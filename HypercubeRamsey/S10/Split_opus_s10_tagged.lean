@@ -259,23 +259,6 @@ noncomputable def selected (h : History n N δ) (s : Site n δ) : Option (hp n �
 noncomputable def realizedList (h : History n N δ) (q : Site n δ) : Finset (ID n δ) :=
   (incidentSites δ q).biUnion fun s => (selected M t h s).elim ∅ (fun loc => {(s.1, loc)})
 
-/-- The local validity event `𝒱_g` (10:117): position counts within relative
-error `.002`, eligibility sizes at least `.99λ`, selections at all incident sites,
-own fan at most `T`, and a passing realized list of the prescribed form. -/
-def groupValid (h : History n N δ) (q : Site n δ) : Prop :=
-  (∀ s ∈ incidentSites δ q, ∀ j,
-    (998 / 1000 : ℝ) * (hp n δ).lam ≤
-        (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ∧
-      (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ≤
-        (1002 / 1000 : ℝ) * (hp n δ).lam) ∧
-  (∀ s ∈ incidentSites δ q, ∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((elig M t h s.1 s.2 j).card : ℝ)) ∧
-  (∀ s ∈ incidentSites δ q, (selected M t h s).isSome) ∧
-  realizedList M t h q ∈ lists h q ∧
-  ¬ listFails M t h q (realizedList M t h q)
-
-/-- Global validity: all groups valid. -/
-def valid (h : History n N δ) : Prop := ∀ q, IsGroup δ q → groupValid M t h q
-
 /-- Common hits of the realized list, and with one ID deleted. -/
 noncomputable def hitSet (h : History n N δ) (q : Site n δ) : Finset (Fin N) :=
   Finset.univ.filter fun y => ∀ c ∈ realizedList M t h q, ∀ i, Hits E G (h.tup c i) y
@@ -309,6 +292,25 @@ theorem tiltWeight_nonneg (h : History n N δ) (q : Site n δ) (j : Fin (M.K (t 
   split_ifs
   · exact mul_nonneg ((maskedPrior M _ _).nonneg j) (sq_nonneg _)
   · exact le_rfl
+
+/-- The local validity event `𝒱_g` (10:117): position counts within relative
+error `.002`, eligibility sizes at least `.99λ`, selections at all incident sites,
+a passing realized list of the prescribed form (own fan at most `T`), and positive
+retained squared-tilt mass (`h_F > 0`, 10:142). -/
+def groupValid (h : History n N δ) (q : Site n δ) : Prop :=
+  (∀ s ∈ incidentSites δ q, ∀ j,
+    (998 / 1000 : ℝ) * (hp n δ).lam ≤
+        (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ∧
+      (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ≤
+        (1002 / 1000 : ℝ) * (hp n δ).lam) ∧
+  (∀ s ∈ incidentSites δ q, ∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((elig M t h s.1 s.2 j).card : ℝ)) ∧
+  (∀ s ∈ incidentSites δ q, (selected M t h s).isSome) ∧
+  realizedList M t h q ∈ lists h q ∧
+  ¬ listFails M t h q (realizedList M t h q) ∧
+  0 < ∑ j, tiltWeight M t h q j
+
+/-- Global validity: all groups valid. -/
+def valid (h : History n N δ) : Prop := ∀ q, IsGroup δ q → groupValid M t h q
 
 /-- Cluster index: a tag and one of its clusters. -/
 abbrev ClIdx := Σ i : M.I, Fin (M.K i)
@@ -589,14 +591,15 @@ noncomputable def hypMean (t : Slice n δ → M.I) (q : Site n δ) (S : Finset (
 
 /-- A good mask strategy (10:50, 10:153): local in the tags of the group's
 slice and its adjacent slices, supported on permitted or trivial masks, with
-every hypothetical mean at most `100 (T+1) ν` pointwise. -/
+every hypothetical mean at most `e^{m/100} ν` pointwise (the paper gives
+`O(T+1) ν`, which is smaller for large `n`; d5 needs only this). -/
 structure GoodStrategy (σ : MaskStrategy M) : Prop where
   local_tags : ∀ q : Site n δ, FinProb.DependsOn (fun t : Slice n δ → M.I => σ t q)
     (Finset.univ.filter fun z => hammingDist z q.1 ≤ 1)
   permitted : ∀ t q S, (σ t q).w S ≠ 0 → Permitted M (t q.1) S ∨ S = Finset.univ
   balanced : ∀ t q (s : ℕ), s ≤ TT n δ → ∀ y,
     ∑ S, (σ t q).w S * hypMean M t q S s y ≤
-      100 * (TT n δ + 1) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+      Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
 
 end Strategy
 

@@ -822,3 +822,574 @@ private theorem smallErrors_survival_product_le {κ : CConsts} {T : Stage} {k : 
     (fun j => error_nonneg D v j) he12 hsum'
 
 end HypercubeRamsey.Lane_q_s18_n1
+
+namespace HypercubeRamsey.Lane_sol_s18_n1
+set_option backward.isDefEq.respectTransparency false
+open Classical
+open scoped BigOperators
+open S18 Lane_q_s18_n1
+
+private theorem E_map {A B : Type*} [Fintype A] [Fintype B] [DecidableEq B]
+    (P : FinLaw A) (f : A → B) (g : B → ℝ) :
+    (FinLaw.map P f).E g = P.E (fun a => g (f a)) := by
+  classical
+  unfold FinLaw.E FinLaw.map
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro a ha
+  simp
+
+private theorem E_bind {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinLaw A) (K : A → FinLaw B) (g : A × B → ℝ) :
+    (FinLaw.bind P K).E g = P.E (fun a => (K a).E (fun b => g (a,b))) := by
+  unfold FinLaw.E FinLaw.bind
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a ha
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b hb
+  ring
+
+private theorem E_const {A : Type*} [Fintype A] (P : FinLaw A) (c : ℝ) :
+    P.E (fun _ => c) = c := by
+  simp [FinLaw.E, ← Finset.sum_mul, P.sum_one]
+
+private theorem pr_eq_E {A : Type*} [Fintype A] (P : FinLaw A) (A' : A → Prop) :
+    P.pr A' = P.E (fun a => if A' a then 1 else 0) := by
+  classical
+  unfold FinLaw.pr FinLaw.E
+  apply Finset.sum_congr rfl
+  intro a ha
+  by_cases h : A' a <;> simp [h]
+
+private theorem E_pi_eval {I : Type*} [Fintype I] [DecidableEq I]
+    {A : I → Type*} [∀ i, Fintype (A i)] (P : ∀ i, FinLaw (A i))
+    (i : I) (g : A i → ℝ) : (FinLaw.pi P).E (fun z => g (z i)) = (P i).E g := by
+  let Q : ∀ i, FinProb (A i) := fun i => ⟨(P i).w, (P i).nonneg, (P i).sum_one⟩
+  -- Use the singleton marginal via independence of the remaining coordinates.
+  have hm := FinProb.pi_marginal_expect Q {i} (fun z => g (z ⟨i, by simp⟩))
+  change (FinProb.pi Q).expect (fun z => g (z i)) = (Q i).expect g
+  rw [hm]
+  unfold FinProb.expect FinProb.pi
+  -- A direct singleton-product sum avoids introducing an arbitrary inhabitant of A i.
+  have hprod (z : ∀ j : {j : I // j ∈ ({i} : Finset I)}, A j.1) :
+      (∏ j, (Q j.1).w (z j)) = (Q i).w (z ⟨i, by simp⟩) := by
+    rw [Fintype.prod_eq_single ⟨i, by simp⟩]
+    intro j hj
+    have : j = ⟨i, by simp⟩ := Subtype.ext (by simpa only [Finset.mem_singleton] using j.2)
+    exact (hj this).elim
+  simp_rw [hprod]
+  let ev : (∀ j : {j : I // j ∈ ({i} : Finset I)}, A j.1) ≃ A i :=
+    { toFun := fun z => z ⟨i, by simp⟩
+      invFun := fun a j => by
+        have hji : j.1 = i := Finset.mem_singleton.mp j.2
+        exact Eq.mp (congrArg A hji.symm) a
+      left_inv := by intro z; funext j; have hj : j = ⟨i, by simp⟩ := Subtype.ext (by simpa only [Finset.mem_singleton] using j.2); subst j; rfl
+      right_inv := by intro a; rfl }
+  exact ev.sum_comp (fun a => (Q i).w a * g a)
+
+private theorem E_swap {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinLaw A) (Q : FinLaw B) (g : A → B → ℝ) :
+    P.E (fun a => Q.E (g a)) = Q.E (fun b => P.E (fun a => g a b)) := by
+  unfold FinLaw.E
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro b hb
+  apply Finset.sum_congr rfl
+  intro a ha
+  ring
+
+private theorem pr_single {A : Type*} [Fintype A] (P : FinLaw A) (a : A) :
+    P.pr (fun z => z = a) = P.w a := by
+  classical
+  simp [FinLaw.pr]
+
+variable {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+  {hPT : PT.Valid}
+
+private noncomputable def prefixLaw (D : LateData hPT)
+    (p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (m : ℕ) (hm : m ≤ D.geom.r) :
+    FinLaw (D.encoding.base.History ⟨m, Nat.lt_succ_of_le hm⟩) :=
+  FinLaw.map (FinLaw.bind (D.encoding.initialLaw D.encoding.iidLaw)
+    (fun x => D.encoding.base.runFrom (kernelsFromProfiles D p).referenceTransition
+      (D.encoding.initialState x) m hm)) Prod.snd
+
+private theorem prefixLaw_step (D : LateData hPT)
+    (p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (m : ℕ) (hm : m + 1 ≤ D.geom.r)
+    (g : D.encoding.base.History ⟨m+1, Nat.lt_succ_of_le hm⟩ → ℝ) :
+    (prefixLaw D p (m+1) hm).E g =
+      (prefixLaw D p m (Nat.le_of_succ_le hm)).E (fun h =>
+        ((kernelsFromProfiles D p).referenceTransition ⟨m, hm⟩ h).E
+          (fun out => g (D.encoding.base.extend ⟨m, hm⟩ h out))) := by
+  simp only [prefixLaw, E_map, E_bind, LateProcessBase.runFrom]
+
+private theorem runFrom_congr (D : LateData hPT)
+    (p q : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (m : ℕ) (hm : m ≤ D.geom.r)
+    (hpq : ∀ j : Fin D.geom.r, j.val < m → ∀ b ∈ D.encoding.base.classes j,
+      p b = q b) (s : Config D.fresh) :
+    D.encoding.base.runFrom (kernelsFromProfiles D p).referenceTransition s m hm =
+      D.encoding.base.runFrom (kernelsFromProfiles D q).referenceTransition s m hm := by
+  induction m with
+  | zero => rfl
+  | succ m ih =>
+    rw [LateProcessBase.runFrom, LateProcessBase.runFrom,
+      ih (Nat.le_of_succ_le hm) (fun j hj => hpq j (by omega))]
+    congr 2
+    funext h
+    unfold LateKernels.referenceTransition
+    congr 1
+    funext b
+    change explicitRowKernel D ⟨m,hm⟩ b.1 b.2 h (p b.1) =
+      explicitRowKernel D ⟨m,hm⟩ b.1 b.2 h (q b.1)
+    rw [hpq ⟨m,hm⟩ (by simp) b.1 b.2]
+
+private theorem prefixLaw_congr (D : LateData hPT)
+    (p q : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (m : ℕ) (hm : m ≤ D.geom.r)
+    (hpq : ∀ j : Fin D.geom.r, j.val < m → ∀ b ∈ D.encoding.base.classes j,
+      p b = q b) : prefixLaw D p m hm = prefixLaw D q m hm := by
+  unfold prefixLaw
+  congr 2
+  funext x
+  exact runFrom_congr D p q m hm hpq (D.encoding.initialState x)
+
+private theorem extend_past (D : LateData hPT) (m : Fin D.geom.r)
+    (h : D.encoding.base.History m.castSucc) (out : D.encoding.base.ClassRows m)
+    (j : Fin D.geom.r) (hj : j.val < m.val) :
+    D.pastRows (D.encoding.base.extend m h out) j (by exact Nat.lt_trans hj (Nat.lt_succ_self _)) =
+      D.pastRows h j hj := by
+  funext b
+  dsimp [LateData.pastRows, LateProcessBase.extend]
+  rw [dif_pos (D.class_before j m.castSucc hj b.2)]
+
+private theorem extend_current (D : LateData hPT) (m : Fin D.geom.r)
+    (h : D.encoding.base.History m.castSucc) (out : D.encoding.base.ClassRows m) :
+    D.pastRows (D.encoding.base.extend m h out) m (Nat.lt_succ_self _) = out := by
+  funext b
+  have hnot : b.1 ∉ D.encoding.base.processed m.castSucc :=
+    fun hb => Finset.disjoint_left.mp (D.encoding.base.class_fresh m) b.2 hb
+  dsimp [LateData.pastRows, LateProcessBase.extend]
+  rw [dif_neg hnot]
+
+private noncomputable def nextProfiles (D : LateData hPT)
+    (p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (j : Fin D.geom.r) (history : FinLaw (D.encoding.base.History j.castSucc)) :
+    ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b) := fun b =>
+  if hb : b ∈ D.encoding.base.classes j then
+    (exists_row_balanced_profile D j b hb history).choose
+  else p b
+
+private theorem nextProfiles_past (D : LateData hPT)
+    (p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (j : Fin D.geom.r) (history : FinLaw (D.encoding.base.History j.castSucc))
+    (t : Fin D.geom.r) (ht : t.val < j.val) (b : Pos T k)
+    (hb : b ∈ D.encoding.base.classes t) : nextProfiles D p j history b = p b := by
+  have hne : t ≠ j := fun he => by simpa [he] using ht
+  have hnot : b ∉ D.encoding.base.classes j := fun hj =>
+    Finset.disjoint_left.mp (D.encoding.base.class_disjoint t j hne) hb hj
+  simp [nextProfiles, hnot]
+
+private theorem fixedMask_weight (D : LateData hPT) (j : Fin D.geom.r)
+    (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (history : FinLaw (D.encoding.base.History j.castSucc))
+    (mask : D.encoding.base.AllowedMask b)
+    (y : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b}) :
+    (rowFixedMaskLabelLaw D j b hb history mask).w y =
+      history.E (fun h => (rowSketchLaw D j b h).E (fun sketch =>
+        (lateLabelLaw D j (rowSide D j b hb mask sketch) Finset.univ
+          (allowedMask_nonempty D j b hb mask)).E (fun z => if z = y then 1 else 0))) := by
+  rw [← pr_single, pr_eq_E]
+  simp only [rowFixedMaskLabelLaw, rowSketchLabelJoint, E_map, E_bind]
+  congr 1
+  funext h
+  congr 1
+  funext sketch
+  congr 1
+  funext z
+  by_cases he : z = y <;> simp [he]
+
+private theorem balanced_row_E (D : LateData hPT)
+    (p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (j : Fin D.geom.r) (history : FinLaw (D.encoding.base.History j.castSucc))
+    (b : {b : Pos T k // b ∈ D.encoding.base.classes j}) (y : Fin (T.S.N k)) :
+    history.E (fun h =>
+      ((kernelsFromProfiles D (nextProfiles D p j history)).refK j b h).E
+        (fun out => if D.encoding.base.rowLabel out = y then 1 else 0)) ≤
+      2 / ((D.encoding.base.latePool j).card : ℝ) := by
+  have hclass := (D.encoding.base.class_of_spec b.1 j).1 b.2
+  have hpool : D.encoding.base.latePoolOf b.1 = D.encoding.base.latePool j := by
+    simp [LateProcessBase.latePoolOf, hclass]
+  by_cases hy : y ∈ D.encoding.base.latePoolOf b.1
+  · let z : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1} := ⟨y,hy⟩
+    have hbalance := (exists_row_balanced_profile D j b.1 b.2 history).choose_spec z
+    change history.E (fun h =>
+      (explicitRowKernel D j b.1 b.2 h (nextProfiles D p j history b.1)).E _) ≤ _
+    simp only [explicitRowKernel, E_bind]
+    rw [E_swap]
+    have hind (label : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1}) :
+        (if label.1 = y then (1 : ℝ) else 0) = if label = z then 1 else 0 := by
+      have he : label.1 = y ↔ label = z := ⟨fun he => Subtype.ext he, fun he => congrArg Subtype.val he⟩
+      simp only [he]
+    simp only [LateProcessBase.rowLabel]
+    simp_rw [hind, ← fixedMask_weight D j b.1 b.2 history]
+    simpa only [FinLaw.E, nextProfiles, dif_pos b.2, hpool] using hbalance
+  · have hzero (out : D.encoding.base.RowOut b.1) :
+        (if D.encoding.base.rowLabel out = y then (1 : ℝ) else 0) = 0 := by
+      have hn : D.encoding.base.rowLabel out ≠ y := fun he => hy (he ▸ out.2.2.2)
+      simp [hn]
+    simp_rw [hzero, E_const]
+    positivity
+
+private def PrefixBalanced (D : LateData hPT)
+    (p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b))
+    (m : ℕ) (hm : m ≤ D.geom.r) : Prop :=
+  ∀ (j : Fin D.geom.r) (hj : j.val < m)
+    (b : {b : Pos T k // b ∈ D.encoding.base.classes j}) (y : Fin (T.S.N k)),
+    (prefixLaw D p m hm).E (fun h =>
+      if D.encoding.base.rowLabel (D.pastRows h j hj b) = y then 1 else 0) ≤
+      2 / ((D.encoding.base.latePool j).card : ℝ)
+
+private theorem profiles_exist (D : LateData hPT) : ∀ m (hm : m ≤ D.geom.r),
+    ∃ p : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b), PrefixBalanced D p m hm := by
+  intro m
+  induction m with
+  | zero =>
+    intro hm
+    refine ⟨fun b => FinLaw.dirac ⟨D.encoding.base.latePoolOf b, Finset.Subset.rfl, by omega⟩, ?_⟩
+    intro j hj
+    omega
+  | succ m ih =>
+    intro hm
+    obtain ⟨p, hp⟩ := ih (Nat.le_of_succ_le hm)
+    let j : Fin D.geom.r := ⟨m,hm⟩
+    let history := prefixLaw D p m (Nat.le_of_succ_le hm)
+    let q := nextProfiles D p j history
+    have hprefix : prefixLaw D q m (Nat.le_of_succ_le hm) = history := by
+      exact prefixLaw_congr D q p m (Nat.le_of_succ_le hm)
+        (fun t ht b hb => nextProfiles_past D p j history t ht b hb)
+    refine ⟨q, ?_⟩
+    intro t ht b y
+    rw [prefixLaw_step]
+    by_cases htm : t.val < m
+    · have hpast (h : D.encoding.base.History j.castSucc) (out : D.encoding.base.ClassRows j) :
+        D.pastRows (D.encoding.base.extend j h out) t ht = D.pastRows h t htm :=
+          extend_past D j h out t htm
+      dsimp only [j] at hpast
+      simp only [hpast, E_const]
+      rw [hprefix]
+      exact hp t htm b y
+    · have hteq : t = j := Fin.ext (by dsimp [j]; omega)
+      subst t
+      have hext := extend_current D (⟨m,hm⟩ : Fin D.geom.r)
+      dsimp only [j]
+      simp only [hext]
+      have hmarg (h : D.encoding.base.History j.castSucc) :
+          ((kernelsFromProfiles D q).referenceTransition ⟨m,hm⟩ h).E
+              (fun out => if D.encoding.base.rowLabel (out b) = y then (1:ℝ) else 0) =
+            ((kernelsFromProfiles D q).refK ⟨m,hm⟩ b h).E
+              (fun out => if D.encoding.base.rowLabel out = y then 1 else 0) := by
+        convert E_pi_eval (fun c => (kernelsFromProfiles D q).refK ⟨m,hm⟩ c h) b
+          (fun out : D.encoding.base.RowOut b.1 => if D.encoding.base.rowLabel out = y then (1:ℝ) else 0) using 1
+        congr 1
+      simp only [hmarg]
+      rw [hprefix]
+      exact balanced_row_E D p j history b y
+
+/-- Class-ordered minimax selection, with each earlier marginal preserved by extension. -/
+theorem balanced_kernels (D : LateData hPT) (hD : D.Spec) :
+    ∃ K : LateKernels D.encoding.base,
+      (D.withKernels K).Spec ∧ TransitionData (D.withKernels K) ∧ MaskBalance (D.withKernels K) := by
+  obtain ⟨p,hp⟩ := profiles_exist D D.geom.r le_rfl
+  refine ⟨kernelsFromProfiles D p, withKernels_spec D hD _, transitionData_of_profiles D p, ?_⟩
+  intro j b y
+  have hh := hp j j.isLt b y
+  change (D.withKernels (kernelsFromProfiles D p)).encoding.baseline.pr _ ≤ _
+  rw [pr_eq_E]
+  classical
+  simp only [prefixLaw, E_map] at hh
+  convert hh using 1
+  · congr 1
+    funext z
+    simp [LateData.withKernels, LateData.pastRows]
+  · rfl
+
+
+private theorem E_sum {A I : Type*} [Fintype A] [Fintype I] (P : FinLaw A) (g : I → A → ℝ) :
+    P.E (fun a => ∑ i, g i a) = ∑ i, P.E (g i) := by
+  unfold FinLaw.E
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+
+private theorem E_mul_const {A : Type*} [Fintype A] (P : FinLaw A) (g : A → ℝ) (c : ℝ) :
+    P.E (fun a => g a * c) = P.E g * c := by
+  unfold FinLaw.E
+  rw [Finset.sum_mul]
+  apply Finset.sum_congr rfl
+  intro a _
+  ring
+
+private theorem E_div {A : Type*} [Fintype A] (P : FinLaw A) (g : A → ℝ) (c : ℝ) :
+    P.E (fun a => g a / c) = P.E g / c := by
+  simp only [div_eq_mul_inv, E_mul_const]
+
+private theorem E_mono {A : Type*} [Fintype A] (P : FinLaw A) {f g : A → ℝ}
+    (hfg : ∀ a, f a ≤ g a) : P.E f ≤ P.E g := by
+  apply Finset.sum_le_sum
+  intro a _
+  exact mul_le_mul_of_nonneg_left (hfg a) (P.nonneg a)
+
+private theorem E_pi_independent {I : Type*} [Fintype I] [DecidableEq I]
+    {A : I → Type*} [∀ i, Fintype (A i)] (P : ∀ i, FinLaw (A i))
+    (f g : (∀ i, A i) → ℝ) (s t : Finset I)
+    (hf : DependsOn f (s : Set I)) (hg : DependsOn g (t : Set I)) (hst : Disjoint s t) :
+    (FinLaw.pi P).E (fun z => f z * g z) = (FinLaw.pi P).E f * (FinLaw.pi P).E g := by
+  let Q : ∀ i, FinProb (A i) := fun i => ⟨(P i).w,(P i).nonneg,(P i).sum_one⟩
+  exact FinProb.pi_expect_mul_of_disjoint Q f g s t hf hg hst
+
+private theorem E_pi_pair {A I : Type*} [Fintype A] [Fintype I] [DecidableEq I]
+    (P : FinLaw A) (i j : I) (hij : i ≠ j) (g : A → A → ℝ) :
+    (FinLaw.pi fun _ : I => P).E (fun z => g (z i) (z j)) =
+      ∑ x, ∑ y, P.w x * P.w y * g x y := by
+  classical
+  let Q := FinLaw.pi fun _ : I => P
+  let ind : I → A → (I → A) → ℝ := fun i x z => if z i = x then 1 else 0
+  have hi (i : I) (x : A) : Q.E (ind i x) = P.w x := by
+    have hmarg := E_pi_eval (fun _ : I => P) i (fun a => if a=x then (1:ℝ) else 0)
+    calc
+      Q.E (ind i x) = P.E (fun a => if a=x then (1:ℝ) else 0) := hmarg
+      _ = P.w x := by simp [FinLaw.E,eq_comm]
+  have hp (x y : A) : Q.E (fun z => ind i x z * ind j y z) = P.w x * P.w y := by
+    rw [E_pi_independent (fun _ : I => P) (ind i x) (ind j y) {i} {j}]
+    · rw [hi,hi]
+    · intro z z' hh
+      change (if z i = x then (1:ℝ) else 0) = if z' i = x then 1 else 0
+      rw [hh i (by simp)]
+    · intro z z' hh
+      change (if z j = y then (1:ℝ) else 0) = if z' j = y then 1 else 0
+      rw [hh j (by simp)]
+    · simpa using hij
+  have he (z : I → A) : g (z i) (z j) =
+      ∑ x, ∑ y, (ind i x z * ind j y z) * g x y := by
+    simp [ind,ite_mul,mul_ite,eq_comm]
+  dsimp only [Q] at hp
+  simp only [he,E_sum,E_mul_const,hp]
+
+noncomputable def conflictFraction {A : Type*} {m : ℕ} (R : A → A → Prop) (z : Fin m → A) : ℝ :=
+  (∑ i, ∑ j, if R (z i) (z j) then (1:ℝ) else 0) / (m:ℝ)^2
+
+/-- The diagonal contributes at most 1/m; off-diagonal samples are independent. -/
+theorem conflictFraction_mean {A : Type*} [Fintype A] (P : FinLaw A)
+    (R : A → A → Prop) (m : ℕ) (hm : 0 < m) (q : ℝ) (hq : 0 ≤ q)
+    (hrow : ∀ x, (∑ y, P.w y * (if R x y then (1:ℝ) else 0)) ≤ q) :
+    (FinLaw.pi fun _ : Fin m => P).E (conflictFraction R) ≤ 1/(m:ℝ) + q := by
+  classical
+  let Q := FinLaw.pi fun _ : Fin m => P
+  have hpair (i j : Fin m) : Q.E (fun z => if R (z i) (z j) then (1:ℝ) else 0) ≤
+      (if i=j then 1 else 0) + q := by
+    by_cases hij : i = j
+    · have hh := E_mono Q (f := fun z => if R (z i) (z j) then (1:ℝ) else 0)
+        (g := fun _ => (1:ℝ)) (fun z => by split_ifs <;> norm_num)
+      rw [E_const] at hh
+      simp only [hij,ite_true]
+      simpa only [hij] using hh.trans (show (1:ℝ) ≤ 1+q by linarith)
+    · have hh := E_pi_pair P i j hij (fun x y => if R x y then (1:ℝ) else 0)
+      rw [hh,if_neg hij,zero_add]
+      calc
+        (∑ x, ∑ y, P.w x * P.w y * (if R x y then (1:ℝ) else 0)) =
+            ∑ x, P.w x * (∑ y, P.w y * (if R x y then (1:ℝ) else 0)) := by
+          simp only [Finset.mul_sum,mul_assoc]
+        _ ≤ ∑ x, P.w x * q := Finset.sum_le_sum fun x _ => mul_le_mul_of_nonneg_left (hrow x) (P.nonneg x)
+        _ = q := by rw [← Finset.sum_mul,P.sum_one,one_mul]
+  have hm' : 0 < (m:ℝ) := by exact_mod_cast hm
+  unfold conflictFraction
+  rw [E_div]
+  simp_rw [E_sum]
+  apply (div_le_iff₀ (sq_pos_of_pos hm')).mpr
+  calc
+    (∑ i, ∑ j, Q.E (fun z => if R (z i) (z j) then (1:ℝ) else 0)) ≤
+        ∑ i : Fin m, ∑ j : Fin m, ((if i=j then (1:ℝ) else 0) + q) :=
+      Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j _ => hpair i j
+    _ = (1/(m:ℝ)+q) * (m:ℝ)^2 := by
+      simp [Finset.sum_add_distrib,eq_comm]
+      field_simp
+
+/-- Replacing one sample affects at most two rows of the ordered pair sum. -/
+theorem conflictFraction_lipschitz {A : Type*} (R : A → A → Prop) (m : ℕ) (hm : 0 < m)
+    (p : Fin m) (z z' : Fin m → A) (h : ∀ i, i ≠ p → z i = z' i) :
+    |conflictFraction R z - conflictFraction R z'| ≤ 2/(m:ℝ) := by
+  classical
+  let f := fun (z : Fin m → A) (i j : Fin m) => if R (z i) (z j) then (1:ℝ) else 0
+  have hb (i j : Fin m) : |f z i j - f z' i j| ≤
+      (if i=p then (1:ℝ) else 0) + (if j=p then 1 else 0) := by
+    by_cases hi : i=p <;> by_cases hj : j=p
+    · dsimp [f]; split_ifs <;> norm_num
+    · dsimp [f]; simp only [if_pos hi,if_neg hj]; split_ifs <;> norm_num
+    · dsimp [f]; simp only [if_neg hi,if_pos hj]; split_ifs <;> norm_num
+    · simp only [f,h i hi,h j hj,sub_self,abs_zero,if_neg hi,if_neg hj,add_zero,le_refl]
+  have hsum : |(∑ i, ∑ j, f z i j) - (∑ i, ∑ j, f z' i j)| ≤ 2*(m:ℝ) := by
+    rw [← Finset.sum_sub_distrib]
+    simp_rw [← Finset.sum_sub_distrib]
+    calc
+      _ ≤ ∑ i, |∑ j, (f z i j - f z' i j)| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ i, ∑ j, |f z i j - f z' i j| := Finset.sum_le_sum fun i _ => Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ i, ∑ j, ((if i=p then (1:ℝ) else 0) + (if j=p then 1 else 0)) :=
+        Finset.sum_le_sum fun i _ => Finset.sum_le_sum fun j _ => hb i j
+      _ = 2*(m:ℝ) := by simp [Finset.sum_add_distrib]; ring
+  have hm' : 0 < (m:ℝ) := by exact_mod_cast hm
+  unfold conflictFraction
+  rw [← sub_div,abs_div,abs_of_pos (sq_pos_of_pos hm')]
+  calc
+    _ ≤ (2*(m:ℝ))/(m:ℝ)^2 := div_le_div_of_nonneg_right hsum (sq_nonneg _)
+    _ = 2/(m:ℝ) := by field_simp
+
+/-- A tail bound for the actual ordered conflicting-pair statistic. -/
+theorem conflictFraction_tail {A : Type*} [Fintype A] (P : FinLaw A)
+    (R : A → A → Prop) (m : ℕ) (hm : 0 < m) (δ : ℝ) (hδ : 0 < δ)
+    (hmean : (FinLaw.pi fun _ : Fin m => P).E (conflictFraction R) ≤ δ) :
+    (FinLaw.pi fun _ : Fin m => P).pr (fun z => 2*δ ≤ conflictFraction R z) ≤
+      2 * Real.exp (-(m:ℝ) * δ^2 / 2) := by
+  let Q : FinProb A := ⟨P.w,P.nonneg,P.sum_one⟩
+  have hm' : 0 < (m:ℝ) := by exact_mod_cast hm
+  have hwidth : (∑ i : Fin m, (2/(m:ℝ))^2) = 4/(m:ℝ) := by
+    simp only [Finset.sum_const,Finset.card_univ,Fintype.card_fin,nsmul_eq_mul]
+    field_simp
+    ring
+  have hh := bounded_difference_upper_tail (fun _ : Fin m => Q) (conflictFraction R)
+    (fun _ => 2/(m:ℝ)) (fun _ => by positivity)
+    (conflictFraction_lipschitz R m hm) (by rw [hwidth]; positivity) δ hδ hmean
+  change (FinLaw.pi fun _ : Fin m => P).pr _ ≤ _ at hh
+  rw [hwidth] at hh
+  convert hh using 1
+  congr 2
+  field_simp
+  ring
+
+
+private theorem pr_exists_le {A I : Type*} [Fintype A] [Fintype I]
+    (P : FinLaw A) (B : I → A → Prop) : P.pr (fun a => ∃ i, B i a) ≤ ∑ i, P.pr (B i) := by
+  classical
+  simp only [pr_eq_E]
+  rw [← E_sum]
+  apply E_mono
+  intro a
+  by_cases hex : ∃ i, B i a
+  · obtain ⟨i,hi⟩ := hex
+    simp only [if_pos (show ∃ i, B i a from ⟨i,hi⟩)]
+    calc
+      (1:ℝ) = if B i a then 1 else 0 := by simp [hi]
+      _ ≤ ∑ j, if B j a then (1:ℝ) else 0 :=
+        Finset.single_le_sum (f := fun j => if B j a then (1:ℝ) else 0)
+          (fun j _ => by split_ifs <;> norm_num) (Finset.mem_univ i)
+  · simp only [if_neg hex]
+    exact Finset.sum_nonneg fun j _ => by split_ifs <;> norm_num
+
+private noncomputable def sketchBad (D : LateData hPT) (j : Fin D.geom.r) (b : Pos T k)
+    (sketch : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) : Prop :=
+  ∃ a, 2 * D.error (flipPos b a) j ^ 4 <
+    conflictFraction (fun x z => ¬ D.nonconflict (flipPos b a) x z) (sketch a)
+
+private theorem R1_iff_sketch (D : LateData hPT) (j : Fin D.geom.r) (b : Pos T k)
+    (out : D.encoding.base.RowOut b) : ¬ D.R1 j out ↔ sketchBad D j b out.2.1 := by
+  simp only [LateData.R1,sketchBad,conflictFraction,not_forall,not_le]
+  congr!
+
+private theorem refK_eq_explicit (D : LateData hPT) (hT : TransitionData D)
+    (j : Fin D.geom.r) (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) :
+    D.encoding.kernels.refK j b h = explicitRowKernel D j b.1 b.2 h (D.encoding.kernels.maskProfile b.1) := by
+  apply finLaw_eq_of_weights
+  intro out
+  rw [hT.reference_formula,explicitRowKernel_formula]
+  rfl
+
+private theorem refK_sketchBad (D : LateData hPT) (hT : TransitionData D)
+    (j : Fin D.geom.r) (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) :
+    (D.encoding.kernels.refK j b h).pr (fun out => ¬ D.R1 j out) =
+      (rowSketchLaw D j b.1 h).pr (sketchBad D j b.1) := by
+  rw [refK_eq_explicit D hT,pr_eq_E,pr_eq_E]
+  simp only [explicitRowKernel,E_bind]
+  have hind (mask : D.encoding.base.AllowedMask b.1)
+      (sketch : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k))
+      (y : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1}) :
+      (if ¬ D.R1 j (mask,sketch,y) then (1:ℝ) else 0) =
+        if sketchBad D j b.1 sketch then 1 else 0 := by
+    simp only [R1_iff_sketch]
+  have hinner (mask : D.encoding.base.AllowedMask b.1)
+      (sketch : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) :
+      (lateLabelLaw D j (rowSide D j b.1 b.2 mask sketch) Finset.univ
+        (allowedMask_nonempty D j b.1 b.2 mask)).E
+          (fun y => if ¬ D.R1 j (mask,sketch,y) then (1:ℝ) else 0) =
+        if sketchBad D j b.1 sketch then 1 else 0 := by
+    calc
+      _ = (lateLabelLaw D j (rowSide D j b.1 b.2 mask sketch) Finset.univ
+          (allowedMask_nonempty D j b.1 b.2 mask)).E
+            (fun _ => if sketchBad D j b.1 sketch then (1:ℝ) else 0) := by
+        congr 1
+        funext y
+        exact hind mask sketch y
+      _ = _ := E_const _ _
+  calc
+    _ = (D.encoding.kernels.maskProfile b.1).E
+        (fun _ => (rowSketchLaw D j b.1 h).E
+          (fun sketch => if sketchBad D j b.1 sketch then (1:ℝ) else 0)) := by
+      congr 1
+      funext mask
+      congr 1
+      funext sketch
+      convert hinner mask sketch using 1
+      congr 1
+      funext y
+      by_cases hh : ¬ D.R1 j (mask,sketch,y) <;> simp [hh]
+    _ = _ := E_const _ _
+
+/-- Requirement 1 for the exact row kernel reduces to the actual sketch means. -/
+theorem R1_tail_from_means (D : LateData hPT) (hT : TransitionData D)
+    (j : Fin D.geom.r) (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) (hm : 0 < sketchLength T k)
+    (hmean : ∀ a,
+      (FinLaw.pi fun _ : Fin (sketchLength T k) => asFinLaw (D.currentPrior j (flipPos b.1 a) h)).E
+        (conflictFraction (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z)) ≤
+          D.error (flipPos b.1 a) j ^ 4) :
+    (D.encoding.kernels.refK j b h).pr (fun out => ¬ D.R1 j out) ≤
+      ∑ a : Fin (T.S.n k), 2 * Real.exp (-(sketchLength T k : ℝ) * D.error (flipPos b.1 a) j ^ 8 / 2) := by
+  rw [refK_sketchBad D hT]
+  apply (pr_exists_le (rowSketchLaw D j b.1 h) _).trans
+  apply Finset.sum_le_sum
+  intro a _
+  let P := asFinLaw (D.currentPrior j (flipPos b.1 a) h)
+  have hproj : (rowSketchLaw D j b.1 h).pr
+      (fun sketch => 2 * D.error (flipPos b.1 a) j ^ 4 <
+        conflictFraction (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z) (sketch a)) =
+      (FinLaw.pi fun _ : Fin (sketchLength T k) => P).pr
+        (fun sketch => 2 * D.error (flipPos b.1 a) j ^ 4 <
+          conflictFraction (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z) sketch) := by
+    simp only [pr_eq_E,rowSketchLaw]
+    convert E_pi_eval
+      (fun a => FinLaw.pi fun _ : Fin (sketchLength T k) => asFinLaw (D.currentPrior j (flipPos b.1 a) h)) a
+      (fun sketch => if 2 * D.error (flipPos b.1 a) j ^ 4 <
+          conflictFraction (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z) sketch then (1:ℝ) else 0) using 1
+  rw [hproj]
+  have hδ : 0 < D.error (flipPos b.1 a) j ^ 4 := pow_pos
+    (lateError_pos (D.geom.patchOf (flipPos b.1 a)) (D.geom.r-j.val)) 4
+  have hh := conflictFraction_tail P (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z)
+    (sketchLength T k) hm (D.error (flipPos b.1 a) j ^ 4) hδ (hmean a)
+  have hmono : (FinLaw.pi fun _ : Fin (sketchLength T k) => P).pr
+      (fun sketch => 2 * D.error (flipPos b.1 a) j ^ 4 <
+        conflictFraction (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z) sketch) ≤
+      (FinLaw.pi fun _ : Fin (sketchLength T k) => P).pr
+      (fun sketch => 2 * D.error (flipPos b.1 a) j ^ 4 ≤
+        conflictFraction (fun x z => ¬ D.nonconflict (flipPos b.1 a) x z) sketch) := by
+    simp only [pr_eq_E]
+    apply E_mono
+    intro sketch
+    split_ifs <;> try norm_num <;> linarith
+  exact hmono.trans (by simpa only [← pow_mul] using hh)
+
+end HypercubeRamsey.Lane_sol_s18_n1

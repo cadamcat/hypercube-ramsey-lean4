@@ -551,7 +551,7 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         exact hCount2 u
   have hstep2Alarm : X.initLaw.pr (fun v => ∃ β ∈ X.occTypes,
       τ₂ β.u ≤ X.rate2V0 v β) ≤
-      ∑ u : Fin (X.m + 2),
+      ∑ u ∈ (Finset.univ.filter fun u : Fin (X.m + 2) => 0 < u.val),
         (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val := by
     have huBound : ∀ β, β ∈ X.occTypes → β.u ≤ X.m + 1 := by
       intro β hβ
@@ -569,26 +569,31 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         omega
     have hsub : ∀ v, (∃ β ∈ X.occTypes, τ₂ β.u ≤ X.rate2V0 v β) →
         ∃ u : Fin (X.m + 2),
-          ∃ β ∈ X.occTypes.filter (fun β => β.u = u.val), τ₂ u.val ≤ X.rate2V0 v β := by
+          u ∈ (Finset.univ.filter fun u : Fin (X.m + 2) => 0 < u.val) ∧
+            ∃ β ∈ X.occTypes.filter (fun β => β.u = u.val),
+              τ₂ u.val ≤ X.rate2V0 v β := by
       intro v hbad
       rcases hbad with ⟨β, hβ, hfail⟩
       have hbu := huBound β hβ
+      have hbuPos : 0 < β.u := by
+        cases hmode : β.mode <;> simp [Type6.u, hmode]
       let u : Fin (X.m + 2) := ⟨β.u, by omega⟩
-      refine ⟨u, β, ?_, ?_⟩
+      refine ⟨u, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hbuPos⟩, β, ?_, ?_⟩
       · exact Finset.mem_filter.mpr ⟨hβ, rfl⟩
       · simpa using hfail
     calc
       X.initLaw.pr (fun v => ∃ β ∈ X.occTypes, τ₂ β.u ≤ X.rate2V0 v β) ≤
-          X.initLaw.pr (fun v => ∃ u : Fin (X.m + 2),
+          X.initLaw.pr (fun v => ∃ u ∈ (Finset.univ.filter fun u : Fin (X.m + 2) => 0 < u.val),
             ∃ β ∈ X.occTypes.filter (fun β => β.u = u.val), τ₂ u.val ≤ X.rate2V0 v β) :=
         pr_mono X.initLaw hsub
-      _ ≤ ∑ u : Fin (X.m + 2),
+      _ ≤ ∑ u ∈ (Finset.univ.filter fun u : Fin (X.m + 2) => 0 < u.val),
           X.initLaw.pr (fun v => ∃ β ∈ X.occTypes.filter (fun β => β.u = u.val),
             τ₂ u.val ≤ X.rate2V0 v β) := by
-        simpa using pr_exists_finset_le X.initLaw (Finset.univ : Finset (Fin (X.m + 2)))
+        simpa using pr_exists_finset_le X.initLaw
+          (Finset.univ.filter fun u : Fin (X.m + 2) => 0 < u.val)
           (fun u v => ∃ β ∈ X.occTypes.filter (fun β => β.u = u.val),
             τ₂ u.val ≤ X.rate2V0 v β)
-      _ ≤ ∑ u : Fin (X.m + 2),
+      _ ≤ ∑ u ∈ (Finset.univ.filter fun u : Fin (X.m + 2) => 0 < u.val),
           (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val := by
         apply Finset.sum_le_sum
         intro u hu

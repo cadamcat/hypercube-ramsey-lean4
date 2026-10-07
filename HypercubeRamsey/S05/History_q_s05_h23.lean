@@ -1247,6 +1247,60 @@ theorem highEvenType_mem_candidates5 (X : Setup5 γ K' χ n N E G)
   dsimp [highTypeCandidates5, highTypeFromData5, ChunkGeometry5.evenType]
   rw [dif_neg hhigh, hType]
 
+abbrev Stage2LowPattern5 (X : Setup5 γ K' χ n N E G) :=
+  Σ q : CoarseKey5 n, Σ j : Fin (X.p.J n + 1),
+    {K : X.Ty // K ∈ lowTypeCandidates5 X q default j ∧
+      K.1 = q ∧ K.2.2 = some j ∧
+      ∃ x : CubeVertex n, IsEvenRole x ∧
+        K = signShiftType5 X (X.g.sign x) (X.g.evenType (X.p.J n) x)}
+
+noncomputable instance stage2LowPatternFintype5 (X : Setup5 γ K' χ n N E G) :
+    Fintype (Stage2LowPattern5 X) := by
+  classical
+  infer_instance
+
+abbrev Stage2HighPattern5 (X : Setup5 γ K' χ n N E G) :=
+  Σ q : CoarseKey5 n,
+    {K : X.Ty // K ∈ highTypeCandidates5 X q ∧
+      K.1 = q ∧ K.2.2 = none ∧
+      ∃ x : CubeVertex n, IsEvenRole x ∧ K = X.g.evenType (X.p.J n) x}
+
+noncomputable instance stage2HighPatternFintype5 (X : Setup5 γ K' χ n N E G) :
+    Fintype (Stage2HighPattern5 X) := by
+  classical
+  infer_instance
+
+theorem stage2LowPattern_exists5 (X : Setup5 γ K' χ n N E G)
+    (x : CubeVertex n) (heven : IsEvenRole x) (hlow : X.g.severity x ≤ X.p.J n) :
+    ∃ p : Stage2LowPattern5 X,
+      p.1 = X.g.key x ∧ p.2.1.val = X.g.severity x ∧
+        p.2.2.1 = signShiftType5 X (X.g.sign x) (X.g.evenType (X.p.J n) x) := by
+  classical
+  let j : Fin (X.p.J n + 1) := ⟨X.g.severity x, by omega⟩
+  let K : X.Ty := signShiftType5 X (X.g.sign x) (X.g.evenType (X.p.J n) x)
+  have hmem : K ∈ lowTypeCandidates5 X (X.g.key x) default j := by
+    exact normalizedEvenType_mem_candidates5 X x j rfl
+  have hlevel : K.2.2 = some j := by
+    dsimp [K]
+    rw [signShiftType5_level]
+    have hfin : (⟨X.g.severity x, Nat.lt_succ_of_le hlow⟩ : Fin (X.p.J n + 1)) = j := by
+      apply Fin.ext
+      rfl
+    simpa [ChunkGeometry5.evenType, hlow] using congrArg some hfin
+  refine ⟨⟨X.g.key x, j, ⟨K, hmem, rfl, hlevel, ⟨x, heven, rfl⟩⟩⟩, rfl, ?_, ?_⟩
+  · rfl
+  · rfl
+
+theorem stage2HighPattern_exists5 (X : Setup5 γ K' χ n N E G)
+    (x : CubeVertex n) (heven : IsEvenRole x) (hhigh : ¬ X.g.severity x ≤ X.p.J n) :
+    ∃ p : Stage2HighPattern5 X,
+      p.1 = X.g.key x ∧ p.2.1 = X.g.evenType (X.p.J n) x := by
+  classical
+  have hlevel : (X.g.evenType (X.p.J n) x).2.2 = none := by
+    simp [ChunkGeometry5.evenType, hhigh]
+  refine ⟨⟨X.g.key x, ⟨X.g.evenType (X.p.J n) x,
+    highEvenType_mem_candidates5 X x hhigh, rfl, hlevel, ⟨x, heven, rfl⟩⟩⟩, rfl, rfl⟩
+
 theorem blockGate_signShiftLow5 (X : Setup5 γ K' χ n N E G) (b : X.Base)
     (t : CubeVertex (X.p.m n)) (K : X.Ty) {j : Fin (X.p.J n + 1)}
     (hlevel : K.2.2 = some j) (z : X.Block K) :
@@ -1973,6 +2027,70 @@ theorem optKeyLawPr_signShiftHigh5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
     _ = (X.coarseLaw v).expect (fun c => (X.hiddenLaw (v, c)).pr
         (fun U => X.optFail ((v, c), U) K t)) := by rw [hfun]
     _ = (X.keyLawAt v).pr (fun cu => X.optFail ((v, cu.1), cu.2) K t) := hright.symm
+
+theorem keyLawPr_hiddenSignShift5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
+    (t : CubeVertex (X.p.m n)) (A : X.Coarse → X.Hidden → Prop) :
+    (X.keyLawAt v).pr (fun cu => A cu.1 (hiddenSignShift5 X t cu.2)) =
+      (X.keyLawAt v).pr (fun cu => A cu.1 cu.2) := by
+  classical
+  have hleft : (X.keyLawAt v).pr (fun cu => A cu.1 (hiddenSignShift5 X t cu.2)) =
+      (X.coarseLaw v).expect (fun c =>
+        (X.hiddenLaw (v, c)).pr (fun U => A c (hiddenSignShift5 X t U))) := by
+    simpa [Setup5.keyLawAt] using bind_pr5 (X.coarseLaw v)
+      (fun c => X.hiddenLaw (v, c)) (fun c U => A c (hiddenSignShift5 X t U))
+  have hright : (X.keyLawAt v).pr (fun cu => A cu.1 cu.2) =
+      (X.coarseLaw v).expect (fun c => (X.hiddenLaw (v, c)).pr (A c)) := by
+    simpa [Setup5.keyLawAt] using bind_pr5 (X.coarseLaw v)
+      (fun c => X.hiddenLaw (v, c)) (fun c U => A c U)
+  have hfun : (fun c => (X.hiddenLaw (v, c)).pr (fun U => A c (hiddenSignShift5 X t U))) =
+      (fun c => (X.hiddenLaw (v, c)).pr (A c)) := by
+    funext c
+    let P := X.hiddenLaw (v, c)
+    have hmap := map_pr_equiv5 P (hiddenSignShift5 X t) (A c)
+    rw [hiddenLaw_map_signShift5 X (v, c) t] at hmap
+    exact hmap.symm
+  calc
+    (X.keyLawAt v).pr (fun cu => A cu.1 (hiddenSignShift5 X t cu.2)) =
+      (X.coarseLaw v).expect (fun c =>
+        (X.hiddenLaw (v, c)).pr (fun U => A c (hiddenSignShift5 X t U))) := hleft
+    _ = (X.coarseLaw v).expect (fun c => (X.hiddenLaw (v, c)).pr (A c)) := by rw [hfun]
+    _ = (X.keyLawAt v).pr (fun cu => A cu.1 cu.2) := hright.symm
+
+theorem step2KeyLawPr_signShiftLowSimple5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
+    (t : CubeVertex (X.p.m n)) (K : X.Ty) {j : Fin (X.p.J n + 1)}
+    (hlevel : K.2.2 = some j) :
+    (X.keyLawAt v).pr (fun cu =>
+      X.step2Fail ((v, cu.1), cu.2) (signShiftType5 X t K)) =
+      (X.keyLawAt v).pr (fun cu => X.step2Fail ((v, cu.1), cu.2) K) := by
+  calc
+    (X.keyLawAt v).pr (fun cu =>
+        X.step2Fail ((v, cu.1), cu.2) (signShiftType5 X t K)) =
+      (X.keyLawAt v).pr (fun cu =>
+        X.step2Fail ((v, cu.1), hiddenSignShift5 X t cu.2) (signShiftType5 X t K)) := by
+          symm
+          exact keyLawPr_hiddenSignShift5 X v t
+            (fun c U => X.step2Fail ((v, c), U) (signShiftType5 X t K))
+    _ = (X.keyLawAt v).pr (fun cu => X.step2Fail ((v, cu.1), cu.2) K) :=
+      step2KeyLawPr_signShiftLow5 X v t K hlevel
+
+theorem optKeyLawPr_signShiftHighSimple5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
+    (t₀ t : CubeVertex (X.p.m n)) (K : X.Ty) (hnone : K.2.2 = none)
+    (hHigh : ∀ ℓ ∈ K.2.1, ∃ i : CoarseKey5 n, ℓ = .inr i) :
+    (X.keyLawAt v).pr (fun cu =>
+      X.optFail ((v, cu.1), cu.2) (signShiftType5 X t₀ K) (shiftSignVector5 t₀ t)) =
+      (X.keyLawAt v).pr (fun cu => X.optFail ((v, cu.1), cu.2) K t) := by
+  calc
+    (X.keyLawAt v).pr (fun cu =>
+        X.optFail ((v, cu.1), cu.2) (signShiftType5 X t₀ K) (shiftSignVector5 t₀ t)) =
+      (X.keyLawAt v).pr (fun cu =>
+        X.optFail ((v, cu.1), hiddenSignShift5 X t₀ cu.2)
+          (signShiftType5 X t₀ K) (shiftSignVector5 t₀ t)) := by
+          symm
+          exact keyLawPr_hiddenSignShift5 X v t₀
+            (fun c U => X.optFail ((v, c), U) (signShiftType5 X t₀ K)
+              (shiftSignVector5 t₀ t))
+    _ = (X.keyLawAt v).pr (fun cu => X.optFail ((v, cu.1), cu.2) K t) :=
+      optKeyLawPr_signShiftHigh5 X v t₀ t K hnone hHigh
 
 abbrev Stage2TypeOcc5 (X : Setup5 γ K' χ n N E G) :=
   {K : X.Ty // X.TypeOccurs K}

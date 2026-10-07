@@ -185,7 +185,7 @@ private theorem hdScaleFailure_has_local_bad {p : HDParams} (Sites : p.Sites)
     have hRqReal : (R : ℝ) ≤ q := by exact_mod_cast hRq
     linarith [hnet', hηR, hRqReal]
 
-private theorem exists_nat_rpow_ge {e C : ℝ} (he : 0 < e) :
+theorem exists_nat_rpow_ge {e C : ℝ} (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → C ≤ (n : ℝ) ^ e := by
   have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ e) Filter.atTop Filter.atTop :=
     (tendsto_rpow_atTop he).comp tendsto_natCast_atTop_atTop
@@ -375,7 +375,7 @@ theorem hdScaleThreshold_fractions_strict {h i : ℕ} (hi : i ≤ h) (hi0 : 0 < 
     nlinarith
   exact ⟨hs, ht, heta⟩
 
-private theorem exists_nat_log_ge (C : ℝ) :
+theorem exists_nat_log_ge (C : ℝ) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → C ≤ Real.log (n : ℝ) := by
   have hlog : Filter.Tendsto (fun n : ℕ => Real.log (n : ℝ))
       Filter.atTop Filter.atTop :=
@@ -789,7 +789,7 @@ theorem height_local_geometry_eventually
       apply hsub p hD hb₀ hb hn hdimLo hdimHi
       simpa [HDRegime.ok] using hreg
 
-private theorem finprob_pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+theorem finprob_pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
     (A B : Ω → Prop) (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
   classical
   unfold FinProb.pr
@@ -812,7 +812,7 @@ private theorem finprob_pr_or_le {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
   intro ω hω
   by_cases hA : A ω <;> by_cases hB : B ω <;> simp [hA, hB] <;> linarith [P.nonneg ω]
 
-private theorem finprob_pr_finset_exists_le {Ω X : Type*} [Fintype Ω]
+theorem finprob_pr_finset_exists_le {Ω X : Type*} [Fintype Ω]
     (P : FinProb Ω) (S : Finset X) (F : X → Ω → Prop) :
     P.pr (fun ω => ∃ x ∈ S, F x ω) ≤ ∑ x ∈ S, P.pr (F x) := by
   classical
@@ -1230,7 +1230,7 @@ private theorem bernoulli_pi_count_ge_prob {ι : Type*} [Fintype ι] [DecidableE
           apply mul_le_mul_of_nonneg_right _ (by positivity)
           exact_mod_cast hpow
 
-private theorem position_count_ge_prob_bound {p : HDParams}
+theorem position_count_ge_prob_bound {p : HDParams}
     (hq0 : 0 ≤ p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1)
     (T : Finset p.Loc) (k : ℕ) :
     p.posLaw.pr (fun P => k ≤ (T.filter (fun ℓ => P ℓ = true)).card) ≤
@@ -1276,7 +1276,7 @@ private theorem activation_overlap_union_bound {p : HDParams}
       intro T hT
       exact activation_count_ge_prob_bound hq0 hq1 T k
 
-private theorem active_count_ge_prob_bound {p : HDParams}
+theorem active_count_ge_prob_bound {p : HDParams}
     (hqP0 : 0 ≤ p.lam / (p.V : ℝ)) (hqP1 : p.lam / (p.V : ℝ) ≤ 1)
     (hqA0 : 0 ≤ (p.n : ℝ) ^ p.b₀ / p.lam)
     (hqA1 : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1)
@@ -1697,7 +1697,7 @@ private def heightCrowdRegion {p : HDParams} (v : CubeVertex p.d)
 
 /-- A rectangular over-approximation to the prospective-center domain of a child path:
 all levels within `R` and all center locations in the radius-`r + D*R + D` spatial ball. -/
-private def hdChildCenterDomain {p : HDParams} (start : HDState p) (R : ℕ) : Finset p.Loc :=
+def hdChildCenterDomain {p : HDParams} (start : HDState p) (R : ℕ) : Finset p.Loc :=
   Finset.univ.filter (fun ℓ =>
     Nat.dist start.2 ℓ.2.val < R ∧
       _root_.hammingDist start.1 ℓ.1 ≤ p.r + p.D * R + p.D)
@@ -1828,7 +1828,7 @@ private theorem hdChildCenterDomain_overlap_real_bound {p : HDParams}
       mul_le_mul_of_nonneg_right hspatial (by positivity)
     _ = (2 * R + 1 : ℝ) * (p.V : ℝ) * ρ := by ring
 
-private theorem hdChildCenterDomain_disjoint_levels {p : HDParams}
+theorem hdChildCenterDomain_disjoint_levels {p : HDParams}
     (start₁ start₂ : HDState p) (R : ℕ)
     (hsep : 2 * R < Nat.dist start₁.2 start₂.2) :
     Disjoint (hdChildCenterDomain start₁ R) (hdChildCenterDomain start₂ R) := by
@@ -1845,7 +1845,7 @@ private theorem hdChildCenterDomain_disjoint_levels {p : HDParams}
   rw [hsymm] at htri
   omega
 
-private theorem hdScaleSeparated_spatial_distance_lower {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleSeparated_spatial_distance_lower {p : HDParams} (hD : 0 < p.D)
     {start₁ start₂ : HDState p} {gap R : ℕ}
     (hsep : gap ≤ hdScaleDistance p.D start₁ start₂)
     (hvertical : Nat.dist start₁.2 start₂.2 ≤ 2 * R)
@@ -1975,7 +1975,7 @@ private theorem volume_ge_lambda_from_fixed_layer
     _ ≤ (Nat.choose p.d k : ℝ) := hchoose
     _ ≤ (p.V : ℝ) := by exact_mod_cast hdVolume_ge_choose k hr
 
-private theorem height_volume_ge_lambda_eventually
+theorem height_volume_ge_lambda_eventually
     (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
     (hp : HDAdmissible J₀ b₀ b σ ζ θ a c_d C_d D)
     (reg : HDRegime b₀ b D) :
@@ -6028,7 +6028,7 @@ private theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep {p : HDParams
     simp [hempty]
     positivity
 
-private theorem hdChildCenterDomain_overlap_linear_bound_of_sep_scale {p : HDParams}
+theorem hdChildCenterDomain_overlap_linear_bound_of_sep_scale {p : HDParams}
     (start₁ start₂ : HDState p) (R gap : ℕ) (hD : 0 < p.D)
     (hsep : gap ≤ hdScaleDistance p.D start₁ start₂)
     (hgap : 2 * R < gap) (hR : 0 < R) (hr : 0 < p.r)
@@ -6099,7 +6099,7 @@ private theorem hdChildCenterDomain_overlap_linear_bound_of_sep_scale {p : HDPar
     simp [hempty]
     positivity
 
-private theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep_scale {p : HDParams}
+theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep_scale {p : HDParams}
     (start₁ start₂ : HDState p) (R gap : ℕ) (hD : 0 < p.D)
     (hsep : gap ≤ hdScaleDistance p.D start₁ start₂)
     (hgap : 2 * R < gap) (hR : 0 < R) (hr : 0 < p.r)
@@ -6174,7 +6174,7 @@ private theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep_scale {p : HD
     simp [hempty]
     positivity
 
-private theorem hdScaleRadius_child_enlargement_le_dimension_eventually
+theorem hdScaleRadius_child_enlargement_le_dimension_eventually
     (D : ℕ) (σ ζ c_d : ℝ) (hD : 0 < D) (hcd : 0 < c_d)
     (hζ : 0 < ζ ∧ ζ < 1) :
     ∃ n₀ : ℕ, ∀ n d i, n₀ ≤ n → c_d * (n : ℝ) ≤ (d : ℝ) →

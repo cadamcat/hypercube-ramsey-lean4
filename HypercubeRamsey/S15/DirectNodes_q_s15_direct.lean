@@ -2837,6 +2837,82 @@ theorem highDirect_scattered_slack {κ : CConsts} (hκ : κ.Admissible) (T : Sta
         simpa using hpow
   simpa [nR] using hmain
 
+set_option maxHeartbeats 400000 in
+theorem highDirect_own_degree_gate {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid →
+      PT.tiling.mode = .highDirect → ∀ i x, x ∈ PT.envelope i →
+        |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤ bstar T k := by
+  have hNlarge : ∀ᶠ k : ℕ in atTop, 3 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually (eventually_ge_atTop 3)
+  have hpowerLarge : ∀ᶠ k : ℕ in atTop, 4 ≤ (T.S.n k : ℝ) ^ (0.03 : ℝ) := by
+    have hlim : Filter.Tendsto (fun k : ℕ =>
+        (T.S.n k : ℝ) ^ (0.03 : ℝ)) atTop atTop :=
+      (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 0.03)).comp
+        (tendsto_natCast_atTop_atTop.comp T.S.n_tendsto)
+    exact hlim.eventually (eventually_ge_atTop 4)
+  filter_upwards [hNlarge, hpowerLarge] with k hn hlarge
+  intro PT hPT hmode i x hx
+  let nR : ℝ := T.S.n k
+  have hnR : 1 ≤ nR := by
+    change (1 : ℝ) ≤ (T.S.n k : ℝ)
+    exact_mod_cast (show 1 ≤ T.S.n k by omega)
+  have hscale := hPT.tiling_valid.direct_scale_bound (Or.inr hmode) i
+  have hι : κ.ι / 2 ≤ 0.01 := by
+    have hι := hκ.ι_rng.2
+    have hmin1 : min κ.η0 0.01 ≤ 0.01 := min_le_right _ _
+    have hmin2 : min κ.xs (min κ.η0 0.01) ≤ min κ.η0 0.01 := min_le_right _ _
+    have hmin : min κ.xs (min κ.η0 0.01) ≤ 0.01 := hmin2.trans hmin1
+    linarith
+  have hg : (PT.tiling.P i).g ≤ nR ^ (0.01 : ℝ) := by
+    calc
+      (PT.tiling.P i).g ≤ nR ^ (κ.ι / 2) := by simpa [nR] using hscale
+      _ ≤ nR ^ (0.01 : ℝ) := Real.rpow_le_rpow_of_exponent_le hnR hι
+  have hOwn := hPT.envelope_degree i x hx
+  have hOwn' : OwnDegOK PT.tiling i (PT.π i) x := hOwn
+  have hbounds := hOwn'
+  simp [OwnDegOK, hmode] at hbounds
+  have hlow : 0 ≤ deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2 := by
+    have hsurplus : 0 ≤ (PT.tiling.P i).g / (4 * (T.S.n k : ℝ)) := by positivity
+    linarith [hbounds.1]
+  have hhigh : deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2 ≤
+      4 * (PT.tiling.P i).g / nR := by
+    have hhi := hbounds.2
+    simpa [nR] using (by linarith :
+      deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2 ≤
+        4 * (PT.tiling.P i).g / (T.S.n k : ℝ))
+  have hratio : 4 * nR ^ (0.01 : ℝ) / nR ≤ nR ^ (-0.96 : ℝ) := by
+    apply (div_le_iff₀ (by positivity : 0 < nR)).2
+    have hpow : nR ^ (0.01 : ℝ) * nR ^ (0.03 : ℝ) = nR ^ (0.04 : ℝ) := by
+      rw [← Real.rpow_add (by positivity : 0 < nR)]
+      congr 1 <;> norm_num
+    have hscale' : 4 ≤ nR ^ (0.03 : ℝ) := by simpa [nR] using hlarge
+    calc
+      4 * nR ^ (0.01 : ℝ) ≤ nR ^ (0.03 : ℝ) * nR ^ (0.01 : ℝ) :=
+        mul_le_mul_of_nonneg_right hscale' (Real.rpow_nonneg (by linarith [hnR]) _)
+      _ = nR ^ (0.04 : ℝ) := by rw [mul_comm, hpow]
+      _ = nR ^ (-0.96 : ℝ) * nR := by
+        have hright : nR ^ (0.04 : ℝ) = nR ^ (-0.96 : ℝ) * nR := by
+          calc
+            nR ^ (0.04 : ℝ) = nR ^ ((-0.96 : ℝ) + 1) := by congr 1 <;> norm_num
+            _ = nR ^ (-0.96 : ℝ) * nR ^ (1 : ℝ) := by
+              rw [Real.rpow_add (by linarith [hnR])]
+            _ = nR ^ (-0.96 : ℝ) * nR := by rw [Real.rpow_one]
+        exact hright
+  have habs : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+      4 * (PT.tiling.P i).g / nR := by
+    rw [abs_of_nonneg hlow]
+    exact hhigh
+  calc
+    |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+        4 * (PT.tiling.P i).g / nR := habs
+    _ ≤ 4 * nR ^ (0.01 : ℝ) / nR := by
+      exact div_le_div_of_nonneg_right
+        (mul_le_mul_of_nonneg_left hg (by norm_num)) (by positivity)
+    _ ≤ nR ^ (-0.96 : ℝ) := hratio
+    _ = bstar T k := by
+      simp [bstar, nR]
+      norm_num
+
 theorem direct_sampler_separated_product_bound {κ : CConsts} {T : Stage} {k m : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (J : S15.DirectSampler PT hPT) (rows : Fin m → S15.EvenPosition T k)

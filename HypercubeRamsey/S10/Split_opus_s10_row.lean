@@ -1,4 +1,5 @@
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_row_q_s10_b
 import HypercubeRamsey.S10.LocalNodes
 import HypercubeRamsey.Framework.Props
 

@@ -90,7 +90,7 @@ theorem height_position_counts (p : HDParams) (Sites : p.Sites)
     (hprob : p.lam / (p.V : ℝ) ≤ 1) :
     p.posLaw.pr (fun P => ∃ v ∈ Sites, ∃ j : Fin (p.H + 1),
       let count := (Finset.univ.filter (fun u : CubeVertex p.d =>
-        P (u, j) = true ∧ hammingDist u v ≤ p.r)).card
+        P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card
       ((count : ℝ) < p.lam / 2 ∨ 2 * p.lam < (count : ℝ))) ≤
         2 * (Sites.card : ℝ) * ((p.H + 1 : ℕ) : ℝ) * Real.exp (-p.lam / 12) := by
   exact height_position_counts_p_height_small p Sites hlam hV hr hprob

@@ -738,10 +738,10 @@ structure ProjectionGeometry (κ : CConsts) {T : Stage} {k : ℕ}
   /-- Sites in a group's neighborhood have pairwise distance at most six. -/
   neighborhood_distance : ∀ (g : Group 𝒯 i) (v v' : EvenRole 𝒯 i),
     v ∈ groupNeighborhood g →
-    v' ∈ groupNeighborhood g → hammingDist v.1 v'.1 ≤ 6
+    v' ∈ groupNeighborhood g → _root_.hammingDist v.1 v'.1 ≤ 6
   projected_distance : ∀ g (v v' : EvenRole 𝒯 i),
     v ∈ groupNeighborhood g → v' ∈ groupNeighborhood g →
-      hammingDist (project v.1) (project v'.1) ≤ 6
+      _root_.hammingDist (project v.1) (project v'.1) ≤ 6
   projected_overlap : ∀ x : IWord 𝒯 i,
     ((Finset.univ.filter fun g : Group 𝒯 i =>
       ∃ v ∈ groupNeighborhood g, project v.1 = x).card : ℝ) ≤ (𝒯.P i).h ^ 3
@@ -1122,22 +1122,22 @@ theorem projection_geometry (κ : CConsts) (hκ : κ.Admissible)
     simp
     rfl
   have hcenterDist (g : Group 𝒯 i) (v : EvenRole 𝒯 i)
-      (hv : v ∈ groupNeighborhood g) : hammingDist v.1 g.1 ≤ 2 := by
+      (hv : v ∈ groupNeighborhood g) : _root_.hammingDist v.1 g.1 ≤ 2 := by
     rcases hneighborhoodSpec g v |>.1 hv with ⟨l, hl⟩
     rcases Finset.mem_image.mp hl with ⟨l', _, hfl⟩
     have hdistV := HypercubeRamsey.S14.Geometry_q_s14_geom.hammingDist_flipPos v.1 l
-    have hdistG : hammingDist (flipPos v.1 l) g.1 = 1 := by
+    have hdistG : _root_.hammingDist (flipPos v.1 l) g.1 = 1 := by
       calc
-        hammingDist (flipPos v.1 l) g.1 = hammingDist (flipPos g.1 l') g.1 := by rw [← hfl]
-        _ = hammingDist g.1 (flipPos g.1 l') := hammingDist_comm _ _
+        _root_.hammingDist (flipPos v.1 l) g.1 = _root_.hammingDist (flipPos g.1 l') g.1 := by rw [← hfl]
+        _ = _root_.hammingDist g.1 (flipPos g.1 l') := hammingDist_comm _ _
         _ = 1 := HypercubeRamsey.S14.Geometry_q_s14_geom.hammingDist_flipPos g.1 l'
     calc
-      hammingDist v.1 g.1 ≤ hammingDist v.1 (flipPos v.1 l) +
-          hammingDist (flipPos v.1 l) g.1 := hammingDist_triangle _ _ _
+      _root_.hammingDist v.1 g.1 ≤ _root_.hammingDist v.1 (flipPos v.1 l) +
+          _root_.hammingDist (flipPos v.1 l) g.1 := _root_.hammingDist_triangle _ _ _
       _ = 1 + 1 := by rw [hdistV, hdistG]
       _ ≤ 2 := by omega
   have hprojectDistOne (v : EvenRole 𝒯 i) :
-      hammingDist (project v.1) v.1 = 1 := by
+      _root_.hammingDist (project v.1) v.1 = 1 := by
     rw [hprojectEq, hammingDist_comm]
     exact HypercubeRamsey.S14.Geometry_q_s14_geom.hammingDist_flipPos v.1 (idx v.1)
   let groupsAt : EvenRole 𝒯 i → Finset (Group 𝒯 i) := fun v =>
@@ -1303,36 +1303,36 @@ theorem projection_geometry (κ : CConsts) (hκ : κ.Admissible)
     neighborhood_distance := by
       intro g v v' hv hv'
       have hvg := hcenterDist g v hv
-      have hgv' : hammingDist g.1 v'.1 ≤ 2 := by
+      have hgv' : _root_.hammingDist g.1 v'.1 ≤ 2 := by
         simpa [hammingDist_comm] using hcenterDist g v' hv'
       calc
-        hammingDist v.1 v'.1 ≤ hammingDist v.1 g.1 + hammingDist g.1 v'.1 :=
-          hammingDist_triangle _ _ _
+        _root_.hammingDist v.1 v'.1 ≤ _root_.hammingDist v.1 g.1 + _root_.hammingDist g.1 v'.1 :=
+          _root_.hammingDist_triangle _ _ _
         _ ≤ 2 + 2 := Nat.add_le_add hvg hgv'
         _ ≤ 6 := by omega
     projected_distance := by
       intro g v v' hv hv'
       have hvg := hcenterDist g v hv
-      have hgv' : hammingDist g.1 v'.1 ≤ 2 := by
+      have hgv' : _root_.hammingDist g.1 v'.1 ≤ 2 := by
         simpa [hammingDist_comm] using hcenterDist g v' hv'
-      have hleft : hammingDist (project v.1) g.1 ≤ 3 := by
+      have hleft : _root_.hammingDist (project v.1) g.1 ≤ 3 := by
         calc
-          hammingDist (project v.1) g.1 ≤
-              hammingDist (project v.1) v.1 + hammingDist v.1 g.1 := hammingDist_triangle _ _ _
+          _root_.hammingDist (project v.1) g.1 ≤
+              _root_.hammingDist (project v.1) v.1 + _root_.hammingDist v.1 g.1 := _root_.hammingDist_triangle _ _ _
           _ ≤ 1 + 2 := Nat.add_le_add (le_of_eq (hprojectDistOne v)) hvg
           _ ≤ 3 := by omega
-      have hright : hammingDist g.1 (project v'.1) ≤ 3 := by
-        have hlast : hammingDist v'.1 (project v'.1) = 1 := by
+      have hright : _root_.hammingDist g.1 (project v'.1) ≤ 3 := by
+        have hlast : _root_.hammingDist v'.1 (project v'.1) = 1 := by
           simpa [hammingDist_comm] using hprojectDistOne v'
         calc
-          hammingDist g.1 (project v'.1) ≤
-              hammingDist g.1 v'.1 + hammingDist v'.1 (project v'.1) := hammingDist_triangle _ _ _
+          _root_.hammingDist g.1 (project v'.1) ≤
+              _root_.hammingDist g.1 v'.1 + _root_.hammingDist v'.1 (project v'.1) := _root_.hammingDist_triangle _ _ _
           _ ≤ 2 + 1 := Nat.add_le_add hgv' (by omega)
           _ ≤ 3 := by omega
       calc
-        hammingDist (project v.1) (project v'.1) ≤
-            hammingDist (project v.1) g.1 + hammingDist g.1 (project v'.1) :=
-          hammingDist_triangle _ _ _
+        _root_.hammingDist (project v.1) (project v'.1) ≤
+            _root_.hammingDist (project v.1) g.1 + _root_.hammingDist g.1 (project v'.1) :=
+          _root_.hammingDist_triangle _ _ _
         _ ≤ 3 + 3 := Nat.add_le_add hleft hright
         _ ≤ 6 := by omega
     projected_overlap := by
@@ -3766,7 +3766,7 @@ noncomputable def siteSet (Geom : ProjectionGeometry κ 𝒯 i) : (patchHD κ (�
 
 noncomputable def candidateBall (H : PrimitiveHistory κ 𝒯 i mesh)
     (v : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) : Finset H.Center :=
-  Finset.univ.filter fun c => c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r
+  Finset.univ.filter fun c => c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r
 
 abbrev Masks (H : PrimitiveHistory κ 𝒯 i mesh) :=
   ∀ (g : Group 𝒯 i) (W : ∀ r, H.Val r), MaskFacts i mesh (H.maskVertex g W)
@@ -4137,30 +4137,30 @@ theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
             ring
   have hballCard (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
       ((Finset.univ.filter fun c : H.Center =>
-        c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r).card : ℝ) = H.Device.V := by
+        c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r).card : ℝ) = H.Device.V := by
     have hNat : (Finset.univ.filter fun c : H.Center =>
-        c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r).card = H.Device.V := by
+        c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r).card = H.Device.V := by
       simpa [PrimitiveHistory.Device, PrimitiveHistory.Center, patchHD,
         HDParams.Loc, HDParams.V] using
           Lane_q_s14_hist.levelBall_card H.Device.d H.Device.H H.Device.r j v
     exact_mod_cast hNat
   have hballIndicators (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
       (∑ c : H.Center,
-        if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) =
+        if c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) =
           (H.Device.V : ℝ) := by
     calc
       _ = ((Finset.univ.filter fun c : H.Center =>
-          c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r).card : ℝ) := by
+          c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r).card : ℝ) := by
             simp [Finset.sum_ite_mem, Finset.univ_inter]
       _ = _ := hballCard v j
   have hinside (v : OAI.HypercubeRamsey.CubeVertex H.Device.d)
       (j : Fin (H.Device.H + 1)) :
       (∑ r : H.Rec, if ∃ c : H.Center, r = Sum.inl c ∧
-          c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) =
+          c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) =
         (H.Device.V : ℝ) := by
     calc
       _ = ∑ c : H.Center,
-          if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0 := by
+          if c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0 := by
             rw [Fintype.sum_sum_type, Fintype.sum_sum_type]
             simp [PrimitiveHistory.Rec]
       _ = (H.Device.V : ℝ) := hballIndicators v j
@@ -4168,7 +4168,7 @@ theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
       ∀ r : H.Rec, H.Val r → ℝ := fun r =>
     match r with
     | .inl c => fun z =>
-        if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then
+        if c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then
           if z.2.2.1 then 1 else 0 else 0
     | .inr (.inl _) => fun _ => 0
     | .inr (.inr _) => fun _ => 0
@@ -4207,12 +4207,12 @@ theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
       (r : H.Rec) :
       (H.record p r).E (fun z => Real.exp (s * term v j r z)) =
         match r with
-        | .inl c => if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then
+        | .inl c => if c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then
             1 + q * (Real.exp s - 1) else 1
         | .inr _ => 1 := by
     cases r with
     | inl c =>
-        by_cases hc : c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r
+        by_cases hc : c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r
         · simpa [term, hc, PrimitiveHistory.record] using hcenterMoment s
         · simp [term, hc, PrimitiveHistory.record, Lane_q_s14_hist.E_const]
     | inr r =>
@@ -4235,10 +4235,10 @@ theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
     have hbound (r : H.Rec) :
         (H.record p r).E (f r) ≤ Real.exp (q * (Real.exp s - 1) *
           (if ∃ c : H.Center, r = Sum.inl c ∧
-              c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0)) := by
+              c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0)) := by
       cases r with
       | inl c =>
-          by_cases hc : c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r
+          by_cases hc : c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r
           · simp [f, hfactor, hc]
             simpa [add_comm] using (Real.add_one_le_exp (q * (Real.exp s - 1)))
           · simp [f, hfactor, hc]
@@ -4253,7 +4253,7 @@ theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
       _ = ∏ r, (H.record p r).E (f r) := hfact
       _ ≤ ∏ r, Real.exp (q * (Real.exp s - 1) *
           (if ∃ c : H.Center, r = Sum.inl c ∧
-              c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0)) := by
+              c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0)) := by
             apply Finset.prod_le_prod₀
             · intro r hr
               exact hnonneg r
@@ -4265,7 +4265,7 @@ theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
             calc
               _ = q * (Real.exp s - 1) *
                     ∑ r : H.Rec, (if ∃ c : H.Center, r = Sum.inl c ∧
-                      c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) := by
+                      c.2 = j ∧ _root_.hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) := by
                     rw [Finset.mul_sum]
               _ = q * (Real.exp s - 1) * (H.Device.V : ℝ) := by rw [hinside v j]
               _ = H.Device.lam * (Real.exp s - 1) := by
@@ -5147,7 +5147,7 @@ structure HeightFacts {κ : CConsts} {T : Stage} {k : ℕ}
   chosen_eligible : ∀ W v c, selected Geom H mask W v = some c →
     c ∈ eligible Geom H mask W (Geom.project v.1) c.2 ∧ H.active W c = true
   selected_local : ∀ v W W',
-    (∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
+    (∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
       selected Geom H mask W v = selected Geom H mask W' v
 
 section SelectionLocalProof
@@ -5159,7 +5159,7 @@ variable {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
   {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
 
 private theorem flip_dist_le_one {d : ℕ} (z : CubePos d) (l : Fin d) :
-    hammingDist (flipPos z l) z ≤ 1 := by
+    _root_.hammingDist (flipPos z l) z ≤ 1 := by
   calc
     _ ≤ ({l} : Finset (Fin d)).card := by
       apply Finset.card_le_card
@@ -5171,21 +5171,21 @@ private theorem flip_dist_le_one {d : ℕ} (z : CubePos d) (l : Fin d) :
     _ = 1 := by simp
 
 private theorem projection_dist_le_one (Geom : ProjectionGeometry κ 𝒯 i)
-    (z : IWord 𝒯 i) : hammingDist (Geom.project z) z ≤ 1 := by
+    (z : IWord 𝒯 i) : _root_.hammingDist (Geom.project z) z ≤ 1 := by
   rw [Geom.project_eq]
   exact flip_dist_le_one z _
 
 private theorem group_neighborhood_dist (g : Group 𝒯 i) (v : EvenRole 𝒯 i)
-    (hv : v ∈ groupNeighborhood g) : hammingDist g.1 v.1 ≤ 2 := by
+    (hv : v ∈ groupNeighborhood g) : _root_.hammingDist g.1 v.1 ≤ 2 := by
   obtain ⟨l, hl⟩ := (Finset.mem_filter.mp hv).2
   obtain ⟨j, _, hj⟩ := Finset.mem_image.mp hl
-  have ha : hammingDist g.1 (flipPos g.1 j) ≤ 1 := by
+  have ha : _root_.hammingDist g.1 (flipPos g.1 j) ≤ 1 := by
     rw [hammingDist_comm]
     exact flip_dist_le_one _ _
-  have hb : hammingDist (flipPos g.1 j) v.1 ≤ 1 := by
+  have hb : _root_.hammingDist (flipPos g.1 j) v.1 ≤ 1 := by
     rw [hj]
     exact flip_dist_le_one _ _
-  have ht := hammingDist_triangle g.1 (flipPos g.1 j) v.1
+  have ht := _root_.hammingDist_triangle g.1 (flipPos g.1 j) v.1
   omega
 
 private theorem patch_radius_pos (hconst : HeightConstantContract κ)
@@ -5208,14 +5208,14 @@ private theorem patch_radius_pos (hconst : HeightConstantContract κ)
 private theorem candidate_range_dist (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (g : Group 𝒯 i) (u : EvenRole 𝒯 i)
     (hu : u ∈ groupNeighborhood g) (c : H.Center) (hc : c ∈ candidateRange Geom H g) :
-    hammingDist c.1 (Geom.project u.1) ≤ H.Device.r + 6 := by
+    _root_.hammingDist c.1 (Geom.project u.1) ≤ H.Device.r + 6 := by
   obtain ⟨v, hv, hc⟩ := Finset.mem_biUnion.mp hc
   obtain ⟨j, _, hc⟩ := Finset.mem_biUnion.mp hc
   have hd := (Finset.mem_filter.mp hc).2.2
   have hp := Geom.projected_distance g v u hv hu
-  have ht := hammingDist_triangle c.1 (Geom.project v.1) (Geom.project u.1)
+  have ht := _root_.hammingDist_triangle c.1 (Geom.project v.1) (Geom.project u.1)
   dsimp only [PrimitiveHistory.Device, patchHD] at hd hp ht ⊢
-  simp only [hammingDist, Finset.filter_congr_decidable] at hd hp ht ⊢
+  simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd hp ht ⊢
   omega
 
 private theorem failedFamily_congr (Geom : ProjectionGeometry κ 𝒯 i)
@@ -5276,15 +5276,15 @@ private theorem failedFamily_congr (Geom : ProjectionGeometry κ 𝒯 i)
 private theorem local_record_eq (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
-    (hW : ∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r)
-    (r : H.Rec) (hr : hammingDist (H.loc r) (Geom.project v.1) ≤
+    (hW : ∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r)
+    (r : H.Rec) (hr : _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
       H.Device.Rlong + H.Device.r + 6) : W r = W' r := by
   apply hW
   have hp := projection_dist_le_one Geom v.1
-  have ht := hammingDist_triangle (H.loc r) (Geom.project v.1) v.1
-  have hd : (hammingDist (H.loc r) v.1 : ℝ) ≤
+  have ht := _root_.hammingDist_triangle (H.loc r) (Geom.project v.1) v.1
+  have hd : (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤
       (H.Device.Rlong : ℝ) + H.Device.r + 7 := by exact_mod_cast (by omega :
-        hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 7)
+        _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 7)
   have hs := (hconst.threshold_slack (𝒯.P i).h scales.h_large).2.2.2.2.1
   have hrad := patch_radius_pos hconst scales H
   have hradR : (1 : ℝ) ≤ H.Device.r := by exact_mod_cast hrad
@@ -5298,18 +5298,18 @@ private theorem eligible_congr_local (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
-    (hW : ∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r)
-    (u : IWord 𝒯 i) (hu : hammingDist u (Geom.project v.1) ≤ H.Device.Rlong)
+    (hW : ∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r)
+    (u : IWord 𝒯 i) (hu : _root_.hammingDist u (Geom.project v.1) ≤ H.Device.Rlong)
     (j : Fin (H.Device.H + 1)) :
     eligible Geom H mask W u j = eligible Geom H mask W' u j := by
   have hcenter (c : H.Center) (hc : c ∈ candidateBall H u j) :
       W (.inl c) = W' (.inl c) := by
     apply local_record_eq hconst scales Geom H v W W' hW
-    change hammingDist c.1 (Geom.project v.1) ≤ _
+    change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
     have hd := (Finset.mem_filter.mp hc).2.2
-    have ht := hammingDist_triangle c.1 u (Geom.project v.1)
+    have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
     dsimp only [PrimitiveHistory.Device, patchHD] at hd hu ht ⊢
-    simp only [hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
+    simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
     omega
   have hcounts : (candidateBall H u j).filter (fun c => H.present W c = true) =
       (candidateBall H u j).filter (fun c => H.present W' c = true) := by
@@ -5324,26 +5324,26 @@ private theorem eligible_congr_local (hconst : HeightConstantContract κ)
     obtain ⟨u', hu', heq⟩ := hg
     have hgroup : W (.inr (.inl g)) = W' (.inr (.inl g)) := by
       apply local_record_eq hconst scales Geom H v W W' hW
-      change hammingDist g.1 (Geom.project v.1) ≤ _
+      change _root_.hammingDist g.1 (Geom.project v.1) ≤ _
       have hg := group_neighborhood_dist g u' hu'
       have hp := projection_dist_le_one Geom u'.1
-      have ht := hammingDist_triangle g.1 u'.1 (Geom.project u'.1)
-      have ht' := hammingDist_triangle g.1 u (Geom.project v.1)
+      have ht := _root_.hammingDist_triangle g.1 u'.1 (Geom.project u'.1)
+      have ht' := _root_.hammingDist_triangle g.1 u (Geom.project v.1)
       rw [hammingDist_comm (Geom.project u'.1) u'.1] at hp
       rw [heq] at ht
       rw [heq] at hp
       dsimp only [PrimitiveHistory.Device, patchHD] at hu ht' ⊢
-      simp only [hammingDist, Finset.filter_congr_decidable] at hg hp ht ht' hu ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hg hp ht ht' hu ⊢
       omega
     have hrange : ∀ c ∈ candidateRange Geom H g, W (.inl c) = W' (.inl c) := by
       intro c hc
       apply local_record_eq hconst scales Geom H v W W' hW
-      change hammingDist c.1 (Geom.project v.1) ≤ _
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
       have hd := candidate_range_dist Geom H g u' hu' c hc
       rw [heq] at hd
-      have ht := hammingDist_triangle c.1 u (Geom.project v.1)
+      have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
       dsimp only [PrimitiveHistory.Device, patchHD] at hd hu ht ⊢
-      simp only [hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
       omega
     unfold marked
     rw [failedFamily_congr Geom H mask hlookup g W W' hgroup (fun c hc =>
@@ -5361,8 +5361,8 @@ private theorem bad_congr_local (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
-    (hW : ∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r)
-    (u : IWord 𝒯 i) (hu : hammingDist u (Geom.project v.1) ≤ H.Device.Rlong)
+    (hW : ∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r)
+    (u : IWord 𝒯 i) (hu : _root_.hammingDist u (Geom.project v.1) ≤ H.Device.Rlong)
     (j : Fin (H.Device.H + 1)) :
     H.Device.Bad (H.present W) (H.active W) (eligible Geom H mask W) u j ↔
       H.Device.Bad (H.present W') (H.active W') (eligible Geom H mask W') u j := by
@@ -5371,12 +5371,12 @@ private theorem bad_congr_local (hconst : HeightConstantContract κ)
       H.active W c = H.active W' c := by
     have hr : W (.inl c) = W' (.inl c) := by
       apply local_record_eq hconst scales Geom H v W W' hW
-      change hammingDist c.1 (Geom.project v.1) ≤ _
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
       have hball := (Finset.mem_filter.mp (Finset.mem_sdiff.mp hc).1).1
       have hd := (Finset.mem_filter.mp hball).2.2
-      have ht := hammingDist_triangle c.1 u (Geom.project v.1)
+      have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
       dsimp only [PrimitiveHistory.Device, patchHD] at hd hu ht ⊢
-      simp only [hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
       omega
     exact congrArg (fun x => x.2.2.2) hr
   have hnone : (∀ c ∈ eligible Geom H mask W u j, H.active W c = false) ↔
@@ -5388,19 +5388,19 @@ private theorem bad_congr_local (hconst : HeightConstantContract κ)
     · rw [hactive c hc]
       exact hn c hc
   have hfilter : (Finset.univ.filter fun z : CubePos H.Device.d => H.present W (z, j) = true ∧
-      H.active W (z, j) = true ∧ hammingDist z u ≤ H.Device.r + H.Device.D) =
+      H.active W (z, j) = true ∧ _root_.hammingDist z u ≤ H.Device.r + H.Device.D) =
       (Finset.univ.filter fun z : CubePos H.Device.d => H.present W' (z, j) = true ∧
-      H.active W' (z, j) = true ∧ hammingDist z u ≤ H.Device.r + H.Device.D) := by
+      H.active W' (z, j) = true ∧ _root_.hammingDist z u ≤ H.Device.r + H.Device.D) := by
     ext z
     simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-    by_cases hz : hammingDist z u ≤ H.Device.r + H.Device.D
+    by_cases hz : _root_.hammingDist z u ≤ H.Device.r + H.Device.D
     · have hr : W (.inl (z, j)) = W' (.inl (z, j)) := by
         apply local_record_eq hconst scales Geom H v W W' hW
-        change hammingDist z (Geom.project v.1) ≤ _
-        have ht := hammingDist_triangle z u (Geom.project v.1)
+        change _root_.hammingDist z (Geom.project v.1) ≤ _
+        have ht := _root_.hammingDist_triangle z u (Geom.project v.1)
         have hD : H.Device.D = 6 := rfl
         dsimp only [PrimitiveHistory.Device, patchHD] at hz hu ht hD ⊢
-        simp only [hammingDist, Finset.filter_congr_decidable] at hz hu ht ⊢
+        simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hz hu ht ⊢
         omega
       have hp : H.present W (z, j) = H.present W' (z, j) := congrArg (fun x => x.2.2.1) hr
       have ha : H.active W (z, j) = H.active W' (z, j) := congrArg (fun x => x.2.2.2) hr
@@ -5411,7 +5411,7 @@ private theorem bad_congr_local (hconst : HeightConstantContract κ)
 
 private theorem reach_distance (p : HDParams) (Sites : p.Sites) (P A : p.Loc → Bool)
     (E : p.EligMap) (q u : CubePos p.d) (R j : ℕ)
-    (h : p.Reach Sites P A E q R u j) : hammingDist u q ≤ R := by
+    (h : p.Reach Sites P A E q R u j) : _root_.hammingDist u q ≤ R := by
   induction h with
   | start u _ hu => exact hu
   | up u j hj hr hb ih => exact ih
@@ -5419,7 +5419,7 @@ private theorem reach_distance (p : HDParams) (Sites : p.Sites) (P A : p.Loc →
 
 private theorem reach_congr_bad (p : HDParams) (Sites : p.Sites)
     (P A P' A' : p.Loc → Bool) (E E' : p.EligMap) (q : CubePos p.d) (R : ℕ)
-    (hbad : ∀ u, hammingDist u q ≤ R → ∀ j, p.BadN P A E u j ↔ p.BadN P' A' E' u j)
+    (hbad : ∀ u, _root_.hammingDist u q ≤ R → ∀ j, p.BadN P A E u j ↔ p.BadN P' A' E' u j)
     (u : CubePos p.d) (j : ℕ) :
     p.Reach Sites P A E q R u j ↔ p.Reach Sites P' A' E' q R u j := by
   constructor <;> intro h
@@ -5438,12 +5438,12 @@ private theorem height_congr_local (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
-    (hW : ∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) :
+    (hW : ∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) :
     H.Device.height (siteSet Geom) (H.present W) (H.active W) (eligible Geom H mask W)
         H.Device.Rlong (Geom.project v.1) =
       H.Device.height (siteSet Geom) (H.present W') (H.active W') (eligible Geom H mask W')
         H.Device.Rlong (Geom.project v.1) := by
-  have hbad : ∀ u, hammingDist u (Geom.project v.1) ≤ H.Device.Rlong → ∀ j,
+  have hbad : ∀ u, _root_.hammingDist u (Geom.project v.1) ≤ H.Device.Rlong → ∀ j,
       H.Device.BadN (H.present W) (H.active W) (eligible Geom H mask W) u j ↔
         H.Device.BadN (H.present W') (H.active W') (eligible Geom H mask W') u j := by
     intro u hu j
@@ -5461,9 +5461,9 @@ private theorem selected_congr_local (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
-    (hW : ∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) :
+    (hW : ∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) :
     selected Geom H mask W v = selected Geom H mask W' v := by
-  have hq : hammingDist (Geom.project v.1) (Geom.project v.1) ≤ H.Device.Rlong := by
+  have hq : _root_.hammingDist (Geom.project v.1) (Geom.project v.1) ≤ H.Device.Rlong := by
     simp
   have hh := height_congr_local hconst scales Geom H mask hlookup v W W' hW
   have hb (j : Fin (H.Device.H + 1)) :
@@ -5479,11 +5479,11 @@ private theorem selected_congr_local (hconst : HeightConstantContract κ)
     intro c hc
     have hr : W (.inl c) = W' (.inl c) := by
       apply local_record_eq hconst scales Geom H v W W' hW
-      change hammingDist c.1 (Geom.project v.1) ≤ _
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
       have hball := (Finset.mem_filter.mp (Finset.mem_sdiff.mp hc).1).1
       have hd := (Finset.mem_filter.mp hball).2.2
       dsimp only [PrimitiveHistory.Device, patchHD] at hd ⊢
-      simp only [hammingDist, Finset.filter_congr_decidable] at hd ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd ⊢
       omega
     have ha : H.active W c = H.active W' c := congrArg (fun x => x.2.2.2) hr
     rw [ha]
@@ -5492,7 +5492,7 @@ private theorem selected_congr_local (hconst : HeightConstantContract κ)
         H.Device.priority (H.ties W') (Geom.project v.1, j) := by
     have hr := local_record_eq hconst scales Geom H v W W' hW
       (.inr (.inr (Geom.project v.1, j))) (by
-        change hammingDist (Geom.project v.1) (Geom.project v.1) ≤ _
+        change _root_.hammingDist (Geom.project v.1) (Geom.project v.1) ≤ _
         rw [hammingDist_self]
         omega)
     funext c
@@ -5819,7 +5819,7 @@ private theorem realizedList_card_bound (hconst : HeightConstantContract κ)
   let jh : Fin (H.Device.H + 1) := ⟨f hi, by have := (hg _ (hsite hi)).1; dsimp [f] at *; omega⟩
   let ball := fun (u : EvenRole 𝒯 i) (j : Fin (H.Device.H + 1)) =>
     Finset.univ.filter fun z : CubePos H.Device.d => H.present W (z, j) = true ∧
-      H.active W (z, j) = true ∧ hammingDist z (Geom.project u.1) ≤ H.Device.r + H.Device.D
+      H.active W (z, j) = true ∧ _root_.hammingDist z (Geom.project u.1) ≤ H.Device.r + H.Device.D
   let Bl := (ball lo jl).image fun z => (z, jl)
   let Bh := (ball hi jh).image fun z => (z, jh)
   have hsub : realizedList Geom H mask g W ⊆ Bl ∪ Bh := by
@@ -5833,13 +5833,13 @@ private theorem realizedList_card_bound (hconst : HeightConstantContract κ)
         (j : Fin (H.Device.H + 1)) (hj : c.2 = j) :
         c ∈ (ball r j).image (fun z => (z, j)) := by
       have hnear := Geom.projected_distance g u r hu hr
-      have hnear' : hammingDist (Geom.project u.1) (Geom.project r.1) ≤ 6 := by
+      have hnear' : _root_.hammingDist (Geom.project u.1) (Geom.project r.1) ≤ 6 := by
         convert hnear using 1 <;> congr
-      have ht := hammingDist_triangle c.1 (Geom.project u.1) (Geom.project r.1)
-      have hd : hammingDist c.1 (Geom.project r.1) ≤ H.Device.r + H.Device.D := by
+      have ht := _root_.hammingDist_triangle c.1 (Geom.project u.1) (Geom.project r.1)
+      have hd : _root_.hammingDist c.1 (Geom.project r.1) ≤ H.Device.r + H.Device.D := by
         have hD : H.Device.D = 6 := rfl
         dsimp only [PrimitiveHistory.Device, patchHD] at hdist hnear' ht hD ⊢
-        simp only [hammingDist, Finset.filter_congr_decidable] at hdist hnear' ht ⊢
+        simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hdist hnear' ht ⊢
         omega
       have hpair : (c.1, j) = c := Prod.ext rfl hj.symm
       apply Finset.mem_image.mpr
@@ -6567,11 +6567,11 @@ private def diffEquiv {d : ℕ} (v : CubePos d) : CubePos d ≃ Finset (Fin d) w
     · simp [diffSet, vertexOfDiff, hi]
 
 private theorem diffSet_card {d : ℕ} (v u : CubePos d) :
-    (diffSet v u).card = hammingDist u v := by
-  simp [diffSet, hammingDist, ne_comm]
+    (diffSet v u).card = _root_.hammingDist u v := by
+  simp [diffSet, _root_.hammingDist, ne_comm]
 
 private def ballToSubsets {d r : ℕ} (v : CubePos d) :
-    {u : CubePos d // hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
+    {u : CubePos d // _root_.hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
   toFun u := ⟨diffSet v u.1, by rw [diffSet_card]; exact u.2⟩
   invFun s := ⟨vertexOfDiff v s.1, by
     rw [← diffSet_card]
@@ -6636,17 +6636,17 @@ private theorem card_small_subsets (d r : ℕ) :
   rw [← Fin.sum_univ_eq_sum_range]
 
 private theorem hammingBall_card (d r : ℕ) (v : CubePos d) :
-    (Finset.univ.filter (fun u : CubePos d => hammingDist u v ≤ r)).card =
+    (Finset.univ.filter (fun u : CubePos d => _root_.hammingDist u v ≤ r)).card =
       ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
   classical
-  have hcard : Fintype.card {u : CubePos d // hammingDist u v ≤ r} =
-      (Finset.univ.filter (fun u : CubePos d => hammingDist u v ≤ r)).card := by
-    simpa using (Fintype.card_subtype (fun u : CubePos d => hammingDist u v ≤ r))
+  have hcard : Fintype.card {u : CubePos d // _root_.hammingDist u v ≤ r} =
+      (Finset.univ.filter (fun u : CubePos d => _root_.hammingDist u v ≤ r)).card := by
+    simpa using (Fintype.card_subtype (fun u : CubePos d => _root_.hammingDist u v ≤ r))
   exact hcard.symm.trans ((Fintype.card_congr (ballToSubsets v)).trans (card_small_subsets d r))
 
 private def levelBallEquiv (d H r : ℕ) (j : Fin (H + 1)) (v : CubePos d) :
-    {u : CubePos d // hammingDist u v ≤ r} ≃
-      {ℓ : CubePos d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} where
+    {u : CubePos d // _root_.hammingDist u v ≤ r} ≃
+      {ℓ : CubePos d × Fin (H + 1) // ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r} where
   toFun u := ⟨(u.1, j), by simp [u.2]⟩
   invFun ℓ := ⟨ℓ.1.1, ℓ.2.2⟩
   left_inv := by intro u; apply Subtype.ext; rfl
@@ -6658,18 +6658,18 @@ private def levelBallEquiv (d H r : ℕ) (j : Fin (H + 1)) (v : CubePos d) :
 
 private theorem levelBall_card (d H r : ℕ) (j : Fin (H + 1)) (v : CubePos d) :
     (Finset.univ.filter (fun ℓ : CubePos d × Fin (H + 1) =>
-      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
+      ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r)).card =
       ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
   classical
   calc
     (Finset.univ.filter (fun ℓ : CubePos d × Fin (H + 1) =>
-      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
-        Fintype.card {ℓ : CubePos d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} := by
+      ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r)).card =
+        Fintype.card {ℓ : CubePos d × Fin (H + 1) // ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r} := by
           symm
           exact Fintype.card_subtype _
-    _ = Fintype.card {u : CubePos d // hammingDist u v ≤ r} :=
+    _ = Fintype.card {u : CubePos d // _root_.hammingDist u v ≤ r} :=
           Fintype.card_congr (levelBallEquiv d H r j v).symm
-    _ = (Finset.univ.filter (fun u : CubePos d => hammingDist u v ≤ r)).card :=
+    _ = (Finset.univ.filter (fun u : CubePos d => _root_.hammingDist u v ≤ r)).card :=
           Fintype.card_subtype _
     _ = _ := hammingBall_card d r v
 
@@ -6685,7 +6685,7 @@ theorem forced_present_incidence (κ : CConsts) (hκ : κ.Admissible)
   classical
   intro p v x
   let q := Geom.project v.1
-  let B : Finset H.Center := Finset.univ.filter fun c => hammingDist c.1 q ≤ H.Device.r
+  let B : Finset H.Center := Finset.univ.filter fun c => _root_.hammingDist c.1 q ≤ H.Device.r
   let e := Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent)
   have hn := hconst.threshold_slack (𝒯.P i).h scales.h_large
   have hk : 0 < 𝒯.kScale i := hn.2.1
@@ -6703,8 +6703,8 @@ theorem forced_present_incidence (κ : CConsts) (hκ : κ.Admissible)
     dsimp [B]
     rw [Finset.card_filter, Fintype.sum_prod_type]
     have hsum (z : CubePos H.Device.d) :
-        (∑ j : Fin (H.Device.H + 1), if hammingDist z q ≤ H.Device.r then 1 else 0) =
-          (if hammingDist z q ≤ H.Device.r then 1 else 0) * (H.Device.H + 1) := by
+        (∑ j : Fin (H.Device.H + 1), if _root_.hammingDist z q ≤ H.Device.r then 1 else 0) =
+          (if _root_.hammingDist z q ≤ H.Device.r then 1 else 0) * (H.Device.H + 1) := by
       simp
     simp_rw [hsum]
     rw [← Finset.sum_mul, ← Finset.card_filter, hammingBall_card]
@@ -6712,7 +6712,7 @@ theorem forced_present_incidence (κ : CConsts) (hκ : κ.Admissible)
   have hB0 : (B.filter fun c => c.2.val = 0).card = H.Device.V := by
     let j0 : Fin (H.Device.H + 1) := ⟨0, by omega⟩
     have heq : B.filter (fun c => c.2.val = 0) =
-        Finset.univ.filter (fun c : H.Center => c.2 = j0 ∧ hammingDist c.1 q ≤ H.Device.r) := by
+        Finset.univ.filter (fun c : H.Center => c.2 = j0 ∧ _root_.hammingDist c.1 q ≤ H.Device.r) := by
       ext c
       simp only [B, Finset.mem_filter, Finset.mem_univ, true_and]
       have hj : c.2.val = 0 ↔ c.2 = j0 := ⟨fun h => Fin.ext h, fun h => congrArg Fin.val h⟩
@@ -9158,16 +9158,16 @@ structure LocalSymmetry (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHist
     (mask : Masks H) (O : OddKernels Geom H mask) (L : LikelihoodData Geom H mask O)
     (R : EvenRows Geom H mask O L) (Tests : GoodTests Geom H mask O L R) where
   q_local : ∀ g W W',
-    (∀ r, (hammingDist (H.loc r) (groupCenter g).1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
+    (∀ r, (_root_.hammingDist (H.loc r) (groupCenter g).1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
       O.q g W = O.q g W'
   U_local : ∀ g W W' D,
-    (∀ r, (hammingDist (H.loc r) (groupCenter g).1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
+    (∀ r, (_root_.hammingDist (H.loc r) (groupCenter g).1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
       O.U g W D = O.U g W' D
   σ_local : ∀ v W W' ys,
-    (∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
+    (∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
       R.σ v W ys = R.σ v W' ys
   Hgood_local : ∀ v W W',
-    (∀ r, (hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
+    (∀ r, (_root_.hammingDist (H.loc r) v.1 : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) →
       (Tests.Hgood v W ↔ Tests.Hgood v W')
   averaged_marginal_invariant : ∀ p g g' y,
     (H.recLaw p).E (fun W => ∑ D, O.q g W D * O.U g W D y) =
@@ -10234,7 +10234,7 @@ theorem posterior_good_tests (κ : CConsts) (hκ : κ.Admissible)
         ∑ ys, if bad c W ys then
           subLikelihood Geom H mask O v c W (H.tuple W c) ys else 0
       let B := Finset.univ.filter fun c : H.Center =>
-        hammingDist c.1 (Geom.project vWord) ≤ H.Device.r
+        _root_.hammingDist c.1 (Geom.project vWord) ≤ H.Device.r
       have hsub0 (c : H.Center) (W : ∀ r, H.Val r) (w : H.Tuple)
           (ys : InternalLabels 𝒯 i) : 0 ≤ subLikelihood Geom H mask O v c W w ys := by
         dsimp [subLikelihood]
@@ -10441,8 +10441,8 @@ theorem posterior_good_tests (κ : CConsts) (hκ : κ.Admissible)
         dsimp [B]
         rw [Finset.card_filter, Fintype.sum_prod_type]
         have hsum (z : CubePos H.Device.d) :
-            (∑ j : Fin (H.Device.H + 1), if hammingDist z (Geom.project vWord) ≤ H.Device.r then 1 else 0) =
-              (if hammingDist z (Geom.project vWord) ≤ H.Device.r then 1 else 0) * (H.Device.H + 1) := by simp
+            (∑ j : Fin (H.Device.H + 1), if _root_.hammingDist z (Geom.project vWord) ≤ H.Device.r then 1 else 0) =
+              (if _root_.hammingDist z (Geom.project vWord) ≤ H.Device.r then 1 else 0) * (H.Device.H + 1) := by simp
         simp_rw [hsum]
         rw [← Finset.sum_mul, ← Finset.card_filter]
         rw [hammingBall_card H.Device.d H.Device.r (Geom.project vWord)]
@@ -10568,7 +10568,7 @@ theorem locality_and_symmetry (κ : CConsts) (hκ : κ.Admissible)
         eg g = g' ∧ (∀ a, (eg a).1 = e a.1) ∧
         (∀ v, (ev v).1 = e v.1) ∧
         (∀ z l, e (flipPos z l) = flipPos (e z) l) ∧
-        (∀ z z', hammingDist (e z) (e z') = hammingDist z z') ∧
+        (∀ z z', _root_.hammingDist (e z) (e z') = _root_.hammingDist z z') ∧
         (∀ z, Geom.project (e z) = e (Geom.project z)) := by
     let s := Lane_sol_s14_lik.shift g.1 g'.1
     have hsEven : IsEvenRole s :=

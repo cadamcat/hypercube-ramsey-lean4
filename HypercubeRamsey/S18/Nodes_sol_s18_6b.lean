@@ -1235,4 +1235,190 @@ lemma descFactorial_le_factorial (p d : ℕ) (h : d ≤ p) : p.descFactorial d �
 
 end DiagramCounts
 
+section DiagramEncoding
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+noncomputable def diagramNodeEquiv {q : ℕ}
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) : NodePos shape.1 ≃ Fin (q - 1) :=
+  Fintype.equivFinOfCardEq ((nodePos_card shape.1).trans
+    (BinaryTree.mem_treesOfNumNodesEq.mp shape.2))
+
+noncomputable def diagramVertexEquiv {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) : Option (NodePos shape.1) ≃ Fin q :=
+  Fintype.equivFinOfCardEq (by
+    rw [Fintype.card_option, nodePos_card,
+      BinaryTree.mem_treesOfNumNodesEq.mp shape.2]
+    omega)
+
+noncomputable def diagramParent {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) (i : Fin (q - 1)) : Fin q :=
+  diagramVertexEquiv hq shape (parent shape.1 ((diagramNodeEquiv shape).symm i))
+
+noncomputable def diagramChild {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) (i : Fin (q - 1)) : Fin q :=
+  diagramVertexEquiv hq shape (some ((diagramNodeEquiv shape).symm i))
+
+/-- The tree rows record an orientation; every remaining row records its two
+vertex coordinates. The labels include the root coordinate. -/
+noncomputable def DiagramRealizes {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (pairs : Row → α × α) : Prop :=
+  (∀ i, pairs (diagram.2.1 i) =
+    if diagram.2.2.1 i then
+      (labels (diagramChild hq diagram.1 i), labels (diagramParent hq diagram.1 i))
+    else (labels (diagramParent hq diagram.1 i), labels (diagramChild hq diagram.1 i))) ∧
+  (∀ row : ExtraRows diagram.2.1, pairs row.1 =
+    (labels (diagram.2.2.2 row).1, labels (diagram.2.2.2 row).2))
+
+/-- A connected endpoint graph has a diagram using each spanning-tree row once. -/
+theorem exists_endpointDiagram {Row α : Type*} [Fintype α]
+    (G : SimpleGraph α) (hc : G.Connected) (pairs : Row → α × α)
+    (hw : ∀ x y, G.Adj x y → ∃ row,
+      s(x, y) = s((pairs row).1, (pairs row).2)) :
+    ∃ hq : 0 < Fintype.card α, ∃ diagram : EndpointDiagram Row (Fintype.card α),
+      ∃ labels : Fin (Fintype.card α) ≃ α,
+        DiagramRealizes hq diagram labels pairs := by
+  obtain ⟨root⟩ := hc.nonempty
+  have hq : 0 < Fintype.card α := Fintype.card_pos_iff.mpr ⟨root⟩
+  obtain ⟨tree, hv, hn, hcover⟩ := exists_plane_spanning_tree G hc root
+  let vl : Option (NodePos (treeShape tree)) ≃ α :=
+    Equiv.ofBijective (vertexLabels root tree)
+      ⟨vertexLabels_injective root tree hn, vertexLabels_surjective root tree hcover⟩
+  have hsize : (treeShape tree).numNodes = Fintype.card α - 1 := by
+    have h := Fintype.card_congr vl
+    rw [Fintype.card_option, nodePos_card] at h
+    omega
+  let shape : BinaryTree.treesOfNumNodesEq (Fintype.card α - 1) :=
+    ⟨treeShape tree, BinaryTree.mem_treesOfNumNodesEq.mpr hsize⟩
+  obtain ⟨eNode, heNode⟩ := exists_tree_row_embedding G pairs hw root tree hv hn
+  let e : Fin (Fintype.card α - 1) ↪ Row :=
+    (diagramNodeEquiv shape).symm.toEmbedding.trans eNode
+  let labels : Fin (Fintype.card α) ≃ α := (diagramVertexEquiv hq shape).symm.trans vl
+  have hparent (i : Fin (Fintype.card α - 1)) :
+      labels (diagramParent hq shape i) =
+        vertexLabels root tree (parent (treeShape tree) ((diagramNodeEquiv shape).symm i)) := by
+    simp [labels, diagramParent, vl, shape]
+  have hchild (i : Fin (Fintype.card α - 1)) :
+      labels (diagramChild hq shape i) = nodeLabel tree ((diagramNodeEquiv shape).symm i) := by
+    simp [labels, diagramChild, vl, shape, vertexLabels]
+  have horient : ∀ i : Fin (Fintype.card α - 1), ∃ flip : Bool,
+      pairs (e i) = if flip then
+        (labels (diagramChild hq shape i), labels (diagramParent hq shape i))
+      else (labels (diagramParent hq shape i), labels (diagramChild hq shape i)) := by
+    intro i
+    have h := heNode ((diagramNodeEquiv shape).symm i)
+    change s(vertexLabels root tree (parent (treeShape tree) ((diagramNodeEquiv shape).symm i)),
+      nodeLabel tree ((diagramNodeEquiv shape).symm i)) =
+      s((pairs (e i)).1, (pairs (e i)).2) at h
+    rw [← hparent i, ← hchild i] at h
+    rcases Sym2.eq_iff.mp h with ⟨h₁, h₂⟩ | ⟨h₁, h₂⟩
+    · exact ⟨false, by simp only [Bool.false_eq_true, ↓reduceIte]; exact Prod.ext h₁.symm h₂.symm⟩
+    · exact ⟨true, by simp only [↓reduceIte]; exact Prod.ext h₂.symm h₁.symm⟩
+  choose flip hflip using horient
+  let chords : ExtraRows e → Fin (Fintype.card α) × Fin (Fintype.card α) :=
+    fun row => (labels.symm (pairs row.1).1, labels.symm (pairs row.1).2)
+  refine ⟨hq, (shape, ⟨e, flip, chords⟩), labels, hflip, ?_⟩
+  intro row
+  simp only [chords, Equiv.apply_symm_apply, Prod.mk.eta]
+
+
+
+lemma diagramRealizes_map {Row α β : Type*} {q : ℕ} {hq : 0 < q}
+    {diagram : EndpointDiagram Row q} {labels : Fin q → α} {pairs : Row → α × α}
+    (f : α → β) (h : DiagramRealizes hq diagram labels pairs) :
+    DiagramRealizes hq diagram (fun i => f (labels i))
+      (fun row => (f (pairs row).1, f (pairs row).2)) := by
+  constructor
+  · intro i
+    change (f (pairs (diagram.2.1 i)).1, f (pairs (diagram.2.1 i)).2) = _
+    rw [h.1 i]
+    split_ifs <;> rfl
+  · intro row
+    change (f (pairs row.1).1, f (pairs row.1).2) = _
+    rw [h.2 row]
+
+
+lemma extendRowAssignment_apply (D : LateData hPT) (S : Finset (Pos T k))
+    (a : RowAssignment S) (v : S) : extendRowAssignment D S a v = a v := by
+  simp only [extendRowAssignment, v.2, ↓reduceDIte]
+
+lemma supported_host_mem (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (a : RowAssignment S) (violating : Bool)
+    (ha : rowPredicate D palette S violating a)
+    (x : HostVertices S (extendRowAssignment D S a)) :
+    x.1 ∈ D.palettes palette.1 palette.2 := by
+  obtain ⟨v, hv, hx⟩ := Finset.mem_biUnion.mp x.2
+  let row : S := ⟨v, hv⟩
+  have hrow := extendRowAssignment_apply D S a row
+  change extendRowAssignment D S a v = a row at hrow
+  rw [hrow] at hx
+  simp only [Finset.mem_insert, Finset.mem_singleton] at hx
+  rcases hx with hx | hx
+  · rw [hx]
+    exact (ha.1 row).2.1
+  · rw [hx]
+    exact (ha.1 row).2.2
+
+/-- Every supported assignment has a finite diagram, injective palette-valued
+labels, and the endpoint-count bounds used to stratify the weighted sum. -/
+theorem supported_assignment_diagram (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : RowAssignment S)
+    (ha : rowPredicate D palette S violating a) :
+    ∃ q : ℕ, ∃ hq : 0 < q,
+      q = (endpointVertices S (extendRowAssignment D S a)).card ∧
+      2 ≤ q ∧ q ≤ S.card + 1 ∧ (violating = true → q < S.card) ∧
+      ∃ diagram : EndpointDiagram S q, ∃ labels : Fin q ↪ Fin (T.S.N k),
+        (∀ i, labels i ∈ D.palettes palette.1 palette.2) ∧
+        DiagramRealizes hq diagram labels a := by
+  let b := extendRowAssignment D S a
+  let V := HostVertices S b
+  let pairs : S → V × V := fun row => (hostFirst S b row, hostSecond S b row)
+  have hc : (hostGraph S b).Connected := hostGraph_connected S b ha.2.1
+  have hw : ∀ x y : V, (hostGraph S b).Adj x y → ∃ row : S,
+      s(x, y) = s((pairs row).1, (pairs row).2) := by
+    rintro x y ⟨hne, row, hx⟩
+    refine ⟨row, ?_⟩
+    rcases hx with ⟨h₁, h₂⟩ | ⟨h₁, h₂⟩
+    · have h₁' : x = (pairs row).1 := Subtype.ext h₁
+      have h₂' : y = (pairs row).2 := Subtype.ext h₂
+      rw [h₁', h₂']
+    · have h₁' : x = (pairs row).2 := Subtype.ext h₁
+      have h₂' : y = (pairs row).1 := Subtype.ext h₂
+      rw [h₁', h₂']
+      exact Sym2.eq_swap
+  obtain ⟨hq, diagram, labelsV, hrealizes⟩ := exists_endpointDiagram (hostGraph S b) hc pairs hw
+  let labels : Fin (Fintype.card V) ↪ Fin (T.S.N k) :=
+    labelsV.toEmbedding.trans ⟨Subtype.val, Subtype.val_injective⟩
+  have hcard : Fintype.card V = (endpointVertices S b).card := Fintype.card_coe _
+  have htwo : 2 ≤ Fintype.card V := by
+    obtain ⟨row⟩ := ha.2.1.nonempty
+    have hne : hostFirst S b row ≠ hostSecond S b row := by
+      intro heq
+      have h := congrArg Subtype.val heq
+      change (b row).1 = (b row).2 at h
+      have hb := extendRowAssignment_apply D S a row
+      change b row = a row at hb
+      rw [hb] at h
+      exact (ha.1 row).1 h
+    haveI : Nontrivial V := ⟨⟨hostFirst S b row, hostSecond S b row, hne⟩⟩
+    exact Fintype.one_lt_card_iff_nontrivial.mpr inferInstance
+  have hupper : Fintype.card V ≤ S.card + 1 := by
+    rw [hcard]
+    exact connected_vertices_le S b ha.2.1
+  have hviolating : violating = true → Fintype.card V < S.card := by
+    rw [hcard]
+    exact ha.2.2
+  refine ⟨Fintype.card V, hq, hcard, htwo, hupper, hviolating,
+    diagram, labels, ?_, ?_⟩
+  · intro i
+    exact supported_host_mem D palette S a violating ha (labelsV i)
+  · have hmap := diagramRealizes_map (fun x : V => x.1) hrealizes
+    have hpairs : (fun row : S => ((pairs row).1.1, (pairs row).2.1)) = a := by
+      funext row
+      exact extendRowAssignment_apply D S a row
+    rw [hpairs] at hmap
+    exact hmap
+
+end DiagramEncoding
+
 end HypercubeRamsey.S18.Lane_sol_s18_6b

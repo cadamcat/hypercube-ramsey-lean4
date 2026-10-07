@@ -551,7 +551,222 @@ that value (`≥ 1 − ε` for the same named primary, `≥ c₁` in the crossin
 has degree only `c₁`; `c₁ − O(mε) ≥ c₁/2`. -/
 theorem L6_1d_supp (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Supp := by
-  sorry
+  rcases hadm with ⟨_, _, hp₀, _⟩
+  obtain ⟨nErr, hnErr⟩ := Filter.eventually_atTop.1
+    (Lane_q_s06_steps1.eventually_m6_req_error hp₀)
+  refine ⟨max 1 nErr, 1, ?_⟩
+  intro n N E G M X hlarge
+  have hn1Nat : 1 ≤ n := le_trans (le_max_left 1 nErr) hlarge.1
+  have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast hn1Nat
+  have hnpos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hn1
+  have hErr : (602 * ((X.m : ℝ) + 1) + 2) * X.ε ≤ c₁ / 2 := by
+    have h := hnErr n (le_trans (le_max_right 1 nErr) hlarge.1)
+    simpa [Ctx6.m, Ctx6.ε, m₆, ε₆, X.g.m_eq] using h
+  have hεpos : 0 < X.ε := by
+    simp [Ctx6.ε, ε₆]
+    exact Real.rpow_pos_of_pos hnpos _
+  intro H β hβ hKeys hTests i hi
+  have hMatchEquiv : ∀ nm : X.Name, matchesPrimaryName6 β nm ↔ X.MatchName β nm := by
+    intro nm
+    cases nm <;> rfl
+  have hMatchEquiv : ∀ nm : X.Name, matchesPrimaryName6 β nm ↔ X.MatchName β nm := by
+    intro nm
+    cases nm <;> rfl
+  let S : Finset X.Name := reqNames6 β
+  have hbin : β.key.1 ∈ X.binsOf (X.typeKeys β) := by
+    unfold Ctx6.binsOf Ctx6.typeKeys
+    exact Finset.mem_image.mpr ⟨β.key, Finset.mem_insert_self _ _, rfl⟩
+  have hcand : 0 < (X.candLaw H.1.1).w (H.1.2.1 β.key.1) := hKeys.2.1 _ hbin
+  have hparent := parent_heavy_related_of_local_support X β.key H.1 hKeys.1 hcand
+  have hmass : 0 < X.tagMass H β β.obs := hTests.1
+  have hweight : 0 < X.tagWeight H β β.obs i :=
+    Lane_q_s06_steps1.Tβ_pos_tagWeight X H β i hmass hi
+  have htagPos := Lane_q_s06_steps1.tagWeight_pos_tagLaw X H β β.obs i hweight
+  have hbaseTag := Lane_q_s06_steps1.baseTag_pos_accept_of_average X (X.parOf H.1) β.key
+    hparent.2.1 i htagPos
+  have hmixParent := Lane_q_s06_steps1.posterior_heavy_pos_mixture X hn1Nat
+    ((X.parOf H.1).val (primaryName6 β.key)) hparent.1
+  have hnuParent := Lane_q_s06_steps1.tagPosterior_pos_nu_of_positive_mixture X
+    ((X.parOf H.1).val (primaryName6 β.key)) i hmixParent hbaseTag.2
+  have hdegParent := X.hDeg i ((X.parOf H.1).val (primaryName6 β.key)) hnuParent.1 hnuParent.2
+  have hdegree : ∀ nm ∈ S,
+      (if matchesPrimaryName6 β nm then 1 - X.ε else c₁) ≤
+        colDeg E G (M.μ i) (X.varVal H nm) := by
+    intro nm hnm
+    cases nm with
+    | par p =>
+        change VarName6.par p ∈ reqNames6 β at hnm
+        have hparentName : p = primaryName6 β.key ∨ p = otherPrimaryName6 β.key := by
+          by_cases hmode : β.mode = .high
+          · simp [reqNames6, hmode] at hnm
+            rcases hnm with hprimary | hother
+            · exact Or.inl hprimary
+            · exact Or.inr hother
+          · simp [reqNames6, hmode] at hnm
+            exact Or.inl hnm
+        rcases hparentName with hprimary | hother
+        · have hmatch : matchesPrimaryName6 β (.par p) := by
+            simp [matchesPrimaryName6, hprimary]
+          have hparentHigh : 1 - X.ε ≤
+              colDeg E G (M.μ i) ((X.parOf H.1).val (primaryName6 β.key)) := by
+            change 1 - (n : ℝ) ^ (-p₀) ≤ _
+            exact hdegParent
+          have hde : (if matchesPrimaryName6 β (.par p) then 1 - X.ε else c₁) ≤
+              colDeg E G (M.μ i) (X.varVal H (.par p)) := by
+            rw [if_pos hmatch]
+            change 1 - X.ε ≤ colDeg E G (M.μ i) (X.varVal H (.par p))
+            simpa [Ctx6.varVal, hprimary] using hparentHigh
+          exact hde
+        · have hnot : ¬ matchesPrimaryName6 β (.par p) := by
+            have hne : primaryName6 β.key ≠ otherPrimaryName6 β.key := by
+              cases hflag : β.key.2 <;> simp [primaryName6, otherPrimaryName6, hflag]
+            intro hm
+            have hp : p = primaryName6 β.key := by simpa [matchesPrimaryName6] using hm
+            exact hne (hp.symm.trans hother)
+          have hde : (if matchesPrimaryName6 β (.par p) then 1 - X.ε else c₁) ≤
+              colDeg E G (M.μ i) (X.varVal H (.par p)) := by
+            rw [if_neg hnot]
+            change c₁ ≤ colDeg E G (M.μ i) (X.varVal H (.par p))
+            simpa [Ctx6.varVal, hother] using hbaseTag.1
+          exact hde
+    | hid ℓ =>
+        change VarName6.hid ℓ ∈ reqNames6 β at hnm
+        have hℓ : ℓ ∈ β.obs := by
+          by_cases hmode : β.mode = .high
+          · simp [reqNames6, hmode] at hnm
+            exact hnm
+          · simpa [reqNames6, hmode] using hnm
+        have hkeyrel := occObs_key_mem_C X β hβ ℓ hℓ
+        have hratio := Lane_q_s06_steps1.tagWeight_pos_ratio X H β β.obs i ℓ hℓ hweight
+        have hrepPos := Lane_q_s06_steps1.safeRatio6_pos_num
+          ((X.hidPostRep H.1 ℓ.1 β.key i).nonneg (H.2 ℓ))
+          ((X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ)) hratio
+        have hrepWeight := Lane_q_s06_steps1.hidPostRep_pos_weight X H.1 β ℓ hℓ
+          hKeys hkeyrel i htagPos (H.2 ℓ) hrepPos
+        let pvS := (X.parOf (X.withTag H.1 β.key i)).set (primaryName6 ℓ.1) (H.2 ℓ)
+        have htagModWeight := Lane_q_s06_steps1.hidWeight_pos_tagFactor
+          X (X.withTag H.1 β.key i) ℓ.1 (X.C ℓ.1) (H.2 ℓ) β.key hkeyrel hrepWeight
+        have htagMod : 0 < (X.tagLawAt pvS β.key).w i := by
+          simpa [pvS, Ctx6.withTag, Ctx6.parOf] using htagModWeight
+        have hpair0 := Lane_q_s06_steps1.hidWeight_parent_related_at_neighbor X
+          (X.withTag H.1 β.key i) β.key ℓ.1 (H.2 ℓ) hKeys.1 hrepWeight hkeyrel
+        have hpair : pvS.val (primaryName6 β.key) ∈ X.par.heavy ∧
+            related6 E G M (pvS.val (primaryName6 β.key)) (pvS.val (otherPrimaryName6 β.key)) := by
+          simpa [pvS] using hpair0
+        have hbaseMod := Lane_q_s06_steps1.baseTag_pos_accept_of_average X pvS β.key
+          hpair.2.1 i htagMod
+        by_cases hmatch : matchesPrimaryName6 β (.hid ℓ)
+        · have hnames : primaryName6 ℓ.1 = primaryName6 β.key := by
+            simpa [matchesPrimaryName6] using hmatch
+          have hval : pvS.val (primaryName6 β.key) = H.2 ℓ := by
+            cases hp : primaryName6 β.key <;>
+              simp [pvS, Ctx6.parOf, Par6.val, Par6.set, hnames, hp]
+          have hmix := Lane_q_s06_steps1.posterior_heavy_pos_mixture X hn1Nat
+            (pvS.val (primaryName6 β.key)) hpair.1
+          have hnu := Lane_q_s06_steps1.tagPosterior_pos_nu_of_positive_mixture X
+            (pvS.val (primaryName6 β.key)) i hmix hbaseMod.2
+          have hdeg := X.hDeg i (pvS.val (primaryName6 β.key)) hnu.1 hnu.2
+          have hde : (if matchesPrimaryName6 β (.hid ℓ) then 1 - X.ε else c₁) ≤
+              colDeg E G (M.μ i) (X.varVal H (.hid ℓ)) := by
+            rw [if_pos hmatch]
+            change 1 - X.ε ≤ colDeg E G (M.μ i) (X.varVal H (.hid ℓ))
+            have hdeg' : 1 - X.ε ≤ colDeg E G (M.μ i) (pvS.val (primaryName6 β.key)) := by
+              change 1 - (n : ℝ) ^ (-p₀) ≤ _
+              exact hdeg
+            simpa [Ctx6.varVal, hval] using hdeg'
+          exact hde
+        · have hcrossOr := Lane_q_s06_steps1.neighbor_primary_eq_or_other ℓ.1 β.key
+            (by
+              change β.key ∈ Finset.univ.filter (keyAdjacent6 binAdjacent6 ℓ.1) at hkeyrel
+              exact (Finset.mem_filter.mp hkeyrel).2)
+          have hcross : primaryName6 ℓ.1 = otherPrimaryName6 β.key := by
+            rcases hcrossOr with hsame | hcross
+            · exact False.elim (hmatch (by simpa [matchesPrimaryName6] using hsame))
+            · exact hcross
+          have hval : pvS.val (otherPrimaryName6 β.key) = H.2 ℓ := by
+            cases hp : otherPrimaryName6 β.key <;>
+              simp [pvS, Ctx6.parOf, Par6.val, Par6.set, hcross, hp]
+          have hde : (if matchesPrimaryName6 β (.hid ℓ) then 1 - X.ε else c₁) ≤
+              colDeg E G (M.μ i) (X.varVal H (.hid ℓ)) := by
+            rw [if_neg hmatch]
+            change c₁ ≤ colDeg E G (M.μ i) (X.varVal H (.hid ℓ))
+            simpa [Ctx6.varVal, hval] using hbaseMod.1
+          exact hde
+  obtain ⟨e, heS, hrest⟩ := Lane_q_s06_steps1.exists_req_except_matching6 X β hβ
+  have heMatch : ∀ nm ∈ S.erase e, X.MatchName β nm := by
+    intro nm hnm
+    exact (hMatchEquiv nm).1 (hrest nm hnm)
+  have hedegC : c₁ ≤ colDeg E G (M.μ i) (X.varVal H e) := by
+    by_cases hm : matchesPrimaryName6 β e
+    · have hde := hdegree e heS
+      have hfactor : 1 ≤ 602 * ((X.m : ℝ) + 1) + 2 := by
+        have hm0 : 0 ≤ (X.m : ℝ) := Nat.cast_nonneg _
+        nlinarith
+      have hεle : X.ε ≤ c₁ / 2 := by nlinarith [hErr, hfactor, hεpos]
+      have hhigh : 1 - X.ε ≤ colDeg E G (M.μ i) (X.varVal H e) := by
+        rw [if_pos hm] at hde
+        exact hde
+      have hc1small : c₁ ≤ 1 / 2 := by norm_num [c₁, c₀]
+      have hc1high : c₁ ≤ 1 - X.ε := by linarith [hεle, hc1small]
+      exact hc1high.trans hhigh
+    · simpa [hm] using hdegree e heS
+  have hmiss : ∀ nm ∈ S.erase e,
+      (M.μ i).pr (fun x => ¬ Hits E G x (X.varVal H nm)) ≤ X.ε := by
+    intro nm hnm
+    have hmatch := heMatch nm hnm
+    have hde := hdegree nm (Finset.mem_of_mem_erase hnm)
+    have hhigh : 1 - X.ε ≤ colDeg E G (M.μ i) (X.varVal H nm) := by
+      have hm : matchesPrimaryName6 β nm := (hMatchEquiv nm).2 hmatch
+      rw [if_pos hm] at hde
+      exact hde
+    rw [Lane_q_s06_steps1.pr_not_eq_one_sub_pr6,
+      ← Lane_q_s06_steps1.colDeg_eq_pr6 E G (M.μ i) (X.varVal H nm)]
+    linarith
+  have hcommon := pr_forall_lower6 (M.μ i) S
+    (fun nm x => Hits E G x (X.varVal H nm)) e c₁ X.ε (le_of_lt hεpos) heS
+    (by simpa [Lane_q_s06_steps1.colDeg_eq_pr6 E G (M.μ i) (X.varVal H e)] using hedegC) hmiss
+  have hcardNat : S.card ≤ 602 * β.u + 2 := by
+    have hcard : S.card ≤ β.obs.card + 2 := by
+      simpa [S] using Lane_q_s06_steps1.reqNames_card_le6 X β
+    have hobsCard := occType_obs_card_le X β hβ
+    calc
+      S.card ≤ β.obs.card + 2 := hcard
+      _ ≤ 602 * β.u + 2 := Nat.add_le_add_right hobsCard 2
+  have hu : β.u ≤ X.m + 1 := by
+    change Type6.u β ≤ X.g.L.m + 1
+    have hsevLe : β.2.2.1.val ≤ X.g.L.m := Nat.lt_succ_iff.mp β.2.2.1.isLt
+    cases hmode : β.mode
+    · rw [Type6.u, hmode]
+      exact Nat.succ_le_succ hsevLe
+    · simp [Type6.u, hmode]
+  have hcardReal : (S.card : ℝ) ≤ 602 * ((X.m : ℝ) + 1) + 2 := by
+    have hcardR : (S.card : ℝ) ≤ 602 * (β.u : ℝ) + 2 := by exact_mod_cast hcardNat
+    have huR : (β.u : ℝ) ≤ (X.m : ℝ) + 1 := by exact_mod_cast hu
+    nlinarith
+  have hloss : (S.card : ℝ) * X.ε ≤ c₁ / 2 := by
+    calc
+      (S.card : ℝ) * X.ε ≤ (602 * ((X.m : ℝ) + 1) + 2) * X.ε :=
+        mul_le_mul_of_nonneg_right hcardReal (le_of_lt hεpos)
+      _ ≤ c₁ / 2 := hErr
+  have hprobCommon : c₁ / 2 ≤
+      (M.μ i).pr (fun x => ∀ nm ∈ S, Hits E G x (X.varVal H nm)) := by
+    linarith [hcommon, hloss]
+  have hprobEq : (M.μ i).pr (fun x => ∀ nm ∈ S, Hits E G x (X.varVal H nm)) =
+      ∑ x ∈ X.reqNbhd H S, (M.μ i).w x := by
+    classical
+    unfold FinProb.pr Ctx6.reqNbhd
+    rw [Finset.sum_filter]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hhit : ∀ nm ∈ S, Hits E G x (X.varVal H nm) <;> simp [hhit]
+  constructor
+  · rw [hprobEq] at hprobCommon
+    exact hprobCommon
+  · intro nm hnm hmatch
+    have hde := hdegree nm hnm
+    have hm : matchesPrimaryName6 β nm := (hMatchEquiv nm).2 hmatch
+    rw [if_pos hm] at hde
+    exact hde
 
 namespace Ctx6
 

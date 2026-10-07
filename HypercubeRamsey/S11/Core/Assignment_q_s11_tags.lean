@@ -1895,4 +1895,334 @@ theorem hIn_le_half {n : ℕ} (hn : 4 ≤ n) : hIn n ≤ n / 2 := by
   have hmulNat : 2 * hIn n ≤ n := by exact_mod_cast hmul
   omega
 
+private theorem local_nonempty_of_finProb {α : Type*} [Fintype α] (P : FinProb α) : Nonempty α := by
+  classical
+  by_contra h
+  haveI : IsEmpty α := ⟨fun a => h ⟨a⟩⟩
+  have hs : (∑ a, P.w a) = 0 := by simp
+  rw [P.sum_eq_one] at hs
+  norm_num at hs
+
+theorem one_sub_mul_pow_lower {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1) (k : ℕ) :
+    1 - (k : ℝ) * x ≤ (1 - x) ^ k := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+      calc
+        1 - ((k + 1 : ℕ) : ℝ) * x ≤ (1 - (k : ℝ) * x) * (1 - x) := by
+          have hx2 : 0 ≤ x ^ 2 := sq_nonneg x
+          norm_num only [Nat.cast_add, Nat.cast_one]
+          nlinarith [hx2]
+        _ ≤ (1 - x) ^ k * (1 - x) :=
+          mul_le_mul_of_nonneg_right ih (by linarith)
+        _ = (1 - x) ^ (k + 1) := by rw [pow_succ]
+
+private theorem pi_expect_congr_local {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P Q : ∀ i, FinProb (Ω i)) (s : Finset ι)
+    (f g : (∀ i : {i // i ∈ s}, Ω i.1) → ℝ)
+    (hfg : ∀ a, f a = g a)
+    (hw : ∀ i, ∀ hi : i ∈ s, ∀ x, (P i).w x = (Q i).w x) :
+    (FinProb.pi (fun i : {i // i ∈ s} => P i.1)).expect f =
+      (FinProb.pi (fun i : {i // i ∈ s} => Q i.1)).expect g := by
+  classical
+  unfold FinProb.expect FinProb.pi
+  apply Finset.sum_congr rfl
+  intro a ha
+  rw [hfg a]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro i hi
+  exact hw i.1 i.2 (a i)
+
+private theorem pi_expect_eq_of_local {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P Q : ∀ i, FinProb (Ω i)) (s : Finset ι)
+    (f g : (∀ i, Ω i) → ℝ)
+    (hf : FinProb.DependsOn f s) (hg : FinProb.DependsOn g s)
+    (hfg : ∀ ω ω', (∀ i, i ∈ s → ω i = ω' i) → f ω = g ω')
+    (hw : ∀ i, ∀ hi : i ∈ s, ∀ x, (P i).w x = (Q i).w x) :
+    (FinProb.pi P).expect f = (FinProb.pi Q).expect g := by
+  classical
+  let ω₀ : ∀ i, Ω i := Classical.choice (local_nonempty_of_finProb (FinProb.pi P))
+  let e := Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω
+  let f' : (∀ i : {i // i ∈ s}, Ω i.1) → ℝ :=
+    fun a => f (e.symm (a, fun i => ω₀ i.1))
+  let g' : (∀ i : {i // i ∈ s}, Ω i.1) → ℝ :=
+    fun a => g (e.symm (a, fun i => ω₀ i.1))
+  have hredP : (FinProb.pi P).expect f =
+      (FinProb.pi (fun i : {i // i ∈ s} => P i.1)).expect f' := by
+    simpa [f', e] using FinProb.pi_expect_depends P s f ω₀ hf
+  have hredQ : (FinProb.pi Q).expect g =
+      (FinProb.pi (fun i : {i // i ∈ s} => Q i.1)).expect g' := by
+    simpa [g', e] using FinProb.pi_expect_depends Q s g ω₀ hg
+  have hfg' : ∀ a, f' a = g' a := by
+    intro a
+    apply hfg _ _
+    intro i hi
+    simp [e, Equiv.piEquivPiSubtypeProd_symm_apply, hi]
+  calc
+    (FinProb.pi P).expect f =
+        (FinProb.pi (fun i : {i // i ∈ s} => P i.1)).expect f' := hredP
+    _ = (FinProb.pi (fun i : {i // i ∈ s} => Q i.1)).expect g' :=
+      pi_expect_congr_local P Q s f' g' hfg' hw
+    _ = (FinProb.pi Q).expect g := hredQ.symm
+
+private theorem pi_pr_eq_of_local {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P Q : ∀ i, FinProb (Ω i)) (s : Finset ι)
+    (A B : (∀ i, Ω i) → Prop)
+    (hA : FinProb.DependsOn A s) (hB : FinProb.DependsOn B s)
+    (hAB : ∀ ω ω', (∀ i, i ∈ s → ω i = ω' i) → (A ω ↔ B ω'))
+    (hw : ∀ i, ∀ hi : i ∈ s, ∀ x, (P i).w x = (Q i).w x) :
+    (FinProb.pi P).pr A = (FinProb.pi Q).pr B := by
+  classical
+  let f : (∀ i, Ω i) → ℝ := fun ω => if A ω then 1 else 0
+  let g : (∀ i, Ω i) → ℝ := fun ω => if B ω then 1 else 0
+  have hf : FinProb.DependsOn f s := by
+    intro ω ω' hω
+    have h := hA ω ω' hω
+    simp [f, h]
+  have hg : FinProb.DependsOn g s := by
+    intro ω ω' hω
+    have h := hB ω ω' hω
+    simp [g, h]
+  have hfg : ∀ ω ω', (∀ i, i ∈ s → ω i = ω' i) → f ω = g ω' := by
+    intro ω ω' hω
+    have h := hAB ω ω' hω
+    simp [f, g, h]
+  have hEx := pi_expect_eq_of_local P Q s f g hf hg hfg hw
+  have hP : (FinProb.pi P).pr A = (FinProb.pi P).expect f := by
+    unfold FinProb.pr FinProb.expect f
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases h : A ω <;> simp [h]
+  have hQ : (FinProb.pi Q).pr B = (FinProb.pi Q).expect g := by
+    unfold FinProb.pr FinProb.expect g
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases h : B ω <;> simp [h]
+  calc
+    (FinProb.pi P).pr A = (FinProb.pi P).expect f := hP
+    _ = (FinProb.pi Q).expect g := hEx
+    _ = (FinProb.pi Q).pr B := hQ.symm
+
+private noncomputable def rawFailOddScope {n : ℕ} (v : EvenRole n) : Finset (OddRole n) :=
+  Finset.univ.image (oddNbr v)
+
+private noncomputable def rawFailTupleScope {n : ℕ} (v : EvenRole n) : Finset (EvenRole n) :=
+  (rawFailOddScope v).biUnion fun b => Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1)
+
+private theorem sliceOf_oddNbr_mem_wordBall {n : ℕ} (v : EvenRole n) (j : Fin n) :
+    sliceOf (oddNbr v j).1 ∈ wordBall (sliceOf v.1) 1 := by
+  classical
+  by_cases hj : hIn n ≤ j.val
+  · let q : OuterCoord n := ⟨j, hj⟩
+    have hslice : sliceOf (oddNbr v j).1 = flipOuter (sliceOf v.1) q := by
+      funext k
+      by_cases hk : k = q
+      · subst k
+        simp [oddNbr, sliceOf, cubeFlip, flipOuter, q]
+      · have hkj : k.1 ≠ j := by
+          intro heq
+          apply hk
+          apply Subtype.ext
+          exact Fin.ext (by simpa [q] using congrArg Fin.val heq)
+        simp [oddNbr, sliceOf, cubeFlip, flipOuter, q, hk, hkj]
+    rw [hslice]
+    simp [wordBall, wordDist_flipOuter]
+  · have hslice : sliceOf (oddNbr v j).1 = sliceOf v.1 := by
+      funext k
+      have hkj : k.1 ≠ j := by
+        intro heq
+        subst j
+        exact hj k.2
+      simp [oddNbr, sliceOf, cubeFlip, hkj]
+    rw [hslice]
+    simp [wordBall, wordDist]
+
+private theorem sliceOf_evenNbr_inner_eq {n : ℕ} (b : OddRole n) (a : InnerCoord n) :
+    sliceOf (evenNbr b a.1).1 = sliceOf b.1 := by
+  funext k
+  have hka : k.1 ≠ a.1 := by
+    intro heq
+    have hval := congrArg Fin.val heq
+    have hk' : hIn n ≤ a.1.val := by simpa [hval] using k.2
+    omega
+  simp [evenNbr, sliceOf, cubeFlip, hka]
+
+private theorem massFailGiven_as_pr {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (W : EvenRole n → Fin (kTup n) → Fin N)
+    (v : EvenRole n) :
+    massFailGiven M y₀ p t W v =
+      (FinProb.pi (fun b : OddRole n => {
+        w := fun y => oddRowF M t W b y
+        nonneg := oddRowW_nonneg E M.G (gS n) (M.μ (t (sliceOf b.1)))
+          (M.ν (t (sliceOf b.1))) (starOf W b)
+        sum_eq_one := oddRowF_sum_one M t W b })).pr (MassFail M y₀ p t · v) := by
+  classical
+  let Q : OddRole n → FinProb (Fin N) := fun b => {
+    w := fun y => oddRowF M t W b y
+    nonneg := oddRowW_nonneg E M.G (gS n) (M.μ (t (sliceOf b.1)))
+      (M.ν (t (sliceOf b.1))) (starOf W b)
+    sum_eq_one := oddRowF_sum_one M t W b }
+  have hweight (f : OddRole n → Fin N) : (FinProb.pi Q).w f = oddProdW M t W f := by
+    simp [FinProb.pi, Q, oddProdW]
+  unfold massFailGiven
+  calc
+    (∑ f, oddProdW M t W f * (if MassFail M y₀ p t f v then 1 else 0)) =
+        ∑ f, if MassFail M y₀ p t f v then (FinProb.pi Q).w f else 0 := by
+          apply Finset.sum_congr rfl
+          intro f hf
+          rw [← hweight f]
+          by_cases h : MassFail M y₀ p t f v <;> simp [h]
+    _ = (FinProb.pi Q).pr (MassFail M y₀ p t · v) := by rfl
+
+private theorem massFailGiven_eq_of_local {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t t' : OuterWord n → M.ι) (W W' : EvenRole n → Fin (kTup n) → Fin N)
+    (v : EvenRole n) (ht : t (sliceOf v.1) = t' (sliceOf v.1))
+    (hTags : ∀ b, b ∈ rawFailOddScope v → t (sliceOf b.1) = t' (sliceOf b.1))
+    (hW : ∀ u, u ∈ rawFailTupleScope v → W u = W' u) :
+    massFailGiven M y₀ p t W v = massFailGiven M y₀ p t' W' v := by
+  classical
+  let B := rawFailOddScope v
+  let C := rawFailTupleScope v
+  let Q : OddRole n → FinProb (Fin N) := fun b => {
+    w := fun y => oddRowF M t W b y
+    nonneg := oddRowW_nonneg E M.G (gS n) (M.μ (t (sliceOf b.1)))
+      (M.ν (t (sliceOf b.1))) (starOf W b)
+    sum_eq_one := oddRowF_sum_one M t W b }
+  let Q' : OddRole n → FinProb (Fin N) := fun b => {
+    w := fun y => oddRowF M t' W' b y
+    nonneg := oddRowW_nonneg E M.G (gS n) (M.μ (t' (sliceOf b.1)))
+      (M.ν (t' (sliceOf b.1))) (starOf W' b)
+    sum_eq_one := oddRowF_sum_one M t' W' b }
+  have hstar (b : OddRole n) (hb : b ∈ B) : starOf W b = starOf W' b := by
+    funext a
+    funext l
+    have hcoord : evenNbr b a.1 ∈ C := by
+      apply Finset.mem_biUnion.mpr
+      refine ⟨b, hb, Finset.mem_image.mpr ?_⟩
+      exact ⟨a, Finset.mem_univ _, rfl⟩
+    exact congrFun (hW (evenNbr b a.1) hcoord) l
+  have hrow (b : OddRole n) (hb : b ∈ B) (y : Fin N) :
+      oddRowF M t W b y = oddRowF M t' W' b y := by
+    have ht' := hTags b hb
+    unfold oddRowF
+    rw [ht', hstar b hb]
+  have hweights : ∀ b, ∀ hb : b ∈ B, ∀ y, (Q b).w y = (Q' b).w y := by
+    intro b hb y
+    exact hrow b hb y
+  have hmass : ∀ f f', (∀ b, b ∈ B → f b = f' b) →
+      (MassFail M y₀ p t f v ↔ MassFail M y₀ p t' f' v) := by
+    intro f f' hf
+    have hinner : innerOut f v = innerOut f' v := by
+      funext a
+      exact hf (oddNbr v a.1) (Finset.mem_image.mpr ⟨a.1, Finset.mem_univ _, rfl⟩)
+    have houter (j : OuterCoord n) : f (oddNbr v j.1) = f' (oddNbr v j.1) :=
+      hf (oddNbr v j.1) (Finset.mem_image.mpr ⟨j.1, Finset.mem_univ _, rfl⟩)
+    have hrowEq (x : Fin N) : evenRowF M y₀ p t f v x = evenRowF M y₀ p t' f' v x := by
+      unfold evenRowF
+      rw [ht, hinner]
+      congr 1
+      apply Finset.prod_congr rfl
+      intro j hj
+      rw [houter j]
+    unfold MassFail
+    apply Iff.of_eq
+    exact congrArg (fun q : ℝ => q < 1 / 2) (by
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact hrowEq x)
+  have hprob := pi_pr_eq_of_local Q Q' B (MassFail M y₀ p t · v) (MassFail M y₀ p t' · v)
+    (MassFail_dependsOn_oddNbrs M y₀ p t v) (MassFail_dependsOn_oddNbrs M y₀ p t' v)
+    hmass hweights
+  rw [massFailGiven_as_pr, massFailGiven_as_pr]
+  exact hprob
+
+private theorem sliceOf_rawFailTupleScope_mem_wordBall {n : ℕ} (v u : EvenRole n)
+    (hu : u ∈ rawFailTupleScope v) :
+    sliceOf u.1 ∈ wordBall (sliceOf v.1) 1 := by
+  classical
+  change u ∈ (rawFailOddScope v).biUnion
+    (fun b => Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1)) at hu
+  rcases Finset.mem_biUnion.mp hu with ⟨b, hb, hua⟩
+  rcases Finset.mem_image.mp hua with ⟨a, ha, huEq⟩
+  have hb' : b ∈ Finset.univ.image (oddNbr v) := by simpa [rawFailOddScope] using hb
+  rcases Finset.mem_image.mp hb' with ⟨j, hj, hbEq⟩
+  have huEq' : u = evenNbr b a.1 := huEq.symm
+  have hbEq' : b = oddNbr v j := hbEq.symm
+  rw [congrArg Subtype.val huEq', sliceOf_evenNbr_inner_eq, hbEq']
+  exact sliceOf_oddNbr_mem_wordBall v j
+
+private theorem massFailGiven_dependsOn_tupleScope {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :
+    FinProb.DependsOn (fun W => massFailGiven M y₀ p t W v) (rawFailTupleScope v) := by
+  intro W W' hW
+  exact massFailGiven_eq_of_local M y₀ p t t W W' v rfl (by intro b hb; rfl) hW
+
+private theorem rawFail_eq_of_wordBall_agreement {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t t' : OuterWord n → M.ι) (v : EvenRole n)
+    (htag : ∀ s, s ∈ wordBall (sliceOf v.1) 1 → t s = t' s) :
+    rawFail M y₀ p t v = rawFail M y₀ p t' v := by
+  classical
+  let C := rawFailTupleScope v
+  let P : EvenRole n → FinProb (Fin (kTup n) → Fin N) := fun u =>
+    tupLaw E M.G (M.μ (t (sliceOf u.1))) (y₀ (t (sliceOf u.1))) (kTup n)
+  let Q : EvenRole n → FinProb (Fin (kTup n) → Fin N) := fun u =>
+    tupLaw E M.G (M.μ (t' (sliceOf u.1))) (y₀ (t' (sliceOf u.1))) (kTup n)
+  let F : (EvenRole n → Fin (kTup n) → Fin N) → ℝ :=
+    fun W => massFailGiven M y₀ p t W v
+  let G : (EvenRole n → Fin (kTup n) → Fin N) → ℝ :=
+    fun W => massFailGiven M y₀ p t' W v
+  have hP : ∀ u, ∀ hu : u ∈ C, ∀ w, (P u).w w = (Q u).w w := by
+    intro u hu w
+    have hs := htag (sliceOf u.1) (sliceOf_rawFailTupleScope_mem_wordBall v u hu)
+    change (tupLaw E M.G (M.μ (t (sliceOf u.1))) (y₀ (t (sliceOf u.1))) (kTup n)).w w =
+      (tupLaw E M.G (M.μ (t' (sliceOf u.1))) (y₀ (t' (sliceOf u.1))) (kTup n)).w w
+    rw [hs]
+  have hfg : ∀ W W', (∀ u, u ∈ C → W u = W' u) → F W = G W' := by
+    intro W W' hW
+    have hcenter : t (sliceOf v.1) = t' (sliceOf v.1) :=
+      htag (sliceOf v.1) (by simp [wordBall, wordDist])
+    have hTags : ∀ b, b ∈ rawFailOddScope v → t (sliceOf b.1) = t' (sliceOf b.1) := by
+      intro b hb
+      have hb' : b ∈ Finset.univ.image (oddNbr v) := by simpa [rawFailOddScope] using hb
+      rcases Finset.mem_image.mp hb' with ⟨j, hj, rfl⟩
+      exact htag _ (sliceOf_oddNbr_mem_wordBall v j)
+    exact massFailGiven_eq_of_local M y₀ p t t' W W' v hcenter hTags hW
+  have hF : FinProb.DependsOn F C := by
+    intro W W' hW
+    exact massFailGiven_dependsOn_tupleScope M y₀ p t v W W' hW
+  have hG : FinProb.DependsOn G C := by
+    intro W W' hW
+    exact massFailGiven_dependsOn_tupleScope M y₀ p t' v W W' hW
+  have h := pi_expect_eq_of_local P Q C F G hF hG hfg hP
+  simpa [rawFail, rawTuples, FinProb.expect, P, Q, F, G, C] using h
+
+theorem T1_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (P : ℝ) (s : OuterWord n) :
+    FinProb.DependsOn (fun t => T1 M y₀ p P t s) (wordBall s 1) := by
+  intro t t' htag
+  apply propext
+  unfold T1
+  constructor
+  · rintro ⟨v, hvs, hfail⟩
+    refine ⟨v, hvs, ?_⟩
+    rw [← rawFail_eq_of_wordBall_agreement M y₀ p t t' v ?_]
+    · exact hfail
+    · intro u hu
+      exact htag u (by simpa [hvs] using hu)
+  · rintro ⟨v, hvs, hfail⟩
+    refine ⟨v, hvs, ?_⟩
+    rw [rawFail_eq_of_wordBall_agreement M y₀ p t t' v ?_]
+    · exact hfail
+    · intro u hu
+      exact htag u (by simpa [hvs] using hu)
+
 end HypercubeRamsey.Lane_q_s11_tags

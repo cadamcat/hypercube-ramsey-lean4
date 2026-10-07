@@ -311,7 +311,148 @@ theorem tag_lll (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
       (∀ s, (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤ (n : ℝ) ^ (-(2 * P))) →
       (∀ s, (rawTags M p).pr (fun t => T2 M y₀ t s) ≤ (n : ℝ) ^ (-(2 * P))) →
       TagLLL11 M y₀ p P := by
-  sorry
+  classical
+  unfold TagLLL11
+  refine ⟨32, ?_⟩
+  intro n hn N E X Y κ M y₀ p hF hT1 hT2
+  have hn32 : 32 ≤ n := hn
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnOne : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hn32R : (32 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn32
+  let q : ℝ := (n : ℝ) ^ (-(2 * P))
+  let Δ : ℕ := (n + 1) ^ 2
+  let x : ℝ := xTag n P
+  have hqpos : 0 < q := by
+    dsimp [q]
+    exact Real.rpow_pos_of_pos hnPos _
+  have hqle20 : q ≤ (n : ℝ) ^ (-(20 : ℝ)) := by
+    dsimp [q]
+    apply Real.rpow_le_rpow_of_exponent_le hnOne
+    nlinarith
+  have hneg20 : (n : ℝ) ^ (-(20 : ℝ)) = ((n : ℝ) ^ (20 : ℕ))⁻¹ := by
+    rw [Real.rpow_neg (by positivity)]
+    change ((n : ℝ) ^ (20 : ℝ))⁻¹ = ((n : ℝ) ^ (20 : ℕ))⁻¹
+    exact congrArg Inv.inv (Real.rpow_natCast (n : ℝ) 20)
+  have hpowOrder : (n : ℝ) ^ (3 : ℕ) ≤ (n : ℝ) ^ (20 : ℕ) :=
+    pow_le_pow_right₀ hnOne (by norm_num : 3 ≤ 20)
+  have hqle : q ≤ ((n : ℝ) ^ (3 : ℕ))⁻¹ := by
+    calc
+      q ≤ (n : ℝ) ^ (-(20 : ℝ)) := hqle20
+      _ = ((n : ℝ) ^ (20 : ℕ))⁻¹ := hneg20
+      _ ≤ ((n : ℝ) ^ (3 : ℕ))⁻¹ :=
+        (inv_le_inv₀ (pow_pos hnPos 20) (pow_pos hnPos 3)).2 hpowOrder
+  have hnPlusNat : n + 1 ≤ 2 * n := by omega
+  have hnPlusR : (n : ℝ) + 1 ≤ 2 * (n : ℝ) := by exact_mod_cast hnPlusNat
+  have hDelta : (Δ : ℝ) ≤ 4 * (n : ℝ) ^ 2 := by
+    dsimp [Δ]
+    rw [Nat.cast_pow, Nat.cast_add, Nat.cast_one]
+    have hsq := (sq_le_sq₀ (by positivity : 0 ≤ (n : ℝ) + 1)
+      (by positivity : 0 ≤ 2 * (n : ℝ))).2 hnPlusR
+    nlinarith [hsq]
+  have hDelta4 : 4 * (Δ : ℝ) ≤ 16 * (n : ℝ) ^ 2 := by
+    calc
+      4 * (Δ : ℝ) ≤ 4 * (4 * (n : ℝ) ^ 2) :=
+        mul_le_mul_of_nonneg_left hDelta (by norm_num : (0 : ℝ) ≤ 4)
+      _ = 16 * (n : ℝ) ^ 2 := by ring
+  have hDeltaX : (Δ : ℝ) * (4 * q) ≤ 1 / 2 := by
+    have h4q : 4 * q ≤ 4 * ((n : ℝ) ^ (3 : ℕ))⁻¹ :=
+      mul_le_mul_of_nonneg_left hqle (by norm_num)
+    calc
+      (Δ : ℝ) * (4 * q) ≤ (Δ : ℝ) * (4 * ((n : ℝ) ^ (3 : ℕ))⁻¹) :=
+        mul_le_mul_of_nonneg_left h4q (by positivity)
+      _ = 4 * (Δ : ℝ) * ((n : ℝ) ^ (3 : ℕ))⁻¹ := by ring
+      _ ≤ 16 * (n : ℝ) ^ 2 * ((n : ℝ) ^ (3 : ℕ))⁻¹ :=
+        mul_le_mul_of_nonneg_right hDelta4 (by positivity)
+      _ = 16 / (n : ℝ) := by
+        rw [div_eq_mul_inv]
+        field_simp [ne_of_gt hnPos]
+      _ ≤ 1 / 2 := by
+        apply (div_le_iff₀ hnPos).2
+        nlinarith [hn32R]
+  have hDeltaOne : (1 : ℝ) ≤ (Δ : ℝ) := by
+    dsimp [Δ]
+    rw [Nat.cast_pow, Nat.cast_add, Nat.cast_one]
+    exact one_le_pow₀ (by nlinarith [hn32R] : (1 : ℝ) ≤ (n : ℝ) + 1)
+  have hxDef : x = 4 * q := by
+    dsimp [x, q, xTag]
+  have hxNonneg : 0 ≤ x := by rw [hxDef]; positivity
+  have hxLeHalf : 4 * q ≤ 1 / 2 := by nlinarith [hDeltaX, hDeltaOne, hqpos.le]
+  have hxLtOne : x < 1 := by rw [hxDef]; linarith
+  have hpowHalf : (1 / 2 : ℝ) ≤ (1 - 4 * q) ^ Δ := by
+    calc
+      (1 / 2 : ℝ) ≤ 1 - (Δ : ℝ) * (4 * q) := by nlinarith [hDeltaX]
+      _ ≤ (1 - 4 * q) ^ Δ :=
+        HypercubeRamsey.Lane_q_s11_tags.one_sub_mul_pow_lower (by positivity)
+          (hxLeHalf.trans (by norm_num : (1 / 2 : ℝ) ≤ 1)) Δ
+  have hcharge : 2 * q ≤ x * (1 - x) ^ Δ := by
+    rw [hxDef]
+    calc
+      2 * q = (4 * q) * (1 / 2 : ℝ) := by ring
+      _ ≤ (4 * q) * (1 - 4 * q) ^ Δ :=
+        mul_le_mul_of_nonneg_left hpowHalf (by positivity)
+  have hbad (s : OuterWord n) :
+      (rawTags M p).pr (fun t => TagBad M y₀ p P t s) ≤ 2 * q := by
+    calc
+      (rawTags M p).pr (fun t => TagBad M y₀ p P t s) ≤
+          (rawTags M p).pr (fun t => T1 M y₀ p P t s) +
+            (rawTags M p).pr (fun t => T2 M y₀ t s) := by
+              simpa [TagBad] using
+                (FinProb.pr_union (rawTags M p)
+                  (fun t => T1 M y₀ p P t s) (fun t => T2 M y₀ t s))
+      _ ≤ q + q := add_le_add (hT1 s) (hT2 s)
+      _ = 2 * q := by ring
+  have hdim : Fintype.card (OuterCoord n) ≤ n := by
+    rw [HypercubeRamsey.Lane_q_s11_tags.outerCoord_card]
+    exact Nat.sub_le _ _
+  have houterPlus : (Fintype.card (OuterCoord n) : ℝ) + 1 ≤ (n : ℝ) + 1 := by
+    exact_mod_cast Nat.add_le_add_right hdim 1
+  have hball (s : OuterWord n) : ((wordBall s 2).card : ℝ) ≤ ((n : ℝ) + 1) ^ 2 := by
+    calc
+      ((wordBall s 2).card : ℝ) ≤ ((Fintype.card (OuterCoord n) : ℝ) + 1) ^ 2 :=
+        HypercubeRamsey.Lane_q_s11_tags.wordBall_card_two_le s
+      _ ≤ ((n : ℝ) + 1) ^ 2 := by
+        exact (sq_le_sq₀ (by positivity) (by positivity)).2 houterPlus
+  have hballNat (s : OuterWord n) : (wordBall s 2).card ≤ (n + 1) ^ 2 := by
+    exact_mod_cast hball s
+  refine {
+    x_nonneg := hxNonneg
+    x_lt_one := hxLtOne
+    scope := ?_
+    degree := ?_
+    prob := ?_ }
+  · intro s t t' hagree
+    have h1 := HypercubeRamsey.Lane_q_s11_tags.T1_dependsOn_wordBall M y₀ p P s t t' hagree
+    have h2 := HypercubeRamsey.Lane_q_s11_tags.T2_dependsOn_wordBall M y₀ s t t' hagree
+    have h1' : T1 M y₀ p P t s = T1 M y₀ p P t' s := by simpa using h1
+    have h2' : T2 M y₀ t s = T2 M y₀ t' s := by simpa using h2
+    change (T1 M y₀ p P t s ∨ T2 M y₀ t s) =
+      (T1 M y₀ p P t' s ∨ T2 M y₀ t' s)
+    rw [h1', h2']
+  · intro s
+    let adjacent : Finset (OuterWord n) := Finset.univ.filter fun j =>
+      j ≠ s ∧ ¬ Disjoint (wordBall s 1) (wordBall j 1)
+    have hsub : adjacent ⊆ wordBall s 2 := by
+      intro j hj
+      have hjs := (Finset.mem_filter.mp hj).2.2
+      rcases Finset.not_disjoint_iff.mp hjs with ⟨u, hus, huj⟩
+      have hsu : wordDist s u ≤ 1 := (Finset.mem_filter.mp hus).2
+      have hju : wordDist j u ≤ 1 := (Finset.mem_filter.mp huj).2
+      have huj' : wordDist u j ≤ 1 := by
+        rw [HypercubeRamsey.Lane_q_s11_tags.wordDist_symm]
+        exact hju
+      simp only [wordBall, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact (HypercubeRamsey.Lane_q_s11_tags.wordDist_triangle s u j).trans (by omega)
+    have hbound : adjacent.card ≤ (n + 1) ^ 2 :=
+      (Finset.card_le_card hsub).trans (hballNat s)
+    simpa [adjacent, Δ] using hbound
+  · intro s
+    change (FinProb.pi (fun _ : OuterWord n => p)).pr (fun t => TagBad M y₀ p P t s) ≤
+      x * (1 - x) ^ Δ
+    calc
+      (FinProb.pi (fun _ : OuterWord n => p)).pr (fun t => TagBad M y₀ p P t s) =
+          (rawTags M p).pr (fun t => TagBad M y₀ p P t s) := rfl
+      _ ≤ 2 * q := hbad s
+      _ ≤ x * (1 - x) ^ Δ := hcharge
 
 /-- P11.1d1(iii), moments (11:364–368).  For pairwise separated words, remove the at most `(n+1)³` tag events
 touching each radius-one ball (`cond_product_bound`, factor `2` per word); the raw tags are independent with

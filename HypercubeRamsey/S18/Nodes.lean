@@ -12,9 +12,16 @@ import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
+import HypercubeRamsey.S18.Run_sol_s18_n4
+import HypercubeRamsey.S18.Risk_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
+import HypercubeRamsey.S18.Swap_sol_s18_n4
+import HypercubeRamsey.S18.Locality_sol_s18_n4
+import HypercubeRamsey.S18.Cost_sol_s18_n4
+import HypercubeRamsey.S18.Test_sol_s18_n4
+import HypercubeRamsey.S18.Current_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
@@ -523,7 +530,13 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inl v =>
           exact Lane_sol_s18_n4.finalListPinnedBound D v (by omega)
             (hfinal D hD (Lane_sol_s18_n4.eventDegreeBound D hD hk) v) pin
-      | inr F => sorry
+      | inr F =>
+          by_cases hkind : F.1.val = 1
+          · by_cases hvalid : D.prefixValid F.2
+            · sorry
+            · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
+          · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
+              (hδsmall.le.trans (min_le_left _ _)) F hkind pin
 
 /-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
 theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
@@ -535,7 +548,8 @@ slot/image/tape dependency, conditional pushforward and touching charges.
 The prescribed `D.l16_valid.slot_eq` bounds leaf slot domains as well as cells. -/
 theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
-      ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → Nonempty (LeafCoupling D δ) := by
+      ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
+        Nonempty (LeafCoupling D δ) := by
   sorry
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
@@ -548,11 +562,15 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
           Nonempty (TerminalCertificate D δ (ε k)) := by
   refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
     (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
-  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ] with k hpositive
+  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
+    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ] with k hpositive hcost
   intro PT hPT D hD hRisk leaves
   have hpos := hpositive D hRisk leaves
+  obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk leaves
   refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
   intro seed hseed Ψ hΨ hlocal
+  -- Construct the consulted-image partition and its local forcing kernels;
+  -- hproduct supplies the vanishing cost once their deterministic scopes are bounded.
   sorry
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
@@ -567,7 +585,7 @@ theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   filter_upwards [P18_3a hκ T K27 c1 δ hK hc1 hδ hδsmall, P18_3e hκ T δ hδ, hf] with k ha he hf
   intro PT hPT D hD hR hLocal hTransfer
   have risk := ha PT hPT D hD hR hLocal hTransfer (P18_3c D)
-  obtain ⟨leaves⟩ := he PT hPT D hD risk
+  obtain ⟨leaves⟩ := he PT hPT D hD hR risk
   exact hf PT hPT D hD risk leaves
 
 /-- P18.4b, 18:827–861. The entering predicate is the exact incoming-risk
@@ -583,6 +601,9 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   intro PT hPT D hD hTransition hLocal hTransfer ε C
   apply Lane_sol_s18_n4.classSamplerOfEnteringLaws D δ hn
   intro j h henter
+  have hcurrent := Lane_sol_s18_n4.classCurrentBadUniformBound D δ (by omega) j h henter
+  have halarm := Lane_sol_s18_n4.classFutureAlarmBound D δ j h henter
+  -- Instantiate the clock with the deterministic spatial scopes and incidences.
   sorry
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish

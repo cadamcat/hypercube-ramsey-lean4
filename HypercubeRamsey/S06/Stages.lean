@@ -1490,16 +1490,23 @@ theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.HiddenCert := by
   obtain ⟨nC, CC, hC⟩ := L6_1h_coarse γ p₀ K hadm
+  have hα : 0 < α₆ p₀ := lt_min (by norm_num) (by linarith [hadm.2.2.1])
+  have hMto := m₆_nat_tendsto_atTop p₀ hadm.2.2.1
+  have hMlarge := hMto.eventually (Filter.eventually_ge_atTop (4000 : ℕ))
+  have hTJevent := hMto.eventually eventually_T₆_le_J₆
+  have hCeil := eventually_nat_ceil_rpow_add_two_le_double hα
   obtain ⟨nB, hB⟩ := Filter.eventually_atTop.1
     ((eventually_step2_group_charge_budget p₀ hadm.2.2.1).and
-      ((eventually_hidden_degree_charge_budget p₀ hadm.2.2.1).and (Filter.eventually_ge_atTop 2)))
+      ((eventually_hidden_degree_charge_budget p₀ hadm.2.2.1).and
+        (eventually_hidden_step3_tail_charge.and
+          (hCeil.and (hTJevent.and (hMlarge.and (Filter.eventually_ge_atTop 4)))))))
   refine ⟨max nC nB, max CC 0, ?_⟩
   intro n N E G M X hLarge hDesc hRate
   intro v c hV0 hSupport
   have hlargeC := (LargeAt.mono_max hLarge).1
   have hnB : nB ≤ n := le_trans (le_max_right _ _) hLarge.1
-  have hbudget := hB n hnB
-  have hn2 : 2 ≤ n := hbudget.2.2
+  obtain ⟨hStep2Num, hDegreeNum, hStep3Num, hCeilNum, hTJNum, hMNum, hn4⟩ := hB n hnB
+  have hn2 : 2 ≤ n := by omega
   have hn1 : 1 < (n : ℝ) := by exact_mod_cast (by omega : 1 < n)
   have hn0 : 0 < (n : ℝ) := by linarith
   let charge : ℝ := (n : ℝ) ^ (-(δ₂ / 128))
@@ -1538,7 +1545,7 @@ theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   let q : ℝ := (n : ℝ) ^ (-(δ₂ / 8))
   have hXm : X.m = m₆ p₀ n := X.g.m_eq
   have hquarter : 8 * ((X.m : ℝ) + 1) * q ≤ charge / 4 := by
-    simpa only [hXm] using hbudget.1
+    simpa only [hXm] using hStep2Num
   have hq0 : 0 ≤ q := by dsimp [q]; positivity
   have hq1 : ((X.m : ℝ) + 1) * q ≤ 1 / 2 := by linarith
   have hStep2 : ∀ gr : X.Bin × CubeVertex X.m,
@@ -1561,6 +1568,33 @@ theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       ring
     rw [hqpow]
     exact hfuture
+  have hmLarge : 4000 ≤ X.m := by simpa only [hXm] using hMNum
+  have hTleJ : X.T ≤ X.J := by
+    change T₆ X.g.L.m ≤ J₆ X.g.L.m
+    rw [X.g.m_eq]
+    exact hTJNum
+  have hmOne : 1 ≤ X.m := by omega
+  have hmPos : 0 < (X.g.L.m : ℝ) := by exact_mod_cast (show 0 < X.m by omega)
+  have hTOne : 1 ≤ X.T := (Nat.one_le_ceil_iff).2 (Real.rpow_pos_of_pos hmPos _)
+  have hJOne : 1 ≤ X.J := hTOne.trans hTleJ
+  have hJleM : X.J ≤ X.m := by
+    change ⌊(X.g.L.m : ℝ) ^ (1 / 25 : ℝ)⌋₊ ≤ X.g.L.m
+    have hmR : 1 ≤ (X.g.L.m : ℝ) := by exact_mod_cast hmOne
+    have hh := Real.rpow_le_rpow_of_exponent_le hmR (by norm_num : (1 / 25 : ℝ) ≤ 1)
+    have hpow : (X.g.L.m : ℝ) ^ (1 / 25 : ℝ) ≤ (X.g.L.m : ℝ) := by
+      simpa only [Real.rpow_one] using hh
+    exact Nat.floor_le_of_le hpow
+  have hMbound : (X.m : ℝ) + 2 ≤ (n : ℝ) ^ (2 * α₆ p₀) := by simpa [hXm, m₆] using hCeilNum
+  have hlogM : Real.log ((X.m : ℝ) + 2) ≤ 2 * α₆ p₀ * Real.log (n : ℝ) := by
+    calc
+      _ ≤ Real.log ((n : ℝ) ^ (2 * α₆ p₀)) := Real.log_le_log (by positivity) hMbound
+      _ = _ := Real.log_rpow hn0 _
+  have hStep3Mean : ∀ a ∈ X.g.L.oddStates, ∀ D ∈ X.absDescs a,
+      X.rate3Base (v, c) a D ≤ Real.exp (-(9 / 2000) * X.k) := by
+    intro a ha D hD
+    apply le_of_not_gt
+    intro hh
+    exact hNoBad2 (X.g.L.stKey a).1 (Or.inr (Or.inr ⟨a, ha, rfl, D, hD, hh⟩))
   let scope : X.Bin × CubeVertex X.m → Finset X.HKey := bad3HiddenScope X
   let adj : X.Bin × CubeVertex X.m → X.Bin × CubeVertex X.m → Prop :=
     fun i j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)
@@ -1658,14 +1692,45 @@ theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
             2 * 602 ^ 4 * ((X.m : ℝ) + 1) ^ 4 := by
           exact_mod_cast hidden_overlap_degree_le X i
         apply (mul_le_mul_of_nonneg_right hcard hcharge0).trans
-        simpa only [hXm] using hbudget.2.1
+        simpa only [hXm] using hDegreeNum
       have hprob : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) ≤
           charge * ∏ j ∈ Finset.univ.filter (adj i), (1 - charge) := by
         have hremaining :
             (X.hidLaw (v, c)).pr (fun Z => ∃ b ∈ X.g.L.oddStates,
               (X.g.L.stKey b).1 = i.1 ∧ X.g.L.stSign b = i.2 ∧
                 ∃ D ∈ X.absDescs b, Real.exp (-c₂ * X.k) < X.rate3 ((v, c), Z) b D) ≤ charge / 4 := by
-          sorry
+          have hnear : (X.hidLaw (v, c)).pr (fun Z => ∃ a ∈ X.g.L.oddStates,
+              (X.g.L.stKey a).1 = i.1 ∧ X.g.L.stSign a = i.2 ∧ X.g.L.stSeverity a ≤ X.J + 2 ∧
+                ∃ D ∈ X.absDescs a, Real.exp (-c₂ * X.k) < X.rate3 ((v, c), Z) a D) ≤ charge / 4 := by
+            have hh := near_group_step3_alarm_probability X (v, c) i hn4
+              (Real.exp (-c₂ * X.k)) (Real.exp (-(9 / 2000) * X.k)) (Real.exp_pos _) (Real.exp_nonneg _)
+              (fun a ha _ _ _ D hD => hStep3Mean a ha D hD)
+            have hexp : Real.exp (-(9 / 2000) * X.k) / Real.exp (-c₂ * X.k) =
+                Real.exp (-(7 / 2000 : ℝ) * X.k) := by
+              rw [← Real.exp_sub]
+              congr 1
+              norm_num [c₂]
+              ring
+            have hnum : (descriptorCodeCountBound X : ℝ) * Real.exp (-(9 / 2000) * X.k) /
+                Real.exp (-c₂ * X.k) ≤ charge / 4 := by
+              rw [mul_div_assoc, hexp]
+              exact (hidden_step3_count_tail X hn1 hmLarge hJOne hJleM hTleJ hlogM).trans hStep3Num
+            exact hh.trans hnum
+          apply (pr_mono (X.hidLaw (v, c)) ?_).trans hnear
+          rintro Z ⟨a, ha, hw, ht, D, hD, hr⟩
+          by_cases hj : X.g.L.stSeverity a ≤ X.J + 2
+          · exact ⟨a, ha, hw, ht, hj, D, hD, hr⟩
+          · have hempty := far_high_hidden_scope_empty X a D hD (by omega)
+            have heq : X.rate3 ((v, c), Z) a D = X.rate3Base (v, c) a D :=
+              s3_rate_eq_base_of_hidden_scope_empty X (v, c) a D hempty Z
+            have hbound : X.rate3 ((v, c), Z) a D ≤ Real.exp (-c₂ * X.k) := by
+              rw [heq]
+              apply (hStep3Mean a ha D hD).trans
+              apply Real.exp_le_exp.mpr
+              norm_num [c₂]
+              have hk0 : (0 : ℝ) ≤ X.k := by positivity
+              linarith
+            exact False.elim ((not_lt.mpr hbound) hr)
         have hhalf : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) ≤ charge / 2 := by
           have heq : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) =
               (X.hidLaw (v, c)).pr (X.Bad3 (v, c) i) := by

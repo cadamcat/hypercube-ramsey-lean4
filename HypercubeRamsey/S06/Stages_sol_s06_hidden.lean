@@ -2027,5 +2027,205 @@ theorem nearGroupDescriptorShapes_card_le (gr : X.Bin × CubeVertex X.m) (hn : 4
   (Finset.card_le_card (nearGroupDescriptorShapes_subset_codes X gr hn)).trans
     (groupDescriptorShapeCodes_card_le X gr)
 
+private theorem multiply_powers (b g a c d : ℕ) :
+    b ^ a * b ^ c * (g * b ^ d) = g * b ^ (a + c + d) := by
+  calc
+    _ = g * ((b ^ a * b ^ c) * b ^ d) := by ring
+    _ = _ := by rw [← pow_add b a c, ← pow_add b (a + c) d]
+
+private theorem descriptor_exponent_bound (J : ℕ) :
+    4 + 2 * (J + 2) + 5 * (2 * (1 + 21 * (J + 2))) ≤ 500 * (J + 1) := by omega
+
+theorem descriptor_count_power_bound (m J T : ℕ) (hm : 4000 ≤ m) (hJ : J ≤ m) (hT : T ≤ m) :
+    4 * (J + 3) * (m + 2) ^ (2 * (J + 2)) *
+      (2 ^ (1806 * T) * (T * 4000 * (m + 1) ^ 2 + 2) ^ (2 * (1 + 21 * (J + 2)))) ≤
+        (T + 2) ^ (1806 * T) * (m + 2) ^ (500 * (J + 1)) := by
+  let b := m + 2
+  have hb2 : 2 ≤ b := by dsimp [b]; omega
+  have hpref : 4 * (J + 3) ≤ b ^ 4 := by
+    have h1 : 4 ≤ b ^ 2 := by have hh := Nat.pow_le_pow_left hb2 2; norm_num at hh; exact hh
+    have h2 : J + 3 ≤ b ^ 2 := by dsimp [b]; nlinarith
+    have hh := Nat.mul_le_mul h1 h2
+    simpa only [← pow_add] using hh
+  have htc : T * 4000 ≤ b ^ 2 := by
+    have hh := Nat.mul_le_mul (show T ≤ b by dsimp [b]; omega) (show 4000 ≤ b by dsimp [b]; omega)
+    simpa only [pow_two] using hh
+  have hm2 : (m + 1) ^ 2 ≤ b ^ 2 := Nat.pow_le_pow_left (by dsimp [b]; omega) 2
+  have hbody : T * 4000 * (m + 1) ^ 2 ≤ b ^ 4 := by
+    simpa only [← pow_add] using Nat.mul_le_mul htc hm2
+  have hb4 : 2 ≤ b ^ 4 := by have hh := Nat.pow_le_pow_left hb2 4; norm_num at hh; omega
+  have hbad : T * 4000 * (m + 1) ^ 2 + 2 ≤ b ^ 5 := by
+    calc
+      _ ≤ b ^ 4 + b ^ 4 := Nat.add_le_add hbody hb4
+      _ = 2 * b ^ 4 := by omega
+      _ ≤ b * b ^ 4 := Nat.mul_le_mul_right _ hb2
+      _ = b ^ 5 := by simpa only [Nat.mul_comm] using (pow_succ b 4).symm
+  have hbadpow := Nat.pow_le_pow_left hbad (2 * (1 + 21 * (J + 2)))
+  have hgen := Nat.pow_le_pow_left (by omega : 2 ≤ T + 2) (1806 * T)
+  have hmul := Nat.mul_le_mul (Nat.mul_le_mul_right ((m + 2) ^ (2 * (J + 2))) hpref)
+    (Nat.mul_le_mul hgen hbadpow)
+  calc
+    _ ≤ b ^ 4 * b ^ (2 * (J + 2)) *
+        ((T + 2) ^ (1806 * T) * (b ^ 5) ^ (2 * (1 + 21 * (J + 2)))) := hmul
+    _ = (T + 2) ^ (1806 * T) * b ^ (4 + 2 * (J + 2) + 5 * (2 * (1 + 21 * (J + 2)))) := by
+      rw [← pow_mul b 5 (2 * (1 + 21 * (J + 2)))]
+      exact multiply_powers b ((T + 2) ^ (1806 * T)) 4 (2 * (J + 2))
+        (5 * (2 * (1 + 21 * (J + 2))))
+    _ ≤ _ := by
+      have hbase : 0 < b := by dsimp [b]; omega
+      have hexp := descriptor_exponent_bound J
+      have hp := Nat.pow_le_pow_right hbase hexp
+      exact Nat.mul_le_mul_left ((T + 2) ^ (1806 * T)) hp
+
+theorem descriptor_count_exp_bound (hm : 4000 ≤ X.m) (hJ : X.J ≤ X.m) (hT : X.T ≤ X.m) :
+    (descriptorCodeCountBound X : ℝ) ≤
+      Real.exp (1806 * X.T * Real.log ((X.T : ℝ) + 2) +
+        500 * ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2)) := by
+  have hn := descriptor_count_power_bound X.m X.J X.T hm hJ hT
+  have hr : (descriptorCodeCountBound X : ℝ) ≤
+      ((X.T + 2 : ℕ) : ℝ) ^ (1806 * X.T) * ((X.m + 2 : ℕ) : ℝ) ^ (500 * (X.J + 1)) := by
+    exact_mod_cast hn
+  have hTp := S06.Lane_q_s06_steps2.natPow_eq_exp_log6 (X.T + 2) (1806 * X.T) (by omega)
+  have hMp := S06.Lane_q_s06_steps2.natPow_eq_exp_log6 (X.m + 2) (500 * (X.J + 1)) (by omega)
+  have heq : (((X.T + 2) ^ (1806 * X.T) : ℕ) : ℝ) *
+      (((X.m + 2) ^ (500 * (X.J + 1)) : ℕ) : ℝ) =
+      Real.exp (1806 * X.T * Real.log ((X.T : ℝ) + 2) +
+        500 * ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2)) := by
+    simp only [Nat.cast_pow]
+    rw [hTp, hMp, ← Real.exp_add]
+    congr 1
+    push_cast
+    ring
+  exact hr.trans (by simpa only [Nat.cast_pow] using heq.le)
+
+theorem hidden_step3_count_tail (hn : 1 < (n : ℝ)) (hm : 4000 ≤ X.m)
+    (hJ1 : 1 ≤ X.J) (hJm : X.J ≤ X.m) (hTJ : X.T ≤ X.J)
+    (hlog : Real.log ((X.m : ℝ) + 2) ≤ 2 * α₆ p₀ * Real.log (n : ℝ)) :
+    (descriptorCodeCountBound X : ℝ) * Real.exp (-(7 / 2000 : ℝ) * X.k) ≤
+      (n : ℝ) ^ (-(1 / 10 ^ 7 : ℝ)) := by
+  have hn0 : 0 < (n : ℝ) := by linarith
+  have hln : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hn.le
+  have hJr : (1 : ℝ) ≤ X.J := by exact_mod_cast hJ1
+  have hTr : (X.T : ℝ) ≤ X.J := by exact_mod_cast hTJ
+  have hTm : (X.T : ℝ) + 2 ≤ (X.m : ℝ) + 2 := by exact_mod_cast Nat.add_le_add (hTJ.trans hJm) (Nat.le_refl 2)
+  have hlogT : Real.log ((X.T : ℝ) + 2) ≤ Real.log ((X.m : ℝ) + 2) :=
+    Real.log_le_log (by positivity) hTm
+  have hlogM0 : 0 ≤ Real.log ((X.m : ℝ) + 2) := Real.log_nonneg (by
+    have hm0 : (0 : ℝ) ≤ X.m := by positivity
+    linarith)
+  have hshape : 1806 * X.T * Real.log ((X.T : ℝ) + 2) +
+      500 * ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2) ≤
+        6000 * α₆ p₀ * ((X.J : ℝ) * Real.log (n : ℝ)) := by
+    calc
+      _ ≤ (1806 * X.T + 500 * ((X.J : ℝ) + 1)) * Real.log ((X.m : ℝ) + 2) := by
+        nlinarith [mul_le_mul_of_nonneg_left hlogT (show (0 : ℝ) ≤ 1806 * X.T by positivity)]
+      _ ≤ 3000 * X.J * Real.log ((X.m : ℝ) + 2) :=
+        mul_le_mul_of_nonneg_right (by linarith) hlogM0
+      _ ≤ 3000 * X.J * (2 * α₆ p₀ * Real.log (n : ℝ)) :=
+        mul_le_mul_of_nonneg_left hlog (by positivity)
+      _ = _ := by ring
+  have hk : κ₆ * ((X.J : ℝ) * Real.log (n : ℝ)) ≤ (X.k : ℝ) := by
+    dsimp [Ctx6.k, Ctx6.J, k₆]
+    simpa only [mul_assoc] using Nat.le_ceil (κ₆ * (J₆ X.g.L.m : ℝ) * Real.log (n : ℝ))
+  have hα : α₆ p₀ ≤ 1 / 10 ^ 12 := min_le_left _ _
+  have hcoeff : 6000 * α₆ p₀ - (7 / 2000 : ℝ) * κ₆ ≤ -(1 / 10 ^ 7 : ℝ) := by
+    norm_num [κ₆]
+    linarith
+  have hJlog0 : 0 ≤ (X.J : ℝ) * Real.log (n : ℝ) := by positivity
+  have hexp : 1806 * X.T * Real.log ((X.T : ℝ) + 2) +
+      500 * ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2) - (7 / 2000 : ℝ) * X.k ≤
+        -(1 / 10 ^ 7 : ℝ) * Real.log (n : ℝ) := by
+    have hfirst := mul_le_mul_of_nonneg_right hcoeff hJlog0
+    have hsecond := mul_le_mul_of_nonneg_right hJr hln
+    nlinarith
+  calc
+    _ ≤ Real.exp (1806 * X.T * Real.log ((X.T : ℝ) + 2) +
+        500 * ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2)) * Real.exp (-(7 / 2000 : ℝ) * X.k) :=
+      mul_le_mul_of_nonneg_right (descriptor_count_exp_bound X hm hJm (hTJ.trans hJm)) (Real.exp_nonneg _)
+    _ = Real.exp (1806 * X.T * Real.log ((X.T : ℝ) + 2) +
+        500 * ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2) - (7 / 2000 : ℝ) * X.k) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    _ ≤ Real.exp (-(1 / 10 ^ 7 : ℝ) * Real.log (n : ℝ)) := Real.exp_le_exp.mpr hexp
+    _ = _ := by rw [Real.rpow_def_of_pos hn0]; congr 1; ring
+
+open Filter in
+theorem eventually_hidden_step3_tail_charge :
+    ∀ᶠ n : ℕ in atTop,
+      (n : ℝ) ^ (-(1 / 10 ^ 7 : ℝ)) ≤ (n : ℝ) ^ (-(δ₂ / 128)) / 4 := by
+  let a : ℝ := 1 / 10 ^ 7 - δ₂ / 128
+  have ha : 0 < a := by norm_num [a, δ₂]
+  have hh := Lane_q_s06_stages.eventually_const_mul_nat_rpow_neg_lt (c := 4) ha
+    (by norm_num : (0 : ℝ) < 1)
+  filter_upwards [hh, Filter.eventually_ge_atTop 2] with n hn hn2
+  have hn0 : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have heq : (n : ℝ) ^ (-(1 / 10 ^ 7 : ℝ)) =
+      (n : ℝ) ^ (-a) * (n : ℝ) ^ (-(δ₂ / 128)) := by
+    rw [← Real.rpow_add hn0]
+    congr 1
+    dsimp [a]
+    ring
+  rw [heq]
+  have hx : 0 ≤ (n : ℝ) ^ (-(δ₂ / 128)) := Real.rpow_nonneg hn0.le _
+  nlinarith [mul_le_mul_of_nonneg_right (show (n : ℝ) ^ (-a) ≤ 1 / 4 by linarith) hx]
+
+set_option maxHeartbeats 400000 in
+theorem near_group_step3_alarm_probability (base : X.Base) (gr : X.Bin × CubeVertex X.m)
+    (hn : 4 ≤ n) (t q : ℝ) (ht : 0 < t) (hq : 0 ≤ q)
+    (hmean : ∀ b ∈ X.g.L.oddStates, (X.g.L.stKey b).1 = gr.1 → X.g.L.stSign b = gr.2 →
+      X.g.L.stSeverity b ≤ X.J + 2 → ∀ D ∈ X.absDescs b,
+        (X.hidLaw base).expect (fun Z => (X.dataLaw (Fin X.T) (base, Z)).pr
+          (fun o => X.S3Fail (base, Z) b D o)) ≤ q) :
+    (X.hidLaw base).pr (fun Z => ∃ b ∈ X.g.L.oddStates,
+      (X.g.L.stKey b).1 = gr.1 ∧ X.g.L.stSign b = gr.2 ∧ X.g.L.stSeverity b ≤ X.J + 2 ∧
+        ∃ D ∈ X.absDescs b, t < (X.dataLaw (Fin X.T) (base, Z)).pr (fun o => X.S3Fail (base, Z) b D o)) ≤
+          (descriptorCodeCountBound X : ℝ) * q / t := by
+  let P := X.hidLaw base
+  let A (s : DescriptorShape X) (Z : X.Hid) : Prop := ∃ b ∈ X.g.L.oddStates,
+    (X.g.L.stKey b).1 = gr.1 ∧ X.g.L.stSign b = gr.2 ∧ X.g.L.stSeverity b ≤ X.J + 2 ∧
+      s.2.2 ∈ X.absDescs b ∧ ((X.g.L.stKey b).2, X.stMode b, s.2.2) = s ∧
+        t < (X.dataLaw (Fin X.T) (base, Z)).pr (fun o => X.S3Fail (base, Z) b s.2.2 o)
+  have hsub : ∀ Z, (∃ b ∈ X.g.L.oddStates,
+      (X.g.L.stKey b).1 = gr.1 ∧ X.g.L.stSign b = gr.2 ∧ X.g.L.stSeverity b ≤ X.J + 2 ∧
+        ∃ D ∈ X.absDescs b, t < (X.dataLaw (Fin X.T) (base, Z)).pr (fun o => X.S3Fail (base, Z) b D o)) →
+      ∃ s ∈ nearGroupDescriptorShapes X gr, A s Z := by
+    rintro Z ⟨b, hb, hw, hs, hj, D, hD, hr⟩
+    refine ⟨((X.g.L.stKey b).2, X.stMode b, D), ?_, b, hb, hw, hs, hj, hD, rfl, hr⟩
+    exact Finset.mem_biUnion.mpr ⟨b, Finset.mem_filter.mpr ⟨hb, hw, hs, hj⟩,
+      Finset.mem_image.mpr ⟨D, hD, rfl⟩⟩
+  have hclass : ∀ s ∈ nearGroupDescriptorShapes X gr, P.pr (A s) ≤ q / t := by
+    intro s hs
+    rcases Finset.mem_biUnion.mp hs with ⟨b₀, hb₀, hs⟩
+    rcases Finset.mem_filter.mp hb₀ with ⟨hbOdd, hw₀, ht₀, hj₀⟩
+    rcases Finset.mem_image.mp hs with ⟨D₀, hD₀, rfl⟩
+    let f : X.Hid → ℝ := fun Z => (X.dataLaw (Fin X.T) (base, Z)).pr (fun o => X.S3Fail (base, Z) b₀ D₀ o)
+    have hA : ∀ Z, A ((X.g.L.stKey b₀).2, X.stMode b₀, D₀) Z ↔ t < f Z := by
+      intro Z
+      constructor
+      · rintro ⟨b, hb, hw, hs, hj, hD, heq, hr⟩
+        have hkey : X.g.L.stKey b = X.g.L.stKey b₀ :=
+          Prod.ext (hw.trans hw₀.symm) (congrArg (fun s : DescriptorShape X => s.1) heq)
+        have hmode : X.stMode b = X.stMode b₀ := congrArg (fun s : DescriptorShape X => s.2.1) heq
+        have hsign : X.g.L.stSign b = X.g.L.stSign b₀ := hs.trans ht₀.symm
+        have hfields : targetFields X b = targetFields X b₀ := Prod.ext hkey (Prod.ext hmode hsign)
+        have he := s3_data_rate_eq_of_targetFields X b b₀ hfields (base, Z) D₀
+        exact lt_of_lt_of_eq hr he
+      · intro hr
+        exact ⟨b₀, hbOdd, hw₀, ht₀, hj₀, hD₀, rfl, hr⟩
+    rw [Lane_q_s06_stages.pr_congr P hA]
+    calc
+      P.pr (fun Z => t < f Z) ≤ P.pr (fun Z => t ≤ f Z) :=
+        Lane_q_s06_stages.pr_mono _ (fun _ h => h.le)
+      _ ≤ P.expect f / t := FinProb.markov P f t (fun Z => Lane_q_s06_stages.pr_nonneg _ _) ht
+      _ ≤ q / t := div_le_div_of_nonneg_right (hmean b₀ hbOdd hw₀ ht₀ hj₀ D₀ hD₀) ht.le
+  calc
+    _ ≤ P.pr (fun Z => ∃ s ∈ nearGroupDescriptorShapes X gr, A s Z) := Lane_q_s06_stages.pr_mono _ hsub
+    _ ≤ ((nearGroupDescriptorShapes X gr).card : ℝ) * (q / t) :=
+      pr_finite_union_le_card P _ A _ hclass
+    _ ≤ (descriptorCodeCountBound X : ℝ) * (q / t) :=
+      mul_le_mul_of_nonneg_right (by exact_mod_cast nearGroupDescriptorShapes_card_le X gr hn) (div_nonneg hq ht.le)
+    _ = _ := by rw [mul_div_assoc]
+
 end
 end HypercubeRamsey.Lane_sol_s06_hidden

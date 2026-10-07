@@ -1212,4 +1212,124 @@ theorem cubeAdj_exists_flip {n : ℕ} (v w : CubeVertex n)
   · have hEq := hother j hji
     simp [cubeFlip, hji, hEq]
 
+private theorem hammingDist_cubeFlip_of_eq {d : ℕ} (x y : CubeVertex d) (i : Fin d)
+    (hi : x i = y i) :
+    _root_.hammingDist x (cubeFlip y i) = _root_.hammingDist x y + 1 := by
+  classical
+  let D : Finset (Fin d) := Finset.univ.filter (fun j => x j ≠ y j)
+  have hfilter : Finset.univ.filter (fun j : Fin d => x j ≠ cubeFlip y i j) = insert i D := by
+    ext j
+    by_cases hji : j = i
+    · subst j
+      cases hy : y i <;> simp [D, hi, hy, cubeFlip]
+    · have hflip : cubeFlip y i j = y j := by simp [cubeFlip, hji]
+      simp [D, hji, hflip]
+  have hiD : i ∉ D := by simp [D, hi]
+  rw [_root_.hammingDist, hfilter]
+  rw [Finset.card_insert_of_notMem hiD]
+  simp [D, _root_.hammingDist]
+
+private theorem card_flip_neighbors_bound {d : ℕ} (v : CubeVertex d)
+    (B : Finset (CubeVertex d)) (D : Finset (Fin d))
+    (hB : ∀ b ∈ B, ∃ i ∈ D, cubeFlip v i = b) : B.card ≤ D.card := by
+  classical
+  let B' := {b : CubeVertex d // b ∈ B}
+  let f : B' → Fin d := fun b => Classical.choose (hB b.1 b.2)
+  have hspec (b : B') : cubeFlip v (f b) = b.1 := by
+    exact (Classical.choose_spec (hB b.1 b.2)).2
+  have hmem (b : B') : f b ∈ D := (Classical.choose_spec (hB b.1 b.2)).1
+  have hinj : Function.Injective f := by
+    intro b c hfc
+    apply Subtype.ext
+    calc
+      b.1 = cubeFlip v (f b) := (hspec b).symm
+      _ = cubeFlip v (f c) := by rw [hfc]
+      _ = c.1 := hspec c
+  have hsubcard : B.card = Fintype.card B' := (Fintype.card_coe B).symm
+  have huniv : (Finset.univ : Finset B').card = Fintype.card B' := by simp
+  have himagecard : (Finset.univ.image f).card = Fintype.card B' := by
+    calc
+      (Finset.univ.image f).card = (Finset.univ : Finset B').card :=
+        Finset.card_image_of_injective (Finset.univ : Finset B') hinj
+      _ = Fintype.card B' := huniv
+  have himage : Finset.univ.image f ⊆ D := by
+    intro i hi
+    rcases Finset.mem_image.mp hi with ⟨b, _, rfl⟩
+    exact hmem b
+  calc
+    B.card = Fintype.card B' := hsubcard
+    _ = (Finset.univ.image f).card := himagecard.symm
+    _ ≤ D.card := Finset.card_le_card himage
+
+private theorem specialWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i : Fin n) (hi : m ≤ i.val) :
+    specialWord9 m (cubeFlip v i) = specialWord9 m v := by
+  funext k
+  let k' : Fin n := ⟨k.val, lt_of_lt_of_le k.isLt hm⟩
+  have hki : k' ≠ i := by
+    intro heq
+    have hv := congrArg Fin.val heq
+    dsimp [k'] at hv
+    omega
+  simp [specialWord9, k', cubeFlip, hki, lt_of_lt_of_le k.isLt hm]
+
+private theorem residualWord9_cubeFlip_special {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i : Fin n) (hi : i.val < m) :
+    residualWord9 m (cubeFlip v i) = residualWord9 m v := by
+  funext k
+  let k' : Fin n := ⟨m + k.val, by omega⟩
+  have hki : k' ≠ i := by
+    intro heq
+    have hv := congrArg Fin.val heq
+    dsimp [k'] at hv
+    omega
+  simp [residualWord9, k', cubeFlip, hki]
+
+private theorem specialWord9_doubleFlip_at_first {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i j : Fin n) (hij : i ≠ j) (hi : i.val < m) :
+    specialWord9 m (cubeFlip (cubeFlip v i) j) ⟨i.val, hi⟩ ≠
+      specialWord9 m v ⟨i.val, hi⟩ := by
+  let k' : Fin n := ⟨i.val, lt_of_lt_of_le hi hm⟩
+  have hki : k' = i := Fin.ext rfl
+  have hkj : k' ≠ j := by
+    intro heq
+    exact hij (hki.symm.trans heq)
+  have houter : cubeFlip (cubeFlip v i) j k' = cubeFlip v i k' :=
+    Function.update_of_ne hkj _ _
+  have hinner : cubeFlip v i k' = !v k' := by
+    rw [hki]
+    simp [cubeFlip]
+  have hsource : specialWord9 m v ⟨i.val, hi⟩ = v k' := by
+    simp [specialWord9, k', lt_of_lt_of_le hi hm]
+  have htarget : specialWord9 m (cubeFlip (cubeFlip v i) j) ⟨i.val, hi⟩ =
+      cubeFlip (cubeFlip v i) j k' := by
+    simp [specialWord9, k', lt_of_lt_of_le hi hm]
+  rw [htarget, houter, hinner, hsource]
+  cases hv : v k' <;> simp [hv]
+
+private theorem residualWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i : Fin n) (hi : m ≤ i.val) :
+    let k : Fin (n - m) := ⟨i.val - m, by omega⟩
+    residualWord9 m (cubeFlip v i) = cubeFlip (residualWord9 m v) k := by
+  dsimp
+  let k : Fin (n - m) := ⟨i.val - m, by omega⟩
+  funext l
+  let l' : Fin n := ⟨m + l.val, by omega⟩
+  have hlk : l = k ∨ l ≠ k := Classical.em (l = k)
+  rcases hlk with hlk | hlk
+  · subst l
+    have hidx : l' = i := by
+      apply Fin.ext
+      dsimp [l', k]
+      omega
+    simp [residualWord9, cubeFlip, l', k, hidx]
+  · have hidx : l' ≠ i := by
+      intro heq
+      apply hlk
+      apply Fin.ext
+      have hval := congrArg Fin.val heq
+      dsimp [l', k] at hval ⊢
+      omega
+    simp [residualWord9, cubeFlip, l', k, hidx, hlk]
+
 end HypercubeRamsey.Lane_q_s09_map

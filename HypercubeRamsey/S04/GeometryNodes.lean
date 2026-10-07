@@ -1,4 +1,5 @@
 import HypercubeRamsey.S04.CoreLemmas
+import HypercubeRamsey.S04.GeometryNodes_q_s04_geom
 
 /-!
 # L4.1f: marking, eligibility and geometric success
@@ -19,13 +20,38 @@ definition.  So eligibility is legal on the even sites (for large `n`). -/
 theorem geo_legal (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι), LegalOf M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_geom.geo_legal_proof hβ hβγ hγ
 
 /-- L4.1f, selection (04:329–331): on good heights every even site has height below `H` and a site-level that is
 not bad, so its eligible set has an active ID and the long rule selects one. -/
 theorem geo_select {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) : SelectOf M tag := by
-  sorry
+  classical
+  intro ω hgood a
+  let p := hd β γ n
+  have ha : a.1 ∈ evenSites n := by
+    simp [evenSites, a.2]
+  have hga := hgood a.1 ha
+  have hh : p.height (evenSites n) (ppos ω) (pact ω) (elig M tag (ppos ω) (paux ω)) p.Rlong a.1 < p.H := by
+    simpa [p, hd] using hga.1
+  let j : Fin (p.H + 1) := ⟨p.height (evenSites n) (ppos ω) (pact ω)
+    (elig M tag (ppos ω) (paux ω)) p.Rlong a.1,
+      Nat.lt_succ_of_lt hh⟩
+  have hbad : ¬ p.Bad (ppos ω) (pact ω) (elig M tag (ppos ω) (paux ω)) a.1 j := by
+    intro hb
+    apply hga.2.1
+    exact ⟨by dsimp [j]; exact Nat.lt_succ_of_lt hh, hb⟩
+  have hnotInactive : ¬ ∀ ℓ ∈ elig M tag (ppos ω) (paux ω) a.1 j, pact ω ℓ = false := by
+    intro hall
+    exact hbad (Or.inl hall)
+  have hactive : ∃ ℓ ∈ elig M tag (ppos ω) (paux ω) a.1 j, pact ω ℓ = true := by
+    by_contra hn
+    apply hnotInactive
+    intro ℓ hℓ
+    cases hA : pact ω ℓ <;> simp_all
+  change p.selection (evenSites n) (ppos ω) (pact ω) (elig M tag (ppos ω) (paux ω))
+    (pties ω) a.1 ≠ none
+  simpa [HDParams.selection, HDParams.selectionAt, j, hh, hbad] using hactive
 
 /-- L4.1f, marking (04:306–309, 332–338): around an odd role `u` the heights of its even neighbours (pairwise at
 distance two) occupy two consecutive levels `j, j+1` with `j < H`; at an occupied level, a neighbour `v₀` at that
@@ -35,7 +61,7 @@ the greedy maximal marked family (`greedy_spec`), and the common ID would be for
 selected it, contradicting its eligibility. -/
 theorem geo_oddOK {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_hsel : SelectOf M tag) : OddOKOf M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_geom.geo_oddOK_proof M tag _hsel
 
 /-- L4.1f: geometric success gives, at every even role, a selected reference meeting the local event `E`, and
 valid kernels at all odd roles (04:337–338, 361–362). -/
@@ -82,7 +108,61 @@ theorem height_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ <
         (hd β γ n).Legal (ppos ω) (elig M tag (ppos ω) (paux ω)) (evenSites n) ∧
           ¬ (hd β γ n).GoodHeights (evenSites n) (ppos ω) (pact ω) (elig M tag (ppos ω) (paux ω))) ≤
         1 / 30 := by
-  sorry
+  classical
+  obtain ⟨c, hc, n₀, hglobal⟩ :=
+    height_selection_global 10 (b0H β γ) (bH β γ) (sigmaH β γ) (zetaH β γ)
+      (thetaH β γ) (aH β γ) 1 1 2
+      (hd_admissible hβ hβγ hγ) (hdRegime hβ hβγ hγ)
+  refine ⟨max n₀ 30, ?_⟩
+  intro n hn N E G X Y M tag q q'
+  have hn₀ : n₀ ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hn30 : 30 ≤ n := le_trans (Nat.le_max_right _ _) hn
+  let p := hd β γ n
+  let A : ((Pos β γ n × Aux M tag) × Pos β γ n) → Prop := fun x =>
+    p.Legal x.1.1 (elig M tag x.1.1 x.1.2) (evenSites n) ∧
+      ¬ p.GoodHeights (evenSites n) x.1.1 x.2 (elig M tag x.1.1 x.1.2)
+  have hbase : ((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).pr A ≤
+      Real.exp (-(n : ℝ) ^ (1 + c)) := by
+    have hdim₁ : 1 * (p.n : ℝ) ≤ p.d := by simp [p, hd]
+    have hdim₂ : (p.d : ℝ) ≤ 1 * (p.n : ℝ) := by simp [p, hd]
+    have hreg := hdRegime_ok hβ hβγ hγ n
+    have h := hglobal p rfl rfl rfl rfl rfl (by simpa [p] using hn₀)
+      hdim₁ hdim₂ hreg (evenSites n) (auxLaw M tag q q') (fun P a => elig M tag P a)
+    simpa [A, p, hd, HDParams.posLaw, HDParams.actLaw] using h
+  have hmargin :
+      (prepLaw M tag q q').pr (fun ω => A ((ppos ω, paux ω), pact ω)) =
+        ((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).pr A := by
+    change (FinProb.prod ((FinProb.prod (p.posLaw) (auxLaw M tag q q')).prod p.actLaw)
+      (hd β γ n).tieLaw).pr (fun ω => A ω.1) = _
+    exact HypercubeRamsey.Lane_q_s04_geom.pr_prod_fst _ _ _
+  have hnreal : (30 : ℝ) ≤ n := by exact_mod_cast hn30
+  have hbaseOne : (1 : ℝ) ≤ n := by linarith
+  have hc0 : 0 ≤ c := hc.le
+  have hpowC : 1 ≤ (n : ℝ) ^ c := Real.one_le_rpow hbaseOne hc0
+  have hpow : (n : ℝ) ≤ (n : ℝ) ^ (1 + c) := by
+    rw [Real.rpow_add (by positivity) 1 c, Real.rpow_one]
+    nlinarith [mul_le_mul_of_nonneg_left hpowC (show 0 ≤ (n : ℝ) by positivity)]
+  have hexp : Real.exp (-((n : ℝ) ^ (1 + c))) ≤ 1 / 30 := by
+    calc
+      Real.exp (-((n : ℝ) ^ (1 + c))) ≤ Real.exp (-(n : ℝ)) :=
+        Real.exp_le_exp.mpr (by linarith)
+      _ ≤ 1 / ((n : ℝ) + 1) := by
+        rw [Real.exp_neg]
+        simpa only [one_div] using
+          (one_div_le_one_div_of_le (by positivity) (Real.add_one_le_exp (n : ℝ)))
+      _ ≤ 1 / 30 := one_div_le_one_div_of_le (by norm_num) (by linarith)
+  calc
+    (prepLaw M tag q q').pr (fun ω =>
+        (hd β γ n).Legal (ppos ω) (elig M tag (ppos ω) (paux ω)) (evenSites n) ∧
+          ¬ (hd β γ n).GoodHeights (evenSites n) (ppos ω) (pact ω)
+            (elig M tag (ppos ω) (paux ω))) =
+        (prepLaw M tag q q').pr (fun ω => A ((ppos ω, paux ω), pact ω)) := by
+          apply congrArg
+          funext ω
+          simp [A, p]
+    _ = ((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).pr A := hmargin
+    _ ≤ Real.exp (-((n : ℝ) ^ (1 + c))) := hbase
+    _ ≤ 1 / 30 := hexp
 
 /-- L4.1f (04:311–338): geometric success fails with probability at most `1/10`. -/
 theorem geo_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :

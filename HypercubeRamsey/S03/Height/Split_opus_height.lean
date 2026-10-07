@@ -419,7 +419,233 @@ theorem actual_pr_le_forced_expect (p : HDParams) (hlam : 30 ≤ p.lam)
         hdScaleFailure Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) x R η) ≤
       (p.posLawForced forced).expect
         (relSup p (forcedFree p forced) (siteDom p Sites) s t η x R) := by
-  sorry
+  classical
+  let C := forcedFree p forced
+  let Dom := siteDom p Sites
+  let N : ℝ := (p.n : ℝ) ^ p.b
+  have hN : 4 ≤ N := by simpa [N] using hnb
+  have hn : 0 < p.n := by
+    by_contra h
+    have hn0 : p.n = 0 := by omega
+    have hcast : (p.n : ℝ) = 0 := by exact_mod_cast hn0
+    by_cases hb0 : p.b = 0
+    · rw [hb0, Real.rpow_zero] at hnb
+      norm_num at hnb
+    · rw [hcast, Real.zero_rpow hb0] at hnb
+      norm_num at hnb
+  have hn2 : 2 ≤ p.n := by
+    by_contra h
+    have hnle : p.n ≤ 1 := by omega
+    have hn1 : p.n = 1 := by omega
+    rw [hn1] at hnb
+    norm_num at hnb
+  have hb : 0 < p.b := by
+    by_contra h
+    have hpow : (p.n : ℝ) ^ p.b ≤ 1 :=
+      Real.rpow_le_one_of_one_le_of_nonpos (by exact_mod_cast (show 1 ≤ p.n by omega))
+        (le_of_not_gt h)
+    linarith [hnb, hpow]
+  have filterCardLoss (S : Finset p.Loc) :
+      S.card ≤ (S.filter (fun ℓ => ℓ ∈ C)).card + 1 := by
+    cases forced with
+    | none =>
+        have hsub : S ⊆ S.filter (fun ℓ => ℓ ∈ C) := by
+          intro ℓ hℓ
+          apply Finset.mem_filter.mpr
+          exact ⟨hℓ, by simp [C, forcedFree]⟩
+        have hcard := Finset.card_le_card hsub
+        omega
+    | some f =>
+        let T := S.filter (fun ℓ => ℓ ∈ C)
+        have hsub : S ⊆ insert f T := by
+          intro ℓ hℓ
+          by_cases hℓf : ℓ = f
+          · subst ℓ
+            exact Finset.mem_insert_self _ _
+          · apply Finset.mem_insert_of_mem
+            apply Finset.mem_filter.mpr
+            have hneq : f ≠ ℓ := Ne.symm hℓf
+            exact ⟨hℓ, by simp [T, C, forcedFree, hneq]⟩
+        have hcard := Finset.card_le_card hsub
+        have hinsert : (insert f T).card ≤ T.card + 1 := Finset.card_insert_le f T
+        simpa [T] using hcard.trans hinsert
+  have hbound : ∀ pa : (p.Loc → Bool) × Aux,
+      p.actLaw.pr (fun A =>
+        p.Legal pa.1 (Esel pa.1 pa.2) Sites ∧
+          hdScaleFailure Sites pa.1 A (Esel pa.1 pa.2) x R η) ≤
+        relSup p C Dom s t η x R pa.1 := by
+    intro pa
+    let P := pa.1
+    let E := Esel pa.1 pa.2
+    have crowdCardLoss (A : p.Loc → Bool) (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+        (Finset.univ.filter (fun u : CubeVertex p.d =>
+          P (u, j) = true ∧ A (u, j) = true ∧
+            _root_.hammingDist u v ≤ p.r + p.D)).card ≤
+          relCrowd p C P A v j + 1 := by
+      let active : CubeVertex p.d → Prop := fun u =>
+        P (u, j) = true ∧ A (u, j) = true ∧
+          _root_.hammingDist u v ≤ p.r + p.D
+      let U : Finset (CubeVertex p.d) := Finset.univ.filter active
+      let V : Finset (CubeVertex p.d) :=
+        Finset.univ.filter (fun u => (u, j) ∈ C ∧ active u)
+      change U.card ≤ V.card + 1
+      cases forced with
+      | none =>
+          have hsub : U ⊆ V := by
+            intro u hu
+            have hactive := (Finset.mem_filter.mp hu).2
+            have hC : (u, j) ∈ C := by simp [C, forcedFree]
+            exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hC, hactive⟩⟩
+          have hcard : U.card ≤ V.card := Finset.card_le_card hsub
+          omega
+      | some f =>
+          have hsub : U ⊆ insert f.1 V := by
+            intro u hu
+            by_cases huf : u = f.1
+            · subst u
+              exact Finset.mem_insert_self _ _
+            · apply Finset.mem_insert_of_mem
+              apply Finset.mem_filter.mpr
+              have hneq : f ≠ (u, j) := by
+                intro heq
+                exact huf (congrArg Prod.fst heq).symm
+              have hC : (u, j) ∈ C := by
+                simp [C, forcedFree, hneq]
+              exact ⟨Finset.mem_univ _, ⟨hC, (Finset.mem_filter.mp hu).2⟩⟩
+          have hcard : U.card ≤ (insert f.1 V).card := Finset.card_le_card hsub
+          have hinsert : (insert f.1 V).card ≤ V.card + 1 :=
+            Finset.card_insert_le f.1 V
+          exact hcard.trans hinsert
+    by_cases hlegal : p.Legal P E Sites
+    · have hrelLegal : relLegal p C Dom s P E x R := by
+        intro v j hv _
+        change v ∈ Sites at hv
+        rcases (show p.LegalAt P E v j from hlegal v hv j) with ⟨hitems, hsize⟩
+        refine ⟨?_, ?_⟩
+        · intro ℓ hℓ _
+          exact hitems ℓ hℓ
+        · let F := (E v j).filter (fun ℓ => ℓ ∈ C)
+          have hloss : (E v j).card ≤ F.card + 1 := by
+            simpa [F] using filterCardLoss (E v j)
+          have hlossR : ((E v j).card : ℝ) ≤ (F.card : ℝ) + 1 := by
+            exact_mod_cast hloss
+          have hbase : (3 / 10 : ℝ) * p.lam ≤ (F.card : ℝ) := by
+            have hmargin : (3 / 10 : ℝ) * p.lam ≤ p.lam / 3 - 1 := by
+              nlinarith [hlam]
+            have hsize' : p.lam / 3 - 1 ≤ (F.card : ℝ) := by
+              nlinarith [hsize, hlossR]
+            exact hmargin.trans hsize'
+          have hlam0 : 0 ≤ p.lam := by linarith
+          have hs' : s * p.lam ≤ (3 / 10 : ℝ) * p.lam :=
+            mul_le_mul_of_nonneg_right hs hlam0
+          have hsizeC : s * p.lam ≤ (F.card : ℝ) := hs'.trans hbase
+          simpa [F] using hsizeC
+      have hrelFail : ∀ A : p.Loc → Bool,
+          p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η →
+            relFail p C Dom t η P A E x R := by
+        intro A hEvent
+        rcases hEvent with ⟨_, hfail⟩
+        have crowdCardLoss' (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+            (Finset.univ.filter (fun u : CubeVertex p.d =>
+              P (u, j) = true ∧ A (u, j) = true ∧
+                _root_.hammingDist u v ≤ p.r + p.D)).card ≤
+              relCrowd p C P A v j + 1 := by
+          exact crowdCardLoss A v j
+        have badAtRel (v : CubeVertex p.d) (j : Fin (p.H + 1))
+            (hbad : p.Bad P A E v j) : relBadAt p C t P A E v j := by
+          rcases hbad with hhole | hcrowd
+          · exact Or.inl (fun ℓ hℓ _ => hhole ℓ hℓ)
+          · right
+            let U : Finset (CubeVertex p.d) := Finset.univ.filter (fun u =>
+              P (u, j) = true ∧ A (u, j) = true ∧
+                _root_.hammingDist u v ≤ p.r + p.D)
+            have hcount : N < (U.card : ℝ) := by
+              simpa [N, U] using hcrowd
+            have hloss : (U.card : ℝ) ≤ (relCrowd p C P A v j : ℝ) + 1 := by
+              exact_mod_cast crowdCardLoss' v j
+            by_cases hN4 : N = 4
+            · have hcount4 : (4 : ℝ) < (U.card : ℝ) := by simpa [hN4] using hcount
+              have hchildR : (3 : ℝ) < (relCrowd p C P A v j : ℝ) := by
+                nlinarith [hcount4, hloss]
+              have htN : t * N ≤ 3 := by rw [hN4]; nlinarith [ht]
+              exact lt_of_le_of_lt htN hchildR
+            · have hNgt : 4 < N := lt_of_le_of_ne hN (Ne.symm hN4)
+              have htN : t * N ≤ (3 / 4 : ℝ) * N :=
+                mul_le_mul_of_nonneg_right ht (by linarith [hNgt])
+              have hmargin : (3 / 4 : ℝ) * N < N - 1 := by nlinarith
+              have hchild : N - 1 < (relCrowd p C P A v j : ℝ) := by
+                nlinarith [hcount, hloss]
+              exact (lt_of_le_of_lt htN hmargin).trans hchild
+        have hwalkConv : ∀ {start finish},
+            HDScaleWalk Sites P A E x R start finish →
+              HDThresholdWalk (Finset.univ : p.Sites)
+                (relBad p C Dom t P A E) x R start finish := by
+          intro start finish walk
+          induction walk with
+          | stop hstop => exact HDThresholdWalk.stop hstop
+          | @up v j finish hinside hv hj hbad tail ih =>
+              let hjFin : j < p.H + 1 := Classical.choose hbad
+              have hbadAt : p.Bad P A E v ⟨j, hjFin⟩ := Classical.choose_spec hbad
+              apply HDThresholdWalk.up hinside (Finset.mem_univ v) hj ?_ ih
+              have hDom : (v, j) ∈ Dom := by
+                change v ∈ Sites
+                exact hv
+              exact ⟨hDom, ⟨hjFin, badAtRel v ⟨j, hjFin⟩ hbadAt⟩⟩
+          | @down v v' j finish hinside hv' hj hstep tail ih =>
+              exact HDThresholdWalk.down hinside (Finset.mem_univ v') hj hstep ih
+        change hdScaleThresholdFailure (Finset.univ : p.Sites)
+          (relBad p C Dom t P A E) x R η
+        rcases hfail with ⟨finish, ⟨walk⟩, hnet⟩
+        exact ⟨finish, ⟨hwalkConv walk⟩, hnet⟩
+      have hinc : ∀ A : p.Loc → Bool,
+          (p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η) →
+            relFail p C Dom t η P A E x R := hrelFail
+      calc
+        p.actLaw.pr (fun A => p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η)
+            ≤ p.actLaw.pr (fun A => relFail p C Dom t η P A E x R) :=
+              pr_mono _ _ _ hinc
+        _ ≤ relSup p C Dom s t η x R P := by
+              unfold relSup
+              refine le_trans ?_ (Finset.le_sup' _ (Finset.mem_univ E))
+              rw [if_pos hrelLegal]
+    · have hzero : p.actLaw.pr
+          (fun A => p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η) = 0 := by
+        unfold FinProb.pr
+        simp [hlegal]
+      rw [hzero]
+      unfold relSup
+      refine le_trans ?_ (Finset.le_sup' _
+        (Finset.mem_univ (fun _ _ => ∅ : p.EligMap)))
+      split_ifs
+      · exact pr_nonneg _ _
+      · exact le_rfl
+  calc
+    (((p.posLawForced forced).prod πAux).prod p.actLaw).pr
+        (fun ω => p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) Sites ∧
+          hdScaleFailure Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) x R η)
+        ≤ ((p.posLawForced forced).prod πAux).expect
+            (fun pa => relSup p C Dom s t η x R pa.1) :=
+          prod_pr_le_expect _ _ _ _ hbound
+    _ = (p.posLawForced forced).expect (relSup p C Dom s t η x R) := by
+      unfold FinProb.expect FinProb.prod
+      rw [Fintype.sum_prod_type]
+      apply Finset.sum_congr rfl
+      intro P hP
+      calc
+        (∑ a : Aux,
+            (p.posLawForced forced).w P * πAux.w a *
+              relSup p C Dom s t η x R P)
+            = ∑ a : Aux,
+                ((p.posLawForced forced).w P * relSup p C Dom s t η x R P) *
+                  πAux.w a := by
+                    apply Finset.sum_congr rfl
+                    intro a ha
+                    ring
+        _ = ((p.posLawForced forced).w P * relSup p C Dom s t η x R P) *
+              ∑ a : Aux, πAux.w a := by rw [Finset.mul_sum]
+        _ = (p.posLawForced forced).w P * relSup p C Dom s t η x R P := by
+              rw [πAux.sum_eq_one]
+              ring
 
 /-- LEAF (Step 2, TeX 03:406–420). Base-scale claim for every radius up to `R₀`, uniform in
 the domains and the start. Adapts `height_scale_zero_relaxed_failure_bound` (helper file) to
@@ -1363,7 +1589,141 @@ theorem parent_fail_children (p : HDParams) (hD : 0 < p.D) (C : Finset p.Loc)
     (hlarge : (1 + ηC) * (2 * (K : ℝ) + 1) * (q : ℝ) + (1 + ηC) < (ηC - ηP) * (M : ℝ))
     (hfail : relFail p C Dom t ηP P A E x (M * R')) :
     ∃ Y ∈ configs p x (M * R') (K * R') q, ∀ y ∈ Y, relFail p C Dom t ηC P A E y R' := by
-  sorry
+  classical
+  let bad := relBad p C Dom t P A E
+  change hdScaleThresholdFailure (Finset.univ : p.Sites) bad x (M * R') ηP at hfail
+  rcases hfail with ⟨finish, hwalkNonempty, hnet⟩
+  let walk : HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') x finish :=
+    Classical.choice hwalkNonempty
+  obtain ⟨chunks, suffix, hchunk⟩ :=
+    hdThresholdWalk_exists_chunking (Finset.univ : p.Sites) bad x (M * R') R' hD hR' walk
+  have chunkStartBounds :
+      ∀ {start finish : HDState p}
+        (parentWalk : HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') start finish)
+        (chunkList : List (HDChunk p (Finset.univ : p.Sites) bad R'))
+        (tailWalk : Σ suffixStart : HDState p,
+          HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') suffixStart finish),
+        HDThresholdChunking (Finset.univ : p.Sites) bad x (M * R') R'
+          parentWalk chunkList tailWalk →
+        ∀ c ∈ chunkList,
+          hdScaleDistance p.D x c.1 < M * R' ∧ c.1.2 ≤ p.H := by
+    intro start finish parentWalk chunkList tailWalk hchunk
+    induction hchunk with
+    | done hinside => intro c hc; simp at hc
+    | @more start finish middle chunks suffixStart walk childWalk rest suffix hcut htail ih =>
+        intro c hc
+        simp only [List.mem_cons] at hc
+        rcases hc with hc | hc
+        · subst c
+          change hdScaleDistance p.D x start < M * R' ∧ start.2 ≤ p.H
+          have hstart : hdScaleDistance p.D x start < M * R' ∧ start.2 ≤ p.H := by
+            cases hcut with
+            | upExit hparent _ hj _ _ _ _ =>
+                exact ⟨by simpa using hparent, by simpa using (Nat.le_of_lt hj)⟩
+            | upContinue hparent _ hj _ _ _ _ _ =>
+                exact ⟨by simpa using hparent, by simpa using (Nat.le_of_lt hj)⟩
+            | downExit hparent _ hj _ _ _ _ =>
+                exact ⟨by simpa using hparent, by omega⟩
+            | downContinue hparent _ hj _ _ _ _ _ =>
+                exact ⟨by simpa using hparent, by omega⟩
+          exact hstart
+        · exact ih c hc
+  have hstartBounds : ∀ c ∈ chunks,
+      hdScaleDistance p.D x c.1 < M * R' ∧ c.1.2 ≤ p.H :=
+    chunkStartBounds walk chunks suffix hchunk
+  have walkFinishOutside :
+      ∀ {start finish : HDState p},
+        HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') start finish →
+          M * R' ≤ hdScaleDistance p.D x finish := by
+    intro start finish w
+    induction w with
+    | stop hstop => exact hstop
+    | up _ _ _ _ _ ih => exact ih
+    | down _ _ _ _ _ ih => exact ih
+  have hboundary : M * R' ≤ hdScaleDistance p.D x finish := walkFinishOutside walk
+  have hparentNet : -(ηP * ((M * R' : ℕ) : ℝ)) ≤ (finish.2 : ℝ) - x.2 := by
+    simpa using hnet
+  have hηC0 : 0 ≤ ηC := le_trans hηP hηPC.le
+  let K₀ : ℕ := 2 * K + 1
+  let δ : ℝ := (q : ℝ) / (M : ℝ)
+  have hMreal : 0 < (M : ℝ) := by exact_mod_cast (show 0 < M by omega)
+  have hδM : δ * (M : ℝ) = (q : ℝ) := by
+    dsimp [δ]
+    field_simp
+  have hK₀cast : (K₀ : ℝ) = 2 * (K : ℝ) + 1 := by
+    dsimp [K₀]
+    push_cast
+    ring
+  have hgap : 0 < K * R' := Nat.mul_pos (by omega) hR'
+  have hbudget : 2 * (K * R') + R' = K₀ * R' := by
+    dsimp [K₀]
+    ring
+  have hlarge' :
+      (1 + ηC) * (K₀ : ℝ) * δ * (M : ℝ) + (1 + ηC) <
+        (ηC - ηP) * (M : ℝ) := by
+    calc
+      (1 + ηC) * (K₀ : ℝ) * δ * (M : ℝ) + (1 + ηC) =
+          (1 + ηC) * (K₀ : ℝ) * (δ * (M : ℝ)) + (1 + ηC) := by ring
+      _ = (1 + ηC) * (2 * (K : ℝ) + 1) * (q : ℝ) + (1 + ηC) := by
+            rw [hK₀cast, hδM]
+      _ < (ηC - ηP) * (M : ℝ) := hlarge
+  obtain ⟨S, hSsubset, hSsep, hScard⟩ :=
+    hdParentFailure_has_many_separated_child_failure_starts
+      (p := p) hD (Sites := Finset.univ) (bad := bad)
+      (parentOrigin := x) (start := x) (finish := finish)
+      (parentRadius := M * R') (childRadius := R') (gap := K * R')
+      (M := M) (K := K₀) (ηParent := ηP) (ηChild := ηC) (δ := δ)
+      (walk := walk) (chunks := chunks) (suffix := suffix)
+      hchunk hM hR' hgap hbudget hηP hηC0 hηPC hlarge' hboundary hparentNet
+  have hqreal : (q : ℝ) ≤ (S.card : ℝ) := by
+    calc
+      (q : ℝ) = δ * (M : ℝ) := hδM.symm
+      _ ≤ (S.card : ℝ) := hScard
+  have hq : q ≤ S.card := by exact_mod_cast hqreal
+  obtain ⟨Y, hYS, hYcard⟩ := Finset.exists_subset_card_eq hq
+  have Sprops : ∀ y ∈ S,
+      y ∈ scaleBall p x (M * R') ∧ relFail p C Dom t ηC P A E y R' := by
+    intro y hy
+    have hySet : y ∈ hdFailureStartSet ηC chunks := hSsubset hy
+    unfold hdFailureStartSet at hySet
+    rcases Finset.mem_image.mp hySet with ⟨c, hcFiltered, hcy⟩
+    have hcFilter := Finset.mem_filter.mp hcFiltered
+    have hcList : c ∈ chunks := by simpa using hcFilter.1
+    have hcFail : hdThresholdChunkFailure ηC c := hcFilter.2
+    have hbounds := hstartBounds c hcList
+    have hballC : c.1 ∈ scaleBall p x (M * R') := by
+      unfold scaleBall
+      apply Finset.mem_image.mpr
+      refine ⟨(c.1.1, ⟨c.1.2, by omega⟩),
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, ?_⟩
+      · simpa using hbounds.1
+      · rfl
+    have hfailC : relFail p C Dom t ηC P A E c.1 R' := by
+      change hdScaleThresholdFailure (Finset.univ : p.Sites) bad c.1 R' ηC
+      rcases c with ⟨childStart, ⟨childFinish, childWalk⟩⟩
+      have hchildNet : -(ηC * (R' : ℝ)) ≤
+          (childFinish.2 : ℝ) - childStart.2 := by
+        simpa [hdThresholdChunkFailure, hdThresholdChunkRise] using hcFail
+      exact ⟨childFinish, ⟨childWalk⟩, hchildNet⟩
+    have hball : y ∈ scaleBall p x (M * R') := by
+      rw [← hcy]
+      exact hballC
+    have hfailY : relFail p C Dom t ηC P A E y R' := by
+      simpa [hcy] using hfailC
+    exact ⟨hball, hfailY⟩
+  have hYball : Y ⊆ scaleBall p x (M * R') := by
+    intro y hy
+    exact (Sprops y (hYS hy)).1
+  have hYsep : Separated p (K * R') Y := by
+    intro y hy y' hy' hne
+    exact hSsep y (hYS hy) y' (hYS hy') hne
+  refine ⟨Y, ?_, ?_⟩
+  · unfold configs
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_powerset.mpr hYball, ?_⟩
+    exact ⟨hYcard, hYsep⟩
+  · intro y hy
+    exact (Sprops y (hYS hy)).2
 
 /-- LEAF (Step 4 transfer and activation independence, TeX 03:483–512). For fixed positions and
 a fixed parent-legal eligibility map, outside the position exception: every child failure with

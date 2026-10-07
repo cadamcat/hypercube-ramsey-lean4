@@ -1,6 +1,6 @@
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
-import HypercubeRamsey.S05.History_q_s05_h23
+import HypercubeRamsey.S05.History_sol_s05_h23_apply
 import HypercubeRamsey.S05.History_q_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1c_apply
@@ -585,7 +585,16 @@ Stage 1); bounded-degree grouping by bin and the conditional avoidance lemma wit
 theorem L5_1h2 : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       ∀ v, X.Stage1Good v → ∃ ν : FinProb X.Coarse, X.Stage2Law v ν := by
-  sorry
+  refine ⟨Lane_sol_s05_h23.stage2Request, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 (Lane_sol_s05_h23.stage2Bounds_eventually p)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp v hv
+  obtain ⟨hm, hbhalf, hbdeg, hbfactor⟩ := hn₀ n hn
+  have hK1 : 8 / p.delta ≤ p.K1 := hp.2.2.2.1
+  rw [← hXp] at hm hbhalf hbdeg hbfactor hK1
+  exact Lane_sol_s05_h23.stage2Law_exists X v
+    ⟨hv.1, hv.2.1, hv.2.2.1, hv.2.2.2⟩ hm hK1 hbhalf hbdeg hbfactor
 
 /-! ### History odd loads, first part (05:1007–1025) -/
 

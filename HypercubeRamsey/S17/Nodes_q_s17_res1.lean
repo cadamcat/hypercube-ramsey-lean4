@@ -438,7 +438,7 @@ private theorem graphBall_card_step
     _ ≤ prev.card + d * prev.card := Nat.add_le_add_left hnext _
     _ = (d + 1) * prev.card := by ring
 
-private theorem graphBall_singleton_card_le_pow
+theorem graphBall_singleton_card_le_pow
     {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {D : ListGateContext κ T k PT} (LE : ListEvent D.F) (d : ℕ)
     (hdegree : ∀ v, (Finset.univ.filter fun w => LE.Adjacent v w).card ≤ d)

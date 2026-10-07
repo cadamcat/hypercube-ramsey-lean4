@@ -586,33 +586,6 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       (R.history C).w W ≠ 0 → GroupBinHypotheses hκ (K.binProblem C pool W) := by
   sorry
 
-private theorem group_bin_dirac_obstruction {κ : CConsts} (hκ : κ.Admissible)
-    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {G : LowGeom PT}
-    {R : CellRawData G} {Perm : CellPermissions R} (K : CellRestrictedKernels R Perm)
-    (C : G.Cell) (pool : CellPool G C) (W : R.Hist C)
-    (r : OddCellRole G C) (b : Bin PT.tiling (G.cellPatch C)) (y : Fin (T.S.N k))
-    (hdirac : (R.U C W (R.groupOf C r) b).w y = 1)
-    (hd : 2 ≤ (PT.tiling.P (G.cellPatch C)).d) :
-    ¬ GroupBinHypotheses hκ (K.binProblem C pool W) := by
-  intro hP
-  have hlo : (R.U C W (R.groupOf C r) b).w y ≤
-      (K.binProblem C pool W).contribution (R.groupOf C r) b y := by
-    change _ ≤ ∑ r' : OddCellRole G C,
-      if R.groupOf C r' = R.groupOf C r then (R.U C W (R.groupOf C r) b).w y else 0
-    have hs := Finset.single_le_sum (s := Finset.univ) (a := r)
-      (f := fun r' : OddCellRole G C =>
-        if R.groupOf C r' = R.groupOf C r then (R.U C W (R.groupOf C r) b).w y else 0)
-      (by intro r' _; split_ifs <;> first | exact (R.U C W _ b).nonneg y | exact le_rfl)
-      (Finset.mem_univ r)
-    simpa using hs
-  have hcap := (hP.contribution_range (R.groupOf C r) b y).2
-  have hlt : Real.rpow ((PT.tiling.P (G.cellPatch C)).d : ℝ) (-0.5) < 1 := by
-    apply Real.rpow_lt_one_of_one_lt_of_neg
-    · exact_mod_cast (lt_of_lt_of_le (by norm_num : (1 : ℕ) < 2) hd)
-    · norm_num
-  rw [hdirac] at hlo
-  exact (not_le_of_gt hlt) (hlo.trans hcap)
-
 /-- A role problem linked to the successful physical bins, not arbitrary
 targets/tests. In direct modes its single block is the whole cell pool. -/
 structure CellRoleProblem {κ : CConsts} {T : Stage} {k : ℕ}

@@ -2268,6 +2268,107 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     · have hcardR : (A₀.card : ℝ) = (sC n : ℝ) := by exact_mod_cast hA₀card
       simpa [D₀, FinProb.uniform, hy, hcardR] using hrecip
     · simpa [D₀, FinProb.uniform, hy] using (Real.exp_pos (-x)).le
+  let PackPair := Finset (Finset (Fin r₀)) × Finset (Fin r₀)
+  let PackValid (q : SampleState) (P : Finset (Finset (Fin r₀))) (V : Finset (Fin r₀)) : Prop :=
+    (∀ C ∈ P, C.card = sC n ∧ ∀ j ∈ C, ∀ k ∈ C, j ≠ k →
+      1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (q.2 j) (q.2 k)) ∧
+    (∀ C ∈ P, ∀ D ∈ P, C ≠ D → Disjoint C D) ∧
+    V = P.biUnion id ∧ (Finset.univ \ V).card < Nat.choose (sC n + t₀ - 2) (sC n - 1)
+  have hpackExists (q : SampleState) (hq : GoodSample q) :
+      ∃ pv : PackPair, PackValid q pv.1 pv.2 := by
+    rcases hsamplePacking q.1 r₀ q.2 hq.1 hq.2.1 hRamseySize with
+      ⟨P, V, hPClique, hPDisjoint, hVeq, hRemain⟩
+    exact ⟨(P, V), hPClique, hPDisjoint, hVeq, hRemain⟩
+  let packing (q : SampleState) : PackPair :=
+    if hq : GoodSample q then Classical.choose (hpackExists q hq) else (∅, ∅)
+  have hpackingSpec (q : SampleState) (hq : GoodSample q) :
+      PackValid q (packing q).1 (packing q).2 := by
+    dsimp [packing]
+    rw [dif_pos hq]
+    exact Classical.choose_spec (hpackExists q hq)
+  have hPackingVHalf (q : SampleState) (hq : GoodSample q) :
+      (r₀ : ℝ) / 2 < ((packing q).2.card : ℝ) := by
+    let V := (packing q).2
+    have hspec := hpackingSpec q hq
+    have hRemain : (Finset.univ \ V).card < Nat.choose (sC n + t₀ - 2) (sC n - 1) := hspec.2.2.2
+    have hRemainR : ((Finset.univ \ V).card : ℝ) <
+        (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) := by exact_mod_cast hRemain
+    have hRHalf : (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+        (r₀ : ℝ) / 2 := by
+      exact (le_div_iff₀ (by norm_num : (0 : ℝ) < 2)).2 (by nlinarith [hRhalf])
+    have hCardEqNat : (Finset.univ \ V).card + V.card = r₀ := by
+      simpa using Finset.card_sdiff_add_card_eq_card (Finset.subset_univ V)
+    have hCardEqR : ((Finset.univ \ V).card : ℝ) + (V.card : ℝ) = (r₀ : ℝ) := by
+      exact_mod_cast hCardEqNat
+    change (r₀ : ℝ) / 2 < (V.card : ℝ)
+    nlinarith [hRemainR, hRHalf, hCardEqR]
+  have hPackingNonempty (q : SampleState) (hq : GoodSample q) :
+      (packing q).1.Nonempty := by
+    have hVne : (packing q).2.Nonempty := by
+      apply Finset.card_pos.mp
+      exact_mod_cast (lt_trans (by positivity : (0 : ℝ) < (r₀ : ℝ) / 2) (hPackingVHalf q hq))
+    obtain ⟨j, hj⟩ := hVne
+    have hVeq : (packing q).2 = (packing q).1.biUnion id := (hpackingSpec q hq).2.2.1
+    rw [hVeq] at hj
+    obtain ⟨C, hCP, _⟩ := Finset.mem_biUnion.mp hj
+    exact ⟨C, hCP⟩
+  have hPackingCard (q : SampleState) (hq : GoodSample q) :
+      (packing q).2.card = (packing q).1.card * sC n := by
+    have hspec := hpackingSpec q hq
+    rw [hspec.2.2.1]
+    change ((packing q).1.biUnion (fun C => C)).card = (packing q).1.card * sC n
+    rw [Finset.card_biUnion (fun C hC D hD hCD => hspec.2.1 C hC D hD hCD)]
+    have hsum : (∑ C ∈ (packing q).1, C.card) = ∑ C ∈ (packing q).1, sC n := by
+      apply Finset.sum_congr rfl
+      intro C hC
+      exact (hspec.1 C hC).1
+    rw [hsum]
+    simp
+  have hSelectedDiagLower (i : HighTags) (y : Fin N) (hy : y ∈ selected i.1) :
+      1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ y y := by
+    have hproj : 1 / 2 + etaC / 200 < projection i.1 y := by simpa [selected] using hy
+    have hmomentPos : 0 < tagMoment i.1 := by
+      have hi := (Finset.mem_filter.mp i.2).2
+      nlinarith [heta]
+    have hnormSq : norm i.1 ^ 2 = tagMoment i.1 := by
+      dsimp [norm]
+      exact Real.sq_sqrt (htagMomentBounds i.1).1
+    have hhitSq : ∑ x, μ.w x * (hit E G x y) ^ 2 = codeg E G μ y y := by
+      calc
+        (∑ x, μ.w x * (hit E G x y) ^ 2) =
+            ∑ x, μ.w x * hit E G x y * hit E G x y := by
+              apply Finset.sum_congr rfl
+              intro x hx
+              ring
+        _ = codeg E G μ y y := by rw [← hcodegGram]
+    have hcs := hweightedCS (fun x => hit E G x y) (fun x => deg E G (π i.1) x)
+    have hinnerSq : inner i.1 y ^ 2 ≤ codeg E G μ y y * tagMoment i.1 := by
+      dsimp [inner, tagMoment] at hcs ⊢
+      calc
+        (∑ x, μ.w x * hit E G x y * deg E G (π i.1) x) ^ 2 ≤
+            (∑ x, μ.w x * (hit E G x y) ^ 2) *
+              (∑ x, μ.w x * (deg E G (π i.1) x) ^ 2) := by simpa [mul_assoc] using hcs
+        _ = codeg E G μ y y * (∑ x, μ.w x * (deg E G (π i.1) x) ^ 2) := by rw [hhitSq]
+        _ = codeg E G μ y y * tagMoment i.1 := rfl
+    have hinnerEq : inner i.1 y = norm i.1 * projection i.1 y := by
+      dsimp [projection]
+      field_simp [ne_of_gt (hnormPos i.1 i.2)]
+    have hprojSq : projection i.1 y ^ 2 ≤ codeg E G μ y y := by
+      have hmul : tagMoment i.1 * projection i.1 y ^ 2 ≤
+          tagMoment i.1 * codeg E G μ y y := by
+        calc
+          tagMoment i.1 * projection i.1 y ^ 2 = inner i.1 y ^ 2 := by
+            rw [hinnerEq, mul_pow, hnormSq]
+          _ ≤ codeg E G μ y y * tagMoment i.1 := hinnerSq
+          _ = tagMoment i.1 * codeg E G μ y y := by ring
+      exact (mul_le_mul_iff_of_pos_left hmomentPos).mp hmul
+    have hthreshold : 1 / 4 + (n : ℝ) ^ (-δ) <
+        (1 / 2 + etaC / 200) ^ 2 := by
+      nlinarith [hpowSmall, ht₀recip, hprojectionGap]
+    have hprojNonneg : 0 ≤ projection i.1 y := hprojectionNonneg i.1 i.2 y
+    have hSqStrict : (1 / 2 + etaC / 200) ^ 2 < projection i.1 y ^ 2 :=
+      (sq_lt_sq₀ (by positivity) hprojNonneg).2 hproj
+    exact le_of_lt (lt_of_lt_of_le hthreshold (le_trans hSqStrict.le hprojSq))
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

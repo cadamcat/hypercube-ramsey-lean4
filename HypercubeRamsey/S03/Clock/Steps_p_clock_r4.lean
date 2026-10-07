@@ -3,19 +3,6 @@ import HypercubeRamsey.Framework.FinProbLemmas
 
 namespace HypercubeRamsey.Clock
 
-theorem finProb_pr_mono {α : Type*} [Fintype α] (P : FinProb α)
-    {A B : α → Prop} (hAB : ∀ x, A x → B x) : P.pr A ≤ P.pr B := by
-  classical
-  unfold FinProb.pr
-  apply Finset.sum_le_sum
-  intro x hx
-  by_cases hA : A x
-  · have hB : B x := hAB x hA
-    simp [hA, hB]
-  · have hleft : (if A x then P.w x else 0) = 0 := by simp [hA]
-    rw [hleft]
-    split_ifs <;> simp [P.nonneg]
-
 theorem pi_pr_forall_coordinates {ι : Type*} [Fintype ι] [DecidableEq ι]
     {α : ι → Type*} [∀ i, Fintype (α i)]
     (P : ∀ i, FinProb (α i)) (A : ∀ i, α i → Prop) :

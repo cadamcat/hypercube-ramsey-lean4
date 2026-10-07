@@ -17,7 +17,7 @@ noncomputable def physical_prior_histories (hPT : PT.Valid)
     Finset (Fin (T.S.N k) → ℝ) :=
   if hc : PT.tiling.mode.isCluster then
     let S := Classical.choose (hPT.cluster_solver hc (G.patchOf v))
-    (Lane_sol_d18l_pal.cluster_family hPT G S).image Law.w
+    (Lane_sol_d18l_pal.cluster_family hPT G S).image (fun μ => μ.w)
   else {fun x => if x ∈ PT.envelope (G.patchOf v) then
     1 / ((PT.envelope (G.patchOf v)).card : ℝ) else 0}
 
@@ -31,7 +31,7 @@ theorem physical_prior_history_cover (hPT : PT.Valid)
   · let S := Classical.choose (hPT.cluster_solver hc (G.patchOf v))
     have hS := Classical.choose_spec (hPT.cluster_solver hc (G.patchOf v))
     have hm : PT.tiling.mode = .lowCluster := by
-      cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Mode.isCluster]
+      cases hm : PT.tiling.mode <;> simp [hm, Mode.isLow, Mode.isCluster] at hc hLow ⊢
     obtain ⟨μ, hμ, hμσ⟩ := Lane_sol_d18l_pal.cluster_family_prior_capture
       hPT hLow physical hm S hS v (G.patchOf_leaf v) he σ hσ
     exact Finset.mem_image.mpr ⟨μ, hμ, hμσ⟩
@@ -44,6 +44,7 @@ theorem physical_prior_history_cover (hPT : PT.Valid)
     apply Finset.mem_singleton.mpr
     funext x
     rw [(hshape hc).2 x, haq, henv]
+    rfl
 
 /-- A coarse count is enough: the eventual n^2.01 budget pays for the fixed
 factor and for every external neighbour label. -/
@@ -57,7 +58,7 @@ theorem physical_prior_history_card (hPT : PT.Valid)
   unfold physical_prior_histories
   split_ifs with hc
   · have hm : PT.tiling.mode = .lowCluster := by
-      cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Mode.isCluster]
+      cases hm : PT.tiling.mode <;> simp [hm, Mode.isLow, Mode.isCluster] at hc hLow ⊢
     apply (Nat.cast_le.mpr Finset.card_image_le).trans
     exact Lane_sol_d18l_pal.cluster_family_card_bound hPT G _ hm hn hh hN
   · simp only [Finset.card_singleton, Nat.cast_one]
@@ -111,7 +112,7 @@ theorem physical_history_log_bounds (hPT : PT.Valid) (hLow : PT.tiling.mode.isLo
     simpa using Lane_q_s17_pool.externalEarly_card_le D v
   have hlocal : ((physical_local_histories hPT hLow physical v).card : ℝ) ≤
       B * (T.S.N k : ℝ) ^ T.S.n k := by
-    simp only [physical_local_histories, Finset.card_product, Finset.card_univ,
+    simp only [physical_local_histories, Finset.product_eq_sprod, Finset.card_product, Finset.card_univ,
       Fintype.card_fun, Fintype.card_fin, Nat.cast_mul, Nat.cast_pow]
     exact mul_le_mul hcard (pow_le_pow_right₀ hNone hext) (by positivity) (by positivity)
   constructor
@@ -137,14 +138,16 @@ theorem eventually_history_budget (T : Stage) :
   have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
     tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
   filter_upwards [hn.eventually_ge_atTop 1,
-    (Real.tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 0.01) |>.comp hn).eventually_ge_atTop 10]
+    (_root_.tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 0.01) |>.comp hn).eventually_ge_atTop 10]
     with k hk hp
+  dsimp only [Function.comp_apply] at hp
   have hnpos : 0 < (T.S.n k : ℝ) := by linarith
+  have hn2 : 1 ≤ (T.S.n k : ℝ) ^ 2 := one_le_pow₀ hk
   have hlog : Real.log 3 ≤ 2 := by
     have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 3)
     norm_num at h
     exact h
-  rw [show (2.01 : ℝ) = 2 + 0.01 by norm_num, Real.rpow_add hnpos,
+  rw [Real.rpow_eq_pow, show (2.01 : ℝ) = 2 + 0.01 by norm_num, Real.rpow_add hnpos,
     Real.rpow_two]
   have hmul := mul_le_mul_of_nonneg_left hp (sq_nonneg (T.S.n k : ℝ))
   nlinarith

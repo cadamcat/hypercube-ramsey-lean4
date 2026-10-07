@@ -107,7 +107,8 @@ theorem physical_posterior_origin (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
       rw [← hlabel, hflip]
     change OriginAt (Lane_sol_s18_dl.physical_list_context hPT hLow physical)
       v state (G.patchOf v) rfl
-    apply origin_transport _ v state (G.cellPatch C) (G.cellOf_patch v)
+    apply origin_transport (Lane_sol_s18_dl.physical_list_context hPT hLow physical)
+      v state (G.cellPatch C) (G.cellOf_patch v)
     exact ⟨S, e, W, ys, hS, hrole,
       lt_of_le_of_ne ((S.recLaw PT.parameter).nonneg W) hW.symm, hy, hprior⟩
   · exact (hsource.1 hc).elim
@@ -127,7 +128,8 @@ theorem physical_late_count (physical : PhysicalFreshCertificate G F)
   have hr : 2 ≤ (S.r : ℝ) :=
     H.scale.class_scale.trans H.late_classes.subspace_size.1
   have hcard : S.r = 2 ^ Module.finrank (ZMod 2) S.Lsub := by
-    rw [← H.late_classes.class_enum_card, Module.card_eq_pow_finrank, ZMod.card]
+    rw [← H.late_classes.class_enum_card,
+      Module.card_eq_pow_finrank (K := ZMod 2) (V := S.Lsub), ZMod.card]
   have hdim : Module.finrank (ZMod 2) S.Lsub ≠ 0 := by
     intro h
     rw [h, pow_zero] at hcard
@@ -140,11 +142,11 @@ theorem physical_late_count (physical : PhysicalFreshCertificate G F)
   have hhalf := (H.late_classes.total_late_neighbour_bounds v he).1
   change S.r / 2 ≤ (Finset.univ.filter fun j : Fin (T.S.n k) =>
     (S.classOf (flipPos v j)).isSome).card at hhalf
-  rw [hm] at hhalf
-  have hdiv : (m + m) / 2 = m := by omega
+  have hdiv : S.r / 2 = m := by omega
   rw [hdiv] at hhalf
-  change (S.r : ℝ) / 2 ≤ _
-  rw [hm, Nat.cast_add]
+  change (S.r : ℝ) / 2 ≤ (Finset.univ.filter fun j : Fin (T.S.n k) =>
+    (S.classOf (flipPos v j)).isSome).card
+  have hrreal : (S.r : ℝ) = (m : ℝ) + (m : ℝ) := by exact_mod_cast hm
   have hreal : (m : ℝ) ≤ (Finset.univ.filter fun j : Fin (T.S.n k) =>
     (S.classOf (flipPos v j)).isSome).card := by exact_mod_cast hhalf
   linarith
@@ -165,7 +167,7 @@ theorem physical_internal_hits (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
 
 
 private theorem flip_distance_le {n : ℕ} (v : CubePos n) (a : Fin n) :
-    hammingDist v (flipPos v a) ≤ 1 := by
+    _root_.hammingDist v (flipPos v a) ≤ 1 := by
   have hsub : (Finset.univ.filter fun j => v j ≠ flipPos v a j) ⊆ {a} := by
     intro j hj
     by_contra hn
@@ -174,13 +176,13 @@ private theorem flip_distance_le {n : ℕ} (v : CubePos n) (a : Fin n) :
   exact (Finset.card_le_card hsub).trans_eq (Finset.card_singleton _)
 
 private theorem double_flip_distance_le {n : ℕ} (v : CubePos n) (a b : Fin n) :
-    hammingDist (flipPos v a) (flipPos v b) ≤ 2 := by
+    _root_.hammingDist (flipPos v a) (flipPos v b) ≤ 2 := by
   have hsub : (Finset.univ.filter fun j => flipPos v a j ≠ flipPos v b j) ⊆ {a, b} := by
     intro j hj
     by_contra hn
     have hne : j ≠ a ∧ j ≠ b := by simpa using hn
     exact (Finset.mem_filter.mp hj).2 (by simp [flipPos, hne.1, hne.2])
-  exact (Finset.card_le_card hsub).trans (by simp; omega)
+  exact (Finset.card_le_card hsub).trans Finset.card_le_two
 
 /-- An external flip remains external to its neighbour's patch. Prefix and
 internal coordinates are disjoint uniformly over all patches. -/
@@ -212,7 +214,7 @@ theorem physical_geometry (hκ : κ.Admissible) (hPT : PT.Valid)
     (Lane_sol_s18_dl.physical_list_context hPT hLow physical).S17GeometryValidity K17 := by
   have hlates := physical_late_count physical
   have hsep (v w : Pos T k) (hc : G.cellOf v = G.cellOf w)
-      (hd : (hammingDist v w : ℝ) ≤ (Real.log (T.S.n k : ℝ)) ^ 3) :
+      (hd : (_root_.hammingDist v w : ℝ) ≤ (Real.log (T.S.n k : ℝ)) ^ 3) :
       ∀ j, j ∉ PT.tiling.Icoord (G.patchOf v) → v j = w j := by
     intro j hj
     by_contra hne
@@ -226,8 +228,8 @@ theorem physical_geometry (hκ : κ.Admissible) (hPT : PT.Valid)
     constructor
     · intro w hw heq
       obtain ⟨_, a, ha, rfl⟩ := Finset.mem_filter.mp hw |>.2
-      have hd : (hammingDist v (flipPos v a) : ℝ) ≤ (Real.log (T.S.n k : ℝ)) ^ 3 := by
-        have hh : (hammingDist v (flipPos v a) : ℝ) ≤ 1 := by exact_mod_cast flip_distance_le v a
+      have hd : (_root_.hammingDist v (flipPos v a) : ℝ) ≤ (Real.log (T.S.n k : ℝ)) ^ 3 := by
+        have hh : (_root_.hammingDist v (flipPos v a) : ℝ) ≤ 1 := by exact_mod_cast flip_distance_le v a
         linarith
       have heqbit := hsep v (flipPos v a) heq.symm hd a ha
       cases hv : v a <;> simp [flipPos, hv] at heqbit
@@ -236,9 +238,11 @@ theorem physical_geometry (hκ : κ.Admissible) (hPT : PT.Valid)
       obtain ⟨_, b, hb, rfl⟩ := Finset.mem_filter.mp hz |>.2
       by_cases hab : a = b
       · rw [hab]
-      · have hd : (hammingDist (flipPos v a) (flipPos v b) : ℝ) ≤
+      · have hd : (_root_.hammingDist (flipPos v a) (flipPos v b) : ℝ) ≤
             (Real.log (T.S.n k : ℝ)) ^ 3 := by
-          exact (by exact_mod_cast double_flip_distance_le v a b).trans hlog
+          have hh : (_root_.hammingDist (flipPos v a) (flipPos v b) : ℝ) ≤ 2 := by
+            exact_mod_cast double_flip_distance_le v a b
+          exact hh.trans hlog
         have heqbit := hsep (flipPos v a) (flipPos v b) hcell hd a
           (external_axis_at_neighbor hPT v a ha)
         cases hv : v a <;> simp [flipPos, hab, hv] at heqbit
@@ -273,7 +277,9 @@ theorem physical_geometry (hκ : κ.Admissible) (hPT : PT.Valid)
       exact legacy.internal_cosets (H.geom.patchOf v) a b ha hb hab)
   · intro C
     obtain ⟨v, hv⟩ := H.cell_partition.cells_nonempty C
-    exact ⟨v, (Finset.mem_filter.mp hv).2⟩
+    refine ⟨v, ?_⟩
+    change H.data.cells.cellOf v = C
+    simpa only [CellData.positions, Finset.mem_filter, Finset.mem_univ, true_and] using hv
   · intro v w hp hout
     exact legacy.whole_slices v w hp.symm hout
   · intro i
@@ -342,7 +348,8 @@ theorem physical_permission_present (hPT : PT.Valid) (hLow : PT.tiling.mode.isLo
     refine ⟨?_, j, hy⟩
     rw [permission_core_eq physical C P b hb]
     apply hp y
-    rw [cast_bin_val]
+    rw [cast_bin_val (PT := PT) (G.cellPatch C) (G.patchOf b)
+      (by rw [← hb, G.cellOf_patch]) (P j)]
     exact hy
 
 
@@ -375,14 +382,16 @@ theorem physical_permission_test (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
   obtain ⟨B', hB', hy'⟩ := Finset.mem_biUnion.mp hcore
   have hBval : B'.1 = B.1 := by
     have hpart : B.1 ∈ (PT.tiling.P (G.cellPatch C)).bins.parts := by
-      simpa only [C, G.cellOf_patch] using B.2
+      change B.1 ∈ (PT.tiling.P (G.cellPatch (G.cellOf b))).bins.parts
+      rw [G.cellOf_patch b]
+      exact B.2
     exact (PT.tiling.P (G.cellPatch C)).bins.eq_of_mem_parts B'.2 hpart hy' hy
   have hperm : B' ∈ (physical.permissions.table C).permitted (physical.raw.groupOf C r) := by
     rw [← physical.construction.group_eq C r]
     rw [← physical.construction.permission_eq C (physical.calibration.groupOf C r)]
     exact hB'
   have htest := (physical.permissions.table C).permitted_iff _ _ |>.mp hperm
-  have hbad := htest (r, a) (by rw [physical.permissions.group_eq]; rfl) y
+  have hbad := htest (r, a) (by rw [physical.permissions.group_eq]) y
     (by rw [physical.permissions.labels_eq]; exact hy')
   rw [physical.permissions.bad_eq] at hbad
   have hyY : y ∈ (PT.tiling.P (G.cellPatch C)).Y :=
@@ -394,6 +403,21 @@ theorem physical_permission_test (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
       simp [b, flipPos]
     · simp [b, flipPos, hj]
   rw [if_pos ⟨hyY, by simpa only [C, G.cellOf_patch] using hout, hclass⟩, hflip] at hbad
+  rw [physical.permissions.rate_eq, physical.permissions.n_eq] at hbad
+  let P := physical.raw.baseExperiment (G.cellOf v) v
+  let bad (σ : Fin (T.S.N k) → ℝ) := σ ≠ 0 ∧
+    |(∑ x, σ x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| > 2 * bstar T k
+  change (physical_base_source hPT hLow physical v).law.pr
+    (fun ω => bad ((physical_base_source hPT hLow physical v).readout ω)) ≤ _
+  have hprob : (physical_base_source hPT hLow physical v).law.pr
+      (fun ω => bad ((physical_base_source hPT hLow physical v).readout ω)) =
+      P.expect (fun σ => if bad σ then 1 else 0) := by
+    change P.law.pr (fun ω => bad (P.prior ω)) = _
+    unfold FinLaw.pr PriorExperiment.expect FinLaw.E
+    apply Finset.sum_congr rfl
+    intro ω _
+    by_cases h : bad (P.prior ω) <;> simp [h]
+  rw [hprob]
   exact hbad
 
 /-- S16's exact slot formula and subpolynomial bin size supply the two
@@ -407,17 +431,19 @@ theorem physical_slot_bounds (hκ : κ.Admissible) (hPT : PT.Valid)
   intro C
   let n : ℝ := T.S.n k
   let d : ℝ := (PT.tiling.P (G.cellPatch C)).d
-  let A := Real.rpow n (κ.Ac : ℝ)
+  let A := n ^ κ.Ac
   have hnpos : 0 < n := by
     dsimp [n]
     exact_mod_cast (lt_of_lt_of_le (by norm_num : 0 < 2) physical.quantitative.n_large)
   have hn : 1 ≤ n := by linarith
-  have hA : 1 ≤ A := Real.one_le_rpow hn (Nat.cast_nonneg _)
+  have hA : 1 ≤ A := one_le_pow₀ hn
   obtain ⟨y, hy⟩ := (hPT.tiling_valid.patch_nonempty (G.cellPatch C)).2
   obtain ⟨B, hB, hyB⟩ := (PT.tiling.P (G.cellPatch C)).bins.exists_mem hy
   have hdNat : 0 < (PT.tiling.P (G.cellPatch C)).d :=
     (Finset.card_pos.mpr ⟨y, hyB⟩).trans_eq (hPT.tiling_valid.bins_card _ B hB)
-  have hd : 1 ≤ d := by exact_mod_cast hdNat
+  have hd : 1 ≤ d := by
+    dsimp only [d]
+    exact_mod_cast Nat.succ_le_of_lt hdNat
   have hdpos : 0 < d := by linarith
   have hbin := physical.quantitative.bin_count_bound (G.cellPatch C)
   have hsqrt : Real.sqrt (Real.log n) ≤ Real.log n := by
@@ -433,19 +459,22 @@ theorem physical_slot_bounds (hκ : κ.Admissible) (hPT : PT.Valid)
     have hprod := mul_le_mul_of_nonneg_left hdle hS
     have hgrow : A ≤ κ.Kcell * A := by
       simpa only [one_mul] using mul_le_mul_of_nonneg_right hKcell (le_trans (by norm_num) hA)
-    simpa only [Real.rpow_natCast] using hgrow.trans (h.trans hprod)
+    exact hgrow.trans (h.trans hprod)
   constructor
-  · rw [Real.rpow_sub_one hnpos.ne']
+  · rw [Real.rpow_eq_pow, Real.rpow_sub_one hnpos.ne', Real.rpow_natCast]
     exact (div_le_iff₀ hnpos).mpr hslot
   · have hceil : (G.nslot C : ℝ) ≤ κ.Kcell * A / d + 1 := by
-      rw [legacy.slot_eq C]
+      rw [legacy.slot_eq C, Real.rpow_eq_pow, Real.rpow_natCast]
       exact (Nat.ceil_lt_add_one (show 0 ≤ κ.Kcell * A / d by positivity)).le
     have hquot : κ.Kcell * A / d ≤ κ.Kcell * A := by
       exact div_le_self (by positivity) hd
     have hupper : (G.nslot C : ℝ) ≤ A * n := by
       have hprod := mul_le_mul_of_nonneg_right hnK (show 0 ≤ A by positivity)
       nlinarith
-    simpa only [Real.rpow_add_one hnpos.ne'] using hupper
+    rw [Real.rpow_eq_pow]
+    change (G.nslot C : ℝ) ≤ n ^ ((κ.Ac : ℝ) + 1)
+    rw [Real.rpow_add_one hnpos.ne', Real.rpow_natCast]
+    exact hupper
 
 /-- L16.7 supplies the comparison for every nonnegative test of the raw
 prior vector; the fixed coefficient precedes the eventual index. -/
@@ -508,7 +537,9 @@ theorem physical_pool_bin_budget (hκ : κ.Admissible) (hPT : PT.Valid)
   intro i
   let n : ℝ := T.S.n k
   let m := κ.Ac + 4
-  have hn2 : 2 ≤ n := by exact_mod_cast physical.quantitative.n_large
+  have hn2 : 2 ≤ n := by
+    dsimp only [n]
+    exact_mod_cast physical.quantitative.n_large
   have hnpos : 0 < n := by linarith
   have hA : 1 ≤ n ^ m := one_le_pow₀ (by linarith)
   have hsqrt : Real.sqrt (Real.log n) ≤ Real.log n := by
@@ -542,21 +573,24 @@ theorem physical_pool_bin_budget (hκ : κ.Admissible) (hPT : PT.Valid)
     have hp' := mul_le_mul_of_nonneg_right hp hnpos.le
     simpa only [pow_two, mul_assoc] using hNm.trans hp'
   have hHost : n ^ (2 * m + 8) ≤ (T.S.N k : ℝ) := by
-    simpa only [Real.rpow_natCast] using hN
+    simpa only [Real.rpow_eq_pow, Real.rpow_natCast] using hN
   have hbig : n ^ (2 * m + 3) * n ^ 3 ≤ (Fintype.card (Bin PT.tiling i) : ℝ) := by
     have hh := hHost.trans hNB
     rw [show 2 * m + 8 = (2 * m + 3) + 3 + 2 by omega,
       pow_add, pow_add] at hh
-    exact (mul_le_mul_right (show 0 < n ^ 2 by positivity)).mp hh
+    exact le_of_mul_le_mul_right hh (show 0 < n ^ 2 by positivity)
   have hn3 : 8 ≤ n ^ 3 := by
     calc
       8 = (2 : ℝ) ^ 3 := by norm_num
       _ ≤ n ^ 3 := pow_le_pow_left₀ (by norm_num) hn2 _
   have hbin : 8 * n ^ (2 * m + 3) ≤ (Fintype.card (Bin PT.tiling i) : ℝ) := by
     have h := mul_le_mul_of_nonneg_left hn3 (show 0 ≤ n ^ (2 * m + 3) by positivity)
-    exact (by simpa only [mul_comm] using h).trans hbig
+    have h' : 8 * n ^ (2 * m + 3) ≤ n ^ (2 * m + 3) * n ^ 3 := by
+      simpa only [mul_comm] using h
+    exact h'.trans hbig
   have hε : Real.rpow n (-3 : ℝ) = (n ^ 3)⁻¹ := by
-    rw [Real.rpow_neg hnpos.le, Real.rpow_natCast n 3]
+    rw [Real.rpow_eq_pow, Real.rpow_neg hnpos.le]
+    norm_num
   have hεone : Real.rpow n (-3 : ℝ) ≤ 1 :=
     Real.rpow_le_one_of_one_le_of_nonpos (by linarith) (by norm_num)
   have hεpos : 0 < Real.rpow n (-3 : ℝ) := Real.rpow_pos_of_pos hnpos _
@@ -568,9 +602,15 @@ theorem physical_pool_bin_budget (hκ : κ.Admissible) (hPT : PT.Valid)
         apply div_le_div_of_nonneg_right _ hεpos.le
         exact mul_le_mul hq (by linarith) (by positivity) (by positivity)
       _ = 8 * n ^ (2 * m + 3) := by
-        rw [hε, div_inv_eq_mul, pow_add, show 2 * m = m * 2 by omega, pow_mul]
+        have hpow : n ^ (2 * m + 3) = (n ^ m) ^ 2 * n ^ 3 := by
+          rw [pow_add n (2 * m) 3, show 2 * m = m * 2 by omega, pow_mul]
+        rw [hε, div_inv_eq_mul, hpow]
         ring
-  exact (by simpa only [Nat.cast_add, Nat.cast_one, Nat.cast_pow] using htarget).trans hbin
+  have htarget' : (((T.S.n k) ^ (κ.Ac + 4) + 1 : ℕ) : ℝ) ^ 2 *
+      (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) /
+        Real.rpow (T.S.n k : ℝ) (-3 : ℝ) ≤ 8 * n ^ (2 * m + 3) := by
+    simpa only [Nat.cast_add, Nat.cast_one, Nat.cast_pow] using htarget
+  exact htarget'.trans hbin
 
 /-- All sampler fields come from the one linked physical construction. -/
 noncomputable def physical_sampler (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
@@ -707,7 +747,7 @@ theorem eventually_physical_remaining_inputs (hκ : κ.Admissible) (T : Stage)
     have h := Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h) (Finset.mem_univ i)
     have hlen := hPT.tiling_valid.prefix_internal_length
     exact_mod_cast (show (PT.tiling.P i).h ≤ T.S.n k by omega)
-  let sampler := physical_sampler hPT hLow physical K17 hHost.1 hh hHost.2.2.2.2
+  let sampler := physical_sampler hPT hLow physical K17 (by exact_mod_cast hHost.1) hh hHost.2.2.2.2
     hHistory (hBase PT G F physical)
   have hBin := physical_pool_bin_budget hκ hPT physical hlog1 hHost.2.2.2.1
   have hε : 0 < Real.rpow (T.S.n k : ℝ) (-3 : ℝ) :=

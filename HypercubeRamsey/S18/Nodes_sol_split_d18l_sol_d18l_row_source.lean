@@ -149,7 +149,12 @@ noncomputable def physical_base_source {F : FreshCell G} (hPT : PT.Valid)
         exact raw_local_reference_expect R hc C p.1 e S records groups hGroup hQ hU
           W fallback (fun ys => Φ (S.σ e (records p.1 (W p.1)) ys))
       simp only [hlocal]
-      rw [Lane_q_s16_prod2.finLaw_pi_E_coordinate]
+      let test (W : ∀ r, S.Val r) :=
+        (S.refLaw W).E (fun ω => Φ (S.σ e W (nbrLabels e.1 ω.2)))
+      change (FinLaw.pi (R.sliceLaw C)).E (fun W => test (records p.1 (W p.1))) =
+        (S.recLaw PT.parameter).E test
+      rw [Lane_q_s16_prod2.finLaw_pi_E_coordinate (R.sliceLaw C) p.1
+        (fun W => test (records p.1 W))]
       rw [hLaw p.1, Lane_q_s16_comp2.map_expect]
       simp only [Equiv.apply_symm_apply]
     · exact (hsource.1 hc).elim
@@ -162,8 +167,9 @@ noncomputable def physical_base_source {F : FreshCell G} (hPT : PT.Valid)
       refine ⟨σ, ?_, ?_⟩
       · obtain ⟨q, hq⟩ := Finset.card_eq_one.mp (hPT.direct_single_corner hc)
         have hqmem : q ∈ PT.activeVertices := by rw [hq]; simp
-        have henv : PT.envelope (G.cellPatch C) = PT.mesh.corner q (G.cellPatch C) := by
-          rw [hPT.envelope_eq, hq]
+        have hpatch : G.cellPatch C = G.patchOf v := G.cellOf_patch v
+        have henv : PT.envelope (G.cellPatch C) = PT.mesh.corner q (G.patchOf v) := by
+          rw [hpatch, hPT.envelope_eq, hq]
           simp
         dsimp only [ListGateContext.CleanInitialPrior, D, Lane_sol_s18_dl.physical_list_context]
         refine ⟨(Law.unifCore _ hEnv).nonneg, (Law.unifCore _ hEnv).sum_eq_one,
@@ -172,7 +178,7 @@ noncomputable def physical_base_source {F : FreshCell G} (hPT : PT.Valid)
           change (if x ∈ PT.envelope (G.cellPatch C) then _ else 0) ≠ 0 at hx
           by_contra hn
           have hnot : x ∉ PT.envelope (G.cellPatch C) := by
-            simpa only [henv, C, G.cellOf_patch] using hn
+            simpa only [henv] using hn
           simp [hnot] at hx
         · intro h
           exact (hc h).elim
@@ -180,7 +186,7 @@ noncomputable def physical_base_source {F : FreshCell G} (hPT : PT.Valid)
           refine ⟨Lane_sol_fix_corner.active_corner_card_lower_waste hPT _ q hqmem, ?_⟩
           intro x
           dsimp only [σ, Law.unifCore]
-          simp only [henv, G.cellOf_patch, one_div]
+          simp only [henv, one_div]
       · intro ω
         exact hPrior ω.1 ω.2.2 v rfl he
 

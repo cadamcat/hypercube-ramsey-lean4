@@ -1070,21 +1070,24 @@ theorem p92_gain (P : Params9) (hP : P.Valid) (c₀ c₁ : ℝ) (hc₀ : 0 < c�
   -- Split each star failure into a filter failure, a low conditional-mean history, or a downward deviation.
   -- On the complementary event `starRegular9` identifies each clipped fraction with `targetFrac9`; the
   -- remaining deterministic log estimate uses the `4 b_*` interval and the scale gap `h_+ - h_- < χ/10`.
-  let c := min c₀ c₁ / 2
+  let c := min c₀ (min c₁ 1) / 2
   have hc : 0 < c := by
     dsimp [c]
-    exact div_pos (lt_min hc₀ hc₁) (by norm_num)
+    exact div_pos (lt_min hc₀ (lt_min hc₁ (by norm_num))) (by norm_num)
   have hu : 0 < P.u := by
     have hxS : 0 < (P.xS : ℝ) := by exact_mod_cast hP.1.1
     dsimp [Params9.u]
     linarith
   obtain ⟨nTail, hTail⟩ := Lane_q_s09_gain2.eventual_tail_sum3
-    (u := P.u) (c₁ := c₀) (c₂ := c₁) (c₃ := c₁) hu hc₀ hc₁ hc₁
+    (u := P.u) (c₁ := c₀) (c₂ := c₁) (c₃ := 1) hu hc₀ hc₁ (by norm_num)
   obtain ⟨nLog, hLog⟩ := Lane_q_s09_gain2.eventual_gain_log_error9 P hP
-  refine ⟨c, hc, max nTail nLog, ?_⟩
+  obtain ⟨nConc, hConcRate⟩ := Lane_q_s09_gain2.eventual_gain_concentration_rate9 P hP
+  refine ⟨c, hc, max (max nTail nLog) nConc, ?_⟩
   intro n hn N E X Y κ G M S I hin hreg hmean hconc
-  have hnTail : nTail ≤ n := le_trans (le_max_left nTail nLog) hn
-  have hnLog : nLog ≤ n := le_trans (le_max_right nTail nLog) hn
+  have hnMain : max nTail nLog ≤ n := le_trans (le_max_left (max nTail nLog) nConc) hn
+  have hnTail : nTail ≤ n := le_trans (le_max_left nTail nLog) hnMain
+  have hnLog : nLog ≤ n := le_trans (le_max_right nTail nLog) hnMain
+  have hnConc : nConc ≤ n := le_trans (le_max_right (max nTail nLog) nConc) hn
   have htailN := hTail n hnTail
   have hmargin := hLog n hnLog
   rcases hin with ⟨hN, hprep, hdeep, htags, hmasks, htools, hexps, hscales⟩
@@ -1099,9 +1102,10 @@ theorem p92_gain (P : Params9) (hP : P.Valid) (c₀ c₁ : ℝ) (hc₀ : 0 < c�
   let devBad (ω₀ ω : Outcome9 I N) : Prop :=
     ∑ b : StarOdd9 v, clippedFrac9 S E G ω v b.1 ≤
       ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω₀ - (n : ℝ) * P.aStar n / 10
+  let devEvent (ω : Outcome9 I N) : Prop := devBad ω ω ∧ ¬ meanBad ω
   have hsplit (ω : Outcome9 I N) :
       ¬ starValid9 S E G ω v →
-        (¬ starRegular9 S E G ω v ∨ meanBad ω ∨ devBad ω ω) := by
+        (¬ starRegular9 S E G ω v ∨ meanBad ω ∨ devEvent ω) := by
     intro hbad
     by_cases hregular : starRegular9 S E G ω v
     · by_cases hmeanBad : meanBad ω
@@ -1111,7 +1115,7 @@ theorem p92_gain (P : Params9) (hP : P.Valid) (c₀ c₁ : ℝ) (hc₀ : 0 < c�
               ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω :=
           le_of_not_gt hmeanBad
         by_cases hdevBad : devBad ω ω
-        · exact Or.inr (Or.inr hdevBad)
+        · exact Or.inr (Or.inr ⟨hdevBad, hmeanBad⟩)
         · have hdevGood :
               ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω -
                   (n : ℝ) * P.aStar n / 10 <
@@ -1153,9 +1157,89 @@ theorem p92_gain (P : Params9) (hP : P.Valid) (c₀ c₁ : ℝ) (hc₀ : 0 < c�
             Lane_q_s09_gain2.star_gain_lower_of_mean9 ω v hbsmall hmargin hfrac hsumTarget
           exact False.elim (hbad ⟨hregular, hgain⟩)
     · exact Or.inl hregular
-  -- The remaining step converts the fiberwise `hconcAt` bounds into the unconditional deviation tail,
-  -- then unions that tail with the regularity and mean-history tails.
-  sorry
+  have hdevEventAgreement (ω₀ ω : Outcome9 I N) (hsame : sameCore9 I v ω₀ ω) :
+      devEvent ω ↔ (devBad ω₀ ω ∧ ¬ meanBad ω₀) := by
+    have hmeanSum :
+        (∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω) =
+          ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω₀ := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      exact (Lane_q_s09_gain2.condCoreMean_sameCore9 S I E G v b.1 ω₀ ω hsame).symm
+    have hmeanEq : meanBad ω ↔ meanBad ω₀ := by
+      unfold meanBad
+      rw [hmeanSum]
+    have hdevEq : devBad ω ω ↔ devBad ω₀ ω := by
+      unfold devBad
+      rw [hmeanSum]
+    have hmeanNotEq : ¬ meanBad ω ↔ ¬ meanBad ω₀ := not_congr hmeanEq
+    constructor
+    · rintro ⟨hd, hm⟩
+      exact ⟨hdevEq.mp hd, hmeanNotEq.mp hm⟩
+    · rintro ⟨hd, hm⟩
+      exact ⟨hdevEq.mpr hd, hmeanNotEq.mpr hm⟩
+  let epsConc : ℝ := Real.exp
+    (-((n : ℝ) * P.aStar n ^ 2 /
+      (800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2)))
+  have hdevCondBound (ω₀ : Outcome9 I N) :
+      condCorePr9 S I v ω₀ devEvent ≤ epsConc := by
+    have heq := Lane_q_s09_gain2.condCorePr_congr_on_fiber9
+      S I v ω₀ devEvent (fun ω => devBad ω₀ ω ∧ ¬ meanBad ω₀)
+      (hdevEventAgreement ω₀)
+    rw [heq]
+    by_cases hmBad : meanBad ω₀
+    · have hfalse : (fun ω => devBad ω₀ ω ∧ ¬ meanBad ω₀) = fun _ => False := by
+        funext ω
+        simp [hmBad]
+      rw [hfalse]
+      simp [condCorePr9, FinProb.condExp, FinProb.expect, epsConc]
+      exact Real.exp_nonneg _
+    · have hconc := hconcAt ω₀
+      simpa [devBad, hmBad, epsConc] using hconc
+  have hdevTower := Lane_q_s09_gain2.condCorePr_average9 S I v devEvent
+  have hdevProb : (rawLaw9 S I).pr devEvent ≤ epsConc := by
+    rw [← hdevTower]
+    unfold FinProb.expect
+    calc
+      (∑ ω₀, (rawLaw9 S I).w ω₀ * condCorePr9 S I v ω₀ devEvent) ≤
+          ∑ ω₀, (rawLaw9 S I).w ω₀ * epsConc := by
+            apply Finset.sum_le_sum
+            intro ω₀ hω₀
+            exact mul_le_mul_of_nonneg_left (hdevCondBound ω₀) ((rawLaw9 S I).nonneg ω₀)
+      _ = epsConc := by
+            rw [← Finset.sum_mul, (rawLaw9 S I).sum_eq_one]
+            ring
+  have hrate := hConcRate n hnConc
+  have heps : epsConc ≤ P.tail 1 n := by
+    change Real.exp (-((n : ℝ) * P.aStar n ^ 2 /
+      (800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2))) ≤
+        Real.exp (-((1 : ℝ) * (n : ℝ) ^ P.u))
+    apply Real.exp_le_exp.mpr
+    simpa using neg_le_neg hrate
+  have hbadIncl (ω : Outcome9 I N) (hbad : ¬ starValid9 S E G ω v) :
+      (¬ starRegular9 S E G ω v ∨ meanBad ω ∨ devEvent ω) := hsplit ω hbad
+  have hbadProb : (rawLaw9 S I).pr (fun ω => ¬ starValid9 S E G ω v) ≤
+      (rawLaw9 S I).pr (fun ω => ¬ starRegular9 S E G ω v) +
+        (rawLaw9 S I).pr meanBad + (rawLaw9 S I).pr devEvent := by
+    calc
+      _ ≤ (rawLaw9 S I).pr (fun ω =>
+          ¬ starRegular9 S E G ω v ∨ meanBad ω ∨ devEvent ω) :=
+            FinProb.pr_mono (rawLaw9 S I) _ _ (fun ω => hbadIncl ω)
+      _ ≤ (rawLaw9 S I).pr (fun ω => ¬ starRegular9 S E G ω v) +
+          (rawLaw9 S I).pr meanBad + (rawLaw9 S I).pr devEvent :=
+            Lane_q_s09_gain2.pr_or3_le (rawLaw9 S I)
+              (fun ω => ¬ starRegular9 S E G ω v) meanBad devEvent
+  have hbadTail : (rawLaw9 S I).pr (fun ω => ¬ starValid9 S E G ω v) ≤
+      P.tail c₀ n + P.tail c₁ n + P.tail 1 n := by
+    calc
+      _ ≤ (rawLaw9 S I).pr (fun ω => ¬ starRegular9 S E G ω v) +
+          (rawLaw9 S I).pr meanBad + (rawLaw9 S I).pr devEvent := hbadProb
+      _ ≤ P.tail c₀ n + P.tail c₁ n + P.tail 1 n :=
+          add_le_add (add_le_add hregAt hmeanAt) (le_trans hdevProb heps)
+  calc
+    (rawLaw9 S I).pr (fun ω => ¬ starValid9 S E G ω v) ≤
+        P.tail c₀ n + P.tail c₁ n + P.tail 1 n := hbadTail
+    _ ≤ P.tail c n := by
+      simpa [Params9.tail, c] using htailN
 
 /-- The gain stage assembled (09:146–294): from the tags, the star validity event fails with raw probability at
 most `e^{-c n^u}` at every even star. -/

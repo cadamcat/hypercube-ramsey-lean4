@@ -1311,4 +1311,340 @@ theorem star_gain_lower_of_mean9 {P : Params9} {n N : ℕ} {M : TagMix N}
   unfold gainConst9
   nlinarith
 
+theorem FinProb.expect_condExp_history_eq_expect {Ω H : Type*}
+    [Fintype Ω] [Fintype H] [DecidableEq H] (P : FinProb Ω)
+    (history : Ω → H) (f : Ω → ℝ) :
+    P.expect (fun ω₀ => P.condExp f (fun ω => history ω = history ω₀)) = P.expect f := by
+  classical
+  letI : DecidableEq H := Classical.decEq H
+  let Q : FinProb H := FinProb.map P history
+  let g : H → ℝ := fun h => P.condExp f (fun ω => history ω = h)
+  have hmap := FinProb.map_expect P history g
+  have hq (h : H) : Q.w h = P.pr (fun ω => history ω = h) := by
+    dsimp [Q, FinProb.map, FinProb.pr]
+  have hnumEq (h : H) :
+      P.expect (fun ω => (if history ω = h then (1 : ℝ) else 0) * f ω) =
+        ∑ ω, if history ω = h then P.w ω * f ω else 0 := by
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases hh : history ω = h <;> simp [hh]
+  have hprod (h : H) :
+      Q.w h * g h = ∑ ω, if history ω = h then P.w ω * f ω else 0 := by
+    by_cases hz : Q.w h = 0
+    · have hnum0 : (∑ ω, if history ω = h then P.w ω * f ω else 0) = 0 := by
+        apply Finset.sum_eq_zero
+        intro ω hω
+        by_cases hh : history ω = h
+        · have hwle := FinProb.pr_fiber_single_le P (fun ω => history ω = h) ω hh
+          rw [← hq h, hz] at hwle
+          have hw : P.w ω = 0 := le_antisymm hwle (P.nonneg ω)
+          simp [hh, hw]
+        · simp [hh]
+      rw [hz, hnum0]
+      simp [g, FinProb.condExp, hq, hz]
+    · have hqnonneg : 0 ≤ Q.w h := Q.nonneg h
+      have hqpos : 0 < P.pr (fun ω => history ω = h) := by
+        rw [← hq h]
+        exact lt_of_le_of_ne hqnonneg (Ne.symm hz)
+      have hqpos' : 0 < Q.w h := by rw [hq h]; exact hqpos
+      have hg : g h =
+          P.expect (fun ω => (if history ω = h then (1 : ℝ) else 0) * f ω) /
+            P.pr (fun ω => history ω = h) := by
+        dsimp [g, FinProb.condExp]
+      rw [hg, hnumEq h, ← hq h]
+      field_simp [ne_of_gt hqpos']
+  calc
+    P.expect (fun ω₀ => P.condExp f (fun ω => history ω = history ω₀)) =
+        Q.expect g := by
+          symm
+          exact hmap
+    _ = ∑ h, Q.w h * g h := rfl
+    _ = ∑ h, ∑ ω, if history ω = h then P.w ω * f ω else 0 := by
+          apply Finset.sum_congr rfl
+          intro h hh
+          exact hprod h
+    _ = P.expect f := by
+          unfold FinProb.expect
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro ω hω
+          simp [eq_comm]
+
+noncomputable def coreHistory9 {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (v : EvenSites9 n) (ω : Outcome9 I N) :
+    ∀ c : {c : I.ID // c ∈ I.core v.1}, Fin N :=
+  fun c => anc9 ω c.1
+
+theorem sameCore_iff_coreHistory9_eq {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ ω : Outcome9 I N) :
+    sameCore9 I v ω₀ ω ↔ coreHistory9 I v ω = coreHistory9 I v ω₀ := by
+  constructor
+  · intro h
+    funext c
+    exact h c.1 c.2
+  · intro h c hc
+    exact congrFun h ⟨c, hc⟩
+
+theorem condCorePr_average9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n)
+    (A : Outcome9 I N → Prop) :
+    (rawLaw9 S I).expect (fun ω₀ => condCorePr9 S I v ω₀ A) =
+      (rawLaw9 S I).pr A := by
+  classical
+  let hist : Outcome9 I N → (∀ c : {c : I.ID // c ∈ I.core v.1}, Fin N) :=
+    fun ω => coreHistory9 I v ω
+  have hcond (ω₀ : Outcome9 I N) :
+      condCorePr9 S I v ω₀ A =
+        (rawLaw9 S I).condExp (fun ω => if A ω then 1 else 0)
+          (fun ω => hist ω = hist ω₀) := by
+    dsimp [condCorePr9]
+    congr 1
+    funext ω
+    exact propext (sameCore_iff_coreHistory9_eq I v ω₀ ω)
+  calc
+    (rawLaw9 S I).expect (fun ω₀ => condCorePr9 S I v ω₀ A) =
+        (rawLaw9 S I).expect (fun ω₀ =>
+          (rawLaw9 S I).condExp (fun ω => if A ω then 1 else 0)
+          (fun ω => hist ω = hist ω₀)) := by
+              apply Finset.sum_congr rfl
+              intro ω₀ hω₀
+              simp only [hcond]
+    _ = (rawLaw9 S I).expect (fun ω => if A ω then 1 else 0) :=
+          FinProb.expect_condExp_history_eq_expect (rawLaw9 S I) hist _
+    _ = (rawLaw9 S I).pr A := by simp [FinProb.expect, FinProb.pr]
+
+theorem FinProb.condExp_congr_event {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (f : Ω → ℝ) (A B : Ω → Prop) (hAB : ∀ ω, A ω ↔ B ω) :
+    P.condExp f A = P.condExp f B := by
+  classical
+  have hpr : P.pr A = P.pr B := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ω hω
+    simp [hAB ω]
+  have hexp : P.expect (fun ω => (if A ω then 1 else 0) * f ω) =
+      P.expect (fun ω => (if B ω then 1 else 0) * f ω) := by
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro ω hω
+    simp [hAB ω]
+  unfold FinProb.condExp
+  rw [hexp, hpr]
+
+theorem FinProb.condExp_indicator_le_one {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (A B : Ω → Prop) :
+    P.condExp (fun ω => if A ω then 1 else 0) B ≤ 1 := by
+  classical
+  have hnum : P.expect (fun ω => (if B ω then (1 : ℝ) else 0) *
+      (if A ω then 1 else 0)) = P.pr (fun ω => B ω ∧ A ω) := by
+    unfold FinProb.expect FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases hB : B ω <;> by_cases hA : A ω <;> simp [hB, hA]
+  have hle : P.pr (fun ω => B ω ∧ A ω) ≤ P.pr B :=
+    FinProb.pr_mono P (fun ω => B ω ∧ A ω) B (fun ω h => h.1)
+  have hnonneg : 0 ≤ P.pr B := by
+    unfold FinProb.pr
+    apply Finset.sum_nonneg
+    intro ω hω
+    by_cases hB : B ω <;> simp [hB, P.nonneg]
+  unfold FinProb.condExp
+  rw [hnum]
+  exact div_le_one_of_le₀ hle hnonneg
+
+theorem condCoreMean_sameCore9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (ω₀ ω₁ : Outcome9 I N)
+    (hsame : sameCore9 I v ω₀ ω₁) :
+    condCoreMean9 S I E G v b ω₀ = condCoreMean9 S I E G v b ω₁ := by
+  apply FinProb.condExp_congr_event
+  intro ω
+  constructor
+  · intro h0 c hc
+    exact (h0 c hc).trans (hsame c hc).symm
+  · intro h1 c hc
+    exact (h1 c hc).trans (hsame c hc)
+
+theorem condCorePr_congr_on_fiber9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
+    (A B : Outcome9 I N → Prop)
+    (hAB : ∀ ω, sameCore9 I v ω₀ ω → (A ω ↔ B ω)) :
+    condCorePr9 S I v ω₀ A = condCorePr9 S I v ω₀ B := by
+  classical
+  unfold condCorePr9 FinProb.condExp
+  congr 1
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases hs : sameCore9 I v ω₀ ω
+  · simp [hs, hAB ω hs]
+  · simp [hs]
+
+theorem eventual_gain_concentration_rate9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (n : ℝ) ^ P.u ≤
+        (n : ℝ) * P.aStar n ^ 2 /
+          (800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2) := by
+  have hxSposQ : 0 < P.xS := hP.1.1
+  have hxSltQ : P.xS < 1 / 10 := lt_trans hP.1.2.1 hP.1.2.2
+  have hσltQ : P.σ < P.xS / 10 := hP.2.2.2.1.2
+  have hχltQ : P.χ < P.xS / 100 := by
+    have hχmin := hP.2.2.2.2.1.2
+    have hle : min P.xS (min P.hMinus (1 - P.hPlus)) / 100 ≤ P.xS / 100 := by
+      apply div_le_div_of_nonneg_right _ (by norm_num)
+      exact min_le_left _ _
+    exact lt_of_lt_of_le hχmin hle
+  have hgapQ : P.hPlus - P.hMinus < P.χ / 10 := hP.2.2.2.2.2.1
+  have hxSlt : (P.xS : ℝ) < 1 / 10 := by
+    have hq' : P.xS * 10 < 1 := (lt_div_iff₀ (by norm_num : (0 : ℚ) < 10)).mp hxSltQ
+    have hr' : (P.xS : ℝ) * 10 < 1 := by exact_mod_cast hq'
+    exact (lt_div_iff₀ (by norm_num : (0 : ℝ) < 10)).mpr hr'
+  have hσlt : (P.σ : ℝ) < (P.xS : ℝ) / 10 := by
+    have hq' : P.σ * 10 < P.xS := (lt_div_iff₀ (by norm_num : (0 : ℚ) < 10)).mp hσltQ
+    have hr' : (P.σ : ℝ) * 10 < (P.xS : ℝ) := by exact_mod_cast hq'
+    exact (lt_div_iff₀ (by norm_num : (0 : ℝ) < 10)).mpr hr'
+  have hχlt : (P.χ : ℝ) < (P.xS : ℝ) / 100 := by
+    have hq' : P.χ * 100 < P.xS := (lt_div_iff₀ (by norm_num : (0 : ℚ) < 100)).mp hχltQ
+    have hr' : (P.χ : ℝ) * 100 < (P.xS : ℝ) := by exact_mod_cast hq'
+    exact (lt_div_iff₀ (by norm_num : (0 : ℝ) < 100)).mpr hr'
+  have hgap : (P.hPlus : ℝ) - (P.hMinus : ℝ) < (P.χ : ℝ) / 10 := by
+    exact_mod_cast hgapQ
+  let d : ℝ := 1 - (P.σ : ℝ) - 2 * ((P.hPlus : ℝ) - (P.hMinus : ℝ)) - P.u
+  have hd : 0 < d := by
+    dsimp [d, Params9.u]
+    nlinarith
+  obtain ⟨n₁, hsmall⟩ := eventual_const_mul_rpow_neg_lt
+    (d := d) (A := 12800) (ε := 1) hd (by norm_num)
+  refine ⟨max n₁ 1, ?_⟩
+  intro n hn
+  have hn₁ : n₁ ≤ n := le_trans (le_max_left n₁ 1) hn
+  have hnDim : 1 ≤ n := le_trans (le_max_right n₁ 1) hn
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hnRle : 1 ≤ (n : ℝ) := by exact_mod_cast hnDim
+  have hσpos : 0 < (P.σ : ℝ) := by exact_mod_cast hP.2.2.2.1.1
+  have hrFloor : (P.radius n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+    dsimp [Params9.radius]
+    exact Nat.floor_le (by positivity)
+  have hσpow : 1 ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnRle (by linarith : (0 : ℝ) ≤ (P.σ : ℝ))
+    simpa using h
+  have hrBound : (P.radius n : ℝ) + 3 ≤ 4 * (n : ℝ) ^ (P.σ : ℝ) := by
+    nlinarith [hrFloor, hσpow]
+  have hsqMinus : ((n : ℝ) ^ (-(P.hMinus : ℝ))) ^ 2 =
+      (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) := by
+    rw [← Real.rpow_mul_natCast hnR.le (-(P.hMinus : ℝ)) 2]
+    congr 1
+    ring
+  have hsqPlus : ((n : ℝ) ^ (-(P.hPlus : ℝ))) ^ 2 =
+      (n : ℝ) ^ (-(2 * (P.hPlus : ℝ))) := by
+    rw [← Real.rpow_mul_natCast hnR.le (-(P.hPlus : ℝ)) 2]
+    congr 1
+    ring
+  have hbSq : P.bStar n ^ 2 = (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) := by
+    dsimp [Params9.bStar]
+    exact hsqMinus
+  have haSq : P.aStar n ^ 2 = (n : ℝ) ^ (-(2 * (P.hPlus : ℝ))) / 4 := by
+    dsimp [Params9.aStar]
+    rw [show ((n : ℝ) ^ (-(P.hPlus : ℝ)) / 2) ^ 2 =
+      ((n : ℝ) ^ (-(P.hPlus : ℝ))) ^ 2 / 4 by ring, hsqPlus]
+  have hnumPow : (n : ℝ) * (n : ℝ) ^ (-(2 * (P.hPlus : ℝ))) =
+      (n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ)) := by
+    calc
+      (n : ℝ) * (n : ℝ) ^ (-(2 * (P.hPlus : ℝ))) =
+          (n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (-(2 * (P.hPlus : ℝ))) := by simp
+      _ = (n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ)) := by
+        rw [← Real.rpow_add hnR]
+        rw [show (1 : ℝ) + -(2 * (P.hPlus : ℝ)) = 1 - 2 * (P.hPlus : ℝ) by ring]
+  have hdenPow : (n : ℝ) ^ (P.σ : ℝ) *
+      (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) =
+        (n : ℝ) ^ ((P.σ : ℝ) - 2 * (P.hMinus : ℝ)) := by
+    rw [← Real.rpow_add hnR]
+    rw [show (P.σ : ℝ) + -(2 * (P.hMinus : ℝ)) =
+      (P.σ : ℝ) - 2 * (P.hMinus : ℝ) by ring]
+  have hpowDiv (a b : ℝ) :
+      (n : ℝ) ^ a / (n : ℝ) ^ b = (n : ℝ) ^ (a - b) := by
+    rw [div_eq_mul_inv, ← Real.rpow_neg hnR.le b, ← Real.rpow_add hnR]
+    rw [show a + -b = a - b by ring]
+  let γ : ℝ := 1 - 2 * (P.hPlus : ℝ) + 2 * (P.hMinus : ℝ) - (P.σ : ℝ)
+  let pPlus : ℝ := (n : ℝ) ^ (-(2 * (P.hPlus : ℝ)))
+  let pMinus : ℝ := (n : ℝ) ^ (-(2 * (P.hMinus : ℝ)))
+  let pSigma : ℝ := (n : ℝ) ^ (P.σ : ℝ)
+  have hγ : P.u + d = γ := by
+    dsimp [γ, d, Params9.u]
+    ring
+  have hratioEq :
+      ((n : ℝ) * P.aStar n ^ 2) /
+          (3200 * (n : ℝ) ^ (P.σ : ℝ) * P.bStar n ^ 2) =
+        (n : ℝ) ^ γ / 12800 := by
+    rw [haSq, hbSq]
+    have hcoef :
+        ((n : ℝ) * (pPlus / 4)) / (3200 * pSigma * pMinus) =
+          ((n : ℝ) * pPlus) / (12800 * pSigma * pMinus) := by
+      have hpS : 0 < pSigma := Real.rpow_pos_of_pos hnR _
+      have hpM : 0 < pMinus := Real.rpow_pos_of_pos hnR _
+      field_simp [ne_of_gt hpS, ne_of_gt hpM]
+      <;> ring
+    change ((n : ℝ) * (pPlus / 4)) / (3200 * pSigma * pMinus) =
+      (n : ℝ) ^ γ / 12800
+    rw [hcoef]
+    have hpPlusEq : pPlus = (n : ℝ) ^ (-(2 * (P.hPlus : ℝ))) := rfl
+    have hpSigmaEq : pSigma = (n : ℝ) ^ (P.σ : ℝ) := rfl
+    have hpMinusEq : pMinus = (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) := rfl
+    rw [hpPlusEq, hpSigmaEq, hpMinusEq]
+    rw [hnumPow]
+    rw [mul_assoc]
+    rw [hdenPow]
+    have hdiv := hpowDiv (1 - 2 * (P.hPlus : ℝ))
+      ((P.σ : ℝ) - 2 * (P.hMinus : ℝ))
+    calc
+      ((n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ))) /
+          (12800 * (n : ℝ) ^ ((P.σ : ℝ) - 2 * (P.hMinus : ℝ))) =
+        (((n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ))) /
+          (n : ℝ) ^ ((P.σ : ℝ) - 2 * (P.hMinus : ℝ))) / 12800 := by
+            field_simp
+            <;> ring
+      _ = (n : ℝ) ^ γ / 12800 := by rw [hdiv]; congr 2 <;> dsimp [γ] <;> ring
+  have hbStarPos : 0 < P.bStar n := by
+    dsimp [Params9.bStar]
+    exact Real.rpow_pos_of_pos hnR _
+  have hdenPos : 0 <
+      800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2 := by positivity
+  have hdenBigPos : 0 < 3200 * (n : ℝ) ^ (P.σ : ℝ) * P.bStar n ^ 2 := by positivity
+  have hnumNonneg : 0 ≤ (n : ℝ) * P.aStar n ^ 2 := by positivity
+  have hdenLe :
+      800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2 ≤
+        3200 * (n : ℝ) ^ (P.σ : ℝ) * P.bStar n ^ 2 := by
+    have h := mul_le_mul_of_nonneg_left hrBound (by positivity :
+      0 ≤ 800 * P.bStar n ^ 2)
+    nlinarith
+  have hratioLower :
+      ((n : ℝ) * P.aStar n ^ 2) /
+          (3200 * (n : ℝ) ^ (P.σ : ℝ) * P.bStar n ^ 2) ≤
+        ((n : ℝ) * P.aStar n ^ 2) /
+          (800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2) := by
+    rw [div_le_div_iff₀ hdenBigPos hdenPos]
+    exact mul_le_mul_of_nonneg_left hdenLe hnumNonneg
+  have hsmallN := hsmall n hn₁
+  have hpowDpos : 0 < (n : ℝ) ^ d := Real.rpow_pos_of_pos hnR d
+  rw [Real.rpow_neg hnR.le d] at hsmallN
+  have hlargeD : 12800 < (n : ℝ) ^ d := by
+    have hm := mul_lt_mul_of_pos_right hsmallN hpowDpos
+    simpa [mul_assoc, inv_mul_cancel₀ (ne_of_gt hpowDpos)] using hm
+  have hfactor : 1 ≤ (n : ℝ) ^ d / 12800 :=
+    (le_div_iff₀ (by norm_num : (0 : ℝ) < 12800)).2 (by nlinarith [hlargeD])
+  have hbase : (n : ℝ) ^ P.u ≤ (n : ℝ) ^ γ / 12800 := by
+    calc
+      (n : ℝ) ^ P.u = (n : ℝ) ^ P.u * 1 := by ring
+      _ ≤ (n : ℝ) ^ P.u * ((n : ℝ) ^ d / 12800) :=
+        mul_le_mul_of_nonneg_left hfactor (Real.rpow_nonneg hnR.le _)
+      _ = ((n : ℝ) ^ P.u * (n : ℝ) ^ d) / 12800 := by ring
+      _ = (n : ℝ) ^ γ / 12800 := by rw [← Real.rpow_add hnR, hγ]
+  calc
+    (n : ℝ) ^ P.u ≤ (n : ℝ) ^ γ / 12800 := hbase
+    _ = ((n : ℝ) * P.aStar n ^ 2) /
+        (3200 * (n : ℝ) ^ (P.σ : ℝ) * P.bStar n ^ 2) := hratioEq.symm
+    _ ≤ ((n : ℝ) * P.aStar n ^ 2) /
+        (800 * ((P.radius n : ℝ) + 3) * P.bStar n ^ 2) := hratioLower
+
 end HypercubeRamsey.Lane_q_s09_gain2

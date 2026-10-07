@@ -136,46 +136,82 @@ is the candidate prior (`≤ 20Π ≤ 20K/N`); same-bin fraction `O((2n^{−.04}
 constraints touching separated bins costs `O(1)^l` (Lemma 3.4); Lemma 3.6, Markov and the label union. -/
 theorem L6_1k_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.CoarseCert → X.OddBaseLoad := by
+  classical
+  have hK : 0 < K := hadm.2.2.2
   have hStages : ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.StageFacts :=
     ((stepFacts6 γ p₀ K hadm).and (stageFacts6 γ p₀ K hadm)).mono
       (fun _ _ _ _ _ _ h => h.2 h.1)
   obtain ⟨n₀, C₀, hStages⟩ := hStages
-  refine ⟨n₀, C₀, ?_⟩
+  obtain ⟨n₁, hn₁⟩ := Filter.eventually_atTop.1
+    ((Lane_sol_s06_loadA.coarse_touch_charge_eventually_small.and Lane_sol_s06_loadA.sameBinNear_moment_eventually_small).and
+      Lane_sol_s06_loadA.boundary_baseLoadTerm_eventually_small)
+  refine ⟨max n₀ (max n₁ 10), C₀, ?_⟩
   intro n N E G M X hLarge hCoarse v hv hGood
-  have hStage := hStages n N E G M X hLarge
+  have hn₀ : n₀ ≤ n := (le_max_left _ _).trans hLarge.1
+  have hn₁' : n₁ ≤ n := (le_max_left _ _).trans ((le_max_right _ _).trans hLarge.1)
+  have hn10 : 10 ≤ n := (le_max_right _ _).trans ((le_max_right _ _).trans hLarge.1)
+  have hnpos : 0 < n := by omega
+  have hStage := hStages n N E G M X ⟨hn₀, hLarge.2⟩
   have hGoodMass : 0 < X.initLaw.pr X.V0Good :=
     lt_of_lt_of_le (by norm_num) hStage.1
-  have hvRaw : X.initLaw.w v ≠ 0 :=
-    (restrictOr6_supp hGoodMass hv).2
+  have hvRaw : X.initLaw.w v ≠ 0 := (restrictOr6_supp hGoodMass hv).2
   have hS₀Mass : 0 < X.par.piPrime.pr (fun z => z ∈ X.par.S₀) := by
     linarith [X.par.S₀_mass]
   have hvS₀ : v ∈ X.par.S₀ :=
     (restrictOr6_supp hS₀Mass (by simpa [Ctx6.initLaw] using hvRaw)).1
-  have hInteriorRaw (h : X.Key) (hh : h.2 = .interior) (y : Fin N) :
-      (X.coarseLaw v).expect (fun c =>
-        if X.Step1OK (v, c) h then (N : ℝ) * (X.hidPost (v, c) h).w y else 0) ≤ 20 * K :=
-    Lane_sol_s06_loadA.interior_step1_mean_le X v h hh y hvS₀
-  have hnPos : 0 < n := by
-    by_contra hn
-    have hnZero : n = 0 := by omega
-    have hNZero : N ≤ 0 := by simpa [hnZero] using hLarge.2.2
-    have hY := X.y₀.isLt
-    omega
-  have hBoundaryRaw (b : X.Base) (y : Fin N) :
-      ((2 : ℝ) ^ n)⁻¹ * ∑ u : CubeVertex n,
-        (if X.g.L.boundary u then Lane_sol_s06_loadA.baseLoadTerm X b u y else 0) ≤
-          (n : ℝ) ^ (-(1 / 20 : ℝ) + d₁) :=
-    Lane_sol_s06_loadA.boundary_baseLoadTerm_average_le X b y hnPos
-  have hRawProduct (U : Finset (CubeVertex n))
-      (hsep : ∀ u ∈ U, ∀ u' ∈ U, u ≠ u' → X.g.L.coarseBin u ≠ X.g.L.coarseBin u') (y : Fin N) :
-      (X.coarseLaw v).expect (fun c => ∏ u ∈ U,
-        (if X.Step1OK (v, c) (X.g.L.coarseBin u, .interior) then
-          (N : ℝ) * (X.hidPost (v, c) (X.g.L.coarseBin u, .interior)).w y else 0)) ≤
-            (20 * K) ^ U.card :=
-    Lane_sol_s06_loadA.interior_step1_product_raw_le X v hvS₀ U
-      (fun u => (X.g.L.coarseBin u, .interior)) (fun _ => rfl) hsep y
-  -- Remaining: coarse avoidance, near-bin moments, and the simultaneous label estimate.
-  sorry
+  obtain ⟨hhalf, hcharge⟩ := (hn₁ n hn₁').1.1
+  have hsmall := (hn₁ n hn₁').1.2
+  have hboundary := (hn₁ n hn₁').2
+  let cert := Classical.choice (hCoarse v hGood)
+  have hN : (N : ℝ) ≤ (n : ℝ) * 2 ^ n := by exact_mod_cast hLarge.2.2
+  have htail := Lane_sol_s06_loadA.interiorBaseAvg_tail X v hvS₀ hK.le hn10 hN cert hhalf hcharge hsmall
+  have hRoleCard : X.oddRoles.card = 2 ^ (n - 1) := by
+    have hOddEq : X.oddRoles = Finset.univ \ evenRoleSet n := by
+      ext u
+      simp [Ctx6.oddRoles, evenRoleSet]
+    rw [hOddEq]
+    exact (parity_class_card hnpos).2
+  have hPowNat : (2 : ℕ) ^ n = 2 * 2 ^ (n - 1) := by
+    calc
+      2 ^ n = 2 ^ (n - 1 + 1) := by rw [Nat.sub_add_cancel (by omega : 1 ≤ n)]
+      _ = 2 ^ (n - 1) * 2 := by rw [pow_succ]
+      _ = 2 * 2 ^ (n - 1) := by omega
+  have hCard : (Fintype.card (CubeVertex n) : ℝ) = 2 * (X.oddRoles.card : ℝ) := by
+    rw [hRoleCard]
+    exact_mod_cast (by simpa using hPowNat : Fintype.card (CubeVertex n) = 2 * 2 ^ (n - 1))
+  have hcoef : (X.oddRoles.card : ℝ)⁻¹ = 2 * (Fintype.card (CubeVertex n) : ℝ)⁻¹ := by
+    rw [hCard, mul_inv_rev]
+    ring
+  have hAvg (c : X.Coarse) (y : Fin N) :
+      X.baseAvg (v,c) y ≤ 2 * (Lane_sol_s06_loadA.interiorBaseAvg X (v,c) y + 1) := by
+    have hsum : (∑ u ∈ X.oddRoles, Lane_sol_s06_loadA.baseLoadTerm X (v,c) u y) =
+        ∑ u : CubeVertex n, if ¬ IsEvenRole u then Lane_sol_s06_loadA.baseLoadTerm X (v,c) u y else 0 := by
+      simp only [Ctx6.oddRoles, Finset.sum_filter]
+    have heq : X.baseAvg (v,c) y = 2 * ((Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+        ∑ u : CubeVertex n, if ¬ IsEvenRole u then Lane_sol_s06_loadA.baseLoadTerm X (v,c) u y else 0) := by
+      change (X.oddRoles.card : ℝ)⁻¹ * (∑ u ∈ X.oddRoles, Lane_sol_s06_loadA.baseLoadTerm X (v,c) u y) = _
+      rw [hcoef, hsum]
+      ring
+    rw [heq]
+    exact mul_le_mul_of_nonneg_left
+      ((Lane_sol_s06_loadA.odd_baseLoadTerm_full_average_le X (v,c) y hnpos).trans
+        (add_le_add (le_refl _) hboundary)) (by norm_num)
+  have hConst : 2 * (8 * (20 * K + 1) + 1) ≤ Ckb K := by
+    have hc : (400 : ℝ) ≤ 2 ^ 700 := by
+      calc
+        400 ≤ (2 : ℝ) ^ 9 := by norm_num
+        _ ≤ 2 ^ 700 := pow_le_pow_right₀ (by norm_num) (by norm_num)
+    calc
+      _ ≤ 400 * (K + 1) := by linarith
+      _ ≤ 2 ^ 700 * (K + 1) := mul_le_mul_of_nonneg_right hc (by linarith)
+  have hmono : (X.stage2Law v).pr (fun c => ∃ y, Ckb K < X.baseAvg (v,c) y) ≤
+      (X.stage2Law v).pr (fun c => ∃ y, 8 * (20 * K + 1) < Lane_sol_s06_loadA.interiorBaseAvg X (v,c) y) := by
+    apply FinProb.pr_mono
+    intro c hbad
+    obtain ⟨y, hy⟩ := hbad
+    refine ⟨y, ?_⟩
+    linarith [hAvg c y]
+  exact hmono.trans htail
 
 /-- L6.1k (hidden joint, 06:683–689): Lemma 3.4 removal of the stage 3 constraints touching separated targets
 (charges `n^{−c₃/2}`, `m^{O(1)}` touching groups), then the proxy bound `2Nπ_{ℓ(b)}(y)` target by target. -/

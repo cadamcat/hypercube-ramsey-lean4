@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.Steps_bayes_sol_s06_steps1
+import HypercubeRamsey.Tools.ScatteredUnion
 
 namespace HypercubeRamsey.Lane_sol_s06_loadA
 
@@ -1722,6 +1723,181 @@ theorem sameBinNear_moment_eventually_small :
         ring
   rw [hEq]
   exact hsmall.le
+
+/-- The interior odd summand used in the coarse-stage scattered moments. -/
+def interiorBaseLoadTerm (b : X.Base) (u : CubeVertex n) (y : Fin N) : ℝ :=
+  if ¬ IsEvenRole u ∧ ¬ X.g.L.boundary u then baseLoadTerm X b u y else 0
+
+theorem interiorBaseLoadTerm_nonneg (b : X.Base) (u : CubeVertex n) (y : Fin N) :
+    0 ≤ interiorBaseLoadTerm X b u y := by
+  unfold interiorBaseLoadTerm
+  split_ifs
+  · exact baseLoadTerm_nonneg X b u y
+  · exact le_rfl
+
+theorem interiorBaseLoadTerm_cap (b : X.Base) (u : CubeVertex n) (y : Fin N) :
+    interiorBaseLoadTerm X b u y ≤ (n : ℝ) ^ d₁ := by
+  unfold interiorBaseLoadTerm
+  split_ifs
+  · exact baseLoadTerm_cap X b u y
+  · exact Real.rpow_nonneg (Nat.cast_nonneg _) _
+
+theorem interiorBaseLoadTerm_le_step1 (b : X.Base) (u : CubeVertex n) (y : Fin N) :
+    interiorBaseLoadTerm X b u y ≤
+      if X.Step1OK b (X.g.L.coarseBin u, .interior) then
+        (N : ℝ) * (X.hidPost b (X.g.L.coarseBin u, .interior)).w y else 0 := by
+  have hright : 0 ≤ (if X.Step1OK b (X.g.L.coarseBin u, .interior) then
+      (N : ℝ) * (X.hidPost b (X.g.L.coarseBin u, .interior)).w y else 0) := by
+    split_ifs
+    · exact mul_nonneg (Nat.cast_nonneg _) ((X.hidPost b _).nonneg y)
+    · exact le_rfl
+  by_cases hu : ¬ IsEvenRole u ∧ ¬ X.g.L.boundary u
+  · have hkey : (X.tgt (X.g.L.stateOf u)).1 = (X.g.L.coarseBin u, .interior) := by
+      simp only [Ctx6.tgt, ChunkLayout6.stTarget]
+      rw [X.facts.key_eq, ChunkLayout6.key, ite_eq_right hu.2]
+    simp only [interiorBaseLoadTerm, hu, baseLoadTerm, hkey]
+    by_cases hl : X.stMode (X.g.L.stateOf u) = .low
+    · simp [hl]
+    · simpa [hl] using hright
+  · simpa [interiorBaseLoadTerm, hu] using hright
+
+/-- Fixed-radius touching costs are small for all sufficiently large dimensions. -/
+theorem coarse_touch_charge_eventually_small :
+    ∀ᶠ n : ℕ in atTop,
+      (n : ℝ) ^ (-(δ₁ / 8)) ≤ 1 / 2 ∧
+        2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ) ≤ Real.log 2 := by
+  have hlim : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(δ₁ / 8))) atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num [δ₁] : (0 : ℝ) < δ₁ / 8)).comp
+      tendsto_natCast_atTop_atTop
+  have hlim' : Tendsto (fun n : ℕ =>
+      2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ)) atTop (nhds 0) := by
+    simpa only [mul_zero, zero_mul] using (hlim.const_mul 2).mul_const ((602 ^ 6 : ℕ) : ℝ)
+  filter_upwards [hlim.eventually (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1 / 2)),
+    hlim'.eventually (eventually_lt_nhds (Real.log_pos (by norm_num : (1 : ℝ) < 2)))]
+    with n hhalf hsmall
+  exact ⟨hhalf.le, hsmall.le⟩
+
+/-- The separated interior product moment under coarse avoidance. -/
+theorem interiorBaseLoadTerm_product_stage2_le {R : Type*} [Fintype R] [DecidableEq R]
+    (v : Fin N) (hv : v ∈ X.par.S₀) (hK : 0 ≤ K) (s : Finset R) (u : R → CubeVertex n)
+    (hsep : ∀ i ∈ s, ∀ j ∈ s, i ≠ j → X.g.L.coarseBin (u i) ≠ X.g.L.coarseBin (u j))
+    (y : Fin N)
+    (cert : AvoidCert6 (X.coarseLaw v).w (X.bad2Set v) ((n : ℝ) ^ (-(δ₁ / 8))))
+    (hhalf : (n : ℝ) ^ (-(δ₁ / 8)) ≤ 1 / 2)
+    (hsmall : 2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ) ≤ Real.log 2) :
+    (X.stage2Law v).expect (fun c => ∏ i ∈ s, interiorBaseLoadTerm X (v,c) (u i) y) ≤
+      (2 : ℝ) ^ s.card * (20 * K) ^ s.card := by
+  let U := s.image (fun i => X.g.L.coarseBin (u i))
+  let T := touchingCoarse X U
+  have hcard : T.card ≤ s.card * 602 ^ 6 :=
+    (touchingCoarse_card_le X U).trans (Nat.mul_le_mul_right _ Finset.card_image_le)
+  have hcharge : (∏ w ∈ T, (1 - cert.x w))⁻¹ ≤ (2 : ℝ) ^ s.card := by
+    rw [← Finset.prod_inv_distrib]
+    exact _root_.Lane_q_s06_loads.avoidance_charge_product_le_two_pow T cert.x
+      ((n : ℝ) ^ (-(δ₁ / 8))) s.card (602 ^ 6)
+      (Real.rpow_nonneg (Nat.cast_nonneg _) _) hhalf
+      (fun w => ⟨cert.x_nonneg w, cert.x_le w⟩) hcard hsmall
+  have hraw := interior_step1_product_stage2_le X v hv s
+    (fun i => (X.g.L.coarseBin (u i), .interior)) (fun _ => rfl) hsep y cert
+    (by linarith : (n : ℝ) ^ (-(δ₁ / 8)) < 1)
+  calc
+    _ ≤ (X.stage2Law v).expect (fun c => ∏ i ∈ s,
+        if X.Step1OK (v,c) (X.g.L.coarseBin (u i), .interior) then
+          (N : ℝ) * (X.hidPost (v,c) (X.g.L.coarseBin (u i), .interior)).w y else 0) := by
+      apply FinProb.expect_mono
+      intro c
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact interiorBaseLoadTerm_nonneg X (v,c) (u i) y
+      · intro i hi
+        exact interiorBaseLoadTerm_le_step1 X (v,c) (u i) y
+    _ ≤ (∏ w ∈ T, (1 - cert.x w))⁻¹ * (20 * K) ^ s.card := hraw
+    _ ≤ _ := mul_le_mul_of_nonneg_right hcharge
+      (pow_nonneg (by positivity : 0 ≤ 20 * K) _)
+
+/-- Full-cube normalization of the interior odd contribution. -/
+def interiorBaseAvg (b : X.Base) (y : Fin N) : ℝ :=
+  (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, interiorBaseLoadTerm X b u y
+
+/-- Scattered moments and the label union bound for interior coarse loads. -/
+theorem interiorBaseAvg_tail (v : Fin N) (hv : v ∈ X.par.S₀) (hK : 0 ≤ K)
+    (hn : 10 ≤ n) (hN : (N : ℝ) ≤ (n : ℝ) * 2 ^ n)
+    (cert : AvoidCert6 (X.coarseLaw v).w (X.bad2Set v) ((n : ℝ) ^ (-(δ₁ / 8))))
+    (hhalf : (n : ℝ) ^ (-(δ₁ / 8)) ≤ 1 / 2)
+    (hcharge : 2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ) ≤ Real.log 2)
+    (hsmall : (n : ℝ) * (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount *
+      (n : ℝ) ^ d₁ ≤ 1) :
+    (X.stage2Law v).pr (fun c => ∃ y, 8 * (20 * K + 1) < interiorBaseAvg X (v,c) y) ≤
+      1 / 100 := by
+  let P := X.stage2Law v
+  let Z : CubeVertex n → Fin N → X.Coarse → ℝ := fun u y c =>
+    interiorBaseLoadTerm X (v,c) u y
+  let d : CubeVertex n → Fin N → ℝ := fun _ _ => 20 * K
+  let f : ℝ := (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount
+  have hmean : ∀ y : Fin N, (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, d u y ≤ 20 * K := by
+    intro y
+    simp only [d, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    rw [← mul_assoc, inv_mul_cancel₀ (by positivity : (Fintype.card (CubeVertex n) : ℝ) ≠ 0), one_mul]
+  have hjoint : ∀ y (m : ℕ), m ≤ n → ∀ s : Fin m → CubeVertex n,
+      (∀ i j : Fin m, j < i → s i ∉ sameBinNear X.g.L (s j)) →
+        ∑ c ∈ (Finset.univ : Finset X.Coarse), P.w c * ∏ i, Z (s i) y c ≤
+          (2 : ℝ) ^ m * ∏ i, d (s i) y := by
+    intro y m hm s hsep
+    have hbins : ∀ i ∈ (Finset.univ : Finset (Fin m)), ∀ j ∈ Finset.univ, i ≠ j →
+        X.g.L.coarseBin (s i) ≠ X.g.L.coarseBin (s j) := by
+      intro i hi j hj hij
+      rcases lt_or_gt_of_ne hij with hij | hji
+      · have hnot := hsep j i hij
+        have hne : X.g.L.coarseBin (s j) ≠ X.g.L.coarseBin (s i) := by
+          simpa [sameBinNear] using hnot
+        exact hne.symm
+      · simpa [sameBinNear] using hsep i j hji
+    have hp := interiorBaseLoadTerm_product_stage2_le X v hv hK Finset.univ s hbins y
+      cert hhalf hcharge
+    simpa [P, Z, d, FinProb.expect] using hp
+  have ht := scatteredMoments_union_labels P Finset.univ Z
+    (fun u y c => interiorBaseLoadTerm_nonneg X (v,c) u y)
+    ((n : ℝ) ^ d₁) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+    (fun u y c _ => interiorBaseLoadTerm_cap X (v,c) u y)
+    (sameBinNear X.g.L) (fun u => by simp [sameBinNear]) f (by positivity)
+    (sameBinNear_card_le X.g.L) n (by omega) 2 (20 * K) (by norm_num) (by positivity)
+    d (fun _ _ => by dsimp [d]; positivity) hmean hjoint hsmall
+    (by simpa only [Fintype.card_fin] using hN)
+  have ht' : P.pr (fun c => ∃ y, 8 * (20 * K + 1) < interiorBaseAvg X (v,c) y) ≤
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    simpa [FinProb.pr, interiorBaseAvg, Z, show (4 : ℝ) * 2 = 8 by norm_num] using ht
+  exact ht'.trans (Lane_q_s06_loads.nat_two_pow_union_tail hn)
+
+/-- Splitting interior and boundary roles costs only the deterministic boundary bound. -/
+theorem odd_baseLoadTerm_full_average_le (b : X.Base) (y : Fin N) (hn : 0 < n) :
+    (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+      (∑ u : CubeVertex n, if ¬ IsEvenRole u then baseLoadTerm X b u y else 0) ≤
+        interiorBaseAvg X b y + (n : ℝ) ^ (-(1 / 20 : ℝ) + d₁) := by
+  have hpoint (u : CubeVertex n) :
+      (if ¬ IsEvenRole u then baseLoadTerm X b u y else 0) ≤
+        interiorBaseLoadTerm X b u y +
+          (if X.g.L.boundary u then baseLoadTerm X b u y else 0) := by
+    by_cases ho : IsEvenRole u <;> by_cases hb : X.g.L.boundary u
+    · simp [ho, hb, interiorBaseLoadTerm, baseLoadTerm_nonneg X b u y]
+    · simp [ho, hb, interiorBaseLoadTerm]
+    · simp [ho, hb, interiorBaseLoadTerm]
+    · simp [ho, hb, interiorBaseLoadTerm]
+  calc
+    _ ≤ (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+        ∑ u : CubeVertex n, (interiorBaseLoadTerm X b u y +
+          (if X.g.L.boundary u then baseLoadTerm X b u y else 0)) :=
+      mul_le_mul_of_nonneg_left (Finset.sum_le_sum (fun u _ => hpoint u)) (by positivity)
+    _ = interiorBaseAvg X b y + (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+        ∑ u : CubeVertex n, (if X.g.L.boundary u then baseLoadTerm X b u y else 0) := by
+      rw [Finset.sum_add_distrib, mul_add]
+      rfl
+    _ ≤ _ := by
+      have hb : (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+          (∑ u : CubeVertex n, if X.g.L.boundary u then baseLoadTerm X b u y else 0) ≤
+            (n : ℝ) ^ (-(1 / 20 : ℝ) + d₁) := by
+        simpa [OAI.HypercubeRamsey.card_cubeVertex] using boundary_baseLoadTerm_average_le X b y hn
+      exact add_le_add (le_refl _) hb
+
 
 end
 end HypercubeRamsey.Lane_sol_s06_loadA

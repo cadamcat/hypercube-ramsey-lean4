@@ -921,6 +921,11 @@ private theorem outer_filter_core_hit_factor9 {P : Params9} {n N : ℕ} {M : Tag
     ∃ (s : Finset (I.ID ⊕ OddSites9 n))
       (f : ∀ i : {i // i ∈ s}, Val9 I N i.1 → ℝ),
       s = ((I.seen b.1 ∩ I.core v.1).image Sum.inl) ∧
+      (∀ i : {i // i ∈ s},
+        (inputLaw9 S I i.1).expect (f i) =
+          match i.1 with
+          | Sum.inl c => colDeg E G (M.μ (S.tag c.slice)) y
+          | Sum.inr _ => 1) ∧
       (rawLaw9 S I).expect (fun ω => (outerFilter9 S E G ω v b).w y *
         ∏ i : {i // i ∈ s}, f i (ω i.1)) =
         (outerMean9 S I E G v b).w y *
@@ -971,7 +976,18 @@ private theorem outer_filter_core_hit_factor9 {P : Params9} {n N : ℕ} {M : Tag
     unfold outerFilter9
     rw [hmasked, hset]
   have hfactor := pi_expect_core_factor9 (inputLaw9 S I) s g f hdep
-  refine ⟨s, f, ?_, ?_⟩
+  have heval (i : {i // i ∈ s}) :
+      (inputLaw9 S I i.1).expect (f i) =
+        match i.1 with
+        | Sum.inl c => colDeg E G (M.μ (S.tag c.slice)) y
+        | Sum.inr _ => 1 := by
+    rcases i with ⟨i, hi⟩
+    rcases Finset.mem_image.mp hi with ⟨c, hc, rfl⟩
+    change (M.μ (S.tag c.slice)).expect
+        (fun x : Fin N => if Hits E G x y then 1 else 0) =
+      colDeg E G (M.μ (S.tag c.slice)) y
+    rfl
+  refine ⟨s, f, ?_, heval, ?_⟩
   · simp [s, D]
   · calc
       (rawLaw9 S I).expect (fun ω => (outerFilter9 S E G ω v b).w y *

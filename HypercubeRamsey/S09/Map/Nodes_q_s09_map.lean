@@ -570,9 +570,12 @@ theorem height_counts9_volume_bounds (P : Params9) (hP : P.Valid) :
     nlinarith [hmul]
   have hvolumeNat : (n : ℝ) ^ (10 : ℕ) ≤ (residualBall9 P n : ℝ) :=
     hratio.trans hchooseLower |>.trans hballReal
-  have hvolume : (n : ℝ) ^ (10 : ℝ) ≤ (residualBall9 P n : ℝ) := by
-    rw [show (10 : ℝ) = ((10 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+  have hvolumeCast : (n : ℝ) ^ ((10 : ℕ) : ℝ) ≤ (residualBall9 P n : ℝ) := by
+    rw [Real.rpow_natCast]
     exact hvolumeNat
+  have hvolume : (n : ℝ) ^ (10 : ℝ) ≤ (residualBall9 P n : ℝ) := by
+    rw [show (10 : ℝ) = ((10 : ℕ) : ℝ) by norm_num]
+    exact hvolumeCast
   have hVposNat : 0 < residualBall9 P n := by
     have hnpositive : 0 < (n : ℝ) ^ (10 : ℝ) := by positivity
     have : 0 < (residualBall9 P n : ℝ) := lt_of_lt_of_le hnpositive hvolume

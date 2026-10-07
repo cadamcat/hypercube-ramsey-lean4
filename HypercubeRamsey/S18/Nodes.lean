@@ -16,6 +16,7 @@ import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_5b
 import HypercubeRamsey.S18.Probability_sol_s18_n5
+import HypercubeRamsey.S18.ColumnMoment_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Run_sol_s18_n4
 import HypercubeRamsey.S18.Risk_sol_s18_n4
@@ -770,7 +771,9 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
                   D.columnSum j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt)) y ^ T.S.n k else 0) ≤
                     (2 : ℝ) ^ D.geom.r *
                       (12 * (D.encoding.base.classes j).card / (D.encoding.base.latePool j).card) ^ T.S.n k := by
-    sorry
+    filter_upwards [Lane_sol_s18_n5.actual_column_moment_eventually hκ T εterm hterm] with k hk
+    intro PT hPT D hD hT hBalance _hLocal _hTransfer C A j y
+    exact hk D hD hT hBalance δ C A j y
   filter_upwards [hmoments, T.S.n_tendsto.eventually_ge_atTop 1,
     T.S.ratio_tendsto.eventually_ge_atTop (576 * 12 / κ.θ0)] with k hk hn hscale
   intro PT hPT D hD hT hBalance hLocal hTransfer C A

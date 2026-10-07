@@ -418,7 +418,7 @@ theorem L18_1b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     calc
       bstar T k ≤ (Real.rpow (T.S.n k : ℝ) (-0.02)) ^ 4 := by
         unfold bstar
-        rw [← Real.rpow_mul_natCast hn0.le]
+        rw [Real.rpow_eq_pow, ← Real.rpow_mul_natCast hn0.le (-0.02) 4]
         apply Real.rpow_le_rpow_of_exponent_le hnR
         norm_num
       _ ≤ D.error v j ^ 4 := pow_le_pow_left₀ (Real.rpow_nonneg (Nat.cast_nonneg _) _) he 4

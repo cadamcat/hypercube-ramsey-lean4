@@ -107,9 +107,9 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
   obtain ⟨R3, h3⟩ := Setup5.L5_1h3 (γ := γ) (K' := K') (χ := χ) Ccnt cL cH hcLH
   obtain ⟨R4, h4⟩ := Setup5.L5_1h4 (γ := γ) (K' := K') (χ := χ)
   obtain ⟨R5, h5⟩ := Setup5.L5_1h5 (γ := γ) (K' := K') (χ := χ) Ccnt cL cH hcLH
-  obtain ⟨C₂, _hC₂, Rl2, hl2⟩ := Setup5.L5_1l2 (γ := γ) (K' := K') (χ := χ) C₁ hC₁
+  obtain ⟨Cloc, Rk, hk⟩ := Setup5.L5_1k_rows (γ := γ) (K' := K') (χ := χ) cL cH hcLH
+  obtain ⟨C₂, _hC₂, Rl2, hl2⟩ := Setup5.L5_1l2 (γ := γ) (K' := K') (χ := χ) Cloc C₁ hC₁
   obtain ⟨Rj, hj⟩ := Setup5.L5_1j (γ := γ) (K' := K') (χ := χ) Ccnt cL cH hcLH
-  obtain ⟨Rk, hk⟩ := Setup5.L5_1k_rows (γ := γ) (K' := K') (χ := χ) cL cH hcLH
   obtain ⟨Rl3, hl3⟩ := Setup5.L5_1l3 (γ := γ) (K' := K') (χ := χ) (max C₁ C₂)
     (lt_of_lt_of_le hC₁ (le_max_left _ _))
   obtain ⟨A, P, nm, εc, hεc, hεc0, hm⟩ := L5_1m
@@ -202,14 +202,16 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
   obtain ⟨ν₂, hν₂⟩ := h2' n (by omega) N E G X rfl v hv1
   obtain ⟨c, hcw, hcbad⟩ := FinProb.exists_support_of_pr_lt5 _ _
     (lt_of_le_of_lt (hl1' n (by omega) N E G X rfl hgE hN2 v ν₂ hν₂) (by norm_num))
-  obtain ⟨ν₃, hν₃⟩ := h3' n (by omega) N E G X rfl hRC hS3 v c (hν₂.1 c hcw) (hν₂.2.1 c hcw)
+  have hbase : X.baseLaw.w (v, c) ≠ 0 :=
+    mul_ne_zero hvw (hν₂.2.2.2.2 c hcw)
+  obtain ⟨ν₃, hν₃⟩ := h3' n (by omega) N E G X rfl hRC hS3 v c hbase (hν₂.1 c hcw) (hν₂.2.1 c hcw)
     (hν₂.2.2.1 c hcw)
   obtain ⟨hi, hiw, -⟩ := FinProb.exists_support_of_pos5 ν₃ (fun _ => True) (FinProb.pos_pr_true5 ν₃)
   obtain ⟨tr, htr⟩ := h4' n (by omega) N E G X rfl (v, c) hi (hν₃.2.2.1 hi hiw)
   obtain ⟨ν₅, hν₅⟩ := h5' n (by omega) N E G X rfl hRC hS3 (v, c) hi ν₃ hν₃ hiw tr htr
   -- the center layer and the rows (needed for the proxy means of the second history load)
   obtain ⟨L, hLsucc⟩ := hj' n (by omega) N E G X rfl hRC
-  obtain ⟨LR⟩ := hk' n (by omega) N E G X rfl hcov.2 L
+  obtain ⟨LR, hCloc⟩ := hk' n (by omega) N E G X rfl hcov.2 L
   let HC : X.HighChoice5 L.ht.hp.Loc :=
     { law := fun H r a hc hpf => Classical.choose
         ((L5_1g_common_high_law (X.highModel H r a hc hpf)).2 () trivial)
@@ -222,12 +224,13 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
           ((L5_1g_common_high_law (X.highModel H r a hc hpf)).2 () trivial)).2.2 ⟨c, hcm⟩
         simpa [Setup5.highModel, highDeletionCost5] using h }
   obtain ⟨HR⟩ := Setup5.L5_1g_rows n N E G X L hcov.2 HC
-  obtain ⟨Cloc, hCloc⟩ := LR.proxy_local
-  have hZ : X.ProxyMeanData5 (v, c) hi (fun lo => LR.proxy ((v, c), X.joinHidden hi lo)) :=
+  have hZ : X.ProxyMeanData5 Cloc (v, c) hi (fun lo => LR.proxy ((v, c), X.joinHidden hi lo)) :=
     { nonneg := fun lo r y => LR.proxy_nonneg _ r y
       high_zero := fun lo r y hr => LR.proxy_high _ r y hr
       cap := fun lo r y => LR.proxy_cap _ r y
-      locality := ⟨Cloc, fun r => hCloc (v, c) hi r⟩
+      locality := fun r lo lo' hagree => LR.proxy_local (v, c) hi r lo lo' (fun k hk =>
+        hagree k (Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          (Finset.mem_filter.mp hk).2.trans (Nat.mul_le_mul_right _ hCloc)⟩))
       one_target := fun lo r y hr => by
         rw [LR.selExp_mean (v, c) hi r lo y hr]
         have hmean := L5_1k_mean_bound (LR.selExp (v, c) hi r)
@@ -249,12 +252,21 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
   -- the successful key history
   let H : X.KeyHist := ((v, c), X.joinHidden hi lo)
   have hgoodH : X.KeyGood5 H (cL p.pre1) (cH p.pre1) :=
-    ⟨hvlab, hν₂.1 c hcw, hν₅.1 lo hlow, hν₅.2.1 lo hlow⟩
+    { parent_mem := hvlab
+      step1 := hν₂.1 c hcw
+      step2 := hν₅.1 lo hlow
+      step3 := hν₅.2.1 lo hlow
+      base_support := hbase
+      key_support := by
+        intro ℓ h
+        cases ℓ with
+        | inl k => exact hν₅.2.2.2 lo hlow k h
+        | inr i => exact hν₃.2.2.2.2.2.2 hi hiw i h }
   have hsuccH : X.KeySuccess5 H (cL p.pre1) (cH p.pre1) (max C₁ C₂) LR.proxy :=
     ⟨hgoodH, fun y => (hload1 y).trans (le_max_left _ _),
       fun y => (not_lt.mp fun h => hlobad ⟨y, h⟩).trans (le_max_right _ _)⟩
   have hS2B : ∀ K, X.TypeOccurs K → X.Step2Bounds H K := fun K hK =>
-    Setup5.L5_1d_bounds n N E G X hcov.2 H hvlab hgoodH.step1 K hK (hgoodH.step2.1 K hK)
+    Setup5.L5_1d_bounds n N E G X hcov.2 H hgoodH.base_support hgoodH.step1 K hK (hgoodH.step2.1 K hK)
   -- the center stage at `H`
   have hPs := hLsucc H hgoodH
   have hPodd := hl3' n (by omega) N E G X rfl hgE hC₀a hN2 L _ _ LR HR H hsuccH

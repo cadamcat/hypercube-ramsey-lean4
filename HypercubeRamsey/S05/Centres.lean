@@ -29,8 +29,8 @@ variable {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} (X : Setup5 γ 
 
 /-! ### The height device at this dimension (05:315–329) -/
 
-/-- The height exponents, chosen after `α` (05:318–325): admissible for D3.8 with `λ = n^{10}`, `D = 8`,
-linear radius `r = ⌊ρ n⌋`, `θ > .9` and `2 n^b ≤ T`. -/
+/-- The height exponents, fixed from `α` before the dimension threshold (05:318–325): admissible for D3.8
+with `λ = n^{10}`, `D = 8`, linear radius `r = ⌊ρ n⌋`, `θ > .9` and eventually `2 n^b ≤ T`. -/
 structure HeightChoice5 where
   b₀ : ℝ
   b : ℝ
@@ -42,6 +42,11 @@ structure HeightChoice5 where
   regime : HDRegime b₀ b 8
   hθ : 9 / 10 < θ
   hbT : b < X.p.alpha / 1000
+  /-- One admissible family fixed by `α`, before the eventual dimension threshold (05:318–329).
+  In particular the slack exponent has the uniform gap `ζ - σ = 9α/1000000`. -/
+  fixed : b₀ = X.p.alpha / 10000 ∧ b = X.p.alpha / 2000 ∧
+    σ = X.p.alpha / 1000000 ∧ ζ = X.p.alpha / 100000 ∧
+    θ = 1 - X.p.alpha / 100000 ∧ a = X.p.alpha / 20000
 
 variable {X}
 
@@ -113,15 +118,7 @@ def selShort (elig : X.CΩ h → h.hp.EligMap) (ω : X.CΩ h) (v : EvenRole5 n) 
 high type the first `k_*/u_*` pool blocks hitting the optional column if there are enough, otherwise the first
 blocks. -/
 def refSubset (H : X.KeyHist) (ω : X.CΩ h) (v : EvenRole5 n) (l : h.hp.Loc) : Finset (Fin X.blockBound) :=
-  let K := X.g.evenType (X.p.J n) v.1
-  match K.2.2 with
-  | some _ => Finset.univ.filter fun i => (i : ℕ) < X.p.typeBlocks n K
-  | none =>
-    let hits : Finset (Fin X.blockBound) :=
-      match X.g.optionalKey (X.p.J n) v.1 with
-      | some (.inl k) => X.hitSet (arraysOf ω) (l, K) (X.lowCol H.2 k)
-      | _ => X.poolIdx
-    X.firstK (if X.p.usedBlocks n ≤ hits.card then hits else X.poolIdx) (X.p.usedBlocks n)
+  X.refSubsetOn H (arraysOf ω) (l, X.g.evenType (X.p.J n) v.1) (X.g.optionalKey (X.p.J n) v.1)
 
 /-- A center reference: location and block subset. -/
 abbrev CRef (h : X.HeightChoice5) := h.hp.Loc × Finset (Fin X.blockBound)
@@ -140,12 +137,12 @@ def actualRecord (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h
     match X.selLong elig ω a with
     | some l => {(l, X.g.evenType (X.p.J n) a.1)}
     | none => ∅
-  let refs : Finset (h.hp.Loc × X.Ty × Finset (Fin X.blockBound)) := (evenNbrs y).biUnion fun a =>
+  let refs : Finset (h.hp.Loc × X.Ty × Option X.Key) := (evenNbrs y).biUnion fun a =>
     match X.selLong elig ω a with
     | some l =>
       if ℓ ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
           ℓ.isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
-        {(l, X.g.evenType (X.p.J n) a.1, X.refSubset H ω a l)} else ∅
+        {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
     | none => ∅
   let mask : Option (h.hp.Loc × X.Ty × Finset (Fin X.blockBound)) :=
     match ℓ with
@@ -194,8 +191,9 @@ def scopeBall (x : CubeVertex n) (rad : ℕ) : Finset h.hp.Loc :=
 
 /-- The center base layer.  `elig` is the pre-activation eligible map after the singleton removals and the
 maximal disjoint markings of Step 3 failures (05:822–833); `valid` is local validity at an odd role (05:866–879);
-`success` is the global geometry event of 05:835–860.  Local validity reads the center data within ambient
-radius `r + slack`, `slack = o(n)`. -/
+`success` is the global geometry event of 05:835–860. Local validity includes raw support, positive true
+posterior paths and local position counts (05:869–879). It reads the center data within ambient radius
+`r + slack`; the fixed exponent family makes the slack bound uniformly sublinear. -/
 structure CentreLayer5 where
   ht : X.HeightChoice5
   elig : X.KeyHist → X.CΩ ht → ht.hp.EligMap
@@ -214,6 +212,24 @@ structure CentreLayer5 where
   success_legal : ∀ H ω, success H ω → ht.hp.Legal (pos ω) (elig H ω) (X.sites ht)
   success_select : ∀ H ω, success H ω → ∀ v, (X.selLong (elig H) ω v).isSome
   valid_select : ∀ H ω y, valid H ω y → ∀ a ∈ evenNbrs y, (X.selLong (elig H) ω a).isSome
+  /-- The fixed base lies in raw support. Key and array replacements keep this base; they do not
+  retest global Step 1 or Step 2 (05:888–894). -/
+  valid_base_support : ∀ H ω y, valid H ω y → X.baseLaw.w H.1 ≠ 0
+  /-- True raw block support at the observed arrays, excluding zero-normalizer fallbacks. This
+  is the local support test of 05:876–879; it is recomputed at hypothetical values. -/
+  valid_block_support : ∀ H ω y, valid H ω y →
+    ∀ c ∈ (X.actualRecord (elig H) H ω y).2.1, ∀ i,
+      X.blockWeight H c.2 c.2.2.1 (arraysOf ω c i) ≠ 0
+  /-- The realized target path is supported by the full posterior, so every true prefix used
+  by the high law has a positive continuation (05:483–486,601–605). -/
+  valid_path_support : ∀ H ω y, valid H ω y →
+    0 < X.step3PostOn H (X.actualRecord (elig H) H ω y) (arraysOf ω) none
+      (H.2 (X.g.roleKey (X.p.J n) y.1))
+  /-- Local prospective-position count gate, at every neighbouring query and every level
+  (05:869–873). It does not require eligibility sizes on a larger domain. -/
+  valid_counts : ∀ H ω y, valid H ω y → ∀ a ∈ evenNbrs y, ∀ j : Fin (ht.hp.H + 1),
+    ((Finset.univ.filter fun u : CubeVertex ht.hp.d =>
+      pos ω (u, j) = true ∧ hammingDist u (X.siteOf a) ≤ ht.hp.r).card : ℝ) ≤ 2 * ht.hp.lam
   valid_T : ∀ H ω y, valid H ω y →
     ((evenNbrs y).image fun a => X.selLong (elig H) ω a).card ≤ X.p.T n
   valid_hits : ∀ H ω y, valid H ω y → ∀ a ∈ evenNbrs y, ∀ l k,
@@ -244,7 +260,7 @@ theorem L5_1j : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < 
 the smoothed deletion conditionals, lengths `k_c`, cap `D_H` and cost bound `a₄`. -/
 def highModel {Id : Type} [DecidableEq Id] (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn Id)
     (hc : X.HighCapped H r a) (hpf : X.HighPriceFeasible H r a) :
-    HighRowModel5 Unit {c // c ∈ r.2.2.1} (colLen5 (X.p.s n) r.1) N where
+    HighRowModel5 Unit {c // c ∈ X.refsOn H r a} (colLen5 (X.p.s n) r.1) N where
   raw := FinProb.dirac5 ()
   good := fun _ => True
   errorExponent := 0
@@ -266,7 +282,7 @@ structure HighChoice5 (Id : Type) [DecidableEq Id] where
   cap : ∀ H r a hc hpf h y, (law H r a hc hpf).w (h, y) ≤
     2 * Real.exp (X.p.DH n) / ((colLen5 (X.p.s n) r.1 : ℝ) * N)
   support : ∀ H r a hc hpf h y, (law H r a hc hpf).w (h, y) ≠ 0 → (X.highSource H r a h).w y ≠ 0
-  cost : ∀ H r a hc hpf, ∀ c ∈ r.2.2.1, ∑ h, ∑ y, (law H r a hc hpf).w (h, y) *
+  cost : ∀ H r a hc hpf, ∀ c ∈ X.refsOn H r a, ∑ h, ∑ y, (law H r a hc hpf).w (h, y) *
     highDeletionCost5 (law H r a hc hpf) (fun c' h' => X.highDeleted H r a c' h') c h y ≤
       X.p.a 4 * (X.refLen c.2.1 c.2.2 : ℝ)
 
@@ -299,14 +315,14 @@ structure HighRows5 (L : X.CentreLayer5) where
   row_support : ∀ H ω y o, row H ω y o ≠ 0 → ∀ a ∈ evenNbrs y, ∀ c,
     X.evenRefOf (L.elig H) H ω a = some c → ∀ z ∈ X.refBlocks ω a c, X.BlockHits _ z o.2
   row_cost : ∀ H ω y, L.valid H ω y → ¬ X.g.low (X.p.J n) y.1 →
-    ∀ c ∈ (X.actualRecord (L.elig H) H ω y).2.2.1,
+    ∀ c ∈ X.refsOn H (X.actualRecord (L.elig H) H ω y) (arraysOf ω),
       ∑ o, row H ω y o * X.highCost H (X.actualRecord (L.elig H) H ω y) (arraysOf ω) c (row H ω y) o ≤
         X.p.a 4 * (X.refLen c.2.1 c.2.2 : ℝ)
   row_local : ∀ H y, FinProb.DependsOn (fun ω => row H ω y) (X.scopeBall (h := L.ht) y.1 (L.ht.hp.r + L.slack))
 
 /-- L5.1g, row construction (05:592–605): given a choice of common laws with the conclusions of L5.1g, the high
 rows are that law at the actual record of each valid high role — feasible there by the high Step 3 test in local
-validity, the true-target gate holding at a good key history. -/
+validity, with supported raw blocks and a supported true posterior path. -/
 theorem L5_1g_rows : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G)
     (L : X.CentreLayer5), (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
     X.HighChoice5 L.ht.hp.Loc → Nonempty (X.HighRows5 L) := by
@@ -317,7 +333,7 @@ theorem L5_1g_rows : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
 /-- The low rows (05:896–1001).  `row` is the long-rule row, `proxy` its short-rule proxy mean
 `p̄^{pr}_b(y;H)`.  For every fixed base, high history and low role, `selExp` is the finite target/presentation
 experiment of the selection table, with prior `π_ℓ`, whose mean identity integrates the target prior and the
-raw centers. -/
+raw centers. The row constructor bounds `proxyRadius` by a constant chosen before the dimension threshold. -/
 structure LowRows5 (L : X.CentreLayer5) (cL cH : ℝ) where
   row : X.KeyHist → X.CΩ L.ht → OddRole5 n → X.OddOut → ℝ
   proxy : X.KeyHist → OddRole5 n → Fin N → ℝ
@@ -330,7 +346,7 @@ structure LowRows5 (L : X.CentreLayer5) (cL cH : ℝ) where
   row_support : ∀ H ω y o, row H ω y o ≠ 0 → ∀ a ∈ evenNbrs y, ∀ c,
     X.evenRefOf (L.elig H) H ω a = some c → ∀ z ∈ X.refBlocks ω a c, X.BlockHits _ z o.2
   row_deletion : ∀ H ω y, L.valid H ω y → X.g.low (X.p.J n) y.1 →
-    ∀ c ∈ (X.actualRecord (L.elig H) H ω y).2.2.1, ∀ o,
+    ∀ c ∈ X.refsOn H (X.actualRecord (L.elig H) H ω y) (arraysOf ω), ∀ o,
       row H ω y o ≤ Real.exp (X.p.a 4 * X.refLen c.2.1 c.2.2) *
         X.step3PostOn H (X.actualRecord (L.elig H) H ω y) (arraysOf ω) (some c) (fun _ => o.2)
   row_local : ∀ H y, FinProb.DependsOn (fun ω => row H ω y) (X.scopeBall (h := L.ht) y.1 (L.ht.hp.r + L.slack))
@@ -339,8 +355,10 @@ structure LowRows5 (L : X.CentreLayer5) (cL cH : ℝ) where
   proxy_nonneg : ∀ H y x, 0 ≤ proxy H y x
   proxy_high : ∀ H y x, ¬ X.g.low (X.p.J n) y.1 → proxy H y x = 0
   proxy_cap : ∀ H y x, proxy H y x ≤ Real.exp (X.p.DL n)
-  proxy_local : ∃ Cloc : ℕ, ∀ b hi y, FinProb.DependsOn (fun lo => proxy (b, X.joinHidden hi lo) y)
-    (Finset.univ.filter fun k : X.LowIdx => hammingDist k.2.1 (X.g.sign y.1) ≤ Cloc * Nat.sqrt (X.p.m n))
+  proxyRadius : ℕ
+  proxy_local : ∀ b hi y, FinProb.DependsOn (fun lo => proxy (b, X.joinHidden hi lo) y)
+    (Finset.univ.filter fun k : X.LowIdx =>
+      hammingDist k.2.1 (X.g.sign y.1) ≤ proxyRadius * Nat.sqrt (X.p.m n))
   Data : X.Base → X.HighHid → OddRole5 n → Type
   dataFintype : ∀ b hi y, Fintype (Data b hi y)
   selExp : ∀ b hi y, @SelectionExperiment5 (Fin N) (Data b hi y) _ (dataFintype b hi y)
@@ -362,12 +380,13 @@ attribute [instance] LowRows5.dataFintype
 ratio of finite sums in the experiment with the target replaced and the unrecorded arrays regenerated at the
 candidate value), the adjusted or fallback rows, the proxy means, their locality (sign distance `O(√m)`), the
 long/short comparison (`o(e^{-2m^{1/5}})` mismatch at each of `O(n)` neighbouring states, cap `e^{D_L}`), and the
-deletion bound `e^{a₄ k_c}` from the Step 3 bounds and the reserved selection multiplier. -/
+deletion bound `e^{a₄ k_c}` from the Step 3 bounds and the reserved selection multiplier. Its locality constant
+is chosen before the parameter request and dimension threshold, uniformly over all permitted layers. -/
 theorem L5_1k_rows : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) →
-    ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
+    ∃ Cloc : ℕ, ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G),
       X.p = p → (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
-        ∀ L : X.CentreLayer5, Nonempty (X.LowRows5 L (cL p.pre1) (cH p.pre1)) := by
+        ∀ L : X.CentreLayer5, ∃ LR : X.LowRows5 L (cL p.pre1) (cH p.pre1), LR.proxyRadius ≤ Cloc := by
   sorry
 
 /-! ### The odd rows and their column sums (05:1003–1058) -/

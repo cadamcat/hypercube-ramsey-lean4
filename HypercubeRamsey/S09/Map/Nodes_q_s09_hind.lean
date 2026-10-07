@@ -1245,6 +1245,85 @@ private theorem listRadialUnit9_lower_bound {α : Type*} {f : α → ℕ} {r : �
       · exact hfx
       · exact hallTail z hzTail
 
+private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hp : HeightPath9 bad l start) : start ∈ l := by
+  induction hp with
+  | singleton x => simp
+  | cons hstep htail ih => exact List.mem_cons_of_mem _ ih
+
+private theorem heightPath9_annularBlock9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : HeightState9 P hc n → ℕ)
+    (hstep : ∀ x y, heightStep9 bad x y → Nat.dist (f x) (f y) ≤ 1)
+    (hp : HeightPath9 (heightStep9 bad) l start) {inner outer : ℕ}
+    (hstart : f start = inner) (hgap : inner < outer)
+    (hexit : ∃ x ∈ l, outer ≤ f x) :
+    ∃ outerHit outerRest innerHit pre post,
+      f outerHit = outer ∧ f innerHit = inner ∧
+      outerHit :: outerRest = (pre ++ [innerHit]) ++ post ∧
+      (∀ z ∈ pre, f z ≠ inner) ∧
+      HeightPath9 (heightStep9 bad) (pre ++ [innerHit]) innerHit ∧
+      (∀ z ∈ pre ++ [innerHit], inner ≤ f z ∧ f z ≤ outer) ∧
+      (∀ z ∈ pre ++ [innerHit], z ∈ l) := by
+  have hstartle : f start ≤ outer := by omega
+  obtain ⟨outerHit, outerRest, houterPath, houterSub, houterClose, houterEq⟩ :=
+    heightPath9_firstExitValue9 f hstep hp outer hstartle hexit
+  have hinnerMem : start ∈ outerHit :: outerRest := heightPath9_start_mem houterPath
+  obtain ⟨pre, innerHit, post, hsplit, hinnerEq, hpreNo, hblock⟩ :=
+    heightPath9_firstValueSegment9 f houterPath ⟨start, hinnerMem, hstart⟩
+  have hunitBlock := heightPath9_radialUnitList9 f hstep hblock
+  have hunitPre : ListRadialUnit9 f pre :=
+    listRadialUnit9_prefix (pre := pre) (post := [innerHit]) hunitBlock
+  have hpreNonempty : pre ≠ [] := by
+    intro hnil
+    have hsplit' : outerHit :: outerRest = innerHit :: post := by
+      simpa [hnil] using hsplit
+    have heq : outerHit = innerHit := (List.cons.inj hsplit').1
+    have : outer = inner := by rw [← houterEq, heq, hinnerEq]
+    omega
+  cases pre with
+  | nil => exact (hpreNonempty rfl).elim
+  | cons first preTail =>
+      have hsplit' : outerHit :: outerRest =
+          first :: ((preTail ++ [innerHit]) ++ post) := by
+        simpa [List.append_assoc] using hsplit
+      have hfirstEq : first = outerHit := (List.cons.inj hsplit').1.symm
+      subst first
+      have hstartPre : ∀ x, (outerHit :: preTail).head? = some x → inner ≤ f x := by
+        intro x hx
+        have hxEq : x = outerHit := by simpa using hx.symm
+        subst x
+        rw [houterEq]
+        omega
+      have hlowPre := listRadialUnit9_lower_bound hunitPre hpreNo hstartPre
+      have hlow : ∀ z ∈ outerHit :: preTail ++ [innerHit], inner ≤ f z := by
+        intro z hz
+        rcases List.mem_append.mp hz with hzpre | hzlast
+        · exact hlowPre z hzpre
+        · have hzeq : z = innerHit := by simpa using hzlast
+          subst z
+          rw [hinnerEq]
+      have hblockSub : ∀ z ∈ outerHit :: preTail ++ [innerHit], z ∈ outerHit :: outerRest := by
+        intro z hz
+        rw [hsplit']
+        exact List.mem_append.mpr (Or.inl hz)
+      have hupper : ∀ z ∈ outerHit :: preTail ++ [innerHit], f z ≤ outer := by
+        intro z hz
+        have hz' := hblockSub z hz
+        rcases List.mem_cons.mp hz' with rfl | hzRest
+        · rw [houterEq]
+        · exact le_of_lt (houterClose z hzRest)
+      refine ⟨outerHit, outerRest, innerHit, outerHit :: preTail, post,
+        houterEq, hinnerEq, hsplit', hpreNo, ?_, ?_, ?_⟩
+      · simpa [List.append_assoc] using hblock
+      · intro z hz
+        exact ⟨hlow z (by simpa [List.append_assoc] using hz),
+          hupper z (by simpa [List.append_assoc] using hz)⟩
+      · intro z hz
+        exact houterSub z (hblockSub z (by simpa [List.append_assoc] using hz))
+
 private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root x y : HeightState9 P hc n) :
     Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ heightMetric9 x y := by
@@ -1402,14 +1481,6 @@ private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightCh
     (r s : Fin (R + 1)) {D : ℕ} (hgap : D ≤ Nat.dist r.val s.val) :
     D ≤ heightMetric9 (f r) (f s) := by
   exact heightMetric9_ge_radial_gap start (f r) (f s) (hf r).2 (hf s).2 hgap
-
-private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
-    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
-    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
-    (hp : HeightPath9 bad l start) : start ∈ l := by
-  induction hp with
-  | singleton x => simp
-  | cons hstep htail ih => exact List.mem_cons_of_mem _ ih
 
 private theorem scaleFailure9_from_levelBand {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {C : Finset (Pos9 P hc n)} {t s η : ℝ} {R : ℕ}

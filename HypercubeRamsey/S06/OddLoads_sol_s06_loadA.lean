@@ -1586,5 +1586,142 @@ theorem touchingCoarse_card_le (U : Finset X.Bin) :
     _ ≤ ∑ _u ∈ U, 602 ^ 6 := Finset.sum_le_sum (fun u _ => touchingCoarse_singleton_card_le X u)
     _ = _ := by simp
 
+/-- Restricting a cube vertex to a coordinate block preserves its count of ones on that block. -/
+theorem boolWeight_restrict_eq (A : Finset (Fin n)) (x : CubeVertex n) :
+    Lane_q_s06_front.boolWeight (fun a : {a : Fin n // a ∈ A} => x a.1) =
+      (A.filter fun a => x a = true).card := by
+  classical
+  symm
+  apply Finset.card_bij (fun a ha => ⟨a, (Finset.mem_filter.mp ha).1⟩)
+  · intro a ha
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp ha).2⟩
+  · intro a ha b hb hab
+    exact congrArg Subtype.val hab
+  · intro a ha
+    exact ⟨a.1, Finset.mem_filter.mpr ⟨a.2, (Finset.mem_filter.mp ha).2⟩, rfl⟩
+
+/-- Independent coarse blocks give the product of the individual bin-probability caps. -/
+theorem coarseBin_fiber_fraction_le (L : ChunkLayout6 n) (w : BinVector6 n) :
+    ((Finset.univ.filter fun x : CubeVertex n => L.coarseBin x = w).card : ℝ) /
+      (2 : ℝ) ^ n ≤ (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount := by
+  classical
+  let Coord (i : Fin coarseChunkCount) := {a : Fin n // a ∈ L.coarseChunks i}
+  let events (i : Fin coarseChunkCount) : Finset (Coord i → Bool) :=
+    Finset.univ.filter (fun f => L.bin i (Lane_q_s06_front.boolWeight f) = w i)
+  have hCoordCard (i : Fin coarseChunkCount) :
+      Fintype.card (Coord i) = (L.coarseChunks i).card := by
+    simp [Coord, Fintype.card_coe]
+  have hWeightBound (i : Fin coarseChunkCount) (f : Coord i → Bool) :
+      Lane_q_s06_front.boolWeight f ≤ (L.coarseChunks i).card := by
+    calc
+      _ ≤ Fintype.card (Coord i) := Finset.card_filter_le _ _
+      _ = _ := hCoordCard i
+  have hLayer (i : Fin coarseChunkCount) (q : ℕ) :
+      (Finset.univ.filter fun f : Coord i → Bool => Lane_q_s06_front.boolWeight f = q).card =
+        Nat.choose (L.coarseChunks i).card q := by
+    calc
+      _ = Fintype.card {f : Coord i → Bool // Lane_q_s06_front.boolWeight f = q} := by
+        symm
+        exact Fintype.card_subtype _
+      _ = Nat.choose (Fintype.card (Coord i)) q :=
+        Lane_q_s06_front.boolWeightLayerCard (Coord i) q
+      _ = _ := by rw [hCoordCard]
+  have hLocal (i : Fin coarseChunkCount) :
+      ((events i).card : ℝ) ≤
+        (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card := by
+    let layer (q : ℕ) : Finset (Coord i → Bool) :=
+      (Finset.univ.filter fun f => Lane_q_s06_front.boolWeight f = q).filter
+        (fun _ => L.bin i q = w i)
+    have hUnion : events i = (Finset.range ((L.coarseChunks i).card + 1)).biUnion layer := by
+      ext f
+      simp only [events, layer, Finset.mem_filter, Finset.mem_univ, true_and,
+        Finset.mem_biUnion, Finset.mem_range]
+      constructor
+      · intro hf
+        exact ⟨Lane_q_s06_front.boolWeight f, Nat.lt_succ_of_le (hWeightBound i f), rfl, hf⟩
+      · rintro ⟨q, hq, hweight, hbin⟩
+        simpa [hweight] using hbin
+    have hLayerCard (q : ℕ) : (layer q).card =
+        if L.bin i q = w i then Nat.choose (L.coarseChunks i).card q else 0 := by
+      by_cases hq : L.bin i q = w i <;> simp [layer, hq, hLayer]
+    have hcardNat : (events i).card ≤
+        ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), (layer q).card := by
+      rw [hUnion]
+      exact Finset.card_biUnion_le
+    have hcardReal : ((events i).card : ℝ) ≤
+        ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), ((layer q).card : ℝ) := by
+      exact_mod_cast hcardNat
+    calc
+      _ ≤ ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), ((layer q).card : ℝ) := hcardReal
+      _ = ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1),
+          if L.bin i q = w i then (Nat.choose (L.coarseChunks i).card q : ℝ) else 0 := by
+        simp only [hLayerCard, Nat.cast_ite, Nat.cast_zero]
+      _ ≤ _ := L.bin_probability i (w i)
+  have hProduct := Lane_q_s06_front.cubeBlockEventFraction_le L.coarseChunks
+    L.chunks_disjoint.1 Finset.univ events (2 * (n : ℝ) ^ (-(1 / 25 : ℝ)))
+    (by positivity) (fun i _ => hLocal i)
+  have hWeightEq (i : Fin coarseChunkCount) (x : CubeVertex n) :
+      Lane_q_s06_front.boolWeight (fun a : Coord i => x a.1) = L.coarseCount x i :=
+    boolWeight_restrict_eq (L.coarseChunks i) x
+  have hEvent : (Finset.univ.filter fun x : CubeVertex n =>
+      ∀ i ∈ (Finset.univ : Finset (Fin coarseChunkCount)),
+        (fun a : Coord i => x a.1) ∈ events i) =
+      Finset.univ.filter (fun x : CubeVertex n => L.coarseBin x = w) := by
+    ext x
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, true_implies, events, hWeightEq]
+    change (∀ i : Fin coarseChunkCount, L.coarseBin x i = w i) ↔ L.coarseBin x = w
+    constructor
+    · intro hx
+      funext i
+      exact hx i
+    · intro hx i
+      exact congrFun hx i
+  rw [hEvent] at hProduct
+  simpa only [Finset.card_univ, Fintype.card_fin] using hProduct
+
+/-- The near relation required by the base moments: equal coarse-bin vectors. -/
+def sameBinNear (L : ChunkLayout6 n) (u : CubeVertex n) : Finset (CubeVertex n) :=
+  Finset.univ.filter (fun u' => L.coarseBin u' = L.coarseBin u)
+
+theorem sameBinNear_card_le (L : ChunkLayout6 n) (u : CubeVertex n) :
+    ((sameBinNear L u).card : ℝ) ≤
+      (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * Fintype.card (CubeVertex n) := by
+  have h := coarseBin_fiber_fraction_le L (L.coarseBin u)
+  have hscaled := (div_le_iff₀ (by positivity : 0 < (2 : ℝ) ^ n)).mp h
+  simpa [sameBinNear, OAI.HypercubeRamsey.card_cubeVertex] using hscaled
+
+/-- The repeated-bin contribution, including its Step 1 cap, vanishes in the n-th moment. -/
+theorem sameBinNear_moment_eventually_small :
+    ∀ᶠ n : ℕ in Filter.atTop,
+      (n : ℝ) * (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * (n : ℝ) ^ d₁ ≤ 1 := by
+  have hDecay : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (-((11 : ℝ) - d₁)))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num [d₁] : (0 : ℝ) < 11 - d₁)).comp
+      tendsto_natCast_atTop_atTop
+  have hlimit : Filter.Tendsto (fun n : ℕ => (2 : ℝ) ^ coarseChunkCount *
+      (n : ℝ) ^ (-((11 : ℝ) - d₁))) Filter.atTop (nhds 0) := by
+    simpa using hDecay.const_mul ((2 : ℝ) ^ coarseChunkCount)
+  filter_upwards [Filter.eventually_ge_atTop 1,
+    hlimit.eventually (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1))] with n hn hsmall
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hPow : ((n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount = (n : ℝ) ^ (-12 : ℝ) := by
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hnPos.le]
+    congr 1
+    norm_num [coarseChunkCount]
+  have hEq : (n : ℝ) * (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * (n : ℝ) ^ d₁ =
+      (2 : ℝ) ^ coarseChunkCount * (n : ℝ) ^ (-((11 : ℝ) - d₁)) := by
+    rw [mul_pow, hPow]
+    calc
+      _ = (2 : ℝ) ^ coarseChunkCount *
+          ((n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (-12 : ℝ) * (n : ℝ) ^ d₁) := by
+        rw [Real.rpow_one]
+        ring
+      _ = _ := by
+        rw [← Real.rpow_add hnPos, ← Real.rpow_add hnPos]
+        congr 2
+        ring
+  rw [hEq]
+  exact hsmall.le
+
 end
 end HypercubeRamsey.Lane_sol_s06_loadA

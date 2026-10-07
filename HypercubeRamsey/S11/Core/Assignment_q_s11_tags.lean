@@ -939,6 +939,148 @@ private theorem raw_compA_product_mean {n N : ℕ} {E : Fin N → Fin N → Prop
       exact hmean i
     _ = ((N : ℝ) * piBar M y₀ p z) ^ m := by simp
 
+private def compBCoord {n : ℕ} (s : OuterWord n) : Option (OuterCoord n) → OuterWord n
+  | none => s
+  | some j => flipOuter s j
+
+private theorem compBCoord_injective {n : ℕ} (s : OuterWord n) :
+    Function.Injective (compBCoord s) := by
+  intro a b h
+  cases a with
+  | none =>
+      cases b with
+      | none => rfl
+      | some j => exact False.elim ((flipOuter_ne_self s j) h.symm)
+  | some i =>
+      cases b with
+      | none => exact False.elim ((flipOuter_ne_self s i) h)
+      | some j => exact congrArg some (flipOuter_injective s h)
+
+private theorem prod_option_factors {α β : Type} [Fintype α] [CommMonoid β]
+    (f : Option α → β) :
+    (∏ o : Option α, f o) = f none * ∏ a : α, f (some a) := by
+  let e : Option α ≃ α ⊕ PUnit.{1} := Equiv.optionEquivSumPUnit.{0, 0} α
+  calc
+    (∏ o : Option α, f o) = ∏ u, f (e.symm u) :=
+      Fintype.prod_equiv e _ _ (by intro o; simp [e])
+    _ = (∏ a : α, f (some a)) * f none := by simp [e, Fintype.prod_sum_type]
+    _ = f none * ∏ a : α, f (some a) := mul_comm _ _
+
+private theorem raw_compB_mean_le {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (p : FinProb M.ι) (s : OuterWord n) (x : Fin N)
+    (hα : 0 ≤ alphaBar M y₀ p x) (hπ : ∀ y, 0 ≤ piBar M y₀ p y) :
+    (rawTags M p).expect (fun t => compB M y₀ p t s x) ≤
+      (N : ℝ) * alphaBar M y₀ p x := by
+  classical
+  let D : ℝ := deg E M.G (piBar M y₀ p) x
+  let F : Option (OuterCoord n) → M.ι → ℝ := fun o i =>
+    match o with
+    | none => (N : ℝ) * alphaRow M y₀ i x
+    | some _ => deg E M.G (piRow M y₀ i) x / D
+  have hprod (t : OuterWord n → M.ι) :
+      (∏ o : Option (OuterCoord n), F o (t (compBCoord s o))) =
+        compB M y₀ p t s x := by
+    simp [F, compBCoord, compB, D]
+  have hcenter :
+      p.expect (fun i => (N : ℝ) * alphaRow M y₀ i x) =
+        (N : ℝ) * alphaBar M y₀ p x := by
+    unfold FinProb.expect alphaBar mixW
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro i hi
+    ring
+  have hdeg : p.expect (fun i => deg E M.G (piRow M y₀ i) x) = D := by
+    unfold FinProb.expect D deg piBar mixW
+    calc
+      (∑ i, p.w i * ∑ y, piRow M y₀ i y * hit E M.G x y) =
+          ∑ i, ∑ y, p.w i * piRow M y₀ i y * hit E M.G x y := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      _ = ∑ y, ∑ i, p.w i * piRow M y₀ i y * hit E M.G x y := by rw [Finset.sum_comm]
+      _ = ∑ y, (∑ i, p.w i * piRow M y₀ i y) * hit E M.G x y := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            rw [Finset.sum_mul]
+  have hDnonneg : 0 ≤ D := by
+    unfold D deg
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg (hπ y) (by unfold hit; split_ifs <;> norm_num)
+  have hratio : ∀ j : OuterCoord n,
+      p.expect (fun i => deg E M.G (piRow M y₀ i) x / D) = D / D := by
+    intro j
+    unfold FinProb.expect
+    calc
+      (∑ i, p.w i * (deg E M.G (piRow M y₀ i) x / D)) =
+          (∑ i, p.w i * deg E M.G (piRow M y₀ i) x) / D := by
+            rw [Finset.sum_div]
+            apply Finset.sum_congr rfl
+            intro i hi
+            ring
+      _ = D / D := by
+        change p.expect (fun i => deg E M.G (piRow M y₀ i) x) / D = D / D
+        rw [hdeg]
+  have hcoord (o : Option (OuterCoord n)) :
+      p.expect (fun i => F o i) =
+        (if o.isNone then (N : ℝ) * alphaBar M y₀ p x else D / D) := by
+    cases o with
+    | none => simpa [F] using hcenter
+    | some j => simpa [F] using hratio j
+  have hcoords (o : Option (OuterCoord n)) : 0 ≤ p.expect (fun i => F o i) := by
+    cases o with
+    | none => simpa [hcoord] using mul_nonneg (by positivity : 0 ≤ (N : ℝ)) hα
+    | some j => simpa [hcoord] using div_nonneg hDnonneg hDnonneg
+  have hprodMean :
+      (rawTags M p).expect (fun t => ∏ o : Option (OuterCoord n), F o (t (compBCoord s o))) =
+        ∏ o : Option (OuterCoord n), p.expect (fun i => F o i) := by
+    unfold rawTags
+    exact pi_expect_prod_on_injective_coords p (compBCoord s) (compBCoord_injective s)
+      Finset.univ F
+  have hcomp :
+      (rawTags M p).expect (fun t => compB M y₀ p t s x) =
+        ∏ o : Option (OuterCoord n), p.expect (fun i => F o i) := by
+    calc
+      (rawTags M p).expect (fun t => compB M y₀ p t s x) =
+          (rawTags M p).expect
+            (fun t => ∏ o : Option (OuterCoord n), F o (t (compBCoord s o))) := by
+              have hfun : (fun t => compB M y₀ p t s x) =
+                  (fun t => ∏ o : Option (OuterCoord n), F o (t (compBCoord s o))) := by
+                funext t
+                exact (hprod t).symm
+              rw [hfun]
+      _ = ∏ o : Option (OuterCoord n), p.expect (fun i => F o i) := hprodMean
+  rw [hcomp]
+  have hratio_le (j : OuterCoord n) :
+      p.expect (fun i => deg E M.G (piRow M y₀ i) x / D) ≤ 1 := by
+    rw [hratio j]
+    by_cases hD : D = 0
+    · simp [hD]
+    · simp [hD]
+  have hfactor :
+      (∏ o : Option (OuterCoord n), p.expect (fun i => F o i)) =
+        ((N : ℝ) * alphaBar M y₀ p x) *
+          ∏ j : OuterCoord n,
+            p.expect (fun i => deg E M.G (piRow M y₀ i) x / D) := by
+    rw [prod_option_factors]
+    simp [F, hcenter, hratio]
+  rw [hfactor]
+  have hprodle :
+      (∏ j : OuterCoord n,
+          p.expect (fun i => deg E M.G (piRow M y₀ i) x / D)) ≤ 1 := by
+    exact Finset.prod_le_one₀ (fun j hj => hcoords (some j)) (fun j hj => hratio_le j)
+  have hC : 0 ≤ (N : ℝ) * alphaBar M y₀ p x := mul_nonneg (by positivity) hα
+  calc
+    ((N : ℝ) * alphaBar M y₀ p x) *
+        ∏ j : OuterCoord n,
+          p.expect (fun i => deg E M.G (piRow M y₀ i) x / D) ≤
+      ((N : ℝ) * alphaBar M y₀ p x) * 1 := mul_le_mul_of_nonneg_left hprodle hC
+    _ = (N : ℝ) * alphaBar M y₀ p x := by ring
+
 private theorem MassFail_dependsOn_oddNbrs {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
     (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :

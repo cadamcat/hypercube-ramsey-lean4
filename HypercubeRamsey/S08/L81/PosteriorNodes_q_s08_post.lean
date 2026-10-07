@@ -1704,6 +1704,109 @@ theorem fcand_congr_target_update {η₀ β p : ℝ} {h : ℕ}
     exact hCross u
   rw [hIprod, hCprod]
 
+theorem intRatio_mul_refInt {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hDB : D.DensityBounds) (Θ : D.Hist)
+    (g : D.KeyT) (ξ : D.Tup) (hGate : D.CandGate (Function.update Θ g ξ) g)
+    (i : D.M.ι) :
+    D.intRatio Θ g ξ (some i) * (D.refInt Θ g).w i =
+      (D.tilt (Function.update Θ g ξ) g).w i := by
+  classical
+  by_cases hzero : (D.refInt Θ g).w i = 0
+  · have hbound := (hDB Θ g ξ hGate).1 i
+    have htilt0 : (D.tilt (Function.update Θ g ξ) g).w i = 0 := by
+      have hle : (D.tilt (Function.update Θ g ξ) g).w i ≤ 0 := by simpa [hzero] using hbound
+      exact le_antisymm hle ((D.tilt (Function.update Θ g ξ) g).nonneg i)
+    simp [Ctx.intRatio, hzero, htilt0]
+  · unfold Ctx.intRatio
+    exact div_mul_cancel₀ _ hzero
+
+theorem crossRatio_mul_refCross {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hDB : D.DensityBounds) (Θ : D.Hist)
+    (g : D.KeyT) (ξ : D.Tup) (hGate : D.CandGate (Function.update Θ g ξ) g)
+    (u : D.CrossSub g) (q : D.M.ι × Fin D.N) :
+    D.crossRatio Θ g ξ u q * (D.refCross Θ g u.1).w q =
+      (D.tilt (Function.update Θ g ξ) u.1).w q.1 *
+        (D.anchorU (Function.update Θ g ξ) u.1 q.1).w q.2 := by
+  classical
+  have hnumNonneg := mul_nonneg
+    ((D.tilt (Function.update Θ g ξ) u.1).nonneg q.1)
+    ((D.anchorU (Function.update Θ g ξ) u.1 q.1).nonneg q.2)
+  by_cases hzero : (D.refCross Θ g u.1).w q = 0
+  · have hbound := (hDB Θ g ξ hGate).2 u q
+    have hnum0 :
+        (D.tilt (Function.update Θ g ξ) u.1).w q.1 *
+            (D.anchorU (Function.update Θ g ξ) u.1 q.1).w q.2 = 0 := by
+      have hle :
+          (D.tilt (Function.update Θ g ξ) u.1).w q.1 *
+              (D.anchorU (Function.update Θ g ξ) u.1 q.1).w q.2 ≤ 0 := by
+        simpa [hzero] using hbound
+      exact le_antisymm hle hnumNonneg
+    simp [Ctx.crossRatio, hzero, hnum0]
+  · unfold Ctx.crossRatio
+    exact div_mul_cancel₀ _ hzero
+
+theorem fcand_mul_qref_eq_observed {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hDB : D.DensityBounds) (Θ : D.Hist)
+    (c : D.CellT) (ξ : D.Tup) (π : D.Pres c.1) :
+    D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) =
+      (if D.CandGate (Function.update Θ c.1 ξ) c.1 then 1 else 0) *
+        (∏ j, (π.1 j).elim 1
+          (fun i => (D.tilt (Function.update Θ c.1 ξ) c.1).w i)) *
+        ∏ u : D.CrossSub c.1,
+          (D.tilt (Function.update Θ c.1 ξ) u.1).w ((π.2 u).2.1) *
+            (D.anchorU (Function.update Θ c.1 ξ) u.1 ((π.2 u).2.1)).w ((π.2 u).2.2) := by
+  classical
+  let H := Function.update Θ c.1 ξ
+  unfold Ctx.Fcand Ctx.Qref
+  dsimp [H]
+  by_cases hg : D.CandGate (Function.update Θ c.1 ξ) c.1
+  · simp only [if_pos hg, one_mul]
+    have hI :
+        (∏ j, D.intRatio Θ c.1 ξ (π.1 j)) *
+            ∏ j, (π.1 j).elim 1 (fun i => (D.refInt Θ c.1).w i) =
+          ∏ j, (π.1 j).elim 1 (fun i => (D.tilt (Function.update Θ c.1 ξ) c.1).w i) := by
+      rw [← Finset.prod_mul_distrib]
+      apply Finset.prod_congr rfl
+      intro j hj
+      cases ho : π.1 j with
+      | none => simp [Ctx.intRatio, ho]
+      | some i =>
+          simpa [Ctx.intRatio, ho] using
+            (Lane_q_s08_post.intRatio_mul_refInt D hDB Θ c.1 ξ hg i)
+    have hC :
+        (∏ u : D.CrossSub c.1,
+            D.crossRatio Θ c.1 ξ u ((π.2 u).2.1, (π.2 u).2.2)) *
+            ∏ u : D.CrossSub c.1,
+              (D.refCross Θ c.1 u.1).w ((π.2 u).2.1, (π.2 u).2.2) =
+          ∏ u : D.CrossSub c.1,
+            (D.tilt (Function.update Θ c.1 ξ) u.1).w ((π.2 u).2.1) *
+              (D.anchorU (Function.update Θ c.1 ξ) u.1 ((π.2 u).2.1)).w ((π.2 u).2.2) := by
+      rw [← Finset.prod_mul_distrib]
+      apply Finset.prod_congr rfl
+      intro u hu
+      exact Lane_q_s08_post.crossRatio_mul_refCross D hDB Θ c.1 ξ hg u
+        ((π.2 u).2.1, (π.2 u).2.2)
+    calc
+      ((∏ j, D.intRatio Θ c.1 ξ (π.1 j)) *
+          ∏ u : D.CrossSub c.1,
+            D.crossRatio Θ c.1 ξ u ((π.2 u).2.1, (π.2 u).2.2)) *
+          ((∏ j, (π.1 j).elim 1 (fun i => (D.refInt Θ c.1).w i)) *
+            ∏ u : D.CrossSub c.1,
+              (D.refCross Θ c.1 u.1).w ((π.2 u).2.1, (π.2 u).2.2)) =
+        ((∏ j, D.intRatio Θ c.1 ξ (π.1 j)) *
+            ∏ j, (π.1 j).elim 1 (fun i => (D.refInt Θ c.1).w i)) *
+          ((∏ u : D.CrossSub c.1,
+              D.crossRatio Θ c.1 ξ u ((π.2 u).2.1, (π.2 u).2.2)) *
+            ∏ u : D.CrossSub c.1,
+              (D.refCross Θ c.1 u.1).w ((π.2 u).2.1, (π.2 u).2.2)) := by ring
+      _ = (∏ j, (π.1 j).elim 1
+            (fun i => (D.tilt (Function.update Θ c.1 ξ) c.1).w i)) *
+          ∏ u : D.CrossSub c.1,
+            (D.tilt (Function.update Θ c.1 ξ) u.1).w ((π.2 u).2.1) *
+              (D.anchorU (Function.update Θ c.1 ξ) u.1 ((π.2 u).2.1)).w ((π.2 u).2.2) := by
+          rw [hI, hC]
+  · simp [hg]
+
 theorem mden_congr_target_update {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
     {J : Type} [Fintype J] (o : D.Obs J g)

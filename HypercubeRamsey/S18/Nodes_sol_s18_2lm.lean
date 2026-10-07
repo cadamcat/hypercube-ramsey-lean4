@@ -10,13 +10,12 @@ set_option backward.isDefEq.respectTransparency false
 variable {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
   {hPT : PT.Valid} {D : LateData hPT} {X : CriticalTransferData D}
 
-/-- The additional protocol field needed to apply the retained-side discrepancy
-estimate to every output, including abort and zero-mass fallbacks. -/
+/-- Retained-side support for every output, including abort and zero-mass
+fallbacks, as required by the protocol. -/
 def OutputSupported (P : TransferProtocol X) : Prop :=
   ∀ seed s, (P.output seed (P.replies seed s P.steps)).SupportedIn (T.Y k)
 
-/-- The actual late pools used by the paper's masks lie in the retained side.
-The arbitrary TransferProtocol interface does not connect output to these pools. -/
+/-- The actual late pools used by the paper's masks lie in the retained side. -/
 theorem latePool_subset_retained (D : LateData hPT) (j : Fin D.geom.r) :
     D.encoding.base.latePool j ⊆ T.Y k :=
   (D.encoding.base.latePool_reserve j).trans hPT.tiling_valid.reserveY_subset
@@ -40,17 +39,19 @@ private theorem pr_mono {Ω : Type*} [Fintype Ω] (Q : FinLaw Ω)
   · simp only [hs, ↓reduceIte]
     split_ifs <;> [exact Q.nonneg s; exact le_rfl]
 
-/-- A broad replacement whose deviations contain the original event preserves
-all protocol premises, including the pointwise reduction inequality. -/
+/-- A supported broad replacement whose deviations contain the original event
+preserves all protocol premises, including the pointwise reduction inequality. -/
 noncomputable def replaceOutput (P : TransferProtocol X)
     (out : P.Seed → List P.Reply → Law (T.S.N k))
     (hb : ∀ seed s, (out seed (P.replies seed s P.steps)).WidthLE (κ.α * T.S.n k / 2))
+    (hs : ∀ seed s, (out seed (P.replies seed s P.steps)).SupportedIn (T.Y k))
     (hd : ∀ seed s x z, X.allowed x z →
       X.deviates (P.output seed (P.replies seed s P.steps)) x z →
       X.deviates (out seed (P.replies seed s P.steps)) x z) : TransferProtocol X :=
   { P with
     output := out
     broad := hb
+    output_supported := hs
     reduction := P.reduction.trans (mul_le_mul_of_nonneg_left
       (pr_mono (FinLaw.bind X.rawLaw (fun _ => P.seedLaw)) _ _ (by
         rintro ⟨s, seed⟩ ⟨x, z, ha, hs, hdev⟩
@@ -60,10 +61,11 @@ noncomputable def replaceOutput (P : TransferProtocol X)
 theorem stopFacts_replaceOutput (P : TransferProtocol X)
     (out : P.Seed → List P.Reply → Law (T.S.N k))
     (hb : ∀ seed s, (out seed (P.replies seed s P.steps)).WidthLE (κ.α * T.S.n k / 2))
+    (hs : ∀ seed s, (out seed (P.replies seed s P.steps)).SupportedIn (T.Y k))
     (hd : ∀ seed s x z, X.allowed x z →
       X.deviates (P.output seed (P.replies seed s P.steps)) x z →
       X.deviates (out seed (P.replies seed s P.steps)) x z) (c : ℝ) :
-    StopFacts (replaceOutput P out hb hd) c ↔ StopFacts P c := Iff.rfl
+    StopFacts (replaceOutput P out hb hs hd) c ↔ StopFacts P c := Iff.rfl
 
 theorem witnessMean_mono (pair : Bool)
     (f g : Fin (T.S.N k) → Option (Fin (T.S.N k)) → ℝ)
@@ -287,6 +289,7 @@ observations. The reduction premise remains true because every original
 witness deviation is retained. -/
 noncomputable def zeroOutputProtocol (P : TransferProtocol X) (U : Law (T.S.N k))
     (hb : U.WidthLE (κ.α * T.S.n k / 2))
+    (hs : U.SupportedIn (T.Y k))
     (hd : ∀ x z, X.allowed x z → X.deviates U x z) : TransferProtocol X :=
   { P with
     steps := 0
@@ -294,22 +297,23 @@ noncomputable def zeroOutputProtocol (P : TransferProtocol X) (U : Law (T.S.N k)
     calls_bound := by intro seed s a; simp
     output := fun _ _ => U
     broad := by intro seed s; exact hb
+    output_supported := by intro seed s; exact hs
     reduction := P.reduction.trans (mul_le_mul_of_nonneg_left
       (pr_mono (FinLaw.bind X.rawLaw (fun _ => P.seedLaw)) _ _ (by
         rintro ⟨s, seed⟩ ⟨x, z, ha, hs, _⟩
         exact ⟨x, z, ha, hs, hd x z ha⟩)) (Real.exp_pos _).le) }
 
-/-- A conditional obstruction using the complete protocol structure, rather
-than an informal claim that the width field implies support. It does not
-construct a bad sequence or a LateData.Spec instance. -/
+/-- A conditional obstruction with explicit supported bad-law premises.
+It does not construct a bad sequence or a LateData.Spec instance. -/
 theorem bad_constant_protocol (P : TransferProtocol X) (U : Law (T.S.N k))
     (hb : U.WidthLE (κ.α * T.S.n k / 2))
+    (hs : U.SupportedIn (T.Y k))
     (hd : ∀ x z, X.allowed x z → X.deviates U x z)
     (cstop ctilt : ℝ) (seed : P.Seed)
     (hmass : Real.exp (-Real.rpow (T.S.n k : ℝ) ctilt) <
       witnessMean X false (fun x z => if X.allowed x z then 1 else 0)) :
     ∃ Q : TransferProtocol X, StopFacts Q cstop ∧ ¬ TiltedDeviationBound Q ctilt := by
-  let Q := zeroOutputProtocol P U hb hd
+  let Q := zeroOutputProtocol P U hb hs hd
   refine ⟨Q, stopFacts_zero_steps Q rfl cstop, ?_⟩
   exact constant_output_obstruction Q U (by intros; rfl)
     (fun x hx => hd x none hx) ctilt seed hmass

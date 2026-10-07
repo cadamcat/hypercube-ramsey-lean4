@@ -88,7 +88,24 @@ theorem bounded_patch (κ : CConsts) (T : Stage) (k : ℕ)
     ∃ X Y : Finset (Fin (T.S.N k)), X.Nonempty ∧ Y.Nonempty ∧
       X ⊆ RX ∧ Y ⊆ RY ∧ X.card = Y.card ∧
       (1 / 400 : ℝ) * T.S.N k ≤ X.card := by
-  sorry
+  classical
+  let m := min RX.card RY.card
+  obtain ⟨X, hXsub, hXcard⟩ := Finset.exists_subset_card_eq (Nat.min_le_left _ _)
+  obtain ⟨Y, hYsub, hYcard⟩ := Finset.exists_subset_card_eq (Nat.min_le_right _ _)
+  have hNpos : 0 < (T.S.N k : ℝ) := by
+    exact_mod_cast T.S.N_pos k
+  have hmin : (T.S.N k : ℝ) / 2 ≤ (m : ℝ) := by
+    dsimp [m]
+    rw [Nat.cast_min]
+    exact le_min hX hY
+  have hmpos : 0 < m := by
+    exact_mod_cast (show (0 : ℝ) < (m : ℝ) by linarith)
+  have hXne : X.Nonempty := Finset.card_pos.mp (by rw [hXcard]; exact hmpos)
+  have hYne : Y.Nonempty := Finset.card_pos.mp (by rw [hYcard]; exact hmpos)
+  refine ⟨X, Y, hXne, hYne, hXsub, hYsub, ?_, ?_⟩
+  · rw [hXcard, hYcard]
+  · rw [hXcard]
+    linarith
 
 /-- D13.T/P13.3d (sections/13, lines 52–126, 128–159): extraction data independent of prefix allocation. -/
 /- The extraction data which does not depend on the prefix words or on the

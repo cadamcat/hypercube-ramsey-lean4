@@ -721,7 +721,7 @@ theorem one_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
         have h := (Finset.mem_filter.mp hx).2
         simpa using h)
 
-set_option maxHeartbeats 400000 in
+set_option maxHeartbeats 800000 in
 /-- L11.3b (11:207–252).  `t = ⌈n^.25⌉` conditioned samples from `σ|_{E_x}`, `‖E_{ρ_x} a_z‖_{L²(π)} = O(b_*)` by
 (11.1), `E‖S‖² = O_u(t)`, Fubini to a fixed norm-good tuple whose simultaneous violation set has `x`-mass
 `e^{-O(t n^.4)}` (width `O(n^.65)`), the projection identity and the equal-normalizer pair `π_±`
@@ -743,6 +743,8 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
     ((2 : ℝ) / 5) a (8 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
   have hgapTuple := OuterMoment_q_s11_outer.eventually_pow_gap
     ((13 : ℝ) / 20) a (16 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
+  have hgapTail := OuterMoment_q_s11_outer.eventually_pow_gap
+    (x₀ / 4) x₀ (32 / x₀) (by nlinarith [hx₀]) (by positivity)
   have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
     simpa [bS, neg_div, Function.comp_def] using
       (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < (19 : ℝ) / 20)).comp
@@ -760,13 +762,18 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
     exact hn.le
   have hnLarge : ∀ᶠ n : ℕ in atTop, 64 ≤ n :=
     eventually_atTop.mpr ⟨64, fun _ hn => hn⟩
+  have hKHalf : ∀ᶠ n : ℕ in atTop, Real.log K ≤ (n : ℝ) ^ x₀ / 2 := by
+    filter_upwards [hPiTend.eventually_gt_atTop (2 * Real.log K)] with n hn
+    linarith
   have hScale : ∀ᶠ n : ℕ in atTop,
       64 ≤ n ∧ bS n ≤ 1 / 8 ∧ tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 ∧
         Real.log K + Real.log (2 * B + 2) ≤ (n : ℝ) ^ x₀ ∧
         8 * (n : ℝ) ^ ((2 : ℝ) / 5) < (n : ℝ) ^ a ∧
-        16 * (n : ℝ) ^ ((13 : ℝ) / 20) < (n : ℝ) ^ a := by
-    filter_upwards [hnLarge, hbSmall, hgap, hPiWidth, hgapFiber, hgapTuple]
-      with n hn hb hg hp hgf hgt
+        16 * (n : ℝ) ^ ((13 : ℝ) / 20) < (n : ℝ) ^ a ∧
+        Real.log K ≤ (n : ℝ) ^ x₀ / 2 ∧
+        (32 / x₀) * (n : ℝ) ^ (x₀ / 4) < (n : ℝ) ^ x₀ := by
+    filter_upwards [hnLarge, hbSmall, hgap, hPiWidth, hgapFiber, hgapTuple, hKHalf, hgapTail]
+      with n hn hb hg hp hgf hgt hk ht
     have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
     have hpow : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
       exact Real.one_le_rpow hn1 (by norm_num)
@@ -793,13 +800,14 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
       linarith
     have hwidth : tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
       nlinarith [htσ, hlog3, hpow, hg]
-    exact ⟨hn, hb, hwidth, hp, hgf, hgt⟩
+    exact ⟨hn, hb, hwidth, hp, hgf, hgt, hk, ht⟩
   obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScale
   refine ⟨n₀, ?_⟩
   intro n hn N E X Y G π σ S hO
   intro J j j' hj hj' hjj base hbase
   have hpars := hn₀ n hn
-  rcases hpars with ⟨hn64, hbSmallN, hwidthN, hpiWidthN, hfiberGap, htupleGap⟩
+  rcases hpars with ⟨hn64, hbSmallN, hwidthN, hpiWidthN, hfiberGap, htupleGap,
+    hKHalfN, htailGap⟩
   have hNpos : 0 < (N : ℝ) := by
     have hNnat : 0 < N := lt_of_lt_of_le (by positivity) hO.host
     exact_mod_cast hNnat
@@ -882,6 +890,41 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
   have hthreshold_pos : 0 < threshold := by dsimp [threshold]; positivity
   have hεpos : 0 < ε := by dsimp [ε]; exact Real.exp_pos _
   have hρpos : 0 < ρ := by dsimp [ρ]; positivity
+  let τ : ℝ := Real.exp (-((n : ℝ) ^ x₀ / 4))
+  have hτpos : 0 < τ := by dsimp [τ]; exact Real.exp_pos _
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hlogPower : Real.log (n : ℝ) ≤
+      (n : ℝ) ^ (x₀ / 4) / (x₀ / 4) :=
+    Real.log_natCast_le_rpow_div n (by positivity)
+  have hLogTail : 8 * Real.log (n : ℝ) < (n : ℝ) ^ x₀ := by
+    calc
+      8 * Real.log (n : ℝ) ≤ 8 * ((n : ℝ) ^ (x₀ / 4) / (x₀ / 4)) :=
+        mul_le_mul_of_nonneg_left hlogPower (by norm_num)
+      _ = (32 / x₀) * (n : ℝ) ^ (x₀ / 4) := by field_simp [ne_of_gt hx₀]; ring
+      _ < (n : ℝ) ^ x₀ := htailGap
+  have hτExp : τ ≤ (n : ℝ) ^ (-(2 : ℝ)) := by
+    have harg : -((n : ℝ) ^ x₀ / 4) ≤ -2 * Real.log (n : ℝ) := by
+      nlinarith [hLogTail]
+    calc
+      τ = Real.exp (-((n : ℝ) ^ x₀ / 4)) := rfl
+      _ ≤ Real.exp (-2 * Real.log (n : ℝ)) := Real.exp_le_exp.mpr harg
+      _ = (n : ℝ) ^ (-(2 : ℝ)) := by
+        rw [Real.rpow_def_of_pos hnreal]
+        congr 1
+        ring
+  have hBsq : bS n ^ 2 = (n : ℝ) ^ (-(19 : ℝ) / 10) := by
+    dsimp [bS]
+    calc
+      ((n : ℝ) ^ (-(19 : ℝ) / 20)) ^ 2 =
+          (n : ℝ) ^ ((-(19 : ℝ) / 20) * 2) :=
+            (Real.rpow_mul_natCast (Nat.cast_nonneg n) (-(19 : ℝ) / 20) 2).symm
+      _ = (n : ℝ) ^ (-(19 : ℝ) / 10) := by congr 1 <;> ring
+  have hτLeBsq : τ ≤ bS n ^ 2 := by
+    calc
+      τ ≤ (n : ℝ) ^ (-(2 : ℝ)) := hτExp
+      _ ≤ (n : ℝ) ^ (-(19 : ℝ) / 10) :=
+        Real.rpow_le_rpow_of_exponent_le hn1R (by norm_num)
+      _ = bS n ^ 2 := hBsq.symm
   let pairMass (sgn : ℝ) : ℝ :=
     ∑ x : Fin N, ∑ z : Fin N, σ x * σ z *
       (if threshold < sgn * inter E G π J
@@ -1150,9 +1193,9 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
     rw [hr, inv_eq_one_div]
     constructor
     · apply (le_div_iff₀ hdenpos).2
-      nlinarith [(hDenBounds z hz).2]
+      linarith [(hDenBounds z hz).2]
     · apply (div_le_iff₀ hdenpos).2
-      nlinarith [(hDenBounds z hz).1]
+      linarith [(hDenBounds z hz).1]
   have hrNonneg (z : Fin N) : 0 ≤ r z := by
     by_cases hz : z ∈ S
     · linarith [(hrBounds z hz).1]
@@ -1205,7 +1248,10 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
     have hratio : r z / c x hx ≤ 3 := by
       by_cases hzS : z ∈ S
       · apply (div_le_iff₀ (hcPos x hx)).2
-        nlinarith [(hrBounds z hzS).2, hcLower x hx]
+        calc
+          r z ≤ 2 := (hrBounds z hzS).2
+          _ = 3 * (2 / 3 : ℝ) := by norm_num
+          _ ≤ 3 * c x hx := mul_le_mul_of_nonneg_left (hcLower x hx) (by norm_num)
       · simp [r, hzS]
     calc
       (q x hx).w z * r z / c x hx = (q x hx).w z * (r z / c x hx) := by ring
@@ -1217,6 +1263,510 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
         rw [Real.exp_sub, Real.exp_log (by norm_num : (0 : ℝ) < 3)]
         field_simp [ne_of_gt hNpos]
         <;> ring
+  have hqtildeWeight (x : Fin N) (hx : x ∈ A) (z : Fin N) :
+      c x hx * (qtilde x hx).w z = (q x hx).w z * r z := by
+    change c x hx * ((q x hx).w z * r z / c x hx) = _
+    field_simp [ne_of_gt (hcPos x hx)]
+  let dir (x : Fin N) (hx : x ∈ A) (y : Fin N) : ℝ :=
+    ∑ z, (q x hx).w z * aF E G π z y
+  let dirF (x : Fin N) (hx : x ∈ A) (y : Fin N) : ℝ :=
+    ∑ z, (qtilde x hx).w z * fv E G z y
+  let dirMean (x : Fin N) (hx : x ∈ A) : ℝ :=
+    ∑ z, (qtilde x hx).w z * sMean E G π z
+  have hdirTerm (x : Fin N) (hx : x ∈ A) (y z : Fin N) :
+      (q x hx).w z * aF E G π z y =
+        c x hx * ((qtilde x hx).w z * (fv E G z y - sMean E G π z)) := by
+    by_cases hzS : z ∈ S
+    · have hrf : r z = (1 + sMean E G π z)⁻¹ := by simp [r, hzS]
+      calc
+        (q x hx).w z * aF E G π z y =
+            ((q x hx).w z * r z) * (fv E G z y - sMean E G π z) := by
+              rw [haFid z hzS y, div_eq_mul_inv, ← hrf]
+              ring
+        _ = c x hx * ((qtilde x hx).w z * (fv E G z y - sMean E G π z)) := by
+              rw [← hqtildeWeight x hx z]
+              ring
+    · have hq0 : (q x hx).w z = 0 := hqSupportedInS x hx z hzS
+      have hqt0 : (qtilde x hx).w z = 0 := hqtildeSupport x hx z hzS
+      simp [hq0, hqt0]
+  have hdirIdentity (x : Fin N) (hx : x ∈ A) (y : Fin N) :
+      dir x hx y = c x hx * (dirF x hx y - dirMean x hx) := by
+    dsimp [dir, dirF, dirMean]
+    calc
+      (∑ z, (q x hx).w z * aF E G π z y) =
+          ∑ z, c x hx * ((qtilde x hx).w z *
+            (fv E G z y - sMean E G π z)) := by
+              apply Finset.sum_congr rfl
+              intro z hz
+              exact hdirTerm x hx y z
+      _ = c x hx *
+          ((∑ z, (qtilde x hx).w z * fv E G z y) -
+            ∑ z, (qtilde x hx).w z * sMean E G π z) := by
+              calc
+                (∑ z, c x hx * ((qtilde x hx).w z *
+                    (fv E G z y - sMean E G π z))) =
+                  c x hx * ∑ z, (qtilde x hx).w z *
+                    (fv E G z y - sMean E G π z) := by rw [← Finset.mul_sum]
+                _ = c x hx *
+                    ((∑ z, (qtilde x hx).w z * fv E G z y) -
+                      ∑ z, (qtilde x hx).w z * sMean E G π z) := by
+                    congr 1
+                    calc
+                      (∑ z, (qtilde x hx).w z * (fv E G z y - sMean E G π z)) =
+                          ∑ z, ((qtilde x hx).w z * fv E G z y -
+                            (qtilde x hx).w z * sMean E G π z) := by
+                              apply Finset.sum_congr rfl
+                              intro z hz
+                              ring
+                      _ = _ := by rw [Finset.sum_sub_distrib]
+      _ = c x hx * (dirF x hx y - dirMean x hx) := by rfl
+  have hdirFExpectation (x : Fin N) (hx : x ∈ A) (ν : Law N) :
+      (∑ y, ν.w y * dirF x hx y) = 2 * dens E G (qtilde x hx) ν - 1 := by
+    classical
+    unfold dirF dens
+    calc
+      (∑ y, ν.w y * ∑ z, (qtilde x hx).w z * fv E G z y) =
+          ∑ z, ∑ y, (qtilde x hx).w z * ν.w y * fv E G z y := by
+            calc
+              (∑ y, ν.w y * ∑ z, (qtilde x hx).w z * fv E G z y) =
+                  ∑ y, ∑ z, ν.w y * ((qtilde x hx).w z * fv E G z y) := by
+                    apply Finset.sum_congr rfl
+                    intro y hy
+                    rw [Finset.mul_sum]
+              _ = ∑ z, ∑ y, (qtilde x hx).w z * ν.w y * fv E G z y := by
+                    rw [Finset.sum_comm]
+                    apply Finset.sum_congr rfl
+                    intro z hz
+                    apply Finset.sum_congr rfl
+                    intro y hy
+                    ring
+      _ = 2 * (∑ z, ∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) - 1 := by
+            have hByZ (z : Fin N) :
+                (∑ y, (qtilde x hx).w z * ν.w y * fv E G z y) =
+                  2 * (∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) -
+                    (qtilde x hx).w z := by
+              calc
+                (∑ y, (qtilde x hx).w z * ν.w y * fv E G z y) =
+                    ∑ y, (2 * ((qtilde x hx).w z * ν.w y * hit E G z y) -
+                      (qtilde x hx).w z * ν.w y) := by
+                        apply Finset.sum_congr rfl
+                        intro y hy
+                        unfold fv
+                        ring
+                _ = (∑ y, 2 * ((qtilde x hx).w z * ν.w y * hit E G z y)) -
+                    ∑ y, (qtilde x hx).w z * ν.w y := by
+                      rw [Finset.sum_sub_distrib]
+                _ = 2 * (∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) -
+                    (qtilde x hx).w z * ∑ y, ν.w y := by
+                      rw [← Finset.mul_sum, ← Finset.mul_sum]
+                _ = 2 * (∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) -
+                    (qtilde x hx).w z := by rw [ν.sum_eq_one]; ring
+            calc
+              (∑ z, ∑ y, (qtilde x hx).w z * ν.w y * fv E G z y) =
+                  ∑ z, (2 * (∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) -
+                    (qtilde x hx).w z) := by
+                      apply Finset.sum_congr rfl
+                      intro z hz
+                      exact hByZ z
+              _ = 2 * (∑ z, ∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) -
+                    ∑ z, (qtilde x hx).w z := by
+                      rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+              _ = 2 * (∑ z, ∑ y, (qtilde x hx).w z * ν.w y * hit E G z y) - 1 := by
+                    rw [(qtilde x hx).sum_eq_one]
+      _ = 2 * dens E G (qtilde x hx) ν - 1 := by rfl
+  have hdirMeanEq (x : Fin N) (hx : x ∈ A) :
+      dirMean x hx = ∑ y, π y * dirF x hx y := by
+    dsimp [dirMean, dirF]
+    calc
+      (∑ z, (qtilde x hx).w z * sMean E G π z) =
+          ∑ z, (qtilde x hx).w z * ∑ y, π y * fv E G z y := by
+            apply Finset.sum_congr rfl
+            intro z hz
+            rfl
+      _ = ∑ z, ∑ y, (qtilde x hx).w z * (π y * fv E G z y) := by
+            apply Finset.sum_congr rfl
+            intro z hz
+            rw [Finset.mul_sum]
+      _ = ∑ y, ∑ z, (qtilde x hx).w z * (π y * fv E G z y) := by
+            exact Finset.sum_comm
+      _ = ∑ y, π y * ∑ z, (qtilde x hx).w z * fv E G z y := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            calc
+              (∑ z, (qtilde x hx).w z * (π y * fv E G z y)) =
+                  ∑ z, π y * ((qtilde x hx).w z * fv E G z y) := by
+                    apply Finset.sum_congr rfl
+                    intro z hz
+                    ring
+              _ = π y * ∑ z, (qtilde x hx).w z * fv E G z y := by
+                    rw [Finset.mul_sum]
+      _ = ∑ y, π y * dirF x hx y := by rfl
+  have hdirAverageIdentity (x : Fin N) (hx : x ∈ A) (ν : Law N) :
+      (∑ y, ν.w y * dir x hx y) =
+        2 * c x hx * (dens E G (qtilde x hx) ν - dens E G (qtilde x hx) πlaw) := by
+    have hcenter (ν' : Law N) :
+        (∑ y, ν'.w y * (dirF x hx y - dirMean x hx)) =
+          (∑ y, ν'.w y * dirF x hx y) - dirMean x hx := by
+      calc
+        (∑ y, ν'.w y * (dirF x hx y - dirMean x hx)) =
+            ∑ y, (ν'.w y * dirF x hx y - ν'.w y * dirMean x hx) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = (∑ y, ν'.w y * dirF x hx y) -
+            ∑ y, ν'.w y * dirMean x hx := by rw [Finset.sum_sub_distrib]
+        _ = (∑ y, ν'.w y * dirF x hx y) - dirMean x hx := by
+              have hconst : (∑ y, ν'.w y * dirMean x hx) = dirMean x hx := by
+                calc
+                  (∑ y, ν'.w y * dirMean x hx) =
+                      (∑ y, ν'.w y) * dirMean x hx := by rw [← Finset.sum_mul]
+                  _ = dirMean x hx := by rw [ν'.sum_eq_one]; ring
+              rw [hconst]
+    have hfactor :
+        (∑ y, ν.w y * dir x hx y) =
+          c x hx * (∑ y, ν.w y * (dirF x hx y - dirMean x hx)) := by
+      calc
+        (∑ y, ν.w y * dir x hx y) =
+            ∑ y, ν.w y * (c x hx * (dirF x hx y - dirMean x hx)) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              rw [hdirIdentity x hx y]
+        _ = ∑ y, c x hx * (ν.w y * (dirF x hx y - dirMean x hx)) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = c x hx * ∑ y, ν.w y * (dirF x hx y - dirMean x hx) := by
+              rw [Finset.mul_sum]
+    calc
+      (∑ y, ν.w y * dir x hx y) =
+          c x hx * ((∑ y, ν.w y * dirF x hx y) - dirMean x hx) := by
+            rw [hfactor, hcenter]
+      _ = 2 * c x hx *
+          (dens E G (qtilde x hx) ν - dens E G (qtilde x hx) πlaw) := by
+            rw [hdirFExpectation x hx ν, hdirMeanEq x hx,
+              hdirFExpectation x hx πlaw]
+            ring
+  have hqtildeSupportX (x : Fin N) (hx : x ∈ A) : (qtilde x hx).SupportedIn X := by
+    intro z hzX
+    have hzS : z ∉ S := by
+      intro hz
+      exact hzX (hO.S_sub hz)
+    exact hqtildeSupport x hx z hzS
+  let posDir (x : Fin N) (hx : x ∈ A) : Finset (Fin N) :=
+    Finset.univ.filter (fun y => 16 * bS n < dir x hx y)
+  let negDir (x : Fin N) (hx : x ∈ A) : Finset (Fin N) :=
+    Finset.univ.filter (fun y => 16 * bS n < -dir x hx y)
+  have hbpos : 0 < bS n := by
+    unfold bS
+    exact Real.rpow_pos_of_pos hnreal _
+  have hNoSide (x : Fin N) (hx : x ∈ A) (Bset : Finset (Fin N))
+      (sgn : ℝ) (hsign : |sgn| = 1)
+      (hEvent : ∀ y ∈ Bset, 16 * bS n < sgn * dir x hx y) :
+      (∑ y ∈ Bset, π y) ≤ τ := by
+    by_contra hmassNot
+    have hmass : τ < ∑ y ∈ Bset, π y := lt_of_not_ge hmassNot
+    have hmassPos : 0 < ∑ y ∈ Bset, π y := lt_trans hτpos hmass
+    let ν : Law N := Law.restrict πlaw Bset hmassPos
+    have hνSupportB : ν.SupportedIn Bset := by
+      intro y hy
+      simp [ν, Law.restrict, hy]
+    have hνSupportY : ν.SupportedIn Y := by
+      intro y hy
+      have hπzero : πlaw.w y = 0 := hπSupport y hy
+      simp [ν, Law.restrict, hπzero]
+    have hmassLog : -((n : ℝ) ^ x₀ / 4) < Real.log (∑ y ∈ Bset, π y) := by
+      have hlog := Real.log_lt_log hτpos hmass
+      simpa [τ, Real.log_exp] using hlog
+    have hνWidth0 : ν.WidthLE (Real.log K - Real.log (∑ y ∈ Bset, π y)) := by
+      simpa [ν] using Law.WidthLE.restrict hπWidth hmassPos
+    have hνWidth : ν.WidthLE ((n : ℝ) ^ x₀) := by
+      have hneglog : -Real.log (∑ y ∈ Bset, π y) < (n : ℝ) ^ x₀ / 4 := by
+        linarith [hmassLog]
+      have hpowNonneg : 0 ≤ (n : ℝ) ^ x₀ := Real.rpow_nonneg (Nat.cast_nonneg n) _
+      have hExponent : Real.log K - Real.log (∑ y ∈ Bset, π y) ≤ (n : ℝ) ^ x₀ := by
+        calc
+          Real.log K - Real.log (∑ y ∈ Bset, π y) ≤
+              Real.log K + (n : ℝ) ^ x₀ / 4 := by linarith [hneglog]
+          _ ≤ (n : ℝ) ^ x₀ / 2 + (n : ℝ) ^ x₀ / 4 :=
+                add_le_add hKHalfN le_rfl
+          _ = (3 / 4 : ℝ) * (n : ℝ) ^ x₀ := by ring
+          _ ≤ (1 : ℝ) * (n : ℝ) ^ x₀ :=
+                mul_le_mul_of_nonneg_right (by norm_num : (3 / 4 : ℝ) ≤ 1) hpowNonneg
+          _ = (n : ℝ) ^ x₀ := by ring
+      intro y
+      change ν.w y ≤ Real.exp ((n : ℝ) ^ x₀) / N
+      calc
+        ν.w y ≤ Real.exp (Real.log K - Real.log (∑ y ∈ Bset, π y)) / N := hνWidth0 y
+        _ ≤ Real.exp ((n : ℝ) ^ x₀) / N := by
+              exact div_le_div_of_nonneg_right
+                (Real.exp_le_exp.mpr hExponent) (by positivity)
+    have hDiscν : |dens E G (qtilde x hx) ν - 1 / 2| ≤ bS n := by
+      have hd := hO.disc (qtilde x hx) ν (hqtildeSupportX x hx) hνSupportY
+        (hqtildeWidth x hx) hνWidth G
+      simpa [bS, neg_div] using hd
+    have hDiscπ : |dens E G (qtilde x hx) πlaw - 1 / 2| ≤ bS n := by
+      have hpowNonneg : 0 ≤ (n : ℝ) ^ x₀ := Real.rpow_nonneg (Nat.cast_nonneg n) _
+      have hπWidth' : πlaw.WidthLE ((n : ℝ) ^ x₀) := by
+        apply Law.WidthLE.mono hπWidth
+        exact hKHalfN.trans (div_le_self hpowNonneg (by norm_num))
+      have hd := hO.disc (qtilde x hx) πlaw (hqtildeSupportX x hx) hπSupport
+        (hqtildeWidth x hx) hπWidth' G
+      simpa [bS, neg_div] using hd
+    have hDensityDiff :
+        |dens E G (qtilde x hx) ν - dens E G (qtilde x hx) πlaw| ≤ 2 * bS n := by
+      calc
+        |dens E G (qtilde x hx) ν - dens E G (qtilde x hx) πlaw| ≤
+            |dens E G (qtilde x hx) ν - 1 / 2| +
+              |dens E G (qtilde x hx) πlaw - 1 / 2| := by
+                calc
+                  _ = |(dens E G (qtilde x hx) ν - 1 / 2) -
+                        (dens E G (qtilde x hx) πlaw - 1 / 2)| := by congr 1 <;> ring
+                  _ ≤ _ := abs_sub _ _
+        _ ≤ bS n + bS n := add_le_add hDiscν hDiscπ
+        _ = 2 * bS n := by ring
+    have hDirMeanAbs : |∑ y, ν.w y * dir x hx y| ≤ 8 * bS n := by
+      have h2c : 0 ≤ 2 * c x hx := mul_nonneg (by norm_num) (hcPos x hx).le
+      rw [hdirAverageIdentity x hx ν, abs_mul, abs_of_nonneg h2c]
+      calc
+        2 * c x hx * |dens E G (qtilde x hx) ν - dens E G (qtilde x hx) πlaw| ≤
+            2 * c x hx * (2 * bS n) :=
+              mul_le_mul_of_nonneg_left hDensityDiff h2c
+        _ ≤ 8 * bS n := by
+              have h2cUpper : 2 * c x hx ≤ 4 :=
+                calc
+                  2 * c x hx ≤ 2 * 2 :=
+                    mul_le_mul_of_nonneg_left (hcUpper x hx) (by norm_num : (0 : ℝ) ≤ 2)
+                  _ = 4 := by norm_num
+              have h2bpos : 0 ≤ 2 * bS n := mul_nonneg (by norm_num) hbpos.le
+              calc
+                2 * c x hx * (2 * bS n) ≤ 4 * (2 * bS n) :=
+                  mul_le_mul_of_nonneg_right h2cUpper h2bpos
+                _ = 8 * bS n := by ring
+    have hDirLower : 16 * bS n ≤ sgn * (∑ y, ν.w y * dir x hx y) := by
+      calc
+        16 * bS n = (∑ y, ν.w y) * (16 * bS n) := by rw [ν.sum_eq_one]; ring
+        _ = ∑ y, ν.w y * (16 * bS n) := by rw [Finset.sum_mul]
+        _ ≤ ∑ y, ν.w y * (sgn * dir x hx y) := by
+          apply Finset.sum_le_sum
+          intro y hy
+          by_cases hyB : y ∈ Bset
+          · exact mul_le_mul_of_nonneg_left (le_of_lt (hEvent y hyB)) (ν.nonneg y)
+          · have hνzero : ν.w y = 0 := hνSupportB y hyB
+            simp [hνzero]
+        _ = sgn * (∑ y, ν.w y * dir x hx y) := by
+          calc
+            (∑ y, ν.w y * (sgn * dir x hx y)) =
+                ∑ y, sgn * (ν.w y * dir x hx y) := by
+                  apply Finset.sum_congr rfl
+                  intro y hy
+                  ring
+            _ = _ := by rw [Finset.mul_sum]
+    have hSignedAbs : sgn * (∑ y, ν.w y * dir x hx y) ≤
+        |∑ y, ν.w y * dir x hx y| := by
+      calc
+        sgn * (∑ y, ν.w y * dir x hx y) ≤
+            |sgn * (∑ y, ν.w y * dir x hx y)| := le_abs_self _
+        _ = |∑ y, ν.w y * dir x hx y| := by rw [abs_mul, hsign, one_mul]
+    have hbad : 16 * bS n ≤ 8 * bS n := hDirLower.trans (hSignedAbs.trans hDirMeanAbs)
+    nlinarith only [hbad, hbpos]
+  have hposMassSmall (x : Fin N) (hx : x ∈ A) :
+      (∑ y ∈ posDir x hx, π y) ≤ τ := by
+    apply hNoSide x hx (posDir x hx) 1 (by norm_num)
+    intro y hy
+    calc
+      16 * bS n < dir x hx y := (Finset.mem_filter.mp hy).2
+      _ = 1 * dir x hx y := by ring
+  have hnegMassSmall (x : Fin N) (hx : x ∈ A) :
+      (∑ y ∈ negDir x hx, π y) ≤ τ := by
+    apply hNoSide x hx (negDir x hx) (-1) (by norm_num)
+    intro y hy
+    calc
+      16 * bS n < -dir x hx y := (Finset.mem_filter.mp hy).2
+      _ = (-1) * dir x hx y := by ring
+  have hπIndicator (T : Finset (Fin N)) :
+      (∑ y, π y * (if y ∈ T then (1 : ℝ) else 0)) = ∑ y ∈ T, π y := by
+    calc
+      (∑ y, π y * (if y ∈ T then (1 : ℝ) else 0)) =
+          ∑ y, (if y ∈ T then π y else 0) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            by_cases h : y ∈ T <;> simp [h] <;> ring
+      _ = ∑ y ∈ T, π y := Finset.sum_ite_mem_eq T π
+  have hdirAbsBound (x : Fin N) (hx : x ∈ A) (y : Fin N) :
+      |dir x hx y| ≤ 5 := by
+    dsimp [dir]
+    calc
+      |∑ z, (q x hx).w z * aF E G π z y| ≤
+          ∑ z, |(q x hx).w z * aF E G π z y| := Finset.abs_sum_le_sum_abs _ _
+      _ = ∑ z, (q x hx).w z * |aF E G π z y| := by
+            apply Finset.sum_congr rfl
+            intro z hz
+            rw [abs_mul, abs_of_nonneg ((q x hx).nonneg z)]
+      _ ≤ ∑ z, (q x hx).w z * 5 := by
+            apply Finset.sum_le_sum
+            intro z hz
+            by_cases hzS : z ∈ S
+            · exact mul_le_mul_of_nonneg_left (haBound z hzS y) ((q x hx).nonneg z)
+            · have hqzero : (q x hx).w z = 0 := hqSupportedInS x hx z hzS
+              simp [hqzero]
+      _ = 5 := by rw [← Finset.sum_mul, (q x hx).sum_eq_one]; ring
+  have hdirPoint (x : Fin N) (hx : x ∈ A) (y : Fin N) :
+      (dir x hx y) ^ 2 ≤ (16 * bS n) ^ 2 +
+        25 * (if y ∈ posDir x hx then (1 : ℝ) else 0) +
+        25 * (if y ∈ negDir x hx then (1 : ℝ) else 0) := by
+    by_cases hp : y ∈ posDir x hx
+    · have hpos : 16 * bS n < dir x hx y := (Finset.mem_filter.mp hp).2
+      have hsq : (dir x hx y) ^ 2 ≤ 25 := by
+        have habs : |dir x hx y| ≤ |(5 : ℝ)| := by
+          simpa using hdirAbsBound x hx y
+        calc
+          (dir x hx y) ^ 2 ≤ (5 : ℝ) ^ 2 := (sq_le_sq).2 habs
+          _ = 25 := by norm_num
+      have hsqNonneg : 0 ≤ (16 * bS n) ^ 2 := sq_nonneg _
+      have hnegInd : 0 ≤ (if y ∈ negDir x hx then (1 : ℝ) else 0) := by
+        split_ifs <;> norm_num
+      have hPosCase : (dir x hx y) ^ 2 ≤
+          (16 * bS n) ^ 2 + 25 +
+            25 * (if y ∈ negDir x hx then (1 : ℝ) else 0) := by
+        calc
+          (dir x hx y) ^ 2 ≤ 25 := hsq
+          _ ≤ 25 + ((16 * bS n) ^ 2 +
+              25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) :=
+                le_add_of_nonneg_right
+                  (add_nonneg hsqNonneg (mul_nonneg (by norm_num) hnegInd))
+          _ = (16 * bS n) ^ 2 + 25 +
+              25 * (if y ∈ negDir x hx then (1 : ℝ) else 0) := by ring
+      simpa [hp, mul_one] using hPosCase
+    · by_cases hn : y ∈ negDir x hx
+      · have hneg : 16 * bS n < -dir x hx y := (Finset.mem_filter.mp hn).2
+        have hsq : (dir x hx y) ^ 2 ≤ 25 := by
+          have habs : |dir x hx y| ≤ |(5 : ℝ)| := by
+            simpa using hdirAbsBound x hx y
+          calc
+            (dir x hx y) ^ 2 ≤ (5 : ℝ) ^ 2 := (sq_le_sq).2 habs
+            _ = 25 := by norm_num
+        have hsqNonneg : 0 ≤ (16 * bS n) ^ 2 := sq_nonneg _
+        have hNegCase : (dir x hx y) ^ 2 ≤ (16 * bS n) ^ 2 + 25 := by
+          calc
+            (dir x hx y) ^ 2 ≤ 25 := hsq
+            _ ≤ (16 * bS n) ^ 2 + 25 := le_add_of_nonneg_left hsqNonneg
+        simpa [hp, hn, mul_one] using hNegCase
+      · have hupper : dir x hx y ≤ 16 * bS n := by
+          exact le_of_not_gt (by intro h; exact hp (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩))
+        have hlower : -(16 * bS n) ≤ dir x hx y := by
+          have hnot : ¬ 16 * bS n < -dir x hx y := by
+            intro h
+            exact hn (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩)
+          linarith
+        have hsq : (dir x hx y) ^ 2 ≤ (16 * bS n) ^ 2 := sq_le_sq' hlower hupper
+        simpa [hp, hn, mul_one] using hsq
+  have hdirL2 (x : Fin N) (hx : x ∈ A) :
+      (∑ y, π y * (dir x hx y) ^ 2) ≤ 306 * (bS n) ^ 2 := by
+    calc
+      (∑ y, π y * (dir x hx y) ^ 2) ≤
+          ∑ y, π y * ((16 * bS n) ^ 2 +
+            25 * (if y ∈ posDir x hx then (1 : ℝ) else 0) +
+            25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+              apply Finset.sum_le_sum
+              intro y hy
+              exact mul_le_mul_of_nonneg_left (hdirPoint x hx y) (hO.pi_nonneg y)
+      _ = (16 * bS n) ^ 2 + 25 * (∑ y, π y * (if y ∈ posDir x hx then (1 : ℝ) else 0)) +
+            25 * (∑ y, π y * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+              have hbase : (∑ y, π y * (16 * bS n) ^ 2) = (16 * bS n) ^ 2 := by
+                rw [← Finset.sum_mul, hO.pi_sum]
+                ring
+              have hposTerm :
+                  (∑ y, π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0))) =
+                    25 * (∑ y, π y * (if y ∈ posDir x hx then (1 : ℝ) else 0)) := by
+                calc
+                  (∑ y, π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0))) =
+                      ∑ y, 25 * (π y * (if y ∈ posDir x hx then (1 : ℝ) else 0)) := by
+                        apply Finset.sum_congr rfl
+                        intro y hy
+                        ring
+                  _ = _ := by rw [Finset.mul_sum]
+              have hnegTerm :
+                  (∑ y, π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0))) =
+                    25 * (∑ y, π y * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+                calc
+                  (∑ y, π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0))) =
+                      ∑ y, 25 * (π y * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+                        apply Finset.sum_congr rfl
+                        intro y hy
+                        ring
+                  _ = _ := by rw [Finset.mul_sum]
+              calc
+                (∑ y, π y * ((16 * bS n) ^ 2 +
+                    25 * (if y ∈ posDir x hx then (1 : ℝ) else 0) +
+                    25 * (if y ∈ negDir x hx then (1 : ℝ) else 0))) =
+                    ∑ y, (π y * (16 * bS n) ^ 2 +
+                      π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0)) +
+                      π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0))) := by
+                        apply Finset.sum_congr rfl
+                        intro y hy
+                        calc
+                          π y * ((16 * bS n) ^ 2 +
+                              25 * (if y ∈ posDir x hx then (1 : ℝ) else 0) +
+                              25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) =
+                              π y * ((16 * bS n) ^ 2 +
+                                25 * (if y ∈ posDir x hx then (1 : ℝ) else 0)) +
+                                π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+                                  rw [mul_add]
+                          _ = π y * (16 * bS n) ^ 2 +
+                                π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0)) +
+                                π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+                                  rw [mul_add]
+                _ = (∑ y, π y * (16 * bS n) ^ 2) +
+                      (∑ y, π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0))) +
+                      ∑ y, π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) := by
+                        calc
+                          (∑ y : Fin N, ((π y * (16 * bS n) ^ 2 +
+                              π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0))) +
+                              π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)))) =
+                              (∑ y : Fin N, (π y * (16 * bS n) ^ 2 +
+                                π y * (25 * (if y ∈ posDir x hx then (1 : ℝ) else 0)))) +
+                                ∑ y : Fin N, π y * (25 * (if y ∈ negDir x hx then (1 : ℝ) else 0)) :=
+                                  Finset.sum_add_distrib
+                          _ = _ := by rw [Finset.sum_add_distrib]
+                _ = _ := by rw [hbase, hposTerm, hnegTerm]
+      _ ≤ 256 * (bS n) ^ 2 + 25 * τ + 25 * τ := by
+            have hposIndicator :
+                (∑ y, π y * (if y ∈ posDir x hx then (1 : ℝ) else 0)) =
+                  ∑ y ∈ posDir x hx, π y := by
+                exact hπIndicator (posDir x hx)
+            have hnegIndicator :
+                (∑ y, π y * (if y ∈ negDir x hx then (1 : ℝ) else 0)) =
+                  ∑ y ∈ negDir x hx, π y := by
+                exact hπIndicator (negDir x hx)
+            rw [hposIndicator, hnegIndicator]
+            have hpos := hposMassSmall x hx
+            have hneg := hnegMassSmall x hx
+            have hposTerm : 25 * (∑ y ∈ posDir x hx, π y) ≤ 25 * τ :=
+              mul_le_mul_of_nonneg_left hpos (by norm_num)
+            have hnegTerm : 25 * (∑ y ∈ negDir x hx, π y) ≤ 25 * τ :=
+              mul_le_mul_of_nonneg_left hneg (by norm_num)
+            have h16 : (16 * bS n) ^ 2 = 256 * (bS n) ^ 2 := by ring
+            rw [h16]
+            have htailSum :
+                25 * (∑ y ∈ posDir x hx, π y) + 25 * (∑ y ∈ negDir x hx, π y) ≤
+                  25 * τ + 25 * τ := add_le_add hposTerm hnegTerm
+            calc
+              256 * (bS n) ^ 2 + 25 * (∑ y ∈ posDir x hx, π y) +
+                  25 * (∑ y ∈ negDir x hx, π y) =
+                  256 * (bS n) ^ 2 +
+                    (25 * (∑ y ∈ posDir x hx, π y) + 25 * (∑ y ∈ negDir x hx, π y)) := by ring
+              _ ≤ 256 * (bS n) ^ 2 + (25 * τ + 25 * τ) :=
+                    add_le_add (le_refl (256 * (bS n) ^ 2)) htailSum
+              _ = 256 * (bS n) ^ 2 + 25 * τ + 25 * τ := by ring
+      _ ≤ 306 * (bS n) ^ 2 := by
+            calc
+              256 * (bS n) ^ 2 + 25 * τ + 25 * τ =
+                  256 * (bS n) ^ 2 + 50 * τ := by ring
+              _ ≤ 256 * (bS n) ^ 2 + 50 * (bS n) ^ 2 := by
+                    have h50 : 50 * τ ≤ 50 * (bS n) ^ 2 :=
+                      mul_le_mul_of_nonneg_left hτLeBsq (by norm_num : (0 : ℝ) ≤ 50)
+                    exact add_le_add (le_refl (256 * (bS n) ^ 2)) h50
+              _ = 306 * (bS n) ^ 2 := by ring
   -- The conditioned fibers have mass above `ρ`; the remaining proof bounds their
   -- centered direction in L², samples a norm-good tuple, and applies the equal-normalizer signed test.
   sorry

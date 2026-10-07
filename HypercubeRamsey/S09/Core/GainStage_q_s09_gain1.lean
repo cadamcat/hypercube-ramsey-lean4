@@ -325,6 +325,180 @@ private theorem raw_anchor_hit_probability9 {P : Params9} {n N : ℕ} {M : TagMi
   rw [hevent, rawLaw9]
   exact FinProb.pi_pr_forall (inputLaw9 S I) C
 
+theorem conditional_history_markov9 {Ω ι : Type*} [Fintype Ω] [Fintype ι]
+    [DecidableEq ι] (P : FinProb Ω) (history : Ω → ι) (A : Ω → Prop)
+    (t : ℝ) (ht : 0 < t) :
+    P.pr (fun ω₀ => t < P.condExp (fun ω => if A ω then 1 else 0)
+      (fun ω => history ω = history ω₀)) ≤ P.pr A / t := by
+  classical
+  let Q : FinProb ι := FinProb.map P history
+  let fiber : ι → Ω → Prop := fun a ω => history ω = a
+  let fiberInd : ι → Ω → ℝ := fun a ω =>
+    @ite ℝ (fiber a ω) (Classical.propDecidable (fiber a ω)) 1 0
+  let q : ι → ℝ := fun a => P.condExp (fun ω => if A ω then 1 else 0) (fiber a)
+  have hQw (a : ι) : Q.w a = P.pr (fun ω => history ω = a) := by
+    change (∑ ω, if history ω = a then P.w ω else 0) = _
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ω _
+    simp
+  have hmapPr (B : ι → Prop) :
+      P.pr (fun ω => B (history ω)) = Q.pr B := by
+    change (∑ ω, if B (history ω) then P.w ω else 0) =
+      ∑ a, if B a then ∑ ω, if history ω = a then P.w ω else 0 else 0
+    calc
+      (∑ ω, if B (history ω) then P.w ω else 0) =
+          ∑ ω, ∑ a, if B a ∧ history ω = a then P.w ω else 0 := by
+        apply Finset.sum_congr rfl
+        intro ω _
+        rw [Finset.sum_eq_single_of_mem (history ω) (Finset.mem_univ _) (by
+          intro a _ hne
+          have hne' : history ω ≠ a := fun he => hne he.symm
+          simp [hne'])]
+        simp
+      _ = ∑ a, ∑ ω, if B a ∧ history ω = a then P.w ω else 0 := by
+        rw [Finset.sum_comm]
+      _ = ∑ a, if B a then ∑ ω, if history ω = a then P.w ω else 0 else 0 := by
+        apply Finset.sum_congr rfl
+        intro a _
+        by_cases hB : B a <;> simp [hB]
+  have hpr_nonneg (B : Ω → Prop) : 0 ≤ P.pr B := by
+    unfold FinProb.pr
+    apply Finset.sum_nonneg
+    intro ω _
+    split_ifs <;> positivity [P.nonneg ω]
+  have hqnonneg (a : ι) : 0 ≤ q a := by
+    dsimp [q, FinProb.condExp, FinProb.expect]
+    apply div_nonneg
+    · apply Finset.sum_nonneg
+      intro ω _
+      exact mul_nonneg (P.nonneg ω) (by split_ifs <;> norm_num)
+    · exact hpr_nonneg _
+  have hfiber (a : ι) : Q.w a * q a = P.pr (fun ω => history ω = a ∧ A ω) := by
+    rw [hQw a]
+    simp only [q, FinProb.condExp]
+    change P.pr (fiber a) *
+      (P.expect (fun ω => fiberInd a ω * (if A ω then 1 else 0)) / P.pr (fiber a)) =
+        P.pr (fun ω => fiber a ω ∧ A ω)
+    have hnum :
+        P.expect (fun ω => fiberInd a ω * (if A ω then 1 else 0)) =
+          P.pr (fun ω => fiber a ω ∧ A ω) := by
+      unfold FinProb.expect FinProb.pr
+      apply Finset.sum_congr rfl
+      intro ω _
+      by_cases hh : history ω = a <;> by_cases ha : A ω <;>
+        simp [fiberInd, fiber, hh, ha]
+    have hquot : P.pr (fiber a) *
+        (P.pr (fun ω => fiber a ω ∧ A ω) / P.pr (fiber a)) =
+        P.pr (fun ω => fiber a ω ∧ A ω) := by
+      by_cases hp : P.pr (fiber a) = 0
+      ·
+        have hhit : P.pr (fun ω => fiber a ω ∧ A ω) = 0 := by
+          have hle : P.pr (fun ω => fiber a ω ∧ A ω) ≤ P.pr (fiber a) := by
+            unfold FinProb.pr
+            apply Finset.sum_le_sum
+            intro ω _
+            by_cases hh : history ω = a <;> by_cases ha : A ω <;>
+              simp [fiber, hh, ha, P.nonneg]
+          have hnonneg := hpr_nonneg (fun ω => fiber a ω ∧ A ω)
+          rw [hp] at hle
+          linarith
+        rw [hp, hhit]
+        norm_num
+      ·
+        have hp' : 0 < P.pr (fiber a) := lt_of_le_of_ne
+          (hpr_nonneg _) (Ne.symm hp)
+        field_simp [ne_of_gt hp'] <;> ring
+    calc
+      P.pr (fiber a) *
+          (P.expect (fun ω => fiberInd a ω * (if A ω then 1 else 0)) / P.pr (fiber a)) =
+          P.pr (fiber a) *
+            (P.pr (fun ω => fiber a ω ∧ A ω) / P.pr (fiber a)) := by
+              exact congrArg (fun z => P.pr (fiber a) * (z / P.pr (fiber a))) hnum
+      _ = P.pr (fun ω => fiber a ω ∧ A ω) := hquot
+  have hexpect : Q.expect q = P.pr A := by
+    calc
+      (∑ a, Q.w a * q a) = ∑ a, P.pr (fun ω => history ω = a ∧ A ω) := by
+        apply Finset.sum_congr rfl
+        intro a _
+        exact hfiber a
+      _ = P.pr A := by
+        unfold FinProb.pr
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro ω _
+        by_cases ha : A ω
+        · rw [Finset.sum_eq_single_of_mem (history ω) (Finset.mem_univ _) (by
+            intro a _ hne
+            have hne' : history ω ≠ a := fun he => hne he.symm
+            simp [ha, hne'])]
+          simp [ha]
+        · simp [ha]
+  have hmarkov : Q.pr (fun a => t < q a) ≤ Q.expect q / t := by
+    unfold FinProb.pr FinProb.expect
+    calc
+      (∑ a, if t < q a then Q.w a else 0) ≤
+          ∑ a, Q.w a * q a / t := by
+        apply Finset.sum_le_sum
+        intro a _
+        by_cases h : t < q a
+        · rw [if_pos h]
+          have hq : 0 ≤ q a := hqnonneg a
+          have hpnt : Q.w a ≤ Q.w a * q a / t := by
+            rw [le_div_iff₀ ht]
+            nlinarith [Q.nonneg a, h]
+          exact hpnt
+        · rw [if_neg h]
+          exact div_nonneg (mul_nonneg (Q.nonneg a) (hqnonneg a)) ht.le
+      _ = (∑ a, Q.w a * q a) / t := by rw [← Finset.sum_div]
+  have hprob : P.pr (fun ω₀ => t < P.condExp (fun ω => if A ω then 1 else 0)
+      (fun ω => history ω = history ω₀)) = Q.pr (fun a => t < q a) := by
+    change P.pr (fun ω₀ => t < q (history ω₀)) = _
+    exact hmapPr (fun a => t < q a)
+  calc
+    P.pr (fun ω₀ => t < P.condExp (fun ω => if A ω then 1 else 0)
+        (fun ω => history ω = history ω₀)) = Q.pr (fun a => t < q a) := hprob
+    _ ≤ Q.expect q / t := hmarkov
+    _ = P.pr A / t := by rw [hexpect]
+
+theorem core_history_markov9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n)
+    (v : EvenSites9 n) (A : Outcome9 I N → Prop) (t : ℝ) (ht : 0 < t) :
+    (rawLaw9 S I).pr (fun ω₀ => t < condCorePr9 S I v ω₀ A) ≤
+      (rawLaw9 S I).pr A / t := by
+  classical
+  let hist : Outcome9 I N →
+      (∀ c : {c : I.ID // c ∈ I.core v.1}, Fin N) :=
+    fun ω c => anc9 ω c.1
+  have hrel (ω₀ ω : Outcome9 I N) :
+      sameCore9 I v ω₀ ω ↔ hist ω = hist ω₀ := by
+    constructor
+    · intro h
+      funext c
+      exact h c.1 c.2
+    · intro h c hc
+      exact congrFun h ⟨c, hc⟩
+  have hpred (ω₀ : Outcome9 I N) :
+      sameCore9 I v ω₀ = (fun ω => hist ω = hist ω₀) := by
+    funext ω
+    exact propext (hrel ω₀ ω)
+  have hcond (ω₀ : Outcome9 I N) :
+      condCorePr9 S I v ω₀ A =
+        (rawLaw9 S I).condExp (fun ω => if A ω then 1 else 0)
+          (fun ω => hist ω = hist ω₀) := by
+    unfold condCorePr9
+    rw [hpred ω₀]
+  have hmarkov := conditional_history_markov9 (rawLaw9 S I) hist A t ht
+  calc
+    (rawLaw9 S I).pr (fun ω₀ => t < condCorePr9 S I v ω₀ A) =
+        (rawLaw9 S I).pr (fun ω₀ => t <
+          (rawLaw9 S I).condExp (fun ω => if A ω then 1 else 0)
+            (fun ω => hist ω = hist ω₀)) := by
+              apply congrArg (fun f => (rawLaw9 S I).pr f)
+              funext ω₀
+              exact congrArg (fun z => t < z) (hcond ω₀)
+    _ ≤ (rawLaw9 S I).pr A / t := hmarkov
+
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)
     (t : Fin 3) : List I.ID :=

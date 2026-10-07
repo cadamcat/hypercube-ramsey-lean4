@@ -41,6 +41,12 @@ theorem rates_pos (x : Pre15) : 0 < lowRate x ∧ 0 < highRate x := by
 theorem pathDelta_params (p : Params5 γ K' χ) : pathDelta p.pre1 = p.delta := by
   simp [pathDelta, Params5.pre1, Params5.pre0, p.hdelta.1]
 
+theorem pathL0_params (p : Params5 γ K' χ) : pathL0 p.pre1 =
+    100 * (|p.a 3| + p.delta + 1) / p.delta := by
+  unfold pathL0
+  rw [pathDelta_params]
+  rfl
+
 /-- A request for the density cap only reads constants fixed before K_D. -/
 def atomCoefficientBeforeD (x : Pre35) : ℝ :=
   x.1.1.2.1 * (6 * x.1.2 + x.1.1.1.2.2.2.2.2.2.2) +

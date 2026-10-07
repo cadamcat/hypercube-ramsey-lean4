@@ -519,6 +519,7 @@ private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : �
     ∃ start : HeightState9 P hc n, ∃ l : List (HeightState9 P hc n),
       HeightPath9 (heightStep9 (fun x => badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2))
         ((v, ⟨j, by have := reach_level_le_for_path9 Pp A vq R h; omega⟩) :: l) start ∧
+      start.2.val = 0 ∧
       (∀ x ∈ ((v, ⟨j, by have := reach_level_le_for_path9 Pp A vq R h; omega⟩) :: l),
         _root_.hammingDist x.1 vq ≤ R) := by
   induction h with
@@ -527,12 +528,14 @@ private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : �
       constructor
       · simpa using (HeightPath9.singleton (step := heightStep9
           (fun x => badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2)) (v, ⟨0, by omega⟩))
-      · intro x hx
-        simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-        subst x
-        exact hdist
+      · constructor
+        · rfl
+        · intro x hx
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+          subst x
+          exact hdist
   | @up v j hj hreach hbad ih =>
-      obtain ⟨start, l, hp, hlocal⟩ := ih
+      obtain ⟨start, l, hp, hstart, hlocal⟩ := ih
       let x : HeightState9 P hc n := (v, ⟨j, by omega⟩)
       let y : HeightState9 P hc n := (v, ⟨j + 1, by omega⟩)
       refine ⟨start, ⟨x :: l, ?_⟩⟩
@@ -542,14 +545,16 @@ private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : �
           left
           exact ⟨rfl, rfl, hbad⟩
         simpa [x, y] using HeightPath9.cons hedge hp
-      · intro z hz
-        simp only [List.mem_cons] at hz
-        rcases hz with rfl | hz
-        · have hxlocal := hlocal x (by simp [x])
-          simpa [x, y] using hxlocal
-        · exact hlocal _ (by simpa [x] using hz)
+      · constructor
+        · exact hstart
+        · intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with rfl | hz
+          · have hxlocal := hlocal x (by simp [x])
+            simpa [x, y] using hxlocal
+          · exact hlocal _ (by simpa [x] using hz)
   | @down v v' j hreach hdistRoot hstep ih =>
-      obtain ⟨start, l, hp, hlocal⟩ := ih
+      obtain ⟨start, l, hp, hstart, hlocal⟩ := ih
       have hjle : j + 1 ≤ hc.levels n := reach_level_le_for_path9 Pp A vq R hreach
       let x : HeightState9 P hc n := (v, ⟨j + 1, by omega⟩)
       let y : HeightState9 P hc n := (v', ⟨j, by omega⟩)
@@ -560,11 +565,13 @@ private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : �
           right
           exact ⟨rfl, hstep⟩
         simpa [x, y] using HeightPath9.cons hedge hp
-      · intro z hz
-        simp only [List.mem_cons] at hz
-        rcases hz with rfl | hz
-        · exact hdistRoot
-        · exact hlocal _ (by simpa [x] using hz)
+      · constructor
+        · exact hstart
+        · intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with rfl | hz
+          · exact hdistRoot
+          · exact hlocal _ (by simpa [x] using hz)
 
 private theorem heightStep9_mono {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad bad' : HeightState9 P hc n → Prop}
@@ -618,14 +625,18 @@ private def scaleBad9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
 
 private def scaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
-    (Pp A : Pos9 P hc n → Bool) (start : HeightState9 P hc n) : Prop :=
-  ∃ endpoint : HeightState9 P hc n, ∃ rest : List (HeightState9 P hc n),
+    (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) : Prop :=
+  ∃ start endpoint : HeightState9 P hc n, ∃ rest : List (HeightState9 P hc n),
     HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: rest) start ∧
-    (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 start.1 ≤ 16 * R) ∧
+    (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 root ≤ 4 * R + 2) ∧
     (∀ x ∈ endpoint :: rest, Nat.dist x.2.val start.2.val ≤ 8 * R) ∧
     R ≤ max (Nat.dist endpoint.2.val start.2.val)
-      ((_root_.hammingDist endpoint.1 start.1 + 1) / 2) ∧
+      ((_root_.hammingDist endpoint.1 root + 1) / 2) ∧
     (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
+
+private noncomputable def scaleRootSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (root : CubeVertex n) (R : ℕ) : Finset (Pos9 P hc n) :=
+  consulted9 (P := P) (hc := hc) (n := n) root (2 * R + 1)
 
 private noncomputable def scaleSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (start : HeightState9 P hc n) (R : ℕ) : Finset (Pos9 P hc n) :=
@@ -888,6 +899,33 @@ private theorem residualWord9_hammingDist_le {m n : ℕ} (hmn : m ≤ n)
   have hcard := Finset.card_le_card_of_injOn f hmaps hinj
   simpa [S, T, _root_.hammingDist]
     using hcard
+
+private theorem scaleSupport9_mem_of_relevant {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hmn : P.m n ≤ n) (start : HeightState9 P hc n) (R : ℕ)
+    (site : CubeVertex n) (j : Fin (hc.levels n + 1))
+    (hsite : _root_.hammingDist site start.1 ≤ 16 * R)
+    (hlevel : Nat.dist j.val start.2.val ≤ 8 * R + 2)
+    (c : Pos9 P hc n)
+    (hslice : _root_.hammingDist c.slice (specialWord9 (P.m n) site) ≤ 1)
+    (hres : _root_.hammingDist c.location (residualWord9 (P.m n) site) ≤ P.radius n + 1)
+    (hcLevel : c.level = j) :
+    c ∈ scaleSupport9 start R := by
+  have hspecialProj := specialWord9_hammingDist_le hmn site start.1
+  have hresidualProj := residualWord9_hammingDist_le hmn site start.1
+  have hspecial := _root_.hammingDist_triangle c.slice
+    (specialWord9 (P.m n) site) (specialWord9 (P.m n) start.1)
+  have hresidual := _root_.hammingDist_triangle c.location
+    (residualWord9 (P.m n) site) (residualWord9 (P.m n) start.1)
+  have hsliceRoot : _root_.hammingDist c.slice (specialWord9 (P.m n) start.1) ≤ 16 * R + 1 := by
+    exact (hspecial.trans (Nat.add_le_add hslice hspecialProj)).trans (by omega)
+  have hlocationRoot : _root_.hammingDist c.location (residualWord9 (P.m n) start.1) ≤
+      (P.radius n + 1) + 16 * R := by
+    exact (hresidual.trans (Nat.add_le_add hres hresidualProj)).trans (by omega)
+  have hlevelRoot : Nat.dist c.level.val start.2.val ≤ 8 * R + 2 := by
+    simpa [hcLevel] using hlevel
+  simp only [scaleSupport9, consulted9, Finset.mem_filter, Finset.mem_univ,
+    true_and, and_true]
+  exact ⟨⟨by omega, by omega⟩, hlevelRoot⟩
 
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :

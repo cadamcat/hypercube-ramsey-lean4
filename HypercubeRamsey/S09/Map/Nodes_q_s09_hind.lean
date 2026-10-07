@@ -363,6 +363,129 @@ theorem badIn9_finite_union_on_counts {P : Params9} {hc : HeightChoice9 P} {n : 
     _ ≤ (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) + Real.exp (-(n : ℝ)) :=
       add_le_add hqual hsmall
 
+private def diffSet9H {d : ℕ} (v u : CubeVertex d) : Finset (Fin d) :=
+  Finset.univ.filter (fun i => u i ≠ v i)
+
+private def vertexOfDiff9H {d : ℕ} (v : CubeVertex d) (s : Finset (Fin d)) : CubeVertex d :=
+  fun i => if i ∈ s then !(v i) else v i
+
+private def diffEquiv9H {d : ℕ} (v : CubeVertex d) : CubeVertex d ≃ Finset (Fin d) where
+  toFun := diffSet9H v
+  invFun := vertexOfDiff9H v
+  left_inv := by
+    intro u
+    funext i
+    by_cases hi : u i = v i
+    · simp [vertexOfDiff9H, diffSet9H, hi]
+    · have hmem : i ∈ diffSet9H v u := by simp [diffSet9H, hi]
+      have hbool : v i = !(u i) := by
+        cases hu : u i <;> cases hv : v i <;> simp_all
+      simp [vertexOfDiff9H, hmem, hbool]
+  right_inv := by
+    intro s
+    ext i
+    by_cases hi : i ∈ s
+    · simp [diffSet9H, vertexOfDiff9H, hi]
+    · simp [diffSet9H, vertexOfDiff9H, hi]
+
+private theorem diffSet9H_card {d : ℕ} (v u : CubeVertex d) :
+    (diffSet9H v u).card = _root_.hammingDist u v := by
+  simp [diffSet9H, _root_.hammingDist, ne_comm]
+
+private def ballToSubsets9H {d r : ℕ} (v : CubeVertex d) :
+    {u : CubeVertex d // _root_.hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
+  toFun u := ⟨diffSet9H v u.1, by rw [diffSet9H_card]; exact u.2⟩
+  invFun s := ⟨vertexOfDiff9H v s.1, by
+    rw [← diffSet9H_card]
+    simp [diffSet9H, vertexOfDiff9H]
+    exact s.2⟩
+  left_inv := by
+    intro u
+    apply Subtype.ext
+    exact (diffEquiv9H v).left_inv u.1
+  right_inv := by
+    intro s
+    apply Subtype.ext
+    exact (diffEquiv9H v).right_inv s.1
+
+private def smallSubsetFiberEquiv9H (d r : ℕ) (i : Fin (r + 1)) :
+    {s : {s : Finset (Fin d) // s.card ≤ r} // (⟨s.1.card, by omega⟩ : Fin (r + 1)) = i} ≃
+      {s : Finset (Fin d) // s.card = i.val} where
+  toFun s := ⟨s.1.1, by
+    have h := congrArg Fin.val s.2
+    simpa using h⟩
+  invFun s := ⟨⟨s.1, by rw [s.2]; omega⟩, by
+    apply Fin.ext
+    exact s.2⟩
+  left_inv := by
+    intro s
+    apply Subtype.ext
+    apply Subtype.ext
+    rfl
+  right_inv := by
+    intro s
+    apply Subtype.ext
+    rfl
+
+private def subsetsSmallEquiv9H (d r : ℕ) :
+    {s : Finset (Fin d) // s.card ≤ r} ≃
+      Σ i : Fin (r + 1), {s : Finset (Fin d) // s.card = i.val} := by
+  let f : {s : Finset (Fin d) // s.card ≤ r} → Fin (r + 1) :=
+    fun s => ⟨s.1.card, by omega⟩
+  exact (Equiv.sigmaFiberEquiv f).symm.trans
+    (Equiv.sigmaCongrRight (smallSubsetFiberEquiv9H d r))
+
+private theorem card_small_subsets9H (d r : ℕ) :
+    Fintype.card {s : Finset (Fin d) // s.card ≤ r} =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  rw [Fintype.card_congr (subsetsSmallEquiv9H d r), Fintype.card_sigma]
+  have hfiber (i : Fin (r + 1)) :
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Nat.choose d i.val := by
+    let S : Finset (Finset (Fin d)) := Finset.univ.powersetCard i.val
+    let e : {s : Finset (Fin d) // s.card = i.val} ≃ S :=
+      { toFun := fun s => ⟨s.1, by
+          rw [Finset.mem_powersetCard]
+          exact ⟨Finset.subset_univ _, s.2⟩⟩
+        invFun := fun s => ⟨s.1, (Finset.mem_powersetCard.mp s.2).2⟩
+        left_inv := by intro s; apply Subtype.ext; rfl
+        right_inv := by intro s; apply Subtype.ext; rfl }
+    calc
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Fintype.card S := Fintype.card_congr e
+      _ = S.card := Fintype.card_coe S
+      _ = Nat.choose d i.val := by simp [S, Finset.card_powersetCard]
+  simp_rw [hfiber]
+  rw [← Fin.sum_univ_eq_sum_range]
+
+private theorem hammingBall9H_card (d r : ℕ) (v : CubeVertex d) :
+    (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  have hcard : Fintype.card {u : CubeVertex d // _root_.hammingDist u v ≤ r} =
+      (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card := by
+    simpa using (Fintype.card_subtype (fun u : CubeVertex d => _root_.hammingDist u v ≤ r))
+  exact hcard.symm.trans ((Fintype.card_congr (ballToSubsets9H v)).trans
+    (card_small_subsets9H d r))
+
+private theorem hammingBall9H_card_le (d r : ℕ) (v : CubeVertex d) :
+    (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card ≤
+      (r + 1) * (d + 1) ^ r := by
+  classical
+  rw [hammingBall9H_card]
+  have hterm (i : ℕ) (hi : i ∈ Finset.range (r + 1)) : Nat.choose d i ≤ (d + 1) ^ r := by
+    have hir : i ≤ r := by simp only [Finset.mem_range] at hi; omega
+    calc
+      Nat.choose d i ≤ Nat.choose (d + 1) i := Nat.choose_le_succ d i
+      _ ≤ (d + 1) ^ i := Nat.choose_le_pow _ _
+      _ ≤ (d + 1) ^ r := Nat.pow_le_pow_right (by omega) hir
+  calc
+    (∑ i ∈ Finset.range (r + 1), Nat.choose d i) ≤
+        ∑ i ∈ Finset.range (r + 1), (d + 1) ^ r := by
+          apply Finset.sum_le_sum
+          intro i hi
+          exact hterm i hi
+    _ = (r + 1) * (d + 1) ^ r := by simp
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

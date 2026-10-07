@@ -520,6 +520,83 @@ private def scaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
       ((_root_.hammingDist endpoint.1 start.1 + 1) / 2) ∧
     (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
 
+private noncomputable def scaleBall9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (start : HeightState9 P hc n) (R : ℕ) : Finset (HeightState9 P hc n) :=
+  Finset.univ.filter (fun x => _root_.hammingDist x.1 start.1 ≤ 16 * R ∧
+    Nat.dist x.2.val start.2.val ≤ 8 * R)
+
+private theorem heightPath9_head_bounds_of_good {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 bad) l start) (hgood : ∀ x ∈ l, ¬ bad x) :
+    ∃ endpoint, l.head? = some endpoint ∧ endpoint.2.val ≤ start.2.val ∧
+      _root_.hammingDist endpoint.1 start.1 ≤ 2 * (start.2.val - endpoint.2.val) := by
+  induction hp with
+  | singleton x => exact ⟨x, by simp, by omega, by simp⟩
+  | @cons x y rest start hstep htail ih =>
+      have hygood : ¬ bad y := hgood y (by simp)
+      have hgoodTail : ∀ z ∈ y :: rest, ¬ bad z := by
+        intro z hz
+        exact hgood z (by simp [hz])
+      obtain ⟨endpoint, hhead, hlevel, hspace⟩ := ih hgoodTail
+      have hendpoint : endpoint = y := by simpa using hhead.symm
+      subst endpoint
+      rcases hstep with ⟨hsite, hstepLevel, hbad⟩ | ⟨hstepLevel, hstepSite⟩
+      · exact False.elim (hygood hbad)
+      · refine ⟨x, by simp, ?_, ?_⟩
+        · omega
+        · have hstepSite' : _root_.hammingDist x.1 y.1 ≤ 2 := by
+            simpa [_root_.hammingDist_comm] using hstepSite
+          have htri := _root_.hammingDist_triangle x.1 y.1 start.1
+          calc
+            _root_.hammingDist x.1 start.1 ≤
+                _root_.hammingDist x.1 y.1 + _root_.hammingDist y.1 start.1 := htri
+            _ ≤ 2 + 2 * (start.2.val - y.2.val) := Nat.add_le_add hstepSite' hspace
+            _ = 2 * (start.2.val - x.2.val) := by omega
+
+private theorem scaleFailure9_forces_bad {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {C : Finset (Pos9 P hc n)} {t s η : ℝ} {R : ℕ}
+    {Pp A : Pos9 P hc n → Bool} {start : HeightState9 P hc n}
+    (hfail : scaleFailure9 C t s η R Pp A start)
+    (hη : 0 ≤ η) (hηhalf : η ≤ 1 / 2) (hR : 0 < R) :
+    ∃ x ∈ scaleBall9 start R, scaleBad9 C t s Pp A x := by
+  classical
+  by_contra hnone
+  push_neg at hnone
+  obtain ⟨endpoint, rest, hpath, hsite, hlevel, hmetric, hrise⟩ := hfail
+  have hgood : ∀ x ∈ endpoint :: rest, ¬ scaleBad9 C t s Pp A x := by
+    intro x hx hbad
+    have hxball : x ∈ scaleBall9 start R := by
+      simp [scaleBall9, hsite x hx, hlevel x hx]
+    exact hnone x hxball hbad
+  have hbounds := heightPath9_head_bounds_of_good hpath hgood
+  obtain ⟨head, hhead, hheadLevel, hheadSpace⟩ := hbounds
+  have hheadEq : head = endpoint := by simpa using hhead.symm
+  subst head
+  let k := start.2.val - endpoint.2.val
+  have hdistLevel : Nat.dist endpoint.2.val start.2.val = k := by
+    dsimp [k]
+    exact Nat.dist_eq_sub_of_le hheadLevel
+  have hspaceMetric : (_root_.hammingDist endpoint.1 start.1 + 1) / 2 ≤ k := by
+    dsimp [k] at hheadSpace ⊢
+    omega
+  have hmax : max (Nat.dist endpoint.2.val start.2.val)
+      ((_root_.hammingDist endpoint.1 start.1 + 1) / 2) ≤ k := by
+    exact max_le (by rw [hdistLevel]) hspaceMetric
+  have hkcast : (k : ℝ) ≤ η * (R : ℝ) := by
+    have hkEq : (k : ℝ) = (start.2.val : ℝ) - (endpoint.2.val : ℝ) := by
+      dsimp [k]
+      rw [Nat.cast_sub hheadLevel]
+    rw [hkEq]
+    linarith [hrise]
+  have hkhalf : (k : ℝ) ≤ (R : ℝ) / 2 := by
+    have hmul := mul_le_mul_of_nonneg_right hηhalf (Nat.cast_nonneg R)
+    nlinarith [hkcast, hmul]
+  have htwoReal : (2 : ℝ) * (k : ℝ) ≤ (R : ℝ) := by nlinarith [hkhalf]
+  have htwo : 2 * k ≤ R := by exact_mod_cast htwoReal
+  have hRk : R ≤ k := hmetric.trans hmax
+  omega
+
 private theorem reach_level_le_for_path9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (vq : CubeVertex n) (R : ℕ)
     {v : CubeVertex n} {j : ℕ}

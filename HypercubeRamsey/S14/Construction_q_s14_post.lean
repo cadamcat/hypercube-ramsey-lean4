@@ -67,6 +67,42 @@ theorem sum_pi_splitAt {ι : Type*} [Fintype ι] [DecidableEq ι]
           intro r hr
           ring
 
+theorem sum_pi_grouped {G B Y A : Type*} [Fintype G] [DecidableEq G]
+    [Fintype B] [Fintype Y]
+    (grp : Y → G) (q : G → B → ℝ) (u : G → B → A → ℝ)
+    (f : Y → A) :
+    (∑ d : G → B, (∏ g, q g (d g)) *
+        ∏ y, u (grp y) (d (grp y)) (f y)) =
+      ∏ g, ∑ b, q g b *
+        ∏ y, if grp y = g then u g b (f y) else 1 := by
+  classical
+  have hrole (d : G → B) :
+      (∏ y, u (grp y) (d (grp y)) (f y)) =
+        ∏ g, ∏ y, if grp y = g then u g (d g) (f y) else 1 := by
+    calc
+      _ = ∏ y, ∏ g, if grp y = g then u g (d g) (f y) else 1 := by
+        apply Finset.prod_congr rfl
+        intro y hy
+        rw [Finset.prod_eq_single (grp y)]
+        · simp
+        · intro g hg hne
+          simp [eq_comm, hne]
+        · simp
+      _ = ∏ g, ∏ y, if grp y = g then u g (d g) (f y) else 1 := Finset.prod_comm
+  calc
+    _ = ∑ d : G → B, ∏ g, q g (d g) *
+        (∏ y, if grp y = g then u g (d g) (f y) else 1) := by
+      apply Finset.sum_congr rfl
+      intro d hd
+      rw [hrole d]
+      rw [Finset.prod_mul_distrib]
+    _ = ∑ d : G → B, ∏ g,
+        (q g (d g) * ∏ y, if grp y = g then u g (d g) (f y) else 1) := rfl
+    _ = ∏ g, ∑ b, q g b * ∏ y,
+        if grp y = g then u g b (f y) else 1 := by
+      exact (Fintype.prod_sum
+        (fun g b => q g b * ∏ y, if grp y = g then u g b (f y) else 1)).symm
+
 theorem expect_comp_eq_sum_pr {α β : Type*} [Fintype α] [Fintype β]
     (P : FinLaw α) (f : α → β) (g : β → ℝ) :
     P.E (fun a => g (f a)) = ∑ b, P.pr (fun a => f a = b) * g b := by

@@ -755,6 +755,99 @@ private theorem antitoneTickCount_le (T j : ℕ) :
         (Nat.choose (T + j) j : ℝ) := by exact_mod_cast hcard
   exact hcard'.trans hchoose
 
+private theorem eventPriority_tick_le {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}
+    {Ω : R → Type*} (c d : ClockCandidate T R g Ω)
+    (h : eventPriority d < eventPriority c) : d.2.2.1.val ≤ c.2.2.1.val := by
+  let base := Fintype.card R * g
+  let low (e : ClockCandidate T R g Ω) := (Fintype.equivFin R e.1).val * g + e.2.1.val
+  have hlow (e : ClockCandidate T R g Ω) : low e < base := by
+    dsimp [low, base]
+    calc
+      (Fintype.equivFin R e.1).val * g + e.2.1.val <
+          (Fintype.equivFin R e.1).val * g + g := Nat.add_lt_add_left e.2.1.isLt _
+      _ = Nat.succ (Fintype.equivFin R e.1).val * g := by rw [Nat.succ_mul]
+      _ ≤ Fintype.card R * g :=
+        Nat.mul_le_mul_right g (Nat.succ_le_of_lt (Fintype.equivFin R e.1).isLt)
+  have hkey (e : ClockCandidate T R g Ω) :
+      eventPriority e = e.2.2.1.val * base + low e := by
+    simp [eventPriority, base, low, Nat.add_assoc]
+  by_contra hnot
+  have htime : c.2.2.1.val + 1 ≤ d.2.2.1.val := by omega
+  have hcut : (c.2.2.1.val + 1) * base ≤ eventPriority d := by
+    rw [hkey d]
+    calc
+      (c.2.2.1.val + 1) * base ≤ d.2.2.1.val * base := Nat.mul_le_mul_right base htime
+      _ ≤ d.2.2.1.val * base + low d := Nat.le_add_right _ _
+  have hc : eventPriority c < (c.2.2.1.val + 1) * base := by
+    rw [hkey c]
+    calc
+      c.2.2.1.val * base + low c < c.2.2.1.val * base + base := Nat.add_lt_add_left (hlow c) _
+      _ = (c.2.2.1.val + 1) * base := by rw [Nat.succ_mul]
+  omega
+
+private theorem pathCandidateTicks_antitone {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} {j : ℕ} (π : Fin j → ClockCandidate T R g Ω)
+    (hstrict : ∀ i i', i < i' → eventPriority (π i') < eventPriority (π i)) :
+    Antitone fun i => (π i).2.2.1.val := by
+  apply (antitone_iff_forall_lt).2
+  intro i i' hii
+  exact eventPriority_tick_le (π i) (π i') (hstrict i i' hii)
+
+private theorem samplingTickWeight_le_mark {T : ℕ} {R : Type*} {g : ℕ}
+    {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a))
+    (lab : ∀ a, Ω a → Fin g) (e : RowLabel R g) (t : Fin T) (o : Ω e.1) :
+    (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab e).w (.tick t o) ≤
+      δ * outputMarkMass (p e.1) (lab e.1) e.2 o := by
+  have hr0 := labMarg_nonneg (p e.1) (lab e.1) e.2
+  have hr1 := labMarg_le_one (p e.1) (lab e.1) e.2
+  have hδr0 : 0 ≤ δ * labMarg (p e.1) (lab e.1) e.2 := mul_nonneg hδ hr0
+  have hδr1 : δ * labMarg (p e.1) (lab e.1) e.2 ≤ 1 := by
+    calc
+      δ * labMarg (p e.1) (lab e.1) e.2 ≤ δ * 1 := mul_le_mul_of_nonneg_left hr1 hδ
+      _ ≤ 1 := by simpa only [mul_one] using hδ1
+  have hbase0 : 0 ≤ 1 - δ * labMarg (p e.1) (lab e.1) e.2 := sub_nonneg.mpr hδr1
+  have hbase1 : 1 - δ * labMarg (p e.1) (lab e.1) e.2 ≤ 1 := by linarith
+  have hsurv : survival δ (labMarg (p e.1) (lab e.1) e.2) t.val ≤ 1 := by
+    exact pow_le_one₀ hbase0 hbase1
+  have hmark : 0 ≤ outputMarkMass (p e.1) (lab e.1) e.2 o := by
+    unfold outputMarkMass
+    split_ifs
+    · exact (p e.1).nonneg o
+    · exact le_rfl
+  simpa [samplingEdgeClockLaw, outputEdgeClockLaw, markedClockLaw, markedClockWeight] using
+    (calc
+      survival δ (labMarg (p e.1) (lab e.1) e.2) t.val * δ *
+          outputMarkMass (p e.1) (lab e.1) e.2 o ≤
+        1 * δ * outputMarkMass (p e.1) (lab e.1) e.2 o := by
+          exact mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_right hsurv hδ) hmark
+      _ = δ * outputMarkMass (p e.1) (lab e.1) e.2 o := by ring)
+
+private theorem pathWeight_le_markProduct {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a))
+    (lab : ∀ a, Ω a → Fin g) {j : ℕ} (π : Fin j → ClockCandidate T R g Ω) :
+    pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π ≤
+      δ ^ j * ∏ i, outputMarkMass (p (π i).1) (lab (π i).1) (π i).2.1 (π i).2.2.2 := by
+  classical
+  rw [pathWeight]
+  calc
+    (∏ i, (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab
+        ((π i).1, (π i).2.1)).w
+        (MeshClockValue.tick (π i).2.2.1 (π i).2.2.2)) ≤
+        ∏ i, δ * outputMarkMass (p (π i).1) (lab (π i).1) (π i).2.1 (π i).2.2.2 := by
+          apply Finset.prod_le_prod₀
+          · intro i hi
+            exact (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab
+              ((π i).1, (π i).2.1)).nonneg _
+          · intro i hi
+            exact samplingTickWeight_le_mark δ hδ hδ1 p lab
+              ((π i).1, (π i).2.1) (π i).2.2.1 (π i).2.2.2
+    _ = δ ^ j * ∏ i, outputMarkMass (p (π i).1) (lab (π i).1) (π i).2.1 (π i).2.2.2 := by
+          rw [Finset.prod_mul_distrib]
+          simp
+
 theorem decPath_weight_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}
     {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g) (θ : ℝ)
@@ -762,6 +855,101 @@ theorem decPath_weight_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g 
     (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1) (v : Endpoint R g) (j : ℕ) :
     ∑ r, ∑ π ∈ decPaths r v j, pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π ≤
       θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ) := by
+  classical
+  let PathIndex :=
+    Σ r : Endpoint R g, {π : Fin j → ClockCandidate T R g Ω // π ∈ decPaths r v j}
+  let WalkIndex :=
+    {q : (Fin (j + 1) → Endpoint R g) × (Fin j → ClockCandidate T R g Ω) //
+      q.1 (Fin.last j) = v ∧
+      (∀ i : Fin j,
+        (q.1 i.castSucc = Sum.inl (q.2 i).1 ∧ q.1 i.succ = Sum.inr (q.2 i).2.1) ∨
+        (q.1 i.castSucc = Sum.inr (q.2 i).2.1 ∧ q.1 i.succ = Sum.inl (q.2 i).1)) ∧
+      Antitone fun i => (q.2 i).2.2.1.val}
+  letI : Fintype WalkIndex := Fintype.ofFinite WalkIndex
+  let pathTerm (π : Fin j → ClockCandidate T R g Ω) : ℝ :=
+    δ ^ j * ∏ i, outputMarkMass (p (π i).1) (lab (π i).1) (π i).2.1 (π i).2.2.2
+  have hπattach (r : Endpoint R g) :
+      (∑ π : {π : Fin j → ClockCandidate T R g Ω // π ∈ decPaths r v j},
+          pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π.1) =
+        ∑ π ∈ decPaths r v j,
+          pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π := by
+    rw [Finset.univ_eq_attach]
+    exact Finset.sum_attach (decPaths r v j) _
+  have hsource :
+      (∑ r, ∑ π ∈ decPaths r v j,
+        pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π) =
+        ∑ q : PathIndex, pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) q.2.1 := by
+    calc
+      (∑ r, ∑ π ∈ decPaths r v j,
+          pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π) =
+          ∑ r, ∑ π : {π : Fin j → ClockCandidate T R g Ω // π ∈ decPaths r v j},
+            pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π.1 := by
+              apply Finset.sum_congr rfl
+              intro r hr
+              exact (hπattach r).symm
+      _ = ∑ q : PathIndex, pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) q.2.1 := by
+            change (∑ r, ∑ π : {π : Fin j → ClockCandidate T R g Ω // π ∈ decPaths r v j},
+              pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π.1) = _
+            rw [← Fintype.sum_sigma']
+  have hdec (q : PathIndex) : IsDecPath q.1 v q.2.1 := by
+    have hm := q.2.2
+    change q.2.1 ∈ Finset.univ.filter (fun π => IsDecPath q.1 v π) at hm
+    exact (Finset.mem_filter.mp hm).2
+  let selectedWalk (q : PathIndex) : Fin (j + 1) → Endpoint R g :=
+    Classical.choose (hdec q)
+  have hselected (q : PathIndex) :
+      selectedWalk q 0 = q.1 ∧ selectedWalk q (Fin.last j) = v ∧
+      (∀ i : Fin j,
+        (selectedWalk q i.castSucc = Sum.inl (q.2.1 i).1 ∧
+          selectedWalk q i.succ = Sum.inr (q.2.1 i).2.1) ∨
+        (selectedWalk q i.castSucc = Sum.inr (q.2.1 i).2.1 ∧
+          selectedWalk q i.succ = Sum.inl (q.2.1 i).1)) ∧
+      (∀ i : Fin j, eventPriority (q.2.1 i) < rootHorizon T R g) ∧
+      (∀ i i' : Fin j, i < i' → eventPriority (q.2.1 i') < eventPriority (q.2.1 i)) := by
+    exact Classical.choose_spec (hdec q)
+  let toWalk (q : PathIndex) : WalkIndex := by
+    refine ⟨(selectedWalk q, q.2.1), ?_⟩
+    rcases hselected q with ⟨_, hlast, hedges, _, hstrict⟩
+    exact ⟨hlast, hedges, pathCandidateTicks_antitone q.2.1 hstrict⟩
+  have htoWalk : Function.Injective toWalk := by
+    intro q q' h
+    rcases q with ⟨r, π⟩
+    rcases q' with ⟨r', π'⟩
+    have hpair : (selectedWalk ⟨r, π⟩, π.1) = (selectedWalk ⟨r', π'⟩, π'.1) :=
+      congrArg Subtype.val h
+    have hwalk : selectedWalk ⟨r, π⟩ = selectedWalk ⟨r', π'⟩ := congrArg Prod.fst hpair
+    have hπ : π.1 = π'.1 := congrArg Prod.snd hpair
+    have hroot : r = r' := by
+      calc
+        r = selectedWalk ⟨r, π⟩ 0 := (hselected ⟨r, π⟩).1.symm
+        _ = selectedWalk ⟨r', π'⟩ 0 := by rw [hwalk]
+        _ = r' := (hselected ⟨r', π'⟩).1
+    cases hroot
+    have hπ' : π = π' := Subtype.ext hπ
+    cases hπ'
+    rfl
+  have hmapSum :
+      (∑ q : PathIndex, pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) q.2.1) ≤
+        ∑ q : WalkIndex, pathTerm q.1.2 := by
+    calc
+      (∑ q : PathIndex, pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) q.2.1) ≤
+          ∑ q : PathIndex, pathTerm q.2.1 := by
+            apply Finset.sum_le_sum
+            intro q hq
+            exact pathWeight_le_markProduct δ hδ hδ1 p lab q.2.1
+      _ = ∑ q ∈ (Finset.univ.image toWalk), pathTerm q.1.2 := by
+            symm
+            rw [Finset.sum_image htoWalk.injOn]
+      _ ≤ ∑ q : WalkIndex, pathTerm q.1.2 := by
+            apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+            intro q hq hqnot
+            dsimp [pathTerm]
+            apply mul_nonneg (pow_nonneg hδ j)
+            exact Finset.prod_nonneg fun i hi => by
+              unfold outputMarkMass
+              split_ifs
+              · exact (p (q.1.2 i).1).nonneg _
+              · exact le_rfl
   sorry
 
 open Classical in

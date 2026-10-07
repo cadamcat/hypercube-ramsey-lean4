@@ -1,4 +1,5 @@
 import HypercubeRamsey.S11.Needs
+import HypercubeRamsey.S11.Core
 
 /-!
 Section 11's two interfaces to the stage-level assembly. The embedding node is the frozen one-shot boundary for
@@ -39,7 +40,8 @@ theorem linear_jump_embedding_core (δ x₀ h₀ : ℚ) (κ : ℝ)
       AvailableAt κ
         (PBias (pw ((1 / 100 : ℚ) : ℝ)) (lw ((1 / 100 : ℚ) : ℝ)) (h₀ : ℝ)).toPatch
         n N E X Y →
-      CubeAt n N E := by
-  sorry
+    CubeAt n N E := by
+  exact HypercubeRamsey.S11.Core.linear_jump_core_from_nodes δ x₀ h₀ κ
+    hδ hδ1 hx₀ hx₀1 hh₀ hh₀1 hκ
 
 end HypercubeRamsey.S11

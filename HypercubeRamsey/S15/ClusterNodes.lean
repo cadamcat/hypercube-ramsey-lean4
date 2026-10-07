@@ -76,13 +76,14 @@ def ClusterMassClaim (κ : CConsts) (T : Stage) : Prop :=
 /-- L15.2a: the raw alarm-one probability and deterministic crossing-removal bound. -/
 theorem high_cluster_degree_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterAlarmTestClaim κ T := by
-  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.cluster_crossing_removed_eventually
-    κ hκ T hDeep] with k hk
+  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.raw_degree_alarm_probability κ hκ T hDeep,
+    HypercubeRamsey.Lane_sol_s15_alarm.cluster_crossing_removed_eventually κ hκ T hDeep]
+    with k hraw hcross
   intro PT hPT hm a
   constructor
-  · sorry
+  · exact hraw PT hPT hm a
   · intro W
-    simpa only [clusterCrossingRemovedMass] using hk PT hPT hm W a
+    simpa only [clusterCrossingRemovedMass] using hcross PT hPT hm W a
 
 /-- L15.2b: the raw mean large-interaction estimate. -/
 theorem high_cluster_interaction_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

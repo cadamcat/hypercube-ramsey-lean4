@@ -1978,4 +1978,363 @@ theorem degree_product_failure_le {A G : Type*} [Fintype A] [DecidableEq G]
     _ ≤ P.pr O + P.pr T := HypercubeRamsey.Lane_q_s15_direct.finLaw_pr_union P O T
     _ ≤ δ + ε := add_le_add ((finite_probability_exists_le P s (fun g a => 2 * b < |D g a - 1 / 2|)).trans hbad) htail
 
+
+private theorem bulk_card_le (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : EvenPosition T k) :
+    (clusterBulkNeighbours PT hPT a).card ≤ T.S.n k := by
+  apply le_trans (Finset.card_le_card _) (HypercubeRamsey.Lane_q_s15_direct.star_card_le a)
+  intro b hb
+  exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb).2.1⟩
+
+/-- The actual bulk-product failure bound at a first label with small raw outlier probability. -/
+theorem raw_J0_failure_bound_at (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (x : Fin (T.S.N k))
+    (hn : 0 < T.S.n k) (hs : (clusterBulkNeighbours PT hPT a).Nonempty)
+    (hbsmall : bstar T k ≤ 1 / 1000)
+    (hsize : (T.S.n k : ℝ) * (bstar T k) ^ 2 ≤ 1 / 100000)
+    (δ : ℝ) (hδb : δ ≤ bstar T k) (hδt : δ ≤ 1 / 200)
+    (htail : (T.S.n k : ℝ) ^ (0.5 : ℝ) ≤ 1 / (320000 * (T.S.n k : ℝ) * (bstar T k) ^ 2))
+    (hx : x ∈ (PT.tiling.P (patchAt PT hPT a.1)).X)
+    (hbad : (∑ b ∈ clusterBulkNeighbours PT hPT a,
+      (clusterHistoryLaw PT hPT hm).pr
+        (fun W => 2 * bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2|)) ≤ δ) :
+    (clusterHistoryLaw PT hPT hm).pr (fun W => ¬ clusterJ0 PT hPT hm W a x) ≤
+      δ + 2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ)) := by
+  let S := clusterBulkNeighbours PT hPT a
+  let P := clusterHistoryLaw PT hPT hm
+  let d := deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w x
+  have hb : 0 < bstar T k := by unfold bstar; exact Real.rpow_pos_of_pos (Nat.cast_pos.mpr hn) _
+  have hmc : (0 : ℝ) < S.card := Nat.cast_pos.mpr (Finset.card_pos.mpr hs)
+  have hmle : (S.card : ℝ) ≤ T.S.n k := by exact_mod_cast bulk_card_le PT hPT a
+  have hB : 0 < Fintype.card (BulkIndex PT hPT a) := by
+    simpa [BulkIndex, Fintype.card_coe] using Finset.card_pos.mpr hs
+  have hct := clipped_bulk_degree_tail PT hPT hm a x hn hB (1 / 200) (by norm_num)
+  have hsum1 (W : ClusterHistory PT hPT hm) :
+      (∑ b : BulkIndex PT hPT a, clip_half (bstar T k) (clusterDegree PT hPT hm W b.1 x)) =
+      ∑ b ∈ S, clip_half (bstar T k) (clusterDegree PT hPT hm W b x) := by
+    exact Finset.sum_coe_sort S
+      (fun b : OddPosition T k => clip_half (bstar T k) (clusterDegree PT hPT hm W b x))
+  have hsum2 : (∑ b : BulkIndex PT hPT a, P.E
+      (fun W => clip_half (bstar T k) (clusterDegree PT hPT hm W b.1 x))) =
+      ∑ b ∈ S, P.E (fun W => clip_half (bstar T k) (clusterDegree PT hPT hm W b x)) := by
+    exact Finset.sum_coe_sort S
+      (fun b : OddPosition T k => P.E (fun W => clip_half (bstar T k) (clusterDegree PT hPT hm W b x)))
+  have hcard : Fintype.card (BulkIndex PT hPT a) = S.card := by exact Fintype.card_coe S
+  simp_rw [hsum1] at hct
+  rw [hcard] at hct
+  have hct' : P.pr (fun W => (1 / 200 : ℝ) ≤
+      |(∑ b ∈ S, clip_half (bstar T k) (clusterDegree PT hPT hm W b x)) -
+      ∑ b ∈ S, P.E (fun W => clip_half (bstar T k) (clusterDegree PT hPT hm W b x))|) ≤
+        2 * Real.exp (-(1 / (320000 * (S.card : ℝ) * (bstar T k) ^ 2))) := by
+    have heq : 2 * (1 / 200 : ℝ) ^ 2 / ((S.card : ℝ) * (4 * bstar T k) ^ 2) =
+        1 / (320000 * (S.card : ℝ) * (bstar T k) ^ 2) := by field_simp <;> ring
+    change P.pr _ ≤ _ at hct
+    rw [hsum2] at hct
+    simpa only [heq] using hct
+  have hinv : 1 / (320000 * (T.S.n k : ℝ) * (bstar T k) ^ 2) ≤
+      1 / (320000 * (S.card : ℝ) * (bstar T k) ^ 2) := by
+    apply one_div_le_one_div_of_le (by positivity)
+    nlinarith [mul_le_mul_of_nonneg_right hmle (sq_nonneg (bstar T k))]
+  have hct'' : P.pr (fun W => (1 / 200 : ℝ) ≤
+      |(∑ b ∈ S, clip_half (bstar T k) (clusterDegree PT hPT hm W b x)) -
+      ∑ b ∈ S, P.E (fun W => clip_half (bstar T k) (clusterDegree PT hPT hm W b x))|) ≤
+        2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ)) := by
+    apply hct'.trans
+    apply mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr _) (by norm_num)
+    linarith [htail.trans hinv]
+  have hp := degree_product_failure_le P S hs
+    (fun b W => clusterDegree PT hPT hm W b x) d (bstar T k) δ
+    (2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ))) hb.le hbsmall hδb hδt
+    (fun b hb W => cluster_degree_bounds PT hPT hm W b x)
+    (fun b hb => by
+      rw [raw_degree_mean]
+      have hpatch := (Finset.mem_filter.mp hb).2.2.1
+      simp only [d, hpatch]) hbad
+    ((mul_le_mul_of_nonneg_right hmle (sq_nonneg (bstar T k))).trans hsize) hct''
+  simpa [clusterJ0, hx, S, d, P] using hp
+
+private theorem finite_mean_removed_bound {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinLaw A) (Q : FinLaw B) (E : A → B → Prop) (φ : B → ℝ)
+    (hφ : ∀ b, 0 ≤ φ b) (δ η ε : ℝ) (hδ : 0 < δ) (hε : 0 ≤ ε)
+    (hmean : Q.E φ ≤ η)
+    (hpoint : ∀ b, Q.w b ≠ 0 → φ b ≤ δ → P.pr (fun a => E a b) ≤ ε) :
+    P.E (fun a => Q.pr (E a)) ≤ η / δ + ε := by
+  rw [← finite_fubini_probability]
+  have hmark := HypercubeRamsey.Lane_q_s15_c1.finLaw_pr_gt_le_E_div Q φ hφ δ hδ
+  calc
+    Q.E (fun b => P.pr (fun a => E a b)) ≤ Q.pr (fun b => δ < φ b) + ε := by
+      have he : Q.pr (fun b => δ < φ b) + ε =
+          ∑ b, ((if δ < φ b then Q.w b else 0) + Q.w b * ε) := by
+        unfold FinLaw.pr
+        rw [Finset.sum_add_distrib, ← Finset.sum_mul, Q.sum_one, one_mul]
+      rw [he]
+      apply Finset.sum_le_sum
+      intro b _
+      by_cases hw : Q.w b = 0
+      · simp [hw]
+      · by_cases hbad : δ < φ b
+        · rw [if_pos hbad]
+          have hp := (finite_probability_bounds P (fun a => E a b)).2
+          nlinarith [Q.nonneg b, mul_le_mul_of_nonneg_left hp (Q.nonneg b), mul_nonneg (Q.nonneg b) hε]
+        · rw [if_neg hbad, zero_add]
+          exact mul_le_mul_of_nonneg_left (hpoint b hw (le_of_not_gt hbad)) (Q.nonneg b)
+    _ ≤ Q.E φ / δ + ε := add_le_add hmark le_rfl
+    _ ≤ η / δ + ε := add_le_add (div_le_div_of_nonneg_right hmean hδ.le) le_rfl
+
+noncomputable def uniform_first_law (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (i : Fin PT.tiling.m) : FinLaw (Fin (T.S.N k)) where
+  w := (Law.unifCore (PT.tiling.P i).X (hPT.tiling_valid.patch_nonempty i).1).w
+  nonneg := (Law.unifCore (PT.tiling.P i).X (hPT.tiling_valid.patch_nonempty i).1).nonneg
+  sum_one := (Law.unifCore (PT.tiling.P i).X (hPT.tiling_valid.patch_nonempty i).1).sum_eq_one
+
+noncomputable def bulk_outlier_sum (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (x : Fin (T.S.N k)) : ℝ :=
+  ∑ b ∈ clusterBulkNeighbours PT hPT a, (clusterHistoryLaw PT hPT hm).pr
+    (fun W => 2 * bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2|)
+
+/-- Averaging the per-history uniform outlier bounds controls the first-label exceptional set. -/
+theorem mean_bulk_outliers_le (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (η : ℝ) (hη : 0 ≤ η)
+    (hout : ∀ W : ClusterHistory PT hPT hm, ∀ b ∈ clusterBulkNeighbours PT hPT a,
+      (∑ x, if 2 * bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2| then
+        (uniform_first_law PT hPT (patchAt PT hPT a.1)).w x else 0) ≤ η) :
+    (uniform_first_law PT hPT (patchAt PT hPT a.1)).E (bulk_outlier_sum PT hPT hm a) ≤
+      (T.S.n k : ℝ) * η := by
+  let Q := uniform_first_law PT hPT (patchAt PT hPT a.1)
+  let P := clusterHistoryLaw PT hPT hm
+  let S := clusterBulkNeighbours PT hPT a
+  unfold bulk_outlier_sum
+  rw [finite_expectation_sum]
+  calc
+    (∑ b ∈ S, Q.E (fun x => P.pr (fun W => 2 * bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2|))) ≤
+        ∑ b ∈ S, η := by
+      apply Finset.sum_le_sum
+      intro b hb
+      rw [finite_fubini_probability]
+      exact (finite_expectation_bounds P _ 0 η
+        (fun W => ⟨(finite_probability_bounds Q _).1, hout W b hb⟩)).2
+    _ = (S.card : ℝ) * η := by simp
+    _ ≤ _ := mul_le_mul_of_nonneg_right (by exact_mod_cast bulk_card_le PT hPT a) hη
+
+/-- The expected uniform mass removed by J0 is small before the final alarm Markov step. -/
+theorem mean_J0_removed_le (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (hn : 0 < T.S.n k)
+    (hs : (clusterBulkNeighbours PT hPT a).Nonempty)
+    (hbsmall : bstar T k ≤ 1 / 1000)
+    (hsize : (T.S.n k : ℝ) * (bstar T k) ^ 2 ≤ 1 / 100000)
+    (δ η : ℝ) (hδ : 0 < δ) (hη : 0 ≤ η)
+    (hδb : δ ≤ bstar T k) (hδt : δ ≤ 1 / 200)
+    (htail : (T.S.n k : ℝ) ^ (0.5 : ℝ) ≤ 1 / (320000 * (T.S.n k : ℝ) * (bstar T k) ^ 2))
+    (hout : ∀ W : ClusterHistory PT hPT hm, ∀ b ∈ clusterBulkNeighbours PT hPT a,
+      (∑ x, if 2 * bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2| then
+        (uniform_first_law PT hPT (patchAt PT hPT a.1)).w x else 0) ≤ η) :
+    (clusterHistoryLaw PT hPT hm).E (fun W =>
+      ∑ x, if clusterJ0 PT hPT hm W a x then 0 else
+        (uniform_first_law PT hPT (patchAt PT hPT a.1)).w x) ≤
+      (T.S.n k : ℝ) * η / δ + δ + 2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ)) := by
+  let P := clusterHistoryLaw PT hPT hm
+  let Q := uniform_first_law PT hPT (patchAt PT hPT a.1)
+  let φ := bulk_outlier_sum PT hPT hm a
+  have hφ : ∀ x, 0 ≤ φ x := by
+    intro x
+    unfold φ bulk_outlier_sum
+    exact Finset.sum_nonneg fun b _ => (finite_probability_bounds P _).1
+  have hmass := finite_mean_removed_bound P Q
+    (fun W x => ¬ clusterJ0 PT hPT hm W a x) φ hφ δ ((T.S.n k : ℝ) * η)
+    (δ + 2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ))) hδ (by positivity)
+    (mean_bulk_outliers_le PT hPT hm a η hη hout) (by
+      intro x hx hgood
+      have hxX : x ∈ (PT.tiling.P (patchAt PT hPT a.1)).X := by
+        by_contra h
+        apply hx
+        simp [Q, uniform_first_law, Law.unifCore, h]
+      exact raw_J0_failure_bound_at PT hPT hm a x hn hs hbsmall hsize δ hδb hδt htail hxX hgood)
+  have he (W : ClusterHistory PT hPT hm) : Q.pr (fun x => ¬ clusterJ0 PT hPT hm W a x) =
+      ∑ x, if clusterJ0 PT hPT hm W a x then 0 else Q.w x := by
+    unfold FinLaw.pr
+    apply Finset.sum_congr rfl
+    intro x _
+    by_cases h : clusterJ0 PT hPT hm W a x <;> simp [h]
+  simp_rw [he] at hmass
+  simpa only [add_assoc] using hmass
+
+private theorem degree_bsquare (n : ℝ) (hn : 0 < n) :
+    n * (n ^ (-0.96 : ℝ)) ^ 2 = n ^ (-0.92 : ℝ) := by
+  have hs : (n ^ (-0.96 : ℝ)) ^ 2 = n ^ (-1.92 : ℝ) := by
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hn.le]
+    congr 1
+    norm_num
+  rw [hs]
+  convert (Real.rpow_add hn (1 : ℝ) (-1.92 : ℝ)).symm using 1 <;> norm_num
+
+private theorem degree_removed_decay (α : ℝ) (hα : 0 < α) :
+    ∀ᶠ n : ℝ in atTop,
+      2 * n * Real.exp (-α * n / 2) + Real.exp (-α * n / 4) +
+        2 * Real.exp (-n ^ (0.5 : ℝ)) ≤ Real.exp (-2 * n ^ (0.2 : ℝ)) := by
+  have hlin : ∀ᶠ n : ℝ in atTop, 3 * n ≤ Real.exp ((α / 8) * n) := by
+    have he := (tendsto_exp_mul_div_rpow_atTop 1 (α / 8) (by positivity)).eventually_ge_atTop (3 : ℝ)
+    filter_upwards [he, eventually_ge_atTop (1 : ℝ)] with n hn hn1
+    have hn' : 3 ≤ Real.exp ((α / 8) * n) / n := by simpa using hn
+    exact (le_div_iff₀ (by linarith)).mp hn'
+  have hhalf : ∀ᶠ n : ℝ in atTop, 2 ≤ Real.exp (n ^ (0.5 : ℝ) / 2) :=
+    (Real.tendsto_exp_atTop.comp ((tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 0.5)).atTop_div_const (by norm_num))).eventually_ge_atTop _
+  have hsmall1 : ∀ᶠ n : ℝ in atTop, n ^ (0.2 : ℝ) ≤ (α / 24) * n := by
+    simpa only [Real.rpow_one] using real_eventually_rpow_le_mul
+      (p := 0.2) (q := 1) (c := α / 24) (by norm_num) (by positivity)
+  have hsmall2 : ∀ᶠ n : ℝ in atTop, n ^ (0.2 : ℝ) ≤ (1 / 6) * n ^ (0.5 : ℝ) :=
+    real_eventually_rpow_le_mul (by norm_num) (by norm_num)
+  have hfactor : ∀ᶠ n : ℝ in atTop, 2 ≤ Real.exp (n ^ (0.2 : ℝ)) :=
+    (Real.tendsto_exp_atTop.comp (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 0.2))).eventually_ge_atTop _
+  filter_upwards [hlin, hhalf, hsmall1, hsmall2, hfactor, eventually_ge_atTop (1 : ℝ)]
+    with n hnlin hnhalf hnsmall1 hnsmall2 hnfactor hn1
+  have hpos : 0 < n := by linarith
+  have hfirst : 2 * n * Real.exp (-α * n / 2) + Real.exp (-α * n / 4) ≤
+      Real.exp (-3 * n ^ (0.2 : ℝ)) := by
+    have he : Real.exp (-α * n / 2) ≤ Real.exp (-α * n / 4) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith
+    calc
+      _ ≤ 3 * n * Real.exp (-α * n / 4) := by
+        have hm := mul_le_mul_of_nonneg_left he (show 0 ≤ 2 * n by positivity)
+        have h1 := mul_le_mul_of_nonneg_right hn1 (Real.exp_pos (-α * n / 4)).le
+        nlinarith
+      _ ≤ Real.exp ((α / 8) * n) * Real.exp (-α * n / 4) :=
+        mul_le_mul_of_nonneg_right hnlin (Real.exp_pos _).le
+      _ = Real.exp (-(α / 8) * n) := by rw [← Real.exp_add]; congr 1; ring
+      _ ≤ _ := by apply Real.exp_le_exp.mpr; nlinarith
+  have hsecond : 2 * Real.exp (-n ^ (0.5 : ℝ)) ≤ Real.exp (-3 * n ^ (0.2 : ℝ)) := by
+    calc
+      _ ≤ Real.exp (n ^ (0.5 : ℝ) / 2) * Real.exp (-n ^ (0.5 : ℝ)) :=
+        mul_le_mul_of_nonneg_right hnhalf (Real.exp_pos _).le
+      _ = Real.exp (-n ^ (0.5 : ℝ) / 2) := by rw [← Real.exp_add]; congr 1; ring
+      _ ≤ _ := by apply Real.exp_le_exp.mpr; linarith
+  calc
+    _ ≤ 2 * Real.exp (-3 * n ^ (0.2 : ℝ)) := by linarith
+    _ ≤ Real.exp (n ^ (0.2 : ℝ)) * Real.exp (-3 * n ^ (0.2 : ℝ)) :=
+      mul_le_mul_of_nonneg_right hnfactor (Real.exp_pos _).le
+    _ = _ := by rw [← Real.exp_add]; congr 1; ring
+
+/-- Uniform numerical slack for the clipped-degree alarm proof. -/
+theorem degree_alarm_numeric_eventually (T : Stage) (α : ℝ) (hα : 0 < α) :
+    ∀ᶠ k in atTop,
+      0 < T.S.n k ∧ bstar T k ≤ 1 / 1000 ∧
+      (T.S.n k : ℝ) * (bstar T k) ^ 2 ≤ 1 / 100000 ∧
+      Real.exp (-α * T.S.n k / 4) ≤ bstar T k ∧
+      Real.exp (-α * T.S.n k / 4) ≤ 1 / 200 ∧
+      (T.S.n k : ℝ) ^ (0.5 : ℝ) ≤ 1 / (320000 * (T.S.n k : ℝ) * (bstar T k) ^ 2) ∧
+      2 * (T.S.n k : ℝ) * Real.exp (-α * T.S.n k / 2) +
+        Real.exp (-α * T.S.n k / 4) + 2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ)) ≤
+          Real.exp (-2 * (T.S.n k : ℝ) ^ (0.2 : ℝ)) := by
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hb : ∀ᶠ k in atTop, (T.S.n k : ℝ) ^ (-0.96 : ℝ) ≤ 1 / 1000 :=
+    ((tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 0.96)).comp hn).eventually
+      (Iic_mem_nhds (by norm_num : (0 : ℝ) < 1 / 1000))
+  have hs : ∀ᶠ k in atTop, (T.S.n k : ℝ) ^ (-0.92 : ℝ) ≤ 1 / 100000 :=
+    ((tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 0.92)).comp hn).eventually
+      (Iic_mem_nhds (by norm_num : (0 : ℝ) < 1 / 100000))
+  have hδlim : Tendsto (fun k => Real.exp (-α * T.S.n k / 4)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero 0 (α / 4) (by positivity)).comp hn
+    convert h using 1
+    funext k
+    simp only [Function.comp_apply, Real.rpow_zero, one_mul]
+    congr 1
+    ring
+  have hδ : ∀ᶠ k in atTop, Real.exp (-α * T.S.n k / 4) ≤ 1 / 200 :=
+    hδlim.eventually (Iic_mem_nhds (by norm_num : (0 : ℝ) < 1 / 200))
+  have hδratio : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ (0.96 : ℝ) * Real.exp (-(α / 4) * T.S.n k) ≤ 1 :=
+    ((tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero 0.96 (α / 4) (by positivity)).comp hn).eventually
+      (Iic_mem_nhds (by norm_num : (0 : ℝ) < 1))
+  have htail : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ (0.5 : ℝ) ≤ (1 / 320000) * (T.S.n k : ℝ) ^ (0.92 : ℝ) :=
+    hn.eventually (real_eventually_rpow_le_mul (by norm_num) (by norm_num))
+  filter_upwards [hb, hs, hδ, hδratio, htail, hn.eventually_ge_atTop 1,
+    hn.eventually (degree_removed_decay α hα)] with k hbk hsk hδk hδrk htk hnk hdec
+  have hn0 : 0 < (T.S.n k : ℝ) := by linarith
+  have hbdef : bstar T k = (T.S.n k : ℝ) ^ (-0.96 : ℝ) := by norm_num [bstar]
+  have hsq : (T.S.n k : ℝ) * (bstar T k) ^ 2 = (T.S.n k : ℝ) ^ (-0.92 : ℝ) := by
+    rw [hbdef]
+    exact degree_bsquare _ hn0
+  have hδb : Real.exp (-α * T.S.n k / 4) ≤ bstar T k := by
+    rw [hbdef, Real.rpow_neg hn0.le (0.96 : ℝ)]
+    rw [← one_div]
+    apply (le_div_iff₀ (Real.rpow_pos_of_pos hn0 (0.96 : ℝ))).mpr
+    have he : Real.exp (-α * T.S.n k / 4) = Real.exp (-(α / 4) * T.S.n k) := by congr 1; ring
+    rw [he, mul_comm]
+    exact hδrk
+  have heq : 1 / (320000 * (T.S.n k : ℝ) * (bstar T k) ^ 2) =
+      (1 / 320000) * (T.S.n k : ℝ) ^ (0.92 : ℝ) := by
+    rw [mul_assoc, hsq, Real.rpow_neg hn0.le (0.92 : ℝ)]
+    simp [one_div, mul_inv_rev, mul_comm]
+  refine ⟨by exact_mod_cast hn0, ?_, ?_, hδb, hδk, ?_, hdec⟩
+  · simpa only [hbdef] using hbk
+  · simpa only [hsq] using hsk
+  · simpa only [heq] using htk
+
+
+/-- The raw degree alarm probability from clipping, concentration and two finite Markov steps. -/
+theorem raw_degree_alarm_probability (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ a : EvenPosition T k,
+        (clusterHistoryLaw PT hPT hm).pr (fun W => clusterAlarm1 PT hPT hm W a) ≤
+          Real.exp (-(T.S.n k : ℝ) ^ (0.2 : ℝ)) := by
+  filter_upwards [cluster_degree_outlier_eventually κ hκ T hDeep,
+    bulk_nonempty_eventually κ hκ T, degree_alarm_numeric_eventually T κ.α hκ.α_rng.1]
+    with k hout hbulk hnum
+  intro PT hPT hm a
+  rcases hnum with ⟨hn, hbsmall, hsize, hδb, hδt, htail, hdec⟩
+  let P := clusterHistoryLaw PT hPT hm
+  let Q := uniform_first_law PT hPT (patchAt PT hPT a.1)
+  let δ := Real.exp (-κ.α * T.S.n k / 4)
+  let η := 2 * Real.exp (-3 * κ.α * T.S.n k / 4)
+  let F := fun W : ClusterHistory PT hPT hm =>
+    ∑ x, if clusterJ0 PT hPT hm W a x then 0 else Q.w x
+  have hmean := mean_J0_removed_le PT hPT hm a hn (hbulk PT hPT a) hbsmall hsize δ η
+    (by dsimp [δ]; positivity) (by dsimp [η]; positivity) hδb hδt htail
+    (fun W b hb => hout PT hPT hm W (patchAt PT hPT a.1) b)
+  have heq : (T.S.n k : ℝ) * η / δ =
+      2 * (T.S.n k : ℝ) * Real.exp (-κ.α * T.S.n k / 2) := by
+    have he : Real.exp (-3 * κ.α * T.S.n k / 4) / Real.exp (-κ.α * T.S.n k / 4) =
+        Real.exp (-κ.α * T.S.n k / 2) := by
+      rw [← Real.exp_sub]
+      congr 1
+      ring
+    dsimp [δ, η]
+    calc
+      (T.S.n k : ℝ) * (2 * Real.exp (-3 * κ.α * T.S.n k / 4)) /
+          Real.exp (-κ.α * T.S.n k / 4) =
+          (2 * (T.S.n k : ℝ)) * (Real.exp (-3 * κ.α * T.S.n k / 4) /
+            Real.exp (-κ.α * T.S.n k / 4)) := by ring
+      _ = _ := by rw [he]
+  have hmean' : P.E F ≤ Real.exp (-2 * (T.S.n k : ℝ) ^ (0.2 : ℝ)) := by
+    have hm' : P.E F ≤ (T.S.n k : ℝ) * η / δ + δ +
+        2 * Real.exp (-(T.S.n k : ℝ) ^ (0.5 : ℝ)) := hmean
+    rw [heq] at hm'
+    exact hm'.trans hdec
+  have hF : ∀ W, 0 ≤ F W := by
+    intro W
+    apply Finset.sum_nonneg
+    intro x _
+    split_ifs
+    · exact le_rfl
+    · exact Q.nonneg x
+  have hmark := HypercubeRamsey.Lane_q_s15_c1.finLaw_pr_gt_le_E_div P F hF
+    (Real.exp (-(T.S.n k : ℝ) ^ (0.2 : ℝ))) (by positivity)
+  have hmark' : P.pr (fun W => clusterAlarm1 PT hPT hm W a) ≤
+      P.E F / Real.exp (-(T.S.n k : ℝ) ^ (0.2 : ℝ)) := by
+    simpa [clusterAlarm1, F, Q, uniform_first_law] using hmark
+  apply hmark'.trans
+  calc
+    P.E F / Real.exp (-(T.S.n k : ℝ) ^ (0.2 : ℝ)) ≤
+      Real.exp (-2 * (T.S.n k : ℝ) ^ (0.2 : ℝ)) /
+        Real.exp (-(T.S.n k : ℝ) ^ (0.2 : ℝ)) :=
+      div_le_div_of_nonneg_right hmean' (Real.exp_pos _).le
+    _ = _ := by rw [← Real.exp_sub]; congr 1; ring
+
 end HypercubeRamsey.Lane_sol_s15_alarm

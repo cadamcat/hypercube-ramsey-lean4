@@ -486,6 +486,85 @@ private theorem hammingBall9H_card_le (d r : ℕ) (v : CubeVertex d) :
           exact hterm i hi
     _ = (r + 1) * (d + 1) ^ r := by simp
 
+private abbrev HeightState9 (P : Params9) (hc : HeightChoice9 P) (n : ℕ) :=
+  CubeVertex n × Fin (hc.levels n + 1)
+
+private def heightStep9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (bad : HeightState9 P hc n → Prop) (x y : HeightState9 P hc n) : Prop :=
+  (x.1 = y.1 ∧ y.2.val = x.2.val + 1 ∧ bad x) ∨
+    (x.2.val = y.2.val + 1 ∧ _root_.hammingDist x.1 y.1 ≤ 2)
+
+private inductive HeightPath9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (step : HeightState9 P hc n → HeightState9 P hc n → Prop) :
+    List (HeightState9 P hc n) → HeightState9 P hc n → Prop
+  | singleton (x : HeightState9 P hc n) : HeightPath9 step [x] x
+  | cons {x y : HeightState9 P hc n} {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+      (hxy : step y x) (hp : HeightPath9 step (y :: l) start) :
+      HeightPath9 step (x :: y :: l) start
+
+private theorem reach_level_le_for_path9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (Pp A : Pos9 P hc n → Bool) (vq : CubeVertex n) (R : ℕ)
+    {v : CubeVertex n} {j : ℕ}
+    (h : Reach9 (P := P) (hc := hc) (n := n) Pp A vq R v j) : j ≤ hc.levels n := by
+  induction h with
+  | start v hdist => simp
+  | up v j hj hreach hbad ih => omega
+  | down v v' j hreach hdistRoot hstep ih => omega
+
+private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (Pp A : Pos9 P hc n → Bool) (vq : CubeVertex n) (R : ℕ)
+    {v : CubeVertex n} {j : ℕ}
+    (h : Reach9 (P := P) (hc := hc) (n := n) Pp A vq R v j) :
+    ∃ start : HeightState9 P hc n, ∃ l : List (HeightState9 P hc n),
+      HeightPath9 (heightStep9 (fun x => badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2))
+        ((v, ⟨j, by have := reach_level_le_for_path9 Pp A vq R h; omega⟩) :: l) start ∧
+      (∀ x ∈ ((v, ⟨j, by have := reach_level_le_for_path9 Pp A vq R h; omega⟩) :: l),
+        _root_.hammingDist x.1 vq ≤ R) := by
+  induction h with
+  | start v hdist =>
+      refine ⟨(v, ⟨0, by omega⟩), ⟨[], ?_⟩⟩
+      constructor
+      · simpa using (HeightPath9.singleton (step := heightStep9
+          (fun x => badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2)) (v, ⟨0, by omega⟩))
+      · intro x hx
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+        subst x
+        exact hdist
+  | @up v j hj hreach hbad ih =>
+      obtain ⟨start, l, hp, hlocal⟩ := ih
+      let x : HeightState9 P hc n := (v, ⟨j, by omega⟩)
+      let y : HeightState9 P hc n := (v, ⟨j + 1, by omega⟩)
+      refine ⟨start, ⟨x :: l, ?_⟩⟩
+      constructor
+      · have hedge : heightStep9
+            (fun z => badAt9 (P := P) (hc := hc) (n := n) Pp A z.1 z.2) x y := by
+          left
+          exact ⟨rfl, rfl, hbad⟩
+        simpa [x, y] using HeightPath9.cons hedge hp
+      · intro z hz
+        simp only [List.mem_cons] at hz
+        rcases hz with rfl | hz
+        · have hxlocal := hlocal x (by simp [x])
+          simpa [x, y] using hxlocal
+        · exact hlocal _ (by simpa [x] using hz)
+  | @down v v' j hreach hdistRoot hstep ih =>
+      obtain ⟨start, l, hp, hlocal⟩ := ih
+      have hjle : j + 1 ≤ hc.levels n := reach_level_le_for_path9 Pp A vq R hreach
+      let x : HeightState9 P hc n := (v, ⟨j + 1, by omega⟩)
+      let y : HeightState9 P hc n := (v', ⟨j, by omega⟩)
+      refine ⟨start, ⟨x :: l, ?_⟩⟩
+      constructor
+      · have hedge : heightStep9
+            (fun z => badAt9 (P := P) (hc := hc) (n := n) Pp A z.1 z.2) x y := by
+          right
+          exact ⟨rfl, hstep⟩
+        simpa [x, y] using HeightPath9.cons hedge hp
+      · intro z hz
+        simp only [List.mem_cons] at hz
+        rcases hz with rfl | hz
+        · exact hdistRoot
+        · exact hlocal _ (by simpa [x] using hz)
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

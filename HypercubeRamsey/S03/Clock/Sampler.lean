@@ -1328,7 +1328,595 @@ theorem predicate_failure_under_insertion (B C_g : ℝ) (hB : 1 ≤ B) : ∃ n�
       D.law.pr (fun ξ => testFails D.failure' D.scope' (greedyMatching (insertArrivals ins ξ))
           (.predicate k)) ≤
         ((insertionSize ins : ℝ) + 1) * (1 + (n : ℝ)⁻¹) * (n : ℝ) ^ (-(clockP B / 3)) := by
-  sorry
+  classical
+  let kconst : ℝ := clockK₀ B
+  have hkpos : 0 < clockK₀ B := by unfold clockK₀; linarith [hB]
+  have hA : 10 * (B + clockK₀ B) < clockA B - 1 := by
+    unfold clockA
+    nlinarith
+  obtain ⟨n₁, hstep⟩ := step7_target_product_bound B (clockA B - 1) C_g
+    (clockK₀ B) hB hkpos hA
+  refine ⟨max n₁ 2, ?_⟩
+  intro n hn g hg R K _ _ _ Ω _ _ _ D k a₀ ins hins hinsPos hinsScope
+  let fac : ℝ := 1 + (n : ℝ)⁻¹
+  let pn : ℝ := (n : ℝ) ^ (-(clockP B / 3))
+  have hn₁ : n₁ ≤ n := le_trans (le_max_left _ _) hn
+  have hn₂ : 2 ≤ n := le_trans (le_max_right _ _) hn
+  have hnreal : (2 : ℝ) ≤ n := by exact_mod_cast hn₂
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnreal
+  have hlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by linarith)
+  have hA20 : 20 ≤ clockA B := by unfold clockA clockK₀; linarith [hB]
+  have hpow20 : (10 : ℝ) ^ 6 ≤ (n : ℝ) ^ (20 : ℝ) := by
+    calc
+      (10 : ℝ) ^ 6 ≤ (2 : ℝ) ^ (20 : ℝ) := by norm_num
+      _ ≤ (n : ℝ) ^ (20 : ℝ) := Real.rpow_le_rpow (by norm_num) hnreal (by norm_num)
+  have hpowA : (n : ℝ) ^ (20 : ℝ) ≤ (n : ℝ) ^ clockA B :=
+    Real.rpow_le_rpow_of_exponent_le (le_trans (by norm_num) hnreal) hA20
+  have hgnum : (10 : ℝ) ^ 6 ≤ g :=
+    le_trans (le_trans hpow20 hpowA) (D.card_labels_ge (by omega))
+  have htheta := D.completed_theta_bounds hgnum
+  have hthetaAtom := D.completed_atom_le hn₂
+  have hSbound : ((D.scope' k).card : ℝ) ≤ (n : ℝ) ^ B := by
+    simpa [ClockData.scope'] using D.admissible.2.2.2.1 k
+  have hstepAt := hstep n hn₁ D.mesh D.mesh.δ_nonneg D.mesh.δ_le_one
+    D.law' D.lab' D.C.theta hg
+    (fun y => D.completed_columns_eq y) htheta.2
+    (fun a y => hthetaAtom a y) ins hins
+  have hinvalid : D.law.pr
+      (fun ξ => ∃ e t o, ξ e = MeshClockValue.tick t o ∧ D.lab' e.1 o ≠ e.2) = 0 := by
+    simpa [ClockData.law, ClockData.edgeLaw] using
+      (invalid_marks_null D.mesh.δ D.mesh.δ_nonneg D.mesh.δ_le_one D.law' D.lab')
+  have hOrdinaryBound (S : Finset D.Row) (o : ∀ a : D.Row, D.Out a)
+      (hScard : (S.card : ℝ) ≤ (n : ℝ) ^ B) :
+      D.law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) ≤
+        fac * ∏ a ∈ S, (D.law' a).w (o a) := by
+    by_cases hinj : Set.InjOn (fun a => D.lab' a (o a)) S
+    · have h := hstepAt S o hinj hScard
+      simpa [fac, ClockData.law, ClockData.edgeLaw] using h
+    · have hcollision : ∃ a ∈ S, ∃ b ∈ S, a ≠ b ∧
+          D.lab' a (o a) = D.lab' b (o b) := by
+        by_contra hc
+        apply hinj
+        intro a ha b hb hab
+        by_contra hne
+        exact hc ⟨a, ha, b, hb, hne, hab⟩
+      have hsub : ∀ ξ, matchesTargetsOrdinarily ins ξ S o →
+          ∃ e t x, ξ e = MeshClockValue.tick t x ∧ D.lab' e.1 x ≠ e.2 := by
+        intro ξ hξ
+        rcases hcollision with ⟨a, ha, b, hb, hab, hlab⟩
+        rcases hξ a ha with ⟨ya, hya, hyaIns⟩
+        rcases hξ b hb with ⟨yb, hyb, hybIns⟩
+        obtain ⟨ta, hta⟩ := greedyMatching_assignment_origin
+          (insertArrivals ins ξ) a ya (o a) hya
+        obtain ⟨tb, htb⟩ := greedyMatching_assignment_origin
+          (insertArrivals ins ξ) b yb (o b) hyb
+        have htaRaw : ξ (a, ya) = MeshClockValue.tick ta (o a) := by
+          simpa [insertArrivals, hyaIns] using hta
+        have htbRaw : ξ (b, yb) = MeshClockValue.tick tb (o b) := by
+          simpa [insertArrivals, hybIns] using htb
+        by_cases hmarkA : D.lab' a (o a) = ya
+        · by_cases hmarkB : D.lab' b (o b) = yb
+          · have hyEq : ya = yb := hmarkA.symm.trans (hlab.trans hmarkB)
+            have hyb' : (greedyMatching (insertArrivals ins ξ)).assignment b =
+                some (ya, o b) := by simpa [hyEq.symm] using hyb
+            have hab' := greedyMatching_label_injective (insertArrivals ins ξ)
+              a b ya (o a) (o b) hya hyb'
+            exact False.elim (hab hab')
+          · exact ⟨(b, yb), tb, o b, htbRaw, hmarkB⟩
+        · exact ⟨(a, ya), ta, o a, htaRaw, hmarkA⟩
+      have hz : D.law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) = 0 := by
+        apply le_antisymm
+        · calc
+            _ ≤ D.law.pr
+                (fun ξ => ∃ e t x, ξ e = MeshClockValue.tick t x ∧ D.lab' e.1 x ≠ e.2) :=
+                  finProb_pr_mono D.law hsub
+            _ = 0 := hinvalid
+        · exact finProb_pr_nonneg D.law _
+      rw [hz]
+      have hfacNonneg : 0 ≤ fac := by dsimp [fac]; positivity
+      have hprodNonneg : 0 ≤ ∏ a ∈ S, (D.law' a).w (o a) := by
+        apply Finset.prod_nonneg
+        intro a ha
+        exact (D.law' a).nonneg (o a)
+      exact mul_nonneg hfacNonneg hprodNonneg
+  let Sreal : Finset R := D.I.scope k
+  let Scomp : Finset D.Row := D.scope' k
+  let base : ∀ a : R, Ω a := fun a =>
+    Classical.choice (finProb_nonempty (D.C.trimmed a))
+  let lift : (∀ a : ↥Sreal, Ω a.1) → ∀ a : R, Ω a := fun u =>
+    (Equiv.piEquivPiSubtypeProd (fun a => a ∈ Sreal) Ω).symm
+      (u, fun a => base a.1)
+  let failTuple : (∀ a : ↥Sreal, Ω a.1) → Prop := fun u =>
+    D.I.failure k (lift u)
+  let failTuples : Finset (∀ a : ↥Sreal, Ω a.1) :=
+    Finset.univ.filter failTuple
+  let outTuple (u : ∀ a : ↥Sreal, Ω a.1) : ∀ a : D.Row, D.Out a :=
+    D.extendTarget (lift u)
+  let ordinary (u : ∀ a : ↥Sreal, Ω a.1) :
+      ClockField D.mesh.ticks D.Row g D.Out → Prop :=
+    fun ξ => matchesTargetsOrdinarily ins ξ Scomp (outTuple u)
+  have htupleCard : (Scomp.card : ℝ) ≤ (n : ℝ) ^ B := hSbound
+  have htupleWeight (u : ∀ a : ↥Sreal, Ω a.1) :
+      (∏ a ∈ Scomp, (D.law' a).w (outTuple u a)) =
+        ∏ a : ↥Sreal, (D.C.trimmed a.1).w (u a) := by
+    dsimp [Scomp, ClockData.scope', outTuple]
+    rw [Finset.prod_map, ← Finset.prod_coe_sort]
+    apply Finset.prod_congr rfl
+    intro a ha
+    change (D.C.trimmed a.1).w (lift u a.1) = (D.C.trimmed a.1).w (u a)
+    rw [show lift u a.1 = u a by simp [lift]]
+  have hordinaryBound (u : ∀ a : ↥Sreal, Ω a.1) :
+      D.law.pr (ordinary u) ≤ fac * ∏ a : ↥Sreal, (D.C.trimmed a.1).w (u a) := by
+    rw [← htupleWeight u]
+    exact hOrdinaryBound Scomp (outTuple u) htupleCard
+  have hfailWeightSum :
+      (∑ u ∈ failTuples, ∏ a : ↥Sreal, (D.C.trimmed a.1).w (u a)) =
+        (FinProb.pi D.C.trimmed).pr (D.I.failure k) := by
+    have hsubsum :
+      (∑ u ∈ failTuples, ∏ a : ↥Sreal, (D.C.trimmed a.1).w (u a)) =
+          (FinProb.pi (fun a : ↥Sreal => D.C.trimmed a.1)).pr failTuple := by
+      unfold FinProb.pr
+      rw [show failTuples = Finset.univ.filter failTuple by rfl, Finset.sum_filter]
+      simp [FinProb.pi, failTuple]
+    have hdep : FinProb.DependsOn (D.I.failure k) Sreal := D.admissible.2.2.1 k
+    have hproj := HypercubeRamsey.Lane_q_clock_sampler.pi_pr_depends_eq_subtype
+      D.C.trimmed Sreal (D.I.failure k) hdep base
+    calc
+      _ = (FinProb.pi (fun a : ↥Sreal => D.C.trimmed a.1)).pr failTuple := hsubsum
+      _ = (FinProb.pi D.C.trimmed).pr (D.I.failure k) := by simpa [lift, failTuple] using hproj
+  have hordinaryUnion :
+      D.law.pr (fun ξ => ∃ u ∈ failTuples, ordinary u ξ) ≤ fac * pn := by
+    calc
+      _ ≤ ∑ u ∈ failTuples, D.law.pr (ordinary u) :=
+        finProb_pr_biUnion_le_sum D.law failTuples ordinary
+      _ ≤ ∑ u ∈ failTuples,
+            fac * ∏ a : ↥Sreal, (D.C.trimmed a.1).w (u a) :=
+        Finset.sum_le_sum fun u hu => hordinaryBound u
+      _ = fac * ∑ u ∈ failTuples,
+            ∏ a : ↥Sreal, (D.C.trimmed a.1).w (u a) := by rw [Finset.mul_sum]
+      _ ≤ fac * pn := by
+        rw [hfailWeightSum]
+        have htrim := D.C.trimmed_failure k
+        rw [show (n : ℝ) ^ (-clockP B / 3) = pn by
+          dsimp [pn]
+          congr 1
+          ring] at htrim
+        exact mul_le_mul_of_nonneg_left htrim (by positivity)
+  by_cases ha₀ : a₀ ∈ Sreal
+  · -- exceptional inserted matches are charged by the pinned trimmed failure bound
+    let iScope : ↥Sreal := ⟨a₀, ha₀⟩
+    let Sother : Type := {b : ↥Sreal // b ≠ iScope}
+    let embOther : Sother ↪ D.Row := {
+      toFun := fun b => Sum.inl b.1.1
+      inj' := by
+        intro b c h
+        apply Subtype.ext
+        apply Subtype.ext
+        exact Sum.inl.inj h }
+    let SotherComp : Finset D.Row := Finset.univ.map embOther
+    have hotherSubset : SotherComp ⊆ Scomp := by
+      intro r hr
+      rcases Finset.mem_map.mp hr with ⟨b, hb, rfl⟩
+      apply Finset.mem_map.mpr
+      exact ⟨b.1.1, b.1.2, rfl⟩
+    have hotherCard : (SotherComp.card : ℝ) ≤ (n : ℝ) ^ B := by
+      have hnat : SotherComp.card ≤ Scomp.card := Finset.card_le_card hotherSubset
+      exact (Nat.cast_le.mpr hnat).trans hSbound
+    let pinScope (o : Ω a₀) (u : ∀ b : Sother, Ω b.1.1) :
+        ∀ b : ↥Sreal, Ω b.1 :=
+      HypercubeRamsey.Lane_q_clock_sampler.pinCoordinateRest iScope o u
+    let pinReal (o : Ω a₀) (u : ∀ b : Sother, Ω b.1.1) : ∀ a : R, Ω a :=
+      lift (pinScope o u)
+    let pinOut (o : Ω a₀) (u : ∀ b : Sother, Ω b.1.1) :
+        ∀ a : D.Row, D.Out a := D.extendTarget (pinReal o u)
+    have hpinCoord (o : Ω a₀) (u : ∀ b : Sother, Ω b.1.1) (b : Sother) :
+        pinReal o u b.1.1 = u b := by
+      rcases b with ⟨a, hne⟩
+      simp [pinReal, pinScope, lift,
+        HypercubeRamsey.Lane_q_clock_sampler.pinCoordinateRest, hne]
+    have hpinProduct (o : Ω a₀) (u : ∀ b : Sother, Ω b.1.1) :
+        (∏ r ∈ SotherComp, (D.law' r).w (pinOut o u r)) =
+          ∏ b : Sother, (D.C.trimmed b.1.1).w (u b) := by
+      dsimp [SotherComp, pinOut]
+      rw [Finset.prod_map]
+      apply Finset.prod_congr rfl
+      intro b hb
+      change (D.C.trimmed b.1.1).w (pinReal o u b.1.1) =
+        (D.C.trimmed b.1.1).w (u b)
+      rw [hpinCoord o u b]
+    have htrimPosOfTick (y : Fin g) (t : Fin D.mesh.ticks) (o : Ω a₀)
+        (htick : ins (Sum.inl a₀, y) = some (MeshClockValue.tick t o)) :
+        0 < (D.C.trimmed a₀).w o := by
+      have hpositive := hinsPos (Sum.inl a₀, y) (MeshClockValue.tick t o) htick
+      by_contra hnot
+      have hzero : (D.C.trimmed a₀).w o = 0 := by
+        linarith [(D.C.trimmed a₀).nonneg o]
+      have hweightZero :
+          (D.edgeLaw (Sum.inl a₀, y)).w (MeshClockValue.tick t o) = 0 := by
+        simp [ClockData.edgeLaw, samplingEdgeClockLaw, outputEdgeClockLaw,
+          markedClockLaw, markedClockWeight, outputMarkMass, ClockData.law',
+          ClockData.lab', hzero]
+      linarith
+    have hkeepOfTick (y : Fin g) (t : Fin D.mesh.ticks) (o : Ω a₀)
+        (htick : ins (Sum.inl a₀, y) = some (MeshClockValue.tick t o)) :
+        o ∈ D.C.keep a₀ := by
+      by_contra hnot
+      have hz := D.C.trimmed_supported a₀ o hnot
+      have hp := htrimPosOfTick y t o htick
+      linarith
+    have hdepFailure : FinProb.DependsOn (D.I.failure k) Sreal := D.admissible.2.2.1 k
+    let G : ∀ o : Ω a₀, (∀ a : R, Ω a) → Prop :=
+      fun o ω => D.I.failure k ω ∧ ω a₀ = o
+    have hGdepends (o : Ω a₀) : FinProb.DependsOn (G o) Sreal := by
+      intro ω ω' hagree
+      have hF := hdepFailure ω ω' hagree
+      have ha := hagree a₀ ha₀
+      apply propext
+      constructor
+      · rintro ⟨hf, hpin⟩
+        exact ⟨hF.mp hf, by rw [← ha]; exact hpin⟩
+      · rintro ⟨hf, hpin⟩
+        exact ⟨hF.mpr hf, by rw [ha]; exact hpin⟩
+    have hprojG (o : Ω a₀) :=
+      HypercubeRamsey.Lane_q_clock_sampler.pi_pr_depends_eq_subtype
+        D.C.trimmed Sreal (G o) (hGdepends o) base
+    have hGscope (o : Ω a₀) (u : ∀ a : ↥Sreal, Ω a.1) :
+        G o (lift u) ↔ failTuple u ∧ u iScope = o := by
+      change (D.I.failure k (lift u) ∧ (lift u) a₀ = o) ↔
+        (D.I.failure k (lift u) ∧ u iScope = o)
+      rw [show (lift u) a₀ = u iScope by simp [lift, iScope, ha₀]]
+    have hscopeJoint (o : Ω a₀) :
+        (FinProb.pi (fun a : ↥Sreal => D.C.trimmed a.1)).pr
+          (fun u => failTuple u ∧ u iScope = o) =
+        (FinProb.pi D.C.trimmed).pr (G o) := by
+      calc
+        _ = (FinProb.pi (fun a : ↥Sreal => D.C.trimmed a.1)).pr (fun u => G o (lift u)) := by
+          apply HypercubeRamsey.Lane_q_clock_sampler.finProb_pr_congr
+          intro u
+          exact (hGscope o u).symm
+        _ = (FinProb.pi D.C.trimmed).pr (G o) := by simpa [lift] using hprojG o
+    have hpinEq (o : Ω a₀) (hpos : 0 < (D.C.trimmed a₀).w o) :
+        (FinProb.pi (fun b : Sother => D.C.trimmed b.1.1)).pr
+            (fun v => D.I.failure k (pinReal o v)) =
+          pinnedFailureProb D.C.trimmed D.I.failure k a₀ o := by
+      have hratio := HypercubeRamsey.Lane_q_clock_sampler.pi_pr_pinned_eq_rest
+        (fun a : ↥Sreal => D.C.trimmed a.1) failTuple iScope o hpos
+      have hratio' :
+          (FinProb.pi (fun a : ↥Sreal => D.C.trimmed a.1)).pr
+            (fun u => failTuple u ∧ u iScope = o) / (D.C.trimmed a₀).w o =
+          (FinProb.pi (fun b : Sother => D.C.trimmed b.1.1)).pr
+            (fun v => D.I.failure k (pinReal o v)) := by
+        simpa [pinReal, pinScope, failTuple, iScope] using hratio
+      unfold pinnedFailureProb
+      calc
+        _ = (FinProb.pi (fun a : ↥Sreal => D.C.trimmed a.1)).pr
+              (fun u => failTuple u ∧ u iScope = o) / (D.C.trimmed a₀).w o := hratio'.symm
+        _ = (FinProb.pi D.C.trimmed).pr
+              (G o) / (D.C.trimmed a₀).w o := by rw [hscopeJoint o]
+        _ = (FinProb.pi D.C.trimmed).pr
+              (fun ω => D.I.failure k ω ∧ ω a₀ = o) / (D.C.trimmed a₀).w o := by
+                simp [G]
+    let pinFailure (o : Ω a₀) (u : ∀ b : Sother, Ω b.1.1) : Prop :=
+      D.I.failure k (pinReal o u)
+    let pinFailSet (o : Ω a₀) : Finset (∀ b : Sother, Ω b.1.1) :=
+      Finset.univ.filter (pinFailure o)
+    have hpinWeightSum (o : Ω a₀) :
+        (∑ u ∈ pinFailSet o, ∏ b : Sother, (D.C.trimmed b.1.1).w (u b)) =
+          (FinProb.pi (fun b : Sother => D.C.trimmed b.1.1)).pr (pinFailure o) := by
+      unfold FinProb.pr
+      rw [show pinFailSet o = Finset.univ.filter (pinFailure o) by rfl, Finset.sum_filter]
+      simp [FinProb.pi, pinFailure]
+    have hpinProbabilityBound (o : Ω a₀) (hpos : 0 < (D.C.trimmed a₀).w o)
+        (hkeep : o ∈ D.C.keep a₀) :
+        (FinProb.pi (fun b : Sother => D.C.trimmed b.1.1)).pr (pinFailure o) ≤ pn := by
+      rw [hpinEq o hpos]
+      have hcert := D.C.trimmed_pinned_failure k a₀ ha₀ o hkeep
+      have hpn : (n : ℝ) ^ (-clockP B / 3) = pn := by
+        dsimp [pn]
+        congr 1
+        ring
+      rw [hpn] at hcert
+      exact hcert
+    have hpinWeightBound (o : Ω a₀) (hpos : 0 < (D.C.trimmed a₀).w o)
+        (hkeep : o ∈ D.C.keep a₀) :
+        (∑ u ∈ pinFailSet o, ∏ b : Sother, (D.C.trimmed b.1.1).w (u b)) ≤ pn := by
+      rw [hpinWeightSum o]
+      exact hpinProbabilityBound o hpos hkeep
+    let insertedLabels : Finset (Fin g) :=
+      Finset.univ.filter fun y => (ins (Sum.inl a₀, y)).isSome
+    let insertedEdges : Finset (RowLabel D.Row g) :=
+      Finset.univ.filter fun e => (ins e).isSome
+    let edgeEmb : Fin g ↪ RowLabel D.Row g := {
+      toFun := fun y => (Sum.inl a₀, y)
+      inj' := by intro y z h; exact congrArg Prod.snd h }
+    have hInsertedSubset : insertedLabels.map edgeEmb ⊆ insertedEdges := by
+      intro e he
+      rcases Finset.mem_map.mp he with ⟨y, hy, rfl⟩
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hy).2⟩
+    have hInsertedCount : (insertedLabels.card : ℝ) ≤ (insertionSize ins : ℝ) := by
+      have hcard : insertedLabels.card ≤ insertedEdges.card := by
+        calc
+          insertedLabels.card = (insertedLabels.map edgeEmb).card := by simp
+          _ ≤ insertedEdges.card := Finset.card_le_card hInsertedSubset
+      have hsize : insertedEdges.card = insertionSize ins := by
+        simp [insertedEdges, insertionSize]
+      exact_mod_cast (hsize ▸ hcard)
+    let outMark (y : Fin g) : Option (Ω a₀) :=
+      match ins (Sum.inl a₀, y) with
+      | some (.tick _ o) => some o
+      | _ => none
+    let pinTuples (y : Fin g) : Finset (∀ b : Sother, Ω b.1.1) :=
+      match outMark y with
+      | some o => pinFailSet o
+      | none => ∅
+    let pinEvent (y : Fin g) (u : ∀ b : Sother, Ω b.1.1) :
+        ClockField D.mesh.ticks D.Row g D.Out → Prop := fun ξ =>
+      match outMark y with
+      | some o => matchesTargetsOrdinarily ins ξ SotherComp (pinOut o u)
+      | none => False
+    have hpinEventBound (y : Fin g) :
+        (∑ u ∈ pinTuples y, D.law.pr (pinEvent y u)) ≤ fac * pn := by
+      cases hval : ins (Sum.inl a₀, y) with
+      | none =>
+          simp [pinTuples, pinEvent, outMark, hval]
+          positivity
+      | some x =>
+          cases x with
+          | noArrival =>
+              simp [pinTuples, pinEvent, outMark, hval]
+              positivity
+          | tick t o =>
+              have htick : ins (Sum.inl a₀, y) =
+                  some (MeshClockValue.tick t o) := hval
+              have hpos := htrimPosOfTick y t o htick
+              have hkeep := hkeepOfTick y t o htick
+              have hmark : outMark y = some o := by simp [outMark, hval]; rfl
+              have hset : pinTuples y = pinFailSet o := by simp [pinTuples, hmark]
+              have hevent (u : ∀ b : Sother, Ω b.1.1) :
+                  pinEvent y u = fun ξ => matchesTargetsOrdinarily ins ξ SotherComp (pinOut o u) := by
+                simp [pinEvent, hmark]
+              rw [hset]
+              calc
+                _ ≤ ∑ u ∈ pinFailSet o,
+                      fac * ∏ b : Sother, (D.C.trimmed b.1.1).w (u b) := by
+                    apply Finset.sum_le_sum
+                    intro u hu
+                    have hbound := hOrdinaryBound SotherComp (pinOut o u) hotherCard
+                    rw [hpinProduct o u] at hbound
+                    calc
+                      D.law.pr (pinEvent y u) =
+                          D.law.pr (fun ξ => matchesTargetsOrdinarily ins ξ SotherComp (pinOut o u)) :=
+                            congrArg (fun E => D.law.pr E) (hevent u)
+                      _ ≤ fac * ∏ b : Sother, (D.C.trimmed b.1.1).w (u b) := hbound
+                _ = fac * ∑ u ∈ pinFailSet o,
+                      ∏ b : Sother, (D.C.trimmed b.1.1).w (u b) := by
+                    rw [Finset.mul_sum]
+                _ ≤ fac * pn := by
+                    exact mul_le_mul_of_nonneg_left (hpinWeightBound o hpos hkeep)
+                      (by positivity)
+    let pinUnion : ClockField D.mesh.ticks D.Row g D.Out → Prop := fun ξ =>
+      ∃ y ∈ insertedLabels, ∃ u ∈ pinTuples y, pinEvent y u ξ
+    have hpinUnionBound : D.law.pr pinUnion ≤
+        (insertionSize ins : ℝ) * fac * pn := by
+      calc
+        _ ≤ ∑ y ∈ insertedLabels,
+              D.law.pr (fun ξ => ∃ u ∈ pinTuples y, pinEvent y u ξ) :=
+          finProb_pr_biUnion_le_sum D.law insertedLabels
+            (fun y ξ => ∃ u ∈ pinTuples y, pinEvent y u ξ)
+        _ ≤ ∑ y ∈ insertedLabels, ∑ u ∈ pinTuples y, D.law.pr (pinEvent y u) := by
+          apply Finset.sum_le_sum
+          intro y hy
+          exact finProb_pr_biUnion_le_sum D.law (pinTuples y) (pinEvent y)
+        _ ≤ ∑ _y ∈ insertedLabels, fac * pn := by
+          apply Finset.sum_le_sum
+          intro y hy
+          exact hpinEventBound y
+        _ = (insertedLabels.card : ℝ) * (fac * pn) := by simp
+        _ ≤ (insertionSize ins : ℝ) * (fac * pn) :=
+          mul_le_mul_of_nonneg_right hInsertedCount (by positivity)
+        _ = (insertionSize ins : ℝ) * fac * pn := by ring
+    have hcoverBoth : ∀ ξ,
+        testFails D.failure' D.scope' (greedyMatching (insertArrivals ins ξ)) (.predicate k) →
+          (∃ u ∈ failTuples, ordinary u ξ) ∨ pinUnion ξ := by
+      intro ξ hbad
+      rcases hbad with ⟨ω, hω, hassign⟩
+      let realOut : ∀ a : R, Ω a := fun a => ω (Sum.inl a)
+      let u : ∀ a : ↥Sreal, Ω a.1 := fun a => realOut a.1
+      have hagree : ∀ a ∈ Sreal, lift u a = realOut a := by
+        intro a ha
+        simp [lift, u, realOut, ha]
+        rfl
+      have hdep := D.admissible.2.2.1 k (lift u) realOut hagree
+      have hfail : failTuple u := by
+        dsimp [failTuple]
+        exact hdep.mpr (by simpa [realOut, ClockData.failure'] using hω)
+      have huMem : u ∈ failTuples := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hfail⟩
+      let hasInsertedScopeMatch : Prop :=
+        ∃ a ∈ Sreal, ∃ y,
+          (greedyMatching (insertArrivals ins ξ)).assignment (Sum.inl a) =
+            some (y, realOut a) ∧ ins (Sum.inl a, y) ≠ none
+      by_cases hordinary : hasInsertedScopeMatch
+      · rcases hordinary with ⟨a, ha, y, hassignA, hnotNone⟩
+        have hscopeComp : Sum.inl a ∈ Scomp := by
+          change Sum.inl a ∈ (D.I.scope k).map Function.Embedding.inl
+          exact Finset.mem_map.mpr ⟨a, ha, rfl⟩
+        obtain ⟨x, hval⟩ := Option.ne_none_iff_exists'.mp hnotNone
+        have hrow := hinsScope (Sum.inl a, y) x hval hscopeComp
+        have haa : a = a₀ := Sum.inl.inj hrow
+        subst a
+        cases hvalue : ins (Sum.inl a₀, y) with
+        | none => exact False.elim (hnotNone hvalue)
+        | some x =>
+            obtain ⟨t, harr⟩ := greedyMatching_assignment_origin
+              (insertArrivals ins ξ) (Sum.inl a₀) y (realOut a₀) hassignA
+            have hx : x = MeshClockValue.tick t (realOut a₀) := by
+              change (ins (Sum.inl a₀, y)).getD (ξ (Sum.inl a₀, y)) =
+                MeshClockValue.tick t (realOut a₀) at harr
+              rw [hvalue] at harr
+              simpa using harr
+            have htick : ins (Sum.inl a₀, y) =
+                some (MeshClockValue.tick t (realOut a₀)) := by rw [hvalue, hx]; rfl
+            have hmark : outMark y = some (realOut a₀) := by
+              simp [outMark, htick]
+            have hlabelMem : y ∈ insertedLabels := by
+              apply Finset.mem_filter.mpr
+              constructor
+              · exact Finset.mem_univ _
+              · simp [insertedLabels, htick]
+                rfl
+            let otherOut : ∀ b : Sother, Ω b.1.1 := fun b => realOut b.1.1
+            have hpinAgree : ∀ a ∈ Sreal, pinReal (realOut a₀) otherOut a = realOut a := by
+              intro a ha
+              by_cases haa : a = a₀
+              · subst a
+                have hvalue : pinReal (realOut a₀) otherOut a₀ = realOut a₀ := by
+                  simp [pinReal, pinScope, lift, iScope, ha₀,
+                    HypercubeRamsey.Lane_q_clock_sampler.pinCoordinateRest]
+                exact hvalue
+              · let b : Sother := ⟨⟨a, ha⟩, by
+                    intro heq
+                    exact haa (congrArg Subtype.val heq)⟩
+                calc
+                  pinReal (realOut a₀) otherOut a =
+                      pinReal (realOut a₀) otherOut b.1.1 := by rfl
+                  _ = otherOut b := hpinCoord (realOut a₀) otherOut b
+                  _ = realOut a := rfl
+            have hrealFailure : D.I.failure k realOut := by
+              simpa [realOut, ClockData.failure'] using hω
+            have hpinFailureHere : pinFailure (realOut a₀) otherOut := by
+              have hdepPin := D.admissible.2.2.1 k
+                (pinReal (realOut a₀) otherOut) realOut hpinAgree
+              exact hdepPin.mpr hrealFailure
+            have hpinMem : otherOut ∈ pinTuples y := by
+              rw [show pinTuples y = pinFailSet (realOut a₀) by simp [pinTuples, hmark]]
+              exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hpinFailureHere⟩
+            have hordinaryOther :
+                matchesTargetsOrdinarily ins ξ SotherComp
+                  (pinOut (realOut a₀) otherOut) := by
+              intro r hr
+              rcases Finset.mem_map.mp hr with ⟨b, hb, rfl⟩
+              let a : R := b.1.1
+              have ha : a ∈ Sreal := b.1.2
+              rcases hassign (Sum.inl a) (by
+                change Sum.inl a ∈ (D.I.scope k).map Function.Embedding.inl
+                exact Finset.mem_map.mpr ⟨a, ha, rfl⟩) with ⟨y', hy'⟩
+              have hnone : ins (Sum.inl a, y') = none := by
+                cases hyIns : ins (Sum.inl a, y') with
+                | none => rfl
+                | some x' =>
+                    have hsc : Sum.inl a ∈ Scomp := by
+                      change Sum.inl a ∈ (D.I.scope k).map Function.Embedding.inl
+                      exact Finset.mem_map.mpr ⟨a, ha, rfl⟩
+                    have hrow' := hinsScope (Sum.inl a, y') x' hyIns hsc
+                    have hEqA : a = a₀ := Sum.inl.inj hrow'
+                    have hneA : a ≠ a₀ := by
+                      intro heq
+                      have heqSubtype : b.1 = iScope := by
+                        apply Subtype.ext
+                        exact heq
+                      exact b.2 heqSubtype
+                    exact False.elim (hneA hEqA)
+              have hout : pinOut (realOut a₀) otherOut (embOther b) = realOut a := by
+                change pinReal (realOut a₀) otherOut a = realOut a
+                calc
+                  pinReal (realOut a₀) otherOut a = pinReal (realOut a₀) otherOut b.1.1 := by rfl
+                  _ = otherOut b := hpinCoord (realOut a₀) otherOut b
+                  _ = realOut a := rfl
+              refine ⟨y', ?_, hnone⟩
+              rw [hout]
+              exact hy'
+            refine Or.inr ?_
+            refine ⟨y, hlabelMem, otherOut, hpinMem, ?_⟩
+            simpa [pinEvent, hmark] using hordinaryOther
+      · exact Or.inl ⟨u, huMem, by
+          intro r hr
+          rcases Finset.mem_map.mp hr with ⟨a, ha, rfl⟩
+          have hscopeComp : Sum.inl a ∈ Scomp := by
+            change Sum.inl a ∈ (D.I.scope k).map Function.Embedding.inl
+            exact Finset.mem_map.mpr ⟨a, ha, rfl⟩
+          rcases hassign (Sum.inl a) hscopeComp with ⟨y, hy⟩
+          have hnone : ins (Sum.inl a, y) = none := by
+            by_contra h
+            exact hordinary ⟨a, ha, y, hy, h⟩
+          refine ⟨y, ?_, hnone⟩
+          have hout : outTuple u (Sum.inl a) = realOut a := by
+            change lift u a = realOut a
+            exact hagree a ha
+          have hout' : outTuple u (Function.Embedding.inl a) = realOut a := by
+            change outTuple u (Sum.inl a) = realOut a
+            exact hout
+          rw [hout']
+          exact hy⟩
+    have hbadPr : D.law.pr
+        (fun ξ => testFails D.failure' D.scope' (greedyMatching (insertArrivals ins ξ)) (.predicate k)) ≤
+          D.law.pr (fun ξ => (∃ u ∈ failTuples, ordinary u ξ) ∨ pinUnion ξ) := by
+      apply finProb_pr_mono D.law
+      intro ξ hξ
+      exact hcoverBoth ξ hξ
+    calc
+      _ ≤ D.law.pr (fun ξ => (∃ u ∈ failTuples, ordinary u ξ) ∨ pinUnion ξ) := hbadPr
+      _ ≤ D.law.pr (fun ξ => ∃ u ∈ failTuples, ordinary u ξ) + D.law.pr pinUnion :=
+        FinProb.pr_union D.law _ _
+      _ ≤ fac * pn + (insertionSize ins : ℝ) * fac * pn :=
+        add_le_add hordinaryUnion hpinUnionBound
+      _ = ((insertionSize ins : ℝ) + 1) * fac * pn := by ring
+  · -- no inserted edge can match a row in the predicate scope
+    have hnoInsScope : ∀ a ∈ Sreal, ∀ y, ins (Sum.inl a, y) = none := by
+      intro a ha y
+      cases hval : ins (Sum.inl a, y) with
+      | none => rfl
+      | some x =>
+          have hscopeComp : Sum.inl a ∈ Scomp := by
+            change Sum.inl a ∈ (D.I.scope k).map Function.Embedding.inl
+            exact Finset.mem_map.mpr ⟨a, ha, rfl⟩
+          have hrow := hinsScope (Sum.inl a, y) x hval hscopeComp
+          have haa : a = a₀ := Sum.inl.inj hrow
+          exact False.elim (ha₀ (haa ▸ ha))
+    have hcover : ∀ ξ,
+        testFails D.failure' D.scope' (greedyMatching (insertArrivals ins ξ)) (.predicate k) →
+          ∃ u ∈ failTuples, ordinary u ξ := by
+      intro ξ hbad
+      rcases hbad with ⟨ω, hω, hassign⟩
+      let u : ∀ a : ↥Sreal, Ω a.1 := fun a => ω (Sum.inl a.1)
+      have hagree : ∀ a ∈ Sreal, lift u a = ω (Sum.inl a) := by
+        intro a ha
+        simp [lift, u, ha]
+        rfl
+      have hdep := D.admissible.2.2.1 k (lift u) (fun a => ω (Sum.inl a)) hagree
+      have hfail : failTuple u := by
+        dsimp [failTuple]
+        exact hdep.mpr (by simpa [ClockData.failure'] using hω)
+      refine ⟨u, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hfail⟩, ?_⟩
+      intro r hr
+      rcases Finset.mem_map.mp hr with ⟨a, ha, rfl⟩
+      have hscopeComp : Sum.inl a ∈ Scomp := by
+        change Sum.inl a ∈ (D.I.scope k).map Function.Embedding.inl
+        exact Finset.mem_map.mpr ⟨a, ha, rfl⟩
+      rcases hassign (Sum.inl a) hscopeComp with ⟨y, hy⟩
+      refine ⟨y, ?_, hnoInsScope a ha y⟩
+      have hout : outTuple u (Sum.inl a) = ω (Sum.inl a) := by
+        change lift u a = ω (Sum.inl a)
+        exact hagree a ha
+      have hout' : outTuple u (Function.Embedding.inl a) = ω (Sum.inl a) := by
+        change outTuple u (Sum.inl a) = ω (Sum.inl a)
+        exact hout
+      rw [hout']
+      exact hy
+    calc
+      D.law.pr (fun ξ => testFails D.failure' D.scope'
+          (greedyMatching (insertArrivals ins ξ)) (.predicate k)) ≤
+          D.law.pr (fun ξ => ∃ u ∈ failTuples, ordinary u ξ) :=
+        finProb_pr_mono D.law (by intro ξ hξ; exact hcover ξ hξ)
+      _ ≤ fac * pn := hordinaryUnion
+      _ ≤ ((insertionSize ins : ℝ) + 1) * fac * pn := by
+        have hcast : 0 ≤ (insertionSize ins : ℝ) := Nat.cast_nonneg _
+        have hsize : 1 ≤ (insertionSize ins : ℝ) + 1 := by linarith
+        have hfacpn : 0 ≤ fac * pn := by positivity
+        calc
+          fac * pn = 1 * (fac * pn) := by ring
+          _ ≤ ((insertionSize ins : ℝ) + 1) * (fac * pn) :=
+            mul_le_mul_of_nonneg_right hsize hfacpn
+          _ = ((insertionSize ins : ℝ) + 1) * fac * pn := by ring
 
 /-- L3.10h-short (03:1084–1098): the bad-outcome probability under the insertion of a short decreasing path from a
 root `r` of the test that meets no other row of the test is at most `clockShortBound`: giant tail

@@ -1099,6 +1099,30 @@ private theorem heightPath9_firstExitValue9 {P : Params9} {hc : HeightChoice9 P}
           · exact hnextLess
           · exact htailLess z (List.mem_cons_of_mem _ hz)
 
+private theorem list_split_first_match9 {α : Type*} (f : α → ℕ) (r : ℕ) (l : List α)
+    (h : ∃ x ∈ l, f x = r) :
+    ∃ pre x post, l = pre ++ x :: post ∧ f x = r ∧ ∀ z ∈ pre, f z ≠ r := by
+  induction l with
+  | nil => simp at h
+  | cons head tail ih =>
+      by_cases hhead : f head = r
+      · exact ⟨[], head, tail, by simp, hhead, by simp⟩
+      · have htail : ∃ x ∈ tail, f x = r := by
+          rcases h with ⟨x, hx, hfx⟩
+          rcases List.mem_cons.mp hx with hxeq | hxtail
+          · subst x
+            exact (hhead hfx).elim
+          · exact ⟨x, hxtail, hfx⟩
+        obtain ⟨pre, x, post, hsplit, hfx, hpre⟩ := ih htail
+        refine ⟨head :: pre, x, post, ?_, hfx, ?_⟩
+        · simp [hsplit]
+        · intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with hzeq | hzpre
+          · subst z
+            exact hhead
+          · exact hpre z hzpre
+
 private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root x y : HeightState9 P hc n) :
     Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ heightMetric9 x y := by

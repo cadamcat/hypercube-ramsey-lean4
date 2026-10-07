@@ -1118,13 +1118,340 @@ structure LocalSymmetry (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHist
   symmetry : RuleSymmetry Geom H mask O L R Tests
 
 end Conclusions
+set_option maxHeartbeats 2000000 in
 /-- P14.1i: exact posterior support; arbitrary capped rows are insufficient. -/
 theorem posterior_row_support (κ : CConsts) (hκ : κ.Admissible)
     {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
     (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh)
     (mask : Masks H) (O : OddKernels Geom H mask) (L : LikelihoodData Geom H mask O)
     (R : EvenRows Geom H mask O L) : RowSupport Geom H mask O L R := by
-  sorry
+  classical
+  intro v W ys hrow
+  have hsomeCoord : ∃ x, R.σ v W ys x ≠ 0 := by
+    by_contra hnone
+    apply hrow
+    funext x
+    by_contra hx
+    exact hnone ⟨x, hx⟩
+  rcases hsomeCoord with ⟨x₀, hx₀⟩
+  have hpost : ∀ x, R.σ v W ys x ≠ 0 →
+      posteriorRow Geom H mask O L v W ys x ≠ 0 := by
+    intro x hx
+    rw [← R.σ_eq]
+    exact hx
+  have hchosen : ∃ c, selected Geom H mask W v = some c ∧
+      posteriorGate Geom H mask O L v c W ys := by
+    have hp := hpost x₀ hx₀
+    cases hc : selected Geom H mask W v with
+    | none => simp [posteriorRow, hc] at hp
+    | some c =>
+      have hpair : posteriorGate Geom H mask O L v c W ys ∧
+          x₀ ∈ retainedLabels Geom H mask O v c W ys := by
+        by_contra hnot
+        apply hp
+        simp [posteriorRow, hc, hnot]
+      exact ⟨c, rfl, hpair.1⟩
+  rcases hchosen with ⟨c, hsel, hgateBase⟩
+  have hgateAt : ∀ x, R.σ v W ys x ≠ 0 →
+      posteriorGate Geom H mask O L v c W ys ∧
+        x ∈ retainedLabels Geom H mask O v c W ys := by
+    intro x hx
+    have hp := hpost x hx
+    by_contra hnot
+    apply hp
+    simp [posteriorRow, hsel, hnot]
+  rcases (hgateAt x₀ hx₀).1 with ⟨_, _, ⟨hpriorSupport, _⟩, _, _⟩
+  let postTerm (x : Fin (T.S.N k)) (w : H.Tuple) : ℝ :=
+    ((H.tuplePrior (H.cornerOf W c)).w w *
+      subLikelihood Geom H mask O v c W w ys /
+        predictiveMass Geom H mask O v c W ys) *
+      ((∑ r, if w r = x then (1 : ℝ) else 0) / 𝒯.kScale i)
+  have hmeanNe : ∀ x, R.σ v W ys x ≠ 0 →
+      posteriorMean Geom H mask O v c W ys x ≠ 0 := by
+    intro x hx
+    have hfrac :
+        posteriorMean Geom H mask O v c W ys x /
+          (∑ z ∈ retainedLabels Geom H mask O v c W ys,
+            posteriorMean Geom H mask O v c W ys z) ≠ 0 := by
+      simpa [posteriorRow, hsel, hgateAt x hx] using hpost x hx
+    intro hz
+    apply hfrac
+    simp [hz]
+  have tupleCoordinate : ∀ x, R.σ v W ys x ≠ 0 →
+      ∃ w : H.Tuple, ∃ r, postTerm x w ≠ 0 ∧ w r = x := by
+    intro x hx
+    have hm := hmeanNe x hx
+    have hexists : ∃ w : H.Tuple, postTerm x w ≠ 0 := by
+      by_contra hnone
+      push_neg at hnone
+      have hzero : posteriorMean Geom H mask O v c W ys x = 0 := by
+        unfold posteriorMean
+        apply Finset.sum_eq_zero
+        intro w hw
+        simpa [postTerm] using hnone w
+      exact hm hzero
+    rcases hexists with ⟨w, hterm⟩
+    have hcountDiv :
+        ((∑ r, if w r = x then (1 : ℝ) else 0) / 𝒯.kScale i) ≠ 0 :=
+      (mul_ne_zero_iff.mp hterm).2
+    have hcount : (∑ r, if w r = x then (1 : ℝ) else 0) ≠ 0 := by
+      intro hz
+      apply hcountDiv
+      simp [hz]
+    have hr : ∃ r, w r = x := by
+      by_contra hnone
+      push_neg at hnone
+      apply hcount
+      simp [hnone]
+    rcases hr with ⟨r, hrx⟩
+    exact ⟨w, r, hterm, hrx⟩
+  have cornerOfTuple : ∀ x (w : H.Tuple) (r : Fin (𝒯.kScale i)),
+      (H.tuplePrior (H.cornerOf W c)).w w ≠ 0 → w r = x →
+      x ∈ mesh.corner (H.cornerOf W c) i := by
+    intro x w r htuple hrx
+    have hprod :
+        (∏ r' : Fin (𝒯.kScale i), (H.prior (H.cornerOf W c)).w (w r')) ≠ 0 := by
+      simpa [PrimitiveHistory.tuplePrior, FinLaw.pi, lawToFinLaw] using htuple
+    have hcoord := (Finset.prod_ne_zero_iff.mp hprod) r (Finset.mem_univ r)
+    have hcoord' : (H.prior (H.cornerOf W c)).w x ≠ 0 := by
+      simpa [hrx] using hcoord
+    by_contra hx
+    have hzero := hpriorSupport x hx
+    exact hcoord' hzero
+  have hactive : ∀ p, 0 < (H.recLaw p).w W →
+      0 < mesh.wt (H.cornerOf W c) p := by
+    intro p hp
+    let r₀ : H.Rec := Sum.inl c
+    have hprod : 0 < ∏ r : H.Rec, H.lawRec p r (W r) := by
+      change 0 < ∏ r : H.Rec, H.lawRec p r (W r) at hp
+      exact hp
+    have hcenterLaw : 0 < (H.centerLaw p).w (W r₀) := by
+      have hprodNe : (∏ r : H.Rec, H.lawRec p r (W r)) ≠ 0 := ne_of_gt hprod
+      have hfactorNe := (Finset.prod_ne_zero_iff.mp hprodNe)
+        r₀ (Finset.mem_univ r₀)
+      have hfactorNonneg : 0 ≤ H.lawRec p r₀ (W r₀) :=
+        (H.record p r₀).nonneg (W r₀)
+      have hfactorPos : 0 < H.lawRec p r₀ (W r₀) := by
+        by_contra hnot
+        have hle := le_of_not_gt hnot
+        have hz := le_antisymm hle hfactorNonneg
+        exact hfactorNe hz
+      simpa [PrimitiveHistory.lawRec, PrimitiveHistory.record, r₀] using hfactorPos
+    have hwtNe : mesh.wt (H.cornerOf W c) p ≠ 0 := by
+      intro hz
+      apply (ne_of_gt hcenterLaw)
+      have hz' : mesh.wt (W r₀).1 p = 0 := by
+        simpa [PrimitiveHistory.cornerOf] using hz
+      simp [PrimitiveHistory.centerLaw, PrimitiveHistory.vertexLaw,
+        FinLaw.bind, r₀, hz']
+    by_contra hnot
+    have hle : mesh.wt (H.cornerOf W c) p ≤ 0 := le_of_not_gt hnot
+    have hz : mesh.wt (H.cornerOf W c) p = 0 :=
+      le_antisymm hle (mesh.wt_nonneg _ _)
+    exact hwtNe hz
+  have prPosWitness
+      (P : FinLaw ((Group 𝒯 i → Bin 𝒯 i) × (IWord 𝒯 i → Fin (T.S.N k))))
+      (A : ((Group 𝒯 i → Bin 𝒯 i) × (IWord 𝒯 i → Fin (T.S.N k))) → Prop)
+      (hP : 0 < P.pr A) : ∃ ω, A ω ∧ 0 < P.w ω := by
+    classical
+    by_contra hnone
+    push_neg at hnone
+    have hzero : P.pr A = 0 := by
+      unfold FinLaw.pr
+      apply Finset.sum_eq_zero
+      intro ω hω
+      by_cases hA : A ω
+      · have hle : P.w ω ≤ 0 := hnone ω hA
+        have hz : P.w ω = 0 := le_antisymm hle (P.nonneg ω)
+        simp [hA, hz]
+      · simp [hA]
+    exact (ne_of_gt hP) hzero
+  have hsubPositive : ∀ w, subLikelihood Geom H mask O v c W w ys ≠ 0 →
+      0 < subLikelihood Geom H mask O v c W w ys := by
+    intro w hne
+    have hnonneg : 0 ≤ subLikelihood Geom H mask O v c W w ys := by
+      by_cases hh : selected Geom H mask (H.replaceTuple W c w) v = some c ∧
+          starValid Geom H mask v (H.replaceTuple W c w)
+      · have hp : 0 ≤ (refLaw Geom H mask O (H.replaceTuple W c w)).pr
+            (fun ω => nbrLabels v.1 ω.2 = ys) := by
+          unfold FinLaw.pr
+          apply Finset.sum_nonneg
+          intro ω hω
+          split_ifs
+          · exact (refLaw Geom H mask O (H.replaceTuple W c w)).nonneg ω
+          · exact le_rfl
+        simpa [subLikelihood, hh] using hp
+      · simp [subLikelihood, hh]
+    by_contra hnot
+    have hle : subLikelihood Geom H mask O v c W w ys ≤ 0 := le_of_not_gt hnot
+    have hz : subLikelihood Geom H mask O v c W w ys = 0 := le_antisymm hle hnonneg
+    exact hne hz
+  have hitsOfTuple : ∀ (x : Fin (T.S.N k)) (w : H.Tuple)
+      (r : Fin (𝒯.kScale i)), postTerm x w ≠ 0 → w r = x →
+      ∀ l, Hits (T.S.E k) 𝒯.c x (ys l) := by
+    intro x w r hterm hrx l
+    have htupleNe : (H.tuplePrior (H.cornerOf W c)).w w ≠ 0 := by
+      intro hz
+      apply hterm
+      simp [postTerm, hz]
+    have hsubNe : subLikelihood Geom H mask O v c W w ys ≠ 0 := by
+      intro hz
+      apply hterm
+      simp [postTerm, hz]
+    have hsubPos := hsubPositive w hsubNe
+    let W' := H.replaceTuple W c w
+    have hsubCond : selected Geom H mask W' v = some c ∧
+        starValid Geom H mask v W' := by
+      by_contra hnot
+      have hz : subLikelihood Geom H mask O v c W w ys = 0 := by
+        simp [subLikelihood, W', hnot]
+      exact hsubNe hz
+    have hRefPos : 0 < (refLaw Geom H mask O W').pr
+        (fun ω => nbrLabels v.1 ω.2 = ys) := by
+      simpa [subLikelihood, W', hsubCond] using hsubPos
+    obtain ⟨ω, hωlabels, hωweight⟩ := prPosWitness
+      (refLaw Geom H mask O W') (fun ω => nbrLabels v.1 ω.2 = ys) hRefPos
+    let qprod : ℝ := ∏ g₀ : Group 𝒯 i, O.q g₀ W' (ω.1 g₀)
+    let uprod : ℝ := ∏ z : IWord 𝒯 i,
+      O.U (Geom.groupOf z) W' (ω.1 (Geom.groupOf z)) (ω.2 z)
+    have hweight : 0 < qprod * uprod := by
+      simpa [qprod, uprod, refLaw, internalRefLaw, FinLaw.bind, FinLaw.pi] using hωweight
+    have hqprodNonneg : 0 ≤ qprod := by
+      dsimp [qprod]
+      exact Finset.prod_nonneg fun g₀ hg₀ => O.q_nonneg g₀ W' (ω.1 g₀)
+    have huproductNonneg : 0 ≤ uprod := by
+      dsimp [uprod]
+      exact Finset.prod_nonneg fun z hz => O.U_nonneg (Geom.groupOf z) W'
+        (ω.1 (Geom.groupOf z)) (ω.2 z)
+    have hqprodPos : 0 < qprod := by
+      by_contra hnot
+      have hz : qprod = 0 := le_antisymm (le_of_not_gt hnot) hqprodNonneg
+      simp [hz] at hweight
+    have huproductPos : 0 < uprod := by
+      by_contra hnot
+      have hz : uprod = 0 := le_antisymm (le_of_not_gt hnot) huproductNonneg
+      simp [hz] at hweight
+    have hqAt : ∀ g₀, 0 < O.q g₀ W' (ω.1 g₀) := by
+      have hprodNe : (∏ g₀ : Group 𝒯 i, O.q g₀ W' (ω.1 g₀)) ≠ 0 := by
+        simpa [qprod] using (ne_of_gt hqprodPos)
+      intro g₀
+      have hne := (Finset.prod_ne_zero_iff.mp hprodNe) g₀ (Finset.mem_univ g₀)
+      by_contra hnot
+      have hle := le_of_not_gt hnot
+      have hz := le_antisymm hle (O.q_nonneg g₀ W' (ω.1 g₀))
+      exact hne hz
+    have huAt : ∀ z : IWord 𝒯 i,
+        0 < O.U (Geom.groupOf z) W' (ω.1 (Geom.groupOf z)) (ω.2 z) := by
+      have hprodNe : (∏ z : IWord 𝒯 i,
+          O.U (Geom.groupOf z) W' (ω.1 (Geom.groupOf z)) (ω.2 z)) ≠ 0 := by
+        simpa [uprod] using (ne_of_gt huproductPos)
+      intro z
+      have hne := (Finset.prod_ne_zero_iff.mp hprodNe) z (Finset.mem_univ z)
+      by_contra hnot
+      have hle := le_of_not_gt hnot
+      have hz := le_antisymm hle (O.U_nonneg (Geom.groupOf z) W'
+        (ω.1 (Geom.groupOf z)) (ω.2 z))
+      exact hne hz
+    have hflipOdd : ∀ l : Fin (𝒯.P i).h, ¬ IsEvenRole (flipPos v.1 l) := by
+      intro l
+      classical
+      let A : Finset (Fin (𝒯.P i).h) := Finset.univ.filter fun j => v.1 j = true
+      let B : Finset (Fin (𝒯.P i).h) :=
+        Finset.univ.filter fun j => flipPos v.1 l j = true
+      have hEvenA : Even A.card := by
+        simpa [A, IsEvenRole] using v.2
+      change ¬ Even B.card
+      cases hbit : v.1 l with
+      | true =>
+        have hlA : l ∈ A := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hbit⟩
+        have hBA : B = A.erase l := by
+          ext j
+          by_cases hj : j = l
+          · subst j
+            simp [A, B, flipPos, hbit]
+          · simp [A, B, flipPos, hj, Ne.symm hj, hbit]
+        intro hevenB
+        have hevenSub : Even (A.card - 1) := by
+          rw [← Finset.card_erase_of_mem hlA, ← hBA]
+          exact hevenB
+        rcases hEvenA with ⟨a, ha⟩
+        rcases hevenSub with ⟨b, hb⟩
+        have hposA : 0 < A.card := Finset.card_pos.mpr ⟨l, hlA⟩
+        omega
+      | false =>
+        have hlA : l ∉ A := by simp [A, hbit]
+        have hBA : B = insert l A := by
+          ext j
+          by_cases hj : j = l
+          · subst j
+            simp [A, B, flipPos, hbit]
+          · simp [A, B, flipPos, hj, Ne.symm hj, hbit]
+        intro hevenB
+        have hevenIns : Even (A.card + 1) := by
+          rw [← Finset.card_insert_of_notMem hlA, ← hBA]
+          exact hevenB
+        rcases hEvenA with ⟨a, ha⟩
+        rcases hevenIns with ⟨b, hb⟩
+        omega
+    let z : IWord 𝒯 i := flipPos v.1 l
+    have hzOdd : ¬ IsEvenRole z := by simpa [z] using hflipOdd l
+    have hzGroup : z ∈ groupFiber (Geom.groupOf z) := Geom.groupOf_spec z hzOdd
+    have hvGroup : v ∈ groupNeighborhood (Geom.groupOf z) := by
+      simp [groupNeighborhood, z]
+      exact ⟨l, hzGroup⟩
+    have hgroupValid : groupValid Geom H mask (Geom.groupOf z) W' :=
+      hsubCond.2.1 (Geom.groupOf z) hvGroup
+    have hcList : c ∈ realizedList Geom H mask (Geom.groupOf z) W' := by
+      unfold realizedList
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨v, hvGroup, hsubCond.1⟩
+    have hqfactor : 0 < O.q (Geom.groupOf z) W' (ω.1 (Geom.groupOf z)) :=
+      hqAt (Geom.groupOf z)
+    have hUfactor : 0 < O.U (Geom.groupOf z) W'
+        (ω.1 (Geom.groupOf z)) (ω.2 z) := huAt z
+    have hlabel : ω.2 z = ys l := by
+      have h := congrFun hωlabels l
+      simpa [nbrLabels, z] using h
+    have hqOdd : 0 < oddQ Geom H mask (Geom.groupOf z) W'
+        (ω.1 (Geom.groupOf z)) := by
+      have hqeq := congrFun (congrFun (congrFun O.q_eq (Geom.groupOf z)) W')
+        (ω.1 (Geom.groupOf z))
+      rw [← hqeq]
+      exact hqfactor
+    have huHit : ys l ∈ listHit H W'
+        (realizedList Geom H mask (Geom.groupOf z) W') := by
+      have hUeq := congrFun (congrFun (congrFun (congrFun O.U_eq (Geom.groupOf z)) W')
+        (ω.1 (Geom.groupOf z))) (ω.2 z)
+      have huPos0 : 0 < oddU Geom H mask (Geom.groupOf z) W'
+          (ω.1 (Geom.groupOf z)) (ω.2 z) := by
+        rw [← hUeq]
+        exact hUfactor
+      have huPos : 0 < oddU Geom H mask (Geom.groupOf z) W'
+          (ω.1 (Geom.groupOf z)) (ys l) := by
+        rw [← hlabel]
+        exact huPos0
+      have hcond : groupValid Geom H mask (Geom.groupOf z) W' ∧
+          0 < oddQ Geom H mask (Geom.groupOf z) W' (ω.1 (Geom.groupOf z)) :=
+        ⟨hgroupValid, hqOdd⟩
+      unfold oddU at huPos
+      rw [if_pos hcond] at huPos
+      by_cases hhit : ys l ∈ listHit H W' (realizedList Geom H mask (Geom.groupOf z) W')
+      · exact hhit
+      · simp [hhit] at huPos
+    have htupleEq : H.tuple W' c r = w r := by
+      simp [W', PrimitiveHistory.tuple, PrimitiveHistory.replaceTuple]
+    have htupleHit : Hits (T.S.E k) 𝒯.c (H.tuple W' c r) (ys l) := by
+      exact (Finset.mem_filter.mp huHit).2 c hcList r
+    simpa [htupleEq, hrx] using htupleHit
+  refine ⟨H.cornerOf W c, hactive, ?_⟩
+  intro x hx
+  rcases tupleCoordinate x hx with ⟨w, r, hterm, hrx⟩
+  refine ⟨cornerOfTuple x w r ?_ hrx, ?_⟩
+  · intro hz
+    apply hterm
+    simp [postTerm, hz]
+  · exact hitsOfTuple x w r hterm hrx
+
 
 /-- P14.1j: posterior cancellation, retained-mass cost and the independently
 proved forced-present selection incidence estimate. -/
@@ -1224,6 +1551,7 @@ noncomputable def assembleSolver {κ : CConsts} {T : Stage} {k : ℕ}
   low_support := hlow
 }
 
+set_option maxHeartbeats 2000000 in
 /-- Law-preserving history transport carries the entire test event and the
 conditional failure probabilities defining the pretrim bins. -/
 theorem low_output_group_invariant {κ : CConsts} {T : Stage} {k : ℕ}
@@ -1237,7 +1565,151 @@ theorem low_output_group_invariant {κ : CConsts} {T : Stage} {k : ℕ}
       (((Finset.univ.filter fun W => 0 < (H.recLaw p).w W).card : ℕ) : ℝ) ≤
         Real.exp ((T.S.n k : ℝ) ^ (1.01 : ℝ))) :
     LowOutputInvariant (assembleSolver Geom H mask O L R Tests hsupp hmean hlocal hlow) := by
-  sorry
+  classical
+  let S := assembleSolver Geom H mask O L R Tests hsupp hmean hlocal hlow
+  change LowOutputInvariant S
+  intro p g g' y hmode
+  let Sym := hlocal.symmetry
+  let e : (∀ r, S.Val r) ≃ (∀ r, S.Val r) := Sym.history g g'
+  have hqTransport : ∀ W D, S.q g' (e W) D = S.q g W D := by
+    intro W D
+    have hqfun := Sym.q_preserved g g' W g
+    change O.q g' (Sym.history g g' W) D = O.q g W D
+    rw [Sym.groups_target] at hqfun
+    exact congrFun hqfun D
+  have hUTransport : ∀ W D, ∀ y, S.U g' (e W) D y = S.U g W D y := by
+    intro W D y
+    have hUfun := Sym.U_preserved g g' W g D
+    change O.U g' (Sym.history g g' W) D y = O.U g W D y
+    rw [Sym.groups_target] at hUfun
+    exact congrFun hUfun y
+  have hpre : ∀ W D,
+      D ∈ S.pretrimBins W g ↔ D ∈ S.pretrimBins (e W) g' := by
+    intro W D
+    simp only [SliceSolver.pretrimBins, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨hq, hfail⟩
+      constructor
+      · rw [hqTransport W D]
+        exact hq
+      · intro v hv
+        have hv' : v ∈ groupNeighborhood g' := by
+          simpa [SliceSolver.Incident, groupNeighborhood] using hv
+        let v₀ := (Sym.roles g g').symm v
+        have hrole : Sym.roles g g' v₀ = v := by simp [v₀]
+        have hv₀' : Sym.roles g g' v₀ ∈ groupNeighborhood (Sym.groups g g' g) := by
+          simpa [Sym.groups_target, hrole] using hv'
+        have hv₀ : v₀ ∈ groupNeighborhood g :=
+          (Sym.incidence_preserved g g' v₀ g).mp hv₀'
+        have hv₀I : SliceSolver.Incident v₀ g := by
+          simpa [SliceSolver.Incident, groupNeighborhood] using hv₀
+        have hprob := Sym.row_failure_preserved g g' W v₀ g D
+        have hprobS :
+            (S.refLaw (e W)).pr (fun ω =>
+              ω.1 g' = D ∧ S.σ v (e W) (nbrLabels v.1 ω.2) = 0) =
+              (S.refLaw W).pr (fun ω =>
+                ω.1 g = D ∧ S.σ v₀ W (nbrLabels v₀.1 ω.2) = 0) := by
+          change (refLaw Geom H mask O (Sym.history g g' W)).pr (fun ω =>
+              ω.1 g' = D ∧ R.σ v (Sym.history g g' W) (nbrLabels v.1 ω.2) = 0) =
+            (refLaw Geom H mask O W).pr (fun ω =>
+              ω.1 g = D ∧ R.σ v₀ W (nbrLabels v₀.1 ω.2) = 0)
+          simpa only [Sym.groups_target, hrole] using hprob
+        have hineq := hfail v₀ hv₀I
+        rw [hprobS, hqTransport]
+        exact hineq
+    · rintro ⟨hq, hfail⟩
+      constructor
+      · rw [← hqTransport W D]
+        exact hq
+      · intro v hv
+        have hv₀ : v ∈ groupNeighborhood g := by
+          simpa [SliceSolver.Incident, groupNeighborhood] using hv
+        have hv' : Sym.roles g g' v ∈ groupNeighborhood g' := by
+          have hi := Sym.incidence_preserved g g' v g
+          simpa [Sym.groups_target] using hi.mpr hv₀
+        have hv'I : SliceSolver.Incident (Sym.roles g g' v) g' := by
+          simpa [SliceSolver.Incident, groupNeighborhood] using hv'
+        have hprob := Sym.row_failure_preserved g g' W v g D
+        have hprobS :
+            (S.refLaw (e W)).pr (fun ω =>
+              ω.1 g' = D ∧ S.σ (Sym.roles g g' v) (e W)
+                (nbrLabels (Sym.roles g g' v).1 ω.2) = 0) =
+              (S.refLaw W).pr (fun ω =>
+                ω.1 g = D ∧ S.σ v W (nbrLabels v.1 ω.2) = 0) := by
+          change (refLaw Geom H mask O (Sym.history g g' W)).pr (fun ω =>
+              ω.1 g' = D ∧ R.σ (Sym.roles g g' v) (Sym.history g g' W)
+                (nbrLabels (Sym.roles g g' v).1 ω.2) = 0) =
+            (refLaw Geom H mask O W).pr (fun ω =>
+              ω.1 g = D ∧ R.σ v W (nbrLabels v.1 ω.2) = 0)
+          simpa only [Sym.groups_target] using hprob
+        have hineq := hfail (Sym.roles g g' v) hv'I
+        rw [hprobS, hqTransport] at hineq
+        exact hineq
+  have hpreSet : ∀ W, S.pretrimBins W g = S.pretrimBins (e W) g' := by
+    intro W
+    ext D
+    exact hpre W D
+  have hqin : ∀ W D, S.qin W g D = S.qin (e W) g' D := by
+    intro W D
+    have hden :
+        (∑ D' ∈ S.pretrimBins W g, S.q g W D') =
+          ∑ D' ∈ S.pretrimBins (e W) g', S.q g' (e W) D' := by
+      rw [hpreSet W]
+      apply Finset.sum_congr rfl
+      intro D' hD'
+      simpa [S, assembleSolver] using (hqTransport W D').symm
+    unfold SliceSolver.qin
+    by_cases hmem : D ∈ S.pretrimBins W g
+    · have hmem' := (hpre W D).mp hmem
+      simp [hmem, hmem', hden, hqTransport W D]
+    · have hmem' : D ∉ S.pretrimBins (e W) g' := by
+        intro hm
+        exact hmem ((hpre W D).mpr hm)
+      simp [hmem, hmem']
+  have hgood : ∀ W, S.AllGood W ↔ S.AllGood (e W) := by
+    intro W
+    change (∀ v, Tests.Hgood v W) ↔ (∀ v, Tests.Hgood v (e W))
+    constructor
+    · intro h v
+      obtain ⟨v₀, hv₀⟩ := (Sym.roles g g').surjective v
+      rw [← hv₀]
+      exact (Sym.test_preserved g g' W v₀).mpr (h v₀)
+    · intro h v
+      exact (Sym.test_preserved g g' W v).mp (h (Sym.roles g g' v))
+  have hinner : ∀ W,
+      (if S.AllGood W then ∑ D, S.qin W g D * S.U g W D y else 0) =
+        (if S.AllGood (e W) then ∑ D, S.qin (e W) g' D * S.U g' (e W) D y else 0) := by
+    intro W
+    by_cases hg : S.AllGood W
+    · have hg' := (hgood W).mp hg
+      simp only [hg, hg', ite_true]
+      apply Finset.sum_congr rfl
+      intro D hD
+      have hq := hqin W D
+      rw [hq, ← hUTransport W D y]
+    · have hg' : ¬ S.AllGood (e W) := fun h => hg ((hgood W).mpr h)
+      simp [hg, hg']
+  have hnum :
+      (∑ W, (S.recLaw p).w W *
+        (if S.AllGood W then ∑ D, S.qin W g D * S.U g W D y else 0)) =
+      ∑ W, (S.recLaw p).w W *
+        (if S.AllGood W then ∑ D, S.qin W g' D * S.U g' W D y else 0) := by
+    calc
+      _ = ∑ W, (S.recLaw p).w (e W) *
+          (if S.AllGood (e W) then ∑ D, S.qin (e W) g' D * S.U g' (e W) D y else 0) := by
+            apply Finset.sum_congr rfl
+            intro W hW
+            have hw : (S.recLaw p).w (e W) = (S.recLaw p).w W := by
+              change (H.recLaw p).w (Sym.history g g' W) = (H.recLaw p).w W
+              exact Sym.law_preserved p g g' W
+            rw [hinner W, ← hw]
+      _ = ∑ W, (S.recLaw p).w W *
+          (if S.AllGood W then ∑ D, S.qin W g' D * S.U g' W D y else 0) := by
+            exact Equiv.sum_comp e (fun W => (S.recLaw p).w W *
+              (if S.AllGood W then ∑ D, S.qin W g' D * S.U g' W D y else 0))
+  change (S.lowOut p g y) = S.lowOut p g' y
+  unfold SliceSolver.lowOut
+  rw [hnum]
 
 structure SolverWitness {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯} where

@@ -1,6 +1,7 @@
 import HypercubeRamsey.S17.Needs
 import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S17.Nodes_sol_s17_pool
+import HypercubeRamsey.S17.Nodes_q_s17_res1
 
 set_option maxHeartbeats 1000000
 
@@ -1090,7 +1091,7 @@ theorem resampleLocality
     (tapes : ∀ C : D.G.Cell, ℕ → TapeEntry D.F C) :
     LE.CellLocalitySpec Ts order pools tapes ∧
       LE.EventTruthLocalitySpec Ts order pools tapes := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s17_res1.resampleLocality LE Ts order pools tapes
 
 /-- P17.4a: extract the executions and only untouched extra sites from the
 ever-true component; the root is not required to be an untouched test. -/
@@ -1131,7 +1132,145 @@ theorem finiteResamplingWitnessTests
       WitnessReadsDisjoint LE Ts W →
       (tapeLaw D.F Ts).pr (fun tapes => WitnessTestsPass LE Ts pools tapes W) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
-  sorry
+  classical
+  intro m W hItems hReads
+  let e := Lane_q_s17_res1.flattenTapesEquiv D.F Ts
+  let Idx := Lane_q_s17_res1.TapeRoundIndex (G := D.G) Ts
+  let key (j : Fin m) (C : D.G.Cell) : Idx :=
+    ⟨C, ⟨min (witnessReadIndex LE Ts W j C) (Ts + 1), by omega⟩⟩
+  let cfg (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) : Config D.F :=
+    fun C => x (key j C) (pools C)
+  let test (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) : Prop :=
+    LE.S (W j).1 (witnessTestConfig LE Ts pools (e.symm x) W j)
+  let support (j : Fin m) : Finset Idx := Finset.univ.filter fun i =>
+    i.1 ∈ LE.scope (W j).1 ∧ i.2 = (key j i.1).2
+  have hcfg (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) :
+      cfg j x = witnessTestConfig LE Ts pools (e.symm x) W j := by
+    funext C
+    simp [cfg, witnessTestConfig, Tapes.extend, e,
+      Lane_q_s17_res1.flattenTapesEquiv, key]
+  have hdep : ∀ j, FinProb.DependsOn
+      (fun x => if test j x then (1 : ℝ) else 0) (support j) := by
+    intro j x y hxy
+    have hstates : ∀ C, C ∈ LE.scope (W j).1 →
+        (witnessTestConfig LE Ts pools (e.symm x) W j) C =
+          (witnessTestConfig LE Ts pools (e.symm y) W j) C := by
+      intro C hC
+      rw [← hcfg j x, ← hcfg j y]
+      change x (key j C) (pools C) = y (key j C) (pools C)
+      apply congrArg (fun a : TapeEntry D.F C => a (pools C))
+      apply hxy
+      simp [support, hC, key]
+    have htruth := LE.scope_ok (W j).1
+      (witnessTestConfig LE Ts pools (e.symm x) W j)
+      (witnessTestConfig LE Ts pools (e.symm y) W j) hstates
+    exact congrArg (fun p : Prop => if p then (1 : ℝ) else 0) (propext htruth)
+  have hdisj : ∀ i j, i ≠ j → Disjoint (support i) (support j) := by
+    intro i j hij
+    apply Finset.disjoint_left.mpr
+    intro x hxi hxj
+    rcases Finset.mem_filter.mp hxi with ⟨_, ⟨hCi, hki⟩⟩
+    rcases Finset.mem_filter.mp hxj with ⟨_, ⟨hCj, hkj⟩⟩
+    have hiBound := hReads.1 i x.1 hCi
+    have hjBound := hReads.1 j x.1 hCj
+    have hiVal : (key i x.1).2.val = witnessReadIndex LE Ts W i x.1 := by
+      simp [key, Nat.min_eq_left (by omega)]
+      omega
+    have hjVal : (key j x.1).2.val = witnessReadIndex LE Ts W j x.1 := by
+      simp [key, Nat.min_eq_left (by omega)]
+      omega
+    have hval := congrArg Fin.val (hki.symm.trans hkj)
+    rw [hiVal, hjVal] at hval
+    exact (hReads.2 i j hij x.1 hCi hCj) hval
+  have hmap (j : Fin m) :
+      FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j) =
+        D.freshConfigLaw pools := by
+    have hkey : Function.Injective (key j) := by
+      intro C C' h
+      exact congrArg Sigma.fst h
+    have hprod := Lane_q_s17_res1.pi_map_injective
+      (P := fun i : Idx => FinLaw.pi fun P : D.F.Pool i.1 => D.F.fresh i.1 P)
+      (key j) hkey (fun C entry => entry (pools C))
+    have hcoord (C : D.G.Cell) :
+        FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+          (fun entry => entry (pools C)) = D.F.fresh C (pools C) :=
+      Lane_q_s17_res1.pi_map_coordinate_law
+        (fun P : D.F.Pool C => D.F.fresh C P) (pools C)
+    have hcoords :
+        (fun C : D.G.Cell =>
+          FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+            (fun entry => entry (pools C))) =
+        (fun C => D.F.fresh C (pools C)) := funext hcoord
+    calc
+      FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j) =
+          FinLaw.pi (fun C : D.G.Cell =>
+            FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+              (fun entry => entry (pools C))) := by
+        simpa [Lane_q_s17_res1.flatTapeLaw, cfg] using hprod
+      _ = D.freshConfigLaw pools := by
+        rw [hcoords]
+        rfl
+  have hsingle (j : Fin m) :
+      (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) ≤
+        Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := by
+    have htest : test j = fun x => LE.S (W j).1 (cfg j x) := by
+      funext x
+      simp [test, hcfg]
+    calc
+      _ = (FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j)).pr
+          (LE.S (W j).1) := by
+        rw [htest]
+        exact (Lane_q_s17_res1.map_pr_law _ _ _).symm
+      _ = (D.freshConfigLaw pools).pr (LE.S (W j).1) := by rw [hmap j]
+      _ ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := h23 (W j).1 (hItems j)
+  let flatTests (x : ∀ i : Idx, TapeEntry D.F i.1) : Prop :=
+    WitnessTestsPass LE Ts pools (e.symm x) W
+  have hfactor :
+      (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests =
+        ∏ j ∈ (Finset.univ : Finset (Fin m)),
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) := by
+    simpa [Lane_q_s17_res1.flatTapeLaw, flatTests, WitnessTestsPass, test] using
+      Lane_q_s17_res1.pi_pr_inter_disjoint
+        (fun i : Idx => FinLaw.pi fun P : D.F.Pool i.1 => D.F.fresh i.1 P)
+        Finset.univ test support hdep hdisj
+  have hprob :
+      (tapeLaw D.F Ts).pr
+          (fun tapes => WitnessTestsPass LE Ts pools tapes W) =
+        (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests := by
+    calc
+      _ = (FinLaw.map (tapeLaw D.F Ts) e).pr flatTests := by
+        symm
+        calc
+          (FinLaw.map (tapeLaw D.F Ts) e).pr flatTests =
+              (tapeLaw D.F Ts).pr (fun tapes => flatTests (e tapes)) :=
+            Lane_q_s17_res1.map_pr_law _ _ _
+          _ = (tapeLaw D.F Ts).pr
+              (fun tapes => WitnessTestsPass LE Ts pools tapes W) := by
+            congr 1
+      _ = (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests := by
+        rw [Lane_q_s17_res1.tapeLaw_flatten]
+  calc
+    (tapeLaw D.F Ts).pr (fun tapes => WitnessTestsPass LE Ts pools tapes W) =
+        ∏ j ∈ (Finset.univ : Finset (Fin m)),
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) := by
+      rw [hprob, hfactor]
+    _ ≤ ∏ j ∈ (Finset.univ : Finset (Fin m)),
+        Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := by
+      apply Finset.prod_le_prod₀
+      · intro j hj
+        exact Lane_q_s17_res1.finLaw_pr_nonneg
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts) (test j)
+      · intro j hj
+        exact hsingle j
+    _ = (Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ))) ^ m := by simp
+    _ = Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
+      calc
+        _ = Real.rpow (T.S.n k : ℝ) ((-(κ.P : ℝ)) * (m : ℝ)) :=
+          (Real.rpow_mul_natCast (by positivity) (-(κ.P : ℝ)) m).symm
+        _ = Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
+          congr 1
+          push_cast
+          ring
 
 /-- P17.4d(i): target backward-closure extraction with exact terminal entries. -/
 theorem finiteResamplingTargetWitness

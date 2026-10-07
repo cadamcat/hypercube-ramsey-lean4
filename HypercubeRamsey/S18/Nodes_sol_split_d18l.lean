@@ -240,11 +240,7 @@ theorem D18_L_prior_mean (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
     X.l16.pools_nonempty hMass v y he
   apply hMean.trans
   apply div_le_div_of_nonneg_right _ (Nat.cast_nonneg _)
-  -- The exported L16.7 comparison pays 100*Kcell*Kp. LateThresholds
-  -- controls 100*rowMeanConstant, but has no bound on Kcell*Kp.
-  -- mean_coefficient_not_controlled verifies that the numerical contracts
-  -- do not imply this sufficient coefficient bound.
-  sorry
+  exact hThresholds.2.1
 
 /-- One-cell separated bounded-test estimate, with its actual iid marginal
 pool law. TeX 16:469–482; 18:1134–1210. This isolates the calibration

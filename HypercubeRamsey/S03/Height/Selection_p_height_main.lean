@@ -6195,13 +6195,13 @@ private theorem hdScaleRadius_child_enlargement_le_dimension_eventually
   have hceil : (target : ℝ) < (n : ℝ) ^ (1 - ζ) + 1 := by
     dsimp [target]
     exact Nat.ceil_lt_add_one (Real.rpow_nonneg hnpos.le _)
+  have hpow1 : (1 : ℝ) ≤ (n : ℝ) ^ (1 - ζ) := by
+    calc
+      1 = (n : ℝ) ^ (0 : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ (1 - ζ) :=
+        Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hζ.2])
   have hscale : (hdScaleRadius n σ i : ℝ) ≤ 2 * (n : ℝ) ^ (1 - ζ) := by
     have hscale' : (hdScaleRadius n σ i : ℝ) < (target : ℝ) := by exact_mod_cast htarget
-    have hpow1 : (1 : ℝ) ≤ (n : ℝ) ^ (1 - ζ) := by
-      calc
-        1 = (n : ℝ) ^ (0 : ℝ) := by simp
-        _ ≤ (n : ℝ) ^ (1 - ζ) :=
-          Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hζ.2])
     linarith
   have hcoef : 36 * (D : ℝ) ≤ c_d * (n : ℝ) ^ ζ := by
     calc
@@ -6224,7 +6224,7 @@ private theorem hdScaleRadius_child_enlargement_le_dimension_eventually
       _ ≤ 36 * (D : ℝ) * (n : ℝ) ^ (1 - ζ) := by nlinarith [hT]
       _ ≤ c_d * (n : ℝ) ^ ζ * (n : ℝ) ^ (1 - ζ) :=
         mul_le_mul_of_nonneg_right hcoef (Real.rpow_nonneg hnpos.le _)
-      _ = c_d * (n : ℝ) := by rw [hpower]
+      _ = c_d * (n : ℝ) := by rw [mul_assoc, hpower]
       _ ≤ _ := hdim
   exact_mod_cast hboundReal
 

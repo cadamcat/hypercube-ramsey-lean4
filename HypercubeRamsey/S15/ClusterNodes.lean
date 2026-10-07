@@ -1,4 +1,6 @@
 import HypercubeRamsey.S15.DirectNodes
+import HypercubeRamsey.S15.Masks
+import HypercubeRamsey.S15.Capacity
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -6,13 +8,6 @@ namespace HypercubeRamsey.S15
 
 open HypercubeRamsey Filter Classical
 open scoped BigOperators
-
-/-- A history test depends only on the primitive slice records in `S`. -/
-def ClusterHistoryDependsOn {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (F : ClusterHistory PT hPT hm → ℝ) (S : Finset (ClusterRecordIndex PT hPT hm)) : Prop :=
-  ∀ W W', (∀ r ∈ S, W r = W' r) → F W = F W'
 
 /-- A test of the degree and crossing alarms from L15.2a. -/
 noncomputable def clusterCrossingRemovedMass {κ : CConsts} {T : Stage} {k : ℕ}
@@ -32,7 +27,7 @@ def ClusterAlarmTestClaim (κ : CConsts) (T : Stage) : Prop :=
     ∀ a : EvenPosition T k,
       (clusterHistoryLaw PT hPT hm).pr (fun W => clusterAlarm1 PT hPT hm W a) ≤
         Real.exp (-Real.rpow (T.S.n k : ℝ) 0.2) ∧
-      ∀ W, clusterCrossingRemovedMass PT hPT hm W a ≤ Real.exp (-0.01 * T.S.n k)
+      ∀ W, clusterCrossingRemovedMass PT hPT hm W a ≤ Real.exp (-(κ.α / 2) * T.S.n k)
 
 /-- Raw mean bound for the large-interaction alarm `T_v(W)`. -/
 def ClusterInteractionMeanClaim (κ : CConsts) (T : Stage) : Prop :=
@@ -51,8 +46,9 @@ structure ClusterHistoryConditioning {κ : CConsts} {T : Stage} {k : ℕ}
   law_eq : law = clusterAvoidedHistoryLaw PT hPT hm positive
   avoids : ∀ W, law.w W ≠ 0 → clusterAlarmsAvoided PT hPT hm W
   local_comparison : ∀ F : ClusterHistory PT hPT hm → ℝ,
-    (∀ W, 0 ≤ F W) → ∀ S : Finset (ClusterRecordIndex PT hPT hm),
-      ClusterHistoryDependsOn F S → (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ κ.Astar →
+    (∀ W, 0 ≤ F W) → ∀ U : Finset (ClusterConsultation PT),
+      ClusterHistoryDependsOn F (clusterConsultationScope PT hPT hm U) →
+      (U.card : ℝ) ≤ (T.S.n k : ℝ) ^ 5 →
         law.E F ≤ (1 + 1 / (T.S.n k : ℝ)) * (clusterHistoryLaw PT hPT hm).E F
 
 /-- The output contract of L15.2c. -/
@@ -116,14 +112,18 @@ theorem high_cluster_history_load (κ : CConsts) (hκ : κ.Admissible) (T : Stag
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterHistoryLoadClaim κ T := by
   sorry
 
-/-- P15.3b: the independent bin law rarely violates the capacity-certificate gates. -/
+/-- P15.3b: actual certificate charges, with a constant supplied by the estimate. -/
 def ClusterCapacityClaim (κ : CConsts) (T : Stage) : Prop :=
-  ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+  ∃ c : ℝ, 0 < c ∧ ∀ᶠ k in atTop,
+    ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
-    ∀ W, clusterHistoryLoad PT hPT hm W → ∀ y,
-      (clusterIndependentBinKernel PT hPT hm W).pr
-        (fun B => κ.θ0 < clusterGivenBinColumn PT hPT hm W B y) ≤
-          Real.exp (-κ.cChernoff * (κ.d0 : ℝ) ^ (0.4 : ℝ))
+    ∀ W, clusterHistoryLoad PT hPT hm W →
+      (∀ i (D : Bin PT.tiling i) g, 0 < clusterBinProbability PT hPT hm W g D.1 →
+        clusterPinnedCapacityCharge PT hPT hm W D.1 g ≤
+          Real.exp (-c * (D.1.card : ℝ) ^ (0.4 : ℝ))) ∧
+      (∀ B, (clusterIndependentBinKernel PT hPT hm W).w B ≠ 0 →
+        clusterCapacityAvoided PT hPT hm W B →
+          ∀ y, clusterGivenBinColumn PT hPT hm W B y ≤ κ.θ0)
 
 /-- P15.3b: capacity certificates bound bin-wise label-column overloads. -/
 theorem high_cluster_capacity_certificates (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -188,7 +188,7 @@ noncomputable def clusterColumnMoment {κ : CConsts} {T : Stage} {k : ℕ}
   CS.law.E (fun ω =>
     if CS.historyLoad ω then clusterColumnAverage CS i x ω ^ (T.S.n k) else 0)
 
-/-- P15.4a: cap of each cluster row on a successful history and assignment. -/
+/-- P15.4a: both equation (15.20) bounds, and the individual nominal factor cap. -/
 def ClusterRowCapClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
@@ -196,177 +196,155 @@ def ClusterRowCapClaim (κ : CConsts) (T : Stage) : Prop :=
       (∀ ω a x, CS.row ω a x = clusterRowWeight PT hPT hm (CS.history ω) (CS.internal ω) a x) ∧
       (∀ ω, CS.law.w ω ≠ 0 → CS.historyLoad ω → ∀ a x,
         (PT.tiling.P (patchAt PT hPT a.1)).M * CS.row ω a x ≤
-          2 ^ (T.S.n k) * Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)))
+          2 ^ (T.S.n k) * Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1))) ∧
+      (∀ ω, CS.law.w ω ≠ 0 → CS.historyLoad ω → ∀ a x,
+        CS.row ω a x ≤ 4 * clusterSigma PT hPT hm (CS.history ω) (CS.internal ω) a x *
+          ∏ b ∈ clusterBulkNeighbours PT hPT a ∪ clusterCrossingNeighbours PT hPT a,
+            normalizedHit (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT b.1)) x (CS.label ω b)) ∧
+      (∀ i x, x ∈ PT.envelope i → ∀ (b : OddPosition T k) y,
+        normalizedHit (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT b.1)) x y ≤ 3)
 
-/-- Core scopes meet when their complementary words and inner words are close. -/
-def clusterCoreNear {κ : CConsts} {T : Stage} {k : ℕ}
-    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
-    (a b : EvenPosition T k) : Prop :=
-  (hammingDist (outsideWord PT hPT i a.1) (outsideWord PT hPT i b.1) : ℝ) ≤ 4 ∧
-  (hammingDist (internalWord PT hPT i a.1) (internalWord PT hPT i b.1) : ℝ) ≤
-    100 * κ.ρ * (PT.tiling.P i).h
-
-/-- P15.4b: geometric core-neighbour and crossing-graph sparsity. -/
+/-- P15.4b: core fractions, forest/rank tails and the actual crossing-factor deletion cost. -/
 def ClusterGeometryClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
-    ∀ i a, a ∈ evenPatchPositions PT.tiling i →
-      ((evenPatchPositions PT.tiling i).filter fun b => clusterCoreNear PT hPT i a b).card ≤
-        (evenPatchPositions PT.tiling i).card *
-          Real.exp (0.01 * PT.tiling.gain i) / 2 ^ (T.S.n k)
+      (∀ i a, a ∈ evenPatchPositions PT.tiling i →
+        ((evenPatchPositions PT.tiling i).filter fun b => clusterCoreNear PT hPT i a b).card ≤
+          (evenPatchPositions PT.tiling i).card *
+            Real.exp (0.01 * PT.tiling.gain i) / 2 ^ (T.S.n k)) ∧
+      (∀ i G j, j ≤ T.S.n k →
+        clusterCrossingRankTail PT i G j ≤
+          ((T.S.n k : ℝ) ^ 2 * clusterCrossingFraction T k) ^ j) ∧
+      (∀ vs G, (clusterCrossingNonisolated PT vs G).card ≤ 2 * clusterCrossingRank PT vs G) ∧
+      (∀ i x, x ∈ PT.envelope i → ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+        ∀ ys : OddAssignment T k,
+        (∏ r ∈ clusterKeptRows M,
+          ∏ b ∈ clusterCrossingNeighbours PT hPT (M.positions r),
+            normalizedHit (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT b.1)) x (ys b)) ≤
+          3 ^ (2 * clusterCrossingRank PT M.positions M.geometric * (PT.tiling.P i).ℓ) *
+            ∏ q ∈ clusterAllowedCrossings PT hPT M,
+              normalizedHit (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT q.2.1)) x (ys q.2))
 
-/-- P15.4c: the small-bin core repeat cost is absorbed by the row cap. -/
+/-- P15.4c: the small-bin core-repeat probability pays the cap, with gain to spare. -/
 def ClusterSmallBinSpliceClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     PT.tiling.mode = .highSmall → ∀ i,
-      (T.S.n k : ℝ) ^ 4 * 4 * Real.exp
-        (2 * (PT.tiling.kScale i : ℝ) * PT.tiling.tScale i) *
-        (PT.tiling.P i).d / (PT.tiling.P i).M ≤
-          (2 : ℝ) ^ (-(T.S.n k : ℤ)) * Real.exp (0.01 * PT.tiling.gain i)
+      clusterCoreRepeatCost PT i ≤
+        (2 : ℝ) ^ (-(T.S.n k : ℤ)) * Real.exp (0.01 * PT.tiling.gain i)
 
-/-- P15.4d: label-stage upper comparison on at most `n^2` queried roles. -/
-def ClusterLabelTransfer {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (CS : ClusterSample PT hPT hm) : Prop :=
-  (CS.referenceLabelLaw = clusterRawOddLabelLaw PT hPT hm) ∧
-    (∀ ω b, CS.label ω b =
-      (CS.internal ω (clusterSliceAt PT hPT b.1)).2 (clusterWordAt PT hPT b.1)) ∧
-    (∀ (F : OddAssignment T k → ℝ), (∀ ys, 0 ≤ F ys) →
-      ∀ (S : Finset (OddPosition T k)),
-      (∀ ys ys', (∀ b ∈ S, ys b = ys' b) → F ys = F ys') →
-      (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
-        (FinLaw.map CS.law CS.label).E F ≤
-          Real.exp (∑ b ∈ S, Real.rpow
-            (max ((PT.tiling.P (patchAt PT hPT b.1)).d : ℝ) 1) (-0.04)) *
-            CS.referenceLabelLaw.E F)
+/-- P15.4d: conditional comparison for the fixed nonnegative masked row product.
+The load and mask indicators remain in the integral after label comparison. -/
+def ClusterLabelTransfer (κ : CConsts) (T : Stage) : Prop :=
+  ∃ L : ℝ, 0 < L ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+    ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+    ∀ CS : ClusterSample PT hPT hm, ∀ i x, x ∈ PT.envelope i →
+    ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      clusterMaskedIntegral CS i x M ≤ L ^ (T.S.n k) * clusterAfterLabelIntegral CS i x M
 
-/-- P15.4e: bin-stage upper comparison on every queried group scope. -/
-def ClusterBinTransfer {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (CS : ClusterSample PT hPT hm) : Prop :=
-  (∀ ω g, CS.bins ω g = (CS.internal ω g.1).1 g.2) ∧
-  (∀ W B, CS.law.pr (fun ω => CS.history ω = W ∧ CS.bins ω = B) =
-    (FinLaw.bind CS.binStage.historyLaw CS.binStage.binLaw).pr (fun wb => wb = (W, B))) ∧
-  (∀ W, CS.binStage.historyLaw.w W ≠ 0 → ∀ B,
-    (CS.binStage.binLaw W).w B ≠ 0 → clusterBinGood PT hPT hm W B) ∧
-  (∀ W, CS.binStage.historyLaw.w W ≠ 0 →
-    ∀ (F : ClusterBinAssignment PT → ℝ), (∀ B, 0 ≤ F B) →
-    ∀ (S : Finset (ClusterGroupIndex PT)),
-    ClusterBinDependsOn F S → (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 3 →
-      (CS.binStage.binLaw W).E F ≤ (1 + 1 / (T.S.n k : ℝ)) *
-        (clusterIndependentBinKernel PT hPT hm W).E F)
+/-- P15.4e: bin comparison followed by reverse integration of the necessary earlier repeats.
+Only after bin comparison is the global load restriction discarded. -/
+def ClusterBinTransfer (κ : CConsts) (T : Stage) : Prop :=
+  ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+    ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+    ∀ CS : ClusterSample PT hPT hm, ∀ i x, x ∈ PT.envelope i →
+    ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      clusterAfterLabelIntegral CS i x M ≤
+        2 * clusterCoreRepeatCost PT i ^ M.coreBins.card *
+          clusterCrossingFraction T k ^ M.crossingBins.card *
+            CS.binStage.historyLaw.E (clusterReferenceMean PT hPT hm i x M)
 
-/-- P15.4f: history avoidance restores the raw product on separated local scopes. -/
-def ClusterHistoryRestore {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (CS : ClusterSample PT hPT hm) : Prop :=
-    (∀ ω, CS.historyLoad ω ↔ clusterHistoryLoad PT hPT hm (CS.history ω)) ∧
-      (1 - (1 / 100 : ℝ) ≤ CS.law.pr CS.historyLoad) ∧
-      (0 < (clusterHistoryLaw PT hPT hm).pr (clusterAlarmsAvoided PT hPT hm)) ∧
-      (CS.binStage.historyLaw = clusterAvoidedHistoryLaw PT hPT hm CS.binStage.history_positive) ∧
-      (∀ W, CS.binStage.historyLaw.w W ≠ 0 → clusterAlarmsAvoided PT hPT hm W) ∧
-      ((99 / 100 : ℝ) ≤ CS.binStage.historyLaw.pr (fun W => clusterHistoryLoad PT hPT hm W)) ∧
-      (∀ (F : ClusterHistory PT hPT hm → ℝ), (∀ W, 0 ≤ F W) →
-        ∀ (S : Finset (ClusterRecordIndex PT hPT hm)),
-        (∀ W W', (∀ r ∈ S, W r = W' r) → F W = F W') →
-        (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ κ.Astar →
-          CS.binStage.historyLaw.E F ≤ (1 + 1 / (T.S.n k : ℝ)) *
-            (clusterHistoryLaw PT hPT hm).E F)
+/-- P15.4f: restore raw histories and factor the kept reference product.
+The equality exposes where every remaining nominal external hit integrates to one. -/
+def ClusterHistoryRestore (κ : CConsts) (T : Stage) : Prop :=
+  ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+    ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+    ∀ CS : ClusterSample PT hPT hm, ∀ i x, x ∈ PT.envelope i →
+    ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      (clusterHistoryLaw PT hPT hm).E (clusterReferenceMean PT hPT hm i x M) =
+        ∏ r ∈ clusterKeptRows M, (clusterRawReferenceLaw PT hPT hm).E
+          (fun z => (PT.tiling.P i).M * clusterSigma PT hPT hm z.1 z.2 (M.positions r) x) ∧
+      CS.binStage.historyLaw.E (clusterReferenceMean PT hPT hm i x M) ≤
+        2 * rowMeanConstant κ ^ (clusterKeptRows M).card
 
-/-- P15.4a: cap estimate from the D14 row cap and the successful high-mode gates. -/
+/-- P15.4a: prove the row cap and nominal-denominator product comparison. -/
 theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterRowCapClaim κ T := by
   sorry
 
-/-- P15.4b: geometric removal counts and crossing-graph sparsity. -/
+/-- P15.4b: core removal counts, forest/rank sparsity and crossing-factor deletion. -/
 theorem high_cluster_geometry (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterGeometryClaim κ T := by
   sorry
 
-/-- P15.4c: small-bin repeated-core splice bound in high-small mode. -/
+/-- P15.4c: the small-bin core repeat cost. -/
 theorem high_cluster_small_bin_splice (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterSmallBinSpliceClaim κ T := by
   sorry
 
-/-- P15.4d: extract the label comparison proved at the label-sampling stage. -/
-theorem high_cluster_label_transfer {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (CS : ClusterSample PT hPT hm) : ClusterLabelTransfer CS :=
-  ⟨CS.referenceLabelLaw_eq,
-    CS.label_eq, CS.label_local_upper_comparison⟩
-
-/-- P15.4e: extract the bin comparison proved at the bin-sampling stage. -/
-theorem high_cluster_bin_transfer {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (CS : ClusterSample PT hPT hm) : ClusterBinTransfer CS :=
-  ⟨CS.bins_eq, CS.bin_stage_marginal_eq,
-    CS.binStage.bin_requirements, CS.binStage.local_upper_comparison⟩
-
-/-- P15.4f: extract the history-local comparison from the conditioned process. -/
-theorem high_cluster_history_restore {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
-    (CS : ClusterSample PT hPT hm) : ClusterHistoryRestore CS :=
-  ⟨CS.history_eq, CS.history_load_probability,
-    CS.binStage.history_positive,
-    CS.binStage.historyLaw_eq,
-    CS.binStage.history_avoids_alarms,
-    CS.binStage.history_load_probability,
-    CS.binStage.history_local_upper_comparison⟩
-
-/-- P15.4g: sum the geometric removal masks and transfer costs into the `K^n` moment bound. -/
-theorem high_cluster_mask_summation (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    {k : ℕ} {PT : ProfiledTiling κ T k} (hPT : PT.Valid)
-    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
-    (CS : ClusterSample PT hPT hm) (i : Fin PT.tiling.m) (x : Fin (T.S.N k))
-    (hrowFormula : ∀ ω a x,
-      CS.row ω a x = clusterRowWeight PT hPT hm (CS.history ω) (CS.internal ω) a x)
-    (hcap : ∀ ω, CS.law.w ω ≠ 0 → CS.historyLoad ω →
-      ∀ a x', (PT.tiling.P (patchAt PT hPT a.1)).M * CS.row ω a x' ≤
-        2 ^ (T.S.n k) * Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)))
-    (hgeometry : ∀ a, a ∈ evenPatchPositions PT.tiling i →
-      ((evenPatchPositions PT.tiling i).filter fun b => clusterCoreNear PT hPT i a b).card ≤
-        (evenPatchPositions PT.tiling i).card * Real.exp (0.01 * PT.tiling.gain i) /
-          2 ^ (T.S.n k))
-    (hsplice : PT.tiling.mode = .highSmall →
-      (T.S.n k : ℝ) ^ 4 * 4 * Real.exp
-        (2 * (PT.tiling.kScale i : ℝ) * PT.tiling.tScale i) *
-        (PT.tiling.P i).d / (PT.tiling.P i).M ≤
-          (2 : ℝ) ^ (-(T.S.n k : ℤ)) * Real.exp (0.01 * PT.tiling.gain i))
-    (hlabel : ClusterLabelTransfer CS) (hbin : ClusterBinTransfer CS)
-    (hhistory : ClusterHistoryRestore CS) :
-    clusterColumnMoment CS i x ≤ κ.A0 ^ (T.S.n k) := by
+/-- P15.4d: transfer the actual masked product, conditional on its entering history and bins. -/
+theorem high_cluster_label_transfer (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterLabelTransfer κ T := by
   sorry
 
-/-- P15.4: high-cluster column moments under the history, bin, and label stages. -/
-def ClusterColumnMomentClaim (κ : CConsts) (T : Stage) : Prop :=
+/-- P15.4e: bin comparison and reverse integration, with all removed variables charged. -/
+theorem high_cluster_bin_transfer (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterBinTransfer κ T := by
+  sorry
+
+/-- P15.4f: restore the raw local scopes and factor the kept reference experiment. -/
+theorem high_cluster_history_restore (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterHistoryRestore κ T := by
+  sorry
+
+/-- Fixed-mask expansion: caps and deletion costs are outside each nonnegative tested product. -/
+def ClusterMaskExpansionClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
     ∀ CS : ClusterSample PT hPT hm, ∀ i x, x ∈ PT.envelope i →
-      clusterColumnMoment CS i x ≤ κ.A0 ^ (T.S.n k)
+      clusterColumnMoment CS i x ≤
+        (∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then
+          clusterMaskPayoff PT i M * clusterMaskedIntegral CS i x M else 0) /
+          ((evenPatchPositions PT.tiling i).card : ℝ) ^ (T.S.n k)
 
-/-- P15.4: assemble the caps, geometric masks, three transfers, and final summation. -/
+/-- P15.4g(i): expand the column power and fix the ordered removal masks. -/
+theorem high_cluster_mask_expansion (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04)
+    (hcap : ClusterRowCapClaim κ T) (hgeometry : ClusterGeometryClaim κ T) :
+    ClusterMaskExpansionClaim κ T := by
+  sorry
+
+/-- One fixed producer constant, shared with the final Markov estimate. -/
+def ClusterColumnMomentBound (κ : CConsts) (T : Stage) (K : ℝ) : Prop :=
+  ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+    ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+    ∀ CS : ClusterSample PT hPT hm, ∀ i x, x ∈ PT.envelope i →
+      clusterColumnMoment CS i x ≤ K ^ (T.S.n k)
+
+/-- P15.4: the paper supplies K before all sufficiently large indices and all tilings. -/
+def ClusterColumnMomentClaim (κ : CConsts) (T : Stage) : Prop :=
+  ∃ K : ℝ, 0 < K ∧ ClusterColumnMomentBound κ T K
+
+/-- P15.4g(ii): sum already-transferred masks and crossing forests.
+All index-dependent estimates arrive as eventual contracts; no arbitrary early index is used. -/
+theorem high_cluster_mask_summation (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04)
+    (hexpand : ClusterMaskExpansionClaim κ T) (hgeometry : ClusterGeometryClaim κ T)
+    (hsplice : ClusterSmallBinSpliceClaim κ T) (hlabel : ClusterLabelTransfer κ T)
+    (hbin : ClusterBinTransfer κ T) (hhistory : ClusterHistoryRestore κ T) :
+    ClusterColumnMomentClaim κ T := by
+  sorry
+
+/-- P15.4: assemble the fixed-mask expansion, three actual transfers and mask summation. -/
 theorem high_cluster_column_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterColumnMomentClaim κ T := by
   have hcap := high_cluster_row_caps κ hκ T hDeep
   have hgeometry := high_cluster_geometry κ hκ T hDeep
   have hsplice := high_cluster_small_bin_splice κ hκ T hDeep
-  filter_upwards [hcap, hgeometry, hsplice] with k hcap hgeometry hsplice
-  intro PT hPT hm CS i x hx
-  exact high_cluster_mask_summation κ hκ T hPT hm CS i x
-    (fun ω a x' => (hcap PT hPT hm CS).1 ω a x')
-    (fun ω hω hload a x' => (hcap PT hPT hm CS).2 ω hω hload a x')
-    (by
-      intro a ha
-      exact hgeometry PT hPT hm i a ha)
-    (fun hs => hsplice PT hPT hs i)
-    (high_cluster_label_transfer CS) (high_cluster_bin_transfer CS)
-    (high_cluster_history_restore CS)
+  have hexpand := high_cluster_mask_expansion κ hκ T hDeep hcap hgeometry
+  have hlabel := high_cluster_label_transfer κ hκ T hDeep
+  have hbin := high_cluster_bin_transfer κ hκ T hDeep
+  have hhistory := high_cluster_history_restore κ hκ T hDeep
+  exact high_cluster_mask_summation κ hκ T hDeep hexpand hgeometry hsplice hlabel hbin hhistory
 
 /-- Normalize one nonnegative high-cluster row after its mass gate. -/
 noncomputable def clusterNormalizedSampleRow {κ : CConsts} {T : Stage} {k : ℕ}
@@ -388,7 +366,8 @@ def ClusterHallOutcomeClaim (κ : CConsts) (T : Stage) : Prop :=
 /-- C15.Fa: retain history-load success while applying Markov and the union bound to all columns. -/
 theorem high_cluster_good_outcome (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hSamples : ClusterSampleClaim κ T)
-    (hMoments : ClusterColumnMomentClaim κ T) : ClusterHallOutcomeClaim κ T := by
+    (K : ℝ) (hK : 0 < K) (hMoments : ClusterColumnMomentBound κ T K) :
+    ClusterHallOutcomeClaim κ T := by
   sorry
 
 /-- A normalized set of even rows produced from one good cluster outcome. -/
@@ -435,15 +414,16 @@ theorem high_cluster_exclusion (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       (PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) → CubeIn T k PT.tiling.c := by
   have hSamples := high_cluster_sampling κ hκ T hDeep
-  have hMoments := high_cluster_column_moment κ hκ T hDeep
-  have hGood := high_cluster_good_outcome κ hκ T hDeep hSamples hMoments
+  obtain ⟨K, hK, hMoments⟩ := high_cluster_column_moment κ hκ T hDeep
+  have hGood := high_cluster_good_outcome κ hκ T hDeep hSamples K hK hMoments
   filter_upwards [hSamples, hGood] with k hSamplesK hGoodK
   intro PT hPT hm
   obtain ⟨CS⟩ := hSamplesK PT hPT hm
   obtain ⟨ω, hω, hload, hcol⟩ := hGoodK PT hPT hm CS
   obtain ⟨H⟩ := high_cluster_fractional_rows hPT (hm := hm) CS ω
-    (CS.injective_on_support ω hω) (CS.row_nonneg ω) (CS.mass_gate ω hω)
-    (fun b => CS.label_supported ω b) (CS.row_support ω) (CS.common_neighbour ω) hcol
+    (CS.injective_on_support ω hω hload) (CS.row_nonneg ω) (CS.mass_gate ω hω hload)
+    (CS.label_supported ω hω hload) (CS.row_support ω hω hload)
+    (CS.common_neighbour ω hω hload) hcol
   exact (cluster_certificate_to_cube H).1
 
 end HypercubeRamsey.S15

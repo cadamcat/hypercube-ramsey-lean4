@@ -460,6 +460,75 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       ∀ g, D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) ≤
         Real.exp (-(D.n : ℝ) ^ c) := by
+  have rPrimeFormula (D : Ctx η₀ β p h) (ξ : D.Tup) :
+      D.R'.w ξ = ∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) := by
+    simp only [Ctx.R', FinProb.map, FinProb.bind, FinProb.pi]
+    rw [Fintype.sum_prod_type]
+    simp [Ctx.tagLaw]
+  have rPrimeHit (D : Ctx η₀ β p h) (x : Fin D.N) :
+      D.R'.pr (fun ξ => D.hitsAll x ξ) =
+        ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by
+    classical
+    have hProdId (i : D.M.ι) :
+        (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+          if D.hitsAll x ξ then (1 : ℝ) else 0) =
+          rowDeg D.E D.G x (D.M.ν i) ^ h := by
+      have hInd (ξ : D.Tup) :
+          (if D.hitsAll x ξ then (1 : ℝ) else 0) =
+            ∏ j, if Hits D.E D.G x (ξ j) then (1 : ℝ) else 0 := by
+        by_cases hall : ∀ j, Hits D.E D.G x (ξ j)
+        · simp [Ctx.hitsAll, hall]
+        · push_neg at hall
+          obtain ⟨j, hj⟩ := hall
+          have hz : (∏ j', if Hits D.E D.G x (ξ j') then (1 : ℝ) else 0) = 0 :=
+            Finset.prod_eq_zero (Finset.mem_univ j) (by simp [hj])
+          have hnotall : ¬ D.hitsAll x ξ := by
+            intro hAll
+            exact hj (hAll j)
+          simp [hnotall, hz]
+      calc
+        _ = ∑ ξ : D.Tup, ∏ j, (D.M.ν i).w (ξ j) *
+              (if Hits D.E D.G x (ξ j) then (1 : ℝ) else 0) := by
+          apply Finset.sum_congr rfl
+          intro ξ _
+          rw [hInd, ← Finset.prod_mul_distrib]
+        _ = ∏ j : Fin h, ∑ y : Fin D.N, (D.M.ν i).w y *
+              (if Hits D.E D.G x y then (1 : ℝ) else 0) := by
+          rw [Fintype.prod_sum]
+        _ = rowDeg D.E D.G x (D.M.ν i) ^ h := by
+          simp [rowDeg, Finset.prod_const, Fintype.card_fin]
+    change (∑ ξ : D.Tup, if D.hitsAll x ξ then D.R'.w ξ else 0) = _
+    calc
+      (∑ ξ : D.Tup, if D.hitsAll x ξ then D.R'.w ξ else 0) =
+          ∑ ξ, D.R'.w ξ * if D.hitsAll x ξ then (1 : ℝ) else 0 := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        split_ifs <;> ring
+      _ =
+          ∑ ξ, (∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j)) *
+            if D.hitsAll x ξ then (1 : ℝ) else 0 := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [rPrimeFormula D ξ]
+      _ = ∑ i, D.M.Λ i *
+          (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+            if D.hitsAll x ξ then (1 : ℝ) else 0) := by
+        simp_rw [Finset.sum_mul]
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro i _
+        calc
+          _ = ∑ ξ, D.M.Λ i * ((∏ j, (D.M.ν i).w (ξ j)) *
+                if D.hitsAll x ξ then (1 : ℝ) else 0) := by
+            apply Finset.sum_congr rfl
+            intro ξ _
+            ring
+          _ = D.M.Λ i * ∑ ξ, (∏ j, (D.M.ν i).w (ξ j)) *
+                if D.hitsAll x ξ then (1 : ℝ) else 0 := by rw [← Finset.mul_sum]
+      _ = ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [hProdId i]
   have cutoffLoss (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT)
       (h34 : D.Gate34 Θ g) (hnot : ¬ D.Gate2 Θ g)
       (hpost : ∑ i, D.postW (Θ g) i = 1)

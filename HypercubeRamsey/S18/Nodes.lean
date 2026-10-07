@@ -40,6 +40,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n6_g
 import HypercubeRamsey.S18.Nodes_q_s18_n2
 import HypercubeRamsey.S18.Nodes_q_s18_n3
 import HypercubeRamsey.S18.Deletion_sol_s18_1b
+import HypercubeRamsey.S18.Nodes_sol_s18_1c
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -436,7 +437,18 @@ theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK 
       ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr
         (fun out => D.R1 j out ∧ D.R2 j h out ∧ ¬ D.R3 j h out) ≤
           Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
-  sorry
+  obtain ⟨Kβ, hKβ, hSchedule, hSmall⟩ := L18_0a hκ T
+  have hε : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  have hn : ∀ᶠ k in atTop, 0 < (T.S.n k : ℝ) := by
+    filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+    exact_mod_cast (show 0 < T.S.n k by omega)
+  filter_upwards [hSchedule, hSmall (Real.log 2 / 1000) hε,
+    Lane_sol_s18_1c.numerical_cutoff T, hn] with k hSchedule hSmall hCutoff hn
+  intro PT hPT D hD hT hB j b h hg
+  have hS := hSchedule PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hE := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  exact (Lane_sol_s18_1c.trueHit_tail D hT K27 hB hE hn
+    (fun i => (hS i).1) j b h hg).trans hCutoff
 
 theorem L18_1 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∃ K27 : ℝ, 0 < K27 ∧ ∀ᶠ k in atTop,

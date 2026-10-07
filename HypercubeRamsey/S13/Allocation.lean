@@ -3,6 +3,7 @@ import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.CubeGeometry
 import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.Framework.Embedding
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # Section 13.3: extraction, type selection, and prefix allocation
@@ -1391,6 +1392,7 @@ theorem law_subsample : LawSubsampleStatement := by
 theorem random_subset_lemma : UniformSubsampleStatement ∧ LawSubsampleStatement :=
   ⟨uniform_subsample, law_subsample⟩
 
+set_option maxHeartbeats 5000000 in
 /-- L13.3a (sections/13, lines 141–147): direct bias extraction from a witness and absence at twice its budget. -/
 theorem direct_patch_from_bias (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hSampling : UniformSubsampleStatement)
@@ -1399,7 +1401,703 @@ theorem direct_patch_from_bias (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       RX ⊆ T.X k → RY ⊆ T.Y k →
       (κ.M1 * κ.Q0 ≤ (g : ℝ)) → BiasWitness κ T k RX RY g →
       ¬ BiasWitness κ T k RX RY (2 * g) → DirectPatchData κ T k RX RY g := by
-  sorry
+  classical
+  have hξpow : Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) < 1 := by
+    have hz : 0 < 10 * (κ.u : ℝ) + 100 := by positivity
+    have hpos : (1 : ℝ) < Real.rpow 2 (10 * (κ.u : ℝ) + 100) :=
+      Real.one_lt_rpow (by norm_num) hz
+    change (2 : ℝ) ^ (-(10 * (κ.u : ℝ) + 100)) < 1
+    rw [Real.rpow_neg (by norm_num : (0 : ℝ) ≤ 2)]
+    exact inv_lt_one_of_one_lt₀ hpos
+  have hξsmall : κ.ξ < 1 := by
+    have hmul := mul_lt_mul_of_pos_left hξpow hκ.α_rng.1
+    have hmul' : κ.α * Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) < κ.α := by
+      simpa using hmul
+    have hξα : κ.ξ < κ.α := hκ.ξ_rng.2.trans hmul'
+    nlinarith [hκ.α_rng.2]
+  have hθsmall : κ.θ < κ.ξ ^ 2 / 3 := by
+    have hp : (1 : ℝ) ≤ (4 : ℝ) ^ (κ.u + 3) := one_le_pow₀ (by norm_num)
+    have hden : (3 : ℝ) ≤ 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith
+    have hfrac : κ.ξ ^ 2 / (3 * (4 : ℝ) ^ (κ.u + 3)) ≤ κ.ξ ^ 2 / 3 :=
+      div_le_div_of_nonneg_left (sq_nonneg κ.ξ) (by norm_num) hden
+    exact hκ.θ_rng.2.trans_le hfrac
+  have haPos : 0 < κ.a := by
+    rw [hκ.a_eq]
+    exact div_pos hκ.θ_rng.1 (by norm_num)
+  have haLtOne : κ.a < 1 := by
+    rw [hκ.a_eq]
+    nlinarith [hθsmall, hξsmall, hκ.ξ_rng.1]
+  have hlogArg : (1 : ℝ) < 800 / (κ.a * (1 / 400 : ℝ)) := by
+    apply (lt_div_iff₀ (by positivity : (0 : ℝ) < κ.a * (1 / 400 : ℝ))).2
+    nlinarith [haLtOne]
+  have hlogPos : 0 < Real.log (800 / (κ.a * (1 / 400 : ℝ))) := Real.log_pos hlogArg
+  have hQ0pos : 0 < κ.Q0 := by
+    by_contra hQ0
+    have hQ0le : κ.Q0 ≤ 0 := le_of_not_gt hQ0
+    have hQCond := hκ.Q0_large 0 hQ0le
+    have hzero : Real.rpow (0 : ℝ) κ.aB = 0 := by
+      change (0 : ℝ) ^ κ.aB = 0
+      exact (Real.rpow_eq_zero (by norm_num : (0 : ℝ) ≤ 0)
+        (ne_of_gt hκ.aB_rng.1)).2 rfl
+    have hzeroM : Real.rpow (κ.M1 * 0) κ.aB = 0 := by
+      calc
+        _ = Real.rpow (0 : ℝ) κ.aB := by congr 1 <;> ring
+        _ = 0 := hzero
+    have hbad := hQCond.1
+    rw [hzeroM, mul_zero] at hbad
+    linarith [hlogPos]
+  have hM1pos : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+  have hThresholdPos : 0 < κ.M1 * κ.Q0 := mul_pos hM1pos hQ0pos
+  have haBhalf : κ.aB < (1 / 2 : ℝ) := by
+    have hmin : min κ.η0 1 ≤ 1 := min_le_right _ _
+    have haC : κ.aC < (1 / 10 ^ 6 : ℝ) := by nlinarith [hκ.aC_rng.2, hmin]
+    have haB := hκ.aB_rng.2.1
+    nlinarith
+  have hlogTwo : (1 / 2 : ℝ) < Real.log 2 := by
+    exact (by norm_num : (1 / 2 : ℝ) < 0.6931471803).trans Real.log_two_gt_d9
+  have hnSeq : Tendsto (fun k : ℕ => (T.S.n k : ℝ) / 4) atTop atTop := by
+    have ht := (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+    have ht' : Tendsto (fun k : ℕ => (1 / 4 : ℝ) * (T.S.n k : ℝ)) atTop atTop :=
+      ht.const_mul_atTop (by norm_num : (0 : ℝ) < 1 / 4)
+    simpa [div_eq_mul_inv, mul_comm] using ht'
+  have hgrowthTendsto := (Real.tendsto_exp_div_pow_atTop 12).comp hnSeq
+  have hgrowthEvent : ∀ᶠ k in atTop,
+      16 * (4 : ℝ) ^ 12 ≤ Real.exp ((T.S.n k : ℝ) / 4) /
+        ((T.S.n k : ℝ) / 4) ^ 12 := by
+    have h := hgrowthTendsto.eventually (eventually_ge_atTop (16 * (4 : ℝ) ^ 12))
+    filter_upwards [h] with k hk
+    exact hk
+  have hlarge := T.S.eventually_large 1 16
+  have hSampleGrowth : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ 12 ≤
+        ((2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4)) / 16 := by
+    filter_upwards [hlarge, hgrowthEvent] with k hk hg
+    have hnpos : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+    have hmul :=
+      (le_div_iff₀ (by positivity : (0 : ℝ) < ((T.S.n k : ℝ) / 4) ^ 12)).mp hg
+    have hcancel : (4 : ℝ) ^ 12 * ((T.S.n k : ℝ) / 4) ^ 12 =
+        (T.S.n k : ℝ) ^ 12 := by field_simp [ne_of_gt hnpos] <;> ring
+    have hn : (16 : ℝ) * (T.S.n k : ℝ) ^ 12 ≤ Real.exp ((T.S.n k : ℝ) / 4) := by
+      calc
+        _ = 16 * ((4 : ℝ) ^ 12 * ((T.S.n k : ℝ) / 4) ^ 12) := by rw [hcancel]
+        _ = 16 * (4 : ℝ) ^ 12 * ((T.S.n k : ℝ) / 4) ^ 12 := by ring
+        _ ≤ Real.exp ((T.S.n k : ℝ) / 4) := hmul
+    have htwo : Real.exp ((T.S.n k : ℝ) / 2) ≤ (2 : ℝ) ^ T.S.n k := by
+      calc
+        Real.exp ((T.S.n k : ℝ) / 2) ≤
+            Real.exp ((T.S.n k : ℝ) * Real.log 2) :=
+          Real.exp_le_exp.mpr (by nlinarith [hlogTwo])
+        _ = (2 : ℝ) ^ T.S.n k := by
+          rw [Real.exp_nat_mul]
+          simp [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+    have hsplit : Real.exp ((T.S.n k : ℝ) / 2) *
+        Real.exp (-(T.S.n k : ℝ) / 4) = Real.exp ((T.S.n k : ℝ) / 4) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    have hmul := mul_le_mul_of_nonneg_right htwo
+      (Real.exp_nonneg (-(T.S.n k : ℝ) / 4))
+    rw [hsplit] at hmul
+    have hn' : (16 : ℝ) * (T.S.n k : ℝ) ^ 12 ≤
+        (2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4) := le_trans hn hmul
+    have hn'' : (T.S.n k : ℝ) ^ 12 * 16 ≤
+        (2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4) := by nlinarith [hn']
+    exact (le_div_iff₀ (by norm_num : (0 : ℝ) < 16)).2 hn''
+  have dens_nonneg_local {N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+      (μ ν : Law N) : 0 ≤ dens E c μ ν := by
+    classical
+    unfold dens
+    apply Finset.sum_nonneg
+    intro x hx
+    apply Finset.sum_nonneg
+    intro y hy
+    by_cases h : Hits E c x y
+    · simp [h]
+      exact mul_nonneg (μ.nonneg x) (ν.nonneg y)
+    · simp [h]
+  have dens_le_one_local {N : ℕ} (E : Fin N → Fin N → Prop) (μ ν : Law N) :
+      dens E true μ ν ≤ 1 := by
+    have hfalse := dens_nonneg_local E false μ ν
+    rw [← dens_add_dens_not E μ ν]
+    linarith
+  filter_upwards [hlarge, hSampleGrowth] with k hk hsample
+  intro RX RY g hRX hRY hg hBias hNo2g
+  have hnN : 16 ≤ T.S.n k := hk.1
+  have hhost : LargeHost 1 (T.S.n k) (T.S.N k) := hk.2
+  have hNlower : (2 : ℝ) ^ T.S.n k ≤ (T.S.N k : ℝ) := by
+    simpa [LargeHost] using hhost.1
+  rcases hBias with ⟨U, V, hU, hV, hUR, hVR, hUcard, hVcard, hden⟩
+  let μU := Law.unifCore U hU
+  let μV := Law.unifCore V hV
+  let dTrue := dens (T.S.E k) true μU μV
+  have hdTrueNonneg : 0 ≤ dTrue := dens_nonneg_local _ _ _ _
+  have hdTrueLe : dTrue ≤ 1 := dens_le_one_local _ _ _
+  have hdevHalf : |dTrue - 1 / 2| ≤ 1 / 2 := by
+    apply abs_le.mpr
+    constructor <;> linarith
+  have hgOverN : (g : ℝ) / (T.S.n k : ℝ) ≤ 1 / 2 := le_trans hden hdevHalf
+  have hnRealPos : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+  have hgSmall : (g : ℝ) ≤ (T.S.n k : ℝ) / 2 :=
+    by simpa [div_eq_mul_inv, mul_comm] using (div_le_iff₀ hnRealPos).mp hgOverN
+  have hgposReal : 0 < (g : ℝ) := lt_of_lt_of_le hThresholdPos hg
+  have hgpos : 0 < g := by exact_mod_cast hgposReal
+  have hGone : (1 : ℝ) ≤ (g : ℝ) := by exact_mod_cast (by omega : 1 ≤ g)
+  have hcolorMargin : ∃ c : Colour,
+      (g : ℝ) / (T.S.n k : ℝ) ≤ dens (T.S.E k) c μU μV - 1 / 2 := by
+    by_cases htrue : 1 / 2 ≤ dTrue
+    · have habs : |dTrue - 1 / 2| = dTrue - 1 / 2 := abs_of_nonneg (by linarith)
+      have hden0 : (g : ℝ) / (T.S.n k : ℝ) ≤ |dTrue - 1 / 2| := by
+        simpa [dTrue, μU, μV] using hden
+      have hden' : (g : ℝ) / (T.S.n k : ℝ) ≤ dTrue - 1 / 2 := by
+        calc
+          _ ≤ |dTrue - 1 / 2| := hden0
+          _ = dTrue - 1 / 2 := habs
+      refine ⟨true, ?_⟩
+      simpa [dTrue, μU, μV] using hden'
+    · have hfalseEq : dens (T.S.E k) false μU μV = 1 - dTrue := by
+        have hs := dens_add_dens_not (T.S.E k) μU μV
+        change dTrue + dens (T.S.E k) false μU μV = 1 at hs
+        linarith
+      have habs : |dTrue - 1 / 2| = 1 / 2 - dTrue := by
+        rw [abs_of_neg (sub_neg.mpr (lt_of_not_ge htrue))]
+        ring
+      have hden' := hden
+      rw [habs] at hden'
+      refine ⟨false, ?_⟩
+      rw [hfalseEq]
+      linarith [hden']
+  obtain ⟨c, hmargin⟩ := hcolorMargin
+  have hgPower : Real.rpow (g : ℝ) κ.aB ≤ (T.S.n k : ℝ) / 4 := by
+    have hgbase : (0 : ℝ) ≤ (g : ℝ) := (Nat.cast_nonneg _)
+    have hnbase : (1 : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast (by omega : 1 ≤ T.S.n k)
+    have hgn : (g : ℝ) ≤ (T.S.n k : ℝ) := by linarith [hgSmall]
+    calc
+      Real.rpow (g : ℝ) κ.aB ≤ Real.rpow (T.S.n k : ℝ) κ.aB :=
+        Real.rpow_le_rpow hgbase hgn hκ.aB_rng.1.le
+      _ ≤ Real.rpow (T.S.n k : ℝ) (1 / 2 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnbase haBhalf.le
+      _ = Real.sqrt (T.S.n k : ℝ) := by
+        simpa [Real.rpow_eq_pow] using (Real.sqrt_eq_rpow (T.S.n k : ℝ)).symm
+      _ ≤ (T.S.n k : ℝ) / 4 := by
+        rw [Real.sqrt_le_left (by positivity : (0 : ℝ) ≤ (T.S.n k : ℝ) / 4)]
+        have hn16R : (16 : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hnN
+        nlinarith [sq_nonneg ((T.S.n k : ℝ) - 16)]
+  have hExpBudget : Real.exp (-(T.S.n k : ℝ) / 4) ≤
+      Real.exp (-(Real.rpow (g : ℝ) κ.aB)) := by
+    apply Real.exp_le_exp.mpr
+    calc
+      -(T.S.n k : ℝ) / 4 = -((T.S.n k : ℝ) / 4) := by ring
+      _ ≤ -(Real.rpow (g : ℝ) κ.aB) := neg_le_neg hgPower
+  have hsampleLower : (16 : ℝ) * (T.S.n k : ℝ) ^ 12 ≤
+      (2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4) :=
+    by
+      have hmul := (le_div_iff₀ (by norm_num : (0 : ℝ) < 16)).mp hsample
+      nlinarith [hmul]
+  have hUsize : (16 : ℝ) * (T.S.n k : ℝ) ^ 12 ≤ (U.card : ℝ) := by
+    calc
+      _ ≤ (2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4) := hsampleLower
+      _ ≤ (T.S.N k : ℝ) * Real.exp (-(T.S.n k : ℝ) / 4) :=
+        mul_le_mul_of_nonneg_right hNlower (Real.exp_nonneg _)
+      _ ≤ (T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB)) :=
+        mul_le_mul_of_nonneg_left hExpBudget (Nat.cast_nonneg _)
+      _ ≤ (U.card : ℝ) := hUcard
+  have hUcardLarge : 16 ≤ U.card := by
+    have hnreal16 : (16 : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hnN
+    have hnOne : (1 : ℝ) ≤ (T.S.n k : ℝ) := by linarith
+    have hnPow : (1 : ℝ) ≤ (T.S.n k : ℝ) ^ 12 := one_le_pow₀ hnOne
+    have hU16 : (16 : ℝ) ≤ (U.card : ℝ) := by
+      have h : (16 : ℝ) ≤ 16 * (T.S.n k : ℝ) ^ 12 := by nlinarith [hnPow]
+      exact h.trans hUsize
+    exact_mod_cast hU16
+  have hHitBounds (x y : Fin (T.S.N k)) :
+      0 ≤ hit (T.S.E k) c x y ∧ hit (T.S.E k) c x y ≤ 1 := by
+    unfold hit
+    split_ifs <;> norm_num
+  let score : Fin (T.S.N k) → ℝ := fun x => deg (T.S.E k) c μV.w x
+  have hScoreBounds (x : Fin (T.S.N k)) : 0 ≤ score x ∧ score x ≤ 1 := by
+    unfold score deg
+    constructor
+    · apply Finset.sum_nonneg
+      intro y hy
+      exact mul_nonneg (μV.nonneg y) (hHitBounds x y).1
+    · calc
+        _ ≤ ∑ y, μV.w y * 1 := Finset.sum_le_sum fun y hy =>
+          mul_le_mul_of_nonneg_left (hHitBounds x y).2 (μV.nonneg y)
+        _ = ∑ y, μV.w y := by simp
+        _ = 1 := μV.sum_eq_one
+  have hDensMean (A : Finset (Fin (T.S.N k))) (hA : A.Nonempty) :
+      dens (T.S.E k) c (Law.unifCore A hA) μV =
+        (∑ x ∈ A, deg (T.S.E k) c μV.w x) / A.card := by
+    classical
+    have hExp : dens (T.S.E k) c (Law.unifCore A hA) μV =
+        ∑ x, (Law.unifCore A hA).w x * deg (T.S.E k) c μV.w x := by
+      unfold dens deg hit
+      apply Finset.sum_congr rfl
+      intro x hx
+      symm
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro y hy
+      ring
+    rw [hExp]
+    calc
+      _ = ∑ x ∈ A, (A.card : ℝ)⁻¹ * deg (T.S.E k) c μV.w x := by
+        change (∑ x, (if x ∈ A then (A.card : ℝ)⁻¹ else 0) *
+          deg (T.S.E k) c μV.w x) = _
+        simp_rw [ite_mul, zero_mul]
+        rw [Finset.sum_ite_mem_eq]
+      _ = (A.card : ℝ)⁻¹ * ∑ x ∈ A, deg (T.S.E k) c μV.w x := by
+        rw [← Finset.mul_sum]
+      _ = _ := by
+        rw [div_eq_mul_inv]
+        ring
+  let r : ℕ := U.card / 8
+  have hrle : r ≤ U.card := by dsimp [r]; omega
+  have hrpos : 0 < r := by dsimp [r]; omega
+  let Candidates : Finset (Finset (Fin (T.S.N k))) := U.powersetCard r
+  have hCandidates : Candidates.Nonempty := by
+    apply Finset.powersetCard_nonempty.mpr
+    exact hrle
+  obtain ⟨U1, hU1mem, hU1max⟩ :=
+    Finset.exists_max_image Candidates (fun W => ∑ x ∈ W, score x) hCandidates
+  have hU1sub : U1 ⊆ U := (Finset.mem_powersetCard.mp hU1mem).1
+  have hU1card : U1.card = r := (Finset.mem_powersetCard.mp hU1mem).2
+  have hTopOrder (x : Fin (T.S.N k)) (hx : x ∈ U1)
+      (y : Fin (T.S.N k)) (hy : y ∈ U) (hynot : y ∉ U1) : score y ≤ score x := by
+    let W := insert y (U1.erase x)
+    have hyErase : y ∉ U1.erase x := by simp [hynot]
+    have hWsub : W ⊆ U := by
+      intro z hz
+      rcases Finset.mem_insert.mp hz with hzy | hz
+      · simpa [hzy] using hy
+      · exact hU1sub (Finset.mem_erase.mp hz).2
+    have hWcard : W.card = r := by
+      dsimp [W]
+      rw [Finset.card_insert_of_notMem hyErase, Finset.card_erase_of_mem hx, hU1card]
+      omega
+    have hWmem : W ∈ Candidates := Finset.mem_powersetCard.mpr ⟨hWsub, hWcard⟩
+    have hmax := hU1max W hWmem
+    have hsumErase : (∑ z ∈ U1.erase x, score z) + score x =
+        ∑ z ∈ U1, score z := Finset.sum_erase_add U1 score hx
+    have hsumW : (∑ z ∈ W, score z) =
+        score y + ∑ z ∈ U1.erase x, score z := by
+      dsimp [W]
+      rw [Finset.sum_insert hyErase]
+    rw [hsumW] at hmax
+    linarith [hmax, hsumErase]
+  have hr400Nat : U.card ≤ 400 * r := by dsimp [r]; omega
+  have hr400Real : (U.card : ℝ) ≤ 400 * (r : ℝ) := by exact_mod_cast hr400Nat
+  have hrLowerReal : (U.card : ℝ) / 400 ≤ (r : ℝ) := by
+    apply (div_le_iff₀ (by norm_num : (0 : ℝ) < 400)).2
+    simpa [mul_comm] using hr400Real
+  have hfactorPos : 0 < Real.rpow 2 κ.aB - 1 := by
+    have hpow : 1 < Real.rpow 2 κ.aB := Real.one_lt_rpow (by norm_num) hκ.aB_rng.1
+    linarith
+  have hpowQ : Real.rpow (κ.M1 * κ.Q0) κ.aB ≤ Real.rpow (g : ℝ) κ.aB :=
+    Real.rpow_le_rpow (le_of_lt hThresholdPos) hg hκ.aB_rng.1.le
+  have hQCond := hκ.Q0_large κ.Q0 le_rfl
+  have hshift : Real.log (800 / (κ.a * (1 / 400 : ℝ))) ≤
+      (Real.rpow 2 κ.aB - 1) * Real.rpow (g : ℝ) κ.aB := by
+    calc
+      _ ≤ (Real.rpow 2 κ.aB - 1) * Real.rpow (κ.M1 * κ.Q0) κ.aB := hQCond.1
+      _ ≤ _ := mul_le_mul_of_nonneg_left hpowQ hfactorPos.le
+  have hArg400 : (400 : ℝ) ≤ 800 / (κ.a * (1 / 400 : ℝ)) := by
+    apply (le_div_iff₀ (by positivity : (0 : ℝ) < κ.a * (1 / 400 : ℝ))).2
+    nlinarith [haLtOne]
+  have hlog400 : Real.log 400 ≤ Real.log (800 / (κ.a * (1 / 400 : ℝ))) :=
+    Real.log_le_log (by norm_num) hArg400
+  have h2gPow : Real.rpow (2 * (g : ℝ)) κ.aB =
+      Real.rpow 2 κ.aB * Real.rpow (g : ℝ) κ.aB :=
+    Real.mul_rpow (by norm_num) (Nat.cast_nonneg g)
+  have hgap : Real.rpow (2 * (g : ℝ)) κ.aB - Real.rpow (g : ℝ) κ.aB =
+      (Real.rpow 2 κ.aB - 1) * Real.rpow (g : ℝ) κ.aB := by
+    rw [h2gPow]
+    ring
+  have hlogGap : Real.log 400 ≤
+      Real.rpow (2 * (g : ℝ)) κ.aB - Real.rpow (g : ℝ) κ.aB :=
+    hlog400.trans (hshift.trans_eq hgap.symm)
+  have hExpRatio : Real.exp (-(Real.rpow (2 * (g : ℝ)) κ.aB)) ≤
+      Real.exp (-(Real.rpow (g : ℝ) κ.aB)) / 400 := by
+    have hlogRatio : -(Real.rpow (2 * (g : ℝ)) κ.aB) ≤ Real.log
+        (Real.exp (-(Real.rpow (g : ℝ) κ.aB)) / 400) := by
+      rw [Real.log_div (ne_of_gt (Real.exp_pos _)) (by norm_num : (400 : ℝ) ≠ 0),
+        Real.log_exp]
+      linarith [hlogGap]
+    calc
+      _ ≤ Real.exp (Real.log
+          (Real.exp (-(Real.rpow (g : ℝ) κ.aB)) / 400)) := Real.exp_le_exp.mpr hlogRatio
+      _ = _ := Real.exp_log (div_pos (Real.exp_pos _) (by norm_num))
+  have hU1Size : (T.S.N k : ℝ) * Real.exp (-(Real.rpow (2 * (g : ℝ)) κ.aB)) ≤
+      (U1.card : ℝ) := by
+    calc
+      _ ≤ (T.S.N k : ℝ) *
+          (Real.exp (-(Real.rpow (g : ℝ) κ.aB)) / 400) :=
+        mul_le_mul_of_nonneg_left hExpRatio (Nat.cast_nonneg _)
+      _ = ((T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB))) / 400 := by ring
+      _ ≤ (U.card : ℝ) / 400 :=
+        div_le_div_of_nonneg_right hUcard (by norm_num : (0 : ℝ) ≤ 400)
+      _ ≤ (r : ℝ) := hrLowerReal
+      _ = (U1.card : ℝ) := by rw [hU1card]
+  have hpow2gLower : Real.rpow (g : ℝ) κ.aB ≤ Real.rpow (2 * (g : ℝ)) κ.aB := by
+    rw [h2gPow]
+    have hpowOne : 1 ≤ Real.rpow 2 κ.aB := (Real.one_lt_rpow (by norm_num) hκ.aB_rng.1).le
+    exact (le_mul_of_one_le_left (Real.rpow_nonneg (Nat.cast_nonneg g) _) hpowOne)
+  have hV2Size : (T.S.N k : ℝ) * Real.exp (-(Real.rpow (2 * (g : ℝ)) κ.aB)) ≤
+      (V.card : ℝ) := by
+    calc
+      _ ≤ (T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB)) :=
+        mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr (neg_le_neg hpow2gLower))
+          (Nat.cast_nonneg _)
+      _ ≤ (V.card : ℝ) := hVcard
+  have hU1pos : 0 < U1.card := by rw [hU1card]; exact hrpos
+  have hU1ne : U1.Nonempty := Finset.card_pos.mp hU1pos
+  have hU1abs :
+      |dens (T.S.E k) true (Law.unifCore U1 hU1ne) μV - 1 / 2| <
+        (2 * g : ℕ) / (T.S.n k : ℝ) := by
+    by_contra hnot
+    have hdev : (2 * g : ℕ) / (T.S.n k : ℝ) ≤
+        |dens (T.S.E k) true (Law.unifCore U1 hU1ne) μV - 1 / 2| := le_of_not_gt hnot
+    apply hNo2g
+    refine ⟨U1, V, hU1ne, hV, hU1sub.trans hUR, hVR, ?_, ?_, ?_⟩
+    · simpa [Nat.cast_mul] using hU1Size
+    · simpa [Nat.cast_mul] using hV2Size
+    · exact hdev
+  have hU1dens : dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV <
+      1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ) := by
+    cases c with
+    | true =>
+        have h := (abs_lt.mp hU1abs).2
+        have hcast : ((2 * g : ℕ) : ℝ) = 2 * (g : ℝ) := by norm_num
+        have h' : dens (T.S.E k) true (Law.unifCore U1 hU1ne) μV - 1 / 2 <
+            2 * (g : ℝ) / (T.S.n k : ℝ) := by simpa [hcast] using h
+        linarith [h']
+    | false =>
+        have htrueLow :
+            1 / 2 - 2 * (g : ℝ) / (T.S.n k : ℝ) <
+              dens (T.S.E k) true (Law.unifCore U1 hU1ne) μV := by
+          have h := (abs_lt.mp hU1abs).1
+          have hcast : ((2 * g : ℕ) : ℝ) = 2 * (g : ℝ) := by norm_num
+          rw [hcast] at h
+          linarith
+        have hsum := dens_add_dens_not (T.S.E k) (Law.unifCore U1 hU1ne) μV
+        linarith
+  let highThreshold : ℝ := 1 / 2 + (g : ℝ) / (2 * (T.S.n k : ℝ))
+  let High : Finset (Fin (T.S.N k)) := U.filter fun x => highThreshold ≤ score x
+  have hOutsideLow (hHighSmall : High.card < r) :
+      ∀ y ∈ U \ U1, score y < highThreshold := by
+    intro y hy
+    rcases Finset.mem_sdiff.mp hy with ⟨hyU, hyNotU1⟩
+    by_contra hyNotLow
+    have hyHigh : y ∈ High := Finset.mem_filter.mpr ⟨hyU, le_of_not_gt hyNotLow⟩
+    have hInterSmall : (High ∩ U1).card < U1.card := by
+      have hInterCard : (High ∩ U1).card ≤ High.card :=
+        Finset.card_le_card Finset.inter_subset_left
+      rw [hU1card]
+      omega
+    obtain ⟨x, hxU1, hxNotInter⟩ :=
+      Finset.exists_mem_notMem_of_card_lt_card hInterSmall
+    have hxNotHigh : x ∉ High := by
+      intro hxHigh
+      exact hxNotInter (Finset.mem_inter.mpr ⟨hxHigh, hxU1⟩)
+    have hxLow : score x < highThreshold := by
+      apply lt_of_not_ge
+      intro hxHigh
+      exact hxNotHigh (Finset.mem_filter.mpr ⟨hU1sub hxU1, hxHigh⟩)
+    have horder := hTopOrder x hxU1 y hyU hyNotU1
+    linarith
+  let Uout : Finset (Fin (T.S.N k)) := U \ U1
+  have hUunion : U1 ∪ Uout = U := by
+    ext x
+    by_cases hx : x ∈ U
+    · by_cases hx1 : x ∈ U1
+      · simp [Uout, hx, hx1]
+      · simp [Uout, hx, hx1]
+    · have hx1 : x ∉ U1 := fun hx1 => hx (hU1sub hx1)
+      simp [Uout, hx, hx1]
+  have hUdisj : Disjoint U1 Uout := by
+    apply Finset.disjoint_left.mpr
+    intro x hx hxout
+    exact (Finset.mem_sdiff.mp hxout).2 hx
+  have hUoutCard : Uout.card = U.card - r := by
+    dsimp [Uout]
+    rw [Finset.card_sdiff_of_subset hU1sub, hU1card]
+  have hUoutCast : (Uout.card : ℝ) = (U.card : ℝ) - (r : ℝ) := by
+    rw [hUoutCard, Nat.cast_sub hrle]
+  have hUPos : 0 < U.card := Finset.card_pos.mpr hU
+  have hUPosReal : 0 < (U.card : ℝ) := by exact_mod_cast hUPos
+  have hrPosReal : 0 < (r : ℝ) := by exact_mod_cast hrpos
+  have hdelta : 0 < (g : ℝ) / (T.S.n k : ℝ) := div_pos hgposReal hnRealPos
+  have hU1Sum : (∑ x ∈ U1, score x) =
+      (r : ℝ) * dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV := by
+    have hmean := hDensMean U1 hU1ne
+    have hmean' : dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV =
+        (∑ x ∈ U1, score x) / (r : ℝ) := by
+      simpa [score, hU1card] using hmean
+    rw [hmean']
+    field_simp [ne_of_gt hrPosReal]
+  have hUoutSum (hHighSmall : High.card < r) : (∑ x ∈ Uout, score x) ≤
+      (Uout.card : ℝ) * highThreshold := by
+    calc
+      _ ≤ ∑ x ∈ Uout, highThreshold :=
+        Finset.sum_le_sum fun x hx => by
+          have hx' : x ∈ U \ U1 := by simpa [Uout] using hx
+          exact (hOutsideLow hHighSmall x hx').le
+      _ = _ := by rw [Finset.sum_const, nsmul_eq_mul]
+  have hDensU : dens (T.S.E k) c μU μV =
+      (∑ x ∈ U, score x) / (U.card : ℝ) := by
+    simpa [μU, score] using hDensMean U hU
+  have hSumSplit : (∑ x ∈ U, score x) =
+      (∑ x ∈ U1, score x) + (∑ x ∈ Uout, score x) := by
+    calc
+      _ = ∑ x ∈ U1 ∪ Uout, score x := by rw [hUunion]
+      _ = _ := Finset.sum_union hUdisj
+  let p : ℝ := (r : ℝ) / (U.card : ℝ)
+  have hp0 : 0 ≤ p := div_nonneg hrPosReal.le hUPosReal.le
+  have h8r : 8 * r ≤ U.card := by
+    dsimp [r]
+    omega
+  have hpLe : p ≤ 1 / 8 := by
+    change (r : ℝ) / (U.card : ℝ) ≤ 1 / 8
+    apply (div_le_iff₀ hUPosReal).2
+    have h8rR : (8 : ℝ) * (r : ℝ) ≤ (U.card : ℝ) := by exact_mod_cast h8r
+    nlinarith
+  have hUoutAvg : (Uout.card : ℝ) / (U.card : ℝ) = 1 - p := by
+    rw [hUoutCast]
+    change ((U.card : ℝ) - (r : ℝ)) / (U.card : ℝ) =
+      1 - (r : ℝ) / (U.card : ℝ)
+    rw [sub_div, div_self (ne_of_gt hUPosReal)]
+  have hDensUUpper (hHighSmall : High.card < r) : dens (T.S.E k) c μU μV ≤
+      p * dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV +
+        (1 - p) * highThreshold := by
+    rw [hDensU, hSumSplit]
+    calc
+      _ ≤ ((r : ℝ) * dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV +
+          (Uout.card : ℝ) * highThreshold) / (U.card : ℝ) := by
+        apply div_le_div_of_nonneg_right _ (le_of_lt hUPosReal)
+        exact add_le_add hU1Sum.le (hUoutSum hHighSmall)
+      _ = _ := by
+        rw [add_div]
+        have hfirst : (r : ℝ) * dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV /
+            (U.card : ℝ) = p * dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV := by
+          dsimp only [p]
+          ring
+        have hsecond : (Uout.card : ℝ) * highThreshold / (U.card : ℝ) =
+            (1 - p) * highThreshold := by
+          rw [← hUoutAvg]
+          ring
+        rw [hfirst, hsecond]
+  have hXY : highThreshold ≤ 1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ) := by
+    dsimp [highThreshold]
+    have hfrac : (g : ℝ) / (2 * (T.S.n k : ℝ)) ≤
+        2 * (g : ℝ) / (T.S.n k : ℝ) := by
+      apply (div_le_div_iff₀ (by positivity : (0 : ℝ) < 2 * (T.S.n k : ℝ))
+        hnRealPos).2
+      nlinarith [mul_nonneg (le_of_lt hgposReal) (le_of_lt hnRealPos)]
+    linarith
+  have hU1upper : dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV ≤
+      1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ) := hU1dens.le
+  have hweight :
+      p * (1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ)) +
+        (1 - p) * highThreshold ≤
+      (1 / 8) * (1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ)) +
+        (1 - (1 / 8 : ℝ)) * highThreshold := by
+    have hprod := mul_nonneg (sub_nonneg.mpr hpLe) (sub_nonneg.mpr hXY)
+    nlinarith [hprod]
+  have hDensUUpperFinal (hHighSmall : High.card < r) : dens (T.S.E k) c μU μV ≤
+      1 / 2 + (11 / 16 : ℝ) * ((g : ℝ) / (T.S.n k : ℝ)) := by
+    calc
+      _ ≤ p * dens (T.S.E k) c (Law.unifCore U1 hU1ne) μV +
+          (1 - p) * highThreshold := hDensUUpper hHighSmall
+      _ ≤ p * (1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ)) +
+          (1 - p) * highThreshold := by
+        apply add_le_add
+        · exact mul_le_mul_of_nonneg_left hU1upper hp0
+        · exact le_rfl
+      _ ≤ (1 / 8) * (1 / 2 + 2 * (g : ℝ) / (T.S.n k : ℝ)) +
+          (1 - (1 / 8 : ℝ)) * highThreshold := hweight
+      _ = 1 / 2 + (11 / 16 : ℝ) * ((g : ℝ) / (T.S.n k : ℝ)) := by
+        dsimp [highThreshold]
+        ring
+  have hHighCard : r ≤ High.card := by
+    by_contra hnot
+    have hHighSmall : High.card < r := lt_of_not_ge hnot
+    linarith [hmargin, hDensUUpperFinal hHighSmall, hdelta]
+  have hVsize : 16 * (T.S.n k : ℝ) ^ 12 ≤ (V.card : ℝ) := by
+    calc
+      _ ≤ (2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4) := hsampleLower
+      _ ≤ (T.S.N k : ℝ) * Real.exp (-(T.S.n k : ℝ) / 4) :=
+        mul_le_mul_of_nonneg_right hNlower (Real.exp_nonneg _)
+      _ ≤ (T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB)) :=
+        mul_le_mul_of_nonneg_left hExpBudget (Nat.cast_nonneg _)
+      _ ≤ (V.card : ℝ) := hVcard
+  have hUsizeNat : 16 * (T.S.n k) ^ 12 ≤ U.card := by exact_mod_cast hUsize
+  have hVsizeNat : 16 * (T.S.n k) ^ 12 ≤ V.card := by exact_mod_cast hVsize
+  have hrSmall : (T.S.n k) ^ 12 ≤ r := by
+    dsimp [r]
+    omega
+  have hVSmall : (T.S.n k) ^ 12 ≤ V.card := by omega
+  let m : ℕ := min r V.card
+  have hmSmall : (T.S.n k) ^ 12 ≤ m := by
+    dsimp [m]
+    exact le_min hrSmall hVSmall
+  have hmV : m ≤ V.card := Nat.min_le_right _ _
+  have hmHigh : m ≤ High.card := (Nat.min_le_left _ _).trans hHighCard
+  obtain ⟨X, hXsub, hXcard⟩ := Finset.exists_subset_card_eq hmHigh
+  have hmPos : 0 < m := by
+    have hn12 : 0 < (T.S.n k) ^ 12 := Nat.pow_pos (by omega)
+    omega
+  have hXne : X.Nonempty := Finset.card_pos.mp (by rw [hXcard]; exact hmPos)
+  let scale : ℝ := (1 / 400 : ℝ) * (T.S.N k : ℝ) *
+    Real.exp (-(Real.rpow (g : ℝ) κ.aB))
+  have hscaleR : scale ≤ (r : ℝ) := by
+    calc
+      _ = ((T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB))) / 400 := by
+        dsimp [scale]
+        ring
+      _ ≤ (U.card : ℝ) / 400 :=
+        div_le_div_of_nonneg_right hUcard (by norm_num : (0 : ℝ) ≤ 400)
+      _ ≤ (r : ℝ) := hrLowerReal
+  have hscaleV : scale ≤ (V.card : ℝ) := by
+    calc
+      _ = ((T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB))) / 400 := by
+        dsimp [scale]
+        ring
+      _ ≤ (T.S.N k : ℝ) * Real.exp (-(Real.rpow (g : ℝ) κ.aB)) :=
+        div_le_self (by positivity) (by norm_num)
+      _ ≤ (V.card : ℝ) := hVcard
+  have hscaleM : scale ≤ (m : ℝ) := by
+    rw [show (m : ℝ) = min (r : ℝ) (V.card : ℝ) by simp [m]]
+    exact le_min hscaleR hscaleV
+  have hexpNat : Real.exp (T.S.n k : ℝ) = Real.exp 1 ^ T.S.n k := by
+    rw [show (T.S.n k : ℝ) = (T.S.n k : ℝ) * 1 by ring,
+      Real.exp_nat_mul]
+  have hpowExp : (2 : ℝ) ^ T.S.n k ≤ Real.exp (2 * (T.S.n k : ℝ)) := by
+    calc
+      _ ≤ Real.exp 1 ^ T.S.n k := by
+        gcongr
+        exact Real.exp_one_gt_two.le
+      _ = Real.exp (T.S.n k : ℝ) := hexpNat.symm
+      _ ≤ Real.exp (2 * (T.S.n k : ℝ)) :=
+        Real.exp_le_exp.mpr (by linarith [hnRealPos])
+  have hpowCeil : 2 ^ T.S.n k ≤ Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) := by
+    have h : (2 : ℝ) ^ T.S.n k ≤
+        (Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) : ℝ) :=
+      hpowExp.trans (Nat.le_ceil _)
+    exact_mod_cast h
+  have hnPow : T.S.n k ≤ (T.S.n k) ^ 4 := by
+    calc
+      _ = T.S.n k * 1 := by omega
+      _ ≤ T.S.n k * (T.S.n k) ^ 3 :=
+        Nat.mul_le_mul_left _ (Nat.one_le_pow 3 _ (by omega))
+      _ = (T.S.n k) ^ 4 := by ring
+  have hJbound : X.card ≤ Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) * (T.S.n k) ^ 4 := by
+    rw [hXcard]
+    calc
+      _ ≤ T.S.N k := by
+        have hUcardN : U.card ≤ T.S.N k := by simpa using (Finset.card_le_univ U)
+        exact (Nat.min_le_left _ _).trans (hrle.trans hUcardN)
+      _ ≤ T.S.n k * 2 ^ T.S.n k := hhost.2
+      _ ≤ T.S.n k * Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) :=
+        Nat.mul_le_mul_left _ hpowCeil
+      _ ≤ (T.S.n k) ^ 4 * Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) :=
+        Nat.mul_le_mul_right _ hnPow
+      _ = _ := Nat.mul_comm _ _
+  let eX : {x : Fin (T.S.N k) // x ∈ X} ≃ Fin X.card :=
+    Fintype.equivFinOfCardEq (by simp)
+  let tests : Fin X.card → Fin (T.S.N k) → ℝ :=
+    fun j y => hit (T.S.E k) c (eX.symm j).val y
+  have htests (j : Fin X.card) (y : Fin (T.S.N k)) :
+      0 ≤ tests j y ∧ tests j y ≤ 1 := by
+    dsimp [tests]
+    exact hHitBounds _ _
+  obtain ⟨Y, hYsub, hYcard, happrox⟩ :=
+    hSampling (T.S.N k) X.card m (T.S.n k) V tests (by omega) hmV hmSmall hJbound htests
+  have hYne : Y.Nonempty := Finset.card_pos.mp (by rw [hYcard]; exact hmPos)
+  have hHighSubsetU : High ⊆ U := by
+    intro x hx
+    simp only [High, Finset.mem_filter] at hx
+    exact hx.1
+  have hXsubsetRX : X ⊆ RX := hXsub.trans (hHighSubsetU.trans hUR)
+  have hYsubsetRY : Y ⊆ RY := hYsub.trans hVR
+  have hunifDegAvg (A : Finset (Fin (T.S.N k))) (hA : A.Nonempty)
+      (x : Fin (T.S.N k)) :
+      deg (T.S.E k) c (Law.unifCore A hA).w x =
+        (∑ y ∈ A, hit (T.S.E k) c x y) / A.card := by
+    classical
+    unfold deg
+    change (∑ y, (if y ∈ A then (A.card : ℝ)⁻¹ else 0) *
+      hit (T.S.E k) c x y) = _
+    simp_rw [ite_mul, zero_mul]
+    rw [Finset.sum_ite_mem_eq, ← Finset.mul_sum]
+    rw [div_eq_mul_inv]
+    ring
+  have hscoreAvg (x : Fin (T.S.N k)) :
+      score x = (∑ y ∈ V, hit (T.S.E k) c x y) / V.card := by
+    simpa [score, μV] using (hunifDegAvg V hV x)
+  have hrow (x : Fin (T.S.N k)) (hx : x ∈ X) :
+      (1 / 2 : ℝ) + (g : ℝ) / (4 * (T.S.n k : ℝ)) ≤
+        deg (T.S.E k) c (Law.unifCore Y hYne).w x := by
+    let j : Fin X.card := eX ⟨x, hx⟩
+    have happ := happrox j
+    have hYapprox :
+        |(∑ y ∈ Y, tests j y) / m - (∑ y ∈ V, tests j y) / V.card| ≤
+          (T.S.n k : ℝ) ^ (-2 : ℝ) := by
+      simpa [tests] using happ
+    have hVavg : (∑ y ∈ V, tests j y) / V.card = score x := by
+      simpa [tests, j, eX] using (hscoreAvg x).symm
+    have herror : (T.S.n k : ℝ) ^ (-2 : ℝ) ≤
+        (g : ℝ) / (4 * (T.S.n k : ℝ)) := by
+      have hnInv : (T.S.n k : ℝ) ^ (-2 : ℝ) =
+          1 / (T.S.n k : ℝ) ^ 2 := by
+        rw [Real.rpow_neg (by positivity : (0 : ℝ) ≤ (T.S.n k : ℝ))]
+        rw [show (2 : ℝ) = (↑(2 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+        simp only [one_div]
+      rw [hnInv]
+      have hfirst : 1 / (T.S.n k : ℝ) ^ 2 ≤
+          1 / (4 * (T.S.n k : ℝ)) := by
+        apply (div_le_div_iff₀ (by positivity : (0 : ℝ) < (T.S.n k : ℝ) ^ 2)
+          (by positivity : (0 : ℝ) < 4 * (T.S.n k : ℝ))).2
+        have hn4 : (4 : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast (by omega : 4 ≤ T.S.n k)
+        have hprod := mul_nonneg (le_of_lt hnRealPos) (sub_nonneg.mpr hn4)
+        nlinarith only [hprod]
+      have hsecond : 1 / (4 * (T.S.n k : ℝ)) ≤
+          (g : ℝ) / (4 * (T.S.n k : ℝ)) :=
+        div_le_div_of_nonneg_right hGone (by positivity)
+      exact hfirst.trans hsecond
+    have hVlarge : (1 / 2 : ℝ) + (g : ℝ) / (2 * (T.S.n k : ℝ)) ≤ score x := by
+      have hxHigh : x ∈ High := hXsub hx
+      have hxHigh' : x ∈ U ∧ highThreshold ≤ score x := by simpa [High] using hxHigh
+      simpa [highThreshold] using hxHigh'.2
+    have hsampleLowerRow : score x - (T.S.n k : ℝ) ^ (-2 : ℝ) ≤
+        (∑ y ∈ Y, tests j y) / m := by
+      have hlow := (abs_le.mp hYapprox).1
+      rw [hVavg] at hlow
+      linarith
+    have hYmean :
+        (∑ y ∈ Y, tests j y) / m ≤
+          deg (T.S.E k) c (Law.unifCore Y hYne).w x := by
+      have hYmeanEq : (∑ y ∈ Y, tests j y) / m =
+          deg (T.S.E k) c (Law.unifCore Y hYne).w x := by
+        rw [← hYcard]
+        simpa [tests, j, eX] using (hunifDegAvg Y hYne x).symm
+      rw [hYmeanEq]
+    have htarget : (1 / 2 : ℝ) + (g : ℝ) / (4 * (T.S.n k : ℝ)) ≤
+        (∑ y ∈ Y, tests j y) / m := by
+      have hhalf : (g : ℝ) / (4 * (T.S.n k : ℝ)) ≤
+          (g : ℝ) / (2 * (T.S.n k : ℝ)) := by
+        apply (div_le_div_iff₀ (by positivity : (0 : ℝ) < 4 * (T.S.n k : ℝ))
+          (by positivity : (0 : ℝ) < 2 * (T.S.n k : ℝ))).2
+        have hgn := mul_nonneg hgposReal.le hnRealPos.le
+        nlinarith only [hgn]
+      have hquarter : 2 * ((g : ℝ) / (4 * (T.S.n k : ℝ))) =
+          (g : ℝ) / (2 * (T.S.n k : ℝ)) := by
+        field_simp [ne_of_gt hnRealPos]
+        norm_num
+      linarith only [hVlarge, hsampleLowerRow, herror, hquarter]
+    exact htarget.trans hYmean
+  refine ⟨c, X, Y, hXne, hYne, hXsubsetRX, hYsubsetRY, ?_, ?_, hrow⟩
+  · rw [hXcard, hYcard]
+  · simpa [scale, hXcard] using hscaleM
 
 /-- P13.3b (sections/13, lines 95–99, 148): common bins of the prescribed size,
 with a diagonal codegree margin. -/

@@ -1,5 +1,6 @@
 import HypercubeRamsey.S15.DirectNodes
 import HypercubeRamsey.S15.ClusterNodes
+import HypercubeRamsey.S15.Needs
 
 /-!
 Section 15 exports. The proofs live with their direct and cluster node chains.

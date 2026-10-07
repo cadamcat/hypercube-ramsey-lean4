@@ -222,6 +222,8 @@ theorem finLaw_pr_or_le_add {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
     (A B : Ω → Prop) :
     P.pr (fun ω => A ω ∨ B ω) ≤ P.pr A + P.pr B := by
   classical
+  letI : DecidablePred (fun ω => A ω ∨ B ω) :=
+    fun ω => Classical.propDecidable _
   unfold FinLaw.pr
   rw [← Finset.sum_add_distrib]
   apply Finset.sum_le_sum
@@ -234,6 +236,21 @@ theorem finLaw_pr_or_le_add {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
   · by_cases hB : B ω
     · simp [hA, hB]
     · simp [hA, hB]
+
+theorem finLaw_pr_mono {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (A B : Ω → Prop) (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinLaw.pr
+  apply Finset.sum_le_sum
+  intro ω hω
+  by_cases hA : A ω
+  · have hB := hAB ω hA
+    simp [hA, hB]
+  · simp only [if_neg hA]
+    by_cases hB : B ω
+    · simp [hB]
+      exact P.nonneg ω
+    · simp [hB]
 
 theorem finLaw_markov {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
     (f : Ω → ℝ) (ε : ℝ) (hε : 0 < ε) (hf : ∀ ω, 0 ≤ f ω) :
@@ -252,5 +269,46 @@ theorem finLaw_markov {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
         exact mul_le_mul_of_nonneg_left (le_of_lt hbad) (P.nonneg ω)
       · rw [if_neg hbad]
         simpa using mul_nonneg (P.nonneg ω) (hf ω)
+
+theorem finLaw_pr_exists_le_sum {Ω ι : Type*} [Fintype Ω] [Fintype ι]
+    (P : FinLaw Ω) (F : ι → Ω → Prop) :
+    P.pr (fun ω => ∃ i, F i ω) ≤ ∑ i, P.pr (F i) := by
+  classical
+  letI : DecidablePred (fun ω => ∃ i, F i ω) :=
+    fun ω => Classical.propDecidable _
+  unfold FinLaw.pr
+  calc
+    (∑ ω, if ∃ i, F i ω then P.w ω else 0) ≤
+        ∑ ω, P.w ω * ∑ i, if F i ω then (1 : ℝ) else 0 := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases hE : ∃ i, F i ω
+      · rw [if_pos hE]
+        obtain ⟨i, hi⟩ := hE
+        have hone : 1 ≤ ∑ j, if F j ω then (1 : ℝ) else 0 := by
+          have hsingle := Finset.single_le_sum
+            (s := Finset.univ)
+            (f := fun j => if F j ω then (1 : ℝ) else 0)
+            (fun j hj => by split_ifs <;> norm_num) (Finset.mem_univ i)
+          simpa [hi] using hsingle
+        calc
+          P.w ω = P.w ω * 1 := by ring
+          _ ≤ P.w ω * ∑ j, if F j ω then (1 : ℝ) else 0 :=
+            mul_le_mul_of_nonneg_left hone (P.nonneg ω)
+      · rw [if_neg hE]
+        apply mul_nonneg (P.nonneg ω)
+        apply Finset.sum_nonneg
+        intro i hi
+        split_ifs <;> positivity
+    _ = ∑ ω, ∑ i, P.w ω * (if F i ω then (1 : ℝ) else 0) := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      rw [Finset.mul_sum]
+    _ = ∑ i, ∑ ω, if F i ω then P.w ω else 0 := by
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro i hi
+      simp
+    _ = ∑ i, P.pr (F i) := by simp [FinLaw.pr]
 
 end HypercubeRamsey.Lane_q_s14_post

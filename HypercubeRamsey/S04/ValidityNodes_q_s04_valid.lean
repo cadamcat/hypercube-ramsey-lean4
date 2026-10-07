@@ -1738,6 +1738,312 @@ private theorem eventual_residual_width_budget (β γ : ℝ) (hβ : 0 < β)
     (hFactors n hnFactors).2.2.1 (hFactors n hnFactors).2.2.2
     xs hxs hgood
 
+private theorem eventual_exposure_factor (β γ : ℝ) (hβ : 0 < β)
+    (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      40 * (n : ℝ) ^ 5 *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2)) / 4) ≤
+        Real.exp (-2 * (n : ℝ) ^ (omega4 β γ / 5)) := by
+  let ω := omega4 β γ
+  let α := β - ω / 2
+  let c := ω / 5
+  let δ := α / 2
+  have hω : 0 < ω := omega4_pos hβ hγ
+  have hωβ : ω ≤ β / 1000 := by
+    dsimp [ω, omega4]
+    exact div_le_div_of_nonneg_right (min_le_left β (1 - γ)) (by norm_num)
+  have hα : 0 < α := by dsimp [α]; nlinarith
+  have hgap : 0 < α - c := by dsimp [α, c]; nlinarith
+  have hδ : 0 < δ := by dsimp [δ]; positivity
+  have hδeq : δ + δ = α := by dsimp [δ]; ring
+  have hfactorPow : 0 < δ := hδ
+  have hcoeff : 0 < Real.log 40 + 5 / δ := by
+    have hlog : 0 < Real.log 40 := Real.log_pos (by norm_num)
+    positivity
+  obtain ⟨nLog, hnLog⟩ := eventually_rpow_gt (a := δ)
+    (c := 8 * (Real.log 40 + 5 / δ)) hδ
+  obtain ⟨nGap, hnGap⟩ := eventually_rpow_gt (a := α - c) (c := 16) hgap
+  refine ⟨max nLog (max nGap 1), ?_⟩
+  intro n hn
+  have hnLog' : nLog ≤ n := le_trans (le_max_left _ _) hn
+  have hnGap' : nGap ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_left nGap 1) (Nat.le_max_right nLog (max nGap 1))
+  have hnOne : 1 ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_right nGap 1) (Nat.le_max_right nLog (max nGap 1))
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hnr : 0 < (n : ℝ) := lt_of_lt_of_le (by norm_num) hnR
+  have hnδpos : 0 < (n : ℝ) ^ δ := Real.rpow_pos_of_pos hnr _
+  have hnδone : 1 ≤ (n : ℝ) ^ δ := Real.one_le_rpow hnR hδ.le
+  have hlogPow := Real.log_le_self hnδpos.le
+  rw [Real.log_rpow hnr δ] at hlogPow
+  have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) ^ δ / δ := by
+    rw [le_div_iff₀ hδ]
+    nlinarith [hlogPow]
+  have hpowC : 8 * (Real.log 40 + 5 / δ) < (n : ℝ) ^ δ := hnLog n hnLog'
+  have hlogFactor : Real.log (40 * (n : ℝ) ^ 5) ≤ (n : ℝ) ^ α / 8 := by
+    have hlogN : Real.log (40 * (n : ℝ) ^ 5) = Real.log 40 + 5 * Real.log (n : ℝ) := by
+      rw [Real.log_mul (by norm_num) (by positivity), Real.log_pow]
+      norm_num
+    have hlog5 : 5 * Real.log (n : ℝ) ≤ (5 / δ) * (n : ℝ) ^ δ := by
+      have h := mul_le_mul_of_nonneg_left hlogPow (by positivity : 0 ≤ 5 / δ)
+      have hleft : (5 / δ) * (δ * Real.log (n : ℝ)) = 5 * Real.log (n : ℝ) := by
+        field_simp [ne_of_gt hδ]
+      rw [hleft] at h
+      exact h
+    have hcoeffBound : Real.log 40 + 5 * Real.log (n : ℝ) ≤
+        (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := by
+      have hlog40 : 0 < Real.log 40 := Real.log_pos (by norm_num)
+      calc
+        Real.log 40 + 5 * Real.log (n : ℝ) ≤
+            Real.log 40 + (5 / δ) * (n : ℝ) ^ δ := by linarith [hlog5]
+        _ ≤ Real.log 40 * (n : ℝ) ^ δ + (5 / δ) * (n : ℝ) ^ δ := by
+            have h := mul_le_mul_of_nonneg_left hnδone hlog40.le
+            nlinarith
+        _ = (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := by ring
+    have hpowHalf : 8 * (Real.log 40 + 5 / δ) ≤ (n : ℝ) ^ δ := le_of_lt hpowC
+    have hpowAlpha : (n : ℝ) ^ α = (n : ℝ) ^ δ * (n : ℝ) ^ δ := by
+      rw [← Real.rpow_add hnr δ δ, hδeq]
+    rw [hlogN, hpowAlpha]
+    calc
+      Real.log 40 + 5 * Real.log (n : ℝ) ≤
+          (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := hcoeffBound
+      _ ≤ ((n : ℝ) ^ δ * (n : ℝ) ^ δ) / 8 := by nlinarith [hnδpos]
+      _ = _ := by ring
+  have hFactorPos : 0 < 40 * (n : ℝ) ^ 5 := by positivity
+  have hFactorExp : 40 * (n : ℝ) ^ 5 ≤ Real.exp ((n : ℝ) ^ α / 8) := by
+    have h := Real.exp_le_exp.mpr hlogFactor
+    rw [Real.exp_log hFactorPos] at h
+    exact h
+  have hGapPow : 16 < (n : ℝ) ^ (α - c) := hnGap n hnGap'
+  have hnCpos : 0 < (n : ℝ) ^ c := Real.rpow_pos_of_pos hnr _
+  have hpowSplit : (n : ℝ) ^ α = (n : ℝ) ^ c * (n : ℝ) ^ (α - c) := by
+    rw [← Real.rpow_add hnr c (α - c)]
+    congr 1
+    ring
+  have hexpCompare : -((n : ℝ) ^ α) / 8 ≤ -2 * (n : ℝ) ^ c := by
+    rw [hpowSplit]
+    nlinarith [mul_lt_mul_of_pos_left hGapPow hnCpos]
+  calc
+    40 * (n : ℝ) ^ 5 * Real.exp (-((n : ℝ) ^ α) / 4) ≤
+        Real.exp ((n : ℝ) ^ α / 8) * Real.exp (-((n : ℝ) ^ α) / 4) :=
+      mul_le_mul_of_nonneg_right hFactorExp (Real.exp_nonneg _)
+    _ = Real.exp (-((n : ℝ) ^ α) / 8) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    _ ≤ Real.exp (-2 * (n : ℝ) ^ c) := Real.exp_le_exp.mpr hexpCompare
+
+set_option maxHeartbeats 1000000 in
+theorem exposure_low_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
+      {X Y : Finset (Fin N)} (M : Menu4 β γ G n N E X Y)
+      (tag : Key β γ n → M.ι),
+      KeyNbrCard β γ n → EntryLow M → ExposureLow M tag := by
+  obtain ⟨nWidth, hWidthAll⟩ :=
+    eventual_residual_width_budget β γ hβ hβγ hγ
+  obtain ⟨nFactors, hFactors⟩ :=
+    eventual_width_budget_factors β γ hβ hβγ hγ
+  obtain ⟨nAbsorb, hAbsorb⟩ := eventual_exposure_factor β γ hβ hγ
+  refine ⟨max 1 (max nWidth (max nFactors nAbsorb)), ?_⟩
+  intro n hn N E G X Y M tag hKey hEntry
+  have hnWidth : nWidth ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_left nWidth (max nFactors nAbsorb))
+      (Nat.le_max_right 1 (max nWidth (max nFactors nAbsorb)))
+  have hnFactors : nFactors ≤ n := by
+    apply le_trans _ hn
+    exact le_trans
+      (le_trans (Nat.le_max_left nFactors nAbsorb)
+        (Nat.le_max_right nWidth (max nFactors nAbsorb)))
+      (Nat.le_max_right 1 (max nWidth (max nFactors nAbsorb)))
+  have hnAbsorb : nAbsorb ≤ n := by
+    apply le_trans _ hn
+    exact le_trans
+      (le_trans (Nat.le_max_right nFactors nAbsorb)
+        (Nat.le_max_right nWidth (max nFactors nAbsorb)))
+      (Nat.le_max_right 1 (max nWidth (max nFactors nAbsorb)))
+  have hωpos : 0 < omega4 β γ := omega4_pos hβ hγ
+  have hωlt : omega4 β γ < 1 := by
+    dsimp [omega4]
+    have hmin : min β (1 - γ) ≤ 1 - γ := min_le_right β (1 - γ)
+    nlinarith
+  have hnOne : 1 ≤ n := le_trans (Nat.le_max_left 1 _) hn
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hnWidth' : nWidth ≤ n := hnWidth
+  have hnFactors' : nFactors ≤ n := hnFactors
+  have hnAbsorb' : nAbsorb ≤ n := hnAbsorb
+  intro xm ym u D hDpos hDcard
+  classical
+  let Z : Finset (Key β γ n) := Zset β γ u
+  let s : Finset (Loc β γ n × Key β γ n) := D ×ˢ Z
+  let A := {ck : Loc β γ n × Key β γ n // ck ∈ s}
+  let m : ℕ := Fintype.card A
+  let e : Fin m ≃ A := (Fintype.equivFin A).symm
+  have hcount : m = D.card * Z.card := by
+    dsimp [m, A, s]
+    rw [Fintype.card_coe, Finset.card_product]
+  have hcountReal : (m : ℝ) = (D.card : ℝ) * (Z.card : ℝ) := by exact_mod_cast hcount
+  have hWidth : ∀ (i : Fin m)
+      (q : Fin i.val → Fin (tupLen β γ n) → Fin N) (xs : List (Fin N)),
+      xs.length ≤ tupLen β γ n →
+      GoodPath E G (capL β γ n) (maskLaw (ym u)) (tupleLabels q ++ xs) →
+      Law.WidthLE (residualAfter E G (maskLaw (ym u)) (tupleLabels q ++ xs))
+        (2 * (n : ℝ) ^ γ) := by
+    intro i q xs hxs hgood
+    have hi : i.val + 1 ≤ m := Nat.succ_le_of_lt i.isLt
+    have hlen : (tupleLabels q ++ xs).length ≤ (tupLen β γ n) * m := by
+      rw [List.length_append, tupleLabels_length]
+      calc
+        i.val * tupLen β γ n + xs.length ≤ i.val * tupLen β γ n + tupLen β γ n :=
+          Nat.add_le_add_left hxs _
+        _ = (i.val + 1) * tupLen β γ n := by rw [Nat.add_mul, one_mul]
+        _ ≤ m * tupLen β γ n := Nat.mul_le_mul_right _ hi
+        _ = tupLen β γ n * m := Nat.mul_comm _ _
+    have hlen' : (tupleLabels q ++ xs).length ≤
+        tupLen β γ n * D.card * Z.card := by
+      simpa [hcount, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm] using hlen
+    exact hWidthAll n hnWidth M u tag D (ym u) hDcard hKey
+      (tupleLabels q ++ xs) hlen' hgood
+  let P := tupleLaw M tag xm
+  let ε : ℝ := Real.exp (-(((n : ℝ) ^ (β - omega4 β γ / 2)) / 4))
+  let b : ℝ := (m : ℝ) * (tupLen β γ n : ℝ) * ε
+  let mass : Tuples β γ n N → Prop := fun W =>
+    (maskLaw (ym u)).pr (HitsAll E G W D Z) <
+      Real.exp (-(capL β γ n * (tupLen β γ n : ℝ) * (D.card : ℝ) * (Z.card : ℝ)))
+  let pairFail (c : Loc β γ n) (κ : Key β γ n) (W : Tuples β γ n N) : Prop :=
+    (maskLaw (ym u)).pr (HitsAll E G W D Z) <
+      ratioThr β γ u κ * (maskLaw (ym u)).pr (HitsBut E G W D Z c κ)
+  let crossAny : Tuples β γ n N → Prop := fun W =>
+    ∃ c ∈ D, ∃ κ ∈ Z, κ ≠ key β γ n u.1 ∧ pairFail c κ W
+  have hbound (e' : Fin m ≃ A) :
+      (P.pr (fun W => OuterFirstBad E G (capL β γ n) (maskLaw (ym u))
+        (fun i => W (e' i).1))) ≤ b := by
+    have h := tupleLaw_firstBad_bound M tag xm ym u m s e' hEntry hWidth
+    simpa [P, b, ε] using h
+  have hMassBound : P.pr mass ≤ b := by
+    apply le_trans (pr_mono P mass
+      (fun W => OuterFirstBad E G (capL β γ n) (maskLaw (ym u))
+        (fun i => W (e i).1)) ?_)
+    · exact hbound e
+    · intro W hMass
+      exact mass_fail_implies_outerFirstBad M tag ym u D m hcount e W hMass
+  have hPairBound : ∀ c ∈ D, ∀ κ ∈ Z, κ ≠ key β γ n u.1 →
+      P.pr (pairFail c κ) ≤ b := by
+    intro c hc κ hκ hne
+    let target : A := ⟨(c, κ), Finset.mem_product.mpr ⟨hc, hκ⟩⟩
+    obtain ⟨e', last, hlast, he'⟩ := exists_fin_equiv_last target
+    apply le_trans (pr_mono P (pairFail c κ)
+      (fun W => OuterFirstBad E G (capL β γ n) (maskLaw (ym u))
+        (fun i => W (e' i).1)) ?_)
+    · exact hbound e'
+    · intro W hFail
+      exact cross_fail_implies_outerFirstBad M tag ym u D m e' last hlast
+        target he' W hne hFail
+  have hCrossBound : P.pr crossAny ≤ (m : ℝ) * b := by
+    have houter := pr_exists_finset_le_sum P D
+      (fun c W => ∃ κ ∈ Z, κ ≠ key β γ n u.1 ∧ pairFail c κ W)
+    calc
+      P.pr crossAny ≤
+          ∑ c ∈ D, P.pr (fun W => ∃ κ ∈ Z,
+            κ ≠ key β γ n u.1 ∧ pairFail c κ W) := houter
+      _ ≤ ∑ c ∈ D, ∑ κ ∈ Z, b := by
+        apply Finset.sum_le_sum
+        intro c hc
+        calc
+          P.pr (fun W => ∃ κ ∈ Z, κ ≠ key β γ n u.1 ∧ pairFail c κ W) ≤
+              ∑ κ ∈ Z, P.pr (fun W => κ ≠ key β γ n u.1 ∧ pairFail c κ W) :=
+            pr_exists_finset_le_sum P Z (fun κ W => κ ≠ key β γ n u.1 ∧ pairFail c κ W)
+          _ ≤ ∑ κ ∈ Z, b := by
+            apply Finset.sum_le_sum
+            intro κ hκ
+            by_cases hne : κ ≠ key β γ n u.1
+            · simpa [hne] using hPairBound c hc κ hκ hne
+            · have hzero : P.pr (fun W => κ ≠ key β γ n u.1 ∧ pairFail c κ W) = 0 := by
+                have hpred : (fun W => κ ≠ key β γ n u.1 ∧ pairFail c κ W) =
+                    (fun _ : Tuples β γ n N => False) := by
+                  funext W
+                  simp [hne]
+                rw [hpred, pr_const]
+                simp
+              rw [hzero]
+              positivity
+      _ = (D.card : ℝ) * (Z.card : ℝ) * b := by
+        simp [Finset.sum_const, nsmul_eq_mul]
+        ring
+      _ = (m : ℝ) * b := by rw [← hcountReal]
+  have hcover : ∀ W, LowFail M tag ym u D W → mass W ∨ crossAny W := by
+    intro W h
+    change mass W ∨ crossAny W at h
+    exact h
+  have hUnion : P.pr (LowFail M tag ym u D) ≤ P.pr mass + P.pr crossAny := by
+    calc
+      P.pr (LowFail M tag ym u D) ≤ P.pr (fun W => mass W ∨ crossAny W) :=
+        pr_mono P _ _ hcover
+      _ ≤ P.pr mass + P.pr crossAny := FinProb.pr_union P mass crossAny
+  have hUnionBound : P.pr (LowFail M tag ym u D) ≤
+      (1 + (m : ℝ)) * (m : ℝ) * (tupLen β γ n : ℝ) * ε := by
+    calc
+      P.pr (LowFail M tag ym u D) ≤ b + (m : ℝ) * b := le_trans hUnion
+        (add_le_add hMassBound hCrossBound)
+      _ = (1 + (m : ℝ)) * (m : ℝ) * (tupLen β γ n : ℝ) * ε := by
+        simp [b]
+        ring
+  have hDreal : (D.card : ℝ) ≤ (setBd β γ n : ℝ) := by exact_mod_cast hDcard
+  have hDlinear : (D.card : ℝ) ≤ 4 * (n : ℝ) := by
+    have hDb := le_trans hDreal (hFactors n hnFactors).1
+    have hpow : (n : ℝ) ^ (omega4 β γ / 30) ≤ (n : ℝ) := by
+      have hpow' : (n : ℝ) ^ (omega4 β γ / 30) ≤ (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR (by nlinarith [hωlt])
+      simpa using hpow'
+    exact le_trans hDb (mul_le_mul_of_nonneg_left hpow (by norm_num))
+  have hZlinear : (Z.card : ℝ) ≤ (n : ℝ) := by
+    have hz := hKey u
+    have hpow : (n : ℝ) ^ (γ - 9 / 10 * omega4 β γ) ≤ (n : ℝ) := by
+      have hpow' : (n : ℝ) ^ (γ - 9 / 10 * omega4 β γ) ≤ (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR (by nlinarith [hγ])
+      simpa using hpow'
+    exact le_trans hz hpow
+  have hKlinear : (tupLen β γ n : ℝ) ≤ 2 * (n : ℝ) := by
+    have hk := (hFactors n hnFactors).2.1
+    have hpow : (n : ℝ) ^ (omega4 β γ / 3) ≤ (n : ℝ) := by
+      have hpow' : (n : ℝ) ^ (omega4 β γ / 3) ≤ (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR (by nlinarith [hωlt])
+      simpa using hpow'
+    exact le_trans hk (mul_le_mul_of_nonneg_left hpow (by norm_num))
+  have hmBound : (m : ℝ) ≤ 4 * (n : ℝ) ^ 2 := by
+    rw [hcountReal]
+    calc
+      (D.card : ℝ) * (Z.card : ℝ) ≤ (4 * (n : ℝ)) * (n : ℝ) :=
+        mul_le_mul hDlinear hZlinear (by positivity) (by positivity)
+      _ = 4 * (n : ℝ) ^ 2 := by ring
+  have honeM : 1 + (m : ℝ) ≤ 5 * (n : ℝ) ^ 2 := by nlinarith [hmBound, hnR]
+  have hfactorBound : (1 + (m : ℝ)) * (m : ℝ) * (tupLen β γ n : ℝ) ≤
+      40 * (n : ℝ) ^ 5 := by
+    have hmNonneg : 0 ≤ (m : ℝ) := by positivity
+    have hprod := mul_le_mul honeM hmBound (by positivity) (by positivity)
+    have hprod' := mul_le_mul_of_nonneg_right hprod (by positivity : 0 ≤ (tupLen β γ n : ℝ))
+    calc
+      (1 + (m : ℝ)) * (m : ℝ) * (tupLen β γ n : ℝ) ≤
+          (5 * (n : ℝ) ^ 2) * (4 * (n : ℝ) ^ 2) * (tupLen β γ n : ℝ) := hprod'
+      _ ≤ (5 * (n : ℝ) ^ 2) * (4 * (n : ℝ) ^ 2) * (2 * (n : ℝ)) :=
+        mul_le_mul_of_nonneg_left hKlinear (by positivity)
+      _ = 40 * (n : ℝ) ^ 5 := by ring
+  have hExpFactor := hAbsorb n hnAbsorb
+  have hExpEq : Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2)) / 4) = ε := by
+    unfold ε
+    congr 1
+    ring
+  rw [hExpEq] at hExpFactor
+  calc
+    P.pr (LowFail M tag ym u D) ≤
+        (1 + (m : ℝ)) * (m : ℝ) * (tupLen β γ n : ℝ) * ε := hUnionBound
+    _ ≤ 40 * (n : ℝ) ^ 5 * ε :=
+      mul_le_mul_of_nonneg_right hfactorBound (Real.exp_nonneg _)
+    _ ≤ Real.exp (-2 * (n : ℝ) ^ (omega4 β γ / 5)) := by
+      exact hExpFactor
+
 private theorem dens_eq_expect_rowDeg {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (μ ν : Law N) : dens E G μ ν = μ.expect (fun x => rowDeg E G x ν) := by
   classical

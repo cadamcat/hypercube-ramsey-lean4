@@ -40,7 +40,7 @@ theorem exposure_low (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ 
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι),
       KeyNbrCard β γ n → EntryLow M → ExposureLow M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_valid.exposure_low_core β γ hβ hβγ hγ
 
 /-- L4.1e2, own key (04:283–295): expose the own-key tuple `W_{c,g(u)}` last; a dip is an entry with
 `q < p - a_i/4`, its indicator stopped at the first entry with `q < e^{-L}`.  By `EntryOwn` the conditional dip

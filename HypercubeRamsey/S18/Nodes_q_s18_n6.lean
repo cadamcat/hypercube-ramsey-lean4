@@ -451,6 +451,29 @@ lemma pairLaw_diagonal_zero_of_full {κ : CConsts} {T : Stage} {k : ℕ}
   have hpair := (hsupport input history hfull v hv).2 (x, x) hpos
   exact hpair.1 rfl
 
+lemma pairSampler_supported_distinct {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (δ K : ℝ) (hPair : PairInitialFacts D δ K)
+    (input : D.encoding.InitInput)
+    (history : D.encoding.base.History (Fin.last D.geom.r))
+    (hfull : D.full δ input history) (assignment : PairAssignment T k)
+    (hweight : (D.pairSampler history).w assignment > 0) :
+    ∀ v, IsEvenRole v → (assignment v).1 ≠ (assignment v).2 := by
+  intro v hvEven
+  have hfactor : 0 < (D.pairLaw history v).w (assignment v) := by
+    by_contra hnot
+    have hnonneg := (D.pairLaw history v).nonneg (assignment v)
+    have hzero : (D.pairLaw history v).w (assignment v) = 0 :=
+      le_antisymm (le_of_not_gt hnot) hnonneg
+    have hprod :
+        (∏ w : Pos T k, (D.pairLaw history w).w (assignment w)) = 0 :=
+      Finset.prod_eq_zero (Finset.mem_univ v) hzero
+    change 0 < ∏ w : Pos T k, (D.pairLaw history w).w (assignment w) at hweight
+    rw [hprod] at hweight
+    norm_num at hweight
+  have hsupport := (hPair.2.2.2.2 input history hfull v hvEven).2 (assignment v) hfactor
+  exact hsupport.1
+
 noncomputable def pairQueriesOfCandidateFinset {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
     (A : InitialPairData D)

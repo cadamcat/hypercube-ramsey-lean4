@@ -35,7 +35,6 @@ import HypercubeRamsey.S08.Needs
 import HypercubeRamsey.S09
 import HypercubeRamsey.S09.Defs
 import HypercubeRamsey.S09.Exports
-import HypercubeRamsey.S09.Needs
 import HypercubeRamsey.S09.Nodes
 import HypercubeRamsey.S09.Regime
 import HypercubeRamsey.S10.ClusterExclusion
@@ -106,8 +105,13 @@ import HypercubeRamsey.S08.L81.Definitions
 import HypercubeRamsey.S08.L81.Nodes
 import HypercubeRamsey.S03.Height.Selection_p_height_small
 import HypercubeRamsey.S05.Stages_p_s05_h
-import HypercubeRamsey.S09.Core.Defs
-import HypercubeRamsey.S09.Core.Stages
+import HypercubeRamsey.S09.Core.Scales
+import HypercubeRamsey.S09.Core.Experiment
+import HypercubeRamsey.S09.Core.TagStage
+import HypercubeRamsey.S09.Core.GainStage
+import HypercubeRamsey.S09.Core.AssignStage
+import HypercubeRamsey.S09.Map.Device
+import HypercubeRamsey.S09.Map.Nodes
 import HypercubeRamsey.S11.Needs_p_s11_a
 import HypercubeRamsey.Tools.Concentration_p_tools_conc
 import HypercubeRamsey.PartC.All

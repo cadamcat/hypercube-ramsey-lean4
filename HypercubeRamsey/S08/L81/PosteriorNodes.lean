@@ -647,6 +647,7 @@ theorem p0_support (D : Ctx η₀ β p h) (hF : D.FSupport) (hG : D.GselLeF) : D
   rw [hcoord] at hh
   exact hh
 
+set_option maxHeartbeats 5000000
 /-- L8.1g(v) (08:266–283): valid data for a presentation `π` have subdensity `M^a_π` against `Q_π`; on the
 selected-posterior cases cancellation gives at most `dR'(ξ) Σ_π ∫ F_ξ a_ξ dQ_π ≤ dR'(ξ)`; on the other cases
 `M^a < ε₀ M` bounds the contribution by `ε₀ L_n dR'(ξ) = o(dR'(ξ))` (validly presentable lists are candidate lists
@@ -656,7 +657,325 @@ the valid-presentation probability vanish wherever the reference `Q_π` does, so
 theorem p0_raw_mean (hη₀ : 0 < η₀) (hK : 0 < K) (hh : 10 ^ 8 ≤ h) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       GridFacts η₀ D.n → D.DensityBounds → D.ListCount → D.P0Law → D.GselLeF → D.P0RawMean K := by
-  sorry
+  classical
+  obtain ⟨n₀, hn₀⟩ := exists_nat_gt (Real.exp (10000 : ℝ))
+  refine ⟨n₀, ?_⟩
+  intro D hn X Y R hStd hGrid hDB hLists hP0 hG Θ P c y
+  have hNpos : 0 < D.N := hStd.size.1
+  have hNposR : 0 < (D.N : ℝ) := by exact_mod_cast hNpos
+  by_cases hPosCount : D.PosCountOK P c
+  · have hn₀pos : 1 ≤ n₀ := by
+      have hpos : (0 : ℝ) < (n₀ : ℝ) := lt_trans (Real.exp_pos _) hn₀
+      exact_mod_cast hpos
+    have hnpos : 1 ≤ D.n := le_trans hn₀pos hn
+    have hlarge : Real.exp (10000 : ℝ) ≤ (D.n : ℝ) :=
+      le_of_lt (lt_of_lt_of_le hn₀ (by exact_mod_cast hn))
+    have hlog : 10000 ≤ Real.log D.n := by
+      have hlog' := Real.log_le_log (Real.exp_pos (10000 : ℝ)) hlarge
+      simpa using hlog'
+    have hlog0 : 0 ≤ Real.log D.n := by linarith
+    have hs : 1 ≤ sC η₀ D.n := hGrid.pos.2.2
+    have hsR : 1 ≤ (sC η₀ D.n : ℝ) := by exact_mod_cast hs
+    have hbase : 1 ≤ (D.n : ℝ) := by exact_mod_cast hnpos
+    have hτ : 0 ≤ tau8 η₀ := by
+      rw [tau8_eq]
+      dsimp [eta8]
+      positivity
+    have hpow : (D.n : ℝ) ^ (tau8 η₀ / 8) ≤ (D.n : ℝ) ^ tau8 η₀ :=
+      Real.rpow_le_rpow_of_exponent_le hbase (by nlinarith [hτ])
+    have hTC : TC η₀ D.n ≤ sC η₀ D.n := by
+      unfold TC sC
+      exact Nat.ceil_le_ceil hpow
+    have htR : (TC η₀ D.n : ℝ) ≤ (sC η₀ D.n : ℝ) := by exact_mod_cast hTC
+    let x : ℝ := (sC η₀ D.n : ℝ) * Real.log D.n
+    let B : ℝ := 25 * ((sC η₀ D.n : ℝ) + (TC η₀ D.n : ℝ)) * Real.log D.n
+    have hx : 10000 ≤ x := by
+      dsimp [x]
+      calc
+        (10000 : ℝ) ≤ 1 * Real.log D.n := by nlinarith [hlog]
+        _ ≤ (sC η₀ D.n : ℝ) * Real.log D.n :=
+          mul_le_mul_of_nonneg_right hsR hlog0
+    have hx0 : 0 ≤ x := le_trans (by norm_num : (0 : ℝ) ≤ 10000) hx
+    have hCoeff : 10000 ≤ (1 / 10000 : ℝ) * (h : ℝ) := by
+      have hhR : (10 ^ 8 : ℝ) ≤ (h : ℝ) := by exact_mod_cast hh
+      nlinarith [hhR]
+    have hListExp : B ≤ 50 * x := by
+      dsimp [B, x]
+      have hst : (sC η₀ D.n : ℝ) + (TC η₀ D.n : ℝ) ≤
+          2 * (sC η₀ D.n : ℝ) := by linarith [htR]
+      calc
+        25 * ((sC η₀ D.n : ℝ) + (TC η₀ D.n : ℝ)) * Real.log D.n ≤
+            25 * (2 * (sC η₀ D.n : ℝ)) * Real.log D.n := by
+              exact mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_left hst (by norm_num)) hlog0
+        _ = 50 * ((sC η₀ D.n : ℝ) * Real.log D.n) := by ring
+    have hEpsExp : 10000 * x ≤ (1 / 10000 : ℝ) * (h : ℝ) * x :=
+      mul_le_mul_of_nonneg_right hCoeff hx0
+    have hExpDiff : B - (1 / 10000 : ℝ) * (h : ℝ) * x ≤ -140 := by
+      calc
+        B - (1 / 10000 : ℝ) * (h : ℝ) * x ≤ 50 * x - 10000 * x :=
+          sub_le_sub hListExp hEpsExp
+        _ ≤ -140 := by nlinarith [hx]
+    have h141 : (141 : ℝ) ≤ Real.exp 140 := by
+      have h := Real.add_one_le_exp (140 : ℝ)
+      linarith
+    have hExpSmall : Real.exp (-140 : ℝ) ≤ 1 / 10 := by
+      have hinv : (Real.exp 140)⁻¹ ≤ (141 : ℝ)⁻¹ :=
+        (inv_le_inv₀ (Real.exp_pos _) (by norm_num)).mpr h141
+      calc
+        Real.exp (-140) = (Real.exp 140)⁻¹ := by rw [Real.exp_neg]
+        _ ≤ (141 : ℝ)⁻¹ := hinv
+        _ ≤ 1 / 10 := by norm_num
+    have hEpsList : D.eps0 * Real.exp B ≤ 1 / 10 := by
+      have hcombine : D.eps0 * Real.exp B =
+          Real.exp (B - (1 / 10000 : ℝ) * (h : ℝ) * x) := by
+        rw [Ctx.eps0, ← Real.exp_add]
+        congr 1
+        dsimp [x]
+        ring
+      rw [hcombine]
+      exact (Real.exp_le_exp.mpr hExpDiff).trans hExpSmall
+    let candidateLists : Finset (D.LList c.1) :=
+      Finset.univ.filter fun L => D.Cand P c L
+    have hCard : (candidateLists.card : ℝ) ≤ Real.exp B := by
+      exact hLists P c hPosCount
+    have hTiny : D.eps0 * (candidateLists.card : ℝ) ≤ 1 / 10 := by
+      calc
+        D.eps0 * (candidateLists.card : ℝ) ≤ D.eps0 * Real.exp B :=
+          mul_le_mul_of_nonneg_left hCard (le_of_lt (Real.exp_pos _))
+        _ ≤ 1 / 10 := hEpsList
+    have hRavg : averageCoordinateMarginal D.R' y ≤ 4 * K / D.N :=
+      Lane_q_s08_post.avgMarg_rprime_le_balanced D (by omega) hNpos K hStd.bal y
+    have hRavgNonneg : 0 ≤ averageCoordinateMarginal D.R' y :=
+      avgMarg_nonneg D.R' y
+    have hMadNonneg (π : D.Pres c.1) : 0 ≤ D.Mad Θ P c π := by
+      unfold Ctx.Mad
+      apply Finset.sum_nonneg
+      intro ξ hξ
+      exact mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ P c ξ π)
+    let selected : Finset (D.Pres c.1) := Finset.univ.filter fun π =>
+      D.eps0 * D.Mden Θ c.1 (D.obsOf π) ≤ D.Mad Θ P c π
+    let fallback : Finset (D.Pres c.1) := Finset.univ.filter fun π =>
+      ¬ D.eps0 * D.Mden Θ c.1 (D.obsOf π) ≤ D.Mad Θ P c π
+    let fallbackPos : Finset (D.Pres c.1) := fallback.filter fun π => 0 < D.Mad Θ P c π
+    let term : D.Pres c.1 → ℝ := fun π =>
+      D.p0w Θ P c π y * D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π
+    have hsplit :
+        ∑ π : D.Pres c.1, term π = (∑ π ∈ selected, term π) + ∑ π ∈ fallback, term π := by
+      dsimp [selected, fallback, term]
+      rw [← Finset.sum_filter_add_sum_filter_not Finset.univ
+        (fun π : D.Pres c.1 =>
+          D.eps0 * D.Mden Θ c.1 (D.obsOf π) ≤ D.Mad Θ P c π)]
+    have hSelectedDom (ξ : D.Tup) :
+        ∑ π : selected,
+          D.Qref Θ c.1 (D.obsOf π.1) * D.Gsel Θ P c ξ π.1 ≤ 1 := by
+      have hAll := Lane_q_s08_post.qref_gsel_sum_le_one D Θ P c ξ
+      have hRestrict :
+          ∑ π ∈ selected,
+              D.Qref Θ c.1 (D.obsOf π) * D.Gsel Θ P c ξ π ≤
+            ∑ π : D.Pres c.1,
+              D.Qref Θ c.1 (D.obsOf π) * D.Gsel Θ P c ξ π := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _)
+        intro π hπ hnot
+        exact mul_nonneg (D.Qref_nonneg Θ c.1 (D.obsOf π))
+          (D.Gsel_nonneg Θ P c ξ π)
+      have hdomFilter := hRestrict.trans hAll
+      rw [← Finset.sum_attach] at hdomFilter
+      simpa [selected] using hdomFilter
+    have hSelectedBranch : ∑ π ∈ selected, term π ≤
+        (5 / 2 : ℝ) * averageCoordinateMarginal D.R' y := by
+      calc
+        _ ≤ ∑ π ∈ selected,
+              (5 / 2 : ℝ) * D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π *
+                averageCoordinateMarginal (D.selPost Θ P c π) y := by
+              apply Finset.sum_le_sum
+              intro π hπ
+              have hcoeff : 0 ≤ D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π :=
+                mul_nonneg (D.Qref_nonneg Θ c.1 (D.obsOf π)) (hMadNonneg π)
+              by_cases hMad : 0 < D.Mad Θ P c π
+              · have hrow := Lane_q_s08_post.p0w_bound_candidate_mden_of_mad_pos
+                  D hP0 hG Θ P c π y hMad
+                calc
+                  term π =
+                      (D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π) * D.p0w Θ P c π y := by
+                        dsimp [term]
+                        ring
+                  _ ≤ (D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π) *
+                      ((5 / 2 : ℝ) * averageCoordinateMarginal
+                        (D.selPost Θ P c π) y) :=
+                        mul_le_mul_of_nonneg_left hrow.1 hcoeff
+                  _ = (5 / 2 : ℝ) * D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π *
+                      averageCoordinateMarginal (D.selPost Θ P c π) y := by ring
+              · have hMad0 : D.Mad Θ P c π = 0 :=
+                  le_antisymm (le_of_not_gt hMad) (hMadNonneg π)
+                simp [term, hMad0]
+        _ = (5 / 2 : ℝ) *
+              ∑ π ∈ selected,
+                D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π *
+                  averageCoordinateMarginal (D.selPost Θ P c π) y := by
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro π hπ
+              ring
+        _ ≤ (5 / 2 : ℝ) * averageCoordinateMarginal D.R' y := by
+              apply mul_le_mul_of_nonneg_left _ (by norm_num)
+              have hCancel := selected_marginal_cancellation D Θ P c y selected
+                (by intro π; exact (Finset.mem_filter.mp π.2).2) hSelectedDom
+              calc
+                ∑ π ∈ selected,
+                    D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π *
+                      averageCoordinateMarginal (D.selPost Θ P c π) y =
+                  ∑ π : selected,
+                    D.Qref Θ c.1 (D.obsOf π.1) * D.Mad Θ P c π.1 *
+                      averageCoordinateMarginal (D.selPost Θ P c π.1) y := by
+                        rw [← Finset.sum_attach]
+                        rw [Finset.univ_eq_attach]
+                _ ≤ averageCoordinateMarginal D.R' y := hCancel
+    have hFallbackTrim :
+        ∑ π ∈ fallback, term π = ∑ π ∈ fallbackPos, term π := by
+      calc
+        _ = ∑ π ∈ fallback,
+              if 0 < D.Mad Θ P c π then term π else 0 := by
+              apply Finset.sum_congr rfl
+              intro π hπ
+              by_cases hMad : 0 < D.Mad Θ P c π
+              · simp [hMad]
+              · have hMad0 : D.Mad Θ P c π = 0 :=
+                  le_antisymm (le_of_not_gt hMad) (hMadNonneg π)
+                simp [term, hMad0]
+        _ = _ := by rw [← Finset.sum_filter]
+    have hFallbackBase :
+        ∑ π ∈ fallbackPos,
+            D.Qref Θ c.1 (D.obsOf π) * D.Mden Θ c.1 (D.obsOf π) *
+              averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y ≤
+          (candidateLists.card : ℝ) * averageCoordinateMarginal D.R' y := by
+      apply Lane_q_s08_post.fallback_base_marginal_le_list_count D (by omega) hDB
+        Θ P c y fallbackPos
+      · intro π hπ
+        have hdata := Lane_q_s08_post.p0w_bound_candidate_mden_of_mad_pos
+          D hP0 hG Θ P c π y ((Finset.mem_filter.mp hπ).2)
+        exact hdata.2.1
+      · intro π hπ
+        have hdata := Lane_q_s08_post.p0w_bound_candidate_mden_of_mad_pos
+          D hP0 hG Θ P c π y ((Finset.mem_filter.mp hπ).2)
+        exact hdata.2.2
+    have hFallbackBranch : ∑ π ∈ fallback, term π ≤
+        (1 / 4 : ℝ) * averageCoordinateMarginal D.R' y := by
+      rw [hFallbackTrim]
+      calc
+        _ ≤ (5 / 2 : ℝ) * D.eps0 *
+              ∑ π ∈ fallbackPos,
+                D.Qref Θ c.1 (D.obsOf π) * D.Mden Θ c.1 (D.obsOf π) *
+                  averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y := by
+              calc
+                _ ≤ ∑ π ∈ fallbackPos,
+                      (5 / 2 : ℝ) * D.eps0 * D.Qref Θ c.1 (D.obsOf π) *
+                        D.Mden Θ c.1 (D.obsOf π) *
+                          averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y := by
+                        apply Finset.sum_le_sum
+                        intro π hπ
+                        have hmem := Finset.mem_filter.mp hπ
+                        have hnot := (Finset.mem_filter.mp hmem.1).2
+                        have hMad := hmem.2
+                        have hData := Lane_q_s08_post.p0w_bound_candidate_mden_of_mad_pos
+                          D hP0 hG Θ P c π y hMad
+                        have hPost : D.selPost Θ P c π = D.basePost Θ c.1 (D.obsOf π) := by
+                          unfold Ctx.selPost
+                          rw [if_neg hnot]
+                        have hrow : D.p0w Θ P c π y ≤
+                            (5 / 2 : ℝ) *
+                              averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y := by
+                          simpa [hPost] using hData.1
+                        have hMnonneg := hMadNonneg π
+                        have hQnonneg := D.Qref_nonneg Θ c.1 (D.obsOf π)
+                        have hAvgNonneg := avgMarg_nonneg (D.basePost Θ c.1 (D.obsOf π)) y
+                        have hLow : D.Mad Θ P c π <
+                            D.eps0 * D.Mden Θ c.1 (D.obsOf π) := lt_of_not_ge hnot
+                        have hcoeff : D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π ≤
+                            D.Qref Θ c.1 (D.obsOf π) *
+                              (D.eps0 * D.Mden Θ c.1 (D.obsOf π)) :=
+                          mul_le_mul_of_nonneg_left hLow.le hQnonneg
+                        calc
+                          term π =
+                              (D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π) *
+                                D.p0w Θ P c π y := by dsimp [term]; ring
+                          _ ≤ (D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π) *
+                                ((5 / 2 : ℝ) *
+                                  averageCoordinateMarginal
+                                    (D.basePost Θ c.1 (D.obsOf π)) y) :=
+                                  mul_le_mul_of_nonneg_left hrow
+                                    (mul_nonneg hQnonneg hMnonneg)
+                          _ ≤ (D.Qref Θ c.1 (D.obsOf π) *
+                                (D.eps0 * D.Mden Θ c.1 (D.obsOf π))) *
+                                ((5 / 2 : ℝ) *
+                                  averageCoordinateMarginal
+                                    (D.basePost Θ c.1 (D.obsOf π)) y) :=
+                                mul_le_mul_of_nonneg_right hcoeff
+                                  (mul_nonneg (by norm_num) hAvgNonneg)
+                          _ = (5 / 2 : ℝ) * D.eps0 * D.Qref Θ c.1 (D.obsOf π) *
+                                D.Mden Θ c.1 (D.obsOf π) *
+                                  averageCoordinateMarginal
+                                    (D.basePost Θ c.1 (D.obsOf π)) y := by ring
+                _ = _ := by
+                      rw [Finset.mul_sum]
+                      apply Finset.sum_congr rfl
+                      intro π hπ
+                      ring
+        _ ≤ (5 / 2 : ℝ) * D.eps0 *
+              ((candidateLists.card : ℝ) * averageCoordinateMarginal D.R' y) :=
+                mul_le_mul_of_nonneg_left hFallbackBase
+                  (mul_nonneg (by norm_num) (Real.exp_nonneg _))
+        _ ≤ (1 / 4 : ℝ) * averageCoordinateMarginal D.R' y := by
+              have hmult := mul_le_mul_of_nonneg_left hTiny
+                (mul_nonneg (by norm_num : (0 : ℝ) ≤ 5 / 2) hRavgNonneg)
+              calc
+                (5 / 2 : ℝ) * D.eps0 *
+                    ((candidateLists.card : ℝ) * averageCoordinateMarginal D.R' y) =
+                  ((5 / 2 : ℝ) * averageCoordinateMarginal D.R' y) *
+                    (D.eps0 * (candidateLists.card : ℝ)) := by ring
+                _ ≤ ((5 / 2 : ℝ) * averageCoordinateMarginal D.R' y) * (1 / 10 : ℝ) :=
+                  hmult
+                _ = (1 / 4 : ℝ) * averageCoordinateMarginal D.R' y := by ring
+    have hRawMeanBound :
+        ∑ ξ, D.R'.w ξ * (D.rawLaw (Function.update Θ c.1 ξ) P).expect
+          (fun z => D.p0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c y) ≤
+            16 * K / D.N := by
+      rw [Lane_q_s08_post.raw_p0_mean_as_mad D Θ P c y]
+      calc
+        _ = (∑ π ∈ selected, term π) + ∑ π ∈ fallback, term π := hsplit
+        _ ≤ (5 / 2 : ℝ) * averageCoordinateMarginal D.R' y +
+              (1 / 4 : ℝ) * averageCoordinateMarginal D.R' y :=
+                add_le_add hSelectedBranch hFallbackBranch
+        _ ≤ 11 * K / D.N := by
+              have hmarg := mul_le_mul_of_nonneg_left hRavg
+                (by norm_num : (0 : ℝ) ≤ (11 / 4 : ℝ))
+              calc
+                (5 / 2 : ℝ) * averageCoordinateMarginal D.R' y +
+                    (1 / 4 : ℝ) * averageCoordinateMarginal D.R' y =
+                  (11 / 4 : ℝ) * averageCoordinateMarginal D.R' y := by ring
+                _ ≤ (11 / 4 : ℝ) * (4 * K / D.N) := hmarg
+                _ = 11 * K / D.N := by ring
+        _ ≤ 16 * K / D.N := by
+              apply div_le_div_of_nonneg_right _ hNposR.le
+              nlinarith [hK]
+    exact hRawMeanBound
+  ·
+    have hRawZero (ξ : D.Tup) :
+        (D.rawLaw (Function.update Θ c.1 ξ) P).expect
+          (fun z => D.p0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c y) = 0 := by
+      unfold FinProb.expect
+      apply Finset.sum_eq_zero
+      intro z hz
+      have hInvalid : ¬ D.PresValid ((Function.update Θ c.1 ξ, P), z.1) z.2 c := by
+        intro hvalid
+        exact hPosCount hvalid.2.2.2.2.1
+      simp [Ctx.p0, hInvalid]
+    have hzero :
+        ∑ ξ, D.R'.w ξ * (D.rawLaw (Function.update Θ c.1 ξ) P).expect
+          (fun z => D.p0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c y) = 0 := by
+      simp [hRawZero]
+    rw [hzero]
+    exact div_nonneg (by positivity) hNposR.le
 
 set_option maxHeartbeats 1000000
 /-- L8.1g(vi) (08:285–290): `p⁰_{g,a}` reads the selections at its incident even cells (`SelLocal`, keys within one

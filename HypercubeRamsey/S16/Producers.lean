@@ -309,7 +309,8 @@ structure CellPermissions {κ : CConsts} {T : Stage} {k : ℕ}
   labels_eq : ∀ C D, (table C).labels D = D.1
   group_eq : ∀ C inc, (table C).groupOf inc = R.groupOf C inc.1
   bad_eq : ∀ C inc y, (table C).badMass inc y =
-    if inc.2 ∉ PT.tiling.Icoord (G.cellPatch C) ∧ G.classOf inc.1.1 = none then
+    if y ∈ (PT.tiling.P (G.cellPatch C)).Y ∧
+        inc.2 ∉ PT.tiling.Icoord (G.cellPatch C) ∧ G.classOf inc.1.1 = none then
       (R.baseExperiment (G.cellOf (flipPos inc.1.1 inc.2)) (flipPos inc.1.1 inc.2)).expect
         (fun σ => if σ ≠ 0 ∧ |∑ x, σ x * hit (T.S.E k) PT.tiling.c x y - 1 / 2| >
           2 * bstar T k then 1 else 0)
@@ -322,6 +323,8 @@ theorem cell_permission_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       ∀ {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
       (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q)
       (R : CellRawData H.geom), R.SourceValid → n₀ ≤ T.S.n k →
+      TwoBudgetDisc T k ((T.S.n k : ℝ) ^ κ.xs)
+        (κ.α * T.S.n k) ((T.S.n k : ℝ) ^ (-1 + (0.04 : ℝ))) →
       ∃ Perm : CellPermissions R, ∀ C W, (R.history C).w W ≠ 0 →
         PermissionLossHypotheses (Perm.table C) (R.qin C W) := by
   sorry

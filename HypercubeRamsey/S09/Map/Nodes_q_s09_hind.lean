@@ -1893,6 +1893,50 @@ private theorem heightRootLLLInput9 {P : Params9} {hc : HeightChoice9 P} {n : �
         (rootBadPair9 (P := P) (hc := hc) (n := n) t s η root) ≤ x * (1 - x) ^ Δ
     exact (rootBadPair9_probability hcounts root ε (hscale root)).trans hcharge
 
+private theorem one_sub_pow_lower9 {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1) (k : ℕ) :
+    1 - (k : ℝ) * x ≤ (1 - x) ^ k := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+      have hbase0 : 0 ≤ 1 - x := by linarith
+      have hbase1 : 1 - x ≤ 1 := by linarith
+      have hpow1 : (1 - x) ^ k ≤ 1 := pow_le_one₀ hbase0 hbase1
+      calc
+        1 - ((k + 1 : ℕ) : ℝ) * x = (1 - (k : ℝ) * x) - x := by push_cast; ring
+        _ ≤ (1 - x) ^ k - x := sub_le_sub_right ih x
+        _ ≤ (1 - x) ^ k * (1 - x) := by
+          have hmul := mul_nonneg hx0 (sub_nonneg.mpr hpow1)
+          nlinarith
+        _ = (1 - x) ^ (k + 1) := by rw [pow_succ]
+
+private theorem local_lemma_charge9 (Δ : ℕ) (p : ℝ)
+    (hp : p ≤ 1 / (4 * ((Δ + 1 : ℕ) : ℝ))) :
+    ∃ x : ℝ, 0 ≤ x ∧ x < 1 ∧ p ≤ x * (1 - x) ^ Δ := by
+  let x : ℝ := 1 / (2 * ((Δ + 1 : ℕ) : ℝ))
+  have hden : 0 < 2 * ((Δ + 1 : ℕ) : ℝ) := by positivity
+  have hx0 : 0 ≤ x := by dsimp [x]; positivity
+  have hx1 : x < 1 := by
+    dsimp [x]
+    have hΔ : 1 ≤ ((Δ + 1 : ℕ) : ℝ) := by exact_mod_cast (Nat.le_add_left 1 Δ)
+    rw [div_lt_one hden]
+    nlinarith
+  have hΔx : ((Δ : ℝ) * x) ≤ 1 / 2 := by
+    have hΔle : (Δ : ℝ) ≤ ((Δ + 1 : ℕ) : ℝ) := by exact_mod_cast (Nat.le_add_right Δ 1)
+    calc
+      (Δ : ℝ) * x = (Δ : ℝ) / (2 * ((Δ + 1 : ℕ) : ℝ)) := by dsimp [x]; ring
+      _ ≤ ((Δ + 1 : ℕ) : ℝ) / (2 * ((Δ + 1 : ℕ) : ℝ)) :=
+        div_le_div_of_nonneg_right hΔle (by positivity)
+      _ = 1 / 2 := by field_simp [ne_of_gt hden]
+  have hpow : 1 / 2 ≤ (1 - x) ^ Δ := by
+    have h := one_sub_pow_lower9 hx0 (le_of_lt hx1) Δ
+    push_cast at h
+    linarith
+  refine ⟨x, hx0, hx1, ?_⟩
+  calc
+    p ≤ 1 / (4 * ((Δ + 1 : ℕ) : ℝ)) := hp
+    _ = x / 2 := by dsimp [x]; field_simp; norm_num
+    _ ≤ x * (1 - x) ^ Δ := by nlinarith [hx0, hpow]
+
 private theorem rootSupport9_overlap_projection_bounds {P : Params9} {hc : HeightChoice9 P}
     {n R : ℕ} (hmn : P.m n ≤ n) (root root' : CubeVertex n)
     (hoverlap : ¬ Disjoint (scaleRootSupport9 (P := P) (hc := hc) (n := n) root R)

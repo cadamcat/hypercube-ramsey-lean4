@@ -3036,6 +3036,24 @@ private theorem clipped_gap_of_search {β γ : ℝ} {n : ℕ}
           _ = mergeSortAt f q := hqRank
           _ ≤ f j := hhigh
 
+private theorem side_stable_of_gap (S a x y : ℕ) (hS : 4 ≤ S)
+    (hgap : x ≤ a * S ∨ (a + 1) * S ≤ x)
+    (hdelta : y ≤ x + 1 ∧ x ≤ y + 1) :
+    (a * S + S / 2 < x) ↔ (a * S + S / 2 < y) := by
+  have hlowMid : a * S + 1 ≤ a * S + S / 2 := by omega
+  have hhighMid : a * S + S / 2 + 1 ≤ a * S + S := by omega
+  have hscale : (a + 1) * S = a * S + S := by
+    rw [Nat.add_mul]
+    simp
+  rcases hgap with hlow | hhigh
+  · have hxnot : ¬ a * S + S / 2 < x := by omega
+    have hynot : ¬ a * S + S / 2 < y := by omega
+    constructor <;> intro h <;> omega
+  · have hbase : a * S + S ≤ x := by rw [← hscale]; exact hhigh
+    have hx : a * S + S / 2 < x := by omega
+    have hy : a * S + S / 2 < y := by omega
+    exact ⟨fun _ => hy, fun _ => hx⟩
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by

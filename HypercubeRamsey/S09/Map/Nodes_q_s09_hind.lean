@@ -3067,6 +3067,32 @@ private theorem goodHeights9_of_no_rootScaleFailure
   intro v' hvv'
   exact hlip v v' hvv'
 
+private theorem goodHeights9_of_no_rootBadPair9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (ω : Pos9 P hc n → Bool × Bool)
+    (hno : ∀ root : CubeVertex n, ¬ rootBadPair9 (1 / 3) (1 / 8) (1 / 4) root ω) :
+    GoodHeights9 (P := P) (hc := hc) (n := n)
+      ((heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω).1
+      ((heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω).2 := by
+  let fields := (heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω
+  have hcounts : ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (1 / 2 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ fields.1 v j : ℝ) := by
+    intro v j
+    by_contra h
+    have hlow : (eligCount9 Finset.univ fields.1 v j : ℝ) < (n : ℝ) ^ (10 : ℝ) / 2 := by
+      nlinarith
+    have hcount : rootCountFailure9 v fields.1 := by
+      refine ⟨(v, j), ?_, hlow⟩
+      simp
+    have hbad : rootBadPair9 (1 / 3) (1 / 8) (1 / 4) v ω := Or.inr hcount
+    exact hno v hbad
+  have hnoScale : ∀ root : CubeVertex n,
+      ¬ rootScaleFailure9 Finset.univ (1 / 3) (1 / 8) (1 / 4)
+        (hc.levels n) fields.1 fields.2 root := by
+    intro root hfail
+    exact hno root (Or.inl hfail)
+  exact goodHeights9_of_no_rootScaleFailure fields.1 fields.2 hcounts hnoScale
+
 theorem goodHeights_of_no_top_reach {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool)
     (hnot : ∀ v : CubeVertex n,

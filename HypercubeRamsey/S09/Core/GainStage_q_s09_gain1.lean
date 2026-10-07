@@ -117,6 +117,15 @@ private theorem pi_pr_slice_le {ι : Type*} [Fintype ι] [DecidableEq ι]
           exact hinner b
     _ = B := by simp [← Finset.sum_mul, Pc.sum_eq_one]
 
+private theorem condExp_eq_condLaw_expect9 {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (A : Ω → Prop) (hA : 0 < P.pr A) (f : Ω → ℝ) :
+    P.condExp f A = (P.cond A hA).expect f := by
+  unfold FinProb.condExp FinProb.expect FinProb.cond
+  rw [Finset.sum_div]
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases h : A ω <;> simp [h] <;> ring
+
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)
     (t : Fin 3) : List I.ID :=

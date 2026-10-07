@@ -1,10 +1,41 @@
 import HypercubeRamsey.S18.Defs
 import HypercubeRamsey.Framework.Minimax
+import HypercubeRamsey.Tools.Concentration
 
 namespace HypercubeRamsey.Lane_q_s18_n1
 
 open scoped BigOperators
 open HypercubeRamsey.S18
+
+private theorem finProb_pr_mono {A : Type*} [Fintype A] (P : FinProb A)
+    {E F : A → Prop} (hEF : ∀ a, E a → F a) : P.pr E ≤ P.pr F := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro a ha
+  by_cases hE : E a
+  · have hF : F a := hEF a hE
+    simp [hE, hF]
+  · by_cases hF : F a
+    · simp [hE, hF, P.nonneg a]
+    · simp [hE, hF]
+
+private theorem bounded_difference_upper_tail {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (f : (∀ i, Ω i) → ℝ) (c : ι → ℝ)
+    (hc : ∀ i, 0 ≤ c i)
+    (hlip : ∀ i (ω ω' : ∀ j, Ω j), (∀ j, j ≠ i → ω j = ω' j) →
+      |f ω - f ω'| ≤ c i)
+    (hwidth : 0 < ∑ i, c i ^ 2) (δ : ℝ) (hδ : 0 < δ)
+    (hmean : (FinProb.pi P).expect f ≤ δ) :
+    (FinProb.pi P).pr (fun ω => 2 * δ ≤ f ω) ≤
+      2 * Real.exp (-2 * δ ^ 2 / ∑ i, c i ^ 2) := by
+  have hsub (ω : ∀ i, Ω i) (hω : 2 * δ ≤ f ω) :
+      δ ≤ |f ω - (FinProb.pi P).expect f| := by
+    have hgap : δ ≤ f ω - (FinProb.pi P).expect f := by linarith
+    exact hgap.trans (le_abs_self _)
+  exact (finProb_pr_mono (FinProb.pi P) hsub).trans
+    (HypercubeRamsey.xMcDiarmid P f c hc hlip hwidth δ hδ)
 
 private theorem law_eq_of_weights {N : ℕ} {μ ν : Law N}
     (h : ∀ x, μ.w x = ν.w x) : μ = ν := by

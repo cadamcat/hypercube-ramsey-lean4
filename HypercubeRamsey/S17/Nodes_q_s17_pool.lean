@@ -676,6 +676,190 @@ theorem profiled_degree_tail {κ : CConsts} {T : Stage} {k : ℕ}
     (w₁ := wS) (W₂ := wL) (w := W) hpair τ hτ hτw
     (PT.π j) hπY hπw
 
+theorem product_filter_pins_eq {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (pins : Finset (Pos T k))
+    (hPins : pins ⊆ D.externalEarly v) (f : Pos T k → ℝ) :
+    (∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+      if w.1 ∈ pins then f w.1 else 1) = ∏ w ∈ pins, f w := by
+  classical
+  let Ext := {w : Pos T k // w ∈ D.externalEarly v}
+  let PinExt := {w : Ext // w.1 ∈ pins}
+  let Pin := {w : Pos T k // w ∈ pins}
+  let e : PinExt ≃ Pin := {
+    toFun := fun w => ⟨w.1.1, w.2⟩
+    invFun := fun w => ⟨⟨w.1, hPins w.2⟩, w.2⟩
+    left_inv := by intro w; apply Subtype.ext; apply Subtype.ext; rfl
+    right_inv := by intro w; apply Subtype.ext; rfl }
+  let p : Ext → Prop := fun w => w.1 ∈ pins
+  let g : Ext → ℝ := fun w => if p w then f w.1 else 1
+  have hPinG : (∏ w : PinExt, g w.1) = ∏ w : PinExt, f w.1.1 := by
+    apply Fintype.prod_congr
+    intro w
+    simp [g, p, w.2]
+  have hUnpinG : (∏ w : {w : Ext // ¬ p w}, g w.1) = 1 := by
+    calc
+      (∏ w : {w : Ext // ¬ p w}, g w.1) =
+          ∏ w : {w : Ext // ¬ p w}, (1 : ℝ) := by
+        apply Fintype.prod_congr
+        intro w
+        simp [g, p, w.2]
+      _ = 1 := by simp
+  have hpart := Fintype.prod_subtype_mul_prod_subtype p g
+  rw [hUnpinG, mul_one] at hpart
+  calc
+    (∏ w : Ext, if w.1 ∈ pins then f w.1 else 1) =
+        ∏ w : Ext, g w := by simp [g, p]
+    _ = ∏ w : PinExt, f w.1.1 := hpart.symm.trans hPinG
+    _ = ∏ w : Pin, f w.1 := Fintype.prod_equiv e _ _ (by intro w; rfl)
+    _ = ∏ w ∈ pins, f w := Finset.prod_attach pins f
+
+theorem pinnedPriorMass_eq_hits {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT) (hPT : PT.Valid)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (hσ : D.CleanInitialPrior v σ) (pins : Finset (Pos T k))
+    (fixed : Pos T k → Fin (T.S.N k)) :
+    D.pinnedPriorMass v σ pins fixed =
+      ∑ x, σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) := by
+  classical
+  rcases hσ.2.2 with ⟨a, ha, hsupport, _, _⟩
+  unfold ListGateContext.pinnedPriorMass
+  apply Finset.sum_congr rfl
+  intro x hx
+  by_cases hzero : σ x = 0
+  · simp [hzero]
+  · have hxclean : x ∈ PT.mesh.corner a (D.G.patchOf v) := hsupport x hzero
+    have hxX : x ∈ (PT.tiling.P (D.G.patchOf v)).X :=
+      (hPT.corner_clean (D.G.patchOf v) a ha).sub hxclean
+    simp [hxX]
+
+theorem rowMass_subtype_product {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (hN : 0 < T.S.N k) (σ : Fin (T.S.N k) → ℝ)
+    (ys : {w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k)) :
+    D.rowMass v σ (D.labelsOfPinnedSample v hN ys) =
+      ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+        D.hitRatio w.1 x (ys w) := by
+  classical
+  unfold ListGateContext.rowMass ListGateContext.row
+  apply Finset.sum_congr rfl
+  intro x hx
+  congr 1
+  rw [← Finset.prod_attach, ← Finset.univ_eq_attach]
+  apply Fintype.prod_congr
+  intro w
+  simp [ListGateContext.labelsOfPinnedSample]
+
+theorem pinned_row_expectation_lower {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (hσ : D.CleanInitialPrior v σ) (pins : Finset (Pos T k))
+    (hPins : pins ⊆ D.externalEarly v) (fixed : Pos T k → Fin (T.S.N k))
+    (dmax : ℝ) (hdmax : 0 < dmax)
+    (hdeg : ∀ x, σ x ≠ 0 → ∀ w ∈ D.externalEarly v,
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ∧
+      deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ≤ dmax) :
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) ≥
+      D.pinnedPriorMass v σ pins fixed / dmax ^ pins.card := by
+  classical
+  have hdegreePositive : ∀ x, σ x ≠ 0 → ∀ w ∈ D.externalEarly v,
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+    intro x hx w hw
+    exact (hdeg x hx w hw).1
+  have hExpectation :
+      (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) =
+      ∑ x, σ x * ∏ w ∈ pins,
+        hit (T.S.E k) PT.tiling.c x (fixed w) /
+          deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+    calc
+      (D.pinnedLabelLaw v pins fixed).E
+          (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) =
+          (D.pinnedLabelLaw v pins fixed).E (fun ys =>
+            ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+              D.hitRatio w.1 x (ys w)) := by
+          unfold FinLaw.E
+          apply Finset.sum_congr rfl
+          intro ys hys
+          change (D.pinnedLabelLaw v pins fixed).w ys *
+              D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys) =
+            (D.pinnedLabelLaw v pins fixed).w ys *
+              (∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+                D.hitRatio w.1 x (ys w))
+          congr 1
+          exact rowMass_subtype_product D v (T.S.N_pos k) σ ys
+      _ = ∑ x, σ x * ∏ w ∈ pins,
+            hit (T.S.E k) PT.tiling.c x (fixed w) /
+              deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+        rw [pinned_product_row_expectation_simplified D v σ pins fixed hdegreePositive]
+        apply Finset.sum_congr rfl
+        intro x hx
+        congr 1
+        rw [product_filter_pins_eq D v pins hPins
+          (fun w => D.hitRatio w x (fixed w))]
+        simp [ListGateContext.hitRatio]
+  have hsum :
+      (∑ x, σ x * ∏ w ∈ pins,
+        hit (T.S.E k) PT.tiling.c x (fixed w) /
+          deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) ≥
+      (∑ x, σ x * ∏ w ∈ pins,
+        hit (T.S.E k) PT.tiling.c x (fixed w)) / dmax ^ pins.card := by
+    have hterm (x : Fin (T.S.N k)) :
+        (σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+          dmax ^ pins.card ≤ σ x * (∏ w ∈ pins,
+          hit (T.S.E k) PT.tiling.c x (fixed w) /
+            deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) := by
+      by_cases hzero : σ x = 0
+      · simp [hzero]
+      · have hprod :
+            (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) / dmax) ≤
+            ∏ w ∈ pins,
+              hit (T.S.E k) PT.tiling.c x (fixed w) /
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+          apply Finset.prod_le_prod₀
+          · intro w hw
+            unfold hit
+            split_ifs <;> positivity
+          · intro w hw
+            have hden := hdeg x hzero w (hPins hw)
+            by_cases hh : Hits (T.S.E k) PT.tiling.c x (fixed w)
+            · simp [hit, hh]
+              simpa [one_div] using one_div_le_one_div_of_le hden.1 hden.2
+            · simp [hit, hh]
+        have hproddiv :
+            (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) / dmax) =
+              (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+                dmax ^ pins.card := by
+          rw [Finset.prod_div_distrib]
+          simp
+        calc
+          (σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+              dmax ^ pins.card =
+              σ x * (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) / dmax) := by
+                rw [hproddiv]
+                ring
+          _ ≤ σ x * (∏ w ∈ pins,
+              hit (T.S.E k) PT.tiling.c x (fixed w) /
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) :=
+            mul_le_mul_of_nonneg_left hprod (hσ.1 x)
+    calc
+      (∑ x, σ x * ∏ w ∈ pins,
+          hit (T.S.E k) PT.tiling.c x (fixed w) /
+            deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) ≥
+          ∑ x, (σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+            dmax ^ pins.card := Finset.sum_le_sum fun x _ => hterm x
+      _ = (∑ x, σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+            dmax ^ pins.card := by rw [Finset.sum_div]
+  calc
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) =
+        ∑ x, σ x * ∏ w ∈ pins,
+          hit (T.S.E k) PT.tiling.c x (fixed w) /
+            deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := hExpectation
+    _ ≥ D.pinnedPriorMass v σ pins fixed / dmax ^ pins.card := by
+      simpa only [pinnedPriorMass_eq_hits D hPT v σ hσ pins fixed] using hsum
+
 theorem externalEarly_card_le {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
     (v : Pos T k) : (D.externalEarly v).card ≤ T.S.n k := by

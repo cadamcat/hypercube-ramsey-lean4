@@ -23,6 +23,14 @@ theorem residualDist_le_hammingDist (X : Ctx6 γ p₀ K n N E G M) (v w : CubeVe
   rcases Finset.mem_filter.mp ha with ⟨_, hd⟩
   exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hd⟩
 
+theorem residualDist_comm (X : Ctx6 γ p₀ K n N E G M) (v w : CubeVertex n) :
+    X.g.L.residualDist v w = X.g.L.residualDist w v := by
+  change (X.g.L.residual.filter (fun a => v a ≠ w a)).card =
+    (X.g.L.residual.filter (fun a => w a ≠ v a)).card
+  apply congrArg (fun s : Finset (Fin n) => s.card)
+  ext a
+  simp [ne_comm]
+
 theorem oddStar_card_le (X : Ctx6 γ p₀ K n N E G M) (v : CubeVertex n) (hn : 0 < n) :
     (oddStar (n := n) v).card ≤ n := by
   let adj : Finset (CubeVertex n) := Finset.univ.filter fun u => (cube n).Adj v u

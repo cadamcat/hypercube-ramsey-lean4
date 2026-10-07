@@ -348,12 +348,56 @@ near-product bound of `JfOK` on at most `n²` outputs; long computations at resi
 disjoint centre randomness, so the raw centre integrals factor into the comparison means. -/
 theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → X.EvenMean → X.EvenJoint := by
+  refine ⟨1, 1, ?_⟩
+  intro n N E G M X hLarge hDensity hMean
+  have hn : 0 < n := lt_of_lt_of_le Nat.zero_lt_one hLarge.1
+  have hnear : 2 ≤ X.nearR := by
+    simp only [Ctx6.nearR]
+    omega
+  have hstarCard (v : CubeVertex n) : (Lane_q_s06_ev_d.oddStar v).card ≤ n :=
+    Lane_q_s06_ev_d.oddStar_card_le X v hn
+  have hstarDisjoint (v w : CubeVertex n)
+      (hsep : X.nearR < X.g.L.residualDist v w) :
+      Disjoint (Lane_q_s06_ev_d.oddStar v) (Lane_q_s06_ev_d.oddStar w) :=
+    Lane_q_s06_ev_d.oddStar_disjoint_of_residualDist X v w (lt_of_le_of_lt hnear hsep)
+  have hstarImage (v : CubeVertex n) :
+      (X.oddNbrs v).image Subtype.val = Lane_q_s06_ev_d.oddStar v := by
+    ext u
+    simp [Ctx6.oddNbrs, Lane_q_s06_ev_d.oddStar, OddRole6, and_comm]
+  have hoddNbrCard (v : CubeVertex n) : (X.oddNbrs v).card ≤ n := by
+    calc
+      (X.oddNbrs v).card = ((X.oddNbrs v).image Subtype.val).card :=
+        (Finset.card_image_of_injective _ Subtype.val_injective).symm
+      _ = (Lane_q_s06_ev_d.oddStar v).card := congrArg Finset.card (hstarImage v)
+      _ ≤ n := hstarCard v
+  have hoddNbrDisjoint (v w : CubeVertex n)
+      (hsep : X.nearR < X.g.L.residualDist v w) : Disjoint (X.oddNbrs v) (X.oddNbrs w) := by
+    rw [Finset.disjoint_left]
+    intro u huv huw
+    have huvRaw : u.1 ∈ Lane_q_s06_ev_d.oddStar v := by
+      rw [← hstarImage v]
+      exact Finset.mem_image.mpr ⟨u, huv, rfl⟩
+    have huwRaw : u.1 ∈ Lane_q_s06_ev_d.oddStar w := by
+      rw [← hstarImage w]
+      exact Finset.mem_image.mpr ⟨u, huw, rfl⟩
+    exact (Finset.disjoint_left.mp (hstarDisjoint v w hsep)) huvRaw huwRaw
   sorry
 
 /-- L6.1n (even loads, 06:870–884): close repeats by `H_bin(2ρ) < log 2 − .55` and the cap `10e^{.55n}`; the joint
 comparison for separated rows; Lemma 3.6, Markov, the union over labels, and `|A|/N → 0`. -/
 theorem L6_1n_loads (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → X.EvenJoint → X.EvenLoad := by
+  refine ⟨1, 1, ?_⟩
+  intro n N E G M X hLarge hDensity hJoint
+  have hn : 0 < n := lt_of_lt_of_le Nat.zero_lt_one hLarge.1
+  have hnear : 2 ≤ X.nearR := by
+    simp only [Ctx6.nearR]
+    omega
+  have hrowCap (H : X.Hist) (C : X.Centre) (v : CubeVertex n) (a : Fin N)
+      (hH : X.histLaw.w H ≠ 0) (hv : IsEvenRole v) (y : OddRole6 n → Fin N)
+      (hvalid : X.EvenValid H C v y) :
+      (N : ℝ) * X.evenRow H C v y a ≤ 10 * Real.exp ((55 / 100) * n) := by
+    exact (hDensity H C v y hH hv hvalid).2.2.2 a
   sorry
 
 /-- L6.1m–n assembled from their nodes. -/

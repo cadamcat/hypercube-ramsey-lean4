@@ -959,7 +959,7 @@ private theorem finish_single_cauchy_bound {κ : CConsts} {T : Stage} {k : ℕ}
             X.deviates (P.output seed (P.replies seed s P.steps)) x none)
       else 0) ^ 2 ≤
       ((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) ^ 2 *
-        Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+        Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
           Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
   classical
   let i := D.geom.patchOf X.target
@@ -987,10 +987,10 @@ private theorem finish_single_cauchy_bound {κ : CConsts} {T : Stage} {k : ℕ}
   have hAdiv :
       (∑ x ∈ patch, if X.allowed x none then
         ((2 : ℝ) ^ X.criticalCoords.card * p x) ^ 2 else 0) / M ≤
-        Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) := by
+        Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) := by
     simpa [patch, M, p, i] using hSurv.2.1
   have hA : (∑ x ∈ patch, f x ^ 2) ≤
-      M * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) := by
+      M * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) := by
     rw [← hAeq] at hAdiv
     simpa [mul_comm] using (div_le_iff₀ hMpos).1 hAdiv
   have hq_nonneg (x : Fin (T.S.N k)) : 0 ≤ q x := by
@@ -1026,12 +1026,12 @@ private theorem finish_single_cauchy_bound {κ : CConsts} {T : Stage} {k : ℕ}
   have hC :
       (∑ x ∈ patch, if X.allowed x none then
         ((2 : ℝ) ^ X.criticalCoords.card * p x) * q x else 0) ^ 2 ≤
-      (M * Real.exp (κ.KB * Real.log (T.S.n k : ℝ))) *
+      (M * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ))) *
           (M * Real.exp (-Real.rpow (T.S.n k : ℝ) c)) := by
     rw [hsum] at hCauchy
     have hGnonneg : 0 ≤ ∑ x ∈ patch, g x ^ 2 :=
       Finset.sum_nonneg fun x hx => sq_nonneg (g x)
-    have hAupper : 0 ≤ M * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) := by positivity
+    have hAupper : 0 ≤ M * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) := by positivity
     have hstep1 := mul_le_mul_of_nonneg_right hA hGnonneg
     have hstep2 := mul_le_mul_of_nonneg_left hB hAupper
     exact hCauchy.trans (hstep1.trans hstep2)
@@ -1051,7 +1051,7 @@ private theorem finish_pair_cauchy_bound {κ : CConsts} {T : Stage} {k : ℕ}
                 X.deviates (P.output seed (P.replies seed s P.steps)) x (some y))
         else 0) ^ 2 ≤
       (((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) ^ 2 *
-        Real.exp (κ.KB * Real.log (T.S.n k : ℝ))) *
+        Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ))) *
       (((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) ^ 2 *
         Real.exp (-Real.rpow (T.S.n k : ℝ) c)) := by
   classical
@@ -1090,10 +1090,10 @@ private theorem finish_pair_cauchy_bound {κ : CConsts} {T : Stage} {k : ℕ}
       (∑ x ∈ patch, ∑ y ∈ patch,
         if X.allowed x (some y) then
           ((4 : ℝ) ^ X.criticalCoords.card * p x y) ^ 2 else 0) / M ^ 2 ≤
-        Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) := by
+        Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) := by
     simpa [patch, M, p, i] using hSurv.2.2
   have hA : (∑ xy ∈ prodPatch, f xy ^ 2) ≤
-      M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) := by
+      M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) := by
     rw [← hAeq] at hAdiv
     simpa [mul_comm] using (div_le_iff₀ hM2pos).1 hAdiv
   have hq_nonneg (x y : Fin (T.S.N k)) : 0 ≤ q x y := by
@@ -1142,12 +1142,12 @@ private theorem finish_pair_cauchy_bound {κ : CConsts} {T : Stage} {k : ℕ}
       (∑ x ∈ patch, ∑ y ∈ patch,
         if X.allowed x (some y) then
           ((4 : ℝ) ^ X.criticalCoords.card * p x y) * q x y else 0) ^ 2 ≤
-        (M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ))) *
+        (M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ))) *
           (M ^ 2 * Real.exp (-Real.rpow (T.S.n k : ℝ) c)) := by
     rw [hsum] at hCauchy
     have hg_nonneg : 0 ≤ ∑ xy ∈ prodPatch, g xy ^ 2 :=
       Finset.sum_nonneg fun xy hxy => sq_nonneg (g xy)
-    have hAupper : 0 ≤ M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) := by positivity
+    have hAupper : 0 ≤ M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) := by positivity
     have hstep1 := mul_le_mul_of_nonneg_right hA hg_nonneg
     have hstep2 := mul_le_mul_of_nonneg_left hB hAupper
     exact hCauchy.trans (hstep1.trans hstep2)
@@ -1179,7 +1179,7 @@ private theorem finish_single_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
     (hSurv : SurvivalFacts X) (hTilt : TiltedDeviationBound P c) (seed : P.Seed) :
     finish_single_scaled_sum X P seed ≤
         ((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
   classical
   let i := D.geom.patchOf X.target
   let patch := (PT.tiling.P i).X
@@ -1189,7 +1189,7 @@ private theorem finish_single_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
     X.deviates (P.output seed (P.replies seed s P.steps)) x none)
   let F : ℝ := finish_single_scaled_sum X P seed
   let R : ℝ := M * Real.exp
-    ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)
+    (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)
   have hX : (PT.tiling.P i).X.Nonempty := hPT.tiling_valid.patch_nonempty i |>.1
   have hMpos : 0 < M := by
     dsimp [M]
@@ -1208,15 +1208,15 @@ private theorem finish_single_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
     · simp [ha]
   have hRpos : 0 < R := mul_pos hMpos (Real.exp_pos _)
   have hCauchy := finish_single_cauchy_bound X P c hSurv hTilt seed
-  have hCauchy' : F ^ 2 ≤ M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+  have hCauchy' : F ^ 2 ≤ M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
       Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
     simpa [F, finish_single_scaled_sum, M, patch, i, p, q,
       mul_assoc, mul_left_comm, mul_comm] using hCauchy
-  have hExpSq : Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) -
+  have hExpSq : Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) -
       Real.rpow (T.S.n k : ℝ) c) / 2) ^ 2 =
-      Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+      Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
         Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
-    let a := κ.KB * Real.log (T.S.n k : ℝ)
+    let a := (64 * κ.KB) * Real.log (T.S.n k : ℝ)
     let b := Real.rpow (T.S.n k : ℝ) c
     calc
       Real.exp ((a - b) / 2) ^ 2 = Real.exp ((a - b) / 2) * Real.exp ((a - b) / 2) := by ring
@@ -1226,17 +1226,17 @@ private theorem finish_single_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
         have heq : a - b = a + -b := by ring
         rw [heq, Real.exp_add]
       _ = _ := by simp [a, b]
-  have hRsq : R ^ 2 = M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+  have hRsq : R ^ 2 = M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
       Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
     dsimp [R]
     rw [mul_pow]
     calc
-      M ^ 2 * Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) -
+      M ^ 2 * Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) -
           Real.rpow (T.S.n k : ℝ) c) / 2) ^ 2 =
-        M ^ 2 * (Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+        M ^ 2 * (Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
           Real.exp (-Real.rpow (T.S.n k : ℝ) c)) :=
             congrArg (fun e : ℝ => M ^ 2 * e) hExpSq
-      _ = M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+      _ = M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
           Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by ring
   have hFle : F ≤ R :=
     le_of_sq_le_sq hFnonneg hRpos.le (hCauchy'.trans_eq hRsq.symm)
@@ -1261,7 +1261,7 @@ private theorem finish_pair_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
     (hSurv : SurvivalFacts X) (hTilt : TiltedDeviationBound P c) (seed : P.Seed) :
     finish_pair_scaled_sum X P seed ≤
       ((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) ^ 2 *
-        Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
+        Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
   classical
   let i := D.geom.patchOf X.target
   let patch := (PT.tiling.P i).X
@@ -1273,7 +1273,7 @@ private theorem finish_pair_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
       X.deviates (P.output seed (P.replies seed s P.steps)) x (some y))
   let F : ℝ := finish_pair_scaled_sum X P seed
   let R : ℝ := M ^ 2 * Real.exp
-    ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)
+    (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)
   have hX : (PT.tiling.P i).X.Nonempty := hPT.tiling_valid.patch_nonempty i |>.1
   have hMpos : 0 < M := by
     dsimp [M]
@@ -1296,15 +1296,15 @@ private theorem finish_pair_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
   have hRpos : 0 < R := mul_pos hM2pos (Real.exp_pos _)
   have hCauchy := finish_pair_cauchy_bound X P c hSurv hTilt seed
   have hCauchy' : F ^ 2 ≤
-      (M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ))) *
+      (M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ))) *
         (M ^ 2 * Real.exp (-Real.rpow (T.S.n k : ℝ) c)) := by
     simpa [F, finish_pair_scaled_sum, M, patch, i, p, q,
       mul_assoc, mul_left_comm, mul_comm] using hCauchy
-  have hExpSq : Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) -
+  have hExpSq : Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) -
       Real.rpow (T.S.n k : ℝ) c) / 2) ^ 2 =
-      Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+      Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
         Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
-    let a := κ.KB * Real.log (T.S.n k : ℝ)
+    let a := (64 * κ.KB) * Real.log (T.S.n k : ℝ)
     let b := Real.rpow (T.S.n k : ℝ) c
     calc
       Real.exp ((a - b) / 2) ^ 2 = Real.exp ((a - b) / 2) * Real.exp ((a - b) / 2) := by ring
@@ -1315,14 +1315,14 @@ private theorem finish_pair_root_bound {κ : CConsts} {T : Stage} {k : ℕ}
         rw [heq, Real.exp_add]
       _ = _ := by simp [a, b]
   have hRsq : R ^ 2 =
-      (M ^ 2 * Real.exp (κ.KB * Real.log (T.S.n k : ℝ))) *
+      (M ^ 2 * Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ))) *
         (M ^ 2 * Real.exp (-Real.rpow (T.S.n k : ℝ) c)) := by
     dsimp [R]
     rw [mul_pow]
     calc
-      (M ^ 2) ^ 2 * Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) -
+      (M ^ 2) ^ 2 * Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) -
           Real.rpow (T.S.n k : ℝ) c) / 2) ^ 2 =
-      (M ^ 2) ^ 2 * (Real.exp (κ.KB * Real.log (T.S.n k : ℝ)) *
+      (M ^ 2) ^ 2 * (Real.exp ((64 * κ.KB) * Real.log (T.S.n k : ℝ)) *
           Real.exp (-Real.rpow (T.S.n k : ℝ) c)) :=
             congrArg (fun e : ℝ => (M ^ 2) ^ 2 * e) hExpSq
       _ = _ := by
@@ -1462,7 +1462,7 @@ private theorem finish_single_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
         X.deviates (P.output ss.2 (P.replies ss.2 ss.1 P.steps)) x none)) ≤
       (((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) /
         (2 : ℝ) ^ X.criticalCoords.card) *
-        Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
+        Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
   classical
   let i := D.geom.patchOf X.target
   let patch := (PT.tiling.P i).X
@@ -1540,14 +1540,14 @@ private theorem finish_single_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
       P.seedLaw.w seed * ∑ x, p x * (if X.allowed x none then q x seed else 0) ≤
         P.seedLaw.w seed * (((2 : ℝ) ^ d)⁻¹ *
           (((PT.tiling.P i).M : ℝ) *
-            Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
+            Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
     intro seed
     have hr := finish_single_root_bound X P c hSurv hTilt seed
     have hn := hnormalize seed
     have hs := hsupport seed
     have hscaled : ∑ x ∈ patch, p x * (if X.allowed x none then q x seed else 0) ≤
         ((2 : ℝ)^d)⁻¹ * (((PT.tiling.P i).M : ℝ) *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)) := by
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)) := by
       rw [hn]
       exact mul_le_mul_of_nonneg_left (by simpa [i] using hr) (inv_nonneg.mpr (by positivity))
     rw [hs]
@@ -1557,11 +1557,11 @@ private theorem finish_single_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
           p x * (if X.allowed x none then q x seed else 0) := h_expand
     _ ≤ ∑ seed, P.seedLaw.w seed * (((2 : ℝ) ^ d)⁻¹ *
           (((PT.tiling.P i).M : ℝ) *
-            Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) :=
+            Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) :=
           Finset.sum_le_sum fun seed _ => hseedBound seed
     _ = (∑ seed, P.seedLaw.w seed) *
         (((2 : ℝ) ^ d)⁻¹ * (((PT.tiling.P i).M : ℝ) *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
           rw [← Finset.sum_mul]
     _ = _ := by
           rw [P.seedLaw.sum_one]
@@ -1578,7 +1578,7 @@ private theorem finish_pair_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
         X.deviates (P.output ss.2 (P.replies ss.2 ss.1 P.steps)) x (some y))) ≤
       (((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) ^ 2 /
         (4 : ℝ) ^ X.criticalCoords.card) *
-        Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
+        Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
   classical
   let i := D.geom.patchOf X.target
   let patch := (PT.tiling.P i).X
@@ -1723,7 +1723,7 @@ private theorem finish_pair_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
         (if X.allowed x (some y) then q x y seed else 0) ≤
       P.seedLaw.w seed * (((4 : ℝ) ^ d)⁻¹ *
         ((((PT.tiling.P i).M : ℝ) ^ 2) *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
     intro seed
     have hr := finish_pair_root_bound X P c hSurv hTilt seed
     have hn := hnormalize seed
@@ -1731,7 +1731,7 @@ private theorem finish_pair_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
     have hscaled : ∑ x ∈ patch, ∑ y ∈ patch,
         p x y * (if X.allowed x (some y) then q x y seed else 0) ≤
       ((4 : ℝ) ^ d)⁻¹ * (((PT.tiling.P i).M : ℝ) ^ 2 *
-        Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)) := by
+        Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2)) := by
       rw [hn]
       exact mul_le_mul_of_nonneg_left (by simpa [i] using hr) (inv_nonneg.mpr (by positivity))
     rw [hs]
@@ -1741,11 +1741,11 @@ private theorem finish_pair_raw_sum_bound {κ : CConsts} {T : Stage} {k : ℕ}
           p x y * (if X.allowed x (some y) then q x y seed else 0) := h_expand
     _ ≤ ∑ seed, P.seedLaw.w seed * (((4 : ℝ) ^ d)⁻¹ *
           ((((PT.tiling.P i).M : ℝ) ^ 2) *
-            Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) :=
+            Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) :=
           Finset.sum_le_sum fun seed _ => hseedBound seed
     _ = (∑ seed, P.seedLaw.w seed) * (((4 : ℝ) ^ d)⁻¹ *
         (((PT.tiling.P i).M : ℝ) ^ 2 *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2))) := by
           rw [← Finset.sum_mul]
     _ = _ := by
           rw [P.seedLaw.sum_one]
@@ -1761,10 +1761,10 @@ private theorem finish_raw_bad_prob_bound {κ : CConsts} {T : Stage} {k : ℕ}
         X.deviates (P.output ss.2 (P.replies ss.2 ss.1 P.steps)) x z) ≤
       (((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) /
         (2 : ℝ) ^ X.criticalCoords.card) *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) +
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) +
       (((PT.tiling.P (D.geom.patchOf X.target)).M : ℝ) ^ 2 /
         (4 : ℝ) ^ X.criticalCoords.card) *
-          Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
+          Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - Real.rpow (T.S.n k : ℝ) c) / 2) := by
   calc
     _ ≤
         (∑ x, (FinLaw.bind X.rawLaw (fun _ => P.seedLaw)).pr (fun ss =>
@@ -1788,7 +1788,7 @@ private theorem four_pow_eq_two_pow_sq (d : ℕ) :
 private theorem finish_exponent_slack_eventually {κ : CConsts} (T : Stage)
     (c : ℝ) (hc : 0 < c) :
     ∀ᶠ k in (Filter.atTop : Filter ℕ),
-      Real.log 4 + 50 * (κ.KB + 1) * Real.log (T.S.n k : ℝ) ≤
+      Real.log 4 + 80 * (κ.KB + 1) * Real.log (T.S.n k : ℝ) ≤
         Real.rpow (T.S.n k : ℝ) c / 4 ∧
       Real.rpow (T.S.n k : ℝ) (c / 2) ≤ Real.rpow (T.S.n k : ℝ) c / 4 := by
   have hnR : Filter.Tendsto (fun k : ℕ => (T.S.n k : ℝ))
@@ -1803,7 +1803,7 @@ private theorem finish_exponent_slack_eventually {κ : CConsts} (T : Stage)
     (tendsto_rpow_atTop (by linarith : 0 < c / 2)).comp hnR
   have hlogLittle :=
     ((isLittleO_log_rpow_atTop hc).tendsto_div_nhds_zero).comp hnR
-  let A : ℝ := 50 * (κ.KB + 1)
+  let A : ℝ := 80 * (κ.KB + 1)
   have hAconst : Filter.Tendsto (fun _ : ℕ => A)
       (Filter.atTop : Filter ℕ) (nhds A) := tendsto_const_nhds
   have hratio : Filter.Tendsto (fun k : ℕ =>
@@ -1891,7 +1891,7 @@ theorem finish_from_survival_tilt {κ : CConsts} (hκ : κ.Admissible) (T : Stag
   let ρ : ℝ := M / (2 : ℝ) ^ d
   let L : ℝ := 20 * (κ.KB + 1) * Real.log (T.S.n k : ℝ)
   let t : ℝ := Real.rpow (T.S.n k : ℝ) ctilt
-  let half : ℝ := Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - t) / 2)
+  let half : ℝ := Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2)
   have hKB0 : 0 ≤ κ.KB := le_trans (mul_nonneg (by norm_num) (by positivity)) hκ.KB_big
   have hlog0 : 0 ≤ Real.log (T.S.n k : ℝ) := by linarith
   have hL0 : 0 ≤ L := by dsimp [L]; positivity
@@ -1951,7 +1951,7 @@ theorem finish_from_survival_tilt {κ : CConsts} (hκ : κ.Admissible) (T : Stag
   have hReduction := P.reduction
   have hProb : X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
       4 * Real.exp (2 * L +
-        (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2) := by
+        ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2) := by
     calc
       _ ≤ Real.exp (1000 * (max 1 (PT.tiling.P i).h : ℝ) *
             (∑ j : Fin D.geom.r, D.error X.target j)) *
@@ -1965,18 +1965,18 @@ theorem finish_from_survival_tilt {κ : CConsts} (hκ : κ.Admissible) (T : Stag
       _ ≤ 2 * (2 * Real.exp (2 * L) * half) :=
             mul_le_mul_of_nonneg_right hErrExp (by positivity)
       _ = 4 * Real.exp (2 * L +
-            (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2) := by
+            ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2) := by
               dsimp [half]
               calc
                 2 * (2 * Real.exp (2 * L) *
-                    Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - t) / 2)) =
+                    Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2)) =
                   4 * (Real.exp (2 * L) *
-                    Real.exp ((κ.KB * Real.log (T.S.n k : ℝ) - t) / 2)) := by ring
+                    Real.exp (((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2)) := by ring
                 _ = _ := by rw [← Real.exp_add]
   have hArg : Real.log 4 + 2 * L +
-      (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2 ≤ -t / 4 := by
-    have hcoeff : 2 * L + κ.KB * Real.log (T.S.n k : ℝ) / 2 ≤
-        50 * (κ.KB + 1) * Real.log (T.S.n k : ℝ) := by
+      ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2 ≤ -t / 4 := by
+    have hcoeff : 2 * L + (64 * κ.KB) * Real.log (T.S.n k : ℝ) / 2 ≤
+        80 * (κ.KB + 1) * Real.log (T.S.n k : ℝ) := by
       dsimp [L]
       nlinarith [hKB0, hlog0]
     have hs := hSlack.1
@@ -1986,16 +1986,16 @@ theorem finish_from_survival_tilt {κ : CConsts} (hκ : κ.Admissible) (T : Stag
       Real.exp (-t / 4) := by
     calc
       _ ≤ 4 * Real.exp (2 * L +
-          (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2) := hProb
+          ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2) := hProb
       _ = Real.exp (Real.log 4 + 2 * L +
-          (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2) := by
+          ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2) := by
             calc
-              4 * Real.exp (2 * L + (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2) =
+              4 * Real.exp (2 * L + ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2) =
                   Real.exp (Real.log 4) *
-                    Real.exp (2 * L + (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2) := by
+                    Real.exp (2 * L + ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2) := by
                       rw [Real.exp_log (by norm_num : (0 : ℝ) < 4)]
               _ = Real.exp (Real.log 4 + (2 * L +
-                    (κ.KB * Real.log (T.S.n k : ℝ) - t) / 2)) :=
+                    ((64 * κ.KB) * Real.log (T.S.n k : ℝ) - t) / 2)) :=
                       (Real.exp_add _ _).symm
               _ = _ := by congr 1 <;> ring
       _ ≤ Real.exp (-t / 4) := Real.exp_le_exp.mpr hArg

@@ -1471,6 +1471,40 @@ private theorem residual_hamming_le_full9 {m n : ℕ} (u v : CubeVertex n) :
   · have hdim : n - m = 0 := by omega
     simp [_root_.hammingDist, hdim]
 
+private theorem sameCenter_siteNear9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    (u v : CubeVertex n) (hc : I.center u = I.center v) : siteNear9 P n u v := by
+  constructor
+  · have hs : specialWord9 (P.m n) u = specialWord9 (P.m n) v := by
+      calc
+        specialWord9 (P.m n) u = (I.center u).slice := (I.center_slice u).symm
+        _ = (I.center v).slice := congrArg CenterID9.slice hc
+        _ = specialWord9 (P.m n) v := I.center_slice v
+    simp [hs]
+  · have hloc : (I.center u).location = (I.center v).location := congrArg CenterID9.location hc
+    have hu : _root_.hammingDist (residualWord9 (P.m n) u) (I.center u).location ≤ P.radius n := by
+      rw [_root_.hammingDist_comm]
+      exact I.center_near u
+    have hv : _root_.hammingDist (I.center u).location (residualWord9 (P.m n) v) ≤ P.radius n := by
+      simpa [hloc.symm] using I.center_near v
+    calc
+      _ ≤ _root_.hammingDist (residualWord9 (P.m n) u) (I.center u).location +
+          _root_.hammingDist (I.center u).location (residualWord9 (P.m n) v) :=
+            _root_.hammingDist_triangle _ _ _
+      _ ≤ P.radius n + P.radius n := Nat.add_le_add hu hv
+      _ ≤ 4 * P.radius n + 8 := by omega
+
+private theorem targetCenters_injective9 {P : Params9} {n k : ℕ} {I : IDMap9 P n}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    Function.Injective (fun i : Fin k => I.center (a i).1) := by
+  intro i j hij
+  by_contra hne
+  have hnear := sameCenter_siteNear9 (P := P) (a i).1 (a j).1 hij
+  by_cases hji : j < i
+  · exact hsep i j hji hnear
+  · have hij' : i < j := by omega
+    exact hsep j i hij' (siteNear9_symm (P := P) (n := n) (a i).1 (a j).1 hnear)
+
 private theorem siteNear9_of_common_neighbor {P : Params9} {n : ℕ}
     (u v : EvenSites9 n) (b : OddSites9 n)
     (hu : (cube n).Adj u.1 b.1) (hv : (cube n).Adj v.1 b.1) :

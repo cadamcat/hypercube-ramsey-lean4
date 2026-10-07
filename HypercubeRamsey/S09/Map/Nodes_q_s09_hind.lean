@@ -1137,13 +1137,16 @@ private theorem heightPath9_nextRadialState9 {P : Params9} {hc : HeightChoice9 P
   exact hsegmentSub
 
 private inductive HeightRadialChain9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
-    (bad : HeightState9 P hc n → Prop) (root : HeightState9 P hc n) (gap : ℕ) :
-    HeightState9 P hc n → HeightState9 P hc n → Prop
-  | nil (x : HeightState9 P hc n) : HeightRadialChain9 bad root gap x x
-  | cons {x y z : HeightState9 P hc n}
+    (bad : HeightState9 P hc n → Prop) (root : HeightState9 P hc n) (gap : ℕ)
+    (endpoint : HeightState9 P hc n) : HeightState9 P hc n → Prop
+  | terminal {x : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
+      (hp : HeightPath9 (heightStep9 bad) (endpoint :: suffix) x) :
+      HeightRadialChain9 bad root gap endpoint x
+  | cons {x y : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
       (hxy : heightMetric9 y root = heightMetric9 x root + gap)
-      (hsegment : ∃ suffix, HeightPath9 (heightStep9 bad) (y :: suffix) x)
-      (hyz : HeightRadialChain9 bad root gap y z) : HeightRadialChain9 bad root gap x z
+      (hsegment : HeightPath9 (heightStep9 bad) (y :: suffix) x)
+      (hy : HeightRadialChain9 bad root gap endpoint y) :
+      HeightRadialChain9 bad root gap endpoint x
 
 private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
@@ -1153,13 +1156,13 @@ private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice
     (hstart : heightMetric9 start root = r)
     (hreach : r + q * gap ≤ heightMetric9 endpoint root) :
     ∃ z suffix,
-      HeightRadialChain9 bad root gap start z ∧
+      HeightRadialChain9 bad root gap endpoint start ∧
       HeightPath9 (heightStep9 bad) (endpoint :: suffix) z ∧
       (∀ x ∈ endpoint :: suffix, x ∈ endpoint :: l) ∧
       heightMetric9 z root = r + q * gap := by
   induction q generalizing start l r hp hstart with
   | zero =>
-      refine ⟨start, l, HeightRadialChain9.nil start, hp, ?_, ?_⟩
+      refine ⟨start, l, HeightRadialChain9.terminal hp, hp, ?_, ?_⟩
       · intro x hx
         exact hx
       · simpa using hstart
@@ -1183,8 +1186,8 @@ private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice
       have hsub : ∀ x ∈ endpoint :: suffix₂, x ∈ endpoint :: l := by
         intro x hx
         exact hsub₁ x (hsub₂ x hx)
-      refine ⟨z, suffix₂, HeightRadialChain9.cons hnextRadius'
-        ⟨blockRest, hblock⟩ hchain, hpath₂, hsub, ?_⟩
+      refine ⟨z, suffix₂, HeightRadialChain9.cons hnextRadius' hblock hchain,
+        hpath₂, hsub, ?_⟩
       omega
 
 private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}

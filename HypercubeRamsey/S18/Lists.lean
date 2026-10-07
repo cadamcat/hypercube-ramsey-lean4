@@ -168,7 +168,11 @@ noncomputable def typicalFresh (C : D.geom.Cell) : FinLaw (D.fresh.Pool C × D.f
 
 /-- Fresh sampler comparison on separated group consultations, for
 arbitrary bounded nonnegative tests. This is the explicit §§16 input bridge;
-it carries calibration and repeat losses, not any endpoint or Hall estimate. -/
+it carries calibration and repeat losses, not any endpoint or Hall estimate.
+The 50ρh word margin pays the two one-flip shifts to primitive consultation
+centres of radius 10ρh; `Spec.thresholds` supplies 20ρh > 2 in cluster modes.
+Main's current cell calibration exports do not yet supply this general test
+and repeated-bin bridge. -/
 noncomputable def freshQueryIntegral (q : ℕ) (odd : Fin q → Pos T k)
     (f : Fin q → Fin (T.S.N k) → ℝ) : ℝ :=
   D.encoding.iidLaw.E (fun pools =>
@@ -183,7 +187,7 @@ def FreshCalibration : Prop :=
     (∀ a, ¬ IsEvenRole (odd a) ∧ D.geom.classOf (odd a) = none) →
     (∀ a a', a ≠ a' → D.geom.cellOf (odd a) = D.geom.cellOf (odd a') →
       (hammingDist (odd a) (odd a') : ℝ) >
-        20 * κ.ρ * (PT.tiling.P (D.geom.patchOf (odd a))).h) →
+        50 * κ.ρ * (PT.tiling.P (D.geom.patchOf (odd a))).h) →
     ∀ f : Fin q → Fin (T.S.N k) → ℝ, (∀ a y, 0 ≤ f a y ∧ f a y ≤ 1) →
       D.freshQueryIntegral q odd f ≤ Real.exp (0.002 * q) *
         ∏ a, ((∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +

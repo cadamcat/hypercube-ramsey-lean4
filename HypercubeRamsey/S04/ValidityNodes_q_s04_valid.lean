@@ -3974,7 +3974,7 @@ theorem own_ratio_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
             (residualAfter E G P₀ (base ++ finToList (prefixVals (V last) j))) = _
           rw [hres]
           exact (pr_Hit_eq_rowDeg E G _ _).symm
-        exact ⟨h.1, by rw [← hrow]; exact h.2⟩
+        exact ⟨h.1, by rw [hrow]; exact h.2⟩
       have hprefixGood (j : Fin (tupLen β γ n)) :
           GoodPath E G cap P₀ (base ++ finToList (prefixVals (V last) j)) := by
         exact (GoodPath_append E G cap P₀ base
@@ -4024,53 +4024,45 @@ theorem own_ratio_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
                 rw [Finset.sum_sub_distrib]
                 simp [Finset.sum_const, hIndicator]
       have hthetaSmall : theta ≤ aStarN / (40 * cap) := by
-        have hpowEq : (n : ℝ) ^ (-cExp + h * 3) *
-            (n : ℝ) ^ (cExp - h * 3) = 1 := by
-          rw [← Real.rpow_add hnr]
-          congr 1
-          ring
-        have hmul := mul_lt_mul_of_pos_left hnThetaPow
-          (Real.rpow_pos_of_pos hnr (-cExp + h * 3))
-        have hpowEq' : (n : ℝ) ^ (-cExp + h * 3) *
-            (n : ℝ) ^ (cExp - h * 3) = 1 := hpowEq
-        have hnum : 800 * (n : ℝ) ^ (-cExp + h * 3) ≤ 1 := by
-          nlinarith [hmul, hpowEq']
         have hleft : (n : ℝ) ^ (-cExp) * cap = (n : ℝ) ^ (-cExp + h) := by
-          dsimp [cap, h]
+          dsimp [cap, capL, h]
           rw [← Real.rpow_add hnr]
-          congr 1
-          ring
         have hright : aStarN * aStarN = (n : ℝ) ^ (-2 * h) := by
           dsimp [aStarN, aStar, h]
           rw [← Real.rpow_add hnr]
           congr 1
           ring
+        have hfactor : (n : ℝ) ^ (-cExp + h) * (n : ℝ) ^ gapθ =
+            (n : ℝ) ^ (-2 * h) := by
+          rw [← Real.rpow_add hnr]
+          congr 1
+          dsimp [gapθ]
+          ring
+        have hmul := mul_le_mul_of_nonneg_left (le_of_lt hnThetaPow)
+          (Real.rpow_nonneg hnr.le (-cExp + h))
+        rw [hfactor] at hmul
         have hbound : 800 * (n : ℝ) ^ (-cExp) * cap ≤ aStarN * aStarN := by
-          rw [hleft, hright]
-        have hfactor : (n : ℝ) ^ (-cExp + h) *
-              (n : ℝ) ^ (cExp - 3 * h) = (n : ℝ) ^ (-2 * h) := by
-            rw [← Real.rpow_add hnr]
-            congr 1
-            ring_nf
-          have hmul' := mul_le_mul_of_nonneg_left hnum
-            (Real.rpow_nonneg hnr.le (-cExp + h))
-          rw [hfactor] at hmul'
-          nlinarith [hmul']
-        dsimp [theta, aStarN]
-        rw [div_le_div_iff₀ (Real.rpow_pos_of_pos hnr _)
-          (mul_pos (by norm_num) (Real.rpow_pos_of_pos hnr _))]
+          rw [mul_assoc, hleft, hright]
+          nlinarith [hmul]
+        dsimp [theta]
+        have haPos : 0 < aStarN := Real.rpow_pos_of_pos hnr _
+        have hcapPos : 0 < cap := Real.rpow_pos_of_pos hnr _
+        apply (div_le_div_iff₀ haPos (mul_pos (by norm_num) hcapPos)).2
+        have hExpEq : -cExp = -(omega4 β γ) / 5 := by dsimp [cExp, ω]; ring
+        rw [hExpEq] at hbound
         nlinarith [hbound]
-      have htAzEq : tAz =
-          (tupLen β γ n : ℝ) * aStarN / (40 * cap) := rfl
-      have hsumLower :
-          (tupLen β γ n : ℝ) * (1 - aStarN / (20 * cap)) ≤ ∑ j, Delta j V := by
-        have hthetaT : theta ≤ aStarN / (40 * cap) := hthetaSmall
-        have hAzT : tAz = (tupLen β γ n : ℝ) * aStarN / (40 * cap) := htAzEq
-        rw [hSumEq] at hSumLower
-        nlinarith [hSumLower, hthetaT, hAzT]
       have hDipsBound : (dips.card : ℝ) ≤ aStarN * (tupLen β γ n : ℝ) / (20 * cap) := by
-        rw [hSumEq] at hsumLower
-        nlinarith [hsumLower]
+        have hThetaK := mul_le_mul_of_nonneg_left hthetaSmall
+          (Nat.cast_nonneg (tupLen β γ n) : (0 : ℝ) ≤ (tupLen β γ n : ℝ))
+        calc
+          (dips.card : ℝ) ≤ (tupLen β γ n : ℝ) * theta + tAz := by
+            rw [hSumEq] at hSumLower
+            nlinarith [hSumLower]
+          _ ≤ (tupLen β γ n : ℝ) * (aStarN / (40 * cap)) + tAz :=
+            add_le_add hThetaK le_rfl
+          _ = aStarN * (tupLen β γ n : ℝ) / (20 * cap) := by
+            dsimp [tAz]
+            ring
       have hAStarPos : 0 < aStarN := Real.rpow_pos_of_pos hnr _
       have hAStarHalf : aStarN ≤ 1 / 2 := by
         dsimp [aStarN, aStar]
@@ -4087,6 +4079,7 @@ theorem own_ratio_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
         have hjNotDip : ¬ q j < M.pd ownPatch - (M.pd ownPatch - 1 / 2) / 4 := by
           intro hlow
           exact hj (Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [q] using hlow⟩)
+        change aStarN ≤ M.pd ownPatch - 1 / 2 at hai
         have hthreshold : 1 / 2 + 3 / 4 * aStarN ≤
             M.pd ownPatch - (M.pd ownPatch - 1 / 2) / 4 := by
           nlinarith [hai]
@@ -4103,35 +4096,193 @@ theorem own_ratio_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
       have hmassAppend := pr_HitsList_append E G P₀ base targetLabels cap hGoodAppend
       have hbasePos : 0 < P₀.pr (HitsList E G base) :=
         lt_of_lt_of_le (Real.exp_pos _) (pr_HitsList_lower E G P₀ base cap hParts.1)
+      have hFill : (fun i : Fin m => (seqFill s e ω₀ V) (e i).1) = V := by
+        funext i
+        simp [seqFill, (e i).2]
       have hAllMass : P₀.pr (HitsAll E G (seqFill s e ω₀ V) D Z) =
           P₀.pr (HitsList E G (tupleLabels V)) := by
         apply pr_congr_local_early P₀
         intro y
-        exact (HitsList_tupleLaw_iff u D m e (seqFill s e ω₀ V) y).symm
+        simpa only [hFill] using
+          (HitsList_tupleLaw_iff u D m e (seqFill s e ω₀ V) y).symm
       have hButMass : P₀.pr (HitsBut E G (seqFill s e ω₀ V) D Z cLoc ownKey) =
           P₀.pr (HitsList E G base) := by
         apply pr_congr_local_early P₀
         intro y
-        simpa [base] using (HitsBut_tuplePrefix_iff u D m e last hlast target he
+        simpa only [hFill, base] using (HitsBut_tuplePrefix_iff u D m e last hlast target he
           (seqFill s e ω₀ V) y)
       have hMassEq : P₀.pr (HitsAll E G (seqFill s e ω₀ V) D Z) =
           P₀.pr (HitsList E G base) *
             (residualAfter E G P₀ base).pr (HitsList E G targetLabels) := by
-        rw [hAllMass, ← hsplit]
+        rw [hAllMass, hsplit]
         exact hmassAppend
       have hFail := hOwnSeqV
-      dsimp [ownSeq, ownFail, P₀] at hFail
+      change P₀.pr (HitsAll E G (seqFill s e ω₀ V) D Z) <
+        ratioThr β γ u ownKey *
+          P₀.pr (HitsBut E G (seqFill s e ω₀ V) D Z cLoc ownKey) at hFail
       rw [hMassEq, hButMass] at hFail
       have hOwnCondFail : (residualAfter E G P₀ base).pr (HitsList E G targetLabels) <
           ratioThr β γ u ownKey := by
-        exact (mul_lt_mul_right hbasePos).mp hFail
+        have hFail' : P₀.pr (HitsList E G base) *
+            (residualAfter E G P₀ base).pr (HitsList E G targetLabels) <
+              P₀.pr (HitsList E G base) * ratioThr β γ u ownKey := by
+          simpa only [mul_comm] using hFail
+        exact (mul_lt_mul_iff_right₀ hbasePos).mp hFail'
       have hRatioThr : ratioThr β γ u ownKey =
           Real.exp ((tupLen β γ n : ℝ) * (-Real.log 2 + c1 * aStarN)) := by
         simp [ratioThr, ownKey, aStarN]
       have hProdLower :
           Real.exp ((tupLen β γ n : ℝ) * (-Real.log 2 + c1 * aStarN)) ≤
             (residualAfter E G P₀ base).pr (HitsList E G targetLabels) := by
-        simpa [targetLabels, q, eta0, hRatioThr] using hproduct
+        rw [hmassOwn]
+        have hprodEq : (∏ j : Fin (tupLen β γ n), q j) =
+            ∏ j : Fin (tupLen β γ n),
+              (residualAfter E G eta0 (finToList (prefixVals (V last) j))).pr
+                (fun y => Hits E G (V last j) y) := by
+          apply Finset.prod_congr rfl
+          intro j hj
+          dsimp [q, eta0]
+          rw [residualAfter_append]
+          exact (pr_Hit_eq_rowDeg E G _ _).symm
+        rw [← hprodEq]
+        exact hproduct
       exact False.elim ((not_lt_of_ge hProdLower) (by simpa [hRatioThr] using hOwnCondFail))
+
+  have hDreal : (D.card : ℝ) ≤ (setBd β γ n : ℝ) := by exact_mod_cast hDcard
+  have hωlt : omega4 β γ < 1 := by
+    change ω < 1
+    nlinarith
+  have hDlinear : (D.card : ℝ) ≤ 4 * (n : ℝ) := by
+    have hDb := le_trans hDreal (hFactors n hnFactors).1
+    have hpow : (n : ℝ) ^ (omega4 β γ / 30) ≤ (n : ℝ) := by
+      have hpow' := Real.rpow_le_rpow_of_exponent_le hnR
+        (show omega4 β γ / 30 ≤ (1 : ℝ) by linarith)
+      simpa using hpow'
+    exact hDb.trans (mul_le_mul_of_nonneg_left hpow (by norm_num))
+  have hZlinear : (Z.card : ℝ) ≤ (n : ℝ) := by
+    have hz := hKey u
+    have hpow : (n : ℝ) ^ (γ - 9 / 10 * omega4 β γ) ≤ (n : ℝ) := by
+      have hpow' := Real.rpow_le_rpow_of_exponent_le hnR
+        (show γ - 9 / 10 * omega4 β γ ≤ (1 : ℝ) by
+          have hωpos := omega4_pos hβ hγ
+          nlinarith)
+      simpa using hpow'
+    exact hz.trans hpow
+  have hKlinear : (tupLen β γ n : ℝ) ≤ 2 * (n : ℝ) := by
+    have hk := (hFactors n hnFactors).2.1
+    have hpow : (n : ℝ) ^ (omega4 β γ / 3) ≤ (n : ℝ) := by
+      have hpow' := Real.rpow_le_rpow_of_exponent_le hnR
+        (show omega4 β γ / 3 ≤ (1 : ℝ) by linarith)
+      simpa using hpow'
+    exact hk.trans (mul_le_mul_of_nonneg_left hpow (by norm_num))
+  have hcountReal : (m : ℝ) = (D.card : ℝ) * (Z.card : ℝ) := by
+    rw [hcount, Nat.cast_mul]
+  have hmBound : (m : ℝ) ≤ 4 * (n : ℝ) ^ 2 := by
+    rw [hcountReal]
+    calc
+      (D.card : ℝ) * (Z.card : ℝ) ≤ (4 * (n : ℝ)) * (n : ℝ) :=
+        mul_le_mul hDlinear hZlinear (by positivity) (by positivity)
+      _ = 4 * (n : ℝ) ^ 2 := by ring
+  have hfactorBound : (m : ℝ) * (tupLen β γ n : ℝ) ≤ 40 * (n : ℝ) ^ 5 := by
+    calc
+      (m : ℝ) * (tupLen β γ n : ℝ) ≤ (4 * (n : ℝ) ^ 2) * (2 * (n : ℝ)) :=
+        mul_le_mul hmBound hKlinear (by positivity) (by positivity)
+      _ = 8 * (n : ℝ) ^ 3 := by ring
+      _ ≤ 40 * (n : ℝ) ^ 5 := by
+        have hnSq : 1 ≤ (n : ℝ) ^ 2 := by nlinarith
+        have hmul := mul_le_mul_of_nonneg_left hnSq
+          (by positivity : 0 ≤ 8 * (n : ℝ) ^ 3)
+        nlinarith [hmul, pow_nonneg hnr.le 5]
+  have hFirstSmall : Pseq.pr firstBad ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+    calc
+      Pseq.pr firstBad ≤ (m : ℝ) * (tupLen β γ n : ℝ) *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) := hfirstBound
+      _ ≤ 40 * (n : ℝ) ^ 5 *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) :=
+        mul_le_mul_of_nonneg_right hfactorBound (Real.exp_nonneg _)
+      _ ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+        simpa [cExp, ω, neg_div] using hAbsorb n hnAbsorb
+  have hkposR : 0 < (tupLen β γ n : ℝ) := by exact_mod_cast hhk
+  have hcapPos : 0 < cap := Real.rpow_pos_of_pos hnr _
+  have hAzCost : 2 * tAz ^ 2 / (tupLen β γ n : ℝ) =
+      (tupLen β γ n : ℝ) * aStarN ^ 2 / (800 * cap ^ 2) := by
+    dsimp [tAz]
+    field_simp [ne_of_gt hkposR, ne_of_gt hcapPos]
+    <;> ring
+  have haSq : aStarN ^ 2 = (n : ℝ) ^ (-2 * h) := by
+    rw [pow_two]
+    dsimp [aStarN, aStar, h]
+    rw [← Real.rpow_add hnr]
+    congr 1
+    ring
+  have hcapSq : cap ^ 2 = (n : ℝ) ^ (2 * h) := by
+    rw [pow_two]
+    dsimp [cap, capL, h]
+    rw [← Real.rpow_add hnr]
+    congr 1
+    ring
+  have hCostPow : (n : ℝ) ^ (ω / 3) * aStarN ^ 2 / cap ^ 2 =
+      (n : ℝ) ^ (ω / 3 - 4 * h) := by
+    rw [haSq, hcapSq, ← Real.rpow_add hnr, ← Real.rpow_sub hnr]
+    congr 1
+    ring
+  have hPowGap : (n : ℝ) ^ cExp * (n : ℝ) ^ gapA =
+      (n : ℝ) ^ (ω / 3 - 4 * h) := by
+    rw [← Real.rpow_add hnr]
+    congr 1
+    dsimp [gapA]
+    ring
+  have hCostLarge : 3200 * (n : ℝ) ^ cExp ≤ (n : ℝ) ^ (ω / 3 - 4 * h) := by
+    have hmul := mul_le_mul_of_nonneg_left (le_of_lt hnAzumaPow)
+      (Real.rpow_nonneg hnr.le cExp)
+    rw [hPowGap] at hmul
+    nlinarith [hmul]
+  have hkLower : (n : ℝ) ^ (ω / 3) ≤ (tupLen β γ n : ℝ) := by
+    dsimp [tupLen, ω]
+    exact Nat.le_ceil _
+  have hAzCostLower : 4 * (n : ℝ) ^ cExp ≤ 2 * tAz ^ 2 / (tupLen β γ n : ℝ) := by
+    rw [hAzCost]
+    calc
+      4 * (n : ℝ) ^ cExp ≤ (n : ℝ) ^ (ω / 3 - 4 * h) / 800 := by
+        linarith [hCostLarge]
+      _ = (n : ℝ) ^ (ω / 3) * aStarN ^ 2 / (800 * cap ^ 2) := by
+        rw [← hCostPow]
+        ring
+      _ ≤ (tupLen β γ n : ℝ) * aStarN ^ 2 / (800 * cap ^ 2) :=
+        div_le_div_of_nonneg_right
+          (mul_le_mul_of_nonneg_right hkLower (sq_nonneg _)) (by positivity)
+  have hAzSmall : Pseq.pr azBad ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+    calc
+      Pseq.pr azBad ≤ Real.exp (-2 * tAz ^ 2 / (tupLen β γ n : ℝ)) := hAzumaBound
+      _ ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+        apply Real.exp_le_exp.mpr
+        calc
+          -2 * tAz ^ 2 / (tupLen β γ n : ℝ) =
+              -(2 * tAz ^ 2 / (tupLen β γ n : ℝ)) := by ring
+          _ ≤ -4 * (n : ℝ) ^ cExp := by
+            simpa only [neg_mul] using neg_le_neg hAzCostLower
+  have hUnion : Pseq.pr ownSeq ≤ Pseq.pr firstBad + Pseq.pr azBad := by
+    calc
+      Pseq.pr ownSeq ≤ Pseq.pr (fun V => firstBad V ∨ azBad V) :=
+        pr_mono Pseq _ _ hcover
+      _ ≤ Pseq.pr firstBad + Pseq.pr azBad := FinProb.pr_union Pseq firstBad azBad
+  have hxOne : 1 ≤ (n : ℝ) ^ cExp := Real.one_le_rpow hnR (by dsimp [cExp]; positivity)
+  have htwoExp : 2 ≤ Real.exp (2 * (n : ℝ) ^ cExp) := by
+    have h := Real.add_one_le_exp (2 * (n : ℝ) ^ cExp)
+    linarith
+  change (tupleLaw M tag xm).pr ownFail ≤ _
+  rw [hOwnTransfer]
+  calc
+    Pseq.pr ownSeq ≤ Pseq.pr firstBad + Pseq.pr azBad := hUnion
+    _ ≤ Real.exp (-4 * (n : ℝ) ^ cExp) + Real.exp (-4 * (n : ℝ) ^ cExp) :=
+      add_le_add hFirstSmall hAzSmall
+    _ = 2 * Real.exp (-4 * (n : ℝ) ^ cExp) := by ring
+    _ ≤ Real.exp (2 * (n : ℝ) ^ cExp) * Real.exp (-4 * (n : ℝ) ^ cExp) :=
+      mul_le_mul_of_nonneg_right htwoExp (Real.exp_nonneg _)
+    _ = Real.exp (-2 * (n : ℝ) ^ (omega4 β γ / 5)) := by
+      rw [← Real.exp_add]
+      congr 1
+      dsimp [cExp, ω]
+      ring
 
 end HypercubeRamsey.Lane_q_s04_valid

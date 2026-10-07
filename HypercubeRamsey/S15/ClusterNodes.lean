@@ -5,6 +5,7 @@ import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
 import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c2
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_transfer
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -792,12 +793,47 @@ theorem high_cluster_label_transfer (κ : CConsts) (hκ : κ.Admissible) (T : St
 /-- P15.4e: bin comparison and reverse integration, with all removed variables charged. -/
 theorem high_cluster_bin_transfer (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterBinTransfer κ T := by
-  sorry
+  have hsmall : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      PT.tiling.mode = .highSmall →
+      ∀ i x, x ∈ PT.envelope i → ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      ∀ W : ClusterHistory PT hPT hm,
+      (clusterIndependentBinKernel PT hPT hm W).E
+        (fun B => if ClusterMaskConsistent PT hPT hm M B then
+          (clusterIndependentLabelKernel PT hPT hm W B).E
+            (clusterKeptProduct PT hPT hm i x M W) else 0) ≤
+        clusterCoreRepeatCost PT i ^ M.coreBins.card *
+          clusterCrossingFraction T k ^ M.crossingBins.card *
+            clusterReferenceMean PT hPT hm i x M W := by
+    sorry
+  filter_upwards [hsmall, T.S.n_tendsto.eventually (eventually_ge_atTop 5)] with k hk hn
+  intro PT hPT hm CS i x hx M hM
+  exact Lane_sol_s15_transfer.bin_transfer_of_scope_and_reverse PT hPT hm CS i x M
+    (by omega) (Lane_sol_s15_transfer.maskBinQueries PT hPT hm M)
+    (Lane_sol_s15_transfer.masked_label_integral_bin_depends PT hPT hm i x M)
+    (Lane_sol_s15_transfer.mask_bin_queries_budget PT hPT hm M hn)
+    (fun W => by
+      rcases hm with hsm | hlg
+      · exact hk PT hPT (Or.inl hsm) hsm i x hx M hM W
+      · exact Lane_sol_s15_transfer.raw_bin_repeat_bound_large PT hPT (Or.inr hlg) hlg i x M W)
 
 /-- P15.4f: restore the raw local scopes and factor the kept reference experiment. -/
 theorem high_cluster_history_restore (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterHistoryRestore κ T := by
-  sorry
+  have hfactor : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ i x, x ∈ PT.envelope i → ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      (clusterHistoryLaw PT hPT hm).E (clusterReferenceMean PT hPT hm i x M) =
+        ∏ r ∈ clusterKeptRows M, (clusterRawReferenceLaw PT hPT hm).E
+          (fun z => (PT.tiling.P i).M * clusterSigma PT hPT hm z.1 z.2 (M.positions r) x) := by
+    sorry
+  filter_upwards [hfactor, T.S.n_tendsto.eventually (eventually_ge_atTop 2)] with k hk hn
+  intro PT hPT hm CS i x hx M hM
+  exact Lane_sol_s15_transfer.history_restore_of_scope_and_factorization PT hPT hm CS i x M
+    (by omega) (Lane_sol_s15_transfer.referenceConsultations PT hPT hm M)
+    (Lane_sol_s15_transfer.reference_mean_history_depends PT hPT hm i x M)
+    (Lane_sol_s15_transfer.reference_consultations_budget PT hPT hm M hn)
+    hM.1 (hk PT hPT hm i x hx M hM)
 
 /-- Fixed-mask expansion: caps and deletion costs are outside each nonnegative tested product. -/
 def ClusterMaskExpansionClaim (κ : CConsts) (T : Stage) : Prop :=

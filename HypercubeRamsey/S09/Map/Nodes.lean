@@ -213,8 +213,12 @@ hypergeometric estimates (`hypergeometric_intersection_tail`) bound the residual
 the overlap at one level is at most `V e^{-c₀ R'}`. -/
 theorem p92_height_overlap (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ K > (0 : ℝ), ∃ c₀ > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightOverlap9 P hc n K c₀ := by
-  refine ⟨16, by norm_num, 1, by norm_num, 2, ?_⟩
+  obtain ⟨nGeom, hGeom⟩ := Lane_q_s09_map.height_counts9_special_le_n P hP
+  refine ⟨16, by norm_num, 1, by norm_num, max 2 nGeom, ?_⟩
   intro n hn v v' R' j hR hsep
+  have hn2 : 2 ≤ n := le_trans (le_max_left 2 nGeom) hn
+  have hnGeom : nGeom ≤ n := le_trans (le_max_right 2 nGeom) hn
+  have hmle : P.m n ≤ n := hGeom n hnGeom
   have hlocal : ∀ c : Pos9 P hc n,
       c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R' →
         _root_.hammingDist c.slice (specialWord9 (P.m n) v) ≤ 2 * R' + 1 ∧
@@ -223,6 +227,11 @@ theorem p92_height_overlap (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (
         _root_.hammingDist c.location (residualWord9 (P.m n) v') ≤ P.radius n + 2 * R' + 1 := by
     intro c hc
     exact Lane_q_s09_map.sharedConsulted_local_bounds v v' R' c hc
+  have _hresidualSeparation (c : Pos9 P hc n)
+      (hshared : c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R') :
+      12 * R' - 2 ≤
+        _root_.hammingDist (residualWord9 (P.m n) v) (residualWord9 (P.m n) v') :=
+    Lane_q_s09_map.sharedConsulted_residual_separation hmle v v' R' hsep c hshared
   -- The remaining estimate is the shell/hypergeometric bound for the two residual balls,
   -- combined with the count of consulted slices.
   sorry

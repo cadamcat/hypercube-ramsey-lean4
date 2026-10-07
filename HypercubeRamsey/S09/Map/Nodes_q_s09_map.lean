@@ -1090,6 +1090,72 @@ theorem splitProjectionDist_add_le {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex 
       _ ≤ t.card := Finset.card_le_card hsub
   simpa [s, r, t, k, _root_.hammingDist] using hsum
 
+theorem splitProjectionDist_ge {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n) :
+    _root_.hammingDist v w ≤
+      _root_.hammingDist (specialWord9 m v) (specialWord9 m w) +
+        _root_.hammingDist (residualWord9 m v) (residualWord9 m w) := by
+  classical
+  let k := n - m
+  let s : Finset (Fin m) := Finset.univ.filter (fun i => specialWord9 m v i ≠ specialWord9 m w i)
+  let r : Finset (Fin k) := Finset.univ.filter (fun i => residualWord9 m v i ≠ residualWord9 m w i)
+  let t : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let fs : Fin m → Fin n := fun i => ⟨i.val, lt_of_lt_of_le i.isLt hm⟩
+  let fr : Fin k → Fin n := fun i => ⟨m + i.val, by have := i.isLt; omega⟩
+  have hcover : t ⊆ s.image fs ∪ r.image fr := by
+    intro z hz
+    have hdiff := (Finset.mem_filter.mp hz).2
+    by_cases hzm : z.val < m
+    · let i : Fin m := ⟨z.val, hzm⟩
+      have hfs : fs i = z := by apply Fin.ext; rfl
+      have hcoordv : specialWord9 m v i = v (fs i) := by
+        simp [specialWord9, fs, lt_of_lt_of_le i.isLt hm]
+      have hcoordw : specialWord9 m w i = w (fs i) := by
+        simp [specialWord9, fs, lt_of_lt_of_le i.isLt hm]
+      have hsi : i ∈ s := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        simpa [hfs, hcoordv, hcoordw] using hdiff
+      exact Finset.mem_union_left _ (Finset.mem_image.mpr ⟨i, hsi, hfs⟩)
+    · let i : Fin k := ⟨z.val - m, by dsimp [k]; omega⟩
+      have hfr : fr i = z := by
+        apply Fin.ext
+        dsimp [fr, i, k]
+        omega
+      have hcoordv : residualWord9 m v i = v (fr i) := by simp [residualWord9, fr]
+      have hcoordw : residualWord9 m w i = w (fr i) := by simp [residualWord9, fr]
+      have hri : i ∈ r := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        simpa [hfr, hcoordv, hcoordw] using hdiff
+      exact Finset.mem_union_right _ (Finset.mem_image.mpr ⟨i, hri, hfr⟩)
+  have hcard : t.card ≤ s.card + r.card := by
+    calc
+      t.card ≤ (s.image fs ∪ r.image fr).card := Finset.card_le_card hcover
+      _ ≤ (s.image fs).card + (r.image fr).card := Finset.card_union_le _ _
+      _ ≤ s.card + r.card := Nat.add_le_add (Finset.card_image_le) (Finset.card_image_le)
+  simpa [s, r, t, k, _root_.hammingDist] using hcard
+
+theorem sharedConsulted_residual_separation {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hm : P.m n ≤ n) (v v' : CubeVertex n) (R' : ℕ)
+    (hsep : 16 * (R' : ℝ) ≤ (_root_.hammingDist v v' : ℝ))
+    (c : Pos9 P hc n)
+    (hshared : c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R') :
+    12 * R' - 2 ≤
+      _root_.hammingDist (residualWord9 (P.m n) v) (residualWord9 (P.m n) v') := by
+  have hlocal := sharedConsulted_local_bounds v v' R' c hshared
+  have hspecial : _root_.hammingDist (specialWord9 (P.m n) v)
+      (specialWord9 (P.m n) v') ≤ 4 * R' + 2 := by
+    calc
+      _ ≤ _root_.hammingDist (specialWord9 (P.m n) v) c.slice +
+          _root_.hammingDist c.slice (specialWord9 (P.m n) v') :=
+            _root_.hammingDist_triangle _ _ _
+      _ ≤ (2 * R' + 1) + (2 * R' + 1) := by
+        exact Nat.add_le_add (by simpa [_root_.hammingDist_comm] using hlocal.1) hlocal.2.1
+      _ = 4 * R' + 2 := by omega
+  have hfull : 16 * R' ≤ _root_.hammingDist v v' := by exact_mod_cast hsep
+  have hprojection := splitProjectionDist_ge hm v v'
+  omega
+
 theorem adjacent_projection_classification {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n)
     (hadj : _root_.hammingDist v w = 1) :
     (_root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 1 ∧

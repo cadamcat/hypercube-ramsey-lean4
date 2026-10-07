@@ -658,6 +658,7 @@ theorem p0_raw_mean (hη₀ : 0 < η₀) (hK : 0 < K) (hh : 10 ^ 8 ≤ h) :
       GridFacts η₀ D.n → D.DensityBounds → D.ListCount → D.P0Law → D.GselLeF → D.P0RawMean K := by
   sorry
 
+set_option maxHeartbeats 1000000
 /-- L8.1g(vi) (08:285–290): `p⁰_{g,a}` reads the selections at its incident even cells (`SelLocal`, keys within one
 of `g`), the tags of the selected IDs, the position gate, the gates and references (hidden keys within two), the
 selection adjustment (the raw experiment at fixed positions and non-target tuples, whose relevant marginals read
@@ -824,7 +825,95 @@ theorem p0_local (D : Ctx η₀ β p h) (hS : D.SelLocal) : D.P0Local := by
     apply propext
     unfold Ctx.PresValid
     rw [hCandGateEq, hOrdValid, hCrossValid, hIntIds, hPosCountEq, hMdenEq]
-  sorry
+  have hHist4 : ∀ g, keyDist c.1 g ≤ 4 → q.1.1 g = q'.1.1 g := by
+    intro g hg
+    have hmem : g ∈ keyBall c.1 4 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact hHidden g hmem
+  have hPos3 : ∀ g, keyDist c.1 g ≤ 3 → q.1.2 g = q'.1.2 g := by
+    intro g hg
+    have hmem : g ∈ keyBall c.1 3 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact (hPosTag g hmem).1
+  have hGselEq (ξ : D.Tup) :
+      D.Gsel q.1.1 q.1.2 c ξ (D.presOf q' W' c) =
+        D.Gsel q'.1.1 q'.1.2 c ξ (D.presOf q' W' c) := by
+    exact Lane_q_s08_post.gsel_congr_local D hS q.1.1 q'.1.1 q.1.2 q'.1.2
+      c ξ (D.presOf q' W' c) q.2 W hHist4 hPos3
+  have hMadEq :
+      D.Mad q.1.1 q.1.2 c (D.presOf q W c) =
+        D.Mad q'.1.1 q'.1.2 c (D.presOf q' W' c) := by
+    rw [hPres]
+    unfold Ctx.Mad
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    exact congrArg (fun x : ℝ => D.R'.w ξ * x) (hGselEq ξ)
+  have hMdenSame :
+      D.Mden q.1.1 c.1 (D.obsOf (D.presOf q' W' c)) =
+        D.Mden q'.1.1 c.1 (D.obsOf (D.presOf q' W' c)) := by
+    rw [hObs] at hMdenEq
+    exact hMdenEq
+  have hFcandEq (ξ : D.Tup) :
+      D.Fcand q.1.1 c.1 ξ (D.obsOf (D.presOf q' W' c)) =
+        D.Fcand q'.1.1 c.1 ξ (D.obsOf (D.presOf q' W' c)) := by
+    exact Lane_q_s08_post.fcand_congr_radius_two D q.1.1 q'.1.1 c.1 ξ
+      (D.obsOf (D.presOf q' W' c)) hHist2
+  have hBasePost :
+      D.basePost q.1.1 c.1 (D.obsOf (D.presOf q' W' c)) =
+        D.basePost q'.1.1 c.1 (D.obsOf (D.presOf q' W' c)) := by
+    unfold Ctx.basePost
+    exact Lane_q_s08_post.normOr_congr
+      (f := fun ξ => D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf (D.presOf q' W' c)))
+      (g := fun ξ => D.R'.w ξ * D.Fcand q'.1.1 c.1 ξ (D.obsOf (D.presOf q' W' c)))
+      (hf := fun ξ => mul_nonneg (D.R'.nonneg ξ)
+        (D.Fcand_nonneg q.1.1 c.1 ξ (D.obsOf (D.presOf q' W' c))))
+      (hg := fun ξ => mul_nonneg (D.R'.nonneg ξ)
+        (D.Fcand_nonneg q'.1.1 c.1 ξ (D.obsOf (D.presOf q' W' c))))
+      (P := D.R') (Q := D.R') (hPQ := fun ξ => rfl)
+      (hfg := fun ξ => congrArg (fun x : ℝ => D.R'.w ξ * x) (hFcandEq ξ))
+  have hSelNorm :
+      normOr
+          (fun ξ => D.R'.w ξ * D.Gsel q.1.1 q.1.2 c ξ (D.presOf q' W' c))
+          (fun ξ => mul_nonneg (D.R'.nonneg ξ)
+            (D.Gsel_nonneg q.1.1 q.1.2 c ξ (D.presOf q' W' c)))
+          (D.basePost q'.1.1 c.1 (D.obsOf (D.presOf q' W' c))) =
+        normOr
+          (fun ξ => D.R'.w ξ * D.Gsel q'.1.1 q'.1.2 c ξ (D.presOf q' W' c))
+          (fun ξ => mul_nonneg (D.R'.nonneg ξ)
+            (D.Gsel_nonneg q'.1.1 q'.1.2 c ξ (D.presOf q' W' c)))
+          (D.basePost q'.1.1 c.1 (D.obsOf (D.presOf q' W' c))) := by
+    exact Lane_q_s08_post.normOr_congr
+      (f := fun ξ => D.R'.w ξ * D.Gsel q.1.1 q.1.2 c ξ (D.presOf q' W' c))
+      (g := fun ξ => D.R'.w ξ * D.Gsel q'.1.1 q'.1.2 c ξ (D.presOf q' W' c))
+      (hf := fun ξ => mul_nonneg (D.R'.nonneg ξ)
+        (D.Gsel_nonneg q.1.1 q.1.2 c ξ (D.presOf q' W' c)))
+      (hg := fun ξ => mul_nonneg (D.R'.nonneg ξ)
+        (D.Gsel_nonneg q'.1.1 q'.1.2 c ξ (D.presOf q' W' c)))
+      (P := D.basePost q'.1.1 c.1 (D.obsOf (D.presOf q' W' c)))
+      (Q := D.basePost q'.1.1 c.1 (D.obsOf (D.presOf q' W' c)))
+      (hPQ := fun ξ => rfl)
+      (hfg := fun ξ => congrArg (fun x : ℝ => D.R'.w ξ * x) (hGselEq ξ))
+  have hMadSame :
+      D.Mad q.1.1 q.1.2 c (D.presOf q' W' c) =
+        D.Mad q'.1.1 q'.1.2 c (D.presOf q' W' c) := by
+    rw [hPres] at hMadEq
+    exact hMadEq
+  have hSelectPost :
+      D.selPost q.1.1 q.1.2 c (D.presOf q' W' c) =
+        D.selPost q'.1.1 q'.1.2 c (D.presOf q' W' c) := by
+    unfold Ctx.selPost
+    have hcond :
+        (D.eps0 * D.Mden q.1.1 c.1 (D.obsOf (D.presOf q' W' c)) ≤
+          D.Mad q.1.1 q.1.2 c (D.presOf q' W' c)) =
+        (D.eps0 * D.Mden q'.1.1 c.1 (D.obsOf (D.presOf q' W' c)) ≤
+          D.Mad q'.1.1 q'.1.2 c (D.presOf q' W' c)) := by
+      rw [hMdenSame, hMadSame]
+    simp only [hcond, hBasePost, hSelNorm]
+  unfold Ctx.p0
+  rw [hPresValidEq, hPres]
+  simp [Ctx.p0w, hSelectPost]
 
 set_option maxHeartbeats 1000000
 /-- L8.1h(i) (08:295–297): fix the valid presentation and cross anchors.  A label of `p⁰` is a coordinate of a

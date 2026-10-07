@@ -1653,6 +1653,27 @@ theorem qref_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
     intro u hu
     exact congrArg (fun R : FinProb (D.M.ι × Fin D.N) => R.w (o.2 u)) (hCross u)
 
+theorem normOr_congr {α : Type*} [Fintype α]
+    (f g : α → ℝ) (hf : ∀ x, 0 ≤ f x) (hg : ∀ x, 0 ≤ g x)
+    (P Q : FinProb α) (hPQ : ∀ x, P.w x = Q.w x) (hfg : ∀ x, f x = g x) :
+    normOr f hf P = normOr g hg Q := by
+  classical
+  have hsum : (∑ x, f x) = ∑ x, g x := by
+    apply Finset.sum_congr rfl
+    intro x hx
+    exact hfg x
+  apply FinProb.ext
+  intro x
+  by_cases hz : (∑ x, f x) = 0
+  · have hz' : (∑ x, g x) = 0 := by rw [← hsum]; exact hz
+    simp [normOr, hz, hz', hPQ x]
+  · have hz' : (∑ x, g x) ≠ 0 := by
+      intro hzero
+      apply hz
+      rw [hsum]
+      exact hzero
+    simp [normOr, hz, hz', hfg x, hsum]
+
 set_option maxHeartbeats 1000000 in
 theorem presentation_event_congr_local {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (hS : D.SelLocal) (H H' : D.Hist)

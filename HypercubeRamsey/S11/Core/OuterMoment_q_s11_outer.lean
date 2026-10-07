@@ -495,4 +495,7 @@ theorem tuple_event_mass_le_of_one_free {u N : ℕ} (σ : Fin N → ℝ) (S : Fi
           rw [← Finset.sum_mul, hσsum]
           ring
 
+theorem sub_le_neg_of_add_le {x y z : ℝ} (h : x + y ≤ z) : x - z ≤ -y := by
+  linarith
+
 end HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer

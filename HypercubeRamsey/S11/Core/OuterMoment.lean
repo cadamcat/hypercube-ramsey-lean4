@@ -1373,12 +1373,764 @@ theorem count_ext (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx�
       intro x hx
       simpa using (Finset.mem_filter.mp hx).2)
 
+set_option maxHeartbeats 400000 in
 /-- L11.3e (11:282–292).  On `w ≤ n^{-1.03}` the weight is at most `e^{2^u n^{-.03}}`; on
 `n^{-1.03} < w ≤ n^{-1+.06}` use the two-free estimate (`C_u e^{2^u n^{.06} - n^{.4}}`), on
 `n^{-1+.06} < w ≤ n^{-υ}` the one-free estimate (`C_u e^{2^u n^{1-υ} - n^{1-υ/4}/2}`); finitely many `u ≤ U`. -/
 theorem moderate (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
     (hK : 0 < K) (hA : OneFreeEv δ x₀ K) (hB : TwoFreeEv δ x₀ K) : ModerateEv δ x₀ K := by
-  sorry
+  classical
+  unfold ModerateEv
+  intro U P'
+  let cA : ℕ → ℝ := fun v => Classical.choose (hA v)
+  have hArest (v : ℕ) := Classical.choose_spec (hA v)
+  let nA : ℕ → ℕ := fun v => Classical.choose (hArest v)
+  have hAvalid (v : ℕ) := Classical.choose_spec (hArest v)
+  have hBrest (v : ℕ) := hB v
+  let nB : ℕ → ℕ := fun v => Classical.choose (hBrest v)
+  have hBvalid (v : ℕ) := Classical.choose_spec (hBrest v)
+  let idxs : Finset ℕ := Finset.range (U + 1)
+  let cmax : ℝ := (∑ v ∈ idxs, max (cA v) 0) + 1
+  let nAmax : ℕ := ∑ v ∈ idxs, nA v
+  let nBmax : ℕ := ∑ v ∈ idxs, nB v
+  let nStart : ℕ := max 64 (nAmax + nBmax + 2)
+  have huMem (u : ℕ) (hu : u ≤ U) : u ∈ idxs := by
+    dsimp [idxs]
+    exact Finset.mem_range.mpr (Nat.lt_succ_of_le hu)
+  have hcmax_nonneg : 0 ≤ cmax := by
+    dsimp [cmax]
+    positivity
+  have hcmax (u : ℕ) (hu : u ≤ U) : cA u ≤ cmax := by
+    dsimp [cmax]
+    calc
+      cA u ≤ max (cA u) 0 := le_max_left _ _
+      _ ≤ ∑ v ∈ idxs, max (cA v) 0 :=
+        Finset.single_le_sum (fun v hv => le_max_right _ _) (huMem u hu)
+      _ ≤ (∑ v ∈ idxs, max (cA v) 0) + 1 := by linarith
+  have hnAmax (u : ℕ) (hu : u ≤ U) : nA u ≤ nAmax := by
+    dsimp [nAmax]
+    exact Finset.single_le_sum (fun v hv => Nat.zero_le _) (huMem u hu)
+  have hnBmax (u : ℕ) (hu : u ≤ U) : nB u ≤ nBmax := by
+    dsimp [nBmax]
+    exact Finset.single_le_sum (fun v hv => Nat.zero_le _) (huMem u hu)
+  let a : ℝ := 1 - δ / 16
+  let ell : ℝ := 1 - δ / 4
+  let Amax : ℝ := (2 : ℝ) ^ U
+  let Mmax : ℝ := (2 : ℝ) ^ U
+  let Pstar : ℝ := max P' 0 + 1
+  have ha_pos : 0 < a := by dsimp [a]; nlinarith
+  have hell_pos : 0 < ell := by dsimp [ell]; nlinarith
+  have hell_lt_a : ell < a := by dsimp [ell, a]; linarith
+  have hCgap := OuterMoment_q_s11_outer.eventually_pow_gap
+    (-(19 : ℝ) / 20) (-(94 : ℝ) / 100) (cmax + 1) (by norm_num) (by positivity)
+  have hGapOne := OuterMoment_q_s11_outer.eventually_pow_gap
+    ((1 : ℝ) / 10) ((2 : ℝ) / 5)
+    (2 * (Amax + Mmax + 10 * Pstar + 3)) (by norm_num) (by positivity)
+  have hGapTwo := OuterMoment_q_s11_outer.eventually_pow_gap
+    ell a (2 * (Amax + 2 * Mmax + 10 * Pstar + 3)) hell_lt_a (by positivity)
+  have hnLarge : ∀ᶠ n : ℕ in atTop, 2 ≤ n :=
+    eventually_atTop.mpr ⟨2, fun _ hn => hn⟩
+  have hScale : ∀ᶠ n : ℕ in atTop,
+      2 ≤ n ∧ (cmax + 1) * (n : ℝ) ^ (-(19 : ℝ) / 20) <
+          (n : ℝ) ^ (-(94 : ℝ) / 100) ∧
+        2 * (Amax + Mmax + 10 * Pstar + 3) * (n : ℝ) ^ ((1 : ℝ) / 10) <
+          (n : ℝ) ^ ((2 : ℝ) / 5) ∧
+        2 * (Amax + 2 * Mmax + 10 * Pstar + 3) * (n : ℝ) ^ ell < (n : ℝ) ^ a := by
+    filter_upwards [hnLarge, hCgap, hGapOne, hGapTwo] with n hn hc h1 h2
+    exact ⟨hn, hc, h1, h2⟩
+  obtain ⟨nScale, hnScale⟩ := Filter.eventually_atTop.1 hScale
+  let n₀ := max nStart nScale
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y G π σ S hO u hu
+  have hnStart : n ≥ nStart := le_trans (le_max_left _ _) hn
+  have hnScale' : n ≥ nScale := le_trans (le_max_right _ _) hn
+  have hnA : n ≥ nA u := by
+    have hsum : nA u ≤ nAmax := hnAmax u hu
+    dsimp [nStart] at hnStart
+    dsimp [nAmax] at hsum
+    omega
+  have hnB : n ≥ nB u := by
+    have hsum : nB u ≤ nBmax := hnBmax u hu
+    dsimp [nStart] at hnStart
+    dsimp [nBmax] at hsum
+    omega
+  have hpars := hnScale n hnScale'
+  rcases hpars with ⟨hn2, hCpow, hGapOneN, hGapTwoN⟩
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hσpos : ∃ x, 0 < σ x := by
+    by_contra h
+    have hnonpos : ∀ x, σ x ≤ 0 := by
+      intro x
+      by_contra hx
+      exact h ⟨x, lt_of_not_ge hx⟩
+    have hzero : ∀ x, σ x = 0 := by
+      intro x
+      exact le_antisymm (hnonpos x) (hO.sigma_nonneg x)
+    have hsum0 : (∑ x, σ x) = 0 := Finset.sum_eq_zero fun x hx => hzero x
+    have hsum := hO.sigma_sum
+    rw [hsum0] at hsum
+    norm_num at hsum
+  obtain ⟨x₀, hx₀pos⟩ := hσpos
+  have hx₀S : x₀ ∈ S := hO.sigma_supp x₀ (ne_of_gt hx₀pos)
+  have hwt_nonneg (f : Fin u → Fin N) : 0 ≤ tupWt σ f := by
+    unfold tupWt
+    exact Finset.prod_nonneg fun i hi => hO.sigma_nonneg (f i)
+  have hwt_sum : (∑ f : Fin u → Fin N, tupWt σ f) = 1 := by
+    unfold tupWt
+    calc
+      (∑ f : Fin u → Fin N, ∏ i, σ (f i)) = ∏ i : Fin u, ∑ x, σ x := by
+        symm
+        exact Fintype.prod_sum (fun (_ : Fin u) (x : Fin N) => σ x)
+      _ = 1 := by simp [hO.sigma_sum]
+  have hOne := hAvalid u n hnA (N := N) (E := E) (X := X) (Y := Y) G π σ S hO
+  have hTwo := hBvalid u n hnB (N := N) (E := E) (X := X) (Y := Y) G π σ S hO
+  have hUnion (v b : ℝ) (hv : 0 < v) (hb : 0 ≤ b)
+      (hper : ∀ J : Finset (Fin u), 2 ≤ J.card →
+        (∑ f : Fin u → Fin N, tupWt σ f *
+          (if v < |inter E G π J f| then 1 else 0)) ≤ b) :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if v < env E G π f then 1 else 0)) ≤ (Fintype.card (Finset (Fin u) : Type) : ℝ) * b := by
+    have hpoint (f : Fin u → Fin N) :
+        (if v < env E G π f then (1 : ℝ) else 0) ≤
+          ∑ J : Finset (Fin u), if 2 ≤ J.card ∧ v < |inter E G π J f| then (1 : ℝ) else 0 := by
+      by_cases henv : v < env E G π f
+      · have hsome : ∃ J : Finset (Fin u), 2 ≤ J.card ∧ v < |inter E G π J f| := by
+          have hmax' : v < (Finset.univ : Finset (Finset (Fin u))).sup'
+              (⟨∅, Finset.mem_univ _⟩) (fun J : Finset (Fin u) =>
+                if 2 ≤ J.card then |inter E G π J f| else 0) := by
+            simpa [env] using henv
+          have hmax := (Finset.lt_sup'_iff
+            (show (Finset.univ : Finset (Finset (Fin u))).Nonempty from ⟨∅, Finset.mem_univ _⟩)).mp hmax'
+          rcases hmax with ⟨J, hJ, hJlt⟩
+          by_cases hJcard : 2 ≤ J.card
+          · exact ⟨J, hJcard, by simpa [hJcard] using hJlt⟩
+          · have hJzero : (if 2 ≤ J.card then |inter E G π J f| else 0) = 0 := by simp [hJcard]
+            rw [hJzero] at hJlt
+            exact False.elim (not_lt_of_ge hv.le hJlt)
+        rcases hsome with ⟨J, hJcard, hJevent⟩
+        have hsum : (1 : ℝ) ≤
+            ∑ J' : Finset (Fin u), if 2 ≤ J'.card ∧ v < |inter E G π J' f| then (1 : ℝ) else 0 := by
+          calc
+            (1 : ℝ) = (if 2 ≤ J.card ∧ v < |inter E G π J f| then (1 : ℝ) else 0) := by simp [hJcard, hJevent]
+            _ ≤ ∑ J' : Finset (Fin u), if 2 ≤ J'.card ∧ v < |inter E G π J' f| then (1 : ℝ) else 0 := by
+              exact Finset.single_le_sum
+                (f := fun J' : Finset (Fin u) =>
+                  if 2 ≤ J'.card ∧ v < |inter E G π J' f| then (1 : ℝ) else 0)
+                (fun J' hJ' => by split_ifs <;> norm_num)
+                (Finset.mem_univ J)
+        simpa [henv] using hsum
+      · simp only [if_neg henv]
+        exact Finset.sum_nonneg fun J hJ => by split_ifs <;> positivity
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f * (if v < env E G π f then 1 else 0)) ≤
+          ∑ f : Fin u → Fin N, tupWt σ f *
+            (∑ J : Finset (Fin u), if 2 ≤ J.card ∧ v < |inter E G π J f| then (1 : ℝ) else 0) := by
+        apply Finset.sum_le_sum
+        intro f hf
+        exact mul_le_mul_of_nonneg_left (hpoint f) (hwt_nonneg f)
+      _ = ∑ J : Finset (Fin u), ∑ f : Fin u → Fin N, tupWt σ f *
+            (if 2 ≤ J.card ∧ v < |inter E G π J f| then 1 else 0) := by
+        calc
+          (∑ f : Fin u → Fin N, tupWt σ f *
+              (∑ J : Finset (Fin u), if 2 ≤ J.card ∧ v < |inter E G π J f| then (1 : ℝ) else 0)) =
+              ∑ f : Fin u → Fin N, ∑ J : Finset (Fin u), tupWt σ f *
+                (if 2 ≤ J.card ∧ v < |inter E G π J f| then (1 : ℝ) else 0) := by
+                  apply Finset.sum_congr rfl
+                  intro f hf
+                  rw [Finset.mul_sum]
+          _ = ∑ J : Finset (Fin u), ∑ f : Fin u → Fin N, tupWt σ f *
+                (if 2 ≤ J.card ∧ v < |inter E G π J f| then (1 : ℝ) else 0) := by rw [Finset.sum_comm]
+      _ ≤ ∑ J : Finset (Fin u), b := by
+        apply Finset.sum_le_sum
+        intro J hJ
+        by_cases hJcard : 2 ≤ J.card
+        · simpa [hJcard] using hper J hJcard
+        · simpa [hJcard] using hb
+      _ = (Fintype.card (Finset (Fin u) : Type) : ℝ) * b := by simp
+  have hTwoPer (J : Finset (Fin u)) (hJ : 2 ≤ J.card) :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if (n : ℝ) ^ (-(103 : ℝ) / 100) < |inter E G π J f| then 1 else 0)) ≤
+        Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5))) := by
+    obtain ⟨j, hj, j', hj', hjj⟩ := Finset.one_lt_card.mp (by omega : 1 < J.card)
+    apply OuterMoment_q_s11_outer.tuple_event_mass_le_of_two_free
+      σ S hO.sigma_nonneg hO.sigma_sum hO.sigma_supp j j' hjj x₀ hx₀S
+      (fun f => (n : ℝ) ^ (-(103 : ℝ) / 100) < |inter E G π J f|)
+      (Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))) (by positivity)
+    intro base hbase
+    exact hTwo J j j' hj hj' hjj base hbase
+  have hOneThreshold : cA u * bS n ≤ (n : ℝ) ^ (-(94 : ℝ) / 100) := by
+    have hcA : cA u ≤ cmax := hcmax u hu
+    have hbS : 0 ≤ bS n := by unfold bS; positivity
+    have hcA' : cA u * bS n ≤ cmax * bS n := mul_le_mul_of_nonneg_right hcA hbS
+    have hcgap : (cmax + 1) * bS n < (n : ℝ) ^ (-(94 : ℝ) / 100) := by
+      simpa [bS, neg_div] using hCpow
+    have hcoeff : cmax * bS n ≤ (cmax + 1) * bS n := by
+      nlinarith [mul_nonneg hbS (by norm_num : (0 : ℝ) ≤ 1)]
+    exact hcA'.trans (le_of_lt (hcoeff.trans_lt hcgap))
+  have hOnePer (J : Finset (Fin u)) (hJ : 2 ≤ J.card) :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if (n : ℝ) ^ (-(94 : ℝ) / 100) < |inter E G π J f| then 1 else 0)) ≤
+        2 * Real.exp (-((n : ℝ) ^ a / 2)) := by
+    obtain ⟨j, hj, j', hj', hjj⟩ := Finset.one_lt_card.mp (by omega : 1 < J.card)
+    apply OuterMoment_q_s11_outer.tuple_event_mass_le_of_one_free
+      σ S hO.sigma_nonneg hO.sigma_sum hO.sigma_supp j j' hjj x₀ hx₀S
+      (fun f => (n : ℝ) ^ (-(94 : ℝ) / 100) < |inter E G π J f|)
+      (2 * Real.exp (-((n : ℝ) ^ a / 2))) (by positivity)
+    intro base hbase
+    calc
+      (∑ x, σ x *
+        (if (n : ℝ) ^ (-(94 : ℝ) / 100) < |inter E G π J (Function.update base j x)| then 1 else 0)) ≤
+        ∑ x, σ x *
+          (if cA u * bS n < |inter E G π J (Function.update base j x)| then 1 else 0) := by
+            apply Finset.sum_le_sum
+            intro x hx
+            have hInd :
+                (if (n : ℝ) ^ (-(94 : ℝ) / 100) <
+                    |inter E G π J (Function.update base j x)| then (1 : ℝ) else 0) ≤
+                  (if cA u * bS n < |inter E G π J (Function.update base j x)| then 1 else 0) := by
+              by_cases hlarge : (n : ℝ) ^ (-(94 : ℝ) / 100) <
+                  |inter E G π J (Function.update base j x)|
+              · have hlarge' : cA u * bS n <
+                  |inter E G π J (Function.update base j x)| := lt_of_le_of_lt hOneThreshold hlarge
+                simp [hlarge, hlarge']
+              · simp only [if_neg hlarge]
+                split_ifs <;> norm_num
+            exact mul_le_mul_of_nonneg_left hInd (hO.sigma_nonneg x)
+      _ ≤ 2 * Real.exp (((-1 : ℝ) * (n : ℝ) ^ a) / 2) := by
+        simpa [cA, a] using hOne J j hj base hbase
+      _ = 2 * Real.exp (-((n : ℝ) ^ a / 2)) := by congr 1; congr 1; ring
+  let t0 : ℝ := (n : ℝ) ^ (-(103 : ℝ) / 100)
+  let t1 : ℝ := (n : ℝ) ^ (-(94 : ℝ) / 100)
+  let cap : ℝ := (n : ℝ) ^ (-(δ / 4))
+  let A : ℝ := (2 : ℝ) ^ u
+  let M : ℝ := (Fintype.card (Finset (Fin u)) : ℝ)
+  have hA_bound : A ≤ Amax := by
+    dsimp [A, Amax]
+    exact_mod_cast (Nat.pow_le_pow_right (by omega : 1 ≤ 2) hu)
+  have hcardFinset : Fintype.card (Finset (Fin u)) = 2 ^ u := by
+    simp [Fintype.card_finset]
+  have hM_bound : M ≤ Mmax := by
+    have hMA : M = A := by
+      dsimp [M, A]
+      exact_mod_cast hcardFinset
+    rw [hMA]
+    simpa [Amax, Mmax] using hA_bound
+  have hnpos : 0 < (n : ℝ) := by positivity
+  have hmulRpow (q : ℝ) : (n : ℝ) * (n : ℝ) ^ q = (n : ℝ) ^ (1 + q) := by
+    calc
+      (n : ℝ) * (n : ℝ) ^ q = (n : ℝ) ^ 1 * (n : ℝ) ^ q :=
+        congrArg (fun z : ℝ => z * (n : ℝ) ^ q) (Real.rpow_one (n : ℝ)).symm
+      _ = (n : ℝ) ^ (1 + q) := by rw [Real.rpow_add hnpos]
+  have hnt0 : (n : ℝ) * t0 ≤ 1 := by
+    dsimp [t0]
+    calc
+      (n : ℝ) * (n : ℝ) ^ (-(103 : ℝ) / 100) =
+          (n : ℝ) ^ (-(3 : ℝ) / 100) := by rw [hmulRpow]; congr 1; norm_num
+      _ ≤ 1 := Real.rpow_le_one_of_one_le_of_nonpos hn1R (by norm_num)
+  have hnt1 : (n : ℝ) * t1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    dsimp [t1]
+    calc
+      (n : ℝ) * (n : ℝ) ^ (-(94 : ℝ) / 100) =
+          (n : ℝ) ^ ((6 : ℝ) / 100) := by rw [hmulRpow]; congr 1; norm_num
+      _ ≤ (n : ℝ) ^ ((1 : ℝ) / 10) :=
+        Real.rpow_le_rpow_of_exponent_le hn1R (by norm_num)
+  have hncap : (n : ℝ) * cap = (n : ℝ) ^ ell := by
+    dsimp [cap, ell]
+    calc
+      (n : ℝ) * (n : ℝ) ^ (-(δ / 4)) = (n : ℝ) ^ (1 + (-(δ / 4))) := hmulRpow _
+      _ = (n : ℝ) ^ (1 - δ / 4) := by congr 1
+  have hlogn : Real.log (n : ℝ) ≤ 10 * (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    calc
+      Real.log (n : ℝ) ≤ (n : ℝ) ^ ((1 : ℝ) / 10) / ((1 : ℝ) / 10) :=
+        Real.log_natCast_le_rpow_div n (by norm_num : (0 : ℝ) < (1 : ℝ) / 10)
+      _ = 10 * (n : ℝ) ^ ((1 : ℝ) / 10) := by ring
+  have hlog2 : Real.log 2 ≤ 1 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    linarith
+  have hPstar_nonneg : 0 ≤ Pstar := by dsimp [Pstar]; positivity
+  have hPstar_ge1 : 1 ≤ Pstar := by dsimp [Pstar]; linarith [le_max_right P' 0]
+  have hPstar_geP : P' + 1 ≤ Pstar := by dsimp [Pstar]; linarith [le_max_left P' 0]
+  have hAmax_nonneg : 0 ≤ Amax := by dsimp [Amax]; positivity
+  have hMmax_nonneg : 0 ≤ Mmax := by dsimp [Mmax]; positivity
+  have hMexp : Mmax ≤ Real.exp Mmax := by
+    have h := Real.add_one_le_exp Mmax
+    nlinarith [h, hMmax_nonneg]
+  have h2Mexp : 2 * Mmax ≤ Real.exp (2 * Mmax) := by
+    have h := Real.add_one_le_exp (2 * Mmax)
+    nlinarith [h, hMmax_nonneg]
+  have hprob0 :
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) ≤
+        Mmax * Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5))) := by
+    have h := hUnion t0 (Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))) (by positivity)
+      (by positivity) hTwoPer
+    have hraw :
+        (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) ≤
+          A * Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5))) := by simpa [t0, A, hcardFinset] using h
+    exact hraw.trans (mul_le_mul_of_nonneg_right hA_bound (Real.exp_nonneg _))
+  have hprob1 :
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤
+        2 * Mmax * Real.exp (-((n : ℝ) ^ a / 2)) := by
+    have h := hUnion t1 (2 * Real.exp (-((n : ℝ) ^ a / 2))) (by positivity)
+      (by positivity) hOnePer
+    have hraw :
+        (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤
+          A * (2 * Real.exp (-((n : ℝ) ^ a / 2))) := by simpa [t1, A, hcardFinset] using h
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤
+          A * (2 * Real.exp (-((n : ℝ) ^ a / 2))) := hraw
+      _ = 2 * (A * Real.exp (-((n : ℝ) ^ a / 2))) := by ring
+      _ ≤ 2 * (Mmax * Real.exp (-((n : ℝ) ^ a / 2))) :=
+        mul_le_mul_of_nonneg_left
+          (mul_le_mul_of_nonneg_right hA_bound (Real.exp_nonneg _)) (by norm_num)
+      _ = 2 * Mmax * Real.exp (-((n : ℝ) ^ a / 2)) := by ring
+  have hnPow01 : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    simpa using Real.rpow_le_rpow_of_exponent_le hn1R
+      (y := 0) (z := (1 : ℝ) / 10) (by norm_num)
+  have hell_ge_tenth : (1 : ℝ) / 10 ≤ ell := by dsimp [ell]; linarith [hδ']
+  have hnPowEll : 1 ≤ (n : ℝ) ^ ell := by
+    simpa using Real.rpow_le_rpow_of_exponent_le hn1R (y := 0) (z := ell) hell_pos.le
+  have hnPowTenthLeEll : (n : ℝ) ^ ((1 : ℝ) / 10) ≤ (n : ℝ) ^ ell :=
+    Real.rpow_le_rpow_of_exponent_le hn1R hell_ge_tenth
+  have hMterm : Mmax ≤ Mmax * (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    calc
+      Mmax = Mmax * 1 := by ring
+      _ ≤ Mmax * (n : ℝ) ^ ((1 : ℝ) / 10) :=
+        mul_le_mul_of_nonneg_left hnPow01 hMmax_nonneg
+  have hAterm : A * ((n : ℝ) * t1) ≤ Amax * (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    calc
+      A * ((n : ℝ) * t1) ≤ Amax * ((n : ℝ) * t1) :=
+        mul_le_mul_of_nonneg_right hA_bound (by positivity)
+      _ ≤ Amax * (n : ℝ) ^ ((1 : ℝ) / 10) :=
+        mul_le_mul_of_nonneg_left hnt1 hAmax_nonneg
+  have hPterm : Pstar * Real.log (n : ℝ) ≤ 10 * Pstar * (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    calc
+      Pstar * Real.log (n : ℝ) ≤ Pstar * (10 * (n : ℝ) ^ ((1 : ℝ) / 10)) :=
+        mul_le_mul_of_nonneg_left hlogn hPstar_nonneg
+      _ = 10 * Pstar * (n : ℝ) ^ ((1 : ℝ) / 10) := by ring
+  have hlog2term : Real.log 2 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    exact hlog2.trans hnPow01
+  have hAddOne : Mmax + A * ((n : ℝ) * t1) + Pstar * Real.log (n : ℝ) + Real.log 2 ≤
+      (Amax + Mmax + 10 * Pstar + 1) * (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    have hsum := add_le_add (add_le_add hMterm hAterm) (add_le_add hPterm hlog2term)
+    calc
+      Mmax + A * ((n : ℝ) * t1) + Pstar * Real.log (n : ℝ) + Real.log 2 ≤
+          (Mmax * (n : ℝ) ^ ((1 : ℝ) / 10) + Amax * (n : ℝ) ^ ((1 : ℝ) / 10)) +
+            (10 * Pstar * (n : ℝ) ^ ((1 : ℝ) / 10) + (n : ℝ) ^ ((1 : ℝ) / 10)) := by
+              simpa [add_assoc] using hsum
+      _ = (Amax + Mmax + 10 * Pstar + 1) * (n : ℝ) ^ ((1 : ℝ) / 10) := by ring
+  have hCoeffOne : (Amax + Mmax + 10 * Pstar + 1) * (n : ℝ) ^ ((1 : ℝ) / 10) <
+      (n : ℝ) ^ ((2 : ℝ) / 5) / 2 := by
+    have hcoef : Amax + Mmax + 10 * Pstar + 1 ≤ Amax + Mmax + 10 * Pstar + 3 := by linarith
+    have hpow_nonneg : 0 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := Real.rpow_nonneg (Nat.cast_nonneg n) _
+    have hprod := mul_le_mul_of_nonneg_right hcoef hpow_nonneg
+    have hstrict : (Amax + Mmax + 10 * Pstar + 3) * (n : ℝ) ^ ((1 : ℝ) / 10) <
+        (n : ℝ) ^ ((2 : ℝ) / 5) / 2 := by nlinarith only [hGapOneN]
+    exact lt_of_le_of_lt hprod hstrict
+  have hAddTwo : 2 * Mmax + A * ((n : ℝ) * cap) + Pstar * Real.log (n : ℝ) + Real.log 2 ≤
+      (Amax + 2 * Mmax + 10 * Pstar + 1) * (n : ℝ) ^ ell := by
+    have hMterm' : 2 * Mmax ≤ 2 * Mmax * (n : ℝ) ^ ell := by
+      calc
+        2 * Mmax = (2 * Mmax) * 1 := by ring
+        _ ≤ (2 * Mmax) * (n : ℝ) ^ ell :=
+          mul_le_mul_of_nonneg_left hnPowEll (by positivity)
+    have hAterm' : A * ((n : ℝ) * cap) ≤ Amax * (n : ℝ) ^ ell := by
+      rw [hncap]
+      exact mul_le_mul_of_nonneg_right hA_bound (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+    have hPterm' : Pstar * Real.log (n : ℝ) ≤ 10 * Pstar * (n : ℝ) ^ ell := by
+      calc
+        Pstar * Real.log (n : ℝ) ≤ 10 * Pstar * (n : ℝ) ^ ((1 : ℝ) / 10) := hPterm
+        _ ≤ 10 * Pstar * (n : ℝ) ^ ell :=
+          mul_le_mul_of_nonneg_left hnPowTenthLeEll (by positivity)
+    have hlog2term' : Real.log 2 ≤ (n : ℝ) ^ ell := hlog2.trans hnPowEll
+    have hsum := add_le_add (add_le_add hMterm' hAterm') (add_le_add hPterm' hlog2term')
+    calc
+      2 * Mmax + A * ((n : ℝ) * cap) + Pstar * Real.log (n : ℝ) + Real.log 2 ≤
+          (2 * Mmax * (n : ℝ) ^ ell + Amax * (n : ℝ) ^ ell) +
+            (10 * Pstar * (n : ℝ) ^ ell + (n : ℝ) ^ ell) := by simpa [add_assoc] using hsum
+      _ = (Amax + 2 * Mmax + 10 * Pstar + 1) * (n : ℝ) ^ ell := by ring
+  have hCoeffTwo : (Amax + 2 * Mmax + 10 * Pstar + 1) * (n : ℝ) ^ ell <
+      (n : ℝ) ^ a / 2 := by
+    have hcoef : Amax + 2 * Mmax + 10 * Pstar + 1 ≤ Amax + 2 * Mmax + 10 * Pstar + 3 := by linarith
+    have hpow_nonneg : 0 ≤ (n : ℝ) ^ ell := Real.rpow_nonneg (Nat.cast_nonneg n) _
+    have hprod := mul_le_mul_of_nonneg_right hcoef hpow_nonneg
+    have hstrict : (Amax + 2 * Mmax + 10 * Pstar + 3) * (n : ℝ) ^ ell <
+        (n : ℝ) ^ a / 2 := by nlinarith only [hGapTwoN]
+    exact lt_of_le_of_lt hprod hstrict
+  have hTailTwo : Real.exp (A * ((n : ℝ) * t1)) *
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) ≤
+        (n : ℝ) ^ (-Pstar) := by
+    calc
+      Real.exp (A * ((n : ℝ) * t1)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) ≤
+          Real.exp (A * ((n : ℝ) * t1)) * (Mmax * Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))) :=
+        mul_le_mul_of_nonneg_left hprob0 (Real.exp_nonneg _)
+      _ = Mmax * Real.exp (A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5)) := by
+        calc
+          Real.exp (A * ((n : ℝ) * t1)) * (Mmax * Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))) =
+              Mmax * (Real.exp (A * ((n : ℝ) * t1)) * Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))) := by ring
+          _ = Mmax * Real.exp (A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5)) := by
+            have hExp : Real.exp (A * ((n : ℝ) * t1)) *
+                Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5))) =
+                Real.exp (A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5)) := by
+              calc
+                _ = Real.exp (A * ((n : ℝ) * t1) + (-((n : ℝ) ^ ((2 : ℝ) / 5)))) :=
+                  (Real.exp_add _ _).symm
+                _ = _ := by congr 1
+            exact congrArg (fun z : ℝ => Mmax * z) hExp
+      _ ≤ Real.exp Mmax * Real.exp (A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5)) :=
+        mul_le_mul_of_nonneg_right hMexp (Real.exp_nonneg _)
+      _ = Real.exp (Mmax + A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5)) := by
+        simpa [sub_eq_add_neg, add_assoc] using
+          (Real.exp_add Mmax (A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5))).symm
+      _ ≤ Real.exp (-Pstar * Real.log (n : ℝ)) := by
+        have hlog2nonneg : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num : (1 : ℝ) ≤ 2)
+        have hpow_nonneg : 0 ≤ (n : ℝ) ^ ((2 : ℝ) / 5) :=
+          Real.rpow_nonneg (Nat.cast_nonneg n) _
+        have htotal : Mmax + A * ((n : ℝ) * t1) + Pstar * Real.log (n : ℝ) + Real.log 2 <
+            (n : ℝ) ^ ((2 : ℝ) / 5) / 2 := hAddOne.trans_lt hCoeffOne
+        have hhalf : (n : ℝ) ^ ((2 : ℝ) / 5) / 2 ≤ (n : ℝ) ^ ((2 : ℝ) / 5) := by
+          exact div_le_self hpow_nonneg (by norm_num : (1 : ℝ) ≤ 2)
+        have hbaseStrict : Mmax + A * ((n : ℝ) * t1) + Pstar * Real.log (n : ℝ) <
+            (n : ℝ) ^ ((2 : ℝ) / 5) := by
+          calc
+            Mmax + A * ((n : ℝ) * t1) + Pstar * Real.log (n : ℝ) ≤
+                Mmax + A * ((n : ℝ) * t1) + Pstar * Real.log (n : ℝ) + Real.log 2 := by
+                  exact le_add_of_nonneg_right hlog2nonneg
+            _ < (n : ℝ) ^ ((2 : ℝ) / 5) / 2 := htotal
+            _ ≤ (n : ℝ) ^ ((2 : ℝ) / 5) := hhalf
+        have hExponent := OuterMoment_q_s11_outer.sub_le_neg_of_add_le (le_of_lt hbaseStrict)
+        have hExponent' : Mmax + A * ((n : ℝ) * t1) - (n : ℝ) ^ ((2 : ℝ) / 5) ≤
+            -Pstar * Real.log (n : ℝ) := by simpa only [neg_mul] using hExponent
+        exact Real.exp_le_exp.mpr hExponent'
+      _ = (n : ℝ) ^ (-Pstar) := by
+        rw [Real.rpow_def_of_pos hnpos]
+        congr 1
+        ring
+  have hTailOne : Real.exp (A * ((n : ℝ) * cap)) *
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤
+        (n : ℝ) ^ (-Pstar) := by
+    calc
+      Real.exp (A * ((n : ℝ) * cap)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤
+          Real.exp (A * ((n : ℝ) * cap)) * (2 * Mmax * Real.exp (-((n : ℝ) ^ a / 2))) :=
+        mul_le_mul_of_nonneg_left hprob1 (Real.exp_nonneg _)
+      _ = 2 * Mmax * Real.exp (A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2) := by
+        calc
+          Real.exp (A * ((n : ℝ) * cap)) * (2 * Mmax * Real.exp (-((n : ℝ) ^ a / 2))) =
+              2 * Mmax * (Real.exp (A * ((n : ℝ) * cap)) * Real.exp (-((n : ℝ) ^ a / 2))) := by ring
+          _ = 2 * Mmax * Real.exp (A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2) := by
+            have hExp : Real.exp (A * ((n : ℝ) * cap)) *
+                Real.exp (-((n : ℝ) ^ a / 2)) =
+                Real.exp (A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2) := by
+              calc
+                _ = Real.exp (A * ((n : ℝ) * cap) + (-((n : ℝ) ^ a / 2))) :=
+                  (Real.exp_add _ _).symm
+                _ = _ := by congr 1
+            exact congrArg (fun z : ℝ => 2 * Mmax * z) hExp
+      _ ≤ Real.exp (2 * Mmax) * Real.exp (A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2) :=
+        mul_le_mul_of_nonneg_right h2Mexp (Real.exp_nonneg _)
+      _ = Real.exp (2 * Mmax + A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2) := by
+        have harg : 2 * Mmax + A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2 =
+            2 * Mmax + (A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2) := by ring
+        rw [harg]
+        exact (Real.exp_add (2 * Mmax) (A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2)).symm
+      _ ≤ Real.exp (-Pstar * Real.log (n : ℝ)) := by
+        have hlog2nonneg : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num : (1 : ℝ) ≤ 2)
+        have htotal : 2 * Mmax + A * ((n : ℝ) * cap) + Pstar * Real.log (n : ℝ) + Real.log 2 <
+            (n : ℝ) ^ a / 2 := hAddTwo.trans_lt hCoeffTwo
+        have hbaseStrict : 2 * Mmax + A * ((n : ℝ) * cap) + Pstar * Real.log (n : ℝ) <
+            (n : ℝ) ^ a / 2 := by
+          calc
+            2 * Mmax + A * ((n : ℝ) * cap) + Pstar * Real.log (n : ℝ) ≤
+                2 * Mmax + A * ((n : ℝ) * cap) + Pstar * Real.log (n : ℝ) + Real.log 2 := by
+                  exact le_add_of_nonneg_right hlog2nonneg
+            _ < (n : ℝ) ^ a / 2 := htotal
+        have hExponent := OuterMoment_q_s11_outer.sub_le_neg_of_add_le (le_of_lt hbaseStrict)
+        have hExponent' : 2 * Mmax + A * ((n : ℝ) * cap) - (n : ℝ) ^ a / 2 ≤
+            -Pstar * Real.log (n : ℝ) := by simpa only [neg_mul] using hExponent
+        exact Real.exp_le_exp.mpr hExponent'
+      _ = (n : ℝ) ^ (-Pstar) := by
+        rw [Real.rpow_def_of_pos hnpos]
+        congr 1
+        ring
+  have hn2R : 2 ≤ (n : ℝ) := by exact_mod_cast hn2
+  have hInvHalf : (n : ℝ) ^ (-(1 : ℝ)) ≤ 1 / 2 := by
+    have hInv : (n : ℝ) ^ (-(1 : ℝ)) = (n : ℝ)⁻¹ := by rw [Real.rpow_neg_one]
+    rw [hInv]
+    simpa [one_div] using (inv_le_inv₀ hnpos (by norm_num : (0 : ℝ) < 2)).2 hn2R
+  have hPstarSmall : (n : ℝ) ^ (-Pstar) ≤ 1 / 2 := by
+    calc
+      (n : ℝ) ^ (-Pstar) ≤ (n : ℝ) ^ (-(1 : ℝ)) :=
+        Real.rpow_le_rpow_of_exponent_le hn1R (by linarith [hPstar_ge1])
+      _ ≤ 1 / 2 := hInvHalf
+  have hPstarHalf : (n : ℝ) ^ (-Pstar) ≤ (n : ℝ) ^ (-P') / 2 := by
+    have hexp : -Pstar ≤ -(P' + 1) := by linarith [hPstar_geP]
+    calc
+      (n : ℝ) ^ (-Pstar) ≤ (n : ℝ) ^ (-(P' + 1)) :=
+        Real.rpow_le_rpow_of_exponent_le hn1R hexp
+      _ = (n : ℝ) ^ (-P') * (n : ℝ) ^ (-(1 : ℝ)) := by
+        rw [show -(P' + 1) = (-P') + (-(1 : ℝ)) by ring, Real.rpow_add hnpos]
+      _ ≤ (n : ℝ) ^ (-P') * (1 / 2) :=
+        mul_le_mul_of_nonneg_left hInvHalf (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+      _ = (n : ℝ) ^ (-P') / 2 := by ring
+  have hBaseSum : (∑ f : Fin u → Fin N, tupWt σ f * Real.exp A) = Real.exp A := by
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f * Real.exp A) =
+          (∑ f : Fin u → Fin N, tupWt σ f) * Real.exp A := by rw [Finset.sum_mul]
+      _ = Real.exp A := by rw [hwt_sum]; ring
+  have hBump0 :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0)) =
+        Real.exp (A * ((n : ℝ) * t1)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) := by
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f *
+          (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0)) =
+        ∑ f : Fin u → Fin N, Real.exp (A * ((n : ℝ) * t1)) *
+          (tupWt σ f * (if t0 < env E G π f then 1 else 0)) := by
+            apply Finset.sum_congr rfl
+            intro f hf
+            by_cases hf0 : t0 < env E G π f <;> simp [hf0] <;> ring
+      _ = Real.exp (A * ((n : ℝ) * t1)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) := by
+            rw [Finset.mul_sum]
+  have hBump1 :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0)) =
+        Real.exp (A * ((n : ℝ) * cap)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f *
+          (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0)) =
+        ∑ f : Fin u → Fin N, Real.exp (A * ((n : ℝ) * cap)) *
+          (tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+            apply Finset.sum_congr rfl
+            intro f hf
+            by_cases hf1 : t1 < env E G π f <;> simp [hf1] <;> ring
+      _ = Real.exp (A * ((n : ℝ) * cap)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+            rw [Finset.mul_sum]
+  have hBaseNonneg (f : Fin u → Fin N) : 0 ≤ tupWt σ f * Real.exp A :=
+    mul_nonneg (hwt_nonneg f) (Real.exp_nonneg _)
+  have hBump0Nonneg (f : Fin u → Fin N) :
+      0 ≤ tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) := by
+    by_cases h : t0 < env E G π f
+    · simpa only [if_pos h] using mul_nonneg (hwt_nonneg f) (Real.exp_nonneg _)
+    · simp only [if_neg h, mul_zero]
+      exact le_rfl
+  have hBump1Nonneg (f : Fin u → Fin N) :
+      0 ≤ tupWt σ f * (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0) := by
+    by_cases h : t1 < env E G π f
+    · simpa only [if_pos h] using mul_nonneg (hwt_nonneg f) (Real.exp_nonneg _)
+    · simp only [if_neg h, mul_zero]
+      exact le_rfl
+  have hcoefNonneg : 0 ≤ A * (n : ℝ) := mul_nonneg (by positivity) (by positivity)
+  have hExpBase (f : Fin u → Fin N) (hf : env E G π f ≤ t0) :
+      Real.exp (A * ((n : ℝ) * env E G π f)) ≤ Real.exp A := by
+    apply Real.exp_le_exp.mpr
+    calc
+      A * ((n : ℝ) * env E G π f) ≤ A * ((n : ℝ) * t0) :=
+        mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left hf (by positivity)) (by positivity)
+      _ = A * ((n : ℝ) * t0) := rfl
+      _ ≤ A * 1 := mul_le_mul_of_nonneg_left hnt0 (by positivity)
+      _ = A := by ring
+  have hExpMid (f : Fin u → Fin N) (hf : env E G π f ≤ t1) :
+      Real.exp (A * ((n : ℝ) * env E G π f)) ≤ Real.exp (A * ((n : ℝ) * t1)) := by
+    apply Real.exp_le_exp.mpr
+    exact mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left hf (by positivity)) (by positivity)
+  have hExpCap (f : Fin u → Fin N) (hf : env E G π f ≤ cap) :
+      Real.exp (A * ((n : ℝ) * env E G π f)) ≤ Real.exp (A * ((n : ℝ) * cap)) := by
+    apply Real.exp_le_exp.mpr
+    exact mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left hf (by positivity)) (by positivity)
+  have hPointBounded (f : Fin u → Fin N) :
+      tupWt σ f *
+        (if env E G π f ≤ cap then Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0) ≤
+      tupWt σ f * Real.exp A +
+        tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) +
+        tupWt σ f * (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0) := by
+    have hExpIdent : ((2 : ℝ) ^ u) * n * env E G π f = A * ((n : ℝ) * env E G π f) := by
+      dsimp [A]
+      ring
+    rw [hExpIdent]
+    by_cases hcap : env E G π f ≤ cap
+    · by_cases hlow : env E G π f ≤ t0
+      · calc
+          tupWt σ f * (if env E G π f ≤ cap then Real.exp (A * ((n : ℝ) * env E G π f)) else 0) =
+              tupWt σ f * Real.exp (A * ((n : ℝ) * env E G π f)) := by simp [hcap]
+          _ ≤ tupWt σ f * Real.exp A := mul_le_mul_of_nonneg_left (hExpBase f hlow) (hwt_nonneg f)
+          _ ≤ tupWt σ f * Real.exp A +
+                tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) :=
+                  le_add_of_nonneg_right (hBump0Nonneg f)
+          _ ≤ tupWt σ f * Real.exp A +
+                tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) +
+                tupWt σ f * (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0) :=
+                  le_add_of_nonneg_right (hBump1Nonneg f)
+      · by_cases hmid : env E G π f ≤ t1
+        · have h0lt : t0 < env E G π f := lt_of_not_ge hlow
+          have h1not : ¬ t1 < env E G π f := not_lt_of_ge hmid
+          simp only [if_pos hcap, if_pos h0lt, if_neg h1not, mul_zero, add_zero]
+          calc
+            tupWt σ f * Real.exp (A * ((n : ℝ) * env E G π f)) ≤
+                tupWt σ f * Real.exp (A * ((n : ℝ) * t1)) :=
+                  mul_le_mul_of_nonneg_left (hExpMid f hmid) (hwt_nonneg f)
+            _ ≤ tupWt σ f * Real.exp A + tupWt σ f * Real.exp (A * ((n : ℝ) * t1)) := by
+                  simpa only [zero_add] using
+                    add_le_add_left (hBaseNonneg f) (tupWt σ f * Real.exp (A * ((n : ℝ) * t1)))
+        · have h1lt : t1 < env E G π f := lt_of_not_ge hmid
+          have h0lt : t0 < env E G π f := lt_of_not_ge hlow
+          simp only [if_pos hcap, if_pos h0lt, if_pos h1lt]
+          calc
+            tupWt σ f * Real.exp (A * ((n : ℝ) * env E G π f)) ≤
+                tupWt σ f * Real.exp (A * ((n : ℝ) * cap)) :=
+                  mul_le_mul_of_nonneg_left (hExpCap f hcap) (hwt_nonneg f)
+            _ ≤ tupWt σ f * Real.exp A +
+                  tupWt σ f * Real.exp (A * ((n : ℝ) * t1)) +
+                  tupWt σ f * Real.exp (A * ((n : ℝ) * cap)) := by
+                    have hbaseMid : 0 ≤ tupWt σ f * Real.exp A +
+                        tupWt σ f * Real.exp (A * ((n : ℝ) * t1)) :=
+                      add_nonneg (hBaseNonneg f)
+                        (mul_nonneg (hwt_nonneg f) (Real.exp_nonneg _))
+                    simpa only [zero_add] using
+                      add_le_add_left hbaseMid (tupWt σ f * Real.exp (A * ((n : ℝ) * cap)))
+    · simp only [if_neg hcap]
+      simp only [mul_zero]
+      exact add_nonneg (add_nonneg (hBaseNonneg f) (hBump0Nonneg f)) (hBump1Nonneg f)
+  have hBoundedSum :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if env E G π f ≤ cap then Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0)) ≤
+        Real.exp A + Real.exp (A * ((n : ℝ) * t1)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+          Real.exp (A * ((n : ℝ) * cap)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if env E G π f ≤ cap then Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0)) ≤
+        ∑ f : Fin u → Fin N, (tupWt σ f * Real.exp A +
+          tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) +
+          tupWt σ f * (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0)) := by
+            apply Finset.sum_le_sum
+            intro f hf
+            exact hPointBounded f
+      _ = (∑ f : Fin u → Fin N, tupWt σ f * Real.exp A) +
+            (∑ f : Fin u → Fin N, tupWt σ f *
+              (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0)) +
+            (∑ f : Fin u → Fin N, tupWt σ f *
+              (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0)) := by
+            rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+      _ = Real.exp A + Real.exp (A * ((n : ℝ) * t1)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+            Real.exp (A * ((n : ℝ) * cap)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+            rw [hBaseSum, hBump0, hBump1]
+  have hTail0Half : Real.exp (A * ((n : ℝ) * t1)) *
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) ≤ 1 / 2 :=
+    (hTailTwo.trans hPstarSmall)
+  have hTail1Half : Real.exp (A * ((n : ℝ) * cap)) *
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤ 1 / 2 :=
+    (hTailOne.trans hPstarSmall)
+  have hBounded : ModBounded E G π σ n δ u := by
+    unfold ModBounded
+    have htailSum :
+        Real.exp (A * ((n : ℝ) * t1)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+          Real.exp (A * ((n : ℝ) * cap)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤ 1 := by
+      calc
+        _ ≤ (1 / 2 : ℝ) + 1 / 2 := add_le_add hTail0Half hTail1Half
+        _ = 1 := by norm_num
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if env E G π f ≤ (n : ℝ) ^ (-(δ / 4)) then Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0)) ≤
+        Real.exp A + Real.exp (A * ((n : ℝ) * t1)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+          Real.exp (A * ((n : ℝ) * cap)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+              simpa [cap] using hBoundedSum
+      _ = Real.exp A +
+          (Real.exp (A * ((n : ℝ) * t1)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+          Real.exp (A * ((n : ℝ) * cap)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0))) := by ring
+      _ ≤ Real.exp A + 1 := add_le_add_right htailSum (Real.exp A)
+      _ = Real.exp ((2 : ℝ) ^ u) + 1 := by rfl
+  have hPointTail (f : Fin u → Fin N) :
+      tupWt σ f *
+        (if t0 < env E G π f ∧ env E G π f ≤ cap then
+          Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0) ≤
+      tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) +
+        tupWt σ f * (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0) := by
+    have hExpIdent : ((2 : ℝ) ^ u) * (n : ℝ) * env E G π f =
+        A * ((n : ℝ) * env E G π f) := by dsimp [A]; ring
+    rw [hExpIdent]
+    by_cases hrange : t0 < env E G π f ∧ env E G π f ≤ cap
+    · rcases hrange with ⟨h0, hcap⟩
+      by_cases hmid : env E G π f ≤ t1
+      · have h1not : ¬ t1 < env E G π f := not_lt_of_ge hmid
+        simp [h0, hcap, h1not]
+        exact mul_le_mul_of_nonneg_left (hExpMid f hmid) (hwt_nonneg f)
+      · have h1 : t1 < env E G π f := lt_of_not_ge hmid
+        simp [h0, hcap, h1]
+        calc
+          tupWt σ f * Real.exp (A * ((n : ℝ) * env E G π f)) ≤
+              tupWt σ f * Real.exp (A * ((n : ℝ) * cap)) := by
+                exact mul_le_mul_of_nonneg_left (hExpCap f hcap) (hwt_nonneg f)
+          _ ≤ tupWt σ f * Real.exp (A * ((n : ℝ) * t1)) +
+                tupWt σ f * Real.exp (A * ((n : ℝ) * cap)) := by
+                  exact le_add_of_nonneg_left (mul_nonneg (hwt_nonneg f) (Real.exp_nonneg _))
+    · simp only [if_neg hrange, mul_zero]
+      exact add_nonneg (hBump0Nonneg f) (hBump1Nonneg f)
+  have hTailSum :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if t0 < env E G π f ∧ env E G π f ≤ cap then
+          Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0)) ≤
+        Real.exp (A * ((n : ℝ) * t1)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+        Real.exp (A * ((n : ℝ) * cap)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if t0 < env E G π f ∧ env E G π f ≤ cap then
+          Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0)) ≤
+          ∑ f : Fin u → Fin N,
+            (tupWt σ f * (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0) +
+              tupWt σ f * (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0)) := by
+                apply Finset.sum_le_sum
+                intro f hf
+                exact hPointTail f
+      _ = (∑ f : Fin u → Fin N, tupWt σ f *
+            (if t0 < env E G π f then Real.exp (A * ((n : ℝ) * t1)) else 0)) +
+          (∑ f : Fin u → Fin N, tupWt σ f *
+            (if t1 < env E G π f then Real.exp (A * ((n : ℝ) * cap)) else 0)) := by
+              rw [Finset.sum_add_distrib]
+      _ = Real.exp (A * ((n : ℝ) * t1)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+        Real.exp (A * ((n : ℝ) * cap)) *
+          (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+            rw [hBump0, hBump1]
+  have hTailTwoSmall : Real.exp (A * ((n : ℝ) * t1)) *
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) ≤
+        (n : ℝ) ^ (-P') / 2 := hTailTwo.trans hPstarHalf
+  have hTailOneSmall : Real.exp (A * ((n : ℝ) * cap)) *
+      (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) ≤
+        (n : ℝ) ^ (-P') / 2 := hTailOne.trans hPstarHalf
+  have hModTail : ModTail E G π σ n δ P' u := by
+    unfold ModTail
+    calc
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if (n : ℝ) ^ (-(103 : ℝ) / 100) < env E G π f ∧
+            env E G π f ≤ (n : ℝ) ^ (-(δ / 4)) then
+          Real.exp ((2 : ℝ) ^ u * n * env E G π f) else 0)) ≤
+          Real.exp (A * ((n : ℝ) * t1)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t0 < env E G π f then 1 else 0)) +
+          Real.exp (A * ((n : ℝ) * cap)) *
+            (∑ f : Fin u → Fin N, tupWt σ f * (if t1 < env E G π f then 1 else 0)) := by
+              simpa [t0, cap] using hTailSum
+      _ ≤ (n : ℝ) ^ (-P') := by
+          calc
+            _ ≤ (n : ℝ) ^ (-P') / 2 + (n : ℝ) ^ (-P') / 2 :=
+              add_le_add hTailTwoSmall hTailOneSmall
+            _ = (n : ℝ) ^ (-P') := by ring
+  exact ⟨hBounded, hModTail⟩
 
 /-- The moment identity (11:295–300): expand `(Z - 1)^u` binomially over subsets `I ⊆ [u]`, write `Z^{|I|}` as an
 integral over `|I|` independent `σ`-labels, integrate the independent outer labels (each factor gives

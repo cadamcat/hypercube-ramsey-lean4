@@ -2560,4 +2560,351 @@ theorem pool_birthday_from_capacity (n ℓ L : ℕ) (B K : ℝ)
       nlinarith only [hh]
     _ = _ := by ring
 
+
+/-- A generating-function estimate for the sparse capacity subset charges. -/
+theorem capacity_subset_product_bound {I : Type*} [DecidableEq I]
+    (S : Finset I) (z : I → ℝ) (t : ℕ) (hz : ∀ i ∈ S, 0 ≤ z i)
+    (hsum : (∑ i ∈ S, z i) ≤ (t : ℝ) / 5) :
+    (∑ A ∈ S.powersetCard t, ∏ i ∈ A, z i) ≤ (3 / 5 : ℝ) ^ t := by
+  classical
+  have hfamily : S.powersetCard t ⊆ S.powerset := by
+    intro A hA
+    exact Finset.mem_powerset.mpr (Finset.mem_powersetCard.mp hA).1
+  have hprod : ∀ A ∈ S.powersetCard t, (5 : ℝ) ^ t * (∏ i ∈ A, z i) = ∏ i ∈ A, 5 * z i := by
+    intro A hA
+    rw [Finset.prod_mul_distrib, Finset.prod_const, (Finset.mem_powersetCard.mp hA).2]
+  have hscaled : (5 : ℝ) ^ t * (∑ A ∈ S.powersetCard t, ∏ i ∈ A, z i) ≤ (3 : ℝ) ^ t := by
+    calc
+      _ = ∑ A ∈ S.powersetCard t, ∏ i ∈ A, 5 * z i := by
+        rw [Finset.mul_sum]
+        exact Finset.sum_congr rfl hprod
+      _ ≤ ∑ A ∈ S.powerset, ∏ i ∈ A, 5 * z i :=
+        Finset.sum_le_sum_of_subset_of_nonneg hfamily (fun A hA _ =>
+          Finset.prod_nonneg (fun i hi => mul_nonneg (by norm_num)
+            (hz i (Finset.mem_powerset.mp hA hi))))
+      _ = ∏ i ∈ S, (1 + 5 * z i) := (Finset.prod_one_add S).symm
+      _ ≤ ∏ i ∈ S, Real.exp (5 * z i) := by
+        apply Finset.prod_le_prod₀
+        · intro i hi
+          linarith [hz i hi]
+        · intro i _
+          simpa only [add_comm] using Real.add_one_le_exp (5 * z i)
+      _ = Real.exp (5 * ∑ i ∈ S, z i) := by rw [← Real.exp_sum, Finset.mul_sum]
+      _ ≤ Real.exp (t : ℝ) := Real.exp_le_exp.mpr (by linarith)
+      _ = (Real.exp 1) ^ t := by rw [← Real.exp_nat_mul, mul_one]
+      _ ≤ 3 ^ t := pow_le_pow_left₀ (Real.exp_pos 1).le Real.exp_one_lt_three.le t
+  have hp : (0 : ℝ) < 5 ^ t := by positivity
+  have hh : (∑ A ∈ S.powersetCard t, ∏ i ∈ A, z i) ≤ (3 : ℝ) ^ t / 5 ^ t :=
+    (le_div_iff₀ hp).mpr (by nlinarith only [hscaled])
+  simpa only [div_pow] using hh
+
+/-- Erasing the pinned group leaves an ordinary fixed-size subset sum. -/
+theorem capacity_pinned_product_bound {I : Type*} [DecidableEq I]
+    (S : Finset I) (z : I → ℝ) (g : I) (hg : g ∈ S) (t : ℕ)
+    (hz : ∀ i ∈ S, 0 ≤ z i)
+    (hsum : (∑ i ∈ S.erase g, z i) ≤ (t : ℝ) / 5) :
+    (∑ A ∈ (S.powersetCard (t + 1)).filter (fun A => g ∈ A),
+      ∏ i ∈ A.erase g, z i) ≤ (3 / 5 : ℝ) ^ t := by
+  classical
+  have hEq : (∑ A ∈ (S.powersetCard (t + 1)).filter (fun A => g ∈ A),
+      ∏ i ∈ A.erase g, z i) = ∑ B ∈ (S.erase g).powersetCard t, ∏ i ∈ B, z i := by
+    apply Finset.sum_bij (fun A _ => A.erase g)
+    · intro A hA
+      obtain ⟨hAS, hgA⟩ := Finset.mem_filter.mp hA
+      obtain ⟨hsub, hcard⟩ := Finset.mem_powersetCard.mp hAS
+      apply Finset.mem_powersetCard.mpr
+      constructor
+      · intro i hi
+        exact Finset.mem_erase.mpr ⟨(Finset.mem_erase.mp hi).1, hsub (Finset.mem_erase.mp hi).2⟩
+      · rw [Finset.card_erase_of_mem hgA, hcard]
+        omega
+    · intro A hA B hB hEq
+      have hgA := (Finset.mem_filter.mp hA).2
+      have hgB := (Finset.mem_filter.mp hB).2
+      have hh := congrArg (insert g) hEq
+      rwa [Finset.insert_erase hgA, Finset.insert_erase hgB] at hh
+    · intro B hB
+      obtain ⟨hsub, hcard⟩ := Finset.mem_powersetCard.mp hB
+      have hgB : g ∉ B := fun hh => (Finset.mem_erase.mp (hsub hh)).1 rfl
+      refine ⟨insert g B, ?_, ?_⟩
+      · apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_powersetCard.mpr ⟨?_, ?_⟩, Finset.mem_insert_self _ _⟩
+        · intro i hi
+          rcases Finset.mem_insert.mp hi with hgi | hi
+          · simpa only [hgi] using hg
+          · exact (Finset.mem_erase.mp (hsub hi)).2
+        · rw [Finset.card_insert_of_notMem hgB, hcard]
+      · exact Finset.erase_insert hgB
+    · intro A hA
+      rfl
+  rw [hEq]
+  exact capacity_subset_product_bound _ z t (fun i hi => hz i (Finset.mem_erase.mp hi).2) hsum
+
+/-- The lower edge of a bucket converts its load mean into a charge sum. -/
+theorem capacity_bucket_mean_bound {I : Type*} [DecidableEq I]
+    (S : Finset I) (p q u : I → ℝ) (δ μ : ℝ)
+    (hδ : 0 < δ) (hp : ∀ i ∈ S, 0 ≤ p i)
+    (hq : ∀ i ∈ S, 0 ≤ q i ∧ q i ≤ 2 * p i)
+    (hu : ∀ i ∈ S, δ / 2 ≤ u i)
+    (hmean : (∑ i ∈ S, p i * u i) ≤ μ) :
+    (∑ i ∈ S, 4 * q i) ≤ 16 * μ / δ := by
+  have hh : δ * (∑ i ∈ S, 4 * q i) ≤ 16 * μ := by
+    calc
+      _ = ∑ i ∈ S, δ * (4 * q i) := Finset.mul_sum _ _ _
+      _ ≤ ∑ i ∈ S, 16 * (p i * u i) := by
+        apply Finset.sum_le_sum
+        intro i hi
+        have h1 := mul_le_mul_of_nonneg_left (hq i hi).2 hδ.le
+        have h2 := mul_le_mul_of_nonneg_left (hu i hi) (hp i hi)
+        nlinarith only [h1, h2]
+      _ = 16 * ∑ i ∈ S, p i * u i := (Finset.mul_sum _ _ _).symm
+      _ ≤ 16 * μ := mul_le_mul_of_nonneg_left hmean (by norm_num)
+  exact (le_div_iff₀ hδ).mpr (by nlinarith only [hh])
+
+
+/-- The positive physical atoms fit a finite dyadic family; there is no
+infinite event index or summability obligation. -/
+theorem capacity_dyadic_bucket_cover (d : ℕ) (δ u : ℝ) (hd : 1 ≤ d)
+    (hδ : 0 < δ ∧ δ ≤ 1) (hu : 1 / (d : ℝ) ≤ u ∧ u ≤ δ) :
+    ∃ j : ℕ, j < d ∧ δ / (2 : ℝ) ^ (j + 1) < u ∧ u ≤ δ / (2 : ℝ) ^ j := by
+  have hdp : (0 : ℝ) < d := by exact_mod_cast (by omega : 0 < d)
+  have hpow : (d : ℝ) < (2 : ℝ) ^ d := by exact_mod_cast d.lt_two_pow_self
+  have hsmall : δ / (2 : ℝ) ^ d < u := by
+    calc
+      _ ≤ 1 / (2 : ℝ) ^ d := div_le_div_of_nonneg_right hδ.2 (by positivity)
+      _ < 1 / (d : ℝ) := (div_lt_div_iff₀ (by positivity) hdp).mpr (by simpa using hpow)
+      _ ≤ u := hu.1
+  have hex : ∃ j : ℕ, δ / (2 : ℝ) ^ j < u := ⟨d, hsmall⟩
+  let t := Nat.find hex
+  have ht : δ / (2 : ℝ) ^ t < u := Nat.find_spec hex
+  have htd : t ≤ d := Nat.find_min' hex hsmall
+  have htpos : 0 < t := by
+    by_contra hn
+    have hz : t = 0 := by omega
+    rw [hz, pow_zero, div_one] at ht
+    exact not_lt_of_ge hu.2 ht
+  have htprev : u ≤ δ / (2 : ℝ) ^ (t - 1) := by
+    exact le_of_not_gt (Nat.find_min hex (by omega : t - 1 < t))
+  refine ⟨t - 1, by omega, ?_, htprev⟩
+  simpa only [Nat.sub_add_cancel (by omega : 1 ≤ t)] using ht
+
+/-- Avoiding all fixed-size subset certificates enforces the bucket load. -/
+theorem capacity_bucket_load_bound {I O : Type*} [DecidableEq I] [DecidableEq O]
+    (S : Finset I) (a : I → O) (b : O) (u : I → ℝ) (δ τ : ℝ)
+    (hδ : 0 < δ) (hτ : 0 ≤ τ) (hu : ∀ i ∈ S, u i ≤ δ)
+    (havoid : ∀ A : Finset I, A ⊆ S → A.card = ⌊τ / δ⌋₊ + 1 →
+      ¬ ∀ i ∈ A, a i = b) :
+    (∑ i ∈ S, if a i = b then u i else 0) ≤ τ := by
+  classical
+  let V := S.filter fun i => a i = b
+  have hcard : V.card ≤ ⌊τ / δ⌋₊ := by
+    by_contra hh
+    have ht : ⌊τ / δ⌋₊ + 1 ≤ V.card := by omega
+    obtain ⟨A, hAV, hAc⟩ := Finset.exists_subset_card_eq ht
+    apply havoid A (hAV.trans (Finset.filter_subset _ _)) hAc
+    intro i hi
+    exact (Finset.mem_filter.mp (hAV hi)).2
+  calc
+    _ = ∑ i ∈ V, u i := (Finset.sum_filter _ _).symm
+    _ ≤ ∑ _i ∈ V, δ := Finset.sum_le_sum fun i hi => hu i (Finset.mem_filter.mp hi).1
+    _ = (V.card : ℝ) * δ := by simp
+    _ ≤ (⌊τ / δ⌋₊ : ℝ) * δ := mul_le_mul_of_nonneg_right (by exact_mod_cast hcard) hδ.le
+    _ ≤ (τ / δ) * δ := mul_le_mul_of_nonneg_right
+      (Nat.floor_le (div_nonneg hτ hδ.le)) hδ.le
+    _ = τ := div_mul_cancel₀ τ hδ.ne'
+
+
+/-- The double inflation pays both ordinary and reciprocal pinned costs. -/
+theorem capacity_pinned_inflated_bound {I : Type*} [DecidableEq I]
+    (S : Finset I) (q : I → ℝ) (g : I) (hg : g ∈ S) (t : ℕ)
+    (hq : ∀ i ∈ S, 0 ≤ q i)
+    (hsum : (∑ i ∈ S.erase g, 4 * q i) ≤ (t : ℝ) / 5) :
+    (∑ A ∈ (S.powersetCard (t + 1)).filter (fun A => g ∈ A),
+      (4 : ℝ) ^ A.card * ∏ i ∈ A.erase g, q i) ≤ 4 * (3 / 5 : ℝ) ^ t := by
+  classical
+  have hh := capacity_pinned_product_bound S (fun i => 4 * q i) g hg t
+    (fun i hi => mul_nonneg (by norm_num) (hq i hi)) hsum
+  have heq : (∑ A ∈ (S.powersetCard (t + 1)).filter (fun A => g ∈ A),
+      (4 : ℝ) ^ A.card * ∏ i ∈ A.erase g, q i) =
+      4 * (∑ A ∈ (S.powersetCard (t + 1)).filter (fun A => g ∈ A),
+        ∏ i ∈ A.erase g, 4 * q i) := by
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro A hA
+    obtain ⟨hAS, hgA⟩ := Finset.mem_filter.mp hA
+    have hc := (Finset.mem_powersetCard.mp hAS).2
+    rw [Finset.prod_mul_distrib, Finset.prod_const, Finset.card_erase_of_mem hgA, hc]
+    simp only [Nat.add_sub_cancel, pow_succ]
+    ring
+  rw [heq]
+  exact mul_le_mul_of_nonneg_left hh (by norm_num)
+
+/-- A fixed large bin scale pays the total capacity charge over d columns
+and d finite buckets, including supported singleton pins. -/
+theorem capacity_total_charge_small (d m : ℕ) (hd : (10 ^ 100 : ℕ) ≤ d)
+    (hm : Real.rpow (d : ℝ) 0.4 ≤ (m : ℝ)) :
+    4 * (d : ℝ) ^ 2 * (3 / 5 : ℝ) ^ m ≤ Real.rpow (d : ℝ) (-2) / 16 := by
+  have hb : (10 : ℝ) ^ (100 : ℕ) ≤ d := by exact_mod_cast hd
+  have hp : (0 : ℝ) < d := lt_of_lt_of_le (by positivity) hb
+  have hd1 : (1 : ℝ) ≤ d := le_trans (by norm_num) hb
+  have hdecay : Real.rpow (d : ℝ) (-0.2) ≤ 1 / 1000 := by
+    calc
+      _ ≤ Real.rpow ((10 : ℝ) ^ (100 : ℕ)) (-0.2) :=
+        Real.rpow_le_rpow_of_nonpos (by positivity) hb (by norm_num)
+      _ = Real.rpow 10 (100 * (-0.2)) := by
+        rw [← Real.rpow_natCast]
+        exact (Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 10) 100 (-0.2)).symm
+      _ ≤ _ := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+  have hsmall : Real.rpow (d : ℝ) 0.2 ≤ (1 / 1000 : ℝ) * Real.rpow (d : ℝ) 0.4 := by
+    have hh := mul_le_mul_of_nonneg_right hdecay (Real.rpow_nonneg hp.le 0.4)
+    simp only [← Real.rpow_eq_pow] at hh
+    have heq : Real.rpow (d : ℝ) (-0.2) * Real.rpow (d : ℝ) 0.4 = Real.rpow (d : ℝ) 0.2 := by
+      convert (Real.rpow_add hp (-0.2) 0.4).symm using 1 <;> norm_num
+    rw [heq] at hh
+    exact hh
+  have hlog : Real.log (d : ℝ) ≤ 5 * Real.rpow (d : ℝ) 0.2 := by
+    have hh : Real.log (d : ℝ) ≤ Real.rpow (d : ℝ) 0.2 / 0.2 :=
+      Real.log_le_rpow_div hp.le (by norm_num : (0 : ℝ) < 0.2)
+    have hid : Real.rpow (d : ℝ) 0.2 / 0.2 = 5 * Real.rpow (d : ℝ) 0.2 := by ring
+    rwa [hid] at hh
+  have hlog64 : Real.log (64 : ℝ) ≤ 64 :=
+    le_trans (Real.log_le_sub_one_of_pos (by norm_num)) (by norm_num)
+  have hpow1 : 1 ≤ Real.rpow (d : ℝ) 0.2 := Real.one_le_rpow hd1 (by norm_num)
+  have hex : Real.log (64 : ℝ) + 4 * Real.log (d : ℝ) -
+      0.4 * Real.rpow (d : ℝ) 0.4 ≤ 0 := by
+    nlinarith only [hsmall, hlog, hlog64, hpow1]
+  have he := Real.exp_le_exp.mpr hex
+  have hd4 : Real.exp ((4 : ℝ) * Real.log (d : ℝ)) = (d : ℝ) ^ (4 : ℕ) := by
+    change Real.exp (((4 : ℕ) : ℝ) * Real.log (d : ℝ)) = _
+    rw [Real.exp_nat_mul, Real.exp_log hp]
+  rw [Real.exp_sub, Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 64), hd4, Real.exp_zero] at he
+  have hgeo : (3 / 5 : ℝ) ^ m ≤ Real.exp (-0.4 * Real.rpow (d : ℝ) 0.4) := by
+    have hbase : (3 / 5 : ℝ) ≤ Real.exp (-0.4) := by
+      have hh := Real.add_one_le_exp (-0.4)
+      norm_num only at hh ⊢
+      exact hh
+    calc
+      _ ≤ (Real.exp (-0.4)) ^ m := pow_le_pow_left₀ (by norm_num) hbase m
+      _ = Real.exp (-0.4 * m) := by rw [← Real.exp_nat_mul]; congr 1; ring
+      _ ≤ _ := Real.exp_le_exp.mpr (by nlinarith only [hm])
+  have hbudget : 64 * (d : ℝ) ^ (4 : ℕ) * Real.exp (-0.4 * Real.rpow (d : ℝ) 0.4) ≤ 1 := by
+    rw [show -0.4 * Real.rpow (d : ℝ) 0.4 = -(0.4 * Real.rpow (d : ℝ) 0.4) by ring, Real.exp_neg]
+    simpa only [div_eq_mul_inv] using he
+  have hmul := mul_le_mul_of_nonneg_left hgeo (by positivity : 0 ≤ 64 * (d : ℝ) ^ (4 : ℕ))
+  have hh := hmul.trans hbudget
+  norm_num [Real.rpow_neg, Real.rpow_natCast]
+  rw [inv_eq_one_div, div_div]
+  apply (le_div_iff₀ (by positivity : 0 < (d : ℝ) ^ 2 * (16 : ℝ))).mpr
+  nlinarith only [hh]
+
+
+/-- Weighted touching costs count each event once, even if several query
+variables meet its scope. -/
+theorem scope_touching_sum {I E : Type*} [DecidableEq I] [Fintype E] [DecidableEq E]
+    (scope : E → Finset I) (x : E → ℝ) (b : ℝ) (hx : ∀ e, 0 ≤ x e)
+    (hOne : ∀ i, (∑ e ∈ Finset.univ.filter (fun e => i ∈ scope e), x e) ≤ b)
+    (S : Finset I) :
+    (∑ e ∈ Finset.univ.filter (fun e => ∃ i ∈ S, i ∈ scope e), x e) ≤ (S.card : ℝ) * b := by
+  classical
+  rw [Finset.sum_filter]
+  calc
+    _ ≤ ∑ e : E, ∑ i ∈ S, if i ∈ scope e then x e else 0 := by
+      apply Finset.sum_le_sum
+      intro e _
+      by_cases he : ∃ i ∈ S, i ∈ scope e
+      · rw [if_pos he]
+        obtain ⟨i, hi, hie⟩ := he
+        have hh := Finset.single_le_sum (s := S) (f := fun i => if i ∈ scope e then x e else 0)
+          (fun i _ => by split_ifs <;> first | exact hx e | exact le_rfl) hi
+        rwa [if_pos hie] at hh
+      · rw [if_neg he]
+        exact Finset.sum_nonneg fun i _ => by split_ifs <;> first | exact hx e | exact le_rfl
+    _ = ∑ i ∈ S, ∑ e ∈ Finset.univ.filter (fun e => i ∈ scope e), x e := by
+      rw [Finset.sum_comm]
+      simp_rw [Finset.sum_filter]
+    _ ≤ ∑ _i ∈ S, b := Finset.sum_le_sum fun i _ => hOne i
+    _ = _ := by simp
+
+/-- The same incidence estimate controls the weighted neighbor cost. -/
+theorem scope_neighbor_sum {I E : Type*} [DecidableEq I] [Fintype E] [DecidableEq E]
+    (scope : E → Finset I) (x : E → ℝ) (b : ℝ) (hx : ∀ e, 0 ≤ x e)
+    (hOne : ∀ i, (∑ e ∈ Finset.univ.filter (fun e => i ∈ scope e), x e) ≤ b)
+    (e : E) :
+    (∑ f ∈ Finset.univ.filter (fun f => f ≠ e ∧ ¬ Disjoint (scope e) (scope f)), x f) ≤
+      ((scope e).card : ℝ) * b := by
+  classical
+  have hsub : Finset.univ.filter (fun f => f ≠ e ∧ ¬ Disjoint (scope e) (scope f)) ⊆
+      Finset.univ.filter (fun f => ∃ i ∈ scope e, i ∈ scope f) := by
+    intro f hf
+    obtain ⟨i, hi, hif⟩ := Finset.not_disjoint_iff.mp (Finset.mem_filter.mp hf).2.2
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, i, hi, hif⟩
+  exact (Finset.sum_le_sum_of_subset_of_nonneg hsub (fun f _ _ => hx f)).trans
+    (scope_touching_sum scope x b hx hOne (scope e))
+
+theorem group_avoidance_rate_budget (d : ℕ) (hd : (10 ^ 100 : ℕ) ≤ d) :
+    Real.log ((1 + Real.rpow (d : ℝ) (-0.1)) / (1 - Real.rpow (d : ℝ) (-0.1))) +
+      Real.rpow (d : ℝ) (-2) ≤ Real.rpow (d : ℝ) (-0.05) := by
+  have hp : (0 : ℝ) < d := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 10 ^ 100) hd
+  let ρ := Real.rpow (d : ℝ) (-0.1)
+  have hρ : 0 ≤ ρ ∧ ρ ≤ 1 / 3 :=
+    ⟨(Real.rpow_pos_of_pos hp _).le, (calibration_power_bounds d hd).1⟩
+  have hc : 0 < (1 + ρ) / (1 - ρ) := div_pos (by linarith) (by linarith)
+  have hlog : Real.log ((1 + ρ) / (1 - ρ)) ≤ 4 * ρ := by
+    have hh := Real.log_le_log hc (relative_factor_exp ρ hρ)
+    simpa only [Real.log_exp] using hh
+  have h1 := calibration_rpow_tenth d hd 0.05 (by norm_num)
+  have h2 := calibration_rpow_tenth d hd 1.95 (by norm_num)
+  have hh1 := mul_le_mul_of_nonneg_right h1 (Real.rpow_nonneg hp.le (-0.05))
+  have hh2 := mul_le_mul_of_nonneg_right h2 (Real.rpow_nonneg hp.le (-0.05))
+  simp only [← Real.rpow_eq_pow] at hh1 hh2
+  have hmul (a b : ℝ) : Real.rpow (d : ℝ) a * Real.rpow (d : ℝ) b =
+      Real.rpow (d : ℝ) (a + b) := (Real.rpow_add hp a b).symm
+  rw [hmul] at hh1 hh2
+  norm_num only at hh1 hh2
+  change Real.log ((1 + Real.rpow (d : ℝ) (-0.1)) / (1 - Real.rpow (d : ℝ) (-0.1))) ≤
+    4 * Real.rpow (d : ℝ) (-0.1) at hlog
+  norm_num only at hlog ⊢
+  have hn : 0 ≤ Real.rpow (d : ℝ) (-(1 / 20 : ℝ)) := Real.rpow_nonneg hp.le _
+  nlinarith only [hlog, hh1, hh2, hn]
+
+
+/-- The additive bucket slack forces every certificate to have many groups. -/
+theorem capacity_size_lower (d : ℕ) (a : ℝ) (hd : (10 ^ 100 : ℕ) ≤ d)
+    (ha : (1 / 100 : ℝ) * Real.rpow (d : ℝ) 0.5 ≤ a) :
+    Real.rpow (d : ℝ) 0.4 ≤ (⌊a⌋₊ : ℝ) := by
+  have hb : (10 : ℝ) ^ (100 : ℕ) ≤ d := by exact_mod_cast hd
+  have hp : (0 : ℝ) < d := lt_of_lt_of_le (by positivity) hb
+  have hdecay : Real.rpow (d : ℝ) (-0.1) ≤ 1 / 1000 := by
+    calc
+      _ ≤ Real.rpow ((10 : ℝ) ^ (100 : ℕ)) (-0.1) :=
+        Real.rpow_le_rpow_of_nonpos (by positivity) hb (by norm_num)
+      _ = Real.rpow 10 (100 * (-0.1)) := by
+        rw [← Real.rpow_natCast]
+        exact (Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 10) 100 (-0.1)).symm
+      _ ≤ _ := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+  have hsmall : Real.rpow (d : ℝ) 0.4 ≤ (1 / 1000 : ℝ) * Real.rpow (d : ℝ) 0.5 := by
+    have hh := mul_le_mul_of_nonneg_right hdecay (Real.rpow_nonneg hp.le 0.5)
+    simp only [← Real.rpow_eq_pow] at hh
+    have heq : Real.rpow (d : ℝ) (-0.1) * Real.rpow (d : ℝ) 0.5 = Real.rpow (d : ℝ) 0.4 := by
+      convert (Real.rpow_add hp (-0.1) 0.5).symm using 1 <;> norm_num
+    rwa [heq] at hh
+  have hbig : 1000 ≤ Real.rpow (d : ℝ) 0.5 := by
+    calc
+      _ ≤ Real.rpow ((10 : ℝ) ^ (100 : ℕ)) 0.5 := by
+        have heq : Real.rpow ((10 : ℝ) ^ (100 : ℕ)) 0.5 = Real.rpow 10 (100 * 0.5) := by
+          rw [← Real.rpow_natCast]
+          exact (Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 10) 100 0.5).symm
+        rw [heq]
+        norm_num [Real.rpow_natCast]
+      _ ≤ _ := Real.rpow_le_rpow (by positivity) hb (by norm_num)
+  have hfloor := Nat.sub_one_lt_floor a
+  nlinarith only [ha, hsmall, hbig, hfloor]
+
+theorem capacity_size_upper (d : ℕ) (a : ℝ) (hd : 2 ≤ d) (ha : 0 ≤ a)
+    (hhalf : a ≤ (d : ℝ) / 2) : ⌊a⌋₊ + 1 ≤ d := by
+  have hfloor := Nat.floor_le ha
+  have hd' : (2 : ℝ) ≤ d := by exact_mod_cast hd
+  have hh : (⌊a⌋₊ : ℝ) + 1 ≤ d := by linarith
+  exact_mod_cast hh
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

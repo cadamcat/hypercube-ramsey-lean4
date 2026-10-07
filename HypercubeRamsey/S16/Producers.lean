@@ -1284,6 +1284,7 @@ theorem cell_pool_diagnostics_exists {κ : CConsts} (hκ : κ.Admissible) :
             Nonempty (CellDiagnosticLink K C D) ∧
             Nonempty (PoolConcentrationHypotheses D) ∧ Nonempty (LoadGateHypotheses D) := by
   classical
+  obtain ⟨nBirthday, hBirthday⟩ := cell_pool_birthday_cutoff hκ
   -- The physical restrictions are independent of the concentration estimates.
   -- The cutoff must still precede the cell/history/pin union budgets.
   have hBudgets : ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
@@ -1292,6 +1293,8 @@ theorem cell_pool_diagnostics_exists {κ : CConsts} (hκ : κ.Admissible) :
       (K : CellRestrictedKernels R Perm),
       R.SourceValid → n₀ ≤ T.S.n k →
       (∀ C W, (R.history C).w W ≠ 0 → PermissionLossHypotheses (Perm.table C) (R.qin C W)) →
+      (∀ C, (H.geom.nslot C : ℝ) ^ 2 / Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) ≤
+        Real.exp (-Real.rpow (T.S.n k : ℝ) (1 / 2 : ℝ)) / 4) →
       ∀ C, ∃ Check : Type, ∃ _ : Fintype Check,
         ∃ D : CellPoolDiagnostics (Fin (H.geom.nslot C)) (Bin PT.tiling (H.geom.cellPatch C))
           (R.Hist C) Check (T.S.n k) (1 / 2),
@@ -1301,10 +1304,11 @@ theorem cell_pool_diagnostics_exists {κ : CConsts} (hκ : κ.Admissible) :
     -- does not give a uniform one-slot sensitivity at zero denominators.
     sorry
   obtain ⟨n₀, hBudgets⟩ := hBudgets
-  refine ⟨n₀, 1 / 2, rfl, ?_⟩
+  refine ⟨max n₀ nBirthday, 1 / 2, rfl, ?_⟩
   intro T k PT K16 Q H R Perm hR hn hPerm
   obtain ⟨K, _⟩ := restricted_kernels_exists hκ R Perm hPerm
-  exact ⟨K, hBudgets Q H R Perm K hR hn hPerm⟩
+  exact ⟨K, hBudgets Q H R Perm K hR (le_trans (Nat.le_max_left _ _) hn) hPerm
+    (hBirthday Q H (le_trans (Nat.le_max_right _ _) hn))⟩
 
 private theorem physical_participants_count {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} {R : CellRawData G}
@@ -1739,6 +1743,50 @@ private theorem cluster_incoming_cap {κ : CConsts} (hκ : κ.Admissible)
           (mul_le_mul_of_nonneg_left hexp (by norm_num : (0 : ℝ) ≤ 8))
   · exact (hDirect hc).elim
 
+
+private theorem group_contribution_minimum {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {K16 : ℝ} {hκ : κ.Admissible}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT} {R : CellRawData G}
+    {Perm : CellPermissions R} (K : CellRestrictedKernels R Perm) (hR : R.SourceValid)
+    (hc : PT.tiling.mode.isCluster) (C : G.Cell) (pool : CellPool G C) (W : R.Hist C)
+    (hW : (R.history C).w W ≠ 0)
+    (hm : ∀ g, (∑ b ∈ Finset.univ.image pool, (K.qbar C W g).w b) ≠ 0)
+    (g : R.Group C) (b : Bin PT.tiling (G.cellPatch C)) (y : Fin (T.S.N k))
+    (hcon : (K.binProblem C pool W).contribution g b y ≠ 0) :
+    1 / ((PT.tiling.P (G.cellPatch C)).d : ℝ) ≤
+      (K.binProblem C pool W).contribution g b y := by
+  classical
+  have htarget : (K.qtilde C pool W g).w b ≠ 0 := by
+    intro hh
+    simp only [CellRestrictedKernels.binProblem, hh, if_true] at hcon
+    exact hcon rfl
+  have hU : (R.U C W g b).w y ≠ 0 := by
+    intro hh
+    simp only [CellRestrictedKernels.binProblem, if_neg htarget, hh] at hcon
+    simp at hcon
+  have hg : ∃ r : OddCellRole G C, R.groupOf C r = g := by
+    by_contra hn
+    push_neg at hn
+    simp only [CellRestrictedKernels.binProblem, if_neg htarget] at hcon
+    have hh : ∀ r : OddCellRole G C, (if R.groupOf C r = g then (R.U C W g b).w y else 0) = 0 := by
+      intro r
+      rw [if_neg (hn r)]
+    simp only [hh, Finset.sum_const_zero] at hcon
+    exact hcon rfl
+  obtain ⟨r, hr⟩ := hg
+  have hlow := physical_U_atom_lower R hR hc C W g b
+    (positive_pool_bin_raw K C pool W hW hm g b htarget) y hU
+  rw [Q.profiled_valid.tiling_valid.bins_card _ _ b.2] at hlow
+  apply hlow.trans
+  change _ ≤ if (K.qtilde C pool W g).w b = 0 then 0 else _
+  rw [if_neg htarget]
+  have hsum := Finset.single_le_sum
+    (s := (Finset.univ : Finset (OddCellRole G C)))
+    (f := fun r => if R.groupOf C r = g then (R.U C W g b).w y else 0)
+    (fun r _ => by split_ifs <;> first | exact (R.U C W g b).nonneg y | exact le_rfl)
+    (Finset.mem_univ r)
+  rwa [if_pos hr] at hsum
+
 private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
     ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
       (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q)
@@ -1944,8 +1992,70 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       exact hnat.trans h
     exact le_trans (by exact_mod_cast hcard) hh
   · exact physical_group_star_degree K hR hCalibration hCluster C
-  · -- Star/repeated-bin events and capacity-subset certificates, with
-    -- reciprocal avoidance factors for every supported singleton pin.
+  · intro q hq
+    let P := K.binProblem C pool W
+    letI : Nonempty (Bin PT.tiling (H.geom.cellPatch C)) := (hPerm C W hW).bins_nonempty
+    have hLocal : ∀ v, DependsOn (P.failureMass v) (P.participants v : Set (R.Group C)) := by
+      intro v a a' haa
+      obtain ⟨y, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2
+      letI : Nonempty (Fin (T.S.N k)) := ⟨y⟩
+      change K.failure C W v a = K.failure C W v a'
+      simp only [CellRestrictedKernels.failure, hCluster, if_true]
+      rw [Lane_sol_s16_prod1.pr_eq_indicator_E, Lane_sol_s16_prod1.pr_eq_indicator_E]
+      apply Lane_sol_s16_prod1.pi_E_local _ _ (K.participants C v)
+      · intro ys ys' hys
+        rw [cell_raw_prior_local hκ Q K hR C W v ys ys' hys]
+      · intro r hr
+        change R.U C W (R.groupOf C r) (a (R.groupOf C r)) =
+          R.U C W (R.groupOf C r) (a' (R.groupOf C r))
+        rw [haa (R.groupOf C r) (Finset.mem_image.mpr ⟨r, hr, rfl⟩)]
+    have hMean : ∀ v, P.independentFailure v ≤ Real.rpow P.ε (1 / 4 : ℝ) := by
+      intro v
+      have h := (D.checks_cover pool ht.2).2.1 (L.starProbe v) W
+      rw [L.failure_eq pool W v hW, L.epsilon_eq] at h
+      exact h
+    have hPinMean : ∀ v g b, P.pinnedFailure v g b ≤ Real.rpow P.ε (1 / 4 : ℝ) := by
+      intro v g b
+      have h := (D.checks_cover pool ht.2).2.2 (L.pinProbe v g b) W
+      rw [L.pinned_failure_eq pool W v g b hW, L.epsilon_eq] at h
+      exact h
+    have hShort : ∀ v, ((P.participants v).card : ℝ) ≤ 2 * Real.rpow (P.d : ℝ) 0.01 := by
+      intro v
+      have hcard : (P.participants v).card ≤ (PT.tiling.P (H.geom.cellPatch C)).h :=
+        Finset.card_image_le.trans (physical_participants_count K C v)
+      have hh := hRoom.2.2.2.1
+      have hNat : ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ≤
+          2 * ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ^ 2 := by
+        have hi : (PT.tiling.P (H.geom.cellPatch C)).h = 0 ∨
+            1 ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by omega
+        rcases hi with hi | hi
+        · simp [hi]
+        · have hi' : (1 : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by exact_mod_cast hi
+          nlinarith
+      have hb : ((P.participants v).card : ℝ) ≤ Real.rpow (P.d : ℝ) 0.01 :=
+        (show ((P.participants v).card : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h by exact_mod_cast hcard).trans
+          (hNat.trans hh)
+      have hp : 0 ≤ Real.rpow (P.d : ℝ) 0.01 := Real.rpow_nonneg (Nat.cast_nonneg _) _
+      linarith
+    have hStrong := hAtomCutoff Q H R Perm K C pool W hR hCalibration hCluster hn hPerm hW
+      (fun g => by
+        have h := (D.checks_cover pool ht.2).1 (L.groupProbe g) W
+        rw [L.normalizer_eq pool W g hW] at h
+        simpa only [Fintype.card_fin] using h)
+    have hStarBounds := Lane_sol_s16_prod1.group_star_event_bounds P hlarge
+      (slice_epsilon_range hκ _).1 (by
+        intro v a
+        change 0 ≤ K.failure C W v a
+        simp only [CellRestrictedKernels.failure, hCluster, if_true]
+        exact (Lane_sol_s16_prod1.pr_range _ _).1)
+      hLocal hMean hPinMean hShort hStrong q hq
+    have hContributionLower : ∀ g b y, P.contribution g b y ≠ 0 →
+        1 / (P.d : ℝ) ≤ P.contribution g b y := by
+      intro g b y hcon
+      exact group_contribution_minimum Q K hR hCluster C pool W hW
+        (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW) g b y hcon
+    -- Star/pin endpoints and positive-atom bucket support are proved.
+    -- The capacity event family and its reciprocal budgets remain.
     sorry
 
 /-- A role problem linked to the successful physical bins, not arbitrary

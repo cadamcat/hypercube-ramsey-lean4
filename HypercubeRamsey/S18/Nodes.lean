@@ -678,15 +678,19 @@ theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
         Nonempty (LeafCoupling D δ) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+  have hnR := (tendsto_natCast_atTop_atTop :
+    Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  filter_upwards [Lane_sol_s18_n4.terminalScaleEventually κ T,
+    hnR.eventually_ge_atTop κ.Kcell] with k hscale hK
   intro PT hPT D hD hR hRisk
+  obtain ⟨hn8, hTs, hr⟩ := hscale D
   have hn : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
   suffices hinputs : Nonempty (Lane_sol_s18_3e.CanonicalLeafInputs D δ) by
     obtain ⟨X⟩ := hinputs
     exact ⟨Lane_sol_s18_3e.leafCouplingOfInputs D δ hRisk X
       (Lane_sol_s18_3e.late_probability_local D hD hR) hn⟩
-  -- Supply the geometric counts and patch-wise pool swaps with local tape conditioning.
-  sorry
+  exact Lane_sol_s18_3e.canonicalLeafInputs_of_bounds hκ D hD hR δ
+    (by omega) (by exact_mod_cast hTs) (by exact_mod_cast hr) hK
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
 vanishing cost for every stated local nonnegative test. The slot-count

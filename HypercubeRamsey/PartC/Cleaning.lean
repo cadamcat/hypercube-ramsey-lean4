@@ -57,6 +57,9 @@ structure CleanProps {κ : CConsts} {T : Stage} {k : ℕ}
   nonempty : C.Nonempty
   /-- The cleaning loses less than half the patch (section 13, line 232). -/
   card_lower : (𝒯.P i).M / 2 ≤ (C.card : ℝ)
+  /-- Stable cleaning removes less than the fraction `κ.a` of the original patch
+  (sections/13, lines 226–232 and 270–278). -/
+  card_lower_waste : (1 - κ.a) * ((𝒯.P i).M : ℝ) ≤ (C.card : ℝ)
   degOwn : ∀ x ∈ C, OwnDegOK 𝒯 i (π i) x
   noClique : NoClique (T.S.E k) 𝒯.c C (π i).w κ.θ (𝒯.Q i)
   degOther : ∀ j, j ≠ i → ∀ x ∈ C,

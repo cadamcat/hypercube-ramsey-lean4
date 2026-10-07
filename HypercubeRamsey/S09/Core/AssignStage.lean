@@ -4,6 +4,7 @@ import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S03.ClockSampling
 import HypercubeRamsey.Tools.ScatteredUnion
 import HypercubeRamsey.S09.Core.AssignStage_q_s09_assign1
+import HypercubeRamsey.S09.Core.AssignStage_q_s09_assign2
 
 /-!
 # Proposition 9.2, core: predictive tests, anchor avoidance, odd injection, even rows (P9.2-assignA–C)
@@ -1727,7 +1728,7 @@ theorem p92_star_lik_bound (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
       {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → StarLikBound9 S I E G := by
-  sorry
+  exact Lane_q_s09_assign2.p92_star_lik_bound_core P hP
 
 /-- P9.2-assignC, posterior rows (09:331–335): on predictive success `M_v > 0`, so the posterior row is a
 probability law; a nonzero entry at `x` forces `𝒱` with `W_* = x`, hence every neighbour label hits `x`
@@ -1738,14 +1739,20 @@ theorem p92_even_rows (P : Params9) (hP : P.Valid) :
       {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → StarLikBound9 S I E G →
         EvenRowLaw9 S I E G ∧ EvenRowCap9 S I E G := by
-  sorry
+  obtain ⟨n₀, hcap⟩ := Lane_q_s09_assign2.p92_even_row_cap_core P hP
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y κ G M S I hCore hSLB
+  have hcap' : EvenRowCap9 S I E G := hcap n hn S I hCore hSLB
+  rcases hCore with ⟨_, _, _, _, _, _, _, hscales⟩
+  rcases hscales with ⟨_, _, _, _, _, _, hbStar, _⟩
+  exact ⟨Lane_q_s09_assign2.evenRowLaw9_core S E G hbStar, hcap'⟩
 
 /-- P9.2-assignC, cancellation (09:342–346): integrating the target anchor turns the gated neighbour product into
 `M_v`, which cancels the posterior denominator: `∑_y M_v(y) F_x(y) μ(x)/M_v(y) ≤ μ(x) ∑_y F_x(y) ≤ μ(x)`
 (third assertion of `gated_posterior`); predictive success only decreases the integral. -/
 theorem p92_star_cancel {P : Params9} {n N : ℕ} {M : TagMix N} (S : Setup9 P n N M)
     (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour) : StarCancel9 S I E G := by
-  sorry
+  exact Lane_q_s09_assign2.starCancel9_core S E G
 
 /-- P9.2-assignC, clock comparison (09:337–341): separated even sites have disjoint odd neighbourhoods (at most
 `n²` labels in all), the clock law is supported on predictive success, and its joint comparison replaces the
@@ -1755,7 +1762,7 @@ theorem p92_clock_factor {P : Params9} {n N : ℕ} {M : TagMix N} (S : Setup9 P 
     (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (J : Outcome9 I N → FinProb (OddSites9 n → Fin N))
     (hJ : ∀ ω, GoodPre9 S E G ω → ClockOK9 S E G ω (J ω)) : ClockFactor9 S I E G J := by
-  sorry
+  exact Lane_q_s09_assign2.p92_clock_factor_core S E G J hJ
 
 /-- P9.2-assignC, anchor integral (09:341–347): remove the star events touching the separated target IDs (at
 most `(n+1)^{2r+8}` each, factor `2` per site for large `n`); the remaining events do not read the targets, each
@@ -1774,7 +1781,7 @@ theorem p92_even_moment {P : Params9} {n N : ℕ} {M : TagMix N} (S : Setup9 P n
     (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (J : Outcome9 I N → FinProb (OddSites9 n → Fin N))
     (hfac : ClockFactor9 S I E G J) (hint : EvenAnchorIntegral9 S I E G) : EvenMoment9 S I E G J := by
-  sorry
+  exact Lane_q_s09_assign2.p92_even_moment_helper S I E G J hfac hint
 
 /-- P9.2-assignC, even column sums (09:347–350): Lemma 3.6 with near = `siteNear9` (fraction
 `(n+1)^{4r+12} 2^{1-n}`), cap `2^n e^{-c₄ n a_*/2}` on predictive success (`EvenRowCap9`; repeat cost
@@ -1791,7 +1798,7 @@ theorem p92_even_loads (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ) :
         ∑ ω, (anchorLaw9 S I E G).w ω *
             (if GoodPre9 S E G ω then (J ω).pr (fun f => ∃ x, 1 < evenColumn9 S E G ω f x) else 0) ≤
           (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
-  sorry
+  exact Lane_q_s09_assign2.p92_even_loads_core P hP κ hκ
 
 /-- P9.2-assignB/C averaged (09:327–350): if the avoidance event has positive raw mass, the odd column sums
 exceed `θ₀` with anchor-law probability at most `δ = n 2^n 4^{-n}`, successful prehistories admit clock-sampler
@@ -1813,7 +1820,12 @@ theorem p92_realization :
       ∃ (ω : Outcome9 I N) (f : OddSites9 n → Fin N), (∀ v, ¬ StarBad9 S E G ω v) ∧
         Function.Injective f ∧ (∀ v, ¬ predFail9 S E G ω v (nbrLabels9 f)) ∧
         ∀ x, evenColumn9 S E G ω f x ≤ 1 := by
-  sorry
+  refine ⟨3, ?_⟩
+  intro n hn P N M E G S I hN havoid hodd hsampler heven
+  have hδ := Lane_q_s09_assign2.p92_delta_lt_half hn
+  have hδ' : 2 * ((n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) < 1 := by
+    linarith
+  exact Lane_q_s09_assign2.p92_realization_core S hN havoid hodd hsampler heven hδ'
 
 /-- F-HallEmbed (09:349–350): the posterior even rows of a good realization are probability laws on the common
 neighbourhoods of the injective odd labels with column sums at most one. -/

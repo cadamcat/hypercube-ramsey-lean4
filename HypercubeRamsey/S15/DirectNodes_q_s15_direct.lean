@@ -2647,6 +2647,175 @@ theorem evenPatchPositions_card_eq {κ : CConsts} {T : Stage} {k : ℕ}
     simpa [n, ell, hScard] using hUniform
   rw [hEcard, hcardTarget]
 
+
+theorem highDirect_scattered_slack {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid →
+      PT.tiling.mode = .highDirect → ∀ i : Fin PT.tiling.m,
+        (T.S.n k : ℝ) * ((T.S.n k : ℝ) ^ 2 /
+          (S15.evenPatchPositions PT.tiling i).card) *
+          ((2 : ℝ) ^ (T.S.n k) * Real.exp (-200 * PT.tiling.gain i)) ≤ 1 := by
+  have hNlarge : ∀ᶠ k : ℕ in atTop, 3 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually (eventually_ge_atTop 3)
+  filter_upwards [hNlarge] with k hn
+  intro PT hPT hmode i
+  let nR : ℝ := T.S.n k
+  let ell : ℕ := (PT.tiling.P i).ℓ
+  let g : ℝ := (PT.tiling.P i).g
+  have hnreal : 3 ≤ nR := by
+    change (3 : ℝ) ≤ (T.S.n k : ℝ)
+    exact_mod_cast hn
+  have hPpos : 1 ≤ κ.P := by
+    have h := hκ.P_big.2
+    rw [hκ.Ac_eq] at h
+    omega
+  have hRpos : 1 ≤ κ.R := by
+    rw [hκ.R_eq]
+    nlinarith [hPpos]
+  have hKB : 200 ≤ κ.KB := by
+    have hKB0 := hκ.KB_big
+    have hRreal : 1 ≤ (κ.R : ℝ) := by exact_mod_cast hRpos
+    nlinarith
+  have hlog : 1 ≤ Real.log nR := by
+    have hexp : Real.exp 1 < nR := by
+      exact lt_of_lt_of_le Real.exp_one_lt_three hnreal
+    have h := Real.log_le_log (Real.exp_pos 1) hexp.le
+    simpa using h
+  have hdata := hPT.tiling_valid.direct_data (Or.inr hmode) i
+  rcases hdata with ⟨_, _, _, _, _, _, hmodeIff⟩
+  have hgainLower : κ.KB * Real.log nR < g := by
+    have h := hmodeIff.mp hmode
+    simpa [g, nR] using h
+  have hglarge : 200 ≤ g := by
+    have hKBpos : 0 ≤ κ.KB := by linarith
+    have hlogpos : 0 ≤ Real.log nR := by linarith
+    have hprod : 200 ≤ κ.KB * Real.log nR := by
+      calc
+        200 = 200 * 1 := by norm_num
+        _ ≤ κ.KB * 1 := mul_le_mul_of_nonneg_right hKB (by norm_num)
+        _ ≤ κ.KB * Real.log nR := mul_le_mul_of_nonneg_left hlog hKBpos
+    exact le_of_lt (lt_of_le_of_lt hprod hgainLower)
+  have hscale := hPT.tiling_valid.direct_scale_bound (Or.inr hmode) i
+  have hι : κ.ι / 2 ≤ 1 := by
+    have hι := hκ.ι_rng.2
+    have hmin1 : min κ.η0 0.01 ≤ 0.01 := min_le_right _ _
+    have hmin2 : min κ.xs (min κ.η0 0.01) ≤ min κ.η0 0.01 := min_le_right _ _
+    have hmin : min κ.xs (min κ.η0 0.01) ≤ 0.01 := hmin2.trans hmin1
+    linarith
+  have hgsmall : g ≤ nR := by
+    calc
+      g ≤ nR ^ (κ.ι / 2) := by simpa [g, nR] using hscale
+      _ ≤ nR ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by linarith [hnreal]) hι
+      _ = nR := by rw [Real.rpow_one]
+  have hprefix := highDirect_prefix_gain_bound PT hPT hκ hmode i
+  have hu : 1 ≤ κ.u := by
+    have hpos : 0 < κ.u := lt_of_le_of_lt (Nat.zero_le _) hκ.u_rng.2
+    omega
+  have hEllSmall : (ell : ℝ) ≤ g / 1000000 := by
+    have huReal : 1 ≤ (κ.u : ℝ) := by exact_mod_cast hu
+    calc
+      (ell : ℝ) ≤ g / (1000000 * (κ.u : ℝ)) := by simpa [ell, g] using hprefix
+      _ ≤ g / 1000000 := by
+        apply (div_le_div_iff₀ (by positivity : (0 : ℝ) < 1000000 * (κ.u : ℝ))
+          (by norm_num : (0 : ℝ) < 1000000)).2
+        nlinarith [hglarge, huReal]
+  have hEllGain : (ell : ℝ) + 1 ≤ g / 100 := by
+    nlinarith [hEllSmall, hglarge]
+  have hellLeNat : ell ≤ T.S.n k := by
+    have hle : (ell : ℝ) ≤ nR := le_trans hEllSmall (by nlinarith [hgsmall])
+    change (ell : ℝ) ≤ (T.S.n k : ℝ) at hle
+    exact_mod_cast hle
+  have hleStrict : ell < T.S.n k := by
+    have hle : (ell : ℝ) + 1 ≤ nR := by
+      calc
+        (ell : ℝ) + 1 ≤ g / 100 := hEllGain
+        _ ≤ nR / 100 := div_le_div_of_nonneg_right hgsmall (by norm_num)
+        _ ≤ nR := by nlinarith [hnreal]
+    have hleReal : (ell : ℝ) < (T.S.n k : ℝ) := by nlinarith [hle]
+    exact_mod_cast hleReal
+  have hcardNat := evenPatchPositions_card_eq PT i hleStrict
+  have hcardCast : ((S15.evenPatchPositions PT.tiling i).card : ℝ) =
+      (2 : ℝ) ^ (T.S.n k - ell - 1) := by exact_mod_cast hcardNat
+  have hcardPos : 0 < ((S15.evenPatchPositions PT.tiling i).card : ℝ) := by
+    rw [hcardCast]
+    positivity
+  have hratio : (2 : ℝ) ^ (T.S.n k) /
+      (S15.evenPatchPositions PT.tiling i).card = (2 : ℝ) ^ (ell + 1) := by
+    rw [hcardCast]
+    have hpow : (2 : ℝ) ^ (T.S.n k) =
+        (2 : ℝ) ^ (T.S.n k - ell - 1) * (2 : ℝ) ^ (ell + 1) := by
+      rw [← pow_add]
+      congr 1
+      omega
+    rw [hpow]
+    field_simp [pow_ne_zero _ (by norm_num : (2 : ℝ) ≠ 0)]
+  have hlog2 : Real.log (2 : ℝ) ≤ 1 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    linarith
+  have htwo : (2 : ℝ) ^ (ell + 1) ≤ Real.exp (g / 100) := by
+    have hexp : (2 : ℝ) ^ (ell + 1) =
+        Real.exp (Real.log 2 * ((ell + 1 : ℕ) : ℝ)) := by
+      rw [← Real.rpow_natCast]
+      rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    have harg : Real.log 2 * ((ell + 1 : ℕ) : ℝ) ≤ g / 100 := by
+      have hell : ((ell + 1 : ℕ) : ℝ) = (ell : ℝ) + 1 := by norm_num
+      rw [hell]
+      nlinarith [hEllGain, hlog2]
+    rw [hexp]
+    exact Real.exp_le_exp.mpr harg
+  have hgainLarge : (4 : ℝ) * Real.log nR ≤ (19 / 100 : ℝ) * g := by
+    have h := hgainLower
+    nlinarith [hKB, hlog]
+  have hdecay : Real.exp (-(19 / 100 : ℝ) * g) ≤ nR ^ (-(4 : ℝ)) := by
+    have harg : -(19 / 100 : ℝ) * g ≤ -(4 : ℝ) * Real.log nR := by
+      nlinarith [hgainLarge]
+    calc
+      Real.exp (-(19 / 100 : ℝ) * g) ≤ Real.exp (-(4 : ℝ) * Real.log nR) :=
+        Real.exp_le_exp.mpr harg
+      _ = nR ^ (-(4 : ℝ)) := by
+        rw [Real.rpow_def_of_pos (by linarith [hnreal])]
+        congr 1
+        ring
+  have hgainArgPos : 200 * PT.tiling.gain i = g / 5 := by
+    simp [Tiling.gain, hmode, g]
+    ring
+  have hgainArg : -200 * PT.tiling.gain i = -g / 5 := by
+    calc
+      (-200 : ℝ) * PT.tiling.gain i = -(200 * PT.tiling.gain i) := by ring
+      _ = -(g / 5) := congrArg Neg.neg hgainArgPos
+      _ = -g / 5 := by ring
+  have hmain : (nR) * (nR ^ 2 / (S15.evenPatchPositions PT.tiling i).card) *
+      ((2 : ℝ) ^ (T.S.n k) * Real.exp (-200 * PT.tiling.gain i)) ≤ 1 := by
+    rw [hgainArg]
+    calc
+      _ = nR ^ 3 *
+          ((2 : ℝ) ^ (T.S.n k) / (S15.evenPatchPositions PT.tiling i).card) *
+          Real.exp (-g / 5) := by ring
+      _ = nR ^ 3 * (2 : ℝ) ^ (ell + 1) * Real.exp (-g / 5) := by rw [hratio]
+      _ ≤ nR ^ 3 * Real.exp (g / 100) * Real.exp (-g / 5) := by
+        calc
+          _ = nR ^ 3 * ((2 : ℝ) ^ (ell + 1) * Real.exp (-g / 5)) := by ring
+          _ ≤ nR ^ 3 * (Real.exp (g / 100) * Real.exp (-g / 5)) :=
+            mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_right htwo (Real.exp_pos _).le) (by positivity)
+          _ = _ := by ring
+      _ = nR ^ 3 * Real.exp (-(19 / 100 : ℝ) * g) := by
+        calc
+          nR ^ 3 * Real.exp (g / 100) * Real.exp (-g / 5) =
+              nR ^ 3 * (Real.exp (g / 100) * Real.exp (-g / 5)) := by ring
+          _ = nR ^ 3 * Real.exp (g / 100 + (-g / 5)) := by rw [← Real.exp_add]
+          _ = nR ^ 3 * Real.exp (-(19 / 100 : ℝ) * g) := by congr 1 <;> ring
+      _ ≤ nR ^ 3 * nR ^ (-(4 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hdecay (by positivity)
+      _ = nR ^ (-(1 : ℝ)) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_add (by positivity)]
+        norm_num
+      _ ≤ 1 := by
+        have hn1 : 1 ≤ nR := by linarith [hnreal]
+        have hpow := Real.rpow_le_rpow_of_exponent_le hn1
+          (by norm_num : (-1 : ℝ) ≤ 0)
+        simpa using hpow
+  simpa [nR] using hmain
+
 theorem direct_sampler_separated_product_bound {κ : CConsts} {T : Stage} {k m : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (J : S15.DirectSampler PT hPT) (rows : Fin m → S15.EvenPosition T k)
@@ -2807,5 +2976,17 @@ theorem scattered_moment_sampler_bound
         exact pow_le_pow_left₀ hbaseNonneg hbaseBound n
   rw [hsupportEq]
   exact hmomentBound
+
+theorem finLaw_sum_support_eq_one {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) :
+    (∑ ω ∈ Finset.univ.filter (fun ω => P.w ω ≠ 0), P.w ω) = 1 := by
+  classical
+  calc
+    (∑ ω ∈ Finset.univ.filter (fun ω => P.w ω ≠ 0), P.w ω) =
+        ∑ ω, if P.w ω ≠ 0 then P.w ω else 0 := by rw [Finset.sum_filter]
+    _ = ∑ ω, P.w ω := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      by_cases hz : P.w ω = 0 <;> simp [hz]
+    _ = 1 := P.sum_one
 
 end HypercubeRamsey.Lane_q_s15_direct

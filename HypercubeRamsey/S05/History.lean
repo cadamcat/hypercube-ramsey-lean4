@@ -1,6 +1,7 @@
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
 import HypercubeRamsey.S05.History_q_s05_hist1b
+import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.Parent_sol_s05_h1
@@ -99,7 +100,8 @@ def Step2Raw : Prop :=
 /-- L5.1d, raw part (05:219–259): the subdensity calculation for the Step 2 tests. -/
 theorem L5_1d : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G),
     X.Step2Raw := by
-  sorry
+  intro n N E G X
+  exact ⟨Lane_sol_s05_hist1b.step2_type_bound X, Lane_sol_s05_hist1b.step2_optional_bound X⟩
 
 /-- Block-density bound `A_K = exp(K''(1 + Σ_S s_ℓ))` (05:263–268). -/
 def blockConst (K : X.Ty) : ℝ :=

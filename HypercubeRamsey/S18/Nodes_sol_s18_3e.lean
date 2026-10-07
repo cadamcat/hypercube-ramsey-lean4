@@ -792,6 +792,10 @@ noncomputable def leafCouplingOfInputs (D : S18.LateData hPT) (δ : ℝ)
   preserves := X.preserves
   nonneighbor_bound := Lane_sol_s18_n4.leafNonneighborBoundOfForcing D
     (leaf D δ) (adjacent D) X.force X.pushforward X.preserves
+  images_cover := by
+    intro L x hx s hs
+    rw [images_of_mem_leaf D δ L x hx]
+    exact Finset.mem_image_of_mem (imageAt D x) hs
 
 noncomputable def poolSliceSet (D : S18.LateData hPT) (L : LeafKey D) :
     Finset (∀ C, D.fresh.Pool C) :=

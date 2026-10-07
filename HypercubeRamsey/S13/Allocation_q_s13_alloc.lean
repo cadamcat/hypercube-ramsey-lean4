@@ -1,8 +1,10 @@
 import HypercubeRamsey.S13.ResidualBounds
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 namespace HypercubeRamsey.S13
 
 open scoped BigOperators
+open Filter
 
 /-- Partition the initial `d`-blocks of a finite set, leaving only its final remainder. -/
 theorem allocation_chunks_exact {α : Type*} [Fintype α] [DecidableEq α]
@@ -87,5 +89,56 @@ theorem allocation_chunks_exact {α : Type*} [Fintype α] [DecidableEq α]
     · intro i hi j hj hij
       exact hdisj i j hij
   exact ⟨C, hsub, hcard, hdisj, hUnion⟩
+
+/-- A host of dimension `n` has enough labels for the exact-size subsampler. -/
+theorem allocation_sample_growth (T : Stage) :
+    ∀ᶠ k in atTop,
+      (16 : ℝ) * (T.S.n k : ℝ) ^ 12 ≤
+        (2 : ℝ) ^ T.S.n k * Real.exp (-(T.S.n k : ℝ) / 4) := by
+  have hlogTwo : (1 / 2 : ℝ) < Real.log 2 := by
+    exact (by norm_num : (1 / 2 : ℝ) < 0.6931471803).trans Real.log_two_gt_d9
+  have hnSeq : Tendsto (fun k : ℕ => (T.S.n k : ℝ) / 4) atTop atTop := by
+    have ht := (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+    have ht' : Tendsto (fun k : ℕ => (1 / 4 : ℝ) * (T.S.n k : ℝ)) atTop atTop :=
+      ht.const_mul_atTop (by norm_num : (0 : ℝ) < 1 / 4)
+    simpa [div_eq_mul_inv, mul_comm] using ht'
+  have hgrowthTendsto := (Real.tendsto_exp_div_pow_atTop 12).comp hnSeq
+  have hgrowthEvent : ∀ᶠ k in atTop,
+      16 * (4 : ℝ) ^ 12 ≤ Real.exp ((T.S.n k : ℝ) / 4) /
+        ((T.S.n k : ℝ) / 4) ^ 12 := by
+    have h := hgrowthTendsto.eventually (eventually_ge_atTop (16 * (4 : ℝ) ^ 12))
+    filter_upwards [h] with k hk
+    exact hk
+  have hlarge := T.S.eventually_large 1 16
+  filter_upwards [hlarge, hgrowthEvent] with k hk hg
+  have hnpos : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+  have hmul :=
+    (le_div_iff₀ (by positivity : (0 : ℝ) < ((T.S.n k : ℝ) / 4) ^ 12)).mp hg
+  have hcancel : (4 : ℝ) ^ 12 * ((T.S.n k : ℝ) / 4) ^ 12 =
+      (T.S.n k : ℝ) ^ 12 := by field_simp [ne_of_gt hnpos] <;> ring
+  have hexpLower : (16 : ℝ) * (T.S.n k : ℝ) ^ 12 ≤
+      Real.exp ((T.S.n k : ℝ) / 4) := by
+    calc
+      _ = 16 * ((4 : ℝ) ^ 12 * ((T.S.n k : ℝ) / 4) ^ 12) := by rw [hcancel]
+      _ = 16 * (4 : ℝ) ^ 12 * ((T.S.n k : ℝ) / 4) ^ 12 := by ring
+      _ ≤ Real.exp ((T.S.n k : ℝ) / 4) := hmul
+  have htwo : Real.exp ((T.S.n k : ℝ) / 2) ≤ (2 : ℝ) ^ T.S.n k := by
+    calc
+      Real.exp ((T.S.n k : ℝ) / 2) ≤
+          Real.exp ((T.S.n k : ℝ) * Real.log 2) :=
+        Real.exp_le_exp.mpr (by nlinarith [hlogTwo])
+      _ = (2 : ℝ) ^ T.S.n k := by
+        rw [Real.exp_nat_mul]
+        simp [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+  have hsplit : Real.exp ((T.S.n k : ℝ) / 2) *
+      Real.exp (-(T.S.n k : ℝ) / 4) = Real.exp ((T.S.n k : ℝ) / 4) := by
+    rw [← Real.exp_add]
+    congr 1
+    ring
+  have hmul := mul_le_mul_of_nonneg_right htwo
+    (Real.exp_nonneg (-(T.S.n k : ℝ) / 4))
+  rw [hsplit] at hmul
+  have hresult := le_trans hexpLower hmul
+  simpa using hresult
 
 end HypercubeRamsey.S13

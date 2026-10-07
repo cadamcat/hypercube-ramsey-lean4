@@ -1,4 +1,6 @@
 import HypercubeRamsey.S04.Defs
+import HypercubeRamsey.S04.PlateauProof
+import HypercubeRamsey.S04.StageProof
 
 /-!
 # Lemma 4.1: bias versus purity
@@ -24,7 +26,7 @@ def L4_1aStatement (β γ : ℝ) : Prop :=
 /-- L4.1a (04:29–81): a biased witness can be prepared inside the same residual supports. -/
 theorem L4_1a (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     L4_1aStatement β γ := by
-  sorry
+  exact l41a_proof β γ hβ hβγ hγ
 
 /-- Statement of L4.1-core (frozen with its body). -/
 def L4_1_coreStatement (β γ K : ℝ) : Prop :=
@@ -63,7 +65,7 @@ theorem L4_1_stage (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 
     ∃ h > (0 : ℝ), ∀ h' : ℝ, 0 < h' → h' ≤ h → ∀ T : Stage,
       Available T (PBias (pw β) (pw γ) h').toPatch →
       EventuallyAbsent T (PPure β γ h').toPatch → False := by
-  sorry
+  exact l41_stage_proof β γ hβ hβγ hγ _plateau _core
 
 /-- L4.1, Part B consumed form (04:9–16; Part B §1.3).
 

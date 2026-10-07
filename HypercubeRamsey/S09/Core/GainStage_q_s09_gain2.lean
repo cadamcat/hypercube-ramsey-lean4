@@ -1562,6 +1562,13 @@ theorem eventual_gain_concentration_rate9 (P : Params9) (hP : P.Valid) :
     rw [← Real.rpow_add hnR]
     rw [show (P.σ : ℝ) + -(2 * (P.hMinus : ℝ)) =
       (P.σ : ℝ) - 2 * (P.hMinus : ℝ) by ring]
+  have hdenAll :
+      12800 * (n : ℝ) ^ (P.σ : ℝ) * (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) =
+        12800 * (n : ℝ) ^ ((P.σ : ℝ) - 2 * (P.hMinus : ℝ)) := by
+    calc
+      12800 * (n : ℝ) ^ (P.σ : ℝ) * (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) =
+          12800 * ((n : ℝ) ^ (P.σ : ℝ) * (n : ℝ) ^ (-(2 * (P.hMinus : ℝ)))) := by ring
+      _ = 12800 * (n : ℝ) ^ ((P.σ : ℝ) - 2 * (P.hMinus : ℝ)) := by rw [hdenPow]
   have hpowDiv (a b : ℝ) :
       (n : ℝ) ^ a / (n : ℝ) ^ b = (n : ℝ) ^ (a - b) := by
     rw [div_eq_mul_inv, ← Real.rpow_neg hnR.le b, ← Real.rpow_add hnR]
@@ -1592,9 +1599,7 @@ theorem eventual_gain_concentration_rate9 (P : Params9) (hP : P.Valid) :
     have hpSigmaEq : pSigma = (n : ℝ) ^ (P.σ : ℝ) := rfl
     have hpMinusEq : pMinus = (n : ℝ) ^ (-(2 * (P.hMinus : ℝ))) := rfl
     rw [hpPlusEq, hpSigmaEq, hpMinusEq]
-    rw [hnumPow]
-    rw [mul_assoc]
-    rw [hdenPow]
+    rw [hnumPow, hdenAll]
     have hdiv := hpowDiv (1 - 2 * (P.hPlus : ℝ))
       ((P.σ : ℝ) - 2 * (P.hMinus : ℝ))
     calc

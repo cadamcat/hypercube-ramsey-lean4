@@ -2162,6 +2162,12 @@ theorem rawPresEvent_pr_eq_qref_mul_gsel {η₀ β p : ℝ} {h : ℕ}
             D.Qref Θ c.1 (D.obsOf π))
     field_simp [ne_of_gt hQpos]
 
+private theorem pr_le_one_local {α : Type*} [Fintype α]
+    (Q : FinProb α) (A : α → Prop) : Q.pr A ≤ 1 := by
+  have hcomp := Lane_q_s08_post.pr_compl Q A
+  have hnonneg := FinProb.pr_nonneg Q (fun x => ¬ A x)
+  linarith
+
 set_option maxHeartbeats 1000000 in
 theorem sel_some_mem_elig {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (q : D.Pre) (e : D.CellT) (ℓ : D.Loc)
@@ -2343,6 +2349,33 @@ theorem expect_group_by_fiber {Ω Ψ : Type*} [Fintype Ω] [Fintype Ψ] [Decidab
         (Classical.propDecidable (V x ∧ f x = y)) _ _
 
 set_option maxHeartbeats 3000000 in
+theorem qref_gsel_sum_le_one {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (c : D.CellT) (ξ : D.Tup) :
+    ∑ π : D.Pres c.1,
+      D.Qref Θ c.1 (D.obsOf π) * D.Gsel Θ P c ξ π ≤ 1 := by
+  classical
+  let H := Function.update Θ c.1 ξ
+  let Q := D.rawLaw H P
+  let V : D.TAT × D.Anch → Prop := fun z => D.PresValid ((H, P), z.1) z.2 c
+  have hpartition :
+      ∑ π : D.Pres c.1, Q.pr (rawPresEvent D H P c π) = Q.pr V := by
+    have hgroup := Lane_q_s08_post.expect_group_by_fiber Q
+      (fun z => D.presOf ((H, P), z.1) z.2 c) V (fun _ => (1 : ℝ))
+    calc
+      ∑ π : D.Pres c.1, Q.pr (rawPresEvent D H P c π) =
+          ∑ π : D.Pres c.1, (1 : ℝ) * Q.pr (rawPresEvent D H P c π) := by simp
+      _ = Q.expect (fun z => if V z then 1 else 0) := hgroup.symm
+      _ = Q.pr V := (FinProb.pr_indicator Q V).symm
+  calc
+    ∑ π : D.Pres c.1, D.Qref Θ c.1 (D.obsOf π) * D.Gsel Θ P c ξ π =
+        ∑ π : D.Pres c.1, Q.pr (rawPresEvent D H P c π) := by
+          apply Finset.sum_congr rfl
+          intro π hπ
+          exact (rawPresEvent_pr_eq_qref_mul_gsel D Θ P c ξ π).symm
+    _ = Q.pr V := hpartition
+    _ ≤ 1 := pr_le_one_local Q V
+
+
 theorem rawLaw_pr_local_expect {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (hS : D.SelLocal) (H : D.Hist) (P : D.Pos)
     (c : D.CellT) (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch) :

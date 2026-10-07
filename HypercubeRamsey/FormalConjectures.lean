@@ -5,6 +5,8 @@ Definitions copied verbatim from Formal Conjectures (Apache-2.0), commit
 - `FormalConjecturesForMathlib/Combinatorics/SimpleGraph/Ramsey.lean` (`graphRamsey`, `diagonalGraphRamsey`).
 Only the module-system wrappers (`module`, `public import`, `@[expose] public section`) are dropped, and
 the deprecated import `Mathlib.Data.Real.Basic` is replaced by its new path `Mathlib.Basic.Real.Basic`.
+The two FC definition files are merged into one block, and FC's other `Ramsey.lean` declarations and its
+`EdgeColouring` import are omitted.
 This file and `Challenge.lean` carry the same definitions; `scripts/check_target.py` compares them.
 -/
 import Mathlib.Combinatorics.SimpleGraph.Basic

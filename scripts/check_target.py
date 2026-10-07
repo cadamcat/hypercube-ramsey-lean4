@@ -2,11 +2,15 @@
 """Check that the proof's target matches Challenge.lean.
 
   check_target.py defs [FC_CHECKOUT]   definitions block of Challenge.lean equals that of
-                                       HypercubeRamsey/FormalConjectures.lean; with FC_CHECKOUT, each
-                                       definition also appears verbatim in Formal Conjectures' sources
-  check_target.py types                elaborated statement of Erdos181.erdos_181 and the definitions it
-                                       uses, printed with pp.all, agree between Challenge.lean and
-                                       HypercubeRamsey.Main (run after `lake build HypercubeRamsey.Main`)
+                                       HypercubeRamsey/FormalConjectures.lean and holds nothing besides the
+                                       copied declarations; with FC_CHECKOUT, each declaration (with its
+                                       docstring and attribute) appears verbatim in Formal Conjectures'
+                                       sources, and Challenge.lean's `namespace Erdos181` section equals
+                                       FC's 181.lean section minus its attribute and TODO lines
+  check_target.py types                builds HypercubeRamsey.Main; the elaborated statement of
+                                       Erdos181.erdos_181 and the definitions it uses, printed with pp.all,
+                                       agree between Challenge.lean and HypercubeRamsey.Main; and the
+                                       proof's axioms are within propext, Classical.choice, Quot.sound
 Exit 0 only when every check passes.
 """
 import re, subprocess, sys, tempfile, os
@@ -25,14 +29,32 @@ def block(path):
     return s[s.index(BEGIN):s.index(END)]
 
 
+PRE, POST = 'namespace SimpleGraph\n\nopen scoped Finset\n', '\nend SimpleGraph'
+
+
+def erdos_section(text):
+    s = text[text.index('namespace Erdos181'):text.index('end Erdos181') + len('end Erdos181')]
+    lines = [l for l in s.splitlines() if not l.startswith('@[category') and not l.startswith('-- TODO')]
+    return re.sub(r'\n{2,}', '\n\n', '\n'.join(lines)).strip()
+
+
 def defs(fc):
     a, b = block(ROOT / 'Challenge.lean'), block(ROOT / 'HypercubeRamsey/FormalConjectures.lean')
     ok = a == b
     print(f'definitions block identical: {ok}')
+    body = a[len(BEGIN):].strip('\n')
+    framed = body.startswith(PRE) and body.rstrip().endswith(POST)
+    print(f'block is exactly the SimpleGraph preamble, the declarations and the closing: {framed}')
+    ok = ok and framed
     if fc:
         src = '\n'.join((Path(fc) / f).read_text() for f in FC_FILES)
-        # each top-level declaration with its docstring, as one chunk
-        a = re.sub(r'\n\s*end SimpleGraph\s*$', '', a.rstrip())
+        same = erdos_section((ROOT / 'Challenge.lean').read_text()) == \
+            erdos_section((Path(fc) / 'FormalConjectures/ErdosProblems/181.lean').read_text())
+        print(f'Erdos181 section equals Formal Conjectures 181.lean (attribute and TODO lines removed): {same}')
+        ok = ok and same
+        # each declaration with its docstring or attribute is one chunk; text between declarations would make a
+        # chunk fail to match
+        a = body[len(PRE):].rstrip()[:-len(POST)] if framed else body
         chunks = [c.strip() for c in re.split(r'\n(?=/--|@\[simp\]\n|noncomputable def|def |theorem )', a)
                   if re.match(r'(/--|@\[simp\]|noncomputable def|def |theorem )', c.strip())]
         for c in chunks:
@@ -57,7 +79,33 @@ def printed(header_lines):
     return r.returncode, out
 
 
+ALLOWED = {'propext', 'Classical.choice', 'Quot.sound'}
+
+
+def axioms_of_main():
+    fd, p = tempfile.mkstemp(prefix='.check_target_', suffix='.lean', dir=ROOT)
+    with os.fdopen(fd, 'w') as f:
+        f.write('import HypercubeRamsey.Main\n#print axioms Erdos181.erdos_181\n')
+    try:
+        r = subprocess.run(['lake', 'env', 'lean', p], cwd=ROOT, capture_output=True, text=True)
+    finally:
+        os.unlink(p)
+    out = re.sub(r'\s+', ' ', r.stdout)
+    if 'does not depend on any axioms' in out:
+        return r.returncode, set()
+    m = re.search(r'depends on axioms: \[(.*?)\]', out)
+    return r.returncode, ({x.strip() for x in m.group(1).split(',')} if m else None)
+
+
 def types():
+    b0 = subprocess.run(['lake', 'build', 'HypercubeRamsey.Main'], cwd=ROOT, capture_output=True, text=True)
+    print(f'lake build HypercubeRamsey.Main exit {b0.returncode}')
+    if b0.returncode != 0:
+        print((b0.stdout + b0.stderr)[-3000:])
+        return False
+    rc0, ax = axioms_of_main()
+    ax_ok = rc0 == 0 and ax is not None and ax <= ALLOWED
+    print(f'axioms of Erdos181.erdos_181: {sorted(ax) if ax is not None else "unparsed"}; allowed: {ax_ok}')
     ch = (ROOT / 'Challenge.lean').read_text()
     ch_imports = [l for l in ch.splitlines() if l.startswith('import ')]
     ch_body = [l for l in ch.splitlines() if not l.startswith('import ')]
@@ -66,7 +114,7 @@ def types():
     a = a.replace("declaration uses 'sorry'", '').replace('declaration uses `sorry`', '')
     a = '\n'.join(l for l in a.splitlines() if not l.startswith('warning'))
     b = '\n'.join(l for l in b.splitlines() if not l.startswith('warning'))
-    ok = rc1 == 0 and rc2 == 0 and a.strip() == b.strip() and 'erdos_181' in a
+    ok = ax_ok and rc1 == 0 and rc2 == 0 and a.strip() == b.strip() and 'erdos_181' in a
     print(f'challenge exit {rc1}, main exit {rc2}, pp.all outputs identical: {a.strip() == b.strip()}')
     if not ok:
         print('--- challenge\n' + a[-3000:] + '\n--- main\n' + b[-3000:])

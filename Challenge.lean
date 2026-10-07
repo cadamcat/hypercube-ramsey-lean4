@@ -3,7 +3,9 @@ The target of this formalization: Formal Conjectures `Erdos181.erdos_181`
 (`FormalConjectures/ErdosProblems/181.lean`, commit 9d259649abe0b02d7a25f7589b872db679b35e21),
 with the definitions it uses copied verbatim from `FormalConjecturesForMathlib` at that commit.
 Only the module-system wrappers are dropped, and the deprecated import `Mathlib.Data.Real.Basic` is
-replaced by its new path `Mathlib.Basic.Real.Basic`. This file imports Mathlib alone and is not imported
+replaced by its new path `Mathlib.Basic.Real.Basic`.
+The two FC definition files are merged into one block, and FC's other `Ramsey.lean` declarations and its
+`EdgeColouring` import are omitted. This file imports Mathlib alone and is not imported
 by the proof; `HypercubeRamsey/Main.lean` proves the same statement over the identical definitions
 in `HypercubeRamsey/FormalConjectures.lean`, and `scripts/check_target.py` compares the two.
 -/

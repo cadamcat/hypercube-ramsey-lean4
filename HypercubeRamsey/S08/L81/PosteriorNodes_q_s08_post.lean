@@ -7,6 +7,67 @@ namespace HypercubeRamsey.S08
 open Classical OAI.HypercubeRamsey
 open scoped BigOperators
 
+namespace Lane_q_s08_post
+
+theorem pi_pr_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (S : Finset ι)
+    (a : ∀ i : {i // i ∈ S}, Ω i.1) :
+    (FinProb.pi P).pr (fun ω => ∀ i : {i // i ∈ S}, ω i.1 = a i) =
+      ∏ i : {i // i ∈ S}, (P i.1).w (a i) := by
+  classical
+  let proj : (∀ i, Ω i) → (∀ i : {i // i ∈ S}, Ω i.1) := fun ω i => ω i.1
+  have hpr :
+      (FinProb.pi P).pr (fun ω => ∀ i : {i // i ∈ S}, ω i.1 = a i) =
+        (FinProb.map (FinProb.pi P) proj).w a := by
+    unfold FinProb.pr FinProb.map
+    apply Finset.sum_congr rfl
+    intro ω hω
+    have hiff : (∀ i : {i // i ∈ S}, ω i.1 = a i) ↔ proj ω = a := by
+      constructor
+      · intro h
+        funext i
+        exact h i
+      · intro h i
+        exact congrFun h i
+    by_cases hfix : ∀ i : {i // i ∈ S}, ω i.1 = a i
+    · have heq : proj ω = a := by
+        exact hiff.mp hfix
+      simp only [if_pos hfix, if_pos heq]
+    · have hneq : proj ω ≠ a := by
+        intro heq
+        exact hfix (hiff.mpr heq)
+      simp only [if_neg hfix, if_neg hneq]
+  rw [hpr, FinProb.pi_marginal]
+  simp [FinProb.pi]
+
+theorem pi_pr_le_fixed {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (S : Finset ι)
+    (a : ∀ i : {i // i ∈ S}, Ω i.1) (A : (∀ i, Ω i) → Prop)
+    (hA : ∀ ω, A ω → ∀ i : {i // i ∈ S}, ω i.1 = a i) :
+    (FinProb.pi P).pr A ≤ ∏ i : {i // i ∈ S}, (P i.1).w (a i) := by
+  classical
+  calc
+    (FinProb.pi P).pr A ≤
+        (FinProb.pi P).pr (fun ω => ∀ i : {i // i ∈ S}, ω i.1 = a i) := by
+      unfold FinProb.pr
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases h : A ω
+      · have hc : ∀ i : {i // i ∈ S}, ω i.1 = a i := hA ω h
+        simp [h, hc]
+      · simp only [if_neg h]
+        by_cases hc : ∀ i : {i // i ∈ S}, ω i.1 = a i
+        · simp only [if_pos hc]
+          exact (FinProb.pi P).nonneg ω
+        · simp only [if_neg hc]
+          norm_num
+    _ = ∏ i : {i // i ∈ S}, (P i.1).w (a i) :=
+      pi_pr_cylinder P S a
+
+end Lane_q_s08_post
+
 theorem avgMarg_nonneg {N k : ℕ} (Q : FinProb (Fin k → Fin N)) (y : Fin N) :
     0 ≤ averageCoordinateMarginal Q y := by
   unfold averageCoordinateMarginal

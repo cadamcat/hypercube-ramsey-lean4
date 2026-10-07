@@ -839,6 +839,9 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
         (mul_nonneg (Nat.cast_nonneg _)
           (inv_nonneg.mpr hratioPos.le))
         ((refRow M tag ω u c κ).nonneg (y j))
+  have exp_neg_inv (x : ℝ) : (Real.exp (-x))⁻¹ = Real.exp x := by
+    rw [Real.exp_neg]
+    simp
   have hωpos : 0 < omega4 β γ := omega4_pos hβ hγ
   have hωlt : omega4 β γ < 1 / 1000 := omega4_lt hβ hβγ
   have hωsmall : omega4 β γ ≤ (1 - γ) / 1000 := by
@@ -1136,7 +1139,324 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
         Real.log (((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ^
             (2 * setBd β γ n)) ≤ Cmix * (n : ℝ) ^ (bH β γ + η) := poolLogBound n hn2
         _ ≤ ε * aStar β γ n * (tupLen β γ n : ℝ) := hMixSmall
-  sorry
+  refine ⟨max 2 (max nCross nMix), ?_⟩
+  intro n hn hlocal N E G X Y M tag
+  have hnlarge : max 2 (max nCross nMix) ≤ n := hn
+  have hn2 : 2 ≤ n := le_trans (le_max_left 2 (max nCross nMix)) hnlarge
+  have hcost := errorBounds hnlarge
+  intro ω a c z y
+  let ω' := updW ω (c, key β γ n a.1) z
+  have hrefProdNonneg : 0 ≤ refProd M tag ω a c y := by
+    unfold refProd
+    apply Finset.prod_nonneg
+    intro j hj
+    exact (refRow M tag ω (oddNbr a j) c (key β γ n a.1)).nonneg (y j)
+  by_cases hEv : EvLocal M tag ω' a c
+  · let Jdiff : Finset (Fin n) := Finset.univ.filter fun j =>
+      key β γ n (oddNbr a j).1 ≠ key β γ n a.1
+    let κ : Key β γ n := key β γ n a.1
+    let k : ℝ := (tupLen β γ n : ℝ)
+    let ownExp : ℝ := k * (Real.log 2 - c1 * aStar β γ n)
+    let diffExp : ℝ := capL β γ n * k
+    let poolBound : ℝ :=
+      (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n)
+    let Cref : ℝ := (poolBound + 1) ^ (2 * setBd β γ n)
+    have hnreal : (1 : ℝ) ≤ n := by exact_mod_cast (by omega : 1 ≤ n)
+    have hnpos : (0 : ℝ) < n := by linarith
+    have hstarle : aStar β γ n ≤ 1 := by
+      unfold aStar
+      have hh4 : 0 ≤ h4 β γ := by unfold h4; positivity
+      exact Real.rpow_le_one_of_one_le_of_nonpos hnreal (neg_nonpos.mpr hh4)
+    have hloggap : 0 ≤ Real.log 2 - c1 * aStar β γ n := by
+      have hlog2 := Real.log_two_gt_d9
+      dsimp [c1]
+      nlinarith [hstarle]
+    have hownNonneg : 0 ≤ ownExp := by
+      dsimp [ownExp, k]
+      exact mul_nonneg (Nat.cast_nonneg _) hloggap
+    have hJdiff : ∀ j, j ∈ Jdiff ↔ κ ≠ key β γ n (oddNbr a j).1 := by
+      intro j
+      simp [Jdiff, κ, oddNbr, ne_comm]
+    have hJcard : (Jdiff.card : ℝ) ≤ (n : ℝ) ^ (γ + 14 * omega4 β γ) := by
+      have hlocal' := hlocal a.1
+      have heq : Jdiff = Finset.univ.filter fun j : Fin n =>
+          key β γ n (cubeFlip a.1 j) ≠ key β γ n a.1 := by
+        ext j
+        simp [Jdiff, oddNbr, ne_comm]
+      rw [heq]
+      exact hlocal'
+    have hRatioEach (j : Fin n) :
+        (ratioThr β γ (oddNbr a j) κ)⁻¹ ≤
+          Real.exp (ownExp + if j ∈ Jdiff then diffExp else 0) := by
+      by_cases hj : j ∈ Jdiff
+      · have hneq : κ ≠ key β γ n (oddNbr a j).1 := (hJdiff j).mp hj
+        have hratioEq : ratioThr β γ (oddNbr a j) κ = Real.exp (-diffExp) := by
+          rw [ratioThr, if_neg hneq]
+        rw [hratioEq]
+        simpa [hj] using (exp_neg_inv diffExp).le.trans
+          (Real.exp_le_exp.mpr (by nlinarith [hownNonneg]))
+      · have hsame : κ = key β γ n (oddNbr a j).1 := by
+          by_contra hneq
+          exact hj ((hJdiff j).mpr hneq)
+        have hratioEq : ratioThr β γ (oddNbr a j) κ = Real.exp (-ownExp) := by
+          rw [ratioThr, if_pos hsame]
+          apply congrArg Real.exp
+          dsimp [ownExp, k, c1]
+          ring
+        rw [hratioEq, if_neg hj]
+        simpa [add_zero] using (exp_neg_inv ownExp).le
+    have hExpSum :
+        (∑ j : Fin n, (ownExp + if j ∈ Jdiff then diffExp else 0)) =
+          (n : ℝ) * ownExp + (Jdiff.card : ℝ) * diffExp := by
+      have hOwnSum : (∑ j : Fin n, ownExp) = (n : ℝ) * ownExp := by simp
+      have hDiffSum :
+          (∑ j : Fin n, (if j ∈ Jdiff then diffExp else 0)) =
+            (Jdiff.card : ℝ) * diffExp := by
+        simpa [Finset.sum_const, nsmul_eq_mul] using
+          (Finset.sum_ite_mem_eq (s := Jdiff) (f := fun _ : Fin n => diffExp))
+      calc
+        _ = (∑ j : Fin n, ownExp) + (∑ j : Fin n, (if j ∈ Jdiff then diffExp else 0)) :=
+          Finset.sum_add_distrib
+        _ = (n : ℝ) * ownExp + (Jdiff.card : ℝ) * diffExp := by rw [hOwnSum, hDiffSum]
+    have hRatioProduct :
+        (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) ≤
+          Real.exp (ownExp * (n : ℝ) + diffExp * (Jdiff.card : ℝ)) := by
+      have hratioNonneg (j : Fin n) :
+          0 ≤ (ratioThr β γ (oddNbr a j) κ)⁻¹ := by
+        have hpos : 0 < ratioThr β γ (oddNbr a j) κ := by
+          unfold ratioThr
+          split_ifs <;> exact Real.exp_pos _
+        exact inv_nonneg.mpr hpos.le
+      calc
+        (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) ≤
+            ∏ j : Fin n, Real.exp (ownExp + if j ∈ Jdiff then diffExp else 0) := by
+          apply Finset.prod_le_prod₀
+          · intro j hj
+            exact hratioNonneg j
+          · intro j hj
+            exact hRatioEach j
+        _ = Real.exp (∑ j : Fin n, (ownExp + if j ∈ Jdiff then diffExp else 0)) := by
+          rw [← Real.exp_sum]
+        _ = Real.exp (ownExp * (n : ℝ) + diffExp * (Jdiff.card : ℝ)) := by
+          rw [hExpSum]
+          ring_nf
+    have hpoolBoundNonneg : 0 ≤ poolBound := by
+      dsimp [poolBound, lamH]
+      exact mul_nonneg
+        (mul_nonneg (Nat.cast_nonneg n) (by positivity))
+        (mul_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg n) _))
+    have hCrefPos : 0 < Cref := by
+      dsimp [Cref]
+      exact pow_pos (by linarith [hpoolBoundNonneg]) _
+    have hCrefLog : Real.log Cref ≤ Cmix * (n : ℝ) ^ (bH β γ + η) := by
+      simpa [Cref, poolBound] using poolLogBound n hn2
+    have hCrefPow : Cref ^ n = Real.exp ((n : ℝ) * Real.log Cref) := by
+      calc
+        Cref ^ n = (Real.exp (Real.log Cref)) ^ n := by rw [Real.exp_log hCrefPos]
+        _ = Real.exp ((n : ℝ) * Real.log Cref) := by
+          rw [← Real.exp_nat_mul]
+    have hpoolCard (j : Fin n) :
+        ((refPool (ppos ω) (oddNbr a j)).card : ℝ) ≤ poolBound := by
+      have hpos : ppos ω' = ppos ω := rfl
+      have hcounts : ∀ v ∈ oddAdj (oddNbr a j), ∀ l,
+          (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n := by
+        intro v hv l
+        rw [← hpos]
+        exact hEv.counts j v hv l
+      simpa [poolBound] using
+        (refPool_card_le (N := N) (ppos ω) (oddNbr a j) hcounts)
+    have hsetCard (j : Fin n) :
+        ((refSets (ppos ω) (oddNbr a j) c).card : ℝ) ≤ Cref := by
+      have hsetNat := refSets_card_le (ppos ω) (oddNbr a j) c
+      have hsetReal : ((refSets (ppos ω) (oddNbr a j) c).card : ℝ) ≤
+          (((refPool (ppos ω) (oddNbr a j)).card : ℝ) + 1) ^ (2 * setBd β γ n) := by
+        exact_mod_cast hsetNat
+      have hpoolPlus : ((refPool (ppos ω) (oddNbr a j)).card : ℝ) + 1 ≤ poolBound + 1 := by
+        nlinarith [hpoolCard j]
+      calc
+        ((refSets (ppos ω) (oddNbr a j) c).card : ℝ) ≤
+            (((refPool (ppos ω) (oddNbr a j)).card : ℝ) + 1) ^ (2 * setBd β γ n) := hsetReal
+        _ ≤ Cref := by
+          dsimp [Cref]
+          exact pow_le_pow_left₀ (by positivity) hpoolPlus _
+    have hrowNonneg : ∀ j, 0 ≤ oddRow M tag ω' (oddNbr a j) (y j) := by
+      intro j
+      by_cases ho : OddOK M tag ω' (oddNbr a j)
+      · simp [oddRow, ho]
+        exact (oddDraw M tag ω' (oddNbr a j)).nonneg _
+      · simp [oddRow, ho]
+    have hrowCap (j : Fin n) :
+        oddRow M tag ω' (oddNbr a j) (y j) ≤
+          Cref * (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+            (refRow M tag ω (oddNbr a j) c κ).w (y j) := by
+      have hrow := row_deleted_bound M tag ω a c z y j hEv
+      have hratioPos : 0 < ratioThr β γ (oddNbr a j) κ := by
+        unfold ratioThr
+        split_ifs <;> exact Real.exp_pos _
+      have hfactor : 0 ≤ (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+          (refRow M tag ω (oddNbr a j) c κ).w (y j) :=
+        mul_nonneg (inv_nonneg.mpr hratioPos.le)
+          ((refRow M tag ω (oddNbr a j) c κ).nonneg (y j))
+      calc
+        oddRow M tag ω' (oddNbr a j) (y j) ≤
+            (refSets (ppos ω) (oddNbr a j) c).card *
+              (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+                (refRow M tag ω (oddNbr a j) c κ).w (y j) := hrow
+        _ ≤ Cref * (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+              (refRow M tag ω (oddNbr a j) c κ).w (y j) := by
+          calc
+            _ = ((refSets (ppos ω) (oddNbr a j) c).card : ℝ) *
+                ((ratioThr β γ (oddNbr a j) κ)⁻¹ *
+                  (refRow M tag ω (oddNbr a j) c κ).w (y j)) := by ring
+            _ ≤ Cref *
+                ((ratioThr β γ (oddNbr a j) κ)⁻¹ *
+                  (refRow M tag ω (oddNbr a j) c κ).w (y j)) :=
+              mul_le_mul_of_nonneg_right (hsetCard j) hfactor
+            _ = Cref * (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+                (refRow M tag ω (oddNbr a j) c κ).w (y j) := by ring
+    have hprodRefNonneg : 0 ≤ refProd M tag ω a c y := by
+      unfold refProd
+      apply Finset.prod_nonneg
+      intro j hj
+      exact (refRow M tag ω (oddNbr a j) c κ).nonneg (y j)
+    have hprodRows :
+        (∏ j : Fin n, oddRow M tag ω' (oddNbr a j) (y j)) ≤
+          Cref ^ n * (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) *
+            refProd M tag ω a c y := by
+      calc
+        (∏ j : Fin n, oddRow M tag ω' (oddNbr a j) (y j)) ≤
+            ∏ j : Fin n,
+              (Cref * (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+                (refRow M tag ω (oddNbr a j) c κ).w (y j)) := by
+          apply Finset.prod_le_prod₀
+          · intro j hj
+            exact hrowNonneg j
+          · intro j hj
+            exact hrowCap j
+        _ = Cref ^ n * (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) *
+              refProd M tag ω a c y := by
+          have hprodC : (∏ j : Fin n, Cref) = Cref ^ n := by
+            rw [Finset.prod_const]
+            simp
+          have hprodRow :
+              (∏ j : Fin n, (refRow M tag ω (oddNbr a j) c κ).w (y j)) =
+                refProd M tag ω a c y := rfl
+          have hfactor :
+              (∏ j : Fin n,
+                Cref * (ratioThr β γ (oddNbr a j) κ)⁻¹ *
+                  (refRow M tag ω (oddNbr a j) c κ).w (y j)) =
+                (∏ j : Fin n, Cref) *
+                  (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) *
+                    (∏ j : Fin n, (refRow M tag ω (oddNbr a j) c κ).w (y j)) := by
+            simp_rw [mul_assoc]
+            rw [Finset.prod_mul_distrib, Finset.prod_mul_distrib]
+          calc
+            _ = (∏ j : Fin n, Cref) *
+                (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) *
+                  (∏ j : Fin n, (refRow M tag ω (oddNbr a j) c κ).w (y j)) := hfactor
+            _ = Cref ^ n * (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) *
+                  refProd M tag ω a c y := by rw [hprodC, hprodRow]
+    have hRatioCost :
+        (n : ℝ) * Real.log Cref + ownExp * (n : ℝ) + diffExp * (Jdiff.card : ℝ) ≤
+          (Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ) := by
+      have hErr := hcost
+      have hCrossCount :
+          capL β γ n * (Jdiff.card : ℝ) ≤ ε * aStar β γ n * (n : ℝ) := by
+        have hcapNonneg : 0 ≤ capL β γ n := by
+          dsimp [capL]
+          exact Real.rpow_nonneg (Nat.cast_nonneg n) _
+        calc
+          capL β γ n * (Jdiff.card : ℝ) ≤
+              capL β γ n * (n : ℝ) ^ (γ + 14 * omega4 β γ) :=
+            mul_le_mul_of_nonneg_left hJcard hcapNonneg
+          _ = (n : ℝ) ^ (γ + 14 * omega4 β γ) * capL β γ n := by ring
+          _ ≤ ε * aStar β γ n * (n : ℝ) := hErr.1
+      have hCrossExp : diffExp * (Jdiff.card : ℝ) ≤
+          ε * aStar β γ n * k * (n : ℝ) := by
+        dsimp [diffExp]
+        calc
+          capL β γ n * k * (Jdiff.card : ℝ) =
+              k * (capL β γ n * (Jdiff.card : ℝ)) := by ring
+          _ ≤ k * (ε * aStar β γ n * (n : ℝ)) :=
+            mul_le_mul_of_nonneg_left hCrossCount (by positivity)
+          _ = ε * aStar β γ n * k * (n : ℝ) := by ring
+      have hMixExp : (n : ℝ) * Real.log Cref ≤
+          ε * aStar β γ n * k * (n : ℝ) := by
+        calc
+          (n : ℝ) * Real.log Cref ≤
+              (n : ℝ) * (ε * aStar β γ n * k) :=
+            mul_le_mul_of_nonneg_left hErr.2 (by positivity)
+          _ = ε * aStar β γ n * k * (n : ℝ) := by ring
+      have hAstarnonneg : 0 ≤ aStar β γ n := by
+        unfold aStar
+        exact Real.rpow_nonneg (by positivity) _
+      have hkNonneg : 0 ≤ k := by dsimp [k]; positivity
+      have hnNonneg : 0 ≤ (n : ℝ) := by positivity
+      have hcoef :
+          Real.log 2 - c1 * aStar β γ n + 2 * ε * aStar β γ n ≤
+            Real.log 2 - c2 * aStar β γ n := by
+        have hepsCoeff : 2 * ε ≤ c1 - c2 := by dsimp [ε]; ring_nf; norm_num [c1, c2]
+        have hmulCoeff := mul_le_mul_of_nonneg_right hepsCoeff hAstarnonneg
+        dsimp [c1, c2] at hmulCoeff ⊢
+        linarith [hmulCoeff]
+      have hOwn : ownExp * (n : ℝ) +
+          2 * (ε * aStar β γ n * k * (n : ℝ)) ≤
+            (Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ) := by
+        dsimp [ownExp]
+        calc
+          k * (Real.log 2 - c1 * aStar β γ n) * (n : ℝ) +
+              2 * (ε * aStar β γ n * k * (n : ℝ)) =
+                k * (n : ℝ) *
+                  (Real.log 2 - c1 * aStar β γ n + 2 * ε * aStar β γ n) := by ring
+          _ ≤ k * (n : ℝ) * (Real.log 2 - c2 * aStar β γ n) :=
+            mul_le_mul_of_nonneg_left hcoef (mul_nonneg hkNonneg hnNonneg)
+          _ = (Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ) := by ring
+      calc
+        (n : ℝ) * Real.log Cref + ownExp * (n : ℝ) + diffExp * (Jdiff.card : ℝ) ≤
+            ownExp * (n : ℝ) +
+              2 * (ε * aStar β γ n * k * (n : ℝ)) := by
+          nlinarith [hMixExp, hCrossExp]
+        _ ≤ (Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ) := hOwn
+    have hratioProductBound :
+        Cref ^ n *
+          (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) ≤
+            Real.exp ((Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ)) := by
+      calc
+        Cref ^ n *
+            (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) =
+          Real.exp ((n : ℝ) * Real.log Cref) *
+            (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) := by rw [hCrefPow]
+        _ ≤ Real.exp ((n : ℝ) * Real.log Cref) *
+            Real.exp (ownExp * (n : ℝ) + diffExp * (Jdiff.card : ℝ)) :=
+          mul_le_mul_of_nonneg_left hRatioProduct (Real.exp_nonneg _)
+        _ = Real.exp ((n : ℝ) * Real.log Cref + ownExp * (n : ℝ) +
+              diffExp * (Jdiff.card : ℝ)) := by
+          rw [← Real.exp_add]
+          congr 1
+          ring
+        _ ≤ Real.exp ((Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ)) :=
+          Real.exp_le_exp.mpr hRatioCost
+    have hlik : lik M tag ω a c z y =
+        ∏ j : Fin n, oddRow M tag ω' (oddNbr a j) (y j) := by
+      simp [lik, ω', hEv]
+    rw [hlik]
+    calc
+      (∏ j : Fin n, oddRow M tag ω' (oddNbr a j) (y j)) ≤
+          Cref ^ n * (∏ j : Fin n, (ratioThr β γ (oddNbr a j) κ)⁻¹) *
+            refProd M tag ω a c y := hprodRows
+      _ ≤ Real.exp ((Real.log 2 - c2 * aStar β γ n) * k * (n : ℝ)) *
+            refProd M tag ω a c y :=
+          mul_le_mul_of_nonneg_right hratioProductBound hprodRefNonneg
+      _ = Real.exp ((Real.log 2 - c2 * aStar β γ n) *
+            (tupLen β γ n : ℝ) * (n : ℝ)) * refProd M tag ω a c y := by
+          simp [k]
+  · have hrefProdNonneg : 0 ≤ refProd M tag ω a c y := by
+      unfold refProd
+      apply Finset.prod_nonneg
+      intro j hj
+      exact (refRow M tag ω (oddNbr a j) c (key β γ n a.1)).nonneg (y j)
+    simp [lik, ω', hEv]
+    exact mul_nonneg (Real.exp_nonneg _) hrefProdNonneg
 set_option maxHeartbeats 200000
 
 /-- L4.1g(3) (04:409–427): by `LikBound` and Lemma 3.7(2) (`gated_posterior`) the posterior `π(z) F_z(y)/M_c(y)`

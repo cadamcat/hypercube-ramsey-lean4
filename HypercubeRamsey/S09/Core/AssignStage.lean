@@ -1665,7 +1665,7 @@ theorem p92_odd_clock (P : Params9) (hP : P.Valid) :
           exact Fintype.prod_equiv e.symm
             (fun i => (rows i.1).w (a i))
             (fun b => (rows b.1).w ((eFun a) b))
-            (by intro i; simp [eFun])
+            (by intro i; simp [eFun, e])
         simp [hEv, hWeight]
       have hStarValid : starValid9 S E G ω v := by
         have hnot := hNoBad v

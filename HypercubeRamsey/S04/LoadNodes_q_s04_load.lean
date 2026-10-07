@@ -1277,7 +1277,11 @@ theorem odd_load_prob_proof (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
     (d := d) hd hmean hjoint hsmall hlabels
   have hscat : (∑ ω, if ω ∈ Finset.univ ∧ ∃ y, 4 * (4 * K + 1) < average y ω
       then P.w ω else 0) ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
-    simpa only [average, mul_one] using hscatRaw
+    change (∑ ω, if ω ∈ Finset.univ ∧ ∃ y,
+        4 * (4 * K + 1) < (Fintype.card (HypercubeRamsey.S04.OddRole n) : ℝ)⁻¹ *
+          ∑ u : HypercubeRamsey.S04.OddRole n, Z u y ω
+      then P.w ω else 0) ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n
+    simpa only [mul_one] using hscatRaw
   have hratio : 2 * C₀ ≤ (N : ℝ) / (Fintype.card U : ℝ) := by
     have hpowNat : 2 ^ n = 2 * 2 ^ (n - 1) := by
       calc
@@ -1315,7 +1319,9 @@ theorem odd_load_prob_proof (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
     rw [havg ω y]
     exact hbase.trans_lt hlt
   let event : HypercubeRamsey.S04.Prep M tag → Prop :=
-    fun ω => ∃ y, 4 * (4 * K + 1) < average y ω
+    fun ω => ∃ y, 4 * (4 * K + 1) <
+      (Fintype.card (HypercubeRamsey.S04.OddRole n) : ℝ)⁻¹ *
+        ∑ u : HypercubeRamsey.S04.OddRole n, Z u y ω
   have htailP : P.pr event ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
     classical
     have hEq : P.pr event =
@@ -1327,7 +1333,9 @@ theorem odd_load_prob_proof (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
     rw [hEq]
     exact hscat
   have hmono : P.pr (fun ω => ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) ≤
-      P.pr event := HypercubeRamsey.S04.pr_mono P (fun ω hbad => hbadTo ω hbad)
+      P.pr event := HypercubeRamsey.S04.pr_mono P (fun ω hbad => by
+        obtain ⟨y, hy⟩ := hbadTo ω hbad
+        exact ⟨y, by simpa [average, U] using hy⟩)
   have hprob := hmono.trans htailP
   change P.pr (fun ω => ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) ≤ 1 / 10
   exact hprob.trans (hTail n hnTail)

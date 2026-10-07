@@ -1465,6 +1465,11 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
   have hsCpos : 0 < sC n := by
     dsimp [sC]
     exact Nat.ceil_pos.mpr (Real.exp_pos _)
+  have hRamseyBound : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤
+      (sC n + t₀ - 2) ^ (t₀ - 1) := by
+    have hnR : sC n + t₀ - 2 = (sC n - 1) + (t₀ - 1) := by omega
+    rw [Nat.choose_symm_of_eq_add hnR]
+    exact Nat.choose_le_pow (sC n + t₀ - 2) (t₀ - 1)
   have hsampleClique (i : HighTags) (r : ℕ) (z : Fin r → Fin N)
       (hzInjective : Function.Injective z)
       (hzSelected : ∀ j, z j ∈ selected i.1)

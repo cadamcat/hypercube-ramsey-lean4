@@ -2002,6 +2002,268 @@ theorem directBulkNeighbours_card_lower {κ : CConsts} {T : Stage} {k : ℕ}
   have hcross := highDirect_crossingNeighbours_card_le_prefix PT hPT a i hi
   omega
 
+set_option maxHeartbeats 400000 in
+theorem directRowWeight_cap_from_factors {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (ys : S15.OddAssignment T k) (a : S15.EvenPosition T k)
+    (x : Fin (T.S.N k)) (M ell : ℕ) (g : ℝ)
+    (hbase : (M : ℝ) * S15.directBaseWeight PT hPT a x ≤ 2)
+    (hcross : ∀ b ∈ S15.crossingNeighbours PT hPT a,
+      0 ≤ S15.directFactor PT hPT a ys b x ∧
+      S15.directFactor PT hPT a ys b x ≤ 4)
+    (hbulk : ∀ b ∈ S15.bulkNeighbours PT hPT a,
+      0 ≤ S15.directFactor PT hPT a ys b x ∧
+      S15.directFactor PT hPT a ys b x ≤
+        2 / (1 + g / (2 * (T.S.n k : ℝ))))
+    (hcrossCard : ((S15.crossingNeighbours PT hPT a).card : ℝ) ≤ ell)
+    (hbulkLower : (9 / 10 : ℝ) * (T.S.n k : ℝ) ≤
+      (S15.bulkNeighbours PT hPT a).card)
+    (hbulkUpper : (S15.bulkNeighbours PT hPT a).card ≤ T.S.n k)
+    (hellGain : (ell : ℝ) + 1 ≤ g / 100)
+    (hgpos : 0 < g) (hgsmall : g ≤ T.S.n k) :
+    (M : ℝ) * S15.directRowWeight PT hPT ys a x ≤
+      (2 : ℝ) ^ (T.S.n k) * Real.exp (-g / 5) := by
+  classical
+  let nR : ℝ := T.S.n k
+  let C : ℕ := (S15.crossingNeighbours PT hPT a).card
+  let B : ℕ := (S15.bulkNeighbours PT hPT a).card
+  let q : ℝ := 2 / (1 + g / (2 * nR))
+  have hnpos : 0 < nR := by
+    dsimp [nR]
+    exact lt_of_lt_of_le hgpos hgsmall
+  have htpos : 0 ≤ g / (2 * nR) := by positivity
+  have htle : g / (2 * nR) ≤ 1 / 2 := by
+    apply (div_le_iff₀ (by positivity : 0 < 2 * nR)).2
+    nlinarith [hgsmall]
+  have hloglower : g / (4 * nR) ≤ Real.log (1 + g / (2 * nR)) := by
+    let t : ℝ := g / (2 * nR)
+    have ht0 : 0 ≤ t := by dsimp [t]; exact htpos
+    have ht1 : t ≤ 1 / 2 := by dsimp [t]; exact htle
+    have hfrac : t / 2 ≤ 2 * t / (t + 2) := by
+      apply (div_le_div_iff₀ (by norm_num : (0 : ℝ) < 2)
+        (by positivity : (0 : ℝ) < t + 2)).2
+      nlinarith [ht0, ht1]
+    have hlog := Real.le_log_one_add_of_nonneg ht0
+    have htEq : t / 2 = g / (4 * nR) := by dsimp [t]; ring
+    have hargEq : 1 + t = 1 + g / (2 * nR) := by dsimp [t]
+    rw [← htEq, ← hargEq]
+    exact hfrac.trans hlog
+  have hrecip : 1 / (1 + g / (2 * nR)) ≤ Real.exp (-g / (4 * nR)) := by
+    have hargpos : 0 < 1 + g / (2 * nR) := by positivity
+    have hlogneg : -Real.log (1 + g / (2 * nR)) ≤ -(g / (4 * nR)) :=
+      neg_le_neg hloglower
+    calc
+      1 / (1 + g / (2 * nR)) = Real.exp (-Real.log (1 + g / (2 * nR))) := by
+        rw [Real.exp_neg, Real.exp_log hargpos]
+        simp
+      _ ≤ Real.exp (-g / (4 * nR)) := by
+        apply Real.exp_le_exp.mpr
+        simpa [neg_div] using hlogneg
+  have hqbound : q ≤ 2 * Real.exp (-g / (4 * nR)) := by
+    dsimp [q]
+    calc
+      2 / (1 + g / (2 * nR)) = 2 * (1 / (1 + g / (2 * nR))) := by ring
+      _ ≤ 2 * Real.exp (-g / (4 * nR)) :=
+        mul_le_mul_of_nonneg_left hrecip (by norm_num)
+  have hcrossProd :
+      (∏ b ∈ S15.crossingNeighbours PT hPT a,
+        S15.directFactor PT hPT a ys b x) ≤ 4 ^ C := by
+    calc
+      _ ≤ ∏ b ∈ S15.crossingNeighbours PT hPT a, (4 : ℝ) := by
+        apply Finset.prod_le_prod₀
+        · intro b hb
+          exact (hcross b hb).1
+        · intro b hb
+          exact (hcross b hb).2
+      _ = 4 ^ C := by simp [C]
+  have hbulkProd :
+      (∏ b ∈ S15.bulkNeighbours PT hPT a,
+        S15.directFactor PT hPT a ys b x) ≤ q ^ B := by
+    calc
+      _ ≤ ∏ b ∈ S15.bulkNeighbours PT hPT a, q := by
+        apply Finset.prod_le_prod₀
+        · intro b hb
+          exact (hbulk b hb).1
+        · intro b hb
+          simpa [q, nR] using (hbulk b hb).2
+      _ = q ^ B := by simp [B]
+  have hbaseProd :
+      (M : ℝ) * S15.directRowWeight PT hPT ys a x =
+        ((M : ℝ) * S15.directBaseWeight PT hPT a x) *
+          ((∏ b ∈ S15.crossingNeighbours PT hPT a,
+              S15.directFactor PT hPT a ys b x) *
+           (∏ b ∈ S15.bulkNeighbours PT hPT a,
+              S15.directFactor PT hPT a ys b x)) := by
+    rw [directRowWeight_eq_base_prod]
+    ring
+  have hcrossProdNonneg : 0 ≤
+      ∏ b ∈ S15.crossingNeighbours PT hPT a,
+        S15.directFactor PT hPT a ys b x :=
+    Finset.prod_nonneg fun b hb => (hcross b hb).1
+  have hbulkProdNonneg : 0 ≤
+      ∏ b ∈ S15.bulkNeighbours PT hPT a,
+        S15.directFactor PT hPT a ys b x :=
+    Finset.prod_nonneg fun b hb => (hbulk b hb).1
+  have hprod : (M : ℝ) * S15.directRowWeight PT hPT ys a x ≤
+      2 * (4 ^ C * q ^ B) := by
+    rw [hbaseProd]
+    have hprodBound :
+        (∏ b ∈ S15.crossingNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) *
+          (∏ b ∈ S15.bulkNeighbours PT hPT a,
+            S15.directFactor PT hPT a ys b x) ≤ 4 ^ C * q ^ B :=
+      calc
+        _ ≤ 4 ^ C *
+            (∏ b ∈ S15.bulkNeighbours PT hPT a,
+              S15.directFactor PT hPT a ys b x) :=
+          mul_le_mul_of_nonneg_right hcrossProd hbulkProdNonneg
+        _ ≤ 4 ^ C * q ^ B := mul_le_mul_of_nonneg_left hbulkProd (by positivity)
+    calc
+      _ ≤ 2 * ((∏ b ∈ S15.crossingNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) *
+          (∏ b ∈ S15.bulkNeighbours PT hPT a,
+            S15.directFactor PT hPT a ys b x)) :=
+        mul_le_mul_of_nonneg_right hbase (mul_nonneg hcrossProdNonneg hbulkProdNonneg)
+      _ ≤ _ := mul_le_mul_of_nonneg_left hprodBound (by norm_num)
+  have hqnonneg : 0 ≤ q := by positivity [q]
+  have hqpow : q ^ B ≤ (2 * Real.exp (-g / (4 * nR))) ^ B :=
+    pow_le_pow_left₀ hqnonneg hqbound B
+  have hexpPow : (2 * Real.exp (-g / (4 * nR))) ^ B =
+      (2 : ℝ) ^ B * Real.exp (-(g / (4 * nR)) * (B : ℝ)) := by
+    calc
+      (2 * Real.exp (-g / (4 * nR))) ^ B =
+          (2 : ℝ) ^ B * (Real.exp (-g / (4 * nR))) ^ B := by rw [mul_pow]
+      _ = (2 : ℝ) ^ B * Real.exp (-(g / (4 * nR)) * (B : ℝ)) := by
+        congr 1
+        calc
+          (Real.exp (-g / (4 * nR))) ^ B =
+              Real.exp ((B : ℝ) * (-g / (4 * nR))) := by rw [← Real.exp_nat_mul]
+          _ = Real.exp (-(g / (4 * nR)) * (B : ℝ)) := by congr 1 <;> ring
+  have hdecay : (9 / 40 : ℝ) * g ≤ (g / (4 * nR)) * (B : ℝ) := by
+    have hB := hbulkLower
+    have hscaled := mul_le_mul_of_nonneg_left hB
+      (div_nonneg hgpos.le (by positivity : (0 : ℝ) ≤ 4 * nR))
+    have hleft : (g / (4 * nR)) * ((9 / 10 : ℝ) * nR) =
+        (9 / 40 : ℝ) * g := by field_simp [ne_of_gt hnpos]; ring
+    rw [hleft] at hscaled
+    simpa [B, nR] using hscaled
+  have hpowDecay : Real.exp (-(g / (4 * nR)) * (B : ℝ)) ≤
+      Real.exp (-(9 / 40 : ℝ) * g) := by
+    exact Real.exp_le_exp.mpr (by nlinarith [hdecay])
+  have hBcast : (B : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hbulkUpper
+  have hCcast : (C : ℝ) ≤ ell := by exact_mod_cast hcrossCard
+  have hexpCount : (1 : ℝ) + 2 * C + B ≤
+      (T.S.n k : ℝ) + 2 * ell + 1 := by
+    have hBC : (B : ℝ) ≤ (T.S.n k : ℝ) := hBcast
+    nlinarith [hCcast]
+  have hcountPow :
+      (2 : ℝ) ^ (1 + 2 * C + B) ≤
+        (2 : ℝ) ^ (T.S.n k) * (2 : ℝ) ^ (2 * ell + 1) := by
+    have hnat : 1 + 2 * C + B ≤ T.S.n k + 2 * ell + 1 := by exact_mod_cast hexpCount
+    calc
+      (2 : ℝ) ^ (1 + 2 * C + B) ≤
+          (2 : ℝ) ^ ((T.S.n k) + 2 * ell + 1) := by
+        exact_mod_cast Nat.pow_le_pow_right (by norm_num : 0 < 2) hnat
+      _ = (2 : ℝ) ^ (T.S.n k) * (2 : ℝ) ^ (2 * ell + 1) := by
+        rw [← pow_add]
+        congr 1
+  have hlog2 : Real.log (2 : ℝ) ≤ 1 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    linarith
+  have hsmallCount : (2 : ℝ) ^ (2 * ell + 1) ≤ Real.exp (g / 50) := by
+    have hexp : (2 : ℝ) ^ (2 * ell + 1) =
+        Real.exp (Real.log 2 * ((2 * ell + 1 : ℕ) : ℝ)) := by
+      rw [← Real.rpow_natCast]
+      rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    have harg : Real.log 2 * ((2 * ell + 1 : ℕ) : ℝ) ≤ g / 50 := by
+      have hnat : 2 * ell + 1 ≤ g / 50 := by
+        have : (ell : ℝ) + 1 ≤ g / 100 := hellGain
+        exact_mod_cast (by nlinarith : (2 * ell + 1 : ℝ) ≤ g / 50)
+      have hnatR : ((2 * ell + 1 : ℕ) : ℝ) ≤ g / 50 := by exact_mod_cast hnat
+      have hnonneg : 0 ≤ ((2 * ell + 1 : ℕ) : ℝ) := by positivity
+      nlinarith [hlog2, hnatR, hnonneg]
+    rw [hexp]
+    exact Real.exp_le_exp.mpr harg
+  have hmain : (M : ℝ) * S15.directRowWeight PT hPT ys a x ≤
+      (2 : ℝ) ^ (T.S.n k) *
+        Real.exp (-(9 / 40 : ℝ) * g + g / 50) := by
+    calc
+      _ ≤ 2 * (4 : ℝ) ^ C * q ^ B := by simpa [mul_assoc] using hprod
+      _ ≤ 2 * (4 : ℝ) ^ C *
+          ((2 : ℝ) ^ B * Real.exp (-(9 / 40 : ℝ) * g)) := by
+        have hqdecay : q ^ B ≤ (2 : ℝ) ^ B * Real.exp (-(9 / 40 : ℝ) * g) := by
+          calc
+            q ^ B ≤ (2 * Real.exp (-g / (4 * nR))) ^ B := hqpow
+            _ = (2 : ℝ) ^ B * Real.exp (-(g / (4 * nR)) * (B : ℝ)) := hexpPow
+            _ ≤ (2 : ℝ) ^ B * Real.exp (-(9 / 40 : ℝ) * g) :=
+              mul_le_mul_of_nonneg_left hpowDecay (by positivity)
+        calc
+          2 * (4 : ℝ) ^ C * q ^ B =
+              2 * ((4 : ℝ) ^ C * q ^ B) := by ring
+          _ ≤ 2 * ((4 : ℝ) ^ C *
+              ((2 : ℝ) ^ B * Real.exp (-(9 / 40 : ℝ) * g))) := by
+            exact mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_left hqdecay (by positivity : 0 ≤ (4 : ℝ) ^ C))
+              (by norm_num)
+          _ = 2 * (4 : ℝ) ^ C *
+              ((2 : ℝ) ^ B * Real.exp (-(9 / 40 : ℝ) * g)) := by ring
+      _ = (2 : ℝ) ^ (1 + 2 * C + B) * Real.exp (-(9 / 40 : ℝ) * g) := by
+        have hfour : (4 : ℝ) ^ C = (2 : ℝ) ^ (2 * C) := by
+          rw [show (4 : ℝ) = (2 : ℝ) ^ 2 by norm_num, pow_mul]
+        rw [hfour]
+        have hpow : 2 * (2 : ℝ) ^ (2 * C) * (2 : ℝ) ^ B =
+            (2 : ℝ) ^ (1 + 2 * C + B) := by
+          calc
+            2 * (2 : ℝ) ^ (2 * C) * (2 : ℝ) ^ B =
+                (2 : ℝ) ^ (2 * C + 1) * (2 : ℝ) ^ B := by rw [pow_succ]; ring
+            _ = (2 : ℝ) ^ (2 * C + 1 + B) := by rw [← pow_add]
+            _ = (2 : ℝ) ^ (1 + 2 * C + B) := by congr 1 <;> omega
+        calc
+          2 * (2 : ℝ) ^ (2 * C) *
+              ((2 : ℝ) ^ B * Real.exp (-(9 / 40 : ℝ) * g)) =
+              (2 * (2 : ℝ) ^ (2 * C) * (2 : ℝ) ^ B) *
+                Real.exp (-(9 / 40 : ℝ) * g) := by ring
+          _ = (2 : ℝ) ^ (1 + 2 * C + B) *
+              Real.exp (-(9 / 40 : ℝ) * g) := by
+            exact congrArg (fun z : ℝ => z * Real.exp (-(9 / 40 : ℝ) * g)) hpow
+      _ ≤ (2 : ℝ) ^ (T.S.n k) * (2 : ℝ) ^ (2 * ell + 1) *
+          Real.exp (-(9 / 40 : ℝ) * g) :=
+        mul_le_mul_of_nonneg_right hcountPow (Real.exp_pos _).le
+      _ ≤ (2 : ℝ) ^ (T.S.n k) * Real.exp (g / 50) *
+          Real.exp (-(9 / 40 : ℝ) * g) := by
+        calc
+          (2 : ℝ) ^ (T.S.n k) * (2 : ℝ) ^ (2 * ell + 1) *
+              Real.exp (-(9 / 40 : ℝ) * g) =
+              (2 : ℝ) ^ (T.S.n k) *
+                ((2 : ℝ) ^ (2 * ell + 1) * Real.exp (-(9 / 40 : ℝ) * g)) := by ring
+          _ ≤ (2 : ℝ) ^ (T.S.n k) *
+                (Real.exp (g / 50) * Real.exp (-(9 / 40 : ℝ) * g)) :=
+            mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_right hsmallCount (Real.exp_pos _).le)
+              (pow_nonneg (by norm_num : (0 : ℝ) ≤ 2) _)
+          _ = _ := by ring
+      _ = (2 : ℝ) ^ (T.S.n k) *
+          Real.exp (-(9 / 40 : ℝ) * g + g / 50) := by
+        have hmulExp : Real.exp (g / 50) * Real.exp (-(9 / 40 : ℝ) * g) =
+            Real.exp (g / 50 + (-(9 / 40 : ℝ) * g)) := (Real.exp_add _ _).symm
+        calc
+          _ = (2 : ℝ) ^ (T.S.n k) *
+              (Real.exp (g / 50) * Real.exp (-(9 / 40 : ℝ) * g)) := by ring
+          _ = (2 : ℝ) ^ (T.S.n k) *
+              Real.exp (g / 50 + (-(9 / 40 : ℝ) * g)) := by rw [hmulExp]
+          _ = _ := by congr 1 <;> ring
+  have hexpTarget :
+      Real.exp (-(9 / 40 : ℝ) * g + g / 50) ≤ Real.exp (-g / 5) := by
+    apply Real.exp_le_exp.mpr
+    calc
+      -(9 / 40 : ℝ) * g + g / 50 =
+          (-(9 / 40 : ℝ) + 1 / 50) * g := by ring
+      _ ≤ -(1 / 5 : ℝ) * g :=
+        mul_le_mul_of_nonneg_right (by norm_num :
+          -(9 / 40 : ℝ) + 1 / 50 ≤ -(1 / 5 : ℝ)) hgpos.le
+      _ = -g / 5 := by ring
+  exact le_trans hmain (mul_le_mul_of_nonneg_left hexpTarget (by positivity))
+
 theorem evenPatchPositions_card_eq {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (i : Fin PT.tiling.m)
     (hle : (PT.tiling.P i).ℓ < T.S.n k) :

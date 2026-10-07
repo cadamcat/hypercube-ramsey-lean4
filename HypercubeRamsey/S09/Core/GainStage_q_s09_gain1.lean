@@ -2,7 +2,7 @@ import HypercubeRamsey.S09.Core.Experiment
 import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.Framework.OneShot
 import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
-import HypercubeRamsey.S05.Clock_q_s05_even
+import HypercubeRamsey.Tools.CubeGeometry
 import HypercubeRamsey.S05.Stages_p_s05_h
 import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.SignedTest
@@ -2165,6 +2165,80 @@ private theorem regularityOrder_length_le_seen_add_one9 {P : Params9} {n N : ℕ
     rw [hfull]
     omega
 
+private theorem bool_eq_of_ne {a b c : Bool} (hab : a ≠ b) (hac : a ≠ c) : b = c := by
+  cases a <;> cases b <;> cases c <;> simp_all
+
+/-- Every vertex of an `n`-cube has at most `n` neighbors. -/
+private theorem cube_adj_neighbors_card_le (n : ℕ) (x : CubeVertex n) :
+    (Finset.univ.filter fun y : CubeVertex n => (cube n).Adj x y).card ≤ n := by
+  classical
+  cases n with
+  | zero =>
+      have hEmpty : Finset.univ.filter (fun y : CubeVertex 0 => (cube 0).Adj x y) = ∅ := by
+        apply Finset.filter_eq_empty_iff.mpr
+        intro y _
+        have hyx : y = x := Subsingleton.elim _ _
+        subst y
+        exact (cube 0).loopless.irrefl x
+      rw [hEmpty]
+      simp
+  | succ n =>
+    let fallback : Fin (n + 1) := ⟨0, by omega⟩
+    let S : Finset (CubeVertex (n + 1)) := Finset.univ.filter fun y => (cube (n + 1)).Adj x y
+    let coord (y : {y : CubeVertex (n + 1) // (cube (n + 1)).Adj x y}) : Fin (n + 1) :=
+      Classical.choose (Finset.card_eq_one.mp (show
+        (Finset.univ.filter fun i : Fin (n + 1) => x i ≠ y.1 i).card = 1 from y.2))
+    have coord_mem (y : {y : CubeVertex (n + 1) // (cube (n + 1)).Adj x y}) :
+        x (coord y) ≠ y.1 (coord y) := by
+      have hs := Classical.choose_spec
+        (Finset.card_eq_one.mp (show
+          (Finset.univ.filter fun i : Fin (n + 1) => x i ≠ y.1 i).card = 1 from y.2))
+      have hm : coord y ∈ Finset.univ.filter fun i : Fin (n + 1) => x i ≠ y.1 i := by
+        rw [hs]
+        simp [coord]
+      exact (Finset.mem_filter.mp hm).2
+    have coord_other (y : {y : CubeVertex (n + 1) // (cube (n + 1)).Adj x y})
+        (i : Fin (n + 1)) (hi : i ≠ coord y) : y.1 i = x i := by
+      have hs := Classical.choose_spec
+        (Finset.card_eq_one.mp (show
+          (Finset.univ.filter fun j : Fin (n + 1) => x j ≠ y.1 j).card = 1 from y.2))
+      have hnot : i ∉ Finset.univ.filter fun j : Fin (n + 1) => x j ≠ y.1 j := by
+        rw [hs]
+        simpa [coord] using hi
+      by_contra hne
+      exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [ne_comm] using hne⟩)
+    let f (y : CubeVertex (n + 1)) : Fin (n + 1) :=
+      if hy : (cube (n + 1)).Adj x y then coord ⟨y, hy⟩ else fallback
+    have hcoord_sub : ∀ {y z : {y : CubeVertex (n + 1) // (cube (n + 1)).Adj x y}},
+        coord y = coord z → y = z := by
+      intro y z hyz
+      apply Subtype.ext
+      funext i
+      by_cases hi : i = coord y
+      · subst i
+        have hz := coord_mem z
+        have hz' : x (coord y) ≠ z.1 (coord y) := by simpa [hyz] using hz
+        exact bool_eq_of_ne (coord_mem y) hz'
+      · rw [coord_other y i hi, coord_other z i (by rw [← hyz]; exact hi)]
+    have hcoord : Set.InjOn f S := by
+      intro y hy z hz hyz
+      have hyAdj := (Finset.mem_filter.mp hy).2
+      have hzAdj := (Finset.mem_filter.mp hz).2
+      have hcoords : coord ⟨y, hyAdj⟩ = coord ⟨z, hzAdj⟩ := by
+        simpa [f, hyAdj, hzAdj] using hyz
+      have hySub : (⟨y, hyAdj⟩ : {y : CubeVertex (n + 1) // (cube (n + 1)).Adj x y}) = ⟨z, hzAdj⟩ :=
+        hcoord_sub hcoords
+      exact congrArg Subtype.val hySub
+    have himage : S.card = (S.image f).card := (Finset.card_image_of_injOn hcoord).symm
+    have hsub : S.image f ⊆ Finset.univ := Finset.subset_univ _
+    have hcard : (S.image f).card ≤ n + 1 := by
+      calc
+        (S.image f).card ≤ Finset.univ.card := Finset.card_le_card hsub
+        _ = n + 1 := by simp
+    rw [himage]
+    exact hcard
+
+
 private theorem starOdd_card_le9 {n : ℕ} (v : EvenSites9 n) : Fintype.card (StarOdd9 v) ≤ n := by
   classical
   let Adj : CubeVertex n → Prop := fun b => (cube n).Adj v.1 b
@@ -3399,29 +3473,21 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
     have hZgood (ξ) (hg : good ξ) : |z ξ - z₀| ≤ δ * z₀ := by
       have hrel := outerFilter_core_mass_relative_regular9 S I E G (lift ξ) v b
         (hOrder ξ hg) hbstar hsizeCore
-      have hrel' : |z ξ * (2 : ℝ) ^ m - 1| ≤ δ := by
-        simpa [z, z₀, δ, m, K, B, hBsame ξ] using hrel
-      have hquot : z ξ * (2 : ℝ) ^ m - 1 = (z ξ - z₀) / z₀ := by
-        rw [div_eq_mul_inv, hz₀inverse]
-        ring
-      rw [hquot, abs_div, abs_of_pos hz₀pos] at hrel'
-      exact (div_le_iff₀ hz₀pos).mp hrel'
+      have hrelDiv : |z ξ / z₀ - 1| ≤ δ := by
+        simpa only [z, z₀, δ, m, K, hBsame ξ, B] using hrel
+      have hquot : z ξ / z₀ - 1 = (z ξ - z₀) / z₀ := by
+        field_simp [ne_of_gt hz₀pos]
+      rw [hquot, abs_div, abs_of_pos hz₀pos] at hrelDiv
+      exact (div_le_iff₀ hz₀pos).mp hrelDiv
     have hbadEq : condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v) =
         μc.pr (fun ξ => ¬ good ξ) := by
       unfold condCorePr9
-      change (rawLaw9 S I).condExp
-          (fun ω => if ¬ starRegular9 S E G ω v then 1 else 0)
-          (sameCore9 I v ω₀) = μc.pr (fun ξ => ¬ good ξ)
-      calc
-        (rawLaw9 S I).condExp
-            (fun ω => if ¬ starRegular9 S E G ω v then 1 else 0)
-            (sameCore9 I v ω₀) =
-          μc.expect (fun ξ =>
-            if ¬ starRegular9 S E G (lift ξ) v then 1 else 0) :=
-              condCoreExpect_fiber_formula9 S I v ω₀ _ hpos
-        _ = μc.pr (fun ξ => ¬ good ξ) := by
-              simpa [good, lift, μc] using
-                (expect_indicator9 μc (fun ξ => ¬ starRegular9 S E G (lift ξ) v))
+      rw [condCoreExpect_fiber_formula9 S I v ω₀ _ hpos]
+      change μc.expect _ = μc.pr _
+      simp only [FinProb.expect, FinProb.pr]
+      apply Finset.sum_congr rfl
+      intro ξ _
+      by_cases hg : good ξ <;> simp [good, lift] at hg ⊢ <;> simp [hg]
     have hbad : μc.pr (fun ξ => ¬ good ξ) ≤ ε := by
       rw [← hbadEq]
       exact hcondle
@@ -3502,8 +3568,10 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
         constructor <;> linarith [hp.1, hp.2, hrv.1, hrv.2]
     have hnumErrorPoint' (ξ) : |z ξ * q ξ - r ξ| ≤ if ¬ good ξ then 1 else 0 := by
       by_cases hg : good ξ <;> simpa [hg] using hnumErrorPoint ξ
-    have hnumError := expect_abs_diff_le_pr9 μc good
-      (fun ξ => z ξ * q ξ) r ε hnumErrorPoint' hbad
+    have hnumError := expect_abs_diff_le_pr9 μc (fun ξ => ¬ good ξ)
+      (fun ξ => z ξ * q ξ) r ε (by
+        intro ξ
+        by_cases hg : good ξ <;> simpa [hg] using hnumErrorPoint ξ) hbad
     have hnumRatioError :
         |μc.expect (fun ξ => z ξ * q ξ) / μc.expect z - μc.expect r / μc.expect z| ≤
           4 * ε / z₀ := by
@@ -3513,7 +3581,7 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
           (μc.expect (fun ξ => z ξ * q ξ) - μc.expect r) / μc.expect z := by ring
       rw [hsub, abs_div, abs_of_pos hdenPos]
       have hrecip : (μc.expect z)⁻¹ ≤ (4 : ℝ) / z₀ := by
-        change 1 / μc.expect z ≤ 4 / z₀
+        rw [← one_div]
         apply (div_le_div_iff₀ hdenPos hz₀pos).2
         nlinarith [hdenLower]
       calc
@@ -3521,7 +3589,7 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
             |μc.expect (fun ξ => z ξ * q ξ) - μc.expect r| *
               (μc.expect z)⁻¹ := by rw [div_eq_mul_inv]
         _ ≤ ε * (4 / z₀) :=
-          mul_le_mul hnumError hrecip (inv_nonneg.mpr hdenPos.le) (abs_nonneg _)
+          mul_le_mul hnumError hrecip (inv_nonneg.mpr hdenPos.le) hε
         _ = 4 * ε / z₀ := by ring
     have htriangle :
         |μc.expect q - rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B)| ≤
@@ -3564,9 +3632,9 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
         calc
           (m : ℝ) * Real.log 2 + Real.log 12 ≤
               (n : ℝ) ^ (P.χ : ℝ) * Real.log 2 + Real.log 12 := by
-                nlinarith [hKcard, hlog2Pos]
+                exact add_le_add (mul_le_mul_of_nonneg_right hKcard hlog2Pos.le) le_rfl
           _ ≤ c₀ / 8 * (n : ℝ) ^ P.u + c₀ / 8 * (n : ℝ) ^ P.u :=
-                add_le_add hAbsorbN hlogConst
+                add_le_add (by simpa only [mul_comm] using hAbsorbN) hlogConst
           _ = c₀ / 4 * (n : ℝ) ^ P.u := by ring
       have hcoefPos : 0 < 12 * (2 : ℝ) ^ m := by positivity
       have hlogCoef : Real.log (12 * (2 : ℝ) ^ m) =
@@ -3583,11 +3651,11 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
                 _ = Real.exp (Real.log (12 * (2 : ℝ) ^ m) -
                     c₀ / 2 * (n : ℝ) ^ P.u) := by
                       rw [← Real.exp_add]
-                      congr 1
+                      congr 1 <;> ring
         _ ≤ Real.exp (-(c₀ / 4 * (n : ℝ) ^ P.u)) := by
               apply Real.exp_le_exp.mpr
               rw [hlogCoef]
-              nlinarith [hnχ]
+              linarith only [hnχ]
     have htailError : 12 * ε / z₀ ≤ P.tail (c₀ / 4) n := by
       calc
         12 * ε / z₀ = 12 * (2 : ℝ) ^ m * ε := by
@@ -3618,7 +3686,7 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
       128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail (c₀ / 4) n <
         |condCoreMean9 S I E G v b ω₀ -
           rowDeg E G (anc9 ω₀ (I.center v.1))
-            (restrictOr9 (outerMean9 S I E G v b) (coreHitSet9 E G ω₀ v b)) →
+            (restrictOr9 (outerMean9 S I E G v b) (coreHitSet9 E G ω₀ v b))| →
         (ε < condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) ∨ zeroMass ω₀ := by
     intro ω₀ herr
     by_cases hpos : 0 < (rawLaw9 S I).w ω₀
@@ -3635,7 +3703,7 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
         have hnonneg := (rawLaw9 S I).nonneg ω₀
         exact le_antisymm (le_of_not_gt hpos) hnonneg
       exact hw0
-  have hunion := FinProb.pr_union_le (rawLaw9 S I)
+  have hunion := FinProb.pr_union (rawLaw9 S I)
     (fun ω₀ => ε < condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) zeroMass
   have hbadProbability := hbadHistory v
   calc
@@ -3652,6 +3720,10 @@ theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) 
           (fun ω₀ => ε < condCorePr9 S I v ω₀
             (fun ω => ¬ starRegular9 S E G ω v)) + (rawLaw9 S I).pr zeroMass := hunion
     _ ≤ ε := by rw [hzero]; simpa [ε] using hbadProbability
+    _ ≤ P.tail (c₀ / 4) n := by
+      dsimp [ε, Params9.tail]
+      apply Real.exp_le_exp.mpr
+      nlinarith [Real.rpow_nonneg (by positivity : (0 : ℝ) ≤ n) P.u]
 
 private theorem rowDeg_lipschitz_l1_9 {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (x : Fin N) (μ ν : Law N) :
@@ -5323,5 +5395,654 @@ theorem replace_certificate9 (P : Params9) (hP : P.Valid) (c₀ C₁ c₁ : ℝ)
     _ = 2 * Real.exp (-((d : ℝ) * (n : ℝ) ^ P.u)) := by ring
     _ ≤ Real.exp (-((d / 2) * (n : ℝ) ^ P.u)) := hTwoTail
     _ = P.tail (d / 2) n := by simp [Params9.tail]
+
+private theorem clipped_density9 {N : ℕ} (Q ν : Law N) (B : ℝ) (hB : 0 ≤ B)
+    (e : Fin N → ℝ) (he : ∀ y, 0 ≤ e y)
+    (hclose : ∀ y, |Q.w y - ν.w y| ≤ B * ν.w y + e y) :
+    ∃ ψ : Fin N → ℝ, (∀ y, |ψ y| ≤ B) ∧
+      ∑ y, |Q.w y - (1 + ψ y) * ν.w y| ≤ ∑ y, e y := by
+  classical
+  let ψ := fun y => if 0 < ν.w y then
+    max (-B) (min B (Q.w y / ν.w y - 1)) else 0
+  refine ⟨ψ, ?_, ?_⟩
+  · intro y
+    dsimp [ψ]
+    split_ifs with h
+    · rw [abs_le]
+      exact ⟨le_max_left _ _, max_le (by linarith) (min_le_left _ _)⟩
+    · simpa using hB
+  · apply Finset.sum_le_sum
+    intro y _
+    have hd := abs_le.mp (hclose y)
+    have hn := ν.nonneg y
+    have hq := Q.nonneg y
+    by_cases hv : 0 < ν.w y
+    · dsimp [ψ]
+      rw [if_pos hv]
+      have hratio : (Q.w y / ν.w y - 1) * ν.w y = Q.w y - ν.w y := by
+        field_simp
+      by_cases hlo : Q.w y / ν.w y - 1 < -B
+      · have hmin : min B (Q.w y / ν.w y - 1) = Q.w y / ν.w y - 1 :=
+          min_eq_right (by linarith)
+        have hm := mul_le_mul_of_nonneg_right (le_of_lt hlo) hv.le
+        rw [hmin, max_eq_left (le_of_lt hlo), abs_le]
+        constructor <;> nlinarith [he y]
+      · by_cases hhi : B < Q.w y / ν.w y - 1
+        · have hm := mul_le_mul_of_nonneg_right (le_of_lt hhi) hv.le
+          rw [min_eq_left (le_of_lt hhi), max_eq_right (by linarith), abs_le]
+          constructor <;> nlinarith [he y]
+        · rw [min_eq_right (le_of_not_gt hhi), max_eq_right (le_of_not_gt hlo)]
+          have hz : Q.w y - (1 + (Q.w y / ν.w y - 1)) * ν.w y = 0 := by
+            field_simp
+            ring
+          rw [hz, abs_zero]
+          exact he y
+    · have hv0 : ν.w y = 0 := le_antisymm (le_of_not_gt hv) hn
+      simpa [ψ, hv, hv0, abs_of_nonneg hq] using hclose y
+
+private theorem law_domination_l1_9 {N : ℕ} (R ν : Law N) (t : ℝ) (ht : 0 ≤ t)
+    (hdom : ∀ y, R.w y ≤ (1 + t) * ν.w y) :
+    ∑ y, |R.w y - ν.w y| ≤ 2 * t := by
+  have hp (y) : |R.w y - ν.w y| ≤ 2 * t * ν.w y - (R.w y - ν.w y) := by
+    rw [abs_le]
+    constructor <;> nlinarith [hdom y, mul_nonneg ht (ν.nonneg y)]
+  calc
+    ∑ y, |R.w y - ν.w y| ≤ ∑ y, (2 * t * ν.w y - (R.w y - ν.w y)) :=
+      Finset.sum_le_sum (fun y _ => hp y)
+    _ = 2 * t := by
+      rw [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_sub_distrib,
+        R.sum_eq_one, ν.sum_eq_one]
+      ring
+
+private theorem core_hit_expect_factor9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (y : Fin N) :
+    (rawLaw9 S I).expect (fun ω => (outerFilter9 S E G ω v b).w y *
+      (if y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1) then 1 else 0)) =
+      (outerMean9 S I E G v b).w y *
+        ∏ c ∈ I.seen b.1 ∩ I.core v.1, colDeg E G (M.μ (S.tag c.slice)) y := by
+  classical
+  let D := I.seen b.1 ∩ I.core v.1
+  let s : Finset (I.ID ⊕ OddSites9 n) := (I.core v.1).image Sum.inl
+  let f : Outcome9 I N → ℝ := fun ω =>
+    if y ∈ hitSet9 E G ω D then 1 else 0
+  let g : Outcome9 I N → ℝ := fun ω => (outerFilter9 S E G ω v b).w y
+  have hg : FinProb.DependsOn g (Finset.univ \ s) := by
+    intro ω ω' heq
+    exact congrArg (fun μ : Law N => μ.w y)
+      (outerFilter_depends_off_core9 S I E G v b ω ω' heq)
+  have hf : FinProb.DependsOn f s := by
+    intro ω ω' heq
+    have hh : (y ∈ hitSet9 E G ω D) ↔ (y ∈ hitSet9 E G ω' D) := by
+      simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+      have hanc (c) (hc : c ∈ D) : anc9 ω c = anc9 ω' c :=
+        heq (.inl c) (Finset.mem_image.mpr ⟨c, (Finset.mem_inter.mp hc).2, rfl⟩)
+      constructor
+      · intro h c hc
+        rw [← hanc c hc]
+        exact h c hc
+      · intro h c hc
+        rw [hanc c hc]
+        exact h c hc
+    simp only [f, hh]
+  have hdis : Disjoint (Finset.univ \ s) s := Finset.sdiff_disjoint
+  have hm := FinProb.pi_expect_mul_of_disjoint (inputLaw9 S I) g f
+    (Finset.univ \ s) s hg hf hdis
+  have hpr : (rawLaw9 S I).expect f =
+      ∏ c ∈ D, colDeg E G (M.μ (S.tag c.slice)) y := by
+    rw [show (rawLaw9 S I).expect f =
+      (rawLaw9 S I).pr (fun ω => ∀ c ∈ D, Hits E G (anc9 ω c) y) by
+        unfold FinProb.expect FinProb.pr
+        apply Finset.sum_congr rfl
+        intro ω _
+        by_cases h : ∀ c ∈ D, Hits E G (anc9 ω c) y <;>
+          simp [f, hitSet9, h]]
+    rw [raw_anchor_hit_probability9, Fintype.prod_sum_type]
+    have hleft (c : I.ID) :
+        (inputLaw9 S I (.inl c)).pr (fun x =>
+          if c ∈ D then Hits E G x y else True) =
+        if c ∈ D then colDeg E G (M.μ (S.tag c.slice)) y else 1 := by
+      by_cases hc : c ∈ D
+      · simp only [hc, if_true, inputLaw9]
+        unfold FinProb.pr colDeg
+        apply Finset.sum_congr rfl
+        intro x _
+        by_cases h : Hits E G x y <;> simp [h]
+      · simp [hc, FinProb.pr, FinProb.sum_eq_one]
+    simp_rw [hleft]
+    simp [FinProb.pr, FinProb.sum_eq_one, Fintype.prod_ite_mem]
+  change (rawLaw9 S I).expect (fun ω => g ω * f ω) = _
+  change (rawLaw9 S I).expect (fun ω => g ω * f ω) =
+    (rawLaw9 S I).expect g * (rawLaw9 S I).expect f at hm
+  rw [hm, hpr]
+  rfl
+
+private theorem full_core_filter_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hadj : (cube n).Adj v.1 b.1)
+    (hreg : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hb : P.bStar n ≤ 1 / 200)
+    (hsize : 16 * (coreCount9 I v b : ℝ) * P.bStar n ≤ 1 / 2) :
+    ∃ ht : 0 < ∑ y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1),
+        (outerFilter9 S E G ω v b).w y,
+      rowLaw9 S E G ω b = (outerFilter9 S E G ω v b).restrict
+          (hitSet9 E G ω (I.seen b.1 ∩ I.core v.1)) ht ∧
+      |(∑ y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1),
+          (outerFilter9 S E G ω v b).w y) / (1 / 2 : ℝ) ^ coreCount9 I v b - 1| ≤
+        8 * (coreCount9 I v b : ℝ) * P.bStar n := by
+  classical
+  let O := outerIDs9 I v b
+  let D := I.seen b.1 ∩ I.core v.1
+  let ord := fullOrder9 I v b
+  let base := maskedLaw9 S ω b
+  let A := hitSet9 E G ω O
+  let B := hitSet9 E G ω D
+  have hcenter : I.center v.1 ∈ D := by
+    apply Finset.mem_inter.mpr
+    refine ⟨?_, I.center_mem_core v.1 v.2⟩
+    unfold IDMap9.seen seenIDs9
+    exact Finset.mem_image.mpr ⟨v.1, Finset.mem_filter.mpr
+      ⟨Finset.mem_univ _, (cube n).adj_symm hadj⟩, rfl⟩
+  have hcard : (coreIDs9 I v b).card + 1 = D.card := by
+    dsimp [coreIDs9]
+    exact Finset.card_erase_add_one hcenter
+  have hlen : ord.length = O.card + D.card := by
+    simp only [ord, fullOrder9, List.length_append, Finset.length_toList, List.length_singleton]
+    change (O.card + (coreIDs9 I v b).card) + 1 = O.card + D.card
+    omega
+  have hIDs : ord.toFinset = I.seen b.1 := by
+    have hc : insert (I.center v.1) (coreIDs9 I v b) = D := by
+      dsimp [coreIDs9]
+      exact Finset.insert_erase hcenter
+    simp only [ord, fullOrder9, List.toFinset_append, Finset.toList_toFinset,
+      List.toFinset_cons, List.toFinset_nil]
+    rw [Finset.union_assoc, Finset.union_insert, Finset.union_empty, hc]
+    ext c
+    simp [O, D, outerIDs9]
+    tauto
+  have htakeO : (ord.take O.card).toFinset = O := by
+    have hlist : ord.take O.card = O.toList := by
+      dsimp [ord, fullOrder9, O]
+      rw [List.take_append_of_le_length (by simp), List.take_append_of_le_length (by simp)]
+      rw [← Finset.length_toList, List.take_length]
+    rw [hlist, Finset.toList_toFinset]
+  have hAB : A ∩ B = hitSet9 E G ω (I.seen b.1) := by
+    ext y
+    simp only [A, B, hitSet9, Finset.mem_inter, Finset.mem_filter,
+      Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨ho, hd⟩ c hc
+      by_cases hcore : c ∈ I.core v.1
+      · exact hd c (Finset.mem_inter.mpr ⟨hc, hcore⟩)
+      · exact ho c (Finset.mem_sdiff.mpr ⟨hc, hcore⟩)
+    · intro h
+      exact ⟨fun c hc => h c (Finset.mem_sdiff.mp hc).1,
+        fun c hc => h c (Finset.mem_inter.mp hc).1⟩
+  have hprev := orderRegular_prefix_degrees9 S I E G ω base ord hreg hb
+  have hlow := prefixMass_lower9 S I E G ω base ord ord.length le_rfl
+    (hprev ord.length le_rfl)
+  have hF : 0 < ∑ y ∈ A ∩ B, base.w y := by
+    rw [hAB]
+    have he : prefixMass9 E G ω base ord ord.length =
+        ∑ y ∈ hitSet9 E G ω (I.seen b.1), base.w y := by
+      simp [prefixMass9, hIDs]
+    rw [← he]
+    exact lt_of_lt_of_le (by positivity) hlow
+  obtain ⟨hO, houter⟩ := outerFilter_restrict_regular9 S I E G ω v b hreg hb
+  obtain ⟨hB, hnested⟩ := law_restrict_nested9 base A B hO hF
+  have ht : 0 < ∑ y ∈ B, (outerFilter9 S E G ω v b).w y := by
+    rw [houter]
+    exact hB
+  refine ⟨ht, ?_, ?_⟩
+  · have hfull : 0 < ∑ y ∈ hitSet9 E G ω (I.seen b.1), base.w y := by
+      rw [← hAB]; exact hF
+    unfold rowLaw9 restrictOr9
+    rw [dif_pos hfull]
+    have houterB : (outerFilter9 S E G ω v b).restrict B ht =
+        (base.restrict A hO).restrict B hB := by
+      apply FinProb.ext
+      intro y
+      simp only [Law.restrict, houter, base, A, O]
+    rw [houterB, hnested]
+    apply FinProb.ext
+    intro y
+    simp only [Law.restrict, hAB, base]
+  · let t : ℝ := ∑ y ∈ B, (outerFilter9 S E G ω v b).w y
+    let z₀ : ℝ := (1 / 2 : ℝ) ^ D.card
+    have hz₀ : 0 < z₀ := by dsimp [z₀]; positivity
+    have heO : prefixMass9 E G ω base ord O.card = ∑ y ∈ A, base.w y := by
+      simp only [prefixMass9, htakeO]; rfl
+    have heFull : prefixMass9 E G ω base ord (O.card + D.card) =
+        ∑ y ∈ A ∩ B, base.w y := by
+      rw [← hlen, hAB]
+      simp [prefixMass9, hIDs]
+    have htEq : t = prefixMass9 E G ω base ord (O.card + D.card) /
+        prefixMass9 E G ω base ord O.card := by
+      dsimp [t]
+      rw [houter, law_restrict_mass9, ← heFull, ← heO]
+    have bounds := prefixMass_suffix_bounds9 S I E G ω base ord hreg hb
+      O.card D.card (by omega)
+    have low : (1 / 2 - 2 * P.bStar n) ^ D.card ≤ t := by
+      rw [htEq]
+      exact (le_div_iff₀ (by rw [heO]; exact hO)).mpr bounds.1
+    have high : t ≤ (1 / 2 + 2 * P.bStar n) ^ D.card := by
+      rw [htEq]
+      exact (div_le_iff₀ (by rw [heO]; exact hO)).mpr bounds.2
+    have hb0 : 0 ≤ P.bStar n := by dsimp [Params9.bStar]; positivity
+    have hδ : 0 ≤ 4 * P.bStar n := by positivity
+    have hδle : 4 * P.bStar n ≤ 1 / 2 := by linarith
+    have hsmall : (D.card : ℝ) * (4 * P.bStar n) ≤ 1 / 2 := by
+      change 16 * (D.card : ℝ) * P.bStar n ≤ 1 / 2 at hsize
+      nlinarith
+    have powLow := one_sub_pow_lower9 hδ (by linarith) D.card
+    have powHigh := one_add_pow_upper9 hδ hδle D.card hsmall
+    have hl : (1 - 4 * P.bStar n) ^ D.card ≤ t / z₀ := by
+      calc
+        _ = (1 / 2 - 2 * P.bStar n) ^ D.card / z₀ := by
+          dsimp [z₀]; rw [← div_pow]; congr 1; ring
+        _ ≤ t / z₀ := div_le_div_of_nonneg_right low hz₀.le
+    have hh : t / z₀ ≤ (1 + 4 * P.bStar n) ^ D.card := by
+      calc
+        _ ≤ (1 / 2 + 2 * P.bStar n) ^ D.card / z₀ :=
+          div_le_div_of_nonneg_right high hz₀.le
+        _ = _ := by dsimp [z₀]; rw [← div_pow]; congr 1; ring
+    change |t / z₀ - 1| ≤ 8 * (D.card : ℝ) * P.bStar n
+    rw [abs_le]
+    constructor <;> nlinarith
+
+private theorem normalized_atom_close9 {f t r δ : ℝ}
+    (hf : 0 ≤ f) (ht : 0 ≤ t) (hδ : 0 ≤ δ) (hδle : δ ≤ 1 / 2)
+    (hr : |r - 1| ≤ δ) (hrel : f * r = t) : |f - t| ≤ 2 * δ * t := by
+  have hrb := abs_le.mp hr
+  have hft : f ≤ 2 * t := by nlinarith
+  have hbound : |f - t| ≤ δ * f := by
+    rw [abs_le]
+    constructor <;> nlinarith
+  exact hbound.trans (by nlinarith)
+
+private theorem mixture_core_error9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (hadj : (cube n).Adj v.1 b.1)
+    (hb : P.bStar n ≤ 1 / 200)
+    (hsize : 16 * (coreCount9 I v b : ℝ) * P.bStar n ≤ 1 / 2) :
+    ∃ e : Fin N → ℝ, (∀ y, 0 ≤ e y) ∧
+      (∑ y, e y ≤ (1 + (2 : ℝ) ^ coreCount9 I v b) *
+        (rawLaw9 S I).pr (fun ω => ¬ starRegular9 S E G ω v)) ∧
+      ∀ y, |(rawRowLaw9 S I E G b).w y -
+        (∏ c ∈ I.seen b.1 ∩ I.core v.1,
+          (2 * colDeg E G (M.μ (S.tag c.slice)) y)) *
+          (outerMean9 S I E G v b).w y| ≤
+        16 * (coreCount9 I v b : ℝ) * P.bStar n *
+          (∏ c ∈ I.seen b.1 ∩ I.core v.1,
+            (2 * colDeg E G (M.μ (S.tag c.slice)) y)) *
+          (outerMean9 S I E G v b).w y + e y := by
+  classical
+  let μ := rawLaw9 S I
+  let k := coreCount9 I v b
+  let δ : ℝ := 8 * (k : ℝ) * P.bStar n
+  let T : Outcome9 I N → Fin N → ℝ := fun ω y =>
+    (2 : ℝ) ^ k * (outerFilter9 S E G ω v b).w y *
+      (if y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1) then 1 else 0)
+  let a : Fin N → ℝ := fun y => ∏ c ∈ I.seen b.1 ∩ I.core v.1,
+    (2 * colDeg E G (M.μ (S.tag c.slice)) y)
+  let e : Fin N → ℝ := fun y => μ.expect (fun ω => if starRegular9 S E G ω v
+    then 0 else (rowLaw9 S E G ω b).w y + T ω y)
+  have hb0 : 0 ≤ P.bStar n := by dsimp [Params9.bStar]; positivity
+  have hδ : 0 ≤ δ := by dsimp [δ]; positivity
+  have hδle : δ ≤ 1 / 2 := by dsimp [δ, k]; nlinarith
+  have hT0 (ω) (y) : 0 ≤ T ω y := by
+    dsimp [T]; split_ifs <;> positivity [(outerFilter9 S E G ω v b).nonneg y]
+  have hTmass (ω) : ∑ y, T ω y ≤ (2 : ℝ) ^ k := by
+    have hmass : ∑ y, (outerFilter9 S E G ω v b).w y *
+        (if y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1) then 1 else 0) ≤ 1 := by
+      calc
+        _ ≤ ∑ y, (outerFilter9 S E G ω v b).w y := by
+          apply Finset.sum_le_sum
+          intro y _
+          split_ifs <;> simp [(outerFilter9 S E G ω v b).nonneg y]
+        _ = 1 := (outerFilter9 S E G ω v b).sum_eq_one
+    dsimp [T]
+    simp_rw [mul_assoc]
+    rw [← Finset.mul_sum]
+    simpa only [mul_one] using mul_le_mul_of_nonneg_left hmass
+      (by positivity : 0 ≤ (2 : ℝ) ^ k)
+  have hTmean (y) : μ.expect (fun ω => T ω y) =
+      a y * (outerMean9 S I E G v b).w y := by
+    have hfact := core_hit_expect_factor9 S I E G v b y
+    have hscale : μ.expect (fun ω => T ω y) = (2 : ℝ) ^ k * μ.expect (fun ω =>
+      (outerFilter9 S E G ω v b).w y *
+        (if y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1) then 1 else 0)) := by
+      simp only [FinProb.expect, Finset.mul_sum, T]
+      apply Finset.sum_congr rfl
+      intro ω _
+      ring
+    rw [hscale, hfact]
+    dsimp [a, k, coreCount9]
+    rw [Finset.prod_mul_distrib, Finset.prod_const]
+    ring
+  have hsample (ω) (y) : |(rowLaw9 S E G ω b).w y - T ω y| ≤
+      2 * δ * T ω y +
+        (if starRegular9 S E G ω v then 0 else (rowLaw9 S E G ω b).w y + T ω y) := by
+    by_cases hreg : starRegular9 S E G ω v
+    · rw [if_pos hreg, add_zero]
+      obtain ⟨ht, hrow, hratio⟩ := full_core_filter_regular9 S I E G ω v b hadj
+        (hreg b hadj).1 hb hsize
+      let t : ℝ := ∑ y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1),
+        (outerFilter9 S E G ω v b).w y
+      have hrel : (rowLaw9 S E G ω b).w y * (t / (1 / 2 : ℝ) ^ k) = T ω y := by
+        rw [hrow]
+        dsimp [Law.restrict, T, t]
+        by_cases hy : y ∈ hitSet9 E G ω (I.seen b.1 ∩ I.core v.1)
+        · rw [if_pos hy, if_pos hy]
+          have hp : (1 / 2 : ℝ) ^ k = ((2 : ℝ) ^ k)⁻¹ := by
+            rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, inv_pow]
+          rw [hp]
+          field_simp
+        · simp [hy]
+      exact normalized_atom_close9 ((rowLaw9 S E G ω b).nonneg y)
+        (hT0 ω y) hδ hδle (by simpa [δ, k, t] using hratio) hrel
+    · rw [if_neg hreg]
+      have hrow0 := (rowLaw9 S E G ω b).nonneg y
+      have ht0 := hT0 ω y
+      have hprod : 0 ≤ 2 * δ * T ω y := by positivity
+      rw [abs_le]
+      constructor <;> linarith
+  refine ⟨e, ?_, ?_, ?_⟩
+  · intro y
+    apply Finset.sum_nonneg
+    intro ω _
+    dsimp [e, FinProb.expect]
+    split_ifs <;> positivity [μ.nonneg ω, (rowLaw9 S E G ω b).nonneg y, hT0 ω y]
+  · change ∑ y, μ.expect (fun ω => if starRegular9 S E G ω v then 0 else
+        (rowLaw9 S E G ω b).w y + T ω y) ≤ _
+    simp only [FinProb.expect]
+    rw [Finset.sum_comm]
+    calc
+      ∑ ω, ∑ y, μ.w ω * (if starRegular9 S E G ω v then 0 else
+          (rowLaw9 S E G ω b).w y + T ω y) ≤
+        ∑ ω, if starRegular9 S E G ω v then 0 else μ.w ω * (1 + (2 : ℝ) ^ k) := by
+          apply Finset.sum_le_sum
+          intro ω _
+          by_cases hreg : starRegular9 S E G ω v
+          · simp [hreg]
+          · simp only [hreg, if_false, ← Finset.mul_sum, Finset.sum_add_distrib,
+              (rowLaw9 S E G ω b).sum_eq_one]
+            exact mul_le_mul_of_nonneg_left (by linarith [hTmass ω]) (μ.nonneg ω)
+      _ = (1 + (2 : ℝ) ^ k) * μ.pr (fun ω => ¬ starRegular9 S E G ω v) := by
+          simp only [FinProb.pr]
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro ω _
+          by_cases hreg : starRegular9 S E G ω v <;> simp [hreg] <;> ring
+  · intro y
+    change |(rawRowLaw9 S I E G b).w y - a y * (outerMean9 S I E G v b).w y| ≤ _
+    have hboundEq : 16 * (coreCount9 I v b : ℝ) * P.bStar n * a y *
+        (outerMean9 S I E G v b).w y = 2 * δ *
+        (a y * (outerMean9 S I E G v b).w y) := by dsimp [δ, k]; ring
+    rw [hboundEq, ← hTmean]
+    change |μ.expect (fun ω => (rowLaw9 S E G ω b).w y) -
+        μ.expect (fun ω => T ω y)| ≤ 2 * δ * μ.expect (fun ω => T ω y) + e y
+    simp only [FinProb.expect, ← Finset.sum_sub_distrib]
+    calc
+      |∑ ω, (μ.w ω * (rowLaw9 S E G ω b).w y - μ.w ω * T ω y)| ≤
+          ∑ ω, |μ.w ω * (rowLaw9 S E G ω b).w y - μ.w ω * T ω y| :=
+            Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ ω, μ.w ω * (2 * δ * T ω y +
+          (if starRegular9 S E G ω v then 0 else (rowLaw9 S E G ω b).w y + T ω y)) := by
+            apply Finset.sum_le_sum
+            intro ω _
+            rw [← mul_sub, abs_mul, abs_of_nonneg (μ.nonneg ω)]
+            exact mul_le_mul_of_nonneg_left (hsample ω y) (μ.nonneg ω)
+      _ = 2 * δ * (∑ ω, μ.w ω * T ω y) +
+          ∑ ω, μ.w ω * (if starRegular9 S E G ω v then 0 else
+            (rowLaw9 S E G ω b).w y + T ω y) := by
+        simp only [mul_add, Finset.sum_add_distrib, Finset.mul_sum]
+        congr 1
+        apply Finset.sum_congr rfl
+        intro ω _
+        ring
+
+private theorem col_degree_bounds9 {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (μ : Law N) (y : Fin N) : 0 ≤ colDeg E G μ y ∧ colDeg E G μ y ≤ 1 := by
+  classical
+  constructor
+  · exact Finset.sum_nonneg (fun x _ => by split_ifs <;> simp [μ.nonneg x])
+  · calc
+      colDeg E G μ y ≤ ∑ x, μ.w x := by
+        apply Finset.sum_le_sum
+        intro x _
+        split_ifs <;> simp [μ.nonneg x]
+      _ = 1 := μ.sum_eq_one
+
+private theorem erase_scalar_close9 {q r ν a δ e : ℝ}
+    (hq : 0 ≤ q) (hr : 0 ≤ r) (hν : 0 ≤ ν) (he : 0 ≤ e)
+    (hδ : 0 ≤ δ) (hδle : δ ≤ 1 / 8)
+    (ha : |a - 1| ≤ δ) (hrel : |r - a * q| ≤ 2 * δ * a * q + e) :
+    |q - ν| ≤ 8 * δ * ν + 2 * (|r - ν| + e) := by
+  have hab := abs_le.mp ha
+  have hrelb := abs_le.mp hrel
+  have hd := abs_le.mp (le_refl |r - ν|)
+  have hδq : 0 ≤ δ * q := mul_nonneg hδ hq
+  have haQ : a * q ≤ (1 + δ) * q :=
+    mul_le_mul_of_nonneg_right (by linarith [hab.2]) hq
+  have hsmall : 2 * δ * a * q ≤ 3 * δ * q := by
+    have hm := mul_le_mul_of_nonneg_left haQ (by positivity : 0 ≤ 2 * δ)
+    have hsq := mul_le_mul_of_nonneg_left hδle hδq
+    nlinarith
+  have haqDiff := abs_le.mp (show |a * q - q| ≤ δ * q by
+    rw [show a * q - q = (a - 1) * q by ring, abs_mul, abs_of_nonneg hq]
+    exact mul_le_mul_of_nonneg_right ha hq)
+  have hqBound : q ≤ 2 * ν + 2 * (|r - ν| + e) := by
+    have hs := mul_le_mul_of_nonneg_right hδle hq
+    nlinarith
+  have hmul := mul_le_mul_of_nonneg_left hqBound (by positivity : 0 ≤ 4 * δ)
+  have herror0 : 0 ≤ |r - ν| + e := by positivity
+  have hsm := mul_le_mul_of_nonneg_right hδle herror0
+  rw [abs_le]
+  constructor <;> nlinarith
+
+private theorem core_bias_small9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, 128 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n ≤ 1 / 2 := by
+  rcases hP with ⟨_, hhm, _, _, hchi, _, _⟩
+  have hχminusQ : P.χ < P.hMinus / 100 := by
+    exact lt_of_lt_of_le hchi.2 (div_le_div_of_nonneg_right
+      ((min_le_right _ _).trans (min_le_left _ _)) (by norm_num))
+  have hχminus : (P.χ : ℝ) < (P.hMinus : ℝ) := by
+    exact_mod_cast (by linarith [hhm.1] : P.χ < P.hMinus)
+  let a : ℝ := (P.hMinus : ℝ) - (P.χ : ℝ)
+  obtain ⟨n₀, hDecay⟩ := nat_rpow_decay_cutoff9 (a := a) (K := 128)
+    (by dsimp [a]; linarith) (by norm_num)
+  refine ⟨max n₀ 2, ?_⟩
+  intro n hn
+  have hn0 : n₀ ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hn2 : 2 ≤ n := le_trans (Nat.le_max_right _ _) hn
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hp : (n : ℝ) ^ (P.χ : ℝ) * P.bStar n = (n : ℝ) ^ (-a) := by
+    dsimp [Params9.bStar]
+    rw [← Real.rpow_add hnPos]
+    congr 1
+    dsimp [a]
+    ring
+  calc
+    128 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n = 128 * (n : ℝ) ^ (-a) := by
+      rw [mul_assoc, hp]
+    _ ≤ 1 / 2 := (hDecay n hn0).le
+
+set_option maxHeartbeats 1000000 in
+theorem erase_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 0 < c₀) :
+    ∃ C > (0 : ℝ), ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ}
+      {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ} {G : Colour}
+      {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
+      CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ →
+        EraseCert9 S I E G C c := by
+  classical
+  have hxS : 0 < (P.xS : ℝ) := by exact_mod_cast hP.1.1
+  have hχ0 : 0 < (P.χ : ℝ) := by exact_mod_cast hP.2.2.2.2.1.1
+  have hχu : (P.χ : ℝ) < P.u := by
+    have hχx : P.χ < P.xS / 100 := lt_of_lt_of_le hP.2.2.2.2.1.2
+      (div_le_div_of_nonneg_right (min_le_left _ _) (by norm_num))
+    dsimp [Params9.u]
+    exact_mod_cast (by linarith [hP.1.1] : P.χ < P.xS / 2)
+  have hu : 0 < P.u := by dsimp [Params9.u]; positivity
+  let d : ℝ := min c₀ (1 / 2)
+  have hd : 0 < d := lt_min hc₀ (by norm_num)
+  have hd0 : d ≤ c₀ := min_le_left _ _
+  have hd1 : d ≤ 1 / 2 := min_le_right _ _
+  obtain ⟨nSize, hSize⟩ := core_bias_small9 P hP
+  obtain ⟨nAbsorb, hAbsorb⟩ := absorb_subpower9 hu hχu hχ0.le
+    (by positivity : 0 < d / 4) (Real.log_pos (by norm_num : (1 : ℝ) < 2))
+  obtain ⟨nConst, hConst⟩ := nat_rpow_growth_cutoff9 (K := 4 * Real.log 32 / d) hu
+  let n₀ := max (max nSize nAbsorb) (max nConst 2)
+  refine ⟨64, by norm_num, d / 2, by positivity, n₀, ?_⟩
+  intro n hn N E X Y κ G M S I hCore hReg
+  have hnSize : nSize ≤ n := le_trans (le_trans (Nat.le_max_left _ _) (Nat.le_max_left _ _)) hn
+  have hnAbs : nAbsorb ≤ n := le_trans (le_trans (Nat.le_max_right _ _) (Nat.le_max_left _ _)) hn
+  have hnConst : nConst ≤ n := le_trans (le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _)) hn
+  have hn2 : 2 ≤ n := le_trans (le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)) hn
+  have hpow0 : 0 ≤ (n : ℝ) ^ P.u := by positivity
+  have hlogn0 : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by exact_mod_cast (by omega : 1 ≤ n))
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlog32 : Real.log 32 ≤ d / 4 * (n : ℝ) ^ P.u := by
+    have hm := mul_le_mul_of_nonneg_left (hConst n hnConst) (by positivity : 0 ≤ d / 4)
+    have he : d / 4 * (4 * Real.log 32 / d) = Real.log 32 := by field_simp
+    rwa [he] at hm
+  have habs : Real.log 2 * (n : ℝ) ^ (P.χ : ℝ) +
+      (P.χ : ℝ) * Real.log (n : ℝ) ≤ d / 4 * (n : ℝ) ^ P.u := hAbsorb n hnAbs
+  have hlogBudget : Real.log 2 + (P.χ : ℝ) * Real.log (n : ℝ) ≤
+      (1 / 2 : ℝ) * (n : ℝ) ^ P.u := by
+    have hlogSmall : Real.log 2 ≤ Real.log 32 :=
+      Real.log_le_log (by norm_num) (by norm_num)
+    have hterm : 0 ≤ Real.log 2 * (n : ℝ) ^ (P.χ : ℝ) := by positivity
+    nlinarith
+  have hb : P.bStar n ≤ 1 / 200 := by
+    rcases hCore with ⟨_, _, _, _, _, _, _, hAt⟩
+    exact hAt.2.2.2.2.2.2.1
+  change ∀ v : EvenSites9 n, ∀ b : OddSites9 n, (cube n).Adj v.1 b.1 → _
+  intro v b hadj
+  let k := coreCount9 I v b
+  let δ : ℝ := 8 * (k : ℝ) * P.bStar n
+  let Q := outerMean9 S I E G v b
+  let R := rawRowLaw9 S I E G b
+  let ν := siteSecond9 S b.1
+  let a := fun y => ∏ c ∈ I.seen b.1 ∩ I.core v.1,
+    (2 * colDeg E G (M.μ (S.tag c.slice)) y)
+  let bad : Fin N → Prop := fun y => ∃ c ∈ I.seen b.1 ∩ I.core v.1,
+    2 * P.bStar n < |colDeg E G (M.μ (S.tag c.slice)) y - 1 / 2|
+  have hk : (k : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+    have hc : k ≤ (I.core v.1).card := Finset.card_le_card Finset.inter_subset_right
+    exact (by exact_mod_cast hc : (k : ℝ) ≤ (I.core v.1).card).trans
+      (I.core_card v.1 v.2)
+  have hb0 : 0 ≤ P.bStar n := by dsimp [Params9.bStar]; positivity
+  have hsmall : 128 * (k : ℝ) * P.bStar n ≤ 1 / 2 :=
+    (mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hk (by norm_num)) hb0).trans
+      (hSize n hnSize)
+  have hδ : 0 ≤ δ := by dsimp [δ]; positivity
+  have hδle : δ ≤ 1 / 8 := by dsimp [δ]; nlinarith
+  have hsize16 : 16 * (coreCount9 I v b : ℝ) * P.bStar n ≤ 1 / 2 := by
+    change 16 * (k : ℝ) * P.bStar n ≤ 1 / 2
+    nlinarith
+  obtain ⟨e, he0, heSum, hrel⟩ := mixture_core_error9 S I E G v b hadj hb hsize16
+  have hbad := outer_mean_core_degree_exceptions9 hP S I v b hn2 hlogBudget hCore
+  have haGood (y) (hy : ¬ bad y) : |a y - 1| ≤ δ := by
+    exact core_degree_product_regular9 S I v b y hb0 (by linarith)
+      (by change (k : ℝ) * (4 * P.bStar n) ≤ 1 / 2; nlinarith) hy
+  have haBound (y) : a y ≤ (2 : ℝ) ^ k := by
+    calc
+      a y ≤ ∏ c ∈ I.seen b.1 ∩ I.core v.1, (2 : ℝ) := by
+        apply Finset.prod_le_prod₀
+        · intro c hc
+          exact mul_nonneg (by norm_num) ((col_degree_bounds9 E G _ y).1)
+        · intro c hc
+          nlinarith [(col_degree_bounds9 E G (M.μ (S.tag c.slice)) y).2]
+      _ = (2 : ℝ) ^ k := by simp [k, coreCount9]
+  have ha0 (y) : 0 ≤ a y := by
+    apply Finset.prod_nonneg
+    intro c hc
+    exact mul_nonneg (by norm_num) ((col_degree_bounds9 E G _ y).1)
+  let err := fun y => 2 * (|R.w y - ν.w y| + e y) +
+    (if bad y then (1 + 2 * (2 : ℝ) ^ k) * Q.w y else 0)
+  have herr0 (y) : 0 ≤ err y := by
+    dsimp [err]; split_ifs <;> positivity [he0 y, Q.nonneg y]
+  have hclose (y) : |Q.w y - ν.w y| ≤ 8 * δ * ν.w y + err y := by
+    have hr : |R.w y - a y * Q.w y| ≤ 2 * δ * a y * Q.w y + e y := by
+      convert hrel y using 1 <;> dsimp [R, a, Q, δ, k] <;> ring
+    by_cases hy : bad y
+    · dsimp [err]
+      rw [if_pos hy]
+      have hrb := abs_le.mp hr
+      have hν : ν.w y ≤ R.w y + |R.w y - ν.w y| := by
+        have h := abs_le.mp (le_refl |R.w y - ν.w y|)
+        linarith
+      have hm : 2 * δ * a y * Q.w y ≤ a y * Q.w y := by
+        nlinarith [mul_nonneg (ha0 y) (Q.nonneg y)]
+      have haq : a y * Q.w y ≤ (2 : ℝ) ^ k * Q.w y :=
+        mul_le_mul_of_nonneg_right (haBound y) (Q.nonneg y)
+      have hR : R.w y ≤ 2 * (2 : ℝ) ^ k * Q.w y + e y := by
+        nlinarith only [hrb.2, hm, haq]
+      have hbig : 0 ≤ 8 * δ * ν.w y := by positivity [ν.nonneg y]
+      have hq : 0 ≤ Q.w y := Q.nonneg y
+      have hn : 0 ≤ ν.w y := ν.nonneg y
+      have hde : 0 ≤ |R.w y - ν.w y| + e y := by positivity [he0 y]
+      have hpowq : 0 ≤ (2 : ℝ) ^ k * Q.w y := by positivity
+      rw [abs_le]
+      constructor <;> nlinarith only [hR, hν, hbig, hq, hn, hde, hpowq]
+    · simpa [err, hy] using erase_scalar_close9 (Q.nonneg y) (R.nonneg y)
+        (ν.nonneg y) (he0 y) hδ hδle (haGood y hy) hr
+  obtain ⟨ψ, hψ, hψerr⟩ := clipped_density9 Q ν (8 * δ) (by positivity) err herr0 hclose
+  refine ⟨ψ, ?_, ?_⟩
+  · intro y
+    simpa [δ, k, show (8 : ℝ) * (8 * (k : ℝ) * P.bStar n) =
+      64 * (k : ℝ) * P.bStar n by ring] using hψ y
+  · have hDom : ∑ y, |R.w y - ν.w y| ≤ 2 * Real.exp (-((n : ℝ) ^ P.u)) :=
+      law_domination_l1_9 R ν _ (Real.exp_nonneg _) (hCore.2.2.2.2.1.2 b)
+    have herrSum : ∑ y, err y ≤ 32 * (2 : ℝ) ^ k * P.tail d n := by
+      have hpowk : 1 ≤ (2 : ℝ) ^ k := one_le_pow₀ (by norm_num)
+      have hmono (t : ℝ) (ht : d ≤ t) : P.tail t n ≤ P.tail d n := by
+        apply Real.exp_le_exp.mpr
+        exact neg_le_neg (mul_le_mul_of_nonneg_right ht hpow0)
+      have hreg := hReg v
+      have hbadR : Q.pr bad ≤ P.tail d n := hbad.trans (hmono (1 / 2) hd1)
+      have hregR : (rawLaw9 S I).pr (fun ω => ¬ starRegular9 S E G ω v) ≤
+          P.tail d n := hreg.trans (hmono c₀ hd0)
+      have hdomR : ∑ y, |R.w y - ν.w y| ≤ 2 * P.tail d n := by
+        have hmon := hmono 1 (by linarith)
+        exact hDom.trans (mul_le_mul_of_nonneg_left
+          (by simpa only [Params9.tail, one_mul] using hmon) (by norm_num))
+      have heR : ∑ y, e y ≤ (1 + (2 : ℝ) ^ k) * P.tail d n :=
+        heSum.trans (mul_le_mul_of_nonneg_left hregR (by positivity))
+      have hbadSum : ∑ y, (if bad y then (1 + 2 * (2 : ℝ) ^ k) * Q.w y else 0) =
+          (1 + 2 * (2 : ℝ) ^ k) * Q.pr bad := by
+        simp only [FinProb.pr, Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro y _
+        split_ifs <;> simp
+      calc
+        ∑ y, err y = 2 * ((∑ y, |R.w y - ν.w y|) + ∑ y, e y) +
+            (1 + 2 * (2 : ℝ) ^ k) * Q.pr bad := by
+              simp only [err, Finset.sum_add_distrib, ← Finset.mul_sum, hbadSum]
+        _ ≤ 2 * (2 * P.tail d n + (1 + (2 : ℝ) ^ k) * P.tail d n) +
+            (1 + 2 * (2 : ℝ) ^ k) * P.tail d n := by
+              exact add_le_add (mul_le_mul_of_nonneg_left (add_le_add hdomR heR) (by norm_num))
+                (mul_le_mul_of_nonneg_left hbadR (by positivity))
+        _ ≤ 32 * (2 : ℝ) ^ k * P.tail d n := by
+              have ht0 : 0 ≤ P.tail d n := Real.exp_nonneg _
+              have hcoef : 2 * (2 + (1 + (2 : ℝ) ^ k)) + (1 + 2 * (2 : ℝ) ^ k) ≤
+                  32 * (2 : ℝ) ^ k := by linarith only [hpowk]
+              convert mul_le_mul_of_nonneg_right hcoef ht0 using 1 <;> ring
+    have hlogK : Real.log 32 + (k : ℝ) * Real.log 2 ≤ d / 2 * (n : ℝ) ^ P.u := by
+      have hm := mul_le_mul_of_nonneg_right hk hlog2.le
+      have ht : 0 ≤ (P.χ : ℝ) * Real.log (n : ℝ) := mul_nonneg hχ0.le hlogn0
+      nlinarith
+    have htail : 32 * (2 : ℝ) ^ k * P.tail d n ≤ P.tail (d / 2) n := by
+      have hcoef : 0 < 32 * (2 : ℝ) ^ k := by positivity
+      have hlog : Real.log (32 * (2 : ℝ) ^ k) = Real.log 32 + (k : ℝ) * Real.log 2 := by
+        rw [Real.log_mul (by norm_num) (by positivity), Real.log_pow]
+      change 32 * (2 : ℝ) ^ k * Real.exp (-(d * (n : ℝ) ^ P.u)) ≤
+        Real.exp (-(d / 2 * (n : ℝ) ^ P.u))
+      rw [show 32 * (2 : ℝ) ^ k = Real.exp (Real.log (32 * (2 : ℝ) ^ k)) by
+        rw [Real.exp_log hcoef], ← Real.exp_add, hlog]
+      exact Real.exp_le_exp.mpr (by linarith)
+    exact hψerr.trans (herrSum.trans htail)
 
 end HypercubeRamsey.Lane_q_s09_gain1

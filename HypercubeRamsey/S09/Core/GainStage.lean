@@ -83,7 +83,7 @@ theorem p92_conditional_mean (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 
       {X Y : Finset (Fin N)} {κ : ℝ} {G : Colour} {M : TagMix N} (S : Setup9 P n N M)
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ → CondMeanCert9 S I E G C c := by
-  sorry
+  exact Lane_q_s09_gain1.conditional_mean_certificate9 P hP c₀ hc₀
 
 /-! ## P9.2-erase (09:186–220) -/
 
@@ -98,7 +98,7 @@ theorem p92_erase_mean (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 0 < c�
       {X Y : Finset (Fin N)} {κ : ℝ} {G : Colour} {M : TagMix N} (S : Setup9 P n N M)
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ → EraseCert9 S I E G C c := by
-  sorry
+  exact Lane_q_s09_gain1.erase_mean_certificate9 P hP c₀ hc₀
 
 /-- P9.2-erase, second part (09:209–220): fix the core except `W_*`.  The unmasked core tests give
 `ν(J_-) ≥ .49^k` outside an exponentially small exception, so restricting `Q = (1 + ψ)ν + err` to `J_-` changes

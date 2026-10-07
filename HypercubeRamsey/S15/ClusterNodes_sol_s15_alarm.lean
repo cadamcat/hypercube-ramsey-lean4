@@ -1646,4 +1646,336 @@ theorem degree_product_gate {G : Type*} [DecidableEq G]
   · have he := Real.exp_le_exp.mpr hu
     simpa [Real.exp_log (by norm_num : (0 : ℝ) < 2)] using he
 
+/-- Conditional degrees are probability-law hit averages. -/
+theorem cluster_degree_bounds (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (b : OddPosition T k) (x : Fin (T.S.N k)) :
+    0 ≤ clusterDegree PT hPT hm W b x ∧ clusterDegree PT hPT hm W b x ≤ 1 := by
+  let s := clusterSliceAt PT hPT b.1
+  let S := clusterSolver PT hPT hm s.1
+  let g := S.groupOf (solverWordAt PT hPT hm b.1)
+  let ν := solver_marginal_law S g (historyOnSlice W s)
+  have hh (y : Fin (T.S.N k)) : 0 ≤ hit (T.S.E k) PT.tiling.c x y ∧ hit (T.S.E k) PT.tiling.c x y ≤ 1 := by
+    unfold hit
+    split_ifs <;> norm_num
+  change 0 ≤ deg (T.S.E k) PT.tiling.c ν.w x ∧ deg (T.S.E k) PT.tiling.c ν.w x ≤ 1
+  constructor
+  · exact Finset.sum_nonneg fun y _ => mul_nonneg (ν.nonneg y) (hh y).1
+  · calc
+      (∑ y, ν.w y * hit (T.S.E k) PT.tiling.c x y) ≤ ∑ y, ν.w y :=
+        Finset.sum_le_sum fun y _ => by nlinarith [ν.nonneg y, (hh y).2]
+      _ = 1 := ν.sum_eq_one
+
+/-- Clipped bulk-degree sum has the independent-slice Hoeffding bound. -/
+theorem clipped_bulk_degree_tail (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (x : Fin (T.S.N k))
+    (hn : 0 < T.S.n k) (hB : 0 < Fintype.card (BulkIndex PT hPT a))
+    (t : ℝ) (ht : 0 < t) :
+    (clusterHistoryLaw PT hPT hm).pr (fun W => t ≤
+      |(∑ b : BulkIndex PT hPT a, clip_half (bstar T k) (clusterDegree PT hPT hm W b.1 x)) -
+        ∑ b : BulkIndex PT hPT a, (clusterHistoryLaw PT hPT hm).E
+          (fun W => clip_half (bstar T k) (clusterDegree PT hPT hm W b.1 x))|) ≤
+      2 * Real.exp (-(2 * t ^ 2 /
+        ((Fintype.card (BulkIndex PT hPT a) : ℝ) * (4 * bstar T k) ^ 2))) := by
+  let Q : ∀ r : ClusterRecordIndex PT hPT hm, FinProb (ClusterRecordValue r) := fun r =>
+    ⟨(clusterSolver PT hPT hm r.1.1).lawRec PT.parameter r.2,
+      (clusterSolver PT hPT hm r.1.1).lawRec_nonneg PT.parameter r.2,
+      (clusterSolver PT hPT hm r.1.1).lawRec_sum PT.parameter r.2⟩
+  let scope := fun b : BulkIndex PT hPT a => raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1.1)
+  let X := fun (b : BulkIndex PT hPT a) (W : ClusterHistory PT hPT hm) =>
+    clip_half (bstar T k) (clusterDegree PT hPT hm W b.1 x)
+  have hb : 0 < bstar T k := by
+    unfold bstar
+    exact Real.rpow_pos_of_pos (Nat.cast_pos.mpr hn) _
+  have hscope : ∀ b, FinProb.DependsOn (X b) (scope b) := by
+    intro b W W' h
+    change clip_half (bstar T k) (clusterDegree PT hPT hm W b.1 x) =
+      clip_half (bstar T k) (clusterDegree PT hPT hm W' b.1 x)
+    have hd : clusterDegree PT hPT hm W b.1 x = clusterDegree PT hPT hm W' b.1 x := by
+      simpa only using degree_depends_on_raw_slice PT hPT hm b.1 x W W' h
+    rw [hd]
+  have hh := scoped_two_sided_tail Q scope
+    (bulk_raw_scopes_degree_one PT hPT hm a) X hscope
+    (1 / 2 - 2 * bstar T k) (1 / 2 + 2 * bstar T k) t
+    (by linarith) (fun b W => clip_half_bounds _ _ hb.le) hB ht
+  convert hh using 1
+  · rfl
+  · congr 3
+    ring
+
+/-- Eventually each row has a coordinate outside both its prefix and internal block. -/
+theorem bulk_nonempty_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ a : EvenPosition T k, (clusterBulkNeighbours PT hPT a).Nonempty := by
+  have hι : κ.ι < 1 := by
+    have hm : min κ.xs (min κ.η0 0.01) ≤ κ.xs := min_le_left _ _
+    linarith [hκ.ι_rng.2, hκ.xs_rng.2]
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hsmall : ∀ᶠ k in atTop, (T.S.n k : ℝ) ^ κ.ι ≤ (1 / 4) * T.S.n k := by
+    simpa only [Real.rpow_one] using hn.eventually
+      (real_eventually_rpow_le_mul (p := κ.ι) (q := 1) (c := 1 / 4) hι (by norm_num))
+  filter_upwards [hsmall, hn.eventually_ge_atTop 1] with k hk hn1
+  intro PT hPT a
+  let i := patchAt PT hPT a.1
+  let P := PT.tiling.P i
+  have hlen : P.ℓ + P.h < T.S.n k := by
+    have hm := (hPT.tiling_valid.allocation_bounds i).1
+    have hl : (P.ℓ : ℝ) ≤ max (P.h : ℝ) (P.ℓ : ℝ) := le_max_right _ _
+    have hh : (P.h : ℝ) ≤ max (P.h : ℝ) (P.ℓ : ℝ) := le_max_left _ _
+    have hreal : (P.ℓ : ℝ) + P.h < T.S.n k := by nlinarith
+    exact_mod_cast hreal
+  let j : Fin (T.S.n k) := ⟨P.ℓ, by omega⟩
+  let v := flipPos a.1 j
+  have hv : ¬ HypercubeRamsey.IsEvenRole v := by
+    intro h
+    exact ((evenRole_flipPos a.1 j).mp h) a.2
+  let b : OddPosition T k := ⟨v, hv⟩
+  have haLeaf : a.1 ∈ PT.tiling.leaf i :=
+    (Classical.choose_spec (hPT.tiling_valid.prefix_complete a.1)).1
+  have hvLeaf : v ∈ PT.tiling.leaf i := by
+    intro l hl
+    have hne : l ≠ j := by
+      intro h
+      have hval := congrArg Fin.val h
+      change l.val = P.ℓ at hval
+      change l.val < P.ℓ at hl
+      omega
+    simp only [v, flipPos, Function.update_of_ne hne]
+    exact haLeaf l hl
+  have hpatch : patchAt PT hPT b.1 = i :=
+    HypercubeRamsey.Lane_q_s15_direct.patchAt_eq_of_leaf PT hPT i b.1 hvLeaf
+  have hslice : clusterSliceAt PT hPT b.1 ≠ clusterSliceAt PT hPT a.1 := by
+    intro h
+    have hj : j.val < T.S.n k - (PT.tiling.P i).h := by
+      change P.ℓ < T.S.n k - P.h
+      omega
+    have he := slice_eq_gives_outside_coordinate PT hPT i b.1 a.1 hpatch rfl h j hj
+    cases ha : a.1 j <;> simp [b, v, flipPos, ha] at he
+  refine ⟨b, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_, hpatch, hslice⟩⟩
+  have hadj := cubeFlip_adj a.1 j
+  simpa [Adjacent, b, v, cubeFlip, flipPos] using hadj
+
+/-- Every fixed conditional marginal has exponentially few degree outliers in every patch. -/
+theorem cluster_degree_outlier_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ W : ClusterHistory PT hPT hm, ∀ i, ∀ b : OddPosition T k,
+        (∑ x, if 2 * bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2| then
+          (Law.unifCore (PT.tiling.P i).X (hPT.tiling_valid.patch_nonempty i).1).w x else 0) ≤
+          2 * Real.exp (-3 * κ.α * T.S.n k / 4) := by
+  have hα : 0 < κ.α := hκ.α_rng.1
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hsmall : ∀ᶠ k in atTop, (T.S.n k : ℝ) ^ (κ.xs / 4) ≤ (κ.α / 4) * T.S.n k := by
+    have hx : κ.xs / 4 < 1 := by linarith [hκ.xs_rng.2]
+    simpa only [Real.rpow_one] using hn.eventually
+      (real_eventually_rpow_le_mul (p := κ.xs / 4) (q := 1) (c := κ.α / 4) hx (by positivity))
+  filter_upwards [hDeep, cluster_width_eventually κ hκ T, hsmall,
+    hn.eventually_ge_atTop 1] with k hdisc hwidth hsmall hn1
+  intro PT hPT hm W i b
+  let μ := Law.unifCore (PT.tiling.P i).X (hPT.tiling_valid.patch_nonempty i).1
+  have hμsupp : μ.SupportedIn (T.X k) := by
+    intro x hx
+    have hx' : x ∉ (PT.tiling.P i).X := by
+      intro h
+      exact hx (Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports i).2.1
+        ((hPT.tiling_valid.patch_supports i).1 h))).1
+    simp [μ, Law.unifCore, hx']
+  have hμwidth : μ.WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)) := by
+    have hwidthμ := Law.uniform_width (PT.tiling.P i).X (hPT.tiling_valid.patch_nonempty i).1
+    rw [(PT.tiling.P i).cardX] at hwidthμ
+    have hμlog : μ.WidthLE (Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M)) := by
+      intro x
+      simpa [μ, Law.unifCore, FinProb.uniform, one_div] using hwidthμ x
+    exact hμlog.mono (hwidth PT hPT hm i).1
+  have hxs : (T.S.n k : ℝ) ^ (κ.xs / 4) ≤ (T.S.n k : ℝ) ^ κ.xs :=
+    Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hκ.xs_rng.1])
+  have hbstar : 0 ≤ bstar T k := by unfold bstar; positivity
+  let s := clusterSliceAt PT hPT b.1
+  let S := clusterSolver PT hPT hm s.1
+  let g := S.groupOf (solverWordAt PT hPT hm b.1)
+  let ν := solver_marginal_law S g (historyOnSlice W s)
+  have hνsupp : ν.SupportedIn (T.Y k) := by
+    intro y hy
+    apply solver_marginal_law_supported S g (historyOnSlice W s) y
+    intro h
+    exact hy (Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports s.1).2.2.2
+      ((hPT.tiling_valid.patch_supports s.1).2.2.1 h))).1
+  have hνwidth : ν.WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)) :=
+    (hwidth PT hPT hm s.1).2 ν (fun y => S.marginal_cap g (historyOnSlice W s) y)
+  have hdeg (x : Fin (T.S.N k)) : deg (T.S.E k) PT.tiling.c ν.w x = clusterDegree PT hPT hm W b x := rfl
+  have he := HypercubeRamsey.S12.exceptional_first hdisc PT.tiling.c
+    (w₁ := (T.S.n k : ℝ) ^ (κ.xs / 4)) (W₂ := κ.α * T.S.n k)
+    (w := (T.S.n k : ℝ) ^ (κ.xs / 4)) (Or.inl ⟨hxs, le_rfl⟩)
+    ν hνsupp hνwidth μ hμsupp hμwidth
+  have herr : (T.S.n k : ℝ) ^ (-1 + (0.04 : ℝ)) = bstar T k := by norm_num [bstar]
+  simp_rw [herr, hdeg] at he
+  calc
+    (∑ x, if |clusterDegree PT hPT hm W b x - 1 / 2| > 2 * bstar T k then μ.w x else 0) ≤
+        ∑ x, if bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2| then μ.w x else 0 := by
+      apply Finset.sum_le_sum
+      intro x _
+      split_ifs with h h'
+      · exact le_rfl
+      · exfalso; apply h'; linarith
+      · exact μ.nonneg x
+      · exact le_rfl
+    _ = ∑ x ∈ Finset.univ.filter (fun x => bstar T k < |clusterDegree PT hPT hm W b x - 1 / 2|), μ.w x := by rw [Finset.sum_filter]
+    _ ≤ 2 * Real.exp ((T.S.n k : ℝ) ^ (κ.xs / 4) - κ.α * T.S.n k) := he
+    _ ≤ _ := by apply mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr _) (by norm_num); linarith
+
+private theorem finite_probability_bounds {A : Type*} [Fintype A] (P : FinLaw A) (E : A → Prop) :
+    0 ≤ P.pr E ∧ P.pr E ≤ 1 := by
+  constructor
+  · unfold FinLaw.pr
+    apply Finset.sum_nonneg
+    intro a _
+    split_ifs
+    · exact P.nonneg a
+    · exact le_rfl
+  · calc
+      P.pr E ≤ ∑ a, P.w a := by
+        apply Finset.sum_le_sum
+        intro a _
+        split_ifs
+        · exact le_rfl
+        · exact P.nonneg a
+      _ = 1 := P.sum_one
+
+private theorem finite_expectation_bounds {A : Type*} [Fintype A]
+    (P : FinLaw A) (f : A → ℝ) (lo hi : ℝ) (hf : ∀ a, lo ≤ f a ∧ f a ≤ hi) :
+    lo ≤ P.E f ∧ P.E f ≤ hi := by
+  have hconst (c : ℝ) : (∑ a, P.w a * c) = c := by rw [← Finset.sum_mul, P.sum_one, one_mul]
+  constructor
+  · rw [← hconst lo]
+    exact Finset.sum_le_sum fun a _ => mul_le_mul_of_nonneg_left (hf a).1 (P.nonneg a)
+  · rw [← hconst hi]
+    exact Finset.sum_le_sum fun a _ => mul_le_mul_of_nonneg_left (hf a).2 (P.nonneg a)
+
+private theorem finite_fubini_probability {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinLaw A) (Q : FinLaw B) (E : A → B → Prop) :
+    Q.E (fun b => P.pr (fun a => E a b)) = P.E (fun a => Q.pr (E a)) := by
+  unfold FinLaw.E FinLaw.pr
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro a _
+  apply Finset.sum_congr rfl
+  intro b _
+  split_ifs <;> ring
+
+private theorem finite_expectation_sum {A B : Type*} [Fintype A] [DecidableEq B]
+    (P : FinLaw A) (s : Finset B) (f : B → A → ℝ) :
+    P.E (fun a => ∑ b ∈ s, f b a) = ∑ b ∈ s, P.E (f b) := by
+  unfold FinLaw.E
+  simp_rw [Finset.mul_sum]
+  exact Finset.sum_comm
+
+private theorem finite_probability_exists_le {A B : Type*} [Fintype A] [DecidableEq B]
+    (P : FinLaw A) (s : Finset B) (E : B → A → Prop) :
+    P.pr (fun a => ∃ b ∈ s, E b a) ≤ ∑ b ∈ s, P.pr (E b) := by
+  unfold FinLaw.pr
+  rw [Finset.sum_comm]
+  apply Finset.sum_le_sum
+  intro a _
+  by_cases h : ∃ b ∈ s, E b a
+  · rw [if_pos h]
+    obtain ⟨b, hb, hba⟩ := h
+    have hs := Finset.single_le_sum (s := s) (a := b)
+      (f := fun b => if E b a then P.w a else 0)
+      (fun b _ => by
+        split_ifs
+        · exact P.nonneg a
+        · exact le_rfl) hb
+    simpa [hba] using hs
+  · rw [if_neg h]
+    exact Finset.sum_nonneg fun b _ => by
+      split_ifs
+      · exact P.nonneg a
+      · exact le_rfl
+
+/-- Pointwise probability bound for the product-of-degrees test. -/
+theorem degree_product_failure_le {A G : Type*} [Fintype A] [DecidableEq G]
+    (P : FinLaw A) (s : Finset G) (hs : s.Nonempty) (D : G → A → ℝ)
+    (d b δ ε : ℝ) (hb : 0 ≤ b) (hbsmall : b ≤ 1 / 1000)
+    (hδb : δ ≤ b) (hδt : δ ≤ 1 / 200)
+    (hD : ∀ g ∈ s, ∀ a, 0 ≤ D g a ∧ D g a ≤ 1)
+    (hmean : ∀ g ∈ s, P.E (D g) = d)
+    (hbad : (∑ g ∈ s, P.pr (fun a => 2 * b < |D g a - 1 / 2|)) ≤ δ)
+    (hsize : (s.card : ℝ) * b ^ 2 ≤ 1 / 100000)
+    (htail : P.pr (fun a => (1 / 200 : ℝ) ≤
+      |(∑ g ∈ s, clip_half b (D g a)) - ∑ g ∈ s, P.E (fun a => clip_half b (D g a))|) ≤ ε) :
+    P.pr (fun a => ¬ ((∀ g ∈ s, |D g a - 1 / 2| ≤ 2 * b) ∧
+      0 < d ∧ (1 / 2 : ℝ) ≤ (∏ g ∈ s, D g a) / d ^ s.card ∧
+        (∏ g ∈ s, D g a) / d ^ s.card ≤ 2)) ≤ δ + ε := by
+  let C := fun g => P.E (fun a => clip_half b (D g a))
+  let q := fun g => P.pr (fun a => 2 * b < |D g a - 1 / 2|)
+  have hq : ∀ g, 0 ≤ q g := fun g => (finite_probability_bounds P _).1
+  have herr (g : G) (hg : g ∈ s) : |C g - d| ≤ q g := by
+    have h := clip_probability_error_le P (D g) (hD g hg) b hb (by linarith)
+    rw [hmean g hg] at h
+    exact h
+  have hqle (g : G) (hg : g ∈ s) : q g ≤ δ :=
+    (Finset.single_le_sum (fun g _ => hq g) hg).trans hbad
+  obtain ⟨g0, hg0⟩ := hs
+  have hCrange := finite_expectation_bounds P (fun a => clip_half b (D g0 a))
+    (1 / 2 - 2 * b) (1 / 2 + 2 * b) (fun a => clip_half_bounds b (D g0 a) hb)
+  have hdgate : |d - 1 / 2| ≤ 3 * b := by
+    have herror := (herr g0 hg0).trans (hqle g0 hg0)
+    rcases abs_le.mp herror with ⟨hl, hu⟩
+    apply abs_le.mpr
+    constructor <;> linarith
+  have hd : (2 / 5 : ℝ) ≤ d := by
+    have hl := (abs_le.mp hdgate).1
+    linarith
+  have hd0 : 0 < d := by linarith
+  have hsumerr : |(∑ g ∈ s, C g) - s.card * d| ≤ δ := by
+    have heq : (∑ g ∈ s, C g) - s.card * d = ∑ g ∈ s, (C g - d) := by
+      rw [Finset.sum_sub_distrib]
+      simp
+    rw [heq]
+    calc
+      |∑ g ∈ s, (C g - d)| ≤ ∑ g ∈ s, |C g - d| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ g ∈ s, q g := Finset.sum_le_sum herr
+      _ ≤ δ := hbad
+  let O := fun a => ∃ g ∈ s, 2 * b < |D g a - 1 / 2|
+  let T := fun a => (1 / 200 : ℝ) ≤ |(∑ g ∈ s, clip_half b (D g a)) - ∑ g ∈ s, C g|
+  have hsub (a : A) (h : ¬ ((∀ g ∈ s, |D g a - 1 / 2| ≤ 2 * b) ∧
+      0 < d ∧ (1 / 2 : ℝ) ≤ (∏ g ∈ s, D g a) / d ^ s.card ∧
+        (∏ g ∈ s, D g a) / d ^ s.card ≤ 2)) : O a ∨ T a := by
+    by_cases ho : O a
+    · exact Or.inl ho
+    · by_cases ht : T a
+      · exact Or.inr ht
+      · exfalso
+        apply h
+        have hgates : ∀ g ∈ s, |D g a - 1 / 2| ≤ 2 * b := by
+          intro g hg
+          by_contra hb
+          exact ho ⟨g, hg, lt_of_not_ge hb⟩
+        have hclip : (∑ g ∈ s, clip_half b (D g a)) = ∑ g ∈ s, D g a := by
+          apply Finset.sum_congr rfl
+          intro g hg
+          exact clip_half_eq_of_gate b (D g a) (hgates g hg)
+        have hdiff : |(∑ g ∈ s, D g a) - ∑ g ∈ s, C g| ≤ 1 / 200 := by
+          have hlt := lt_of_not_ge ht
+          change |(∑ g ∈ s, clip_half b (D g a)) - ∑ g ∈ s, C g| < 1 / 200 at hlt
+          rw [hclip] at hlt
+          exact hlt.le
+        have hsum : |(∑ g ∈ s, D g a) - s.card * d| ≤ 1 / 100 := by
+          have htriangle := abs_add_le ((∑ g ∈ s, D g a) - ∑ g ∈ s, C g)
+            ((∑ g ∈ s, C g) - s.card * d)
+          rw [sub_add_sub_cancel] at htriangle
+          linarith
+        have hp := degree_product_gate s (fun g => D g a) d b hb hbsmall hd hdgate hgates hsize hsum
+        exact ⟨hgates, hd0, hp.1, hp.2⟩
+  calc
+    _ ≤ P.pr (fun a => O a ∨ T a) :=
+      HypercubeRamsey.Lane_q_s15_direct.finLaw_pr_mono P _ _ hsub
+    _ ≤ P.pr O + P.pr T := HypercubeRamsey.Lane_q_s15_direct.finLaw_pr_union P O T
+    _ ≤ δ + ε := add_le_add ((finite_probability_exists_le P s (fun g a => 2 * b < |D g a - 1 / 2|)).trans hbad) htail
+
 end HypercubeRamsey.Lane_sol_s15_alarm

@@ -147,6 +147,12 @@ structure LeafCoupling (D : LateData hPT) (δ : ℝ) where
     D.encoding.permLaw.pr (fun x => x ∈ leaf L ∧ ∀ L' ∈ avoided, x ∉ leaf L') ≤
       D.encoding.permLaw.pr (fun x => x ∈ leaf L) *
         D.encoding.permLaw.pr (fun x => ∀ L' ∈ avoided, x ∉ leaf L')
+  /-- 18:753–757: a leaf specifies the images of its consulted slots, so every bin it
+  reads at a domain slot is one of its image tokens. -/
+  images_cover : ∀ (L : Leaf) (x : D.encoding.InitInput), x ∈ leaf L →
+    ∀ s ∈ domains L,
+      (⟨D.geom.cellPatch s.1, x.1 s.1 s.2⟩ : Sigma fun i : Fin PT.tiling.m => Bin PT.tiling i) ∈
+        images L
 attribute [instance] LeafCoupling.leafFin
 
 end HypercubeRamsey.S18

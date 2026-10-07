@@ -87,4 +87,16 @@ abbrev tilingOf {κ : CConsts} {T : Stage} {k : ℕ}
 
 end ProfiledTiling
 
+namespace Lane_sol_fix_corner
+
+/-- Stable-cleaning retained mass on active corners (sections/13, lines 226–232 and
+270–278), as required by Section 17's corner-size and direct-prior clauses. -/
+theorem active_corner_card_lower_waste {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (hPT : PT.Valid)
+    (i : Fin PT.tiling.m) (a : PT.mesh.V) (ha : a ∈ PT.activeVertices) :
+    (1 - κ.a) * ((PT.tiling.P i).M : ℝ) ≤ ((PT.mesh.corner a i).card : ℝ) := by
+  exact (hPT.corner_clean i a ha).card_lower_waste
+
+end Lane_sol_fix_corner
+
 end HypercubeRamsey

@@ -3471,6 +3471,53 @@ theorem small_range (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx
     ∃ u : ℕ, Even u ∧ 0 < u ∧ ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop}
       {X Y : Finset (Fin N)} (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
       OuterHyp δ x₀ K n N E X Y G π σ S → SmallRange E G π σ (Fintype.card (OuterCoord n)) n δ P u := by
+  classical
+  let L : ℕ := Nat.ceil (P + 10)
+  let u : ℕ := 2 * L
+  have hLpos : 0 < L := by
+    dsimp [L]
+    apply Nat.ceil_pos.2
+    linarith
+  have huPos : 0 < u := by dsimp [u]; exact Nat.mul_pos (by norm_num) hLpos
+  have huEven : Even u := by
+    dsimp [u]
+    exact ⟨L, by omega⟩
+  let P' : ℝ := P + (u : ℝ) + 2
+  obtain ⟨nC, hCev⟩ := hC u
+  obtain ⟨nE, hEev⟩ := hE u P'
+  let n₀ : ℕ := max 64 (max nC nE)
+  refine ⟨u, huEven, huPos, n₀, ?_⟩
+  intro n hn N E X Y G π σ S hO
+  have hn64 : 64 ≤ n := le_trans (le_max_left _ _) hn
+  have hnCE : max nC nE ≤ n := le_trans (le_max_right _ _) hn
+  have hnC : nC ≤ n := le_trans (le_max_left _ _) hnCE
+  have hnE : nE ≤ n := le_trans (le_max_right _ _) hnCE
+  have hMean := hCev n hnC G π σ S hO
+  have hModerate := hEev n hnE G π σ S hO
+  have hModerateAll (v : ℕ) (hv : v ≤ u) := hModerate v hv
+  let t0 : ℝ := (n : ℝ) ^ (-(103 : ℝ) / 100)
+  let cap : ℝ := (n : ℝ) ^ (-(δ / 4))
+  have hnpos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hcutOrder : t0 < cap := by
+    change (n : ℝ) ^ (-(103 : ℝ) / 100) < (n : ℝ) ^ (-(δ / 4))
+    exact Real.rpow_lt_rpow_of_exponent_lt
+      (by exact_mod_cast (by omega : 1 < n)) (by linarith)
+  have hBounded := (hModerateAll u (le_rfl)).1
+  have hTail := (hModerateAll u (le_rfl)).2
+  -- The remaining expansion splits the covered interaction lists at L:
+  -- the short-list terms use `hMean`, while the long-list geometric tail and
+  -- the exponential-weight middle band use `hBounded` and `hTail`.
+  have hLowExpansion :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if env E G π f ≤ t0 then |phiU E G π (Fintype.card (OuterCoord n)) u f| else 0)) ≤
+        (2 : ℝ) ^ (-((u : ℝ) + 3)) * (n : ℝ) ^ (-P) := by
+    sorry
+  have hMiddleExpansion :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if t0 < env E G π f ∧ env E G π f ≤ cap then
+          |phiU E G π (Fintype.card (OuterCoord n)) u f| else 0)) ≤
+        (2 : ℝ) ^ (-((u : ℝ) + 3)) * (n : ℝ) ^ (-P) := by
+    sorry
   sorry
 
 /-- L11.3g (11:311–327).  For a tuple with `w > n^{-υ}` fix a maximal retained set `R` (all interactions within `R`
@@ -3482,6 +3529,40 @@ theorem large_range (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} (G : Colour)
       (π σ : Fin N → ℝ) (S : Finset (Fin N)),
       OuterHyp δ x₀ K n N E X Y G π σ S → LargeRange E G π σ (Fintype.card (OuterCoord n)) n δ P u := by
+  classical
+  let P' : ℝ := P + (u : ℝ) + 4
+  obtain ⟨nD, hDev⟩ := hD u
+  obtain ⟨nE, hEev⟩ := hE u P'
+  let n₀ : ℕ := max nD nE
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y G π σ S hO
+  have hnD : nD ≤ n := le_trans (le_max_left _ _) hn
+  have hnE : nE ≤ n := le_trans (le_max_right _ _) hn
+  have hCount := hDev n hnD G π σ S hO
+  have hModerate := hEev n hnE G π σ S hO
+  have hModerateAll (v : ℕ) (hv : v ≤ u) := hModerate v hv
+  let cap : ℝ := (n : ℝ) ^ (-(δ / 4))
+  let d : ℕ := Fintype.card (OuterCoord n)
+  have hChoices : Fintype.card (Finset (Fin u)) = 2 ^ u := by simp [Fintype.card_finset]
+  have hRetainedBound (R : Finset (Fin u)) :
+      (∑ f : Fin u → Fin N, tupWt σ f *
+        (if env E G π f ≤ cap then |phiU E G π d u f| else 0)) ≤
+        Real.exp ((2 : ℝ) ^ u) + 1 := by
+    have hB := (hModerateAll u (le_rfl)).1
+    -- Restrict the positive expansion to the retained coordinates and use the
+    -- bounded moderate exponential weight at length `R.card`.
+    sorry
+  have hExtensionCharge (base : Fin u → Fin N) (hbase : ∀ l, base l ∈ S)
+      (R : Finset (Fin u)) (i : Fin u) :
+      ((S.filter fun z => ∃ J' : Finset (Fin u), J' ∈ R.powerset ∧
+        cap < |inter E G π (insert i J') (Function.update base i z)|).card : ℝ) ≤
+        (2 : ℝ) ^ u * Real.exp ((n : ℝ) ^ ((3 : ℝ) / 100)) := by
+    -- Union over the at most `2^u` interaction sets and apply CountExt to each free label.
+    sorry
+  -- Choose a maximal retained set of tuple coordinates. Every omitted coordinate
+  -- incurs the extension charge above; the retained product is controlled by hRetainedBound.
+  -- Summing over the finitely many retained sets and charging at least one omitted
+  -- coordinate gives the required 2^{-u-2} n^{-P} tail.
   sorry
 
 /-- Markov's inequality on the even moment (11:329): `Z < 1/2` forces `(Z - 1)^u ≥ 2^{-u}`, and

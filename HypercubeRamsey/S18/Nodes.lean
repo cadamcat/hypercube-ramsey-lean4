@@ -2,6 +2,10 @@ import HypercubeRamsey.S18.Defs
 import HypercubeRamsey.S18.Nodes_q_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n1
+import HypercubeRamsey.S18.Nodes_sol_s18_n4
+import HypercubeRamsey.S18.Terminal_sol_s18_n4
+import HypercubeRamsey.S18.Sampler_sol_s18_n4
+import HypercubeRamsey.S18.Leaf_sol_s18_n4
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -436,7 +440,8 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2,
+    Lane_sol_s18_n4.finalListTapeBound hκ T] with k hk hfinal
   intro PT hPT D hD hTransition hLocal hTransfer hReplay
   intro pin f
   cases f with
@@ -447,17 +452,19 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
             funext x
             rfl
           rw [hevent]
-          exact Lane_q_s18_n4.upstreamBadPinnedBound D hD pin (.inl C) hk
+          exact Lane_q_s18_n4.upstreamBadPinnedBound D hD pin (.inl C) (by omega)
       | inr v =>
           have hevent : terminalFailure D δ (.inl (.inr v)) = D.upstreamBad (.inr v) := by
             funext x
             simp [terminalFailure, LateData.poolListOK, LateData.freshConfigLaw,
               LateData.upstreamBad]
           rw [hevent]
-          exact Lane_q_s18_n4.upstreamBadPinnedBound D hD pin (.inr v) hk
+          exact Lane_q_s18_n4.upstreamBadPinnedBound D hD pin (.inr v) (by omega)
   | inr pair =>
       cases pair with
-      | inl v => sorry
+      | inl v =>
+          exact Lane_sol_s18_n4.finalListPinnedBound D v (by omega)
+            (hfinal D hD (Lane_sol_s18_n4.eventDegreeBound D hD hk) v) pin
       | inr F => sorry
 
 /-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
@@ -481,6 +488,13 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
       ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
         ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → LeafCoupling D δ →
           Nonempty (TerminalCertificate D δ (ε k)) := by
+  refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
+    (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
+  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ] with k hpositive
+  intro PT hPT D hD hRisk leaves
+  have hpos := hpositive D hRisk leaves
+  refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
+  intro seed hseed Ψ hΨ hlocal
   sorry
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
@@ -507,6 +521,10 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ∀ ε, TerminalCertificate D δ ε →
           Nonempty (ClassSamplerData D δ) := by
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hn
+  intro PT hPT D hD hTransition hLocal hTransfer ε C
+  apply Lane_sol_s18_n4.classSamplerOfEnteringLaws D δ hn
+  intro j h henter
   sorry
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish

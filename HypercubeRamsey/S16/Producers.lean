@@ -1,6 +1,7 @@
 import HypercubeRamsey.S16.Comparisons
 import HypercubeRamsey.S16.Producers_q_s16_prod1
 import HypercubeRamsey.S16.Producers_sol_s16_prod1
+import HypercubeRamsey.S16.Producers_sol_s16_group
 
 /-! Construction contracts connecting the conditional Section 16 estimates
 to physical cells. These nodes are separate proof obligations: none assumes
@@ -2054,9 +2055,65 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       intro g b y hcon
       exact group_contribution_minimum Q K hR hCluster C pool W hW
         (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW) g b y hcon
-    -- Star/pin endpoints and positive-atom bucket support are proved.
-    -- The capacity event family and its reciprocal budgets remain.
-    sorry
+    apply Lane_sol_s16_group.dyadic_group_certificates P hlarge
+      (slice_epsilon_range hκ _).1 (PT.tiling.P (H.geom.cellPatch C)).h
+      hRoom.2.2.2.2.2 (fun b => b.1)
+    · intro b
+      exact le_of_eq (Q.profiled_valid.tiling_valid.bins_card _ _ b.2)
+    · exact physical_bins_disjoint _
+    · intro g b y hcon
+      by_contra hy
+      have hzero : (R.U C W g b).w y = 0 := by
+        by_contra hn
+        exact hy (R.U_support C W g b y hn)
+      simp only [P, CellRestrictedKernels.binProblem, hzero, ite_self, Finset.sum_const_zero] at hcon
+      exact hcon rfl
+    · intro g b y
+      exact group_contribution_nonneg K C pool W g b y
+    · exact physical_group_contribution_cap hκ K hR hCalibration hCluster C pool W hW
+        (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW)
+    · exact hContributionLower
+    · intro y
+      rw [nominal_load_eq K C pool W y]
+      have h := hload (L.Column.symm y)
+      rw [L.load_eq, L.threshold_eq, L.Column.apply_symm_apply] at h
+      have hθ : κ.θstar ≤ 1 / 1000 := by
+        have hclock := hκ.clock.2.1
+        have hb := hκ.bucket
+        rw [hclock] at hb
+        have hKp : (40 : ℝ) ≤ κ.Kp := by exact_mod_cast hb.1
+        nlinarith [mul_le_mul_of_nonneg_right hKp hb.2.2.2.2.le]
+      exact h.trans hθ
+    · exact hLocal
+    · intro v
+      have hcard : (P.participants v).card ≤ (PT.tiling.P (H.geom.cellPatch C)).h :=
+        Finset.card_image_le.trans (physical_participants_count K C v)
+      have hpow : Real.rpow (P.d : ℝ) 0.025 ≤ P.d := by
+        have hbase : (1 : ℝ) ≤ P.d := by
+          exact_mod_cast (show 1 ≤ P.d from le_trans (by norm_num) hTwo)
+        have hh : Real.rpow (P.d : ℝ) 0.025 ≤ Real.rpow (P.d : ℝ) 1 :=
+          Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+        have hone : Real.rpow (P.d : ℝ) 1 = P.d := Real.rpow_one _
+        exact hh.trans_eq hone
+      have hh := hRoom.2.2.2.2.1
+      have hbound : ((P.participants v).card : ℝ) ≤ P.d := by
+        have hc : ((P.participants v).card : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by exact_mod_cast hcard
+        exact hc.trans (le_trans (by norm_num : ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ≤
+          (PT.tiling.P (H.geom.cellPatch C)).h + 1) (hh.trans hpow))
+      exact_mod_cast hbound
+    · intro g
+      have hdeg := physical_group_star_degree K hR hCalibration hCluster C g
+      have hpow : Real.rpow (P.d : ℝ) 0.01 ≤ P.d := by
+        have hbase : (1 : ℝ) ≤ P.d := by
+          exact_mod_cast (show 1 ≤ P.d from le_trans (by norm_num) hTwo)
+        have hh : Real.rpow (P.d : ℝ) 0.01 ≤ Real.rpow (P.d : ℝ) 1 :=
+          Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+        have hone : Real.rpow (P.d : ℝ) 1 = P.d := Real.rpow_one _
+        exact hh.trans_eq hone
+      exact hdeg.trans hpow
+    · exact hq
+    · exact hStarBounds.1
+    · exact hStarBounds.2
 
 /-- A role problem linked to the successful physical bins, not arbitrary
 targets/tests. In direct modes its single block is the whole cell pool. -/

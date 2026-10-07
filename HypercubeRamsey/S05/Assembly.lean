@@ -1,10 +1,11 @@
 import HypercubeRamsey.S05.Selection
 
 /-!
-# L5.1m–o and the Part B one-shot export
+# L5.1n–o and the Part B one-shot export
 
-The two construction outputs are separated into an injective odd assignment and fractional even rows.  Their
-assembly uses the repository's Hall embedding interface and has no proof hole of its own.
+The construction outputs an injective odd assignment together with fractional even rows on its common
+neighborhoods (L5.1n).  Their assembly uses the repository's Hall embedding interface and has no proof hole of
+its own.
 -/
 
 namespace HypercubeRamsey
@@ -28,8 +29,18 @@ structure EvenPlacement5 {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
       (cube n).Adj a.1 b.1 → Hits E G x (O.label b)
   column_load : ∀ x, ∑ a, row a x ≤ 1
 
-/-- L5.1m: successful high-row deletion budgets and clock sampling give an injective odd assignment. -/
-theorem L5_1m (γ K' χ : ℝ) (hγ : 0 < γ) (hγ' : γ < 1)
+/-- L5.1n (05:15–18; construction 05:40–1282 without the final Hall step): for large `n` and `N ≥ C₀ 2^n`, the
+staged experiment has an outcome giving an injective odd assignment together with fractional even rows on
+the common `G`-neighborhoods with column loads at most one (05:1275–1281: "with positive probability the odd
+assignment is injective and every even row is a probability law on its common neighborhood, with all even
+column sums at most one").
+
+The odd assignment is an output, not an input: the paper's even rows exist only for odd labels drawn by the
+clock sampler from the odd rows of a successful history (05:1063–1084, 05:1170–1177, 05:1259–1273), so no
+statement quantifying over every injective assignment is true.  This node therefore covers L5.1a–n and the
+probabilistic part of L5.1o; it is a single construction node pending a Section 5 skeleton revision that
+defines the staged experiment. -/
+theorem L5_1n (γ K' χ : ℝ) (hγ : 0 < γ) (hγ' : γ < 1)
     (hK : 0 < K') (hχ : 0 < χ) :
     ∃ n₀ : ℕ, ∃ C₀ : ℝ, 0 < C₀ ∧
       ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
@@ -39,37 +50,7 @@ theorem L5_1m (γ K' χ : ℝ) (hγ : 0 < γ) (hγ' : γ < 1)
         (∀ x, (N : ℝ) * ∑ i, Λ i * (μ i).w x ≤ K') →
         (∀ i, 0 < Λ i → χ * N ≤
           ((Finset.univ.filter (fun y => (95 : ℝ) / 100 ≤ colDeg E G (μ i) y)).card : ℝ)) →
-        Nonempty (OddAssignment5 (n := n) (N := N) E G) := by
-  classical
-  refine ⟨1, 1, by norm_num, ?_⟩
-  intro n N E G ι inst Λ μ hLarge hΛ hΛsum hwidth hbalance hgood
-  have hNat : 2 ^ n ≤ N := by
-    have hReal : ((2 ^ n : ℕ) : ℝ) ≤ (N : ℝ) := by
-      simpa using hLarge.2.1
-    exact_mod_cast hReal
-  have hcard : Fintype.card {v : CubeVertex n // ¬ IsEvenRole v} ≤ N := by
-    calc
-      Fintype.card {v : CubeVertex n // ¬ IsEvenRole v} ≤ Fintype.card (CubeVertex n) :=
-        Fintype.card_le_of_injective Subtype.val Subtype.val_injective
-      _ = 2 ^ n := OAI.HypercubeRamsey.card_cubeVertex n
-      _ ≤ N := hNat
-  let f : {v : CubeVertex n // ¬ IsEvenRole v} ↪ Fin N :=
-    (Function.Embedding.nonempty_of_card_le (by simpa using hcard)).some
-  exact ⟨⟨f, f.injective⟩⟩
-
-/-- L5.1n: after the odd assignment, deletion of primitive tuple blocks and the even load estimate give
-fractional rows on common neighborhoods. -/
-theorem L5_1n (γ K' χ : ℝ) (hγ : 0 < γ) (hγ' : γ < 1)
-    (hK : 0 < K') (hχ : 0 < χ) (n₀ : ℕ) (C₀ : ℝ) (hC₀ : 0 < C₀)
-    {n N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    {ι : Type*} [Fintype ι] (Λ : ι → ℝ) (μ : ι → Law N)
-    (hLarge : LargeAt n₀ C₀ n N) (hΛ : ∀ i, 0 ≤ Λ i) (hΛsum : ∑ i, Λ i = 1)
-    (hwidth : ∀ i, 0 < Λ i → (μ i).WidthLE ((n : ℝ) ^ γ))
-    (hbalance : ∀ x, (N : ℝ) * ∑ i, Λ i * (μ i).w x ≤ K')
-    (hgood : ∀ i, 0 < Λ i → χ * N ≤
-      ((Finset.univ.filter (fun y => (95 : ℝ) / 100 ≤ colDeg E G (μ i) y)).card : ℝ))
-    (O : OddAssignment5 (n := n) (N := N) E G) :
-    Nonempty (EvenPlacement5 (n := n) (N := N) O) := by
+        ∃ O : OddAssignment5 (n := n) (N := N) E G, Nonempty (EvenPlacement5 O) := by
   sorry
 
 /-- L5.1o: the odd assignment and even fractional rows assemble into a cube row certificate. -/
@@ -98,12 +79,10 @@ theorem L5_1_consumed : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 <
         (fun y => (95 : ℝ) / 100 ≤ colDeg E G (μ i) y)).card : ℝ)) →
       CubeAt n N E := by
   intro γ K' χ hγ hγ' hK hχ
-  obtain ⟨n₀, C₀, hC₀, hOdd⟩ := L5_1m γ K' χ hγ hγ' hK hχ
+  obtain ⟨n₀, C₀, _hC₀, hRows⟩ := L5_1n γ K' χ hγ hγ' hK hχ
   refine ⟨n₀, C₀, ?_⟩
   intro n N E G ι inst Λ μ hLarge hΛ hΛsum hwidth hbalance hgood
-  obtain ⟨O⟩ := hOdd n N E G Λ μ hLarge hΛ hΛsum hwidth hbalance hgood
-  obtain ⟨A⟩ := L5_1n γ K' χ hγ hγ' hK hχ n₀ C₀ hC₀
-    E G Λ μ hLarge hΛ hΛsum hwidth hbalance hgood O
+  obtain ⟨O, ⟨A⟩⟩ := hRows n N E G Λ μ hLarge hΛ hΛsum hwidth hbalance hgood
   exact cube_of_rows5 (L5_1o_rows O A)
 
 end HypercubeRamsey

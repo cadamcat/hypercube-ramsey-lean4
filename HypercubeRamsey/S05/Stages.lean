@@ -33,7 +33,12 @@ noncomputable def highDeletionCost5 {N s : ℕ} {Ref : Type*}
     (c : Ref) (h : Fin s) (y : Fin N) : ℝ :=
   max 0 (Real.log (R.w (h, y) / ((Q c h).w y / (s : ℝ))))
 
-/-- Finite high-row data at a fixed observation history. -/
+/-- Finite high-row data at a fixed observation history.
+
+`capped_feasible` is the paper's density-good law (05:479–481, 05:557–573, 05:591–593): on a path passing the
+tests, `ν` restricted to `G_D` and normalized lies in the compact convex set `𝔉`, whose members have the atom
+cap and the true support.  It supplies the cap when there are no deletion references (`r_ref = 0`,
+05:479–481), where `price_feasible` is vacuous. -/
 structure HighRowModel5 (Data Ref : Type*) [Fintype Data] [Fintype Ref]
     (s N : ℕ) where
   raw : FinProb Data
@@ -45,6 +50,10 @@ structure HighRowModel5 (Data Ref : Type*) [Fintype Data] [Fintype Ref]
   length : Ref → ℕ
   capExponent : ℝ
   costBound : ℝ
+  capped_feasible : ∀ d, good d →
+    ∃ R : FinProb (Fin s × Fin N),
+      (∀ h y, R.w (h, y) ≤ 2 * Real.exp capExponent / ((s : ℝ) * N)) ∧
+      (∀ h y, R.w (h, y) ≠ 0 → (source d h).w y ≠ 0)
   price_feasible : ∀ d, good d →
     ∀ price : Ref → ℝ, (∀ c, 0 ≤ price c) → (∑ c, price c = 1) →
       ∃ R : FinProb (Fin s × Fin N),
@@ -54,8 +63,10 @@ structure HighRowModel5 (Data Ref : Type*) [Fintype Data] [Fintype Ref]
           R.w (h, y) * highDeletionCost5 R (deleted d) c h y) ≤
             ∑ c, price c * (costBound * length c)
 
-/-- L5.1g: price feasibility over the compact high-row laws yields one law meeting every deletion cost at
-once, with the atom cap and support on labels of positive reconstructed likelihood. -/
+/-- L5.1g (05:574–581): price feasibility over the compact high-row laws yields one law meeting every deletion
+cost at once, with the atom cap and support on labels of positive reconstructed likelihood.  The proof is the
+separation step: the capped, supported laws form a nonempty (`capped_feasible`) compact convex set and each
+cost `∑ R log⁺(R/q)` is convex and continuous in `R`; with no references the cost clause is vacuous. -/
 theorem L5_1g_common_high_law {Data Ref : Type*} [Fintype Data] [Fintype Ref]
     {s N : ℕ} (M : HighRowModel5 Data Ref s N) :
     M.raw.pr (fun d => ¬ M.good d) ≤ Real.exp (-M.errorExponent * s) ∧

@@ -250,6 +250,64 @@ noncomputable def observedTagValue {η₀ β p : ℝ} {h : ℕ}
       if hℓ : x.2 = (π.2 u).1 then (π.2 u).2.1 else default
     else default
 
+theorem observed_tag_weight_product {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (c : D.CellT) (π : D.Pres c.1)
+    (default : D.M.ι) :
+    (∏ x ∈ observedTagCoords D c π,
+        (D.tilt Θ x.1).w (observedTagValue D c π default x)) =
+      (∏ ℓ, (π.1 ℓ).elim 1 (fun i => (D.tilt Θ c.1).w i)) *
+        ∏ u : D.CrossSub c.1, (D.tilt Θ u.1).w ((π.2 u).2.1) := by
+  classical
+  let Sint := observedInternalTagCoords D c π
+  let Sloc : Finset D.Loc := Finset.univ.filter fun ℓ => (π.1 ℓ).isSome
+  let Scross := observedCrossTagCoords D c π
+  have hdisj : Disjoint Sint Scross := by
+    apply Finset.disjoint_left.mpr
+    intro x hxI hxC
+    rcases Finset.mem_image.mp hxI with ⟨ℓ, hℓ, rfl⟩
+    rcases Finset.mem_image.mp hxC with ⟨u, hu, hEq⟩
+    have hkey : u.1 = c.1 := congrArg Prod.fst hEq
+    exact cross_key_ne D c.1 u hkey
+  have hIinj : Set.InjOn (fun ℓ : D.Loc => (c.1, ℓ)) (Sloc : Set D.Loc) := by
+    intro ℓ hℓ ℓ' hℓ' h
+    exact congrArg Prod.snd h
+  have hInternal :
+      (∏ x ∈ Sint, (D.tilt Θ x.1).w (observedTagValue D c π default x)) =
+        ∏ ℓ ∈ Sloc, (D.tilt Θ c.1).w ((π.1 ℓ).getD default) := by
+    unfold Sint observedInternalTagCoords
+    rw [Finset.prod_image hIinj]
+    apply Finset.prod_congr rfl
+    intro ℓ hℓ
+    simp [observedTagValue, Sloc, hℓ]
+  have hCinj : Set.InjOn (fun u : D.CrossSub c.1 => (u.1, (π.2 u).1))
+      (Finset.univ : Finset (D.CrossSub c.1)) := by
+    intro u hu v hv huv
+    apply Subtype.ext
+    exact congrArg Prod.fst huv
+  have hCross :
+      (∏ x ∈ Scross, (D.tilt Θ x.1).w (observedTagValue D c π default x)) =
+        ∏ u : D.CrossSub c.1, (D.tilt Θ u.1).w ((π.2 u).2.1) := by
+    unfold Scross observedCrossTagCoords
+    rw [Finset.prod_image hCinj]
+    apply Finset.prod_congr rfl
+    intro u hu
+    have hne : u.1 ≠ c.1 := cross_key_ne D c.1 u
+    simp [observedTagValue, hne]
+  have hIntFull :
+      (∏ ℓ, (π.1 ℓ).elim 1 (fun i => (D.tilt Θ c.1).w i)) =
+        ∏ ℓ ∈ Sloc, (D.tilt Θ c.1).w ((π.1 ℓ).getD default) := by
+    calc
+      (∏ ℓ, (π.1 ℓ).elim 1 (fun i => (D.tilt Θ c.1).w i)) =
+          ∏ ℓ, if (π.1 ℓ).isSome then (D.tilt Θ c.1).w ((π.1 ℓ).getD default) else 1 := by
+            apply Finset.prod_congr rfl
+            intro ℓ hℓ
+            cases ho : π.1 ℓ <;> simp [ho]
+      _ = ∏ ℓ ∈ Sloc, (D.tilt Θ c.1).w ((π.1 ℓ).getD default) := by
+            rw [← Finset.prod_filter]
+  unfold observedTagCoords
+  rw [Finset.prod_union hdisj, hInternal, hCross]
+  rw [← hIntFull]
+
 theorem positive_tilt_gate {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
     (hbase : D.BaseGates Θ g) (hpos : 0 < (D.tilt Θ g).w i) :

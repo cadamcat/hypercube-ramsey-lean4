@@ -2,6 +2,7 @@ import HypercubeRamsey.S09.Map.Device
 import HypercubeRamsey.S03.Height.Selection
 import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S05.Clock_q_s05_even
 import Mathlib.Data.Nat.Choose.Bounds
 
 /-!
@@ -586,6 +587,43 @@ theorem height_counts9_volume_bounds (P : Params9) (hP : P.Valid) :
     exact hvolume
   exact ⟨hVposNat, hradiusD, hprob⟩
 
+theorem height_counts9_special_le_n (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, P.m n ≤ n := by
+  obtain ⟨n₀, hscale⟩ := params9_small_internal_scales P hP
+  refine ⟨n₀, ?_⟩
+  intro n hn
+  have hm := (hscale n hn).1
+  have hm' : (P.m n : ℝ) ≤ (n : ℝ) := by nlinarith
+  exact_mod_cast hm'
+
+theorem height_counts9_budget_slack (P : Params9) (hc : HeightChoice9 P)
+    (hadm : hc.Admissible) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') ≤ P.idBudget n := by
+  rcases hadm with ⟨hσhpos, hσhζ, hζlt, hθpos, hθlt, ha, hab, hχa, hbpos, hbε, hε, hcase⟩
+  let gap : ℝ := P.eps - hc.eps'
+  have hgap : 0 < gap := by dsimp [gap]; linarith
+  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ gap) atTop atTop :=
+    (tendsto_rpow_atTop hgap).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (Filter.tendsto_atTop.1 hT 3)
+  refine ⟨max 2 n₀, ?_⟩
+  intro n hn
+  have hn₀' : n₀ ≤ n := le_trans (le_max_right 2 n₀) hn
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hlarge : 3 ≤ (n : ℝ) ^ gap := hn₀ n hn₀'
+  let a : ℝ := 1 - (P.σ : ℝ) + hc.eps'
+  calc
+    3 * (n : ℝ) ^ a ≤ (n : ℝ) ^ gap * (n : ℝ) ^ a :=
+      mul_le_mul_of_nonneg_right hlarge (Real.rpow_nonneg hnreal.le _)
+    _ = (n : ℝ) ^ a * (n : ℝ) ^ gap := by ring
+    _ = (n : ℝ) ^ (a + gap) := (Real.rpow_add hnreal a gap).symm
+    _ = (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) := by
+      congr 1
+      dsimp [a, gap]
+      ring
+    _ = P.idBudget n := by simp [Params9.idBudget]
+
 private theorem topScale_coarse_bound (n : ℕ) (σ ζ : ℝ) (hn : 5 ≤ n)
     (hσ : σ < 1) (hζ : 0 < ζ) (hζ1 : ζ < 1) :
     topScale n σ ζ ≤ 2 ^ (n ^ 2 + 2 * n) := by
@@ -881,5 +919,223 @@ theorem sharedConsulted_local_bounds
   unfold consulted9 at hv hv'
   simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hv hv'
   exact ⟨hv.1, hv'.1, hv.2, hv'.2⟩
+
+theorem specialProjectionDist_le {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n) :
+    _root_.hammingDist (specialWord9 m v) (specialWord9 m w) ≤ _root_.hammingDist v w := by
+  classical
+  let s : Finset (Fin m) := Finset.univ.filter (fun i => specialWord9 m v i ≠ specialWord9 m w i)
+  let t : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let f : Fin m → Fin n := fun i => ⟨i.val, lt_of_lt_of_le i.isLt hm⟩
+  have hmap : Set.MapsTo f s t := by
+    intro i hi
+    have his : specialWord9 m v i ≠ specialWord9 m w i := (Finset.mem_filter.mp hi).2
+    have hcoordv : specialWord9 m v i = v (f i) := by
+      simp [specialWord9, f, lt_of_lt_of_le i.isLt hm]
+    have hcoordw : specialWord9 m w i = w (f i) := by
+      simp [specialWord9, f, lt_of_lt_of_le i.isLt hm]
+    have hdiff : v (f i) ≠ w (f i) := by simpa [hcoordv, hcoordw] using his
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdiff⟩
+  have hinj : Set.InjOn f s := by
+    intro i hi j hj h
+    apply Fin.ext
+    have hv := congrArg Fin.val h
+    dsimp [f] at hv
+    exact hv
+  have hsubset : s.image f ⊆ t := by
+    intro y hy
+    rcases Finset.mem_image.mp hy with ⟨i, hi, rfl⟩
+    exact hmap hi
+  have hcardImg : s.card = (s.image f).card :=
+    (Finset.card_image_of_injOn hinj).symm
+  calc
+    _ = s.card := by simp [s, _root_.hammingDist]
+    _ = (s.image f).card := hcardImg
+    _ ≤ t.card := Finset.card_le_card hsubset
+    _ = _ := by simp [t, _root_.hammingDist]
+
+theorem residualProjectionDist_le {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n) :
+    _root_.hammingDist (residualWord9 m v) (residualWord9 m w) ≤ _root_.hammingDist v w := by
+  classical
+  let k := n - m
+  let s : Finset (Fin k) := Finset.univ.filter (fun i => residualWord9 m v i ≠ residualWord9 m w i)
+  let t : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let f : Fin k → Fin n := fun i => ⟨m + i.val, by have := i.isLt; omega⟩
+  have hmap : Set.MapsTo f s t := by
+    intro i hi
+    have his : residualWord9 m v i ≠ residualWord9 m w i := (Finset.mem_filter.mp hi).2
+    have hcoordv : residualWord9 m v i = v (f i) := by
+      simp [residualWord9, f]
+    have hcoordw : residualWord9 m w i = w (f i) := by
+      simp [residualWord9, f]
+    have hdiff : v (f i) ≠ w (f i) := by simpa [hcoordv, hcoordw] using his
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdiff⟩
+  have hinj : Set.InjOn f s := by
+    intro i hi j hj h
+    apply Fin.ext
+    have hv := congrArg Fin.val h
+    dsimp [f] at hv
+    omega
+  have hsubset : s.image f ⊆ t := by
+    intro y hy
+    rcases Finset.mem_image.mp hy with ⟨i, hi, rfl⟩
+    exact hmap hi
+  have hcardImg : s.card = (s.image f).card :=
+    (Finset.card_image_of_injOn hinj).symm
+  calc
+    _ = s.card := by simp [s, k, _root_.hammingDist]
+    _ = (s.image f).card := hcardImg
+    _ ≤ t.card := Finset.card_le_card hsubset
+    _ = _ := by simp [t, _root_.hammingDist]
+
+theorem cubeWord_eq_of_components {m n : ℕ} (hm : m ≤ n) {v w : CubeVertex n}
+    (hs : specialWord9 m v = specialWord9 m w)
+    (hr : residualWord9 m v = residualWord9 m w) : v = w := by
+  funext i
+  by_cases hmi : i.val < m
+  · have h := congrArg (fun z : CubeVertex m => z ⟨i.val, hmi⟩) hs
+    simpa [specialWord9, hmi] using h
+  · let j : Fin (n - m) := ⟨i.val - m, by omega⟩
+    have h := congrArg (fun z : CubeVertex (n - m) => z j) hr
+    have hidx : m + j.val = i.val := by dsimp [j]; omega
+    simpa [residualWord9, j, hidx] using h
+
+theorem splitProjectionDist_add_le {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n) :
+    _root_.hammingDist (specialWord9 m v) (specialWord9 m w) +
+        _root_.hammingDist (residualWord9 m v) (residualWord9 m w) ≤
+      _root_.hammingDist v w := by
+  classical
+  let k := n - m
+  let s : Finset (Fin m) := Finset.univ.filter (fun i => specialWord9 m v i ≠ specialWord9 m w i)
+  let r : Finset (Fin k) := Finset.univ.filter (fun i => residualWord9 m v i ≠ residualWord9 m w i)
+  let t : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let fs : Fin m → Fin n := fun i => ⟨i.val, lt_of_lt_of_le i.isLt hm⟩
+  let fr : Fin k → Fin n := fun i => ⟨m + i.val, by have := i.isLt; omega⟩
+  have hsMap : Set.MapsTo fs s t := by
+    intro i hi
+    have hcoordv : specialWord9 m v i = v (fs i) := by
+      simp [specialWord9, fs, lt_of_lt_of_le i.isLt hm]
+    have hcoordw : specialWord9 m w i = w (fs i) := by
+      simp [specialWord9, fs, lt_of_lt_of_le i.isLt hm]
+    have hdiff : v (fs i) ≠ w (fs i) := by
+      simpa [hcoordv, hcoordw] using (Finset.mem_filter.mp hi).2
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdiff⟩
+  have hrMap : Set.MapsTo fr r t := by
+    intro i hi
+    have hcoordv : residualWord9 m v i = v (fr i) := by simp [residualWord9, fr]
+    have hcoordw : residualWord9 m w i = w (fr i) := by simp [residualWord9, fr]
+    have hdiff : v (fr i) ≠ w (fr i) := by
+      simpa [hcoordv, hcoordw] using (Finset.mem_filter.mp hi).2
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdiff⟩
+  have hsInj : Set.InjOn fs s := by
+    intro i hi j hj h
+    apply Fin.ext
+    have hv := congrArg Fin.val h
+    dsimp [fs] at hv
+    exact hv
+  have hrInj : Set.InjOn fr r := by
+    intro i hi j hj h
+    apply Fin.ext
+    have hv := congrArg Fin.val h
+    dsimp [fr] at hv
+    omega
+  have hdisj : Disjoint (s.image fs) (r.image fr) := by
+    rw [Finset.disjoint_left]
+    intro z hzS hzR
+    rcases Finset.mem_image.mp hzS with ⟨i, hi, rfl⟩
+    rcases Finset.mem_image.mp hzR with ⟨j, hj, hEq⟩
+    have hv := congrArg Fin.val hEq.symm
+    dsimp [fs, fr] at hv
+    have hiLt : i.val < m := i.isLt
+    have hmLe : m ≤ m + j.val := Nat.le_add_right _ _
+    omega
+  have hsub : s.image fs ∪ r.image fr ⊆ t := by
+    intro z hz
+    rcases Finset.mem_union.mp hz with hz | hz
+    · rcases Finset.mem_image.mp hz with ⟨i, hi, rfl⟩
+      exact hsMap hi
+    · rcases Finset.mem_image.mp hz with ⟨i, hi, rfl⟩
+      exact hrMap hi
+  have hsImg : s.card = (s.image fs).card := (Finset.card_image_of_injOn hsInj).symm
+  have hrImg : r.card = (r.image fr).card := (Finset.card_image_of_injOn hrInj).symm
+  have hsum : s.card + r.card ≤ t.card := by
+    calc
+      s.card + r.card = (s.image fs).card + (r.image fr).card := by rw [hsImg, hrImg]
+      _ = (s.image fs ∪ r.image fr).card := by rw [Finset.card_union_of_disjoint hdisj]
+      _ ≤ t.card := Finset.card_le_card hsub
+  simpa [s, r, t, k, _root_.hammingDist] using hsum
+
+theorem adjacent_projection_classification {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n)
+    (hadj : _root_.hammingDist v w = 1) :
+    (_root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 1 ∧
+      residualWord9 m v = residualWord9 m w) ∨
+    (specialWord9 m v = specialWord9 m w ∧
+      _root_.hammingDist (residualWord9 m v) (residualWord9 m w) = 1) := by
+  have hsle := specialProjectionDist_le hm v w
+  have hrle := residualProjectionDist_le hm v w
+  have hsum := splitProjectionDist_add_le hm v w
+  have hsbound : _root_.hammingDist (specialWord9 m v) (specialWord9 m w) ≤ 1 := by omega
+  have hrbound : _root_.hammingDist (residualWord9 m v) (residualWord9 m w) ≤ 1 := by omega
+  by_cases hs0 : _root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 0
+  · have hsEq : specialWord9 m v = specialWord9 m w :=
+      (hammingDist_lt_one).mp (by omega)
+    have hrpos : 0 < _root_.hammingDist (residualWord9 m v) (residualWord9 m w) := by
+      by_contra hnot
+      have hr0 : _root_.hammingDist (residualWord9 m v) (residualWord9 m w) = 0 := by omega
+      have hrEq : residualWord9 m v = residualWord9 m w :=
+        (hammingDist_lt_one).mp (by omega)
+      have hvw : v = w := cubeWord_eq_of_components hm hsEq hrEq
+      subst w
+      simp at hadj
+    have hrone : _root_.hammingDist (residualWord9 m v) (residualWord9 m w) = 1 := by omega
+    exact Or.inr ⟨hsEq, hrone⟩
+  · have hsone : _root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 1 := by omega
+    have hr0 : _root_.hammingDist (residualWord9 m v) (residualWord9 m w) = 0 := by omega
+    have hrEq : residualWord9 m v = residualWord9 m w :=
+      (hammingDist_lt_one).mp (by omega)
+    exact Or.inl ⟨hsone, hrEq⟩
+
+theorem special_neighbor_count_le {m n : ℕ} (hm : m ≤ n) (v : CubeVertex n) :
+    (Finset.univ.filter (fun w : CubeVertex n =>
+      _root_.hammingDist v w = 1 ∧
+        _root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 1)).card ≤ m := by
+  classical
+  let S : Finset (CubeVertex n) := Finset.univ.filter (fun w =>
+    _root_.hammingDist v w = 1 ∧
+      _root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 1)
+  let T : Finset (CubeVertex m) := Finset.univ.filter fun z =>
+    (cube m).Adj (specialWord9 m v) z
+  let f : CubeVertex n → CubeVertex m := fun w => specialWord9 m w
+  have hT : T.card ≤ m := cube_adj_neighbors_card_le m (specialWord9 m v)
+  have hmap : Set.MapsTo f S T := by
+    intro w hw
+    change w ∈ S at hw
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hw
+    change f w ∈ T
+    refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩
+    simpa [OAI.HypercubeRamsey.cube] using hw.2
+  have hinj : Set.InjOn f S := by
+    intro w hw w' hw' heq
+    have hw'cond : w ∈ S := by change w ∈ S at hw; exact hw
+    have hw'cond' : w' ∈ S := by change w' ∈ S at hw'; exact hw'
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hw'cond hw'cond'
+    have hres (x : CubeVertex n) (hx :
+        _root_.hammingDist v x = 1 ∧
+          _root_.hammingDist (specialWord9 m v) (specialWord9 m x) = 1) :
+        residualWord9 m v = residualWord9 m x := by
+      rcases adjacent_projection_classification hm v x hx.1 with hgood | hbad
+      · exact hgood.2
+      · have : (0 : ℕ) = 1 := by simpa [hbad.1] using hx.2
+        omega
+    exact cubeWord_eq_of_components hm heq
+      ((hres w hw'cond).symm.trans (hres w' hw'cond'))
+  have hcardImg : S.card = (S.image f).card := (Finset.card_image_of_injOn hinj).symm
+  calc
+    S.card = (S.image f).card := hcardImg
+    _ ≤ T.card := by
+      apply Finset.card_le_card
+      intro z hz
+      rcases Finset.mem_image.mp hz with ⟨w, hw, rfl⟩
+      exact hmap hw
+    _ ≤ m := hT
 
 end HypercubeRamsey.Lane_q_s09_map

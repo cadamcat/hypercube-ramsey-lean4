@@ -220,11 +220,20 @@ radius-`(r-1)` ball, together with the site's own ID; the two smaller crowd test
 theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ Pp A : Pos9 P hc n → Bool, GoodHeights9 Pp A → Nonempty (IDMap9 P n) := by
   classical
+  obtain ⟨nGeom, hGeom⟩ := Lane_q_s09_map.height_counts9_special_le_n P hP
+  obtain ⟨nBudget, hBudget⟩ := Lane_q_s09_map.height_counts9_budget_slack P hc hadm
   rcases hP with ⟨_, _, _, _, ⟨hχpos, _⟩, _, _⟩
   have hχR : 0 < (P.χ : ℝ) := by exact_mod_cast hχpos
-  refine ⟨1, ?_⟩
+  refine ⟨max 1 (max nGeom nBudget), ?_⟩
   intro n hn Pp A hgood
-  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have houter : max nGeom nBudget ≤ n := le_trans (le_max_right 1 _) hn
+  have hnGeom : nGeom ≤ n := le_trans (le_max_left nGeom nBudget) houter
+  have hnBudget : nBudget ≤ n := le_trans (le_max_right nGeom nBudget) houter
+  have hmle : P.m n ≤ n := hGeom n hnGeom
+  have hbudget : 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') ≤ P.idBudget n :=
+    hBudget n hnBudget
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 _) hn
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
   have hχpow : 1 ≤ (n : ℝ) ^ (P.χ : ℝ) := Real.one_le_rpow hnR hχR.le
   let center := Lane_q_s09_map.chosenCenterOfGoodHeights Pp A hgood
   have hcenter v :
@@ -242,7 +251,151 @@ theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P)
   · intro v
     exact (hcenter v).2.1
   · intro b hbOdd
-    sorry
+    classical
+    let m := P.m n
+    let special := specialWord9 m b
+    let residual := residualWord9 m b
+    let N : Finset (CubeVertex n) := Finset.univ.filter fun w => (cube n).Adj b w
+    let Special : Finset (CubeVertex n) := Finset.univ.filter fun w =>
+      _root_.hammingDist b w = 1 ∧
+        _root_.hammingDist special (specialWord9 m w) = 1
+    let Residual : Finset (CubeVertex n) := Finset.univ.filter fun w =>
+      _root_.hammingDist b w = 1 ∧
+        _root_.hammingDist special (specialWord9 m w) = 0
+    have hcover : N ⊆ Special ∪ Residual := by
+      intro w hw
+      have hfull : _root_.hammingDist b w = 1 := by
+        have hadj := (Finset.mem_filter.mp hw).2
+        simpa [OAI.HypercubeRamsey.cube] using hadj
+      have hproj := Lane_q_s09_map.specialProjectionDist_le hmle b w
+      have hprojle : _root_.hammingDist special (specialWord9 m w) ≤ 1 := by
+        dsimp [special, m]
+        omega
+      by_cases hs : _root_.hammingDist special (specialWord9 m w) = 1
+      · apply Finset.mem_union_left
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hfull, hs⟩⟩
+      · have hs0 : _root_.hammingDist special (specialWord9 m w) = 0 := by omega
+        apply Finset.mem_union_right
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hfull, hs0⟩⟩
+    have hSeenEq : seenIDs9 center b = N.image center := by
+      rfl
+    have hSeenSubset : seenIDs9 center b ⊆ Special.image center ∪ Residual.image center := by
+      rw [hSeenEq]
+      apply Finset.image_subset_iff.mpr
+      intro w hw
+      rcases Finset.mem_union.mp (hcover hw) with hS | hR
+      · exact Finset.mem_union_left _ (Finset.mem_image.mpr ⟨w, hS, rfl⟩)
+      · exact Finset.mem_union_right _ (Finset.mem_image.mpr ⟨w, hR, rfl⟩)
+    have hSpecialCard : Special.card ≤ m := by
+      simpa [Special, special, m] using
+        (Lane_q_s09_map.special_neighbor_count_le hmle b)
+    have hSpecialIDs : (Special.image center).card ≤ m :=
+      (Finset.card_image_le).trans hSpecialCard
+    rcases hgood b with ⟨hbelow, hgoodNoBad, hregular⟩
+    let j₀ : Fin (hc.levels n + 1) := ⟨height9 Pp A b, by omega⟩
+    have hnotbad : ¬ badAt9 Pp A b j₀ := by simpa [j₀] using hgoodNoBad
+    let J : Finset (Fin (hc.levels n + 1)) := Finset.univ.filter fun j =>
+      Nat.dist j.val (height9 Pp A b) ≤ 1
+    let values : Finset ℕ := {height9 Pp A b - 1, height9 Pp A b, height9 Pp A b + 1}
+    have hJimage : J.image Fin.val ⊆ values := by
+      intro k hk
+      rcases Finset.mem_image.mp hk with ⟨j, hj, rfl⟩
+      have hwindow := (Finset.mem_filter.mp hj).2
+      unfold Nat.dist at hwindow
+      simp only [values, Finset.mem_insert, Finset.mem_singleton]
+      omega
+    have hJcard : J.card ≤ 3 := by
+      calc
+        J.card = (J.image Fin.val).card :=
+          (Finset.card_image_of_injective _ Fin.val_injective).symm
+        _ ≤ values.card := Finset.card_le_card hJimage
+        _ ≤ 3 := by
+          simpa [values] using
+            (Finset.card_le_three : ({height9 Pp A b - 1, height9 Pp A b,
+              height9 Pp A b + 1} : Finset ℕ).card ≤ 3)
+    let crowdAt : Fin (hc.levels n + 1) → Finset (Pos9 P hc n) := fun j =>
+      Finset.univ.filter (fun c => activeAt9 Pp A c ∧ c.slice = special ∧
+        _root_.hammingDist c.location residual ≤ P.radius n + 1 ∧ c.level = j)
+    have hcrowd (j : Fin (hc.levels n + 1)) (hj : j ∈ J) :
+        ((crowdAt j).card : ℝ) ≤ (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+      by_contra hlarge
+      have hstrict : (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+          ((crowdAt j).card : ℝ) := lt_of_not_ge hlarge
+      have hstrict' : (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+          (crowdSame9 Finset.univ Pp A b j (P.radius n + 1) : ℝ) := by
+        simpa [crowdAt, special, residual, crowdSame9] using hstrict
+      have hdist : Nat.dist j₀.val j.val ≤ 2 := by
+        have hwin := (Finset.mem_filter.mp hj).2
+        simpa [j₀, Nat.dist_comm] using (le_trans hwin (by omega : 1 ≤ 2))
+      have hbad : badAt9 Pp A b j₀ := by
+        apply (show badIn9 Finset.univ 1 Pp A b j₀ from ?_)
+        exact Or.inr ⟨j, hdist, Or.inr (Or.inr (by simpa [one_mul] using hstrict'))⟩
+      exact hnotbad hbad
+    have hResidualSubset : Residual.image center ⊆ J.biUnion crowdAt := by
+      intro id hid
+      rcases Finset.mem_image.mp hid with ⟨w, hw, rfl⟩
+      rcases Finset.mem_filter.mp hw with ⟨_, ⟨hfull, hspecial0⟩⟩
+      rcases Lane_q_s09_map.adjacent_projection_classification hmle b w hfull with hspecial | hresidual
+      · have hs0 : _root_.hammingDist special (specialWord9 m w) = 0 := by
+          simpa [special, m] using hspecial0
+        have hs1 : _root_.hammingDist special (specialWord9 m w) = 1 := by
+          simpa [special, m] using hspecial.1
+        omega
+      · have hslice : (center w).slice = special := by
+          exact (hcenter w).1.trans hresidual.1.symm
+        have hloc : _root_.hammingDist (center w).location residual ≤ P.radius n + 1 := by
+          have hres1 : _root_.hammingDist (residualWord9 m b) (residualWord9 m w) = 1 := by
+            simpa [m] using hresidual.2
+          have hflip : _root_.hammingDist (residualWord9 m w) residual ≤ 1 := by
+            simpa [residual, hammingDist_comm] using hres1.le
+          calc
+            _ ≤ _ := _root_.hammingDist_triangle (center w).location
+              (residualWord9 m w) residual
+            _ ≤ P.radius n + 1 := Nat.add_le_add (hcenter w).2.1 hflip
+        let j : Fin (hc.levels n + 1) := (center w).level
+        have hlev : Nat.dist j.val (height9 Pp A b) ≤ 1 := by
+          have hreg := hregular w (by rw [hfull]; omega)
+          simpa [j, (hcenter w).2.2.1, Nat.dist_comm] using hreg
+        have hj : j ∈ J := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlev⟩
+        have hc : center w ∈ crowdAt j := by
+          simp only [crowdAt, Finset.mem_filter, Finset.mem_univ, true_and]
+          exact ⟨(hcenter w).2.2.2, hslice, hloc, rfl⟩
+        exact Finset.mem_biUnion.mpr ⟨j, hj, hc⟩
+    have hResidualCard : ((Residual.image center).card : ℝ) ≤
+        3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+      calc
+        ((Residual.image center).card : ℝ) ≤ ((J.biUnion crowdAt).card : ℝ) := by
+          exact_mod_cast Finset.card_le_card hResidualSubset
+        _ ≤ ∑ j ∈ J, (crowdAt j).card := by exact_mod_cast Finset.card_biUnion_le
+        _ = ∑ j ∈ J, ((crowdAt j).card : ℝ) := by norm_cast
+        _ ≤ ∑ _j ∈ J, (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+          apply Finset.sum_le_sum
+          intro j hj
+          exact hcrowd j hj
+        _ = (J.card : ℝ) * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by simp
+        _ ≤ 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+          gcongr
+          exact_mod_cast hJcard
+    have hseenCard : (seenIDs9 center b).card ≤
+        (Special.image center).card + (Residual.image center).card := by
+      calc
+        (seenIDs9 center b).card ≤ (Special.image center ∪ Residual.image center).card :=
+          Finset.card_le_card hSeenSubset
+        _ ≤ (Special.image center).card + (Residual.image center).card :=
+          Finset.card_union_le _ _
+    have hseenReal : ((seenIDs9 center b).card : ℝ) ≤
+        (P.m n : ℝ) + 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+      calc
+        ((seenIDs9 center b).card : ℝ) ≤
+            ((Special.image center).card : ℝ) + ((Residual.image center).card : ℝ) := by
+              exact_mod_cast hseenCard
+        _ ≤ (P.m n : ℝ) + 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') :=
+          add_le_add (by exact_mod_cast hSpecialIDs) hResidualCard
+    calc
+      ((seenIDs9 center b).card : ℝ) ≤
+          (P.m n : ℝ) + 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := hseenReal
+      _ = 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') + (P.m n : ℝ) := by ring
+      _ ≤ P.idBudget n + (P.m n : ℝ) := by nlinarith [hbudget]
   · intro v hvEven
     simp [core]
   · intro v hvEven

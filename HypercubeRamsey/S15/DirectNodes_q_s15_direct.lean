@@ -1,4 +1,5 @@
 import HypercubeRamsey.S15.Defs
+import HypercubeRamsey.S15.Needs
 import HypercubeRamsey.S05.Clock_q_s05_even
 import HypercubeRamsey.Framework.FinProbLemmas
 
@@ -894,6 +895,95 @@ theorem directFactor_nonzero_hit {κ : CConsts} {T : Stage} {k : ℕ}
   by_contra hnot
   unfold S15.directFactor at hfactor
   simp [S15.normalizedHit, HypercubeRamsey.hit, hnot] at hfactor
+
+theorem directFactor_eq_one_add_acoef {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
+    (ys : S15.OddAssignment T k) (b : S15.OddPosition T k) (x : Fin (T.S.N k))
+    (π : Law (T.S.N k))
+    (hπ : S15.lawAtOdd PT hPT b = π) :
+    S15.directFactor PT hPT a ys b x =
+      1 + S15.Needs.acoef (T.S.E k) PT.tiling.c π.w x (ys b) := by
+  unfold S15.directFactor S15.normalizedHit S15.Needs.acoef
+  rw [hπ]
+  by_cases hd : 0 < deg (T.S.E k) PT.tiling.c π.w x
+  · simp [hd]
+  · simp [hd]
+
+theorem directBulkMass_eq_centered_product {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
+    (ys : S15.OddAssignment T k) (π : Law (T.S.N k))
+    (hπ : ∀ b ∈ S15.bulkNeighbours PT hPT a, S15.lawAtOdd PT hPT b = π) :
+    S15.directBulkMass PT hPT ys a =
+      ∑ x, S15.directPostCrossingWeight PT hPT ys a x *
+        ∏ b ∈ S15.bulkNeighbours PT hPT a,
+          (1 + S15.Needs.acoef (T.S.E k) PT.tiling.c π.w x (ys b)) := by
+  classical
+  unfold S15.directBulkMass
+  apply Finset.sum_congr rfl
+  intro x hx
+  congr 1
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact directFactor_eq_one_add_acoef PT hPT a ys b x π (hπ b hb)
+
+theorem directRowWeight_dependsOn {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
+    (ys ys' : S15.OddAssignment T k)
+    (hys : ∀ b ∈ star a, ys b = ys' b) (x : Fin (T.S.N k)) :
+    S15.directRowWeight PT hPT ys a x = S15.directRowWeight PT hPT ys' a x := by
+  classical
+  have hcrossSubset : S15.crossingNeighbours PT hPT a ⊆ star a := by
+    intro b hb
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb).2.1⟩
+  have hbulkSubset : S15.bulkNeighbours PT hPT a ⊆ star a := by
+    intro b hb
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb).2.1⟩
+  have hfactor (b : S15.OddPosition T k) (hb : b ∈ star a)
+      (z : Fin (T.S.N k)) :
+      S15.directFactor PT hPT a ys b z = S15.directFactor PT hPT a ys' b z := by
+    simp [S15.directFactor, hys b hb]
+  have hcross : S15.directCrossingMass PT hPT ys a =
+      S15.directCrossingMass PT hPT ys' a := by
+    unfold S15.directCrossingMass
+    apply Finset.sum_congr rfl
+    intro z hz
+    congr 1
+    apply Finset.prod_congr rfl
+    intro b hb
+    exact hfactor b (hcrossSubset hb) z
+  have hpost (z : Fin (T.S.N k)) :
+      S15.directPostCrossingWeight PT hPT ys a z =
+        S15.directPostCrossingWeight PT hPT ys' a z := by
+    unfold S15.directPostCrossingWeight
+    rw [hcross]
+    by_cases hm : 0 < S15.directCrossingMass PT hPT ys' a
+    · simp [hm]
+      apply congrArg (fun q : ℝ => q / S15.directCrossingMass PT hPT ys' a)
+      apply congrArg (fun q : ℝ => S15.directBaseWeight PT hPT a z * q)
+      apply Finset.prod_congr rfl
+      intro b hb
+      exact hfactor b (hcrossSubset hb) z
+    · simp [hm]
+  unfold S15.directRowWeight
+  rw [hcross, hpost]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact hfactor b (hbulkSubset hb) x
+
+theorem directRowWeight_product_dependsOn {κ : CConsts} {T : Stage} {k n : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (positions : Fin n → S15.EvenPosition T k) (x : Fin (T.S.N k))
+    (S : Finset (S15.OddPosition T k))
+    (hscope : ∀ i, star (positions i) ⊆ S) :
+    FinProb.DependsOn
+      (fun ys => ∏ i, S15.directRowWeight PT hPT ys (positions i) x) S := by
+  intro ys ys' hys
+  apply Finset.prod_congr rfl
+  intro i hi
+  apply directRowWeight_dependsOn PT hPT (positions i) ys ys'
+  · intro b hb
+    exact hys b (hscope i hb)
 
 theorem directBaseWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)

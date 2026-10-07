@@ -896,25 +896,26 @@ private theorem heightPath9_segmentFromMember {P : Params9} {hc : HeightChoice9 
     {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
     {l : List (HeightState9 P hc n)} {root : HeightState9 P hc n}
     (hp : HeightPath9 bad l root) {y : HeightState9 P hc n} (hy : y ∈ l) :
-    ∃ head suffix, l.head? = some head ∧ HeightPath9 bad (head :: suffix) y ∧
-      ∀ z ∈ head :: suffix, z ∈ l := by
+    ∃ head suffix tail, l = (head :: suffix) ++ tail ∧ l.head? = some head ∧
+      HeightPath9 bad (head :: suffix) y ∧ ∀ z ∈ head :: suffix, z ∈ l := by
   induction hp generalizing y with
   | singleton x =>
       have hyx : y = x := by simpa using hy
       subst y
-      exact ⟨x, [], by simp, HeightPath9.singleton x, by simp⟩
+      exact ⟨x, [], [], by simp, by simp, HeightPath9.singleton x, by simp⟩
   | @cons head next rest root hstep htail ih =>
       rcases List.mem_cons.mp hy with hyHead | hyTail
       · subst y
-        exact ⟨head, [], by simp, HeightPath9.singleton head, by simp⟩
-      · obtain ⟨segmentHead, suffix, hhead, hpath, hsub⟩ := ih hyTail
+        exact ⟨head, [], next :: rest, by simp, by simp, HeightPath9.singleton head, by simp⟩
+      · obtain ⟨segmentHead, suffix, tail, hprefix, hhead, hpath, hsub⟩ := ih hyTail
         have hhead' : segmentHead = next := by simpa using hhead.symm
         subst segmentHead
-        refine ⟨head, next :: suffix, by simp, HeightPath9.cons hstep hpath, ?_⟩
-        intro z hz
-        rcases List.mem_cons.mp hz with rfl | hz
-        · simp
-        · exact List.mem_cons_of_mem _ (hsub z hz)
+        refine ⟨head, next :: suffix, tail, ?_, by simp, HeightPath9.cons hstep hpath, ?_⟩
+        · simpa using congrArg (List.cons head) hprefix
+        · intro z hz
+          rcases List.mem_cons.mp hz with rfl | hz
+          · simp
+          · exact List.mem_cons_of_mem _ (hsub z hz)
 
 private theorem heightPath9_has_intermediate_level {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
@@ -1202,7 +1203,7 @@ private theorem heightPath9_nextRadialState9 {P : Params9} {hc : HeightChoice9 P
     rw [hstart]
     omega
   obtain ⟨next, hnext, hnextRadial⟩ := hrange (r + gap) hlow hhigh
-  obtain ⟨segmentHead, suffix, hsegmentHead, hsegment, hsegmentSub⟩ :=
+  obtain ⟨segmentHead, suffix, _tail, _hprefix, hsegmentHead, hsegment, hsegmentSub⟩ :=
     heightPath9_segmentFromMember hp hnext
   have hsegmentHead' : segmentHead = endpoint := by simpa using hsegmentHead.symm.trans hhead
   subst segmentHead
@@ -1426,7 +1427,7 @@ private theorem scaleFailure9_from_longPath9 {P : Params9} {hc : HeightChoice9 P
           · have hbad : (next.2.val : ℝ) + η * (R : ℝ) < (x.2.val : ℝ) :=
               lt_of_not_ge hgood
             have hnextMem : next ∈ endpoint :: xs := hfirstSub next (by simp)
-            obtain ⟨segHead, suffix, hsegHead, hseg, _hsegSub⟩ :=
+            obtain ⟨segHead, suffix, _tail, _hsegPrefix, hsegHead, hseg, _hsegSub⟩ :=
               heightPath9_segmentFromMember hp' hnextMem
             have hsegHead' : segHead = endpoint := by
               simpa using hsegHead.symm.trans (by simp : (endpoint :: xs).head? = some endpoint)

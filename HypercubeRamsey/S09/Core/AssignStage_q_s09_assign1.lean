@@ -117,6 +117,26 @@ theorem hammingBallCardBound9 {d r : ℕ} (v : CubeVertex d) :
     _ = (d + 1) ^ q := hbin
     _ ≤ (d + 1) ^ r := pow_le_pow_right' (by omega) (min_le_left r d)
 
+open Classical in
+/-- A parity subtype contains no more points in a Hamming ball than the full cube. -/
+theorem subtypeHammingBallCardBound9 {n : ℕ} (p : CubeVertex n → Prop)
+    [Fintype {v : CubeVertex n // p v}] (v : CubeVertex n) (r : ℕ) :
+    (Finset.univ.filter (fun x : {x : CubeVertex n // p x} =>
+      _root_.hammingDist v x.1 ≤ r)).card ≤ (n + 1) ^ r := by
+  let C := Finset.univ.filter (fun x : {x : CubeVertex n // p x} =>
+    _root_.hammingDist v x.1 ≤ r)
+  let B := Finset.univ.filter (fun x : CubeVertex n => _root_.hammingDist v x ≤ r)
+  have hsubset : C.image Subtype.val ⊆ B := by
+    intro x hx
+    rcases Finset.mem_image.mp hx with ⟨x', hx', rfl⟩
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hx').2⟩
+  have himage : (C.image Subtype.val).card = C.card :=
+    Finset.card_image_of_injective C Subtype.val_injective
+  calc
+    C.card = (C.image Subtype.val).card := himage.symm
+    _ ≤ B.card := Finset.card_le_card hsubset
+    _ ≤ (n + 1) ^ r := hammingBallCardBound9 (r := r) v
+
 /-- The Hamming distance on a cube is at most the sum of its special and residual coordinate distances. -/
 theorem hammingDistSplitBound9 {m n : ℕ} (u v : CubeVertex n) :
     _root_.hammingDist u v ≤
@@ -413,6 +433,26 @@ theorem natLogSmall9 :
   have hlog : Real.log (n : ℝ) / (n : ℝ) < 1 / 100 := hratio
   have hlog' : Real.log (n : ℝ) < (1 / 100 : ℝ) * (n : ℝ) := (div_lt_iff₀ hnR).1 hlog
   nlinarith
+
+open Classical in
+/-- Any fixed positive multiple of `n` eventually dominates `log n`. -/
+theorem natLogLeConst9 (c : ℝ) (hc : 0 < c) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, Real.log (n : ℝ) ≤ c * (n : ℝ) := by
+  have hlim : Tendsto (fun n : ℕ => Real.log (n : ℝ) / (n : ℝ)) atTop (nhds 0) := by
+    simpa [Function.comp_def] using
+      (Real.isLittleO_log_id_atTop.tendsto_div_nhds_zero.comp tendsto_natCast_atTop_atTop)
+  obtain ⟨n₁, hn₁⟩ := Filter.eventually_atTop.1
+    (hlim.eventually (Iio_mem_nhds hc))
+  refine ⟨max 1 n₁, ?_⟩
+  intro n hn
+  have hn₀ : 1 ≤ n := le_trans (le_max_left _ _) hn
+  have hn₁' : n₁ ≤ n := le_trans (le_max_right _ _) hn
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast (Nat.zero_lt_of_lt hn₀)
+  have hratio : Real.log (n : ℝ) / (n : ℝ) < c := hn₁ n hn₁'
+  have hlog : Real.log (n : ℝ) < c * (n : ℝ) := by
+    have hh := (div_lt_iff₀ hnR).1 hratio
+    nlinarith
+  exact hlog.le
 
 open Classical in
 /-- A declared near-neighborhood of an odd row has at most `(n+1)^(4r+12)` sites. -/

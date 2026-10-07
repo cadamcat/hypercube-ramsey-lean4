@@ -1,8 +1,10 @@
 import HypercubeRamsey.Tools.Binomial
+import HypercubeRamsey.Tools.CubeGeometry
 
 namespace HypercubeRamsey.Lane_q_s06_front
 
 open scoped BigOperators
+open OAI.HypercubeRamsey
 
 noncomputable section
 
@@ -15,6 +17,98 @@ private def prefixMass (ell j : ℕ) : ℝ :=
 /-- Consecutive quantile labels for a binomial count. -/
 def quantileLabel (ell : ℕ) (ε : ℝ) (q : ℕ) : ℕ :=
   Nat.floor (prefixMass ell (min q (ell + 1)) / ε)
+
+private abbrev ChunkCoord (n : ℕ) (A : Finset (Fin n)) := {i : Fin n // i ∈ A}
+private abbrev OutsideCoord (n : ℕ) (A : Finset (Fin n)) := {i : Fin n // i ∉ A}
+
+private def splitCube {n : ℕ} (A : Finset (Fin n)) :
+    CubeVertex n ≃ (ChunkCoord n A → Bool) × (OutsideCoord n A → Bool) where
+  toFun x := (fun i => x i.1, fun i => x i.1)
+  invFun p i := if hi : i ∈ A then p.1 ⟨i, hi⟩ else p.2 ⟨i, hi⟩
+  left_inv x := by
+    funext i
+    by_cases hi : i ∈ A <;> simp [hi]
+  right_inv p := by
+    apply Prod.ext
+    · funext i
+      simp [i.2]
+    · funext i
+      simp [i.2]
+
+private def cubeCountOn {n : ℕ} (A : Finset (Fin n)) (x : CubeVertex n) : ℕ :=
+  (A.attach.filter fun i => x i.1 = true).card
+
+private def boolWeight {ι : Type*} [Fintype ι] (f : ι → Bool) : ℕ :=
+  (Finset.univ.filter fun i => f i = true).card
+
+private def boolSupportEquiv (ι : Type*) [Fintype ι] [DecidableEq ι] :
+    (ι → Bool) ≃ Finset ι where
+  toFun f := Finset.univ.filter fun i => f i = true
+  invFun s i := decide (i ∈ s)
+  left_inv f := by
+    funext i
+    cases h : f i <;> simp [h]
+  right_inv s := by
+    ext i
+    simp
+
+private theorem boolWeightLayerCard (ι : Type*) [Fintype ι] [DecidableEq ι] (q : ℕ) :
+    Fintype.card {f : ι → Bool // boolWeight f = q} = Nat.choose (Fintype.card ι) q := by
+  classical
+  let eSupport := boolSupportEquiv ι
+  let e : {f : ι → Bool // boolWeight f = q} ≃ {s : Finset ι // s.card = q} :=
+    eSupport.subtypeEquiv (fun f => by rfl)
+  let ps : Finset (Finset ι) := Finset.univ.powersetCard q
+  have eSub : {s : Finset ι // s.card = q} ≃ {s : Finset ι // s ∈ ps} := by
+    refine {
+      toFun := fun s => ⟨s.1, by
+        change s.1 ∈ Finset.univ.powersetCard q
+        exact Finset.mem_powersetCard.mpr ⟨Finset.subset_univ _, s.2⟩⟩
+      invFun := fun s => ⟨s.1, (Finset.mem_powersetCard.mp (by
+        change s.1 ∈ Finset.univ.powersetCard q
+        exact s.2)).2⟩
+      left_inv := by intro s; apply Subtype.ext; rfl
+      right_inv := by intro s; apply Subtype.ext; rfl }
+  calc
+    _ = Fintype.card {s : Finset ι // s.card = q} := Fintype.card_congr e
+    _ = Fintype.card {s : Finset ι // s ∈ ps} := Fintype.card_congr eSub
+    _ = ps.card := Fintype.card_coe ps
+    _ = Nat.choose (Fintype.card ι) q := by simp [ps, Finset.card_powersetCard]
+
+/-- The number of cube vertices with a prescribed number of ones on `A`. -/
+theorem cubeCountOn_card {n : ℕ} (A : Finset (Fin n)) (q : ℕ) :
+    (Finset.univ.filter fun x : CubeVertex n => cubeCountOn A x = q).card =
+      Nat.choose A.card q * 2 ^ (n - A.card) := by
+  classical
+  let I := ChunkCoord n A
+  let O := OutsideCoord n A
+  let split := splitCube A
+  have hCount (x : CubeVertex n) : cubeCountOn A x = boolWeight (split x).1 := rfl
+  have splitPredEquiv :
+      {x : CubeVertex n // cubeCountOn A x = q} ≃
+        {p : (I → Bool) × (O → Bool) // boolWeight p.1 = q} :=
+    split.subtypeEquiv (fun x => by rw [hCount x])
+  let prodEquiv :
+      {p : (I → Bool) × (O → Bool) // boolWeight p.1 = q} ≃
+        {f : I → Bool // boolWeight f = q} × (O → Bool) :=
+    @Equiv.prodSubtypeFstEquivSubtypeProd (I → Bool) (O → Bool)
+      (fun f => boolWeight f = q)
+  have hIcard : Fintype.card I = A.card := by
+    simp [I, ChunkCoord, Fintype.card_coe]
+  have hOcard : Fintype.card O = n - A.card := by
+    simpa [O, OutsideCoord, Fintype.card_coe] using
+      (Fintype.card_subtype_compl (fun i : Fin n => i ∈ A))
+  calc
+    (Finset.univ.filter fun x : CubeVertex n => cubeCountOn A x = q).card =
+        Fintype.card {x : CubeVertex n // cubeCountOn A x = q} := by
+          symm
+          simpa using (Fintype.card_subtype (fun x : CubeVertex n => cubeCountOn A x = q))
+    _ = Fintype.card {p : (I → Bool) × (O → Bool) // boolWeight p.1 = q} :=
+      Fintype.card_congr splitPredEquiv
+    _ = Fintype.card {f : I → Bool // boolWeight f = q} * Fintype.card (O → Bool) := by
+      rw [Fintype.card_congr prodEquiv, Fintype.card_prod]
+    _ = Nat.choose A.card q * 2 ^ (n - A.card) := by
+      rw [boolWeightLayerCard, Fintype.card_fun, Fintype.card_bool, hIcard, hOcard]
 
 private theorem prefixMass_succ (ell j : ℕ) :
     prefixMass ell (j + 1) = prefixMass ell j + halfMassNat ell j := by

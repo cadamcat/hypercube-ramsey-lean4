@@ -1,4 +1,5 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d4
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -699,7 +700,553 @@ theorem d4_mask_strategy (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < 
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
       (G : Colour) (M : MenuData n N E X Y G ζ δ κ),
       2 ^ n ≤ N → ∃ σ : MaskStrategy M, GoodStrategy M σ := by
-  sorry
+  classical
+  have hscaleEvent : ∀ᶠ n : ℕ in atTop,
+      10 * ((TT n δ + 1 : ℕ) : ℝ) ≤ Real.exp ((mS n δ : ℝ) / 100) := by
+    let x : ℕ → ℝ := fun n => (n : ℝ) ^ (200 * δ)
+    have hxTend : Tendsto x atTop atTop := by
+      dsimp [x]
+      exact (_root_.tendsto_rpow_atTop (by positivity : (0 : ℝ) < 200 * δ)).comp
+        tendsto_natCast_atTop_atTop
+    have hlarge := hxTend.eventually_gt_atTop (2000000 : ℝ)
+    have hnlarge : ∀ᶠ n : ℕ in atTop, 2 ≤ n :=
+      Filter.eventually_atTop.mpr ⟨2, fun _ hn => hn⟩
+    filter_upwards [hlarge, hnlarge] with n hlarge hn
+    have hnreal : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (show (1 : ℕ) ≤ n by omega)
+    have hδsmall' : δ < (1 : ℝ) / 2000 :=
+      lt_of_lt_of_le hδsmall
+        (div_le_div_of_nonneg_right (min_le_right (min η₀ ζ) 1) (by norm_num))
+    have h200 : 200 * δ < 1 := by nlinarith [hδsmall']
+    have hxle : x n ≤ (n : ℝ) := by
+      calc
+        x n = (n : ℝ) ^ (200 * δ) := rfl
+        _ ≤ (n : ℝ) ^ (1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le hnreal (by linarith)
+        _ = (n : ℝ) := by rw [Real.rpow_one]
+    have hsple : p10_1kSpecialCount n δ ≤ n := by
+      have hcast : (p10_1kSpecialCount n δ : ℝ) ≤ x n := by
+        dsimp [p10_1kSpecialCount, x]
+        exact Nat.floor_le (by positivity)
+      exact_mod_cast le_trans hcast hxle
+    have hmEq : mS n δ = p10_1kSpecialCount n δ := by
+      simp [mS, hsple]
+    have hfloor : x n < (p10_1kSpecialCount n δ : ℝ) + 1 := by
+      dsimp [p10_1kSpecialCount, x]
+      exact Nat.lt_floor_add_one _
+    have hmLower : x n / 2 ≤ (mS n δ : ℝ) := by
+      rw [hmEq]
+      nlinarith [hlarge, hfloor]
+    have hTnat : p10_1kHeightCount n δ ≤
+        ⌊(n : ℝ) ^ (141 * δ)⌋₊ + 1 := Nat.ceil_le_floor_add_one _
+    have hTcast : (TT n δ : ℝ) ≤ (n : ℝ) ^ (141 * δ) + 1 := by
+      have hcast : (p10_1kHeightCount n δ : ℝ) ≤
+          ((⌊(n : ℝ) ^ (141 * δ)⌋₊ + 1 : ℕ) : ℝ) := by exact_mod_cast hTnat
+      dsimp [TT, p10_1kHeightCount] at hcast ⊢
+      rw [Nat.cast_add, Nat.cast_one] at hcast
+      have hfloor' := Nat.floor_le (by positivity : 0 ≤ (n : ℝ) ^ (141 * δ))
+      have hfloorAdd :
+          (⌊(n : ℝ) ^ (141 * δ)⌋₊ : ℝ) + 1 ≤
+            (n : ℝ) ^ (141 * δ) + 1 := by linarith
+      exact hcast.trans hfloorAdd
+    have h141 : (n : ℝ) ^ (141 * δ) ≤ x n := by
+      dsimp [x]
+      exact Real.rpow_le_rpow_of_exponent_le hnreal (by nlinarith [hδ])
+    have hTplus : ((TT n δ + 1 : ℕ) : ℝ) ≤ x n + 2 := by
+      rw [Nat.cast_add, Nat.cast_one]
+      linarith
+    have hxnonneg : 0 ≤ x n := le_of_lt (Real.rpow_pos_of_pos (by positivity : 0 < (n : ℝ)) _)
+    have hprod : 0 ≤ x n * (x n - 2000000) :=
+      mul_nonneg hxnonneg (sub_nonneg.mpr hlarge.le)
+    have hpoly : 10 * (x n + 2) ≤ (1 + x n / 400) ^ 2 := by
+      nlinarith [hlarge, hprod]
+    have hlin : 1 + x n / 400 ≤ Real.exp (x n / 400) := by
+      simpa [add_comm] using Real.add_one_le_exp (x n / 400)
+    have hsquare : (1 + x n / 400) ^ 2 ≤ Real.exp (x n / 200) := by
+      have ha : 0 ≤ 1 + x n / 400 := by positivity
+      have he : 0 ≤ Real.exp (x n / 400) := (Real.exp_pos _).le
+      calc
+        (1 + x n / 400) ^ 2 = (1 + x n / 400) * (1 + x n / 400) := by ring
+        _ ≤ Real.exp (x n / 400) * (1 + x n / 400) :=
+          mul_le_mul_of_nonneg_right hlin ha
+        _ ≤ Real.exp (x n / 400) * Real.exp (x n / 400) :=
+          mul_le_mul_of_nonneg_left hlin he
+        _ = Real.exp (x n / 200) := by
+          rw [← Real.exp_add]
+          congr 1
+          ring
+    have hExp : 10 * (x n + 2) ≤ Real.exp ((mS n δ : ℝ) / 100) := by
+      calc
+        10 * (x n + 2) ≤ (1 + x n / 400) ^ 2 := hpoly
+        _ ≤ Real.exp (x n / 200) := hsquare
+        _ ≤ Real.exp ((mS n δ : ℝ) / 100) :=
+          Real.exp_le_exp.mpr (by nlinarith [hmLower])
+    exact (mul_le_mul_of_nonneg_left hTplus (by norm_num)).trans hExp
+
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hscaleEvent
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y G M hN
+  have hypList_nonneg {r k : ℕ} (i : M.I) (S : Finset (Fin N))
+      (μs : Fin r → Law N) (own : Fin r → Prop) (W : Fin r → Fin k → Fin N)
+      (y : Fin N) : 0 ≤ hypListRow M i S μs own W y := by
+    let ρ := maskedPrior M i S
+    let D := maskedCluster M i S
+    let F := fixedListHitSet E G W
+    let kept : Fin (M.K i) → Prop := fun j =>
+      Real.exp (-(3 / 2 : ℝ) * k * r) ≤ lawMassOn (D j) F ∧
+        ∀ b, (if own b then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * k)
+            else Real.exp (-(6 / 5 : ℝ) * k)) *
+          lawMassOn (D j) (fixedListHitSetWithout E G W b) ≤ lawMassOn (D j) F
+    let wt : Fin (M.K i) → ℝ := fun j =>
+      if kept j then ρ.w j * (lawMassOn (D j) F) ^ 2 else 0
+    have hwt : ∀ j, 0 ≤ wt j := by
+      intro j
+      dsimp [wt]
+      split_ifs
+      · exact mul_nonneg (ρ.nonneg j) (sq_nonneg _)
+      · exact le_rfl
+    have hden : 0 ≤ ∑ j, wt j := Finset.sum_nonneg fun j _ => hwt j
+    change 0 ≤ (if fixedListFailure E G ρ D μs (aG n δ) W ∨
+      ∑ j, wt j = 0 then 0 else
+        ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y)
+    by_cases hbad : fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0
+    · simp [hbad]
+    · have hdenpos : 0 < ∑ j, wt j :=
+        lt_of_le_of_ne hden (Ne.symm (fun heq => hbad (Or.inr heq)))
+      simp only [if_neg hbad]
+      apply Finset.sum_nonneg
+      intro j hj
+      exact mul_nonneg (div_nonneg (hwt j) hdenpos.le) ((restrictOrSelf (D j) F).nonneg y)
+
+  have hypList_sum_le_one {r k : ℕ} (i : M.I) (S : Finset (Fin N))
+      (μs : Fin r → Law N) (own : Fin r → Prop) (W : Fin r → Fin k → Fin N) :
+      ∑ y, hypListRow M i S μs own W y ≤ 1 := by
+    classical
+    let ρ := maskedPrior M i S
+    let D := maskedCluster M i S
+    let F := fixedListHitSet E G W
+    let kept : Fin (M.K i) → Prop := fun j =>
+      Real.exp (-(3 / 2 : ℝ) * k * r) ≤ lawMassOn (D j) F ∧
+        ∀ b, (if own b then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * k)
+            else Real.exp (-(6 / 5 : ℝ) * k)) *
+          lawMassOn (D j) (fixedListHitSetWithout E G W b) ≤ lawMassOn (D j) F
+    let wt : Fin (M.K i) → ℝ := fun j =>
+      if kept j then ρ.w j * (lawMassOn (D j) F) ^ 2 else 0
+    have hwt : ∀ j, 0 ≤ wt j := by
+      intro j
+      dsimp [wt]
+      split_ifs
+      · exact mul_nonneg (ρ.nonneg j) (sq_nonneg _)
+      · exact le_rfl
+    have hden : 0 ≤ ∑ j, wt j := Finset.sum_nonneg fun j _ => hwt j
+    change ∑ y, (if fixedListFailure E G ρ D μs (aG n δ) W ∨
+      ∑ j, wt j = 0 then 0 else
+        ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y) ≤ 1
+    by_cases hbad : fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0
+    · simp [hbad]
+    · have hdenne : (∑ j, wt j) ≠ 0 := by
+        intro heq
+        exact hbad (Or.inr heq)
+      have hdenpos : 0 < ∑ j, wt j := lt_of_le_of_ne hden (Ne.symm hdenne)
+      simp only [if_neg hbad]
+      calc
+        (∑ y, ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y) =
+            ∑ j, wt j / (∑ j', wt j') * ∑ y, (restrictOrSelf (D j) F).w y := by
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro j hj
+          rw [← Finset.mul_sum]
+        _ = ∑ j, wt j / (∑ j', wt j') := by
+          apply Finset.sum_congr rfl
+          intro j hj
+          have hlaw : ∑ y, (restrictOrSelf (D j) F).w y = 1 :=
+            (restrictOrSelf (D j) F).sum_eq_one
+          rw [hlaw]
+          ring
+        _ = 1 := by
+          rw [← Finset.sum_div]
+          exact div_self hdenne
+        _ ≤ 1 := le_rfl
+
+  have hypList_supported {r k : ℕ} (i : M.I) (S : Finset (Fin N))
+      (μs : Fin r → Law N) (own : Fin r → Prop) (W : Fin r → Fin k → Fin N)
+      (hPerm : Permitted M i S) {y : Fin N} (hy : y ∉ S) :
+      hypListRow M i S μs own W y = 0 := by
+    classical
+    let ρ := maskedPrior M i S
+    let D := maskedCluster M i S
+    let F := fixedListHitSet E G W
+    let kept : Fin (M.K i) → Prop := fun j =>
+      Real.exp (-(3 / 2 : ℝ) * k * r) ≤ lawMassOn (D j) F ∧
+        ∀ b, (if own b then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * k)
+            else Real.exp (-(6 / 5 : ℝ) * k)) *
+          lawMassOn (D j) (fixedListHitSetWithout E G W b) ≤ lawMassOn (D j) F
+    let wt : Fin (M.K i) → ℝ := fun j =>
+      if kept j then ρ.w j * (lawMassOn (D j) F) ^ 2 else 0
+    have hρzero (j : Fin (M.K i)) (hj : j ∉ keptClusters M i S) : ρ.w j = 0 := by
+      dsimp [ρ, maskedPrior]
+      rw [dif_pos hPerm]
+      simp [FinProb.cond, hj]
+    have hDsupport (j : Fin (M.K i)) (hj : j ∈ keptClusters M i S) :
+        ∀ y, y ∉ S → (D j).w y = 0 := by
+      intro y hy
+      have hmass : 0 < lawMassOn (M.D i j) S :=
+        lt_of_lt_of_le (by norm_num) (Finset.mem_filter.mp hj).2
+      simp [D, maskedCluster, hPerm, hj, restrictOrSelf, hmass, Law.restrict, hy]
+    change (if fixedListFailure E G ρ D μs (aG n δ) W ∨
+      ∑ j, wt j = 0 then 0 else
+        ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y) = 0
+    by_cases hbad : fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0
+    · simp [hbad]
+    · simp only [if_neg hbad]
+      apply Finset.sum_eq_zero
+      intro j hj
+      by_cases hjK : j ∈ keptClusters M i S
+      · have hrow : (restrictOrSelf (D j) F).w y = 0 := by
+          unfold restrictOrSelf
+          split_ifs with hmass
+          · simp [Law.restrict, hDsupport j hjK y hy]
+          · exact hDsupport j hjK y hy
+        simp [hrow]
+      · have hwtzero : wt j = 0 := by
+          dsimp [wt]
+          split_ifs
+          · simp [hρzero j hjK]
+          · rfl
+        simp [hwtzero]
+
+  have hypMean_nonneg (p : Slice n δ → M.I) (q : Site n δ)
+      (S : Finset (Fin N)) (s : ℕ) (y : Fin N) :
+      0 ≤ hypMean M p q S s y := by
+    let μs : Fin (s + mS n δ) → Law N := fun b =>
+      Fin.addCases (fun _ => M.μ (p q.1)) (fun e => M.μ (p (flipSlice q.1 e))) b
+    let own : Fin (s + mS n δ) → Prop := fun b => (b : ℕ) < s
+    let P := p10_1kTupleArrayLaw (k := kT n δ) μs
+    have hrow (W : Fin (s + mS n δ) → Fin (kT n δ) → Fin N) :
+        0 ≤ hypListRow M (p q.1) S μs own W y := by
+      exact hypList_nonneg (r := s + mS n δ) (k := kT n δ)
+        (p q.1) S μs own W y
+    change 0 ≤ ∑ W, P.w W * hypListRow M (p q.1) S μs own W y
+    apply Finset.sum_nonneg
+    intro W hW
+    exact mul_nonneg (P.nonneg W) (hrow W)
+
+  have hypMean_sum_le_one (p : Slice n δ → M.I) (q : Site n δ)
+      (S : Finset (Fin N)) (s : ℕ) :
+      ∑ y, hypMean M p q S s y ≤ 1 := by
+    let μs : Fin (s + mS n δ) → Law N := fun b =>
+      Fin.addCases (fun _ => M.μ (p q.1)) (fun e => M.μ (p (flipSlice q.1 e))) b
+    let own : Fin (s + mS n δ) → Prop := fun b => (b : ℕ) < s
+    let P := p10_1kTupleArrayLaw (k := kT n δ) μs
+    have heq : ∑ y, hypMean M p q S s y =
+        ∑ W, P.w W * ∑ y, hypListRow M (p q.1) S μs own W y := by
+      unfold hypMean FinProb.expect
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro W hW
+      rw [← Finset.mul_sum]
+    calc
+      ∑ y, hypMean M p q S s y =
+          ∑ W, P.w W * ∑ y, hypListRow M (p q.1) S μs own W y := heq
+      _ ≤ ∑ W, P.w W * 1 := by
+        apply Finset.sum_le_sum
+        intro W hW
+        exact mul_le_mul_of_nonneg_left
+          (hypList_sum_le_one (p q.1) S μs own W) (P.nonneg W)
+      _ = 1 := by simp [P.sum_eq_one]
+
+  have hypMean_supported (p : Slice n δ → M.I) (q : Site n δ)
+      (S : Finset (Fin N)) (hPerm : Permitted M (p q.1) S) (s : ℕ)
+      {y : Fin N} (hy : y ∉ S) : hypMean M p q S s y = 0 := by
+    let μs : Fin (s + mS n δ) → Law N := fun b =>
+      Fin.addCases (fun _ => M.μ (p q.1)) (fun e => M.μ (p (flipSlice q.1 e))) b
+    let own : Fin (s + mS n δ) → Prop := fun b => (b : ℕ) < s
+    unfold hypMean FinProb.expect
+    apply Finset.sum_eq_zero
+    intro W hW
+    change (p10_1kTupleArrayLaw (k := kT n δ) μs).w W *
+      hypListRow M (p q.1) S μs own W y = 0
+    rw [hypList_supported (p q.1) S μs own W hPerm hy]
+    simp
+
+  let Action := fun (p : Slice n δ → M.I) (q : Site n δ) =>
+    {S : Finset (Fin N) // Permitted M (p q.1) S ∨ S = Finset.univ}
+  have maskResponseExists (p : Slice n δ → M.I) (q : Site n δ) :
+      ∃ P : FinProb (Action p q),
+        ∀ s : Fin (TT n δ + 1), ∀ y,
+          P.expect (fun a => hypMean M p q a.1 s y) ≤
+            10 * ((TT n δ + 1 : ℕ) : ℝ) *
+              (Law.mix (prior M (p q.1)) (M.D (p q.1))).w y := by
+    classical
+    let i := p q.1
+    let data : P10_1kClusterData (n := n) (N := N) E G ζ δ X Y := {
+      μ := M.μ i
+      K := M.K i
+      lam := M.lam i
+      D := M.D i
+      μ_supported := M.μ_support i
+      D_supported := M.D_support i
+      lam_nonneg := M.lam_nonneg i
+      lam_sum := M.lam_sum i
+      μ_width := M.μ_width i
+      aggregate_width := M.ν_width i
+      D_atom := M.D_atom i
+      codegree := M.codegree i
+    }
+    let ν : Law N := Law.mix (prior M i) (M.D i)
+    let Coord := Fin (TT n δ + 1) × Fin N
+    let v : Action p q → Coord → ℝ := fun S c =>
+      hypMean M p q S.1 c.1 c.2
+    let bound : Coord → ℝ := fun c =>
+      10 * ((TT n δ + 1 : ℕ) : ℝ) * ν.w c.2
+    have hprice : ∀ c : Coord → ℝ, (∀ z, 0 ≤ c z) →
+        ∃ S : Action p q, ∑ z, c z * v S z ≤ ∑ z, c z * bound z := by
+      intro c hc
+      let price : Fin (TT n δ + 1) → Fin N → ℝ := fun s y => c (s, y)
+      have hpriceNonneg : ∀ s y, 0 ≤ price s y := by
+        intro s y
+        exact hc (s, y)
+      let F := cheapMaskLabels ν price
+      have hsep := p10_1f_mask_price_separation ν price hpriceNonneg
+      have hmass : 9 / 10 ≤
+          lawMassOn (Law.mix (p10_1kClusterPrior data) data.D) F := by
+        simpa [F, ν, i, data, prior, p10_1kClusterPrior, Law.mix] using hsep.1
+      have hret := p10_1k_retainedClusterSet_mass
+        (p10_1kClusterPrior data) data.D F hmass
+      have hPerm : Permitted M i F := by
+        change (1 / 2 : ℝ) ≤
+          (prior M i).pr (fun j => j ∈ keptClusters M i F)
+        simpa [prior, keptClusters, p10_1kClusterPrior,
+          p10_1kRetainedClusterSet, data] using hret
+      let S : Action p q := ⟨F, Or.inl hPerm⟩
+      have hcheap (y : Fin N) (hy : y ∈ F) :
+          ∑ s : Fin (TT n δ + 1), price s y ≤ 10 * totalMaskPrice ν price := by
+        simpa [F, cheapMaskLabels] using (Finset.mem_filter.mp hy).2
+      have hpriceBound (s : Fin (TT n δ + 1)) (y : Fin N) (hy : y ∈ F) :
+          price s y ≤ 10 * totalMaskPrice ν price := by
+        calc
+          price s y ≤ ∑ s' : Fin (TT n δ + 1), price s' y :=
+            Finset.single_le_sum (fun s' hs' => hpriceNonneg s' y)
+              (Finset.mem_univ s)
+          _ ≤ 10 * totalMaskPrice ν price := hcheap y hy
+      have hSnonneg : 0 ≤ totalMaskPrice ν price := by
+        unfold totalMaskPrice
+        apply Finset.sum_nonneg
+        intro s hs
+        apply Finset.sum_nonneg
+        intro y hy
+        exact mul_nonneg (ν.nonneg y) (hpriceNonneg s y)
+      have hrowCost (s : Fin (TT n δ + 1)) :
+          ∑ y, price s y * hypMean M p q F s y ≤
+            10 * totalMaskPrice ν price := by
+        calc
+          ∑ y, price s y * hypMean M p q F s y ≤
+              ∑ y, (10 * totalMaskPrice ν price) * hypMean M p q F s y := by
+            apply Finset.sum_le_sum
+            intro y hy
+            by_cases hyF : y ∈ F
+            · exact mul_le_mul_of_nonneg_right (hpriceBound s y hyF)
+                (hypMean_nonneg p q F s y)
+            · rw [hypMean_supported p q F hPerm s hyF]
+              simp
+          _ = (10 * totalMaskPrice ν price) *
+                ∑ y, hypMean M p q F s y := by rw [← Finset.mul_sum]
+          _ ≤ (10 * totalMaskPrice ν price) * 1 :=
+            mul_le_mul_of_nonneg_left (hypMean_sum_le_one p q F s)
+              (mul_nonneg (by norm_num) hSnonneg)
+          _ = 10 * totalMaskPrice ν price := by ring
+      have htarget :
+          ∑ s : Fin (TT n δ + 1), ∑ y : Fin N,
+              price s y * (10 * ((TT n δ + 1 : ℕ) : ℝ) * ν.w y) =
+            (10 * ((TT n δ + 1 : ℕ) : ℝ)) * totalMaskPrice ν price := by
+        unfold totalMaskPrice
+        calc
+          _ = ∑ s : Fin (TT n δ + 1),
+                (10 * ((TT n δ + 1 : ℕ) : ℝ)) *
+                  ∑ y : Fin N, ν.w y * price s y := by
+            apply Finset.sum_congr rfl
+            intro s hs
+            calc
+              ∑ y : Fin N, price s y *
+                  (10 * ((TT n δ + 1 : ℕ) : ℝ) * ν.w y) =
+                  ∑ y : Fin N,
+                    (10 * ((TT n δ + 1 : ℕ) : ℝ)) * (ν.w y * price s y) := by
+                apply Finset.sum_congr rfl
+                intro y hy
+                ring
+              _ = (10 * ((TT n δ + 1 : ℕ) : ℝ)) *
+                    ∑ y : Fin N, ν.w y * price s y := by
+                rw [← Finset.mul_sum]
+          _ = (10 * ((TT n δ + 1 : ℕ) : ℝ)) *
+                ∑ s : Fin (TT n δ + 1), ∑ y : Fin N, ν.w y * price s y := by
+            rw [← Finset.mul_sum]
+          _ = (10 * ((TT n δ + 1 : ℕ) : ℝ)) * totalMaskPrice ν price := rfl
+      have hcost :
+          ∑ s : Fin (TT n δ + 1), ∑ y : Fin N,
+              price s y * hypMean M p q F s y ≤
+            ∑ s : Fin (TT n δ + 1), ∑ y : Fin N,
+              price s y * (10 * ((TT n δ + 1 : ℕ) : ℝ) * ν.w y) := by
+        calc
+          ∑ s : Fin (TT n δ + 1), ∑ y : Fin N,
+              price s y * hypMean M p q F s y ≤
+              ∑ s : Fin (TT n δ + 1), 10 * totalMaskPrice ν price :=
+            Finset.sum_le_sum fun s hs => hrowCost s
+          _ = (10 * ((TT n δ + 1 : ℕ) : ℝ)) * totalMaskPrice ν price := by
+            simp [Finset.sum_const, nsmul_eq_mul]
+            ring
+          _ = ∑ s : Fin (TT n δ + 1), ∑ y : Fin N,
+              price s y * (10 * ((TT n δ + 1 : ℕ) : ℝ) * ν.w y) := htarget.symm
+      refine ⟨S, ?_⟩
+      simpa [v, bound, Coord, price, S, F, Fintype.sum_prod_type] using hcost
+    obtain ⟨w, hw0, hw1, hbound⟩ :=
+      HypercubeRamsey.Lane_q_s10_d4.finite_mixture_le_of_price_bound v bound hprice
+    let P : FinProb (Action p q) := ⟨w, hw0, hw1⟩
+    refine ⟨P, ?_⟩
+    intro s y
+    simpa [P, v, bound, FinProb.expect] using hbound (s, y)
+
+  let near := fun q : Site n δ =>
+    Finset.univ.filter fun z : Slice n δ => hammingDist z q.1 ≤ 1
+  have hflipDist (z : Slice n δ) (e : Fin (mS n δ)) :
+      hammingDist z (flipSlice z e) ≤ 1 := by
+    classical
+    have hsub :
+        (Finset.univ.filter fun i : Fin (mS n δ) => z i ≠ flipSlice z e i) ⊆ {e} := by
+      intro i hi
+      by_contra hnot
+      have hne : i ≠ e := by
+        intro hie
+        apply hnot
+        simp [hie]
+      have heq : flipSlice z e i = z i := by
+        simp [flipSlice, Function.update_of_ne hne]
+      exact (Finset.mem_filter.mp hi).2 heq.symm
+    change (Finset.univ.filter fun i : Fin (mS n δ) => z i ≠ flipSlice z e i).card ≤ 1
+    calc
+      _ ≤ ({e} : Finset (Fin (mS n δ))).card := Finset.card_le_card hsub
+      _ = 1 := by simp
+  let defaultTag : M.I := Classical.choice M.neI
+  let localize := fun (p : Slice n δ → M.I) (q : Site n δ) =>
+    fun z : Slice n δ => if z ∈ near q then p z else defaultTag
+  have hqNear (q : Site n δ) : q.1 ∈ near q := by
+    simp [near]
+  have hflipNear (q : Site n δ) (e : Fin (mS n δ)) :
+      flipSlice q.1 e ∈ near q := by
+    simp [near, hammingDist_comm, hflipDist]
+  have hmeanLocalized (p : Slice n δ → M.I) (q : Site n δ)
+      (S : Finset (Fin N)) (s : ℕ) (y : Fin N) :
+      hypMean M (localize p q) q S s y = hypMean M p q S s y := by
+    have hself : localize p q q.1 = p q.1 := by
+      simp [localize, hqNear]
+    have hflip : ∀ e, localize p q (flipSlice q.1 e) = p (flipSlice q.1 e) := by
+      intro e
+      simp [localize, hflipNear]
+    have hfirst :
+        (fun _ : Fin s => M.μ (localize p q q.1)) =
+          (fun _ : Fin s => M.μ (p q.1)) := by
+      funext b
+      rw [hself]
+    have hsecond :
+        (fun e : Fin (mS n δ) => M.μ (localize p q (flipSlice q.1 e))) =
+          (fun e : Fin (mS n δ) => M.μ (p (flipSlice q.1 e))) := by
+      funext e
+      rw [hflip e]
+    have hμs' :
+        @Fin.addCases s (mS n δ) (fun _ : Fin (s + mS n δ) => Law N)
+          (fun _ : Fin s => M.μ (localize p q q.1))
+          (fun e : Fin (mS n δ) => M.μ (localize p q (flipSlice q.1 e))) =
+        @Fin.addCases s (mS n δ) (fun _ : Fin (s + mS n δ) => Law N)
+          (fun _ : Fin s => M.μ (p q.1))
+          (fun e : Fin (mS n δ) => M.μ (p (flipSlice q.1 e))) := by
+      rw [hfirst, hsecond]
+    simp only [hypMean]
+    rw [hμs', hself]
+
+  let chooseLaw := fun (p : Slice n δ → M.I) (q : Site n δ) =>
+    Classical.choose (maskResponseExists p q)
+  let σ : MaskStrategy M := fun t q =>
+    FinProb.map (chooseLaw (localize t q) q) Subtype.val
+
+  refine ⟨σ, ?_, ?_, ?_⟩
+  · intro q
+    unfold FinProb.DependsOn
+    intro t t' hagree
+    have hlocal : localize t q = localize t' q := by
+      funext z
+      simp only [localize]
+      by_cases hz : z ∈ near q
+      · simp [hz, hagree z hz]
+      · simp [hz]
+    change FinProb.map (chooseLaw (localize t q) q) Subtype.val =
+      FinProb.map (chooseLaw (localize t' q) q) Subtype.val
+    rw [hlocal]
+  · intro t q S hweight
+    let p := localize t q
+    by_contra hnot
+    have hnotLocal : ¬(Permitted M (p q.1) S ∨ S = Finset.univ) := by
+      intro hP
+      apply hnot
+      simpa [p, localize, hqNear] using hP
+    have hterm : ∀ a : Action p q,
+        (if a.1 = S then (chooseLaw p q).w a else 0) = 0 := by
+      intro a
+      by_cases heq : a.1 = S
+      · have hprop : Permitted M (p q.1) S ∨ S = Finset.univ := by
+          simpa [Action, heq] using a.2
+        exact False.elim (hnotLocal hprop)
+      · simp [heq]
+    have hzero : ∑ a : Action p q,
+        (if a.1 = S then (chooseLaw p q).w a else 0) = 0 :=
+      Finset.sum_eq_zero fun a ha => hterm a
+    have hweight' : (FinProb.map (chooseLaw p q) Subtype.val).w S ≠ 0 := by
+      simpa [σ, chooseLaw, p] using hweight
+    change (∑ a : Action p q,
+      if a.1 = S then (chooseLaw p q).w a else 0) ≠ 0 at hweight'
+    exact hweight' hzero
+  · intro t q s hs y
+    let p := localize t q
+    let P := chooseLaw p q
+    have hP := Classical.choose_spec (maskResponseExists p q)
+    have hsame (S : Finset (Fin N)) :
+        hypMean M p q S s y = hypMean M t q S s y := by
+      exact hmeanLocalized t q S s y
+    have heq : P.expect (fun a : Action p q => hypMean M p q a.1 s y) =
+        P.expect (fun a : Action p q => hypMean M t q a.1 s y) := by
+      unfold FinProb.expect
+      apply Finset.sum_congr rfl
+      intro a ha
+      change P.w a * hypMean M p q a.1 s y =
+        P.w a * hypMean M t q a.1 s y
+      rw [hsame a.1]
+    have hnu : (Law.mix (prior M (p q.1)) (M.D (p q.1))).w y =
+        ∑ j, M.lam (p q.1) j * (M.D (p q.1) j).w y := by
+      simp [prior, Law.mix]
+    let sFin : Fin (TT n δ + 1) := ⟨s, by omega⟩
+    have hPbound : P.expect (fun a : Action p q => hypMean M p q a.1 s y) ≤
+        10 * ((TT n δ + 1 : ℕ) : ℝ) *
+          (Law.mix (prior M (p q.1)) (M.D (p q.1))).w y := by
+      simpa [P, chooseLaw, sFin] using hP sFin y
+    have hself : p q.1 = t q.1 := by
+      simp [p, localize, hqNear]
+    have hrows :
+        (∑ j, M.lam (p q.1) j * (M.D (p q.1) j).w y) =
+          ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y := by
+      exact congrArg (fun i : M.I =>
+        ∑ j : Fin (M.K i), M.lam i j * (M.D i j).w y) hself
+    calc
+      ∑ S : Finset (Fin N), (σ t q).w S * hypMean M t q S s y =
+          (FinProb.map P Subtype.val).expect (fun S => hypMean M t q S s y) := rfl
+      _ = P.expect (fun a : Action p q => hypMean M t q a.1 s y) :=
+        FinProb.map_expect P Subtype.val _
+      _ = P.expect (fun a : Action p q => hypMean M p q a.1 s y) := heq.symm
+      _ ≤ 10 * ((TT n δ + 1 : ℕ) : ℝ) *
+          (Law.mix (prior M (p q.1)) (M.D (p q.1))).w y := hPbound
+      _ ≤ Real.exp ((mS n δ : ℝ) / 100) *
+          ∑ j, M.lam (p q.1) j * (M.D (p q.1) j).w y := by
+        have hsc := mul_le_mul_of_nonneg_right (hn₀ n hn)
+          ((Law.mix (prior M (p q.1)) (M.D (p q.1))).nonneg y)
+        simpa [hnu] using hsc
+      _ = Real.exp ((mS n δ : ℝ) / 100) *
+          ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y := by rw [hrows]
 
 /-- **d5** = P10.1g (10:155–186; ~500 lines; new argument: the position-only
 enumeration of own lists, the eligibility-free selection bounds `w_{ℓ,c}` from

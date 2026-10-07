@@ -3093,6 +3093,39 @@ private theorem gadgetOut_eq_of_leaf_and_side {β γ : ℝ} {n : ℕ}
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
   exact hside' j
 
+private theorem gadgetOut_flip_eq_of_leaf {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hleaf : HypercubeRamsey.S04.searchLeaf β γ n g (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.searchLeaf β γ n g v)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.gadgetOut β γ n g v := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  have hgap := clipped_gap_of_search g v hS
+  have hwidth : (HypercubeRamsey.S04.searchLeaf β γ n g v).2 =
+      (HypercubeRamsey.S04.searchLeaf β γ n g v).1 + 1 := by
+    simpa using (gadgetSearchLeaf_spec g v).1
+  apply Eq.symm
+  apply gadgetOut_eq_of_leaf_and_side g v (HypercubeRamsey.cubeFlip v i) hleaf.symm
+  intro j
+  have hdelta :
+      (HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≤
+          HypercubeRamsey.S04.clipped β γ n g j v + 1) ∧
+        (HypercubeRamsey.S04.clipped β γ n g j v ≤
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1) := by
+    by_cases hj : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j
+    · exact clipped_flip_delta g j v i hj
+    · have heq := chunkCount_flip_eq g j v i hj
+      simp [HypercubeRamsey.S04.clipped, heq]
+  have hstable := side_stable_of_gap S
+    (HypercubeRamsey.S04.searchLeaf β γ n g v).1
+    (HypercubeRamsey.S04.clipped β γ n g j v)
+    (HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i))
+    hS (by simpa [hwidth] using hgap j) hdelta
+  rw [hleaf]
+  simpa [S] using hstable
+
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
   classical

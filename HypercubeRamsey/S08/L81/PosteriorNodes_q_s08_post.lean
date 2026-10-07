@@ -1197,6 +1197,85 @@ theorem refCross_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
   simp only [Ctx.refCross, normOr]
   rw [hZ, hweight q]
 
+theorem fcand_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (ξ : D.Tup)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
+    D.Fcand Θ g ξ o = D.Fcand Θ' g ξ o := by
+  classical
+  have hBall (v : D.KeyT) (hv : keyDist g v ≤ 2) : v ∈ keyBall g 2 := by
+    apply Finset.mem_filter.mpr
+    exact ⟨Finset.mem_univ v, hv⟩
+  have hUpdate (v : D.KeyT) (hv : keyDist g v ≤ 2) :
+      Function.update Θ g ξ v = Function.update Θ' g ξ v := by
+    by_cases hvg : v = g
+    · subst v
+      simp
+    · simp [Function.update_of_ne hvg, hΘ v hv]
+  have hUpdateBall : ∀ v ∈ keyBall g 2,
+      Function.update Θ g ξ v = Function.update Θ' g ξ v := by
+    intro v hv
+    exact hUpdate v (Finset.mem_filter.mp hv).2
+  have hCand := Lane_q_s08_post.candGate_congr_of_radius_two D
+    (Function.update Θ g ξ) (Function.update Θ' g ξ) g hUpdateBall
+  have hThetaCross : ∀ u ∈ crossKeys g, Θ u = Θ' u := by
+    intro u hu
+    exact hΘ u ((Finset.mem_filter.mp hu).2.le.trans (by omega))
+  have hIntLaw := Lane_q_s08_post.tilt_congr_of_local D
+    (Function.update Θ g ξ) (Function.update Θ' g ξ) g (by simp)
+    (by
+      intro u hu
+      exact hUpdate u ((Finset.mem_filter.mp hu).2.le.trans (by omega)))
+  have hIntRef := Lane_q_s08_post.refInt_congr_of_local D Θ Θ' g hThetaCross
+  have hIntRatio (j : J) :
+      D.intRatio Θ g ξ (o.1 j) = D.intRatio Θ' g ξ (o.1 j) := by
+    unfold Ctx.intRatio
+    rw [hIntLaw, hIntRef]
+  have hCrossRatio (u : D.CrossSub g) :
+      D.crossRatio Θ g ξ u (o.2 u) = D.crossRatio Θ' g ξ u (o.2 u) := by
+    have huDist : keyDist g u.1 ≤ 1 := (Finset.mem_filter.mp u.2).2.le
+    have h0 := hUpdate u.1 (huDist.trans (by omega))
+    have hCross : ∀ w ∈ crossKeys u.1,
+        Function.update Θ g ξ w = Function.update Θ' g ξ w := by
+      intro w hw
+      have htri := keyDist_triangle_aux g u.1 w
+      have hgw : keyDist g w ≤ 2 := by
+        have huw : keyDist u.1 w = 1 := (Finset.mem_filter.mp hw).2
+        omega
+      exact hUpdate w hgw
+    have hTilt := Lane_q_s08_post.tilt_congr_of_local D
+      (Function.update Θ g ξ) (Function.update Θ' g ξ) u.1 h0 hCross
+    have hAnchor := Lane_q_s08_post.anchorU_congr_of_local D
+      (Function.update Θ g ξ) (Function.update Θ' g ξ) u.1 (o.2 u).1 h0 hCross
+    have hRef := Lane_q_s08_post.refCross_congr_radius_two D Θ Θ' g u
+      (fun w hw => hΘ w (Finset.mem_filter.mp hw).2)
+    unfold Ctx.crossRatio
+    rw [hTilt, hAnchor, hRef]
+  unfold Ctx.Fcand
+  rw [hCand]
+  have hIprod : (∏ j, D.intRatio Θ g ξ (o.1 j)) =
+      ∏ j, D.intRatio Θ' g ξ (o.1 j) := by
+    apply Finset.prod_congr rfl
+    intro j hj
+    exact hIntRatio j
+  have hCprod : (∏ u, D.crossRatio Θ g ξ u (o.2 u)) =
+      ∏ u, D.crossRatio Θ' g ξ u (o.2 u) := by
+    apply Finset.prod_congr rfl
+    intro u hu
+    exact hCrossRatio u
+  rw [hIprod, hCprod]
+
+theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
+    D.Mden Θ g o = D.Mden Θ' g o := by
+  classical
+  unfold Ctx.Mden
+  apply Finset.sum_congr rfl
+  intro ξ hξ
+  rw [Lane_q_s08_post.fcand_congr_radius_two D Θ Θ' g ξ o hΘ]
+
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
   classical

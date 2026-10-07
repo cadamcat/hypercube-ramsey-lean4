@@ -214,23 +214,54 @@ theorem L6_1h_shapes12 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       exact_mod_cast hc
     exact hcR.trans (Lane_sol_s06_shapes.taggedStep2Shape_card_bound X hm603 u)
 
+set_option maxHeartbeats 400000 in
 /-- L6.1h (shapes, Step 3, 06:282–292, 06:479–481): the same symmetries act on abstract descriptors; the count of
 abstract descriptors per coarse shape and central sign. -/
 theorem L6_1h_shapes3 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes3 := by
-  refine ⟨2, 0, ?_⟩
+  have hα : 0 < α₆ p₀ := (height_exponents6_admissible p₀ hadm.2.2.1).1
+  let C : ℕ := ⌈602 / α₆ p₀⌉₊
+  have hC : (602 : ℝ) ≤ α₆ p₀*C := by
+    have hceil : (602 : ℝ)/α₆ p₀ ≤ (C : ℝ) := Nat.le_ceil _
+    exact (div_le_iff₀ hα).mp hceil |>.trans_eq (mul_comm _ _)
+  have hJtail : ∀ᶠ m : ℕ in Filter.atTop, C ≤ J₆ m := by
+    have hp : Filter.Tendsto (fun m : ℕ => (m : ℝ)^(1/25 : ℝ)) Filter.atTop Filter.atTop :=
+      (tendsto_rpow_atTop (by norm_num : (0:ℝ) < 1/25)).comp tendsto_natCast_atTop_atTop
+    filter_upwards [hp.eventually (Filter.eventually_ge_atTop (C : ℝ))] with m hm
+    exact (Nat.le_floor_iff (Real.rpow_nonneg (Nat.cast_nonneg m) _)).mpr hm
+  have hmTail := m₆_nat_tendsto_atTop p₀ hadm.2.2.1
+  obtain ⟨nM,hnM⟩ := Filter.eventually_atTop.1
+    ((hmTail.eventually (Filter.eventually_ge_atTop 603)).and (hmTail.eventually hJtail))
+  refine ⟨max 4 nM,0,?_⟩
   intro n N E G M X hLarge hDesc
-  let Sh : Type := (X.Key × Mode6 × CubeVertex X.m) × Finset (Fin X.T × X.Ty)
-  let f₃ : X.State → Finset (Fin X.T × X.Ty) → Sh :=
-    fun b D => (Lane_sol_s06_shapes.targetShape X b, D)
-  refine ⟨Sh, inferInstance, f₃, ?_, ?_⟩
-  · intro b D b' D' heq v
-    have hb : Lane_sol_s06_shapes.targetShape X b = Lane_sol_s06_shapes.targetShape X b' :=
-      congrArg Prod.fst heq
-    have hD : D = D' := congrArg Prod.snd heq
-    subst D'
-    exact Lane_sol_s06_shapes.step3V0Rate_targetShape X b b' hb v D
-  · sorry
+  have hn4 : 4 ≤ n := (le_max_left 4 nM).trans hLarge.1
+  have hstat := hnM n ((le_max_right 4 nM).trans hLarge.1)
+  have hmeq : X.m = m₆ p₀ n := X.g.m_eq
+  have hm603 : 603 ≤ X.m := by rw [hmeq]; exact hstat.1
+  have hCJ : C ≤ X.J := by change C ≤ J₆ X.m; rw [hmeq]; exact hstat.2
+  have hmR : (1:ℝ) ≤ X.m := by exact_mod_cast (show 1 ≤ X.m by omega)
+  have hJm : X.J ≤ X.m := by
+    change ⌊(X.m:ℝ)^(1/25:ℝ)⌋₊ ≤ X.m
+    apply Nat.floor_le_of_le
+    simpa only [Real.rpow_one] using
+      Real.rpow_le_rpow_of_exponent_le hmR (by norm_num : (1/25:ℝ) ≤ 1)
+  have hTm : X.T ≤ X.m := by
+    change ⌈(X.m:ℝ)^(1/1000:ℝ)⌉₊ ≤ X.m
+    apply Nat.ceil_le.mpr
+    simpa only [Real.rpow_one] using
+      Real.rpow_le_rpow_of_exponent_le hmR (by norm_num : (1/1000:ℝ) ≤ 1)
+  have hcoarse : 4*(n+1)^300 ≤ (X.m+2)^(X.J+1) := by
+    apply Lane_sol_s06_shapes.coarse_factor_le_fine_power X (α₆ p₀) hα C hC (by omega) _ (by omega)
+    change (n:ℝ)^(α₆ p₀) ≤ (X.g.L.m:ℝ)
+    rw [X.g.m_eq]
+    exact Nat.le_ceil _
+  let Sh : Type := Lane_sol_s06_shapes.NormalizedShape X
+  refine ⟨Sh,Lane_sol_s06_shapes.normalizedShapeFintype X,
+    Lane_sol_s06_shapes.normalizedShape X,?_,?_⟩
+  · intro b D b' D' h v
+    exact Lane_sol_s06_shapes.normalizedShape_rates X b b' D D' h v
+  · exact Lane_sol_s06_shapes.normalizedShapeSet_card_exp X
+      (Classical.decEq Sh) hn4 hm603 hJm hTm hcoarse
 
 set_option maxHeartbeats 10000000
 /-- L6.1h (parent, 06:470–486): Markov on each shape and the unions over shapes; `E_v rate = raw rate`. -/

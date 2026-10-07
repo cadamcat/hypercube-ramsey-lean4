@@ -386,7 +386,7 @@ theorem exists_nat_log_ge (C : ℝ) :
   exact ⟨n₀, fun n hn => hn₀ n hn⟩
 
 /-- Every fixed positive power eventually dominates `log n`. -/
-private theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
+theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → Real.log (n : ℝ) ≤ (n : ℝ) ^ e := by
   let t : ℝ := e / 2
   have ht : 0 < t := by dsimp [t]; linarith
@@ -3623,7 +3623,7 @@ inductive HDThresholdWalk {p : HDParams} (Sites : p.Sites)
 
 /- The path-prefix relation certifies that the child walk stops at the first
 exit from its radius, with a parent suffix left over. -/
-private inductive HDThresholdCutFirstExit {p : HDParams} (Sites : p.Sites)
+inductive HDThresholdCutFirstExit {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p) (parentRadius : ℕ)
     (childOrigin : HDState p) (childRadius : ℕ) :
     {start finish : HDState p} →
@@ -3820,7 +3820,7 @@ private theorem hdThresholdCutFirstExit_finish_le_radius {p : HDParams}
   | downContinue hparent hv' hj hstep tail hinside hnext htail ih => exact ih
 
 /-- A parent-walk suffix that never leaves one child ball. -/
-private inductive HDThresholdWalkInside {p : HDParams} (Sites : p.Sites)
+inductive HDThresholdWalkInside {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p) (parentRadius : ℕ)
     (center : HDState p) (childRadius : ℕ) :
     {start finish : HDState p} →
@@ -3979,12 +3979,12 @@ private theorem hdThresholdCutFirstExit_remainder_shorter {p : HDParams}
       simp [hdThresholdWalk_length, hdThresholdWalk_upCount, hdThresholdWalk_downCount] at ih ⊢
       omega
 
-private abbrev HDChunk (p : HDParams) (Sites : p.Sites)
+abbrev HDChunk (p : HDParams) (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (childRadius : ℕ) :=
   Σ chunkStart : HDState p, Σ chunkFinish : HDState p,
     HDThresholdWalk Sites bad chunkStart childRadius chunkStart chunkFinish
 
-private inductive HDThresholdChunking {p : HDParams} (Sites : p.Sites)
+inductive HDThresholdChunking {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p)
     (parentRadius childRadius : ℕ) :
     {start finish : HDState p} →
@@ -4078,7 +4078,7 @@ private theorem hdThresholdChunking_lastFinish_eq {p : HDParams} {Sites : p.Site
           have hlastTail : (c :: cs).getLast? = some last := by simpa using hlast
           exact ih hlastTail
 
-private def hdThresholdChunkRise {p : HDParams} {Sites : p.Sites}
+def hdThresholdChunkRise {p : HDParams} {Sites : p.Sites}
     {bad : CubeVertex p.d → ℕ → Prop} {childRadius : ℕ}
     (chunk : Σ chunkStart : HDState p, Σ chunkFinish : HDState p,
       HDThresholdWalk Sites bad chunkStart childRadius chunkStart chunkFinish) : ℝ :=
@@ -4227,7 +4227,7 @@ private theorem hdThresholdChunking_suffix_rise_upper {p : HDParams}
       (hdScaleDistance p.D suffix.1 finish : ℝ) := by exact_mod_cast hlevel
   exact hlevelReal.trans (by exact_mod_cast hmetric)
 
-private def hdThresholdChunkFailure {p : HDParams} {Sites : p.Sites}
+def hdThresholdChunkFailure {p : HDParams} {Sites : p.Sites}
     {bad : CubeVertex p.d → ℕ → Prop} {childRadius : ℕ}
     (η : ℝ) (chunk : Σ chunkStart : HDState p, Σ chunkFinish : HDState p,
       HDThresholdWalk Sites bad chunkStart childRadius chunkStart chunkFinish) : Prop :=
@@ -4415,7 +4415,7 @@ private theorem hdThresholdChunking_failure_count_lower {p : HDParams} (hD : 0 <
           field_simp [hden.ne']
     _ ≤ q := hquot
 
-private theorem hdThresholdWalk_exists_chunking {p : HDParams} (Sites : p.Sites)
+theorem hdThresholdWalk_exists_chunking {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p)
     (parentRadius childRadius : ℕ) (hD : 0 < p.D) (hchild : 0 < childRadius)
     {start finish : HDState p}
@@ -4650,7 +4650,7 @@ private theorem exists_maximal_heightMetricSeparated {p : HDParams}
   have hcardEq : (insert x S).card = S.card + 1 := Finset.card_insert_of_notMem hxnotS
   omega
 
-private def hdScaleSeparated {p : HDParams} (gap : ℕ) (S : Finset (HDState p)) : Prop :=
+def hdScaleSeparated {p : HDParams} (gap : ℕ) (S : Finset (HDState p)) : Prop :=
   ∀ x ∈ S, ∀ y ∈ S, x ≠ y → gap ≤ hdScaleDistance p.D x y
 
 private theorem exists_maximal_hdScaleSeparated {p : HDParams}
@@ -4709,7 +4709,7 @@ private theorem exists_maximal_hdScaleSeparated {p : HDParams}
   have hcardEq : (insert x S).card = S.card + 1 := Finset.card_insert_of_notMem hxnotS
   omega
 
-private noncomputable def hdFailureStartSet {p : HDParams} {Sites : p.Sites}
+noncomputable def hdFailureStartSet {p : HDParams} {Sites : p.Sites}
     {bad : CubeVertex p.d → ℕ → Prop} {childRadius : ℕ}
     (η : ℝ) (chunks : List (HDChunk p Sites bad childRadius)) : Finset (HDState p) := by
   classical
@@ -6959,7 +6959,7 @@ private theorem hdChunkCoverPartition_parent_failure_false {p : HDParams} (hD : 
               _ < _ := hlarge
           exact (not_lt_of_ge hgapIneq hupperGap)
 
-private theorem hdParentFailure_has_many_separated_child_failure_starts
+theorem hdParentFailure_has_many_separated_child_failure_starts
     {p : HDParams} (hD : 0 < p.D)
     {Sites : p.Sites} {bad : CubeVertex p.d → ℕ → Prop}
     {parentOrigin start finish : HDState p} {parentRadius childRadius gap M K : ℕ}

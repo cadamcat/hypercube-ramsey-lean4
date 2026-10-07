@@ -1,5 +1,6 @@
 import HypercubeRamsey.S10.LocalNodes
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_row
 import HypercubeRamsey.Framework.PartC
 import HypercubeRamsey.Assembly
 
@@ -98,8 +99,8 @@ theorem p10_1k_transfer_to_even_rows
         LargeAt n₀ C₀ n N →
         DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
         AvailableAt κ (PCluster G ζ δ) n N E X Y →
-        Nonempty (Lane_sol_s10_1k.RowExperiment n N E G) := by
-    sorry
+        Nonempty (Lane_sol_s10_1k.RowExperiment n N E G) :=
+    Lane_opus_s10_row.rowExperiment_eventually η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
   obtain ⟨n₀, C₀, hconstruct⟩ := hconstruction
   refine ⟨n₀, C₀, ?_⟩
   intro n N E X Y G hlarge hdisc havail _odd

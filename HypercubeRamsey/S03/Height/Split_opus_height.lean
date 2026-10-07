@@ -419,7 +419,233 @@ theorem actual_pr_le_forced_expect (p : HDParams) (hlam : 30 ≤ p.lam)
         hdScaleFailure Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) x R η) ≤
       (p.posLawForced forced).expect
         (relSup p (forcedFree p forced) (siteDom p Sites) s t η x R) := by
-  sorry
+  classical
+  let C := forcedFree p forced
+  let Dom := siteDom p Sites
+  let N : ℝ := (p.n : ℝ) ^ p.b
+  have hN : 4 ≤ N := by simpa [N] using hnb
+  have hn : 0 < p.n := by
+    by_contra h
+    have hn0 : p.n = 0 := by omega
+    have hcast : (p.n : ℝ) = 0 := by exact_mod_cast hn0
+    by_cases hb0 : p.b = 0
+    · rw [hb0, Real.rpow_zero] at hnb
+      norm_num at hnb
+    · rw [hcast, Real.zero_rpow hb0] at hnb
+      norm_num at hnb
+  have hn2 : 2 ≤ p.n := by
+    by_contra h
+    have hnle : p.n ≤ 1 := by omega
+    have hn1 : p.n = 1 := by omega
+    rw [hn1] at hnb
+    norm_num at hnb
+  have hb : 0 < p.b := by
+    by_contra h
+    have hpow : (p.n : ℝ) ^ p.b ≤ 1 :=
+      Real.rpow_le_one_of_one_le_of_nonpos (by exact_mod_cast (show 1 ≤ p.n by omega))
+        (le_of_not_gt h)
+    linarith [hnb, hpow]
+  have filterCardLoss (S : Finset p.Loc) :
+      S.card ≤ (S.filter (fun ℓ => ℓ ∈ C)).card + 1 := by
+    cases forced with
+    | none =>
+        have hsub : S ⊆ S.filter (fun ℓ => ℓ ∈ C) := by
+          intro ℓ hℓ
+          apply Finset.mem_filter.mpr
+          exact ⟨hℓ, by simp [C, forcedFree]⟩
+        have hcard := Finset.card_le_card hsub
+        omega
+    | some f =>
+        let T := S.filter (fun ℓ => ℓ ∈ C)
+        have hsub : S ⊆ insert f T := by
+          intro ℓ hℓ
+          by_cases hℓf : ℓ = f
+          · subst ℓ
+            exact Finset.mem_insert_self _ _
+          · apply Finset.mem_insert_of_mem
+            apply Finset.mem_filter.mpr
+            have hneq : f ≠ ℓ := Ne.symm hℓf
+            exact ⟨hℓ, by simp [T, C, forcedFree, hneq]⟩
+        have hcard := Finset.card_le_card hsub
+        have hinsert : (insert f T).card ≤ T.card + 1 := Finset.card_insert_le f T
+        simpa [T] using hcard.trans hinsert
+  have hbound : ∀ pa : (p.Loc → Bool) × Aux,
+      p.actLaw.pr (fun A =>
+        p.Legal pa.1 (Esel pa.1 pa.2) Sites ∧
+          hdScaleFailure Sites pa.1 A (Esel pa.1 pa.2) x R η) ≤
+        relSup p C Dom s t η x R pa.1 := by
+    intro pa
+    let P := pa.1
+    let E := Esel pa.1 pa.2
+    have crowdCardLoss (A : p.Loc → Bool) (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+        (Finset.univ.filter (fun u : CubeVertex p.d =>
+          P (u, j) = true ∧ A (u, j) = true ∧
+            _root_.hammingDist u v ≤ p.r + p.D)).card ≤
+          relCrowd p C P A v j + 1 := by
+      let active : CubeVertex p.d → Prop := fun u =>
+        P (u, j) = true ∧ A (u, j) = true ∧
+          _root_.hammingDist u v ≤ p.r + p.D
+      let U : Finset (CubeVertex p.d) := Finset.univ.filter active
+      let V : Finset (CubeVertex p.d) :=
+        Finset.univ.filter (fun u => (u, j) ∈ C ∧ active u)
+      change U.card ≤ V.card + 1
+      cases forced with
+      | none =>
+          have hsub : U ⊆ V := by
+            intro u hu
+            have hactive := (Finset.mem_filter.mp hu).2
+            have hC : (u, j) ∈ C := by simp [C, forcedFree]
+            exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hC, hactive⟩⟩
+          have hcard : U.card ≤ V.card := Finset.card_le_card hsub
+          omega
+      | some f =>
+          have hsub : U ⊆ insert f.1 V := by
+            intro u hu
+            by_cases huf : u = f.1
+            · subst u
+              exact Finset.mem_insert_self _ _
+            · apply Finset.mem_insert_of_mem
+              apply Finset.mem_filter.mpr
+              have hneq : f ≠ (u, j) := by
+                intro heq
+                exact huf (congrArg Prod.fst heq).symm
+              have hC : (u, j) ∈ C := by
+                simp [C, forcedFree, hneq]
+              exact ⟨Finset.mem_univ _, ⟨hC, (Finset.mem_filter.mp hu).2⟩⟩
+          have hcard : U.card ≤ (insert f.1 V).card := Finset.card_le_card hsub
+          have hinsert : (insert f.1 V).card ≤ V.card + 1 :=
+            Finset.card_insert_le f.1 V
+          exact hcard.trans hinsert
+    by_cases hlegal : p.Legal P E Sites
+    · have hrelLegal : relLegal p C Dom s P E x R := by
+        intro v j hv _
+        change v ∈ Sites at hv
+        rcases (show p.LegalAt P E v j from hlegal v hv j) with ⟨hitems, hsize⟩
+        refine ⟨?_, ?_⟩
+        · intro ℓ hℓ _
+          exact hitems ℓ hℓ
+        · let F := (E v j).filter (fun ℓ => ℓ ∈ C)
+          have hloss : (E v j).card ≤ F.card + 1 := by
+            simpa [F] using filterCardLoss (E v j)
+          have hlossR : ((E v j).card : ℝ) ≤ (F.card : ℝ) + 1 := by
+            exact_mod_cast hloss
+          have hbase : (3 / 10 : ℝ) * p.lam ≤ (F.card : ℝ) := by
+            have hmargin : (3 / 10 : ℝ) * p.lam ≤ p.lam / 3 - 1 := by
+              nlinarith [hlam]
+            have hsize' : p.lam / 3 - 1 ≤ (F.card : ℝ) := by
+              nlinarith [hsize, hlossR]
+            exact hmargin.trans hsize'
+          have hlam0 : 0 ≤ p.lam := by linarith
+          have hs' : s * p.lam ≤ (3 / 10 : ℝ) * p.lam :=
+            mul_le_mul_of_nonneg_right hs hlam0
+          have hsizeC : s * p.lam ≤ (F.card : ℝ) := hs'.trans hbase
+          simpa [F] using hsizeC
+      have hrelFail : ∀ A : p.Loc → Bool,
+          p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η →
+            relFail p C Dom t η P A E x R := by
+        intro A hEvent
+        rcases hEvent with ⟨_, hfail⟩
+        have crowdCardLoss' (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+            (Finset.univ.filter (fun u : CubeVertex p.d =>
+              P (u, j) = true ∧ A (u, j) = true ∧
+                _root_.hammingDist u v ≤ p.r + p.D)).card ≤
+              relCrowd p C P A v j + 1 := by
+          exact crowdCardLoss A v j
+        have badAtRel (v : CubeVertex p.d) (j : Fin (p.H + 1))
+            (hbad : p.Bad P A E v j) : relBadAt p C t P A E v j := by
+          rcases hbad with hhole | hcrowd
+          · exact Or.inl (fun ℓ hℓ _ => hhole ℓ hℓ)
+          · right
+            let U : Finset (CubeVertex p.d) := Finset.univ.filter (fun u =>
+              P (u, j) = true ∧ A (u, j) = true ∧
+                _root_.hammingDist u v ≤ p.r + p.D)
+            have hcount : N < (U.card : ℝ) := by
+              simpa [N, U] using hcrowd
+            have hloss : (U.card : ℝ) ≤ (relCrowd p C P A v j : ℝ) + 1 := by
+              exact_mod_cast crowdCardLoss' v j
+            by_cases hN4 : N = 4
+            · have hcount4 : (4 : ℝ) < (U.card : ℝ) := by simpa [hN4] using hcount
+              have hchildR : (3 : ℝ) < (relCrowd p C P A v j : ℝ) := by
+                nlinarith [hcount4, hloss]
+              have htN : t * N ≤ 3 := by rw [hN4]; nlinarith [ht]
+              exact lt_of_le_of_lt htN hchildR
+            · have hNgt : 4 < N := lt_of_le_of_ne hN (Ne.symm hN4)
+              have htN : t * N ≤ (3 / 4 : ℝ) * N :=
+                mul_le_mul_of_nonneg_right ht (by linarith [hNgt])
+              have hmargin : (3 / 4 : ℝ) * N < N - 1 := by nlinarith
+              have hchild : N - 1 < (relCrowd p C P A v j : ℝ) := by
+                nlinarith [hcount, hloss]
+              exact (lt_of_le_of_lt htN hmargin).trans hchild
+        have hwalkConv : ∀ {start finish},
+            HDScaleWalk Sites P A E x R start finish →
+              HDThresholdWalk (Finset.univ : p.Sites)
+                (relBad p C Dom t P A E) x R start finish := by
+          intro start finish walk
+          induction walk with
+          | stop hstop => exact HDThresholdWalk.stop hstop
+          | @up v j finish hinside hv hj hbad tail ih =>
+              let hjFin : j < p.H + 1 := Classical.choose hbad
+              have hbadAt : p.Bad P A E v ⟨j, hjFin⟩ := Classical.choose_spec hbad
+              apply HDThresholdWalk.up hinside (Finset.mem_univ v) hj ?_ ih
+              have hDom : (v, j) ∈ Dom := by
+                change v ∈ Sites
+                exact hv
+              exact ⟨hDom, ⟨hjFin, badAtRel v ⟨j, hjFin⟩ hbadAt⟩⟩
+          | @down v v' j finish hinside hv' hj hstep tail ih =>
+              exact HDThresholdWalk.down hinside (Finset.mem_univ v') hj hstep ih
+        change hdScaleThresholdFailure (Finset.univ : p.Sites)
+          (relBad p C Dom t P A E) x R η
+        rcases hfail with ⟨finish, ⟨walk⟩, hnet⟩
+        exact ⟨finish, ⟨hwalkConv walk⟩, hnet⟩
+      have hinc : ∀ A : p.Loc → Bool,
+          (p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η) →
+            relFail p C Dom t η P A E x R := hrelFail
+      calc
+        p.actLaw.pr (fun A => p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η)
+            ≤ p.actLaw.pr (fun A => relFail p C Dom t η P A E x R) :=
+              pr_mono _ _ _ hinc
+        _ ≤ relSup p C Dom s t η x R P := by
+              unfold relSup
+              refine le_trans ?_ (Finset.le_sup' _ (Finset.mem_univ E))
+              rw [if_pos hrelLegal]
+    · have hzero : p.actLaw.pr
+          (fun A => p.Legal P E Sites ∧ hdScaleFailure Sites P A E x R η) = 0 := by
+        unfold FinProb.pr
+        simp [hlegal]
+      rw [hzero]
+      unfold relSup
+      refine le_trans ?_ (Finset.le_sup' _
+        (Finset.mem_univ (fun _ _ => ∅ : p.EligMap)))
+      split_ifs
+      · exact pr_nonneg _ _
+      · exact le_rfl
+  calc
+    (((p.posLawForced forced).prod πAux).prod p.actLaw).pr
+        (fun ω => p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) Sites ∧
+          hdScaleFailure Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) x R η)
+        ≤ ((p.posLawForced forced).prod πAux).expect
+            (fun pa => relSup p C Dom s t η x R pa.1) :=
+          prod_pr_le_expect _ _ _ _ hbound
+    _ = (p.posLawForced forced).expect (relSup p C Dom s t η x R) := by
+      unfold FinProb.expect FinProb.prod
+      rw [Fintype.sum_prod_type]
+      apply Finset.sum_congr rfl
+      intro P hP
+      calc
+        (∑ a : Aux,
+            (p.posLawForced forced).w P * πAux.w a *
+              relSup p C Dom s t η x R P)
+            = ∑ a : Aux,
+                ((p.posLawForced forced).w P * relSup p C Dom s t η x R P) *
+                  πAux.w a := by
+                    apply Finset.sum_congr rfl
+                    intro a ha
+                    ring
+        _ = ((p.posLawForced forced).w P * relSup p C Dom s t η x R P) *
+              ∑ a : Aux, πAux.w a := by rw [Finset.mul_sum]
+        _ = (p.posLawForced forced).w P * relSup p C Dom s t η x R P := by
+              rw [πAux.sum_eq_one]
+              ring
 
 /-- LEAF (Step 2, TeX 03:406–420). Base-scale claim for every radius up to `R₀`, uniform in
 the domains and the start. Adapts `height_scale_zero_relaxed_failure_bound` (helper file) to
@@ -1363,7 +1589,141 @@ theorem parent_fail_children (p : HDParams) (hD : 0 < p.D) (C : Finset p.Loc)
     (hlarge : (1 + ηC) * (2 * (K : ℝ) + 1) * (q : ℝ) + (1 + ηC) < (ηC - ηP) * (M : ℝ))
     (hfail : relFail p C Dom t ηP P A E x (M * R')) :
     ∃ Y ∈ configs p x (M * R') (K * R') q, ∀ y ∈ Y, relFail p C Dom t ηC P A E y R' := by
-  sorry
+  classical
+  let bad := relBad p C Dom t P A E
+  change hdScaleThresholdFailure (Finset.univ : p.Sites) bad x (M * R') ηP at hfail
+  rcases hfail with ⟨finish, hwalkNonempty, hnet⟩
+  let walk : HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') x finish :=
+    Classical.choice hwalkNonempty
+  obtain ⟨chunks, suffix, hchunk⟩ :=
+    hdThresholdWalk_exists_chunking (Finset.univ : p.Sites) bad x (M * R') R' hD hR' walk
+  have chunkStartBounds :
+      ∀ {start finish : HDState p}
+        (parentWalk : HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') start finish)
+        (chunkList : List (HDChunk p (Finset.univ : p.Sites) bad R'))
+        (tailWalk : Σ suffixStart : HDState p,
+          HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') suffixStart finish),
+        HDThresholdChunking (Finset.univ : p.Sites) bad x (M * R') R'
+          parentWalk chunkList tailWalk →
+        ∀ c ∈ chunkList,
+          hdScaleDistance p.D x c.1 < M * R' ∧ c.1.2 ≤ p.H := by
+    intro start finish parentWalk chunkList tailWalk hchunk
+    induction hchunk with
+    | done hinside => intro c hc; simp at hc
+    | @more start finish middle chunks suffixStart walk childWalk rest suffix hcut htail ih =>
+        intro c hc
+        simp only [List.mem_cons] at hc
+        rcases hc with hc | hc
+        · subst c
+          change hdScaleDistance p.D x start < M * R' ∧ start.2 ≤ p.H
+          have hstart : hdScaleDistance p.D x start < M * R' ∧ start.2 ≤ p.H := by
+            cases hcut with
+            | upExit hparent _ hj _ _ _ _ =>
+                exact ⟨by simpa using hparent, by simpa using (Nat.le_of_lt hj)⟩
+            | upContinue hparent _ hj _ _ _ _ _ =>
+                exact ⟨by simpa using hparent, by simpa using (Nat.le_of_lt hj)⟩
+            | downExit hparent _ hj _ _ _ _ =>
+                exact ⟨by simpa using hparent, by omega⟩
+            | downContinue hparent _ hj _ _ _ _ _ =>
+                exact ⟨by simpa using hparent, by omega⟩
+          exact hstart
+        · exact ih c hc
+  have hstartBounds : ∀ c ∈ chunks,
+      hdScaleDistance p.D x c.1 < M * R' ∧ c.1.2 ≤ p.H :=
+    chunkStartBounds walk chunks suffix hchunk
+  have walkFinishOutside :
+      ∀ {start finish : HDState p},
+        HDThresholdWalk (Finset.univ : p.Sites) bad x (M * R') start finish →
+          M * R' ≤ hdScaleDistance p.D x finish := by
+    intro start finish w
+    induction w with
+    | stop hstop => exact hstop
+    | up _ _ _ _ _ ih => exact ih
+    | down _ _ _ _ _ ih => exact ih
+  have hboundary : M * R' ≤ hdScaleDistance p.D x finish := walkFinishOutside walk
+  have hparentNet : -(ηP * ((M * R' : ℕ) : ℝ)) ≤ (finish.2 : ℝ) - x.2 := by
+    simpa using hnet
+  have hηC0 : 0 ≤ ηC := le_trans hηP hηPC.le
+  let K₀ : ℕ := 2 * K + 1
+  let δ : ℝ := (q : ℝ) / (M : ℝ)
+  have hMreal : 0 < (M : ℝ) := by exact_mod_cast (show 0 < M by omega)
+  have hδM : δ * (M : ℝ) = (q : ℝ) := by
+    dsimp [δ]
+    field_simp
+  have hK₀cast : (K₀ : ℝ) = 2 * (K : ℝ) + 1 := by
+    dsimp [K₀]
+    push_cast
+    ring
+  have hgap : 0 < K * R' := Nat.mul_pos (by omega) hR'
+  have hbudget : 2 * (K * R') + R' = K₀ * R' := by
+    dsimp [K₀]
+    ring
+  have hlarge' :
+      (1 + ηC) * (K₀ : ℝ) * δ * (M : ℝ) + (1 + ηC) <
+        (ηC - ηP) * (M : ℝ) := by
+    calc
+      (1 + ηC) * (K₀ : ℝ) * δ * (M : ℝ) + (1 + ηC) =
+          (1 + ηC) * (K₀ : ℝ) * (δ * (M : ℝ)) + (1 + ηC) := by ring
+      _ = (1 + ηC) * (2 * (K : ℝ) + 1) * (q : ℝ) + (1 + ηC) := by
+            rw [hK₀cast, hδM]
+      _ < (ηC - ηP) * (M : ℝ) := hlarge
+  obtain ⟨S, hSsubset, hSsep, hScard⟩ :=
+    hdParentFailure_has_many_separated_child_failure_starts
+      (p := p) hD (Sites := Finset.univ) (bad := bad)
+      (parentOrigin := x) (start := x) (finish := finish)
+      (parentRadius := M * R') (childRadius := R') (gap := K * R')
+      (M := M) (K := K₀) (ηParent := ηP) (ηChild := ηC) (δ := δ)
+      (walk := walk) (chunks := chunks) (suffix := suffix)
+      hchunk hM hR' hgap hbudget hηP hηC0 hηPC hlarge' hboundary hparentNet
+  have hqreal : (q : ℝ) ≤ (S.card : ℝ) := by
+    calc
+      (q : ℝ) = δ * (M : ℝ) := hδM.symm
+      _ ≤ (S.card : ℝ) := hScard
+  have hq : q ≤ S.card := by exact_mod_cast hqreal
+  obtain ⟨Y, hYS, hYcard⟩ := Finset.exists_subset_card_eq hq
+  have Sprops : ∀ y ∈ S,
+      y ∈ scaleBall p x (M * R') ∧ relFail p C Dom t ηC P A E y R' := by
+    intro y hy
+    have hySet : y ∈ hdFailureStartSet ηC chunks := hSsubset hy
+    unfold hdFailureStartSet at hySet
+    rcases Finset.mem_image.mp hySet with ⟨c, hcFiltered, hcy⟩
+    have hcFilter := Finset.mem_filter.mp hcFiltered
+    have hcList : c ∈ chunks := by simpa using hcFilter.1
+    have hcFail : hdThresholdChunkFailure ηC c := hcFilter.2
+    have hbounds := hstartBounds c hcList
+    have hballC : c.1 ∈ scaleBall p x (M * R') := by
+      unfold scaleBall
+      apply Finset.mem_image.mpr
+      refine ⟨(c.1.1, ⟨c.1.2, by omega⟩),
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, ?_⟩
+      · simpa using hbounds.1
+      · rfl
+    have hfailC : relFail p C Dom t ηC P A E c.1 R' := by
+      change hdScaleThresholdFailure (Finset.univ : p.Sites) bad c.1 R' ηC
+      rcases c with ⟨childStart, ⟨childFinish, childWalk⟩⟩
+      have hchildNet : -(ηC * (R' : ℝ)) ≤
+          (childFinish.2 : ℝ) - childStart.2 := by
+        simpa [hdThresholdChunkFailure, hdThresholdChunkRise] using hcFail
+      exact ⟨childFinish, ⟨childWalk⟩, hchildNet⟩
+    have hball : y ∈ scaleBall p x (M * R') := by
+      rw [← hcy]
+      exact hballC
+    have hfailY : relFail p C Dom t ηC P A E y R' := by
+      simpa [hcy] using hfailC
+    exact ⟨hball, hfailY⟩
+  have hYball : Y ⊆ scaleBall p x (M * R') := by
+    intro y hy
+    exact (Sprops y (hYS hy)).1
+  have hYsep : Separated p (K * R') Y := by
+    intro y hy y' hy' hne
+    exact hSsep y (hYS hy) y' (hYS hy') hne
+  refine ⟨Y, ?_, ?_⟩
+  · unfold configs
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_powerset.mpr hYball, ?_⟩
+    exact ⟨hYcard, hYsep⟩
+  · intro y hy
+    exact (Sprops y (hYS hy)).2
 
 /-- LEAF (Step 4 transfer and activation independence, TeX 03:483–512). For fixed positions and
 a fixed parent-legal eligibility map, outside the position exception: every child failure with
@@ -1758,6 +2118,7 @@ theorem configs_card_le (p : HDParams) (hD : 0 < p.D) (x : HDState p) (R g q : �
     exact hpow.trans (Nat.pow_le_pow_left hball q)
   exact_mod_cast hle
 
+set_option maxHeartbeats 1200000 in
 /-- LEAF (arithmetic, TeX 03:517–533): configuration count times the accumulated error is below
 the parent target. -/
 theorem step_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
@@ -1771,9 +2132,793 @@ theorem step_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
             stepExc n b σ (hdScaleRadius n σ (i - 1)) +
             Real.exp (-((n : ℝ) ^ a * (hdScaleRadius n σ (i - 1) : ℝ) ^ θ)) ^
               (stepQ n σ ζ K)) ≤
-        Real.exp (-((n : ℝ) ^ a *
+          Real.exp (-((n : ℝ) ^ a *
           ((hdScaleMultiplier n σ * hdScaleRadius n σ (i - 1) : ℕ) : ℝ) ^ θ)) := by
-  sorry
+  have hσ : 0 < σ := hp.hsz.1
+  have hσζ : σ < ζ := hp.hsz.2.1
+  have hζ : ζ < 1 := hp.hsz.2.2.1
+  have hθ : 0 < θ := hp.hsz.2.2.2.1
+  have hθ1 : θ < 1 := hp.hsz.2.2.2.2
+  have ha : 0 < a := by linarith [hp.ha.1, hσ, hσζ, hζ]
+  have hgapF : 0 < b - 4 * σ := by linarith [hp.ha.2.2, ha]
+  have hgapBase : 0 < a - σ - (1 - ζ) * (1 - θ) := by
+    have hζpos : 0 < ζ := by linarith [hσ, hσζ]
+    have h1θ : 0 < 1 - θ := sub_pos.mpr hθ1
+    have hprod : 0 < ζ * (1 - θ) := mul_pos hζpos h1θ
+    nlinarith [hp.ha.1, hprod]
+  have hgapTail : 0 < b - 2 * σ - (a + σ * θ) := by
+    have hσθ : σ * θ < σ := by
+      calc
+        σ * θ < σ * 1 := mul_lt_mul_of_pos_left hθ1 hσ
+        _ = σ := by ring
+    nlinarith [hp.ha.2.2, hσθ]
+  let δ : ℝ := min ((b - 4 * σ) / 2)
+    ((a - σ - (1 - ζ) * (1 - θ)) / 2)
+  have hδ : 0 < δ := by
+    dsimp [δ]
+    positivity
+  have hδF : δ < b - 4 * σ := by
+    dsimp [δ]
+    have h1 : 0 < (b - 4 * σ) / 2 := by linarith
+    have h2 : 0 < (a - σ - (1 - ζ) * (1 - θ)) / 2 := by linarith
+    have hm : min ((b - 4 * σ) / 2)
+        ((a - σ - (1 - ζ) * (1 - θ)) / 2) ≤ (b - 4 * σ) / 2 := min_le_left _ _
+    linarith
+  have hδBase : δ < a - σ - (1 - ζ) * (1 - θ) := by
+    dsimp [δ]
+    have h1 : 0 < (b - 4 * σ) / 2 := by linarith
+    have h2 : 0 < (a - σ - (1 - ζ) * (1 - θ)) / 2 := by linarith
+    have hm : min ((b - 4 * σ) / 2)
+        ((a - σ - (1 - ζ) * (1 - θ)) / 2) ≤
+          (a - σ - (1 - ζ) * (1 - θ)) / 2 := min_le_right _ _
+    linarith
+  have powerAbsorb : ∀ (C e f : ℝ), 0 ≤ C → e < f →
+      ∃ N : ℕ, ∀ n : ℕ, N ≤ n → C * (n : ℝ) ^ e ≤ (n : ℝ) ^ f := by
+    intro C e f hC hef
+    obtain ⟨N, hN⟩ := exists_nat_rpow_ge (e := f - e) (C := C) (sub_pos.mpr hef)
+    refine ⟨max 1 N, ?_⟩
+    intro n hn
+    have hn1 : 1 ≤ n := le_trans (Nat.le_max_left 1 N) hn
+    have hnN : N ≤ n := le_trans (Nat.le_max_right 1 N) hn
+    have hnpos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+    have hNpow : C ≤ (n : ℝ) ^ (f - e) := hN n hnN
+    calc
+      C * (n : ℝ) ^ e ≤ (n : ℝ) ^ (f - e) * (n : ℝ) ^ e :=
+        mul_le_mul_of_nonneg_right hNpow (Real.rpow_nonneg hnpos.le _)
+      _ = (n : ℝ) ^ f := by
+        calc
+          _ = (n : ℝ) ^ ((f - e) + e) := (Real.rpow_add hnpos (f - e) e).symm
+          _ = _ := by congr 1 <;> ring
+  let B : ℕ := ⌈1 / σ⌉₊
+  let L : ℝ := 16 * ((B : ℝ) + 1) * (2 * (K : ℝ) + 1)
+  let Ccount : ℝ := 18 * ((D + 1 : ℕ) : ℝ)
+  let Cbase : ℝ := 2 * Ccount + Real.log 2
+  let Xbase : ℝ := 2 * σ + δ + (1 - ζ) * (1 - θ)
+  have hL : 0 < L := by
+    dsimp [L]
+    positivity
+  have hCcount : 0 < Ccount := by
+    dsimp [Ccount]
+    positivity
+  have hCbase : 0 < Cbase := by
+    dsimp [Cbase]
+    have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+    positivity
+  have hXbase : 0 ≤ Xbase := by
+    dsimp [Xbase]
+    positivity
+  have hFexp : 0 < b - 2 * σ := by linarith [hgapF, hσ]
+  have hTargetGap : a + σ * θ < b - 2 * σ := by linarith [hgapTail]
+  have hCountGap : 2 * σ + δ < b - 2 * σ := by linarith [hgapF, hδF]
+  have hBaseGap : Xbase < a + σ := by
+    dsimp [Xbase]
+    linarith [hδBase]
+  obtain ⟨Nlog, hlogN⟩ := log_le_rpow_eventually δ hδ
+  obtain ⟨Ncd, hcdN⟩ := exists_nat_rpow_ge (e := δ)
+    (C := Real.log (C_d + 1)) hδ
+  obtain ⟨N7, h7N⟩ := exists_nat_rpow_ge (e := δ)
+    (C := Real.log 7) hδ
+  obtain ⟨Nmult, hmultN⟩ := exists_nat_rpow_ge (e := σ) (C := 12 * L) hσ
+  obtain ⟨Nq, hqN⟩ := exists_nat_rpow_ge (e := σ * (1 - θ)) (C := 12 * L)
+    (mul_pos hσ (sub_pos.mpr hθ1))
+  obtain ⟨NerrCount, herrCountN⟩ := powerAbsorb (3 * Ccount) (2 * σ + δ)
+    (b - 2 * σ) (by positivity) hCountGap
+  obtain ⟨NerrBase, herrBaseN⟩ := powerAbsorb 9 (a + σ * θ) (b - 2 * σ)
+    (by norm_num) hTargetGap
+  obtain ⟨NerrConst, herrConstN⟩ := powerAbsorb (3 * Real.log 4) 0 (b - 2 * σ)
+    (by positivity) hFexp
+  obtain ⟨Nbase, hbaseN⟩ := powerAbsorb (4 * L * Cbase) Xbase (a + σ)
+    (by positivity) hBaseGap
+  let N : ℕ := max 2 (max Nlog (max Ncd (max N7
+    (max Nmult (max Nq (max NerrCount (max NerrBase (max NerrConst Nbase))))))))
+  exact ⟨N, fun n d hn hdim i hi1 hih => by
+    have hnAll := hn
+    dsimp [N] at hnAll
+    simp only [max_le_iff] at hnAll
+    rcases hnAll with ⟨hn2, hNlog, hNcd, hN7, hNmult, hNq,
+      hNerrCount, hNerrBase, hNerrConst, hNbase⟩
+    have hnpos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+    have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+    let h : ℕ := hdScaleIndex n σ ζ
+    let M : ℕ := hdScaleMultiplier n σ
+    let R : ℕ := hdScaleRadius n σ (i - 1)
+    let q : ℕ := stepQ n σ ζ K
+    let U : ℝ := ((h + 1 : ℕ) : ℝ)
+    let den : ℝ := 16 * U * (2 * (K : ℝ) + 1)
+    have hidx : h ≤ B := by
+      dsimp [h, B]
+      exact hdScaleIndex_le_ceil_inv_sigma hn2 hσ ⟨by linarith [hσ, hσζ], hζ⟩
+    have hMlower : (n : ℝ) ^ σ ≤ (M : ℝ) := by
+      have hceil : (n : ℝ) ^ σ ≤ (⌈(n : ℝ) ^ σ⌉₊ : ℝ) := by
+        exact_mod_cast Nat.le_ceil ((n : ℝ) ^ σ)
+      have hmax : ⌈(n : ℝ) ^ σ⌉₊ ≤ hdScaleMultiplier n σ := by
+        unfold hdScaleMultiplier
+        exact Nat.le_max_right _ _
+      exact hceil.trans (by exact_mod_cast hmax)
+    have hnσone : 1 ≤ (n : ℝ) ^ σ := by
+      calc
+        1 = (n : ℝ) ^ (0 : ℝ) := by simp
+        _ ≤ (n : ℝ) ^ σ := Real.rpow_le_rpow_of_exponent_le hn1 (by linarith)
+    have hMupper : (M : ℝ) ≤ 3 * (n : ℝ) ^ σ := by
+      have hceil : (⌈(n : ℝ) ^ σ⌉₊ : ℝ) ≤ (n : ℝ) ^ σ + 1 :=
+        (Nat.ceil_lt_add_one (Real.rpow_nonneg hnpos.le σ)).le
+      have hmax : (max 2 ⌈(n : ℝ) ^ σ⌉₊ : ℝ) ≤ 3 * (n : ℝ) ^ σ := by
+        exact max_le (by nlinarith [hnσone]) (by nlinarith [hceil, hnσone])
+      simpa [M, hdScaleMultiplier] using hmax
+    have hRone : 1 ≤ R := by
+      apply Nat.one_le_iff_ne_zero.mpr
+      dsimp [R, hdScaleRadius]
+      apply Nat.mul_ne_zero
+      · apply pow_ne_zero
+        dsimp [hdScaleMultiplier]
+        omega
+      · dsimp [heightBaseRadius]
+        omega
+    have hRpos : 0 < (R : ℝ) := by exact_mod_cast (show 0 < R by omega)
+    have hRoneR : 1 ≤ (R : ℝ) := by exact_mod_cast hRone
+    have htargetOne : 1 ≤ (n : ℝ) ^ (1 - ζ) := by
+      calc
+        1 = (n : ℝ) ^ (0 : ℝ) := by simp
+        _ ≤ (n : ℝ) ^ (1 - ζ) :=
+          Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hζ])
+    have hceilTargetLt :
+        (⌈(n : ℝ) ^ (1 - ζ)⌉₊ : ℝ) < (n : ℝ) ^ (1 - ζ) + 1 :=
+      Nat.ceil_lt_add_one (Real.rpow_nonneg hnpos.le _)
+    have hceilTargetLe :
+        (⌈(n : ℝ) ^ (1 - ζ)⌉₊ : ℝ) ≤ 2 * (n : ℝ) ^ (1 - ζ) := by
+      nlinarith [hceilTargetLt, htargetOne]
+    have hRprev : (R : ℝ) < (⌈(n : ℝ) ^ (1 - ζ)⌉₊ : ℝ) := by
+      have hspec := (hdScaleIndex_spec n σ ζ).2 (i - 1) (by omega)
+      dsimp [R]
+      exact_mod_cast hspec
+    have hRupper : (R : ℝ) ≤ 2 * (n : ℝ) ^ (1 - ζ) :=
+      le_trans hRprev.le hceilTargetLe
+    have htopPrev :
+        (hdScaleRadius n σ (h - 1) : ℝ) <
+          (⌈(n : ℝ) ^ (1 - ζ)⌉₊ : ℝ) := by
+      have hspec := (hdScaleIndex_spec n σ ζ).2 (h - 1) (by omega)
+      dsimp [h]
+      exact_mod_cast hspec
+    have htopPrevLe :
+        (hdScaleRadius n σ (h - 1) : ℝ) ≤ 2 * (n : ℝ) ^ (1 - ζ) :=
+      le_trans htopPrev.le hceilTargetLe
+    have hhpos : 1 ≤ h := by dsimp [h]; omega
+    have hTopCast : (topScale n σ ζ : ℝ) =
+        (M : ℝ) * (hdScaleRadius n σ (h - 1) : ℝ) := by
+      rw [topScale_eq_hdScaleRadius, hdScaleRadius_pred n σ hhpos]
+      simp [h, M, Nat.cast_mul]
+    have hprodPow : (n : ℝ) ^ σ * (n : ℝ) ^ (1 - ζ) =
+        (n : ℝ) ^ (1 - ζ + σ) := by
+      calc
+        _ = (n : ℝ) ^ (σ + (1 - ζ)) := (Real.rpow_add hnpos σ (1 - ζ)).symm
+        _ = _ := by congr 1 <;> ring
+    have htopScaleLe : (topScale n σ ζ : ℝ) ≤ 6 * (n : ℝ) := by
+      rw [hTopCast]
+      calc
+        (M : ℝ) * (hdScaleRadius n σ (h - 1) : ℝ) ≤
+            (3 * (n : ℝ) ^ σ) * (2 * (n : ℝ) ^ (1 - ζ)) :=
+          mul_le_mul hMupper htopPrevLe (by positivity) (by positivity)
+        _ = 6 * (n : ℝ) ^ (1 - ζ + σ) := by
+          calc
+            _ = 6 * ((n : ℝ) ^ σ * (n : ℝ) ^ (1 - ζ)) := by ring
+            _ = _ := by rw [hprodPow]
+        _ ≤ 6 * (n : ℝ) := by
+          have hexp : (n : ℝ) ^ (1 - ζ + σ) ≤ (n : ℝ) ^ (1 : ℝ) :=
+            Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hσζ])
+          have hpow : (n : ℝ) ^ (1 - ζ + σ) ≤ (n : ℝ) := by
+            simpa only [Real.rpow_one] using hexp
+          exact mul_le_mul_of_nonneg_left hpow (by norm_num)
+    have hTopPlus : ((topScale n σ ζ + 1 : ℕ) : ℝ) ≤ 7 * (n : ℝ) := by
+      push_cast
+      nlinarith [htopScaleLe, hn1]
+    have hdPlus : ((d + 1 : ℕ) : ℝ) ≤ (C_d + 1) * (n : ℝ) := by
+      have hdCast : (d : ℝ) ≤ C_d * n := by exact_mod_cast hdim
+      push_cast
+      nlinarith [hdCast, hn1]
+    have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) ^ δ := hlogN n hNlog
+    have hlogCd : Real.log (C_d + 1) ≤ (n : ℝ) ^ δ := hcdN n hNcd
+    have hlog7 : Real.log 7 ≤ (n : ℝ) ^ δ := h7N n hN7
+    have hlogTop : Real.log ((topScale n σ ζ + 1 : ℕ) : ℝ) ≤
+        2 * (n : ℝ) ^ δ := by
+      calc
+        _ ≤ Real.log (7 * (n : ℝ)) := Real.log_le_log (by positivity) hTopPlus
+        _ = Real.log 7 + Real.log (n : ℝ) := by
+          rw [Real.log_mul (by norm_num) hnpos.ne']
+        _ ≤ 2 * (n : ℝ) ^ δ := by linarith [hlog7, hlogn]
+    have hlogd : Real.log ((d + 1 : ℕ) : ℝ) ≤ 2 * (n : ℝ) ^ δ := by
+      have hCdpos : 0 < C_d := lt_of_lt_of_le hp.hd.1 hp.hd.2
+      calc
+        _ ≤ Real.log ((C_d + 1) * (n : ℝ)) := Real.log_le_log (by positivity) hdPlus
+        _ = Real.log (C_d + 1) + Real.log (n : ℝ) := by
+          rw [Real.log_mul (by linarith [hCdpos]) hnpos.ne']
+        _ ≤ 2 * (n : ℝ) ^ δ := by linarith [hlogCd, hlogn]
+    have hdenPos : 0 < den := by
+      dsimp [den, U]
+      positivity
+    have hdenBound : den ≤ L := by
+      have hUbound : ((h + 1 : ℕ) : ℝ) ≤ (B : ℝ) + 1 := by
+        exact_mod_cast Nat.succ_le_succ hidx
+      have hfac : 0 ≤ 2 * (K : ℝ) + 1 := by positivity
+      change 16 * U * (2 * (K : ℝ) + 1) ≤
+        16 * ((B : ℝ) + 1) * (2 * (K : ℝ) + 1)
+      calc
+        16 * U * (2 * (K : ℝ) + 1) =
+            (16 * U) * (2 * (K : ℝ) + 1) := by ring
+        _ ≤ (16 * ((B : ℝ) + 1)) * (2 * (K : ℝ) + 1) :=
+          mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_left hUbound (by norm_num)) hfac
+        _ = _ := by ring
+    have hUone : 1 ≤ U := by
+      dsimp [U]
+      exact_mod_cast Nat.succ_le_succ (Nat.zero_le h)
+    have hKfactor : 1 ≤ 2 * (K : ℝ) + 1 := by
+      have hKnonneg : 0 ≤ (K : ℝ) := Nat.cast_nonneg K
+      nlinarith [hKnonneg]
+    have hdenOne : 1 ≤ den := by
+      dsimp [den]
+      have h16U : (16 : ℝ) ≤ (16 : ℝ) * U := by
+        calc
+          (16 : ℝ) = 16 * 1 := by ring
+          _ ≤ 16 * U := mul_le_mul_of_nonneg_left hUone (by norm_num)
+      have hprod' : (16 * U) * 1 ≤
+          (16 * U) * (2 * (K : ℝ) + 1) :=
+        mul_le_mul_of_nonneg_left hKfactor
+          (show (0 : ℝ) ≤ 16 * U by positivity)
+      have hprod : 16 * U ≤ 16 * U * (2 * (K : ℝ) + 1) := by
+        calc
+          16 * U = (16 * U) * 1 := by ring
+          _ ≤ _ := hprod'
+      linarith
+    have hqfloor : (q : ℝ) + 1 >
+        (M : ℝ) / den := by
+      have hfloor : (stepQ n σ ζ K : ℝ) + 1 >
+          (hdScaleMultiplier n σ : ℝ) /
+            (16 * ((hdScaleIndex n σ ζ + 1 : ℕ) : ℝ) * (2 * (K : ℝ) + 1)) := by
+        unfold stepQ
+        exact_mod_cast Nat.lt_floor_add_one _
+      simpa [q, M, den, U, h] using hfloor
+    have hqupper : (q : ℝ) ≤ (M : ℝ) := by
+      have hfloor : (q : ℝ) ≤ (M : ℝ) / den := by
+        have hfloor' : (stepQ n σ ζ K : ℝ) ≤
+            (hdScaleMultiplier n σ : ℝ) /
+              (16 * ((hdScaleIndex n σ ζ + 1 : ℕ) : ℝ) * (2 * (K : ℝ) + 1)) := by
+          unfold stepQ
+          exact_mod_cast Nat.floor_le (by positivity)
+        simpa [q, M, den, U, h] using hfloor'
+      have hMnonneg : 0 ≤ (M : ℝ) := Nat.cast_nonneg _
+      have hMden : (M : ℝ) ≤ (M : ℝ) * den := by
+        calc
+          (M : ℝ) = (M : ℝ) * 1 := by ring
+          _ ≤ (M : ℝ) * den := mul_le_mul_of_nonneg_left hdenOne hMnonneg
+      exact le_trans hfloor ((div_le_iff₀ hdenPos).2 hMden)
+    have hMlarge : 12 * L ≤ (M : ℝ) := by
+      calc
+        12 * L ≤ (n : ℝ) ^ σ := hmultN n hNmult
+        _ ≤ (M : ℝ) := hMlower
+    have hMLargeDiv : 12 ≤ (M : ℝ) / L := by
+      exact (le_div_iff₀ hL).2 (by simpa [mul_comm] using hMlarge)
+    have hdenLower : (M : ℝ) / L ≤ (M : ℝ) / den := by
+      apply (le_div_iff₀ hdenPos).2
+      calc
+        (M : ℝ) / L * den ≤ (M : ℝ) / L * L :=
+          mul_le_mul_of_nonneg_left hdenBound (by positivity)
+        _ = (M : ℝ) := by field_simp [ne_of_gt hL]
+    have hqLower : (M : ℝ) / (2 * L) ≤ (q : ℝ) := by
+      have hhalf : (M : ℝ) / L = 2 * ((M : ℝ) / (2 * L)) := by
+        field_simp [ne_of_gt hL]
+        <;> ring
+      have hqgt : (M : ℝ) / L < (q : ℝ) + 1 := lt_of_le_of_lt hdenLower hqfloor
+      rw [hhalf] at hqgt
+      linarith [hMLargeDiv]
+    have hnmultLarge : 12 * L ≤ (n : ℝ) ^ σ := hmultN n hNmult
+    have hnqLarge : 12 * L ≤ (n : ℝ) ^ (σ * (1 - θ)) := hqN n hNq
+    have hpowSigmaSplit :
+        (n : ℝ) ^ (σ * θ) * (n : ℝ) ^ (σ * (1 - θ)) = (n : ℝ) ^ σ := by
+      calc
+        _ = (n : ℝ) ^ (σ * θ + σ * (1 - θ)) :=
+          (Real.rpow_add hnpos (σ * θ) (σ * (1 - θ))).symm
+        _ = _ := by congr 1 <;> ring
+    have hq6 : 6 * (n : ℝ) ^ (σ * θ) ≤ (q : ℝ) := by
+      have hmultprod : 12 * L * (n : ℝ) ^ (σ * θ) ≤ (n : ℝ) ^ σ := by
+        calc
+          12 * L * (n : ℝ) ^ (σ * θ) ≤
+              (n : ℝ) ^ (σ * (1 - θ)) * (n : ℝ) ^ (σ * θ) :=
+            mul_le_mul_of_nonneg_right hnqLarge (Real.rpow_nonneg hnpos.le _)
+          _ = (n : ℝ) ^ σ := by
+            rw [mul_comm, hpowSigmaSplit]
+      have hdiv : 6 * (n : ℝ) ^ (σ * θ) ≤ (n : ℝ) ^ σ / (2 * L) := by
+        apply (le_div_iff₀ (mul_pos (by norm_num) hL)).2
+        calc
+          (6 * (n : ℝ) ^ (σ * θ)) * (2 * L) =
+              12 * L * (n : ℝ) ^ (σ * θ) := by ring
+          _ ≤ (n : ℝ) ^ σ := hmultprod
+      have hqNlower : (n : ℝ) ^ σ / (2 * L) ≤ (q : ℝ) :=
+        le_trans (div_le_div_of_nonneg_right hMlower (by positivity)) hqLower
+      exact le_trans hdiv hqNlower
+    have hMtheta : (M : ℝ) ^ θ ≤ 3 * (n : ℝ) ^ (σ * θ) := by
+      have hnPow : ((n : ℝ) ^ σ) ^ θ = (n : ℝ) ^ (σ * θ) := by
+        rw [← Real.rpow_mul hnpos.le]
+      calc
+        (M : ℝ) ^ θ ≤ (3 * (n : ℝ) ^ σ) ^ θ :=
+          Real.rpow_le_rpow (Nat.cast_nonneg _) hMupper hθ.le
+        _ = (3 : ℝ) ^ θ * ((n : ℝ) ^ σ) ^ θ := by
+          rw [Real.mul_rpow (by norm_num) (Real.rpow_nonneg hnpos.le _)]
+        _ = (3 : ℝ) ^ θ * (n : ℝ) ^ (σ * θ) := by rw [hnPow]
+        _ ≤ 3 * (n : ℝ) ^ (σ * θ) := by
+          have h3 : (3 : ℝ) ^ θ ≤ 3 := by
+            calc
+              (3 : ℝ) ^ θ ≤ (3 : ℝ) ^ (1 : ℝ) :=
+                Real.rpow_le_rpow_of_exponent_le (by norm_num) hθ1.le
+              _ = 3 := by rw [Real.rpow_one]
+          exact mul_le_mul h3 le_rfl (Real.rpow_nonneg hnpos.le _) (by positivity)
+    have hqBig : 2 * (M : ℝ) ^ θ ≤ (q : ℝ) := by
+      calc
+        2 * (M : ℝ) ^ θ ≤ 2 * (3 * (n : ℝ) ^ (σ * θ)) :=
+          mul_le_mul_of_nonneg_left hMtheta (by norm_num)
+        _ = 6 * (n : ℝ) ^ (σ * θ) := by ring
+        _ ≤ (q : ℝ) := hq6
+    have hRthetaLe : (R : ℝ) ^ θ ≤ (R : ℝ) := by
+      simpa only [Real.rpow_one] using Real.rpow_le_rpow_of_exponent_le hRoneR hθ1.le
+    have hRthetaOne : 1 ≤ (R : ℝ) ^ θ := by
+      calc
+        1 = (R : ℝ) ^ (0 : ℝ) := by simp
+        _ ≤ (R : ℝ) ^ θ := Real.rpow_le_rpow_of_exponent_le hRoneR (by linarith [hθ])
+    have hRsplit : (R : ℝ) = (R : ℝ) ^ θ * (R : ℝ) ^ (1 - θ) := by
+      calc
+        (R : ℝ) = (R : ℝ) ^ (1 : ℝ) := by rw [Real.rpow_one]
+        _ = (R : ℝ) ^ (θ + (1 - θ)) := by congr 1 <;> ring
+        _ = _ := Real.rpow_add hRpos θ (1 - θ)
+    have hRremain : (R : ℝ) ^ (1 - θ) ≤ 2 * (n : ℝ) ^ ((1 - ζ) * (1 - θ)) := by
+      have hbase : (R : ℝ) ^ (1 - θ) ≤
+          (2 * (n : ℝ) ^ (1 - ζ)) ^ (1 - θ) := by
+        have h1θ : 0 ≤ 1 - θ := by linarith [hθ1]
+        exact Real.rpow_le_rpow (by positivity) hRupper h1θ
+      have hnest : ((n : ℝ) ^ (1 - ζ)) ^ (1 - θ) =
+          (n : ℝ) ^ ((1 - ζ) * (1 - θ)) := by
+        rw [← Real.rpow_mul hnpos.le]
+      have htwo : (2 : ℝ) ^ (1 - θ) ≤ 2 := by
+        have htwo' : (2 : ℝ) ^ (1 - θ) ≤ (2 : ℝ) ^ (1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le (by norm_num) (by linarith [hθ])
+        simpa only [Real.rpow_one] using htwo'
+      calc
+        _ ≤ (2 * (n : ℝ) ^ (1 - ζ)) ^ (1 - θ) := hbase
+        _ = 2 ^ (1 - θ) * ((n : ℝ) ^ (1 - ζ)) ^ (1 - θ) := by
+          rw [Real.mul_rpow (by norm_num) (Real.rpow_nonneg hnpos.le _)]
+        _ = 2 ^ (1 - θ) * (n : ℝ) ^ ((1 - ζ) * (1 - θ)) := by rw [hnest]
+        _ ≤ 2 * (n : ℝ) ^ ((1 - ζ) * (1 - θ)) :=
+          mul_le_mul_of_nonneg_right htwo (Real.rpow_nonneg hnpos.le _)
+    have hRpowExponent : (R : ℝ) ^ (1 - θ) ≤
+        2 * (n : ℝ) ^ ((1 - ζ) * (1 - θ)) := hRremain
+    let A : ℝ := ((topScale n σ ζ + 1 : ℕ) : ℝ) *
+      ((d + 1 : ℕ) : ℝ) ^ (D * (M * R))
+    have hApos : 0 < A := by
+      dsimp [A]
+      positivity
+    have hlogA : Real.log A ≤ 2 * (n : ℝ) ^ δ +
+        ((D * (M * R) : ℕ) : ℝ) * (2 * (n : ℝ) ^ δ) := by
+      have hlogEq : Real.log A =
+          Real.log ((topScale n σ ζ + 1 : ℕ) : ℝ) +
+            ((D * (M * R) : ℕ) : ℝ) * Real.log ((d + 1 : ℕ) : ℝ) := by
+        dsimp [A]
+        rw [Real.log_mul (by positivity) (by positivity), Real.log_pow]
+      rw [hlogEq]
+      exact add_le_add hlogTop
+        (mul_le_mul_of_nonneg_left hlogd (Nat.cast_nonneg _))
+    let Cexp : ℝ := (q : ℝ) * Real.log A
+    have hqden : 0 < den := hdenPos
+    have hdenFact : 1 ≤ den := hdenOne
+    have hqCount : Cexp ≤ Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) := by
+      have hqlog := mul_le_mul_of_nonneg_left hlogA (Nat.cast_nonneg q)
+      have hlogNonneg : 0 ≤ 2 * (n : ℝ) ^ δ +
+          ((D * (M * R) : ℕ) : ℝ) * (2 * (n : ℝ) ^ δ) := by positivity
+      have hqterm : (q : ℝ) *
+          (2 * (n : ℝ) ^ δ + ((D * (M * R) : ℕ) : ℝ) * (2 * (n : ℝ) ^ δ)) ≤
+            (M : ℝ) *
+              (2 * (n : ℝ) ^ δ + ((D * (M * R) : ℕ) : ℝ) * (2 * (n : ℝ) ^ δ)) :=
+        mul_le_mul_of_nonneg_right hqupper hlogNonneg
+      have hraw : Cexp ≤ 2 * (M : ℝ) * (n : ℝ) ^ δ +
+          2 * (D : ℝ) * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by
+        dsimp [Cexp]
+        calc
+          _ ≤ (q : ℝ) *
+              (2 * (n : ℝ) ^ δ + ((D * (M * R) : ℕ) : ℝ) * (2 * (n : ℝ) ^ δ)) := hqlog
+          _ ≤ (M : ℝ) *
+              (2 * (n : ℝ) ^ δ + ((D * (M * R) : ℕ) : ℝ) * (2 * (n : ℝ) ^ δ)) := hqterm
+          _ = _ := by push_cast; ring
+      have hMone : 1 ≤ (M : ℝ) := le_trans hnσone hMlower
+      have hMRone : 1 ≤ (M : ℝ) * (R : ℝ) := by
+        calc
+          1 = 1 * 1 := by ring
+          _ ≤ (M : ℝ) * (R : ℝ) :=
+            mul_le_mul hMone hRoneR (by norm_num) (by positivity)
+      have hMterm : (M : ℝ) * (n : ℝ) ^ δ ≤
+          (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by
+        have hmul : 1 * ((M : ℝ) * (n : ℝ) ^ δ) ≤
+            ((M : ℝ) * (R : ℝ)) * ((M : ℝ) * (n : ℝ) ^ δ) :=
+          mul_le_mul_of_nonneg_right hMRone
+            (show 0 ≤ (M : ℝ) * (n : ℝ) ^ δ by positivity)
+        calc
+          (M : ℝ) * (n : ℝ) ^ δ = 1 * ((M : ℝ) * (n : ℝ) ^ δ) := by ring
+          _ ≤ ((M : ℝ) * (R : ℝ)) * ((M : ℝ) * (n : ℝ) ^ δ) := hmul
+          _ = (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by ring
+      have hraw' : Cexp ≤
+          (2 + 2 * (D : ℝ)) * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by
+        calc
+          Cexp ≤ 2 * (M : ℝ) * (n : ℝ) ^ δ +
+              2 * (D : ℝ) * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := hraw
+          _ ≤ 2 * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ +
+              2 * (D : ℝ) * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by
+            have hMterm2 : 2 * (M : ℝ) * (n : ℝ) ^ δ ≤
+                2 * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by
+              calc
+                2 * (M : ℝ) * (n : ℝ) ^ δ =
+                    2 * ((M : ℝ) * (n : ℝ) ^ δ) := by ring
+                _ ≤ 2 * ((M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ) :=
+                  mul_le_mul_of_nonneg_left hMterm (show (0 : ℝ) ≤ 2 by norm_num)
+                _ = _ := by ring
+            exact add_le_add hMterm2 le_rfl
+          _ = (2 + 2 * (D : ℝ)) * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := by ring
+      have hM2 : (M : ℝ) ^ 2 ≤ 9 * (n : ℝ) ^ (2 * σ) := by
+        calc
+          (M : ℝ) ^ 2 ≤ (3 * (n : ℝ) ^ σ) ^ 2 := by
+            exact pow_le_pow_left₀ (by positivity) hMupper 2
+          _ = 9 * (n : ℝ) ^ (2 * σ) := by
+            rw [mul_pow]
+            have hpow : ((n : ℝ) ^ σ) ^ 2 = (n : ℝ) ^ (2 * σ) := by
+              rw [← Real.rpow_natCast, ← Real.rpow_mul hnpos.le]
+              congr 1
+              ring
+            rw [hpow]
+            ring
+      have hpowδ : (n : ℝ) ^ (2 * σ) * (n : ℝ) ^ δ =
+          (n : ℝ) ^ (2 * σ + δ) := (Real.rpow_add hnpos (2 * σ) δ).symm
+      have hcoeff : (2 + 2 * (D : ℝ)) * 9 = Ccount := by
+        dsimp [Ccount]
+        push_cast
+        ring
+      have hDnonneg : 0 ≤ (D : ℝ) := Nat.cast_nonneg D
+      have hcoefNonneg : 0 ≤ 2 + 2 * (D : ℝ) :=
+        add_nonneg (by norm_num) (mul_nonneg (by norm_num) hDnonneg)
+      have hcoefM2 : (2 + 2 * (D : ℝ)) * (M : ℝ) ^ 2 ≤
+          (2 + 2 * (D : ℝ)) * (9 * (n : ℝ) ^ (2 * σ)) :=
+        mul_le_mul_of_nonneg_left hM2 hcoefNonneg
+      calc
+        Cexp ≤ (2 + 2 * (D : ℝ)) * (M : ℝ) ^ 2 * (R : ℝ) * (n : ℝ) ^ δ := hraw'
+        _ ≤ (2 + 2 * (D : ℝ)) * (9 * (n : ℝ) ^ (2 * σ)) *
+            (R : ℝ) * (n : ℝ) ^ δ := by
+          have hRnonneg : 0 ≤ (R : ℝ) := Nat.cast_nonneg R
+          have hδnonneg : 0 ≤ (n : ℝ) ^ δ := Real.rpow_nonneg hnpos.le _
+          calc
+            ((2 + 2 * (D : ℝ)) * (M : ℝ) ^ 2) * (R : ℝ) * (n : ℝ) ^ δ =
+                (((2 + 2 * (D : ℝ)) * (M : ℝ) ^ 2) * (R : ℝ)) * (n : ℝ) ^ δ := by ring
+            _ ≤ (((2 + 2 * (D : ℝ)) * (9 * (n : ℝ) ^ (2 * σ))) *
+                  (R : ℝ)) * (n : ℝ) ^ δ := by
+              exact mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_right hcoefM2 hRnonneg) hδnonneg
+            _ = _ := by ring
+        _ = Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) := by
+          calc
+            ((2 + 2 * (D : ℝ)) * (9 * (n : ℝ) ^ (2 * σ))) *
+                (R : ℝ) * (n : ℝ) ^ δ =
+              ((2 + 2 * (D : ℝ)) * 9) *
+                ((n : ℝ) ^ (2 * σ) * (n : ℝ) ^ δ) * (R : ℝ) := by ring
+            _ = Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) := by
+              rw [hcoeff, hpowδ]
+    let T : ℝ := (n : ℝ) ^ a *
+      ((M * R : ℕ) : ℝ) ^ θ
+    let F : ℝ := (n : ℝ) ^ (b - 2 * σ) * (R : ℝ)
+    let G : ℝ := (n : ℝ) ^ a * (R : ℝ) ^ θ
+    have hTfact : T = (n : ℝ) ^ a * (M : ℝ) ^ θ * (R : ℝ) ^ θ := by
+      change (n : ℝ) ^ a * ((M * R : ℕ) : ℝ) ^ θ =
+        (n : ℝ) ^ a * (M : ℝ) ^ θ * (R : ℝ) ^ θ
+      have hcast : ((M * R : ℕ) : ℝ) = (M : ℝ) * (R : ℝ) := by exact_mod_cast Nat.cast_mul M R
+      calc
+        (n : ℝ) ^ a * ((M * R : ℕ) : ℝ) ^ θ =
+            (n : ℝ) ^ a * ((M : ℝ) * (R : ℝ)) ^ θ := by rw [hcast]
+        _ = (n : ℝ) ^ a * ((M : ℝ) ^ θ * (R : ℝ) ^ θ) := by
+          rw [Real.mul_rpow (Nat.cast_nonneg M) (Nat.cast_nonneg R)]
+        _ = (n : ℝ) ^ a * (M : ℝ) ^ θ * (R : ℝ) ^ θ := by ring
+    have hTupper : T ≤ 3 * (n : ℝ) ^ (a + σ * θ) * (R : ℝ) := by
+      rw [hTfact]
+      calc
+        (n : ℝ) ^ a * (M : ℝ) ^ θ * (R : ℝ) ^ θ ≤
+            (n : ℝ) ^ a * (3 * (n : ℝ) ^ (σ * θ)) * (R : ℝ) := by
+          have hMR : (M : ℝ) ^ θ * (R : ℝ) ^ θ ≤
+              (3 * (n : ℝ) ^ (σ * θ)) * (R : ℝ) :=
+            mul_le_mul hMtheta hRthetaLe (by positivity) (by positivity)
+          calc
+            (n : ℝ) ^ a * (M : ℝ) ^ θ * (R : ℝ) ^ θ =
+                (n : ℝ) ^ a * ((M : ℝ) ^ θ * (R : ℝ) ^ θ) := by ring
+            _ ≤ (n : ℝ) ^ a * ((3 * (n : ℝ) ^ (σ * θ)) * (R : ℝ)) :=
+              mul_le_mul_of_nonneg_left hMR (by positivity)
+            _ = (n : ℝ) ^ a * (3 * (n : ℝ) ^ (σ * θ)) * (R : ℝ) := by ring
+        _ = 3 * (n : ℝ) ^ (a + σ * θ) * (R : ℝ) := by
+          calc
+            (n : ℝ) ^ a * (3 * (n : ℝ) ^ (σ * θ)) * (R : ℝ) =
+                3 * ((n : ℝ) ^ a * (n : ℝ) ^ (σ * θ)) * (R : ℝ) := by ring
+            _ = 3 * (n : ℝ) ^ (a + σ * θ) * (R : ℝ) := by
+              have hpow : (n : ℝ) ^ a * (n : ℝ) ^ (σ * θ) =
+                  (n : ℝ) ^ (a + σ * θ) :=
+                (Real.rpow_add hnpos a (σ * θ)).symm
+              rw [hpow]
+    have hTleBase : T ≤ (q : ℝ) / 2 * (n : ℝ) ^ a * (R : ℝ) ^ θ := by
+      rw [hTfact]
+      have hqhalf : (M : ℝ) ^ θ ≤ (q : ℝ) / 2 := by linarith [hqBig]
+      calc
+        (n : ℝ) ^ a * (M : ℝ) ^ θ * (R : ℝ) ^ θ ≤
+            (n : ℝ) ^ a * ((q : ℝ) / 2) * (R : ℝ) ^ θ := by
+          have hleft : (n : ℝ) ^ a * (M : ℝ) ^ θ ≤
+              (n : ℝ) ^ a * ((q : ℝ) / 2) :=
+            mul_le_mul_of_nonneg_left hqhalf (Real.rpow_nonneg hnpos.le _)
+          exact mul_le_mul_of_nonneg_right hleft (Real.rpow_nonneg hRpos.le _)
+        _ = _ := by ring
+    have hqHalfLower : (n : ℝ) ^ σ / (4 * L) ≤ (q : ℝ) / 2 := by
+      have hqNlower : (n : ℝ) ^ σ / (2 * L) ≤ (q : ℝ) :=
+        le_trans (div_le_div_of_nonneg_right hMlower (by positivity)) hqLower
+      have hhalf : (n : ℝ) ^ σ / (4 * L) =
+          ((n : ℝ) ^ σ / (2 * L)) / 2 := by
+        field_simp [ne_of_gt hL]
+        <;> ring
+      rw [hhalf]
+      exact div_le_div_of_nonneg_right hqNlower (by norm_num)
+    have hSurplus : (n : ℝ) ^ (a + σ) * (R : ℝ) ^ θ / (4 * L) ≤
+        (q : ℝ) / 2 * (n : ℝ) ^ a * (R : ℝ) ^ θ := by
+      have hpow : (n : ℝ) ^ (a + σ) = (n : ℝ) ^ a * (n : ℝ) ^ σ := by
+        rw [← Real.rpow_add hnpos a σ]
+      rw [hpow]
+      have hmul := mul_le_mul_of_nonneg_right hqHalfLower
+        (mul_nonneg (Real.rpow_nonneg hnpos.le a) (Real.rpow_nonneg hRpos.le θ))
+      have hmul' : ((n : ℝ) ^ σ / (4 * L)) *
+          ((n : ℝ) ^ a * (R : ℝ) ^ θ) ≤
+          ((q : ℝ) / 2) * ((n : ℝ) ^ a * (R : ℝ) ^ θ) := hmul
+      calc
+        (n : ℝ) ^ a * (n : ℝ) ^ σ * (R : ℝ) ^ θ / (4 * L) =
+            ((n : ℝ) ^ σ / (4 * L)) * ((n : ℝ) ^ a * (R : ℝ) ^ θ) := by ring
+        _ ≤ ((q : ℝ) / 2) * ((n : ℝ) ^ a * (R : ℝ) ^ θ) := hmul'
+        _ = (q : ℝ) / 2 * (n : ℝ) ^ a * (R : ℝ) ^ θ := by ring
+    have hBaseSlack : T + (n : ℝ) ^ (a + σ) * (R : ℝ) ^ θ / (4 * L) ≤
+        (q : ℝ) * (n : ℝ) ^ a * (R : ℝ) ^ θ := by
+      calc
+        T + (n : ℝ) ^ (a + σ) * (R : ℝ) ^ θ / (4 * L) ≤
+            ((q : ℝ) / 2 * (n : ℝ) ^ a * (R : ℝ) ^ θ) +
+              ((q : ℝ) / 2 * (n : ℝ) ^ a * (R : ℝ) ^ θ) :=
+          add_le_add hTleBase hSurplus
+        _ = (q : ℝ) * (n : ℝ) ^ a * (R : ℝ) ^ θ := by ring
+    have hRpowLower : 1 ≤ (R : ℝ) ^ θ := hRthetaOne
+    have hRpow : (R : ℝ) ^ θ ≤ (R : ℝ) := hRthetaLe
+    have hRremainUpper : (R : ℝ) = (R : ℝ) ^ θ * (R : ℝ) ^ (1 - θ) := hRsplit
+    have hCbaseCost : Cexp + Real.log 2 ≤
+        Cbase * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by
+      have hXone : 1 ≤ (n : ℝ) ^ Xbase := by
+        calc
+          1 = (n : ℝ) ^ (0 : ℝ) := by simp
+          _ ≤ (n : ℝ) ^ Xbase :=
+            Real.rpow_le_rpow_of_exponent_le hn1 hXbase
+      have hcountRewritten : Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) ≤
+          2 * Ccount * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by
+        have hpowX : (n : ℝ) ^ (2 * σ + δ) *
+            (n : ℝ) ^ ((1 - ζ) * (1 - θ)) = (n : ℝ) ^ Xbase := by
+          dsimp [Xbase]
+          exact (Real.rpow_add hnpos (2 * σ + δ) ((1 - ζ) * (1 - θ))).symm
+        calc
+          Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) =
+              (Ccount * (n : ℝ) ^ (2 * σ + δ)) *
+                ((R : ℝ) ^ θ * (R : ℝ) ^ (1 - θ)) := by
+            calc
+              _ = (Ccount * (n : ℝ) ^ (2 * σ + δ)) * (R : ℝ) := by ring
+              _ = _ := congrArg
+                (fun r : ℝ => (Ccount * (n : ℝ) ^ (2 * σ + δ)) * r) hRsplit
+          _ ≤ Ccount * (n : ℝ) ^ (2 * σ + δ) *
+              ((R : ℝ) ^ θ * (2 * (n : ℝ) ^ ((1 - ζ) * (1 - θ)))) := by
+            apply mul_le_mul_of_nonneg_left
+            · exact mul_le_mul_of_nonneg_left hRpowExponent
+                (Real.rpow_nonneg hRpos.le θ)
+            · positivity
+          _ = 2 * Ccount *
+              ((n : ℝ) ^ (2 * σ + δ) * (n : ℝ) ^ ((1 - ζ) * (1 - θ))) *
+                (R : ℝ) ^ θ := by ring
+          _ = 2 * Ccount * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by rw [hpowX]
+      have hlog2nonneg : 0 ≤ Real.log 2 := le_of_lt (Real.log_pos (by norm_num))
+      have hlog2bound : Real.log 2 ≤ Real.log 2 * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by
+        have hfactor : 1 ≤ (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by
+          calc
+            1 ≤ (n : ℝ) ^ Xbase := hXone
+            _ ≤ (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by
+              calc
+                (n : ℝ) ^ Xbase = (n : ℝ) ^ Xbase * 1 := by ring
+                _ ≤ (n : ℝ) ^ Xbase * (R : ℝ) ^ θ :=
+                  mul_le_mul_of_nonneg_left hRpowLower (by positivity)
+        calc
+          Real.log 2 = Real.log 2 * 1 := by ring
+          _ ≤ Real.log 2 * ((n : ℝ) ^ Xbase * (R : ℝ) ^ θ) :=
+            mul_le_mul_of_nonneg_left hfactor hlog2nonneg
+          _ = Real.log 2 * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by ring
+      have hcountBase' : Cexp + Real.log 2 ≤
+          (2 * Ccount + Real.log 2) * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by
+        calc
+          Cexp + Real.log 2 ≤ Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) + Real.log 2 :=
+            add_le_add_left hqCount (Real.log 2)
+          _ ≤ 2 * Ccount * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ +
+              Real.log 2 * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ :=
+            add_le_add hcountRewritten hlog2bound
+          _ = (2 * Ccount + Real.log 2) * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := by ring
+      simpa [Cbase] using hcountBase'
+    have hBaseBudget : Cexp + Real.log 2 ≤
+        (n : ℝ) ^ (a + σ) * (R : ℝ) ^ θ / (4 * L) := by
+      have hAbsorb := hbaseN n hNbase
+      have hAbsorbDiv : Cbase * (n : ℝ) ^ Xbase ≤
+          (n : ℝ) ^ (a + σ) / (4 * L) := by
+        apply (le_div_iff₀ (mul_pos (by norm_num) hL)).2
+        calc
+          Cbase * (n : ℝ) ^ Xbase * (4 * L) =
+              4 * L * Cbase * (n : ℝ) ^ Xbase := by ring
+          _ ≤ (n : ℝ) ^ (a + σ) := hAbsorb
+      calc
+        Cexp + Real.log 2 ≤ Cbase * (n : ℝ) ^ Xbase * (R : ℝ) ^ θ := hCbaseCost
+        _ ≤ ((n : ℝ) ^ (a + σ) / (4 * L)) * (R : ℝ) ^ θ :=
+          mul_le_mul_of_nonneg_right hAbsorbDiv (Real.rpow_nonneg hRpos.le _)
+        _ = _ := by ring
+    have hFbudget : Cexp + T + Real.log 4 ≤ F := by
+      have hFcoeff : Ccount * (n : ℝ) ^ (2 * σ + δ) +
+            3 * (n : ℝ) ^ (a + σ * θ) + Real.log 4 ≤
+          (n : ℝ) ^ (b - 2 * σ) := by
+        have h1 := herrCountN n hNerrCount
+        have h2 := herrBaseN n hNerrBase
+        have h3 := herrConstN n hNerrConst
+        have h3' : 3 * Real.log 4 ≤ (n : ℝ) ^ (b - 2 * σ) := by simpa using h3
+        have hsum :
+            3 * Ccount * (n : ℝ) ^ (2 * σ + δ) +
+                9 * (n : ℝ) ^ (a + σ * θ) + 3 * Real.log 4 ≤
+              (n : ℝ) ^ (b - 2 * σ) + (n : ℝ) ^ (b - 2 * σ) +
+                (n : ℝ) ^ (b - 2 * σ) :=
+          add_le_add (add_le_add h1 h2) h3'
+        calc
+          _ = (3 * Ccount * (n : ℝ) ^ (2 * σ + δ) +
+                9 * (n : ℝ) ^ (a + σ * θ) + 3 * Real.log 4) / 3 := by ring
+          _ ≤ ((n : ℝ) ^ (b - 2 * σ) + (n : ℝ) ^ (b - 2 * σ) +
+                (n : ℝ) ^ (b - 2 * σ)) / 3 :=
+            div_le_div_of_nonneg_right hsum (by norm_num)
+          _ = (n : ℝ) ^ (b - 2 * σ) := by ring
+      have hlog4 : 0 ≤ Real.log 4 := le_of_lt (Real.log_pos (by norm_num))
+      have hlog4R : Real.log 4 ≤ Real.log 4 * (R : ℝ) := by
+        calc
+          Real.log 4 = Real.log 4 * 1 := by ring
+          _ ≤ Real.log 4 * (R : ℝ) := mul_le_mul_of_nonneg_left hRoneR hlog4
+      have hcoeffR :
+          Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) +
+            3 * (n : ℝ) ^ (a + σ * θ) * (R : ℝ) + Real.log 4 ≤
+          (Ccount * (n : ℝ) ^ (2 * σ + δ) +
+            3 * (n : ℝ) ^ (a + σ * θ) + Real.log 4) * (R : ℝ) := by
+        calc
+          _ = (Ccount * (n : ℝ) ^ (2 * σ + δ) +
+              3 * (n : ℝ) ^ (a + σ * θ)) * (R : ℝ) + Real.log 4 := by ring
+          _ ≤ (Ccount * (n : ℝ) ^ (2 * σ + δ) +
+              3 * (n : ℝ) ^ (a + σ * θ)) * (R : ℝ) +
+                Real.log 4 * (R : ℝ) := by
+            calc
+              _ = Real.log 4 +
+                  (Ccount * (n : ℝ) ^ (2 * σ + δ) +
+                    3 * (n : ℝ) ^ (a + σ * θ)) * (R : ℝ) := by ring
+              _ ≤ Real.log 4 * (R : ℝ) +
+                  (Ccount * (n : ℝ) ^ (2 * σ + δ) +
+                    3 * (n : ℝ) ^ (a + σ * θ)) * (R : ℝ) :=
+                add_le_add_left hlog4R _
+              _ = _ := by ring
+          _ = _ := by ring
+      calc
+        _ ≤ Ccount * (n : ℝ) ^ (2 * σ + δ) * (R : ℝ) +
+            3 * (n : ℝ) ^ (a + σ * θ) * (R : ℝ) + Real.log 4 :=
+          add_le_add (add_le_add hqCount hTupper) le_rfl
+        _ ≤ (Ccount * (n : ℝ) ^ (2 * σ + δ) +
+            3 * (n : ℝ) ^ (a + σ * θ) + Real.log 4) * (R : ℝ) := hcoeffR
+        _ ≤ (n : ℝ) ^ (b - 2 * σ) * (R : ℝ) :=
+          mul_le_mul_of_nonneg_right hFcoeff (by positivity)
+        _ = F := by rfl
+    let Gbase : ℝ := (q : ℝ) * G
+    have hBaseCostSlack : Cexp + T + Real.log 2 ≤ Gbase := by
+      have hbaseBudget := hBaseBudget
+      have hBaseSlack := hBaseSlack
+      dsimp [Gbase, G]
+      nlinarith [hBaseBudget, hBaseSlack]
+    have hAq : A ^ q = Real.exp Cexp := by
+      calc
+        A ^ q = (Real.exp (Real.log A)) ^ q := by rw [Real.exp_log hApos]
+        _ = Real.exp ((q : ℝ) * Real.log A) := by rw [← Real.exp_nat_mul]
+        _ = Real.exp Cexp := by rfl
+    have hExpMul (x y : ℝ) : Real.exp x * Real.exp y = Real.exp (x + y) := by
+      rw [← Real.exp_add]
+    have hlog2exp : Real.exp (-Real.log 2) = (1 / 2 : ℝ) := by
+      rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+      norm_num
+    have hlog4exp : Real.exp (-Real.log 4) = (1 / 4 : ℝ) := by
+      rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+      norm_num
+    have hErrHalf :
+        A ^ q * (Real.exp (-F) + Real.exp (-F)) ≤
+          (1 / 2 : ℝ) * Real.exp (-T) := by
+      have hExpLe : Real.exp (Cexp - F) ≤ Real.exp (-T - Real.log 4) :=
+        Real.exp_le_exp.mpr (by linarith [hFbudget])
+      have hExpLe' : Real.exp (Cexp - F) ≤
+          (1 / 4 : ℝ) * Real.exp (-T) := by
+        calc
+          _ ≤ Real.exp (-T - Real.log 4) := hExpLe
+          _ = Real.exp (-T) * Real.exp (-Real.log 4) := by
+            rw [hExpMul]
+            congr 1 <;> ring
+          _ = (1 / 4 : ℝ) * Real.exp (-T) := by rw [hlog4exp]; ring
+      calc
+        _ = 2 * Real.exp (Cexp - F) := by
+          rw [hAq]
+          calc
+            _ = Real.exp Cexp * Real.exp (-F) + Real.exp Cexp * Real.exp (-F) := by ring
+            _ = _ := by
+              rw [hExpMul]
+              have harg : Cexp + -F = Cexp - F := by ring
+              rw [harg]
+              ring
+        _ ≤ (1 / 2 : ℝ) * Real.exp (-T) := by
+          calc
+            _ ≤ 2 * ((1 / 4 : ℝ) * Real.exp (-T)) :=
+              mul_le_mul_of_nonneg_left hExpLe' (by norm_num)
+            _ = _ := by ring
+    have hExpBasePow : (Real.exp (-G)) ^ q = Real.exp (-Gbase) := by
+      calc
+        (Real.exp (-G)) ^ q = Real.exp ((q : ℝ) * (-G)) := by
+          rw [← Real.exp_nat_mul]
+        _ = Real.exp (-Gbase) := by
+          congr 1
+          dsimp [Gbase]
+          ring
+    have hBaseHalf :
+        A ^ q * (Real.exp (-G)) ^ q ≤ (1 / 2 : ℝ) * Real.exp (-T) := by
+      have hExpLe : Real.exp (Cexp - Gbase) ≤ Real.exp (-T - Real.log 2) :=
+        Real.exp_le_exp.mpr (by linarith [hBaseCostSlack])
+      have hExpLe' : Real.exp (Cexp - Gbase) ≤
+          (1 / 2 : ℝ) * Real.exp (-T) := by
+        calc
+          _ ≤ Real.exp (-T - Real.log 2) := hExpLe
+          _ = Real.exp (-T) * Real.exp (-Real.log 2) := by
+            rw [hExpMul]
+            congr 1 <;> ring
+          _ = (1 / 2 : ℝ) * Real.exp (-T) := by rw [hlog2exp]; ring
+      calc
+        _ = Real.exp (Cexp - Gbase) := by
+          rw [hAq, hExpBasePow]
+          calc
+            Real.exp Cexp * Real.exp (-Gbase) =
+                Real.exp (Cexp + -Gbase) := hExpMul _ _
+            _ = Real.exp (Cexp - Gbase) := by congr 1 <;> ring
+        _ ≤ _ := hExpLe'
+
+    change A ^ q * (Real.exp (-F) + Real.exp (-F) + (Real.exp (-G)) ^ q) ≤
+      Real.exp (-T)
+    calc
+      _ = A ^ q * (Real.exp (-F) + Real.exp (-F)) + A ^ q * (Real.exp (-G)) ^ q := by
+        rw [mul_add]
+      _ ≤ (1 / 2 : ℝ) * Real.exp (-T) + (1 / 2 : ℝ) * Real.exp (-T) :=
+        add_le_add hErrHalf hBaseHalf
+      _ = Real.exp (-T) := by ring
+   ⟩
 
 /-- LEAF (arithmetic): the separated-children count condition of `parent_fail_children`. -/
 theorem step_large (σ ζ : ℝ) (hσ : 0 < σ) (hζ : 0 < ζ ∧ ζ < 1) (K : ℕ) :
@@ -1783,7 +2928,110 @@ theorem step_large (σ ζ : ℝ) (hσ : 0 < σ) (hζ : 0 < ζ ∧ ζ < 1) (K : �
           (1 + hdScaleSlope (hdScaleIndex n σ ζ) (i - 1)) <
         (hdScaleSlope (hdScaleIndex n σ ζ) (i - 1) - hdScaleSlope (hdScaleIndex n σ ζ) i) *
           (hdScaleMultiplier n σ : ℝ) := by
-  sorry
+  have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ σ) Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop hσ).comp tendsto_natCast_atTop_atTop
+  let B : ℕ := ⌈1 / σ⌉₊
+  have hB : 0 < ((B + 1 : ℕ) : ℝ) := by positivity
+  have hC : 0 < 11 * ((B + 1 : ℕ) : ℝ) := by positivity
+  have hEventually : ∀ᶠ n : ℕ in Filter.atTop,
+      11 * ((B + 1 : ℕ) : ℝ) ≤ (n : ℝ) ^ σ :=
+    (Filter.tendsto_atTop.1 hpow) (11 * ((B + 1 : ℕ) : ℝ))
+  obtain ⟨N, hN⟩ := Filter.eventually_atTop.1 hEventually
+  refine ⟨max 2 N, ?_⟩
+  intro n hn i hi1 hih
+  have hn2 : 2 ≤ n := le_trans (Nat.le_max_left 2 N) hn
+  have hNn : N ≤ n := le_trans (Nat.le_max_right 2 N) hn
+  let h : ℕ := hdScaleIndex n σ ζ
+  let M : ℕ := hdScaleMultiplier n σ
+  let U : ℝ := ((h + 1 : ℕ) : ℝ)
+  have hidx : h ≤ B := by
+    dsimp [h, B]
+    exact hdScaleIndex_le_ceil_inv_sigma hn2 hσ hζ
+  have hUpos : 0 < U := by positivity
+  have hUbound : U ≤ ((B : ℝ) + 1) := by
+    dsimp [U]
+    exact_mod_cast Nat.succ_le_succ hidx
+  have hnPower : 11 * ((B + 1 : ℕ) : ℝ) ≤ (n : ℝ) ^ σ := hN n hNn
+  have hMlarge : 11 * ((B : ℝ) + 1) ≤ (M : ℝ) := by
+    calc
+      11 * ((B : ℝ) + 1) = 11 * ((B + 1 : ℕ) : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ σ := hnPower
+      _ ≤ (⌈(n : ℝ) ^ σ⌉₊ : ℝ) := by exact_mod_cast Nat.le_ceil ((n : ℝ) ^ σ)
+      _ ≤ (M : ℝ) := by
+        dsimp [M, hdScaleMultiplier]
+        exact_mod_cast (Nat.le_max_right 2 ⌈(n : ℝ) ^ σ⌉₊)
+  have hM10 : 10 * U ≤ (M : ℝ) := by
+    have hBnonneg : 0 ≤ (B : ℝ) + 1 := by positivity
+    nlinarith [hUbound, hMlarge, hBnonneg]
+  have hslope : 1 + hdScaleSlope h (i - 1) ≤ 3 / 2 := by
+    have hf := hdScaleThreshold_fractions_bounds (h := h) (i := i - 1) (by omega)
+    rcases hf with ⟨_, _, _, _, _, hupper⟩
+    linarith
+  have hsub : h - (i - 1) = (h - i) + 1 := by omega
+  have hsubCast : ((h - (i - 1) : ℕ) : ℝ) = ((h - i : ℕ) : ℝ) + 1 := by
+    exact_mod_cast hsub
+  have hslopeGap : hdScaleSlope h (i - 1) - hdScaleSlope h i = 1 / (4 * U) := by
+    dsimp [hdScaleSlope, U]
+    rw [hsubCast]
+    ring
+  have hqbound : (stepQ n σ ζ K : ℝ) ≤
+      (M : ℝ) / (16 * U * (2 * (K : ℝ) + 1)) := by
+    have hfloor : (stepQ n σ ζ K : ℝ) ≤
+        (hdScaleMultiplier n σ : ℝ) /
+          (16 * ((hdScaleIndex n σ ζ + 1 : ℕ) : ℝ) * (2 * (K : ℝ) + 1)) := by
+      unfold stepQ
+      exact_mod_cast Nat.floor_le (by positivity :
+        0 ≤ (hdScaleMultiplier n σ : ℝ) /
+          (16 * ((hdScaleIndex n σ ζ + 1 : ℕ) : ℝ) * (2 * (K : ℝ) + 1)))
+    simpa [h, M, U] using hfloor
+  have hqterm :
+      (1 + hdScaleSlope h (i - 1)) * (2 * (K : ℝ) + 1) * (stepQ n σ ζ K : ℝ) ≤
+        3 * (M : ℝ) / (32 * U) := by
+    calc
+      _ ≤ (3 / 2) * (2 * (K : ℝ) + 1) * (stepQ n σ ζ K : ℝ) := by
+        apply mul_le_mul_of_nonneg_right
+        · exact mul_le_mul_of_nonneg_right hslope (by positivity)
+        · exact Nat.cast_nonneg _
+      _ ≤ (3 / 2) * (2 * (K : ℝ) + 1) *
+          ((M : ℝ) / (16 * U * (2 * (K : ℝ) + 1))) :=
+        mul_le_mul_of_nonneg_left hqbound (by positivity)
+      _ = 3 * (M : ℝ) / (32 * U) := by
+        have hKpos : 0 < 2 * (K : ℝ) + 1 := by positivity
+        field_simp [ne_of_gt hUpos, ne_of_gt hKpos]
+        <;> ring
+  have hsum :
+      (1 + hdScaleSlope h (i - 1)) * (2 * (K : ℝ) + 1) * (stepQ n σ ζ K : ℝ) +
+          (1 + hdScaleSlope h (i - 1)) ≤
+        3 * (M : ℝ) / (32 * U) + 3 / 2 := by
+    exact add_le_add hqterm hslope
+  let z : ℝ := (M : ℝ) / (32 * U)
+  have hz : 5 / 16 ≤ z := by
+    apply (le_div_iff₀ (by positivity : (0 : ℝ) < 32 * U)).2
+    nlinarith [hM10]
+  have hratio : (M : ℝ) / (4 * U) = 8 * z := by
+    dsimp [z]
+    field_simp [ne_of_gt hUpos]
+    <;> ring
+  have hstrict : 3 * (M : ℝ) / (32 * U) + 3 / 2 < (M : ℝ) / (4 * U) := by
+    rw [hratio]
+    have hz' : 3 * (M : ℝ) / (32 * U) = 3 * z := by dsimp [z]; ring
+    rw [hz']
+    nlinarith [hz]
+  have htarget :
+      (hdScaleSlope h (i - 1) - hdScaleSlope h i) * (M : ℝ) =
+        (M : ℝ) / (4 * U) := by
+    rw [hslopeGap]
+    dsimp [U]
+    ring
+  have hfinal :
+      (1 + hdScaleSlope h (i - 1)) * (2 * (K : ℝ) + 1) * (stepQ n σ ζ K : ℝ) +
+          (1 + hdScaleSlope h (i - 1)) <
+        (hdScaleSlope h (i - 1) - hdScaleSlope h i) * (M : ℝ) := by
+    calc
+      _ ≤ 3 * (M : ℝ) / (32 * U) + 3 / 2 := hsum
+      _ < (M : ℝ) / (4 * U) := hstrict
+      _ = (hdScaleSlope h (i - 1) - hdScaleSlope h i) * (M : ℝ) := htarget.symm
+  simpa [h, M] using hfinal
 
 open Classical in
 /-- One scale of the induction (Steps 3–4), assembled from the leaves above. -/

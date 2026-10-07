@@ -169,6 +169,58 @@ theorem degreeLogSmall9 (P : Params9) (hexps : ScaleExps9 P) {c : ℝ} (hc : 0 <
           mul_le_mul_of_nonneg_left (le_of_lt hsmall) (by positivity)
         _ = (c / 4) * (n : ℝ) ^ P.u := by ring
 
+/-- Extract the parameter exponent margins from validity without using the eventual-scale node. -/
+theorem scaleExpsOfValid9 (P : Params9) (hP : Params9.Valid P) : ScaleExps9 P := by
+  rcases hP with ⟨hxs, _, _, hσ, hχ, _, hcase⟩
+  rcases hxs with ⟨hxS, _, _⟩
+  rcases hσ with ⟨hσpos, hσxS⟩
+  rcases hχ with ⟨_, hχbound⟩
+  have hxSReal : 0 < (P.xS : ℝ) := by exact_mod_cast hxS
+  have hσReal : 0 < (P.σ : ℝ) := by exact_mod_cast hσpos
+  have hu : 0 < P.u := by
+    dsimp [Params9.u]
+    positivity
+  have hσu : (P.σ : ℝ) < P.u := by
+    have h : (P.σ : ℝ) < (P.xS : ℝ) / 10 := by exact_mod_cast hσxS
+    dsimp [Params9.u]
+    linarith
+  have hχu : (P.χ : ℝ) < P.u / 50 := by
+    have hχ' : (P.χ : ℝ) <
+        ((min P.xS (min P.hMinus (1 - P.hPlus)) : ℚ) : ℝ) / 100 := by
+      exact_mod_cast hχbound
+    have hmin : (min P.xS (min P.hMinus (1 - P.hPlus)) : ℚ) ≤ P.xS := min_le_left _ _
+    have hmin' : ((min P.xS (min P.hMinus (1 - P.hPlus)) : ℚ) : ℝ) ≤ (P.xS : ℝ) := by
+      exact_mod_cast hmin
+    calc
+      (P.χ : ℝ) < ((min P.xS (min P.hMinus (1 - P.hPlus)) : ℚ) : ℝ) / 100 := hχ'
+      _ ≤ (P.xS : ℝ) / 100 := by gcongr
+      _ = P.u / 50 := by dsimp [Params9.u]; ring
+  cases hcaseP : P.case with
+  | sub yS yD yM =>
+      have hsub' : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧ 1 - P.σ < yD ∧
+          yD < 1 ∧ P.χ < P.σ / 10 := by simpa [hcaseP] using hcase
+      have hsub : 1 - P.σ < yD := hsub'.2.2.2.1
+      have hmargin : 0 < (yD : ℝ) - (1 - (P.σ : ℝ)) := by
+        exact_mod_cast (sub_pos.mpr hsub)
+      have hminpos : 0 < min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) :=
+        lt_min hσReal hmargin
+      have heps' : 0 < min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) / 2 :=
+        div_pos hminpos (by norm_num)
+      have heps : 0 < P.eps := by
+        simpa [Params9.eps, hcaseP] using heps'
+      have hepsσ' : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) / 2 < (P.σ : ℝ) := by
+        linarith [min_le_left (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))), hσReal]
+      have hepsσ : P.eps < (P.σ : ℝ) := by
+        simpa [Params9.eps, hcaseP] using hepsσ'
+      exact ⟨heps, hepsσ, hu, hσu, hχu⟩
+  | lin αS αD hB yB =>
+      have heps' : 0 < (P.σ : ℝ) / 2 := by positivity
+      have heps : 0 < P.eps := by simpa [Params9.eps, hcaseP] using heps'
+      have hepsσ' : (P.σ : ℝ) / 2 < (P.σ : ℝ) := by linarith [hσReal]
+      have hepsσ : P.eps < (P.σ : ℝ) := by
+        simpa [Params9.eps, hcaseP] using hepsσ'
+      exact ⟨heps, hepsσ, hu, hσu, hχu⟩
+
 /-- A star scope contains every anchor read by each of its neighbouring odd rows. -/
 theorem starScopeAnchorEq9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
     {v : EvenSites9 n} (ω ω' : Outcome9 I N)

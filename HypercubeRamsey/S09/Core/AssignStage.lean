@@ -165,7 +165,7 @@ theorem p92_star_bad_prob (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 0 <
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → GainCert9 S I E G c₀ → AlarmMean9 S I E G →
         ∀ v : EvenSites9 n, (rawLaw9 S I).pr (fun ω => StarBad9 S E G ω v) ≤ P.tail c n := by
-  obtain ⟨hexps, nScale, hScale⟩ := scales_eventually9 P hP
+  have hexps := Lane_q_s09_assign1.scaleExpsOfValid9 P hP
   let c : ℝ := min c₀ 1 / 2
   have hc : 0 < c := by dsimp [c]; positivity
   have hcBounds : 2 * c ≤ c₀ ∧ 2 * c ≤ 1 := by
@@ -175,9 +175,8 @@ theorem p92_star_bad_prob (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 0 <
     (tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop
   obtain ⟨nTail, hTail⟩ :=
     Filter.eventually_atTop.1 (htendsto.eventually_ge_atTop (Real.log 2 / c))
-  refine ⟨c, hc, max nScale nTail, ?_⟩
+  refine ⟨c, hc, max 1 nTail, ?_⟩
   intro n hn N E X Y κ G M S I hcore hgain hAM v
-  have hnScale : nScale ≤ n := le_trans (le_max_left _ _) hn
   have hnTail : nTail ≤ n := le_trans (le_max_right _ _) hn
   have hpowLarge : Real.log 2 / c ≤ (n : ℝ) ^ P.u := hTail n hnTail
   rcases hcore with ⟨hN, _, _, _, _, _, _, hscales⟩
@@ -420,20 +419,18 @@ theorem p92_anchor_lll (P : Params9) (hP : P.Valid) (c₁ : ℝ) (hc₁ : 0 < c�
       (S : Setup9 P n N M) (I : IDMap9 P n) (G : Colour),
       (∀ v : EvenSites9 n, (rawLaw9 S I).pr (fun ω => StarBad9 S E G ω v) ≤ P.tail c₁ n) →
       StarScopeFacts9 S I E G → AnchorLLL9 S I E G (c₁ / 2) := by
-  obtain ⟨hexps, nScale, hScale⟩ := scales_eventually9 P hP
+  have hexps := Lane_q_s09_assign1.scaleExpsOfValid9 P hP
   obtain ⟨nLog, hLog⟩ := Lane_q_s09_assign1.degreeLogSmall9 P hexps hc₁
   have hu : 0 < P.u := hexps.2.2.1
   have htendsto : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ P.u) Filter.atTop Filter.atTop :=
     (tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop
   obtain ⟨nCharge, hCharge⟩ := Filter.eventually_atTop.1
     (htendsto.eventually_ge_atTop (Real.log 2 / (c₁ / 4)))
-  refine ⟨max nScale (max nLog nCharge), ?_⟩
+  refine ⟨max 1 (max nLog nCharge), ?_⟩
   intro n hn N E M S I G hprob hscope
-  have hnScale : nScale ≤ n := le_trans (le_max_left _ _) hn
+  have hn1 : 1 ≤ n := le_trans (le_max_left _ _) hn
   have hnLog : nLog ≤ n := le_trans (le_trans (le_max_left _ _) (le_max_right _ _)) hn
   have hnCharge : nCharge ≤ n := le_trans (le_trans (le_max_right _ _) (le_max_right _ _)) hn
-  have hscales := hScale n hnScale
-  have hn1 : 1 ≤ n := hscales.1
   have hlogQuarter : Real.log 2 ≤ (c₁ / 4) * (n : ℝ) ^ P.u := by
     have h := (div_le_iff₀ (by positivity : (0 : ℝ) < c₁ / 4)).1 (hCharge n hnCharge)
     nlinarith [h]

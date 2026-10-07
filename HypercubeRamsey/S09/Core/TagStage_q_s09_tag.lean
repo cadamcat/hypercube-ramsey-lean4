@@ -1,5 +1,6 @@
 import HypercubeRamsey.S09.Core.Experiment
 import HypercubeRamsey.S09.Core.GainStage
+import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.Framework.Minimax
 import HypercubeRamsey.Tools.Concentration
 
@@ -138,6 +139,21 @@ private theorem pr_mono_of_imp {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
   · have hB := hAB ω hA
     simp [hA, hB]
   · by_cases hB : B ω <;> simp [hA, hB, P.nonneg ω]
+
+theorem pr_mono_of_imp_q_s09_tag {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    {A B : Ω → Prop} (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B :=
+  pr_mono_of_imp P hAB
+
+theorem pr_le_one_q_s09_tag {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A ≤ 1 := by
+  classical
+  unfold FinProb.pr
+  calc
+    (∑ ω, if A ω then P.w ω else 0) ≤ ∑ ω, P.w ω := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      split_ifs <;> [rfl; exact P.nonneg ω]
+    _ = 1 := P.sum_eq_one
 
 private theorem pr_event_compl {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
     P.pr A + P.pr (fun ω => ¬ A ω) = 1 := by
@@ -799,6 +815,469 @@ theorem tag_failure_mass_expect_eq_q_s09_tag {P : Params9} {n N : ℕ} {M : TagM
       apply Finset.sum_congr rfl
       intro w hw
       rw [hindep w, hF w, hG w]
+
+theorem rowDeg_mix_q_s09_tag {N : ℕ} (M : TagMix N)
+    (E : Fin N → Fin N → Prop) (G : Colour) (w : Fin N) :
+    (tagMixLaw9 M).expect (fun i => rowDeg E G w (M.ν i)) =
+      rowDeg E G w (Law.mix (tagMixLaw9 M) M.ν) := by
+  classical
+  unfold FinProb.expect rowDeg Law.mix
+  calc
+    (∑ i, M.Λ i * ∑ y, (M.ν i).w y * (if Hits E G w y then 1 else 0)) =
+        ∑ i, ∑ y, M.Λ i * ((M.ν i).w y * (if Hits E G w y then 1 else 0)) := by
+      apply Finset.sum_congr rfl
+      intro i hi
+      rw [Finset.mul_sum]
+    _ = ∑ y, ∑ i, M.Λ i * ((M.ν i).w y * (if Hits E G w y then 1 else 0)) :=
+      Finset.sum_comm
+    _ = ∑ y, (∑ i, M.Λ i * (M.ν i).w y) * (if Hits E G w y then 1 else 0) := by
+      apply Finset.sum_congr rfl
+      intro y hy
+      calc
+        ∑ i, M.Λ i * ((M.ν i).w y * (if Hits E G w y then 1 else 0)) =
+            ∑ i, (M.Λ i * (M.ν i).w y) * (if Hits E G w y then 1 else 0) := by
+          apply Finset.sum_congr rfl
+          intro i hi
+          ring
+        _ = (∑ i, M.Λ i * (M.ν i).w y) * (if Hits E G w y then 1 else 0) :=
+          by rw [Finset.sum_mul]
+    _ = rowDeg E G w (Law.mix (tagMixLaw9 M) M.ν) := by
+      simp [Law.mix, rowDeg, tagMixLaw9]
+
+theorem dens_eq_expect_rowDeg_q_s09_tag {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (μ ν : Law N) : dens E G μ ν = μ.expect (fun x => rowDeg E G x ν) := by
+  classical
+  unfold dens rowDeg FinProb.expect
+  calc
+    (∑ x, ∑ y, μ.w x * ν.w y * (if Hits E G x y then 1 else 0)) =
+        ∑ x, μ.w x * ∑ y, ν.w y * (if Hits E G x y then 1 else 0) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro y hy
+      ring
+    _ = ∑ x, μ.w x * rowDeg E G x ν := by simp [rowDeg]
+
+theorem rowDeg_bounds_q_s09_tag {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (w : Fin N) (ν : Law N) : 0 ≤ rowDeg E G w ν ∧ rowDeg E G w ν ≤ 1 := by
+  classical
+  let indicator : Fin N → ℝ := fun y => if Hits E G w y then 1 else 0
+  have hindicator0 (y : Fin N) : 0 ≤ indicator y := by
+    dsimp [indicator]
+    split_ifs <;> norm_num
+  have hindicator1 (y : Fin N) : indicator y ≤ 1 := by
+    dsimp [indicator]
+    split_ifs <;> norm_num
+  have hEq : rowDeg E G w ν = ν.expect indicator := by
+    simp [rowDeg, FinProb.expect, indicator]
+  constructor
+  · rw [hEq]
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg (ν.nonneg y) (hindicator0 y)
+  · rw [hEq]
+    exact (ν.expect_mono hindicator1).trans_eq (ν.expect_const 1)
+
+theorem rowDeg_center_tagMix_q_s09_tag {N : ℕ} (M : TagMix N)
+    (E : Fin N → Fin N → Prop) (G : Colour) (w : Fin N) :
+    (tagMixLaw9 M).expect (fun i => rowDeg E G w (M.ν i) - 1 / 2) =
+      rowDeg E G w (Law.mix (tagMixLaw9 M) M.ν) - 1 / 2 := by
+  classical
+  have hconst : ∑ i, (tagMixLaw9 M).w i * (1 / 2 : ℝ) = 1 / 2 := by
+    rw [← Finset.sum_mul, (tagMixLaw9 M).sum_eq_one]
+    ring
+  calc
+    (tagMixLaw9 M).expect (fun i => rowDeg E G w (M.ν i) - 1 / 2) =
+        (∑ i, (tagMixLaw9 M).w i * rowDeg E G w (M.ν i)) -
+          (∑ i, (tagMixLaw9 M).w i * (1 / 2 : ℝ)) := by
+      unfold FinProb.expect
+      calc
+        (∑ i, (tagMixLaw9 M).w i * (rowDeg E G w (M.ν i) - 1 / 2)) =
+            ∑ i, ((tagMixLaw9 M).w i * rowDeg E G w (M.ν i) -
+              (tagMixLaw9 M).w i * (1 / 2 : ℝ)) := by
+          apply Finset.sum_congr rfl
+          intro i hi
+          ring
+        _ = (∑ i, (tagMixLaw9 M).w i * rowDeg E G w (M.ν i)) -
+            (∑ i, (tagMixLaw9 M).w i * (1 / 2 : ℝ)) := by
+          rw [Finset.sum_sub_distrib]
+    _ = rowDeg E G w (Law.mix (tagMixLaw9 M) M.ν) - 1 / 2 := by
+      rw [hconst, ← rowDeg_mix_q_s09_tag M E G w]
+      rfl
+
+theorem aStar_sq_n_div_bStar_sq_q_s09_tag (P : Params9) {n : ℕ}
+    (hn : 0 < (n : ℝ)) :
+    (n : ℝ) * P.aStar n ^ 2 / P.bStar n ^ 2 =
+      (1 / 4 : ℝ) * (n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ) + 2 * (P.hMinus : ℝ)) := by
+  have hplusPow : ((n : ℝ) ^ (-(P.hPlus : ℝ))) ^ 2 =
+      (n : ℝ) ^ (-2 * (P.hPlus : ℝ)) := by
+    calc
+      ((n : ℝ) ^ (-(P.hPlus : ℝ))) ^ 2 =
+          (n : ℝ) ^ (-(P.hPlus : ℝ)) * (n : ℝ) ^ (-(P.hPlus : ℝ)) := by rw [pow_two]
+      _ = (n : ℝ) ^ (-(P.hPlus : ℝ) + (-(P.hPlus : ℝ))) :=
+        (Real.rpow_add hn _ _).symm
+      _ = (n : ℝ) ^ (-2 * (P.hPlus : ℝ)) := by congr 1 <;> ring
+  have hminusPow : ((n : ℝ) ^ (-(P.hMinus : ℝ))) ^ 2 =
+      (n : ℝ) ^ (-2 * (P.hMinus : ℝ)) := by
+    calc
+      ((n : ℝ) ^ (-(P.hMinus : ℝ))) ^ 2 =
+          (n : ℝ) ^ (-(P.hMinus : ℝ)) * (n : ℝ) ^ (-(P.hMinus : ℝ)) := by rw [pow_two]
+      _ = (n : ℝ) ^ (-(P.hMinus : ℝ) + (-(P.hMinus : ℝ))) :=
+        (Real.rpow_add hn _ _).symm
+      _ = (n : ℝ) ^ (-2 * (P.hMinus : ℝ)) := by congr 1 <;> ring
+  dsimp [Params9.aStar, Params9.bStar]
+  calc
+    (n : ℝ) * ((n : ℝ) ^ (-(P.hPlus : ℝ)) / 2) ^ 2 /
+        ((n : ℝ) ^ (-(P.hMinus : ℝ))) ^ 2 =
+        (1 / 4 : ℝ) *
+          (((n : ℝ) ^ (-2 * (P.hPlus : ℝ)) /
+            (n : ℝ) ^ (-2 * (P.hMinus : ℝ))) * (n : ℝ)) := by
+      rw [div_pow, hplusPow, hminusPow]
+      ring
+    _ = (1 / 4 : ℝ) *
+        ((n : ℝ) ^ (-2 * (P.hPlus : ℝ) - (-2 * (P.hMinus : ℝ))) * (n : ℝ)) := by
+      rw [Real.rpow_sub hn]
+    _ = (1 / 4 : ℝ) *
+        (n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ) + 2 * (P.hMinus : ℝ)) := by
+      calc
+        (1 / 4 : ℝ) *
+            ((n : ℝ) ^ (-2 * (P.hPlus : ℝ) - (-2 * (P.hMinus : ℝ))) * (n : ℝ)) =
+            (1 / 4 : ℝ) *
+              ((n : ℝ) ^ (-2 * (P.hPlus : ℝ) - (-2 * (P.hMinus : ℝ))) * (n : ℝ) ^ (1 : ℝ)) := by
+          rw [Real.rpow_one]
+        _ = (1 / 4 : ℝ) *
+            (n : ℝ) ^ (-2 * (P.hPlus : ℝ) - (-2 * (P.hMinus : ℝ)) + 1) := by
+          rw [← Real.rpow_add hn]
+        _ = (1 / 4 : ℝ) *
+            (n : ℝ) ^ (1 - 2 * (P.hPlus : ℝ) + 2 * (P.hMinus : ℝ)) := by
+          congr 1
+          ring
+
+theorem finProb_pr_biUnion_le_sum_q_s09_tag {Ω ι : Type*} [Fintype Ω]
+    [Fintype ι] [DecidableEq ι] (P : FinProb Ω) (E : ι → Ω → Prop) (s : Finset ι) :
+    P.pr (fun ω => ∃ i ∈ s, E i ω) ≤ ∑ i ∈ s, P.pr (E i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp [FinProb.pr]
+  | @insert i s hi ih =>
+      have hEq : (fun ω => ∃ j ∈ insert i s, E j ω) =
+          (fun ω => E i ω ∨ ∃ j ∈ s, E j ω) := by
+        funext ω
+        simp [hi]
+      calc
+        P.pr (fun ω => ∃ j ∈ insert i s, E j ω) =
+            P.pr (fun ω => E i ω ∨ ∃ j ∈ s, E j ω) := by rw [hEq]
+        _ ≤ P.pr (E i) + P.pr (fun ω => ∃ j ∈ s, E j ω) :=
+          FinProb.pr_union_le P _ _
+        _ ≤ P.pr (E i) + ∑ j ∈ s, P.pr (E j) := by linarith [ih]
+        _ = ∑ j ∈ insert i s, P.pr (E j) := by simp [hi]
+
+/-- A lower-tail bound for independent summands after clipping rare outliers. -/
+theorem clipped_lower_tail_q_s09_tag {ι Ω : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype Ω] (P : ι → FinProb Ω) (f : ι → Ω → ℝ)
+    (a b n u r p : ℝ)
+    (ha : 0 < a) (hb : 0 < b) (hn : 0 < n)
+    (hcard : (Fintype.card ι : ℝ) ≤ n) (hcardpos : 0 < (Fintype.card ι : ℝ))
+    (hclipB : 2 * b ≤ 1 / 100)
+    (hraw : ∀ i ω, -(1 / 2 : ℝ) ≤ f i ω ∧ f i ω ≤ 1 / 2)
+    (hmean : ∀ i, -(a / 100) ≤ (P i).expect (f i))
+    (hbad : ∀ i, (P i).pr (fun ω => 2 * b < |f i ω|) ≤ p)
+    (hp : 0 ≤ p) (hpSmall : p ≤ a / 100)
+    (hratio : n ^ u / n ^ r < 1 / 400000)
+    (huBig : 100 ≤ n ^ u)
+    (hscale : n * a ^ 2 / b ^ 2 = (1 / 4 : ℝ) * n ^ r) :
+    (FinProb.pi P).pr (fun ω => ∑ i, f i (ω i) < -(a / 20) * n) ≤
+      n * p + Real.exp (-n ^ u) := by
+  classical
+  letI : Nonempty ι := Fintype.card_pos_iff.mp (by exact_mod_cast hcardpos)
+  let clip : ℝ → ℝ := fun x => max (-2 * b) (min x (2 * b))
+  let X : ∀ i, Ω → ℝ := fun i ω => clip (f i ω)
+  let t : ℝ := (3 / 100 : ℝ) * a * n
+  have ht : 0 < t := by dsimp [t]; positivity
+  have hclipRange (i : ι) (ω : Ω) : -2 * b ≤ X i ω ∧ X i ω ≤ 2 * b := by
+    constructor
+    · exact le_max_left _ _
+    · exact max_le (by linarith [hb]) (min_le_right _ _)
+  have hclipEq (i : ι) (ω : Ω) (hgood : ¬ 2 * b < |f i ω|) : X i ω = f i ω := by
+    have habs0 : -(2 * b) ≤ f i ω ∧ f i ω ≤ 2 * b := abs_le.mp (le_of_not_gt hgood)
+    have habs : -2 * b ≤ f i ω ∧ f i ω ≤ 2 * b := by
+      constructor <;> nlinarith [habs0.1, habs0.2]
+    dsimp [X, clip]
+    rw [min_eq_left habs.2, max_eq_right habs.1]
+  have hclipMean (i : ι) : -(a / 50) ≤ (P i).expect (X i) := by
+    have hpoint (ω : Ω) :
+        f i ω - (if 2 * b < |f i ω| then 1 else 0) ≤ X i ω := by
+      by_cases hbadω : 2 * b < |f i ω|
+      · have hlow := (hclipRange i ω).1
+        have hhigh := (hraw i ω).2
+        have hhalf : -(1 / 2 : ℝ) ≤ -2 * b := by linarith [hclipB]
+        have hleft : f i ω - 1 ≤ -(1 / 2 : ℝ) := by linarith [hhigh]
+        have hval : f i ω - 1 ≤ X i ω := by
+          dsimp [X, clip]
+          exact le_trans (le_trans hleft hhalf) (le_max_left _ _)
+        simpa [hbadω] using hval
+      · simp [hbadω, hclipEq i ω hbadω]
+    have hmono := (P i).expect_mono hpoint
+    have hsub : (P i).expect (fun ω =>
+        f i ω - (if 2 * b < |f i ω| then 1 else 0)) =
+        (P i).expect (f i) - (P i).pr (fun ω => 2 * b < |f i ω|) := by
+      unfold FinProb.expect
+      have hI : (∑ ω, (P i).w ω *
+          (if 2 * b < |f i ω| then 1 else 0)) =
+          (P i).pr (fun ω => 2 * b < |f i ω|) := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro ω hω
+        by_cases hbadω : 2 * b < |f i ω| <;> simp [hbadω]
+      change (∑ ω, (P i).w ω *
+          (f i ω - (if 2 * b < |f i ω| then 1 else 0))) =
+        (∑ ω, (P i).w ω * f i ω) -
+          (P i).pr (fun ω => 2 * b < |f i ω|)
+      calc
+        (∑ ω, (P i).w ω *
+            (f i ω - (if 2 * b < |f i ω| then 1 else 0))) =
+            ∑ ω, ((P i).w ω * f i ω -
+              (P i).w ω * (if 2 * b < |f i ω| then 1 else 0)) := by
+          apply Finset.sum_congr rfl
+          intro ω hω
+          ring
+        _ = (∑ ω, (P i).w ω * f i ω) -
+            ∑ ω, (P i).w ω * (if 2 * b < |f i ω| then 1 else 0) :=
+          by rw [Finset.sum_sub_distrib]
+        _ = (∑ ω, (P i).w ω * f i ω) -
+            (P i).pr (fun ω => 2 * b < |f i ω|) := by rw [hI]
+    calc
+      -(a / 50) = -(a / 100) - a / 100 := by ring
+      _ ≤ (P i).expect (f i) - (P i).pr (fun ω => 2 * b < |f i ω|) := by
+        have := hbad i
+        linarith [hmean i]
+      _ = (P i).expect (fun ω =>
+          f i ω - (if 2 * b < |f i ω| then 1 else 0)) := hsub.symm
+      _ ≤ (P i).expect (X i) := hmono
+  have hwidthEq : (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) =
+      (Fintype.card ι : ℝ) * (4 * b) ^ 2 := by
+    simp [Finset.sum_const, nsmul_eq_mul]
+    ring
+  have hwidth : 0 < ∑ i : ι, ((2 * b) - (-2 * b)) ^ 2 := by
+    rw [hwidthEq]
+    positivity
+  have htailConc := xChernoff P X (fun _ => -2 * b) (fun _ => 2 * b)
+    (fun i ω => hclipRange i ω) hwidth t ht
+  have hdenUpper : (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) ≤ 16 * n * b ^ 2 := by
+    rw [hwidthEq]
+    calc
+      (Fintype.card ι : ℝ) * (4 * b) ^ 2 ≤ n * (4 * b) ^ 2 :=
+        mul_le_mul_of_nonneg_right hcard (sq_nonneg _)
+      _ = 16 * n * b ^ 2 := by ring
+  have hnPowPos : 0 < n ^ r := Real.rpow_pos_of_pos hn r
+  have hratio' : n ^ u < (1 / 400000 : ℝ) * n ^ r :=
+    (div_lt_iff₀ hnPowPos).mp hratio
+  have hexpConst : 10 * n ^ u < (9 / 320000 : ℝ) * n ^ r := by
+    nlinarith [hratio']
+  have htNum : 0 < 2 * t ^ 2 := by positivity
+  have hdenPos : 0 < 16 * n * b ^ 2 := by positivity
+  have hquotAux : 2 * t ^ 2 / (16 * n * b ^ 2) =
+      (9 / 80000 : ℝ) * (n * a ^ 2 / b ^ 2) := by
+    dsimp [t]
+    field_simp [ne_of_gt hn, ne_of_gt hb]
+    ring
+  have hquot : 2 * t ^ 2 / (16 * n * b ^ 2) =
+      (9 / 320000 : ℝ) * n ^ r := by
+    rw [hquotAux, hscale]
+    ring
+  have hdenCmp : 2 * t ^ 2 / (16 * n * b ^ 2) ≤
+      2 * t ^ 2 / (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) := by
+    rw [div_le_div_iff₀ hdenPos hwidth]
+    exact mul_le_mul_of_nonneg_left hdenUpper (le_of_lt htNum)
+  have hexpBound : 10 * n ^ u ≤
+      2 * t ^ 2 / (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) := by
+    calc
+      10 * n ^ u ≤ (9 / 320000 : ℝ) * n ^ r := le_of_lt hexpConst
+      _ = 2 * t ^ 2 / (16 * n * b ^ 2) := hquot.symm
+      _ ≤ 2 * t ^ 2 / (∑ i, ((2 * b) - (-2 * b)) ^ 2) := hdenCmp
+  have hconcSmall : (FinProb.pi P).pr (fun ω =>
+      t ≤ |(∑ i, X i (ω i)) - ∑ i, (P i).expect (X i)|) ≤ Real.exp (-n ^ u) := by
+    calc
+      _ ≤ 2 * Real.exp (-2 * t ^ 2 /
+          ∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) := htailConc
+      _ ≤ 2 * Real.exp (-10 * n ^ u) := by
+        apply mul_le_mul_of_nonneg_left _ (by norm_num)
+        apply Real.exp_le_exp.mpr
+        have hneg : (-2 * t ^ 2) /
+            (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) ≤ -(10 * n ^ u) := by
+          have heq : (-2 * t ^ 2) /
+              (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2) =
+              -(2 * t ^ 2 /
+                (∑ i : ι, ((2 * b) - (-2 * b)) ^ 2)) := by ring
+          rw [heq]
+          exact neg_le_neg hexpBound
+        nlinarith [hneg]
+      _ ≤ Real.exp (-n ^ u) := by
+        have hlog2 : Real.log 2 ≤ 1 := by linarith [Real.log_two_lt_d9]
+        have hfactor : 2 * Real.exp (-10 * n ^ u) =
+            Real.exp (Real.log 2 - 10 * n ^ u) := by
+          calc
+            2 * Real.exp (-10 * n ^ u) = Real.exp (Real.log 2) *
+                Real.exp (-10 * n ^ u) := by rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+            _ = Real.exp (Real.log 2 + (-10 * n ^ u)) := (Real.exp_add _ _).symm
+            _ = Real.exp (Real.log 2 - 10 * n ^ u) := by congr 1 <;> ring
+        rw [hfactor]
+        apply Real.exp_le_exp.mpr
+        nlinarith [hlog2, huBig]
+  let anyBad : (∀ i, Ω) → Prop := fun ω => ∃ i ∈ Finset.univ, 2 * b < |f i (ω i)|
+  let tailEvent : (∀ i, Ω) → Prop := fun ω => ∑ i, f i (ω i) < -(a / 20) * n
+  let concEvent : (∀ i, Ω) → Prop := fun ω =>
+    t ≤ |(∑ i, X i (ω i)) - ∑ i, (P i).expect (X i)|
+  have hanyBad : (FinProb.pi P).pr anyBad ≤ n * p := by
+    have hunion := finProb_pr_biUnion_le_sum_q_s09_tag (FinProb.pi P)
+      (fun i ω => 2 * b < |f i (ω i)|) Finset.univ
+    have hcoord (i : ι) :
+        (FinProb.pi P).pr (fun ω => 2 * b < |f i (ω i)|) ≤ p := by
+      calc
+        (FinProb.pi P).pr (fun ω => 2 * b < |f i (ω i)|) =
+            (P i).pr (fun x => 2 * b < |f i x|) :=
+          pi_coord_pr_q_s09_tag P i (fun x => 2 * b < |f i x|)
+        _ ≤ p := hbad i
+    have hsum : (∑ i ∈ Finset.univ, (FinProb.pi P).pr
+        (fun ω => 2 * b < |f i (ω i)|)) ≤ (Fintype.card ι : ℝ) * p := by
+      calc
+        _ ≤ ∑ i ∈ Finset.univ, p := by
+          apply Finset.sum_le_sum
+          intro i hi
+          exact hcoord i
+        _ = (Fintype.card ι : ℝ) * p := by simp [nsmul_eq_mul]
+    have hcardmul := mul_le_mul_of_nonneg_right hcard hp
+    change (FinProb.pi P).pr anyBad ≤ n * p
+    calc
+      (FinProb.pi P).pr anyBad =
+          (FinProb.pi P).pr (fun ω => ∃ i ∈ Finset.univ, 2 * b < |f i (ω i)|) := rfl
+      _ ≤ ∑ i ∈ Finset.univ, (FinProb.pi P).pr
+          (fun ω => 2 * b < |f i (ω i)|) := hunion
+      _ ≤ (Fintype.card ι : ℝ) * p := hsum
+      _ ≤ n * p := hcardmul
+  have hsubset (ω : ∀ i, Ω) : tailEvent ω → anyBad ω ∨ concEvent ω := by
+    intro htail
+    change (∑ i, f i (ω i)) < -(a / 20) * n at htail
+    by_cases hbadω : anyBad ω
+    · exact Or.inl hbadω
+    · have hclipEqAll : ∀ i, X i (ω i) = f i (ω i) := by
+        intro i
+        apply hclipEq
+        intro hcoord
+        exact hbadω ⟨i, Finset.mem_univ i, hcoord⟩
+      have hsumEq : (∑ i, X i (ω i)) = ∑ i, f i (ω i) := by
+        apply Finset.sum_congr rfl
+        intro i hi
+        exact hclipEqAll i
+      have hmeanSum : -(a / 50) * (Fintype.card ι : ℝ) ≤
+          ∑ i, (P i).expect (X i) := by
+        calc
+          -(a / 50) * (Fintype.card ι : ℝ) = ∑ i : ι, -(a / 50) := by
+            simp [Finset.sum_const, nsmul_eq_mul]
+            ring
+          _ ≤ ∑ i, (P i).expect (X i) := by
+            apply Finset.sum_le_sum
+            intro i hi
+            exact hclipMean i
+      have hmeanN : -(a / 50) * n ≤ ∑ i, (P i).expect (X i) := by
+        exact le_trans (mul_le_mul_of_nonpos_left hcard (by linarith [ha])) hmeanSum
+      have hgapVal : t ≤ (∑ i, (P i).expect (X i)) - ∑ i, f i (ω i) := by
+        calc
+          t = (a / 20) * n - (a / 50) * n := by dsimp [t]; ring
+          _ ≤ (∑ i, (P i).expect (X i)) - ∑ i, f i (ω i) := by
+            linarith [htail, hmeanN]
+      have hbelow : (∑ i, X i (ω i)) - ∑ i, (P i).expect (X i) < 0 := by
+        rw [hsumEq]
+        have hpos : 0 < (∑ i, (P i).expect (X i)) - ∑ i, f i (ω i) :=
+          lt_of_lt_of_le ht hgapVal
+        linarith
+      have hgap : t ≤ -((∑ i, X i (ω i)) - ∑ i, (P i).expect (X i)) := by
+        rw [hsumEq]
+        linarith [hgapVal]
+      right
+      change t ≤ |(∑ i, X i (ω i)) - ∑ i, (P i).expect (X i)|
+      rw [abs_of_neg hbelow]
+      exact hgap
+  have htailPr : (FinProb.pi P).pr tailEvent ≤
+      (FinProb.pi P).pr anyBad + (FinProb.pi P).pr concEvent := by
+    calc
+      (FinProb.pi P).pr tailEvent ≤ (FinProb.pi P).pr (fun ω => anyBad ω ∨ concEvent ω) :=
+        FinProb.pr_mono _ _ _ hsubset
+      _ ≤ (FinProb.pi P).pr anyBad + (FinProb.pi P).pr concEvent :=
+        FinProb.pr_union_le _ _ _
+  calc
+    (FinProb.pi P).pr (fun ω => ∑ i, f i (ω i) < -(a / 20) * n) =
+        (FinProb.pi P).pr tailEvent := by rfl
+    _ ≤ (FinProb.pi P).pr anyBad + (FinProb.pi P).pr concEvent := htailPr
+    _ ≤ n * p + Real.exp (-n ^ u) := by
+      apply add_le_add hanyBad
+      simpa [concEvent] using hconcSmall
+
+theorem broad_low_degree_mass_q_s09_tag {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    {μ ν : Law N} {G : Colour} (wX wY err base δ q : ℝ)
+    (hDisc : DiscOne E X Y wX wY err)
+    (hμsupp : μ.SupportedIn X) (hνsupp : ν.SupportedIn Y)
+    (hμwidth : μ.WidthLE base) (hνwidth : ν.WidthLE wY)
+    (hbudget : base + q ≤ wX) (herr : err < δ) (hδ : 0 < δ) :
+    μ.pr (fun x => rowDeg E G x ν ≤ 1 / 2 - δ) ≤ Real.exp (-q) := by
+  classical
+  let A : Finset (Fin N) := Finset.univ.filter fun x => rowDeg E G x ν ≤ 1 / 2 - δ
+  by_contra hnot
+  have hmassExp : Real.exp (-q) < μ.pr (fun x => rowDeg E G x ν ≤ 1 / 2 - δ) := lt_of_not_ge hnot
+  have hmass_eq : μ.pr (fun x => rowDeg E G x ν ≤ 1 / 2 - δ) = ∑ x ∈ A, μ.w x := by
+    simp [FinProb.pr, A, Finset.sum_filter]
+  have hmass : 0 < ∑ x ∈ A, μ.w x := by
+    rw [← hmass_eq]
+    exact lt_trans (Real.exp_pos _) hmassExp
+  have hlogmass : -q < Real.log (∑ x ∈ A, μ.w x) := by
+    rw [hmass_eq] at hmassExp
+    have h := Real.log_lt_log (Real.exp_pos (-q)) hmassExp
+    simpa [Real.log_exp] using h
+  let μ' := Law.restrict μ A hmass
+  have hμ'supp : μ'.SupportedIn X := by
+    intro x hx
+    by_cases hA : x ∈ A
+    · simp [μ', Law.restrict, hA, hμsupp x hx]
+    · simp [μ', Law.restrict, hA]
+  have hwidth' : μ'.WidthLE wX := by
+    intro x
+    have hwidth := Law.WidthLE.restrict hμwidth hmass x
+    have hbudget' : base - Real.log (∑ x ∈ A, μ.w x) ≤ wX := by linarith
+    exact le_trans hwidth (div_le_div_of_nonneg_right
+      (Real.exp_le_exp.mpr hbudget') (by positivity))
+  have hrowBound (x : Fin N) :
+      rowDeg E G x ν ≤ if x ∈ A then 1 / 2 - δ else rowDeg E G x ν := by
+    by_cases hx : x ∈ A
+    · have hx' : x ∈ Finset.univ.filter fun x => rowDeg E G x ν ≤ 1 / 2 - δ := by
+        simpa [A] using hx
+      simpa [hx] using (Finset.mem_filter.mp hx').2
+    · simp [hx]
+  have houtside (x : Fin N) (hx : x ∉ A) : μ'.w x = 0 := by
+    simp [μ', Law.restrict, hx]
+  have hupper : μ'.expect (fun x => rowDeg E G x ν) ≤ 1 / 2 - δ := by
+    calc
+      μ'.expect (fun x => rowDeg E G x ν) ≤
+          μ'.expect (fun x => if x ∈ A then 1 / 2 - δ else rowDeg E G x ν) :=
+        μ'.expect_mono hrowBound
+      _ = 1 / 2 - δ := by
+        unfold FinProb.expect
+        calc
+          (∑ x, μ'.w x * (if x ∈ A then 1 / 2 - δ else rowDeg E G x ν)) =
+              ∑ x, μ'.w x * (1 / 2 - δ) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            by_cases hmem : x ∈ A
+            · simp [hmem]
+            · simp [hmem, houtside x hmem]
+          _ = 1 / 2 - δ := by rw [← Finset.sum_mul, μ'.sum_eq_one]; ring
+  have hdisc := hDisc μ' ν hμ'supp hνsupp hwidth' hνwidth G
+  have hlow : 1 / 2 - err ≤ μ'.expect (fun x => rowDeg E G x ν) := by
+    have habs := (abs_le.mp hdisc).1
+    rw [dens_eq_expect_rowDeg_q_s09_tag] at habs
+    linarith
+  linarith [hlow]
 
 theorem cond_product_tuple_expect_q_s09_tag {V Ω I : Type} [Fintype V] [DecidableEq V]
     [Fintype Ω] [DecidableEq Ω] [Fintype I] [DecidableEq I]

@@ -17,6 +17,7 @@ namespace HypercubeRamsey
 open OAI.HypercubeRamsey Classical
 open scoped BigOperators
 
+set_option maxHeartbeats 0 in
 /-- P9.2-tags(ii) (09:128–134): the raw probability of a tag event is exponentially small.  For a fixed `z`,
 draw `w ∼ μ_{i_z}`: the broad test (`BroadAt`, the tag-average second law has width `log(8/κ) = O(1)`) gives
 degree `1/2 ± o(a_*)` into the tag-average second law outside first-law mass `e^{-Ω(n^u)}`, and deep
@@ -32,17 +33,654 @@ theorem p92_tag_bad_prob (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ) 
         (FinProb.pi (fun _ : CubeVertex (P.m n) => tagMixLaw9 M)).pr
           (fun tag => tagBad9 (P := P) E G c tag z) ≤ P.tail c' n := by
   classical
-  refine ⟨1, by norm_num, 1, by norm_num, 0, ?_⟩
-  intro n hn N E X Y G M hN hprep hdeep hbroad z
   cases hcase : P.case with
   | sub yS yD yM =>
-      have ht : 0 ≤ P.tail 1 n := by
+      refine ⟨1 / 100, by norm_num, 1 / 100, by norm_num, 0, ?_⟩
+      intro n hn N E X Y G M hN hprep hdeep hbroad z
+      have ht : 0 ≤ P.tail (1 / 100) n := by
         rw [Params9.tail]
         exact Real.exp_nonneg _
       simpa [tagBad9, hcase, FinProb.pr] using ht
   | lin αS αD hB yB =>
-      -- The linear case needs the broad-test degree estimate and conditional Hoeffding argument.
-      sorry
+      have hlin : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+          P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+        simpa [hcase] using hP.2.2.2.2.2.2
+      obtain ⟨h100, hgapα, hαsmall, hσχ, hplusB, hB1, hyB, hyB1⟩ := hlin
+      obtain ⟨hScaleExps, nScale, hScales⟩ := scales_eventually9 P hP
+      let D₀ : ℝ := 8 / κ
+      let r : ℝ := 1 - 2 * ((P.hPlus : ℝ) - (P.hMinus : ℝ))
+      have hD₀pos : 0 < D₀ := by dsimp [D₀]; positivity
+      have hu : 0 < P.u := hScaleExps.2.2.1
+      have hxS : 0 < (P.xS : ℝ) := by exact_mod_cast hP.1.1
+      have hMinusPos : (0 : ℝ) < (P.hMinus : ℝ) := by exact_mod_cast hP.2.1.1
+      have hMinusPlus : (P.hMinus : ℝ) < (P.hPlus : ℝ) := by exact_mod_cast hP.2.1.2.1
+      have hPlus : 0 < (P.hPlus : ℝ) := lt_trans hMinusPos hMinusPlus
+      have hPlusLt1 : (P.hPlus : ℝ) < 1 := by exact_mod_cast hP.2.1.2.2
+      have hBcast : (P.hPlus : ℝ) < (hB : ℝ) := by exact_mod_cast hplusB
+      have hyBcast : 0 < (yB : ℝ) := by exact_mod_cast hyB
+      have hgapHM : (P.hPlus : ℝ) - (P.hMinus : ℝ) < (P.χ : ℝ) / 10 := by
+        exact_mod_cast hP.2.2.2.2.2.1
+      have hχSmall : (P.χ : ℝ) < P.u / 50 := hScaleExps.2.2.2.2
+      have huSmall : P.u < 1 / 20 := by
+        rw [Params9.u]
+        have hxsxd : (P.xS : ℝ) < (P.xD : ℝ) := by exact_mod_cast hP.1.2.1
+        have hxdQ : P.xD < (1 : ℚ) / 10 := hP.1.2.2
+        have hxdCast : (P.xD : ℝ) < ((((1 : ℚ) / 10 : ℚ) : ℝ)) := by exact_mod_cast hxdQ
+        have hxd : (P.xD : ℝ) < (1 : ℝ) / 10 := by norm_num at hxdCast ⊢; exact hxdCast
+        linarith
+      have hrU : P.u < r := by
+        dsimp [r]
+        nlinarith [hgapHM, hχSmall, huSmall]
+      have hWμlim : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (P.xS : ℝ)) Filter.atTop Filter.atTop :=
+        (tendsto_rpow_atTop hxS).comp tendsto_natCast_atTop_atTop
+      have hWμevent := hWμlim.eventually_ge_atTop (Real.log D₀)
+      obtain ⟨nWμ, hnWμ⟩ := Filter.eventually_atTop.mp hWμevent
+      have hYlim : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (yB : ℝ)) Filter.atTop Filter.atTop :=
+        (tendsto_rpow_atTop hyBcast).comp tendsto_natCast_atTop_atTop
+      have hYevent := hYlim.eventually_ge_atTop (Real.log D₀)
+      obtain ⟨nY, hnY⟩ := Filter.eventually_atTop.mp hYevent
+      have hErrLim := Lane_q_s09_tag.rpow_ratio_tendsto (-(hB : ℝ))
+        (-(P.hPlus : ℝ)) (by linarith)
+      have hErrevent : ∀ᶠ n : ℕ in Filter.atTop,
+          (n : ℝ) ^ (-(hB : ℝ)) / (n : ℝ) ^ (-(P.hPlus : ℝ)) < 1 / 200 :=
+        hErrLim.eventually (Iio_mem_nhds (by norm_num))
+      obtain ⟨nErr, hnErr⟩ := Filter.eventually_atTop.mp hErrevent
+      have hExpSquare := Lane_q_s09_tag.expTail_square_tendsto P hP (1 / 4) (by norm_num)
+      have hClipEvent : ∀ᶠ n : ℕ in Filter.atTop,
+          (n : ℝ) ^ 2 * P.tail (1 / 4) n < 1 / 200 :=
+        hExpSquare.eventually (Iio_mem_nhds (by norm_num))
+      obtain ⟨nClip, hnClip⟩ := Filter.eventually_atTop.mp hClipEvent
+      have hLogLim : Filter.Tendsto (fun n : ℕ => Real.log (n : ℝ) / (n : ℝ) ^ P.u)
+          Filter.atTop (nhds 0) :=
+        ((isLittleO_log_rpow_atTop hu).tendsto_div_nhds_zero).comp
+          tendsto_natCast_atTop_atTop
+      have hLogEvent : ∀ᶠ n : ℕ in Filter.atTop,
+          Real.log (n : ℝ) / (n : ℝ) ^ P.u < 1 / 8 :=
+        hLogLim.eventually (Iio_mem_nhds (by norm_num))
+      obtain ⟨nLog, hnLog⟩ := Filter.eventually_atTop.mp hLogEvent
+      have hConcLim := Lane_q_s09_tag.rpow_ratio_tendsto P.u r hrU
+      have hConcEvent : ∀ᶠ n : ℕ in Filter.atTop,
+          (n : ℝ) ^ P.u / (n : ℝ) ^ r < 1 / 400000 :=
+        hConcLim.eventually (Iio_mem_nhds (by norm_num))
+      obtain ⟨nConc, hnConc⟩ := Filter.eventually_atTop.mp hConcEvent
+      have hUlim : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ P.u) Filter.atTop Filter.atTop :=
+        (tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop
+      obtain ⟨nBig, hnBig⟩ := Filter.eventually_atTop.mp
+        (hUlim.eventually_ge_atTop (100 : ℝ))
+      let n₀ := max nScale (max nWμ (max nY (max nErr (max nClip (max nLog (max nConc nBig))))))
+      refine ⟨1 / 100, by norm_num, 1 / 100, by norm_num, n₀, ?_⟩
+      intro n hn N E X Y G M hN hprep hdeep hbroad z
+      have hnBounds :
+          nScale ≤ n ∧ nWμ ≤ n ∧ nY ≤ n ∧ nErr ≤ n ∧ nClip ≤ n ∧ nLog ≤ n ∧
+            nConc ≤ n ∧ nBig ≤ n := by
+        simp only [n₀, Nat.max_le] at hn
+        rcases hn with ⟨hnScale, hnWμ, hnY, hnErr, hnClip, hnLog, hnConc, hnBig⟩
+        exact ⟨hnScale, hnWμ, hnY, hnErr, hnClip, hnLog, hnConc, hnBig⟩
+      rcases hnBounds with ⟨hnScaleN, hnWμN, hnYN, hnErrN, hnClipN, hnLogN, hnConcN, hnBigN⟩
+      have hscale := hScales n hnScaleN
+      have hnRpos : 0 < (n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 1) hscale.1)
+      have hnRone : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hscale.1
+      have hlognNonneg : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hnRone
+      let Wμn : ℝ := (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1
+      have hWμ : Real.log D₀ ≤ Wμn := by
+        have hp := hnWμ n hnWμN
+        dsimp [Wμn]
+        nlinarith [hlognNonneg, hPlus]
+      have hYwidth : Real.log D₀ ≤ (n : ℝ) ^ (yB : ℝ) := hnY n hnYN
+      have hrpos : 0 < r := by dsimp [r]; linarith [hPlusLt1]
+      have hErrRat := hnErr n hnErrN
+      have hErrDen : 0 < (n : ℝ) ^ (-(P.hPlus : ℝ)) := Real.rpow_pos_of_pos hnRpos _
+      have hErrNum : (n : ℝ) ^ (-(hB : ℝ)) <
+          (1 / 200 : ℝ) * (n : ℝ) ^ (-(P.hPlus : ℝ)) :=
+        (div_lt_iff₀ hErrDen).mp hErrRat
+      have hErrSmall : (n : ℝ) ^ (-(hB : ℝ)) < P.aStar n / 100 := by
+        calc
+          (n : ℝ) ^ (-(hB : ℝ)) < (1 / 200 : ℝ) * (n : ℝ) ^ (-(P.hPlus : ℝ)) := hErrNum
+          _ = P.aStar n / 100 := by dsimp [Params9.aStar]; ring
+      have hClipEvent := hnClip n hnClipN
+      have hplusLe2 : (P.hPlus : ℝ) ≤ 2 := by linarith [hPlusLt1]
+      have hpowPlusR : (n : ℝ) ^ (P.hPlus : ℝ) ≤ (n : ℝ) ^ (2 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnRone hplusLe2
+      have hpowPlus : (n : ℝ) ^ (P.hPlus : ℝ) ≤ (n : ℝ) ^ 2 := by
+        calc
+          (n : ℝ) ^ (P.hPlus : ℝ) ≤ (n : ℝ) ^ (2 : ℝ) := hpowPlusR
+          _ = (n : ℝ) ^ 2 := Real.rpow_natCast (n : ℝ) 2
+      have htailNonneg : 0 ≤ P.tail (1 / 4) n := by
+        rw [Params9.tail]
+        exact Real.exp_nonneg _
+      have hclipProd : (n : ℝ) ^ (P.hPlus : ℝ) * P.tail (1 / 4) n < 1 / 200 := by
+        calc
+          (n : ℝ) ^ (P.hPlus : ℝ) * P.tail (1 / 4) n ≤
+              (n : ℝ) ^ 2 * P.tail (1 / 4) n :=
+            mul_le_mul_of_nonneg_right hpowPlus htailNonneg
+          _ < 1 / 200 := hClipEvent
+      have hclipByAst : P.tail (1 / 4) n ≤ P.aStar n / 100 := by
+        have hpowPos : 0 < (n : ℝ) ^ (P.hPlus : ℝ) := Real.rpow_pos_of_pos hnRpos _
+        have hclipProd' : P.tail (1 / 4) n * (n : ℝ) ^ (P.hPlus : ℝ) < 1 / 200 := by
+          calc
+            P.tail (1 / 4) n * (n : ℝ) ^ (P.hPlus : ℝ) =
+                (n : ℝ) ^ (P.hPlus : ℝ) * P.tail (1 / 4) n := by ring
+            _ < 1 / 200 := hclipProd
+        have hdiv : P.tail (1 / 4) n < (1 / 200 : ℝ) /
+            (n : ℝ) ^ (P.hPlus : ℝ) :=
+          (lt_div_iff₀ hpowPos).2 hclipProd'
+        have hneg : (n : ℝ) ^ (-(P.hPlus : ℝ)) =
+            ((n : ℝ) ^ (P.hPlus : ℝ))⁻¹ := by rw [Real.rpow_neg hnRpos.le]
+        have hclipStrict : P.tail (1 / 4) n < P.aStar n / 100 := calc
+          P.tail (1 / 4) n < (1 / 200 : ℝ) /
+              (n : ℝ) ^ (P.hPlus : ℝ) := hdiv
+          _ = P.aStar n / 100 := by rw [Params9.aStar, hneg]; ring
+        exact hclipStrict.le
+      have hLogRatio := hnLog n hnLogN
+      have hLogN : Real.log (n : ℝ) < (n : ℝ) ^ P.u / 8 := by
+        have h := (div_lt_iff₀ (Real.rpow_pos_of_pos hnRpos P.u)).mp hLogRatio
+        nlinarith
+      have hConcRatio := hnConc n hnConcN
+      have hUbig := hnBig n hnBigN
+      let tagLaw : FinProb M.ι := tagMixLaw9 M
+      let μbar : Law N := Law.mix tagLaw M.μ
+      let νbar : Law N := Law.mix tagLaw M.ν
+      have hNreal : 0 < (N : ℝ) := by exact_mod_cast hN
+      have hμbarSupp : μbar.SupportedIn X := by
+        intro w hw
+        change (∑ i, M.Λ i * (M.μ i).w w) = 0
+        apply Finset.sum_eq_zero
+        intro i hi
+        by_cases hweight0 : M.Λ i = 0
+        · simp [hweight0]
+        · have hweightpos : 0 < M.Λ i := lt_of_le_of_ne (M.Λ_nonneg i) (Ne.symm hweight0)
+          have hzero := (hprep.2 i hweightpos).1 w hw
+          simp [hzero]
+      have hνbarSupp : νbar.SupportedIn Y := by
+        intro w hw
+        change (∑ i, M.Λ i * (M.ν i).w w) = 0
+        apply Finset.sum_eq_zero
+        intro i hi
+        by_cases hweight0 : M.Λ i = 0
+        · simp [hweight0]
+        · have hweightpos : 0 < M.Λ i := lt_of_le_of_ne (M.Λ_nonneg i) (Ne.symm hweight0)
+          have hzero := (hprep.2 i hweightpos).2.1 w hw
+          simp [hzero]
+      have hμbarWidth : μbar.WidthLE (Real.log D₀) := by
+        intro y
+        change (∑ i, M.Λ i * (M.μ i).w y) ≤ Real.exp (Real.log D₀) / N
+        rw [Real.exp_log hD₀pos]
+        exact (le_div_iff₀ hNreal).2 (by simpa [D₀, mul_comm] using hprep.1.1 y)
+      have hνbarWidth : νbar.WidthLE (Real.log D₀) := by
+        intro y
+        change (∑ i, M.Λ i * (M.ν i).w y) ≤ Real.exp (Real.log D₀) / N
+        rw [Real.exp_log hD₀pos]
+        exact (le_div_iff₀ hNreal).2 (by simpa [D₀, mul_comm] using hprep.1.2 y)
+      have hνbarBroadWidth : νbar.WidthLE ((n : ℝ) ^ (yB : ℝ)) := by
+        intro y
+        exact le_trans (hνbarWidth y)
+          (div_le_div_of_nonneg_right (Real.exp_le_exp.mpr hYwidth) (Nat.cast_nonneg N))
+      have hdeepBudget :
+          (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 +
+            (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        hscale.2.2.2.2.2.1
+      have hχpos : 0 < (P.χ : ℝ) := by exact_mod_cast hP.2.2.2.2.1.1
+      have hpowMargin : (n : ℝ) ^ P.u / 4 ≤
+          (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) := by
+        have hpow := Real.rpow_le_rpow_of_exponent_le hnRone
+          (by linarith [hχpos] : P.u ≤ P.u + 8 * (P.χ : ℝ))
+        nlinarith [hpow, Real.rpow_nonneg (Nat.cast_nonneg n) P.u]
+      have hlowBudget : Real.log D₀ + (n : ℝ) ^ P.u / 4 ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+        have hsum := add_le_add hWμ hpowMargin
+        dsimp [Wμn] at hsum
+        exact hsum.trans hdeepBudget
+      have hbroad : DiscOne E X Y ((n : ℝ) ^ (P.xD : ℝ)) ((n : ℝ) ^ (yB : ℝ))
+          ((n : ℝ) ^ (-(hB : ℝ))) := by
+        simpa [Params9.BroadAt, hcase] using hbroad
+      have hδpos : 0 < P.aStar n / 100 := by
+        unfold Params9.aStar
+        positivity
+      have hLowMass := Lane_q_s09_tag.broad_low_degree_mass_q_s09_tag (G := G)
+        ((n : ℝ) ^ (P.xD : ℝ)) ((n : ℝ) ^ (yB : ℝ)) ((n : ℝ) ^ (-(hB : ℝ)))
+        (Real.log D₀) (P.aStar n / 100) ((n : ℝ) ^ P.u / 4)
+        hbroad hμbarSupp hνbarSupp hμbarWidth hνbarBroadWidth hlowBudget hErrSmall hδpos
+      have hαLe : (αS : ℝ) ≤ (αD : ℝ) := by
+        have hα : (100 : ℝ) * (αS : ℝ) < (αD : ℝ) := by exact_mod_cast hgapα
+        have h100R : (0 : ℝ) < 100 * (αS : ℝ) := by exact_mod_cast h100
+        have hαSsmall : (αS : ℝ) < 100 * (αS : ℝ) := by linarith [h100R]
+        exact le_of_lt (lt_trans hαSsmall hα)
+      have hSsLeSd : P.Ss (n : ℝ) ≤ P.Sd (n : ℝ) := by
+        simp [Params9.Ss, Params9.Sd, hcase]
+        exact mul_le_mul_of_nonneg_right hαLe (Nat.cast_nonneg n)
+      have hbarDeepWidth : (Real.log D₀) ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+        have hpos : 0 ≤ (n : ℝ) ^ P.u / 4 := by positivity
+        exact le_trans (le_add_of_nonneg_right hpos) hlowBudget
+      let qBad : Fin N → ℝ := fun w =>
+        tagLaw.pr (fun i => 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2|)
+      let epsDeep : ℝ := 2 * Real.exp (Real.log D₀ - (n : ℝ) ^ (P.xD : ℝ))
+      have hqNonneg (w : Fin N) : 0 ≤ qBad w := by
+        dsimp [qBad]
+        unfold FinProb.pr
+        apply Finset.sum_nonneg
+        intro i hi
+        split_ifs
+        · exact tagLaw.nonneg i
+        · exact le_rfl
+      have hdeepPair (i : M.ι) (hi : 0 < M.Λ i) :
+          (∑ w ∈ Finset.univ.filter
+            (fun w => 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2|), μbar.w w) ≤ epsDeep := by
+        rcases hprep.2 i hi with ⟨hμsupp, hνsupp, _, hνwidth, _⟩
+        have hνwidth' : (M.ν i).WidthLE (P.Sd (n : ℝ)) :=
+          Law.WidthLE.mono hνwidth hSsLeSd
+        have hDeep := deep_forward9 hdeep G (M.ν i) hνsupp hνwidth' μbar
+          hμbarSupp (Real.log D₀) hμbarWidth hbarDeepWidth
+        simpa [epsDeep, FinProb.pr, Finset.sum_filter] using hDeep
+      have hqMean : μbar.expect qBad ≤ epsDeep := by
+        dsimp [qBad]
+        unfold FinProb.expect
+        change (∑ w, μbar.w w *
+          ∑ i, if 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| then tagLaw.w i else 0) ≤ epsDeep
+        calc
+          (∑ w, μbar.w w *
+              ∑ i, if 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| then tagLaw.w i else 0) =
+              ∑ i, tagLaw.w i *
+                ∑ w, if 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| then μbar.w w else 0 := by
+            calc
+              _ = ∑ w, ∑ i, μbar.w w *
+                  (if 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| then tagLaw.w i else 0) := by
+                apply Finset.sum_congr rfl
+                intro w hw
+                rw [Finset.mul_sum]
+              _ = ∑ i, ∑ w, μbar.w w *
+                  (if 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| then tagLaw.w i else 0) :=
+                Finset.sum_comm
+              _ = ∑ i, tagLaw.w i *
+                  ∑ w, if 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| then μbar.w w else 0 := by
+                apply Finset.sum_congr rfl
+                intro i hi
+                rw [Finset.mul_sum]
+                apply Finset.sum_congr rfl
+                intro w hw
+                by_cases hb : 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2| <;> simp [hb] <;> ring
+          _ ≤ ∑ i, tagLaw.w i * epsDeep := by
+            apply Finset.sum_le_sum
+            intro i hi
+            by_cases hzero : tagLaw.w i = 0
+            · simp [hzero]
+            · have hiPos : 0 < M.Λ i := by
+                have hnotzero : M.Λ i ≠ 0 := by simpa [tagMixLaw9, tagLaw] using hzero
+                exact lt_of_le_of_ne (M.Λ_nonneg i) (Ne.symm hnotzero)
+              have h := hdeepPair i hiPos
+              have hprob : μbar.pr
+                  (fun w => 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2|) ≤ epsDeep := by
+                simpa [FinProb.pr, Finset.sum_filter] using h
+              have hmul := mul_le_mul_of_nonneg_left hprob (tagLaw.nonneg i)
+              simpa [FinProb.pr, tagMixLaw9, tagLaw, Finset.mul_sum] using hmul
+          _ = epsDeep := by
+            rw [← Finset.sum_mul, tagLaw.sum_eq_one]
+            ring
+      let p₀ : ℝ := Real.exp (-(n : ℝ) ^ P.u / 4)
+      have hp₀ : 0 < p₀ := by dsimp [p₀]; positivity
+      have hscaleDeepMargin :
+          (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 +
+            (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        hscale.2.2.2.2.2.1
+      have hpowDeep : (n : ℝ) ^ P.u ≤
+          (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) := by
+        exact Real.rpow_le_rpow_of_exponent_le hnRone
+          (by linarith [hχpos] : P.u ≤ P.u + 8 * (P.χ : ℝ))
+      have hlogD0Deep : Real.log D₀ + (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+        have hsum := add_le_add hWμ hpowDeep
+        dsimp [Wμn] at hsum
+        linarith [hscaleDeepMargin]
+      have hdeepExp : epsDeep ≤ 2 * Real.exp (-(n : ℝ) ^ P.u) := by
+        change 2 * Real.exp (Real.log D₀ - (n : ℝ) ^ (P.xD : ℝ)) ≤
+          2 * Real.exp (-(n : ℝ) ^ P.u)
+        exact mul_le_mul_of_nonneg_left
+          (Real.exp_le_exp.mpr (by linarith [hlogD0Deep])) (by norm_num : 0 ≤ (2 : ℝ))
+      have hlog2 : Real.log 2 ≤ 1 := by
+        have := Real.log_two_lt_d9
+        linarith
+      have hgapExp : 2 * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) ≤
+          Real.exp (-((n : ℝ) ^ P.u) / 2) := by
+        have hquarter : 1 ≤ (n : ℝ) ^ P.u / 4 := by
+          have hq := div_le_div_of_nonneg_right hUbig (by norm_num : 0 ≤ (1 : ℝ) / 4)
+          norm_num at hq
+          linarith
+        have hlogQuarter : Real.log 2 ≤ (n : ℝ) ^ P.u / 4 := le_trans hlog2 hquarter
+        have hlog : Real.log 2 - 3 * ((n : ℝ) ^ P.u) / 4 ≤
+            -((n : ℝ) ^ P.u) / 2 := by
+          calc
+            Real.log 2 - 3 * ((n : ℝ) ^ P.u) / 4 ≤
+                ((n : ℝ) ^ P.u) / 4 - 3 * ((n : ℝ) ^ P.u) / 4 :=
+              sub_le_sub_right hlogQuarter _
+            _ = -((n : ℝ) ^ P.u) / 2 := by ring
+        have htwo : 2 * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) =
+            Real.exp (Real.log 2 - 3 * ((n : ℝ) ^ P.u) / 4) := by
+          calc
+            2 * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) =
+                Real.exp (Real.log 2) * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) := by
+              rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+            _ = Real.exp (Real.log 2 + (-3 * ((n : ℝ) ^ P.u) / 4)) :=
+              (Real.exp_add _ _).symm
+            _ = Real.exp (Real.log 2 - 3 * ((n : ℝ) ^ P.u) / 4) := by congr 1 <;> ring
+        calc
+          2 * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) =
+              Real.exp (Real.log 2 - 3 * ((n : ℝ) ^ P.u) / 4) := htwo
+          _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 2) := Real.exp_le_exp.mpr hlog
+      have hhighMass : μbar.pr (fun w => p₀ ≤ qBad w) ≤ Real.exp (-((n : ℝ) ^ P.u) / 2) := by
+        have hmarkov := FinProb.markov μbar qBad p₀ hqNonneg hp₀
+        have hratio : epsDeep / p₀ ≤ Real.exp (-((n : ℝ) ^ P.u) / 2) := by
+          calc
+            epsDeep / p₀ ≤
+                (2 * Real.exp (-(n : ℝ) ^ P.u)) / p₀ :=
+              div_le_div_of_nonneg_right hdeepExp (le_of_lt hp₀)
+            _ = 2 * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) := by
+              dsimp [p₀]
+              calc
+                (2 * Real.exp (-(n : ℝ) ^ P.u)) / Real.exp (-((n : ℝ) ^ P.u) / 4) =
+                    2 * (Real.exp (-(n : ℝ) ^ P.u) /
+                      Real.exp (-((n : ℝ) ^ P.u) / 4)) := by ring
+                _ = 2 * Real.exp (-(n : ℝ) ^ P.u - (-(n : ℝ) ^ P.u / 4)) := by
+                  rw [← Real.exp_sub]
+                _ = 2 * Real.exp (-3 * ((n : ℝ) ^ P.u) / 4) := by congr 1 <;> ring
+            _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 2) := hgapExp
+        have hmeanRatio : μbar.expect qBad / p₀ ≤ epsDeep / p₀ :=
+          div_le_div_of_nonneg_right hqMean (le_of_lt hp₀)
+        calc
+          μbar.pr (fun w => p₀ ≤ qBad w) ≤ μbar.expect qBad / p₀ := hmarkov
+          _ ≤ epsDeep / p₀ := hmeanRatio
+          _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 2) := hratio
+      have hmle : P.m n ≤ n := hscale.2.1
+      have h100R : 0 < (100 : ℝ) * (αS : ℝ) := by exact_mod_cast h100
+      have hαSpos : 0 < (αS : ℝ) := by linarith only [h100R]
+      have hSsPos : 0 < P.Ss (n : ℝ) := by
+        unfold Params9.Ss
+        rw [hcase]
+        exact mul_pos hαSpos hnRpos
+      have hmlogPos : 0 < (P.m n : ℝ) * Real.log 2 := by
+        have hleft : 0 < P.Ss (n : ℝ) + Real.log (n : ℝ) :=
+          add_pos_of_pos_of_nonneg hSsPos hlognNonneg
+        exact lt_trans hleft hscale.2.2.2.1
+      have hmposR : 0 < (P.m n : ℝ) := by
+        by_contra hmnot
+        have hmle : (P.m n : ℝ) ≤ 0 := le_of_not_gt hmnot
+        have hmzero : (P.m n : ℝ) = 0 := le_antisymm hmle (Nat.cast_nonneg _)
+        rw [hmzero] at hmlogPos
+        norm_num at hmlogPos
+      have hmpos : 0 < P.m n := by exact_mod_cast hmposR
+      have hbStarPos : 0 < P.bStar n := by
+        unfold Params9.bStar
+        exact Real.rpow_pos_of_pos hnRpos _
+      have haStarPos : 0 < P.aStar n := by
+        unfold Params9.aStar
+        positivity
+      have hbStarScale : P.bStar n ≤ 1 / 200 := hscale.2.2.2.2.2.2.1
+      have hclipB : 2 * P.bStar n ≤ 1 / 100 := by linarith [hbStarScale]
+      have hp₀eq : p₀ = P.tail (1 / 4) n := by
+        simp [p₀, Params9.tail]
+        congr 1
+        ring
+      let lowLabel : Fin N → Prop := fun w =>
+        rowDeg E G w νbar ≤ 1 / 2 - P.aStar n / 100
+      let highLabel : Fin N → Prop := fun w => p₀ ≤ qBad w
+      let exceptionalLabel : Fin N → Prop := fun w => lowLabel w ∨ highLabel w
+      let neighborP : Fin (P.m n) → FinProb M.ι := fun _ => tagLaw
+      let neighborLaw : FinProb (Fin (P.m n) → M.ι) := FinProb.pi neighborP
+      let failProb : Fin N → ℝ := fun w => neighborLaw.pr (fun tags =>
+        ∑ j : Fin (P.m n), (rowDeg E G w (M.ν (tags j)) - 1 / 2) <
+          -((1 / 20 : ℝ) * P.aStar n * (n : ℝ)))
+      have htailGood (w : Fin N) (hnotLow : ¬ lowLabel w)
+          (hnotHigh : ¬ highLabel w) :
+          failProb w ≤ (n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)) := by
+        let f : Fin (P.m n) → M.ι → ℝ := fun _ i =>
+          rowDeg E G w (M.ν i) - 1 / 2
+        have hraw (j : Fin (P.m n)) (i : M.ι) :
+            -(1 / 2 : ℝ) ≤ f j i ∧ f j i ≤ 1 / 2 := by
+          rcases Lane_q_s09_tag.rowDeg_bounds_q_s09_tag E G w (M.ν i) with ⟨h0, h1⟩
+          dsimp [f]
+          constructor <;> linarith
+        have hmean (j : Fin (P.m n)) :
+            -(P.aStar n / 100) ≤ (neighborP j).expect (f j) := by
+          change -(P.aStar n / 100) ≤
+            (tagMixLaw9 M).expect (fun i => rowDeg E G w (M.ν i) - 1 / 2)
+          rw [Lane_q_s09_tag.rowDeg_center_tagMix_q_s09_tag M E G w]
+          have hgt : 1 / 2 - P.aStar n / 100 < rowDeg E G w νbar :=
+            lt_of_not_ge hnotLow
+          linarith
+        have hbad (j : Fin (P.m n)) :
+            (neighborP j).pr (fun i => 2 * P.bStar n < |f j i|) ≤ p₀ := by
+          have hq : qBad w < p₀ := lt_of_not_ge hnotHigh
+          change tagLaw.pr
+            (fun i => 2 * P.bStar n < |rowDeg E G w (M.ν i) - 1 / 2|) ≤ p₀
+          exact le_of_lt (by simpa [qBad, tagLaw] using hq)
+        have hcard : (Fintype.card (Fin (P.m n)) : ℝ) ≤ (n : ℝ) := by
+          have hmleR : (P.m n : ℝ) ≤ (n : ℝ) := by exact_mod_cast hmle
+          simpa using hmleR
+        have hcardpos : 0 < (Fintype.card (Fin (P.m n)) : ℝ) := by
+          simpa using hmposR
+        have hsmall : p₀ ≤ P.aStar n / 100 := by
+          rw [hp₀eq]
+          exact hclipByAst
+        have hscaleSq₀ := Lane_q_s09_tag.aStar_sq_n_div_bStar_sq_q_s09_tag P hnRpos
+        have hrExp :
+            1 - 2 * (P.hPlus : ℝ) + 2 * (P.hMinus : ℝ) = r := by
+          dsimp [r]
+          ring
+        rw [hrExp] at hscaleSq₀
+        have hbound := Lane_q_s09_tag.clipped_lower_tail_q_s09_tag
+          neighborP f (P.aStar n) (P.bStar n) (n : ℝ) P.u r p₀
+          haStarPos hbStarPos hnRpos hcard hcardpos hclipB hraw hmean hbad
+          (le_of_lt hp₀) hsmall hConcRatio hUbig hscaleSq₀
+        have hbound' : neighborLaw.pr (fun tags =>
+            ∑ j : Fin (P.m n), f j (tags j) < -(P.aStar n / 20) * (n : ℝ)) ≤
+            (n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)) := by
+          simpa [neighborLaw] using hbound
+        have hle : failProb w ≤ neighborLaw.pr (fun tags =>
+            ∑ j : Fin (P.m n), f j (tags j) < -(P.aStar n / 20) * (n : ℝ)) := by
+          apply FinProb.pr_mono
+          intro tags htag
+          change (∑ j : Fin (P.m n),
+              (rowDeg E G w (M.ν (tags j)) - 1 / 2)) <
+            -((1 / 20 : ℝ) * P.aStar n * (n : ℝ)) at htag
+          change (∑ j : Fin (P.m n), f j (tags j)) <
+            -(P.aStar n / 20) * (n : ℝ)
+          have heq : -((1 / 20 : ℝ) * P.aStar n * (n : ℝ)) =
+              -(P.aStar n / 20) * (n : ℝ) := by ring
+          rw [heq] at htag
+          exact htag
+        exact hle.trans hbound'
+      let mass (tag : CubeVertex (P.m n) → M.ι) : ℝ :=
+        ∑ w, (M.μ (tag z)).w w *
+          (if tagSurplus9 (P := P) E G tag z w <
+              -((1 / 20 : ℝ) * P.aStar n * (n : ℝ)) then 1 else 0)
+      let raw : FinProb (CubeVertex (P.m n) → M.ι) :=
+        FinProb.pi (fun _ : CubeVertex (P.m n) => tagLaw)
+      have hmassNonneg (tag : CubeVertex (P.m n) → M.ι) : 0 ≤ mass tag := by
+        dsimp [mass]
+        apply Finset.sum_nonneg
+        intro w hw
+        by_cases hfail : tagSurplus9 (P := P) E G tag z w <
+            -((1 / 20 : ℝ) * P.aStar n * (n : ℝ))
+        · rw [if_pos hfail]
+          exact mul_nonneg ((M.μ (tag z)).nonneg w) (by norm_num)
+        · rw [if_neg hfail]
+          simp
+      have hmassFilter (tag : CubeVertex (P.m n) → M.ι) :
+          (∑ w ∈ tagFail9 (P := P) E G tag z, (M.μ (tag z)).w w) = mass tag := by
+        simp [mass, tagFail9, tagSurplus9, Finset.sum_filter]
+      let threshold : ℝ := (1 / 20 : ℝ) * P.aStar n * (n : ℝ)
+      have hmassFactor := Lane_q_s09_tag.tag_failure_mass_expect_eq_q_s09_tag
+        (P := P) (n := n) (N := N) (M := M) E G z threshold
+      have hmassFactor' : raw.expect mass = μbar.expect failProb := by
+        simpa [raw, mass, failProb, neighborLaw, neighborP, threshold, tagLaw, μbar,
+          FinProb.expect]
+          using hmassFactor
+      have hfailMass : μbar.expect failProb ≤ Real.exp (-((n : ℝ) ^ P.u) / 10) := by
+        have hCnonneg : 0 ≤ (n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)) := by positivity
+        have hpoint (w : Fin N) : failProb w ≤
+            (if exceptionalLabel w then 1 else 0) +
+              ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))) := by
+          by_cases hex : exceptionalLabel w
+          · have hone := Lane_q_s09_tag.pr_le_one_q_s09_tag neighborLaw
+              (fun tags => ∑ j : Fin (P.m n),
+                (rowDeg E G w (M.ν (tags j)) - 1 / 2) <
+                  -((1 / 20 : ℝ) * P.aStar n * (n : ℝ)))
+            have hpr : failProb w ≤ 1 := by simpa [failProb] using hone
+            simp [hex]
+            linarith [hpr, hCnonneg]
+          · have hlo : ¬ lowLabel w := fun h => hex (Or.inl h)
+            have hhi : ¬ highLabel w := fun h => hex (Or.inr h)
+            simpa [hex] using htailGood w hlo hhi
+        have hEbad : μbar.expect (fun w => if exceptionalLabel w then 1 else 0) =
+            μbar.pr exceptionalLabel := by
+          unfold FinProb.expect FinProb.pr
+          apply Finset.sum_congr rfl
+          intro w hw
+          by_cases h : exceptionalLabel w <;> simp [h]
+        have hEbad' : (∑ w, μbar.w w * (if exceptionalLabel w then 1 else 0)) =
+            μbar.pr exceptionalLabel := by
+          change μbar.expect (fun w => if exceptionalLabel w then 1 else 0) = _
+          exact hEbad
+        have hEupper : μbar.expect (fun w =>
+            (if exceptionalLabel w then 1 else 0) +
+              ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))) ) =
+              μbar.pr exceptionalLabel +
+                ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))) := by
+          have hconst : (∑ w, μbar.w w *
+              ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)))) =
+              (n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)) := by
+            calc
+              _ = (∑ w, μbar.w w) *
+                  ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))) := by
+                rw [← Finset.sum_mul]
+              _ = _ := by rw [μbar.sum_eq_one]; ring
+          unfold FinProb.expect
+          calc
+            (∑ w, μbar.w w *
+                ((if exceptionalLabel w then 1 else 0) +
+                  ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))))) =
+                (∑ w, μbar.w w * (if exceptionalLabel w then 1 else 0)) +
+                  ∑ w, μbar.w w *
+                    ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))) := by
+              calc
+                _ = ∑ w, (μbar.w w * (if exceptionalLabel w then 1 else 0) +
+                    μbar.w w * ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)))) := by
+                  apply Finset.sum_congr rfl
+                  intro w hw
+                  ring
+                _ = _ := Finset.sum_add_distrib
+            _ = _ := by rw [hEbad', hconst]
+        have hException : μbar.pr exceptionalLabel ≤
+            Real.exp (-((n : ℝ) ^ P.u) / 4) +
+              Real.exp (-((n : ℝ) ^ P.u) / 2) := by
+          calc
+            μbar.pr exceptionalLabel ≤ μbar.pr lowLabel + μbar.pr highLabel :=
+              FinProb.pr_union_le μbar lowLabel highLabel
+            _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 4) +
+                Real.exp (-((n : ℝ) ^ P.u) / 2) := by
+              apply add_le_add
+              · convert hLowMass using 1 <;> congr 1 <;> ring
+              · simpa [highLabel] using hhighMass
+        have hlogNexp :
+            (n : ℝ) * p₀ ≤ Real.exp (-((n : ℝ) ^ P.u) / 8) := by
+          calc
+            (n : ℝ) * p₀ = Real.exp (Real.log (n : ℝ)) *
+                Real.exp (-((n : ℝ) ^ P.u) / 4) := by
+              rw [Real.exp_log hnRpos]
+            _ = Real.exp (Real.log (n : ℝ) - ((n : ℝ) ^ P.u) / 4) := by
+              rw [← Real.exp_add]
+              congr 1
+              ring
+            _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 8) :=
+              Real.exp_le_exp.mpr (by linarith [hLogN])
+        have hnuNonneg : 0 ≤ (n : ℝ) ^ P.u := Real.rpow_nonneg (Nat.cast_nonneg n) P.u
+        have hLowExp : Real.exp (-((n : ℝ) ^ P.u) / 4) ≤
+            Real.exp (-((n : ℝ) ^ P.u) / 8) :=
+          Real.exp_le_exp.mpr (by nlinarith [hnuNonneg])
+        have hHighExp : Real.exp (-((n : ℝ) ^ P.u) / 2) ≤
+            Real.exp (-((n : ℝ) ^ P.u) / 8) :=
+          Real.exp_le_exp.mpr (by nlinarith [hnuNonneg])
+        have hDeepExp : Real.exp (-((n : ℝ) ^ P.u)) ≤
+            Real.exp (-((n : ℝ) ^ P.u) / 8) :=
+          Real.exp_le_exp.mpr (by nlinarith [hnuNonneg])
+        have hsumBound : μbar.expect failProb ≤
+            4 * Real.exp (-((n : ℝ) ^ P.u) / 8) := by
+          calc
+            μbar.expect failProb ≤
+                μbar.expect (fun w => (if exceptionalLabel w then 1 else 0) +
+                ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)))) :=
+              μbar.expect_mono hpoint
+            _ = μbar.pr exceptionalLabel +
+                ((n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u))) := hEupper
+            _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 4) +
+                Real.exp (-((n : ℝ) ^ P.u) / 2) +
+                (n : ℝ) * p₀ + Real.exp (-((n : ℝ) ^ P.u)) := by
+              linarith [hException]
+            _ ≤ 4 * Real.exp (-((n : ℝ) ^ P.u) / 8) := by
+              calc
+                _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 8) +
+                    Real.exp (-((n : ℝ) ^ P.u) / 8) +
+                    Real.exp (-((n : ℝ) ^ P.u) / 8) +
+                    Real.exp (-((n : ℝ) ^ P.u) / 8) := by
+                  gcongr
+                _ = 4 * Real.exp (-((n : ℝ) ^ P.u) / 8) := by ring
+        have hlog2 : Real.log 2 ≤ 1 := by linarith [Real.log_two_lt_d9]
+        have hlog4 : Real.log 4 ≤ 2 := by
+          have hpow := Real.log_pow (2 : ℝ) 2
+          norm_num at hpow ⊢
+          nlinarith [hpow, hlog2]
+        have hnu40 : 2 ≤ ((n : ℝ) ^ P.u) / 40 := by nlinarith [hUbig]
+        have hfactor : 4 * Real.exp (-((n : ℝ) ^ P.u) / 8) =
+            Real.exp (Real.log 4 - ((n : ℝ) ^ P.u) / 8) := by
+          calc
+            4 * Real.exp (-((n : ℝ) ^ P.u) / 8) =
+                Real.exp (Real.log 4) * Real.exp (-((n : ℝ) ^ P.u) / 8) := by
+              rw [Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+            _ = Real.exp (Real.log 4 - ((n : ℝ) ^ P.u) / 8) := by
+              rw [← Real.exp_add]
+              congr 1
+              ring
+        calc
+          μbar.expect failProb ≤ 4 * Real.exp (-((n : ℝ) ^ P.u) / 8) := hsumBound
+          _ = Real.exp (Real.log 4 - ((n : ℝ) ^ P.u) / 8) := hfactor
+          _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 10) := by
+            apply Real.exp_le_exp.mpr
+            linarith [hlog4, hnu40]
+      have hrawMass : raw.expect mass ≤ Real.exp (-((n : ℝ) ^ P.u) / 10) := by
+        rw [hmassFactor']
+        exact hfailMass
+      have hτpos : 0 < P.tail (1 / 100) n := by
+        rw [Params9.tail]
+        exact Real.exp_pos _
+      have hτeq : P.tail (1 / 100) n = Real.exp (-((n : ℝ) ^ P.u) / 100) := by
+        rw [Params9.tail]
+        congr 1
+        ring
+      have hmarkov := FinProb.markov raw mass (P.tail (1 / 100) n) hmassNonneg hτpos
+      have hbadImpl (tag : CubeVertex (P.m n) → M.ι)
+          (htag : tagBad9 (P := P) E G (1 / 100) tag z) :
+          P.tail (1 / 100) n ≤ mass tag := by
+        have htag' : P.tail (1 / 100) n <
+            ∑ w ∈ tagFail9 (P := P) E G tag z, (M.μ (tag z)).w w := by
+          simpa [tagBad9, hcase] using htag
+        rw [hmassFilter tag] at htag'
+        exact le_of_lt htag'
+      have hbadProb : raw.pr (fun tag =>
+          tagBad9 (P := P) E G (1 / 100) tag z) ≤ P.tail (1 / 100) n := by
+        calc
+          raw.pr (fun tag => tagBad9 (P := P) E G (1 / 100) tag z) ≤
+              raw.pr (fun tag => P.tail (1 / 100) n ≤ mass tag) :=
+            FinProb.pr_mono raw _ _ hbadImpl
+          _ ≤ raw.expect mass / P.tail (1 / 100) n := hmarkov
+          _ ≤ Real.exp (-((n : ℝ) ^ P.u) / 10) /
+                P.tail (1 / 100) n := by
+            exact div_le_div_of_nonneg_right hrawMass (le_of_lt hτpos)
+          _ ≤ P.tail (1 / 100) n := by
+            rw [hτeq]
+            have hratioTail : Real.exp (-((n : ℝ) ^ P.u) / 10) /
+                Real.exp (-((n : ℝ) ^ P.u) / 100) ≤
+                  Real.exp (-((n : ℝ) ^ P.u) / 100) := by
+              rw [← Real.exp_sub]
+              apply Real.exp_le_exp.mpr
+              nlinarith [hUbig]
+            exact hratioTail
+      simpa [raw, tagLaw] using hbadProb
 
 set_option maxHeartbeats 0 in
 /-- P9.2-tags(ii) (09:135–137): the tag events satisfy the local-lemma input with charge `e^{-c' n^u/2}`:

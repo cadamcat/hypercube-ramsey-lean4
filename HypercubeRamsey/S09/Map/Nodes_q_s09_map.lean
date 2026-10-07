@@ -586,6 +586,202 @@ theorem height_counts9_volume_bounds (P : Params9) (hP : P.Valid) :
     exact hvolume
   exact ⟨hVposNat, hradiusD, hprob⟩
 
+private theorem topScale_coarse_bound (n : ℕ) (σ ζ : ℝ) (hn : 5 ≤ n)
+    (hσ : σ < 1) (hζ : 0 < ζ) (hζ1 : ζ < 1) :
+    topScale n σ ζ ≤ 2 ^ (n ^ 2 + 2 * n) := by
+  let R₀ : ℕ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M : ℕ := max 2 ⌈(n : ℝ) ^ σ⌉₊
+  let target : ℕ := ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+  have hn2 : 2 ≤ n := by omega
+  have hnreal : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hnpositive : 0 < (n : ℝ) := by positivity
+  have hσpow : (n : ℝ) ^ σ ≤ (n : ℝ) := by
+    calc
+      (n : ℝ) ^ σ ≤ (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnreal (le_of_lt hσ)
+      _ = (n : ℝ) := by rw [Real.rpow_one]
+  have hMceil : ⌈(n : ℝ) ^ σ⌉₊ ≤ n := Nat.ceil_le.2 hσpow
+  have hMle : M ≤ n := by
+    dsimp [M]
+    exact max_le hn2 hMceil
+  have hMupper : M ≤ 2 ^ n := hMle.trans (Nat.le_of_lt n.lt_two_pow_self)
+  have hMlower : 2 ≤ M := le_max_left _ _
+  have hζpow : (n : ℝ) ^ (1 - ζ) ≤ (n : ℝ) := by
+    calc
+      (n : ℝ) ^ (1 - ζ) ≤ (n : ℝ) ^ (1 : ℝ) := by
+        apply Real.rpow_le_rpow_of_exponent_le hnreal
+        linarith
+      _ = (n : ℝ) := by rw [Real.rpow_one]
+  have htarget : target ≤ n := by
+    dsimp [target]
+    exact Nat.ceil_le.2 hζpow
+  have hlog : Real.log (n : ℝ) ≤ (n : ℝ) := by
+    simpa using Real.log_natCast_le_rpow_div n (by norm_num : (0 : ℝ) < 1)
+  have hlog0 : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hnreal
+  have hn0 : 0 ≤ (n : ℝ) := by positivity
+  have hlogSq : Real.log (n : ℝ) ^ 2 ≤ (n : ℝ) ^ 2 := by
+    calc
+      Real.log (n : ℝ) ^ 2 = Real.log (n : ℝ) * Real.log (n : ℝ) := by ring
+      _ ≤ (n : ℝ) * Real.log (n : ℝ) := mul_le_mul_of_nonneg_right hlog hlog0
+      _ ≤ (n : ℝ) * (n : ℝ) := mul_le_mul_of_nonneg_left hlog hn0
+      _ = (n : ℝ) ^ 2 := by ring
+  have hlogSqCast : Real.log (n : ℝ) ^ 2 ≤ ((n ^ 2 : ℕ) : ℝ) := by
+    simpa only [Nat.cast_pow] using hlogSq
+  have hRceil : ⌈Real.log (n : ℝ) ^ 2⌉₊ ≤ n ^ 2 := Nat.ceil_le.2 hlogSqCast
+  have hR0n : R₀ ≤ n ^ 2 := by
+    dsimp [R₀]
+    have hnsqpos : 0 < n ^ 2 := by positivity
+    have hnsqone : 1 ≤ n ^ 2 := by omega
+    exact max_le hnsqone hRceil
+  have hnTwo : n ≤ 2 ^ n := Nat.le_of_lt n.lt_two_pow_self
+  have hnsquare : n ^ 2 ≤ (2 ^ n) ^ 2 := by gcongr
+  have hpowSquare : (2 ^ n) ^ 2 = 2 ^ (2 * n) := by
+    calc
+      (2 ^ n) ^ 2 = 2 ^ (n * 2) := by rw [Nat.pow_mul]
+      _ = 2 ^ (2 * n) := by rw [Nat.mul_comm]
+  have hR0 : R₀ ≤ 2 ^ (2 * n) := by
+    calc
+      R₀ ≤ n ^ 2 := hR0n
+      _ ≤ (2 ^ n) ^ 2 := hnsquare
+      _ = 2 ^ (2 * n) := hpowSquare
+  have hexists : ∃ i : ℕ, target ≤ M ^ i * R₀ := by
+    refine ⟨n, ?_⟩
+    have hpowM : 2 ^ n ≤ M ^ n := by gcongr
+    have hprod : M ^ n ≤ M ^ n * R₀ := by
+      calc
+        M ^ n = M ^ n * 1 := by simp
+        _ ≤ M ^ n * R₀ := Nat.mul_le_mul_left _ (le_max_left 1 _)
+    exact htarget.trans (hnTwo.trans (hpowM.trans hprod))
+  have hfind : Nat.find hexists ≤ n := Nat.find_min' hexists (by
+    have hpowM : 2 ^ n ≤ M ^ n := by gcongr
+    have hprod : M ^ n ≤ M ^ n * R₀ := by
+      calc
+        M ^ n = M ^ n * 1 := by simp
+        _ ≤ M ^ n * R₀ := Nat.mul_le_mul_left _ (le_max_left 1 _)
+    exact htarget.trans (hnTwo.trans (hpowM.trans hprod)))
+  have hdef : topScale n σ ζ = M ^ Nat.find hexists * R₀ := by
+    unfold topScale
+    rfl
+  have hMpow : M ^ Nat.find hexists ≤ (2 ^ n) ^ n := by
+    calc
+      M ^ Nat.find hexists ≤ M ^ n := by gcongr
+      _ ≤ (2 ^ n) ^ n := by gcongr
+  have hupper : topScale n σ ζ ≤ (2 ^ n) ^ n * 2 ^ (2 * n) := by
+    rw [hdef]
+    exact Nat.mul_le_mul hMpow hR0
+  calc
+    topScale n σ ζ ≤ (2 ^ n) ^ n * 2 ^ (2 * n) := hupper
+    _ = 2 ^ (n * n) * 2 ^ (2 * n) := by
+      rw [show (2 ^ n) ^ n = 2 ^ (n * n) by rw [Nat.pow_mul]]
+    _ = 2 ^ (n * n + 2 * n) := by rw [← Nat.pow_add]
+    _ = 2 ^ (n ^ 2 + 2 * n) := by congr 1 <;> ring
+
+private theorem two_nat_pow_le_exp (k : ℕ) :
+    (2 : ℝ) ^ k ≤ Real.exp (k : ℝ) := by
+  have htwo : (2 : ℝ) ≤ Real.exp 1 := by
+    have h := Real.add_one_le_exp (1 : ℝ)
+    norm_num at h ⊢
+    linarith
+  calc
+    (2 : ℝ) ^ k ≤ (Real.exp 1) ^ k := by gcongr
+    _ = Real.exp (k : ℝ) := by
+      rw [← Real.exp_nat_mul]
+      congr 1
+      push_cast
+      ring
+
+theorem height_counts9_union_tail (P : Params9) (hc : HeightChoice9 P)
+    (hadm : hc.Admissible) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (2 : ℝ) ^ n *
+        (2 * ((Finset.univ : Finset (CubeVertex (n - P.m n))).card : ℝ) *
+          ((hc.levels n + 1 : ℕ) : ℝ) *
+          Real.exp (-((n : ℝ) ^ (10 : ℝ)) / 12)) ≤ Real.exp (-(n : ℝ)) := by
+  rcases hadm with ⟨hσhpos, hσhζ, hζlt, hθpos, hθlt, ha, hab, hχa, hbpos, hbε, hε, hcase⟩
+  have hσh1 : hc.σh < 1 := lt_trans hσhζ hζlt
+  have hζpos : 0 < hc.ζ := lt_trans hσhpos hσhζ
+  refine ⟨100, ?_⟩
+  intro n hn
+  have hn5 : 5 ≤ n := by omega
+  have hlevels : hc.levels n ≤ 2 ^ (n ^ 2 + 2 * n) := by
+    simpa [HeightChoice9.levels] using
+      (topScale_coarse_bound n hc.σh hc.ζ hn5 hσh1 hζpos hζlt)
+  let k : ℕ := n ^ 2 + 2 * n
+  have hkpos : 1 ≤ 2 ^ k := Nat.one_le_two_pow
+  have hlevelsPlus : hc.levels n + 1 ≤ 2 ^ (k + 1) := by
+    calc
+      hc.levels n + 1 ≤ 2 ^ k + 1 := Nat.add_le_add_right hlevels 1
+      _ ≤ 2 ^ k + 2 ^ k := by omega
+      _ = 2 ^ (k + 1) := by rw [Nat.pow_succ]; omega
+  have hdim : n - P.m n ≤ n := Nat.sub_le _ _
+  have hcardEq : (Finset.univ : Finset (CubeVertex (n - P.m n))).card =
+      2 ^ (n - P.m n) := by simp [CubeVertex]
+  have hcard : (Finset.univ : Finset (CubeVertex (n - P.m n))).card ≤ 2 ^ n := by
+    rw [hcardEq]
+    gcongr
+  have hfactorNat : 2 ^ n *
+      (2 * (Finset.univ : Finset (CubeVertex (n - P.m n))).card *
+        (hc.levels n + 1)) ≤ 2 ^ (n ^ 2 + 4 * n + 2) := by
+    rw [hcardEq]
+    calc
+      2 ^ n * (2 * 2 ^ (n - P.m n) * (hc.levels n + 1)) ≤
+          2 ^ n * (2 * 2 ^ n * 2 ^ (k + 1)) := by gcongr
+      _ = 2 ^ (n ^ 2 + 4 * n + 2) := by
+        have htwo : 2 * 2 ^ n = 2 ^ (n + 1) := by rw [Nat.pow_succ]; omega
+        rw [htwo]
+        calc
+          2 ^ n * (2 ^ (n + 1) * 2 ^ (k + 1)) =
+              2 ^ (n + (n + 1 + (k + 1))) := by
+                rw [← Nat.pow_add, ← Nat.pow_add]
+          _ = 2 ^ (n ^ 2 + 4 * n + 2) := by congr 1 <;> dsimp [k] <;> omega
+  have hfactorReal : (2 : ℝ) ^ n *
+      (2 * ((Finset.univ : Finset (CubeVertex (n - P.m n))).card : ℝ) *
+        ((hc.levels n + 1 : ℕ) : ℝ)) ≤
+      (2 : ℝ) ^ (n ^ 2 + 4 * n + 2) := by exact_mod_cast hfactorNat
+  have hfactorExp : (2 : ℝ) ^ n *
+      (2 * ((Finset.univ : Finset (CubeVertex (n - P.m n))).card : ℝ) *
+        ((hc.levels n + 1 : ℕ) : ℝ)) ≤
+      Real.exp ((n ^ 2 + 4 * n + 2 : ℕ) : ℝ) := by
+    exact hfactorReal.trans (two_nat_pow_le_exp (n ^ 2 + 4 * n + 2))
+  have hn100R : (100 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+  have hn1R : 1 ≤ (n : ℝ) := le_trans (by norm_num) hn100R
+  have hcube : 100 * (n : ℝ) ^ 2 ≤ (n : ℝ) ^ 3 := by
+    have hmul := mul_nonneg (sq_nonneg (n : ℝ)) (sub_nonneg.mpr hn100R)
+    nlinarith [hmul]
+  have hquad : 100 * (n : ℝ) ≤ (n : ℝ) ^ 2 := by
+    have hprod : 0 ≤ (n : ℝ) * ((n : ℝ) - 100) :=
+      mul_nonneg (by positivity) (sub_nonneg.mpr hn100R)
+    nlinarith [hprod]
+  have hbig : 12 * ((n : ℝ) ^ 2 + 5 * (n : ℝ) + 2) ≤ (n : ℝ) ^ 3 := by
+    nlinarith [hcube, hquad, hn100R]
+  have hpow310 : (n : ℝ) ^ 3 ≤ (n : ℝ) ^ 10 :=
+    pow_le_pow_right₀ hn1R (by norm_num)
+  have hbig10 : (n : ℝ) ^ 2 + 5 * (n : ℝ) + 2 ≤ (n : ℝ) ^ 10 / 12 := by
+    nlinarith [hbig, hpow310]
+  have hpow10 : (n : ℝ) ^ (10 : ℝ) = (n : ℝ) ^ (10 : ℕ) := by
+    rw [show (10 : ℝ) = ((10 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+  have hBcast : ((n ^ 2 + 4 * n + 2 : ℕ) : ℝ) =
+      (n : ℝ) ^ 2 + 4 * (n : ℝ) + 2 := by norm_num [Nat.cast_add, Nat.cast_mul, Nat.cast_pow]
+  have hexponent : ((n ^ 2 + 4 * n + 2 : ℕ) : ℝ) -
+      (n : ℝ) ^ (10 : ℝ) / 12 ≤ -(n : ℝ) := by
+    rw [hBcast, hpow10]
+    nlinarith [hbig10]
+  calc
+    (2 : ℝ) ^ n *
+        (2 * ((Finset.univ : Finset (CubeVertex (n - P.m n))).card : ℝ) *
+          ((hc.levels n + 1 : ℕ) : ℝ) *
+          Real.exp (-((n : ℝ) ^ (10 : ℝ)) / 12)) =
+        ((2 : ℝ) ^ n *
+          (2 * ((Finset.univ : Finset (CubeVertex (n - P.m n))).card : ℝ) *
+            ((hc.levels n + 1 : ℕ) : ℝ))) *
+          Real.exp (-((n : ℝ) ^ (10 : ℝ)) / 12) := by ring
+    _ ≤ Real.exp ((n ^ 2 + 4 * n + 2 : ℕ) : ℝ) *
+          Real.exp (-((n : ℝ) ^ (10 : ℝ)) / 12) :=
+        mul_le_mul_of_nonneg_right hfactorExp (Real.exp_nonneg _)
+    _ = Real.exp (((n ^ 2 + 4 * n + 2 : ℕ) : ℝ) -
+          (n : ℝ) ^ (10 : ℝ) / 12) := by rw [← Real.exp_add]; congr 1 <;> ring
+    _ ≤ Real.exp (-(n : ℝ)) := Real.exp_le_exp.mpr hexponent
+
 private theorem active_center_of_good_heights
     (Pp A : Pos9 P hc n → Bool) (hg : GoodHeights9 Pp A) (v : CubeVertex n) :
     ∃ c : Pos9 P hc n,

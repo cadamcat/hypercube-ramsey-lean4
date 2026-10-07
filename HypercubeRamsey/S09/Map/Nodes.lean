@@ -153,7 +153,20 @@ probability `n^{10}/V`); a Chernoff lower tail `e^{-n^{10}/8}` and a union over 
 (`H = O(n^{1-ζ+σ_h})`). -/
 theorem p92_height_counts (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightCounts9 P hc n := by
-  sorry
+  obtain ⟨nV, hV⟩ := Lane_q_s09_map.height_counts9_volume_bounds P hP
+  obtain ⟨nTail, hTail⟩ := Lane_q_s09_map.height_counts9_union_tail P hc hadm
+  refine ⟨max 1 (max nV nTail), ?_⟩
+  intro n hn
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 _) hn
+  have houter : max nV nTail ≤ n := le_trans (le_max_right 1 _) hn
+  have hnV : nV ≤ n := le_trans (le_max_left nV nTail) houter
+  have hnTail : nTail ≤ n := le_trans (le_max_right nV nTail) houter
+  have hVn := hV n hnV
+  have hTailn := hTail n hnTail
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hlam : 0 < (n : ℝ) ^ (10 : ℝ) := Real.rpow_pos_of_pos hnreal _
+  exact Lane_q_s09_map.height_counts9_of_bounds P hc n hlam
+    hVn.1 hVn.2.1 hVn.2.2 hTailn
 
 /-- P9.2-map1, cross-slice overlap (09:86–92): a child domain of radius `R'` consults slices within `O(R')` and
 residual locations within `r + O(R')`; for starts separated by `K R'` either the consulted slice ranges are

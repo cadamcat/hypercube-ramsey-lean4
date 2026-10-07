@@ -558,6 +558,52 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
             rw [← Finset.mul_sum]
       _ = D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
         rw [nuTupleMiss]
+  have crossProductExp (D : Ctx η₀ β p h) (g : D.KeyT) (x : Fin D.N) :
+      D.rawHidden.expect (fun Θ =>
+        ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) =
+        (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+    classical
+    let q : ℝ := D.R'.pr (fun ξ => D.hitsAll x ξ)
+    let P : D.KeyT → FinProb D.Tup := fun _ => D.R'
+    let F : (D.CrossSub g → D.Tup) → ℝ := fun a =>
+      ∏ u, if D.hitsAll x (a u) then (1 : ℝ) else 0
+    have hMarg : D.rawHidden.expect (fun Θ =>
+        ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) =
+        (FinProb.pi (fun u : D.CrossSub g => D.R')).expect F := by
+      simpa [Ctx.rawHidden, Ctx.CrossSub, P, F] using
+        (FinProb.pi_marginal_expect P (crossKeys g) F)
+    have hsum (u : D.CrossSub g) :
+        (∑ ξ : D.Tup, D.R'.w ξ * if D.hitsAll x ξ then (1 : ℝ) else 0) = q := by
+      unfold q FinProb.pr
+      apply Finset.sum_congr rfl
+      intro ξ _
+      split_ifs <;> ring
+    have hP : (FinProb.pi (fun u : D.CrossSub g => D.R')).expect F =
+        q ^ Fintype.card (D.CrossSub g) := by
+      unfold FinProb.expect
+      change (∑ a : D.CrossSub g → D.Tup,
+          (∏ u : D.CrossSub g, D.R'.w (a u)) *
+            ∏ u : D.CrossSub g, if D.hitsAll x (a u) then (1 : ℝ) else 0) = _
+      calc
+        (∑ a : (D.CrossSub g → D.Tup),
+            (∏ u, D.R'.w (a u)) * ∏ u, if D.hitsAll x (a u) then (1 : ℝ) else 0) =
+          ∑ a : D.CrossSub g → D.Tup, ∏ u : D.CrossSub g, D.R'.w (a u) *
+            (if D.hitsAll x (a u) then (1 : ℝ) else 0) := by
+              apply Finset.sum_congr rfl
+              intro (a : D.CrossSub g → D.Tup) _
+              rw [← Finset.prod_mul_distrib]
+        _ = ∏ u : D.CrossSub g, ∑ ξ : D.Tup, D.R'.w ξ *
+              if D.hitsAll x ξ then (1 : ℝ) else 0 := by
+          rw [Fintype.prod_sum]
+        _ = ∏ _u : D.CrossSub g, q := by
+          apply Finset.prod_congr rfl
+          intro u _
+          exact hsum u
+        _ = q ^ Fintype.card (D.CrossSub g) := by simp [Finset.prod_const]
+    calc
+      _ = (FinProb.pi (fun u : D.CrossSub g => D.R')).expect F := hMarg
+      _ = q ^ Fintype.card (D.CrossSub g) := hP
+      _ = (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by rfl
   have rPrimeHit (D : Ctx η₀ β p h) (x : Fin D.N) :
       D.R'.pr (fun ξ => D.hitsAll x ξ) =
         ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by

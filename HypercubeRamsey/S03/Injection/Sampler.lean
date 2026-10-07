@@ -2231,7 +2231,225 @@ theorem discrete_tracking_gronwall (n : ℕ) (A B : ℝ) (hA : 0 ≤ A) (hB : 0 
 theorem tracking_bootstrap (K : ℝ) (hK : 1 ≤ K) :
     ∀ᶠ d : ℕ in atTop, ∀ t (q : Fin t → Fin d → ℝ), OrderedInput d t q →
       DriftRecurrence q K → ∀ x, sequentialWeight q x ≠ 0 → MartingaleGood q x → Good q x := by
-  sorry
+  classical
+  let C : ℝ := K * Real.exp (3 * K / 4)
+  have hpowTendsto :
+      Tendsto (fun d : ℕ => (d : ℝ) ^ (1 / 40 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num : 0 < (1 / 40 : ℝ))).comp
+      tendsto_natCast_atTop_atTop
+  have hpowTendstoStop :
+      Tendsto (fun d : ℕ => (d : ℝ) ^ (0.1 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num : 0 < (0.1 : ℝ))).comp
+      tendsto_natCast_atTop_atTop
+  have hlargeC : ∀ᶠ d : ℕ in atTop, C < (d : ℝ) ^ (1 / 40 : ℝ) :=
+    hpowTendsto.eventually (Ioi_mem_atTop C)
+  have hlargeStop : ∀ᶠ d : ℕ in atTop, 20 < (d : ℝ) ^ (0.1 : ℝ) :=
+    hpowTendstoStop.eventually (Ioi_mem_atTop 20)
+  filter_upwards [hlargeC, hlargeStop] with d hdC hdStop
+  intro t q h hRec x hw hMG
+  have hd : 0 < (d : ℝ) := by
+    have := h.dimension
+    exact_mod_cast (by omega : 0 < d)
+  let θ : ℝ := (d : ℝ) ^ (-(1 / 8 : ℝ))
+  let A : ℝ := K * θ
+  let B : ℝ := K / d
+  let e : ℕ → ℝ := fun m => trackingError q x m
+  let S : ℕ → ℝ := fun m => ∑ r ∈ Finset.range m, e r
+  have hKpos : 0 ≤ K := le_trans (by norm_num) hK
+  have hθpos : 0 ≤ θ := by dsimp [θ]; positivity
+  have hApos : 0 ≤ A := mul_nonneg hKpos hθpos
+  have hBpos : 0 < B := by dsimp [B]; exact div_pos (by linarith [hK]) hd
+  have hBnonneg : 0 ≤ B := le_of_lt hBpos
+  have hratio (m : ℕ) (hm : m ≤ t) : (m : ℝ) / d ≤ 3 / 4 := by
+    have hmReal : (m : ℝ) ≤ (t : ℝ) := by exact_mod_cast hm
+    have hmBound : (m : ℝ) ≤ 3 * (d : ℝ) / 4 := hmReal.trans h.horizon
+    apply (div_le_iff₀ hd).2
+    nlinarith [hmBound]
+  have hBmul (m : ℕ) (hm : m ≤ t) : B * (m : ℝ) ≤ 3 * K / 4 := by
+    calc
+      B * (m : ℝ) = K * ((m : ℝ) / d) := by dsimp [B]; ring
+      _ ≤ K * (3 / 4) := mul_le_mul_of_nonneg_left (hratio m hm) hKpos
+      _ = 3 * K / 4 := by ring
+  have h1B : 1 + B ≤ Real.exp B := by
+    simpa [add_comm] using Real.add_one_le_exp B
+  have hpowExp (m : ℕ) : (1 + B) ^ m ≤ Real.exp (B * (m : ℝ)) := by
+    calc
+      (1 + B) ^ m ≤ (Real.exp B) ^ m :=
+        pow_le_pow_left₀ (by linarith [hBnonneg]) h1B m
+      _ = Real.exp (B * (m : ℝ)) := by
+        calc
+          (Real.exp B) ^ m = Real.exp ((m : ℝ) * B) := (Real.exp_nat_mul B m).symm
+          _ = Real.exp (B * (m : ℝ)) := by congr 1 <;> ring
+  have hAmpBound (m : ℕ) (hm : m ≤ t) : A * (1 + B) ^ m ≤ C * θ := by
+    calc
+      A * (1 + B) ^ m ≤ A * Real.exp (B * (m : ℝ)) :=
+        mul_le_mul_of_nonneg_left (hpowExp m) hApos
+      _ ≤ A * Real.exp (3 * K / 4) :=
+        mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr (hBmul m hm)) hApos
+      _ = C * θ := by dsimp [A, C]; ring
+  have hCtheta : C * θ ≤ (d : ℝ) ^ (-(0.1 : ℝ)) := by
+    have hmult := mul_le_mul_of_nonneg_right (le_of_lt hdC) hθpos
+    calc
+      C * θ ≤ (d : ℝ) ^ (1 / 40 : ℝ) * θ := hmult
+      _ = (d : ℝ) ^ (-(0.1 : ℝ)) := by
+        rw [show θ = (d : ℝ) ^ (-(1 / 8 : ℝ)) by rfl,
+          ← Real.rpow_add (by positivity)]
+        congr 1
+        norm_num
+  have hsmallStop : (d : ℝ) ^ (-(0.1 : ℝ)) ≤ 1 / 20 := by
+    rw [Real.rpow_neg (le_of_lt hd) (0.1 : ℝ)]
+    simpa [one_div] using one_div_le_one_div_of_le (by norm_num) (le_of_lt hdStop)
+  have hcap (m : ℕ) (hm : m ≤ t) : A * (1 + B) ^ m ≤ (d : ℝ) ^ (-(0.1 : ℝ)) := by
+    exact (hAmpBound m hm).trans hCtheta
+  have hrecBound (m : ℕ) (hm : m ≤ t) (hRun : RunningThrough q x m)
+      (hgeom : S m ≤ A * ((1 + B) ^ m - 1) / B) :
+      e m ≤ A * (1 + B) ^ m := by
+    have hsum :
+        (∑ j : Fin t, if j.val < m then trackingError q x j.val else 0) = S m := by
+      simpa [S, e] using finPrefixSum_eq_range hm (fun r => trackingError q x r)
+    have hrecM := hRec x ⟨m, by omega⟩ hRun hMG
+    have hrecM' : e m ≤ A + B * S m := by
+      rw [hsum] at hrecM
+      simpa [e, A, B, θ] using hrecM
+    have hprod : B * S m ≤ A * ((1 + B) ^ m - 1) := by
+      calc
+        B * S m ≤ B * (A * ((1 + B) ^ m - 1) / B) :=
+          mul_le_mul_of_nonneg_left hgeom hBnonneg
+        _ = A * ((1 + B) ^ m - 1) := by
+          field_simp [ne_of_gt hBpos]
+    calc
+      e m ≤ A + B * S m := hrecM'
+      _ ≤ A + A * ((1 + B) ^ m - 1) := add_le_add (le_rfl) hprod
+      _ = A * (1 + B) ^ m := by ring
+  have hErrorZero : e 0 = 0 := by
+    change trackingError q x 0 = 0
+    apply le_antisymm
+    · unfold trackingError
+      refine csSup_le ?_ ?_
+      · exact ⟨(0 : ℝ), by simp⟩
+      · intro r hr
+        change r ∈ ({0} ∪ {r | ∃ a : Fin t, ∃ k : Fin (t + 1),
+          k.val ≤ 0 ∧ r = |usedMass q x a k.val - (k.val : ℝ) / d|}) at hr
+        rcases hr with hr0 | ⟨a, k, hk, rfl⟩
+        · have hrEq : r = 0 := by simpa using hr0
+          subst r
+          exact le_rfl
+        · have hkval : k.val = 0 := by omega
+          have hkfin : k = 0 := Fin.ext hkval
+          subst k
+          simp [usedMass]
+    · exact trackingError_nonneg q x 0
+  have hrun0 : RunningThrough q x 0 := by
+    constructor
+    · constructor
+      · intro j hj
+        omega
+      · intro i j hi hj heq
+        omega
+    · intro j hj
+      omega
+  have htrack : ∀ m, m ≤ t →
+      RunningThrough q x m ∧ e m ≤ A * (1 + B) ^ m ∧
+        S m ≤ A * ((1 + B) ^ m - 1) / B := by
+    intro m
+    induction m with
+    | zero =>
+      intro hm
+      refine ⟨hrun0, ?_, ?_⟩
+      · rw [hErrorZero]
+        positivity
+      · simp [S]
+    | succ m ih =>
+      intro hm
+      have hmle : m ≤ t := by omega
+      obtain ⟨hRunM, hErrM, hSboundM⟩ := ih hmle
+      have heM : e m ≤ A * (1 + B) ^ m :=
+        hrecBound m hmle hRunM hSboundM
+      have hcapM := hcap m hmle
+      have hstopM : e m ≤ 1 / 20 := (heM.trans hcapM).trans hsmallStop
+      let j : Fin t := ⟨m, by omega⟩
+      have hfreeMass := free_mass_before_stop q h x j hRunM.1 hstopM
+      have havail : 0 < availableMass q x j ∅ := by linarith [hfreeMass.2]
+      have hactive : PrefixValid x j.val ∧ trackingError q x j.val ≤ 1 / 20 ∧
+          0 < availableMass q x j ∅ := ⟨hRunM.1, hstopM, havail⟩
+      have hfactor : ordinaryWeight q x j ∅ (x j) ≠ 0 := by
+        intro hzero
+        apply hw
+        unfold sequentialWeight
+        exact Finset.prod_eq_zero (Finset.mem_univ j) hzero
+      have hsome : ∃ y, x j = some y := by
+        cases hx : x j with
+        | none =>
+          have hz : ordinaryWeight q x j ∅ none = 0 := by
+            simp only [ordinaryWeight, if_pos hactive]
+          have hfactorNone : ordinaryWeight q x j ∅ none ≠ 0 := by
+            simpa [j, hx] using hfactor
+          exact False.elim (hfactorNone hz)
+        | some y => exact ⟨y, rfl⟩
+      obtain ⟨y, hxy⟩ := hsome
+      have hfactorSome : ordinaryWeight q x j ∅ (some y) ≠ 0 := by
+        simpa [j, hxy] using hfactor
+      have hfree : Free x m y := by
+        by_contra hn
+        have hn' : ¬ Free x j.val y := by simpa [j] using hn
+        have hz : ordinaryWeight q x j ∅ (some y) = 0 := by
+          simp only [ordinaryWeight, if_pos hactive]
+          simp [hn']
+        exact hfactorSome hz
+      have hvalidNew : PrefixValid x (m + 1) := by
+        refine ⟨?_, ?_⟩
+        · intro i hi
+          by_cases hiOld : i.val < m
+          · exact hRunM.1.1 i hiOld
+          · have hiVal : i.val = m := by omega
+            have hij : i = j := Fin.ext hiVal
+            rw [hij]
+            exact ⟨y, hxy⟩
+        · intro i k hi hk heq
+          by_cases hiOld : i.val < m
+          · by_cases hkOld : k.val < m
+            · exact hRunM.1.2 i k hiOld hkOld heq
+            · have hkVal : k.val = m := by omega
+              have hkj : k = j := Fin.ext hkVal
+              rw [hkj, hxy] at heq
+              exact False.elim (hfree i hiOld heq)
+          · by_cases hkOld : k.val < m
+            · have hiVal : i.val = m := by omega
+              have hij : i = j := Fin.ext hiVal
+              rw [hij, hxy] at heq
+              exact False.elim (hfree k hkOld heq.symm)
+            · have hiVal : i.val = m := by omega
+              have hkVal : k.val = m := by omega
+              exact Fin.ext (hiVal.trans hkVal.symm)
+      have hRunSucc : RunningThrough q x (m + 1) := by
+        refine ⟨hvalidNew, ?_⟩
+        intro i hi
+        by_cases hiOld : i.val < m
+        · exact hRunM.2 i hiOld
+        · have hiVal : i.val = m := by omega
+          rw [hiVal]
+          exact hstopM
+      have hSsucc : S (m + 1) = S m + e m := by
+        simp [S, e, Finset.sum_range_succ]
+      have hSboundSucc : S (m + 1) ≤ A * ((1 + B) ^ (m + 1) - 1) / B := by
+        have hgeomSucc :
+            A * ((1 + B) ^ (m + 1) - 1) / B =
+              A * ((1 + B) ^ m - 1) / B + A * (1 + B) ^ m := by
+          rw [pow_succ]
+          field_simp [ne_of_gt hBpos]
+          ring
+        calc
+          S (m + 1) = S m + e m := hSsucc
+          _ ≤ A * ((1 + B) ^ m - 1) / B + A * (1 + B) ^ m :=
+            add_le_add hSboundM heM
+          _ = A * ((1 + B) ^ (m + 1) - 1) / B := hgeomSucc.symm
+      have hErrSucc := hrecBound (m + 1) hm hRunSucc hSboundSucc
+      refine ⟨hRunSucc, hErrSucc, hSboundSucc⟩
+  obtain ⟨hRunT, hErrT, hST⟩ := htrack t le_rfl
+  have htrackFinal : e t ≤ (d : ℝ) ^ (-(0.1 : ℝ)) :=
+    hErrT.trans (hcap t le_rfl)
+  have hstopFinal : e t ≤ 1 / 20 := htrackFinal.trans hsmallStop
+  exact ⟨hRunT.1, hstopFinal, htrackFinal⟩
 
 /-- Finite event transfer; avoids asserting that zero-weight paths are valid. -/
 theorem tracking_probability_transfer {d t : ℕ} (q : Fin t → Fin d → ℝ)

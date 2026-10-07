@@ -632,6 +632,152 @@ private noncomputable def scaleSupport9 {P : Params9} {hc : HeightChoice9 P} {n 
   (consulted9 (P := P) (hc := hc) (n := n) start.1 (8 * R)).filter
     (fun c => Nat.dist c.level.val start.2.val ≤ 8 * R + 2)
 
+private def HeightDepends9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (f : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → ℝ)
+    (S : Finset (Pos9 P hc n)) : Prop :=
+  ∀ ω ω', (∀ c ∈ S, ω.1 c = ω'.1 c ∧ ω.2 c = ω'.2 c) → f ω = f ω'
+
+private theorem finProb_expect_congr9 {α : Type*} [Fintype α] (μ : FinProb α)
+    (f g : α → ℝ) (h : ∀ x, f x = g x) : μ.expect f = μ.expect g := by
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro x hx
+  rw [h x]
+
+private theorem finProb_prod_expect9 {α β : Type*} [Fintype α] [Fintype β]
+    (μ : FinProb α) (ν : FinProb β) (f : α × β → ℝ) :
+    (FinProb.prod μ ν).expect f = μ.expect (fun a => ν.expect (fun b => f (a, b))) := by
+  classical
+  unfold FinProb.expect FinProb.prod
+  rw [Fintype.sum_prod_type]
+  calc
+    (∑ a, ∑ b, μ.w a * ν.w b * f (a, b)) =
+        ∑ a, μ.w a * (∑ b, ν.w b * f (a, b)) := by
+          apply Finset.sum_congr rfl
+          intro a ha
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro b hb
+          ring
+    _ = μ.expect (fun a => ν.expect (fun b => f (a, b))) := rfl
+
+private theorem heightLaw9_expect_mul_of_disjoint {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {S T : Finset (Pos9 P hc n)} (f g :
+      (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool) → ℝ)
+    (hf : HeightDepends9 f S) (hg : HeightDepends9 g T) (hST : Disjoint S T) :
+    (heightLaw9 P hc n).expect (fun ω => f ω * g ω) =
+      (heightLaw9 P hc n).expect f * (heightLaw9 P hc n).expect g := by
+  classical
+  let fAct : (Pos9 P hc n → Bool) → ℝ := fun Pp =>
+    (heightActLaw9 P hc n).expect (fun A => f (Pp, A))
+  let gAct : (Pos9 P hc n → Bool) → ℝ := fun Pp =>
+    (heightActLaw9 P hc n).expect (fun A => g (Pp, A))
+  have hfAct : FinProb.DependsOn fAct S := by
+    intro Pp Pp' hPp
+    apply finProb_expect_congr9
+    intro A
+    apply hf
+    intro c hc
+    exact ⟨hPp c hc, rfl⟩
+  have hgAct : FinProb.DependsOn gAct T := by
+    intro Pp Pp' hPp
+    apply finProb_expect_congr9
+    intro A
+    apply hg
+    intro c hc
+    exact ⟨hPp c hc, rfl⟩
+  have hact (Pp : Pos9 P hc n → Bool) :
+      (heightActLaw9 P hc n).expect (fun A => f (Pp, A) * g (Pp, A)) =
+        fAct Pp * gAct Pp := by
+    have hfA : FinProb.DependsOn (fun A => f (Pp, A)) S := by
+      intro A A' hA
+      apply hf
+      intro c hc
+      exact ⟨rfl, hA c hc⟩
+    have hgA : FinProb.DependsOn (fun A => g (Pp, A)) T := by
+      intro A A' hA
+      apply hg
+      intro c hc
+      exact ⟨rfl, hA c hc⟩
+    simpa [heightActLaw9, fAct, gAct] using
+      (FinProb.pi_expect_mul_of_disjoint
+        (fun _ : Pos9 P hc n => FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10)))
+        (fun A => f (Pp, A)) (fun A => g (Pp, A)) S T hfA hgA hST)
+  have hfPos : FinProb.DependsOn fAct S := hfAct
+  have hgPos : FinProb.DependsOn gAct T := hgAct
+  have hpos : (heightPosLaw9 P hc n).expect (fun Pp => fAct Pp * gAct Pp) =
+      (heightPosLaw9 P hc n).expect fAct * (heightPosLaw9 P hc n).expect gAct := by
+    simpa [heightPosLaw9] using
+      (FinProb.pi_expect_mul_of_disjoint
+        (fun _ : Pos9 P hc n =>
+          FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ)))
+        fAct gAct S T hfPos hgPos hST)
+  have hfMarginal : (heightLaw9 P hc n).expect f =
+      (heightPosLaw9 P hc n).expect fAct := by
+    simpa [heightLaw9, fAct] using
+      (finProb_prod_expect9 (heightPosLaw9 P hc n) (heightActLaw9 P hc n)
+        (fun ω => f ω))
+  have hgMarginal : (heightLaw9 P hc n).expect g =
+      (heightPosLaw9 P hc n).expect gAct := by
+    simpa [heightLaw9, gAct] using
+      (finProb_prod_expect9 (heightPosLaw9 P hc n) (heightActLaw9 P hc n)
+        (fun ω => g ω))
+  calc
+    (heightLaw9 P hc n).expect (fun ω => f ω * g ω) =
+        (heightPosLaw9 P hc n).expect
+          (fun Pp => (heightActLaw9 P hc n).expect (fun A => f (Pp, A) * g (Pp, A))) := by
+            simpa [heightLaw9] using
+              (finProb_prod_expect9 (heightPosLaw9 P hc n) (heightActLaw9 P hc n)
+                (fun ω => f ω * g ω))
+    _ = (heightPosLaw9 P hc n).expect (fun Pp => fAct Pp * gAct Pp) := by
+          apply finProb_expect_congr9
+          exact hact
+    _ = (heightPosLaw9 P hc n).expect fAct * (heightPosLaw9 P hc n).expect gAct := hpos
+    _ = (heightLaw9 P hc n).expect f * (heightLaw9 P hc n).expect g := by
+          rw [← hfMarginal, ← hgMarginal]
+
+private theorem heightLaw9_pr_as_expect_indicator {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (E : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop) :
+    (heightLaw9 P hc n).pr E =
+      (heightLaw9 P hc n).expect
+        (fun ω => @ite ℝ (E ω) (Classical.propDecidable (E ω)) 1 0) := by
+  classical
+  unfold FinProb.pr FinProb.expect
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases h : E ω <;> simp [h]
+
+private theorem heightLaw9_pr_and_of_disjoint {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {S T : Finset (Pos9 P hc n)}
+    (E F : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop)
+    (hE : ∀ ω ω', (∀ c ∈ S, ω.1 c = ω'.1 c ∧ ω.2 c = ω'.2 c) → E ω = E ω')
+    (hF : ∀ ω ω', (∀ c ∈ T, ω.1 c = ω'.1 c ∧ ω.2 c = ω'.2 c) → F ω = F ω')
+    (hST : Disjoint S T) :
+    (heightLaw9 P hc n).pr (fun ω => E ω ∧ F ω) =
+      (heightLaw9 P hc n).pr E * (heightLaw9 P hc n).pr F := by
+  classical
+  let f : _ → ℝ := fun ω => if E ω then 1 else 0
+  let g : _ → ℝ := fun ω => if F ω then 1 else 0
+  have hf : HeightDepends9 f S := by
+    intro ω ω' hω
+    simp [f, hE ω ω' hω]
+  have hg : HeightDepends9 g T := by
+    intro ω ω' hω
+    simp [g, hF ω ω' hω]
+  have hprod := heightLaw9_expect_mul_of_disjoint f g hf hg hST
+  have hind (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+      @ite ℝ (E ω ∧ F ω) (Classical.propDecidable _) 1 0 = f ω * g ω := by
+    by_cases hEω : E ω <;> by_cases hFω : F ω <;> simp [f, g, hEω, hFω]
+  calc
+    (heightLaw9 P hc n).pr (fun ω => E ω ∧ F ω) =
+        (heightLaw9 P hc n).expect (fun ω => f ω * g ω) := by
+          rw [heightLaw9_pr_as_expect_indicator]
+          apply finProb_expect_congr9
+          exact hind
+    _ = (heightLaw9 P hc n).expect f * (heightLaw9 P hc n).expect g := hprod
+    _ = (heightLaw9 P hc n).pr E * (heightLaw9 P hc n).pr F := by
+          rw [← heightLaw9_pr_as_expect_indicator E, ← heightLaw9_pr_as_expect_indicator F]
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

@@ -4,6 +4,7 @@ import HypercubeRamsey.Tools.CubeGeometry
 import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.Framework.Embedding
 import HypercubeRamsey.S13.Allocation_q_s13_alloc
+import HypercubeRamsey.S13.Allocation_sol_s13_allocA
 import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
@@ -3146,319 +3147,6 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
     (hSelected : (f.tiling.mode = .bounded ∧ (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S) ∨
        (f.tiling.mode ≠ .bounded ∧ (1 / 200 : ℝ) * T.S.N k ≤ f.tiling.S)) :
     ∃ R : RoundedFamily κ T k, Nonempty (RoundingProvenance f R) := by
-  classical
-  have hNpos : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
-  have hSpos : 0 < (f.tiling.S : ℝ) := by
-    rcases hSelected with ⟨_, hsize⟩ | ⟨_, hsize⟩
-    · exact lt_of_lt_of_le (mul_pos (by norm_num) hNpos) hsize
-    · exact lt_of_lt_of_le (mul_pos (by norm_num) hNpos) hsize
-  have hMassSum : ∑ i, (f.tiling.P i).M = f.tiling.S := f.mass_sum
-  have hMiPos (i : Fin f.tiling.m) : 0 < (f.tiling.P i).M := by
-    have hnon := hExtracted.patch_nonempty i
-    rw [← (f.tiling.P i).cardX]
-    exact Finset.card_pos.mpr hnon.1
-  have hMiCastPos (i : Fin f.tiling.m) : 0 < ((f.tiling.P i).M : ℝ) := by
-    exact_mod_cast hMiPos i
-  have hMiLeS (i : Fin f.tiling.m) : (f.tiling.P i).M ≤ f.tiling.S := by
-    calc
-      _ ≤ ∑ j, (f.tiling.P j).M :=
-        Finset.single_le_sum (fun j hj => Nat.zero_le _) (Finset.mem_univ i)
-      _ = f.tiling.S := hMassSum
-  let ratio : Fin f.tiling.m → ℝ := fun i =>
-    (f.tiling.S : ℝ) / (f.tiling.P i).M
-  let ell : Fin f.tiling.m → ℕ := fun i => allocation_roundLength (ratio i)
-  let weights : Fin f.tiling.m → ℝ := fun i =>
-    (2 : ℝ) ^ (-((ell i : ℕ) : ℤ))
-  have hRoundBounds (i : Fin f.tiling.m) :
-      (f.tiling.P i).M / f.tiling.S ≤ weights i ∧
-        weights i < 2 * (f.tiling.P i).M / f.tiling.S := by
-    have hratioPos : 0 < ratio i := div_pos hSpos (hMiCastPos i)
-    have hratioOne : 1 ≤ ratio i := by
-      apply (le_div_iff₀ (hMiCastPos i)).2
-      have hMiLeSReal : ((f.tiling.P i).M : ℝ) ≤ (f.tiling.S : ℝ) := by
-        exact_mod_cast hMiLeS i
-      nlinarith [hMiLeSReal]
-    have h := allocation_dyadicRoundLength_bounds (ratio i) hratioOne
-    have hinv : (ratio i)⁻¹ = (f.tiling.P i).M / f.tiling.S := by
-      dsimp [ratio]
-      field_simp [ne_of_gt hSpos, ne_of_gt (hMiCastPos i)]
-    constructor
-    · simpa [weights, ell, hinv] using h.1
-    · have h' : weights i < 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) := by
-        simpa [weights, ell, hinv] using h.2
-      have hAlg : 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) =
-          2 * (f.tiling.P i).M / (f.tiling.S : ℝ) := by ring
-      rw [← hAlg]
-      exact h'
-  have hMassSumReal : ∑ i, ((f.tiling.P i).M : ℝ) = (f.tiling.S : ℝ) := by
-    exact_mod_cast hMassSum
-  have hNormalizedMass : ∑ i, (f.tiling.P i).M / (f.tiling.S : ℝ) = 1 := by
-    change (∑ i, ((f.tiling.P i).M : ℝ) / (f.tiling.S : ℝ)) = 1
-    rw [← Finset.sum_div, hMassSumReal, div_self hSpos.ne']
-  have hKraftLower : 1 ≤ ∑ i, weights i := by
-    calc
-      _ = ∑ i, (f.tiling.P i).M / (f.tiling.S : ℝ) := hNormalizedMass.symm
-      _ ≤ ∑ i, weights i := Finset.sum_le_sum fun i hi => (hRoundBounds i).1
-  let rel : Fin f.tiling.m → Fin f.tiling.m → Prop := fun i j => ell i ≤ ell j
-  let order := List.insertionSort rel (List.finRange f.tiling.m)
-  have hSorted : order.Pairwise rel := List.pairwise_insertionSort rel _
-  have hPerm : order.Perm (List.finRange f.tiling.m) :=
-    List.perm_insertionSort rel _
-  have hOrderSum : (order.map weights).sum = ∑ i, weights i := by
-    calc
-      _ = ((List.finRange f.tiling.m).map weights).sum := (hPerm.map weights).sum_eq
-      _ = ∑ i, weights i := (Fin.sum_univ_def weights).symm
-  obtain ⟨pre, a, tail, hOrderDecomp, hPreLt, hCross⟩ :=
-    allocation_exists_prefix_cross weights 1 (by norm_num) order (by
-      rw [hOrderSum]
-      exact hKraftLower)
-  have hSortedPrefix : (pre ++ a :: tail).Pairwise rel := by
-    simpa [hOrderDecomp] using hSorted
-  have hCrossRel := (List.pairwise_append.mp hSortedPrefix).2.2
-  have hEllLe (i : Fin f.tiling.m) (hi : i ∈ pre) : ell i ≤ ell a :=
-    hCrossRel i hi a (by simp)
-  let coeff : Fin f.tiling.m → ℕ := fun i => 2 ^ (ell a - ell i)
-  have hWeightFactor (i : Fin f.tiling.m) (hi : i ∈ pre) :
-      weights i = (coeff i : ℝ) * weights a := by
-    have hlen : ell i ≤ ell a := hEllLe i hi
-    have hexp : -(ell i : ℤ) = (↑(ell a - ell i : ℕ) : ℤ) + -(ell a : ℤ) := by
-      rw [Nat.cast_sub hlen]
-      omega
-    calc
-      _ = (2 : ℝ) ^ (-(ell i : ℤ)) := rfl
-      _ = (2 : ℝ) ^ ((↑(ell a - ell i : ℕ) : ℤ) + -(ell a : ℤ)) := by rw [hexp]
-      _ = (2 : ℝ) ^ (↑(ell a - ell i : ℕ) : ℤ) *
-          (2 : ℝ) ^ (-(ell a : ℤ)) := by
-        rw [← zpow_add₀ (by norm_num : (2 : ℝ) ≠ 0)]
-      _ = (coeff i : ℝ) * weights a := by
-        simp [coeff, weights, zpow_natCast]
-  have hPreMultiple : (pre.map weights).sum =
-      ((pre.map fun i => (coeff i : ℝ)).sum) * weights a := by
-    have hFactors (l : List (Fin f.tiling.m))
-        (hfactor : ∀ i ∈ l, weights i = (coeff i : ℝ) * weights a) :
-        (l.map weights).sum = ((l.map fun i => (coeff i : ℝ)).sum) * weights a := by
-      induction l with
-      | nil => simp
-      | cons i l ih =>
-          have hi := hfactor i (by simp)
-          have htail : ∀ j ∈ l, weights j = (coeff j : ℝ) * weights a := by
-            intro j hj
-            exact hfactor j (by simp [hj])
-          simp only [List.map_cons, List.sum_cons]
-          rw [hi, ih htail]
-          ring
-    exact hFactors pre (fun i hi => hWeightFactor i hi)
-  have hNegWeight : weights a = ((2 : ℝ) ^ ell a)⁻¹ := by
-    simp [weights, zpow_neg, zpow_natCast]
-  have hTargetMultiple : (1 : ℝ) = (2 : ℝ) ^ ell a * weights a := by
-    rw [hNegWeight]
-    exact (mul_inv_cancel₀ (by positivity : (2 : ℝ) ^ ell a ≠ 0)).symm
-  have hWeightPos : 0 < weights a := by
-    dsimp [weights]
-    positivity
-  have hCoeffCastSum := allocation_list_natCast_sum coeff pre
-  have hCoeffLt : (pre.map fun i => coeff i).sum < 2 ^ ell a := by
-    have h := hPreLt
-    rw [hPreMultiple, hTargetMultiple] at h
-    have hReal := (mul_lt_mul_iff_of_pos_right hWeightPos).mp h
-    have hCast : ((pre.map fun i => coeff i).sum : ℝ) <
-        ((2 ^ ell a : ℕ) : ℝ) := by
-      simpa [hCoeffCastSum] using hReal
-    exact_mod_cast hCast
-  have hCoeffLe : 2 ^ ell a ≤ (pre.map fun i => coeff i).sum + 1 := by
-    have h := hCross
-    rw [hPreMultiple, hTargetMultiple] at h
-    have hmul : (2 : ℝ) ^ ell a * weights a ≤
-        ((pre.map fun i => (coeff i : ℝ)).sum + 1) * weights a := by
-      calc
-        _ ≤ ((pre.map fun i => (coeff i : ℝ)).sum) * weights a + weights a := h
-        _ = _ := by ring
-    have hReal := (mul_le_mul_iff_of_pos_right hWeightPos).mp hmul
-    have hCast : ((2 ^ ell a : ℕ) : ℝ) ≤
-        (((pre.map fun i => coeff i).sum + 1 : ℕ) : ℝ) := by
-      simpa [hCoeffCastSum] using hReal
-    exact_mod_cast hCast
-  have hCoeffEq : (pre.map fun i => coeff i).sum + 1 = 2 ^ ell a := by omega
-  have hPrefixExact : (pre.map weights).sum + weights a = 1 := by
-    calc
-      _ = ((pre.map fun i => (coeff i : ℝ)).sum + 1) * weights a := by
-        rw [hPreMultiple]
-        push_cast
-        ring
-      _ = (2 : ℝ) ^ ell a * weights a := by
-        have hCoeffEqReal :
-            ((pre.map fun i => (coeff i : ℝ)).sum + 1) = (2 : ℝ) ^ ell a := by
-          have hCoeffEqCast :
-              (((pre.map fun i => coeff i).sum + 1 : ℕ) : ℝ) =
-                ((2 ^ ell a : ℕ) : ℝ) := by exact_mod_cast hCoeffEq
-          simpa [hCoeffCastSum] using hCoeffEqCast
-        rw [hCoeffEqReal]
-      _ = 1 := hTargetMultiple.symm
-  have hOrderPerm : order.Perm (List.finRange f.tiling.m) := hPerm
-  have hOrderNodup : order.Nodup := hOrderPerm.nodup_iff.mpr (List.nodup_finRange _)
-  have hPrefixSublist : List.Sublist (pre ++ [a]) order := by
-    rw [hOrderDecomp]
-    exact List.Sublist.append (List.Sublist.refl pre)
-      (List.singleton_sublist.2 (by simp))
-  have hPrefixNodup : (pre ++ [a]).Nodup := hOrderNodup.sublist hPrefixSublist
-  let A : Finset (Fin f.tiling.m) := (pre ++ [a]).toFinset
-  have hAweights : ∑ i ∈ A, weights i = 1 := by
-    calc
-      _ = ((pre ++ [a]).map weights).sum := by
-        simpa [A] using allocation_list_sum_toFinset weights (pre ++ [a]) hPrefixNodup
-      _ = (pre.map weights).sum + weights a := by simp [List.map_append, List.sum_append]
-      _ = 1 := hPrefixExact
-  have hAmem : a ∈ A := by simp [A]
-  have hAnonempty : A.Nonempty := ⟨a, hAmem⟩
-  have hSelectedMass : (f.tiling.S : ℝ) / 2 < ∑ i ∈ A, (f.tiling.P i).M := by
-    have hRoundTerm (i : Fin f.tiling.m) :
-        weights i < 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) := by
-      calc
-        _ < 2 * (f.tiling.P i).M / (f.tiling.S : ℝ) := (hRoundBounds i).2
-        _ = 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) := by ring
-    have hRoundTerms : (∑ i ∈ A, weights i) <
-        ∑ i ∈ A, 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) :=
-      Finset.sum_lt_sum_of_nonempty hAnonempty (fun i hi => hRoundTerm i)
-    have hRoundSum : (∑ i ∈ A, weights i) <
-        2 * (∑ i ∈ A, (f.tiling.P i).M / (f.tiling.S : ℝ)) := by
-      rw [Finset.mul_sum]
-      exact hRoundTerms
-    rw [hAweights] at hRoundSum
-    have hSumDiv : (∑ i ∈ A, (f.tiling.P i).M / (f.tiling.S : ℝ)) =
-        (∑ i ∈ A, ((f.tiling.P i).M : ℝ)) / (f.tiling.S : ℝ) := by
-      rw [Finset.sum_div]
-    rw [hSumDiv] at hRoundSum
-    have htotal : (f.tiling.S : ℝ) < 2 * (∑ i ∈ A, ((f.tiling.P i).M : ℝ)) := by
-      have hratio : (1 : ℝ) <
-          (2 * (∑ i ∈ A, ((f.tiling.P i).M : ℝ))) / (f.tiling.S : ℝ) := by
-        convert hRoundSum using 1 <;> ring
-      simpa using (lt_div_iff₀ hSpos).mp hratio
-    have hsumCastA :
-        ((∑ i ∈ A, (f.tiling.P i).M : ℕ) : ℝ) =
-          ∑ i ∈ A, ((f.tiling.P i).M : ℝ) := by simp
-    have htotalNat : (f.tiling.S : ℝ) <
-        2 * ((∑ i ∈ A, (f.tiling.P i).M : ℕ) : ℝ) := by
-      rw [hsumCastA]
-      exact htotal
-    exact (div_lt_iff₀ (by norm_num : (0 : ℝ) < 2)).2
-      (by simpa [mul_comm] using htotalNat)
-  let eA : {i : Fin f.tiling.m // i ∈ A} ≃ Fin A.card :=
-    Fintype.equivFinOfCardEq (by simp)
-  let idx : Fin A.card → Fin f.tiling.m := fun i => (eA.symm i).val
-  have hIdxInj : Function.Injective idx := by
-    intro i j hij
-    apply eA.symm.injective
-    exact Subtype.ext hij
-  have hIdxNe (i j : Fin A.card) (hij : i ≠ j) : idx i ≠ idx j := by
-    intro h
-    exact hij (hIdxInj h)
-  let Pnew : Fin A.card → Patch (T.orient f.orientation) k := fun i =>
-    {f.tiling.P (idx i) with ℓ := ell (idx i)}
-  let Tnew : Tiling κ (T.orient f.orientation) k :=
-    {f.tiling with
-      m := A.card
-      P := Pnew
-      w := fun i => f.tiling.w (idx i)
-      Q := fun i => f.tiling.Q (idx i)}
-  have hExtractedNew : ExtractionData Tnew := by
-    refine {
-      reserveX_card := hExtracted.reserveX_card
-      reserveY_card := hExtracted.reserveY_card
-      reserveX_subset := hExtracted.reserveX_subset
-      reserveY_subset := hExtracted.reserveY_subset
-      patch_supports := ?_
-      patch_nonempty := ?_
-      bins_card := ?_
-      patch_X_disjoint := ?_
-      patch_Y_disjoint := ?_
-      S_upper := hExtracted.S_upper
-      measured_scales := ?_
-      bounded_scale_cutoff := ?_
-      bounded_data := ?_
-      direct_scale_bound := ?_
-      direct_data := ?_
-      cluster_data := ?_
-      clique_scales := ?_ }
-    · intro i
-      simpa [Tnew, Pnew] using hExtracted.patch_supports (idx i)
-    · intro i
-      simpa [Tnew, Pnew] using hExtracted.patch_nonempty (idx i)
-    · intro i B hB
-      simpa [Tnew, Pnew] using hExtracted.bins_card (idx i) B hB
-    · intro i j hij
-      have hidxne := hIdxNe i j hij
-      simpa [Tnew, Pnew] using hExtracted.patch_X_disjoint (idx i) (idx j) hidxne
-    · intro i j hij
-      have hidxne := hIdxNe i j hij
-      simpa [Tnew, Pnew] using hExtracted.patch_Y_disjoint (idx i) (idx j) hidxne
-    · intro i
-      simpa [Tnew, Pnew, idx] using hExtracted.measured_scales (idx i)
-    · intro hmode i
-      simpa [Tnew, Pnew] using hExtracted.bounded_scale_cutoff hmode (idx i)
-    · intro hmode
-      rcases hExtracted.bounded_data hmode with ⟨hm, hbd⟩
-      have hAcardLe : A.card ≤ 1 := by simpa [hm] using (Finset.card_le_univ A)
-      have hAcardPos : 0 < A.card := Finset.card_pos.mpr hAnonempty
-      have hAcardOne : A.card = 1 := by omega
-      refine ⟨hAcardOne, ?_⟩
-      intro i
-      rcases hbd (idx i) with ⟨hℓ, hh, hdPatch, hM, hQ⟩
-      have hidx0 : idx i = 0 := by
-        apply Fin.ext
-        have hiLt : (idx i).val < 1 := by simpa [hm] using (idx i).isLt
-        omega
-      have hMassOne : (f.tiling.P 0).M = f.tiling.S := by
-        simpa [hm] using hMassSum
-      have hMassIdx : (f.tiling.P (idx i)).M = f.tiling.S := by rw [hidx0]; exact hMassOne
-      have hRatioOne : ratio (idx i) = 1 := by
-        dsimp [ratio]
-        rw [hMassIdx]
-        exact div_self hSpos.ne'
-      have hLenZero : ell (idx i) = 0 := by
-        simp [ell, allocation_roundLength, hRatioOne, Real.log_one]
-      simpa [Tnew, Pnew, hLenZero] using ⟨hLenZero, hh, hdPatch, hM, hQ⟩
-    · intro hmode i
-      simpa [Tnew, Pnew, idx] using hExtracted.direct_scale_bound hmode (idx i)
-    · intro hmode i
-      simpa [Tnew, Pnew, idx] using hExtracted.direct_data hmode (idx i)
-    · intro hmode i
-      simpa [Tnew, Pnew, idx] using hExtracted.cluster_data hmode (idx i)
-    · intro i
-      simpa [Tnew, Pnew, idx] using hExtracted.clique_scales (idx i)
-  have hSLower : (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S := by
-    rcases hSelected with ⟨_, hsize⟩ | ⟨_, hsize⟩
-    · exact hsize
-    · calc
-        _ ≤ (1 / 200 : ℝ) * T.S.N k := by positivity
-        _ ≤ f.tiling.S := hsize
-  let R : RoundedFamily κ T k := {
-    orientation := f.orientation
-    tiling := Tnew
-    extracted := hExtractedNew
-    S_lower := hSLower
-    S_upper := hExtracted.S_upper
-    selected_mass := hSelectedMass
-    dyadic_mass_lower := by
-      intro i
-      simpa [Tnew, Pnew, weights] using (hRoundBounds (idx i)).1
-    dyadic_mass_upper := by
-      intro i
-      simpa [Tnew, Pnew, weights] using (hRoundBounds (idx i)).2
-    dyadic_sum := by
-      calc
-        _ = ∑ z : {i : Fin f.tiling.m // i ∈ A}, weights z.val := by
-          exact Fintype.sum_equiv eA.symm _ _ (fun i => rfl)
-        _ = ∑ i ∈ A, weights i := by simp
-        _ = 1 := hAweights }
-  refine ⟨R, { orientation := rfl, mode := rfl, colour := rfl, mass := rfl,
-    reserveX := HEq.rfl, reserveY := HEq.rfl, index := idx, injective := hIdxInj,
-    patches := ?_, clique_scales := ?_ }⟩
-  · intro i
-    dsimp [R, Tnew, Pnew]
-    cases f.tiling.P (idx i)
-    rfl
-  · intro i
-    rfl
   sorry
 
 /-- P13.3g (sections/13, lines 170–182): Kraft's equality gives a complete prefix code. -/
@@ -3881,13 +3569,268 @@ theorem allocation_geometry (κ : CConsts) (T : Stage) (k : ℕ)
     simp [Tiling.Icoord, topCoordinates] at hx ⊢
     omega
 
+set_option maxHeartbeats 1200000 in
+private theorem allocation_cluster_parameters {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} (R : RoundedFamily κ T k) (i : Fin R.tiling.m)
+    (hm : R.tiling.mode = .lowCluster ∨ R.tiling.mode = .highSmall ∨ R.tiling.mode = .highLarge) :
+    κ.Q0 ≤ (R.tiling.P i).q ∧
+      ((R.tiling.P i).q : ℝ) ^ (κ.Mlo : ℝ) ≤ (R.tiling.P i).h ∧
+      ((R.tiling.P i).h : ℝ) < 2 * ((R.tiling.P i).q : ℝ) ^ (κ.Mhi : ℝ) := by
+  try simp only [Real.rpow_eq_pow]
+  have hd := R.extracted.cluster_data hm i
+  simp only [Real.rpow_eq_pow] at hd
+  have hmax : κ.M1 * κ.Q0 ≤ max ((R.tiling.P i).g : ℝ) ((R.tiling.P i).q : ℝ) := by simpa only [Nat.cast_max] using hd.1
+  have hgq : ((R.tiling.P i).g : ℝ) ≤ κ.M1 * (R.tiling.P i).q := hd.2.1
+  have hq : κ.Q0 ≤ (R.tiling.P i).q := by
+    have hm1 : 1 ≤ κ.M1 := by linarith [hκ.M1_big.1]
+    have hq0 : (0 : ℝ) ≤ (R.tiling.P i).q := by positivity
+    have hqq : ((R.tiling.P i).q : ℝ) ≤ κ.M1 * (R.tiling.P i).q := by nlinarith
+    have hupper := max_le hgq hqq
+    have hM1 : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+    exact (mul_le_mul_iff_right₀ hM1).mp (hmax.trans hupper)
+  have hq1 : (1 : ℝ) ≤ (R.tiling.P i).q :=
+    (Lane_sol_s13_allocA.threshold hκ).le.trans hq
+  have hM := (Lane_sol_s13_allocA.Mhi_positive hκ).2.2
+  have hlo := hd.2.2.2.2.2.2.2.1
+  have hhi := hd.2.2.2.2.2.2.2.2.1
+  have hlower : ((R.tiling.P i).q : ℝ) ^ (κ.Mlo : ℝ) ≤ (R.tiling.P i).h := by
+    apply le_trans ?_ hlo
+    apply Real.rpow_le_rpow_of_exponent_le hq1
+    split_ifs <;> first | exact le_rfl | exact hM
+  have hupper : ((R.tiling.P i).h : ℝ) < 2 * ((R.tiling.P i).q : ℝ) ^ (κ.Mhi : ℝ) := by
+    apply hhi.trans_le
+    gcongr
+    split_ifs <;> first | exact hM | exact le_rfl
+  exact ⟨hq, hlower, hupper⟩
+
+set_option maxHeartbeats 1200000 in
 /-- P13.3i (sections/13, lines 151–155, 205–215): fixed thresholds fit prefixes and internal dimensions
 inside the assigned gain budget. -/
 theorem scale_bookkeeping (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hBounds : ResidualScaleBoundFacts κ T) :
     ∀ᶠ k in atTop, ∀ R : RoundedFamily κ T k,
       AllocationBounds R.tiling ∧ ScaleRegimeFacts R.tiling := by
-  sorry
+  classical
+  have hp := Lane_sol_s13_allocA.parameters hκ
+  have haBpos := hκ.aB_rng.1
+  have haCpos := hκ.aC_rng.1
+  have hMhi := Lane_sol_s13_allocA.Mhi_positive hκ
+  let γ : ℝ := κ.ι / (4 * (κ.Mhi : ℝ))
+  have hγ : 0 < γ := by
+    dsimp [γ]
+    exact div_pos hκ.ι_rng.1 (mul_pos (by norm_num) (by exact_mod_cast hMhi.2.1))
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop := by
+    simpa only [Function.comp_def] using
+      (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  have hlog : Tendsto (fun k => Real.log (T.S.n k)) atTop atTop := by
+    simpa only [Function.comp_def] using Real.tendsto_log_atTop.comp hn
+  have hsmall := hn.eventually (Lane_sol_consts_adm.eventually_power_sum (κ.ι / 2) 0 κ.ι 2 0 20 (1 / 2)
+    (by linarith [hκ.ι_rng.1]) hκ.ι_rng.1 hκ.ι_rng.1 (by norm_num))
+  have hlow := hlog.eventually (Lane_sol_consts_adm.eventually_power_bound (κ.cq * (κ.Mlo : ℝ)) (1 / 10) 2 1
+    (by
+      have := hκ.cq_rng.2
+      have hm : (0 : ℝ) < κ.Mlo := by exact_mod_cast hMhi.1
+      have hc := (lt_div_iff₀ (by positivity : 0 < 20 * (κ.Mlo : ℝ))).mp this
+      nlinarith) (by norm_num))
+  filter_upwards [Lane_sol_s13_allocA.oriented_cluster_bound hBounds hγ, hsmall, hlow,
+    Lane_sol_s13_allocA.high_small_estimates hκ T, hn.eventually_ge_atTop 2,
+    hlog.eventually_gt_atTop 1] with k hQ hSmall hLow hHighSmall hn2 hLog1
+  intro R
+  have hnr : (1 : ℝ) ≤ T.S.n k := by linarith
+  have hn0 : (0 : ℝ) < T.S.n k := by linarith
+  have hNo : (T.orient R.orientation).S.n k = T.S.n k := by cases R.orientation <;> rfl
+  have hNO : (T.orient R.orientation).S.N k = T.S.N k := by cases R.orientation <;> rfl
+  have hN : 0 < T.S.N k := T.S.N_pos k
+  have hS : 0 < R.tiling.S := by
+    have hNr : (0 : ℝ) < T.S.N k := by exact_mod_cast hN
+    exact_mod_cast (show (0 : ℝ) < R.tiling.S by linarith [R.S_lower])
+  have hDim : 2 * (T.S.n k : ℝ) ^ (κ.ι / 2) + 20 < (T.S.n k : ℝ) ^ κ.ι := by
+    simp only [zero_mul, add_zero] at hSmall
+    have hnp := Real.rpow_pos_of_pos hn0 κ.ι
+    linarith
+  have hLoss (i : Fin R.tiling.m) (r : ℝ)
+      (hm : (1 / 400 : ℝ) * T.S.N k * Real.exp (-r) ≤ (R.tiling.P i).M) :
+      ((R.tiling.P i).ℓ : ℝ) ≤ 2 * (r + 10) ∧
+        Real.log ((T.S.N k : ℝ) / (R.tiling.P i).M) ≤ r + 10 := by
+    have hM : 0 < (R.tiling.P i).M := by
+      rw [← (R.tiling.P i).cardX]
+      exact Finset.card_pos.mpr (R.extracted.patch_nonempty i).1
+    exact Lane_sol_s13_allocA.prefix_loss hN hM hS R.S_upper hm (R.dyadic_mass_lower i)
+  have hDirect (hm : R.tiling.mode = .lowDirect ∨ R.tiling.mode = .highDirect) (i : Fin R.tiling.m) :
+      (max (R.tiling.P i).h (R.tiling.P i).ℓ : ℝ) < ((T.orient R.orientation).S.n k : ℝ) ^ κ.ι ∧
+      (((R.tiling.P i).ℓ : ℝ) ≤ R.tiling.gain i / (1000 * κ.u) ∧
+        Real.log (((T.orient R.orientation).S.N k : ℝ) / (R.tiling.P i).M) ≤
+          R.tiling.gain i / (1000 * κ.u)) := by
+    rcases R.extracted.direct_data hm i with ⟨hmax, hgq, hsize, hdegree, hh, hd, hreg⟩
+    have hsize' : (1 / 400 : ℝ) * T.S.N k * Real.exp (-((R.tiling.P i).g : ℝ) ^ κ.aB) ≤
+        (R.tiling.P i).M := by simpa [hNO] using hsize
+    have hl := hLoss i _ hsize'
+    have hg := R.extracted.direct_scale_bound hm i
+    rw [hNo] at hg
+    have hgp : ((R.tiling.P i).g : ℝ) ^ κ.aB ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := by
+      calc
+        _ ≤ ((T.S.n k : ℝ) ^ (κ.ι / 2)) ^ κ.aB := by gcongr
+        _ = (T.S.n k : ℝ) ^ ((κ.ι / 2) * κ.aB) := (Real.rpow_mul hn0.le _ _).symm
+        _ ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) :=
+          Real.rpow_le_rpow_of_exponent_le hnr (by nlinarith [hκ.ι_rng.1, hp.2.2.2.2.1])
+    have hel : ((R.tiling.P i).ℓ : ℝ) < (T.S.n k : ℝ) ^ κ.ι := by linarith [hl.1]
+    have hqg : ((R.tiling.P i).q : ℝ) ≤ (R.tiling.P i).g := by
+      have hq0 : (0 : ℝ) ≤ (R.tiling.P i).q := by positivity
+      have hm1 := hκ.M1_big.1
+      nlinarith
+    have hgmin : κ.M1 * κ.Q0 ≤ (R.tiling.P i).g := by
+      rw [Nat.cast_max] at hmax
+      simpa [max_eq_left hqg] using hmax
+    have hbudget := Lane_sol_s13_allocA.direct_budget hκ hgmin
+    have hGain : R.tiling.gain i / (1000 * κ.u) = (R.tiling.P i).g / (10 ^ 6 * κ.u) := by
+      have hu0 : (κ.u : ℝ) ≠ 0 := by linarith [hp.2.2.1]
+      rcases hm with hm | hm <;> simp only [Tiling.gain, hm] <;>
+        field_simp [hu0] <;> ring
+    rw [hNo, hh]
+    simp only [Nat.cast_zero, max_eq_right (by positivity : (0 : ℝ) ≤ (R.tiling.P i).ℓ)]
+    refine ⟨hel, ?_⟩
+    rw [hGain, hNO]
+    constructor
+    · exact hl.1.trans hbudget
+    · have hpow0 := Real.rpow_nonneg (show (0 : ℝ) ≤ (R.tiling.P i).g by positivity) κ.aB
+      linarith [hl.2]
+  have hCluster (hm : R.tiling.mode = .lowCluster ∨ R.tiling.mode = .highSmall ∨ R.tiling.mode = .highLarge)
+      (i : Fin R.tiling.m) :
+      (max (R.tiling.P i).h (R.tiling.P i).ℓ : ℝ) < ((T.orient R.orientation).S.n k : ℝ) ^ κ.ι ∧
+      (((R.tiling.P i).ℓ : ℝ) ≤ R.tiling.gain i / (1000 * κ.u) ∧
+        Real.log (((T.orient R.orientation).S.N k : ℝ) / (R.tiling.P i).M) ≤
+          R.tiling.gain i / (1000 * κ.u)) := by
+    obtain ⟨hqmin, hhlo, hhhi⟩ := allocation_cluster_parameters hκ R i hm
+    have hdata := R.extracted.cluster_data hm i
+    simp only [Real.rpow_eq_pow] at hdata
+    have hsize : (1 / 400 : ℝ) * T.S.N k * Real.exp (-((R.tiling.P i).q : ℝ) ^ κ.aC) ≤
+        (R.tiling.P i).M := by simpa [hNO] using hdata.2.2.1
+    have hl := hLoss i _ hsize
+    have hsupports := R.extracted.patch_supports i
+    have hRX := hsupports.2.1.trans Finset.sdiff_subset
+    have hRY := hsupports.2.2.2.trans Finset.sdiff_subset
+    have hqb := hQ R.orientation (R.tiling.P i).resX (R.tiling.P i).resY hRX hRY
+    rw [← (R.extracted.measured_scales i).2] at hqb
+    have hq1 : (1 : ℝ) ≤ (R.tiling.P i).q := (Lane_sol_s13_allocA.threshold hκ).le.trans hqmin
+    have hMhiReal : (1 : ℝ) ≤ κ.Mhi := by
+      have hnat : 1 ≤ κ.Mhi := by have ht := hMhi.2.1; omega
+      exact_mod_cast hnat
+    have hγM : γ * (κ.Mhi : ℝ) = κ.ι / 4 := by
+      dsimp [γ]
+      field_simp [Nat.cast_ne_zero.mpr (Nat.ne_of_gt hMhi.2.1)]
+      <;> ring
+    have hPow : ((R.tiling.P i).q : ℝ) ^ (κ.Mhi : ℝ) ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := by
+      calc
+        _ ≤ ((T.S.n k : ℝ) ^ γ) ^ (κ.Mhi : ℝ) := by gcongr
+        _ = (T.S.n k : ℝ) ^ (γ * (κ.Mhi : ℝ)) := (Real.rpow_mul hn0.le _ _).symm
+        _ ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) :=
+          Real.rpow_le_rpow_of_exponent_le hnr (by rw [hγM]; linarith [hκ.ι_rng.1])
+    have hqp : ((R.tiling.P i).q : ℝ) ^ κ.aC ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := by
+      calc
+        _ ≤ ((T.S.n k : ℝ) ^ γ) ^ κ.aC := by gcongr
+        _ = (T.S.n k : ℝ) ^ (γ * κ.aC) := (Real.rpow_mul hn0.le _ _).symm
+        _ ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := by
+          apply Real.rpow_le_rpow_of_exponent_le hnr
+          have hgM : γ * (κ.Mhi : ℝ) = κ.ι / 4 := hγM
+          have hmul := mul_le_mul_of_nonneg_left (show κ.aC ≤ (κ.Mhi : ℝ) by linarith [hp.2.2.2.1]) hγ.le
+          linarith [hκ.ι_rng.1]
+    have hhDim : ((R.tiling.P i).h : ℝ) < (T.S.n k : ℝ) ^ κ.ι := by linarith
+    have helDim : ((R.tiling.P i).ℓ : ℝ) < (T.S.n k : ℝ) ^ κ.ι := by linarith [hl.1]
+    have hbudget := Lane_sol_s13_allocA.cluster_budget hκ hqmin hhlo
+    have hGain : R.tiling.gain i = κ.a * (R.tiling.P i).h / 10 ^ 6 := by
+      rcases hm with hm | hm | hm <;> simp [Tiling.gain, hm]
+    rw [hNo]
+    refine ⟨max_lt hhDim helDim, ?_⟩
+    rw [hGain, hNO]
+    constructor
+    · exact hl.1.trans hbudget
+    · have hpow0 := Real.rpow_nonneg (show (0 : ℝ) ≤ (R.tiling.P i).q by positivity) κ.aC
+      linarith [hl.2]
+  refine ⟨?_, ?_⟩
+  · intro i
+    cases hm : R.tiling.mode with
+    | bounded =>
+      have hbd := (R.extracted.bounded_data hm).2 i
+      simp only [hbd.1, hbd.2.1, max_self, Nat.cast_zero]
+      exact ⟨by rw [hNo]; positivity, Or.inl trivial⟩
+    | lowDirect => exact ⟨(hDirect (Or.inl hm) i).1, Or.inr (hDirect (Or.inl hm) i).2⟩
+    | highDirect => exact ⟨(hDirect (Or.inr hm) i).1, Or.inr (hDirect (Or.inr hm) i).2⟩
+    | lowCluster => exact ⟨(hCluster (Or.inl hm) i).1, Or.inr (hCluster (Or.inl hm) i).2⟩
+    | highSmall => exact ⟨(hCluster (Or.inr (Or.inl hm)) i).1, Or.inr (hCluster (Or.inr (Or.inl hm)) i).2⟩
+    | highLarge => exact ⟨(hCluster (Or.inr (Or.inr hm)) i).1, Or.inr (hCluster (Or.inr (Or.inr hm)) i).2⟩
+  · refine ⟨?_, ?_, ?_, ?_⟩
+    · intro i hm
+      have hmode : R.tiling.mode = .lowCluster ∨ R.tiling.mode = .highSmall ∨ R.tiling.mode = .highLarge := by
+        cases hh : R.tiling.mode with
+        | bounded => simp only [hh, Mode.isCluster] at hm
+        | lowDirect => simp only [hh, Mode.isCluster] at hm
+        | highDirect => simp only [hh, Mode.isCluster] at hm
+        | lowCluster => exact Or.inl rfl
+        | highSmall => exact Or.inr (Or.inl rfl)
+        | highLarge => exact Or.inr (Or.inr rfl)
+      obtain ⟨hqmin, hhlo, hhhi⟩ := allocation_cluster_parameters hκ R i hmode
+      have hh1 : 1 ≤ (R.tiling.P i).h := by
+        have := (Real.one_le_rpow ((Lane_sol_s13_allocA.threshold hκ).le.trans hqmin)
+          (by positivity : 0 ≤ (κ.Mlo : ℝ))).trans hhlo
+        exact_mod_cast this
+      refine ⟨Lane_sol_s13_allocA.cluster_tuple_bound hκ hqmin hhhi hh1, ?_⟩
+      have hdata := R.extracted.cluster_data hmode i
+      simp only [Real.rpow_eq_pow] at hdata
+      by_cases hsmall : R.tiling.mode = .highSmall
+      · have hd := hdata.2.2.2.1 hsmall
+        have hqL := (hdata.2.2.2.2.2.2.2.2.2.2.1.mp hsmall).2
+        rw [hNo] at hqL
+        rw [hd]
+        simpa only [Tiling.kScale, Tiling.tScale, hNo] using (hHighSmall _ _ hqmin hqL hhlo hhhi).1
+      · have hother : R.tiling.mode = .lowCluster ∨ R.tiling.mode = .highLarge := by tauto
+        have hd := hdata.2.2.2.2.1 hother
+        rw [hd]
+        simpa only [Tiling.kScale, Tiling.tScale] using (Lane_sol_s13_allocA.cluster_full_bin hκ hqmin hhlo hhhi).1
+    · intro hm i
+      have hdata := R.extracted.cluster_data (Or.inl hm) i
+      simp only [Real.rpow_eq_pow] at hdata
+      have hhhi := hdata.2.2.2.2.2.2.2.2.1
+      have hqL := hdata.2.2.2.2.2.2.2.2.2.1.mp hm
+      rw [hNo] at hqL
+      rw [if_pos hm] at hhhi
+      have hq0 : (0 : ℝ) ≤ (R.tiling.P i).q := by positivity
+      have hbound : ((R.tiling.P i).h : ℝ) <
+          2 * (Real.log (T.S.n k)) ^ (κ.cq * (κ.Mlo : ℝ)) := by
+        calc
+          _ < 2 * ((R.tiling.P i).q : ℝ) ^ (κ.Mlo : ℝ) := hhhi
+          _ ≤ 2 * ((Real.log (T.S.n k)) ^ κ.cq) ^ (κ.Mlo : ℝ) := by gcongr
+          _ = 2 * (Real.log (T.S.n k)) ^ (κ.cq * (κ.Mlo : ℝ)) := by
+            rw [← Real.rpow_mul (by linarith : 0 ≤ Real.log (T.S.n k))]
+      rw [hNo]
+      exact hbound.le.trans (by simpa only [one_mul, Real.rpow_eq_pow] using hLow)
+    · intro hm i
+      have hmode : R.tiling.mode = .lowCluster ∨ R.tiling.mode = .highSmall ∨ R.tiling.mode = .highLarge := by tauto
+      have hdata := R.extracted.cluster_data hmode i
+      simp only [Real.rpow_eq_pow] at hdata
+      have hnotLow : R.tiling.mode ≠ .lowCluster := by rcases hm with hm | hm <;> simp [hm]
+      have hqL : (Real.log ((T.orient R.orientation).S.n k)) ^ κ.cq < (R.tiling.P i).q := by
+        have he := hdata.2.2.2.2.2.2.2.2.2.1
+        exact lt_of_not_ge (fun h => hnotLow (he.mpr h))
+      have hhlo := hdata.2.2.2.2.2.2.2.1
+      rw [if_neg hnotLow] at hhlo
+      rw [hNo] at hqL ⊢
+      calc
+        (Real.log (T.S.n k)) ^ 5 = (Real.log (T.S.n k)) ^ (5 : ℝ) := by norm_num only [Real.rpow_natCast, Real.rpow_ofNat]
+        _ < (Real.log (T.S.n k)) ^ (κ.cq * (κ.Mhi : ℝ)) :=
+          Real.rpow_lt_rpow_of_exponent_lt hLog1 hκ.Mhi_big.2
+        _ = ((Real.log (T.S.n k)) ^ κ.cq) ^ (κ.Mhi : ℝ) :=
+          Real.rpow_mul (by linarith : 0 ≤ Real.log (T.S.n k)) _ _
+        _ ≤ ((R.tiling.P i).q : ℝ) ^ (κ.Mhi : ℝ) := by gcongr
+        _ ≤ (R.tiling.P i).h := hhlo
+    · intro hm i
+      obtain ⟨hqmin, hhlo, hhhi⟩ := allocation_cluster_parameters hκ R i (Or.inr (Or.inl hm))
+      have hdata := R.extracted.cluster_data (Or.inr (Or.inl hm)) i
+      simp only [Real.rpow_eq_pow] at hdata
+      have hd := hdata.2.2.2.1 hm
+      have hqL := (hdata.2.2.2.2.2.2.2.2.2.2.1.mp hm).2
+      rw [hNo] at hqL
+      rw [hd]
+      simpa only [Real.rpow_eq_pow, hNo] using (hHighSmall _ _ hqmin hqL hhlo hhhi).2
 
 /-- P13.3i→h (sections/13, line 210): uniformly small dimensions fit, with a
 free parity coordinate, at all sufficiently large indices. -/

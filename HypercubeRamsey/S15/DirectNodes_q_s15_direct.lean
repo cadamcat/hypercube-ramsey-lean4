@@ -1528,4 +1528,41 @@ theorem pi_expect_finset_product {ι : Type*} [Fintype ι] [DecidableEq ι]
             (f := fun i => (laws i).expect (f i)) (g := fun _ => (1 : ℝ))]
           simp
 
+theorem expect_normalizedHit_eq_one {N : ℕ} (π : Law N)
+    (E : Fin N → Fin N → Prop) (c : Colour) (x : Fin N)
+    (hd : 0 < deg E c π.w x) :
+    (π).expect (fun y => S15.normalizedHit E c π x y) = 1 := by
+  classical
+  have hfactor (y : Fin N) : S15.normalizedHit E c π x y =
+      hit E c x y / deg E c π.w x := by
+    simp [S15.normalizedHit, hd]
+  unfold FinProb.expect
+  simp_rw [hfactor]
+  have hsum :
+      (∑ y, π.w y * (hit E c x y / deg E c π.w x)) =
+        (∑ y, π.w y * hit E c x y) / deg E c π.w x := by
+    have hterm (y : Fin N) :
+        π.w y * (hit E c x y / deg E c π.w x) =
+          (π.w y * hit E c x y) / deg E c π.w x := by ring
+    simp_rw [hterm]
+    rw [Finset.sum_div]
+  rw [hsum]
+  unfold deg
+  exact div_self (ne_of_gt hd)
+
+theorem directRowWeight_split_cross_bulk {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (ys : S15.OddAssignment T k) (a : S15.EvenPosition T k)
+    (x : Fin (T.S.N k))
+    (hcross : 0 < S15.directCrossingMass PT hPT ys a) :
+    S15.directRowWeight PT hPT ys a x =
+      S15.directBaseWeight PT hPT a x *
+        (∏ b ∈ S15.crossingNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) *
+        (∏ b ∈ S15.bulkNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) := by
+  unfold S15.directRowWeight S15.directPostCrossingWeight
+  simp only [if_pos hcross]
+  field_simp [ne_of_gt hcross]
+
 end HypercubeRamsey.Lane_q_s15_direct

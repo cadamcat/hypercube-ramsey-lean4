@@ -6,3 +6,11 @@ import HypercubeRamsey.S18.Nodes_sol_s18_2lm
 #print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.tilted_bound_of_raw
 #print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.barrier_slack_eventually
 #print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.stopped_linear_term_zero
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.cylinder_survival_window
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.single_hit_exception
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.pair_hit_exception
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.relative_survival_window
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.critical_tuple_domination
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.conditioned_atom_domination
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.pi_labels_domination
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.Cylinder.critical_subset_survival_lower

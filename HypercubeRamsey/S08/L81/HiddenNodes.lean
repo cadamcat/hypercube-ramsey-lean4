@@ -465,6 +465,99 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     simp only [Ctx.R', FinProb.map, FinProb.bind, FinProb.pi]
     rw [Fintype.sum_prod_type]
     simp [Ctx.tagLaw]
+  have nuTupleHit (D : Ctx η₀ β p h) (x : Fin D.N) (i : D.M.ι) :
+      (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+        if D.hitsAll x ξ then (1 : ℝ) else 0) =
+        rowDeg D.E D.G x (D.M.ν i) ^ h := by
+    classical
+    have hInd (ξ : D.Tup) :
+        (if D.hitsAll x ξ then (1 : ℝ) else 0) =
+          ∏ j, if Hits D.E D.G x (ξ j) then (1 : ℝ) else 0 := by
+      by_cases hall : ∀ j, Hits D.E D.G x (ξ j)
+      · simp [Ctx.hitsAll, hall]
+      · push_neg at hall
+        obtain ⟨j, hj⟩ := hall
+        have hnot : ¬ D.hitsAll x ξ := by
+          intro hAll
+          exact hj (hAll j)
+        have hz : (∏ j', if Hits D.E D.G x (ξ j') then (1 : ℝ) else 0) = 0 :=
+          Finset.prod_eq_zero (Finset.mem_univ j) (by simp [hj])
+        simp [hnot, hz]
+    calc
+      _ = ∑ ξ : D.Tup, ∏ j, (D.M.ν i).w (ξ j) *
+            (if Hits D.E D.G x (ξ j) then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [hInd, ← Finset.prod_mul_distrib]
+      _ = ∏ j : Fin h, ∑ y : Fin D.N, (D.M.ν i).w y *
+            (if Hits D.E D.G x y then (1 : ℝ) else 0) := by
+        rw [Fintype.prod_sum]
+      _ = rowDeg D.E D.G x (D.M.ν i) ^ h := by
+        simp [rowDeg, Finset.prod_const, Fintype.card_fin]
+  have nuTupleMiss (D : Ctx η₀ β p h) (x : Fin D.N) (i : D.M.ι) :
+      (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+        if ¬ D.hitsAll x ξ then (1 : ℝ) else 0) =
+        1 - rowDeg D.E D.G x (D.M.ν i) ^ h := by
+    have hmass : (∑ ξ : D.Tup, ∏ j, (D.M.ν i).w (ξ j)) = 1 := by
+      simpa [Ctx.Tup, FinProb.pi] using (FinProb.pi (fun _ : Fin h => D.M.ν i)).sum_eq_one
+    calc
+      _ = ∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+          (1 - if D.hitsAll x ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        by_cases hh : D.hitsAll x ξ <;> simp [hh]
+      _ = (∑ ξ : D.Tup, ∏ j, (D.M.ν i).w (ξ j)) -
+          ∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+            if D.hitsAll x ξ then (1 : ℝ) else 0 := by
+        rw [← Finset.sum_sub_distrib]
+        apply Finset.sum_congr rfl
+        intro ξ _
+        ring
+      _ = 1 - rowDeg D.E D.G x (D.M.ν i) ^ h := by rw [hmass, nuTupleHit]
+  have hBayesWeight (D : Ctx η₀ β p h) (ξ : D.Tup) (i : D.M.ι) :
+      D.R'.w ξ * D.postW ξ i = D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) := by
+    have hform := rPrimeFormula D ξ
+    by_cases hR0 : D.R'.w ξ = 0
+    · have hterm : D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) ≤ D.R'.w ξ := by
+        rw [hform]
+        exact Finset.single_le_sum
+          (fun j _ => mul_nonneg (D.M.Λ_nonneg j)
+            (Finset.prod_nonneg fun k _ => (D.M.ν j).nonneg (ξ k))) (Finset.mem_univ i)
+      have hterm0 : D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) = 0 := by
+        have hle : D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) ≤ 0 := by simpa [hR0] using hterm
+        exact le_antisymm hle (mul_nonneg (D.M.Λ_nonneg i)
+          (Finset.prod_nonneg fun j _ => (D.M.ν i).nonneg (ξ j)))
+      simp [Ctx.postW, hR0, hterm0]
+    · have hRpos : 0 < D.R'.w ξ :=
+        lt_of_le_of_ne (D.R'.nonneg ξ) (Ne.symm hR0)
+      simp [Ctx.postW, hR0]
+      field_simp [ne_of_gt hRpos]
+  have posteriorOwnMiss (D : Ctx η₀ β p h) (x : Fin D.N) (i : D.M.ι) :
+      D.R'.expect (fun ξ => D.postW ξ i *
+        if ¬ D.hitsAll x ξ then (1 : ℝ) else 0) =
+        D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
+    unfold FinProb.expect
+    calc
+      _ = ∑ ξ : D.Tup, (D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j)) *
+          if ¬ D.hitsAll x ξ then (1 : ℝ) else 0 := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [← hBayesWeight D ξ i]
+        ring
+      _ = D.M.Λ i * ∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+          if ¬ D.hitsAll x ξ then (1 : ℝ) else 0 := by
+        calc
+          _ = ∑ ξ : D.Tup, D.M.Λ i *
+                ((∏ j, (D.M.ν i).w (ξ j)) *
+                  if ¬ D.hitsAll x ξ then (1 : ℝ) else 0) := by
+            apply Finset.sum_congr rfl
+            intro ξ _
+            ring
+          _ = D.M.Λ i * ∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) *
+                if ¬ D.hitsAll x ξ then (1 : ℝ) else 0 := by
+            rw [← Finset.mul_sum]
+      _ = D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
+        rw [nuTupleMiss]
   have rPrimeHit (D : Ctx η₀ β p h) (x : Fin D.N) :
       D.R'.pr (fun ξ => D.hitsAll x ξ) =
         ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by

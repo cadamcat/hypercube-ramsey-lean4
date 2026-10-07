@@ -18,7 +18,7 @@ theorem partC_main_proof (T : Stage) (η0 : ℝ) (hη0 : 0 < η0)
       (δ : ℝ) < min η0 (min (ζ : ℝ) 1) / 2000 →
       ∀ (c : Colour) (o : Bool), ∀ᶠ k in atTop,
         ¬ ClusterWitnessAt (T.orient o) k c ζ δ) : False := by
-  obtain ⟨κ, hκ, hκη, hThresholds, hDeepκ₁, hDeepκ₂⟩ :=
+  obtain ⟨κ, hκ, hκη, hThresholds, hConstants, hDeepκ₁, hDeepκ₂⟩ :=
     exists_late_constants T η0 hη0 hDeep
   have hInitκ : InitDisc T κ.η0 := by simpa [hκη] using hInit
   have hCluκ : ∀ (ζ δ : ℚ), 0 < ζ → 0 < δ →
@@ -28,9 +28,9 @@ theorem partC_main_proof (T : Stage) (η0 : ℝ) (hη0 : 0 < η0)
     intro ζ δ hζ hδ hδ' c o
     apply hClu ζ δ hζ hδ
     simpa [hκη] using hδ'
-  have hProfiles := profiled_tiling_exists hκ T hInitκ hDeep hDeepκ₁ hDeepκ₂ hCluκ
-  have hLow := C18_Flow hκ hThresholds T hInitκ hDeep hDeepκ₁ hDeepκ₂
-  have hLowSwap := C18_Flow hκ hThresholds T.swap
+  have hProfiles := profiled_tiling_exists hκ hConstants T hInitκ hDeep hDeepκ₁ hDeepκ₂ hCluκ
+  have hLow := C18_Flow hκ hThresholds hConstants T hInitκ hDeep hDeepκ₁ hDeepκ₂
+  have hLowSwap := C18_Flow hκ hThresholds hConstants T.swap
     (orient_init hInitκ true) (orient_deep hDeep true)
     (orient_deep_budget hDeepκ₁ true) (orient_deep_budget hDeepκ₂ true)
   have hDirect := high_direct_cube hκ T hDeepκ₁
@@ -42,23 +42,23 @@ theorem partC_main_proof (T : Stage) (η0 : ℝ) (hη0 : 0 < η0)
   have hContradiction : ∀ᶠ k : ℕ in atTop, False := by
     filter_upwards [hProfiles, hLow, hLowSwap, hDirect, hDirectSwap,
         hCluster, hClusterSwap] with k hProfile hLow0 hLow1 hDirect0 hDirect1 hCluster0 hCluster1
-    rcases hProfile with ⟨o, PT, hPT, hCorners⟩
+    rcases hProfile with ⟨o, PT, hPT, hCorners, hUniform⟩
     have hCube : CubeIn (T.orient o) k PT.tiling.c := by
       cases o with
       | false =>
         cases hmode : PT.tiling.mode with
-        | bounded => exact hLow0 PT hPT (by simp [Mode.isLow, hmode]) hCorners
-        | lowDirect => exact hLow0 PT hPT (by simp [Mode.isLow, hmode]) hCorners
+        | bounded => exact hLow0 PT hPT (by simp [Mode.isLow, hmode]) hCorners hUniform
+        | lowDirect => exact hLow0 PT hPT (by simp [Mode.isLow, hmode]) hCorners hUniform
         | highDirect => exact hDirect0 PT hPT hmode
-        | lowCluster => exact hLow0 PT hPT (by simp [Mode.isLow, hmode]) hCorners
+        | lowCluster => exact hLow0 PT hPT (by simp [Mode.isLow, hmode]) hCorners hUniform
         | highSmall => exact hCluster0 PT hPT (Or.inl hmode)
         | highLarge => exact hCluster0 PT hPT (Or.inr hmode)
       | true =>
         cases hmode : PT.tiling.mode with
-        | bounded => exact hLow1 PT hPT (by simp [Mode.isLow, hmode]) hCorners
-        | lowDirect => exact hLow1 PT hPT (by simp [Mode.isLow, hmode]) hCorners
+        | bounded => exact hLow1 PT hPT (by simp [Mode.isLow, hmode]) hCorners hUniform
+        | lowDirect => exact hLow1 PT hPT (by simp [Mode.isLow, hmode]) hCorners hUniform
         | highDirect => exact hDirect1 PT hPT hmode
-        | lowCluster => exact hLow1 PT hPT (by simp [Mode.isLow, hmode]) hCorners
+        | lowCluster => exact hLow1 PT hPT (by simp [Mode.isLow, hmode]) hCorners hUniform
         | highSmall => exact hCluster1 PT hPT (Or.inl hmode)
         | highLarge => exact hCluster1 PT hPT (Or.inr hmode)
     cases o with

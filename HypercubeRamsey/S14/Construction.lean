@@ -1733,6 +1733,11 @@ structure OddKernels (Geom : ProjectionGeometry κ 𝒯 i)
   /-- Atom bound of the uniform-subset law (required by the shared `SliceSolver.U_atom_cap`). -/
   U_atom_cap : ∀ g W D y, 0 < q g W D →
     U g W D y ≤ 2 * Real.exp (1.5 * (𝒯.kScale i : ℝ) * 𝒯.tScale i) / (𝒯.P i).d
+  /-- The conditional law and its masked-prior fallback are uniform on
+  subsets (14:75). Section 16 uses the resulting lower atom bound under a pin. -/
+  U_uniform : ∀ g W D, 0 < q g W D →
+    ∃ support : Finset (Fin (T.S.N k)), ∃ hs : support.Nonempty,
+      ∀ y, U g W D y = (FinLaw.uniform support hs).w y
   cheap_mean_support : ∀ p g y,
     (H.recLaw p).E (fun W => ∑ D, q g W D * U g W D y) > 0 →
       ∃ v : mesh.V, 0 < mesh.wt v p ∧
@@ -3187,6 +3192,9 @@ structure SolverWitness {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯} where
   solver : SliceSolver κ 𝒯 i mesh
   low_output_invariant : LowOutputInvariant solver
+  labels_uniform : ∀ g W D, 0 < solver.q g W D →
+    ∃ support : Finset (Fin (T.S.N k)), ∃ hs : support.Nonempty,
+      ∀ y, solver.U g W D y = (FinLaw.uniform support hs).w y
   cheap_raw_support : ∀ p g y, solver.oddMean p g y > 0 →
     ∃ v : mesh.V, 0 < mesh.wt v p ∧
       mesh.paramPrice (mesh.base v) i y ≤ 10 / (𝒯.P i).M
@@ -3224,7 +3232,7 @@ theorem internal_slice_solver_at_patch (κ : CConsts) (hκ : κ.Admissible)
   let S := assembleSolver Geom H mask O L R Tests hsupp hmean hlocal (hfinite H)
   have hlow : LowOutputInvariant S :=
     low_output_group_invariant Geom H mask O L R Tests hsupp hmean hlocal (hfinite H)
-  refine ⟨⟨S, hlow, ?_⟩⟩
+  refine ⟨⟨S, hlow, O.U_uniform, ?_⟩⟩
   intro p g y hpos
   exact O.cheap_mean_support p g y hpos
 

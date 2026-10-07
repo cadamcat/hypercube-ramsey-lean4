@@ -497,12 +497,13 @@ theorem C18_Fcube {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T
 
 /-- Internal low-mode assembly. The specific budgets chosen by C12.K are
 needed to bound the adaptive broad laws, in addition to the full regime. -/
-theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ) (T : Stage)
+theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
+    (hConstants : ProducerConstants κ) (T : Stage)
     (hInit : InitDisc T κ.η0)
     (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε)
     (hDisc : DeepDisc T κ.xs κ.α 0.04)
     (hDiscι : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
-    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid → PT.tiling.mode.isLow → ProfileCornerMass PT → CubeIn T k PT.tiling.c := by
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid → PT.tiling.mode.isLow → ProfileCornerMass PT → S16.Lane_sol_fix2_s16.SolverLabelsUniform PT → CubeIn T k PT.tiling.c := by
   obtain ⟨Kβ, _hKβ, hsched, hsmall⟩ := L18_0a hκ T
   obtain ⟨K27, hK27, hlocal⟩ := L18_1 hκ T
   obtain ⟨c1, hc1, htransfer⟩ := L18_2 hκ T hDisc K27 hK27
@@ -515,12 +516,12 @@ theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresho
   have hTermSmall : ∀ᶠ k in atTop, εterm k ≤ 1 := htermlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1))
   have hRunSmall : ∀ᶠ k in atTop, εrun k ≤ 1 / 4 := hrunlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1 / 4))
   have hSmall := hsmall (Real.log 2 / 1000) (div_pos (Real.log_pos (by norm_num)) (by norm_num))
-  filter_upwards [l16_quantitative_validity hκ T hInit hDeep hDisc, D18_L hκ hThresholds T hInit hDeep hDisc hDiscι,
+  filter_upwards [l16_quantitative_validity hκ hConstants T hInit hDeep hDisc, D18_L hκ hThresholds T hInit hDeep hDisc hDiscι,
     hsched, hSmall, hlocal, htransfer, hterminal, hcompletion, hendpoint, eventually_largeIndex κ T,
     L18_6 hκ T K Cp Cs hK hCp hCs, hTermSmall, hRunSmall] with
     k h16 hdata _hsched hSmall hLocal hTransfer hTerminal hCompletion hEndpoint hLarge hHall hTermSmall hRunSmall
-  intro PT hPT hLow hCorners
-  obtain ⟨⟨D0, hD0⟩⟩ := hdata PT hPT hLow hCorners hLarge (h16 PT hPT hLow hCorners)
+  intro PT hPT hLow hCorners hUniform
+  obtain ⟨⟨D0, hD0⟩⟩ := hdata PT hPT hLow hCorners hLarge (h16 PT hPT hLow hCorners hUniform)
   obtain ⟨kernels, hD, hR, hBalance⟩ := P18_4a D0 hD0
   let D := D0.withKernels kernels
   have small := hSmall PT hPT hLow D.geom D.fresh D.l16_valid

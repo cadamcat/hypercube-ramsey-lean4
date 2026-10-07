@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Injection.Comparison
+import HypercubeRamsey.S03.Injection.Nodes_q_inj_nodes
 
 /-!
 Lemma 3.9 assemblies and calibration. Concrete sequential/forcing processes and the
@@ -66,7 +67,30 @@ theorem balanced_completion_good_order :
             (∀ y, ∑ j, qbar j y = (t : ℝ) / d) ∧
             Injection.OrderedInput d t (fun k y => qbar (e k) y) := by
   classical
-  filter_upwards [Filter.eventually_ge_atTop 100] with d hd
+  have hsqrtT : Tendsto (fun n : ℕ => Real.sqrt (n : ℝ)) atTop atTop := by
+    have h := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 2)).comp
+      tendsto_natCast_atTop_atTop
+    simpa only [Function.comp_def, Real.sqrt_eq_rpow] using h
+  have hpolyExp : Tendsto
+      (fun n : ℕ => (Real.sqrt (n : ℝ)) ^ 4 *
+        Real.exp (-(1 / 2 : ℝ) * Real.sqrt (n : ℝ))) atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      (4 : ℝ) (1 / 2 : ℝ) (by norm_num)).comp hsqrtT
+    have hfun : (fun n : ℕ => (Real.sqrt (n : ℝ)) ^ (4 : ℝ) *
+        Real.exp (-(1 / 2 : ℝ) * Real.sqrt (n : ℝ))) =
+        (fun n : ℕ => (Real.sqrt (n : ℝ)) ^ 4 *
+          Real.exp (-(1 / 2 : ℝ) * Real.sqrt (n : ℝ))) := by
+      funext n
+      congr 1
+      exact Real.rpow_natCast _ _
+    rw [← hfun]
+    simpa only [Function.comp_def] using h
+  have hsmallT : ∀ᶠ n : ℕ in atTop, 2 * (Real.sqrt (n : ℝ)) ^ 4 *
+      Real.exp (-(1 / 2 : ℝ) * Real.sqrt (n : ℝ)) < 1 := by
+    have h := hpolyExp.const_mul 2
+    simpa [mul_assoc] using
+      h.eventually (Iio_mem_nhds (by norm_num : 2 * (0 : ℝ) < 1))
+  filter_upwards [Filter.eventually_ge_atTop 100, hsmallT] with d hd hsmall
   intro R hR hdec q hq0 hqsum hqcap hqload
   have hdR : (100 : ℝ) ≤ (d : ℝ) := by exact_mod_cast hd
   have hdpos : (0 : ℝ) < (d : ℝ) := by linarith
@@ -201,17 +225,39 @@ theorem balanced_completion_good_order :
   have hcardEq' : Fintype.card (R ⊕ Fin m) = Fintype.card (Fin t) := by
     simpa using hcardEq
   let e : Fin t ≃ (R ⊕ Fin m) := (Fintype.equivOfCardEq hcardEq').symm
-  have hordered : Injection.OrderedInput d t (fun k y => qbar (e k) y) := by
+  have htposR : (0 : ℝ) < (t : ℝ) := by nlinarith [htlo, hdR]
+  have htpos : 0 < t := by exact_mod_cast htposR
+  have hweakPow : (d : ℝ) ^ (-(0.95 : ℝ)) ≤ (d : ℝ) ^ (-(9 / 10 : ℝ)) :=
+    Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+  have hqbarWeak : ∀ j y, qbar j y ≤ 10 * (d : ℝ) ^ (-(9 / 10 : ℝ)) := by
+    intro j y
+    calc
+      qbar j y ≤ 10 * (d : ℝ) ^ (-(0.95 : ℝ)) := hqbarAtom j y
+      _ ≤ 10 * (d : ℝ) ^ (-(9 / 10 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hweakPow (by norm_num)
+  have horderCol (y : Fin d) :
+      (∑ k : Fin t, qbar (e k) y) = (t : ℝ) / d := by
+    calc
+      (∑ k : Fin t, qbar (e k) y) = ∑ j : R ⊕ Fin m, qbar j y :=
+        Equiv.sum_comp e (fun j : R ⊕ Fin m => qbar j y)
+      _ = (t : ℝ) / d := hqbarCol y
+  obtain ⟨σ, hprefix⟩ := Lane_q_inj_nodes.prefix_order_exists hd htHorizon htpos
+    (fun k y => qbar (e k) y)
+    (by intro k y; exact hqbarNonneg (e k) y)
+    (by intro k y; exact hqbarWeak (e k) y)
+    horderCol hsmall
+  let e' : Fin t ≃ (R ⊕ Fin m) := σ.trans e
+  have hordered : Injection.OrderedInput d t (fun k y => qbar (e' k) y) := by
     refine ⟨hd, htHorizon, ?_, ?_, ?_, ?_⟩
     · intro k y
-      exact hqbarNonneg (e k) y
+      exact hqbarNonneg (e' k) y
     · intro k
-      exact hqbarRow (e k)
+      exact hqbarRow (e' k)
     · intro k y
-      exact hqbarAtom (e k) y
+      exact hqbarAtom (e' k) y
     · intro b y
-      sorry
-  refine ⟨t, rfl, hrows, qbar, e, ?_, ?_, hdummyCap, hqbarCol, hordered⟩
+      simpa [e'] using hprefix b y
+  refine ⟨t, rfl, hrows, qbar, e', ?_, ?_, hdummyCap, hqbarCol, hordered⟩
   · intro i y
     rfl
   · intro j y

@@ -1013,6 +1013,74 @@ private theorem heightPath9_levelBandSegment9 {P : Params9} {hc : HeightChoice9 
             · simp
             · exact List.mem_cons_of_mem _ (hsub z hz')
 
+private theorem heightPath9_has_intermediate_value9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : HeightState9 P hc n → ℕ)
+    (hstep : ∀ x y, heightStep9 bad x y → Nat.dist (f x) (f y) ≤ 1)
+    (hp : HeightPath9 (heightStep9 bad) l start) :
+    ∃ endpoint, l.head? = some endpoint ∧
+      ∀ k, min (f start) (f endpoint) ≤ k → k ≤ max (f start) (f endpoint) →
+        ∃ x ∈ l, f x = k := by
+  induction hp with
+  | singleton x =>
+      refine ⟨x, by simp, ?_⟩
+      intro k hlow hhigh
+      have hk : f x = k := by omega
+      exact ⟨x, by simp, hk⟩
+  | @cons head next rest start hstep' htail ih =>
+      obtain ⟨tailHead, htailHead, htailRange⟩ := ih
+      have htailHead' : tailHead = next := by simpa using htailHead.symm
+      subst tailHead
+      refine ⟨head, by simp, ?_⟩
+      intro k hlow hhigh
+      by_cases hkHead : k = f head
+      · exact ⟨head, by simp, hkHead.symm⟩
+      · have hstepDist : Nat.dist (f next) (f head) ≤ 1 := hstep next head hstep'
+        have hstepValues : f next ≤ f head + 1 ∧ f head ≤ f next + 1 := by
+          rcases le_total (f next) (f head) with h | h
+          · rw [Nat.dist_eq_sub_of_le h] at hstepDist
+            constructor <;> omega
+          · rw [Nat.dist_eq_sub_of_le_right h] at hstepDist
+            constructor <;> omega
+        rcases hstepValues with ⟨hnextHead, hheadNext⟩
+        have hlow' : min (f start) (f next) ≤ k := by omega
+        have hhigh' : k ≤ max (f start) (f next) := by omega
+        obtain ⟨x, hx, hfx⟩ := htailRange k hlow' hhigh'
+        exact ⟨x, List.mem_cons_of_mem _ hx, hfx⟩
+
+private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (root x y : HeightState9 P hc n) :
+    Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ heightMetric9 x y := by
+  have hxy := heightMetric9_triangle x y root
+  have hyx := heightMetric9_triangle y x root
+  have hyx' : heightMetric9 y root ≤ heightMetric9 x y + heightMetric9 x root := by
+    simpa [heightMetric9_comm] using hyx
+  rcases le_total (heightMetric9 x root) (heightMetric9 y root) with h | h
+  · rw [Nat.dist_eq_sub_of_le h]
+    omega
+  · rw [Nat.dist_eq_sub_of_le_right h]
+    omega
+
+private theorem heightPath9_has_intermediate_radius9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (hp : HeightPath9 (heightStep9 bad) l start)
+    {endpoint : HeightState9 P hc n} (hhead : l.head? = some endpoint) (R : ℕ)
+    (hR : R ≤ heightMetric9 endpoint start) :
+    ∀ r ≤ R, ∃ x ∈ l, heightMetric9 x start = r := by
+  obtain ⟨head, hhead', hrange⟩ := heightPath9_has_intermediate_value9
+    (fun x => heightMetric9 x start)
+    (fun x y h => (heightMetric9_radialVariation_le start x y).trans
+      (heightStep9_metric_le_one h)) hp
+  have hheadEq : head = endpoint := by simpa using hhead'.symm.trans hhead
+  subst head
+  intro r hr
+  have hlow : min (heightMetric9 start start) (heightMetric9 endpoint start) ≤ r := by
+    simp [heightMetric9]
+  have hhigh : r ≤ max (heightMetric9 start start) (heightMetric9 endpoint start) := by
+    have hr' : r ≤ heightMetric9 endpoint start := hr.trans hR
+    simpa [heightMetric9] using hr'
+  exact hrange r hlow hhigh
+
 private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
     {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}

@@ -387,4 +387,162 @@ theorem solver_pretrim_mass {κ : CConsts} {T : Stage} {k : ℕ}
   dsimp [t] at *
   linarith
 
+theorem calibration_power_bounds (d : ℕ) (hd : (10 ^ 100 : ℕ) ≤ d) :
+    Real.rpow (d : ℝ) (-0.1) ≤ 1 / 3 ∧
+      Real.rpow (d : ℝ) (-0.02) ≤ 1 / 3 := by
+  have hbase : (10 : ℝ) ^ (100 : ℕ) ≤ (d : ℝ) := by exact_mod_cast hd
+  have hpow : ∀ a : ℝ,
+      Real.rpow ((10 : ℝ) ^ (100 : ℕ)) a = Real.rpow 10 (100 * a) := by
+    intro a
+    rw [← Real.rpow_natCast]
+    exact (Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 10) 100 a).symm
+  constructor
+  · calc
+      Real.rpow (d : ℝ) (-0.1) ≤ Real.rpow ((10 : ℝ) ^ (100 : ℕ)) (-0.1) :=
+        Real.rpow_le_rpow_of_nonpos (by positivity) hbase (by norm_num)
+      _ ≤ 1 / 3 := by rw [hpow]; norm_num [Real.rpow_neg, Real.rpow_natCast]
+  · calc
+      Real.rpow (d : ℝ) (-0.02) ≤ Real.rpow ((10 : ℝ) ^ (100 : ℕ)) (-0.02) :=
+        Real.rpow_le_rpow_of_nonpos (by positivity) hbase (by norm_num)
+      _ ≤ 1 / 3 := by rw [hpow]; norm_num [Real.rpow_neg, Real.rpow_natCast]
+
+theorem calibration_price_gap (d : ℕ) (hd : 10 ≤ d) (a : ℝ) (ha : a ≤ 1) :
+    4 * Real.rpow (d : ℝ) (-2) < Real.rpow (d : ℝ) (-a) := by
+  have hdreal : (10 : ℝ) ≤ d := by exact_mod_cast hd
+  have hdpos : (0 : ℝ) < d := by linarith
+  have heq : Real.rpow (d : ℝ) (-2) =
+      Real.rpow (d : ℝ) (-a) * Real.rpow (d : ℝ) (-2 + a) := by
+    calc
+      Real.rpow (d : ℝ) (-2) = Real.rpow (d : ℝ) ((-a) + (-2 + a)) := by congr 1; ring
+      _ = _ := Real.rpow_add hdpos _ _
+  have hlt : Real.rpow (d : ℝ) (-2 + a) < 1 / 4 := by
+    calc
+      Real.rpow (d : ℝ) (-2 + a) ≤ Real.rpow (d : ℝ) (-1) :=
+        Real.rpow_le_rpow_of_exponent_le (by linarith) (by linarith)
+      _ = 1 / (d : ℝ) := by simpa only [Real.rpow_eq_pow, one_div] using Real.rpow_neg_one (d : ℝ)
+      _ < 1 / 4 := (div_lt_iff₀ hdpos).mpr (by linarith)
+  have hp : 0 < Real.rpow (d : ℝ) (-a) := Real.rpow_pos_of_pos hdpos (-a)
+  rw [heq]
+  have hproduct : Real.rpow (d : ℝ) (-a) * Real.rpow (d : ℝ) (-2 + a) <
+      Real.rpow (d : ℝ) (-a) * (1 / 4) := mul_lt_mul_of_pos_left hlt hp
+  nlinarith
+
+theorem pr_eq_indicator_E {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (A : Ω → Prop) :
+    P.pr A = P.E (fun ω => if A ω then 1 else 0) := by
+  classical
+  unfold FinLaw.pr FinLaw.E
+  apply Finset.sum_congr rfl
+  intro ω _
+  by_cases h : A ω <;> simp [h]
+
+set_option maxHeartbeats 400000 in
+theorem pi_E_local {I Ω : Type*} [Fintype I] [DecidableEq I] [Fintype Ω] [Nonempty Ω]
+    (P Q : I → FinLaw Ω) (S : Finset I) (f : (I → Ω) → ℝ)
+    (hf : ∀ x y, (∀ i ∈ S, x i = y i) → f x = f y)
+    (hPQ : ∀ i ∈ S, P i = Q i) : (FinLaw.pi P).E f = (FinLaw.pi Q).E f := by
+  classical
+  let e := Equiv.piEquivPiSubtypeProd (fun i => i ∈ S) (fun _ : I => Ω)
+  let z : {i : I // i ∉ S} → Ω := fun _ => Classical.choice inferInstance
+  have hcalc (L : I → FinLaw Ω) : (FinLaw.pi L).E f =
+      ∑ x : {i : I // i ∈ S} → Ω,
+        (∏ i : {i : I // i ∈ S}, (L i.1).w (x i)) * f (e.symm (x, z)) := by
+    have hfactor (xy : ({i : I // i ∈ S} → Ω) × ({i : I // i ∉ S} → Ω)) :
+        (FinLaw.pi L).w (e.symm xy) =
+          (∏ i : {i : I // i ∈ S}, (L i.1).w (xy.1 i)) *
+          (∏ i : {i : I // i ∉ S}, (L i.1).w (xy.2 i)) := by
+      change (∏ i, (L i).w ((e.symm xy) i)) = _
+      rw [← Fintype.prod_subtype_mul_prod_subtype (fun i => i ∈ S)]
+      congr 1
+      · apply Finset.prod_congr (by ext i; simp)
+        intro i _
+        change (L i.1).w (if h : i.1 ∈ S then xy.1 ⟨i.1, h⟩ else xy.2 ⟨i.1, h⟩) = _
+        rw [dif_pos i.2]
+      · apply Finset.prod_congr rfl
+        intro i _
+        change (L i.1).w (if h : i.1 ∈ S then xy.1 ⟨i.1, h⟩ else xy.2 ⟨i.1, h⟩) = _
+        rw [dif_neg i.2]
+    calc
+      (FinLaw.pi L).E f = ∑ xy, (FinLaw.pi L).w (e.symm xy) * f (e.symm xy) := by
+        exact (e.symm.sum_comp (fun x => (FinLaw.pi L).w x * f x)).symm
+      _ = ∑ x : {i : I // i ∈ S} → Ω, ∑ y : {i : I // i ∉ S} → Ω,
+          ((∏ i : {i : I // i ∈ S}, (L i.1).w (x i)) *
+          (∏ i : {i : I // i ∉ S}, (L i.1).w (y i))) * f (e.symm (x, z)) := by
+        rw [Fintype.sum_prod_type]
+        apply Finset.sum_congr rfl
+        intro x _
+        apply Finset.sum_congr rfl
+        intro y _
+        rw [hfactor]
+        have heq : f (e.symm (x, y)) = f (e.symm (x, z)) := by
+          apply hf
+          intro i hi
+          change (if h : i ∈ S then x ⟨i, h⟩ else y ⟨i, h⟩) =
+            (if h : i ∈ S then x ⟨i, h⟩ else z ⟨i, h⟩)
+          rw [dif_pos hi, dif_pos hi]
+        rw [heq]
+      _ = _ := by
+        apply Finset.sum_congr rfl
+        intro x _
+        calc
+          (∑ y : {i : I // i ∉ S} → Ω, ((∏ i : {i : I // i ∈ S}, (L i.1).w (x i)) *
+              (∏ i : {i : I // i ∉ S}, (L i.1).w (y i))) * f (e.symm (x, z))) =
+              ((∏ i : {i : I // i ∈ S}, (L i.1).w (x i)) * f (e.symm (x, z))) *
+                (∑ y : {i : I // i ∉ S} → Ω, ∏ i : {i : I // i ∉ S}, (L i.1).w (y i)) := by
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro y _
+            ring
+          _ = _ := by
+            have hnorm := (FinLaw.pi (fun i : {i : I // i ∉ S} => L i.1)).sum_one
+            change (∑ y : {i : I // i ∉ S} → Ω, ∏ i : {i : I // i ∉ S}, (L i.1).w (y i)) = 1 at hnorm
+            rw [hnorm, mul_one]
+  rw [hcalc P, hcalc Q]
+  apply Finset.sum_congr rfl
+  intro x _
+  congr 1
+  apply Finset.prod_congr rfl
+  intro i _
+  rw [hPQ i.1 i.2]
+
+theorem pr_mono {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (A B : Ω → Prop)
+    (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  apply Finset.sum_le_sum
+  intro ω _
+  by_cases ha : A ω
+  · simp [ha, hAB ω ha]
+  · by_cases hb : B ω <;> simp [ha, hb, P.nonneg]
+
+theorem pi_coordinate_pr {I Ω : Type*} [Fintype I] [DecidableEq I]
+    [Fintype Ω] (P : I → FinLaw Ω) (i : I) (y : Ω) :
+    (FinLaw.pi P).pr (fun x => x i = y) = (P i).w y := by
+  classical
+  rw [pr_eq_indicator_E]
+  calc
+    (FinLaw.pi P).E (fun x => if x i = y then 1 else 0) =
+        (P i).E (fun z => if z = y then 1 else 0) :=
+          pi_coordinate_E P i (fun z => if z = y then (1 : ℝ) else 0)
+    _ = (P i).w y := by unfold FinLaw.E; simp [eq_comm]
+
+theorem solver_qin_cap {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (hW : S.AllGood W)
+    (g : HypercubeRamsey.Group 𝒯 i) (D : Bin 𝒯 i)
+    (hsmall : ((𝒯.P i).h : ℝ) ^ 2 * Real.sqrt (sliceEps κ (𝒯.P i).h) ≤ 1 / 2) :
+    S.qin W g D ≤ 8 * Real.exp (2 * (𝒯.kScale i : ℝ) * 𝒯.tScale i) * (𝒯.P i).d / (𝒯.P i).M := by
+  let cap := 4 * Real.exp (2 * (𝒯.kScale i : ℝ) * 𝒯.tScale i) * (𝒯.P i).d / (𝒯.P i).M
+  have hcap : 0 ≤ cap := by dsimp [cap]; positivity
+  have hmass : (1 / 2 : ℝ) ≤ ∑ b ∈ S.pretrimBins W g, S.q g W b := by
+    have h := solver_pretrim_mass S W hW g (Real.exp_pos _)
+    linarith
+  unfold SliceSolver.qin
+  split_ifs with hD
+  · calc
+      S.q g W D / (∑ b ∈ S.pretrimBins W g, S.q g W b) ≤
+          cap / (∑ b ∈ S.pretrimBins W g, S.q g W b) :=
+        div_le_div_of_nonneg_right (S.q_cap g W D) (by linarith)
+      _ ≤ cap / (1 / 2 : ℝ) := div_le_div_of_nonneg_left hcap (by norm_num) hmass
+      _ = _ := by dsimp [cap]; ring
+  · positivity
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

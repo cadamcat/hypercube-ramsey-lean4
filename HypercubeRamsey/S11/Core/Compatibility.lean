@@ -2477,6 +2477,37 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       · simpa [Dlaw, hq, hC] using hcliqueLawAtom q hq C hC y
       · simpa [Dlaw, hq, hC] using hD₀atom y
     · simpa [Dlaw, hq] using hD₀atom y
+  have hsumPackFactor (P : Finset (Finset (Fin r₀))) (hP : P.Nonempty) :
+      (∑ C : Finset (Fin r₀), if C ∈ P then (P.card : ℝ)⁻¹ else 0) = 1 := by
+    classical
+    exact HypercubeRamsey.S11.Core.q_s11_compat_uniformWeight_sum P hP
+  let clusterWeight (q : SampleState) (C : Finset (Fin r₀)) : ℝ :=
+    joint.w q * (if C ∈ (packing q).1 then ((packing q).1.card : ℝ)⁻¹ else 0)
+  have hclusterWeightSum :
+      (∑ q : SampleState, ∑ C : Finset (Fin r₀), clusterWeight q C) = 1 := by
+    calc
+      (∑ q : SampleState, ∑ C : Finset (Fin r₀), clusterWeight q C) =
+          ∑ q, joint.w q * ∑ C : Finset (Fin r₀),
+            if C ∈ (packing q).1 then ((packing q).1.card : ℝ)⁻¹ else 0 := by
+              apply Finset.sum_congr rfl
+              intro q hq
+              dsimp [clusterWeight]
+              rw [← Finset.mul_sum]
+      _ = ∑ q, joint.w q := by
+            apply Finset.sum_congr rfl
+            intro q hq
+            by_cases hzero : joint.w q = 0
+            · simp [hzero]
+            · have hpos : 0 < joint.w q := lt_of_le_of_ne (joint.nonneg q) (Ne.symm hzero)
+              have hgood := hjointGood q (ne_of_gt hpos)
+              rw [hsumPackFactor (packing q).1 (hPackingNonempty q hgood)]
+              ring
+      _ = 1 := joint.sum_eq_one
+  have hPackingNonemptyAtMass (q : SampleState) (hq : joint.w q ≠ 0) :
+      (packing q).1.Nonempty := hPackingNonempty q (hjointGood q hq)
+  let clusterLaw : FinProb (SampleState × Finset (Fin r₀)) :=
+    HypercubeRamsey.S11.Core.q_s11_compat_uniformIndexLaw joint
+      (fun q => (packing q).1) hPackingNonemptyAtMass
   have hcliqueLawPair (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
       (hC : C ∈ (packing q).1) (y y' : Fin N)
       (hy : 0 < (Dlaw q C).w y) (hy' : 0 < (Dlaw q C).w y') :
@@ -2504,6 +2535,126 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       exact hSelectedDiagLower q.1 (q.2 j) (hq.2.1 j)
     · have hEdge := (hpackingSpec q hq).1 C hC
       exact hEdge.2 j hjC k hkC hjk
+  have hDlawPacked (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
+      (hC : C ∈ (packing q).1) (y : Fin N) :
+      (Dlaw q C).w y = if y ∈ C.image q.2 then (sC n : ℝ)⁻¹ else 0 := by
+    have hLaw : Dlaw q C = cliqueLaw q hq C hC := by simp [Dlaw, hq, hC]
+    rw [hLaw]
+    simp [cliqueLaw, FinProb.uniform, hImageCard q hq C hC]
+  have hsamplePackMass (q : SampleState) (hq : GoodSample q) (y : Fin N) :
+      (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
+        joint.w q * (2 / (r₀ : ℝ)) := by
+    let P := (packing q).1
+    have hPne : P.Nonempty := hPackingNonempty q hq
+    have hPpos : 0 < (P.card : ℝ) := by exact_mod_cast (Finset.card_pos.mpr hPne)
+    have hsCposR : 0 < (sC n : ℝ) := by exact_mod_cast hsCpos
+    have hr₀pos : 0 < (r₀ : ℝ) := by positivity
+    have hPackingCardR : ((packing q).2.card : ℝ) =
+        (P.card : ℝ) * (sC n : ℝ) := by
+      exact_mod_cast hPackingCard q hq
+    have hdenom : (r₀ : ℝ) / 2 < (P.card : ℝ) * (sC n : ℝ) := by
+      rw [← hPackingCardR]
+      exact hPackingVHalf q hq
+    have hfactor : (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ ≤ 2 / (r₀ : ℝ) := by
+      have hrecip := one_div_le_one_div_of_le
+        (by positivity : (0 : ℝ) < (r₀ : ℝ) / 2) hdenom.le
+      have hrecip' : ((P.card : ℝ) * (sC n : ℝ))⁻¹ ≤ ((r₀ : ℝ) / 2)⁻¹ := by
+        simpa only [one_div] using hrecip
+      have hinvprod : (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ =
+          ((P.card : ℝ) * (sC n : ℝ))⁻¹ := by
+        calc
+          (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ =
+              (sC n : ℝ)⁻¹ * (P.card : ℝ)⁻¹ := mul_comm _ _
+          _ = ((P.card : ℝ) * (sC n : ℝ))⁻¹ := (mul_inv_rev _ _).symm
+      calc
+        (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ =
+            ((P.card : ℝ) * (sC n : ℝ))⁻¹ := hinvprod
+        _ ≤ ((r₀ : ℝ) / 2)⁻¹ := hrecip'
+        _ = 2 / (r₀ : ℝ) := by field_simp [ne_of_gt hr₀pos]
+    have hunique : ∀ C ∈ P, ∀ D ∈ P,
+        (y ∈ C.image q.2) → (y ∈ D.image q.2) → C = D := by
+      intro C hC D hD hyC hyD
+      obtain ⟨j, hjC, hjy⟩ := Finset.mem_image.mp hyC
+      obtain ⟨k, hkD, hky⟩ := Finset.mem_image.mp hyD
+      have hjk : j = k := hq.1 (hjy.trans hky.symm)
+      subst k
+      by_contra hCD
+      have hdisj := (hpackingSpec q hq).2.1 C hC D hD hCD
+      exact (Finset.disjoint_left.mp hdisj) j hkD hjC
+    have hcount := HypercubeRamsey.S11.Core.q_s11_compat_sum_unique_indicator
+      P (fun C => y ∈ C.image q.2) hunique
+    have hmassEq :
+        (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) =
+          (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) *
+            (∑ C : Finset (Fin r₀),
+              if C ∈ P then if y ∈ C.image q.2 then (1 : ℝ) else 0 else 0) := by
+      calc
+        _ = ∑ C : Finset (Fin r₀),
+              (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) *
+                (if C ∈ P then if y ∈ C.image q.2 then (1 : ℝ) else 0 else 0) := by
+              apply Finset.sum_congr rfl
+              intro C hCsum
+              by_cases hC : C ∈ P
+              · have hC' : C ∈ (packing q).1 := by simpa [P] using hC
+                rw [hDlawPacked q hq C hC' y]
+                by_cases hy : y ∈ C.image q.2
+                · simp [clusterWeight, hC', hy]
+                  ring
+                · simp [clusterWeight, hC', hy]
+                  ring
+              · have hC' : C ∉ (packing q).1 := by simpa [P] using hC
+                simp [clusterWeight, hC']
+        _ = _ := by rw [Finset.mul_sum]
+    calc
+      (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) =
+          (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) *
+            (∑ C : Finset (Fin r₀),
+              if C ∈ P then if y ∈ C.image q.2 then (1 : ℝ) else 0 else 0) := hmassEq
+      _ ≤ joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹) := by
+            calc
+              _ ≤ (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) * 1 :=
+                mul_le_mul_of_nonneg_left hcount (by positivity)
+              _ = _ := by ring
+      _ ≤ joint.w q * (2 / (r₀ : ℝ)) :=
+            mul_le_mul_of_nonneg_left hfactor (joint.nonneg q)
+  have hsampleAggCoord (q : SampleState) (y : Fin N) :
+      (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
+        (joint.w q * (2 / (r₀ : ℝ))) *
+          (∑ j : Fin r₀, if q.2 j = y then (1 : ℝ) else 0) := by
+    by_cases hqzero : joint.w q = 0
+    · simp [clusterWeight, hqzero]
+    · have hqpos : 0 < joint.w q := lt_of_le_of_ne (joint.nonneg q) (Ne.symm hqzero)
+      have hqgood := hjointGood q (ne_of_gt hqpos)
+      by_cases hcoord : ∃ j : Fin r₀, q.2 j = y
+      · obtain ⟨j, hj⟩ := hcoord
+        have hcount : 1 ≤ ∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0 := by
+          calc
+            1 = (if q.2 j = y then (1 : ℝ) else 0) := by simp [hj]
+            _ ≤ ∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0 :=
+              Finset.single_le_sum (fun j' hj' => by positivity)
+                (Finset.mem_univ j)
+        calc
+          (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
+              joint.w q * (2 / (r₀ : ℝ)) := hsamplePackMass q hqgood y
+          _ ≤ (joint.w q * (2 / (r₀ : ℝ))) *
+              (∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0) :=
+                mul_le_mul_of_nonneg_left hcount (by positivity)
+      · have hsumZero :
+          (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) = 0 := by
+        apply Finset.sum_eq_zero
+        intro C hCsum
+        by_cases hC : C ∈ (packing q).1
+        · have hnot : y ∉ C.image q.2 := by
+            intro hy
+            obtain ⟨j, hjC, hjy⟩ := Finset.mem_image.mp hy
+            exact hcoord ⟨j, hjy⟩
+          rw [hDlawPacked q hqgood C hC y]
+          simp [clusterWeight, hC, hnot]
+        · simp [clusterWeight, hC]
+      have hneq (j : Fin r₀) : q.2 j ≠ y := by
+        intro hj
+        exact hcoord ⟨j, hj⟩
+      simp [hsumZero, hneq]
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

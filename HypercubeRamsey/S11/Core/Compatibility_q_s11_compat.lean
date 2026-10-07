@@ -57,4 +57,54 @@ theorem q_s11_compat_cond_expect_le {Ω : Type*} [Fintype Ω]
         P.expect (fun x => if A x then f x else 0) / P.pr A := hEq
     _ ≤ P.expect f / P.pr A := div_le_div_of_nonneg_right hNum hA.le
 
+theorem q_s11_compat_uniformWeight_sum {β : Type*} [Fintype β] [DecidableEq β]
+    (s : Finset β) (hs : s.Nonempty) :
+    (∑ b : β, if b ∈ s then (s.card : ℝ)⁻¹ else 0) = 1 := by
+  classical
+  have hcard : (0 : ℝ) < (s.card : ℝ) := by exact_mod_cast (Finset.card_pos.mpr hs)
+  rw [Finset.sum_ite_mem_eq, Finset.sum_const]
+  simp only [nsmul_eq_mul]
+  field_simp [ne_of_gt hcard]
+  <;> ring
+
+theorem q_s11_compat_sum_unique_indicator {α : Type*} [Fintype α] [DecidableEq α]
+    (s : Finset α) (P : α → Prop) [DecidablePred P]
+    (hunique : ∀ a ∈ s, ∀ b ∈ s, P a → P b → a = b) :
+    (∑ a : α, if a ∈ s then if P a then (1 : ℝ) else 0 else 0) ≤ 1 := by
+  classical
+  let t := s.filter P
+  have hcard : t.card ≤ 1 := by
+    apply Finset.card_le_one.mpr
+    intro a ha b hb
+    apply hunique a (Finset.mem_filter.mp ha).1 b (Finset.mem_filter.mp hb).1
+      (Finset.mem_filter.mp ha).2 (Finset.mem_filter.mp hb).2
+  have hsum :
+      (∑ a : α, if a ∈ s then if P a then (1 : ℝ) else 0 else 0) = (t.card : ℝ) := by
+    simp [t, Finset.sum_ite_mem_eq, Finset.sum_filter]
+  rw [hsum]
+  exact_mod_cast hcard
+
+noncomputable def q_s11_compat_uniformIndexLaw {α β : Type*} [Fintype α] [Fintype β]
+    [DecidableEq β] (P : FinProb α) (S : α → Finset β)
+    (hS : ∀ a, P.w a ≠ 0 → (S a).Nonempty) : FinProb (α × β) where
+  w ab := P.w ab.1 * (if ab.2 ∈ S ab.1 then ((S ab.1).card : ℝ)⁻¹ else 0)
+  nonneg ab := mul_nonneg (P.nonneg ab.1) (by split_ifs <;> positivity)
+  sum_eq_one := by
+    classical
+    rw [Fintype.sum_prod_type]
+    calc
+      (∑ a, ∑ b, P.w a * (if b ∈ S a then ((S a).card : ℝ)⁻¹ else 0)) =
+          ∑ a, P.w a * (∑ b, if b ∈ S a then ((S a).card : ℝ)⁻¹ else 0) := by
+            apply Finset.sum_congr rfl
+            intro a ha
+            rw [Finset.mul_sum]
+      _ = ∑ a, P.w a := by
+            apply Finset.sum_congr rfl
+            intro a ha
+            by_cases hzero : P.w a = 0
+            · simp [hzero]
+            · rw [q_s11_compat_uniformWeight_sum (S a) (hS a hzero)]
+              ring
+      _ = 1 := P.sum_eq_one
+
 end HypercubeRamsey.S11.Core

@@ -594,17 +594,24 @@ private theorem heightPath9_suffix {P : Params9} {hc : HeightChoice9 P} {n : ℕ
     {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
     {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
     (hp : HeightPath9 bad l start) {x : HeightState9 P hc n} (hx : x ∈ l) :
-    ∃ rest, HeightPath9 bad (x :: rest) start := by
+    ∃ rest, HeightPath9 bad (x :: rest) start ∧ ∀ z ∈ x :: rest, z ∈ l := by
   induction hp generalizing x with
   | singleton y =>
       simp only [List.mem_singleton] at hx
       subst x
-      exact ⟨[], HeightPath9.singleton y⟩
-  | cons hstep htail ih =>
+      exact ⟨[], HeightPath9.singleton y, by simp⟩
+  | @cons head next tail start hstep htail ih =>
       simp only [List.mem_cons] at hx
       rcases hx with rfl | hx
-      · exact ⟨_, HeightPath9.cons hstep htail⟩
-      · exact ih (by simp [hx])
+      · refine ⟨next :: tail, HeightPath9.cons hstep htail, ?_⟩
+        intro z hz
+        exact hz
+      · have hxTail : x ∈ next :: tail := by
+          simpa only [List.mem_cons] using hx
+        obtain ⟨suffix, hsuffix, hsub⟩ := ih hxTail
+        refine ⟨suffix, hsuffix, ?_⟩
+        intro z hz
+        exact List.mem_cons_of_mem _ (hsub z hz)
 
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)
@@ -658,6 +665,32 @@ private def rootScaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
   ∃ start : HeightState9 P hc n,
     _root_.hammingDist start.1 root ≤ 4 * R + 2 ∧
       scaleFailure9 C t s η R Pp A start
+
+private theorem rootScaleFailure9_of_path {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s η : ℝ} {R : ℕ} (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n)
+    (start endpoint : HeightState9 P hc n) (rest : List (HeightState9 P hc n))
+    (hroot : _root_.hammingDist start.1 root ≤ 4 * R + 2)
+    (hpath : HeightPath9 (heightStep9 (scaleBad9 Finset.univ t s Pp A))
+      (endpoint :: rest) start)
+    (hsite : ∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 start.1 ≤ 16 * R)
+    (hlevel : ∀ x ∈ endpoint :: rest, Nat.dist x.2.val start.2.val ≤ 8 * R)
+    (hmetric : R ≤ max (Nat.dist endpoint.2.val start.2.val)
+      ((_root_.hammingDist endpoint.1 start.1 + 1) / 2))
+    (hrise : (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)) :
+    rootScaleFailure9 Finset.univ t s η R Pp A root := by
+  refine ⟨start, ?_⟩
+  constructor
+  · exact hroot
+  · refine ⟨endpoint, ⟨rest, ?_⟩⟩
+    constructor
+    · exact hpath
+    constructor
+    · exact hsite
+    constructor
+    · exact hlevel
+    constructor
+    · exact hmetric
+    · exact hrise
 
 private theorem heightStep9_mono {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad bad' : HeightState9 P hc n → Prop}

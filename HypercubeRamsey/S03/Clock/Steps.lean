@@ -5,9 +5,10 @@ import HypercubeRamsey.S03.Clock.Inputs
 
 Each proof node refers to the finite mesh objects in `Model`, `Matching`, `Exploration`, `Leaves`, and
 `Inputs`. Steps 4–7 are separated into path, branching-tail, background-tracking, and target-product
-obligations. Step 8 is assembled: `step8_bad_leaf_avoidance` (used by `clock_sampling`) combines Step 1, the
-renormalization bound and `step8_trimmed_core`; the core combines `clock_raw_sampler` (the clock construction
-and its incidence bound) with `leaf_avoidance_transfer` (Lemma 3.5).
+obligations. Step 8 is assembled in `Sampler.lean`: `step8_bad_leaf_avoidance` (used by `clock_sampling`)
+combines Step 1, the renormalization bound and `step8_trimmed_core`; the core combines `clock_raw_sampler` (the
+clock construction, split over `Truncated`, `Paths`, `Branching` and `Sampler`) with `leaf_avoidance_transfer`
+(Lemma 3.5, below).
 -/
 
 namespace HypercubeRamsey.Clock
@@ -504,114 +505,5 @@ theorem leaf_avoidance_transfer {n g : ℕ} {R K : Type} [Fintype R] [DecidableE
         J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤
           Real.exp (4 * ((n : ℝ) ^ B * L) * κ) * ((1 + η) * ∏ a ∈ S, (q a).w (o a))) := by
   sorry
-
-/-- L3.10b–h without Step 1 and without the avoidance step (TeX 03:844–1111, 03:1121–1128): from a Step 1
-certificate, the completed finite-mesh clock matching (Steps 2–7) with its truncated exploration leaves gives
-a raw sampler for the trimmed laws, with `L = ⌈n^{.1K₀}⌉`, `κ = n^{-.6K₀}` in the paper (03:872, 03:898–902),
-so that `n^B L κ → 0`. The constants come first, with `4B + 4 ≤ P` so that Step 1 applies. This node still
-carries the exploration leaves and the incidence bound of Steps 2–8 and must be split further before proof. -/
-theorem clock_raw_sampler (B C_g : ℝ) (hB : 1 ≤ B) :
-    ∃ A P : ℝ, ∃ n₀ : ℕ, ∃ L κ : ℕ → ℝ, 4 * B + 4 ≤ P ∧
-      Tendsto (fun n : ℕ => (n : ℝ) ^ B * L n * κ n) atTop (nhds 0) ∧
-      ∀ n ≥ n₀, 0 ≤ L n ∧ 0 ≤ κ n ∧ 4 * L n * κ n ≤ 1 ∧
-      ∀ g : ℕ, Real.log g ≤ C_g * n →
-      ∀ {R K : Type} [Fintype R] [DecidableEq R] [Fintype K] {Ω : R → Type} [∀ a, Fintype (Ω a)]
-        [∀ a, DecidableEq (Ω a)] (I : SamplingInstance n g R K Ω), I.Admissible B A P →
-        ∀ C : TrimCertificate I B A P,
-        Nonempty (RawSampler I C.trimmed B (L n) (κ n) (n : ℝ)⁻¹) := by
-  sorry
-
-/-- L3.10h without Step 1 (03:844–1128), assembled: the raw sampler of the clock construction, conditioned
-through `leaf_avoidance_transfer`, gives a law on real outputs that is injective, avoids every predicate, and
-has the joint product bound relative to the trimmed laws. -/
-theorem step8_trimmed_core (B C_g : ℝ) (hB : 1 ≤ B) :
-    ∃ A P : ℝ, ∃ n₀ : ℕ, ∃ ε : ℕ → ℝ, 4 * B + 4 ≤ P ∧ Tendsto ε atTop (nhds 0) ∧
-    ∀ n ≥ n₀, ∀ g : ℕ, Real.log g ≤ C_g * n →
-    ∀ {R K : Type} [Fintype R] [DecidableEq R] [Fintype K] {Ω : R → Type} [∀ a, Fintype (Ω a)]
-      [∀ a, DecidableEq (Ω a)] (I : SamplingInstance n g R K Ω), I.Admissible B A P →
-      ∀ C : TrimCertificate I B A P,
-      ∃ J : FinProb (∀ a, Ω a),
-        (∀ ω, J.w ω ≠ 0 → Function.Injective (fun a => I.lab a (ω a)) ∧ ∀ k, ¬ I.failure k ω) ∧
-        (∀ (S : Finset R) (o : ∀ a, Ω a), ((S.card : ℝ) ≤ (n : ℝ) ^ B) →
-          J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤
-            (1 + ε n) * ∏ a ∈ S, (C.trimmed a).w (o a)) := by
-  obtain ⟨A, P, n₀, L, κ, hP, hsmall, hraw⟩ := clock_raw_sampler B C_g hB
-  refine ⟨A, P, n₀,
-    fun n => Real.exp (4 * ((n : ℝ) ^ B * L n) * κ n) * (1 + (n : ℝ)⁻¹) - 1, hP, ?_, ?_⟩
-  · have hx : Tendsto (fun n : ℕ => 4 * ((n : ℝ) ^ B * L n) * κ n) atTop (nhds 0) := by
-      have h := hsmall.const_mul 4
-      simpa [mul_assoc] using h
-    have hexp := (Real.continuous_exp.tendsto 0).comp hx
-    have hlim := (hexp.mul ((tendsto_const_nhds (x := (1 : ℝ))).add
-      (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)))).sub_const 1
-    convert hlim using 2 <;> simp
-  · intro n hn g hg R K _ _ _ Ω _ _ I hI C
-    obtain ⟨hL0, hκ0, hLκ, hrest⟩ := hraw n hn
-    obtain ⟨X⟩ := hrest g hg I hI C
-    obtain ⟨J, hJs, hJt⟩ :=
-      leaf_avoidance_transfer I C.trimmed B (L n) (κ n) (n : ℝ)⁻¹ hL0 hκ0 hLκ X
-    refine ⟨J, hJs, fun S o hS => ?_⟩
-    calc J.pr (fun ω => ∀ a ∈ S, ω a = o a)
-        ≤ Real.exp (4 * ((n : ℝ) ^ B * L n) * κ n) *
-            ((1 + (n : ℝ)⁻¹) * ∏ a ∈ S, (C.trimmed a).w (o a)) := hJt S o hS
-      _ = (1 + (Real.exp (4 * ((n : ℝ) ^ B * L n) * κ n) * (1 + (n : ℝ)⁻¹) - 1)) *
-            ∏ a ∈ S, (C.trimmed a).w (o a) := by ring
-
-/-- L3.10h (03:1084–1131), assembled: trim and complete (Step 1), run the trimmed core, and pay the
-renormalization cost of Step 1 on the queried rows (03:1128–1131). This is the sub-node consumed by the
-exported theorem. -/
-theorem step8_bad_leaf_avoidance (B C_g : ℝ) (hB : 1 ≤ B) :
-    ∃ A P : ℝ, ∃ n₀ : ℕ, ∃ ε : ℕ → ℝ,
-    Tendsto ε atTop (nhds 0) ∧ ∀ n ≥ n₀, ∀ g : ℕ, Real.log g ≤ C_g * n →
-    ∀ {R K : Type} [Fintype R] [DecidableEq R] [Fintype K] {Ω : R → Type} [∀ a, Fintype (Ω a)]
-      [∀ a, DecidableEq (Ω a)] (lab : ∀ a, Ω a → Fin g) (p : ∀ a, FinProb (Ω a))
-      (F : K → (∀ a, Ω a) → Prop) (sc : K → Finset R),
-      (∀ y, ∑ a, labMarg (p a) (lab a) y ≤ 1e-8) →
-      (∀ a y, labMarg (p a) (lab a) y ≤ (n : ℝ) ^ (-A)) →
-      (∀ k, FinProb.DependsOn (F k) (sc k)) →
-      (∀ k, ((sc k).card : ℝ) ≤ (n : ℝ) ^ B) →
-      (∀ a, ((Finset.univ.filter (fun k => a ∈ sc k)).card : ℝ) ≤ (n : ℝ) ^ B) →
-      (∀ k, (FinProb.pi p).pr (F k) ≤ (n : ℝ) ^ (-P)) →
-      ∃ J : FinProb (∀ a, Ω a),
-        (∀ ω, J.w ω ≠ 0 → Function.Injective (fun a => lab a (ω a)) ∧ ∀ k, ¬ F k ω) ∧
-        (∀ (S : Finset R) (o : ∀ a, Ω a), ((S.card : ℝ) ≤ (n : ℝ) ^ B) →
-          J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤
-            (1 + ε n) * ∏ a ∈ S, (p a).w (o a)) := by
-  obtain ⟨A, P, n₀, ε, hP, hε, hcore⟩ := step8_trimmed_core B C_g hB
-  refine ⟨A, P, max n₀ 2,
-    fun n => (1 + |ε n|) * (1 + 2 * (n : ℝ) ^ (2 * B - P / 2)) - 1, ?_, ?_⟩
-  · have hexp : 0 < P / 2 - 2 * B := by linarith
-    have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ (2 * B - P / 2)) atTop (nhds 0) := by
-      have h := (tendsto_rpow_neg_atTop hexp).comp tendsto_natCast_atTop_atTop
-      simpa [Function.comp_def, neg_sub] using h
-    have habs : Tendsto (fun n => |ε n|) atTop (nhds 0) := by
-      simpa using hε.abs
-    have hlim := ((tendsto_const_nhds (x := (1 : ℝ))).add habs).mul
-      ((tendsto_const_nhds (x := (1 : ℝ))).add (hpow.const_mul 2))
-    convert hlim.sub_const 1 using 2
-    norm_num
-  · intro n hn g hg R K _ _ _ Ω _ _ lab p F sc h1 h2 h3 h4 h5 h6
-    have hn2 : 2 ≤ n := le_trans (le_max_right _ _) hn
-    have hn0 : n₀ ≤ n := le_trans (le_max_left _ _) hn
-    let I : SamplingInstance n g R K Ω := ⟨lab, p, F, sc⟩
-    have hI : I.Admissible B A P := by
-      unfold SamplingInstance.Admissible
-      exact ⟨h1, h2, h3, h4, h5, h6⟩
-    obtain ⟨C⟩ := step1_trim_and_complete I B A P hn2 (by linarith) hP hI
-    obtain ⟨J, hJsupp, hJ⟩ := hcore n hn0 g hg I hI C
-    refine ⟨J, hJsupp, fun S o hS => ?_⟩
-    have hcoreS := hJ S o hS
-    have huntrim := untrim_product_bound I B A P hn2 (by linarith) hP C S o hS
-    have hprod : 0 ≤ ∏ a ∈ S, (C.trimmed a).w (o a) :=
-      Finset.prod_nonneg fun a _ => (C.trimmed a).nonneg (o a)
-    have hfac : 0 ≤ 1 + |ε n| := by positivity
-    calc J.pr (fun ω => ∀ a ∈ S, ω a = o a)
-        ≤ (1 + ε n) * ∏ a ∈ S, (C.trimmed a).w (o a) := hcoreS
-      _ ≤ (1 + |ε n|) * ∏ a ∈ S, (C.trimmed a).w (o a) :=
-          mul_le_mul_of_nonneg_right (by linarith [le_abs_self (ε n)]) hprod
-      _ ≤ (1 + |ε n|) * ((1 + 2 * (n : ℝ) ^ (2 * B - P / 2)) * ∏ a ∈ S, (p a).w (o a)) :=
-          mul_le_mul_of_nonneg_left huntrim hfac
-      _ = (1 + ((1 + |ε n|) * (1 + 2 * (n : ℝ) ^ (2 * B - P / 2)) - 1)) *
-            ∏ a ∈ S, (p a).w (o a) := by ring
 
 end HypercubeRamsey.Clock

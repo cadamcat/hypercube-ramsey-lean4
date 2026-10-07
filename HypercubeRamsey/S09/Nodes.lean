@@ -36,7 +36,61 @@ nonempty because `y_s < y_m < 1 - σ` and `x_s < 1/10 < 1 - σ`.  Availability, 
 constraints do not involve `y_m`. -/
 theorem p92_admissible_sublinear (T : Stage) (P : Params9) (hP : P.Valid) (hSel : P.SubSelection T) :
     ∃ P' : Params9, P'.Valid ∧ P'.IsSublinear ∧ P'.SubSelection T ∧ P'.CoreAdmissible := by
-  sorry
+  classical
+  rcases hSel with ⟨yS, yD, yM, hcase, hAvail, hDeep⟩
+  simp only [Params9.Valid, hcase] at hP
+  rcases hP with ⟨⟨hxs0, hxsxd, hxd010⟩, ⟨hm0, hmm, hmp1⟩, hmargin,
+    ⟨hsig0, hsigxs⟩, ⟨hchi0, hchibound⟩, hgap,
+    hys0, hsym, hymupper, hysigd, hyd1, hchiSig⟩
+  have hxsUpper : (P.xS : ℝ) < 1 - (P.σ : ℝ) := by
+    have hx : (P.xS : ℝ) < 1 / 10 := by
+      have hx1 : (P.xS : ℝ) < (P.xD : ℝ) := by exact_mod_cast hxsxd
+      have hx2cast : (P.xD : ℝ) < ((1 / 10 : ℚ) : ℝ) := by exact_mod_cast hxd010
+      have hx2 : (P.xD : ℝ) < (1 / 10 : ℝ) := by simpa using hx2cast
+      exact lt_trans hx1 hx2
+    have hs : (P.σ : ℝ) < 1 / 100 := by
+      have : (P.σ : ℝ) < (P.xS : ℝ) / 10 := by exact_mod_cast hsigxs
+      linarith
+    linarith
+  have hymUpperR : (yM : ℝ) < 1 - (P.σ : ℝ) := by exact_mod_cast hymupper
+  have hysUpper : (yS : ℝ) < 1 - (P.σ : ℝ) := by
+    have hsymR : (yS : ℝ) < (yM : ℝ) := by exact_mod_cast hsym
+    exact lt_trans hsymR hymUpperR
+  let low : ℝ := max (max (yS : ℝ) (P.xS : ℝ)) (yM : ℝ)
+  have hlow : low < 1 - (P.σ : ℝ) := by
+    dsimp [low]
+    exact max_lt (max_lt hysUpper hxsUpper) hymUpperR
+  obtain ⟨yM', hlowNew, hnewUpper⟩ := exists_rat_btwn hlow
+  have hysNew : yS < yM' := by
+    have h : (yS : ℝ) ≤ low := by
+      dsimp [low]
+      exact le_trans (le_max_left _ _) (le_max_left _ _)
+    exact_mod_cast lt_of_le_of_lt h hlowNew
+  have hxsNew : P.xS < yM' := by
+    have h : (P.xS : ℝ) ≤ low := by
+      dsimp [low]
+      exact le_trans (le_max_right _ _) (le_max_left _ _)
+    exact_mod_cast lt_of_le_of_lt h hlowNew
+  have hxsNewR : (P.xS : ℝ) < (yM' : ℝ) := by exact_mod_cast hxsNew
+  have hymNew : yM < yM' := by
+    have h : (yM : ℝ) ≤ low := by dsimp [low]; exact le_max_right _ _
+    exact_mod_cast lt_of_le_of_lt h hlowNew
+  let P' : Params9 := { P with case := .sub yS yD yM' }
+  have hValid' : P'.Valid := by
+    simp only [Params9.Valid, P']
+    refine ⟨⟨hxs0, hxsxd, hxd010⟩, ⟨hm0, hmm, hmp1⟩, hmargin,
+      ⟨hsig0, hsigxs⟩, ⟨hchi0, hchibound⟩, hgap, ?_⟩
+    exact ⟨hys0, hysNew, (by exact_mod_cast hnewUpper), hysigd, hyd1, hchiSig⟩
+  have hSub : P'.IsSublinear := ⟨yS, yD, yM', rfl⟩
+  have hSel' : P'.SubSelection T := by
+    refine ⟨yS, yD, yM', rfl, hAvail, ?_⟩
+    have hDeep' : DiscAt T (pw (P.xD : ℝ)) (fun n => n ^ (yD : ℝ))
+        (fun n => (n : ℝ) ^ (-(P.hMinus : ℝ))) := by
+      simpa [Params9.DeepOnStage, Params9.Sd, hcase] using hDeep
+    simpa [Params9.DeepOnStage, Params9.Sd, P'] using hDeep'
+  have hAdmissible : P'.CoreAdmissible := by
+    simpa [Params9.CoreAdmissible, P'] using hxsNewR
+  exact ⟨P', hValid', hSub, hSel', hAdmissible⟩
 
 /-- P9.2-prep (09:61): balanced tag mixture with a colour and surplus rows. -/
 theorem p92_patch_preparation {P : Params9} {κ : ℝ} {n N : ℕ}

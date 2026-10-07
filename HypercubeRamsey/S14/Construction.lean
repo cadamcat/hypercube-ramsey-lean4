@@ -10550,6 +10550,1371 @@ theorem posterior_good_tests (κ : CConsts) (hκ : κ.Admissible)
             (1 + hconst.sliceExponent)))]
       _ ≤ Real.exp (-Real.rpow (hp : ℝ) (1 + κ.c14)) := hfinal'
 
+section LaneTranslationProof
+
+set_option backward.isDefEq.respectTransparency false
+set_option maxHeartbeats 1000000
+
+variable {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
+  {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+
+private structure LaneTranslation (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) where
+  e : IWord 𝒯 i ≃ IWord 𝒯 i
+  eg : Group 𝒯 i ≃ Group 𝒯 i
+  ev : EvenRole 𝒯 i ≃ EvenRole 𝒯 i
+  ec : H.Center ≃ H.Center
+  eh : (∀ r, H.Val r) ≃ (∀ r, H.Val r)
+  group : ∀ a, (eg a).1 = e a.1
+  role : ∀ v, (ev v).1 = e v.1
+  center : ∀ c, ec c = (e c.1, c.2)
+  flip : ∀ z l, e (flipPos z l) = flipPos (e z) l
+  distance : ∀ z z', _root_.hammingDist (e z) (e z') = _root_.hammingDist z z'
+  project : ∀ z, Geom.project (e z) = e (Geom.project z)
+  centerRecord : ∀ W c, eh W (.inl (ec c)) = W (.inl c)
+  vertex : ∀ W a, H.maskVertex (eg a) (eh W) = H.maskVertex a W
+  search : ∀ W a n,
+    ((Fintype.equivFin (SmallList H.Device (𝒯.tScale i))).symm
+      (H.searchOrder (eg a) (eh W) n)).1 =
+    (((Fintype.equivFin (SmallList H.Device (𝒯.tScale i))).symm
+      (H.searchOrder a W n)).1).map ec.toEmbedding
+  replace : ∀ W c w, eh (H.replaceTuple W c w) = H.replaceTuple (eh W) (ec c) w
+  priority : ∀ W v j c, H.Device.priority (H.ties (eh W)) (e v, j) (ec c) =
+    H.Device.priority (H.ties W) (v, j) c
+
+private theorem lane_mask_transport (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (tr : LaneTranslation Geom H) (W : ∀ r, H.Val r) (a : Group 𝒯 i) :
+    (mask (tr.eg a) (tr.eh W)).prior = (mask a W).prior ∧
+      (mask (tr.eg a) (tr.eh W)).within = (mask a W).within := by
+  have hc (D : Bin 𝒯 i) : (mask (tr.eg a) (tr.eh W)).cheap D = (mask a W).cheap D := by
+    erw [(mask _ _).cheap_eq, (mask _ _).cheap_eq, tr.vertex]
+  have hr : (mask (tr.eg a) (tr.eh W)).retained = (mask a W).retained := by
+    ext D
+    erw [(mask _ _).retained_spec, (mask _ _).retained_spec, hc]
+  constructor
+  · funext D
+    erw [(mask _ _).prior_uniform, (mask _ _).prior_uniform, hr]
+  · funext D y
+    erw [(mask _ _).within_uniform, (mask _ _).within_uniform, hr, hc]
+
+private theorem lane_incidence (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (v : EvenRole 𝒯 i) (a : Group 𝒯 i) :
+    tr.ev v ∈ groupNeighborhood (tr.eg a) ↔ v ∈ groupNeighborhood a := by
+  simp only [groupNeighborhood, Finset.mem_filter, Finset.mem_univ, true_and,
+    groupFiber, Finset.mem_image]
+  simp_rw [tr.group, tr.role, ← tr.flip]
+  simp only [tr.e.injective.eq_iff]
+
+private theorem lane_ball (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (v : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    candidateBall H (tr.e v) j = (candidateBall H v j).map tr.ec.toEmbedding := by
+  classical
+  ext c
+  obtain ⟨c, rfl⟩ := tr.ec.surjective c
+  simp only [Finset.mem_map, Function.Embedding.coeFn_mk, Equiv.toEmbedding,
+    tr.ec.injective.eq_iff, exists_eq_right]
+  simp [candidateBall, tr.center, tr.distance]
+
+private theorem lane_range (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H) (a : Group 𝒯 i) :
+    candidateRange Geom H (tr.eg a) = (candidateRange Geom H a).map tr.ec.toEmbedding := by
+  classical
+  ext c
+  obtain ⟨c, rfl⟩ := tr.ec.surjective c
+  simp only [candidateRange, Finset.mem_biUnion, Finset.mem_univ, true_and,
+    Finset.mem_map, Function.Embedding.coeFn_mk, Equiv.toEmbedding,
+    tr.ec.injective.eq_iff, exists_eq_right]
+  constructor
+  · rintro ⟨v, hv, j, hj⟩
+    obtain ⟨v, rfl⟩ := tr.ev.surjective v
+    refine ⟨v, (lane_incidence Geom H tr v a).mp hv, j, ?_⟩
+    erw [tr.role, tr.project, lane_ball Geom H tr] at hj
+    obtain ⟨c', hc', heq⟩ := Finset.mem_map.mp hj
+    have : c' = c := tr.ec.injective heq
+    simpa [this] using hc'
+  · rintro ⟨v, hv, j, hj⟩
+    refine ⟨tr.ev v, (lane_incidence Geom H tr v a).mpr hv, j, ?_⟩
+    erw [tr.role, tr.project, lane_ball Geom H tr]
+    exact Finset.mem_map.mpr ⟨c, hj, rfl⟩
+
+private theorem lane_present (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (c : H.Center) : H.present (tr.eh W) (tr.ec c) = H.present W c :=
+  congrArg (fun x => x.2.2.1) (tr.centerRecord W c)
+
+private theorem lane_active (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (c : H.Center) : H.active (tr.eh W) (tr.ec c) = H.active W c :=
+  congrArg (fun x => x.2.2.2) (tr.centerRecord W c)
+
+private theorem lane_tuple (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (c : H.Center) : H.tuple (tr.eh W) (tr.ec c) = H.tuple W c :=
+  congrArg (fun x => x.2.1) (tr.centerRecord W c)
+
+private theorem lane_admissible (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    admissibleList Geom H (tr.eg a) (tr.eh W) (S.map tr.ec.toEmbedding) ↔
+      admissibleList Geom H a W S := by
+  classical
+  simp only [admissibleList, Finset.map_nonempty, Finset.card_map]
+  erw [lane_range Geom H tr]
+  constructor
+  · rintro ⟨hn, hs, hc⟩
+    refine ⟨hn, hs, fun c hc' => ?_⟩
+    have hh := hc (tr.ec c) (Finset.mem_map.mpr ⟨c, hc', rfl⟩)
+    simpa [lane_present] using hh
+  · rintro ⟨hn, hs, hc⟩
+    refine ⟨hn, hs, fun c hc' => ?_⟩
+    obtain ⟨c0, hc0, heq⟩ := Finset.mem_map.mp hc'
+    erw [← heq]
+    simpa [lane_present] using hc c0 hc0
+
+private theorem lane_hit (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    listHit H (tr.eh W) (S.map tr.ec.toEmbedding) = listHit H W S := by
+  classical
+  ext y
+  simp only [listHit, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro hy c hc r
+    simpa [lane_tuple] using hy (tr.ec c) (Finset.mem_map.mpr ⟨c, hc, rfl⟩) r
+  · intro hy c hc r
+    obtain ⟨c0, hc0, heq⟩ := Finset.mem_map.mp hc
+    erw [← heq]
+    simpa [lane_tuple] using hy c0 hc0 r
+
+private theorem lane_mass (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (W : ∀ r, H.Val r) (J : Finset (Fin (T.S.N k))) :
+    maskedMass H mask (tr.eg a) (tr.eh W) J = maskedMass H mask a W J := by
+  obtain ⟨hp, hu⟩ := lane_mask_transport Geom H mask tr W a
+  simp only [maskedMass, hp, hu]
+
+private theorem lane_good (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    listGood H mask (tr.eg a) (tr.eh W) (S.map tr.ec.toEmbedding) ↔ listGood H mask a W S := by
+  classical
+  have hmap (c : H.Center) : (S.map tr.ec.toEmbedding).erase (tr.ec c) =
+      (S.erase c).map tr.ec.toEmbedding := (Finset.map_erase tr.ec.toEmbedding S c).symm
+  simp only [listGood, lane_hit, lane_mass, Finset.card_map]
+  constructor
+  · rintro ⟨habs, hdel⟩
+    refine ⟨habs, fun c hc => ?_⟩
+    have h := hdel (tr.ec c) (Finset.mem_map.mpr ⟨c, hc, rfl⟩)
+    simpa only [hmap, lane_hit] using h
+  · rintro ⟨habs, hdel⟩
+    refine ⟨habs, fun c hc => ?_⟩
+    obtain ⟨c0, hc0, heq⟩ := Finset.mem_map.mp hc
+    change tr.ec c0 = c at heq
+    erw [← heq]
+    simpa only [hmap, lane_hit] using hdel c0 hc0
+
+private theorem lane_failed (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (W : ∀ r, H.Val r) :
+    failedFamily Geom H mask (tr.eg a) (tr.eh W) =
+      (failedFamily Geom H mask a W).map (Equiv.finsetCongr tr.ec).toEmbedding := by
+  classical
+  unfold failedFamily greedyFailed
+  have hitems : (List.ofFn fun n =>
+      ((Fintype.equivFin (SmallList H.Device (𝒯.tScale i))).symm
+        (H.searchOrder (tr.eg a) (tr.eh W) n)).1) =
+      (List.ofFn fun n => ((Fintype.equivFin (SmallList H.Device (𝒯.tScale i))).symm
+        (H.searchOrder a W n)).1).map (fun S => S.map tr.ec.toEmbedding) := by
+    erw [List.map_ofFn]
+    congr 1
+    funext n
+    exact tr.search W a n
+  erw [hitems]
+  dsimp only
+  exact Lane_sol_s14_lik.greedy_scan_map tr.ec
+    (List.ofFn fun n : Fin (Fintype.card (SmallList H.Device (𝒯.tScale i))) =>
+      ((Fintype.equivFin (SmallList H.Device (𝒯.tScale i))).symm (H.searchOrder a W n)).1)
+    (fun S => admissibleList Geom H a W S ∧ ¬ listGood H mask a W S)
+    (fun S => admissibleList Geom H (tr.eg a) (tr.eh W) S ∧ ¬ listGood H mask (tr.eg a) (tr.eh W) S)
+    (fun S => by erw [lane_admissible, lane_good])
+
+private theorem lane_marked (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (W : ∀ r, H.Val r) :
+    marked Geom H mask (tr.eg a) (tr.eh W) = (marked Geom H mask a W).map tr.ec.toEmbedding := by
+  classical
+  erw [marked, lane_failed, marked]
+  ext c
+  obtain ⟨c, rfl⟩ := tr.ec.surjective c
+  conv_lhs => simp only [Finset.mem_biUnion]
+  conv_rhs => simp only [Finset.mem_map_equiv, Equiv.symm_apply_apply, Finset.mem_biUnion]
+  constructor
+  · rintro ⟨S, hS, hc⟩
+    obtain ⟨S0, hS0, heq⟩ := Finset.mem_map.mp hS
+    refine ⟨S0, hS0, ?_⟩
+    erw [← heq] at hc
+    simpa using hc
+  · rintro ⟨S, hS, hc⟩
+    refine ⟨S.map tr.ec.toEmbedding, Finset.mem_map.mpr ⟨S, hS, rfl⟩, ?_⟩
+    exact Finset.mem_map.mpr ⟨c, hc, rfl⟩
+
+private theorem lane_incident (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (u : IWord 𝒯 i) (a : Group 𝒯 i) :
+    (∃ v ∈ groupNeighborhood (tr.eg a), Geom.project v.1 = tr.e u) ↔
+      (∃ v ∈ groupNeighborhood a, Geom.project v.1 = u) := by
+  constructor
+  · rintro ⟨v, hv, hp⟩
+    obtain ⟨v, rfl⟩ := tr.ev.surjective v
+    refine ⟨v, (lane_incidence Geom H tr v a).mp hv, ?_⟩
+    erw [tr.role, tr.project] at hp
+    exact tr.e.injective hp
+  · rintro ⟨v, hv, hp⟩
+    refine ⟨tr.ev v, (lane_incidence Geom H tr v a).mpr hv, ?_⟩
+    erw [tr.role, tr.project, hp]
+
+set_option maxHeartbeats 400000 in
+private theorem lane_forbidden_at (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (u : IWord 𝒯 i) (a : Group 𝒯 i) :
+    (if ∃ v ∈ groupNeighborhood (tr.eg a), Geom.project v.1 = tr.e u then
+      marked Geom H mask (tr.eg a) (tr.eh W) else ∅) =
+    (if ∃ v ∈ groupNeighborhood a, Geom.project v.1 = u then
+      marked Geom H mask a W else ∅).map tr.ec.toEmbedding := by
+  classical
+  by_cases ha : ∃ v ∈ groupNeighborhood a, Geom.project v.1 = u
+  · have ha' := (lane_incident Geom H tr u a).mpr ha
+    simp only [if_pos ha, if_pos ha', lane_marked]
+  · have ha' := mt (lane_incident Geom H tr u a).mp ha
+    simp only [if_neg ha, if_neg ha', Finset.map_empty]
+
+set_option maxHeartbeats 400000 in
+private theorem lane_forbidden_union (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (u : IWord 𝒯 i) :
+    (Finset.univ.biUnion fun a : Group 𝒯 i =>
+      if ∃ v ∈ groupNeighborhood a, Geom.project v.1 = tr.e u then marked Geom H mask a (tr.eh W) else ∅) =
+    (Finset.univ.biUnion fun a : Group 𝒯 i =>
+      if ∃ v ∈ groupNeighborhood a, Geom.project v.1 = u then marked Geom H mask a W else ∅).map tr.ec.toEmbedding := by
+  classical
+  exact Lane_sol_s14_lik.biUnion_transport tr.eg tr.ec _ _ (lane_forbidden_at Geom H mask tr W u)
+
+private theorem lane_positions (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (u : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    (candidateBall H (tr.e u) j).filter (fun c => H.present (tr.eh W) c = true) =
+      ((candidateBall H u j).filter fun c => H.present W c = true).map tr.ec.toEmbedding := by
+  classical
+  erw [lane_ball]
+  ext c
+  obtain ⟨c, rfl⟩ := tr.ec.surjective c
+  simp [lane_present]
+
+private theorem lane_eligible_unfold (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (W : ∀ r, H.Val r)
+    (u : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    eligible Geom H mask W u j =
+      ((candidateBall H u j).filter fun c => H.present W c = true) \
+        (Finset.univ.biUnion fun a : Group 𝒯 i =>
+          if ∃ v ∈ groupNeighborhood a, Geom.project v.1 = u then marked Geom H mask a W else ∅) := by
+  unfold eligible
+  apply congrArg (fun B : Finset H.Center =>
+    ((candidateBall H u j).filter fun c => H.present W c = true) \ B)
+  apply Finset.biUnion_congr rfl
+  intro a _
+  -- The concrete definition and this expression choose different decisions
+  -- for word equality; cases prove equality without evaluating either one.
+  split_ifs <;> rfl
+
+set_option maxHeartbeats 400000 in
+private theorem lane_eligible (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (u : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    eligible Geom H mask (tr.eh W) (tr.e u) j =
+      (eligible Geom H mask W u j).map tr.ec.toEmbedding := by
+  rw [lane_eligible_unfold, lane_eligible_unfold]
+  let A := (candidateBall H u j).filter fun c => H.present W c = true
+  let B := Finset.univ.biUnion fun a : Group 𝒯 i =>
+    if ∃ v ∈ groupNeighborhood a, Geom.project v.1 = u then marked Geom H mask a W else ∅
+  -- The bridge fixes decision-instance conversion before transporting sets.
+  exact (congrArg₂ (fun A B : Finset H.Center => A \ B)
+    (lane_positions Geom H tr W u j)
+    (lane_forbidden_union Geom H mask tr W u)).trans
+      (Finset.map_sdiff (f := tr.ec.toEmbedding) A B).symm
+
+private theorem lane_bad (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (u : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    H.Device.Bad (H.present (tr.eh W)) (H.active (tr.eh W))
+      (eligible Geom H mask (tr.eh W)) (tr.e u) j ↔
+    H.Device.Bad (H.present W) (H.active W) (eligible Geom H mask W) u j := by
+  apply Lane_sol_s14_lik.bad_transport H.Device tr.e _ _ _ _ _ _ tr.distance
+  · intro c
+    erw [← tr.center c]
+    exact lane_present Geom H tr W c
+  · intro c
+    erw [← tr.center c]
+    exact lane_active Geom H tr W c
+  · intro u j
+    erw [lane_eligible]
+    congr 1
+    apply congrArg Equiv.toEmbedding
+    apply Equiv.ext
+    intro c
+    exact tr.center c
+
+private theorem lane_sites (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H) (u : IWord 𝒯 i) :
+    tr.e u ∈ siteSet Geom ↔ u ∈ siteSet Geom := by
+  simp only [siteSet, Finset.mem_image, Finset.mem_univ, true_and]
+  constructor
+  · rintro ⟨v, hv⟩
+    obtain ⟨v, rfl⟩ := tr.ev.surjective v
+    refine ⟨v, ?_⟩
+    erw [tr.role, tr.project] at hv
+    exact tr.e.injective hv
+  · rintro ⟨v, hv⟩
+    refine ⟨tr.ev v, ?_⟩
+    erw [tr.role, tr.project, hv]
+
+private theorem lane_selected (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (v : EvenRole 𝒯 i) :
+    selected Geom H mask (tr.eh W) (tr.ev v) = (selected Geom H mask W v).map tr.ec := by
+  have hb (u : IWord 𝒯 i) (j : ℕ) :
+      H.Device.BadN (H.present (tr.eh W)) (H.active (tr.eh W))
+        (eligible Geom H mask (tr.eh W)) (tr.e u) j ↔
+      H.Device.BadN (H.present W) (H.active W) (eligible Geom H mask W) u j := by
+    unfold HDParams.BadN
+    exact exists_congr fun hj => lane_bad Geom H mask tr W u ⟨j, hj⟩
+  have hh := Lane_sol_s14_lik.height_transport H.Device tr.e (siteSet Geom) (siteSet Geom)
+    (H.present W) (H.active W) (H.present (tr.eh W)) (H.active (tr.eh W))
+    (eligible Geom H mask W) (eligible Geom H mask (tr.eh W)) tr.distance
+    (lane_sites Geom H tr) hb
+  have hec : tr.ec = Equiv.prodCongr tr.e (Equiv.refl _) := by
+    apply Equiv.ext
+    intro c
+    exact tr.center c
+  unfold selected HDParams.selection
+  erw [tr.role, tr.project, hec]
+  apply Lane_sol_s14_lik.selection_transport H.Device tr.e _ _ _ _ _ _ _ _ _ _ _
+  · intro u
+    exact hh u H.Device.Rlong
+  · exact lane_bad Geom H mask tr W
+  · intro c
+    erw [← tr.center c]
+    exact lane_active Geom H tr W c
+  · intro u j
+    erw [lane_eligible, hec]
+  · intro u j c
+    erw [← tr.center c]
+    exact tr.priority W u j c
+
+private theorem lane_realized (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (a : Group 𝒯 i) :
+    realizedList Geom H mask (tr.eg a) (tr.eh W) =
+      (realizedList Geom H mask a W).map tr.ec.toEmbedding := by
+  classical
+  ext c
+  obtain ⟨c, rfl⟩ := tr.ec.surjective c
+  simp only [realizedList, Finset.mem_filter, Finset.mem_univ, true_and,
+    Finset.mem_map_equiv, Equiv.symm_apply_apply]
+  constructor
+  · rintro ⟨v, hv, hc⟩
+    obtain ⟨v, rfl⟩ := tr.ev.surjective v
+    refine ⟨v, (lane_incidence Geom H tr v a).mp hv, ?_⟩
+    erw [lane_selected] at hc
+    exact (Option.map_inj_right tr.ec.injective).mp (by simpa using hc)
+  · rintro ⟨v, hv, hc⟩
+    refine ⟨tr.ev v, (lane_incidence Geom H tr v a).mpr hv, ?_⟩
+    erw [lane_selected, hc]
+    rfl
+
+private theorem lane_count (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (u : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    ((candidateBall H (tr.e u) j).filter fun c => H.present (tr.eh W) c = true).card =
+      ((candidateBall H u j).filter fun c => H.present W c = true).card := by
+  have he : (candidateBall H (tr.e u) j).filter (fun c => H.present (tr.eh W) c = true) =
+      ((candidateBall H u j).filter fun c => H.present W c = true).map tr.ec.toEmbedding := by
+    erw [lane_ball]
+    ext c
+    obtain ⟨c, rfl⟩ := tr.ec.surjective c
+    simp [lane_present]
+  erw [he, Finset.card_map]
+
+private theorem lane_valid (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (a : Group 𝒯 i) :
+    groupValid Geom H mask (tr.eg a) (tr.eh W) ↔ groupValid Geom H mask a W := by
+  simp only [groupValid, lane_realized, lane_admissible, lane_good]
+  apply and_congr_left
+  intro _
+  constructor
+  · intro h v hv
+    obtain ⟨c', hs, hc⟩ := h (tr.ev v) ((lane_incidence Geom H tr v a).mpr hv)
+    obtain ⟨c, rfl⟩ := tr.ec.surjective c'
+    refine ⟨c, ?_, ?_⟩
+    · erw [lane_selected] at hs
+      exact (Option.map_inj_right tr.ec.injective).mp (by simpa using hs)
+    · simpa only [tr.role, tr.project, tr.center, lane_count] using hc
+  · intro h v hv
+    obtain ⟨v, rfl⟩ := tr.ev.surjective v
+    obtain ⟨c, hs, hc⟩ := h v ((lane_incidence Geom H tr v a).mp hv)
+    refine ⟨tr.ec c, ?_, ?_⟩
+    · erw [lane_selected, hs]
+      rfl
+    · simpa only [tr.role, tr.project, tr.center, lane_count] using hc
+
+private theorem lane_star (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (v : EvenRole 𝒯 i) :
+    starValid Geom H mask (tr.ev v) (tr.eh W) ↔ starValid Geom H mask v W := by
+  have hgroups : (∀ a, tr.ev v ∈ groupNeighborhood a → groupValid Geom H mask a (tr.eh W)) ↔
+      (∀ a, v ∈ groupNeighborhood a → groupValid Geom H mask a W) := by
+    constructor
+    · intro h a ha
+      exact (lane_valid Geom H mask tr W a).mp (h _ ((lane_incidence Geom H tr v a).mpr ha))
+    · intro h a ha
+      obtain ⟨a, rfl⟩ := tr.eg.surjective a
+      exact (lane_valid Geom H mask tr W a).mpr (h _ ((lane_incidence Geom H tr v a).mp ha))
+  have hdom (u : IWord 𝒯 i) :
+      tr.e u ∈ H.Device.domBall (siteSet Geom) (Geom.project (tr.ev v).1) H.Device.Rlong ↔
+      u ∈ H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong := by
+    simp only [HDParams.domBall, Finset.mem_filter, tr.role, tr.project, tr.distance]
+    erw [lane_sites]
+  have hcounts : (∀ u ∈ H.Device.domBall (siteSet Geom) (Geom.project (tr.ev v).1) H.Device.Rlong,
+      ∀ j, (((candidateBall H u j).filter fun c => H.present (tr.eh W) c = true).card : ℝ) ≤
+        2 * H.Device.lam ∧ H.Device.lam / 2 ≤ (eligible Geom H mask (tr.eh W) u j).card) ↔
+      (∀ u ∈ H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong,
+      ∀ j, (((candidateBall H u j).filter fun c => H.present W c = true).card : ℝ) ≤
+        2 * H.Device.lam ∧ H.Device.lam / 2 ≤ (eligible Geom H mask W u j).card) := by
+    constructor
+    · intro h u hu j
+      simpa only [lane_count, lane_eligible, Finset.card_map] using h (tr.e u) ((hdom u).mpr hu) j
+    · intro h u hu j
+      obtain ⟨u, rfl⟩ := tr.e.surjective u
+      simpa only [lane_count, lane_eligible, Finset.card_map] using h u ((hdom u).mp hu) j
+  have hsel : (∃ c, selected Geom H mask (tr.eh W) (tr.ev v) = some c) ↔
+      (∃ c, selected Geom H mask W v = some c) := by
+    erw [lane_selected]
+    cases selected Geom H mask W v <;> simp
+  exact and_congr hgroups (and_congr hcounts hsel)
+
+private theorem lane_hitMass (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (a : Group 𝒯 i) (D : Bin 𝒯 i) (S : Finset H.Center) :
+    hitMass H mask (tr.eg a) (tr.eh W) D (S.map tr.ec.toEmbedding) = hitMass H mask a W D S := by
+  erw [hitMass, hitMass, lane_hit, (lane_mask_transport Geom H mask tr W a).2]
+
+private theorem lane_restricted (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (W : ∀ r, H.Val r) (a : Group 𝒯 i) (D : Bin 𝒯 i) :
+    restrictedBin Geom H mask (tr.eg a) (tr.eh W) D ↔ restrictedBin Geom H mask a W D := by
+  have hmap (c : H.Center) : ((realizedList Geom H mask a W).map tr.ec.toEmbedding).erase (tr.ec c) =
+      ((realizedList Geom H mask a W).erase c).map tr.ec.toEmbedding :=
+    (Finset.map_erase tr.ec.toEmbedding _ c).symm
+  simp only [restrictedBin, lane_realized, lane_hitMass, Finset.card_map]
+  constructor
+  · rintro ⟨ha, hd⟩
+    refine ⟨ha, fun c hc => ?_⟩
+    have h := hd (tr.ec c) (Finset.mem_map.mpr ⟨c, hc, rfl⟩)
+    simpa only [hmap, lane_hitMass] using h
+  · rintro ⟨ha, hd⟩
+    refine ⟨ha, fun c hc => ?_⟩
+    obtain ⟨c0, hc0, heq⟩ := Finset.mem_map.mp hc
+    change tr.ec c0 = c at heq
+    erw [← heq]
+    simpa only [hmap, lane_hitMass] using hd c0 hc0
+
+private theorem lane_q (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (tr : LaneTranslation Geom H) (W : ∀ r, H.Val r) (a : Group 𝒯 i) :
+    O.q (tr.eg a) (tr.eh W) = O.q a W := by
+  erw [O.q_eq]
+  funext D
+  simp only [oddQ, lane_valid, tiltWeight, lane_restricted, lane_realized,
+    lane_hitMass, (lane_mask_transport Geom H mask tr W a).1]
+
+private theorem lane_U (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (tr : LaneTranslation Geom H) (W : ∀ r, H.Val r) (a : Group 𝒯 i) (D : Bin 𝒯 i) :
+    O.U (tr.eg a) (tr.eh W) D = O.U a W D := by
+  have hq := lane_q Geom H mask O tr W a
+  erw [O.q_eq] at hq
+  erw [O.U_eq]
+  funext y
+  simp only [oddU, lane_valid, hq, lane_realized, lane_hit, lane_hitMass,
+    (lane_mask_transport Geom H mask tr W a).2]
+
+private theorem lane_owner (Geom : ProjectionGeometry κ 𝒯 i)
+    (v : EvenRole 𝒯 i) (g : Group 𝒯 i) (l : Fin (𝒯.P i).h) :
+    Geom.groupOf (flipPos v.1 l) = g ↔ flipPos v.1 l ∈ groupFiber g := by
+  have hodd : ¬ IsEvenRole (flipPos v.1 l) := by
+    let A : Finset (Fin (𝒯.P i).h) := Finset.univ.filter fun j => v.1 j = true
+    let B : Finset (Fin (𝒯.P i).h) := Finset.univ.filter fun j => flipPos v.1 l j = true
+    have hEvenA : Even A.card := by simpa [A, IsEvenRole] using v.2
+    change ¬ Even B.card
+    cases hbit : v.1 l with
+    | true =>
+      have hlA : l ∈ A := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hbit⟩
+      have hBA : B = A.erase l := by
+        ext j
+        by_cases hj : j = l
+        · subst j; simp [A, B, flipPos, hbit]
+        · simp [A, B, flipPos, hj, Ne.symm hj, hbit]
+      intro hEvenB
+      have hEvenSub : Even (A.card - 1) := by
+        erw [← Finset.card_erase_of_mem hlA, ← hBA]
+        exact hEvenB
+      rcases hEvenA with ⟨a, ha⟩
+      rcases hEvenSub with ⟨b, hb⟩
+      have hposA : 0 < A.card := Finset.card_pos.mpr ⟨l, hlA⟩
+      omega
+    | false =>
+      have hlA : l ∉ A := by simp [A, hbit]
+      have hBA : B = insert l A := by
+        ext j
+        by_cases hj : j = l
+        · subst j; simp [A, B, flipPos, hbit]
+        · simp [A, B, flipPos, hj, Ne.symm hj, hbit]
+      intro hEvenB
+      have hEvenIns : Even (A.card + 1) := by
+        erw [← Finset.card_insert_of_notMem hlA, ← hBA]
+        exact hEvenB
+      rcases hEvenA with ⟨a, ha⟩
+      rcases hEvenIns with ⟨b, hb⟩
+      omega
+  constructor
+  · intro heq
+    erw [← heq]
+    exact Geom.groupOf_spec _ hodd
+  · intro hmem
+    obtain ⟨g₀, hg₀, huniq⟩ := Geom.partition _ hodd
+    exact (huniq _ (Geom.groupOf_spec _ hodd)).trans (huniq g hmem).symm
+
+private theorem lane_groupOf (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (v : EvenRole 𝒯 i) (l : Fin (𝒯.P i).h) :
+    Geom.groupOf (flipPos (tr.ev v).1 l) = tr.eg (Geom.groupOf (flipPos v.1 l)) := by
+  apply (lane_owner Geom (tr.ev v) _ l).mpr
+  have hm := (lane_owner Geom v (Geom.groupOf (flipPos v.1 l)) l).mp rfl
+  simp only [groupFiber, Finset.mem_image, Finset.mem_univ, true_and] at hm ⊢
+  obtain ⟨j, hj⟩ := hm
+  refine ⟨j, ?_⟩
+  erw [tr.group, tr.role, ← tr.flip, ← tr.flip, hj]
+
+private theorem lane_event (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (tr : LaneTranslation Geom H) (W : ∀ r, H.Val r) (v : EvenRole 𝒯 i)
+    (A A' : (Group 𝒯 i → Bin 𝒯 i) → InternalLabels 𝒯 i → Prop)
+    (hA : ∀ bins ys, A' (fun a => bins (tr.eg.symm a)) ys ↔ A bins ys) :
+    (refLaw Geom H mask O (tr.eh W)).pr
+      (fun ω => A' ω.1 (nbrLabels (tr.ev v).1 ω.2)) =
+    (refLaw Geom H mask O W).pr (fun ω => A ω.1 (nbrLabels v.1 ω.2)) := by
+  classical
+  have hi (v : EvenRole 𝒯 i) : Function.Injective (flipPos v.1) := by
+    intro l l' h
+    by_contra hn
+    have hb := congrFun h l
+    simp [flipPos, hn] at hb
+  have hpr (W : ∀ r, H.Val r) (v : EvenRole 𝒯 i)
+      (A : (Group 𝒯 i → Bin 𝒯 i) → InternalLabels 𝒯 i → Prop) :
+      (refLaw Geom H mask O W).pr (fun ω => A ω.1 (nbrLabels v.1 ω.2)) =
+      ∑ bins : Group 𝒯 i → Bin 𝒯 i, (∏ a, O.q a W (bins a)) *
+        ∑ ys : InternalLabels 𝒯 i, if A bins ys then
+          ∏ l, O.U (Geom.groupOf (flipPos v.1 l)) W
+            (bins (Geom.groupOf (flipPos v.1 l))) (ys l) else 0 := by
+    exact Lane_sol_s14_lik.internal_query_pr (fun a => O.q a W)
+      (fun a => O.q_nonneg a W) (fun a => O.q_sum a W)
+      (fun a => O.U a W) (fun a => O.U_nonneg a W) (fun a => O.U_sum a W)
+      Geom.groupOf (flipPos v.1) (hi v) A
+  erw [hpr, hpr]
+  let eb := Equiv.arrowCongr tr.eg (Equiv.refl (Bin 𝒯 i))
+  erw [← eb.sum_comp]
+  apply Finset.sum_congr rfl
+  intro bins _
+  have hbin (a : Group 𝒯 i) : eb bins (tr.eg a) = bins a := by simp [eb, Equiv.arrowCongr]
+  have hprod : (∏ a, O.q a (tr.eh W) (eb bins a)) = ∏ a, O.q a W (bins a) := by
+    erw [← tr.eg.prod_comp]
+    apply Finset.prod_congr rfl
+    intro a _
+    erw [lane_q, hbin]
+  erw [hprod]
+  congr 1
+  apply Finset.sum_congr rfl
+  intro ys _
+  have hA' : A' (eb bins) ys ↔ A bins ys := hA bins ys
+  simp only [hA']
+  split_ifs
+  · apply Finset.prod_congr rfl
+    intro l _
+    erw [lane_groupOf, lane_U, hbin]
+  · rfl
+
+private theorem lane_referenceLists (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (c : H.Center) (W : ∀ r, H.Val r) :
+    referenceLists Geom H (tr.eg a) (tr.ec c) (tr.eh W) =
+      (referenceLists Geom H a c W).map (Equiv.finsetCongr tr.ec).toEmbedding := by
+  classical
+  ext S
+  obtain ⟨S, rfl⟩ := (Equiv.finsetCongr tr.ec).surjective S
+  simp only [referenceLists, Finset.mem_filter, Finset.mem_univ, true_and,
+    Finset.mem_map_equiv, Equiv.symm_apply_apply]
+  change (admissibleList Geom H (tr.eg a) (tr.eh W) (S.map tr.ec.toEmbedding) ∧
+    tr.ec c ∈ S.map tr.ec.toEmbedding) ↔ (admissibleList Geom H a W S ∧ c ∈ S)
+  erw [lane_admissible]
+  simp
+
+private theorem lane_deletedQ (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (c : H.Center) (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    deletedQ H mask (tr.eg a) (tr.ec c) (tr.eh W) (S.map tr.ec.toEmbedding) =
+      deletedQ H mask a c W S := by
+  have hmap : (S.map tr.ec.toEmbedding).erase (tr.ec c) =
+      (S.erase c).map tr.ec.toEmbedding := (Finset.map_erase tr.ec.toEmbedding S c).symm
+  funext D
+  simp only [deletedQ, hmap, lane_hit, lane_mass, lane_hitMass,
+    (lane_mask_transport Geom H mask tr W a).1]
+
+private theorem lane_deletedU (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (tr : LaneTranslation Geom H)
+    (a : Group 𝒯 i) (c : H.Center) (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    deletedU H mask (tr.eg a) (tr.ec c) (tr.eh W) (S.map tr.ec.toEmbedding) =
+      deletedU H mask a c W S := by
+  have hmap : (S.map tr.ec.toEmbedding).erase (tr.ec c) =
+      (S.erase c).map tr.ec.toEmbedding := (Finset.map_erase tr.ec.toEmbedding S c).symm
+  funext D y
+  simp only [deletedU, hmap, lane_hit, lane_hitMass,
+    (lane_mask_transport Geom H mask tr W a).2]
+
+private theorem lane_labelMass (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (tr : LaneTranslation Geom H)
+    (v : EvenRole 𝒯 i) (a : Group 𝒯 i)
+    (q : Bin 𝒯 i → ℝ) (U : Bin 𝒯 i → Fin (T.S.N k) → ℝ) (ys : InternalLabels 𝒯 i) :
+    groupLabelMass Geom (tr.ev v) (tr.eg a) q U ys = groupLabelMass Geom v a q U ys := by
+  simp only [groupLabelMass, lane_groupOf, tr.eg.injective.eq_iff]
+
+private theorem lane_reference (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (L : LikelihoodData Geom H mask O) (tr : LaneTranslation Geom H)
+    (v : EvenRole 𝒯 i) (c : H.Center) (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i) :
+    (L.reference (tr.ev v) (tr.ec c) (tr.eh W)).w ys = (L.reference v c W).w ys := by
+  erw [L.reference_eq, L.reference_eq]
+  unfold referenceWeight
+  erw [← tr.eg.prod_comp]
+  apply Finset.prod_congr rfl
+  intro a _
+  simp only [lane_referenceLists, Finset.map_nonempty, Finset.card_map]
+  split_ifs
+  · erw [Finset.sum_map]
+    congr 1
+    apply Finset.sum_congr rfl
+    intro S _
+    change groupLabelMass Geom (tr.ev v) (tr.eg a)
+      (deletedQ H mask (tr.eg a) (tr.ec c) (tr.eh W) (S.map tr.ec.toEmbedding))
+      (deletedU H mask (tr.eg a) (tr.ec c) (tr.eh W) (S.map tr.ec.toEmbedding)) ys = _
+    erw [lane_deletedQ, lane_deletedU, lane_labelMass]
+  · erw [(lane_mask_transport Geom H mask tr W a).1,
+      (lane_mask_transport Geom H mask tr W a).2, lane_labelMass]
+
+private theorem lane_sublikelihood (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (tr : LaneTranslation Geom H) (v : EvenRole 𝒯 i) (c : H.Center)
+    (W : ∀ r, H.Val r) (w : H.Tuple) (ys : InternalLabels 𝒯 i) :
+    subLikelihood Geom H mask O (tr.ev v) (tr.ec c) (tr.eh W) w ys =
+      subLikelihood Geom H mask O v c W w ys := by
+  have hs : selected Geom H mask (tr.eh (H.replaceTuple W c w)) (tr.ev v) = some (tr.ec c) ↔
+      selected Geom H mask (H.replaceTuple W c w) v = some c := by
+    erw [lane_selected]
+    cases selected Geom H mask (H.replaceTuple W c w) v <;> simp
+  simp only [subLikelihood, ← tr.replace, hs, lane_star]
+  split_ifs
+  · exact lane_event Geom H mask O tr (H.replaceTuple W c w) v
+      (fun _ zs => zs = ys) (fun _ zs => zs = ys) (fun _ _ => Iff.rfl)
+  · rfl
+
+private theorem lane_posterior (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (L : LikelihoodData Geom H mask O) (R : EvenRows Geom H mask O L)
+    (tr : LaneTranslation Geom H) (v : EvenRole 𝒯 i) (W : ∀ r, H.Val r)
+    (ys : InternalLabels 𝒯 i) : R.σ (tr.ev v) (tr.eh W) ys = R.σ v W ys := by
+  have hcorner (c : H.Center) : H.cornerOf (tr.eh W) (tr.ec c) = H.cornerOf W c :=
+    congrArg Prod.fst (tr.centerRecord W c)
+  have hpred (c : H.Center) : predictiveMass Geom H mask O (tr.ev v) (tr.ec c) (tr.eh W) ys =
+      predictiveMass Geom H mask O v c W ys := by
+    simp only [predictiveMass, hcorner, lane_sublikelihood]
+  have hmean (c : H.Center) : posteriorMean Geom H mask O (tr.ev v) (tr.ec c) (tr.eh W) ys =
+      posteriorMean Geom H mask O v c W ys := by
+    funext x
+    simp only [posteriorMean, hcorner, hpred, lane_sublikelihood]
+  have hret (c : H.Center) : retainedLabels Geom H mask O (tr.ev v) (tr.ec c) (tr.eh W) ys =
+      retainedLabels Geom H mask O v c W ys := by
+    simp only [retainedLabels, hmean]
+  have hgate (c : H.Center) : posteriorGate Geom H mask O L (tr.ev v) (tr.ec c) (tr.eh W) ys ↔
+      posteriorGate Geom H mask O L v c W ys := by
+    simp only [posteriorGate, lane_selected, lane_star, UsableCorner, hcorner, hpred,
+      lane_reference]
+    cases selected Geom H mask W v <;> simp
+  erw [R.σ_eq]
+  funext x
+  simp only [posteriorRow, lane_selected]
+  cases hs : selected Geom H mask W v with
+  | none => rfl
+  | some c => simp only [Option.map_some, hgate, hret, hmean]
+
+
+private theorem lane_dep_local_record_eq (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6 → W r = W' r)
+    (r : H.Rec) (hr : _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6) : W r = W' r := by
+  exact hW r hr
+
+private theorem lane_dep_eligible_congr_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6 → W r = W' r)
+    (u : IWord 𝒯 i) (hu : _root_.hammingDist u (Geom.project v.1) ≤ H.Device.Rlong)
+    (j : Fin (H.Device.H + 1)) :
+    eligible Geom H mask W u j = eligible Geom H mask W' u j := by
+  have hcenter (c : H.Center) (hc : c ∈ candidateBall H u j) :
+      W (.inl c) = W' (.inl c) := by
+    apply lane_dep_local_record_eq hconst scales Geom H v W W' hW
+    change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
+    have hd := (Finset.mem_filter.mp hc).2.2
+    have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
+    dsimp only [PrimitiveHistory.Device, patchHD] at hd hu ht ⊢
+    simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
+    omega
+  have hcounts : (candidateBall H u j).filter (fun c => H.present W c = true) =
+      (candidateBall H u j).filter (fun c => H.present W' c = true) := by
+    apply Finset.filter_congr
+    intro c hc
+    have h := congrArg (fun x => x.2.2.1) (hcenter c hc)
+    change H.present W c = H.present W' c at h
+    erw [h]
+  have hmarked (g : Group 𝒯 i)
+      (hg : ∃ u' ∈ groupNeighborhood g, Geom.project u'.1 = u) :
+      marked Geom H mask g W = marked Geom H mask g W' := by
+    obtain ⟨u', hu', heq⟩ := hg
+    have hgroup : W (.inr (.inl g)) = W' (.inr (.inl g)) := by
+      apply lane_dep_local_record_eq hconst scales Geom H v W W' hW
+      change _root_.hammingDist g.1 (Geom.project v.1) ≤ _
+      have hg := group_neighborhood_dist g u' hu'
+      have hp := projection_dist_le_one Geom u'.1
+      have ht := _root_.hammingDist_triangle g.1 u'.1 (Geom.project u'.1)
+      have ht' := _root_.hammingDist_triangle g.1 u (Geom.project v.1)
+      erw [hammingDist_comm (Geom.project u'.1) u'.1] at hp
+      erw [heq] at ht
+      erw [heq] at hp
+      dsimp only [PrimitiveHistory.Device, patchHD] at hu ht' ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hg hp ht ht' hu ⊢
+      omega
+    have hrange : ∀ c ∈ candidateRange Geom H g, W (.inl c) = W' (.inl c) := by
+      intro c hc
+      apply lane_dep_local_record_eq hconst scales Geom H v W W' hW
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
+      have hd := candidate_range_dist Geom H g u' hu' c hc
+      erw [heq] at hd
+      have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
+      dsimp only [PrimitiveHistory.Device, patchHD] at hd hu ht ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd hu ht ⊢
+      omega
+    unfold marked
+    erw [failedFamily_congr Geom H mask hlookup g W W' hgroup (fun c hc =>
+      ⟨congrArg (fun x => x.2.2.1) (hrange c hc), congrArg (fun x => x.2.1) (hrange c hc)⟩)]
+  unfold eligible
+  erw [hcounts]
+  congr 1
+  apply Finset.biUnion_congr rfl
+  intro g _
+  split_ifs with hg
+  · exact hmarked g hg
+  · rfl
+
+private theorem lane_dep_bad_congr_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6 → W r = W' r)
+    (u : IWord 𝒯 i) (hu : _root_.hammingDist u (Geom.project v.1) ≤ H.Device.Rlong)
+    (j : Fin (H.Device.H + 1)) :
+    H.Device.Bad (H.present W) (H.active W) (eligible Geom H mask W) u j ↔
+      H.Device.Bad (H.present W') (H.active W') (eligible Geom H mask W') u j := by
+  have he := lane_dep_eligible_congr_local hconst scales Geom H mask hlookup v W W' hW u hu j
+  have hbits (c : H.Center) (hc : _root_.hammingDist c.1 u ≤ H.Device.r + H.Device.D) :
+      H.present W c = H.present W' c ∧ H.active W c = H.active W' c := by
+    have hr : W (.inl c) = W' (.inl c) := by
+      apply hW
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
+      have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
+      have hD : H.Device.D = 6 := rfl
+      dsimp only [PrimitiveHistory.Device, patchHD] at hc hu ht ⊢
+      simp only [_root_.hammingDist] at hc hu ht ⊢
+      omega
+    exact ⟨congrArg (fun x => x.2.2.1) hr, congrArg (fun x => x.2.2.2) hr⟩
+  apply Lane_sol_s14_lik.bad_congr_at H.Device _ _ _ _ _ _ u j he
+  · intro c hc
+    have hball := (Finset.mem_filter.mp (Finset.mem_sdiff.mp hc).1).1
+    have hd := (Finset.mem_filter.mp hball).2.2
+    exact (hbits c (by omega)).2
+  · intro z hz
+    exact hbits (z, j) hz
+
+private theorem lane_dep_reach_distance (p : HDParams) (Sites : p.Sites) (P A : p.Loc → Bool)
+    (E : p.EligMap) (q u : CubePos p.d) (R j : ℕ)
+    (h : p.Reach Sites P A E q R u j) : _root_.hammingDist u q ≤ R := by
+  induction h with
+  | start u _ hu => exact hu
+  | up u j hj hr hb ih => exact ih
+  | down u u' j hr hu' hd hnear ih => exact hd
+
+private theorem lane_dep_reach_congr_bad (p : HDParams) (Sites : p.Sites)
+    (P A P' A' : p.Loc → Bool) (E E' : p.EligMap) (q : CubePos p.d) (R : ℕ)
+    (hbad : ∀ u, _root_.hammingDist u q ≤ R → ∀ j, p.BadN P A E u j ↔ p.BadN P' A' E' u j)
+    (u : CubePos p.d) (j : ℕ) :
+    p.Reach Sites P A E q R u j ↔ p.Reach Sites P' A' E' q R u j := by
+  constructor <;> intro h
+  · induction h with
+    | start u hu hd => exact .start u hu hd
+    | up u j hj hr hb ih =>
+      exact .up u j hj ih ((hbad u (lane_dep_reach_distance p Sites P A E q u R j hr) j).mp hb)
+    | down u u' j hr hu' hd hnear ih => exact .down u u' j ih hu' hd hnear
+  · induction h with
+    | start u hu hd => exact .start u hu hd
+    | up u j hj hr hb ih =>
+      exact .up u j hj ih ((hbad u (lane_dep_reach_distance p Sites P' A' E' q u R j hr) j).mpr hb)
+    | down u u' j hr hu' hd hnear ih => exact .down u u' j ih hu' hd hnear
+
+private theorem lane_dep_height_congr_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6 → W r = W' r) :
+    H.Device.height (siteSet Geom) (H.present W) (H.active W) (eligible Geom H mask W)
+        H.Device.Rlong (Geom.project v.1) =
+      H.Device.height (siteSet Geom) (H.present W') (H.active W') (eligible Geom H mask W')
+        H.Device.Rlong (Geom.project v.1) := by
+  have hbad : ∀ u, _root_.hammingDist u (Geom.project v.1) ≤ H.Device.Rlong → ∀ j,
+      H.Device.BadN (H.present W) (H.active W) (eligible Geom H mask W) u j ↔
+        H.Device.BadN (H.present W') (H.active W') (eligible Geom H mask W') u j := by
+    intro u hu j
+    unfold HDParams.BadN
+    exact exists_congr fun hj => lane_dep_bad_congr_local hconst scales Geom H mask hlookup v W W' hW u hu ⟨j, hj⟩
+  unfold HDParams.height
+  congr 1
+  ext j
+  simp only [Finset.mem_filter]
+  exact and_congr_right fun _ => lane_dep_reach_congr_bad H.Device (siteSet Geom) (H.present W) (H.active W)
+    (H.present W') (H.active W') (eligible Geom H mask W) (eligible Geom H mask W')
+    (Geom.project v.1) H.Device.Rlong hbad (Geom.project v.1) j
+
+private theorem lane_dep_selected_congr_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6 → W r = W' r) :
+    selected Geom H mask W v = selected Geom H mask W' v := by
+  have hq : _root_.hammingDist (Geom.project v.1) (Geom.project v.1) ≤ H.Device.Rlong := by
+    simp
+  have hh := lane_dep_height_congr_local hconst scales Geom H mask hlookup v W W' hW
+  have hb (j : Fin (H.Device.H + 1)) :
+      H.Device.Bad (H.present W) (H.active W) (eligible Geom H mask W) (Geom.project v.1) j =
+      H.Device.Bad (H.present W') (H.active W') (eligible Geom H mask W') (Geom.project v.1) j :=
+    propext (lane_dep_bad_congr_local hconst scales Geom H mask hlookup v W W' hW _ hq j)
+  have he (j : Fin (H.Device.H + 1)) :
+      ((eligible Geom H mask W (Geom.project v.1) j).filter fun c => H.active W c = true) =
+      ((eligible Geom H mask W' (Geom.project v.1) j).filter fun c => H.active W' c = true) := by
+    have hel := lane_dep_eligible_congr_local hconst scales Geom H mask hlookup v W W' hW _ hq j
+    erw [← hel]
+    apply Finset.filter_congr
+    intro c hc
+    have hr : W (.inl c) = W' (.inl c) := by
+      apply lane_dep_local_record_eq hconst scales Geom H v W W' hW
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
+      have hball := (Finset.mem_filter.mp (Finset.mem_sdiff.mp hc).1).1
+      have hd := (Finset.mem_filter.mp hball).2.2
+      dsimp only [PrimitiveHistory.Device, patchHD] at hd ⊢
+      simp only [_root_.hammingDist, Finset.filter_congr_decidable] at hd ⊢
+      omega
+    have ha : H.active W c = H.active W' c := congrArg (fun x => x.2.2.2) hr
+    erw [ha]
+  have hp (j : Fin (H.Device.H + 1)) :
+      H.Device.priority (H.ties W) (Geom.project v.1, j) =
+        H.Device.priority (H.ties W') (Geom.project v.1, j) := by
+    have hr := lane_dep_local_record_eq hconst scales Geom H v W W' hW
+      (.inr (.inr (Geom.project v.1, j))) (by
+        change _root_.hammingDist (Geom.project v.1) (Geom.project v.1) ≤ _
+        erw [hammingDist_self]
+        omega)
+    funext c
+    change W (.inr (.inr (Geom.project v.1, j))) _ = W' (.inr (.inr (Geom.project v.1, j))) _
+    erw [hr]
+  unfold selected HDParams.selection HDParams.selectionAt
+  simp only [hh, hb, he, hp]
+
+
+private theorem lane_range_center (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (a : Group 𝒯 i) (c : H.Center)
+    (hc : c ∈ candidateRange Geom H a) : _root_.hammingDist c.1 a.1 ≤ H.Device.r + 3 := by
+  obtain ⟨v, hv, hc⟩ := Finset.mem_biUnion.mp hc
+  obtain ⟨j, _, hc⟩ := Finset.mem_biUnion.mp hc
+  have hd := (Finset.mem_filter.mp hc).2.2
+  have hp := projection_dist_le_one Geom v.1
+  have hg := group_neighborhood_dist a v hv
+  erw [hammingDist_comm a.1 v.1] at hg
+  have ht := _root_.hammingDist_triangle c.1 (Geom.project v.1) v.1
+  have ht' := _root_.hammingDist_triangle c.1 v.1 a.1
+  omega
+
+private theorem lane_group_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (a : Group 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) a.1 ≤ H.Device.Rlong + H.Device.r + 9 → W r = W' r) :
+    realizedList Geom H mask a W = realizedList Geom H mask a W' ∧
+      (groupValid Geom H mask a W ↔ groupValid Geom H mask a W') ∧
+      (∀ S, S ⊆ candidateRange Geom H a → listHit H W S = listHit H W' S) ∧
+      (mask a W).prior = (mask a W').prior ∧ (mask a W).within = (mask a W').within := by
+  classical
+  have hs (v : EvenRole 𝒯 i) (hv : v ∈ groupNeighborhood a) :
+      selected Geom H mask W v = selected Geom H mask W' v := by
+    apply lane_dep_selected_congr_local hconst scales Geom H mask hlookup
+    intro r hr
+    apply hW
+    have hp := projection_dist_le_one Geom v.1
+    have hg := group_neighborhood_dist a v hv
+    erw [hammingDist_comm a.1 v.1] at hg
+    have ht := _root_.hammingDist_triangle (H.loc r) (Geom.project v.1) v.1
+    have ht' := _root_.hammingDist_triangle (H.loc r) v.1 a.1
+    omega
+  have hreal : realizedList Geom H mask a W = realizedList Geom H mask a W' := by
+    ext c
+    simp only [realizedList, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor <;> rintro ⟨v, hv, hc⟩ <;> refine ⟨v, hv, ?_⟩
+    · rwa [← hs v hv]
+    · rwa [hs v hv]
+  have hrange (c : H.Center) (hc : c ∈ candidateRange Geom H a) : W (.inl c) = W' (.inl c) :=
+    hW _ (by
+      change _root_.hammingDist c.1 a.1 ≤ _
+      have h := lane_range_center Geom H a c hc
+      omega)
+  have hhit (S : Finset H.Center) (hS : S ⊆ candidateRange Geom H a) : listHit H W S = listHit H W' S := by
+    ext y
+    simp only [listHit, Finset.mem_filter, Finset.mem_univ, true_and]
+    have ht (c : H.Center) (hc : c ∈ S) : H.tuple W c = H.tuple W' c :=
+      congrArg (fun x => x.2.1) (hrange c (hS hc))
+    constructor <;> intro hy c hc r
+    · erw [← ht c hc]
+      exact hy c hc r
+    · erw [ht c hc]
+      exact hy c hc r
+  have hgroup : W (.inr (.inl a)) = W' (.inr (.inl a)) := hW _ (by simp [PrimitiveHistory.loc])
+  obtain ⟨hprior, hwithin⟩ := hlookup a W W' (congrArg Prod.fst hgroup)
+  have hmass (J : Finset (Fin (T.S.N k))) : maskedMass H mask a W J = maskedMass H mask a W' J := by
+    simp only [maskedMass, hprior, hwithin]
+  have hsub : realizedList Geom H mask a W ⊆ candidateRange Geom H a := by
+    intro c hc
+    obtain ⟨v, hv, hs⟩ := (Finset.mem_filter.mp hc).2
+    have he := (hh.chosen_eligible W v c hs).1
+    have hc := (Finset.mem_filter.mp (Finset.mem_sdiff.mp he).1).1
+    exact Finset.mem_biUnion.mpr ⟨v, hv, Finset.mem_biUnion.mpr ⟨c.2, Finset.mem_univ _, hc⟩⟩
+  have hadm : admissibleList Geom H a W (realizedList Geom H mask a W) ↔
+      admissibleList Geom H a W' (realizedList Geom H mask a W) := by
+    unfold admissibleList
+    constructor <;> rintro ⟨hne, hsize, hc⟩ <;> refine ⟨hne, hsize, fun c hc' => ?_⟩
+    · have hp : H.present W c = H.present W' c := congrArg (fun x => x.2.2.1) (hrange c (hsub hc'))
+      simpa [← hp] using hc c hc'
+    · have hp : H.present W c = H.present W' c := congrArg (fun x => x.2.2.1) (hrange c (hsub hc'))
+      simpa [hp] using hc c hc'
+  have hgood : listGood H mask a W (realizedList Geom H mask a W) ↔
+      listGood H mask a W' (realizedList Geom H mask a W) := by
+    have hdel (c : H.Center) := hhit ((realizedList Geom H mask a W).erase c)
+      ((Finset.erase_subset c (realizedList Geom H mask a W)).trans hsub)
+    simp only [listGood, hhit _ hsub, hdel, hmass]
+  have hcount (v : EvenRole 𝒯 i) (hv : v ∈ groupNeighborhood a) (j : Fin (H.Device.H + 1)) :
+      ((candidateBall H (Geom.project v.1) j).filter fun c => H.present W c = true) =
+      ((candidateBall H (Geom.project v.1) j).filter fun c => H.present W' c = true) := by
+    apply Finset.filter_congr
+    intro c hc
+    have hr := hrange c (Finset.mem_biUnion.mpr ⟨v, hv,
+      Finset.mem_biUnion.mpr ⟨j, Finset.mem_univ _, hc⟩⟩)
+    have hp : H.present W c = H.present W' c := congrArg (fun x => x.2.2.1) hr
+    erw [hp]
+  refine ⟨hreal, ?_, hhit, hprior, hwithin⟩
+  simp only [groupValid, ← hreal, hadm, hgood]
+  apply and_congr_left
+  intro _
+  constructor <;> intro h v hv
+  · obtain ⟨c, hc, hn⟩ := h v hv
+    exact ⟨c, by rwa [← hs v hv], by rwa [← hcount v hv]⟩
+  · obtain ⟨c, hc, hn⟩ := h v hv
+    exact ⟨c, by rwa [hs v hv], by rwa [hcount v hv]⟩
+
+private theorem lane_kernels_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (O : OddKernels Geom H mask)
+    (a : Group 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) a.1 ≤ H.Device.Rlong + H.Device.r + 9 → W r = W' r) :
+    O.q a W = O.q a W' ∧ ∀ D, O.U a W D = O.U a W' D := by
+  obtain ⟨hreal, hvalid, hhit, hprior, hwithin⟩ :=
+    lane_group_local hconst scales Geom H mask hlookup hh a W W' hW
+  have hsub : realizedList Geom H mask a W ⊆ candidateRange Geom H a := by
+    intro c hc
+    obtain ⟨v, hv, hs⟩ := (Finset.mem_filter.mp hc).2
+    have he := (hh.chosen_eligible W v c hs).1
+    have hc := (Finset.mem_filter.mp (Finset.mem_sdiff.mp he).1).1
+    exact Finset.mem_biUnion.mpr ⟨v, hv, Finset.mem_biUnion.mpr ⟨c.2, Finset.mem_univ _, hc⟩⟩
+  have hm (D : Bin 𝒯 i) (S : Finset H.Center) (hS : S ⊆ candidateRange Geom H a) :
+      hitMass H mask a W D S = hitMass H mask a W' D S := by
+    simp only [hitMass, hhit S hS, hwithin]
+  have hdel (D : Bin 𝒯 i) (c : H.Center) := hm D ((realizedList Geom H mask a W).erase c)
+    ((Finset.erase_subset c (realizedList Geom H mask a W)).trans hsub)
+  have hrestr (D : Bin 𝒯 i) : restrictedBin Geom H mask a W D ↔ restrictedBin Geom H mask a W' D := by
+    simp only [restrictedBin, ← hreal, hm _ _ hsub, hdel]
+  have hq : oddQ Geom H mask a W = oddQ Geom H mask a W' := by
+    funext D
+    simp only [oddQ, hvalid, tiltWeight, hrestr, ← hreal, hprior, hm _ _ hsub]
+  refine ⟨by simpa only [O.q_eq] using hq, ?_⟩
+  intro D
+  erw [O.U_eq]
+  funext y
+  simp only [oddU, hvalid, hq, ← hreal, hhit _ hsub, hm _ _ hsub, hwithin]
+
+
+private theorem lane_star_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 11 → W r = W' r) :
+    selected Geom H mask W v = selected Geom H mask W' v ∧
+      (starValid Geom H mask v W ↔ starValid Geom H mask v W') := by
+  have hproj : ∀ r, _root_.hammingDist (H.loc r) (Geom.project v.1) ≤
+      H.Device.Rlong + H.Device.r + 6 → W r = W' r := by
+    intro r hr
+    apply hW
+    have hp := projection_dist_le_one Geom v.1
+    have ht := _root_.hammingDist_triangle (H.loc r) (Geom.project v.1) v.1
+    omega
+  have hs := lane_dep_selected_congr_local hconst scales Geom H mask hlookup v W W' hproj
+  have hgroups (a : Group 𝒯 i) (ha : v ∈ groupNeighborhood a) :
+      groupValid Geom H mask a W ↔ groupValid Geom H mask a W' := by
+    apply (lane_group_local hconst scales Geom H mask hlookup hh a W W' ?_).2.1
+    intro r hr
+    apply hW
+    have hg := group_neighborhood_dist a v ha
+    have ht := _root_.hammingDist_triangle (H.loc r) a.1 v.1
+    omega
+  have hcounts (u : IWord 𝒯 i) (hu : u ∈ H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong)
+      (j : Fin (H.Device.H + 1)) :
+      ((candidateBall H u j).filter fun c => H.present W c = true) =
+      ((candidateBall H u j).filter fun c => H.present W' c = true) := by
+    apply Finset.filter_congr
+    intro c hc
+    have hru := (Finset.mem_filter.mp hu).2
+    have hrc := (Finset.mem_filter.mp hc).2.2
+    have hrec : W (.inl c) = W' (.inl c) := by
+      apply hproj
+      change _root_.hammingDist c.1 (Geom.project v.1) ≤ _
+      have ht := _root_.hammingDist_triangle c.1 u (Geom.project v.1)
+      omega
+    have hp : H.present W c = H.present W' c := congrArg (fun x => x.2.2.1) hrec
+    erw [hp]
+  refine ⟨hs, ?_⟩
+  unfold starValid
+  have hgrp : (∀ a, v ∈ groupNeighborhood a → groupValid Geom H mask a W) ↔
+      (∀ a, v ∈ groupNeighborhood a → groupValid Geom H mask a W') :=
+    forall_congr' fun a => imp_congr_right (hgroups a)
+  erw [hgrp, hs]
+  apply and_congr_right
+  intro _
+  apply and_congr_left
+  intro _
+  apply forall_congr'
+  intro u
+  apply forall_congr'
+  intro hu
+  apply forall_congr'
+  intro j
+  erw [hcounts u hu j, lane_dep_eligible_congr_local hconst scales Geom H mask hlookup
+    v W W' hproj u (Finset.mem_filter.mp hu).2 j]
+
+private theorem lane_label_marginal (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (O : OddKernels Geom H mask)
+    (v : EvenRole 𝒯 i) (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i) :
+    (refLaw Geom H mask O W).pr (fun ω => nbrLabels v.1 ω.2 = ys) =
+      ∏ a, groupLabelMass Geom v a (O.q a W) (O.U a W) ys := by
+  classical
+  have hinj : Function.Injective (flipPos v.1) := by
+    intro l l' h
+    by_contra hn
+    have hb := congrFun h l
+    simp [flipPos, hn] at hb
+  have hquery (d : Group 𝒯 i → Bin 𝒯 i) :
+      (FinLaw.pi fun z : IWord 𝒯 i =>
+        (⟨O.U (Geom.groupOf z) W (d (Geom.groupOf z)), O.U_nonneg _ _ _, O.U_sum _ _ _⟩ :
+          FinLaw (Fin (T.S.N k)))).pr (fun lab => nbrLabels v.1 lab = ys) =
+        ∏ l, O.U (Geom.groupOf (flipPos v.1 l)) W
+          (d (Geom.groupOf (flipPos v.1 l))) (ys l) :=
+    Lane_sol_s14_lik.pi_query_probability _ (flipPos v.1) hinj ys
+  simp only [refLaw, internalRefLaw, FinLaw.pr, FinLaw.bind, FinLaw.pi]
+  rw [Fintype.sum_prod_type]
+  calc
+    _ = ∑ d : Group 𝒯 i → Bin 𝒯 i, (∏ g, O.q g W (d g)) *
+        (FinLaw.pi fun z : IWord 𝒯 i =>
+          (⟨O.U (Geom.groupOf z) W (d (Geom.groupOf z)), O.U_nonneg _ _ _, O.U_sum _ _ _⟩ :
+            FinLaw (Fin (T.S.N k)))).pr (fun lab => nbrLabels v.1 lab = ys) := by
+      apply Finset.sum_congr rfl
+      intro d _
+      unfold FinLaw.pr
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro lab _
+      split_ifs <;> simp [FinLaw.pi]
+    _ = ∑ d : Group 𝒯 i → Bin 𝒯 i, (∏ g, O.q g W (d g)) *
+        ∏ l, O.U (Geom.groupOf (flipPos v.1 l)) W
+          (d (Geom.groupOf (flipPos v.1 l))) (ys l) := by simp_rw [hquery]
+    _ = _ := Lane_q_s14_post.sum_pi_grouped
+      (fun l => Geom.groupOf (flipPos v.1 l)) (fun g => O.q g W)
+      (fun g => O.U g W) ys
+
+private theorem lane_unused_mass (Geom : ProjectionGeometry κ 𝒯 i)
+    (v : EvenRole 𝒯 i) (a : Group 𝒯 i) (ha : v ∉ groupNeighborhood a)
+    (q : Bin 𝒯 i → ℝ) (U : Bin 𝒯 i → Fin (T.S.N k) → ℝ)
+    (hq : ∑ D, q D = 1) (ys : InternalLabels 𝒯 i) : groupLabelMass Geom v a q U ys = 1 := by
+  have hn (l : Fin (𝒯.P i).h) : Geom.groupOf (flipPos v.1 l) ≠ a := by
+    intro he
+    apply ha
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨l, (lane_owner Geom v a l).mp he⟩⟩
+  simpa only [groupLabelMass, hn, if_false, Finset.prod_const_one, mul_one] using hq
+
+private theorem lane_atom_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (O : OddKernels Geom H mask)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 11 → W r = W' r)
+    (ys : InternalLabels 𝒯 i) :
+    (refLaw Geom H mask O W).pr (fun ω => nbrLabels v.1 ω.2 = ys) =
+      (refLaw Geom H mask O W').pr (fun ω => nbrLabels v.1 ω.2 = ys) := by
+  classical
+  erw [lane_label_marginal, lane_label_marginal]
+  apply Finset.prod_congr rfl
+  intro a _
+  by_cases ha : v ∈ groupNeighborhood a
+  · obtain ⟨hq, hU⟩ := lane_kernels_local hconst scales Geom H mask hlookup hh O a W W' (by
+      intro r hr
+      apply hW
+      have hg := group_neighborhood_dist a v ha
+      have ht := _root_.hammingDist_triangle (H.loc r) a.1 v.1
+      omega)
+    simp only [groupLabelMass, hq, hU]
+  · erw [lane_unused_mass Geom v a ha _ _ (O.q_sum a W),
+      lane_unused_mass Geom v a ha _ _ (O.q_sum a W')]
+
+private theorem lane_deleted_sum (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (a : Group 𝒯 i) (c : H.Center) (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    ∑ D, deletedQ H mask a c W S D = 1 := by
+  classical
+  let A := maskedMass H mask a W (listHit H W (S.erase c))
+  have hnum : (∑ D, (mask a W).prior D * hitMass H mask a W D (S.erase c) ^ 2) = A := by
+    simp [A, maskedMass, hitMass]
+  by_cases hA : 0 < A
+  · simp only [deletedQ, show 0 < maskedMass H mask a W (listHit H W (S.erase c)) from hA, if_true]
+    erw [← Finset.sum_div, hnum]
+    exact div_self hA.ne'
+  · simpa only [deletedQ, show ¬ 0 < maskedMass H mask a W (listHit H W (S.erase c)) from hA,
+      if_false] using (mask a W).prior_sum
+
+private theorem lane_reference_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (O : OddKernels Geom H mask)
+    (L : LikelihoodData Geom H mask O) (v : EvenRole 𝒯 i) (c : H.Center)
+    (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 11 → W r = W' r)
+    (ys : InternalLabels 𝒯 i) : (L.reference v c W).w ys = (L.reference v c W').w ys := by
+  classical
+  erw [L.reference_eq, L.reference_eq]
+  unfold referenceWeight
+  apply Finset.prod_congr rfl
+  intro a _
+  by_cases ha : v ∈ groupNeighborhood a
+  · have hagree : ∀ r, _root_.hammingDist (H.loc r) a.1 ≤ H.Device.Rlong + H.Device.r + 9 → W r = W' r := by
+      intro r hr
+      apply hW
+      have hg := group_neighborhood_dist a v ha
+      have ht := _root_.hammingDist_triangle (H.loc r) a.1 v.1
+      omega
+    obtain ⟨_, _, hhit, hp, hu⟩ := lane_group_local hconst scales Geom H mask hlookup hh a W W' hagree
+    have hrange (d : H.Center) (hd : d ∈ candidateRange Geom H a) : W (.inl d) = W' (.inl d) := by
+      apply hagree
+      change _root_.hammingDist d.1 a.1 ≤ _
+      have h := lane_range_center Geom H a d hd
+      omega
+    have hadm (S : Finset H.Center) : admissibleList Geom H a W S ↔ admissibleList Geom H a W' S := by
+      unfold admissibleList
+      constructor <;> rintro ⟨hne, hsize, hs⟩ <;> refine ⟨hne, hsize, fun d hd => ?_⟩
+      · have hd' := hs d hd
+        have he : H.present W d = H.present W' d := congrArg (fun x => x.2.2.1) (hrange d hd'.1)
+        simpa [← he] using hd'
+      · have hd' := hs d hd
+        have he : H.present W d = H.present W' d := congrArg (fun x => x.2.2.1) (hrange d hd'.1)
+        simpa [he] using hd'
+    have hlists : referenceLists Geom H a c W = referenceLists Geom H a c W' := by
+      ext S
+      simp only [referenceLists, Finset.mem_filter, Finset.mem_univ, true_and, hadm]
+    erw [← hlists]
+    dsimp only
+    split_ifs
+    · congr 1
+      apply Finset.sum_congr rfl
+      intro S hS
+      have hsub : S ⊆ candidateRange Geom H a := fun d hd =>
+        ((Finset.mem_filter.mp hS).2.1.2.2 d hd).1
+      have hdel := hhit (S.erase c) ((Finset.erase_subset _ _).trans hsub)
+      have hq : deletedQ H mask a c W S = deletedQ H mask a c W' S := by
+        funext D
+        simp only [deletedQ, maskedMass, hitMass, hdel, hp, hu]
+      have hU : deletedU H mask a c W S = deletedU H mask a c W' S := by
+        funext D y
+        simp only [deletedU, hitMass, hdel, hu]
+      erw [hq, hU]
+    · erw [hp, hu]
+  · have hone (W : ∀ r, H.Val r) :
+        (if (referenceLists Geom H a c W).Nonempty then
+          (∑ S ∈ referenceLists Geom H a c W,
+            groupLabelMass Geom v a (deletedQ H mask a c W S) (deletedU H mask a c W S) ys) /
+              (referenceLists Geom H a c W).card
+        else groupLabelMass Geom v a (mask a W).prior (mask a W).within ys) = 1 := by
+      split_ifs with hn
+      · simp only [lane_unused_mass Geom v a ha _ _ (lane_deleted_sum H mask a c W _) ys,
+          Finset.sum_const, nsmul_eq_mul, mul_one]
+        exact div_self (by exact_mod_cast hn.card_pos.ne')
+      · exact lane_unused_mass Geom v a ha _ _ (mask a W).prior_sum ys
+    erw [hone W, hone W']
+
+
+private theorem lane_posterior_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (O : OddKernels Geom H mask)
+    (L : LikelihoodData Geom H mask O) (R : EvenRows Geom H mask O L)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 11 → W r = W' r)
+    (ys : InternalLabels 𝒯 i) : R.σ v W ys = R.σ v W' ys := by
+  classical
+  obtain ⟨hsel, hstar⟩ := lane_star_local hconst scales Geom H mask hlookup hh v W W' hW
+  have hreplace (c : H.Center) (w : H.Tuple) : ∀ r,
+      _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 11 →
+        H.replaceTuple W c w r = H.replaceTuple W' c w r := by
+    intro r hr
+    have he := hW r hr
+    by_cases hrc : r = .inl c
+    · subst r
+      simp only [PrimitiveHistory.replaceTuple, Function.update_self,
+        PrimitiveHistory.cornerOf, PrimitiveHistory.present, PrimitiveHistory.active, he]
+    · simp only [PrimitiveHistory.replaceTuple, Function.update_of_ne hrc, he]
+  have hsub (c : H.Center) (w : H.Tuple) :
+      subLikelihood Geom H mask O v c W w ys = subLikelihood Geom H mask O v c W' w ys := by
+    obtain ⟨hs, hv⟩ := lane_star_local hconst scales Geom H mask hlookup hh v
+      (H.replaceTuple W c w) (H.replaceTuple W' c w) (hreplace c w)
+    simp only [subLikelihood, hs, hv]
+    split_ifs
+    · exact lane_atom_local hconst scales Geom H mask hlookup hh O v
+        (H.replaceTuple W c w) (H.replaceTuple W' c w) (hreplace c w) ys
+    · rfl
+  erw [R.σ_eq]
+  funext x
+  simp only [posteriorRow, ← hsel]
+  cases hs : selected Geom H mask W v with
+  | none => rfl
+  | some c =>
+    have he := (hh.chosen_eligible W v c hs).1
+    have hc := (Finset.mem_filter.mp (Finset.mem_filter.mp (Finset.mem_sdiff.mp he).1).1).2.2
+    have hrecord : W (.inl c) = W' (.inl c) := by
+      apply hW
+      change _root_.hammingDist c.1 v.1 ≤ _
+      have hp := projection_dist_le_one Geom v.1
+      have ht := _root_.hammingDist_triangle c.1 (Geom.project v.1) v.1
+      omega
+    have hcorner : H.cornerOf W c = H.cornerOf W' c := congrArg Prod.fst hrecord
+    have hpred : predictiveMass Geom H mask O v c W ys = predictiveMass Geom H mask O v c W' ys := by
+      simp only [predictiveMass, hcorner, hsub]
+    have hmean : posteriorMean Geom H mask O v c W ys = posteriorMean Geom H mask O v c W' ys := by
+      funext z
+      simp only [posteriorMean, hcorner, hsub, hpred]
+    have hret : retainedLabels Geom H mask O v c W ys = retainedLabels Geom H mask O v c W' ys := by
+      simp only [retainedLabels, hmean]
+    have href := lane_reference_local hconst scales Geom H mask hlookup hh O L v c W W' hW ys
+    have hgate : posteriorGate Geom H mask O L v c W ys ↔ posteriorGate Geom H mask O L v c W' ys := by
+      simp only [posteriorGate, hsel, hstar, UsableCorner, hcorner, hpred, href]
+    simp only [hgate, hret, hmean]
+
+private theorem lane_failure_local (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask) (O : OddKernels Geom H mask)
+    (L : LikelihoodData Geom H mask O) (R : EvenRows Geom H mask O L)
+    (v : EvenRole 𝒯 i) (W W' : ∀ r, H.Val r)
+    (hW : ∀ r, _root_.hammingDist (H.loc r) v.1 ≤ H.Device.Rlong + H.Device.r + 11 → W r = W' r) :
+    (refLaw Geom H mask O W).pr (fun ω => R.σ v W (nbrLabels v.1 ω.2) = 0) =
+      (refLaw Geom H mask O W').pr (fun ω => R.σ v W' (nbrLabels v.1 ω.2) = 0) := by
+  classical
+  erw [Lane_sol_s14_lik.pr_fibers (refLaw Geom H mask O W)
+    (fun ω => nbrLabels v.1 ω.2) (fun ys => R.σ v W ys = 0),
+    Lane_sol_s14_lik.pr_fibers (refLaw Geom H mask O W')
+    (fun ω => nbrLabels v.1 ω.2) (fun ys => R.σ v W' ys = 0)]
+  apply Finset.sum_congr rfl
+  intro ys _
+  erw [lane_posterior_local hconst scales Geom H mask hlookup hh O L R v W W' hW ys,
+    lane_atom_local hconst scales Geom H mask hlookup hh O v W W' hW ys]
+
+private theorem lane_radius_bound (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh) :
+    ((H.Device.Rlong + H.Device.r + 11 : ℕ) : ℝ) < 10 * κ.ρ * (𝒯.P i).h := by
+  have hn := hconst.threshold_slack (𝒯.P i).h scales.h_large
+  have hh := hn.1
+  have hlam := hn.2.2.1
+  have hrad : 2 ≤ H.Device.r := by
+    by_contra hr
+    have hr' : H.Device.r = 0 ∨ H.Device.r = 1 := by omega
+    have hV : H.Device.V ≤ (𝒯.P i).h + 1 := by
+      rcases hr' with hr' | hr'
+      · simp [HDParams.V, hr']
+      · simp [HDParams.V, hr', Finset.sum_range_succ,
+          show H.Device.d = (𝒯.P i).h from rfl, Nat.add_comm]
+    have hpow : ((𝒯.P i).h : ℝ) ^ (2 : ℕ) ≤ ((𝒯.P i).h : ℝ) ^ (10 : ℕ) :=
+      pow_le_pow_right₀ (by exact_mod_cast (by omega : 1 ≤ (𝒯.P i).h)) (by norm_num)
+    have hVR : (H.Device.V : ℝ) ≤ (𝒯.P i).h + 1 := by exact_mod_cast hV
+    have hhR : (2 : ℝ) ≤ (𝒯.P i).h := by exact_mod_cast hh
+    change ((𝒯.P i).h : ℝ) ^ (10 : ℕ) ≤ (H.Device.V : ℝ) / 2 at hlam
+    nlinarith
+  have hradR : (2 : ℝ) ≤ H.Device.r := by exact_mod_cast hrad
+  have hs := hn.2.2.2.2.1
+  change 12 * (H.Device.H : ℝ) + 4 * (H.Device.r : ℝ) + 6 <
+    10 * κ.ρ * (𝒯.P i).h at hs
+  norm_num only [Nat.cast_add, Nat.cast_ofNat, HDParams.Rlong, Nat.cast_mul,
+    show H.Device.D = 6 from rfl]
+  linarith
+
+
+end LaneTranslationProof
+
 /-- P14.1l: locality and complete symmetry for the concrete rules, including
 search, choice, validity, posterior and predictive-test computations. -/
 theorem locality_and_symmetry (κ : CConsts) (hκ : κ.Admissible)
@@ -10675,7 +12040,170 @@ theorem locality_and_symmetry (κ : CConsts) (hκ : κ.Admissible)
     · intro W c
       exact Equiv.piCongr_apply_apply er fiber W (.inr (.inr c))
 
-  sorry
+  have htranslation (g g' : Group 𝒯 i) :
+      ∃ tr : LaneTranslation Geom H, tr.eg g = g' ∧
+        ∀ p W, (H.recLaw p).w (tr.eh W) = (H.recLaw p).w W := by
+    obtain ⟨e, eg, ev, htarget, hgroup, hrole, hflip, hdist, hproj⟩ := hgeometry g g'
+    let ec : H.Center ≃ H.Center := Equiv.prodCongr e (Equiv.refl _)
+    let eL : SmallList H.Device (𝒯.tScale i) ≃ SmallList H.Device (𝒯.tScale i) :=
+      Equiv.subtypeEquiv (Equiv.finsetCongr ec) (fun S => by
+        change (S.Nonempty ∧ S.card ≤ 𝒯.tScale i) ↔
+          ((S.map ec.toEmbedding).Nonempty ∧ (S.map ec.toEmbedding).card ≤ 𝒯.tScale i)
+        simp only [Finset.map_nonempty, Finset.card_map])
+    let fL := Fintype.equivFin (SmallList H.Device (𝒯.tScale i))
+    let pl : SearchPerm H.Device (𝒯.tScale i) := (fL.symm.trans eL).trans fL
+    let fC := Fintype.equivFin H.Center
+    let pc : H.Device.TiePerm := (fC.symm.trans ec).trans fC
+    obtain ⟨eh, hlaw, hcenter, hgroupRec, htie⟩ := hrecordTransport ec eg pl pc
+    have hcorner (W : ∀ r, H.Val r) (c : H.Center) :
+        H.cornerOf (eh W) (ec c) = H.cornerOf W c := congrArg Prod.fst (hcenter W c)
+    have hpresent (W : ∀ r, H.Val r) (c : H.Center) :
+        H.present (eh W) (ec c) = H.present W c := congrArg (fun x => x.2.2.1) (hcenter W c)
+    have hactive (W : ∀ r, H.Val r) (c : H.Center) :
+        H.active (eh W) (ec c) = H.active W c := congrArg (fun x => x.2.2.2) (hcenter W c)
+    have hreplace (W : ∀ r, H.Val r) (c : H.Center) (w : H.Tuple) :
+        eh (H.replaceTuple W c w) = H.replaceTuple (eh W) (ec c) w := by
+      funext r
+      cases r with
+      | inl c' =>
+        obtain ⟨c', rfl⟩ := ec.surjective c'
+        erw [hcenter]
+        by_cases hc : c' = c
+        · subst c'
+          simp [PrimitiveHistory.replaceTuple, hcorner, hpresent, hactive]
+        · have hec : ec c' ≠ ec c := fun h => hc (ec.injective h)
+          simp [PrimitiveHistory.replaceTuple, hc, hec, hcenter]
+      | inr r => cases r with
+        | inl a =>
+          obtain ⟨a, rfl⟩ := eg.surjective a
+          erw [hgroupRec]
+          have hne : (Sum.inr (Sum.inl a) : H.Rec) ≠ Sum.inl c := by simp
+          have hne' : (Sum.inr (Sum.inl (eg a)) : H.Rec) ≠ Sum.inl (ec c) := by simp
+          simp only [PrimitiveHistory.replaceTuple, Function.update_of_ne hne, Function.update_of_ne hne']
+          exact (hgroupRec W a).symm
+        | inr c' =>
+          obtain ⟨c', rfl⟩ := ec.surjective c'
+          erw [htie]
+          have hne : (Sum.inr (Sum.inr c') : H.Rec) ≠ Sum.inl c := by simp
+          have hne' : (Sum.inr (Sum.inr (ec c')) : H.Rec) ≠ Sum.inl (ec c) := by simp
+          simp only [PrimitiveHistory.replaceTuple, Function.update_of_ne hne, Function.update_of_ne hne']
+          exact (htie W c').symm
+    refine ⟨{
+      e := e
+      eg := eg
+      ev := ev
+      ec := ec
+      eh := eh
+      group := hgroup
+      role := hrole
+      center := fun _ => rfl
+      flip := hflip
+      distance := hdist
+      project := hproj
+      centerRecord := hcenter
+      vertex := ?_
+      search := ?_
+      replace := hreplace
+      priority := ?_
+    }, htarget, hlaw⟩
+    · intro W a
+      simpa only [PrimitiveHistory.maskVertex, Prod.fst] using
+        congrArg (fun x : mesh.V × SearchPerm H.Device (𝒯.tScale i) => x.1) (hgroupRec W a)
+    · intro W a n
+      change (fL.symm ((eh W (.inr (.inl (eg a)))).2 n)).1 = _
+      erw [hgroupRec]
+      change (fL.symm (pl (H.searchOrder a W n))).1 = _
+      simp only [pl, Equiv.trans_apply, Equiv.symm_apply_apply]
+      rfl
+    · intro W v j c
+      change (eh W (.inr (.inr (ec (v, j))))) (fC (ec c)) =
+        W (.inr (.inr (v, j))) (fC c)
+      have he := congrArg (fun σ : H.Device.TiePerm => σ (fC (ec c))) (htie W (v, j))
+      simpa [pc, Equiv.trans_apply] using he
+
+  let tr (g g' : Group 𝒯 i) := Classical.choose (htranslation g g')
+  have htarget (g g' : Group 𝒯 i) : (tr g g').eg g = g' :=
+    (Classical.choose_spec (htranslation g g')).1
+  have hlaw (p : mesh.Param) (g g' : Group 𝒯 i) (W : ∀ r, H.Val r) :
+      (H.recLaw p).w ((tr g g').eh W) = (H.recLaw p).w W :=
+    (Classical.choose_spec (htranslation g g')).2 p W
+  have htests (g g' : Group 𝒯 i) (W : ∀ r, H.Val r) (v : EvenRole 𝒯 i) :
+      Tests.Hgood ((tr g g').ev v) ((tr g g').eh W) ↔ Tests.Hgood v W := by
+    erw [Tests.Hgood_eq]
+    unfold goodTest
+    apply and_congr (lane_star Geom H mask (tr g g') W v)
+    erw [lane_event Geom H mask O (tr g g') W v
+      (fun _ ys => R.σ v W ys = 0)
+      (fun _ ys => R.σ ((tr g g').ev v) ((tr g g').eh W) ys = 0)
+      (fun _ ys => by erw [lane_posterior])]
+  have hsym : RuleSymmetry Geom H mask O L R Tests := {
+    history := fun g g' => (tr g g').eh
+    groups := fun g g' => (tr g g').eg
+    roles := fun g g' => (tr g g').ev
+    groups_target := htarget
+    law_preserved := hlaw
+    q_preserved := fun g g' W a => lane_q Geom H mask O (tr g g') W a
+    U_preserved := fun g g' W a D => lane_U Geom H mask O (tr g g') W a D
+    row_failure_preserved := by
+      intro g g' W v a D
+      apply lane_event Geom H mask O (tr g g') W v
+        (fun bins ys => bins a = D ∧ R.σ v W ys = 0)
+        (fun bins ys => bins ((tr g g').eg a) = D ∧
+          R.σ ((tr g g').ev v) ((tr g g').eh W) ys = 0)
+      intro bins ys
+      simp only [Equiv.symm_apply_apply, lane_posterior]
+    test_preserved := htests
+    incidence_preserved := fun g g' v a => lane_incidence Geom H (tr g g') v a
+  }
+  have hmean (p : mesh.Param) (g g' : Group 𝒯 i) (y : Fin (T.S.N k)) :
+      (H.recLaw p).E (fun W => ∑ D, O.q g W D * O.U g W D y) =
+      (H.recLaw p).E (fun W => ∑ D, O.q g' W D * O.U g' W D y) := by
+    unfold FinLaw.E
+    erw [← (tr g g').eh.sum_comp (fun W => (H.recLaw p).w W *
+      ∑ D, O.q g' W D * O.U g' W D y)]
+    apply Finset.sum_congr rfl
+    intro W _
+    erw [hlaw]
+    have hq := lane_q Geom H mask O (tr g g') W g
+    have hU (D : Bin 𝒯 i) := lane_U Geom H mask O (tr g g') W g D
+    erw [htarget] at hq
+    have hU' (D : Bin 𝒯 i) : O.U g' ((tr g g').eh W) D = O.U g W D := by
+      simpa only [htarget] using hU D
+    simp only [hq, hU']
+
+  have hrad := lane_radius_bound hconst scales H
+  have hagree (z : IWord 𝒯 i) (W W' : ∀ r, H.Val r)
+      (hW : ∀ r, (_root_.hammingDist (H.loc r) z : ℝ) ≤ 10 * κ.ρ * (𝒯.P i).h → W r = W' r) :
+      ∀ r, _root_.hammingDist (H.loc r) z ≤ H.Device.Rlong + H.Device.r + 11 → W r = W' r := by
+    intro r hr
+    apply hW
+    have hc : (_root_.hammingDist (H.loc r) z : ℝ) ≤
+        ((H.Device.Rlong + H.Device.r + 11 : ℕ) : ℝ) := by exact_mod_cast hr
+    exact hc.trans hrad.le
+  refine ⟨{
+    q_local := ?_
+    U_local := ?_
+    σ_local := ?_
+    Hgood_local := ?_
+    averaged_marginal_invariant := hmean
+    symmetry := hsym
+  }⟩
+  · intro a W W' hW
+    exact (lane_kernels_local hconst scales Geom H mask hlookup hh O a W W' (fun r hr =>
+      hagree a.1 W W' hW r (by omega))).1
+  · intro a W W' D hW
+    exact (lane_kernels_local hconst scales Geom H mask hlookup hh O a W W' (fun r hr =>
+      hagree a.1 W W' hW r (by omega))).2 D
+  · intro v W W' ys hW
+    exact lane_posterior_local hconst scales Geom H mask hlookup hh O L R v W W'
+      (hagree v.1 W W' hW) ys
+  · intro v W W' hW
+    erw [Tests.Hgood_eq]
+    unfold goodTest
+    have ha := hagree v.1 W W' hW
+    erw [(lane_star_local hconst scales Geom H mask hlookup hh v W W' ha).2,
+      lane_failure_local hconst scales Geom H mask hlookup hh O L R v W W' ha]
+
 
 /-- Canonical mask equations make every mask family a fixed vertex lookup. -/
 theorem masks_are_lookups {κ : CConsts} {T : Stage} {k : ℕ}

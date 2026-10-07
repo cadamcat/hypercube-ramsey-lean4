@@ -1,7 +1,9 @@
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_row_q_s10_b
 import HypercubeRamsey.S10.LocalNodes
 import HypercubeRamsey.Framework.Props
 import HypercubeRamsey.S10.Split_opus_s10_tagged
+import HypercubeRamsey.S10.Split_opus_s10_row_q_s10_c
 
 /-!
 # Section 10: split of the even-row construction (TeX 10:23–294)
@@ -636,7 +638,279 @@ over the groups, mean at most `oddThr` by `cluster_mean`); the cluster law is
 `FinProb.pi (Kg h)` and `lab h c b = lab h b (c (grp b))`. -/
 theorem transferData_of_typical {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {A : ℝ}
     (S : TypicalSystem n N E G A) : Nonempty (TransferData n N E G A) := by
-  sorry
+  classical
+  let D := S.core
+  letI : Fintype D.H := D.fH
+  letI : Fintype D.Grp := D.fGrp
+  letI : DecidableEq D.Grp := D.dGrp
+  letI : Fintype D.Cl := D.fCl
+  have hOdd : Nonempty (OddRole n) := by
+    let v : CubeVertex n := fun _ => false
+    have hv : IsEvenRole v := by simp [IsEvenRole, v]
+    let i : Fin n := ⟨0, D.n_pos⟩
+    refine ⟨⟨cubeFlip v i, ?_⟩⟩
+    intro hflip
+    exact (cubeFlip_parity v i).mp hflip hv
+  letI : Nonempty (OddRole n) := hOdd
+  let validRows : Finset D.H := Finset.univ.filter D.valid
+  let goodH : D.H → Prop := fun h => D.valid h ∧
+    ∀ y, ∑ b, D.oddRow h b y ≤ S.oddThr
+  letI : DecidablePred goodH := fun h => Classical.propDecidable (goodH h)
+  let clusterGood : D.H → (D.Grp → D.Cl) → Prop := fun h c =>
+    ∀ y, ∑ b, (D.lab h b (c (D.grp b))).w y ≤ (1e-8 : ℝ)
+  let oddOne : ℝ := ((Fintype.card (OddRole n) : ℝ) *
+    (S.oddAvg + n * D.oddFrac * D.oddCap) / ((N : ℝ) * S.oddThr)) ^ n
+  let errOdd : ℝ := (N : ℝ) * oddOne
+  let epsCluster : ℝ := (N : ℝ) *
+    Real.exp (((Real.exp 1 - 1) * S.oddThr - 1e-8) / D.groupCap)
+  have hepsCluster_nonneg : 0 ≤ epsCluster := by positivity
+  have hodd_est := Lane_q_s10_b.scattered_scaled_column_tail
+      D.PH validRows (fun b y h => D.oddRow h b y)
+      (by intro b y h; exact D.oddRow_nonneg h b y)
+      N D.N_pos D.oddCap D.oddCap_nonneg
+      (by
+        intro b y h hh
+        exact D.odd_cap h (Finset.mem_filter.mp hh).2 b y)
+      D.oddNear D.oddNear_self D.oddFrac D.oddNear_card n
+      (fun y b => D.oddMean y b)
+      (by intro y b; exact D.oddMean_nonneg y b)
+      (by
+        intro y m hm s hs
+        have hj := D.odd_joint y m hm s hs
+        calc
+          ∑ h ∈ validRows, D.PH.w h *
+              ∏ i, (N : ℝ) * D.oddRow h (s i) y =
+              ∑ h, D.PH.w h *
+                (if D.valid h then ∏ i, (N : ℝ) * D.oddRow h (s i) y else 0) := by
+            simp [validRows, Finset.sum_filter]
+          _ ≤ ∏ i, D.oddMean y (s i) := hj)
+      S.oddAvg S.odd_avg S.oddThr S.budget.1
+  have hodd_each : ∀ y,
+      D.PH.pr (fun h => D.valid h ∧ S.oddThr < ∑ b, D.oddRow h b y) ≤ oddOne := by
+    intro y
+    simpa [validRows, oddOne] using hodd_est y
+  have hodd_failure :
+      D.PH.pr (fun h => D.valid h ∧ ∃ y : Fin N,
+        S.oddThr < ∑ b, D.oddRow h b y) ≤ errOdd := by
+    calc
+      D.PH.pr (fun h => D.valid h ∧ ∃ y : Fin N,
+          S.oddThr < ∑ b, D.oddRow h b y) ≤
+          ∑ y : Fin N, D.PH.pr (fun h => D.valid h ∧
+            S.oddThr < ∑ b, D.oddRow h b y) :=
+        (by
+          simpa only [exists_and_left] using
+            (Lane_q_s10_b.pr_exists_le_sum D.PH
+              (fun y h => D.valid h ∧ S.oddThr < ∑ b, D.oddRow h b y)))
+      _ ≤ ∑ _y : Fin N, oddOne :=
+        Finset.sum_le_sum fun y _ => hodd_each y
+      _ = errOdd := by simp [errOdd, oddOne]
+  have hpre_failure : D.PH.pr (fun h => ¬ goodH h) ≤ D.ε_valid + errOdd := by
+    have hevent : (fun h => ¬ goodH h) =
+        (fun h => ¬ D.valid h ∨ (D.valid h ∧ ∃ y : Fin N,
+          S.oddThr < ∑ b, D.oddRow h b y)) := by
+      funext h
+      by_cases hv : D.valid h <;> simp [goodH, hv, not_le]
+    rw [hevent]
+    calc
+      D.PH.pr (fun h => ¬ D.valid h ∨
+          (D.valid h ∧ ∃ y : Fin N, S.oddThr < ∑ b, D.oddRow h b y)) ≤
+          D.PH.pr (fun h => ¬ D.valid h) +
+            D.PH.pr (fun h => D.valid h ∧ ∃ y : Fin N,
+              S.oddThr < ∑ b, D.oddRow h b y) := FinProb.pr_union D.PH _ _
+      _ ≤ D.ε_valid + errOdd := add_le_add D.valid_failure hodd_failure
+  have hgate_sum_le (q : D.H → ℝ) (hq : ∀ h, 0 ≤ q h) :
+      ∑ h, D.PH.w h * (if goodH h then q h else 0) ≤
+        ∑ h, D.PH.w h * (if D.valid h then q h else 0) := by
+    apply Finset.sum_le_sum
+    intro h hh
+    by_cases hg : goodH h
+    · simp [hg, hg.1]
+    · by_cases hv : D.valid h
+      · have hn := mul_nonneg (D.PH.nonneg h) (hq h)
+        simpa [hg, hv] using hn
+      · simp [hg, hv]
+  let groupX : D.H → D.Grp → Fin N → D.Cl → ℝ := fun h g y c =>
+    ∑ b, if D.grp b = g then (D.lab h b c).w y else 0
+  have hcluster_tail (h : D.H) (hh : goodH h) :
+      (FinProb.pi (D.Kg h)).pr (fun c => ¬ clusterGood h c) ≤ epsCluster := by
+    have hgroup_total (c : D.Grp → D.Cl) (y : Fin N) :
+        ∑ g, groupX h g y (c g) = ∑ b, (D.lab h b (c (D.grp b))).w y := by
+      calc
+        ∑ g, groupX h g y (c g) =
+            ∑ g, ∑ b, if D.grp b = g then (D.lab h b (c g)).w y else 0 := rfl
+        _ = ∑ g, ∑ b,
+              if D.grp b = g then (D.lab h b (c (D.grp b))).w y else 0 := by
+          apply Finset.sum_congr rfl
+          intro g hg
+          apply Finset.sum_congr rfl
+          intro b hb
+          split_ifs with hbg
+          · rw [hbg]
+          · rfl
+        _ = ∑ b, (D.lab h b (c (D.grp b))).w y :=
+          Lane_q_s10_b.grouped_sum_eq D.grp
+            (fun b => (D.lab h b (c (D.grp b))).w y)
+    have hX : ∀ g y c, 0 ≤ groupX h g y c ∧ groupX h g y c ≤ D.groupCap := by
+      intro g y c
+      constructor
+      · unfold groupX
+        apply Finset.sum_nonneg
+        intro b hb
+        by_cases hbg : D.grp b = g
+        · simp [hbg, (D.lab h b c).nonneg y]
+        · simp [hbg]
+      · simpa [groupX, Finset.sum_filter] using D.group_cap h hh.1 g c y
+    have hmean : ∀ y, ∑ g, (D.Kg h g).expect (fun c => groupX h g y c) ≤ S.oddThr := by
+      intro y
+      calc
+        ∑ g, (D.Kg h g).expect (fun c => groupX h g y c) =
+            ∑ b, (D.Kg h (D.grp b)).expect (fun c => (D.lab h b c).w y) := by
+          simpa [groupX] using
+            (Lane_q_s10_b.grouped_expect_sum_eq D.grp (D.Kg h) (D.lab h) y)
+        _ ≤ ∑ b, D.oddRow h b y := by
+          apply Finset.sum_le_sum
+          intro b hb
+          exact D.cluster_mean h hh.1 b y
+        _ ≤ S.oddThr := hh.2 y
+    have htail := Lane_q_s10_b.independent_group_tail (D.Kg h)
+      (fun g y c => groupX h g y c) D.groupCap S.oddThr (1e-8 : ℝ)
+      D.groupCap_pos hX hmean
+    have hinc : ∀ c, ¬ clusterGood h c →
+        ∃ y : Fin N, (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g) := by
+      intro c hc
+      have hex : ∃ y : Fin N,
+          (1e-8 : ℝ) < ∑ b, (D.lab h b (c (D.grp b))).w y := by
+        by_contra hno
+        apply hc
+        intro y
+        by_contra hle
+        exact hno ⟨y, lt_of_not_ge hle⟩
+      obtain ⟨y, hy⟩ := hex
+      exact ⟨y, by rw [hgroup_total]; exact le_of_lt hy⟩
+    have hunion := Lane_q_s10_b.pr_exists_le_sum (FinProb.pi (D.Kg h))
+      (fun y c => (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g))
+    calc
+      (FinProb.pi (D.Kg h)).pr (fun c => ¬ clusterGood h c) ≤
+          (FinProb.pi (D.Kg h)).pr
+            (fun c => ∃ y : Fin N, (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g)) :=
+        Lane_q_s10_b.pr_mono _ hinc
+      _ ≤ ∑ y : Fin N, (FinProb.pi (D.Kg h)).pr
+            (fun c => (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g)) := hunion
+      _ ≤ ∑ _y : Fin N,
+            Real.exp (((Real.exp 1 - 1) * S.oddThr - 1e-8) / D.groupCap) :=
+        Finset.sum_le_sum fun y hy => htail y
+      _ = epsCluster := by simp [epsCluster]
+  have hcluster_failure :
+      ∑ h, D.PH.w h *
+        (if goodH h then (FinProb.pi (D.Kg h)).pr (fun c => ¬ clusterGood h c) else 0)
+        ≤ epsCluster := by
+    calc
+      _ ≤ ∑ h, D.PH.w h * (if goodH h then epsCluster else 0) := by
+        apply Finset.sum_le_sum
+        intro h hh
+        by_cases hg : goodH h
+        · simp [hg]
+          exact mul_le_mul_of_nonneg_left (hcluster_tail h hg) (D.PH.nonneg h)
+        · simp [hg]
+      _ ≤ ∑ h, D.PH.w h * epsCluster := by
+        apply Finset.sum_le_sum
+        intro h hh
+        by_cases hg : goodH h
+        · simp [hg]
+        · simp [hg]
+          exact mul_nonneg (D.PH.nonneg h) hepsCluster_nonneg
+      _ = epsCluster := by
+        rw [← Finset.sum_mul, D.PH.sum_eq_one]
+        ring
+  refine ⟨{
+    H := D.H
+    PH := D.PH
+    goodH := goodH
+    C := D.Grp → D.Cl
+    K := fun h => FinProb.pi (D.Kg h)
+    lab := fun h c b => D.lab h b (c (D.grp b))
+    clusterGood := clusterGood
+    column_small := by
+      intro h c hh hc y
+      exact hc y
+    atom_small := by
+      intro h c hh hc b y
+      exact D.atom_small h hh.1 b (c (D.grp b)) y
+    predictive := D.predictive
+    row := D.row
+    row_nonneg := D.row_nonneg
+    row_sum := by
+      intro h ω a hh hp
+      exact D.row_sum h ω a hh.1 hp
+    common_neighbor := by
+      intro h ω a hh hp x hx b hb
+      exact D.common_neighbor h ω a hh.1 hp x hx b hb
+    predictive_local := D.predictive_local
+    row_local := D.row_local
+    rowCap := D.rowCap
+    rowCap_nonneg := D.rowCap_nonneg
+    row_cap := by
+      intro h ω a x hh
+      exact D.row_cap h ω a x hh.1
+    near := D.near
+    near_self := D.near_self
+    nearFrac := D.nearFrac
+    near_card := D.near_card
+    jointConst := D.jointConst
+    jointConst_ge := D.jointConst_ge
+    mean := D.mean
+    mean_nonneg := D.mean_nonneg
+    meanAvg := S.meanAvg
+    mean_avg := S.mean_avg
+    ref_joint := by
+      intro x m hm s hs
+      have hq (h : D.H) : 0 ≤
+          ∑ c : D.Grp → D.Cl, (FinProb.pi (D.Kg h)).w c *
+          (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).expect
+            (fun ω => ∏ i, (N : ℝ) * D.row h ω (s i) x) := by
+        apply Finset.sum_nonneg
+        intro c hc
+        have hprod (ω : OddRole n → Fin N) :
+            0 ≤ ∏ i : Fin m, (N : ℝ) * D.row h ω (s i) x := by
+          apply Finset.prod_nonneg
+          intro i hi
+          exact mul_nonneg (by positivity) (D.row_nonneg h ω (s i) x)
+        have hexpect : 0 ≤
+            (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).expect
+              (fun ω => ∏ i : Fin m, (N : ℝ) * D.row h ω (s i) x) := by
+          unfold FinProb.expect
+          apply Finset.sum_nonneg
+          intro ω hw
+          exact mul_nonneg
+            ((FinProb.pi (fun b => D.lab h b (c (D.grp b)))).nonneg ω) (hprod ω)
+        exact mul_nonneg ((FinProb.pi (D.Kg h)).nonneg c) hexpect
+      exact (hgate_sum_le
+        (fun h => ∑ c : D.Grp → D.Cl, (FinProb.pi (D.Kg h)).w c *
+          (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).expect
+            (fun ω => ∏ i, (N : ℝ) * D.row h ω (s i) x)) hq).trans
+        (D.ref_joint x m hm s hs)
+    ε_pre := D.ε_valid + errOdd
+    ε_cluster := epsCluster
+    ε_ref := D.ε_ref
+    pre_failure := hpre_failure
+    cluster_failure := hcluster_failure
+    ref_predictive := by
+      intro a
+      exact (hgate_sum_le
+        (fun h => ∑ c : D.Grp → D.Cl, (FinProb.pi (D.Kg h)).w c *
+          (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).pr
+            (fun ω => ¬ D.predictive a h ω))
+        (by
+          intro h
+          apply Finset.sum_nonneg
+          intro c hc
+          exact mul_nonneg ((FinProb.pi (D.Kg h)).nonneg c)
+            (Lane_q_s10_b.pr_nonneg _ _))
+      ).trans (D.ref_predictive a)
+    N_pos := D.N_pos
+    budget := by
+      simpa [TypicalCore.Budget, errOdd, oddOne, epsCluster, D] using S.budget.2
+  }⟩
 
 /-! ## Stage 2: all tag assignments (TeX 10:263–269) -/
 
@@ -703,7 +977,229 @@ disjoint tag domains, `FinProb.pi_expect_mul_of_disjoint`) and a union over
 the `2N` labels give a tag assignment with both averages at most `typThr`. -/
 theorem typical_of_tagged {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {A : ℝ}
     (S : TaggedSystem n N E G A) : Nonempty (TypicalSystem n N E G A) := by
-  sorry
+  classical
+  let t₀ : S.Slice → S.Tag := fun _ => Classical.choice S.neTag
+  have hn : 0 < n := (S.core t₀).n_pos
+  have hOddSetEq :
+      (Finset.univ.filter fun v : CubeVertex n => ¬ IsEvenRole v) =
+        (Finset.univ \ HypercubeRamsey.evenRoleSet n) := by
+    ext v
+    simp [HypercubeRamsey.evenRoleSet]
+  have hOddCardEq : Fintype.card (OddRole n) =
+      (Finset.univ \ HypercubeRamsey.evenRoleSet n).card := by
+    rw [Fintype.card_subtype]
+    exact congrArg Finset.card hOddSetEq
+  have hOddCardPos : 0 < Fintype.card (OddRole n) := by
+    rw [hOddCardEq, (HypercubeRamsey.parity_class_card hn).2]
+    positivity
+  letI : Nonempty (OddRole n) := Fintype.card_pos_iff.mp hOddCardPos
+  let oddScale : ℝ := (Fintype.card S.Slice : ℝ) / Fintype.card (OddRole n)
+  let evenScale : ℝ := (Fintype.card S.Slice : ℝ) / Fintype.card (EvenRole n)
+  let Label := Sum (Fin N) (Fin N)
+  let labelEquiv : Label ≃ Fin (Fintype.card Label) := Fintype.equivFin Label
+  let payoff : ∀ j : S.Slice, (S.Slice → S.Tag) →
+      Fin (Fintype.card Label) → ℝ := fun j σ r =>
+    match labelEquiv.symm r with
+    | Sum.inl y => oddScale *
+        ∑ b ∈ Finset.univ.filter (fun b : OddRole n => S.oddSlice b = j),
+          (S.core σ).oddMean y b
+    | Sum.inr x => evenScale *
+        ∑ a ∈ Finset.univ.filter (fun a : EvenRole n => S.evenSlice a = j),
+          (S.core σ).mean x a
+  have hresponse : ∀ j (q : S.Slice → S.Tag → ℝ),
+      (∀ i a, 0 ≤ q i a) → (∀ i, ∑ a, q i a = 1) →
+      ∃ qj : S.Tag → ℝ, (∀ a, 0 ≤ qj a) ∧ ∑ a, qj a = 1 ∧
+        ∀ r, ∑ σ : S.Slice → S.Tag, (∏ i, Function.update q j qj i (σ i)) *
+          payoff j σ r ≤ S.balConst := by
+    intro j q hq0 hq1
+    obtain ⟨qj, hqj0, hqj1, hodd, heven⟩ := S.response j q hq0 hq1
+    refine ⟨qj, hqj0, hqj1, ?_⟩
+    intro r
+    cases hlabel : labelEquiv.symm r with
+    | inl y =>
+        simpa [payoff, hlabel, oddScale] using hodd y
+    | inr x =>
+        simpa [payoff, hlabel, evenScale] using heven x
+  obtain ⟨q, hq0, hq1, hprofile⟩ :=
+    HypercubeRamsey.simultaneous_profiles payoff (fun _ _ => S.balConst) hresponse
+  let P : S.Slice → FinProb S.Tag := fun j => ⟨q j, hq0 j, hq1 j⟩
+  let Q : FinProb (S.Slice → S.Tag) := FinProb.pi P
+  let Zodd : Fin N → OddRole n → (S.Slice → S.Tag) → ℝ :=
+    fun y b σ => (S.core σ).oddMean y b
+  let Zeven : Fin N → EvenRole n → (S.Slice → S.Tag) → ℝ :=
+    fun x a σ => (S.core σ).mean x a
+  have hprofileOdd (j : S.Slice) (y : Fin N) :
+      Q.expect (fun σ => oddScale *
+        ∑ b ∈ Finset.univ.filter (fun b : OddRole n => S.oddSlice b = j), Zodd y b σ)
+          ≤ S.balConst := by
+    have h := hprofile j (labelEquiv (Sum.inl y))
+    simpa [Q, P, payoff, Zodd, FinProb.expect, FinProb.pi] using h
+  have hprofileEven (j : S.Slice) (x : Fin N) :
+      Q.expect (fun σ => evenScale *
+        ∑ a ∈ Finset.univ.filter (fun a : EvenRole n => S.evenSlice a = j), Zeven x a σ)
+          ≤ S.balConst := by
+    have h := hprofile j (labelEquiv (Sum.inr x))
+    simpa [Q, P, payoff, Zeven, FinProb.expect, FinProb.pi] using h
+  have hoddAverage : ∀ y : Fin N, (Fintype.card (OddRole n) : ℝ)⁻¹ *
+      ∑ b, Q.expect (Zodd y b) ≤ S.balConst := by
+    intro y
+    apply Lane_q_s10_c.role_average_of_profiles
+      (roleSlice := S.oddSlice) (Z := Zodd) (scale := oddScale)
+      (bound := S.balConst) (hscale := by rfl) (q := q) hq0 hq1
+    exact hprofileOdd
+  have hevenAverage : ∀ x : Fin N, (Fintype.card (EvenRole n) : ℝ)⁻¹ *
+      ∑ a, Q.expect (Zeven x a) ≤ S.balConst := by
+    intro x
+    apply Lane_q_s10_c.role_average_of_profiles
+      (roleSlice := S.evenSlice) (Z := Zeven) (scale := evenScale)
+      (bound := S.balConst) (hscale := by rfl) (q := q) hq0 hq1
+    exact hprofileEven
+  have htagFrac0 : 0 ≤ S.tagFrac := by
+    obtain ⟨a⟩ := (inferInstance : Nonempty (EvenRole n))
+    have hcard : 0 < (Fintype.card (EvenRole n) : ℝ) :=
+      Nat.cast_pos.mpr Fintype.card_pos
+    have hnearPos : 0 < ((Finset.univ.filter (fun a' : EvenRole n =>
+        ¬ Disjoint (S.tagNbhd (S.evenSlice a)) (S.tagNbhd (S.evenSlice a')))).card : ℝ) := by
+      have hmem : a ∈ Finset.univ.filter (fun a' : EvenRole n =>
+          ¬ Disjoint (S.tagNbhd (S.evenSlice a)) (S.tagNbhd (S.evenSlice a'))) := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        intro hdis
+        have hself := S.tagNbhd_self (S.evenSlice a)
+        exact (Finset.disjoint_left.mp hdis) hself hself
+      exact Nat.cast_pos.mpr (Finset.card_pos.mpr ⟨a, hmem⟩)
+    by_contra h
+    have hneg : S.tagFrac < 0 := lt_of_not_ge h
+    have hprod : S.tagFrac * (Fintype.card (EvenRole n) : ℝ) < 0 :=
+      mul_neg_of_neg_of_pos hneg hcard
+    have hbound := S.even_tag_near a
+    linarith
+  let oddScope : OddRole n → Finset S.Slice := fun b => S.tagNbhd (S.oddSlice b)
+  let evenScope : EvenRole n → Finset S.Slice := fun a => S.tagNbhd (S.evenSlice a)
+  let oddNear : OddRole n → Finset (OddRole n) := fun b =>
+    Finset.univ.filter (fun b' => ¬ Disjoint (oddScope b) (oddScope b'))
+  let evenNear : EvenRole n → Finset (EvenRole n) := fun a =>
+    Finset.univ.filter (fun a' => ¬ Disjoint (evenScope a) (evenScope a'))
+  have hoddScopeDisjoint : ∀ b b', b' ∉ oddNear b →
+      Disjoint (oddScope b) (oddScope b') := by
+    intro b b' hnot
+    by_contra hdis
+    exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdis⟩)
+  have hevenScopeDisjoint : ∀ a a', a' ∉ evenNear a →
+      Disjoint (evenScope a) (evenScope a') := by
+    intro a a' hnot
+    by_contra hdis
+    exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdis⟩)
+  have hoddSelf : ∀ b, b ∈ oddNear b := by
+    intro b
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    intro hdis
+    have hself := S.tagNbhd_self (S.oddSlice b)
+    exact (Finset.disjoint_left.mp hdis) hself hself
+  have hevenSelf : ∀ a, a ∈ evenNear a := by
+    intro a
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    intro hdis
+    have hself := S.tagNbhd_self (S.evenSlice a)
+    exact (Finset.disjoint_left.mp hdis) hself hself
+  have hoddNearCard : ∀ b, ((oddNear b).card : ℝ) ≤ S.tagFrac * Fintype.card (OddRole n) := by
+    intro b
+    simpa [oddNear, oddScope] using S.odd_tag_near b
+  have hevenNearCard : ∀ a, ((evenNear a).card : ℝ) ≤ S.tagFrac * Fintype.card (EvenRole n) := by
+    intro a
+    simpa [evenNear, evenScope] using S.even_tag_near a
+  have hoddTail : ∀ y : Fin N, Q.pr (fun t => S.typThr ≤
+      (Fintype.card (OddRole n) : ℝ)⁻¹ * ∑ b, Zodd y b t) ≤
+        ((S.balConst + n * S.tagFrac * S.meanCap) / S.typThr) ^ n := by
+    intro y
+    simpa [Q, Zodd] using Lane_q_s10_c.pi_scattered_average_tail
+      P oddScope oddNear hoddScopeDisjoint hoddSelf S.tagFrac S.meanCap
+      S.balConst S.typThr hoddNearCard htagFrac0 S.meanCap_nonneg S.typThr_pos
+      Zodd (fun y b => S.odd_local y b)
+      (fun y b t => (S.core t).oddMean_nonneg y b)
+      (fun y b t => S.odd_mean_cap t y b) hoddAverage n y
+  have hevenTail : ∀ x : Fin N, Q.pr (fun t => S.typThr ≤
+      (Fintype.card (EvenRole n) : ℝ)⁻¹ * ∑ a, Zeven x a t) ≤
+        ((S.balConst + n * S.tagFrac * S.meanCap) / S.typThr) ^ n := by
+    intro x
+    simpa [Q, Zeven] using Lane_q_s10_c.pi_scattered_average_tail
+      P evenScope evenNear hevenScopeDisjoint hevenSelf S.tagFrac S.meanCap
+      S.balConst S.typThr hevenNearCard htagFrac0 S.meanCap_nonneg S.typThr_pos
+      Zeven (fun x a => S.even_local x a)
+      (fun x a t => (S.core t).mean_nonneg x a)
+      (fun x a t => S.even_mean_cap t x a) hevenAverage n x
+  let oddAt (y : Fin N) (t : S.Slice → S.Tag) : ℝ :=
+    (Fintype.card (OddRole n) : ℝ)⁻¹ * ∑ b, (S.core t).oddMean y b
+  let evenAt (x : Fin N) (t : S.Slice → S.Tag) : ℝ :=
+    (Fintype.card (EvenRole n) : ℝ)⁻¹ * ∑ a, (S.core t).mean x a
+  let badOdd : (S.Slice → S.Tag) → Prop := fun t => ∃ y, S.typThr ≤ oddAt y t
+  let badEven : (S.Slice → S.Tag) → Prop := fun t => ∃ x, S.typThr ≤ evenAt x t
+  have hoddUnion : Q.pr badOdd ≤ ∑ y : Fin N,
+      Q.pr (fun t => S.typThr ≤ oddAt y t) := by
+    simpa [badOdd, oddAt] using Lane_q_s10_c.pr_exists_finset_le_sum Q
+      (Finset.univ : Finset (Fin N)) (fun y t => S.typThr ≤ oddAt y t)
+  have hevenUnion : Q.pr badEven ≤ ∑ x : Fin N,
+      Q.pr (fun t => S.typThr ≤ evenAt x t) := by
+    simpa [badEven, evenAt] using Lane_q_s10_c.pr_exists_finset_le_sum Q
+      (Finset.univ : Finset (Fin N)) (fun x t => S.typThr ≤ evenAt x t)
+  let ratio : ℝ := ((S.balConst + n * S.tagFrac * S.meanCap) / S.typThr) ^ n
+  have hoddUnionBound : Q.pr badOdd ≤ N * ratio := by
+    calc
+      Q.pr badOdd ≤ ∑ y : Fin N, Q.pr (fun t => S.typThr ≤ oddAt y t) := hoddUnion
+      _ ≤ ∑ y : Fin N, ratio := Finset.sum_le_sum fun y hy => by
+            simpa [oddAt] using hoddTail y
+      _ = N * ratio := by simp [Finset.sum_const, nsmul_eq_mul]
+  have hevenUnionBound : Q.pr badEven ≤ N * ratio := by
+    calc
+      Q.pr badEven ≤ ∑ x : Fin N, Q.pr (fun t => S.typThr ≤ evenAt x t) := hevenUnion
+      _ ≤ ∑ x : Fin N, ratio := Finset.sum_le_sum fun x hx => by
+            simpa [evenAt] using hevenTail x
+      _ = N * ratio := by simp [Finset.sum_const, nsmul_eq_mul]
+  have hbadBound : Q.pr (fun t => badOdd t ∨ badEven t) < 1 := by
+    calc
+      Q.pr (fun t => badOdd t ∨ badEven t) ≤ Q.pr badOdd + Q.pr badEven :=
+        FinProb.pr_union Q badOdd badEven
+      _ ≤ N * ratio + N * ratio := add_le_add hoddUnionBound hevenUnionBound
+      _ = 2 * N * ratio := by ring
+      _ < 1 := by simpa [ratio] using S.tag_budget
+  have hgood : ∃ t : S.Slice → S.Tag,
+      (∀ y, oddAt y t < S.typThr) ∧ (∀ x, evenAt x t < S.typThr) := by
+    by_contra hNo
+    have hallBad : ∀ t : S.Slice → S.Tag, badOdd t ∨ badEven t := by
+      intro t
+      by_cases ho : badOdd t
+      · exact Or.inl ho
+      · right
+        by_contra he
+        apply hNo
+        refine ⟨t, ?_, ?_⟩
+        · intro y
+          exact lt_of_not_ge (fun hy => ho ⟨y, by simpa [oddAt] using hy⟩)
+        · intro x
+          exact lt_of_not_ge (fun hx => he ⟨x, by simpa [evenAt] using hx⟩)
+    have hprobOne : Q.pr (fun t => badOdd t ∨ badEven t) = 1 := by
+      have hevent : (fun t => badOdd t ∨ badEven t) = fun _ => True := by
+        funext t
+        exact propext ⟨fun _ => True.intro, fun _ => hallBad t⟩
+      rw [hevent]
+      simp [FinProb.pr, Q.sum_eq_one]
+    linarith [hbadBound, hprobOne]
+  obtain ⟨t, hoddGood, hevenGood⟩ := hgood
+  refine ⟨{
+    core := S.core t
+    oddThr := S.oddThr
+    oddAvg := S.typThr
+    meanAvg := S.typThr
+    odd_avg := ?_
+    mean_avg := ?_
+    budget := S.core_budget t
+  }⟩
+  · intro y
+    exact le_of_lt (hoddGood y)
+  · intro x
+    exact le_of_lt (hevenGood x)
 
 /-! ## Stage 1: the finite patch menu and the construction (TeX 10:23–262) -/
 

@@ -107,6 +107,8 @@ structure TransferProtocol {D : LateData hPT} (X : CriticalTransferData D) where
       ⌈Real.log (T.S.n k) ^ 20⌉₊
   output : Seed → List Reply → Law (T.S.N k)
   broad : ∀ seed s, (output seed (replies seed s steps)).WidthLE (κ.α * T.S.n k / 2)
+  output_supported : ∀ seed s,
+    (output seed (replies seed s steps)).SupportedIn (T.Y k)
   /-- Pointwise deletion and integration of erased sketches precede seed fixing. -/
   reduction : X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
     Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *
@@ -151,6 +153,9 @@ def TiltedDeviationBound {D : LateData hPT} {X : CriticalTransferData D}
         X.deviates (P.output seed (P.replies seed s P.steps)) x (some z)) else 0) /
       (PT.tiling.P (D.geom.patchOf X.target)).M ^ 2 ≤ Real.exp (-Real.rpow (T.S.n k : ℝ) c))
 
+/-- Whole-cell survival and uniform witness moments. The fixed coefficient
+`64 * κ.KB` absorbs the low-mode degree drift and marginal perturbations
+(17:334–347 and 18:630–645), and is chosen before the eventual stage. -/
 def SurvivalFacts {D : LateData hPT} (X : CriticalTransferData D) : Prop :=
   (∀ a ∈ X.criticalCoords, ∀ x z, X.allowed x z →
     (D.typicalFresh (D.geom.cellOf (flipPos X.target a))).pr (fun Ps =>
@@ -159,12 +164,12 @@ def SurvivalFacts {D : LateData hPT} (X : CriticalTransferData D) : Prop :=
         (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a))) ≥ 0.15) ∧
   ((∑ x ∈ (PT.tiling.P (D.geom.patchOf X.target)).X,
     if X.allowed x none then ((2 : ℝ) ^ X.criticalCoords.card * X.rawLaw.pr (fun s => X.survives s x none)) ^ 2 else 0) /
-      (PT.tiling.P (D.geom.patchOf X.target)).M ≤ Real.exp (κ.KB * Real.log (T.S.n k))) ∧
+      (PT.tiling.P (D.geom.patchOf X.target)).M ≤ Real.exp ((64 * κ.KB) * Real.log (T.S.n k))) ∧
   ((∑ x ∈ (PT.tiling.P (D.geom.patchOf X.target)).X,
     ∑ z ∈ (PT.tiling.P (D.geom.patchOf X.target)).X,
     if X.allowed x (some z) then ((4 : ℝ) ^ X.criticalCoords.card *
       X.rawLaw.pr (fun s => X.survives s x (some z))) ^ 2 else 0) /
-      (PT.tiling.P (D.geom.patchOf X.target)).M ^ 2 ≤ Real.exp (κ.KB * Real.log (T.S.n k)))
+      (PT.tiling.P (D.geom.patchOf X.target)).M ^ 2 ≤ Real.exp ((64 * κ.KB) * Real.log (T.S.n k)))
 
 /-- Witness averaging is against the full patch, independently of raw blocks. -/
 noncomputable def witnessMean {D : LateData hPT} (X : CriticalTransferData D) (pair : Bool)

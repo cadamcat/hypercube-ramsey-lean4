@@ -3086,4 +3086,35 @@ theorem finLaw_sum_support_eq_one {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) :
       by_cases hz : P.w ω = 0 <;> simp [hz]
     _ = 1 := P.sum_one
 
+theorem directPostCrossingWeight_sum_one {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (hcross : 0 < S15.directCrossingMass PT hPT ys a) :
+    (∑ x, S15.directPostCrossingWeight PT hPT ys a x) = 1 := by
+  classical
+  simp only [S15.directPostCrossingWeight, if_pos hcross]
+  rw [← Finset.sum_div]
+  unfold S15.directCrossingMass
+  exact div_self (ne_of_gt hcross)
+
+noncomputable def directPostCrossingLaw {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (hcross : 0 < S15.directCrossingMass PT hPT ys a) :
+    Law (T.S.N k) where
+  w := S15.directPostCrossingWeight PT hPT ys a
+  nonneg := directPostCrossingWeight_nonneg PT hPT ys a
+  sum_eq_one := directPostCrossingWeight_sum_one PT hPT ys a hcross
+
+theorem directPostCrossingLaw_supported {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (hcross : 0 < S15.directCrossingMass PT hPT ys a)
+    (x : Fin (T.S.N k))
+    (hx : (directPostCrossingLaw PT hPT ys a hcross).w x ≠ 0) :
+    x ∈ PT.envelope (S15.patchAt PT hPT a.1) := by
+  by_contra hnot
+  have hbase : S15.directBaseWeight PT hPT a x = 0 := by
+    simp [S15.directBaseWeight, hnot]
+  have hweight : S15.directPostCrossingWeight PT hPT ys a x = 0 := by
+    simp [S15.directPostCrossingWeight, hcross, hbase]
+  exact hx hweight
+
 end HypercubeRamsey.Lane_q_s15_direct

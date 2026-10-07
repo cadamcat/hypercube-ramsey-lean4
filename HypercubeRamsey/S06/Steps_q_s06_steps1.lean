@@ -472,4 +472,120 @@ theorem occObs_key_mem_C {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → 
       simp [Ctx6.C, keyNeighborhood6, keyAdjacent6]
     · simp [highObservations6, hsev] at hℓ
 
+namespace Lane_q_s06_steps1
+
+open OAI.HypercubeRamsey
+open Classical
+open scoped BigOperators
+
+theorem normalize6_pos_weight_of_pos_mass {α : Type*} [Fintype α]
+    (f : α → ℝ) (ω₀ x : α) (hf : ∀ y, 0 ≤ f y)
+    (hsum : 0 < ∑ y, f y) (hpos : 0 < (normalize6 f ω₀).w x) : 0 < f x := by
+  rw [normalize6_weight_formula f ω₀ x hf hsum] at hpos
+  exact (div_pos_iff_of_pos_right hsum).1 hpos
+
+theorem safeRatio6_pos_num {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)
+    (h : 0 < safeRatio6 a b) : 0 < a := by
+  unfold safeRatio6 at h
+  split_ifs at h with hz
+  · norm_num at h
+  · have hmul : 0 < a := (div_pos_iff_of_pos_right (lt_of_le_of_ne hb (Ne.symm hz))).1 h
+    exact hmul
+
+theorem hidWeight_nonneg {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h : X.Key) (obs : Finset X.Key) (y : Fin N) :
+    0 ≤ X.hidWeight b h obs y := by
+  cases hflag : h.2
+  · simp only [Ctx6.hidWeight, hflag]
+    apply mul_nonneg
+    · exact (X.candLaw b.1).nonneg y
+    · apply Finset.prod_nonneg
+      intro s hs
+      exact (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).nonneg (b.2.2 s)
+  · simp only [Ctx6.hidWeight, hflag]
+    apply mul_nonneg
+    · apply mul_nonneg
+      · exact X.initLaw.nonneg y
+      · apply Finset.prod_nonneg
+        intro u hu
+        exact (X.candLaw y).nonneg (b.2.1 u)
+    · apply Finset.prod_nonneg
+      intro s hs
+      exact (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).nonneg (b.2.2 s)
+
+theorem hidWeight_pos_tagFactor {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h : X.Key) (obs : Finset X.Key) (y : Fin N)
+    (s : X.Key) (hs : s ∈ obs) (hw : 0 < X.hidWeight b h obs y) :
+    0 < (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) := by
+  unfold Ctx6.hidWeight at hw
+  dsimp at hw
+  have hfactor_ne : (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) ≠ 0 := by
+    intro hz
+    have hzprod : (∏ t ∈ obs,
+        (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) t).w (b.2.2 t)) = 0 :=
+      Finset.prod_eq_zero hs hz
+    rw [hzprod] at hw
+    simp [hzprod] at hw
+  exact lt_of_le_of_ne
+    ((X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).nonneg (b.2.2 s))
+    (Ne.symm hfactor_ne)
+
+theorem baseTag_pos_accept_of_average {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (pv : Par6 X.Bin N) (h : X.Key) (havg : c₀ ≤
+      colDeg E G (broadLaw6 M (pv.val (primaryName6 h))) (pv.val (otherPrimaryName6 h)))
+    (i : X.ι) (hi : 0 < (X.tagLawAt pv h).w i) :
+    c₁ ≤ colDeg E G (M.μ i) (pv.val (otherPrimaryName6 h)) ∧
+      0 < (tagPosterior6 M (pv.val (primaryName6 h))).w i := by
+  have hmass := baseTag_accept_mass6 (N := N) (ι := X.ι) E G M (pv.val (primaryName6 h))
+      (pv.val (otherPrimaryName6 h)) havg
+  have hposMass : 0 < (tagPosterior6 M (pv.val (primaryName6 h))).pr
+      (fun j => c₁ ≤ colDeg E G (M.μ j) (pv.val (otherPrimaryName6 h))) := by
+    have hc : 0 < c₁ := by norm_num [c₁, c₀]
+    linarith
+  have hsupp := restrictOr6_supp hposMass (ne_of_gt hi)
+  have heta : 0 < (tagPosterior6 M (pv.val (primaryName6 h))).w i :=
+    lt_of_le_of_ne ((tagPosterior6 M (pv.val (primaryName6 h))).nonneg i) (Ne.symm hsupp.2)
+  exact ⟨hsupp.1, heta⟩
+
+theorem tagPosterior_pos_nu_of_positive_mixture {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (y : Fin N) (i : X.ι)
+    (hmix : 0 < (secondMixture6 M).w y)
+    (hi : 0 < (tagPosterior6 M y).w i) : 0 < (M.ν i).w y := by
+  have hformula : (tagPosterior6 M y).w i = M.Λ i * (M.ν i).w y / (secondMixture6 M).w y := by
+    simp [tagPosterior6, hmix]
+  rw [hformula] at hi
+  have hprod : 0 < M.Λ i * (M.ν i).w y := (div_pos_iff_of_pos_right hmix).1 hi
+  have hνne : (M.ν i).w y ≠ 0 := by
+    intro hz
+    simp [hz] at hprod
+  exact lt_of_le_of_ne ((M.ν i).nonneg y) (Ne.symm hνne)
+
+theorem posterior_heavy_pos_mixture {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (hn : 1 ≤ n) (y : Fin N) (hy : y ∈ X.par.heavy) :
+    0 < (secondMixture6 M).w y := by
+  have hmem : y ∈ heavySet6 (n := n) Dstar₆ (secondMixture6 M) := by
+    rw [← X.par.heavy_eq]
+    exact hy
+  have hbound : (n : ℝ) ^ (-Dstar₆) ≤ (N : ℝ) * (secondMixture6 M).w y := by
+    simpa [heavySet6] using (Finset.mem_filter.mp hmem).2
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have hnpos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+  have hpow : 0 < (n : ℝ) ^ (-Dstar₆) := Real.rpow_pos_of_pos hnpos _
+  have hprod : 0 < (N : ℝ) * (secondMixture6 M).w y := lt_of_lt_of_le hpow hbound
+  have hN : 0 < (N : ℝ) := by
+    by_contra hN
+    have : (N : ℝ) = 0 := le_antisymm (le_of_not_gt hN) (Nat.cast_nonneg _)
+    simp [this] at hprod
+  have hmixNe : (secondMixture6 M).w y ≠ 0 := by
+    intro hz
+    simp [hz] at hprod
+  exact lt_of_le_of_ne ((secondMixture6 M).nonneg y) (Ne.symm hmixNe)
+
+end Lane_q_s06_steps1
+
 end HypercubeRamsey.S06

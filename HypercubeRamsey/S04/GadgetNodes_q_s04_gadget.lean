@@ -3227,6 +3227,17 @@ private theorem unit_below_multiple_same_side (S t a : ℕ) (hS : 4 ≤ S) :
     have hgap : a * S + S / 2 < t * S - 1 := by omega
     exact ⟨fun _ => by omega, fun _ => hgap⟩
 
+private theorem side_equiv_of_unit_multiple (S t a x y : ℕ) (hS : 4 ≤ S)
+    (hnear : (x + 1 = t * S ∧ y = t * S) ∨
+      (y + 1 = t * S ∧ x = t * S)) :
+    (a * S + S / 2 < x) ↔ (a * S + S / 2 < y) := by
+  have h := unit_below_multiple_same_side S t a hS
+  rcases hnear with ⟨hx, hy⟩ | ⟨hy, hx⟩
+  · have hx' : x = t * S - 1 := by omega
+    simpa [hx', hy] using h
+  · have hy' : y = t * S - 1 := by omega
+    simpa [hy', hx] using h.symm
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by
@@ -3298,6 +3309,68 @@ private theorem gadgetOut_flip_eq_of_leaf {β γ : ℝ} {n : ℕ}
     hS (by simpa [hwidth] using hgap j) hdelta
   rw [hleaf]
   simpa [S] using hstable
+
+private theorem gadgetOut_eq_of_same_rank_side_profile {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (base w₁ w₂ : CubeVertex n)
+    (j₁ j₂ r : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    (hprofile : ∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w₁) t =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w₂) t)
+    (hother₁ : ∀ k, k ≠ j₁ →
+      HypercubeRamsey.S04.clipped β γ n g k w₁ =
+        HypercubeRamsey.S04.clipped β γ n g k base)
+    (hother₂ : ∀ k, k ≠ j₂ →
+      HypercubeRamsey.S04.clipped β γ n g k w₂ =
+        HypercubeRamsey.S04.clipped β γ n g k base)
+    (hnear₁ :
+      (HypercubeRamsey.S04.clipped β γ n g j₁ base + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ w₁ = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₁ w₁ + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ base = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n))
+    (hnear₂ :
+      (HypercubeRamsey.S04.clipped β γ n g j₂ base + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ w₂ = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₂ w₂ + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ base = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n)) :
+    HypercubeRamsey.S04.gadgetOut β γ n g w₁ =
+      HypercubeRamsey.S04.gadgetOut β γ n g w₂ := by
+  classical
+  have hleaf := searchLeaf_eq_of_rank_profile g w₁ w₂ hprofile
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let a := (HypercubeRamsey.S04.searchLeaf β γ n g w₁).1
+  have hstable₁ : ∀ k : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k base) ↔
+        (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k w₁) := by
+    intro k
+    by_cases hk : k = j₁
+    · subst k
+      exact side_equiv_of_unit_multiple S (r.val + 1) a
+        (HypercubeRamsey.S04.clipped β γ n g j₁ base)
+        (HypercubeRamsey.S04.clipped β γ n g j₁ w₁) hS hnear₁
+    · simp [hother₁ k hk]
+  have hstable₂ : ∀ k : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k base) ↔
+        (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k w₂) := by
+    intro k
+    by_cases hk : k = j₂
+    · subst k
+      exact side_equiv_of_unit_multiple S (r.val + 1) a
+        (HypercubeRamsey.S04.clipped β γ n g j₂ base)
+        (HypercubeRamsey.S04.clipped β γ n g j₂ w₂) hS hnear₂
+    · simp [hother₂ k hk]
+  apply gadgetOut_eq_of_leaf_and_side g w₁ w₂ hleaf
+  intro k
+  rw [← hleaf]
+  exact (hstable₁ k).symm.trans (hstable₂ k)
 
 private theorem chunkCoords_pairwise_disjoint {β γ : ℝ} {n : ℕ}
     (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
@@ -3430,10 +3503,12 @@ private theorem clipped_tuple_flip_profile {β γ : ℝ} {n : ℕ}
 private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
     (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
     (∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
-      mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j v) t =
-        mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j
-          (HypercubeRamsey.cubeFlip v i)) t) ∨
+      HypercubeRamsey.S04.clipped β γ n g t v =
+        HypercubeRamsey.S04.clipped β γ n g t (HypercubeRamsey.cubeFlip v i)) ∨
     ∃ j r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (∀ k, k ≠ j →
+        HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g k v) ∧
       (∀ t, t ≠ r → mergeSortAt
         (fun k => HypercubeRamsey.S04.clipped β γ n g k
           (HypercubeRamsey.cubeFlip v i)) t =
@@ -3462,8 +3537,7 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
   rcases clipped_tuple_flip_profile g v i with heq | ⟨j, hother, hdir⟩
   · left
     intro t
-    have hfgh : f = h := funext fun t => by simpa [f, h] using (heq t).symm
-    simp [f, h, hfgh]
+    exact (heq t).symm
   · by_cases hup : h j = f j + 1
     · have hfg : ∀ k, f k ≤ h k := by
         intro k
@@ -3495,7 +3569,7 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
       have hrank : mergeSortAt h r = mergeSortAt f r + 1 := by
         rw [hnew, hold, hup]
       right
-      refine ⟨j, r, ?_, ?_⟩
+      refine ⟨j, r, hother, ?_, ?_⟩
       · intro t htr
         exact hrest t htr
       · exact Or.inl ⟨hrank, hup, hold⟩
@@ -3533,7 +3607,7 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
       have hrank : mergeSortAt f r = mergeSortAt h r + 1 := by
         rw [hhigh, hlow, hdown]
       right
-      refine ⟨j, r, ?_, ?_⟩
+      refine ⟨j, r, hother, ?_, ?_⟩
       · intro t htr
         exact (hrest t htr).symm
       · exact Or.inr ⟨hrank, hdown, hlow⟩

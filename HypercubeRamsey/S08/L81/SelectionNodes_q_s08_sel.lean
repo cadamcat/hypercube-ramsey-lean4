@@ -276,23 +276,82 @@ private theorem foldl_greedyStep_source_hit_aux {α β : Type*}
             (mem_greedyStep_of_mem ids acc x b hb), hhit⟩
       · simpa only [List.foldl_cons] using ih (greedyStep ids acc x) a haxs
 
+private theorem greedy_eq_foldl_greedyStep {α β : Type*}
+    (ids : α → Finset β) (l : List α) : greedy ids l = l.foldl (greedyStep ids) [] := by
+  classical
+  unfold greedy
+  change l.foldl (fun acc a =>
+    if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc) [] =
+    l.foldl (greedyStep ids) []
+  have hs : (fun acc a =>
+      if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc) =
+      greedyStep ids := by
+    funext acc a
+    rfl
+  rw [hs]
+
+private theorem greedyStep_pairwise {α β : Type*}
+    (ids : α → Finset β) (acc : List α) (a : α)
+    (hacc : acc.Pairwise fun x y => Disjoint (ids x) (ids y)) :
+    (greedyStep ids acc a).Pairwise fun x y => Disjoint (ids x) (ids y) := by
+  classical
+  by_cases h : Disjoint (ids a) (greedyIdUnion ids acc)
+  · have h' : Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) := by
+      simpa [greedyIdUnion] using h
+    have hcross : ∀ x ∈ acc, Disjoint (ids x) (ids a) := by
+      intro x hx
+      apply Finset.disjoint_left.mpr
+      intro z hzX hzA
+      have hzUnion : z ∈ greedyIdUnion ids acc :=
+        (mem_greedyIdUnion_iff ids acc z).mpr ⟨x, hx, hzX⟩
+      exact (Finset.disjoint_left.mp h) hzA (by simpa [greedyIdUnion] using hzUnion)
+    have hstep : greedyStep ids acc a = acc ++ [a] := by
+      simp [greedyStep, h']
+    rw [hstep, List.pairwise_append]
+    refine ⟨hacc, ?_, ?_⟩
+    · simp
+    · intro x hx y hy
+      simp at hy
+      subst y
+      exact hcross x hx
+  · have h' : ¬ Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) := by
+      simpa [greedyIdUnion] using h
+    simpa [greedyStep, h'] using hacc
+
+private theorem foldl_greedyStep_pairwise {α β : Type*} (ids : α → Finset β) :
+    ∀ (l acc : List α), acc.Pairwise (fun x y => Disjoint (ids x) (ids y)) →
+      (l.foldl (greedyStep ids) acc).Pairwise (fun x y => Disjoint (ids x) (ids y)) := by
+  classical
+  intro l
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+      intro acc hacc
+      rw [List.foldl_cons]
+      exact ih (greedyStep ids acc a) (greedyStep_pairwise ids acc a hacc)
+
+theorem greedy_pairwise_disjoint {α β : Type*} (ids : α → Finset β) (l : List α) :
+    (greedy ids l).Pairwise (fun x y => Disjoint (ids x) (ids y)) := by
+  classical
+  rw [greedy_eq_foldl_greedyStep ids l]
+  exact foldl_greedyStep_pairwise ids l [] (by simp)
+
 theorem greedy_mem_or_overlap {α β : Type*}
     (ids : α → Finset β) (l : List α) {a : α} (ha : a ∈ l) :
     a ∈ greedy ids l ∨ ∃ b ∈ greedy ids l, ¬ Disjoint (ids a) (ids b) := by
   classical
-  have hEq : greedy ids l = l.foldl (greedyStep ids) [] := by
-    unfold greedy
-    change l.foldl (fun acc a =>
-      if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc) [] =
-      l.foldl (greedyStep ids) []
-    have hs : (fun acc a =>
-        if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc) =
-        greedyStep ids := by
-      funext acc a
-      rfl
-    rw [hs]
+  have hEq := greedy_eq_foldl_greedyStep ids l
   rw [hEq]
   exact foldl_greedyStep_source_hit_aux ids l [] a ha
+
+theorem family_pairwise_disjoint (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
+    (t : D.Tags) (c : D.CellT) :
+    (D.family Θ P t c).Pairwise
+      (fun L L' => Disjoint (D.listIds c.1 L) (D.listIds c.1 L')) := by
+  classical
+  unfold Ctx.family
+  exact greedy_pairwise_disjoint (D.listIds c.1)
+    ((D.listOrder c.1).filter fun L => decide (D.Cand P c L ∧ D.BadList Θ t c L))
 
 theorem listIds_card_bound (D : Ctx η₀ β p h) (g : D.KeyT) (L : D.LList g) :
     (D.listIds g L).card ≤ L.1.card + (crossKeys g).card := by

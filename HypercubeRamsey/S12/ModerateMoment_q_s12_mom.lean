@@ -1688,4 +1688,261 @@ lemma selected_interaction_product_abs_le_pow {N d u : ℕ}
             exact hmoderate l.1 (f l) (hsize l)
     _ = t ^ K.card := by simp
 
+lemma prefix_prodW_event_mass_eq {N u' u : ℕ}
+    (τ : Law N) (hu : u' ≤ u)
+    (p : (Fin u' → Fin N) → Prop) [DecidablePred p] :
+    (∑ xs : Fin u' → Fin N, if p xs then prodW τ.w xs else 0) =
+      ∑ xs : Fin u → Fin N,
+        (if p (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩)
+          then prodW τ.w xs else 0) := by
+  classical
+  let s : Finset (Fin u) := Finset.univ.filter (fun i => i.val < u')
+  let e : Fin u' ≃ {i : Fin u // i ∈ s} := {
+    toFun := fun i => ⟨⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩, by simp [s]⟩
+    invFun := fun i => ⟨i.1.val, by simpa [s] using (Finset.mem_filter.mp i.2).2⟩
+    left_inv := by intro i; apply Fin.ext; rfl
+    right_inv := by intro i; apply Subtype.ext; apply Fin.ext; rfl
+  }
+  let ePi : (Fin u' → Fin N) ≃ (∀ i : {i : Fin u // i ∈ s}, Fin N) := {
+    toFun := fun xs i => xs (e.symm i)
+    invFun := fun a i => a (e i)
+    left_inv := by intro xs; funext i; rfl
+    right_inv := by intro a; funext i; rfl
+  }
+  let getPrefix : (Fin u → Fin N) → (Fin u' → Fin N) :=
+    fun xs i => xs (e i).1
+  let f : (Fin u → Fin N) → ℝ := fun xs => if p (getPrefix xs) then 1 else 0
+  let eFull := Equiv.piEquivPiSubtypeProd (fun i : Fin u => i ∈ s)
+    (fun _ : Fin u => Fin N)
+  have hprefix (a : ∀ i : {i : Fin u // i ∈ s}, Fin N)
+      (b : ∀ i : {i : Fin u // i ∉ s}, Fin N) :
+      getPrefix (eFull.symm (a, b)) = ePi.symm a := by
+    have hleft : ∀ i : {i : Fin u // i ∈ s}, eFull.symm (a, b) i.1 = a i := by
+      intro i
+      simp [eFull, Equiv.piEquivPiSubtypeProd]
+    funext i
+    change eFull.symm (a, b) (e i).1 = a (e i)
+    exact hleft (e i)
+  have hsplit := iid_pi_expect_split (fun _ : Fin u => τ) s f
+  have hfullIndicator :
+      (∑ xs : Fin u → Fin N, (∏ i, τ.w (xs i)) * f xs) =
+        ∑ xs : Fin u → Fin N, (if p (getPrefix xs) then prodW τ.w xs else 0) := by
+    apply Finset.sum_congr rfl
+    intro xs hxs
+    by_cases hp : p (getPrefix xs) <;> simp [f, hp, prodW]
+  have hSuffix :
+      (∑ b : (∀ i : {i : Fin u // i ∉ s}, Fin N),
+        ∏ i : {i : Fin u // i ∉ s}, τ.w (b i)) = 1 := by
+    rw [← Fintype.prod_sum]
+    simp [τ.sum_eq_one]
+  have hsplitIndicator :
+      (∑ xs : Fin u → Fin N, (∏ i, τ.w (xs i)) * f xs) =
+        ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+          (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+            (if p (ePi.symm a) then 1 else 0) := by
+    calc
+      _ = ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+            ∑ b : (∀ i : {i : Fin u // i ∉ s}, Fin N),
+              (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+                (∏ i : {i : Fin u // i ∉ s}, τ.w (b i)) *
+                  (if p (getPrefix (eFull.symm (a, b))) then 1 else 0) := by
+        simpa [f, eFull, hprefix] using hsplit
+      _ = ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+            (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+              (if p (ePi.symm a) then 1 else 0) := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        simp_rw [hprefix a]
+        calc
+          _ = (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+                (if p (ePi.symm a) then 1 else 0) *
+                ∑ b : (∀ i : {i : Fin u // i ∉ s}, Fin N),
+                  ∏ i : {i : Fin u // i ∉ s}, τ.w (b i) := by
+            rw [Finset.univ.mul_sum]
+            apply Finset.sum_congr rfl
+            intro b hb
+            ring
+          _ = _ := by rw [hSuffix]; ring
+  have hweight (a : ∀ i : {i : Fin u // i ∈ s}, Fin N) :
+      prodW τ.w (ePi.symm a) =
+        ∏ i : {i : Fin u // i ∈ s}, τ.w (a i) := by
+    change (∏ j : Fin u', τ.w ((ePi.symm a) j)) = _
+    calc
+      _ = ∏ i : {i : Fin u // i ∈ s}, τ.w ((ePi.symm a) (e.symm i)) :=
+        Fintype.prod_equiv e _ _ (by intro j; rfl)
+      _ = _ := by simp [ePi]
+  have hReindex :
+      (∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+        (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+          (if p (ePi.symm a) then 1 else 0)) =
+        ∑ xs : Fin u' → Fin N, (if p xs then prodW τ.w xs else 0) := by
+    symm
+    apply Fintype.sum_equiv ePi
+    intro xs
+    have hweightXs := hweight (ePi xs)
+    rw [ePi.symm_apply_apply] at hweightXs
+    by_cases hp : p xs <;> simp [hp, hweightXs]
+  calc
+    _ = ∑ xs : Fin u' → Fin N, (if p xs then prodW τ.w xs else 0) := by
+      apply Finset.sum_congr rfl
+      intro xs hxs
+      by_cases hp : p xs <;> simp [hp, prodW]
+    _ = ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+          (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+            (if p (ePi.symm a) then 1 else 0) := hReindex.symm
+    _ = ∑ xs : Fin u → Fin N,
+          (if p (getPrefix xs) then prodW τ.w xs else 0) := by
+      rw [← hsplitIndicator, ← hfullIndicator]
+
+lemma moderate_prefix_mono {N d u' u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (t : ℝ) (hu : u' ≤ u)
+    (xs : Fin u → Fin N) :
+    Moderate E c π t xs →
+      Moderate E c π t (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩) := by
+  classical
+  intro hmod l J hJ
+  let emb : Fin u' ↪ Fin u := {
+    toFun := fun i => ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩
+    inj' := by
+      intro i j hij
+      apply Fin.ext_iff.mpr
+      simpa using congrArg (fun x : Fin u => x.val) hij
+  }
+  let Jfull : Finset (Fin u) := J.map emb
+  have hcard : Jfull.card = J.card := by simp [Jfull]
+  have hprod (y : Fin N) :
+      (∏ i ∈ Jfull, acoef E c (π l) (xs i) y) =
+        ∏ i ∈ J, acoef E c (π l)
+          (xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩) y := by
+    dsimp [Jfull]
+    rw [Finset.prod_map]
+    rfl
+  have hinter :
+      inter E c (π l) Jfull xs =
+        inter E c (π l) J (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩) := by
+    unfold inter
+    apply Finset.sum_congr rfl
+    intro y hy
+    rw [hprod y]
+  have hlarge : 2 ≤ Jfull.card := by omega
+  have hfull := hmod l Jfull hlarge
+  simpa [hinter] using hfull
+
+lemma moderate_bad_prefix_mass_le {N d u' u : ℕ}
+    (τ : Law N) (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (t : ℝ) (hu : u' ≤ u) :
+    (∑ xs : Fin u' → Fin N,
+      if ¬ Moderate E c π t xs then prodW τ.w xs else 0) ≤
+      ∑ xs : Fin u → Fin N,
+        if ¬ Moderate E c π t xs then prodW τ.w xs else 0 := by
+  classical
+  calc
+    _ = ∑ xs : Fin u → Fin N,
+          if ¬ Moderate E c π t
+              (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩)
+          then prodW τ.w xs else 0 :=
+      by
+        simpa using prefix_prodW_event_mass_eq τ hu
+          (fun xs : Fin u' → Fin N => ¬ Moderate E c π t xs)
+    _ ≤ _ := by
+      apply Finset.sum_le_sum
+      intro xs hxs
+      let pre : Fin u' → Fin N := fun i => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩
+      by_cases hp : ¬ Moderate E c π t pre
+      · have hq : ¬ Moderate E c π t xs := by
+          intro hfull
+          exact hp (moderate_prefix_mono E c π t hu xs hfull)
+        simp [pre, hp, hq]
+      · by_cases hq : ¬ Moderate E c π t xs
+        · have hW : 0 ≤ prodW τ.w xs := by
+            unfold prodW
+            exact Finset.prod_nonneg fun i hi => τ.nonneg (xs i)
+          simpa [pre, hp, hq] using hW
+        · simp [pre, hp, hq]
+
+lemma weighted_event_factor_bound {N u : ℕ} (τ : Law N)
+    (p q : (Fin u → Fin N) → Prop) (f : (Fin u → Fin N) → ℝ)
+    (B M : ℝ) (hB : 0 ≤ B) (hM : 0 ≤ M)
+    (hsub : ∀ xs, p xs → q xs)
+    (hpoint : ∀ xs, p xs → (∀ i, 0 < τ.w (xs i)) → f xs ≤ B)
+    (hf : ∀ xs, 0 ≤ f xs)
+    (hmass : (∑ xs : Fin u → Fin N,
+      if q xs then prodW τ.w xs else 0) ≤ M) :
+    (∑ xs : Fin u → Fin N,
+      if p xs then prodW τ.w xs * f xs else 0) ≤ B * M := by
+  classical
+  have hw (xs : Fin u → Fin N) : 0 ≤ prodW τ.w xs := by
+    unfold prodW
+    exact Finset.prod_nonneg fun i hi => τ.nonneg (xs i)
+  have hterm (xs : Fin u → Fin N) :
+      (if p xs then prodW τ.w xs * f xs else 0) ≤
+        B * (if q xs then prodW τ.w xs else 0) := by
+    by_cases hp : p xs
+    · have hq := hsub xs hp
+      rw [if_pos hp, if_pos hq]
+      by_cases hzero : prodW τ.w xs = 0
+      · simp [hzero]
+      · have hpos : 0 < prodW τ.w xs := lt_of_le_of_ne (hw xs) (Ne.symm hzero)
+        have hcoords : ∀ i, 0 < τ.w (xs i) := by
+          intro i
+          by_contra hnot
+          have hz : τ.w (xs i) = 0 := le_antisymm (le_of_not_gt hnot) (τ.nonneg _)
+          have hprod : prodW τ.w xs = 0 := by
+            unfold prodW
+            exact Finset.prod_eq_zero (Finset.mem_univ i) hz
+          exact (ne_of_gt hpos) hprod
+        calc
+          prodW τ.w xs * f xs ≤ prodW τ.w xs * B :=
+            mul_le_mul_of_nonneg_left (hpoint xs hp hcoords) (hw xs)
+          _ = B * prodW τ.w xs := by ring
+    · rw [if_neg hp]
+      by_cases hq : q xs
+      · rw [if_pos hq]
+        exact mul_nonneg hB (hw xs)
+      · rw [if_neg hq]
+        simp
+  calc
+    _ ≤ ∑ xs : Fin u → Fin N, B * (if q xs then prodW τ.w xs else 0) :=
+      Finset.sum_le_sum fun xs hxs => hterm xs
+    _ = B * ∑ xs : Fin u → Fin N, (if q xs then prodW τ.w xs else 0) := by
+      rw [Finset.mul_sum]
+    _ ≤ B * M := mul_le_mul_of_nonneg_left hmass hB
+
+lemma sum_if_nested_split {α : Type*} [Fintype α]
+    (P Q R : α → Prop) (f : α → ℝ)
+    (hPQ : ∀ x, P x → Q x) (hQR : ∀ x, Q x → R x) :
+    (∑ x, if R x then f x else 0) =
+      (∑ x, if P x then f x else 0) +
+        (∑ x, if Q x ∧ ¬ P x then f x else 0) +
+          ∑ x, if R x ∧ ¬ Q x then f x else 0 := by
+  classical
+  calc
+    _ = ∑ x, ((if P x then f x else 0) +
+          (if Q x ∧ ¬ P x then f x else 0) +
+            if R x ∧ ¬ Q x then f x else 0) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases hp : P x
+      · have hq := hPQ x hp
+        have hr := hQR x hq
+        simp [hp, hq, hr]
+      · by_cases hq : Q x
+        · have hr := hQR x hq
+          simp [hp, hq, hr]
+        · by_cases hr : R x <;> simp [hp, hq, hr]
+    _ = _ := by simp only [Finset.sum_add_distrib]
+
+lemma Phi_abs_le_card_mul_of_posTerm_bound {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour) (π : Fin d → Fin N → ℝ)
+    (hπ : ∀ l y, 0 ≤ π l y) (xs : Fin u → Fin N) (B : ℝ)
+    (hpoint : ∀ I : Finset (Fin u), posTerm E c π I xs ≤ B) :
+    |Phi E c π xs| ≤ (Fintype.card (Finset (Fin u)) : ℝ) * B := by
+  calc
+    |Phi E c π xs| ≤ ∑ I : Finset (Fin u), posTerm E c π I xs :=
+      Phi_abs_le_posTerm_sum E c π hπ xs
+    _ ≤ ∑ I : Finset (Fin u), B :=
+      Finset.sum_le_sum fun I hI => hpoint I
+    _ = (Fintype.card (Finset (Fin u)) : ℝ) * B := by simp
+
 end HypercubeRamsey.S12.Lane_q_s12_mom

@@ -1,5 +1,6 @@
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
+import HypercubeRamsey.S05.History_q_s05_h23
 
 /-!
 # L5.1c, d, f, h, l(1–2): raw test bounds and the five conditioning stages

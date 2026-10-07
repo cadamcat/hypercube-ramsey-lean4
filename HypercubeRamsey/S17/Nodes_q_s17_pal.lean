@@ -837,6 +837,21 @@ theorem finsetProdTwoExpBound {α : Type*} [DecidableEq α]
     _ = (2 : ℝ) ^ S.card * Real.exp (∑ x ∈ S, ε x) := by
       rw [Finset.prod_mul_distrib, Finset.prod_const, ← Real.exp_sum]
 
+theorem finsetProdExpBound {α : Type*} [DecidableEq α]
+    (S : Finset α) (f ε : α → ℝ)
+    (hf0 : ∀ x ∈ S, 0 ≤ f x)
+    (hf : ∀ x ∈ S, f x ≤ Real.exp (ε x)) :
+    (∏ x ∈ S, f x) ≤ Real.exp (∑ x ∈ S, ε x) := by
+  classical
+  calc
+    _ ≤ ∏ x ∈ S, Real.exp (ε x) := by
+      apply Finset.prod_le_prod₀
+      · intro x hx
+        exact hf0 x hx
+      · intro x hx
+        exact hf x hx
+    _ = Real.exp (∑ x ∈ S, ε x) := by rw [← Real.exp_sum]
+
 theorem invHalfSubBound {ε : ℝ} (hε0 : 0 ≤ ε) (hε1 : ε ≤ 1 / 4) :
     (1 / 2 - ε)⁻¹ ≤ 2 * Real.exp (4 * ε) := by
   have hden : 0 < 1 - 2 * ε := by linarith
@@ -1088,6 +1103,45 @@ theorem finProb_uniform_singleton_expect {Color : Type*} [Fintype Color]
       (fun d => if d = c then (1 : ℝ) else 0) = 1 / (Fintype.card Color : ℝ) := by
   classical
   simp [FinProb.expect, FinProb.uniform]
+
+theorem four_hit_corr_identity {N : ℕ} (E : Fin N → Fin N → Prop)
+    (c : Colour) (π : FinProb (Fin N)) (x z : Fin N) :
+    4 * (∑ y, π.w y * hit E c x y * hit E c z y) =
+      2 * deg E c π.w x + 2 * deg E c π.w z - 1 + corr E c π.w x z := by
+  have hpoint (y : Fin N) :
+      4 * π.w y * hit E c x y * hit E c z y =
+        2 * π.w y * hit E c x y + 2 * π.w y * hit E c z y - π.w y +
+          π.w y * fv E c x y * fv E c z y := by
+    simp only [fv]
+    ring
+  calc
+    4 * (∑ y, π.w y * hit E c x y * hit E c z y) =
+        ∑ y, 4 * π.w y * hit E c x y * hit E c z y := by
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro y hy
+      ring
+    _ = ∑ y, (2 * π.w y * hit E c x y + 2 * π.w y * hit E c z y -
+          π.w y + π.w y * fv E c x y * fv E c z y) := by
+      apply Finset.sum_congr rfl
+      intro y hy
+      exact hpoint y
+    _ = 2 * deg E c π.w x + 2 * deg E c π.w z - 1 + corr E c π.w x z := by
+      simp only [Finset.sum_add_distrib, Finset.sum_sub_distrib]
+      simp [deg, corr, π.sum_eq_one, Finset.mul_sum]
+      <;> ring
+
+theorem pairRatio_formula {N : ℕ} (E : Fin N → Fin N → Prop)
+    (c : Colour) (π : FinProb (Fin N)) (x z : Fin N)
+    (hDx : 0 < deg E c π.w x) (hDz : 0 < deg E c π.w z) :
+    (∑ y, π.w y * hit E c x y * hit E c z y) /
+        (deg E c π.w x * deg E c π.w z) =
+      1 + (corr E c π.w x z -
+        (2 * deg E c π.w x - 1) * (2 * deg E c π.w z - 1)) /
+        (4 * deg E c π.w x * deg E c π.w z) := by
+  have hid := four_hit_corr_identity E c π x z
+  field_simp [ne_of_gt hDx, ne_of_gt hDz]
+  nlinarith [hid]
 
 theorem uniform_pair_expect {N : ℕ} (X : Finset (Fin N)) (hX : X.Nonempty)
     (g : Fin N → Fin N → ℝ) :

@@ -2217,6 +2217,52 @@ theorem sel_some_mem_elig {η₀ β p : ℝ} {h : ℕ}
     exact (Finset.mem_filter.mp hactive).2
   exact ⟨j, hE, hA⟩
 
+def presList {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (c : D.CellT) : D.LList c.1 :=
+  (D.intIds q c, fun u => D.crossId q c u)
+
+theorem presList_cand_of_valid {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT)
+    (hvalid : D.PresValid q W c) : D.Cand q.1.2 c (presList D q c) := by
+  classical
+  have hOrd := hvalid.2.1
+  have hCross := hvalid.2.2.1
+  have hCard := hvalid.2.2.2.1
+  refine ⟨hCard, ?_, ?_⟩
+  · intro ℓ hℓ
+    rcases Finset.mem_biUnion.mp hℓ with ⟨b, hb, hId⟩
+    have hselSome : (D.sel q (c.1, b)).isSome := hOrd b hb
+    cases hsel : D.sel q (c.1, b) with
+    | none => simp [hsel] at hselSome
+    | some x =>
+        have hEq : ℓ = x := by simpa [hsel] using hId
+        obtain ⟨j, hElig, hAct⟩ :=
+          Lane_q_s08_post.sel_some_mem_elig D q (c.1, b) x hsel
+        have hProps : q.1.2 c.1 x = true ∧
+            x.2 = j ∧ _root_.hammingDist x.1 b ≤ rH D.n ∧
+              ¬ D.Forbidden q.1.1 q.1.2 q.2.1.1 (c.1, b) x := by
+          simpa [Ctx.elig] using hElig
+        refine ⟨?_, ⟨b, hb, ?_⟩⟩
+        · rw [hEq]
+          exact hProps.1
+        · rw [hEq]
+          exact hProps.2.2.1
+  · intro u
+    have hselSome : (D.sel q (u.1, c.2)).isSome := hCross u
+    cases hsel : D.sel q (u.1, c.2) with
+    | none => simp [hsel] at hselSome
+    | some x =>
+        have hEq : D.crossId q c u = x := by simp [Ctx.crossId, hsel]
+        obtain ⟨j, hElig, hAct⟩ :=
+          Lane_q_s08_post.sel_some_mem_elig D q (u.1, c.2) x hsel
+        have hProps : q.1.2 u.1 x = true ∧
+            x.2 = j ∧ _root_.hammingDist x.1 c.2 ≤ rH D.n ∧
+              ¬ D.Forbidden q.1.1 q.1.2 q.2.1.1 (u.1, c.2) x := by
+          simpa [Ctx.elig] using hElig
+        constructor
+        · simpa [presList, hEq] using hProps.1
+        · simpa [presList, hEq] using hProps.2.2.1
+
 def localPresEvent {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
     (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch)

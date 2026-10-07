@@ -61,13 +61,15 @@ theorem heavyTruncation {N k : ℕ} (hN : 0 < N) (hk : 0 < k)
     rw [hconvert, hsum]
     simp
   have hcoord (i : Fin k) : ∑ x : Fin N, P.pr (fun ω => ω i = x) = 1 := by
-    unfold FinProb.pr
-    rw [Finset.sum_comm]
+    have hsumEq :
+        (∑ x : Fin N, P.pr (fun ω => ω i = x)) = ∑ ω, P.w ω := by
+      unfold FinProb.pr
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro ω hω
+      exact hcoordRow i ω
     calc
-      ∑ ω, ∑ x : Fin N, (if ω i = x then P.w ω else 0) = ∑ ω, P.w ω := by
-        apply Finset.sum_congr rfl
-        intro ω hω
-        exact hcoordRow i ω
+      ∑ x : Fin N, P.pr (fun ω => ω i = x) = ∑ ω, P.w ω := hsumEq
       _ = 1 := P.sum_eq_one
   have htotal : ∑ x : Fin N, averageCoordinateMarginal P x = 1 := by
     unfold averageCoordinateMarginal

@@ -1,4 +1,5 @@
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_row_q_s10_b
 import HypercubeRamsey.S10.LocalNodes
 import HypercubeRamsey.Framework.Props
 import HypercubeRamsey.S10.Split_opus_s10_tagged
@@ -637,7 +638,279 @@ over the groups, mean at most `oddThr` by `cluster_mean`); the cluster law is
 `FinProb.pi (Kg h)` and `lab h c b = lab h b (c (grp b))`. -/
 theorem transferData_of_typical {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {A : ℝ}
     (S : TypicalSystem n N E G A) : Nonempty (TransferData n N E G A) := by
-  sorry
+  classical
+  let D := S.core
+  letI : Fintype D.H := D.fH
+  letI : Fintype D.Grp := D.fGrp
+  letI : DecidableEq D.Grp := D.dGrp
+  letI : Fintype D.Cl := D.fCl
+  have hOdd : Nonempty (OddRole n) := by
+    let v : CubeVertex n := fun _ => false
+    have hv : IsEvenRole v := by simp [IsEvenRole, v]
+    let i : Fin n := ⟨0, D.n_pos⟩
+    refine ⟨⟨cubeFlip v i, ?_⟩⟩
+    intro hflip
+    exact (cubeFlip_parity v i).mp hflip hv
+  letI : Nonempty (OddRole n) := hOdd
+  let validRows : Finset D.H := Finset.univ.filter D.valid
+  let goodH : D.H → Prop := fun h => D.valid h ∧
+    ∀ y, ∑ b, D.oddRow h b y ≤ S.oddThr
+  letI : DecidablePred goodH := fun h => Classical.propDecidable (goodH h)
+  let clusterGood : D.H → (D.Grp → D.Cl) → Prop := fun h c =>
+    ∀ y, ∑ b, (D.lab h b (c (D.grp b))).w y ≤ (1e-8 : ℝ)
+  let oddOne : ℝ := ((Fintype.card (OddRole n) : ℝ) *
+    (S.oddAvg + n * D.oddFrac * D.oddCap) / ((N : ℝ) * S.oddThr)) ^ n
+  let errOdd : ℝ := (N : ℝ) * oddOne
+  let epsCluster : ℝ := (N : ℝ) *
+    Real.exp (((Real.exp 1 - 1) * S.oddThr - 1e-8) / D.groupCap)
+  have hepsCluster_nonneg : 0 ≤ epsCluster := by positivity
+  have hodd_est := Lane_q_s10_b.scattered_scaled_column_tail
+      D.PH validRows (fun b y h => D.oddRow h b y)
+      (by intro b y h; exact D.oddRow_nonneg h b y)
+      N D.N_pos D.oddCap D.oddCap_nonneg
+      (by
+        intro b y h hh
+        exact D.odd_cap h (Finset.mem_filter.mp hh).2 b y)
+      D.oddNear D.oddNear_self D.oddFrac D.oddNear_card n
+      (fun y b => D.oddMean y b)
+      (by intro y b; exact D.oddMean_nonneg y b)
+      (by
+        intro y m hm s hs
+        have hj := D.odd_joint y m hm s hs
+        calc
+          ∑ h ∈ validRows, D.PH.w h *
+              ∏ i, (N : ℝ) * D.oddRow h (s i) y =
+              ∑ h, D.PH.w h *
+                (if D.valid h then ∏ i, (N : ℝ) * D.oddRow h (s i) y else 0) := by
+            simp [validRows, Finset.sum_filter]
+          _ ≤ ∏ i, D.oddMean y (s i) := hj)
+      S.oddAvg S.odd_avg S.oddThr S.budget.1
+  have hodd_each : ∀ y,
+      D.PH.pr (fun h => D.valid h ∧ S.oddThr < ∑ b, D.oddRow h b y) ≤ oddOne := by
+    intro y
+    simpa [validRows, oddOne] using hodd_est y
+  have hodd_failure :
+      D.PH.pr (fun h => D.valid h ∧ ∃ y : Fin N,
+        S.oddThr < ∑ b, D.oddRow h b y) ≤ errOdd := by
+    calc
+      D.PH.pr (fun h => D.valid h ∧ ∃ y : Fin N,
+          S.oddThr < ∑ b, D.oddRow h b y) ≤
+          ∑ y : Fin N, D.PH.pr (fun h => D.valid h ∧
+            S.oddThr < ∑ b, D.oddRow h b y) :=
+        (by
+          simpa only [exists_and_left] using
+            (Lane_q_s10_b.pr_exists_le_sum D.PH
+              (fun y h => D.valid h ∧ S.oddThr < ∑ b, D.oddRow h b y)))
+      _ ≤ ∑ _y : Fin N, oddOne :=
+        Finset.sum_le_sum fun y _ => hodd_each y
+      _ = errOdd := by simp [errOdd, oddOne]
+  have hpre_failure : D.PH.pr (fun h => ¬ goodH h) ≤ D.ε_valid + errOdd := by
+    have hevent : (fun h => ¬ goodH h) =
+        (fun h => ¬ D.valid h ∨ (D.valid h ∧ ∃ y : Fin N,
+          S.oddThr < ∑ b, D.oddRow h b y)) := by
+      funext h
+      by_cases hv : D.valid h <;> simp [goodH, hv, not_le]
+    rw [hevent]
+    calc
+      D.PH.pr (fun h => ¬ D.valid h ∨
+          (D.valid h ∧ ∃ y : Fin N, S.oddThr < ∑ b, D.oddRow h b y)) ≤
+          D.PH.pr (fun h => ¬ D.valid h) +
+            D.PH.pr (fun h => D.valid h ∧ ∃ y : Fin N,
+              S.oddThr < ∑ b, D.oddRow h b y) := FinProb.pr_union D.PH _ _
+      _ ≤ D.ε_valid + errOdd := add_le_add D.valid_failure hodd_failure
+  have hgate_sum_le (q : D.H → ℝ) (hq : ∀ h, 0 ≤ q h) :
+      ∑ h, D.PH.w h * (if goodH h then q h else 0) ≤
+        ∑ h, D.PH.w h * (if D.valid h then q h else 0) := by
+    apply Finset.sum_le_sum
+    intro h hh
+    by_cases hg : goodH h
+    · simp [hg, hg.1]
+    · by_cases hv : D.valid h
+      · have hn := mul_nonneg (D.PH.nonneg h) (hq h)
+        simpa [hg, hv] using hn
+      · simp [hg, hv]
+  let groupX : D.H → D.Grp → Fin N → D.Cl → ℝ := fun h g y c =>
+    ∑ b, if D.grp b = g then (D.lab h b c).w y else 0
+  have hcluster_tail (h : D.H) (hh : goodH h) :
+      (FinProb.pi (D.Kg h)).pr (fun c => ¬ clusterGood h c) ≤ epsCluster := by
+    have hgroup_total (c : D.Grp → D.Cl) (y : Fin N) :
+        ∑ g, groupX h g y (c g) = ∑ b, (D.lab h b (c (D.grp b))).w y := by
+      calc
+        ∑ g, groupX h g y (c g) =
+            ∑ g, ∑ b, if D.grp b = g then (D.lab h b (c g)).w y else 0 := rfl
+        _ = ∑ g, ∑ b,
+              if D.grp b = g then (D.lab h b (c (D.grp b))).w y else 0 := by
+          apply Finset.sum_congr rfl
+          intro g hg
+          apply Finset.sum_congr rfl
+          intro b hb
+          split_ifs with hbg
+          · rw [hbg]
+          · rfl
+        _ = ∑ b, (D.lab h b (c (D.grp b))).w y :=
+          Lane_q_s10_b.grouped_sum_eq D.grp
+            (fun b => (D.lab h b (c (D.grp b))).w y)
+    have hX : ∀ g y c, 0 ≤ groupX h g y c ∧ groupX h g y c ≤ D.groupCap := by
+      intro g y c
+      constructor
+      · unfold groupX
+        apply Finset.sum_nonneg
+        intro b hb
+        by_cases hbg : D.grp b = g
+        · simp [hbg, (D.lab h b c).nonneg y]
+        · simp [hbg]
+      · simpa [groupX, Finset.sum_filter] using D.group_cap h hh.1 g c y
+    have hmean : ∀ y, ∑ g, (D.Kg h g).expect (fun c => groupX h g y c) ≤ S.oddThr := by
+      intro y
+      calc
+        ∑ g, (D.Kg h g).expect (fun c => groupX h g y c) =
+            ∑ b, (D.Kg h (D.grp b)).expect (fun c => (D.lab h b c).w y) := by
+          simpa [groupX] using
+            (Lane_q_s10_b.grouped_expect_sum_eq D.grp (D.Kg h) (D.lab h) y)
+        _ ≤ ∑ b, D.oddRow h b y := by
+          apply Finset.sum_le_sum
+          intro b hb
+          exact D.cluster_mean h hh.1 b y
+        _ ≤ S.oddThr := hh.2 y
+    have htail := Lane_q_s10_b.independent_group_tail (D.Kg h)
+      (fun g y c => groupX h g y c) D.groupCap S.oddThr (1e-8 : ℝ)
+      D.groupCap_pos hX hmean
+    have hinc : ∀ c, ¬ clusterGood h c →
+        ∃ y : Fin N, (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g) := by
+      intro c hc
+      have hex : ∃ y : Fin N,
+          (1e-8 : ℝ) < ∑ b, (D.lab h b (c (D.grp b))).w y := by
+        by_contra hno
+        apply hc
+        intro y
+        by_contra hle
+        exact hno ⟨y, lt_of_not_ge hle⟩
+      obtain ⟨y, hy⟩ := hex
+      exact ⟨y, by rw [hgroup_total]; exact le_of_lt hy⟩
+    have hunion := Lane_q_s10_b.pr_exists_le_sum (FinProb.pi (D.Kg h))
+      (fun y c => (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g))
+    calc
+      (FinProb.pi (D.Kg h)).pr (fun c => ¬ clusterGood h c) ≤
+          (FinProb.pi (D.Kg h)).pr
+            (fun c => ∃ y : Fin N, (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g)) :=
+        Lane_q_s10_b.pr_mono _ hinc
+      _ ≤ ∑ y : Fin N, (FinProb.pi (D.Kg h)).pr
+            (fun c => (1e-8 : ℝ) ≤ ∑ g, groupX h g y (c g)) := hunion
+      _ ≤ ∑ _y : Fin N,
+            Real.exp (((Real.exp 1 - 1) * S.oddThr - 1e-8) / D.groupCap) :=
+        Finset.sum_le_sum fun y hy => htail y
+      _ = epsCluster := by simp [epsCluster]
+  have hcluster_failure :
+      ∑ h, D.PH.w h *
+        (if goodH h then (FinProb.pi (D.Kg h)).pr (fun c => ¬ clusterGood h c) else 0)
+        ≤ epsCluster := by
+    calc
+      _ ≤ ∑ h, D.PH.w h * (if goodH h then epsCluster else 0) := by
+        apply Finset.sum_le_sum
+        intro h hh
+        by_cases hg : goodH h
+        · simp [hg]
+          exact mul_le_mul_of_nonneg_left (hcluster_tail h hg) (D.PH.nonneg h)
+        · simp [hg]
+      _ ≤ ∑ h, D.PH.w h * epsCluster := by
+        apply Finset.sum_le_sum
+        intro h hh
+        by_cases hg : goodH h
+        · simp [hg]
+        · simp [hg]
+          exact mul_nonneg (D.PH.nonneg h) hepsCluster_nonneg
+      _ = epsCluster := by
+        rw [← Finset.sum_mul, D.PH.sum_eq_one]
+        ring
+  refine ⟨{
+    H := D.H
+    PH := D.PH
+    goodH := goodH
+    C := D.Grp → D.Cl
+    K := fun h => FinProb.pi (D.Kg h)
+    lab := fun h c b => D.lab h b (c (D.grp b))
+    clusterGood := clusterGood
+    column_small := by
+      intro h c hh hc y
+      exact hc y
+    atom_small := by
+      intro h c hh hc b y
+      exact D.atom_small h hh.1 b (c (D.grp b)) y
+    predictive := D.predictive
+    row := D.row
+    row_nonneg := D.row_nonneg
+    row_sum := by
+      intro h ω a hh hp
+      exact D.row_sum h ω a hh.1 hp
+    common_neighbor := by
+      intro h ω a hh hp x hx b hb
+      exact D.common_neighbor h ω a hh.1 hp x hx b hb
+    predictive_local := D.predictive_local
+    row_local := D.row_local
+    rowCap := D.rowCap
+    rowCap_nonneg := D.rowCap_nonneg
+    row_cap := by
+      intro h ω a x hh
+      exact D.row_cap h ω a x hh.1
+    near := D.near
+    near_self := D.near_self
+    nearFrac := D.nearFrac
+    near_card := D.near_card
+    jointConst := D.jointConst
+    jointConst_ge := D.jointConst_ge
+    mean := D.mean
+    mean_nonneg := D.mean_nonneg
+    meanAvg := S.meanAvg
+    mean_avg := S.mean_avg
+    ref_joint := by
+      intro x m hm s hs
+      have hq (h : D.H) : 0 ≤
+          ∑ c : D.Grp → D.Cl, (FinProb.pi (D.Kg h)).w c *
+          (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).expect
+            (fun ω => ∏ i, (N : ℝ) * D.row h ω (s i) x) := by
+        apply Finset.sum_nonneg
+        intro c hc
+        have hprod (ω : OddRole n → Fin N) :
+            0 ≤ ∏ i : Fin m, (N : ℝ) * D.row h ω (s i) x := by
+          apply Finset.prod_nonneg
+          intro i hi
+          exact mul_nonneg (by positivity) (D.row_nonneg h ω (s i) x)
+        have hexpect : 0 ≤
+            (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).expect
+              (fun ω => ∏ i : Fin m, (N : ℝ) * D.row h ω (s i) x) := by
+          unfold FinProb.expect
+          apply Finset.sum_nonneg
+          intro ω hw
+          exact mul_nonneg
+            ((FinProb.pi (fun b => D.lab h b (c (D.grp b)))).nonneg ω) (hprod ω)
+        exact mul_nonneg ((FinProb.pi (D.Kg h)).nonneg c) hexpect
+      exact (hgate_sum_le
+        (fun h => ∑ c : D.Grp → D.Cl, (FinProb.pi (D.Kg h)).w c *
+          (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).expect
+            (fun ω => ∏ i, (N : ℝ) * D.row h ω (s i) x)) hq).trans
+        (D.ref_joint x m hm s hs)
+    ε_pre := D.ε_valid + errOdd
+    ε_cluster := epsCluster
+    ε_ref := D.ε_ref
+    pre_failure := hpre_failure
+    cluster_failure := hcluster_failure
+    ref_predictive := by
+      intro a
+      exact (hgate_sum_le
+        (fun h => ∑ c : D.Grp → D.Cl, (FinProb.pi (D.Kg h)).w c *
+          (FinProb.pi (fun b => D.lab h b (c (D.grp b)))).pr
+            (fun ω => ¬ D.predictive a h ω))
+        (by
+          intro h
+          apply Finset.sum_nonneg
+          intro c hc
+          exact mul_nonneg ((FinProb.pi (D.Kg h)).nonneg c)
+            (Lane_q_s10_b.pr_nonneg _ _))
+      ).trans (D.ref_predictive a)
+    N_pos := D.N_pos
+    budget := by
+      simpa [TypicalCore.Budget, errOdd, oddOne, epsCluster, D] using S.budget.2
+  }⟩
 
 /-! ## Stage 2: all tag assignments (TeX 10:263–269) -/
 

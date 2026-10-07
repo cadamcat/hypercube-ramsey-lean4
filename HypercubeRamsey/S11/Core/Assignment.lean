@@ -42,7 +42,75 @@ theorem t1_prob {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)
     (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (P : ℝ) (hP : 0 < P)
     (hraw : ∀ v : EvenRole n, (rawTags M p).expect (fun t => rawFail M y₀ p t v) ≤ (n : ℝ) ^ (-(4 * P))) :
     ∀ s, (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤ (n : ℝ) ^ (-(2 * P)) := by
-  sorry
+  classical
+  intro s
+  by_cases hV : ∃ v : EvenRole n, sliceOf v.1 = s
+  · obtain ⟨v, hvs⟩ := hV
+    by_cases hn0 : n = 0
+    · have hpow4 : (0 : ℝ) ^ (-(4 * P)) = 0 := Real.zero_rpow (by nlinarith)
+      have hpow2 : (0 : ℝ) ^ (-(2 * P)) = 0 := Real.zero_rpow (by nlinarith)
+      have hthreshold : (n : ℝ) ^ (-(2 * P)) = 0 := by simpa [hn0] using hpow2
+      have hE : (rawTags M p).expect (fun t => rawFail M y₀ p t v) ≤ 0 := by
+        simpa [hn0, hpow4] using hraw v
+      have hzero := HypercubeRamsey.Lane_q_s11_tags.pr_pos_eq_zero_of_expect_nonpos
+        (rawTags M p) (fun t => rawFail M y₀ p t v)
+        (fun t => HypercubeRamsey.Lane_q_s11_tags.rawFail_nonneg M y₀ p t v) hE
+      have hsub : ∀ t, T1 M y₀ p P t s → 0 < rawFail M y₀ p t v := by
+        intro t ht
+        unfold T1 at ht
+        rcases ht with ⟨v', hv's, hlarge⟩
+        have heq := HypercubeRamsey.Lane_q_s11_tags.rawFail_same_slice M y₀ p t v' v
+          (hv's.trans hvs.symm)
+        calc
+          0 < rawFail M y₀ p t v' := by simpa [hthreshold] using hlarge
+          _ = rawFail M y₀ p t v := heq
+      calc
+        (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤
+            (rawTags M p).pr (fun t => 0 < rawFail M y₀ p t v) :=
+          HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hsub
+        _ = 0 := hzero
+        _ ≤ (n : ℝ) ^ (-(2 * P)) := by simpa [hthreshold]
+    · have hnpos : 0 < (n : ℝ) := by exact_mod_cast Nat.pos_of_ne_zero hn0
+      let a : ℝ := (n : ℝ) ^ (-(2 * P))
+      have ha : 0 < a := by dsimp [a]; exact Real.rpow_pos_of_pos hnpos _
+      have hsub : ∀ t, T1 M y₀ p P t s → a ≤ rawFail M y₀ p t v := by
+        intro t ht
+        unfold T1 at ht
+        rcases ht with ⟨v', hv's, hlarge⟩
+        have heq := HypercubeRamsey.Lane_q_s11_tags.rawFail_same_slice M y₀ p t v' v
+          (hv's.trans hvs.symm)
+        exact le_of_lt (by simpa [a] using lt_of_lt_of_eq hlarge heq)
+      have hmark := FinProb.markov (rawTags M p) (fun t => rawFail M y₀ p t v) a
+        (fun t => HypercubeRamsey.Lane_q_s11_tags.rawFail_nonneg M y₀ p t v) ha
+      have hpow : (n : ℝ) ^ (-(4 * P)) = a * a := by
+        dsimp [a]
+        calc
+          (n : ℝ) ^ (-(4 * P)) =
+              (n : ℝ) ^ ((-(2 * P)) + (-(2 * P))) := by congr 1 <;> ring
+          _ = (n : ℝ) ^ (-(2 * P)) * (n : ℝ) ^ (-(2 * P)) :=
+            Real.rpow_add hnpos _ _
+      calc
+        (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤
+            (rawTags M p).pr (fun t => a ≤ rawFail M y₀ p t v) :=
+          HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hsub
+        _ ≤ (rawTags M p).expect (fun t => rawFail M y₀ p t v) / a := hmark
+        _ ≤ (n : ℝ) ^ (-(4 * P)) / a := div_le_div_of_nonneg_right (hraw v) ha.le
+        _ = (n : ℝ) ^ (-(2 * P)) := by
+          rw [hpow]
+          dsimp [a]
+          field_simp [ne_of_gt ha]
+  · have hfalse : ∀ t, ¬ T1 M y₀ p P t s := by
+      intro t ht
+      unfold T1 at ht
+      rcases ht with ⟨v, hvs, hlarge⟩
+      exact hV ⟨v, hvs⟩
+    calc
+      (rawTags M p).pr (fun t => T1 M y₀ p P t s) = 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_eq_zero
+        intro t ht
+        simp [hfalse t]
+      _ ≤ (n : ℝ) ^ (-(2 * P)) := Real.rpow_nonneg (by positivity) _
 
 /-- P11.1d1(ii), second event (11:350–352).  Given `i(s)` with `p_{i(s)} > 0` and `x ∈ supp μ_{i(s)}`,
 compatibility gives exceptional tag probability at most `η` for each of the `d` independent outer neighbouring

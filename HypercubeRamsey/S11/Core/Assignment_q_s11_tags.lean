@@ -408,6 +408,302 @@ private theorem xorCube_preserves_even {n : ℕ} {d : CubeVertex n}
   · intro hv
     exact xorCube_even_of_even hv hd
 
+private def evenTranslate {n : ℕ} (d : CubeVertex n) (hd : IsEvenRole d) :
+    EvenRole n ≃ EvenRole n where
+  toFun v := ⟨xorCube v.1 d, (xorCube_preserves_even hd v.1).2 v.2⟩
+  invFun v := ⟨xorCube v.1 d, (xorCube_preserves_even hd v.1).2 v.2⟩
+  left_inv v := by
+    apply Subtype.ext
+    exact xorCube_right_twice v.1 d
+  right_inv v := by
+    apply Subtype.ext
+    exact xorCube_right_twice v.1 d
+
+private def oddTranslate {n : ℕ} (d : CubeVertex n) (hd : IsEvenRole d) :
+    OddRole n ≃ OddRole n where
+  toFun v := ⟨xorCube v.1 d, fun he => v.2 ((xorCube_preserves_even hd v.1).mp he)⟩
+  invFun v := ⟨xorCube v.1 d, fun he => v.2 ((xorCube_preserves_even hd v.1).mp he)⟩
+  left_inv v := by
+    apply Subtype.ext
+    exact xorCube_right_twice v.1 d
+  right_inv v := by
+    apply Subtype.ext
+    exact xorCube_right_twice v.1 d
+
+private theorem evenTranslate_oddNbr {n : ℕ} (d : CubeVertex n) (hd : IsEvenRole d)
+    (v : EvenRole n) (j : Fin n) :
+    oddTranslate d hd (oddNbr v j) = oddNbr (evenTranslate d hd v) j := by
+  apply Subtype.ext
+  exact xorCube_cubeFlip v.1 d j
+
+private theorem oddTranslate_evenNbr {n : ℕ} (d : CubeVertex n) (hd : IsEvenRole d)
+    (b : OddRole n) (j : Fin n) :
+    evenTranslate d hd (evenNbr b j) = evenNbr (oddTranslate d hd b) j := by
+  apply Subtype.ext
+  exact xorCube_cubeFlip b.1 d j
+
+private def precompEquiv {α β : Type*} (e : α ≃ α) : (α → β) ≃ (α → β) where
+  toFun f a := f (e a)
+  invFun f a := f (e.symm a)
+  left_inv f := by funext a; simp
+  right_inv f := by funext a; simp
+
+private theorem starOf_evenTranslate {n k N : ℕ}
+    (d : CubeVertex n) (hd : IsEvenRole d) (W : EvenRole n → Fin k → Fin N) (b : OddRole n) :
+    starOf (fun v => W (evenTranslate d hd v)) b = starOf W (oddTranslate d hd b) := by
+  funext a
+  funext l
+  change W (evenTranslate d hd (evenNbr b a.1)) l =
+    W (evenNbr (oddTranslate d hd b) a.1) l
+  rw [oddTranslate_evenNbr]
+
+private theorem xorCube_slice_eq_of_zero {n : ℕ} {d : CubeVertex n}
+    (hd : sliceOf d = fun _ => false) (x : CubeVertex n) :
+    sliceOf (xorCube x d) = sliceOf x := by
+  funext j
+  have hj := congrFun hd j
+  have hj' : d j.1 = false := by simpa [sliceOf] using hj
+  cases hx : x j.1 <;> simp [sliceOf, xorCube, hj', hx]
+
+private theorem oddRowF_evenTranslate {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (t : OuterWord n → M.ι)
+    (d : CubeVertex n) (hd : IsEvenRole d) (hD : sliceOf d = fun _ => false)
+    (W : EvenRole n → Fin (kTup n) → Fin N)
+    (b : OddRole n) (y : Fin N) :
+    oddRowF M t (fun v => W (evenTranslate d hd v)) b y =
+      oddRowF M t W (oddTranslate d hd b) y := by
+  have hslice : sliceOf (oddTranslate d hd b).1 = sliceOf b.1 := by
+    simpa [oddTranslate] using xorCube_slice_eq_of_zero hD b.1
+  have hstar := starOf_evenTranslate d hd W b
+  unfold oddRowF
+  rw [hslice, hstar]
+
+private theorem oddProdW_evenTranslate {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (t : OuterWord n → M.ι)
+    (d : CubeVertex n) (hd : IsEvenRole d) (hD : sliceOf d = fun _ => false)
+    (W : EvenRole n → Fin (kTup n) → Fin N)
+    (f : OddRole n → Fin N) :
+    oddProdW M t (fun v => W (evenTranslate d hd v)) (fun b => f (oddTranslate d hd b)) =
+      oddProdW M t W f := by
+  unfold oddProdW
+  calc
+    (∏ b, oddRowF M t (fun v => W (evenTranslate d hd v)) b
+        (f (oddTranslate d hd b))) =
+      ∏ b, oddRowF M t W (oddTranslate d hd b) (f (oddTranslate d hd b)) := by
+        apply Finset.prod_congr rfl
+        intro b hb
+        rw [oddRowF_evenTranslate M t d hd hD]
+    _ = ∏ b, oddRowF M t W b (f b) := by
+      exact Fintype.prod_equiv (oddTranslate d hd) _ _ (by intro b; rfl)
+
+private theorem evenRowF_evenTranslate {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (d : CubeVertex n) (hd : IsEvenRole d)
+    (hD : sliceOf d = fun _ => false) (f : OddRole n → Fin N)
+    (v : EvenRole n) (x : Fin N) :
+    evenRowF M y₀ p t (fun b => f (oddTranslate d hd b)) (evenTranslate d hd v) x =
+      evenRowF M y₀ p t f v x := by
+  have hslice : sliceOf (evenTranslate d hd v).1 = sliceOf v.1 := by
+    simpa [evenTranslate] using xorCube_slice_eq_of_zero hD v.1
+  have hoddNbr (j : Fin n) :
+      oddTranslate d hd (oddNbr (evenTranslate d hd v) j) = oddNbr v j := by
+    rw [evenTranslate_oddNbr]
+    have hτ : evenTranslate d hd (evenTranslate d hd v) = v := by
+      change (evenTranslate d hd).invFun ((evenTranslate d hd).toFun v) = v
+      exact (evenTranslate d hd).left_inv v
+    rw [hτ]
+  have hinner :
+      innerOut (fun b => f (oddTranslate d hd b)) (evenTranslate d hd v) = innerOut f v := by
+    funext a
+    exact congrArg f (hoddNbr a.1)
+  unfold evenRowF
+  rw [hslice, hinner]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro j hj
+  simpa only [hoddNbr]
+
+private theorem massFailGiven_evenTranslate {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (d : CubeVertex n) (hd : IsEvenRole d)
+    (hD : sliceOf d = fun _ => false) (W : EvenRole n → Fin (kTup n) → Fin N)
+    (v : EvenRole n) :
+    massFailGiven M y₀ p t (fun e => W (evenTranslate d hd e)) (evenTranslate d hd v)
+        = massFailGiven M y₀ p t W v := by
+  classical
+  let eF : (OddRole n → Fin N) ≃ (OddRole n → Fin N) :=
+    precompEquiv (oddTranslate d hd)
+  have hMass (x : OddRole n → Fin N) :
+      MassFail M y₀ p t (fun b => x (oddTranslate d hd b)) (evenTranslate d hd v) =
+        MassFail M y₀ p t x v := by
+    apply congrArg (fun z : ℝ => z < 1 / 2)
+    apply Finset.sum_congr rfl
+    intro y hy
+    exact evenRowF_evenTranslate M y₀ p t d hd hD x v y
+  unfold massFailGiven
+  calc
+    (∑ x : OddRole n → Fin N,
+        oddProdW M t (fun e => W (evenTranslate d hd e)) x *
+          (if MassFail M y₀ p t x (evenTranslate d hd v)
+            then 1 else 0)) =
+      ∑ x : OddRole n → Fin N,
+        oddProdW M t (fun e => W (evenTranslate d hd e)) (eF x) *
+          (if MassFail M y₀ p t (eF x) (evenTranslate d hd v) then 1 else 0) := by
+        exact Fintype.sum_equiv eF.symm _ _ (by intro x; simp [eF, precompEquiv])
+    _ = ∑ x : OddRole n → Fin N,
+        oddProdW M t W x * (if MassFail M y₀ p t x v then 1 else 0) := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        rw [show oddProdW M t (fun e => W (evenTranslate d hd e)) (eF x) =
+            oddProdW M t W x by
+              simpa [eF, precompEquiv] using oddProdW_evenTranslate M t d hd hD W x]
+        have hfx : eF x = (fun b => x (oddTranslate d hd b)) := by
+          funext b
+          simp [eF, precompEquiv, oddTranslate]
+        rw [hfx]
+        rw [hMass x]
+
+private theorem rawTuples_weight_evenTranslate {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (t : OuterWord n → M.ι) (d : CubeVertex n) (hd : IsEvenRole d)
+    (hD : sliceOf d = fun _ => false) (W : EvenRole n → Fin (kTup n) → Fin N) :
+    (rawTuples M y₀ t).w (fun v => W (evenTranslate d hd v)) = (rawTuples M y₀ t).w W := by
+  have hslice (v : EvenRole n) : sliceOf (evenTranslate d hd v).1 = sliceOf v.1 := by
+    simpa [evenTranslate] using xorCube_slice_eq_of_zero hD v.1
+  change (∏ v : EvenRole n,
+      (tupLaw E M.G (M.μ (t (sliceOf v.1))) (y₀ (t (sliceOf v.1))) (kTup n)).w
+        (W (evenTranslate d hd v))) =
+    ∏ v : EvenRole n,
+      (tupLaw E M.G (M.μ (t (sliceOf v.1))) (y₀ (t (sliceOf v.1))) (kTup n)).w (W v)
+  exact Fintype.prod_equiv (evenTranslate d hd) _ _ (by intro v; simp [hslice])
+
+private theorem rawFail_evenTranslate {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (d : CubeVertex n) (hd : IsEvenRole d)
+    (hD : sliceOf d = fun _ => false) (v : EvenRole n) :
+    rawFail M y₀ p t (evenTranslate d hd v) = rawFail M y₀ p t v := by
+  classical
+  let eW : (EvenRole n → Fin (kTup n) → Fin N) ≃
+      (EvenRole n → Fin (kTup n) → Fin N) := precompEquiv (evenTranslate d hd)
+  have hsum :
+      (∑ W, (rawTuples M y₀ t).w W * massFailGiven M y₀ p t W (evenTranslate d hd v)) =
+        ∑ W, (rawTuples M y₀ t).w W * massFailGiven M y₀ p t W v := by
+    calc
+      (∑ W, (rawTuples M y₀ t).w W * massFailGiven M y₀ p t W (evenTranslate d hd v)) =
+          ∑ W, (rawTuples M y₀ t).w (eW W) *
+            massFailGiven M y₀ p t (eW W) (evenTranslate d hd v) := by
+          exact Fintype.sum_equiv eW.symm _ _ (by intro W; simp [eW, precompEquiv])
+      _ = ∑ W, (rawTuples M y₀ t).w W * massFailGiven M y₀ p t W v := by
+          apply Finset.sum_congr rfl
+          intro W hW
+          have hWmap : eW W = (fun e => W (evenTranslate d hd e)) := rfl
+          rw [hWmap, rawTuples_weight_evenTranslate M y₀ t d hd hD W]
+          rw [massFailGiven_evenTranslate M y₀ p t d hd hD W v]
+  unfold rawFail FinProb.expect
+  exact hsum
+
+theorem rawFail_same_slice {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (v w : EvenRole n)
+    (hs : sliceOf v.1 = sliceOf w.1) :
+    rawFail M y₀ p t v = rawFail M y₀ p t w := by
+  classical
+  let d : CubeVertex n := xorCube v.1 w.1
+  have hd : IsEvenRole d := by simpa [d] using xorCube_even_of_even v.2 w.2
+  have hD : sliceOf d = fun _ => false := by
+    funext j
+    have hj := congrFun hs j
+    have hvw : v.1 j.1 = w.1 j.1 := by simpa [sliceOf] using hj
+    change Bool.xor (v.1 j.1) (w.1 j.1) = false
+    rw [← hvw]
+    cases hv : v.1 j.1 <;> simp [Bool.xor, hv]
+  have hmap : evenTranslate d hd v = w := by
+    apply Subtype.ext
+    funext j
+    cases hv : v.1 j <;> cases hw : w.1 j <;> simp [evenTranslate, d, xorCube, hv, hw]
+  calc
+    rawFail M y₀ p t v = rawFail M y₀ p t (evenTranslate d hd v) :=
+      (rawFail_evenTranslate M y₀ p t d hd hD v).symm
+    _ = rawFail M y₀ p t w := by rw [hmap]
+
+private theorem colDeg_nonneg {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (μ : Law N) (y : Fin N) : 0 ≤ colDeg E G μ y := by
+  unfold colDeg
+  apply Finset.sum_nonneg
+  intro x hx
+  apply mul_nonneg (μ.nonneg x)
+  split_ifs <;> norm_num
+
+private theorem lik_nonneg {N : ℕ} {I : Type} [Fintype I] {k : ℕ}
+    (E : Fin N → Fin N → Prop) (G : Colour) (μ : Law N)
+    (ws : I → Fin k → Fin N) (y : Fin N) : 0 ≤ lik E G μ ws y := by
+  unfold lik
+  apply Finset.prod_nonneg
+  intro a ha
+  apply Finset.prod_nonneg
+  intro j hj
+  apply div_nonneg
+  · unfold hit
+    split_ifs <;> norm_num
+  · exact colDeg_nonneg E G μ y
+
+private theorem oddRowW_nonneg {N : ℕ} {I : Type} [Fintype I] {k : ℕ}
+    (E : Fin N → Fin N → Prop) (G : Colour) (g : ℝ) (μ ν : Law N)
+    (ws : I → Fin k → Fin N) (y : Fin N) : 0 ≤ oddRowW E G g μ ν ws y := by
+  unfold oddRowW
+  split_ifs with hPass
+  · exact div_nonneg (mul_nonneg (ν.nonneg y) (lik_nonneg E G μ ws y)) hPass.1.le
+  · exact ν.nonneg y
+
+theorem rawFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :
+    0 ≤ rawFail M y₀ p t v := by
+  unfold rawFail FinProb.expect massFailGiven oddProdW oddRowF
+  apply Finset.sum_nonneg
+  intro W hW
+  apply mul_nonneg
+  · exact (rawTuples M y₀ t).nonneg W
+  · apply Finset.sum_nonneg
+    intro f hf
+    apply mul_nonneg
+    · apply Finset.prod_nonneg
+      intro b hb
+      unfold oddRowW
+      split_ifs with hPass
+      · exact div_nonneg
+          (mul_nonneg ((M.ν (t (sliceOf b.1))).nonneg (f b))
+            (lik_nonneg E M.G (M.μ (t (sliceOf b.1))) (starOf W b) (f b))) hPass.1.le
+      · exact (M.ν (t (sliceOf b.1))).nonneg (f b)
+    · split_ifs <;> norm_num
+
+theorem pr_pos_eq_zero_of_expect_nonpos {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (f : Ω → ℝ) (hf : ∀ ω, 0 ≤ f ω) (hE : P.expect f ≤ 0) :
+    P.pr (fun ω => 0 < f ω) = 0 := by
+  classical
+  have hnonneg : 0 ≤ P.expect f := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro ω hω
+    exact mul_nonneg (P.nonneg ω) (hf ω)
+  have hzero : P.expect f = 0 := le_antisymm hE hnonneg
+  have hweight (ω : Ω) (hω : 0 < f ω) : P.w ω = 0 := by
+    have hterm : P.w ω * f ω ≤ P.expect f := by
+      unfold FinProb.expect
+      exact Finset.single_le_sum (s := Finset.univ) (f := fun z => P.w z * f z)
+        (fun z hz => mul_nonneg (P.nonneg z) (hf z)) (Finset.mem_univ ω)
+    have htermZero : P.w ω * f ω = 0 := by
+      apply le_antisymm
+      · simpa [hzero] using hterm
+      · exact mul_nonneg (P.nonneg ω) (hf ω)
+    exact (mul_eq_zero.mp htermZero).resolve_right (ne_of_gt hω)
+  unfold FinProb.pr
+  apply Finset.sum_eq_zero
+  intro ω hω
+  by_cases h : 0 < f ω
+  · simp [h, hweight ω h]
+  · simp [h]
+
 private theorem flipOuter_injective {n : ℕ} (s : OuterWord n) :
     Function.Injective (flipOuter s) := by
   intro j k hjk

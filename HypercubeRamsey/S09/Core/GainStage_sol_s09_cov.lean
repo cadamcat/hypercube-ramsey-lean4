@@ -1,12 +1,13 @@
 import HypercubeRamsey.S09.Core.Experiment
 import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Framework.LawLemmas
+import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
 
 namespace HypercubeRamsey.Lane_sol_s09_cov
 
-open Classical
-open scoped BigOperators
+open Classical Filter
+open scoped BigOperators Topology
 
 theorem expect_const {Ω : Type*} [Fintype Ω] (Q : FinProb Ω) (a : ℝ) :
     Q.expect (fun _ => a) = a := by
@@ -958,5 +959,654 @@ theorem pi_resample_subset_expect {iota : Type*} [Fintype iota] [DecidableEq iot
       intro b hb
       ring
     _ = _ := by rw [← Finset.sum_mul, Ps.sum_eq_one, one_mul]
+
+private theorem eventual_covariance_power_decay {d A eps : ℝ} (hd : 0 < d) (heps : 0 < eps) :
+    ∃ n0 : ℕ, ∀ n ≥ n0, A*(n : ℝ)^(-d) < eps := by
+  have hlim : Tendsto (fun n : ℕ => A*(n : ℝ)^(-d)) atTop (𝓝 0) := by
+    simpa [mul_assoc] using Tendsto.const_mul A
+      ((tendsto_rpow_neg_atTop hd).comp tendsto_natCast_atTop_atTop)
+  have hsmall : ∀ᶠ n : ℕ in atTop, A*(n : ℝ)^(-d) < eps :=
+    hlim.eventually (Iio_mem_nhds heps)
+  obtain ⟨n0, hn0⟩ := eventually_atTop.1 hsmall
+  exact ⟨n0, fun n hn => hn0 n hn⟩
+
+theorem eventual_covariance_gain_margin9 (P : Params9) (hP : P.Valid) :
+    ∃ n0 : ℕ, ∀ n ≥ n0,
+      12*P.bStar n < P.aStar n * (n : ℝ)^(-(2*(P.χ : ℝ))) * (n : ℝ)^(4*(P.χ : ℝ)) := by
+  rcases hP with ⟨hx, hh, hwidth, hsigma, hchi, hgap, hcase⟩
+  have hchiR : (0 : ℝ) < P.χ := by exact_mod_cast hchi.1
+  have hgapR : (P.hPlus : ℝ)-(P.hMinus : ℝ) < (P.χ : ℝ)/10 := by exact_mod_cast hgap
+  let d := 2*(P.χ : ℝ)-((P.hPlus : ℝ)-(P.hMinus : ℝ))
+  have hd : 0 < d := by dsimp [d]; linarith
+  obtain ⟨n0, hsmall⟩ := eventual_covariance_power_decay
+    (d := d) (A := 24) (eps := 1) hd (by norm_num)
+  refine ⟨max 1 n0, ?_⟩
+  intro n hn
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n0) hn
+  have hn0 : n0 ≤ n := le_trans (le_max_right 1 n0) hn
+  have hnR : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hn1)
+  have hs := hsmall n hn0
+  have hratio : (n : ℝ)^(-d) = P.bStar n / (n : ℝ)^(-(P.hPlus : ℝ)+2*(P.χ : ℝ)) := by
+    dsimp [Params9.bStar]
+    rw [← Real.rpow_sub hnR]
+    congr 1
+    dsimp [d]
+    ring
+  rw [hratio, ← mul_div_assoc,
+    div_lt_iff₀ (Real.rpow_pos_of_pos hnR (-(P.hPlus : ℝ)+2*(P.χ : ℝ)))] at hs
+  have hprod : P.aStar n * (n : ℝ)^(-(2*(P.χ : ℝ))) * (n : ℝ)^(4*(P.χ : ℝ)) =
+      (n : ℝ)^(-(P.hPlus : ℝ)+2*(P.χ : ℝ))/2 := by
+    dsimp [Params9.aStar]
+    calc
+      _ = ((n : ℝ)^(-(P.hPlus : ℝ)) * (n : ℝ)^(-(2*(P.χ : ℝ))) *
+        (n : ℝ)^(4*(P.χ : ℝ)))/2 := by ring
+      _ = _ := by
+        rw [← Real.rpow_add hnR, ← Real.rpow_add hnR]
+        congr 2
+        ring
+  rw [hprod]
+  nlinarith
+
+private theorem covariance_power_exp_decay {s u c : ℝ} (hu : 0 < u) (hc : 0 < c) :
+    Tendsto (fun n : ℕ => (n : ℝ) ^ s * Real.exp (-c * (n : ℝ) ^ u)) atTop (𝓝 0) := by
+  have hn : Tendsto (fun n : ℕ => (n : ℝ) ^ u) atTop atTop :=
+    (tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop
+  have hbase :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero (s / u) c hc).comp hn
+  apply Tendsto.congr' ?_ hbase
+  filter_upwards [eventually_gt_atTop (0 : ℕ)] with n hn0
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast hn0
+  have hpow : (n : ℝ) ^ s = ((n : ℝ) ^ u) ^ (s / u) := by
+    rw [← Real.rpow_mul hnR.le]
+    congr 1
+    field_simp [ne_of_gt hu]
+  change ((n : ℝ) ^ u) ^ (s / u) * Real.exp (-c * (n : ℝ) ^ u) =
+    (n : ℝ) ^ s * Real.exp (-c * (n : ℝ) ^ u)
+  rw [← hpow]
+
+theorem eventual_covariance_moment_margin9 (P : Params9) (hP : P.Valid) :
+    ∃ n0 : ℕ, ∀ n ≥ n0,
+      2*(n : ℝ)^(8*(P.χ : ℝ)) * (4*(P.bStar n)^2+2*Real.exp (-(n : ℝ)^P.u)) ≤ 1 := by
+  rcases hP with ⟨hx, hh, hwidth, hsigma, hchi, hgap, hcase⟩
+  have hchiR : (0 : ℝ) < P.χ := by exact_mod_cast hchi.1
+  have hxR : (0 : ℝ) < P.xS := by exact_mod_cast hx.1
+  have hu : 0 < P.u := by dsimp [Params9.u]; linarith
+  have hmin : min P.xS (min P.hMinus (1-P.hPlus)) ≤ P.hMinus :=
+    le_trans (min_le_right _ _) (min_le_left _ _)
+  have hchiminusQ : 100*P.χ < P.hMinus := by linarith [hchi.2]
+  have hchiminus : 100*(P.χ : ℝ) < P.hMinus := by exact_mod_cast hchiminusQ
+  let d := 2*(P.hMinus : ℝ)-8*(P.χ : ℝ)
+  have hd : 0 < d := by dsimp [d]; linarith
+  obtain ⟨nPower, hPower⟩ := eventual_covariance_power_decay
+    (d := d) (A := 8) (eps := 1/2) hd (by norm_num)
+  have hlim : Tendsto (fun n : ℕ => 4*(n : ℝ)^(8*(P.χ : ℝ))*Real.exp (-(n : ℝ)^P.u))
+      atTop (𝓝 0) := by
+    simpa [mul_assoc] using Tendsto.const_mul 4
+      (covariance_power_exp_decay (s := 8*(P.χ : ℝ)) (c := 1) hu (by norm_num))
+  obtain ⟨nExp, hExp⟩ := eventually_atTop.1
+    (hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1/2)))
+  refine ⟨max 1 (max nPower nExp), ?_⟩
+  intro n hn
+  have hn1 : 1 ≤ n := le_trans (le_max_left _ _) hn
+  have hnRest : max nPower nExp ≤ n := le_trans (le_max_right _ _) hn
+  have hnPower : nPower ≤ n := le_trans (le_max_left _ _) hnRest
+  have hnExp : nExp ≤ n := le_trans (le_max_right _ _) hnRest
+  have hnR : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hn1)
+  have hp := hPower n hnPower
+  have he := hExp n hnExp
+  have hsquare : (P.bStar n)^2 = (n : ℝ)^(-2*(P.hMinus : ℝ)) := by
+    dsimp [Params9.bStar]
+    rw [← Real.rpow_mul_natCast hnR.le (-(P.hMinus : ℝ)) 2]
+    congr 1
+    ring
+  have hid : 8*(n : ℝ)^(8*(P.χ : ℝ))*(P.bStar n)^2 = 8*(n : ℝ)^(-d) := by
+    rw [hsquare, mul_assoc, ← Real.rpow_add hnR]
+    congr 2
+    dsimp [d]
+    ring
+  rw [← hid] at hp
+  nlinarith
+
+theorem eventual_covariance_width_margins9 (P : Params9) (hP : P.Valid) :
+    ∃ n0 : ℕ, ∀ n ≥ n0,
+      Real.log 4 + (2*(n : ℝ)^(8*(P.χ : ℝ))+1)*(n : ℝ)^P.u/100 ≤
+        (n : ℝ)^(P.u+8*(P.χ : ℝ)) ∧
+      2*(n : ℝ)^(8*(P.χ : ℝ)) ≤ (n : ℝ)^P.u := by
+  rcases hP with ⟨hx, hh, hwidth, hsigma, hchi, hgap, hcase⟩
+  have hchiR : (0 : ℝ) < P.χ := by exact_mod_cast hchi.1
+  have hxR : (0 : ℝ) < P.xS := by exact_mod_cast hx.1
+  have hu : 0 < P.u := by dsimp [Params9.u]; linarith
+  have hmin : min P.xS (min P.hMinus (1-P.hPlus)) ≤ P.xS := min_le_left _ _
+  have hchixsQ : 100*P.χ < P.xS := by linarith [hchi.2]
+  have hchixs : 100*(P.χ : ℝ) < P.xS := by exact_mod_cast hchixsQ
+  let dSecond := P.u-8*(P.χ : ℝ)
+  let dFirst := P.u+8*(P.χ : ℝ)
+  have hdSecond : 0 < dSecond := by dsimp [dSecond, Params9.u]; linarith
+  have hdFirst : 0 < dFirst := by dsimp [dFirst]; positivity
+  obtain ⟨nSecond, hSecond⟩ := eventual_covariance_power_decay
+    (d := dSecond) (A := 2) (eps := 1) hdSecond (by norm_num)
+  obtain ⟨nFirst, hFirst⟩ := eventual_covariance_power_decay
+    (d := dFirst) (A := 2*Real.log 4) (eps := 1) hdFirst (by norm_num)
+  refine ⟨max 1 (max nSecond nFirst), ?_⟩
+  intro n hn
+  have hn1 : 1 ≤ n := le_trans (le_max_left _ _) hn
+  have hnRest : max nSecond nFirst ≤ n := le_trans (le_max_right _ _) hn
+  have hnSecond : nSecond ≤ n := le_trans (le_max_left _ _) hnRest
+  have hnFirst : nFirst ≤ n := le_trans (le_max_right _ _) hnRest
+  have hnR : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hn1)
+  have hnR1 : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hs := hSecond n hnSecond
+  have hf := hFirst n hnFirst
+  have hratio : (n : ℝ)^(-dSecond) =
+      (n : ℝ)^(8*(P.χ : ℝ))/(n : ℝ)^P.u := by
+    rw [← Real.rpow_sub hnR]
+    congr 1
+    dsimp [dSecond]
+    ring
+  rw [hratio, ← mul_div_assoc, div_lt_iff₀ (Real.rpow_pos_of_pos hnR P.u)] at hs
+  rw [Real.rpow_neg hnR.le, ← div_eq_mul_inv,
+    div_lt_iff₀ (Real.rpow_pos_of_pos hnR dFirst)] at hf
+  dsimp [dFirst] at hf
+  have hq : (1 : ℝ) ≤ (n : ℝ)^(8*(P.χ : ℝ)) :=
+    Real.one_le_rpow hnR1 (by positivity)
+  have hm : (2*(n : ℝ)^(8*(P.χ : ℝ))+1)*(n : ℝ)^P.u ≤
+      3*(n : ℝ)^(P.u+8*(P.χ : ℝ)) := by
+    calc
+      _ ≤ (3*(n : ℝ)^(8*(P.χ : ℝ)))*(n : ℝ)^P.u :=
+        mul_le_mul_of_nonneg_right (by linarith) (Real.rpow_nonneg hnR.le _)
+      _ = _ := by
+        rw [mul_assoc, ← Real.rpow_add hnR]
+        congr 2
+        ring
+  constructor
+  · have hnonneg := Real.rpow_nonneg hnR.le (P.u+8*(P.χ : ℝ))
+    nlinarith
+  · simpa using hs.le
+
+theorem prefix_supported9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (omega : Outcome9 I N)
+    (base : Law N) (ord : List I.ID) (k : ℕ) (Y : Finset (Fin N)) (hbase : base.SupportedIn Y) :
+    Law.SupportedIn (prefixLaw9 E G omega base ord k) Y := by
+  unfold prefixLaw9 restrictOr9
+  split_ifs with hm
+  · intro y hy
+    simp [Law.restrict, hbase y hy]
+  · exact hbase
+
+theorem hitSet_update_of_not_mem9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (omega : Outcome9 I N)
+    (ids : Finset I.ID) (c : I.ID) (x : Fin N) (hc : c ∉ ids) :
+    hitSet9 E G (updAnc9 omega c x) ids = hitSet9 E G omega ids := by
+  have hanc (a : I.ID) (ha : a ∈ ids) : anc9 (updAnc9 omega c x) a = anc9 omega a := by
+    have hne : a ≠ c := by intro h; subst a; exact hc ha
+    have hsum : (Sum.inl a : I.ID ⊕ OddSites9 n) ≠ Sum.inl c := by
+      intro h; exact hne (Sum.inl.inj h)
+    simp [anc9, updAnc9, Function.update, hsum] <;> rfl
+  ext y
+  simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro h a ha
+    have hh := h a ha
+    rw [hanc a ha] at hh
+    exact hh
+  · intro h a ha
+    rw [hanc a ha]
+    exact h a ha
+
+theorem prefix_update_of_not_mem9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (omega : Outcome9 I N)
+    (base : Law N) (ord : List I.ID) (k : ℕ) (c : I.ID) (x : Fin N)
+    (hc : c ∉ (ord.take k).toFinset) :
+    prefixLaw9 E G (updAnc9 omega c x) base ord k = prefixLaw9 E G omega base ord k := by
+  unfold prefixLaw9
+  rw [hitSet_update_of_not_mem9 E G omega _ c x hc]
+
+theorem pi_resample_coordinate_expect {iota : Type*} [Fintype iota] [DecidableEq iota]
+    {beta : iota → Type*} [∀ i, Fintype (beta i)] (P : ∀ i, FinProb (beta i))
+    (i : iota) (f : (∀ i, beta i) → ℝ) :
+    (FinProb.pi P).expect f = (FinProb.pi P).expect (fun omega =>
+      (P i).expect (fun a => f (Function.update omega i a))) := by
+  let S : Finset iota := {i}
+  let J := {j // j ∈ S}
+  letI : Unique J := ⟨⟨i, by simp [S]⟩, fun j => by
+    apply Subtype.ext
+    exact Finset.mem_singleton.mp (by simpa [S] using j.2)⟩
+  let j0 : J := default
+  let e := Equiv.piEquivPiSubtypeProd (fun j => j ∈ S) beta
+  let Ps := FinProb.pi (fun j : J => P j.1)
+  have hsplice (omega : ∀ i, beta i) (a : ∀ j : J, beta j.1) :
+      e.symm (a, (e omega).2) = Function.update omega i (a j0) := by
+    funext j
+    by_cases hj : j = i
+    · subst j
+      simp [e, S, j0, Equiv.piEquivPiSubtypeProd]
+      have hsub : (⟨i, by simp [S]⟩ : J) = j0 := Subsingleton.elim _ _
+      change a (⟨i, by simp [S]⟩ : J) = a j0
+      cases hsub
+      rfl
+    · simp [Function.update, hj, e, S, Equiv.piEquivPiSubtypeProd_symm_apply]
+  have hweight (a : ∀ j : J, beta j.1) : Ps.w a = (P i).w (a j0) := by
+    change (∏ j : J, (P j.1).w (a j)) = _
+    simp [J, j0, S]
+  let ea : (∀ j : J, beta j.1) ≃ beta i := Equiv.piUnique (fun j : J => beta j.1)
+  have heval (a : beta i) : (ea.symm a) j0 = a := by simp [ea, j0]
+  rw [pi_resample_subset_expect P S f]
+  change (FinProb.pi P).expect (fun omega => Ps.expect (fun a => f (e.symm (a,(e omega).2)))) = _
+  congr 1
+  funext omega
+  unfold FinProb.expect
+  rw [← Equiv.sum_comp ea.symm]
+  apply Finset.sum_congr rfl
+  intro a ha
+  change Ps.w (ea.symm a) * f (e.symm (ea.symm a, (e omega).2)) =
+    (P i).w a * f (Function.update omega i a)
+  rw [hweight, hsplice, heval]
+
+set_option maxHeartbeats 400000 in
+theorem covariance_tail_at_filter_budget9 (P : Params9) (hP : P.Valid) :
+    ∃ n0 : ℕ, ∀ n ≥ n0, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)},
+      P.DeepAt n N E X Y → DeepTools9 P n N E X Y → ScalesAt9 P n →
+      ∀ (G : Colour) (mu beta lam : Law N), mu.SupportedIn X → beta.SupportedIn X →
+      lam.SupportedIn Y →
+      mu.WidthLE ((n : ℝ)^(P.xS : ℝ)+(P.hPlus : ℝ)*Real.log n+1) →
+      beta.WidthLE ((n : ℝ)^(P.xS : ℝ)+(P.hPlus : ℝ)*Real.log n+1) →
+      lam.WidthLE (P.filterBudget n) →
+      mu.expect (fun x => beta.pr (fun a => P.aStar n*(n : ℝ)^(-(2*(P.χ : ℝ))) <
+        |testCov lam (hitInd9 E G) (hitInd9 E G) x a|)) ≤
+      4*Real.exp (-((n : ℝ)^P.u/100)) := by
+  obtain ⟨nGain, hGain⟩ := eventual_covariance_gain_margin9 P hP
+  obtain ⟨nMoment, hMoment⟩ := eventual_covariance_moment_margin9 P hP
+  obtain ⟨nWidth, hWidth⟩ := eventual_covariance_width_margins9 P hP
+  have hchiR : (0 : ℝ) < P.χ := by exact_mod_cast hP.2.2.2.2.1.1
+  refine ⟨max nGain (max nMoment nWidth), ?_⟩
+  intro n hn N E X Y hdeep htools hscales G mu beta lam hmuX hbetaX hlamY hmuW hbetaW hlamW
+  have hnGain : nGain ≤ n := le_trans (le_max_left _ _) hn
+  have hnRest : max nMoment nWidth ≤ n := le_trans (le_max_right _ _) hn
+  have hnMoment : nMoment ≤ n := le_trans (le_max_left _ _) hnRest
+  have hnWidth : nWidth ≤ n := le_trans (le_max_right _ _) hnRest
+  have hg := hGain n hnGain
+  have hm := hMoment n hnMoment
+  have hw := hWidth n hnWidth
+  rcases hscales with ⟨hn1, hmDim, hr, hload, hfilter, hfirst, hbsmall, hgain⟩
+  have hnR : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hn1)
+  have hnR1 : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  let q := (n : ℝ)^(8*(P.χ : ℝ))
+  let t : ℕ := ⌈q⌉₊
+  let d := (n : ℝ)^P.u/100
+  let delta := P.aStar n*(n : ℝ)^(-(2*(P.χ : ℝ)))
+  let w := (n : ℝ)^(P.xS : ℝ)+(P.hPlus : ℝ)*Real.log n+1
+  have hqPos : 0 < q := Real.rpow_pos_of_pos hnR _
+  have hqOne : 1 ≤ q := Real.one_le_rpow hnR1 (by positivity)
+  have htLo : q ≤ (t : ℝ) := Nat.le_ceil q
+  have htHi : (t : ℝ) ≤ 2*q := Nat.ceil_le_two_mul (by linarith)
+  have htR : (0 : ℝ) < t := lt_of_lt_of_le hqPos htLo
+  have ht : 0 < t := by exact_mod_cast htR
+  have htR1 : (1 : ℝ) ≤ t := by exact_mod_cast (Nat.succ_le_iff.mpr ht)
+  have hd : 0 ≤ d := by dsimp [d]; positivity
+  have hb : 0 ≤ P.bStar n := by dsimp [Params9.bStar]; positivity
+  have hdelta : 0 ≤ delta := by dsimp [delta, Params9.aStar]; positivity
+  have hroot : (Real.sqrt (t : ℝ))^2 = t := Real.sq_sqrt htR.le
+  have hrootPos : 0 < Real.sqrt (t : ℝ) := Real.sqrt_pos.2 htR
+  have hrootOne : 1 ≤ Real.sqrt (t : ℝ) := by nlinarith only [hroot, htR1, hrootPos]
+  have hrootSelf : Real.sqrt (t : ℝ) ≤ t := by
+    nlinarith only [hroot, mul_nonneg (sub_nonneg.mpr hrootOne) hrootPos.le]
+  have hlog : Real.log (1+Real.sqrt (t : ℝ)) ≤ (n : ℝ)^P.u := by
+    have hl := Real.log_le_sub_one_of_pos (by positivity : 0 < 1+Real.sqrt (t : ℝ))
+    have htw : (t : ℝ) ≤ (n : ℝ)^P.u := le_trans htHi hw.2
+    linarith only [hl, hrootSelf, htw]
+  have hsecond : P.filterBudget n+Real.log (1+Real.sqrt (t : ℝ)) ≤ P.Sd n := by
+    linarith only [hfilter, hlog]
+  have hcost : Real.log 4+((t : ℝ)+1)*d ≤ (n : ℝ)^(P.u+8*(P.χ : ℝ)) := by
+    have hmul := mul_le_mul_of_nonneg_right (add_le_add htHi (show (1 : ℝ) ≤ 1 from le_rfl)) hd
+    have hwidth := hw.1
+    dsimp [d, q] at hmul
+    dsimp [d]
+    nlinarith only [hmul, hwidth]
+  have hfirstTarget : w+Real.log 4+((t : ℝ)+1)*d ≤ (n : ℝ)^(P.xD : ℝ) := by
+    dsimp [w]
+    linarith only [hfirst, hcost]
+  have hfirstCond : w+d ≤ (n : ℝ)^(P.xD : ℝ) := by
+    have hlog4 : 0 ≤ Real.log (4 : ℝ) := Real.log_nonneg (by norm_num)
+    nlinarith only [hfirstTarget, hlog4, mul_nonneg (Nat.cast_nonneg t : (0 : ℝ) ≤ t) hd]
+  have hmoment : (t : ℝ)*((2*P.bStar n)^2+2*Real.exp (-(n : ℝ)^P.u)) ≤ 1 := by
+    have hmul := mul_le_mul_of_nonneg_right htHi
+      (by positivity : 0 ≤ (2*P.bStar n)^2+2*Real.exp (-(n : ℝ)^P.u))
+    dsimp [q] at hmul
+    nlinarith only [hmul, hm]
+  have hpowSq : ((n : ℝ)^(4*(P.χ : ℝ)))^2 = q := by
+    rw [← Real.rpow_mul_natCast hnR.le (4*(P.χ : ℝ)) 2]
+    congr 1
+    dsimp [q]
+    ring
+  have hpowPos : 0 ≤ (n : ℝ)^(4*(P.χ : ℝ)) := Real.rpow_nonneg hnR.le _
+  have hpowRoot : (n : ℝ)^(4*(P.χ : ℝ)) ≤ Real.sqrt (t : ℝ) := by
+    nlinarith only [hpowSq, htLo, hroot, hpowPos, hrootPos]
+  have hforced : 6*P.bStar n < delta*Real.sqrt (t : ℝ) := by
+    have hbase : 6*P.bStar n < delta*(n : ℝ)^(4*(P.χ : ℝ)) := by
+      dsimp [delta]
+      linarith only [hg, hb]
+    exact lt_of_lt_of_le hbase (mul_le_mul_of_nonneg_left hpowRoot hdelta)
+  have hgap : 6*P.bStar n*Real.sqrt (t : ℝ) < (t : ℝ)*delta := by
+    have hmul := mul_lt_mul_of_pos_right hforced hrootPos
+    calc
+      _ < delta*Real.sqrt (t : ℝ)*Real.sqrt (t : ℝ) := hmul
+      _ = _ := by rw [mul_assoc, ← pow_two, hroot]; ring
+  have hreverse (sigma : Law N) (hsigmaX : sigma.SupportedIn X)
+      (hsigmaW : sigma.WidthLE ((n : ℝ)^(P.xD : ℝ))) :
+      lam.pr (fun y => 2*P.bStar n < |colDeg E G sigma y-1/2|) ≤
+        2*Real.exp (-(n : ℝ)^P.u) := by
+    have htest := htools.2 G sigma hsigmaX hsigmaW lam hlamY (P.filterBudget n) hlamW
+      (by have hp := Real.rpow_nonneg hnR.le P.u; linarith)
+    calc
+      _ = ∑ y ∈ Finset.univ.filter (fun y => 2*P.bStar n < |colDeg E G sigma y-1/2|), lam.w y := by
+        simp [FinProb.pr, Finset.sum_filter]
+      _ ≤ 2*Real.exp (P.filterBudget n-P.Sd n) := htest
+      _ ≤ _ := by
+        apply mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr ?_) (by norm_num)
+        linarith
+  exact fixed_law_abs_tail hdeep G mu beta lam hmuX hbetaX hlamY hmuW hbetaW hlamW
+    t ht hb (by positivity) hfirstCond hfirstTarget hsecond hmoment hgap hreverse
+
+theorem anc_update_ne9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (omega : Outcome9 I N) (c a : I.ID) (x : Fin N) (hne : a ≠ c) :
+    anc9 (updAnc9 omega c x) a = anc9 omega a := by
+  have hsum : (Sum.inl a : I.ID ⊕ OddSites9 n) ≠ Sum.inl c := by
+    intro h; exact hne (Sum.inl.inj h)
+  simp [anc9, updAnc9, Function.update, hsum] <;> rfl
+
+def previousHits9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (omega : Outcome9 I N)
+    (base : Law N) (ord : List I.ID) (k : ℕ) : Prop :=
+  ∀ j a, j < k → ord[j]? = some a →
+    (49/100 : ℝ) ≤ rowDeg E G (anc9 omega a) (prefixLaw9 E G omega base ord j)
+
+theorem previousHits_update_of_not_mem9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (omega : Outcome9 I N)
+    (base : Law N) (ord : List I.ID) (k : ℕ) (c : I.ID) (x : Fin N)
+    (hord : ord.Nodup) (hc : c ∉ (ord.take k).toFinset) :
+    previousHits9 E G (updAnc9 omega c x) base ord k ↔ previousHits9 E G omega base ord k := by
+  have hcList : c ∉ ord.take k := by simpa using hc
+  have hstep (j : ℕ) (a : I.ID) (hj : j < k) (ha : ord[j]? = some a) :
+      rowDeg E G (anc9 (updAnc9 omega c x) a) (prefixLaw9 E G (updAnc9 omega c x) base ord j) =
+        rowDeg E G (anc9 omega a) (prefixLaw9 E G omega base ord j) := by
+    rcases List.getElem?_eq_some_iff.mp ha with ⟨hjLen, hval⟩
+    have hself : a ∈ ord := by
+      rw [← hval]
+      exact List.mem_iff_getElem.mpr ⟨j, hjLen, rfl⟩
+    have hidx : ord.idxOf a = j := by rw [← hval]; exact hord.idxOf_getElem j hjLen
+    have hmem : a ∈ (ord.take k).toFinset := by
+      apply List.mem_toFinset.mpr
+      apply (List.mem_take_iff_idxOf_lt hself).mpr
+      rw [hidx]
+      exact hj
+    have hne : a ≠ c := by intro h; exact hc (h ▸ hmem)
+    have htake : (ord.take k).take j = ord.take j := by
+      rw [List.take_take, Nat.min_eq_left hj.le]
+    have hcj : c ∉ (ord.take j).toFinset := by
+      intro hmem
+      have hmem' : c ∈ ord.take j := List.mem_toFinset.mp hmem
+      rw [← htake] at hmem'
+      exact hcList (List.mem_of_mem_take hmem')
+    rw [anc_update_ne9 omega c a x hne, prefix_update_of_not_mem9 E G omega base ord j c x hcj]
+  constructor
+  · intro h j a hj ha
+    have hh := h j a hj ha
+    rw [hstep j a hj ha] at hh
+    exact hh
+  · intro h j a hj ha
+    rw [hstep j a hj ha]
+    exact h j a hj ha
+
+theorem pi_two_coordinate_pr_le {iota : Type*} [Fintype iota] [DecidableEq iota]
+    {beta : iota → Type*} [∀ i, Fintype (beta i)] (P : ∀ i, FinProb (beta i))
+    (i j : iota) (A : (∀ i, beta i) → Prop) (B : ℝ)
+    (hbound : ∀ omega, (P i).expect (fun a => (P j).expect (fun b =>
+      if A (Function.update (Function.update omega i a) j b) then (1 : ℝ) else 0)) ≤ B) :
+    (FinProb.pi P).pr A ≤ B := by
+  let f := fun omega => if A omega then (1 : ℝ) else 0
+  have hprob : (FinProb.pi P).pr A = (FinProb.pi P).expect f := by
+    simp [f, FinProb.pr, FinProb.expect, mul_ite]
+  calc
+    _ = (FinProb.pi P).expect f := hprob
+    _ = (FinProb.pi P).expect (fun omega => (P j).expect (fun b => f (Function.update omega j b))) :=
+      pi_resample_coordinate_expect P j f
+    _ = (FinProb.pi P).expect (fun omega => (P i).expect (fun a => (P j).expect
+        (fun b => f (Function.update (Function.update omega i a) j b)))) :=
+      pi_resample_coordinate_expect P i _
+    _ ≤ (FinProb.pi P).expect (fun _ => B) := expect_mono _ hbound
+    _ = B := expect_const _ _
+
+set_option maxHeartbeats 400000 in
+theorem raw_good_prefix_covariance_bound9 (P : Params9) (hP : P.Valid) :
+    ∃ n0 : ℕ, ∀ n ≥ n0, ∀ {N : ℕ} {E : Fin N → Fin N → Prop}
+      {X Y : Finset (Fin N)} {kappa : ℝ} {G : Colour} {M : TagMix N}
+      (S : Setup9 P n N M) (I : IDMap9 P n), CoreInput9 P kappa E X Y G M S I →
+      ∀ (v : EvenSites9 n) (b : OddSites9 n) (k : ℕ) (a : I.ID),
+      (coreOrder9 I v b)[k]? = some a →
+      (rawLaw9 S I).pr (fun omega =>
+        previousHits9 E G omega (siteSecond9 S b.1) (coreOrder9 I v b) k ∧
+        P.aStar n*(n : ℝ)^(-(2*(P.χ : ℝ))) < |coreCov9 S E G omega v b k|) ≤
+        4*Real.exp (-((n : ℝ)^P.u/100)) := by
+  obtain ⟨n0, hbudget⟩ := covariance_tail_at_filter_budget9 P hP
+  refine ⟨n0, ?_⟩
+  intro n hn N E X Y kappa G M S I hin v b k a hget
+  rcases hin with ⟨hN, hprep, hdeep, htags, hmasks, htools, hexps, hscales⟩
+  let ord := coreOrder9 I v b
+  let base := siteSecond9 S b.1
+  let target := I.center v.1
+  let mu : Law N := M.μ (S.tag target.slice)
+  let beta : Law N := M.μ (S.tag a.slice)
+  let lam := fun omega : Outcome9 I N => prefixLaw9 E G omega base ord k
+  let phi := fun omega : Outcome9 I N => previousHits9 E G omega base ord k
+  let delta := P.aStar n*(n : ℝ)^(-(2*(P.χ : ℝ)))
+  have hord : ord.Nodup := Finset.nodup_toList _
+  change ord[k]? = some a at hget
+  rcases List.getElem?_eq_some_iff.mp hget with ⟨hkLen, hval⟩
+  have haSelf : a ∈ ord := List.mem_iff_getElem.mpr ⟨k, hkLen, hval⟩
+  have haIdx : ord.idxOf a = k := by rw [← hval]; exact hord.idxOf_getElem k hkLen
+  have haAvoid : a ∉ (ord.take k).toFinset := by
+    intro hmem
+    have hlt := (List.mem_take_iff_idxOf_lt haSelf).mp (List.mem_toFinset.mp hmem)
+    rw [haIdx] at hlt
+    omega
+  have htAbsent : target ∉ ord := by simp [ord, coreOrder9, coreIDs9, target]
+  have htAvoid : target ∉ (ord.take k).toFinset := by
+    intro hmem
+    exact htAbsent (List.mem_of_mem_take (List.mem_toFinset.mp hmem))
+  have haNe : a ≠ target := by intro h; exact htAbsent (h ▸ haSelf)
+  obtain ⟨hmuX, hmuY, hmuW, hmuSecondW, hmuDegree⟩ :=
+    hprep.2 (S.tag target.slice) (htags target.slice)
+  obtain ⟨hbetaX, hbetaY, hbetaW, hbetaSecondW, hbetaDegree⟩ :=
+    hprep.2 (S.tag a.slice) (htags a.slice)
+  obtain ⟨hbaseX, hbaseY, hbaseFirstW, hbaseW, hbaseDegree⟩ :=
+    hprep.2 (S.tag (specialWord9 (P.m n) b.1)) (htags _)
+  have hbaseY' : base.SupportedIn Y := hbaseY
+  have hbaseW' : base.WidthLE (P.Ss n) := hbaseW
+  have hsubset : coreIDs9 I v b ⊆ I.seen b.1 := by
+    intro z hz
+    simp only [coreIDs9, Finset.mem_erase, Finset.mem_inter] at hz
+    exact hz.2.1
+  have hlen : (ord.length : ℝ) ≤ (I.seen b.1).card := by
+    dsimp [ord, coreOrder9]
+    rw [Finset.length_toList]
+    exact_mod_cast Finset.card_le_card hsubset
+  have hkBudget : (k : ℝ) ≤ P.idBudget n+(P.m n : ℝ) := by
+    have hkCast : (k : ℝ) ≤ ord.length := by exact_mod_cast hkLen.le
+    exact le_trans hkCast (le_trans hlen (I.odd_ids b.1 b.2))
+  have hlamY (omega : Outcome9 I N) : (lam omega).SupportedIn Y :=
+    prefix_supported9 E G omega base ord k Y hbaseY'
+  have hlamW (omega : Outcome9 I N) (hphi : phi omega) : (lam omega).WidthLE (P.filterBudget n) := by
+    have hw := prefix_width_of_previous_hits9 S I E G omega base ord k hkLen.le (P.Ss n) hbaseW' hphi
+    apply Law.WidthLE.mono hw
+    have hl : 0 ≤ Real.log (100/49 : ℝ) := Real.log_nonneg (by norm_num)
+    have hmul := mul_le_mul_of_nonneg_right hkBudget hl
+    have hnu : 0 ≤ (n : ℝ)^P.u := by positivity
+    have hl2 : 0 ≤ Real.log (2 : ℝ) := Real.log_nonneg (by norm_num)
+    dsimp [Params9.filterBudget]
+    nlinarith only [hmul, hnu, hl2]
+  change (FinProb.pi (inputLaw9 S I)).pr (fun omega => phi omega ∧ delta < |coreCov9 S E G omega v b k|) ≤ _
+  apply pi_two_coordinate_pr_le (inputLaw9 S I) (Sum.inl target) (Sum.inl a)
+  intro omega
+  let upd := fun x y => updAnc9 (updAnc9 omega target x) a y
+  have hphiUpd (x y : Fin N) : phi (upd x y) ↔ phi omega :=
+    (previousHits_update_of_not_mem9 E G (updAnc9 omega target x) base ord k a y hord haAvoid).trans
+      (previousHits_update_of_not_mem9 E G omega base ord k target x hord htAvoid)
+  have hlamUpd (x y : Fin N) : lam (upd x y) = lam omega := by
+    dsimp [lam, upd]
+    rw [prefix_update_of_not_mem9 E G (updAnc9 omega target x) base ord k a y haAvoid,
+      prefix_update_of_not_mem9 E G omega base ord k target x htAvoid]
+  have hancA (x y : Fin N) : anc9 (upd x y) a = y := by
+    simp [upd, anc9, updAnc9, Function.update] <;> rfl
+  have hancT (x y : Fin N) : anc9 (upd x y) target = x := by
+    dsimp [upd]
+    rw [anc_update_ne9 (updAnc9 omega target x) a target y haNe.symm]
+    simp [anc9, updAnc9, Function.update] <;> rfl
+  have hcovUpd (x y : Fin N) : coreCov9 S E G (upd x y) v b k =
+      testCov (lam omega) (hitInd9 E G) (hitInd9 E G) x y := by
+    unfold coreCov9
+    rw [hget]
+    change (lam (upd x y)).expect (fun z => hitInd9 E G (anc9 (upd x y) a) z *
+      hitInd9 E G (anc9 (upd x y) target) z) -
+      (lam (upd x y)).expect (hitInd9 E G (anc9 (upd x y) a)) *
+      (lam (upd x y)).expect (hitInd9 E G (anc9 (upd x y) target)) = _
+    rw [hlamUpd, hancA, hancT]
+    rfl
+  change mu.expect (fun x => beta.expect (fun y =>
+    @ite ℝ (phi (upd x y) ∧ delta < |coreCov9 S E G (upd x y) v b k|)
+      (Classical.propDecidable _) 1 0)) ≤ _
+  by_cases hphi : phi omega
+  · have hind (x y : Fin N) :
+        (@ite ℝ (phi (upd x y) ∧ delta < |coreCov9 S E G (upd x y) v b k|)
+          (Classical.propDecidable _) 1 0) =
+        (if delta < |testCov (lam omega) (hitInd9 E G) (hitInd9 E G) x y| then (1 : ℝ) else 0) := by
+      have hp := (hphiUpd x y).mpr hphi
+      rw [hcovUpd]
+      simp [hp]
+    simp_rw [hind]
+    have hpr (x : Fin N) : beta.expect (fun y =>
+        if delta < |testCov (lam omega) (hitInd9 E G) (hitInd9 E G) x y| then (1 : ℝ) else 0) =
+        beta.pr (fun y => delta < |testCov (lam omega) (hitInd9 E G) (hitInd9 E G) x y|) := by
+      simp [FinProb.expect, FinProb.pr, mul_ite]
+    simp_rw [hpr]
+    exact hbudget n hn hdeep htools hscales G mu beta (lam omega) hmuX hbetaX (hlamY omega)
+      hmuW hbetaW (hlamW omega hphi)
+  · have hfalse (x y : Fin N) : ¬ phi (upd x y) := by
+      intro hp
+      exact hphi ((hphiUpd x y).mp hp)
+    simp [hfalse, expect_const]
+    positivity
+
+private theorem pr_imp_le {Omega : Type*} [Fintype Omega] (Q : FinProb Omega)
+    (A B : Omega → Prop) (h : ∀ omega, A omega → B omega) : Q.pr A ≤ Q.pr B := by
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro omega homega
+  by_cases ha : A omega
+  · simp [ha, h omega ha]
+  · simp only [ha, if_false]
+    split_ifs <;> simp [Q.nonneg]
+
+private theorem regular_order_lower9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (omega : Outcome9 I N)
+    (base : Law N) (ord : List I.ID) (hregular : orderRegular9 E G omega base ord)
+    (hsmall : P.bStar n ≤ 1/200) :
+    ∀ k a, ord[k]? = some a → (49/100 : ℝ) ≤ rowDeg E G (anc9 omega a) (prefixLaw9 E G omega base ord k) := by
+  intro k
+  induction k using Nat.strong_induction_on with
+  | h k ih =>
+    intro a hget
+    have hstep := hregular k a hget (by
+      intro j a' hj hget'
+      exact ih j hj a' hget')
+    have hlow := (abs_le.mp hstep).1
+    linarith only [hlow, hsmall]
+
+set_option maxHeartbeats 400000 in
+theorem covariance_certificate9 (P : Params9) (hP : P.Valid) (c0 : ℝ) (hc0 : 0 < c0) :
+    ∃ c > (0 : ℝ), ∃ n0 : ℕ, ∀ n ≥ n0, ∀ {N : ℕ} {E : Fin N → Fin N → Prop}
+      {X Y : Finset (Fin N)} {kappa : ℝ} {G : Colour} {M : TagMix N}
+      (S : Setup9 P n N M) (I : IDMap9 P n),
+      CoreInput9 P kappa E X Y G M S I → RegularityCert9 S I E G c0 → CovCert9 S I E G c := by
+  have hxs : (0 : ℝ) < P.xS := by exact_mod_cast hP.1.1
+  have hu : 0 < P.u := by dsimp [Params9.u]; linarith
+  let C := min c0 (1/100 : ℝ)
+  have hC : 0 < C := lt_min hc0 (by norm_num)
+  let c := C/2
+  have hc : 0 < c := by dsimp [c]; positivity
+  have hlim : Tendsto (fun n : ℕ => Real.exp (-(c*(n : ℝ)^P.u))) atTop (𝓝 0) := by
+    simpa [neg_mul] using (covariance_power_exp_decay (s := 0) (c := c) hu hc)
+  obtain ⟨nTail, hTail⟩ := eventually_atTop.1
+    (hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1/5)))
+  obtain ⟨nRaw, hRaw⟩ := raw_good_prefix_covariance_bound9 P hP
+  refine ⟨c, hc, max nRaw nTail, ?_⟩
+  intro n hn N E X Y kappa G M S I hin hreg v b hadj k
+  have hnRaw : nRaw ≤ n := le_trans (le_max_left _ _) hn
+  have hnTail : nTail ≤ n := le_trans (le_max_right _ _) hn
+  let delta := P.aStar n*(n : ℝ)^(-(2*(P.χ : ℝ)))
+  let bad := fun omega : Outcome9 I N => delta < |coreCov9 S E G omega v b k|
+  change (rawLaw9 S I).pr bad ≤ P.tail c n
+  have hdelta : 0 ≤ delta := by dsimp [delta, Params9.aStar]; positivity
+  by_cases hnone : (coreOrder9 I v b)[k]? = none
+  · have hfalse (omega : Outcome9 I N) : ¬ bad omega := by
+      dsimp [bad]
+      simp only [coreCov9, hnone, abs_zero]
+      exact not_lt_of_ge hdelta
+    have hzero : (rawLaw9 S I).pr bad = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro omega homega
+      simp [hfalse omega]
+    rw [hzero]
+    exact Real.exp_nonneg _
+  · obtain ⟨a, hget⟩ := Option.ne_none_iff_exists'.mp hnone
+    let phi := fun omega : Outcome9 I N =>
+      previousHits9 E G omega (siteSecond9 S b.1) (coreOrder9 I v b) k
+    have hscales : ScalesAt9 P n := by
+      rcases hin with ⟨hN, hp, hd, ht, hm, htools, hexps, hs⟩
+      exact hs
+    rcases hscales with ⟨hn1, hmDim, hr, hw, hfilter, hfirst, hbsmall, hgain⟩
+    have hregularPhi (omega : Outcome9 I N) (hstar : starRegular9 S E G omega v) : phi omega := by
+      intro j a' hj hget'
+      exact regular_order_lower9 E G omega (siteSecond9 S b.1) (coreOrder9 I v b)
+        (hstar b hadj).2.2 hbsmall j a' hget'
+    have hgood := hRaw n hnRaw S I hin v b k a hget
+    have hsplit : (rawLaw9 S I).pr bad ≤
+        P.tail c0 n+4*Real.exp (-((n : ℝ)^P.u/100)) := by
+      have himp : ∀ omega, bad omega → ¬ starRegular9 S E G omega v ∨ (phi omega ∧ bad omega) := by
+        intro omega hbad
+        by_cases hs : starRegular9 S E G omega v
+        · exact Or.inr ⟨hregularPhi omega hs, hbad⟩
+        · exact Or.inl hs
+      calc
+        _ ≤ (rawLaw9 S I).pr (fun omega => ¬ starRegular9 S E G omega v ∨ (phi omega ∧ bad omega)) :=
+          pr_imp_le _ _ _ himp
+        _ ≤ (rawLaw9 S I).pr (fun omega => ¬ starRegular9 S E G omega v)+
+            (rawLaw9 S I).pr (fun omega => phi omega ∧ bad omega) := FinProb.pr_union _ _ _
+        _ ≤ _ := add_le_add (hreg v) hgood
+    have hnu : 0 ≤ (n : ℝ)^P.u := by positivity
+    have hC0 : C ≤ c0 := min_le_left _ _
+    have hC1 : C ≤ (1/100 : ℝ) := min_le_right _ _
+    have hbase : P.tail c0 n+4*Real.exp (-((n : ℝ)^P.u/100)) ≤
+        5*Real.exp (-(C*(n : ℝ)^P.u)) := by
+      have h0 : P.tail c0 n ≤ Real.exp (-(C*(n : ℝ)^P.u)) := by
+        apply Real.exp_le_exp.mpr
+        nlinarith only [mul_le_mul_of_nonneg_right hC0 hnu]
+      have h1 : Real.exp (-((n : ℝ)^P.u/100)) ≤ Real.exp (-(C*(n : ℝ)^P.u)) := by
+        apply Real.exp_le_exp.mpr
+        nlinarith only [mul_le_mul_of_nonneg_right hC1 hnu]
+      nlinarith only [h0, h1]
+    let e := Real.exp (-(c*(n : ℝ)^P.u))
+    have he : 0 < e := Real.exp_pos _
+    have hes : e < 1/5 := hTail n hnTail
+    have hexp : Real.exp (-(C*(n : ℝ)^P.u)) = e*e := by
+      dsimp [e, c]
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    have hfinal : 5*Real.exp (-(C*(n : ℝ)^P.u)) ≤ P.tail c n := by
+      rw [hexp]
+      change 5*(e*e) ≤ e
+      nlinarith only [hes, he, mul_nonneg (show 0 ≤ 1-5*e by linarith) he.le]
+    exact le_trans hsplit (le_trans hbase hfinal)
 
 end HypercubeRamsey.Lane_sol_s09_cov

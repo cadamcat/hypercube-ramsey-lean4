@@ -3095,6 +3095,7 @@ theorem fresh_cell_spec_exists {κ : CConsts} (hκ : κ.Admissible) :
       | some z => exact R.prior_subprob C z.1 z.2.2 b
   }
   exact ⟨F, Cal, ⟨Link⟩, Spec⟩
+set_option maxHeartbeats 2000000 in
 /-- S3 prior pipeline producer (T16:513–529). It uses the same fresh state,
 calibrated stages and raw readout as the singleton construction; the source
 identity and the equality of base expectations are outputs. -/
@@ -3487,7 +3488,176 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
       qtilde := Cal.qtilde C
       qtilde_eq := by
         intro pool W g D ht hW hbase
-        sorry
+        have hCalHist : (Cal.history C).w W ≠ 0 := by
+          have hCondHist :
+              (FinLaw.cond localBase localPassCal hSlicePosCal).w W ≠ 0 := by
+            simp only [FinLaw.cond]
+            rw [if_pos hW]
+            exact div_ne_zero hbase (ne_of_gt hSlicePosCal)
+          have hEq := congrArg (fun law => law.w W) hCalHistory
+          rw [← hEq]
+          exact hCondHist
+        let Wraw := hLink.histories C W
+        let graw := hLink.groups C g
+        let raw := R.qraw C Wraw graw
+        let preSet := R.pretrim C Wraw graw
+        let permSet := Cal.permitted C g
+        let poolSet := Finset.univ.image pool
+        let bothSet := (preSet ∩ permSet) ∩ poolSet
+        let zPre : ℝ := ∑ b ∈ preSet, raw.w b
+        have hIncoming : Cal.qin C W g = R.qin C Wraw graw :=
+          hLink.incoming_eq C W g
+        have hRHist : (R.history C).w Wraw ≠ 0 := by
+          have hmap : (FinLaw.map (R.history C) (hLink.histories C).symm).w W ≠ 0 := by
+            rw [← hLink.history_eq C]
+            exact hCalHist
+          have hSymm : (hLink.histories C).symm Wraw = W := by
+            simp [Wraw]
+          rw [← hSymm, Lane_q_s16_prod2.finLaw_map_equiv_weight] at hmap
+          exact hmap
+        have hGoodCoord (s : R.Slice C) :
+            (goodFactors s).w (Wraw s) ≠ 0 := by
+          intro hzero
+          apply hRHist
+          change (∏ s : R.Slice C, (goodFactors s).w (Wraw s)) = 0
+          exact Finset.prod_eq_zero (Finset.mem_univ s) hzero
+        have hSliceInput : ∀ s : R.Slice C,
+            Wraw s ∈ R.slicePass C s ∧ (R.sliceLaw C s).w (Wraw s) ≠ 0 := by
+          intro s
+          have hpass : Wraw s ∈ R.slicePass C s := by
+            by_contra hnot
+            apply hGoodCoord s
+            simp [goodFactors, FinLaw.cond, hnot]
+          have hmass : (R.sliceLaw C s).w (Wraw s) ≠ 0 := by
+            intro hz
+            apply hGoodCoord s
+            simp [goodFactors, FinLaw.cond, hpass, hz]
+          exact ⟨hpass, hmass⟩
+        have hQin (b : Bin PT.tiling (H.geom.cellPatch C)) :
+            (R.qin C Wraw graw).w b =
+              (if b ∈ preSet then raw.w b else 0) / zPre := by
+          have h := R.qin_eq C Wraw graw b hSliceInput
+          simpa [preSet, raw, zPre] using h
+        have hPreNe : zPre ≠ 0 := by
+          intro hz
+          have hZero (b : Bin PT.tiling (H.geom.cellPatch C)) :
+              (R.qin C Wraw graw).w b = 0 := by
+            rw [hQin b]
+            by_cases hb : b ∈ preSet <;> simp [hb, hz]
+          have hsum : ∑ b, (R.qin C Wraw graw).w b = 0 := by
+            apply Finset.sum_eq_zero
+            intro b hb
+            exact hZero b
+          have hone := (R.qin C Wraw graw).sum_one
+          rw [hsum] at hone
+          norm_num at hone
+        have hPreNonneg : 0 ≤ zPre := by
+          apply Finset.sum_nonneg
+          intro b hb
+          exact raw.nonneg b
+        have hPrePos : 0 < zPre := lt_of_le_of_ne hPreNonneg (Ne.symm hPreNe)
+        let zPerm : ℝ := ∑ b ∈ permSet, (Cal.qin C W g).w b
+        let zPool : ℝ := ∑ b ∈ permSet ∩ poolSet, (Cal.qin C W g).w b
+        let zBoth : ℝ := ∑ b ∈ bothSet, raw.w b
+        have hPermPos : 0 < zPerm := by
+          have hMass := Cal.permission_mass C W g hCalHist
+          have hDen := Cal.perm_range.2
+          have hEq : zPerm = ∑ b ∈ Cal.permitted C g, (Cal.qin C W g).w b := by
+            rfl
+          rw [hEq]
+          linarith
+        have hBinNonempty : Nonempty (Bin PT.tiling (H.geom.cellPatch C)) := by
+          have hPr : 0 < (Cal.qin C W g).pr (fun _ => True) := by
+            rw [Lane_q_s16_prod2.finLaw_pr_const]
+            norm_num
+          obtain ⟨b, _, _⟩ := Lane_q_s16_prod2.finLaw_pr_pos_has_nonzero_atom
+            (Cal.qin C W g) (fun _ => True) hPr
+          exact ⟨b⟩
+        letI : Nonempty (Bin PT.tiling (H.geom.cellPatch C)) := hBinNonempty
+        have hBinCard : 0 < Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) :=
+          Fintype.card_pos
+        have hTheta : 0 < (H.geom.nslot C : ℝ) /
+            (Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) : ℝ) := by
+          exact div_pos (by exact_mod_cast Cal.slot_pos C) (by exact_mod_cast hBinCard)
+        have hnR : 1 < (T.S.n k : ℝ) := by
+          exact_mod_cast (lt_of_lt_of_le (by norm_num : 1 < 2) Q.n_large)
+        have hnPow : (T.S.n k : ℝ) ^ (-4 : ℝ) < 1 := by
+          exact Real.rpow_lt_one_of_one_lt_of_neg hnR (by norm_num)
+        let normFactor : ℝ :=
+          ((H.geom.nslot C : ℝ) / Fintype.card (Bin PT.tiling (H.geom.cellPatch C))) *
+            (1 - (T.S.n k : ℝ) ^ (-4 : ℝ))
+        have hNormFactor : 0 < normFactor :=
+          mul_pos hTheta (sub_pos.mpr hnPow)
+        have hPoolPos : 0 < zPool := by
+          have hPoolReq := Cal.pool_normalizer C pool W g ht hCalHist
+          have hLower : normFactor ≤ zPool / zPerm := by
+            simpa [normFactor, zPool, zPerm, poolSet, permSet] using hPoolReq
+          have hRatio : 0 < zPool / zPerm := lt_of_lt_of_le hNormFactor hLower
+          have hzPoolNe : zPool ≠ 0 := by
+            intro hz
+            simp [hz, zPerm] at hRatio
+          have hzPoolNonneg : 0 ≤ zPool := by
+            dsimp [zPool]
+            apply Finset.sum_nonneg
+            intro b hb
+            exact (Cal.qin C W g).nonneg b
+          exact lt_of_le_of_ne hzPoolNonneg (Ne.symm hzPoolNe)
+        have hZBothEq : zPool = zBoth / zPre := by
+          calc
+            zPool = ∑ b ∈ permSet ∩ poolSet,
+                (if b ∈ preSet then raw.w b else 0) / zPre := by
+              dsimp [zPool]
+              apply Finset.sum_congr rfl
+              intro b hb
+              rw [hIncoming, hQin b]
+            _ = (∑ b ∈ permSet ∩ poolSet,
+                if b ∈ preSet then raw.w b else 0) / zPre := by
+              rw [Finset.sum_div]
+            _ = zBoth / zPre := by
+              congr 1
+              have hSet : (permSet ∩ poolSet).filter (fun b => b ∈ preSet) = bothSet := by
+                ext b
+                simp [bothSet, and_assoc, and_left_comm, and_comm]
+              rw [← Finset.sum_filter, hSet]
+        have hZBothPos : 0 < zBoth := by
+          have hmul : zPool * zPre = zBoth := by
+            rw [hZBothEq]
+            field_simp [hPreNe]
+          rw [← hmul]
+          exact mul_pos hPoolPos hPrePos
+        have hTargetDen :
+            (∑ b ∈ (R.pretrim C Wraw graw ∩ Cal.permitted C g) ∩
+              Finset.univ.image pool,
+              (R.qraw C Wraw graw).w b) = zBoth := by
+          change (∑ b ∈ bothSet, raw.w b) = zBoth
+          rfl
+        have hCalQtilde := Cal.qtilde_eq C pool W g D ht hCalHist
+        rw [hCalQtilde, hLink.incoming_eq C W g]
+        rw [hQin]
+        have hcalDen :
+            (∑ b ∈ permSet ∩ poolSet, (R.qin C Wraw graw).w b) = zPool := by
+          rw [← hIncoming]
+        rw [hcalDen, hZBothEq, hTargetDen]
+        by_cases hpre : D ∈ preSet
+        · by_cases hperm : D ∈ permSet
+          · have hpermCal : D ∈ Cal.permitted C g := by
+              simpa [permSet] using hperm
+            by_cases hpool : D ∈ poolSet
+            · have hpreRaw : D ∈ R.pretrim C Wraw graw := by
+                simpa [preSet] using hpre
+              have hpoolImage : D ∈ Finset.univ.image pool := by
+                simpa [poolSet] using hpool
+              simp [preSet, raw, Wraw, graw, hpre, hpreRaw, hpermCal, hpoolImage]
+              field_simp [ne_of_gt hPrePos, ne_of_gt hZBothPos]
+            · have hpoolNot : D ∉ Finset.univ.image pool := by
+                simpa [poolSet] using hpool
+              simp [preSet, raw, Wraw, graw, hpre, hpermCal, hpoolNot]
+          · have hpermNot : D ∉ Cal.permitted C g := by
+              simpa [permSet] using hperm
+            simp [preSet, raw, Wraw, graw, hpre, hpermNot]
+        · have hpreNot : D ∉ R.pretrim C Wraw graw := by
+            simpa [preSet] using hpre
+          simp [preSet, raw, Wraw, graw, hpre, hpreNot]
       binSampler := fun pool W => Cal.binSampler C pool W.1
       labelSampler := fun pool W a => Cal.labelSampler C pool W.1 a
       groupRate := Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.05 : ℝ)
@@ -3873,9 +4043,12 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
           nlinarith
         have hInvTheta : 1 ≤ κ.θstar⁻¹ := (one_le_inv₀ hTheta).2 hThetaBound
         have hKcell100 : 100 ≤ κ.Kcell := by
-          have hBig := hκ.Kcell_big
-          rw [div_eq_mul_inv] at hBig
-          have hle : 100 ≤ 100 * κ.θstar⁻¹ := by nlinarith
+          have hBig : 100 * κ.θstar⁻¹ ≤ κ.Kcell := by
+            simpa [div_eq_mul_inv] using hκ.Kcell_big
+          have hle : 100 ≤ 100 * κ.θstar⁻¹ := by
+            calc
+              100 = 100 * 1 := by ring
+              _ ≤ 100 * κ.θstar⁻¹ := mul_le_mul_of_nonneg_left hInvTheta (by norm_num)
           exact le_trans hle hBig
         have hFinal : (1 - Cal.δgate)⁻¹ ≤ 10 * κ.Kcell := by
           linarith [hGateSmall, hKcell100]

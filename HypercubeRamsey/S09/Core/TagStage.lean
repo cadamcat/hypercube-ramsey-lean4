@@ -55,7 +55,7 @@ theorem p92_tag_lll (P : Params9) (hP : P.Valid) (c c' : ℝ) (hc : 0 < c) (hc' 
           (fun tag => tagBad9 (P := P) E G c tag z) ≤ P.tail c' n) →
       TagLLL9 P n M E G c (c' / 2) := by
   classical
-  rcases scales_eventually9 P hP with ⟨_, nScale, hScales⟩
+  obtain ⟨nBasic, hBasic⟩ := Lane_q_s09_tag.basic_m_le_n_eventually_q_s09_tag P hP
   have hsmallEventually : ∀ᶠ n : ℕ in Filter.atTop,
       (n : ℝ) ^ 2 * P.tail (c' / 2) n < 1 / 8 := by
     have hlim := Lane_q_s09_tag.expTail_square_tendsto P hP (c' / 2) (by positivity)
@@ -63,13 +63,13 @@ theorem p92_tag_lll (P : Params9) (hP : P.Valid) (c c' : ℝ) (hc : 0 < c) (hc' 
     filter_upwards [h] with n hn
     simpa only [Set.mem_Iio] using hn
   obtain ⟨nExp, hExp⟩ := Filter.eventually_atTop.mp hsmallEventually
-  refine ⟨max nScale nExp, ?_⟩
+  refine ⟨max nBasic nExp, ?_⟩
   intro n hn N M E G hprob
-  have hnScale : nScale ≤ n := le_trans (le_max_left _ _) hn
+  have hnBasic : nBasic ≤ n := le_trans (le_max_left _ _) hn
   have hnExp : nExp ≤ n := le_trans (le_max_right _ _) hn
-  have hscale : ScalesAt9 P n := hScales n hnScale
-  have hn1 : 1 ≤ n := hscale.1
-  have hm : P.m n ≤ n := hscale.2.1
+  have hbasic := hBasic n hnBasic
+  have hn1 : 1 ≤ n := hbasic.1
+  have hm : P.m n ≤ n := hbasic.2
   let x : ℝ := P.tail (c' / 2) n
   let Δ : ℕ := (P.m n + 1) ^ 2
   have hsmall : (n : ℝ) ^ 2 * x < 1 / 8 := by

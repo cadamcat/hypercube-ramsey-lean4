@@ -505,6 +505,57 @@ theorem inv_rpow_tendsto (a : ℝ) (ha : 0 < a) :
     simp [one_div, Real.rpow_neg hnpos.le]
   exact h.congr' heq.symm
 
+theorem basic_m_le_n_eventually_q_s09_tag (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, 1 ≤ n ∧ P.m n ≤ n := by
+  classical
+  refine ⟨1, ?_⟩
+  intro n hn
+  refine ⟨hn, ?_⟩
+  cases hcase : P.case with
+  | sub yS yD yM =>
+      have hsub : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧
+          1 - P.σ < yD ∧ yD < 1 ∧ P.χ < P.σ / 10 := by
+        simpa [hcase] using hP.2.2.2.2.2.2
+      have hσ : (0 : ℝ) < (P.σ : ℝ) := by exact_mod_cast hP.2.2.2.1.1
+      have hyM : (yM : ℝ) ≤ 1 := by
+        have hlt : yM < 1 - P.σ := hsub.2.2.1
+        have hcast : (yM : ℝ) < 1 - (P.σ : ℝ) := by exact_mod_cast hlt
+        linarith
+      have hnR : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+      have hpow : (n : ℝ) ^ (yM : ℝ) ≤ (n : ℝ) := by
+        calc
+          (n : ℝ) ^ (yM : ℝ) ≤ (n : ℝ) ^ (1 : ℝ) :=
+            Real.rpow_le_rpow_of_exponent_le hnR hyM
+          _ = (n : ℝ) := by simp
+      have hfloor : (P.m n : ℝ) ≤ (n : ℝ) := by
+        rw [Params9.m, hcase]
+        exact (Nat.floor_le (by positivity)).trans hpow
+      exact_mod_cast hfloor
+  | lin αS αD hB yB =>
+      have hlin : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+          P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+        simpa [hcase] using hP.2.2.2.2.2.2
+      have hαD : (αD : ℝ) / 10 ≤ 1 := by
+        have hcast : (αD : ℝ) < (((1 : ℚ) / 100 : ℚ) : ℝ) :=
+          Rat.cast_lt.mpr hlin.2.2.1
+        have hcast' : (((1 : ℚ) / 100 : ℚ) : ℝ) = (1 : ℝ) / 100 := by norm_num
+        rw [hcast'] at hcast
+        linarith
+      have hαDpos : 0 < (αD : ℝ) := by
+        have h100 : (0 : ℝ) < ((100 * αS : ℚ) : ℝ) := by exact_mod_cast hlin.1
+        have hnext : ((100 * αS : ℚ) : ℝ) < (αD : ℝ) := by exact_mod_cast hlin.2.1
+        exact lt_trans h100 hnext
+      have hnR : 0 ≤ (n : ℝ) := Nat.cast_nonneg _
+      have harg : (αD : ℝ) * (n : ℝ) / 10 ≤ (n : ℝ) := by
+        calc
+          (αD : ℝ) * (n : ℝ) / 10 = ((αD : ℝ) / 10) * (n : ℝ) := by ring
+          _ ≤ 1 * (n : ℝ) := mul_le_mul_of_nonneg_right hαD hnR
+          _ = (n : ℝ) := by ring
+      have hfloor : (P.m n : ℝ) ≤ (n : ℝ) := by
+        rw [Params9.m, hcase]
+        exact (Nat.floor_le (by positivity [hαDpos])).trans harg
+      exact_mod_cast hfloor
+
 theorem tagWidth_over_rpow_tendsto (P : Params9) (a : ℝ) (ha : 0 < a)
     (hxa : (P.xS : ℝ) < a) :
     Tendsto

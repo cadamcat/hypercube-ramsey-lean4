@@ -1,6 +1,7 @@
+import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.S06.Step3Defs
 
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 400000
 
 /-!
 Lane-local finite normalization facts for Section 6 Step 3.
@@ -8,10 +9,164 @@ Lane-local finite normalization facts for Section 6 Step 3.
 
 namespace HypercubeRamsey
 namespace S06
+namespace Lane_q_s06_steps2
 
 open Classical
 open OAI.HypercubeRamsey
 open scoped BigOperators
+
+theorem smallPowersetCount6 {α : Type*} [Fintype α] [DecidableEq α]
+    (s : Finset α) (T : ℕ) :
+    ((Finset.range (T + 1)).biUnion fun k => s.powersetCard k).card ≤
+      (s.card + 2) ^ (2 * T) := by
+  classical
+  have hT : T + 1 ≤ 2 ^ T := by
+    induction T with
+    | zero => norm_num
+    | succ T ih =>
+        have hstep : T + 2 ≤ 2 * (T + 1) := by omega
+        calc
+          T + 2 ≤ 2 * (T + 1) := hstep
+          _ ≤ 2 * 2 ^ T := Nat.mul_le_mul_left 2 ih
+          _ = 2 ^ (T + 1) := by simp [pow_succ, Nat.mul_comm]
+  have hchoose (k : ℕ) (hk : k ∈ Finset.range (T + 1)) :
+      s.card.choose k ≤ (s.card + 1) ^ T := by
+    have hkT : k ≤ T := by simpa using Finset.mem_range.mp hk
+    calc
+      s.card.choose k ≤ s.card ^ k := Nat.choose_le_pow _ _
+      _ ≤ (s.card + 1) ^ k := Nat.pow_le_pow_left (Nat.le_succ _) _
+      _ ≤ (s.card + 1) ^ T := Nat.pow_le_pow_right (Nat.succ_pos _) hkT
+  have hsum :
+      (∑ k ∈ Finset.range (T + 1), s.card.choose k) ≤
+        (T + 1) * (s.card + 1) ^ T := by
+    calc
+      (∑ k ∈ Finset.range (T + 1), s.card.choose k) ≤
+          ∑ k ∈ Finset.range (T + 1), (s.card + 1) ^ T := by
+        apply Finset.sum_le_sum
+        intro k hk
+        exact hchoose k hk
+      _ = (T + 1) * (s.card + 1) ^ T := by simp
+  have hcard :
+      ((Finset.range (T + 1)).biUnion fun k => s.powersetCard k).card ≤
+        ∑ k ∈ Finset.range (T + 1), s.card.choose k := by
+    calc
+      ((Finset.range (T + 1)).biUnion fun k => s.powersetCard k).card ≤
+          ∑ k ∈ Finset.range (T + 1), (s.powersetCard k).card := Finset.card_biUnion_le
+      _ = ∑ k ∈ Finset.range (T + 1), s.card.choose k := by
+        apply Finset.sum_congr rfl
+        intro k hk
+        rw [Finset.card_powersetCard]
+  have hbase : 2 * (s.card + 1) ≤ (s.card + 2) * (s.card + 2) := by
+    exact Nat.mul_le_mul (by omega) (by omega)
+  calc
+    ((Finset.range (T + 1)).biUnion fun k => s.powersetCard k).card ≤
+        (T + 1) * (s.card + 1) ^ T := hcard.trans hsum
+    _ ≤ 2 ^ T * (s.card + 1) ^ T := Nat.mul_le_mul_right _ hT
+    _ = (2 * (s.card + 1)) ^ T := by rw [Nat.mul_pow]
+    _ ≤ ((s.card + 2) * (s.card + 2)) ^ T := Nat.pow_le_pow_left hbase _
+    _ = (s.card + 2) ^ (2 * T) := by rw [← pow_two, ← pow_mul]
+
+theorem sigmaPatternCard6 {α β C : Type*} [Fintype α] [DecidableEq α]
+    [Fintype β] [Fintype C] [DecidableEq C]
+    (S : Finset (Finset α)) (T E : ℕ)
+    (hS : ∀ s ∈ S, s.card ≤ T) (hβ : Fintype.card β ≤ 1806)
+    (hC : Fintype.card C ≤ E) :
+    Fintype.card (Σ s : {s // s ∈ S}, Finset (s.1 × β) × (C → s.1)) ≤
+      S.card * (2 ^ (T * 1806)) * ((T + 1) ^ E) := by
+  classical
+  calc
+    Fintype.card (Σ s : {s // s ∈ S}, Finset (s.1 × β) × (C → s.1)) =
+        ∑ s : {s // s ∈ S}, Fintype.card (Finset (s.1 × β) × (C → s.1)) := by
+      rw [Fintype.card_sigma]
+    _ ≤ ∑ _s : {s // s ∈ S}, (2 ^ (T * 1806)) * ((T + 1) ^ E) := by
+      apply Finset.sum_le_sum
+      intro s hs
+      have hsCard := hS s.1 s.2
+      have hpow1 : 2 ^ (s.1.card * Fintype.card β) ≤ 2 ^ (T * 1806) :=
+        Nat.pow_le_pow_right (by decide) (Nat.mul_le_mul hsCard hβ)
+      have hsPlus : s.1.card ≤ T + 1 := by omega
+      have hpow2 : s.1.card ^ Fintype.card C ≤ (T + 1) ^ E := by
+        calc
+          s.1.card ^ Fintype.card C ≤ (T + 1) ^ Fintype.card C :=
+            Nat.pow_le_pow_left hsPlus _
+          _ ≤ (T + 1) ^ E := Nat.pow_le_pow_right (by omega) hC
+      have hcard' : Fintype.card (Finset (s.1 × β) × (C → s.1)) =
+          (2 ^ (s.1.card * Fintype.card β)) * (s.1.card ^ Fintype.card C) := by
+        simp [Fintype.card_prod, Fintype.card_finset, Fintype.card_fun, Fintype.card_coe]
+      rw [hcard']
+      exact Nat.mul_le_mul hpow1 hpow2
+    _ = S.card * ((2 ^ (T * 1806)) * ((T + 1) ^ E)) := by simp
+    _ = S.card * (2 ^ (T * 1806)) * ((T + 1) ^ E) := by ring
+
+theorem natPow_eq_exp_log6 (b k : ℕ) (hb : 0 < b) :
+    (b : ℝ) ^ k = Real.exp ((k : ℝ) * Real.log (b : ℝ)) := by
+  rw [← Real.rpow_natCast, Real.rpow_def_of_pos (by exact_mod_cast hb), mul_comm]
+
+noncomputable def DescCode6 {Id Ty σ : Type*} (S : Finset Id)
+    (Tys : Finset Ty) (Bad : Finset σ) : Type _ :=
+  Finset ({i // i ∈ S} × {t // t ∈ Tys}) × ({a // a ∈ Bad} → {i // i ∈ S})
+
+noncomputable def decodeDescCode6 {Id Ty σ : Type*} [DecidableEq Id] [DecidableEq Ty]
+    {S : Finset Id} {Tys : Finset Ty} {Bad : Finset σ} (τ : σ → Ty)
+    (c : DescCode6 S Tys Bad) : Finset (Id × Ty) :=
+  c.1.image (fun x => (x.1.1, x.2.1)) ∪
+    (Finset.univ.image fun a : {a // a ∈ Bad} => ((c.2 a).1, τ a.1))
+
+theorem exists_descCode6 {Id Ty σ : Type*} [Fintype σ]
+    [DecidableEq Id] [DecidableEq Ty] [DecidableEq σ]
+    (S : Finset Id) (Tys : Finset Ty) (Bad : Finset σ)
+    (φ : σ → Id) (τ : σ → Ty) (D : Finset (Id × Ty))
+    (hD : D = Finset.univ.image fun a : σ => (φ a, τ a))
+    (hids : ∀ a, φ a ∈ S)
+    (hclass : ∀ a, τ a ∈ Tys ∨ a ∈ Bad) :
+    ∃ c : DescCode6 S Tys Bad, decodeDescCode6 τ c = D := by
+  classical
+  let GoodType := {t : Ty // t ∈ Tys}
+  let BadType := {a : σ // a ∈ Bad}
+  let Gen : Finset ({i // i ∈ S} × GoodType) :=
+    (Finset.univ : Finset ({i // i ∈ S} × GoodType)).filter
+      (fun x => (x.1.1, x.2.1) ∈ D)
+  let badMap : BadType → {i // i ∈ S} := fun a => ⟨φ a.1, hids a.1⟩
+  let c : DescCode6 S Tys Bad := ⟨Gen, badMap⟩
+  have hdecode : decodeDescCode6 τ c = D := by
+    apply Finset.ext
+    intro e
+    change e ∈ (c.1.image (fun x => (x.1.1, x.2.1)) ∪
+        Finset.univ.image fun a : BadType => ((c.2 a).1, τ a.1)) ↔ e ∈ D
+    constructor
+    · intro he
+      rcases Finset.mem_union.mp he with hgen | hbad
+      · rcases Finset.mem_image.mp hgen with ⟨x, hx, hxe⟩
+        rw [← hxe]
+        exact (Finset.mem_filter.mp hx).2
+      · rcases Finset.mem_image.mp hbad with ⟨a, ha, hxe⟩
+        rw [← hxe, hD]
+        exact Finset.mem_image.mpr ⟨a.1, Finset.mem_univ _, rfl⟩
+    · intro he
+      rw [hD] at he
+      rcases Finset.mem_image.mp he with ⟨a, ha, rfl⟩
+      rcases hclass a with hgood | hbad
+      · let x : {i // i ∈ S} × GoodType :=
+          (⟨φ a, hids a⟩, ⟨τ a, hgood⟩)
+        apply Finset.mem_union.mpr
+        left
+        apply Finset.mem_image.mpr
+        refine ⟨x, ?_, ?_⟩
+        · change x ∈ Finset.univ.filter
+            (fun y : {i // i ∈ S} × GoodType => (y.1.1, y.2.1) ∈ D)
+          apply Finset.mem_filter.mpr
+          refine ⟨Finset.mem_univ _, ?_⟩
+          rw [hD]
+          apply Finset.mem_image.mpr
+          exact ⟨a, Finset.mem_univ _, by simp [x]⟩
+        · rfl
+      · let a' : BadType := ⟨a, hbad⟩
+        apply Finset.mem_union.mpr
+        right
+        apply Finset.mem_image.mpr
+        refine ⟨a', Finset.mem_univ _, ?_⟩
+        rfl
+  exact ⟨c, hdecode⟩
 
 private theorem edge_coord_in_chunks {n : ℕ} (L : ChunkLayout6 n)
     (u v : CubeVertex n) (h : (cube n).Adj u v) :
@@ -44,6 +199,12 @@ private theorem edge_coord_in_chunks {n : ℕ} (L : ChunkLayout6 n)
       exact ⟨q, hq, hother, Or.inr (Or.inl ⟨i, hqi⟩)⟩
   · exact ⟨q, hq, hother, Or.inr (Or.inr hr)⟩
 
+private theorem stNbr_witness6 {n : ℕ} (L : ChunkLayout6 n) (b a : State6 L)
+    (ha : a ∈ L.stNbr b) :
+    ∃ u v : CubeVertex n, ¬ IsEvenRole u ∧ IsEvenRole v ∧
+      L.stateOf u = b ∧ L.stateOf v = a ∧ (cube n).Adj u v := by
+  simpa only [ChunkLayout6.stNbr, Finset.mem_filter, Finset.mem_univ, true_and] using ha
+
 private theorem edge_key_severity {n : ℕ} (L : ChunkLayout6 n) (F : ChunkFlips6 L)
     (u v : CubeVertex n) (h : (cube n).Adj u v) :
     keyAdjacent6 binAdjacent6 (L.key u) (L.key v) ∧ Nat.dist (L.severity u) (L.severity v) ≤ 1 := by
@@ -72,26 +233,43 @@ private theorem edge_key_severity {n : ℕ} (L : ChunkLayout6 n) (F : ChunkFlips
       rw [hsev]
       simp
 
+private def neighborSeverityVariants6 (j : ℕ) : Finset ℕ := {j - 1, j, j + 1}
+
+private noncomputable def neighborTypeVariants6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (b : X.State)
+    (h : CoarseKey6 (BinVector6 n)) : Finset X.Ty :=
+  (neighborSeverityVariants6 (X.g.L.stSeverity b)).image
+    (fun j => makeType6 binAdjacent6 h (X.g.L.stSign b) (X.g.L.stFlippable b) j X.J)
+
 noncomputable def neighborTypeForms6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (b : X.State) : Finset X.Ty :=
-  (X.C (X.g.L.stKey b)).biUnion fun h =>
-    ({X.g.L.stSeverity b - 1, X.g.L.stSeverity b, X.g.L.stSeverity b + 1} : Finset ℕ).image
-      (fun j => makeType6 binAdjacent6 h (X.g.L.stSign b) (X.g.L.stFlippable b) j X.J)
+  (X.C (X.g.L.stKey b)).biUnion (neighborTypeVariants6 X b)
 
 theorem neighborTypeForms6_card {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (b : X.State) :
     (neighborTypeForms6 X b).card ≤ 3 * 602 := by
   classical
-  let Js : Finset ℕ := {X.g.L.stSeverity b - 1, X.g.L.stSeverity b, X.g.L.stSeverity b + 1}
+  let Js := neighborSeverityVariants6 (X.g.L.stSeverity b)
   have hJs : Js.card ≤ 3 := by
-    simpa [Js] using (Finset.card_le_three
+    simpa [Js, neighborSeverityVariants6] using (Finset.card_le_three
       (a := X.g.L.stSeverity b - 1) (b := X.g.L.stSeverity b)
       (c := X.g.L.stSeverity b + 1))
   calc
-    (neighborTypeForms6 X b).card ≤ ∑ h ∈ X.C (X.g.L.stKey b), Js.card := by
+    (neighborTypeForms6 X b).card ≤
+        ∑ h ∈ X.C (X.g.L.stKey b), (neighborTypeVariants6 X b h).card := by
+      unfold neighborTypeForms6
       exact Finset.card_biUnion_le
-    _ = (X.C (X.g.L.stKey b)).card * Js.card := by simp
-    _ ≤ (X.C (X.g.L.stKey b)).card * 3 := Nat.mul_le_mul_left _ hJs
+    _ ≤ ∑ h ∈ X.C (X.g.L.stKey b), 3 := by
+      apply Finset.sum_le_sum
+      intro h hh
+      calc
+        (neighborTypeVariants6 X b h).card ≤ Js.card := by
+          simpa [neighborTypeVariants6, neighborSeverityVariants6, Js] using
+            (Finset.card_image_le :
+              (Js.image (fun j : ℕ =>
+                makeType6 binAdjacent6 h (X.g.L.stSign b) (X.g.L.stFlippable b) j X.J)).card ≤ Js.card)
+        _ ≤ 3 := hJs
+    _ = (X.C (X.g.L.stKey b)).card * 3 := by simp
     _ ≤ 602 * 3 := Nat.mul_le_mul_right _ (X.g.flips.key_neighborhood_card _)
     _ = 3 * 602 := by omega
 
@@ -100,9 +278,7 @@ theorem neighbor_key_severity6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin 
     {b a : X.State} (ha : a ∈ X.g.L.stNbr b) :
     X.g.L.stKey a ∈ X.C (X.g.L.stKey b) ∧
       Nat.dist (X.g.L.stSeverity a) (X.g.L.stSeverity b) ≤ 1 := by
-  change a ∈ Finset.univ.filter (fun a => ∃ u v : CubeVertex n, ¬ IsEvenRole u ∧ IsEvenRole v ∧
-    X.g.L.stateOf u = b ∧ X.g.L.stateOf v = a ∧ (cube n).Adj u v) at ha
-  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := Finset.mem_filter.mp ha
+  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := stNbr_witness6 X.g.L b a ha
   have hedge := edge_key_severity X.g.L X.g.flips u v hadj
   have hku : X.g.L.key u = X.g.L.stKey b := by
     calc
@@ -139,9 +315,7 @@ theorem neighbor_type_mem_forms6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fi
     (hflip : X.g.L.stFlippable a = X.g.L.stFlippable b) :
     X.stType a ∈ neighborTypeForms6 X b := by
   classical
-  change a ∈ Finset.univ.filter (fun a => ∃ u v : CubeVertex n, ¬ IsEvenRole u ∧ IsEvenRole v ∧
-    X.g.L.stateOf u = b ∧ X.g.L.stateOf v = a ∧ (cube n).Adj u v) at ha
-  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := Finset.mem_filter.mp ha
+  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := stNbr_witness6 X.g.L b a ha
   have hedge := edge_key_severity X.g.L X.g.flips u v hadj
   have hkeyu := X.facts.key_eq u
   have hkeyv := X.facts.key_eq v
@@ -238,15 +412,15 @@ theorem descOf_card_le_split {γ p₀ K : ℝ} {n N : ℕ}
 
 private def mergedField6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
-    (s : X.State) (i : Fin X.m) : ℕ := (s.2.2.2.1 i).val
+    (s : X.State) (i : Fin X.g.L.m) : ℕ := (s.2.2.2.1 i).val
 
 private def nearCoordsState6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (s : X.State) : Finset (Fin X.m) :=
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (s : X.State) : Finset (Fin X.g.L.m) :=
   Finset.univ.filter fun i => Nat.dist (2 * mergedField6 X s i) X.g.L.fineLength ≤ 3
 
 private def countCoordinate6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
-    (s : X.State) (i : Fin X.m) : Fin (n + 1) := s.2.2.2.1 i
+    (s : X.State) (i : Fin X.g.L.m) : Fin (n + 1) := s.2.2.2.1 i
 
 private def severityCoordinate6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
@@ -254,20 +428,30 @@ private def severityCoordinate6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin
 
 private def potentialState6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
-    (b : X.State) (i : Fin X.m) (s : X.State) : Prop :=
+    (b : X.State) (i : Fin X.g.L.m) (s : X.State) : Prop :=
   s.1 = b.1 ∧ X.g.L.stKey s = X.g.L.stKey b ∧
     (∀ j, j ≠ i → mergedField6 X s j = mergedField6 X b j) ∧
       Nat.dist (mergedField6 X s i) (mergedField6 X b i) ≤ 3 ∧
-        Nat.dist (X.g.L.stSeverity s) (X.g.L.stSeverity b) ≤ 1
+      Nat.dist (X.g.L.stSeverity s) (X.g.L.stSeverity b) ≤ 1
+
+private theorem mergedField_stateOf6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (x : CubeVertex n) (i : Fin X.g.L.m) :
+    mergedField6 X (X.g.L.stateOf x) i = min (X.g.L.mergedCount x i) n := rfl
+
+private theorem stSeverity_stateOf6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (x : CubeVertex n) :
+    X.g.L.stSeverity (X.g.L.stateOf x) = min (X.g.L.severity x) X.g.L.m := rfl
 
 noncomputable def potentialStates6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
-    (b : X.State) (i : Fin X.m) : Finset (X.g.L.stNbr b) :=
+    (b : X.State) (i : Fin X.g.L.m) : Finset (X.g.L.stNbr b) :=
   Finset.univ.filter fun s => potentialState6 X b i s.1
 
 private theorem potentialStates6_card {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
-    (X : Ctx6 γ p₀ K n N E G M) (b : X.State) (i : Fin X.m) :
+    (X : Ctx6 γ p₀ K n N E G M) (b : X.State) (i : Fin X.g.L.m) :
     (potentialStates6 X b i).card ≤ 21 := by
   classical
   let Counts : Finset (Fin (n + 1)) :=
@@ -334,16 +518,12 @@ private theorem potentialStates6_card {γ p₀ K : ℝ} {n N : ℕ}
     · exact hrs.trans hrt.symm
     · apply Prod.ext
       · have hkey : X.g.L.stKey s.1.1 = X.g.L.stKey t.1.1 := hks.trans hkt.symm
-        have hkey' : ((s.1.1).2.1, (s.1.1).2.2.1) = ((t.1.1).2.1, (t.1.1).2.2.1) := by
-          simpa [ChunkLayout6.stKey] using hkey
-        change (s.1.1).2.1 = (t.1.1).2.1
-        exact congrArg Prod.fst hkey'
+        simpa [ChunkLayout6.stKey] using
+          congrArg (fun k : CoarseKey6 (BinVector6 n) => k.1) hkey
       · apply Prod.ext
         · have hkey : X.g.L.stKey s.1.1 = X.g.L.stKey t.1.1 := hks.trans hkt.symm
-          have hkey' : ((s.1.1).2.1, (s.1.1).2.2.1) = ((t.1.1).2.1, (t.1.1).2.2.1) := by
-            simpa [ChunkLayout6.stKey] using hkey
-          change (s.1.1).2.2.1 = (t.1.1).2.2.1
-          exact congrArg Prod.snd hkey'
+          simpa [ChunkLayout6.stKey] using
+            congrArg (fun k : CoarseKey6 (BinVector6 n) => k.2) hkey
         · apply Prod.ext
           · funext j
             by_cases hji : j = i
@@ -498,7 +678,7 @@ private theorem flippable_change_near6 {n : ℕ} (L : ChunkLayout6 n) (u v : Cub
       Nat.dist (2 * L.fineCount u i) (2 * L.fineCount v i) +
             Nat.dist (2 * L.fineCount v i) L.fineLength :=
         Nat.dist.triangle_inequality _ _ _
-      _ = 3 := by rw [htwice, h]; rfl
+      _ = 3 := by rw [htwice, h]
 
 private theorem changed_fine_coordinate_near6 {n : ℕ} (L : ChunkLayout6 n)
     (u v : CubeVertex n) (i : Fin L.m)
@@ -589,15 +769,15 @@ private theorem near_card_le_severity6 {γ p₀ K : ℝ} {n N : ℕ}
     have hiNear := (Finset.mem_filter.mp hi).2
     have hfield : mergedField6 X b i = X.g.L.mergedCount u i := by
       rw [← hstate]
-      simp [mergedField6, ChunkLayout6.stateOf,
-        Nat.min_eq_left (mergedCount_le_length6 X.g.L u i |>.trans (by exact_mod_cast hlen))]
-    have hdist : Nat.dist (2 * X.g.L.fineCount u i) X.g.L.fineLength ≤ 3 := by
-      have hmerged : X.g.L.mergedCount u i = X.g.L.fineCount u i := by
-        dsimp [ChunkLayout6.mergedCount]
-        split_ifs <;> have hc := fineCount_le_length6 X.g.L u i <;>
-          have hd := hiNear <;> rw [hfield] at hd <;> unfold Nat.dist at hd <;> omega
-      simpa [hfield, hmerged] using hiNear
-    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by omega⟩
+      rw [mergedField_stateOf6]
+      exact Nat.min_eq_left (mergedCount_le_length6 X.g.L u i |>.trans (by exact_mod_cast hlen))
+    have hdist : Nat.dist (2 * X.g.L.fineCount u i) X.g.L.fineLength ≤ 11 := by
+      have hd := hiNear
+      rw [hfield] at hd
+      dsimp [ChunkLayout6.mergedCount] at hd
+      unfold Nat.dist at hd ⊢
+      split_ifs at hd <;> omega
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdist⟩
   calc
     (nearCoordsState6 X b).card ≤
         (Finset.univ.filter fun i => Nat.dist (2 * X.g.L.fineCount u i) X.g.L.fineLength ≤ 11).card :=
@@ -612,7 +792,7 @@ private theorem edge_fine_state_data6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N �
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
     {b a : X.State} (u v : CubeVertex n) (hub : X.g.L.stateOf u = b)
     (hva : X.g.L.stateOf v = a) (hadj : (cube n).Adj u v)
-    (q : Fin n) (i : Fin X.m) (hqi : q ∈ X.g.L.fineChunks i)
+    (q : Fin n) (i : Fin X.g.L.m) (hqi : q ∈ X.g.L.fineChunks i)
     (hneq : u q ≠ v q) (hother : ∀ j, j ≠ q → u j = v j) :
     X.g.L.stKey a = X.g.L.stKey b ∧ a.1 = b.1 ∧
       (∀ j, j ≠ i → mergedField6 X a j = mergedField6 X b j) ∧
@@ -659,7 +839,8 @@ private theorem edge_fine_state_data6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N �
     intro j hji
     have hqnot : q ∉ X.g.L.fineChunks j := by
       intro hqj
-      exact (Finset.disjoint_left.mp (X.g.L.chunks_disjoint.2.2.1 i j hji)) hqi hqj
+      exact (Finset.disjoint_left.mp
+        (X.g.L.chunks_disjoint.2.2.1 i j (Ne.symm hji))) hqi hqj
     have hagree : ∀ x, x ∈ X.g.L.fineChunks j → u x = v x := by
       intro x hx
       by_cases hxq : x = q
@@ -672,16 +853,18 @@ private theorem edge_fine_state_data6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N �
     calc
       mergedField6 X a j = mergedField6 X (X.g.L.stateOf v) j := by rw [hva]
       _ = mergedField6 X (X.g.L.stateOf u) j := by
-        simp [mergedField6, ChunkLayout6.stateOf, hmerge]
+        rw [mergedField_stateOf6, mergedField_stateOf6]
+        exact congrArg (fun c => min c n) hmerge.symm
       _ = mergedField6 X b j := by rw [hub]
   have hfc := fineCount_dist_one6 X.g.L u v q i hqi hneq hother
   have hmerge := mergedCount_dist_le_three6 X.g.L u v i hfc
   have hcountUV : Nat.dist (mergedField6 X (X.g.L.stateOf v) i)
       (mergedField6 X (X.g.L.stateOf u) i) ≤ 3 := by
     calc
-      Nat.dist (mergedField6 X (X.g.L.stateOf v) i) (mergedField6 X (X.g.L.stateOf u) i) =
+      Nat.dist (mergedField6 X (X.g.L.stateOf v) i) (mergedField6 X (X.g.L.stateOf u) i) ≤
           Nat.dist (X.g.L.mergedCount v i) (X.g.L.mergedCount u i) := by
-            simp [mergedField6, ChunkLayout6.stateOf]
+            rw [mergedField_stateOf6, mergedField_stateOf6]
+            exact natDist_min_right
       _ = Nat.dist (X.g.L.mergedCount u i) (X.g.L.mergedCount v i) := Nat.dist_comm _ _
       _ ≤ 3 := hmerge
   have hcount : Nat.dist (mergedField6 X a i) (mergedField6 X b i) ≤ 3 := by
@@ -696,7 +879,7 @@ private theorem edge_fine_state_data6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N �
     calc
       Nat.dist (X.g.L.stSeverity (X.g.L.stateOf v)) (X.g.L.stSeverity (X.g.L.stateOf u)) =
           Nat.dist (min (X.g.L.severity v) X.g.L.m) (min (X.g.L.severity u) X.g.L.m) := by
-            simp [ChunkLayout6.stateOf, ChunkLayout6.stSeverity, sevFin6]
+            rw [stSeverity_stateOf6, stSeverity_stateOf6]
       _ ≤ Nat.dist (X.g.L.severity v) (X.g.L.severity u) := natDist_min_right
       _ = Nat.dist (X.g.L.severity u) (X.g.L.severity v) := Nat.dist_comm _ _
       _ ≤ 1 := hedge
@@ -716,9 +899,7 @@ private theorem changed_neighbor_state6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N
     ∃ i, i ∈ nearCoordsState6 X b ∧
       (⟨a, ha⟩ : X.g.L.stNbr b) ∈ potentialStates6 X b i := by
   classical
-  change a ∈ Finset.univ.filter (fun a => ∃ u v : CubeVertex n, ¬ IsEvenRole u ∧ IsEvenRole v ∧
-    X.g.L.stateOf u = b ∧ X.g.L.stateOf v = a ∧ (cube n).Adj u v) at ha
-  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := Finset.mem_filter.mp ha
+  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := stNbr_witness6 X.g.L b a ha
   obtain ⟨q, hqdiff, hqother, hkind⟩ := edge_coord_in_chunks X.g.L u v hadj
   have hsignA : X.g.L.stSign a = X.g.L.sign v := by
     calc
@@ -779,7 +960,7 @@ private theorem changed_neighbor_state6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N
             funext j
             by_cases hji : j = i
             · subst j
-              exact not_ne_iff.mp heq
+              exact heq
             · exact hsignOff j hji
           exact changed_fine_coordinate_near6 X.g.L u v i hcount (Or.inl hsignI)
         · have hflipUV : X.g.L.flippable u ≠ X.g.L.flippable v := by
@@ -790,11 +971,13 @@ private theorem changed_neighbor_state6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N
                 _ = X.g.L.flippable u := heq.symm
                 _ = X.g.L.stFlippable b := hflipB.symm)
           have hmemOff : ∀ j, j ≠ i →
-              (j ∈ X.g.L.flippable u) ↔ (j ∈ X.g.L.flippable v) := by
-            intro j hji
+              ((j ∈ X.g.L.flippable u) ↔ (j ∈ X.g.L.flippable v)) := by
+            intro j
+            intro hji
             have hqnot : q ∉ X.g.L.fineChunks j := by
               intro hqj
-              exact (Finset.disjoint_left.mp (X.g.L.chunks_disjoint.2.2.1 i j hji)) hqi hqj
+              exact (Finset.disjoint_left.mp
+                (X.g.L.chunks_disjoint.2.2.1 i j (Ne.symm hji))) hqi hqj
             have hsame : ∀ x, x ∈ X.g.L.fineChunks j → u x = v x := by
               intro x hx
               by_cases hxq : x = q
@@ -805,9 +988,7 @@ private theorem changed_neighbor_state6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N
             simpa [ChunkLayout6.flippable, hfc]
           have hmemI : (i ∈ X.g.L.flippable u) ≠ (i ∈ X.g.L.flippable v) := by
             by_contra hsame
-            have hprop : (i ∈ X.g.L.flippable u) = (i ∈ X.g.L.flippable v) := by
-              by_cases hu : i ∈ X.g.L.flippable u <;>
-                by_cases hv : i ∈ X.g.L.flippable v <;> simp_all
+            have hprop : (i ∈ X.g.L.flippable u) = (i ∈ X.g.L.flippable v) := hsame
             apply hflipUV
             apply Finset.ext
             intro j
@@ -822,21 +1003,32 @@ private theorem changed_neighbor_state6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N
         calc
           mergedField6 X b i = mergedField6 X (X.g.L.stateOf u) i := by rw [← hub]
           _ = X.g.L.mergedCount u i := by
-            simp [mergedField6, ChunkLayout6.stateOf,
-              Nat.min_eq_left (mergedCount_le_length6 X.g.L u i |>.trans (by exact_mod_cast hlen))]
+            rw [mergedField_stateOf6]
+            exact Nat.min_eq_left (mergedCount_le_length6 X.g.L u i |>.trans (by exact_mod_cast hlen))
           _ = X.g.L.fineCount u i := merged_eq_fineCount_of_near6 X.g.L u i hnearRaw
       have hnear : i ∈ nearCoordsState6 X b := by
-        refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩
-        simpa [nearCoordsState6, hcenterField] using hnearRaw
+        change i ∈ Finset.univ.filter
+          (fun j => Nat.dist (2 * mergedField6 X b j) X.g.L.fineLength ≤ 3)
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        rw [hcenterField]
+        exact hnearRaw
       have hpotential : potentialState6 X b i a :=
         ⟨hdata.2.1, hdata.1, hdata.2.2.1, hdata.2.2.2.1, hdata.2.2.2.2⟩
-      exact ⟨i, hnear, Finset.mem_filter.mpr ⟨Finset.mem_univ ⟨a, ha⟩, hpotential⟩⟩
+      have hmem : (⟨a, ha⟩ : X.g.L.stNbr b) ∈ potentialStates6 X b i := by
+        change (⟨a, ha⟩ : X.g.L.stNbr b) ∈
+          Finset.univ.filter (fun s => potentialState6 X b i s.1)
+        apply Finset.mem_filter.mpr
+        exact ⟨Finset.mem_univ _, hpotential⟩
+      exact ⟨i, hnear, hmem⟩
     ·
       have hsameFine : ∀ j x, x ∈ X.g.L.fineChunks j → u x = v x := by
         intro j x hx
         by_cases hxq : x = q
         · subst x
-          exact False.elim ((Finset.disjoint_left.mp (X.g.L.chunks_disjoint.2.2.2.2 j)) hqi hq)
+          have hqnot : q ∉ X.g.L.fineChunks j :=
+            (Finset.disjoint_right.mp (X.g.L.chunks_disjoint.2.2.2.2 j)) hr
+          exact False.elim (hqnot hx)
         · exact hqother x hxq
       have hgood := X.g.flips.nonfine_flip_fine u v hadj hsameFine
       have hsignEq : X.g.L.stSign a = X.g.L.stSign b := by
@@ -880,12 +1072,14 @@ theorem descriptorBadStates6_card {γ p₀ K : ℝ} {n N : ℕ}
   have htrans : Trans.card ≤ 1 := by
     have hattach : Trans.card =
         ((X.g.L.stNbr b).filter fun a => X.stMode a ≠ X.stMode b).card := by
-      dsimp [Trans]
-      rw [show (Finset.univ : Finset (X.g.L.stNbr b)) = (X.g.L.stNbr b).attach by simp]
-      rw [Finset.filter_attach]
-      simp
+      have h := congrArg Finset.card
+        (Finset.filter_attach (fun a : X.State => X.stMode a ≠ X.stMode b)
+          (X.g.L.stNbr b))
+      simpa [Trans] using h
     have hraw : ((X.g.L.stNbr b).filter fun a => X.stMode a ≠ X.stMode b).card ≤ 1 := by
-      simpa [Ctx6.stMode, modeOf6] using X.facts.low_high_one b
+      change ((X.g.L.stNbr b).filter
+        (fun a => modeOf6 X.J (X.g.L.stSeverity a) ≠ modeOf6 X.J (X.g.L.stSeverity b))).card ≤ 1
+      exact X.facts.low_high_one b
     rw [hattach]
     exact hraw
   have hvarSub : Var ⊆ Potential := by
@@ -1038,6 +1232,46 @@ theorem subdensity_ratio_small_mass6 {Ω : Type*} [Fintype Ω]
         ε * (∑ x, Q.w x * mdel x) ≤ ε * 1 := mul_le_mul_of_nonneg_left hdel hε
         _ = ε := by ring
 
+theorem mixture_subdensity_bound6 {Ξ Ω : Type*} [Fintype Ξ] [Fintype Ω]
+    (π : FinProb Ξ) (Q : FinProb Ω) (P : Ξ → FinProb Ω)
+    (gate : Ξ → Prop) (lik : Ξ → Ω → ℝ) (m θ : Ω → ℝ) (ε : ℝ)
+    (hm : ∀ ω, m ω = ∑ ξ, if gate ξ then π.w ξ * lik ξ ω else 0)
+    (hdom : ∀ ξ ω, gate ξ → (P ξ).w ω ≤ Q.w ω * lik ξ ω)
+    (hsmall : (∑ ω, if m ω < θ ω then Q.w ω * m ω else 0) ≤ ε) :
+    ∑ ξ, π.w ξ * (P ξ).pr (fun ω => gate ξ ∧ m ω < θ ω) ≤ ε := by
+  classical
+  calc
+    (∑ ξ, π.w ξ * (P ξ).pr (fun ω => gate ξ ∧ m ω < θ ω)) ≤
+        ∑ ξ, π.w ξ * ∑ ω, if gate ξ ∧ m ω < θ ω then Q.w ω * lik ξ ω else 0 := by
+      apply Finset.sum_le_sum
+      intro ξ hξ
+      apply mul_le_mul_of_nonneg_left _ (π.nonneg ξ)
+      unfold FinProb.pr
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases he : gate ξ ∧ m ω < θ ω
+      · simp only [if_pos he]
+        exact hdom ξ ω he.1
+      · simp only [if_neg he]
+        rfl
+    _ = ∑ ω, if m ω < θ ω then Q.w ω * m ω else 0 := by
+      simp_rw [Finset.mul_sum]
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro ω hω
+      by_cases hlt : m ω < θ ω
+      · simp [hlt]
+        rw [hm ω]
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro ξ hξ
+        by_cases hg : gate ξ
+        · simp only [if_pos hg]
+          ring
+        · simp [hg]
+      · simp [hlt]
+    _ ≤ ε := hsmall
+
 /-- Products of coordinate likelihoods with integral at most one also have integral at most one. -/
 theorem pi_product_density_le_one6 {ι : Type*} [Fintype ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
@@ -1072,5 +1306,413 @@ theorem pi_product_density_le_one6 {ι : Type*} [Fintype ι]
               (Finset.prod_nonneg fun j hj => hnonneg j) ih
       simpa using hprod Finset.univ
 
+private theorem tupleLawOn_weight6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (S : Finset X.Name)
+    (T : FinProb X.ι) (o : X.Tuple) :
+    (X.tupleLawOn H S T).w o = T.w o.1 * ∏ r, (X.labelLaw H S o.1).w (o.2 r) := by
+  simp [Ctx6.tupleLawOn, FinProb.bind, FinProb.pi]
+
+private theorem safeRatio_mul_of_ne6 {a b : ℝ} (hb : b ≠ 0) :
+    b * safeRatio6 a b = a := by
+  unfold safeRatio6
+  rw [if_neg hb]
+  field_simp
+
+private theorem tupleLawOn_ratio6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (Hξ H : X.Hist)
+    (Sraw Sref : Finset X.Name) (T Tref : FinProb X.ι) (o : X.Tuple)
+    (hTag : Tref.w o.1 ≠ 0)
+    (hLabel : ∀ r, (X.labelLaw H Sref o.1).w (o.2 r) ≠ 0) :
+    (X.tupleLawOn Hξ Sraw T).w o =
+      (X.tupleLawOn H Sref Tref).w o *
+        (safeRatio6 (T.w o.1) (Tref.w o.1) *
+          ∏ r, safeRatio6 ((X.labelLaw Hξ Sraw o.1).w (o.2 r))
+            ((X.labelLaw H Sref o.1).w (o.2 r))) := by
+  rw [tupleLawOn_weight6, tupleLawOn_weight6]
+  have hTag' := safeRatio_mul_of_ne6 (a := T.w o.1) (b := Tref.w o.1) hTag
+  have hLabels (r : Fin X.k) :=
+    safeRatio_mul_of_ne6
+      (a := (X.labelLaw Hξ Sraw o.1).w (o.2 r))
+      (b := (X.labelLaw H Sref o.1).w (o.2 r)) (hLabel r)
+  calc
+    T.w o.1 * ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) =
+        (Tref.w o.1 * safeRatio6 (T.w o.1) (Tref.w o.1)) *
+          ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) := by rw [hTag']
+    _ = (Tref.w o.1 * safeRatio6 (T.w o.1) (Tref.w o.1)) *
+          ∏ r, ((X.labelLaw H Sref o.1).w (o.2 r) *
+            safeRatio6 ((X.labelLaw Hξ Sraw o.1).w (o.2 r))
+              ((X.labelLaw H Sref o.1).w (o.2 r))) := by
+        congr 1
+        apply Finset.prod_congr rfl
+        intro r hr
+        exact (hLabels r).symm
+    _ = (Tref.w o.1 * ∏ r, (X.labelLaw H Sref o.1).w (o.2 r)) *
+          (safeRatio6 (T.w o.1) (Tref.w o.1) *
+            ∏ r, safeRatio6 ((X.labelLaw Hξ Sraw o.1).w (o.2 r))
+              ((X.labelLaw H Sref o.1).w (o.2 r))) := by
+        rw [Finset.prod_mul_distrib]
+        ring
+
+private theorem withHid_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (ℓ : X.HKey) (ξ : Fin N)
+    (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ ℓ → H.2 h = H'.2 h) :
+    X.withHid H ℓ ξ = X.withHid H' ℓ ξ := by
+  apply Prod.ext
+  · exact hbase
+  · funext h
+    by_cases hh : h = ℓ
+    · subst h
+      simp [Ctx6.withHid]
+    · simp [Ctx6.withHid, Function.update, hh, hother h hh]
+
+private theorem finProb_ext_weight6 {Ω : Type*} [Fintype Ω]
+    {P Q : FinProb Ω} (h : P.w = Q.w) : P = Q := by
+  cases P with
+  | mk w hnon hsum =>
+    cases Q with
+    | mk w' hnon' hsum' =>
+      dsimp at h
+      subst w'
+      have hnonEq : hnon = hnon' := Subsingleton.elim _ _
+      have hsumEq : hsum = hsum' := Subsingleton.elim _ _
+      cases hnonEq
+      cases hsumEq
+      rfl
+
+private theorem tagPost_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (β : X.Ty)
+    (S : Finset X.HKey) (hbase : H.1 = H'.1)
+    (hobs : ∀ ℓ ∈ S, H.2 ℓ = H'.2 ℓ) :
+    X.tagPost H β S = X.tagPost H' β S := by
+  have hweight : X.tagWeight H β S = X.tagWeight H' β S := by
+    funext i
+    unfold Ctx6.tagWeight
+    rw [hbase]
+    congr 1
+    apply Finset.prod_congr rfl
+    intro ℓ hℓ
+    rw [hobs ℓ hℓ]
+  apply finProb_ext_weight6
+  exact congrArg (fun w => (normalize6 w X.i₀).w) hweight
+
+private theorem labelLaw_eq_of_varVal_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (S : Finset X.Name) (i : X.ι)
+    (hval : ∀ nm ∈ S, X.varVal H nm = X.varVal H' nm) :
+    X.labelLaw H S i = X.labelLaw H' S i := by
+  have hnbhd : X.reqNbhd H S = X.reqNbhd H' S := by
+    apply Finset.ext
+    intro x
+    simp only [Ctx6.reqNbhd, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro hx nm hnm
+      rw [← hval nm hnm]
+      exact hx nm hnm
+    · intro hx nm hnm
+      rw [hval nm hnm]
+      exact hx nm hnm
+  unfold Ctx6.labelLaw
+  rw [hnbhd]
+
+private theorem tupleLawOn_eq_of_labelLaw_eq6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (S : Finset X.Name)
+    (T : FinProb X.ι) (hLabel : ∀ i, X.labelLaw H S i = X.labelLaw H' S i) :
+    X.tupleLawOn H S T = X.tupleLawOn H' S T := by
+  apply finProb_ext_weight6
+  funext o
+  rw [tupleLawOn_weight6, tupleLawOn_weight6]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro r hr
+  rw [hLabel]
+
+private theorem lowRef_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (b : X.State) (β : X.Ty)
+    (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) :
+    Ctx6.lowRef X H b β = Ctx6.lowRef X H' b β := by
+  let drop : X.Name := .hid (X.tgt b)
+  have htag : X.TβDel H β (X.tgt b) = X.TβDel H' β (X.tgt b) := by
+    change X.tagPost H β (β.obs.erase (X.tgt b)) =
+      X.tagPost H' β (β.obs.erase (X.tgt b))
+    apply tagPost_eq_of_hidden_agree6 X H H' β (β.obs.erase (X.tgt b)) hbase
+    intro h hh
+    exact hother h (Finset.mem_erase.mp hh).1
+  have hnames : ∀ nm, nm ∈ (reqNames6 β).erase drop →
+      X.varVal H nm = X.varVal H' nm := by
+    intro nm hnm
+    cases nm with
+    | par p => simp [Ctx6.varVal, hbase]
+    | hid h =>
+        have hne : h ≠ X.tgt b := by
+          intro heq
+          apply (Finset.mem_erase.mp hnm).1
+          subst h
+          rfl
+        simpa [Ctx6.varVal] using hother h hne
+  have hlabels : ∀ i, X.labelLaw H ((reqNames6 β).erase drop) i =
+      X.labelLaw H' ((reqNames6 β).erase drop) i := by
+    intro i
+    exact labelLaw_eq_of_varVal_agree6 X H H' ((reqNames6 β).erase drop) i hnames
+  unfold Ctx6.lowRef Ctx6.tupleRef
+  rw [htag]
+  exact tupleLawOn_eq_of_labelLaw_eq6 X H H' ((reqNames6 β).erase drop)
+    (X.TβDel H' β (X.tgt b)) hlabels
+
+private theorem lowGate_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H H' : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) :
+    Ctx6.LowGate X H b D ξ = Ctx6.LowGate X H' b D ξ := by
+  have hwith := withHid_eq_of_hidden_agree6 X H H' (X.tgt b) ξ hbase hother
+  simp [Ctx6.LowGate, hbase, hwith]
+
+private theorem lowLik_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (b : X.State)
+    (β : X.Ty) (ξ : Fin N) (o : X.Tuple)
+    (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) :
+    Ctx6.lowLik X H b ξ β o = Ctx6.lowLik X H' b ξ β o := by
+  have hwith := withHid_eq_of_hidden_agree6 X H H' (X.tgt b) ξ hbase hother
+  have htag : X.TβDel H β (X.tgt b) = X.TβDel H' β (X.tgt b) := by
+    change X.tagPost H β (β.obs.erase (X.tgt b)) =
+      X.tagPost H' β (β.obs.erase (X.tgt b))
+    apply tagPost_eq_of_hidden_agree6 X H H' β (β.obs.erase (X.tgt b)) hbase
+    intro h hh
+    exact hother h (Finset.mem_erase.mp hh).1
+  have hnames : ∀ nm, nm ∈ (reqNames6 β).erase (.hid (X.tgt b)) →
+      X.varVal H nm = X.varVal H' nm := by
+    intro nm hnm
+    cases nm with
+    | par p => simp [Ctx6.varVal, hbase]
+    | hid h =>
+        have hne : h ≠ X.tgt b := by
+          intro heq
+          apply (Finset.mem_erase.mp hnm).1
+          subst h
+          rfl
+        simpa [Ctx6.varVal] using hother h hne
+  have hlabels : ∀ i, X.labelLaw H ((reqNames6 β).erase (.hid (X.tgt b))) i =
+      X.labelLaw H' ((reqNames6 β).erase (.hid (X.tgt b))) i := by
+    intro i
+    exact labelLaw_eq_of_varVal_agree6 X H H' _ i hnames
+  unfold Ctx6.lowLik Ctx6.tupleRatio
+  rw [hwith, htag, hlabels]
+
+private theorem lowWeight_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H H' : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (o : X.Data Id)
+    (drop : Option (Id × X.Ty)) (ξ : Fin N)
+    (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) :
+    Ctx6.lowWeight X H b D o drop ξ = Ctx6.lowWeight X H' b D o drop ξ := by
+  have hgate := lowGate_eq_of_hidden_agree6 X H H' b D ξ hbase hother
+  have hfactor : (X.hidPost H.1 (X.tgt b).1).w ξ *
+        (if X.LowGate H b D ξ then 1 else 0) =
+      (X.hidPost H'.1 (X.tgt b).1).w ξ *
+        (if X.LowGate H' b D ξ then 1 else 0) := by
+    rw [hbase, hgate]
+  have hprod :
+      (∏ e ∈ D, if drop = some e then 1 else X.lowLik H b ξ e.2 (o e)) =
+        ∏ e ∈ D, if drop = some e then 1 else X.lowLik H' b ξ e.2 (o e) := by
+    apply Finset.prod_congr rfl
+    intro e he
+    by_cases hdrop : drop = some e
+    · simp [hdrop]
+    · simp [hdrop, lowLik_eq_of_hidden_agree6 X H H' b e.2 ξ (o e) hbase hother]
+  unfold Ctx6.lowWeight
+  rw [hfactor, hprod]
+
+private theorem s3Mass_low_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H H' : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (o : X.Data Id)
+    (drop : Option (Id × X.Ty)) (hmode : X.stMode b = .low)
+    (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) :
+    X.s3Mass H b D o drop = X.s3Mass H' b D o drop := by
+  unfold Ctx6.s3Mass
+  apply Finset.sum_congr rfl
+  intro ξ hξ
+  simpa [Ctx6.s3Weight, hmode] using
+    lowWeight_eq_of_hidden_agree6 X H H' b D o drop ξ hbase hother
+
+private theorem pi_weight_split_qs6 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (ω : ∀ i, Ω i) :
+    (∏ i, (P i).w (ω i)) =
+      (∏ i : {i // i ∈ s}, (P i.1).w (ω i.1)) *
+        (∏ i : {i // i ∉ s}, (P i.1).w (ω i.1)) := by
+  classical
+  let f : ι → ℝ := fun i => (P i).w (ω i)
+  let t : Finset ι := Finset.univ.filter (fun i => i ∉ s)
+  have hs : (∏ i : {i // i ∈ s}, f i.1) =
+      ∏ i ∈ Finset.univ with i ∈ s, f i := by
+    rw [Finset.univ_eq_attach]
+    simpa [f] using Finset.prod_attach s f
+  let ecomp : {i // i ∉ s} ≃ {i // i ∈ t} := {
+    toFun := fun i => ⟨i.1, by simp [t, i.2]⟩
+    invFun := fun i => ⟨i.1, (Finset.mem_filter.mp i.2).2⟩
+    left_inv := by intro i; apply Subtype.ext; rfl
+    right_inv := by intro i; apply Subtype.ext; rfl
+  }
+  have hnot : (∏ i : {i // i ∉ s}, f i.1) =
+      ∏ i ∈ Finset.univ with i ∉ s, f i := by
+    calc
+      (∏ i : {i // i ∉ s}, f i.1) = ∏ i : {i // i ∈ t}, f i.1 := by
+        exact Fintype.prod_equiv ecomp _ _ (by intro i; rfl)
+      _ = ∏ i ∈ t.attach, f i.1 := by rw [Finset.univ_eq_attach]
+      _ = ∏ i ∈ t, f i := Finset.prod_attach t f
+      _ = ∏ i ∈ Finset.univ with i ∉ s, f i := by simp [t]
+  calc
+    (∏ i, f i) =
+        (∏ i ∈ Finset.univ with i ∈ s, f i) *
+          (∏ i ∈ Finset.univ with i ∉ s, f i) :=
+      (Finset.prod_filter_mul_prod_filter_not Finset.univ (fun i : ι => i ∈ s) f).symm
+    _ = (∏ i : {i // i ∈ s}, f i.1) *
+          (∏ i : {i // i ∉ s}, f i.1) := by rw [← hs, ← hnot]
+    _ = (∏ i : {i // i ∈ s}, (P i.1).w (ω i.1)) *
+          (∏ i : {i // i ∉ s}, (P i.1).w (ω i.1)) := by rfl
+
+theorem pi_expect_split6 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (f : (∀ i, Ω i) → ℝ) :
+    (FinProb.pi P).expect f =
+      ∑ a : (∀ i : {i // i ∈ s}, Ω i.1),
+        ∑ b : (∀ i : {i // i ∉ s}, Ω i.1),
+          (FinProb.pi (fun i : {i // i ∈ s} => P i.1)).w a *
+            (FinProb.pi (fun i : {i // i ∉ s} => P i.1)).w b *
+            f ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω).symm (a, b)) := by
+  classical
+  let e := Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω
+  change (∑ ω, (∏ i, (P i).w (ω i)) * f ω) = _
+  rw [← Equiv.sum_comp e.symm (fun ω => (∏ i, (P i).w (ω i)) * f ω)]
+  rw [Fintype.sum_prod_type]
+  apply Fintype.sum_congr
+  intro a
+  apply Fintype.sum_congr
+  intro b
+  rw [pi_weight_split_qs6 P s (e.symm (a, b))]
+  change ((∏ i : {i // i ∈ s}, (P i.1).w (e.symm (a, b) i.1)) *
+      (∏ i : {i // i ∉ s}, (P i.1).w (e.symm (a, b) i.1))) * f (e.symm (a, b)) = _
+  have hleft : ∀ i : {i // i ∈ s}, e.symm (a, b) i.1 = a i := by
+    intro i
+    simp [e, Equiv.piEquivPiSubtypeProd]
+  have hright : ∀ i : {i // i ∉ s}, e.symm (a, b) i.1 = b i := by
+    intro i
+    simp only [e, Equiv.piEquivPiSubtypeProd_symm_apply, dif_neg i.2]
+  simp_rw [hleft, hright]
+  rfl
+
+theorem pi_expect_prod6 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (f : ∀ i, Ω i → ℝ) :
+    (FinProb.pi P).expect (fun ω => ∏ i, f i (ω i)) =
+      ∏ i, (P i).expect (f i) := by
+  classical
+  calc
+    (FinProb.pi P).expect (fun ω => ∏ i, f i (ω i)) =
+        ∑ ω : (∀ i, Ω i), ∏ i, ((P i).w (ω i) * f i (ω i)) := by
+      unfold FinProb.expect FinProb.pi
+      apply Finset.sum_congr rfl
+      intro ω hω
+      rw [← Finset.prod_mul_distrib]
+    _ = ∏ i, ∑ x, (P i).w x * f i x :=
+      (Fintype.prod_sum fun i x => (P i).w x * f i x).symm
+    _ = ∏ i, (P i).expect (f i) := by simp [FinProb.expect]
+
+theorem pr_eq_expect_indicator6 {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A = P.expect (fun ω => if A ω then 1 else 0) := by
+  classical
+  simp [FinProb.pr, FinProb.expect, mul_ite]
+
+theorem dataLaw_pr_depends6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H : X.Hist) (D : Finset (Id × X.Ty)) (A : X.Data Id → Prop)
+    (hA : ∀ o o', (∀ e ∈ D, o e = o' e) → (A o ↔ A o'))
+    (o₀ : X.Data Id) :
+    (X.dataLaw Id H).pr A =
+      (FinProb.pi (fun e : {e : Id × X.Ty // e ∈ D} => X.tupleLaw H e.1.2)).pr
+        (fun a => A ((Equiv.piEquivPiSubtypeProd (fun e : Id × X.Ty => e ∈ D)
+          (fun _ => X.Tuple)).symm (a, fun e => o₀ e.1))) := by
+  classical
+  let P : ∀ e : Id × X.Ty, FinProb X.Tuple := fun e => X.tupleLaw H e.2
+  let f : X.Data Id → ℝ := fun o => if A o then 1 else 0
+  have hf : FinProb.DependsOn f D := by
+    intro o o' hagree
+    have hiff := hA o o' hagree
+    by_cases ho : A o
+    · have ho' : A o' := hiff.mp ho
+      simp [f, ho, ho']
+    · have ho' : ¬ A o' := fun h' => ho (hiff.mpr h')
+      simp [f, ho, ho']
+  calc
+    (X.dataLaw Id H).pr A = (X.dataLaw Id H).expect f :=
+      (pr_eq_expect_indicator6 (X.dataLaw Id H) A)
+    _ = (FinProb.pi P).expect f := by rfl
+    _ = (FinProb.pi (fun e : {e : Id × X.Ty // e ∈ D} => P e.1)).expect
+        (fun a => f ((Equiv.piEquivPiSubtypeProd (fun e : Id × X.Ty => e ∈ D)
+          (fun _ => X.Tuple)).symm (a, fun e => o₀ e.1))) :=
+        FinProb.pi_expect_depends P D f o₀ hf
+    _ = (FinProb.pi (fun e : {e : Id × X.Ty // e ∈ D} => X.tupleLaw H e.1.2)).pr
+        (fun a => A ((Equiv.piEquivPiSubtypeProd (fun e : Id × X.Ty => e ∈ D)
+          (fun _ => X.Tuple)).symm (a, fun e => o₀ e.1))) := by
+      simp [FinProb.pr, FinProb.expect, f, P]
+
+theorem bind_pr6 {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (K : α → FinProb β) (A : α → β → Prop) :
+    (FinProb.bind P K).pr (fun ab => A ab.1 ab.2) =
+      ∑ a, P.w a * (K a).pr (A a) := by
+  classical
+  change (∑ ab : α × β, if A ab.1 ab.2 then P.w ab.1 * (K ab.1).w ab.2 else 0) =
+    ∑ a, P.w a * ∑ b, if A a b then (K a).w b else 0
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a ha
+  calc
+    (∑ b, if A a b then P.w a * (K a).w b else 0) =
+        ∑ b, P.w a * (if A a b then (K a).w b else 0) := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      by_cases h : A a b <;> simp [h]
+    _ = P.w a * ∑ b, if A a b then (K a).w b else 0 := by rw [Finset.mul_sum]
+
+theorem rawHistData_pr_expand6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (A : X.Hist → X.Data Id → Prop) :
+    (X.rawHistData Id).pr (fun z => A z.1 z.2) =
+      ∑ b : X.Base, X.baseLaw.w b *
+        (X.hidLaw b).expect (fun z => (X.dataLaw Id (b, z)).pr (A (b, z))) := by
+  classical
+  rw [Ctx6.rawHistData, bind_pr6]
+  rw [Ctx6.rawHist]
+  change (∑ H : X.Base × X.Hid,
+      (X.baseLaw.w H.1 * (X.hidLaw H.1).w H.2) *
+        (X.dataLaw Id H).pr (A H)) = _
+  rw [Fintype.sum_prod_type]
+  unfold FinProb.expect
+  calc
+    (∑ b, ∑ z, (X.baseLaw.w b * (X.hidLaw b).w z) *
+        (X.dataLaw Id (b, z)).pr (A (b, z))) =
+      ∑ b, X.baseLaw.w b * ∑ z, (X.hidLaw b).w z *
+        (X.dataLaw Id (b, z)).pr (A (b, z)) := by
+          apply Finset.sum_congr rfl
+          intro b hb
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro z hz
+          ring
+    _ = ∑ b, X.baseLaw.w b *
+        (X.hidLaw b).expect (fun z => (X.dataLaw Id (b, z)).pr (A (b, z))) := rfl
+
+end Lane_q_s06_steps2
 end S06
 end HypercubeRamsey

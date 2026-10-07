@@ -1474,6 +1474,7 @@ theorem decPath_weight_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g 
         rw [mul_pow]
         ring
 
+set_option maxHeartbeats 1000000 in
 open Classical in
 /-- L3.10d-two (03:928–936): paths from a scope row `r` of a predicate meeting another row of that scope. In the
 reversed walk from `v`, choose the two positions (at most `j²` pairs) and a predicate containing the earlier row
@@ -1491,7 +1492,134 @@ theorem two_row_weight_sum {T : ℕ} {R K : Type*} [Fintype R] [DecidableEq R] [
           pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π ≤
       (j : ℝ) ^ 2 * D * (D * lam / θ) *
         (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ)) := by
-  sorry
+  classical
+  let edgeLaw := samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab
+  let allRootWeight (r : R) : ℝ :=
+    ∑ π ∈ decPaths (Sum.inl r) v j, pathWeight edgeLaw π
+  let badRootWeight (k : K) (r : R) : ℝ :=
+    ∑ π ∈ (decPaths (Sum.inl r) v j).filter (fun π => pathMeetsOtherRow π (scope k) r),
+      pathWeight edgeLaw π
+  have hpathWeight_nonneg (π : Fin j → ClockCandidate T R g Ω) :
+      0 ≤ pathWeight edgeLaw π := by
+    unfold pathWeight
+    exact Finset.prod_nonneg fun i hi =>
+      (edgeLaw ((π i).1, (π i).2.1)).nonneg _
+  have hweightNonneg (r : R) : 0 ≤ allRootWeight r := by
+    unfold allRootWeight pathWeight
+    apply Finset.sum_nonneg
+    intro π hπ
+    exact hpathWeight_nonneg π
+  have hbadLe (k : K) (r : R) : badRootWeight k r ≤ allRootWeight r := by
+    unfold badRootWeight allRootWeight
+    apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _)
+    intro π hπ hπnot
+    exact hpathWeight_nonneg π
+  have hscopeAttach (k : K) :
+      (∑ r : {r : R // r ∈ scope k}, badRootWeight k r.1) =
+        ∑ r ∈ scope k, badRootWeight k r := by
+    rw [Finset.univ_eq_attach]
+    exact Finset.sum_attach (scope k) _
+  let scopePairEquiv :
+      (Σ k : K, {r : R // r ∈ scope k}) ≃ Σ r : R, {k : K // r ∈ scope k} :=
+    { toFun := fun (x : Σ k : K, {r : R // r ∈ scope k}) => ⟨x.2.1, ⟨x.1, x.2.2⟩⟩
+      invFun := fun (x : Σ r : R, {k : K // r ∈ scope k}) => ⟨x.2.1, ⟨x.1, x.2.2⟩⟩
+      left_inv := by rintro ⟨k, ⟨r, hr⟩⟩; rfl
+      right_inv := by rintro ⟨r, ⟨k, hr⟩⟩; rfl }
+  have hswap :
+      (∑ k, ∑ r ∈ scope k, badRootWeight k r) =
+        ∑ r : R, ∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r := by
+    calc
+      (∑ k, ∑ r ∈ scope k, badRootWeight k r) =
+          ∑ k, ∑ r : {r : R // r ∈ scope k}, badRootWeight k r.1 := by
+            apply Finset.sum_congr rfl
+            intro k hk
+            exact (hscopeAttach k).symm
+      _ = ∑ x : (Σ k : K, {r : R // r ∈ scope k}), badRootWeight x.1 x.2.1 := by
+            symm
+            exact Fintype.sum_sigma'
+              (fun (k : K) (r : {r : R // r ∈ scope k}) => badRootWeight k r.1)
+      _ = ∑ x : (Σ r : R, {k : K // r ∈ scope k}), badRootWeight x.2.1 x.1 := by
+            exact Fintype.sum_equiv scopePairEquiv _ _ (by intro x; rfl)
+      _ = ∑ r : R, ∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r := by
+            exact Fintype.sum_sigma'
+              (fun (r : R) (k : {k : K // r ∈ scope k}) => badRootWeight k.1 r)
+  have hdegreeBound (r : R) :
+      (∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r) ≤ D * allRootWeight r := by
+    calc
+      (∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r) ≤
+          ∑ k : {k : K // r ∈ scope k}, allRootWeight r := by
+            apply Finset.sum_le_sum
+            intro k hk
+            exact hbadLe k.1 r
+      _ = (Fintype.card {k : K // r ∈ scope k} : ℝ) * allRootWeight r := by
+            simp [Finset.sum_const, nsmul_eq_mul]
+      _ ≤ D * allRootWeight r := by
+            apply mul_le_mul_of_nonneg_right _ (hweightNonneg r)
+            have hcard : (Fintype.card {k : K // r ∈ scope k} : ℝ) ≤ D := by
+              simpa [Fintype.card_subtype] using hdeg r
+            exact hcard
+  have hrowWeight :
+      (∑ r : R, allRootWeight r) ≤
+        θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ) := by
+    calc
+      (∑ r : R, allRootWeight r) ≤
+          ∑ u : Endpoint R g, ∑ π ∈ decPaths u v j, pathWeight edgeLaw π := by
+            rw [Fintype.sum_sum_type]
+            apply le_add_of_nonneg_right
+            apply Finset.sum_nonneg
+            intro y hy
+            apply Finset.sum_nonneg
+            intro π hπ
+            exact hpathWeight_nonneg π
+      _ = ∑ r, ∑ π ∈ decPaths r v j, pathWeight edgeLaw π := by rfl
+      _ ≤ _ := decPath_weight_sum δ hδ hδ1 p lab θ hrow hcol hθ0.le hθ1 v j
+  have hsumRoot :
+      (∑ k, ∑ r ∈ scope k,
+        ∑ π ∈ (decPaths (Sum.inl r) v j).filter
+          (fun π => pathMeetsOtherRow π (scope k) r), pathWeight edgeLaw π) ≤
+        D * (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ)) := by
+    calc
+      (∑ k, ∑ r ∈ scope k,
+        ∑ π ∈ (decPaths (Sum.inl r) v j).filter
+          (fun π => pathMeetsOtherRow π (scope k) r), pathWeight edgeLaw π) =
+          ∑ k, ∑ r ∈ scope k, badRootWeight k r := by
+            simp [badRootWeight]
+      _ = ∑ r : R, ∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r := hswap
+      _ ≤ ∑ r : R, D * allRootWeight r := by
+            apply Finset.sum_le_sum
+            intro r hr
+            exact hdegreeBound r
+      _ = D * ∑ r : R, allRootWeight r := by rw [Finset.mul_sum]
+      _ ≤ D * (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ)) := by
+            exact mul_le_mul_of_nonneg_left hrowWeight hD
+  by_cases hj : j = 0
+  · subst j
+    simp [pathMeetsOtherRow] at *
+  by_cases hD0 : D = 0
+  · have hempty (k : K) : scope k = ∅ := by
+      apply Finset.card_eq_zero.mp
+      have hle : ((scope k).card : ℝ) ≤ 0 := by simpa [hD0] using hsc k
+      have hreal : ((scope k).card : ℝ) = 0 := le_antisymm hle (by positivity)
+      exact_mod_cast hreal
+    simp [hempty, hD0]
+  by_cases hlarge : 1 ≤ D * lam / θ
+  · have hmult : D ≤ (j : ℝ) ^ 2 * D * (D * lam / θ) := by
+      have hj1 : 1 ≤ (j : ℝ) ^ 2 := by
+        have hnat : 1 ≤ j := Nat.one_le_iff_ne_zero.mpr hj
+        have hjR : (1 : ℝ) ≤ (j : ℝ) := by exact_mod_cast hnat
+        nlinarith
+      have hfactor' := mul_le_mul_of_nonneg_left hlarge (sq_nonneg (j : ℝ))
+      have hfactor : 1 ≤ (j : ℝ) ^ 2 * (D * lam / θ) := by
+        calc
+          1 ≤ (j : ℝ) ^ 2 := hj1
+          _ ≤ (j : ℝ) ^ 2 * (D * lam / θ) := by simpa using hfactor'
+      calc
+        D ≤ D * ((j : ℝ) ^ 2 * (D * lam / θ)) := le_mul_of_one_le_right hD hfactor
+        _ = (j : ℝ) ^ 2 * D * (D * lam / θ) := by ring
+    exact le_trans hsumRoot (by
+      apply mul_le_mul_of_nonneg_right hmult
+      positivity)
+  · sorry
 
 /-- L3.10d-series (03:922–924): `∑_j θ^{⌊j/2⌋} x^j / j! ≤ e^{√θ x} / √θ`. -/
 theorem walk_series_bound (θ x : ℝ) (hθ0 : 0 < θ) (hθ1 : θ ≤ 1) (hx : 0 ≤ x) (M : ℕ) :

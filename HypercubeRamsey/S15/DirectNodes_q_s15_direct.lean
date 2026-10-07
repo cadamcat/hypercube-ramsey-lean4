@@ -1565,4 +1565,62 @@ theorem directRowWeight_split_cross_bulk {κ : CConsts} {T : Stage} {k : ℕ}
   simp only [if_pos hcross]
   field_simp [ne_of_gt hcross]
 
+theorem directRowWeight_eq_base_prod {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (ys : S15.OddAssignment T k) (a : S15.EvenPosition T k)
+    (x : Fin (T.S.N k)) :
+    S15.directRowWeight PT hPT ys a x =
+      S15.directBaseWeight PT hPT a x *
+        (∏ b ∈ S15.crossingNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) *
+        (∏ b ∈ S15.bulkNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) := by
+  classical
+  by_cases hcross : 0 < S15.directCrossingMass PT hPT ys a
+  · exact directRowWeight_split_cross_bulk PT hPT ys a x hcross
+  · have hmass0 : S15.directCrossingMass PT hPT ys a = 0 := by
+      apply le_antisymm
+      · exact le_of_not_gt hcross
+      · exact directCrossingMass_nonneg PT hPT ys a
+    have hbaseNonneg := directBaseWeight_nonneg PT hPT a x
+    have hcrossProdNonneg : 0 ≤
+        ∏ b ∈ S15.crossingNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x :=
+      Finset.prod_nonneg fun b hb => directFactor_nonneg PT hPT a ys b x
+    have hbaseProdZero : S15.directBaseWeight PT hPT a x *
+        (∏ b ∈ S15.crossingNeighbours PT hPT a,
+          S15.directFactor PT hPT a ys b x) = 0 := by
+      by_contra hne
+      have hbaseNe : S15.directBaseWeight PT hPT a x ≠ 0 := by
+        intro hz
+        simp [hz] at hne
+      have hcrossProdNe :
+          (∏ b ∈ S15.crossingNeighbours PT hPT a,
+            S15.directFactor PT hPT a ys b x) ≠ 0 := by
+        intro hz
+        simp [hz] at hne
+      have hbasePos : 0 < S15.directBaseWeight PT hPT a x :=
+        lt_of_le_of_ne hbaseNonneg (Ne.symm hbaseNe)
+      have hcrossProdPos : 0 <
+          ∏ b ∈ S15.crossingNeighbours PT hPT a,
+            S15.directFactor PT hPT a ys b x :=
+        lt_of_le_of_ne hcrossProdNonneg (Ne.symm hcrossProdNe)
+      have htermPos : 0 < S15.directBaseWeight PT hPT a x *
+          (∏ b ∈ S15.crossingNeighbours PT hPT a,
+            S15.directFactor PT hPT a ys b x) := mul_pos hbasePos hcrossProdPos
+      have htermLe : S15.directBaseWeight PT hPT a x *
+          (∏ b ∈ S15.crossingNeighbours PT hPT a,
+            S15.directFactor PT hPT a ys b x) ≤
+              S15.directCrossingMass PT hPT ys a := by
+        unfold S15.directCrossingMass
+        exact Finset.single_le_sum
+          (fun z hz => mul_nonneg (directBaseWeight_nonneg PT hPT a z)
+            (Finset.prod_nonneg fun b hb => directFactor_nonneg PT hPT a ys b z))
+          (Finset.mem_univ x)
+      have hmass0le : S15.directCrossingMass PT hPT ys a ≤ 0 := by rw [hmass0]
+      exact (not_le_of_gt htermPos) (le_trans htermLe hmass0le)
+    unfold S15.directRowWeight
+    rw [hmass0]
+    simp [S15.directPostCrossingWeight, hbaseProdZero]
+
 end HypercubeRamsey.Lane_q_s15_direct

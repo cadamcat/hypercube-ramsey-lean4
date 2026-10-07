@@ -41,7 +41,7 @@ of `Θ_g` and a retained `x` survives them with probability `α_x^{|E(g)|} ≤ 1
 theorem bcomp_mean (hη₀ : 0 < η₀) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       GridFacts η₀ D.n → D.BcompMean K := by
-  sorry
+  exact Lane_q_s08_load.bcomp_mean η₀ γ β p K h hη₀ hK
 
 /-- L8.1i(iii) (08:345–350): Lemma 3.6 (with labels, `scatteredMoments_union_labels`) for the comparison means under
 the hidden law.  Rows are near when their keys are within distance eight (fraction `f_grid`); `B_g` reads `Θ` on

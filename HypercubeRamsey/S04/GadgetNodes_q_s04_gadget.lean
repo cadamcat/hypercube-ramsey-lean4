@@ -2792,6 +2792,68 @@ private theorem mergeSort_one_change_at {n : ℕ} (f g : Fin n → ℕ) (j : Fin
   have hvalue : mergeSortAt f r = f j := by omega
   exact ⟨r, hvalue, by rw [hrank, hvalue, hcoord], hrest⟩
 
+private theorem mergeSortList_eq_of_at_eq {n : ℕ} (f g : Fin n → ℕ)
+    (h : ∀ i, mergeSortAt f i = mergeSortAt g i) :
+    (List.ofFn f).mergeSort (fun a b => decide (a ≤ b)) =
+      (List.ofFn g).mergeSort (fun a b => decide (a ≤ b)) := by
+  classical
+  let Lf := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  let Lg := (List.ofFn g).mergeSort (fun a b => decide (a ≤ b))
+  have hlenf : Lf.length = n := by simp [Lf]
+  have hLeng : Lg.length = n := by simp [Lg]
+  let qf : Fin n → ℕ := fun i => Lf.get (Fin.cast hlenf.symm i)
+  let qg : Fin n → ℕ := fun i => Lg.get (Fin.cast hLeng.symm i)
+  have hqf : ∀ i : Fin n, qf i = mergeSortAt f i := by intro i; rfl
+  have hqg : ∀ i : Fin n, qg i = mergeSortAt g i := by intro i; rfl
+  have hOfFnF : List.ofFn qf = Lf := by
+    change List.ofFn (fun i : Fin n => Lf.get (Fin.cast hlenf.symm i)) = Lf
+    rw [← List.ofFn_congr hlenf (List.get Lf)]
+    exact List.ofFn_get Lf
+  have hOfFnG : List.ofFn qg = Lg := by
+    change List.ofFn (fun i : Fin n => Lg.get (Fin.cast hLeng.symm i)) = Lg
+    rw [← List.ofFn_congr hLeng (List.get Lg)]
+    exact List.ofFn_get Lg
+  have hq : qf = qg := by
+    funext i
+    rw [hqf i, hqg i]
+    exact h i
+  calc
+    Lf = List.ofFn qf := hOfFnF.symm
+    _ = List.ofFn qg := congrArg List.ofFn hq
+    _ = Lg := hOfFnG
+
+private theorem searchLeaf_eq_of_rank_profile {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v w : CubeVertex n)
+    (hprofile : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) j =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w) j) :
+    HypercubeRamsey.S04.searchLeaf β γ n g v =
+      HypercubeRamsey.S04.searchLeaf β γ n g w := by
+  classical
+  have hsorted := mergeSortList_eq_of_at_eq
+    (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+      HypercubeRamsey.S04.clipped β γ n g j v)
+    (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+      HypercubeRamsey.S04.clipped β γ n g j w) hprofile
+  have hrv : ∀ t, HypercubeRamsey.S04.rankValue β γ n g v t =
+      HypercubeRamsey.S04.rankValue β γ n g w t := by
+    intro t
+    simp [HypercubeRamsey.S04.rankValue,
+      HypercubeRamsey.S04.sortedCounts, hsorted]
+  have hstep : ∀ ab,
+      HypercubeRamsey.S04.searchStep β γ n g v ab =
+        HypercubeRamsey.S04.searchStep β γ n g w ab := by
+    intro ab
+    simp [HypercubeRamsey.S04.searchStep, hrv]
+  have hfold (L : List ℕ) (ab : ℕ × ℕ) :
+      List.foldl (fun st _ => HypercubeRamsey.S04.searchStep β γ n g v st) ab L =
+        List.foldl (fun st _ => HypercubeRamsey.S04.searchStep β γ n g w st) ab L := by
+    induction L generalizing ab with
+    | nil => rfl
+    | cons t L ih => simp [List.foldl_cons, hstep, ih]
+  unfold HypercubeRamsey.S04.searchLeaf
+  exact hfold _ _
+
 private def binarySearchMid (ab : ℕ × ℕ) : ℕ := (ab.1 + ab.2) / 2
 
 private def binarySearchStepR (S : ℕ) (R : ℕ → ℕ) (ab : ℕ × ℕ) : ℕ × ℕ :=

@@ -1,5 +1,6 @@
 import HypercubeRamsey.S16.Comparisons
 import HypercubeRamsey.S16.Producers_q_s16_prod1
+import HypercubeRamsey.S16.Producers_sol_s16_prod1
 
 /-! Construction contracts connecting the conditional Section 16 estimates
 to physical cells. These nodes are separate proof obligations: none assumes
@@ -151,7 +152,162 @@ theorem cell_raw_data_exists {κ : CConsts} (hκ : κ.Admissible) :
   refine ⟨0, ?_⟩
   intro T k PT K16 Q H hUniform hn
   by_cases hCluster : PT.tiling.mode.isCluster
-  · sorry
+  · have hMode : PT.tiling.mode = .lowCluster := by
+      have hLow := Q.mode_low
+      cases hm : PT.tiling.mode <;>
+        simp_all [Mode.isCluster, Mode.isLow]
+    let S : ∀ C : H.geom.Cell,
+        SliceSolver κ PT.tiling (H.geom.cellPatch C) PT.mesh :=
+      fun C => Classical.choose (Q.profiled_valid.cluster_solver hCluster (H.geom.cellPatch C))
+    have hS : ∀ C, PT.solver (H.geom.cellPatch C) = some (S C) :=
+      fun C => Classical.choose_spec
+        (Q.profiled_valid.cluster_solver hCluster (H.geom.cellPatch C))
+    have hh : ∀ i, (PT.tiling.P i).h ≤ T.S.n k := by
+      intro i
+      have hle : (PT.tiling.P i).h ≤
+          Finset.univ.sup (fun i : Fin PT.tiling.m => (PT.tiling.P i).h) :=
+        Finset.le_sup (f := fun i : Fin PT.tiling.m => (PT.tiling.P i).h) (Finset.mem_univ i)
+      have := Q.profiled_valid.tiling_valid.prefix_internal_length
+      omega
+    have hp : ∀ i, 0 < (PT.tiling.P i).h := by
+      intro i
+      have hdy := (Q.profiled_valid.tiling_valid.cluster_data (Or.inl hMode) i).2.2.2.2.2.2.1
+      rw [hdy]
+      positivity
+    let words := fun C => Lane_q_s16_prod1.clusterCellWords C
+      (H.cell_partition.whole_slices C) (hh (H.geom.cellPatch C)) (hp (H.geom.cellPatch C))
+    let q : ∀ C, (∀ _ : Lane_q_s16_prod1.ClusterCellSlice H.geom C, ∀ r, (S C).Val r) →
+        (Lane_q_s16_prod1.ClusterCellSlice H.geom C × HypercubeRamsey.Group PT.tiling (H.geom.cellPatch C)) →
+        FinLaw (Bin PT.tiling (H.geom.cellPatch C)) :=
+      fun C W g => ⟨(S C).q g.2 (W g.1), (S C).q_nonneg g.2 (W g.1),
+        (S C).q_sum g.2 (W g.1)⟩
+    let trim := fun C (W : ∀ _ : Lane_q_s16_prod1.ClusterCellSlice H.geom C, ∀ r, (S C).Val r)
+        (g : Lane_q_s16_prod1.ClusterCellSlice H.geom C ×
+        HypercubeRamsey.Group PT.tiling (H.geom.cellPatch C)) =>
+      (S C).pretrimBins (W g.1) g.2
+    let prior := fun C (W : ∀ _ : Lane_q_s16_prod1.ClusterCellSlice H.geom C, ∀ r, (S C).Val r)
+        (ys : OddCellRole H.geom C → Fin (T.S.N k)) (v : Pos T k) =>
+      if hv : H.geom.cellOf v = C then
+        let x := (words C).symm ⟨v, hv⟩
+        if hz : IsEvenRole x.2 then
+          (S C).σ ⟨x.2, hz⟩ (W x.1) (nbrLabels x.2 fun z =>
+            if ho : ¬ IsEvenRole (words C (x.1, z)).1 then
+              ys ⟨(words C (x.1, z)).1, (words C (x.1, z)).2, ho⟩
+            else Classical.choose (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2)
+        else 0
+      else 0
+    have σ_subprob : ∀ C (w : EvenRole PT.tiling (H.geom.cellPatch C)) W ls,
+        (∑ y, (S C).σ w W ls y) ≤ 1 := by
+      intro C w W ls
+      by_cases hzero : (S C).σ w W ls = 0
+      · simp [hzero]
+      · exact le_of_eq ((S C).σ_prob w W ls hzero)
+    have prior_on_word : ∀ C W ys s (w : EvenRole PT.tiling (H.geom.cellPatch C)),
+        prior C W ys (words C (s, w.1)).1 =
+          (S C).σ w (W s) (nbrLabels w.1 fun z =>
+            if ho : ¬ IsEvenRole (words C (s, z)).1 then
+              ys ⟨(words C (s, z)).1, (words C (s, z)).2, ho⟩
+            else Classical.choose (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2) := by
+      intro C W ys s w
+      have hcell := (words C (s, w.1)).2
+      have hback : (words C).symm ⟨(words C (s, w.1)).1, hcell⟩ = (s, w.1) :=
+        (words C).symm_apply_apply (s, w.1)
+      simp only [prior, dif_pos hcell, hback, w.2, ↓reduceDIte]
+      rfl
+    let R : CellRawData H.geom :=
+      { Slice := fun C => Lane_q_s16_prod1.ClusterCellSlice H.geom C
+        sliceFin := fun C => inferInstance
+        sliceDec := fun C => Classical.decEq _
+        Value := fun C _ => ∀ r, (S C).Val r
+        valueFin := fun C s => inferInstance
+        valueDec := fun C s => Classical.decEq _
+        sliceLaw := fun C _ => (S C).recLaw PT.parameter
+        slicePass := fun C _ => Finset.univ.filter (S C).AllGood
+        slice_pos := by
+          intro C s
+          simpa [FinLaw.pr, Finset.sum_filter] using
+            Lane_sol_s16_prod1.solver_good_pos Q.profiled_valid hMode (S C) (hS C)
+        Group := fun C => Lane_q_s16_prod1.ClusterCellSlice H.geom C ×
+          HypercubeRamsey.Group PT.tiling (H.geom.cellPatch C)
+        groupFin := fun C => inferInstance
+        groupDec := fun C => Classical.decEq _
+        groupOf := fun C r =>
+          let x := (words C).symm ⟨r.1, r.2.1⟩
+          (x.1, (S C).groupOf x.2)
+        cellWords := words
+        axis := fun C => Lane_q_s16_prod1.cellAxis (H.geom.cellPatch C) (hh (H.geom.cellPatch C))
+        axis_injective := fun C => Lane_q_s16_prod1.cellAxis_injective _ _
+        axes_eq := fun C => Lane_q_s16_prod1.cellAxis_image _ _
+        word_parity := by
+          intro _ C s z
+          exact Lane_sol_s16_prod1.combine_parity _ s z _
+        word_flip := by
+          intro C s z j
+          exact Lane_sol_s16_prod1.combine_flip _ s z _ j
+        word_outer := by
+          intro C s z z' j hj
+          simp [words, Lane_q_s16_prod1.clusterCellWords,
+            Lane_q_s16_prod1.clusterCombine, hj]
+        qraw := q
+        pretrim := trim
+        qin := fun C W g =>
+          if hmass : 0 < ∑ D ∈ trim C W g, (q C W g).w D then
+            FinLaw.cond (q C W g) (trim C W g) hmass else q C W g
+        qin_eq := by
+          intro C W g D hW
+          have hg := hW g.1
+          have hgood : (S C).AllGood (W g.1) := by simpa using hg.1
+          have hmass := Lane_sol_s16_prod1.solver_pretrim_pos Q.profiled_valid hMode
+            (S C) (hS C) (W g.1) hgood hg.2 g.2
+          dsimp [q, trim] at hmass ⊢
+          simp only [hmass, ↓reduceDIte, FinLaw.cond]
+        U := fun C W g D => ⟨(S C).U g.2 (W g.1) D,
+          (S C).U_nonneg g.2 (W g.1) D, (S C).U_sum g.2 (W g.1) D⟩
+        U_support := by
+          intro C W g D y hy
+          exact (S C).U_support g.2 (W g.1) D y hy
+        rawPrior := prior
+        prior_nonneg := by
+          intro C W ys v y
+          dsimp [prior]
+          split_ifs <;> first | exact (S C).σ_nonneg _ _ _ _ | exact le_rfl
+        prior_subprob := by
+          intro C W ys v
+          dsimp [prior]
+          split_ifs with hv hz
+          · exact σ_subprob C _ _ _
+          · simp
+          · simp }
+    refine ⟨R, Or.inl ⟨hMode, hUniform, ?_⟩⟩
+    intro C
+    refine ⟨S C, hS C, fun _ => Equiv.refl _, Equiv.refl _, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · intro s
+      exact (@Lane_sol_s16_prod1.map_refl (R.Value C s)
+        (R.instValueFintype C s) (R.instValueDecidableEq C s)
+        ((S C).recLaw PT.parameter)).symm
+    · intro s W
+      simp [R]
+    · intro s z hz
+      dsimp [R]
+      rw [Equiv.symm_apply_apply]
+    · intro W s g D
+      rfl
+    · intro W s g
+      rfl
+    · intro W s g D y
+      rfl
+    · intro W s w ys fallback
+      change prior C W ys (words C (s, w.1)).1 =
+        (S C).σ w (W s) (nbrLabels w.1 (R.wordLabel C ys s fallback))
+      rw [prior_on_word]
+      apply congrArg ((S C).σ w (W s))
+      funext j
+      have hodd : ¬ IsEvenRole (words C (s, flipPos w.1 j)).1 := by
+        change ¬ IsEvenRole (Lane_q_s16_prod1.clusterCombine _ s (flipPos w.1 j) _)
+        rw [Lane_sol_s16_prod1.combine_parity]
+        intro he
+        exact ((Lane_sol_s16_prod1.flip_parity w.1 j).mp he) w.2
+      simp [nbrLabels, CellRawData.wordLabel, R, hodd]
   · have hDirect : PT.tiling.mode = .bounded ∨ PT.tiling.mode = .lowDirect := by
       cases hmode : PT.tiling.mode with
       | bounded => exact Or.inl rfl
@@ -427,6 +583,33 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       CellDiagnosticLink K C D → ∀ pool W, D.typical pool → D.loadGate pool W →
       (R.history C).w W ≠ 0 → GroupBinHypotheses hκ (K.binProblem C pool W) := by
   sorry
+
+private theorem group_bin_dirac_obstruction {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {G : LowGeom PT}
+    {R : CellRawData G} {Perm : CellPermissions R} (K : CellRestrictedKernels R Perm)
+    (C : G.Cell) (pool : CellPool G C) (W : R.Hist C)
+    (r : OddCellRole G C) (b : Bin PT.tiling (G.cellPatch C)) (y : Fin (T.S.N k))
+    (hdirac : (R.U C W (R.groupOf C r) b).w y = 1)
+    (hd : 2 ≤ (PT.tiling.P (G.cellPatch C)).d) :
+    ¬ GroupBinHypotheses hκ (K.binProblem C pool W) := by
+  intro hP
+  have hlo : (R.U C W (R.groupOf C r) b).w y ≤
+      (K.binProblem C pool W).contribution (R.groupOf C r) b y := by
+    change _ ≤ ∑ r' : OddCellRole G C,
+      if R.groupOf C r' = R.groupOf C r then (R.U C W (R.groupOf C r) b).w y else 0
+    have hs := Finset.single_le_sum (s := Finset.univ) (a := r)
+      (f := fun r' : OddCellRole G C =>
+        if R.groupOf C r' = R.groupOf C r then (R.U C W (R.groupOf C r) b).w y else 0)
+      (by intro r' _; split_ifs <;> first | exact (R.U C W _ b).nonneg y | exact le_rfl)
+      (Finset.mem_univ r)
+    simpa using hs
+  have hcap := (hP.contribution_range (R.groupOf C r) b y).2
+  have hlt : Real.rpow ((PT.tiling.P (G.cellPatch C)).d : ℝ) (-0.5) < 1 := by
+    apply Real.rpow_lt_one_of_one_lt_of_neg
+    · exact_mod_cast (lt_of_lt_of_le (by norm_num : (1 : ℕ) < 2) hd)
+    · norm_num
+  rw [hdirac] at hlo
+  exact (not_le_of_gt hlt) (hlo.trans hcap)
 
 /-- A role problem linked to the successful physical bins, not arbitrary
 targets/tests. In direct modes its single block is the whole cell pool. -/

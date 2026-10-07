@@ -2993,6 +2993,755 @@ def ScaleRegimeFacts {κ : CConsts} {T : Stage} {k : ℕ}
   (𝒯.mode = .highSmall → ∀ i,
     ((𝒯.P i).h : ℝ) < Real.rpow ((𝒯.P i).d : ℝ) (1 / 40 : ℝ))
 
+private abbrev allocation_retypePatch (T : Stage) (k : ℕ) (o : Bool) (P : Patch T k) :
+    Patch (T.orient o) k := by
+  cases o with
+  | false => exact P
+  | true =>
+    exact { X := P.X, Y := P.Y, M := P.M, resX := P.resX, resY := P.resY, g := P.g, q := P.q, h := P.h, ℓ := P.ℓ, d := P.d, bins := P.bins, cardX := P.cardX, cardY := P.cardY, X_res := P.X_res, Y_res := P.Y_res }
+
+private abbrev allocation_singleTiling (κ : CConsts) (T : Stage) (k : ℕ) (o : Bool)
+    (mode : Mode) (c : Colour) (P : Patch T k)
+    (ZX ZY : Finset (Fin (T.S.N k))) (Q : ℕ) : Tiling κ (T.orient o) k := by
+  cases o with
+  | false =>
+    exact { mode := mode, c := c, m := 1, P := fun _ => P, S := P.M, w := fun _ _ => false, reserveX := ZX, reserveY := ZY, Q := fun _ => Q }
+  | true =>
+    exact { mode := mode, c := c, m := 1, P := fun _ => allocation_retypePatch T k true P, S := P.M, w := fun _ _ => false, reserveX := ZY, reserveY := ZX, Q := fun _ => Q }
+
+private structure AllocationRawPass (κ : CConsts) (T : Stage) (k : ℕ)
+    (ZX ZY : Finset (Fin (T.S.N k))) where
+  orientation : Bool
+  mode : Mode
+  colour : Colour
+  patch : Patch T k
+  cliqueScale : ℕ
+  nonbounded : mode ≠ .bounded
+  data : ExtractionData (allocation_singleTiling κ T k orientation mode colour patch ZX ZY cliqueScale)
+
+private def AllocationRawPass.physicalX {κ : CConsts} {T : Stage} {k : ℕ}
+    {ZX ZY : Finset (Fin (T.S.N k))} (r : AllocationRawPass κ T k ZX ZY) :
+    Finset (Fin (T.S.N k)) := if r.orientation then r.patch.Y else r.patch.X
+
+private def AllocationRawPass.physicalY {κ : CConsts} {T : Stage} {k : ℕ}
+    {ZX ZY : Finset (Fin (T.S.N k))} (r : AllocationRawPass κ T k ZX ZY) :
+    Finset (Fin (T.S.N k)) := if r.orientation then r.patch.X else r.patch.Y
+
+private theorem allocation_raw_mass {κ : CConsts} {T : Stage} {k : ℕ}
+    {ZX ZY : Finset (Fin (T.S.N k))} (r : AllocationRawPass κ T k ZX ZY) :
+    r.physicalX.card = r.patch.M ∧ r.physicalY.card = r.patch.M := by
+  cases h : r.orientation <;> simp [AllocationRawPass.physicalX, AllocationRawPass.physicalY,
+    h, r.patch.cardX, r.patch.cardY]
+
+private theorem allocation_raw_nonempty {κ : CConsts} {T : Stage} {k : ℕ}
+    {ZX ZY : Finset (Fin (T.S.N k))} (r : AllocationRawPass κ T k ZX ZY) :
+    r.physicalX.Nonempty ∧ r.physicalY.Nonempty := by
+  cases r with
+  | mk o mode c P Q hmode hdata =>
+    cases o
+    · simpa [AllocationRawPass.physicalX, AllocationRawPass.physicalY,
+        allocation_singleTiling, Stage.orient] using hdata.patch_nonempty 0
+    · simpa [AllocationRawPass.physicalX, AllocationRawPass.physicalY,
+        allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap, and_comm]
+        using hdata.patch_nonempty 0
+
+private theorem allocation_raw_supports {κ : CConsts} {T : Stage} {k : ℕ}
+    {ZX ZY : Finset (Fin (T.S.N k))} (r : AllocationRawPass κ T k ZX ZY) :
+    r.physicalX ⊆ T.X k \ ZX ∧ r.physicalY ⊆ T.Y k \ ZY := by
+  cases r with
+  | mk o mode c P Q hmode hdata =>
+    cases o
+    · have h := hdata.patch_supports 0
+      exact ⟨h.1.trans h.2.1, h.2.2.1.trans h.2.2.2⟩
+    · have h := hdata.patch_supports 0
+      exact ⟨h.2.2.1.trans h.2.2.2, h.1.trans h.2.1⟩
+
+private noncomputable def allocation_emptyPatch (T : Stage) (k : ℕ) : Patch T k where
+  X := ∅
+  Y := ∅
+  M := 0
+  resX := ∅
+  resY := ∅
+  g := 1
+  q := 1
+  h := 0
+  ℓ := 0
+  d := 1
+  bins := ⊥
+  cardX := by simp
+  cardY := by simp
+  X_res := by simp
+  Y_res := by simp
+
+private theorem allocation_regroup_family (κ : CConsts) (T : Stage) (k : ℕ)
+    (ZX ZY : Finset (Fin (T.S.N k)))
+    (hZX : ZX.card = T.S.N k / 3) (hZY : ZY.card = T.S.N k / 3)
+    (hZXT : ZX ⊆ T.X k) (hZYT : ZY ⊆ T.Y k)
+    (s : Finset (AllocationRawPass κ T k ZX ZY))
+    (hs : (s : Set (AllocationRawPass κ T k ZX ZY)).Pairwise (fun a b => Disjoint a.physicalX b.physicalX ∧ Disjoint a.physicalY b.physicalY))
+    (o : Bool) (mode : Mode) (c : Colour) (hmode : mode ≠ .bounded) :
+    ∃ f : PassFamily κ T k,
+      f.orientation = o ∧ f.tiling.mode = mode ∧ f.tiling.c = c ∧
+      f.tiling.S = ∑ r ∈ s.filter (fun r => (r.orientation, r.mode, r.colour) = (o, mode, c)), r.patch.M := by
+  classical
+  let A := s.filter fun r => (r.orientation, r.mode, r.colour) = (o, mode, c)
+  let e : A ≃ Fin A.card := Fintype.equivFinOfCardEq (by simp)
+  let idx : Fin A.card → AllocationRawPass κ T k ZX ZY := fun i => (e.symm i).val
+  have hmem (i : Fin A.card) : idx i ∈ A := (e.symm i).property
+  have htag (r : AllocationRawPass κ T k ZX ZY) (hr : r ∈ A) :
+      r.orientation = o ∧ r.mode = mode ∧ r.colour = c := by
+    have h := (Finset.mem_filter.mp hr).2
+    simpa only [Prod.mk.injEq] using h
+  have hidx (i j : Fin A.card) (hij : i ≠ j) : idx i ≠ idx j := by
+    intro h
+    apply hij
+    apply e.symm.injective
+    exact Subtype.ext h
+  have hOne (i : Fin A.card) :
+      ExtractionData (allocation_singleTiling κ T k o mode c (idx i).patch ZX ZY (idx i).cliqueScale) := by
+    have ht := htag (idx i) (hmem i)
+    cases hri : idx i with
+    | mk ro rm rc rp rQ rNot rData =>
+      have ht' : ro = o ∧ rm = mode ∧ rc = c := by simpa only [hri] using ht
+      rcases ht' with ⟨rfl, rfl, rfl⟩
+      exact rData
+  have hDisj (a b : AllocationRawPass κ T k ZX ZY) (ha : a ∈ A) (hb : b ∈ A) (hab : a ≠ b) :
+      Disjoint a.patch.X b.patch.X ∧ Disjoint a.patch.Y b.patch.Y := by
+    have h := hs (Finset.mem_filter.mp ha).1 (Finset.mem_filter.mp hb).1 hab
+    have hao := (htag a ha).1
+    have hbo := (htag b hb).1
+    cases o
+    · simpa [AllocationRawPass.physicalX, AllocationRawPass.physicalY, hao, hbo] using h
+    · simpa [AllocationRawPass.physicalX, AllocationRawPass.physicalY, hao, hbo, and_comm] using h
+  have hSum : ∑ i : Fin A.card, (idx i).patch.M = ∑ r ∈ A, r.patch.M := by
+    apply Finset.sum_bij (fun i _ => idx i)
+    · intro i hi
+      exact hmem i
+    · intro i hi j hj hij
+      by_contra hne
+      exact hidx i j hne hij
+    · intro r hr
+      exact ⟨e ⟨r, hr⟩, Finset.mem_univ _, by simp [idx]⟩
+    · intro i hi
+      rfl
+  have hSupper : ∑ r ∈ A, r.patch.M ≤ T.S.N k := by
+    have hc : (A.biUnion fun r => r.patch.X).card = ∑ r ∈ A, r.patch.X.card := by
+      apply Finset.card_biUnion
+      intro a ha b hb hab
+      exact (hDisj a b ha hb hab).1
+    simp_rw [show ∀ r : AllocationRawPass κ T k ZX ZY, r.patch.X.card = r.patch.M from fun r => r.patch.cardX] at hc
+    rw [← hc]
+    simpa using Finset.card_le_univ (A.biUnion fun r => r.patch.X)
+  let tiling : Tiling κ (T.orient o) k :=
+    {allocation_singleTiling κ T k o mode c (allocation_emptyPatch T k) ZX ZY 0 with
+      m := A.card
+      P := fun i => allocation_retypePatch T k o (idx i).patch
+      S := ∑ r ∈ A, r.patch.M
+      w := fun _ _ => false
+      Q := fun i => (idx i).cliqueScale}
+  have hExtracted : ExtractionData tiling := by
+    cases o <;> refine {
+      reserveX_card := by first | simpa [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] using hZX | simpa [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] using hZY
+      reserveY_card := by first | simpa [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] using hZY | simpa [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] using hZX
+      reserveX_subset := by
+        first
+        | change ZX ⊆ T.X k
+          exact hZXT
+        | change ZY ⊆ T.Y k
+          exact hZYT
+      reserveY_subset := by
+        first
+        | change ZY ⊆ T.Y k
+          exact hZYT
+        | change ZX ⊆ T.X k
+          exact hZXT
+      patch_supports := by intro i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).patch_supports 0
+      patch_nonempty := by intro i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).patch_nonempty 0
+      bins_card := by intro i B hB; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).bins_card 0 B hB
+      patch_X_disjoint := by
+        intro i j hij
+        change Disjoint (idx i).patch.X (idx j).patch.X
+        exact (hDisj (idx i) (idx j) (hmem i) (hmem j) (hidx i j hij)).1
+      patch_Y_disjoint := by
+        intro i j hij
+        change Disjoint (idx i).patch.Y (idx j).patch.Y
+        exact (hDisj (idx i) (idx j) (hmem i) (hmem j) (hidx i j hij)).2
+      S_upper := by simpa [tiling, Stage.orient, Stage.swap, BadSeq.swap] using hSupper
+      measured_scales := by intro i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).measured_scales 0
+      bounded_scale_cutoff := by
+        intro h
+        have hm : mode = .bounded := by simpa [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] using h
+        exact (hmode hm).elim
+      bounded_data := by intro h; simp [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] at h; exact (hmode h).elim
+      direct_scale_bound := by intro h i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).direct_scale_bound h 0
+      direct_data := by intro h i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).direct_data h 0
+      cluster_data := by intro h i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using (hOne i).cluster_data h 0
+      clique_scales := by intro i; simpa [tiling, allocation_singleTiling, allocation_retypePatch, Tiling.kScale] using (hOne i).clique_scales 0 }
+  have hmass : ∑ i, (tiling.P i).M = tiling.S := by
+    cases o <;> simpa [tiling, allocation_retypePatch, Stage.orient, Stage.swap, BadSeq.swap] using hSum
+  exact ⟨{orientation := o, tiling := tiling, extracted := hExtracted, mass_sum := hmass},
+    rfl, by cases o <;> rfl, by cases o <;> rfl, rfl⟩
+
+private theorem allocation_regroup_collection (κ : CConsts) (T : Stage) (k : ℕ)
+    (ZX ZY : Finset (Fin (T.S.N k)))
+    (hZX : ZX.card = T.S.N k / 3) (hZY : ZY.card = T.S.N k / 3)
+    (hZXT : ZX ⊆ T.X k) (hZYT : ZY ⊆ T.Y k)
+    (s : Finset (AllocationRawPass κ T k ZX ZY))
+    (hs : (s : Set (AllocationRawPass κ T k ZX ZY)).Pairwise (fun a b => Disjoint a.physicalX b.physicalX ∧ Disjoint a.physicalY b.physicalY))
+    (hmass : (∑ r ∈ s, r.patch.M) * 10 ≥ T.S.N k) :
+    Nonempty (PassCollection κ T k) := by
+  classical
+  let Tag := {t : Bool × Mode × Colour // t.2.1 ≠ .bounded}
+  have hExists (t : Tag) := allocation_regroup_family κ T k ZX ZY hZX hZY hZXT hZYT
+    s hs t.val.1 t.val.2.1 t.val.2.2 t.property
+  choose family hfamily using hExists
+  let tags : List Tag := (Finset.univ : Finset Tag).toList
+  let families := tags.map family
+  have htags : tags.Nodup := Finset.nodup_toList _
+  have hType (t : Tag) :
+      (family t).orientation = t.val.1 ∧ (family t).tiling.mode = t.val.2.1 ∧
+        (family t).tiling.c = t.val.2.2 := by
+    exact ⟨(hfamily t).1, (hfamily t).2.1, (hfamily t).2.2.1⟩
+  have hNot (t : Tag) : (family t).tiling.mode ≠ .bounded := by
+    rw [(hType t).2.1]
+    exact t.property
+  have hFilter : families.filter (fun f => f.tiling.mode ≠ .bounded) = families := by
+    apply List.filter_eq_self.mpr
+    intro f hf
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hf
+    simp [hNot t]
+  have hSum : (families.map fun f => f.tiling.S).sum = ∑ r ∈ s, r.patch.M := by
+    change ((tags.map family).map fun f => f.tiling.S).sum = _
+    rw [List.map_map]
+    simp only [Function.comp_def]
+    rw [← allocation_list_sum_toFinset (fun t => (family t).tiling.S) tags htags]
+    have htagset : tags.toFinset = Finset.univ := by simp [tags]
+    rw [htagset]
+    simp_rw [(hfamily _).2.2.2]
+    simp only [Finset.sum_filter]
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro r hr
+    let t : Tag := ⟨(r.orientation, r.mode, r.colour), r.nonbounded⟩
+    have hEq (u : Tag) : (r.orientation, r.mode, r.colour) = u.val ↔ u = t := by
+      constructor
+      · intro h
+        exact Subtype.ext h.symm
+      · intro h
+        subst u
+        rfl
+    simpa only [hEq] using
+      (Finset.sum_ite_eq_of_mem' (Finset.univ : Finset Tag) t (fun _ => r.patch.M) (Finset.mem_univ t))
+  refine ⟨{families := families, families_mass := ?_, type_tags_nodup := ?_, mass_or_bounded := ?_}⟩
+  · intro f hf
+    exact f.mass_sum
+  · change ((tags.map family).map fun f => (f.orientation, f.tiling.mode, f.tiling.c)).Nodup
+    rw [List.map_map]
+    simp only [Function.comp_def]
+    have heq : (tags.map fun t => ((family t).orientation, (family t).tiling.mode, (family t).tiling.c)) =
+        tags.map Subtype.val := by
+      apply List.map_congr_left
+      intro t ht
+      simp only [(hType t).1, (hType t).2.1, (hType t).2.2]
+    rw [heq]
+    exact htags.map Subtype.val_injective
+  · right
+    rw [hFilter, hSum]
+    exact hmass
+
+private theorem allocation_bounded_collection (κ : CConsts) (T : Stage) (k : ℕ)
+    (ZX ZY RX RY : Finset (Fin (T.S.N k)))
+    (hZX : ZX.card = T.S.N k / 3) (hZY : ZY.card = T.S.N k / 3)
+    (hZXT : ZX ⊆ T.X k) (hZYT : ZY ⊆ T.Y k)
+    (hRX : RX ⊆ T.X k \ ZX) (hRY : RY ⊆ T.Y k \ ZY)
+    (hCutoff : max (gScale κ T k RX RY : ℝ) (qScale κ T k RX RY : ℝ) < κ.M1 * κ.Q0)
+    (X Y : Finset (Fin (T.S.N k))) (hX : X.Nonempty) (hY : Y.Nonempty)
+    (hXR : X ⊆ RX) (hYR : Y ⊆ RY) (hcard : X.card = Y.card)
+    (hM : (1 / 400 : ℝ) * T.S.N k ≤ X.card) : Nonempty (PassCollection κ T k) := by
+  classical
+  let P : Patch T k := {X := X, Y := Y, M := X.card, resX := RX, resY := RY, g := gScale κ T k RX RY, q := qScale κ T k RX RY, h := 0, ℓ := 0, d := 1, bins := ⊥, cardX := rfl, cardY := hcard.symm, X_res := hXR, Y_res := hYR}
+  let tiling := allocation_singleTiling κ T k false .bounded false P ZX ZY κ.Qbd
+  have hExtracted : ExtractionData tiling := by
+    refine {
+      reserveX_card := hZX
+      reserveY_card := hZY
+      reserveX_subset := hZXT
+      reserveY_subset := hZYT
+      patch_supports := by intro i; exact ⟨hXR, hRX, hYR, hRY⟩
+      patch_nonempty := by intro i; exact ⟨hX, hY⟩
+      bins_card := by
+        intro i B hB
+        change B ∈ (⊥ : Finpartition Y).parts at hB
+        obtain ⟨y, hy, rfl⟩ := Finpartition.mem_bot_iff.mp hB
+        change ({y} : Finset (Fin (T.S.N k))).card = 1
+        exact Finset.card_singleton y
+      patch_X_disjoint := by
+        intro i j hij
+        have hi : i.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using i.isLt
+        have hj : j.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using j.isLt
+        exact (hij (Fin.ext (by omega))).elim
+      patch_Y_disjoint := by
+        intro i j hij
+        have hi : i.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using i.isLt
+        have hj : j.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using j.isLt
+        exact (hij (Fin.ext (by omega))).elim
+      S_upper := by simpa [tiling, allocation_singleTiling, P, Stage.orient, Stage.swap, BadSeq.swap, Fintype.card_fin] using Finset.card_le_univ X
+      measured_scales := by intro i; exact ⟨rfl, rfl⟩
+      bounded_scale_cutoff := by intro hm i; simpa only [Nat.cast_max] using hCutoff
+      bounded_data := by intro hm; exact ⟨rfl, fun i => ⟨rfl, rfl, rfl, hM, rfl⟩⟩
+      direct_scale_bound := by simp [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap]
+      direct_data := by simp [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap]
+      cluster_data := by simp [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap]
+      clique_scales := by simp [tiling, allocation_singleTiling, Stage.orient, Stage.swap, BadSeq.swap] }
+  let f : PassFamily κ T k := {orientation := false, tiling := tiling, extracted := hExtracted, mass_sum := by simp [tiling, allocation_singleTiling, P, Stage.orient, Stage.swap, BadSeq.swap, Fintype.card_fin]}
+  refine ⟨{families := [f], families_mass := ?_, type_tags_nodup := by simp, mass_or_bounded := ?_}⟩
+  · intro g hg
+    have hgf : g = f := by simpa using hg
+    subst g
+    exact f.mass_sum
+  · left
+    exact ⟨f, by simp, rfl, hM⟩
+
+private theorem allocation_direct_clique (κ : CConsts) (hκ : κ.Admissible)
+    (g q : ℕ) (hg : κ.M1 * κ.Q0 ≤ (g : ℝ)) (hq : κ.M1 * (q : ℝ) < g) :
+    ∃ Q : ℕ, IsDyadic Q ∧ (g : ℝ) / (2 * Real.sqrt κ.M1) < Q ∧
+      (Q : ℝ) ≤ 2 * g / Real.sqrt κ.M1 ∧ q < Q := by
+  have hM : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+  have hs : 0 < Real.sqrt κ.M1 := Real.sqrt_pos.mpr hM
+  have hs0 := hs.le
+  have hsq := Real.sq_sqrt hM.le
+  have hs2 : 2 ≤ Real.sqrt κ.M1 := by
+    have ht := Real.sqrt_le_sqrt hκ.M1_big.1
+    norm_num at ht
+    exact ht
+  have hsM : Real.sqrt κ.M1 ≤ κ.M1 := by nlinarith
+  have htwos : 2 * Real.sqrt κ.M1 ≤ κ.M1 := by
+    have hp := mul_nonneg hs0 (sub_nonneg.mpr hs2)
+    nlinarith
+  have hg0 : (0 : ℝ) ≤ g := by positivity
+  have hgM : κ.M1 ≤ (g : ℝ) := by
+    have hQ0 := Lane_sol_s13_allocA.threshold hκ
+    have hm := mul_le_mul_of_nonneg_left hQ0.le hM.le
+    nlinarith
+  have hx1 : 1 ≤ (g : ℝ) / Real.sqrt κ.M1 := (le_div_iff₀ hs).2 (by linarith)
+  obtain ⟨j, hjlo, hjhi⟩ := exists_nat_pow_near hx1 (by norm_num : (1 : ℝ) < 2)
+  let Q : ℕ := 2 ^ j
+  have hQcast : (Q : ℝ) = (2 : ℝ) ^ j := by simp [Q]
+  have hLower : (g : ℝ) / (2 * Real.sqrt κ.M1) < Q := by
+    rw [hQcast]
+    rw [pow_succ] at hjhi
+    have hmul := (div_lt_iff₀ hs).mp hjhi
+    apply (div_lt_iff₀ (by positivity : 0 < 2 * Real.sqrt κ.M1)).2
+    nlinarith only [hmul]
+  have hUpper : (Q : ℝ) ≤ 2 * g / Real.sqrt κ.M1 := by
+    rw [hQcast]
+    exact hjlo.trans (div_le_div_of_nonneg_right (by linarith : (g : ℝ) ≤ 2 * g) hs0)
+  have hqLower : (q : ℝ) < (g : ℝ) / (2 * Real.sqrt κ.M1) := by
+    have hqg : (q : ℝ) < (g : ℝ) / κ.M1 := (lt_div_iff₀ hM).2 (by simpa [mul_comm] using hq)
+    exact hqg.trans_le (div_le_div_of_nonneg_left hg0 (by positivity) htwos)
+  exact ⟨Q, ⟨j, rfl⟩, hLower, hUpper, by exact_mod_cast hqLower.trans hLower⟩
+
+private theorem allocation_residual_card {N : ℕ} (W Z V : Finset (Fin N))
+    (hZ : Z ⊆ W) (hV : V ⊆ W \ Z) (hZcard : Z.card = N / 3)
+    (hSmall : (Wᶜ.card : ℝ) ≤ (N : ℝ) / 20)
+    (hVcard : (V.card : ℝ) < (N : ℝ) / 10) :
+    (N : ℝ) / 2 ≤ ((W \ Z) \ V).card := by
+  have hWcard : W.card ≤ N := by simpa using Finset.card_le_univ W
+  have hZle := Finset.card_le_card hZ
+  have hVle := Finset.card_le_card hV
+  have hDiff : (W \ Z).card = W.card - Z.card := Finset.card_sdiff_of_subset hZ
+  have hRes : ((W \ Z) \ V).card = (W \ Z).card - V.card := Finset.card_sdiff_of_subset hV
+  have hSum : ((W \ Z) \ V).card + V.card + Z.card = W.card := by omega
+  have hCover : W.card + Wᶜ.card = N := by
+    simp only [Finset.card_compl, Fintype.card_fin]
+    omega
+  have hZthree : 3 * Z.card ≤ N := by
+    rw [hZcard]
+    simpa [mul_comm] using Nat.div_mul_le_self N 3
+  have hZr : (3 : ℝ) * Z.card ≤ N := by exact_mod_cast hZthree
+  have hCoverr : (W.card : ℝ) + Wᶜ.card = N := by exact_mod_cast hCover
+  have hSumr : (((W \ Z) \ V).card : ℝ) + V.card + Z.card = W.card := by exact_mod_cast hSum
+  have hN0 : (0 : ℝ) ≤ N := by positivity
+  linarith
+
+private theorem allocation_direct_raw (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)
+    (ZX ZY RX RY : Finset (Fin (T.S.N k)))
+    (hZX : ZX.card = T.S.N k / 3) (hZY : ZY.card = T.S.N k / 3)
+    (hZXT : ZX ⊆ T.X k) (hZYT : ZY ⊆ T.Y k)
+    (hRX : RX ⊆ T.X k \ ZX) (hRY : RY ⊆ T.Y k \ ZY)
+    (g q : ℕ) (hg : g = gScale κ T k RX RY) (hq : q = qScale κ T k RX RY)
+    (hCutoff : κ.M1 * κ.Q0 ≤ max (g : ℝ) (q : ℝ))
+    (hgq : κ.M1 * (q : ℝ) < g) (hgbound : (g : ℝ) ≤ (T.S.n k : ℝ) ^ (κ.ι / 2))
+    (hPatch : DirectPatchData κ T k RX RY g) :
+    ∃ r : AllocationRawPass κ T k ZX ZY, r.physicalX ⊆ RX ∧ r.physicalY ⊆ RY := by
+  classical
+  obtain ⟨c, X, Y, hX, hY, hXR, hYR, hcard, hM, hDegree⟩ := hPatch
+  have hqg : (q : ℝ) ≤ g := by
+    have hm1 := hκ.M1_big.1
+    have hq0 : (0 : ℝ) ≤ q := by positivity
+    nlinarith
+  have hgmin : κ.M1 * κ.Q0 ≤ (g : ℝ) := by simpa [max_eq_left hqg] using hCutoff
+  obtain ⟨Q, hQdyadic, hQlower, hQupper, hqQ⟩ := allocation_direct_clique κ hκ g q hgmin hgq
+  let mode : Mode := if κ.KB * Real.log (T.S.n k) < g then .highDirect else .lowDirect
+  have hnonbounded : mode ≠ .bounded := by dsimp [mode]; split <;> simp
+  have hnoncluster : ¬ (mode = .lowCluster ∨ mode = .highSmall ∨ mode = .highLarge) := by
+    dsimp [mode]; split <;> simp
+  have hreg : (mode = .highDirect) ↔ κ.KB * Real.log (T.S.n k) < g := by
+    dsimp [mode]; split <;> simp_all
+  let P : Patch T k := {X := X, Y := Y, M := X.card, resX := RX, resY := RY, g := g, q := q, h := 0, ℓ := 0, d := 1, bins := ⊥, cardX := rfl, cardY := hcard.symm, X_res := hXR, Y_res := hYR}
+  let tiling := allocation_singleTiling κ T k false mode c P ZX ZY Q
+  have hExtracted : ExtractionData tiling := by
+    refine {
+      reserveX_card := hZX
+      reserveY_card := hZY
+      reserveX_subset := hZXT
+      reserveY_subset := hZYT
+      patch_supports := by intro i; exact ⟨hXR, hRX, hYR, hRY⟩
+      patch_nonempty := by intro i; exact ⟨hX, hY⟩
+      bins_card := by
+        intro i B hB
+        change B ∈ (⊥ : Finpartition Y).parts at hB
+        obtain ⟨y, hy, rfl⟩ := Finpartition.mem_bot_iff.mp hB
+        change ({y} : Finset (Fin (T.S.N k))).card = 1
+        exact Finset.card_singleton y
+      patch_X_disjoint := by
+        intro i j hij
+        have hi : i.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using i.isLt
+        have hj : j.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using j.isLt
+        exact (hij (Fin.ext (by omega))).elim
+      patch_Y_disjoint := by
+        intro i j hij
+        have hi : i.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using i.isLt
+        have hj : j.val < 1 := by simpa only [tiling, allocation_singleTiling, Stage.orient] using j.isLt
+        exact (hij (Fin.ext (by omega))).elim
+      S_upper := by simpa [tiling, allocation_singleTiling, P, Stage.orient, Stage.swap, BadSeq.swap, Fintype.card_fin] using Finset.card_le_univ X
+      measured_scales := by intro i; exact ⟨hg, hq⟩
+      bounded_scale_cutoff := by intro hm; exact (hnonbounded hm).elim
+      bounded_data := by intro hm; exact (hnonbounded hm).elim
+      direct_scale_bound := by intro hm i; exact hgbound
+      direct_data := by
+        intro hm i
+        refine ⟨?_, hgq, hM, ?_, rfl, rfl, hreg⟩
+        · simpa only [Nat.cast_max] using hCutoff
+        · exact hDegree
+      cluster_data := by intro hm; exact (hnoncluster hm).elim
+      clique_scales := by
+        intro i
+        exact ⟨fun hm => (hnoncluster hm).elim, fun hm => ⟨hQdyadic, hQlower, hQupper, hqQ⟩⟩ }
+  let r : AllocationRawPass κ T k ZX ZY := {orientation := false, mode := mode, colour := c, patch := P, cliqueScale := Q, nonbounded := hnonbounded, data := hExtracted}
+  exact ⟨r, hXR, hYR⟩
+
+private theorem allocation_bin_partition {N m d : ℕ} (Y : Finset (Fin N))
+    (B : Fin m → Finset (Fin N)) (hd : 0 < d)
+    (hSub : ∀ j, B j ⊆ Y) (hDisj : Set.PairwiseDisjoint Set.univ B)
+    (hCard : ∀ j, (B j).card = d) (hUnion : Y = Finset.univ.biUnion B) :
+    ∃ p : Finpartition Y, p.parts = Finset.univ.image B := by
+  classical
+  let parts := Finset.univ.image B
+  have hpartsSub : ∀ p ∈ parts, p ⊆ Y := by
+    intro p hp
+    obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp hp
+    exact hSub j
+  have hEmpty : ∅ ∉ parts := by
+    intro h
+    obtain ⟨j, hj, he⟩ := Finset.mem_image.mp h
+    have hc := hCard j
+    rw [he, Finset.card_empty] at hc
+    omega
+  have hUnique : ∀ y ∈ Y, ∃! p ∈ parts, y ∈ p := by
+    intro y hy
+    rw [hUnion] at hy
+    obtain ⟨j, hj, hyj⟩ := Finset.mem_biUnion.mp hy
+    refine ⟨B j, ⟨Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩, hyj⟩, ?_⟩
+    intro p hp
+    obtain ⟨j', hj', rfl⟩ := Finset.mem_image.mp hp.1
+    have he : j' = j := by
+      by_contra hne
+      exact Finset.disjoint_left.mp (hDisj (Set.mem_univ _) (Set.mem_univ _) hne) hp.2 hyj
+    rw [he]
+  exact ⟨Finpartition.ofExistsUnique parts hpartsSub hUnique hEmpty, rfl⟩
+
+private theorem allocation_maximal_collection (κ : CConsts) (T : Stage) (k : ℕ)
+    (ZX ZY : Finset (Fin (T.S.N k)))
+    (hZX : ZX.card = T.S.N k / 3) (hZY : ZY.card = T.S.N k / 3)
+    (hZXT : ZX ⊆ T.X k) (hZYT : ZY ⊆ T.Y k)
+    (hSmallX : ((T.X k)ᶜ.card : ℝ) ≤ (T.S.N k : ℝ) / 20)
+    (hSmallY : ((T.Y k)ᶜ.card : ℝ) ≤ (T.S.N k : ℝ) / 20)
+    (hOne : ∀ RX RY : Finset (Fin (T.S.N k)),
+      RX ⊆ T.X k \ ZX → RY ⊆ T.Y k \ ZY →
+      (T.S.N k : ℝ) / 2 ≤ RX.card → (T.S.N k : ℝ) / 2 ≤ RY.card →
+      Nonempty (PassCollection κ T k) ∨
+        ∃ r : AllocationRawPass κ T k ZX ZY, r.physicalX ⊆ RX ∧ r.physicalY ⊆ RY) :
+    Nonempty (PassCollection κ T k) := by
+  classical
+  obtain ⟨s, hs, hMax⟩ := Lane_sol_s13_allocA.maximal_disjoint_patches
+    (AllocationRawPass.physicalX (κ := κ) (T := T) (k := k) (ZX := ZX) (ZY := ZY))
+    (AllocationRawPass.physicalY (κ := κ) (T := T) (k := k) (ZX := ZX) (ZY := ZY))
+  let mass : ℕ := ∑ r ∈ s, r.patch.M
+  let usedX := s.biUnion AllocationRawPass.physicalX
+  let usedY := s.biUnion AllocationRawPass.physicalY
+  have hCardX : usedX.card = mass := by
+    have h := Finset.card_biUnion (s := s) (t := AllocationRawPass.physicalX)
+      (fun a ha b hb hab => (hs ha hb hab).1)
+    simpa only [usedX, mass, (allocation_raw_mass _).1] using h
+  have hCardY : usedY.card = mass := by
+    have h := Finset.card_biUnion (s := s) (t := AllocationRawPass.physicalY)
+      (fun a ha b hb hab => (hs ha hb hab).2)
+    simpa only [usedY, mass, (allocation_raw_mass _).2] using h
+  have hUsedX : usedX ⊆ T.X k \ ZX := by
+    intro x hx
+    obtain ⟨r, hr, hxr⟩ := Finset.mem_biUnion.mp hx
+    exact (allocation_raw_supports r).1 hxr
+  have hUsedY : usedY ⊆ T.Y k \ ZY := by
+    intro y hy
+    obtain ⟨r, hr, hyr⟩ := Finset.mem_biUnion.mp hy
+    exact (allocation_raw_supports r).2 hyr
+  by_cases hmass : T.S.N k ≤ mass * 10
+  · exact allocation_regroup_collection κ T k ZX ZY hZX hZY hZXT hZYT s hs hmass
+  · have hmassLt : mass * 10 < T.S.N k := lt_of_not_ge hmass
+    have hmassR : (mass : ℝ) < (T.S.N k : ℝ) / 10 := by
+      apply (lt_div_iff₀ (by norm_num : (0 : ℝ) < 10)).2
+      exact_mod_cast hmassLt
+    let RX := (T.X k \ ZX) \ usedX
+    let RY := (T.Y k \ ZY) \ usedY
+    have hRX : (T.S.N k : ℝ) / 2 ≤ RX.card :=
+      allocation_residual_card (T.X k) ZX usedX hZXT hUsedX hZX hSmallX (by simpa [hCardX] using hmassR)
+    have hRY : (T.S.N k : ℝ) / 2 ≤ RY.card :=
+      allocation_residual_card (T.Y k) ZY usedY hZYT hUsedY hZY hSmallY (by simpa [hCardY] using hmassR)
+    rcases hOne RX RY Finset.sdiff_subset Finset.sdiff_subset hRX hRY with hPool | ⟨r, hrX, hrY⟩
+    · exact hPool
+    · have hCross (a : AllocationRawPass κ T k ZX ZY) (ha : a ∈ s) :
+          Disjoint r.physicalX a.physicalX ∧ Disjoint r.physicalY a.physicalY := by
+        constructor
+        · apply Finset.disjoint_left.mpr
+          intro x hx hxa
+          have hnot := (Finset.mem_sdiff.mp (hrX hx)).2
+          exact hnot (Finset.mem_biUnion.mpr ⟨a, ha, hxa⟩)
+        · apply Finset.disjoint_left.mpr
+          intro y hy hya
+          have hnot := (Finset.mem_sdiff.mp (hrY hy)).2
+          exact hnot (Finset.mem_biUnion.mpr ⟨a, ha, hya⟩)
+      have hNot : r ∉ s := by
+        intro hr
+        obtain ⟨x, hx⟩ := (allocation_raw_nonempty r).1
+        exact Finset.disjoint_left.mp (hCross r hr).1 hx hx
+      have hInsert : ((insert r s : Finset _) : Set (AllocationRawPass κ T k ZX ZY)).Pairwise
+          (fun a b => Disjoint a.physicalX b.physicalX ∧ Disjoint a.physicalY b.physicalY) := by
+        intro a ha b hb hab
+        rcases Finset.mem_insert.mp ha with haEq | haS
+        · rcases Finset.mem_insert.mp hb with hbEq | hbS
+          · subst a
+            subst b
+            exact (hab rfl).elim
+          · subst a
+            exact hCross b hbS
+        · rcases Finset.mem_insert.mp hb with hbEq | hbS
+          · subst b
+            exact ⟨(hCross a haS).1.symm, (hCross a haS).2.symm⟩
+          · exact hs haS hbS hab
+      have hm := hMax (insert r s) hInsert
+      rw [Finset.sum_insert hNot] at hm
+      have hp : 0 < r.physicalX.card := Finset.card_pos.mpr (allocation_raw_nonempty r).1
+      omega
+
+private theorem allocation_cluster_clique (κ : CConsts) (hκ : κ.Admissible)
+    (q h : ℕ) (hqDyadic : IsDyadic q) (hq : κ.Q0 ≤ (q : ℝ))
+    (hlo : (q : ℝ) ^ (κ.Mlo : ℝ) ≤ h) (hhi : (h : ℝ) < 2 * (q : ℝ) ^ (κ.Mhi : ℝ)) :
+    IsDyadic (q ^ 2) ∧ sliceK κ h < q ^ 2 := by
+  have hqLarge := (Lane_sol_s13_allocA.cluster_scale_large hκ hq).1
+  have hq1 : (1 : ℝ) ≤ q := by linarith
+  have hh1r : (1 : ℝ) ≤ h :=
+    (Real.one_le_rpow hq1 (Nat.cast_nonneg κ.Mlo)).trans hlo
+  have hh1 : 1 ≤ h := by exact_mod_cast hh1r
+  have hT : (1 : ℝ) ≤ sliceT κ h := by
+    calc
+      1 ≤ (h : ℝ) ^ κ.ω := Real.one_le_rpow hh1r hκ.ω_rng.1.le
+      _ ≤ (⌈(h : ℝ) ^ κ.ω⌉₊ : ℝ) := Nat.le_ceil _
+      _ = (sliceT κ h : ℝ) := by simp only [sliceT, Real.rpow_eq_pow]
+  have hK : (sliceK κ h : ℝ) ≤ (sliceK κ h : ℝ) * sliceT κ h := by
+    simpa only [mul_one] using mul_le_mul_of_nonneg_left hT (Nat.cast_nonneg (sliceK κ h))
+  have htuple := Lane_sol_s13_allocA.cluster_tuple_bound hκ hq hhi hh1
+  have hsmall : (q : ℝ) ^ (κ.aC / 2) < (q : ℝ) ^ (2 : ℕ) := by
+    calc
+      _ < (q : ℝ) ^ (2 : ℝ) := Real.rpow_lt_rpow_of_exponent_lt (by linarith)
+        (by linarith [(Lane_sol_s13_allocA.parameters hκ).2.2.2.1])
+      _ = _ := by norm_num only [Real.rpow_ofNat]
+  have hKR : (sliceK κ h : ℝ) < (q : ℝ) ^ (2 : ℕ) := hK.trans_lt (htuple.trans_lt hsmall)
+  rcases hqDyadic with ⟨j, hj⟩
+  exact ⟨⟨j * 2, by rw [hj, pow_mul]⟩, by exact_mod_cast hKR⟩
+
+private theorem allocation_gScale_swap (κ : CConsts) (T : Stage) (k : ℕ)
+    (RX RY : Finset (Fin (T.S.N k))) :
+    gScale κ T.swap k RY RX = gScale κ T k RX RY := by
+  classical
+  unfold gScale
+  apply congrArg (fun J : Finset ℕ => 2 ^ J.sup id)
+  ext j
+  simp only [Finset.mem_filter, Finset.mem_range]
+  rw [biasWitness_swap_iff]
+  rfl
+
+set_option maxHeartbeats 1600000 in
+private theorem allocation_cluster_raw (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)
+    (ZX ZY RX RY : Finset (Fin (T.S.N k)))
+    (hZX : ZX.card = T.S.N k / 3) (hZY : ZY.card = T.S.N k / 3)
+    (hZXT : ZX ⊆ T.X k) (hZYT : ZY ⊆ T.Y k)
+    (hRX : RX ⊆ T.X k \ ZX) (hRY : RY ⊆ T.Y k \ ZY)
+    (g q : ℕ) (o : Bool) (hg : g = gScale κ T k RX RY) (hq : q = qScale κ T k RX RY)
+    (hCutoff : κ.M1 * κ.Q0 ≤ max (g : ℝ) (q : ℝ)) (hgq : (g : ℝ) ≤ κ.M1 * q)
+    (hqmin : κ.Q0 ≤ (q : ℝ)) (hqDyadic : IsDyadic q)
+    (hLCutoff : (Real.log (T.S.n k)) ^ κ.cq ≤ (Real.log (T.S.n k)) ^ 2)
+    (hNode : ∀ d : ℕ, 0 < d → (d : ℝ) ≤ Real.exp ((q : ℝ) / 2) →
+      ClusterPatchData κ T k RX RY q o d) :
+    ∃ r : AllocationRawPass κ T k ZX ZY, r.physicalX ⊆ RX ∧ r.physicalY ⊆ RY := by
+  classical
+  let L : ℝ := Real.log (T.S.n k)
+  let mode : Mode := if (q : ℝ) ≤ L ^ κ.cq then .lowCluster else
+    if (q : ℝ) ≤ L ^ 2 then .highSmall else .highLarge
+  let d : ℕ := if mode = .highSmall then
+    min ⌊Real.exp ((q : ℝ) / 2)⌋₊ ⌊Real.exp (Real.sqrt L)⌋₊ else ⌊Real.exp ((q : ℝ) / 2)⌋₊
+  let M : ℕ := if mode = .lowCluster then κ.Mlo else κ.Mhi
+  let h : ℕ := q ^ M
+  have hqLarge := (Lane_sol_s13_allocA.cluster_scale_large hκ hqmin).1
+  have hq1 : (1 : ℝ) ≤ q := by linarith
+  have hq0 : 0 < q := by exact_mod_cast (show (0 : ℝ) < q by linarith)
+  have hMF := Lane_sol_s13_allocA.Mhi_positive hκ
+  have hnonbounded : mode ≠ .bounded := by dsimp [mode]; split_ifs <;> simp
+  have hnondirect : ¬ (mode = .lowDirect ∨ mode = .highDirect) := by dsimp [mode]; split_ifs <;> simp
+  have hregLow : mode = .lowCluster ↔ (q : ℝ) ≤ L ^ κ.cq := by
+    dsimp [mode]; split_ifs <;> simp_all only [eq_self_iff_true, reduceCtorEq, true_iff, false_iff]
+  have hregSmall : mode = .highSmall ↔ L ^ κ.cq < (q : ℝ) ∧ (q : ℝ) ≤ L ^ 2 := by
+    by_cases ha : (q : ℝ) ≤ L ^ κ.cq
+    · simp [mode, ha, not_lt_of_ge ha]
+    · by_cases hb : (q : ℝ) ≤ L ^ 2
+      · simp [mode, ha, hb, lt_of_not_ge ha]
+      · simp [mode, ha, hb]
+  have hregLarge : mode = .highLarge ↔ L ^ 2 < (q : ℝ) := by
+    by_cases ha : (q : ℝ) ≤ L ^ κ.cq
+    · have hb : (q : ℝ) ≤ L ^ 2 := ha.trans hLCutoff
+      simp [mode, ha, not_lt_of_ge hb]
+    · by_cases hb : (q : ℝ) ≤ L ^ 2
+      · simp [mode, ha, hb, not_lt_of_ge hb]
+      · simp [mode, ha, hb, lt_of_not_ge hb]
+  have hdFull : 0 < ⌊Real.exp ((q : ℝ) / 2)⌋₊ :=
+    Nat.floor_pos.mpr (Real.one_le_exp_iff.mpr (by positivity))
+  have hdSmall : 0 < ⌊Real.exp (Real.sqrt L)⌋₊ :=
+    Nat.floor_pos.mpr (Real.one_le_exp_iff.mpr (Real.sqrt_nonneg _))
+  have hd : 0 < d := by dsimp [d]; split_ifs <;> first | exact lt_min hdFull hdSmall | exact hdFull
+  have hdle : d ≤ ⌊Real.exp ((q : ℝ) / 2)⌋₊ := by
+    dsimp [d]; split_ifs <;> first | exact Nat.min_le_left _ _ | exact le_rfl
+  have hdCast : (d : ℝ) ≤ (⌊Real.exp ((q : ℝ) / 2)⌋₊ : ℝ) := by exact_mod_cast hdle
+  have hdReal : (d : ℝ) ≤ Real.exp ((q : ℝ) / 2) :=
+    hdCast.trans (Nat.floor_le (Real.exp_pos _).le)
+  obtain ⟨X, Y, m, B, hX, hY, hd', hXR, hYR, hXY, hSize,
+    hBsub, hBdisj, hBcard, hUnion, hCodegree⟩ := hNode d hd hdReal
+  obtain ⟨bins, hbins⟩ := allocation_bin_partition Y B hd hBsub hBdisj hBcard hUnion
+  have hDimEq : (q : ℝ) ^ (M : ℝ) = (h : ℝ) := by simp only [h, Real.rpow_natCast, Nat.cast_pow]
+  have hMlo : (κ.Mlo : ℝ) ≤ M := by dsimp [M]; split_ifs <;> first | exact le_rfl | exact hMF.2.2
+  have hMhi : (M : ℝ) ≤ κ.Mhi := by dsimp [M]; split_ifs <;> first | exact hMF.2.2 | exact le_rfl
+  have hhlo : (q : ℝ) ^ (κ.Mlo : ℝ) ≤ h :=
+    (Real.rpow_le_rpow_of_exponent_le hq1 hMlo).trans hDimEq.le
+  have hh1 : (1 : ℝ) ≤ h := (Real.one_le_rpow hq1 (Nat.cast_nonneg κ.Mlo)).trans hhlo
+  have hhhi : (h : ℝ) < 2 * (q : ℝ) ^ (κ.Mhi : ℝ) := by
+    have hh := hDimEq.symm.le.trans (Real.rpow_le_rpow_of_exponent_le hq1 hMhi)
+    have hp : 0 < (q : ℝ) ^ (κ.Mhi : ℝ) := Real.rpow_pos_of_pos (by linarith) _
+    linarith
+  obtain ⟨j, hj⟩ := hqDyadic
+  have hPow : h = 2 ^ (j * M) := by simp only [h, hj, pow_mul]
+  have hDyadic : h = 2 ^ Nat.log2 h := by
+    rw [hPow, Nat.log2_eq_log_two, Nat.log_pow (by decide : 1 < (2 : ℕ))]
+  obtain ⟨hQdyadic, hKQ⟩ := allocation_cluster_clique κ hκ q h ⟨j, hj⟩ hqmin hhlo hhhi
+  let P : Patch T k := {
+    X := X, Y := Y, M := X.card, resX := if o then RY else RX, resY := if o then RX else RY,
+    g := g, q := q, h := h, ℓ := 0, d := d, bins := bins,
+    cardX := rfl, cardY := hXY.symm, X_res := hXR, Y_res := hYR }
+  let tiling := allocation_singleTiling κ T k o mode true P ZX ZY (q ^ 2)
+  have hExtracted : ExtractionData tiling := by
+    cases o <;> refine {
+      reserveX_card := by first | exact hZX | exact hZY
+      reserveY_card := by first | exact hZY | exact hZX
+      reserveX_subset := by first | exact hZXT | exact hZYT
+      reserveY_subset := by first | exact hZYT | exact hZXT
+      patch_supports := by intro i; first | exact ⟨hXR, hRX, hYR, hRY⟩ | exact ⟨hXR, hRY, hYR, hRX⟩
+      patch_nonempty := by intro i; exact ⟨hX, hY⟩
+      bins_card := by
+        intro i b hb
+        change b ∈ bins.parts at hb
+        rw [hbins] at hb
+        obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp hb
+        exact hBcard j
+      patch_X_disjoint := by
+        intro i j hij
+        have hi : i.val < 1 := i.isLt
+        have hj : j.val < 1 := j.isLt
+        exact (hij (Fin.ext (by omega))).elim
+      patch_Y_disjoint := by
+        intro i j hij
+        have hi : i.val < 1 := i.isLt
+        have hj : j.val < 1 := j.isLt
+        exact (hij (Fin.ext (by omega))).elim
+      S_upper := by change X.card ≤ T.S.N k; simpa using Finset.card_le_univ X
+      measured_scales := by
+        intro i
+        first
+        | exact ⟨hg, hq⟩
+        | constructor
+          · change g = gScale κ T.swap k RY RX
+            rw [allocation_gScale_swap]
+            exact hg
+          · change q = qScale κ T.swap k RY RX
+            rw [Lane_sol_s13_allocA.qScale_swap]
+            exact hq
+      bounded_scale_cutoff := by intro hm; exact (hnonbounded hm).elim
+      bounded_data := by intro hm; exact (hnonbounded hm).elim
+      direct_scale_bound := by intro hm; exact (hnondirect hm).elim
+      direct_data := by intro hm; exact (hnondirect hm).elim
+      cluster_data := by
+        intro hm i
+        refine ⟨?_, hgq, hSize, ?_, ?_, ?_, hDyadic, ?_, ?_, ?_, ?_, ?_⟩
+        · simpa only [Nat.cast_max] using hCutoff
+        · intro hsmall
+          change mode = .highSmall at hsmall
+          change d = min ⌊Real.exp ((q : ℝ) / 2)⌋₊ ⌊Real.exp (Real.sqrt L)⌋₊
+          simp only [d, hsmall, if_pos]
+        · intro hother
+          change mode = .lowCluster ∨ mode = .highLarge at hother
+          change d = ⌊Real.exp ((q : ℝ) / 2)⌋₊
+          rcases hother with hlow | hlarge
+          · simp [d, hlow]
+          · simp [d, hlarge]
+        · intro b hb y hy y' hy'
+          change b ∈ bins.parts at hb
+          rw [hbins] at hb
+          obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp hb
+          simpa only [Stage.orient, Stage.swap, BadSeq.swap, Bool.false_eq_true, if_false, if_true]
+            using hCodegree j y y' hy hy'
+        · change (q : ℝ) ^ (if mode = .lowCluster then (κ.Mlo : ℝ) else κ.Mhi) ≤ (h : ℝ)
+          by_cases hl : mode = .lowCluster <;> simpa [M, hl, Real.rpow_eq_pow] using hDimEq.le
+        · change (h : ℝ) < 2 * (q : ℝ) ^ (if mode = .lowCluster then (κ.Mlo : ℝ) else κ.Mhi)
+          have hh : (h : ℝ) < 2 * (q : ℝ) ^ (M : ℝ) := by rw [hDimEq]; linarith
+          by_cases hl : mode = .lowCluster <;> simpa [M, hl, Real.rpow_eq_pow] using hh
+        · simpa only [L, Stage.orient, Stage.swap, BadSeq.swap, Real.rpow_eq_pow] using hregLow
+        · simpa only [L, Stage.orient, Stage.swap, BadSeq.swap, Real.rpow_eq_pow] using hregSmall
+        · simpa only [L, Stage.orient, Stage.swap, BadSeq.swap] using hregLarge
+      clique_scales := by
+        intro i
+        constructor
+        · intro hm
+          refine ⟨hQdyadic, le_rfl, ?_, hKQ⟩
+          change ((q ^ 2 : ℕ) : ℝ) ≤ 2 * (q : ℝ) ^ (2 : ℕ)
+          simp only [Nat.cast_pow]
+          nlinarith [sq_nonneg (q : ℝ)]
+        · intro hm
+          exact (hnondirect hm).elim }
+  let r : AllocationRawPass κ T k ZX ZY := {
+    orientation := o, mode := mode, colour := true, patch := P, cliqueScale := q ^ 2,
+    nonbounded := hnonbounded, data := hExtracted }
+  cases o
+  · exact ⟨r, hXR, hYR⟩
+  · exact ⟨r, hYR, hXR⟩
+
+set_option maxHeartbeats 1600000 in
 /-- P13.3d (sections/13, lines 128–159): residual scales and patch nodes drive repeated extraction passes. -/
 theorem extraction_passes (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0)
@@ -3017,7 +3766,114 @@ theorem extraction_passes (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hScaleSpec : ResidualScaleSpec)
     (hScaleBounds : ResidualScaleBoundFacts κ T) :
     ∀ᶠ k in atTop, Nonempty (PassCollection κ T k) := by
-  sorry
+  classical
+  have hQ0 := Lane_sol_s13_allocA.threshold hκ
+  have hM1 : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+  have hMlo := (Lane_sol_s13_allocA.Mhi_positive hκ).1
+  have hMloR : (1 : ℝ) ≤ κ.Mlo := by
+    have hn : 1 ≤ κ.Mlo := by omega
+    exact_mod_cast hn
+  have hcq : κ.cq ≤ 2 := by
+    have hc := (lt_div_iff₀ (by positivity : (0 : ℝ) < 20 * (κ.Mlo : ℝ))).mp hκ.cq_rng.2
+    have hm := mul_le_mul_of_nonneg_left hMloR hκ.cq_rng.1.le
+    nlinarith
+  have hι : κ.ι / 2 ≤ 1 := by
+    have hm : min κ.xs (min κ.η0 (0.01 : ℝ)) ≤ 0.01 :=
+      (min_le_right _ _).trans (min_le_right _ _)
+    nlinarith [hκ.ι_rng.2]
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop := by
+    simpa only [Function.comp_def] using
+      (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  have hlog : Tendsto (fun k => Real.log (T.S.n k)) atTop atTop := by
+    simpa only [Function.comp_def] using Real.tendsto_log_atTop.comp hn
+  have hsmall := T.small.eventually (gt_mem_nhds (by norm_num : (0 : ℝ) < 1 / 20))
+  filter_upwards [hBiasNode, hClusterNode, (hScaleBounds 1 (by norm_num)).1,
+    hsmall, hn.eventually_ge_atTop 1, hlog.eventually_ge_atTop 1]
+    with k hBias hCluster hG hSmall hn1 hLog1
+  have hN : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hsmallSum : (((T.X k)ᶜ.card : ℝ) + (T.Y k)ᶜ.card) < (T.S.N k : ℝ) / 20 := by
+    have hm := (div_lt_iff₀ hN).mp hSmall
+    push_cast at hm
+    linarith
+  have hSmallX : ((T.X k)ᶜ.card : ℝ) ≤ (T.S.N k : ℝ) / 20 := by
+    have hy : (0 : ℝ) ≤ (T.Y k)ᶜ.card := by positivity
+    linarith
+  have hSmallY : ((T.Y k)ᶜ.card : ℝ) ≤ (T.S.N k : ℝ) / 20 := by
+    have hx : (0 : ℝ) ≤ (T.X k)ᶜ.card := by positivity
+    linarith
+  have hreserve (W : Finset (Fin (T.S.N k))) (hW : (Wᶜ.card : ℝ) ≤ (T.S.N k : ℝ) / 20) :
+      T.S.N k / 3 ≤ W.card := by
+    have hWle : W.card ≤ T.S.N k := by simpa using Finset.card_le_univ W
+    have hcover : W.card + Wᶜ.card = T.S.N k := by
+      simp only [Finset.card_compl, Fintype.card_fin]
+      omega
+    have hcoverR : (W.card : ℝ) + Wᶜ.card = T.S.N k := by exact_mod_cast hcover
+    have hthree : 3 * (T.S.N k / 3) ≤ T.S.N k := by
+      simpa [mul_comm] using Nat.div_mul_le_self (T.S.N k) 3
+    have hthreeR : (3 : ℝ) * (T.S.N k / 3 : ℕ) ≤ T.S.N k := by exact_mod_cast hthree
+    exact_mod_cast (show ((T.S.N k / 3 : ℕ) : ℝ) ≤ W.card by linarith)
+  obtain ⟨ZX, hZXT, hZX⟩ := Finset.exists_subset_card_eq (hreserve (T.X k) hSmallX)
+  obtain ⟨ZY, hZYT, hZY⟩ := Finset.exists_subset_card_eq (hreserve (T.Y k) hSmallY)
+  apply allocation_maximal_collection κ T k ZX ZY hZX hZY hZXT hZYT hSmallX hSmallY
+  intro RX RY hRX hRY hRXcard hRYcard
+  have hRXT := hRX.trans Finset.sdiff_subset
+  have hRYT := hRY.trans Finset.sdiff_subset
+  let g := gScale κ T k RX RY
+  let q := qScale κ T k RX RY
+  by_cases hbounded : max (g : ℝ) (q : ℝ) < κ.M1 * κ.Q0
+  · obtain ⟨X, Y, hX, hY, hXR, hYR, hXY, hSize⟩ := hBoundedNode k RX RY hRXcard hRYcard
+    exact Or.inl (allocation_bounded_collection κ T k ZX ZY RX RY hZX hZY hZXT hZYT
+      hRX hRY hbounded X Y hX hY hXR hYR hXY hSize)
+  · have hCutoff : κ.M1 * κ.Q0 ≤ max (g : ℝ) (q : ℝ) := le_of_not_gt hbounded
+    by_cases hDirect : κ.M1 * (q : ℝ) < g
+    · have hqg : (q : ℝ) ≤ g := by
+        have hq0 : (0 : ℝ) ≤ q := by positivity
+        nlinarith [hκ.M1_big.1]
+      have hgmin : κ.M1 * κ.Q0 ≤ (g : ℝ) := by simpa only [max_eq_left hqg] using hCutoff
+      have hg2r : (2 : ℝ) ≤ g := by
+        have hm := mul_le_mul_of_nonneg_left hQ0.le hM1.le
+        nlinarith [hκ.M1_big.1]
+      have hg2 : 2 ≤ g := by exact_mod_cast hg2r
+      have hgBound : (g : ℝ) ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := (hG RX RY hRXT hRYT).2
+      have hgN : g ≤ T.S.n k := by
+        have hp : (T.S.n k : ℝ) ^ (κ.ι / 2) ≤ (T.S.n k : ℝ) := by
+          calc
+            _ ≤ (T.S.n k : ℝ) ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le hn1 hι
+            _ = _ := Real.rpow_one _
+        exact_mod_cast hgBound.trans hp
+      have hgd := hScaleSpec.g_dyadic κ T k RX RY
+      have hgd2 : IsDyadic (2 * g) := by
+        obtain ⟨j, hj⟩ := hgd
+        refine ⟨j + 1, ?_⟩
+        change 2 * g = 2 ^ (j + 1)
+        change g = 2 ^ j at hj
+        simp [hj, pow_succ, Nat.mul_comm]
+      have hWitness : BiasWitness κ T k RX RY g := hScaleSpec.bias_witness κ T k RX RY hg2
+      have hAbsent : ¬ BiasWitness κ T k RX RY (2 * g) :=
+        hScaleSpec.bias_absent κ T k RX RY (2 * g) hgd2 (by omega) (by omega)
+      have hPatch := hBias RX RY g hRXT hRYT hgmin hWitness hAbsent
+      right
+      exact allocation_direct_raw κ hκ T k ZX ZY RX RY hZX hZY hZXT hZYT hRX hRY
+        g q rfl rfl hCutoff hDirect hgBound hPatch
+    · have hgq : (g : ℝ) ≤ κ.M1 * q := le_of_not_gt hDirect
+      have hqmin : κ.Q0 ≤ (q : ℝ) := by
+        have hq0 : (0 : ℝ) ≤ q := by positivity
+        have hqq : (q : ℝ) ≤ κ.M1 * q := by nlinarith [hκ.M1_big.1]
+        have hm := hCutoff.trans (max_le hgq hqq)
+        exact (mul_le_mul_iff_right₀ hM1).mp hm
+      have hq2 : 2 ≤ q := by
+        have hq1 : (1 : ℝ) < q := hQ0.trans_le hqmin
+        have hq1n : 1 < q := by exact_mod_cast hq1
+        omega
+      obtain ⟨o, hWitness⟩ := hScaleSpec.cluster_witness κ T k RX RY hq2
+      have hNode := hCluster RX RY q o hRXT hRYT (hScaleSpec.q_dyadic κ T k RX RY) hqmin hWitness
+      have hLCutoff : (Real.log (T.S.n k)) ^ κ.cq ≤ (Real.log (T.S.n k)) ^ 2 := by
+        calc
+          _ ≤ (Real.log (T.S.n k)) ^ (2 : ℝ) := Real.rpow_le_rpow_of_exponent_le hLog1 hcq
+          _ = _ := by norm_num only [Real.rpow_ofNat]
+      right
+      exact allocation_cluster_raw κ hκ T k ZX ZY RX RY hZX hZY hZXT hZYT hRX hRY
+        g q o rfl rfl hCutoff hgq hqmin (hScaleSpec.q_dyadic κ T k RX RY) hLCutoff hNode
 
 /-- P13.3e (sections/13, lines 159–168): select one bounded family or a nonbounded type carrying at least
 one twentieth of the extracted mass. -/

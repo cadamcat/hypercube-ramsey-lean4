@@ -238,7 +238,7 @@ theorem posLawForced_none (p : HDParams) : p.posLawForced none = p.posLaw := by
 
 /-! ## 3. Leaves -/
 
-/-- LEAF (eventual numerics). Under the standard hypotheses, for large `n`. -/
+/-- Eventual numerics under the standard hypotheses (proved). -/
 theorem std_eventually (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
     (hp : HDAdmissible J₀ b₀ b σ ζ θ a c_d C_d D) (reg : HDRegime b₀ b D) :
     ∃ n₀ : ℕ, ∀ p : HDParams, Std J₀ b₀ b σ ζ c_d C_d D reg p → n₀ ≤ p.n →
@@ -338,7 +338,7 @@ theorem pi_bool_expect_eq_of_eq_off {ι : Type*} [Fintype ι] [DecidableEq ι]
   intro i hi
   rw [hQ i (Finset.ne_of_mem_erase hi)]
 
-/-- LEAF (forced-center transfer, TeX 03:534–541). A function that does not read the forced
+/-- Forced-center transfer, TeX 03:534–541 (proved). A function that does not read the forced
 coordinate has the same expectation under the forced and the unforced position laws. -/
 theorem posLawForced_expect_eq (p : HDParams) (forced : Option p.Loc)
     (f : (p.Loc → Bool) → ℝ) (hf : FinProb.DependsOn f (forcedFree p forced)) :
@@ -359,7 +359,7 @@ theorem posLawForced_expect_eq (p : HDParams) (forced : Option p.Loc)
         simp [forcedFree] at hi
       exact Function.update_of_ne hne _ _
 
-/-- LEAF. `relSup` reads the prospective positions only inside its center domain. -/
+/-- `relSup` reads the prospective positions only inside its center domain (proved). -/
 theorem relSup_dependsOn (p : HDParams) (C : Finset p.Loc) (Dom : Set (HDState p))
     (s t η : ℝ) (x : HDState p) (R : ℕ) :
     FinProb.DependsOn (relSup p C Dom s t η x R) C := by

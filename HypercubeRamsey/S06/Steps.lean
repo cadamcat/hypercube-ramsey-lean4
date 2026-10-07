@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S06.Steps_q_s06_steps1
 import HypercubeRamsey.S06.Steps_raw_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_window_sol_s06_steps1
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -218,8 +219,9 @@ theorem L6_1c_del (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     rcases constants6_facts with ⟨_, _, _, _, _, hδ1, _, _⟩
     exact hδ1
   have htail : X.baseLaw.pr (fun b => ¬ predGood b) ≤ (n : ℝ) ^ (-δ₁) := by
-    -- This is the raw predictive-denominator tail estimate for the local base experiment.
-    sorry
+    simpa only [predGood, not_le, Lane_sol_s06_steps1.posteriorPred] using
+      Lane_sol_s06_steps1.posterior_alarm_bound X h s hs ((n : ℝ) ^ (-δ₁))
+        (Real.rpow_nonneg (Nat.cast_nonneg n) _)
   calc
     X.baseLaw.pr (fun b => ¬ X.Step1Del b h s) ≤ X.baseLaw.pr (fun b => ¬ predGood b) := hrawAlarm
     _ ≤ (n : ℝ) ^ (-δ₁) := htail

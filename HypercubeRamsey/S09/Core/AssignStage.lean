@@ -678,7 +678,225 @@ theorem p92_odd_moment (P : Params9) (hP : P.Valid) (c : ℝ) (hc : 0 < c) :
       (S : Setup9 P n N M) (I : IDMap9 P n),
       S07.CondProductBound → AnchorLLL9 S I E G c → StarScopeFacts9 S I E G →
         OddMoment9 S I E G := by
-  sorry
+  have hexps := Lane_q_s09_assign1.scaleExpsOfValid9 P hP
+  obtain ⟨nLog, hLog⟩ := Lane_q_s09_assign1.degreeLogSmall9 P hexps hc
+  have hu : 0 < P.u := hexps.2.2.1
+  have htendsto : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ P.u)
+      Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop
+  obtain ⟨nCharge, hCharge⟩ := Filter.eventually_atTop.1
+    (htendsto.eventually_ge_atTop (Real.log 4 / (3 * c / 4)))
+  refine ⟨max 1 (max nLog nCharge), ?_⟩
+  intro n hn N E M G S I hCPB hAnchor hScope
+  have hn1 : 1 ≤ n := le_trans (le_max_left _ _) hn
+  have hnCore : max nLog nCharge ≤ n := le_trans (le_max_right _ _) hn
+  have hnLog : nLog ≤ n := le_trans (le_max_left _ _) hnCore
+  have hnCharge : nCharge ≤ n := le_trans (le_max_right _ _) hnCore
+  let D : ℕ := lllDegree9 P n
+  let x : ℝ := P.tail c n
+  have hDpos : 0 < (D : ℝ) := by dsimp [D, lllDegree9]; positivity
+  have hlogD : Real.log (D : ℝ) =
+      (2 * (P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) := by
+    simp [D, lllDegree9, Real.log_pow, Nat.cast_add, Nat.cast_mul]
+  have hlogDBound : Real.log (D : ℝ) ≤ (c / 4) * (n : ℝ) ^ P.u := by
+    rw [hlogD]
+    exact hLog n hnLog
+  have hcharge : Real.log 4 ≤ (3 * c / 4) * (n : ℝ) ^ P.u := by
+    have h := (div_le_iff₀ (by positivity : (0 : ℝ) < 3 * c / 4)).1
+      (hCharge n hnCharge)
+    nlinarith [h]
+  have hsmallExp : Real.exp (-((3 * c / 4) * (n : ℝ) ^ P.u)) ≤ 1 / 4 := by
+    calc
+      Real.exp (-((3 * c / 4) * (n : ℝ) ^ P.u)) ≤ Real.exp (-Real.log 4) :=
+        Real.exp_le_exp.mpr (by linarith [hcharge])
+      _ = 1 / 4 := by
+        rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+        norm_num
+  have hDtail : (D : ℝ) * x ≤ Real.exp (-((3 * c / 4) * (n : ℝ) ^ P.u)) := by
+    calc
+      (D : ℝ) * x =
+          Real.exp (Real.log (D : ℝ)) * Real.exp (-(c * (n : ℝ) ^ P.u)) := by
+            change (D : ℝ) * Real.exp (-(c * (n : ℝ) ^ P.u)) =
+              Real.exp (Real.log (D : ℝ)) * Real.exp (-(c * (n : ℝ) ^ P.u))
+            exact congrArg (fun z : ℝ => z * Real.exp (-(c * (n : ℝ) ^ P.u)))
+              (Real.exp_log hDpos).symm
+      _ = Real.exp (Real.log (D : ℝ) - c * (n : ℝ) ^ P.u) := by
+            rw [← Real.exp_add]
+            congr 1 <;> ring
+      _ ≤ Real.exp (-((3 * c / 4) * (n : ℝ) ^ P.u)) := Real.exp_le_exp.mpr (by
+            nlinarith [hlogDBound])
+  have hxSmall : x ≤ Real.exp (-((3 * c / 4) * (n : ℝ) ^ P.u)) := by
+    dsimp [x, Params9.tail]
+    apply Real.exp_le_exp.mpr
+    have hpow : 0 ≤ (n : ℝ) ^ P.u := by positivity
+    nlinarith [mul_nonneg (by positivity : (0 : ℝ) ≤ c / 4) hpow]
+  have hsmall : ((D : ℝ) + 1) * x ≤ 1 / 2 := by
+    calc
+      ((D : ℝ) + 1) * x = (D : ℝ) * x + x := by ring
+      _ ≤ 2 * Real.exp (-((3 * c / 4) * (n : ℝ) ^ P.u)) := by
+        nlinarith [hDtail, hxSmall]
+      _ ≤ 1 / 2 := by linarith [hsmallExp]
+  have hxpos : 0 < x := by dsimp [x, Params9.tail]; exact Real.exp_pos _
+  have hxlt : x < 1 := by
+    dsimp [x, Params9.tail]
+    calc
+      Real.exp (-(c * (n : ℝ) ^ P.u)) < Real.exp 0 :=
+        Real.exp_lt_exp.mpr (neg_lt_zero.mpr (by positivity : 0 < c * (n : ℝ) ^ P.u))
+      _ = 1 := by simp
+  have hBern : 1 - ((D : ℝ) + 1) * x ≤ (1 - x) ^ (D + 1) := by
+    have h := one_add_mul_le_pow (a := -x) (by linarith [hxlt]) (D + 1)
+    have h' := h
+    rw [Nat.cast_add, Nat.cast_one] at h'
+    have h'' : 1 + ((D : ℝ) + 1) * (-x) ≤ (1 - x) ^ (D + 1) := by
+      simpa [sub_eq_add_neg] using h'
+    calc
+      1 - ((D : ℝ) + 1) * x = 1 + ((D : ℝ) + 1) * (-x) := by ring
+      _ ≤ (1 - x) ^ (D + 1) := h''
+  have hden : (1 / 2 : ℝ) ≤ (1 - x) ^ (D + 1) := by linarith [hBern, hsmall]
+  have hbasePos : 0 < (1 - x) ^ (D + 1) := pow_pos (by linarith [hxlt]) _
+  have hbaseInv : ((1 - x) ^ (D + 1))⁻¹ ≤ 2 := by
+    simpa [one_div] using one_div_le_one_div_of_le
+      (by norm_num : (0 : ℝ) < 1 / 2) hden
+  have hpowCost : ∀ k : ℕ,
+      (1 / 2 : ℝ) ^ k ≤ (1 - x) ^ (k * (D + 1)) := by
+    intro k
+    have hpow : ∀ m : ℕ, (1 / 2 : ℝ) ^ m ≤ ((1 - x) ^ (D + 1)) ^ m := by
+      intro m
+      induction m with
+      | zero => simp
+      | succ m ih =>
+          rw [pow_succ, pow_succ]
+          calc
+            (1 / 2 : ℝ) ^ m * (1 / 2 : ℝ) ≤ ((1 - x) ^ (D + 1)) ^ m * (1 / 2 : ℝ) :=
+              mul_le_mul_of_nonneg_right ih (by norm_num)
+            _ ≤ ((1 - x) ^ (D + 1)) ^ m * (1 - x) ^ (D + 1) :=
+              mul_le_mul_of_nonneg_left hden (pow_nonneg (by linarith [hden]) m)
+    calc
+      (1 / 2 : ℝ) ^ k ≤ ((1 - x) ^ (D + 1)) ^ k :=
+        hpow k
+      _ = (1 - x) ^ (k * (D + 1)) := by
+        calc
+          ((1 - x) ^ (D + 1)) ^ k = (1 - x) ^ ((D + 1) * k) := by rw [pow_mul]
+          _ = (1 - x) ^ (k * (D + 1)) := by
+            congr 1
+            exact Nat.mul_comm _ _
+  intro y k hk s hsep
+  let j₀ : Fin n := ⟨0, by omega⟩
+  let starAt : Fin k → EvenSites9 n := fun i =>
+    ⟨cubeFlip (s i).1 j₀, (cubeFlip_parity (s i).1 j₀).2 (s i).2⟩
+  have hAdj (i : Fin k) : (cube n).Adj (starAt i).1 (s i).1 := by
+    simpa [starAt] using (cubeFlip_adj (s i).1 j₀).symm
+  let U : Finset (I.ID ⊕ OddSites9 n) :=
+    (Finset.univ : Finset (Fin k)).biUnion (fun i => starScope9 I (starAt i))
+  let scopes : Fin k → Finset (I.ID ⊕ OddSites9 n) :=
+    fun i => Lane_q_s09_assign1.oddRowInputs9 (I := I) (s i)
+  have hscopeSub (i : Fin k) : scopes i ⊆ U := by
+    calc
+      scopes i ⊆ starScope9 I (starAt i) :=
+        Lane_q_s09_assign1.oddRowInputsSubsetStarScope9 (hAdj i)
+      _ ⊆ U := Finset.subset_biUnion_of_mem (fun j => starScope9 I (starAt j))
+        (Finset.mem_univ i)
+  let rowFn : Fin k → Outcome9 I N → ℝ := fun i ω =>
+    (N : ℝ) * (rowLaw9 S E G ω (s i)).w y
+  let Φ : Outcome9 I N → ℝ := fun ω => ∏ i, rowFn i ω
+  have hrowDep (i : Fin k) : FinProb.DependsOn (rowFn i) (scopes i) := by
+    intro ω ω' hagree
+    have hrow := Lane_q_s09_assign1.rowLawDependsOnInputs9 S E G (s i) ω ω' hagree
+    simpa [rowFn] using congrArg (fun L : Law N => (N : ℝ) * L.w y) hrow
+  have hΦDep : FinProb.DependsOn Φ U := by
+    intro ω ω' hagree
+    unfold Φ
+    apply Finset.prod_congr rfl
+    intro i hi
+    exact hrowDep i ω ω' (fun q hq => hagree q (hscopeSub i hq))
+  have hΦNonneg (ω : Outcome9 I N) : 0 ≤ Φ ω := by
+    unfold Φ rowFn
+    apply Finset.prod_nonneg
+    intro i hi
+    exact mul_nonneg (Nat.cast_nonneg N) ((rowLaw9 S E G ω (s i)).nonneg y)
+  have hnotNear (i j : Fin k) (hij : i ≠ j) :
+      ¬ siteNear9 P n (s i).1 (s j).1 := by
+    by_cases hji : j < i
+    · exact hsep i j hji
+    · have hij' : i < j := by omega
+      intro hnear
+      exact hsep j i hij' (by simpa [siteNear9, _root_.hammingDist_comm] using hnear)
+  have hrowDisjoint (i j : Fin k) (hij : i ≠ j) : Disjoint (scopes i) (scopes j) :=
+    Lane_q_s09_assign1.oddRowInputsDisjointOfNotNear9 (s i) (s j) (hnotNear i j hij)
+  have hprodFactor := Lane_q_s09_assign1.piExpectProdDisjoint9 (inputLaw9 S I)
+    rowFn scopes hrowDep hrowDisjoint (Finset.univ : Finset (Fin k))
+  have hmean (i : Fin k) :
+      (FinProb.pi (inputLaw9 S I)).expect (rowFn i) =
+        (N : ℝ) * (rawRowLaw9 S I E G (s i)).w y := by
+    simp only [FinProb.expect, FinProb.pi, rowFn, rawRowLaw9, Law.mix, rawLaw9]
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro ω hω
+    ring
+  have hrawFactor :
+      (rawLaw9 S I).expect Φ =
+        ∏ i, (N : ℝ) * (rawRowLaw9 S I E G (s i)).w y := by
+    calc
+      (rawLaw9 S I).expect Φ = (FinProb.pi (inputLaw9 S I)).expect Φ := rfl
+      _ = ∏ i ∈ (Finset.univ : Finset (Fin k)),
+          (FinProb.pi (inputLaw9 S I)).expect (rowFn i) := hprodFactor
+      _ = ∏ i, (N : ℝ) * (rawRowLaw9 S I E G (s i)).w y := by
+          apply Finset.prod_congr rfl
+          intro i hi
+          exact hmean i
+  let B : ℝ := ∏ i, (N : ℝ) * (rawRowLaw9 S I E G (s i)).w y
+  have hBNonneg : 0 ≤ B := by
+    unfold B
+    apply Finset.prod_nonneg
+    intro i hi
+    exact mul_nonneg (Nat.cast_nonneg N) ((rawRowLaw9 S I E G (s i)).nonneg y)
+  have hfree (ω₀ : Outcome9 I N) :
+      (∑ a : (∀ i : U, Val9 I N i.1),
+        (∏ i : U, (inputLaw9 S I i.1).w (a i)) * Φ (S07.glue U ω₀ a)) ≤ B := by
+    calc
+      _ = (rawLaw9 S I).expect Φ :=
+        Lane_q_s09_assign1.piExpectGlue9 (inputLaw9 S I) U Φ ω₀ hΦDep
+      _ = B := by simpa [B] using hrawFactor
+      _ ≤ B := le_rfl
+  have hCostInput : S07.LLLInput (inputLaw9 S I)
+      (fun v ω => StarBad9 S E G ω v) (starScope9 I) x D := by
+    simpa [AnchorLLL9, x, D] using hAnchor
+  have hcond := hCPB (inputLaw9 S I) (fun v ω => StarBad9 S E G ω v)
+    (starScope9 I) x D hCostInput
+  let T : Finset (EvenSites9 n) := Finset.univ.filter (fun v : EvenSites9 n =>
+    ¬ Disjoint (starScope9 I v) U)
+  have hTBound : T.card ≤ k * (D + 1) := by
+    simpa [T, U, D] using
+      (Lane_q_s09_assign1.starEventsTouchingOddNeighborhoods9 S E G hScope starAt)
+  have hqpow : (1 / 2 : ℝ) ^ k ≤ (1 - x) ^ T.card := by
+    calc
+      (1 / 2 : ℝ) ^ k ≤ (1 - x) ^ (k * (D + 1)) := hpowCost k
+      _ ≤ (1 - x) ^ T.card :=
+        pow_le_pow_of_le_one (by linarith [hxpos, hxlt]) (by linarith [hxpos]) hTBound
+  have hcost : ((1 - x) ^ T.card)⁻¹ ≤ (2 : ℝ) ^ k := by
+    have hOneDiv := one_div_le_one_div_of_le
+      (pow_pos (by norm_num : (0 : ℝ) < 1 / 2) k) hqpow
+    calc
+      ((1 - x) ^ T.card)⁻¹ = 1 / (1 - x) ^ T.card := by rw [one_div]
+      _ ≤ 1 / (1 / 2 : ℝ) ^ k := hOneDiv
+      _ = (2 : ℝ) ^ k := by
+        have hhalf : (1 / 2 : ℝ) ^ k * (2 : ℝ) ^ k = 1 := by
+          rw [← mul_pow]
+          norm_num
+        field_simp [one_div, pow_ne_zero k (by norm_num : (2 : ℝ) ≠ 0)]
+        nlinarith [hhalf]
+  have hbound := hcond.2 U Φ hΦNonneg B hfree
+  have hanchorEq : anchorLaw9 S I E G =
+      S07.condOr (FinProb.pi (inputLaw9 S I))
+        (fun ω => ∀ v : EvenSites9 n, ¬ StarBad9 S E G ω v) := rfl
+  have hbound' : (anchorLaw9 S I E G).expect Φ ≤ ((1 - x) ^ T.card)⁻¹ * B := by
+    rw [hanchorEq]
+    simpa [T] using hbound
+  have hfinal : (anchorLaw9 S I E G).expect Φ ≤ (2 : ℝ) ^ k * B := by
+    calc
+      (anchorLaw9 S I E G).expect Φ ≤ ((1 - x) ^ T.card)⁻¹ * B := hbound'
+      _ ≤ (2 : ℝ) ^ k * B := mul_le_mul_of_nonneg_right hcost hBNonneg
+  simpa [Φ, rowFn, B] using hfinal
 
 /-- P9.2-assignB, odd column sums (09:322–327): Lemma 3.6 with weights `N p_b(y)`, cap `e^{S_d}` on the
 avoidance event (`RowCap9`), near fraction at most `(n+1)^{4r+12} 2^{1-n}` (and

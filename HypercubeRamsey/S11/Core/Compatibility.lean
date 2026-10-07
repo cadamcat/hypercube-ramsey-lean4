@@ -667,6 +667,317 @@ all but `binom(s_c + t₀, t₀)` of them into `s_c`-cliques (X-RamseyBinom), an
 samples and tags (aggregate `O(1) π`): an `(X, Y)` cluster witness with first law `μ_U`, excluded. -/
 theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 < K) :
     HighDegreeEv δ K := by
+  classical
+  have heta : 0 < etaC := by norm_num [etaC]
+  have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ δ) Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+  have hexp : Filter.Tendsto (fun n : ℕ => Real.exp ((n : ℝ) ^ δ))
+      Filter.atTop Filter.atTop := Real.tendsto_exp_atTop.comp hpow
+  have hsmall : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ (-δ) < etaC / 1000 := by
+    have hneg : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (-δ)) Filter.atTop (nhds 0) :=
+      (tendsto_rpow_neg_atTop hδ).comp tendsto_natCast_atTop_atTop
+    exact hneg.eventually (Iio_mem_nhds (by norm_num [etaC]))
+  have hbsmall : ∀ᶠ n : ℕ in Filter.atTop, bS n < etaC / 100 := by
+    have hneg : Filter.Tendsto
+        ((fun x : ℝ => x ^ (-(19 / 20 : ℝ))) ∘ (fun n : ℕ => (n : ℝ)))
+        Filter.atTop (nhds 0) := by
+      have hpos : 0 < (19 : ℝ) / 20 := by norm_num
+      exact (tendsto_rpow_neg_atTop hpos).comp tendsto_natCast_atTop_atTop
+    have hneigh : Set.Iio (etaC / 100) ∈ nhds (0 : ℝ) := Iio_mem_nhds (by positivity)
+    have hevent := hneg.eventually hneigh
+    have hevent' : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ (-(19 / 20 : ℝ)) < etaC / 100 := by
+      simpa only [Function.comp_apply] using hevent
+    simpa only [bS, show -(19 : ℝ) / 20 = -(19 / 20 : ℝ) from by ring] using hevent'
+  have hKlarge : ∀ᶠ n : ℕ in Filter.atTop, K ≤ Real.exp ((n : ℝ) ^ δ) :=
+    hexp.eventually (Filter.eventually_ge_atTop K)
+  obtain ⟨nsmall, hnsmall⟩ := Filter.eventually_atTop.1 hsmall
+  obtain ⟨nb, hnb⟩ := Filter.eventually_atTop.1 hbsmall
+  obtain ⟨nK, hnK⟩ := Filter.eventually_atTop.1 hKlarge
+  refine ⟨max nsmall (max nb (max nK 1)), ?_⟩
+  intro n hn N E X Y G ι hι π p hN hπnonneg hπsum hπsupp hπcap hmixcap hXY
+  have hnsmall' : nsmall ≤ n := by omega
+  have hnb' : nb ≤ n := by omega
+  have hnK' : nK ≤ n := by omega
+  have hn1 : 1 ≤ n := by omega
+  have hpowSmall : (n : ℝ) ^ (-δ) < etaC / 1000 := hnsmall n hnsmall'
+  have hbSmall : bS n < etaC / 100 := hnb n hnb'
+  have hKexp : K ≤ Real.exp ((n : ℝ) ^ δ) := hnK n hnK'
+  let πbar : Fin N → ℝ := mixW p π
+  have hbarNonneg : ∀ y, 0 ≤ πbar y := by
+    intro y
+    dsimp [πbar, mixW]
+    exact Finset.sum_nonneg fun i _ => mul_nonneg (p.nonneg i) (hπnonneg i y)
+  have hbarSum : ∑ y, πbar y = 1 := by
+    simp only [πbar, mixW]
+    rw [Finset.sum_comm]
+    simp_rw [← Finset.mul_sum, hπsum]
+    simp [p.sum_eq_one]
+  have hdegreeMix (x : Fin N) :
+      deg E G πbar x = ∑ i, p.w i * deg E G (π i) x := by
+    unfold deg
+    change (∑ y, (∑ i, p.w i * π i y) * hit E G x y) = _
+    calc
+      (∑ y, (∑ i, p.w i * π i y) * hit E G x y) =
+          ∑ y, ∑ i, p.w i * (π i y * hit E G x y) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            rw [Finset.sum_mul]
+            apply Finset.sum_congr rfl
+            intro i hi
+            ring
+      _ = ∑ i, ∑ y, p.w i * (π i y * hit E G x y) := by rw [Finset.sum_comm]
+      _ = ∑ i, p.w i * (∑ y, π i y * hit E G x y) := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            rw [Finset.mul_sum]
+      _ = ∑ i, p.w i * deg E G (π i) x := by rfl
+  have hsMeanDegree (x : Fin N) : sMean E G πbar x = 2 * deg E G πbar x - 1 := by
+    unfold sMean deg fv
+    calc
+      (∑ y, πbar y * (2 * hit E G x y - 1)) =
+          ∑ y, (2 * (πbar y * hit E G x y) - πbar y) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      _ = 2 * (∑ y, πbar y * hit E G x y) - ∑ y, πbar y := by
+            rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+      _ = 2 * (∑ y, πbar y * hit E G x y) - 1 := by rw [hbarSum]
+      _ = 2 * deg E G πbar x - 1 := by rfl
+  have hdegreeBounds (i : ι) (x : Fin N) :
+      0 ≤ deg E G (π i) x ∧ deg E G (π i) x ≤ 1 := by
+    unfold deg
+    constructor
+    · exact Finset.sum_nonneg fun y _ =>
+        mul_nonneg (hπnonneg i y) (by unfold hit; split_ifs <;> norm_num)
+    · calc
+        (∑ y, π i y * hit E G x y) ≤ ∑ y, π i y * 1 := by
+          apply Finset.sum_le_sum
+          intro y hy
+          exact mul_le_mul_of_nonneg_left (by unfold hit; split_ifs <;> norm_num) (hπnonneg i y)
+        _ = 1 := by simp [hπsum i]
+  let U : Finset (Fin N) := X.filter fun x =>
+    |sMean E G πbar x| ≤ 4 * bS n ∧
+      etaC < ∑ i ∈ Finset.univ.filter (fun i => (4 / 5 : ℝ) < deg E G (π i) x), p.w i
+  change (U.card : ℝ) < (N : ℝ) * Real.exp (-((n : ℝ) ^ δ))
+  by_contra hsmall
+  have hNpos : 0 < N := lt_of_lt_of_le (Nat.pow_pos (by norm_num : 0 < 2)) hN
+  have hNr : 0 < (N : ℝ) := by exact_mod_cast hNpos
+  have hUlarge : (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) ≤ U.card := le_of_not_gt hsmall
+  have hUcardPos : 0 < (U.card : ℝ) :=
+    lt_of_lt_of_le (mul_pos hNr (Real.exp_pos _)) hUlarge
+  have hUne : U.Nonempty := by
+    apply Finset.card_pos.mp
+    exact_mod_cast hUcardPos
+  let μ : Law N := Law.unif U hUne
+  have hUsub : U ⊆ X := Finset.filter_subset _ _
+  have hμX : μ.SupportedIn X := by
+    intro x hx
+    have hxU : x ∉ U := fun hxU => hx (hUsub hxU)
+    simp [μ, Law.unif, FinProb.uniform, hxU]
+  have hμWidth : μ.WidthLE ((n : ℝ) ^ δ) := by
+    intro x
+    change (if x ∈ U then (U.card : ℝ)⁻¹ else 0) ≤ Real.exp ((n : ℝ) ^ δ) / N
+    by_cases hx : x ∈ U
+    · rw [if_pos hx]
+      have hcardMul : (N : ℝ) ≤ (U.card : ℝ) * Real.exp ((n : ℝ) ^ δ) := by
+        calc
+          (N : ℝ) = (N : ℝ) * 1 := by ring
+          _ = (N : ℝ) * (Real.exp (-((n : ℝ) ^ δ)) * Real.exp ((n : ℝ) ^ δ)) := by
+            rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
+          _ = ((N : ℝ) * Real.exp (-((n : ℝ) ^ δ))) * Real.exp ((n : ℝ) ^ δ) := by ring
+          _ ≤ (U.card : ℝ) * Real.exp ((n : ℝ) ^ δ) :=
+            mul_le_mul_of_nonneg_right hUlarge (le_of_lt (Real.exp_pos _))
+      rw [show (U.card : ℝ)⁻¹ = (1 : ℝ) / (U.card : ℝ) by ring]
+      rw [div_le_div_iff₀ (by exact_mod_cast (Finset.card_pos.mpr hUne)) hNr]
+      nlinarith
+    · rw [if_neg hx]
+      positivity
+  let massHigh (x : Fin N) : ℝ :=
+    ∑ i ∈ Finset.univ.filter (fun i => (4 / 5 : ℝ) < deg E G (π i) x), p.w i
+  have hmassHigh (x : Fin N) (hx : x ∈ U) : etaC < massHigh x := by
+    exact (Finset.mem_filter.mp hx).2.2
+  have hgoodMean (x : Fin N) (hx : x ∈ U) : |sMean E G πbar x| ≤ 4 * bS n :=
+    (Finset.mem_filter.mp hx).2.1
+  have hdegreeBarBounds (x : Fin N) :
+      0 ≤ deg E G πbar x ∧ deg E G πbar x ≤ 1 := by
+    constructor
+    · rw [hdegreeMix]
+      exact Finset.sum_nonneg fun i _ => mul_nonneg (p.nonneg i) (hdegreeBounds i x).1
+    · rw [hdegreeMix]
+      calc
+        (∑ i, p.w i * deg E G (π i) x) ≤ ∑ i, p.w i * 1 := by
+          apply Finset.sum_le_sum
+          intro i hi
+          exact mul_le_mul_of_nonneg_left (hdegreeBounds i x).2 (p.nonneg i)
+        _ = 1 := by simp [p.sum_eq_one]
+  have hmeanBounds (x : Fin N) (hx : x ∈ U) :
+      1 / 2 - 2 * bS n ≤ deg E G πbar x ∧ deg E G πbar x ≤ 1 / 2 + 2 * bS n := by
+    have h := abs_le.mp (hgoodMean x hx)
+    rw [hsMeanDegree] at h
+    constructor <;> linarith
+  have hvariance (x : Fin N) (hx : x ∈ U) :
+      etaC * (3 / 10 : ℝ) ^ 2 ≤
+        ∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2 := by
+    let H : Finset ι := Finset.univ.filter fun i => (4 / 5 : ℝ) < deg E G (π i) x
+    have hconst (i : ι) (hi : i ∈ H) :
+        (3 / 10 : ℝ) ^ 2 ≤ (deg E G (π i) x - 1 / 2) ^ 2 := by
+      have hdegree : (4 / 5 : ℝ) < deg E G (π i) x := (Finset.mem_filter.mp hi).2
+      nlinarith
+    have hrestrict :
+        (∑ i ∈ H, p.w i * (3 / 10 : ℝ) ^ 2) =
+          (3 / 10 : ℝ) ^ 2 * massHigh x := by
+      calc
+        (∑ i ∈ H, p.w i * (3 / 10 : ℝ) ^ 2) =
+            (∑ i ∈ H, p.w i) * (3 / 10 : ℝ) ^ 2 := by rw [← Finset.sum_mul]
+        _ = (3 / 10 : ℝ) ^ 2 * massHigh x := by
+          have hm : (∑ i ∈ H, p.w i) = massHigh x := rfl
+          rw [hm]
+          ring
+    have hsubsum :
+        (∑ i ∈ H, p.w i * (deg E G (π i) x - 1 / 2) ^ 2) ≤
+          ∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2 := by
+      exact Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) (by
+        intro i hi hnot
+        exact mul_nonneg (p.nonneg i) (sq_nonneg _))
+    have hterm :
+        (∑ i ∈ H, p.w i * (3 / 10 : ℝ) ^ 2) ≤
+          ∑ i ∈ H, p.w i * (deg E G (π i) x - 1 / 2) ^ 2 := by
+      apply Finset.sum_le_sum
+      intro i hi
+      exact mul_le_mul_of_nonneg_left (hconst i hi) (p.nonneg i)
+    have hvarlt : etaC * (3 / 10 : ℝ) ^ 2 <
+        ∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2 := by
+      calc
+        etaC * (3 / 10 : ℝ) ^ 2 < massHigh x * (3 / 10 : ℝ) ^ 2 :=
+          mul_lt_mul_of_pos_right (hmassHigh x hx) (by norm_num)
+        _ = ∑ i ∈ H, p.w i * (3 / 10 : ℝ) ^ 2 := by rw [hrestrict]; ring
+        _ ≤ ∑ i ∈ H, p.w i * (deg E G (π i) x - 1 / 2) ^ 2 := hterm
+        _ ≤ ∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2 := hsubsum
+    exact hvarlt.le
+  have hsecondIdentity (x : Fin N) :
+      ∑ i, p.w i * (deg E G (π i) x) ^ 2 =
+        (∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2) +
+          (∑ i, p.w i * deg E G (π i) x) - 1 / 4 := by
+    calc
+      ∑ i, p.w i * (deg E G (π i) x) ^ 2 =
+          ∑ i, (p.w i * (deg E G (π i) x - 1 / 2) ^ 2 +
+            p.w i * deg E G (π i) x - p.w i * (1 / 4 : ℝ)) := by
+              apply Finset.sum_congr rfl
+              intro i hi
+              ring
+      _ = (∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2) +
+            (∑ i, p.w i * deg E G (π i) x) - (∑ i, p.w i * (1 / 4 : ℝ)) := by
+              rw [Finset.sum_sub_distrib, Finset.sum_add_distrib]
+      _ = (∑ i, p.w i * (deg E G (π i) x - 1 / 2) ^ 2) +
+            (∑ i, p.w i * deg E G (π i) x) - 1 / 4 := by
+              rw [← Finset.sum_mul, p.sum_eq_one]
+              ring
+  have hrowSecond (x : Fin N) (hx : x ∈ U) :
+      1 / 4 + etaC / 20 ≤ ∑ i, p.w i * (deg E G (π i) x) ^ 2 := by
+    have hmeanSum : 1 / 2 - 2 * bS n ≤ ∑ i, p.w i * deg E G (π i) x := by
+      rw [← hdegreeMix x]
+      exact (hmeanBounds x hx).1
+    rw [hsecondIdentity]
+    nlinarith [hvariance x hx, hmeanSum, hbSmall, heta]
+  let tagMoment (i : ι) : ℝ := ∑ x, μ.w x * (deg E G (π i) x) ^ 2
+  have htagMomentBounds (i : ι) : 0 ≤ tagMoment i ∧ tagMoment i ≤ 1 := by
+    constructor
+    · dsimp [tagMoment]
+      exact Finset.sum_nonneg fun x _ => mul_nonneg (μ.nonneg x) (sq_nonneg _)
+    · dsimp [tagMoment]
+      calc
+        (∑ x, μ.w x * (deg E G (π i) x) ^ 2) ≤ ∑ x, μ.w x * 1 := by
+          apply Finset.sum_le_sum
+          intro x hx
+          exact mul_le_mul_of_nonneg_left (by nlinarith [(hdegreeBounds i x).1, (hdegreeBounds i x).2])
+            (μ.nonneg x)
+        _ = 1 := by simp [μ.sum_eq_one]
+  have hprofileSecond :
+      (∑ i, p.w i * tagMoment i) =
+        ∑ x, μ.w x * (∑ i, p.w i * (deg E G (π i) x) ^ 2) := by
+    dsimp [tagMoment]
+    calc
+      (∑ i, p.w i * ∑ x, μ.w x * (deg E G (π i) x) ^ 2) =
+          ∑ i, ∑ x, p.w i * (μ.w x * (deg E G (π i) x) ^ 2) := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            rw [Finset.mul_sum]
+      _ = ∑ x, ∑ i, p.w i * (μ.w x * (deg E G (π i) x) ^ 2) := by
+            rw [Finset.sum_comm]
+      _ = ∑ x, μ.w x * (∑ i, p.w i * (deg E G (π i) x) ^ 2) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            calc
+              (∑ i, p.w i * (μ.w x * (deg E G (π i) x) ^ 2)) =
+                  ∑ i, μ.w x * (p.w i * (deg E G (π i) x) ^ 2) := by
+                    apply Finset.sum_congr rfl
+                    intro i hi
+                    ring
+              _ = μ.w x * (∑ i, p.w i * (deg E G (π i) x) ^ 2) := by
+                    rw [← Finset.mul_sum]
+  have hprofileSecondLower : 1 / 4 + etaC / 20 ≤ ∑ i, p.w i * tagMoment i := by
+    calc
+      1 / 4 + etaC / 20 = (1 / 4 + etaC / 20) * ∑ x, μ.w x := by rw [μ.sum_eq_one]; ring
+      _ = ∑ x, μ.w x * (1 / 4 + etaC / 20) := by
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro x hx
+        ring
+      _ ≤ ∑ x, μ.w x * (∑ i, p.w i * (deg E G (π i) x) ^ 2) := by
+        apply Finset.sum_le_sum
+        intro x hx
+        by_cases hxU : x ∈ U
+        · exact mul_le_mul_of_nonneg_left (hrowSecond x hxU) (μ.nonneg x)
+        · have hμzero : μ.w x = 0 := by simp [μ, Law.unif, FinProb.uniform, hxU]
+          simp [hμzero]
+      _ = ∑ i, p.w i * tagMoment i := hprofileSecond.symm
+  let NormGood : Finset ι := Finset.univ.filter fun i => 1 / 4 + etaC / 40 < tagMoment i
+  let normGoodMass : ℝ := ∑ i ∈ NormGood, p.w i
+  have hnormGoodMass : etaC / 100 < normGoodMass := by
+    by_contra hnot
+    have hgoodIndicator :
+        (∑ i, p.w i * (if i ∈ NormGood then (1 : ℝ) else 0)) = normGoodMass := by
+      calc
+        (∑ i, p.w i * (if i ∈ NormGood then (1 : ℝ) else 0)) =
+            ∑ i, if i ∈ NormGood then p.w i else 0 := by
+              apply Finset.sum_congr rfl
+              intro i hi
+              by_cases h : i ∈ NormGood <;> simp [h]
+        _ = normGoodMass := by simp [normGoodMass, NormGood, Finset.sum_filter]
+    have hsumUpper :
+        (∑ i, p.w i * (1 / 4 + etaC / 40 + if i ∈ NormGood then 1 else 0)) =
+          1 / 4 + etaC / 40 + normGoodMass := by
+      calc
+        _ = ∑ i, (p.w i * (1 / 4 + etaC / 40) +
+            p.w i * (if i ∈ NormGood then 1 else 0)) := by
+              apply Finset.sum_congr rfl
+              intro i hi
+              ring
+        _ = (∑ i, p.w i * (1 / 4 + etaC / 40)) +
+            (∑ i, p.w i * (if i ∈ NormGood then 1 else 0)) := by
+              rw [Finset.sum_add_distrib]
+        _ = 1 / 4 + etaC / 40 + normGoodMass := by
+              rw [← Finset.sum_mul, p.sum_eq_one, hgoodIndicator]
+              ring
+    have hnormUpper : (∑ i, p.w i * tagMoment i) ≤ 1 / 4 + etaC / 40 + normGoodMass := by
+      calc
+        (∑ i, p.w i * tagMoment i) ≤
+            ∑ i, p.w i * (1 / 4 + etaC / 40 + if i ∈ NormGood then 1 else 0) := by
+              apply Finset.sum_le_sum
+              intro i hi
+              apply mul_le_mul_of_nonneg_left _ (p.nonneg i)
+              by_cases hiGood : i ∈ NormGood
+              · have hle := (htagMomentBounds i).2
+                simp [hiGood]
+                linarith
+              · have hsmallI : tagMoment i ≤ 1 / 4 + etaC / 40 := by
+                  by_contra hn
+                  exact hiGood (Finset.mem_filter.mpr ⟨Finset.mem_univ _, lt_of_not_ge hn⟩)
+                simp [hiGood]
+                nlinarith [hsmallI]
+        _ = 1 / 4 + etaC / 40 + normGoodMass := hsumUpper
+    have hmassLe : normGoodMass ≤ etaC / 100 := le_of_not_gt hnot
+    nlinarith [hprofileSecondLower, heta]
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

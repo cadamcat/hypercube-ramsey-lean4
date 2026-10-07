@@ -296,8 +296,8 @@ theorem eventually_T₆_le_J₆ :
     (Nat.le_floor_iff (Real.rpow_nonneg hm0 _)).2 hTy
   simpa [J₆] using hfloor
 
-theorem m₆_tendsto_atTop (p₀ : ℝ) (hp₀ : 0 < p₀) :
-    Tendsto (fun n : ℕ => (m₆ p₀ n : ℝ)) Filter.atTop Filter.atTop := by
+theorem m₆_nat_tendsto_atTop (p₀ : ℝ) (hp₀ : 0 < p₀) :
+    Tendsto (fun n : ℕ => m₆ p₀ n) Filter.atTop Filter.atTop := by
   have hα : 0 < α₆ p₀ := lt_min (by norm_num) (by linarith)
   have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ α₆ p₀) Filter.atTop Filter.atTop :=
     (tendsto_rpow_atTop hα).comp tendsto_natCast_atTop_atTop
@@ -306,10 +306,12 @@ theorem m₆_tendsto_atTop (p₀ : ℝ) (hp₀ : 0 < p₀) :
       (fun b : ℕ => ⟨(b : ℝ), by simp⟩)
   have hceilPow : Tendsto (fun n : ℕ => Nat.ceil ((n : ℝ) ^ α₆ p₀))
       Filter.atTop Filter.atTop := hceil.comp hpow
-  have hcast : Tendsto (fun n : ℕ => ((Nat.ceil ((n : ℝ) ^ α₆ p₀) : ℕ) : ℝ))
-      Filter.atTop Filter.atTop :=
-    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) Filter.atTop Filter.atTop).comp
-      hceilPow
-  simpa [m₆] using hcast
+  simpa [m₆] using hceilPow
+
+theorem m₆_tendsto_atTop (p₀ : ℝ) (hp₀ : 0 < p₀) :
+    Tendsto (fun n : ℕ => (m₆ p₀ n : ℝ)) Filter.atTop Filter.atTop := by
+  exact (tendsto_natCast_atTop_atTop :
+    Tendsto (fun n : ℕ => (n : ℝ)) Filter.atTop Filter.atTop).comp
+      (m₆_nat_tendsto_atTop p₀ hp₀)
 
 end HypercubeRamsey.Lane_q_s06_stages

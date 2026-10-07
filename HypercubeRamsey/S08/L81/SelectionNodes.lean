@@ -1371,8 +1371,8 @@ theorem few_bad_tail (hη₀ : 0 < η₀) (hh : 10 ^ 8 ≤ h) :
   intro D _hn _hGF _hListCount _hBadListProb _hAvoid
   have hWitness (q : D.Pre) (hNF : ¬ D.FewBad q.1.1 q.1.2 q.2.1.1) :=
     bad_family_witness η₀ β p h D q.1.1 q.1.2 q.2.1.1 hNF
-  /- The remaining estimate unions over cells and ordered `n`-tuples of disjoint bad candidates, then factors their
-     tag events. The tag product law still needs the finite-support independence calculation and asymptotic bound. -/
+  /- The lane helper bounds the joint bad-tag probability for each fixed pairwise-disjoint candidate-list family.
+     The union over cells and candidate `n`-tuples, the `ListCount` estimate, and exponent absorption remain. -/
   sorry
 
 /-- L8.1f(x) (08:214): eligibility in slice `g` is a function of the positions and of auxiliary randomness

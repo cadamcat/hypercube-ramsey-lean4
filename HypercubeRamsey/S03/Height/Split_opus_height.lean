@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Height.Selection_p_height_main
+import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_paths
 
 set_option maxHeartbeats 400000
 
@@ -436,7 +437,11 @@ theorem not_goodHeights_top_failure (p : HDParams) (hD : 0 < p.D) (hH : 0 < p.H)
     (Sites : p.Sites) (P A : p.Loc → Bool) (E : p.EligMap) (η : ℝ) (hη : 0 ≤ η)
     (hbad : ¬ p.GoodHeights Sites P A E) :
     ∃ u ∈ Sites, hdScaleFailure Sites P A E (u, 0) p.H η := by
-  sorry
+  classical
+  by_contra hno
+  have hnone : ∀ u ∈ Sites, ¬ hdScaleFailure Sites P A E (u, 0) p.H η := by
+    simpa only [not_exists, not_and] using hno
+  exact hbad (Lane_sol_hs_paths.goodHeights_of_no_failure hD hη hnone)
 
 /-- LEAF (deterministic, TeX 03:555–564). A positive long height is witnessed by a bad
 site-level near the query (displacement below `R₀`), by a scale-`i` failure from a level-zero
@@ -455,7 +460,39 @@ theorem positive_height_witness (p : HDParams) (hD : 0 < p.D) (σ ζ : ℝ)
       hdScaleFailure (p.domBall Sites v p.Rlong) P A E (u, 0)
         (hdScaleRadius p.n σ (hdScaleIndex p.n σ ζ))
         (hdScaleSlope (hdScaleIndex p.n σ ζ) (hdScaleIndex p.n σ ζ))) := by
-  sorry
+  classical
+  have hr := height_reach_at_height Sites P A E v p.Rlong hv
+  obtain ⟨u, hu, ⟨path⟩⟩ := Lane_sol_hs_paths.reach_path
+    (p.domBall Sites v p.Rlong)
+    (fun w hw hq => Finset.mem_filter.mpr ⟨hw, hq⟩) hr
+  have hfirst := Lane_sol_hs_paths.path_first_bad path hpos
+  let L := hdScaleDistance p.D (v, 0) (u, 0)
+  by_cases hbase : L < heightBaseRadius p.n
+  · left
+    refine ⟨(u, 0), ?_, Lane_sol_hs_paths.failure_one_of_bad hD hu hfirst.1 hfirst.2⟩
+    unfold baseStarts
+    apply Finset.mem_image.mpr
+    refine ⟨(u, ⟨0, by omega⟩), ?_, rfl⟩
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, hu, ?_⟩
+    change L < 2 * heightBaseRadius p.n
+    have hR : 1 ≤ heightBaseRadius p.n := by unfold heightBaseRadius; omega
+    omega
+  · let h := hdScaleIndex p.n σ ζ
+    have hfinish := Lane_sol_hs_paths.zero_distance_le_finish (p := p) u v
+      (p.height Sites P A E p.Rlong v)
+    by_cases htop : hdScaleRadius p.n σ h ≤ L
+    · right; right
+      refine ⟨u, hu, Lane_sol_hs_paths.failure_of_path path ?_ (htop.trans hfinish)⟩
+      have hs := hdScaleThreshold_fractions_bounds (Nat.le_refl h)
+      linarith [hs.2.2.2.2.1]
+    · obtain ⟨i, hi, hlo, hhi⟩ := Lane_sol_hs_paths.scale_bracket p.n σ h L
+        (by omega) (by omega)
+      right; left
+      refine ⟨i, Finset.mem_range.mpr hi, u, Finset.mem_filter.mpr ⟨hu, hhi⟩,
+        Lane_sol_hs_paths.failure_of_path path ?_ (hlo.trans hfinish)⟩
+      have hs := hdScaleThreshold_fractions_bounds (Nat.le_of_lt hi)
+      linarith [hs.2.2.2.2.1]
 
 /-- LEAF (counting). -/
 theorem baseStarts_card_le (p : HDParams) (hD : 0 < p.D) (Dom : p.Sites)

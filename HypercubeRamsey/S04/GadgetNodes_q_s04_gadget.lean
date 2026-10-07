@@ -3316,6 +3316,111 @@ private theorem clipped_tuple_flip_profile {β γ : ℝ} {n : ℕ}
       · left
         omega
 
+private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    (∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j v) t =
+        mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i)) t) ∨
+    ∃ j r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (∀ t, t ≠ r → mergeSortAt
+        (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) t =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) t) ∧
+      ((mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) r =
+          mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 ∧
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g j v + 1) ∨
+       (mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+          mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+            (HypercubeRamsey.cubeFlip v i)) r + 1 ∧
+        HypercubeRamsey.S04.clipped β γ n g j v =
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1)) := by
+  classical
+  let f : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
+    fun j => HypercubeRamsey.S04.clipped β γ n g j v
+  let h : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
+    fun j => HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  rcases clipped_tuple_flip_profile g v i with heq | ⟨j, hother, hdir⟩
+  · left
+    intro t
+    have hfgh : f = h := funext fun t => by simpa [f, h] using (heq t).symm
+    simp [f, h, hfgh]
+  · by_cases hup : h j = f j + 1
+    · have hfg : ∀ k, f k ≤ h k := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hgf : ∀ k, h k ≤ f k + 1 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hpoint : ∀ k, h k = f k + if k = j then 1 else 0 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; simp [hup]
+        · simp [f, h, hkj, hother k hkj]
+      have hsum : (∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), f k) + 1 =
+          ∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), h k := by
+        have hs : (∑ k, h k) = (∑ k, f k) + 1 := by
+          calc
+            (∑ k, h k) = ∑ k, (f k + if k = j then 1 else 0) :=
+              Finset.sum_congr rfl (fun k _ => hpoint k)
+            _ = (∑ k, f k) + ∑ k, (if k = j then 1 else 0) := Finset.sum_add_distrib
+            _ = (∑ k, f k) + 1 := by simp
+        omega
+      obtain ⟨r, hold, hnew, hrest⟩ :=
+        mergeSort_one_change_at f h j hfg hgf hsum hup
+          (by intro k hkj; exact hother k hkj)
+      have hrank : mergeSortAt h r = mergeSortAt f r + 1 := by
+        rw [hnew, hold, hup]
+      right
+      refine ⟨j, r, ?_, ?_⟩
+      · intro t htr
+        exact hrest t htr
+      · exact Or.inl ⟨hrank, hup⟩
+    · have hdown : f j = h j + 1 := by
+        rcases hdir with hinc | hdec
+        · exact False.elim (hup hinc)
+        · exact hdec
+      have hfg : ∀ k, h k ≤ f k := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hgf : ∀ k, f k ≤ h k + 1 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hpoint : ∀ k, f k = h k + if k = j then 1 else 0 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; simp [hdown]
+        · simp [f, h, hkj, hother k hkj]
+      have hsum : (∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), h k) + 1 =
+          ∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), f k := by
+        have hs : (∑ k, f k) = (∑ k, h k) + 1 := by
+          calc
+            (∑ k, f k) = ∑ k, (h k + if k = j then 1 else 0) :=
+              Finset.sum_congr rfl (fun k _ => hpoint k)
+            _ = (∑ k, h k) + ∑ k, (if k = j then 1 else 0) := Finset.sum_add_distrib
+            _ = (∑ k, h k) + 1 := by simp
+        omega
+      obtain ⟨r, hlow, hhigh, hrest⟩ :=
+        mergeSort_one_change_at h f j hfg hgf hsum hdown
+          (by intro k hkj; exact (hother k hkj).symm)
+      have hrank : mergeSortAt f r = mergeSortAt h r + 1 := by
+        rw [hhigh, hlow, hdown]
+      right
+      refine ⟨j, r, ?_, ?_⟩
+      · intro t htr
+        exact (hrest t htr).symm
+      · exact Or.inr ⟨hrank, hdown⟩
+
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
   classical

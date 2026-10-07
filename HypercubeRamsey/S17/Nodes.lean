@@ -5,6 +5,9 @@ import HypercubeRamsey.S17.Needs
 import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S17.Nodes_sol_s17_pool
 import HypercubeRamsey.S17.Nodes_q_s17_res1
+import HypercubeRamsey.S17.Nodes_sol_s17_res
+import HypercubeRamsey.S17.Execution_sol_s17_res
+import HypercubeRamsey.S17.Component_sol_s17_res
 import HypercubeRamsey.S17.Nodes_sol_s17_pool_experiment
 import HypercubeRamsey.S17.Nodes_sol_s17_pool_mass
 
@@ -2372,6 +2375,154 @@ theorem resampleLocality
       LE.EventTruthLocalitySpec Ts order pools tapes := by
   exact HypercubeRamsey.Lane_q_s17_res1.resampleLocality LE Ts order pools tapes
 
+private theorem component_witness_of_data
+    {κ : CConsts} {T : Stage} {k Ts : ℕ} {PT : ProfiledTiling κ T k}
+    {D : ListGateContext κ T k PT} (LE : ListEvent D.F)
+    (order : Pos T k → ℕ) (events : Finset (Pos T k))
+    (pools : ∀ C : D.G.Cell, D.F.Pool C) (tapes : Tapes D.F Ts)
+    (root : Pos T k) {m : ℕ}
+    (A : Lane_sol_s17_res.ComponentData LE Ts order events pools tapes.extend root m) :
+    CandidateWitness LE Ts events root m (A.Q, A.items) ∧
+      WitnessReadsDisjoint LE Ts A.items ∧ WitnessTestsPass LE Ts pools tapes A.items := by
+  classical
+  let typed : ExecutionOccurrence T k Ts → Pos T k × Option (Fin Ts) :=
+    fun o => (o.1, some o.2)
+  have htyped : Function.Injective typed := by
+    intro o p h
+    have hs := congrArg (fun x : Pos T k × Option (Fin Ts) => x.1) h
+    have hr := congrArg (fun x : Pos T k × Option (Fin Ts) => x.2) h
+    exact Prod.ext hs (Option.some.inj hr)
+  let I := Finset.univ.image A.items
+  let prior (n : ℕ) (C : D.G.Cell) :=
+    Lane_sol_s17_res.priorExecutions LE Ts n order events pools tapes.extend C
+  let count (n : ℕ) (C : D.G.Cell) :=
+    (LE.runRounds n order events pools tapes.extend).2 C
+  have hCount (n : ℕ) (hn : n ≤ Ts) (C : D.G.Cell) : count n C = (prior n C).card :=
+    Lane_sol_s17_res.run_counter_eq LE Ts order events pools tapes.extend n hn C
+  have hRead (j : Fin m) (r : Fin Ts) (hr : (A.items j).2 = some r)
+      (C : D.G.Cell) (hC : C ∈ LE.scope (A.items j).1) :
+      witnessReadIndex LE Ts A.items j C = count r.val C := by
+    let p := fun x : Pos T k × Option (Fin Ts) =>
+      ∃ s : Fin Ts, x.2 = some s ∧ s.val < r.val ∧ C ∈ LE.scope x.1
+    have hset : I.filter p = (prior r.val C).image typed := by
+      ext x
+      constructor
+      · intro hx
+        obtain ⟨hx, s, hs, hlt, hCs⟩ := Finset.mem_filter.mp hx
+        obtain ⟨i, _, hi⟩ := Finset.mem_image.mp hx
+        have hri : (A.items i).2 = some s := by simpa only [hi] using hs
+        have hCi : C ∈ LE.scope (A.items i).1 := by simpa only [hi] using hCs
+        refine Finset.mem_image.mpr ⟨((A.items i).1, s),
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, A.real_exec i s hri, hlt, hCi⟩, ?_⟩
+        have heq : typed ((A.items i).1, s) = A.items i := by
+          apply Prod.ext
+          · rfl
+          · exact hri.symm
+        exact heq.trans hi
+      · intro hx
+        obtain ⟨o, ho, rfl⟩ := Finset.mem_image.mp hx
+        obtain ⟨_, he, hlt, hCo⟩ := Finset.mem_filter.mp ho
+        obtain ⟨i, hi⟩ := A.prior_closed j r hr C hC o he hlt hCo
+        exact Finset.mem_filter.mpr
+          ⟨Finset.mem_image.mpr ⟨i, Finset.mem_univ _, hi⟩, o.2, rfl, hlt, hCo⟩
+    have hen := Lane_sol_s17_res.enumeration_filter_card A.items A.injective I rfl p
+    have hh : witnessReadIndex LE Ts A.items j C = (I.filter p).card := by
+      simpa only [witnessReadIndex, hr, p] using hen
+    rw [hset, Finset.card_image_of_injective _ htyped] at hh
+    exact hh.trans (hCount _ (by omega) C).symm
+  have hStrict (j : Fin m) (r : Fin Ts) (hr : (A.items j).2 = some r)
+      (C : D.G.Cell) (hC : C ∈ LE.scope (A.items j).1)
+      (n : ℕ) (hrn : r.val < n) (hn : n ≤ Ts) :
+      witnessReadIndex LE Ts A.items j C < count n C := by
+    rw [hRead j r hr C hC, hCount _ (by omega) C, hCount n hn C]
+    apply Finset.card_lt_card
+    apply Finset.ssubset_iff_subset_ne.mpr
+    constructor
+    · intro o ho
+      obtain ⟨_, he, hlt, hCo⟩ := Finset.mem_filter.mp ho
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, he, by omega, hCo⟩
+    · intro heq
+      have hin : ((A.items j).1, r) ∈ prior n C :=
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, A.real_exec j r hr, hrn, hC⟩
+      rw [← heq] at hin
+      have hh := (Finset.mem_filter.mp hin).2.2.1
+      change r.val < r.val at hh
+      exact (Nat.lt_irrefl _ hh).elim
+  have hUntouched (j : Fin m) (hj : (A.items j).2 = none) :
+      ∀ n, n ≤ Ts → ∀ C ∈ LE.scope (A.items j).1,
+        (LE.runRounds n order events pools tapes.extend).1 C = tapes.extend C 0 (pools C) := by
+    intro n
+    induction n with
+    | zero => intro hn C hC; rfl
+    | succ n ih =>
+      intro hn C hC
+      have hno := A.extra_untouched j hj C hC n (by omega)
+      have hp := ih (by omega) C hC
+      rw [show LE.runRounds (n + 1) order events pools tapes.extend =
+        LE.round order events pools tapes.extend
+          (LE.runRounds n order events pools tapes.extend).1
+          (LE.runRounds n order events pools tapes.extend).2 by rfl]
+      simp [ListEvent.round, hno, hp]
+  have hReads : WitnessReadsDisjoint LE Ts A.items := by
+    constructor
+    · intro j C hC
+      cases hr : (A.items j).2 with
+      | none => simp [witnessReadIndex, hr]
+      | some r =>
+        rw [hRead j r hr C hC]
+        exact (Lane_sol_s17_res.run_counter_le LE order events pools tapes.extend _ C).trans
+          (by omega)
+    · intro i j hij C hCi hCj
+      cases hi : (A.items i).2 with
+      | none =>
+        cases hj : (A.items j).2 with
+        | none => exact (Finset.disjoint_left.mp (A.extra_disjoint i j hij hi hj) hCi hCj).elim
+        | some r =>
+          exact (A.extra_untouched i hi C hCi r.val r.isLt
+            ⟨(A.items j).1, A.real_exec j r hj, hCj⟩).elim
+      | some r =>
+        cases hj : (A.items j).2 with
+        | none =>
+          exact (A.extra_untouched j hj C hCj r.val r.isLt
+            ⟨(A.items i).1, A.real_exec i r hi, hCi⟩).elim
+        | some s =>
+          have hrne : r.val ≠ s.val := by
+            intro he
+            have hrs : r = s := Fin.ext he
+            have hei : (A.items i).1 ∈ LE.active order events
+                (LE.runRounds s.val order events pools tapes.extend).1 := by
+              simpa only [Lane_sol_s17_res.Executed, he] using A.real_exec i r hi
+            have hsite := Lane_sol_s17_res.active_touch_unique LE order events _ hei
+              (A.real_exec j s hj) hCi hCj
+            exact hij (A.injective (Prod.ext hsite (hi.trans ((congrArg some hrs).trans hj.symm))))
+          rcases lt_or_gt_of_ne hrne with hlt | hlt
+          · exact ne_of_lt (by
+              rw [hRead j s hj C hCj]
+              exact hStrict i r hi C hCi s.val hlt (by omega))
+          · exact Ne.symm (ne_of_lt (by
+              rw [hRead i r hi C hCi]
+              exact hStrict j s hj C hCj r.val hlt (by omega)))
+  have hTests : WitnessTestsPass LE Ts pools tapes A.items := by
+    intro j
+    cases hr : (A.items j).2 with
+    | none =>
+      obtain ⟨n, hn, htrue⟩ := A.extra_truth j hr
+      apply (LE.scope_ok (A.items j).1 _ _ ?_).mpr htrue
+      intro C hC
+      change tapes.extend C (witnessReadIndex LE Ts A.items j C) (pools C) =
+        (LE.runRounds n order events pools tapes.extend).1 C
+      simp only [witnessReadIndex, hr]
+      exact (hUntouched j hr n hn C hC).symm
+    | some r =>
+      have htrue := (Finset.mem_filter.mp (A.real_exec j r hr)).2.2.1
+      apply (LE.scope_ok (A.items j).1 _ _ ?_).mpr htrue
+      intro C hC
+      change tapes.extend C (witnessReadIndex LE Ts A.items j C) (pools C) =
+        (LE.runRounds r.val order events pools tapes.extend).1 C
+      rw [hRead j r hr C hC]
+      exact (Lane_sol_s17_res.run_state LE order events pools tapes.extend _ C).symm
+  exact ⟨⟨A.tree, A.injective, ⟨A.positive, A.anchor⟩, A.events_mem, A.child⟩, hReads, hTests⟩
+
 /-- P17.4a: extract the executions and only untouched extra sites from the
 ever-true component; the root is not required to be an untouched test. -/
 theorem finiteResamplingComponent
@@ -2384,50 +2535,10 @@ theorem finiteResamplingComponent
     ∃ m, Ts ≤ m ∧ 0 < m ∧ ∃ W : ComponentWitness T k Ts m,
       CandidateWitness LE Ts events v m W ∧ WitnessReadsDisjoint LE Ts W.2 ∧
         WitnessTestsPass LE Ts pools tapes W.2 := by
-  classical
-  by_cases hTs : Ts = 0
-  · subst Ts
-    let Q : PlaneTreeCode 1 := (fun _ => 0, fun _ => 0)
-    let items : WitnessItems T k 0 1 := fun _ => (v, none)
-    refine ⟨1, Nat.zero_le _, by norm_num, (Q, items), ?_, ?_, ?_⟩
-    · refine ⟨?_, ?_, ?_, ?_, ?_⟩
-      · change PlaneTreeSpec Q
-        constructor
-        · intro j hj
-          have hj0 : j = (0 : Fin 1) := Subsingleton.elim _ _
-          subst j
-          simp [Q]
-        · intro j hj
-          omega
-      · intro i j hij
-        exact Subsingleton.elim _ _
-      · refine ⟨by norm_num, ?_⟩
-        have hzero : (items ⟨0, by norm_num⟩).1 = v := rfl
-        rw [hzero]
-        simp [ListEvent.graphBall]
-      · intro j
-        have hj0 : j = (0 : Fin 1) := Subsingleton.elim _ _
-        subst j
-        exact hroot
-      · intro j hj
-        omega
-    · constructor
-      · intro j C hC
-        simp [items, witnessReadIndex]
-      · intro i j hij C hCi hCj
-        exact (hij (Subsingleton.elim _ _)).elim
-    · intro j
-      have hj0 : j = (0 : Fin 1) := by omega
-      subst j
-      have hcfg0 : witnessTestConfig LE 0 pools tapes
-          (fun _ : Fin 1 => (v, none)) 0 =
-          LE.resample 0 order events pools tapes.extend := by
-        funext C
-        simp [witnessTestConfig, witnessReadIndex, Tapes.extend,
-          ListEvent.resample, ListEvent.runRounds]
-      rw [hcfg0]
-      exact hfinal
-  · sorry
+  obtain ⟨m, ⟨A⟩⟩ := Lane_sol_s17_res.component_data LE Ts order events pools tapes.extend
+    v hroot hfinal
+  exact ⟨m, A.rounds_le, A.positive, (A.Q, A.items),
+    component_witness_of_data LE order events pools tapes v A⟩
 
 /-- P17.4b: count plane-tree encodings, not arbitrary connected sequences. -/
 theorem finiteResamplingWitnessCount
@@ -2441,69 +2552,67 @@ theorem finiteResamplingWitnessCount
         (componentWitnessBase d Ts) ^ m := by
   classical
   intro m hm
-  by_cases hm1 : m = 1
-  · subst m
-    let B := LE.graphBall {root} 1
-    let WType := {W : ComponentWitness T k Ts 1 //
-      CandidateWitness LE Ts events root 1 W}
-    let Site := {x : Pos T k // x ∈ B}
-    let encode (W : WType) : Site × Option (Fin Ts) :=
-      let j : Fin 1 := ⟨0, by omega⟩
-      ⟨⟨(W.1.2 j).1, by
-          rcases W.2 with ⟨_, htail⟩
-          rcases htail with ⟨_, htail⟩
-          rcases htail with ⟨hanchor, _⟩
-          rcases hanchor with ⟨hpos, hanchor⟩
-          have hj : (⟨0, hpos⟩ : Fin 1) = j := Subsingleton.elim _ _
-          rw [← hj]
-          exact hanchor⟩,
-        (W.1.2 j).2⟩
-    have hencode : Function.Injective encode := by
-      intro W W' h
-      apply Subtype.ext
-      have htree : W.1.1 = W'.1.1 := Subsingleton.elim _ _
-      have hitem : W.1.2 (⟨0, by omega⟩ : Fin 1) =
-          W'.1.2 (⟨0, by omega⟩ : Fin 1) := by
-        have hsite : (W.1.2 (⟨0, by omega⟩ : Fin 1)).1 =
-            (W'.1.2 (⟨0, by omega⟩ : Fin 1)).1 := by
-          exact congrArg (fun z : Site × Option (Fin Ts) => z.1.1) h
-        have hround := congrArg (fun z : Site × Option (Fin Ts) => z.2) h
-        exact Prod.ext hsite hround
-      exact Prod.ext htree (funext fun j => by
-        have hj : j = (⟨0, by omega⟩ : Fin 1) := Subsingleton.elim _ _
-        simpa [hj] using hitem)
-    have hball : B.card ≤ d + 1 := by
-      simpa [B, pow_one] using
-        (HypercubeRamsey.Lane_q_s17_res1.graphBall_singleton_card_le_pow
-          LE d hdegree root 1)
-    have hcand : (Finset.univ.filter fun W : ComponentWitness T k Ts 1 =>
-        CandidateWitness LE Ts events root 1 W).card = Fintype.card WType := by
-      simp [WType, Fintype.card_subtype]
-    have hSiteCard : Fintype.card Site = B.card := by
-      simp [Site, Fintype.card_subtype]
-    have hencodeCard : Fintype.card WType ≤
-        Fintype.card (Site × Option (Fin Ts)) :=
-      Fintype.card_le_of_injective encode hencode
-    have hcoeff : d + 1 ≤ 4 * (d + 1) ^ 4 := by
-      have hd : 1 ≤ d + 1 := by omega
-      have hp : d + 1 ≤ (d + 1) ^ 4 := by
+  let B (x : Pos T k) := LE.graphBall {x} 3
+  let b := (d + 1) ^ 3
+  have hB (x : Pos T k) : (B x).card ≤ b :=
+    Lane_q_s17_res1.graphBall_singleton_card_le_pow LE d hdegree x 3
+  let Shapes := {Q : PlaneTreeCode m // Lane_sol_s17_res.TreeSpec Q}
+  let Labels (Q : Shapes) := {f : Fin m → Pos T k //
+    Lane_sol_s17_res.LocalLabels Q.1.2 B root f}
+  let Code := Σ Q : Shapes, Labels Q × (Fin m → Option (Fin Ts))
+  let Ws := {W : ComponentWitness T k Ts m // CandidateWitness LE Ts events root m W}
+  let encode (W : Ws) : Code :=
+    ⟨⟨W.1.1, W.2.1⟩, ⟨⟨fun j => (W.1.2 j).1, by
+      intro j
+      by_cases hz : j.val = 0
+      · simp only [hz, if_true]
+        obtain ⟨hpos, hanchor⟩ := W.2.2.2.1
+        have hj : j = (⟨0, hpos⟩ : Fin m) := Fin.ext hz
+        rw [hj]
+        have h2 : (W.1.2 ⟨0, hpos⟩).1 ∈ LE.graphBall {root} 2 :=
+          Finset.mem_union_left _ hanchor
+        exact Finset.mem_union_left _ h2
+      · simp only [hz, if_false]
+        exact W.2.2.2.2.2 j (by omega)⟩,
+      fun j => (W.1.2 j).2⟩⟩
+  have hencode : Function.Injective encode := by
+    intro W V h
+    have hQ : W.1.1 = V.1.1 := congrArg (fun c : Code => c.1.1) h
+    have hsite : (fun j => (W.1.2 j).1) = (fun j => (V.1.2 j).1) :=
+      congrArg (fun c : Code => c.2.1.1) h
+    have hround : (fun j => (W.1.2 j).2) = (fun j => (V.1.2 j).2) :=
+      congrArg (fun c : Code => c.2.2) h
+    apply Subtype.ext
+    exact Prod.ext hQ (funext fun j =>
+      Prod.ext (congrFun hsite j) (congrFun hround j))
+  have hLabels (Q : Shapes) : Fintype.card (Labels Q) ≤ b ^ m :=
+    Lane_sol_s17_res.localLabels_card_le Q.1.2
+      (fun j hj => (Q.2.2 j hj).1) B b hB root
+  have hShapes : Fintype.card Shapes ≤ 4 ^ m :=
+    Lane_sol_s17_res.tree_card_le m
+  have hcand : (Finset.univ.filter fun W : ComponentWitness T k Ts m =>
+      CandidateWitness LE Ts events root m W).card = Fintype.card Ws := by
+    simp [Ws, Fintype.card_subtype]
+  calc
+    _ = Fintype.card Ws := hcand
+    _ ≤ Fintype.card Code := Fintype.card_le_of_injective encode hencode
+    _ = ∑ Q : Shapes, Fintype.card (Labels Q) * (Ts + 1) ^ m := by
+      simp [Code, Fintype.card_sigma, Fintype.card_prod, Fintype.card_fun]
+    _ ≤ ∑ _Q : Shapes, b ^ m * (Ts + 1) ^ m := by
+      exact Finset.sum_le_sum fun Q _ => Nat.mul_le_mul_right _ (hLabels Q)
+    _ = Fintype.card Shapes * (b ^ m * (Ts + 1) ^ m) := by simp
+    _ ≤ 4 ^ m * (b ^ m * (Ts + 1) ^ m) :=
+      Nat.mul_le_mul_right _ hShapes
+    _ = (4 * b * (Ts + 1)) ^ m := by simp only [mul_pow]; ring
+    _ ≤ componentWitnessBase d Ts ^ m := by
+      apply Nat.pow_le_pow_left
+      dsimp [componentWitnessBase, b]
+      have hp : (d + 1) ^ 3 ≤ (d + 1) ^ 4 := by
         calc
-          d + 1 = (d + 1) * 1 := by omega
-          _ ≤ (d + 1) * (d + 1) ^ 3 :=
-            Nat.mul_le_mul_left _ (Nat.one_le_pow 3 (d + 1) hd)
-          _ = (d + 1) ^ 4 := by rw [pow_succ]; ring
-      nlinarith [hp, Nat.zero_le ((d + 1) ^ 4)]
-    calc
-      (Finset.univ.filter fun W : ComponentWitness T k Ts 1 =>
-          CandidateWitness LE Ts events root 1 W).card = Fintype.card WType := hcand
-      _ ≤ Fintype.card (Site × Option (Fin Ts)) := hencodeCard
-      _ = B.card * (Ts + 1) := by simp [Fintype.card_prod, hSiteCard]
-      _ ≤ (d + 1) * (Ts + 1) := Nat.mul_le_mul_right _ hball
-      _ ≤ componentWitnessBase d Ts := by
-        dsimp [componentWitnessBase]
-        exact Nat.mul_le_mul_right (Ts + 1) hcoeff
-      _ = componentWitnessBase d Ts ^ 1 := by simp
-  · sorry
+          (d + 1) ^ 3 ≤ (d + 1) ^ 3 * (d + 1) := by
+            exact Nat.le_mul_of_pos_right _ (by omega)
+          _ = (d + 1) ^ 4 := by ring
+      exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_left _ hp)
 
 /-- P17.4c: independent entry tests for any supported typed item list.
 Tree encoding is irrelevant to this probability estimate. -/
@@ -2658,6 +2767,274 @@ theorem finiteResamplingWitnessTests
           push_cast
           ring
 
+private theorem target_tree_extraction
+    {κ : CConsts} {T : Stage} {k Ts : ℕ} {PT : ProfiledTiling κ T k}
+    {D : ListGateContext κ T k PT} (LE : ListEvent D.F)
+    (order : Pos T k → ℕ) (events : Finset (Pos T k))
+    (pools : ∀ C : D.G.Cell, D.F.Pool C) (targets : Finset D.G.Cell)
+    (tapes : Tapes D.F Ts) :
+    ∃ m, ∃ W : TargetWitness T k Ts m,
+      CandidateTargetWitness LE events targets W ∧
+      Finset.univ.image W.2 = backwardClosure LE order events pools tapes targets := by
+  classical
+  let closure := backwardClosure LE order events pools tapes targets
+  let s : Finset (Option (ExecutionOccurrence T k Ts)) := insert none (closure.image some)
+  let R : Option (ExecutionOccurrence T k Ts) → Option (ExecutionOccurrence T k Ts) → Prop :=
+    fun a b => match a, b with
+    | none, some o => ∃ C ∈ targets, C ∈ LE.scope o.1
+    | some o, some p => ¬ Disjoint (LE.scope o.1) (LE.scope p.1)
+    | _, _ => False
+  let edge := backwardOccurrenceEdge LE order events pools tapes
+  let restricted := fun a b => a ∈ s ∧ b ∈ s ∧ R a b
+  have hsomeMem (o : ExecutionOccurrence T k Ts) : some o ∈ s ↔ o ∈ closure := by
+    simp [s]
+  have hconn : ∀ x ∈ s, Relation.ReflTransGen restricted none x := by
+    intro x hx
+    cases x with
+    | none => exact Relation.ReflTransGen.refl
+    | some o =>
+      have ho := (hsomeMem o).mp hx
+      obtain ⟨_, hexec, seed, hseed, htarget, hpath⟩ := Finset.mem_filter.mp ho
+      have hseedmem : seed ∈ closure := by
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hseed, seed, hseed,
+          htarget, Relation.ReflTransGen.refl⟩
+      have aux : ∀ a, Relation.ReflTransGen edge seed a →
+          a ∈ closure ∧ Relation.ReflTransGen restricted (some seed) (some a) := by
+        intro a hp
+        induction hp with
+        | refl => exact ⟨hseedmem, Relation.ReflTransGen.refl⟩
+        | @tail b c hbc he ih =>
+          have hc : c ∈ closure := Finset.mem_filter.mpr
+            ⟨Finset.mem_univ _, he.2.1, seed, hseed, htarget, hbc.tail he⟩
+          exact ⟨hc, ih.2.tail ⟨(hsomeMem b).mpr ih.1, (hsomeMem c).mpr hc, he.2.2.2⟩⟩
+      have hfirst : Relation.ReflTransGen restricted none (some seed) :=
+        Relation.ReflTransGen.single ⟨by simp [s], (hsomeMem seed).mpr hseedmem, htarget⟩
+      exact hfirst.trans (aux o hpath).2
+  obtain ⟨M, hM, Q, f, hQ, hf, hs, hroot, hedge⟩ :=
+    Lane_sol_s17_res.spanning_preorder R none s (by simp [s]) hconn
+  cases M with
+  | zero => omega
+  | succ m =>
+    have hsome : ∀ j : Fin m, ∃ o, f (targetNode j) = some o := by
+      intro j
+      cases h : f (targetNode j) with
+      | none =>
+        have hj := hf (h.trans hroot.symm)
+        have hv := congrArg Fin.val hj
+        simp only [targetNode] at hv
+        omega
+      | some o => exact ⟨o, rfl⟩
+    let items : Fin m → ExecutionOccurrence T k Ts := fun j => Classical.choose (hsome j)
+    have hitems (j : Fin m) : f (targetNode j) = some (items j) :=
+      Classical.choose_spec (hsome j)
+    let W : TargetWitness T k Ts m := (Q, items)
+    have hitemmem (j : Fin m) : items j ∈ closure := by
+      apply (hsomeMem _).mp
+      rw [← hitems j, ← hs]
+      exact Finset.mem_image.mpr ⟨targetNode j, Finset.mem_univ _, rfl⟩
+    have hcov : Finset.univ.image items = closure := by
+      ext o
+      constructor
+      · rintro ho
+        obtain ⟨j, _, rfl⟩ := Finset.mem_image.mp ho
+        exact hitemmem j
+      · intro ho
+        have hx : some o ∈ Finset.univ.image f := by
+          rw [hs]
+          exact (hsomeMem _).mpr ho
+        obtain ⟨j, _, hj⟩ := Finset.mem_image.mp hx
+        have hjpos : 0 < j.val := by
+          by_contra hn
+          have hj0 : j = ⟨0, hM⟩ := Fin.ext (show j.val = 0 by omega)
+          rw [hj0, hroot] at hj
+          contradiction
+        let i : Fin m := ⟨j.val - 1, by have := j.isLt; omega⟩
+        have hi : targetNode i = j := Fin.ext (by dsimp [targetNode, i]; omega)
+        refine Finset.mem_image.mpr ⟨i, Finset.mem_univ _, ?_⟩
+        apply Option.some.inj
+        exact (hitems i).symm.trans (hi ▸ hj)
+    have hCand : CandidateTargetWitness LE events targets W := by
+      refine ⟨hQ, ?_, ?_, ?_⟩
+      · intro i j hij
+        have h := hf ((hitems i).trans ((congrArg some hij).trans (hitems j).symm))
+        apply Fin.ext
+        have hv := congrArg Fin.val h
+        dsimp [targetNode] at hv
+        omega
+      · intro j
+        have he := (Finset.mem_filter.mp (hitemmem j)).2.1
+        exact (Finset.mem_filter.mp he).2.1
+      · intro j
+        have he := hedge (targetNode j) (by dsimp [targetNode]; omega)
+        by_cases hp : (Q.2 (targetNode j)).val = 0
+        · left
+          refine ⟨hp, ?_⟩
+          have hpar : Q.2 (targetNode j) = ⟨0, hM⟩ := Fin.ext hp
+          simpa only [hpar, hroot, hitems, R] using he
+        · right
+          let i : Fin m := ⟨(Q.2 (targetNode j)).val - 1, by
+            have := (Q.2 (targetNode j)).isLt
+            omega⟩
+          have hi : Q.2 (targetNode j) = targetNode i := by
+            apply Fin.ext
+            change (Q.2 (targetNode j)).val = (Q.2 (targetNode j)).val - 1 + 1
+            omega
+          refine ⟨i, hi, ?_⟩
+          have hh : ¬ Disjoint (LE.scope (items i).1) (LE.scope (items j).1) := by
+            simpa only [hi, hitems, R] using he
+          exact fun h => hh h.symm
+    exact ⟨m, W, hCand, hcov⟩
+
+private theorem target_actual_of_coverage
+    {κ : CConsts} {T : Stage} {k Ts : ℕ} {PT : ProfiledTiling κ T k}
+    {D : ListGateContext κ T k PT} (LE : ListEvent D.F)
+    (order : Pos T k → ℕ) (events : Finset (Pos T k))
+    (pools : ∀ C : D.G.Cell, D.F.Pool C) (targets : Finset D.G.Cell)
+    (tapes : Tapes D.F Ts) {m : ℕ} (W : TargetWitness T k Ts m)
+    (hCand : CandidateTargetWitness LE events targets W)
+    (hcov : Finset.univ.image W.2 = backwardClosure LE order events pools tapes targets) :
+    ActualTargetWitness LE order events pools targets tapes W := by
+  classical
+  let closure := backwardClosure LE order events pools tapes targets
+  let prior (n : ℕ) (C : D.G.Cell) :=
+    Lane_sol_s17_res.priorExecutions LE Ts n order events pools tapes.extend C
+  let count (n : ℕ) (C : D.G.Cell) :=
+    (LE.runRounds n order events pools tapes.extend).2 C
+  have hCount (n : ℕ) (hn : n ≤ Ts) (C : D.G.Cell) : count n C = (prior n C).card :=
+    Lane_sol_s17_res.run_counter_eq LE Ts order events pools tapes.extend n hn C
+  have hMem (j : Fin m) : W.2 j ∈ closure := by
+    change W.2 j ∈ backwardClosure LE order events pools tapes targets
+    rw [← hcov]
+    exact Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩
+  have hExec (j : Fin m) : occurrenceExecuted LE Ts order events pools tapes (W.2 j) :=
+    (Finset.mem_filter.mp (hMem j)).2.1
+  have hPriorClosed (j : Fin m) (C : D.G.Cell) (hC : C ∈ LE.scope (W.2 j).1)
+      (o : ExecutionOccurrence T k Ts) (ho : o ∈ prior (W.2 j).2.val C) : o ∈ closure := by
+    obtain ⟨_, he, seed, hseed, htarget, hpath⟩ := Finset.mem_filter.mp (hMem j)
+    obtain ⟨_, hoExec, hr, hCo⟩ := Finset.mem_filter.mp ho
+    refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, hoExec, seed, hseed, htarget,
+      hpath.tail ⟨he, hoExec, hr, ?_⟩⟩
+    exact fun h => Finset.disjoint_left.mp h hC hCo
+  have hRead (j : Fin m) (C : D.G.Cell) (hC : C ∈ LE.scope (W.2 j).1) :
+      witnessReadIndex LE Ts (targetItems W) j C = count (W.2 j).2.val C := by
+    have hset : (closure.filter fun o => o.2.val < (W.2 j).2.val ∧ C ∈ LE.scope o.1) =
+        prior (W.2 j).2.val C := by
+      ext o
+      constructor
+      · intro ho
+        obtain ⟨hoc, hr, hCo⟩ := Finset.mem_filter.mp ho
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          (Finset.mem_filter.mp hoc).2.1, hr, hCo⟩
+      · intro ho
+        obtain ⟨_, he, hr, hCo⟩ := Finset.mem_filter.mp ho
+        exact Finset.mem_filter.mpr ⟨hPriorClosed j C hC o ho, hr, hCo⟩
+    have hen := Lane_sol_s17_res.enumeration_filter_card W.2 hCand.2.1 closure hcov
+      (fun o => o.2.val < (W.2 j).2.val ∧ C ∈ LE.scope o.1)
+    have hh : witnessReadIndex LE Ts (targetItems W) j C =
+        (closure.filter fun o => o.2.val < (W.2 j).2.val ∧ C ∈ LE.scope o.1).card := by
+      simpa [witnessReadIndex, targetItems] using hen
+    rw [hset] at hh
+    exact hh.trans (hCount _ (by have := (W.2 j).2.isLt; omega) C).symm
+  have hStrict (j : Fin m) (C : D.G.Cell) (hC : C ∈ LE.scope (W.2 j).1)
+      (n : ℕ) (hrn : (W.2 j).2.val < n) (hn : n ≤ Ts) :
+      witnessReadIndex LE Ts (targetItems W) j C < count n C := by
+    rw [hRead j C hC, hCount _ (by omega) C, hCount n hn C]
+    apply Finset.card_lt_card
+    apply Finset.ssubset_iff_subset_ne.mpr
+    constructor
+    · intro o ho
+      obtain ⟨_, he, hr, hCo⟩ := Finset.mem_filter.mp ho
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, he, by omega, hCo⟩
+    · intro heq
+      have hin : W.2 j ∈ prior n C :=
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, hExec j, hrn, hC⟩
+      rw [← heq] at hin
+      have hlt := (Finset.mem_filter.mp hin).2.2.1
+      omega
+  have hReads : WitnessReadsDisjoint LE Ts (targetItems W) := by
+    constructor
+    · intro j C hC
+      rw [hRead j C hC]
+      exact (Lane_sol_s17_res.run_counter_le LE order events pools tapes.extend _ C).trans
+        (by have := (W.2 j).2.isLt; omega)
+    · intro i j hij C hCi hCj
+      have hrne : (W.2 i).2.val ≠ (W.2 j).2.val := by
+        intro he
+        have hri : (W.2 i).2 = (W.2 j).2 := Fin.ext he
+        have hexeci : (W.2 i).1 ∈ LE.active order events
+            (LE.runRounds (W.2 j).2.val order events pools tapes.extend).1 := by
+          simpa only [occurrenceExecuted, activeAtRound, he] using hExec i
+        have hexecj := hExec j
+        have hsite := Lane_sol_s17_res.active_touch_unique LE order events _
+          hexeci hexecj hCi hCj
+        exact hij (hCand.2.1 (Prod.ext hsite hri))
+      rcases lt_or_gt_of_ne hrne with hr | hr
+      · exact ne_of_lt (by
+          rw [hRead j C hCj]
+          exact hStrict i C hCi _ hr (by have := (W.2 j).2.isLt; omega))
+      · exact Ne.symm (ne_of_lt (by
+          rw [hRead i C hCi]
+          exact hStrict j C hCj _ hr (by have := (W.2 i).2.isLt; omega)))
+  have hTests : WitnessTestsPass LE Ts pools tapes (targetItems W) := by
+    intro j
+    have htrue := (Finset.mem_filter.mp (hExec j)).2.2.1
+    apply (LE.scope_ok (W.2 j).1 _ _ ?_).mpr htrue
+    intro C hC
+    change tapes.extend C (witnessReadIndex LE Ts (targetItems W) j C) (pools C) =
+      (LE.runRounds (W.2 j).2.val order events pools tapes.extend).1 C
+    rw [hRead j C hC]
+    exact (Lane_sol_s17_res.run_state LE order events pools tapes.extend _ C).symm
+  have hTerm (C : D.G.Cell) (hC : C ∈ targets) :
+      targetTerminalIndex LE W C = count Ts C := by
+    have hset : closure.filter (fun o => C ∈ LE.scope o.1) = prior Ts C := by
+      ext o
+      constructor
+      · intro ho
+        obtain ⟨hoc, hCo⟩ := Finset.mem_filter.mp ho
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          (Finset.mem_filter.mp hoc).2.1, o.2.isLt, hCo⟩
+      · intro ho
+        obtain ⟨_, he, hr, hCo⟩ := Finset.mem_filter.mp ho
+        exact Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+          he, o, he, ⟨C, hC, hCo⟩, Relation.ReflTransGen.refl⟩, hCo⟩
+    have hen := Lane_sol_s17_res.enumeration_filter_card W.2 hCand.2.1 closure hcov
+      (fun o => C ∈ LE.scope o.1)
+    rw [hCount Ts le_rfl C]
+    unfold targetTerminalIndex
+    apply Finset.card_bij (fun j _ => W.2 j)
+    · intro j hj
+      have hCo := (Finset.mem_filter.mp hj).2
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hExec j, (W.2 j).2.isLt, hCo⟩
+    · intro i hi j hj he
+      exact hCand.2.1 he
+    · intro o ho
+      have hclosure : o ∈ closure := by
+        have hfilter : o ∈ closure.filter (fun p => C ∈ LE.scope p.1) := by
+          rw [hset]
+          exact ho
+        exact (Finset.mem_filter.mp hfilter).1
+      have himage : o ∈ Finset.univ.image W.2 := by
+        rw [hcov]
+        exact hclosure
+      obtain ⟨j, _, hj⟩ := Finset.mem_image.mp himage
+      refine ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, hj⟩
+      rw [hj]
+      exact (Finset.mem_filter.mp ho).2.2.2
+
+  refine ⟨hCand, hcov, hReads, hTests, ?_, ?_⟩
+  · constructor
+    · intro C hC
+      rw [hTerm C hC]
+      exact Lane_sol_s17_res.run_counter_le LE order events pools tapes.extend Ts C
+    · intro j C hC hscope
+      rw [hTerm C hC]
+      exact hStrict j C hscope Ts (W.2 j).2.isLt le_rfl
+  · funext C
+    change (LE.runRounds Ts order events pools tapes.extend).1 C.1 =
+      tapes.extend C.1 (targetTerminalIndex LE W C.1) (pools C.1)
+    rw [hTerm C.1 C.2]
+    exact Lane_sol_s17_res.run_state LE order events pools tapes.extend Ts C.1
+
 /-- P17.4d(i): target backward-closure extraction with exact terminal entries. -/
 theorem finiteResamplingTargetWitness
     {κ : CConsts} {T : Stage} {k Ts : ℕ} {PT : ProfiledTiling κ T k}
@@ -2667,81 +3044,8 @@ theorem finiteResamplingTargetWitness
     (tapes : Tapes D.F Ts) :
     ∃ m, ∃ W : TargetWitness T k Ts m,
       ActualTargetWitness LE order events pools targets tapes W := by
-  classical
-  by_cases hempty : backwardClosure LE order events pools tapes targets = ∅
-  · have hno (r : Fin Ts) (C : D.G.Cell) (hC : C ∈ targets)
-        (v : Pos T k) (hv : v ∈ activeAtRound LE Ts order events pools tapes r)
-        (hCv : C ∈ LE.scope v) : False := by
-      have ho : occurrenceExecuted LE Ts order events pools tapes (v, r) := by
-        simpa [occurrenceExecuted, activeAtRound] using hv
-      have hmem : (v, r) ∈ backwardClosure LE order events pools tapes targets := by
-        unfold backwardClosure
-        apply Finset.mem_filter.mpr
-        refine ⟨Finset.mem_univ _, ho, (v, r), ho, ?_, Relation.ReflTransGen.refl⟩
-        exact ⟨C, hC, hCv⟩
-      rw [hempty] at hmem
-      simp at hmem
-    have hrun : ∀ n, n ≤ Ts → ∀ C : D.G.Cell, C ∈ targets →
-        (LE.runRounds n order events pools tapes.extend).1 C =
-          tapes.extend C 0 (pools C) := by
-      intro n
-      induction n with
-      | zero =>
-          intro hn C hC
-          rfl
-      | succ n ih =>
-          intro hn C hC
-          have hprev := ih (by omega) C hC
-          let r : Fin Ts := ⟨n, by omega⟩
-          have hnot : ¬ ∃ v ∈ LE.active order events
-              (LE.runRounds n order events pools tapes.extend).1, C ∈ LE.scope v := by
-            rintro ⟨v, hv, hCv⟩
-            have hv' : v ∈ activeAtRound LE Ts order events pools tapes r := by
-              simpa [activeAtRound, r] using hv
-            exact hno r C hC v hv' hCv
-          rw [show LE.runRounds (n + 1) order events pools tapes.extend =
-            LE.round order events pools tapes.extend
-              (LE.runRounds n order events pools tapes.extend).1
-              (LE.runRounds n order events pools tapes.extend).2 by rfl]
-          simp [ListEvent.round, hnot, hprev]
-    let Q : PlaneTreeCode 1 := (fun _ => 0, fun _ => 0)
-    let W : TargetWitness T k Ts 0 := (Q, Fin.elim0)
-    have hTree : PlaneTreeSpec Q := by
-      constructor
-      · intro j hj
-        have hj0 : j = (0 : Fin 1) := Subsingleton.elim _ _
-        subst j
-        simp [Q]
-      · intro j hj
-        omega
-    have hCand : CandidateTargetWitness LE events targets W := by
-      refine ⟨hTree, ?_, ?_, ?_⟩
-      · intro i j hij
-        exact Fin.elim0 i
-      · intro j
-        exact Fin.elim0 j
-      · intro j
-        exact Fin.elim0 j
-    refine ⟨0, W, hCand, ?_, ?_, ?_, ?_, ?_⟩
-    · simp [W, hempty]
-    · constructor
-      · intro j
-        exact Fin.elim0 j
-      · intro i j hij C hCi hCj
-        exact Fin.elim0 i
-    · intro j
-      exact Fin.elim0 j
-    · constructor
-      · intro C hC
-        simp [targetTerminalIndex, W]
-      · intro j C hC hscope
-        exact Fin.elim0 j
-    · funext C
-      change (LE.runRounds Ts order events pools tapes.extend).1 C.1 =
-        tapes.extend C.1 (targetTerminalIndex LE W C.1) (pools C.1)
-      have hfinal := hrun Ts le_rfl C.1 C.2
-      simpa [targetTerminalIndex, W] using hfinal
-  · sorry
+  obtain ⟨m, W, hCand, hcov⟩ := target_tree_extraction LE order events pools targets tapes
+  exact ⟨m, W, target_actual_of_coverage LE order events pools targets tapes W hCand hcov⟩
 
 /-- P17.4d(ii): the targets have their own auxiliary-root encoding count. -/
 theorem finiteResamplingTargetCount

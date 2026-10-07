@@ -34,6 +34,7 @@ import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
+import HypercubeRamsey.S18.Nodes_sol_s18_5e
 import HypercubeRamsey.S18.Nodes_q_s18_n2
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
@@ -939,25 +940,7 @@ theorem P18_5e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
                 (D.paletteScale A.paletteIndex)⁻¹ ^ (2 * (D.nonisolates A.rows).card) *
                 ∏ v ∈ A.rows \ D.nonisolates A.rows,
                   isolatedWeight D v (assignment v).1 (assignment v).2 := by
-  have hnCast : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
-    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp
-      T.S.n_tendsto
-  have hlog := Real.tendsto_log_atTop.comp hnCast
-  have hmargin : ∀ᶠ k in atTop, (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
-    filter_upwards [hlog.eventually_gt_atTop 2] with k hk
-    have hlog2 : (2 : ℝ) < Real.log (T.S.n k : ℝ) := by simpa using hk
-    have hlog3 : (2 : ℝ) ^ 3 < Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
-    norm_num at hlog3
-    linarith
-  refine ⟨1, by norm_num, ?_⟩
-  filter_upwards [hmargin] with k hmargin
-  intro PT hPT D hD A
-  obtain ⟨Q, _hCount⟩ :=
-    HypercubeRamsey.Lane_q_s18_n6.pairQueriesOfOuterFamilyRepresentatives
-      hκ D hD A hmargin
-  refine ⟨Q, ?_⟩
-  intro assignment hValid
-  sorry
+  exact HypercubeRamsey.Lane_sol_s18_5e.pair_query_reduction hκ T
 
 /-- P18.5f/g, 18:1126–1212. Calibrated label and group-bin comparisons,
 reverse repeat summation and iid containment yield the actual query integral.

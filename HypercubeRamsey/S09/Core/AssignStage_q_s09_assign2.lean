@@ -3228,4 +3228,69 @@ private theorem tail_degree_small9 (P : Params9) (hP : P.Valid) (c : ℝ) (hc : 
       rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 4)]
       norm_num
 
+private theorem condPenalty9 {x : ℝ} {d k t : ℕ}
+    (hx : 0 ≤ x) (hsmall : x * ((d + 1 : ℕ) : ℝ) ≤ 1 / 4)
+    (ht : t ≤ k * (d + 1)) :
+    ((1 - x) ^ t)⁻¹ ≤ (2 : ℝ) ^ k := by
+  have hdOne : 1 ≤ d + 1 := by omega
+  have hdOneR : 1 ≤ ((d + 1 : ℕ) : ℝ) := by exact_mod_cast hdOne
+  have hxquarter : x ≤ 1 / 4 := by nlinarith [hx, hdOneR, hsmall]
+  have hden : 0 < 1 - x := by linarith
+  have hinvPos : 0 < (1 - x)⁻¹ := inv_pos.mpr hden
+  have hlogInv : Real.log ((1 - x)⁻¹) ≤ 2 * x := by
+    have hlog := Real.log_le_sub_one_of_pos hinvPos
+    calc
+      Real.log ((1 - x)⁻¹) ≤ (1 - x)⁻¹ - 1 := hlog
+      _ = x / (1 - x) := by field_simp [ne_of_gt hden]; ring
+      _ ≤ 2 * x := by
+        apply (div_le_iff₀ hden).2
+        have hprod : 0 ≤ x * (1 - 2 * x) :=
+          mul_nonneg hx (by linarith [hxquarter])
+        nlinarith [hprod]
+  have hlogBase : -Real.log (1 - x) ≤ 2 * x := by
+    simpa [Real.log_inv] using hlogInv
+  have hTcast : (t : ℝ) ≤ ((k * (d + 1) : ℕ) : ℝ) := by exact_mod_cast ht
+  have hsmallCast : x * ((d + 1 : ℕ) : ℝ) ≤ 1 / 4 := hsmall
+  have hTx : (t : ℝ) * x ≤ (k : ℝ) / 4 := by
+    calc
+      (t : ℝ) * x ≤ ((k * (d + 1) : ℕ) : ℝ) * x :=
+        mul_le_mul_of_nonneg_right hTcast hx
+      _ = (k : ℝ) * (x * ((d + 1 : ℕ) : ℝ)) := by push_cast; ring
+      _ ≤ (k : ℝ) * (1 / 4) := mul_le_mul_of_nonneg_left hsmallCast (by positivity)
+      _ = (k : ℝ) / 4 := by ring
+  have hpowPos : 0 < (1 - x) ^ t := pow_pos hden t
+  have hfactor : ((1 - x) ^ t)⁻¹ =
+      Real.exp ((t : ℝ) * (-Real.log (1 - x))) := by
+    calc
+      ((1 - x) ^ t)⁻¹ = Real.exp (-Real.log ((1 - x) ^ t)) := by
+        rw [Real.exp_neg, Real.exp_log hpowPos]
+      _ = Real.exp ((t : ℝ) * (-Real.log (1 - x))) := by
+        rw [Real.log_pow]
+        congr 1
+        ring
+  have hExpBound : (t : ℝ) * (-Real.log (1 - x)) ≤ (k : ℝ) / 2 := by
+    calc
+      (t : ℝ) * (-Real.log (1 - x)) ≤ (t : ℝ) * (2 * x) :=
+        mul_le_mul_of_nonneg_left hlogBase (by positivity)
+      _ = 2 * ((t : ℝ) * x) := by ring
+      _ ≤ (k : ℝ) / 2 := by nlinarith [hTx]
+  have hlog2lower : (1 / 2 : ℝ) ≤ Real.log 2 := by
+    have hhalf : (1 / 2 : ℝ) = (2 : ℝ)⁻¹ := by norm_num
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 1 / 2)
+    rw [hhalf, Real.log_inv] at hlog
+    linarith
+  have hkNonneg : 0 ≤ (k : ℝ) := by positivity
+  have hExp : (t : ℝ) * (-Real.log (1 - x)) ≤
+      (k : ℝ) * Real.log 2 := by
+    calc
+      (t : ℝ) * (-Real.log (1 - x)) ≤ (k : ℝ) / 2 := hExpBound
+      _ ≤ (k : ℝ) * Real.log 2 := by nlinarith [hlog2lower, hkNonneg]
+  have hpow : Real.exp ((k : ℝ) * Real.log 2) = (2 : ℝ) ^ k := by
+    have hlogpow : Real.log ((2 : ℝ) ^ k) = (k : ℝ) * Real.log 2 := by rw [Real.log_pow]
+    rw [← hlogpow, Real.exp_log (by positivity)]
+  calc
+    ((1 - x) ^ t)⁻¹ = Real.exp ((t : ℝ) * (-Real.log (1 - x))) := hfactor
+    _ ≤ Real.exp ((k : ℝ) * Real.log 2) := Real.exp_le_exp.mpr hExp
+    _ = (2 : ℝ) ^ k := hpow
+
 end HypercubeRamsey.Lane_q_s09_assign2

@@ -510,6 +510,51 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     by_cases hvalid : X.EvenValid H C v y
     · exact mul_nonneg (Nat.cast_nonneg _) ((hDensity H C v y hH hv hvalid).1 a)
     · simp [Ctx6.evenRow, hvalid]
+  have hOddRowMass (C : X.Centre) (u : OddRole6 n) :
+      (∑ b : Fin N, X.oddRow H C u.1 b) =
+        if X.OddValid H C X.Rlong (X.g.L.stateOf u.1) then 1 else 0 := by
+    by_cases hvalid : X.OddValid H C X.Rlong (X.g.L.stateOf u.1)
+    · simp only [Ctx6.oddRow, Ctx6.oddRowAt, hvalid, ↓reduceIte]
+      cases hmode : X.stMode (X.g.L.stateOf u.1) with
+      | low => simpa [hmode] using
+          (X.lowRow H (X.pos C) (X.g.L.stateOf u.1)
+            (X.actDesc H C X.Rlong (X.g.L.stateOf u.1)) (X.tup C)).sum_eq_one
+      | high => simpa [hmode] using
+          (X.s3Post H (X.g.L.stateOf u.1)
+            (X.actDesc H C X.Rlong (X.g.L.stateOf u.1)) (X.tup C)).sum_eq_one
+    · simp [Ctx6.oddRow, Ctx6.oddRowAt, hvalid]
+  have hProdOddMass (C : X.Centre) :
+      (∑ y : OddRole6 n → Fin N, X.prodOdd H C y) =
+        if X.AllOddValid H C then 1 else 0 := by
+    classical
+    have hsum :
+        (∑ y : OddRole6 n → Fin N,
+          ∏ u : OddRole6 n, X.oddRow H C u.1 (y u)) =
+          ∏ u : OddRole6 n, (∑ b : Fin N, X.oddRow H C u.1 b) := by
+      rw [← Fintype.prod_sum]
+    rw [show (∑ y : OddRole6 n → Fin N, X.prodOdd H C y) =
+        ∑ y : OddRole6 n → Fin N,
+          ∏ u : OddRole6 n, X.oddRow H C u.1 (y u) by
+      rfl, hsum]
+    by_cases hAll : X.AllOddValid H C
+    · have hvalid (u : OddRole6 n) :
+          X.OddValid H C X.Rlong (X.g.L.stateOf u.1) := hAll u.1 u.2
+      simp [hOddRowMass, hvalid, hAll]
+    · have hnot : ¬ ∀ u : OddRole6 n,
+          X.OddValid H C X.Rlong (X.g.L.stateOf u.1) := by
+        intro hall
+        exact hAll (by
+          intro u hu
+          exact hall ⟨u, hu⟩)
+      obtain ⟨u, hu⟩ := not_forall.mp hnot
+      have hzero : (∑ b : Fin N, X.oddRow H C u.1 b) = 0 := by
+        rw [hOddRowMass]
+        simp [hu]
+      have hprod :
+          (∏ u' : OddRole6 n, (∑ b : Fin N, X.oddRow H C u'.1 b)) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_univ u) hzero
+      rw [hprod]
+      simp [hAll]
   let α := ∀ u : {u : OddRole6 n // u ∈ S}, Fin N
   let project : (OddRole6 n → Fin N) → α := fun y u => y u.1
   let extend : α → OddRole6 n → Fin N := fun o u =>

@@ -63,7 +63,11 @@ theorem reference_pair_hit (D : LateData hPT) (hTransition : TransitionData D)
       let y₀ : {y // y ∈ D.encoding.base.latePoolOf b.1} :=
         ⟨hpool.choose, hpool.choose_spec⟩
       by_cases hR : D.R1 j (M, sk, y₀) ∧ D.R2 j h (M, sk, y₀)
-      · have hp := (hBroad j b.1 h (M, sk, y₀) b.2 hg hR.1 hR.2).2.2.2 a x z hx hz hnc
+      · -- Obligation from the `InitialSketchSupport` guard added to `BroadDeletionFacts` (main 1e2cca1): either the
+        -- sketch `sk` is supported, or its reference weight vanishes. Owner: lane sol-s18-supp.
+        have hSupp : InitialSketchSupport D j h (M, sk, y₀) := by
+          sorry
+        have hp := (hBroad j b.1 h (M, sk, y₀) b.2 hg hSupp hR.1 hR.2).2.2.2 a x z hx hz hnc
         have heq (y : {y // y ∈ D.encoding.base.latePoolOf b.1}) :
             D.labelWeight j (M, sk, y) Finset.univ y.1 =
               D.labelWeight j (M, sk, y₀) Finset.univ y.1 := rfl

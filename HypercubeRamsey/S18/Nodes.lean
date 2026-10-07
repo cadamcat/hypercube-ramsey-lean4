@@ -15,9 +15,11 @@ import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_5b
+import HypercubeRamsey.S18.Probability_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Run_sol_s18_n4
 import HypercubeRamsey.S18.Risk_sol_s18_n4
+import HypercubeRamsey.S18.PrefixObligations_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
@@ -630,7 +632,9 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
   filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2,
-    Lane_sol_s18_n4.finalListTapeBound hκ T] with k hk hfinal
+    Lane_sol_s18_n4.finalListTapeBound hκ T,
+    Lane_sol_s18_n4.validPrefixPinnedBound hκ T K27 c1 δ hK hc1
+      (hδsmall.trans_le (min_le_right _ _))] with k hk hfinal hprefix
   intro PT hPT D hD hTransition hLocal hTransfer hReplay
   intro pin f
   cases f with
@@ -657,7 +661,7 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inr F =>
           by_cases hkind : F.1.val = 1
           · by_cases hvalid : D.prefixValid F.2
-            · sorry
+            · exact hprefix D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
             · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
           · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
               (hδsmall.le.trans (min_le_left _ _)) F hkind pin
@@ -694,36 +698,12 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
           Nonempty (TerminalCertificate D δ (ε k)) := by
   refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
     (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
-  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
-    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ,
-    Lane_sol_s18_3f.testTokensEventually hκ T] with k hpositive hcost htokens
+  filter_upwards [Lane_sol_s18_3f.terminalCertificateEventually_of_nonneighbor hκ T δ]
+    with k hcertificate
   intro PT hPT D hD hRisk leaves
-  have hpos := hpositive D hRisk leaves
-  obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk leaves
-  refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
-  intro seed hseed Ψ hΨ hlocal
-  have hviewcost : ∀ a : Lane_sol_s18_3f.TestView D (D.expandCells seed),
-      (∏ i ∈ Finset.univ.filter
-          (Lane_sol_s18_3f.testTouches D δ leaves (D.expandCells seed) a),
-        (1 - 2 * D.encoding.permLaw.pr (fun x => x ∈ leaves.leaf i))⁻¹) ≤
-          1 + (T.S.n k : ℝ)⁻¹ := by
-    intro a
-    have hfilter : Finset.univ.filter
-        (Lane_sol_s18_3f.testTouches D δ leaves (D.expandCells seed) a) =
-        Finset.univ.filter (fun i =>
-          ¬ Disjoint (leaves.domains i) (Lane_sol_s18_3f.testDomains D (D.expandCells seed)) ∨
-          ¬ Disjoint (leaves.images i) (Lane_sol_s18_3f.testImages D (D.expandCells seed)
-            (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a)) ∨
-          ¬ Disjoint (leaves.tapes i) (D.expandCells seed)) := by
-      ext i
-      simp only [Finset.mem_filter, Lane_sol_s18_3f.testTouches]
-    rw [hfilter]
-    exact hproduct (Lane_sol_s18_3f.testDomains D (D.expandCells seed))
-      (Lane_sol_s18_3f.testImages D (D.expandCells seed)
-        (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a)) (D.expandCells seed)
-      (htokens D hD seed hseed (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a))
-  -- Coordinate fibers, their deterministic scopes and reciprocal costs are now fixed.
-  -- A test nonneighbor bound is still needed; TestFiberForcing would supply it.
+  apply hcertificate PT hPT D hD hRisk leaves
+  intro seed hseed
+  -- The remaining obligation is the coordinate-fiber nonneighbor inequality.
   sorry
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
@@ -766,25 +746,25 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
         ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
           TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
             ∀ A : ClassSamplerData D δ, FullRunProbability D C A (εrun k) := by
-  let εrun : ℕ → ℝ := fun k => 1 / ((T.S.n k + 1 : ℕ) : ℝ)
-  have hlim : Tendsto εrun atTop (nhds 0) := by
-    have hn : Tendsto (fun k => ((T.S.n k + 1 : ℕ) : ℝ)) atTop atTop :=
-      tendsto_natCast_atTop_atTop.comp ((tendsto_add_atTop_nat 1).comp T.S.n_tendsto)
-    simpa only [Function.comp_def, εrun, one_div] using tendsto_inv_atTop_zero.comp hn
-  refine ⟨εrun, (fun k => by dsimp [εrun]; positivity), hlim, ?_⟩
-  have hstop : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+  refine ⟨Lane_sol_s18_n5.runError T, Lane_sol_s18_n5.runError_nonneg T,
+    Lane_sol_s18_n5.runError_tendsto T, ?_⟩
+  have hθ : 0 < κ.θ0 := by rw [hκ.clock.2.1]; norm_num
+  have hmoments : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
-          ∀ A : ClassSamplerData D δ,
+          ∀ A : ClassSamplerData D δ, ∀ j : Fin D.geom.r, ∀ y : Fin (T.S.N k),
             (FinLaw.bind (D.encoding.terminalLaw (terminalSet D δ) C.positive)
-              (fun x => D.encoding.base.runFull A.act (D.encoding.initialState x))).pr
-                (fun z => ∃ j : Fin D.geom.r, Lane_sol_s18_n5.reached D δ j z.2 ∧
-                  ¬ D.enter δ j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt))) ≤ εrun k := by
+              (fun x => D.encoding.base.runFull A.act (D.encoding.initialState x))).E
+                (fun z => if Lane_sol_s18_n5.reached D δ j z.2 then
+                  D.columnSum j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt)) y ^ T.S.n k else 0) ≤
+                    (2 : ℝ) ^ D.geom.r *
+                      (12 * (D.encoding.base.classes j).card / (D.encoding.base.latePool j).card) ^ T.S.n k := by
     sorry
-  filter_upwards [hstop] with k hk
+  filter_upwards [hmoments, T.S.n_tendsto.eventually_ge_atTop 1,
+    T.S.ratio_tendsto.eventually_ge_atTop (576 * 12 / κ.θ0)] with k hk hn hscale
   intro PT hPT D hD hT hBalance hLocal hTransfer C A
-  exact Lane_sol_s18_n5.fullRunProbability_of_first_stop D hD C A hLocal.2.1
-    (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
+  exact Lane_sol_s18_n5.fullRunProbability_of_column_moments D hD C A hLocal.2.1
+    hθ (by norm_num) hn hscale (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
 
 theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)

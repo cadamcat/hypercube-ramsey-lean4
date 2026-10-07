@@ -71,18 +71,43 @@ structure KuhnDomain (D : ℕ) (K : Set (Fin D → ℝ)) : Prop where
   compact : IsCompact K
   convex : Convex ℝ K
 
-/-- D14.M: abstract mesh payload used for a tiling's cleaned corner supports. -/
+/-- D14.M: mesh of the parameter polytope of a tiling, with the cleaned corner supports stored at its
+vertices (sections/14 lines 9–14).
+
+A parameter point carries one input law and one price vector per patch (`paramLaw`, `paramPrice`;
+the input laws lie in the capped domain `Capᵢ`). Barycentric weights are continuous, a vertex with
+positive weight at `p` has its base point within the L13.4 stability radius `n⁻³` (per-patch `ℓ¹`)
+and within price distance `1/(n Mᵢ)` of `p`, and at most `D + 1 ≤ 2N + 1` vertices are active,
+since the polytope has dimension `D = ∑ᵢ 2|Yᵢ| ≤ 2N` (blueprint §5.1(1); needed by L14.3). -/
 structure Mesh {κ : CConsts} {T : Stage} {k : ℕ} (𝒯 : Tiling κ T k) where
   V : Type
   [vFin : Fintype V]
   Param : Type
-  dimension : ℕ
+  [paramTop : TopologicalSpace Param]
+  paramLaw : Param → Fin 𝒯.m → Law (T.S.N k)
+  paramPrice : Param → Fin 𝒯.m → Fin (T.S.N k) → ℝ
+  paramLaw_supp : ∀ p i, (paramLaw p i).SupportedIn (𝒯.P i).Y
+  paramLaw_cap : ∀ p i y,
+    ((𝒯.P i).M : ℝ) * (paramLaw p i).w y ≤ Real.exp (10 * (𝒯.kScale i : ℝ) * 𝒯.tScale i)
+  paramPrice_simplex : ∀ p i, (∀ y, 0 ≤ paramPrice p i y) ∧ (∀ y, y ∉ (𝒯.P i).Y → paramPrice p i y = 0) ∧
+    ∑ y, paramPrice p i y = 1
   base : V → Param
   wt : V → Param → ℝ
   corner : V → Fin 𝒯.m → Finset (Fin (T.S.N k))
+  wt_cont : ∀ v, Continuous (wt v)
   wt_nonneg : ∀ v p, 0 ≤ wt v p
   wt_sum_one : ∀ p, ∑ v, wt v p = 1
+  local_law : ∀ v p, 0 < wt v p → ∀ i,
+    ∑ y, |(paramLaw p i).w y - (paramLaw (base v) i).w y| ≤ (T.S.n k : ℝ) ^ (-3 : ℝ)
+  local_price : ∀ v p, 0 < wt v p → ∀ i y,
+    |paramPrice p i y - paramPrice (base v) i y| ≤ 1 / ((T.S.n k : ℝ) * (𝒯.P i).M)
   active_bound : ∀ p,
-    (Finset.univ.filter fun v => 0 < wt v p).card ≤ dimension + 1
+    (Finset.univ.filter fun v => 0 < wt v p).card ≤ 2 * T.S.N k + 1
+
+instance instMeshVFintype {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} (mesh : Mesh 𝒯) :
+    Fintype mesh.V := mesh.vFin
+
+instance instMeshParamTop {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} (mesh : Mesh 𝒯) :
+    TopologicalSpace mesh.Param := mesh.paramTop
 
 end HypercubeRamsey

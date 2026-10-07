@@ -6,8 +6,14 @@ import HypercubeRamsey.S03.NearProductInjection
 
 `QCond` records the fixed-threshold inequalities used by Sections 13–18.
 The auxiliary constants `c5`, `c14`, `h0`, `d0`, and `cChernoff` stand for
-the fixed outputs of the cited framework estimates; storing them here makes
-the interface explicit for the section modules.
+the fixed outputs of the cited estimates. A node may use such a constant as
+"the" constant of its estimate only if `Admissible` ties it to that estimate:
+`c5` is bounded by an explicit absolute value (`c5_le`), `d0` carries the L3.9
+contract (`nearProduct`), and the clock constants carry the L3.10 contract
+(`clock`). `c14` and `h0` (L3.8 at the Section 14 exponents) and `cChernoff`
+(P15.3b) are not yet tied: the node producing each must add the bound it needs
+(an upper bound for `c14`, `cChernoff`; a lower bound for `h0`) before a
+statement may read them as that estimate's constant.
 -/
 
 namespace HypercubeRamsey
@@ -23,15 +29,18 @@ noncomputable def Cstar (u : ℕ) (ξ : ℝ) : ℝ :=
 noncomputable def binEntropy (x : ℝ) : ℝ :=
   if x = 0 then 0 else if x = 1 then 0 else -x * Real.log x - (1 - x) * Real.log (1 - x)
 
-/-- F-CConsts: L3.10 sampler contract at fixed scope exponent `B` and integer exponents `A`,`P`.
+/-- F-CConsts: L3.10 sampler contract at scope exponent `B`, label-range constant `Cg` and integer
+exponents `A`, `P`.
 
-It records the full input hypotheses and the two outputs consumed by Part C:
-injectivity plus avoidance, and an upper cylinder comparison with a vanishing
-error. `A` and `P` may be rounded upward from the real exponents returned by
-the framework theorem. -/
-def ClockConstants (B : ℝ) (A P : ℕ) (θ0 : ℝ) : Prop :=
+It records the hypotheses and the two outputs consumed by Part C (injectivity plus avoidance, and an
+upper cylinder comparison with a vanishing error) in exactly the quantifier order of Part A's
+`clock_sampling`, where the exponents may depend on `Cg`; `Cg` is therefore fixed here, not
+universally quantified. Part C applies the lemma only with `log g ≤ 2 n` (`g = N ≤ n 2^n` with the
+cube dimension as size parameter in L15.1d and P15.3, and `g ≤ N` with `n_clock = ⌊exp n^{δ'}⌋` in
+P18.4b). `A` and `P` may be rounded upward from the real exponents returned by the framework theorem. -/
+def ClockConstants (B Cg : ℝ) (A P : ℕ) (θ0 : ℝ) : Prop :=
   1 ≤ B ∧ θ0 = 1e-8 ∧
-  ∀ Cg : ℝ, ∃ A' P' : ℝ, ∃ n₀ : ℕ, ∃ ε : ℕ → ℝ,
+  ∃ A' P' : ℝ, ∃ n₀ : ℕ, ∃ ε : ℕ → ℝ,
     0 < A' ∧ 0 < P' ∧ A' ≤ A ∧ P' ≤ P ∧ 1 ≤ n₀ ∧
     Tendsto ε atTop (nhds 0) ∧
     ∀ n ≥ n₀, ∀ g : ℕ, Real.log g ≤ Cg * n →
@@ -51,6 +60,21 @@ def ClockConstants (B : ℝ) (A P : ℕ) (θ0 : ℝ) : Prop :=
           (∀ (S : Finset R) (o : ∀ a, Ω a), ((S.card : ℝ) ≤ (n : ℝ) ^ B) →
             J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤
               (1 + ε n) * ∏ a ∈ S, (laws a).w (o a))
+
+/-- F-CConsts: L3.9 contract. `d0` is a valid threshold for Part A's `near_product_injection`
+(the same statement, for every bin size `d ≥ d0`). -/
+def NearProductConstants (d0 : ℕ) : Prop :=
+  ∀ d ≥ d0, ∀ {R : Type} [Fintype R] [DecidableEq R]
+    {Ω : R → Type} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (lab : ∀ i, Ω i → Fin d) (p : ∀ i, FinProb (Ω i)),
+    (∀ i y, labMarg (p i) (lab i) y ≤ (d : ℝ) ^ (-(0.95 : ℝ))) →
+    (∀ y, ∑ i, labMarg (p i) (lab i) y ≤ 0.4) →
+    ∃ J : FinProb (∀ i, Ω i),
+      (∀ ω, J.w ω ≠ 0 → Function.Injective (fun i => lab i (ω i))) ∧
+      (∀ i o, J.pr (fun ω => ω i = o) = (p i).w o) ∧
+      (∀ (S : Finset R) (o : ∀ i, Ω i), (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ) →
+        J.pr (fun ω => ∀ i ∈ S, ω i = o i) ≤
+          Real.exp ((d : ℝ) ^ (-(0.04 : ℝ)) * S.card) * ∏ i ∈ S, (p i).w (o i))
 
 /-- Dyadic scale predicate used in the extraction and clique interfaces. -/
 def IsDyadic (b : ℕ) : Prop := ∃ j : ℕ, b = 2 ^ j
@@ -173,7 +197,7 @@ structure CConsts.Admissible (κ : CConsts) : Prop where
   u_rng : Even κ.u ∧ 10 * κ.L ^ 2 < κ.u
   ξ_rng : 0 < κ.ξ ∧ κ.ξ < κ.α * Real.rpow 2 (-(10 * (κ.u : ℝ) + 100))
   θ_rng : 0 < κ.θ ∧ κ.θ < κ.ξ ^ 2 / (3 * 4 ^ (κ.u + 3))
-  clock : ClockConstants 5 κ.Astar κ.Pstar κ.θ0
+  clock : ClockConstants 5 2 κ.Astar κ.Pstar κ.θ0
   aC_rng : 0 < κ.aC ∧ κ.aC < min κ.η0 1 / 10 ^ 6
   aB_rng : 0 < κ.aB ∧ κ.aB < κ.aC / 1000 ∧ κ.aB ≤ κ.xι
   M1_big : 4 ≤ κ.M1 ∧ 2 * Cstar κ.u κ.ξ / Real.sqrt κ.M1 ≤ 1e-4
@@ -191,10 +215,14 @@ structure CConsts.Admissible (κ : CConsts) : Prop where
   Kcell_big : 100 / κ.θstar ≤ κ.Kcell
   cperm_rng : 0 < κ.cperm ∧ κ.cperm < κ.α / 10
   c5_pos : 0 < κ.c5
+  /-- P14.1c: the list-test exponent is an absolute constant; Azuma with deviation margin `.3ak`
+  over `k` increments of range `< 1.5` gives exponent `≥ .08 a²k`, so any `c5 ≤ 1/1000` is valid. -/
+  c5_le : κ.c5 ≤ 1 / 1000
   c14_pos : 0 < κ.c14
   cChernoff_pos : 0 < κ.cChernoff
   h0_pos : 0 < κ.h0
   d0_pos : 0 < κ.d0
+  nearProduct : NearProductConstants κ.d0
   Q0_large : ∀ q : ℝ, κ.Q0 ≤ q → QCond κ q
   bounded : BoundedCond κ
   β_rng : 0 < κ.β ∧ κ.β ≤ 0.02 / (1 + κ.KB + 2 * κ.A0) ∧ κ.β < 1 / 16

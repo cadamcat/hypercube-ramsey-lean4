@@ -3,10 +3,26 @@ import HypercubeRamsey.PartC.Resampling
 /-!
 # Section 18 late-process encoding (D18.E, G26)
 
-The encoding makes histories dependent products of the initial cell state and
-the row outputs already processed. Every class has both its product reference
-transition and its actual injective sampler. The full experiment is assembled
-with dependent finite-law binds, terminal conditioning, and the final pair draw.
+The three laws of sections/18 lines 11–38 in their order:
+
+1. *Initial process* (L1): pools (permutation slots; iid slots in the annealed baseline) and
+   independent cell tapes, then the deterministic finite resampling of D17.R, giving `S_fin`.
+   Terminal avoidance conditions this pair (pools, tapes), before any late draw
+   (sections/18 lines 659–676).
+2. *Reference late transitions* (L2): from an entering history, a product over the rows of the
+   current class of reference row kernels (mask, sketches, label).
+3. *Actual late assignment* (L3): a conditional injective sampler per class at the entering
+   history, with upper comparison at factor two to the product reference law on every small set
+   of rows, required only on the histories where the run proceeds (sections/18 lines 827–861).
+
+Histories are dependent products of the initial configuration and the row outputs already
+processed. Class runs, reference runs from any configuration (needed for `p_F(S_fin)`, the
+transfer experiment and the baseline), the terminal-conditioned experiment and the final pair draw
+are definitions; mask profiles, reference kernels, the actual samplers, bad events, alarms and the
+terminal event are inputs, supplied by D18.L, D18.T, D18.G and P18.4.
+
+Classes are processed in increasing index; the class with index `j` is processed with `r − j`
+classes remaining (the paper numbers the classes `r, …, 1` in processing order).
 -/
 
 namespace HypercubeRamsey
@@ -14,7 +30,10 @@ namespace HypercubeRamsey
 open Classical
 open scoped BigOperators
 
-/-- Fixed class partition and row-output vocabulary for the late process. -/
+/-- Sketch length `m = ⌈n^{.25}⌉` (sections/18 line 97). -/
+noncomputable def sketchLength (T : Stage) (k : ℕ) : ℕ := ⌈(T.S.n k : ℝ) ^ (0.25 : ℝ)⌉₊
+
+/-- Fixed class partition, processing schedule and late pools (D18.L). -/
 structure LateProcessBase {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} (F : FreshCell G) where
   classes : Fin G.r → Finset (Pos T k)
@@ -27,217 +46,219 @@ structure LateProcessBase {κ : CConsts} {T : Stage} {k : ℕ}
   class_fresh : ∀ j : Fin G.r, Disjoint (classes j) (processed j.castSucc)
   processed_last : processed (Fin.last G.r) =
     Finset.univ.filter fun b => ∃ j : Fin G.r, G.classOf b = some j
-  Mask : Pos T k → Type
-  [maskFinite : ∀ b, Fintype (Mask b)]
-  maskAllowed : ∀ b, Mask b → Prop
-  [maskAllowedDec : ∀ b, DecidablePred (maskAllowed b)]
-  sketchRows : Pos T k → ℕ
-  sketchLength : Pos T k → ℕ
-  latePool : Pos T k → Finset (Fin (T.S.N k))
+  /-- Late pool of each class: disjoint subsets of the reserved second-side labels, each of size
+  `M_late = ⌊⌊N/3⌋/r⌋`. -/
+  latePool : Fin G.r → Finset (Fin (T.S.N k))
+  latePool_reserve : ∀ j, latePool j ⊆ PT.tiling.reserveY
+  latePool_disjoint : ∀ j j', j ≠ j' → Disjoint (latePool j) (latePool j')
+  latePool_card : ∀ j, (latePool j).card = T.S.N k / 3 / G.r
 
 namespace LateProcessBase
 
-instance instMaskFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) : Fintype (B.Mask b) := B.maskFinite b
+variable {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {G : LowGeom PT}
+  {F : FreshCell G}
 
-instance instMaskAllowedDecidable {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) : DecidablePred (B.maskAllowed b) :=
-  B.maskAllowedDec b
+/-- The late pool read by a row (empty for a position that is not a late role). -/
+noncomputable def latePoolOf (B : LateProcessBase F) (b : Pos T k) : Finset (Fin (T.S.N k)) :=
+  match G.classOf b with
+  | some j => B.latePool j
+  | none => ∅
 
-/-- Allowed mask profiles at a row. -/
-abbrev AllowedMask {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) :=
-  {m : B.Mask b // B.maskAllowed b m}
+/-- Allowed masks at a row: subsets of its late pool of at least half the pool's size. -/
+abbrev AllowedMask (B : LateProcessBase F) (b : Pos T k) :=
+  {S : Finset (Fin (T.S.N k)) // S ⊆ B.latePoolOf b ∧ (B.latePoolOf b).card ≤ 2 * S.card}
 
-noncomputable instance instAllowedMaskFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) : Fintype (B.AllowedMask b) :=
-  Fintype.subtype (Finset.univ.filter fun m => B.maskAllowed b m) (by intro m; simp)
+noncomputable instance instAllowedMaskFintype (B : LateProcessBase F) (b : Pos T k) :
+    Fintype (B.AllowedMask b) :=
+  Fintype.subtype (Finset.univ.filter fun S : Finset (Fin (T.S.N k)) =>
+    S ⊆ B.latePoolOf b ∧ (B.latePoolOf b).card ≤ 2 * S.card) (by intro S; simp)
 
-noncomputable instance instLatePoolLabelFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) :
-    Fintype {y : Fin (T.S.N k) // y ∈ B.latePool b} :=
-  Fintype.subtype (B.latePool b) (by intro y; rfl)
+noncomputable instance instLatePoolLabelFintype (B : LateProcessBase F) (b : Pos T k) :
+    Fintype {y : Fin (T.S.N k) // y ∈ B.latePoolOf b} :=
+  Fintype.subtype (B.latePoolOf b) (by intro y; rfl)
 
-/-- One late row output: allowed mask, all finite sketches, and a label in the late pool. -/
-abbrev RowOut {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) :=
+/-- One late row output: the mask, one sketch of length `m` for each of the `n` even neighbours
+`flipPos b k'` (first-side labels), and the label in the late pool. -/
+abbrev RowOut (B : LateProcessBase F) (b : Pos T k) :=
   B.AllowedMask b ×
-    (Fin (B.sketchRows b) → Fin (B.sketchLength b) → Fin (T.S.N k)) ×
-    {y : Fin (T.S.N k) // y ∈ B.latePool b}
+    (Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) ×
+    {y : Fin (T.S.N k) // y ∈ B.latePoolOf b}
 
-noncomputable instance instRowOutFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (b : Pos T k) : Fintype (B.RowOut b) := inferInstance
+noncomputable instance instRowOutFintype (B : LateProcessBase F) (b : Pos T k) :
+    Fintype (B.RowOut b) := inferInstance
 
 /-- Mask component of a late row output. -/
-def rowMask {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) {b : Pos T k} (o : B.RowOut b) : B.AllowedMask b := o.1
+def rowMask (B : LateProcessBase F) {b : Pos T k} (o : B.RowOut b) : B.AllowedMask b := o.1
 
-/-- Possible outputs of one late class. -/
-abbrev ClassRows {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (j : Fin G.r) :=
-  ∀ b : {x : Pos T k // x ∈ B.classes j}, B.RowOut b.1
+/-- Label component of a late row output. -/
+def rowLabel (B : LateProcessBase F) {b : Pos T k} (o : B.RowOut b) : Fin (T.S.N k) := o.2.2.1
 
-noncomputable instance instClassRoleFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (j : Fin G.r) :
+noncomputable instance instClassRoleFintype (B : LateProcessBase F) (j : Fin G.r) :
     Fintype {x : Pos T k // x ∈ B.classes j} :=
   Fintype.subtype (B.classes j) (by intro x; rfl)
 
+/-- Possible outputs of one late class. -/
+abbrev ClassRows (B : LateProcessBase F) (j : Fin G.r) :=
+  ∀ b : {x : Pos T k // x ∈ B.classes j}, B.RowOut b.1
+
 /-- Rows already processed at stage `j`. -/
-abbrev ProcessedRole {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (j : Fin (G.r + 1)) :=
+abbrev ProcessedRole (B : LateProcessBase F) (j : Fin (G.r + 1)) :=
   {b : Pos T k // b ∈ B.processed j}
 
-noncomputable instance instProcessedRoleFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (j : Fin (G.r + 1)) : Fintype (B.ProcessedRole j) :=
+noncomputable instance instProcessedRoleFintype (B : LateProcessBase F) (j : Fin (G.r + 1)) :
+    Fintype (B.ProcessedRole j) :=
   Fintype.subtype (B.processed j) (by intro b; rfl)
 
-/-- History equals the initial cell configuration and the dependent product of processed row outputs. -/
-abbrev History {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (j : Fin (G.r + 1)) :=
+/-- History: the initial cell configuration and the dependent product of processed row outputs. -/
+abbrev History (B : LateProcessBase F) (j : Fin (G.r + 1)) :=
   Config F × (∀ b : B.ProcessedRole j, B.RowOut b.1)
 
 /-- Embed an initial configuration into the empty processed history. -/
-noncomputable def initialHistory {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (B : LateProcessBase F) (s : Config F) : B.History 0 := by
-  classical
+noncomputable def initialHistory (B : LateProcessBase F) (s : Config F) : B.History 0 := by
   refine (s, ?_)
   intro b
   have hfalse : False := by
     simpa [B.processed_zero] using b.2
   exact hfalse.elim
 
+/-- Extend a history by one class's row outputs. -/
+noncomputable def extend (B : LateProcessBase F) (j : Fin G.r) (h : B.History j.castSucc)
+    (out : B.ClassRows j) : B.History j.succ :=
+  (h.1, fun b =>
+    if hb : b.1 ∈ B.processed j.castSucc then h.2 ⟨b.1, hb⟩
+    else
+      have hmem : b.1 ∈ B.processed j.castSucc ∪ B.classes j := by
+        rw [B.processed_step j]
+        exact b.2
+      out ⟨b.1, (Finset.mem_union.mp hmem).resolve_left hb⟩)
+
+/-- Class-by-class run from an initial configuration, with a given per-class transition. -/
+noncomputable def runFrom (B : LateProcessBase F)
+    (step : ∀ j : Fin G.r, B.History j.castSucc → FinLaw (B.ClassRows j)) (s : Config F) :
+    ∀ m (hm : m ≤ G.r), FinLaw (B.History ⟨m, Nat.lt_succ_of_le hm⟩)
+  | 0, _ => FinLaw.dirac (B.initialHistory s)
+  | m + 1, hm =>
+      FinLaw.map (FinLaw.bind (B.runFrom step s m (Nat.le_of_succ_le hm)) (step ⟨m, hm⟩))
+        (fun x => B.extend ⟨m, hm⟩ x.1 x.2)
+
+/-- The full run through all late classes. -/
+noncomputable def runFull (B : LateProcessBase F)
+    (step : ∀ j : Fin G.r, B.History j.castSucc → FinLaw (B.ClassRows j)) (s : Config F) :
+    FinLaw (B.History (Fin.last G.r)) :=
+  B.runFrom step s G.r le_rfl
+
 end LateProcessBase
 
-/-- Complete finite-law interface for the late exposure process. -/
+/-- Mask profiles (fixed in advance, independent across rows) and reference row kernels (D18.T),
+defined on every history including invalid ones. -/
+structure LateKernels {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G} (B : LateProcessBase F) where
+  maskProfile : ∀ b : Pos T k, FinLaw (B.AllowedMask b)
+  refK : ∀ j : Fin G.r,
+    ∀ b : {x : Pos T k // x ∈ B.classes j},
+      B.History j.castSucc → FinLaw (B.RowOut b.1)
+  refK_mask_marginal : ∀ (j : Fin G.r) (b : {x : Pos T k // x ∈ B.classes j})
+      (h : B.History j.castSucc),
+    FinLaw.map (refK j b h) (fun out : B.RowOut b.1 => out.1) = maskProfile b.1
+
+namespace LateKernels
+
+variable {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {G : LowGeom PT}
+  {F : FreshCell G} {B : LateProcessBase F}
+
+/-- Independent product reference transition (L2) for one class at a fixed entering history. -/
+noncomputable def referenceTransition (K : LateKernels B) (j : Fin G.r)
+    (h : B.History j.castSucc) : FinLaw (B.ClassRows j) :=
+  FinLaw.pi (fun b => K.refK j b h)
+
+/-- Unconstrained reference late process from an initial configuration (gives
+`p_F(S) = Pr_ref(F ∣ S)` and the transfer experiment of Section 18.2). -/
+noncomputable def refRun (K : LateKernels B) (s : Config F) :
+    FinLaw (B.History (Fin.last G.r)) :=
+  B.runFull K.referenceTransition s
+
+end LateKernels
+
+/-- Data of the late exposure process: class schedule, kernels, initial list events `S_v` with their
+scopes (D17.L), the resampling schedule (`T_s = ⌈log² n⌉` rounds, a fixed event order), and the fact
+that all slots fit injectively into their patches' bins (so the pool laws exist). -/
 structure LateEncoding {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} (F : FreshCell G) where
   base : LateProcessBase F
-  /-- Independent fixed-in-advance mask profiles. -/
-  maskProfile : ∀ b : Pos T k, FinLaw (base.AllowedMask b)
-  Pools : Type
-  [poolFinite : Fintype Pools]
-  Tape : Pools → Type
-  [tapeFinite : ∀ p, Fintype (Tape p)]
-  poolLaw : FinLaw Pools
-  tapeLaw : ∀ p, FinLaw (Tape p)
-  /-- Initial Section 17 process law at fixed pools and tapes. -/
-  initialProcess : ∀ p, Tape p → FinLaw (Config F)
-  /-- Reference kernels, defined on every history including invalid ones. -/
-  refK : ∀ j : Fin G.r,
-    ∀ b : {x : Pos T k // x ∈ base.classes j},
-      base.History j.castSucc → FinLaw (base.RowOut b.1)
-  refK_mask_marginal : ∀ (j : Fin G.r) (b : {x : Pos T k // x ∈ base.classes j})
-      (h : base.History j.castSucc),
-    FinLaw.map (refK j b h) (fun out : base.RowOut b.1 => out.1) = maskProfile b.1
-  /-- Actual conditional injective sampler for each late class. -/
-  act : ∀ j : Fin G.r, base.History j.castSucc → FinLaw (base.ClassRows j)
-  act_injective : ∀ (j : Fin G.r) (h : base.History j.castSucc) (out : base.ClassRows j),
-    (act j h).w out ≠ 0 →
-      Function.Injective (fun b : {x : Pos T k // x ∈ base.classes j} => (out b).2.2.1)
-  lateError : ℝ
-  lateError_nonneg : 0 ≤ lateError
-  comparisonScope : ∀ j : Fin G.r, Set ({x : Pos T k // x ∈ base.classes j})
-  /-- L3.10 upper comparison for the actual class sampler on its stated scope. -/
-  act_ref_upper : ∀ (j : Fin G.r) (h : base.History j.castSucc)
-      (Ψ : base.ClassRows j → ℝ),
-    (∀ out, 0 ≤ Ψ out) →
-    DependsOn Ψ (comparisonScope j) →
-    (act j h).E Ψ ≤ (1 + lateError) *
-      (FinLaw.pi (fun b => refK j b h)).E Ψ
-  /-- Extend a history with one class's row outputs. -/
-  extend : ∀ j : Fin G.r, base.History j.castSucc → base.ClassRows j → base.History j.succ
-  extend_old : ∀ (j : Fin G.r) (h : base.History j.castSucc)
-      (out : base.ClassRows j) (b : base.ProcessedRole j.castSucc),
-    (extend j h out).2 ⟨b.1, by
-      rw [← base.processed_step j]
-      exact Finset.mem_union.mpr (Or.inl b.2)⟩ = h.2 b
-  extend_new : ∀ (j : Fin G.r) (h : base.History j.castSucc)
-      (out : base.ClassRows j) (b : {x : Pos T k // x ∈ base.classes j}),
-    (extend j h out).2 ⟨b.1, by
-      rw [← base.processed_step j]
-      exact Finset.mem_union.mpr (Or.inr b.2)⟩ = out b
-  /-- Full actual class-by-class run, constrained by the bind recursion below. -/
-  run : ∀ j : Fin (G.r + 1), ∀ p, Tape p → FinLaw (base.History j)
-  run_zero : ∀ p t,
-    run 0 p t = FinLaw.map (initialProcess p t) base.initialHistory
-  run_step : ∀ j : Fin G.r, ∀ p t,
-    run j.succ p t =
-      FinLaw.map (FinLaw.bind (run j.castSucc p t) (act j))
-        (fun ht => extend j ht.1 ht.2)
-  /-- Terminal-avoidance event; it is a finite set of full class histories. -/
-  terminal : ∀ p, Tape p → Finset (base.History (Fin.last G.r))
-  terminal_positive : ∀ p t,
-    0 < ∑ h ∈ terminal p t, (run (Fin.last G.r) p t).w h
-  /-- Bad events and alarms are finite sets of outputs at each fixed class. -/
-  badOutputs : ∀ j : Fin G.r, Finset (base.ClassRows j)
-  alarms : ∀ j : Fin G.r, Finset (base.ClassRows j)
-  PairDraw : Type
-  [pairFinite : Fintype PairDraw]
-  pairSampler : base.History (Fin.last G.r) → FinLaw PairDraw
-
-instance instPoolsFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) : Fintype E.Pools := E.poolFinite
-
-instance instTapeFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) : ∀ p, Fintype (E.Tape p) := E.tapeFinite
-
-instance instPairDrawFintype {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) : Fintype E.PairDraw := E.pairFinite
+  kernels : LateKernels base
+  events : ListEvent F
+  Ts : ℕ
+  Ts_eq : Ts = ⌈Real.log (T.S.n k) ^ 2⌉₊
+  order : Pos T k → ℕ
+  pools_nonempty : (permPools G).Nonempty
 
 namespace LateEncoding
 
-/-- Independent product reference transition for one class. -/
-noncomputable def referenceTransition {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) (j : Fin G.r) (h : E.base.History j.castSucc) :
-    FinLaw (E.base.ClassRows j) :=
-  FinLaw.pi (fun b => E.refK j b h)
+variable {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {G : LowGeom PT}
+  {F : FreshCell G}
 
-/-- Pool and tape experiment, sampled by dependent finite-law bind. -/
-noncomputable def poolTapeLaw {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) : FinLaw (Sigma E.Tape) :=
-  FinLaw.bindD E.poolLaw E.tapeLaw
+/-- Inputs of the initial process: pools and tapes. -/
+abbrev InitInput (E : LateEncoding F) := (∀ C, F.Pool C) × Tapes F E.Ts
 
-/-- Run the classes and condition the final history on terminal avoidance. -/
-noncomputable def terminalRun {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) (pt : Sigma E.Tape) :
-    FinLaw (E.base.History (Fin.last G.r)) :=
-  FinLaw.cond (E.run (Fin.last G.r) pt.1 pt.2) (E.terminal pt.1 pt.2)
-    (E.terminal_positive pt.1 pt.2)
+/-- `S_fin`: the configuration after the `Ts` resampling rounds at the given pools and tapes. -/
+noncomputable def initialState (E : LateEncoding F) (x : E.InitInput) : Config F :=
+  E.events.resample E.Ts E.order Finset.univ x.1 x.2.extend
 
-/-- Pool/tape choice paired with the terminal-conditioned class history. -/
-noncomputable def terminalExperiment {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) :
-    FinLaw (Sigma E.Tape × E.base.History (Fin.last G.r)) :=
-  FinLaw.map (FinLaw.bindD E.poolTapeLaw E.terminalRun) (fun x => (x.1, x.2))
+/-- Pools from a given pool law, independent tapes. -/
+noncomputable def initialLaw (E : LateEncoding F) (pools : FinLaw (∀ C, F.Pool C)) :
+    FinLaw E.InitInput :=
+  FinLaw.bind pools (fun _ => tapeLaw F E.Ts)
 
-/-- Full late experiment after terminal-conditioned initial sampling and pair draws. -/
-noncomputable def experiment {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
-    (E : LateEncoding F) :
-    FinLaw ((Sigma E.Tape × E.base.History (Fin.last G.r)) × E.PairDraw) :=
-  FinLaw.bind (E.terminalExperiment)
-    (fun x => E.pairSampler x.2)
+/-- Permutation pool law (L16.1c). -/
+noncomputable def poolLaw (E : LateEncoding F) : FinLaw (∀ C, F.Pool C) :=
+  permPoolLaw G E.pools_nonempty
+
+/-- iid slot law of the annealed baseline. -/
+noncomputable def iidLaw (E : LateEncoding F) : FinLaw (∀ C, F.Pool C) :=
+  iidPoolLaw G E.pools_nonempty
+
+/-- Unconditioned initial sampling on permutation pools. -/
+noncomputable def permLaw (E : LateEncoding F) : FinLaw E.InitInput := E.initialLaw E.poolLaw
+
+/-- Terminal-conditioned initial sampling `𝔼_term`: the initial inputs conditioned on the terminal
+avoidance event (requirements T1–T3, D18.G), whose positivity is P18.3(ii). -/
+noncomputable def terminalLaw (E : LateEncoding F) (terminal : Finset E.InitInput)
+    (hpos : 0 < ∑ x ∈ terminal, E.permLaw.w x) : FinLaw E.InitInput :=
+  FinLaw.cond E.permLaw terminal hpos
+
+/-- Annealed baseline: iid slots, the full initial process, unconstrained reference late
+transitions (used to choose the mask profiles). -/
+noncomputable def baseline (E : LateEncoding F) :
+    FinLaw (E.InitInput × E.base.History (Fin.last G.r)) :=
+  FinLaw.bind (E.initialLaw E.iidLaw) (fun x => E.kernels.refRun (E.initialState x))
+
+/-- Specification of actual class samplers (L3), required at entering histories where the run
+proceeds: distinct labels, avoidance of the current bad events and future alarms, and upper
+comparison at factor two with the product reference law for every nonnegative test of at most
+`exp((log n)³)` rows (this covers the `n^{O(r)}` queried rows, side data included). -/
+def SamplerSpec (E : LateEncoding F)
+    (act : ∀ j : Fin G.r, E.base.History j.castSucc → FinLaw (E.base.ClassRows j))
+    (enter : ∀ j : Fin G.r, E.base.History j.castSucc → Prop)
+    (bad alarm : ∀ j : Fin G.r, E.base.History j.castSucc → Finset (E.base.ClassRows j)) :
+    Prop :=
+  ∀ j h, enter j h →
+    (∀ out, (act j h).w out ≠ 0 →
+      Function.Injective (fun b => E.base.rowLabel (out b)) ∧ out ∉ bad j h ∧ out ∉ alarm j h) ∧
+    (∀ S : Finset {x : Pos T k // x ∈ E.base.classes j},
+      (S.card : ℝ) ≤ Real.exp (Real.log (T.S.n k) ^ 3) →
+      ∀ Ψ : E.base.ClassRows j → ℝ, (∀ out, 0 ≤ Ψ out) → DependsOn Ψ (S : Set _) →
+        (act j h).E Ψ ≤ 2 * (E.kernels.referenceTransition j h).E Ψ)
+
+/-- Full late experiment: terminal-conditioned initial sampling, the actual class-by-class run
+from `S_fin`, then the final pair draw. -/
+noncomputable def experiment (E : LateEncoding F) (terminal : Finset E.InitInput)
+    (hpos : 0 < ∑ x ∈ terminal, E.permLaw.w x)
+    (act : ∀ j : Fin G.r, E.base.History j.castSucc → FinLaw (E.base.ClassRows j))
+    {Pair : Type} [Fintype Pair] (pairSampler : E.base.History (Fin.last G.r) → FinLaw Pair) :
+    FinLaw ((E.InitInput × E.base.History (Fin.last G.r)) × Pair) :=
+  FinLaw.bind
+    (FinLaw.bind (E.terminalLaw terminal hpos) (fun x => E.base.runFull act (E.initialState x)))
+    (fun z => pairSampler z.2)
 
 end LateEncoding
 

@@ -11,6 +11,7 @@ the priority rule, so each touched cell advances exactly one tape entry.
 namespace HypercubeRamsey
 
 open Classical
+open scoped BigOperators
 
 /-- Event `v` as a predicate of the cell configuration, with its cell scope. -/
 structure ListEvent {κ : CConsts} {T : Stage} {k : ℕ}
@@ -24,6 +25,25 @@ structure ListEvent {κ : CConsts} {T : Stage} {k : ℕ}
 abbrev TapeEntry {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} (F : FreshCell G) (C : G.Cell) :=
   ∀ _P : F.Pool C, F.State C
+
+/-- Finite cell tapes: `Ts + 2` entries per cell (L16.1c). -/
+abbrev Tapes {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (F : FreshCell G) (Ts : ℕ) :=
+  ∀ C : G.Cell, Fin (Ts + 2) → TapeEntry F C
+
+/-- Read a finite tape at any index; indices beyond the last entry read the last entry (a run of
+`Ts` rounds reads at most index `Ts`). -/
+def Tapes.extend {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G} {Ts : ℕ}
+    (t : Tapes F Ts) : ∀ C, ℕ → TapeEntry F C :=
+  fun C j => t C ⟨min j (Ts + 1), by omega⟩
+
+/-- Tape law: every entry is a family of independent fresh states, one for every possible pool of
+the cell, independent across entries and cells (L16.1c, sections/18 lines 748–750). -/
+noncomputable def tapeLaw {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (F : FreshCell G) (Ts : ℕ) :
+    FinLaw (Tapes F Ts) :=
+  FinLaw.pi fun C => FinLaw.pi fun _ : Fin (Ts + 2) => FinLaw.pi fun P : F.Pool C => F.fresh C P
 
 namespace ListEvent
 

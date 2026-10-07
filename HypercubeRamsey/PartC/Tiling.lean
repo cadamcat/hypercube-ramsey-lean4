@@ -151,6 +151,9 @@ structure Valid {κ : CConsts} {T : Stage} {k : ℕ} (𝒯 : Tiling κ T k) : Pr
     (𝒯.P i).Y ⊆ (𝒯.P i).resY ∧
     (𝒯.P i).resY ⊆ T.Y k \ 𝒯.reserveY
   patch_nonempty : ∀ i, (𝒯.P i).X.Nonempty ∧ (𝒯.P i).Y.Nonempty
+  /-- Every physical bin has `d` labels in every mode (singleton bins in direct and bounded
+  modes, sections/16 line 15). -/
+  bins_card : ∀ i, ∀ B ∈ (𝒯.P i).bins.parts, B.card = (𝒯.P i).d
   patch_X_disjoint : ∀ i j, i ≠ j → Disjoint (𝒯.P i).X (𝒯.P j).X
   patch_Y_disjoint : ∀ i j, i ≠ j → Disjoint (𝒯.P i).Y (𝒯.P j).Y
   S_lower : (1 / 400 : ℝ) * T.S.N k ≤ 𝒯.S
@@ -182,7 +185,6 @@ structure Valid {κ : CConsts} {T : Stage} {k : ℕ} (𝒯 : Tiling κ T k) : Pr
     κ.M1 * κ.Q0 ≤ max (𝒯.P i).g (𝒯.P i).q ∧
     (𝒯.P i).g ≤ κ.M1 * (𝒯.P i).q ∧
     (1 / 400 : ℝ) * T.S.N k * Real.exp (-Real.rpow ((𝒯.P i).q : ℝ) κ.aC) ≤ (𝒯.P i).M ∧
-    (∀ B ∈ (𝒯.P i).bins.parts, B.card = (𝒯.P i).d) ∧
     ((𝒯.mode = .highSmall) →
       (𝒯.P i).d = min ⌊Real.exp ((𝒯.P i).q / 2)⌋₊
         ⌊Real.exp (Real.sqrt (Real.log (T.S.n k)))⌋₊) ∧

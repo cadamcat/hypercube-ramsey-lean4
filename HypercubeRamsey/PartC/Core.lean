@@ -120,6 +120,12 @@ noncomputable def uniform [DecidableEq Ω] (s : Finset Ω) (hs : s.Nonempty) : F
       exact_mod_cast (Finset.card_pos.mpr hs).ne'
     field_simp
 
+/-- Point mass at one outcome. -/
+noncomputable def dirac [DecidableEq Ω] (x : Ω) : FinLaw Ω where
+  w y := if y = x then 1 else 0
+  nonneg y := by split_ifs <;> norm_num
+  sum_one := by simp
+
 end FinLaw
 
 /-- A real-valued function reads only coordinates indexed by `S`. -/

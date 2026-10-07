@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.Centres
+import HypercubeRamsey.S06.OddRows_sol_s06_cj
 
 set_option maxHeartbeats 5000000
 
@@ -1230,7 +1231,10 @@ disjoint presentation events; fallback `≤ e^{−.02k}(#descriptors) π_ℓ(y)`
 position-count gate. -/
 theorem L6_1j_proxy (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TableOK → X.DescCount → X.ProxyMean := by
-  refine ⟨1, 1, fun n N E G M X hL hTable hDescCount => ?_⟩
+  obtain ⟨nGrowth, hGrowth⟩ := Lane_q_s06_ev_a.parameter_growth p₀ hadm.2.2.1
+  obtain ⟨nScale, hScale⟩ := Lane_q_s06_ev_a.topScale_fourth_eventually p₀ hadm.2.2.1
+  obtain ⟨nMore, hMore⟩ := Lane_sol_s06_cj.proxy_growth p₀ hadm.2.2.1
+  refine ⟨max (max nGrowth nScale) nMore, 1, fun n N E G M X hL hTable hDescCount => ?_⟩
   intro H P u hBase hOdd hMode y
   classical
   let b := X.g.L.stateOf u
@@ -2371,7 +2375,176 @@ theorem L6_1j_proxy (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
             (fun ω => PresentsKey (Hξ ξ) ω k)) *
               (X.lowRow H P b k.1 (partialData k.1 k.2)).w y := hTotalFiber
       _ ≤ _ := hKeyRemainderBound
-  sorry
+  have hbOdd : b ∈ X.g.L.oddStates := by
+    unfold b ChunkLayout6.oddStates
+    exact Finset.mem_image.mpr
+      ⟨u, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hOdd⟩, rfl⟩
+  let pCount : ℕ := 4 * n ^ 10
+  let cover : Finset (Finset (X.Loc × X.Ty)) := Finset.univ.biUnion fun j : Fin X.hp.H =>
+    if ∀ a, (X.permAt P b j a).card ≤ pCount then X.descsIn b (X.permAt P b j) else ∅
+  have hDgoodCover : Dgood ⊆ cover := by
+    intro D hD
+    obtain ⟨z, _hz, hm⟩ := (Finset.mem_filter.mp hD).2
+    have hex : ∃ ξ ω, PresentsKey (Hξ ξ) ω (D, z) := by
+      by_contra hn
+      have hevent : ∀ ξ ω, ¬ PresentsKey (Hξ ξ) ω (D, z) := by
+        intro ξ ω hp
+        exact hn ⟨ξ, ω, hp⟩
+      apply hm
+      dsimp [keyMassOf]
+      apply Finset.sum_eq_zero
+      intro ξ hξ
+      have hpr : (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω (D, z)) = 0 :=
+        pr_zero_of_supp6 _ (fun ω _ => hevent ξ ω)
+      rw [hpr, mul_zero]
+    obtain ⟨ξ, ω, hv, hd, _⟩ := hex
+    let C := X.assemble P ω
+    change X.actDesc (Hξ ξ) C X.Rshort b = D at hd
+    have hpos : X.pos C = P := rfl
+    obtain ⟨j, hj⟩ := hv.2.2.1
+    let φ : X.g.L.stNbr b → X.Loc := fun a => (X.choice (Hξ ξ) C X.Rshort a.1).getD X.defaultLoc
+    have hPerm : ∀ a, φ a ∈ X.permAt P b j a := by
+      intro a
+      have hs := hv.1 a.1 a.2
+      change (X.choice (Hξ ξ) C X.Rshort a.1).isSome = true at hs
+      cases hc : X.choice (Hξ ξ) C X.Rshort a.1 with
+      | none => simp [hc] at hs
+      | some c =>
+        have hp := Lane_sol_s06_cj.choice_mem_prosp X (Hξ ξ) C X.Rshort a.1 c hc
+        have hl := hj a.1 a.2 c hc
+        change φ a ∈ (X.levelPair j).biUnion (X.prosp P (X.site a.1))
+        have hφ : φ a = c := by simp [φ, hc]
+        rw [hφ]
+        exact Finset.mem_biUnion.mpr ⟨c.2, hl, by simpa [hpos] using hp⟩
+    have hDesc : X.descOf b φ = D := hd
+    have hImage : Finset.univ.image φ = D.image Prod.fst := by
+      rw [← hDesc]
+      simp only [Ctx6.descOf, Finset.image_image]
+      rfl
+    have hCard : (Finset.univ.image φ).card ≤ X.T := by
+      rw [hImage, ← hd]
+      exact hv.2.2.2.1
+    have hIn : D ∈ X.descsIn b (X.permAt P b j) := by
+      unfold Ctx6.descsIn
+      exact Finset.mem_image.mpr
+        ⟨φ, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hPerm, hCard⟩, hDesc⟩
+    have hCount : ∀ a, (X.permAt P b j a).card ≤ pCount := by
+      intro a
+      have h₀ := hv.2.1 a.1 a.2 j.castSucc
+      have h₁ := hv.2.1 a.1 a.2 j.succ
+      have hp : (X.permAt P b j a).card ≤
+          (X.prosp P (X.site a.1) j.castSucc).card + (X.prosp P (X.site a.1) j.succ).card := by
+        simpa only [Ctx6.permAt, Ctx6.levelPair, Finset.biUnion_insert,
+          Finset.singleton_biUnion] using
+          Finset.card_union_le (X.prosp P (X.site a.1) j.castSucc)
+            (X.prosp P (X.site a.1) j.succ)
+      have hpr : ((X.permAt P b j a).card : ℝ) ≤
+          ((X.prosp P (X.site a.1) j.castSucc).card : ℝ) +
+            ((X.prosp P (X.site a.1) j.succ).card : ℝ) := by exact_mod_cast hp
+      have hlam : X.hp.lam = (n : ℝ) ^ 10 := by
+        simp [Ctx6.hp, J₀₆]
+      rw [hpos, hlam] at h₀ h₁
+      have hb : ((X.permAt P b j a).card : ℝ) ≤ 4 * (n : ℝ) ^ 10 := by linarith
+      exact_mod_cast hb
+    exact Finset.mem_biUnion.mpr
+      ⟨j, Finset.mem_univ _, by simpa [hCount] using hIn⟩
+  let rate : ℝ := 10 ^ 4 *
+    (X.T * Real.log (3 * n * (4 * n ^ 10) + 2) + (X.J + 1) * Real.log (X.T + 2))
+  have hDgoodCount : (Dgood.card : ℝ) ≤ (X.hp.H : ℝ) * Real.exp rate := by
+    have hcard := (Finset.card_le_card hDgoodCover).trans
+      (show cover.card ≤ ∑ j : Fin X.hp.H,
+        (if ∀ a, (X.permAt P b j a).card ≤ pCount then
+          X.descsIn b (X.permAt P b j) else ∅).card from Finset.card_biUnion_le)
+    have hcardR : (Dgood.card : ℝ) ≤ ∑ j : Fin X.hp.H,
+        ((if ∀ a, (X.permAt P b j a).card ≤ pCount then
+          X.descsIn b (X.permAt P b j) else ∅).card : ℝ) := by exact_mod_cast hcard
+    calc
+      (Dgood.card : ℝ) ≤ _ := hcardR
+      _ ≤ ∑ _j : Fin X.hp.H, Real.exp rate := by
+        apply Finset.sum_le_sum
+        intro j hj
+        by_cases hc : ∀ a, (X.permAt P b j a).card ≤ pCount
+        · rw [if_pos hc]
+          simpa [pCount, rate, Nat.cast_mul, Nat.cast_pow] using
+            hDescCount X.Loc b (X.permAt P b j) pCount hbOdd hc
+        · rw [if_neg hc]
+          simp only [Finset.card_empty, Nat.cast_zero]
+          exact Real.exp_nonneg _
+      _ = (X.hp.H : ℝ) * Real.exp rate := by simp
+  have hRemainder : (∑ k : Key,
+      if PartValid k.1 k.2 ∧ keyMassOf k.1 k.2 ≠ 0 then
+        X.s3Thr * X.lowQ H b k.1 (partialData k.1 k.2) *
+          (prior y * X.lowF H b k.1 (partialData k.1 k.2) y) else 0) ≤
+        X.s3Thr * prior y * (Dgood.card : ℝ) := by
+    rw [Fintype.sum_prod_type]
+    calc
+      _ ≤ ∑ D : Finset (X.Loc × X.Ty), if D ∈ Dgood then X.s3Thr * prior y else 0 := by
+        apply Finset.sum_le_sum
+        intro D hD
+        by_cases hg : D ∈ Dgood
+        · rw [if_pos hg]
+          calc
+            _ ≤ ∑ z : PartData, X.s3Thr * prior y *
+                (if PartValid D z then
+                  X.lowQ H b D (partialData D z) * X.lowF H b D (partialData D z) y else 0) := by
+              apply Finset.sum_le_sum
+              intro z hz
+              by_cases hc : PartValid D z ∧ keyMassOf D z ≠ 0
+              · rw [if_pos hc, if_pos hc.1]
+                exact le_of_eq (by ring)
+              · rw [if_neg hc]
+                apply mul_nonneg (mul_nonneg (Real.exp_nonneg _) (hPriorNonneg y))
+                split_ifs
+                · exact mul_nonneg (hLowQNonneg H D _) (hLowFNonneg H D _ y)
+                · exact le_rfl
+            _ = X.s3Thr * prior y * (∑ z : PartData, if PartValid D z then
+                  X.lowQ H b D (partialData D z) * X.lowF H b D (partialData D z) y else 0) :=
+                (Finset.mul_sum _ _ _).symm
+            _ ≤ X.s3Thr * prior y * 1 :=
+              mul_le_mul_of_nonneg_left (hPartialDataIntegral D)
+                (mul_nonneg (Real.exp_nonneg _) (hPriorNonneg y))
+            _ = X.s3Thr * prior y := mul_one _
+        · rw [if_neg hg]
+          apply le_of_eq
+          apply Finset.sum_eq_zero
+          intro z hz
+          have hc : ¬ (PartValid D z ∧ keyMassOf D z ≠ 0) := by
+            intro hc
+            exact hg (Finset.mem_filter.mpr ⟨Finset.mem_univ _, z, hc⟩)
+          simp [hc]
+      _ = X.s3Thr * prior y * (Dgood.card : ℝ) := by
+        rw [← Finset.sum_filter]
+        simp [mul_comm]
+  have hGrowthN := hGrowth n (le_trans (le_max_left _ _) (le_trans (le_max_left _ _) hL.1))
+  have hScaleN := hScale n (le_trans (le_max_right _ _) (le_trans (le_max_left _ _) hL.1))
+  have hnlarge : 10 ^ 10 ≤ n := hGrowthN.2.2.2.2.2
+  have hJlarge : 20000000 ≤ X.J := by
+    simpa [Ctx6.J, X.g.m_eq, m₆] using hMore n (le_trans (le_max_right _ _) hL.1)
+  have hTsmall : (X.T : ℝ) ≤ (1 / 10 ^ 11 : ℝ) * X.J := by
+    simpa [Ctx6.T, Ctx6.J, X.g.m_eq, m₆] using hGrowthN.2.1
+  have hlogT : Real.log (X.T + 2) ≤ 2 * α₆ p₀ * Real.log n := by
+    simpa [Ctx6.T, X.g.m_eq, m₆] using hGrowthN.2.2.1
+  have hHscale : X.hp.H ≤ n ^ 4 := hScaleN
+  have hkceil : κ₆ * (X.J : ℝ) * Real.log n ≤ (X.k : ℝ) := Nat.le_ceil _
+  have hRate : (X.hp.H : ℝ) * Real.exp rate ≤ Real.exp ((2 / 100 : ℝ) * X.k) :=
+    Lane_sol_s06_cj.proxy_family_rate (by omega) hJlarge hTsmall hlogT hHscale
+      hkceil (height_exponents6_admissible p₀ hadm.2.2.1).1.le
+      (height_exponents6_admissible p₀ hadm.2.2.1).2.2.1
+  have hCountBudget : X.s3Thr * (Dgood.card : ℝ) ≤ 1 := by
+    calc
+      X.s3Thr * (Dgood.card : ℝ) ≤ X.s3Thr * ((X.hp.H : ℝ) * Real.exp rate) :=
+        mul_le_mul_of_nonneg_left hDgoodCount (Real.exp_nonneg _)
+      _ ≤ X.s3Thr * Real.exp ((2 / 100 : ℝ) * X.k) :=
+        mul_le_mul_of_nonneg_left hRate (Real.exp_nonneg _)
+      _ = 1 := by
+        rw [Ctx6.s3Thr, ← Real.exp_add]
+        convert Real.exp_zero using 1 <;> ring
+  calc
+    _ ≤ prior y + _ := hTotalProxyBound
+    _ ≤ prior y + X.s3Thr * prior y * (Dgood.card : ℝ) := add_le_add le_rfl hRemainder
+    _ ≤ 2 * prior y := by
+      have hb := mul_le_mul_of_nonneg_right hCountBudget (hPriorNonneg y)
+      nlinarith [hb]
 
 /-- L6.1j (long versus short, 06:639–657): couple both rules by positions, activations and ties; mismatch at one
 of `O(n)` neighbouring sites `≤ e^{−3m^{1/5}}` (L3.8, `height_selection_short`), times the cap `e^{m^{.15}}`. -/

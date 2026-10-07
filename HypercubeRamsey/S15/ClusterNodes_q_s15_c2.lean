@@ -2211,6 +2211,143 @@ theorem clusterHighMode_degree_window {κ : CConsts} (hκ : CConsts.Admissible �
       _ ≤ 10 * (1 / 60) := by gcongr
       _ = 1 / 6 := by norm_num
 
+private def crossingRoot {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) (r : Fin (T.S.n k)) : Prop :=
+  ∀ t, Relation.ReflTransGen (clusterCrossingEdge PT vs G) t r → r ≤ t
+
+private theorem clusterCrossingEdge_symm {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) {r t : Fin (T.S.n k)}
+    (h : clusterCrossingEdge PT vs G r t) : clusterCrossingEdge PT vs G t r := by
+  rcases h with ⟨hr, ht, hne, hnear⟩
+  refine ⟨ht, hr, Ne.symm hne, ?_⟩
+  simpa [clusterCrossingNear, _root_.hammingDist_comm] using hnear
+
+private theorem clusterCrossingRoot_neighbor_notRoot {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) {r t : Fin (T.S.n k)}
+    (hr : crossingRoot PT vs G r)
+    (hEdge : clusterCrossingEdge PT vs G r t) : ¬ crossingRoot PT vs G t := by
+  intro ht
+  have hreachRT : Relation.ReflTransGen (clusterCrossingEdge PT vs G) r t :=
+    Relation.ReflTransGen.tail Relation.ReflTransGen.refl hEdge
+  have hleTR : t ≤ r := ht r hreachRT
+  have hEdgeTR := clusterCrossingEdge_symm PT vs G hEdge
+  have hreachTR : Relation.ReflTransGen (clusterCrossingEdge PT vs G) t r :=
+    Relation.ReflTransGen.tail Relation.ReflTransGen.refl hEdgeTR
+  have hleRT : r ≤ t := hr t hreachTR
+  have hne : r ≠ t := hEdge.2.2.1
+  exact hne (Fin.le_antisymm hleRT hleTR)
+
+theorem clusterCrossingNonisolated_card_le_two_rank {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) :
+    (clusterCrossingNonisolated PT vs G).card ≤ 2 * clusterCrossingRank PT vs G := by
+  classical
+  let N := T.S.n k
+  let rootPred : Fin N → Prop := fun r =>
+    ∀ t, Relation.ReflTransGen (clusterCrossingEdge PT vs G) t r → r ≤ t
+  let roots : Finset (Fin N) := Finset.univ.filter rootPred
+  let nonroots : Finset (Fin N) := Finset.univ.filter (fun r => ¬ rootPred r)
+  let nonisolated : Finset (Fin N) := clusterCrossingNonisolated PT vs G
+  let dom := {r : Fin N // r ∈ nonisolated}
+  let cod := Bool × {r : Fin N // ¬ crossingRoot PT vs G r}
+  have hroot_count : roots.card + nonroots.card = N := by
+    have hunion : roots ∪ nonroots = Finset.univ := by
+      ext r
+      simp only [roots, nonroots, Finset.mem_union, Finset.mem_filter, Finset.mem_univ,
+        true_and]
+      exact iff_true_intro (Classical.em (rootPred r))
+    have hdisj : Disjoint roots nonroots := by
+      apply Finset.disjoint_left.mpr
+      intro r hr hn
+      exact (Finset.mem_filter.mp hn).2 (Finset.mem_filter.mp hr).2
+    have h := Finset.card_union_of_disjoint hdisj
+    rw [hunion] at h
+    simpa [N] using h.symm
+  have hnonroot_card : nonroots.card = N - roots.card := by omega
+  let neighbor : ∀ (r : Fin N), r ∈ nonisolated → Fin N := by
+    intro r hr
+    have hmem : r ∈ clusterCrossingNonisolated PT vs G := by
+      simpa [nonisolated] using hr
+    exact Classical.choose (Finset.mem_filter.mp hmem).2
+  have neighbor_edge : ∀ (r : Fin N) (hr : r ∈ nonisolated),
+      clusterCrossingEdge PT vs G r (neighbor r hr) := by
+    intro r hr
+    have hmem : r ∈ clusterCrossingNonisolated PT vs G := by
+      simpa [nonisolated] using hr
+    exact Classical.choose_spec (Finset.mem_filter.mp hmem).2
+  let f : dom → cod := fun r =>
+    if hr : crossingRoot PT vs G r.1 then
+      let t := neighbor r.1 r.2
+      ⟨true, ⟨t, clusterCrossingRoot_neighbor_notRoot PT vs G hr (neighbor_edge r.1 r.2)⟩⟩
+    else ⟨false, ⟨r.1, hr⟩⟩
+  have hf_inj : Function.Injective f := by
+    intro r s hfs
+    by_cases hr : crossingRoot PT vs G r.1 <;>
+      by_cases hs : crossingRoot PT vs G s.1
+    · have hval : (f r).2.1 = (f s).2.1 :=
+        congrArg (fun z : cod => z.2.1) hfs
+      have hts : neighbor r.1 r.2 = neighbor s.1 s.2 := by
+        simpa [f, hr, hs] using hval
+      have hneighR := neighbor_edge r.1 r.2
+      have hneighS := neighbor_edge s.1 s.2
+      have hneighS' : clusterCrossingEdge PT vs G s.1 (neighbor r.1 r.2) := by
+        simpa [hts] using hneighS
+      have hpath : Relation.ReflTransGen (clusterCrossingEdge PT vs G) s.1 r.1 := by
+        have hpathS : Relation.ReflTransGen (clusterCrossingEdge PT vs G) s.1
+            (neighbor r.1 r.2) :=
+          Relation.ReflTransGen.tail
+            (Relation.ReflTransGen.refl :
+              Relation.ReflTransGen (clusterCrossingEdge PT vs G) s.1 s.1) hneighS'
+        have hEdgeTR : clusterCrossingEdge PT vs G (neighbor r.1 r.2) r.1 :=
+          clusterCrossingEdge_symm PT vs G hneighR
+        exact Relation.ReflTransGen.tail hpathS hEdgeTR
+      have hle₁ := hr s.1 hpath
+      have hpath' : Relation.ReflTransGen (clusterCrossingEdge PT vs G) r.1 s.1 := by
+        have hpathR : Relation.ReflTransGen (clusterCrossingEdge PT vs G) r.1
+            (neighbor r.1 r.2) :=
+          Relation.ReflTransGen.tail
+            (Relation.ReflTransGen.refl :
+              Relation.ReflTransGen (clusterCrossingEdge PT vs G) r.1 r.1) hneighR
+        have hEdgeTS : clusterCrossingEdge PT vs G (neighbor r.1 r.2) s.1 := by
+          have := clusterCrossingEdge_symm PT vs G hneighS
+          simpa [hts] using this
+        exact Relation.ReflTransGen.tail hpathR hEdgeTS
+      have hle₂ := hs r.1 hpath'
+      have heq : r.1 = s.1 := Fin.ext (by omega)
+      exact Subtype.ext heq
+    · have hbool := congrArg Prod.fst hfs
+      simp [f, hr, hs] at hbool
+    · have hbool := congrArg Prod.fst hfs
+      simp [f, hr, hs] at hbool
+    · have hval : (f r).2.1 = (f s).2.1 :=
+        congrArg (fun z : cod => z.2.1) hfs
+      have heq : r.1 = s.1 := by simpa [f, hr, hs] using hval
+      exact Subtype.ext heq
+  have hcard : Fintype.card dom ≤ Fintype.card cod := Fintype.card_le_of_injective f hf_inj
+  have hdom : Fintype.card dom = nonisolated.card := by
+    simp [dom]
+  have hroots : Fintype.card {r : Fin N // crossingRoot PT vs G r} = roots.card := by
+    exact Fintype.card_of_subtype roots (by intro r; simp [roots, rootPred, crossingRoot])
+  have hcod : Fintype.card cod = 2 * nonroots.card := by
+    dsimp [cod]
+    rw [Fintype.card_prod, Fintype.card_bool, Fintype.card_subtype_compl,
+      Fintype.card_fin, hroots, ← hnonroot_card]
+  have hcard' : nonisolated.card ≤ 2 * nonroots.card := by
+    rw [← hdom, ← hcod]
+    exact hcard
+  calc
+    nonisolated.card ≤ 2 * nonroots.card := hcard'
+    _ = 2 * clusterCrossingRank PT vs G := by
+      have hrankDef : clusterCrossingRank PT vs G = N - roots.card := by
+        simp only [clusterCrossingRank, N]
+        rfl
+      have hrank : clusterCrossingRank PT vs G = nonroots.card :=
+        hrankDef.trans hnonroot_card.symm
+      rw [hrank]
+
 theorem two_exp_le_exp_two_pow {n : ℕ} (hn : 1 ≤ n) :
     2 * Real.exp (n : ℝ) ≤ (Real.exp 2) ^ n := by
   have hnR : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn

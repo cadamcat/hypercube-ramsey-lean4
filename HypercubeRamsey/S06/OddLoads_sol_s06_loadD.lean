@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadA
+import HypercubeRamsey.Tools.ScatteredUnion
 
 namespace HypercubeRamsey.Lane_sol_s06_loadD
 
@@ -1141,6 +1142,369 @@ theorem stage2_evenMean_product_le (v : Fin N) (hv : 0 < X.initLaw.w v)
     _ ≤ (∏ w ∈ T, (1 - cert.x w)⁻¹) * (X.coarseLaw v).expect W := hcompare
     _ ≤ (2 : ℝ) ^ U.card * (X.coarseLaw v).expect W := mul_le_mul_of_nonneg_right hcharge hraw0
     _ ≤ _ := mul_le_mul_of_nonneg_left hraw (by positivity)
+
+
+theorem keyAdjacent_coord_dist_le (h k : X.Key) (hk : keyAdjacent6 binAdjacent6 h k)
+    (i : Fin coarseChunkCount) : Nat.dist (h.1 i).val (k.1 i).val ≤ 1 := by
+  rcases hk with rfl | heq | ⟨_, _, j, hsame, hdist⟩
+  · simp
+  · simp [heq]
+  · by_cases hij : i = j
+    · subst i
+      omega
+    · simp [hsame i hij]
+
+theorem keyBall_coord_dist_le (h k : X.Key) (r : ℕ)
+    (hk : k ∈ Lane_q_s06_loads.keyBall6 X h r) (i : Fin coarseChunkCount) :
+    Nat.dist (h.1 i).val (k.1 i).val ≤ r := by
+  induction r generalizing k with
+  | zero =>
+    have heq : k = h := by simpa [Lane_q_s06_loads.keyBall6] using hk
+    subst k
+    simp
+  | succ r ih =>
+    obtain ⟨j, hj, hkj⟩ := Finset.mem_biUnion.mp hk
+    have hfirst := ih j hj
+    have hlast := keyAdjacent_coord_dist_le X j k (Finset.mem_filter.mp hkj).2 i
+    exact (Nat.dist.triangle_inequality _ _ _).trans (Nat.add_le_add hfirst hlast)
+
+ def binBoxNear (L : ChunkLayout6 n) (x : CubeVertex n) : Finset (CubeVertex n) :=
+  Finset.univ.filter fun y => ∀ i, Nat.dist (L.coarseBin y i).val (L.coarseBin x i).val ≤ 10
+
+theorem binBoxNear_self (L : ChunkLayout6 n) (x : CubeVertex n) : x ∈ binBoxNear L x := by
+  simp [binBoxNear]
+
+theorem evenBinScope_disjoint_of_not_near (x y : CubeVertex n) (hxy : y ∉ binBoxNear X.g.L x) :
+    Disjoint (evenBinScope X x) (evenBinScope X y) := by
+  apply Finset.disjoint_left.mpr
+  intro w hwx hwy
+  obtain ⟨h, hh, hbin⟩ := Finset.mem_image.mp hwx
+  obtain ⟨k, hk, kbin⟩ := Finset.mem_image.mp hwy
+  have hd (i : Fin coarseChunkCount) :
+      Nat.dist (X.g.L.coarseBin y i).val (X.g.L.coarseBin x i).val ≤ 10 := by
+    have hx := keyBall_coord_dist_le X (X.g.L.key x) h 2 (evenType_typeKeys_subset_keyBall X x hh) i
+    have hy := keyBall_coord_dist_le X (X.g.L.key y) k 2 (evenType_typeKeys_subset_keyBall X y hk) i
+    have hsame : h.1 = k.1 := hbin.trans kbin.symm
+    have ht := Nat.dist.triangle_inequality (X.g.L.coarseBin y i).val (k.1 i).val (X.g.L.coarseBin x i).val
+    rw [← hsame, Nat.dist_comm (h.1 i).val] at ht
+    change Nat.dist (X.g.L.coarseBin x i).val (h.1 i).val ≤ 2 at hx
+    change Nat.dist (X.g.L.coarseBin y i).val (k.1 i).val ≤ 2 at hy
+    rw [← hsame] at hy
+    omega
+  exact hxy (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hd⟩)
+
+/-- Restricting a cube vertex to a coordinate block preserves its count of ones on that block. -/
+theorem boolWeight_restrict_eq (A : Finset (Fin n)) (x : CubeVertex n) :
+    Lane_q_s06_front.boolWeight (fun a : {a : Fin n // a ∈ A} => x a.1) =
+      (A.filter fun a => x a = true).card := by
+  classical
+  symm
+  apply Finset.card_bij (fun a ha => ⟨a, (Finset.mem_filter.mp ha).1⟩)
+  · intro a ha
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp ha).2⟩
+  · intro a ha b hb hab
+    exact congrArg Subtype.val hab
+  · intro a ha
+    exact ⟨a.1, Finset.mem_filter.mpr ⟨a.2, (Finset.mem_filter.mp ha).2⟩, rfl⟩
+
+/-- Independent coarse blocks give the product of the individual bin-probability caps. -/
+theorem coarseBin_box_fraction_le (L : ChunkLayout6 n) (w : BinVector6 n) :
+    ((Finset.univ.filter fun x : CubeVertex n => ∀ i, Nat.dist (L.coarseBin x i).val (w i).val ≤ 10).card : ℝ) /
+      (2 : ℝ) ^ n ≤ (42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount := by
+  classical
+  let Coord (i : Fin coarseChunkCount) := {a : Fin n // a ∈ L.coarseChunks i}
+  let events (i : Fin coarseChunkCount) : Finset (Coord i → Bool) :=
+    Finset.univ.filter (fun f => Nat.dist (L.bin i (Lane_q_s06_front.boolWeight f)).val (w i).val ≤ 10)
+  have hCoordCard (i : Fin coarseChunkCount) :
+      Fintype.card (Coord i) = (L.coarseChunks i).card := by
+    simp [Coord, Fintype.card_coe]
+  have hWeightBound (i : Fin coarseChunkCount) (f : Coord i → Bool) :
+      Lane_q_s06_front.boolWeight f ≤ (L.coarseChunks i).card := by
+    calc
+      _ ≤ Fintype.card (Coord i) := Finset.card_filter_le _ _
+      _ = _ := hCoordCard i
+  have hLayer (i : Fin coarseChunkCount) (q : ℕ) :
+      (Finset.univ.filter fun f : Coord i → Bool => Lane_q_s06_front.boolWeight f = q).card =
+        Nat.choose (L.coarseChunks i).card q := by
+    calc
+      _ = Fintype.card {f : Coord i → Bool // Lane_q_s06_front.boolWeight f = q} := by
+        symm
+        exact Fintype.card_subtype _
+      _ = Nat.choose (Fintype.card (Coord i)) q :=
+        Lane_q_s06_front.boolWeightLayerCard (Coord i) q
+      _ = _ := by rw [hCoordCard]
+  have hFiber (i : Fin coarseChunkCount) (j : Fin (n + 1)) :
+      ((Finset.univ.filter fun f : Coord i → Bool => L.bin i (Lane_q_s06_front.boolWeight f) = j).card : ℝ) ≤
+        (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card := by
+    let layer (q : ℕ) : Finset (Coord i → Bool) :=
+      (Finset.univ.filter fun f => Lane_q_s06_front.boolWeight f = q).filter
+        (fun _ => L.bin i q = j)
+    have hUnion : (Finset.univ.filter fun f : Coord i → Bool => L.bin i (Lane_q_s06_front.boolWeight f) = j) = (Finset.range ((L.coarseChunks i).card + 1)).biUnion layer := by
+      ext f
+      simp only [layer, Finset.mem_filter, Finset.mem_univ, true_and,
+        Finset.mem_biUnion, Finset.mem_range]
+      constructor
+      · intro hf
+        exact ⟨Lane_q_s06_front.boolWeight f, Nat.lt_succ_of_le (hWeightBound i f), rfl, hf⟩
+      · rintro ⟨q, hq, hweight, hbin⟩
+        simpa [hweight] using hbin
+    have hLayerCard (q : ℕ) : (layer q).card =
+        if L.bin i q = j then Nat.choose (L.coarseChunks i).card q else 0 := by
+      by_cases hq : L.bin i q = j <;> simp [layer, hq, hLayer]
+    have hcardNat : (Finset.univ.filter fun f : Coord i → Bool => L.bin i (Lane_q_s06_front.boolWeight f) = j).card ≤
+        ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), (layer q).card := by
+      rw [hUnion]
+      exact Finset.card_biUnion_le
+    have hcardReal : ((Finset.univ.filter fun f : Coord i → Bool => L.bin i (Lane_q_s06_front.boolWeight f) = j).card : ℝ) ≤
+        ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), ((layer q).card : ℝ) := by
+      exact_mod_cast hcardNat
+    calc
+      _ ≤ ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), ((layer q).card : ℝ) := hcardReal
+      _ = ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1),
+          if L.bin i q = j then (Nat.choose (L.coarseChunks i).card q : ℝ) else 0 := by
+        simp only [hLayerCard, Nat.cast_ite, Nat.cast_zero]
+      _ ≤ _ := L.bin_probability i j
+  have hLocal (i : Fin coarseChunkCount) :
+      ((events i).card : ℝ) ≤
+        (42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card := by
+    let J : Finset (Fin (n + 1)) := Finset.univ.filter fun j => Nat.dist j.val (w i).val ≤ 10
+    let fiber (j : Fin (n + 1)) : Finset (Coord i → Bool) :=
+      Finset.univ.filter fun f => L.bin i (Lane_q_s06_front.boolWeight f) = j
+    have hUnion : events i = J.biUnion fiber := by
+      ext f
+      simp only [events, J, fiber, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_biUnion]
+      constructor
+      · intro hf
+        exact ⟨L.bin i (Lane_q_s06_front.boolWeight f), hf, rfl⟩
+      · rintro ⟨j, hj, hf⟩
+        simpa [hf] using hj
+    have hcardNat : (events i).card ≤ ∑ j ∈ J, (fiber j).card := by
+      rw [hUnion]
+      exact Finset.card_biUnion_le
+    have hcardReal : ((events i).card : ℝ) ≤ ∑ j ∈ J, ((fiber j).card : ℝ) := by
+      exact_mod_cast hcardNat
+    have hJ : (J.card : ℝ) ≤ 21 := by
+      exact_mod_cast (Lane_q_s06_front.finDistFilterCard_le (r := 10) (w i))
+    calc
+      _ ≤ ∑ j ∈ J, ((fiber j).card : ℝ) := hcardReal
+      _ ≤ ∑ _j ∈ J, (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card :=
+        Finset.sum_le_sum fun j _ => hFiber i j
+      _ = (J.card : ℝ) * ((2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card) := by simp
+      _ ≤ 21 * ((2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card) :=
+        mul_le_mul_of_nonneg_right hJ (by positivity)
+      _ = _ := by ring
+  have hProduct := Lane_q_s06_front.cubeBlockEventFraction_le L.coarseChunks
+    L.chunks_disjoint.1 Finset.univ events (42 * (n : ℝ) ^ (-(1 / 25 : ℝ)))
+    (by positivity) (fun i _ => hLocal i)
+  have hWeightEq (i : Fin coarseChunkCount) (x : CubeVertex n) :
+      Lane_q_s06_front.boolWeight (fun a : Coord i => x a.1) = L.coarseCount x i :=
+    boolWeight_restrict_eq (L.coarseChunks i) x
+  have hEvent : (Finset.univ.filter fun x : CubeVertex n =>
+      ∀ i ∈ (Finset.univ : Finset (Fin coarseChunkCount)),
+        (fun a : Coord i => x a.1) ∈ events i) =
+      Finset.univ.filter (fun x : CubeVertex n => ∀ i, Nat.dist (L.coarseBin x i).val (w i).val ≤ 10) := by
+    ext x
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, true_implies, events, hWeightEq]
+    rfl
+  rw [hEvent] at hProduct
+  simpa only [Finset.card_univ, Fintype.card_fin] using hProduct
+
+
+/-- A radius-ten box has at most twenty-one bin labels in each independent coarse block. -/
+theorem binBoxNear_card_le (L : ChunkLayout6 n) (x : CubeVertex n) :
+    ((binBoxNear L x).card : ℝ) ≤
+      (42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * Fintype.card (CubeVertex n) := by
+  have h := coarseBin_box_fraction_le L (L.coarseBin x)
+  have hscaled := (div_le_iff₀ (by positivity : 0 < (2 : ℝ) ^ n)).mp h
+  simpa [binBoxNear, OAI.HypercubeRamsey.card_cubeVertex] using hscaled
+
+/-- Near-bin repeats have vanishing cap cost in the n-th moment. -/
+theorem binBoxNear_moment_eventually_small (K : ℝ) :
+    ∀ᶠ n : ℕ in atTop,
+      (n : ℝ) * (42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount *
+        ((n : ℝ) ^ d₂ * K) ≤ 1 := by
+  have hDecay : Tendsto (fun n : ℕ => (n : ℝ) ^ (-((11 : ℝ) - d₂)))
+      atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num [d₂] : (0 : ℝ) < 11 - d₂)).comp
+      tendsto_natCast_atTop_atTop
+  have hlimit : Tendsto (fun n : ℕ => ((42 : ℝ) ^ coarseChunkCount * K) *
+      (n : ℝ) ^ (-((11 : ℝ) - d₂))) atTop (nhds 0) := by
+    simpa using hDecay.const_mul ((42 : ℝ) ^ coarseChunkCount * K)
+  filter_upwards [eventually_ge_atTop 1,
+    hlimit.eventually (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1))] with n hn hsmall
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hPow : ((n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount = (n : ℝ) ^ (-12 : ℝ) := by
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hnPos.le]
+    congr 1
+    norm_num [coarseChunkCount]
+  have hEq : (n : ℝ) * (42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount *
+      ((n : ℝ) ^ d₂ * K) =
+      ((42 : ℝ) ^ coarseChunkCount * K) * (n : ℝ) ^ (-((11 : ℝ) - d₂)) := by
+    rw [mul_pow, hPow]
+    calc
+      _ = ((42 : ℝ) ^ coarseChunkCount * K) *
+          ((n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (-12 : ℝ) * (n : ℝ) ^ d₂) := by
+        rw [Real.rpow_one]
+        ring
+      _ = _ := by
+        rw [← Real.rpow_add hnPos, ← Real.rpow_add hnPos]
+        congr 2
+        ring
+  rw [hEq]
+  exact hsmall.le
+
+/-- The severity-zero interior summand, extended by zero to the entire cube. -/
+def interiorEvenMean (b : X.Base) (x : CubeVertex n) (a : Fin N) : ℝ :=
+  if IsEvenRole x ∧ InteriorZero X x then evenMean X b x a else 0
+
+theorem interiorEvenMean_nonneg (b : X.Base) (x : CubeVertex n) (a : Fin N) :
+    0 ≤ interiorEvenMean X b x a := by
+  unfold interiorEvenMean
+  split_ifs
+  · exact evenMean_nonneg X b x a
+  · exact le_rfl
+
+/-- Full-cube normalization of the regular even means. -/
+def interiorEvenAvg (b : X.Base) (a : Fin N) : ℝ :=
+  (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, interiorEvenMean X b x a
+
+/-- The cap and separated moments imply a simultaneous bound over all labels. -/
+theorem interiorEvenAvg_tail (v : Fin N) (hK : 0 ≤ K) (hn : 10 ≤ n)
+    (hN : (N : ℝ) ≤ (n : ℝ) * 2 ^ n)
+    (hcap : ∀ c, (X.stage2Law v).w c ≠ 0 → ∀ x a,
+      IsEvenRole x → InteriorZero X x → evenMean X (v,c) x a ≤ (n : ℝ) ^ d₂ * K)
+    (hjoint : ∀ (U : Finset (CubeVertex n)),
+      (∀ x ∈ U, InteriorZero X x) →
+      (∀ x ∈ U, ∀ y ∈ U, x ≠ y → Disjoint (evenBinScope X x) (evenBinScope X y)) →
+      ∀ a, (X.stage2Law v).expect (fun c => ∏ x ∈ U, evenMean X (v,c) x a) ≤
+        (2 : ℝ) ^ U.card * (20 * K / c₁) ^ U.card)
+    (hsmall : (n : ℝ) * (42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount *
+      ((n : ℝ) ^ d₂ * K) ≤ 1) :
+    (X.stage2Law v).pr (fun c => ∃ a, 8 * (20 * K / c₁ + 1) < interiorEvenAvg X (v,c) a) ≤
+      1 / 100 := by
+  let P := X.stage2Law v
+  let succ : Finset X.Coarse := Finset.univ.filter fun c => P.w c ≠ 0
+  let Z : CubeVertex n → Fin N → X.Coarse → ℝ := fun x a c => interiorEvenMean X (v,c) x a
+  let d : CubeVertex n → Fin N → ℝ := fun _ _ => 20 * K / c₁
+  have hD : 0 ≤ 20 * K / c₁ := by unfold c₁ c₀; positivity
+  have hmean : ∀ a : Fin N,
+      (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, d x a ≤ 20 * K / c₁ := by
+    intro a
+    simp only [d, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    rw [← mul_assoc, inv_mul_cancel₀ (by positivity : (Fintype.card (CubeVertex n) : ℝ) ≠ 0), one_mul]
+  have hZcap : ∀ x a c, c ∈ succ → Z x a c ≤ (n : ℝ) ^ d₂ * K := by
+    intro x a c hc
+    by_cases hx : IsEvenRole x ∧ InteriorZero X x
+    · change interiorEvenMean X (v,c) x a ≤ _
+      rw [interiorEvenMean, if_pos hx]
+      exact hcap c (Finset.mem_filter.mp hc).2 x a hx.1 hx.2
+    · simp only [Z, interiorEvenMean, if_neg hx]
+      positivity
+  have hJointSeq : ∀ a (m : ℕ), m ≤ n → ∀ s : Fin m → CubeVertex n,
+      (∀ i j : Fin m, j < i → s i ∉ binBoxNear X.g.L (s j)) →
+        ∑ c ∈ succ, P.w c * ∏ i, Z (s i) a c ≤ (2 : ℝ) ^ m * ∏ i, d (s i) a := by
+    intro a m hm s hsep
+    by_cases hAll : ∀ i : Fin m, IsEvenRole (s i) ∧ InteriorZero X (s i)
+    · have hinj : Function.Injective s := by
+        intro i j heq
+        by_contra hne
+        rcases lt_or_gt_of_ne hne with hij | hji
+        · exact hsep j i hij (by simpa [heq] using binBoxNear_self X.g.L (s i))
+        · exact hsep i j hji (by simpa [heq] using binBoxNear_self X.g.L (s j))
+      let U : Finset (CubeVertex n) := Finset.univ.image s
+      have hcard : U.card = m := by
+        dsimp [U]
+        rw [Finset.card_image_of_injective _ hinj]
+        simp
+      have hinterior : ∀ x ∈ U, InteriorZero X x := by
+        intro x hx
+        obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hx
+        exact (hAll i).2
+      have hdis : ∀ x ∈ U, ∀ y ∈ U, x ≠ y →
+          Disjoint (evenBinScope X x) (evenBinScope X y) := by
+        intro x hx y hy hxy
+        obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hx
+        obtain ⟨j, _, rfl⟩ := Finset.mem_image.mp hy
+        have hij : i ≠ j := fun h => hxy (congrArg s h)
+        rcases lt_or_gt_of_ne hij with hij | hji
+        · exact evenBinScope_disjoint_of_not_near X (s i) (s j) (hsep j i hij)
+        · exact (evenBinScope_disjoint_of_not_near X (s j) (s i) (hsep i j hji)).symm
+      have hprod (c : X.Coarse) : ∏ i, Z (s i) a c = ∏ x ∈ U, evenMean X (v,c) x a := by
+        rw [Finset.prod_image hinj.injOn]
+        apply Finset.prod_congr rfl
+        intro i _
+        simp [Z, interiorEvenMean, hAll i]
+      calc
+        _ = ∑ c ∈ succ, P.w c * ∏ x ∈ U, evenMean X (v,c) x a := by
+          apply Finset.sum_congr rfl
+          intro c _
+          rw [hprod c]
+        _ ≤ P.expect (fun c => ∏ x ∈ U, evenMean X (v,c) x a) := by
+          unfold FinProb.expect
+          apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _)
+          intro c _ _
+          exact mul_nonneg (P.nonneg c) (Finset.prod_nonneg fun x _ => evenMean_nonneg X (v,c) x a)
+        _ ≤ (2 : ℝ) ^ U.card * (20 * K / c₁) ^ U.card := hjoint U hinterior hdis a
+        _ = _ := by simp only [hcard, d, Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+    · obtain ⟨i, hi⟩ := not_forall.mp hAll
+      have hzero (c : X.Coarse) : ∏ j : Fin m, Z (s j) a c = 0 := by
+        apply Finset.prod_eq_zero (Finset.mem_univ i)
+        simp [Z, interiorEvenMean, hi]
+      simp only [hzero, mul_zero, Finset.sum_const_zero]
+      exact mul_nonneg (by positivity) (Finset.prod_nonneg fun _ _ => hD)
+  have ht := scatteredMoments_union_labels P succ Z
+    (fun x a c => interiorEvenMean_nonneg X (v,c) x a)
+    ((n : ℝ) ^ d₂ * K) (by positivity) hZcap
+    (binBoxNear X.g.L) (binBoxNear_self X.g.L)
+    ((42 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount) (by positivity)
+    (binBoxNear_card_le X.g.L) n (by omega) 2 (20 * K / c₁) (by norm_num) hD
+    d (fun _ _ => hD) hmean hJointSeq hsmall
+    (by simpa only [Fintype.card_fin] using hN)
+  have hsum : (∑ c, if c ∈ succ ∧ ∃ a, 8 * (20 * K / c₁ + 1) < interiorEvenAvg X (v,c) a
+      then P.w c else 0) =
+      P.pr (fun c => ∃ a, 8 * (20 * K / c₁ + 1) < interiorEvenAvg X (v,c) a) := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro c _
+    by_cases hc : P.w c = 0 <;> simp [succ, hc]
+  have ht' : P.pr (fun c => ∃ a, 8 * (20 * K / c₁ + 1) < interiorEvenAvg X (v,c) a) ≤
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    rw [← hsum]
+    convert ht using 1
+    apply Finset.sum_congr rfl
+    intro c _
+    have he : (c ∈ succ ∧ ∃ a, 8 * (20 * K / c₁ + 1) < interiorEvenAvg X (v,c) a) ↔
+        (c ∈ succ ∧ ∃ a, 4 * 2 * (20 * K / c₁ + 1) <
+          (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, Z x a c) := by
+      simp only [Z, interiorEvenAvg, show (4 : ℝ) * 2 = 8 by norm_num]
+    by_cases hc : c ∈ succ ∧ ∃ a, 8 * (20 * K / c₁ + 1) < interiorEvenAvg X (v,c) a
+    · rw [if_pos hc, if_pos (he.mp hc)]
+    · rw [if_neg hc, if_neg (mt he.mpr hc)]
+  exact ht'.trans (Lane_q_s06_loads.nat_two_pow_union_tail hn)
+
+/-- Parity normalization doubles the full-cube interior average. -/
+theorem interiorEvenAvg_parity (b : X.Base) (a : Fin N) (hn : 1 ≤ n) :
+    ((evenRoleSet n).card : ℝ)⁻¹ * ∑ x ∈ evenRoleSet n,
+      (if InteriorZero X x then evenMean X b x a else 0) = 2 * interiorEvenAvg X b a := by
+  have hsum : (∑ x ∈ evenRoleSet n, if InteriorZero X x then evenMean X b x a else 0) =
+      ∑ x : CubeVertex n, interiorEvenMean X b x a := by
+    rw [evenRoleSet, Finset.sum_filter]
+    apply Finset.sum_congr rfl
+    intro x _
+    by_cases he : IsEvenRole x <;> by_cases hi : InteriorZero X x <;> simp [interiorEvenMean, he, hi]
+  have hcard : (evenRoleSet n).card = 2 ^ (n - 1) := (parity_class_card (by omega : 0 < n)).1
+  have hcardR : ((evenRoleSet n).card : ℝ) = (2 : ℝ) ^ (n - 1) := by exact_mod_cast hcard
+  have hpow : (2 : ℝ) ^ n = 2 * (2 : ℝ) ^ (n - 1) := by
+    conv_lhs => rw [show n = n - 1 + 1 by omega]
+    rw [pow_succ]
+    ring
+  rw [hsum, hcardR]
+  unfold interiorEvenAvg
+  rw [OAI.HypercubeRamsey.card_cubeVertex]
+  push_cast
+  rw [hpow]
+  field_simp
+
 
 end
 end HypercubeRamsey.Lane_sol_s06_loadD

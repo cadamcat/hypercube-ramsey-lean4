@@ -1227,11 +1227,16 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     (Lane_sol_s06_loadD.outside_interiorZero_eventually_small K)
   obtain ⟨nCharge, hCharge⟩ := Filter.eventually_atTop.1
     Lane_sol_s06_loadD.coarse_touch_charge_eventually_small
-  refine ⟨max (max n₀ nRare) nCharge, C₀, ?_⟩
+  obtain ⟨nMoment, hMoment⟩ := Filter.eventually_atTop.1
+    (Lane_sol_s06_loadD.binBoxNear_moment_eventually_small K)
+  refine ⟨max (max (max n₀ nRare) nCharge) (max nMoment 10), C₀, ?_⟩
   intro n N E G M X hLarge hTag hDom hCoarse v hv hGood
   have hnStages : n₀ ≤ n := by have := hLarge.1; omega
   have hnRare : nRare ≤ n := by have := hLarge.1; omega
   have hnCharge : nCharge ≤ n := by have := hLarge.1; omega
+  have hnMoment : nMoment ≤ n := by have := hLarge.1; omega
+  have hn10 : 10 ≤ n := by have := hLarge.1; omega
+  have hK : 0 ≤ K := hadm.2.2.2.le
   have hStage := hStages n N E G M X
     ⟨hnStages, hLarge.2⟩
   have hNumerical := hRare n hnRare
@@ -1250,9 +1255,7 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       X.phiEven b x a ≤ (n : ℝ) ^ (d₂ * (X.evenType x).u) * K := by
     apply Lane_sol_s06_loadA.gatedTagMixture_hiddenMean_cap X hDom b (X.evenType x) _ hSupp a
     exact Finset.mem_image.mpr ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hx⟩, rfl⟩
-  have hOutside (c : X.Coarse) (hc : (X.stage2Law v).w c ≠ 0) (a : Fin N) :
-      (X.evenRoles.card : ℝ)⁻¹ * ∑ x ∈ X.evenRoles,
-        (if Lane_sol_s06_loadD.InteriorZero X x then 0 else X.phiEven (v, c) x a) ≤ 2 := by
+  have hBaseSupp (c : X.Coarse) (hc : (X.stage2Law v).w c ≠ 0) : X.BaseSupp (v,c) := by
     have hStage3Supp : ∃ z, (X.stage3Law (v, c)).w z ≠ 0 := by
       by_contra h
       push_neg at h
@@ -1264,8 +1267,11 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     have hHistWeight : X.histLaw.w ((v, c), z) ≠ 0 := by
       change (X.stage1Law.w v * (X.stage2Law v).w c) * (X.stage3Law (v, c)).w z ≠ 0
       exact mul_ne_zero (mul_ne_zero hv hc) hz
-    have hBaseSupp := (hStage.2.2.2 ((v, c), z) hHistWeight).1
-    exact Lane_sol_s06_loadD.outside_evenMean_average_le_two X hDom (v, c) hBaseSupp
+    exact (hStage.2.2.2 ((v, c), z) hHistWeight).1
+  have hOutside (c : X.Coarse) (hc : (X.stage2Law v).w c ≠ 0) (a : Fin N) :
+      (X.evenRoles.card : ℝ)⁻¹ * ∑ x ∈ X.evenRoles,
+        (if Lane_sol_s06_loadD.InteriorZero X x then 0 else X.phiEven (v, c) x a) ≤ 2 := by
+    exact Lane_sol_s06_loadD.outside_evenMean_average_le_two X hDom (v, c) (hBaseSupp c hc)
       hNumerical.1 hNumerical.2.1 hNumerical.2.2 a
   have hJoint (U : Finset (CubeVertex n))
       (hInterior : ∀ x ∈ U, Lane_sol_s06_loadD.InteriorZero X x)
@@ -1280,8 +1286,59 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       (X.g.L.flippable x) (X.g.L.severity x) X.J).key.2 = .interior
     rw [Lane_sol_s06_loadD.makeType_key]
     simp [ChunkLayout6.key, (hInterior x hx).1]
-  -- Remaining: near-bin scattered moments and the simultaneous label estimate.
-  sorry
+  have hRegularCap (c : X.Coarse) (hc : (X.stage2Law v).w c ≠ 0)
+      (x : CubeVertex n) (a : Fin N) (hx : IsEvenRole x)
+      (hi : Lane_sol_s06_loadD.InteriorZero X x) :
+      Lane_sol_s06_loadD.evenMean X (v,c) x a ≤ (n : ℝ) ^ d₂ * K := by
+    have hcap := hPhiCap (v,c) x hx
+      (Lane_sol_s06_loadD.baseSupp_keysSupp X (v,c) (hBaseSupp c hc) _) a
+    rw [Lane_sol_s06_loadD.evenType_u_zero X x hi.2, Nat.cast_one, mul_one] at hcap
+    exact hcap
+  have hN : (N : ℝ) ≤ (n : ℝ) * 2 ^ n := by exact_mod_cast hLarge.2.2
+  have hTail := Lane_sol_s06_loadD.interiorEvenAvg_tail X v hK hn10 hN
+    hRegularCap hJoint (hMoment n hnMoment)
+  have hAvg (c : X.Coarse) (hc : (X.stage2Law v).w c ≠ 0) (a : Fin N) :
+      X.phiAvg (v,c) a ≤ 2 * Lane_sol_s06_loadD.interiorEvenAvg X (v,c) a + 2 := by
+    have hsplit : X.phiAvg (v,c) a =
+        (X.evenRoles.card : ℝ)⁻¹ * ∑ x ∈ X.evenRoles,
+          (if Lane_sol_s06_loadD.InteriorZero X x then X.phiEven (v,c) x a else 0) +
+        (X.evenRoles.card : ℝ)⁻¹ * ∑ x ∈ X.evenRoles,
+          (if Lane_sol_s06_loadD.InteriorZero X x then 0 else X.phiEven (v,c) x a) := by
+      unfold Ctx6.phiAvg
+      rw [← mul_add, ← Finset.sum_add_distrib]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro x _
+      by_cases hi : Lane_sol_s06_loadD.InteriorZero X x <;> simp [hi]
+    have hparity : (X.evenRoles.card : ℝ)⁻¹ * ∑ x ∈ X.evenRoles,
+        (if Lane_sol_s06_loadD.InteriorZero X x then X.phiEven (v,c) x a else 0) =
+        2 * Lane_sol_s06_loadD.interiorEvenAvg X (v,c) a :=
+      Lane_sol_s06_loadD.interiorEvenAvg_parity X (v,c) a hNumerical.1
+    rw [hsplit, hparity]
+    exact add_le_add (le_refl _) (hOutside c hc a)
+  have hHuge : (400 : ℝ) ≤ (2 : ℝ) ^ 700 := by
+    calc
+      _ ≤ (2 : ℝ) ^ 9 := by norm_num
+      _ ≤ (2 : ℝ) ^ 700 := pow_le_pow_right₀ (by norm_num) (by omega)
+  have hThreshold : 2 * (8 * (20 * K / c₁ + 1)) + 2 ≤ Clb K := by
+    have hsmall : 2 * (8 * (20 * K / c₁ + 1)) + 2 ≤ 400 * (K + 1) / c₁ := by
+      norm_num [c₁, c₀]
+      linarith
+    apply hsmall.trans
+    unfold Clb
+    exact div_le_div_of_nonneg_right
+      (mul_le_mul_of_nonneg_right hHuge (by linarith)) (by norm_num [c₁, c₀])
+  have hEvent : ∀ c, (X.stage2Law v).w c ≠ 0 →
+      (∃ a, Clb K < X.phiAvg (v,c) a) →
+      ∃ a, 8 * (20 * K / c₁ + 1) < Lane_sol_s06_loadD.interiorEvenAvg X (v,c) a := by
+    intro c hc hbad
+    obtain ⟨a, ha⟩ := hbad
+    by_contra hnot
+    push_neg at hnot
+    have hb := hAvg c hc a
+    have ht := hnot a
+    linarith
+  exact (pr_mono_supp6 (X.stage2Law v) hEvent).trans hTail
 
 /-- L6.1l (hidden, 06:751–757): scattered moments of the `f_x` under stage 3; removing the constraints touching
 separated key lists lets their means integrate to the `φ_x`; on admitted histories `f_x` is the tag mixture. -/

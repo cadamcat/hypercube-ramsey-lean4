@@ -914,6 +914,44 @@ private theorem heightPath9_segmentFromMember {P : Params9} {hc : HeightChoice9 
         · simp
         · exact List.mem_cons_of_mem _ (hsub z hz)
 
+private theorem heightPath9_has_intermediate_level {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hstepUnit : ∀ x y, bad x y → heightMetric9 x y ≤ 1)
+    (hp : HeightPath9 bad l start) :
+    ∃ endpoint, l.head? = some endpoint ∧
+      ∀ j, min start.2.val endpoint.2.val ≤ j → j ≤ max start.2.val endpoint.2.val →
+        ∃ x ∈ l, x.2.val = j := by
+  induction hp with
+  | singleton x =>
+      refine ⟨x, by simp, ?_⟩
+      intro j hlow hhigh
+      have hj : j = x.2.val := by omega
+      exact ⟨x, by simp, hj.symm⟩
+  | @cons head next rest start hstep htail ih =>
+      obtain ⟨tailHead, htailHead, htailRange⟩ := ih
+      have htailHead' : tailHead = next := by simpa using htailHead.symm
+      subst tailHead
+      refine ⟨head, by simp, ?_⟩
+      intro j hlow hhigh
+      by_cases hjeq : j = head.2.val
+      · exact ⟨head, by simp, hjeq.symm⟩
+      · have hstepMetric := hstepUnit next head hstep
+        have hlevels : Nat.dist next.2.val head.2.val ≤ 1 :=
+          (Nat.le_max_left _ _).trans hstepMetric
+        have hstepLevels : next.2.val ≤ head.2.val + 1 ∧
+            head.2.val ≤ next.2.val + 1 := by
+          rcases le_total next.2.val head.2.val with h | h
+          · rw [Nat.dist_eq_sub_of_le h] at hlevels
+            constructor <;> omega
+          · rw [Nat.dist_eq_sub_of_le_right h] at hlevels
+            constructor <;> omega
+        rcases hstepLevels with ⟨hnextHead, hheadNext⟩
+        have hlow' : min start.2.val next.2.val ≤ j := by omega
+        have hhigh' : j ≤ max start.2.val next.2.val := by omega
+        obtain ⟨x, hx, hxlevel⟩ := htailRange j hlow' hhigh'
+        exact ⟨x, List.mem_cons_of_mem _ hx, hxlevel⟩
+
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)
     {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}

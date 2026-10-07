@@ -11,7 +11,7 @@ namespace HypercubeRamsey.S13
 
 open Filter
 
-/-- D13.1: each measured scale is a dyadic integer. -/
+/-- D13.1 (sections/13, lines 15–32): each measured scale is a dyadic integer. -/
 theorem gScale_isDyadic (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) : IsDyadic (gScale κ T k RX RY) := by
   sorry
@@ -20,7 +20,7 @@ theorem qScale_isDyadic (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) : IsDyadic (qScale κ T k RX RY) := by
   sorry
 
-/-- D13.1: an empty finite witness set gives the prescribed scale `1`. -/
+/-- D13.1 (sections/13, lines 15–32): an empty finite witness set gives scale `1`. -/
 theorem gScale_eq_one_of_no_witness (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k)))
     (h : ∀ j, 1 ≤ j → ¬ BiasWitness κ T k RX RY (2 ^ j)) :
@@ -33,21 +33,21 @@ theorem qScale_eq_one_of_no_witness (κ : CConsts) (T : Stage) (k : ℕ)
     qScale κ T k RX RY = 1 := by
   sorry
 
-/-- D13.1(i): a nontrivial measured bias scale is itself witnessed. -/
+/-- D13.1(i) (sections/13, lines 15–32): a nontrivial measured bias scale is witnessed. -/
 theorem gScale_witness (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k)))
     (h : 2 ≤ gScale κ T k RX RY) :
     BiasWitness κ T k RX RY (gScale κ T k RX RY) := by
   sorry
 
-/-- D13.1(i): a nontrivial measured cluster scale has a witness in some orientation. -/
+/-- D13.1(i) (sections/13, lines 15–32): a nontrivial cluster scale is witnessed in some orientation. -/
 theorem qScale_witness (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k)))
     (h : 2 ≤ qScale κ T k RX RY) :
     ∃ o : Bool, CluScaleWitness κ T k RX RY (qScale κ T k RX RY) o := by
   sorry
 
-/-- D13.1(ii): no larger in-range dyadic bias budget is witnessed. -/
+/-- D13.1(ii) (sections/13, lines 15–32): no larger in-range dyadic bias budget is witnessed. -/
 theorem gScale_absent (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) (b : ℕ)
     (hb : IsDyadic b) (hscale : gScale κ T k RX RY < b)
@@ -55,7 +55,7 @@ theorem gScale_absent (κ : CConsts) (T : Stage) (k : ℕ)
     ¬ BiasWitness κ T k RX RY b := by
   sorry
 
-/-- D13.1(ii): no larger in-range dyadic cluster budget is witnessed in either orientation. -/
+/-- D13.1(ii) (sections/13, lines 15–32): no larger in-range cluster budget is witnessed. -/
 theorem qScale_absent (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) (b : ℕ)
     (hb : IsDyadic b) (hscale : qScale κ T k RX RY < b)
@@ -63,7 +63,7 @@ theorem qScale_absent (κ : CConsts) (T : Stage) (k : ℕ)
     ¬ ∃ o : Bool, CluScaleWitness κ T k RX RY b o := by
   sorry
 
-/-- D13.1(iii): both measured scales are monotone under enlarging the residual sides. -/
+/-- D13.1(iii) (sections/13, lines 15–32): scales are monotone under enlarging residual sides. -/
 theorem residual_scales_mono (κ : CConsts) (T : Stage) (k : ℕ)
     {RX RX' RY RY' : Finset (Fin (T.S.N k))}
     (hX : RX ⊆ RX') (hY : RY ⊆ RY') :
@@ -71,19 +71,20 @@ theorem residual_scales_mono (κ : CConsts) (T : Stage) (k : ℕ)
       qScale κ T k RX RY ≤ qScale κ T k RX' RY' := by
   sorry
 
-/-- D13.1(iv): bias witnesses are invariant under swapping the stage and its two sides. -/
+/-- D13.1(iv) (sections/13, lines 15–32): bias witnesses transfer under stage swap. -/
 theorem biasWitness_swap_iff (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) (b : ℕ) :
     BiasWitness κ T.swap k RY RX b ↔ BiasWitness κ T k RX RY b := by
   sorry
 
-/-- D13.1(iv): cluster witnesses transfer under swapping the stage, sides, and orientation. -/
+/-- D13.1(iv) (sections/13, lines 15–32): cluster witnesses transfer under stage and orientation swap. -/
 theorem clusterWitness_swap_iff (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) (b : ℕ) :
     (∃ o, CluScaleWitness κ T.swap k RY RX b o) ↔
       (∃ o, CluScaleWitness κ T k RX RY b o) := by
   sorry
 
+/-- D13.1 (sections/13, lines 15–32): specification interface consumed downstream. -/
 /- D13.1's specification is kept as a named interface so downstream nodes can
 consume all of its clauses together. -/
 structure ResidualScaleSpec : Prop where

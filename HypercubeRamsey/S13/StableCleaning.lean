@@ -11,7 +11,7 @@ open Filter
 open Classical
 open scoped BigOperators
 
-/-- L13.4a: a law below a width budget has a large uniform approximant that
+/-- L13.4a (sections/13, lines 244–249): a capped law has a large uniform approximant that
 preserves every finite family of degree and correlation tests to `n⁻²`. -/
 def UniformApproximantStatement : Prop :=
   ∀ (N J n : ℕ) (π : Law N) (B W : ℝ),
@@ -29,7 +29,7 @@ theorem uniform_approximant (hSampling : LawSubsampleStatement) :
     UniformApproximantStatement := by
   sorry
 
-/-- The degree-trimming output for L13.4b. -/
+/-- L13.4b (sections/13, lines 251–257): own-patch degree-trimming output. -/
 structure OwnDegreeData {κ : CConsts} {T : Stage} {k : ℕ}
     (𝒯 : Tiling κ T k) (i : Fin 𝒯.m)
     (π : Fin 𝒯.m → Law (T.S.N k)) where
@@ -38,7 +38,7 @@ structure OwnDegreeData {κ : CConsts} {T : Stage} {k : ℕ}
   own : ∀ π', NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
     ∀ x ∈ C, OwnDegOK 𝒯 i (π' i) x
 
-/-- The clique-trimming output for L13.4c, retaining the degree data. -/
+/-- L13.4c (sections/13, lines 259–265): clique-trimming output retaining degree data. -/
 structure OwnCliqueData {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {i : Fin 𝒯.m}
     {π : Fin 𝒯.m → Law (T.S.N k)} (D : OwnDegreeData 𝒯 i π) where
@@ -47,7 +47,7 @@ structure OwnCliqueData {κ : CConsts} {T : Stage} {k : ℕ}
   noClique : ∀ π', NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
     NoClique (T.S.E k) 𝒯.c C (π' i).w κ.θ (𝒯.Q i)
 
-/-- Other-patch degree and row-tail output for L13.4d. -/
+/-- L13.4d (sections/13, lines 267–276): other-patch degree and row-tail output. -/
 structure OtherPatchData {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {i : Fin 𝒯.m}
     {π : Fin 𝒯.m → Law (T.S.N k)}
@@ -63,7 +63,7 @@ structure OtherPatchData {κ : CConsts} {T : Stage} {k : ℕ}
     ∀ j, ∀ x ∈ cleaned,
       RowTailRelaxed (T.S.E k) 𝒯.c (π' j).w (𝒯.P i).X (T.S.n k) κ.ξ x
 
-/-- L13.4e subnode: codegree survives deleting fewer than an `a` fraction of
+/-- L13.4e (sections/13, lines 273–278): codegree survives deleting fewer than an `a` fraction of
 the first support. -/
 theorem cleaned_codegree_bound {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} (h𝒯 : Tiling.Valid 𝒯)
@@ -75,7 +75,7 @@ theorem cleaned_codegree_bound {κ : CConsts} {T : Stage} {k : ℕ}
         (∑ x ∈ C, hit (T.S.E k) 𝒯.c x y * hit (T.S.E k) 𝒯.c x y') / C.card := by
   sorry
 
-/-- L13.4e: assemble the four cleaned properties from the degree, clique,
+/-- L13.4e (sections/13, lines 273–278): assemble cleaned properties from degree, clique,
 other-patch, and codegree nodes. -/
 theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k}
@@ -119,26 +119,27 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
     · intro _
       exact hCodegree hCluster
 
-/-- L13.4b: own-patch degree trimming; the direct, cluster, and bounded
+/-- L13.4b (sections/13, lines 251–257): own-patch degree trimming; direct, cluster, and bounded
 thresholds are exactly those in `OwnDegOK`. -/
 theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2))
-    (hApprox : UniformApproximantStatement) :
+    (hApprox : UniformApproximantStatement) (hScales : ResidualScaleSpec) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
       ∀ i (π : Fin 𝒯.m → Law (T.S.N k)), InputOK 𝒯 h𝒯 π →
         Nonempty (OwnDegreeData 𝒯 i π) := by
   sorry
 
-/-- L13.4c: remove large high-correlation cliques without destroying the own
+/-- L13.4c (sections/13, lines 259–265): remove large high-correlation cliques without destroying own
 degree margins. -/
 theorem own_patch_clique_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
+    (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2))
+    (hApprox : UniformApproximantStatement) (hScales : ResidualScaleSpec) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
       ∀ i (π : Fin 𝒯.m → Law (T.S.N k)), InputOK 𝒯 h𝒯 π →
         ∀ D : OwnDegreeData 𝒯 i π, Nonempty (OwnCliqueData D) := by
   sorry
 
-/-- L13.4d: clean all other-patch degree outliers and enforce the relaxed row
+/-- L13.4d (sections/13, lines 267–276): clean other-patch outliers and enforce relaxed row
 tails on the fixed original first support. -/
 theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
@@ -148,7 +149,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           Nonempty (OtherPatchData D C) := by
   sorry
 
-/-- L13.4: stable cleaning at every valid tiling and every allowed input profile. -/
+/-- L13.4 (sections/13, lines 218–281): stable cleaning at every valid tiling and allowed input profile. -/
 theorem stable_cleaning (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
@@ -159,8 +160,9 @@ theorem stable_cleaning (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           (𝒯.mode.isCluster → ∀ π',
             NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) → CleanProps 𝒯 i π' C) := by
   have hD := own_patch_degree_trim κ hκ T hInit hDeep
-    (uniform_approximant random_subset_lemma.2)
+    (uniform_approximant random_subset_lemma.2) d13_1_residual_scale_specification
   have hC := own_patch_clique_trim κ hκ T hDeep
+    (uniform_approximant random_subset_lemma.2) d13_1_residual_scale_specification
   have hO := other_patch_degrees_and_tails κ hκ T hInit hDeep
   filter_upwards [hD, hC, hO] with k hkD hkC hkO
   intro 𝒯 h𝒯 i π hInput

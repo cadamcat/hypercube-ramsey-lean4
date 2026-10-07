@@ -12,7 +12,7 @@ open Filter
 open Classical
 open scoped BigOperators
 
-/-- The first-side and second-side sets of a direct patch extracted from a bias witness. -/
+/-- P13.3a (sections/13, lines 141–147): direct patch data extracted from a bias witness. -/
 def DirectPatchData (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) (g : ℕ) : Prop :=
   ∃ (c : Colour) (X Y : Finset (Fin (T.S.N k))),
@@ -21,7 +21,7 @@ def DirectPatchData (κ : CConsts) (T : Stage) (k : ℕ)
     ∀ x ∈ X, (1 / 2 : ℝ) + g / (4 * T.S.n k) ≤
       deg (T.S.E k) c (Law.unifCore Y hY).w x
 
-/-- L13.0, first form: an exact-size uniform subsample preserves a finite family
+/-- L13.0 (sections/13, lines 147–148): exact-size uniform subsampling preserves a finite family
 of bounded averages. -/
 def UniformSubsampleStatement : Prop :=
   ∀ (N J m n : ℕ) (V : Finset (Fin N)) (f : Fin J → Fin N → ℝ),
@@ -31,7 +31,7 @@ def UniformSubsampleStatement : Prop :=
       ∀ j, |(∑ y ∈ V', f j y) / m - (∑ y ∈ V, f j y) / V.card| ≤
         (n : ℝ) ^ (-2 : ℝ)
 
-/-- L13.0, second form: a capped law admits a large uniform approximant for
+/-- L13.0 (sections/13, lines 244–249): a capped law admits a large uniform approximant for
 finitely many bounded tests. -/
 def LawSubsampleStatement : Prop :=
   ∀ (N J n : ℕ) (π : Law N) (t : ℝ) (f : Fin J → Fin N → ℝ),
@@ -41,11 +41,11 @@ def LawSubsampleStatement : Prop :=
       (V.card : ℝ) ≥ t / 2 ∧
       ∀ j, |(∑ y ∈ V, f j y) / V.card - π.expect (f j)| ≤ (n : ℝ) ^ (-2 : ℝ)
 
-/-- L13.0: the two finite random-subset guarantees used in Sections 13.3 and 13.4. -/
+/-- L13.0 (sections/13, lines 147–148, 244–249): the random-subset guarantees used in Sections 13.3 and 13.4. -/
 theorem random_subset_lemma : UniformSubsampleStatement ∧ LawSubsampleStatement := by
   sorry
 
-/-- L13.3a: direct bias extraction from a witness and absence at twice its budget. -/
+/-- L13.3a (sections/13, lines 141–147): direct bias extraction from a witness and absence at twice its budget. -/
 theorem direct_patch_from_bias (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hSampling : UniformSubsampleStatement) :
     ∀ (k : ℕ) (RX RY : Finset (Fin (T.S.N k))) (g : ℕ),
@@ -54,7 +54,7 @@ theorem direct_patch_from_bias (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       ¬ BiasWitness κ T k RX RY (2 * g) → DirectPatchData κ T k RX RY g := by
   sorry
 
-/-- L13.3b: cluster extraction leaves common bins with diagonal codegree margin. -/
+/-- P13.3b (sections/13, lines 148, 151–155): common cluster bins with a diagonal codegree margin. -/
 def ClusterPatchData (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool) : Prop :=
   ∃ (X Y : Finset (Fin (T.S.N k))) (d m : ℕ)
@@ -69,7 +69,7 @@ def ClusterPatchData (κ : CConsts) (T : Stage) (k : ℕ)
         (∑ x ∈ X, hit (if o then transposeRel (T.S.E k) else T.S.E k) true x y *
           hit (if o then transposeRel (T.S.E k) else T.S.E k) true x y') / X.card
 
-/-- L13.3b: a cluster-scale witness yields equal sides partitioned into bins. -/
+/-- P13.3b (sections/13, lines 148, 151–155): a cluster witness yields equal sides partitioned into bins. -/
 theorem cluster_patch_from_witness (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0) (hSampling : LawSubsampleStatement)
     (hClean : ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
@@ -81,7 +81,7 @@ theorem cluster_patch_from_witness (κ : CConsts) (hκ : κ.Admissible) (T : Sta
       ClusterPatchData κ T k RX RY q o := by
   sorry
 
-/-- L13.3c: the bounded case truncates two large residual sides to a common size. -/
+/-- P13.3c (sections/13, line 140): truncate two large residual sides to a common size. -/
 theorem bounded_patch (κ : CConsts) (T : Stage) (k : ℕ)
     (RX RY : Finset (Fin (T.S.N k)))
     (hX : (T.S.N k : ℝ) / 2 ≤ RX.card) (hY : (T.S.N k : ℝ) / 2 ≤ RY.card) :
@@ -90,7 +90,8 @@ theorem bounded_patch (κ : CConsts) (T : Stage) (k : ℕ)
       (1 / 400 : ℝ) * T.S.N k ≤ X.card := by
   sorry
 
-/-- The extraction data which does not depend on the prefix words or on the
+/-- D13.T/P13.3d (sections/13, lines 52–126, 128–159): extraction data independent of prefix allocation. -/
+/- The extraction data which does not depend on the prefix words or on the
 allocation estimates. This is the output of the repeated patch passes. -/
 structure ExtractionData {κ : CConsts} {T : Stage} {k : ℕ}
     (𝒯 : Tiling κ T k) : Prop where
@@ -165,14 +166,14 @@ private theorem extractionData_withWords {κ : CConsts} {T : Stage} {k : ℕ}
     cases h𝒯
     constructor <;> assumption
 
-/-- One uniform mode/orientation/colour family of extracted patches. -/
+/-- P13.3d–e (sections/13, lines 128–168): one uniform mode/orientation/colour family. -/
 structure PassFamily (κ : CConsts) (T : Stage) (k : ℕ) where
   orientation : Bool
   tiling : Tiling κ (T.orient orientation) k
   extracted : ExtractionData tiling
   mass_sum : ∑ i, (tiling.P i).M = tiling.S
 
-/-- The output of all extraction passes, grouped by their finite type. -/
+/-- P13.3d (sections/13, lines 128–159): extraction pass families grouped by finite type. -/
 structure PassCollection (κ : CConsts) (T : Stage) (k : ℕ) where
   families : List (PassFamily κ T k)
   families_mass : ∀ f ∈ families, ∑ i, (f.tiling.P i).M = f.tiling.S
@@ -184,7 +185,7 @@ structure PassCollection (κ : CConsts) (T : Stage) (k : ℕ) where
     ((families.filter fun f => f.tiling.mode ≠ .bounded).map
       (fun f => f.tiling.S)).sum * 10 ≥ T.S.N k
 
-/-- The rounded family after P13.3f, with its dyadic weights summing to one. -/
+/-- P13.3f (sections/13, lines 170–182): rounded family with dyadic weights summing to one. -/
 structure RoundedFamily (κ : CConsts) (T : Stage) (k : ℕ) where
   orientation : Bool
   tiling : Tiling κ (T.orient orientation) k
@@ -198,14 +199,14 @@ structure RoundedFamily (κ : CConsts) (T : Stage) (k : ℕ) where
     (2 : ℝ) ^ (-((tiling.P i).ℓ : ℤ)) < 2 * (tiling.P i).M / tiling.S
   dyadic_sum : ∑ i, (2 : ℝ) ^ (-((tiling.P i).ℓ : ℤ)) = 1
 
-/-- Complete prefix-code property for assigned words. -/
+/-- P13.3g (sections/13, lines 170–182): complete prefix-code property for assigned words. -/
 def PrefixCodeComplete {κ : CConsts} {T : Stage} {k : ℕ}
     (R : RoundedFamily κ T k)
     (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k)) : Prop :=
   ∀ v : CubePos ((T.orient R.orientation).S.n k), ∃! i,
     v ∈ prefixLeaf (R.tiling.P i).ℓ (w i)
 
-/-- P13.3h: parity counts, crossing flips, and internal-coordinate fit. -/
+/-- P13.3h (sections/13, lines 184–204): parity counts, crossing flips, and internal-coordinate fit. -/
 structure PrefixGeometry {κ : CConsts} {T : Stage} {k : ℕ}
     (R : RoundedFamily κ T k)
     (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k)) : Prop where
@@ -302,7 +303,7 @@ private def withPrefixWords {κ : CConsts} {T : Stage} {k : ℕ}
   dyadic_mass_upper := R.dyadic_mass_upper
   dyadic_sum := R.dyadic_sum
 
-/-- P13.3i: the scale and gain inequalities required by the later sections. -/
+/-- P13.3i (sections/13, lines 151–155, 205–215): scale and gain inequalities required by later sections. -/
 def AllocationBounds {κ : CConsts} {T : Stage} {k : ℕ}
     (𝒯 : Tiling κ T k) : Prop :=
   ∀ i, (max (𝒯.P i).h (𝒯.P i).ℓ : ℝ) < (T.S.n k : ℝ) ^ κ.ι ∧
@@ -310,7 +311,7 @@ def AllocationBounds {κ : CConsts} {T : Stage} {k : ℕ}
       ((𝒯.P i).ℓ : ℝ) ≤ 𝒯.gain i / (1000 * κ.u) ∧
       Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) ≤ 𝒯.gain i / (1000 * κ.u))
 
-/-- The remaining P13.3i estimates used to choose the later low and high modes. -/
+/-- P13.3i (sections/13, lines 151–155, 205–215): estimates selecting later low and high modes. -/
 def ScaleRegimeFacts {κ : CConsts} {T : Stage} {k : ℕ}
     (𝒯 : Tiling κ T k) : Prop :=
   (∀ i, 𝒯.mode.isCluster →
@@ -323,7 +324,7 @@ def ScaleRegimeFacts {κ : CConsts} {T : Stage} {k : ℕ}
   (𝒯.mode = .highSmall → ∀ i,
     ((𝒯.P i).h : ℝ) < Real.rpow ((𝒯.P i).d : ℝ) (1 / 40 : ℝ))
 
-/-- P13.3a–c: residual-scale specification gives the extraction pass predicates. -/
+/-- P13.3d (sections/13, lines 128–159): residual scales and patch nodes drive repeated extraction passes. -/
 theorem extraction_passes (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
@@ -349,7 +350,7 @@ theorem extraction_passes (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     ∀ᶠ k in atTop, Nonempty (PassCollection κ T k) := by
   sorry
 
-/-- P13.3e: select one bounded family or a nonbounded type carrying at least
+/-- P13.3e (sections/13, lines 159–168): select one bounded family or a nonbounded type carrying at least
 one twentieth of the extracted mass. -/
 theorem type_selection (κ : CConsts) (T : Stage) (k : ℕ)
     (families : List (PassFamily κ T k))
@@ -365,7 +366,7 @@ theorem type_selection (κ : CConsts) (T : Stage) (k : ℕ)
        (f.tiling.mode ≠ .bounded ∧ (1 / 200 : ℝ) * T.S.N k ≤ f.tiling.S)) := by
   sorry
 
-/-- P13.3f: round dyadic masses upward and retain the first complete segment. -/
+/-- P13.3f (sections/13, lines 170–182): round dyadic masses upward and retain the first complete segment. -/
 theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)
     (f : PassFamily κ T k)
     (hExtracted : ExtractionData f.tiling)
@@ -376,21 +377,21 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
       R.tiling.c = f.tiling.c := by
   sorry
 
-/-- P13.3g: Kraft's equality gives a complete prefix code at the rounded lengths. -/
+/-- P13.3g (sections/13, lines 170–182): Kraft's equality gives a complete prefix code. -/
 theorem kraft_prefix_code (κ : CConsts) (T : Stage) (k : ℕ)
     (R : RoundedFamily κ T k) :
     ∃ w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k),
       PrefixCodeComplete R w := by
   sorry
 
-/-- P13.3h: prefix geometry gives role counts and makes crossings visit distinct leaves. -/
+/-- P13.3h (sections/13, lines 184–204): prefix geometry gives role counts and distinct crossing leaves. -/
 theorem allocation_geometry (κ : CConsts) (T : Stage) (k : ℕ)
     (R : RoundedFamily κ T k)
     (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k))
     (hCode : PrefixCodeComplete R w) : PrefixGeometry R w := by
   sorry
 
-/-- P13.3i: the fixed thresholds make every prefix and internal dimension fit
+/-- P13.3i (sections/13, lines 151–155, 205–215): fixed thresholds fit prefixes and internal dimensions
 inside the assigned gain budget. -/
 theorem scale_bookkeeping (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)
     (R : RoundedFamily κ T k) :
@@ -447,7 +448,7 @@ private theorem tiling_valid_of_parts {κ : CConsts} {T : Stage} {k : ℕ}
   change ∃! i, v ∈ prefixLeaf (R.tiling.P i).ℓ (w i)
   exact hPrefix v
 
-/-- P13.3: extraction and allocation in the selected mode, orientation and colour. -/
+/-- P13.3 (sections/13, lines 52–216): extraction and allocation in one selected mode, orientation, and colour. -/
 theorem extraction_allocation (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)

@@ -314,4 +314,73 @@ theorem eventually_log_rpow_le_linear {s ε : ℝ} (hs : 0 < s) (hε : 0 < ε) :
   rw [Real.norm_of_nonneg hleft, Real.norm_of_nonneg hright] at h
   exact h
 
+theorem log_eight_le_seven : Real.log (8 : ℝ) ≤ 7 := by
+  have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 8)
+  linarith
+
+theorem log_two_ge_half : (1 / 2 : ℝ) ≤ Real.log 2 := by
+  have h := Real.log_two_gt_d9
+  norm_num at h ⊢
+  linarith
+
+theorem log_two_le_one : Real.log (2 : ℝ) ≤ 1 := by
+  have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+  linarith
+
+theorem square_add_one_le_four_mul_sq {x : ℝ} (hx : 1 ≤ x) :
+    (x + 1) ^ 2 ≤ 4 * x ^ 2 := by
+  nlinarith [sq_nonneg (x - 1)]
+
+theorem comparison_exp_argument {m a l : ℝ} (hm : 100 ≤ m)
+    (ha : a ≤ m / 1000) (hl : l ≤ m / 1000) :
+    Real.log 8 + 2 * a + 2 * l ≤ m * Real.log 2 := by
+  have h8 := log_eight_le_seven
+  have h2 := log_two_ge_half
+  nlinarith
+
+theorem capacity_exp_argument {m c l b : ℝ} (hm : 100 ≤ m)
+    (hc : c ≤ l) (hl : l ≤ m / 1000) (hb : b ≤ m / 1000) :
+    c + 201 * l + b ≤ m * Real.log 2 := by
+  have h2 := log_two_ge_half
+  have hc' : c ≤ m / 1000 := hc.trans hl
+  have hmid : m / 1000 + 201 * (m / 1000) + m / 1000 ≤ m / 2 := by
+    nlinarith
+  calc
+    c + 201 * l + b ≤ m / 1000 + 201 * (m / 1000) + m / 1000 := by gcongr
+    _ ≤ m / 2 := hmid
+    _ ≤ m * Real.log 2 := by
+      rw [div_eq_mul_inv]
+      exact mul_le_mul_of_nonneg_left (by simpa [one_div] using h2)
+        (le_trans (by norm_num) hm)
+
+theorem two_pow_le_of_log {n h : ℕ} (hn : 2 ≤ n)
+    (hh : (h : ℝ) ≤ Real.log (n : ℝ)) :
+    (2 : ℝ) ^ h ≤ (n : ℝ) := by
+  have hlog2nonneg : 0 ≤ Real.log (2 : ℝ) :=
+    Real.log_nonneg (by norm_num : (1 : ℝ) ≤ 2)
+  have hlognnonneg : 0 ≤ Real.log (n : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast (show 1 ≤ n by omega))
+  have hmul : (h : ℝ) * Real.log 2 ≤ Real.log (n : ℝ) := by
+    calc
+      (h : ℝ) * Real.log 2 ≤ Real.log (n : ℝ) * Real.log 2 :=
+        mul_le_mul_of_nonneg_right hh hlog2nonneg
+      _ ≤ Real.log (n : ℝ) := by
+        nlinarith [mul_le_mul_of_nonneg_left log_two_le_one hlognnonneg]
+  have hlogpow : Real.log ((2 : ℝ) ^ h) = (h : ℝ) * Real.log 2 := by
+    simpa [mul_comm] using (Real.log_pow (2 : ℝ) h)
+  calc
+    (2 : ℝ) ^ h = Real.exp ((h : ℝ) * Real.log 2) := by
+      symm
+      calc
+        Real.exp ((h : ℝ) * Real.log 2) = Real.exp (Real.log ((2 : ℝ) ^ h)) :=
+          congrArg Real.exp hlogpow.symm
+        _ = (2 : ℝ) ^ h := Real.exp_log (pow_pos (by norm_num : (0 : ℝ) < 2) _)
+    _ ≤ Real.exp (Real.log (n : ℝ)) := Real.exp_le_exp.mpr hmul
+    _ = (n : ℝ) := Real.exp_log (by positivity)
+
+theorem rpow_ac_eq_pow_200 {κ : CConsts} (hκ : κ.Admissible) (n : ℕ) :
+    Real.rpow (n : ℝ) κ.Ac = (n : ℝ) ^ 200 := by
+  rw [hκ.Ac_eq]
+  simpa [Real.rpow_natCast]
+
 end HypercubeRamsey.Lane_q_s16_geom

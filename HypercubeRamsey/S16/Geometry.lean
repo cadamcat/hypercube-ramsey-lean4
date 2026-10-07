@@ -77,6 +77,7 @@ structure LowModeScaleFacts {κ : CConsts} {T : Stage} {k : ℕ}
     2 * (Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 10) + 1) ^ 2 ≤
       Fintype.card (Bin PT.tiling i)
 
+set_option maxHeartbeats 400000
 /-- Fixed constants precede every dimension, host size, and tiling.
 The dyadic mass allocation in `Tiling.Valid` supplies the host capacity;
 its lower bound on `S` is essential here (16:106–107). -/
@@ -86,7 +87,484 @@ theorem low_geometry_thresholds {κ : CConsts} (hκ : κ.Admissible) :
         (Q : LowModeQuantFacts hκ (PT := PT) K16),
         n₀ ≤ T.S.n k → C₀ * (2 : ℝ) ^ T.S.n k ≤ T.S.N k →
         LowModeScaleFacts hκ Q := by
-  sorry
+  classical
+  have hPpos : 0 < κ.P := by
+    have h := hκ.P_big.2
+    rw [hκ.Ac_eq] at h
+    omega
+  have hRpos : 0 < κ.R := by
+    rw [hκ.R_eq]
+    exact pow_pos hPpos _
+  have hA0pos : 0 < κ.A0 := by
+    exact lt_of_lt_of_le (mul_pos (by norm_num : (0 : ℝ) < 10 ^ 6)
+      (by exact_mod_cast hRpos)) hκ.A0_big
+  have hKpos : 0 < κ.Kcell := by
+    rcases hκ.bucket with ⟨_, _, _, _, hθ⟩
+    exact lt_of_lt_of_le (by positivity) hκ.Kcell_big
+  let C0 : ℝ := 800 * (6 * κ.Kcell + 2)
+  have hC0 : 0 < C0 := by dsimp [C0]; positivity
+  have hC0large : 800 ≤ C0 := by dsimp [C0]; nlinarith [hKpos]
+  let L : ℕ → ℝ := fun m => Real.log (m : ℝ)
+  let Good : ℕ → Prop := fun m =>
+    4 ≤ m ∧
+    2 ≤ κ.A0 * L m ∧
+    4 * κ.A0 * L m * (L m + 1) ≤ (m : ℝ) ∧
+    2 * m ≤ ⌊Real.rpow (m : ℝ) κ.Ac⌋₊ ∧
+    (1 + ∑ j ∈ Finset.range (⌈Real.rpow (L m) 3⌉₊ + 1),
+      (Nat.choose m j : ℝ)) ≤ Real.exp (Real.rpow (L m) 5) ∧
+    κ.Kcell * (m : ℝ) ^ 200 + 1 ≤ Real.exp (Real.rpow (L m) 10) ∧
+    2 * (Real.exp (Real.rpow (L m) 10) + 1) ^ 2 * (m : ℝ) ^ 2 ≤ (2 : ℝ) ^ m ∧
+    2 * (κ.Kcell + 1) * (m : ℝ) ^ 201 * Real.exp (Real.rpow (L m) 5) ≤
+      (2 : ℝ) ^ m
+  have hLog1 : ∀ᶠ m : ℕ in Filter.atTop, L m ≤ (m : ℝ) / 1000 := by
+    filter_upwards [Lane_q_s16_geom.eventually_log_rpow_le_linear
+      (s := 1) (ε := 1 / 1000) (by norm_num) (by norm_num)] with m hm
+    simpa [L, div_eq_mul_inv, mul_comm, mul_left_comm, mul_assoc] using hm
+  have hLog2 : ∀ᶠ m : ℕ in Filter.atTop,
+      Real.rpow (L m) 2 ≤ (m : ℝ) / (8 * κ.A0) := by
+    filter_upwards [Lane_q_s16_geom.eventually_log_rpow_le_linear
+      (s := 2) (ε := 1 / (8 * κ.A0)) (by norm_num)
+      (div_pos (by norm_num) (mul_pos (by norm_num) hA0pos))] with m hm
+    simpa [L, div_eq_mul_inv, mul_comm, mul_left_comm, mul_assoc] using hm
+  have hLog5 : ∀ᶠ m : ℕ in Filter.atTop,
+      Real.rpow (L m) 5 ≤ (m : ℝ) / 1000 := by
+    filter_upwards [Lane_q_s16_geom.eventually_log_rpow_le_linear
+      (s := 5) (ε := 1 / 1000) (by norm_num) (by norm_num)] with m hm
+    simpa [L, div_eq_mul_inv, mul_comm, mul_left_comm, mul_assoc] using hm
+  have hLog10 : ∀ᶠ m : ℕ in Filter.atTop,
+      Real.rpow (L m) 10 ≤ (m : ℝ) / 1000 := by
+    filter_upwards [Lane_q_s16_geom.eventually_log_rpow_le_linear
+      (s := 10) (ε := 1 / 1000) (by norm_num) (by norm_num)] with m hm
+    simpa [L, div_eq_mul_inv, mul_comm, mul_left_comm, mul_assoc] using hm
+  let Bcut : ℝ := max (4 : ℝ)
+    (max (2 / κ.A0) (Real.log (κ.Kcell + 1) + 1))
+  have hLogLarge : ∀ᶠ m : ℕ in Filter.atTop, Bcut ≤ L m := by
+    have hlog :=
+      (Real.tendsto_log_atTop.comp tendsto_natCast_atTop_atTop).eventually_ge_atTop Bcut
+    simpa [L] using hlog
+  have hNatLarge : ∀ᶠ m : ℕ in Filter.atTop, 100 ≤ m :=
+    Filter.eventually_ge_atTop 100
+  have hGood : ∀ᶠ m : ℕ in Filter.atTop, Good m := by
+    filter_upwards [hLog1, hLog2, hLog5, hLog10, hLogLarge, hNatLarge]
+      with m hlog1 hlog2 hlog5 hlog10 hlogLarge hm
+    let l := L m
+    have hl4 : 4 ≤ l := by
+      exact (le_max_left (4 : ℝ) _).trans hlogLarge
+    have hlA0 : 2 / κ.A0 ≤ l := by
+      exact (le_max_left _ _).trans ((le_max_right (4 : ℝ) _).trans hlogLarge)
+    have hlK : Real.log (κ.Kcell + 1) + 1 ≤ l := by
+      exact (le_max_right _ _).trans ((le_max_right (4 : ℝ) _).trans hlogLarge)
+    have hlpos : 0 < l := by linarith
+    have hmpos : (0 : ℝ) < (m : ℝ) := by exact_mod_cast (by omega : 0 < m)
+    have hmreal : (100 : ℝ) ≤ (m : ℝ) := by exact_mod_cast hm
+    have hlog1' : l ≤ (m : ℝ) / 1000 := by simpa [l] using hlog1
+    have hlog2' : l ^ 2 ≤ (m : ℝ) / (8 * κ.A0) := by
+      simpa [l, Real.rpow_natCast] using hlog2
+    have hlog5' : l ^ 5 ≤ (m : ℝ) / 1000 := by
+      simpa [l, Real.rpow_natCast] using hlog5
+    have hlog10' : l ^ 10 ≤ (m : ℝ) / 1000 := by
+      simpa [l, Real.rpow_natCast] using hlog10
+    unfold Good
+    refine ⟨by omega, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · have hA : 0 < κ.A0 := hA0pos
+      have hmul := mul_le_mul_of_nonneg_left hlA0 hA.le
+      have hcancel : κ.A0 * (2 / κ.A0) = 2 := by field_simp [ne_of_gt hA]
+      nlinarith [hmul, hcancel]
+    · have hLplus : l + 1 ≤ 2 * l := by linarith
+      have hcoef : 0 ≤ 4 * κ.A0 * l := by positivity
+      have hstep := mul_le_mul_of_nonneg_left hLplus hcoef
+      have hsq : 8 * κ.A0 * l ^ 2 ≤ (m : ℝ) := by
+        have hmul := mul_le_mul_of_nonneg_left hlog2' (show 0 ≤ 8 * κ.A0 by positivity)
+        have hcancel : 8 * κ.A0 * ((m : ℝ) / (8 * κ.A0)) = (m : ℝ) := by
+          field_simp [ne_of_gt hA0pos]
+        exact hmul.trans_eq hcancel
+      nlinarith [hstep, hsq]
+    · have hmOne : (1 : ℝ) ≤ (m : ℝ) := by exact_mod_cast (by omega : 1 ≤ m)
+      have hpow200 : (m : ℝ) ^ 2 ≤ Real.rpow (m : ℝ) κ.Ac := by
+        rw [hκ.Ac_eq]
+        simpa [Real.rpow_natCast] using
+          (Real.rpow_le_rpow_of_exponent_le hmOne (by norm_num : (2 : ℝ) ≤ 200))
+      have hpow200' : (m : ℝ) ^ 2 ≤ Real.rpow (m : ℝ) 200 := by
+        simpa [hκ.Ac_eq] using hpow200
+      have hfloor : m ^ 2 ≤ ⌊Real.rpow (m : ℝ) κ.Ac⌋₊ := by
+        rw [hκ.Ac_eq]
+        apply (Nat.le_floor_iff' (Nat.ne_of_gt (Nat.pow_pos (by omega : 0 < m)))).2
+        exact_mod_cast hpow200'
+      have htwo : 2 * m ≤ m ^ 2 := by nlinarith
+      exact htwo.trans hfloor
+    · let r := ⌈Real.rpow l 3⌉₊
+      have hrCast : (r : ℝ) ≤ l ^ 3 + 1 := by
+        have hceil : r ≤ ⌊Real.rpow l 3⌋₊ + 1 := Nat.ceil_le_floor_add_one _
+        have hceilR : (r : ℝ) ≤ (⌊Real.rpow l 3⌋₊ : ℝ) + 1 := by exact_mod_cast hceil
+        have hfloor : (⌊Real.rpow l 3⌋₊ : ℝ) ≤ Real.rpow l 3 := by
+          have hfloor' : (⌊l ^ 3⌋₊ : ℝ) ≤ l ^ 3 := Nat.floor_le (by positivity)
+          simpa [Real.rpow_natCast] using hfloor'
+        have hceilR' : (r : ℝ) ≤ Real.rpow l 3 + 1 := by
+          linarith [hceilR, hfloor]
+        simpa [Real.rpow_natCast] using hceilR'
+      have hsumNat :
+          (∑ j ∈ Finset.range (r + 1), Nat.choose m j) ≤ (r + 1) * m ^ r := by
+        calc
+          (∑ j ∈ Finset.range (r + 1), Nat.choose m j) ≤
+              ∑ j ∈ Finset.range (r + 1), m ^ r := by
+                apply Finset.sum_le_sum
+                intro j hj
+                have hjle : j ≤ r := Nat.lt_succ_iff.mp (Finset.mem_range.mp hj)
+                exact (Nat.choose_le_pow m j).trans
+                  (Nat.pow_le_pow_right (by omega : 1 ≤ m) hjle)
+          _ = (r + 1) * m ^ r := by simp
+      have hsumReal :
+          (∑ j ∈ Finset.range (r + 1), (Nat.choose m j : ℝ)) ≤
+            ((r + 1 : ℕ) : ℝ) * (m : ℝ) ^ r := by exact_mod_cast hsumNat
+      have hL3 : (1 : ℝ) ≤ l ^ 3 := by nlinarith [hl4]
+      have hLminus : (3 : ℝ) ≤ l - 1 := by linarith
+      have hLgap : (3 : ℝ) ≤ l ^ 3 * (l - 1) := by
+        calc
+          3 = 1 * 3 := by norm_num
+          _ ≤ l ^ 3 * (l - 1) := mul_le_mul hL3 hLminus (by norm_num) (by positivity)
+      have hL4id : l ^ 4 = l ^ 3 + l ^ 3 * (l - 1) := by ring
+      have hRplus : (r : ℝ) + 2 ≤ l ^ 4 := by
+        have := hL4id
+        linarith [hrCast, hLgap]
+      have hLogR : Real.log ((r : ℝ) + 2) ≤ l ^ 4 := by
+        have h := Real.log_le_sub_one_of_pos (by positivity : (0 : ℝ) < (r : ℝ) + 2)
+        linarith [h, hRplus]
+      have hRL : (r : ℝ) * l ≤ l ^ 4 + l := by
+        exact (mul_le_mul_of_nonneg_right hrCast (by positivity)).trans_eq (by ring)
+      have hL5 : 4 * l ^ 4 ≤ l ^ 5 := by
+        have hprod : 0 ≤ l ^ 4 * (l - 4) :=
+          mul_nonneg (by positivity) (by linarith [hl4])
+        nlinarith [hprod]
+      have hExpArg : Real.log ((r : ℝ) + 2) + (r : ℝ) * l ≤ l ^ 5 := by
+        have hle : l ^ 4 + (l ^ 4 + l) ≤ 3 * l ^ 4 := by nlinarith [hl4]
+        linarith [hLogR, hRL, hL5, hle]
+      have hexpNatPow (p : ℕ) : Real.exp ((p : ℝ) * l) = (m : ℝ) ^ p := by
+        have hlogpow : Real.log ((m : ℝ) ^ p) = (p : ℝ) * l := by
+          simpa [l, L, mul_comm] using (Real.log_pow (m : ℝ) p)
+        calc
+          Real.exp ((p : ℝ) * l) = Real.exp (Real.log ((m : ℝ) ^ p)) :=
+            congrArg Real.exp hlogpow.symm
+          _ = (m : ℝ) ^ p := Real.exp_log (pow_pos hmpos _)
+      have hmOne : (1 : ℝ) ≤ (m : ℝ) := by exact_mod_cast (by omega : 1 ≤ m)
+      have hmPowOne : (1 : ℝ) ≤ (m : ℝ) ^ r := one_le_pow₀ hmOne
+      have hCountCoarse :
+          1 + ((r + 1 : ℕ) : ℝ) * (m : ℝ) ^ r ≤
+            ((r : ℝ) + 2) * (m : ℝ) ^ r := by
+        calc
+          1 + ((r + 1 : ℕ) : ℝ) * (m : ℝ) ^ r ≤
+              (m : ℝ) ^ r + ((r + 1 : ℕ) : ℝ) * (m : ℝ) ^ r := by nlinarith [hmPowOne]
+          _ = ((r : ℝ) + 2) * (m : ℝ) ^ r := by push_cast; ring
+      have hExpEq : Real.exp (Real.log ((r : ℝ) + 2) + (r : ℝ) * l) =
+          ((r : ℝ) + 2) * (m : ℝ) ^ r := by
+        calc
+          Real.exp (Real.log ((r : ℝ) + 2) + (r : ℝ) * l) =
+              Real.exp (Real.log ((r : ℝ) + 2)) * Real.exp ((r : ℝ) * l) := by
+                rw [Real.exp_add]
+          _ = ((r : ℝ) + 2) * (m : ℝ) ^ r := by
+                rw [Real.exp_log (by positivity), hexpNatPow r]
+      calc
+        1 + ∑ j ∈ Finset.range (r + 1), (Nat.choose m j : ℝ) ≤
+            1 + ((r + 1 : ℕ) : ℝ) * (m : ℝ) ^ r := by
+              simpa [add_comm] using add_le_add_left hsumReal (1 : ℝ)
+        _ ≤ ((r : ℝ) + 2) * (m : ℝ) ^ r := hCountCoarse
+        _ = Real.exp (Real.log ((r : ℝ) + 2) + (r : ℝ) * l) := hExpEq.symm
+        _ ≤ Real.exp (Real.rpow l 5) := by
+          apply Real.exp_le_exp.mpr
+          simpa [Real.rpow_natCast] using hExpArg
+    · have hL9 : (202 : ℝ) ≤ l ^ 9 := by
+        calc
+          202 ≤ 4 ^ 9 := by norm_num
+          _ ≤ l ^ 9 := by gcongr
+      have hL10large : (202 : ℝ) * l ≤ Real.rpow l 10 := by
+        calc
+          202 * l ≤ l ^ 9 * l := mul_le_mul_of_nonneg_right hL9 (by positivity)
+          _ = l ^ 10 := by ring
+          _ = Real.rpow l 10 := (Real.rpow_natCast l 10).symm
+      have hLogK : Real.log (κ.Kcell + 1) ≤ l - 1 := by linarith [hlK]
+      have hLogScope : Real.log (κ.Kcell + 1) + 200 * l ≤ Real.rpow l 10 := by
+        have h201 : Real.log (κ.Kcell + 1) + 200 * l ≤ 201 * l := by linarith [hLogK]
+        have h202 : 201 * l ≤ 202 * l := by nlinarith [hlpos]
+        exact h201.trans (h202.trans hL10large)
+      have hexpNatPow (p : ℕ) : Real.exp ((p : ℝ) * l) = (m : ℝ) ^ p := by
+        have hlogpow : Real.log ((m : ℝ) ^ p) = (p : ℝ) * l := by
+          simpa [l, L, mul_comm] using (Real.log_pow (m : ℝ) p)
+        calc
+          Real.exp ((p : ℝ) * l) = Real.exp (Real.log ((m : ℝ) ^ p)) :=
+            congrArg Real.exp hlogpow.symm
+          _ = (m : ℝ) ^ p := Real.exp_log (pow_pos hmpos _)
+      have hscopeExp : (κ.Kcell + 1) * (m : ℝ) ^ 200 ≤ Real.exp (Real.rpow l 10) := by
+        calc
+          (κ.Kcell + 1) * (m : ℝ) ^ 200 =
+              Real.exp (Real.log (κ.Kcell + 1) + (200 : ℝ) * l) := by
+                calc
+                  (κ.Kcell + 1) * (m : ℝ) ^ 200 =
+                      (κ.Kcell + 1) * Real.exp (200 * l) := by
+                        rw [(hexpNatPow 200).symm]
+                        change (κ.Kcell + 1) * Real.exp ((200 : ℝ) * l) =
+                          (κ.Kcell + 1) * Real.exp ((200 : ℝ) * l)
+                        norm_num
+                  _ = Real.exp (Real.log (κ.Kcell + 1)) * Real.exp (200 * l) := by
+                        rw [Real.exp_log (by positivity)]
+                  _ = Real.exp (Real.log (κ.Kcell + 1) + 200 * l) := by rw [← Real.exp_add]
+          _ ≤ Real.exp (Real.rpow l 10) := Real.exp_le_exp.mpr hLogScope
+      have hpoly : κ.Kcell * (m : ℝ) ^ 200 + 1 ≤
+          (κ.Kcell + 1) * (m : ℝ) ^ 200 := by
+        have hmOne : (1 : ℝ) ≤ (m : ℝ) := by exact_mod_cast (by omega : 1 ≤ m)
+        have hmPowOne : (1 : ℝ) ≤ (m : ℝ) ^ 200 := one_le_pow₀ hmOne
+        calc
+          κ.Kcell * (m : ℝ) ^ 200 + 1 ≤
+              κ.Kcell * (m : ℝ) ^ 200 + (m : ℝ) ^ 200 := by gcongr
+          _ = (κ.Kcell + 1) * (m : ℝ) ^ 200 := by ring
+      exact hpoly.trans hscopeExp
+    · have hCompArg : Real.log 8 + 2 * Real.rpow l 10 + 2 * l ≤
+          (m : ℝ) * Real.log 2 := by
+        have hpow : Real.rpow l 10 ≤ (m : ℝ) / 1000 := by
+          simpa [Real.rpow_natCast] using hlog10'
+        exact Lane_q_s16_geom.comparison_exp_argument hmreal hpow hlog1'
+      have hexpSquare : (Real.exp (Real.rpow l 10)) ^ 2 =
+          Real.exp (2 * Real.rpow l 10) := by
+        rw [← Real.exp_nat_mul]
+        change Real.exp ((2 : ℝ) * Real.rpow l 10) =
+          Real.exp (2 * Real.rpow l 10)
+        rfl
+      have hTwoPow : Real.exp ((m : ℝ) * Real.log 2) = (2 : ℝ) ^ m := by
+        have hlogPow : Real.log ((2 : ℝ) ^ m) = (m : ℝ) * Real.log 2 := by
+          simpa [mul_comm] using (Real.log_pow (2 : ℝ) m)
+        calc
+          Real.exp ((m : ℝ) * Real.log 2) = Real.exp (Real.log ((2 : ℝ) ^ m)) :=
+            congrArg Real.exp hlogPow.symm
+          _ = (2 : ℝ) ^ m := Real.exp_log (pow_pos (by norm_num : (0 : ℝ) < 2) _)
+      have hexpNatPow (p : ℕ) : Real.exp ((p : ℝ) * l) = (m : ℝ) ^ p := by
+        have hlogpow : Real.log ((m : ℝ) ^ p) = (p : ℝ) * l := by
+          simpa [l, L, mul_comm] using (Real.log_pow (m : ℝ) p)
+        calc
+          Real.exp ((p : ℝ) * l) = Real.exp (Real.log ((m : ℝ) ^ p)) :=
+            congrArg Real.exp hlogpow.symm
+          _ = (m : ℝ) ^ p := Real.exp_log (pow_pos hmpos _)
+      have hCompEq : 8 * Real.exp (2 * Real.rpow l 10) * (m : ℝ) ^ 2 =
+          Real.exp (Real.log 8 + 2 * Real.rpow l 10 + 2 * l) := by
+        have h8mul : 8 * Real.exp (2 * Real.rpow l 10) =
+            Real.exp (Real.log 8) * Real.exp (2 * Real.rpow l 10) := by
+          rw [Real.exp_log (by norm_num : (0 : ℝ) < 8)]
+        have hpow2 : (m : ℝ) ^ 2 = Real.exp (2 * l) := (hexpNatPow 2).symm
+        calc
+          8 * Real.exp (2 * Real.rpow l 10) * (m : ℝ) ^ 2 =
+              (Real.exp (Real.log 8) * Real.exp (2 * Real.rpow l 10)) * Real.exp (2 * l) := by
+                calc
+                  8 * Real.exp (2 * Real.rpow l 10) * (m : ℝ) ^ 2 =
+                      (8 * Real.exp (2 * Real.rpow l 10)) * (m : ℝ) ^ 2 := by ring
+                  _ = (Real.exp (Real.log 8) * Real.exp (2 * Real.rpow l 10)) * (m : ℝ) ^ 2 :=
+                        congrArg (fun x : ℝ => x * (m : ℝ) ^ 2) h8mul
+                  _ = _ := by rw [hpow2]
+          _ = Real.exp (Real.log 8 + 2 * Real.rpow l 10 + 2 * l) := by
+                rw [← Real.exp_add, ← Real.exp_add]
+      have hExpGe : (1 : ℝ) ≤ Real.exp (Real.rpow l 10) := by
+        apply Real.one_le_exp_iff.mpr
+        exact Real.rpow_nonneg (le_of_lt hlpos) 10
+      have hCompCore : 2 * (Real.exp (Real.rpow l 10) + 1) ^ 2 * (m : ℝ) ^ 2 ≤ (2 : ℝ) ^ m := by
+        calc
+          2 * (Real.exp (Real.rpow l 10) + 1) ^ 2 * (m : ℝ) ^ 2 ≤
+              8 * Real.exp (2 * Real.rpow l 10) * (m : ℝ) ^ 2 := by
+                have hsq : (Real.exp (Real.rpow l 10) + 1) ^ 2 ≤
+                    4 * (Real.exp (Real.rpow l 10)) ^ 2 :=
+                  Lane_q_s16_geom.square_add_one_le_four_mul_sq hExpGe
+                calc
+                  2 * (Real.exp (Real.rpow l 10) + 1) ^ 2 * (m : ℝ) ^ 2 ≤
+                      2 * (4 * (Real.exp (Real.rpow l 10)) ^ 2) * (m : ℝ) ^ 2 := by
+                    exact mul_le_mul_of_nonneg_right
+                      (mul_le_mul_of_nonneg_left hsq (by norm_num)) (sq_nonneg (m : ℝ))
+                  _ = 8 * Real.exp (2 * Real.rpow l 10) * (m : ℝ) ^ 2 := by
+                    rw [hexpSquare]
+                    ring
+          _ = Real.exp (Real.log 8 + 2 * Real.rpow l 10 + 2 * l) := hCompEq
+          _ ≤ Real.exp ((m : ℝ) * Real.log 2) := Real.exp_le_exp.mpr hCompArg
+          _ = (2 : ℝ) ^ m := hTwoPow
+      exact hCompCore
+    · have hLogC : Real.log (2 * (κ.Kcell + 1)) ≤ l := by
+        rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (by positivity : κ.Kcell + 1 ≠ 0)]
+        have hlog2 : Real.log 2 ≤ 1 :=
+          (Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)).trans_eq (by norm_num)
+        linarith [hlK]
+      have hCapArg : Real.log (2 * (κ.Kcell + 1)) + 201 * l + Real.rpow l 5 ≤
+          (m : ℝ) * Real.log 2 := by
+        have hLog1' : l ≤ (m : ℝ) / 1000 := by simpa [l] using hlog1
+        have hLog5' : Real.rpow l 5 ≤ (m : ℝ) / 1000 := by simpa [l] using hlog5
+        exact Lane_q_s16_geom.capacity_exp_argument hmreal hLogC hLog1' hLog5'
+      have hexpNatPow (p : ℕ) : Real.exp ((p : ℝ) * l) = (m : ℝ) ^ p := by
+        have hlogpow : Real.log ((m : ℝ) ^ p) = (p : ℝ) * l := by
+          simpa [l, L, mul_comm] using (Real.log_pow (m : ℝ) p)
+        calc
+          Real.exp ((p : ℝ) * l) = Real.exp (Real.log ((m : ℝ) ^ p)) :=
+            congrArg Real.exp hlogpow.symm
+          _ = (m : ℝ) ^ p := Real.exp_log (pow_pos hmpos _)
+      have hTwoPow : Real.exp ((m : ℝ) * Real.log 2) = (2 : ℝ) ^ m := by
+        have hlogPow : Real.log ((2 : ℝ) ^ m) = (m : ℝ) * Real.log 2 := by
+          simpa [mul_comm] using (Real.log_pow (2 : ℝ) m)
+        calc
+          Real.exp ((m : ℝ) * Real.log 2) = Real.exp (Real.log ((2 : ℝ) ^ m)) :=
+            congrArg Real.exp hlogPow.symm
+          _ = (2 : ℝ) ^ m := Real.exp_log (pow_pos (by norm_num : (0 : ℝ) < 2) _)
+      have hCapEq :
+          2 * (κ.Kcell + 1) * (m : ℝ) ^ 201 * Real.exp (Real.rpow l 5) =
+            Real.exp (Real.log (2 * (κ.Kcell + 1)) + 201 * l + Real.rpow l 5) := by
+        have hCoeff : 2 * (κ.Kcell + 1) =
+            Real.exp (Real.log (2 * (κ.Kcell + 1))) :=
+          (Real.exp_log (by positivity)).symm
+        have hpow201 : (m : ℝ) ^ 201 = Real.exp (201 * l) :=
+          (hexpNatPow 201).symm
+        calc
+          2 * (κ.Kcell + 1) * (m : ℝ) ^ 201 * Real.exp (Real.rpow l 5) =
+              (2 * (κ.Kcell + 1)) * Real.exp (201 * l) * Real.exp (Real.rpow l 5) := by
+                rw [hpow201]
+          _ = Real.exp (Real.log (2 * (κ.Kcell + 1))) * Real.exp (201 * l) *
+                Real.exp (Real.rpow l 5) := by
+                  exact congrArg (fun x : ℝ => x * Real.exp (201 * l) * Real.exp (Real.rpow l 5)) hCoeff
+          _ = Real.exp (Real.log (2 * (κ.Kcell + 1)) + 201 * l + Real.rpow l 5) := by
+                rw [← Real.exp_add, ← Real.exp_add]
+      calc
+        2 * (κ.Kcell + 1) * (m : ℝ) ^ 201 * Real.exp (Real.rpow l 5) =
+            Real.exp (Real.log (2 * (κ.Kcell + 1)) + 201 * l + Real.rpow l 5) := hCapEq
+        _ ≤ Real.exp ((m : ℝ) * Real.log 2) := Real.exp_le_exp.mpr hCapArg
+        _ = (2 : ℝ) ^ m := hTwoPow
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp hGood
+  refine ⟨n₀, C0, hC0, ?_⟩
+  intro T k PT K16 Q hn hhost
+  let n := T.S.n k
+  have hGoodN : Good n := by
+    apply hn₀
+    simpa [n] using hn
+  obtain ⟨hn4, hclass, hcoset, hsliceBase, hcoloring, hscope, hcomparison, hcapacity⟩ := hGoodN
+  let topH : ℕ := ⌈Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)⌉₊
+  let inner : Finset (Fin n) := Finset.univ.biUnion fun i => PT.tiling.Icoord i
+  have hlogn : 1 ≤ Real.log (n : ℝ) := by
+    have hlog4 : 1 ≤ Real.log (4 : ℝ) := by
+      have hlog4eq : Real.log (4 : ℝ) = 2 * Real.log 2 := by
+        rw [show (4 : ℝ) = 2 ^ 2 by norm_num, Real.log_pow]
+        norm_num
+      rw [hlog4eq]
+      nlinarith [Lane_q_s16_geom.log_two_ge_half]
+    have hnreal : (4 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn4
+    exact hlog4.trans (Real.log_le_log (by norm_num) hnreal)
+  have hpowlog : Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ) ≤ Real.log (n : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hlogn (by norm_num : (1 / 10 : ℝ) ≤ 1)
+    simpa using h
+  have htopbound : (topH : ℝ) ≤ Real.log (n : ℝ) + 1 := by
+    have hceilNat : topH ≤ ⌊Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)⌋₊ + 1 := by
+      simpa [topH] using Nat.ceil_le_floor_add_one
+        (Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ))
+    have hrpow_nonneg : 0 ≤ Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ) :=
+      Real.rpow_nonneg (by linarith [hlogn]) _
+    have hfloor : (⌊Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)⌋₊ : ℝ) ≤
+        Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ) :=
+      Nat.floor_le hrpow_nonneg
+    calc
+      (topH : ℝ) ≤ (⌊Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)⌋₊ : ℝ) + 1 := by
+        exact_mod_cast hceilNat
+      _ ≤ Real.log (n : ℝ) + 1 := by linarith [hfloor, hpowlog]
+  have hlogUpper : Real.log (n : ℝ) ≤ (n : ℝ) - 1 :=
+    Real.log_le_sub_one_of_pos (by exact_mod_cast (by omega : 0 < n))
+  have htop_le_n : topH ≤ n := by
+    have ht : (topH : ℝ) ≤ (n : ℝ) := by linarith [htopbound, hlogUpper]
+    exact_mod_cast ht
+  have htop_le (i : Fin PT.tiling.m) : (PT.tiling.P i).h ≤ topH := by
+    exact Nat.cast_le.mp ((Q.height_bound i).trans (by simpa [topH] using
+      (Nat.le_ceil (Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)))) )
+  have hinner_sub : inner ⊆ topCoordinates n topH := by
+    intro j hj
+    rcases Finset.mem_biUnion.mp hj with ⟨i, hi, hji⟩
+    have hjtop : n - (PT.tiling.P i).h ≤ j.val := by
+      simpa [Tiling.Icoord, topCoordinates] using hji
+    have hhi := htop_le i
+    have hsub : n - topH ≤ n - (PT.tiling.P i).h := by omega
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hsub.trans hjtop⟩
+  have hinner_card : inner.card ≤ topH := by
+    let f : {j : Fin n // j ∈ inner} → Fin topH := fun j =>
+      ⟨j.val.val - (n - topH), by
+        have hj := (Finset.mem_filter.mp (hinner_sub j.property)).2
+        omega⟩
+    have hf : Function.Injective f := by
+      intro x y hxy
+      apply Subtype.ext
+      apply Fin.ext
+      have h := congrArg Fin.val hxy
+      have hxlo := (Finset.mem_filter.mp (hinner_sub x.property)).2
+      have hylo := (Finset.mem_filter.mp (hinner_sub y.property)).2
+      dsimp [f] at h
+      omega
+    have hcardEq : inner.card = Fintype.card {j : Fin n // j ∈ inner} := by
+      rw [Fintype.card_subtype]
+      simp
+    rw [hcardEq]
+    calc
+      Fintype.card {j : Fin n // j ∈ inner} ≤ Fintype.card (Fin topH) :=
+        Fintype.card_le_of_injective f hf
+      _ = topH := by simp
+  have hinner_card_real : (inner.card : ℝ) ≤ (topH : ℝ) := by exact_mod_cast hinner_card
+  have hcosetMax : max 1 (inner.card : ℝ) ≤ Real.log (n : ℝ) + 1 := by
+    apply max_le
+    · linarith
+    · exact hinner_card_real.trans htopbound
+  refine ⟨hn4, hclass, ?_, ?_, hcoloring, ?_, ?_, ?_⟩
+  · have hcoef : 0 ≤ 4 * κ.A0 * Real.log (n : ℝ) := by positivity
+    calc
+      4 * κ.A0 * Real.log (n : ℝ) * max 1 (inner.card : ℝ) ≤
+          4 * κ.A0 * Real.log (n : ℝ) * (Real.log (n : ℝ) + 1) :=
+        mul_le_mul_of_nonneg_left hcosetMax hcoef
+      _ ≤ (n : ℝ) := by simpa [L] using hcoset
+  · intro i
+    have hhlog : ((PT.tiling.P i).h : ℝ) ≤ Real.log (n : ℝ) :=
+      (Q.height_bound i).trans hpowlog
+    have hpow := Lane_q_s16_geom.two_pow_le_of_log (by omega) hhlog
+    have hpowNat : 2 ^ (PT.tiling.P i).h ≤ n := by exact_mod_cast hpow
+    calc
+      2 * 2 ^ (PT.tiling.P i).h ≤ 2 * n := Nat.mul_le_mul_left 2 hpowNat
+      _ ≤ ⌊Real.rpow (n : ℝ) κ.Ac⌋₊ := hsliceBase
+  · sorry
+  · intro i
+    have hparts : (PT.tiling.P i).bins.parts.Nonempty := by
+      by_contra hparts
+      have hpartsEmpty : (PT.tiling.P i).bins.parts = ∅ :=
+        Finset.not_nonempty_iff_eq_empty.mp hparts
+      have hYempty : (PT.tiling.P i).Y = ∅ := by
+        rw [← (PT.tiling.P i).bins.sup_parts]
+        simp [hpartsEmpty]
+      exact (Q.profiled_valid.tiling_valid.patch_nonempty i).2.ne_empty hYempty
+    have hdpos : 0 < (PT.tiling.P i).d := by
+      by_contra h
+      have hdzero : (PT.tiling.P i).d = 0 := by omega
+      obtain ⟨B, hB⟩ := hparts
+      have hcard := Q.profiled_valid.tiling_valid.bins_card i B hB
+      have hBzero : B.card = 0 := by simpa [hdzero] using hcard
+      have hBempty : B = ∅ := Finset.card_eq_zero.mp hBzero
+      have hBot : (∅ : Finset (Fin (T.S.N k))) ∈ (PT.tiling.P i).bins.parts := by
+        simpa [hBempty] using hB
+      exact (PT.tiling.P i).bins.bot_notMem hBot
+    let x : ℝ := κ.Kcell * Real.rpow (n : ℝ) κ.Ac / (PT.tiling.P i).d
+    have hpowNonneg : 0 ≤ Real.rpow (n : ℝ) κ.Ac := Real.rpow_nonneg (Nat.cast_nonneg n) _
+    have hxnonneg : 0 ≤ x := by
+      dsimp [x]
+      exact div_nonneg (mul_nonneg hKpos.le hpowNonneg) (Nat.cast_nonneg _)
+    have hdNat : 1 ≤ (PT.tiling.P i).d := Nat.one_le_iff_ne_zero.mpr hdpos.ne'
+    have hdge : (1 : ℝ) ≤ (PT.tiling.P i).d := by exact_mod_cast hdNat
+    have hnum_nonneg : 0 ≤ κ.Kcell * (n : ℝ) ^ 200 :=
+      mul_nonneg hKpos.le (pow_nonneg (Nat.cast_nonneg n) 200)
+    have hxle_norm : κ.Kcell * Real.rpow (n : ℝ) κ.Ac /
+        ((PT.tiling.P i).d : ℝ) ≤ κ.Kcell * (n : ℝ) ^ 200 := by
+      rw [Lane_q_s16_geom.rpow_ac_eq_pow_200 hκ n]
+      exact div_le_self hnum_nonneg hdge
+    have hxle : x ≤ κ.Kcell * (n : ℝ) ^ 200 := by simpa [x] using hxle_norm
+    have hceilNat : ⌈x⌉₊ ≤ ⌊x⌋₊ + 1 := Nat.ceil_le_floor_add_one x
+    have hceilReal : (⌈x⌉₊ : ℝ) ≤ x + 1 := by
+      calc
+        (⌈x⌉₊ : ℝ) ≤ (⌊x⌋₊ + 1 : ℕ) := by exact_mod_cast hceilNat
+        _ = (⌊x⌋₊ : ℝ) + 1 := by simp
+        _ ≤ x + 1 := by linarith [Nat.floor_le hxnonneg]
+    calc
+      (⌈κ.Kcell * Real.rpow (n : ℝ) κ.Ac / (PT.tiling.P i).d⌉₊ : ℝ) ≤
+          x + 1 := by simpa [x] using hceilReal
+      _ ≤ κ.Kcell * (n : ℝ) ^ 200 + 1 := by linarith [hxle]
+      _ ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 10) := by simpa [L] using hscope
+  · sorry
 
 /-- L16.1a data: coordinate IDs, the hyperplane, and ordered syndrome classes. -/
 structure SyndromeData {κ : CConsts} {T : Stage} {k : ℕ}

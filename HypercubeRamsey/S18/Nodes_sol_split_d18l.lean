@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S17.Nodes
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_query
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -248,13 +249,46 @@ theorem D18_L_cell_query_calibration (hκ : κ.Admissible) (hThresholds : LateTh
     (T : Stage) (hSources : Sources κ T) :
     ∀ᶠ k in atTop, ∀ (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (X : Inputs hPT),
       ProfileCornerMass PT → LargeIndex κ T k → CellQueryCalibration (rawData hκ X) := by
-  sorry
+  classical
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1000000] with k hn
+  intro PT hPT X hMass hLarge
+  let D := rawData hκ X
+  change CellQueryCalibration D
+  intro C q hq odd hodd hCell hEarly hSep f hf
+  by_cases hzero : q = 0
+  · subst q
+    exact Lane_sol_d18l_cal.zero_queries D C odd f
+  let physical := Classical.choice X.l16.physical
+  let roles : Fin q → S16.OddCellRole D.geom C :=
+    fun a => ⟨odd a, hCell a, (hEarly a).1⟩
+  have hroles : Function.Injective roles := by
+    intro a b hab
+    exact hodd (congrArg Subtype.val hab)
+  by_cases hCluster : PT.tiling.mode.isCluster
+  · have hSepC : ∀ a b, a ≠ b →
+        50 * κ.ρ * (PT.tiling.P (D.geom.cellPatch C)).h <
+          (hammingDist (roles a).1 (roles b).1 : ℝ) := by
+      intro a b hab
+      have hpatch : D.geom.patchOf (odd a) = D.geom.cellPatch C := by
+        rw [← D.geom.cellOf_patch (odd a), hCell a]
+      simpa only [hpatch] using hSep a b hab
+    have hGroups : Function.Injective (fun a => physical.raw.groupOf C (roles a)) :=
+      Lane_sol_d18l_cal.query_groups_injective hκ hThresholds hPT
+        physical.raw physical.source_valid hCluster X.low C roles hSepC
+    sorry
+  · have hRawGroups : Function.Injective (physical.raw.groupOf C) := by
+      rcases physical.source_valid with ⟨hm, _, hSource⟩ | ⟨_, hSource⟩
+      · exact (hCluster (by simp [hm, Mode.isCluster])).elim
+      · exact (hSource C).1
+    have hGroups : Function.Injective (fun a => physical.raw.groupOf C (roles a)) :=
+      hRawGroups.comp hroles
+    sorry
 
 /-- Product-pool/product-fresh algebra, without positivity or typicality
 assumptions on unconsulted cells. TeX 18:277–285,1134–1210. -/
 theorem D18_L_query_factorization (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT) :
     QueryFactorization (rawData hκ X) := by
-  sorry
+  exact Lane_sol_d18l_cal.fresh_factorization (rawData hκ X)
 
 /-- Assemble the general separated-test estimate from one-cell calibration
 and exact factorization; reindex each queried fibre by its finite cardinality.
@@ -270,7 +304,58 @@ theorem D18_L_separated_calibration {hPT : PT.Valid} (D : LateData hPT)
         D.freshQueryIntegral q odd f ≤ Real.exp (0.002 * q) *
           ∏ a, ((∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +
             Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3))) := by
-  sorry
+  classical
+  intro q hq odd hodd hEarly hSep f hf
+  let c := fun a => D.geom.cellOf (odd a)
+  let S := Finset.univ.filter fun C => ∃ a, c a = C
+  let b := fun a => (∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +
+    Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3))
+  let L := fun C => (D.cellPoolLaw C).E (fun P => if D.fresh.typical C P then
+    (D.fresh.fresh C P).E (fun s => ∏ a : {a : Fin q // c a = C},
+      f a.1 (D.fresh.label C s (odd a.1))) else 0)
+  have hL : ∀ C, 0 ≤ L C := by
+    intro C
+    dsimp only [L, FinLaw.E]
+    apply Finset.sum_nonneg
+    intro P _
+    apply mul_nonneg ((D.cellPoolLaw C).nonneg P)
+    split_ifs
+    · apply Finset.sum_nonneg
+      intro s _
+      apply mul_nonneg ((D.fresh.fresh C P).nonneg s)
+      exact Finset.prod_nonneg (fun a _ => (hf a.1 _).1)
+    · exact le_rfl
+  have hB (C : D.geom.Cell) :
+      L C ≤ Real.exp (0.002 * Fintype.card {a : Fin q // c a = C}) *
+        ∏ a : {a : Fin q // c a = C}, b a.1 := by
+    let A := {a : Fin q // c a = C}
+    let e := (Fintype.equivFin A).symm
+    have hsize : Fintype.card A ≤ q := by
+      calc
+        Fintype.card A ≤ Fintype.card (Fin q) :=
+          Fintype.card_le_of_injective Subtype.val Subtype.val_injective
+        _ = q := Fintype.card_fin q
+    have he : Function.Injective (fun a => odd (e a).1) :=
+      hodd.comp (Subtype.val_injective.comp e.injective)
+    have h := hCells C (Fintype.card A) (hsize.trans hq)
+      (fun a => odd (e a).1) he (fun a => (e a).2)
+      (fun a => hEarly (e a).1)
+      (fun a a' hne => hSep (e a).1 (e a').1
+        (fun hv => hne (e.injective (Subtype.ext hv)))
+        ((e a).2.trans (e a').2.symm))
+      (fun a => f (e a).1) (fun a y => hf (e a).1 y)
+    have hprod (s : D.fresh.State C) :
+        (∏ a : Fin (Fintype.card A), f (e a).1
+          (D.fresh.label C s (odd (e a).1))) =
+          ∏ a : A, f a.1 (D.fresh.label C s (odd a.1)) := by
+      exact e.prod_comp (fun a : A => f a.1 (D.fresh.label C s (odd a.1)))
+    simp_rw [hprod] at h
+    have hrhs : (∏ a : Fin (Fintype.card A), b (e a).1) =
+        ∏ a : A, b a.1 := e.prod_comp (fun a : A => b a.1)
+    exact h.trans_eq (congrArg (fun x => Real.exp (0.002 * Fintype.card A) * x) hrhs)
+  rw [hFactor q odd f]
+  simpa only [S, c, L, b, Fintype.card_fin] using
+    Lane_sol_d18l_cal.fibre_bounds c S (fun a => by simp [S]) L b 0.002 hL hB
 
 /-- Unpinned upstream pool/list tail for the actual finite process.
 TeX 17:123–131; 18:678–690. The exponent uses the prescribed Ts. -/

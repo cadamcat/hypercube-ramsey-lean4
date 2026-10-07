@@ -12,10 +12,11 @@ open Classical Filter
 open scoped BigOperators
 open S16 S16.Lane_sol_fix2_s16
 
-/-- Fixed cluster-query threshold from 18:1118–1123. -/
+/-- Fixed cluster-query threshold from 18:1118–1123, covering the actual
+low-cluster height lower bound `Q0^Mlo`. -/
 def LateThresholds (κ : CConsts) : Prop :=
   Real.exp (100 * κ.Kbd) + 100 * rowMeanConstant κ + κ.A0 ≤ κ.KB ∧
-  ∀ h : ℕ, Real.rpow (κ.M1 * κ.Q0) κ.Mlo ≤ (h : ℝ) → 2 < 20 * κ.ρ * h
+  ∀ h : ℕ, Real.rpow κ.Q0 κ.Mlo ≤ (h : ℝ) → 2 < 20 * κ.ρ * h
 
 /-- Fixed Q0 inequalities used by both calibration stages (16:338–342,
 400–427). The arguments are scalar scales, before any stage or profile. -/

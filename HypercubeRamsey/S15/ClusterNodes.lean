@@ -1,6 +1,7 @@
 import HypercubeRamsey.S15.DirectNodes
 import HypercubeRamsey.S15.Masks
 import HypercubeRamsey.S15.Capacity
+import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -369,7 +370,303 @@ theorem high_cluster_good_outcome (κ : CConsts) (hκ : κ.Admissible) (T : Stag
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hSamples : ClusterSampleClaim κ T)
     (K : ℝ) (hK : 0 < K) (hMoments : ClusterColumnMomentBound κ T K) :
     ClusterHallOutcomeClaim κ T := by
-  sorry
+  classical
+  have hratio : ∀ᶠ k in atTop,
+      160000 * K < (T.S.N k : ℝ) / (2 : ℝ) ^ (T.S.n k) := by
+    filter_upwards [T.S.ratio_tendsto.eventually_ge_atTop (160000 * K + 1)] with k hk
+    linarith
+  have hdim : ∀ᶠ k in atTop, 4 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 4
+  filter_upwards [hMoments, hratio, hdim] with k hmom hratioK hdimK
+  intro PT hPT hm CS
+  let n := T.S.n k
+  let N := T.S.N k
+  let t : ℝ := (N : ℝ) / (1600 * (2 : ℝ) ^ n)
+  have hNpos : 0 < (N : ℝ) := Nat.cast_pos.mpr (T.S.N_pos k)
+  have hpowpos : 0 < (2 : ℝ) ^ n := by positivity
+  have ht : 0 < t := by dsimp [t]; positivity
+  have hKt : K / t < 1 / 100 := by
+    have hratio' : 160000 * K * (2 : ℝ) ^ n < (N : ℝ) := by
+      have h := (lt_div_iff₀ hpowpos).mp hratioK
+      simpa [n, N, mul_assoc] using h
+    dsimp [t]
+    field_simp [ne_of_gt hpowpos, ne_of_gt hNpos]
+    nlinarith
+  have hSpos : 0 < (PT.tiling.S : ℝ) := by
+    have hN : 0 < (T.S.N k : ℝ) := Nat.cast_pos.mpr (T.S.N_pos k)
+    have hleft : 0 < (1 / 400 : ℝ) * (T.S.N k : ℝ) := by positivity
+    exact lt_of_lt_of_le hleft hPT.tiling_valid.S_lower
+  have hmass_div :
+      (∑ i : Fin PT.tiling.m, (PT.tiling.P i).M : ℝ) / PT.tiling.S ≤ 1 := by
+    calc
+      (∑ i : Fin PT.tiling.m, (PT.tiling.P i).M : ℝ) / PT.tiling.S =
+          ∑ i, ((PT.tiling.P i).M : ℝ) / PT.tiling.S := by
+            rw [Finset.sum_div (s := Finset.univ)]
+      _ ≤ ∑ i, (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) := by
+            apply Finset.sum_le_sum
+            intro i hi
+            exact hPT.tiling_valid.dyadic_mass_lower i
+      _ = 1 := hPT.tiling_valid.dyadic_sum
+  have hmass_sum :
+      (∑ i : Fin PT.tiling.m, (PT.tiling.P i).M : ℝ) ≤ PT.tiling.S := by
+    have h := (div_le_iff₀ hSpos).mp hmass_div
+    nlinarith
+  have hMpos : ∀ i : Fin PT.tiling.m, 0 < (PT.tiling.P i).M := by
+    intro i
+    have hx : 0 < (PT.tiling.P i).X.card :=
+      Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1
+    rw [(PT.tiling.P i).cardX] at hx
+    exact hx
+  have hm_sum : (PT.tiling.m : ℝ) ≤
+      ∑ i : Fin PT.tiling.m, ((PT.tiling.P i).M : ℝ) := by
+    calc
+      (PT.tiling.m : ℝ) = ∑ i : Fin PT.tiling.m, (1 : ℝ) := by simp
+      _ ≤ ∑ i : Fin PT.tiling.m, ((PT.tiling.P i).M : ℝ) := by
+        apply Finset.sum_le_sum
+        intro i hi
+        exact_mod_cast (Nat.succ_le_of_lt (hMpos i))
+  have hm_le_N : PT.tiling.m ≤ N := by
+    have hm_le_S : (PT.tiling.m : ℝ) ≤ PT.tiling.S := hm_sum.trans hmass_sum
+    have hm_le_S_nat : PT.tiling.m ≤ PT.tiling.S := by exact_mod_cast hm_le_S
+    exact hm_le_S_nat.trans hPT.tiling_valid.S_upper
+  have hEll (i : Fin PT.tiling.m) : (PT.tiling.P i).ℓ ≤ n := by
+    have hsup := Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+      (Finset.mem_univ i)
+    have hprefix := hPT.tiling_valid.prefix_internal_length
+    dsimp [n]
+    omega
+  have hEcard (i : Fin PT.tiling.m) :
+      (evenPatchPositions PT.tiling i).card ≤ 2 ^ (n - (PT.tiling.P i).ℓ) := by
+    apply HypercubeRamsey.Lane_q_s15_c3.even_prefix_card_le (PT.tiling.w i)
+      (evenPatchPositions PT.tiling i) ?_ (hEll i)
+    intro a ha j hj
+    have hmem : a.1 ∈ PT.tiling.leaf i := by
+      simpa [evenPatchPositions] using ha
+    change ∀ j : Fin n, j.val < (PT.tiling.P i).ℓ → a.1 j = PT.tiling.w i j at hmem
+    exact hmem j hj
+  have hpatchratio (i : Fin PT.tiling.m)
+      (hEpos : 0 < ((evenPatchPositions PT.tiling i).card : ℝ)) :
+      (N : ℝ) / (1600 * (2 : ℝ) ^ n) ≤
+        (PT.tiling.P i).M / (2 * (evenPatchPositions PT.tiling i).card) := by
+    let u : ℝ := (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ))
+    have hu : 0 < u := by positivity
+    have hpowNat :
+        (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) * (2 : ℝ) ^ (PT.tiling.P i).ℓ =
+          (2 : ℝ) ^ n := by
+      rw [← pow_add, Nat.sub_add_cancel (hEll i)]
+    have huinv : u = ((2 : ℝ) ^ (PT.tiling.P i).ℓ)⁻¹ := by
+      dsimp [u]
+      rw [zpow_neg, zpow_natCast]
+    have hpow : (2 : ℝ) ^ n * u = (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) := by
+      rw [huinv, ← hpowNat]
+      field_simp
+    have hEupper : ((evenPatchPositions PT.tiling i).card : ℝ) ≤
+        (2 : ℝ) ^ n * u := by
+      calc
+        ((evenPatchPositions PT.tiling i).card : ℝ) ≤
+            (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) := by exact_mod_cast hEcard i
+        _ = (2 : ℝ) ^ n * u := hpow.symm
+    have hSM : u * (PT.tiling.S : ℝ) < 2 * (PT.tiling.P i).M := by
+      calc
+        u * (PT.tiling.S : ℝ) <
+            (2 * (PT.tiling.P i).M / PT.tiling.S) * PT.tiling.S :=
+          mul_lt_mul_of_pos_right (by simpa [u] using hPT.tiling_valid.dyadic_mass_upper i) hSpos
+        _ = 2 * (PT.tiling.P i).M := by field_simp [ne_of_gt hSpos]
+    have hNscale :
+        (N : ℝ) * u / 800 ≤ u * (PT.tiling.S : ℝ) / 2 := by
+      have hs := mul_le_mul_of_nonneg_right hPT.tiling_valid.S_lower hu.le
+      nlinarith
+    have hMlower : (N : ℝ) * u / 800 < (PT.tiling.P i).M := by
+      have hSM' : u * (PT.tiling.S : ℝ) / 2 < (PT.tiling.P i).M := by nlinarith
+      exact lt_of_le_of_lt hNscale hSM'
+    have hleft : (N : ℝ) * (2 * (evenPatchPositions PT.tiling i).card) ≤
+        (N : ℝ) * (2 * (2 : ℝ) ^ n * u) := by
+      calc
+        _ = 2 * (N : ℝ) * (evenPatchPositions PT.tiling i).card := by ring
+        _ ≤ 2 * (N : ℝ) * ((2 : ℝ) ^ n * u) :=
+          mul_le_mul_of_nonneg_left hEupper (by positivity)
+        _ = (N : ℝ) * (2 * (2 : ℝ) ^ n * u) := by ring
+    have hright : (N : ℝ) * (2 * (2 : ℝ) ^ n * u) <
+        (PT.tiling.P i).M * (1600 * (2 : ℝ) ^ n) := by
+      have hmul := mul_lt_mul_of_pos_right hMlower (by positivity :
+        0 < (1600 : ℝ) * (2 : ℝ) ^ n)
+      calc
+        (N : ℝ) * (2 * (2 : ℝ) ^ n * u) =
+            ((N : ℝ) * u / 800) * (1600 * (2 : ℝ) ^ n) := by ring
+        _ < (PT.tiling.P i).M * (1600 * (2 : ℝ) ^ n) := hmul
+    have hcross := le_trans hleft hright.le
+    apply (div_le_div_iff₀ (by positivity) (by positivity)).2
+    exact hcross
+  have haverage_eq (i : Fin PT.tiling.m) (x : Fin (T.S.N k)) (ω : CS.Outcome) :
+      clusterColumnAverage CS i x ω =
+        ((PT.tiling.P i).M / (evenPatchPositions PT.tiling i).card) *
+          ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x := by
+    unfold clusterColumnAverage
+    change ((evenPatchPositions PT.tiling i).card : ℝ)⁻¹ *
+        ∑ a ∈ evenPatchPositions PT.tiling i, (PT.tiling.P i).M * CS.row ω a x = _
+    calc
+      _ = ((evenPatchPositions PT.tiling i).card : ℝ)⁻¹ *
+          ((PT.tiling.P i).M *
+            ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x) := by
+              congr 1
+              rw [← Finset.mul_sum]
+      _ = _ := by ring
+  have havg_nonneg (i : Fin PT.tiling.m) (x : Fin (T.S.N k)) (ω : CS.Outcome) :
+      0 ≤ clusterColumnAverage CS i x ω := by
+    unfold clusterColumnAverage
+    apply mul_nonneg
+    · exact inv_nonneg.mpr (Nat.cast_nonneg _)
+    · apply Finset.sum_nonneg
+      intro a ha
+      exact mul_nonneg (by positivity) (CS.row_nonneg ω a x)
+  have havg_large (i : Fin PT.tiling.m) (x : Fin (T.S.N k)) (ω : CS.Outcome)
+      (hxi : x ∈ PT.envelope i)
+      (hbad : 1 / 2 < ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x) :
+      t < clusterColumnAverage CS i x ω := by
+    have hEi : (evenPatchPositions PT.tiling i).Nonempty := by
+      by_contra hempty
+      have hEq := Finset.not_nonempty_iff_eq_empty.mp hempty
+      rw [hEq, Finset.sum_empty] at hbad
+      norm_num at hbad
+    have hEpos : 0 < ((evenPatchPositions PT.tiling i).card : ℝ) :=
+      Nat.cast_pos.mpr (Finset.card_pos.mpr hEi)
+    have hMpos' : 0 < ((PT.tiling.P i).M : ℝ) := Nat.cast_pos.mpr (hMpos i)
+    have hMEpos : 0 <
+        ((PT.tiling.P i).M : ℝ) / ((evenPatchPositions PT.tiling i).card : ℝ) := by
+      exact div_pos hMpos' hEpos
+    have hmul : (((PT.tiling.P i).M : ℝ) / ((evenPatchPositions PT.tiling i).card : ℝ)) * (1 / 2) <
+        (((PT.tiling.P i).M : ℝ) / ((evenPatchPositions PT.tiling i).card : ℝ)) *
+          ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x :=
+      mul_lt_mul_of_pos_left hbad hMEpos
+    calc
+      t ≤ (PT.tiling.P i).M / (2 * (evenPatchPositions PT.tiling i).card) :=
+        hpatchratio i hEpos
+      _ = ((PT.tiling.P i).M / (evenPatchPositions PT.tiling i).card) * (1 / 2) := by
+        field_simp [ne_of_gt hEpos]
+      _ < ((PT.tiling.P i).M / (evenPatchPositions PT.tiling i).card) *
+          ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x := hmul
+      _ = clusterColumnAverage CS i x ω := (haverage_eq i x ω).symm
+  let Bad : (Fin PT.tiling.m × Fin N) → CS.Outcome → Prop := fun q ω =>
+    q.2 ∈ PT.envelope q.1 ∧
+      1 / 2 < ∑ a ∈ evenPatchPositions PT.tiling q.1, CS.row ω a q.2
+  let BadAll : CS.Outcome → Prop := fun ω => ∃ q, Bad q ω
+  have hbadprob (q : Fin PT.tiling.m × Fin N) :
+      CS.law.pr (fun ω => CS.historyLoad ω ∧ Bad q ω) ≤ (1 / 100 : ℝ) ^ n := by
+    by_cases hq : q.2 ∈ PT.envelope q.1
+    · have hMarkov := HypercubeRamsey.Lane_q_s15_c3.finLaw_pr_markov
+        CS.law CS.historyLoad (fun ω => clusterColumnAverage CS q.1 q.2 ω)
+        (fun ω hω => havg_nonneg q.1 q.2 ω) t ht n
+      have hMoment := hmom PT hPT hm CS q.1 q.2 hq
+      calc
+        CS.law.pr (fun ω => CS.historyLoad ω ∧ Bad q ω) ≤
+            CS.law.pr (fun ω => CS.historyLoad ω ∧
+              t < clusterColumnAverage CS q.1 q.2 ω) := by
+                apply HypercubeRamsey.Lane_q_s15_c3.finLaw_pr_mono
+                intro ω hω
+                exact ⟨hω.1, havg_large q.1 q.2 ω hq hω.2.2⟩
+        _ ≤ CS.law.E (fun ω => if CS.historyLoad ω then
+              clusterColumnAverage CS q.1 q.2 ω ^ n else 0) / t ^ n := by
+                simpa using hMarkov
+        _ ≤ K ^ n / t ^ n := div_le_div_of_nonneg_right
+              (by simpa [clusterColumnMoment] using hMoment) (pow_nonneg ht.le _)
+        _ = (K / t) ^ n := (div_pow K t n).symm
+        _ ≤ (1 / 100 : ℝ) ^ n :=
+              pow_le_pow_left₀ (by positivity) (le_of_lt hKt) n
+    · have hfalse : ∀ ω, ¬ Bad q ω := by
+        intro ω h
+        exact hq h.1
+      have hzero : CS.law.pr (fun ω => CS.historyLoad ω ∧ Bad q ω) = 0 := by
+        unfold FinLaw.pr
+        apply Finset.sum_eq_zero
+        intro ω hω
+        simp [hfalse ω]
+      rw [hzero]
+      positivity
+  have hbad_all : CS.law.pr (fun ω => CS.historyLoad ω ∧ BadAll ω) ≤ 1 / 2 := by
+    calc
+      CS.law.pr (fun ω => CS.historyLoad ω ∧ BadAll ω) =
+          CS.law.pr (fun ω => ∃ q, CS.historyLoad ω ∧ Bad q ω) := by
+            congr 1
+            funext ω
+            apply propext
+            simp [BadAll]
+      _ ≤ ∑ q, CS.law.pr (fun ω => CS.historyLoad ω ∧ Bad q ω) :=
+          HypercubeRamsey.Lane_q_s15_c3.finLaw_pr_exists_le_sum CS.law
+            (fun q ω => CS.historyLoad ω ∧ Bad q ω)
+      _ ≤ ∑ q : Fin PT.tiling.m × Fin N, (1 / 100 : ℝ) ^ n :=
+          Finset.sum_le_sum fun q hq => hbadprob q
+      _ = (Fintype.card (Fin PT.tiling.m × Fin N) : ℝ) * (1 / 100 : ℝ) ^ n := by simp
+      _ ≤ 1 / 2 := by
+        have hNle : N ≤ n * 2 ^ n := by simpa [N, n] using T.S.N_le k
+        have hmR : (PT.tiling.m : ℝ) ≤ (N : ℝ) := by exact_mod_cast hm_le_N
+        have hNR : (N : ℝ) ≤ (n : ℝ) * (2 : ℝ) ^ n := by exact_mod_cast hNle
+        have hcount :
+            (Fintype.card (Fin PT.tiling.m × Fin N) : ℝ) ≤
+              (n : ℝ) ^ 2 * (4 : ℝ) ^ n := by
+          simp only [Fintype.card_prod, Fintype.card_fin, Nat.cast_mul]
+          calc
+            (PT.tiling.m : ℝ) * (N : ℝ) ≤ (N : ℝ) * (N : ℝ) :=
+              mul_le_mul_of_nonneg_right hmR (Nat.cast_nonneg _)
+            _ ≤ ((n : ℝ) * (2 : ℝ) ^ n) * ((n : ℝ) * (2 : ℝ) ^ n) :=
+              mul_le_mul hNR hNR (by positivity) (by positivity)
+            _ = (n : ℝ) ^ 2 * (4 : ℝ) ^ n := by
+              calc
+                _ = (n : ℝ) ^ 2 * ((2 : ℝ) ^ n * (2 : ℝ) ^ n) := by ring
+                _ = (n : ℝ) ^ 2 * (4 : ℝ) ^ n := by rw [← mul_pow]; norm_num
+        have hpoly := HypercubeRamsey.Lane_q_s15_c3.nat_sq_le_two_pow n hdimK
+        have hsmall : (n : ℝ) ^ 2 * (4 : ℝ) ^ n * (1 / 100 : ℝ) ^ n ≤ 1 / 2 := by
+          calc
+            _ = (n : ℝ) ^ 2 * ((4 : ℝ) ^ n * (1 / 100 : ℝ) ^ n) := by ring
+            _ = (n : ℝ) ^ 2 * (4 / 100 : ℝ) ^ n := by
+              congr 1
+              rw [← mul_pow]
+              congr 1
+              norm_num
+            _ ≤ (2 : ℝ) ^ n * (4 / 100 : ℝ) ^ n :=
+              mul_le_mul_of_nonneg_right hpoly (by positivity)
+            _ = (8 / 100 : ℝ) ^ n := by rw [← mul_pow]; norm_num
+            _ ≤ (8 / 100 : ℝ) ^ 4 := by
+              have hbase0 : 0 ≤ (8 / 100 : ℝ) := by norm_num
+              have hbase1 : (8 / 100 : ℝ) ≤ 1 := by norm_num
+              have htail : (8 / 100 : ℝ) ^ (n - 4) ≤ 1 := pow_le_one₀ hbase0 hbase1
+              have hnEq : n = 4 + (n - 4) := by omega
+              calc
+                (8 / 100 : ℝ) ^ n = (8 / 100 : ℝ) ^ (4 + (n - 4)) := by
+                  congr 1
+                _ = (8 / 100 : ℝ) ^ 4 * (8 / 100 : ℝ) ^ (n - 4) := by rw [pow_add]
+                _ ≤ (8 / 100 : ℝ) ^ 4 * 1 :=
+                    mul_le_mul_of_nonneg_left htail (pow_nonneg hbase0 _)
+                _ = (8 / 100 : ℝ) ^ 4 := by ring
+            _ ≤ 1 / 2 := by norm_num
+        exact (le_trans (mul_le_mul_of_nonneg_right hcount (by positivity)) hsmall)
+  have hevent : CS.historyLoad =
+        (fun ω => (CS.historyLoad ω ∧ ¬ BadAll ω) ∨
+          (CS.historyLoad ω ∧ BadAll ω)) := by
+    funext ω
+    by_cases hload : CS.historyLoad ω
+    · by_cases hbad : BadAll ω
+      · simp [hload, hbad]
+      · simp [hload, hbad]
+    · simp [hload]
+  have hdecomp : CS.law.pr CS.historyLoad ≤
+      CS.law.pr (fun ω => CS.historyLoad ω ∧ ¬ BadAll ω) +
+        CS.law.pr (fun ω => CS.historyLoad ω ∧ BadAll ω) := by
+    calc
+      CS.law.pr CS.historyLoad =
+          CS.law.pr (fun ω => (CS.historyLoad ω ∧ ¬ BadAll ω) ∨
+            (CS.historyLoad ω ∧ BadAll ω)) := congrArg CS.law.pr hevent
+      _ ≤ _ := HypercubeRamsey.Lane_q_s15_c3.finLaw_pr_union CS.law _ _
+  have hgoodpos : 0 < CS.law.pr (fun ω => CS.historyLoad ω ∧ ¬ BadAll ω) := by
+    have hload := CS.history_load_probability
+    linarith
+  obtain ⟨ω, hω, hsuccess⟩ :=
+    HypercubeRamsey.Lane_q_s15_c3.finLaw_pr_pos_exists CS.law
+      (fun ω => CS.historyLoad ω ∧ ¬ BadAll ω) hgoodpos
+  refine ⟨ω, hω, hsuccess.1, ?_⟩
+  intro i x hx
+  by_contra hbad
+  apply hsuccess.2
+  exact ⟨(i, x), hx, lt_of_not_ge hbad⟩
 
 /-- A normalized set of even rows produced from one good cluster outcome. -/
 structure ClusterHallCertificate {κ : CConsts} {T : Stage} {k : ℕ}
@@ -396,7 +693,123 @@ theorem high_cluster_fractional_rows {κ : CConsts} {T : Stage} {k : ℕ}
     (hcol : ∀ i x, x ∈ PT.envelope i →
       ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x ≤ 1 / 2) :
     Nonempty (ClusterHallCertificate CS ω) := by
-  sorry
+  classical
+  let mass : EvenPosition T k → ℝ := fun a => ∑ x, CS.row ω a x
+  have hmass_pos : ∀ a, 0 < mass a := by
+    intro a
+    have hm := hmass a
+    dsimp [mass] at *
+    linarith
+  have hrow_eq (a : EvenPosition T k) (x : Fin (T.S.N k)) :
+      clusterNormalizedSampleRow CS ω a x = CS.row ω a x / mass a := by
+    simp [clusterNormalizedSampleRow, mass, hmass_pos]
+  have hpatch_mem (v : Position T k) :
+      v ∈ PT.tiling.leaf (patchAt PT hPT v) := by
+    exact (Classical.choose_spec (hPT.tiling_valid.prefix_complete v)).1
+  have henvelope_unique (i j : Fin PT.tiling.m) (x : Fin (T.S.N k))
+      (hi : x ∈ PT.envelope i) (hj : x ∈ PT.envelope j) : i = j := by
+    by_contra hne
+    have hdisj := hPT.tiling_valid.patch_X_disjoint i j hne
+    have hxi : x ∈ (PT.tiling.P i).X := hPT.envelope_subset i hi
+    have hxj : x ∈ (PT.tiling.P j).X := hPT.envelope_subset j hj
+    exact (Finset.disjoint_left.mp hdisj) hxi hxj
+  have hlabelY : ∀ b, CS.label ω b ∈ T.Y k := by
+    intro b
+    let i := patchAt PT hPT b.1
+    have hy := hlabel b
+    rcases hPT.tiling_valid.patch_supports i with ⟨_, _, hySub, hyResSub⟩
+    exact (Finset.mem_sdiff.mp (hyResSub (hySub hy))).1
+  refine ⟨⟨⟨CS.label ω, hinj, hlabelY,
+    (fun a x => clusterNormalizedSampleRow CS ω a x), ?_, ?_, ?_, ?_, ?_⟩, rfl, rfl⟩⟩
+  · intro a x
+    rw [hrow_eq]
+    exact div_nonneg (hrow0 a x) (le_of_lt (hmass_pos a))
+  · intro a
+    simp_rw [hrow_eq]
+    rw [← Finset.sum_div]
+    change (∑ x, CS.row ω a x) / (∑ x, CS.row ω a x) = 1
+    exact div_self (ne_of_gt (by linarith [hmass a]))
+  · intro a x hne
+    have hraw : CS.row ω a x ≠ 0 := by
+      intro hz
+      apply hne
+      rw [hrow_eq, hz]
+      simp
+    have hx := hsupp a x hraw
+    have hpatchX : x ∈ (PT.tiling.P (patchAt PT hPT a.1)).X :=
+      hPT.envelope_subset (patchAt PT hPT a.1) hx
+    rcases hPT.tiling_valid.patch_supports (patchAt PT hPT a.1) with
+      ⟨hXres, hXhost, _, _⟩
+    exact (Finset.mem_sdiff.mp (hXhost (hXres hpatchX))).1
+  · intro a x hne b hab
+    have hraw : CS.row ω a x ≠ 0 := by
+      intro hz
+      apply hne
+      rw [hrow_eq, hz]
+      simp
+    exact hcommon a x hraw b hab
+  · intro x
+    by_cases hex : ∃ a, CS.row ω a x ≠ 0
+    · obtain ⟨a₀, ha₀⟩ := hex
+      let i := patchAt PT hPT a₀.1
+      have hxenv : x ∈ PT.envelope i := by
+        dsimp [i]
+        exact hsupp a₀ x ha₀
+      have hraw_out : ∀ a, a ∉ evenPatchPositions PT.tiling i → CS.row ω a x = 0 := by
+        intro a hnot
+        by_contra hne
+        have hxenv' : x ∈ PT.envelope (patchAt PT hPT a.1) := hsupp a x hne
+        have heq : patchAt PT hPT a.1 = i := henvelope_unique _ _ _ hxenv' hxenv
+        apply hnot
+        apply Finset.mem_filter.mpr
+        constructor
+        · simp
+        · change a.1 ∈ PT.tiling.leaf i
+          rw [← heq]
+          exact hpatch_mem a.1
+      have hsum_raw : (∑ a : EvenPosition T k, CS.row ω a x) =
+          ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x := by
+        symm
+        apply Finset.sum_subset (Finset.subset_univ _)
+        intro a ha hnot
+        exact hraw_out a hnot
+      have hsum_norm_le :
+          (∑ a : EvenPosition T k, clusterNormalizedSampleRow CS ω a x) ≤
+            2 * ∑ a : EvenPosition T k, CS.row ω a x := by
+        calc
+          _ ≤ ∑ a : EvenPosition T k, 2 * CS.row ω a x := by
+            apply Finset.sum_le_sum
+            intro a ha
+            rw [hrow_eq]
+            have hinv : (mass a)⁻¹ ≤ 2 := by
+              have htwo : 1 ≤ 2 * mass a := by
+                dsimp [mass]
+                linarith [hmass a]
+              rw [inv_eq_one_div]
+              exact (div_le_iff₀ (hmass_pos a)).2 htwo
+            calc
+              CS.row ω a x / mass a = CS.row ω a x * (mass a)⁻¹ := by ring
+              _ ≤ CS.row ω a x * 2 := mul_le_mul_of_nonneg_left hinv (hrow0 a x)
+              _ = 2 * CS.row ω a x := by ring
+          _ = 2 * ∑ a : EvenPosition T k, CS.row ω a x := by
+            simp [Finset.mul_sum]
+      have hlocal := hcol i x hxenv
+      calc
+        (∑ a : EvenPosition T k, clusterNormalizedSampleRow CS ω a x)
+            ≤ 2 * ∑ a : EvenPosition T k, CS.row ω a x := hsum_norm_le
+        _ = 2 * ∑ a ∈ evenPatchPositions PT.tiling i, CS.row ω a x := by rw [hsum_raw]
+        _ ≤ 1 := by linarith
+    · have hzero : ∀ a, CS.row ω a x = 0 := by
+        intro a
+        by_contra hne
+        exact hex ⟨a, hne⟩
+      have hsum_zero : (∑ a : EvenPosition T k, clusterNormalizedSampleRow CS ω a x) = 0 := by
+        apply Finset.sum_eq_zero
+        intro a ha
+        rw [hrow_eq, hzero]
+        simp
+      rw [hsum_zero]
+      norm_num
 
 /-- C15.R applied to a normalized cluster certificate, retaining its sampler equations. -/
 theorem cluster_certificate_to_cube {κ : CConsts} {T : Stage} {k : ℕ}

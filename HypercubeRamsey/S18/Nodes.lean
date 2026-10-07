@@ -15,17 +15,22 @@ import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
 import HypercubeRamsey.S18.Probability_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5b
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Run_sol_s18_n4
 import HypercubeRamsey.S18.Risk_sol_s18_n4
+import HypercubeRamsey.S18.PrefixObligations_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_3e
 import HypercubeRamsey.S18.Swap_sol_s18_n4
 import HypercubeRamsey.S18.Locality_sol_s18_n4
 import HypercubeRamsey.S18.Cost_sol_s18_n4
 import HypercubeRamsey.S18.Test_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_3f
 import HypercubeRamsey.S18.Current_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
@@ -42,18 +47,25 @@ lists. The selected discrepancy budgets are forwarded from C12.K. The input
 geometry includes the prescribed cell slot count and the same physical
 calibration/source links, positive typical mass and internal probability
 priors in `L16QuantitativeValidity.physical`. The output calibration uses a
-50ρh consultation-centre margin. The general calibration and upstream
+50ρh consultation-centre margin. Equation (24)'s palette-row constant is
+selected before the eventual index and retained alongside `Spec`.
+The general calibration and upstream
 construction gaps recorded in `Needs` remain producer obligations. -/
 theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ) (T : Stage)
     (hInit : InitDisc T κ.η0)
     (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε)
     (hDisc : DeepDisc T κ.xs κ.α 0.04)
     (hDiscι : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
-    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, PT.tiling.mode.isLow → ProfileCornerMass PT → LargeIndex κ T k →
+    ∃ Krow : ℝ, 0 < Krow ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, PT.tiling.mode.isLow → ProfileCornerMass PT → LargeIndex κ T k →
       (∃ G : LowGeom PT, ∃ F : FreshCell G, L16QuantitativeValidity G F) →
-      Nonempty {D : LateData hPT // D.Spec} := by
+      Nonempty {D : LateData hPT // D.Spec ∧ PaletteRowInput D Krow} := by
   have hSources : Lane_sol_split_d18l.Sources κ T := ⟨hInit, hDeep, hDisc, hDiscι⟩
+  obtain ⟨Krow, hKrow, hRows⟩ :=
+    Lane_sol_split_d18l.D18_L_palette_row hκ hThresholds T hSources
+  refine ⟨Krow, hKrow, ?_⟩
   filter_upwards [
+    hRows,
     Lane_sol_split_d18l.D18_L_inputs hκ hThresholds T hSources,
     Lane_sol_split_d18l.D18_L_fresh_internal hκ hThresholds T hSources,
     Lane_sol_split_d18l.D18_L_prior_mean hκ hThresholds T hSources,
@@ -64,7 +76,7 @@ theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds
     Lane_sol_split_d18l.D18_L_palette_counts hκ hThresholds T hSources,
     Lane_sol_split_d18l.D18_L_initial_cap hκ hThresholds T hSources,
     Lane_sol_split_d18l.D18_L_initial_success hκ hThresholds T hSources]
-    with k hInputs hInternal hMean hCalibration hBad hPinned hSingleton hCounts hCap hSuccess
+    with k hRows hInputs hInternal hMean hCalibration hBad hPinned hSingleton hCounts hCap hSuccess
   intro PT hPT hLow hMass hLarge hOld
   obtain ⟨X⟩ := hInputs PT hPT hLow hMass hLarge hOld
   let D := Lane_sol_split_d18l.rawData hκ X
@@ -86,7 +98,8 @@ theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds
     events_eq := Lane_sol_split_d18l.D18_L_events_eq hκ X
     initial_cap := hCap PT hPT X hMass hLarge
     initial_success := hSuccess PT hPT X hMass hLarge
-    prior_local := Lane_sol_split_d18l.D18_L_prior_local D }⟩⟩
+    prior_local := Lane_sol_split_d18l.D18_L_prior_local D },
+    hRows PT hPT X hMass hLarge⟩⟩
 
 /-- L18.0a, 18:78–87. Constants precede all stages; epsilon precedes its
 own eventual quantifier. Only L16-valid geometries are quantified. -/
@@ -619,7 +632,9 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
   filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2,
-    Lane_sol_s18_n4.finalListTapeBound hκ T] with k hk hfinal
+    Lane_sol_s18_n4.finalListTapeBound hκ T,
+    Lane_sol_s18_n4.validPrefixPinnedBound hκ T K27 c1 δ hK hc1
+      (hδsmall.trans_le (min_le_right _ _))] with k hk hfinal hprefix
   intro PT hPT D hD hTransition hLocal hTransfer hReplay
   intro pin f
   cases f with
@@ -646,7 +661,7 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inr F =>
           by_cases hkind : F.1.val = 1
           · by_cases hvalid : D.prefixValid F.2
-            · sorry
+            · exact hprefix D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
             · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
           · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
               (hδsmall.le.trans (min_le_left _ _)) F hkind pin
@@ -663,6 +678,14 @@ theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
         Nonempty (LeafCoupling D δ) := by
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+  intro PT hPT D hD hR hRisk
+  have hn : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+  suffices hinputs : Nonempty (Lane_sol_s18_3e.CanonicalLeafInputs D δ) by
+    obtain ⟨X⟩ := hinputs
+    exact ⟨Lane_sol_s18_3e.leafCouplingOfInputs D δ hRisk X
+      (Lane_sol_s18_3e.late_probability_local D hD hR) hn⟩
+  -- Supply the geometric counts and patch-wise pool swaps with local tape conditioning.
   sorry
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
@@ -676,14 +699,35 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
   refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
     (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
   filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
-    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ] with k hpositive hcost
+    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ,
+    Lane_sol_s18_3f.testTokensEventually hκ T] with k hpositive hcost htokens
   intro PT hPT D hD hRisk leaves
   have hpos := hpositive D hRisk leaves
   obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk leaves
   refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
   intro seed hseed Ψ hΨ hlocal
-  -- Construct the consulted-image partition and its local forcing kernels;
-  -- hproduct supplies the vanishing cost once their deterministic scopes are bounded.
+  have hviewcost : ∀ a : Lane_sol_s18_3f.TestView D (D.expandCells seed),
+      (∏ i ∈ Finset.univ.filter
+          (Lane_sol_s18_3f.testTouches D δ leaves (D.expandCells seed) a),
+        (1 - 2 * D.encoding.permLaw.pr (fun x => x ∈ leaves.leaf i))⁻¹) ≤
+          1 + (T.S.n k : ℝ)⁻¹ := by
+    intro a
+    have hfilter : Finset.univ.filter
+        (Lane_sol_s18_3f.testTouches D δ leaves (D.expandCells seed) a) =
+        Finset.univ.filter (fun i =>
+          ¬ Disjoint (leaves.domains i) (Lane_sol_s18_3f.testDomains D (D.expandCells seed)) ∨
+          ¬ Disjoint (leaves.images i) (Lane_sol_s18_3f.testImages D (D.expandCells seed)
+            (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a)) ∨
+          ¬ Disjoint (leaves.tapes i) (D.expandCells seed)) := by
+      ext i
+      simp only [Finset.mem_filter, Lane_sol_s18_3f.testTouches]
+    rw [hfilter]
+    exact hproduct (Lane_sol_s18_3f.testDomains D (D.expandCells seed))
+      (Lane_sol_s18_3f.testImages D (D.expandCells seed)
+        (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a)) (D.expandCells seed)
+      (htokens D hD seed hseed (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a))
+  -- Coordinate fibers, their deterministic scopes and reciprocal costs are now fixed.
+  -- A test nonneighbor bound is still needed; TestFiberForcing would supply it.
   sorry
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
@@ -710,14 +754,9 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ∀ ε, TerminalCertificate D δ ε →
           Nonempty (ClassSamplerData D δ) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hn
+  filter_upwards [Lane_sol_s18_4b.classSamplerEventually hκ T δ hδ] with k hsampler
   intro PT hPT D hD hTransition hLocal hTransfer ε C
-  apply Lane_sol_s18_n4.classSamplerOfEnteringLaws D δ hn
-  intro j h henter
-  have hcurrent := Lane_sol_s18_n4.classCurrentBadUniformBound D δ (by omega) j h henter
-  have halarm := Lane_sol_s18_n4.classFutureAlarmBound D δ j h henter
-  -- Instantiate the clock with the deterministic spatial scopes and incidences.
-  sorry
+  exact hsampler D hD hTransition
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish
 all actual completion conclusions; no existential full=True shortcut.
@@ -843,7 +882,41 @@ theorem P18_5b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
             endpointProbability D C H A assignment ≤
               Real.exp (Cs * D.geom.r + Cp * A.rows.card * D.rank A.rows) * KL ^ A.rows.card *
                 A.termTest C assignment := by
-  sorry
+  have hKL : 1 ≤ 32 * Real.exp (24 + K27) := by
+    have he : 1 ≤ Real.exp (24 + K27) := by
+      calc
+        (1 : ℝ) = Real.exp 0 := by simp
+        _ ≤ Real.exp (24 + K27) := Real.exp_le_exp.mpr (by linarith)
+    nlinarith
+  refine ⟨32 * Real.exp (24 + K27), 8, 1, hKL, by norm_num, by norm_num, ?_⟩
+  obtain ⟨Kpair, hKpair, hPairs⟩ := P18_5a hκ T δ hδ
+  obtain ⟨Kβ, hKβ, hSchedule, hsmall⟩ := L18_0a hκ T
+  have hscale : ∀ᶠ k in atTop, 8 * κ.KB < densityScale T k :=
+    T.S.ratio_tendsto.eventually_gt_atTop (8 * κ.KB)
+  filter_upwards [hPairs, hsmall (1 / 1000) (by norm_num), hscale,
+    Lane_sol_s18_5b.eventually_query_size T] with k hPair hSmall hScale hQuery
+  intro PT hPT D hD hTransition hLocal εterm εrun C H A assignment
+  have hs := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hs₁ : SmallErrors κ T k PT D.geom 1 :=
+    fun i => (hs i).trans (by norm_num)
+  have herr (v : Pos T k) (j : Fin D.geom.r) : D.error v j ≤ 1 / 1000 :=
+    Lane_sol_s18_n5.smallErrors_error_le D (1 / 1000) hs v j
+  have hPairFacts := hPair PT hPT D hD hTransition
+  have hm (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+      (hf : D.full δ x h) (v : Pos T k) (hv : v ∈ A.rows) :
+      0 < ∑ y, Lane_sol_s18_n5.finalWeight D h v y := by
+    have heven : IsEvenRole v := (Finset.mem_filter.mp (A.rows_subset hv)).2.1
+    exact Lane_sol_s18_n5.full_finalWeight_pos D δ x h hf v heven
+      (fun j hj => Lane_sol_s18_n5.currentCap_lt_one hκ D hLocal.1 hScale δ x h hf v j hj)
+      (fun j => lt_of_le_of_lt (herr v j) (by norm_num))
+  have hZ (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+      (hf : D.full δ x h) (v : Pos T k) (hv : v ∈ A.rows) :
+      (1 / 2 : ℝ) ≤ ∑ p : Fin (T.S.N k) × Fin (T.S.N k),
+        if D.nonconflict v p.1 p.2 then (D.finalPrior h v).w p.1 * (D.finalPrior h v).w p.2 else 0 :=
+    (hPairFacts.2.2.2.2 x h hf v (Finset.mem_filter.mp (A.rows_subset hv)).2.1).1
+  have hcard : (A.rows.card : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast A.small
+  simpa only [one_mul] using Lane_sol_s18_5b.endpoint_comparison D hTransition hK.le hLocal.2.1 hs₁ C H A assignment
+    (hcard.trans hQuery) (fun v hv j => (herr v j).trans (by norm_num)) hm hZ
 
 /-- P18.5c, 18:1027–1056. Terminal → fixed-pool resampling → iid pools;
 the stronger pool gate remains through the fixed-pool comparison. The last
@@ -864,13 +937,15 @@ theorem P18_5c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     hresampling PT hPT D hD A assignment, ?_⟩
   exact hiid PT hPT D hD A assignment
 
-/-- P18.5d, 18:1058–1090. Bounds the explicitly defined isolate kernel. -/
-theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+/-- P18.5d, 18:1058–1090. Bounds the explicitly defined isolate kernel,
+using equation (24) with `Krow` fixed before the eventual index. -/
+theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (Krow : ℝ) (hKrow : 0 < Krow) :
     ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
-      ∀ D : LateData hPT, D.Spec → IsolateKernelFacts D KI := by
+      ∀ D : LateData hPT, D.Spec → PaletteRowInput D Krow → IsolateKernelFacts D KI := by
   refine ⟨1, by norm_num, ?_⟩
   apply Filter.Eventually.of_forall
-  intro k PT hPT D hD v hv x z
+  intro k PT hPT D hD hRows v hv x z
   exact ⟨Lane_q_s18_n5.isolatedWeight_nonneg D v x z,
     Lane_q_s18_n5.isolatedWeight_symm D v x z, by
       sorry, by
@@ -1252,23 +1327,23 @@ theorem P18_5g {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     hPair hIso hEndpoint hCompare hQueries
   simpa using hCore
 
-theorem P18_5 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
-    (hK : 0 < K27) (hδ : 0 < δ) :
+theorem P18_5 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ Krow : ℝ)
+    (hK : 0 < K27) (hδ : 0 < δ) (hKrow : 0 < Krow) :
     ∃ K Cprime Cstage : ℝ, 0 < K ∧ 0 < Cprime ∧ 0 < Cstage ∧ ∀ᶠ k in atTop,
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
-        D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+        D.Spec → PaletteRowInput D Krow → TransitionData D → LocalTransitionFacts D K27 →
         ∀ εterm εrun, εterm ≤ 1 → ∀ C : TerminalCertificate D δ εterm,
           ∀ H : CompletionCertificate D C εrun, EndpointCertificate D C H K Cprime Cstage := by
   obtain ⟨KP, hKP, ha⟩ := P18_5a hκ T δ hδ
   obtain ⟨KL, Cp, Cs, hKL, hCp, hCs, hb⟩ := P18_5b hκ T K27 δ hK hδ
-  obtain ⟨KI, hKI, hd⟩ := P18_5d hκ T
+  obtain ⟨KI, hKI, hd⟩ := P18_5d hκ T Krow hKrow
   obtain ⟨CQ, hCQ, he⟩ := P18_5e hκ T
   obtain ⟨K, Cprime, Cstage, hK, hCp', hCs', hg⟩ :=
     P18_5g hκ T KP KL KI Cp Cs CQ hKP hKL hKI hCp hCs hCQ
   refine ⟨K, Cprime, Cstage, hK, hCp', hCs', ?_⟩
   filter_upwards [ha, hb, P18_5c hκ T, hd, he, P18_5f hκ T, hg] with k ha hb hc hd he hf hg
-  intro PT hPT D hD hR hLocal εterm εrun hε C H
-  apply hg PT hPT D hD δ εterm εrun hε C H (ha PT hPT D hD hR) (hd PT hPT D hD)
+  intro PT hPT D hD hRows hR hLocal εterm εrun hε C H
+  apply hg PT hPT D hD δ εterm εrun hε C H (ha PT hPT D hD hR) (hd PT hPT D hD hRows)
     (hb PT hPT D hD hR hLocal εterm εrun C H) (hc PT hPT D hD δ εterm C)
   intro A
   let A' := D18_I D A.paletteIndex A.rows A.rows_subset A.small
@@ -1977,24 +2052,27 @@ theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresho
   have hδsmall : δ < min 0.04 c1 := by dsimp [δ]; have := lt_min (by norm_num : (0 : ℝ) < 0.04) hc1; linarith
   obtain ⟨εterm, hεterm, htermlim, hterminal⟩ := P18_3 hκ T K27 c1 δ hK27 hc1 hδ hδsmall
   obtain ⟨εrun, hεrun, hrunlim, hcompletion⟩ := P18_4 hκ T K27 c1 δ hK27 hc1 hδ hδsmall εterm htermlim
-  obtain ⟨K, Cp, Cs, hK, hCp, hCs, hendpoint⟩ := P18_5 hκ T K27 δ hK27 hδ
+  obtain ⟨Krow, hKrow, hdata⟩ := D18_L hκ hThresholds T hInit hDeep hDisc hDiscι
+  obtain ⟨K, Cp, Cs, hK, hCp, hCs, hendpoint⟩ := P18_5 hκ T K27 δ Krow hK27 hδ hKrow
   have hTermSmall : ∀ᶠ k in atTop, εterm k ≤ 1 := htermlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1))
   have hRunSmall : ∀ᶠ k in atTop, εrun k ≤ 1 / 4 := hrunlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1 / 4))
   have hSmall := hsmall (Real.log 2 / 1000) (div_pos (Real.log_pos (by norm_num)) (by norm_num))
-  filter_upwards [l16_quantitative_validity hκ hConstants T hInit hDeep hDisc, D18_L hκ hThresholds T hInit hDeep hDisc hDiscι,
+  filter_upwards [l16_quantitative_validity hκ hConstants T hInit hDeep hDisc, hdata,
     hsched, hSmall, hlocal, htransfer, hterminal, hcompletion, hendpoint, eventually_largeIndex κ T,
     L18_6 hκ T K Cp Cs hK hCp hCs, hTermSmall, hRunSmall] with
     k h16 hdata _hsched hSmall hLocal hTransfer hTerminal hCompletion hEndpoint hLarge hHall hTermSmall hRunSmall
   intro PT hPT hLow hCorners hUniform
-  obtain ⟨⟨D0, hD0⟩⟩ := hdata PT hPT hLow hCorners hLarge (h16 PT hPT hLow hCorners hUniform)
+  obtain ⟨⟨D0, hD0, hRows0⟩⟩ := hdata PT hPT hLow hCorners hLarge (h16 PT hPT hLow hCorners hUniform)
   obtain ⟨kernels, hD, hR, hBalance⟩ := P18_4a D0 hD0
   let D := D0.withKernels kernels
+  have hRows : PaletteRowInput D Krow :=
+    (Lane_sol_bridge_5d.paletteRowInput_withKernels D0 kernels Krow).2 hRows0
   have small := hSmall PT hPT hLow D.geom D.fresh D.l16_valid
   have localFacts := hLocal PT hPT D hD hR small
   have transfer := hTransfer PT hPT D hD hR localFacts small
   obtain ⟨C⟩ := hTerminal PT hPT D hD hR localFacts transfer
   obtain ⟨H⟩ := hCompletion PT hPT D hD hR hBalance localFacts transfer C
-  have E := hEndpoint PT hPT D hD hR localFacts (εterm k) (εrun k) hTermSmall C H
+  have E := hEndpoint PT hPT D hD hRows hR localFacts (εterm k) (εrun k) hTermSmall C H
   obtain ⟨Hall⟩ := hHall PT hPT D hD δ (εterm k) (εrun k) hRunSmall C H E
   exact C18_Fcube D δ K E.pair_facts Hall
 

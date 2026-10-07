@@ -2907,4 +2907,688 @@ theorem capacity_size_upper (d : ℕ) (a : ℝ) (hd : 2 ≤ d) (ha : 0 ≤ a)
   have hh : (⌊a⌋₊ : ℝ) + 1 ≤ d := by linarith
   exact_mod_cast hh
 
+theorem image_mass_le_slot_mass {Slot Bin : Type*} [Fintype Slot] [DecidableEq Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : FinLaw Bin) (pool : Slot → Bin) :
+    (∑ b ∈ Finset.univ.image pool, P.w b) ≤ ∑ s, P.w (pool s) := by
+  classical
+  have hsum : (∑ s, P.w (pool s)) = ∑ b, ∑ s, if pool s = b then P.w b else 0 := by
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro s _
+    simp
+  rw [hsum]
+  calc
+    _ ≤ ∑ b ∈ Finset.univ.image pool, ∑ s, if pool s = b then P.w b else 0 := by
+      apply Finset.sum_le_sum
+      intro b hb
+      obtain ⟨s, _, hs⟩ := Finset.mem_image.mp hb
+      have hh := Finset.single_le_sum (s := (Finset.univ : Finset Slot))
+        (f := fun t => if pool t = b then P.w b else 0)
+        (fun t _ => by split_ifs <;> first | exact P.nonneg b | exact le_rfl) (Finset.mem_univ s)
+      simpa only [if_pos hs] using hh
+    _ ≤ _ := Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _) (fun b _ _ =>
+      Finset.sum_nonneg fun s _ => by split_ifs <;> first | exact P.nonneg b | exact le_rfl)
+
+theorem image_mass_one_slot {Slot Bin : Type*} [Fintype Slot] [DecidableEq Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : FinLaw Bin) (c : ℝ) (hc : 0 ≤ c)
+    (hcap : ∀ b, P.w b ≤ c) (s : Slot) (x y : Slot → Bin)
+    (hxy : ∀ t, t ≠ s → x t = y t) :
+    |(∑ b ∈ Finset.univ.image x, P.w b) - ∑ b ∈ Finset.univ.image y, P.w b| ≤ c := by
+  classical
+  have hupper (a b : Slot → Bin) (hab : ∀ t, t ≠ s → a t = b t) :
+      (∑ z ∈ Finset.univ.image a, P.w z) ≤ (∑ z ∈ Finset.univ.image b, P.w z) + c := by
+    have hsub : Finset.univ.image a ⊆ insert (a s) (Finset.univ.image b) := by
+      intro z hz
+      obtain ⟨t, _, rfl⟩ := Finset.mem_image.mp hz
+      by_cases hts : t = s
+      · simp [hts]
+      · apply Finset.mem_insert_of_mem
+        exact Finset.mem_image.mpr ⟨t, Finset.mem_univ _, (hab t hts).symm⟩
+    calc
+      _ ≤ ∑ z ∈ insert (a s) (Finset.univ.image b), P.w z :=
+        Finset.sum_le_sum_of_subset_of_nonneg hsub (fun z _ _ => P.nonneg z)
+      _ ≤ P.w (a s) + ∑ z ∈ Finset.univ.image b, P.w z := by
+        by_cases hm : a s ∈ Finset.univ.image b
+        · rw [Finset.insert_eq_of_mem hm]
+          exact le_add_of_nonneg_left (P.nonneg _)
+        · rw [Finset.sum_insert hm]
+      _ ≤ _ := by linarith [hcap (a s)]
+  rw [abs_le]
+  constructor <;> linarith [hupper x y hxy, hupper y x (fun t ht => (hxy t ht).symm)]
+
+/-- The image-mass bias is supported on repeated slot images, before or
+after an iid pin. This isolates the birthday loss from the pin's mean shift. -/
+theorem image_mass_mean_bias {Slot Bin : Type*} [Fintype Slot] [DecidableEq Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : FinLaw Bin) (Q : FinLaw (Slot → Bin))
+    (c : ℝ) (hc : 0 ≤ c) (hcap : ∀ b, P.w b ≤ c) :
+    0 ≤ Q.E (fun pool => ∑ s, P.w (pool s)) - Q.E (fun pool => ∑ b ∈ Finset.univ.image pool, P.w b) ∧
+    Q.E (fun pool => ∑ s, P.w (pool s)) - Q.E (fun pool => ∑ b ∈ Finset.univ.image pool, P.w b) ≤
+      (Fintype.card Slot : ℝ) * c * Q.pr (fun pool => ¬ Function.Injective pool) := by
+  classical
+  have hpoint (pool : Slot → Bin) :
+      0 ≤ (∑ s, P.w (pool s)) - ∑ b ∈ Finset.univ.image pool, P.w b :=
+    sub_nonneg.mpr (image_mass_le_slot_mass P pool)
+  have hdom (pool : Slot → Bin) :
+      (∑ s, P.w (pool s)) - ∑ b ∈ Finset.univ.image pool, P.w b ≤
+        if ¬ Function.Injective pool then (Fintype.card Slot : ℝ) * c else 0 := by
+    by_cases hi : Function.Injective pool
+    · rw [if_neg (not_not.mpr hi), distinct_pool_mass P pool hi, sub_self]
+    · rw [if_pos hi]
+      have hu : (∑ s, P.w (pool s)) ≤ (Fintype.card Slot : ℝ) * c := by
+        simpa using Finset.sum_le_sum (s := Finset.univ) (fun s _ => hcap (pool s))
+      have hl : 0 ≤ ∑ b ∈ Finset.univ.image pool, P.w b := Finset.sum_nonneg fun b _ => P.nonneg b
+      linarith
+  have heq : Q.E (fun pool => ∑ s, P.w (pool s)) -
+      Q.E (fun pool => ∑ b ∈ Finset.univ.image pool, P.w b) =
+      ∑ pool, Q.w pool * ((∑ s, P.w (pool s)) - ∑ b ∈ Finset.univ.image pool, P.w b) := by
+    unfold FinLaw.E
+    simp only [mul_sub, Finset.sum_sub_distrib]
+  rw [heq]
+  refine ⟨Finset.sum_nonneg (fun pool _ => mul_nonneg (Q.nonneg pool) (hpoint pool)), ?_⟩
+  calc
+    _ ≤ ∑ pool, Q.w pool * (if ¬ Function.Injective pool then (Fintype.card Slot : ℝ) * c else 0) :=
+      Finset.sum_le_sum fun pool _ => mul_le_mul_of_nonneg_left (hdom pool) (Q.nonneg pool)
+    _ = _ := by
+      unfold FinLaw.pr
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro pool _
+      by_cases hi : Function.Injective pool <;> simp [hi] <;> ring
+
+theorem iid_collision_probability {Slot Bin : Type*} [Fintype Slot] [DecidableEq Slot]
+    [Fintype Bin] (Q : Slot → FinLaw Bin)
+    (hQ : ∀ s b, (Q s).w b = 1 / (Fintype.card Bin : ℝ)) :
+    (FinLaw.pi Q).pr (fun pool => ¬ Function.Injective pool) ≤
+      (Fintype.card Slot : ℝ) ^ 2 / Fintype.card Bin := by
+  have hp : (fun pool : Slot → Bin => ¬ Function.Injective pool) =
+      (fun pool => ∃ s ∈ (Finset.univ : Finset Slot), ∃ t ∈ Finset.univ, s ≠ t ∧ pool s = pool t) := by
+    funext pool
+    apply propext
+    simp only [Finset.mem_univ, true_and]
+    constructor
+    · intro h
+      by_contra hex
+      apply h
+      intro s t heq
+      by_contra hst
+      exact hex ⟨s, t, hst, heq⟩
+    · rintro ⟨s, t, hst, heq⟩ hi
+      exact hst (hi heq)
+  rw [hp]
+  simpa only [Finset.card_univ, div_eq_mul_inv, one_mul] using
+    pi_repeated_bins Q Finset.univ (1 / (Fintype.card Bin : ℝ)) (by positivity)
+      (fun s _ b => (hQ s b).le)
+
+theorem iid_pinned_collision_probability {Slot Bin : Type*} [Fintype Slot] [DecidableEq Slot]
+    [Fintype Bin] (Q : Slot → FinLaw Bin)
+    (hQ : ∀ s b, (Q s).w b = 1 / (Fintype.card Bin : ℝ)) (s : Slot) (b : Bin) :
+    (FinLaw.pi (coordinatePin Q s b)).pr (fun pool => ¬ Function.Injective pool) ≤
+      (Fintype.card Slot : ℝ) ^ 2 / Fintype.card Bin := by
+  have hp : (fun pool : Slot → Bin => ¬ Function.Injective pool) =
+      (fun pool => ∃ s ∈ (Finset.univ : Finset Slot), ∃ t ∈ Finset.univ, s ≠ t ∧ pool s = pool t) := by
+    funext pool
+    apply propext
+    simp only [Finset.mem_univ, true_and]
+    constructor
+    · intro h
+      by_contra hex
+      apply h
+      intro s t heq
+      by_contra hst
+      exact hex ⟨s, t, hst, heq⟩
+    · rintro ⟨s, t, hst, heq⟩ hi
+      exact hst (hi heq)
+  rw [hp]
+  simpa only [Finset.card_univ, div_eq_mul_inv, one_mul] using
+    pi_repeated_bins_pinned Q Finset.univ s b (1 / (Fintype.card Bin : ℝ)) (by positivity)
+      (fun s _ b => (hQ s b).le)
+
+/-- Image normalizers concentrate with the same iid pin as the pool
+experiment. The two explicit budgets separate bias from bounded differences. -/
+theorem image_diagnostic_concentration {Slot Bin Hist Check : Type*}
+    [Fintype Slot] [DecidableEq Slot] [Fintype Bin] [instB : DecidableEq Bin]
+    [Fintype Hist] [Fintype Check] {n : ℕ} {c0 : ℝ}
+    (D : CellPoolDiagnostics Slot Bin Hist Check n c0)
+    (P : Check → FinLaw Bin) (c tol : ℝ) (hc : 0 < c) (htol : 0 < tol)
+    (hn : 2 ≤ n) (hc0 : 0 < c0) (hslots : 0 < Fintype.card Slot)
+    (heps : 0 < D.ε ∧ D.ε ≤ 1)
+    (hcap : ∀ a b, (P a).w b ≤ c)
+    (hnormal : ∀ pool a, D.normalizer pool a = ∑ b ∈ Finset.univ.image pool, (P a).w b)
+    (hcenter : ∀ a, D.center a = (Fintype.card Slot : ℝ) / Fintype.card Bin)
+    (htolerance : ∀ a, D.tolerance a = tol)
+    (hbias : (Fintype.card Slot : ℝ) * c *
+        ((Fintype.card Slot : ℝ) ^ 2 / Fintype.card Bin) + (c + 1 / (Fintype.card Bin : ℝ)) ≤ tol / 2)
+    (hvariance : (n : ℝ) ^ c0 + Real.log (8 * max 1 (Fintype.card Check : ℝ)) ≤
+        2 * (tol / 2) ^ 2 / ((Fintype.card Slot : ℝ) * c ^ 2))
+    (hcollision : (Fintype.card Slot : ℝ) ^ 2 / Fintype.card Bin ≤ Real.exp (-(n : ℝ) ^ c0) / 4) :
+    Nonempty (PoolConcentrationHypotheses D) := by
+  classical
+  cases Subsingleton.elim instB (Classical.decEq Bin)
+  let B : ℝ := Fintype.card Bin
+  let L : ℝ := Fintype.card Slot
+  have hL : 0 < L := by dsimp [L]; exact_mod_cast hslots
+  have herror : 0 ≤ c + 1 / B := by positivity
+  have hplain (a : Check) :
+      |D.poolLaw.E (D.normalizer · a) - D.center a| ≤ tol / 2 := by
+    simp_rw [CellPoolDiagnostics.poolLaw, hnormal, hcenter]
+    have hb := image_mass_mean_bias (P a) (FinLaw.pi D.iidSlotLaw) c hc.le (hcap a)
+    rw [empirical_mass_mean (P a) D.iidSlotLaw D.uniform_slots] at hb
+    have hprob := iid_collision_probability D.iidSlotLaw D.uniform_slots
+    have hmul := mul_le_mul_of_nonneg_left hprob (mul_nonneg hL.le hc.le)
+    have hbound : L / B - (FinLaw.pi D.iidSlotLaw).E
+        (fun pool => ∑ b ∈ Finset.univ.image pool, (P a).w b) ≤ tol / 2 := by
+      exact (hb.2.trans hmul).trans (by dsimp [L, B] at *; linarith only [hbias, herror])
+    apply abs_le.mpr
+    dsimp [L, B] at hbound
+    constructor <;> linarith [hb.1]
+  have hpinned (s : Slot) (b : Bin) (a : Check) :
+      |(D.pinLaw s b).E (D.normalizer · a) - D.center a| ≤ tol / 2 := by
+    simp_rw [CellPoolDiagnostics.pinLaw, hnormal, hcenter]
+    let Q := coordinatePin D.iidSlotLaw s b
+    have hb := image_mass_mean_bias (P a) (FinLaw.pi Q) c hc.le (hcap a)
+    have hprob := iid_pinned_collision_probability D.iidSlotLaw D.uniform_slots s b
+    have hmul := mul_le_mul_of_nonneg_left hprob (mul_nonneg hL.le hc.le)
+    have hmean := empirical_mass_pinned_mean (P a) D.iidSlotLaw D.uniform_slots c hc.le (hcap a) s b
+    have hshift : |(FinLaw.pi Q).E (fun pool => ∑ s, (P a).w (pool s)) - L / B| ≤ c + 1 / B :=
+      by simpa only [Q, coordinatePin, FinLaw.E, FinLaw.pi, FinLaw.dirac, L, B] using hmean
+    have hbound : |(FinLaw.pi Q).E (fun pool => ∑ b ∈ Finset.univ.image pool, (P a).w b) -
+        (FinLaw.pi Q).E (fun pool => ∑ s, (P a).w (pool s))| ≤ L * c * (L ^ 2 / B) := by
+      apply abs_le.mpr
+      have hh := hb.2.trans hmul
+      constructor <;> linarith [hb.1]
+    simpa only [Q, coordinatePin, FinLaw.E, FinLaw.pi, FinLaw.dirac, L, B] using
+      (abs_sub_le ((FinLaw.pi Q).E (fun pool => ∑ b ∈ Finset.univ.image pool, (P a).w b))
+        ((FinLaw.pi Q).E (fun pool => ∑ s, (P a).w (pool s))) (L / B)).trans
+        ((add_le_add hbound hshift).trans hbias)
+  refine ⟨{
+    n_large := hn
+    exponent_pos := hc0
+    slots_pos := hslots
+    epsilon_pos := heps
+    tolerance_pos := fun a => by rw [htolerance]; exact htol
+    sensitivity := fun _ _ => c
+    sensitivity_nonneg := fun _ _ => hc.le
+    mean_close := fun a => by rw [htolerance]; exact hplain a
+    pinned_mean_close := fun s b a => by rw [htolerance]; exact hpinned s b a
+    one_slot_change := ?_
+    variance_budget := ?_
+    collision_budget := hcollision }⟩
+  · intro a s x y hxy
+    rw [hnormal, hnormal]
+    exact image_mass_one_slot (P a) c hc.le (hcap a) s x y hxy
+  · intro a
+    simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, htolerance]
+    exact Or.inr ⟨mul_pos hL (sq_pos_of_pos hc), hvariance⟩
+
+theorem direct_image_budget_room : ∃ n₀ : ℕ, ∀ (n : ℕ) (L B : ℝ),
+    n₀ ≤ n → 2 ≤ n → 0 < B → (n : ℝ) ^ (200 : ℕ) ≤ L →
+    L ^ 2 / B ≤ Real.exp (-Real.rpow (n : ℝ) (1 / 2 : ℝ)) / 4 →
+    (2 * L ^ 2 / B + 3 / L ≤ Real.rpow (n : ℝ) (-4) / 2) ∧
+    (Real.rpow (n : ℝ) (1 / 2 : ℝ) + Real.log (8 * ((2 ^ n + 1 : ℕ) : ℝ)) ≤
+      L * Real.rpow (n : ℝ) (-4) ^ 2 / 8) := by
+  obtain ⟨n₀, hroom⟩ := logarithmic_room (1 / 2) 1 (Real.log 2) 4 (by norm_num) (by norm_num) (by norm_num)
+  refine ⟨n₀, ?_⟩
+  intro n L B hn hn2 hB hL hcollision
+  let x : ℝ := n
+  have hx2 : (2 : ℝ) ≤ x := by dsimp [x]; exact_mod_cast hn2
+  have hx : 0 < x := by linarith
+  have hx1 : 1 ≤ x := by linarith
+  have hLp : 0 < L := lt_of_lt_of_le (pow_pos hx _) hL
+  have hρ : Real.rpow x (-4) = 1 / x ^ (4 : ℕ) := by
+    rw [Real.rpow_eq_pow, Real.rpow_neg, show (4 : ℝ) = ((4 : ℕ) : ℝ) by norm_num, Real.rpow_natCast, one_div] <;> exact hx.le
+  have hsmall : Real.exp (-Real.rpow x (1 / 2 : ℝ)) ≤ Real.rpow x (-4) / 2 := by
+    have hr := hroom n hn
+    simp only [one_mul] at hr
+    have he := Real.exp_le_exp.mpr (show -Real.rpow x (1 / 2 : ℝ) ≤ -(Real.log 2 + 4 * Real.log x) by exact neg_le_neg hr)
+    have he4 : Real.exp (4 * Real.log x) = x ^ (4 : ℕ) := by
+      simpa only [Nat.cast_ofNat, Real.exp_log hx] using Real.exp_nat_mul (Real.log x) 4
+    rw [Real.exp_neg (Real.log 2 + 4 * Real.log x), Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 2), he4] at he
+    rw [hρ]
+    convert he using 1 <;> ring
+  have h196 : (12 : ℝ) ≤ x ^ (196 : ℕ) := by
+    calc
+      12 ≤ (2 : ℝ) ^ (4 : ℕ) := by norm_num
+      _ ≤ x ^ (4 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (196 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have h191 : (32 : ℝ) ≤ x ^ (191 : ℕ) := by
+    calc
+      32 = (2 : ℝ) ^ (5 : ℕ) := by norm_num
+      _ ≤ x ^ (5 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (191 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have hload : 12 * x ^ (4 : ℕ) ≤ L := by
+    calc
+      _ ≤ x ^ (196 : ℕ) * x ^ (4 : ℕ) := mul_le_mul_of_nonneg_right h196 (pow_nonneg hx.le _)
+      _ = x ^ (200 : ℕ) := by rw [← pow_add]
+      _ ≤ L := hL
+  have hvar : 32 * x ^ (9 : ℕ) ≤ L := by
+    calc
+      _ ≤ x ^ (191 : ℕ) * x ^ (9 : ℕ) := mul_le_mul_of_nonneg_right h191 (pow_nonneg hx.le _)
+      _ = x ^ (200 : ℕ) := by rw [← pow_add]
+      _ ≤ L := hL
+  refine ⟨?_, ?_⟩
+  · have hpin : 3 / L ≤ Real.rpow x (-4) / 4 := by
+      calc
+        _ ≤ 3 / (12 * x ^ (4 : ℕ)) := div_le_div_of_nonneg_left (by norm_num) (by positivity) hload
+        _ = _ := by rw [hρ]; ring
+    have hcoll := mul_le_mul_of_nonneg_left hcollision (by norm_num : (0 : ℝ) ≤ 2)
+    have hs := mul_le_mul_of_nonneg_left hsmall (by norm_num : (0 : ℝ) ≤ 1 / 2)
+    dsimp [x] at *
+    rw [mul_div_assoc]
+    nlinarith only [hpin, hcoll, hs]
+  · have hlog2 : Real.log 2 ≤ 1 := by
+      have hh := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+      nlinarith
+    have hlog16 : Real.log 16 ≤ 4 := by
+      have heq : Real.log 16 = 4 * Real.log 2 := by
+        convert Real.log_pow (2 : ℝ) 4 using 1 <;> norm_num
+      rw [heq]
+      linarith
+    have hlog : Real.log (8 * ((2 ^ n + 1 : ℕ) : ℝ)) ≤ 4 + x := by
+      have hp1 : (1 : ℝ) ≤ (2 : ℝ) ^ n := one_le_pow₀ (by norm_num)
+      have hh : 8 * ((2 ^ n + 1 : ℕ) : ℝ) ≤ 16 * (2 : ℝ) ^ n := by
+        push_cast
+        nlinarith only [hp1]
+      calc
+        _ ≤ Real.log (16 * (2 : ℝ) ^ n) := Real.log_le_log (by positivity) hh
+        _ = Real.log 16 + (n : ℝ) * Real.log 2 := by
+          rw [Real.log_mul (by norm_num : (16 : ℝ) ≠ 0) (by positivity : (2 : ℝ) ^ n ≠ 0), Real.log_pow]
+        _ ≤ 4 + x := by nlinarith [mul_le_mul_of_nonneg_left hlog2 hx.le]
+    have hroot : Real.rpow x (1 / 2 : ℝ) ≤ x := by
+      simpa only [Real.rpow_eq_pow, Real.rpow_one] using Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1 / 2 : ℝ) ≤ 1)
+    have hpoly : 4 * x ≤ L * Real.rpow x (-4) ^ 2 / 8 := by
+      calc
+        _ = (32 * x ^ (9 : ℕ)) * Real.rpow x (-4) ^ 2 / 8 := by rw [hρ]; field_simp; ring
+        _ ≤ _ := div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hvar (sq_nonneg _)) (by norm_num)
+    exact (show Real.rpow x (1 / 2 : ℝ) + Real.log (8 * ((2 ^ n + 1 : ℕ) : ℝ)) ≤ 4 * x by linarith).trans hpoly
+
+theorem pi_injective_coordinate_E {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Fintype Bin]
+    (Q : Slot → FinLaw Bin) (indices : Index → Slot) (hi : Function.Injective indices)
+    (F : (Index → Bin) → ℝ) :
+    (FinLaw.pi Q).E (fun pool => F (fun i => pool (indices i))) =
+      (FinLaw.pi (fun i => Q (indices i))).E F := by
+  classical
+  let S := Finset.univ.image indices
+  let e : Index ≃ {s : Slot // s ∈ S} := Equiv.ofBijective
+    (fun i => ⟨indices i, Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩⟩)
+    ⟨fun i j hh => hi (congrArg Subtype.val hh), by
+      intro s
+      obtain ⟨i, _, heq⟩ := Finset.mem_image.mp s.2
+      exact ⟨i, Subtype.ext heq⟩⟩
+  have heval : ∀ i, (e i).1 = indices i := fun _ => rfl
+  let ef : ({s : Slot // s ∈ S} → Bin) ≃ (Index → Bin) := {
+    toFun := fun z i => z (e i)
+    invFun := fun z s => z (e.symm s)
+    left_inv := fun z => funext fun s => by simp
+    right_inv := fun z => funext fun i => by simp }
+  have hef (z : {s : Slot // s ∈ S} → Bin) : ef z = (fun i => z (e i)) := rfl
+  let P : Slot → FinProb Bin := fun s => finLawToFramework (Q s)
+  have hm := FinProb.pi_marginal_expect P S (fun z => F (fun i => z (e i)))
+  have hm' : (FinLaw.pi Q).E (fun pool => F (fun i => pool (indices i))) =
+      (FinLaw.pi (fun s : {s : Slot // s ∈ S} => Q s.1)).E (fun z => F (ef z)) := by
+    simpa only [P, FinProb.expect, FinProb.pi, finLawToFramework, FinLaw.E, FinLaw.pi, heval, hef] using hm
+  rw [hm']
+  have hweights (z : Index → Bin) :
+      (FinLaw.pi (fun s : {s : Slot // s ∈ S} => Q s.1)).w (ef.symm z) =
+        (FinLaw.pi (fun i => Q (indices i))).w z := by
+    change (∏ s : {s : Slot // s ∈ S}, (Q s.1).w (z (e.symm s))) =
+      ∏ i, (Q (indices i)).w (z i)
+    simpa only [Equiv.symm_apply_apply, heval] using
+      (e.prod_comp (fun s : {s : Slot // s ∈ S} => (Q s.1).w (z (e.symm s)))).symm
+  calc
+    _ = ∑ z : Index → Bin,
+        (FinLaw.pi (fun s : {s : Slot // s ∈ S} => Q s.1)).w (ef.symm z) * F z := by
+      have hh := (ef.symm.sum_comp (fun z =>
+        (FinLaw.pi (fun s : {s : Slot // s ∈ S} => Q s.1)).w z * F (ef z))).symm
+      simpa only [Equiv.apply_symm_apply, FinLaw.E] using hh
+    _ = _ := by simp only [hweights, FinLaw.E]
+
+/-- Slot expansion of an unnormalized empirical star polynomial. The
+kernel can already include the factors `B*qbar` and a fixed group-bin pin. -/
+noncomputable def empirical_statistic {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    (F : (Index → Bin) → ℝ) (pool : Slot → Bin) : ℝ :=
+  (FinLaw.pi (fun _ : Index => FinLaw.uniform (Finset.univ : Finset Slot) Finset.univ_nonempty)).E
+    (fun indices => F (fun i => pool (indices i)))
+
+theorem empirical_statistic_range {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    (F : (Index → Bin) → ℝ) (M : ℝ) (hF : ∀ a, 0 ≤ F a ∧ F a ≤ M) (pool : Slot → Bin) :
+    0 ≤ empirical_statistic F pool ∧ empirical_statistic F pool ≤ M := by
+  let J := FinLaw.pi (fun _ : Index => FinLaw.uniform (Finset.univ : Finset Slot) Finset.univ_nonempty)
+  refine ⟨Finset.sum_nonneg (fun indices _ => mul_nonneg (J.nonneg indices) (hF _).1), ?_⟩
+  calc
+    _ ≤ ∑ indices, J.w indices * M := Finset.sum_le_sum fun indices _ =>
+      mul_le_mul_of_nonneg_left (hF _).2 (J.nonneg indices)
+    _ = M := by rw [← Finset.sum_mul, J.sum_one, one_mul]
+
+theorem empirical_statistic_one_slot {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    (F : (Index → Bin) → ℝ) (M : ℝ) (hM : 0 ≤ M) (hF : ∀ a, 0 ≤ F a ∧ F a ≤ M)
+    (s : Slot) (x y : Slot → Bin) (hxy : ∀ t, t ≠ s → x t = y t) :
+    |empirical_statistic F x - empirical_statistic F y| ≤
+      (Fintype.card Index : ℝ) * M / Fintype.card Slot := by
+  classical
+  let laws : Index → FinLaw Slot := fun _ => FinLaw.uniform Finset.univ Finset.univ_nonempty
+  let J := FinLaw.pi laws
+  have hprob : J.pr (fun indices => ∃ i : Index, indices i = s) ≤
+      (Fintype.card Index : ℝ) / Fintype.card Slot := by
+    have hh := finLaw_union_bound J (Finset.univ : Finset Index) (fun i indices => indices i = s)
+    have hcoord : ∀ i, J.pr (fun indices => indices i = s) = 1 / (Fintype.card Slot : ℝ) := by
+      intro i
+      rw [show J = FinLaw.pi laws from rfl, pi_coordinate_pr]
+      simp [laws, FinLaw.uniform]
+    simpa only [Finset.mem_univ, true_and, hcoord, Finset.sum_const, Finset.card_univ,
+      nsmul_eq_mul, div_eq_mul_inv, one_mul] using hh
+  have hdom (indices : Index → Slot) :
+      |F (fun i => x (indices i)) - F (fun i => y (indices i))| ≤
+        if ∃ i : Index, indices i = s then M else 0 := by
+    by_cases hhit : ∃ i : Index, indices i = s
+    · rw [if_pos hhit]
+      exact abs_le.mpr ⟨by linarith [(hF (fun i => x (indices i))).1, (hF (fun i => y (indices i))).2],
+        by linarith [(hF (fun i => y (indices i))).1, (hF (fun i => x (indices i))).2]⟩
+    · rw [if_neg hhit]
+      have heq : (fun i => x (indices i)) = (fun i => y (indices i)) :=
+        funext fun i => hxy (indices i) (fun hi => hhit ⟨i, hi⟩)
+      rw [heq, sub_self, abs_zero]
+  have heq : empirical_statistic F x - empirical_statistic F y =
+      ∑ indices, J.w indices * (F (fun i => x (indices i)) - F (fun i => y (indices i))) := by
+    unfold empirical_statistic FinLaw.E
+    simp only [J, laws, mul_sub, Finset.sum_sub_distrib]
+  rw [heq]
+  calc
+    _ ≤ ∑ indices, |J.w indices * (F (fun i => x (indices i)) - F (fun i => y (indices i)))| :=
+      Finset.abs_sum_le_sum_abs _ _
+    _ = ∑ indices, J.w indices * |F (fun i => x (indices i)) - F (fun i => y (indices i))| := by
+      apply Finset.sum_congr rfl
+      intro indices _
+      rw [abs_mul, abs_of_nonneg (J.nonneg indices)]
+    _ ≤ ∑ indices, J.w indices * (if ∃ i : Index, indices i = s then M else 0) :=
+      Finset.sum_le_sum fun indices _ => mul_le_mul_of_nonneg_left (hdom indices) (J.nonneg indices)
+    _ = M * J.pr (fun indices => ∃ i : Index, indices i = s) := by
+      unfold FinLaw.pr
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro indices _
+      by_cases hh : ∃ i : Index, indices i = s <;> simp [hh, mul_comm]
+    _ ≤ M * ((Fintype.card Index : ℝ) / Fintype.card Slot) := mul_le_mul_of_nonneg_left hprob hM
+    _ = _ := by ring
+
+theorem empirical_statistic_mean_exchange {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] (F : (Index → Bin) → ℝ) (P : FinLaw (Slot → Bin)) :
+    P.E (empirical_statistic F) =
+      (FinLaw.pi (fun _ : Index => FinLaw.uniform (Finset.univ : Finset Slot) Finset.univ_nonempty)).E
+        (fun indices => P.E (fun pool => F (fun i => pool (indices i)))) := by
+  unfold empirical_statistic FinLaw.E
+  simp only [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro indices _
+  apply Finset.sum_congr rfl
+  intro pool _
+  ring
+
+private theorem finite_expect_range {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (F : Ω → ℝ) (M : ℝ) (hF : ∀ x, 0 ≤ F x ∧ F x ≤ M) :
+    0 ≤ P.E F ∧ P.E F ≤ M := by
+  refine ⟨Finset.sum_nonneg (fun x _ => mul_nonneg (P.nonneg x) (hF x).1), ?_⟩
+  calc
+    _ ≤ ∑ x, P.w x * M := Finset.sum_le_sum fun x _ => mul_le_mul_of_nonneg_left (hF x).2 (P.nonneg x)
+    _ = M := by rw [← Finset.sum_mul, P.sum_one, one_mul]
+
+/-- Distinct empirical indices reproduce the independent bin integral.
+Repeated indices cost at most the ordered-pair birthday estimate. -/
+theorem empirical_statistic_mean {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] (F : (Index → Bin) → ℝ) (Q : FinLaw Bin) (M : ℝ) (hM : 0 ≤ M)
+    (hF : ∀ a, 0 ≤ F a ∧ F a ≤ M) :
+    (FinLaw.pi (fun _ : Slot => Q)).E (empirical_statistic F) ≤
+      (FinLaw.pi (fun _ : Index => Q)).E F +
+        M * ((Fintype.card Index : ℝ) ^ 2 / Fintype.card Slot) := by
+  classical
+  let laws : Index → FinLaw Slot := fun _ => FinLaw.uniform Finset.univ Finset.univ_nonempty
+  let J := FinLaw.pi laws
+  let μ := (FinLaw.pi (fun _ : Index => Q)).E F
+  have hμ : 0 ≤ μ := (finite_expect_range _ F M hF).1
+  have hpoint (indices : Index → Slot) :
+      (FinLaw.pi (fun _ : Slot => Q)).E (fun pool => F (fun i => pool (indices i))) ≤
+        μ + (if ¬ Function.Injective indices then M else 0) := by
+    by_cases hi : Function.Injective indices
+    · rw [if_neg (not_not.mpr hi), add_zero, pi_injective_coordinate_E _ indices hi]
+    · rw [if_pos hi]
+      exact ((finite_expect_range _ _ M (fun pool => hF _)).2).trans (le_add_of_nonneg_left hμ)
+  have hcollision : J.pr (fun indices => ¬ Function.Injective indices) ≤
+      (Fintype.card Index : ℝ) ^ 2 / Fintype.card Slot :=
+    iid_collision_probability laws (fun _ _ => by simp [laws, FinLaw.uniform])
+  rw [empirical_statistic_mean_exchange F]
+  calc
+    _ ≤ ∑ indices, J.w indices * (μ + (if ¬ Function.Injective indices then M else 0)) :=
+      Finset.sum_le_sum fun indices _ => mul_le_mul_of_nonneg_left (hpoint indices) (J.nonneg indices)
+    _ = μ + M * J.pr (fun indices => ¬ Function.Injective indices) := by
+      unfold FinLaw.pr
+      simp only [mul_add, Finset.sum_add_distrib, ← Finset.sum_mul, J.sum_one, one_mul]
+      congr 1
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro indices _
+      by_cases hi : Function.Injective indices <;> simp [hi, mul_comm]
+    _ ≤ _ := add_le_add le_rfl (mul_le_mul_of_nonneg_left hcollision hM)
+
+theorem finite_pr_or {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (A B : Ω → Prop) :
+    P.pr (fun x => A x ∨ B x) ≤ P.pr A + P.pr B := by
+  classical
+  unfold FinLaw.pr
+  rw [← Finset.sum_add_distrib]
+  apply Finset.sum_le_sum
+  intro x _
+  by_cases ha : A x <;> by_cases hb : B x <;> simp [ha, hb, P.nonneg x]
+
+/-- A fixed pool slot creates an additional exceptional index set. Outside
+it and the birthday set, the original independent integral is unchanged. -/
+theorem empirical_statistic_pinned_mean {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] (F : (Index → Bin) → ℝ) (Q : FinLaw Bin) (M : ℝ) (hM : 0 ≤ M)
+    (hF : ∀ a, 0 ≤ F a ∧ F a ≤ M) (s : Slot) (b : Bin) :
+    (FinLaw.pi (coordinatePin (fun _ : Slot => Q) s b)).E (empirical_statistic F) ≤
+      (FinLaw.pi (fun _ : Index => Q)).E F +
+        M * (((Fintype.card Index : ℝ) ^ 2 + Fintype.card Index) / Fintype.card Slot) := by
+  classical
+  let laws : Index → FinLaw Slot := fun _ => FinLaw.uniform Finset.univ Finset.univ_nonempty
+  let J := FinLaw.pi laws
+  let μ := (FinLaw.pi (fun _ : Index => Q)).E F
+  let bad : (Index → Slot) → Prop := fun indices =>
+    ¬ Function.Injective indices ∨ ∃ i : Index, indices i = s
+  have hμ : 0 ≤ μ := (finite_expect_range _ F M hF).1
+  have hgood (indices : Index → Slot) (hi : Function.Injective indices)
+      (hmiss : ∀ i, indices i ≠ s) :
+      (FinLaw.pi (coordinatePin (fun _ : Slot => Q) s b)).E (fun pool => F (fun i => pool (indices i))) = μ := by
+    rw [pi_injective_coordinate_E _ indices hi]
+    have heq : (fun i => coordinatePin (fun _ : Slot => Q) s b (indices i)) = (fun _ : Index => Q) := by
+      funext i
+      simp only [coordinatePin, if_neg (hmiss i)]
+    rw [heq]
+  have hpoint (indices : Index → Slot) :
+      (FinLaw.pi (coordinatePin (fun _ : Slot => Q) s b)).E (fun pool => F (fun i => pool (indices i))) ≤
+        μ + (if bad indices then M else 0) := by
+    by_cases hb : bad indices
+    · rw [if_pos hb]
+      exact ((finite_expect_range _ _ M (fun pool => hF _)).2).trans (le_add_of_nonneg_left hμ)
+    · rw [if_neg hb, add_zero]
+      have hi : Function.Injective indices := by
+        by_contra hi
+        exact hb (Or.inl hi)
+      have hmiss : ∀ i, indices i ≠ s := fun i hh => hb (Or.inr ⟨i, hh⟩)
+      rw [hgood indices hi hmiss]
+  have hcollision : J.pr (fun indices => ¬ Function.Injective indices) ≤
+      (Fintype.card Index : ℝ) ^ 2 / Fintype.card Slot :=
+    iid_collision_probability laws (fun _ _ => by simp [laws, FinLaw.uniform])
+  have hhit : J.pr (fun indices => ∃ i : Index, indices i = s) ≤
+      (Fintype.card Index : ℝ) / Fintype.card Slot := by
+    have hh := finLaw_union_bound J (Finset.univ : Finset Index) (fun i indices => indices i = s)
+    have hcoord : ∀ i, J.pr (fun indices => indices i = s) = 1 / (Fintype.card Slot : ℝ) := by
+      intro i
+      rw [show J = FinLaw.pi laws from rfl, pi_coordinate_pr]
+      simp [laws, FinLaw.uniform]
+    simpa only [Finset.mem_univ, true_and, hcoord, Finset.sum_const, Finset.card_univ,
+      nsmul_eq_mul, div_eq_mul_inv, one_mul] using hh
+  have hprob : J.pr bad ≤ ((Fintype.card Index : ℝ) ^ 2 + Fintype.card Index) / Fintype.card Slot := by
+    have hh := (finite_pr_or J (fun indices => ¬ Function.Injective indices)
+      (fun indices => ∃ i : Index, indices i = s)).trans (add_le_add hcollision hhit)
+    simpa only [bad, add_div] using hh
+  rw [empirical_statistic_mean_exchange F]
+  calc
+    _ ≤ ∑ indices, J.w indices * (μ + (if bad indices then M else 0)) :=
+      Finset.sum_le_sum fun indices _ => mul_le_mul_of_nonneg_left (hpoint indices) (J.nonneg indices)
+    _ = μ + M * J.pr bad := by
+      unfold FinLaw.pr
+      simp only [mul_add, Finset.sum_add_distrib, ← Finset.sum_mul, J.sum_one, one_mul]
+      congr 1
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro indices _
+      by_cases hb : bad indices <;> simp [hb, mul_comm]
+    _ ≤ _ := add_le_add le_rfl (mul_le_mul_of_nonneg_left hprob hM)
+
+noncomputable def empirical_weighted_kernel {Index Bin : Type*} [Fintype Index] [Fintype Bin]
+    (P : Index → FinLaw Bin) (B : ℝ) (F : (Index → Bin) → ℝ) (a : Index → Bin) : ℝ :=
+  F a * ∏ i, B * (P i).w (a i)
+
+theorem empirical_weighted_kernel_range {Index Bin : Type*} [Fintype Index] [Fintype Bin]
+    (P : Index → FinLaw Bin) (B A : ℝ) (hB : 0 < B) (hA : 0 ≤ A)
+    (hcap : ∀ i b, (P i).w b ≤ A / B) (F : (Index → Bin) → ℝ)
+    (hF : ∀ a, 0 ≤ F a ∧ F a ≤ 1) :
+    ∀ a, 0 ≤ empirical_weighted_kernel P B F a ∧
+      empirical_weighted_kernel P B F a ≤ A ^ Fintype.card Index := by
+  intro a
+  have hprod0 : 0 ≤ ∏ i, B * (P i).w (a i) :=
+    Finset.prod_nonneg fun i _ => mul_nonneg hB.le ((P i).nonneg _)
+  refine ⟨mul_nonneg (hF a).1 hprod0, ?_⟩
+  calc
+    _ ≤ ∏ i, B * (P i).w (a i) := mul_le_of_le_one_left hprod0 (hF a).2
+    _ ≤ ∏ _i : Index, A := by
+      apply Finset.prod_le_prod₀
+      · intro i _
+        exact mul_nonneg hB.le ((P i).nonneg _)
+      · intro i _
+        have hh := (le_div_iff₀ hB).mp (hcap i (a i))
+        simpa only [mul_comm] using hh
+    _ = _ := by simp
+
+/-- Uniform-slot expectation cancels the `B*qbar` factors exactly. -/
+theorem empirical_weighted_kernel_integral {Index Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Bin] [DecidableEq Bin] [Nonempty Bin]
+    (P : Index → FinLaw Bin) (F : (Index → Bin) → ℝ) :
+    (FinLaw.pi (fun _ : Index => FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)).E
+      (empirical_weighted_kernel P (Fintype.card Bin) F) = (FinLaw.pi P).E F := by
+  classical
+  have hB : (Fintype.card Bin : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  apply Finset.sum_congr rfl
+  intro a _
+  have hprod : (∏ i : Index, (FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty).w (a i)) *
+      (∏ i : Index, (Fintype.card Bin : ℝ) * (P i).w (a i)) = ∏ i : Index, (P i).w (a i) := by
+    rw [← Finset.prod_mul_distrib]
+    apply Finset.prod_congr rfl
+    intro i _
+    simp only [FinLaw.uniform, Finset.mem_univ, if_true, Finset.card_univ]
+    field_simp [hB]
+  change (∏ i : Index, (FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty).w (a i)) *
+    (F a * ∏ i : Index, (Fintype.card Bin : ℝ) * (P i).w (a i)) = (∏ i : Index, (P i).w (a i)) * F a
+  rw [mul_left_comm, hprod, mul_comm]
+
+private theorem finLaw_eq_of_weights {Ω : Type*} [Fintype Ω] (P Q : FinLaw Ω)
+    (h : ∀ x, P.w x = Q.w x) : P = Q := by
+  cases P
+  cases Q
+  congr 1
+  exact funext h
+
+/-- Deterministic histories need no further history conditioning. A finite
+refinement of the constant summands supplies the analytic range budget. -/
+theorem deterministic_history_load_gate {Slot Bin Hist Check : Type*}
+    [Fintype Slot] [DecidableEq Slot] [Fintype Bin] [DecidableEq Bin]
+    [Fintype Hist] [Fintype Check] [Subsingleton Hist] {n : ℕ} {c0 : ℝ}
+    (D : CellPoolDiagnostics Slot Bin Hist Check n c0) (hn : 2 ≤ n)
+    (hc0 : 0 < c0) (ht : 0 < D.loadThreshold) (R : ℝ) (hR : 0 ≤ R)
+    (hrange : ∀ pool h y, 0 ≤ D.loadValue pool h y ∧ D.loadValue pool h y ≤ R)
+    (hsmall : ∀ pool, D.typical pool → ∀ h y,
+      D.loadValue pool h y ≤ D.loadThreshold / 2) :
+    Nonempty (LoadGateHypotheses D) := by
+  classical
+  have hHist : Nonempty Hist := by
+    by_contra h
+    have hzero : Fintype.card Hist = 0 := Fintype.card_eq_zero_iff.mpr (not_nonempty_iff.mp h)
+    have hempty : Finset.univ = (∅ : Finset Hist) :=
+      Finset.card_eq_zero.mp (by simpa using hzero)
+    have hsum := (D.historyLaw (fun _ => Classical.choice D.bins_nonempty)).sum_one
+    rw [hempty, Finset.sum_empty] at hsum
+    norm_num at hsum
+  let h0 : Hist := Classical.choice hHist
+  let A : ℝ := (n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))
+  have hA : 0 < A := by
+    have hnp : (0 : ℝ) < n := by exact_mod_cast lt_of_lt_of_le (by norm_num) hn
+    exact add_pos_of_pos_of_nonneg (Real.rpow_pos_of_pos hnp _)
+      (Real.log_nonneg (le_max_left _ _))
+  obtain ⟨m, hm⟩ := exists_nat_gt (2 * R ^ 2 * A / D.loadThreshold ^ 2)
+  let M := m + 1
+  have hM : (0 : ℝ) < M := by exact_mod_cast (Nat.succ_pos m)
+  have hroom : 2 * R ^ 2 * A < (M : ℝ) * D.loadThreshold ^ 2 := by
+    have hh : 2 * R ^ 2 * A / D.loadThreshold ^ 2 < (M : ℝ) :=
+      hm.trans (by dsimp [M]; norm_num)
+    exact (div_lt_iff₀ (sq_pos_of_pos ht)).mp hh
+  have hbudget : A * (R ^ 2 / (M : ℝ)) ≤ 2 * (D.loadThreshold / 2) ^ 2 := by
+    rw [← mul_div_assoc]
+    apply (div_le_iff₀ hM).mpr
+    nlinarith only [hroom]
+  have hsum : (∑ _s : Fin M, (R / (M : ℝ)) ^ 2) = R ^ 2 / (M : ℝ) := by
+    simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    field_simp
+  refine ⟨{
+    n_large := hn
+    exponent_pos := hc0
+    Slice := Fin M
+    Value := fun _ => Unit
+    sliceLaw := fun _ _ => FinLaw.dirac ()
+    encode := fun _ => h0
+    history_eq := ?_
+    contribution := fun pool _ _ y => D.loadValue pool h0 y / (M : ℝ)
+    range := fun _ => R / (M : ℝ)
+    range_nonneg := fun _ => div_nonneg hR hM.le
+    contribution_range := ?_
+    load_eq := ?_
+    threshold_pos := ht
+    mean_small := ?_
+    variance_budget := ?_ }⟩
+  · intro pool
+    apply finLaw_eq_of_weights
+    intro h
+    have heq : h = h0 := Subsingleton.elim _ _
+    have huniv : (Finset.univ : Finset Hist) = {h0} := by
+      ext x
+      simp [Subsingleton.elim x h0]
+    have hweight := (D.historyLaw pool).sum_one
+    rw [huniv, Finset.sum_singleton] at hweight
+    rw [heq, hweight]
+    simp only [FinLaw.map, if_true, FinLaw.sum_one]
+  · intro pool s z y
+    exact ⟨div_nonneg (hrange pool h0 y).1 hM.le,
+      div_le_div_of_nonneg_right (hrange pool h0 y).2 hM.le⟩
+  · intro pool z y
+    simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+    field_simp
+  · intro pool hp y
+    calc
+      _ ≤ (D.historyLaw pool).E (fun _ => D.loadThreshold / 2) := by
+        apply Finset.sum_le_sum
+        intro h _
+        exact mul_le_mul_of_nonneg_left (hsmall pool hp h y) ((D.historyLaw pool).nonneg h)
+      _ = _ := by
+        unfold FinLaw.E
+        rw [← Finset.sum_mul, FinLaw.sum_one, one_mul]
+  · rw [hsum]
+    by_cases hz : R ^ 2 / (M : ℝ) = 0
+    · exact Or.inl hz
+    · refine Or.inr ⟨lt_of_le_of_ne (div_nonneg (sq_nonneg R) hM.le) (Ne.symm hz), ?_⟩
+      exact (le_div_iff₀ (lt_of_le_of_ne (div_nonneg (sq_nonneg R) hM.le) (Ne.symm hz))).mpr hbudget
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

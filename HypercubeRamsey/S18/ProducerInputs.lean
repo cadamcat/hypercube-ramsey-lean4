@@ -2,6 +2,7 @@ import HypercubeRamsey.S13.All
 import HypercubeRamsey.S14.All
 import HypercubeRamsey.S16.Producers
 import HypercubeRamsey.S18.ProducerInputs_q_s18_bridge
+import HypercubeRamsey.S18.ProducerInputs_sol_s18_widen
 
 /-! Inputs constructed before the Section 18 assembly. The remaining leaves
 are the fixed constant choice, the fine mesh, and the low-mode estimates;
@@ -48,7 +49,112 @@ theorem producer_constants_widening (κ₀ : CConsts) (hκ₀ : κ₀.Admissible
     ∃ κ : CConsts, κ.Admissible ∧ κ.η0 = κ₀.η0 ∧
       κ.xs = κ₀.xs ∧ κ.α = κ₀.α ∧ κ.xι = κ₀.xι ∧ κ.αι = κ₀.αι ∧ κ.ι = κ₀.ι ∧
       LateThresholds κ ∧ ProducerConstants κ := by
-  sorry
+  have ha : 0 < κ₀.a := by rw [hκ₀.a_eq]; exact div_pos hκ₀.θ_rng.1 (by norm_num)
+  have haC : κ₀.aC < 1 := by
+    have := hκ₀.aC_rng.2
+    have := min_le_right κ₀.η0 1
+    linarith
+  have hCb : 0 < κ₀.Cb := by
+    have h := hκ₀.Cb_big
+    have hdiv : 0 < 100 * κ₀.aC / κ₀.aB :=
+      div_pos (mul_pos (by norm_num) hκ₀.aC_rng.1) hκ₀.aB_rng.1
+    linarith only [h, hdiv]
+  have hM : 1 < (κ₀.Mlo : ℝ) := by linarith [hκ₀.Mlo_big]
+  have hMhi : (κ₀.Mlo : ℝ) ≤ κ₀.Mhi := by
+    have := div_pos (by norm_num : (0 : ℝ) < 10) hκ₀.cq_rng.1
+    linarith [hκ₀.Mhi_big.1]
+  have hωM : 4 * κ₀.ω * κ₀.Mlo < 1 := by
+    have h1 := mul_le_mul_of_nonneg_left hMhi
+      (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) hκ₀.ω_rng.1.le)
+    have h2 : 0 ≤ κ₀.ω * κ₀.Mhi := mul_nonneg hκ₀.ω_rng.1.le (by positivity)
+    nlinarith [hκ₀.ω_rng.2]
+  obtain ⟨c, h0, hc, hcc, hh0, hheight⟩ := Lane_sol_s18_widen.height_witness κ₀ hκ₀
+  obtain ⟨qc, hqc⟩ := eventually_atTop.mp
+    (Lane_sol_s18_widen.qcond_update_eventually κ₀ hκ₀ c hc h0 (by linarith))
+  obtain ⟨qcal, hcal⟩ := eventually_atTop.mp
+    (Lane_sol_s18_widen.calibration_eventually κ₀ hκ₀.ω_rng.1 ha hM hωM)
+  obtain ⟨qlate, hlate⟩ := eventually_atTop.mp
+    ((tendsto_rpow_atTop (show 0 < (κ₀.Mlo : ℝ) by linarith)).eventually_ge_atTop
+      (1 / κ₀.ρ))
+  let Q0 := max κ₀.Q0 (max qc (max qcal (max qlate 1)))
+  have hQold : κ₀.Q0 ≤ Q0 := le_max_left _ _
+  have hQqc : qc ≤ Q0 := by dsimp [Q0]; exact (le_max_left _ _).trans (le_max_right _ _)
+  have hQcal : qcal ≤ Q0 := by
+    dsimp [Q0]
+    exact (le_max_left _ _).trans ((le_max_right _ _).trans (le_max_right _ _))
+  have hQlate : qlate ≤ Q0 := by
+    dsimp [Q0]
+    exact (le_max_left _ _).trans
+      ((le_max_right _ _).trans ((le_max_right _ _).trans (le_max_right _ _)))
+  have hQone : 1 ≤ Q0 := by
+    dsimp [Q0]
+    exact (le_max_right _ _).trans
+      ((le_max_right _ _).trans ((le_max_right _ _).trans (le_max_right _ _)))
+  obtain ⟨N, hN⟩ := exists_nat_gt (max (κ₀.Qbd : ℝ) (κ₀.M1 * Q0))
+  let Qbd := 2 ^ N
+  have hNQ : N ≤ Qbd := Nat.le_of_lt Nat.lt_two_pow_self
+  have hNQR : (N : ℝ) ≤ Qbd := by exact_mod_cast hNQ
+  have hQB : κ₀.Qbd ≤ Qbd := by
+    exact_mod_cast ((le_max_left (κ₀.Qbd : ℝ) (κ₀.M1 * Q0)).trans (hN.le.trans hNQR))
+  have hMQ : κ₀.M1 * Q0 < (Qbd : ℝ) :=
+    ((le_max_right _ _).trans_lt hN).trans_le hNQR
+  let Kbd := max κ₀.Kbd (Real.exp (Cstar κ₀.u κ₀.ξ * Qbd))
+  let KB := max κ₀.KB
+    (max (Real.exp (100 * Kbd) + 100 * rowMeanConstant κ₀ + κ₀.A0)
+      ((100 * κ₀.Kcell * (κ₀.Kp : ℝ)) * max (rowMeanConstant κ₀) 2))
+  have hKb : κ₀.Kbd ≤ Kbd := le_max_left _ _
+  have hKB : κ₀.KB ≤ KB := le_max_left _ _
+  have hKB0 : 0 ≤ KB := (le_trans (by positivity) hκ₀.KB_big).trans hKB
+  have hA0 : 0 ≤ κ₀.A0 := le_trans (by positivity) hκ₀.A0_big
+  have hden : 0 < 1 + KB + 2 * κ₀.A0 := by linarith
+  let β := min κ₀.β (0.01 / (1 + KB + 2 * κ₀.A0))
+  have hβ : 0 < β := lt_min hκ₀.β_rng.1 (div_pos (by norm_num) hden)
+  let κ : CConsts := {κ₀ with c14 := c, h0 := h0, Q0 := Q0, Qbd := Qbd, Kbd := Kbd, KB := KB, β := β}
+  have hκ : κ.Admissible := by
+    refine {
+      η0_pos := hκ₀.η0_pos, xs_rng := hκ₀.xs_rng, α_rng := hκ₀.α_rng,
+      ι_rng := hκ₀.ι_rng, xι_pos := hκ₀.xι_pos, αι_pos := hκ₀.αι_pos,
+      Ac_eq := hκ₀.Ac_eq, P_big := hκ₀.P_big, R_eq := hκ₀.R_eq,
+      L_eq := hκ₀.L_eq, u_rng := hκ₀.u_rng, ξ_rng := hκ₀.ξ_rng,
+      θ_rng := hκ₀.θ_rng, clock := hκ₀.clock, aC_rng := hκ₀.aC_rng,
+      aB_rng := hκ₀.aB_rng, M1_big := hκ₀.M1_big, Cb_big := hκ₀.Cb_big,
+      Mlo_big := hκ₀.Mlo_big, cq_rng := hκ₀.cq_rng, Mhi_big := hκ₀.Mhi_big,
+      ω_rng := hκ₀.ω_rng, a_eq := hκ₀.a_eq, ρ_rng := hκ₀.ρ_rng,
+      KB_big := hκ₀.KB_big.trans hKB, A0_big := hκ₀.A0_big,
+      bucket := hκ₀.bucket, Kcell_big := hκ₀.Kcell_big,
+      cperm_rng := hκ₀.cperm_rng, c5_pos := hκ₀.c5_pos, c5_le := hκ₀.c5_le,
+      c14_pos := hc, cChernoff_pos := hκ₀.cChernoff_pos, h0_pos := hh0,
+      d0_pos := hκ₀.d0_pos, nearProduct := hκ₀.nearProduct,
+      Q0_large := ?_, bounded := ?_, β_rng := ?_ }
+    · intro q hq
+      exact hqc q (hQqc.trans hq)
+    · refine ⟨⟨N, rfl⟩, hMQ, ?_, hκ₀.bounded.2.2.2.1.trans hKb, le_max_right _ _⟩
+      have hqpow : (κ₀.Qbd : ℝ) ^ κ₀.aC ≤ (Qbd : ℝ) ^ κ₀.aC :=
+        Real.rpow_le_rpow (by positivity) (by exact_mod_cast hQB) hκ₀.aC_rng.1.le
+      exact (Real.exp_le_exp.mpr (neg_le_neg hqpow)).trans hκ₀.bounded.2.2.1
+    · refine ⟨hβ, ?_, ?_⟩
+      · exact (min_le_right _ _).trans
+          (div_le_div_of_nonneg_right (by norm_num : (0.01 : ℝ) ≤ 0.02) hden.le)
+      · exact (min_le_left _ _).trans_lt hκ₀.β_rng.2.2
+  have hcalibration : CalibrationConstants κ := by
+    intro q h hq hl hh
+    exact hcal (q : ℝ) (hQcal.trans hq) h hl hh
+  have hheight' : Nonempty (S14.HeightConstantContract κ) :=
+    Lane_sol_s18_widen.transfer_height (κ := {κ₀ with c14 := c, h0 := h0}) (κ' := κ)
+      rfl rfl rfl rfl rfl rfl hheight
+  have hlate' : LateThresholds κ := by
+    refine ⟨(le_max_left _ _).trans (le_max_right _ _),
+      (le_max_right _ _).trans (le_max_right _ _), ?_⟩
+    intro h hh
+    have hscale := hlate Q0 hQlate
+    have hbase : Q0 ≤ κ₀.M1 * Q0 := by
+      nlinarith only [hQone, hκ₀.M1_big.1]
+    have hp := Real.rpow_le_rpow (by linarith : 0 ≤ Q0) hbase (by linarith : 0 ≤ (κ₀.Mlo : ℝ))
+    have hdim : 1 / κ₀.ρ ≤ (h : ℝ) := hscale.trans (hp.trans hh)
+    have hρh : 1 ≤ (h : ℝ) * κ₀.ρ := (div_le_iff₀ hκ₀.ρ_rng.1).mp hdim
+    change 2 < 20 * κ₀.ρ * h
+    nlinarith only [hρh]
+  exact ⟨κ, hκ, rfl, rfl, rfl, rfl, rfl, rfl, hlate', ⟨hheight', hcalibration⟩⟩
 
 /-- Symmetric law budgets transport across the orientation swap. -/
 private theorem orient_two_budget {T : Stage} {k : ℕ} {s l e : ℝ}

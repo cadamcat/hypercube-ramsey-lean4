@@ -425,7 +425,8 @@ private theorem evenRow_cap11 {n N : ℕ} {E : Fin N → Fin N → Prop}
 
 private theorem tuple_cond_cost_le {n m : ℕ} {P x : ℝ} {K : ℕ}
     (hP : 10 ≤ P) (hn : 32 ≤ n) (hm : m ≤ n) (hx1 : x < 1)
-    (hxeq : x = xTup n P) (hK : K ≤ 34 * m * n ^ 6) :
+    (hxeq : x = xTup n P)
+    (hK : (K : ℝ) ≤ 34 * (m : ℝ) * (n : ℝ) ^ 6) :
     ((1 - x) ^ K)⁻¹ ≤ (2 : ℝ) ^ m := by
   classical
   have hnR : (32 : ℝ) ≤ n := by exact_mod_cast hn
@@ -434,7 +435,7 @@ private theorem tuple_cond_cost_le {n m : ℕ} {P x : ℝ} {K : ℕ}
     Real.rpow_le_rpow_of_exponent_le hn1 (by linarith)
   have hKReal : (K : ℝ) ≤ 34 * (n : ℝ) ^ 7 := by
     calc
-      (K : ℝ) ≤ 34 * m * n ^ 6 := by exact_mod_cast hK
+      (K : ℝ) ≤ 34 * (m : ℝ) * (n : ℝ) ^ 6 := hK
       _ ≤ 34 * n * n ^ 6 := by gcongr
       _ = 34 * n ^ 7 := by ring
   have hKx : (K : ℝ) * xTup n P ≤ 1 / 2 := by
@@ -666,6 +667,34 @@ private theorem pi_expect_coordinate
         (FinProb.pi P).expect (fun ω => gSub (fun j => ω j.1)) := by rw [hleft]
     _ = (FinProb.pi (fun j : {j // j ∈ s} => P j.1)).expect gSub := hMarg
     _ = (P i).expect g := hsub
+
+private theorem pi_free_expect_eq
+    {V : Type*} [Fintype V] [DecidableEq V] {Ω : V → Type*}
+    [∀ v, Fintype (Ω v)] [∀ v, DecidableEq (Ω v)]
+    (P : ∀ v, FinProb (Ω v)) (U : Finset V) (Phi : (∀ v, Ω v) → ℝ)
+    (hdep : FinProb.DependsOn Phi U) (outside : ∀ v, Ω v) :
+    (∑ a : (∀ v : U, Ω v), (∏ v : U, (P v.1).w (a v)) *
+      Phi (S07.glue U outside a)) = (FinProb.pi P).expect Phi := by
+  classical
+  let restrict (W : ∀ v, Ω v) (v : U) := W v.1
+  let G (a : ∀ v : U, Ω v) := Phi (S07.glue U outside a)
+  have hMarginal := FinProb.pi_marginal_expect P U G
+  have hpoint (W : ∀ v, Ω v) : G (restrict W) = Phi W := by
+    apply hdep
+    intro v hv
+    simp [G, restrict, S07.glue, hv]
+  calc
+    ∑ a : (∀ v : U, Ω v), (∏ v : U, (P v.1).w (a v)) * Phi (S07.glue U outside a) =
+        (FinProb.pi (fun v : U => P v.1)).expect G := by
+          simp [FinProb.expect, FinProb.pi, G]
+    _ = (FinProb.pi P).expect (fun W => G (restrict W)) := hMarginal.symm
+    _ = (FinProb.pi P).expect Phi := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro W hW
+          change (FinProb.pi P).w W * G (restrict W) =
+            (FinProb.pi P).w W * Phi W
+          rw [hpoint W]
 
 private theorem localEvenRole_injective {n : ℕ} (v : EvenRole n) :
     Function.Injective (localEvenRole v) := by
@@ -1157,6 +1186,44 @@ private theorem tupleStarFactor_depends {n N : ℕ} {E : Fin N → Fin N → Pro
     exact hWW (evenNbr (oddNbr v j) a.1) (fullStarScope_mem v j a)
   simp [oddRowF, hstar]
 
+private theorem tupleStarFactor_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ}
+    (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
+    (t : OuterWord n → M.ι) (W : EvenRole n → Fin (kTup n) → Fin N)
+    (v : EvenRole n) (x : Fin N) (hS : SliceFacts M y₀) :
+    0 ≤ tupleStarFactor M y₀ p t W v x := by
+  classical
+  have hpi : ∀ y, 0 ≤ piBar M y₀ p y := by
+    intro y
+    unfold piBar mixW
+    apply Finset.sum_nonneg
+    intro i hi
+    exact mul_nonneg (p.nonneg i) ((hS.rows i).pi_nonneg y)
+  have hden : 0 ≤ deg E M.G (piBar M y₀ p) x := by
+    unfold deg
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg (hpi y) (by unfold hit; split_ifs <;> norm_num)
+  have hsigma (f : OddRole n → Fin N) :
+      0 ≤ sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x := by
+    unfold sigmaW
+    split_ifs <;> positivity
+  have hrow (f : OddRole n → Fin N) : 0 ≤ evenRowF M y₀ p t f v x := by
+    unfold evenRowF
+    apply mul_nonneg (hsigma f)
+    apply Finset.prod_nonneg
+    intro j hj
+    exact div_nonneg (by unfold hit; split_ifs <;> norm_num) hden
+  unfold tupleStarFactor
+  apply Finset.sum_nonneg
+  intro f hf
+  apply mul_nonneg
+  · unfold oddProdW
+    apply Finset.prod_nonneg
+    intro b hb
+    exact (hS.rows (t (sliceOf b.1))).row_nonneg (starOf W b) (f b)
+  · exact mul_nonneg (Nat.cast_nonneg _) (hrow f)
+
 private theorem odd_output_product {n N m : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
     (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι)
@@ -1325,6 +1392,180 @@ theorem raw_separated_star_product_bound {n N m : ℕ} {E : Fin N → Fin N → 
             exact hstarNonneg i
           · intro i hi
             simpa [StarMean11, tupleStarFactor] using hStar (a i) x
+
+theorem even_tuple_integral_full (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop}
+      {X Y : Finset (Fin N)} {κ : ℝ}
+      (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
+      (t : OuterWord n → M.ι),
+      Fixed11 δ x₀ K n N E X Y κ M y₀ p → GatedTags M y₀ p P t →
+      S07.CondProductBound → TupleLLL11 M y₀ p P t → StarMean11 M y₀ p t →
+      EvenTupleIntegral11 M y₀ p P t := by
+  classical
+  refine ⟨32, ?_⟩
+  intro n hn N E X Y κ M y₀ p t hFixed hGate hCond hTuple hStar
+  unfold EvenTupleIntegral11
+  intro x m hm a hsep
+  let Q (u : EvenRole n) : FinProb (Fin (kTup n) → Fin N) :=
+    tupLaw E M.G (M.μ (t (sliceOf u.1))) (y₀ (t (sliceOf u.1))) (kTup n)
+  let Bad (u : EvenRole n) (W : EvenRole n → Fin (kTup n) → Fin N) :=
+    TupleBad M y₀ p P t u W
+  let sc (u : EvenRole n) := evenBall u 2
+  have hLLL : S07.LLLInput Q Bad sc (xTup n P) ((n + 1) ^ 4) := by
+    simpa [TupleLLL11, Q, Bad, sc] using hTuple
+  let U : Finset (EvenRole n) := Finset.univ.biUnion fun i : Fin m => fullStarScope (a i)
+  let Phi (W : EvenRole n → Fin (kTup n) → Fin N) : ℝ :=
+    ∑ f, oddProdW M t W f *
+      ∏ i : Fin m, ((N : ℝ) * evenRowF M y₀ p t f (a i) x)
+  have hPhiPoint (W : EvenRole n → Fin (kTup n) → Fin N) :
+      Phi W = ∏ i : Fin m, tupleStarFactor M y₀ p t W (a i) x := by
+    exact odd_output_product M y₀ p t W x hFixed.slice a hsep
+  have hScopeSub (i : Fin m) : fullStarScope (a i) ⊆ U := by
+    intro u hu
+    exact Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hu⟩
+  have hPhiDep : FinProb.DependsOn Phi U := by
+    intro W W' hWW
+    rw [hPhiPoint W, hPhiPoint W']
+    apply Finset.prod_congr rfl
+    intro i hi
+    exact tupleStarFactor_depends M y₀ p t (a i) x hFixed.slice W W'
+      (fun u hu => hWW u (hScopeSub i hu))
+  have hPhiNonneg (W : EvenRole n → Fin (kTup n) → Fin N) : 0 ≤ Phi W := by
+    rw [hPhiPoint W]
+    apply Finset.prod_nonneg
+    intro i hi
+    exact tupleStarFactor_nonneg M y₀ p t W (a i) x hFixed.slice
+  have hRawBound : (rawTuples M y₀ t).expect Phi ≤
+      ∏ i : Fin m, compB M y₀ p t (sliceOf (a i).1) x :=
+    raw_separated_star_product_bound M y₀ p t hFixed.slice hStar x a hsep
+  have hScopeCardOne (i : Fin m) : (fullStarScope (a i)).card ≤ 2 * n ^ 2 := by
+    have hInner : Fintype.card (InnerCoord n) ≤ n := by
+      calc
+        Fintype.card (InnerCoord n) ≤ Fintype.card (Fin n) :=
+          Fintype.card_le_of_injective (fun u : InnerCoord n => u.1) Subtype.val_injective
+        _ = n := by simp
+    have hNpos : 0 < n := by omega
+    have hNN : 1 ≤ n * n := Nat.one_le_iff_ne_zero.mpr (Nat.mul_ne_zero hNpos.ne' hNpos.ne')
+    calc
+      (fullStarScope (a i)).card ≤ 1 + n * Fintype.card (InnerCoord n) :=
+        fullStarScope_card_le (a i)
+      _ ≤ 1 + n * n := Nat.add_le_add_left (Nat.mul_le_mul_left n hInner) 1
+      _ ≤ n * n + n * n := Nat.add_le_add_right hNN (n * n)
+      _ = 2 * n * n := by ring
+      _ = 2 * n ^ 2 := by ring
+  have hUcard : U.card ≤ 2 * m * n ^ 2 := by
+    calc
+      U.card ≤ ∑ i : Fin m, (fullStarScope (a i)).card :=
+        Finset.card_biUnion_le (s := Finset.univ) (t := fun i : Fin m => fullStarScope (a i))
+      _ ≤ ∑ _i : Fin m, 2 * n ^ 2 := Finset.sum_le_sum fun i hi => hScopeCardOne i
+      _ = 2 * m * n ^ 2 := by simp [mul_assoc, mul_left_comm, mul_comm]
+  let touching : Finset (EvenRole n) :=
+    Finset.univ.filter fun u => ¬ Disjoint (evenBall u 2) U
+  let depSet (v : EvenRole n) : Finset (EvenRole n) :=
+    insert v (Finset.univ.filter fun u => u ≠ v ∧ ¬ Disjoint (evenBall v 2) (evenBall u 2))
+  have hDepCard (v : EvenRole n) : (depSet v).card ≤ (n + 1) ^ 4 + 1 := by
+    have hdegree : (Finset.univ.filter fun u : EvenRole n =>
+        u ≠ v ∧ ¬ Disjoint (evenBall v 2) (evenBall u 2)).card ≤ (n + 1) ^ 4 := by
+      simpa [sc] using hLLL.degree v
+    have hnot : v ∉ Finset.univ.filter
+        (fun u : EvenRole n => u ≠ v ∧ ¬ Disjoint (evenBall v 2) (evenBall u 2)) := by simp
+    change (insert v (Finset.univ.filter
+      (fun u : EvenRole n => u ≠ v ∧ ¬ Disjoint (evenBall v 2) (evenBall u 2)))).card ≤ _
+    rw [Finset.card_insert_of_notMem hnot]
+    exact Nat.add_le_add_right hdegree 1
+  have hTouchSub : touching ⊆ U.biUnion depSet := by
+    intro u hu
+    have hnd : ¬ Disjoint (evenBall u 2) U := (Finset.mem_filter.mp hu).2
+    have hmeet : ∃ v ∈ U, v ∈ evenBall u 2 := by
+      by_contra hnone
+      apply hnd
+      apply Finset.disjoint_left.mpr
+      intro v hvBall hvU
+      exact hnone ⟨v, hvU, hvBall⟩
+    obtain ⟨v, hvU, hvBall⟩ := hmeet
+    apply Finset.mem_biUnion.mpr
+    refine ⟨v, hvU, ?_⟩
+    by_cases huv : u = v
+    · subst u
+      exact Finset.mem_insert_self _ _
+    · apply Finset.mem_insert_of_mem
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, huv, ?_⟩
+      intro hdis
+      have hself : v ∈ evenBall v 2 := by simp [evenBall, hammingDist]
+      exact Finset.disjoint_left.mp hdis hself hvBall
+  have hTouchCard : touching.card ≤ U.card * ((n + 1) ^ 4 + 1) := by
+    calc
+      touching.card ≤ (U.biUnion depSet).card := Finset.card_le_card hTouchSub
+      _ ≤ ∑ v ∈ U, (depSet v).card := Finset.card_biUnion_le
+      _ ≤ ∑ _v ∈ U, ((n + 1) ^ 4 + 1) :=
+        Finset.sum_le_sum fun v hv => hDepCard v
+      _ = U.card * ((n + 1) ^ 4 + 1) := by simp [nsmul_eq_mul]
+  have hnR : (32 : ℝ) ≤ n := by exact_mod_cast hn
+  have hN1 : (1 : ℝ) ≤ n := by linarith
+  have hPlus : (n : ℝ) + 1 ≤ (2 : ℝ) * (n : ℝ) := by linarith
+  have hDelta : ((n : ℝ) + 1) ^ 4 + 1 ≤ 17 * (n : ℝ) ^ 4 := by
+    have hp := pow_le_pow_left₀ (by positivity : (0 : ℝ) ≤ n + 1) hPlus 4
+    have hn4 : (1 : ℝ) ≤ (n : ℝ) ^ 4 := one_le_pow₀ hN1
+    calc
+      ((n : ℝ) + 1) ^ 4 + 1 = 1 + ((n : ℝ) + 1) ^ 4 := by ring
+      _ ≤ 1 + ((2 : ℝ) * (n : ℝ)) ^ 4 := add_le_add_right hp 1
+      _ = ((2 : ℝ) * (n : ℝ)) ^ 4 + 1 := by ring
+      _ = 16 * (n : ℝ) ^ 4 + 1 := by ring
+      _ ≤ 17 * (n : ℝ) ^ 4 := by nlinarith
+  have hDeltaCast : (((n + 1) ^ 4 + 1 : ℕ) : ℝ) ≤ 17 * (n : ℝ) ^ 4 := by
+    simpa [Nat.cast_add, Nat.cast_pow] using hDelta
+  have hTouchReal : (touching.card : ℝ) ≤ 34 * (m : ℝ) * (n : ℝ) ^ 6 := by
+    have hcard : (touching.card : ℝ) ≤ (U.card : ℝ) * (((n + 1) ^ 4 + 1 : ℕ) : ℝ) := by
+      exact_mod_cast hTouchCard
+    have hU : (U.card : ℝ) ≤ 2 * (m : ℝ) * (n : ℝ) ^ 2 := by exact_mod_cast hUcard
+    calc
+      (touching.card : ℝ) ≤ (U.card : ℝ) * (((n + 1) ^ 4 + 1 : ℕ) : ℝ) := hcard
+      _ ≤ (2 * (m : ℝ) * (n : ℝ) ^ 2) * (17 * (n : ℝ) ^ 4) :=
+        mul_le_mul hU hDeltaCast (by positivity) (by positivity)
+      _ = 34 * (m : ℝ) * (n : ℝ) ^ 6 := by ring
+  let B : ℝ := ∏ i : Fin m, compB M y₀ p t (sliceOf (a i).1) x
+  have hBNonneg : 0 ≤ B := by
+    unfold B
+    apply Finset.prod_nonneg
+    intro i hi
+    have hmean : 0 ≤ (rawTuples M y₀ t).expect
+        (fun W => tupleStarFactor M y₀ p t W (a i) x) := by
+      unfold FinProb.expect
+      apply Finset.sum_nonneg
+      intro W hW
+      exact mul_nonneg ((rawTuples M y₀ t).nonneg W)
+        (tupleStarFactor_nonneg M y₀ p t W (a i) x hFixed.slice)
+    have hle : (rawTuples M y₀ t).expect
+        (fun W => tupleStarFactor M y₀ p t W (a i) x) ≤
+          compB M y₀ p t (sliceOf (a i).1) x := by
+      simpa [StarMean11, tupleStarFactor] using hStar (a i) x
+    linarith
+  let tupleLaw : FinProb (EvenRole n → Fin (kTup n) → Fin N) :=
+    S07.condOr (rawTuples M y₀ t) (fun W => ∀ v, ¬ TupleBad M y₀ p P t v W)
+  have hPhiBound : tupleLaw.expect Phi ≤
+      ((1 - xTup n P) ^ touching.card)⁻¹ * B := by
+    have hLLL' : S07.LLLInput Q Bad sc (xTup n P) ((n + 1) ^ 4) := by
+      simpa [TupleLLL11, Q, Bad, sc] using hLLL
+    obtain ⟨hAvoid, hFree⟩ := hCond Q Bad sc (xTup n P) ((n + 1) ^ 4) hLLL'
+    have hFreeBound : ∀ outside : EvenRole n → Fin (kTup n) → Fin N,
+        (∑ q : (∀ u : U, Fin (kTup n) → Fin N),
+          (∏ u : U, (Q u.1).w (q u)) * Phi (S07.glue U outside q)) ≤ B := by
+      intro outside
+      calc
+        (∑ q : (∀ u : U, Fin (kTup n) → Fin N),
+          (∏ u : U, (Q u.1).w (q u)) * Phi (S07.glue U outside q)) =
+            (rawTuples M y₀ t).expect Phi :=
+              pi_free_expect_eq Q U Phi hPhiDep outside
+        _ ≤ B := by simpa [B] using hRawBound
+    have hfreeResult := hFree U Phi hPhiNonneg B hFreeBound
+    simpa [tupleLaw, Q, rawTuples] using hfreeResult
+  have hCost : ((1 - xTup n P) ^ touching.card)⁻¹ ≤ (2 : ℝ) ^ m :=
+    tuple_cond_cost_le hP hn hm (hLLL.x_lt_one) rfl hTouchReal
+  have hfinal := hPhiBound
+  calc
+    tupleLaw.expect Phi ≤ ((1 - xTup n P) ^ touching.card)⁻¹ * B := hPhiBound
+    _ ≤ (2 : ℝ) ^ m * B := mul_le_mul_of_nonneg_right hCost hBNonneg
 
 theorem star_mean_full {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
     (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)

@@ -344,7 +344,7 @@ theorem even_tuple_integral (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
       (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι),
       Fixed11 δ x₀ K n N E X Y κ M y₀ p → GatedTags M y₀ p P t → S07.CondProductBound →
       TupleLLL11 M y₀ p P t → StarMean11 M y₀ p t → EvenTupleIntegral11 M y₀ p P t := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_even.even_tuple_integral_full δ x₀ K P hP
 
 /-- P11.1d3, assembled moment (11:386–390): drop the success indicator after the clock comparison and integrate
 (`2 · 2^m ≤ 4^m` for `m ≥ 1`; for `m = 0` both sides are at most one). -/

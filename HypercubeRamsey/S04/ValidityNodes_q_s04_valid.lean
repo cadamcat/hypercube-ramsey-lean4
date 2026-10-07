@@ -622,6 +622,24 @@ private theorem expect_pi_prefix_fiber {α : Type*} [Fintype α] [DecidableEq α
                   (Q ⟨j.val, lt_trans j.isLt i.succ.isLt⟩).w (p j)) *
                   (Q i.succ).expect f := by rw [← hprod]
 
+private theorem expect_eq_on_support {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (f g : Ω → ℝ) (h : ∀ ω, P.w ω = 0 ∨ f ω = g ω) : P.expect f = P.expect g := by
+  classical
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro ω hω
+  rcases h ω with hz | hfg
+  · simp [hz]
+  · simp [hfg]
+
+private theorem cond_true_eq_self {α : Type*} [Fintype α] [DecidableEq α] (P : FinProb α) :
+    P.cond (fun _ => True) (by simp [FinProb.pr, P.sum_eq_one]) = P := by
+  classical
+  have hp : P.pr (fun _ => True) = 1 := by simp [FinProb.pr, P.sum_eq_one]
+  apply finProb_ext
+  intro a
+  simp [FinProb.cond, hp]
+
 private theorem pr_pi_cons {α : Type*} [Fintype α] {k : ℕ}
     (P : Fin (k + 1) → FinProb α) (A : (Fin (k + 1) → α) → Prop) :
     (FinProb.pi P).pr A =
@@ -843,6 +861,10 @@ private theorem pr_Hit_eq_rowDeg {N : ℕ} (E : Fin N → Fin N → Prop) (G : C
   simp [FinProb.pr, rowDeg, mul_comm]
 
 private def finToList {α : Type*} {k : ℕ} (x : Fin k → α) : List α := List.ofFn x
+
+private theorem finToList_cons {α : Type*} {k : ℕ} (a : α) (x : Fin k → α) :
+    finToList (Fin.cons a x) = a :: finToList x := by
+  simp [finToList]
 
 private def tupleLabels {k N m : ℕ} (W : Fin m → Fin k → Fin N) : List (Fin N) :=
   (List.ofFn fun i : Fin m => finToList (W i)).flatten
@@ -1299,6 +1321,161 @@ private theorem pr_HitsList_append {N : ℕ} (E : Fin N → Fin N → Prop) (G :
                         (HitsList E G ys) := by rw [← hBaseEvent]
                 _ = P.pr (HitsList E G (x :: xs)) *
                       (residualAfter E G P (x :: xs)).pr (HitsList E G ys) := by rw [← hres]
+
+private theorem pr_HitsList_finToList_eq_prod {N k : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (P : Law N) (x : Fin k → Fin N) (L : ℝ)
+    (hgood : GoodPath E G L P (finToList x)) :
+    P.pr (HitsList E G (finToList x)) =
+      ∏ j : Fin k,
+        (residualAfter E G P (finToList (prefixVals x j))).pr
+          (fun y => Hits E G (x j) y) := by
+  induction k generalizing P with
+  | zero =>
+      simp [finToList, HitsList, FinProb.pr, P.sum_eq_one]
+  | succ k ih =>
+      let a := x 0
+      let tail : Fin k → Fin N := fun j => x j.succ
+      have hx : x = Fin.cons a tail := by
+        funext j
+        cases j using Fin.cases <;> rfl
+      have hlist : finToList x = a :: finToList tail := by
+        rw [hx, finToList_cons]
+      have hgood' : GoodPath E G L P ([a] ++ finToList tail) := by
+        simpa [hlist] using hgood
+      have hparts : Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+          GoodPath E G L (safeCond P (fun y => Hits E G a y)) (finToList tail) := by
+        simpa [GoodPath, hlist] using hgood
+      have hprob := pr_HitsList_append E G P [a] (finToList tail) L hgood'
+      have hone : HitsList E G [a] = (fun y => Hits E G a y) := by
+        funext y
+        simp [HitsList]
+      have hprob' : P.pr (HitsList E G (finToList x)) =
+          P.pr (fun y => Hits E G a y) *
+            (safeCond P (fun y => Hits E G a y)).pr
+              (HitsList E G (finToList tail)) := by
+        calc
+          P.pr (HitsList E G (finToList x)) =
+              P.pr (HitsList E G (a :: finToList tail)) := by rw [hlist]
+          _ = P.pr (HitsList E G ([a] ++ finToList tail)) := by rfl
+          _ = P.pr (HitsList E G [a]) *
+              (residualAfter E G P [a]).pr (HitsList E G (finToList tail)) := hprob
+          _ = _ := by simp [hone, residualAfter, safeCond]
+      have htail := ih (P := safeCond P (fun y => Hits E G a y)) tail hparts.2
+      have hq0 :
+          (residualAfter E G P (finToList (prefixVals x (0 : Fin (k + 1))))).pr
+            (fun y => Hits E G (x 0) y) = P.pr (fun y => Hits E G a y) := by
+        have hprefix : prefixVals x (0 : Fin (k + 1)) =
+            (fun j : Fin 0 => Fin.elim0 j) := by
+          funext j
+          exact Fin.elim0 j
+        have hnil : finToList (prefixVals x (0 : Fin (k + 1))) = [] := by
+          rw [hprefix]
+          simp [finToList]
+        rw [hnil]
+        simp only [residualAfter, List.foldl_nil]
+        rw [hx]
+        simp [a]
+      have hqtail (j : Fin k) :
+          (residualAfter E G P (finToList (prefixVals x j.succ))).pr
+              (fun y => Hits E G (x j.succ) y) =
+            (residualAfter E G (safeCond P (fun y => Hits E G a y))
+              (finToList (prefixVals tail j))).pr (fun y => Hits E G (tail j) y) := by
+        have hlistTail : finToList (prefixVals x j.succ) = a :: finToList (prefixVals tail j) := by
+          rw [hx, prefixVals_cons_succ, finToList_cons]
+        rw [hlistTail]
+        have hres := residualAfter_append E G P [a] (finToList (prefixVals tail j))
+        have hres' : residualAfter E G P (a :: finToList (prefixVals tail j)) =
+            residualAfter E G (safeCond P (fun y => Hits E G a y))
+              (finToList (prefixVals tail j)) := by
+          simpa [residualAfter] using hres
+        rw [hres']
+      calc
+        P.pr (HitsList E G (finToList x)) =
+            P.pr (fun y => Hits E G a y) *
+              (safeCond P (fun y => Hits E G a y)).pr
+                (HitsList E G (finToList tail)) := hprob'
+        _ = P.pr (fun y => Hits E G a y) *
+              (∏ j : Fin k,
+                (residualAfter E G P (finToList (prefixVals x j.succ))).pr
+                  (fun y => Hits E G (x j.succ) y)) := by
+              rw [htail]
+              congr 1
+              apply Finset.prod_congr rfl
+              intro j hj
+              exact (hqtail j).symm
+        _ = ∏ j : Fin (k + 1),
+              (residualAfter E G P (finToList (prefixVals x j))).pr
+                (fun y => Hits E G (x j) y) := by
+              rw [Fin.prod_univ_succ]
+              rw [← hq0]
+
+private noncomputable def seqFill {ι α : Type*} [Fintype ι] [DecidableEq ι]
+    {m : ℕ} (s : Finset ι) (e : Fin m ≃ {i // i ∈ s}) (ω₀ : ι → α)
+    (V : Fin m → α) : ι → α := fun i =>
+  if hi : i ∈ s then V (e.symm ⟨i, hi⟩) else ω₀ i
+
+private theorem pr_congr_local {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (A B : Ω → Prop) (h : ∀ ω, A ω ↔ B ω) : P.pr A = P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  simp [h ω]
+
+private theorem pi_pr_seqFill {ι α : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype α] (P : ι → FinProb α) {m : ℕ} (s : Finset ι)
+    (e : Fin m ≃ {i // i ∈ s}) (ω₀ : ι → α) (A : (ι → α) → Prop)
+    (hA : ∀ ω ω', (∀ i ∈ s, ω i = ω' i) → A ω = A ω') :
+    (FinProb.pi P).pr A =
+      (FinProb.pi (fun j : Fin m => P (e j).1)).pr (fun V => A (seqFill s e ω₀ V)) := by
+  classical
+  let Psub : {i // i ∈ s} → FinProb α := fun i => P i.1
+  let E := Equiv.piEquivPiSubtypeProd (fun i : ι => i ∈ s) (fun _ => α)
+  let b₀ : ∀ i : {j // j ∉ s}, α := fun i => ω₀ i.1
+  let Asub : (∀ i : {j // j ∈ s}, α) → Prop := fun a => A (E.symm (a, b₀))
+  letI : DecidablePred (fun i : ι => i ∈ s) := fun i => Finset.decidableMem i s
+  let ωc : ι → α := Classical.choice (nonempty_finProb (FinProb.pi P))
+  let bc : ∀ i : {j // j ∉ s}, α := fun i => ωc i.1
+  have hMargChoice : (FinProb.pi P).pr A =
+      (FinProb.pi Psub).pr (fun a => A (E.symm (a, bc))) := by
+    change (FinProb.pi P).pr A =
+      (FinProb.pi (fun i : {j // j ∈ s} => P i.1)).pr
+        (fun a => A ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s)
+          (fun _ => α)).symm
+            (a, fun i : {j // j ∉ s} =>
+              (Classical.choice (nonempty_finProb (FinProb.pi P))) i.1)))
+    exact pr_pi_depends_subset P s A hA
+  have hAgree (a : ∀ i : {j // j ∈ s}, α) :
+      ∀ i ∈ s, E.symm (a, bc) i = E.symm (a, b₀) i := by
+    intro i hi
+    simp [E, hi]
+  have hPred (a : ∀ i : {j // j ∈ s}, α) :
+      A (E.symm (a, bc)) ↔ A (E.symm (a, b₀)) := by
+    exact Iff.of_eq (hA _ _ (hAgree a))
+  have hMarg : (FinProb.pi P).pr A =
+      (FinProb.pi Psub).pr (fun a => A (E.symm (a, b₀))) := by
+    calc
+      (FinProb.pi P).pr A =
+          (FinProb.pi Psub).pr (fun a => A (E.symm (a, bc))) := hMargChoice
+      _ = (FinProb.pi Psub).pr (fun a => A (E.symm (a, b₀))) := by
+          apply pr_congr_local
+          intro a
+          exact hPred a
+  have hLift (V : Fin m → α) :
+      E.symm ((fun i : {j // j ∈ s} => V (e.symm i)), b₀) = seqFill s e ω₀ V := by
+    funext i
+    by_cases hi : i ∈ s
+    · simp [E, seqFill, b₀, hi]
+    · simp [E, seqFill, b₀, hi]
+  have hReindex := pr_pi_reindex e Psub Asub
+  calc
+    (FinProb.pi P).pr A = (FinProb.pi Psub).pr Asub := by simpa [Asub] using hMarg
+    _ = (FinProb.pi (fun j : Fin m => P (e j).1)).pr
+          (fun V => A (seqFill s e ω₀ V)) := by
+        rw [hReindex]
+        apply pr_congr_local
+        intro V
+        rw [← hLift V]
 
 private theorem HitsList_tupleLabels_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
     (G : Colour) (W : Fin m → Fin k → Fin N) (y : Fin N) :

@@ -1,4 +1,5 @@
 import HypercubeRamsey.Framework.FinProb
+import HypercubeRamsey.PartC.Core
 
 /-!
 Finite product reindexing lemmas for the Section 14 posterior calculations.
@@ -65,5 +66,37 @@ theorem sum_pi_splitAt {ι : Type*} [Fintype ι] [DecidableEq ι]
           apply Finset.sum_congr rfl
           intro r hr
           ring
+
+theorem expect_comp_eq_sum_pr {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinLaw α) (f : α → β) (g : β → ℝ) :
+    P.E (fun a => g (f a)) = ∑ b, P.pr (fun a => f a = b) * g b := by
+  classical
+  unfold FinLaw.E FinLaw.pr
+  calc
+    _ = ∑ a, ∑ b, (if f a = b then P.w a * g b else 0) := by
+      apply Finset.sum_congr rfl
+      intro a ha
+      simp
+    _ = ∑ b, ∑ a, (if f a = b then P.w a * g b else 0) := Finset.sum_comm
+    _ = ∑ b, (∑ a, if f a = b then P.w a else 0) * g b := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      rw [Finset.sum_mul]
+      apply Finset.sum_congr rfl
+      intro a ha
+      split_ifs <;> simp [*]
+
+theorem sum_pr_eq_one {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinLaw α) (f : α → β) :
+    ∑ b, P.pr (fun a => f a = b) = 1 := by
+  classical
+  unfold FinLaw.pr
+  rw [Finset.sum_comm]
+  calc
+    _ = ∑ a, P.w a := by
+      apply Finset.sum_congr rfl
+      intro a ha
+      simp
+    _ = 1 := P.sum_one
 
 end HypercubeRamsey.Lane_q_s14_post

@@ -340,6 +340,155 @@ private noncomputable def rowSketchLaw {κ : CConsts} {T : Stage} {k : ℕ}
     FinLaw.pi (fun t : Fin (sketchLength T k) =>
       asFinLaw (D.currentPrior j (flipPos b a) h)))
 
+private noncomputable def rowSketchLabelJoint {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (history : FinLaw (D.encoding.base.History j.castSucc))
+    (mask : D.encoding.base.AllowedMask b) :
+    FinLaw (D.encoding.base.History j.castSucc ×
+      ((Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) ×
+        {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b})) :=
+  FinLaw.bind history (fun h =>
+    FinLaw.bind (rowSketchLaw D j b h) (fun sketch =>
+      lateLabelLaw D j (rowSide D j b hb mask sketch) Finset.univ
+        (allowedMask_nonempty D j b hb mask)))
+
+private noncomputable def rowFixedMaskLabelLaw {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (history : FinLaw (D.encoding.base.History j.castSucc))
+    (mask : D.encoding.base.AllowedMask b) :
+    FinLaw {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b} :=
+  FinLaw.map (rowSketchLabelJoint D j b hb history mask) (fun z => z.2.2)
+
+private noncomputable def rowMaskLabels {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    {b : Pos T k} (mask : D.encoding.base.AllowedMask b) :
+    Finset {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b} :=
+  Finset.univ.filter fun y => y.1 ∈ mask.1
+
+private theorem rowFixedMaskLabelLaw_supported {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (history : FinLaw (D.encoding.base.History j.castSucc))
+    (mask : D.encoding.base.AllowedMask b) (y : {y : Fin (T.S.N k) //
+      y ∈ D.encoding.base.latePoolOf b})
+    (hy : y ∉ rowMaskLabels D mask) :
+    (rowFixedMaskLabelLaw D j b hb history mask).w y = 0 := by
+  classical
+  have hnot : y.1 ∉ mask.1 := by simpa [rowMaskLabels] using hy
+  unfold rowFixedMaskLabelLaw rowSketchLabelJoint
+  simp only [FinLaw.map, FinLaw.bind]
+  apply Finset.sum_eq_zero
+  intro z hz
+  by_cases hzy : z.2.2 = y
+  · subst y
+    cases z with
+    | mk h rest =>
+      cases rest with
+      | mk sketch label =>
+        have hnotSide : label.1 ∉ (rowSide D j b hb mask sketch).1.1 := by
+          simpa [rowSide] using hnot
+        have hweight := labelWeight_zero_of_not_mask D j
+          (rowSide D j b hb mask sketch) Finset.univ label.1 hnotSide
+        simp [lateLabelLaw, hweight]
+  · simp [hzy]
+
+private theorem exists_row_mask_profile {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (history : FinLaw (D.encoding.base.History j.castSucc)) (cap : ℝ)
+    (hprice : ∀ q : FinLaw {y : Fin (T.S.N k) //
+        y ∈ D.encoding.base.latePoolOf b},
+      ∃ mask : D.encoding.base.AllowedMask b,
+        ∀ y ∈ rowMaskLabels D mask, q.w y ≤ cap) :
+    ∃ mix : FinLaw (D.encoding.base.AllowedMask b), ∀ y,
+      (∑ mask, mix.w mask * (rowFixedMaskLabelLaw D j b hb history mask).w y) ≤ cap := by
+  have hmask : Nonempty (D.encoding.base.AllowedMask b) := by
+    refine ⟨⟨D.encoding.base.latePoolOf b, Finset.Subset.rfl, ?_⟩⟩
+    omega
+  have hlabel : Nonempty {y : Fin (T.S.N k) //
+      y ∈ D.encoding.base.latePoolOf b} := by
+    have hclass := (D.encoding.base.class_of_spec b j).1 hb
+    have hpoolpos : 0 < (D.encoding.base.latePoolOf b).card := by
+      simpa [LateProcessBase.latePoolOf, hclass] using D.late_pool_pos j
+    obtain ⟨y, hy⟩ := Finset.card_pos.mp hpoolpos
+    exact ⟨⟨y, hy⟩⟩
+  apply exists_balanced_mixture
+  intro q
+  obtain ⟨mask, hm⟩ := hprice q
+  refine ⟨mask, ?_⟩
+  have hsupp (y : {y : Fin (T.S.N k) //
+      y ∈ D.encoding.base.latePoolOf b}) :
+      (rowFixedMaskLabelLaw D j b hb history mask).w y ≠ 0 →
+        y ∈ rowMaskLabels D mask := by
+    intro hy
+    by_contra hnot
+    exact hy (rowFixedMaskLabelLaw_supported D j b hb history mask y hnot)
+  exact price_expectation_le_of_support (rowFixedMaskLabelLaw D j b hb history mask)
+    (rowMaskLabels D mask) q.w cap hsupp hm
+
+private theorem rowMask_price_response {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (q : FinLaw {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b}) :
+    ∃ mask : D.encoding.base.AllowedMask b,
+      ∀ y ∈ rowMaskLabels D mask, q.w y ≤ 2 / ((D.encoding.base.latePoolOf b).card : ℝ) := by
+  classical
+  let pool := D.encoding.base.latePoolOf b
+  let Label := {y : Fin (T.S.N k) // y ∈ pool}
+  have hclass := (D.encoding.base.class_of_spec b j).1 hb
+  have hpoolpos : 0 < pool.card := by
+    simpa [pool, LateProcessBase.latePoolOf, hclass] using D.late_pool_pos j
+  have hlabel : Nonempty Label := by
+    obtain ⟨y, hy⟩ := Finset.card_pos.mp hpoolpos
+    exact ⟨⟨y, hy⟩⟩
+  letI : Nonempty Label := hlabel
+  have hcardLabel : Fintype.card Label = pool.card := Fintype.card_coe pool
+  obtain ⟨cheap, hcheapCard, hcheapPrice⟩ := exists_cheap_half q
+  let S : Finset (Fin (T.S.N k)) := cheap.image Subtype.val
+  have hSsub : S ⊆ pool := by
+    intro y hy
+    rcases Finset.mem_image.mp hy with ⟨z, hz, rfl⟩
+    exact z.2
+  have hScard : S.card = cheap.card := by
+    simpa [S] using Finset.card_image_of_injective cheap Subtype.val_injective
+  have hcheapCardNat : Fintype.card Label ≤ 2 * cheap.card := by
+    exact_mod_cast hcheapCard
+  have hSlarge : pool.card ≤ 2 * S.card := by
+    calc
+      pool.card = Fintype.card Label := hcardLabel.symm
+      _ ≤ 2 * cheap.card := hcheapCardNat
+      _ = 2 * S.card := by rw [hScard]
+  let mask : D.encoding.base.AllowedMask b := ⟨S, hSsub, hSlarge⟩
+  have hlabels : rowMaskLabels D mask = cheap := by
+    ext y
+    simp only [rowMaskLabels, Finset.mem_filter, Finset.mem_univ, true_and]
+    change y.1 ∈ S ↔ y ∈ cheap
+    change y.1 ∈ cheap.image Subtype.val ↔ y ∈ cheap
+    constructor
+    · intro hy
+      rcases Finset.mem_image.mp hy with ⟨z, hz, hzy⟩
+      have hzEq : z = y := Subtype.ext hzy
+      simpa [hzEq] using hz
+    · intro hy
+      exact Finset.mem_image.mpr ⟨y, hy, rfl⟩
+  refine ⟨mask, ?_⟩
+  intro y hy
+  have hycheap : y ∈ cheap := hlabels ▸ hy
+  simpa [hcardLabel, pool] using hcheapPrice y hycheap
+
+private theorem exists_row_balanced_profile {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (history : FinLaw (D.encoding.base.History j.castSucc)) :
+    ∃ mix : FinLaw (D.encoding.base.AllowedMask b), ∀ y,
+      (∑ mask, mix.w mask * (rowFixedMaskLabelLaw D j b hb history mask).w y) ≤
+        2 / ((D.encoding.base.latePoolOf b).card : ℝ) := by
+  exact exists_row_mask_profile D j b hb history
+    (2 / ((D.encoding.base.latePoolOf b).card : ℝ))
+    (fun q => rowMask_price_response D j b hb q)
+
 private noncomputable def explicitRowKernel {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
     (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)

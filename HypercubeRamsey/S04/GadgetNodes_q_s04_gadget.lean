@@ -50,6 +50,96 @@ private theorem chunkCount_flip_eq {β γ : ℝ} {n : ℕ}
     exact False.elim (hi hj')
   · simp [HypercubeRamsey.cubeFlip, Function.update_of_ne hji]
 
+private theorem chunkCount_flip_delta {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (v : CubeVertex n) (i : Fin n)
+    (hi : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j) :
+    (HypercubeRamsey.S04.chunkCount β γ n g j
+        (HypercubeRamsey.cubeFlip v i) ≤
+      HypercubeRamsey.S04.chunkCount β γ n g j v + 1) ∧
+    (HypercubeRamsey.S04.chunkCount β γ n g j v ≤
+      HypercubeRamsey.S04.chunkCount β γ n g j
+        (HypercubeRamsey.cubeFlip v i) + 1) := by
+  classical
+  let C := HypercubeRamsey.S04.chunkCoords β γ n g j
+  let A := C.filter fun k => v k = true
+  let B := C.filter fun k => HypercubeRamsey.cubeFlip v i k = true
+  have hmemA : i ∈ A ↔ v i = true := by
+    simp [A, C, hi]
+  by_cases hv : v i = true
+  · have hfilter : B = A.erase i := by
+      ext k
+      by_cases hki : k = i
+      · subst k
+        simp [A, B, C, hi, hv, HypercubeRamsey.cubeFlip]
+      · have hflip : HypercubeRamsey.cubeFlip v i k = v k :=
+          Function.update_of_ne hki _ _
+        simp [A, B, C, hflip, hki]
+    have hcard : B.card + 1 = A.card := by
+      rw [hfilter]
+      exact Finset.card_erase_add_one (hmemA.mpr hv)
+    change B.card ≤ A.card + 1 ∧ A.card ≤ B.card + 1
+    omega
+  · have hfilter : B = insert i A := by
+      ext k
+      by_cases hki : k = i
+      · subst k
+        simp [A, B, C, hi, hv, HypercubeRamsey.cubeFlip]
+      · have hflip : HypercubeRamsey.cubeFlip v i k = v k :=
+          Function.update_of_ne hki _ _
+        simp [A, B, C, hflip, hki]
+    have hnot : i ∉ A := by
+      simp [A, C, hi, hv]
+    have hcard : B.card = A.card + 1 := by
+      rw [hfilter, Finset.card_insert_of_notMem hnot]
+    change B.card ≤ A.card + 1 ∧ A.card ≤ B.card + 1
+    omega
+
+private theorem minClip_lipschitz {a b lo cap : ℕ} (hab : a ≤ b) (hba : b ≤ a + 1) :
+    min (a - lo) cap ≤ min (b - lo) cap ∧
+      min (b - lo) cap ≤ min (a - lo) cap + 1 := by
+  have hsub : a - lo ≤ b - lo := Nat.sub_le_sub_right hab lo
+  have hgap : b - lo ≤ (a - lo) + 1 := by omega
+  refine ⟨min_le_min hsub le_rfl, ?_⟩
+  by_cases hc : cap ≤ a - lo
+  · rw [Nat.min_eq_right hc]
+    have hc' : cap ≤ b - lo := le_trans hc hsub
+    rw [Nat.min_eq_right hc']
+    omega
+  · have ha : a - lo ≤ cap := Nat.le_of_not_ge hc
+    rw [Nat.min_eq_left ha]
+    by_cases hb : b - lo ≤ cap
+    · rw [Nat.min_eq_left hb]
+      omega
+    · have hb' : cap ≤ b - lo := Nat.le_of_not_ge hb
+      rw [Nat.min_eq_right hb']
+      omega
+
+private theorem clipped_flip_delta {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (v : CubeVertex n) (i : Fin n)
+    (hi : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j) :
+    (HypercubeRamsey.S04.clipped β γ n g j
+        (HypercubeRamsey.cubeFlip v i) ≤ HypercubeRamsey.S04.clipped β γ n g j v + 1) ∧
+    (HypercubeRamsey.S04.clipped β γ n g j v ≤ HypercubeRamsey.S04.clipped β γ n g j
+        (HypercubeRamsey.cubeFlip v i) + 1) := by
+  have hc := chunkCount_flip_delta g j v i hi
+  unfold HypercubeRamsey.S04.clipped
+  let lo := HypercubeRamsey.S04.chunkLen β γ n / 2 -
+    HypercubeRamsey.S04.gadgetPower β γ n ^ 2 / 2
+  let cap := HypercubeRamsey.S04.gadgetPower β γ n ^ 2
+  by_cases hcnt : HypercubeRamsey.S04.chunkCount β γ n g j
+      (HypercubeRamsey.cubeFlip v i) ≤ HypercubeRamsey.S04.chunkCount β γ n g j v
+  · have h := minClip_lipschitz (lo := lo) (cap := cap) hcnt hc.2
+    exact ⟨h.1.trans (Nat.le_add_right _ _), h.2⟩
+  · have hcnt' : HypercubeRamsey.S04.chunkCount β γ n g j v ≤
+        HypercubeRamsey.S04.chunkCount β γ n g j (HypercubeRamsey.cubeFlip v i) :=
+      Nat.le_of_not_ge hcnt
+    have h := minClip_lipschitz (lo := lo) (cap := cap) hcnt' hc.1
+    exact ⟨h.2, h.1.trans (Nat.le_add_right _ _)⟩
+
 private theorem gadgetOut_flip_eq {β γ : ℝ} {n : ℕ}
     (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
     (v : CubeVertex n) (i : Fin n)
@@ -2265,5 +2355,44 @@ theorem pow_two_partition_mul (m n : ℕ) (hmn : m < n) :
   rw [← pow_add]
   congr 1
   omega
+
+private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
+    l₁.mergeSort (fun a b => decide (a ≤ b)) =
+      l₂.mergeSort (fun a b => decide (a ≤ b)) := by
+  let r : ℕ → ℕ → Prop := (· ≤ ·)
+  let cmp : ℕ → ℕ → Bool := fun a b => decide (r a b)
+  have hp : List.Perm (l₁.mergeSort cmp) (l₂.mergeSort cmp) := by
+    exact (List.mergeSort_perm l₁ cmp).trans
+      (h.trans (List.mergeSort_perm l₂ cmp).symm)
+  have hpair₁ : (l₁.mergeSort cmp).Pairwise r := by
+    simpa [cmp, r] using List.pairwise_mergeSort' r l₁
+  have hpair₂ : (l₂.mergeSort cmp).Pairwise r := by
+    simpa [cmp, r] using List.pairwise_mergeSort' r l₂
+  exact hp.eq_of_pairwise' hpair₁ hpair₂
+
+private theorem gadgetOut_eq_of_leaf_and_side {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v w : CubeVertex n)
+    (hleaf : HypercubeRamsey.S04.searchLeaf β γ n g v =
+      HypercubeRamsey.S04.searchLeaf β γ n g w)
+    (hside : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      ((HypercubeRamsey.S04.searchLeaf β γ n g v).1 *
+          HypercubeRamsey.S04.gadgetPower β γ n +
+          HypercubeRamsey.S04.gadgetPower β γ n / 2 <
+        HypercubeRamsey.S04.clipped β γ n g j v) ↔
+      ((HypercubeRamsey.S04.searchLeaf β γ n g w).1 *
+          HypercubeRamsey.S04.gadgetPower β γ n +
+          HypercubeRamsey.S04.gadgetPower β γ n / 2 <
+        HypercubeRamsey.S04.clipped β γ n g j w)) :
+    HypercubeRamsey.S04.gadgetOut β γ n g v =
+      HypercubeRamsey.S04.gadgetOut β γ n g w := by
+  classical
+  have hside' := hside
+  rw [hleaf] at hside'
+  unfold HypercubeRamsey.S04.gadgetOut
+  rw [hleaf]
+  congr 1
+  ext j
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  exact hside' j
 
 end HypercubeRamsey.Lane_q_s04_gadget

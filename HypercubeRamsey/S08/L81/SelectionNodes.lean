@@ -41,7 +41,177 @@ theorem list_count (hη₀ : 0 < η₀) :
 at least `λ/2 - o(λ) ≥ λ/3` present IDs remain eligible. -/
 theorem legal_of_counts (hη₀ : 0 < η₀) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.LegalOfCounts := by
-  sorry
+  classical
+  obtain ⟨nScale, hScale⟩ := gridScaleBounds η₀ hη₀
+  let n₀ := max nScale 3
+  refine ⟨n₀, ?_⟩
+  intro D hn hGF Θ P t hPos hFew g b j
+  have hn3 : 3 ≤ D.n := le_trans (Nat.le_max_right nScale 3) hn
+  have hscale := hScale D.n (le_trans (Nat.le_max_left nScale 3) hn)
+  obtain ⟨hs, hT, hH⟩ := hscale
+  have hd : dC η₀ D.n ≤ D.n := by
+    have hreal := hGF.hd_ok.2.2
+    exact_mod_cast (by simpa using hreal)
+  let B := localIdsAt D P g b j
+  have hBcard : B.card = D.ballCount P g b j := by
+    exact localIdsAt_card D P g b j
+  let incident : Finset D.CellT := Finset.univ.filter fun c => PadNbr c (g, b)
+  let ordinary : Finset D.CellT := (ordNbrs b).image fun v => (g, v)
+  let crossing : Finset D.CellT := (crossKeys g).image fun u => (u, b)
+  have hIncidentSubset : incident ⊆ ordinary ∪ crossing := by
+    intro c hc
+    have hpad := (Finset.mem_filter.mp hc).2
+    rcases hpad with ⟨hkey, hres⟩ | ⟨hres, hkey⟩
+    · have hb : _root_.hammingDist b c.2 ≤ 1 := by
+        have hb' : _root_.hammingDist c.2 b ≤ 1 := by simpa [ordNbrs] using hres
+        rw [_root_.hammingDist_comm]
+        exact hb'
+      apply Finset.mem_union.mpr
+      left
+      apply Finset.mem_image.mpr
+      refine ⟨c.2, ?_, ?_⟩
+      · simpa [ordNbrs] using hb
+      · exact Prod.ext hkey rfl
+    · apply Finset.mem_union.mpr
+      right
+      have hcross : c.1 ∈ crossKeys g := by
+        simpa [crossKeys, keyDist_symm] using hkey
+      apply Finset.mem_image.mpr
+      refine ⟨c.1, hcross, ?_⟩
+      exact Prod.ext rfl hres
+  have hIncidentCard : incident.card ≤ 4 * D.n := by
+    calc
+      incident.card ≤ ordinary.card + crossing.card := by
+        exact (Finset.card_le_card hIncidentSubset).trans (Finset.card_union_le _ _)
+      _ ≤ (ordNbrs b).card + (crossKeys g).card := by
+        dsimp [ordinary, crossing]
+        exact Nat.add_le_add Finset.card_image_le Finset.card_image_le
+      _ ≤ dC η₀ D.n + 1 + 2 * sC η₀ D.n := by
+        exact Nat.add_le_add (ordNbrs_card_bound b) (hGF.crossKeys_card g)
+      _ ≤ 4 * D.n := by omega
+  let familySet (c : D.CellT) : Finset (D.LList c.1) := (D.family Θ P t c).toFinset
+  let idsAtCell (c : D.CellT) (L : D.LList c.1) : Finset D.Loc :=
+    ((D.listIds c.1 L).filter fun id => id.1 = g).image Prod.snd
+  let cover : Finset D.Loc := incident.biUnion fun c =>
+    (familySet c).biUnion (idsAtCell c)
+  have hIdsAtCell (c : D.CellT) (L : D.LList c.1) (hL : L ∈ familySet c) :
+      (idsAtCell c L).card ≤ TC η₀ D.n + 2 * sC η₀ D.n := by
+    have hCand := family_candidate D Θ P t c (List.mem_toFinset.mp hL)
+    have hList := listIds_card_bound D c.1 L
+    calc
+      (idsAtCell c L).card ≤ (D.listIds c.1 L).card := by
+        dsimp [idsAtCell]
+        exact (Finset.card_image_le.trans (Finset.card_filter_le _ _))
+      _ ≤ L.1.card + (crossKeys c.1).card := hList
+      _ ≤ TC η₀ D.n + 2 * sC η₀ D.n := by
+        exact Nat.add_le_add hCand.1 (hGF.crossKeys_card c.1)
+  have hFamilyCard (c : D.CellT) : (familySet c).card ≤ D.n := by
+    dsimp [familySet]
+    exact (List.toFinset_card_le _).trans (Nat.le_of_lt (hFew c))
+  have hCoverCard : cover.card ≤ incident.card * D.n * (TC η₀ D.n + 2 * sC η₀ D.n) := by
+    calc
+      cover.card ≤ ∑ c ∈ incident, ((familySet c).biUnion (idsAtCell c)).card := by
+        exact Finset.card_biUnion_le (s := incident) (t := fun c => (familySet c).biUnion (idsAtCell c))
+      _ ≤ ∑ c ∈ incident, (familySet c).card * (TC η₀ D.n + 2 * sC η₀ D.n) := by
+        apply Finset.sum_le_sum
+        intro c hc
+        calc
+          ((familySet c).biUnion (idsAtCell c)).card ≤
+              ∑ L ∈ familySet c, (idsAtCell c L).card :=
+            Finset.card_biUnion_le (s := familySet c) (t := idsAtCell c)
+          _ ≤ ∑ L ∈ familySet c, (TC η₀ D.n + 2 * sC η₀ D.n) := by
+            apply Finset.sum_le_sum
+            intro L hL
+            exact hIdsAtCell c L hL
+          _ = (familySet c).card * (TC η₀ D.n + 2 * sC η₀ D.n) := by
+            simp [Finset.sum_const, nsmul_eq_mul]
+      _ ≤ ∑ c ∈ incident, (D.n * (TC η₀ D.n + 2 * sC η₀ D.n)) := by
+        apply Finset.sum_le_sum
+        intro c hc
+        exact Nat.mul_le_mul_right _ (hFamilyCard c)
+      _ = incident.card * D.n * (TC η₀ D.n + 2 * sC η₀ D.n) := by
+        simp [Finset.sum_const, nsmul_eq_mul, Nat.mul_assoc]
+  have hTandS : TC η₀ D.n + 2 * sC η₀ D.n ≤ 3 * D.n := by omega
+  have hCoverBound : cover.card ≤ 12 * D.n ^ 3 := by
+    calc
+      cover.card ≤ incident.card * D.n * (TC η₀ D.n + 2 * sC η₀ D.n) := hCoverCard
+      _ ≤ (4 * D.n) * D.n * (3 * D.n) := by gcongr
+      _ = 12 * D.n ^ 3 := by ring
+  let forbidden : Finset D.Loc := B.filter fun ℓ => D.Forbidden Θ P t (g, b) ℓ
+  have hForbiddenSubset : forbidden ⊆ cover := by
+    intro ℓ hℓ
+    rcases Finset.mem_filter.mp hℓ with ⟨_, ⟨c, hpad, L, hL, hid, _⟩⟩
+    have hc : c ∈ incident := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hpad⟩
+    have hL' : L ∈ familySet c := List.mem_toFinset.mpr hL
+    have hid' : (g, ℓ) ∈ (D.listIds c.1 L).filter fun id => id.1 = g :=
+      Finset.mem_filter.mpr ⟨hid, rfl⟩
+    exact Finset.mem_biUnion.mpr ⟨c, hc,
+      Finset.mem_biUnion.mpr ⟨L, hL', Finset.mem_image.mpr ⟨(g, ℓ), hid', rfl⟩⟩⟩
+  have hForbiddenCard : forbidden.card ≤ 12 * D.n ^ 3 :=
+    (Finset.card_le_card hForbiddenSubset).trans hCoverBound
+  let eligible := B.filter fun ℓ => ¬ D.Forbidden Θ P t (g, b) ℓ
+  have hEligEq : D.elig Θ P t g b j = eligible := by
+    ext ℓ
+    constructor
+    · intro hℓ
+      simp only [Ctx.elig, Finset.mem_filter, Finset.mem_univ, true_and] at hℓ
+      rcases hℓ with ⟨hp, hj, hd, hforbid⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_image.mpr ⟨ℓ.1, ?_, ?_⟩, hforbid⟩
+      · simp only [localIdsAt, Finset.mem_image, Finset.mem_filter, Finset.mem_univ,
+          true_and]
+        have hp' : P g (ℓ.1, j) = true := by
+          have heq : (ℓ.1, j) = ℓ := Prod.ext rfl hj.symm
+          rw [heq]
+          exact hp
+        exact ⟨hp', hd⟩
+      · exact Prod.ext rfl hj.symm
+    · intro hℓ
+      rcases Finset.mem_filter.mp hℓ with ⟨hB, hforbid⟩
+      rcases Finset.mem_image.mp hB with ⟨u, hu, rfl⟩
+      rcases Finset.mem_filter.mp hu with ⟨_, ⟨hp, hd⟩⟩
+      simp only [Ctx.elig, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨hp, hd, hforbid⟩
+  have hSplit := Finset.card_filter_add_card_filter_not (s := B)
+    (fun ℓ => D.Forbidden Θ P t (g, b) ℓ)
+  have hBDecomp : B.card = eligible.card + forbidden.card := by
+    simpa [eligible, forbidden, Nat.add_comm] using hSplit.symm
+  have hBallLower : (hdP η₀ D.n).lam / 2 ≤ (B.card : ℝ) := by
+    simpa [B, localIdsAt_card] using (hPos g b j).1
+  have hForbiddenSmall : (forbidden.card : ℝ) ≤ (hdP η₀ D.n).lam / 6 := by
+    have hnPow : 72 ≤ D.n ^ 7 := by
+      calc
+        72 ≤ 3 ^ 7 := by norm_num
+        _ ≤ D.n ^ 7 := by gcongr
+    have hnPowR : (72 : ℝ) ≤ (D.n : ℝ) ^ 7 := by exact_mod_cast hnPow
+    have hnProd := mul_le_mul_of_nonneg_right hnPowR (show 0 ≤ (D.n : ℝ) ^ 3 by positivity)
+    have hpow : (D.n : ℝ) ^ (10 : ℕ) = (D.n : ℝ) ^ (7 : ℕ) * (D.n : ℝ) ^ (3 : ℕ) := by
+      calc
+        (D.n : ℝ) ^ (10 : ℕ) = (D.n : ℝ) ^ (7 + 3 : ℕ) := by norm_num
+        _ = (D.n : ℝ) ^ (7 : ℕ) * (D.n : ℝ) ^ (3 : ℕ) := by rw [pow_add]
+    have hsmall : (12 : ℝ) * (D.n : ℝ) ^ (3 : ℕ) ≤ (D.n : ℝ) ^ (10 : ℕ) / 6 := by
+      rw [hpow]
+      nlinarith [hnProd]
+    calc
+      (forbidden.card : ℝ) ≤ (12 * D.n ^ 3 : ℕ) := by exact_mod_cast hForbiddenCard
+      _ = 12 * (D.n : ℝ) ^ 3 := by norm_num
+      _ ≤ (hdP η₀ D.n).lam / 6 := by
+        simpa [hdP, HDParams.lam, Real.rpow_natCast] using hsmall
+  have hLegalCard : (hdP η₀ D.n).lam / 3 ≤ (D.elig Θ P t g b j).card := by
+    have hDecompR : (B.card : ℝ) = (eligible.card : ℝ) + (forbidden.card : ℝ) := by
+      exact_mod_cast hBDecomp
+    have hEligibleLower : (hdP η₀ D.n).lam / 3 ≤ (eligible.card : ℝ) := by
+      linarith [hDecompR, hBallLower, hForbiddenSmall]
+    rw [hEligEq]
+    exact hEligibleLower
+  change (∀ ℓ ∈ D.elig Θ P t g b j,
+      P g ℓ = true ∧ ℓ.2 = j ∧ _root_.hammingDist ℓ.1 b ≤ rH D.n) ∧
+      (hdP η₀ D.n).lam / 3 ≤ (D.elig Θ P t g b j).card
+  constructor
+  · intro ℓ hℓ
+    simp only [Ctx.elig, Finset.mem_filter, Finset.mem_univ, true_and] at hℓ
+    exact ⟨hℓ.1, hℓ.2.1, hℓ.2.2.1⟩
+  · exact hLegalCard
 
 /-- L8.1f(v) (08:130–131, 212–214): on selection success, good heights select at every site (`¬ Bad` at the
 selected level gives an active eligible ID); the ordinary neighbours of an odd cell lie within distance `D = 2`, so

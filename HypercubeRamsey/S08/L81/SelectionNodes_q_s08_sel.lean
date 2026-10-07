@@ -102,7 +102,7 @@ private theorem hammingBall_card_le_sum_choose {d R : ℕ} (v : CubeVertex d) :
     _ = ∑ j ∈ S, Nat.choose d j := hQtoS
     _ ≤ ∑ j ∈ Finset.range (R + 1), Nat.choose d j := hsum
 
-private theorem small_powerset_card {α : Type*} [DecidableEq α] (U : Finset α) (T : ℕ) :
+theorem small_powerset_card {α : Type*} [DecidableEq α] (U : Finset α) (T : ℕ) :
     (U.powerset.filter fun S => S.card ≤ T).card ≤ (U.card + 1) ^ (T + 1) := by
   classical
   let Q := U.powerset.filter fun S => S.card ≤ T
@@ -136,7 +136,7 @@ private theorem small_powerset_card {α : Type*} [DecidableEq α] (U : Finset α
     _ = (U.card + 1) * (U.card + 1) ^ T := by simp [Finset.sum_const, nsmul_eq_mul]
     _ = (U.card + 1) ^ (T + 1) := by rw [pow_succ]; ring
 
-private theorem ordNbrs_card_bound {η₀ : ℝ} {n : ℕ} (a : Res η₀ n) :
+theorem ordNbrs_card_bound {η₀ : ℝ} {n : ℕ} (a : Res η₀ n) :
     (ordNbrs a).card ≤ dC η₀ n + 1 := by
   have hball : ordNbrs a = hammingBall a 1 := by
     ext b
@@ -149,6 +149,85 @@ private theorem ordNbrs_card_bound {η₀ : ℝ} {n : ℕ} (a : Res η₀ n) :
       simp [Finset.sum_range_succ, Nat.choose_zero_right, Nat.choose_one_right]
     _ = dC η₀ n + 1 := by simp [Nat.choose_zero_right, Nat.choose_one_right]; omega
 
+private theorem foldl_mem_or {α : Type*} (step : List α → α → List α)
+    (hstep : ∀ acc a x, x ∈ step acc a → x ∈ acc ∨ x = a) :
+    ∀ (l : List α) (acc : List α) (x : α),
+      x ∈ l.foldl step acc → x ∈ acc ∨ x ∈ l := by
+  intro l
+  induction l with
+  | nil =>
+      intro acc x hx
+      exact Or.inl (by simpa using hx)
+  | cons a l ih =>
+      intro acc x hx
+      rw [List.foldl_cons] at hx
+      rcases ih (step acc a) x hx with hmem | htail
+      · rcases hstep acc a x hmem with hacc | rfl
+        · exact Or.inl hacc
+        · exact Or.inr (by simp)
+      · exact Or.inr (by simp [htail])
+
+private theorem greedy_mem_source {α β : Type*}
+    (ids : α → Finset β) (l : List α) {x : α} (hx : x ∈ greedy ids l) : x ∈ l := by
+  classical
+  unfold greedy at hx
+  have hstep : ∀ acc a y,
+      y ∈ (fun acc L => if Disjoint (ids L)
+        (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [L] else acc) acc a →
+        y ∈ acc ∨ y = a := by
+    intro acc a y hy
+    by_cases hd : Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅)
+    · have hy' : y ∈ acc ++ [a] := by simpa [hd] using hy
+      rcases List.mem_append.mp hy' with hyacc | hyone
+      · exact Or.inl hyacc
+      · exact Or.inr (List.mem_singleton.mp hyone)
+    · exact Or.inl (by simpa [hd] using hy)
+  rcases foldl_mem_or
+      (fun acc L => if Disjoint (ids L)
+        (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [L] else acc)
+      hstep l [] x hx with hnil | hmem
+  · simpa using hnil
+  · exact hmem
+
+theorem family_candidate (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
+    (t : D.Tags) (c : D.CellT) {L : D.LList c.1} (hL : L ∈ D.family Θ P t c) :
+    D.Cand P c L := by
+  have hsrc := greedy_mem_source (D.listIds c.1)
+    ((D.listOrder c.1).filter fun L => decide (D.Cand P c L ∧ D.BadList Θ t c L)) hL
+  have hfilter : L ∈ (D.listOrder c.1).filter
+      (fun L => decide (D.Cand P c L ∧ D.BadList Θ t c L)) := by
+    simpa [Ctx.family] using hsrc
+  rcases List.mem_filter.mp hfilter with ⟨_, hdec⟩
+  exact (of_decide_eq_true hdec).1
+
+theorem listIds_card_bound (D : Ctx η₀ β p h) (g : D.KeyT) (L : D.LList g) :
+    (D.listIds g L).card ≤ L.1.card + (crossKeys g).card := by
+  classical
+  unfold Ctx.listIds
+  calc
+    (L.1.image (fun ℓ => (g, ℓ)) ∪
+        Finset.univ.image (fun u : D.CrossSub g => (u.1, L.2 u))).card ≤
+      (L.1.image (fun ℓ => (g, ℓ))).card +
+        (Finset.univ.image (fun u : D.CrossSub g => (u.1, L.2 u))).card :=
+      Finset.card_union_le _ _
+    _ ≤ L.1.card + Fintype.card (D.CrossSub g) :=
+      Nat.add_le_add Finset.card_image_le Finset.card_image_le
+    _ = L.1.card + (crossKeys g).card := by simp [Ctx.CrossSub]
+
+noncomputable def localIdsAt (D : Ctx η₀ β p h) (P : D.Pos) (g : D.KeyT)
+    (b : D.ResT) (j : Fin (HH η₀ D.n + 1)) : Finset D.Loc :=
+  (Finset.univ.filter fun u : D.ResT =>
+    P g (u, j) = true ∧ _root_.hammingDist u b ≤ rH D.n).image (fun u => (u, j))
+
+theorem localIdsAt_card (D : Ctx η₀ β p h) (P : D.Pos) (g : D.KeyT)
+    (b : D.ResT) (j : Fin (HH η₀ D.n + 1)) :
+    (localIdsAt D P g b j).card = D.ballCount P g b j := by
+  classical
+  have hinj : Function.Injective (fun u : D.ResT => (u, j)) := by
+    intro u v h
+    exact congrArg Prod.fst h
+  simp [localIdsAt, Ctx.ballCount, Finset.card_image_of_injective _ hinj]
+
 private theorem keyDist_triangle {η₀ : ℝ} {n : ℕ} (a b c : Key η₀ n) :
     keyDist a c ≤ keyDist a b + keyDist b c := by
   unfold keyDist
@@ -159,7 +238,7 @@ private theorem keyDist_triangle {η₀ : ℝ} {n : ℕ} (a b c : Key η₀ n) :
     _ = (∑ r, Nat.dist (a r).val (b r).val) +
         ∑ r, Nat.dist (b r).val (c r).val := Finset.sum_add_distrib
 
-private theorem keyDist_symm {η₀ : ℝ} {n : ℕ} (a b : Key η₀ n) :
+theorem keyDist_symm {η₀ : ℝ} {n : ℕ} (a b : Key η₀ n) :
     keyDist a b = keyDist b a := by
   unfold keyDist
   apply Finset.sum_congr rfl

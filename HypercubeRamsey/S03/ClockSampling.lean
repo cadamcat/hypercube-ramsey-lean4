@@ -1,4 +1,4 @@
-import HypercubeRamsey.S03.Clock.Steps
+import HypercubeRamsey.S03.Clock.Sampler
 
 /-!
 # Lemma 3.10: clock sampling

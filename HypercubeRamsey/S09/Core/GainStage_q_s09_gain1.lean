@@ -828,7 +828,9 @@ private theorem law_restrict_l1_bound9 {N : ℕ} (μ ν : Law N) (A : Finset (Fi
               apply Finset.sum_congr rfl
               intro y hy
               ring
-        _ = (∑ y ∈ A, ν.w y) * (|a - b| / (a * b)) := by rw [← Finset.sum_mul]
+        _ = (∑ y ∈ A, ν.w y) * (|a - b| / (a * b)) := by
+          simpa using (Finset.sum_mul (s := A) (f := fun y => ν.w y)
+            (a := |a - b| / (a * b))).symm
         _ = (∑ y ∈ A, ν.w y) * |a - b| / (a * b) := by ring
     calc
       (∑ y, if y ∈ A then |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) else 0) =
@@ -862,6 +864,79 @@ private theorem law_restrict_l1_bound9 {N : ℕ} (μ ν : Law N) (A : Finset (Fi
         ∑ y, if y ∈ A then |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) else 0 := hsum
     _ ≤ δ / a + δ / a := hsumBound
     _ = 2 * δ / (∑ y ∈ A, μ.w y) := by dsimp [a]; ring
+
+private theorem normalize_l1_perturbation9 {N : ℕ} (Q ν : Law N) (ψ : Fin N → ℝ)
+    (B δ : ℝ) (hB : 0 ≤ B) (hBhalf : B ≤ 1 / 2)
+    (hψ : ∀ y, |ψ y| ≤ B)
+    (herr : ∑ y, |Q.w y - (1 + ψ y) * ν.w y| ≤ δ) :
+    ∃ Z > 0, ∃ R : Law N,
+      (∀ y, R.w y = (1 + ψ y) * ν.w y / Z) ∧
+      ∑ y, |Q.w y - R.w y| ≤ 2 * δ := by
+  classical
+  let Z : ℝ := ∑ y, (1 + ψ y) * ν.w y
+  have hZ : 0 < Z := by
+    have hterm (y : Fin N) : (1 / 2 : ℝ) * ν.w y ≤ (1 + ψ y) * ν.w y := by
+      have hψlower : 1 / 2 ≤ 1 + ψ y := by
+        have := (abs_le.mp (hψ y)).1
+        linarith
+      exact mul_le_mul_of_nonneg_right hψlower (ν.nonneg y)
+    have hsum : (1 / 2 : ℝ) ≤ Z := by
+      dsimp [Z]
+      calc
+        (1 / 2 : ℝ) = (1 / 2 : ℝ) * ∑ y, ν.w y := by rw [ν.sum_eq_one]; ring
+        _ = ∑ y, (1 / 2 : ℝ) * ν.w y := by rw [Finset.mul_sum]
+        _ ≤ ∑ y, (1 + ψ y) * ν.w y := Finset.sum_le_sum fun y hy => hterm y
+    linarith
+  let R : Law N :=
+    { w := fun y => (1 + ψ y) * ν.w y / Z
+      nonneg := by
+        intro y
+        exact div_nonneg (mul_nonneg (by linarith [(abs_le.mp (hψ y)).1]) (ν.nonneg y)) hZ.le
+      sum_eq_one := by
+        rw [← Finset.sum_div]
+        dsimp [Z]
+        exact div_self (ne_of_gt hZ) }
+  have hRw (y : Fin N) : R.w y = (1 + ψ y) * ν.w y / Z := rfl
+  have hraw (y : Fin N) : (1 + ψ y) * ν.w y = R.w y * Z := by
+    rw [hRw]
+    field_simp [ne_of_gt hZ]
+  have hnormErr : ∑ y, |(1 + ψ y) * ν.w y - R.w y| = |Z - 1| := by
+    calc
+      (∑ y, |(1 + ψ y) * ν.w y - R.w y|) = ∑ y, R.w y * |Z - 1| := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        rw [hraw]
+        have hnonneg := R.nonneg y
+        rw [show R.w y * Z - R.w y = R.w y * (Z - 1) by ring,
+          abs_mul, abs_of_nonneg hnonneg]
+      _ = (∑ y, R.w y) * |Z - 1| := by rw [Finset.sum_mul]
+      _ = |Z - 1| := by rw [R.sum_eq_one]; ring
+  have hmassDiff : |Z - 1| ≤ δ := by
+    have hsum : Z - 1 = ∑ y, ((1 + ψ y) * ν.w y - Q.w y) := by
+      calc
+        Z - 1 = (∑ y, (1 + ψ y) * ν.w y) - ∑ y, Q.w y := by simp [Z, Q.sum_eq_one]
+        _ = ∑ y, ((1 + ψ y) * ν.w y - Q.w y) := by rw [Finset.sum_sub_distrib]
+    rw [hsum]
+    calc
+      |∑ y, ((1 + ψ y) * ν.w y - Q.w y)| ≤
+          ∑ y, |(1 + ψ y) * ν.w y - Q.w y| := Finset.abs_sum_le_sum_abs _ _
+      _ = ∑ y, |Q.w y - (1 + ψ y) * ν.w y| := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        rw [abs_sub_comm]
+      _ ≤ δ := herr
+  have hL1 : ∑ y, |Q.w y - R.w y| ≤ 2 * δ := by
+    calc
+      (∑ y, |Q.w y - R.w y|) ≤
+          ∑ y, (|Q.w y - (1 + ψ y) * ν.w y| + |(1 + ψ y) * ν.w y - R.w y|) := by
+            apply Finset.sum_le_sum
+            intro y hy
+            exact abs_sub_le _ _ _
+      _ = (∑ y, |Q.w y - (1 + ψ y) * ν.w y|) +
+          ∑ y, |(1 + ψ y) * ν.w y - R.w y| := by rw [Finset.sum_add_distrib]
+      _ ≤ δ + δ := add_le_add herr (by rw [hnormErr]; exact hmassDiff)
+      _ = 2 * δ := by ring
+  exact ⟨Z, hZ, R, hRw, hL1⟩
 
 private theorem boundedRegularityTest_probability_le9 {P : Params9} (hP : P.Valid)
     {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}

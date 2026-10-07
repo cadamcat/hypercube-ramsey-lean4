@@ -1713,6 +1713,54 @@ theorem rawHistData_pr_expand6 {γ p₀ K : ℝ} {n N : ℕ}
     _ = ∑ b, X.baseLaw.w b *
         (X.hidLaw b).expect (fun z => (X.dataLaw Id (b, z)).pr (A (b, z))) := rfl
 
+theorem baseLaw_pos_factors6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (b : X.Base) (hb : 0 < X.baseLaw.w b) :
+    0 < X.initLaw.w b.1 ∧
+      (∀ u, 0 < (X.candLaw b.1).w (b.2.1 u)) ∧
+      (∀ s, 0 < (X.tagLawAt (X.parOf b) s).w (b.2.2 s)) := by
+  have hbaseEq : X.baseLaw.w b = X.initLaw.w b.1 * (X.coarseLaw b.1).w b.2 := rfl
+  have hcoarse : 0 < (X.coarseLaw b.1).w b.2 := by
+    by_contra hz
+    have hz' : (X.coarseLaw b.1).w b.2 = 0 := by linarith [((X.coarseLaw b.1).nonneg b.2)]
+    rw [hbaseEq, hz'] at hb
+    simp at hb
+  have hinit : 0 < X.initLaw.w b.1 := by
+    by_contra hz
+    have hz' : X.initLaw.w b.1 = 0 := by linarith [X.initLaw.nonneg b.1]
+    rw [hbaseEq, hz'] at hb
+    simp at hb
+  have hcoarseEq : (X.coarseLaw b.1).w b.2 =
+      (FinProb.pi (fun _ : X.Bin => X.candLaw b.1)).w b.2.1 *
+        (FinProb.pi (X.tagLawAt (b.1, b.2.1))).w b.2.2 := rfl
+  have hcandPi : 0 < (FinProb.pi (fun _ : X.Bin => X.candLaw b.1)).w b.2.1 := by
+    have hAne : (FinProb.pi (fun _ : X.Bin => X.candLaw b.1)).w b.2.1 ≠ 0 := by
+      intro hz
+      rw [hcoarseEq, hz, zero_mul] at hcoarse
+      exact (lt_irrefl 0) hcoarse
+    exact lt_of_le_of_ne ((FinProb.pi (fun _ : X.Bin => X.candLaw b.1)).nonneg b.2.1)
+      (Ne.symm hAne)
+  have htagPi : 0 < (FinProb.pi (X.tagLawAt (b.1, b.2.1))).w b.2.2 := by
+    have hBne : (FinProb.pi (X.tagLawAt (b.1, b.2.1))).w b.2.2 ≠ 0 := by
+      intro hz
+      rw [hcoarseEq, hz, mul_zero] at hcoarse
+      exact (lt_irrefl 0) hcoarse
+    exact lt_of_le_of_ne ((FinProb.pi (X.tagLawAt (b.1, b.2.1))).nonneg b.2.2)
+      (Ne.symm hBne)
+  have hcandProd : 0 < ∏ u : X.Bin, (X.candLaw b.1).w (b.2.1 u) := by
+    simpa [FinProb.pi] using hcandPi
+  have htagProd : 0 < ∏ s : X.Key, (X.tagLawAt (X.parOf b) s).w (b.2.2 s) := by
+    exact htagPi
+  refine ⟨hinit, ?_, ?_⟩
+  · intro u
+    have hne : (X.candLaw b.1).w (b.2.1 u) ≠ 0 := by
+      apply (Finset.prod_ne_zero_iff.mp hcandProd.ne') u (Finset.mem_univ _)
+    exact lt_of_le_of_ne ((X.candLaw b.1).nonneg (b.2.1 u)) (Ne.symm hne)
+  · intro s
+    have hne : (X.tagLawAt (X.parOf b) s).w (b.2.2 s) ≠ 0 := by
+      apply (Finset.prod_ne_zero_iff.mp htagProd.ne') s (Finset.mem_univ _)
+    exact lt_of_le_of_ne ((X.tagLawAt (X.parOf b) s).nonneg (b.2.2 s)) (Ne.symm hne)
+
 end Lane_q_s06_steps2
 end S06
 end HypercubeRamsey

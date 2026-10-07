@@ -345,7 +345,126 @@ theorem high_direct_column_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stag
 theorem high_direct_load_existence (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hSampler : DirectSamplerClaim κ T hDeep)
     (hMoment : DirectMomentClaim κ T) : DirectCertificateClaim κ T := by
-  sorry
+  classical
+  have hPpos : 0 < κ.P := by
+    have h := hκ.P_big.2
+    rw [hκ.Ac_eq] at h
+    norm_num at h
+    omega
+  have hRpos : 0 < κ.R := by
+    rw [hκ.R_eq]
+    exact Nat.pow_pos hPpos
+  have hA0 : 0 < κ.A0 :=
+    lt_of_lt_of_le (mul_pos (by norm_num : (0 : ℝ) < 10 ^ 6) (by exact_mod_cast hRpos))
+      hκ.A0_big
+  let Clarge : ℝ := 51200 * κ.A0
+  have hHost : ∀ᶠ k in atTop,
+      max 4 2 ≤ T.S.n k ∧ LargeHost Clarge (T.S.n k) (T.S.N k) :=
+    T.S.eventually_large Clarge (max 4 2)
+  have hRatio : ∀ᶠ k in atTop,
+      Clarge ≤ (T.S.N k : ℝ) / (2 : ℝ) ^ (T.S.n k) :=
+    T.S.ratio_tendsto.eventually_ge_atTop Clarge
+  have hNsmall : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ 2 / (2 : ℝ) ^ (T.S.n k) < 1 :=
+    T.S.n_tendsto.eventually
+      Lane_q_s15_direct.eventually_nat_sq_over_two_pow_lt_one
+  filter_upwards [hSampler, hMoment, hHost, hRatio, hNsmall]
+    with k hsampler hmoment hhost hratio hnsq
+  intro PT hPT hmode
+  obtain ⟨J⟩ := hsampler PT hPT hmode
+  let n := T.S.n k
+  let N := T.S.N k
+  have hn : 0 < n := by dsimp [n]; have := hhost.1; omega
+  have hNpos : (0 : ℝ) < N := by exact_mod_cast T.S.N_pos k
+  have hnPowPos : (0 : ℝ) < (2 : ℝ) ^ n := by positivity
+  have hnsq' : (n : ℝ) ^ 2 < (2 : ℝ) ^ n := by
+    have h := (div_lt_iff₀ hnPowPos).mp (by simpa [n] using hnsq)
+    simpa [n] using h
+  have hNupper : (N : ℝ) ≤ (n : ℝ) * (2 : ℝ) ^ n := by
+    exact_mod_cast hhost.2.2
+  have hNpowSq : (N : ℝ) ^ 2 < (8 : ℝ) ^ n := by
+    have hpow2 : ((2 : ℝ) ^ n) ^ 2 = (4 : ℝ) ^ n := by
+      calc
+        ((2 : ℝ) ^ n) ^ 2 = (2 : ℝ) ^ n * (2 : ℝ) ^ n := by rw [pow_two]
+        _ = ((2 : ℝ) * 2) ^ n := by rw [← mul_pow]
+        _ = (4 : ℝ) ^ n := by norm_num
+    calc
+      (N : ℝ) ^ 2 ≤ ((n : ℝ) * (2 : ℝ) ^ n) ^ 2 := by nlinarith
+      _ = (n : ℝ) ^ 2 * ((2 : ℝ) ^ n) ^ 2 := by ring
+      _ = (n : ℝ) ^ 2 * (4 : ℝ) ^ n := by rw [hpow2]
+      _ < (2 : ℝ) ^ n * (4 : ℝ) ^ n :=
+        mul_lt_mul_of_pos_right hnsq' (by positivity)
+      _ = (8 : ℝ) ^ n := by rw [← mul_pow]; norm_num
+  let t : ℝ := (N : ℝ) / (2 : ℝ) ^ n / 1600
+  have ht : 0 < t := by dsimp [t]; positivity
+  have hratio32 : 32 * κ.A0 ≤ t := by
+    have hscaled : (51200 * κ.A0) / 1600 ≤
+        ((N : ℝ) / (2 : ℝ) ^ n) / 1600 :=
+      div_le_div_of_nonneg_right (by simpa [Clarge] using hratio) (by norm_num)
+    have hconst : (51200 * κ.A0) / 1600 = 32 * κ.A0 := by ring
+    rw [hconst] at hscaled
+    simpa [t] using hscaled
+  let P : FinProb (OddAssignment T k) :=
+    ⟨J.law.w, J.law.nonneg, J.law.sum_one⟩
+  let stats : (Fin PT.tiling.m × Fin N) → OddAssignment T k → ℝ := fun ix ys =>
+    if ix.2 ∈ PT.envelope ix.1 then
+      patchColumnAverage PT ix.1 (directRowWeight PT hPT) ys ix.2 else 0
+  have hstats : ∀ ix ys, 0 ≤ stats ix ys := by
+    intro ix ys
+    by_cases hx : ix.2 ∈ PT.envelope ix.1
+    · simpa [stats, hx] using
+        Lane_q_s15_direct.patchColumnAverage_directRowWeight_nonneg
+          PT hPT ix.1 ys ix.2
+    · simp [stats, hx]
+  have hindexMoment (ix : Fin PT.tiling.m × Fin N) :
+      P.expect (fun ys => (stats ix ys) ^ n) ≤ κ.A0 ^ n := by
+    by_cases hx : ix.2 ∈ PT.envelope ix.1
+    · simpa [P, stats, hx, FinProb.expect, FinLaw.E, n] using
+        hmoment PT hPT hmode J ix.1 ix.2 hx
+    · simp [P, stats, hx, FinProb.expect, hn.ne', n]
+      exact pow_nonneg hA0.le n
+  have hsumMoment :
+      P.expect (fun ys => ∑ ix : Fin PT.tiling.m × Fin N, (stats ix ys) ^ n) ≤
+        (N : ℝ) ^ 2 * κ.A0 ^ n := by
+    rw [Lane_q_s15_direct.finProb_expect_sum]
+    calc
+      (∑ ix : Fin PT.tiling.m × Fin N, P.expect (fun ys => (stats ix ys) ^ n)) ≤
+          ∑ ix : Fin PT.tiling.m × Fin N, κ.A0 ^ n :=
+        Finset.sum_le_sum fun ix _ => hindexMoment ix
+      _ = ((PT.tiling.m * N : ℕ) : ℝ) * κ.A0 ^ n := by
+        simp [Fintype.card_prod, Fintype.card_fin]
+      _ ≤ (N : ℝ) ^ 2 * κ.A0 ^ n := by
+        have hcount : PT.tiling.m * N ≤ N * N :=
+          Nat.mul_le_mul_right N
+            (Lane_q_s15_direct.tiling_patch_count_le PT hPT)
+        apply mul_le_mul_of_nonneg_right _ (pow_nonneg hA0.le n)
+        rw [pow_two]
+        exact_mod_cast hcount
+  have hlargeMoment : (N : ℝ) ^ 2 * κ.A0 ^ n < t ^ n := by
+    have hpowBase : 8 * κ.A0 < 32 * κ.A0 := by nlinarith [hA0]
+    calc
+      (N : ℝ) ^ 2 * κ.A0 ^ n ≤ (8 : ℝ) ^ n * κ.A0 ^ n :=
+        mul_le_mul_of_nonneg_right hNpowSq.le (pow_nonneg hA0.le n)
+      _ = (8 * κ.A0) ^ n := by rw [← mul_pow]
+      _ < (32 * κ.A0) ^ n := pow_lt_pow_left₀ hpowBase (by positivity) hn.ne'
+      _ ≤ t ^ n := pow_le_pow_left₀ (by positivity) hratio32 n
+  have htotalMoment :
+      P.expect (fun ys => ∑ ix : Fin PT.tiling.m × Fin N, (stats ix ys) ^ n) < t ^ n :=
+    lt_of_le_of_lt hsumMoment hlargeMoment
+  obtain ⟨ys, hys, hbelow⟩ :=
+    Lane_q_s15_direct.exists_support_all_below_of_sum_moment
+      P stats n t hn ht hstats htotalMoment
+  have havg : ∀ i x, patchColumnAverage PT i (directRowWeight PT hPT) ys x ≤ t := by
+    intro i x
+    by_cases hx : x ∈ PT.envelope i
+    · have hlt := hbelow ⟨i, x⟩
+      simpa [stats, hx] using le_of_lt hlt
+    · rw [Lane_q_s15_direct.patchColumnAverage_directRowWeight_zero PT hPT i ys x hx]
+      exact le_of_lt ht
+  have hcol :=
+    Lane_q_s15_direct.direct_column_le_of_patch_averages PT hPT J ys hys havg
+  let rows := Lane_q_s15_direct.directHallRows_of_sampler PT hPT J ys hys hcol
+  exact ⟨⟨J, ys, hys, rows, rfl, rfl⟩⟩
 
 /-- Hall assembly retains the sampler support and normalized-row identity. -/
 theorem direct_certificate_to_cube {κ : CConsts} {T : Stage} {k : ℕ}

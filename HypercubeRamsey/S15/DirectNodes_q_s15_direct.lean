@@ -955,6 +955,46 @@ theorem directRowWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
     intro b hb
     exact directFactor_nonneg PT hPT a ys b x
 
+theorem patchAt_eq_of_leaf {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (v : S15.Position T k) (hv : v ∈ PT.tiling.leaf i) :
+    S15.patchAt PT hPT v = i := by
+  dsimp [S15.patchAt]
+  exact ((Classical.choose_spec (hPT.tiling_valid.prefix_complete v)).2 i hv).symm
+
+theorem directRowWeight_zero_of_not_envelope {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k))
+    (hnot : x ∉ PT.envelope (S15.patchAt PT hPT a.1)) :
+    S15.directRowWeight PT hPT ys a x = 0 := by
+  classical
+  unfold S15.directRowWeight
+  by_cases hcross : 0 < S15.directCrossingMass PT hPT ys a
+  · simp [S15.directPostCrossingWeight, hcross, S15.directBaseWeight, hnot]
+  · simp [S15.directPostCrossingWeight, hcross]
+
+theorem patchColumnAverage_directRowWeight_zero {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (ys : S15.OddAssignment T k) (x : Fin (T.S.N k))
+    (hnot : x ∉ PT.envelope i) :
+    S15.patchColumnAverage PT i (S15.directRowWeight PT hPT) ys x = 0 := by
+  classical
+  unfold S15.patchColumnAverage
+  have hterms : ∀ a ∈ S15.evenPatchPositions PT.tiling i,
+      S15.directRowWeight PT hPT ys a x = 0 := by
+    intro a ha
+    have hleaf : a.1 ∈ PT.tiling.leaf i := (Finset.mem_filter.mp ha).2
+    have hpatch := patchAt_eq_of_leaf PT hPT i a.1 hleaf
+    exact directRowWeight_zero_of_not_envelope PT hPT ys a x (by simpa [hpatch] using hnot)
+  have hsum :
+      (∑ a ∈ S15.evenPatchPositions PT.tiling i,
+        (PT.tiling.P i).M * S15.directRowWeight PT hPT ys a x) = 0 := by
+    apply Finset.sum_eq_zero
+    intro a ha
+    rw [hterms a ha]
+    simp
+  simp [hsum]
+
 theorem directRowWeight_sum {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
     (a : S15.EvenPosition T k) :

@@ -1225,11 +1225,17 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   obtain ⟨n₀, C₀, hStages⟩ := hStages
   obtain ⟨nRare, hRare⟩ := Filter.eventually_atTop.1
     (Lane_sol_s06_loadD.outside_interiorZero_eventually_small K)
-  refine ⟨max n₀ nRare, C₀, ?_⟩
+  obtain ⟨nCharge, hCharge⟩ := Filter.eventually_atTop.1
+    Lane_sol_s06_loadD.coarse_touch_charge_eventually_small
+  refine ⟨max (max n₀ nRare) nCharge, C₀, ?_⟩
   intro n N E G M X hLarge hTag hDom hCoarse v hv hGood
+  have hnStages : n₀ ≤ n := by have := hLarge.1; omega
+  have hnRare : nRare ≤ n := by have := hLarge.1; omega
+  have hnCharge : nCharge ≤ n := by have := hLarge.1; omega
   have hStage := hStages n N E G M X
-    ⟨le_trans (Nat.le_max_left _ _) hLarge.1, hLarge.2⟩
-  have hNumerical := hRare n (le_trans (Nat.le_max_right _ _) hLarge.1)
+    ⟨hnStages, hLarge.2⟩
+  have hNumerical := hRare n hnRare
+  have hTouchCharge := hCharge n hnCharge
   have hGoodMass : 0 < X.initLaw.pr X.V0Good :=
     lt_of_lt_of_le (by norm_num) hStage.1
   have hvRaw : X.initLaw.w v ≠ 0 :=
@@ -1261,7 +1267,20 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     have hBaseSupp := (hStage.2.2.2 ((v, c), z) hHistWeight).1
     exact Lane_sol_s06_loadD.outside_evenMean_average_le_two X hDom (v, c) hBaseSupp
       hNumerical.1 hNumerical.2.1 hNumerical.2.2 a
-  -- Remaining: coarse-stage separated products, scattered moments, and the label union.
+  have hJoint (U : Finset (CubeVertex n))
+      (hInterior : ∀ x ∈ U, Lane_sol_s06_loadD.InteriorZero X x)
+      (hdis : ∀ x ∈ U, ∀ x' ∈ U, x ≠ x' → Disjoint
+        (Lane_sol_s06_loadD.evenBinScope X x) (Lane_sol_s06_loadD.evenBinScope X x')) (a : Fin N) :
+      (X.stage2Law v).expect (fun c => ∏ x ∈ U, X.phiEven (v, c) x a) ≤
+        (2 : ℝ) ^ U.card * (20 * K / c₁) ^ U.card := by
+    obtain ⟨cert⟩ := hCoarse v hGood
+    apply Lane_sol_s06_loadD.stage2_evenMean_product_le X v hvPos cert hTouchCharge U _ hdis a
+    intro x hx
+    change (makeType6 binAdjacent6 (X.g.L.key x) (X.g.L.sign x)
+      (X.g.L.flippable x) (X.g.L.severity x) X.J).key.2 = .interior
+    rw [Lane_sol_s06_loadD.makeType_key]
+    simp [ChunkLayout6.key, (hInterior x hx).1]
+  -- Remaining: near-bin scattered moments and the simultaneous label estimate.
   sorry
 
 /-- L6.1l (hidden, 06:751–757): scattered moments of the `f_x` under stage 3; removing the constraints touching

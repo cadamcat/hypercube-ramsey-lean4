@@ -3380,7 +3380,8 @@ private theorem chunkCoords_pairwise_disjoint {β γ : ℝ} {n : ℕ}
   classical
   let s := HypercubeRamsey.S04.chunkNum β γ n
   let ℓ := HypercubeRamsey.S04.chunkLen β γ n
-  have hs : 0 < s := by omega
+  have hs : 0 < s := by
+    simpa [s] using Nat.zero_lt_of_lt j.isLt
   have hstart :
       HypercubeRamsey.S04.chunkStart β γ n g j + ℓ ≤
           HypercubeRamsey.S04.chunkStart β γ n g k ∨
@@ -3426,6 +3427,93 @@ private theorem chunkCoords_pairwise_disjoint {β γ : ℝ} {n : ℕ}
       simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₂
     have hle₂ : HypercubeRamsey.S04.chunkStart β γ n g j ≤ i.val := by
       exact hlo₁
+    omega
+
+private theorem chunkCoords_pairwise_disjoint_all {β γ : ℝ} {n : ℕ}
+    (g h : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j k : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (hpair : (g, j) ≠ (h, k)) :
+    Disjoint (HypercubeRamsey.S04.chunkCoords β γ n g j)
+      (HypercubeRamsey.S04.chunkCoords β γ n h k) := by
+  classical
+  let s := HypercubeRamsey.S04.chunkNum β γ n
+  let ℓ := HypercubeRamsey.S04.chunkLen β γ n
+  let q₁ := g.val * s + j.val
+  let q₂ := h.val * s + k.val
+  have hs : 0 < s := by
+    simpa [s] using Nat.zero_lt_of_lt j.isLt
+  have hqne : q₁ ≠ q₂ := by
+    intro heq
+    rcases lt_trichotomy g.val h.val with hgh | hgh | hgh
+    · have hu : q₁ < (g.val + 1) * s := by
+        dsimp [q₁]
+        rw [Nat.add_mul, Nat.one_mul]
+        omega
+      have hstep : g.val + 1 ≤ h.val := Nat.succ_le_of_lt hgh
+      have hm : (g.val + 1) * s ≤ h.val * s := Nat.mul_le_mul_right s hstep
+      have hq₂lower : h.val * s ≤ q₂ := by
+        dsimp [q₂]
+        exact Nat.le_add_right _ _
+      exact (ne_of_lt (lt_of_lt_of_le hu (hm.trans hq₂lower))) heq
+    · have hjk : j.val ≠ k.val := by
+        intro hjk
+        apply hpair
+        exact Prod.ext (Fin.ext hgh) (Fin.ext hjk)
+      have heq' : g.val * s + j.val = g.val * s + k.val := by
+        simpa [q₁, q₂, hgh] using heq
+      exact hjk (Nat.add_left_cancel heq')
+    · have hu : q₂ < (h.val + 1) * s := by
+        dsimp [q₂]
+        rw [Nat.add_mul, Nat.one_mul]
+        omega
+      have hstep : h.val + 1 ≤ g.val := Nat.succ_le_of_lt hgh
+      have hm : (h.val + 1) * s ≤ g.val * s := Nat.mul_le_mul_right s hstep
+      have hq₁lower : g.val * s ≤ q₁ := by
+        dsimp [q₁]
+        exact Nat.le_add_right _ _
+      exact (ne_of_lt (lt_of_lt_of_le hu (hm.trans hq₁lower))) heq.symm
+  have hstart :
+      HypercubeRamsey.S04.chunkStart β γ n g j + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n h k ∨
+        HypercubeRamsey.S04.chunkStart β γ n h k + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n g j := by
+    rcases lt_or_gt_of_ne hqne with hq | hq
+    · have hidx : q₁ + 1 ≤ q₂ := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      left
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n g j + ℓ = q₁ * ℓ + ℓ := by
+          simp [HypercubeRamsey.S04.chunkStart, q₁, s, ℓ]
+        _ = (q₁ + 1) * ℓ := by
+          calc
+            q₁ * ℓ + ℓ = q₁ * ℓ + 1 * ℓ := by rw [Nat.one_mul]
+            _ = (q₁ + 1) * ℓ := (Nat.add_mul q₁ 1 ℓ).symm
+        _ ≤ q₂ * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n h k := by
+          simp [HypercubeRamsey.S04.chunkStart, q₂, s, ℓ]
+    · have hidx : q₂ + 1 ≤ q₁ := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      right
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n h k + ℓ = q₂ * ℓ + ℓ := by
+          simp [HypercubeRamsey.S04.chunkStart, q₂, s, ℓ]
+        _ = (q₂ + 1) * ℓ := by
+          calc
+            q₂ * ℓ + ℓ = q₂ * ℓ + 1 * ℓ := by rw [Nat.one_mul]
+            _ = (q₂ + 1) * ℓ := (Nat.add_mul q₂ 1 ℓ).symm
+        _ ≤ q₁ * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n g j := by
+          simp [HypercubeRamsey.S04.chunkStart, q₁, s, ℓ]
+  apply Finset.disjoint_left.mpr
+  intro i hi hk
+  rcases Finset.mem_filter.mp hi with ⟨_, ⟨hlo₁, hhi₁⟩⟩
+  rcases Finset.mem_filter.mp hk with ⟨_, ⟨hlo₂, hhi₂⟩⟩
+  rcases hstart with h12 | h21
+  · have hupper : i.val < HypercubeRamsey.S04.chunkStart β γ n g j + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₁
+    omega
+  · have hupper : i.val < HypercubeRamsey.S04.chunkStart β γ n h k + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₂
     omega
 
 private theorem clipped_tuple_flip_profile {β γ : ℝ} {n : ℕ}
@@ -3877,6 +3965,202 @@ private theorem gadgetFlipCode_some_spec {β γ : ℝ} {n : ℕ}
           exact hc hne
         simp [gadgetFlipCodeOfData, d, r₀, t, b₀, S, R, R', path, hp, heq] at hdataCode
     · simp [gadgetFlipCodeOfData, d, r₀, t, b₀, S, R, R', path, hp] at hdataCode
+
+private theorem threshold_of_unit_increment (a x : ℕ)
+    (hcross : (a ≤ x) ≠ (a ≤ x + 1)) : x + 1 = a := by
+  have hnot : ¬ a ≤ x := by
+    intro hx
+    have hy : a ≤ x + 1 := by omega
+    have heq : (a ≤ x) = (a ≤ x + 1) :=
+      propext ⟨fun _ => hy, fun _ => hx⟩
+    exact hcross heq
+  have hy : a ≤ x + 1 := by
+    by_contra hny
+    have heq : (a ≤ x) = (a ≤ x + 1) :=
+      propext ⟨fun hx => by omega, fun hy => by exact False.elim (hny hy)⟩
+    exact hcross heq
+  omega
+
+private theorem threshold_of_unit_decrement (a x : ℕ)
+    (hcross : (a ≤ x + 1) ≠ (a ≤ x)) : x + 1 = a := by
+  have hy : a ≤ x + 1 := by
+    by_contra hny
+    have heq : (a ≤ x + 1) = (a ≤ x) :=
+      propext ⟨fun hx => by exact False.elim (hny hx), fun hx => by omega⟩
+    exact hcross heq
+  have hnot : ¬ a ≤ x := by
+    intro hx
+    have heq : (a ≤ x + 1) = (a ≤ x) :=
+      propext ⟨fun _ => hx, fun _ => by omega⟩
+    exact hcross heq
+  omega
+
+private theorem gadgetOut_eq_of_same_flip_code {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (i₁ i₂ : Fin n) (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    {r : Fin (HypercubeRamsey.S04.chunkNum β γ n)} {b : Bool}
+    (hcode₁ : gadgetFlipCode g v i₁ = some (r, b))
+    (hcode₂ : gadgetFlipCode g v i₂ = some (r, b)) :
+    HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i₁) =
+      HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i₂) := by
+  classical
+  rcases gadgetFlipCode_some_spec g v i₁ hcode₁ with
+    ⟨j₁, hdata₁, hpath₁, hb₁, hcross₁⟩
+  rcases gadgetFlipCode_some_spec g v i₂ hcode₂ with
+    ⟨j₂, hdata₂, hpath₂, hb₂, hcross₂⟩
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let f₀ := fun k : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+    HypercubeRamsey.S04.clipped β γ n g k v
+  let f₁ := fun k : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+    HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i₁)
+  let f₂ := fun k : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+    HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i₂)
+  have hprofile : ∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt f₁ t = mergeSortAt f₂ t := by
+    intro t
+    by_cases htr : t = r
+    · subst t
+      cases b
+      · have hdec₁ := of_decide_eq_false (by simpa using hb₁.symm)
+        have hdec₂ := of_decide_eq_false (by simpa using hb₂.symm)
+        rcases hdata₁.2.2 with ⟨_, hchunk₁, _⟩ | ⟨hbase₁, hchunk₁, _⟩
+        · omega
+        · rcases hdata₂.2.2 with ⟨_, hchunk₂, _⟩ | ⟨hbase₂, hchunk₂, _⟩
+          · omega
+          · have hf₁ : mergeSortAt f₁ r + 1 = mergeSortAt f₀ r := hbase₁.symm
+            have hf₂ : mergeSortAt f₂ r + 1 = mergeSortAt f₀ r := hbase₂.symm
+            omega
+      · have hinc₁ := of_decide_eq_true (by simpa using hb₁.symm)
+        have hinc₂ := of_decide_eq_true (by simpa using hb₂.symm)
+        rcases hdata₁.2.2 with ⟨hnew₁, hchunk₁, _⟩ | ⟨_, hchunk₁, _⟩
+        · rcases hdata₂.2.2 with ⟨hnew₂, _, _⟩ | ⟨_, hchunk₂, _⟩
+          · simpa [f₁, f₂] using hnew₁.trans hnew₂.symm
+          · omega
+        · omega
+    · calc
+        mergeSortAt f₁ t = mergeSortAt f₀ t := hdata₁.2.1 t htr
+        _ = mergeSortAt f₂ t := (hdata₂.2.1 t htr).symm
+  have hnear₁ :
+      (HypercubeRamsey.S04.clipped β γ n g j₁ v + 1 = (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ (HypercubeRamsey.cubeFlip v i₁) =
+          (r.val + 1) * S) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₁ (HypercubeRamsey.cubeFlip v i₁) + 1 =
+          (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ v = (r.val + 1) * S) := by
+    cases b
+    · have hdec := of_decide_eq_false (by simpa using hb₁.symm)
+      rcases hdata₁.2.2 with hinc | hdecData
+      · omega
+      · rcases hdecData with ⟨hbaseRank, hchunk, hpin⟩
+        have hnewRank : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₁) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁ (HypercubeRamsey.cubeFlip v i₁) := by
+          rw [rankValue_succ_eq_mergeSortAt, hpin]
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁
+              (HypercubeRamsey.cubeFlip v i₁) + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                (HypercubeRamsey.cubeFlip v i₁)) r + 1 := hbaseRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₁
+                (HypercubeRamsey.cubeFlip v i₁) + 1 := by rw [hpin]
+        have hthreshold := threshold_of_unit_decrement ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₁
+            (HypercubeRamsey.cubeFlip v i₁)) (by
+              simpa [S, holdRank, hnewRank] using hcross₁)
+        exact Or.inr ⟨by simpa [S] using hthreshold, by omega⟩
+    · have hinc := of_decide_eq_true (by simpa using hb₁.symm)
+      rcases hdata₁.2.2 with hincData | hdec
+      · rcases hincData with ⟨hnewRank, hchunk, hpin⟩
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁ v := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = HypercubeRamsey.S04.clipped β γ n g j₁ v := hpin
+        have hnewRank' : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₁) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁ v + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i₁)
+                (r.val + 1) = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                  (HypercubeRamsey.cubeFlip v i₁)) r :=
+              rankValue_succ_eq_mergeSortAt g (HypercubeRamsey.cubeFlip v i₁) r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 :=
+              hnewRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₁ v + 1 := by
+              rw [← rankValue_succ_eq_mergeSortAt g v r, holdRank]
+        have hthreshold := threshold_of_unit_increment ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₁ v) (by
+            simpa [S, holdRank, hnewRank'] using hcross₁)
+        exact Or.inl ⟨by simpa [S] using hthreshold, by omega⟩
+      · omega
+  have hnear₂ :
+      (HypercubeRamsey.S04.clipped β γ n g j₂ v + 1 = (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ (HypercubeRamsey.cubeFlip v i₂) =
+          (r.val + 1) * S) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₂ (HypercubeRamsey.cubeFlip v i₂) + 1 =
+          (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ v = (r.val + 1) * S) := by
+    cases b
+    · have hdec := of_decide_eq_false (by simpa using hb₂.symm)
+      rcases hdata₂.2.2 with hinc | hdecData
+      · omega
+      · rcases hdecData with ⟨hbaseRank, hchunk, hpin⟩
+        have hnewRank : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₂) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂ (HypercubeRamsey.cubeFlip v i₂) := by
+          rw [rankValue_succ_eq_mergeSortAt, hpin]
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂
+              (HypercubeRamsey.cubeFlip v i₂) + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                (HypercubeRamsey.cubeFlip v i₂)) r + 1 := hbaseRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₂
+                (HypercubeRamsey.cubeFlip v i₂) + 1 := by rw [hpin]
+        have hthreshold := threshold_of_unit_decrement ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₂
+            (HypercubeRamsey.cubeFlip v i₂)) (by
+              simpa [S, holdRank, hnewRank] using hcross₂)
+        exact Or.inr ⟨by simpa [S] using hthreshold, by omega⟩
+    · have hinc := of_decide_eq_true (by simpa using hb₂.symm)
+      rcases hdata₂.2.2 with hincData | hdec
+      · rcases hincData with ⟨hnewRank, hchunk, hpin⟩
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂ v := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = HypercubeRamsey.S04.clipped β γ n g j₂ v := hpin
+        have hnewRank' : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₂) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂ v + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i₂)
+                (r.val + 1) = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                  (HypercubeRamsey.cubeFlip v i₂)) r :=
+              rankValue_succ_eq_mergeSortAt g (HypercubeRamsey.cubeFlip v i₂) r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 :=
+              hnewRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₂ v + 1 := by
+              rw [← rankValue_succ_eq_mergeSortAt g v r, holdRank]
+        have hthreshold := threshold_of_unit_increment ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₂ v) (by
+            simpa [S, holdRank, hnewRank'] using hcross₂)
+        exact Or.inl ⟨by simpa [S] using hthreshold, by omega⟩
+      · omega
+  exact gadgetOut_eq_of_same_rank_side_profile g v
+    (HypercubeRamsey.cubeFlip v i₁) (HypercubeRamsey.cubeFlip v i₂)
+    j₁ j₂ r hS hprofile hdata₁.1 hdata₂.1 hnear₁ hnear₂
 
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by

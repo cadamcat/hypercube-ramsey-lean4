@@ -108,7 +108,9 @@ noncomputable def clusterSolver {κ : CConsts} {T : Stage} {k : ℕ}
 /-- A slice is a patch together with the fixed word outside its internal coordinates. -/
 abbrev ClusterSlice {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) :=
-  Σ i : Fin PT.tiling.m, CubeVertex (T.S.n k - (PT.tiling.P i).h)
+  Σ i : Fin PT.tiling.m, {o : CubeVertex (T.S.n k - (PT.tiling.P i).h) //
+    ∀ j : Fin (T.S.n k - (PT.tiling.P i).h), j.val < (PT.tiling.P i).ℓ →
+      o j = PT.tiling.w i ⟨j.val, by have := j.isLt; omega⟩}
 
 noncomputable instance clusterSliceDecidableEq {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) : DecidableEq (ClusterSlice PT) := Classical.decEq _
@@ -159,14 +161,27 @@ def internalWord {κ : CConsts} {T : Stage} {k : ℕ}
 
 /-- The patch-slice containing a full cube position. -/
 noncomputable def clusterSliceAt {κ : CConsts} {T : Stage} {k : ℕ}
-    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (v : Position T k) : ClusterSlice PT :=
-  ⟨patchAt PT hPT v, outsideWord PT hPT (patchAt PT hPT v) v⟩
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (v : Position T k) : ClusterSlice PT := by
+  refine ⟨patchAt PT hPT v, outsideWord PT hPT (patchAt PT hPT v) v, ?_⟩
+  intro j hj
+  exact (Classical.choose_spec (hPT.tiling_valid.prefix_complete v)).1
+    ⟨j.val, by have := j.isLt; omega⟩ hj
 
 /-- The internal word of a full cube position. -/
 noncomputable def clusterWordAt {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (v : Position T k) :
     IWord PT.tiling (patchAt PT hPT v) :=
   internalWord PT hPT (patchAt PT hPT v) v
+
+/-- Solver coordinates. Equality of internal and full parity means the outer word is even;
+otherwise translate the whole slice by `e₀`. This parity test avoids a dependent word split. -/
+noncomputable def solverWordAt {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) (v : Position T k) :
+    IWord PT.tiling (patchAt PT hPT v) :=
+  let z := clusterWordAt PT hPT v
+  if HypercubeRamsey.IsEvenRole z ↔ HypercubeRamsey.IsEvenRole v then z
+  else flipPos z ⟨0, clusterHeight_pos PT hPT hm (patchAt PT hPT v)⟩
 
 /-- A group in one high-cluster slice. -/
 abbrev ClusterGroupIndex {κ : CConsts} {T : Stage} {k : ℕ}
@@ -206,7 +221,7 @@ noncomputable def clusterGroupIndexAt {κ : CConsts} {T : Stage} {k : ℕ}
     (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
     (b : OddPosition T k) : ClusterGroupIndex PT := by
   let s := clusterSliceAt PT hPT b.1
-  exact ⟨s, (clusterSolver PT hPT hm s.1).groupOf (clusterWordAt PT hPT b.1)⟩
+  exact ⟨s, (clusterSolver PT hPT hm s.1).groupOf (solverWordAt PT hPT hm b.1)⟩
 
 /-- Translate the internal center to the even-role convention of its slice solver. -/
 noncomputable def clusterCenterRole {κ : CConsts} {T : Stage} {k : ℕ}
@@ -215,11 +230,11 @@ noncomputable def clusterCenterRole {κ : CConsts} {T : Stage} {k : ℕ}
     (v : EvenPosition T k) : EvenRole PT.tiling (patchAt PT hPT v.1) := by
   classical
   let z := clusterWordAt PT hPT v.1
+  refine ⟨solverWordAt PT hPT hm v.1, ?_⟩
   by_cases hz : HypercubeRamsey.IsEvenRole z
-  · exact ⟨z, hz⟩
-  · let j : Fin (PT.tiling.P (patchAt PT hPT v.1)).h :=
-      ⟨0, clusterHeight_pos PT hPT hm (patchAt PT hPT v.1)⟩
-    exact ⟨flipPos z j, (evenRole_flipPos z j).2 hz⟩
+  · simpa [solverWordAt, z, hz, v.2] using hz
+  · simpa [solverWordAt, z, hz, v.2] using
+      (evenRole_flipPos z ⟨0, clusterHeight_pos PT hPT hm (patchAt PT hPT v.1)⟩).2 hz
 
 /-- One primitive record in one high-cluster slice. -/
 abbrev ClusterRecordIndex {κ : CConsts} {T : Stage} {k : ℕ}
@@ -316,7 +331,7 @@ noncomputable def clusterMarginal {κ : CConsts} {T : Stage} {k : ℕ}
     (W : ClusterHistory PT hPT hm) (b : OddPosition T k) (y : Fin (T.S.N k)) : ℝ := by
   let s := clusterSliceAt PT hPT b.1
   let S := clusterSolver PT hPT hm s.1
-  exact S.oddMarginal (S.groupOf (clusterWordAt PT hPT b.1)) (historyOnSlice W s) y
+  exact S.oddMarginal (S.groupOf (solverWordAt PT hPT hm b.1)) (historyOnSlice W s) y
 
 /-- Conditional first-side degree of an odd position in the high-cluster history. -/
 noncomputable def clusterDegree {κ : CConsts} {T : Stage} {k : ℕ}
@@ -343,13 +358,16 @@ def clusterJ0 {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
     (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) (x : Fin (T.S.N k)) : Prop :=
+  x ∈ (PT.tiling.P (patchAt PT hPT a.1)).X ∧
   (∀ b ∈ clusterBulkNeighbours PT hPT a,
     |clusterDegree PT hPT hm W b x - 1 / 2| ≤ 2 * bstar T k) ∧
   let d := deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w x
   0 < d ∧
     (1 / 2 : ℝ) ≤
-      (∏ b ∈ clusterBulkNeighbours PT hPT a, clusterDegree PT hPT hm W b x) / d ∧
-    (∏ b ∈ clusterBulkNeighbours PT hPT a, clusterDegree PT hPT hm W b x) / d ≤ 2
+      (∏ b ∈ clusterBulkNeighbours PT hPT a, clusterDegree PT hPT hm W b x) /
+        d ^ (clusterBulkNeighbours PT hPT a).card ∧
+    (∏ b ∈ clusterBulkNeighbours PT hPT a, clusterDegree PT hPT hm W b x) /
+      d ^ (clusterBulkNeighbours PT hPT a).card ≤ 2
 
 /-- `J_v`: `J_v^0` together with crossing degree gates. -/
 def clusterJ {κ : CConsts} {T : Stage} {k : ℕ}
@@ -378,7 +396,7 @@ noncomputable def clusterFactor {κ : CConsts} {T : Stage} {k : ℕ}
     (W : ClusterHistory PT hPT hm) (I : ClusterInternalData PT)
     (a : EvenPosition T k) (b : OddPosition T k) (x : Fin (T.S.N k)) : ℝ :=
   let d := clusterDegree PT hPT hm W b x
-  if 0 < d then hit (T.S.E k) PT.tiling.c x ((I (clusterSliceAt PT hPT b.1)).2 (clusterWordAt PT hPT b.1)) / d
+  if 0 < d then hit (T.S.E k) PT.tiling.c x ((I (clusterSliceAt PT hPT b.1)).2 (solverWordAt PT hPT hm b.1)) / d
   else 0
 
 /-- Crossing-filter mass for a cluster row before its bulk factors are exposed. -/
@@ -476,7 +494,7 @@ noncomputable def clusterInteractionCost {κ : CConsts} {T : Stage} {k : ℕ}
       (∏ j, clusterSigma PT hPT hm W I a (xs j)) *
         (if (∀ j, clusterJ0 PT hPT hm W a (xs j)) ∧
             ∃ b ∈ clusterBulkNeighbours PT hPT a, ∃ J : Finset (Fin κ.u),
-              2 * κ.ξ < |clusterInteraction PT hPT hm W b J xs| then
+              2 ≤ J.card ∧ 2 * κ.ξ < |clusterInteraction PT hPT hm W b J xs| then
           clusterInteractionEnvelope PT hPT hm W a xs else 0)
 
 /-- The second local alarm: the large-interaction statistic exceeds its permitted budget. -/
@@ -495,13 +513,16 @@ def clusterAlarmsAvoided {κ : CConsts} {T : Stage} {k : ℕ}
   ∀ a, ¬ clusterAlarm1 PT hPT hm W a ∧
     ¬ clusterAlarm2 PT hPT hm W a ∧ ¬ clusterAlarm3 PT hPT hm W a
 
-/-- The cluster-mode part of L15.1a's reusable crossing-filter estimate. -/
+/-- The cluster-mode part of L15.1a's crossing estimate on positive raw-history support. -/
 def ClusterCrossingClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in Filter.atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
-    ∀ W, clusterAlarmsAvoided PT hPT hm W → ∀ a : EvenPosition T k,
+    ∀ W, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      clusterAlarmsAvoided PT hPT hm W → ∀ a : EvenPosition T k,
       (clusterInternalKernel PT hPT hm W).pr (fun I =>
-        |clusterCrossingMass PT hPT hm W I a - 1| > 10 * bstar T k) ≤
+        (∑ x, clusterSigma PT hPT hm W I a x) = 1 ∧
+          |clusterCrossingMass PT hPT hm W I a - 1| >
+            Real.exp (20 * (PT.tiling.P (patchAt PT hPT a.1)).ℓ * bstar T k) - 1) ≤
           (T.S.n k : ℝ) ^ (-(κ.R : ℝ))
 
 /-- The raw history law conditioned to avoid the D15.A alarms. -/
@@ -537,8 +558,9 @@ noncomputable def clusterRawReferenceLaw {κ : CConsts} {T : Stage} {k : ℕ}
 /-- The label at a full cube position read from its internal slice experiment. -/
 noncomputable def clusterLabelFromInternal {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
     (I : ClusterInternalData PT) (b : OddPosition T k) : Fin (T.S.N k) :=
-  (I (clusterSliceAt PT hPT b.1)).2 (clusterWordAt PT hPT b.1)
+  (I (clusterSliceAt PT hPT b.1)).2 (solverWordAt PT hPT hm b.1)
 
 /-- The odd-label marginal of the raw history and product-by-groups reference experiment. -/
 noncomputable def clusterRawOddLabelLaw {κ : CConsts} {T : Stage} {k : ℕ}
@@ -547,7 +569,7 @@ noncomputable def clusterRawOddLabelLaw {κ : CConsts} {T : Stage} {k : ℕ}
     FinLaw (OddAssignment T k) := by
   classical
   exact FinLaw.map (clusterRawReferenceLaw PT hPT hm)
-    (fun z => fun b => clusterLabelFromInternal (hPT := hPT) z.2 b)
+    (fun z => fun b => clusterLabelFromInternal (hPT := hPT) hm z.2 b)
 
 /-- The patch label law attached to an odd cube position. -/
 noncomputable def lawAtOdd {κ : CConsts} {T : Stage} {k : ℕ}
@@ -696,6 +718,12 @@ structure DirectSampler {κ : CConsts} {T : Stage} {k : ℕ}
   rawLaw : FinLaw (OddAssignment T k)
   rawLaw_eq : rawLaw = directRawLaw PT hPT
   law : FinLaw (OddAssignment T k)
+  local_upper_comparison : ∀ F : OddAssignment T k → ℝ,
+    (∀ ys, 0 ≤ F ys) → ∀ S : Finset (OddPosition T k),
+      (∀ ys ys', (∀ b ∈ S, ys b = ys' b) → F ys = F ys') →
+      (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 5 → law.E F ≤ 2 * rawLaw.E F
+  label_supported : ∀ ys, law.w ys ≠ 0 → ∀ b,
+    ys b ∈ (PT.tiling.P (patchAt PT hPT b.1)).Y
   injective_on_support : ∀ ys, law.w ys ≠ 0 → Function.Injective ys
   row_mass_gate : ∀ ys, law.w ys ≠ 0 → ∀ a, (1 / 2 : ℝ) ≤ directRowMass PT hPT ys a
 
@@ -737,6 +765,26 @@ noncomputable def clusterBinStarFailure {κ : CConsts} {T : Stage} {k : ℕ}
     clusterRowMass PT hPT hm W I a < 1 / 2)
   exact if 0 < pB then qB / pB else 0
 
+/-- Consultation sites count local solver reads, independently of record multiplicity. -/
+abbrev ClusterConsultation {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) := Σ s : ClusterSlice PT, IWord PT.tiling s.1
+
+/-- All records within one of the queried `10ρh` consultation domains. -/
+noncomputable def clusterConsultationScope {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (U : Finset (ClusterConsultation PT)) : Finset (ClusterRecordIndex PT hPT hm) :=
+  Finset.univ.filter fun r => ∃ c ∈ U, ∃ e : c.1 = r.1,
+    (hammingDist ((clusterSolver PT hPT hm r.1.1).loc r.2) (e ▸ c.2) : ℝ) ≤
+      10 * κ.ρ * (PT.tiling.P r.1.1).h
+
+/-- Dependence on specified primitive records. The budget counts consultation domains. -/
+def ClusterHistoryDependsOn {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
+    {hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge}
+    (F : ClusterHistory PT hPT hm → ℝ) (S : Finset (ClusterRecordIndex PT hPT hm)) : Prop :=
+  ∀ W W', (∀ r ∈ S, W r = W' r) → F W = F W'
+
 /-- Per-bin mass gates and capacity certificates from P15.3's bin stage. -/
 noncomputable def clusterBinGood {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
@@ -760,23 +808,74 @@ structure ClusterBinStage {κ : CConsts} {T : Stage} {k : ℕ}
   historyLaw_eq : historyLaw = clusterAvoidedHistoryLaw PT hPT hm history_positive
   binLaw : ClusterHistory PT hPT hm → FinLaw (ClusterBinAssignment PT)
   history_local_upper_comparison : ∀ F : ClusterHistory PT hPT hm → ℝ,
-    (∀ W, 0 ≤ F W) → ∀ S : Finset (ClusterRecordIndex PT hPT hm),
-      (∀ W W', (∀ r ∈ S, W r = W' r) → F W = F W') →
-      (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ κ.Astar →
+    (∀ W, 0 ≤ F W) → ∀ U : Finset (ClusterConsultation PT),
+      ClusterHistoryDependsOn F (clusterConsultationScope PT hPT hm U) →
+      (U.card : ℝ) ≤ (T.S.n k : ℝ) ^ 5 →
         historyLaw.E F ≤ (1 + 1 / (T.S.n k : ℝ)) *
           (clusterHistoryLaw PT hPT hm).E F
   history_avoids_alarms : ∀ W, historyLaw.w W ≠ 0 → clusterAlarmsAvoided PT hPT hm W
   history_load_probability : (99 / 100 : ℝ) ≤
     historyLaw.pr (fun W => clusterHistoryLoad PT hPT hm W)
-  bin_requirements : ∀ W, historyLaw.w W ≠ 0 → ∀ B,
+  bin_requirements : ∀ W, historyLaw.w W ≠ 0 → clusterHistoryLoad PT hPT hm W → ∀ B,
     (binLaw W).w B ≠ 0 → clusterBinGood PT hPT hm W B
-  local_upper_comparison : ∀ W, historyLaw.w W ≠ 0 → ∀ F : ClusterBinAssignment PT → ℝ,
+  local_upper_comparison : ∀ W, historyLaw.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+    ∀ F : ClusterBinAssignment PT → ℝ,
     (∀ B, 0 ≤ F B) → ∀ S : Finset (ClusterGroupIndex PT),
       ClusterBinDependsOn F S → (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 3 →
         (binLaw W).E F ≤ (1 + 1 / (T.S.n k : ℝ)) *
           (clusterIndependentBinKernel PT hPT hm W).E F
 
-/-- A cluster sample records the conditional stages and their row weights. -/
+/-- Reference labels conditional on fixed group bins; every role is independent. -/
+noncomputable def clusterIndependentLabelKernel {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (B : ClusterBinAssignment PT) :
+    FinLaw (ClusterInternalData PT) := by
+  classical
+  let P : FinLaw (∀ s : ClusterSlice PT, IWord PT.tiling s.1 → Fin (T.S.N k)) :=
+    FinLaw.pi fun s => FinLaw.pi fun z =>
+      let S := clusterSolver PT hPT hm s.1
+      let g := S.groupOf z
+      ⟨S.U g (historyOnSlice W s) (B ⟨s, g⟩),
+        S.U_nonneg g (historyOnSlice W s) (B ⟨s, g⟩),
+        S.U_sum g (historyOnSlice W s) (B ⟨s, g⟩)⟩
+  exact FinLaw.map P (fun ys s => (fun g => B ⟨s, g⟩, ys s))
+
+/-- Tests read only the transported labels of the queried physical odd roles. -/
+def ClusterLabelDependsOn {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (F : ClusterInternalData PT → ℝ) (S : Finset (OddPosition T k)) : Prop :=
+  ∀ I I', (∀ b ∈ S, clusterLabelFromInternal (hPT := hPT) hm I b =
+    clusterLabelFromInternal (hPT := hPT) hm I' b) → F I = F I'
+
+/-- Physical bin multiplicity of a queried role. -/
+noncomputable def clusterBinQueryCount {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (B : ClusterBinAssignment PT) (S : Finset (OddPosition T k)) (b : OddPosition T k) : ℕ :=
+  (S.filter fun b' => (B (clusterGroupIndexAt PT hPT hm b')).1 =
+    (B (clusterGroupIndexAt PT hPT hm b)).1).card
+
+/-- L3.9 applies only up to `d^.025` observations of each small physical bin. -/
+def ClusterLabelQueryOK {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (B : ClusterBinAssignment PT) (S : Finset (OddPosition T k)) : Prop :=
+  PT.tiling.mode = .highSmall → ∀ b ∈ S,
+    (clusterBinQueryCount PT hPT hm B S b : ℝ) ≤
+      ((PT.tiling.P (patchAt PT hPT b.1)).d : ℝ) ^ (0.025 : ℝ)
+
+/-- Exact singletons incur no L3.9 error; multi-observations use its `d^-.04` error. -/
+noncomputable def clusterLabelError {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (B : ClusterBinAssignment PT) (S : Finset (OddPosition T k)) : ℝ :=
+  if PT.tiling.mode = .highSmall then Real.exp (∑ b ∈ S,
+    if 2 ≤ clusterBinQueryCount PT hPT hm B S b then
+      ((PT.tiling.P (patchAt PT hPT b.1)).d : ℝ) ^ (-0.04 : ℝ) else 0) else 1
+
+/-- A cluster sample records normalized conditional kernels without reweighting incoming histories. -/
 structure ClusterSample {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) where
@@ -788,16 +887,31 @@ structure ClusterSample {κ : CConsts} {T : Stage} {k : ℕ}
   internal : Outcome → ClusterInternalData PT
   bins : Outcome → ClusterBinAssignment PT
   label : Outcome → OddAssignment T k
-  referenceLabelLaw : FinLaw (OddAssignment T k)
-  referenceLabelLaw_eq : referenceLabelLaw = clusterRawOddLabelLaw PT hPT hm
-  label_local_upper_comparison : ∀ F : OddAssignment T k → ℝ,
-    (∀ ys, 0 ≤ F ys) → ∀ S : Finset (OddPosition T k),
-      (∀ ys ys', (∀ b ∈ S, ys b = ys' b) → F ys = F ys') →
-      (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
-        (FinLaw.map law label).E F ≤
-          Real.exp (∑ b ∈ S, Real.rpow
-            (max ((PT.tiling.P (patchAt PT hPT b.1)).d : ℝ) 1) (-0.04)) *
-            referenceLabelLaw.E F
+  /-- Before mass-failure avoidance: calibrated per-bin injection, exact singleton marginals. -/
+  preLabelKernel : ClusterHistory PT hPT hm → ClusterBinAssignment PT → FinLaw (ClusterInternalData PT)
+  labelKernel : ClusterHistory PT hPT hm → ClusterBinAssignment PT → FinLaw (ClusterInternalData PT)
+  label_disintegration : FinLaw.map law (fun ω => ((history ω, bins ω), internal ω)) =
+    FinLaw.bind (FinLaw.bind binStage.historyLaw binStage.binLaw)
+      (fun wb => labelKernel wb.1 wb.2)
+  prelabel_singleton : ∀ W, binStage.historyLaw.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+    ∀ B, (binStage.binLaw W).w B ≠ 0 → ∀ b y,
+      (preLabelKernel W B).pr (fun I => clusterLabelFromInternal (hPT := hPT) hm I b = y) =
+        (clusterSolver PT hPT hm (patchAt PT hPT b.1)).U
+          (clusterGroupIndexAt PT hPT hm b).2
+          (historyOnSlice W (clusterSliceAt PT hPT b.1)) (B (clusterGroupIndexAt PT hPT hm b)) y
+  prelabel_upper_comparison : ∀ W, binStage.historyLaw.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+    ∀ B, (binStage.binLaw W).w B ≠ 0 → ∀ F : ClusterInternalData PT → ℝ,
+    (∀ I, 0 ≤ F I) → ∀ S : Finset (OddPosition T k),
+    ClusterLabelDependsOn hPT hm F S → (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
+    ClusterLabelQueryOK PT hPT hm B S →
+      (preLabelKernel W B).E F ≤ clusterLabelError PT hPT hm B S *
+        (clusterIndependentLabelKernel PT hPT hm W B).E F
+  /-- The clock's `1 + o(1)` comparison is eventually bounded by two. -/
+  label_local_upper_comparison : ∀ W, binStage.historyLaw.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+    ∀ B, (binStage.binLaw W).w B ≠ 0 → ∀ F : ClusterInternalData PT → ℝ,
+    (∀ I, 0 ≤ F I) → ∀ S : Finset (OddPosition T k),
+    ClusterLabelDependsOn hPT hm F S → (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
+      (labelKernel W B).E F ≤ 2 * (preLabelKernel W B).E F
   row : Outcome → EvenPosition T k → Fin (T.S.N k) → ℝ
   historyLoad : Outcome → Prop
   history_eq : ∀ ω, historyLoad ω ↔ clusterHistoryLoad PT hPT hm (history ω)
@@ -807,16 +921,17 @@ structure ClusterSample {κ : CConsts} {T : Stage} {k : ℕ}
     law.pr (fun ω => history ω = W ∧ bins ω = B) =
       (FinLaw.bind binStage.historyLaw binStage.binLaw).pr (fun wb => wb = (W, B))
   label_eq : ∀ ω b, label ω b =
-    (internal ω (clusterSliceAt PT hPT b.1)).2 (clusterWordAt PT hPT b.1)
-  label_supported : ∀ ω b, label ω b ∈ (PT.tiling.P (patchAt PT hPT b.1)).Y
+    (internal ω (clusterSliceAt PT hPT b.1)).2 (solverWordAt PT hPT hm b.1)
+  label_supported : ∀ ω, law.w ω ≠ 0 → historyLoad ω → ∀ b,
+    label ω b ∈ (PT.tiling.P (patchAt PT hPT b.1)).Y
   row_eq : ∀ ω a x, row ω a x =
     clusterRowWeight PT hPT hm (history ω) (internal ω) a x
-  injective_on_support : ∀ ω, law.w ω ≠ 0 → Function.Injective (label ω)
+  injective_on_support : ∀ ω, law.w ω ≠ 0 → historyLoad ω → Function.Injective (label ω)
   row_nonneg : ∀ ω a x, 0 ≤ row ω a x
-  mass_gate : ∀ ω, law.w ω ≠ 0 → ∀ a, (1 / 2 : ℝ) ≤ ∑ x, row ω a x
-  row_support : ∀ ω a x, row ω a x ≠ 0 →
+  mass_gate : ∀ ω, law.w ω ≠ 0 → historyLoad ω → ∀ a, (1 / 2 : ℝ) ≤ ∑ x, row ω a x
+  row_support : ∀ ω, law.w ω ≠ 0 → historyLoad ω → ∀ a x, row ω a x ≠ 0 →
     x ∈ PT.envelope (patchAt PT hPT a.1)
-  common_neighbour : ∀ ω a x, row ω a x ≠ 0 →
+  common_neighbour : ∀ ω, law.w ω ≠ 0 → historyLoad ω → ∀ a x, row ω a x ≠ 0 →
     ∀ b, Adjacent a b → Hits (T.S.E k) PT.tiling.c x (label ω b)
 
 attribute [instance] ClusterSample.outcomeFinite

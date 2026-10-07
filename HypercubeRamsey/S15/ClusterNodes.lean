@@ -6,6 +6,7 @@ import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
 import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c2
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -528,6 +529,23 @@ theorem high_cluster_conditional_mass_estimate (κ : CConsts) (hκ : κ.Admissib
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hCross : ClusterCrossingClaim κ T)
     (hAlarm : ClusterAlarmTestClaim κ T) (hInteraction : ClusterInteractionMeanClaim κ T)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterMassClaim κ T := by
+  filter_upwards [hAlarm] with k hkAlarm
+  intro PT hPT hm W hW hAvoid a
+  have hZero := Lane_sol_s15_load.clusterSigma_zero_probability PT hPT hm W hAvoid a
+  have hRemoval : ∀ I : ClusterInternalData PT,
+      (∑ x, if clusterJ PT hPT hm W a x then 0 else clusterSigma PT hPT hm W I a x) ≤
+      ((PT.tiling.P (patchAt PT hPT a.1)).M *
+        ((2 : ℝ) ^ (PT.tiling.P (patchAt PT hPT a.1)).h *
+          Real.exp (-500 * PT.tiling.gain (patchAt PT hPT a.1)) / T.S.N k)) *
+      (Real.exp (-Real.rpow (T.S.n k : ℝ) 0.2) + Real.exp (-(κ.α / 2) * T.S.n k)) := by
+    intro I
+    exact Lane_sol_s15_load.clusterSigma_removed_mass_le PT hPT hm W hW hAvoid I a _
+      ((hkAlarm PT hPT hm a).2 W)
+  have hInteractionBudget : clusterInteractionCost PT hPT hm W a ≤
+      Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := le_of_not_gt (hAvoid a).2.1
+  -- Remaining: project the external neighbour labels to independent slice marginals,
+  -- apply the crossing chain to the normalized J-restricted row, then average the
+  -- heterogeneous bulk moment and its alarm-two envelope over the center experiment.
   sorry
 
 /-- L15.2 (`lem:high-cluster-mass`, 15:91–112): conditional row-mass failure is at most `n^-R`. -/
@@ -551,7 +569,41 @@ def ClusterHistoryLoadClaim (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_history_load (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterHistoryLoadClaim κ T := by
-  sorry
+  have hsmall := Lane_sol_s15_load.history_load_small_eventually κ hκ T
+  have hHost := T.S.eventually_large 1 7
+  have hRatio := T.S.ratio_tendsto.eventually_ge_atTop (800 * 384 / κ.θstar)
+  have hNsmall : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ 2 / (2 : ℝ) ^ (T.S.n k) < 1 :=
+    T.S.n_tendsto.eventually Lane_q_s15_direct.eventually_nat_sq_over_two_pow_lt_one
+  filter_upwards [hsmall, hHost, hRatio, hNsmall] with k hsmall hHost hRatio hNsmall
+  intro PT hPT hm H
+  have htheta : 0 < κ.θstar := hκ.bucket.2.2.2.2
+  have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hpow : (0 : ℝ) < 2 ^ (T.S.n k) := by positivity
+  have hratio : 800 * 384 * (2 : ℝ) ^ (T.S.n k) / T.S.N k ≤ κ.θstar := by
+    have h := (div_le_div_iff₀ htheta hpow).mp hRatio
+    exact (div_le_iff₀ hNpos).2 (by nlinarith [h])
+  have hNupper : (T.S.N k : ℝ) ≤ (T.S.n k : ℝ) * (2 : ℝ) ^ (T.S.n k) := by
+    exact_mod_cast hHost.2.2
+  have hn2 : (T.S.n k : ℝ) ^ 2 ≤ (2 : ℝ) ^ (T.S.n k) := by
+    simpa using ((div_lt_iff₀ hpow).mp hNsmall).le
+  have hNbound : (T.S.N k : ℝ) ^ 2 ≤ (8 : ℝ) ^ (T.S.n k) := by
+    calc
+      _ ≤ ((T.S.n k : ℝ) * (2 : ℝ) ^ (T.S.n k)) ^ 2 := by gcongr
+      _ = (T.S.n k : ℝ) ^ 2 * (4 : ℝ) ^ (T.S.n k) := by
+        rw [mul_pow]
+        congr 1
+        rw [pow_two, ← mul_pow]
+        norm_num
+      _ ≤ (2 : ℝ) ^ (T.S.n k) * (4 : ℝ) ^ (T.S.n k) := by gcongr
+      _ = (8 : ℝ) ^ (T.S.n k) := by rw [← mul_pow]; norm_num
+  have htail : (1 / 2 : ℝ) ^ (T.S.n k) ≤ 1 / 100 := by
+    have h := pow_le_pow_of_le_one (by norm_num : (0 : ℝ) ≤ 1 / 2)
+      (by norm_num : (1 / 2 : ℝ) ≤ 1) hHost.1
+    norm_num at h
+    linarith
+  exact Lane_sol_s15_load.historyLoad_probability hκ PT hPT hm H.law
+    H.local_comparison hsmall.1 (hsmall.2 PT hPT hm) hratio hNbound htail
 
 /-- P15.3b: actual certificate charges, with a constant supplied by the estimate. -/
 def ClusterCapacityClaim (κ : CConsts) (T : Stage) : Prop :=

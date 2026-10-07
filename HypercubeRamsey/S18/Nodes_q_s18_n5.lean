@@ -109,4 +109,112 @@ theorem isolatedWeight_nonneg (D : LateData hPT) (v : Pos T k) (x z : Fin (T.S.N
     exact mul_nonneg (sq_nonneg (D.chi (D.geom.patchOf v) : ℝ)) hout
   · simp
 
+private theorem graph_nonisolates_le_twice_rank {V : Type*} [Fintype V]
+    [DecidableEq V] (G : SimpleGraph V) [DecidableRel G.Adj]
+    (N : Finset V) (hN : ∀ v ∈ N, ∃ w, G.Adj v w) :
+    N.card ≤ 2 * (Fintype.card V - Nat.card G.ConnectedComponent) := by
+  classical
+  let fiber (c : G.ConnectedComponent) : Finset V :=
+    Finset.univ.filter fun v => G.connectedComponentMk v = c
+  have hfiber_pos (c : G.ConnectedComponent) : 0 < (fiber c).card := by
+    obtain ⟨v, hv⟩ := c.exists_rep
+    apply Finset.card_pos.mpr
+    refine ⟨v, ?_⟩
+    simp only [fiber, Finset.mem_filter, Finset.mem_univ, true_and]
+    change G.connectedComponentMk v = c
+    exact hv
+  have hsum_fiber :
+      Fintype.card V = ∑ c : G.ConnectedComponent, (fiber c).card := by
+    simpa [fiber] using
+      (Finset.card_eq_sum_card_fiberwise
+        (f := fun v : V => G.connectedComponentMk v)
+        (s := Finset.univ) (t := Finset.univ)
+      (by intro v hv; simp))
+  have hsub : N.card ≤
+      ∑ c : G.ConnectedComponent,
+        if 2 ≤ (fiber c).card then (fiber c).card else 0 := by
+    rw [Finset.card_eq_sum_card_fiberwise
+      (f := fun v : V => G.connectedComponentMk v) (s := N) (t := Finset.univ)
+      (by intro v hv; simp)]
+    apply Finset.sum_le_sum
+    intro c hc
+    by_cases hlarge : 2 ≤ (fiber c).card
+    · have hsubset : (N.filter fun v => G.connectedComponentMk v = c) ⊆ fiber c := by
+        intro v hv
+        change v ∈ Finset.univ.filter (fun u => G.connectedComponentMk u = c)
+        exact Finset.mem_filter.mpr
+          ⟨Finset.mem_univ _, (Finset.mem_filter.mp hv).2⟩
+      simpa [hlarge] using Finset.card_le_card hsubset
+    · have hsmall : (fiber c).card < 2 := Nat.lt_of_not_ge hlarge
+      have hnot : ∀ v ∈ N, G.connectedComponentMk v ≠ c := by
+        intro v hvN heq
+        obtain ⟨w, hadj⟩ := hN v hvN
+        have hne : v ≠ w := G.ne_of_adj hadj
+        have hwc : G.connectedComponentMk w = c := by
+          rw [← heq]
+          exact SimpleGraph.ConnectedComponent.sound hadj.symm.reachable
+        have hmemV : v ∈ fiber c := by simp [fiber, heq]
+        have hmemW : w ∈ fiber c := by simp [fiber, hwc]
+        have hcard : 2 ≤ (fiber c).card := by
+          exact Finset.one_lt_card.mpr ⟨v, hmemV, w, hmemW, hne⟩
+        omega
+      have hempty : (N.filter fun v => G.connectedComponentMk v = c) = ∅ :=
+        Finset.filter_eq_empty_iff.mpr hnot
+      simpa [hempty, hlarge]
+  have hsum_sub :
+      (∑ c : G.ConnectedComponent, ((fiber c).card - 1)) =
+          Fintype.card V - Nat.card G.ConnectedComponent := by
+    have hsum_decomp :
+        (∑ c : G.ConnectedComponent, (fiber c).card) =
+          (∑ c : G.ConnectedComponent, ((fiber c).card - 1)) +
+            Fintype.card G.ConnectedComponent := by
+      calc
+        _ = ∑ c : G.ConnectedComponent, ((fiber c).card - 1 + 1) := by
+          apply Finset.sum_congr rfl
+          intro c hc
+          have := hfiber_pos c
+          omega
+        _ = _ := by
+          rw [Finset.sum_add_distrib]
+          simp
+    have hnat : Nat.card G.ConnectedComponent = Fintype.card G.ConnectedComponent :=
+      Nat.card_eq_fintype_card
+    omega
+  calc
+    N.card ≤ ∑ c : G.ConnectedComponent,
+        if 2 ≤ (fiber c).card then (fiber c).card else 0 := hsub
+    _ ≤ ∑ c : G.ConnectedComponent, 2 * ((fiber c).card - 1) := by
+      apply Finset.sum_le_sum
+      intro c hc
+      by_cases hlarge : 2 ≤ (fiber c).card
+      · have := hfiber_pos c
+        simp [hlarge]
+        omega
+      · have hsmall : (fiber c).card < 2 := Nat.lt_of_not_ge hlarge
+        have hone : (fiber c).card = 1 := by
+          have := hfiber_pos c
+          omega
+        simp [hlarge, hone]
+    _ = 2 * (Fintype.card V - Nat.card G.ConnectedComponent) := by
+      rw [← Finset.mul_sum]
+      rw [hsum_sub]
+
+theorem nonisolates_le_twice_rank (D : LateData hPT) (S : Finset (Pos T k)) :
+    (D.nonisolates S).card ≤ 2 * D.rank S := by
+  classical
+  let G := D.overlapGraph S
+  let N : Finset {v : Pos T k // v ∈ S} :=
+    S.attach.filter fun v => ∃ w ∈ S, D.geometricAdj v.1 w
+  have hN : ∀ v ∈ N, ∃ w : {u : Pos T k // u ∈ S}, G.Adj v w := by
+    intro v hv
+    obtain ⟨w, hw, hadj⟩ := (Finset.mem_filter.mp hv).2
+    exact ⟨⟨w, hw⟩, hadj⟩
+  have hbound := graph_nonisolates_le_twice_rank G N hN
+  have hcard : N.card = (D.nonisolates S).card := by
+    simpa [N, LateData.nonisolates] using
+      congrArg Finset.card
+        (Finset.filter_attach (fun v : Pos T k => ∃ w ∈ S, D.geometricAdj v w) S)
+  rw [hcard] at hbound
+  simpa [G, LateData.rank, Nat.card_eq_fintype_card] using hbound
+
 end HypercubeRamsey.S18.Lane_q_s18_n5

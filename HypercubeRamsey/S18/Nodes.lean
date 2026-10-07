@@ -307,7 +307,7 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
   · intro v
     sorry
   · intro S
-    sorry
+    exact Lane_q_s18_n5.nonisolates_le_twice_rank D S
   · intro x h hfull v heven
     sorry
 

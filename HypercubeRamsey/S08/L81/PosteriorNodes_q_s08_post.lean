@@ -1034,6 +1034,81 @@ theorem avgMarg_rprime_le_balanced {η₀ β p : ℝ} {h : ℕ}
   apply (le_div_iff₀ hN').2
   simpa [mul_comm] using hBal.2 y
 
+theorem tilt_congr_of_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    (h0 : Θ g = Θ' g) (hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u) :
+    D.tilt Θ g = D.tilt Θ' g := by
+  classical
+  have hCrossHit (x : Fin D.N) : D.crossHit Θ g x = D.crossHit Θ' g x := by
+    apply propext
+    constructor
+    · intro hx u hu
+      rw [← hcross u hu]
+      exact hx u hu
+    · intro hx u hu
+      rw [hcross u hu]
+      exact hx u hu
+  have hOwnHit (x : Fin D.N) : D.ownHit Θ g x = D.ownHit Θ' g x := by
+    simp [Ctx.ownHit, Ctx.hitsAll, hCrossHit, h0]
+  have hMinus (i : D.M.ι) : D.dMinus Θ g i = D.dMinus Θ' g i := by
+    unfold Ctx.dMinus
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp [hCrossHit]
+  have hPlus (i : D.M.ι) : D.dPlus Θ g i = D.dPlus Θ' g i := by
+    unfold Ctx.dPlus
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp [hOwnHit]
+  have hpost (i : D.M.ι) : D.postW (Θ g) i = D.postW (Θ' g) i := by rw [h0]
+  have hgate (i : D.M.ι) : D.GateOpen Θ g i = D.GateOpen Θ' g i := by
+    unfold Ctx.GateOpen
+    rw [hMinus, hPlus]
+  have hweight (i : D.M.ι) : D.tiltW Θ g i = D.tiltW Θ' g i := by
+    unfold Ctx.tiltW
+    rw [hpost, hMinus, hgate]
+  have hZ : D.ZG Θ g = D.ZG Θ' g := by
+    unfold Ctx.ZG
+    apply Finset.sum_congr rfl
+    intro i hi
+    exact hweight i
+  unfold Ctx.ZG at hZ
+  apply FinProb.ext
+  intro i
+  simp only [Ctx.tilt, normOr]
+  rw [hZ, hweight i]
+
+theorem anchorU_congr_of_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (i : D.M.ι)
+    (h0 : Θ g = Θ' g) (hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u) :
+    D.anchorU Θ g i = D.anchorU Θ' g i := by
+  classical
+  have hCrossHit (x : Fin D.N) : D.crossHit Θ g x = D.crossHit Θ' g x := by
+    apply propext
+    constructor
+    · intro hx u hu
+      rw [← hcross u hu]
+      exact hx u hu
+    · intro hx u hu
+      rw [hcross u hu]
+      exact hx u hu
+  have hOwnHit (x : Fin D.N) : D.ownHit Θ g x = D.ownHit Θ' g x := by
+    simp [Ctx.ownHit, Ctx.hitsAll, hCrossHit, h0]
+  have hweight (x : Fin D.N) :
+      (D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0) =
+        (D.M.μ i).w x * (if D.ownHit Θ' g x then 1 else 0) := by
+    simp [hOwnHit x]
+  have hZ :
+      (∑ x, (D.M.μ i).w x * if D.ownHit Θ g x then 1 else 0) =
+        ∑ x, (D.M.μ i).w x * if D.ownHit Θ' g x then 1 else 0 := by
+    apply Finset.sum_congr rfl
+    intro x hx
+    exact hweight x
+  apply FinProb.ext
+  intro x
+  simp only [Ctx.anchorU, normOr]
+  rw [hZ, hweight x]
+
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
   classical

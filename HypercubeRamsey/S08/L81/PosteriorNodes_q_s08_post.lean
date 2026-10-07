@@ -231,6 +231,244 @@ theorem anchor_miss_le {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
         _ ≤ (D.Δ / (1 - D.Δ)) * D.dPlus Θ g i :=
           mul_le_mul_of_nonneg_left htrue.2 (div_nonneg hΔpos.le hfactor.le)
 
+theorem one_sub_prod_le_sum {α : Type*} [Fintype α] (s : Finset α) (a : α → ℝ)
+    (ha0 : ∀ i ∈ s, 0 ≤ a i) (ha1 : ∀ i ∈ s, a i ≤ 1) :
+    1 - ∏ i ∈ s, (1 - a i) ≤ ∑ i ∈ s, a i := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp
+  | @insert i s his ih =>
+      have hi0 := ha0 i (Finset.mem_insert_self i s)
+      have hi1 := ha1 i (Finset.mem_insert_self i s)
+      have hs0 : ∀ j ∈ s, 0 ≤ a j := fun j hj => ha0 j (Finset.mem_insert_of_mem hj)
+      have hs1 : ∀ j ∈ s, a j ≤ 1 := fun j hj => ha1 j (Finset.mem_insert_of_mem hj)
+      have hprod0 : 0 ≤ ∏ j ∈ s, (1 - a j) :=
+        Finset.prod_nonneg fun j hj => sub_nonneg.mpr (hs1 j hj)
+      have hprod1 : ∏ j ∈ s, (1 - a j) ≤ 1 :=
+        Finset.prod_le_one₀ (fun j hj => sub_nonneg.mpr (hs1 j hj))
+          (fun j hj => by linarith [hs0 j hj])
+      rw [Finset.prod_insert his, Finset.sum_insert his]
+      calc
+        1 - (1 - a i) * ∏ j ∈ s, (1 - a j) =
+            (1 - ∏ j ∈ s, (1 - a j)) + a i * ∏ j ∈ s, (1 - a j) := by ring
+        _ ≤ (∑ j ∈ s, a j) + a i := by
+          have hmul := mul_le_mul_of_nonneg_left hprod1 hi0
+          have hih := ih hs0 hs1
+          linarith
+        _ = a i + ∑ j ∈ s, a j := by ring
+
+theorem pr_compl {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A + P.pr (fun ω => ¬ A ω) = 1 := by
+  classical
+  unfold FinProb.pr
+  rw [← Finset.sum_add_distrib]
+  calc
+    (∑ ω, ((if A ω then P.w ω else 0) +
+        (@ite ℝ ((fun ω => ¬ A ω) ω)
+          (Classical.propDecidable ((fun ω => ¬ A ω) ω)) (P.w ω) 0))) =
+        ∑ ω, P.w ω := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      by_cases h : A ω <;> simp [h]
+    _ = 1 := P.sum_eq_one
+
+theorem pr_eq_weighted_indicator {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A = ∑ ω, P.w ω *
+      (@ite ℝ (A ω) (Classical.propDecidable (A ω)) (1 : ℝ) 0) := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases h : A ω <;> simp [h]
+
+theorem pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A B : Ω → Prop)
+    (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro ω hω
+  by_cases hA : A ω
+  · have hB := hAB ω hA
+    simp [hA, hB]
+  · by_cases hB : B ω
+    · simp [hA, hB, P.nonneg ω]
+    · simp [hA, hB]
+
+theorem sum_subtype_const {α : Type*} [DecidableEq α] (s : Finset α) (r : ℝ) :
+    (∑ x : s, r) = (Fintype.card s : ℝ) * r := by
+  classical
+  simp [Finset.sum_const, nsmul_eq_mul]
+
+theorem pi_pr_not_forall_le_sum {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {α : Type*} [Fintype α] (P : ι → FinProb α) (A : ι → α → Prop) :
+    (FinProb.pi P).pr (fun ω => ¬ ∀ i, A i (ω i)) ≤
+      ∑ i, (P i).pr (fun x => ¬ A i x) := by
+  classical
+  have hcompl : (FinProb.pi P).pr (fun ω => ¬ ∀ i, A i (ω i)) =
+      1 - (FinProb.pi P).pr (fun ω => ∀ i, A i (ω i)) := by
+    have h := pr_compl (FinProb.pi P) (fun ω => ∀ i, A i (ω i))
+    linarith
+  have hfactor : (FinProb.pi P).pr (fun ω => ∀ i, A i (ω i)) =
+      ∏ i, (P i).pr (A i) := FinProb.pi_pr_forall P A
+  have hprod : (∏ i, (P i).pr (A i)) =
+      ∏ i, (1 - (P i).pr (fun x => ¬ A i x)) := by
+    apply Finset.prod_congr rfl
+    intro i hi
+    have h := pr_compl (P i) (A i)
+    linarith
+  have hmiss0 (i : ι) : 0 ≤ (P i).pr (fun x => ¬ A i x) := pr_nonneg _ _
+  have hmiss1 (i : ι) : (P i).pr (fun x => ¬ A i x) ≤ 1 := by
+    have h := pr_compl (P i) (A i)
+    have hnonneg : 0 ≤ (P i).pr (A i) := pr_nonneg _ _
+    linarith
+  rw [hcompl, hfactor, hprod]
+  exact one_sub_prod_le_sum Finset.univ (fun i => (P i).pr (fun x => ¬ A i x))
+    (fun i hi => hmiss0 i) (fun i hi => hmiss1 i)
+
+private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
+    (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
+  classical
+  let B : Finset (CubeVertex d) := Finset.univ.filter fun u => _root_.hammingDist a u ≤ 1
+  let diff : CubeVertex d → Finset (Fin d) := fun u =>
+    Finset.univ.filter fun i => u i ≠ a i
+  let small : Finset (Finset (Fin d)) :=
+    insert ∅ ((Finset.univ : Finset (Fin d)).image fun i => ({i} : Finset (Fin d)))
+  have hdiff_card (u : CubeVertex d) : (diff u).card = _root_.hammingDist a u := by
+    simp [diff, _root_.hammingDist, ne_comm]
+  have hdiff_inj : Set.InjOn diff (B : Set (CubeVertex d)) := by
+    intro u hu v hv huv
+    funext i
+    have hi : (u i ≠ a i) ↔ (v i ≠ a i) := by
+      have hh := congrArg (fun s : Finset (Fin d) => i ∈ s) huv
+      simpa [diff] using hh
+    cases ha : a i <;> cases hu' : u i <;> cases hv' : v i <;> simp_all
+  have hdiff_small : B.image diff ⊆ small := by
+    intro s hs
+    rcases Finset.mem_image.mp hs with ⟨u, hu, rfl⟩
+    have hcard : (diff u).card ≤ 1 := by
+      rw [hdiff_card]
+      simpa [B] using hu
+    by_cases hzero : (diff u).card = 0
+    · have heq : diff u = ∅ := Finset.card_eq_zero.mp hzero
+      simp [small, heq]
+    · have hpos : 0 < (diff u).card := Finset.card_pos.mpr
+        (Finset.nonempty_iff_ne_empty.mpr (by
+          intro he
+          exact hzero (by simpa [he])))
+      have hone : (diff u).card = 1 := by omega
+      obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hone
+      apply Finset.mem_insert_of_mem
+      apply Finset.mem_image.mpr
+      refine ⟨i, Finset.mem_univ i, ?_⟩
+      simpa [hi]
+  have hsmall_card : small.card ≤ d + 1 := by
+    calc
+      small.card ≤ ((Finset.univ : Finset (Fin d)).image fun i => ({i} : Finset (Fin d))).card + 1 :=
+        Finset.card_insert_le _ _
+      _ ≤ d + 1 := by
+        have himage := Finset.card_image_le (s := (Finset.univ : Finset (Fin d)))
+          (f := fun i => ({i} : Finset (Fin d)))
+        simpa using Nat.add_le_add_right himage 1
+  calc
+    B.card = (B.image diff).card :=
+      (Finset.card_image_of_injOn hdiff_inj).symm
+    _ ≤ small.card := Finset.card_le_card hdiff_small
+    _ ≤ d + 1 := hsmall_card
+
+theorem ordCells_card_le_n_add_one {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) :
+    (D.ordCells c).card ≤ D.n + 1 := by
+  classical
+  unfold Ctx.ordCells
+  calc
+    ((ordNbrs c.2).image fun b => (c.1, b)).card ≤ (ordNbrs c.2).card := Finset.card_image_le
+    _ ≤ dC η₀ D.n + 1 := by
+      simpa [ordNbrs] using cube_ball_one_card (dC η₀ D.n) c.2
+    _ ≤ D.n + 1 := Nat.add_le_add_right (Nat.sub_le _ _) 1
+
+theorem ordHit_iff_product {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (W : D.Anch)
+    (a : ∀ e : D.ordCells c, Fin D.N) (y : Fin D.N) :
+    D.OrdHit (glue (D.ordCells c) W a) c y ↔
+      ∀ e : D.ordCells c, Hits D.E D.G (a e) y := by
+  classical
+  change (∀ b ∈ ordNbrs c.2, Hits D.E D.G ((glue (D.ordCells c) W a) (c.1, b)) y) ↔ _
+  constructor
+  · intro h e
+    rcases Finset.mem_image.mp e.2 with ⟨b, hb, hbe⟩
+    have hmem : (c.1, b) ∈ D.ordCells c := by
+      exact Finset.mem_image.mpr ⟨b, hb, rfl⟩
+    have heq : e = ⟨(c.1, b), hmem⟩ := by
+      apply Subtype.ext
+      exact hbe.symm
+    rw [heq]
+    have hh := h b hb
+    simpa [glue, hmem] using hh
+  · intro h b hb
+    have hmem : (c.1, b) ∈ D.ordCells c := Finset.mem_image.mpr ⟨b, hb, rfl⟩
+    let e : D.ordCells c := ⟨(c.1, b), hmem⟩
+    have hh := h e
+    simpa [glue, e, hmem] using hh
+
+theorem glue_ordCells_eq_on_cross {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (W : D.Anch)
+    (a : ∀ e : D.ordCells c, Fin D.N) (u : D.CrossSub c.1) :
+    (glue (D.ordCells c) W a) (u.1, c.2) = W (u.1, c.2) := by
+  classical
+  have hnotmem : (u.1, c.2) ∉ D.ordCells c := by
+    intro hmem
+    rcases Finset.mem_image.mp hmem with ⟨b, hb, hEq⟩
+    have hkey : u.1 = c.1 := by
+      simpa using (congrArg Prod.fst hEq).symm
+    have hself : keyDist c.1 c.1 = 0 := by simp [keyDist]
+    have hu : keyDist c.1 u.1 = 1 := (Finset.mem_filter.mp u.2).2
+    rw [hkey] at hu
+    rw [hself] at hu
+    norm_num at hu
+  simp [glue, hnotmem]
+
+theorem presValid_iff_cross_anchors_eq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W W' : D.Anch) (c : D.CellT)
+    (hcross : ∀ u : D.CrossSub c.1, W (u.1, c.2) = W' (u.1, c.2)) :
+    D.PresValid q W c ↔ D.PresValid q W' c := by
+  classical
+  have hpres : D.presOf q W c = D.presOf q W' c := by
+    apply Prod.ext
+    · rfl
+    · funext u
+      simp only [Ctx.presOf]
+      rw [hcross u]
+  unfold Ctx.PresValid
+  rw [hpres]
+
+theorem p0_eq_of_cross_anchors_eq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W W' : D.Anch) (c : D.CellT)
+    (hcross : ∀ u : D.CrossSub c.1, W (u.1, c.2) = W' (u.1, c.2))
+    (y : Fin D.N) : D.p0 q W c y = D.p0 q W' c y := by
+  classical
+  have hpres : D.presOf q W c = D.presOf q W' c := by
+    apply Prod.ext
+    · rfl
+    · funext u
+      simp only [Ctx.presOf]
+      rw [hcross u]
+  have hvalid : D.PresValid q W c ↔ D.PresValid q W' c := by
+    unfold Ctx.PresValid
+    rw [hpres]
+  have hvalidEq : D.PresValid q W c = D.PresValid q W' c := propext hvalid
+  unfold Ctx.p0
+  rw [hvalidEq, hpres]
+
+theorem p0_eq_on_ordinary_glue {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT)
+    (a : ∀ e : D.ordCells c, Fin D.N) (y : Fin D.N) :
+    D.p0 q (glue (D.ordCells c) W a) c y = D.p0 q W c y := by
+  symm
+  apply p0_eq_of_cross_anchors_eq D q W (glue (D.ordCells c) W a) c
+  intro u
+  exact (glue_ordCells_eq_on_cross D c W a u).symm
+
 end Lane_q_s08_post
 
 theorem avgMarg_nonneg {N k : ℕ} (Q : FinProb (Fin k → Fin N)) (y : Fin N) :
@@ -377,5 +615,73 @@ theorem selPost_pos_fcand_pos {η₀ β p : ℝ} {h : ℕ}
         exact (not_le_of_gt hprod) hmul
       exact lt_of_lt_of_le hGpos hG
   · exact hbase hq
+
+namespace Lane_q_s08_post
+
+private theorem p0_label_coordinate_gate {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hF : D.FSupport) (hG : D.GselLeF)
+    (q : D.Pre) (W : D.Anch) (c : D.CellT) (y : Fin D.N)
+    (hvalid : D.PresValid q W c) (hp0 : D.p0 q W c y ≠ 0)
+    (ℓ : D.Loc) (hℓ : ℓ ∈ D.intIds q c) :
+    ∃ ξ j, ξ j = y ∧
+      D.GateOpen (Function.update q.1.1 c.1 ξ) c.1 (q.2.1.1 c.1 ℓ) := by
+  classical
+  let π : D.Pres c.1 := D.presOf q W c
+  let Q : FinProb D.Tup := D.selPost q.1.1 q.1.2 c π
+  have hp0w : D.p0w q.1.1 q.1.2 c π y ≠ 0 := by
+    intro hz
+    apply hp0
+    simp [Ctx.p0, hvalid, π, hz]
+  have hlight : D.lightMass Q ≠ 0 := by
+    intro hz
+    apply hp0w
+    simp [Ctx.p0w, π, Q, hz]
+  have hMarg : averageCoordinateMarginal Q y ≠ 0 := by
+    intro hz
+    apply hp0w
+    simp [Ctx.p0w, π, Q, hlight, hz]
+  obtain ⟨ξ, j, hξ, hcoord⟩ := avgMarg_ne_zero_support Q y hMarg
+  have hQpos : 0 < Q.w ξ := lt_of_le_of_ne (Q.nonneg ξ) (Ne.symm hξ)
+  have hden : D.eps0 ≤ D.Mden q.1.1 c.1 (D.obsOf π) := hvalid.2.2.2.2.2
+  have heps : 0 < D.eps0 := Real.exp_pos _
+  have hM : 0 < D.Mden q.1.1 c.1 (D.obsOf π) := lt_of_lt_of_le heps hden
+  have hGξ : D.Gsel q.1.1 q.1.2 c ξ π ≤ D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+    hG q.1.1 q.1.2 c ξ π
+  have hFcand : 0 < D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+    selPost_pos_fcand_pos D q.1.1 q.1.2 c π ξ hM hGξ (by simpa [Q] using hQpos)
+  have hfs := hF q.1.1 c.1 ξ (D.obsOf π) (ne_of_gt hFcand)
+  have hobs : (D.obsOf π).1 ℓ = some (q.2.1.1 c.1 ℓ) := by
+    simp [π, Ctx.obsOf, Ctx.presOf, hℓ]
+  exact ⟨ξ, j, hcoord, hfs.2 ℓ (q.2.1.1 c.1 ℓ) hobs⟩
+
+theorem selected_anchor_miss_bound {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hn : 1 ≤ D.n) (hF : D.FSupport) (hG : D.GselLeF)
+    (q : D.Pre) (W : D.Anch) (c : D.CellT) (hSupp : D.Supp q)
+    (hvalid : D.PresValid q W c) (e : D.ordCells c) (y : Fin D.N)
+    (hp0 : D.p0 q W c y ≠ 0) :
+    (D.Usel q e.1).pr (fun x => ¬ Hits D.E D.G x y) ≤ D.Δ / (1 - D.Δ) := by
+  classical
+  rcases Finset.mem_image.mp e.2 with ⟨b, hb, hbe⟩
+  have hcell : e.1 = (c.1, b) := hbe.symm
+  have hselSome : (D.sel q (c.1, b)).isSome := hvalid.2.1 b hb
+  cases hsel : D.sel q (c.1, b) with
+  | none => simp [hsel] at hselSome
+  | some ℓ =>
+      have hℓmem : ℓ ∈ D.intIds q c := by
+        unfold Ctx.intIds
+        rw [Finset.mem_biUnion]
+        exact ⟨b, hb, by simp [hsel]⟩
+      let i : D.M.ι := q.2.1.1 c.1 ℓ
+      have htruePos : 0 < (D.tilt q.1.1 c.1).w i := hSupp.2 c.1 ℓ
+      have htrue : D.GateOpen q.1.1 c.1 i :=
+        positive_tilt_gate D q.1.1 c.1 i hvalid.1.1 htruePos
+      obtain ⟨ξ, j, hcoord, hcand⟩ :=
+        p0_label_coordinate_gate D hF hG q W c y hvalid hp0 ℓ hℓmem
+      have hU : D.Usel q (c.1, b) = D.anchorU q.1.1 c.1 i := by
+        simp [Ctx.Usel, Ctx.selTag, hsel, i]
+      rw [hcell, hU, ← hcoord]
+      exact anchor_miss_le D hn q.1.1 c.1 i ξ j htrue hcand
+
+end Lane_q_s08_post
 
 end HypercubeRamsey.S08

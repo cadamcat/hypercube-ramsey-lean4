@@ -440,6 +440,7 @@ hidden keys within four and positions within three) and the cross anchors. -/
 theorem p0_local (D : Ctx η₀ β p h) (hS : D.SelLocal) : D.P0Local := by
   sorry
 
+set_option maxHeartbeats 1000000
 /-- L8.1h(i) (08:295–297): fix the valid presentation and cross anchors.  A label of `p⁰` is a coordinate of a
 supported candidate `ξ`; for an observed internal tag `i`, the cutoff under `ξ` gives
 `μ_i{misses ξ | hits Θ_{E(g)}} ≤ Δ`, and the true cutoff (the tag has positive probability under `S_g`, `Z_g > 0`)
@@ -447,7 +448,200 @@ gives `d_i^+ ≥ (1-Δ)d_i^-`, so under `U_{g,i}` the miss probability is at mos
 `n+1` ordinary anchors and Markov at `.02` (with `Σ p⁰ = 1`, `P0Law`) gives the bound. -/
 theorem hit_tail (D : Ctx η₀ β p h) (hn : 1 ≤ D.n) (hF : D.FSupport) (hG : D.GselLeF) (hL : D.P0Law) :
     D.HitTail := by
-  sorry
+  classical
+  intro q W c hSupp hvalid
+  let P : ∀ e : D.ordCells c, FinProb (Fin D.N) := fun e => D.Usel q e.1
+  let Pa : FinProb (∀ e : D.ordCells c, Fin D.N) := FinProb.pi P
+  let anchorMiss : (∀ e : D.ordCells c, Fin D.N) → Fin D.N → Prop := fun a y =>
+    ¬ D.OrdHit (glue (D.ordCells c) W a) c y
+  let missMass : (∀ e : D.ordCells c, Fin D.N) → ℝ := fun a =>
+    ∑ y, D.p0 q W c y *
+      (@ite ℝ (anchorMiss a y)
+        (Classical.propDecidable _) (1 : ℝ) 0)
+  have hLvalid := hL q W c
+  have hP0nonneg (y : Fin D.N) : 0 ≤ D.p0 q W c y := hLvalid.1 y
+  have hP0sum : ∑ y, D.p0 q W c y = 1 := (hLvalid.2 hvalid).1
+  have hOrd (a : ∀ e : D.ordCells c, Fin D.N) (y : Fin D.N) :=
+    Lane_q_s08_post.ordHit_iff_product D c W a y
+  have hcross (a : ∀ e : D.ordCells c, Fin D.N) :
+      ∀ u : D.CrossSub c.1, W (u.1, c.2) = (glue (D.ordCells c) W a) (u.1, c.2) := by
+    intro u
+    exact (Lane_q_s08_post.glue_ordCells_eq_on_cross D c W a u).symm
+  have hvalidGlue (a : ∀ e : D.ordCells c, Fin D.N) :
+      D.PresValid q (glue (D.ordCells c) W a) c :=
+    (Lane_q_s08_post.presValid_iff_cross_anchors_eq D q W
+      (glue (D.ordCells c) W a) c (hcross a)).mp hvalid
+  have hp0Glue (a : ∀ e : D.ordCells c, Fin D.N) (y : Fin D.N) :
+      D.p0 q W c y = D.p0 q (glue (D.ordCells c) W a) c y :=
+    Lane_q_s08_post.p0_eq_of_cross_anchors_eq D q W
+      (glue (D.ordCells c) W a) c (hcross a) y
+  have hP0sumGlue (a : ∀ e : D.ordCells c, Fin D.N) :
+      ∑ y, D.p0 q (glue (D.ordCells c) W a) c y = 1 :=
+    ((hL q (glue (D.ordCells c) W a) c).2 (hvalidGlue a)).1
+  have hmissEq (a : ∀ e : D.ordCells c, Fin D.N) :
+      missMass a = 1 - D.ordRet q (glue (D.ordCells c) W a) c := by
+    unfold missMass Ctx.ordRet
+    calc
+      (∑ y, D.p0 q W c y *
+          (@ite ℝ (anchorMiss a y) (Classical.propDecidable _) (1 : ℝ) 0)) =
+          ∑ y, (D.p0 q (glue (D.ordCells c) W a) c y -
+            D.p0 q (glue (D.ordCells c) W a) c y *
+            (if D.OrdHit (glue (D.ordCells c) W a) c y then 1 else 0)) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              rw [hp0Glue a y]
+              by_cases ho : D.OrdHit (glue (D.ordCells c) W a) c y <;>
+                simp [anchorMiss, ho] <;> ring
+      _ = (∑ y, D.p0 q (glue (D.ordCells c) W a) c y) -
+            ∑ y, D.p0 q (glue (D.ordCells c) W a) c y *
+              (if D.OrdHit (glue (D.ordCells c) W a) c y then 1 else 0) := by
+              rw [Finset.sum_sub_distrib]
+      _ = 1 - ∑ y, D.p0 q (glue (D.ordCells c) W a) c y *
+            (if D.OrdHit (glue (D.ordCells c) W a) c y then 1 else 0) := by
+              rw [hP0sumGlue a]
+  have hmissNonneg (a : ∀ e : D.ordCells c, Fin D.N) : 0 ≤ missMass a := by
+    apply Finset.sum_nonneg
+    intro y hy
+    have hind : 0 ≤
+        (@ite ℝ (anchorMiss a y)
+          (Classical.propDecidable _) (1 : ℝ) 0) := by
+      split_ifs <;> norm_num
+    exact mul_nonneg (hP0nonneg y) hind
+  have hhitPoint (a : ∀ e : D.ordCells c, Fin D.N) :
+      (if D.HitFail q (glue (D.ordCells c) W a) c then 1 else 0) ≤ 50 * missMass a := by
+    by_cases hfail : D.HitFail q (glue (D.ordCells c) W a) c
+    · have hmiss : (1 / 50 : ℝ) < missMass a := by
+        rw [hmissEq]
+        unfold Ctx.HitFail at hfail
+        linarith
+      rw [if_pos hfail]
+      nlinarith
+    · rw [if_neg hfail]
+      exact mul_nonneg (by norm_num) (hmissNonneg a)
+  have hdelta : D.Δ < 1 := by
+    have hnR : 0 < (D.n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 1) hn)
+    have hpow : 0 < (D.n : ℝ) ^ (p / 2) := Real.rpow_pos_of_pos hnR _
+    unfold Ctx.Δ
+    have hlt : Real.exp (-((D.n : ℝ) ^ (p / 2))) < Real.exp 0 :=
+      Real.exp_lt_exp.mpr (neg_neg_of_pos hpow)
+    simpa using hlt
+  have hdenpos : 0 < 1 - D.Δ := sub_pos.mpr hdelta
+  let rate : ℝ := D.Δ / (1 - D.Δ)
+  have hrateNonneg : 0 ≤ rate := by
+    dsimp [rate]
+    exact div_nonneg (le_of_lt (Real.exp_pos _)) hdenpos.le
+  have hmissProb (y : Fin D.N) :
+      Pa.pr (fun a => anchorMiss a y) =
+        ∑ a, Pa.w a * (@ite ℝ (anchorMiss a y)
+          (Classical.propDecidable _) (1 : ℝ) 0) := by
+    exact Lane_q_s08_post.pr_eq_weighted_indicator Pa (fun a => anchorMiss a y)
+  have hmissExpectation :
+      ∑ a, Pa.w a * missMass a =
+        ∑ y, D.p0 q W c y * Pa.pr
+          (fun a => anchorMiss a y) := by
+    unfold missMass
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro y hy
+    calc
+      ∑ a, Pa.w a * (D.p0 q W c y *
+          (@ite ℝ (anchorMiss a y) (Classical.propDecidable _) (1 : ℝ) 0)) =
+          ∑ a, D.p0 q W c y * (Pa.w a *
+            (@ite ℝ (anchorMiss a y) (Classical.propDecidable _) (1 : ℝ) 0)) := by
+              apply Finset.sum_congr rfl
+              intro a ha
+              ring
+      _ = D.p0 q W c y * ∑ a, Pa.w a *
+            (@ite ℝ (anchorMiss a y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+              rw [Finset.mul_sum]
+      _ = D.p0 q W c y * Pa.pr
+            (fun a => anchorMiss a y) := by
+              rw [← hmissProb y]
+  have hmissExpectation_le :
+      ∑ a, Pa.w a * missMass a ≤
+        (Fintype.card (D.ordCells c) : ℝ) * rate := by
+    have hunion (y : Fin D.N) :
+        Pa.pr (fun a => anchorMiss a y) ≤
+          ∑ e : D.ordCells c, (P e).pr (fun x => ¬ Hits D.E D.G x y) := by
+      have hmono := Lane_q_s08_post.pr_mono Pa
+        (fun a => anchorMiss a y)
+        (fun a => ¬ ∀ e : D.ordCells c, Hits D.E D.G (a e) y)
+        (fun a hmiss hhit => by
+          change ¬ D.OrdHit (glue (D.ordCells c) W a) c y at hmiss
+          exact hmiss ((hOrd a y).mpr hhit))
+      exact hmono.trans (Lane_q_s08_post.pi_pr_not_forall_le_sum P
+        (fun _ x => Hits D.E D.G x y))
+    calc
+      ∑ a, Pa.w a * missMass a =
+          ∑ y, D.p0 q W c y * Pa.pr
+            (fun a => anchorMiss a y) := hmissExpectation
+      _ ≤ ∑ y, D.p0 q W c y *
+            ∑ e : D.ordCells c, (P e).pr (fun x => ¬ Hits D.E D.G x y) := by
+              apply Finset.sum_le_sum
+              intro y hy
+              exact mul_le_mul_of_nonneg_left (hunion y) (hP0nonneg y)
+      _ ≤ ∑ y, D.p0 q W c y * ((Fintype.card (D.ordCells c) : ℝ) * rate) := by
+              apply Finset.sum_le_sum
+              intro y hy
+              by_cases hp0 : D.p0 q W c y = 0
+              · simp [hp0]
+              · have honeach (e : D.ordCells c) :
+                    (P e).pr (fun x => ¬ Hits D.E D.G x y) ≤ rate := by
+                  change (D.Usel q e.1).pr (fun x => ¬ Hits D.E D.G x y) ≤ rate
+                  exact Lane_q_s08_post.selected_anchor_miss_bound D hn hF hG q W c hSupp hvalid e y hp0
+                have hsum :
+                    (∑ e : D.ordCells c, (P e).pr (fun x => ¬ Hits D.E D.G x y)) ≤
+                      (Fintype.card (D.ordCells c) : ℝ) * rate := by
+                  calc
+                    _ ≤ ∑ e : D.ordCells c, rate := Finset.sum_le_sum fun e he => honeach e
+                    _ = (Fintype.card (D.ordCells c) : ℝ) * rate :=
+                      Lane_q_s08_post.sum_subtype_const (D.ordCells c) rate
+                exact mul_le_mul_of_nonneg_left hsum (hP0nonneg y)
+      _ = (Fintype.card (D.ordCells c) : ℝ) * rate := by
+            rw [← Finset.sum_mul, hP0sum]
+            ring
+  have hcard : Fintype.card (D.ordCells c) ≤ D.n + 1 := by
+    simpa using Lane_q_s08_post.ordCells_card_le_n_add_one D c
+  have hcardReal : (Fintype.card (D.ordCells c) : ℝ) ≤ (D.n : ℝ) + 1 := by
+    exact_mod_cast hcard
+  have hweighted :
+      ∑ a, Pa.w a * (if D.HitFail q (glue (D.ordCells c) W a) c then 1 else 0) ≤
+        50 * ((Fintype.card (D.ordCells c) : ℝ) * rate) := by
+    calc
+      _ ≤ ∑ a, Pa.w a * (50 * missMass a) := by
+            apply Finset.sum_le_sum
+            intro a ha
+            exact mul_le_mul_of_nonneg_left (hhitPoint a) (Pa.nonneg a)
+      _ = 50 * ∑ a, Pa.w a * missMass a := by
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro a ha
+            ring
+      _ ≤ 50 * ((Fintype.card (D.ordCells c) : ℝ) * rate) :=
+            mul_le_mul_of_nonneg_left hmissExpectation_le (by norm_num)
+  change (∑ a : (∀ e : D.ordCells c, Fin D.N),
+      (∏ e : D.ordCells c, (D.Usel q e.1).w (a e)) *
+        (if D.HitFail q (glue (D.ordCells c) W a) c then 1 else 0)) ≤ _
+  calc
+    _ = ∑ a, Pa.w a *
+          (if D.HitFail q (glue (D.ordCells c) W a) c then 1 else 0) := by
+            apply Finset.sum_congr rfl
+            intro a ha
+            rfl
+    _ ≤ 50 * ((Fintype.card (D.ordCells c) : ℝ) * rate) := hweighted
+    _ ≤ 50 * ((D.n : ℝ) + 1) * rate := by
+          have hinner : ((Fintype.card (D.ordCells c) : ℝ) * rate) ≤
+              ((D.n : ℝ) + 1) * rate := mul_le_mul_of_nonneg_right hcardReal hrateNonneg
+          calc
+            50 * ((Fintype.card (D.ordCells c) : ℝ) * rate) ≤
+                50 * (((D.n : ℝ) + 1) * rate) := mul_le_mul_of_nonneg_left hinner (by norm_num)
+            _ = 50 * ((D.n : ℝ) + 1) * rate := by ring
+    _ = 50 * ((D.n : ℝ) + 1) * D.Δ / (1 - D.Δ) := by
+          dsimp [rate]
+          ring
+
+set_option maxHeartbeats 200000
 
 /-- L8.1h(ii) (08:293–300): the odd row restricts `p⁰` (cross hits) to ordinary hits, normalized by a retained mass
 `≥ .98`, so `p ≤ p⁰/.98`, `N max p ≤ 3e^{.01 s log n}/.98 ≤ e^{.02 s log n}` for large `n`, and `p` hits every

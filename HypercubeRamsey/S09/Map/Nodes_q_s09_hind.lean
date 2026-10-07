@@ -778,6 +778,63 @@ private theorem heightLaw9_pr_and_of_disjoint {P : Params9} {hc : HeightChoice9 
     _ = (heightLaw9 P hc n).pr E * (heightLaw9 P hc n).pr F := by
           rw [← heightLaw9_pr_as_expect_indicator E, ← heightLaw9_pr_as_expect_indicator F]
 
+private theorem heightLaw9_pr_forall_disjoint {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {κ : Type*} [Fintype κ] [DecidableEq κ]
+    (I : Finset κ)
+    (E : κ → ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop)
+    (S : κ → Finset (Pos9 P hc n))
+    (hE : ∀ i ω ω', (∀ c ∈ S i, ω.1 c = ω'.1 c ∧ ω.2 c = ω'.2 c) → E i ω = E i ω')
+    (hdisj : ∀ i j, i ≠ j → Disjoint (S i) (S j)) :
+    (heightLaw9 P hc n).pr (fun ω => ∀ i ∈ I, E i ω) =
+      ∏ i ∈ I, (heightLaw9 P hc n).pr (E i) := by
+  classical
+  induction I using Finset.induction_on with
+  | empty => simp [FinProb.pr, (heightLaw9 P hc n).sum_eq_one]
+  | @insert a I ha ih =>
+      let Erest : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop :=
+        fun ω => ∀ i ∈ I, E i ω
+      let Srest : Finset (Pos9 P hc n) := I.biUnion S
+      have hErest : ∀ ω ω',
+          (∀ c ∈ Srest, ω.1 c = ω'.1 c ∧ ω.2 c = ω'.2 c) → Erest ω = Erest ω' := by
+        intro ω ω' hagree
+        apply propext
+        constructor <;> intro hall i hi
+        · have hsi : S i ⊆ Srest := by
+            intro c hc
+            exact Finset.mem_biUnion.mpr ⟨i, hi, hc⟩
+          have heq := hE i ω ω' (fun c hc => hagree c (hsi hc))
+          rw [← heq]
+          exact hall i hi
+        · have hsi : S i ⊆ Srest := by
+            intro c hc
+            exact Finset.mem_biUnion.mpr ⟨i, hi, hc⟩
+          have heq := hE i ω ω' (fun c hc => hagree c (hsi hc))
+          rw [heq]
+          exact hall i hi
+      have hdisjRest : Disjoint (S a) Srest := by
+        apply Finset.disjoint_left.mpr
+        intro c hca hcrest
+        rcases Finset.mem_biUnion.mp hcrest with ⟨i, hi, hci⟩
+        have hne : a ≠ i := by
+          intro hEq
+          subst i
+          exact ha hi
+        exact (Finset.disjoint_left.mp (hdisj a i hne)) hca hci
+      have hrewrite (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+          (∀ i ∈ insert a I, E i ω) = (E a ω ∧ Erest ω) := by
+        simp [Erest, ha]
+      calc
+        (heightLaw9 P hc n).pr (fun ω => ∀ i ∈ insert a I, E i ω) =
+            (heightLaw9 P hc n).pr (fun ω => E a ω ∧ Erest ω) := by
+              congr 1
+              funext ω
+              exact hrewrite ω
+        _ = (heightLaw9 P hc n).pr (E a) * (heightLaw9 P hc n).pr Erest := by
+              exact heightLaw9_pr_and_of_disjoint (E a) Erest (hE a) hErest hdisjRest
+        _ = (heightLaw9 P hc n).pr (E a) * ∏ i ∈ I, (heightLaw9 P hc n).pr (E i) := by
+              rw [ih]
+        _ = ∏ i ∈ insert a I, (heightLaw9 P hc n).pr (E i) := by simp [ha]
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

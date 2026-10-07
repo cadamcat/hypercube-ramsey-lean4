@@ -1107,7 +1107,7 @@ theorem rawFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
       · exact (M.ν (t (sliceOf b.1))).nonneg (f b)
     · split_ifs <;> norm_num
 
-private theorem outerHyp_of_sigma_mass {n N : ℕ} {E : Fin N → Fin N → Prop}
+theorem outerHyp_of_sigma_mass {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ δ x₀ K : ℝ} (M : Menu11 n N E X Y κ)
     (y₀ : M.ι → Fin N) (p : FinProb M.ι) (hF : Fixed11 δ x₀ K n N E X Y κ M y₀ p)
     (i : M.ι) (hi : p.w i ≠ 0) (z : InnerCoord n → Fin N)
@@ -1234,6 +1234,28 @@ private theorem outerHyp_of_sigma_mass {n N : ℕ} {E : Fin N → Fin N → Prop
         _ ≤ Real.exp A := hdiv
     · have hσ : sigmaW E M.G (gS n) (M.μ i) z x = 0 := by simp [sigmaW, C, hx]
       simpa [hσ] using (Real.exp_nonneg A)
+
+theorem MassFail_iff_outerZ {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (f : OddRole n → Fin N) (v : EvenRole n) :
+    MassFail M y₀ p t f v ↔
+      outerZ E M.G (piBar M y₀ p)
+        (fun x => sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x)
+        (fun j : OuterCoord n => f (oddNbr v j.1)) < 1 / 2 := by
+  apply Iff.of_eq
+  apply congrArg (fun z : ℝ => z < 1 / 2)
+  change (∑ x, sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x *
+      ∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) /
+        deg E M.G (piBar M y₀ p) x) =
+    ∑ x, sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x *
+      ∏ j : OuterCoord n,
+        (1 + aF E M.G (piBar M y₀ p) x (f (oddNbr v j.1)))
+  apply Finset.sum_congr rfl
+  intro x hx
+  congr 1
+  apply Finset.prod_congr rfl
+  intro j hj
+  simp [aF]
 
 theorem pr_pos_eq_zero_of_expect_nonpos {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (f : Ω → ℝ) (hf : ∀ ω, 0 ≤ f ω) (hE : P.expect f ≤ 0) :

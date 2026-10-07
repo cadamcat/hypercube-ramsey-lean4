@@ -3370,6 +3370,25 @@ private theorem goodHeights9_of_no_rootBadPair9 {P : Params9} {hc : HeightChoice
     exact hno root (Or.inl hfail)
   exact goodHeights9_of_no_rootScaleFailure fields.1 fields.2 hcounts hnoScale
 
+private theorem exists_goodHeights9_of_small_root_events {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} {ε : ℝ} {Δ : ℕ} (hmn : P.m n ≤ n) (hcounts : HeightCounts9 P hc n)
+    (hdegree : ∀ root : CubeVertex n,
+      (Finset.univ.filter
+        (fun root' => root' ≠ root ∧ ¬ Disjoint
+          (scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n))
+          (scaleRootSupport9 (P := P) (hc := hc) (n := n) root' (hc.levels n)))).card ≤ Δ)
+    (hscale : ∀ root : CubeVertex n,
+      (heightLaw9 P hc n).pr (fun ω =>
+        rootScaleFailure9 Finset.univ (1 / 3) (1 / 8) (1 / 4)
+          (hc.levels n) ω.1 ω.2 root) ≤ ε)
+    (hsmall : ε + Real.exp (-(n : ℝ)) ≤ 1 / (4 * ((Δ + 1 : ℕ) : ℝ))) :
+    ∃ Pp A : Pos9 P hc n → Bool, GoodHeights9 Pp A := by
+  obtain ⟨x, hx0, hx1, hinput⟩ := heightRootLLLInput9_of_small
+    hmn hcounts hdegree hscale hsmall
+  obtain ⟨ω, hno⟩ := exists_pair_fields_avoiding_rootBad9 hinput
+  let fields := (heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω
+  exact ⟨fields.1, fields.2, goodHeights9_of_no_rootBadPair9 ω hno⟩
+
 theorem goodHeights_of_no_top_reach {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool)
     (hnot : ∀ v : CubeVertex n,

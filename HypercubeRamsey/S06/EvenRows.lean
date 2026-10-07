@@ -381,6 +381,57 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       rw [← hstarImage w]
       exact Finset.mem_image.mpr ⟨u, huw, rfl⟩
     exact (Finset.disjoint_left.mp (hstarDisjoint v w hsep)) huvRaw huwRaw
+  intro Jf hJf H hH U a hU hUcard hsep
+  let S : Finset (OddRole6 n) := U.biUnion X.oddNbrs
+  have hScard : S.card ≤ n ^ 2 := by
+    calc
+      S.card ≤ ∑ v ∈ U, (X.oddNbrs v).card := by
+        simpa [S] using (Finset.card_biUnion_le (s := U) (t := X.oddNbrs))
+      _ ≤ ∑ v ∈ U, n := Finset.sum_le_sum fun v hv => hoddNbrCard v
+      _ = U.card * n := by simp
+      _ ≤ n * n := Nat.mul_le_mul_right n hUcard
+      _ = n ^ 2 := by ring
+  have hEvenRow_local (C : X.Centre) (v : CubeVertex n) (b : Fin N)
+      {y y' : OddRole6 n → Fin N}
+      (hAgree : ∀ u ∈ X.oddNbrs v, y u = y' u) :
+      X.evenRow H C v y b = X.evenRow H C v y' b := by
+    have hFz (z : X.Tuple) :
+        X.Fz H C v (X.selC H C v) z y = X.Fz H C v (X.selC H C v) z y' := by
+      unfold Ctx6.Fz
+      have hprod :
+          (∏ u ∈ X.oddNbrs v,
+            X.oddRow H (X.withTuple C (X.selC H C v, X.evenTy v) z) u.1 (y u)) =
+          (∏ u ∈ X.oddNbrs v,
+            X.oddRow H (X.withTuple C (X.selC H C v, X.evenTy v) z) u.1 (y' u)) := by
+        apply Finset.prod_congr rfl
+        intro u hu
+        rw [hAgree u hu]
+      rw [hprod]
+    have hmc : X.mc H C v y = X.mc H C v y' := by
+      unfold Ctx6.mc
+      apply Finset.sum_congr rfl
+      intro z hz
+      rw [hFz z]
+    have hQ : X.Qref H C v y = X.Qref H C v y' := by
+      unfold Ctx6.Qref
+      apply Finset.prod_congr rfl
+      intro u hu
+      rw [hAgree u hu]
+    have hvalid : X.EvenValid H C v y = X.EvenValid H C v y' := by
+      unfold Ctx6.EvenValid
+      rw [hmc, hQ]
+    have hMarg (c : Fin N) : X.evenMarg H C v y c = X.evenMarg H C v y' c := by
+      unfold Ctx6.evenMarg
+      apply Finset.sum_congr rfl
+      intro z hz
+      rw [hFz z, hmc]
+    have hHeavy : X.heavyLab H C v y = X.heavyLab H C v y' := by
+      unfold Ctx6.heavyLab
+      ext c
+      simp [hMarg c]
+    unfold Ctx6.evenRow
+    rw [hvalid, hHeavy]
+    simp_rw [hMarg]
   sorry
 
 /-- L6.1n (even loads, 06:870–884): close repeats by `H_bin(2ρ) < log 2 − .55` and the cap `10e^{.55n}`; the joint

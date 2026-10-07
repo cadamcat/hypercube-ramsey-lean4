@@ -22,3 +22,5 @@ import HypercubeRamsey.S03.NearProductInjection
 import HypercubeRamsey.S03.ClockSampling
 import HypercubeRamsey.Interface
 import HypercubeRamsey.Main
+import HypercubeRamsey.S04.Lemma41
+import HypercubeRamsey.S08.AsymmetricDiscrepancy

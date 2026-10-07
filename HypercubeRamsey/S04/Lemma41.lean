@@ -12,8 +12,8 @@ namespace HypercubeRamsey
 open OAI.HypercubeRamsey
 open scoped BigOperators
 
-/-- Internal proposition abbreviation for L4.1a. -/
-private def L4_1aStatement (β γ : ℝ) : Prop :=
+/-- Statement of L4.1a (frozen with its body). -/
+def L4_1aStatement (β γ : ℝ) : Prop :=
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ N (E : Fin N → Fin N → Prop)
       (A B : Finset (Fin N)) (q : Law N × Law N),
       PBias (pw β) (pw γ) (h4 β γ) n N E q.1 q.2 →
@@ -26,8 +26,8 @@ theorem L4_1a (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     L4_1aStatement β γ := by
   sorry
 
-/-- Internal proposition abbreviation for L4.1-core. -/
-private def L4_1_coreStatement (β γ K : ℝ) : Prop :=
+/-- Statement of L4.1-core (frozen with its body). -/
+def L4_1_coreStatement (β γ K : ℝ) : Prop :=
     ∃ n₀ : ℕ, ∃ C₀ : ℝ, ∀ n ≥ n₀, ∀ N,
       LargeHost C₀ n N → ∀ (E : Fin N → Fin N → Prop) (G : Colour)
       (X' Y' : Finset (Fin N)) {ι : Type} [Fintype ι]

@@ -1,0 +1,89 @@
+# formalization.yaml (v0.4)
+version: "v0.4"
+
+project:
+  name: "The hypercube Ramsey number has linear order in Lean 4"
+  description: >-
+    A Lean 4 formalization of Formal Conjectures' Erdos181.erdos_181: an
+    absolute constant C > 0 bounds the diagonal Ramsey number of the
+    n-dimensional hypercube by C * 2^n for every natural n. The proof uses
+    OpenAI's openai/math Ramsey and hypercube library. The formalization
+    records the result proved in OpenAI's paper and claims no new mathematics.
+  authors:
+    - "Yao Xu"
+  license: "Apache-2.0"
+
+sources:
+  - title: "The hypercube Ramsey number has linear order"
+    authors: ["OpenAI"]
+    id: "https://github.com/openai/math/blob/adc7f1241b42e322a6451854ab7e4b4c146bf78a/preprints/The-hypercube-Ramsey-number-has-linear-order-September-23-2026/paper.pdf"
+    type: "paper"
+    location: "The theorem bounding the diagonal Ramsey number of Q_n by C * 2^n"
+    relationship: "formalizes"
+
+related_formalizations:
+  - id: "https://github.com/google-deepmind/formal-conjectures/tree/9d259649abe0b02d7a25f7589b872db679b35e21"
+    relationship: "formalizes"
+    note: >-
+      The target is Formal Conjectures' Erdos181.erdos_181. The graph
+      definitions used by the challenge and proof are copied from that commit.
+  - id: "https://github.com/openai/math/tree/adc7f1241b42e322a6451854ab7e4b4c146bf78a/lean"
+    relationship: "builds-on"
+    note: >-
+      The project imports OAI.Combinatorics.Ramsey.Hypercube, which supplies
+      the cube and Ramsey-number definitions and finite Ramsey and
+      cross-colouring results used by the proof.
+
+status:
+  scope: >-
+    Formalization of Erdos181.erdos_181 as stated in Challenge.lean, including
+    natural n and the definitions copied from Formal Conjectures.
+  completion: "TODO(release: final acceptance status)"
+  sorry_count: "TODO(release: final checked sorry count)"
+  sorry_in_definitions: "TODO(release: final checked count)"
+  permitted_axioms: ["propext", "Classical.choice", "Quot.sound"]
+  axioms: "TODO(release: final theorem axiom report)"
+  main_results:
+    - declaration: "Erdos181.erdos_181"
+      file: "HypercubeRamsey/Main.lean"
+      sorry_count: "TODO(release: final checked sorry count)"
+      axioms: "TODO(release: final theorem axiom report)"
+      comparator_config: "Challenge.json"
+
+automation:
+  methods:
+    - method: "agent"
+      models: ["Claude Opus 5.5", "GPT-6 Luna", "GPT-6.1 Sol"]
+      framework: "Claude Code and Codex"
+      tool_setup: >-
+        The author set the acceptance criteria. AI agents coordinated the work,
+        reviewed statements, developed most proofs, and checked statements for
+        counterexamples. The Lean kernel checks all proofs; the final theorem
+        is accepted only with the permitted axioms listed above.
+
+fidelity:
+  divergences: >-
+    The definitions in Challenge.lean are copied from Formal Conjectures at
+    commit 9d259649abe0b02d7a25f7589b872db679b35e21. Module-system wrappers
+    are omitted, the deprecated real-number import uses its current Mathlib
+    path, and the hypercube and Ramsey definitions are combined in one block.
+
+review:
+  status: "agent-reviewed"
+  reviewers: ["Claude Opus 5.5", "GPT-6.1 Sol"]
+  notes: >-
+    Statements were reviewed against the target, and GPT-6.1 Sol checked for
+    counterexamples and designed repairs where needed.
+
+alignment:
+  namespace: "Erdos181"
+  statements:
+    - source: "Formal Conjectures Erdos181.erdos_181 at commit 9d259649abe0b02d7a25f7589b872db679b35e21"
+      lean: "Erdos181.erdos_181"
+      module: "HypercubeRamsey/Main.lean"
+      status: "TODO(release: final acceptance)"
+
+release:
+  tag: "TODO(release: version tag)"
+  commit_sha: "TODO(release: commit SHA)"
+  tracked_lean_lines: "TODO(release: final line count)"

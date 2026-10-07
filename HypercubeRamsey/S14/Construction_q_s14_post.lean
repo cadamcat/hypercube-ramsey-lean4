@@ -99,4 +99,44 @@ theorem sum_pr_eq_one {α β : Type*} [Fintype α] [Fintype β]
       simp
     _ = 1 := P.sum_one
 
+theorem sum_diagonal_eq_base {α : Type*} [Fintype α]
+    (P : FinProb α) (g : α → α → ℝ)
+    (hg : ∀ a a' b, g a b = g a' b) :
+    (∑ a, P.w a * g a a) =
+      ∑ b, P.w b * ∑ a, P.w a * g b a := by
+  classical
+  have hconst (a : α) : ∑ b, P.w b * g a a = g a a := by
+    calc
+      _ = (∑ b, P.w b) * g a a := by rw [← Finset.sum_mul]
+      _ = g a a := by rw [P.sum_eq_one]; ring
+  calc
+    _ = ∑ a, P.w a * ∑ b, P.w b * g a a := by
+      apply Finset.sum_congr rfl
+      intro a ha
+      rw [hconst]
+    _ = ∑ a, P.w a * ∑ b, P.w b * g b a := by
+      apply Finset.sum_congr rfl
+      intro a ha
+      congr 1
+      apply Finset.sum_congr rfl
+      intro b hb
+      rw [hg b a a]
+    _ = ∑ b, P.w b * ∑ a, P.w a * g b a := by
+      calc
+        _ = ∑ a, ∑ b, P.w a * (P.w b * g b a) := by
+          apply Finset.sum_congr rfl
+          intro a ha
+          rw [Finset.mul_sum]
+        _ = ∑ b, ∑ a, P.w b * (P.w a * g b a) := by
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro b hb
+          apply Finset.sum_congr rfl
+          intro a ha
+          ring
+        _ = ∑ b, P.w b * ∑ a, P.w a * g b a := by
+          apply Finset.sum_congr rfl
+          intro b hb
+          rw [Finset.mul_sum]
+
 end HypercubeRamsey.Lane_q_s14_post

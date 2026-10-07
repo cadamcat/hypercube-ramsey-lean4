@@ -191,6 +191,261 @@ theorem hammingDistSplitBound9 {m n : ℕ} (u v : CubeVertex n) :
   rw [hD, hS, hR]
   exact hcard
 
+open Classical in
+/-- Each special-coordinate slice contains at most all residual words worth of odd sites. -/
+theorem oddSliceFiberCardBound9 {n m : ℕ} (hm : m ≤ n) (z : CubeVertex m) :
+    Fintype.card {b : OddSites9 n // specialWord9 m b.1 = z} ≤ 2 ^ (n - m) := by
+  let f : {b : OddSites9 n // specialWord9 m b.1 = z} → CubeVertex (n - m) :=
+    fun b => residualWord9 m b.1.1
+  have hinj : Function.Injective f := by
+    intro b b' h
+    apply Subtype.ext
+    apply Subtype.ext
+    have hspecial : specialWord9 m b.1.1 = specialWord9 m b'.1.1 := b.2.trans b'.2.symm
+    have hresidual : residualWord9 m b.1.1 = residualWord9 m b'.1.1 := h
+    funext i
+    by_cases hi : (i : ℕ) < m
+    · have hs := congrFun hspecial (⟨i.val, hi⟩ : Fin m)
+      simpa [specialWord9, hi] using hs
+    · let j : Fin (n - m) := ⟨i.val - m, by omega⟩
+      have hidx : (⟨m + j.val, by omega⟩ : Fin n) = i := by
+        apply Fin.ext
+        dsimp [j]
+        omega
+      have hr := congrFun hresidual j
+      simpa [residualWord9, hidx, j] using hr
+  calc
+    Fintype.card {b : OddSites9 n // specialWord9 m b.1 = z} ≤ Fintype.card (CubeVertex (n - m)) :=
+      Fintype.card_le_of_injective f hinj
+    _ = 2 ^ (n - m) := by simp [OAI.HypercubeRamsey.card_cubeVertex]
+
+open Classical in
+/-- The odd parity class has half the vertices of every positive-dimensional cube. -/
+theorem oddSitesCardPow9 {n : ℕ} (hn : 0 < n) :
+    Fintype.card (OddSites9 n) = 2 ^ (n - 1) := by
+  let j : Fin n := ⟨0, by omega⟩
+  let flip : CubeVertex n → CubeVertex n := fun v => cubeFlip v j
+  have hinv (v : CubeVertex n) : flip (flip v) = v := by
+    funext i
+    by_cases hi : i = j
+    · subst i
+      simp [flip, cubeFlip]
+    · simp [flip, cubeFlip, hi]
+  let e : OddSites9 n ≃ EvenSites9 n :=
+    { toFun := fun b => (⟨flip b.1, (cubeFlip_parity b.1 j).2 b.2⟩ : EvenSites9 n)
+      invFun := fun v => (⟨flip v.1, by
+        intro hflip
+        exact ((cubeFlip_parity v.1 j).mp hflip) v.2⟩ : OddSites9 n)
+      left_inv := fun b => by
+        apply Subtype.ext
+        exact hinv b.1
+      right_inv := fun v => by
+        apply Subtype.ext
+        exact hinv v.1 }
+  have hEven : Fintype.card (EvenSites9 n) = (evenRoleSet n).card := by
+    simp [EvenSites9, evenRoleSet, Fintype.card_subtype]
+  calc
+    Fintype.card (OddSites9 n) = Fintype.card (EvenSites9 n) := Fintype.card_congr e
+    _ = (evenRoleSet n).card := hEven
+    _ = 2 ^ (n - 1) := (parity_class_card hn).1
+
+open Classical in
+/-- A vertex is determined by its special and residual coordinate words. -/
+theorem specialResidualEq9 {n m : ℕ} (hm : m ≤ n) (u v : CubeVertex n)
+    (hs : specialWord9 m u = specialWord9 m v)
+    (hr : residualWord9 m u = residualWord9 m v) : u = v := by
+  funext i
+  by_cases hi : (i : ℕ) < m
+  · have h := congrFun hs (⟨i.val, hi⟩ : Fin m)
+    simpa [specialWord9, hi] using h
+  · let j : Fin (n - m) := ⟨i.val - m, by omega⟩
+    have hidx : (⟨m + j.val, by omega⟩ : Fin n) = i := by
+      apply Fin.ext
+      dsimp [j]
+      omega
+    have h := congrFun hr j
+    simpa [residualWord9, hidx, j] using h
+
+open Classical in
+/-- Averaging a nonnegative slice load over odd vertices costs at most a factor two from the uniform slice
+average, since every odd vertex embeds into the product of its special and residual words. -/
+theorem oddSpecialAverageBound9 {n m : ℕ} (hm : m ≤ n) (hn : 0 < n)
+    (g : CubeVertex m → ℝ) (hg : ∀ z, 0 ≤ g z) :
+    (Fintype.card (OddSites9 n) : ℝ)⁻¹ *
+        ∑ b : OddSites9 n, g (specialWord9 m b.1) ≤
+      2 * (Fintype.card (CubeVertex m) : ℝ)⁻¹ * ∑ z, g z := by
+  let ψ : OddSites9 n → CubeVertex m × CubeVertex (n - m) := fun b =>
+    (specialWord9 m b.1, residualWord9 m b.1)
+  have hψ : Function.Injective ψ := by
+    intro b b' h
+    apply Subtype.ext
+    exact specialResidualEq9 hm b.1 b'.1 (congrArg Prod.fst h) (congrArg Prod.snd h)
+  let A : Finset (CubeVertex m × CubeVertex (n - m)) := Finset.univ.image ψ
+  have hsumImage :
+      (∑ b : OddSites9 n, g (specialWord9 m b.1)) = ∑ q ∈ A, g q.1 := by
+    dsimp [A, ψ]
+    symm
+    exact Finset.sum_image hψ.injOn
+  have hsumLe :
+      (∑ b : OddSites9 n, g (specialWord9 m b.1)) ≤
+        ∑ q : CubeVertex m × CubeVertex (n - m), g q.1 := by
+    rw [hsumImage]
+    apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+    intro q hq hqA
+    exact hg q.1
+  have hfull :
+      (∑ q : CubeVertex m × CubeVertex (n - m), g q.1) =
+        (Fintype.card (CubeVertex (n - m)) : ℝ) * ∑ z, g z := by
+    rw [Fintype.sum_prod_type]
+    calc
+      ∑ z, ∑ r : CubeVertex (n - m), g z =
+          ∑ z, g z * (Fintype.card (CubeVertex (n - m)) : ℝ) := by
+            apply Finset.sum_congr rfl
+            intro z hz
+            simp
+            ring
+      _ = (Fintype.card (CubeVertex (n - m)) : ℝ) * ∑ z, g z := by
+            calc
+              ∑ z, g z * (Fintype.card (CubeVertex (n - m)) : ℝ) =
+                  (∑ z, g z) * (Fintype.card (CubeVertex (n - m)) : ℝ) := by
+                    rw [Finset.sum_mul]
+              _ = (Fintype.card (CubeVertex (n - m)) : ℝ) * ∑ z, g z := by ring
+  have hOdd : Fintype.card (OddSites9 n) = 2 ^ (n - 1) := oddSitesCardPow9 hn
+  have hSlice : Fintype.card (CubeVertex m) = 2 ^ m := by simp
+  have hResidual : Fintype.card (CubeVertex (n - m)) = 2 ^ (n - m) := by simp
+  have hProduct :
+      (Fintype.card (CubeVertex (n - m)) : ℝ) *
+        (Fintype.card (CubeVertex m) : ℝ) =
+          2 * (Fintype.card (OddSites9 n) : ℝ) := by
+    rw [hResidual, hSlice, hOdd]
+    push_cast
+    calc
+      (2 : ℝ) ^ (n - m) * 2 ^ m = (2 : ℝ) ^ ((n - m) + m) := by rw [← pow_add]
+      _ = (2 : ℝ) ^ n := by rw [Nat.sub_add_cancel hm]
+      _ = (2 : ℝ) ^ (n - 1 + 1) := by
+        have hnpow : n = n - 1 + 1 := by omega
+        conv_lhs => rw [hnpow]
+      _ = (2 : ℝ) ^ (n - 1) * 2 := by rw [pow_succ]
+      _ = 2 * (2 : ℝ) ^ (n - 1) := by
+        ring
+  have hOddPos : 0 < (Fintype.card (OddSites9 n) : ℝ) := by rw [hOdd]; positivity
+  have hSlicePos : 0 < (Fintype.card (CubeVertex m) : ℝ) := by rw [hSlice]; positivity
+  have hfactor :
+      (Fintype.card (OddSites9 n) : ℝ)⁻¹ *
+          (Fintype.card (CubeVertex (n - m)) : ℝ) =
+        2 * (Fintype.card (CubeVertex m) : ℝ)⁻¹ := by
+    field_simp
+    nlinarith [hProduct]
+  calc
+    (Fintype.card (OddSites9 n) : ℝ)⁻¹ *
+        ∑ b : OddSites9 n, g (specialWord9 m b.1) ≤
+      (Fintype.card (OddSites9 n) : ℝ)⁻¹ *
+        ((Fintype.card (CubeVertex (n - m)) : ℝ) * ∑ z, g z) :=
+          mul_le_mul_of_nonneg_left (hsumLe.trans_eq hfull) (inv_nonneg.mpr hOddPos.le)
+    _ = 2 * (Fintype.card (CubeVertex m) : ℝ)⁻¹ * ∑ z, g z := by
+      rw [← mul_assoc, hfactor]
+
+open Classical in
+/-- The valid deep width is eventually at most one tenth of the ambient dimension. -/
+theorem deepWidthSmall9 (P : Params9) (hP : Params9.Valid P) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, P.Sd (n : ℝ) ≤ (n : ℝ) / 10 := by
+  rcases hP with ⟨_, _, _, _, _, _, hcase⟩
+  cases hc : P.case with
+  | sub yS yD yM =>
+      rw [hc] at hcase
+      rcases hcase with ⟨_, _, _, _, hyD, _⟩
+      let α : ℝ := (yD : ℝ)
+      have hα : α < 1 := by
+        dsimp [α]
+        exact_mod_cast hyD
+      have hratio : Tendsto (fun n : ℕ => (n : ℝ) ^ (α - 1)) atTop (nhds 0) := by
+        have h := (tendsto_rpow_neg_atTop (sub_pos.mpr hα)).comp tendsto_natCast_atTop_atTop
+        simpa [Function.comp_def, α, neg_sub] using h
+      obtain ⟨n₁, hn₁⟩ := Filter.eventually_atTop.1
+        (hratio.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 10)))
+      refine ⟨max 1 n₁, ?_⟩
+      intro n hn
+      have hn₀ : 1 ≤ n := le_trans (le_max_left _ _) hn
+      have hn₁' : n₁ ≤ n := le_trans (le_max_right _ _) hn
+      have hnR : 0 < (n : ℝ) := by exact_mod_cast (Nat.zero_lt_of_lt hn₀)
+      have hpow : (n : ℝ) ^ α = (n : ℝ) * (n : ℝ) ^ (α - 1) := by
+        calc
+          (n : ℝ) ^ α = (n : ℝ) ^ (1 + (α - 1)) := by congr 1 <;> ring
+          _ = (n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (α - 1) := Real.rpow_add hnR 1 (α - 1)
+          _ = (n : ℝ) * (n : ℝ) ^ (α - 1) := by simp
+      have hsd : P.Sd (n : ℝ) = (n : ℝ) ^ α := by simp [Params9.Sd, hc, α]
+      rw [hsd, hpow]
+      have hsmall := hn₁ n hn₁'
+      have hsmall' : (n : ℝ) * (n : ℝ) ^ (α - 1) < (n : ℝ) / 10 := by
+        have hmul := mul_lt_mul_of_pos_left hsmall hnR
+        nlinarith
+      exact hsmall'.le
+  | lin αS αD hB yB =>
+      rw [hc] at hcase
+      rcases hcase with ⟨_, _, hαD, _, _, _, _, _⟩
+      refine ⟨1, ?_⟩
+      intro n hn
+      have hn0 : 0 ≤ (n : ℝ) := by positivity
+      have hsd : P.Sd (n : ℝ) = (αD : ℝ) * (n : ℝ) := by simp [Params9.Sd, hc]
+      rw [hsd]
+      have hαD' : (αD : ℝ) < 1 / 100 := by
+        calc
+          (αD : ℝ) < ((1 / 100 : ℚ) : ℝ) :=
+            (Rat.cast_lt (K := ℝ) (p := αD) (q := (1 / 100 : ℚ))).2 hαD
+          _ = 1 / 100 := by norm_num
+      nlinarith
+
+open Classical in
+/-- The logarithmic dimension factor is eventually at most one hundredth of the dimension. -/
+theorem natLogSmall9 :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, Real.log (n : ℝ) ≤ (n : ℝ) / 100 := by
+  have hlim : Tendsto (fun n : ℕ => Real.log (n : ℝ) / (n : ℝ)) atTop (nhds 0) := by
+    simpa [Function.comp_def] using
+      (Real.isLittleO_log_id_atTop.tendsto_div_nhds_zero.comp tendsto_natCast_atTop_atTop)
+  obtain ⟨n₁, hn₁⟩ := Filter.eventually_atTop.1
+    (hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 100)))
+  refine ⟨max 1 n₁, ?_⟩
+  intro n hn
+  have hn₀ : 1 ≤ n := le_trans (le_max_left _ _) hn
+  have hn₁' : n₁ ≤ n := le_trans (le_max_right _ _) hn
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast (Nat.zero_lt_of_lt hn₀)
+  have hratio := hn₁ n hn₁'
+  have hlog : Real.log (n : ℝ) / (n : ℝ) < 1 / 100 := hratio
+  have hlog' : Real.log (n : ℝ) < (1 / 100 : ℝ) * (n : ℝ) := (div_lt_iff₀ hnR).1 hlog
+  nlinarith
+
+open Classical in
+/-- A declared near-neighborhood of an odd row has at most `(n+1)^(4r+12)` sites. -/
+theorem oddNearCardBound9 (P : Params9) (n : ℕ) (b : OddSites9 n) :
+    (Finset.univ.filter (fun b' : OddSites9 n => siteNear9 P n b.1 b'.1)).card ≤
+      (n + 1) ^ (4 * P.radius n + 12) := by
+  classical
+  let C := Finset.univ.filter (fun b' : OddSites9 n => siteNear9 P n b.1 b'.1)
+  let B := Finset.univ.filter (fun w : CubeVertex n =>
+    _root_.hammingDist b.1 w ≤ 4 * P.radius n + 12)
+  have hsubset : C.image Subtype.val ⊆ B := by
+    intro w hw
+    rcases Finset.mem_image.mp hw with ⟨b', hb', rfl⟩
+    have hnear := (Finset.mem_filter.mp hb').2
+    have hsplit := hammingDistSplitBound9 (m := P.m n) b.1 b'.1
+    unfold siteNear9 at hnear
+    have hd : _root_.hammingDist b.1 b'.1 ≤ 4 * P.radius n + 12 := by
+      calc
+        _root_.hammingDist b.1 b'.1 ≤
+            _root_.hammingDist (specialWord9 (P.m n) b.1) (specialWord9 (P.m n) b'.1) +
+              _root_.hammingDist (residualWord9 (P.m n) b.1) (residualWord9 (P.m n) b'.1) := hsplit
+        _ ≤ 4 + (4 * P.radius n + 8) := Nat.add_le_add hnear.1 hnear.2
+        _ = 4 * P.radius n + 12 := by omega
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hd⟩
+  have himage : (C.image Subtype.val).card = C.card :=
+    Finset.card_image_of_injective C Subtype.val_injective
+  calc
+    C.card = (C.image Subtype.val).card := himage.symm
+    _ ≤ B.card := Finset.card_le_card hsubset
+    _ ≤ (n + 1) ^ (4 * P.radius n + 12) :=
+      hammingBallCardBound9 (r := 4 * P.radius n + 12) b.1
+
+
 /-- Restricting to the special coordinates cannot increase Hamming distance. -/
 theorem hammingDistSpecialLe9 {m n : ℕ} (u v : CubeVertex n) :
     _root_.hammingDist (specialWord9 m u) (specialWord9 m v) ≤ _root_.hammingDist u v := by

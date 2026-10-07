@@ -1,0 +1,78 @@
+# sol-inj declaration manifest
+# New interfaces to freeze after coordinator review.
+# Analytic proof bodies are placeholders; assemblies have no local sorry.
+
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.Path
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.OrderedInput
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.usedMass
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.trackingError
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.PrefixValid
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.Free
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.availableMass
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.ordinaryWeight
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.sequentialWeight
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.pendingLabels
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.forcingStepWeight
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.forcingWeight
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.sequential_weights_probability
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.forcing_weights_probability
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.sequentialLaw
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.forcingLaw
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.Good
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.RunningThrough
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.failureBound
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.relativeError
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.readLabels
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.conditionedLaw
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.stepDrift
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.forcedStepDrift
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.martingalePart
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.forcedMartingalePart
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.MartingaleGood
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.ForcedMartingaleGood
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.free_mass_before_stop
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.sequential_drift_increment
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.sequential_martingale_concentration
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.drift_denominator_replacement
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.drift_column_replacement
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.DriftRecurrence
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.tracking_drift_recurrence
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.discrete_tracking_gronwall
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.tracking_bootstrap
+HypercubeRamsey.S03.Injection.Sampler:HypercubeRamsey.Injection.tracking_probability_transfer
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.Targets
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.PositiveDistinctTargets
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.pendingMass
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.excludedFraction
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.likelihoodFactor
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.linearError
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.quadraticError
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.forcing_likelihood_identity
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.prefix_log_comparison
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.linear_likelihood_cancellation
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.quadratic_likelihood_remainder
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.likelihood_log_transfer
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.singleton_forcing_drift_stability
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.forced_martingale_concentration
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.singleton_forcing_tracking_transfer
+HypercubeRamsey.S03.Injection.Comparison:HypercubeRamsey.Injection.conditioned_comparison_transfer
+
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.balanced_completion_good_order
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.tracking_label_sampler
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.price_directed_label_sampler
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.ordered_conditioned_sampler_estimates
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.restrict_ordered_sampler
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.injectionPriceMean
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.injectionPriceDelta
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.injectionPriceSign
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.injectionPriceTilt
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.injectionPricePerturbation
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.price_perturbation_estimates
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.price_gain_dominates_relative_error
+HypercubeRamsey.S03.Injection.Nodes:HypercubeRamsey.perturbed_joint_bound_transfer
+
+HypercubeRamsey.S03.NearProductInjection:HypercubeRamsey.near_product_injection
+# Deleted declarations: none. Old tracking proof body replaced.
+# Changed types: balanced_completion_good_order, tracking_label_sampler.
+# Changed body only: price_directed_label_sampler.
+# Unchanged frozen export: near_product_injection.

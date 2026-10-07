@@ -1,4 +1,7 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_dl
+import HypercubeRamsey.S18.Nodes_sol_s18_dl
+import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S18.Nodes_q_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n1
@@ -6,6 +9,7 @@ import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_q_s18_n7
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -579,8 +583,9 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     have hKB := hκ.KB_big
     nlinarith
   refine ⟨κ.KB, hK, ?_⟩
-  apply Filter.Eventually.of_forall
-  intro k PT hPT D hD hTransition
+  have hn : ∀ᶠ k in atTop, 2 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 2
+  filter_upwards [hn] with k hk
+  intro PT hPT D hD hTransition
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro p
     simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale,
@@ -590,9 +595,9 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale]
       using (hD.palette_counts p.1 p.2).2
   · intro v
-    sorry
+    exact Lane_q_s18_n5.geometricAdj_degree_bound hκ D hk v
   · intro S
-    sorry
+    exact Lane_q_s18_n5.nonisolates_le_twice_rank D S
   · intro x h hfull v heven
     sorry
 
@@ -746,13 +751,376 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
           HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
   sorry
 
+set_option maxHeartbeats 400000
+
 /-- L18.6c, 18:1289–1299. Sum all palettes/patches; C_n→∞ supplies the
 negative linear exponent. The output spends a quarter of total mass. -/
 theorem L18_6c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (η K Cs Kpair : ℝ)
     (hη : 0 < η) (hK : 0 < K) (hCs : 0 < Cs) (hKP : 0 < Kpair) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ δ, PairInitialFacts D δ Kpair → HallBudget D η K Cs < 1 / 4 := by
-  sorry
+  let B : ℝ := 4 * Cs * κ.A0
+  have hnT : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
+    (tendsto_natCast_atTop_atTop.comp T.S.n_tendsto)
+  have hpoly1 : Tendsto (fun x : ℝ => x ^ (B + 1) * Real.exp (-x)) atTop (nhds 0) := by
+    simpa [mul_comm] using
+      (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero (B + 1) 1 one_pos)
+  have hsmall1 : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ (B + 1) * Real.exp (-(T.S.n k : ℝ)) < 1 / 8 := by
+    exact (hpoly1.comp hnT).eventually (Iio_mem_nhds (by norm_num))
+  have hpoly2 : Tendsto
+      (fun x : ℝ => (Kpair * η ^ 5) * x ^ (B + 5) * Real.exp (-(1 / 3 : ℝ) * x))
+      atTop (nhds 0) := by
+    have hdecay := tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      (B + 5) (1 / 3 : ℝ) (by norm_num)
+    have hconst : Tendsto (fun _ : ℝ => Kpair * η ^ 5) atTop
+        (nhds (Kpair * η ^ 5)) := tendsto_const_nhds
+    simpa [mul_assoc] using hconst.mul hdecay
+  have hsmall2 : ∀ᶠ k in atTop,
+      (Kpair * η ^ 5) * (T.S.n k : ℝ) ^ (B + 5) *
+        Real.exp (-(1 / 3 : ℝ) * (T.S.n k : ℝ)) < 1 / 8 := by
+    exact (hpoly2.comp hnT).eventually (Iio_mem_nhds (by norm_num))
+  have hdensity : Tendsto (fun k : ℕ => densityScale T k) atTop atTop := by
+    simpa [densityScale] using T.S.ratio_tendsto
+  have hlargeDensity : ∀ᶠ k in atTop,
+      max 1 (K * Real.exp (4 / η)) ≤ densityScale T k :=
+    hdensity.eventually_ge_atTop _
+  have hlargeN : ∀ᶠ k in atTop,
+      max (256 : ℝ) (2 / η) ≤ (T.S.n k : ℝ) := hnT.eventually_ge_atTop _
+  filter_upwards [hsmall1, hsmall2, hlargeDensity, hlargeN] with k hsmall1 hsmall2 hlargeDensity hlargeN
+  intro PT hPT D hD δ hPair
+  let n : ℝ := (T.S.n k : ℝ)
+  let t : ℕ := ⌊η * n⌋₊
+  let u : ℝ := η * n
+  let a : ℝ := K / densityScale T k
+  have hncast : (T.S.n k : ℝ) = n := rfl
+  have hnlarge : 256 ≤ n := (le_max_left _ _).trans hlargeN
+  have hneta : 2 / η ≤ n := (le_max_right _ _).trans hlargeN
+  have hnpos : 0 < n := by linarith
+  have hdensity1 : 1 ≤ densityScale T k := (le_max_left _ _).trans hlargeDensity
+  have hKdensity : K * Real.exp (4 / η) ≤ densityScale T k :=
+    (le_max_right _ _).trans hlargeDensity
+  have hsmall1' : n ^ (B + 1) * Real.exp (-n) < 1 / 8 := by simpa [n] using hsmall1
+  have hsmall2' : (Kpair * η ^ 5) * n ^ (B + 5) *
+      Real.exp (-(1 / 3 : ℝ) * n) < 1 / 8 := by simpa [n] using hsmall2
+  have hlog2lo : (1 / 2 : ℝ) ≤ Real.log 2 := by
+    nlinarith [Real.log_two_gt_d9]
+  have hlog2hi : Real.log 2 ≤ 1 := by
+    nlinarith [Real.log_two_lt_d9]
+  have hgeom : (D.geom.r : ℝ) ≤ 4 * κ.A0 * Real.log n := by
+    have hhalf := mul_le_mul_of_nonneg_left hlog2lo (Nat.cast_nonneg D.geom.r)
+    nlinarith [D.l16_valid.r_upper, hhalf]
+  have houter : Real.exp (Cs * D.geom.r) ≤ n ^ B := by
+    have h := mul_le_mul_of_nonneg_left hgeom hCs.le
+    calc
+      Real.exp (Cs * D.geom.r) ≤ Real.exp (B * Real.log n) := by
+        apply Real.exp_le_exp.mpr
+        simpa [B, mul_assoc, mul_left_comm, mul_comm] using h
+      _ = n ^ B := by rw [Real.rpow_def_of_pos hnpos]; congr 1 <;> ring
+  have hNle : (T.S.N k : ℝ) ≤ n * (2 : ℝ) ^ (T.S.n k) := by
+    rw [← hncast]
+    exact_mod_cast T.S.N_le k
+  have hpow2 : (2 : ℝ) ^ (T.S.n k) ≤ Real.exp n := by
+    calc
+      (2 : ℝ) ^ (T.S.n k) = (Real.exp (Real.log 2)) ^ (T.S.n k) := by
+        rw [Real.exp_log (by norm_num)]
+      _ = Real.exp ((T.S.n k : ℝ) * Real.log 2) := by rw [← Real.exp_nat_mul]
+      _ ≤ Real.exp n := by
+        apply Real.exp_le_exp.mpr
+        have hmul := mul_le_mul_of_nonneg_left hlog2hi (Nat.cast_nonneg (T.S.n k))
+        calc
+          (T.S.n k : ℝ) * Real.log 2 ≤ (T.S.n k : ℝ) * 1 := hmul
+          _ = n := by simp [hncast]
+  have hNexp : (T.S.N k : ℝ) ≤ n * Real.exp n :=
+    hNle.trans (mul_le_mul_of_nonneg_left hpow2 (by linarith))
+  have hneta2 : 2 ≤ u := by
+    dsimp [u]
+    have hmul := (div_le_iff₀ hη).1 hneta
+    simpa [mul_comm] using hmul
+  have htUpper : (t : ℝ) ≤ u := by
+    dsimp [t, u]
+    exact Nat.floor_le (by positivity)
+  have htLower : u / 2 ≤ (t : ℝ) := by
+    have hfloor : u < (t : ℝ) + 1 := by
+      simpa [t, u] using Nat.lt_floor_add_one (η * n)
+    nlinarith [hneta2]
+  have hdensityPos : 0 < densityScale T k := lt_of_lt_of_le (by norm_num) hdensity1
+  have hExpCancel : Real.exp (-4 / η) * Real.exp (4 / η) = 1 := by
+    rw [← Real.exp_add]
+    have : -4 / η + 4 / η = 0 := by ring
+    rw [this, Real.exp_zero]
+  have hKle : K ≤ Real.exp (-4 / η) * densityScale T k := by
+    calc
+      K = K * (Real.exp (-4 / η) * Real.exp (4 / η)) := by rw [hExpCancel]; ring
+      _ = Real.exp (-4 / η) * (K * Real.exp (4 / η)) := by ring
+      _ ≤ Real.exp (-4 / η) * densityScale T k :=
+        mul_le_mul_of_nonneg_left hKdensity (Real.exp_nonneg _)
+  have hbase : a ≤ Real.exp (-4 / η) := by
+    dsimp [a]
+    exact (div_le_iff₀ hdensityPos).2 hKle
+  have hbase0 : 0 ≤ a := by positivity
+  have hquotPos : 0 < (4 : ℝ) / η := div_pos (by norm_num) hη
+  have hbase1 : Real.exp (-4 / η) < 1 :=
+    Real.exp_lt_one_iff.mpr (by rw [neg_div]; exact neg_lt_zero.mpr hquotPos)
+  have ha1 : a ≤ 1 := hbase.trans hbase1.le
+  have hpowBase : a ^ t ≤ Real.exp (-2 * n) := by
+    calc
+      a ^ t ≤ (Real.exp (-4 / η)) ^ t := by gcongr
+      _ = Real.exp ((t : ℝ) * (-4 / η)) := by
+        rw [← Real.exp_nat_mul]
+      _ ≤ Real.exp (-2 * n) := by
+        apply Real.exp_le_exp.mpr
+        have hcoeff : (-4 / η) * (u / 2) = -2 * n := by
+          dsimp [u]
+          field_simp
+          ring
+        have hcoeffneg : -4 / η ≤ 0 := by
+          rw [neg_div]
+          exact neg_nonpos.mpr hquotPos.le
+        have hmul := mul_le_mul_of_nonpos_left htLower hcoeffneg
+        calc
+          (t : ℝ) * (-4 / η) = (-4 / η) * (t : ℝ) := by ring
+          _ ≤ (-4 / η) * (u / 2) := hmul
+          _ = -2 * n := hcoeff
+  have hsumA :
+      (∑ p : PaletteIndex D, D.paletteScale p * a ^ t) ≤
+        (T.S.N k : ℝ) * a ^ t := by
+    calc
+      _ = (∑ p : PaletteIndex D, D.paletteScale p) * a ^ t := by
+        rw [← Finset.sum_mul]
+      _ ≤ (T.S.N k : ℝ) * a ^ t :=
+        mul_le_mul_of_nonneg_right (Lane_q_s18_n7.paletteScale_sum_le_host D)
+          (pow_nonneg hbase0 _)
+  have hfirst : Real.exp (Cs * D.geom.r) *
+      (∑ p : PaletteIndex D, D.paletteScale p * a ^ t) ≤
+      n ^ (B + 1) * Real.exp (-n) := by
+    calc
+      _ ≤ Real.exp (Cs * D.geom.r) * ((T.S.N k : ℝ) * a ^ t) :=
+        mul_le_mul_of_nonneg_left hsumA (Real.exp_nonneg _)
+      _ ≤ n ^ B * (n * Real.exp n * Real.exp (-2 * n)) := by
+        gcongr
+      _ = n ^ (B + 1) * Real.exp (-n) := by
+        have hexp : Real.exp n * Real.exp (-2 * n) = Real.exp (-n) := by
+          calc
+            _ = Real.exp (n + (-2 * n)) := (Real.exp_add n (-2 * n)).symm
+            _ = Real.exp (-n) := by congr 1 <;> ring
+        calc
+          n ^ B * (n * Real.exp n * Real.exp (-2 * n)) =
+              n ^ B * n * (Real.exp n * Real.exp (-2 * n)) := by ring
+          _ = n ^ B * n * Real.exp (-n) := by rw [hexp]
+          _ = n ^ (B + 1) * Real.exp (-n) := by
+            calc
+              n ^ B * n * Real.exp (-n) = (n ^ B * n) * Real.exp (-n) := by ring
+              _ = n ^ (B + 1) * Real.exp (-n) := by
+                rw [show n ^ B * n = n ^ (B + 1) by
+                  simpa [Real.rpow_one] using (Real.rpow_add hnpos B 1).symm]
+  have hLpos : 0 < (2 : ℝ) ^ (n - Real.sqrt n) := Real.rpow_pos_of_pos (by norm_num) _
+  have hsqrt : Real.sqrt n ≤ n / 16 := by
+    rw [Real.sqrt_le_iff]
+    constructor
+    · positivity
+    · have hprod := mul_nonneg (by linarith : 0 ≤ n) (by linarith : 0 ≤ n - 256)
+      nlinarith [hprod]
+  have hcoeff : -n + 2 * Real.sqrt n ≤ -7 * n / 8 := by nlinarith [hsqrt]
+  have hpowRatioEq :
+      (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 =
+        (2 : ℝ) ^ (-n + 2 * Real.sqrt n) := by
+    have h2 : 0 < (2 : ℝ) := by norm_num
+    rw [Real.rpow_def_of_pos h2, Real.rpow_def_of_pos h2]
+    rw [← Real.exp_nat_mul, ← Real.exp_sub]
+    rw [Real.rpow_def_of_pos h2]
+    congr 1 <;> ring
+  have hpowRatio :
+      (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 ≤ Real.exp (-7 * n / 16) := by
+    rw [hpowRatioEq, Real.rpow_def_of_pos (by norm_num : 0 < (2 : ℝ))]
+    have hcoeffneg : -n + 2 * Real.sqrt n ≤ 0 := by linarith [hcoeff, hnlarge]
+    have hmul := mul_le_mul_of_nonpos_left hlog2lo hcoeffneg
+    apply Real.exp_le_exp.mpr
+    nlinarith [hmul, hcoeff]
+  have hinner :
+      (∑ q ∈ Finset.range t,
+        if 3 ≤ q then (q : ℝ) ^ 4 * a ^ q else 0) ≤ u ^ 5 := by
+    have hterm : ∀ q ∈ Finset.range t,
+        (if 3 ≤ q then (q : ℝ) ^ 4 * a ^ q else 0) ≤ u ^ 4 := by
+      intro q hq
+      have hqle : (q : ℝ) ≤ u := by
+        have hqt : q < t := Finset.mem_range.mp hq
+        have hqtcast : (q : ℝ) ≤ (t : ℝ) := by exact_mod_cast hqt.le
+        exact hqtcast.trans htUpper
+      by_cases hq3 : 3 ≤ q
+      · simp only [if_pos hq3]
+        have hqp : (q : ℝ) ^ 4 ≤ u ^ 4 := by gcongr
+        have hap : a ^ q ≤ 1 := by
+          calc
+            a ^ q ≤ (1 : ℝ) ^ q := by gcongr
+            _ = 1 := by simp
+        calc
+          (q : ℝ) ^ 4 * a ^ q ≤ u ^ 4 * 1 :=
+            mul_le_mul hqp hap (by positivity) (by positivity)
+          _ = u ^ 4 := by ring
+      · simp [hq3]
+        positivity
+    calc
+      _ ≤ ∑ q ∈ Finset.range t, u ^ 4 := by
+        apply Finset.sum_le_sum
+        intro q hq
+        exact hterm q hq
+      _ = (t : ℝ) * u ^ 4 := by simp
+      _ ≤ u ^ 5 := by
+        have hu : 0 ≤ u := by positivity
+        calc
+          (t : ℝ) * u ^ 4 ≤ u * u ^ 4 := by gcongr
+          _ = u ^ 5 := by rw [pow_succ]; ring
+  have hInv := Lane_q_s18_n7.paletteScale_inv_sum_le (D := D) hKP hPair hdensity1
+  have hLsq : 0 < ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 := sq_pos_of_pos hLpos
+  have hInv' :
+      (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) ≤
+        Kpair * (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 := by
+    calc
+      _ ≤ Kpair * (2 : ℝ) ^ n /
+          (densityScale T k * ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) := hInv
+      _ ≤ Kpair * (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 := by
+        rw [div_le_div_iff₀ (mul_pos (lt_of_lt_of_le (by norm_num) hdensity1) hLsq) hLsq]
+        have htop : 0 ≤ Kpair * (2 : ℝ) ^ n := by positivity
+        have hden : ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 ≤
+            densityScale T k * ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 :=
+          by simpa using mul_le_mul_of_nonneg_right hdensity1 hLsq.le
+        exact mul_le_mul_of_nonneg_left hden htop
+  have hsumB :
+      (∑ p : PaletteIndex D,
+        (D.paletteScale p)⁻¹ * Real.exp (0.02 * n) *
+          (∑ q ∈ Finset.range t,
+            if 3 ≤ q then (q : ℝ) ^ 4 * a ^ q else 0)) ≤
+        (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) * Real.exp (0.02 * n) * u ^ 5 := by
+    calc
+      _ = (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+          (Real.exp (0.02 * n) *
+            (∑ q ∈ Finset.range t,
+              if 3 ≤ q then (q : ℝ) ^ 4 * a ^ q else 0)) := by
+        calc
+          _ = ∑ p : PaletteIndex D, (D.paletteScale p)⁻¹ *
+              (Real.exp (0.02 * n) *
+                (∑ q ∈ Finset.range t,
+                  if 3 ≤ q then (q : ℝ) ^ 4 * a ^ q else 0)) := by
+            apply Finset.sum_congr rfl
+            intro p hp
+            ring
+          _ = _ := by rw [← Finset.sum_mul]
+      _ ≤ (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+          (Real.exp (0.02 * n) * u ^ 5) := by
+        have hnonneg : 0 ≤ ∑ p : PaletteIndex D, (D.paletteScale p)⁻¹ :=
+          Finset.sum_nonneg fun p hp => inv_nonneg.mpr (by
+            unfold LateData.paletteScale
+            positivity)
+        have hexp : 0 ≤ Real.exp (0.02 * n) := Real.exp_nonneg _
+        have hprod := mul_le_mul_of_nonneg_left hinner hexp
+        exact mul_le_mul_of_nonneg_left hprod hnonneg
+      _ = _ := by ring
+  have hsecond : Real.exp (Cs * D.geom.r) *
+      (∑ p : PaletteIndex D,
+        (D.paletteScale p)⁻¹ * Real.exp (0.02 * n) *
+          (∑ q ∈ Finset.range t,
+            if 3 ≤ q then (q : ℝ) ^ 4 * a ^ q else 0)) ≤
+      (Kpair * η ^ 5) * n ^ (B + 5) * Real.exp (-(1 / 3 : ℝ) * n) := by
+    have hinv0 : 0 ≤ ∑ p : PaletteIndex D, (D.paletteScale p)⁻¹ :=
+      Finset.sum_nonneg fun p hp => inv_nonneg.mpr (by
+        unfold LateData.paletteScale
+        positivity)
+    have htail0 : 0 ≤ Real.exp (0.02 * n) * u ^ 5 :=
+      mul_nonneg (Real.exp_nonneg _) (pow_nonneg (by positivity) _)
+    have hmiddle0 : 0 ≤ (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+        Real.exp (0.02 * n) * u ^ 5 := by positivity
+    have hinvStep : (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+        Real.exp (0.02 * n) * u ^ 5 ≤
+        (Kpair * (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+          Real.exp (0.02 * n) * u ^ 5 := by
+      calc
+        _ = (∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+            (Real.exp (0.02 * n) * u ^ 5) := by ring
+        _ ≤ (Kpair * (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+            (Real.exp (0.02 * n) * u ^ 5) :=
+          mul_le_mul_of_nonneg_right hInv' htail0
+        _ = _ := by ring
+    have hscaleStep : Real.exp (Cs * D.geom.r) *
+        ((∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+          Real.exp (0.02 * n) * u ^ 5) ≤
+        n ^ B * ((∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+          Real.exp (0.02 * n) * u ^ 5) :=
+      mul_le_mul_of_nonneg_right houter hmiddle0
+    have hinvStep' : n ^ B *
+        ((∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) *
+          Real.exp (0.02 * n) * u ^ 5) ≤
+        n ^ B * ((Kpair * (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+          Real.exp (0.02 * n) * u ^ 5) :=
+      mul_le_mul_of_nonneg_left hinvStep (by positivity)
+    calc
+      _ ≤ Real.exp (Cs * D.geom.r) *
+          ((∑ p : PaletteIndex D, (D.paletteScale p)⁻¹) * Real.exp (0.02 * n) * u ^ 5) :=
+        mul_le_mul_of_nonneg_left hsumB (Real.exp_nonneg _)
+      _ ≤ n ^ B *
+          ((Kpair * (2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+            Real.exp (0.02 * n) * u ^ 5) := hscaleStep.trans hinvStep'
+      _ ≤ (Kpair * η ^ 5) * n ^ (B + 5) * Real.exp (-(1 / 3 : ℝ) * n) := by
+        have hsmallExp : (2 : ℝ) ^ n /
+            ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 * Real.exp (0.02 * n) ≤
+            Real.exp (-(1 / 3 : ℝ) * n) := by
+          calc
+            _ ≤ Real.exp (-7 * n / 16) * Real.exp (0.02 * n) :=
+              mul_le_mul_of_nonneg_right hpowRatio (Real.exp_nonneg _)
+            _ = Real.exp (-7 * n / 16 + 0.02 * n) :=
+              (Real.exp_add (-7 * n / 16) (0.02 * n)).symm
+            _ ≤ Real.exp (-(1 / 3 : ℝ) * n) := by
+              apply Real.exp_le_exp.mpr
+              have hcoeff : -7 / 16 + (0.02 : ℝ) ≤ -(1 / 3 : ℝ) := by norm_num
+              calc
+                -7 * n / 16 + 0.02 * n = (-7 / 16 + (0.02 : ℝ)) * n := by ring
+                _ ≤ (-(1 / 3 : ℝ)) * n := mul_le_mul_of_nonneg_right hcoeff (by linarith)
+        have hu5 : u ^ (5 : ℕ) = η ^ (5 : ℕ) * n ^ (5 : ℕ) := by simp [u, mul_pow]
+        have hnPow : n ^ B * n ^ (5 : ℕ) = n ^ (B + 5) := by
+          calc
+            n ^ B * n ^ (5 : ℕ) = n ^ B * n ^ (5 : ℝ) :=
+              congrArg (fun z : ℝ => n ^ B * z) (Real.rpow_natCast n 5).symm
+            _ = n ^ (B + 5) := (Real.rpow_add hnpos B (5 : ℝ)).symm
+        have hfactor : n ^ B *
+            ((Kpair * (2 : ℝ) ^ n /
+                ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+              Real.exp (0.02 * n) * u ^ 5) =
+            (Kpair * η ^ 5 * n ^ (B + 5)) *
+              ((2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 *
+                Real.exp (0.02 * n)) := by
+          rw [hu5]
+          calc
+            n ^ B * ((Kpair * (2 : ℝ) ^ n /
+                ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+                Real.exp (0.02 * n) * (η ^ (5 : ℕ) * n ^ (5 : ℕ))) =
+                (Kpair * η ^ 5) * (n ^ B * n ^ (5 : ℕ)) *
+                  ((2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 *
+                    Real.exp (0.02 * n)) := by ring
+            _ = _ :=
+              congrArg (fun z : ℝ => (Kpair * η ^ 5) * z *
+                ((2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 *
+                  Real.exp (0.02 * n))) hnPow
+        have hcoef0 : 0 ≤ Kpair * η ^ 5 * n ^ (B + 5) := by positivity
+        calc
+          n ^ B * ((Kpair * (2 : ℝ) ^ n /
+                ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2) *
+              Real.exp (0.02 * n) * u ^ 5) =
+              (Kpair * η ^ 5 * n ^ (B + 5)) *
+                ((2 : ℝ) ^ n / ((2 : ℝ) ^ (n - Real.sqrt n)) ^ 2 *
+                  Real.exp (0.02 * n)) := hfactor
+          _ ≤ (Kpair * η ^ 5 * n ^ (B + 5)) *
+                Real.exp (-(1 / 3 : ℝ) * n) :=
+              mul_le_mul_of_nonneg_left hsmallExp hcoef0
+  have hbudget : HallBudget D η K Cs ≤
+      n ^ (B + 1) * Real.exp (-n) +
+        (Kpair * η ^ 5) * n ^ (B + 5) * Real.exp (-(1 / 3 : ℝ) * n) := by
+    unfold HallBudget
+    rw [Finset.sum_add_distrib, mul_add]
+    exact add_le_add hfirst hsecond
+  have hs1 : n ^ (B + 1) * Real.exp (-n) < 1 / 8 := hsmall1'
+  have hs2 : (Kpair * η ^ 5) * n ^ (B + 5) *
+      Real.exp (-(1 / 3 : ℝ) * n) < 1 / 8 := hsmall2'
+  linarith
 
 /-- L18.6d, 18:1301–1306. Full mass≥3/4 minus actual obstruction mass<1/4
 leaves positive success and per-palette representatives. -/
@@ -762,7 +1130,225 @@ theorem L18_6d {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     (t₀ : ℕ) (ht : 3 ≤ t₀) (hfull : εrun ≤ 1 / 4)
     (hbad : (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧ HallObstruction D t₀ out.2) < 1 / 4) :
     Nonempty (HallCertificate D δ) := by
-  sorry
+  classical
+  let P := pairExperiment D C H
+  let fullEvent : ((D.encoding.InitInput × D.encoding.base.History (Fin.last D.geom.r)) ×
+      PairAssignment T k) → Prop := fun out => D.full δ out.1.1 out.1.2
+  let badEvent : ((D.encoding.InitInput × D.encoding.base.History (Fin.last D.geom.r)) ×
+      PairAssignment T k) → Prop := fun out => HallObstruction D t₀ out.2
+  let Base := FinLaw.bind (D.encoding.terminalLaw (terminalSet D δ) C.positive)
+    (fun x => D.encoding.base.runFull H.samplers.act (D.encoding.initialState x))
+  have hfullP : 1 - εrun ≤ P.pr fullEvent := by
+    change 1 - εrun ≤ (FinLaw.bind Base (fun z => D.pairSampler z.2)).pr
+      (fun out => D.full δ out.1.1 out.1.2)
+    have hbaseFull : 1 - εrun ≤ Base.pr (fun z => D.full δ z.1 z.2) := by
+      simpa [Base, FullRunProbability] using H.fullRun
+    rw [Lane_q_s18_n7.finLaw_pr_bind_fst Base (fun z => D.pairSampler z.2)
+      (fun z => D.full δ z.1 z.2)]
+    exact hbaseFull
+  have hfull34 : (3 : ℝ) / 4 ≤ P.pr fullEvent := by linarith
+  have hgoodPos : 0 < P.pr (fun out => fullEvent out ∧ ¬ badEvent out) := by
+    rw [Lane_q_s18_n7.finLaw_pr_split P fullEvent badEvent] at hfull34
+    have hbad' : P.pr (fun out => fullEvent out ∧ badEvent out) < 1 / 4 := by
+      simpa [P, fullEvent, badEvent] using hbad
+    linarith
+  obtain ⟨out, hout, houtw⟩ :=
+    Lane_q_s18_n7.exists_weight_pos_of_pr_pos P
+      (fun out => fullEvent out ∧ ¬ badEvent out) hgoodPos
+  have houtFull : D.full δ out.1.1 out.1.2 := hout.1
+  have houtNoObstruction : ¬ HallObstruction D t₀ out.2 := hout.2
+  have hProd : Base.w out.1 * (D.pairSampler out.1.2).w out.2 > 0 := by
+    simpa [P, Base, pairExperiment, LateEncoding.experiment, FinLaw.bind] using houtw
+  have hsamplerNonneg : 0 ≤ (D.pairSampler out.1.2).w out.2 :=
+    (D.pairSampler out.1.2).nonneg _
+  have hsamplerPos : 0 < (D.pairSampler out.1.2).w out.2 := by
+    by_contra h
+    have hle : (D.pairSampler out.1.2).w out.2 ≤ 0 := le_of_not_gt h
+    have hz : (D.pairSampler out.1.2).w out.2 = 0 := le_antisymm hle hsamplerNonneg
+    rw [hz, mul_zero] at hProd
+    linarith
+  have hpairsPos : ∀ v : Pos T k, 0 < (D.pairLaw out.1.2 v).w (out.2 v) := by
+    have hprod : 0 < ∏ v : Pos T k, (D.pairLaw out.1.2 v).w (out.2 v) := by
+      simpa [LateData.pairSampler, FinLaw.pi] using hsamplerPos
+    have hprodNe : ∏ v : Pos T k, (D.pairLaw out.1.2 v).w (out.2 v) ≠ 0 := ne_of_gt hprod
+    intro v
+    have hvne : (D.pairLaw out.1.2 v).w (out.2 v) ≠ 0 :=
+      (Finset.prod_ne_zero_iff.mp hprodNe) v (Finset.mem_univ _)
+    exact lt_of_le_of_ne ((D.pairLaw out.1.2 v).nonneg _) (Ne.symm hvne)
+  have pairSupported (v : Pos T k) (hv : IsEvenRole v) :
+      0 < (D.pairLaw out.1.2 v).w (out.2 v) := hpairsPos v
+  have pairDistinct (v : Pos T k) (hv : IsEvenRole v) : (out.2 v).1 ≠ (out.2 v).2 := by
+    exact ((hPair.2.2.2.2 out.1.1 out.1.2 houtFull v hv).2 (out.2 v)
+      (pairSupported v hv)).1
+  have rowEvent : ∀ p : PaletteIndex D, ∀ v ∈ D.paletteRows p, IsEvenRole v := by
+    intro p v hv
+    exact (Finset.mem_filter.mp hv).2.1
+  let endpoints : Pos T k → Finset (Fin (T.S.N k)) := fun v =>
+    insert (out.2 v).1 { (out.2 v).2 }
+  let G : SimpleGraph (Pos T k) := {
+    Adj v w := v ≠ w ∧ ((out.2 v).1 = (out.2 w).1 ∨ (out.2 v).1 = (out.2 w).2 ∨
+      (out.2 v).2 = (out.2 w).1 ∨ (out.2 v).2 = (out.2 w).2)
+    symm := by
+      constructor
+      intro v w h
+      refine ⟨h.1.symm, ?_⟩
+      rcases h.2 with h | h | h | h
+      · exact Or.inl h.symm
+      · exact Or.inr (Or.inr (Or.inl h.symm))
+      · exact Or.inr (Or.inl h.symm)
+      · exact Or.inr (Or.inr (Or.inr h.symm))
+    loopless := by
+      constructor
+      intro v h
+      exact h.1 rfl
+  }
+  have hGraphEq (S : Finset (Pos T k)) : endpointGraph S out.2 = G.induce (S : Set (Pos T k)) := by
+    ext v w
+    simp [endpointGraph, G]
+  have endpointLeft (v : Pos T k) : (out.2 v).1 ∈ endpoints v := by
+    change (out.2 v).1 ∈ insert (out.2 v).1 {(out.2 v).2}
+    exact Finset.mem_insert_self _ _
+  have endpointRight (v : Pos T k) : (out.2 v).2 ∈ endpoints v := by
+    change (out.2 v).2 ∈ insert (out.2 v).1 {(out.2 v).2}
+    exact Finset.mem_insert_of_mem (Finset.mem_singleton_self _)
+  have endpointChoice (v : Pos T k) {x : Fin (T.S.N k)} (hx : x ∈ endpoints v) :
+      x = (out.2 v).1 ∨ x = (out.2 v).2 := by
+    change x ∈ insert (out.2 v).1 {(out.2 v).2} at hx
+    rcases Finset.mem_insert.mp hx with h | h
+    · exact Or.inl h
+    · exact Or.inr (Finset.mem_singleton.mp h)
+  have hOverlap : ∀ v w : Pos T k, G.Adj v w ↔
+      v ≠ w ∧ (endpoints v ∩ endpoints w).Nonempty := by
+    intro v w
+    constructor
+    · rintro ⟨hne, hshare⟩
+      refine ⟨hne, ?_⟩
+      rcases hshare with h | h | h | h
+      · exact ⟨(out.2 v).1, Finset.mem_inter.mpr
+          ⟨endpointLeft v, by rw [h]; exact endpointLeft w⟩⟩
+      · exact ⟨(out.2 v).1, Finset.mem_inter.mpr
+          ⟨endpointLeft v, by rw [h]; exact endpointRight w⟩⟩
+      · exact ⟨(out.2 v).2, Finset.mem_inter.mpr
+          ⟨endpointRight v, by rw [h]; exact endpointLeft w⟩⟩
+      · exact ⟨(out.2 v).2, Finset.mem_inter.mpr
+          ⟨endpointRight v, by rw [h]; exact endpointRight w⟩⟩
+    · rintro ⟨hne, ⟨x, hxInter⟩⟩
+      have hxv := (Finset.mem_inter.mp hxInter).1
+      have hxw := (Finset.mem_inter.mp hxInter).2
+      have hxv' := endpointChoice v hxv
+      have hxw' := endpointChoice w hxw
+      rcases hxv' with hxv | hxv <;> rcases hxw' with hxw | hxw
+      · exact ⟨hne, Or.inl (hxv.symm.trans hxw)⟩
+      · exact ⟨hne, Or.inr (Or.inl (hxv.symm.trans hxw))⟩
+      · exact ⟨hne, Or.inr (Or.inr (Or.inl (hxv.symm.trans hxw)))⟩
+      · exact ⟨hne, Or.inr (Or.inr (Or.inr (hxv.symm.trans hxw)))⟩
+  have hGraphEq' (S : Finset (Pos T k)) :
+      (endpointGraph S out.2).Connected ↔ (G.induce (S : Set (Pos T k))).Connected := by
+    rw [hGraphEq S]
+  let Rows : PaletteIndex D → Type := fun p => {v : Pos T k // v ∈ D.paletteRows p}
+  have hForPalette : ∀ p : PaletteIndex D,
+      ∃ m : Rows p → Fin (T.S.N k),
+        Function.Injective m ∧ ∀ v, m v ∈ endpoints v.1 := by
+    intro p
+    let R := D.paletteRows p
+    have hTwo : ∀ v ∈ R, 2 ≤ (endpoints v).card := by
+      intro v hv
+      have heven := rowEvent p v hv
+      have hd := pairDistinct v heven
+      simp [endpoints, hd]
+    have hLarge : ∀ S : Finset (Pos T k), S ⊆ R → S.card = t₀ →
+        (G.induce (S : Set (Pos T k))).Connected → False := by
+      intro S hS hScard hSconn
+      apply houtNoObstruction
+      exact ⟨p, S, hS, (hGraphEq' S).2 hSconn, Or.inl hScard⟩
+    have hSmall : ∀ S : Finset (Pos T k), S ⊆ R → 3 ≤ S.card → S.card < t₀ →
+        (G.induce (S : Set (Pos T k))).Connected → ¬ (S.biUnion endpoints).card < S.card := by
+      intro S hS h3 hlt hSconn hdef
+      apply houtNoObstruction
+      have hdef' : (endpointVertices S out.2).card < S.card := by
+        simpa [endpointVertices, endpoints] using hdef
+      exact ⟨p, S, hS, (hGraphEq' S).2 hSconn, Or.inr ⟨h3, hlt, hdef'⟩⟩
+    have hHall := Lane_q_s18_n7.hall_condition_of_no_connected_obstruction
+      G R endpoints t₀ ht hOverlap hTwo hLarge hSmall
+    let I := Rows p
+    have hHallI : ∀ S : Finset I, S.card ≤ (S.biUnion (fun v => endpoints v.1)).card := by
+      intro S
+      let Spos := S.image Subtype.val
+      have hSsub : Spos ⊆ R := by
+        intro v hv
+        rcases Finset.mem_image.mp hv with ⟨x, hx, rfl⟩
+        exact x.2
+      have hScard : Spos.card = S.card := by
+        dsimp [Spos]
+        exact Finset.card_image_of_injective S Subtype.val_injective
+      have hUnion : S.biUnion (fun v => endpoints v.1) = Spos.biUnion endpoints := by
+        ext x
+        constructor
+        · intro hx
+          rcases Finset.mem_biUnion.mp hx with ⟨v, hv, hxv⟩
+          exact Finset.mem_biUnion.mpr
+            ⟨v.1, Finset.mem_image.mpr ⟨v, hv, rfl⟩, hxv⟩
+        · intro hx
+          rcases Finset.mem_biUnion.mp hx with ⟨v, hv, hxv⟩
+          rcases Finset.mem_image.mp hv with ⟨w, hw, rfl⟩
+          exact Finset.mem_biUnion.mpr ⟨w, hw, hxv⟩
+      calc
+        S.card = Spos.card := hScard.symm
+        _ ≤ (Spos.biUnion endpoints).card := hHall Spos hSsub
+        _ = (S.biUnion (fun v => endpoints v.1)).card := by rw [hUnion]
+    obtain ⟨m, hmInj, hmMem⟩ :=
+      (Finset.all_card_le_biUnion_card_iff_existsInjective' (fun v : I => endpoints v.1)).mp hHallI
+    exact ⟨m, hmInj, hmMem⟩
+  let pick : ∀ p : PaletteIndex D, Rows p → Fin (T.S.N k) :=
+    fun p => Classical.choose (hForPalette p)
+  have pickSpec (p : PaletteIndex D) : Function.Injective (pick p) ∧
+      ∀ v, pick p v ∈ endpoints v.1 := Classical.choose_spec (hForPalette p)
+  have rowMem (v : {v : Pos T k // IsEvenRole v}) :
+      v.1 ∈ D.paletteRows (D.rolePalette v.1) := by
+    simp [LateData.paletteRows, LateData.rolePalette, v.2]
+  let matching : {v : Pos T k // IsEvenRole v} → Fin (T.S.N k) := fun v =>
+    pick (D.rolePalette v.1) ⟨v.1, rowMem v⟩
+  have chosen (v : {v : Pos T k // IsEvenRole v}) :
+      matching v = (out.2 v.1).1 ∨ matching v = (out.2 v.1).2 := by
+    have hmem := (pickSpec (D.rolePalette v.1)).2 ⟨v.1, rowMem v⟩
+    have hmem' : matching v ∈
+        (insert (out.2 v.1).1 ({(out.2 v.1).2} : Finset (Fin (T.S.N k)))) := by
+      simpa [matching, endpoints] using hmem
+    simpa [Finset.mem_insert, Finset.mem_singleton] using hmem'
+  have paletteInjective {v w : {v : Pos T k // IsEvenRole v}}
+      (hp : D.rolePalette v.1 = D.rolePalette w.1) (hm : matching v = matching w) : v = w := by
+    let p := D.rolePalette v.1
+    let q := D.rolePalette w.1
+    let rowV : Rows p := ⟨v.1, by simpa [p] using rowMem v⟩
+    let rowW : Rows q := ⟨w.1, by simpa [q] using rowMem w⟩
+    let rowVq : Rows q := Eq.mp (congrArg Rows hp) rowV
+    have hm' : pick p rowV = pick q rowW := by
+      simpa [matching, p, q, Rows, rowV, rowW] using hm
+    have htransport := Lane_q_s18_n7.depFun_app_eq pick hp rowV
+    have hrows : rowVq = rowW := (pickSpec q).1 (htransport.symm.trans hm')
+    have hvalTransport : rowV.1 = rowVq.1 := by
+      have h := Lane_q_s18_n7.depFun_app_eq
+        (fun (q : PaletteIndex D) (x : Rows q) => x.1) hp rowV
+      exact h
+    have hpos : v.1 = w.1 := by
+      calc
+        v.1 = rowV.1 := rfl
+        _ = rowVq.1 := hvalTransport
+        _ = rowW.1 := congrArg Subtype.val hrows
+        _ = w.1 := rfl
+    exact Subtype.ext hpos
+  refine ⟨{
+    input := out.1.1
+    history := out.1.2
+    pairs := out.2
+    full := houtFull
+    pair_supported := pairSupported
+    matching := matching
+    chosen := chosen
+    palette_injective := by
+      intro v w hp hm
+      exact paletteInjective hp hm
+  }⟩
 
 theorem L18_6 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs : ℝ)
     (hK : 0 < K) (hCp : 0 < Cp) (hCs : 0 < Cs) :

@@ -6,6 +6,7 @@ import HypercubeRamsey.S06.EvenRows_q_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_sol_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_select_sol_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_q_s06_ev_d
+import HypercubeRamsey.S06.EvenRows_sol_s06_ev_d
 
 /-!
 # Odd injection and even posterior reconstruction
@@ -673,11 +674,56 @@ theorem L6_1m_mean (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       X.HistSupport → X.Step2Supp → X.EvenDensity → X.SelectBound → X.EvenMean := by
   sorry
 
-/-- L6.1n (joint comparison, 06:857–868): actual odd-neighbour sets of separated rows are disjoint; the
-near-product bound of `JfOK` on at most `n²` outputs; long computations at residual distance `> nearR` read
-disjoint centre randomness, so the raw centre integrals factor into the comparison means. -/
-theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
-    ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → X.EvenMean → X.EvenJoint := by
+namespace Lane_sol_s06_ev_d
+
+/-- The local row mean under auxiliary odd sampling with probability fillers. -/
+def localEvenMean (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
+    (v : CubeVertex n) (a : Fin N) : ℝ :=
+  (FinProb.pi (fun u : OddRole6 n => oddLaw X H C u.1)).expect
+    (fun y => (N : ℝ) * X.evenRow H C v y a)
+
+/-- The raw centre moment estimate needed after nonlocal success gates are removed. -/
+def RawCentreComparison (X : Ctx6 γ p₀ K n N E G M) : Prop :=
+  ∀ H, X.histLaw.w H ≠ 0 → ∀ (U : Finset (CubeVertex n)) (a : Fin N),
+    U ⊆ X.evenRoles → U.card ≤ n →
+    (∀ v ∈ U, ∀ v' ∈ U, v ≠ v' → X.nearR < X.g.L.residualDist v v') →
+      (X.centreLaw H).expect (fun C => ∏ v ∈ U, localEvenMean X H C v a) ≤
+        ∏ v ∈ U, (Cm6 * ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a))
+
+/-- `EvenMean` is the filler mean multiplied by the global all-valid indicator. -/
+theorem gatedMean_eq (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
+    (v : CubeVertex n) (a : Fin N) :
+    (∑ y, X.prodOdd H C y * ((N : ℝ) * X.evenRow H C v y a)) =
+      if X.AllOddValid H C then localEvenMean X H C v a else 0 := by
+  by_cases hAll : X.AllOddValid H C
+  · rw [if_pos hAll]
+    unfold localEvenMean FinProb.expect
+    apply Finset.sum_congr rfl
+    intro y hy
+    have hpRow (u : OddRole6 n) :
+        (oddLaw X H C u.1).w (y u) = X.oddRow H C u.1 (y u) :=
+      oddLaw_eq_row X H C u.1 (hAll u.1 u.2) (y u)
+    change (∏ u : OddRole6 n, X.oddRow H C u.1 (y u)) *
+      ((N : ℝ) * X.evenRow H C v y a) =
+      (∏ u : OddRole6 n, (oddLaw X H C u.1).w (y u)) * ((N : ℝ) * X.evenRow H C v y a)
+    simp_rw [hpRow]
+  · rw [if_neg hAll]
+    have hnot : ¬ ∀ u : OddRole6 n,
+        X.OddValid H C X.Rlong (X.g.L.stateOf u.1) := by
+      intro hall
+      exact hAll (fun u hu => hall ⟨u, hu⟩)
+    obtain ⟨u, hu⟩ := not_forall.mp hnot
+    apply Finset.sum_eq_zero
+    intro y hy
+    have hz : X.oddRow H C u.1 (y u) = 0 := by
+      simp [Ctx6.oddRow, Ctx6.oddRowAt, hu]
+    have hprod : X.prodOdd H C y = 0 :=
+      Finset.prod_eq_zero (Finset.mem_univ u) hz
+    rw [hprod, zero_mul]
+
+/-- A fully proved reduction from raw centre moments to the frozen joint conclusion. -/
+theorem joint_of_rawCentreComparison (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
+    ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → RawCentreComparison X → X.EvenJoint := by
   have hp₀ : 0 < p₀ := hadm.2.2.1
   obtain ⟨nNear, hNear⟩ := Filter.eventually_atTop.1
     (Lane_q_s06_ev_d.residual_near_bounds_eventually
@@ -685,7 +731,7 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   obtain ⟨nSquare, hSquare⟩ := Filter.eventually_atTop.1
     Lane_q_s06_ev_d.natSquare_le_powTwo_point025_eventually
   refine ⟨max nNear (max nSquare 100), 1, ?_⟩
-  intro n N E G M X hLarge hDensity hMean
+  intro n N E G M X hLarge hDensity hRaw
   have hNearDim : nNear ≤ n := le_trans (le_max_left _ _) hLarge.1
   have hBigDim : max nSquare 100 ≤ n := le_trans (le_max_right _ _) hLarge.1
   have hSquareDim : nSquare ≤ n := le_trans (le_max_left _ _) hBigDim
@@ -724,6 +770,18 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       exact Finset.mem_image.mpr ⟨u, huw, rfl⟩
     exact (Finset.disjoint_left.mp (hstarDisjoint v w hsep)) huvRaw huwRaw
   intro Jf hJf H hH U a hU hUcard hsep
+  by_cases hUempty : U = ∅
+  · subst U
+    simp only [Finset.prod_empty, Finset.card_empty, pow_zero, mul_one]
+    unfold FinProb.expect
+    calc
+      _ ≤ ∑ ω, ((X.centreLaw H).bind (Jf H)).w ω := by
+        apply Finset.sum_le_sum
+        intro ω hω
+        change ((X.centreLaw H).bind (Jf H)).w ω *
+          (if X.OddGood H ω.1 then 1 else 0) ≤ ((X.centreLaw H).bind (Jf H)).w ω
+        split_ifs <;> simp [FinProb.nonneg]
+      _ = 1 := FinProb.sum_eq_one _
   let S : Finset (OddRole6 n) := U.biUnion X.oddNbrs
   have hScard : S.card ≤ n ^ 2 := by
     calc
@@ -838,6 +896,51 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     by_cases hvalid : X.EvenValid H C v y
     · exact mul_nonneg (Nat.cast_nonneg _) ((hDensity H C v y hH hv hvalid).1 a)
     · simp [Ctx6.evenRow, hvalid]
+  have hOddRowMass (C : X.Centre) (u : OddRole6 n) :
+      (∑ b : Fin N, X.oddRow H C u.1 b) =
+        if X.OddValid H C X.Rlong (X.g.L.stateOf u.1) then 1 else 0 := by
+    by_cases hvalid : X.OddValid H C X.Rlong (X.g.L.stateOf u.1)
+    · simp only [Ctx6.oddRow, Ctx6.oddRowAt, hvalid, ↓reduceIte]
+      cases hmode : X.stMode (X.g.L.stateOf u.1) with
+      | low => simpa [hmode] using
+          (X.lowRow H (X.pos C) (X.g.L.stateOf u.1)
+            (X.actDesc H C X.Rlong (X.g.L.stateOf u.1)) (X.tup C)).sum_eq_one
+      | high => simpa [hmode] using
+          (X.s3Post H (X.g.L.stateOf u.1)
+            (X.actDesc H C X.Rlong (X.g.L.stateOf u.1)) (X.tup C)).sum_eq_one
+    · simp [Ctx6.oddRow, Ctx6.oddRowAt, hvalid]
+  have hProdOddMass (C : X.Centre) :
+      (∑ y : OddRole6 n → Fin N, X.prodOdd H C y) =
+        if X.AllOddValid H C then 1 else 0 := by
+    classical
+    have hsum :
+        (∑ y : OddRole6 n → Fin N,
+          ∏ u : OddRole6 n, X.oddRow H C u.1 (y u)) =
+          ∏ u : OddRole6 n, (∑ b : Fin N, X.oddRow H C u.1 b) := by
+      rw [← Fintype.prod_sum]
+    rw [show (∑ y : OddRole6 n → Fin N, X.prodOdd H C y) =
+        ∑ y : OddRole6 n → Fin N,
+          ∏ u : OddRole6 n, X.oddRow H C u.1 (y u) by
+      rfl, hsum]
+    by_cases hAll : X.AllOddValid H C
+    · have hvalid (u : OddRole6 n) :
+          X.OddValid H C X.Rlong (X.g.L.stateOf u.1) := hAll u.1 u.2
+      simp [hOddRowMass, hvalid, hAll]
+    · have hnot : ¬ ∀ u : OddRole6 n,
+          X.OddValid H C X.Rlong (X.g.L.stateOf u.1) := by
+        intro hall
+        exact hAll (by
+          intro u hu
+          exact hall ⟨u, hu⟩)
+      obtain ⟨u, hu⟩ := not_forall.mp hnot
+      have hzero : (∑ b : Fin N, X.oddRow H C u.1 b) = 0 := by
+        rw [hOddRowMass]
+        simp [hu]
+      have hprod :
+          (∏ u' : OddRole6 n, (∑ b : Fin N, X.oddRow H C u'.1 b)) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_univ u) hzero
+      rw [hprod]
+      simp [hAll]
   let α := ∀ u : {u : OddRole6 n // u ∈ S}, Fin N
   let project : (OddRole6 n → Fin N) → α := fun y u => y u.1
   let extend : α → OddRole6 n → Fin N := fun o u =>
@@ -897,6 +1000,123 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         (Jf H C).w y * g C (project y)
       rw [← hLocal y]
     exact (le_of_eq hExpectLocal).trans hProjected
+  let p : X.Centre → OddRole6 n → Law N := fun C u =>
+    Lane_sol_s06_ev_d.oddLaw X H C u.1
+  let localMean : X.Centre → CubeVertex n → ℝ := fun C v =>
+    (FinProb.pi (p C)).expect (fun y => (N : ℝ) * X.evenRow H C v y a)
+  have hProductNonneg (C : X.Centre) :
+      0 ≤ ∏ v ∈ U, localMean C v := by
+    apply Finset.prod_nonneg
+    intro v hv
+    unfold localMean FinProb.expect
+    exact Finset.sum_nonneg fun y _ =>
+      mul_nonneg ((FinProb.pi (p C)).nonneg y)
+        (hRowNonneg C v ((Finset.mem_filter.mp (hU hv)).2) y)
+  have hOutputToLocal (C : X.Centre) (hGood : X.OddGood H C) :
+      (Jf H C).expect (fun y => ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a) ≤
+        2 * ∏ v ∈ U, localMean C v := by
+    let t := Real.exp ((N : ℝ) ^ (-(0.04 : ℝ)) * S.card)
+    have hpRow (u : OddRole6 n) (b : Fin N) :
+        (p C u).w b = X.oddRow H C u.1 b :=
+      Lane_sol_s06_ev_d.oddLaw_eq_row X H C u.1 (hGood.2.1 u.1 u.2) b
+    have hWeight (o : α) :
+        q C o = t * (FinProb.pi (fun u : {u : OddRole6 n // u ∈ S} => p C u.1)).w o := by
+      change t * (∏ u ∈ S, X.oddRow H C u.1 (extend o u)) =
+        t * (∏ u : {u : OddRole6 n // u ∈ S}, (p C u.1).w (o u))
+      congr 1
+      rw [Finset.univ_eq_attach]
+      rw [← Finset.prod_attach S (fun u => X.oddRow H C u.1 (extend o u))]
+      apply Finset.prod_congr rfl
+      intro u hu
+      rw [hpRow]
+      simp only [extend, dif_pos u.2]
+    have hLocal (y : OddRole6 n → Fin N) :
+        g C (project y) = ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a := by
+      apply Finset.prod_congr rfl
+      intro v hv
+      congr 1
+      apply hEvenRow_local
+      intro u hu
+      have huS : u ∈ S := Finset.mem_biUnion.mpr ⟨v, hv, hu⟩
+      simp [extend, project, huS]
+    have hProjection :
+        (FinProb.pi (p C)).expect (fun y => ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a) =
+        (FinProb.pi (fun u : {u : OddRole6 n // u ∈ S} => p C u.1)).expect (g C) := by
+      have heq : (fun y => ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a) =
+          (fun y => g C (project y)) := by
+        funext y
+        exact (hLocal y).symm
+      rw [heq]
+      exact FinProb.pi_marginal_expect (p C) S (g C)
+    have hFactor :
+        (FinProb.pi (p C)).expect (fun y => ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a) =
+          ∏ v ∈ U, localMean C v := by
+      apply Lane_q_s06_ev_d.pi_expect_finset_prod_disjoint (p C) U
+        (fun v y => (N : ℝ) * X.evenRow H C v y a) X.oddNbrs
+      · intro v y y' hAgree
+        exact congrArg (fun x : ℝ => (N : ℝ) * x) (hEvenRow_local C v a hAgree)
+      · intro v hv w hw hvw
+        exact hoddNbrDisjoint v w (hsep v hv w hw hvw)
+    have hSum : ∑ o : α, q C o * g C o = t * ∏ v ∈ U, localMean C v := by
+      simp_rw [hWeight, mul_assoc]
+      rw [← Finset.mul_sum]
+      change t * (FinProb.pi (fun u : {u : OddRole6 n // u ∈ S} => p C u.1)).expect (g C) = _
+      rw [← hProjection, hFactor]
+    have ht : t ≤ 2 := by
+      simpa only [t, show (0.04 : ℝ) = 1 / 25 by norm_num] using hNearProductExp
+    exact (hOutputComparison C hGood).trans
+      (hSum.le.trans (mul_le_mul_of_nonneg_right ht (hProductNonneg C)))
+  have hRawReduction :
+      ((X.centreLaw H).bind (Jf H)).expect (fun ω => (if X.OddGood H ω.1 then 1 else 0) *
+        ∏ v ∈ U, (N : ℝ) * X.evenRow H ω.1 v ω.2 a) ≤
+      2 * (X.centreLaw H).expect (fun C => ∏ v ∈ U, localMean C v) := by
+    rw [FinProb.bind_expect (X.centreLaw H) (Jf H)
+      (fun C y => (if X.OddGood H C then 1 else 0) *
+        ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a)]
+    unfold FinProb.expect
+    rw [Finset.mul_sum]
+    apply Finset.sum_le_sum
+    intro C hC
+    have hinner :
+        (∑ y, (Jf H C).w y * ((if X.OddGood H C then 1 else 0) *
+          ∏ v ∈ U, (N : ℝ) * X.evenRow H C v y a)) ≤
+        2 * ∏ v ∈ U, localMean C v := by
+      by_cases hGood : X.OddGood H C
+      · simpa only [FinProb.expect, hGood, if_true, one_mul] using hOutputToLocal C hGood
+      · simp only [hGood, if_false, zero_mul, mul_zero, Finset.sum_const_zero]
+        exact mul_nonneg (by norm_num) (hProductNonneg C)
+    have h := mul_le_mul_of_nonneg_left hinner ((X.centreLaw H).nonneg C)
+    simpa only [mul_assoc, mul_left_comm] using h
+  have hRawCentreComparison :
+      (X.centreLaw H).expect (fun C => ∏ v ∈ U, localMean C v) ≤
+        ∏ v ∈ U, (Cm6 * ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a)) :=
+    hRaw H hH U a hU hUcard hsep
+  have hBoundsNonneg :
+      0 ≤ ∏ v ∈ U, (Cm6 * ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a)) := by
+    apply Finset.prod_nonneg
+    intro v hv
+    apply mul_nonneg (by norm_num [Cm6])
+    apply mul_nonneg (Nat.cast_nonneg _)
+    exact Finset.sum_nonneg fun i _ => mul_nonneg ((X.Tβ H (X.evenTy v)).nonneg i) ((M.μ i).nonneg a)
+  have hTwo : (2 : ℝ) ≤ 2 ^ U.card := by
+    have hcard : 0 < U.card := Finset.card_pos.mpr (Finset.nonempty_iff_ne_empty.mpr hUempty)
+    simpa using (pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 2) hcard)
+  exact hRawReduction.trans ((mul_le_mul_of_nonneg_left hRawCentreComparison (by norm_num)).trans
+    (mul_le_mul_of_nonneg_right hTwo hBoundsNonneg))
+
+
+end Lane_sol_s06_ev_d
+
+/-- L6.1n (joint comparison, 06:857–868): actual odd-neighbour sets of separated rows are disjoint; the
+near-product bound of `JfOK` on at most `n²` outputs; long computations at residual distance `> nearR` read
+disjoint centre randomness, so the raw centre integrals factor into the comparison means. -/
+theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
+    ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → X.EvenMean → X.EvenJoint := by
+  apply (Lane_sol_s06_ev_d.joint_of_rawCentreComparison γ p₀ K hadm).mono
+  intro n N E G M X hJoint hDensity hMean
+  apply hJoint hDensity
+  -- The supplied mean has the global AllOddValid gate (gatedMean_eq).
+  -- The raw centre moment estimate needs unrestricted local means.
   sorry
 
 set_option maxHeartbeats 1000000

@@ -1,7 +1,9 @@
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
 import HypercubeRamsey.S05.History_q_s05_hist1b
+import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_q_s05_h5l
+import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.Parent_sol_s05_h1
 
 /-!
@@ -98,7 +100,8 @@ def Step2Raw : Prop :=
 /-- L5.1d, raw part (05:219–259): the subdensity calculation for the Step 2 tests. -/
 theorem L5_1d : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G),
     X.Step2Raw := by
-  sorry
+  intro n N E G X
+  exact ⟨Lane_sol_s05_hist1b.step2_type_bound X, Lane_sol_s05_hist1b.step2_optional_bound X⟩
 
 /-- Block-density bound `A_K = exp(K''(1 + Σ_S s_ℓ))` (05:263–268). -/
 def blockConst (K : X.Ty) : ℝ :=
@@ -517,7 +520,21 @@ theorem L5_1l1 : ∃ C : ℝ, 0 < C ∧ ∃ R : ParamReq5, ∀ p : Params5 γ K'
       X.p = p → ChunkEstimates5 X.g → N ≤ n * 2 ^ n →
         ∀ v (ν : FinProb X.Coarse), X.Stage2Law v ν →
           ν.pr (fun c => ∃ y, C < X.avgLowPrior (v, c) y) ≤ 1 / 100 := by
-  sorry
+  classical
+  refine ⟨8 * (4 / χ ^ 2 + 1) + 1, by positivity, Lane_sol_s05_h5l.loadRequest, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 (Lane_sol_s05_h5l.eventually_load_bounds p hp)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp hGeom hN v ν hStage
+  obtain ⟨hnpos, hcaps, hexception, hrepeat, htail⟩ := hn₀ n hn
+  have hcapsX : ∀ j : ℕ, Real.exp (X.p.Kcap * (X.p.q0 * X.p.uSeg n (j + 1))) ≤
+      (n : ℝ) ^ (((j : ℝ) + 5) / 500) := by simpa only [hXp] using hcaps
+  have hexceptionX : 2 * (n : ℝ) ^ (-(4 / 100 : ℝ)) +
+      2 * (X.p.J n + 1 : ℕ) * (n : ℝ) ^ (-(1 / 10 : ℝ)) ≤ 1 := by
+    simpa only [hXp] using hexception
+  simpa only [Setup5.avgLowPrior, Lane_sol_s05_h5l.lowWeight] using
+    Lane_sol_s05_h5l.low_average_tail X hnpos v ν hGeom hN hStage.1
+      hStage.2.2.2.1 hcapsX hexceptionX hrepeat htail
 
 /-! ### Stage 3: the high keys (05:681–702) -/
 

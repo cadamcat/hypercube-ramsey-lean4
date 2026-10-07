@@ -3126,6 +3126,134 @@ private theorem gadgetOut_flip_eq_of_leaf {β γ : ℝ} {n : ℕ}
   rw [hleaf]
   simpa [S] using hstable
 
+private theorem chunkCoords_pairwise_disjoint {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j k : Fin (HypercubeRamsey.S04.chunkNum β γ n)) (hjk : j ≠ k) :
+    Disjoint (HypercubeRamsey.S04.chunkCoords β γ n g j)
+      (HypercubeRamsey.S04.chunkCoords β γ n g k) := by
+  classical
+  let s := HypercubeRamsey.S04.chunkNum β γ n
+  let ℓ := HypercubeRamsey.S04.chunkLen β γ n
+  have hs : 0 < s := by omega
+  have hstart :
+      HypercubeRamsey.S04.chunkStart β γ n g j + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n g k ∨
+        HypercubeRamsey.S04.chunkStart β γ n g k + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n g j := by
+    by_cases hjk' : j.val < k.val
+    · have hidx : g.val * s + j.val + 1 ≤ g.val * s + k.val := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      left
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n g j + ℓ =
+            (g.val * s + j.val + 1) * ℓ := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ, Nat.add_mul,
+                Nat.mul_add, Nat.add_assoc]
+        _ ≤ (g.val * s + k.val) * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n g k := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ]
+    · have hkj' : k.val < j.val := by
+        have hne : j.val ≠ k.val := by intro h; exact hjk (Fin.ext h)
+        omega
+      have hidx : g.val * s + k.val + 1 ≤ g.val * s + j.val := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      right
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n g k + ℓ =
+            (g.val * s + k.val + 1) * ℓ := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ, Nat.add_mul,
+                Nat.mul_add, Nat.add_assoc]
+        _ ≤ (g.val * s + j.val) * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n g j := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ]
+  apply Finset.disjoint_left.mpr
+  intro i hi hj'
+  rcases Finset.mem_filter.mp hi with ⟨_, ⟨hlo₁, hhi₁⟩⟩
+  rcases Finset.mem_filter.mp hj' with ⟨_, ⟨hlo₂, hhi₂⟩⟩
+  rcases hstart with h | h
+  · have hle₁ : i.val < HypercubeRamsey.S04.chunkStart β γ n g j + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₁
+    have hle₂ : HypercubeRamsey.S04.chunkStart β γ n g k ≤ i.val := by
+      exact hlo₂
+    omega
+  · have hle₁ : i.val < HypercubeRamsey.S04.chunkStart β γ n g k + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₂
+    have hle₂ : HypercubeRamsey.S04.chunkStart β γ n g j ≤ i.val := by
+      exact hlo₁
+    omega
+
+private theorem clipped_tuple_flip_profile {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    (∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g j v) ∨
+    ∃ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (∀ k, k ≠ j →
+        HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g k v) ∧
+      (HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g j v + 1 ∨
+        HypercubeRamsey.S04.clipped β γ n g j v =
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1) := by
+  classical
+  let D : Finset (Fin (HypercubeRamsey.S04.chunkNum β γ n)) :=
+    Finset.univ.filter fun j =>
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≠
+        HypercubeRamsey.S04.clipped β γ n g j v
+  have hcard : D.card ≤ 1 := by
+    apply Finset.card_le_one.mpr
+    intro j hj k hk
+    by_contra hjk
+    have hij : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j := by
+      by_contra hnot
+      have hcount := chunkCount_flip_eq g j v i hnot
+      have hclip : HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i) = HypercubeRamsey.S04.clipped β γ n g j v := by
+        simp [HypercubeRamsey.S04.clipped, hcount]
+      exact (Finset.mem_filter.mp hj).2 hclip
+    have hik : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g k := by
+      by_contra hnot
+      have hcount := chunkCount_flip_eq g k v i hnot
+      have hclip : HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i) = HypercubeRamsey.S04.clipped β γ n g k v := by
+        simp [HypercubeRamsey.S04.clipped, hcount]
+      exact (Finset.mem_filter.mp hk).2 hclip
+    exact (Finset.disjoint_left.mp (chunkCoords_pairwise_disjoint g j k hjk) hij) hik
+  by_cases hempty : D = ∅
+  · left
+    intro j
+    by_contra hne
+    have hj : j ∈ D := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+    rw [hempty] at hj
+    simp at hj
+  · have hDne : D.card ≠ 0 := by
+      intro h
+      exact hempty (Finset.card_eq_zero.mp h)
+    have hDcard : D.card = 1 := by omega
+    obtain ⟨j, hjD⟩ := Finset.card_eq_one.mp hDcard
+    right
+    refine ⟨j, ?_, ?_⟩
+    · intro k hkj
+      by_contra hne
+      have hk : k ∈ D := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+      rw [hjD] at hk
+      simp [hkj] at hk
+    · have hjmem : j ∈ D := by rw [hjD]; simp
+      have hjdiff := (Finset.mem_filter.mp hjmem).2
+      have hdelta := clipped_flip_delta g j v i (by
+        by_contra hnot
+        have hcount := chunkCount_flip_eq g j v i hnot
+        have hclip : HypercubeRamsey.S04.clipped β γ n g j
+            (HypercubeRamsey.cubeFlip v i) = HypercubeRamsey.S04.clipped β γ n g j v := by
+          simp [HypercubeRamsey.S04.clipped, hcount]
+        exact hjdiff hclip)
+      by_cases hle : HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i) ≤ HypercubeRamsey.S04.clipped β γ n g j v
+      · right
+        omega
+      · left
+        omega
+
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
   classical

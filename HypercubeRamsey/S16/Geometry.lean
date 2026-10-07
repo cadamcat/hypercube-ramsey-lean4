@@ -1857,7 +1857,65 @@ theorem pool_comparison_exists {κ : CConsts} {T : Stage} {k : ℕ}
     (hScale : LowModeScaleFacts hκ Q) (D : LowGeometryData PT)
     (hC : CellPartitionFacts hκ Q D.cells) :
     (permPools D.toLowGeom).Nonempty ∧ PoolComparison D.toLowGeom := by
-  sorry
+  classical
+  let G := D.toLowGeom
+  let SlotDomain (i : Fin PT.tiling.m) :=
+    Σ c : {c : G.Cell // G.cellPatch c = i}, Fin (G.nslot c.1)
+  have hSlotCard (i : Fin PT.tiling.m) :
+      Fintype.card (SlotDomain i) = ∑ c ∈ D.cells.cellsInPatch i, D.cells.nslot c := by
+    classical
+    change Fintype.card
+        (Σ c : {c : D.cells.Cell // D.cells.cellPatch c = i}, Fin (D.cells.nslot c.1)) =
+      ∑ c ∈ D.cells.cellsInPatch i, D.cells.nslot c
+    rw [Fintype.card_sigma]
+    simp only [Fintype.card_fin]
+    change (∑ c ∈ (Finset.univ : Finset {c : D.cells.Cell // D.cells.cellPatch c = i}),
+        D.cells.nslot c.1) = ∑ c ∈ D.cells.cellsInPatch i, D.cells.nslot c
+    rw [show D.cells.cellsInPatch i =
+      Finset.univ.filter (fun c : D.cells.Cell => D.cells.cellPatch c = i) by rfl]
+    apply Finset.sum_bij (fun c _ => c.1)
+    · intro c hc
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, c.2⟩
+    · intro c₁ hc₁ c₂ hc₂ heq
+      exact Subtype.ext heq
+    · intro c hc
+      have hc' := (Finset.mem_filter.mp hc).2
+      exact ⟨⟨c, hc'⟩, Finset.mem_univ _, rfl⟩
+    · intro c hc
+      rfl
+  have hEmbed (i : Fin PT.tiling.m) :
+      ∃ e : SlotDomain i ↪ Bin PT.tiling i, True := by
+    refine ⟨Lane_q_s16_geom.finiteEmbeddingOfCardLE ?_, trivial⟩
+    rw [hSlotCard]
+    exact hC.slots_fit i
+  let embed (i : Fin PT.tiling.m) : SlotDomain i ↪ Bin PT.tiling i :=
+    Classical.choose (hEmbed i)
+  have hEmbedInjective {i j : Fin PT.tiling.m} (hij : i = j)
+      (x : SlotDomain i) (y : SlotDomain j)
+      (hbin : (embed i x).1 = (embed j y).1) :
+      x.1.1 = y.1.1 ∧ x.2.val = y.2.val := by
+    cases hij
+    rcases x with ⟨⟨C, hC⟩, s⟩
+    rcases y with ⟨⟨C', hC'⟩, s'⟩
+    have hEq : embed i ⟨⟨C, hC⟩, s⟩ = embed i ⟨⟨C', hC'⟩, s'⟩ := by
+      apply Subtype.ext
+      exact hbin
+    have hSigma := (embed i).injective hEq
+    rcases Sigma.mk.inj_iff.mp hSigma with ⟨hcell, hslot⟩
+    have hcell' : C = C' := congrArg Subtype.val hcell
+    subst C'
+    exact ⟨rfl, congrArg Fin.val (eq_of_heq hslot)⟩
+  let P : PoolAssignment G := fun c s =>
+    embed (G.cellPatch c) ⟨⟨c, rfl⟩, s⟩
+  have hP : P ∈ permPools G := by
+    simp only [permPools, Finset.mem_filter, Finset.mem_univ, true_and]
+    intro C C' s s' hpatch hbin
+    have hbin' : (embed (G.cellPatch C) ⟨⟨C, rfl⟩, s⟩).1 =
+        (embed (G.cellPatch C') ⟨⟨C', rfl⟩, s'⟩).1 := by
+      simpa [P] using hbin
+    exact hEmbedInjective hpatch ⟨⟨C, rfl⟩, s⟩ ⟨⟨C', rfl⟩, s'⟩ hbin'
+  have hNonempty : (permPools G).Nonempty := ⟨P, hP⟩
+  exact ⟨hNonempty, by sorry⟩
 
 /-- L16.1: late classes, separated cells, persistent slot pools, and tapes. -/
 theorem low_geometry_at_scale {κ : CConsts} {T : Stage} {k : ℕ}

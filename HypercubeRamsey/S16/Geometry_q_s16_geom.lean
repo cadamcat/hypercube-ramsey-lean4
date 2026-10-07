@@ -6,6 +6,11 @@ open Classical
 
 universe u
 
+noncomputable def finiteEmbeddingOfCardLE {α β : Type u} [Fintype α] [Fintype β]
+    (h : Fintype.card α ≤ Fintype.card β) : α ↪ β :=
+  (Fintype.equivFin α).toEmbedding |>.trans
+    ((Fin.castLEEmb h).trans (Fintype.equivFin β).symm.toEmbedding)
+
 /-- A finite loopless symmetric graph with degree at most `d` admits a greedy
 coloring with `d + 1` colors. -/
 theorem exists_coloring_of_degree_bound {α : Type u} [Fintype α]

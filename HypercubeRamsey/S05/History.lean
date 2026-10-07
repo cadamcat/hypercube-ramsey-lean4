@@ -1,5 +1,6 @@
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
+import HypercubeRamsey.S05.History_q_s05_hist1b
 
 /-!
 # L5.1c, d, f, h, l(1–2): raw test bounds and the five conditioning stages
@@ -124,7 +125,184 @@ theorem L5_1d_bounds : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colou
     (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
     ∀ H : X.KeyHist, X.baseLaw.w H.1 ≠ 0 → X.Step1Pass H.1 →
       ∀ K, X.TypeOccurs K → ¬ X.step2Fail H K → X.Step2Bounds H K := by
-  sorry
+  classical
+  intro n N E G X hcover H hbase hpass K hType hnotFail
+  have hgateTrue := HypercubeRamsey.Lane_q_s05_hist1b.blockGate_trueBlock_of_step1Pass
+    X H K hType hpass
+  let qu : ℝ := (X.p.q0 : ℝ) * X.p.typeSegs n K
+  let sev : ℝ := ∑ ℓ ∈ K.2.1, (colLen5 (X.p.s n) ℓ : ℝ)
+  have hmassLower : Real.exp (-(X.p.delta * qu) * sev) ≤ X.blockMass H K K.2.1 := by
+    by_contra h
+    have hlt : X.blockMass H K K.2.1 < Real.exp (-(X.p.delta * qu) * sev) := lt_of_not_ge h
+    exact hnotFail ⟨hgateTrue, Or.inl (by simpa [qu, sev] using hlt)⟩
+  have hmassPos : 0 < X.blockMass H K K.2.1 := by
+    exact lt_of_lt_of_le (Real.exp_pos _) hmassLower
+  refine ⟨?_, ?_, ?_⟩
+  · intro ℓ hℓ θ hratio z
+    let x : ℝ := ((X.p.q0 : ℝ) * X.p.typeSegs n K) * colLen5 (X.p.s n) ℓ
+    let M : ℝ := X.blockMass (X.withCol H ℓ θ) K K.2.1
+    let D : ℝ := X.blockMass H K (K.2.1.erase ℓ)
+    let wrep : ℝ := X.blockWeight (X.withCol H ℓ θ) K K.2.1 z
+    let wdel : ℝ := X.blockWeight H K (K.2.1.erase ℓ) z
+    have hMassDom : X.blockMass H K K.2.1 ≤
+        Real.exp (X.p.a 1 * x) * D := by
+      have h := HypercubeRamsey.Lane_q_s05_hist1b.blockMass_withCol_le
+        X H K ℓ (H.2 ℓ) hℓ
+      simpa [Setup5.withCol, Function.update_self, D, x, mul_assoc] using h
+    have hDNonneg : 0 ≤ D := by
+      dsimp [D, Setup5.blockMass]
+      apply Finset.sum_nonneg
+      intro z hz
+      exact HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_nonneg
+        X H K (K.2.1.erase ℓ) z
+    have hDPos : 0 < D := by
+      by_contra hD
+      have hDzero : D = 0 := le_antisymm (le_of_not_gt hD) hDNonneg
+      rw [hDzero] at hMassDom
+      exact (not_le_of_gt hmassPos) (by simpa [hDzero] using hMassDom)
+    have hratio' : Real.exp (-X.p.delta * x) * D ≤ M := by
+      simpa [M, D, x, mul_assoc] using hratio
+    have hMPos : 0 < M :=
+      lt_of_lt_of_le (mul_pos (Real.exp_pos _) hDPos) hratio'
+    have hLawRep : (X.blockLaw (X.withCol H ℓ θ) K).w z = wrep / M := by
+      simpa [wrep, M, Setup5.blockLaw, Setup5.blockLawOn, Setup5.blockMass] using
+        (HypercubeRamsey.Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg
+          (f := fun z => X.blockWeight (X.withCol H ℓ θ) K K.2.1 z)
+          (X.fallbackBlock K) z
+          (fun z => HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_nonneg
+            X (X.withCol H ℓ θ) K K.2.1 z)
+          (by simpa [M, Setup5.blockMass] using hMPos))
+    have hLawDel : (X.blockLawDel H K ℓ).w z = wdel / D := by
+      simpa [wdel, D, Setup5.blockLawDel, Setup5.blockLawOn, Setup5.blockMass] using
+        (HypercubeRamsey.Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg
+          (f := fun z => X.blockWeight H K (K.2.1.erase ℓ) z)
+          (X.fallbackBlock K) z
+          (fun z => HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_nonneg
+            X H K (K.2.1.erase ℓ) z)
+          (by simpa [D, Setup5.blockMass] using hDPos))
+    have hweight : wrep ≤ Real.exp (X.p.a 1 * x) * wdel := by
+      simpa [wrep, wdel, x, mul_assoc] using
+        (HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_withCol_le X H K ℓ z θ hℓ)
+    have hgap : X.p.a 1 + X.p.delta ≤ X.p.a 2 := by
+      have horder := X.p.ha_order (1 : Fin 9) (2 : Fin 9) (by decide)
+      have hdelta := X.p.hdelta_a (1 : Fin 9) (2 : Fin 9) (by decide)
+      nlinarith
+    have hx : 0 ≤ x := by dsimp [x]; positivity
+    have hrate : Real.exp ((X.p.a 1 + X.p.delta) * x) ≤ Real.exp (X.p.a 2 * x) :=
+      Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_right hgap hx)
+    have hwdel : 0 ≤ wdel := by
+      exact HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_nonneg
+        X H K (K.2.1.erase ℓ) z
+    have hwratio : 0 ≤ wdel / D := div_nonneg hwdel hDPos.le
+    have hcancel :
+        Real.exp ((X.p.a 1 + X.p.delta) * x) * (wdel / D) *
+          (Real.exp (-X.p.delta * x) * D) = Real.exp (X.p.a 1 * x) * wdel := by
+      calc
+        _ = Real.exp ((X.p.a 1 + X.p.delta) * x) * Real.exp (-X.p.delta * x) * wdel := by
+          field_simp [ne_of_gt hDPos]
+        _ = _ := by
+          rw [← Real.exp_add]
+          congr 1
+          ring
+    have hmiddle :
+        Real.exp ((X.p.a 1 + X.p.delta) * x) * (wdel / D) *
+          (Real.exp (-X.p.delta * x) * D) ≤
+        Real.exp (X.p.a 2 * x) * (wdel / D) * M := by
+      calc
+        _ ≤ Real.exp (X.p.a 2 * x) * (wdel / D) *
+            (Real.exp (-X.p.delta * x) * D) := by
+              exact mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_right hrate hwratio)
+                (mul_nonneg (Real.exp_nonneg _) hDPos.le)
+        _ ≤ _ := mul_le_mul_of_nonneg_left hratio'
+          (mul_nonneg (Real.exp_nonneg _) hwratio)
+    have hnorm : (Real.exp (X.p.a 1 * x) * wdel) / M ≤
+        Real.exp (X.p.a 2 * x) * (wdel / D) := by
+      apply (div_le_iff₀ hMPos).2
+      calc
+        Real.exp (X.p.a 1 * x) * wdel =
+            Real.exp ((X.p.a 1 + X.p.delta) * x) * (wdel / D) *
+              (Real.exp (-X.p.delta * x) * D) := hcancel.symm
+        _ ≤ Real.exp (X.p.a 2 * x) * (wdel / D) * M := hmiddle
+    rw [hLawRep, hLawDel]
+    simpa [x, mul_assoc] using
+      (div_le_div_of_nonneg_right hweight hMPos.le).trans hnorm
+  · intro z
+    have hLaw : (X.blockLaw H K).w z = X.blockWeight H K K.2.1 z /
+        X.blockMass H K K.2.1 := by
+      simpa [Setup5.blockLaw, Setup5.blockLawOn, Setup5.blockMass] using
+        (HypercubeRamsey.Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg
+          (f := fun z => X.blockWeight H K K.2.1 z) (X.fallbackBlock K) z
+          (fun z => HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_nonneg
+            X H K K.2.1 z)
+          (by simpa [Setup5.blockMass] using hmassPos))
+    have hpoint := HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_le_exp_refBlock X H K z
+    have hK0 : X.p.a 0 ≤ X.p.Kpp :=
+      le_trans (le_max_left _ _) X.p.hKpp_budget
+    have hK1 : X.p.a 1 + X.p.delta ≤ X.p.Kpp :=
+      le_trans (le_max_right _ _) X.p.hKpp_budget
+    have hsev : 0 ≤ sev := by
+      dsimp [sev]
+      exact Finset.sum_nonneg fun ℓ hℓ => Nat.cast_nonneg _
+    have hqu : 0 ≤ qu := by dsimp [qu]; positivity
+    have harg : X.p.a 0 * qu + X.p.a 1 * qu * sev ≤
+        X.p.Kpp * (1 + sev) * qu - X.p.delta * qu * sev := by
+      have hcoeff : X.p.a 0 + X.p.a 1 * sev ≤ X.p.Kpp * (1 + sev) - X.p.delta * sev := by
+        nlinarith [mul_nonneg (sub_nonneg.mpr hK0) hsev,
+          mul_nonneg (sub_nonneg.mpr hK1) hsev]
+      nlinarith [mul_le_mul_of_nonneg_right hcoeff hqu]
+    have hexp : Real.exp (X.p.a 0 * qu + X.p.a 1 * qu * sev) ≤
+        Real.exp (X.p.Kpp * (1 + sev) * qu - X.p.delta * qu * sev) :=
+      Real.exp_le_exp.mpr harg
+    have hrefNonneg : 0 ≤ ∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s) :=
+      Finset.prod_nonneg fun s hs => X.S.reference.nonneg (z s)
+    have hblockConst : X.blockConst K ^ (X.p.q0 * X.p.typeSegs n K) =
+        Real.exp (X.p.Kpp * (1 + sev) * qu) := by
+      dsimp [Setup5.blockConst]
+      rw [← Real.exp_nat_mul]
+      congr 1
+      dsimp [qu, sev]
+      push_cast
+      ring
+    have hdenom : Real.exp (X.p.Kpp * (1 + sev) * qu) *
+        (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) *
+        Real.exp (-(X.p.delta * qu) * sev) ≤
+          Real.exp (X.p.Kpp * (1 + sev) * qu) *
+            (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) *
+            X.blockMass H K K.2.1 := by
+      exact mul_le_mul_of_nonneg_left hmassLower
+        (mul_nonneg (Real.exp_nonneg _) hrefNonneg)
+    have hcombine : Real.exp (X.p.a 0 * qu + X.p.a 1 * qu * sev) *
+        (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) ≤
+          Real.exp (X.p.Kpp * (1 + sev) * qu) *
+            (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) *
+            X.blockMass H K K.2.1 := by
+      calc
+        _ ≤ Real.exp (X.p.Kpp * (1 + sev) * qu - X.p.delta * qu * sev) *
+            (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) :=
+              mul_le_mul_of_nonneg_right hexp hrefNonneg
+        _ = Real.exp (X.p.Kpp * (1 + sev) * qu) *
+            (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) *
+            Real.exp (-(X.p.delta * qu) * sev) := by
+              calc
+                _ = (Real.exp (X.p.Kpp * (1 + sev) * qu) *
+                      Real.exp (-(X.p.delta * qu) * sev)) *
+                      (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) := by
+                        rw [show X.p.Kpp * (1 + sev) * qu - X.p.delta * qu * sev =
+                          X.p.Kpp * (1 + sev) * qu + (-(X.p.delta * qu) * sev) by ring,
+                          Real.exp_add]
+                _ = _ := by ring
+        _ ≤ _ := hdenom
+    rw [hLaw]
+    apply (div_le_iff₀ hmassPos).2
+    rw [hblockConst]
+    calc
+      X.blockWeight H K K.2.1 z ≤
+          Real.exp (X.p.a 0 * qu + X.p.a 1 * qu * sev) *
+            (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) := by
+              simpa [qu, sev] using hpoint
+      _ ≤ _ := hcombine
+  · sorry
 
 /-- The Step 3 threshold of a record target: `e^{-c k'_j}` at low targets, `e^{-c s}` at high targets. -/
 def step3Scale (c : ℝ) (ℓ : X.Key) : ℝ :=

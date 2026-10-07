@@ -519,7 +519,111 @@ theorem low_geometry_thresholds {κ : CConsts} (hκ : κ.Admissible) :
     calc
       2 * 2 ^ (PT.tiling.P i).h ≤ 2 * n := Nat.mul_le_mul_left 2 hpowNat
       _ ≤ ⌊Real.rpow (n : ℝ) κ.Ac⌋₊ := hsliceBase
-  · sorry
+  · intro i
+    let p := PT.tiling.P i
+    let ell := p.ℓ
+    let d := p.d
+    let E : ℝ := Real.exp (Real.rpow (Real.log (n : ℝ)) 5)
+    let A : ℝ :=
+      3 * Real.rpow (2 : ℝ) ((n - ell : ℕ) : ℝ) /
+        Real.rpow (n : ℝ) κ.Ac + E
+    let x : ℝ := κ.Kcell * Real.rpow (n : ℝ) κ.Ac / d
+    let q : ℕ := ⌈κ.Kcell * Real.rpow (n : ℝ) κ.Ac / d⌉₊
+    have hEllH : (PT.tiling.P i).ℓ + (PT.tiling.P i).h ≤ n := by
+      have hlen := Q.profiled_valid.tiling_valid.prefix_internal_length
+      have hell := Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+        (Finset.mem_univ i)
+      have hh := Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h)
+        (Finset.mem_univ i)
+      omega
+    have hEllN : ell ≤ n := by
+      dsimp [ell, p]
+      exact (Nat.le_add_right _ _).trans hEllH
+    have hprefixLog : (ell : ℝ) ≤ Real.log (n : ℝ) := by
+      have hp := Q.prefix_bound i
+      have hsqrt : Real.sqrt (Real.log (n : ℝ)) ≤ Real.log (n : ℝ) := by
+        have hsqrtOne : 1 ≤ Real.sqrt (Real.log (n : ℝ)) := by
+          simpa using Real.sqrt_le_sqrt hlogn
+        have hsqrtSq : (Real.sqrt (Real.log (n : ℝ))) ^ 2 = Real.log (n : ℝ) :=
+          Real.sq_sqrt (by linarith [hlogn])
+        nlinarith [hsqrtSq, hsqrtOne]
+      exact hp.trans hsqrt
+    have hpowEll := Lane_q_s16_geom.two_pow_le_of_log (by omega) hprefixLog
+    have hpowEllNat : 2 ^ ell ≤ n := by exact_mod_cast hpowEll
+    have hpowEllReal : (2 : ℝ) ^ ell ≤ (n : ℝ) := by exact_mod_cast hpowEllNat
+    have hdleExp : (d : ℝ) ≤ Real.exp (Real.sqrt (Real.log (n : ℝ))) := by
+      exact Q.bin_count_bound i
+    have hdleNReal : (d : ℝ) ≤ (n : ℝ) := by
+      calc
+        (d : ℝ) ≤ Real.exp (Real.sqrt (Real.log (n : ℝ))) := hdleExp
+        _ ≤ Real.exp (Real.log (n : ℝ)) := Real.exp_le_exp.mpr (by
+          have hsqrtOne : 1 ≤ Real.sqrt (Real.log (n : ℝ)) := by
+            simpa using Real.sqrt_le_sqrt hlogn
+          have hsqrtSq : (Real.sqrt (Real.log (n : ℝ))) ^ 2 = Real.log (n : ℝ) :=
+            Real.sq_sqrt (by linarith [hlogn])
+          nlinarith [hsqrtSq, hsqrtOne])
+        _ = (n : ℝ) := Real.exp_log (by positivity)
+    have hMlower : (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) ≤ (p.M : ℝ) :=
+      Lane_q_s16_geom.patch_mass_lower_bound PT Q.profiled_valid n (by rfl) C0 (by rfl)
+        hC0 (by simpa [n] using hhost) i hEllN
+    have hdPos : 0 < d := Lane_q_s16_geom.bin_size_pos PT Q.profiled_valid i
+    have hdPosReal : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hdPos
+    have hBinMulNat := Lane_q_s16_geom.bin_card_mul_bin_size PT Q.profiled_valid i
+    have hBinEq : (Fintype.card (Bin PT.tiling i) : ℝ) = (p.M : ℝ) / d := by
+      have hBinMul : (Fintype.card (Bin PT.tiling i) : ℝ) * (d : ℝ) = (p.M : ℝ) :=
+        by exact_mod_cast hBinMulNat
+      calc
+        (Fintype.card (Bin PT.tiling i) : ℝ) =
+            (Fintype.card (Bin PT.tiling i) : ℝ) * (d : ℝ) / d :=
+          (mul_div_cancel_right₀ _ hdPosReal.ne').symm
+        _ = (p.M : ℝ) / d := congrArg (fun z : ℝ => z / d) hBinMul
+    have hpowNonneg : 0 ≤ Real.rpow (n : ℝ) κ.Ac :=
+      Real.rpow_nonneg (Nat.cast_nonneg n) _
+    have hxnonneg : 0 ≤ x := by
+      dsimp [x]
+      exact div_nonneg (mul_nonneg hKpos.le hpowNonneg) (Nat.cast_nonneg _)
+    have hxNorm : x = κ.Kcell * (n : ℝ) ^ 200 / d := by
+      dsimp [x]
+      rw [hκ.Ac_eq]
+      simp [Real.rpow_natCast]
+    have hceilNat : q ≤ ⌊x⌋₊ + 1 := by
+      dsimp [q]
+      exact Nat.ceil_le_floor_add_one x
+    have hceilReal : (q : ℝ) ≤ x + 1 := by
+      calc
+        (q : ℝ) ≤ (⌊x⌋₊ + 1 : ℕ) := by exact_mod_cast hceilNat
+        _ = (⌊x⌋₊ : ℝ) + 1 := by simp
+        _ ≤ x + 1 := by linarith [Nat.floor_le hxnonneg]
+    have hqMul : (q : ℝ) * (d : ℝ) ≤ κ.Kcell * (n : ℝ) ^ 200 + d := by
+      calc
+        (q : ℝ) * (d : ℝ) ≤ (x + 1) * (d : ℝ) :=
+          mul_le_mul_of_nonneg_right hceilReal hdPosReal.le
+        _ = κ.Kcell * (n : ℝ) ^ 200 + d := by
+          rw [hxNorm]
+          field_simp [ne_of_gt hdPosReal]
+          <;> ring
+    have hAeq : A =
+        3 * (2 : ℝ) ^ (n - ell) / (n : ℝ) ^ 200 + E := by
+      dsimp [A]
+      rw [hκ.Ac_eq]
+      simp [Real.rpow_natCast]
+    have hCapProduct := Lane_q_s16_geom.capacity_product_bound
+      (n := n) (ell := ell) (K := κ.Kcell) (E := E) (d := d)
+      (by omega) hEllN hpowEllReal hdleNReal hKpos (by positivity)
+      (by simpa [E, L] using hcapacity)
+    have hApos : 0 ≤ A := by dsimp [A]; positivity
+    have hTargetMul : A * (q : ℝ) * (d : ℝ) ≤ (p.M : ℝ) := by
+      calc
+        A * (q : ℝ) * (d : ℝ) = A * ((q : ℝ) * (d : ℝ)) := by ring
+        _ ≤ A * (κ.Kcell * (n : ℝ) ^ 200 + d) :=
+          mul_le_mul_of_nonneg_left hqMul hApos
+        _ ≤ (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) := by rw [hAeq]; exact hCapProduct
+        _ ≤ (p.M : ℝ) := hMlower
+    change A * (q : ℝ) ≤ Fintype.card (Bin PT.tiling i)
+    calc
+      A * (q : ℝ) ≤ (p.M : ℝ) / d :=
+        (le_div_iff₀ hdPosReal).2 (by simpa [mul_assoc] using hTargetMul)
+      _ = Fintype.card (Bin PT.tiling i) := hBinEq.symm
   · intro i
     have hparts : (PT.tiling.P i).bins.parts.Nonempty := by
       by_contra hparts
@@ -564,7 +668,126 @@ theorem low_geometry_thresholds {κ : CConsts} (hκ : κ.Admissible) :
           x + 1 := by simpa [x] using hceilReal
       _ ≤ κ.Kcell * (n : ℝ) ^ 200 + 1 := by linarith [hxle]
       _ ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 10) := by simpa [L] using hscope
-  · sorry
+  · intro i
+    let p := PT.tiling.P i
+    let ell := p.ℓ
+    let d := p.d
+    have hEllH : (PT.tiling.P i).ℓ + (PT.tiling.P i).h ≤ n := by
+      have hlen := Q.profiled_valid.tiling_valid.prefix_internal_length
+      have hell := Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+        (Finset.mem_univ i)
+      have hh := Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h)
+        (Finset.mem_univ i)
+      omega
+    have hEllN : ell ≤ n := by
+      dsimp [ell, p]
+      exact (Nat.le_add_right _ _).trans hEllH
+    have hprefixLog : (ell : ℝ) ≤ Real.log (n : ℝ) := by
+      have hp := Q.prefix_bound i
+      have hsqrt : Real.sqrt (Real.log (n : ℝ)) ≤ Real.log (n : ℝ) := by
+        have hsqrtOne : 1 ≤ Real.sqrt (Real.log (n : ℝ)) := by
+          simpa using Real.sqrt_le_sqrt hlogn
+        have hsqrtSq : (Real.sqrt (Real.log (n : ℝ))) ^ 2 = Real.log (n : ℝ) :=
+          Real.sq_sqrt (by linarith [hlogn])
+        nlinarith [hsqrtSq, hsqrtOne]
+      exact hp.trans hsqrt
+    have hpowEll := Lane_q_s16_geom.two_pow_le_of_log (by omega) hprefixLog
+    have hpowEllNat : 2 ^ ell ≤ n := by exact_mod_cast hpowEll
+    have hpowEllReal : (2 : ℝ) ^ ell ≤ (n : ℝ) := by exact_mod_cast hpowEllNat
+    have hdleExp : (d : ℝ) ≤ Real.exp (Real.sqrt (Real.log (n : ℝ))) := by
+      exact Q.bin_count_bound i
+    have hdleNReal : (d : ℝ) ≤ (n : ℝ) := by
+      calc
+        (d : ℝ) ≤ Real.exp (Real.sqrt (Real.log (n : ℝ))) := hdleExp
+        _ ≤ Real.exp (Real.log (n : ℝ)) := Real.exp_le_exp.mpr (by
+          have hsqrtOne : 1 ≤ Real.sqrt (Real.log (n : ℝ)) := by
+            simpa using Real.sqrt_le_sqrt hlogn
+          have hsqrtSq : (Real.sqrt (Real.log (n : ℝ))) ^ 2 = Real.log (n : ℝ) :=
+            Real.sq_sqrt (by linarith [hlogn])
+          nlinarith [hsqrtSq, hsqrtOne])
+        _ = (n : ℝ) := Real.exp_log (by positivity)
+    have hdleN : d ≤ n := by exact_mod_cast hdleNReal
+    have hMlower : (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) ≤ (p.M : ℝ) :=
+      Lane_q_s16_geom.patch_mass_lower_bound PT Q.profiled_valid n (by rfl) C0 (by rfl)
+        hC0 (by simpa [n] using hhost) i hEllN
+    have hparts : p.bins.parts.Nonempty := by
+      by_contra hparts
+      have hpartsEmpty : p.bins.parts = ∅ :=
+        Finset.not_nonempty_iff_eq_empty.mp hparts
+      have hYempty : p.Y = ∅ := by
+        rw [← p.bins.sup_parts]
+        simp [hpartsEmpty]
+      exact (Q.profiled_valid.tiling_valid.patch_nonempty i).2.ne_empty hYempty
+    have hdPos : 0 < d := by
+      by_contra hd
+      have hdzero : d = 0 := by omega
+      obtain ⟨B, hB⟩ := hparts
+      have hcard := Q.profiled_valid.tiling_valid.bins_card i B hB
+      have hdVal : (PT.tiling.P i).d = 0 := by simpa [d, p] using hdzero
+      have hBzero : B.card = 0 := hcard.trans hdVal
+      have hBempty : B = ∅ := Finset.card_eq_zero.mp hBzero
+      have hBot : (∅ : Finset (Fin (T.S.N k))) ∈ p.bins.parts := by simpa [hBempty] using hB
+      exact p.bins.bot_notMem hBot
+    have hBinMulNat := Lane_q_s16_geom.bin_card_mul_bin_size PT Q.profiled_valid i
+    have hBinMul : (Fintype.card (Bin PT.tiling i) : ℝ) * (d : ℝ) = (p.M : ℝ) := by
+      exact_mod_cast hBinMulNat
+    have hdPosReal : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hdPos
+    have hBinEq : (Fintype.card (Bin PT.tiling i) : ℝ) = (p.M : ℝ) / d := by
+      calc
+        (Fintype.card (Bin PT.tiling i) : ℝ) =
+            (Fintype.card (Bin PT.tiling i) : ℝ) * (d : ℝ) / d :=
+          (mul_div_cancel_right₀ _ hdPosReal.ne').symm
+        _ = (p.M : ℝ) / d := congrArg (fun x : ℝ => x / d) hBinMul
+    have hpowSplit : (2 : ℝ) ^ n = (2 : ℝ) ^ (n - ell) * (2 : ℝ) ^ ell := by
+      have hs : n - ell + ell = n := Nat.sub_add_cancel hEllN
+      calc
+        (2 : ℝ) ^ n = (2 : ℝ) ^ (n - ell + ell) := by
+          conv_lhs => rw [← hs]
+        _ = (2 : ℝ) ^ (n - ell) * (2 : ℝ) ^ ell := by rw [pow_add]
+    have hprod : (2 : ℝ) ^ ell * (d : ℝ) ≤ (n : ℝ) ^ 2 := by
+      calc
+        (2 : ℝ) ^ ell * (d : ℝ) ≤ (2 : ℝ) ^ ell * (n : ℝ) :=
+          mul_le_mul_of_nonneg_left hdleNReal (by positivity)
+        _ ≤ (n : ℝ) ^ 2 := by
+          simpa [pow_two] using mul_le_mul_of_nonneg_right hpowEllReal (Nat.cast_nonneg n)
+    have hcoeff : (1 : ℝ) ≤ 6 * κ.Kcell + 2 :=
+      Lane_q_s16_geom.one_le_six_mul_add_two hKpos
+    have hCross : (2 : ℝ) ^ n * (d : ℝ) ≤
+        (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2 := by
+      rw [hpowSplit]
+      calc
+        (2 : ℝ) ^ (n - ell) * (2 : ℝ) ^ ell * (d : ℝ) =
+            (2 : ℝ) ^ (n - ell) * ((2 : ℝ) ^ ell * (d : ℝ)) := by ring
+        _ ≤
+            (2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2 :=
+          mul_le_mul_of_nonneg_left hprod (by positivity)
+        _ ≤ (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2 := by
+          calc
+            (2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2 =
+                1 * ((2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2) := by ring
+            _ ≤ (6 * κ.Kcell + 2) * ((2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2) :=
+              mul_le_mul_of_nonneg_right hcoeff
+                (mul_nonneg (pow_nonneg (by norm_num) _) (sq_nonneg (n : ℝ)))
+            _ = (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) * (n : ℝ) ^ 2 := by ring
+    have hratio : (2 : ℝ) ^ n / (n : ℝ) ^ 2 ≤
+        (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) / d := by
+      rw [div_le_div_iff₀ (by positivity) hdPosReal]
+      exact hCross
+    have hcomp : 2 * (Real.exp (Real.rpow (Real.log (n : ℝ)) 10) + 1) ^ 2 ≤
+        (2 : ℝ) ^ n / (n : ℝ) ^ 2 := by
+      rw [le_div_iff₀ (by positivity)]
+      simpa [n] using hcomparison
+    have hcoeff : 2 ≤ 6 * κ.Kcell + 2 := by
+      have hnonneg : 0 ≤ 6 * κ.Kcell := mul_nonneg (by norm_num) hKpos.le
+      linarith
+    have hMdiv : (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) / d ≤ (p.M : ℝ) / d :=
+      div_le_div_of_nonneg_right hMlower hdPosReal.le
+    calc
+      2 * (Real.exp (Real.rpow (Real.log (n : ℝ)) 10) + 1) ^ 2 ≤
+          (2 : ℝ) ^ n / (n : ℝ) ^ 2 := hcomp
+      _ ≤ (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - ell) / d := hratio
+      _ ≤ (p.M : ℝ) / d := hMdiv
+      _ = Fintype.card (Bin PT.tiling i) := hBinEq.symm
 
 /-- L16.1a data: coordinate IDs, the hyperplane, and ordered syndrome classes. -/
 structure SyndromeData {κ : CConsts} {T : Stage} {k : ℕ}

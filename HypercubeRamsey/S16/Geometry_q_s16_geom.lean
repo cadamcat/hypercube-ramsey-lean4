@@ -406,4 +406,183 @@ theorem exists_paired_group_dimension {n : ℕ} (hn : 4 ≤ n) :
   · rw [hpow]
     exact Nat.mul_lt_mul_of_pos_left hpred (by norm_num)
 
+theorem bin_card_mul_bin_size {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    (Fintype.card (Bin PT.tiling i) : ℕ) * (PT.tiling.P i).d =
+      (PT.tiling.P i).M := by
+  classical
+  let p := PT.tiling.P i
+  have hcard : Fintype.card (Bin PT.tiling i) = p.bins.parts.card := by
+    change Fintype.card {B : Finset (Fin (T.S.N k)) // B ∈ p.bins.parts} = _
+    rw [Fintype.card_subtype]
+    simp
+  calc
+    Fintype.card (Bin PT.tiling i) * p.d = p.bins.parts.card * p.d := by rw [hcard]
+    _ = ∑ B ∈ p.bins.parts, p.d := by simp
+    _ = ∑ B ∈ p.bins.parts, B.card := by
+      apply Finset.sum_congr rfl
+      intro B hB
+      rw [hPT.tiling_valid.bins_card i B hB]
+    _ = p.Y.card := p.bins.sum_card_parts
+    _ = p.M := p.cardY
+
+theorem two_pow_sub_zpow {n ell : ℕ} (hell : ell ≤ n) :
+    (2 : ℝ) ^ n * (2 : ℝ) ^ (-(ell : ℤ)) = (2 : ℝ) ^ (n - ell) := by
+  simpa [zpow_neg, zpow_natCast] using
+    (pow_sub₀ (2 : ℝ) (by norm_num) hell).symm
+
+theorem bin_size_pos {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    0 < (PT.tiling.P i).d := by
+  classical
+  let p := PT.tiling.P i
+  have hparts : p.bins.parts.Nonempty := by
+    by_contra hparts
+    have hpartsEmpty : p.bins.parts = ∅ := Finset.not_nonempty_iff_eq_empty.mp hparts
+    have hYempty : p.Y = ∅ := by
+      rw [← p.bins.sup_parts]
+      simp [hpartsEmpty]
+    exact hPT.tiling_valid.patch_nonempty i |>.2.ne_empty hYempty
+  by_contra hd
+  have hdzero : p.d = 0 := Nat.eq_zero_of_le_zero (Nat.not_lt.mp hd)
+  obtain ⟨B, hB⟩ := hparts
+  have hcard := hPT.tiling_valid.bins_card i B hB
+  have hBzero : B.card = 0 := hcard.trans hdzero
+  have hBempty : B = ∅ := Finset.card_eq_zero.mp hBzero
+  have hBot : (∅ : Finset (Fin (T.S.N k))) ∈ p.bins.parts := by simpa [hBempty] using hB
+  exact p.bins.bot_notMem hBot
+
+theorem patch_mass_lower_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (n : ℕ) (hn : n = T.S.n k) (C0 : ℝ) (hC0 : C0 = 800 * (6 * κ.Kcell + 2))
+    (hC0pos : 0 < C0) (hhost : C0 * (2 : ℝ) ^ n ≤ (T.S.N k : ℝ))
+    (i : Fin PT.tiling.m) (hell : (PT.tiling.P i).ℓ ≤ n) :
+    (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) ≤
+      (PT.tiling.P i).M := by
+  have hNpos : (0 : ℝ) < (T.S.N k : ℝ) :=
+    lt_of_lt_of_le (mul_pos hC0pos (pow_pos (by norm_num : (0 : ℝ) < 2) _)) hhost
+  have hSpos : (0 : ℝ) < (PT.tiling.S : ℝ) :=
+    lt_of_lt_of_le (mul_pos (by norm_num : (0 : ℝ) < 1 / 400) hNpos) hPT.tiling_valid.S_lower
+  have hdyad := hPT.tiling_valid.dyadic_mass_upper i
+  have hdyadMul : (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) * (PT.tiling.S : ℝ) <
+      2 * (PT.tiling.P i).M := by
+    have hmul := mul_lt_mul_of_pos_right hdyad hSpos
+    calc
+      (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) * (PT.tiling.S : ℝ) <
+          (2 * (PT.tiling.P i).M / (PT.tiling.S : ℝ)) * (PT.tiling.S : ℝ) := hmul
+      _ = 2 * (PT.tiling.P i).M := by field_simp [ne_of_gt hSpos]
+  have hSloHalf : (T.S.N k : ℝ) / 800 ≤ (PT.tiling.S : ℝ) / 2 := by
+    linarith [hPT.tiling_valid.S_lower]
+  have hmassHalf : (PT.tiling.S : ℝ) / 2 *
+      (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) < (PT.tiling.P i).M := by
+    nlinarith [hdyadMul]
+  have hmassBase : ((T.S.N k : ℝ) / 800) *
+      (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) ≤ (PT.tiling.P i).M :=
+    (mul_le_mul_of_nonneg_right hSloHalf (by positivity)).trans hmassHalf.le
+  have hhostDiv : (C0 / 800) * (2 : ℝ) ^ n ≤ (T.S.N k : ℝ) / 800 := by
+    nlinarith [hhost]
+  have hhostMass : (C0 / 800) * (2 : ℝ) ^ n *
+      (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) ≤
+        ((T.S.N k : ℝ) / 800) * (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) :=
+    mul_le_mul_of_nonneg_right hhostDiv (by positivity)
+  have hC0eq : C0 / 800 = 6 * κ.Kcell + 2 := by rw [hC0]; ring
+  calc
+    (6 * κ.Kcell + 2) * (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) =
+        (C0 / 800) * (2 : ℝ) ^ n * (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) := by
+          calc
+            _ = (C0 / 800) * (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) := by rw [hC0eq]
+            _ = (C0 / 800) * ((2 : ℝ) ^ n *
+                  (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ))) :=
+              congrArg (fun x : ℝ => (C0 / 800) * x)
+                (two_pow_sub_zpow hell).symm
+            _ = _ := by ring
+    _ ≤ ((T.S.N k : ℝ) / 800) *
+          (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) := hhostMass
+    _ ≤ (PT.tiling.P i).M := hmassBase
+
+theorem one_le_six_mul_add_two {K : ℝ} (hK : 0 < K) : 1 ≤ 6 * K + 2 := by
+  nlinarith
+
+theorem capacity_product_bound {n ell : ℕ} {K E d : ℝ}
+    (hn : 4 ≤ n) (hell : ell ≤ n) (hpowEll : (2 : ℝ) ^ ell ≤ (n : ℝ))
+    (hd : d ≤ (n : ℝ)) (hK : 0 < K) (hE : 0 ≤ E)
+    (hcapacity : 2 * (K + 1) * (n : ℝ) ^ 201 * E ≤ (2 : ℝ) ^ n) :
+    (3 * (2 : ℝ) ^ (n - ell) / (n : ℝ) ^ 200 + E) *
+      (K * (n : ℝ) ^ 200 + d) ≤ (6 * K + 2) * (2 : ℝ) ^ (n - ell) := by
+  let N : ℝ := n
+  let u : ℝ := (2 : ℝ) ^ (n - ell)
+  have hNpos : 0 < N := by dsimp [N]; positivity
+  have hNone : 1 ≤ N := by
+    dsimp [N]
+    exact_mod_cast (show 1 ≤ n by omega)
+  have hNfour : (4 : ℝ) ≤ N := by
+    dsimp [N]
+    exact_mod_cast hn
+  have hDsmall : 3 * d ≤ N ^ 200 := by
+    have h199 : (3 : ℝ) ≤ N ^ 199 := by
+      calc
+        3 ≤ 4 ^ 199 := by norm_num
+        _ ≤ N ^ 199 := by gcongr
+    calc
+      3 * d ≤ 3 * N := mul_le_mul_of_nonneg_left hd (by norm_num)
+      _ ≤ N ^ 199 * N := mul_le_mul_of_nonneg_right h199 (Nat.cast_nonneg n)
+      _ = N ^ 200 := by ring
+  have hfirstFactor : K * N ^ 200 + d ≤ (K + 1 / 3) * N ^ 200 := by
+    nlinarith [hDsmall]
+  have hfirst : (3 * u / N ^ 200) * (K * N ^ 200 + d) ≤ (3 * K + 1) * u := by
+    calc
+      (3 * u / N ^ 200) * (K * N ^ 200 + d) ≤
+          (3 * u / N ^ 200) * ((K + 1 / 3) * N ^ 200) :=
+        mul_le_mul_of_nonneg_left hfirstFactor (by positivity)
+      _ = (3 * K + 1) * u := by
+        have hNpow : N ^ 200 ≠ 0 := (pow_pos hNpos _).ne'
+        field_simp [hNpow]
+        <;> ring
+  have hNlePow : N ≤ N ^ 200 := by
+    calc
+      N = N * 1 := by ring
+      _ ≤ N * N ^ 199 := mul_le_mul_of_nonneg_left (one_le_pow₀ hNone) hNpos.le
+      _ = N ^ 200 := by ring
+  have hsecondFactor : K * N ^ 200 + d ≤ (K + 1) * N ^ 200 := by
+    have hdleN200 : d ≤ N ^ 200 := hd.trans hNlePow
+    calc
+      K * N ^ 200 + d ≤ K * N ^ 200 + N ^ 200 :=
+        by nlinarith [hdleN200]
+      _ = (K + 1) * N ^ 200 := by ring
+  have hpowSplit : (2 : ℝ) ^ n = u * (2 : ℝ) ^ ell := by
+    calc
+      (2 : ℝ) ^ n = (2 : ℝ) ^ (n - ell + ell) :=
+        congrArg (fun m : ℕ => (2 : ℝ) ^ m) (Nat.sub_add_cancel hell).symm
+      _ = u * (2 : ℝ) ^ ell := by simp [u, pow_add]
+  have hcapacityBase : 2 * (K + 1) * N ^ 201 * E ≤ u * N := by
+    calc
+      2 * (K + 1) * N ^ 201 * E ≤ (2 : ℝ) ^ n := by simpa [N] using hcapacity
+      _ = u * (2 : ℝ) ^ ell := hpowSplit
+      _ ≤ u * N := mul_le_mul_of_nonneg_left hpowEll (by positivity)
+  have hden : 0 < 2 * N := by positivity
+  have hcapacityDiv :
+      (2 * (K + 1) * N ^ 201 * E) / (2 * N) ≤ (u * N) / (2 * N) :=
+    div_le_div_of_nonneg_right hcapacityBase (by positivity)
+  have hsecond : E * (K * N ^ 200 + d) ≤ u / 2 := by
+    calc
+      E * (K * N ^ 200 + d) ≤ E * ((K + 1) * N ^ 200) :=
+        mul_le_mul_of_nonneg_left hsecondFactor hE
+      _ = (2 * (K + 1) * N ^ 201 * E) / (2 * N) := by
+        have hNne : N ≠ 0 := ne_of_gt hNpos
+        field_simp [hNne]
+        <;> ring
+      _ ≤ (u * N) / (2 * N) := hcapacityDiv
+      _ = u / 2 := by field_simp [ne_of_gt hNpos]
+  have hfinal : (3 * K + 1) * u + u / 2 ≤ (6 * K + 2) * u := by
+    have hu : 0 ≤ u := by dsimp [u]; positivity
+    nlinarith [hK, hu]
+  calc
+    (3 * (2 : ℝ) ^ (n - ell) / (n : ℝ) ^ 200 + E) *
+        (K * (n : ℝ) ^ 200 + d) =
+        (3 * u / N ^ 200) * (K * N ^ 200 + d) + E * (K * N ^ 200 + d) := by
+          simp [u, N]
+          <;> ring
+    _ ≤ (3 * K + 1) * u + u / 2 := add_le_add hfirst hsecond
+    _ ≤ (6 * K + 2) * (2 : ℝ) ^ (n - ell) := by simpa [u] using hfinal
+
 end HypercubeRamsey.Lane_q_s16_geom

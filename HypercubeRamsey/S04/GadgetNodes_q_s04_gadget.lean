@@ -3212,6 +3212,21 @@ private theorem side_stable_of_gap (S a x y : ℕ) (hS : 4 ≤ S)
     have hy : a * S + S / 2 < y := by omega
     exact ⟨fun _ => hy, fun _ => hx⟩
 
+private theorem unit_below_multiple_same_side (S t a : ℕ) (hS : 4 ≤ S) :
+    (a * S + S / 2 < t * S - 1) ↔ (a * S + S / 2 < t * S) := by
+  by_cases hta : t ≤ a
+  · have hmul := Nat.mul_le_mul_right S hta
+    have hnot₁ : ¬ a * S + S / 2 < t * S := by omega
+    have hnot₂ : ¬ a * S + S / 2 < t * S - 1 := by omega
+    constructor <;> intro h <;> omega
+  · have hat : a + 1 ≤ t := by omega
+    have hmul := Nat.mul_le_mul_right S hat
+    have hscale : (a + 1) * S = a * S + S := by
+      rw [Nat.add_mul]
+      simp
+    have hgap : a * S + S / 2 < t * S - 1 := by omega
+    exact ⟨fun _ => by omega, fun _ => hgap⟩
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by
@@ -3427,12 +3442,18 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
           (HypercubeRamsey.cubeFlip v i)) r =
           mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 ∧
         HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
-          HypercubeRamsey.S04.clipped β γ n g j v + 1) ∨
+          HypercubeRamsey.S04.clipped β γ n g j v + 1 ∧
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+          HypercubeRamsey.S04.clipped β γ n g j v) ∨
        (mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
           mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
             (HypercubeRamsey.cubeFlip v i)) r + 1 ∧
         HypercubeRamsey.S04.clipped β γ n g j v =
-          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1)) := by
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1 ∧
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+            (HypercubeRamsey.cubeFlip v i)) r =
+          HypercubeRamsey.S04.clipped β γ n g j
+            (HypercubeRamsey.cubeFlip v i))) := by
   classical
   let f : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
     fun j => HypercubeRamsey.S04.clipped β γ n g j v
@@ -3477,7 +3498,7 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
       refine ⟨j, r, ?_, ?_⟩
       · intro t htr
         exact hrest t htr
-      · exact Or.inl ⟨hrank, hup⟩
+      · exact Or.inl ⟨hrank, hup, hold⟩
     · have hdown : f j = h j + 1 := by
         rcases hdir with hinc | hdec
         · exact False.elim (hup hinc)
@@ -3515,7 +3536,7 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
       refine ⟨j, r, ?_, ?_⟩
       · intro t htr
         exact (hrest t htr).symm
-      · exact Or.inr ⟨hrank, hdown⟩
+      · exact Or.inr ⟨hrank, hdown, hlow⟩
 
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by

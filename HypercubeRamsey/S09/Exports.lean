@@ -3,16 +3,18 @@ import HypercubeRamsey.S09.Nodes
 /-!
 # Proposition 9.2 exports
 
-The exported statements are assembled from parameter selection and the
-single-dimension core.  The assembly proofs themselves have no `sorry`.
+The exported statements are assembled from parameter selection (upgraded to admissible
+parameters in the sublinear case) and the single-dimension core.  The assembly proofs
+themselves have no `sorry`.
 -/
 
 namespace HypercubeRamsey
 
 open Filter
 
-private theorem no_available_of_intermediate_core (T : Stage) (P : Params9)
-    (hP : P.Valid) (hDeep : P.DeepOnStage T) (hBroad : P.BroadOnStage T) :
+/-- P9.2a/b assembly: the core and the one-shot bridge exclude availability of the shallow bias property. -/
+theorem no_available_of_intermediate_core (T : Stage) (P : Params9)
+    (hP : P.Valid) (hA : P.CoreAdmissible) (hDeep : P.DeepOnStage T) (hBroad : P.BroadOnStage T) :
     ¬ Available T P.BiasProperty := by
   have hDeepEvent : ∀ᶠ k in atTop,
       P.DeepAt (T.S.n k) (T.S.N k) (T.S.E k) (T.X k) (T.Y k) := by
@@ -38,7 +40,7 @@ private theorem no_available_of_intermediate_core (T : Stage) (P : Params9)
         LargeAt n₀ C₀ n N → P.SideAt n N E X Y →
           AvailableAt κ P.BiasProperty n N E X Y → CubeAt n N E := by
     intro κ hκ
-    obtain ⟨n₀, C₀, hcore⟩ := intermediate_core P hP κ hκ
+    obtain ⟨n₀, C₀, hcore⟩ := intermediate_core P hP hA κ hκ
     refine ⟨n₀, C₀, ?_⟩
     intro n N E X Y hLarge hSide hAvail
     exact hcore n N E X Y hLarge hSide.1 hSide.2 hAvail
@@ -48,12 +50,13 @@ private theorem no_available_of_intermediate_core (T : Stage) (P : Params9)
 /-- P9.2a (09:22–28): exclude `H† < 1` in the chosen orientation. -/
 theorem not_HdagLtOne (T : Stage) (hT : StabilizedOn T FamB) : ¬ HdagLtOne T := by
   intro hH
-  obtain ⟨P, hP, hSub, hSel⟩ := p92_select_sublinear T hT hH
+  obtain ⟨P₀, hP₀, _hSub₀, hSel₀⟩ := p92_select_sublinear T hT hH
+  obtain ⟨P, hP, _hSub, hSel, hA⟩ := p92_admissible_sublinear T P₀ hP₀ hSel₀
   obtain ⟨yS, yD, yM, hcase, hAvail, hDeep⟩ := hSel
   have hDeepP : P.DeepOnStage T := hDeep
   have hBroadP : P.BroadOnStage T := by
     simp [Params9.BroadOnStage, hcase]
-  have hNo := no_available_of_intermediate_core T P hP hDeepP hBroadP
+  have hNo := no_available_of_intermediate_core T P hP hA hDeepP hBroadP
   have hAvailP : Available T P.BiasProperty := by
     simpa [AvP, Params9.BiasProperty, hcase] using hAvail
   exact hNo hAvailP
@@ -65,7 +68,8 @@ theorem not_intermediate_linear (T : Stage) (hT : StabilizedOn T FamB)
   obtain ⟨αS, αD, hB, yB, hcase, hAvail, hDeep, hBroad⟩ := hSel
   have hDeepP : P.DeepOnStage T := hDeep
   have hBroadP : P.BroadOnStage T := hBroad
-  have hNo := no_available_of_intermediate_core T P hP hDeepP hBroadP
+  have hA : P.CoreAdmissible := by simp [Params9.CoreAdmissible, hcase]
+  have hNo := no_available_of_intermediate_core T P hP hA hDeepP hBroadP
   have hAvailP : Available T P.BiasProperty := by
     simpa [AvL, Params9.BiasProperty, hcase] using hAvail
   exact hNo hAvailP

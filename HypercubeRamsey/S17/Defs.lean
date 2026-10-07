@@ -4,9 +4,10 @@ import HypercubeRamsey.PartC.Resampling
 # Section 17 initial list gates and finite experiment data
 
 The list event is evaluated from the fresh-cell state readouts of D16.F.  An
-external early neighbour is a cube neighbour in another patch which has not
-been assigned a late class.  `FreshCell.prior` is the Section 16 readout and,
-by that interface's contract, already includes the dummy hit at late internal
+external early neighbour is a noninternal coordinate flip, including bulk
+neighbours in the same patch, which has not been assigned a late class.
+`FreshCell.prior` is the Section 16 readout; the quantitative certificate in
+`Needs.lean` requires its solver origin and the dummy hit at late internal
 neighbours.
 -/
 
@@ -27,6 +28,7 @@ and the fresh state sampler with its state and permission contracts. -/
 structure ListGateContext (κ : CConsts) (T : Stage) (k : ℕ)
     (PT : ProfiledTiling κ T k) where
   tiling_valid : PT.Valid
+  mode_low : PT.tiling.mode.isLow
   G : LowGeom PT
   F : FreshCell G
   stateValid : ∀ C : G.Cell, F.Pool C → F.State C → Prop
@@ -46,10 +48,11 @@ noncomputable def lawAsFinLaw {N : ℕ} (μ : Law N) : FinLaw (Fin N) where
   sum_one := μ.sum_eq_one
 
 /-- External early neighbours of an even role (D17.L).  Internal neighbours
-belong to the same patch; late external neighbours are deliberately omitted. -/
+flip the allocated internal coordinates; bulk and crossing flips are external. -/
 noncomputable def externalEarly (v : Pos T k) : Finset (Pos T k) :=
   Finset.univ.filter fun w =>
-    hammingDist v w = 1 ∧ D.G.patchOf w ≠ D.G.patchOf v ∧ D.G.classOf w = none
+    D.G.classOf w = none ∧ ∃ j : Fin (T.S.n k),
+      j ∉ PT.tiling.Icoord (D.G.patchOf v) ∧ w = flipPos v j
 
 /-- The cell scope read by `S_v`: its own cell and the cells carrying the
 external early labels. -/
@@ -84,7 +87,7 @@ noncomputable def rowMass (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
 noncomputable def omittedList (v : Pos T k) (J : Finset (Pos T k))
     (ys : Pos T k → Fin (T.S.N k)) : Finset (Fin (T.S.N k)) :=
   Finset.univ.filter fun x =>
-    x ∈ (PT.tiling.P (D.G.patchOf v)).X ∧
+    x ∈ PT.envelope (D.G.patchOf v) ∧
       ∀ w ∈ D.externalEarly v \ J, Hits (T.S.E k) PT.tiling.c x (ys w)
 
 /-- The Section 17 list event on a fixed row and external labels. -/
@@ -183,33 +186,34 @@ noncomputable def asListEvent : ListEvent D.F := by
   · rintro ⟨heven, hbad⟩
     exact ⟨heven, hgate.mpr hbad⟩
 
-/-- Initial prior hypotheses used uniformly in L17.1 and L17.3. -/
-def ValidInitialPrior (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) : Prop :=
-  (∀ x, 0 ≤ σ x) ∧
-  (∑ x, σ x = 1) ∧
-  (PT.tiling.P (D.G.patchOf v)).X.Nonempty ∧
-  (∃ P : D.F.Pool (D.G.cellOf v), ∃ s : D.F.State (D.G.cellOf v),
-    D.F.typical (D.G.cellOf v) P ∧
-    D.stateValid (D.G.cellOf v) P s ∧
-    (∀ x, σ x = D.F.prior (D.G.cellOf v) s v x)) ∧
-  (∀ x, x ∉ (PT.tiling.P (D.G.patchOf v)).X → σ x = 0) ∧
-  (∃ a : PT.mesh.V, a ∈ PT.activeVertices ∧
-    ∀ x, σ x ≠ 0 → x ∈ PT.mesh.corner a (D.G.patchOf v)) ∧
-  (∀ x, (T.S.N k : ℝ) * σ x ≤
-    2 ^ (PT.tiling.P (D.G.patchOf v)).h *
-      Real.exp (-500 * PT.tiling.gain (D.G.patchOf v)))
+/-- Shape of a cleaned initial probability prior. The exponential cap belongs
+only to cluster mode; in direct/bounded modes the prior is uniform on the
+selected cleaned corner. The cardinality loss is the cleaning input. -/
+def CleanInitialPrior (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) : Prop :=
+  (∀ x, 0 ≤ σ x) ∧ (∑ x, σ x = 1) ∧
+  ∃ a : PT.mesh.V, a ∈ PT.activeVertices ∧
+    (∀ x, σ x ≠ 0 → x ∈ PT.mesh.corner a (D.G.patchOf v)) ∧
+    (PT.tiling.mode.isCluster → ∀ x,
+      (T.S.N k : ℝ) * σ x ≤ 2 ^ (PT.tiling.P (D.G.patchOf v)).h *
+        Real.exp (-500 * PT.tiling.gain (D.G.patchOf v))) ∧
+    (¬ PT.tiling.mode.isCluster →
+      (1 - κ.a) * (PT.tiling.P (D.G.patchOf v)).M ≤
+        (PT.mesh.corner a (D.G.patchOf v)).card ∧
+      ∀ x, σ x = if x ∈ PT.mesh.corner a (D.G.patchOf v) then
+        1 / ((PT.mesh.corner a (D.G.patchOf v)).card : ℝ) else 0)
 
-/-- A row prior represented by a valid fresh state is subprobability by the
-Section 16 sampler contract. -/
+/-- Priors are actual valid own-cell readouts, in addition to their cleaned
+shape. Their solver/dummy-hit origin is supplied by `Needs.lean`. -/
+def ValidInitialPrior (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) : Prop :=
+  D.CleanInitialPrior v σ ∧
+    ∃ P : D.F.Pool (D.G.cellOf v), ∃ s : D.F.State (D.G.cellOf v),
+      D.F.typical (D.G.cellOf v) P ∧ D.stateValid (D.G.cellOf v) P s ∧
+      ∀ x, σ x = D.F.prior (D.G.cellOf v) s v x
+
+/-- Normalization already implies the convenience subprobability bound. -/
 theorem validInitialPriorSubprob (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
     (hσ : D.ValidInitialPrior v σ) : ∑ x, σ x ≤ 1 := by
-  rcases hσ with ⟨_, _, _, ⟨P, s, _, _, hrow⟩, _, _, _⟩
-  calc
-    ∑ x, σ x = ∑ x, D.F.prior (D.G.cellOf v) s v x := by
-      apply Finset.sum_congr rfl
-      intro x hx
-      rw [hrow x]
-    _ ≤ 1 := D.fresh_spec.prior_subprob (D.G.cellOf v) s v
+  exact le_of_eq hσ.1.2.1
 
 /-- Nonemptiness of every patch support, projected from `PT.Valid`. -/
 theorem patchXNonempty (D : ListGateContext κ T k PT) (i : Fin PT.tiling.m) :
@@ -319,50 +323,6 @@ noncomputable def poolSuccess (v : Pos T k) (pools : PoolAssignment D) : Prop :=
 /-- Pool event excluded by the uniform pool estimate. -/
 noncomputable def poolException (v : Pos T k) (pools : PoolAssignment D) : Prop :=
   ¬ D.poolSuccess v pools
-
-/-- Fixed-index Section 16 quantitative validity consumed by the initial-list
-estimates. This is the local interface to be unified with the shared §16
-predicate: it records the probability-prior, clean-corner, and cap contracts
-for valid fresh states. -/
-structure L16QuantitativeValidity : Prop where
-  pool_support_nonempty : (permPools D.G).Nonempty
-  /-- L16.2 pool tail, including one prescribed global slot-to-bin pin. -/
-  pool_typical_tail : ∀ (v : Pos T k),
-    (permPoolLaw D.G pool_support_nonempty).pr
-      (fun pools => ¬ D.LocalPoolsTypical v pools) ≤
-        Real.rpow (T.S.n k : ℝ)
-          (-((κ.R : ℝ) * (initialResamplingRounds T k : ℝ)))
-  pool_typical_tail_pinned : ∀ (v : Pos T k) (pin : D.PoolPin)
-      (hpin : 0 < ∑ pools ∈ D.poolPinSet pin,
-        (permPoolLaw D.G pool_support_nonempty).w pools),
-    (D.pinnedPoolLaw pool_support_nonempty pin hpin).pr
-      (fun pools => ¬ D.LocalPoolsTypical v pools) ≤
-        Real.rpow (T.S.n k : ℝ)
-          (-((κ.R : ℝ) * (initialResamplingRounds T k : ℝ)))
-  /-- The L16.6 singleton comparison with the sampler's permission test. -/
-  singleton_bound : ∀ (C : D.G.Cell) (P : D.F.Pool C) (b : Pos T k)
-      (y : Fin (T.S.N k)), D.F.typical C P → D.G.cellOf b = C →
-    (D.F.fresh C P).pr (fun s => D.F.label C s b = y) ≤
-      (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) * D.slotFactor b *
-        (PT.π (D.G.patchOf b)).w y *
-          (if y ∈ D.permittedLabels C P b then 1 else 0)
-  prior_probability : ∀ (C : D.G.Cell) (P : D.F.Pool C) (s : D.F.State C)
-      (v : Pos T k), D.stateValid C P s → IsEvenRole v → D.G.cellOf v = C →
-      ∑ x, D.F.prior C s v x = 1
-  prior_supported : ∀ (C : D.G.Cell) (P : D.F.Pool C) (s : D.F.State C)
-      (v : Pos T k) (x : Fin (T.S.N k)),
-      D.stateValid C P s → IsEvenRole v → D.G.cellOf v = C →
-      D.F.prior C s v x ≠ 0 → x ∈ (PT.tiling.P (D.G.patchOf v)).X
-  prior_single_corner : ∀ (C : D.G.Cell) (P : D.F.Pool C) (s : D.F.State C)
-      (v : Pos T k), D.stateValid C P s → IsEvenRole v → D.G.cellOf v = C →
-      ∃ a : PT.mesh.V, a ∈ PT.activeVertices ∧
-        ∀ x, D.F.prior C s v x ≠ 0 → x ∈ PT.mesh.corner a (D.G.patchOf v)
-  prior_cap : ∀ (C : D.G.Cell) (P : D.F.Pool C) (s : D.F.State C)
-      (v : Pos T k) (x : Fin (T.S.N k)),
-      D.stateValid C P s → IsEvenRole v → D.G.cellOf v = C →
-      (T.S.N k : ℝ) * D.F.prior C s v x ≤
-        2 ^ (PT.tiling.P (D.G.patchOf v)).h *
-          Real.exp (-500 * PT.tiling.gain (D.G.patchOf v))
 
 /-- Binary word of the internal top coordinates of a patch role. -/
 def internalBits (i : Fin PT.tiling.m) (hle : (PT.tiling.P i).h ≤ T.S.n k)

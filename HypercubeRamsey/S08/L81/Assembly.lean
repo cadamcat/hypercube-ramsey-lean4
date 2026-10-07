@@ -1,4 +1,5 @@
 import HypercubeRamsey.S08.L81.EvenNodes
+import HypercubeRamsey.S08.L81.Assembly_q_s08_asm_realize
 
 /-!
 # Lemma 8.1 assembled
@@ -26,7 +27,7 @@ def C0 (K : ℝ) : ℝ := max (16 * (loadC K + 1)) ((10 : ℝ) ^ 8 * (4 * (oddM 
 /-- The tails of the six failure events sum to less than one for large `n`. -/
 theorem tails_small :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, 3 * Real.exp (-(n : ℝ)) + 4 * ((n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) < 1 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s08_asm.tails_small
 
 section Nodes
 
@@ -52,11 +53,12 @@ theorem realization_of (D : Ctx η₀ β p h) (CL a₁ a₂ a₃ a₄ a₅ a₆ 
       ∀ J : D.Anch → FinProb (OddRole D.n → Fin D.N), (∀ W, D.GoodPre q W → D.ClockOK q W (J W)) →
         ∑ W, (D.anchorLaw q).w W *
             (if D.GoodPre q W then (J W).pr (fun f => ∃ x, 1 < D.evenCol q W f x) else 0) ≤ a₆)
-    (hsum : a₁ + a₂ + a₃ + a₄ + a₅ + a₆ < 1) :
+    (ha₆ : 0 ≤ a₆) (hsum : a₁ + a₂ + a₃ + a₄ + a₅ + a₆ < 1) :
     ∃ (q : D.Pre) (W : D.Anch) (f : OddRole D.n → Fin D.N), D.Good q ∧ (∀ c, ¬ D.CellBad q W c) ∧
       Function.Injective f ∧ (∀ a : EvenRole D.n, ¬ D.PredFail q W a.1 (nbrLabels f a)) ∧
       ∀ x, D.evenCol q W f x ≤ 1 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s08_asm.realization_of D CL a₁ a₂ a₃ a₄ a₅ a₆
+    hpos h1 h2 h3 h4 h5 h6 h7 h8 ha₆ hsum
 
 /-- F-HallEmbed input from a good realization (08:454): the posterior even rows are probability laws on the common
 neighbourhoods of the injective odd labels, with column sums at most one. -/
@@ -114,7 +116,7 @@ theorem l81_core (η₀ γ β p K : ℝ) (hη₀ : 0 < η₀) (hγ₀ : 0 < γ) 
   -- Step 9
   obtain ⟨nSM, hselmean⟩ := select_mean η₀ β p hFix hη₀ hp (hd_admissible η₀ hη₀)
   obtain ⟨nBM, hbmean⟩ := bcomp_mean η₀ γ β p K hFix hη₀ hK
-  obtain ⟨nCT, hcomp⟩ := comp_tail η₀ γ β p K hFix cH hcH hη₀ hK
+  obtain ⟨nCT, hcomp⟩ := comp_tail η₀ γ β p K hFix cH hcH hη₀ hβτ hK
   obtain ⟨nCe, hcenter⟩ := center_tail η₀ γ β p K hFix cR hcR hη₀ hγ₁ hK
   -- Step 10
   obtain ⟨nSL, hstarlik⟩ := starLik_bound η₀ β p hFix hη₀
@@ -206,7 +208,7 @@ theorem l81_core (η₀ γ β p K : ℝ) (hη₀ : 0 < η₀) (hγ₀ : 0 < γ) 
     (fun q hq hLq J hJ => hetail D (by show nET ≤ n; omega) hGF hNle hNeven hECap hPR hSC q hq hLq J hJ
       (even_moment _ _ _ _ D q J hPR (clock_factor _ _ _ _ D q J hJ hPR)
         (heint D (by show nEA ≤ n; omega) hGF cond_product_bound hSCan hPR q hq (hALL q hq))))
-    (by linarith)
+    (by positivity) (by linarith)
   exact hall_of_realization _ _ _ _ D hERL q W f hf hpf hcol
 
 end HypercubeRamsey.S08

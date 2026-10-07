@@ -197,7 +197,7 @@ theorem pi_expect_prod_on_injective_coords {ι κ : Type*} [Fintype ι] [Decidab
             rw [Finset.prod_insert ha]
             ring
 
-private theorem pi_expect_glue_sum {ι : Type*} [Fintype ι] [DecidableEq ι]
+theorem pi_expect_glue_sum {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
     (U : Finset ι) (f : (∀ i, Ω i) → ℝ) (ω₀ : ∀ i, Ω i)
     (hf : FinProb.DependsOn f U) :
@@ -883,7 +883,7 @@ theorem flipOuter_ne_self {n : ℕ} (s : OuterWord n) (j : OuterCoord n) :
   have hval := congrFun h j
   cases hs : s j <;> simp [flipOuter, hs] at hval
 
-private theorem wordDist_flipOuter {n : ℕ} (s : OuterWord n) (j : OuterCoord n) :
+theorem wordDist_flipOuter {n : ℕ} (s : OuterWord n) (j : OuterCoord n) :
     wordDist s (flipOuter s j) = 1 := by
   have hset : (Finset.univ.filter fun k : OuterCoord n => s k ≠ flipOuter s j k) = {j} := by
     ext k
@@ -921,7 +921,36 @@ theorem T2_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
   unfold T2
   simp_rw [hcenter, hcount]
 
-private theorem raw_compA_product_mean {n N : ℕ} {E : Fin N → Fin N → Prop}
+/-- A comparison row `compB` reads only the center tag and its outer neighbors. -/
+theorem compB_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (p : FinProb M.ι) (s : OuterWord n) (x : Fin N) :
+    FinProb.DependsOn (fun t => compB M y₀ p t s x) (wordBall s 1) := by
+  intro t t' hagree
+  have hcenter : t s = t' s := hagree s (by simp [wordBall, wordDist])
+  have hflip (j : OuterCoord n) : flipOuter s j ∈ wordBall s 1 := by
+    simp [wordBall, wordDist_flipOuter]
+  have hprod :
+      (∏ j : OuterCoord n, deg E M.G (piRow M y₀ (t (flipOuter s j))) x /
+        deg E M.G (piBar M y₀ p) x) =
+      ∏ j : OuterCoord n, deg E M.G (piRow M y₀ (t' (flipOuter s j))) x /
+        deg E M.G (piBar M y₀ p) x := by
+    apply Finset.prod_congr rfl
+    intro j hj
+    rw [hagree (flipOuter s j) (hflip j)]
+  unfold compB
+  calc
+    (N : ℝ) * alphaRow M y₀ (t s) x *
+        ∏ j : OuterCoord n, deg E M.G (piRow M y₀ (t (flipOuter s j))) x /
+          deg E M.G (piBar M y₀ p) x =
+      (N : ℝ) * alphaRow M y₀ (t' s) x *
+        ∏ j : OuterCoord n, deg E M.G (piRow M y₀ (t (flipOuter s j))) x /
+          deg E M.G (piBar M y₀ p) x := by rw [hcenter]
+    _ = (N : ℝ) * alphaRow M y₀ (t' s) x *
+        ∏ j : OuterCoord n, deg E M.G (piRow M y₀ (t' (flipOuter s j))) x /
+          deg E M.G (piBar M y₀ p) x := by rw [hprod]
+
+theorem raw_compA_product_mean {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
     (p : FinProb M.ι) (z : Fin N) (m : ℕ) (s : Fin m → OuterWord n)
     (hsep : ∀ i j, i ≠ j → 3 ≤ wordDist (s i) (s j)) :
@@ -1098,13 +1127,13 @@ private theorem raw_compB_mean_le {n N : ℕ} {E : Fin N → Fin N → Prop}
       ((N : ℝ) * alphaBar M y₀ p x) * 1 := mul_le_mul_of_nonneg_left hprodle hC
     _ = (N : ℝ) * alphaBar M y₀ p x := by ring
 
-private theorem wordDist_symm {n : ℕ} (s t : OuterWord n) : wordDist s t = wordDist t s := by
+theorem wordDist_symm {n : ℕ} (s t : OuterWord n) : wordDist s t = wordDist t s := by
   unfold wordDist
   congr 1
   ext j
   simp [ne_comm]
 
-private theorem wordDist_triangle {n : ℕ} (s t u : OuterWord n) :
+theorem wordDist_triangle {n : ℕ} (s t u : OuterWord n) :
     wordDist s u ≤ wordDist s t + wordDist t u := by
   let A := Finset.univ.filter fun j : OuterCoord n => s j ≠ u j
   let B := Finset.univ.filter fun j : OuterCoord n => s j ≠ t j
@@ -1217,7 +1246,7 @@ private theorem wordBall_card_formula {n r : ℕ} (s : OuterWord n) :
     simpa [wordBall] using (Fintype.card_subtype (fun t : OuterWord n => wordDist s t ≤ r))
   exact hcard.symm.trans ((Fintype.card_congr (wordBallToSubsets s)).trans (smallWordSubsets_card r))
 
-private theorem wordBall_card_two_le {n : ℕ} (s : OuterWord n) :
+theorem wordBall_card_two_le {n : ℕ} (s : OuterWord n) :
     ((wordBall s 2).card : ℝ) ≤ (Fintype.card (OuterCoord n) + 1 : ℝ) ^ 2 := by
   have hformula := wordBall_card_formula (r := 2) s
   rw [hformula]
@@ -1258,7 +1287,7 @@ private theorem compBCoord_injective_separated {n m : ℕ} (s : Fin m → OuterW
     have htri := wordDist_triangle (s q.1) (compBCoord (s q.1) q.2) (s r.1)
     omega
 
-private theorem raw_compB_product_mean_le {n N : ℕ} {E : Fin N → Fin N → Prop}
+theorem raw_compB_product_mean_le {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
     (y₀ : M.ι → Fin N) (p : FinProb M.ι) (x : Fin N) (m : ℕ) (s : Fin m → OuterWord n)
     (hsep : ∀ i j, i ≠ j → 3 ≤ wordDist (s i) (s j))

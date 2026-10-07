@@ -321,7 +321,252 @@ theorem tag_moment (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
       (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι),
       Fixed11 δ x₀ K n N E X Y κ M y₀ p → S07.CondProductBound → TagLLL11 M y₀ p P →
       TagMoment11 M y₀ p P := by
-  sorry
+  classical
+  refine ⟨2, ?_⟩
+  intro n hn N E X Y κ M y₀ p hF hCB hTagLLL
+  have hn2 : 2 ≤ n := hn
+  have hnR : (2 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn2
+  have hbaseR : 1 ≤ (n : ℝ) := by linarith
+  have hπrow : ∀ i y, 0 ≤ piRow M y₀ i y := fun i y => (hF.slice.rows i).pi_nonneg y
+  have hαrow : ∀ i x, 0 ≤ alphaRow M y₀ i x := fun i x => (hF.slice.alpha i).nonneg x
+  have hπbar : ∀ y, 0 ≤ piBar M y₀ p y := by
+    intro y
+    unfold piBar mixW
+    exact Finset.sum_nonneg fun i _ => mul_nonneg (p.nonneg i) (hπrow i y)
+  have hαbar : ∀ x, 0 ≤ alphaBar M y₀ p x := by
+    intro x
+    unfold alphaBar mixW
+    exact Finset.sum_nonneg fun i _ => mul_nonneg (p.nonneg i) (hαrow i x)
+  let Q : OuterWord n → FinProb M.ι := fun _ => p
+  let Bad : OuterWord n → (OuterWord n → M.ι) → Prop := fun s t => TagBad M y₀ p P t s
+  let sc : OuterWord n → Finset (OuterWord n) := fun s => wordBall s 1
+  let good : (OuterWord n → M.ι) → Prop := fun t => ∀ s, ¬ TagBad M y₀ p P t s
+  have hInput : S07.LLLInput Q Bad sc (xTag n P) ((n + 1) ^ 2) := by
+    simpa [Q, Bad, sc, TagLLL11] using hTagLLL
+  have hAvoid := hCB Q Bad sc (xTag n P) ((n + 1) ^ 2) hInput
+  have hAvoidPos : 0 < (rawTags M p).pr good := by
+    change 0 < (FinProb.pi Q).pr good
+    simpa [Q, good, rawTags] using hAvoid.1
+  intro z m hm s hsep
+  let U : Finset (OuterWord n) :=
+    Finset.univ.biUnion fun i : Fin m => wordBall (s i) 1
+  let touch : Finset (OuterWord n) := Finset.univ.filter fun r =>
+    ¬ Disjoint (wordBall r 1) U
+  have htouchSub : touch ⊆ Finset.univ.biUnion fun i : Fin m => wordBall (s i) 2 := by
+    intro r hr
+    have hnd : ¬ Disjoint (wordBall r 1) U := (Finset.mem_filter.mp hr).2
+    rcases Finset.not_disjoint_iff.mp hnd with ⟨u, hur, huU⟩
+    rcases Finset.mem_biUnion.mp huU with ⟨i, hi, huBall⟩
+    have hru : wordDist r u ≤ 1 := (Finset.mem_filter.mp hur).2
+    have hsiu : wordDist (s i) u ≤ 1 := (Finset.mem_filter.mp huBall).2
+    have hdist : wordDist r (s i) ≤ 2 := by
+      calc
+        wordDist r (s i) ≤ wordDist r u + wordDist u (s i) :=
+          HypercubeRamsey.Lane_q_s11_tags.wordDist_triangle r u (s i)
+        _ ≤ 1 + 1 := add_le_add hru (by
+          rw [HypercubeRamsey.Lane_q_s11_tags.wordDist_symm]
+          exact hsiu)
+        _ = 2 := by norm_num
+    exact Finset.mem_biUnion.mpr
+      ⟨i, Finset.mem_univ _, Finset.mem_filter.mpr ⟨Finset.mem_univ _, by
+        rw [HypercubeRamsey.Lane_q_s11_tags.wordDist_symm]
+        exact hdist⟩⟩
+  have hOuterCard : Fintype.card (OuterCoord n) ≤ n := by
+    rw [HypercubeRamsey.Lane_q_s11_tags.outerCoord_card]
+    exact Nat.sub_le _ _
+  have hball (i : Fin m) : ((wordBall (s i) 2).card : ℝ) ≤ (n + 1 : ℝ) ^ 2 := by
+    have h := HypercubeRamsey.Lane_q_s11_tags.wordBall_card_two_le (s i)
+    have hOuterR : (Fintype.card (OuterCoord n) : ℝ) ≤ (n : ℝ) := by exact_mod_cast hOuterCard
+    nlinarith [h]
+  have htouchCardR : (touch.card : ℝ) ≤ (m : ℝ) * (n + 1 : ℝ) ^ 2 := by
+    calc
+      (touch.card : ℝ) ≤
+          ((Finset.univ.biUnion fun i : Fin m => wordBall (s i) 2).card : ℝ) := by
+            exact_mod_cast Finset.card_le_card htouchSub
+      _ ≤ ∑ i : Fin m, ((wordBall (s i) 2).card : ℝ) := by
+            exact_mod_cast Finset.card_biUnion_le
+      _ ≤ ∑ _i : Fin m, (n + 1 : ℝ) ^ 2 :=
+            Finset.sum_le_sum fun i _ => hball i
+      _ = (m : ℝ) * (n + 1 : ℝ) ^ 2 := by simp
+  have hcastTouch : ((m * (n + 1) ^ 2 : ℕ) : ℝ) =
+      (m : ℝ) * (n + 1 : ℝ) ^ 2 := by norm_num
+  have htouchCard' : (touch.card : ℝ) ≤ ((m * (n + 1) ^ 2 : ℕ) : ℝ) := by
+    rw [hcastTouch]
+    exact htouchCardR
+  have htouchCard : touch.card ≤ m * (n + 1) ^ 2 := Nat.cast_le.mp htouchCard'
+  let q : ℝ := xTag n P
+  have hpow : (n : ℝ) ^ (-(2 * P)) ≤ (n : ℝ) ^ (-(20 : ℝ)) :=
+    Real.rpow_le_rpow_of_exponent_le hbaseR (by nlinarith [hP])
+  have hnegpow : (n : ℝ) ^ (-(18 : ℝ)) ≤ (2 : ℝ) ^ (-(18 : ℝ)) :=
+    Real.rpow_le_rpow_of_nonpos (by norm_num) hnR (by norm_num)
+  have hpowprod : (n : ℝ) ^ (-(20 : ℝ)) * (n : ℝ) ^ 2 =
+      (n : ℝ) ^ (-(18 : ℝ)) := by
+    rw [← Real.rpow_natCast, ← Real.rpow_add (by positivity : 0 < (n : ℝ))]
+    congr 1 <;> ring
+  have hplusSq : ((n : ℝ) + 1) ^ 2 ≤ 4 * (n : ℝ) ^ 2 := by
+    nlinarith [sq_nonneg ((n : ℝ) - 1)]
+  have hnegBound : (16 : ℝ) * (n : ℝ) ^ (-(18 : ℝ)) ≤ 1 / 2 := by
+    calc
+      (16 : ℝ) * (n : ℝ) ^ (-(18 : ℝ)) ≤ 16 * (2 : ℝ) ^ (-(18 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hnegpow (by norm_num)
+      _ ≤ 1 / 2 := by norm_num [Real.rpow_neg (by norm_num : (0 : ℝ) ≤ 2), Real.rpow_natCast]
+  have hqDelta : q * ((n + 1) ^ 2 : ℕ) ≤ 1 / 2 := by
+    dsimp [q, xTag]
+    change 4 * (n : ℝ) ^ (-(2 * P)) * (((n + 1) ^ 2 : ℕ) : ℝ) ≤ 1 / 2
+    rw [Nat.cast_pow, Nat.cast_add, Nat.cast_one]
+    calc
+      4 * (n : ℝ) ^ (-(2 * P)) * ((n : ℝ) + 1) ^ 2 ≤
+          4 * (n : ℝ) ^ (-(20 : ℝ)) * ((n : ℝ) + 1) ^ 2 := by
+            exact mul_le_mul_of_nonneg_right
+              (mul_le_mul_of_nonneg_left hpow (by norm_num)) (sq_nonneg ((n : ℝ) + 1))
+      _ ≤ 16 * (n : ℝ) ^ (-(18 : ℝ) : ℝ) := by
+            calc
+              4 * (n : ℝ) ^ (-(20 : ℝ)) * ((n : ℝ) + 1) ^ 2 ≤
+                  4 * (n : ℝ) ^ (-(20 : ℝ)) * (4 * (n : ℝ) ^ 2) := by
+                    exact mul_le_mul_of_nonneg_left hplusSq
+                      (by positivity : 0 ≤ 4 * (n : ℝ) ^ (-(20 : ℝ)))
+              _ = 16 * ((n : ℝ) ^ (-(20 : ℝ)) * (n : ℝ) ^ 2) := by ring
+              _ = 16 * (n : ℝ) ^ (-(18 : ℝ)) := by rw [hpowprod]
+      _ ≤ 1 / 2 := hnegBound
+  have hqNonneg : 0 ≤ q := by dsimp [q, xTag]; positivity
+  have hnplus : 1 ≤ n + 1 := by omega
+  have hDeltaPos : 1 ≤ ((n + 1) ^ 2 : ℕ) := one_le_pow₀ hnplus
+  have hDeltaR : 1 ≤ (↑((n + 1) ^ 2 : ℕ) : ℝ) := by exact_mod_cast hDeltaPos
+  have hqd : q ≤ q * (↑((n + 1) ^ 2 : ℕ) : ℝ) := by
+    calc
+      q = q * 1 := by ring
+      _ ≤ q * (↑((n + 1) ^ 2 : ℕ) : ℝ) :=
+        mul_le_mul_of_nonneg_left hDeltaR hqNonneg
+  have hqLeHalf : q ≤ 1 / 2 := le_trans hqd hqDelta
+  have hqLeOne : q ≤ 1 := hqLeHalf.trans (by norm_num)
+  have hbern (k : ℕ) : 1 - (k : ℝ) * q ≤ (1 - q) ^ k := by
+    induction k with
+    | zero => simp
+    | succ k ih =>
+        have hbase0 : 0 ≤ 1 - q := by linarith
+        have hbase1 : 1 - q ≤ 1 := by linarith
+        have hpow0 : 0 ≤ (1 - q) ^ k := pow_nonneg hbase0 _
+        have hpow1 : (1 - q) ^ k ≤ 1 := pow_le_one₀ hbase0 hbase1
+        calc
+          1 - (↑(k + 1) : ℝ) * q = (1 - (k : ℝ) * q) - q := by push_cast; ring
+          _ ≤ (1 - q) ^ k - q := sub_le_sub_right ih q
+          _ ≤ (1 - q) ^ k - q * (1 - q) ^ k := by
+                have hmul := mul_le_mul_of_nonneg_left hpow1 hqNonneg
+                nlinarith
+          _ = (1 - q) ^ (k + 1) := by rw [pow_succ]; ring
+  have hpowDelta : 1 / 2 ≤ (1 - q) ^ ((n + 1) ^ 2) := by
+    have h := hbern ((n + 1) ^ 2)
+    have hqD : ((↑((n + 1) ^ 2 : ℕ) : ℝ) * q) ≤ 1 / 2 := by nlinarith [hqDelta]
+    linarith
+  have hbase0 : 0 ≤ 1 - q := by linarith [hqLeOne]
+  have hbase1 : 1 - q ≤ 1 := by linarith [hqNonneg]
+  have hpowm : (1 / 2 : ℝ) ^ m ≤ (1 - q) ^ touch.card := by
+    calc
+      (1 / 2 : ℝ) ^ m ≤ ((1 - q) ^ ((n + 1) ^ 2)) ^ m :=
+        pow_le_pow_left₀ (by norm_num) hpowDelta m
+      _ = (1 - q) ^ (((n + 1) ^ 2) * m) := by rw [pow_mul]
+      _ = (1 - q) ^ (m * (n + 1) ^ 2) := by rw [Nat.mul_comm]
+      _ ≤ (1 - q) ^ touch.card :=
+        pow_le_pow_of_le_one hbase0 hbase1 htouchCard
+  have hinv : ((1 - q) ^ touch.card)⁻¹ ≤ (2 : ℝ) ^ m := by
+    have hden : 0 < (1 - q) ^ touch.card := pow_pos (by linarith [hqLeHalf] : 0 < 1 - q) _
+    have hhalf : 0 < (1 / 2 : ℝ) ^ m := by positivity
+    calc
+      ((1 - q) ^ touch.card)⁻¹ ≤ ((1 / 2 : ℝ) ^ m)⁻¹ := (inv_le_inv₀ hden hhalf).mpr hpowm
+      _ = (2 : ℝ) ^ m := by
+        rw [← inv_pow]
+        norm_num
+  let ω₀ : OuterWord n → M.ι := fun _ => Classical.choice (HypercubeRamsey.Clock.finProb_nonempty p)
+  have condMomentBound (Φ : (OuterWord n → M.ι) → ℝ) (hΦ : ∀ t, 0 ≤ Φ t)
+      (hdep : FinProb.DependsOn Φ U) (B : ℝ) (hB : 0 ≤ B) (hraw :
+        (rawTags M p).expect Φ ≤ B) : (tagLaw M y₀ p P).expect Φ ≤ (2 : ℝ) ^ m * B := by
+    have hlocal : ∀ ω, ∑ a : (∀ i : U, M.ι),
+        (∏ i : U, p.w (a i)) * Φ (S07.glue U ω a) ≤ B := by
+      intro ω
+      have hglue := HypercubeRamsey.Lane_q_s11_tags.pi_expect_glue_sum Q U Φ ω hdep
+      have hglue' : (rawTags M p).expect Φ =
+          ∑ a : (∀ i : U, M.ι), (∏ i : U, p.w (a i)) * Φ (S07.glue U ω a) := by
+        simpa [rawTags, Q] using hglue
+      rw [← hglue']
+      exact hraw
+    have h := hAvoid.2 U Φ hΦ B hlocal
+    have h' : (S07.condOr (FinProb.pi Q)
+        (fun t => ∀ s, ¬ TagBad M y₀ p P t s)).expect Φ ≤
+        ((1 - xTag n P) ^ touch.card)⁻¹ * B := by
+      simpa [Bad, good, sc, touch] using h
+    calc
+      (tagLaw M y₀ p P).expect Φ ≤ ((1 - q) ^ touch.card)⁻¹ * B := by
+        change (S07.condOr (FinProb.pi Q)
+          (fun t => ∀ s, ¬ TagBad M y₀ p P t s)).expect Φ ≤
+          ((1 - xTag n P) ^ touch.card)⁻¹ * B
+        simpa [q] using h'
+      _ ≤ (2 : ℝ) ^ m * B := mul_le_mul_of_nonneg_right hinv hB
+  let ΦA : (OuterWord n → M.ι) → ℝ := fun t => ∏ i, compA M y₀ t (s i) z
+  have hΦA0 : ∀ t, 0 ≤ ΦA t := by
+    intro t
+    dsimp [ΦA]
+    apply Finset.prod_nonneg
+    intro i hi
+    unfold compA
+    exact mul_nonneg (by positivity) (hπrow (t (s i)) z)
+  have hdepA : FinProb.DependsOn ΦA U := by
+    intro t t' hagree
+    dsimp [ΦA]
+    apply Finset.prod_congr rfl
+    intro i hi
+    unfold compA
+    rw [hagree (s i) (Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, by
+      simp [wordBall, wordDist]⟩)]
+  have hrawA := HypercubeRamsey.Lane_q_s11_tags.raw_compA_product_mean
+    M y₀ p z m s hsep
+  have hA := condMomentBound ΦA hΦA0 hdepA
+    (((N : ℝ) * piBar M y₀ p z) ^ m)
+    (pow_nonneg (mul_nonneg (by positivity) (hπbar z)) m) hrawA.le
+  refine ⟨?_, ?_⟩
+  · simpa [ΦA] using hA
+  · let ΦB : (OuterWord n → M.ι) → ℝ := fun t => ∏ i, compB M y₀ p t (s i) z
+    have hcompB0 (t : OuterWord n → M.ι) (i : Fin m) :
+        0 ≤ compB M y₀ p t (s i) z := by
+      unfold compB
+      apply mul_nonneg (mul_nonneg (by positivity) (hαrow (t (s i)) z))
+      apply Finset.prod_nonneg
+      intro j hj
+      apply div_nonneg
+      · unfold deg
+        apply Finset.sum_nonneg
+        intro y hy
+        exact mul_nonneg (hπrow (t (flipOuter (s i) j)) y) (by
+          unfold hit
+          split_ifs <;> norm_num)
+      · unfold deg
+        apply Finset.sum_nonneg
+        intro y hy
+        exact mul_nonneg (hπbar y) (by
+          unfold hit
+          split_ifs <;> norm_num)
+    have hΦB0 : ∀ t, 0 ≤ ΦB t := by
+      intro t
+      dsimp [ΦB]
+      exact Finset.prod_nonneg fun i hi => hcompB0 t i
+    have hcenterBall (i : Fin m) : s i ∈ wordBall (s i) 1 := by
+      simp [wordBall, wordDist]
+    have hcenter (i : Fin m) : s i ∈ U := by
+      exact Finset.mem_biUnion.mpr
+        ⟨i, Finset.mem_univ _, hcenterBall i⟩
+    have hdepB : FinProb.DependsOn ΦB U := by
+      intro t t' hagree
+      dsimp [ΦB]
+      apply Finset.prod_congr rfl
+      intro i hi
+      apply HypercubeRamsey.Lane_q_s11_tags.compB_dependsOn_wordBall M y₀ p (s i) z t t'
+      intro u hu
+      exact hagree u (Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hu⟩)
+    have hrawB := HypercubeRamsey.Lane_q_s11_tags.raw_compB_product_mean_le
+      M y₀ p z m s hsep (fun i => hαrow i z) hπrow (hαbar z) hπbar
+    have hB := condMomentBound ΦB hΦB0 hdepB
+      (((N : ℝ) * alphaBar M y₀ p z) ^ m)
+      (pow_nonneg (mul_nonneg (by positivity) (hαbar z)) m) hrawB
+    simpa [ΦB] using hB
 
 /-- P11.1d1(iii) (11:356–368).  On gated tags the comparison means have caps `A_s ≤ e^{.02n}` and
 `B_s ≤ 2^h · 2^d e^{O(n^.05)} · .8^{d/2} ≤ 2^n e^{-cn}` (second gate, compatibility); Lemma 3.6 with near = outer

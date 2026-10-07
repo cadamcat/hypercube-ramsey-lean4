@@ -11,6 +11,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5d
 import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
@@ -930,13 +931,7 @@ theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (Krow : ℝ) (hKrow : 0 < Krow) :
     ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → PaletteRowInput D Krow → IsolateKernelFacts D KI := by
-  refine ⟨1, by norm_num, ?_⟩
-  apply Filter.Eventually.of_forall
-  intro k PT hPT D hD hRows v hv x z
-  exact ⟨Lane_q_s18_n5.isolatedWeight_nonneg D v x z,
-    Lane_q_s18_n5.isolatedWeight_symm D v x z, by
-      sorry, by
-      sorry⟩
+  exact Lane_sol_s18_5d.isolate_facts hκ T Krow hKrow
 
 /-- P18.5e, 18:1092–1124. Remove state gates before bin comparisons and
 retain geometrically fixed bulk pair-hit queries. -/

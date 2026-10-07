@@ -1029,6 +1029,12 @@ theorem syndrome_data_exists {κ : CConsts} {T : Stage} {k : ℕ}
   let n := T.S.n k
   obtain ⟨Hdim, hGroupLower, hGroupUpper⟩ :=
     Lane_q_s16_geom.exists_paired_group_dimension hScale.n_four
+  let a := κ.A0 * Real.log (n : ℝ)
+  obtain ⟨rDim, hrLower, hrUpper⟩ := Lane_q_s16_geom.exists_power_two_between hScale.class_scale
+  let rCandidate : ℕ := 2 ^ rDim
+  have hCandidateRLower : a ≤ (rCandidate : ℝ) := by simpa [a, rCandidate] using hrLower
+  have hCandidateRUpper : (rCandidate : ℝ) < 2 * a := by
+    simpa [a, rCandidate] using hrUpper
   have hGroupCard : Fintype.card (Fin Hdim → ZMod 2) = 2 ^ Hdim := by
     simp [Fintype.card_fun]
   have hEmbedCard : Fintype.card (Fin n) ≤ Fintype.card (Fin Hdim → ZMod 2) := by

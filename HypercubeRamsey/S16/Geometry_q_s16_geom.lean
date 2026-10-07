@@ -406,6 +406,32 @@ theorem exists_paired_group_dimension {n : ℕ} (hn : 4 ≤ n) :
   · rw [hpow]
     exact Nat.mul_lt_mul_of_pos_left hpred (by norm_num)
 
+theorem exists_power_two_between {a : ℝ} (ha : 2 ≤ a) :
+    ∃ d : ℕ, a ≤ (2 : ℝ) ^ d ∧ (2 : ℝ) ^ d < 2 * a := by
+  let q := Nat.ceil a
+  let d := Nat.clog 2 q
+  have hqA : a ≤ (q : ℝ) := by exact Nat.le_ceil a
+  have hqLt : (q : ℝ) < a + 1 := Nat.ceil_lt_add_one (by linarith [ha])
+  have hq2 : 2 ≤ q := by exact_mod_cast (ha.trans hqA)
+  have hbase : 1 < 2 := by norm_num
+  have hdPos : 0 < d := Nat.clog_pos hbase (by omega)
+  have hpow : 2 ^ d = 2 * 2 ^ d.pred := by
+    have hsucc : Nat.succ d.pred = d := Nat.succ_pred_eq_of_pos hdPos
+    calc
+      2 ^ d = 2 ^ Nat.succ d.pred := by rw [hsucc]
+      _ = 2 ^ d.pred * 2 := by rw [Nat.pow_succ]
+      _ = 2 * 2 ^ d.pred := Nat.mul_comm _ _
+  have hpred : 2 ^ d.pred < q := Nat.pow_pred_clog_lt_self hbase (by omega)
+  have hpredReal : (2 : ℝ) ^ d.pred + 1 ≤ (q : ℝ) := by
+    exact_mod_cast (Nat.succ_le_of_lt hpred)
+  have hpredLtA : (2 : ℝ) ^ d.pred < a := by linarith [hpredReal, hqLt]
+  refine ⟨d, ?_, ?_⟩
+  · have hqle : (q : ℝ) ≤ (2 : ℝ) ^ d := by exact_mod_cast Nat.le_pow_clog hbase q
+    exact hqA.trans hqle
+  · have hpowReal : (2 : ℝ) ^ d = 2 * (2 : ℝ) ^ d.pred := by exact_mod_cast hpow
+    rw [hpowReal]
+    nlinarith [hpredLtA]
+
 theorem bin_card_mul_bin_size {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m) :
     (Fintype.card (Bin PT.tiling i) : ℕ) * (PT.tiling.P i).d =

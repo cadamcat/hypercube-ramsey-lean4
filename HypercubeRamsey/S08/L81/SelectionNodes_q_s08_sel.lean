@@ -1944,7 +1944,7 @@ private theorem badListAll_depends_on_union (D : Ctx η₀ β p h) (Θ : D.Hist)
     rw [hEq]
     exact hall L hL
 
-private theorem badListList_probability_le (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
+theorem badListList_probability_le (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
     (hAvoid : ∀ g, ¬ D.HBad Θ g) (hBadProb : Ctx.BadListProb D)
     (c : D.CellT) (ls : List (D.LList c.1))
     (hCand : ∀ L ∈ ls, D.Cand P c L)

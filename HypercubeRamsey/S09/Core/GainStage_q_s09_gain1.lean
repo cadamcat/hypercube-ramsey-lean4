@@ -13,6 +13,7 @@ namespace HypercubeRamsey.Lane_q_s09_gain1
 open HypercubeRamsey OAI.HypercubeRamsey Classical
 open Filter
 open scoped BigOperators
+open scoped Topology
 
 private theorem nonempty_of_probability {α : Type*} [Fintype α] (P : FinProb α) : Nonempty α := by
   classical
@@ -1067,6 +1068,61 @@ private theorem normalize_l1_perturbation9 {N : ℕ} (Q ν : Law N) (ψ : Fin N 
       _ ≤ δ + δ := add_le_add herr (by rw [hnormErr]; exact hmassDiff)
       _ = 2 * δ := by ring
   exact ⟨Z, hZ, R, hRw, hL1⟩
+
+private theorem absorb_subpower9 {u χ H c L : ℝ} (hu : 0 < u) (hχ : χ < u)
+    (hH : 0 ≤ H) (hc : 0 < c) (hL : 0 < L) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      L * (n : ℝ) ^ χ + H * Real.log (n : ℝ) ≤ c * (n : ℝ) ^ u := by
+  have hlogLittle : (fun x : ℝ => (2 * H / c) * Real.log x) =o[atTop] fun x => x ^ u := by
+    have hl := (isLittleO_log_rpow_rpow_atTop 1 hu).const_mul_left (2 * H / c)
+    simpa using hl
+  have hlogNat : (fun n : ℕ => (2 * H / c) * Real.log (n : ℝ)) =o[atTop]
+      fun n => (n : ℝ) ^ u := by
+    exact (hlogLittle.comp_tendsto tendsto_natCast_atTop_atTop).congr_left (fun _ => rfl)
+  obtain ⟨nL, hLlog⟩ := Filter.eventually_atTop.mp hlogNat.eventuallyLE
+  have hratio : Tendsto (fun n : ℕ => (n : ℝ) ^ (χ - u)) atTop (𝓝 0) := by
+    refine Tendsto.congr' ?_ ((tendsto_rpow_neg_atTop (sub_pos.mpr hχ)).comp tendsto_natCast_atTop_atTop)
+    filter_upwards [] with n
+    rw [show χ - u = -(u - χ) by ring]
+    simp only [Function.comp_apply]
+  have hratioSmall : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (χ - u) < c / (2 * L) := by
+    have hboundPos : 0 < c / (2 * L) := div_pos hc (mul_pos (by norm_num) hL)
+    exact hratio.eventually (Iio_mem_nhds hboundPos)
+  obtain ⟨nR, hR⟩ := Filter.eventually_atTop.mp hratioSmall
+  refine ⟨max (max nL nR) 2, ?_⟩
+  intro n hn
+  have hnLR : max nL nR ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hn2 : 2 ≤ n := le_trans (Nat.le_max_right _ _) hn
+  have hnL : nL ≤ n := le_trans (Nat.le_max_left _ _) hnLR
+  have hnR : nR ≤ n := le_trans (Nat.le_max_right _ _) hnLR
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hlogNonneg : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by exact_mod_cast (by omega : 1 ≤ n))
+  have hpowPos : 0 < (n : ℝ) ^ u := Real.rpow_pos_of_pos hnPos _
+  have hcoef : 0 ≤ 2 * H / c := div_nonneg (mul_nonneg (by norm_num) hH) hc.le
+  have hlogBound : (2 * H / c) * Real.log (n : ℝ) ≤ (n : ℝ) ^ u := by
+    have h := hLlog n hnL
+    have hleft : 0 ≤ (2 * H / c) * Real.log (n : ℝ) := mul_nonneg hcoef hlogNonneg
+    simpa [Real.norm_of_nonneg hleft, Real.norm_of_nonneg hpowPos.le] using h
+  have hratioN : (n : ℝ) ^ (χ - u) < c / (2 * L) := hR n hnR
+  have hratioPow : (n : ℝ) ^ (χ - u) = (n : ℝ) ^ χ / (n : ℝ) ^ u :=
+    Real.rpow_sub hnPos χ u
+  rw [hratioPow] at hratioN
+  have hratioStep := (div_lt_iff₀ hpowPos).mp hratioN
+  have hmul := mul_lt_mul_of_pos_left hratioStep hL
+  have hright : L * (c / (2 * L) * (n : ℝ) ^ u) = c / 2 * (n : ℝ) ^ u := by
+    field_simp [ne_of_gt hL]
+  have hpowBound : L * (n : ℝ) ^ χ ≤ c / 2 * (n : ℝ) ^ u := by
+    exact le_of_lt (by rw [← hright]; exact hmul)
+  calc
+    L * (n : ℝ) ^ χ + H * Real.log (n : ℝ) ≤
+        c / 2 * (n : ℝ) ^ u + c / 2 * (n : ℝ) ^ u := by
+          apply add_le_add hpowBound
+          have := hlogBound
+          have hfactor : H * Real.log (n : ℝ) = (c / 2) * ((2 * H / c) * Real.log (n : ℝ)) := by
+            field_simp [ne_of_gt hc]
+          rw [hfactor]
+          exact mul_le_mul_of_nonneg_left hlogBound (by positivity)
+    _ = c * (n : ℝ) ^ u := by ring
 
 private theorem boundedRegularityTest_probability_le9 {P : Params9} (hP : P.Valid)
     {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}

@@ -536,7 +536,7 @@ private theorem odd_parity_projection_uniform {n : ℕ} (S : Finset (Fin n))
     oddF.card = evenF.card := hcard.symm
     _ = 2 ^ (n - S.card - 1) := by simpa [evenF, agree] using he
 
-private theorem evenProjection_event_card {n : ℕ} (S : Finset (Fin n))
+theorem evenProjection_event_card {n : ℕ} (S : Finset (Fin n))
     (hS : S.card < n) (A : Finset (∀ i : S, Bool)) :
     ((HypercubeRamsey.evenRoleSet n).filter
       (fun v : CubeVertex n => (fun i : S => v i.1) ∈ A)).card =
@@ -567,7 +567,7 @@ private theorem evenProjection_event_card {n : ℕ} (S : Finset (Fin n))
       exact hfiber z
     _ = A.card * 2 ^ (n - S.card - 1) := by simp
 
-private theorem oddProjection_event_card {n : ℕ} (S : Finset (Fin n))
+theorem oddProjection_event_card {n : ℕ} (S : Finset (Fin n))
     (hS : S.card < n) (A : Finset (∀ i : S, Bool)) :
     ((Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
       (fun v : CubeVertex n => (fun i : S => v i.1) ∈ A)).card =
@@ -599,10 +599,10 @@ private theorem oddProjection_event_card {n : ℕ} (S : Finset (Fin n))
       exact hfiber z
     _ = A.card * 2 ^ (n - S.card - 1) := by simp
 
-private def firstCoordinates (n m : ℕ) : Finset (Fin n) :=
+def firstCoordinates (n m : ℕ) : Finset (Fin n) :=
   Finset.univ.filter fun i => i.val < m
 
-private def firstCoordinatesEquiv {m n : ℕ} (hm : m ≤ n) :
+def firstCoordinatesEquiv {m n : ℕ} (hm : m ≤ n) :
     Fin m ≃ {i : Fin n // i ∈ firstCoordinates n m} where
   toFun i := ⟨⟨i.val, Nat.lt_of_lt_of_le i.isLt hm⟩, by
     simp [firstCoordinates, i.isLt]⟩
@@ -617,7 +617,7 @@ private def firstAssignmentEquiv {m n : ℕ} (hm : m ≤ n) :
   left_inv f := by funext j; simp
   right_inv z := by funext i; simp
 
-private def gadgetFirstBlocksEquiv {G s ℓ n : ℕ} (hmn : G * s * ℓ ≤ n) :
+def gadgetFirstBlocksEquiv {G s ℓ n : ℕ} (hmn : G * s * ℓ ≤ n) :
     (∀ i : {x : Fin n // x ∈ firstCoordinates n (G * s * ℓ)}, Bool) ≃
       (Fin G × Fin s → Fin ℓ → Bool) :=
   (firstAssignmentEquiv (m := G * s * ℓ) (n := n) hmn).symm.trans
@@ -805,7 +805,7 @@ private theorem centralWeightMass_le_sixth (S ℓ : ℕ) (hS : 100 ≤ S)
     _ = ((S ^ 2 + 2 : ℕ) : ℝ) * (2 / (s : ℝ) ^ 3) := by rw [hsqrt]
     _ ≤ 1 / 6 := hsmall
 
-private def clippedBlockWeight (S ℓ : ℕ) (f : Fin ℓ → Bool) : ℕ :=
+def clippedBlockWeight (S ℓ : ℕ) (f : Fin ℓ → Bool) : ℕ :=
   min ((trueCoordinatesEquiv f).card - (ℓ / 2 - S ^ 2 / 2)) (S ^ 2)
 
 private theorem clippedBlock_side_card_le (S ℓ t : ℕ)
@@ -1580,7 +1580,7 @@ private theorem gadgetPower_le_four {β γ : ℝ} (n : ℕ) (hn : 2 ≤ n)
     _ ≤ Real.rpow 2 (Real.log x / Real.log 2 + 2) := hpow
     _ = 4 * x := heval
 
-private theorem gadgetPower_ge_scale {β γ : ℝ} (n : ℕ)
+theorem gadgetPower_ge_scale {β γ : ℝ} (n : ℕ)
     (hω : 0 < HypercubeRamsey.omega4 β γ) (hn : 1 ≤ n) :
     (n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ) ≤
       (HypercubeRamsey.S04.gadgetPower β γ n : ℝ) := by
@@ -1623,7 +1623,7 @@ private theorem gadgetPower_ge_scale {β γ : ℝ} (n : ℕ)
     _ ≤ Real.rpow 2 (max 1 q : ℝ) := hpow
     _ = (HypercubeRamsey.S04.gadgetPower β γ n : ℝ) := hcast.symm
 
-private theorem gadgetPower_even {β γ : ℝ} (n : ℕ) :
+theorem gadgetPower_even {β γ : ℝ} (n : ℕ) :
     Even (HypercubeRamsey.S04.gadgetPower β γ n) := by
   unfold HypercubeRamsey.S04.gadgetPower
   apply (Nat.even_pow).2
@@ -1633,7 +1633,7 @@ private theorem gadgetPower_even {β γ : ℝ} (n : ℕ) :
       (⌈Real.log ((n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)) / Real.log 2⌉₊)
     omega
 
-private theorem leaf_choice_tail (S G s : ℕ) (x : ℝ)
+theorem leaf_choice_tail (S G s : ℕ) (x : ℝ)
     (hSpos : 0 < (S : ℝ)) (hlogS : Real.log (S : ℝ) ≤ (s : ℝ) / 12)
     (hlog32 : 1 / 3 ≤ Real.log ((3 : ℝ) / 2)) (hx : 0 ≤ x)
     (hchunks : (81 / 100 : ℝ) * x ≤ (G : ℝ) * (s : ℝ)) :
@@ -1757,6 +1757,35 @@ theorem specialNum_eventually_bound {β γ : ℝ} (hβ : 0 < β) (hβγ : β ≤
       rw [← Real.rpow_add hnreal]
       congr 1
       ring
+
+theorem keyFiber_growth_thresholds {β γ : ℝ}
+    (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      128 ≤ (n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ) ∧
+      10 ≤ (n : ℝ) ^ (γ - HypercubeRamsey.omega4 β γ) := by
+  have hω : 0 < HypercubeRamsey.omega4 β γ :=
+    HypercubeRamsey.S04.omega4_pos hβ hγ
+  have hωltγ : HypercubeRamsey.omega4 β γ < γ := by
+    dsimp [HypercubeRamsey.omega4]
+    have hmin : min β (1 - γ) ≤ β := min_le_left _ _
+    have hdiv : β / 1000 < β := by nlinarith
+    linarith
+  have hT₁ : Tendsto
+      (fun n : ℕ => (n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)) atTop atTop :=
+    (_root_.tendsto_rpow_atTop (mul_pos (by norm_num) hω)).comp
+      tendsto_natCast_atTop_atTop
+  have hT₂ : Tendsto
+      (fun n : ℕ => (n : ℝ) ^ (γ - HypercubeRamsey.omega4 β γ)) atTop atTop :=
+    (_root_.tendsto_rpow_atTop (sub_pos.mpr hωltγ)).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₁, hn₁⟩ := Filter.eventually_atTop.1
+    (hT₁.eventually_ge_atTop (128 : ℝ))
+  obtain ⟨n₂, hn₂⟩ := Filter.eventually_atTop.1
+    (hT₂.eventually_ge_atTop (10 : ℝ))
+  refine ⟨max n₁ n₂, ?_⟩
+  intro n hn
+  have hn₁' : n₁ ≤ n := (le_max_left n₁ n₂).trans hn
+  have hn₂' : n₂ ≤ n := (le_max_right n₁ n₂).trans hn
+  exact ⟨hn₁ n hn₁', hn₂ n hn₂'⟩
 
 theorem keyLocal_le_specialNum {β γ : ℝ} (n : ℕ) :
     ∀ v : CubeVertex n,
@@ -1997,7 +2026,7 @@ private theorem keyFiber_constraint_assignment_card_le {β γ : ℝ} {n : ℕ}
   rw [hm]
   simpa [C, B, G, s] using hC'
 
-private theorem log_power_le_chunk (S s : ℕ) (hS : 128 ≤ S)
+theorem log_power_le_chunk (S s : ℕ) (hS : 128 ≤ S)
     (hs : s = S - 1) :
     Real.log (S : ℝ) ≤ (s : ℝ) / 12 := by
   have hSpos : 0 < (S : ℝ) := by positivity
@@ -2032,7 +2061,7 @@ private theorem log_power_le_chunk (S s : ℕ) (hS : 128 ≤ S)
   rw [hsCast]
   exact hlogupper.trans htarget
 
-private theorem keyFiber_all_leaf_constraints_card_le {β γ : ℝ} {n : ℕ}
+theorem keyFiber_all_leaf_constraints_card_le {β γ : ℝ} {n : ℕ}
     (κ : HypercubeRamsey.S04.Key β γ n)
     (hmn : HypercubeRamsey.S04.specialNum β γ n ≤ n)
     (S : ℕ) (hS : S = HypercubeRamsey.S04.gadgetPower β γ n)
@@ -2120,7 +2149,7 @@ private theorem keyFiber_all_leaf_constraints_card_le {β γ : ℝ} {n : ℕ}
   simpa [C, hLeaves, hspecial, G, s, ℓ, Leaves, mul_assoc,
     Finset.mem_filter, Finset.mem_univ] using hbound
 
-private theorem keyFiber_key_satisfies_leaf_constraints {β γ : ℝ} {n : ℕ}
+theorem keyFiber_key_satisfies_leaf_constraints {β γ : ℝ} {n : ℕ}
     (κ : HypercubeRamsey.S04.Key β γ n)
     (hmn : HypercubeRamsey.S04.specialNum β γ n ≤ n)
     (S : ℕ) (hS : S = HypercubeRamsey.S04.gadgetPower β γ n)
@@ -2170,7 +2199,7 @@ private theorem keyFiber_key_satisfies_leaf_constraints {β γ : ℝ} {n : ℕ}
     rw [← hclip, hthreshold]
     exact hside.2 hj
 
-private theorem evenRole_filter_card_eq_key_filter {β γ : ℝ} {n : ℕ}
+theorem evenRole_filter_card_eq_key_filter {β γ : ℝ} {n : ℕ}
     (κ : HypercubeRamsey.S04.Key β γ n) :
     (Finset.univ.filter fun a : EvenRole n =>
       HypercubeRamsey.S04.key β γ n a.1 = κ).card =
@@ -2196,7 +2225,7 @@ private theorem evenRole_filter_card_eq_key_filter {β γ : ℝ} {n : ℕ}
     _ = Fintype.card {v : CubeVertex n // v ∈ V} := Fintype.card_congr e
     _ = V.card := Fintype.card_coe V
 
-private theorem oddRole_filter_card_eq_key_filter {β γ : ℝ} {n : ℕ}
+theorem oddRole_filter_card_eq_key_filter {β γ : ℝ} {n : ℕ}
     (κ : HypercubeRamsey.S04.Key β γ n) :
     (Finset.univ.filter fun u : OddRole n =>
       HypercubeRamsey.S04.key β γ n u.1 = κ).card =
@@ -2231,7 +2260,7 @@ private theorem oddRole_filter_card_eq_key_filter {β γ : ℝ} {n : ℕ}
     _ = Fintype.card {v : CubeVertex n // v ∈ V} := Fintype.card_congr e
     _ = V.card := Fintype.card_coe V
 
-private theorem pow_two_partition_mul (m n : ℕ) (hmn : m < n) :
+theorem pow_two_partition_mul (m n : ℕ) (hmn : m < n) :
     (2 : ℝ) ^ m * (2 : ℝ) ^ (n - m - 1) = (2 : ℝ) ^ (n - 1) := by
   rw [← pow_add]
   congr 1

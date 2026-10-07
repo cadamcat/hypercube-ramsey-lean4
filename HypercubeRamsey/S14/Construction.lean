@@ -963,6 +963,41 @@ theorem likelihood_ratio_domination (κ : CConsts) (hκ : κ.Admissible)
     (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh)
     (mask : Masks H) (hlookup : MaskLookup H mask) (O : OddKernels Geom H mask) :
     Nonempty (LikelihoodData Geom H mask O) := by
+  classical
+  have hmaskTransport (g : Group 𝒯 i) (W : ∀ r, H.Val r) (c : H.Center)
+      (w : H.Tuple) :
+      (mask g (H.replaceTuple W c w)).prior = (mask g W).prior ∧
+        (mask g (H.replaceTuple W c w)).within = (mask g W).within := by
+    apply hlookup
+    simp [PrimitiveHistory.maskVertex, PrimitiveHistory.replaceTuple]
+  have hlistTransport (g : Group 𝒯 i) (W : ∀ r, H.Val r) (c : H.Center)
+      (w : H.Tuple) :
+      referenceLists Geom H g c (H.replaceTuple W c w) =
+        referenceLists Geom H g c W := by
+    have hpresent (d : H.Center) :
+        H.present (H.replaceTuple W c w) d = H.present W d := by
+      by_cases hdc : d = c
+      · subst d
+        simp [PrimitiveHistory.present, PrimitiveHistory.replaceTuple,
+          PrimitiveHistory.cornerOf, PrimitiveHistory.active]
+      · simp [PrimitiveHistory.present, PrimitiveHistory.replaceTuple, hdc]
+    ext S
+    simp only [referenceLists, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨hlist, hc⟩
+      unfold admissibleList at hlist ⊢
+      rcases hlist with ⟨hn, hcard, hprops⟩
+      refine ⟨⟨hn, hcard, ?_⟩, hc⟩
+      intro d hd
+      rcases hprops d hd with ⟨hrange, hpres⟩
+      exact ⟨hrange, (hpresent d) ▸ hpres⟩
+    · rintro ⟨hlist, hc⟩
+      unfold admissibleList at hlist ⊢
+      rcases hlist with ⟨hn, hcard, hprops⟩
+      refine ⟨⟨hn, hcard, ?_⟩, hc⟩
+      intro d hd
+      rcases hprops d hd with ⟨hrange, hpres⟩
+      exact ⟨hrange, (hpresent d).symm ▸ hpres⟩
   sorry
 
 section Rows
@@ -1039,7 +1074,157 @@ theorem posterior_even_rows (κ : CConsts) (hκ : κ.Admissible)
     (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh)
     (mask : Masks H) (O : OddKernels Geom H mask) (L : LikelihoodData Geom H mask O) :
     Nonempty (EvenRows Geom H mask O L) := by
-  sorry
+  classical
+  have ha : 0 < κ.a := by
+    rw [hκ.a_eq]
+    exact div_pos hκ.θ_rng.1 (by norm_num)
+  have hsub0 : ∀ (v : EvenRole 𝒯 i) c (W : ∀ r, H.Val r) w ys,
+      0 ≤ subLikelihood Geom H mask O v c W w ys := by
+    intro v c W w ys
+    dsimp [subLikelihood]
+    split_ifs
+    · unfold FinLaw.pr
+      apply Finset.sum_nonneg
+      intro ω hω
+      split_ifs
+      · exact (refLaw Geom H mask O (H.replaceTuple W c w)).nonneg ω
+      · exact le_rfl
+    · exact le_rfl
+  have hpred0 : ∀ (v : EvenRole 𝒯 i) c (W : ∀ r, H.Val r) ys,
+      0 ≤ predictiveMass Geom H mask O v c W ys := by
+    intro v c W ys
+    unfold predictiveMass
+    apply Finset.sum_nonneg
+    intro w hw
+    exact mul_nonneg ((H.tuplePrior (H.cornerOf W c)).nonneg w) (hsub0 v c W w ys)
+  have hpm0 : ∀ (v : EvenRole 𝒯 i) c (W : ∀ r, H.Val r) ys x,
+      0 ≤ posteriorMean Geom H mask O v c W ys x := by
+    intro v c W ys x
+    unfold posteriorMean
+    apply Finset.sum_nonneg
+    intro w hw
+    apply mul_nonneg
+    · exact div_nonneg
+        (mul_nonneg ((H.tuplePrior (H.cornerOf W c)).nonneg w) (hsub0 v c W w ys))
+        (hpred0 v c W ys)
+    · apply div_nonneg
+      · apply Finset.sum_nonneg
+        intro r hr
+        split_ifs <;> positivity
+      · exact_mod_cast (Nat.zero_le (𝒯.kScale i))
+  have hretained : ∀ (v : EvenRole 𝒯 i) c (W : ∀ r, H.Val r) ys,
+      posteriorGate Geom H mask O L v c W ys →
+        κ.a / 200 ≤ ∑ x ∈ retainedLabels Geom H mask O v c W ys,
+          posteriorMean Geom H mask O v c W ys x := by
+    intro v c W ys hg
+    sorry
+  refine ⟨{
+    σ := posteriorRow Geom H mask O L
+    σ_eq := rfl
+    retained_mass := hretained
+    nonneg := ?_
+    probability := ?_
+    cap := ?_
+  }⟩
+  · intro v W ys x
+    cases hs : selected Geom H mask W v with
+    | none => simp [posteriorRow, hs]
+    | some c =>
+      by_cases hg : posteriorGate Geom H mask O L v c W ys
+      · by_cases hx : x ∈ retainedLabels Geom H mask O v c W ys
+        · let den := ∑ z ∈ retainedLabels Geom H mask O v c W ys,
+            posteriorMean Geom H mask O v c W ys z
+          have hm := hretained v c W ys hg
+          have hdenpos : 0 < den := by
+            dsimp [den]
+            exact lt_of_lt_of_le (div_pos ha (by norm_num)) hm
+          simpa [posteriorRow, hs, hg, hx, den] using
+            (div_nonneg (hpm0 v c W ys x) hdenpos.le)
+        · simp [posteriorRow, hs, hg, hx] <;> positivity
+      · simp [posteriorRow, hs, hg] <;> positivity
+  · intro v W ys hσ
+    have hsome : ∃ x, posteriorRow Geom H mask O L v W ys x ≠ 0 := by
+      by_contra hnone
+      apply hσ
+      funext x
+      by_contra hx
+      exact hnone ⟨x, hx⟩
+    rcases hsome with ⟨x₀, hx₀⟩
+    cases hs : selected Geom H mask W v with
+    | none => simp [posteriorRow, hs] at hx₀
+    | some c =>
+      have hg : posteriorGate Geom H mask O L v c W ys := by
+        by_contra hnot
+        simp [posteriorRow, hs, hnot] at hx₀
+      let S := retainedLabels Geom H mask O v c W ys
+      let den := ∑ z ∈ S, posteriorMean Geom H mask O v c W ys z
+      have hden : κ.a / 200 ≤ den := by
+        dsimp [den, S]
+        exact hretained v c W ys hg
+      have hdenpos : 0 < den := lt_of_lt_of_le (div_pos ha (by norm_num)) hden
+      have hsum : (∑ x, posteriorRow Geom H mask O L v W ys x) = 1 := by
+        calc
+          _ = ∑ x, if x ∈ S then posteriorMean Geom H mask O v c W ys x / den else 0 := by
+            simp [posteriorRow, hs, hg, S, den]
+          _ = ∑ x ∈ S, posteriorMean Geom H mask O v c W ys x / den := by
+            simp [Finset.sum_ite_mem]
+          _ = den / den := by
+            rw [← Finset.sum_div]
+          _ = 1 := div_self hdenpos.ne'
+      simpa [posteriorRow, hs] using hsum
+  · intro v W ys x
+    cases hs : selected Geom H mask W v with
+    | none => simp [posteriorRow, hs]; positivity
+    | some c =>
+      by_cases hg : posteriorGate Geom H mask O L v c W ys
+      · by_cases hx : x ∈ retainedLabels Geom H mask O v c W ys
+        · let den := ∑ z ∈ retainedLabels Geom H mask O v c W ys,
+            posteriorMean Geom H mask O v c W ys z
+          have hm := hretained v c W ys hg
+          have hdenpos : 0 < den := by
+            dsimp [den]
+            exact lt_of_lt_of_le (div_pos ha (by norm_num)) hm
+          have hfactor : 1 ≤ (200 / κ.a) * den := by
+            have hcancel : (200 / κ.a) * (κ.a / 200) = 1 := by
+              field_simp [ne_of_gt ha]
+            calc
+              1 = (200 / κ.a) * (κ.a / 200) := hcancel.symm
+              _ ≤ (200 / κ.a) * den :=
+                mul_le_mul_of_nonneg_left hm (by positivity)
+          have hratio :
+              posteriorMean Geom H mask O v c W ys x / den ≤
+                (200 / κ.a) * posteriorMean Geom H mask O v c W ys x := by
+            apply (div_le_iff₀ hdenpos).2
+            calc
+              posteriorMean Geom H mask O v c W ys x =
+                  1 * posteriorMean Geom H mask O v c W ys x := by ring
+              _ ≤ ((200 / κ.a) * den) * posteriorMean Geom H mask O v c W ys x :=
+                mul_le_mul_of_nonneg_right hfactor (hpm0 v c W ys x)
+              _ = (200 / κ.a) * posteriorMean Geom H mask O v c W ys x * den := by ring
+          have hthreshold := (Finset.mem_filter.mp hx).2
+          have hrow : posteriorRow Geom H mask O L v W ys x =
+              posteriorMean Geom H mask O v c W ys x / den := by
+            simp [posteriorRow, hs, hg, hx, den]
+          calc
+            (T.S.N k : ℝ) * posteriorRow Geom H mask O L v W ys x ≤
+                (T.S.N k : ℝ) * ((200 / κ.a) * posteriorMean Geom H mask O v c W ys x) := by
+                  rw [hrow]
+                  exact mul_le_mul_of_nonneg_left hratio (by positivity)
+            _ = (200 / κ.a) * ((T.S.N k : ℝ) *
+                posteriorMean Geom H mask O v c W ys x) := by ring
+            _ ≤ ((200 / κ.a) * 2 ^ (𝒯.P i).h) *
+                Real.exp (-0.02 * κ.a * (𝒯.P i).h) := by
+                  calc
+                    (200 / κ.a) * ((T.S.N k : ℝ) *
+                        posteriorMean Geom H mask O v c W ys x) ≤
+                        (200 / κ.a) *
+                          (2 ^ (𝒯.P i).h * Real.exp (-0.02 * κ.a * (𝒯.P i).h)) :=
+                            mul_le_mul_of_nonneg_left hthreshold (by positivity)
+                    _ = ((200 / κ.a) * 2 ^ (𝒯.P i).h) *
+                        Real.exp (-0.02 * κ.a * (𝒯.P i).h) := by ring
+            _ ≤ 2 ^ (𝒯.P i).h * Real.exp (-500 * 𝒯.gain i) := scales.truncation_cap
+        · simp [posteriorRow, hs, hg, hx] <;> exact le_of_lt (Real.exp_pos _)
+      · simp [posteriorRow, hs, hg] <;> exact le_of_lt (Real.exp_pos _)
 
 section Conclusions
 
@@ -2111,7 +2296,17 @@ theorem posterior_good_tests (κ : CConsts) (hκ : κ.Admissible)
     (mask : Masks H) (O : OddKernels Geom H mask) (L : LikelihoodData Geom H mask O)
     (R : EvenRows Geom H mask O L) (hh : HeightFacts hconst Geom H mask) :
     Nonempty (GoodTests Geom H mask O L R) := by
-  sorry
+  classical
+  refine ⟨{
+    Hgood := goodTest Geom H mask O L R
+    Hgood_eq := rfl
+    zero_bound := ?_
+    bad_bound := ?_
+  }⟩
+  · intro v W hgood
+    exact hgood.2
+  · intro p
+    sorry
 
 /-- P14.1l: locality and complete symmetry for the concrete rules, including
 search, choice, validity, posterior and predictive-test computations. -/

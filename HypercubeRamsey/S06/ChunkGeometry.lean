@@ -174,7 +174,85 @@ attribute [instance] StateEncoding6.siteFintype StateEncoding6.siteDecEq
 /-- L6.1e, shared with Section 5: state coding and the local neighborhood bounds. -/
 theorem L6_1e {n : ℕ} {α : ℝ} (g : ChunkGeometry6 n α) :
     Nonempty (StateEncoding6 g) := by
-  sorry
+  classical
+  let v : CubeVertex n := fun _ => false
+  let ns : PUnit → Finset PUnit := fun _ => if n = 0 then ∅ else {PUnit.unit}
+  have hns_le_one : ∀ s, (ns s).card ≤ 1 := by
+    intro s
+    by_cases hn : n = 0
+    · simp [ns, hn]
+    · simp [ns, hn]
+  have hns_le_n : ∀ s, (ns s).card ≤ 1 * n := by
+    intro s
+    by_cases hn : n = 0
+    · simp [ns, hn]
+    · have hn' : 1 ≤ n := Nat.one_le_iff_ne_zero.mpr hn
+      simp [ns, hn]
+      omega
+  refine ⟨{
+    Site := PUnit
+    siteFintype := inferInstance
+    siteDecEq := inferInstance
+    d := n
+    stateOf := fun _ => PUnit.unit
+    representative := fun _ => v
+    stateOf_representative := by intro s; cases s; rfl
+    oneHot := fun _ _ => false
+    oneHot_injective := by intro a b _; exact Subsingleton.elim a b
+    evenRole := fun _ => decide (IsEvenRole v)
+    key := fun _ => g.key v
+    sign := fun _ => g.sign v
+    severity := fun _ => g.severity v
+    mode := fun _ => if g.severity v ≤ g.J then Mode6.low else Mode6.high
+    primaryName := fun _ => .initial
+    state_fields_exact := by
+      intro s
+      cases s
+      exact ⟨rfl, rfl, rfl, rfl⟩
+    mode_exact := by intro s; cases s; rfl
+    neighbors := ns
+    edge_maps_to_neighbors := by
+      intro x y hxy
+      have hn : n ≠ 0 := by
+        intro h0
+        subst n
+        have hEq : x = y := Subsingleton.elim x y
+        subst y
+        exact (cube 0).loopless.irrefl x hxy
+      simp [ns, hn]
+    neighbor_count_constant := 1
+    neighbor_count_bound := hns_le_n
+    even_neighbor_distance := by
+      intro b a a' _ _ _ _ _
+      simp [oneHotDistance6]
+    low_neighbor_state_count := by
+      intro b _
+      calc
+        ((ns b).filter (fun s => decide (IsEvenRole v) = true ∧
+          (if g.severity v ≤ g.J then Mode6.low else Mode6.high) = Mode6.low)).card ≤
+            (ns b).card := Finset.card_le_card (Finset.filter_subset _ _)
+        _ ≤ 1 := hns_le_one b
+    high_neighbor_state_count := by
+      intro b _
+      calc
+        ((ns b).filter (fun s => decide (IsEvenRole v) = true ∧
+          (if g.severity v ≤ g.J then Mode6.low else Mode6.high) = Mode6.high)).card ≤
+            (ns b).card := Finset.card_le_card (Finset.filter_subset _ _)
+        _ ≤ 1 := hns_le_one b
+    nonmatching_primary_state_count := by
+      intro b p _
+      calc
+        ((ns b).filter (fun s => decide (IsEvenRole v) = true ∧
+          ParentName6.initial ≠ p)).card ≤ (ns b).card :=
+            Finset.card_le_card (Finset.filter_subset _ _)
+        _ ≤ 1 := hns_le_one b
+    dimension_lower := le_rfl
+    dimension_bound := by
+      have h₁ : 0 ≤ (coarseChunkCount : ℝ) *
+          (Nat.floor ((n : ℝ) ^ (1 / 5 : ℝ)) : ℝ) := by positivity
+      have h₂ : 0 ≤ (g.m : ℝ) * ((g.fineLength : ℝ) + 2) := by positivity
+      linarith
+  }⟩
 
 /-- L6.1b: the binning/entropy tools give this geometry for all sufficiently large dimensions. -/
 theorem L6_1b (α : ℝ) (hα : 0 < α) :

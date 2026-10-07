@@ -1,11 +1,27 @@
 import HypercubeRamsey.Framework.OneShot
 import HypercubeRamsey.Framework.PartC
-import HypercubeRamsey.S03.GatedPosterior
+import HypercubeRamsey.Tools.CubeGeometry
 
 /-!
-Finite objects used by the Section 11 slice and outer-word experiments.  All experiments are expressed as
-explicit weights on finite assignment spaces; no probabilistic object is hidden behind an axiom or an
-incomplete definition.
+# Proposition 11.1: parameters, the slice experiment, compatibility and the outer moment
+
+Source: `refs/openai-paper/sections/11-jump-to-large-bias-only-at-linear-budget.tex` (cited `11:line`);
+blueprint `research/blueprint/PART-B.md` §3.11.  Every object is an explicit finite formula:
+
+* parameters `h = ⌊n^.1⌋` (`hIn`), `k = ⌈n^.2⌉` (`kTup`), `g = n^{-.01}` (`gS`), `b_* = n^{-.95}` (`bS`),
+  `s_c = ⌈e^{n^.01}⌉` (`sC`), `η = 10^{-8}` (`etaC`) (11:12–36, 11:109);
+* the inner coordinates `j < hIn n` and the outer coordinates `j ≥ hIn n` of `Q_n`; outer words index the slices;
+* the slice experiment of one tag (11:35–64), written on the data it reads: the hit-conditioned law `ρ_y`
+  (`rhoLaw`), the likelihood `L_b`, the normalizers `Z_b`, `Z_{b,-v}`, the gates and the posterior odd row
+  `p_b^W` (`oddRowW`) as functions of the `h` neighbouring tuples, indexed by an inner direction;
+* the first-side common-neighbour row `σ_v` (`sigmaW`, 11:67–70) as a function of the `h` internal odd outputs,
+  and the radius-two data of an even role (`ballStar`: the centre tuple and one tuple per pair of inner
+  directions);
+* the mean rows `π_i = E_W p_b^W` (`meanOddRow`) and `α_i = E σ_v` (`meanEvenRow`) (11:95–100);
+* the finite menu of P11.1-menu (`Menu11`, 11:26–33) and the compatibility predicates of Lemma 11.2
+  (11:104–115);
+* the interactions `M_J`, the envelope `w`, the alternating sum `Φ_u` and the outer mass `Z` of Lemma 11.3
+  (11:167–331).
 -/
 
 namespace HypercubeRamsey.S11.Core
@@ -14,237 +30,320 @@ open HypercubeRamsey OAI.HypercubeRamsey
 open Classical
 open scoped BigOperators
 
-abbrev EvenRole (n : ℕ) := {v : CubeVertex n // HypercubeRamsey.IsEvenRole v}
-abbrev OddRole (n : ℕ) := {v : CubeVertex n // ¬ HypercubeRamsey.IsEvenRole v}
-abbrev SliceTuples (h k N : ℕ) := EvenRole h → Fin k → Fin N
-abbrev SliceOddLabels (h N : ℕ) := OddRole h → Fin N
+noncomputable section
 
-/-- The inner slice dimension `⌊n^.1⌋`. -/
-noncomputable def innerDimension (n : ℕ) : ℕ := Nat.floor ((n : ℝ) ^ ((1 : ℝ) / 10))
+/-! ## Parameters (11:12–36, 11:109) -/
 
-/-- The number of outer coordinates. -/
-noncomputable def outerDimension (n : ℕ) : ℕ := n - innerDimension n
+/-- The inner slice dimension `h = ⌊n^.1⌋`. -/
+def hIn (n : ℕ) : ℕ := Nat.floor ((n : ℝ) ^ ((1 : ℝ) / 10))
 
-/-- The number of independent samples in each even row, `⌈n^.2⌉`. -/
-noncomputable def tupleLength (n : ℕ) : ℕ := Nat.ceil ((n : ℝ) ^ ((1 : ℝ) / 5))
+/-- The tuple length `k = ⌈n^.2⌉`. -/
+def kTup (n : ℕ) : ℕ := Nat.ceil ((n : ℝ) ^ ((1 : ℝ) / 5))
 
-/-- The Section 11 surplus and correlation thresholds. -/
-noncomputable def sliceSurplus (n : ℕ) : ℝ := (n : ℝ) ^ (-(1 : ℝ) / 100)
-noncomputable def signedBiasScale (n : ℕ) : ℝ := (n : ℝ) ^ (-(19 : ℝ) / 20)
+/-- The surplus `g = n^{-.01}`. -/
+def gS (n : ℕ) : ℝ := (n : ℝ) ^ (-(1 : ℝ) / 100)
 
-/-- A bounded zero-or-one encoding of a coloured edge. -/
-noncomputable def edgeIndicator {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (x y : Fin N) : ℝ := by
-  classical
-  exact if Hits E G x y then 1 else 0
+/-- The discrepancy error `b_* = n^{-1+.05}` of (11.1). -/
+def bS (n : ℕ) : ℝ := (n : ℝ) ^ (-(19 : ℝ) / 20)
 
-/-- The centered sign `f_x(y)`. -/
-noncomputable def signedEdge {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (x y : Fin N) : ℝ := 2 * edgeIndicator E G x y - 1
+/-- The clique size `s_c = ⌈e^{n^ζ}⌉`, `ζ = 1/100`. -/
+def sC (n : ℕ) : ℕ := Nat.ceil (Real.exp ((n : ℝ) ^ ((1 : ℝ) / 100)))
+
+/-- The high-degree tolerance `η = 10^{-8}` of Lemma 11.2. -/
+def etaC : ℝ := 1 / 100000000
+
+/-! ## Cube coordinates and roles -/
+
+/-- Inner coordinates of `Q_n`: the first `hIn n` coordinates. -/
+abbrev InnerCoord (n : ℕ) := {j : Fin n // j.val < hIn n}
+
+/-- Outer coordinates of `Q_n`. -/
+abbrev OuterCoord (n : ℕ) := {j : Fin n // hIn n ≤ j.val}
+
+/-- Outer words; each indexes one inner slice. -/
+abbrev OuterWord (n : ℕ) := OuterCoord n → Bool
+
+/-- Even roles (first side). -/
+abbrev EvenRole (n : ℕ) := {v : CubeVertex n // IsEvenRole v}
+
+/-- Odd roles (second side). -/
+abbrev OddRole (n : ℕ) := {v : CubeVertex n // ¬ IsEvenRole v}
+
+/-- The odd neighbour of an even role across coordinate `j`. -/
+def oddNbr {n : ℕ} (a : EvenRole n) (j : Fin n) : OddRole n :=
+  ⟨cubeFlip a.1 j, fun h => ((cubeFlip_parity a.1 j).mp h) a.2⟩
+
+/-- The even neighbour of an odd role across coordinate `j`. -/
+def evenNbr {n : ℕ} (b : OddRole n) (j : Fin n) : EvenRole n :=
+  ⟨cubeFlip b.1 j, (cubeFlip_parity b.1 j).mpr b.2⟩
+
+/-- The slice (outer word) of a vertex. -/
+def sliceOf {n : ℕ} (v : CubeVertex n) : OuterWord n := fun j => v j.1
+
+/-- Flip one outer coordinate of an outer word. -/
+def flipOuter {n : ℕ} (s : OuterWord n) (j : OuterCoord n) : OuterWord n :=
+  Function.update s j (!s j)
+
+/-- Hamming distance of outer words. -/
+def wordDist {n : ℕ} (s s' : OuterWord n) : ℕ :=
+  (Finset.univ.filter fun j => s j ≠ s' j).card
+
+/-- Outer-word balls. -/
+def wordBall {n : ℕ} (s : OuterWord n) (r : ℕ) : Finset (OuterWord n) :=
+  Finset.univ.filter fun s' => wordDist s s' ≤ r
+
+/-- Full-cube balls of even roles. -/
+def evenBall {n : ℕ} (v : EvenRole n) (r : ℕ) : Finset (EvenRole n) :=
+  Finset.univ.filter fun v' => HypercubeRamsey.hammingDist v.1 v'.1 ≤ r
+
+/-! ## The slice experiment of one tag (11:35–64) -/
+
+/-- Unordered pairs of inner directions; `v + e_a + e_c` is the even role at inner distance two indexed by
+`{a, c}`. -/
+abbrev Pair (I : Type) [Fintype I] [DecidableEq I] := {S : Finset I // S.card = 2}
+
+section Slice
+
+variable {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+
+/-- The hit-conditioned first law `ρ_y(w) = μ(w) 1[w ∼_G y] / d_G(μ, y)` (11:37–39); the law `μ` itself when
+`d_G(μ, y) = 0` (never used: base labels have degree at least `1/2`). -/
+def rhoLaw (μ : Law N) (y : Fin N) : Law N :=
+  if h : 0 < colDeg E G μ y then
+    { w := fun x => μ.w x * hit E G x y / colDeg E G μ y
+      nonneg := fun x => div_nonneg (mul_nonneg (μ.nonneg x) (by unfold hit; split_ifs <;> norm_num)) h.le
+      sum_eq_one := by rw [← Finset.sum_div]; exact div_self h.ne' }
+  else μ
+
+/-- The law `ρ_y^{⊗k}` of one tuple. -/
+def tupLaw (μ : Law N) (y : Fin N) (k : ℕ) : FinProb (Fin k → Fin N) :=
+  FinProb.pi fun _ : Fin k => rhoLaw E G μ y
+
+/-- The weight of one tuple under `ρ_y^{⊗k}`. -/
+def tupW {k : ℕ} (μ : Law N) (y : Fin N) (t : Fin k → Fin N) : ℝ :=
+  ∏ j, (rhoLaw E G μ y).w (t j)
+
+variable {I : Type} [Fintype I] [DecidableEq I] {k : ℕ}
+
+/-- The weight of `h` independent tuples (one per inner direction) under `ρ_y^{⊗k}`. -/
+def starW (μ : Law N) (y : Fin N) (ws : I → Fin k → Fin N) : ℝ :=
+  ∏ a, tupW E G μ y (ws a)
+
+/-- The likelihood `L_b(y) = ∏_w 1[w ∼_G y] / d_G(μ, y)` of the tuples at the internal even neighbours of an odd
+role (11:40–44). -/
+def lik (μ : Law N) (ws : I → Fin k → Fin N) (y : Fin N) : ℝ :=
+  ∏ a, ∏ j, hit E G (ws a j) y / colDeg E G μ y
+
+/-- The likelihood with the tuple of direction `a₀` omitted. -/
+def likDel (μ : Law N) (ws : I → Fin k → Fin N) (a₀ : I) (y : Fin N) : ℝ :=
+  ∏ a ∈ Finset.univ.erase a₀, ∏ j, hit E G (ws a j) y / colDeg E G μ y
+
+/-- `Z_b = ∫ L_b dν` (11:45). -/
+def normZ (μ ν : Law N) (ws : I → Fin k → Fin N) : ℝ := ∑ y, ν.w y * lik E G μ ws y
+
+/-- `Z_{b,-v}` (11:45). -/
+def normZDel (μ ν : Law N) (ws : I → Fin k → Fin N) (a₀ : I) : ℝ :=
+  ∑ y, ν.w y * likDel E G μ ws a₀ y
+
+/-- The gates of an odd row (11:45–49): positivity, `Z_b ≥ e^{-kh}`, and `Z_b / Z_{b,-v} ≥ e^{-.2gk}` for every
+internal neighbour (in multiplicative form). -/
+def Passes (g : ℝ) (μ ν : Law N) (ws : I → Fin k → Fin N) : Prop :=
+  0 < normZ E G μ ν ws ∧ Real.exp (-((k : ℝ) * Fintype.card I)) ≤ normZ E G μ ν ws ∧
+    ∀ a, Real.exp (-(1 / 5 : ℝ) * g * k) * normZDel E G μ ν ws a ≤ normZ E G μ ν ws
+
+/-- The odd row `p_b^W` (11:50): `ν L_b / Z_b` on passing, `ν` otherwise. -/
+def oddRowW (g : ℝ) (μ ν : Law N) (ws : I → Fin k → Fin N) (y : Fin N) : ℝ :=
+  if Passes E G g μ ν ws then ν.w y * lik E G μ ws y / normZ E G μ ν ws else ν.w y
+
+/-- The first-side common-neighbour set of the internal odd outputs `z` inside `supp μ` (11:68). -/
+def commonSet (μ : Law N) (z : I → Fin N) : Finset (Fin N) :=
+  Finset.univ.filter fun x => μ.w x ≠ 0 ∧ ∀ a, Hits E G x (z a)
+
+/-- The row `σ_v` (11:67–70): uniform on the common-neighbour set when it has at least
+`N exp(-(log 2 - g/2) h)` labels, zero otherwise. -/
+def sigmaW (g : ℝ) (μ : Law N) (z : I → Fin N) (x : Fin N) : ℝ :=
+  if x ∈ commonSet E G μ z ∧
+      (N : ℝ) * Real.exp (-((Real.log 2 - g / 2) * Fintype.card I)) ≤ ((commonSet E G μ z).card : ℝ)
+  then ((commonSet E G μ z).card : ℝ)⁻¹ else 0
+
+/-- The neighbouring tuples of the internal odd neighbour `v + e_a` of an even role `v`, read from the radius-two
+data `W` (`none` is `v` itself; `some {a, c}` is `v + e_a + e_c`). -/
+def ballStar (W : Option (Pair I) → Fin k → Fin N) (a : I) : I → Fin k → Fin N :=
+  fun c => if hc : c = a then W none else W (some ⟨{a, c}, Finset.card_pair (Ne.symm hc)⟩)
+
+/-- The weight of the radius-two data under independent `ρ_{y₀}^{⊗k}` tuples. -/
+def ballW (μ : Law N) (y₀ : Fin N) (W : Option (Pair I) → Fin k → Fin N) : ℝ :=
+  ∏ o, tupW E G μ y₀ (W o)
+
+/-- The weight of the internal odd outputs `z` given the radius-two data: independent draws from the odd rows. -/
+def outW (g : ℝ) (μ ν : Law N) (W : Option (Pair I) → Fin k → Fin N) (z : I → Fin N) : ℝ :=
+  ∏ a, oddRowW E G g μ ν (ballStar W a) (z a)
+
+end Slice
+
+section SliceMeans
+
+variable {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+variable (I : Type) [Fintype I] [DecidableEq I] (k : ℕ)
+
+/-- The test-failure probability of one odd row at a fixed base label `y₀` (11:52–56, 11:65). -/
+def testFail (g : ℝ) (μ ν : Law N) (y₀ : Fin N) : ℝ :=
+  ∑ ws : I → Fin k → Fin N, starW E G μ y₀ ws * (if Passes E G g μ ν ws then 0 else 1)
+
+/-- The mean odd row `π_i = E_W p_b^W` (11:97). -/
+def meanOddRow (g : ℝ) (μ ν : Law N) (y₀ y : Fin N) : ℝ :=
+  ∑ ws : I → Fin k → Fin N, starW E G μ y₀ ws * oddRowW E G g μ ν ws y
+
+/-- The mean even subprobability row `α_i = E_{W, Y_{N_in(v)} | W} σ_v` (11:98). -/
+def meanEvenRow (g : ℝ) (μ ν : Law N) (y₀ x : Fin N) : ℝ :=
+  ∑ W : Option (Pair I) → Fin k → Fin N, ballW E G μ y₀ W *
+    ∑ z : I → Fin N, outW E G g μ ν W z * sigmaW E G g μ z x
+
+/-- The probability that `σ_v` does not have mass one in the slice reference law (11:70). -/
+def sigmaFail (g : ℝ) (μ ν : Law N) (y₀ : Fin N) : ℝ :=
+  ∑ W : Option (Pair I) → Fin k → Fin N, ballW E G μ y₀ W *
+    ∑ z : I → Fin N, outW E G g μ ν W z * (if ∑ x, sigmaW E G g μ z x = 1 then 0 else 1)
+
+end SliceMeans
+
+/-! ## The menu (11:26–33) -/
+
+/-- A finite one-colour menu of biased patches (11:26–33): supports in the retained sets, `width μ_i ≤ n^.01`,
+`width ν_i ≤ .011 n`, all columns of `ν_i` of degree at least `1/2 + 2g`, and every removal pair of at most `κN`
+labels per side avoided by the supports of some tag. -/
+structure Menu11 (n N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (κ : ℝ) where
+  ι : Type
+  [fin : Fintype ι]
+  G : Colour
+  μ : ι → Law N
+  ν : ι → Law N
+  μ_supp : ∀ i, (μ i).SupportedIn X
+  ν_supp : ∀ i, (ν i).SupportedIn Y
+  μ_width : ∀ i, (μ i).WidthLE ((n : ℝ) ^ ((1 : ℝ) / 100))
+  ν_width : ∀ i, (ν i).WidthLE ((11 / 1000 : ℝ) * n)
+  high : ∀ i y, (ν i).w y ≠ 0 → 1 / 2 + 2 * gS n ≤ colDeg E G (μ i) y
+  avail : ∀ RX RY : Finset (Fin N), (RX.card : ℝ) ≤ κ * N → (RY.card : ℝ) ≤ κ * N →
+    ∃ i, (∀ x ∈ RX, (μ i).w x = 0) ∧ (∀ y ∈ RY, (ν i).w y = 0)
+
+attribute [instance] Menu11.fin
+
+/-- Profile mixture of a family of weight functions. -/
+def mixW {ι : Type} [Fintype ι] {N : ℕ} (p : FinProb ι) (f : ι → Fin N → ℝ) (x : Fin N) : ℝ :=
+  ∑ i, p.w i * f i x
+
+section MenuRows
+
+variable {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
+
+/-- The mean odd row `π_i` of tag `i` at its base label. -/
+def piRow (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (i : M.ι) (y : Fin N) : ℝ :=
+  meanOddRow E M.G (InnerCoord n) (kTup n) (gS n) (M.μ i) (M.ν i) (y₀ i) y
+
+/-- The mean even row `α_i` of tag `i` at its base label. -/
+def alphaRow (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (i : M.ι) (x : Fin N) : ℝ :=
+  meanEvenRow E M.G (InnerCoord n) (kTup n) (gS n) (M.μ i) (M.ν i) (y₀ i) x
+
+/-- `π = ∑ p_i π_i`. -/
+def piBar (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) : Fin N → ℝ :=
+  mixW p (piRow M y₀)
+
+/-- `∑ p_i α_i`. -/
+def alphaBar (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) : Fin N → ℝ :=
+  mixW p (alphaRow M y₀)
+
+end MenuRows
+
+/-! ## Compatibility (11:104–115) -/
+
+section Compat
+
+variable {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
 
 /-- `m_x = E_π f_x`. -/
-noncomputable def signedMean {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (x : Fin N) : ℝ := ∑ y, π.w y * signedEdge E G x y
+def sMean (π : Fin N → ℝ) (x : Fin N) : ℝ := ∑ y, π y * fv E G x y
 
-/-- The row degree into a law. -/
-noncomputable def lawDegree {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (x : Fin N) : ℝ := ∑ y, π.w y * edgeIndicator E G x y
+/-- No `s_c` pairwise-distinct labels of `S` with all mutual `K_π > 8 n^{-δ}`. -/
+def NoClique (π : Fin N → ℝ) (n : ℕ) (δ : ℝ) (S : Finset (Fin N)) : Prop :=
+  ∀ C : Finset (Fin N), C ⊆ S → C.card = sC n →
+    ∃ x ∈ C, ∃ z ∈ C, x ≠ z ∧ corr E G π x z ≤ 8 * (n : ℝ) ^ (-δ)
 
-/-- `K_π(x,x') = E_π f_x f_x'`. -/
-noncomputable def signedCorrelation {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (x x' : Fin N) : ℝ :=
-  ∑ y, π.w y * signedEdge E G x y * signedEdge E G x' y
+/-- Lemma 11.2's compatibility of the tag `i` with the profile `p` (11:110–114). -/
+def CompatTag (n : ℕ) (δ : ℝ) {ι : Type} [Fintype ι] (μ : ι → Law N) (π : ι → Fin N → ℝ)
+    (p : FinProb ι) (i : ι) : Prop :=
+  (∀ x, (μ i).w x ≠ 0 → |sMean E G (mixW p π) x| ≤ 4 * bS n) ∧
+  (∀ x, (μ i).w x ≠ 0 →
+    (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p.w i') ≤ etaC) ∧
+  NoClique E G (mixW p π) n δ (Finset.univ.filter fun x => (μ i).w x ≠ 0)
 
-/-- The normalized hit factor `1[x~y]/D_x`, with value zero when `D_x=0`. -/
-noncomputable def normalizedHit {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (x y : Fin N) : ℝ :=
-  if lawDegree E G π x = 0 then 0 else edgeIndicator E G x y / lawDegree E G π x
+end Compat
 
-/-- The centered likelihood factor `a_x(y)`. -/
-noncomputable def likelihoodFactor {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (x y : Fin N) : ℝ := normalizedHit E G π x y - 1
+/-- The balance (11.2) with constant `K`. -/
+def Balanced {N : ℕ} {ι : Type} [Fintype ι] (K : ℝ) (p : FinProb ι) (π α : ι → Fin N → ℝ) : Prop :=
+  (∀ y, (N : ℝ) * mixW p π y ≤ K) ∧ (∀ x, (N : ℝ) * mixW p α x ≤ K)
 
-/-- An interaction indexed by a finite set of sampled labels. -/
-noncomputable def interaction {N u : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (J : Finset (Fin u)) (x : Fin u → Fin N) : ℝ :=
-  ∑ y, π.w y * ∏ j ∈ J, likelihoodFactor E G π (x j) y
+/-- The inputs of Lemma 11.2: a menu at tolerance `κ` with odd mean rows `π_i` (laws on `supp ν_i`, width
+`.02n`) and even mean rows `α_i` (subprobabilities on `supp μ_i`). -/
+structure ProfileInput (n N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (κ : ℝ) {ι : Type}
+    [Fintype ι] (μ ν : ι → Law N) (π α : ι → Fin N → ℝ) : Prop where
+  host : 2 ^ n ≤ N
+  μ_supp : ∀ i, (μ i).SupportedIn X
+  ν_supp : ∀ i, (ν i).SupportedIn Y
+  avail : ∀ RX RY : Finset (Fin N), (RX.card : ℝ) ≤ κ * N → (RY.card : ℝ) ≤ κ * N →
+    ∃ i, (∀ x ∈ RX, (μ i).w x = 0) ∧ (∀ y ∈ RY, (ν i).w y = 0)
+  π_nonneg : ∀ i y, 0 ≤ π i y
+  π_sum : ∀ i, ∑ y, π i y = 1
+  π_supp : ∀ i y, π i y ≠ 0 → (ν i).w y ≠ 0
+  π_cap : ∀ i y, (N : ℝ) * π i y ≤ Real.exp ((n : ℝ) / 50)
+  α_nonneg : ∀ i x, 0 ≤ α i x
+  α_sum : ∀ i, ∑ x, α i x ≤ 1
+  α_supp : ∀ i x, α i x ≠ 0 → (μ i).w x ≠ 0
 
-/-- The outer mass tested by L11.3 for a law `σ` and a tuple of outer labels. -/
-noncomputable def outerMass {N d : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π σ : Law N) (Y : Fin d → Fin N) : ℝ :=
-  ∑ x, σ.w x * ∏ j, (1 + likelihoodFactor E G π x (Y j))
+/-- Cluster absence on `(X, Y)` (Corollary 10.2 at one dimension, `ζ = 1/100`). -/
+def ClusterAbsXY (n N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (δ : ℝ) : Prop :=
+  ∀ (G : Colour) A B, A ⊆ X → B ⊆ Y → (A, B) ∉ PCluster G ((1 / 100 : ℚ) : ℝ) δ n N E
 
-/-- The first-side common-neighbour set inside a slice. -/
-noncomputable def commonNeighbourSet {h N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ : Law N) (Y : SliceOddLabels h N) (v : EvenRole h) : Finset (Fin N) := by
-  classical
-  exact Finset.univ.filter fun x => μ.w x ≠ 0 ∧
-    ∀ b : OddRole h, (cube h).Adj v.1 b.1 → Hits E G x (Y b)
+/-- Cluster absence in the reversed orientation `(Y, X)`. -/
+def ClusterAbsYX (n N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (δ : ℝ) : Prop :=
+  ∀ (G : Colour) A B, A ⊆ Y → B ⊆ X → (A, B) ∉ PCluster G ((1 / 100 : ℚ) : ℝ) δ n N (transposeRel E)
 
-/-- The threshold used to make an even row uniform on its internal common neighbours. -/
-noncomputable def commonNeighbourCutoff (N h : ℕ) (g : ℝ) : ℝ :=
-  (N : ℝ) * Real.exp (-((Real.log 2 - g / 2) * h))
+/-! ## The outer moment (11:167–331) -/
 
-/-- The subprobability row `σ_v`: uniform on the common-neighbour set above the cutoff, zero otherwise. -/
-noncomputable def commonNeighbourWeight {N h : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ : Law N) (Y : SliceOddLabels h N) (v : EvenRole h) (g : ℝ) (x : Fin N) : ℝ := by
-  classical
-  let C := commonNeighbourSet E G μ Y v
-  exact if x ∈ C ∧ (C.card : ℝ) ≥ commonNeighbourCutoff N h g then (C.card : ℝ)⁻¹ else 0
+/-- The product weight `σ^{⊗u}` of a tuple. -/
+def tupWt {N : ℕ} (σ : Fin N → ℝ) {u : ℕ} (x : Fin u → Fin N) : ℝ := ∏ j, σ (x j)
 
-/-- The one-row tilted law `ρ_y(w)=μ(w)1[w~y]/d_G(μ,y)`. -/
-noncomputable def hitConditionedWeight {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ : Law N) (y x : Fin N) : ℝ := by
-  classical
-  exact if Hits E G x y then μ.w x / colDeg E G μ y else 0
+/-- The product weight `π^{⊗D}` of an outer word of labels. -/
+def outWt {N : ℕ} (π : Fin N → ℝ) {D : Type} [Fintype D] (Yv : D → Fin N) : ℝ := ∏ l, π (Yv l)
 
-/-- The likelihood of the even tuples incident to one odd role. -/
-noncomputable def sliceLikelihood {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ : Law N) (W : SliceTuples h k N) (b : OddRole h) (y : Fin N) : ℝ := by
-  classical
-  exact ∏ v : EvenRole h, ∏ j : Fin k,
-    if (cube h).Adj v.1 b.1 then hitConditionedWeight E G μ (W v j) y else 1
+section Outer
 
-/-- The likelihood normalizer `Z_b`. -/
-noncomputable def sliceNormalizer {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (W : SliceTuples h k N) (b : OddRole h) : ℝ :=
-  ∑ y, ν.w y * sliceLikelihood E G μ W b y
+variable {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
 
-/-- The deletion normalizer `Z_{b,-v}`. -/
-noncomputable def sliceDeletionNormalizer {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (W : SliceTuples h k N) (b : OddRole h) (v : EvenRole h) : ℝ := by
-  classical
-  exact ∑ y, ν.w y * (∏ v' : EvenRole h, ∏ j : Fin k,
-    if v' ≠ v ∧ (cube h).Adj v'.1 b.1 then
-      hitConditionedWeight E G μ (W v' j) y else 1)
+/-- `a_x(y) = 1[x ∼_G y] / D_x - 1` with `D_x = d_G(x; π)` (11:172–175). -/
+def aF (π : Fin N → ℝ) (x y : Fin N) : ℝ := hit E G x y / deg E G π x - 1
 
-/-- The three gates defining a passing odd row. -/
-def sliceTestsPass {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (W : SliceTuples h k N) (b : OddRole h) (g : ℝ) : Prop :=
-  0 < sliceNormalizer E G μ ν W b ∧
-  Real.exp (-(k * h : ℝ)) ≤ sliceNormalizer E G μ ν W b ∧
-  ∀ v : EvenRole h, (cube h).Adj v.1 b.1 →
-    Real.exp (-((1 / 5 : ℝ) * g * k)) * sliceDeletionNormalizer E G μ ν W b v ≤
-      sliceNormalizer E G μ ν W b
+/-- The interaction `M_J = ∫ ∏_{j ∈ J} a_{x_j} dπ` of a tuple (11:190–193). -/
+def inter (π : Fin N → ℝ) {u : ℕ} (J : Finset (Fin u)) (x : Fin u → Fin N) : ℝ :=
+  ∑ y, π y * ∏ j ∈ J, aF E G π (x j) y
 
-/-- The gated posterior row, with the original second law as its fallback. -/
-noncomputable def posteriorWeight {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (W : SliceTuples h k N) (b : OddRole h) (g : ℝ) (y : Fin N) : ℝ := by
-  classical
-  exact if sliceTestsPass E G μ ν W b g then
-    ν.w y * sliceLikelihood E G μ W b y / sliceNormalizer E G μ ν W b
-  else ν.w y
+/-- The envelope `w = max_{|J| ≥ 2} |M_J|`, zero for an empty maximum (11:283). -/
+def env (π : Fin N → ℝ) {u : ℕ} (x : Fin u → Fin N) : ℝ :=
+  (Finset.univ : Finset (Finset (Fin u))).sup' ⟨∅, Finset.mem_univ _⟩ fun J =>
+    if 2 ≤ J.card then |inter E G π J x| else 0
 
-/-- Product weight of the independent hit-conditioned tuples in one slice. -/
-noncomputable def tupleProductWeight {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ : Law N) (y₀ : Fin N) (W : SliceTuples h k N) : ℝ := by
-  classical
-  exact ∏ v : EvenRole h, ∏ j : Fin k, hitConditionedWeight E G μ y₀ (W v j)
+/-- The alternating sum `Φ_u` with exponent `d` (11:295–300). -/
+def phiU (π : Fin N → ℝ) (d u : ℕ) (x : Fin u → Fin N) : ℝ :=
+  ∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) * (∑ y, π y * ∏ j ∈ I, (1 + aF E G π (x j) y)) ^ d
 
-/-- Product weight of all odd outputs conditional on the even tuples. -/
-noncomputable def oddOutputProductWeight {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (W : SliceTuples h k N) (g : ℝ) (Y : SliceOddLabels h N) : ℝ := by
-  classical
-  exact ∏ b : OddRole h, posteriorWeight E G μ ν W b g (Y b)
+/-- The outer mass `Z = ∫ ∏_l (1 + a_x(Y_l)) dσ(x)` of the outer labels `Yv` (11:178, 187). -/
+def outerZ (π σ : Fin N → ℝ) {D : Type} [Fintype D] (Yv : D → Fin N) : ℝ :=
+  ∑ x, σ x * ∏ l, (1 + aF E G π x (Yv l))
 
-/-- The averaged odd-row weight `π_i`, before asserting that its weights sum to one. -/
-noncomputable def meanOddRowWeight {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (y₀ : Fin N) (g : ℝ) (b : OddRole h) (y : Fin N) : ℝ := by
-  classical
-  exact
-  ∑ W : SliceTuples h k N,
-    tupleProductWeight E G μ y₀ W * posteriorWeight E G μ ν W b g y
+/-- The failure probability `Pr{Z < 1/2}` under independent outer labels `Y_l ∼ π` (11:177–181). -/
+def outerFail (π σ : Fin N → ℝ) (D : Type) [Fintype D] [DecidableEq D] : ℝ :=
+  ∑ Yv : D → Fin N, outWt π Yv * (if outerZ E G π σ Yv < 1 / 2 then 1 else 0)
 
-/-- Failure mass of the posterior tests under the fixed-base tuple experiment. -/
-noncomputable def sliceTestFailureMass {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (y₀ : Fin N) (g : ℝ) (b : OddRole h) : ℝ := by
-  classical
-  exact ∑ W : SliceTuples h k N,
-    tupleProductWeight E G μ y₀ W * (if sliceTestsPass E G μ ν W b g then 0 else 1)
+end Outer
 
-/-- The averaged even subprobability row `α_i`, before asserting its mass bounds. -/
-noncomputable def meanEvenRowWeight {h k N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (μ ν : Law N) (y₀ : Fin N) (g : ℝ) (v : EvenRole h) (x : Fin N) : ℝ := by
-  classical
-  exact
-  ∑ W : SliceTuples h k N, tupleProductWeight E G μ y₀ W *
-    ∑ Y : SliceOddLabels h N,
-      oddOutputProductWeight E G μ ν W g Y * commonNeighbourWeight E G μ Y v g x
-
-/-- A nonnegative subprobability weight function on a finite host side. -/
-structure SubLaw (N : ℕ) where
-  w : Fin N → ℝ
-  nonneg : ∀ x, 0 ≤ w x
-  mass_le_one : ∑ x, w x ≤ 1
-
-/-- A finite tag menu with the slice-side laws and their removal robustness. -/
-structure BiasedMenu (n N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
-    (κ h₀ : ℝ) where
-  mix : TagMix N
-  G : Colour
-  μ_supported : ∀ i, (mix.μ i).SupportedIn X
-  ν_supported : ∀ i, (mix.ν i).SupportedIn Y
-  μ_width : ∀ i, (mix.μ i).WidthLE ((n : ℝ) ^ (1 / 100 : ℝ))
-  ν_width : ∀ i, (mix.ν i).WidthLE ((11 / 1000 : ℝ) * n)
-  high_columns : ∀ i y, 0 < (mix.ν i).w y →
-    (1 / 2 : ℝ) + 2 * sliceSurplus n ≤ colDeg E G (mix.μ i) y
-  bias : ∀ i, (n : ℝ) ^ (-h₀) ≤
-    |dens E true (mix.μ i) (mix.ν i) - 1 / 2|
-  removal_menu : ∀ RX RY : Finset (Fin N),
-    (RX.card : ℝ) ≤ (κ / 2) * N → (RY.card : ℝ) ≤ (κ / 2) * N →
-    ∃ i, (mix.μ i).SupportedIn (X \ RX) ∧ (mix.ν i).SupportedIn (Y \ RY)
-
-/-- The deterministic base point and mean odd rows selected by P11.1a. -/
-structure SliceSeed {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
-    {κ h₀ : ℝ} (M : BiasedMenu n N E X Y κ h₀) (h k : ℕ) (g : ℝ) where
-  y₀ : M.mix.ι → Fin N
-  y₀_supported : ∀ i, (M.mix.ν i).w (y₀ i) > 0
-  π : M.mix.ι → Law N
-  π_eq : ∀ i (b : OddRole h) y,
-    (π i).w y = meanOddRowWeight (h := h) (k := k)
-      E M.G (M.mix.μ i) (M.mix.ν i) (y₀ i) g b y
-  π_role_invariant : ∀ i (b b' : OddRole h) y,
-    meanOddRowWeight (h := h) (k := k)
-        E M.G (M.mix.μ i) (M.mix.ν i) (y₀ i) g b y =
-      meanOddRowWeight (h := h) (k := k)
-        E M.G (M.mix.μ i) (M.mix.ν i) (y₀ i) g b' y
-  π_width : ∀ i, (π i).WidthLE ((1 / 50 : ℝ) * n)
-  row_cap : ∀ i (W : SliceTuples h k N) (b : OddRole h) y,
-    posteriorWeight (h := h) (k := k)
-      E M.G (M.mix.μ i) (M.mix.ν i) W b g y ≤ Real.exp ((1 / 50 : ℝ) * n) / N
-  test_failure : ∀ i (b : OddRole h),
-    sliceTestFailureMass (h := h) (k := k)
-      E M.G (M.mix.μ i) (M.mix.ν i) (y₀ i) g b ≤
-      Real.exp (-((k * h : ℝ))) + h * Real.exp (-((1 / 5 : ℝ) * g * k))
-
-/-- The mean even sublaws and the common-neighbour success estimate from P11.1b. -/
-structure CommonRows {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
-    {κ h₀ : ℝ} {M : BiasedMenu n N E X Y κ h₀} {h k : ℕ} {g : ℝ}
-    (S : SliceSeed M h k g) where
-  α : M.mix.ι → SubLaw N
-  α_eq : ∀ i (v : EvenRole h) x,
-    (α i).w x = meanEvenRowWeight (h := h) (k := k)
-      E M.G (M.mix.μ i) (M.mix.ν i) (S.y₀ i) g v x
-  α_role_invariant : ∀ i (v v' : EvenRole h) x,
-    meanEvenRowWeight (h := h) (k := k)
-        E M.G (M.mix.μ i) (M.mix.ν i) (S.y₀ i) g v x =
-      meanEvenRowWeight (h := h) (k := k)
-        E M.G (M.mix.μ i) (M.mix.ν i) (S.y₀ i) g v' x
-  row_failure : ∀ i (v : EvenRole h),
-    (∑ W : SliceTuples h k N, tupleProductWeight (h := h) (k := k)
-        E M.G (M.mix.μ i) (S.y₀ i) W *
-      ∑ Y' : SliceOddLabels h N,
-        oddOutputProductWeight (h := h) (k := k)
-          E M.G (M.mix.μ i) (M.mix.ν i) W g Y' *
-        (if (∑ x, commonNeighbourWeight E M.G (M.mix.μ i) Y' v g x) = 1 then 0 else 1)) ≤
-      Real.exp (-((1 / 2 : ℝ) * g * k * h)) +
-        h * (Real.exp (-((k * h : ℝ))) + h * Real.exp (-((1 / 5 : ℝ) * g * k)))
-
-/-- Pointwise profile mixtures of the mean laws and sublaws. -/
-noncomputable def profileLaw {ι : Type*} {N : ℕ} [Fintype ι]
-    (p : FinProb ι) (π : ι → Law N) : Law N := Law.mix p π
-
-noncomputable def profileSubWeight {ι : Type*} {N : ℕ} [Fintype ι]
-    (p : FinProb ι) (α : ι → SubLaw N) (x : Fin N) : ℝ := ∑ i, p.w i * (α i).w x
+end
 
 end HypercubeRamsey.S11.Core

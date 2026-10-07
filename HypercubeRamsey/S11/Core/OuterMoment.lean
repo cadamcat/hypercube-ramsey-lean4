@@ -1,319 +1,233 @@
-import HypercubeRamsey.S11.Core.Local
-import HypercubeRamsey.S11.Needs
+import HypercubeRamsey.S11.Core.Definitions
+import HypercubeRamsey.Tools.SignedTest
+import HypercubeRamsey.Tools.Ramsey
 
-/-! L11.3's finite interaction variables, moment estimates, and tail assembly. -/
+/-!
+# Lemma 11.3: the outer mass lower tail
+
+Source: `sections/11-…tex`, lines 164–331 (L11.3, L11.3a–g in `research/blueprint/PART-B.md` §3.11).  The
+interaction estimates are stated for tuples whose fixed coordinates lie in the compatible support `S` (all tuple
+coordinates are drawn from `σ`, supported in `S`); every constant may depend on the tuple length `u` and is chosen
+before the dimension.
+-/
 
 namespace HypercubeRamsey.S11.Core
 
-open HypercubeRamsey
+open HypercubeRamsey OAI.HypercubeRamsey
 open Classical
 open scoped BigOperators
 
-/-- No large correlation clique occurs in the retained label set. -/
-def NoCorrelationClique {n N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (S : Finset (Fin N)) (δ : ℝ) : Prop :=
-  ∀ C : Finset (Fin N), C ⊆ S →
-    C.card = Nat.ceil (Real.exp ((n : ℝ) ^ (1 / 100 : ℝ))) →
-    ∃ x ∈ C, ∃ y ∈ C, x ≠ y ∧ signedCorrelation E G π x y ≤ 8 * (n : ℝ) ^ (-δ)
+/-- The hypotheses of Lemma 11.3 at one dimension (11:168–171): (11.1), a second law `π` on `Y` with `N π ≤ K`, a
+compatible support `S ⊆ X` (degree condition and no correlation clique), and a probability `σ` on `S` with
+`N σ ≤ exp((log 2 - g/2) h)`. -/
+structure OuterHyp (δ x₀ K : ℝ) (n N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (G : Colour)
+    (π σ : Fin N → ℝ) (S : Finset (Fin N)) : Prop where
+  host : 2 ^ n ≤ N
+  disc : DiscOne E X Y ((n : ℝ) ^ ((1 : ℝ) - δ / 16)) ((n : ℝ) ^ x₀) ((n : ℝ) ^ (-(19 : ℝ) / 20))
+  pi_nonneg : ∀ y, 0 ≤ π y
+  pi_sum : ∑ y, π y = 1
+  pi_supp : ∀ y, π y ≠ 0 → y ∈ Y
+  pi_cap : ∀ y, (N : ℝ) * π y ≤ K
+  S_sub : S ⊆ X
+  degree : ∀ x ∈ S, |sMean E G π x| ≤ 4 * bS n
+  noClique : NoClique E G π n δ S
+  sigma_nonneg : ∀ x, 0 ≤ σ x
+  sigma_sum : ∑ x, σ x = 1
+  sigma_supp : ∀ x, σ x ≠ 0 → x ∈ S
+  sigma_cap : ∀ x, (N : ℝ) * σ x ≤ Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n))
 
-/-- All one-shot hypotheses for L11.3, including support, cap, degree and discrepancy conditions. -/
-structure OuterSetup {n N : ℕ} (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
-    (δ x₀ K : ℝ) where
-  G : Colour
-  π : Law N
-  σ : Law N
-  S : Finset (Fin N)
-  hδ : 0 < δ
-  hδ' : δ < 1 / 20000
-  hx₀ : 0 < x₀
-  hx₀' : x₀ < 1
-  hK : 0 < K
-  hHost : 2 ^ n ≤ N
-  π_supported : π.SupportedIn Y
-  π_cap : Law.CapLE π K
-  σ_supported : σ.SupportedIn S
-  S_subset : S ⊆ X
-  σ_cap : Law.CapLE σ (Real.exp ((Real.log 2 - sliceSurplus n / 2) * innerDimension n))
-  degree_good : ∀ (x : Fin N), x ∈ S →
-    |signedMean (N := N) E G π x| ≤ 4 * signedBiasScale n
-  no_clique : NoCorrelationClique (n := n) E G π S δ
-  discrepancy : DiscOne E X Y
-    ((n : ℝ) ^ (1 - δ / 16)) ((n : ℝ) ^ x₀) (signedBiasScale n)
+/-- Lemma 11.3's conclusion at one dimension, for every setup (11:177–182). -/
+def OuterTailAt (δ x₀ K P : ℝ) (n : ℕ) : Prop :=
+  ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} (G : Colour) (π σ : Fin N → ℝ)
+    (S : Finset (Fin N)), OuterHyp δ x₀ K n N E X Y G π σ S → outerFail E G π σ (OuterCoord n) ≤ (n : ℝ) ^ (-P)
 
-/-- Product probability of an outer word under the independent law `π`. -/
-noncomputable def outerTupleWeight {N d : ℕ} (π : Law N) (Y : Fin d → Fin N) : ℝ :=
-  ∏ j, π.w (Y j)
+section Facts
 
-/-- The exact failure probability in L11.3. -/
-noncomputable def outerFailureMass {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : ℝ := by
-  classical
-  exact ∑ Z : Fin (outerDimension n) → Fin N,
-    outerTupleWeight O.π Z * (if outerMass E O.G O.π O.σ Z < 1 / 2 then 1 else 0)
+variable {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N))
 
-/-- Product weight of a tuple of first-side labels drawn from `σ`. -/
-noncomputable def sigmaTupleWeight {N u : ℕ} (σ : Law N) (x : Fin u → Fin N) : ℝ :=
-  ∏ j, σ.w (x j)
+/-- One free label (11:196–198): `|M_J| ≤ C b_*` except with `σ`-probability `2e^{-n^{1-υ/4}/2}`, `υ = δ/4`. -/
+def OneFree (n : ℕ) (δ C : ℝ) (u : ℕ) : Prop :=
+  ∀ (J : Finset (Fin u)) (j : Fin u), j ∈ J → ∀ base : Fin u → Fin N, (∀ l, base l ∈ S) →
+    (∑ x, σ x * (if C * bS n < |inter E G π J (Function.update base j x)| then 1 else 0)) ≤
+      2 * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16)) / 2)
 
-/-- Maximum absolute interaction of size at least two in an `u`-tuple. -/
-noncomputable def interactionEnvelope {N u : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
-    (π : Law N) (x : Fin u → Fin N) : ℝ := by
-  classical
-  exact (Finset.univ : Finset (Finset (Fin u))).sup' ⟨∅, Finset.mem_univ _⟩ fun J =>
-    if 2 ≤ J.card then |interaction E G π J x| else 0
+/-- Two free labels (11:207–211): `Pr{|M_J| > n^{-1.03}} ≤ e^{-n^.4}`. -/
+def TwoFree (n u : ℕ) : Prop :=
+  ∀ (J : Finset (Fin u)) (j j' : Fin u), j ∈ J → j' ∈ J → j ≠ j' → ∀ base : Fin u → Fin N,
+    (∀ l, base l ∈ S) →
+    (∑ x, ∑ z, σ x * σ z *
+      (if (n : ℝ) ^ (-(103 : ℝ) / 100) <
+          |inter E G π J (Function.update (Function.update base j x) j' z)| then 1 else 0)) ≤
+      Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))
 
-/-- The alternating interaction expansion `Φ_u` from L11.3f. -/
-noncomputable def centeredExpansion {n N u : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K)
-    (x : Fin u → Fin N) : ℝ :=
-  ∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
-    (∑ y, O.π.w y * ∏ j ∈ I, (1 + likelihoodFactor E O.G O.π (x j) y)) ^
-      outerDimension n
+/-- Mean interaction size (11:254–255): `E|M_J| ≤ n^{-.4|J|}` for `|J| ≥ 2`. -/
+def MeanInter (n u : ℕ) : Prop :=
+  ∀ J : Finset (Fin u), 2 ≤ J.card →
+    (∑ x : Fin u → Fin N, tupWt σ x * |inter E G π J x|) ≤ (n : ℝ) ^ (-(2 / 5 : ℝ) * J.card)
 
-/-- The `u`th absolute centered moment of the outer mass. -/
-noncomputable def outerMoment {n N u : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : ℝ := by
-  classical
-  exact ∑ Z : Fin (outerDimension n) → Fin N,
-    outerTupleWeight O.π Z * |outerMass E O.G O.π O.σ Z - 1| ^ u
+/-- Counting large extensions (11:270–272): at most `e^{n^.03}` labels of `S` extend fixed coordinates to
+`|M_J| > n^{-υ}`. -/
+def CountExt (n : ℕ) (δ : ℝ) (u : ℕ) : Prop :=
+  ∀ (J : Finset (Fin u)) (j : Fin u), j ∈ J → ∀ base : Fin u → Fin N, (∀ l, base l ∈ S) →
+    ((S.filter fun x => (n : ℝ) ^ (-(δ / 4)) < |inter E G π J (Function.update base j x)|).card : ℝ) ≤
+      Real.exp ((n : ℝ) ^ ((3 : ℝ) / 100))
 
-/-- The contribution from tuples whose interactions are at most `n^(-1-.03)`. -/
-noncomputable def smallInteractionContribution {n N u : ℕ}
-    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {δ x₀ K : ℝ}
-    (O : OuterSetup (n := n) E X Y δ x₀ K) : ℝ := by
-  classical
-  exact ∑ x : Fin u → Fin N,
-    sigmaTupleWeight O.σ x *
-      (if interactionEnvelope E O.G O.π x ≤ (n : ℝ) ^ (-1 - (3 : ℝ) / 100)
-       then |centeredExpansion O x| else 0)
+/-- Exponential weights, bounded part (11:283–284). -/
+def ModBounded (n : ℕ) (δ : ℝ) (u : ℕ) : Prop :=
+  (∑ x : Fin u → Fin N, tupWt σ x *
+    (if env E G π x ≤ (n : ℝ) ^ (-(δ / 4)) then Real.exp ((2 : ℝ) ^ u * n * env E G π x) else 0)) ≤
+    Real.exp ((2 : ℝ) ^ u) + 1
 
-/-- The contribution from tuples with larger interactions. -/
-noncomputable def largeInteractionContribution {n N u : ℕ}
-    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {δ x₀ K : ℝ}
-    (O : OuterSetup (n := n) E X Y δ x₀ K) : ℝ := by
-  classical
-  exact ∑ x : Fin u → Fin N,
-    sigmaTupleWeight O.σ x *
-      (if (n : ℝ) ^ (-1 - (3 : ℝ) / 100) < interactionEnvelope E O.G O.π x
-       then |centeredExpansion O x| else 0)
+/-- Exponential weights, the part above `n^{-1.03}` (11:284–292). -/
+def ModTail (n : ℕ) (δ P' : ℝ) (u : ℕ) : Prop :=
+  (∑ x : Fin u → Fin N, tupWt σ x *
+    (if (n : ℝ) ^ (-(103 : ℝ) / 100) < env E G π x ∧ env E G π x ≤ (n : ℝ) ^ (-(δ / 4))
+     then Real.exp ((2 : ℝ) ^ u * n * env E G π x) else 0)) ≤ (n : ℝ) ^ (-P')
 
-/-- L11.3c–f output, including the alternating-sum identity and the small-interaction estimate. -/
-structure SmallMomentData {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
-    {δ x₀ K P : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) where
-  u : ℕ
-  u_even : Even u
-  u_pos : 0 < u
-  good_bound : smallInteractionContribution (u := u) O ≤
-    (2 : ℝ) ^ (-(u + 1 : ℤ)) * (n : ℝ) ^ (-P)
-  expansion_bound : outerMoment (u := u) O ≤
-    smallInteractionContribution (u := u) O + largeInteractionContribution (u := u) O
+/-- The contribution of tuples with `w ≤ n^{-υ}` to `∫ |Φ_u| dσ^{⊗u}` (11:294–309). -/
+def SmallRange (d n : ℕ) (δ P : ℝ) (u : ℕ) : Prop :=
+  (∑ x : Fin u → Fin N, tupWt σ x *
+    (if env E G π x ≤ (n : ℝ) ^ (-(δ / 4)) then |phiU E G π d u x| else 0)) ≤
+    (2 : ℝ) ^ (-((u : ℝ) + 2)) * (n : ℝ) ^ (-P)
 
-/-- The uniform one-free-label interaction estimate. -/
-def OneFreeEstimate {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
-    {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : Prop :=
-  ∀ (u : ℕ) (J : Finset (Fin u)) (j : Fin u) (hj : j ∈ J)
-    (base : Fin u → Fin N),
-    (∑ x, O.σ.w x *
-      (if (8 : ℝ) ^ u * signedBiasScale n <
-          |interaction E O.G O.π J (Function.update base j x)| then 1 else 0)) ≤
-      2 * Real.exp (-((n : ℝ) ^ (1 - δ / 16) / 2))
+/-- The contribution of tuples with `w > n^{-υ}` (11:311–327). -/
+def LargeRange (d n : ℕ) (δ P : ℝ) (u : ℕ) : Prop :=
+  (∑ x : Fin u → Fin N, tupWt σ x *
+    (if (n : ℝ) ^ (-(δ / 4)) < env E G π x then |phiU E G π d u x| else 0)) ≤
+    (2 : ℝ) ^ (-((u : ℝ) + 2)) * (n : ℝ) ^ (-P)
 
-/-- The uniform two-free-label interaction estimate. -/
-def TwoFreeEstimate {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
-    {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : Prop :=
-  ∀ (u : ℕ) (J : Finset (Fin u)) (j j' : Fin u) (hjj : j ≠ j')
-    (hj : j ∈ J) (hj' : j' ∈ J) (base : Fin u → Fin N),
-    (∑ x, ∑ z, O.σ.w x * O.σ.w z *
-      (if (n : ℝ) ^ (-1 - (3 : ℝ) / 100) <
-          |interaction E O.G O.π J (Function.update (Function.update base j x) j' z)|
-       then 1 else 0)) ≤ Real.exp (-((n : ℝ) ^ (2 / 5 : ℝ)))
+/-- The moment identity `E(Z - 1)^u = ∫ Φ_u dσ^{⊗u}` (11:295–300). -/
+def MomentIdentity (D : Type) [Fintype D] [DecidableEq D] (u : ℕ) : Prop :=
+  (∑ Yv : D → Fin N, outWt π Yv * (outerZ E G π σ Yv - 1) ^ u) =
+    ∑ x : Fin u → Fin N, tupWt σ x * phiU E G π (Fintype.card D) u x
 
-/-- Uniform mean interaction estimate for all interaction sets of cardinality at least two. -/
-def MeanInteractionEstimate {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : Prop :=
-  ∀ (u : ℕ) (J : Finset (Fin u)), 2 ≤ J.card →
-    (∑ x : Fin u → Fin N, sigmaTupleWeight O.σ x *
-      |interaction E O.G O.π J x|) ≤ (n : ℝ) ^ (-(2 / 5 : ℝ) * J.card)
+end Facts
 
-/-- Uniform Ramsey count for labels extending an interaction above the `n^(-δ/4)` cutoff. -/
-def LargeExtensionEstimate {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : Prop :=
-  ∀ (u : ℕ) (J : Finset (Fin u)) (j : Fin u) (hj : j ∈ J)
-    (base : Fin u → Fin N),
-    ((Finset.univ.filter fun x : Fin N =>
-      x ∈ O.S ∧ (n : ℝ) ^ (-δ / 4) <
-        |interaction E O.G O.π J (Function.update base j x)|).card : ℝ) ≤
-      Real.exp ((n : ℝ) ^ (3 / 100 : ℝ))
+/-- L11.3a's conclusion, uniformly in the setup. -/
+def OneFreeEv (δ x₀ K : ℝ) : Prop :=
+  ∀ u : ℕ, ∃ C : ℝ, ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+    OuterHyp δ x₀ K n N E X Y G π σ S → OneFree E G π σ S n δ C u
 
-/-- The shared X-RamseyBinom contract from `Needs.lean`. -/
-def RamseyBinomialContract (N : ℕ) : Prop :=
-  ∀ (G : SimpleGraph (Fin N)) (s t : ℕ)
-    (hs : 0 < s) (ht : 0 < t)
-    (hcard : Nat.choose (s + t - 2) (s - 1) ≤ Fintype.card (Fin N)),
-    (∃ S : Finset (Fin N), S.card = s ∧
-        ∀ ⦃x y : Fin N⦄, x ∈ S → y ∈ S → x ≠ y → G.Adj x y) ∨
-      (∃ S : Finset (Fin N), S.card = t ∧
-        ∀ ⦃x y : Fin N⦄, x ∈ S → y ∈ S → x ≠ y → ¬ G.Adj x y)
+/-- L11.3b's conclusion. -/
+def TwoFreeEv (δ x₀ K : ℝ) : Prop :=
+  ∀ u : ℕ, ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+    OuterHyp δ x₀ K n N E X Y G π σ S → TwoFree E G π σ S n u
 
-/-- Uniform exponential-weight estimate below the `n^(-δ/4)` cutoff. -/
-def ModerateWeightEstimate {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) : Prop :=
-  ∀ (u : ℕ),
-    (∑ x : Fin u → Fin N, sigmaTupleWeight O.σ x *
-      (if interactionEnvelope E O.G O.π x ≤ (n : ℝ) ^ (-δ / 4)
-       then Real.exp ((2 : ℝ) ^ u * n * interactionEnvelope E O.G O.π x) else 0)) ≤
-      (8 : ℝ) ^ u
+/-- L11.3c's conclusion. -/
+def MeanInterEv (δ x₀ K : ℝ) : Prop :=
+  ∀ u : ℕ, ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+    OuterHyp δ x₀ K n N E X Y G π σ S → MeanInter E G π σ n u
 
-/-- L11.3a: one-free-label signed interactions have an exponentially small exceptional set. -/
-theorem one_free_interaction {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) :
-    OneFreeEstimate O := by
+/-- L11.3d's conclusion. -/
+def CountExtEv (δ x₀ K : ℝ) : Prop :=
+  ∀ u : ℕ, ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+    OuterHyp δ x₀ K n N E X Y G π σ S → CountExt E G π S n δ u
+
+/-- L11.3e's conclusion, for all tuple lengths up to `U` (the subtuples of L11.3g). -/
+def ModerateEv (δ x₀ K : ℝ) : Prop :=
+  ∀ (U : ℕ) (P' : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+    OuterHyp δ x₀ K n N E X Y G π σ S →
+    ∀ u ≤ U, ModBounded E G π σ n δ u ∧ ModTail E G π σ n δ P' u
+
+/-- L11.3a (11:196–205).  `M_J = ⟨f_x, H₀ - E_π H₀⟩_π / (1 + m_x)` with `|H₀| ≤ C_u` (fixed coordinates in `S`,
+`D_x ≥ 1/2 - 2b_*`).  A signed exceptional set of `σ`-mass `≥ e^{-n^{1-υ/4}/2}` gives a first law of width
+`≤ h log 2 + n^{1-υ/4}/2 < n^{1-υ/4}`; reweight by `(1 + m_x)^{-1}` and apply F-SignedTest (width
+`log K + O_u(1) ≤ n^{x₀}`) with (11.1). -/
+theorem one_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) : OneFreeEv δ x₀ K := by
   sorry
 
-/-- L11.3b: two-free-label interactions exceed `n^(-1-.03)` with probability at most `e^{-n^.4}`. -/
-theorem two_free_interaction {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) :
-    TwoFreeEstimate O := by
+/-- L11.3b (11:207–252).  `t = ⌈n^.25⌉` conditioned samples from `σ|_{E_x}`, `‖E_{ρ_x} a_z‖_{L²(π)} = O(b_*)` by
+(11.1), `E‖S‖² = O_u(t)`, Fubini to a fixed norm-good tuple whose simultaneous violation set has `x`-mass
+`e^{-O(t n^.4)}` (width `O(n^.65)`), the projection identity and the equal-normalizer pair `π_±`
+(F-SignedTest): `O_u(b_* √t) = O_u(n^{-.825})` against `t n^{-1.03} = n^{-.78+o(1)}`.  Diagonal pairs have
+probability `≤ max σ ≤ e^{h}/N`. -/
+theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) : TwoFreeEv δ x₀ K := by
   sorry
 
-/-- L11.3c: mean interaction sizes decay as `n^(-.4 |J|)`. -/
-theorem mean_interaction {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) :
-    MeanInteractionEstimate O := by
+/-- L11.3c (11:254–268).  `E M_J² = E_{y,y'∼π} (∫ a_x(y) a_x(y') dσ)^{|J|}`; the kernel is `O(b_*)` off a
+`π`-set of mass `e^{-Ω(n^{x₀})}` by (11.1), so `E M_J² ≤ (C_u b_*)^{|J|} + C_u e^{-Ω(n^{x₀})}`; Cauchy–Schwarz
+with `.95/2 > .4`.  Coinciding coordinates have probability `O_u(e^h/N)`. -/
+theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) : MeanInterEv δ x₀ K := by
   sorry
 
-/-- L11.3d: only `exp(n^.03)` labels extend fixed data to a large interaction. -/
-theorem count_large_extensions {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (hRamsey : RamseyBinomialContract N)
-    (O : OuterSetup (n := n) E X Y δ x₀ K) :
-    LargeExtensionEstimate O := by
+/-- L11.3d (11:270–280).  An extension with `|M_J| > n^{-υ}` has projection `≥ c_u n^{-υ}` of `f_x` on a fixed
+bounded direction; `t₀` candidates of one sign with mutual `K_π ≤ 8n^{-δ}` force `t₀ = O_u(n^{2υ})`; no
+`s_c`-clique in `S` (compatibility) and X-RamseyBinom bound the candidates by `binom(s_c + t₀, t₀)`, of logarithm
+`O_u(n^{ζ + 2υ}) < n^{.03}`. -/
+theorem count_ext (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) : CountExtEv δ x₀ K := by
   sorry
 
-/-- L11.3e: exponential weights are controlled below the `n^(-δ/4)` interaction cutoff. -/
-theorem moderate_interaction_weights {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) :
-    ModerateWeightEstimate O := by
+/-- L11.3e (11:282–292).  On `w ≤ n^{-1.03}` the weight is at most `e^{2^u n^{-.03}}`; on
+`n^{-1.03} < w ≤ n^{-1+.06}` use the two-free estimate (`C_u e^{2^u n^{.06} - n^{.4}}`), on
+`n^{-1+.06} < w ≤ n^{-υ}` the one-free estimate (`C_u e^{2^u n^{1-υ} - n^{1-υ/4}/2}`); finitely many `u ≤ U`. -/
+theorem moderate (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) (hA : OneFreeEv δ x₀ K) (hB : TwoFreeEv δ x₀ K) : ModerateEv δ x₀ K := by
   sorry
 
-/-- L11.3f: the centered expansion controls the contribution from small interactions. -/
-theorem centered_interaction_expansion {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K P : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K)
-    (hOne : OneFreeEstimate O) (hTwo : TwoFreeEstimate O)
-    (hMean : MeanInteractionEstimate O) (hModerate : ModerateWeightEstimate O) :
-    ∃ D : SmallMomentData (P := P) O, True := by
+/-- The moment identity (11:295–300): expand `(Z - 1)^u` binomially over subsets `I ⊆ [u]`, write `Z^{|I|}` as an
+integral over `|I|` independent `σ`-labels, integrate the independent outer labels (each factor gives
+`∫ ∏_{j ∈ I} (1 + a_{x_j}) dπ`), and extend to `u` coordinates (`σ` has mass one). -/
+theorem moment_identity {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour) (π σ : Fin N → ℝ) (D : Type)
+    [Fintype D] [DecidableEq D] (u : ℕ) (hσ : ∑ x, σ x = 1) : MomentIdentity E G π σ D u := by
   sorry
 
-/-- L11.3g: Ramsey extension counting removes the large-interaction tuples. -/
-theorem remove_large_interactions {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K P : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K)
-    (hCount : LargeExtensionEstimate O) (hModerate : ModerateWeightEstimate O)
-    (hSmall : SmallMomentData (P := P) O) :
-    largeInteractionContribution (u := hSmall.u) O ≤
-      (2 : ℝ) ^ (-(hSmall.u + 1 : ℤ)) * (n : ℝ) ^ (-P) := by
+/-- L11.3f (11:294–309).  Choose `L = L(P)` and then an even `u` with `.4u/L > L + P + O(1)`.  On
+`w ≤ n^{-1.03}` expand each of the `d` factors into its interactions: only lists covering `[u]` survive the
+alternating sum; lists of more than `L` interactions give the geometric tail in `2^u n^{-.03}`, lists of at most
+`L` interactions contain one of size `≥ u/L` and give `O_u(n^{L - .4u/L})` (mean interaction size).  On
+`n^{-1.03} < w ≤ n^{-υ}` each positive product is at most `e^{2^u n w}` (exponential weights). -/
+theorem small_range (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) (hC : MeanInterEv δ x₀ K) (hE : ModerateEv δ x₀ K) (P : ℝ) (hP : 0 < P) :
+    ∃ u : ℕ, Even u ∧ 0 < u ∧ ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop}
+      {X Y : Finset (Fin N)} (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+      OuterHyp δ x₀ K n N E X Y G π σ S → SmallRange E G π σ (Fintype.card (OuterCoord n)) n δ P u := by
   sorry
 
-/-- Markov's inequality from the even-moment certificate, proved directly on the finite sample space. -/
-theorem outer_tail_from_even_moment {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K P : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K)
-    (h : ∃ u : ℕ, Even u ∧ 0 < u ∧
-      outerMoment (u := u) O ≤ (2 : ℝ) ^ (-(u : ℤ)) * (n : ℝ) ^ (-P)) :
-    outerFailureMass O ≤ (n : ℝ) ^ (-P) := by
-  classical
-  obtain ⟨u, huEven, huPos, hMoment⟩ := h
-  have hcancel : (2 : ℝ) ^ u * (2 : ℝ) ^ (-(u : ℤ)) = 1 := by
-    rw [← zpow_natCast]
-    rw [mul_comm]
-    exact zpow_neg_mul_zpow_self (u : ℤ) (by norm_num)
-  have hpoint (Z : Fin (outerDimension n) → Fin N) :
-      outerTupleWeight O.π Z *
-          (if outerMass E O.G O.π O.σ Z < 1 / 2 then 1 else 0) ≤
-        (2 : ℝ) ^ u * outerTupleWeight O.π Z *
-          |outerMass E O.G O.π O.σ Z - 1| ^ u := by
-    have hw : 0 ≤ outerTupleWeight O.π Z := by
-      unfold outerTupleWeight
-      exact Finset.prod_nonneg fun j _ => O.π.nonneg (Z j)
-    by_cases hZ : outerMass E O.G O.π O.σ Z < 1 / 2
-    · rw [if_pos hZ]
-      have hneg : outerMass E O.G O.π O.σ Z - 1 < 0 := by
-        calc
-          outerMass E O.G O.π O.σ Z - 1 < 1 / 2 - 1 := sub_lt_sub_right hZ 1
-          _ < 0 := by norm_num
-      have hlarge : (1 / 2 : ℝ) ≤ |outerMass E O.G O.π O.σ Z - 1| := by
-        rw [abs_of_neg hneg]
-        have hstrong : outerMass E O.G O.π O.σ Z - 1 < -(1 / 2 : ℝ) := by
-          calc
-            outerMass E O.G O.π O.σ Z - 1 < 1 / 2 - 1 := sub_lt_sub_right hZ 1
-            _ = -(1 / 2 : ℝ) := by norm_num
-        linarith
-      have hpow := pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 1 / 2) hlarge u
-      have hone : 1 ≤ (2 : ℝ) ^ u * |outerMass E O.G O.π O.σ Z - 1| ^ u := by
-        calc
-          1 = (2 : ℝ) ^ u * (1 / 2 : ℝ) ^ u := by
-            rw [← mul_pow]
-            norm_num
-          _ ≤ (2 : ℝ) ^ u * |outerMass E O.G O.π O.σ Z - 1| ^ u :=
-            mul_le_mul_of_nonneg_left hpow (by positivity)
-      calc
-        outerTupleWeight O.π Z * 1 ≤ outerTupleWeight O.π Z *
-            ((2 : ℝ) ^ u * |outerMass E O.G O.π O.σ Z - 1| ^ u) :=
-          mul_le_mul_of_nonneg_left hone hw
-        _ = (2 : ℝ) ^ u * outerTupleWeight O.π Z *
-            |outerMass E O.G O.π O.σ Z - 1| ^ u := by ring
-    · rw [if_neg hZ]
-      simp
-      positivity
-  unfold outerFailureMass
-  calc
-    (∑ Z : Fin (outerDimension n) → Fin N,
-        outerTupleWeight O.π Z *
-          (if outerMass E O.G O.π O.σ Z < 1 / 2 then 1 else 0)) ≤
-      ∑ Z : Fin (outerDimension n) → Fin N,
-        (2 : ℝ) ^ u * outerTupleWeight O.π Z *
-          |outerMass E O.G O.π O.σ Z - 1| ^ u :=
-      Finset.sum_le_sum fun Z _ => hpoint Z
-    _ = (2 : ℝ) ^ u * outerMoment (u := u) O := by
-      unfold outerMoment
-      rw [Finset.mul_sum]
-      apply Finset.sum_congr rfl
-      intro Z _
-      ring
-    _ ≤ (2 : ℝ) ^ u * ((2 : ℝ) ^ (-(u : ℤ)) * (n : ℝ) ^ (-P)) :=
-      mul_le_mul_of_nonneg_left hMoment (by positivity)
-    _ = ((2 : ℝ) ^ u * (2 : ℝ) ^ (-(u : ℤ))) * (n : ℝ) ^ (-P) := by ring
-    _ = (n : ℝ) ^ (-P) := by rw [hcancel]; ring
+/-- L11.3g (11:311–327).  For a tuple with `w > n^{-υ}` fix a maximal retained set `R` (all interactions within `R`
+at most `n^{-υ}`); each omitted coordinate lies in `B_R`, `|B_R| ≤ 2^u e^{n^.03}` (counting large extensions),
+and costs `|B_R| max σ max_x D_x^{-d} ≤ (2^n/N) exp(-.5gh + O(n^.05) + n^.03 + O_u(1)) = n^{-ω(1)}`; the retained
+positive product has bounded integral (exponential weights at length `|R| < u`). -/
+theorem large_range (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
+    (hK : 0 < K) (hD : CountExtEv δ x₀ K) (hE : ModerateEv δ x₀ K) (u : ℕ) (P : ℝ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} (G : Colour)
+      (π σ : Fin N → ℝ) (S : Finset (Fin N)),
+      OuterHyp δ x₀ K n N E X Y G π σ S → LargeRange E G π σ (Fintype.card (OuterCoord n)) n δ P u := by
+  sorry
 
-/-- L11.3: assemble L11.3a–g and apply the finite even-moment bound. -/
-theorem outer_mass_tail {n N : ℕ} {E : Fin N → Fin N → Prop}
-    {X Y : Finset (Fin N)} {δ x₀ K P : ℝ} (O : OuterSetup (n := n) E X Y δ x₀ K) :
-  outerFailureMass O ≤ (n : ℝ) ^ (-P) := by
-  have hOne := one_free_interaction O
-  have hTwo := two_free_interaction O
-  have hMean := mean_interaction O
-  have hRamsey : RamseyBinomialContract N := by
-    intro G s t hs ht hcard
-    exact HypercubeRamsey.S11.graph_ramsey_binomial_bound G s t hs ht hcard
-  have hCount := count_large_extensions hRamsey O
-  have hModerate := moderate_interaction_weights O
-  obtain ⟨hSmall, -⟩ : ∃ D : SmallMomentData (P := P) O, True :=
-    centered_interaction_expansion (P := P) O hOne hTwo hMean hModerate
-  have hLarge := remove_large_interactions (P := P) O hCount hModerate hSmall
-  have hMoment : ∃ u : ℕ, Even u ∧ 0 < u ∧
-      outerMoment (u := u) O ≤ (2 : ℝ) ^ (-(u : ℤ)) * (n : ℝ) ^ (-P) := by
-    refine ⟨hSmall.u, hSmall.u_even, hSmall.u_pos, ?_⟩
-    calc
-      outerMoment (u := hSmall.u) O ≤
-          smallInteractionContribution (u := hSmall.u) O +
-            largeInteractionContribution (u := hSmall.u) O :=
-        hSmall.expansion_bound
-      _ ≤ (2 : ℝ) ^ (-(hSmall.u + 1 : ℤ)) * (n : ℝ) ^ (-P) +
-          (2 : ℝ) ^ (-(hSmall.u + 1 : ℤ)) * (n : ℝ) ^ (-P) :=
-        add_le_add hSmall.good_bound hLarge
-      _ = (2 : ℝ) ^ (-(hSmall.u : ℤ)) * (n : ℝ) ^ (-P) := by
-        rw [← two_mul]
-        rw [show -(hSmall.u + 1 : ℤ) = (-(hSmall.u : ℤ)) + (-1) by omega]
-        rw [zpow_add₀ (by norm_num : (2 : ℝ) ≠ 0)]
-        simp
-        ring
-  exact outer_tail_from_even_moment O hMoment
+/-- Markov's inequality on the even moment (11:329): `Z < 1/2` forces `(Z - 1)^u ≥ 2^{-u}`, and
+`E(Z - 1)^u = ∫ Φ_u ≤ ∫ |Φ_u| ≤ 2 · 2^{-(u+2)} n^{-P}`. -/
+theorem tail_of_ranges {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {G : Colour}
+    {π σ : Fin N → ℝ} {S : Finset (Fin N)} {δ x₀ K P : ℝ} {n : ℕ} (u : ℕ) (hu : Even u)
+    (hO : OuterHyp δ x₀ K n N E X Y G π σ S) (hid : MomentIdentity E G π σ (OuterCoord n) u)
+    (hs : SmallRange E G π σ (Fintype.card (OuterCoord n)) n δ P u)
+    (hl : LargeRange E G π σ (Fintype.card (OuterCoord n)) n δ P u) :
+    outerFail E G π σ (OuterCoord n) ≤ (n : ℝ) ^ (-P) := by
+  sorry
+
+/-- Lemma 11.3 (11:167–331) assembled. -/
+theorem outer_mass_tail (δ x₀ K P : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀)
+    (hx₀' : x₀ < 1) (hK : 0 < K) (hP : 0 < P) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, OuterTailAt δ x₀ K P n := by
+  have hA := one_free δ x₀ K hδ hδ' hx₀ hx₀' hK
+  have hB := two_free δ x₀ K hδ hδ' hx₀ hx₀' hK
+  have hC := mean_inter δ x₀ K hδ hδ' hx₀ hx₀' hK
+  have hD := count_ext δ x₀ K hδ hδ' hx₀ hx₀' hK
+  have hE := moderate δ x₀ K hδ hδ' hx₀ hx₀' hK hA hB
+  obtain ⟨u, hu, _hu0, n₁, hsmall⟩ := small_range δ x₀ K hδ hδ' hx₀ hx₀' hK hC hE P hP
+  obtain ⟨n₂, hlarge⟩ := large_range δ x₀ K hδ hδ' hx₀ hx₀' hK hD hE u P
+  refine ⟨max n₁ n₂, ?_⟩
+  intro n hn N E X Y G π σ S hO
+  exact tail_of_ranges u hu hO (moment_identity E G π σ (OuterCoord n) u hO.sigma_sum)
+    (hsmall n (le_trans (le_max_left _ _) hn) G π σ S hO)
+    (hlarge n (le_trans (le_max_right _ _) hn) G π σ S hO)
 
 end HypercubeRamsey.S11.Core

@@ -276,4 +276,200 @@ theorem occType_obs_card_le {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N �
     rw [hu]
     omega
 
+theorem pr_forall_lower6 {Ω Name : Type*} [Fintype Ω] [DecidableEq Name]
+    (P : FinProb Ω) (S : Finset Name) (Hit : Name → Ω → Prop) (e : Name)
+    (c ε : ℝ) (hε : 0 ≤ ε) (he : e ∈ S) (hc : c ≤ P.pr (Hit e))
+    (hmiss : ∀ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω) ≤ ε) :
+    c - (S.card : ℝ) * ε ≤ P.pr (fun ω => ∀ a ∈ S, Hit a ω) := by
+  classical
+  let All : Ω → Prop := fun ω => ∀ a ∈ S, Hit a ω
+  have hbad_nonneg (ω : Ω) :
+      0 ≤ ∑ a ∈ S.erase e, if ¬ Hit a ω then P.w ω else 0 := by
+    apply Finset.sum_nonneg
+    intro a ha
+    by_cases h : ¬ Hit a ω
+    · rw [if_pos h]
+      exact P.nonneg ω
+    · have hh : Hit a ω := not_not.mp h
+      simp [hh]
+  have hbad_of_missing (ω : Ω) (a : Name) (ha : a ∈ S.erase e) (hnot : ¬ Hit a ω) :
+      P.w ω ≤ ∑ b ∈ S.erase e, if ¬ Hit b ω then P.w ω else 0 := by
+    have hs : (if ¬ Hit a ω then P.w ω else 0) ≤
+        ∑ b ∈ S.erase e, if ¬ Hit b ω then P.w ω else 0 := Finset.single_le_sum
+      (s := S.erase e) (f := fun b => if ¬ Hit b ω then P.w ω else 0)
+      (fun b hb => by
+        by_cases h : ¬ Hit b ω
+        · rw [if_pos h]
+          exact P.nonneg ω
+        · have hh : Hit b ω := not_not.mp h
+          simp [hh]) ha
+    simpa [hnot] using hs
+  have hmissing (ω : Ω) (hnotAll : ¬ All ω) (heHit : Hit e ω) :
+      ∃ a ∈ S.erase e, ¬ Hit a ω := by
+    change ¬ (∀ a ∈ S, Hit a ω) at hnotAll
+    push_neg at hnotAll
+    rcases hnotAll with ⟨a, ha, hnot⟩
+    have hae : a ≠ e := by
+      intro hEq
+      subst a
+      exact hnot heHit
+    exact ⟨a, Finset.mem_erase.mpr ⟨hae, ha⟩, hnot⟩
+  have hpoint (ω : Ω) :
+      (if All ω then P.w ω else 0) +
+          (∑ a ∈ S.erase e, if ¬ Hit a ω then P.w ω else 0) ≥
+        (if Hit e ω then P.w ω else 0) := by
+    by_cases heHit : Hit e ω
+    · by_cases hAll : All ω
+      · rw [if_pos hAll, if_pos heHit]
+        exact le_add_of_nonneg_right (hbad_nonneg ω)
+      · obtain ⟨a, ha, hnot⟩ := hmissing ω hAll heHit
+        have hs := hbad_of_missing ω a ha hnot
+        rw [if_neg hAll, if_pos heHit]
+        simpa using hs
+    · have hfirst : 0 ≤ if All ω then P.w ω else 0 := by
+        by_cases hAll : All ω
+        · simp [hAll]
+          exact P.nonneg ω
+        · simp [hAll]
+      rw [if_neg heHit]
+      exact add_nonneg hfirst (hbad_nonneg ω)
+  have hbadSum :
+      (∑ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω)) =
+        ∑ ω, ∑ a ∈ S.erase e, if ¬ Hit a ω then P.w ω else 0 := by
+    unfold FinProb.pr
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro ω hω
+    apply Finset.sum_congr rfl
+    intro a ha
+    by_cases h : ¬ Hit a ω <;> simp [h]
+  have hprob : P.pr (Hit e) ≤ P.pr All +
+      ∑ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω) := by
+    unfold FinProb.pr
+    calc
+      (∑ ω, if Hit e ω then P.w ω else 0) ≤
+          ∑ ω, ((if All ω then P.w ω else 0) +
+            ∑ a ∈ S.erase e, if ¬ Hit a ω then P.w ω else 0) :=
+        Finset.sum_le_sum fun ω hω => hpoint ω
+      _ = P.pr All + ∑ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω) := by
+        rw [Finset.sum_add_distrib, ← hbadSum]
+        simp [FinProb.pr]
+        apply Finset.sum_congr rfl
+        intro ω hω
+        by_cases hAll : All ω <;> simp [hAll]
+  have hmissSum :
+      (∑ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω)) ≤
+        ((S.erase e).card : ℝ) * ε := by
+    calc
+      (∑ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω)) ≤
+          ∑ a ∈ S.erase e, ε := Finset.sum_le_sum fun a ha => hmiss a ha
+      _ = ((S.erase e).card : ℝ) * ε := by simp
+  have hcardN : (S.erase e).card ≤ S.card := Finset.card_erase_le
+  have hcard : ((S.erase e).card : ℝ) ≤ (S.card : ℝ) := by exact_mod_cast hcardN
+  have hlast : c ≤ P.pr All + (S.card : ℝ) * ε := by
+    calc
+      c ≤ P.pr (Hit e) := hc
+      _ ≤ P.pr All + ∑ a ∈ S.erase e, P.pr (fun ω => ¬ Hit a ω) := hprob
+      _ ≤ P.pr All + ((S.erase e).card : ℝ) * ε := by linarith
+      _ ≤ P.pr All + (S.card : ℝ) * ε := by nlinarith [hcard, hε]
+  linarith
+
+theorem baseTag_accept_mass6 {N : ℕ} {ι : Type*} [Fintype ι]
+    (E : Fin N → Fin N → Prop) (G : Colour) (M : TagMix N)
+    (y z : Fin N) (havg : c₀ ≤ colDeg E G (broadLaw6 M y) z) :
+    c₁ ≤ (tagPosterior6 M y).pr (fun i => c₁ ≤ colDeg E G (M.μ i) z) := by
+  let P := tagPosterior6 M y
+  let f : M.ι → ℝ := fun i => colDeg E G (M.μ i) z
+  have hc : 0 ≤ c₁ := by norm_num [c₁, c₀]
+  have htwoc : 2 * c₁ = c₀ := by norm_num [c₁, c₀]
+  have hmix : c₀ ≤ ∑ i, P.w i * f i := by
+    calc
+      c₀ ≤ colDeg E G (broadLaw6 M y) z := havg
+      _ = ∑ i, P.w i * f i := by
+        simpa [P, f, broadLaw6] using colDeg_mix6 E G (tagPosterior6 M y) M.μ z
+  have hmass : c₁ ≤ ∑ i, if c₁ ≤ f i then P.w i else 0 :=
+    mass_ge_from_average6 P f c₁ hc
+      (by rw [htwoc]; exact hmix)
+      (fun i => colDeg_nonneg6 E G (M.μ i) z)
+      (fun i => colDeg_le_one6 E G (M.μ i) z)
+  simpa [FinProb.pr, P, f] using hmass
+
+theorem normalize6_pos_atom_implies_weight_pos {α : Type*} [Fintype α]
+    (f : α → ℝ) (ω₀ x : α) (hf : ∀ y, 0 ≤ f y)
+    (hex : ∃ y, 0 < f y) (hpos : 0 < (normalize6 f ω₀).w x) : 0 < f x := by
+  obtain ⟨y, hy⟩ := hex
+  have hsum : 0 < ∑ y, f y := by
+    have hle : f y ≤ ∑ z, f z :=
+      Finset.single_le_sum (fun z hz => hf z) (Finset.mem_univ y)
+    linarith
+  have hformula := normalize6_weight_formula f ω₀ x hf hsum
+  rw [hformula] at hpos
+  exact (div_pos_iff_of_pos_right hsum).1 hpos
+
+theorem binAdjacent6_symm {n : ℕ} {u w : BinVector6 n}
+    (h : binAdjacent6 u w) : binAdjacent6 w u := by
+  rcases h with ⟨i, hEq, hdist⟩
+  refine ⟨i, ?_, ?_⟩
+  · intro j hji
+    exact (hEq j hji).symm
+  · simpa [Nat.dist_comm] using hdist
+
+theorem keyAdjacent6_symm {n : ℕ} {a b : CoarseKey6 (BinVector6 n)}
+    (h : keyAdjacent6 binAdjacent6 a b) : keyAdjacent6 binAdjacent6 b a := by
+  unfold keyAdjacent6 at h ⊢
+  rcases h with hab | hab | ⟨ha, hb, hadj⟩
+  · exact Or.inl hab.symm
+  · exact Or.inr (Or.inl hab.symm)
+  · exact Or.inr (Or.inr ⟨hb, ha, binAdjacent6_symm hadj⟩)
+
+theorem occObs_key_mem_C {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (β : X.Ty)
+    (hβ : β ∈ X.occTypes) (ℓ : X.HKey) (hℓ : ℓ ∈ β.obs) : β.key ∈ X.C ℓ.1 := by
+  unfold Ctx6.occTypes at hβ
+  rcases Finset.mem_image.mp hβ with ⟨x, hx, htype⟩
+  have htype' : β = X.evenType x := htype.symm
+  subst β
+  let L := X.g.L
+  have hevenKey : (X.evenType x).key = L.key x := by
+    simp only [Ctx6.evenType, Type6.key, makeType6]
+    split_ifs <;> rfl
+  by_cases hlow : L.severity x ≤ X.J
+  · letI : DecidableEq X.Bin := Classical.decEq _
+    letI : DecidableEq X.Key := instDecidableEqProd
+    letI : DecidableEq X.HKey := instDecidableEqProd
+    have hObs : (X.evenType x).obs =
+        lowObservations6 binAdjacent6 (L.key x) (L.sign x) (L.flippable x) := by
+      simp [Ctx6.evenType, L, makeType6, hlow, Type6.obs]
+    rw [hObs] at hℓ
+    unfold lowObservations6 at hℓ
+    rcases Finset.mem_union.mp hℓ with hNbr | hFlip
+    · rcases Finset.mem_image.mp hNbr with ⟨s, hs, hEq⟩
+      cases hEq
+      have hsC : s ∈ X.C (L.key x) := by simpa [Ctx6.C] using hs
+      have hrel : keyAdjacent6 binAdjacent6 (L.key x) s :=
+        (Finset.mem_filter.mp hsC).2
+      have hrel' : keyAdjacent6 binAdjacent6 s (L.key x) := keyAdjacent6_symm hrel
+      have hsC' : L.key x ∈ X.C s := by
+        change L.key x ∈ Finset.univ.filter (keyAdjacent6 binAdjacent6 s)
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hrel'⟩
+      rw [hevenKey]
+      exact hsC'
+    · rcases Finset.mem_image.mp hFlip with ⟨a, ha, hEq⟩
+      cases hEq
+      rw [hevenKey]
+      simp [Ctx6.C, keyNeighborhood6, keyAdjacent6]
+  · letI : DecidableEq X.Bin := Classical.decEq _
+    letI : DecidableEq X.Key := instDecidableEqProd
+    letI : DecidableEq X.HKey := instDecidableEqProd
+    have hObs : (X.evenType x).obs =
+        highObservations6 (L.key x) (L.sign x) (L.severity x) X.J := by
+      simp [Ctx6.evenType, L, makeType6, hlow, Type6.obs]
+    rw [hObs] at hℓ
+    by_cases hsev : L.severity x = X.J + 1
+    · simp [highObservations6, hsev] at hℓ
+      cases hℓ
+      rw [hevenKey]
+      simp [Ctx6.C, keyNeighborhood6, keyAdjacent6]
+    · simp [highObservations6, hsev] at hℓ
+
 end HypercubeRamsey.S06

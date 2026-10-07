@@ -201,7 +201,36 @@ radius-`(r-1)` ball, together with the site's own ID; the two smaller crowd test
 `r + 3`. -/
 theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ Pp A : Pos9 P hc n → Bool, GoodHeights9 Pp A → Nonempty (IDMap9 P n) := by
-  sorry
+  classical
+  rcases hP with ⟨_, _, _, _, ⟨hχpos, _⟩, _, _⟩
+  have hχR : 0 < (P.χ : ℝ) := by exact_mod_cast hχpos
+  refine ⟨1, ?_⟩
+  intro n hn Pp A hgood
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have hχpow : 1 ≤ (n : ℝ) ^ (P.χ : ℝ) := Real.one_le_rpow hnR hχR.le
+  let center := Lane_q_s09_map.chosenCenterOfGoodHeights Pp A hgood
+  have hcenter v :
+      (center v).slice = specialWord9 (P.m n) v ∧
+        _root_.hammingDist (center v).location (residualWord9 (P.m n) v) ≤ P.radius n ∧
+        (center v).level.val = height9 Pp A v ∧ activeAt9 Pp A (center v) := by
+    simpa [center] using
+      (Lane_q_s09_map.chosenCenterOfGoodHeights_spec (P := P) (hc := hc) (n := n)
+        Pp A hgood v)
+  let core : CubeVertex n → Finset (CenterID9 (P.m n) (n - P.m n) (hc.levels n)) :=
+    fun v => {center v}
+  refine ⟨⟨hc.levels n, center, ?_, ?_, ?_, core, ?_, ?_, ?_⟩⟩
+  · intro v
+    exact (hcenter v).1
+  · intro v
+    exact (hcenter v).2.1
+  · intro b hbOdd
+    sorry
+  · intro v hvEven
+    simp [core]
+  · intro v hvEven
+    simpa [core] using hχpow
+  · intro v hvEven id hid
+    sorry
 
 /-- P9.2-map1 and P9.2-map2 assembled (09:63–118): for all large `n` the fixed ID map exists. -/
 theorem p92_idmap (P : Params9) (hP : P.Valid) : ∃ n₀ : ℕ, ∀ n ≥ n₀, Nonempty (IDMap9 P n) := by

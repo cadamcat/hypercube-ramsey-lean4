@@ -1,5 +1,7 @@
 import HypercubeRamsey.PartC.LateProcess
 import HypercubeRamsey.Framework.Embedding
+import HypercubeRamsey.S15.DirectNodes
+import HypercubeRamsey.S15.ClusterNodes
 
 /-!
 # Section 18 interfaces supplied by earlier sections
@@ -134,8 +136,8 @@ uses only this selected budget, not the existential deep regime. -/
 theorem high_direct_cube {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (hDisc : DeepDisc T κ.xs κ.α 0.04) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid →
-      PT.tiling.mode = .highDirect → CubeIn T k PT.tiling.c := by
-  sorry
+      PT.tiling.mode = .highDirect → CubeIn T k PT.tiling.c :=
+  S15.high_direct κ hκ T hDisc
 
 /-- C15.F high-cluster cube conclusion. Discharged by
 `S15.high_cluster_exclusion κ hκ T hDisc` on main; the output is identical.
@@ -144,8 +146,8 @@ theorem high_cluster_cube {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (hDisc : DeepDisc T κ.xs κ.α 0.04) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid →
       (PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) →
-        CubeIn T k PT.tiling.c := by
-  sorry
+        CubeIn T k PT.tiling.c :=
+  S15.high_cluster_exclusion κ hκ T hDisc
 
 /-- Transfer of initial discrepancy across the two orientations. Bridge:
 split `o`, retain the false branch, and use `dens_transpose` and the symmetric

@@ -1,0 +1,1362 @@
+heavy-slots: waiting for 1 slots and 0 GB (cap 14, set by HEAVY_SLOTS_CAP; heavy 14; heavy RSS 46.6 of 64 GB)
+warning: PrimeNumberTheoremAnd: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/PrimeNumberTheoremAnd' has local changes
+warning: belyi: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/belyi' has local changes
+warning: formal-schemes: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/formal-schemes' has local changes
+warning: elliptic-curves: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/elliptic-curves' has local changes
+warning: tempered-fundamental-groups: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/tempered-fundamental-groups' has local changes
+warning: oka: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/oka' has local changes
+warning: orbicurve-cores: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/orbicurve-cores' has local changes
+warning: pi1: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/pi1' has local changes
+warning: heights: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/heights' has local changes
+warning: genl: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/genl' has local changes
+warning: tate-curves-theta: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/tate-curves-theta' has local changes
+warning: iut: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/iut' has local changes
+warning: gromov: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/gromov' has local changes
+warning: SphereEversion: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/SphereEversion' has local changes
+warning: schoenflies-lean: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/schoenflies-lean' has local changes
+warning: ClassFieldTheory: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/ClassFieldTheory' has local changes
+warning: AINTLIB: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/AINTLIB' has local changes
+warning: AbsorptionCutoff: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/AbsorptionCutoff' has local changes
+warning: StrongPNT: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/StrongPNT' has local changes
+warning: carleson: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/carleson' has local changes
+warning: rellich-kondrachov: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/rellich-kondrachov' has local changes
+warning: Zeta3Irrational: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/Zeta3Irrational' has local changes
+warning: fixed-point-theorems: repository 'runs/lanes/sol-fix2-s05/wt/.lake/packages/fixed-point-theorems' has local changes
+⚠ [8927/8984] Replayed HypercubeRamsey.Framework.Embedding
+warning: HypercubeRamsey/Framework/Embedding.lean:192:23: Try `simp at huv` instead of `simpa using huv`
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/Framework/Embedding.lean:203:23: Try `simp at huv` instead of `simpa using huv`
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8928/8984] Replayed HypercubeRamsey.Framework.Stage
+warning: HypercubeRamsey/Framework/Stage.lean:78:31: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+⚠ [8931/8984] Replayed HypercubeRamsey.Framework.Patch
+warning: HypercubeRamsey/Framework/Patch.lean:13:20: Variable name `n` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Framework/Patch.lean:16:18: Variable name `n` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [8934/8984] Replayed HypercubeRamsey.S03.Stabilization
+warning: HypercubeRamsey/S03/Stabilization.lean:100:4: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/S03/Stabilization.lean:419:5: Variable name `hX` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hX
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Stabilization.lean:419:30: Variable name `hY` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hY
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [8935/8984] Replayed HypercubeRamsey.Framework.OneShot
+warning: HypercubeRamsey/Framework/OneShot.lean:75:19: Variable name `n` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Framework/OneShot.lean:103:70: Variable name `hκ` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hκ
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Framework/OneShot.lean:104:15: Variable name `n` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Framework/OneShot.lean:123:15: Variable name `n` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _n
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Framework/OneShot.lean:147:4: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/Framework/OneShot.lean:153:4: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/Framework/OneShot.lean:467:17: Try `simp at h` instead of `simpa using h`
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/Framework/OneShot.lean:478:17: Try `simp at h` instead of `simpa using h`
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+⚠ [8936/8984] Replayed HypercubeRamsey.S03.GatedPosterior
+warning: HypercubeRamsey/S03/GatedPosterior.lean:48:18: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/GatedPosterior.lean:53:18: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/GatedPosterior.lean:74:14: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/GatedPosterior.lean:96:20: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/GatedPosterior.lean:74:14: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/GatedPosterior.lean:96:20: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+⚠ [8937/8984] Replayed HypercubeRamsey.S03.Injection.Sampler
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:84:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:89:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:154:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:162:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:174:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:180:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:192:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:209:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:214:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:221:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Sampler.lean:227:8: declaration uses `sorry`
+⚠ [8938/8984] Replayed HypercubeRamsey.S03.Injection.Comparison
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:49:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:58:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:65:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:73:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:83:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:97:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:106:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:113:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Comparison.lean:127:8: declaration uses `sorry`
+⚠ [8939/8984] Replayed HypercubeRamsey.S03.Injection.Nodes
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:52:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:115:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:148:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:165:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:180:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:540:23: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:563:34: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:595:19: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:602:8: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:606:19: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:630:6: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:680:6: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:743:16: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:745:16: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:802:21: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:808:10: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:815:21: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:567:21: This simp argument is unused:
+  hpos
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [condLaw, hzero, hy, hpzero]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:567:34: This simp argument is unused:
+  hy
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [condLaw, hpos, hzero, hpzero]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:750:29: This simp argument is unused:
+  hpos
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [condLaw, hzero]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:784:18: This simp argument is unused:
+  y
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hneq]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:715:53: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/Injection/Nodes.lean:715:53: Unused tactic linter: `rfl` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+⚠ [8941/8984] Replayed HypercubeRamsey.S03.Clock.Model
+warning: HypercubeRamsey/S03/Clock/Model.lean:70:5: Variable name `hδ` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hδ
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Clock/Model.lean:70:18: Variable name `hbase` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hbase
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Clock/Model.lean:71:5: Variable name `hr` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hr
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Clock/Model.lean:71:18: Variable name `hmark` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hmark
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Clock/Model.lean:177:12: This simp argument is unused:
+  Nat.not_lt
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [and_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Model.lean:181:36: This simp argument is unused:
+  Nat.not_lt
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [h]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8942/8984] Replayed HypercubeRamsey.S03.Clock.Matching
+warning: HypercubeRamsey/S03/Clock/Matching.lean:88:33: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:92:19: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:96:21: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:102:21: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:104:21: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:109:21: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:109:36: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Matching.lean:92:19: This simp argument is unused:
+  dif_pos rfl
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only at ha
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Matching.lean:104:21: This simp argument is unused:
+  dif_pos rfl
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only at hb
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8943/8984] Replayed HypercubeRamsey.S03.Clock.Exploration
+warning: HypercubeRamsey/S03/Clock/Exploration.lean:329:26: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Exploration.lean:339:38: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Exploration.lean:346:38: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Exploration.lean:347:26: `if_neg` has been deprecated: Use `ite_eq_right` instead
+⚠ [8944/8984] Replayed HypercubeRamsey.Framework.FinProbLemmas
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:32:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:33:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:34:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:104:2: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:171:57: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:210:57: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:244:57: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:250:57: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/Framework/FinProbLemmas.lean:297:57: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+⚠ [8945/8984] Replayed HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:30:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:47:12: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:40:14: This simp argument is unused:
+  hfun
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hall]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:63:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:72:10: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:98:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:195:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:196:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:221:4: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:285:19: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:326:21: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:235:18: This simp argument is unused:
+  hx
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hxz, Q.sum_eq_one]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:236:18: This simp argument is unused:
+  hx
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hxz]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:396:19: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Leaves_p_clock_r2.lean:396:19: This simp argument is unused:
+  if_pos rfl
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8946/8984] Replayed HypercubeRamsey.S03.Clock.Leaves
+warning: HypercubeRamsey/S03/Clock/Leaves.lean:275:19: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Leaves.lean:275:33: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Leaves.lean:125:39: This simp argument is unused:
+  EdgeConstraint.Allows
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [delay, hc]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Leaves.lean:262:4: Try this: intro z hz L' hmem hbase
+⚠ [8947/8984] Replayed HypercubeRamsey.S03.Clock.Inputs_p_clock_r1
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:11:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:12:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:47:2: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:63:14: This simp argument is unused:
+  hk
+
+Hint: Omit it from the simp argument list.
+  [apply] simp
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:79:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:90:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:97:4: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:96:18: This simp argument is unused:
+  Equiv.piUnique_apply
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only [e, f, j₀, S, J, mul_ite, mul_one, mul_zero]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:137:16: This simp argument is unused:
+  Q
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hF]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:196:14: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:152:42: Variable name `hL` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hL
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:250:33: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/Clock/Inputs_p_clock_r1.lean:250:33: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+⚠ [8948/8984] Replayed HypercubeRamsey.S03.Clock.Inputs
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:218:19: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:221:19: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:375:21: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:395:21: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:212:35: This simp argument is unused:
+  keepMass
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [trimmed, FinProb.cond, ho]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:386:33: This simp argument is unused:
+  SamplingInstance.productLaw
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [pinnedFailureProb, jointT, G, hjointZero, htrimZero]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:133:34: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:190:47: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:232:49: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:326:42: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:336:42: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:702:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:712:10: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Inputs.lean:695:54: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+⚠ [8949/8984] Replayed HypercubeRamsey.S03.ConditionalAvoidance
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:24:8: automatically included section variable(s) unused in theorem `_private.HypercubeRamsey.S03.ConditionalAvoidance.0.HypercubeRamsey.LocalLemma.mass_nonneg`:
+  [Fintype Ω]
+  [DecidableEq Ω]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype Ω] [DecidableEq Ω] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:28:8: automatically included section variable(s) unused in theorem `_private.HypercubeRamsey.S03.ConditionalAvoidance.0.HypercubeRamsey.LocalLemma.mass_mono`:
+  [Fintype Ω]
+  [DecidableEq Ω]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype Ω] [DecidableEq Ω] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:32:8: automatically included section variable(s) unused in theorem `_private.HypercubeRamsey.S03.ConditionalAvoidance.0.HypercubeRamsey.LocalLemma.mass_split`:
+  [Fintype Ω]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype Ω] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:54:46: Variable name `hw` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hw
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:64:8: automatically included section variable(s) unused in theorem `_private.HypercubeRamsey.S03.ConditionalAvoidance.0.HypercubeRamsey.LocalLemma.prod_antitone_of_unitInterval`:
+  [Fintype I]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype I] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:133:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:118:5: Variable name `hsymm` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hsymm
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:118:40: Variable name `hirr` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hirr
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:133:58: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:133:58: Unused tactic linter: `norm_num` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:188:8: automatically included section variable(s) unused in theorem `_private.HypercubeRamsey.S03.ConditionalAvoidance.0.HypercubeRamsey.LocalLemma.weighted_mass_mono`:
+  [Fintype Ω]
+  [DecidableEq Ω]
+consider restructuring your `variable` declarations so that the variables are not in scope or explicitly omit them:
+  omit [Fintype Ω] [DecidableEq Ω] in theorem ...
+
+Note: This linter can be disabled with `set_option linter.unusedSectionVars false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:400:8: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:371:10: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:426:10: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:371:10: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:426:10: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/ConditionalAvoidance.lean:443:24: Variable name `hq0` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hq0
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [8950/8984] Replayed HypercubeRamsey.S03.Clock.Steps_p_clock_r4
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:19:10: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:67:22: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:81:20: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:123:57: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:145:16: This simp argument is unused:
+  Equiv.piEquivPiSubtypeProd_symm_apply
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only [e]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:158:33: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:158:46: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:165:33: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:165:46: `dif_neg` has been deprecated: Use `dite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:158:46: This simp argument is unused:
+  dif_pos rfl
+
+Hint: Omit it from the simp argument list.
+  [apply] simp only [processArrival, if_pos hacc] at h
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:193:4: Try `simp at h0` instead of `simpa using h0`
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:407:12: This simp argument is unused:
+  processArrival
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hacc, h] at *
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps_p_clock_r4.lean:407:34: This simp argument is unused:
+  h
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [processArrival, hacc] at *
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8951/8984] Replayed HypercubeRamsey.S03.Clock.Steps
+warning: HypercubeRamsey/S03/Clock/Steps.lean:199:48: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:270:12: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:324:33: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:327:22: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:333:22: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:407:33: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:409:37: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:415:34: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:458:35: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:492:16: This simp argument is unused:
+  Nat.add_one
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [backgroundTrajectory]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:376:50: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:641:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:682:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:801:6: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:886:12: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:888:25: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:895:25: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:901:38: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:902:33: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1035:21: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1073:36: `mul_le_one₀` has been deprecated: No replacement, use constituent lemmas from proof.
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1357:14: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1357:25: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1357:36: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1359:14: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1359:25: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1369:12: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1369:23: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1385:31: `if_true` has been deprecated: Use `ite_true` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1397:23: `if_true` has been deprecated: Use `ite_true` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:843:54: This simp argument is unused:
+  and_assoc
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [List.filter_filter, Finset.mem_singleton, and_left_comm, and_comm, Bool.and_assoc, Bool.and_left_comm,
+    Bool.and_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:843:65: This simp argument is unused:
+  and_left_comm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [List.filter_filter, Finset.mem_singleton, and_assoc, and_comm, Bool.and_assoc, Bool.and_left_comm,
+    Bool.and_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:844:8: This simp argument is unused:
+  Bool.and_assoc
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [List.filter_filter, Finset.mem_singleton, and_assoc, and_left_comm, and_comm, Bool.and_left_comm,
+    Bool.and_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:844:24: This simp argument is unused:
+  Bool.and_left_comm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [List.filter_filter, Finset.mem_singleton, and_assoc, and_left_comm, and_comm, Bool.and_assoc,
+    Bool.and_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1181:16: This simp argument is unused:
+  required
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [freeLabel, hf, ho]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1181:41: This simp argument is unused:
+  ho
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [required, freeLabel, hf]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:979:59: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1195:52: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1339:63: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1224:48: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1230:44: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1266:76: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:979:59: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1162:14: Unused tactic linter: `change
+  (∑ y ∈ (Finset.univ : Finset (Fin g)), if (ins (a, y)).isSome then (n : ℝ) ^ (-A) else 0) = _` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1195:52: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1339:63: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1599:2: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1700:4: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1962:6: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1977:16: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1979:16: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1993:6: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1994:6: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2000:14: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2003:14: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2003:25: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2004:12: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2006:14: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2008:14: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1589:5: Variable name `hL` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hL
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1815:54: This simp argument is unused:
+  Pcond
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hA, hQ]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1848:43: This simp argument is unused:
+  and_left_comm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [LocalLemma.avoid, E, and_comm, and_assoc]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1848:58: This simp argument is unused:
+  and_assoc
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [LocalLemma.avoid, E, and_comm, and_left_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:1857:15: This simp argument is unused:
+  and_comm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [Q]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/S03/Clock/Steps.lean:2001:52: This simp argument is unused:
+  hw
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [he]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8952/8984] Replayed HypercubeRamsey.S03.Clock.Truncated
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:197:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:206:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:243:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:265:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:275:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:284:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:318:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:327:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:338:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:347:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:394:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Truncated.lean:403:8: declaration uses `sorry`
+⚠ [8953/8984] Replayed HypercubeRamsey.S03.Clock.Paths
+warning: HypercubeRamsey/S03/Clock/Paths.lean:74:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Paths.lean:85:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Paths.lean:94:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Paths.lean:108:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Paths.lean:121:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Paths.lean:137:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Paths.lean:144:8: declaration uses `sorry`
+⚠ [8954/8984] Replayed HypercubeRamsey.S03.Clock.Branching
+warning: HypercubeRamsey/S03/Clock/Branching.lean:55:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Branching.lean:67:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Branching.lean:84:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Branching.lean:98:8: declaration uses `sorry`
+⚠ [8955/8984] Replayed HypercubeRamsey.S03.Clock.Sampler
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:59:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:79:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:87:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:200:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:204:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:210:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:215:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:220:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:227:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:232:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:238:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:245:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:252:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:258:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:265:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:276:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:290:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:307:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:323:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:337:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:348:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:358:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:372:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Clock/Sampler.lean:389:8: declaration uses `sorry`
+⚠ [8959/8984] Replayed HypercubeRamsey.S05.Parameters
+warning: HypercubeRamsey/S05/Parameters.lean:208:8: declaration uses `sorry`
+⚠ [8960/8984] Replayed HypercubeRamsey.S05.Parents
+warning: HypercubeRamsey/S05/Parents.lean:66:8: declaration uses `sorry`
+⚠ [8961/8984] Replayed HypercubeRamsey.S05.Geometry
+warning: HypercubeRamsey/S05/Geometry.lean:136:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Geometry.lean:203:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Geometry.lean:254:8: declaration uses `sorry`
+⚠ [8962/8984] Replayed HypercubeRamsey.S05.Stages
+warning: HypercubeRamsey/S05/Stages.lean:55:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Stages.lean:95:21: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S05/Stages.lean:126:21: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S05/Stages.lean:102:46: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/S05/Stages.lean:102:46: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+⚠ [8964/8984] Replayed HypercubeRamsey.S05.Selection
+warning: HypercubeRamsey/S05/Selection.lean:166:41: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S05/Selection.lean:167:44: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S05/Selection.lean:177:43: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S05/Selection.lean:204:43: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S05/Selection.lean:119:65: Variable name `hε1` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hε1
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+⚠ [8965/8984] Replayed HypercubeRamsey.S03.Height.Device
+warning: HypercubeRamsey/S03/Height/Device.lean:44:4: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+⚠ [8966/8984] Replayed HypercubeRamsey.S03.Height.Scale
+warning: HypercubeRamsey/S03/Height/Scale.lean:144:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/S03/Height/Scale.lean:147:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+⚠ [8967/8984] Replayed HypercubeRamsey.S03.Height.Selection_p_height_small
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:239:19: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:241:19: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:290:10: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:305:19: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:321:6: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:267:63: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:360:20: Variable name `hr` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hr
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:535:6: Unused tactic linter: `push_cast` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/S03/Height/Selection_p_height_small.lean:666:22: This simp argument is unused:
+  hweight
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [hA, hB]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+⚠ [8968/8984] Replayed HypercubeRamsey.S03.Height.Selection
+warning: HypercubeRamsey/S03/Height/Selection.lean:21:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Height/Selection.lean:38:8: declaration uses `sorry`
+warning: HypercubeRamsey/S03/Height/Selection.lean:56:8: declaration uses `sorry`
+ℹ [8969/8984] Replayed HypercubeRamsey.Tools.Binomial_p_tools_binom
+info: HypercubeRamsey/Tools/Binomial_p_tools_binom.lean:30:4: Try this:
+  [apply] ring_nf
+
+  The `ring` tactic failed to close the goal. Use `ring_nf` to obtain a normal form.
+
+  Note that `ring` works primarily in *commutative* rings. If you have a noncommutative ring, abelian group or module, consider using `noncomm_ring`, `abel` or `module` instead.
+⚠ [8970/8984] Replayed HypercubeRamsey.Tools.Binomial
+warning: HypercubeRamsey/Tools/Binomial.lean:24:48: Variable name `hk` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hk
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Binomial.lean:214:8: Unused tactic linter: `push_cast` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/Tools/Binomial.lean:289:80: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Binomial.lean:382:12: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Binomial.lean:405:80: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Binomial.lean:502:12: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Binomial.lean:668:14: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/Tools/Binomial.lean:544:16: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+⚠ [8972/8984] Replayed HypercubeRamsey.Tools.Concentration
+warning: HypercubeRamsey/Tools/Concentration.lean:24:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Tools/Concentration.lean:55:69: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/Tools/Concentration.lean:55:36: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Concentration.lean:55:69: Unused tactic linter: `ring` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/Tools/Concentration.lean:198:56: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Concentration.lean:280:6: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Tools/Concentration.lean:399:4: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Concentration.lean:438:62: Variable name `hδ1` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hδ1
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:495:20: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Concentration.lean:498:20: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Concentration.lean:542:4: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Tools/Concentration.lean:515:5: Variable name `hfiltration` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hfiltration
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:760:43: Variable name `hv` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hv
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:787:50: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/Concentration.lean:810:40: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+info: HypercubeRamsey/Tools/Concentration.lean:1011:10: Try this:
+  [apply] ring_nf
+
+  The `ring` tactic failed to close the goal. Use `ring_nf` to obtain a normal form.
+
+  Note that `ring` works primarily in *commutative* rings. If you have a noncommutative ring, abelian group or module, consider using `noncomm_ring`, `abel` or `module` instead.
+warning: HypercubeRamsey/Tools/Concentration.lean:856:5: Variable name `hfiltration` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hfiltration
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1125:67: This simp argument is unused:
+  mul_comm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [FinProb.pi, Finset.mul_sum, Fin.prod_univ_succ, mul_assoc, mul_left_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1125:77: This simp argument is unused:
+  mul_left_comm
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [FinProb.pi, Finset.mul_sum, Fin.prod_univ_succ, mul_assoc, mul_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1181:8: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/Tools/Concentration.lean:1183:12: `if_neg` has been deprecated: Use `ite_eq_right` instead
+warning: HypercubeRamsey/Tools/Concentration.lean:1189:23: Variable name `i` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _i
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1218:22: This simp argument is unused:
+  FinProb.expect
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [E]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1274:8: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1222:7: Variable name `hc` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hc
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1223:7: Variable name `hlip` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hlip
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1411:40: This simp argument is unused:
+  mul_assoc
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [Finset.mul_sum, mul_left_comm, mul_comm]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1477:2: Try this:
+  letI̵
+
+The goal is a proposition, so `let` is preferred over `letI`.
+The difference between `let` and `letI` is that `letI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+warning: HypercubeRamsey/Tools/Concentration.lean:1481:4: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+⚠ [8973/8984] Replayed HypercubeRamsey.Tools.CubeGeometry_p_tools_cube_r
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:30:8: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:105:5: Variable name `hsd` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hsd
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:165:10: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:184:14: This simp argument is unused:
+  sampleLaw
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [he, hs]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:256:58: This simp argument is unused:
+  hmean
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [P, bernoulliLaw, FinProb.expect, boolValue]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:258:12: this tactic is never executed
+
+Note: This linter can be disabled with `set_option linter.unreachableTactic false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:257:8: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:258:12: Unused tactic linter: `ac_rfl` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:334:74: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:339:56: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:414:26: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/Tools/CubeGeometry_p_tools_cube_r.lean:426:71: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+⚠ [8974/8984] Replayed HypercubeRamsey.Tools.CubeGeometry
+warning: HypercubeRamsey/Tools/CubeGeometry.lean:159:11: Variable name `i` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _i
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/Tools/CubeGeometry.lean:295:8: try 'simp' instead of 'simpa'
+
+Note: This linter can be disabled with `set_option linter.unnecessarySimpa false`
+warning: HypercubeRamsey/Tools/CubeGeometry.lean:382:23: `if_pos` has been deprecated: Use `ite_eq_left` instead
+warning: HypercubeRamsey/Tools/CubeGeometry.lean:415:15: This simp argument is unused:
+  mul_inv
+
+Hint: Omit it from the simp argument list.
+  [apply] simp [F]
+
+Note: This linter can be disabled with `set_option linter.unusedSimpArgs false`
+warning: HypercubeRamsey/Tools/CubeGeometry.lean:331:6: Unused tactic linter: `norm_num` does nothing
+
+Note: This linter can be disabled with `set_option linter.unusedTactic false`
+⚠ [8978/8984] Built HypercubeRamsey.S05.History (7.2s)
+warning: HypercubeRamsey/S05/History.lean:34:2: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+warning: HypercubeRamsey/S05/History.lean:80:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:94:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:121:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:148:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:169:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:191:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:220:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:237:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:250:20: Variable name `i` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _i
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S05/History.lean:253:19: Variable name `k` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _k
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S05/History.lean:294:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:317:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:346:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/History.lean:385:8: declaration uses `sorry`
+⚠ [8979/8984] Built HypercubeRamsey.S05.Centres (11s)
+warning: HypercubeRamsey/S05/Centres.lean:70:37: Variable name `l` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _l
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S05/Centres.lean:250:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Centres.lean:326:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Centres.lean:385:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Centres.lean:432:8: declaration uses `sorry`
+⚠ [8980/8984] Built HypercubeRamsey.S05.Clock_q_s05_even (10s)
+warning: HypercubeRamsey/S05/Clock_q_s05_even.lean:125:36: Variable name `hn` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hn
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+warning: HypercubeRamsey/S05/Clock_q_s05_even.lean:181:62: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+warning: HypercubeRamsey/S05/Clock_q_s05_even.lean:259:40: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+⚠ [8981/8984] Built HypercubeRamsey.S05.Clock (8.2s)
+warning: HypercubeRamsey/S05/Clock.lean:55:8: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+⚠ [8982/8984] Built HypercubeRamsey.S05.Even (9.4s)
+warning: HypercubeRamsey/S05/Even.lean:81:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Even.lean:143:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Even.lean:216:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Even.lean:231:8: declaration uses `sorry`
+warning: HypercubeRamsey/S05/Even.lean:253:8: declaration uses `sorry`
+⚠ [8983/8984] Built HypercubeRamsey.S05.Assembly (24s)
+warning: HypercubeRamsey/S05/Assembly.lean:75:19: `if_true` has been deprecated: Use `ite_true` instead
+warning: HypercubeRamsey/S05/Assembly.lean:290:67: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/S05/Assembly.lean:294:67: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/S05/Assembly.lean:298:67: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+warning: HypercubeRamsey/S05/Assembly.lean:345:12: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+✔ [8984/8984] Built HypercubeRamsey.S05 (8.6s)
+Build completed successfully (8984 jobs).

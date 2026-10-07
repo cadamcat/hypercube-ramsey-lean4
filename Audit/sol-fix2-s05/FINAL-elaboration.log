@@ -1,0 +1,88 @@
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05/History.olean HypercubeRamsey/S05/History.lean
+HypercubeRamsey/S05/History.lean:34:2: warning: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+HypercubeRamsey/S05/History.lean:80:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:94:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:121:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:148:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:169:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:191:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:220:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:237:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:250:20: warning: Variable name `i` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _i
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+HypercubeRamsey/S05/History.lean:253:19: warning: Variable name `k` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _k
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+HypercubeRamsey/S05/History.lean:295:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:318:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:349:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/History.lean:388:8: warning: declaration uses `sorry`
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05/Centres.olean HypercubeRamsey/S05/Centres.lean
+heavy-slots: waiting for 1 slots and 0 GB (cap 14, set by HEAVY_SLOTS_CAP; heavy 14; heavy RSS 38.3 of 64 GB)
+HypercubeRamsey/S05/Centres.lean:70:37: warning: Variable name `l` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _l
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+HypercubeRamsey/S05/Centres.lean:250:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Centres.lean:326:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Centres.lean:385:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Centres.lean:432:8: warning: declaration uses `sorry`
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05/Clock_q_s05_even.olean HypercubeRamsey/S05/Clock_q_s05_even.lean
+heavy-slots: waiting for 1 slots and 0 GB (cap 14, set by HEAVY_SLOTS_CAP; heavy 14; heavy RSS 38.4 of 64 GB)
+HypercubeRamsey/S05/Clock_q_s05_even.lean:125:36: warning: Variable name `hn` is not explicitly referenced.
+
+Hint: The binding can be removed (if unused) or named `_` (if used implicitly). Alternatively, prefix the name with `_` to silence this warning:
+  [apply] _hn
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+HypercubeRamsey/S05/Clock_q_s05_even.lean:181:62: warning: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+HypercubeRamsey/S05/Clock_q_s05_even.lean:259:40: warning: Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice
+
+Note: This linter can be disabled with `set_option linter.unnecessarySeqFocus false`
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05/Clock.olean HypercubeRamsey/S05/Clock.lean
+heavy-slots: waiting for 1 slots and 0 GB (cap 14, set by HEAVY_SLOTS_CAP; heavy 14; heavy RSS 33.6 of 64 GB)
+HypercubeRamsey/S05/Clock.lean:55:8: warning: Try this:
+  haveI̵
+
+The goal is a proposition, so `have` is preferred over `haveI`.
+The difference between `have` and `haveI` is that `haveI` inlines the value.
+But this is not relevant for proofs because of proof irrelevance.
+
+Note: This linter can be disabled with `set_option linter.style.haveILetI false`
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05/Even.olean HypercubeRamsey/S05/Even.lean
+HypercubeRamsey/S05/Even.lean:81:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Even.lean:143:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Even.lean:216:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Even.lean:231:8: warning: declaration uses `sorry`
+HypercubeRamsey/S05/Even.lean:253:8: warning: declaration uses `sorry`
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05/Assembly.olean HypercubeRamsey/S05/Assembly.lean
+HypercubeRamsey/S05/Assembly.lean:75:19: warning: `if_true` has been deprecated: Use `ite_true` instead
+HypercubeRamsey/S05/Assembly.lean:299:67: warning: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+HypercubeRamsey/S05/Assembly.lean:303:67: warning: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+HypercubeRamsey/S05/Assembly.lean:307:67: warning: `dif_pos` has been deprecated: Use `dite_eq_left` instead
+HypercubeRamsey/S05/Assembly.lean:354:12: warning: `push_neg` has been deprecated. Prefer using `push Not` instead.
+If you'd rather continue using `push_neg` in your project, you can implement it as follows:
+```
+open Lean.Parser.Tactic in
+macro "push_neg" cfg:optConfig loc:(location)? : tactic =>
+  `(tactic| push $cfg:optConfig Not $[$loc]?)
+```
+COMMAND lake env lean -DautoImplicit=false -o .lake/build/lib/lean/HypercubeRamsey/S05.olean HypercubeRamsey/S05.lean
+heavy-slots: waiting for 1 slots and 0 GB (cap 14, set by HEAVY_SLOTS_CAP; heavy 14; heavy RSS 46.7 of 64 GB)

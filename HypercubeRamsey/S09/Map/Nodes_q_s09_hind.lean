@@ -2114,6 +2114,45 @@ private theorem height9_lipschitz_of_no_rootScaleFailure
   unfold Nat.dist
   omega
 
+private theorem heightLevels9_pos {P : Params9} {hc : HeightChoice9 P} (n : ℕ) :
+    0 < hc.levels n := by
+  unfold HeightChoice9.levels topScale
+  dsimp only
+  positivity
+
+private theorem goodHeights9_of_no_rootScaleFailure
+    {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (Pp A : Pos9 P hc n → Bool)
+    (hcounts : ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (1 / 2 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ Pp v j : ℝ))
+    (hno : ∀ root : CubeVertex n,
+      ¬ rootScaleFailure9 Finset.univ (1 / 3) (1 / 8) (1 / 4)
+        (hc.levels n) Pp A root) :
+    GoodHeights9 (P := P) (hc := hc) (n := n) Pp A := by
+  have hnot : ∀ v : CubeVertex n,
+      ¬ Reach9 (P := P) (hc := hc) (n := n) Pp A v (4 * hc.levels n) v
+        (hc.levels n) := by
+    intro v hreach
+    have hfail : rootScaleFailure9 Finset.univ (1 / 3) (1 / 8) (1 / 4)
+        (hc.levels n) Pp A v :=
+      reach9_top_implies_rootScaleFailure9 (t := 1 / 3) (s := 1 / 8) (η := 1 / 4)
+        (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+        Pp A hcounts v hreach
+    exact hno v hfail
+  have hlip : ∀ v v' : CubeVertex n, _root_.hammingDist v v' ≤ 2 →
+      Nat.dist (height9 (P := P) (hc := hc) (n := n) Pp A v)
+        (height9 (P := P) (hc := hc) (n := n) Pp A v') ≤ 1 := by
+    intro v v' hvv'
+    exact height9_lipschitz_of_no_rootScaleFailure
+      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+      (heightLevels9_pos n) Pp A hcounts hno v v' hvv'
+  intro v
+  have hlt := height_lt_levels_of_not_reach_top Pp A v (hnot v)
+  refine ⟨hlt, height_good_at_max Pp A v hlt, ?_⟩
+  intro v' hvv'
+  exact hlip v v' hvv'
+
 theorem goodHeights_of_no_top_reach {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool)
     (hnot : ∀ v : CubeVertex n,

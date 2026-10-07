@@ -1,5 +1,6 @@
 import HypercubeRamsey.S18.PrefixBudget_sol_s18_n4
 import HypercubeRamsey.S18.PrefixClosure_sol_s18_n4
+import HypercubeRamsey.S18.ReplayScope_sol_s18_3a_perm
 
 namespace HypercubeRamsey.Lane_sol_s18_n4
 open Classical Filter
@@ -25,7 +26,7 @@ private theorem validPrefixClosureTail {κ : CConsts} (hκ : κ.Admissible) (T :
 
 /-- Compare the actual consulted permutation slots, with a globally pinned
 cell omitted from the critical set, to the iid pool/tape fresh experiment. -/
-private theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c : ℝ) (hK : 0 < K27) (hc : 0 < c) :
     ∀ᶠ k in atTop, ∀ {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
       (D : S18.LateData hPT), D.Spec → S18.TransitionData D →
@@ -43,13 +44,22 @@ private theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible
   intro PT hPT D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
   dsimp only
   intro W hW
-  have hfresh := criticalFreshReplayBound D hReplay c hTransfer F hkind hvalid
-    (pin.map (fun p => p.1)) (occurrencePattern D W)
-  have hentry := prescribedPoolTapeLaw D
-  have htypical := criticalTypicalIntegral_le D hD
-  -- Missing: the deterministic consulted pool scope and its pin-uniform
-  -- permutation-to-iid comparison, followed by critical/outside tape disintegration.
-  sorry
+  let X : S18.CriticalTransferData D :=
+    ⟨F.2, hvalid, pin.map (fun p => p.1), fun C => D.fresh.fallback C⟩
+  let f := fun x : D.encoding.InitInput =>
+    if ∀ C ∈ X.criticalCells, D.fresh.typical C (x.1 C) then
+      forcedReplayRisk D X.criticalCells (occurrencePattern D W) F x else 0
+  have hcomparison : (initialPinnedLaw D pin).E f ≤
+      2 * (Lane_sol_s18_3a_perm.iidPinnedLaw D pin).E f := by
+    apply Lane_sol_s18_3a_perm.replayComparison_of_poolComparison D pin f
+    have hlocal := Lane_sol_s18_3a_perm.replayPoolTest_local D hD hTransition F hkind hvalid
+      (pin.map (fun p => p.1)) (occurrencePattern D W)
+    -- Remaining: the pin-uniform patch-wise permutation-to-iid comparison
+    -- on this deterministic region, and its total cost bound at most two.
+    sorry
+  exact hcomparison.trans (mul_le_mul_of_nonneg_left
+    (Lane_sol_s18_3a_perm.iidPinnedReplayBound D hD hReplay c hTransfer F hkind hvalid pin
+      (occurrencePattern D W)) (by norm_num))
 
 /-- The valid-prefix branch reduces to the two exact analytic estimates
 above. Pattern summation and the final exponent budget are proved helpers. -/

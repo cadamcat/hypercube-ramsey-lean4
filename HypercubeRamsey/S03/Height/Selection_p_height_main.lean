@@ -3686,7 +3686,7 @@ theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.D) :
   have hdiv : (p.D - 1) / p.D = 0 := Nat.div_eq_of_lt (by omega)
   simp [hdiv]
 
-private theorem hdScaleDistance_triangle {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleDistance_triangle {p : HDParams} (hD : 0 < p.D)
     (x y z : HDState p) :
     hdScaleDistance p.D x z ≤ hdScaleDistance p.D x y + hdScaleDistance p.D y z := by
   have hD1 : 1 ≤ p.D := by omega

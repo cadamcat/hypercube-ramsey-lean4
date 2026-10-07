@@ -2486,6 +2486,39 @@ theorem critical_raw_pair_survival_upper {κ : CConsts} {T : Stage} {k : ℕ}
     simpa [u, base, i, hpatch] using h
   simpa [u, base, i] using critical_survival_probability_le hgeom x (some y) u hu hcell
 
+theorem likelihood_nonneg (P : TransferProtocol X) (seed : P.Seed)
+    (x : Fin (T.S.N k)) (z : Option (Fin (T.S.N k))) (s : X.Raw) (t : ℕ) :
+    0 ≤ likelihood P seed x z s t := by
+  unfold likelihood
+  exact div_nonneg
+    (finLaw_pr_nonneg (tiltedLaw X x z)
+      (fun s' => P.replies seed s' t = P.replies seed s t))
+    (finLaw_pr_nonneg X.rawLaw
+      (fun s' => P.replies seed s' t = P.replies seed s t))
+
+theorem likelihood_one_at_zero (P : TransferProtocol X) (seed : P.Seed)
+    (x : Fin (T.S.N k)) (z : Option (Fin (T.S.N k))) (s : X.Raw) :
+    likelihood P seed x z s 0 = 1 := by
+  classical
+  simp [likelihood, P.replies_zero, finLaw_pr_true]
+
+theorem stoppingTime_le_steps (P : TransferProtocol X) (seed : P.Seed)
+    (x : Fin (T.S.N k)) (z : Option (Fin (T.S.N k))) (s : X.Raw) (cstop : ℝ) :
+    stoppingTime P seed x z s cstop ≤ P.steps := by
+  classical
+  dsimp only [stoppingTime]
+  split_ifs with h
+  · have hm := Finset.min'_mem _ h
+    have hrange : (Finset.range (P.steps + 1)).filter (fun t =>
+        factorException P seed x z s t ∨
+          Real.exp (Real.rpow (T.S.n k : ℝ) cstop) < likelihood P seed x z s t)
+        ⊆ Finset.range (P.steps + 1) := Finset.filter_subset _ _
+    have hm' := hrange hm
+    have hlt : (Finset.min' _ h) < P.steps + 1 := by
+      simpa only [Finset.mem_range] using hm'
+    omega
+  · omega
+
 theorem critical_cell_hit_bound_eventually {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in (Filter.atTop : Filter ℕ), ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,

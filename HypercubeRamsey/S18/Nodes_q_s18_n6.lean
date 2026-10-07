@@ -501,6 +501,329 @@ noncomputable def pairQueriesOfCandidateFinset {κ : CConsts} {T : Stage} {k : �
       exact hne (e.injective heq)
     · exact hcell
 
+noncomputable def pairQueryCandidateSet {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (A : InitialPairData D) : Finset (Pos T k × Fin (T.S.n k)) :=
+  (D.nonisolates A.rows).biUnion fun v =>
+    ((D.externalEarly v).filter fun a =>
+      a ∈ PT.tiling.bulkCoords (D.geom.patchOf v)).image fun a => (v, a)
+
+lemma mem_pairQueryCandidateSet {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (A : InitialPairData D) (q : Pos T k × Fin (T.S.n k)) :
+  q ∈ pairQueryCandidateSet D A ↔
+      q.1 ∈ D.nonisolates A.rows ∧
+      q.2 ∈ D.externalEarly q.1 ∧
+      q.2 ∈ PT.tiling.bulkCoords (D.geom.patchOf q.1) := by
+  classical
+  simp only [pairQueryCandidateSet, Finset.mem_biUnion, Finset.mem_image,
+    Finset.mem_filter]
+  constructor
+  · rintro ⟨v, hv, a, ⟨⟨he, hb⟩, heq⟩⟩
+    cases heq
+    exact ⟨hv, he, hb⟩
+  · rintro ⟨hq, he, hb⟩
+    exact ⟨q.1, hq, q.2, ⟨⟨he, hb⟩, rfl⟩⟩
+
+noncomputable def pairQueryOuterMask {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) : Pos T k :=
+  fun a => if a ∈ PT.tiling.Icoord (D.geom.patchOf v) then false else v a
+
+noncomputable def pairQueryOuterFamilyCode {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) : ℕ :=
+  ((Fintype.equivFin (Fin PT.tiling.m × Pos T k))
+    (D.geom.patchOf v, pairQueryOuterMask D v)).val
+
+lemma pairQueryOuterFamily_eq_of_code_eq {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    {v w : Pos T k}
+    (h : pairQueryOuterFamilyCode D v = pairQueryOuterFamilyCode D w) :
+    D.geom.patchOf v = D.geom.patchOf w ∧ pairQueryOuterMask D v = pairQueryOuterMask D w := by
+  let e := Fintype.equivFin (Fin PT.tiling.m × Pos T k)
+  have hkey : e (D.geom.patchOf v, pairQueryOuterMask D v) =
+      e (D.geom.patchOf w, pairQueryOuterMask D w) := Fin.ext h
+  have hval := e.injective hkey
+  exact ⟨congrArg Prod.fst hval, congrArg Prod.snd hval⟩
+
+noncomputable def pairQueryCellFamilyMinimum {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (candidates : Finset (Pos T k × Fin (T.S.n k))) (C : D.geom.Cell) : ℕ := by
+  classical
+  let rows := (candidates.filter fun q =>
+    D.geom.cellOf (flipPos q.1 q.2) = C).image fun q => pairQueryOuterFamilyCode D q.1
+  exact if h : rows.Nonempty then rows.min' h else 0
+
+noncomputable def pairQueryOneFamilyPerCell {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (candidates : Finset (Pos T k × Fin (T.S.n k))) : Finset (Pos T k × Fin (T.S.n k)) :=
+  candidates.filter fun q =>
+    pairQueryOuterFamilyCode D q.1 =
+      pairQueryCellFamilyMinimum D candidates (D.geom.cellOf (flipPos q.1 q.2))
+
+lemma pairQueryOneFamilyPerCell_sameFamily {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (candidates : Finset (Pos T k × Fin (T.S.n k)))
+    {q q' : Pos T k × Fin (T.S.n k)}
+    (hq : q ∈ pairQueryOneFamilyPerCell D candidates)
+    (hq' : q' ∈ pairQueryOneFamilyPerCell D candidates)
+    (hcell : D.geom.cellOf (flipPos q.1 q.2) =
+      D.geom.cellOf (flipPos q'.1 q'.2)) :
+    pairQueryOuterFamilyCode D q.1 = pairQueryOuterFamilyCode D q'.1 := by
+  simp only [pairQueryOneFamilyPerCell, Finset.mem_filter] at hq hq'
+  rw [← hcell] at hq'
+  exact hq.2.trans hq'.2.symm
+
+noncomputable def pairQueryRole {T : Stage} {k : ℕ}
+    (q : Pos T k × Fin (T.S.n k)) : Pos T k :=
+  flipPos q.1 q.2
+
+noncomputable def pairQueryRepresentative {T : Stage} {k : ℕ}
+    (selected : Finset (Pos T k × Fin (T.S.n k)))
+    (b : {b : Pos T k // b ∈ selected.image pairQueryRole}) :
+    Pos T k × Fin (T.S.n k) :=
+  Classical.choose (Finset.mem_image.mp b.property)
+
+lemma pairQueryRepresentative_spec {T : Stage} {k : ℕ}
+    (selected : Finset (Pos T k × Fin (T.S.n k)))
+    (b : {b : Pos T k // b ∈ selected.image pairQueryRole}) :
+    pairQueryRepresentative selected b ∈ selected ∧
+      pairQueryRole (pairQueryRepresentative selected b) = b.1 :=
+  Classical.choose_spec (Finset.mem_image.mp b.property)
+
+noncomputable def pairQueryRoleRepresentativeSet {T : Stage} {k : ℕ}
+    (selected : Finset (Pos T k × Fin (T.S.n k))) : Finset (Pos T k × Fin (T.S.n k)) :=
+  (Finset.univ : Finset {b : Pos T k // b ∈ selected.image pairQueryRole}).image
+    (pairQueryRepresentative selected)
+
+lemma pairQueryRoleRepresentativeSet_subset {T : Stage} {k : ℕ}
+    (selected : Finset (Pos T k × Fin (T.S.n k))) :
+    pairQueryRoleRepresentativeSet selected ⊆ selected := by
+  intro q hq
+  rcases Finset.mem_image.mp hq with ⟨b, _, rfl⟩
+  exact (pairQueryRepresentative_spec selected b).1
+
+lemma pairQueryRole_injective_on_representatives {T : Stage} {k : ℕ}
+    (selected : Finset (Pos T k × Fin (T.S.n k))) :
+    Function.Injective (fun q : {q // q ∈ pairQueryRoleRepresentativeSet selected} =>
+      pairQueryRole q.1) := by
+  classical
+  intro q q' hrole
+  rcases Finset.mem_image.mp q.2 with ⟨b, _, hq⟩
+  rcases Finset.mem_image.mp q'.2 with ⟨b', _, hq'⟩
+  have hb : b.1 = b'.1 := by
+    calc
+      b.1 = pairQueryRole (pairQueryRepresentative selected b) :=
+        (pairQueryRepresentative_spec selected b).2.symm
+      _ = pairQueryRole (pairQueryRepresentative selected b') := by
+        calc
+          pairQueryRole (pairQueryRepresentative selected b) = pairQueryRole q.1 :=
+            congrArg pairQueryRole hq
+          _ = pairQueryRole q'.1 := hrole
+          _ = pairQueryRole (pairQueryRepresentative selected b') :=
+            congrArg pairQueryRole hq'.symm
+      _ = b'.1 := (pairQueryRepresentative_spec selected b').2
+  have hb' : b = b' := Subtype.ext hb
+  subst b'
+  exact Subtype.ext (hq.symm.trans hq')
+
+lemma hammingDist_symm_local {n : ℕ} (v w : Fin n → Bool) :
+    hammingDist v w = hammingDist w v := by
+  unfold hammingDist
+  congr 1
+  ext a
+  simp [ne_comm]
+
+lemma hammingDist_flipPos_eq_one {n : ℕ} (v : Fin n → Bool) (a : Fin n) :
+    hammingDist v (flipPos v a) = 1 := by
+  classical
+  unfold hammingDist
+  have hset : Finset.univ.filter (fun i : Fin n => v i ≠ flipPos v a i) = {a} := by
+    ext i
+    by_cases hi : i = a
+    · subst i
+      cases hv : v a <;> simp [flipPos, hv]
+    · have hflip : flipPos v a i = v i := by
+        simp [flipPos, Function.update_of_ne hi]
+      simp [hflip, hi]
+  rw [hset]
+  simp
+
+lemma patchOf_flipPos_of_bulk {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) (a : Fin (T.S.n k))
+    (ha : a ∈ PT.tiling.bulkCoords (D.geom.patchOf v)) :
+    D.geom.patchOf (flipPos v a) = D.geom.patchOf v := by
+  have hbulk : a ∉ PT.tiling.Icoord (D.geom.patchOf v) :=
+    (Finset.mem_filter.mp ha).2.2
+  have hprefix : (PT.tiling.P (D.geom.patchOf v)).ℓ ≤ a.val :=
+    (Finset.mem_filter.mp ha).2.1
+  have hrowLeaf := D.geom.patchOf_leaf v
+  have hrowPrefix : ∀ j, j.val < (PT.tiling.P (D.geom.patchOf v)).ℓ →
+      v j = PT.tiling.w (D.geom.patchOf v) j := by
+    simpa [Tiling.leaf, prefixLeaf] using hrowLeaf
+  have hflipLeaf : flipPos v a ∈ PT.tiling.leaf (D.geom.patchOf v) := by
+    change ∀ j, j.val < (PT.tiling.P (D.geom.patchOf v)).ℓ →
+      flipPos v a j = PT.tiling.w (D.geom.patchOf v) j
+    intro j hj
+    have hne : j ≠ a := by intro heq; subst j; omega
+    simpa [flipPos, hne] using hrowPrefix j hj
+  obtain ⟨i, hi, hUnique⟩ := hPT.tiling_valid.prefix_complete (flipPos v a)
+  have hrowEq : D.geom.patchOf v = i := hUnique _ hflipLeaf
+  have hflipEq : D.geom.patchOf (flipPos v a) = i := hUnique _ (D.geom.patchOf_leaf _)
+  exact hflipEq.trans hrowEq.symm
+
+theorem pairQueriesOfOuterFamilyRepresentatives {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (hκ : κ.Admissible)
+    (D : LateData hPT) (hD : D.Spec) (A : InitialPairData D)
+    (hmargin : (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3) :
+    ∃ Q : PairQueries D A, Q.count ≤ (D.nonisolates A.rows).card * T.S.n k := by
+  classical
+  let candidates := pairQueryCandidateSet D A
+  let selected := pairQueryOneFamilyPerCell D candidates
+  let reps := pairQueryRoleRepresentativeSet selected
+  have hselSubset : selected ⊆ candidates := Finset.filter_subset _ _
+  have hrepSubset : reps ⊆ selected := pairQueryRoleRepresentativeSet_subset selected
+  have hroleInj := pairQueryRole_injective_on_representatives selected
+  have hfamily (q q' : Pos T k × Fin (T.S.n k))
+      (hq : q ∈ selected) (hq' : q' ∈ selected)
+      (hc : D.geom.cellOf (flipPos q.1 q.2) = D.geom.cellOf (flipPos q'.1 q'.2)) :
+      pairQueryOuterFamilyCode D q.1 = pairQueryOuterFamilyCode D q'.1 :=
+    pairQueryOneFamilyPerCell_sameFamily D candidates hq hq' hc
+  have hsep : ∀ q q' : {q // q ∈ reps}, q ≠ q' →
+      D.geom.cellOf (flipPos q.1.1 q.1.2) =
+        D.geom.cellOf (flipPos q'.1.1 q'.1.2) →
+      hammingDist (flipPos q.1.1 q.1.2) (flipPos q'.1.1 q'.1.2) >
+        50 * κ.ρ * (PT.tiling.P A.paletteIndex.1).h := by
+    intro q q' hne hcell
+    let x := q.1
+    let y := q'.1
+    have hxSel : x ∈ selected := hrepSubset q.2
+    have hySel : y ∈ selected := hrepSubset q'.2
+    have hxCand : x ∈ candidates := hselSubset hxSel
+    have hyCand : y ∈ candidates := hselSubset hySel
+    have hxFacts := (mem_pairQueryCandidateSet D A x).mp hxCand
+    have hyFacts := (mem_pairQueryCandidateSet D A y).mp hyCand
+    have hcode := hfamily x y hxSel hySel hcell
+    rcases pairQueryOuterFamily_eq_of_code_eq D hcode with ⟨hpatch, hmask⟩
+    have hOuter : ∀ z, z ∉ PT.tiling.Icoord (D.geom.patchOf x.1) → x.1 z = y.1 z := by
+      intro z hz
+      have hm := congrFun hmask z
+      have hz' : z ∉ PT.tiling.Icoord (D.geom.patchOf y.1) := by simpa [hpatch] using hz
+      simp [pairQueryOuterMask, hz, hz'] at hm
+      exact hm
+    have hxRows : x.1 ∈ A.rows := by
+      have hn := hxFacts.1
+      change x.1 ∈ A.rows.filter _ at hn
+      exact (Finset.mem_filter.mp hn).1
+    have hyRows : y.1 ∈ A.rows := by
+      have hn := hyFacts.1
+      change y.1 ∈ A.rows.filter _ at hn
+      exact (Finset.mem_filter.mp hn).1
+    have hxPalette : x.1 ∈ D.paletteRows A.paletteIndex := A.rows_subset hxRows
+    have hyPalette : y.1 ∈ D.paletteRows A.paletteIndex := A.rows_subset hyRows
+    change x.1 ∈ Finset.univ.filter (fun v => IsEvenRole v ∧
+      D.rolePalette v = A.paletteIndex) at hxPalette
+    change y.1 ∈ Finset.univ.filter (fun v => IsEvenRole v ∧
+      D.rolePalette v = A.paletteIndex) at hyPalette
+    rcases Finset.mem_filter.mp hxPalette with ⟨_, ⟨hxEven, hxRole⟩⟩
+    rcases Finset.mem_filter.mp hyPalette with ⟨_, ⟨hyEven, hyRole⟩⟩
+    have hroleEq : D.rolePalette x.1 = D.rolePalette y.1 := hxRole.trans hyRole.symm
+    have hpatchPalette : D.geom.patchOf x.1 = A.paletteIndex.1 := by
+      have h := congrArg Sigma.fst hxRole
+      simpa [LateData.rolePalette] using h
+    have hpalette : D.palette x.1 = D.palette y.1 := by
+      unfold LateData.palette
+      have h := congrArg (fun p : PaletteIndex D => D.palettes p.1 p.2) hroleEq
+      simpa [LateData.rolePalette] using h
+    have hrowNe : x.1 ≠ y.1 := by
+      intro hxy
+      have hab : x.2 ≠ y.2 := by
+        intro hab
+        apply hne
+        apply Subtype.ext
+        exact Prod.ext hxy hab
+      let bx := flipPos x.1 x.2
+      let byWord := flipPos y.1 y.2
+      have hbit : bx x.2 ≠ byWord x.2 := by
+        have hxa : flipPos x.1 x.2 x.2 = !x.1 x.2 := by simp [flipPos]
+        have hxb : flipPos y.1 y.2 x.2 = x.1 x.2 := by
+          rw [hxy]
+          simp [flipPos, Function.update_of_ne hab]
+        change flipPos x.1 x.2 x.2 ≠ flipPos y.1 y.2 x.2
+        rw [hxa, hxb]
+        cases hval : x.1 x.2 <;> simp [hval]
+      have hpatchBx := patchOf_flipPos_of_bulk D x.1 x.2 hxFacts.2.2
+      have hnotI : x.2 ∉ PT.tiling.Icoord (D.geom.patchOf bx) := by
+        simpa only [bx, hpatchBx] using (Finset.mem_filter.mp hxFacts.2.2).2.2
+      have hspacing := D.l16_valid.cell_spacing bx byWord hcell ⟨x.2,
+        hnotI, hbit⟩
+      have hdist : hammingDist bx byWord ≤ 2 := by
+        have ht := hammingDist_triangle bx x.1 byWord
+        dsimp [byWord] at ht
+        rw [← hxy] at ht
+        rw [hammingDist_symm_local bx x.1,
+          hammingDist_flipPos_eq_one x.1 x.2,
+          hammingDist_flipPos_eq_one x.1 y.2] at ht
+        dsimp [byWord]
+        rw [← hxy]
+        exact ht
+      have hdistReal : (hammingDist bx byWord : ℝ) ≤ 2 := by exact_mod_cast hdist
+      exact (lt_irrefl (2 : ℝ)) (lt_trans hmargin (hspacing.trans_le hdistReal))
+    have hrowSep0 := hD.palette_separation x.1 y.1 hxEven hyEven hrowNe hpalette hOuter
+    have hrowSep : 500 * κ.ρ * (PT.tiling.P A.paletteIndex.1).h <
+        (hammingDist x.1 y.1 : ℝ) := by simpa [hpatchPalette] using hrowSep0
+    by_cases hlarge : 1 / 225 ≤ κ.ρ * (PT.tiling.P A.paletteIndex.1).h
+    · have htri1 := hammingDist_triangle x.1 (flipPos x.1 x.2) y.1
+      have htri2 := hammingDist_triangle (flipPos x.1 x.2) (flipPos y.1 y.2) y.1
+      have hflip1 : hammingDist x.1 (flipPos x.1 x.2) = 1 :=
+        hammingDist_flipPos_eq_one x.1 x.2
+      have hflip2 : hammingDist (flipPos y.1 y.2) y.1 = 1 := by
+        rw [hammingDist_symm_local]
+        exact hammingDist_flipPos_eq_one y.1 y.2
+      have htri : hammingDist x.1 y.1 ≤ hammingDist (flipPos x.1 x.2) (flipPos y.1 y.2) + 2 := by
+        omega
+      have htriR : (hammingDist x.1 y.1 : ℝ) ≤
+          (hammingDist (flipPos x.1 x.2) (flipPos y.1 y.2) : ℝ) + 2 := by exact_mod_cast htri
+      have : (50 : ℝ) * κ.ρ * (PT.tiling.P A.paletteIndex.1).h <
+          hammingDist (flipPos x.1 x.2) (flipPos y.1 y.2) := by
+        nlinarith [hrowSep, htriR, hlarge]
+      exact this
+    · have hoddNe : flipPos x.1 x.2 ≠ flipPos y.1 y.2 := by
+        intro heq
+        exact hne (hroleInj heq)
+      have hdistPos : 0 < hammingDist (flipPos x.1 x.2) (flipPos y.1 y.2) := by
+        unfold hammingDist
+        apply Finset.card_pos.mpr
+        by_contra hnonempty
+        have heq : flipPos x.1 x.2 = flipPos y.1 y.2 := by
+          funext z
+          by_contra hz
+          have : z ∈ Finset.univ.filter
+              (fun i => flipPos x.1 x.2 i ≠ flipPos y.1 y.2 i) :=
+            Finset.mem_filter.mpr ⟨Finset.mem_univ _, hz⟩
+          exact hnonempty ⟨z, this⟩
+        exact hoddNe heq
+      have hdistOne : (1 : ℝ) ≤ hammingDist (flipPos x.1 x.2) (flipPos y.1 y.2) := by
+        exact_mod_cast (Nat.succ_le_iff.mpr hdistPos)
+      have hsmall : (50 : ℝ) * κ.ρ * (PT.tiling.P A.paletteIndex.1).h < 1 := by
+        have ht : κ.ρ * (PT.tiling.P A.paletteIndex.1).h < 1 / 225 := lt_of_not_ge hlarge
+        nlinarith
+      exact lt_of_lt_of_le hsmall hdistOne
+  have hrow : ∀ q ∈ reps, q.1 ∈ D.nonisolates A.rows := by
+    intro q hq
+    exact ((mem_pairQueryCandidateSet D A q).mp (hselSubset (hrepSubset hq))).1
+  have hearly : ∀ q ∈ reps, q.2 ∈ D.externalEarly q.1 := by
+    intro q hq
+    exact ((mem_pairQueryCandidateSet D A q).mp (hselSubset (hrepSubset hq))).2.1
+  have hbulk : ∀ q ∈ reps, q.2 ∈ PT.tiling.bulkCoords (D.geom.patchOf q.1) := by
+    intro q hq
+    exact ((mem_pairQueryCandidateSet D A q).mp (hselSubset (hrepSubset hq))).2.2
+  let Q := pairQueriesOfCandidateFinset D A reps hrow hearly hbulk
+    (pairQueryRole_injective_on_representatives selected) hsep
+  exact ⟨Q, Q.count_bound⟩
+
 def rootedAdjacencyChain {V : Type*} [DecidableEq V] (G : SimpleGraph V)
     (A : Finset V) : List V → Prop
   | [] => True

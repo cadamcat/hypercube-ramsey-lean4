@@ -1090,6 +1090,72 @@ theorem splitProjectionDist_add_le {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex 
       _ ≤ t.card := Finset.card_le_card hsub
   simpa [s, r, t, k, _root_.hammingDist] using hsum
 
+theorem splitProjectionDist_ge {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n) :
+    _root_.hammingDist v w ≤
+      _root_.hammingDist (specialWord9 m v) (specialWord9 m w) +
+        _root_.hammingDist (residualWord9 m v) (residualWord9 m w) := by
+  classical
+  let k := n - m
+  let s : Finset (Fin m) := Finset.univ.filter (fun i => specialWord9 m v i ≠ specialWord9 m w i)
+  let r : Finset (Fin k) := Finset.univ.filter (fun i => residualWord9 m v i ≠ residualWord9 m w i)
+  let t : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let fs : Fin m → Fin n := fun i => ⟨i.val, lt_of_lt_of_le i.isLt hm⟩
+  let fr : Fin k → Fin n := fun i => ⟨m + i.val, by have := i.isLt; omega⟩
+  have hcover : t ⊆ s.image fs ∪ r.image fr := by
+    intro z hz
+    have hdiff := (Finset.mem_filter.mp hz).2
+    by_cases hzm : z.val < m
+    · let i : Fin m := ⟨z.val, hzm⟩
+      have hfs : fs i = z := by apply Fin.ext; rfl
+      have hcoordv : specialWord9 m v i = v (fs i) := by
+        simp [specialWord9, fs, lt_of_lt_of_le i.isLt hm]
+      have hcoordw : specialWord9 m w i = w (fs i) := by
+        simp [specialWord9, fs, lt_of_lt_of_le i.isLt hm]
+      have hsi : i ∈ s := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        simpa [hfs, hcoordv, hcoordw] using hdiff
+      exact Finset.mem_union_left _ (Finset.mem_image.mpr ⟨i, hsi, hfs⟩)
+    · let i : Fin k := ⟨z.val - m, by dsimp [k]; omega⟩
+      have hfr : fr i = z := by
+        apply Fin.ext
+        dsimp [fr, i, k]
+        omega
+      have hcoordv : residualWord9 m v i = v (fr i) := by simp [residualWord9, fr]
+      have hcoordw : residualWord9 m w i = w (fr i) := by simp [residualWord9, fr]
+      have hri : i ∈ r := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        simpa [hfr, hcoordv, hcoordw] using hdiff
+      exact Finset.mem_union_right _ (Finset.mem_image.mpr ⟨i, hri, hfr⟩)
+  have hcard : t.card ≤ s.card + r.card := by
+    calc
+      t.card ≤ (s.image fs ∪ r.image fr).card := Finset.card_le_card hcover
+      _ ≤ (s.image fs).card + (r.image fr).card := Finset.card_union_le _ _
+      _ ≤ s.card + r.card := Nat.add_le_add (Finset.card_image_le) (Finset.card_image_le)
+  simpa [s, r, t, k, _root_.hammingDist] using hcard
+
+theorem sharedConsulted_residual_separation {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hm : P.m n ≤ n) (v v' : CubeVertex n) (R' : ℕ)
+    (hsep : 16 * (R' : ℝ) ≤ (_root_.hammingDist v v' : ℝ))
+    (c : Pos9 P hc n)
+    (hshared : c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R') :
+    12 * R' - 2 ≤
+      _root_.hammingDist (residualWord9 (P.m n) v) (residualWord9 (P.m n) v') := by
+  have hlocal := sharedConsulted_local_bounds v v' R' c hshared
+  have hspecial : _root_.hammingDist (specialWord9 (P.m n) v)
+      (specialWord9 (P.m n) v') ≤ 4 * R' + 2 := by
+    calc
+      _ ≤ _root_.hammingDist (specialWord9 (P.m n) v) c.slice +
+          _root_.hammingDist c.slice (specialWord9 (P.m n) v') :=
+            _root_.hammingDist_triangle _ _ _
+      _ ≤ (2 * R' + 1) + (2 * R' + 1) := by
+        exact Nat.add_le_add (by simpa [_root_.hammingDist_comm] using hlocal.1) hlocal.2.1
+      _ = 4 * R' + 2 := by omega
+  have hfull : 16 * R' ≤ _root_.hammingDist v v' := by exact_mod_cast hsep
+  have hprojection := splitProjectionDist_ge hm v v'
+  omega
+
 theorem adjacent_projection_classification {m n : ℕ} (hm : m ≤ n) (v w : CubeVertex n)
     (hadj : _root_.hammingDist v w = 1) :
     (_root_.hammingDist (specialWord9 m v) (specialWord9 m w) = 1 ∧
@@ -1211,5 +1277,363 @@ theorem cubeAdj_exists_flip {n : ℕ} (v w : CubeVertex n)
     simp [cubeFlip, hflip]
   · have hEq := hother j hji
     simp [cubeFlip, hji, hEq]
+
+theorem hammingDist_cubeFlip_of_eq {d : ℕ} (x y : CubeVertex d) (i : Fin d)
+    (hi : x i = y i) :
+    _root_.hammingDist x (cubeFlip y i) = _root_.hammingDist x y + 1 := by
+  classical
+  let D : Finset (Fin d) := Finset.univ.filter (fun j => x j ≠ y j)
+  have hfilter : Finset.univ.filter (fun j : Fin d => x j ≠ cubeFlip y i j) = insert i D := by
+    ext j
+    by_cases hji : j = i
+    · subst j
+      cases hy : y i <;> simp [D, hi, hy, cubeFlip]
+    · have hflip : cubeFlip y i j = y j := by simp [cubeFlip, hji]
+      simp [D, hji, hflip]
+  have hiD : i ∉ D := by simp [D, hi]
+  rw [_root_.hammingDist, hfilter]
+  rw [Finset.card_insert_of_notMem hiD]
+  simp [D, _root_.hammingDist]
+
+theorem card_flip_neighbors_bound {d : ℕ} (v : CubeVertex d)
+    (B : Finset (CubeVertex d)) (D : Finset (Fin d))
+    (hB : ∀ b ∈ B, ∃ i ∈ D, cubeFlip v i = b) : B.card ≤ D.card := by
+  classical
+  let B' := {b : CubeVertex d // b ∈ B}
+  let f : B' → Fin d := fun b => Classical.choose (hB b.1 b.2)
+  have hspec (b : B') : cubeFlip v (f b) = b.1 := by
+    exact (Classical.choose_spec (hB b.1 b.2)).2
+  have hmem (b : B') : f b ∈ D := (Classical.choose_spec (hB b.1 b.2)).1
+  have hinj : Function.Injective f := by
+    intro b c hfc
+    apply Subtype.ext
+    calc
+      b.1 = cubeFlip v (f b) := (hspec b).symm
+      _ = cubeFlip v (f c) := by rw [hfc]
+      _ = c.1 := hspec c
+  have hsubcard : B.card = Fintype.card B' := (Fintype.card_coe B).symm
+  have huniv : (Finset.univ : Finset B').card = Fintype.card B' := by simp
+  have himagecard : (Finset.univ.image f).card = Fintype.card B' := by
+    calc
+      (Finset.univ.image f).card = (Finset.univ : Finset B').card :=
+        Finset.card_image_of_injective (Finset.univ : Finset B') hinj
+      _ = Fintype.card B' := huniv
+  have himage : Finset.univ.image f ⊆ D := by
+    intro i hi
+    rcases Finset.mem_image.mp hi with ⟨b, _, rfl⟩
+    exact hmem b
+  calc
+    B.card = Fintype.card B' := hsubcard
+    _ = (Finset.univ.image f).card := himagecard.symm
+    _ ≤ D.card := Finset.card_le_card himage
+
+theorem specialWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i : Fin n) (hi : m ≤ i.val) :
+    specialWord9 m (cubeFlip v i) = specialWord9 m v := by
+  funext k
+  let k' : Fin n := ⟨k.val, lt_of_lt_of_le k.isLt hm⟩
+  have hki : k' ≠ i := by
+    intro heq
+    have hv := congrArg Fin.val heq
+    dsimp [k'] at hv
+    omega
+  simp [specialWord9, k', cubeFlip, hki, lt_of_lt_of_le k.isLt hm]
+
+theorem residualWord9_cubeFlip_special {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i : Fin n) (hi : i.val < m) :
+    residualWord9 m (cubeFlip v i) = residualWord9 m v := by
+  funext k
+  let k' : Fin n := ⟨m + k.val, by omega⟩
+  have hki : k' ≠ i := by
+    intro heq
+    have hv := congrArg Fin.val heq
+    dsimp [k'] at hv
+    omega
+  simp [residualWord9, k', cubeFlip, hki]
+
+theorem specialWord9_doubleFlip_at_first {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i j : Fin n) (hij : i ≠ j) (hi : i.val < m) :
+    specialWord9 m (cubeFlip (cubeFlip v i) j) ⟨i.val, hi⟩ ≠
+      specialWord9 m v ⟨i.val, hi⟩ := by
+  let k' : Fin n := ⟨i.val, lt_of_lt_of_le hi hm⟩
+  have hki : k' = i := Fin.ext rfl
+  have hkj : k' ≠ j := by
+    intro heq
+    exact hij (hki.symm.trans heq)
+  have houter : cubeFlip (cubeFlip v i) j k' = cubeFlip v i k' :=
+    Function.update_of_ne hkj _ _
+  have hinner : cubeFlip v i k' = !v k' := by
+    rw [hki]
+    simp [cubeFlip]
+  have hsource : specialWord9 m v ⟨i.val, hi⟩ = v k' := by
+    simp [specialWord9, k', lt_of_lt_of_le hi hm]
+  have htarget : specialWord9 m (cubeFlip (cubeFlip v i) j) ⟨i.val, hi⟩ =
+      cubeFlip (cubeFlip v i) j k' := by
+    simp [specialWord9, k', lt_of_lt_of_le hi hm]
+  rw [htarget, houter, hinner, hsource]
+  cases hv : v k' <;> simp [hv]
+
+theorem residualWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
+    (v : CubeVertex n) (i : Fin n) (hi : m ≤ i.val) :
+    let k : Fin (n - m) := ⟨i.val - m, by omega⟩
+    residualWord9 m (cubeFlip v i) = cubeFlip (residualWord9 m v) k := by
+  dsimp
+  let k : Fin (n - m) := ⟨i.val - m, by omega⟩
+  funext l
+  let l' : Fin n := ⟨m + l.val, by omega⟩
+  have hlk : l = k ∨ l ≠ k := Classical.em (l = k)
+  rcases hlk with hlk | hlk
+  · subst l
+    have hidx : l' = i := by
+      apply Fin.ext
+      dsimp [l', k]
+      omega
+    simp [residualWord9, cubeFlip, l', k, hidx]
+  · have hidx : l' ≠ i := by
+      intro heq
+      apply hlk
+      apply Fin.ext
+      have hval := congrArg Fin.val heq
+      dsimp [l', k] at hval ⊢
+      omega
+    simp [residualWord9, cubeFlip, l', k, hidx, hlk]
+
+theorem cubeFlip_involutive {d : ℕ} (v : CubeVertex d) (i : Fin d) :
+    cubeFlip (cubeFlip v i) i = v := by
+  funext k
+  by_cases hki : k = i
+  · subst k
+    simp [cubeFlip]
+  · simp [cubeFlip, hki]
+
+theorem hammingDist_two_cubeFlips {d : ℕ} (v : CubeVertex d) (i j : Fin d)
+    (hij : i ≠ j) :
+    _root_.hammingDist v (cubeFlip (cubeFlip v i) j) = 2 := by
+  classical
+  have hcoordi : cubeFlip (cubeFlip v i) j i = !v i := by
+    have houter : cubeFlip (cubeFlip v i) j i = cubeFlip v i i :=
+      Function.update_of_ne hij _ _
+    calc
+      _ = cubeFlip v i i := houter
+      _ = !v i := by simp [cubeFlip]
+  have hcoordj : cubeFlip (cubeFlip v i) j j = !v j := by
+    have hinner : cubeFlip v i j = v j := Function.update_of_ne hij.symm _ _
+    calc
+      _ = !(cubeFlip v i j) := by simp [cubeFlip]
+      _ = !v j := by rw [hinner]
+  have hcoord_other (k : Fin d) (hki : k ≠ i) (hkj : k ≠ j) :
+      cubeFlip (cubeFlip v i) j k = v k := by
+    have hinner : cubeFlip v i k = v k := Function.update_of_ne hki _ _
+    have houter : cubeFlip (cubeFlip v i) j k = cubeFlip v i k :=
+      Function.update_of_ne hkj _ _
+    exact houter.trans hinner
+  have hfilter :
+      Finset.univ.filter (fun k : Fin d => v k ≠ cubeFlip (cubeFlip v i) j k) = {i, j} := by
+    ext k
+    by_cases hki : k = i
+    · subst k
+      cases hv : v i <;> simp [hcoordi, hv, hij]
+    · by_cases hkj : k = j
+      · subst k
+        cases hv : v j <;> simp [hcoordj, hv, hij]
+      · have hcoord := hcoord_other k hki hkj
+        simp [hcoord, hki, hkj]
+  rw [_root_.hammingDist, hfilter]
+  simp [hij]
+
+private theorem finProb_prod_pr_dep_bound {α β : Type*} [Fintype α] [Fintype β]
+    (μ : FinProb α) (ν : FinProb β) (Q : α → Prop) (E : α → β → Prop)
+    (ε : ℝ) (hε : 0 ≤ ε)
+    (hE : ∀ a, Q a → ν.pr (E a) ≤ ε) :
+    (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) ≤ ε := by
+  classical
+  have hfactor : (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) =
+      ∑ a, μ.w a * ν.pr (fun b => Q a ∧ E a b) := by
+    calc
+      (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) =
+          ∑ a, ∑ b, if Q a ∧ E a b then μ.w a * ν.w b else 0 := by
+        unfold FinProb.pr FinProb.prod
+        rw [Fintype.sum_prod_type]
+        apply Finset.sum_congr rfl
+        intro a ha
+        apply Finset.sum_congr rfl
+        intro b hb
+        simp [FinProb.prod]
+      _ = ∑ a, μ.w a * ν.pr (fun b => Q a ∧ E a b) := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        calc
+          (∑ b, if Q a ∧ E a b then μ.w a * ν.w b else 0) =
+              ∑ b, μ.w a * (if Q a ∧ E a b then ν.w b else 0) := by
+            apply Finset.sum_congr rfl
+            intro b hb
+            by_cases hab : Q a ∧ E a b <;> simp [hab, mul_assoc]
+          _ = μ.w a * ∑ b, if Q a ∧ E a b then ν.w b else 0 := by
+            rw [Finset.mul_sum]
+          _ = μ.w a * ν.pr (fun b => Q a ∧ E a b) := by
+            congr 1
+            apply Finset.sum_congr rfl
+            intro b hb
+            by_cases hab : Q a ∧ E a b <;> simp [hab]
+  calc
+    (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) =
+        ∑ a, μ.w a * ν.pr (fun b => Q a ∧ E a b) := hfactor
+    _ ≤ ∑ a, μ.w a * ε := by
+      apply Finset.sum_le_sum
+      intro a ha
+      have htail : ν.pr (fun b => Q a ∧ E a b) ≤ ε := by
+        by_cases hq : Q a
+        · simpa [hq] using hE a hq
+        · simp [FinProb.pr, hq, hε]
+      exact mul_le_mul_of_nonneg_left htail (μ.nonneg a)
+    _ = (∑ a, μ.w a) * ε := (Finset.sum_mul _ _ _).symm
+    _ = ε := by rw [μ.sum_eq_one]; ring
+
+private theorem finProb_pi_expect_prod {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (P : ι → FinProb Bool) (f : ι → Bool → ℝ) :
+    (FinProb.pi P).expect (fun ω => ∏ i, f i (ω i)) =
+      ∏ i, (P i).expect (f i) := by
+  classical
+  unfold FinProb.expect FinProb.pi
+  calc
+    _ = ∑ ω : (∀ i, Bool), ∏ i, (P i).w (ω i) * f i (ω i) := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      rw [Finset.prod_mul_distrib]
+    _ = ∏ i, ∑ b : Bool, (P i).w b * f i b := by rw [Fintype.prod_sum]
+    _ = _ := rfl
+
+private theorem bernoulli_all_false_subset_probability {ι : Type*} [Fintype ι]
+    [DecidableEq ι] (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (S : Finset ι) :
+    (FinProb.pi (fun _ : ι => FinProb.bernoulli q)).pr
+      (fun A => ∀ i ∈ S, A i = false) ≤ Real.exp (-q * (S.card : ℝ)) := by
+  classical
+  let μ : FinProb (∀ _ : ι, Bool) := FinProb.pi (fun _ : ι => FinProb.bernoulli q)
+  let E : (∀ _ : ι, Bool) → Prop := fun A => ∀ i ∈ S, A i = false
+  let f : ι → Bool → ℝ := fun i b => if i ∈ S then if b = false then 1 else 0 else 1
+  have hindicator (A : ∀ _ : ι, Bool) : (if E A then (1 : ℝ) else 0) = ∏ i, f i (A i) := by
+    by_cases hA : E A
+    · rw [if_pos hA]
+      have hprod : ∏ i, f i (A i) = 1 := by
+        rw [Finset.prod_ite_mem_eq S]
+        apply Finset.prod_eq_one
+        intro i hi
+        simp [f, hA i hi]
+      rw [hprod]
+    · have hex : ∃ i, i ∈ S ∧ A i = true := by
+        by_contra hnot
+        push_neg at hnot
+        apply hA
+        intro i hi
+        cases hval : A i <;> simp_all
+      rcases hex with ⟨i, hi, hval⟩
+      have hz : f i (A i) = 0 := by simp [f, hi, hval]
+      rw [Finset.prod_eq_zero (Finset.mem_univ i) hz]
+      simp [E, hA]
+  have hcoord (i : ι) :
+      (FinProb.bernoulli q).expect (fun b => f i b) = if i ∈ S then 1 - q else 1 := by
+    by_cases hi : i ∈ S
+    · simp [f, hi, FinProb.expect, FinProb.bernoulli, hq0, hq1]
+    · simp [f, hi, FinProb.expect, FinProb.bernoulli, hq0, hq1]
+  have hfactor : μ.pr E = ∏ i, if i ∈ S then 1 - q else 1 := by
+    calc
+      μ.pr E = μ.expect (fun A => if E A then (1 : ℝ) else 0) := by
+        unfold FinProb.pr FinProb.expect
+        apply Finset.sum_congr rfl
+        intro A hA
+        by_cases h : E A <;> simp [h]
+      _ = μ.expect (fun A => ∏ i, f i (A i)) := by
+        congr 1
+        funext A
+        exact hindicator A
+      _ = ∏ i, (FinProb.bernoulli q).expect (fun b => f i b) := by
+        simpa [μ] using
+          (finProb_pi_expect_prod (fun _ : ι => FinProb.bernoulli q) f)
+      _ = ∏ i, if i ∈ S then 1 - q else 1 := by simp_rw [hcoord]
+  have hprod_le : (∏ i, if i ∈ S then 1 - q else 1) ≤
+      ∏ i, if i ∈ S then Real.exp (-q) else 1 := by
+    apply Finset.prod_le_prod₀
+    · intro i hi
+      by_cases his : i ∈ S
+      · simp only [if_pos his]
+        linarith
+      · simp [his]
+    · intro i hi
+      by_cases his : i ∈ S
+      · simp only [if_pos his]
+        exact Real.one_sub_le_exp_neg q
+      · simp [his]
+  have hexp_prod : (∏ i, if i ∈ S then Real.exp (-q) else 1) =
+      Real.exp (-q * (S.card : ℝ)) := by
+    rw [Finset.prod_ite_mem_eq S (fun _ => Real.exp (-q))]
+    rw [← Real.exp_sum]
+    congr 1
+    simp [Finset.sum_const, nsmul_eq_mul]
+    ring
+  calc
+    μ.pr E = ∏ i, if i ∈ S then 1 - q else 1 := hfactor
+    _ ≤ ∏ i, if i ∈ S then Real.exp (-q) else 1 := hprod_le
+    _ = Real.exp (-q * (S.card : ℝ)) := hexp_prod
+
+theorem height_hole_probability_bound (C : Finset (Pos9 P hc n)) (s : ℝ)
+    (hs : 0 ≤ s) (v : CubeVertex n) (j : Fin (hc.levels n + 1))
+    (hq0 : 0 ≤ (n : ℝ) ^ (hc.b₀ - 10))
+    (hq1 : (n : ℝ) ^ (hc.b₀ - 10) ≤ 1)
+    (hqpow : (n : ℝ) ^ (hc.b₀ - 10) * (n : ℝ) ^ (10 : ℝ) =
+      (n : ℝ) ^ hc.b₀) :
+    (heightLaw9 P hc n).pr (fun ω =>
+      holeIn9 C ω.1 ω.2 v j ∧
+        s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C ω.1 v j : ℝ)) ≤
+      Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+  classical
+  let q : ℝ := (n : ℝ) ^ (hc.b₀ - 10)
+  let Q : (Pos9 P hc n → Bool) → Prop := fun Pp =>
+    s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C Pp v j : ℝ)
+  let Hole : (Pos9 P hc n → Bool) → (Pos9 P hc n → Bool) → Prop :=
+    fun Pp A => holeIn9 C Pp A v j
+  have hActivation (Pp : Pos9 P hc n → Bool) (hQ : Q Pp) :
+      (heightActLaw9 P hc n).pr (Hole Pp) ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+    let S : Finset (Pos9 P hc n) := C.filter fun c =>
+      Pp c = true ∧ c.slice = specialWord9 (P.m n) v ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n ∧ c.level = j
+    have hScard : (S.card : ℝ) = eligCount9 C Pp v j := by
+      simp [S, eligCount9]
+    have hSize : s * (n : ℝ) ^ (10 : ℝ) ≤ (S.card : ℝ) := by
+      simpa [Q, hScard] using hQ
+    have hholeSubset (A : Pos9 P hc n → Bool) (hHole : Hole Pp A) :
+        ∀ c ∈ S, A c = false := by
+      intro c hcS
+      rcases Finset.mem_filter.mp hcS with ⟨hcC, ⟨hPpc, hslice, hdist, hlevel⟩⟩
+      have hnotActive := hHole c hcC hslice hdist hlevel
+      cases hA : A c
+      · rfl
+      · exfalso
+        apply hnotActive
+        exact ⟨hPpc, hA⟩
+    have hnoActive := bernoulli_all_false_subset_probability q hq0 hq1 S
+    have hnoActive' : (heightActLaw9 P hc n).pr (fun A => ∀ c ∈ S, A c = false) ≤
+        Real.exp (-q * (S.card : ℝ)) := by
+      simpa [heightActLaw9, q] using hnoActive
+    have hmono := finProb_pr_mono (heightActLaw9 P hc n) (Hole Pp)
+      (fun A => ∀ c ∈ S, A c = false) hholeSubset
+    have hqCard : s * (n : ℝ) ^ hc.b₀ ≤ q * (S.card : ℝ) := by
+      calc
+        s * (n : ℝ) ^ hc.b₀ = s * (q * (n : ℝ) ^ (10 : ℝ)) := by
+          rw [show q = (n : ℝ) ^ (hc.b₀ - 10) by rfl, hqpow]
+        _ = q * (s * (n : ℝ) ^ (10 : ℝ)) := by ring
+        _ ≤ q * (S.card : ℝ) :=
+          mul_le_mul_of_nonneg_left hSize hq0
+    have hexp : Real.exp (-q * (S.card : ℝ)) ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [hqCard]
+    calc
+      (heightActLaw9 P hc n).pr (Hole Pp) ≤
+          (heightActLaw9 P hc n).pr (fun A => ∀ c ∈ S, A c = false) := hmono
+      _ ≤ Real.exp (-q * (S.card : ℝ)) := hnoActive'
+      _ ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := hexp
+  have hprod := finProb_prod_pr_dep_bound (heightPosLaw9 P hc n)
+    (heightActLaw9 P hc n) Q Hole (Real.exp (-s * (n : ℝ) ^ hc.b₀))
+    (Real.exp_nonneg _) hActivation
+  simpa [heightLaw9, Q, Hole, and_comm] using hprod
 
 end HypercubeRamsey.Lane_q_s09_map

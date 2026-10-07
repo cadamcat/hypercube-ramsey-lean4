@@ -2715,13 +2715,14 @@ theorem replace_certificate9 (P : Params9) (hP : P.Valid) (c₀ C₁ c₁ : ℝ)
         have hTiltDegree : |rowDeg E G x rho - rowDeg E G x lamA| ≤
             16 * B * bStar := by
           rw [rowDeg_centered_tilt9 E G x lamA rho s f B hTilt hsmean hscale]
+          have h4Babs : |4 * B| = 4 * B :=
+            abs_of_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) hBnonneg)
           calc
             |4 * B * ∑ y, lamA.w y *
                 ((if Hits E G x y then (1 : ℝ) else 0) - 1 / 2) * f y| =
                 4 * B * |∑ y, lamA.w y *
                   ((if Hits E G x y then (1 : ℝ) else 0) - 1 / 2) * f y| := by
-                    rw [abs_mul,
-                      abs_of_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) hBnonneg)]
+                    rw [abs_mul, h4Babs]
             _ ≤ 4 * B * (4 * bStar) := mul_le_mul_of_nonneg_left hsum (by positivity)
             _ = 16 * B * bStar := by ring
         have hRowComp : |rowDeg E G x (Q.restrict A hQmass) - rowDeg E G x rho| ≤ bStar ^ 2 :=

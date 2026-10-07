@@ -8,6 +8,7 @@ namespace HypercubeRamsey.Lane_q_s15_direct
 
 open HypercubeRamsey OAI.HypercubeRamsey
 open Classical
+open scoped BigOperators
 
 noncomputable def star {T : Stage} {k : ℕ}
     (a : S15.EvenPosition T k) :
@@ -58,6 +59,252 @@ theorem star_incidence_card_le {T : Stage} {k : ℕ}
     _ ≤ (Finset.univ.filter fun v : CubeVertex (T.S.n k) =>
         (cube (T.S.n k)).Adj b.1 v).card := Finset.card_le_card hsub
     _ ≤ T.S.n k := cube_adj_neighbors_card_le (T.S.n k) b.1
+
+theorem prefixLeaf_card_le {n ell : ℕ} (w : CubeVertex n) (hle : ell ≤ n) :
+    (Finset.univ.filter fun v : CubeVertex n => v ∈ prefixLeaf ell w).card ≤ 2 ^ (n - ell) := by
+  classical
+  let A : Finset (CubeVertex n) := Finset.univ.filter fun v => v ∈ prefixLeaf ell w
+  let tail (v : CubeVertex n) : CubeVertex (n - ell) := fun j =>
+    v ⟨ell + j.val, by have := j.isLt; omega⟩
+  have hcoord : Set.InjOn tail A := by
+    intro v hv z hz hEq
+    have hvpre : ∀ j : Fin n, j.val < ell → v j = w j :=
+      (Finset.mem_filter.mp hv).2
+    have hzpre : ∀ j : Fin n, j.val < ell → z j = w j :=
+      (Finset.mem_filter.mp hz).2
+    funext j
+    by_cases hpre : j.val < ell
+    · exact (hvpre j hpre).trans (hzpre j hpre).symm
+    · let q : Fin (n - ell) := ⟨j.val - ell, by omega⟩
+      have hidx : (⟨ell + q.val, by omega⟩ : Fin n) = j := Fin.ext (by simp [q]; omega)
+      have htail : v ⟨ell + q.val, by omega⟩ = z ⟨ell + q.val, by omega⟩ := by
+        exact congrFun hEq q
+      simpa only [hidx] using htail
+  have himage : A.card = (A.image tail).card :=
+    (Finset.card_image_of_injOn hcoord).symm
+  calc
+    A.card = (A.image tail).card := himage
+    _ ≤ Finset.univ.card := Finset.card_le_card (Finset.subset_univ _)
+    _ = 2 ^ (n - ell) := by simp [CubeVertex]
+
+theorem patchAssignment_count_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    (Finset.univ.filter fun b : S15.OddPosition T k =>
+      S15.patchAt PT hPT b.1 = i).card ≤ 2 ^ (T.S.n k - (PT.tiling.P i).ℓ) := by
+  classical
+  let S := Finset.univ.filter fun b : S15.OddPosition T k => S15.patchAt PT hPT b.1 = i
+  have himage : S.card = (S.image Subtype.val).card :=
+    (Finset.card_image_of_injective S Subtype.val_injective).symm
+  have hsub : S.image Subtype.val ⊆
+      Finset.univ.filter fun v : CubeVertex (T.S.n k) => v ∈ PT.tiling.leaf i := by
+    intro v hv
+    rcases Finset.mem_image.mp hv with ⟨b, hb, rfl⟩
+    have hpatch : S15.patchAt PT hPT b.1 = i := (Finset.mem_filter.mp hb).2
+    have hleaf : b.1 ∈ PT.tiling.leaf (S15.patchAt PT hPT b.1) := by
+      exact (Classical.choose_spec (hPT.tiling_valid.prefix_complete b.1)).1
+    simpa [hpatch] using hleaf
+  calc
+    S.card = (S.image Subtype.val).card := himage
+    _ ≤ (Finset.univ.filter fun v : CubeVertex (T.S.n k) => v ∈ PT.tiling.leaf i).card :=
+      Finset.card_le_card hsub
+    _ ≤ 2 ^ (T.S.n k - (PT.tiling.P i).ℓ) := by
+      have hh := hPT.tiling_valid.prefix_internal_length
+      have hℓ : (PT.tiling.P i).ℓ ≤ Finset.univ.sup
+          (fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) :=
+        Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+          (Finset.mem_univ i)
+      have hlen : (PT.tiling.P i).ℓ ≤ T.S.n k := by omega
+      exact prefixLeaf_card_le (PT.tiling.w i) hlen
+
+theorem direct_marginal_column_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (y : Fin (T.S.N k)) :
+    (∑ b : S15.OddPosition T k, (S15.lawAtOdd PT hPT b).w y) ≤
+      8800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k := by
+  classical
+  let patch (b : S15.OddPosition T k) : Fin PT.tiling.m :=
+    S15.patchAt PT hPT b.1
+  by_cases hex : ∃ i, y ∈ (PT.tiling.P i).Y
+  · obtain ⟨i₀, hy₀⟩ := hex
+    let S₀ := Finset.univ.filter fun b : S15.OddPosition T k => patch b = i₀
+    have hzero (b : S15.OddPosition T k) (hb : patch b ≠ i₀) :
+        (S15.lawAtOdd PT hPT b).w y = 0 := by
+      apply hPT.law_supported (patch b)
+      intro hy
+      have hne : i₀ ≠ patch b := fun heq => hb heq.symm
+      have hdisj := hPT.tiling_valid.patch_Y_disjoint i₀ (patch b) hne
+      exact Finset.disjoint_left.mp hdisj hy₀ hy
+    have hsumEq :
+        (∑ b : S15.OddPosition T k, (S15.lawAtOdd PT hPT b).w y) =
+          ∑ b ∈ S₀, (S15.lawAtOdd PT hPT b).w y := by
+      symm
+      apply Finset.sum_subset (Finset.subset_univ S₀)
+      intro b hb hnot
+      apply hzero
+      intro heq
+      exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, heq⟩)
+    have hsumCap :
+        (∑ b ∈ S₀, (S15.lawAtOdd PT hPT b).w y) ≤
+          (S₀.card : ℝ) * (11 / (PT.tiling.P i₀).M) := by
+      calc
+        _ ≤ ∑ b ∈ S₀, (11 / (PT.tiling.P i₀).M : ℝ) := by
+          apply Finset.sum_le_sum
+          intro b hb
+          have hp : patch b = i₀ := (Finset.mem_filter.mp hb).2
+          simpa [S15.lawAtOdd, patch, hp] using hPT.law_cap i₀ y
+        _ = (S₀.card : ℝ) * (11 / (PT.tiling.P i₀).M) := by simp
+    have hcountNat : S₀.card ≤ 2 ^ (T.S.n k - (PT.tiling.P i₀).ℓ) := by
+      simpa [S₀, patch] using patchAssignment_count_le PT hPT i₀
+    have hcount : (S₀.card : ℝ) ≤ (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) := by
+      exact_mod_cast hcountNat
+    have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+    have hSpos : (0 : ℝ) < PT.tiling.S := by
+      have h := hPT.tiling_valid.S_lower
+      nlinarith
+    have hMpos : (0 : ℝ) < (PT.tiling.P i₀).M := by
+      have hcard : 0 < ((PT.tiling.P i₀).X.card : ℝ) :=
+        Nat.cast_pos.mpr (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i₀).1)
+      rw [(PT.tiling.P i₀).cardX] at hcard
+      exact hcard
+    have hℓn : (PT.tiling.P i₀).ℓ ≤ T.S.n k := by
+      have hh := hPT.tiling_valid.prefix_internal_length
+      have hℓ : (PT.tiling.P i₀).ℓ ≤ Finset.univ.sup
+          (fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) :=
+        Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+          (Finset.mem_univ i₀)
+      omega
+    have hpowℓ : (0 : ℝ) < (2 : ℝ) ^ (PT.tiling.P i₀).ℓ := by positivity
+    have hpow : (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) *
+        (2 : ℝ) ^ (PT.tiling.P i₀).ℓ = (2 : ℝ) ^ (T.S.n k) := by
+      rw [← pow_add, Nat.sub_add_cancel hℓn]
+    have hdyad := hPT.tiling_valid.dyadic_mass_upper i₀
+    have hinv : (2 : ℝ) ^ (-((PT.tiling.P i₀).ℓ : ℤ)) =
+        1 / (2 : ℝ) ^ (PT.tiling.P i₀).ℓ := by
+      simp [zpow_neg]
+    rw [hinv] at hdyad
+    have hdyad' :
+        (PT.tiling.S : ℝ) < 2 * (PT.tiling.P i₀).M * (2 : ℝ) ^ (PT.tiling.P i₀).ℓ := by
+      have hmul := mul_lt_mul_of_pos_right hdyad hSpos
+      have hdiv : (1 / (2 : ℝ) ^ (PT.tiling.P i₀).ℓ) * PT.tiling.S <
+          2 * (PT.tiling.P i₀).M := by
+        calc
+          (1 / (2 : ℝ) ^ (PT.tiling.P i₀).ℓ) * PT.tiling.S <
+              (2 * (PT.tiling.P i₀).M / PT.tiling.S) * PT.tiling.S := hmul
+          _ = 2 * (PT.tiling.P i₀).M := by field_simp [ne_of_gt hSpos]
+      have hdiv' : (PT.tiling.S : ℝ) / (2 : ℝ) ^ (PT.tiling.P i₀).ℓ <
+          2 * (PT.tiling.P i₀).M := by simpa [div_eq_mul_inv, mul_comm] using hdiv
+      exact (div_lt_iff₀ hpowℓ).mp hdiv'
+    have hrecip : 1 / (PT.tiling.P i₀).M <
+        2 * (2 : ℝ) ^ (PT.tiling.P i₀).ℓ / PT.tiling.S := by
+      apply (div_lt_div_iff₀ hMpos hSpos).2
+      nlinarith [hdyad']
+    have hscaled :
+        11 * (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) /
+            (PT.tiling.P i₀).M <
+          22 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S := by
+      calc
+        11 * (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) /
+            (PT.tiling.P i₀).M =
+            11 * (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) *
+              (1 / (PT.tiling.P i₀).M) := by ring
+        _ < 11 * (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) *
+              (2 * (2 : ℝ) ^ (PT.tiling.P i₀).ℓ / PT.tiling.S) :=
+          mul_lt_mul_of_pos_left hrecip (by positivity)
+        _ = 22 * ((2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) *
+              (2 : ℝ) ^ (PT.tiling.P i₀).ℓ) / PT.tiling.S := by ring
+        _ = 22 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S := by rw [hpow]
+    have hSlower : (1 / 400 : ℝ) * T.S.N k ≤ PT.tiling.S :=
+      hPT.tiling_valid.S_lower
+    have hSratio : (1 : ℝ) / PT.tiling.S ≤ 400 / (T.S.N k : ℝ) := by
+      apply (div_le_div_iff₀ hSpos hNpos).2
+      nlinarith [hSlower]
+    have hfinal : 22 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S ≤
+        8800 * (2 : ℝ) ^ (T.S.n k) / (T.S.N k : ℝ) := by
+      calc
+        _ = (22 * (2 : ℝ) ^ (T.S.n k)) * (1 / PT.tiling.S) := by ring
+        _ ≤ (22 * (2 : ℝ) ^ (T.S.n k)) * (400 / (T.S.N k : ℝ)) :=
+          mul_le_mul_of_nonneg_left hSratio (by positivity)
+        _ = 8800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k := by ring
+    calc
+      _ = ∑ b ∈ S₀, (S15.lawAtOdd PT hPT b).w y := hsumEq
+      _ ≤ (S₀.card : ℝ) * (11 / (PT.tiling.P i₀).M) := hsumCap
+      _ ≤ 11 * (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) /
+            (PT.tiling.P i₀).M := by
+          have hfactor : (0 : ℝ) ≤ 11 / (PT.tiling.P i₀).M := by positivity
+          calc
+            _ = (S₀.card : ℝ) * (11 / (PT.tiling.P i₀).M) := rfl
+            _ ≤ ((2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ)) *
+                  (11 / (PT.tiling.P i₀).M) :=
+                mul_le_mul_of_nonneg_right hcount hfactor
+            _ = 11 * (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i₀).ℓ) /
+                  (PT.tiling.P i₀).M := by ring
+      _ ≤ 22 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S := hscaled.le
+      _ ≤ 8800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k := hfinal
+  · have hzero (b : S15.OddPosition T k) : (S15.lawAtOdd PT hPT b).w y = 0 := by
+      apply hPT.law_supported (S15.patchAt PT hPT b.1)
+      intro hy
+      exact hex ⟨S15.patchAt PT hPT b.1, hy⟩
+    have hpos : 0 ≤ 8800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k := by positivity
+    simpa [hzero] using hpos
+
+theorem direct_atom_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (b : S15.OddPosition T k)
+    (y : Fin (T.S.N k)) :
+    (S15.lawAtOdd PT hPT b).w y ≤
+      8800 * (2 : ℝ) ^ ((PT.tiling.P (S15.patchAt PT hPT b.1)).ℓ) / T.S.N k := by
+  classical
+  let i := S15.patchAt PT hPT b.1
+  have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hSpos : (0 : ℝ) < PT.tiling.S := by
+    have h := hPT.tiling_valid.S_lower
+    nlinarith
+  have hMpos : (0 : ℝ) < (PT.tiling.P i).M := by
+    have hcard : 0 < ((PT.tiling.P i).X.card : ℝ) :=
+      Nat.cast_pos.mpr (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1)
+    rw [(PT.tiling.P i).cardX] at hcard
+    exact hcard
+  have hpowℓ : (0 : ℝ) < (2 : ℝ) ^ (PT.tiling.P i).ℓ := by positivity
+  have hdyad := hPT.tiling_valid.dyadic_mass_upper i
+  have hinv : (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) =
+      1 / (2 : ℝ) ^ (PT.tiling.P i).ℓ := by simp [zpow_neg]
+  rw [hinv] at hdyad
+  have hdyad' : (PT.tiling.S : ℝ) < 2 * (PT.tiling.P i).M *
+      (2 : ℝ) ^ (PT.tiling.P i).ℓ := by
+    have hmul := mul_lt_mul_of_pos_right hdyad hSpos
+    have hdiv : (PT.tiling.S : ℝ) / (2 : ℝ) ^ (PT.tiling.P i).ℓ <
+        2 * (PT.tiling.P i).M := by
+      calc
+        _ = (1 / (2 : ℝ) ^ (PT.tiling.P i).ℓ) * PT.tiling.S := by ring
+        _ < (2 * (PT.tiling.P i).M / PT.tiling.S) * PT.tiling.S := hmul
+        _ = 2 * (PT.tiling.P i).M := by field_simp [ne_of_gt hSpos]
+    exact (div_lt_iff₀ hpowℓ).mp hdiv
+  have hrecip : 1 / (PT.tiling.P i).M <
+      2 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S := by
+    apply (div_lt_div_iff₀ hMpos hSpos).2
+    nlinarith [hdyad']
+  have hsum : (11 : ℝ) / ((PT.tiling.P i).M : ℝ) <
+      22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S := by
+    calc
+      _ = 11 * (1 / ((PT.tiling.P i).M : ℝ)) := by ring
+      _ < 11 * (2 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S) :=
+        mul_lt_mul_of_pos_left hrecip (by norm_num)
+      _ = 22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S := by ring
+  have hSlower : (1 / 400 : ℝ) * T.S.N k ≤ PT.tiling.S :=
+    hPT.tiling_valid.S_lower
+  have hSratio : (1 : ℝ) / PT.tiling.S ≤ 400 / (T.S.N k : ℝ) := by
+    apply (div_le_div_iff₀ hSpos hNpos).2
+    nlinarith [hSlower]
+  have hfinal : 22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S ≤
+      8800 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / (T.S.N k : ℝ) := by
+    calc
+      _ = (22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ) * (1 / PT.tiling.S) := by ring
+      _ ≤ (22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ) * (400 / (T.S.N k : ℝ)) :=
+        mul_le_mul_of_nonneg_left hSratio (by positivity)
+      _ = 8800 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / (T.S.N k : ℝ) := by ring
+  calc
+    (S15.lawAtOdd PT hPT b).w y ≤ (11 : ℝ) / ((PT.tiling.P i).M : ℝ) := by
+      simpa [S15.lawAtOdd, i] using hPT.law_cap i y
+    _ ≤ 22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S := hsum.le
+    _ ≤ 8800 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / (T.S.N k : ℝ) := hfinal
 
 theorem directRowMass_dependsOn {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)

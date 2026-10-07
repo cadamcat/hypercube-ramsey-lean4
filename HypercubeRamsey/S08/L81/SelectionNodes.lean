@@ -1279,17 +1279,20 @@ theorem bad_list_prob (D : Ctx η₀ β p h) : D.BadListProb := by
     exact hqgk L.1.card hCand.1
   have hprobSub : (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c L) ≤
       (D.tagLawAll Θ).pr (fun t => δ ≤ f t) := by
+    have hpoint (t : D.Tags) :
+        (if D.BadList Θ t c L then (D.tagLawAll Θ).w t else 0) ≤
+          (if δ ≤ f t then (D.tagLawAll Θ).w t else 0) := by
+      by_cases hbad : D.BadList Θ t c L
+      · have hlarge : δ < f t := by simpa [Ctx.BadList, δ, f] using hbad
+        have hle : δ ≤ f t := le_of_lt hlarge
+        simp [hbad, hle]
+      · by_cases hle : δ ≤ f t
+        · simp [hbad, hle, (D.tagLawAll Θ).nonneg t]
+        · simp [hbad, hle]
     unfold FinProb.pr
     apply Finset.sum_le_sum
     intro t ht
-    by_cases hbad : D.BadList Θ t c L
-    · have hlarge : δ < f t := by simpa [Ctx.BadList, δ, f] using hbad
-      have hle : δ ≤ f t := le_of_lt hlarge
-      simp [hbad, hle]
-    · simp only [if_neg hbad]
-      by_cases hle : δ ≤ f t
-      · simpa [hle] using (D.tagLawAll Θ).nonneg t
-      · simp [hle]
+    exact hpoint t
   have hmarkov := FinProb.markov (D.tagLawAll Θ) f δ hfNonneg hδ
   have hδsq : δ ^ 2 = Real.sqrt D.eps0 := by
     dsimp [δ]

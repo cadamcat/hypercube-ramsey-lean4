@@ -2,6 +2,7 @@ import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S06.Steps_q_s06_steps1
 import HypercubeRamsey.S06.Steps_raw_sol_s06_steps1
 import HypercubeRamsey.S06.Steps_window_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_cap_sol_s06_steps1
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -116,32 +117,46 @@ theorem L6_1c_tag (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 predictive-denominator calculation (L3.7) with `d₀, δ₁ ≪ d₁`. -/
 theorem L6_1c_cap (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step1CapBound := by
-  refine ⟨1, 1, ?_⟩
+  let gap := d₁ - δ₁ - (Dstar₆ + 602 * d₀)
+  have hgap : 0 < gap := by norm_num [gap, d₁, δ₁, Dstar₆, d₀]
+  have htend : Tendsto (fun n : ℕ => (n : ℝ)^gap) atTop atTop :=
+    (tendsto_rpow_atTop hgap).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htend.eventually (eventually_ge_atTop ((20 : ℝ)^603)))
+  refine ⟨max 1 n₀, 1, ?_⟩
   intro n N E G M X hlarge hTagDom
-  have hn1 : 1 ≤ n := hlarge.1
-  intro h hh
-  -- On raw support, the bounded parent-prior atom and the incoming-tag likelihood
-  -- factors control the posterior numerator. The remaining denominator tail is the
-  -- predictive test from Lemma 3.7.
-  have hpriorCap : ∀ y, 0 ≤ X.initLaw.w y := fun y => X.initLaw.nonneg y
-  have hpriorCapOnSupport : ∀ b, X.baseLaw.w b ≠ 0 → ∀ y,
-      (N : ℝ) * (if h.2 = .interior then (X.candLaw b.1).w y else X.initLaw.w y) ≤
-        20 * (n : ℝ) ^ Dstar₆ := by
-    intro b hb y
-    by_cases hflag : h.2 = .interior
-    · rcases Lane_q_s06_steps1.baseLaw_local_support6 X b hb with ⟨hinit, _, _⟩
-      have hmass : 0 < X.par.piPrime.pr (fun z => z ∈ X.par.S₀) := by
-        linarith [X.par.S₀_mass]
-      have hS₀ := restrictOr6_supp hmass (ne_of_gt hinit)
-      have hcap := Lane_q_s06_steps1.candLaw_atom_cap6 X b.1 y hS₀.1
-      simpa [hflag] using hcap
-    · have hcap := Lane_q_s06_steps1.initLaw_atom_cap6 X y
-      have hpow : 0 ≤ (n : ℝ) ^ Dstar₆ := Real.rpow_nonneg (Nat.cast_nonneg n) _
-      have hcap' : (N : ℝ) * X.initLaw.w y ≤ 20 * (n : ℝ) ^ Dstar₆ := by
-        nlinarith
-      simpa [hflag] using hcap'
-  have hkeyCard : (X.C h).card ≤ 602 := X.g.flips.key_neighborhood_card h
-  sorry
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hnp : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+  have hbig : (20 : ℝ)^603 ≤ (n : ℝ)^gap :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
+  have hbudget : Lane_sol_s06_steps1.capBudget n ≤ (n : ℝ)^(d₁-δ₁) := by
+    calc
+      _ = (20 : ℝ)^603 * (n : ℝ)^(Dstar₆+602*d₀) := rfl
+      _ ≤ (n : ℝ)^gap * (n : ℝ)^(Dstar₆+602*d₀) :=
+        mul_le_mul_of_nonneg_right hbig (Real.rpow_nonneg hnp.le _)
+      _ = (n : ℝ)^(d₁-δ₁) := by
+        rw [← Real.rpow_add hnp]
+        congr 1
+        dsimp [gap]
+        ring
+  intro h _hh
+  have hraw : X.baseLaw.pr (fun b => ¬ X.Step1Cap b h) ≤
+      Lane_sol_s06_steps1.capBudget n / (n : ℝ)^d₁ := by
+    simpa only [Ctx6.Step1Cap, not_forall, not_le] using
+      Lane_sol_s06_steps1.posterior_cap_bound X h hnR hTagDom ((n : ℝ)^d₁)
+        (Real.rpow_pos_of_pos hnp _)
+  calc
+    X.baseLaw.pr (fun b => ¬ X.Step1Cap b h) ≤
+        Lane_sol_s06_steps1.capBudget n / (n : ℝ)^d₁ := hraw
+    _ ≤ (n : ℝ)^(d₁-δ₁) / (n : ℝ)^d₁ :=
+      div_le_div_of_nonneg_right hbudget (Real.rpow_nonneg hnp.le _)
+    _ = (n : ℝ)^(-δ₁) := by
+      rw [← Real.rpow_sub hnp]
+      congr 1
+      ring
+    _ ≤ (n : ℝ)^(-(δ₁ / 2)) :=
+      Real.rpow_le_rpow_of_exponent_le hnR (by norm_num [δ₁])
 
 /-- L6.1c (deletion, 06:173–181): the incoming tag has likelihood `≤ n^{d₀} Λ(i)` at every supported parent
 value; its predictive density is `< n^{-δ₁}` with probability `≤ n^{-δ₁}`; Bayes off that event. -/

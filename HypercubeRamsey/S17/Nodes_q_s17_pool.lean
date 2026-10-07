@@ -1,4 +1,5 @@
 import HypercubeRamsey.S17.Needs
+import HypercubeRamsey.S12
 
 namespace HypercubeRamsey.Lane_q_s17_pool
 
@@ -568,6 +569,60 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
   · rw [hBcard]
     simpa [n] using Finset.card_le_univ C
   · simpa [ell] using hcross_card
+
+theorem profiled_law_width_of_mass_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (K : ℝ)
+    (hMass : Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M) ≤
+      K * Real.sqrt (Real.log (T.S.n k : ℝ))) :
+    (PT.π i).WidthLE
+      (K * Real.sqrt (Real.log (T.S.n k : ℝ)) + Real.log 11) := by
+  classical
+  intro y
+  have hN : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+  have hMnat : 0 < (PT.tiling.P i).M := by
+    rw [← (PT.tiling.P i).cardX]
+    exact_mod_cast (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1)
+  have hM : 0 < ((PT.tiling.P i).M : ℝ) := by exact_mod_cast hMnat
+  have hratio : 0 < (T.S.N k : ℝ) / (PT.tiling.P i).M := div_pos hN hM
+  have hidentity : (11 : ℝ) / (PT.tiling.P i).M =
+      Real.exp (Real.log 11 + Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M)) /
+        (T.S.N k : ℝ) := by
+    rw [Real.exp_add, Real.exp_log (by norm_num), Real.exp_log hratio]
+    field_simp
+  calc
+    (PT.π i).w y ≤ 11 / (PT.tiling.P i).M := hPT.law_cap i y
+    _ = Real.exp (Real.log 11 + Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M)) /
+        (T.S.N k : ℝ) := hidentity
+    _ ≤ Real.exp (Real.log 11 + K * Real.sqrt (Real.log (T.S.n k : ℝ))) /
+        (T.S.N k : ℝ) := by
+      apply div_le_div_of_nonneg_right ?_ hN.le
+      exact Real.exp_le_exp.mpr (by nlinarith [hMass])
+    _ = Real.exp (K * Real.sqrt (Real.log (T.S.n k : ℝ)) + Real.log 11) /
+        (T.S.N k : ℝ) := by rw [add_comm]
+
+theorem profiled_degree_tail {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {wS wL err : ℝ}
+    (hDisc : TwoBudgetDisc T k wS wL err)
+    (hPT : PT.Valid) (i j : Fin PT.tiling.m) (τ : Law (T.S.N k))
+    (hτ : τ.SupportedIn (T.X k)) (hτw : τ.WidthLE wS)
+    (W : ℝ) (hπw : (PT.π j).WidthLE W)
+    : ∑ y ∈ Finset.univ.filter (fun y => err <
+      |(∑ x, τ.w x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2|),
+      (PT.π j).w y ≤ 2 * Real.exp (W - wL) := by
+  have hYS : (PT.tiling.P j).Y ⊆ T.Y k := by
+    intro y hy
+    exact (Finset.mem_sdiff.mp
+      ((hPT.tiling_valid.patch_supports j).2.2.2
+        ((hPT.tiling_valid.patch_supports j).2.2.1 hy))).1
+  have hπY : (PT.π j).SupportedIn (T.Y k) := by
+    intro y hy
+    exact hPT.law_supported j y (fun hmem => hy (hYS hmem))
+  have hpair : (wS ≤ wS ∧ wL ≤ wL) ∨ (wS ≤ wL ∧ wL ≤ wS) :=
+    Or.inl ⟨le_rfl, le_rfl⟩
+  exact S12.exceptional_second (hD := hDisc) (c := PT.tiling.c)
+    (w₁ := wS) (W₂ := wL) (w := W) hpair τ hτ hτw
+    (PT.π j) hπY hπw
 
 theorem externalEarly_card_le {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)

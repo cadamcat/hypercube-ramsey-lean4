@@ -2395,4 +2395,53 @@ private theorem gadgetOut_eq_of_leaf_and_side {β γ : ℝ} {n : ℕ}
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
   exact hside' j
 
+private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
+    (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
+  classical
+  have hdiff :
+      (Finset.univ.filter fun i : Fin n => u i ≠ v i).card = 1 := h
+  obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hdiff
+  have hAtI : u i ≠ v i := by
+    have hmem : i ∈ Finset.univ.filter fun k : Fin n => u k ≠ v k := by
+      rw [hi]
+      exact Finset.mem_singleton_self _
+    exact (Finset.mem_filter.mp hmem).2
+  refine ⟨i, ?_⟩
+  funext k
+  by_cases hki : k = i
+  · subst k
+    cases hu : u i <;> cases hv : v i <;> simp_all [HypercubeRamsey.cubeFlip]
+  · have hnot : k ∉ Finset.univ.filter fun k' : Fin n => u k' ≠ v k' := by
+      rw [hi]
+      simpa using hki
+    have hsame : u k = v k := by
+      by_contra hne
+      exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+    simp [HypercubeRamsey.cubeFlip, hki, hsame]
+
+private theorem oddAdj_subset_coordinate_flips {β γ : ℝ} {n : ℕ}
+    (u : OddRole n) :
+    HypercubeRamsey.S04.oddAdj u ⊆
+      Finset.univ.image (fun i : Fin n => HypercubeRamsey.cubeFlip u.1 i) := by
+  intro v hv
+  have hadj : (cube n).Adj u.1 v := (Finset.mem_filter.mp hv).2
+  rcases exists_cubeFlip_of_adj u.1 v hadj with ⟨i, rfl⟩
+  exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩
+
+private theorem keyFlip_image_card_le_n {β γ : ℝ} {n : ℕ} (u : OddRole n) :
+    (HypercubeRamsey.S04.Zset β γ u).card ≤ n := by
+  classical
+  let F : Finset (HypercubeRamsey.S04.Key β γ n) :=
+    Finset.univ.image fun i : Fin n =>
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip u.1 i)
+  have hsub : HypercubeRamsey.S04.Zset β γ u ⊆ F := by
+    intro κ hκ
+    rcases Finset.mem_image.mp hκ with ⟨v, hv, rfl⟩
+    rcases exists_cubeFlip_of_adj u.1 v ((Finset.mem_filter.mp hv).2) with ⟨i, hi⟩
+    exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, by rw [hi]⟩
+  calc
+    (HypercubeRamsey.S04.Zset β γ u).card ≤ F.card := Finset.card_le_card hsub
+    _ ≤ (Finset.univ : Finset (Fin n)).card := Finset.card_image_le
+    _ = n := by simp [F]
+
 end HypercubeRamsey.Lane_q_s04_gadget

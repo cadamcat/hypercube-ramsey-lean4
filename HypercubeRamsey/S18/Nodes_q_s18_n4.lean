@@ -1,9 +1,32 @@
+import HypercubeRamsey.S17.Defs
 import HypercubeRamsey.S18.Defs
 
 namespace HypercubeRamsey.Lane_q_s18_n4
 
 open Classical
 open scoped BigOperators
+
+noncomputable def lateListContext
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+  {hPT : PT.Valid} (D : S18.LateData hPT) : ListGateContext κ T k PT := by
+  classical
+  let validState := Classical.choose D.l16_valid.fresh_spec
+  let hrest := Classical.choose_spec D.l16_valid.fresh_spec
+  let permittedLabels := Classical.choose hrest
+  have hfresh : FreshCell.Spec D.fresh validState permittedLabels :=
+    Classical.choose_spec hrest
+  exact {
+    tiling_valid := hPT
+    mode_low := D.low_mode
+    G := D.geom
+    F := D.fresh
+    stateValid := validState
+    permittedLabels := permittedLabels
+    slotFactor := fun b =>
+      (Fintype.card (Bin PT.tiling (D.geom.patchOf b)) : ℝ) /
+        (D.geom.nslot (D.geom.cellOf b) : ℝ)
+    fresh_spec := hfresh
+  }
 
 theorem upstreamBadPinnedBound
     {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}

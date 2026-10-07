@@ -1103,7 +1103,7 @@ private theorem heightPath9_radialFamily9 {P : Params9} {hc : HeightChoice9 P} {
   exact ⟨f, hf⟩
 
 private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}
-    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {l : List (HeightState9 P hc n)}
     {start : HeightState9 P hc n} (f : Fin (R + 1) → HeightState9 P hc n)
     (hf : ∀ r, f r ∈ l ∧ heightMetric9 (f r) start = r.val)
     (r s : Fin (R + 1)) {D : ℕ} (hgap : D ≤ Nat.dist r.val s.val) :
@@ -2887,6 +2887,20 @@ private theorem scaleSupport9_inter_overlap_bound_of_metric_separation
         exact_mod_cast scaleSupport9_inter_card_le start start'
       _ ≤ ((hc.levels n + 1 : ℕ) : ℝ) * (residualBall9 P n : ℝ) *
           Real.exp (- (c₀ * (8 * R : ℕ))) := hoverBound
+
+private theorem heightPath9_radialSupport_overlap_bound9
+    {P : Params9} {hc : HeightChoice9 P} {n Q R Knat : ℕ} {K c₀ : ℝ}
+    (hover : HeightOverlap9 P hc n K c₀) (hK : K ≤ (Knat : ℝ)) (hR : 1 ≤ R)
+    {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : Fin (Q + 1) → HeightState9 P hc n)
+    (hf : ∀ r, f r ∈ l ∧ heightMetric9 (f r) start = r.val)
+    (r s : Fin (Q + 1))
+    (hgap : 16 * R + 4 + 4 * Knat * R + 1 ≤ Nat.dist r.val s.val) :
+    ((scaleSupport9 (f r) R ∩ scaleSupport9 (f s) R).card : ℝ) ≤
+      ((hc.levels n + 1 : ℕ) : ℝ) * (residualBall9 P n : ℝ) *
+        Real.exp (- (c₀ * (8 * R : ℕ))) := by
+  apply scaleSupport9_inter_overlap_bound_of_metric_separation hover hK hR
+  exact heightPath9_radialFamily_separated9 f hf r s hgap
 
 theorem position_overlap_count_tail {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (v v' : CubeVertex n) (R' t : ℕ) :

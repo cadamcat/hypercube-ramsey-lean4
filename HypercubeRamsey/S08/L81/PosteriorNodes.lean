@@ -663,6 +663,95 @@ of `g`), the tags of the selected IDs, the position gate, the gates and referenc
 selection adjustment (the raw experiment at fixed positions and non-target tuples, whose relevant marginals read
 hidden keys within four and positions within three) and the cross anchors. -/
 theorem p0_local (D : Ctx η₀ β p h) (hS : D.SelLocal) : D.P0Local := by
+  classical
+  unfold Ctx.P0Local
+  intro q q' W W' c hHidden hPosTag hActTie hCrossAnchor
+  have hSelEq (e : D.CellT) (hkey : keyDist c.1 e.1 ≤ 1) :
+      D.sel q e = D.sel q' e := by
+    apply hS q q' e
+    · intro g hg
+      have hEg := (Finset.mem_filter.mp hg).2
+      have hCg : keyDist c.1 g ≤ 4 := by
+        have htri := Lane_q_s08_post.keyDist_triangle c.1 e.1 g
+        omega
+      have hg4 : g ∈ keyBall c.1 4 := by
+        apply Finset.mem_filter.mpr
+        exact ⟨Finset.mem_univ g, hCg⟩
+      exact hHidden g hg4
+    · intro g hg ℓ hℓ
+      have hEg := (Finset.mem_filter.mp hg).2
+      have hCg : keyDist c.1 g ≤ 3 := by
+        have htri := Lane_q_s08_post.keyDist_triangle c.1 e.1 g
+        omega
+      have hg3 : g ∈ keyBall c.1 3 := by
+        apply Finset.mem_filter.mpr
+        exact ⟨Finset.mem_univ g, hCg⟩
+      have hpt := hPosTag g hg3
+      exact ⟨congrFun hpt.1 ℓ, congrFun hpt.2 ℓ⟩
+    · intro ℓ hℓ
+      have he1 : e.1 ∈ keyBall c.1 1 := by
+        apply Finset.mem_filter.mpr
+        constructor
+        · exact Finset.mem_univ e.1
+        · exact hkey
+      have hat := hActTie e.1 he1
+      exact ⟨congrFun hat.1 ℓ, congrFun hat.2 ℓ⟩
+  have hOrdSel (b : Res η₀ D.n) (hb : b ∈ ordNbrs c.2) :
+      D.sel q (c.1, b) = D.sel q' (c.1, b) := by
+    apply hSelEq (c.1, b)
+    simp [keyDist]
+  have hCrossSel (u : D.CrossSub c.1) :
+      D.sel q (u.1, c.2) = D.sel q' (u.1, c.2) := by
+    apply hSelEq (u.1, c.2)
+    have hu : keyDist c.1 u.1 = 1 := by
+      simpa [crossKeys] using (Finset.mem_filter.mp u.2).2
+    change keyDist c.1 u.1 ≤ 1
+    rw [hu]
+  have hIntIds : D.intIds q c = D.intIds q' c := by
+    unfold Ctx.intIds
+    ext ℓ
+    simp only [Finset.mem_biUnion]
+    constructor
+    · rintro ⟨b, hb, hℓ⟩
+      refine ⟨b, hb, ?_⟩
+      rw [hOrdSel b hb] at hℓ
+      exact hℓ
+    · rintro ⟨b, hb, hℓ⟩
+      refine ⟨b, hb, ?_⟩
+      rw [← hOrdSel b hb] at hℓ
+      exact hℓ
+  have hCrossId (u : D.CrossSub c.1) : D.crossId q c u = D.crossId q' c u := by
+    unfold Ctx.crossId
+    rw [hCrossSel u]
+  have hKeyBall3 : c.1 ∈ keyBall c.1 3 := by
+    apply Finset.mem_filter.mpr
+    constructor
+    · exact Finset.mem_univ _
+    · simp [keyDist]
+  have hTagKey : q.2.1.1 c.1 = q'.2.1.1 c.1 := (hPosTag c.1 hKeyBall3).2
+  have hPres : D.presOf q W c = D.presOf q' W' c := by
+    apply Prod.ext
+    · funext ℓ
+      simp only [Ctx.presOf]
+      by_cases hℓ : ℓ ∈ D.intIds q c
+      · have hℓ' : ℓ ∈ D.intIds q' c := by rw [← hIntIds]; exact hℓ
+        simp [hℓ, hℓ', congrFun hTagKey ℓ]
+      · have hℓ' : ℓ ∉ D.intIds q' c := by rw [← hIntIds]; exact hℓ
+        simp [hℓ, hℓ']
+    · funext u
+      simp only [Ctx.presOf]
+      have hKey : u.1 ∈ keyBall c.1 3 := by
+        apply Finset.mem_filter.mpr
+        constructor
+        · exact Finset.mem_univ u.1
+        · have hu : keyDist c.1 u.1 = 1 := by
+            simpa [crossKeys] using (Finset.mem_filter.mp u.2).2
+          omega
+      have hTagU := (hPosTag u.1 hKey).2
+      have hAnchor := hCrossAnchor u.1 u.2
+      change (D.crossId q c u, q.2.1.1 u.1 (D.crossId q c u), W (u.1, c.2)) =
+        (D.crossId q' c u, q'.2.1.1 u.1 (D.crossId q' c u), W' (u.1, c.2))
+      rw [hCrossId u, congrFun hTagU (D.crossId q' c u), hAnchor]
   sorry
 
 set_option maxHeartbeats 1000000

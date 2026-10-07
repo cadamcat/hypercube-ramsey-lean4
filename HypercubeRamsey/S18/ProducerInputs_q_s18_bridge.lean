@@ -1,4 +1,6 @@
 import HypercubeRamsey.S16.Geometry
+import HypercubeRamsey.S03.Height.Selection
+import HypercubeRamsey.S14.All
 import HypercubeRamsey.Tools.Ramsey
 
 namespace HypercubeRamsey.S18.Lane_q_s18_bridge
@@ -1187,5 +1189,82 @@ theorem low_mode_quant_facts_of_events {κ : CConsts} (hκ : κ.Admissible)
       PT.tiling.c (PT.π i) (PT.mesh.corner v i) x κ.ξ κ.θ
       (PT.tiling.Q i : ℝ) K16 hκ.ξ_rng.1 hθ hκ.θ_rng.1 hξlt hQone hK16two hNo
     exact hconf
+
+end HypercubeRamsey.S18.Lane_q_s18_bridge
+
+namespace HypercubeRamsey.S18.Lane_q_s18_bridge
+
+private theorem section14_omega_small {κ : CConsts} (hκ : κ.Admissible) : κ.ω < 1 := by
+  have hMhi : 1 ≤ κ.Mhi := by
+    by_contra h
+    have hz : κ.Mhi = 0 := by omega
+    have hm := hκ.Mhi_big.2
+    rw [hz] at hm
+    norm_num [hκ.cq_rng.1] at hm
+  have hMhiR : 1 ≤ (κ.Mhi : ℝ) := by exact_mod_cast hMhi
+  have hωmul : 5 * κ.ω ≤ 5 * κ.ω * (κ.Mhi : ℝ) := by
+    calc
+      5 * κ.ω = 5 * κ.ω * 1 := by ring
+      _ ≤ 5 * κ.ω * (κ.Mhi : ℝ) :=
+        mul_le_mul_of_nonneg_left hMhiR
+          (mul_nonneg (by norm_num) hκ.ω_rng.1.le)
+  have haC : κ.aC < 1 := by
+    have hmin : min κ.η0 1 ≤ 1 := min_le_right _ _
+    have hbound : min κ.η0 1 / 10 ^ 6 ≤ 1 := by
+      calc
+        min κ.η0 1 / 10 ^ 6 ≤ 1 / 10 ^ 6 :=
+          div_le_div_of_nonneg_right hmin (by positivity)
+        _ ≤ 1 := by norm_num
+    exact hκ.aC_rng.2.trans_le hbound
+  nlinarith [hκ.ω_rng.2, haC]
+
+private theorem section14_height_admissible {κ : CConsts} (hκ : κ.Admissible) :
+    HDAdmissible 10 (κ.ω / 8) (κ.ω / 2) (κ.ω / 100) (κ.ω / 30)
+      (1 - κ.ω / 30) (κ.ω / 12) 1 1 6 := by
+  have hωlt := section14_omega_small hκ
+  refine ⟨by norm_num, ?_, by norm_num, ?_, ?_, by norm_num⟩
+  · constructor
+    · exact div_pos hκ.ω_rng.1 (by norm_num)
+    · constructor
+      · nlinarith [hκ.ω_rng.1]
+      · nlinarith [hωlt]
+  · refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · exact div_pos hκ.ω_rng.1 (by norm_num)
+    · nlinarith [hκ.ω_rng.1]
+    · nlinarith [hωlt]
+    · nlinarith [hωlt]
+    · nlinarith [hκ.ω_rng.1]
+  · constructor
+    · nlinarith [hκ.ω_rng.1]
+    · constructor
+      · nlinarith [hκ.ω_rng.1]
+      · nlinarith [hκ.ω_rng.1, hωlt]
+
+private noncomputable def section14_height_regime {κ : CConsts} (hκ : κ.Admissible) :
+    HDRegime (κ.ω / 8) (κ.ω / 2) 6 := by
+  refine .lin (κ.ρ / 2) ⟨div_pos hκ.ρ_rng.1 (by norm_num), ?_⟩
+  have hρ := hκ.ρ_rng.2.1
+  nlinarith
+
+private theorem section14_height_bound_exponents {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ cg cp : ℝ, ∃ ng np : ℕ,
+      0 < cg ∧ 0 < cp ∧
+      HypercubeRamsey.S14.Section14GlobalHeightBound 10
+        (κ.ω / 8) (κ.ω / 2) (κ.ω / 100)
+        (κ.ω / 30) 1 1 cg 6 (section14_height_regime hκ) ng ∧
+      HypercubeRamsey.S14.Section14PositiveHeightBound 10
+        (κ.ω / 8) (κ.ω / 2) (κ.ω / 100)
+        (κ.ω / 30) 1 1 cp 6 (section14_height_regime hκ) np := by
+  have hp := section14_height_admissible hκ
+  have hωlt := section14_omega_small hκ
+  obtain ⟨cg, hcg, ng, hglobal⟩ :=
+    height_selection_global 10 (κ.ω / 8) (κ.ω / 2) (κ.ω / 100) (κ.ω / 30)
+      (1 - κ.ω / 30) (κ.ω / 12) 1 1 6 hp (section14_height_regime hκ)
+  obtain ⟨cp, hcp, np, hpositive⟩ :=
+    height_selection_positive 10 (κ.ω / 8) (κ.ω / 2) (κ.ω / 100) (κ.ω / 30)
+      (1 - κ.ω / 30) (κ.ω / 12) 1 1 6 hp (section14_height_regime hκ)
+  refine ⟨cg, cp, ng, np, hcg, hcp, ?_, ?_⟩
+  · simpa [HypercubeRamsey.S14.Section14GlobalHeightBound] using hglobal
+  · simpa [HypercubeRamsey.S14.Section14PositiveHeightBound] using hpositive
 
 end HypercubeRamsey.S18.Lane_q_s18_bridge

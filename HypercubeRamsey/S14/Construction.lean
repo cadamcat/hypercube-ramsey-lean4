@@ -2,6 +2,7 @@ import HypercubeRamsey.PartC.ProfiledTiling
 import HypercubeRamsey.S03.Height.Selection
 import HypercubeRamsey.S03.Mixtures
 import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S14.Construction_q_s14_hist
 
 /-!
 # Section 14 internal slice solver
@@ -560,7 +561,49 @@ theorem primitive_history (κ : CConsts) (hκ : κ.Admissible)
     (hcluster : 𝒯.mode.isCluster) (i : Fin 𝒯.m) (mesh : Mesh 𝒯)
     (hclean : MeshCleaned mesh) (ready : MeshReady mesh) :
     Nonempty (PrimitiveHistory κ 𝒯 i mesh) := by
-  sorry
+  classical
+  let prior : mesh.V → Law (T.S.N k) := fun v =>
+    if hv : ∃ p, 0 < mesh.wt v p then
+      Law.unifCore (mesh.corner v i)
+        (hclean v (Classical.choose hv) i (Classical.choose_spec hv)).nonempty
+    else
+      Law.unifCore (𝒯.P i).X (h𝒯.patch_nonempty i).1
+  have hMpos_nat : 0 < (𝒯.P i).M := by
+    have hXpos : 0 < (𝒯.P i).X.card := Finset.card_pos.mpr (h𝒯.patch_nonempty i).1
+    simpa only [(𝒯.P i).cardX] using hXpos
+  have hMpos : (0 : ℝ) < (𝒯.P i).M := by exact_mod_cast hMpos_nat
+  have huniform (v : mesh.V) (p : mesh.Param) (hv : 0 < mesh.wt v p)
+      (x : Fin (T.S.N k)) :
+      (prior v).w x =
+        if x ∈ mesh.corner v i then (1 : ℝ) / ((mesh.corner v i).card : ℝ) else 0 := by
+    have hactive : ∃ p', 0 < mesh.wt v p' := ⟨p, hv⟩
+    simp [prior, hactive, Law.unifCore]
+  refine ⟨{
+    prior := prior
+    prior_support := by
+      intro v x hx
+      by_cases hv : ∃ p, 0 < mesh.wt v p
+      · have hsub := (hclean v (Classical.choose hv) i (Classical.choose_spec hv)).sub
+        have hxcorner : x ∉ mesh.corner v i := fun hmem => hx (hsub hmem)
+        simp [prior, hv, Law.unifCore, hxcorner]
+      · simp [prior, hv, Law.unifCore, hx]
+    prior_uniform := by
+      intro v p hp x
+      exact huniform v p hp x
+    prior_cap := by
+      intro v p hp x
+      rw [huniform v p hp x]
+      by_cases hx : x ∈ mesh.corner v i
+      · rw [if_pos hx]
+        have hcard : ((𝒯.P i).M : ℝ) / 2 ≤ (mesh.corner v i).card :=
+          ready.corner_size v p i hp
+        calc
+          (1 : ℝ) / (mesh.corner v i).card ≤ 1 / ((𝒯.P i).M / 2) :=
+            one_div_le_one_div_of_le (by positivity) hcard
+          _ = 2 / (𝒯.P i).M := by field_simp
+      · simp only [if_neg hx]
+        exact div_nonneg (show (0 : ℝ) ≤ (2 : ℝ) by norm_num) hMpos.le
+  }⟩
 
 /-- Continuity is proved for the concrete product law, rather than assumed
 for arbitrary tuple/position/activation decoders. -/
@@ -568,8 +611,34 @@ theorem primitive_law_continuous {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
     (H : PrimitiveHistory κ 𝒯 i mesh) :
     ∀ r x, Continuous fun p => H.lawRec p r x := by
-  sorry
+  classical
+  intro r x
+  cases r with
+  | inl c =>
+      rcases x with ⟨v, ⟨w, ⟨b₁, b₂⟩⟩⟩
+      simp only [PrimitiveHistory.lawRec, PrimitiveHistory.record,
+        PrimitiveHistory.centerLaw, FinLaw.bind, PrimitiveHistory.vertexLaw,
+        PrimitiveHistory.tuplePrior, lawToFinLaw, FinLaw.pi,
+        PrimitiveHistory.finProbToFinLaw, FinProb.bernoulli]
+      have hcont : Continuous (mesh.wt v) := Mesh.wt_cont mesh v
+      fun_prop
+  | inr r =>
+      cases r with
+      | inl g =>
+          rcases x with ⟨v, σ⟩
+          simp only [PrimitiveHistory.lawRec, PrimitiveHistory.record,
+            PrimitiveHistory.groupLaw, FinLaw.bind, PrimitiveHistory.vertexLaw,
+            PrimitiveHistory.finProbToFinLaw, FinProb.uniformAll]
+          have hcont : Continuous (mesh.wt v) := Mesh.wt_cont mesh v
+          fun_prop
+      | inr c =>
+          simp only [PrimitiveHistory.lawRec, PrimitiveHistory.record,
+            PrimitiveHistory.tieLaw, PrimitiveHistory.finProbToFinLaw,
+            FinProb.uniformAll]
+          fun_prop
 
+set_option maxHeartbeats 5000000
+set_option maxRecDepth 4096
 /-- L14.3 count node, separate from the eligibility theorem. It counts actual
 positive product-record outcomes, including categorical order permutations. -/
 theorem primitive_low_support (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
@@ -577,7 +646,1007 @@ theorem primitive_low_support (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
       𝒯.mode = .lowCluster → ∀ i mesh (H : PrimitiveHistory κ 𝒯 i mesh) p,
         (((Finset.univ.filter fun W => 0 < (H.recLaw p).w W).card : ℕ) : ℝ) ≤
           Real.exp ((T.S.n k : ℝ) ^ (1.01 : ℝ)) := by
-  sorry
+  classical
+  have hlogT : Tendsto (fun k => Real.log (T.S.n k : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp (tendsto_natCast_atTop_atTop.comp T.S.n_tendsto)
+  have htLarge : ∀ᶠ k in atTop, 1000 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop 1000
+  have htTiny : ∀ᶠ k in atTop,
+      1000000 * (Real.log (T.S.n k : ℝ)) ^ (0.3 : ℝ) ≤ Real.log (T.S.n k : ℝ) := by
+    have h := hlogT.eventually (Lane_q_s14_hist.eventually_const_mul_rpow_le_rpow
+      (a := (0.3 : ℝ)) (b := 1) (c := 1000000) (by norm_num) (by norm_num))
+    filter_upwards [h] with k hk
+    simpa [Real.rpow_one] using hk
+  filter_upwards [htLarge, htTiny] with k htLarge htTiny
+  intro 𝒯 h𝒯 hlow i mesh H p
+  let n : ℝ := T.S.n k
+  let t : ℝ := Real.log n
+  have ht : 1000 ≤ t := by simpa [t, n] using htLarge
+  have ht1 : 1 ≤ t := by linarith
+  have htPow : 1000000 * t ^ (0.3 : ℝ) ≤ t := by simpa [t, n] using htTiny
+  have hNpos : 0 < T.S.N k := T.S.N_pos k
+  have hnpos : 0 < T.S.n k := by
+    by_contra hzero
+    have hz : T.S.n k = 0 := by omega
+    have hfalse : ¬ (1000 : ℝ) ≤ 0 := by norm_num
+    exact hfalse (by simpa [hz] using htLarge)
+  have hNcast : (0 : ℝ) < T.S.N k := by exact_mod_cast hNpos
+  have hncast : (0 : ℝ) < T.S.n k := by exact_mod_cast hnpos
+  have hlogN : Real.log (T.S.N k : ℝ) ≤ 2 * n := by
+    have hNle : (T.S.N k : ℝ) ≤ (T.S.n k : ℝ) * 2 ^ (T.S.n k) := by
+      exact_mod_cast T.S.N_le k
+    have hlog : Real.log (T.S.N k : ℝ) ≤
+        Real.log ((T.S.n k : ℝ) * 2 ^ (T.S.n k)) := Real.log_le_log hNcast hNle
+    have hlogn : Real.log (T.S.n k : ℝ) ≤ T.S.n k := by
+      simpa [Real.rpow_one] using
+        Real.log_natCast_le_rpow_div (T.S.n k) (by norm_num : (0 : ℝ) < 1)
+    have hlogtwo : Real.log (2 : ℝ) ≤ 1 := by
+      exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+    rw [Real.log_mul (ne_of_gt hncast) (by positivity), Real.log_pow] at hlog
+    dsimp [n]
+    nlinarith
+
+  have hcluster := h𝒯.cluster_data (Or.inl hlow) i
+  rcases hcluster with
+    ⟨_, _, _, _, _, _, _, hqLower, hhUpper, hlowIff, _, _⟩
+  have hqUpper : (𝒯.P i).q ≤ Real.rpow t κ.cq := by
+    have h := hlowIff.mp hlow
+    simpa [t, n] using h
+  have hMloPos : (0 : ℝ) < κ.Mlo := by
+    have haC := hκ.aC_rng.1
+    have haB := hκ.aB_rng.1
+    have hCb : 100 < κ.Cb := by
+      have hfrac : 0 < 100 * κ.aC / κ.aB := by positivity
+      linarith [hκ.Cb_big]
+    have hMlo : κ.Cb + 100 < (κ.Mlo : ℝ) := hκ.Mlo_big
+    linarith
+  have hcqMlo : κ.cq * (κ.Mlo : ℝ) < 1 / 20 := by
+    have hcq := hκ.cq_rng.2
+    calc
+      κ.cq * (κ.Mlo : ℝ) < (1 / (20 * (κ.Mlo : ℝ))) * (κ.Mlo : ℝ) :=
+        mul_lt_mul_of_pos_right hcq hMloPos
+      _ = 1 / 20 := by field_simp [ne_of_gt hMloPos]
+  have hqPow : Real.rpow ((𝒯.P i).q : ℝ) κ.Mlo ≤ Real.rpow t (1 / 20 : ℝ) := by
+    calc
+      Real.rpow ((𝒯.P i).q : ℝ) (κ.Mlo : ℝ) ≤
+          Real.rpow (Real.rpow t κ.cq) (κ.Mlo : ℝ) := by
+        apply Real.rpow_le_rpow (by positivity) hqUpper
+        exact le_of_lt hMloPos
+      _ = Real.rpow t (κ.cq * (κ.Mlo : ℝ)) := by
+        exact (Real.rpow_mul (by linarith : 0 ≤ t) κ.cq (κ.Mlo : ℝ)).symm
+      _ ≤ Real.rpow t (1 / 20 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le (by linarith) hcqMlo.le
+  have hh : ((𝒯.P i).h : ℝ) < 2 * Real.rpow ((𝒯.P i).q : ℝ) κ.Mlo := by
+    simpa [hlow] using hhUpper
+  have hhSmall : ((𝒯.P i).h : ℝ) < 2 * Real.rpow t (1 / 20 : ℝ) := by
+    exact lt_of_lt_of_le hh (mul_le_mul_of_nonneg_left hqPow (by norm_num))
+  have hOmegaSmall : κ.ω < 1 / 5 := by
+    have hMhi : 1 ≤ (κ.Mhi : ℝ) := by
+      have hcq : 0 < κ.cq := hκ.cq_rng.1
+      have hsum : 0 < (κ.Mlo : ℝ) + 10 / κ.cq := by positivity
+      have hmhi : 0 < (κ.Mhi : ℝ) := lt_of_lt_of_le hsum hκ.Mhi_big.1
+      exact_mod_cast (Nat.succ_le_iff.mpr (by exact_mod_cast hmhi))
+    have hω := hκ.ω_rng.2
+    have hωle : 5 * κ.ω ≤ 5 * κ.ω * (κ.Mhi : ℝ) := by
+      nlinarith [hκ.ω_rng.1, hMhi]
+    have hden : 0 < (10 : ℝ) ^ 6 := by positivity
+    have hmin : min κ.η0 1 ≤ 1 := min_le_right _ _
+    have hscaled : min κ.η0 1 / (10 : ℝ) ^ 6 ≤ 1 := by
+      apply (div_le_iff₀ hden).2
+      nlinarith
+    have haCsmall : κ.aC < 1 := lt_of_lt_of_le hκ.aC_rng.2 hscaled
+    nlinarith [hω, hωle, haCsmall]
+  have hheightK : 3 * κ.ω ≤ 1 := by nlinarith [hOmegaSmall]
+  have hheightT : κ.ω ≤ 1 := by linarith [hOmegaSmall]
+  have hscale_le (a : ℝ) (ha0 : 0 < a) (ha : a ≤ 1) :
+      ⌈Real.rpow ((𝒯.P i).h : ℝ) a⌉₊ ≤ (𝒯.P i).h + 1 := by
+    have hp : Real.rpow ((𝒯.P i).h : ℝ) a ≤ (𝒯.P i).h + 1 := by
+      by_cases hzero : (𝒯.P i).h = 0
+      · simp [hzero, Real.zero_rpow ha0.ne']
+      · have hbase : 1 ≤ (𝒯.P i).h := by omega
+        calc
+          Real.rpow ((𝒯.P i).h : ℝ) a ≤ Real.rpow ((𝒯.P i).h : ℝ) 1 :=
+            Real.rpow_le_rpow_of_exponent_le (by exact_mod_cast hbase) ha
+          _ = (𝒯.P i).h := Real.rpow_one _
+          _ ≤ (𝒯.P i).h + 1 := by norm_num
+    apply Nat.ceil_le.mpr
+    exact_mod_cast hp
+  have hK : 𝒯.kScale i ≤ (𝒯.P i).h + 1 := by
+    change sliceK κ (𝒯.P i).h ≤ (𝒯.P i).h + 1
+    exact hscale_le (3 * κ.ω) (by positivity [hκ.ω_rng.1]) hheightK
+  have hTscale : 𝒯.tScale i ≤ (𝒯.P i).h + 1 := by
+    change sliceT κ (𝒯.P i).h ≤ (𝒯.P i).h + 1
+    exact hscale_le κ.ω hκ.ω_rng.1 hheightT
+  let active : Finset mesh.V := Finset.univ.filter fun v => 0 < mesh.wt v p
+  let A := active.card
+  let L := Fintype.card H.Center
+  let tupleCount := Fintype.card H.Tuple
+  let listCount := Fintype.card (SmallList H.Device (𝒯.tScale i))
+  let orderCount := Fintype.card (SearchPerm H.Device (𝒯.tScale i))
+  let tiePermCount := Fintype.card H.Device.TiePerm
+  let B := 4 * (A + 1) * (tupleCount + 1) * (orderCount + 1) * (tiePermCount + 1)
+  have hActiveCard : A ≤ 2 * T.S.N k + 1 := by
+    simpa [A, active] using mesh.active_bound p
+  have hLocCard : L = 2 ^ (𝒯.P i).h * (H.Device.H + 1) := by
+    calc
+      L = Fintype.card H.Center := rfl
+      _ = Fintype.card H.Device.Loc := rfl
+      _ = Fintype.card
+          (OAI.HypercubeRamsey.CubeVertex (𝒯.P i).h × Fin (H.Device.H + 1)) := by
+            rfl
+      _ = Fintype.card (OAI.HypercubeRamsey.CubeVertex (𝒯.P i).h) *
+          Fintype.card (Fin (H.Device.H + 1)) := by
+            simp only [Fintype.card_prod]
+      _ = 2 ^ (𝒯.P i).h * (H.Device.H + 1) := by
+          simp [OAI.HypercubeRamsey.card_cubeVertex]
+  have hLocPos : 0 < L := by
+    rw [hLocCard]
+    positivity
+  have hTop : H.Device.H ≤
+      ((𝒯.P i).h + 2) ^ ((𝒯.P i).h + 1) * ((𝒯.P i).h ^ 2 + 1) := by
+    exact Lane_q_s14_hist.topScale_le_nat_bound (𝒯.P i).h
+      (κ.ω / 100) (κ.ω / 30)
+      (div_pos hκ.ω_rng.1 (by norm_num))
+      (by have hω := hκ.ω_rng.1; nlinarith)
+      (by have hω := hOmegaSmall; nlinarith)
+  have hHplus : H.Device.H + 1 ≤
+      2 * (((𝒯.P i).h + 2) ^ ((𝒯.P i).h + 1) * ((𝒯.P i).h ^ 2 + 1)) := by
+    have hpowpos : 1 ≤ ((𝒯.P i).h + 2) ^ ((𝒯.P i).h + 1) := by
+      exact Nat.one_le_pow _ _ (by omega)
+    have hpolypos : 1 ≤ (𝒯.P i).h ^ 2 + 1 := by omega
+    have hfactor : 1 ≤
+        ((𝒯.P i).h + 2) ^ ((𝒯.P i).h + 1) * ((𝒯.P i).h ^ 2 + 1) := by
+      calc
+        1 = 1 * 1 := by norm_num
+        _ ≤ _ := Nat.mul_le_mul hpowpos hpolypos
+    omega
+  have hhBound : ((𝒯.P i).h : ℝ) ≤ 2 * t ^ (0.1 : ℝ) := by
+    calc
+      ((𝒯.P i).h : ℝ) ≤ 2 * t ^ (1 / 20 : ℝ) := hhSmall.le
+      _ ≤ 2 * t ^ (0.1 : ℝ) := by
+        gcongr
+        linarith
+  have hlogL : Real.log (L : ℝ) ≤ 30 * t ^ (0.2 : ℝ) := by
+    have hlogH : Real.log ((H.Device.H + 1 : ℕ) : ℝ) ≤
+        1 + ((𝒯.P i).h + 1 : ℝ) * ((𝒯.P i).h + 2 : ℝ) +
+          Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) := by
+      have hHpos : (0 : ℝ) < ((H.Device.H + 1 : ℕ) : ℝ) := by positivity
+      let qNat : ℕ := ((𝒯.P i).h + 2) ^ ((𝒯.P i).h + 1) * ((𝒯.P i).h ^ 2 + 1)
+      have hBound : ((H.Device.H + 1 : ℕ) : ℝ) ≤
+          2 * (((𝒯.P i).h + 2 : ℕ) : ℝ) ^ ((𝒯.P i).h + 1) *
+            (((𝒯.P i).h ^ 2 + 1 : ℕ) : ℝ) := by
+        calc
+          ((H.Device.H + 1 : ℕ) : ℝ) ≤ ((2 * qNat : ℕ) : ℝ) := by
+            exact_mod_cast (by simpa [qNat] using hHplus)
+          _ = 2 * (((𝒯.P i).h + 2 : ℕ) : ℝ) ^ ((𝒯.P i).h + 1) *
+                (((𝒯.P i).h ^ 2 + 1 : ℕ) : ℝ) := by
+            simp [qNat, Nat.cast_mul, Nat.cast_pow]
+            ring
+      have hlogBound := Real.log_le_log hHpos hBound
+      rw [Real.log_mul (by positivity) (by positivity),
+        Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (by positivity), Real.log_pow] at hlogBound
+      push_cast at hlogBound
+      have hlogBound' : Real.log ((H.Device.H + 1 : ℕ) : ℝ) ≤
+          Real.log 2 + ((𝒯.P i).h + 1 : ℝ) * Real.log ((𝒯.P i).h + 2 : ℝ) +
+            Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) := by
+        simpa [Nat.cast_add, Nat.cast_pow] using hlogBound
+      have hlogTwo : Real.log 2 ≤ 1 := by
+        exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+      have hlogHbase : Real.log ((𝒯.P i).h + 2 : ℝ) ≤ (𝒯.P i).h + 2 := by
+        calc
+          Real.log ((𝒯.P i).h + 2 : ℝ) ≤ ((𝒯.P i).h + 2 : ℝ) - 1 :=
+            Real.log_le_sub_one_of_pos (by positivity)
+          _ ≤ (𝒯.P i).h + 2 := by linarith
+      have hlogHprod : ((𝒯.P i).h + 1 : ℝ) * Real.log ((𝒯.P i).h + 2 : ℝ) ≤
+          ((𝒯.P i).h + 1 : ℝ) * ((𝒯.P i).h + 2 : ℝ) :=
+        mul_le_mul_of_nonneg_left hlogHbase (by positivity)
+      calc
+        Real.log ((H.Device.H + 1 : ℕ) : ℝ) ≤
+            Real.log 2 + ((𝒯.P i).h + 1 : ℝ) * Real.log ((𝒯.P i).h + 2 : ℝ) +
+              Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) := hlogBound'
+        _ ≤ 1 + ((𝒯.P i).h + 1 : ℝ) * ((𝒯.P i).h + 2 : ℝ) +
+              Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) := by
+          exact add_le_add (add_le_add hlogTwo hlogHprod) le_rfl
+    rw [hLocCard, Nat.cast_mul, Nat.cast_pow, Real.log_mul (by positivity) (by positivity),
+      Real.log_pow]
+    have hlogTwo : Real.log 2 ≤ 1 := by
+      exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+    have hpow1 : 1 ≤ t ^ (0.1 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.1)
+    have hpow2 : 1 ≤ t ^ (0.2 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.2)
+    have hh1 : (𝒯.P i).h + 1 ≤ 3 * t ^ (0.1 : ℝ) := by
+      have hcast : ((𝒯.P i).h : ℝ) + 1 ≤ 2 * t ^ (0.1 : ℝ) + 1 := by linarith [hhBound]
+      calc
+        ((𝒯.P i).h : ℝ) + 1 ≤ 2 * t ^ (0.1 : ℝ) + 1 := hcast
+        _ ≤ 3 * t ^ (0.1 : ℝ) := by nlinarith [hpow1]
+    have hh2 : ((𝒯.P i).h : ℝ) + 2 ≤ 4 * t ^ (0.1 : ℝ) := by
+      have hcast : ((𝒯.P i).h : ℝ) + 2 ≤ 2 * t ^ (0.1 : ℝ) + 2 := by linarith [hhBound]
+      calc
+        ((𝒯.P i).h : ℝ) + 2 ≤ 2 * t ^ (0.1 : ℝ) + 2 := hcast
+        _ ≤ 4 * t ^ (0.1 : ℝ) := by nlinarith [hpow1]
+    have hprod : (((𝒯.P i).h : ℝ) + 1) * (((𝒯.P i).h : ℝ) + 2) ≤
+        12 * t ^ (0.2 : ℝ) := by
+      have hmul := mul_le_mul hh1 hh2 (by positivity) (by positivity)
+      have hpowMul : t ^ (0.1 : ℝ) * t ^ (0.1 : ℝ) = t ^ (0.2 : ℝ) := by
+        rw [← Real.rpow_add (by linarith : 0 < t)]
+        congr 1
+        ring
+      calc
+        _ ≤ (3 * t ^ (0.1 : ℝ)) * (4 * t ^ (0.1 : ℝ)) := hmul
+        _ = 12 * (t ^ (0.1 : ℝ) * t ^ (0.1 : ℝ)) := by ring
+        _ = 12 * t ^ (0.2 : ℝ) := by rw [hpowMul]
+    have hlogBase : Real.log ((𝒯.P i).h + 2 : ℝ) ≤ 4 * t ^ (0.1 : ℝ) := by
+      have hlog : Real.log ((𝒯.P i).h + 2 : ℝ) ≤ (𝒯.P i).h + 2 := by
+        calc
+          Real.log ((𝒯.P i).h + 2 : ℝ) ≤ ((𝒯.P i).h + 2 : ℝ) - 1 :=
+            Real.log_le_sub_one_of_pos (by positivity)
+          _ ≤ (𝒯.P i).h + 2 := by linarith
+      exact hlog.trans (by linarith [hh2])
+    have hlogPoly : Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) ≤ 5 * t ^ (0.2 : ℝ) := by
+      have hnat : Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) ≤ (𝒯.P i).h ^ 2 + 1 := by
+        calc
+          Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ) ≤ ((𝒯.P i).h ^ 2 + 1 : ℝ) - 1 :=
+            Real.log_le_sub_one_of_pos (by positivity)
+          _ ≤ (𝒯.P i).h ^ 2 + 1 := by linarith
+      have hhBound' : ((𝒯.P i).h : ℝ) ≤ 2 * t ^ (0.1 : ℝ) := hhBound
+      have hpowMul : t ^ (0.1 : ℝ) * t ^ (0.1 : ℝ) = t ^ (0.2 : ℝ) := by
+        rw [← Real.rpow_add (by linarith : 0 < t)]
+        congr 1
+        ring
+      have hsq : ((𝒯.P i).h : ℝ) ^ 2 ≤ 4 * t ^ (0.2 : ℝ) := by
+        have hdiff : ((𝒯.P i).h : ℝ) - 2 * t ^ (0.1 : ℝ) ≤ 0 := by linarith [hhBound']
+        have hsum : 0 ≤ ((𝒯.P i).h : ℝ) + 2 * t ^ (0.1 : ℝ) := by positivity
+        have hprod : (((𝒯.P i).h : ℝ) - 2 * t ^ (0.1 : ℝ)) *
+            (((𝒯.P i).h : ℝ) + 2 * t ^ (0.1 : ℝ)) ≤ 0 :=
+          mul_nonpos_of_nonpos_of_nonneg hdiff hsum
+        nlinarith [hprod, hpowMul]
+      have hpoly : ((𝒯.P i).h : ℝ) ^ 2 + 1 ≤ 5 * t ^ (0.2 : ℝ) := by
+        nlinarith only [hsq, hpow2]
+      exact hnat.trans hpoly
+    have htPow : t ^ (0.1 : ℝ) ≤ t ^ (0.2 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+    have hcalc :
+        (𝒯.P i).h * Real.log 2 +
+          Real.log ((H.Device.H + 1 : ℕ) : ℝ) ≤ 30 * t ^ (0.2 : ℝ) := by
+      have hhBound' : ((𝒯.P i).h : ℝ) ≤ 2 * t ^ (0.1 : ℝ) := hhBound
+      calc
+        (𝒯.P i).h * Real.log 2 + Real.log ((H.Device.H + 1 : ℕ) : ℝ) ≤
+            (𝒯.P i).h * Real.log 2 +
+              (1 + ((𝒯.P i).h + 1 : ℝ) * ((𝒯.P i).h + 2 : ℝ) +
+                Real.log ((𝒯.P i).h ^ 2 + 1 : ℝ)) := add_le_add le_rfl hlogH
+        _ ≤ 30 * t ^ (0.2 : ℝ) := by
+          nlinarith [hhBound', hprod, hlogTwo, hlogPoly, htPow, hpow2]
+    simpa [n, t] using hcalc
+  have hLexp : (L : ℝ) ≤ Real.exp (30 * t ^ (0.2 : ℝ)) := by
+    have hLpos : (0 : ℝ) < L := by exact_mod_cast hLocPos
+    rw [← Real.exp_log hLpos]
+    exact Real.exp_le_exp.mpr hlogL
+  have hTupleCount : tupleCount = (T.S.N k) ^ (𝒯.kScale i) := by
+    simp [tupleCount, PrimitiveHistory.Tuple, Fintype.card_fun]
+  have hListCardEq : Fintype.card (SmallList H.Device (𝒯.tScale i)) =
+      Fintype.card {S : Finset H.Center // S.Nonempty ∧ S.card ≤ 𝒯.tScale i} := by
+    apply Fintype.card_congr
+    exact Equiv.refl _
+  have hListCount : listCount ≤ (L + 1) ^ (2 * 𝒯.tScale i) := by
+    calc
+      listCount = Fintype.card (SmallList H.Device (𝒯.tScale i)) := rfl
+      _ = Fintype.card {S : Finset H.Center // S.Nonempty ∧ S.card ≤ 𝒯.tScale i} := hListCardEq
+      _ ≤ (L + 1) ^ (2 * 𝒯.tScale i) := by
+        simpa [L] using
+          Lane_q_s14_hist.small_finset_type_card_le_pow (α := H.Center) (𝒯.tScale i) hLocPos
+  have hOrderCount : orderCount ≤ listCount ^ listCount := by
+    simp only [orderCount, SearchPerm, Fintype.card_perm, Fintype.card_fin]
+    exact Nat.factorial_le_pow listCount
+  have hTiePermCount : tiePermCount ≤ L ^ L := by
+    have hcard : tiePermCount = Nat.factorial (Fintype.card H.Device.Loc) := by
+      change Fintype.card (Equiv.Perm (Fin (Fintype.card H.Device.Loc))) = _
+      rw [Fintype.card_perm, Fintype.card_fin]
+    rw [hcard]
+    calc
+      Nat.factorial (Fintype.card H.Device.Loc) ≤
+          (Fintype.card H.Device.Loc) ^ (Fintype.card H.Device.Loc) :=
+        Nat.factorial_le_pow _
+      _ = L ^ L := by rfl
+  have centerLaw_active {z : mesh.V × (H.Tuple × (Bool × Bool))}
+      (hz : 0 < (H.centerLaw p).w z) : z.1 ∈ active := by
+    by_contra hn
+    have hzero : mesh.wt z.1 p = 0 := by
+      apply le_antisymm (le_of_not_gt (by simpa [active] using hn))
+      exact mesh.wt_nonneg _ _
+    simp [PrimitiveHistory.centerLaw, FinLaw.bind, PrimitiveHistory.vertexLaw,
+      PrimitiveHistory.tuplePrior, lawToFinLaw, FinLaw.pi,
+      PrimitiveHistory.finProbToFinLaw, FinProb.bernoulli, hzero] at hz
+  have groupLaw_active {z : mesh.V × SearchPerm H.Device (𝒯.tScale i)}
+      (hz : 0 < (H.groupLaw p).w z) : z.1 ∈ active := by
+    by_contra hn
+    have hzero : mesh.wt z.1 p = 0 := by
+      apply le_antisymm (le_of_not_gt (by simpa [active] using hn))
+      exact mesh.wt_nonneg _ _
+    simp [PrimitiveHistory.groupLaw, FinLaw.bind, PrimitiveHistory.vertexLaw,
+      PrimitiveHistory.finProbToFinLaw, FinProb.uniformAll, hzero] at hz
+  have centerSupportCard (c : H.Center) :
+      Fintype.card {z : H.Val (.inl c) // 0 < (H.record p (.inl c)).w z} ≤
+        A * tupleCount * 4 := by
+    let f : {z : H.Val (.inl c) // 0 < (H.record p (.inl c)).w z} →
+        {v : mesh.V // v ∈ active} × H.Tuple × (Bool × Bool) := fun z =>
+      (⟨z.1.1, by
+          have hz : 0 < (H.centerLaw p).w z.1 := by simpa [PrimitiveHistory.record] using z.2
+          exact centerLaw_active hz⟩, z.1.2.1, z.1.2.2)
+    have hf : Function.Injective f := by
+      intro x y hxy
+      apply Subtype.ext
+      dsimp [f] at hxy
+      have hv : x.1.1 = y.1.1 := congrArg Subtype.val (congrArg Prod.fst hxy)
+      have hrest := congrArg Prod.snd hxy
+      have hw : x.1.2.1 = y.1.2.1 := congrArg Prod.fst hrest
+      have hb : x.1.2.2 = y.1.2.2 := congrArg Prod.snd hrest
+      exact Prod.ext hv (Prod.ext hw hb)
+    calc
+      _ ≤ Fintype.card ({v : mesh.V // v ∈ active} × H.Tuple × (Bool × Bool)) :=
+        Fintype.card_le_of_injective f hf
+      _ = A * tupleCount * 4 := by
+        have hactiveCard : Fintype.card {v : mesh.V // v ∈ active} = active.card :=
+          Fintype.card_coe active
+        simp [A, tupleCount, hactiveCard]
+        ring
+  have groupSupportCard (g : Group 𝒯 i) :
+      Fintype.card {z : H.Val (.inr (.inl g)) // 0 < (H.record p (.inr (.inl g))).w z} ≤
+        A * orderCount := by
+    let f : {z : H.Val (.inr (.inl g)) // 0 < (H.record p (.inr (.inl g))).w z} →
+        {v : mesh.V // v ∈ active} × SearchPerm H.Device (𝒯.tScale i) := fun z =>
+      (⟨z.1.1, by
+          have hz : 0 < (H.groupLaw p).w z.1 := by simpa [PrimitiveHistory.record] using z.2
+          exact groupLaw_active hz⟩, z.1.2)
+    have hf : Function.Injective f := by
+      intro x y hxy
+      apply Subtype.ext
+      rcases Prod.mk.inj hxy with ⟨hv, hσ⟩
+      exact Prod.ext (congrArg Subtype.val hv) hσ
+    calc
+      _ ≤ Fintype.card ({v : mesh.V // v ∈ active} × SearchPerm H.Device (𝒯.tScale i)) :=
+        Fintype.card_le_of_injective f hf
+      _ = A * orderCount := by
+        have hactiveCard : Fintype.card {v : mesh.V // v ∈ active} = active.card :=
+          Fintype.card_coe active
+        simp [A, orderCount, hactiveCard]
+  have hAmono : A ≤ A + 1 := Nat.le_succ A
+  have hTmono : tupleCount ≤ tupleCount + 1 := Nat.le_succ tupleCount
+  have hOmono : orderCount ≤ orderCount + 1 := Nat.le_succ orderCount
+  have hPmono : tiePermCount ≤ tiePermCount + 1 := Nat.le_succ tiePermCount
+  have hOpos : 1 ≤ orderCount + 1 := Nat.succ_le_succ (Nat.zero_le orderCount)
+  have hPpos : 1 ≤ tiePermCount + 1 := Nat.succ_le_succ (Nat.zero_le tiePermCount)
+  have hTpos : 1 ≤ tupleCount + 1 := Nat.succ_le_succ (Nat.zero_le tupleCount)
+  have tieSupportCard (c : H.Center) :
+      Fintype.card {z : H.Val (.inr (.inr c)) //
+        0 < (H.record p (.inr (.inr c))).w z} ≤ tiePermCount := by
+    apply Fintype.card_le_of_injective (fun z => z.1)
+    intro x y hxy
+    apply Subtype.ext
+    exact hxy
+  have hCenterB (c : H.Center) :
+      Fintype.card {z : H.Val (.inl c) // 0 < (H.record p (.inl c)).w z} ≤ B := by
+    apply (centerSupportCard c).trans
+    calc
+      A * tupleCount * 4 = 4 * (A * tupleCount) := by ring
+      _ ≤ 4 * ((A + 1) * (tupleCount + 1)) := Nat.mul_le_mul_left 4 (Nat.mul_le_mul hAmono hTmono)
+      _ = (4 * (A + 1) * (tupleCount + 1)) * 1 := by ring
+      _ ≤ (4 * (A + 1) * (tupleCount + 1)) * (orderCount + 1) :=
+        Nat.mul_le_mul_left _ hOpos
+      _ = (4 * (A + 1) * (tupleCount + 1) * (orderCount + 1)) * 1 := by ring
+      _ ≤ (4 * (A + 1) * (tupleCount + 1) * (orderCount + 1)) * (tiePermCount + 1) :=
+        Nat.mul_le_mul_left _ hPpos
+      _ = B := by rfl
+  have hGroupB (g : Group 𝒯 i) :
+      Fintype.card {z : H.Val (.inr (.inl g)) // 0 < (H.record p (.inr (.inl g))).w z} ≤ B := by
+    apply (groupSupportCard g).trans
+    have hTfac : 4 * (A + 1) ≤ 4 * (A + 1) * (tupleCount + 1) := by
+      calc
+        4 * (A + 1) = (4 * (A + 1)) * 1 := by simp
+        _ ≤ (4 * (A + 1)) * (tupleCount + 1) :=
+          Nat.mul_le_mul_left _ hTpos
+    calc
+      A * orderCount = 1 * (A * orderCount) := by simp
+      _ ≤ 4 * (A * orderCount) := Nat.mul_le_mul_right _ (by norm_num)
+      _ ≤ 4 * ((A + 1) * (orderCount + 1)) := Nat.mul_le_mul_left 4 (Nat.mul_le_mul hAmono hOmono)
+      _ = (4 * (A + 1)) * (orderCount + 1) := by ring
+      _ ≤ (4 * (A + 1) * (tupleCount + 1)) * (orderCount + 1) :=
+        Nat.mul_le_mul_right _ hTfac
+      _ = (4 * (A + 1) * (tupleCount + 1) * (orderCount + 1)) * 1 := by ring
+      _ ≤ (4 * (A + 1) * (tupleCount + 1) * (orderCount + 1)) * (tiePermCount + 1) :=
+        Nat.mul_le_mul_left _ hPpos
+      _ = B := by rfl
+  have hTieB (c : H.Center) :
+      Fintype.card {z : H.Val (.inr (.inr c)) //
+        0 < (H.record p (.inr (.inr c))).w z} ≤ B := by
+    apply (tieSupportCard c).trans
+    have hfac : 1 ≤ 4 * (A + 1) * (tupleCount + 1) * (orderCount + 1) := by
+      calc
+        1 = 1 * 1 * 1 * 1 := by norm_num
+        _ ≤ 4 * (A + 1) * (tupleCount + 1) * (orderCount + 1) := by
+          gcongr <;> omega
+    calc
+      tiePermCount ≤ tiePermCount + 1 := hPmono
+      _ = 1 * (tiePermCount + 1) := by simp
+      _ ≤ (4 * (A + 1) * (tupleCount + 1) * (orderCount + 1)) * (tiePermCount + 1) :=
+        Nat.mul_le_mul_right _ hfac
+      _ = B := by rfl
+  have hCoordB (r : H.Rec) :
+      Fintype.card {z : H.Val r // 0 < (H.record p r).w z} ≤ B := by
+    cases r with
+    | inl c => exact hCenterB c
+    | inr q => cases q with
+      | inl g => exact hGroupB g
+      | inr c => exact hTieB c
+  have hSupportNat :
+      (Finset.univ.filter fun W => 0 < (H.recLaw p).w W).card ≤ B ^ Fintype.card H.Rec := by
+    have hprod := Lane_q_s14_hist.positive_pi_support_card_le (H.record p)
+    calc
+      _ = (Finset.univ.filter fun W : ∀ r, H.Val r =>
+        0 < ∏ r, (H.record p r).w (W r)).card := by
+          apply congrArg Finset.card
+          ext W
+          simp [PrimitiveHistory.recLaw, recordLaw, PrimitiveHistory.lawRec, FinLaw.pi]
+      _ ≤ ∏ r, Fintype.card {z : H.Val r // 0 < (H.record p r).w z} := hprod
+      _ ≤ ∏ r : H.Rec, B := by
+          apply Finset.prod_le_prod
+          intro r hr
+          exact hCoordB r
+      _ = B ^ Fintype.card H.Rec := by simp
+  have hGroupLe : Fintype.card (Group 𝒯 i) ≤ L := by
+    apply Fintype.card_le_of_injective
+      (fun g : Group 𝒯 i => (g.1, (⟨0, Nat.zero_lt_succ _⟩ : Fin (H.Device.H + 1))))
+    intro g g' hgg'
+    apply Subtype.ext
+    exact congrArg Prod.fst hgg'
+  have hRecCard : Fintype.card H.Rec ≤ 3 * L := by
+    have hEq : Fintype.card H.Rec = L + (Fintype.card (Group 𝒯 i) + L) := by
+      simp [PrimitiveHistory.Rec, L]
+    rw [hEq]
+    omega
+  have hBpos : 1 ≤ B := by
+    dsimp [B]
+    have hA : 1 ≤ A + 1 := by omega
+    have hT : 1 ≤ tupleCount + 1 := by omega
+    have hO : 1 ≤ orderCount + 1 := by omega
+    have hP : 1 ≤ tiePermCount + 1 := by omega
+    calc
+      1 ≤ 4 * (A + 1) := by
+        calc
+          1 ≤ 4 := by omega
+          _ ≤ 4 * (A + 1) := by
+            simpa using Nat.mul_le_mul_left 4 hA
+      _ ≤ 4 * (A + 1) * (tupleCount + 1) := by
+        simpa using Nat.mul_le_mul_left (4 * (A + 1)) hT
+      _ ≤ 4 * (A + 1) * (tupleCount + 1) * (orderCount + 1) := by
+        simpa using Nat.mul_le_mul_left (4 * (A + 1) * (tupleCount + 1)) hO
+      _ ≤ 4 * (A + 1) * (tupleCount + 1) * (orderCount + 1) * (tiePermCount + 1) := by
+        simpa using Nat.mul_le_mul_left (4 * (A + 1) * (tupleCount + 1) * (orderCount + 1)) hP
+  have hSupportNat' :
+      (Finset.univ.filter fun W => 0 < (H.recLaw p).w W).card ≤ B ^ (3 * L) := by
+    calc
+      _ ≤ B ^ Fintype.card H.Rec := hSupportNat
+      _ ≤ B ^ (3 * L) := Nat.pow_le_pow_right hBpos hRecCard
+  let supp : Finset (∀ r, H.Val r) :=
+    Finset.univ.filter fun W => 0 < (H.recLaw p).w W
+  have hSuppNe : supp.Nonempty := by
+    by_contra hne
+    have hempty : supp = ∅ := Finset.not_nonempty_iff_eq_empty.mp hne
+    have hzero : ∀ W, (H.recLaw p).w W = 0 := by
+      intro W
+      have hnot : ¬ 0 < (H.recLaw p).w W := by
+        intro hpos
+        have hmem : W ∈ supp := by simp [supp, hpos]
+        rw [hempty] at hmem
+        simp at hmem
+      exact le_antisymm (le_of_not_gt hnot) ((H.recLaw p).nonneg W)
+    have hsum : ∑ W, (H.recLaw p).w W = 0 := by
+      apply Finset.sum_eq_zero
+      intro W hW
+      exact hzero W
+    rw [(H.recLaw p).sum_one] at hsum
+    norm_num at hsum
+  have hCountPos : (supp.card : ℝ) > 0 := by
+    exact_mod_cast Finset.card_pos.mpr hSuppNe
+  have hAplusNat : A + 1 ≤ 4 * T.S.N k := by
+    have hNlower : 1 ≤ T.S.N k := Nat.succ_le_of_lt hNpos
+    calc
+      A + 1 ≤ 2 * T.S.N k + 2 := Nat.add_le_add_right hActiveCard 1
+      _ ≤ 4 * T.S.N k := by omega
+  have hAplusLog : Real.log ((A + 1 : ℕ) : ℝ) ≤ 2 + 2 * n := by
+    have hApos : (0 : ℝ) < (A : ℝ) + 1 := by
+      have hAnonneg : (0 : ℝ) ≤ (A : ℝ) := Nat.cast_nonneg A
+      linarith
+    have hAupper : (A : ℝ) + 1 ≤ 4 * (T.S.N k : ℝ) := by
+      exact_mod_cast hAplusNat
+    have hlog := Real.log_le_log hApos hAupper
+    rw [Real.log_mul (by norm_num : (4 : ℝ) ≠ 0) (ne_of_gt hNcast)] at hlog
+    have hlogFour : Real.log 4 ≤ 2 := by
+      apply (Real.log_le_iff_le_exp (by norm_num)).2
+      have hExp : 4 < Real.exp 2 := by
+        rw [show (2 : ℝ) = 1 + 1 by norm_num, Real.exp_add]
+        nlinarith [Real.exp_one_gt_two]
+      exact hExp.le
+    have hAplusLogReal : Real.log ((A : ℝ) + 1) ≤ 2 + 2 * n := by
+      dsimp [n]
+      linarith [hlog, hlogFour, hlogN]
+    simpa [Nat.cast_add] using hAplusLogReal
+  have hTuplePlusLog : Real.log ((tupleCount + 1 : ℕ) : ℝ) ≤
+      1 + 6 * n * t ^ (0.1 : ℝ) := by
+    have hTuplePosNat : 1 ≤ tupleCount := by
+      rw [hTupleCount]
+      exact Nat.one_le_pow _ _ hNpos
+    have hTuplePlus : tupleCount + 1 ≤ 2 * tupleCount := by omega
+    have hTuplePlusCast : ((tupleCount + 1 : ℕ) : ℝ) ≤ 2 * (tupleCount : ℝ) := by
+      exact_mod_cast hTuplePlus
+    have hTuplePlusReal : (tupleCount : ℝ) + 1 ≤ 2 * (tupleCount : ℝ) := by
+      simpa [Nat.cast_add] using hTuplePlusCast
+    have hTuplePosReal : 0 < (tupleCount : ℝ) := by
+      exact_mod_cast (Nat.succ_le_iff.mp hTuplePosNat)
+    have hTupleLogReal : Real.log ((tupleCount : ℝ) + 1) ≤
+        Real.log 2 + Real.log (tupleCount : ℝ) := by
+      have hlog := Real.log_le_log (by positivity) hTuplePlusReal
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (ne_of_gt hTuplePosReal)] at hlog
+      exact hlog
+    have hTupleLog : Real.log ((tupleCount + 1 : ℕ) : ℝ) ≤
+        Real.log 2 + Real.log (tupleCount : ℝ) := by
+      simpa [Nat.cast_add] using hTupleLogReal
+    have hlogTuple : Real.log (tupleCount : ℝ) =
+        (𝒯.kScale i : ℝ) * Real.log (T.S.N k : ℝ) := by
+      rw [hTupleCount, Nat.cast_pow, Real.log_pow]
+    have hlogTwo : Real.log 2 ≤ 1 := by
+      exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+    have hlogNnonneg : 0 ≤ Real.log (T.S.N k : ℝ) := by
+      apply Real.log_nonneg
+      exact_mod_cast Nat.succ_le_of_lt hNpos
+    have hpow1K : 1 ≤ t ^ (0.1 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.1)
+    have hKcast : (𝒯.kScale i : ℝ) ≤ 3 * t ^ (0.1 : ℝ) := by
+      have hh : ((𝒯.P i).h : ℝ) ≤ 2 * t ^ (0.1 : ℝ) := hhBound
+      have hscale : (𝒯.kScale i : ℝ) ≤ (𝒯.P i).h + 1 := by exact_mod_cast hK
+      calc
+        (𝒯.kScale i : ℝ) ≤ (𝒯.P i).h + 1 := hscale
+        _ ≤ 3 * t ^ (0.1 : ℝ) := by nlinarith [hpow1K]
+    calc
+      Real.log ((tupleCount + 1 : ℕ) : ℝ) ≤ Real.log 2 + Real.log (tupleCount : ℝ) := hTupleLog
+      _ = Real.log 2 + (𝒯.kScale i : ℝ) * Real.log (T.S.N k : ℝ) := by rw [hlogTuple]
+      _ ≤ 1 + (𝒯.kScale i : ℝ) * Real.log (T.S.N k : ℝ) := by
+        exact add_le_add hlogTwo le_rfl
+      _ ≤ 1 + (3 * t ^ (0.1 : ℝ)) * (2 * n) := by
+        exact add_le_add le_rfl
+          (mul_le_mul hKcast hlogN hlogNnonneg (by positivity))
+      _ = 1 + 6 * n * t ^ (0.1 : ℝ) := by ring
+  have hLplusLog : Real.log ((L + 1 : ℕ) : ℝ) ≤ 1 + 30 * t ^ (0.2 : ℝ) := by
+    have hLplusNat : L + 1 ≤ 2 * L := by omega
+    have hLplusCast : ((L + 1 : ℕ) : ℝ) ≤ 2 * (L : ℝ) := by exact_mod_cast hLplusNat
+    have hLplusReal : (L : ℝ) + 1 ≤ 2 * (L : ℝ) := by simpa [Nat.cast_add] using hLplusCast
+    have hlogReal : Real.log ((L : ℝ) + 1) ≤ Real.log 2 + Real.log (L : ℝ) := by
+      have hlog := Real.log_le_log (by positivity) hLplusReal
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (ne_of_gt (by exact_mod_cast hLocPos))] at hlog
+      exact hlog
+    have hlog : Real.log ((L + 1 : ℕ) : ℝ) ≤ Real.log 2 + Real.log (L : ℝ) := by
+      simpa [Nat.cast_add] using hlogReal
+    have hlogTwo : Real.log 2 ≤ 1 := by
+      exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+    linarith [hlog, hlogTwo, hlogL]
+  have hListPlusLog : Real.log ((listCount + 1 : ℕ) : ℝ) ≤ 200 * t ^ (0.3 : ℝ) := by
+    have hbase : 1 ≤ (L + 1) ^ (2 * 𝒯.tScale i) :=
+      Nat.one_le_pow _ _ (by omega)
+    have hlistPlusNat : listCount + 1 ≤ 2 * (L + 1) ^ (2 * 𝒯.tScale i) := by
+      calc
+        listCount + 1 ≤ (L + 1) ^ (2 * 𝒯.tScale i) + 1 := Nat.add_le_add_right hListCount 1
+        _ ≤ 2 * (L + 1) ^ (2 * 𝒯.tScale i) := by omega
+    have hlistPlusCast : ((listCount + 1 : ℕ) : ℝ) ≤
+        2 * ((L + 1 : ℕ) : ℝ) ^ (2 * 𝒯.tScale i) := by exact_mod_cast hlistPlusNat
+    have hListCast : ((listCount + 1 : ℕ) : ℝ) = (listCount : ℝ) + 1 := by simp
+    have hLCast : ((L + 1 : ℕ) : ℝ) = (L : ℝ) + 1 := by simp
+    have hlistPlusReal : (listCount : ℝ) + 1 ≤
+        2 * ((L : ℝ) + 1) ^ (2 * 𝒯.tScale i) := by
+      rw [← hListCast, ← hLCast]
+      exact hlistPlusCast
+    have hlogReal : Real.log ((listCount : ℝ) + 1) ≤
+        Real.log 2 + (2 * (𝒯.tScale i : ℝ)) * Real.log ((L : ℝ) + 1) := by
+      have hlog := Real.log_le_log (by positivity) hlistPlusReal
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (by positivity), Real.log_pow] at hlog
+      push_cast at hlog
+      exact hlog
+    have hLplusLogReal : Real.log ((L : ℝ) + 1) ≤ 1 + 30 * t ^ (0.2 : ℝ) := by
+      rw [← hLCast]
+      exact hLplusLog
+    have hlogTwo : Real.log 2 ≤ 1 := by
+      exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+    have hpow1List : 1 ≤ t ^ (0.1 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.1)
+    have hpow2List : 1 ≤ t ^ (0.2 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.2)
+    have htScaleCast : (𝒯.tScale i : ℝ) ≤ 3 * t ^ (0.1 : ℝ) := by
+      have hscale : (𝒯.tScale i : ℝ) ≤ (𝒯.P i).h + 1 := by exact_mod_cast hTscale
+      calc
+        (𝒯.tScale i : ℝ) ≤ (𝒯.P i).h + 1 := hscale
+        _ ≤ 3 * t ^ (0.1 : ℝ) := by nlinarith only [hhBound, hpow1List]
+    have htPow : t ^ (0.1 : ℝ) ≤ t ^ (0.3 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+    have htPow2 : t ^ (0.2 : ℝ) ≤ t ^ (0.3 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+    have hpowMul : t ^ (0.1 : ℝ) * t ^ (0.2 : ℝ) = t ^ (0.3 : ℝ) := by
+      rw [← Real.rpow_add (by linarith : 0 < t)]
+      congr 1
+      ring
+    calc
+      Real.log ((listCount + 1 : ℕ) : ℝ) ≤ Real.log 2 +
+          (2 * (𝒯.tScale i : ℝ)) * Real.log ((L : ℝ) + 1) := by
+            rw [hListCast]
+            exact hlogReal
+      _ ≤ 1 + (2 * (3 * t ^ (0.1 : ℝ))) * (1 + 30 * t ^ (0.2 : ℝ)) := by
+        apply add_le_add
+        · exact hlogTwo
+        · exact mul_le_mul
+            (by nlinarith [htScaleCast]) hLplusLogReal
+            (Real.log_nonneg (by exact_mod_cast Nat.succ_le_succ (Nat.zero_le L)))
+            (by positivity)
+      _ ≤ 200 * t ^ (0.3 : ℝ) := by
+        have hpow3List : 1 ≤ t ^ (0.3 : ℝ) := by
+          simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.3)
+        nlinarith only [hpow1List, hpow2List, hpow3List, htPow, htPow2, hpowMul]
+  have hListPlusExp : ((listCount + 1 : ℕ) : ℝ) ≤ Real.exp (200 * t ^ (0.3 : ℝ)) := by
+    have hpos : (0 : ℝ) < ((listCount + 1 : ℕ) : ℝ) := by positivity
+    calc
+      ((listCount + 1 : ℕ) : ℝ) = Real.exp (Real.log ((listCount + 1 : ℕ) : ℝ)) :=
+        (Real.exp_log hpos).symm
+      _ ≤ Real.exp (200 * t ^ (0.3 : ℝ)) := Real.exp_le_exp.mpr hListPlusLog
+  have hOrderPlusNat : orderCount + 1 ≤
+      2 * (listCount + 1) ^ (listCount + 1) := by
+    have hpow : orderCount ≤ (listCount + 1) ^ (listCount + 1) := by
+      calc
+        orderCount ≤ listCount ^ listCount := hOrderCount
+        _ ≤ (listCount + 1) ^ (listCount + 1) := by gcongr <;> omega
+    have hbase : 1 ≤ (listCount + 1) ^ (listCount + 1) :=
+      Nat.one_le_pow _ _ (by omega)
+    omega
+  have hOrderPlusLog : Real.log ((orderCount + 1 : ℕ) : ℝ) ≤
+      1 + Real.exp (400 * t ^ (0.3 : ℝ)) := by
+    have horderPlusCast : ((orderCount + 1 : ℕ) : ℝ) ≤
+        2 * ((listCount + 1 : ℕ) : ℝ) ^ (listCount + 1) := by exact_mod_cast hOrderPlusNat
+    have hOrderCast : ((orderCount + 1 : ℕ) : ℝ) = (orderCount : ℝ) + 1 := by simp
+    have hListCast : ((listCount + 1 : ℕ) : ℝ) = (listCount : ℝ) + 1 := by simp
+    have horderPlusReal : (orderCount : ℝ) + 1 ≤
+        2 * ((listCount : ℝ) + 1) ^ (listCount + 1) := by
+      rw [← hOrderCast, ← hListCast]
+      exact horderPlusCast
+    have hlogReal : Real.log ((orderCount : ℝ) + 1) ≤
+        Real.log 2 + ((listCount : ℝ) + 1) * Real.log ((listCount : ℝ) + 1) := by
+      have hlog := Real.log_le_log (by positivity) horderPlusReal
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (by positivity), Real.log_pow] at hlog
+      push_cast at hlog
+      exact hlog
+    have hlogU : Real.log ((listCount : ℝ) + 1) ≤ 200 * t ^ (0.3 : ℝ) := by
+      rw [← hListCast]
+      exact hListPlusLog
+    have hU : (listCount : ℝ) + 1 ≤ Real.exp (200 * t ^ (0.3 : ℝ)) := by
+      rw [← hListCast]
+      exact hListPlusExp
+    have hlogUnonneg : 0 ≤ Real.log ((listCount : ℝ) + 1) := by
+      apply Real.log_nonneg
+      have hlistNonneg : 0 ≤ (listCount : ℝ) := Nat.cast_nonneg _
+      linarith
+    have hxnonneg : 0 ≤ 200 * t ^ (0.3 : ℝ) := by positivity
+    have hxle : 200 * t ^ (0.3 : ℝ) ≤ Real.exp (200 * t ^ (0.3 : ℝ)) := by
+      linarith [Real.add_one_le_exp (200 * t ^ (0.3 : ℝ))]
+    have hmul : ((listCount : ℝ) + 1) *
+        Real.log ((listCount : ℝ) + 1) ≤ Real.exp (400 * t ^ (0.3 : ℝ)) := by
+      calc
+        _ ≤ Real.exp (200 * t ^ (0.3 : ℝ)) * (200 * t ^ (0.3 : ℝ)) := by
+          exact mul_le_mul hU hlogU hlogUnonneg (by positivity)
+        _ ≤ Real.exp (200 * t ^ (0.3 : ℝ)) * Real.exp (200 * t ^ (0.3 : ℝ)) :=
+          mul_le_mul_of_nonneg_left hxle (Real.exp_nonneg _)
+        _ = Real.exp (400 * t ^ (0.3 : ℝ)) := by rw [← Real.exp_add]; congr 1 <;> ring
+    calc
+      Real.log ((orderCount + 1 : ℕ) : ℝ) ≤ Real.log 2 +
+          ((listCount : ℝ) + 1) * Real.log ((listCount : ℝ) + 1) := by
+            rw [hOrderCast]
+            exact hlogReal
+      _ ≤ 1 + Real.exp (400 * t ^ (0.3 : ℝ)) := by
+        exact add_le_add (by
+          exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le)
+          hmul
+  have hTiePermPlusNat : tiePermCount + 1 ≤ 2 * L ^ L := by
+    have hpow : tiePermCount ≤ L ^ L := hTiePermCount
+    have hbase : 1 ≤ L ^ L := Nat.one_le_pow _ _ hLocPos
+    omega
+  have hTiePermPlusLog : Real.log ((tiePermCount + 1 : ℕ) : ℝ) ≤
+      1 + (L : ℝ) * Real.log (L : ℝ) := by
+    have hTiePermPlusCast : ((tiePermCount + 1 : ℕ) : ℝ) ≤
+        2 * (L : ℝ) ^ L := by exact_mod_cast hTiePermPlusNat
+    have hTiePermPlusReal : (tiePermCount : ℝ) + 1 ≤ 2 * (L : ℝ) ^ L := by
+      simpa [Nat.cast_add] using hTiePermPlusCast
+    have hlogReal : Real.log ((tiePermCount : ℝ) + 1) ≤ Real.log 2 +
+        (L : ℝ) * Real.log (L : ℝ) := by
+      have hlog := Real.log_le_log (by positivity) hTiePermPlusReal
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (by positivity), Real.log_pow] at hlog
+      exact hlog
+    have hlog : Real.log ((tiePermCount + 1 : ℕ) : ℝ) ≤ Real.log 2 +
+        (L : ℝ) * Real.log (L : ℝ) := by
+      simpa [Nat.cast_add] using hlogReal
+    have hlogTwo : Real.log 2 ≤ 1 := by
+      exact (Real.log_le_iff_le_exp (by norm_num)).2 Real.exp_one_gt_two.le
+    linarith [hlog, hlogTwo]
+  have hTiePermPlusExp' : Real.log ((tiePermCount + 1 : ℕ) : ℝ) ≤
+      1 + Real.exp (100 * t ^ (0.3 : ℝ)) := by
+    have hLreal : (L : ℝ) ≤ Real.exp (30 * t ^ (0.2 : ℝ)) := hLexp
+    have hxnonneg : 0 ≤ 30 * t ^ (0.2 : ℝ) := by positivity
+    have hxle : 30 * t ^ (0.2 : ℝ) ≤ Real.exp (30 * t ^ (0.2 : ℝ)) := by
+      linarith [Real.add_one_le_exp (30 * t ^ (0.2 : ℝ))]
+    have hmul : (L : ℝ) * (30 * t ^ (0.2 : ℝ)) ≤
+        Real.exp (60 * t ^ (0.2 : ℝ)) := by
+      calc
+        _ ≤ Real.exp (30 * t ^ (0.2 : ℝ)) * Real.exp (30 * t ^ (0.2 : ℝ)) :=
+          mul_le_mul hLreal hxle (by positivity) (by positivity)
+        _ = Real.exp (60 * t ^ (0.2 : ℝ)) := by rw [← Real.exp_add]; congr 1 <;> ring
+    have htPow : t ^ (0.2 : ℝ) ≤ t ^ (0.3 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+    have hExpMono : Real.exp (60 * t ^ (0.2 : ℝ)) ≤ Real.exp (100 * t ^ (0.3 : ℝ)) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [htPow]
+    have hlogLScaled : (L : ℝ) * Real.log (L : ℝ) ≤
+        (L : ℝ) * (30 * t ^ (0.2 : ℝ)) :=
+      mul_le_mul_of_nonneg_left hlogL (by positivity)
+    calc
+      Real.log ((tiePermCount + 1 : ℕ) : ℝ) ≤ 1 + (L : ℝ) * Real.log (L : ℝ) := hTiePermPlusLog
+      _ ≤ 1 + (L : ℝ) * (30 * t ^ (0.2 : ℝ)) := by
+        nlinarith only [hlogLScaled]
+      _ ≤ 1 + Real.exp (100 * t ^ (0.3 : ℝ)) := by
+        nlinarith only [hmul, hExpMono]
+  have hBLog : Real.log (B : ℝ) ≤ 10 * n * t ^ (0.1 : ℝ) + 3 * Real.exp (500 * t ^ (0.3 : ℝ)) := by
+    have hAcast : ((A + 1 : ℕ) : ℝ) = (A : ℝ) + 1 := by simp
+    have hTcast : ((tupleCount + 1 : ℕ) : ℝ) = (tupleCount : ℝ) + 1 := by simp
+    have hOcast : ((orderCount + 1 : ℕ) : ℝ) = (orderCount : ℝ) + 1 := by simp
+    have hPcast : ((tiePermCount + 1 : ℕ) : ℝ) = (tiePermCount : ℝ) + 1 := by simp
+    have hAplusLogReal : Real.log ((A : ℝ) + 1) ≤ 2 + 2 * n := by
+      rw [← hAcast]
+      exact hAplusLog
+    have hTuplePlusLogReal : Real.log ((tupleCount : ℝ) + 1) ≤
+        1 + 6 * n * t ^ (0.1 : ℝ) := by
+      rw [← hTcast]
+      exact hTuplePlusLog
+    have hOrderPlusLogReal : Real.log ((orderCount : ℝ) + 1) ≤
+        1 + Real.exp (400 * t ^ (0.3 : ℝ)) := by
+      rw [← hOcast]
+      exact hOrderPlusLog
+    have hTiePlusLogReal : Real.log ((tiePermCount : ℝ) + 1) ≤
+        1 + Real.exp (100 * t ^ (0.3 : ℝ)) := by
+      rw [← hPcast]
+      exact hTiePermPlusExp'
+    have hBexp : (B : ℝ) = 4 * ((A : ℝ) + 1) * ((tupleCount : ℝ) + 1) *
+        ((orderCount : ℝ) + 1) * ((tiePermCount : ℝ) + 1) := by
+      change ((4 * (A + 1) * (tupleCount + 1) * (orderCount + 1) * (tiePermCount + 1) : ℕ) : ℝ) = _
+      push_cast
+      ring
+    have hLogEq : Real.log (B : ℝ) = Real.log 4 + Real.log ((A : ℝ) + 1) +
+        Real.log ((tupleCount : ℝ) + 1) + Real.log ((orderCount : ℝ) + 1) +
+        Real.log ((tiePermCount : ℝ) + 1) := by
+      have hApos : 0 < (A : ℝ) + 1 := by
+        have hA0 : (0 : ℝ) ≤ (A : ℝ) := Nat.cast_nonneg A
+        linarith
+      have hTpos : 0 < (tupleCount : ℝ) + 1 := by
+        have hT0 : (0 : ℝ) ≤ (tupleCount : ℝ) := Nat.cast_nonneg tupleCount
+        linarith
+      have hOpos : 0 < (orderCount : ℝ) + 1 := by
+        have hO0 : (0 : ℝ) ≤ (orderCount : ℝ) := Nat.cast_nonneg orderCount
+        linarith
+      have hPpos : 0 < (tiePermCount : ℝ) + 1 := by
+        have hP0 : (0 : ℝ) ≤ (tiePermCount : ℝ) := Nat.cast_nonneg tiePermCount
+        linarith
+      have hleft1 : 0 < 4 * ((A : ℝ) + 1) := mul_pos (by norm_num) hApos
+      have hleft2 : 0 < 4 * ((A : ℝ) + 1) * ((tupleCount : ℝ) + 1) :=
+        mul_pos hleft1 hTpos
+      have hleft3 : 0 < 4 * ((A : ℝ) + 1) * ((tupleCount : ℝ) + 1) *
+          ((orderCount : ℝ) + 1) := mul_pos hleft2 hOpos
+      rw [hBexp,
+        Real.log_mul (ne_of_gt hleft3) (ne_of_gt hPpos),
+        Real.log_mul (ne_of_gt hleft2) (ne_of_gt hOpos),
+        Real.log_mul (ne_of_gt hleft1) (ne_of_gt hTpos),
+        Real.log_mul (by norm_num : (4 : ℝ) ≠ 0) (ne_of_gt hApos)]
+    have hlogFour : Real.log 4 ≤ 2 := by
+      apply (Real.log_le_iff_le_exp (by norm_num)).2
+      have hExp : 4 < Real.exp 2 := by
+        rw [show (2 : ℝ) = 1 + 1 by norm_num, Real.exp_add]
+        nlinarith [Real.exp_one_gt_two]
+      exact hExp.le
+    have hconst : 7 ≤ n * t ^ (0.1 : ℝ) := by
+      have hNreal : 1000 ≤ n := by
+        have h := Real.add_one_le_exp t
+        have hn : n = Real.exp t := by
+          dsimp [n, t]
+          exact (Real.exp_log hncast).symm
+        rw [hn]
+        linarith
+      have hpow : 1 ≤ t ^ (0.1 : ℝ) := by
+        simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.1)
+      nlinarith
+    have hu : 1 ≤ t ^ (0.1 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.1)
+    have hnu : n ≤ n * t ^ (0.1 : ℝ) := by
+      calc
+        n = n * 1 := by ring
+        _ ≤ n * t ^ (0.1 : ℝ) := mul_le_mul_of_nonneg_left hu (le_of_lt hncast)
+    have hexpO : Real.exp (400 * t ^ (0.3 : ℝ)) ≤ Real.exp (500 * t ^ (0.3 : ℝ)) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [Real.rpow_nonneg (by linarith : 0 ≤ t) (0.3 : ℝ)]
+    have hexpT : Real.exp (100 * t ^ (0.3 : ℝ)) ≤ Real.exp (500 * t ^ (0.3 : ℝ)) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [Real.rpow_nonneg (by linarith : 0 ≤ t) (0.3 : ℝ)]
+    calc
+      Real.log (B : ℝ) ≤ 2 + (2 + 2 * n) + (1 + 6 * n * t ^ (0.1 : ℝ)) +
+          (1 + Real.exp (400 * t ^ (0.3 : ℝ))) +
+          (1 + Real.exp (100 * t ^ (0.3 : ℝ)) ) := by
+        rw [hLogEq]
+        exact add_le_add (add_le_add (add_le_add (add_le_add hlogFour hAplusLogReal)
+          hTuplePlusLogReal) hOrderPlusLogReal) hTiePlusLogReal
+      _ ≤ 10 * n * t ^ (0.1 : ℝ) + 3 * Real.exp (500 * t ^ (0.3 : ℝ)) := by
+        calc
+          _ = 7 + 2 * n + 6 * n * t ^ (0.1 : ℝ) +
+              Real.exp (400 * t ^ (0.3 : ℝ)) + Real.exp (100 * t ^ (0.3 : ℝ)) := by ring
+          _ ≤ 7 + 2 * n + 6 * n * t ^ (0.1 : ℝ) +
+              2 * Real.exp (500 * t ^ (0.3 : ℝ)) := by
+                nlinarith [hexpO, hexpT]
+          _ ≤ 10 * n * t ^ (0.1 : ℝ) + 3 * Real.exp (500 * t ^ (0.3 : ℝ)) := by
+                nlinarith [hconst, hnu, Real.exp_nonneg (500 * t ^ (0.3 : ℝ))]
+  have hBLogNonneg : 0 ≤ Real.log (B : ℝ) := by
+    apply Real.log_nonneg
+    exact_mod_cast hBpos
+  have hRecReal : (Fintype.card H.Rec : ℝ) ≤ 3 * (L : ℝ) := by exact_mod_cast hRecCard
+  have hLtimes : 3 * (L : ℝ) ≤ Real.exp (32 * t ^ (0.2 : ℝ)) := by
+    have hpow2L : 1 ≤ t ^ (0.2 : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num : (0 : ℝ) ≤ 0.2)
+    have hExp2 : 3 ≤ Real.exp (2 * t ^ (0.2 : ℝ)) := by
+      have harg : 2 ≤ 2 * t ^ (0.2 : ℝ) := by
+        nlinarith only [hpow2L]
+      calc
+        3 ≤ 2 + 1 := by norm_num
+        _ ≤ Real.exp 2 := Real.add_one_le_exp 2
+        _ ≤ Real.exp (2 * t ^ (0.2 : ℝ)) := Real.exp_le_exp.mpr harg
+    calc
+      3 * (L : ℝ) ≤ 3 * Real.exp (30 * t ^ (0.2 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hLexp (by norm_num)
+      _ = Real.exp (30 * t ^ (0.2 : ℝ)) * 3 := by ring
+      _ ≤ Real.exp (30 * t ^ (0.2 : ℝ)) * Real.exp (2 * t ^ (0.2 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hExp2 (Real.exp_nonneg _)
+      _ = Real.exp (32 * t ^ (0.2 : ℝ)) := by rw [← Real.exp_add]; congr 1 <;> ring
+  have hlogCount : Real.log (supp.card : ℝ) ≤
+      10 * n * t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ)) +
+        3 * Real.exp (532 * t ^ (0.3 : ℝ)) := by
+    have hlogNat : (supp.card : ℝ) ≤ (B ^ (3 * L) : ℝ) := by exact_mod_cast hSupportNat'
+    have hlog := Real.log_le_log hCountPos hlogNat
+    rw [Real.log_pow] at hlog
+    push_cast at hlog
+    calc
+      Real.log (supp.card : ℝ) ≤ (3 * (L : ℝ)) * Real.log (B : ℝ) := hlog
+      _ ≤ Real.exp (32 * t ^ (0.2 : ℝ)) * Real.log (B : ℝ) :=
+        mul_le_mul_of_nonneg_right hLtimes hBLogNonneg
+      _ ≤ Real.exp (32 * t ^ (0.2 : ℝ)) *
+          (10 * n * t ^ (0.1 : ℝ) + 3 * Real.exp (500 * t ^ (0.3 : ℝ))) :=
+        mul_le_mul_of_nonneg_left hBLog (Real.exp_nonneg _)
+      _ ≤ 10 * n * t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ)) +
+          3 * Real.exp (532 * t ^ (0.3 : ℝ)) := by
+        have htPow : t ^ (0.2 : ℝ) ≤ t ^ (0.3 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+        have hexpMono : Real.exp (32 * t ^ (0.2 : ℝ)) ≤ Real.exp (32 * t ^ (0.3 : ℝ)) :=
+          Real.exp_le_exp.mpr (by gcongr)
+        calc
+          _ = 10 * n * t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ)) +
+              3 * (Real.exp (32 * t ^ (0.2 : ℝ)) * Real.exp (500 * t ^ (0.3 : ℝ))) := by ring
+          _ ≤ _ := by
+            have hmulExp : Real.exp (32 * t ^ (0.2 : ℝ)) *
+                Real.exp (500 * t ^ (0.3 : ℝ)) ≤ Real.exp (532 * t ^ (0.3 : ℝ)) := by
+              rw [← Real.exp_add]
+              apply Real.exp_le_exp.mpr
+              nlinarith only [htPow]
+            exact add_le_add le_rfl
+              (mul_le_mul_of_nonneg_left hmulExp (by norm_num))
+          _ = _ := by ring
+  have hpowTiny3 : 33 * t ^ (0.3 : ℝ) ≤ (1 / 1000 : ℝ) * t := by
+    nlinarith [htTiny]
+  have hpowTiny532 : 532 * t ^ (0.3 : ℝ) ≤ (1 / 1000 : ℝ) * t := by
+    nlinarith [htTiny]
+  have huLeExp : t ^ (0.1 : ℝ) ≤ Real.exp (t ^ (0.3 : ℝ)) := by
+    have h01 : t ^ (0.1 : ℝ) ≤ t ^ (0.3 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+    calc
+      t ^ (0.1 : ℝ) ≤ t ^ (0.3 : ℝ) := h01
+      _ ≤ Real.exp (t ^ (0.3 : ℝ)) := by linarith [Real.add_one_le_exp (t ^ (0.3 : ℝ))]
+  have hExp32 : Real.exp (32 * t ^ (0.2 : ℝ)) ≤ Real.exp (32 * t ^ (0.3 : ℝ)) := by
+    apply Real.exp_le_exp.mpr
+    have htPow : t ^ (0.2 : ℝ) ≤ t ^ (0.3 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le ht1 (by norm_num)
+    nlinarith [htPow]
+  have hProdExp : t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ)) ≤
+      Real.exp (33 * t ^ (0.3 : ℝ)) := by
+    calc
+      _ ≤ Real.exp (t ^ (0.3 : ℝ)) * Real.exp (32 * t ^ (0.3 : ℝ)) :=
+        mul_le_mul huLeExp hExp32 (by positivity) (by positivity)
+      _ = Real.exp (33 * t ^ (0.3 : ℝ)) := by
+        have hsum : t ^ (0.3 : ℝ) + 32 * t ^ (0.3 : ℝ) = 33 * t ^ (0.3 : ℝ) := by ring
+        rw [← Real.exp_add, hsum]
+  have hnEq : n = Real.exp t := by
+    dsimp [n, t]
+    exact (Real.exp_log hncast).symm
+  have hlogCountSmall : Real.log (supp.card : ℝ) ≤
+      13 * Real.exp ((1 + (1 / 1000 : ℝ)) * t) := by
+    calc
+      Real.log (supp.card : ℝ) ≤
+          10 * n * t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ)) +
+            3 * Real.exp (532 * t ^ (0.3 : ℝ)) := hlogCount
+      _ ≤ 10 * n * Real.exp (33 * t ^ (0.3 : ℝ)) +
+            3 * Real.exp ((1 / 1000 : ℝ) * t) := by
+          apply add_le_add
+          · calc
+              10 * n * t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ)) =
+                  (10 * n) * (t ^ (0.1 : ℝ) * Real.exp (32 * t ^ (0.2 : ℝ))) := by ring
+              _ ≤ (10 * n) * Real.exp (33 * t ^ (0.3 : ℝ)) :=
+                mul_le_mul_of_nonneg_left hProdExp (by positivity)
+              _ = 10 * n * Real.exp (33 * t ^ (0.3 : ℝ)) := by ring
+          · exact mul_le_mul_of_nonneg_left
+              (Real.exp_le_exp.mpr hpowTiny532) (by norm_num)
+      _ ≤ 10 * n * Real.exp ((1 / 1000 : ℝ) * t) +
+            3 * n * Real.exp ((1 / 1000 : ℝ) * t) := by
+          have hn1 : 1 ≤ n := by rw [hnEq]; linarith [Real.add_one_le_exp t]
+          have hexpNonneg : 0 ≤ Real.exp ((1 / 1000 : ℝ) * t) := Real.exp_nonneg _
+          have hE : Real.exp ((1 / 1000 : ℝ) * t) ≤
+              n * Real.exp ((1 / 1000 : ℝ) * t) := by
+            simpa only [one_mul] using mul_le_mul_of_nonneg_right hn1 hexpNonneg
+          exact add_le_add
+            (mul_le_mul_of_nonneg_left
+              (Real.exp_le_exp.mpr hpowTiny3) (by positivity))
+            (calc
+            3 * Real.exp ((1 / 1000 : ℝ) * t) ≤
+                3 * (n * Real.exp ((1 / 1000 : ℝ) * t)) :=
+              mul_le_mul_of_nonneg_left hE (by norm_num)
+            _ = 3 * n * Real.exp ((1 / 1000 : ℝ) * t) := by ring)
+      _ = 13 * Real.exp ((1 + (1 / 1000 : ℝ)) * t) := by
+          rw [hnEq]
+          have hexp : Real.exp t * Real.exp ((1 / 1000 : ℝ) * t) =
+              Real.exp ((1 + (1 / 1000 : ℝ)) * t) := by
+            rw [← Real.exp_add]
+            have hsum : t + (1 / 1000 : ℝ) * t = (1 + (1 / 1000 : ℝ)) * t := by ring
+            rw [hsum]
+          calc
+            _ = 13 * (Real.exp t * Real.exp ((1 / 1000 : ℝ) * t)) := by ring
+            _ = 13 * Real.exp ((1 + (1 / 1000 : ℝ)) * t) := by rw [hexp]
+  have hpowFinal : 13 * Real.exp ((1 + (1 / 1000 : ℝ)) * t) ≤ Real.exp ((1.01 : ℝ) * t) := by
+    have h13 : 13 ≤ Real.exp ((9 : ℝ)) := by
+      have hquad := Real.quadratic_le_exp_of_nonneg (by norm_num : (0 : ℝ) ≤ 9)
+      norm_num at hquad ⊢
+      linarith
+    have harg : 9 ≤ ((1.01 : ℝ) - (1 + 1 / 1000)) * t := by
+      have hcoef : (9 : ℝ) / 1000 ≤ (1.01 : ℝ) - (1 + 1 / 1000) := by norm_num
+      calc
+        9 ≤ (9 : ℝ) / 1000 * t := by nlinarith only [ht]
+        _ ≤ ((1.01 : ℝ) - (1 + 1 / 1000)) * t :=
+          mul_le_mul_of_nonneg_right hcoef (by linarith [ht])
+    have hfinalarg : 9 + (1 + (1 / 1000 : ℝ)) * t ≤ (1.01 : ℝ) * t := by
+      nlinarith only [harg]
+    calc
+      13 * Real.exp ((1 + (1 / 1000 : ℝ)) * t) ≤
+          Real.exp 9 * Real.exp ((1 + (1 / 1000 : ℝ)) * t) :=
+        mul_le_mul_of_nonneg_right h13 (Real.exp_nonneg _)
+      _ = Real.exp (9 + (1 + (1 / 1000 : ℝ)) * t) := by rw [Real.exp_add]
+      _ ≤ Real.exp ((1.01 : ℝ) * t) := Real.exp_le_exp.mpr hfinalarg
+  have hcount : (supp.card : ℝ) ≤ Real.exp (n ^ (1.01 : ℝ)) := by
+    have hlogTarget : Real.log (supp.card : ℝ) ≤ n ^ (1.01 : ℝ) := by
+      rw [Real.rpow_def_of_pos hncast]
+      calc
+        Real.log (supp.card : ℝ) ≤ Real.exp ((1.01 : ℝ) * t) := hlogCountSmall.trans hpowFinal
+        _ = Real.exp (Real.log n * (1.01 : ℝ)) := by
+          congr 1
+          dsimp [t]
+          ring
+    calc
+      (supp.card : ℝ) = Real.exp (Real.log (supp.card : ℝ)) := (Real.exp_log hCountPos).symm
+      _ ≤ Real.exp (n ^ (1.01 : ℝ)) := Real.exp_le_exp.mpr hlogTarget
+  simpa [supp] using hcount
+
+set_option maxHeartbeats 200000
+set_option maxRecDepth 1000
 
 section Rules
 
@@ -730,14 +1799,512 @@ theorem candidate_list_models (κ : CConsts) (hκ : κ.Admissible)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) :
     Nonempty (ListFamily Geom H mask) := by
-  sorry
+  classical
+  have record_pos {p : mesh.Param} {W : ∀ r, H.Val r}
+      (hW : 0 < (H.recLaw p).w W) (r : H.Rec) :
+      0 < H.lawRec p r (W r) := by
+    have hprod : 0 < ∏ r, H.lawRec p r (W r) := by
+      change 0 < ∏ r, H.lawRec p r (W r) at hW
+      exact hW
+    have hne : H.lawRec p r (W r) ≠ 0 := by
+      intro hz
+      have hzero : (∏ r, H.lawRec p r (W r)) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_univ r) hz
+      rw [hzero] at hprod
+      norm_num at hprod
+    exact lt_of_le_of_ne (by
+      simpa [PrimitiveHistory.lawRec] using (H.record p r).nonneg (W r)) (Ne.symm hne)
+  have centerActive {p : mesh.Param} {W : ∀ r, H.Val r}
+      (hW : 0 < (H.recLaw p).w W) (c : H.Center) :
+      0 < mesh.wt (H.cornerOf W c) p := by
+    have hc := record_pos hW (Sum.inl c)
+    have hc' : 0 < (H.centerLaw p).w (W (Sum.inl c)) := by
+      simpa [PrimitiveHistory.lawRec, PrimitiveHistory.record] using hc
+    have hwt : 0 < mesh.wt (W (Sum.inl c)).1 p := by
+      by_contra hn
+      have hz : mesh.wt (W (Sum.inl c)).1 p = 0 :=
+        le_antisymm (le_of_not_gt hn) (mesh.wt_nonneg _ _)
+      simp [PrimitiveHistory.centerLaw, FinLaw.bind, PrimitiveHistory.vertexLaw,
+        PrimitiveHistory.tuplePrior, lawToFinLaw, FinLaw.pi,
+        PrimitiveHistory.finProbToFinLaw, FinProb.bernoulli, hz] at hc'
+    simpa [PrimitiveHistory.cornerOf] using hwt
+  have groupActive {p : mesh.Param} {W : ∀ r, H.Val r}
+      (hW : 0 < (H.recLaw p).w W) (g : Group 𝒯 i) :
+      0 < mesh.wt (H.maskVertex g W) p := by
+    have hg := record_pos hW (Sum.inr (Sum.inl g))
+    have hg' : 0 < (H.groupLaw p).w (W (Sum.inr (Sum.inl g))) := by
+      simpa [PrimitiveHistory.lawRec, PrimitiveHistory.record] using hg
+    have hwt : 0 < mesh.wt (W (Sum.inr (Sum.inl g))).1 p := by
+      by_contra hn
+      have hz : mesh.wt (W (Sum.inr (Sum.inl g))).1 p = 0 :=
+        le_antisymm (le_of_not_gt hn) (mesh.wt_nonneg _ _)
+      simp [PrimitiveHistory.groupLaw, FinLaw.bind, PrimitiveHistory.vertexLaw,
+        PrimitiveHistory.finProbToFinLaw, FinProb.uniformAll, hz] at hg'
+    simpa [PrimitiveHistory.maskVertex] using hwt
+  have patchX_subset : (𝒯.P i).X ⊆ T.X k := by
+    exact (h𝒯.patch_supports i).1.trans
+      ((h𝒯.patch_supports i).2.1.trans Finset.sdiff_subset)
+  refine ⟨{
+    model := fun p g W hW S hS => by
+      let c₀ : H.Center := Classical.choose hS.1
+      have hc₀ : c₀ ∈ S := Classical.choose_spec hS.1
+      letI : Fintype {c : H.Center // c ∈ S} := Fintype.ofFinite _
+      refine {
+        Id := {c : H.Center // c ∈ S}
+        idNonempty := ⟨⟨c₀, hc₀⟩⟩
+        binPrior := {
+          w := (mask g W).prior
+          nonneg := (mask g W).prior_nonneg
+          sum_eq_one := (mask g W).prior_sum
+        }
+        binDist := fun D => {
+          w := (mask g W).within D
+          nonneg := (mask g W).within_nonneg D
+          sum_eq_one := (mask g W).within_sum D
+        }
+        firstLaw := fun c => H.prior (H.cornerOf W c.1)
+        bin_support := by
+          intro D y hy
+          change (mask g W).within D y = 0
+          by_contra hne
+          exact hy ((mask g W).within_support D y hne)
+        first_law_supported := by
+          intro c y hy
+          exact H.prior_support (H.cornerOf W c.1) y (fun hmem => hy (patchX_subset hmem))
+        aggregate_cap := (mask g W).aggregate_masked_mass
+        width_bound := by
+          intro c x
+          exact (H.prior_cap (H.cornerOf W c.1) p (centerActive hW c.1) x).trans
+            scales.prior_width
+        codegree_bound := by
+          intro c b y y' hb hy hy'
+          change (mask g W).prior b > 0 at hb
+          have hret : b ∈ (mask g W).retained := by
+            rw [(mask g W).prior_uniform b] at hb
+            by_contra hnot
+            simp [hnot] at hb
+          have hycheap : y ∈ (mask g W).cheap b := by
+            by_contra hnot
+            have hz : (mask g W).within b y = 0 := by
+              rw [(mask g W).within_uniform b y]
+              simp [hret, hnot]
+            exact hy (by simpa using hz)
+          have hy'cheap : y' ∈ (mask g W).cheap b := by
+            by_contra hnot
+            have hz : (mask g W).within b y' = 0 := by
+              rw [(mask g W).within_uniform b y']
+              simp [hret, hnot]
+            exact hy' (by simpa using hz)
+          let v' := H.cornerOf W c.1
+          have hactive := centerActive hW c.1
+          have hprior := H.prior_uniform v' p hactive
+          have hcorner_pos : 0 < ((mesh.corner v' i).card : ℝ) := by
+            by_contra hnot
+            have hcardzero : (mesh.corner v' i).card = 0 := by
+              exact Nat.eq_zero_of_not_pos (fun hpos => hnot (by exact_mod_cast hpos))
+            have hempty : mesh.corner v' i = ∅ := Finset.card_eq_zero.mp hcardzero
+            have hweights : ∀ x, (H.prior v').w x = 0 := by
+              intro x
+              rw [hprior x]
+              simp [hempty]
+            have hsum : ∑ x, (H.prior v').w x = 0 := by
+              apply Finset.sum_eq_zero
+              intro x hx
+              exact hweights x
+            rw [(H.prior v').sum_eq_one] at hsum
+            norm_num at hsum
+          have hmean :
+              ∑ x, (H.prior v').w x * hit (T.S.E k) 𝒯.c x y * hit (T.S.E k) 𝒯.c x y' =
+                (∑ x ∈ mesh.corner v' i,
+                  hit (T.S.E k) 𝒯.c x y * hit (T.S.E k) 𝒯.c x y') /
+                    (mesh.corner v' i).card := by
+            calc
+              _ = ∑ x, (if x ∈ mesh.corner v' i then
+                    (1 : ℝ) / ((mesh.corner v' i).card : ℝ) else 0) *
+                    (hit (T.S.E k) 𝒯.c x y * hit (T.S.E k) 𝒯.c x y') := by
+                      apply Finset.sum_congr rfl
+                      intro x hx
+                      rw [hprior x]
+                      ring
+              _ = (∑ x ∈ mesh.corner v' i,
+                    hit (T.S.E k) 𝒯.c x y * hit (T.S.E k) 𝒯.c x y') /
+                    (mesh.corner v' i).card := by
+                      simp only [ite_mul, zero_mul, Finset.sum_ite_mem, Finset.univ_inter]
+                      rw [← Finset.mul_sum]
+                      ring
+          have hcodeg := (mask g W).cleaned_codegree hcluster p v' hactive
+            b y y' hycheap hy'cheap
+          rw [← hmean] at hcodeg
+          exact hcodeg
+        budget := by
+          have hcard : Fintype.card {c : H.Center // c ∈ S} ≤ 𝒯.tScale i := by
+            simpa using hS.2.1
+          have hcard' : (Fintype.card {c : H.Center // c ∈ S} : ℝ) ≤ 𝒯.tScale i :=
+            by exact_mod_cast hcard
+          calc
+            2 * (𝒯.kScale i : ℝ) * (Fintype.card {c : H.Center // c ∈ S} : ℝ) +
+                Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) + 3 ≤
+              2 * (𝒯.kScale i : ℝ) * 𝒯.tScale i +
+                Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) + 3 := by
+                  gcongr
+            _ ≤ (T.S.n k : ℝ) ^ κ.η0 / 2 := scales.budget
+      }
+    ids := fun _ _ _ _ _ _ => Equiv.refl _
+    first_law := by intro p g W hW S hS c; rfl
+    prior := by intro p g W hW S hS D; rfl
+    within := by intro p g W hW S hS D y; rfl
+    count := by
+      intro p g W hW S hS
+      simpa using hS.2.1
+  }⟩
 
+set_option maxHeartbeats 1000000 in
 theorem position_count_concentration (κ : CConsts) (hκ : κ.Admissible)
     (hconst : HeightConstantContract κ)
     {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
     (scales : PatchScales 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh) :
     PositionCountConcentration hconst H := by
-  sorry
+  classical
+  intro p
+  let q : ℝ := H.Device.lam / (H.Device.V : ℝ)
+  have hnums := hconst.threshold_slack (𝒯.P i).h scales.h_large
+  dsimp [Section14Numerics] at hnums
+  rcases hnums with ⟨_, _, hLamV, _, _, _, _, hfinal, _⟩
+  have hLamVdev : H.Device.lam ≤ (H.Device.V : ℝ) / 2 := by
+    simpa [PrimitiveHistory.Device, patchHD, HDParams.lam, HDParams.V] using hLamV
+  have hLamPos : 0 < H.Device.lam := by
+    have hh : 0 < (𝒯.P i).h := lt_of_lt_of_le hκ.h0_pos scales.h_large
+    dsimp [PrimitiveHistory.Device, patchHD, HDParams.lam]
+    positivity
+  have hVpos : 0 < (H.Device.V : ℝ) := by
+    nlinarith [hLamVdev, hLamPos]
+  have hq0 : 0 ≤ q := by
+    dsimp [q]
+    exact div_nonneg hLamPos.le (Nat.cast_nonneg _)
+  have hq1 : q ≤ 1 := by
+    dsimp [q]
+    rw [div_le_iff₀ hVpos]
+    nlinarith [hLamVdev]
+  have hbern (s : ℝ) :
+      (PrimitiveHistory.finProbToFinLaw (FinProb.bernoulli q)).E
+        (fun b => Real.exp (s * if b then (1 : ℝ) else 0)) =
+        1 + q * (Real.exp s - 1) := by
+    simp [FinLaw.E, PrimitiveHistory.finProbToFinLaw, FinProb.bernoulli, hq0, hq1]
+    <;> ring
+  have hcenterMoment (s : ℝ) :
+      (H.centerLaw p).E (fun z => Real.exp (s * if z.2.2.1 then (1 : ℝ) else 0)) =
+        1 + q * (Real.exp s - 1) := by
+    let presentLaw := PrimitiveHistory.finProbToFinLaw (FinProb.bernoulli q)
+    let activationLaw := PrimitiveHistory.finProbToFinLaw
+      (FinProb.bernoulli ((H.Device.n : ℝ) ^ H.Device.b₀ / H.Device.lam))
+    let bitsLaw := FinLaw.bind presentLaw (fun _ => activationLaw)
+    let bitsEval : Bool → ℝ := fun b => Real.exp (s * if b then (1 : ℝ) else 0)
+    let bitsFun : Bool × Bool → ℝ := fun z => bitsEval z.1
+    let tupleFun : H.Tuple × (Bool × Bool) → ℝ := fun z => bitsFun z.2
+    let tupleBitsLaw (v : mesh.V) := FinLaw.bind (H.tuplePrior v) (fun _ => bitsLaw)
+    have hbits : bitsLaw.E bitsFun = 1 + q * (Real.exp s - 1) := by
+      change (FinLaw.bind presentLaw (fun _ => activationLaw)).E
+        (fun z => bitsEval z.1) = _
+      rw [Lane_q_s14_hist.bind_E_fst]
+      simpa [presentLaw, bitsEval, FinLaw.E] using hbern s
+    have htuple (v : mesh.V) : (tupleBitsLaw v).E tupleFun =
+        1 + q * (Real.exp s - 1) := by
+      change (FinLaw.bind (H.tuplePrior v) (fun _ => bitsLaw)).E
+        (fun z => bitsFun z.2) = _
+      rw [Lane_q_s14_hist.bind_E_snd, hbits]
+      rw [← Finset.sum_mul, (H.tuplePrior v).sum_one]
+      ring
+    change (FinLaw.bind (PrimitiveHistory.vertexLaw p)
+      (fun v => FinLaw.bind (H.tuplePrior v) (fun _ => bitsLaw))).E
+        (fun z => tupleFun z.2) = _
+    rw [Lane_q_s14_hist.bind_E_snd]
+    calc
+      _ = ∑ v, (PrimitiveHistory.vertexLaw p).w v *
+          (1 + q * (Real.exp s - 1)) := by
+            apply Finset.sum_congr rfl
+            intro v hv
+            exact congrArg (fun x : ℝ => (PrimitiveHistory.vertexLaw p).w v * x)
+              (by simpa [tupleBitsLaw] using htuple v)
+      _ = _ := by
+            rw [← Finset.sum_mul, (PrimitiveHistory.vertexLaw p).sum_one]
+            ring
+  have hballCard (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
+      ((Finset.univ.filter fun c : H.Center =>
+        c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r).card : ℝ) = H.Device.V := by
+    have hNat : (Finset.univ.filter fun c : H.Center =>
+        c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r).card = H.Device.V := by
+      simpa [PrimitiveHistory.Device, PrimitiveHistory.Center, patchHD,
+        HDParams.Loc, HDParams.V] using
+          Lane_q_s14_hist.levelBall_card H.Device.d H.Device.H H.Device.r j v
+    exact_mod_cast hNat
+  have hballIndicators (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
+      (∑ c : H.Center,
+        if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) =
+          (H.Device.V : ℝ) := by
+    calc
+      _ = ((Finset.univ.filter fun c : H.Center =>
+          c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r).card : ℝ) := by
+            simp [Finset.sum_ite_mem, Finset.univ_inter]
+      _ = _ := hballCard v j
+  have hinside (v : OAI.HypercubeRamsey.CubeVertex H.Device.d)
+      (j : Fin (H.Device.H + 1)) :
+      (∑ r : H.Rec, if ∃ c : H.Center, r = Sum.inl c ∧
+          c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) =
+        (H.Device.V : ℝ) := by
+    calc
+      _ = ∑ c : H.Center,
+          if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0 := by
+            rw [Fintype.sum_sum_type, Fintype.sum_sum_type]
+            simp [PrimitiveHistory.Rec]
+      _ = (H.Device.V : ℝ) := hballIndicators v j
+  let term (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
+      ∀ r : H.Rec, H.Val r → ℝ := fun r =>
+    match r with
+    | .inl c => fun z =>
+        if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then
+          if z.2.2.1 then 1 else 0 else 0
+    | .inr (.inl _) => fun _ => 0
+    | .inr (.inr _) => fun _ => 0
+  let count (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1))
+      (W : ∀ r, H.Val r) : ℝ :=
+    (((candidateBall H v j).filter fun c => H.present W c = true).card : ℝ)
+  have hcount (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1))
+      (W : ∀ r, H.Val r) : count v j W = ∑ r : H.Rec, term v j r (W r) := by
+    let S := candidateBall H v j
+    have hnat : ((S.filter fun c => H.present W c = true).card : ℕ) =
+        ∑ c : H.Center, if c ∈ S then if H.present W c = true then 1 else 0 else 0 := by
+      rw [Finset.card_eq_sum_ite
+        (s := S.filter fun c => H.present W c = true)
+        (t := Finset.univ) (Finset.subset_univ _)]
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      apply Finset.sum_congr rfl
+      intro c hc
+      by_cases hs : c ∈ S <;> by_cases hp : H.present W c = true <;>
+        simp [hs, hp]
+    have hreal : ((S.filter fun c => H.present W c = true).card : ℝ) =
+        ∑ c : H.Center, if c ∈ S then if H.present W c = true then (1 : ℝ) else 0 else 0 := by
+      exact_mod_cast hnat
+    calc
+      count v j W =
+          ∑ c : H.Center, if c ∈ S then if H.present W c = true then (1 : ℝ) else 0 else 0 := by
+            exact hreal
+      _ = ∑ r : H.Rec, term v j r (W r) := by
+            simp [term, PrimitiveHistory.Rec, PrimitiveHistory.present, S, candidateBall]
+            rfl
+  have recordProduct (f : ∀ r : H.Rec, H.Val r → ℝ) :
+      (H.recLaw p).E (fun W => ∏ r, f r (W r)) =
+        ∏ r, (H.record p r).E (f r) := by
+    simpa [PrimitiveHistory.recLaw, recordLaw, PrimitiveHistory.lawRec] using
+      (Lane_q_s14_hist.pi_expect_prod (fun r : H.Rec => H.record p r) f)
+  have hfactor (s : ℝ) (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1))
+      (r : H.Rec) :
+      (H.record p r).E (fun z => Real.exp (s * term v j r z)) =
+        match r with
+        | .inl c => if c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then
+            1 + q * (Real.exp s - 1) else 1
+        | .inr _ => 1 := by
+    cases r with
+    | inl c =>
+        by_cases hc : c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r
+        · simpa [term, hc, PrimitiveHistory.record] using hcenterMoment s
+        · simp [term, hc, PrimitiveHistory.record, Lane_q_s14_hist.E_const]
+    | inr r =>
+        cases r <;> simp [term, PrimitiveHistory.record, Lane_q_s14_hist.E_const]
+  have hmgf (s : ℝ) (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
+      (H.recLaw p).E (fun W => Real.exp (s * count v j W)) ≤
+        Real.exp (H.Device.lam * (Real.exp s - 1)) := by
+    let f : ∀ r : H.Rec, H.Val r → ℝ := fun r z => Real.exp (s * term v j r z)
+    have hexp (W : ∀ r, H.Val r) :
+        Real.exp (s * count v j W) = ∏ r, f r (W r) := by
+      rw [← Real.exp_sum]
+      congr 1
+      rw [hcount, Finset.mul_sum]
+    have hfact : (H.recLaw p).E (fun W => ∏ r, f r (W r)) =
+        ∏ r, (H.record p r).E (f r) := recordProduct f
+    have hnonneg (r : H.Rec) : 0 ≤ (H.record p r).E (f r) := by
+      unfold FinLaw.E f
+      exact Finset.sum_nonneg fun z hz =>
+        mul_nonneg ((H.record p r).nonneg z) (Real.exp_nonneg _)
+    have hbound (r : H.Rec) :
+        (H.record p r).E (f r) ≤ Real.exp (q * (Real.exp s - 1) *
+          (if ∃ c : H.Center, r = Sum.inl c ∧
+              c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0)) := by
+      cases r with
+      | inl c =>
+          by_cases hc : c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r
+          · simp [f, hfactor, hc]
+            simpa [add_comm] using (Real.add_one_le_exp (q * (Real.exp s - 1)))
+          · simp [f, hfactor, hc]
+      | inr r => cases r <;> simp [f, hfactor]
+    letI : PosMulMono ℝ := ⟨fun {a} ha {b c} hbc => mul_le_mul_of_nonneg_left hbc ha⟩
+    calc
+      (H.recLaw p).E (fun W => Real.exp (s * count v j W)) =
+          (H.recLaw p).E (fun W => ∏ r, f r (W r)) := by
+            congr 1
+            funext W
+            exact hexp W
+      _ = ∏ r, (H.record p r).E (f r) := hfact
+      _ ≤ ∏ r, Real.exp (q * (Real.exp s - 1) *
+          (if ∃ c : H.Center, r = Sum.inl c ∧
+              c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0)) := by
+            apply Finset.prod_le_prod₀
+            · intro r hr
+              exact hnonneg r
+            · intro r hr
+              exact hbound r
+      _ = Real.exp (H.Device.lam * (Real.exp s - 1)) := by
+            rw [← Real.exp_sum]
+            congr 1
+            calc
+              _ = q * (Real.exp s - 1) *
+                    ∑ r : H.Rec, (if ∃ c : H.Center, r = Sum.inl c ∧
+                      c.2 = j ∧ hammingDist c.1 v ≤ H.Device.r then (1 : ℝ) else 0) := by
+                    rw [Finset.mul_sum]
+              _ = q * (Real.exp s - 1) * (H.Device.V : ℝ) := by rw [hinside v j]
+              _ = H.Device.lam * (Real.exp s - 1) := by
+                    dsimp [q]
+                    have hVne : (H.Device.V : ℝ) ≠ 0 :=
+                      (Nat.cast_pos.mpr (by exact_mod_cast hVpos)).ne'
+                    field_simp [hVne]
+  have hExpUpper : Real.exp (1 / 5 : ℝ) ≤ 59 / 48 := by
+    have hlog := Real.le_log_one_add_of_nonneg (x := (11 : ℝ) / 48) (by norm_num)
+    have hlog' : 1 / 5 ≤ Real.log (59 / 48) := by
+      have hfrac : (1 : ℝ) / 5 ≤ 2 * ((11 : ℝ) / 48) / ((11 : ℝ) / 48 + 2) := by norm_num
+      calc
+        (1 : ℝ) / 5 ≤ 2 * ((11 : ℝ) / 48) / ((11 : ℝ) / 48 + 2) := hfrac
+        _ ≤ Real.log (1 + (11 : ℝ) / 48) := hlog
+        _ = Real.log (59 / 48) := by congr 1 <;> norm_num
+    calc
+      Real.exp (1 / 5 : ℝ) ≤ Real.exp (Real.log (59 / 48)) := Real.exp_le_exp.mpr hlog'
+      _ = 59 / 48 := Real.exp_log (by norm_num)
+  have hExpNegFourth : Real.exp (-(1 / 4 : ℝ)) ≤ 19 / 24 := by
+    have hquarter : (81 : ℝ) / 64 ≤ Real.exp (1 / 4) := by
+      have hsmall := Real.add_one_le_exp (1 / 8 : ℝ)
+      have hsmall' : (1 : ℝ) + 1 / 8 ≤ Real.exp (1 / 8) := by linarith [hsmall]
+      have hpow : (1 + (1 : ℝ) / 8) ^ 2 ≤ Real.exp (1 / 8) ^ 2 := by
+        nlinarith [mul_nonneg (sub_nonneg.mpr hsmall')
+          (add_nonneg (by norm_num : (0 : ℝ) ≤ 1 + (1 : ℝ) / 8) (Real.exp_nonneg (1 / 8)))]
+      calc
+        (81 : ℝ) / 64 = (1 + (1 : ℝ) / 8) ^ 2 := by norm_num
+        _ ≤ Real.exp (1 / 8) ^ 2 := hpow
+        _ = Real.exp (1 / 4) := by
+          calc
+            Real.exp (1 / 8) ^ 2 = Real.exp (1 / 8) * Real.exp (1 / 8) := by ring
+            _ = Real.exp (1 / 8 + 1 / 8) := by
+              rw [← Real.exp_add]
+            _ = Real.exp (1 / 4) := by congr 1 <;> norm_num
+    calc
+      Real.exp (-(1 / 4 : ℝ)) = (Real.exp (1 / 4))⁻¹ := by rw [Real.exp_neg]
+      _ ≤ ((81 : ℝ) / 64)⁻¹ :=
+        (inv_le_inv₀ (Real.exp_pos _) (by norm_num)).mpr hquarter
+      _ = 64 / 81 := by norm_num
+      _ ≤ 19 / 24 := by norm_num
+  have hupper (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
+      (H.recLaw p).pr (fun W => 5 * H.Device.lam / 4 ≤ count v j W) ≤
+        Real.exp (-H.Device.lam / 48) := by
+    have hmark := Lane_q_s14_hist.pr_exp_markov (H.recLaw p)
+      (fun W => count v j W) (1 / 5) (5 * H.Device.lam / 4) (by norm_num)
+    have hmoment := hmgf (1 / 5) v j
+    have hcoef : -(1 / 5 : ℝ) * (5 / 4) + (Real.exp (1 / 5) - 1) ≤ -(1 / 48 : ℝ) := by
+      norm_num
+      linarith [hExpUpper]
+    calc
+      _ ≤ Real.exp (-(1 / 5 : ℝ) * (5 * H.Device.lam / 4)) *
+          (H.recLaw p).E (fun W => Real.exp ((1 / 5 : ℝ) * count v j W)) := hmark
+      _ ≤ Real.exp (-(1 / 5 : ℝ) * (5 * H.Device.lam / 4)) *
+          Real.exp (H.Device.lam * (Real.exp (1 / 5) - 1)) :=
+            mul_le_mul_of_nonneg_left hmoment (Real.exp_nonneg _)
+      _ ≤ Real.exp (-H.Device.lam / 48) := by
+            rw [← Real.exp_add]
+            apply Real.exp_le_exp.mpr
+            have hterm := mul_le_mul_of_nonneg_left hcoef hLamPos.le
+            nlinarith [hterm]
+  have hlower (v : OAI.HypercubeRamsey.CubeVertex H.Device.d) (j : Fin (H.Device.H + 1)) :
+      (H.recLaw p).pr (fun W => count v j W ≤ 3 * H.Device.lam / 4) ≤
+        Real.exp (-H.Device.lam / 48) := by
+    have hmark := Lane_q_s14_hist.pr_exp_markov (H.recLaw p)
+      (fun W => -count v j W) (1 / 4) (-(3 * H.Device.lam / 4)) (by norm_num)
+    have hmoment := hmgf (-(1 / 4 : ℝ)) v j
+    have hmoment' : (H.recLaw p).E
+        (fun W => Real.exp ((1 / 4 : ℝ) * (-count v j W))) ≤
+          Real.exp (H.Device.lam * (Real.exp (-(1 / 4 : ℝ)) - 1)) := by
+      simpa [neg_mul] using hmoment
+    have hcoef : (3 / 16 : ℝ) + (Real.exp (-(1 / 4 : ℝ)) - 1) ≤ -(1 / 48 : ℝ) := by
+      have h := sub_le_sub_right hExpNegFourth 1
+      norm_num at h ⊢
+      linarith
+    have hEvent :
+        (fun W => count v j W ≤ 3 * H.Device.lam / 4) =
+          (fun W => -(3 * H.Device.lam / 4) ≤ -count v j W) := by
+      funext W
+      apply propext
+      constructor <;> intro h <;> linarith
+    calc
+      (H.recLaw p).pr (fun W => count v j W ≤ 3 * H.Device.lam / 4) =
+          (H.recLaw p).pr (fun W => -(3 * H.Device.lam / 4) ≤ -count v j W) := by
+            rw [hEvent]
+      _ ≤ Real.exp (-(1 / 4 : ℝ) * (-(3 * H.Device.lam / 4))) *
+          (H.recLaw p).E (fun W => Real.exp ((1 / 4 : ℝ) * (-count v j W))) := hmark
+      _ ≤ Real.exp (-(1 / 4 : ℝ) * (-(3 * H.Device.lam / 4))) *
+          Real.exp (H.Device.lam * (Real.exp (-(1 / 4 : ℝ)) - 1)) :=
+            mul_le_mul_of_nonneg_left hmoment' (Real.exp_nonneg _)
+      _ ≤ Real.exp (-H.Device.lam / 48) := by
+            rw [← Real.exp_add]
+            apply Real.exp_le_exp.mpr
+            have hterm := mul_le_mul_of_nonneg_left hcoef hLamPos.le
+            nlinarith [hterm]
+  let Index := OAI.HypercubeRamsey.CubeVertex H.Device.d × Fin (H.Device.H + 1)
+  let bad (x : Index) (W : ∀ r, H.Val r) : Prop :=
+    ¬ |count x.1 x.2 W - H.Device.lam| ≤ H.Device.lam / 4
+  have hlocal (x : Index) :
+      (H.recLaw p).pr (bad x) ≤ 2 * Real.exp (-H.Device.lam / 48) := by
+    have hsubset (W : ∀ r, H.Val r) : bad x W →
+        (count x.1 x.2 W ≤ 3 * H.Device.lam / 4) ∨
+          5 * H.Device.lam / 4 ≤ count x.1 x.2 W := by
+      intro hbad
+      by_cases hlo : count x.1 x.2 W ≤ 3 * H.Device.lam / 4
+      · exact Or.inl hlo
+      · apply Or.inr
+        by_contra hhi
+        have hlow' : 3 * H.Device.lam / 4 < count x.1 x.2 W := lt_of_not_ge hlo
+        have hhigh' : count x.1 x.2 W < 5 * H.Device.lam / 4 := lt_of_not_ge hhi
+        apply hbad
+        rw [abs_le]
+        constructor <;> linarith
+    calc
+      _ ≤ (H.recLaw p).pr (fun W =>
+          count x.1 x.2 W ≤ 3 * H.Device.lam / 4 ∨
+            5 * H.Device.lam / 4 ≤ count x.1 x.2 W) :=
+              Lane_q_s14_hist.pr_mono (H.recLaw p) _ _ hsubset
+      _ ≤ (H.recLaw p).pr (fun W => count x.1 x.2 W ≤ 3 * H.Device.lam / 4) +
+          (H.recLaw p).pr (fun W => 5 * H.Device.lam / 4 ≤ count x.1 x.2 W) :=
+              Lane_q_s14_hist.pr_or_le (H.recLaw p) _ _
+      _ ≤ Real.exp (-H.Device.lam / 48) + Real.exp (-H.Device.lam / 48) :=
+            add_le_add (hlower x.1 x.2) (hupper x.1 x.2)
+      _ = 2 * Real.exp (-H.Device.lam / 48) := by ring
+  have hbad_eq :
+      (fun W => ¬ PositionCountGate H W) = (fun W => ∃ x : Index, bad x W) := by
+    funext W
+    apply propext
+    simp [PositionCountGate, bad, Index, count]
+    rfl
+  rw [hbad_eq]
+  have hsum := Lane_q_s14_hist.pr_exists_le_sum (H.recLaw p) bad
+  calc
+    (H.recLaw p).pr (fun W => ∃ x : Index, bad x W) ≤ ∑ x : Index,
+        (H.recLaw p).pr (bad x) := hsum
+    _ ≤ ∑ _x : Index, 2 * Real.exp (-H.Device.lam / 48) := by
+      apply Finset.sum_le_sum
+      intro x hx
+      exact hlocal x
+    _ = (2 : ℝ) ^ (𝒯.P i).h * ((H.Device.H + 1 : ℕ) : ℝ) *
+          2 * Real.exp (-H.Device.lam / 48) := by
+      simp [Index, Finset.sum_const, nsmul_eq_mul]
+      push_cast
+      simp [PrimitiveHistory.Device, patchHD]
+      ring
+    _ ≤ Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) (1 + hconst.sliceExponent)) := by
+      simpa [PrimitiveHistory.Device, patchHD] using hfinal
 
 private theorem greedy_acc_subset {C : Type*} [Fintype C] [DecidableEq C]
     (items : List (Finset C)) (bad : Finset C → Prop) (A : Finset (Finset C)) :
@@ -3927,7 +5494,129 @@ theorem oddU_uniform {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
     ∀ g W D, 0 < oddQ Geom H mask g W D →
       ∃ support : Finset (Fin (T.S.N k)), ∃ hs : support.Nonempty,
         ∀ y, oddU Geom H mask g W D y = (FinLaw.uniform support hs).w y := by
-  sorry
+  classical
+  intro g W D hq
+  by_cases hv : groupValid Geom H mask g W
+  · have hden0 : 0 ≤ ∑ D', tiltWeight Geom H mask g W D' :=
+      Finset.sum_nonneg fun D' _ => tiltWeight_nonneg Geom H mask g W D'
+    have hnum0 : 0 ≤ tiltWeight Geom H mask g W D :=
+      tiltWeight_nonneg Geom H mask g W D
+    have hdiv : 0 < tiltWeight Geom H mask g W D ∧
+        0 < ∑ D', tiltWeight Geom H mask g W D' := by
+      have hpos : (0 < tiltWeight Geom H mask g W D ∧
+          0 < ∑ D', tiltWeight Geom H mask g W D') ∨
+          (tiltWeight Geom H mask g W D < 0 ∧
+            ∑ D', tiltWeight Geom H mask g W D' < 0) := by
+        have hq' : 0 < tiltWeight Geom H mask g W D /
+            ∑ D', tiltWeight Geom H mask g W D' := by
+          simpa only [oddQ, if_pos hv] using hq
+        exact (div_pos_iff.mp hq')
+      rcases hpos with hpos | hneg
+      · exact hpos
+      · exact False.elim ((not_lt_of_ge hnum0) hneg.1)
+    have htw : 0 < tiltWeight Geom H mask g W D := hdiv.1
+    have hrestricted : restrictedBin Geom H mask g W D := by
+      unfold tiltWeight at htw
+      split_ifs at htw with hrestricted
+      · exact hrestricted
+      · norm_num at htw
+    have hprod : 0 < (mask g W).prior D *
+        hitMass H mask g W D (realizedList Geom H mask g W) ^ 2 := by
+      rw [tiltWeight, if_pos hrestricted] at htw
+      exact htw
+    have hprior : 0 < (mask g W).prior D := by
+      by_contra h
+      have hz : (mask g W).prior D = 0 :=
+        le_antisymm (le_of_not_gt h) ((mask g W).prior_nonneg D)
+      rw [hz, zero_mul] at hprod
+      exact (lt_irrefl 0) hprod
+    have hmass : 0 < hitMass H mask g W D (realizedList Geom H mask g W) := by
+      have hnonneg := hitMass_nonneg H mask g W D (realizedList Geom H mask g W)
+      by_contra h
+      have hz : hitMass H mask g W D (realizedList Geom H mask g W) = 0 :=
+        le_antisymm (le_of_not_gt h) hnonneg
+      rw [hz] at hprod
+      norm_num at hprod
+    have hretained := prior_pos_retained H mask g W D hprior
+    let support := (listHit H W (realizedList Geom H mask g W)).filter
+      fun y => y ∈ (mask g W).cheap D
+    have hsupport : support.Nonempty := by
+      have hform : hitMass H mask g W D (realizedList Geom H mask g W) =
+          ∑ y, if y ∈ listHit H W (realizedList Geom H mask g W)
+            then (mask g W).within D y else 0 := by
+        simp [hitMass]
+      obtain ⟨y, hy⟩ := positive_summand
+        (f := fun y : Fin (T.S.N k) =>
+          if y ∈ listHit H W (realizedList Geom H mask g W)
+          then (mask g W).within D y else 0)
+        (by rw [← hform]; exact hmass)
+      have hyhit : y ∈ listHit H W (realizedList Geom H mask g W) := by
+        by_contra hyhit
+        simp [hyhit] at hy
+      have hywithin : 0 < (mask g W).within D y := by
+        simpa [hyhit] using hy
+      have hycheap : y ∈ (mask g W).cheap D := by
+        rw [(mask g W).within_uniform D y, if_pos hretained] at hywithin
+        split_ifs at hywithin with hycheap
+        · exact hycheap
+        · norm_num at hywithin
+      exact ⟨y, Finset.mem_filter.mpr ⟨hyhit, hycheap⟩⟩
+    have hcheap_pos : 0 < ((mask g W).cheap D).card :=
+      Finset.card_pos.mpr ((mask g W).cheap_nonempty D hretained)
+    have hsupport_pos : 0 < (support.card : ℝ) := by
+      exact_mod_cast Finset.card_pos.mpr hsupport
+    have hcheap_cast_pos : 0 < ((mask g W).cheap D).card := by
+      exact_mod_cast hcheap_pos
+    have hmass_eq : hitMass H mask g W D (realizedList Geom H mask g W) =
+        (support.card : ℝ) / ((mask g W).cheap D).card := by
+      calc
+        hitMass H mask g W D (realizedList Geom H mask g W) =
+            ∑ y ∈ listHit H W (realizedList Geom H mask g W),
+              if y ∈ (mask g W).cheap D then
+                (1 : ℝ) / ((mask g W).cheap D).card else 0 := by
+          unfold hitMass
+          apply Finset.sum_congr rfl
+          intro y hy
+          rw [(mask g W).within_uniform D y, if_pos hretained]
+        _ = ∑ y ∈ support, (1 : ℝ) / ((mask g W).cheap D).card := by
+          dsimp [support]
+          rw [← Finset.sum_filter]
+        _ = (support.card : ℝ) / ((mask g W).cheap D).card := by
+          simp [div_eq_mul_inv]
+    refine ⟨support, hsupport, ?_⟩
+    intro y
+    have hcond : groupValid Geom H mask g W ∧ 0 < oddQ Geom H mask g W D := ⟨hv, hq⟩
+    rw [oddU, if_pos hcond]
+    by_cases hy : y ∈ listHit H W (realizedList Geom H mask g W)
+    · rw [if_pos hy, (mask g W).within_uniform D y, if_pos hretained]
+      by_cases hycheap : y ∈ (mask g W).cheap D
+      · have hysupport : y ∈ support := Finset.mem_filter.mpr ⟨hy, hycheap⟩
+        rw [if_pos hycheap]
+        simp only [FinLaw.uniform, hysupport]
+        simp only [if_true]
+        rw [hmass_eq]
+        field_simp [ne_of_gt hcheap_cast_pos, ne_of_gt hsupport_pos]
+        <;> ring_nf
+      · have hysupport : y ∉ support := by
+          simp [support, hy, hycheap]
+        rw [if_neg hycheap]
+        simp only [FinLaw.uniform, hysupport]
+        simp
+    · have hysupport : y ∉ support := by
+        simp [support, hy]
+      rw [if_neg hy]
+      simp only [FinLaw.uniform, hysupport]
+      simp
+  · have hprior : 0 < (mask g W).prior D := by
+      simpa [oddQ, hv] using hq
+    have hretained := prior_pos_retained H mask g W D hprior
+    refine ⟨(mask g W).cheap D,
+      (mask g W).cheap_nonempty D hretained, ?_⟩
+    intro y
+    have hcond : ¬ (groupValid Geom H mask g W ∧ 0 < oddQ Geom H mask g W D) :=
+      fun h => hv h.1
+    rw [oddU, if_neg hcond, (mask g W).within_uniform D y, if_pos hretained,
+      FinLaw.uniform]
 
 theorem odd_bin_laws (κ : CConsts) (hκ : κ.Admissible)
     (hconst : HeightConstantContract κ)

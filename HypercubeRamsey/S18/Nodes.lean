@@ -1,4 +1,6 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
+import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
 import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
@@ -13,10 +15,20 @@ import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
+import HypercubeRamsey.S18.Run_sol_s18_n4
+import HypercubeRamsey.S18.Risk_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
+import HypercubeRamsey.S18.Swap_sol_s18_n4
+import HypercubeRamsey.S18.Locality_sol_s18_n4
+import HypercubeRamsey.S18.Cost_sol_s18_n4
+import HypercubeRamsey.S18.Test_sol_s18_n4
+import HypercubeRamsey.S18.Current_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n7
+import HypercubeRamsey.S18.Nodes_q_s18_n6
+import HypercubeRamsey.S18.Nodes_q_s18_n6_g
+import HypercubeRamsey.S18.Nodes_q_s18_n2
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -334,7 +346,7 @@ theorem P18_4a {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : LateData hPT) (hD : D.Spec) :
     ∃ K : LateKernels D.encoding.base,
       (D.withKernels K).Spec ∧ TransitionData (D.withKernels K) ∧ MaskBalance (D.withKernels K) := by
-  sorry
+  exact Lane_sol_s18_n1.balanced_kernels D hD
 
 /-- L18.0b, eq. (25). Finite smallness replaces impossible fixed-index
 vanishing; the cap is on probability atoms, with no factor N. -/
@@ -342,7 +354,9 @@ theorem L18_0b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D →
       SmallErrors κ T k PT D.geom (Real.log 2 / 1000) → CurrentListCapFacts D := by
-  sorry
+  filter_upwards [] with k
+  intro PT hPT D hD hT hsmall
+  exact Lane_sol_s18_n1_caps.gated_current_cap D hD hsmall
 
 /-- L18.1a, 18:171–194. Exponent .04 leaves slack below the derived .09. -/
 theorem L18_1a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
@@ -350,7 +364,17 @@ theorem L18_1a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ D : LateData hPT, D.Spec → TransitionData D → CurrentListCapFacts D →
       ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr (fun out => ¬ D.R1 j out) ≤
         Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
-  sorry
+  obtain ⟨Kβ,hKβ,hSchedule,hErrors⟩ := L18_0a hκ T
+  obtain ⟨K16,hQuant⟩ := low_mode_quantitative_inputs hκ T
+  have hlog : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  filter_upwards [hSchedule,hErrors _ hlog,hQuant,
+    Lane_sol_s18_n1_sketch.numerical_cutoffs hκ T K16] with k hSched hSmall hQ hNum
+  intro PT hPT D hD hT hC j b h hg
+  obtain ⟨Q,hgain⟩ := hQ PT hPT D.low_mode
+  have hs := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hlower := hSched PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  exact Lane_sol_s18_n1_sketch.row_estimate hκ D hT hs hC Q hNum.1 hNum.2.1 hNum.2.2
+    (fun i j => (hlower i).1 j) j b h hg
 
 /-- L18.1b, 18:195–223. Actual broad prefixes, same-side-data deletions,
 and both single and pair versions of eq. (27); K27 is uniform. -/
@@ -390,7 +414,67 @@ theorem L18_1 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
 theorem L18_2b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X := by
-  sorry
+  have hcount := Lane_q_s18_n2.critical_count_field hκ T
+  have hnReal : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hlogT : Tendsto (fun k => Real.log (T.S.n k : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp hnReal
+  have hlogLarge : ∀ᶠ k in atTop, 4 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop 4
+  have hA0 : 0 ≤ κ.A0 := by
+    have hR : 0 ≤ (κ.R : ℝ) := Nat.cast_nonneg _
+    exact le_trans (by positivity) hκ.A0_big
+  have hlogMargin : ∀ᶠ k in atTop, 8 * κ.A0 + 10 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop (8 * κ.A0 + 10)
+  have hmargin : ∀ᶠ k in atTop, (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
+    filter_upwards [hlogLarge] with k hk
+    have hpow : (4 : ℝ) ^ 3 ≤ Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
+    norm_num at hpow
+    linarith
+  filter_upwards [hcount, hmargin, hlogMargin] with k hcount hmargin hlogMargin
+  intro PT hPT D hD X
+  have hlogTwo : (1 / 2 : ℝ) ≤ Real.log 2 := by
+    linarith [Real.log_two_gt_d9]
+  have hrBound : (D.geom.r : ℝ) ≤ 4 * κ.A0 * Real.log (T.S.n k : ℝ) := by
+    have hrnonneg : 0 ≤ (D.geom.r : ℝ) := Nat.cast_nonneg _
+    nlinarith [D.l16_valid.r_upper]
+  have hcoef : 8 * κ.A0 ≤ Real.log (T.S.n k : ℝ) := by linarith
+  have hlogLargeEnough : 2 ≤ Real.log (T.S.n k : ℝ) := by linarith
+  have hmarginReal :
+      2 * (D.geom.r : ℝ) + 4 ≤ Real.log (T.S.n k : ℝ) ^ 3 := by
+    have hprod : 8 * κ.A0 * Real.log (T.S.n k : ℝ) ≤
+        Real.log (T.S.n k : ℝ) ^ 2 := by
+      calc
+        8 * κ.A0 * Real.log (T.S.n k : ℝ) ≤
+            Real.log (T.S.n k : ℝ) * Real.log (T.S.n k : ℝ) :=
+          mul_le_mul_of_nonneg_right hcoef (by linarith)
+        _ = Real.log (T.S.n k : ℝ) ^ 2 := by ring
+    have hfour : (4 : ℝ) ≤ Real.log (T.S.n k : ℝ) ^ 2 := by nlinarith
+    have hsum : 8 * κ.A0 * Real.log (T.S.n k : ℝ) + 4 ≤
+        2 * Real.log (T.S.n k : ℝ) ^ 2 := by linarith
+    have hcube : 2 * Real.log (T.S.n k : ℝ) ^ 2 ≤
+        Real.log (T.S.n k : ℝ) ^ 3 := by nlinarith
+    have hr : 2 * (D.geom.r : ℝ) + 4 ≤
+        8 * κ.A0 * Real.log (T.S.n k : ℝ) + 4 := by nlinarith [hrBound]
+    exact hr.trans (hsum.trans hcube)
+  have hmarginNat : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3 := by
+    exact_mod_cast hmarginReal
+  refine {
+    critical_count := hcount PT hPT D hD X
+    distinct_cells := ?_
+    predecessor_radius := ?_
+    erased_internal := Lane_q_s18_n2.erased_internal_field D X
+    block_size := ?_
+    one_block := by
+      intro w hw
+      exact Lane_q_s18_n2.one_block_field (D := D) (X := X) hmarginNat w hw }
+  · intro a ha b hb hcell
+    exact Lane_q_s18_n2.bulkCoord_eq_of_cellEq (D := D) (X := X) hmargin
+      (Finset.mem_filter.mp ha).1 (Finset.mem_filter.mp hb).1 hcell
+  · intro b hb
+    exact Lane_q_s18_n2.predecessor_radius (D := D) (X := X) b hb
+  · intro a
+    exact Lane_q_s18_n2.block_size (D := D) (X := X) a
 
 /-- L18.2d/e/g, 18:338–453. Perform path deletion and integrate erased
 sketches before fixing independent seeds; construct a total local protocol. -/
@@ -405,7 +489,55 @@ theorem L18_2h {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
       ∀ P : TransferProtocol X, ReplyRangeBound P := by
-  sorry
+  classical
+  have hnReal : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hlogT : Tendsto (fun k => Real.log (T.S.n k : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp hnReal
+  have hlogEventually : ∀ᶠ k in atTop, 2 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop 2
+  have hratioN : Tendsto (fun n : ℕ =>
+      Real.log (n : ℝ) ^ 28 / Real.rpow (n : ℝ) (3 / 20 : ℝ)) atTop (nhds 0) := by
+    simpa [Function.comp_def] using
+      (((isLittleO_log_rpow_rpow_atTop (28 : ℝ)
+        (by norm_num : (0 : ℝ) < 3 / 20)).tendsto_div_nhds_zero).comp
+          tendsto_natCast_atTop_atTop)
+  have hsmallEventually : ∀ᶠ k in atTop,
+      Real.log (T.S.n k : ℝ) ^ 28 /
+        Real.rpow (T.S.n k : ℝ) (3 / 20 : ℝ) < 1 / 1000 :=
+    hratioN.comp T.S.n_tendsto |>.eventually
+      (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1 / 1000))
+  have hNEventually : ∀ᶠ k in atTop, 1 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hlogEventually, hsmallEventually, hNEventually] with k hL hsmall hN
+  intro PT hPT D hD X P
+  have hn : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast hN
+  have hlogCube : (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
+    have hcube : (2 : ℝ) ^ 3 ≤ Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
+    norm_num at hcube
+    linarith
+  have hnum := Lane_q_s18_n2.protocol_code_exponential_bound P hn hL hsmall
+  intro seed a fixed
+  have hcount := Lane_q_s18_n2.replyRange_card_le_codeCard P seed a fixed hlogCube
+  have hcountR :
+      ((((Finset.univ : Finset (CriticalTransferData.Raw X)).filter
+        (fun s => ∀ C, C ∉ X.blockCells a → s C = fixed C)).image
+        (fun s => P.replies seed s P.steps)).card : ℝ) ≤
+        ((⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ + 1 : ℕ) : ℝ) *
+          ((Fintype.card (Fin P.steps × P.Reply) + 1 : ℕ) : ℝ) ^
+            ⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ := by
+    exact_mod_cast hcount
+  have hcode :
+      ((⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ + 1 : ℕ) : ℝ) *
+          ((Fintype.card (Fin P.steps × P.Reply) + 1 : ℕ) : ℝ) ^
+            ⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ ≤
+        Real.exp (Real.rpow (T.S.n k : ℝ) (2 / 5 : ℝ)) := by
+    simpa using hnum
+  change (((Finset.univ : Finset X.Raw).filter
+      (fun s => ∀ C, C ∉ X.blockCells a → s C = fixed C)).image
+      (fun s => P.replies seed s P.steps)).card ≤
+        Real.exp (Real.rpow (T.S.n k : ℝ) 0.4)
+  exact hcountR.trans (by simpa only [show (2 / 5 : ℝ) = 0.4 by norm_num] using hcode)
 
 /-- L18.2a/i and 18:472–490, 630–645. Positive whole-cell survival and
 both surviving-witness second moments. -/
@@ -510,7 +642,13 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inl v =>
           exact Lane_sol_s18_n4.finalListPinnedBound D v (by omega)
             (hfinal D hD (Lane_sol_s18_n4.eventDegreeBound D hD hk) v) pin
-      | inr F => sorry
+      | inr F =>
+          by_cases hkind : F.1.val = 1
+          · by_cases hvalid : D.prefixValid F.2
+            · sorry
+            · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
+          · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
+              (hδsmall.le.trans (min_le_left _ _)) F hkind pin
 
 /-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
 theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
@@ -522,7 +660,8 @@ slot/image/tape dependency, conditional pushforward and touching charges.
 The prescribed `D.l16_valid.slot_eq` bounds leaf slot domains as well as cells. -/
 theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
-      ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → Nonempty (LeafCoupling D δ) := by
+      ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
+        Nonempty (LeafCoupling D δ) := by
   sorry
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
@@ -535,11 +674,15 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
           Nonempty (TerminalCertificate D δ (ε k)) := by
   refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
     (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
-  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ] with k hpositive
+  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
+    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ] with k hpositive hcost
   intro PT hPT D hD hRisk leaves
   have hpos := hpositive D hRisk leaves
+  obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk leaves
   refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
   intro seed hseed Ψ hΨ hlocal
+  -- Construct the consulted-image partition and its local forcing kernels;
+  -- hproduct supplies the vanishing cost once their deterministic scopes are bounded.
   sorry
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
@@ -554,7 +697,7 @@ theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   filter_upwards [P18_3a hκ T K27 c1 δ hK hc1 hδ hδsmall, P18_3e hκ T δ hδ, hf] with k ha he hf
   intro PT hPT D hD hR hLocal hTransfer
   have risk := ha PT hPT D hD hR hLocal hTransfer (P18_3c D)
-  obtain ⟨leaves⟩ := he PT hPT D hD risk
+  obtain ⟨leaves⟩ := he PT hPT D hD hR risk
   exact hf PT hPT D hD risk leaves
 
 /-- P18.4b, 18:827–861. The entering predicate is the exact incoming-risk
@@ -570,6 +713,9 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   intro PT hPT D hD hTransition hLocal hTransfer ε C
   apply Lane_sol_s18_n4.classSamplerOfEnteringLaws D δ hn
   intro j h henter
+  have hcurrent := Lane_sol_s18_n4.classCurrentBadUniformBound D δ (by omega) j h henter
+  have halarm := Lane_sol_s18_n4.classFutureAlarmBound D δ j h henter
+  -- Instantiate the clock with the deterministic spatial scopes and incidences.
   sorry
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish
@@ -750,7 +896,322 @@ theorem P18_5f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ A : InitialPairData D, ∀ Q : PairQueries D A,
         PairQueryBound D A Q := by
-  sorry
+  have hξ : κ.ξ ≤ 1 / 1600 := by
+    have hu : 0 ≤ (κ.u : ℝ) := by positivity
+    have hexp : -(10 * (κ.u : ℝ) + 100) ≤ -4 := by nlinarith
+    have hrpow := Real.rpow_le_rpow_of_exponent_le
+      (by norm_num : (1 : ℝ) ≤ 2) hexp
+    have hrpow4 : Real.rpow (2 : ℝ) (-4 : ℝ) = 1 / 16 := by
+      norm_num [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    have hα : κ.α ≤ 1 / 100 := by
+      calc
+        κ.α ≤ (0.01 : ℝ) := hκ.α_rng.2.le
+        _ = 1 / 100 := by norm_num
+    have hξbound : κ.ξ < 1 / 1600 := by
+      calc
+        κ.ξ < κ.α * Real.rpow (2 : ℝ) (-(10 * (κ.u : ℝ) + 100)) := hκ.ξ_rng.2
+        _ ≤ (1 / 100) * Real.rpow (2 : ℝ) (-(10 * (κ.u : ℝ) + 100)) :=
+          mul_le_mul_of_nonneg_right hα (Real.rpow_nonneg (by norm_num) _)
+        _ ≤ (1 / 100) * Real.rpow (2 : ℝ) (-4 : ℝ) :=
+          mul_le_mul_of_nonneg_left hrpow (by norm_num)
+        _ = 1 / 1600 := by rw [hrpow4]; norm_num
+    exact hξbound.le
+  have hNums := HypercubeRamsey.Lane_q_s18_n6.eventually_endpoint_numeric_bounds hκ T
+  filter_upwards [hNums] with k hNums
+  rcases hNums with ⟨hkB, hkD, hkL, hkErr, hklog, hkN⟩
+  intro PT hPT D hD A Q
+  have hOwn : ∀ i x, x ∈ PT.envelope i →
+      deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤ 1 / 2 + 1 / 10000 := by
+    intro i x hx
+    have hdeg := hPT.envelope_degree i x hx
+    cases hm : PT.tiling.mode with
+    | bounded =>
+      simp [OwnDegOK, hm] at hdeg
+      have habs := abs_le.mp hdeg
+      linarith [hkB]
+    | lowDirect =>
+      simp [OwnDegOK, hm] at hdeg
+      norm_num at hdeg
+      have hscale := hPT.tiling_valid.direct_scale_bound (Or.inl hm) i
+      have hnpos : 0 < (T.S.n k : ℝ) := by linarith [hkN]
+      have hG : ((PT.tiling.P i).g : ℝ) ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := hscale
+      have hdiv : (T.S.n k : ℝ) ^ (κ.ι / 2) / (T.S.n k : ℝ) =
+          (T.S.n k : ℝ) ^ (κ.ι / 2 - 1) := by
+        have h := Real.rpow_sub hnpos (κ.ι / 2) 1
+        rw [Real.rpow_one] at h
+        exact h.symm
+      have hown : deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤
+          1 / 2 + 4 * ((PT.tiling.P i).g : ℝ) / (T.S.n k : ℝ) := hdeg.2
+      have hgdiv : ((PT.tiling.P i).g : ℝ) / (T.S.n k : ℝ) ≤
+          (T.S.n k : ℝ) ^ (κ.ι / 2) / (T.S.n k : ℝ) :=
+        div_le_div_of_nonneg_right hG hnpos.le
+      have hG4 : 4 * ((PT.tiling.P i).g : ℝ) ≤ 4 * (T.S.n k : ℝ) ^ (κ.ι / 2) :=
+        mul_le_mul_of_nonneg_left hG (by norm_num)
+      have herrDirect : 4 * ((PT.tiling.P i).g : ℝ) / (T.S.n k : ℝ) ≤
+          4 * (T.S.n k : ℝ) ^ (κ.ι / 2) / (T.S.n k : ℝ) :=
+        div_le_div_of_nonneg_right hG4 hnpos.le
+      calc
+        deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤
+            1 / 2 + 4 * ((PT.tiling.P i).g : ℝ) / (T.S.n k : ℝ) := hown
+        _ ≤ 1 / 2 + 4 * (T.S.n k : ℝ) ^ (κ.ι / 2) / (T.S.n k : ℝ) :=
+            by linarith [herrDirect]
+        _ = 1 / 2 + 4 * (T.S.n k : ℝ) ^ (κ.ι / 2 - 1) := by
+              have hcancel : 4 * (T.S.n k : ℝ) ^ (κ.ι / 2) / (T.S.n k : ℝ) =
+                  4 * ((T.S.n k : ℝ) ^ (κ.ι / 2) / (T.S.n k : ℝ)) := by
+                field_simp [ne_of_gt hnpos]
+              rw [hcancel, hdiv]
+        _ ≤ 1 / 2 + 1 / 10000 := by linarith [hkD]
+    | lowCluster =>
+      simp [OwnDegOK, hm] at hdeg
+      norm_num at hdeg
+      norm_num at hdeg
+      rcases hPT.tiling_valid.cluster_data (Or.inl hm) i with
+        ⟨_hthreshold, _hg, _hmass, _hsmall, _hlarge, _hcodegree, _hh, _hlo, _hup,
+          hlow, _hsmallMode, _hlargeMode⟩
+      have hqNat : 1 ≤ (PT.tiling.P i).q := by
+        rw [(hPT.tiling_valid.measured_scales i).2]
+        dsimp [qScale]
+        exact Nat.one_le_pow _ _ (by omega)
+      have hq : (1 : ℝ) ≤ (PT.tiling.P i).q := by exact_mod_cast hqNat
+      have hqBound : (PT.tiling.P i).q ≤
+          Real.rpow (Real.log (T.S.n k : ℝ)) κ.cq := hlow.mp hm
+      have hCb : 0 < κ.Cb := by
+        have hdiv : 0 < κ.aC / κ.aB := div_pos hκ.aC_rng.1 hκ.aB_rng.1
+        have hEq : 100 * (κ.aC / κ.aB) = 100 * κ.aC / κ.aB := by
+          field_simp [ne_of_gt hκ.aB_rng.1]
+          <;> ring
+        have hlower : 0 < 100 * κ.aC / κ.aB + 100 := by
+          rw [← hEq]
+          nlinarith
+        exact lt_trans hlower hκ.Cb_big
+      have hMlo : (κ.Cb + 100 : ℝ) < κ.Mlo := hκ.Mlo_big
+      have hcqCb : 0 < κ.cq * κ.Cb := mul_pos hκ.cq_rng.1 hCb
+      have hcqCbLt : κ.cq * κ.Cb < 1 := by
+        have hmul := mul_lt_mul_of_pos_right hκ.cq_rng.2 hCb
+        have hMloPos : 0 < (κ.Mlo : ℝ) := by linarith [hMlo, hCb]
+        have hden : 0 < 20 * (κ.Mlo : ℝ) := mul_pos (by norm_num) hMloPos
+        have hfrac : (1 / (20 * (κ.Mlo : ℝ))) * κ.Cb =
+            κ.Cb / (20 * (κ.Mlo : ℝ)) := by field_simp
+        rw [hfrac] at hmul
+        have hratio : κ.Cb / (20 * (κ.Mlo : ℝ)) < 1 := by
+          apply (div_lt_one hden).2
+          nlinarith [hMlo]
+        exact lt_trans hmul hratio
+      have hqPower :
+          Real.rpow (PT.tiling.P i).q κ.Cb ≤ Real.log (T.S.n k : ℝ) := by
+        have hbase : 0 ≤ Real.log (T.S.n k : ℝ) := by linarith [hklog]
+        have hbasePow := Real.rpow_le_rpow (Nat.cast_nonneg _) hqBound hCb.le
+        have hcomp :
+            (Real.rpow (Real.log (T.S.n k : ℝ)) κ.cq) ^ κ.Cb =
+              Real.rpow (Real.log (T.S.n k : ℝ)) (κ.cq * κ.Cb) := by
+          exact (Real.rpow_mul hbase κ.cq κ.Cb).symm
+        calc
+          Real.rpow (PT.tiling.P i).q κ.Cb ≤
+              (Real.rpow (Real.log (T.S.n k : ℝ)) κ.cq) ^ κ.Cb := hbasePow
+          _ = Real.rpow (Real.log (T.S.n k : ℝ)) (κ.cq * κ.Cb) := hcomp
+          _ ≤ Real.rpow (Real.log (T.S.n k : ℝ)) 1 :=
+              Real.rpow_le_rpow_of_exponent_le hklog hcqCbLt.le
+          _ = Real.log (T.S.n k : ℝ) := Real.rpow_one _
+      have hnpos : 0 < (T.S.n k : ℝ) := by linarith [hkN]
+      have hdiv := div_le_div_of_nonneg_right hqPower hnpos.le
+      have hown : deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤
+          1 / 2 + 10 * Real.rpow (PT.tiling.P i).q κ.Cb / (T.S.n k : ℝ) := by
+        have habs := (abs_le.mp hdeg).2
+        have hle : deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤
+            10 * Real.rpow (PT.tiling.P i).q κ.Cb / (T.S.n k : ℝ) + 1 / 2 :=
+          (sub_le_iff_le_add).mp habs
+        simpa only [add_comm] using hle
+      have hdiv10 :
+          10 * Real.rpow (PT.tiling.P i).q κ.Cb / (T.S.n k : ℝ) =
+            10 * (Real.rpow (PT.tiling.P i).q κ.Cb / (T.S.n k : ℝ)) := by
+        field_simp [ne_of_gt hnpos]
+        <;> ring
+      calc
+        deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤
+            1 / 2 + 10 * Real.rpow (PT.tiling.P i).q κ.Cb / (T.S.n k : ℝ) := hown
+        _ = 1 / 2 + 10 * (Real.rpow (PT.tiling.P i).q κ.Cb / (T.S.n k : ℝ)) := by rw [hdiv10]
+        _ ≤ 1 / 2 + 10 * (Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) :=
+              by
+                have hmul := mul_le_mul_of_nonneg_left hdiv (show (0 : ℝ) ≤ 10 by norm_num)
+                simpa [add_comm] using add_le_add_left hmul (1 / 2 : ℝ)
+        _ = 1 / 2 + 10 * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ) := by ring
+        _ ≤ 1 / 2 + 1 / 10000 := by linarith [hkL]
+    | highSmall =>
+      have : False := by simpa [Mode.isLow, hm] using D.low_mode
+      exact False.elim this
+    | highDirect =>
+      have : False := by simpa [Mode.isLow, hm] using D.low_mode
+      exact False.elim this
+    | highLarge =>
+      have : False := by simpa [Mode.isLow, hm] using D.low_mode
+      exact False.elim this
+  have hTV : ∀ i, PT.tvError i ≤ 1 / 100000 := by
+    intro i
+    cases hm : PT.tiling.mode with
+    | bounded =>
+      have hraw := hPT.raw_direct (by simp [Mode.isCluster, hm]) i
+      have hEq := hPT.tv_error_eq i
+      rw [hraw] at hEq
+      simp at hEq
+      linarith
+    | lowDirect =>
+      have hraw := hPT.raw_direct (by simp [Mode.isCluster, hm]) i
+      have hEq := hPT.tv_error_eq i
+      rw [hraw] at hEq
+      simp at hEq
+      linarith
+    | lowCluster =>
+      rcases hPT.tiling_valid.cluster_data (Or.inl hm) i with
+        ⟨hthreshold, hg, _hmass, _hsmall, _hlarge, _hcodegree, _hh, hHlower, hHupper,
+          _hlow, _hsmallMode, _hlargeMode⟩
+      have hqNat : 1 ≤ (PT.tiling.P i).q := by
+        rw [(hPT.tiling_valid.measured_scales i).2]
+        dsimp [qScale]
+        exact Nat.one_le_pow _ _ (by omega)
+      have hq0 : κ.Q0 ≤ (PT.tiling.P i).q := by
+        have hM1 : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+        have hmax : ((max (PT.tiling.P i).g (PT.tiling.P i).q : ℕ) : ℝ) ≤
+            κ.M1 * (PT.tiling.P i).q := by
+          rw [Nat.cast_max]
+          apply max_le
+          · exact hg
+          · have hM1le : 1 ≤ κ.M1 := by linarith [hκ.M1_big.1]
+            have hqnonneg : (0 : ℝ) ≤ (PT.tiling.P i).q := by positivity
+            nlinarith [hM1le, hqnonneg]
+        have hprod : κ.M1 * κ.Q0 ≤ κ.M1 * (PT.tiling.P i).q :=
+          le_trans hthreshold hmax
+        have hdiv := div_le_div_of_nonneg_right hprod hM1.le
+        field_simp [ne_of_gt hM1] at hdiv
+        exact hdiv
+      have hQC := hκ.Q0_large ((PT.tiling.P i).q : ℝ) hq0
+      rcases hQC with ⟨_, _, _, _, _, _, _, _, htail⟩
+      have hlow : Real.rpow (PT.tiling.P i).q κ.Mlo ≤ (PT.tiling.P i).h := by simpa [hm] using hHlower
+      have hMloMhi : (κ.Mlo : ℝ) ≤ κ.Mhi := by
+        have h := hκ.Mhi_big.1
+        have hq : 0 < κ.cq := hκ.cq_rng.1
+        have hfrac : 0 < 10 / κ.cq := by positivity
+        exact le_trans (le_of_lt (lt_add_of_pos_right _ hfrac)) h
+      have hqpow : Real.rpow (PT.tiling.P i).q κ.Mlo ≤
+          Real.rpow (PT.tiling.P i).q κ.Mhi :=
+        Real.rpow_le_rpow_of_exponent_le (by exact_mod_cast hqNat) hMloMhi
+      have hup : (PT.tiling.P i).h <
+          2 * Real.rpow (PT.tiling.P i).q κ.Mhi := by
+        have hu : (PT.tiling.P i).h <
+            2 * Real.rpow (PT.tiling.P i).q κ.Mlo := by simpa [hm] using hHupper
+        exact lt_of_lt_of_le hu (by nlinarith [hqpow])
+      rcases htail (PT.tiling.P i).h hlow hup with
+        ⟨_, _, _, _, _, _, htv, _, _, _, _⟩
+      have hTVraw := hPT.low_profile_tv hm i
+      have hRpow10 : Real.rpow (10 : ℝ) (-5 : ℝ) = 1 / 100000 := by
+        norm_num
+      calc
+        PT.tvError i ≤ Real.exp (-Real.rpow ((PT.tiling.P i).h : ℝ) (1 + κ.c14)) +
+            2 * (PT.tiling.P i).h ^ 2 * Real.sqrt (sliceEps κ (PT.tiling.P i).h) := hTVraw
+        _ ≤ 1 / 100000 := by
+          rw [hRpow10] at htv
+          exact htv
+    | highSmall =>
+      have : False := by simpa [Mode.isLow, hm] using D.low_mode
+      exact False.elim this
+    | highDirect =>
+      have : False := by simpa [Mode.isLow, hm] using D.low_mode
+      exact False.elim this
+    | highLarge =>
+      have : False := by simpa [Mode.isLow, hm] using D.low_mode
+      exact False.elim this
+  have hCountSub (A : InitialPairData D) :
+      (D.nonisolates A.rows).card ≤ A.rows.card := by
+    apply Finset.card_le_card
+    intro v hv
+    change v ∈ A.rows.filter (fun u => ∃ w ∈ A.rows, D.geometricAdj u w) at hv
+    exact (Finset.mem_filter.mp hv).1
+  have hCount : Q.count ≤ T.S.n k ^ 2 := by
+    calc
+      Q.count ≤ (D.nonisolates A.rows).card * T.S.n k := Q.count_bound
+      _ ≤ A.rows.card * T.S.n k := Nat.mul_le_mul_right _ (hCountSub A)
+      _ ≤ T.S.n k * T.S.n k := Nat.mul_le_mul_right _ A.small
+      _ = T.S.n k ^ 2 := by rw [pow_two]
+  have hRow (q : Fin Q.count) : Q.row q ∈ A.rows := by
+    have h := Q.row_mem q
+    change Q.row q ∈ A.rows.filter (fun u => ∃ w ∈ A.rows, D.geometricAdj u w) at h
+    exact (Finset.mem_filter.mp h).1
+  have hOdd : ∀ q, ¬ IsEvenRole (flipPos (Q.row q) (Q.coordinate q)) ∧
+      D.geom.classOf (flipPos (Q.row q) (Q.coordinate q)) = none := by
+    intro q
+    have heven : IsEvenRole (Q.row q) := by
+      have hm : Q.row q ∈ D.paletteRows A.paletteIndex := A.rows_subset (hRow q)
+      exact (Finset.mem_filter.mp hm).2.1
+    have hEarly : Q.coordinate q ∈ D.externalEarly (Q.row q) := Q.early q
+    unfold LateData.externalEarly at hEarly
+    rcases Finset.mem_filter.mp hEarly with ⟨_, ⟨_, hclass⟩⟩
+    constructor
+    · rw [HypercubeRamsey.S15.evenRole_flipPos]
+      simp [heven]
+    · exact hclass
+  have hPalettePatch (q : Fin Q.count) :
+      D.geom.patchOf (Q.row q) = A.paletteIndex.1 := by
+    have hm : Q.row q ∈ D.paletteRows A.paletteIndex := A.rows_subset (hRow q)
+    have hrole := (Finset.mem_filter.mp hm).2.2
+    exact congrArg Sigma.fst hrole
+  have hPatchFlip (q : Fin Q.count) :
+      D.geom.patchOf (flipPos (Q.row q) (Q.coordinate q)) = D.geom.patchOf (Q.row q) := by
+    have hbulk : Q.coordinate q ∈ PT.tiling.bulkCoords (D.geom.patchOf (Q.row q)) := Q.bulk q
+    have hcoord : (PT.tiling.P (D.geom.patchOf (Q.row q))).ℓ ≤ (Q.coordinate q).val :=
+      (Finset.mem_filter.mp hbulk).2.1
+    have hrowLeaf := D.geom.patchOf_leaf (Q.row q)
+    have hrowPrefix : ∀ j, j.val < (PT.tiling.P (D.geom.patchOf (Q.row q))).ℓ →
+        (Q.row q) j = PT.tiling.w (D.geom.patchOf (Q.row q)) j := by
+      simpa [Tiling.leaf, prefixLeaf] using hrowLeaf
+    have hflipLeaf : flipPos (Q.row q) (Q.coordinate q) ∈
+        PT.tiling.leaf (D.geom.patchOf (Q.row q)) := by
+      change ∀ j, j.val < (PT.tiling.P (D.geom.patchOf (Q.row q))).ℓ →
+        flipPos (Q.row q) (Q.coordinate q) j = PT.tiling.w (D.geom.patchOf (Q.row q)) j
+      intro j hj
+      have hne : j ≠ Q.coordinate q := by
+        intro heq
+        subst j
+        omega
+      simpa [flipPos, hne] using hrowPrefix j hj
+    obtain ⟨i, hi, hUnique⟩ :=
+      hPT.tiling_valid.prefix_complete (flipPos (Q.row q) (Q.coordinate q))
+    have hrowEq : D.geom.patchOf (Q.row q) = i := hUnique _ hflipLeaf
+    have hflipEq : D.geom.patchOf (flipPos (Q.row q) (Q.coordinate q)) = i :=
+      hUnique _ (D.geom.patchOf_leaf _)
+    exact hflipEq.trans hrowEq.symm
+  have hErr : Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3)) ≤ 1 / 25000 := by
+    have h := hkErr.le
+    have hExp : -((κ.Ac : ℝ) - 3) = -197 := by norm_num [hκ.Ac_eq]
+    rw [hExp]
+    exact h
+  have hPairHit : ∀ (assignment : PairAssignment T k) q,
+      (∀ v ∈ A.rows, A.validPair v (assignment v).1 (assignment v).2) →
+      (∑ y, (PT.πraw (D.geom.patchOf (flipPos (Q.row q) (Q.coordinate q)))).w y *
+        (if Hits (T.S.E k) PT.tiling.c (assignment (Q.row q)).1 y ∧
+            Hits (T.S.E k) PT.tiling.c (assignment (Q.row q)).2 y then (1 : ℝ) else 0)) ≤
+        1 / 4 + 1 / 2500 := by
+    intro assignment q hValid
+    have hrow := hRow q
+    rcases hValid (Q.row q) hrow with ⟨_, _, hxenv, hzenv, hnc⟩
+    have hraw := HypercubeRamsey.Lane_q_s18_n6.rawPairHit_le_of_profile_bounds
+      D (Q.row q) (assignment (Q.row q)).1 (assignment (Q.row q)).2
+      ⟨hxenv, hzenv, hnc⟩
+      (hOwn (D.geom.patchOf (Q.row q)) (assignment (Q.row q)).1 hxenv)
+      (hOwn (D.geom.patchOf (Q.row q)) (assignment (Q.row q)).2 hzenv)
+      (hTV (D.geom.patchOf (Q.row q))) hξ
+    rw [hPatchFlip q]
+    exact hraw
+  have hSep : ∀ q q', q ≠ q' →
+      D.geom.cellOf (flipPos (Q.row q) (Q.coordinate q)) =
+        D.geom.cellOf (flipPos (Q.row q') (Q.coordinate q')) →
+      (hammingDist (flipPos (Q.row q) (Q.coordinate q))
+        (flipPos (Q.row q') (Q.coordinate q')) : ℝ) >
+          50 * κ.ρ * (PT.tiling.P
+            (D.geom.patchOf (flipPos (Q.row q) (Q.coordinate q)))).h := by
+    intro q q' hne hcell
+    rw [hPatchFlip q, hPalettePatch q]
+    exact Q.separated q q' hne hcell
+  exact HypercubeRamsey.Lane_q_s18_n6.pairQueryBound_from_calibration
+    hκ D hD A Q hCount hOdd Q.distinct_roles hSep hPairHit hErr
 
 /-- P18.5g, 18:1212–1220. Assemble the numerical comparisons into the
 all-tuples endpoint certificate. Constants remain uniform. -/
@@ -778,7 +1239,17 @@ theorem P18_5g {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
                   ∏ v ∈ A.rows \ D.nonisolates A.rows,
                     isolatedWeight D v (assignment v).1 (assignment v).2) →
           EndpointCertificate D C H K Cprime Cstage := by
-  sorry
+  refine ⟨Kpair + KL + KI + 2, Cp + CQ, Cs + 10, by positivity, by positivity,
+    by positivity, ?_⟩
+  refine Filter.Eventually.of_forall ?_
+  intro k PT hPT D hD δ εterm εrun hε C H hPair hIso hEndpoint hCompare hQueries
+  have hK : 0 < Kpair + KL + KI + 2 := by positivity
+  have hCp' : 0 < Cp + CQ := by positivity
+  have hCs' : 0 < Cs + 10 := by positivity
+  have hCore := HypercubeRamsey.Lane_q_s18_n6.endpointCertificate_of_comparisons
+    hκ D δ εterm εrun C H hε Kpair KL KI Cp Cs CQ hKpair hKL hKI hCp hCs hCQ
+    hPair hIso hEndpoint hCompare hQueries
+  simpa using hCore
 
 theorem P18_5 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
     (hK : 0 < K27) (hδ : 0 < δ) :

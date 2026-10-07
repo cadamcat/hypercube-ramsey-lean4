@@ -1,22 +1,17 @@
 import HypercubeRamsey.S09.Defs
 import HypercubeRamsey.S09.Regime
-import HypercubeRamsey.S09.Needs
-import HypercubeRamsey.S03.Mixtures
-import HypercubeRamsey.S03.ConditionalAvoidance
-import HypercubeRamsey.S03.ScatteredMoments
-import HypercubeRamsey.S03.GatedPosterior
-import HypercubeRamsey.S03.ClockSampling
-import HypercubeRamsey.Framework.Hall
-import HypercubeRamsey.Framework.Minimax
-import HypercubeRamsey.S09.Core.Stages
 import HypercubeRamsey.S09.Nodes_p_s09_select
+import HypercubeRamsey.S09.Map.Nodes
+import HypercubeRamsey.S09.Core.TagStage
+import HypercubeRamsey.S09.Core.AssignStage
 
 /-!
-# Proposition 9.2 nodes
+# Proposition 9.2 nodes and the one-dimension core
 
-Parameter selection, patch preparation, the height/ID maps, and the one-shot
-boundary are stated separately.  The remaining anchor, filter, gain, and
-assignment argument is represented by the core one-shot node.
+Parameter selection (proved), the admissible upgrade of a sublinear selection, patch preparation (proved), and the
+assembly of the one-shot core `intermediate_core` from the ID map (`Map.Nodes`), the tags and masks
+(`Core.TagStage`), the gain stage (`Core.GainStage`) and the assignment stage (`Core.AssignStage`).  The assembly
+has no `sorry` of its own.
 -/
 
 namespace HypercubeRamsey
@@ -35,6 +30,14 @@ theorem p92_select_linear (T : Stage) (hT : StabilizedOn T FamB)
     ∃ P : Params9, P.Valid ∧ P.IsLinear ∧ P.LinearSelection T := by
   exact p92_select_linear_impl T hT hNoH hHL hNotZero
 
+/-- P9.2-selS, admissible form (09:44–49): a valid sublinear selection can be upgraded so that `x_s < y_m`
+(`Params9.CoreAdmissible`), by replacing `y_m` with a rational in `(max(y_s, x_s, y_m), 1 - σ)`; this interval is
+nonempty because `y_s < y_m < 1 - σ` and `x_s < 1/10 < 1 - σ`.  Availability, the deep test and the other
+constraints do not involve `y_m`. -/
+theorem p92_admissible_sublinear (T : Stage) (P : Params9) (hP : P.Valid) (hSel : P.SubSelection T) :
+    ∃ P' : Params9, P'.Valid ∧ P'.IsSublinear ∧ P'.SubSelection T ∧ P'.CoreAdmissible := by
+  sorry
+
 /-- P9.2-prep (09:61): balanced tag mixture with a colour and surplus rows. -/
 theorem p92_patch_preparation {P : Params9} {κ : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
@@ -50,117 +53,37 @@ theorem p92_patch_preparation {P : Params9} {κ : ℝ} {n N : ℕ}
           1 / 2 + (n : ℝ) ^ (-(P.hPlus : ℝ)) / 2 ≤ rowDeg E G x (M.ν i)) := by
   exact p92_patch_preparation_impl hP hκ hN hAvail
 
-/-- P9.2-map1 (09:63–102): good heights with distance-two regularity.  The
-`HeightGood9` predicate records active eligibility and all three crowd tests. -/
-theorem p92_map1 (P : Params9) (hP : P.Valid) :
-    ∃ n₀, ∀ n, n₀ ≤ n → Nonempty (HeightWitness9 P n) := by
-  exact height_general9 P hP
-
-/-- P9.2-map2 (09:102–118): the ID records a special slice, residual location,
-and selected height level. -/
-theorem p92_map2 (P : Params9) (hP : P.Valid) {n r : ℕ}
-    (W : HeightWitness9 P n) (hr : W.radius = r) :
-    ∃ T : ℕ, (n : ℝ) ^ (1 - (P.σ : ℝ) + W.ε) ≤ T ∧
-      ∃ c : CubeVertex n → CenterID9 W.specialBits n W.levels,
-        (∀ v, (c v).slice = specialWord9 W.specialBits_le v ∧
-          residualDistance9 W.specialBits (c v).location v ≤ r ∧
-          (c v).level = W.height v ∧ c v ∈ W.active) ∧
-        (∀ b : CubeVertex n, ¬ IsEvenRole b →
-          (seenIDs9 c b).card ≤ T + W.specialBits) ∧
-        (∀ v : CubeVertex n, IsEvenRole v →
-          ∃ C : Finset (CenterID9 W.specialBits n W.levels), c v ∈ C ∧
-            (C.card : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) ∧
-            ∀ id, id ∉ C →
-              ((Finset.univ.filter (fun b : CubeVertex n =>
-                ¬ IsEvenRole b ∧ (cube n).Adj v b ∧ id ∈ seenIDs9 c b)).card : ℕ) ≤ r + 3) := by
-  classical
-  let exp := (1 : ℝ) - (P.σ : ℝ) + W.ε
-  let T : ℕ := Fintype.card (CubeVertex n) + ⌈(n : ℝ) ^ exp⌉₊
-  have hT : (n : ℝ) ^ exp ≤ T := by
-    dsimp [T]
-    calc
-      (n : ℝ) ^ exp ≤ (⌈(n : ℝ) ^ exp⌉₊ : ℕ) := Nat.le_ceil _
-      _ ≤ (Fintype.card (CubeVertex n) + ⌈(n : ℝ) ^ exp⌉₊ : ℕ) := by
-        exact_mod_cast (Nat.le_add_left ⌈(n : ℝ) ^ exp⌉₊
-          (Fintype.card (CubeVertex n)))
-  have hselect (v : CubeVertex n) :
-      ∃ id, id ∈ W.active ∧ id.slice = specialWord9 W.specialBits_le v ∧
-        residualDistance9 W.specialBits id.location v ≤ r ∧ id.level = W.height v := by
-    simpa [hr] using (W.height_good v).1
-  let c : CubeVertex n → CenterID9 W.specialBits n W.levels :=
-    fun v => Classical.choose (hselect v)
-  have hc (v : CubeVertex n) :
-      c v ∈ W.active ∧ (c v).slice = specialWord9 W.specialBits_le v ∧
-        residualDistance9 W.specialBits (c v).location v ≤ r ∧
-        (c v).level = W.height v :=
-    Classical.choose_spec (hselect v)
-  refine ⟨T, hT, c, ?_, ?_, ?_⟩
-  · intro v
-    rcases hc v with ⟨hactive, hslice, hdist, hlevel⟩
-    exact ⟨hslice, hdist, hlevel, hactive⟩
-  · intro b hb
-    have hseen : (seenIDs9 c b).card ≤ Fintype.card (CubeVertex n) := by
-      unfold seenIDs9
-      calc
-        ((Finset.univ.filter (fun a : CubeVertex n => (cube n).Adj a b)).image c).card ≤
-            (Finset.univ.filter (fun a : CubeVertex n => (cube n).Adj a b)).card :=
-          Finset.card_image_le
-        _ ≤ Fintype.card (CubeVertex n) := Finset.card_le_univ _
-    dsimp [T]
-    omega
-  · sorry
-
-/-- P9.2-tags through P9.2-assignC (09:120–350): the fixed tag, anchor, mask,
-regularity, conditional-mean, erasure, covariance, gain and assignment
-certificates compose to the one-shot embedding.  This assembly interface
-includes the broad test only in the linear case. -/
-theorem intermediate_core (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ) :
+/-- P9.2c (09:30–352): the one-dimension core.  For admissible valid parameters and `κ > 0`, at all large
+dimensions with `N ≥ C₀ 2^n`, deep discrepancy (with the broad test in the linear case) and availability of the
+shallow bias property at tolerance `κ` give a monochromatic cube.  Assembled from P9.2-prep, the ID map
+(P9.2-map1/map2), the tags and masks (P9.2-tags), the gain stage (P9.2-reg … P9.2-gain) and the assignment stage
+(P9.2-assignA–C). -/
+theorem intermediate_core (P : Params9) (hP : P.Valid) (hA : P.CoreAdmissible) (κ : ℝ) (hκ : 0 < κ) :
     ∃ n₀ C₀, ∀ n N (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)),
       LargeAt n₀ C₀ n N → P.DeepAt n N E X Y → P.BroadAt n N E X Y →
       AvailableAt κ P.BiasProperty n N E X Y → CubeAt n N E := by
-  classical
-  obtain ⟨nHeight, hHeight⟩ := p92_map1 P hP
-  let C₀ : ℝ := 32 / κ + 1
-  refine ⟨max nHeight 1, C₀, ?_⟩
-  intro n N E X Y hLarge hDeep hBroad hAvail
-  rcases hLarge with ⟨hn₀, hNLower, _hNUpper⟩
-  have hn : 1 ≤ n := le_trans (le_max_right nHeight 1) hn₀
-  have hnHeight : nHeight ≤ n := le_trans (le_max_left nHeight 1) hn₀
-  have hLargeSmall : LargeAt 1 C₀ n N := ⟨hn, hNLower, _hNUpper⟩
-  have hC₀ : 32 / κ ≤ C₀ := by dsimp [C₀]; linarith
-  have hC₀pos : 0 < C₀ := by dsimp [C₀]; positivity
-  have hNreal : 0 < (N : ℝ) :=
-    lt_of_lt_of_le (mul_pos hC₀pos (by positivity : 0 < (2 : ℝ) ^ n)) hNLower
-  have hN : 0 < N := by exact_mod_cast hNreal
-  obtain ⟨W⟩ := hHeight n hnHeight
-  obtain ⟨idMap⟩ := p92_bounded_idmap9 P hP n W
-  obtain ⟨G, M, hBalanced, hMixRows⟩ :=
-    p92_patch_preparation hP hκ hN hAvail
-  have hMix : M.Balanced (8 / κ) ∧
-      ∀ i, 0 < M.Λ i → (M.μ i).SupportedIn X ∧ (M.ν i).SupportedIn Y ∧
-        (M.μ i).WidthLE ((n : ℝ) ^ (P.xS : ℝ) +
-          (P.hPlus : ℝ) * Real.log (n : ℝ) + 1) ∧
-        (M.ν i).WidthLE (P.Ss (n : ℝ)) ∧
-        ∀ x, (M.μ i).w x ≠ 0 →
-          1 / 2 + (n : ℝ) ^ (-(P.hPlus : ℝ)) / 2 ≤ rowDeg E G x (M.ν i) :=
-    ⟨hBalanced, hMixRows⟩
-  obtain ⟨S, hTagSupport, hTagSliceLoad, hLinearTags⟩ :=
-    p92_tags (P := P) (κ := κ) hκ hP hn hN hDeep hBroad hAvail G M hMix W idMap
-  have hLoads := p92_tag_loads (P := P) (κ := κ) S hBalanced hTagSupport hTagSliceLoad
-  have hRegular := p92_regularity (P := P) S hP hLargeSmall hn hDeep hTagSupport
-  have hMean := p92_conditional_mean S hRegular
-  have hErase := p92_erase_core (κ := κ) S hRegular hMean hLoads
-  have hCov := p92_covariance (P := P) S hP hn hDeep hRegular hMean hErase
-  obtain ⟨hGain⟩ := p92_gain (κ := κ) S hP hRegular hLinearTags hLoads hMean hErase hCov
-  have hPredictive := p92_predictive_tests S hP hRegular hGain
-  obtain ⟨hAvoid⟩ := p92_anchor_avoidance S hP hn hLinearTags hRegular hGain hPredictive
-  obtain ⟨candidates⟩ := p92_odd_candidates (P := P) (κ := κ) (C₀ := C₀)
-    S hC₀ hLargeSmall hTagSupport hLoads hAvoid
-  obtain ⟨odd⟩ := p92_odd_injection (P := P) (κ := κ) S hκ hP hn C₀ hLargeSmall
-    hDeep hBroad hAvail
-    hTagSupport hLinearTags hLoads hGain hAvoid candidates
-  obtain ⟨rows⟩ := p92_even_rows S X Y odd hP κ hκ hn C₀ hLargeSmall hDeep hBroad hAvail
-    hLinearTags hLoads hGain hAvoid
-  exact p92_hall_embed X Y odd rows
+  obtain ⟨nI, hI⟩ := p92_idmap P hP
+  obtain ⟨cT, hcT, nT, htags⟩ := p92_tags P hP hA κ hκ
+  obtain ⟨c₀, hc₀, nG, hgain⟩ := p92_gain_stage P hP cT hcT
+  obtain ⟨nA, CA, hassign⟩ := p92_assign_stage P hP κ hκ c₀ hc₀
+  obtain ⟨hExps, nS, hScales⟩ := scales_eventually9 P hP
+  refine ⟨max (max nI nT) (max nG (max nA nS)), max CA 1, ?_⟩
+  intro n N E X Y hL hDeep hBroad hAvail
+  have hn : max (max nI nT) (max nG (max nA nS)) ≤ n := hL.1
+  have hNreal : (1 : ℝ) * 2 ^ n ≤ N :=
+    le_trans (mul_le_mul_of_nonneg_right (le_max_right CA 1) (by positivity)) hL.2.1
+  have hN : 0 < N := by
+    have h2 : (0 : ℝ) < 1 * 2 ^ n := by positivity
+    exact_mod_cast lt_of_lt_of_le h2 hNreal
+  obtain ⟨G, M, hBal, hRows⟩ := p92_patch_preparation hP hκ hN hAvail
+  have hprep : Prep9 P κ n N E X Y G M := ⟨hBal, hRows⟩
+  obtain ⟨I⟩ := hI n (by omega)
+  obtain ⟨tag, htag⟩ := htags n (by omega) hN hL.2.2 hprep hDeep hBroad
+  obtain ⟨maskLaw, hmask⟩ := p92_masks E G I tag hN
+  let S : Setup9 P n N M := ⟨tag, maskLaw⟩
+  have hin : CoreInput9 P κ E X Y G M S I :=
+    ⟨hN, hprep, hDeep, htag.1, hmask, deep_tools9 hDeep, hExps, hScales n (by omega)⟩
+  have hG := hgain n (by omega) S I hin htag
+  exact hassign n N (largeAt_mono9 hL (by omega) (le_max_left _ _)) S I cT hin htag hG
 
 end HypercubeRamsey

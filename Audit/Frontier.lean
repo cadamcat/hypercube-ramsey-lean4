@@ -11,7 +11,8 @@ target. Auxiliary declarations (`…._proof_n`, `…match_n`) are reported under
 open Lean Meta
 
 partial def frontierWalk (env : Environment) (roots : List Name) : NameSet × NameSet := Id.run do
-  let inProject (n : Name) := (`HypercubeRamsey).isPrefixOf n || (`Erdos181).isPrefixOf n
+  -- any component, so private names (`_private.<module>.0.HypercubeRamsey.…`) are followed too
+  let inProject (n : Name) := n.components.any (fun c => c == `HypercubeRamsey || c == `Erdos181)
   let mut seen : NameSet := {}
   let mut sorried : NameSet := {}
   let mut stack := roots

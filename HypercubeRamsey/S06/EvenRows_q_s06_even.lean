@@ -391,7 +391,8 @@ theorem mem_descUnion_of_level_pair {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N →
 private theorem exists_flipVertex6_of_adj {n : ℕ} (v u : CubeVertex n)
     (hadj : (cube n).Adj v u) : ∃ a : Fin n, u = flipVertex6 v a := by
   have hcard : (Finset.univ.filter fun a : Fin n => v a ≠ u a).card = 1 := by
-    simpa [cube, hammingDist] using hadj
+    have h : _root_.hammingDist v u = 1 := hadj
+    exact h
   obtain ⟨a, ha⟩ := Finset.card_eq_one.mp hcard
   refine ⟨a, ?_⟩
   funext b

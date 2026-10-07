@@ -1,4 +1,6 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_n3
+import HypercubeRamsey.S18.Nodes_sol_fix_surv
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
 import HypercubeRamsey.S18.Nodes_q_s18_dl
@@ -11,6 +13,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5d
 import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
@@ -30,14 +33,18 @@ import HypercubeRamsey.S18.Locality_sol_s18_n4
 import HypercubeRamsey.S18.Cost_sol_s18_n4
 import HypercubeRamsey.S18.Test_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_sol_s18_3f
+import HypercubeRamsey.S18.LeafForcing
 import HypercubeRamsey.S18.Current_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
+import HypercubeRamsey.S18.Nodes_sol_s18_6b
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
+import HypercubeRamsey.S18.Nodes_sol_s18_5e
 import HypercubeRamsey.S18.Nodes_q_s18_n2
 import HypercubeRamsey.S18.Nodes_q_s18_n3
 import HypercubeRamsey.S18.Deletion_sol_s18_1b
+import HypercubeRamsey.S18.Nodes_sol_s18_1c
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -434,7 +441,18 @@ theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK 
       ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr
         (fun out => D.R1 j out ∧ D.R2 j h out ∧ ¬ D.R3 j h out) ≤
           Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
-  sorry
+  obtain ⟨Kβ, hKβ, hSchedule, hSmall⟩ := L18_0a hκ T
+  have hε : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  have hn : ∀ᶠ k in atTop, 0 < (T.S.n k : ℝ) := by
+    filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+    exact_mod_cast (show 0 < T.S.n k by omega)
+  filter_upwards [hSchedule, hSmall (Real.log 2 / 1000) hε,
+    Lane_sol_s18_1c.numerical_cutoff T, hn] with k hSchedule hSmall hCutoff hn
+  intro PT hPT D hD hT hB j b h hg
+  have hS := hSchedule PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hE := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  exact (Lane_sol_s18_1c.trueHit_tail D hT K27 hB hE hn
+    (fun i => (hS i).1) j b h hg).trans hCutoff
 
 theorem L18_1 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∃ K27 : ℝ, 0 < K27 ∧ ∀ᶠ k in atTop,
@@ -588,12 +606,10 @@ theorem L18_2i {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
         TransferGeometry X → SurvivalFacts X := by
   classical
-  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T] with k hcell
+  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T,
+    Lane_sol_fix_surv.survival_moments_eventually hκ T] with k hcell hmoments
   intro PT hPT D hD X hgeom
-  refine ⟨hcell PT hPT D hD X hgeom, ?_⟩
-  constructor
-  · sorry
-  · sorry
+  exact ⟨hcell PT hPT D hD X hgeom, hmoments PT hPT D hD X hgeom⟩
 
 /-- L18.2j, 18:500–524. Cylinder identity for the actual adaptive recurrence. -/
 theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
@@ -745,8 +761,8 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
   intro PT hPT D hD hRisk leaves
   apply hcertificate PT hPT D hD hRisk leaves
   intro seed hseed
-  -- The remaining obligation is the coordinate-fiber nonneighbor inequality.
-  sorry
+  exact Lane_sol_s18_3f.testNonneighbor_of_fiberForcing D δ leaves _
+    (LeafForcing.testFiberForcing_of_cover D δ leaves _).some
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
@@ -963,13 +979,7 @@ theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (Krow : ℝ) (hKrow : 0 < Krow) :
     ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → PaletteRowInput D Krow → IsolateKernelFacts D KI := by
-  refine ⟨1, by norm_num, ?_⟩
-  apply Filter.Eventually.of_forall
-  intro k PT hPT D hD hRows v hv x z
-  exact ⟨Lane_q_s18_n5.isolatedWeight_nonneg D v x z,
-    Lane_q_s18_n5.isolatedWeight_symm D v x z, by
-      sorry, by
-      sorry⟩
+  exact Lane_sol_s18_5d.isolate_facts hκ T Krow hKrow
 
 /-- P18.5e, 18:1092–1124. Remove state gates before bin comparisons and
 retain geometrically fixed bulk pair-hit queries. -/
@@ -983,25 +993,7 @@ theorem P18_5e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
                 (D.paletteScale A.paletteIndex)⁻¹ ^ (2 * (D.nonisolates A.rows).card) *
                 ∏ v ∈ A.rows \ D.nonisolates A.rows,
                   isolatedWeight D v (assignment v).1 (assignment v).2 := by
-  have hnCast : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
-    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp
-      T.S.n_tendsto
-  have hlog := Real.tendsto_log_atTop.comp hnCast
-  have hmargin : ∀ᶠ k in atTop, (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
-    filter_upwards [hlog.eventually_gt_atTop 2] with k hk
-    have hlog2 : (2 : ℝ) < Real.log (T.S.n k : ℝ) := by simpa using hk
-    have hlog3 : (2 : ℝ) ^ 3 < Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
-    norm_num at hlog3
-    linarith
-  refine ⟨1, by norm_num, ?_⟩
-  filter_upwards [hmargin] with k hmargin
-  intro PT hPT D hD A
-  obtain ⟨Q, _hCount⟩ :=
-    HypercubeRamsey.Lane_q_s18_n6.pairQueriesOfOuterFamilyRepresentatives
-      hκ D hD A hmargin
-  refine ⟨Q, ?_⟩
-  intro assignment hValid
-  sorry
+  exact HypercubeRamsey.Lane_sol_s18_5e.pair_query_reduction hκ T
 
 /-- P18.5f/g, 18:1126–1212. Calibrated label and group-bin comparisons,
 reverse repeat summation and iid containment yield the actual query integral.
@@ -1510,8 +1502,10 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
           ((D.paletteRows palette).powersetCard p).card ≤ 2) →
         (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧
           HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
-  let KH : ℝ := K + Cp + Cs + 1
-  have hKH : 0 < KH := by dsimp [KH]; positivity
+  let B : ℝ := 4096 * (K + 1) ^ 2
+  let KH : ℝ := B * K
+  have hB : 0 ≤ B := by dsimp [B]; positivity
+  have hKH : 0 < KH := by dsimp [KH, B]; positivity
   have hthreshold : ∀ᶠ k : ℕ in atTop, 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := by
     have hlarge := T.S.n_tendsto.eventually_ge_atTop ⌈3 / η⌉₊
     filter_upwards [hlarge] with k hk
@@ -1521,14 +1515,65 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
       have h := (div_le_iff₀ hη).mp (hceil.trans hcast)
       nlinarith
     exact Nat.le_floor h3
+  have hChord := Lane_sol_s18_6b.eventually_chordRate_le_one hκ T K hK
   refine ⟨KH, hKH, ?_⟩
-  filter_upwards [hthreshold] with k ht0
+  filter_upwards [hthreshold, hChord] with k ht0 hChord
   intro PT hPT D hD δ εterm εrun C H hEndpoint hAverage
   have hPairFacts : PairInitialFacts D δ K := hEndpoint.pair_facts
-  have hObstructionSize : 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := ht0
-  -- The remaining estimate is the connected endpoint-tree diagram sum,
-  -- with two additional mergers on the actual distinct-endpoint support.
-  sorry
+  simpa only [HallBudget, KH] using
+    (Lane_sol_s18_6b.obstruction_le_of_tuple_diagrams D C H K Cp Cs η B
+      hK hη hB hPairFacts hAverage ht0 (by
+        intro palette S hsub hthree hsmall
+        have hfloor : (⌊η * (T.S.n k : ℝ)⌋₊ : ℝ) ≤ (T.S.n k : ℝ) := by
+          have h := Nat.floor_le (mul_nonneg hη.le (Nat.cast_nonneg (T.S.n k)))
+          have hmul : η * (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) := by
+            simpa only [one_mul] using mul_le_mul_of_nonneg_right hη1.le
+              (show (0 : ℝ) ≤ (T.S.n k : ℝ) from Nat.cast_nonneg _)
+          exact h.trans hmul
+        have hSn : S.card ≤ T.S.n k := by
+          have hcast : (S.card : ℝ) ≤ (⌊η * (T.S.n k : ℝ)⌋₊ : ℝ) := by
+            exact_mod_cast hsmall
+          exact_mod_cast hcast.trans hfloor
+        let A : InitialPairData D := ⟨palette, S, hsub, hSn⟩
+        obtain ⟨ker, hnonneg, hsymm, hrow, hentry, hjoint⟩ := hEndpoint.joint A
+        have hrate := hChord PT hPT D δ hPairFacts palette S.card hSn
+        let F : ℝ := Real.exp (Cs * D.geom.r) * K ^ S.card *
+          Lane_sol_s18_6b.correction D Cp S
+        have hjoint' : ∀ assignment, endpointProbability D C H A assignment ≤
+            F * ∏ v ∈ A.rows, ker v (assignment v).1 (assignment v).2 := by
+          intro assignment
+          exact hjoint assignment
+        have hfalse := Lane_sol_s18_6b.connectedPr_le_kernelSum D C H hPairFacts A false ker F hjoint'
+        have htrue := Lane_sol_s18_6b.connectedPr_le_kernelSum D C H hPairFacts A true ker F hjoint'
+        have hcount :
+            K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S false ker ≤
+              D.paletteScale palette * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card ∧
+            K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker ≤
+              (D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+                (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card := by
+          -- The finite assignment-to-diagram injection and weighted count remain.
+          -- Distinct endpoints and palette support are retained in kernelSum.
+          sorry
+        have hfactor : 0 ≤ Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S :=
+          mul_nonneg (Real.exp_pos _).le (Lane_sol_s18_6b.correction_nonneg D Cp S)
+        constructor
+        · calc
+            _ ≤ F * Lane_sol_s18_6b.kernelSum D palette S false ker := hfalse
+            _ = (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S false ker) := by dsimp [F]; ring
+            _ ≤ (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (D.paletteScale palette * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card) :=
+              mul_le_mul_of_nonneg_left hcount.1 hfactor
+            _ = _ := by ring
+        · calc
+            _ ≤ F * Lane_sol_s18_6b.kernelSum D palette S true ker := htrue
+            _ = (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker) := by dsimp [F]; ring
+            _ ≤ (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                ((D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+                  (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card) :=
+              mul_le_mul_of_nonneg_left hcount.2 hfactor
+            _ = _ := by ring))
 
 set_option maxHeartbeats 400000
 

@@ -1,5 +1,6 @@
 import HypercubeRamsey.S08.L81.HiddenNodes
 import HypercubeRamsey.S08.L81.SelectionNodes_q_s08_sel
+import HypercubeRamsey.S08.L81.SelectionNodes_sol_s08_sel
 
 /-!
 # Lemma 8.1, Step 5: hidden-history conditioning and local selection
@@ -24,47 +25,21 @@ variable (η₀ γ β p K : ℝ) (h : ℕ)
 neighbours, the centre and anchor laws there, the references); two events meet only within grid distance four, at
 most `(2s+1)^4` of them; by the gate tail and Markov on `E_{Θ_g} q_{g,k} ≤ ε₀` (independence of `Θ_g`),
 `q_H ≤ e^{-n^{c'}} + (T+1)ε₀^{1/2} ≤ e^{-n^{c_H}}`, and `x_H = 2q_H` satisfies `q_H ≤ x_H(1-x_H)^{(2s+1)^4}`. -/
-private theorem hidden_charge_eventually (c' : ℝ) (hc' : 0 < c') :
-    ∃ cH > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀,
-      0 ≤ 2 * Real.exp (-(n : ℝ) ^ cH) ∧ 2 * Real.exp (-(n : ℝ) ^ cH) < 1 := by
-  let cH := c' / 2
-  have hcH : 0 < cH := by dsimp [cH]; linarith
-  have htend : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ cH) Filter.atTop Filter.atTop :=
-    (_root_.tendsto_rpow_atTop hcH).comp tendsto_natCast_atTop_atTop
-  have hevent : ∀ᶠ n : ℕ in Filter.atTop, Real.log 4 ≤ (n : ℝ) ^ cH :=
-    htend.eventually (Filter.eventually_ge_atTop (Real.log 4))
-  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hevent
-  refine ⟨cH, hcH, max n₀ 1, ?_⟩
-  intro n hn
-  have hn' : n₀ ≤ n := le_trans (le_max_left _ _) hn
-  have hpow := hn₀ n hn'
-  have hExp : Real.exp (-(n : ℝ) ^ cH) ≤ 1 / 4 := by
-    calc
-      Real.exp (-(n : ℝ) ^ cH) ≤ Real.exp (-Real.log 4) :=
-        Real.exp_le_exp.mpr (neg_le_neg hpow)
-      _ = (1 / 4 : ℝ) := by rw [Real.exp_neg, Real.exp_log (by norm_num)]; norm_num
-  constructor
-  · positivity
-  · linarith
-
 theorem hidden_lll (c' : ℝ) (hc' : 0 < c') (hη₀ : 0 < η₀) (hh : 1 ≤ h) :
     ∃ cH > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n →
       D.GateTail c' → D.DenTail → D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) := by
-  obtain ⟨cH, hcH, n₀, hcharge⟩ := hidden_charge_eventually c' hc'
+  obtain ⟨cH, hcH, n₀, hnum⟩ := Lane_sol_s08_sel.hidden_numeric c' hc' hη₀ hh
   refine ⟨cH, hcH, n₀, ?_⟩
   intro D hn hGF hGT hDT
-  have hx := hcharge D.n hn
-  change LLLInput (fun _ : D.KeyT => D.R') (fun g Θ => D.HBad Θ g)
-    (fun g => keyBall g 2) (2 * Real.exp (-(D.n : ℝ) ^ cH))
-    ((2 * sC η₀ D.n + 1) ^ 4)
-  refine ⟨hx.1, hx.2, ?_, ?_, ?_⟩
-  · -- Show each hidden event reads only the radius-two key scope.
-    intro g Θ Θ' hθ
+  obtain ⟨hx0, hx1, hprob⟩ := hnum D.n hn
+  refine ⟨hx0, hx1, ?_, ?_, ?_⟩
+  · intro g Θ Θ' hθ
     exact hiddenBad_eq_of_keyBall2 D Θ Θ' g hθ
-  · -- Bound the number of overlapping radius-two scopes by `(2s+1)^4`.
-    sorry
-  · -- Combine GateTail and DenTail, then absorb the local-lemma charge factor.
-    sorry
+  · intro g
+    convert Lane_sol_s08_sel.hidden_degree D g using 1 <;> congr 1 <;> ext j <;>
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  · intro g
+    exact (Lane_sol_s08_sel.hidden_raw_bound D c' hGT hDT g).trans hprob
 
 /-- L8.1f(iii) (08:196–199): on incident ball counts at most `2λ`, the internal IDs of a candidate list are chosen
 from at most `(n+1)(H+1) 2λ ≤ n^{13}` IDs (`≤ T` of them) and each of the `≤ 2s` cross IDs from at most `(H+1)2λ`,
@@ -1292,8 +1267,7 @@ theorem bad_list_prob (D : Ctx η₀ β p h) : D.BadListProb := by
     apply hNoBad c.1
     exact Or.inr ⟨k, hk, lt_of_not_ge hlarge⟩
   have hExpIdentity : (D.tagLawAll Θ).expect f = D.qgk Θ c.1 L.1.card := by
-    /- Reindex the internal tag coordinates by `Fin L.1.card`; this also needs the permutation invariance of `Mden`. -/
-    sorry
+    exact Lane_sol_s08_sel.tag_list_average D Θ c.1 L
   have hfNonneg : ∀ t, 0 ≤ f t := by
     intro t
     dsimp [f]
@@ -1367,13 +1341,44 @@ theorem few_bad_tail (hη₀ : 0 < η₀) (hh : 10 ^ 8 ≤ h) :
       0 < D.rawHidden.pr (fun Θ => ∀ g, ¬ D.HBad Θ g) →
       D.preLaw.pr (fun q => D.PosOK q.1.2 ∧ ¬ D.FewBad q.1.1 q.1.2 q.2.1.1) ≤ Real.exp (-(D.n : ℝ)) := by
   classical
-  refine ⟨0, ?_⟩
-  intro D _hn _hGF _hListCount _hBadListProb _hAvoid
-  have hWitness (q : D.Pre) (hNF : ¬ D.FewBad q.1.1 q.1.2 q.2.1.1) :=
-    bad_family_witness η₀ β p h D q.1.1 q.1.2 q.2.1.1 hNF
-  /- The lane helper bounds the joint bad-tag probability for each fixed pairwise-disjoint candidate-list family.
-     The union over cells and candidate `n`-tuples, the `ListCount` estimate, and exponent absorption remain. -/
-  sorry
+  refine ⟨4, ?_⟩
+  intro D hn hGF hCount hProb hAvoid
+  rw [pr_eq_expect_indicator]
+  have hfun : prIndicator (fun q : D.Pre => D.PosOK q.1.2 ∧ ¬ D.FewBad q.1.1 q.1.2 q.2.1.1) =
+      (fun q : D.Pre => prIndicator (fun t => D.PosOK q.1.2 ∧ ¬ D.FewBad q.1.1 q.1.2 t) q.2.1.1) := by
+    funext q
+    rfl
+  rw [hfun, Lane_sol_s08_sel.preLaw_tags_expect D
+    (fun P Θ t => prIndicator (fun t => D.PosOK P ∧ ¬ D.FewBad Θ P t) t)]
+  have hPbound (P : D.Pos) :
+      D.hiddenLaw.expect (fun Θ => (D.tagLawAll Θ).expect
+        (fun t => prIndicator (fun t => D.PosOK P ∧ ¬ D.FewBad Θ P t) t)) ≤ Real.exp (-(D.n : ℝ)) := by
+    calc
+      _ ≤ D.hiddenLaw.expect (fun _ => Real.exp (-(D.n : ℝ))) := by
+        apply Finset.sum_le_sum
+        intro Θ _
+        dsimp only
+        by_cases hw : D.hiddenLaw.w Θ = 0
+        · simp [hw]
+        · have hΘ := Lane_sol_s08_sel.hiddenLaw_support D hAvoid Θ hw
+          by_cases hP : D.PosOK P
+          · have hTag : (D.tagLawAll Θ).expect
+                (fun t => prIndicator (fun t => D.PosOK P ∧ ¬ D.FewBad Θ P t) t) =
+                (D.tagLawAll Θ).pr (fun t => ¬ D.FewBad Θ P t) := by
+              rw [pr_eq_expect_indicator]
+              congr 1
+              funext t
+              simp [prIndicator, hP]
+            rw [hTag]
+            exact mul_le_mul_of_nonneg_left
+              ((Lane_sol_s08_sel.few_bad_tags_bound D Θ P hΘ hP hCount hProb).trans
+                (Lane_sol_s08_sel.few_bad_numeric D hη₀ hh hn hGF)) (D.hiddenLaw.nonneg Θ)
+          · simp only [prIndicator, hP, false_and, ite_false, FinProb.expect, mul_zero, Finset.sum_const_zero]
+            exact mul_nonneg (D.hiddenLaw.nonneg Θ) (Real.exp_nonneg _)
+      _ = _ := by simp [FinProb.expect, ← Finset.sum_mul, D.hiddenLaw.sum_eq_one]
+  calc
+    _ ≤ D.posLaw.expect (fun _ => Real.exp (-(D.n : ℝ))) := FinProb.expect_mono _ hPbound
+    _ = _ := by simp [FinProb.expect, ← Finset.sum_mul, D.posLaw.sum_eq_one]
 
 /-- L8.1f(x) (08:214): eligibility in slice `g` is a function of the positions and of auxiliary randomness
 independent of the activations of slice `g` (other slices' positions, tags); on legality (from `PosOK ∧ FewBad`)
@@ -1384,7 +1389,90 @@ theorem height_tail (hη₀ : 0 < η₀)
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.LegalOfCounts →
       D.preLaw.pr (fun q => D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
         ¬ D.GoodH q.1.1 q.1.2 q.2.1.1 q.2.1.2) ≤ Real.exp (-(D.n : ℝ)) := by
-  sorry
+  classical
+  obtain ⟨c, hc, nH, hH⟩ := height_selection_global
+    10 (b0H η₀) (bH η₀) (sigmaH η₀) (zetaH η₀) (thetaH η₀) (aH η₀) (1 / 2) 1 2 hadm (hdRegime η₀)
+  have ht := (_root_.tendsto_rpow_atTop hc).comp tendsto_natCast_atTop_atTop
+  obtain ⟨nPow, hPow⟩ := Filter.eventually_atTop.1
+    (ht.eventually (Filter.eventually_ge_atTop (2 : ℝ)))
+  refine ⟨max nH nPow, ?_⟩
+  intro D hn hGF hLC
+  let pH := hdP η₀ D.n
+  have hnH : nH ≤ D.n := (le_max_left _ _).trans hn
+  have hnPow : nPow ≤ D.n := (le_max_right _ _).trans hn
+  have hnpos : (0 : ℝ) < D.n := by exact_mod_cast (by have := hGF.pos.1; omega : 0 < D.n)
+  have hSlice (g : D.KeyT) : D.preLaw.pr (fun q =>
+      D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
+        ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g)) ≤
+        Real.exp (-(D.n : ℝ) ^ (1 + c)) := by
+    let AuxLaw : FinProb (D.Pos × (D.Hist × D.Tags)) :=
+      D.posLaw.prod (FinProb.bind D.hiddenLaw (fun Θ => D.tagLawAll Θ))
+    let Esel : (pH.Loc → Bool) → (D.Pos × (D.Hist × D.Tags)) → pH.EligMap :=
+      fun P z => D.elig z.2.1 (Function.update z.1 g P) z.2.2 g
+    have hb := hH pH rfl rfl rfl rfl rfl hnH hGF.hd_ok.2.1 hGF.hd_ok.2.2 hGF.hd_ok.1
+      Finset.univ AuxLaw Esel
+    have hmono : D.preLaw.pr (fun q => D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
+        ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g)) ≤
+        D.preLaw.pr (fun q => pH.Legal (q.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g) Finset.univ ∧
+          ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g)) := by
+      apply FinProb.pr_mono
+      intro q hq
+      refine ⟨?_, hq.2.2⟩
+      intro b _ j
+      exact hLC q.1.1 q.1.2 q.2.1.1 hq.1 hq.2.1 g b j
+    apply hmono.trans
+    rw [pr_eq_expect_indicator]
+    have hm := Lane_sol_s08_sel.preLaw_slice_expect D g
+      (fun P Θ t A => prIndicator (fun A =>
+        pH.Legal (P g) (D.elig Θ P t g) Finset.univ ∧
+          ¬ pH.GoodHeights Finset.univ (P g) A (D.elig Θ P t g)) A)
+    have hfun : prIndicator (fun q : D.Pre =>
+        pH.Legal (q.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g) Finset.univ ∧
+          ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g)) =
+        (fun q : D.Pre => prIndicator (fun A =>
+          pH.Legal (q.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g) Finset.univ ∧
+            ¬ pH.GoodHeights Finset.univ (q.1.2 g) A (D.elig q.1.1 q.1.2 q.2.1.1 g)) (q.2.1.2 g)) := by
+      funext q
+      rfl
+    rw [hfun, hm]
+    rw [pr_eq_expect_indicator] at hb
+    convert hb using 1
+    congr 1
+    funext z
+    simp only [prIndicator, Esel, AuxLaw, pH, Function.update_self]
+    congr 1
+  have hSub (q : D.Pre) (hq : D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
+      ¬ D.GoodH q.1.1 q.1.2 q.2.1.1 q.2.1.2) :
+      ∃ g : D.KeyT, D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
+        ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g) := by
+    obtain ⟨g, hg⟩ := not_forall.mp hq.2.2
+    exact ⟨g, hq.1, hq.2.1, hg⟩
+  have hcard : (Fintype.card D.KeyT : ℝ) ≤ Real.exp D.n :=
+    (show (Fintype.card D.KeyT : ℝ) ≤ (2 : ℝ) ^ D.n by
+      exact_mod_cast Lane_sol_s08_sel.key_card_le D hGF).trans
+        (Lane_sol_s08_sel.two_pow_le_exp D.n)
+  have hp : 2 * (D.n : ℝ) ≤ (D.n : ℝ) ^ (1 + c) := by
+    rw [Real.rpow_add hnpos, Real.rpow_one]
+    have hnp : (2 : ℝ) ≤ (D.n : ℝ) ^ c := by
+      simpa only [Function.comp_apply] using hPow D.n hnPow
+    nlinarith
+  calc
+    _ ≤ D.preLaw.pr (fun q => ∃ g : D.KeyT,
+        D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
+          ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g)) :=
+      FinProb.pr_mono _ _ _ hSub
+    _ ≤ ∑ g : D.KeyT, D.preLaw.pr (fun q =>
+        D.PosOK q.1.2 ∧ D.FewBad q.1.1 q.1.2 q.2.1.1 ∧
+          ¬ pH.GoodHeights Finset.univ (q.1.2 g) (q.2.1.2 g) (D.elig q.1.1 q.1.2 q.2.1.1 g)) :=
+      pr_exists_le_sum _ _
+    _ ≤ (Fintype.card D.KeyT : ℝ) * Real.exp (-(D.n : ℝ) ^ (1 + c)) := by
+      calc
+        _ ≤ ∑ _g : D.KeyT, Real.exp (-(D.n : ℝ) ^ (1 + c)) :=
+          Finset.sum_le_sum (s := Finset.univ) (fun g _ => hSlice g)
+        _ = _ := by rw [Finset.sum_const, Finset.card_univ]; simp [nsmul_eq_mul]
+    _ ≤ Real.exp D.n * Real.exp (-(D.n : ℝ) ^ (1 + c)) := by gcongr
+    _ = Real.exp ((D.n : ℝ) - (D.n : ℝ) ^ (1 + c)) := by rw [← Real.exp_add]; rfl
+    _ ≤ Real.exp (-(D.n : ℝ)) := Real.exp_le_exp.mpr (by linarith)
 
 end Nodes
 

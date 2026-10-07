@@ -185,7 +185,7 @@ private theorem hdScaleFailure_has_local_bad {p : HDParams} (Sites : p.Sites)
     have hRqReal : (R : ℝ) ≤ q := by exact_mod_cast hRq
     linarith [hnet', hηR, hRqReal]
 
-private theorem exists_nat_rpow_ge {e C : ℝ} (he : 0 < e) :
+theorem exists_nat_rpow_ge {e C : ℝ} (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → C ≤ (n : ℝ) ^ e := by
   have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ e) Filter.atTop Filter.atTop :=
     (tendsto_rpow_atTop he).comp tendsto_natCast_atTop_atTop
@@ -375,7 +375,7 @@ theorem hdScaleThreshold_fractions_strict {h i : ℕ} (hi : i ≤ h) (hi0 : 0 < 
     nlinarith
   exact ⟨hs, ht, heta⟩
 
-private theorem exists_nat_log_ge (C : ℝ) :
+theorem exists_nat_log_ge (C : ℝ) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → C ≤ Real.log (n : ℝ) := by
   have hlog : Filter.Tendsto (fun n : ℕ => Real.log (n : ℝ))
       Filter.atTop Filter.atTop :=
@@ -418,7 +418,7 @@ private theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
       mul_le_mul_of_nonneg_right hcoef (Real.rpow_nonneg hnpos.le t)
     _ = (n : ℝ) ^ e := hpowmul
 
-private theorem heightBaseRadius_le_logsq :
+theorem heightBaseRadius_le_logsq :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n →
       (heightBaseRadius n : ℝ) ≤ 2 * (Real.log (n : ℝ)) ^ 2 := by
   obtain ⟨N, hN⟩ := exists_nat_log_ge 1
@@ -433,7 +433,7 @@ private theorem heightBaseRadius_le_logsq :
   have hone : (1 : ℝ) ≤ 2 * (Real.log (n : ℝ)) ^ 2 := by nlinarith
   simpa [heightBaseRadius] using (max_le hone hceil)
 
-private theorem heightBaseRadius_times_D_le_dimension_eventually
+theorem heightBaseRadius_times_D_le_dimension_eventually
     (D : ℕ) (c_d : ℝ) (hD : 0 < D) (hcd : 0 < c_d) :
     ∃ n₀ : ℕ, ∀ n d : ℕ, n₀ ≤ n → c_d * (n : ℝ) ≤ (d : ℝ) →
       D * heightBaseRadius n ≤ d := by
@@ -789,7 +789,7 @@ theorem height_local_geometry_eventually
       apply hsub p hD hb₀ hb hn hdimLo hdimHi
       simpa [HDRegime.ok] using hreg
 
-private theorem finprob_pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+theorem finprob_pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
     (A B : Ω → Prop) (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
   classical
   unfold FinProb.pr
@@ -812,7 +812,7 @@ private theorem finprob_pr_or_le {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
   intro ω hω
   by_cases hA : A ω <;> by_cases hB : B ω <;> simp [hA, hB] <;> linarith [P.nonneg ω]
 
-private theorem finprob_pr_finset_exists_le {Ω X : Type*} [Fintype Ω]
+theorem finprob_pr_finset_exists_le {Ω X : Type*} [Fintype Ω]
     (P : FinProb Ω) (S : Finset X) (F : X → Ω → Prop) :
     P.pr (fun ω => ∃ x ∈ S, F x ω) ≤ ∑ x ∈ S, P.pr (F x) := by
   classical
@@ -913,7 +913,7 @@ private theorem finprob_prod_pr_left {α β : Type*} [Fintype α] [Fintype β]
   · simp [hA, Q.sum_eq_one]
   · simp [hA]
 
-private theorem finprob_prod_pr_le_bad_or_small {α β : Type*} [Fintype α] [Fintype β]
+theorem finprob_prod_pr_le_bad_or_small {α β : Type*} [Fintype α] [Fintype β]
     (P : FinProb α) (Q : FinProb β) (Bad : α → Prop) (F : α → β → Prop)
     (δ : ℝ) (hδ : 0 ≤ δ)
     (hF : ∀ a, ¬ Bad a → Q.pr (F a) ≤ δ) :
@@ -1230,7 +1230,7 @@ private theorem bernoulli_pi_count_ge_prob {ι : Type*} [Fintype ι] [DecidableE
           apply mul_le_mul_of_nonneg_right _ (by positivity)
           exact_mod_cast hpow
 
-private theorem position_count_ge_prob_bound {p : HDParams}
+theorem position_count_ge_prob_bound {p : HDParams}
     (hq0 : 0 ≤ p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1)
     (T : Finset p.Loc) (k : ℕ) :
     p.posLaw.pr (fun P => k ≤ (T.filter (fun ℓ => P ℓ = true)).card) ≤
@@ -1276,7 +1276,7 @@ private theorem activation_overlap_union_bound {p : HDParams}
       intro T hT
       exact activation_count_ge_prob_bound hq0 hq1 T k
 
-private theorem active_count_ge_prob_bound {p : HDParams}
+theorem active_count_ge_prob_bound {p : HDParams}
     (hqP0 : 0 ≤ p.lam / (p.V : ℝ)) (hqP1 : p.lam / (p.V : ℝ) ≤ 1)
     (hqA0 : 0 ≤ (p.n : ℝ) ^ p.b₀ / p.lam)
     (hqA1 : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1)
@@ -1572,7 +1572,7 @@ theorem position_count_upper_three_halves {p : HDParams} (T : Finset p.Loc)
   simpa [HDParams.posLaw, q, X, mul_div_assoc] using hhigh
 
 /-- A sharper position-count cutoff at `11/10` of the mean. -/
-private theorem position_count_upper_eleven_tenths {p : HDParams} (T : Finset p.Loc)
+theorem position_count_upper_eleven_tenths {p : HDParams} (T : Finset p.Loc)
     (hq0 : 0 < p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1) :
     p.posLaw.pr (fun P => (11 / 10 : ℝ) * (T.card : ℝ) * (p.lam / (p.V : ℝ)) <
       ∑ ℓ, if ℓ ∈ T ∧ P ℓ = true then (1 : ℝ) else 0) ≤
@@ -1686,23 +1686,23 @@ private theorem height_crowd_count_eq_sum {p : HDParams} (P A : p.Loc → Bool)
                 exact False.elim (hj (Finset.mem_univ j))
     _ = _ := by rw [Finset.sum_boole]
 
-private def heightCrowdIDs {p : HDParams} (P : p.Loc → Bool)
+def heightCrowdIDs {p : HDParams} (P : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) : Finset p.Loc :=
   Finset.univ.filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧
     _root_.hammingDist ℓ.1 v ≤ p.r + p.D)
 
-private def heightCrowdRegion {p : HDParams} (v : CubeVertex p.d)
+def heightCrowdRegion {p : HDParams} (v : CubeVertex p.d)
     (j : Fin (p.H + 1)) : Finset p.Loc :=
   Finset.univ.filter (fun ℓ => ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r + p.D)
 
 /-- A rectangular over-approximation to the prospective-center domain of a child path:
 all levels within `R` and all center locations in the radius-`r + D*R + D` spatial ball. -/
-private def hdChildCenterDomain {p : HDParams} (start : HDState p) (R : ℕ) : Finset p.Loc :=
+def hdChildCenterDomain {p : HDParams} (start : HDState p) (R : ℕ) : Finset p.Loc :=
   Finset.univ.filter (fun ℓ =>
     Nat.dist start.2 ℓ.2.val < R ∧
       _root_.hammingDist start.1 ℓ.1 ≤ p.r + p.D * R + p.D)
 
-private theorem hdScaleDistance_hamming_bound {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleDistance_hamming_bound {p : HDParams} (hD : 0 < p.D)
     {s t : HDState p} {R : ℕ} (h : hdScaleDistance p.D s t < R) :
     _root_.hammingDist s.1 t.1 ≤ p.D * R := by
   have hD1 : 1 ≤ p.D := by omega
@@ -1828,7 +1828,7 @@ private theorem hdChildCenterDomain_overlap_real_bound {p : HDParams}
       mul_le_mul_of_nonneg_right hspatial (by positivity)
     _ = (2 * R + 1 : ℝ) * (p.V : ℝ) * ρ := by ring
 
-private theorem hdChildCenterDomain_disjoint_levels {p : HDParams}
+theorem hdChildCenterDomain_disjoint_levels {p : HDParams}
     (start₁ start₂ : HDState p) (R : ℕ)
     (hsep : 2 * R < Nat.dist start₁.2 start₂.2) :
     Disjoint (hdChildCenterDomain start₁ R) (hdChildCenterDomain start₂ R) := by
@@ -1845,7 +1845,7 @@ private theorem hdChildCenterDomain_disjoint_levels {p : HDParams}
   rw [hsymm] at htri
   omega
 
-private theorem hdScaleSeparated_spatial_distance_lower {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleSeparated_spatial_distance_lower {p : HDParams} (hD : 0 < p.D)
     {start₁ start₂ : HDState p} {gap R : ℕ}
     (hsep : gap ≤ hdScaleDistance p.D start₁ start₂)
     (hvertical : Nat.dist start₁.2 start₂.2 ≤ 2 * R)
@@ -1876,7 +1876,7 @@ private theorem hdScaleSeparated_spatial_distance_lower {p : HDParams} (hD : 0 <
     p.D * (gap - 1) = (gap - 1) * p.D := Nat.mul_comm _ _
     _ ≤ _ := Nat.le_of_succ_le hnum'
 
-private theorem heightCrowdIDs_card_eq_position_count {p : HDParams}
+theorem heightCrowdIDs_card_eq_position_count {p : HDParams}
     (P : p.Loc → Bool) (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
     ((heightCrowdIDs P v j).card : ℝ) =
       ∑ ℓ : p.Loc, if ℓ ∈ heightCrowdRegion v j ∧ P ℓ = true then (1 : ℝ) else 0 := by
@@ -1975,7 +1975,7 @@ private theorem volume_ge_lambda_from_fixed_layer
     _ ≤ (Nat.choose p.d k : ℝ) := hchoose
     _ ≤ (p.V : ℝ) := by exact_mod_cast hdVolume_ge_choose k hr
 
-private theorem height_volume_ge_lambda_eventually
+theorem height_volume_ge_lambda_eventually
     (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
     (hp : HDAdmissible J₀ b₀ b σ ζ θ a c_d C_d D)
     (reg : HDRegime b₀ b D) :
@@ -2080,7 +2080,7 @@ private theorem height_volume_ge_lambda_eventually
       exact volume_ge_lambda_from_fixed_layer J₀ c_d k hkJ hcd p hlam (by omega) hGrowth hdim
         hRadLower hDimNat
 
-private theorem cube_ball_card_eq_choose_sum {d r : ℕ} (v : CubeVertex d) (hr : r ≤ d) :
+theorem cube_ball_card_eq_choose_sum {d r : ℕ} (v : CubeVertex d) (hr : r ≤ d) :
     (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card =
       ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
   classical
@@ -2246,7 +2246,7 @@ private theorem hdScaleBallSiteLevels_card_bound {p : HDParams} (Sites : p.Sites
 
 /-- At the logarithmic initial scale, the number of possible bad site-levels is
 subexponential in every fixed positive power of `n`. -/
-private theorem hdScaleBallSiteLevels_exp_bound
+theorem hdScaleBallSiteLevels_exp_bound
     (D : ℕ) (C_d e : ℝ) (hD : 0 < D) (hC : 0 < C_d) (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ {p : HDParams} (Sites : p.Sites) (start : HDState p) (R : ℕ),
       n₀ ≤ p.n → p.D = D → (p.d : ℝ) ≤ C_d * p.n →
@@ -2457,7 +2457,7 @@ private theorem hdScaleBallSiteLevels_exp_bound
   have hKexp : K ≤ Real.exp ((p.n : ℝ) ^ e) := Real.le_exp_of_log_le hlogKle
   exact hcount.trans hKexp
 
-private theorem height_base_exp_arithmetic (a b₀ θ : ℝ)
+theorem height_base_exp_arithmetic (a b₀ θ : ℝ)
     (ha : 0 < a) (hab : a < b₀) (hθ : 0 < θ ∧ θ < 1) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n →
       4 * Real.exp ((n : ℝ) ^ (b₀ / 2) - (n : ℝ) ^ b₀ / 8) ≤
@@ -2702,7 +2702,7 @@ private theorem hammingBall_volume_add_bound {d r D : ℕ} (hr : 0 < r)
           nlinarith [htail, hcoeff]
     _ = V₀ * (1 + (D : ℝ) * x ^ D) := by ring
 
-private theorem height_crowd_active_count_eq {p : HDParams} (P A : p.Loc → Bool)
+theorem height_crowd_active_count_eq {p : HDParams} (P A : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
     (∑ ℓ : p.Loc, if ℓ ∈ heightCrowdIDs P v j ∧ A ℓ = true then (1 : ℝ) else 0) =
     ((Finset.univ.filter (fun u : CubeVertex p.d =>
@@ -3623,7 +3623,7 @@ inductive HDThresholdWalk {p : HDParams} (Sites : p.Sites)
 
 /- The path-prefix relation certifies that the child walk stops at the first
 exit from its radius, with a parent suffix left over. -/
-private inductive HDThresholdCutFirstExit {p : HDParams} (Sites : p.Sites)
+inductive HDThresholdCutFirstExit {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p) (parentRadius : ℕ)
     (childOrigin : HDState p) (childRadius : ℕ) :
     {start finish : HDState p} →
@@ -3676,7 +3676,7 @@ private inductive HDThresholdCutFirstExit {p : HDParams} (Sites : p.Sites)
         (HDThresholdWalk.down hparent hv' hj hstep tail)
         ⟨middle, (HDThresholdWalk.down hinside hv' hj hstep childTail, parentTail)⟩
 
-private theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.D) :
+theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.D) :
     hdScaleDistance p.D s s = 0 := by
   unfold hdScaleDistance
   have hD1 : 1 ≤ p.D := by omega
@@ -3686,7 +3686,7 @@ private theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.
   have hdiv : (p.D - 1) / p.D = 0 := Nat.div_eq_of_lt (by omega)
   simp [hdiv]
 
-private theorem hdScaleDistance_triangle {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleDistance_triangle {p : HDParams} (hD : 0 < p.D)
     (x y z : HDState p) :
     hdScaleDistance p.D x z ≤ hdScaleDistance p.D x y + hdScaleDistance p.D y z := by
   have hD1 : 1 ≤ p.D := by omega
@@ -3820,7 +3820,7 @@ private theorem hdThresholdCutFirstExit_finish_le_radius {p : HDParams}
   | downContinue hparent hv' hj hstep tail hinside hnext htail ih => exact ih
 
 /-- A parent-walk suffix that never leaves one child ball. -/
-private inductive HDThresholdWalkInside {p : HDParams} (Sites : p.Sites)
+inductive HDThresholdWalkInside {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p) (parentRadius : ℕ)
     (center : HDState p) (childRadius : ℕ) :
     {start finish : HDState p} →
@@ -3979,12 +3979,12 @@ private theorem hdThresholdCutFirstExit_remainder_shorter {p : HDParams}
       simp [hdThresholdWalk_length, hdThresholdWalk_upCount, hdThresholdWalk_downCount] at ih ⊢
       omega
 
-private abbrev HDChunk (p : HDParams) (Sites : p.Sites)
+abbrev HDChunk (p : HDParams) (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (childRadius : ℕ) :=
   Σ chunkStart : HDState p, Σ chunkFinish : HDState p,
     HDThresholdWalk Sites bad chunkStart childRadius chunkStart chunkFinish
 
-private inductive HDThresholdChunking {p : HDParams} (Sites : p.Sites)
+inductive HDThresholdChunking {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p)
     (parentRadius childRadius : ℕ) :
     {start finish : HDState p} →
@@ -4078,7 +4078,7 @@ private theorem hdThresholdChunking_lastFinish_eq {p : HDParams} {Sites : p.Site
           have hlastTail : (c :: cs).getLast? = some last := by simpa using hlast
           exact ih hlastTail
 
-private def hdThresholdChunkRise {p : HDParams} {Sites : p.Sites}
+def hdThresholdChunkRise {p : HDParams} {Sites : p.Sites}
     {bad : CubeVertex p.d → ℕ → Prop} {childRadius : ℕ}
     (chunk : Σ chunkStart : HDState p, Σ chunkFinish : HDState p,
       HDThresholdWalk Sites bad chunkStart childRadius chunkStart chunkFinish) : ℝ :=
@@ -4227,7 +4227,7 @@ private theorem hdThresholdChunking_suffix_rise_upper {p : HDParams}
       (hdScaleDistance p.D suffix.1 finish : ℝ) := by exact_mod_cast hlevel
   exact hlevelReal.trans (by exact_mod_cast hmetric)
 
-private def hdThresholdChunkFailure {p : HDParams} {Sites : p.Sites}
+def hdThresholdChunkFailure {p : HDParams} {Sites : p.Sites}
     {bad : CubeVertex p.d → ℕ → Prop} {childRadius : ℕ}
     (η : ℝ) (chunk : Σ chunkStart : HDState p, Σ chunkFinish : HDState p,
       HDThresholdWalk Sites bad chunkStart childRadius chunkStart chunkFinish) : Prop :=
@@ -4415,7 +4415,7 @@ private theorem hdThresholdChunking_failure_count_lower {p : HDParams} (hD : 0 <
           field_simp [hden.ne']
     _ ≤ q := hquot
 
-private theorem hdThresholdWalk_exists_chunking {p : HDParams} (Sites : p.Sites)
+theorem hdThresholdWalk_exists_chunking {p : HDParams} (Sites : p.Sites)
     (bad : CubeVertex p.d → ℕ → Prop) (parentOrigin : HDState p)
     (parentRadius childRadius : ℕ) (hD : 0 < p.D) (hchild : 0 < childRadius)
     {start finish : HDState p}
@@ -4650,7 +4650,7 @@ private theorem exists_maximal_heightMetricSeparated {p : HDParams}
   have hcardEq : (insert x S).card = S.card + 1 := Finset.card_insert_of_notMem hxnotS
   omega
 
-private def hdScaleSeparated {p : HDParams} (gap : ℕ) (S : Finset (HDState p)) : Prop :=
+def hdScaleSeparated {p : HDParams} (gap : ℕ) (S : Finset (HDState p)) : Prop :=
   ∀ x ∈ S, ∀ y ∈ S, x ≠ y → gap ≤ hdScaleDistance p.D x y
 
 private theorem exists_maximal_hdScaleSeparated {p : HDParams}
@@ -4709,7 +4709,7 @@ private theorem exists_maximal_hdScaleSeparated {p : HDParams}
   have hcardEq : (insert x S).card = S.card + 1 := Finset.card_insert_of_notMem hxnotS
   omega
 
-private noncomputable def hdFailureStartSet {p : HDParams} {Sites : p.Sites}
+noncomputable def hdFailureStartSet {p : HDParams} {Sites : p.Sites}
     {bad : CubeVertex p.d → ℕ → Prop} {childRadius : ℕ}
     (η : ℝ) (chunks : List (HDChunk p Sites bad childRadius)) : Finset (HDState p) := by
   classical
@@ -5742,7 +5742,7 @@ private theorem hammingBall_intersection_enlarged_sublinear_bound {d r T s q : �
               ((r + T : ℝ) / ((d - (r + T) + 1 : ℕ) : ℝ)) ^ (s / 3)) := htotal'
     _ ≤ _ := mul_le_mul_of_nonneg_right hvolume herror
 
-private theorem hammingDist_custom_eq_root {d : ℕ} (u v : CubeVertex d) :
+theorem hammingDist_custom_eq_root {d : ℕ} (u v : CubeVertex d) :
     hammingDist u v = _root_.hammingDist u v := by
   classical
   simp [HypercubeRamsey.hammingDist, _root_.hammingDist]
@@ -6028,7 +6028,7 @@ private theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep {p : HDParams
     simp [hempty]
     positivity
 
-private theorem hdChildCenterDomain_overlap_linear_bound_of_sep_scale {p : HDParams}
+theorem hdChildCenterDomain_overlap_linear_bound_of_sep_scale {p : HDParams}
     (start₁ start₂ : HDState p) (R gap : ℕ) (hD : 0 < p.D)
     (hsep : gap ≤ hdScaleDistance p.D start₁ start₂)
     (hgap : 2 * R < gap) (hR : 0 < R) (hr : 0 < p.r)
@@ -6099,7 +6099,7 @@ private theorem hdChildCenterDomain_overlap_linear_bound_of_sep_scale {p : HDPar
     simp [hempty]
     positivity
 
-private theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep_scale {p : HDParams}
+theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep_scale {p : HDParams}
     (start₁ start₂ : HDState p) (R gap : ℕ) (hD : 0 < p.D)
     (hsep : gap ≤ hdScaleDistance p.D start₁ start₂)
     (hgap : 2 * R < gap) (hR : 0 < R) (hr : 0 < p.r)
@@ -6174,7 +6174,7 @@ private theorem hdChildCenterDomain_overlap_sublinear_bound_of_sep_scale {p : HD
     simp [hempty]
     positivity
 
-private theorem hdScaleRadius_child_enlargement_le_dimension_eventually
+theorem hdScaleRadius_child_enlargement_le_dimension_eventually
     (D : ℕ) (σ ζ c_d : ℝ) (hD : 0 < D) (hcd : 0 < c_d)
     (hζ : 0 < ζ ∧ ζ < 1) :
     ∃ n₀ : ℕ, ∀ n d i, n₀ ≤ n → c_d * (n : ℝ) ≤ (d : ℝ) →
@@ -6959,7 +6959,7 @@ private theorem hdChunkCoverPartition_parent_failure_false {p : HDParams} (hD : 
               _ < _ := hlarge
           exact (not_lt_of_ge hgapIneq hupperGap)
 
-private theorem hdParentFailure_has_many_separated_child_failure_starts
+theorem hdParentFailure_has_many_separated_child_failure_starts
     {p : HDParams} (hD : 0 < p.D)
     {Sites : p.Sites} {bad : CubeVertex p.d → ℕ → Prop}
     {parentOrigin start finish : HDState p} {parentRadius childRadius gap M K : ℕ}
@@ -7386,7 +7386,7 @@ private theorem sup_id_mem_nat (s : Finset ℕ) (hne : s.Nonempty) : s.sup id �
         subst s
         simp
 
-private theorem reach_level_le {p : HDParams} (Sites : p.Sites)
+theorem reach_level_le {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (vq : CubeVertex p.d) (R : ℕ)
     {v : CubeVertex p.d} {j : ℕ}
     (h : p.Reach Sites P A E vq R v j) : j ≤ p.H := by
@@ -7395,7 +7395,7 @@ private theorem reach_level_le {p : HDParams} (Sites : p.Sites)
   | up v j hj _ _ => omega
   | down v v' j _ _ _ ih => omega
 
-private theorem height_reach_at_height {p : HDParams} (Sites : p.Sites)
+theorem height_reach_at_height {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (vq : CubeVertex p.d) (R : ℕ)
     (hvq : vq ∈ Sites) :
     p.Reach Sites P A E vq R vq (p.height Sites P A E R vq) := by
@@ -7414,7 +7414,7 @@ theorem height_le_top {p : HDParams} (Sites : p.Sites)
     (R : ℕ) : p.height Sites P A E R v ≤ p.H :=
   reach_level_le Sites P A E v R (height_reach_at_height Sites P A E v R hv)
 
-private theorem height_reach_le {p : HDParams} (Sites : p.Sites)
+theorem height_reach_le {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (vq : CubeVertex p.d) (R : ℕ)
     {j : ℕ}
     (h : p.Reach Sites P A E vq R vq j) : j ≤ p.height Sites P A E R vq := by

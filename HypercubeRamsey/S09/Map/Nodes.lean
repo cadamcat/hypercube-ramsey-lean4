@@ -17,7 +17,125 @@ open scoped BigOperators
 (take `θ` near `1`, then `ζ, σ_h` small, `a` between `ζ + σ_h + (1-θ)` and `b₀`, and `b₀ < ε' < ε` small in terms
 of `χ`, using `σ < χ/10` in the linear case). -/
 theorem p92_height_choice (P : Params9) (hP : P.Valid) : ∃ hc : HeightChoice9 P, hc.Admissible := by
-  sorry
+  rcases hP with ⟨hcommon, hminus, hx, hσ, hχ, hgap, hcase⟩
+  rcases hσ with ⟨hσpos, hσsmall⟩
+  rcases hχ with ⟨hχpos, hχsmall⟩
+  have hχlt1 : (P.χ : ℝ) < 1 := by
+    have hh : (P.hMinus : ℝ) < 1 := by
+      exact_mod_cast lt_trans hminus.2.1 hminus.2.2
+    have hmin : min (P.xS : ℝ) (min (P.hMinus : ℝ) (1 - (P.hPlus : ℝ))) < 1 := by
+      apply lt_of_le_of_lt (min_le_right _ _)
+      exact lt_of_le_of_lt (min_le_left _ _) hh
+    have hcχ : (P.χ : ℝ) < min (P.xS : ℝ) (min (P.hMinus : ℝ) (1 - (P.hPlus : ℝ))) / 100 := by
+      exact_mod_cast hχsmall
+    linarith
+  cases hc : P.case with
+  | sub yS yD yM =>
+      have hbranch : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧ 1 - P.σ < yD ∧ yD < 1 ∧
+          P.χ < P.σ / 10 := by simpa [hc] using hcase
+      have heps : 0 < P.eps := by
+        rw [Params9.eps, hc]
+        apply div_pos
+        apply lt_min
+        · exact_mod_cast hσpos
+        · have : (1 - P.σ : ℚ) < yD := hbranch.2.2.2.1
+          exact_mod_cast sub_pos.mpr this
+        · norm_num
+      have hχr : 0 < (P.χ : ℝ) := by exact_mod_cast hχpos
+      let b0 : ℝ := min (P.eps / 2) ((P.χ : ℝ) / 4)
+      have hb0pos : 0 < b0 := by
+        dsimp [b0]
+        apply lt_min
+        · linarith
+        · positivity
+      have hb0eps : b0 < P.eps := by
+        have hb : b0 ≤ P.eps / 2 := min_le_left _ _
+        linarith
+      have hb0chi : b0 < (P.χ : ℝ) / 2 := by
+        have hb : b0 ≤ (P.χ : ℝ) / 4 := min_le_right _ _
+        linarith
+      let hc' : HeightChoice9 P :=
+        ⟨b0, (b0 + P.eps) / 2, b0 / 16, b0 / 64, 1 - b0 / 64, b0 / 2⟩
+      refine ⟨hc', ?_⟩
+      dsimp [HeightChoice9.Admissible, hc']
+      constructor
+      · positivity
+      constructor
+      · linarith
+      constructor
+      · linarith
+      constructor
+      · linarith [hb0chi, hχlt1]
+      constructor
+      · linarith
+      constructor
+      · norm_num
+        linarith
+      constructor
+      · norm_num
+        linarith
+      constructor
+      · nlinarith [hb0chi]
+      constructor
+      · exact hb0pos
+      constructor
+      · linarith
+      constructor
+      · linarith
+      · simpa [hc] using hb0chi
+  | lin αS αD hB yB =>
+      have hbranch : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+          P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+        simpa [hc] using hcase
+      have heps : 0 < P.eps := by
+        rw [Params9.eps, hc]
+        exact div_pos (by exact_mod_cast hσpos) (by norm_num)
+      have hσr : (P.σ : ℝ) < (P.χ : ℝ) / 10 := by exact_mod_cast hbranch.2.2.2.1
+      have hχr : 0 < (P.χ : ℝ) := by exact_mod_cast hχpos
+      let b0 : ℝ := min (P.eps / 2) (((P.χ : ℝ) / 2 - (P.σ : ℝ)) / 2)
+      have hb0pos : 0 < b0 := by
+        dsimp [b0]
+        apply lt_min
+        · linarith
+        · linarith
+      have hb0eps : b0 < P.eps := by
+        have hb : b0 ≤ P.eps / 2 := min_le_left _ _
+        linarith
+      have hb0lin : b0 + (P.σ : ℝ) < (P.χ : ℝ) / 2 := by
+        have hb : b0 ≤ ((P.χ : ℝ) / 2 - (P.σ : ℝ)) / 2 := min_le_right _ _
+        linarith
+      have hσrpos : 0 < (P.σ : ℝ) := by exact_mod_cast hσpos
+      have hb0chi : b0 < (P.χ : ℝ) / 2 := by linarith [hb0lin, hσrpos]
+      let hc' : HeightChoice9 P :=
+        ⟨b0, (b0 + P.eps) / 2, b0 / 16, b0 / 64, 1 - b0 / 64, b0 / 2⟩
+      refine ⟨hc', ?_⟩
+      dsimp [HeightChoice9.Admissible, hc']
+      constructor
+      · positivity
+      constructor
+      · linarith
+      constructor
+      · linarith
+      constructor
+      · linarith [hb0chi, hχlt1]
+      constructor
+      · norm_num
+        linarith
+      constructor
+      · norm_num
+        linarith
+      constructor
+      · norm_num
+        linarith
+      constructor
+      · nlinarith [hb0chi]
+      constructor
+      · exact hb0pos
+      constructor
+      · linarith
+      constructor
+      · linarith
+      simpa [hc] using hb0lin
 
 /-- P9.2-map1, base estimate (09:84–85, Lemma 3.8 Step 2): given an eligible set of size at least `s n^{10}`
 within `C`, the activations of its members are independent of the positions, so a hole has probability at most

@@ -61,7 +61,148 @@ theorem D18_L_palettes (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
         ∀ i, PaletteRetentionSpec
           (Lane_sol_s18_dl.physical_list_context hPT hLow (Classical.choice hL16.physical))
           i (P.hle i) (P.code i) (P.colours i) := by
-  sorry
+  set_option maxHeartbeats 400000 in
+    have hKB : 0 ≤ κ.KB := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.KB_big
+    have hA : 0 ≤ κ.A0 := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.A0_big
+    filter_upwards [Lane_sol_d18l_pal.eventual_palette_codes hκ T,
+      Lane_sol_d18l_pal.polynomial_host_cutoff T (2 * κ.KB + 12) (by positivity),
+      Lane_sol_d18l_pal.late_numeric_cutoff T κ.KB κ.A0 hKB hA] with k hcodes hhost hnum
+    intro PT hPT G F hL16 hLow hMass hLarge
+    by_cases hCluster : PT.tiling.mode.isCluster
+    · have hm : PT.tiling.mode = .lowCluster := by
+        cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Mode.isCluster]
+      let physical := Classical.choice hL16.physical
+      obtain ⟨hle, hcodes⟩ := hcodes PT hPT G F hL16 hLow
+      let code (i : Fin PT.tiling.m) := Classical.choose (hcodes i)
+      have hCode : ∀ i, PaletteCodeSpec i (hle i) (code i) := fun i => Classical.choose_spec (hcodes i)
+      have hn : (100 : ℝ) ≤ T.S.n k := by exact_mod_cast hhost.1
+      have hlog : 1 ≤ Real.log (T.S.n k : ℝ) := hhost.2.1
+      have hL0 : 0 ≤ Real.log (T.S.n k : ℝ) := by linarith
+      have hRest : 0 ≤ (2 * κ.A0 / Real.log 2 + 1) * Real.log (T.S.n k : ℝ) := by positivity
+      have hKL : κ.KB * Real.log (T.S.n k : ℝ) ≤ T.S.n k := by
+        nlinarith [hnum.2.1, mul_nonneg hKB hL0]
+      have hKn : κ.KB ≤ T.S.n k := by
+        have hh := mul_le_mul_of_nonneg_left hlog hKB
+        nlinarith
+      have hgn : ∀ i, PT.tiling.gain i ≤ T.S.n k := fun i => (hL16.gain_upper i).trans hKL
+      have hsqrt : 1 ≤ Real.sqrt (Real.log (T.S.n k : ℝ)) := by
+        have hh := Real.sqrt_le_sqrt hlog
+        simpa only [Real.sqrt_one] using hh
+      have hb : 3 * bstar T k ≤ 1 / 4 := by
+        have hh := mul_le_mul_of_nonneg_left hsqrt (show 0 ≤ 12 * bstar T k by unfold bstar; positivity)
+        nlinarith [hnum.2.2]
+      have hcross : ∀ i, 12 * bstar T k * (PT.tiling.P i).ℓ ≤ 1 := by
+        intro i
+        exact (mul_le_mul_of_nonneg_left (physical.quantitative.prefix_bound i)
+          (by unfold bstar; positivity)).trans hnum.2.2
+      have hpairs : ∀ i, ∃ colours : S17PaletteAssignment (code i),
+          PaletteRetentionSpec (Lane_sol_s18_dl.physical_list_context hPT hLow physical) i (hle i) (code i) colours ∧
+          ∀ c, (Finset.univ.filter fun x : Fin (T.S.N k) => x ∈ (PT.tiling.P i).X ∧ colours x = c).Nonempty := by
+        intro i
+        exact Lane_sol_d18l_pal.cluster_palette_colouring_at hκ hPT hL16 hLow hm hn hlog
+          hhost.2.2.1 hKn hhost.2.2.2.1 hhost.2.2.2.2 hb hcross hgn i (hle i) (code i) (hCode i)
+      let colours i := Classical.choose (hpairs i)
+      have hColours := fun i => Classical.choose_spec (hpairs i)
+      let chi (i : Fin PT.tiling.m) := s17Chi (code i)
+      let e (i : Fin PT.tiling.m) : (Fin (code i).dimension → ZMod 2) ≃ Fin (chi i) :=
+        (Fintype.equivFin _).trans (finCongr (by simp [chi, s17Chi, ListGateContext.PaletteCode.chi, ZMod.card]))
+      let palettes (i : Fin PT.tiling.m) (a : Fin (chi i)) := Finset.univ.filter fun x : Fin (T.S.N k) =>
+        x ∈ (PT.tiling.P i).X ∧ colours i x = (e i).symm a
+      have hSubset : ∀ i a, palettes i a ⊆ (PT.tiling.P i).X := by
+        intro i a x hx
+        exact (Finset.mem_filter.mp hx).2.1
+      have hDisjoint : ∀ i a a', a ≠ a' → Disjoint (palettes i a) (palettes i a') := by
+        intro i a a' hne
+        apply Finset.disjoint_left.mpr
+        intro x hx hx'
+        have hh := ((Finset.mem_filter.mp hx).2.2).symm.trans (Finset.mem_filter.mp hx').2.2
+        exact hne ((e i).symm.injective hh)
+      let P : PaletteData G := {
+        hle := hle
+        code := code
+        colours := colours
+        chi := chi
+        colourEquiv := e
+        chi_eq := fun _ => rfl
+        chi_pos := by intro i; dsimp [chi, s17Chi, ListGateContext.PaletteCode.chi]; positivity
+        colourOf := fun v => e (G.patchOf v) ((code (G.patchOf v)).roleColour v)
+        colour_eq := fun _ => rfl
+        palettes := palettes
+        palettes_eq := fun _ _ => rfl
+        nonempty := fun i a => (hColours i).2 ((e i).symm a)
+        subset := hSubset
+        global_disjoint := by
+          rintro ⟨i, a⟩ ⟨j, b⟩ hne
+          by_cases hij : i = j
+          · subst j
+            apply hDisjoint
+            intro hab
+            cases hab
+            exact hne rfl
+          · exact Disjoint.mono (hSubset i a) (hSubset j b) (hPT.tiling_valid.patch_X_disjoint i j hij)
+        disjoint := hDisjoint
+        size := fun i a => (hColours i).1.1 ((e i).symm a) }
+      exact ⟨P, hCode, fun i => (hColours i).1⟩
+    · have hh : ∀ i, (PT.tiling.P i).h = 0 := by
+        intro i
+        cases hm : PT.tiling.mode with
+        | bounded => exact ((hPT.tiling_valid.bounded_data hm).2 i).2.1
+        | lowDirect => exact (hPT.tiling_valid.direct_data (Or.inl hm) i).2.2.2.2.1
+        | lowCluster => simp [hm, Mode.isCluster] at hCluster
+        | highDirect => simp [hm, Mode.isLow] at hLow
+        | highSmall => simp [hm, Mode.isLow] at hLow
+        | highLarge => simp [hm, Mode.isLow] at hLow
+      let hle : ∀ i, (PT.tiling.P i).h ≤ T.S.n k := fun i => by rw [hh i]; omega
+      let code i := Lane_sol_d18l_pal.empty_code i (hle i)
+      let colours : ∀ i, S17PaletteAssignment (code i) := fun i _ => 0
+      let e (i : Fin PT.tiling.m) : (Fin (code i).dimension → ZMod 2) ≃ Fin 1 := by
+        change (Fin 0 → ZMod 2) ≃ Fin 1
+        exact Equiv.ofUnique _ _
+      let P : PaletteData G := {
+        hle := hle
+        code := code
+        colours := colours
+        chi := fun _ => 1
+        colourEquiv := e
+        chi_eq := by intro i; simp [code, Lane_sol_d18l_pal.empty_code, s17Chi, ListGateContext.PaletteCode.chi]
+        chi_pos := fun _ => by norm_num
+        colourOf := fun _ => 0
+        colour_eq := fun v => @Subsingleton.elim (Fin 1) inferInstance _ _
+        palettes := fun i _ => (PT.tiling.P i).X
+        palettes_eq := by
+          intro i a
+          ext x
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+          constructor
+          · intro hx
+            refine ⟨hx, ?_⟩
+            exact @Subsingleton.elim (Fin 0 → ZMod 2) inferInstance _ _
+          · intro hx; exact hx.1
+        nonempty := fun i _ => (hPT.tiling_valid.patch_nonempty i).1
+        subset := fun _ _ => le_rfl
+        global_disjoint := by
+          rintro ⟨i, a⟩ ⟨j, b⟩ hne
+          have hij : i ≠ j := by
+            intro hij
+            subst j
+            apply hne
+            have hab : a = b := @Subsingleton.elim (Fin 1) inferInstance _ _
+            cases hab
+            rfl
+          exact hPT.tiling_valid.patch_X_disjoint i j hij
+        disjoint := by
+          intro i a a' hne
+          exact (hne (@Subsingleton.elim (Fin 1) inferInstance _ _)).elim
+        size := by
+          intro i a
+          rw [(PT.tiling.P i).cardX]
+          norm_num only [div_one] <;> nlinarith [(show (0 : ℝ) ≤ (PT.tiling.P i).M by positivity)] }
+      refine ⟨P, ?_, ?_⟩
+      · intro i
+        apply Lane_sol_d18l_pal.empty_code_spec i (hle i) (hh i)
+        exact Lane_sol_d18l_pal.gain_nonneg hκ i
+      · intro i
+        exact Lane_sol_d18l_pal.physical_empty_retention hPT hLow (Classical.choice hL16.physical) i (hle i)
 
 /-- Positive reserved pool sizes after one common cutoff. Natural floors
 are retained: this is positivity of N/3/r, not a real-division identity.
@@ -925,7 +1066,26 @@ theorem D18_L_initial_cap (hκ : κ.Admissible) (hThresholds : LateThresholds κ
         (D.initialPrior v s).w x ≤ 4 * κ.KB / densityScale T k *
           Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v)) *
             Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)) := by
-  sorry
+  filter_upwards [Lane_sol_d18l_pal.raw_initial_atom_cap hκ hThresholds T] with k hcap
+  intro PT hPT X hMass hLarge
+  let D := rawData hκ X
+  dsimp only
+  intro v s heven hvalid x
+  have hchi : (D.chi (D.geom.patchOf v) : ℝ) ≤ Real.exp (PT.tiling.gain (D.geom.patchOf v)) := by
+    change (X.palette.chi (X.geom.patchOf v) : ℝ) ≤ Real.exp (PT.tiling.gain (X.geom.patchOf v))
+    rw [X.palette.chi_eq]
+    exact (X.code_spec _).2.2.2
+  have hKB : 0 ≤ κ.KB := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.KB_big
+  have hCpos : 0 < densityScale T k := by
+    unfold densityScale
+    have : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+    positivity
+  have hraw := hcap D (Classical.choice X.l16.physical).quantitative.prefix_bound X.palette.hle v s hvalid
+  have hp := Lane_sol_d18l_pal.initial_prior_cap_of_atom D v s hvalid hchi
+    (κ.KB / densityScale T k)
+    (Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)))
+    (div_nonneg hKB hCpos.le) (Real.rpow_nonneg (by norm_num) _) hraw x
+  simpa only [mul_div_assoc] using hp
 
 /-- Supported resampling inputs with typical pools and all list successes
 have internal validity and retained starting palette mass. TeX 17:273–300;

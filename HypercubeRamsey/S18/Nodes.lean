@@ -154,6 +154,7 @@ theorem L18_2m {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, ∀ P : TransferProtocol X,
           StopFacts P cstop → TiltedDeviationBound P ctilt := by
+  refine ⟨cstop, hc, ?_⟩
   sorry
 
 /-- 18:630–657. Undo survival, use its second moment and restore deletion

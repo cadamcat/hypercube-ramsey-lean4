@@ -2502,6 +2502,53 @@ theorem likelihood_one_at_zero (P : TransferProtocol X) (seed : P.Seed)
   classical
   simp [likelihood, P.replies_zero, finLaw_pr_true]
 
+theorem likelihood_mul_raw_prefix (P : TransferProtocol X) (seed : P.Seed)
+    (x : Fin (T.S.N k)) (z : Option (Fin (T.S.N k))) (s : X.Raw) (t : ℕ) :
+    X.rawLaw.pr (fun s' => P.replies seed s' t = P.replies seed s t) *
+        likelihood P seed x z s t =
+      (tiltedLaw X x z).pr (fun s' => P.replies seed s' t = P.replies seed s t) := by
+  classical
+  let S : X.Raw → Prop := fun s' => X.survives s' x z
+  let A : X.Raw → Prop := fun s' => P.replies seed s' t = P.replies seed s t
+  let p := X.rawLaw.pr S
+  let den := X.rawLaw.pr A
+  let num := (tiltedLaw X x z).pr A
+  have hp : 0 ≤ p := finLaw_pr_nonneg X.rawLaw S
+  have hsub := finLaw_pr_mono X.rawLaw (fun s' => S s' ∧ A s') A
+    (fun _ h => h.2)
+  have hzeroSA (hd : den = 0) : X.rawLaw.pr (fun s' => S s' ∧ A s') = 0 := by
+    change X.rawLaw.pr (fun s' => S s' ∧ A s') ≤ den
+      at hsub
+    apply le_antisymm
+    · rw [hd] at hsub
+      exact hsub
+    · exact finLaw_pr_nonneg X.rawLaw _
+  by_cases hd : den = 0
+  · have hnumZero : num = 0 := by
+      by_cases hpos : 0 < p
+      · have hmul := tilted_pr_mul_survives X x z A
+        have hzero := hzeroSA hd
+        have hpnum : p * num = 0 := by
+          rw [hzero] at hmul
+          simpa [p, num, S, A] using hmul
+        exact (mul_eq_zero.mp hpnum).resolve_left (ne_of_gt hpos)
+      · have hp0 : p = 0 := le_antisymm (le_of_not_gt hpos) hp
+        have hmass : (∑ s' ∈ Finset.univ.filter S, X.rawLaw.w s') = p := by
+          simpa [p] using (finLaw_pr_filter X.rawLaw S).symm
+        have hform : num =
+            if h : 0 < ∑ s' ∈ Finset.univ.filter S, X.rawLaw.w s' then
+              (FinLaw.cond X.rawLaw (Finset.univ.filter S) h).pr A else
+                X.rawLaw.pr A := by
+          simpa [num, S] using tiltedLaw_pr_eq X x z A
+        have hnot : ¬ 0 < ∑ s' ∈ Finset.univ.filter S, X.rawLaw.w s' := by
+          rw [hmass, hp0]
+          exact not_lt.mpr le_rfl
+        rw [hform, dif_neg hnot]
+        simpa [den, A] using hd
+    simp [likelihood, den, num, A, hd, hnumZero]
+  · have hratio : den * (num / den) = num := by field_simp [hd]
+    simpa [likelihood, den, num, A] using hratio
+
 theorem stoppingTime_le_steps (P : TransferProtocol X) (seed : P.Seed)
     (x : Fin (T.S.N k)) (z : Option (Fin (T.S.N k))) (s : X.Raw) (cstop : ℝ) :
     stoppingTime P seed x z s cstop ≤ P.steps := by

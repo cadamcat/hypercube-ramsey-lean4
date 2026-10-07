@@ -2247,4 +2247,121 @@ theorem T1_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
     · intro u hu
       exact htag u (by simpa [hvs] using hu)
 
+private theorem evenNbr_injective_inner {n : ℕ} (b : OddRole n) :
+    Function.Injective (fun a : InnerCoord n => evenNbr b a.1) := by
+  intro a c hac
+  apply Subtype.ext
+  apply Fin.ext
+  by_contra hneq
+  have hneqFin : a.1 ≠ c.1 := by
+    intro heq
+    apply hneq
+    exact congrArg Fin.val heq
+  have hval := congrFun (congrArg Subtype.val hac) a.1
+  simp [evenNbr, cubeFlip, hneqFin] at hval
+
+theorem raw_oddRow_mean {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (t : OuterWord n → M.ι) (b : OddRole n) (y : Fin N) :
+    (rawTuples M y₀ t).expect (fun W => oddRowF M t W b y) =
+      piRow M y₀ (t (sliceOf b.1)) y := by
+  classical
+  let i := t (sliceOf b.1)
+  let U : Finset (EvenRole n) := Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1)
+  let Q : EvenRole n → FinProb (Fin (kTup n) → Fin N) := fun u =>
+    tupLaw E M.G (M.μ (t (sliceOf u.1))) (y₀ (t (sliceOf u.1))) (kTup n)
+  let F : (EvenRole n → Fin (kTup n) → Fin N) → ℝ := fun W => oddRowF M t W b y
+  let e : InnerCoord n ≃ {u : EvenRole n // u ∈ U} := {
+    toFun := fun a => ⟨evenNbr b a.1, by
+      change evenNbr b a.1 ∈ Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1)
+      exact Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩⟩
+    invFun := fun u => Classical.choose (Finset.mem_image.mp (by
+      change u.1 ∈ Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1)
+      exact u.2))
+    left_inv := by
+      intro a
+      apply evenNbr_injective_inner b
+      have hmem : evenNbr b a.1 ∈ Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1) :=
+        Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩
+      exact (Classical.choose_spec (Finset.mem_image.mp hmem)).2
+    right_inv := by
+      intro u
+      apply Subtype.ext
+      exact (Classical.choose_spec (Finset.mem_image.mp (by
+        change u.1 ∈ Finset.univ.image (fun a : InnerCoord n => evenNbr b a.1)
+        exact u.2))).2 }
+  have heSlice (a : InnerCoord n) : sliceOf (evenNbr b a.1).1 = sliceOf b.1 :=
+    sliceOf_evenNbr_inner_eq b a
+  have hdep : FinProb.DependsOn F U := by
+    intro W W' hagree
+    have hstar : starOf W b = starOf W' b := by
+      funext a
+      funext l
+      have hu : evenNbr b a.1 ∈ U :=
+        Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩
+      exact congrFun (hagree (evenNbr b a.1) hu) l
+    change oddRowF M t W b y = oddRowF M t W' b y
+    unfold oddRowF
+    rw [hstar]
+  let W₀ : EvenRole n → Fin (kTup n) → Fin N :=
+    Classical.choice (local_nonempty_of_finProb (FinProb.pi Q))
+  have hglue := pi_expect_glue_sum Q U F W₀ hdep
+  let eFun : (∀ u : {u : EvenRole n // u ∈ U}, Fin (kTup n) → Fin N) ≃
+      (InnerCoord n → Fin (kTup n) → Fin N) := {
+    toFun := fun (a : ∀ u : {u : EvenRole n // u ∈ U}, Fin (kTup n) → Fin N)
+        (c : InnerCoord n) => a (e c)
+    invFun := fun (w : InnerCoord n → Fin (kTup n) → Fin N)
+        (u : {u : EvenRole n // u ∈ U}) => w (e.symm u)
+    left_inv := by
+      intro a
+      funext u
+      simp
+    right_inv := by
+      intro w
+      funext c
+      simp }
+  have hstarGlue (a : ∀ u : {u : EvenRole n // u ∈ U}, Fin (kTup n) → Fin N) :
+      starOf (S07.glue U W₀ a) b = fun c => a (e c) := by
+    funext c
+    simp [starOf, S07.glue, U, e]
+  have hweight (a : ∀ u : {u : EvenRole n // u ∈ U}, Fin (kTup n) → Fin N) :
+      (∏ u : {u : EvenRole n // u ∈ U}, (Q u.1).w (a u)) =
+        starW E M.G (M.μ i) (y₀ i) (fun c => a (e c)) := by
+    calc
+      (∏ u : {u : EvenRole n // u ∈ U}, (Q u.1).w (a u)) =
+          ∏ c : InnerCoord n, (Q (e c).1).w (a (e c)) := by
+            symm
+            exact Fintype.prod_equiv e _ _ (by intro c; rfl)
+      _ = ∏ c : InnerCoord n,
+          (tupLaw E M.G (M.μ i) (y₀ i) (kTup n)).w (a (e c)) := by
+            apply Finset.prod_congr rfl
+            intro c hc
+            change (tupLaw E M.G (M.μ (t (sliceOf (e c).1)))
+                (y₀ (t (sliceOf (e c).1))) (kTup n)).w (a (e c)) = _
+            have htag : t (sliceOf (e c).1) = i := by
+              change t (sliceOf (evenNbr b c.1).1) = t (sliceOf b.1)
+              rw [heSlice c]
+            rw [htag]
+      _ = starW E M.G (M.μ i) (y₀ i) (fun c => a (e c)) := by
+            simp [starW, tupW, tupLaw, FinProb.pi]
+  have hrowGlue (a : ∀ u : {u : EvenRole n // u ∈ U}, Fin (kTup n) → Fin N) :
+      F (S07.glue U W₀ a) = oddRowW E M.G (gS n) (M.μ i) (M.ν i) (fun c => a (e c)) y := by
+    simp [F, oddRowF, hstarGlue, i]
+  calc
+    (rawTuples M y₀ t).expect (fun W => oddRowF M t W b y) =
+        (FinProb.pi Q).expect F := by simp [rawTuples, Q, F]
+    _ = ∑ a : (∀ u : {u : EvenRole n // u ∈ U}, Fin (kTup n) → Fin N),
+          (∏ u : {u : EvenRole n // u ∈ U}, (Q u.1).w (a u)) * F (S07.glue U W₀ a) := hglue
+    _ = ∑ w : InnerCoord n → Fin (kTup n) → Fin N,
+          starW E M.G (M.μ i) (y₀ i) w * oddRowW E M.G (gS n) (M.μ i) (M.ν i) w y := by
+          exact Fintype.sum_equiv eFun _ _ (by
+            intro a
+            change (∏ u : {u : EvenRole n // u ∈ U}, (Q u.1).w (a u)) *
+                F (S07.glue U W₀ a) =
+              starW E M.G (M.μ i) (y₀ i) (fun c => a (e c)) *
+                oddRowW E M.G (gS n) (M.μ i) (M.ν i) (fun c => a (e c)) y
+            rw [hweight a, hrowGlue a])
+    _ = piRow M y₀ i y := by
+          rfl
+
 end HypercubeRamsey.Lane_q_s11_tags

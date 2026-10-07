@@ -455,6 +455,128 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       ∀ g, D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) ≤
         Real.exp (-(D.n : ℝ) ^ c) := by
+  have cutoffLoss (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT)
+      (h34 : D.Gate34 Θ g) (hnot : ¬ D.Gate2 Θ g)
+      (hpost : ∑ i, D.postW (Θ g) i = 1)
+      (hcut : D.cut ≤ (1 / 20 : ℝ) * D.AG g)
+      (hΔpos : 0 < D.Δ) (hΔle : D.Δ ≤ 1) :
+      (1 / 20 : ℝ) * D.Δ * D.AG g <
+        ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) := by
+    have hApos : 0 < D.AG g := by
+      unfold Ctx.AG
+      positivity
+    have hpostNonneg (i : D.M.ι) : 0 ≤ D.postW (Θ g) i := D.postW_nonneg _ _
+    have hdiffNonneg (i : D.M.ι) : 0 ≤ D.dMinus Θ g i - D.dPlus Θ g i := by
+      have hdp : D.dPlus Θ g i ≤ D.dMinus Θ g i := by
+        unfold Ctx.dPlus Ctx.dMinus
+        apply Finset.sum_le_sum
+        intro x _
+        have hInd : (if D.ownHit Θ g x then (1 : ℝ) else 0) ≤
+            (if D.crossHit Θ g x then (1 : ℝ) else 0) := by
+          by_cases hc : D.crossHit Θ g x
+          · by_cases ho : D.hitsAll x (Θ g) <;> simp [Ctx.ownHit, hc, ho]
+          · have ho : ¬ D.ownHit Θ g x := by
+              intro hh
+              exact hc hh.1
+            simp [hc, ho]
+        exact mul_le_mul_of_nonneg_left hInd ((D.M.μ i).nonneg x)
+      linarith
+    have htotalLo : D.AG g / (11 / 10 : ℝ) ≤
+        ∑ i, D.postW (Θ g) i * D.dMinus Θ g i := h34.1.1
+    have htotalHi :
+        ∑ i, D.postW (Θ g) i * D.dMinus Θ g i ≤ (11 / 10 : ℝ) * D.AG g := h34.1.2
+    have hZleTotal : D.ZG Θ g ≤ ∑ i, D.postW (Θ g) i * D.dMinus Θ g i := by
+      unfold Ctx.ZG
+      apply Finset.sum_le_sum
+      intro i _
+      by_cases hopen : D.GateOpen Θ g i
+      · simp [Ctx.tiltW, hopen]
+      · simp [Ctx.tiltW, hopen]
+        exact mul_nonneg (hpostNonneg i) (D.dMinus_nonneg Θ g i)
+    have hZupper : D.ZG Θ g ≤ (12 / 10 : ℝ) * D.AG g := by
+      calc
+        D.ZG Θ g ≤ ∑ i, D.postW (Θ g) i * D.dMinus Θ g i := hZleTotal
+        _ ≤ (11 / 10 : ℝ) * D.AG g := htotalHi
+        _ ≤ (12 / 10 : ℝ) * D.AG g := by nlinarith [hApos]
+    have hZsmall : D.ZG Θ g < (8 / 10 : ℝ) * D.AG g := by
+      by_contra hz
+      apply hnot
+      exact ⟨le_of_not_gt hz, hZupper⟩
+    let L : ℝ := ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)
+    have hremoved (i : D.M.ι) :
+        D.postW (Θ g) i * D.dMinus Θ g i ≤
+          D.tiltW Θ g i + D.postW (Θ g) i * D.cut +
+            D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ := by
+      by_cases hopen : D.GateOpen Θ g i
+      · simp [Ctx.tiltW, hopen]
+        have hcutterm : 0 ≤ D.postW (Θ g) i * D.cut :=
+          mul_nonneg (hpostNonneg i) (Real.exp_nonneg _)
+        have hlast : 0 ≤ D.postW (Θ g) i *
+            (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ :=
+          div_nonneg (mul_nonneg (hpostNonneg i) (hdiffNonneg i)) hΔpos.le
+        linarith [hcutterm, hlast]
+      · by_cases hlow : D.cut ≤ D.dMinus Θ g i
+        · have hratio : ¬ ((1 - D.Δ) * D.dMinus Θ g i ≤ D.dPlus Θ g i) := by
+            intro hratio
+            exact hopen ⟨hlow, hratio⟩
+          have hratio' : D.dPlus Θ g i < (1 - D.Δ) * D.dMinus Θ g i := lt_of_not_ge hratio
+          have hgap : D.Δ * D.dMinus Θ g i ≤
+              D.dMinus Θ g i - D.dPlus Θ g i := by nlinarith [hratio', D.dMinus_nonneg Θ g i]
+          have hdiv : D.dMinus Θ g i ≤
+              (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ :=
+            (le_div_iff₀ hΔpos).2 (by nlinarith [hgap])
+          have hmul := mul_le_mul_of_nonneg_left hdiv (hpostNonneg i)
+          have hmul' : D.postW (Θ g) i * D.dMinus Θ g i ≤
+              D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ := by
+            calc
+              _ ≤ D.postW (Θ g) i *
+                  ((D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ) := hmul
+              _ = _ := by ring
+          simp [Ctx.tiltW, hopen]
+          have hcutterm : 0 ≤ D.postW (Θ g) i * D.cut :=
+            mul_nonneg (hpostNonneg i) (Real.exp_nonneg _)
+          linarith [hmul', hcutterm]
+        · have hlow' : D.dMinus Θ g i < D.cut := lt_of_not_ge hlow
+          have hmul : D.postW (Θ g) i * D.dMinus Θ g i ≤
+              D.postW (Θ g) i * D.cut :=
+            mul_le_mul_of_nonneg_left hlow'.le (hpostNonneg i)
+          simp [Ctx.tiltW, hopen]
+          have hlast : 0 ≤ D.postW (Θ g) i *
+              (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ :=
+            div_nonneg (mul_nonneg (hpostNonneg i) (hdiffNonneg i)) hΔpos.le
+          linarith [hmul, hlast]
+    have hsumRemoved :
+        (∑ i, D.postW (Θ g) i * D.dMinus Θ g i) ≤ D.ZG Θ g + D.cut + L / D.Δ := by
+      calc
+        _ ≤ ∑ i, (D.tiltW Θ g i + D.postW (Θ g) i * D.cut +
+            D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ) := by
+          apply Finset.sum_le_sum
+          intro i _
+          exact hremoved i
+        _ = D.ZG Θ g + D.cut * (∑ i, D.postW (Θ g) i) +
+            (∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) / D.Δ := by
+          simp_rw [Finset.sum_add_distrib, ← Finset.sum_mul, Finset.sum_div]
+          simp [Ctx.ZG]
+          ring
+        _ = D.ZG Θ g + D.cut + L / D.Δ := by simp [L, hpost]
+    by_contra hL
+    have hLle : L ≤ (1 / 20 : ℝ) * D.Δ * D.AG g := le_of_not_gt hL
+    have hLdiv : L / D.Δ ≤ (1 / 20 : ℝ) * D.AG g := by
+      rw [div_le_iff₀ hΔpos]
+      nlinarith [hLle]
+    have htotalBound :
+        ∑ i, D.postW (Θ g) i * D.dMinus Θ g i <
+          (9 / 10 : ℝ) * D.AG g := by
+      have hsum := hsumRemoved
+      have hcut' := hcut
+      have hZ := hZsmall
+      have hL' := hLdiv
+      linarith
+    have hbad : (D.AG g / (11 / 10 : ℝ)) < (9 / 10 : ℝ) * D.AG g :=
+      lt_of_le_of_lt htotalLo htotalBound
+    have hApos' := hApos
+    norm_num at hbad
+    nlinarith [hApos']
   sorry
 
 /-- L8.1c, union bound (08:76): three stretched-exponential tails at exponents `a, b, c` give a base-gate tail at

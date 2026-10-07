@@ -2,6 +2,9 @@ import HypercubeRamsey.S06.OddLoads
 import HypercubeRamsey.S06.Prob
 import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S06.EvenRows_q_s06_even
+import HypercubeRamsey.S06.EvenRows_q_s06_ev_b
+import HypercubeRamsey.S06.EvenRows_sol_s06_ev_b
+import HypercubeRamsey.S06.EvenRows_select_sol_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_q_s06_ev_d
 
 /-!
@@ -219,6 +222,74 @@ def EvenFacts : Prop :=
 
 end Ctx6
 
+private theorem evenTy_occ (X : Ctx6 γ p₀ K n N E G M) (v : CubeVertex n)
+    (hv : IsEvenRole v) : X.evenTy v ∈ X.occTypes := by
+  have heq : X.evenTy v = X.evenType v := by
+    simp only [Ctx6.evenTy, Ctx6.stType, ChunkLayout6.stType, Ctx6.evenType,
+      X.facts.key_eq, X.facts.sign_eq, X.facts.flippable_eq, X.facts.severity_eq]
+  rw [heq]
+  exact Finset.mem_image.mpr ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩, rfl⟩
+
+private theorem baseSupp_keys (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist)
+    (hb : X.BaseSupp H.1) (S : Finset X.Key) : X.KeysSupp H.1 S := by
+  refine ⟨hb.1, ?_, ?_⟩
+  · intro u hu
+    exact hb.2.1 u (Finset.mem_image.mpr ⟨⟨u, .interior⟩, Finset.mem_univ _, rfl⟩)
+  · intro s hs
+    exact hb.2.2 s (Finset.mem_univ _)
+
+private theorem Fz_nonneg (X : Ctx6 γ p₀ K n N E G M) (hrow : X.OddRowBounds)
+    (H : X.Hist) (hH : X.histLaw.w H ≠ 0) (C : X.Centre) (v : CubeVertex n)
+    (c : X.Loc) (z : X.Tuple) (y : OddRole6 n → Fin N) : 0 ≤ X.Fz H C v c z y := by
+  unfold Ctx6.Fz
+  split_ifs with hg
+  · simp only [one_mul]
+    exact Finset.prod_nonneg fun u hu => (hrow H _ u.1 hH u.2 (hg.2.2.1 u hu)).1 (y u)
+  · simp
+
+private theorem Fz_hits (X : Ctx6 γ p₀ K n N E G M) (hrow : X.OddRowBounds)
+    (H : X.Hist) (hH : X.histLaw.w H ≠ 0) (C : X.Centre) (v : CubeVertex n)
+    (hv : IsEvenRole v) (c : X.Loc) (z : X.Tuple) (y : OddRole6 n → Fin N)
+    (hF : X.Fz H C v c z y ≠ 0) :
+    ∀ u ∈ X.oddNbrs v, ∀ r, Hits E G (z.2 r) (y u) := by
+  have hg : X.EvenGate H (X.withTuple C (c, X.evenTy v) z) v c := by
+    by_contra h
+    simp [Ctx6.Fz, h] at hF
+  have hprod : (∏ u ∈ X.oddNbrs v,
+      X.oddRow H (X.withTuple C (c, X.evenTy v) z) u.1 (y u)) ≠ 0 := by
+    simpa [Ctx6.Fz, hg] using hF
+  intro u hu r
+  have hnonzero := (Finset.prod_ne_zero_iff.mp hprod) u hu
+  have hpair := Lane_q_s06_even.selected_pair_mem_actDesc X H
+    (X.withTuple C (c, X.evenTy v) z) v u.1 hv u.2
+    (SimpleGraph.Adj.symm (Finset.mem_filter.mp hu).2)
+  have hpair' : (c, X.evenTy v) ∈
+      X.actDesc H (X.withTuple C (c, X.evenTy v) z) X.Rlong (X.g.L.stateOf u.1) := by
+    change ((X.choice H (X.withTuple C (c, X.evenTy v) z) X.Rlong (X.g.L.stateOf v)).getD X.defaultLoc,
+      X.evenTy v) ∈ _ at hpair
+    simpa only [hg.1, Option.getD_some] using hpair
+  have hh := (hrow H _ u.1 hH u.2 (hg.2.2.1 u hu)).2.2.2.1
+    (y u) hnonzero (c, X.evenTy v) hpair' r
+  simpa [Ctx6.withTuple, Ctx6.tup] using hh
+
+private theorem even_k_pos (X : Ctx6 γ p₀ K n N E G M) (hn : 2 ≤ n) : 0 < X.k := by
+  have hnR : (1 : ℝ) < n := by exact_mod_cast hn
+  have hm : 0 < X.g.L.m := by
+    rw [X.g.m_eq]
+    exact Nat.ceil_pos.mpr (Real.rpow_pos_of_pos (by linarith) _)
+  have hmR : (1 : ℝ) ≤ X.g.L.m := by exact_mod_cast hm
+  have hJ : (1 : ℝ) ≤ (X.J : ℝ) := by
+    have hp : (1 : ℝ) ≤ (X.g.L.m : ℝ) ^ (1 / 25 : ℝ) := Real.one_le_rpow hmR (by norm_num)
+    have h : 1 ≤ J₆ X.g.L.m := by
+      unfold J₆
+      exact (Nat.le_floor_iff (by positivity)).mpr (by simpa using hp)
+    exact_mod_cast h
+  unfold Ctx6.k k₆
+  apply Nat.ceil_pos.mpr
+  have : 0 < κ₆ := by norm_num [κ₆]
+  have : 0 < (J₆ X.g.L.m : ℝ) := by change 0 < (X.J : ℝ); linarith
+  exact mul_pos (mul_pos (by norm_num [κ₆]) this) (Real.log_pos hnR)
+
 /-- L6.1m (gate, 06:779–785): on good odd outcomes every even state has a legitimate prospective choice, its
 neighbours are valid, eligibility is legal everywhere and counts are at most `2λ`. -/
 theorem L6_1m_gate (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
@@ -329,13 +400,270 @@ light mass is at least `.19`; support from the neighbouring kernels at the recom
 theorem L6_1m_density (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X =>
       X.HistSupport → X.Step2Supp → X.OddRowBounds → X.EvenDom → X.EvenDensity := by
-  sorry
+  classical
+  obtain ⟨nT, CT, hT⟩ := (L6_1c_tag γ p₀ K hadm).and (L6_1d_dom γ p₀ K hadm)
+  obtain ⟨nW, hW⟩ := Lane_q_s06_ev_b.eventually_width_exp_bound hadm.2.1
+  refine ⟨max (max nT nW) 10000, CT, ?_⟩
+  intro n N E G M X hL hhist hsupp hrow hdom H C v y hH hv hvalid
+  have hnT : nT ≤ n := le_trans (le_trans (le_max_left _ _) (le_max_left _ _)) hL.1
+  have hnW : nW ≤ n := le_trans (le_trans (le_max_right _ _) (le_max_left _ _)) hL.1
+  have hn : 10000 ≤ n := le_trans (le_max_right _ _) hL.1
+  have hsteps := hT n N E G M X ⟨hnT, hL.2⟩
+  have hstepdom := hsteps.2 hsteps.1
+  have hocc := evenTy_occ X v hv
+  have hhistory := hhist H hH
+  have htests := hhistory.2.2.2.2.1 (X.evenTy v) hocc
+  have hkeys := baseSupp_keys X H hhistory.1 (X.typeKeys (X.evenTy v))
+  have hkeys₀ := baseSupp_keys X H hhistory.1 { (X.evenTy v).key }
+  have htagdom := (hstepdom H (X.evenTy v) hocc hkeys₀ htests).1
+  have hk := even_k_pos X (by omega)
+  have hN : (0 : ℝ) < N := by exact_mod_cast (Nat.zero_lt_of_lt X.y₀.isLt)
+  have hm := hvalid.2.1
+  let β := X.evenTy v
+  let T := X.Tβ H β
+  let U : FinProb (Fin N) := FinProb.uniform Finset.univ ⟨X.y₀, Finset.mem_univ _⟩
+  have hU : ∀ a, U.w a = (N : ℝ)⁻¹ := by intro a; simp [U, FinProb.uniform]
+  have hraw (z : X.Tuple) :
+      (X.tupleLaw H β).w z ≤ T.w z.1 *
+        (Real.exp ((4 / 100 : ℝ) * n) / N) ^ X.k := by
+    change T.w z.1 * (∏ r : Fin X.k, (X.labelLaw H (reqNames6 β) z.1).w (z.2 r)) ≤ _
+    by_cases hz : T.w z.1 = 0
+    · simp [hz]
+    have hzpos : 0 < T.w z.1 := lt_of_le_of_ne (T.nonneg _) (Ne.symm hz)
+    have hΛ : 0 < M.Λ z.1 := by
+      have hh := htagdom z.1
+      have hp : 0 ≤ (n : ℝ) ^ (d₂ * β.u) := Real.rpow_nonneg (Nat.cast_nonneg _) _
+      by_contra h
+      have hΛ0 : M.Λ z.1 = 0 := le_antisymm (not_lt.mp h) (M.Λ_nonneg _)
+      simp only [hΛ0, mul_zero] at hh
+      exact (not_le_of_gt hzpos) hh
+    have hmass := (hsupp H β hocc hkeys htests z.1 hzpos).1
+    have hpr : (M.μ z.1).pr (fun a => a ∈ X.reqNbhd H (reqNames6 β)) =
+        ∑ a ∈ X.reqNbhd H (reqNames6 β), (M.μ z.1).w a := by
+      exact Lane_sol_s06_ev_b.pr_mem_set _ _
+    have hmass' : (1 / 400 : ℝ) ≤ (M.μ z.1).pr (fun a => a ∈ X.reqNbhd H (reqNames6 β)) := by
+      rw [hpr]
+      norm_num [c₁, c₀] at hmass ⊢
+      exact hmass
+    have hp : 0 < (M.μ z.1).pr (fun a => a ∈ X.reqNbhd H (reqNames6 β)) := by linarith
+    have hatom (a : Fin N) : (X.labelLaw H (reqNames6 β) z.1).w a ≤
+        Real.exp ((4 / 100 : ℝ) * n) / N := by
+      calc
+        (X.labelLaw H (reqNames6 β) z.1).w a ≤
+            (M.μ z.1).w a / (M.μ z.1).pr (fun a => a ∈ X.reqNbhd H (reqNames6 β)) :=
+          Lane_q_s06_ev_b.restrictOr6_weight_le _ _ _ _ hp
+        _ ≤ (Real.exp ((n : ℝ) ^ γ) / N) / (1 / 400 : ℝ) := by
+          exact div_le_div₀ (by positivity) (X.hWidth z.1 hΛ a) (by norm_num) hmass'
+        _ = (400 * Real.exp ((n : ℝ) ^ γ)) / N := by ring
+        _ ≤ Real.exp ((4 / 100 : ℝ) * n) / N :=
+          div_le_div_of_nonneg_right (hW n hnW) hN.le
+    apply mul_le_mul_of_nonneg_left _ (T.nonneg _)
+    calc
+      (∏ r : Fin X.k, (X.labelLaw H (reqNames6 β) z.1).w (z.2 r)) ≤
+          ∏ _r : Fin X.k, Real.exp ((4 / 100 : ℝ) * n) / N :=
+        Finset.prod_le_prod₀ (fun r _ => (X.labelLaw H (reqNames6 β) z.1).nonneg _) (fun r _ => hatom _)
+      _ = (Real.exp ((4 / 100 : ℝ) * n) / N) ^ X.k := by simp only [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+  have hFnonneg := Fz_nonneg X hrow H hH C v (X.selC H C v)
+  let P : FinProb X.Tuple :=
+    { w := fun z => (X.tupleLaw H β).w z * X.Fz H C v (X.selC H C v) z y / X.mc H C v y
+      nonneg := fun z => div_nonneg (mul_nonneg ((X.tupleLaw H β).nonneg z) (hFnonneg z y)) hm.le
+      sum_eq_one := by
+        rw [← Finset.sum_div]
+        change X.mc H C v y / X.mc H C v y = 1
+        exact div_self hm.ne' }
+  have hpost (z : X.Tuple) : P.w z ≤ Real.exp ((36 / 100 : ℝ) * X.k * n) * (X.tupleLaw H β).w z := by
+    have hF : X.Fz H C v (X.selC H C v) z y ≤
+        Real.exp ((36 / 100 : ℝ) * X.k * n) * X.mc H C v y := by
+      calc
+        X.Fz H C v (X.selC H C v) z y ≤
+            Real.exp ((34 / 100 : ℝ) * X.k * n) * X.Qref H C v y := hdom H C v z y hH hv
+        _ = Real.exp ((36 / 100 : ℝ) * X.k * n) *
+            (Real.exp (-(2 / 100 : ℝ) * X.k * n) * X.Qref H C v y) := by
+          rw [← mul_assoc, ← Real.exp_add]
+          congr 2
+          ring
+        _ ≤ Real.exp ((36 / 100 : ℝ) * X.k * n) * X.mc H C v y :=
+          mul_le_mul_of_nonneg_left hvalid.2.2 (Real.exp_pos _).le
+    change _ / X.mc H C v y ≤ _
+    apply (div_le_iff₀ hm).mpr
+    nlinarith [mul_le_mul_of_nonneg_left hF ((X.tupleLaw H β).nonneg z)]
+  have hPD (i : X.ι) (x : Fin X.k → Fin N) :
+      P.w (i, x) ≤ Real.exp ((4 / 10 : ℝ) * X.k * n) * T.w i *
+        (FinProb.pi fun _ : Fin X.k => U).w x := by
+    calc
+      P.w (i, x) ≤ Real.exp ((36 / 100 : ℝ) * X.k * n) * (X.tupleLaw H β).w (i, x) := hpost _
+      _ ≤ Real.exp ((36 / 100 : ℝ) * X.k * n) *
+          (T.w i * (Real.exp ((4 / 100 : ℝ) * n) / N) ^ X.k) :=
+        mul_le_mul_of_nonneg_left (hraw _) (Real.exp_pos _).le
+      _ = Real.exp ((4 / 10 : ℝ) * X.k * n) * T.w i *
+          (FinProb.pi fun _ : Fin X.k => U).w x := by
+        simp only [FinProb.pi, hU, Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+        have hpower : (Real.exp ((4 / 100 : ℝ) * n) / N) ^ X.k =
+            Real.exp ((X.k : ℝ) * ((4 / 100 : ℝ) * n)) * (N : ℝ)⁻¹ ^ X.k := by
+          rw [div_eq_mul_inv (Real.exp _) (N : ℝ), mul_pow, ← Real.exp_nat_mul]
+        rw [hpower]
+        have hexp : Real.exp ((36 / 100 : ℝ) * X.k * n) *
+            Real.exp ((X.k : ℝ) * ((4 / 100 : ℝ) * n)) = Real.exp ((4 / 10 : ℝ) * X.k * n) := by
+          rw [← Real.exp_add]
+          congr 1
+          ring
+        calc
+          _ = (Real.exp ((36 / 100 : ℝ) * X.k * n) * Real.exp ((X.k : ℝ) * ((4 / 100 : ℝ) * n))) *
+              T.w i * (N : ℝ)⁻¹ ^ X.k := by ring
+          _ = _ := by rw [hexp]
+  let Q := P.map Prod.snd
+  have hQD := Lane_q_s06_ev_b.map_snd_weight_bound P T (FinProb.pi fun _ : Fin X.k => U)
+    (Real.exp ((4 / 10 : ℝ) * X.k * n)) (Real.exp_pos _).le hPD
+  have hmarg (a : Fin N) : (∑ x, Q.w x * Lane_sol_s06_ev_b.empirical x a) = X.evenMarg H C v y a := by
+    rw [Lane_sol_s06_ev_b.map_snd_empirical]
+    rfl
+  have hlight := Lane_sol_s06_ev_b.light_mass hk hn U hU Q hQD
+  simp_rw [hmarg] at hlight
+  change (19 / 100 : ℝ) ≤ ∑ a ∈ Finset.univ.filter (fun a => a ∉ X.heavyLab H C v y),
+    X.evenMarg H C v y a at hlight
+  have hf (a : Fin N) : 0 ≤ X.evenMarg H C v y a := by
+    rw [← hmarg]
+    exact Finset.sum_nonneg fun x _ => mul_nonneg (Q.nonneg x) (Lane_sol_s06_ev_b.empirical_nonneg x a)
+  have hcap (a : Fin N) (ha : a ∉ X.heavyLab H C v y) :
+      X.evenMarg H C v y a ≤ Real.exp ((55 / 100 : ℝ) * n) / N := by
+    apply (le_div_iff₀ hN).mpr
+    have := not_lt.mp (by simpa [Ctx6.heavyLab] using ha)
+    nlinarith
+  let f := fun a => if a ∈ X.heavyLab H C v y then 0 else X.evenMarg H C v y a
+  have hmassEq : (∑ a, f a) =
+      ∑ a ∈ Finset.univ.filter (fun a => a ∉ X.heavyLab H C v y), X.evenMarg H C v y a := by
+    rw [Finset.sum_filter]
+    apply Finset.sum_congr rfl
+    intro a ha
+    by_cases h : a ∈ X.heavyLab H C v y <;> simp [f, h]
+  have hmass : (19 / 100 : ℝ) ≤ ∑ a, f a := by rw [hmassEq]; exact hlight
+  have hmassPos : 0 < ∑ a, f a := by linarith
+  have hrowEq (a : Fin N) : X.evenRow H C v y a = f a / ∑ a, f a := by
+    rw [Ctx6.evenRow, if_pos hvalid, ← hmassEq]
+  have hfLight (a : Fin N) : 0 ≤ f a := by
+    dsimp [f]
+    split_ifs <;> [rfl; exact hf a]
+  have hcapLight (a : Fin N) : f a ≤ Real.exp ((55 / 100 : ℝ) * n) / N := by
+    by_cases ha : a ∈ X.heavyLab H C v y
+    · simp only [f, if_pos ha]
+      positivity
+    · simpa only [f, if_neg ha] using hcap a ha
+  have hbound (a : Fin N) : X.evenRow H C v y a ≤
+      (100 / 19 : ℝ) * (Real.exp ((55 / 100 : ℝ) * n) / N) := by
+    rw [hrowEq]
+    calc
+      f a / (∑ a, f a) ≤ (Real.exp ((55 / 100 : ℝ) * n) / N) / (19 / 100 : ℝ) :=
+        div_le_div₀ (by positivity) (hcapLight a) (by norm_num) hmass
+      _ = _ := by ring
+  refine ⟨?_, ?_, ?_, ?_, hlight⟩
+  · intro a
+    rw [hrowEq]
+    exact div_nonneg (hfLight a) hmassPos.le
+  · simp_rw [hrowEq]
+    rw [← Finset.sum_div]
+    exact div_self hmassPos.ne'
+  · intro a ha u hu
+    have hmargNZ : X.evenMarg H C v y a ≠ 0 := by
+      intro hzero
+      simp [Ctx6.evenRow, hvalid, hzero] at ha
+    by_contra hhit
+    apply hmargNZ
+    unfold Ctx6.evenMarg
+    apply Finset.sum_eq_zero
+    intro z hz
+    by_cases hF : X.Fz H C v (X.selC H C v) z y = 0
+    · simp [hF]
+    have hentries := Fz_hits X hrow H hH C v hv (X.selC H C v) z y hF u hu
+    have hempty : (Finset.univ.filter fun r => z.2 r = a) = ∅ := by
+      apply Finset.filter_eq_empty_iff.mpr
+      intro r hr heq
+      apply hhit
+      simpa [heq] using hentries r
+    simp [hempty]
+  · intro a
+    have hh := mul_le_mul_of_nonneg_left (hbound a) hN.le
+    have heq : (N : ℝ) * ((100 / 19 : ℝ) * (Real.exp ((55 / 100 : ℝ) * n) / N)) =
+        (100 / 19 : ℝ) * Real.exp ((55 / 100 : ℝ) * n) := by
+      field_simp
+    rw [heq] at hh
+    nlinarith [Real.exp_pos ((55 / 100 : ℝ) * n)]
 
 /-- L6.1m (selection, 06:849–853): the forced-centre bounds of Lemma 3.8 (`height_selection_tie`,
 `height_selection_positive`) against the position-averaged presence mass. -/
 theorem L6_1m_select (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.SelectBound := by
-  sorry
+  classical
+  obtain ⟨hα0, hαp, hα1, hθ, hAlphaRange, ⟨had⟩⟩ := height_exponents6_admissible p₀ hadm.2.2.1
+  let reg : HDRegime (b₀₆ (α₆ p₀)) (b₆ (α₆ p₀)) D₀₆ :=
+    .lin (ρ₆ / 4) ⟨by norm_num [ρ₆], by norm_num [ρ₆]⟩
+  obtain ⟨c, hc, nH, hheight⟩ := height_selection_positive J₀₆ (b₀₆ (α₆ p₀)) (b₆ (α₆ p₀))
+    (σ₆ (α₆ p₀)) (ζ₆ (α₆ p₀)) (θ₆ (α₆ p₀)) (a₆ (α₆ p₀)) cd₆ Cd₆ D₀₆ had reg
+  obtain ⟨nErr, hErr⟩ := Lane_sol_s06_ev_b.eventually_height_error c hc
+  refine ⟨max (max nH nErr) 1000, 0, ?_⟩
+  intro n N E G M X hL H hH v z hv
+  have hnH : nH ≤ n := le_trans (le_trans (le_max_left _ _) (le_max_left _ _)) hL.1
+  have hnErr : nErr ≤ n := le_trans (le_trans (le_max_right _ _) (le_max_left _ _)) hL.1
+  have hn : 1000 ≤ n := le_trans (le_max_right _ _) hL.1
+  have hnR : (1000 : ℝ) ≤ n := by exact_mod_cast hn
+  have hreg : reg.ok X.hp.n X.hp.d X.hp.r := by
+    change (ρ₆ / 4) * X.code.d ≤ ⌊ρ₆ * n⌋₊ ∧ 4 * ⌊ρ₆ * n⌋₊ ≤ X.code.d
+    have hfloor : (⌊ρ₆ * n⌋₊ : ℝ) ≤ ρ₆ * n := Nat.floor_le (by dsimp [ρ₆]; positivity)
+    have hfloor' := Nat.lt_floor_add_one (ρ₆ * (n : ℝ))
+    have hdL := X.code.d_lower
+    have hdU := X.code.d_upper
+    norm_num [ρ₆, cd₆, Cd₆] at hfloor hfloor' hdL hdU ⊢
+    constructor
+    · linarith
+    · exact_mod_cast (show 4 * (⌊(1 / 100 : ℝ) * n⌋₊ : ℝ) ≤ X.code.d by linarith)
+  have hlam : 0 < X.hp.lam := by
+    change 0 < (n : ℝ) ^ J₀₆
+    exact Real.rpow_pos_of_pos (by linarith) _
+  have hsite : X.site (X.g.L.stateOf v) ∈ X.sites := by
+    apply Finset.mem_image.mpr
+    refine ⟨X.g.L.stateOf v, ?_, rfl⟩
+    exact Finset.mem_image.mpr ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩, rfl⟩
+  let Es : X.Loc → (X.Loc → Bool) → X.Data X.Loc → X.hp.EligMap := fun id P o =>
+    X.elig H ((((P, Function.update o (id, X.evenTy v) z), fun _ => false), fun _ => Equiv.refl _))
+  let B : X.Loc → X.Centre → Prop := fun id C => X.EvenGate H (X.withTuple C (id, X.evenTy v) z) v id
+  have hB : ∀ id P o A τ, B id (((P, o), A), τ) →
+      P id = true ∧ X.hp.Legal P (Es id P o)
+        (X.hp.domBall X.sites (X.site (X.g.L.stateOf v)) X.hp.Rlong) ∧
+      X.hp.selection X.sites P A (Es id P o) τ (X.site (X.g.L.stateOf v)) = some id := by
+    intro id P o A τ hg
+    refine ⟨hg.2.1, ?_, ?_⟩
+    · exact hg.2.2.2.1
+    · exact hg.1
+  have hpos : ∀ id, (((X.hp.posLawForced (some id)).prod (X.dataLaw X.Loc H)).prod X.hp.actLaw).pr
+      (fun ω => X.hp.Legal ω.1.1 (Es id ω.1.1 ω.1.2)
+        (X.hp.domBall X.sites (X.site (X.g.L.stateOf v)) X.hp.Rlong) ∧
+        0 < X.hp.height X.sites ω.1.1 ω.2 (Es id ω.1.1 ω.1.2) X.hp.Rlong
+          (X.site (X.g.L.stateOf v))) ≤ Real.exp (-(n : ℝ) ^ c) := by
+    intro id
+    exact hheight X.hp rfl rfl rfl rfl rfl hnH X.code.d_lower X.code.d_upper hreg
+      X.sites (X.site (X.g.L.stateOf v)) hsite (some id) (X.dataLaw X.Loc H) (Es id)
+  have hsum := Lane_sol_s06_ev_b.forced_selection_sum X.hp hlam X.sites
+    (X.site (X.g.L.stateOf v)) hsite (X.dataLaw X.Loc H) Es B hB
+    (Real.exp (-(n : ℝ) ^ c)) (Real.exp_pos _).le hpos
+  have hlevelBound : X.hp.H ≤ 4 * n ^ 2 := by
+    apply Lane_sol_s06_ev_b.topScale_bound (by omega)
+    · dsimp [σ₆]
+      nlinarith
+    · dsimp [ζ₆]
+      positivity
+  have herror : X.hp.lam * (X.hp.H + 1) * Real.exp (-(n : ℝ) ^ c) ≤ 1 := by
+    have hHcast : (X.hp.H : ℝ) ≤ 4 * (n : ℝ) ^ 2 := by exact_mod_cast hlevelBound
+    have hlamEq : X.hp.lam = (n : ℝ) ^ (10 : ℕ) := by norm_num [Ctx6.hp, J₀₆]
+    have hlevels : (X.hp.H : ℝ) + 1 ≤ 5 * (n : ℝ) ^ 2 := by nlinarith
+    calc
+      X.hp.lam * (X.hp.H + 1) * Real.exp (-(n : ℝ) ^ c) ≤
+          (n : ℝ) ^ (10 : ℕ) * (5 * (n : ℝ) ^ 2) * Real.exp (-(n : ℝ) ^ c) := by
+        rw [hlamEq]
+        exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hlevels (by positivity)) (Real.exp_pos _).le
+      _ = 5 * (n : ℝ) ^ (12 : ℕ) * Real.exp (-(n : ℝ) ^ c) := by ring
+      _ ≤ 1 := hErr n hnErr
+  have hsum' : ∑ id : X.Loc, (X.centreLaw H).pr (B id) ≤ 4 := by
+    exact hsum.trans (by linarith)
+  simpa only [Lane_sol_s06_ev_b.expect_indicator] using hsum'
 
 /-- L6.1m (comparison mean, 06:836–853): cancellation of the posterior denominator against the data subdensity
 (`∫ m_c (F_z dP_c / m_c) dy = dP_c ∫ F_z dy`), rows summing to one bound `∫ F_z dy` by the gate, the selection

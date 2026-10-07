@@ -1,5 +1,7 @@
 import HypercubeRamsey.S13.ResidualScales
 import HypercubeRamsey.Framework.PartC
+import HypercubeRamsey.S13.ResidualBounds_q_s13_resid
+import HypercubeRamsey.S13.ResidualBounds_q_s13_resid_grid
 
 /-!
 # Section 13.2: asymptotic bounds on residual scales
@@ -221,7 +223,11 @@ theorem clean_cluster_scale_witness (κ : CConsts) (hκ : κ.Admissible) (T : St
     ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
       RX ⊆ T.X k → RY ⊆ T.Y k → ∀ b o, IsDyadic b →
         CluScaleWitness κ T k RX RY b o → CleanClusterBins κ T k RX RY b o := by
-  sorry
+  change ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
+    RX ⊆ T.X k → RY ⊆ T.Y k → ∀ b o, IsDyadic b →
+      CluScaleWitness κ T k RX RY b o →
+        HypercubeRamsey.Lane_q_s13_resid.CleanClusterBinsAux κ T k RX RY b o
+  exact HypercubeRamsey.Lane_q_s13_resid.clean_cluster_scale_witness_aux κ hκ T hInit
 
 /-- L13.2b2 (sections/13, lines 34–50): codegree identity with red means and
 colour-independent centered correlation. -/
@@ -303,7 +309,21 @@ theorem finite_grid_cluster_bound (κ : CConsts) (hκ : κ.Admissible) (T : Stag
     ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
       RX ⊆ T.X k → RY ⊆ T.Y k → ∀ b o, IsDyadic b →
         CluScaleWitness κ T k RX RY b o → (b : ℝ) < (T.S.n k : ℝ) ^ γ := by
-  sorry
+  have hCluAux :
+      HypercubeRamsey.Lane_q_s13_resid_finite.ClusterAbsenceInputAux κ T := by
+    set_option maxHeartbeats 1000000 in
+      simpa [ClusterAbsenceInput,
+        HypercubeRamsey.Lane_q_s13_resid_finite.ClusterAbsenceInputAux] using hClu
+  have hCleanAux : ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
+      RX ⊆ T.X k → RY ⊆ T.Y k → ∀ b o, IsDyadic b →
+        CluScaleWitness κ T k RX RY b o →
+          HypercubeRamsey.Lane_q_s13_resid.CleanClusterBinsAux κ T k RX RY b o := by
+    change ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
+      RX ⊆ T.X k → RY ⊆ T.Y k → ∀ b o, IsDyadic b →
+        CluScaleWitness κ T k RX RY b o → CleanClusterBins κ T k RX RY b o at hClean
+    exact hClean
+  exact HypercubeRamsey.Lane_q_s13_resid_grid.finite_grid_cluster_bound_aux
+    κ hκ T hInit hCluAux hCleanAux hCodegree γ hγ
 
 /-- L13.2b3 (sections/13, lines 34–50): every cluster-scale witness is smaller than the
 specified positive power. -/

@@ -3,6 +3,7 @@ import HypercubeRamsey.S11.Core.Compatibility
 import HypercubeRamsey.S07.SmallGridPurity
 import HypercubeRamsey.S03.ClockSampling
 import HypercubeRamsey.S03.ScatteredMoments
+import HypercubeRamsey.S11.Core.Assignment_q_s11_odd
 
 /-!
 # Proposition 11.1: taking the assignment, and the one-shot embedding
@@ -96,7 +97,7 @@ theorem tuple_lll (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
       (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι),
       Fixed11 δ x₀ K n N E X Y κ M y₀ p → GatedTags M y₀ p P t → TupleLLL11 M y₀ p P t := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_odd.tuple_lll δ x₀ K P hP
 
 /-- P11.1d2, moments (11:373–375).  For odd roles at pairwise distance at least three, remove the at most `(n+1)³`
 tuple events touching each radius-one scope (factor `2` per role); the raw rows integrate independently, and
@@ -107,7 +108,7 @@ theorem odd_moment (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
       (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι),
       Fixed11 δ x₀ K n N E X Y κ M y₀ p → GatedTags M y₀ p P t → S07.CondProductBound →
       TupleLLL11 M y₀ p P t → OddMoment11 M y₀ p P t := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_odd.odd_moment δ x₀ K P hP
 
 /-- P11.1d2, odd loads (11:373–375).  Lemma 3.6 with near = full-cube distance at most two (fraction
 `(n+1)² 2^{1-n}`, cap `e^{.02n}`), comparison means of average at most `8(K + 1)` (typical tags) and a union over
@@ -119,7 +120,7 @@ theorem odd_loads (δ x₀ K P : ℝ) (hK : 0 ≤ K) :
         Fixed11 δ x₀ K n N E X Y κ M y₀ p → GatedTags M y₀ p P t → Typical11 M y₀ p (8 * (K + 1)) t →
         OddMoment11 M y₀ p P t →
         (tupleLaw M y₀ p P t).pr (fun W => ∃ y, (1e-8 : ℝ) < oddCol M t W y) ≤ 1 / 4 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_odd.odd_loads δ x₀ K P hK
 
 /-- P11.1d2, the odd injection (11:377–378).  Lemma 3.10 (`clock_sampling`, `B = 4`, `C_g = 2`) on the odd rows
 (probability laws by the slice facts, atoms `≤ e^{.02n}/N ≤ n^{-A}`, column sums `≤ θ₀` on a successful history),
@@ -131,7 +132,7 @@ theorem clock_rows :
         (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι)
         (W : EvenRole n → Fin (kTup n) → Fin N),
         SliceFacts M y₀ → GoodPre M y₀ p P t W → ∃ J, ClockOK M y₀ p t W J := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_odd.clock_rows
 
 /-! ## Even loads, normalization and Hall (11:380–394) -/
 

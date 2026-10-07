@@ -176,6 +176,423 @@ private theorem pr_exists_le {ι Ω : Type*} [Fintype ι] [Fintype Ω]
         _ = ∑ i ∈ insert a s, P.pr (A i) := by rw [Finset.sum_insert ha]
   simpa using haux (Finset.univ : Finset ι)
 
+private def trueCoordinatesEquiv {ι : Type*} [Fintype ι] [DecidableEq ι] :
+    (ι → Bool) ≃ Finset ι where
+  toFun f := Finset.univ.filter fun i => f i = true
+  invFun s := fun i => decide (i ∈ s)
+  left_inv f := by
+    funext i
+    cases h : f i <;> simp [h]
+  right_inv s := by
+    ext i
+    simp
+
+private theorem boolFunction_weight_card (ℓ k : ℕ) :
+    (Finset.univ.filter fun f : Fin ℓ → Bool =>
+      (trueCoordinatesEquiv f).card = k).card = Nat.choose ℓ k := by
+  classical
+  let e := trueCoordinatesEquiv (ι := Fin ℓ)
+  let A : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f => (e f).card = k
+  have himage : A.image e = Finset.univ.powersetCard k := by
+    ext s
+    constructor
+    · intro hs
+      rcases Finset.mem_image.mp hs with ⟨f, hf, rfl⟩
+      exact Finset.mem_powersetCard.mpr ⟨Finset.subset_univ _, (Finset.mem_filter.mp hf).2⟩
+    · intro hs
+      rcases Finset.mem_powersetCard.mp hs with ⟨_, hsk⟩
+      refine Finset.mem_image.mpr ⟨e.symm s, ?_, e.apply_symm_apply s⟩
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [e] using hsk⟩
+  rw [← Finset.card_image_of_injective A e.injective, himage, Finset.card_powersetCard]
+  simp
+
+private def boolWeightIndex (ℓ : ℕ) (f : Fin ℓ → Bool) : Fin (ℓ + 1) :=
+  ⟨(trueCoordinatesEquiv f).card,
+    Nat.lt_succ_of_le (by
+      simpa using Finset.card_le_univ (trueCoordinatesEquiv f))⟩
+
+private theorem boolFunction_weight_set_card (ℓ : ℕ) (T : Finset (Fin (ℓ + 1))) :
+    ((Finset.univ.filter fun f : Fin ℓ → Bool => boolWeightIndex ℓ f ∈ T).card : ℝ) =
+      ∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) := by
+  classical
+  have hcard := Finset.sum_card_fiberwise_eq_card_filter
+    (s := (Finset.univ : Finset (Fin ℓ → Bool))) (t := T) (g := boolWeightIndex ℓ)
+  have hfib (k : Fin (ℓ + 1)) :
+      (Finset.univ.filter fun f : Fin ℓ → Bool => boolWeightIndex ℓ f = k).card =
+        Nat.choose ℓ k.val := by
+    simpa [boolWeightIndex, Fin.ext_iff] using boolFunction_weight_card ℓ k.val
+  calc
+    ((Finset.univ.filter fun f : Fin ℓ → Bool => boolWeightIndex ℓ f ∈ T).card : ℝ) =
+        ((∑ k ∈ T, (Finset.univ.filter fun f : Fin ℓ → Bool =>
+          boolWeightIndex ℓ f = k).card : ℕ) : ℝ) := by exact_mod_cast hcard.symm
+    _ = ∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) := by
+      rw [Nat.cast_sum]
+      apply Finset.sum_congr rfl
+      intro k hk
+      exact_mod_cast hfib k
+
+private def blockAssignmentsEquiv {ι : Type*} {m ℓ : ℕ}
+    (e : ι × Fin ℓ ≃ Fin m) : (Fin m → Bool) ≃ (ι → Fin ℓ → Bool) where
+  toFun f i j := f (e (i, j))
+  invFun x k := x (e.symm k).1 (e.symm k).2
+  left_inv f := by
+    funext k
+    simp
+  right_inv x := by
+    funext i j
+    simp
+
+private theorem block_constraint_count {ι : Type*} [Fintype ι] {m ℓ : ℕ}
+    (e : ι × Fin ℓ ≃ Fin m) (A : ι → Finset (Fin ℓ → Bool)) :
+    Fintype.card {f : Fin m → Bool // ∀ i, (blockAssignmentsEquiv e f) i ∈ A i} =
+      ∏ i, (A i).card := by
+  classical
+  let E := blockAssignmentsEquiv e
+  let P := Fintype.piFinset A
+  let F : {f : Fin m → Bool // ∀ i, (E f) i ∈ A i} ≃ {x : ι → Fin ℓ → Bool // x ∈ P} := {
+    toFun := fun f => ⟨E f.1, Fintype.mem_piFinset.mpr f.2⟩
+    invFun := fun x => ⟨E.symm x.1, by
+      intro i
+      simpa [E] using Fintype.mem_piFinset.mp x.2 i⟩
+    left_inv := by intro f; apply Subtype.ext; simp [E]
+    right_inv := by intro x; apply Subtype.ext; simp [E]
+  }
+  calc
+    Fintype.card {f : Fin m → Bool // ∀ i, (blockAssignmentsEquiv e f) i ∈ A i} =
+        Fintype.card {x : ι → Fin ℓ → Bool // x ∈ P} := by
+          apply Fintype.card_congr F
+    _ = P.card := by exact Fintype.card_coe P
+    _ = ∏ i, (A i).card := by simp [P, Fintype.card_piFinset]
+
+private theorem block_constraint_fraction {ι : Type*} [Fintype ι] {m ℓ : ℕ}
+    (e : ι × Fin ℓ ≃ Fin m) (A : ι → Finset (Fin ℓ → Bool))
+    (hA : ∀ i, ((A i).card : ℝ) ≤ (2 / 3) * (2 : ℝ) ^ ℓ) :
+    (Fintype.card {f : Fin m → Bool // ∀ i, (blockAssignmentsEquiv e f) i ∈ A i} : ℝ) ≤
+      (2 / 3) ^ Fintype.card ι * (2 : ℝ) ^ m := by
+  classical
+  have hdim : Fintype.card ι * ℓ = m := by
+    have h := Fintype.card_congr e
+    simpa using h
+  rw [block_constraint_count]
+  rw [Nat.cast_prod]
+  calc
+    (∏ i, ((A i).card : ℝ)) ≤ ∏ i : ι, ((2 / 3 : ℝ) * (2 : ℝ) ^ ℓ) := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact Nat.cast_nonneg _
+      · intro i hi
+        exact hA i
+    _ = (2 / 3) ^ Fintype.card ι * (2 : ℝ) ^ m := by
+      calc
+        ∏ i : ι, ((2 / 3 : ℝ) * (2 : ℝ) ^ ℓ) =
+            (∏ i : ι, (2 / 3 : ℝ)) * ∏ i : ι, (2 : ℝ) ^ ℓ := Finset.prod_mul_distrib
+        _ = (2 / 3) ^ Fintype.card ι * (2 : ℝ) ^ (ℓ * Fintype.card ι) := by
+          simp only [Finset.prod_const, Finset.card_univ]
+          rw [pow_mul]
+        _ = (2 / 3) ^ Fintype.card ι * (2 : ℝ) ^ m := by
+          have hdim' : ℓ * Fintype.card ι = m := by rw [mul_comm, hdim]
+          rw [hdim']
+
+private theorem searchStep_interval {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (a b : ℕ)
+    (hab : a ≤ b) (hb : b ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    (HypercubeRamsey.S04.searchStep β γ n g v (a, b)).1 ≤
+      (HypercubeRamsey.S04.searchStep β γ n g v (a, b)).2 ∧
+    (HypercubeRamsey.S04.searchStep β γ n g v (a, b)).2 ≤
+      HypercubeRamsey.S04.gadgetPower β γ n := by
+  have hmidlo : a ≤ (a + b) / 2 := by omega
+  have hmidhi : (a + b) / 2 ≤ b := by omega
+  unfold HypercubeRamsey.S04.searchStep
+  split_ifs
+  · exact ⟨hmidlo, hmidhi.trans hb⟩
+  · exact ⟨hmidhi, hb⟩
+
+private theorem searchFold_interval {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    ∀ (L : List ℕ) (ab : ℕ × ℕ), ab.1 ≤ ab.2 →
+      ab.2 ≤ HypercubeRamsey.S04.gadgetPower β γ n →
+      (L.foldl (fun ab _ => HypercubeRamsey.S04.searchStep β γ n g v ab) ab).1 ≤
+          (L.foldl (fun ab _ => HypercubeRamsey.S04.searchStep β γ n g v ab) ab).2 ∧
+        (L.foldl (fun ab _ => HypercubeRamsey.S04.searchStep β γ n g v ab) ab).2 ≤
+          HypercubeRamsey.S04.gadgetPower β γ n := by
+  intro L
+  induction L with
+  | nil => intro ab hab hb; simpa using And.intro hab hb
+  | cons x L ih =>
+      intro ab hab hb
+      simp only [List.foldl_cons]
+      have hs := searchStep_interval g v ab.1 ab.2 hab hb
+      exact ih _ hs.1 hs.2
+
+private theorem searchLeaf_first_le_power {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    (HypercubeRamsey.S04.searchLeaf β γ n g v).1 ≤ HypercubeRamsey.S04.gadgetPower β γ n := by
+  have h := searchFold_interval g v (List.range (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n)))
+    (0, HypercubeRamsey.S04.gadgetPower β γ n) (by omega) le_rfl
+  simpa [HypercubeRamsey.S04.searchLeaf] using h.1.trans h.2
+
+private def gadgetChunkEquiv (G s ℓ : ℕ) :
+    (Fin G × Fin s) × Fin ℓ ≃ Fin (G * s * ℓ) :=
+  (Equiv.prodCongr (finProdFinEquiv : Fin G × Fin s ≃ Fin (G * s))
+    (Equiv.refl (Fin ℓ))).trans
+    (finProdFinEquiv : Fin (G * s) × Fin ℓ ≃ Fin ((G * s) * ℓ))
+
+private theorem gadgetChunkEquiv_val {G s ℓ : ℕ}
+    (g : Fin G) (j : Fin s) (r : Fin ℓ) :
+    (gadgetChunkEquiv G s ℓ ((g, j), r)).val = (g.val * s + j.val) * ℓ + r.val := by
+  simp [gadgetChunkEquiv, finProdFinEquiv]
+  ring
+
+private def boolComplementEquiv (ℓ : ℕ) : (Fin ℓ → Bool) ≃ (Fin ℓ → Bool) where
+  toFun f := fun i => !f i
+  invFun f := fun i => !f i
+  left_inv f := by funext i; cases h : f i <;> simp [h]
+  right_inv f := by funext i; cases h : f i <;> simp [h]
+
+private theorem boolWeight_complement (ℓ : ℕ) (f : Fin ℓ → Bool) :
+    (trueCoordinatesEquiv ((boolComplementEquiv ℓ) f)).card =
+      ℓ - (trueCoordinatesEquiv f).card := by
+  classical
+  have hset : trueCoordinatesEquiv ((boolComplementEquiv ℓ) f) =
+      (Finset.univ : Finset (Fin ℓ)) \ trueCoordinatesEquiv f := by
+    ext i
+    simp [boolComplementEquiv, trueCoordinatesEquiv]
+  rw [hset, Finset.card_sdiff_of_subset (Finset.subset_univ _)]
+  simp
+
+private theorem weight_interval_card_le (ℓ lo hi W : ℕ) (hhi : hi ≤ lo + W) :
+    (Finset.univ.filter fun k : Fin (ℓ + 1) => lo < k.val ∧ k.val < hi).card ≤ W + 2 := by
+  classical
+  let I := Finset.univ.filter fun k : Fin (ℓ + 1) => lo < k.val ∧ k.val < hi
+  let f : {k : Fin (ℓ + 1) // k ∈ I} → Fin (W + 2) := fun k =>
+    ⟨k.1.val - lo, by
+      have hk := (Finset.mem_filter.mp k.2).2
+      omega⟩
+  have hinj : Function.Injective f := by
+    intro a b h
+    apply Subtype.ext
+    apply Fin.ext
+    have hv : a.1.val - lo = b.1.val - lo := congrArg Fin.val h
+    have ha : lo ≤ a.1.val := (Finset.mem_filter.mp a.2).2.1.le
+    have hb : lo ≤ b.1.val := (Finset.mem_filter.mp b.2).2.1.le
+    exact (tsub_left_inj ha hb).mp hv
+  have hc := Fintype.card_le_of_injective f hinj
+  calc
+    I.card = Fintype.card {k : Fin (ℓ + 1) // k ∈ I} := (Fintype.card_coe I).symm
+    _ ≤ Fintype.card (Fin (W + 2)) := hc
+    _ = W + 2 := Fintype.card_fin _
+
+private theorem centralWeightMass_le_sixth (S ℓ : ℕ) (hS : 100 ≤ S)
+    (hℓ : ℓ = (S - 1) ^ 6) :
+    ∑ k ∈ (Finset.univ.filter fun k : Fin (ℓ + 1) =>
+      ℓ / 2 - S ^ 2 / 2 < k.val ∧
+        k.val < (ℓ / 2 - S ^ 2 / 2) + S ^ 2),
+      (Nat.choose ℓ k.val : ℝ) / (2 : ℝ) ^ ℓ ≤ 1 / 6 := by
+  classical
+  let s := S - 1
+  let lo := ℓ / 2 - S ^ 2 / 2
+  let hi := lo + S ^ 2
+  let T : Finset (Fin (ℓ + 1)) := Finset.univ.filter fun k => lo < k.val ∧ k.val < hi
+  have hsNat : 99 ≤ s := by dsimp [s]; omega
+  have hsReal : 99 ≤ (s : ℝ) := by exact_mod_cast hsNat
+  have hellNat : 0 < ℓ := by rw [hℓ]; positivity
+  have hellReal : (ℓ : ℝ) = (s : ℝ) ^ 6 := by
+    dsimp [s]
+    rw [hℓ]
+    norm_cast
+  have hsqrt : Real.sqrt (ℓ : ℝ) = (s : ℝ) ^ 3 := by
+    rw [hellReal, show (s : ℝ) ^ 6 = ((s : ℝ) ^ 3) ^ 2 by ring,
+      Real.sqrt_sq_eq_abs, abs_of_nonneg (by positivity)]
+  have hTcard : T.card ≤ S ^ 2 + 2 := by
+    apply weight_interval_card_le ℓ lo hi (S ^ 2)
+    rfl
+  have hEllPos : (0 : ℝ) < ℓ := by exact_mod_cast hellNat
+  have hAtom (k : Fin (ℓ + 1)) :
+      (Nat.choose ℓ k.val : ℝ) / (2 : ℝ) ^ ℓ ≤ 2 / Real.sqrt (ℓ : ℝ) :=
+    HypercubeRamsey.centralBinomialUpper ℓ hellNat k.val (Nat.le_of_lt_succ k.isLt)
+  have hmass :
+      (∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) / (2 : ℝ) ^ ℓ) ≤
+        (T.card : ℝ) * (2 / Real.sqrt (ℓ : ℝ)) := by
+    calc
+      (∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) / (2 : ℝ) ^ ℓ) ≤
+          ∑ _k ∈ T, 2 / Real.sqrt (ℓ : ℝ) := by
+            apply Finset.sum_le_sum
+            intro k hk
+            exact hAtom k
+      _ = (T.card : ℝ) * (2 / Real.sqrt (ℓ : ℝ)) := by simp
+  have hSleNat : S ≤ 2 * (S - 1) := by omega
+  have hSle : (S : ℝ) ≤ 2 * (s : ℝ) := by
+    dsimp [s]
+    exact_mod_cast hSleNat
+  have hsq : (S : ℝ) ^ 2 ≤ (2 * (s : ℝ)) ^ 2 :=
+    (sq_le_sq₀ (by positivity) (by positivity)).2 hSle
+  have hsSqOne : 1 ≤ (s : ℝ) ^ 2 := by nlinarith [sq_nonneg ((s : ℝ) - 1)]
+  have hSsq : (S : ℝ) ^ 2 + 2 ≤ 6 * (s : ℝ) ^ 2 := by nlinarith [hsq, hsSqOne]
+  have hs72 : 72 ≤ (s : ℝ) := by linarith
+  have hprod := mul_le_mul_of_nonneg_right hs72 (sq_nonneg (s : ℝ))
+  have hcoef : 12 * ((S : ℝ) ^ 2 + 2) ≤ (s : ℝ) ^ 3 := by nlinarith [hSsq, hprod]
+  have hsmall : ((S ^ 2 + 2 : ℕ) : ℝ) * (2 / (s : ℝ) ^ 3) ≤ 1 / 6 := by
+    have heq : ((S ^ 2 + 2 : ℕ) : ℝ) * (2 / (s : ℝ) ^ 3) =
+        2 * ((S : ℝ) ^ 2 + 2) / (s : ℝ) ^ 3 := by push_cast; ring
+    rw [heq]
+    apply (div_le_iff₀ (by positivity : (0 : ℝ) < (s : ℝ) ^ 3)).2
+    nlinarith [hcoef]
+  calc
+    (∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) / (2 : ℝ) ^ ℓ) ≤
+        (T.card : ℝ) * (2 / Real.sqrt (ℓ : ℝ)) := hmass
+    _ ≤ ((S ^ 2 + 2 : ℕ) : ℝ) * (2 / Real.sqrt (ℓ : ℝ)) := by
+      gcongr
+    _ = ((S ^ 2 + 2 : ℕ) : ℝ) * (2 / (s : ℝ) ^ 3) := by rw [hsqrt]
+    _ ≤ 1 / 6 := hsmall
+
+private theorem clipped_endpoint_counts (S ℓ : ℕ) (hS : 100 ≤ S)
+    (hSeven : Even S) (hℓ : ℓ = (S - 1) ^ 6) :
+    ((Finset.univ.filter fun f : Fin ℓ → Bool =>
+      (trueCoordinatesEquiv f).card ≤ ℓ / 2 - S ^ 2 / 2).card : ℝ) ≥
+        (1 / 3) * (2 : ℝ) ^ ℓ ∧
+    ((Finset.univ.filter fun f : Fin ℓ → Bool =>
+      ℓ / 2 - S ^ 2 / 2 + S ^ 2 ≤ (trueCoordinatesEquiv f).card).card : ℝ) ≥
+        (1 / 3) * (2 : ℝ) ^ ℓ := by
+  classical
+  let w : (Fin ℓ → Bool) → ℕ := fun f => (trueCoordinatesEquiv f).card
+  let lo := ℓ / 2 - S ^ 2 / 2
+  let hi := lo + S ^ 2
+  let low : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f => w f ≤ lo
+  let mid : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f => lo < w f ∧ w f < hi
+  let high : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f => hi ≤ w f
+  let boundary : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f => w f = lo + 1
+  let T : Finset (Fin (ℓ + 1)) := Finset.univ.filter fun k => lo < k.val ∧ k.val < hi
+  rcases hSeven with ⟨t, ht⟩
+  have hSsq : S ^ 2 = 2 * (S ^ 2 / 2) := by
+    have h : S ^ 2 = 4 * t ^ 2 := by rw [ht]; ring
+    rw [h]
+    omega
+  have hs : 99 ≤ S - 1 := by omega
+  have hS_le_2s : S ≤ 2 * (S - 1) := by omega
+  have hsSq : 2 ≤ (S - 1) ^ 2 := by nlinarith [hS]
+  have h2s_le_s3 : 2 * (S - 1) ≤ (S - 1) ^ 3 := by
+    calc
+      2 * (S - 1) ≤ (S - 1) ^ 2 * (S - 1) := Nat.mul_le_mul_right _ hsSq
+      _ = (S - 1) ^ 3 := by ring
+  have hS_le_s3 : S ≤ (S - 1) ^ 3 := hS_le_2s.trans h2s_le_s3
+  have hSsqLeEll : S ^ 2 ≤ ℓ := by
+    calc
+      S ^ 2 ≤ ((S - 1) ^ 3) ^ 2 := Nat.pow_le_pow_left hS_le_s3 2
+      _ = (S - 1) ^ 6 := by rw [← Nat.pow_mul]
+      _ = ℓ := hℓ.symm
+  have hClipHalf : S ^ 2 / 2 ≤ ℓ / 2 := Nat.div_le_div_right hSsqLeEll
+  have hmod : ℓ % 2 < 2 := Nat.mod_lt _ (by decide)
+  have hdiv : ℓ % 2 + 2 * (ℓ / 2) = ℓ := Nat.mod_add_div _ _
+  have hcomplLo : lo ≤ ℓ - hi := by dsimp [lo, hi]; omega
+  have hcomplHi : ℓ - hi ≤ lo + 1 := by dsimp [lo, hi]; omega
+  have hgap : lo + 1 < hi := by
+    have hSsq' : 2 ≤ S ^ 2 := by nlinarith [hS]
+    dsimp [hi]
+    omega
+  have hmidCardReal : (mid.card : ℝ) = ∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) := by
+    simpa [mid, T, w, lo, hi, boolWeightIndex, Fin.ext_iff] using
+      boolFunction_weight_set_card ℓ T
+  have hmidMass : (mid.card : ℝ) / (2 : ℝ) ^ ℓ ≤ 1 / 6 := by
+    calc
+      (mid.card : ℝ) / (2 : ℝ) ^ ℓ =
+          (∑ k ∈ T, (Nat.choose ℓ k.val : ℝ)) / (2 : ℝ) ^ ℓ := by rw [hmidCardReal]
+      _ = ∑ k ∈ T, (Nat.choose ℓ k.val : ℝ) / (2 : ℝ) ^ ℓ := by rw [Finset.sum_div]
+      _ ≤ 1 / 6 := by simpa [T, lo, hi] using centralWeightMass_le_sixth S ℓ hS hℓ
+  have hmidSmall : (mid.card : ℝ) ≤ (1 / 6) * (2 : ℝ) ^ ℓ :=
+    (div_le_iff₀ (by positivity : (0 : ℝ) < (2 : ℝ) ^ ℓ)).mp hmidMass
+  have htotal : low.card + mid.card + high.card = 2 ^ ℓ := by
+    have hlow := Finset.card_filter_add_card_filter_not
+      (s := (Finset.univ : Finset (Fin ℓ → Bool))) (p := fun f => w f ≤ lo)
+    have hmid := Finset.card_filter_add_card_filter_not
+      (s := Finset.univ.filter fun f : Fin ℓ → Bool => lo < w f)
+      (p := fun f => w f < hi)
+    have hcard : (Finset.univ : Finset (Fin ℓ → Bool)).card = 2 ^ ℓ := by simp
+    have hlow' : low.card + (Finset.univ.filter fun f : Fin ℓ → Bool => lo < w f).card =
+        (Finset.univ : Finset (Fin ℓ → Bool)).card := by
+      simpa [low, w, not_le] using hlow
+    have hotherHigh :
+        (Finset.univ.filter fun f : Fin ℓ → Bool => lo < w f).filter
+          (fun f => ¬ w f < hi) = high := by
+      ext f
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and, not_lt, high]
+      constructor
+      · intro h
+        exact h.2
+      · intro h
+        exact ⟨lt_of_lt_of_le (by omega : lo < hi) h, h⟩
+    have htemp : mid.card +
+        ((Finset.univ.filter fun f : Fin ℓ → Bool => lo < w f).filter
+          (fun f => ¬ w f < hi)).card =
+        (Finset.univ.filter fun f : Fin ℓ → Bool => lo < w f).card := by
+      simpa [mid, w, Finset.filter_filter] using hmid
+    have hmid' : mid.card + high.card =
+        (Finset.univ.filter fun f : Fin ℓ → Bool => lo < w f).card := by
+      rw [← hotherHigh]
+      exact htemp
+    omega
+  have hlowToHigh : low.card ≤ high.card := by
+    let f : {x : Fin ℓ → Bool // x ∈ low} → {x : Fin ℓ → Bool // x ∈ high} := fun x =>
+      ⟨boolComplementEquiv ℓ x.1, by
+        have hx := (Finset.mem_filter.mp x.2).2
+        simp only [high, Finset.mem_filter, Finset.mem_univ, true_and]
+        dsimp [w]
+        rw [boolWeight_complement]
+        dsimp [w] at hx
+        omega⟩
+    have hinj : Function.Injective f := by
+      intro a b h
+      apply Subtype.ext
+      exact (boolComplementEquiv ℓ).injective (congrArg Subtype.val h)
+    calc
+      low.card = Fintype.card {x : Fin ℓ → Bool // x ∈ low} := (Fintype.card_coe low).symm
+      _ ≤ Fintype.card {x : Fin ℓ → Bool // x ∈ high} := Fintype.card_le_of_injective f hinj
+      _ = high.card := Fintype.card_coe high
+  have hhighToLowBoundary : high.card ≤ low.card + boundary.card := by
+    let f : {x : Fin ℓ → Bool // x ∈ high} →
+        {x : Fin ℓ → Bool // x ∈ low ∪ boundary} := fun x =>
+      ⟨boolComplementEquiv ℓ x.1, by
+        have hx := (Finset.mem_filter.mp x.2).2
+        simp only [Finset.mem_union, low, boundary, Finset.mem_filter,
+          Finset.mem_univ, true_and]
+        dsimp [w]
+        rw [boolWeight_complement]
+        dsimp [w] at hx
+        omega⟩
+    have hinj : Function.Injective f := by
+      intro a b h
+      apply Subtype.ext
+      exact (boolComplementEquiv ℓ).injective (congrArg Subtype.val h)
+    calc
+      high.card = Fintype.card {x : Fin ℓ → Bool // x ∈ high} := (Fintype.card_coe high).symm
+      _ ≤ Fintype.card {x : Fin ℓ → Bool // x ∈ low ∪ boundary} := Fintype.card_le_of_injective f hinj
+      _ = (low ∪ boundary).card := Fintype.card_coe _
+      _ ≤ low.card + boundary.card := Finset.card_union_le _ _
+  have hboundarySub : boundary ⊆ mid := by
+    intro f hf
+    have hf' := (Finset.mem_filter.mp hf).2
+    simp only [mid, Finset.mem_filter, Finset.mem_univ, true_and]
+    dsimp [w] at hf'
+    dsimp [w]
+    constructor
+    · rw [hf']
+      omega
+    · rw [hf']
+      exact hgap
+  have hhighSmall : high.card ≤ low.card + mid.card := by
+    have hbd := Finset.card_le_card hboundarySub
+    omega
+  have htotalReal : (low.card : ℝ) + (mid.card : ℝ) + (high.card : ℝ) =
+      (2 : ℝ) ^ ℓ := by exact_mod_cast htotal
+  have hhighSmallReal : (high.card : ℝ) ≤ (low.card : ℝ) + (mid.card : ℝ) := by
+    exact_mod_cast hhighSmall
+  have hlowLarge : (1 / 3 : ℝ) * (2 : ℝ) ^ ℓ ≤ (low.card : ℝ) := by
+    nlinarith [htotalReal, hhighSmallReal, hmidSmall]
+  have hhighLarge : (1 / 3 : ℝ) * (2 : ℝ) ^ ℓ ≤ (high.card : ℝ) :=
+    hlowLarge.trans (by exact_mod_cast hlowToHigh)
+  constructor
+  · simpa [low, w, lo] using hlowLarge
+  · simpa [high, w, lo, hi] using hhighLarge
+
 set_option maxHeartbeats 0 in
 theorem tag_exists_bound (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
     (hγ : γ < 1) (hK : 0 < K) :

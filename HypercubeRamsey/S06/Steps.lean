@@ -1,5 +1,8 @@
 import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S06.Steps_q_s06_steps1
+import HypercubeRamsey.S06.Steps_raw_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_window_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_cap_sol_s06_steps1
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -114,32 +117,46 @@ theorem L6_1c_tag (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 predictive-denominator calculation (L3.7) with `d₀, δ₁ ≪ d₁`. -/
 theorem L6_1c_cap (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step1CapBound := by
-  refine ⟨1, 1, ?_⟩
+  let gap := d₁ - δ₁ - (Dstar₆ + 602 * d₀)
+  have hgap : 0 < gap := by norm_num [gap, d₁, δ₁, Dstar₆, d₀]
+  have htend : Tendsto (fun n : ℕ => (n : ℝ)^gap) atTop atTop :=
+    (tendsto_rpow_atTop hgap).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htend.eventually (eventually_ge_atTop ((20 : ℝ)^603)))
+  refine ⟨max 1 n₀, 1, ?_⟩
   intro n N E G M X hlarge hTagDom
-  have hn1 : 1 ≤ n := hlarge.1
-  intro h hh
-  -- On raw support, the bounded parent-prior atom and the incoming-tag likelihood
-  -- factors control the posterior numerator. The remaining denominator tail is the
-  -- predictive test from Lemma 3.7.
-  have hpriorCap : ∀ y, 0 ≤ X.initLaw.w y := fun y => X.initLaw.nonneg y
-  have hpriorCapOnSupport : ∀ b, X.baseLaw.w b ≠ 0 → ∀ y,
-      (N : ℝ) * (if h.2 = .interior then (X.candLaw b.1).w y else X.initLaw.w y) ≤
-        20 * (n : ℝ) ^ Dstar₆ := by
-    intro b hb y
-    by_cases hflag : h.2 = .interior
-    · rcases Lane_q_s06_steps1.baseLaw_local_support6 X b hb with ⟨hinit, _, _⟩
-      have hmass : 0 < X.par.piPrime.pr (fun z => z ∈ X.par.S₀) := by
-        linarith [X.par.S₀_mass]
-      have hS₀ := restrictOr6_supp hmass (ne_of_gt hinit)
-      have hcap := Lane_q_s06_steps1.candLaw_atom_cap6 X b.1 y hS₀.1
-      simpa [hflag] using hcap
-    · have hcap := Lane_q_s06_steps1.initLaw_atom_cap6 X y
-      have hpow : 0 ≤ (n : ℝ) ^ Dstar₆ := Real.rpow_nonneg (Nat.cast_nonneg n) _
-      have hcap' : (N : ℝ) * X.initLaw.w y ≤ 20 * (n : ℝ) ^ Dstar₆ := by
-        nlinarith
-      simpa [hflag] using hcap'
-  have hkeyCard : (X.C h).card ≤ 602 := X.g.flips.key_neighborhood_card h
-  sorry
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hnp : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+  have hbig : (20 : ℝ)^603 ≤ (n : ℝ)^gap :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
+  have hbudget : Lane_sol_s06_steps1.capBudget n ≤ (n : ℝ)^(d₁-δ₁) := by
+    calc
+      _ = (20 : ℝ)^603 * (n : ℝ)^(Dstar₆+602*d₀) := rfl
+      _ ≤ (n : ℝ)^gap * (n : ℝ)^(Dstar₆+602*d₀) :=
+        mul_le_mul_of_nonneg_right hbig (Real.rpow_nonneg hnp.le _)
+      _ = (n : ℝ)^(d₁-δ₁) := by
+        rw [← Real.rpow_add hnp]
+        congr 1
+        dsimp [gap]
+        ring
+  intro h _hh
+  have hraw : X.baseLaw.pr (fun b => ¬ X.Step1Cap b h) ≤
+      Lane_sol_s06_steps1.capBudget n / (n : ℝ)^d₁ := by
+    simpa only [Ctx6.Step1Cap, not_forall, not_le] using
+      Lane_sol_s06_steps1.posterior_cap_bound X h hnR hTagDom ((n : ℝ)^d₁)
+        (Real.rpow_pos_of_pos hnp _)
+  calc
+    X.baseLaw.pr (fun b => ¬ X.Step1Cap b h) ≤
+        Lane_sol_s06_steps1.capBudget n / (n : ℝ)^d₁ := hraw
+    _ ≤ (n : ℝ)^(d₁-δ₁) / (n : ℝ)^d₁ :=
+      div_le_div_of_nonneg_right hbudget (Real.rpow_nonneg hnp.le _)
+    _ = (n : ℝ)^(-δ₁) := by
+      rw [← Real.rpow_sub hnp]
+      congr 1
+      ring
+    _ ≤ (n : ℝ)^(-(δ₁ / 2)) :=
+      Real.rpow_le_rpow_of_exponent_le hnR (by norm_num [δ₁])
 
 /-- L6.1c (deletion, 06:173–181): the incoming tag has likelihood `≤ n^{d₀} Λ(i)` at every supported parent
 value; its predictive density is `< n^{-δ₁}` with probability `≤ n^{-δ₁}`; Bayes off that event. -/
@@ -217,8 +234,9 @@ theorem L6_1c_del (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     rcases constants6_facts with ⟨_, _, _, _, _, hδ1, _, _⟩
     exact hδ1
   have htail : X.baseLaw.pr (fun b => ¬ predGood b) ≤ (n : ℝ) ^ (-δ₁) := by
-    -- This is the raw predictive-denominator tail estimate for the local base experiment.
-    sorry
+    simpa only [predGood, not_le, Lane_sol_s06_steps1.posteriorPred] using
+      Lane_sol_s06_steps1.posterior_alarm_bound X h s hs ((n : ℝ) ^ (-δ₁))
+        (Real.rpow_nonneg (Nat.cast_nonneg n) _)
   calc
     X.baseLaw.pr (fun b => ¬ X.Step1Del b h s) ≤ X.baseLaw.pr (fun b => ¬ predGood b) := hrawAlarm
     _ ≤ (n : ℝ) ^ (-δ₁) := htail
@@ -259,16 +277,18 @@ end Ctx6
 /-- L6.1d (failure, 06:201–211). -/
 theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Bound := by
-  refine ⟨1, 1, ?_⟩
+  have hδ : 0 < δ₂ / 2 := by norm_num [δ₂]
+  have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ (δ₂ / 2)) atTop atTop :=
+    (tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htend.eventually (eventually_ge_atTop 1206))
+  refine ⟨max 1 n₀, 1, ?_⟩
   intro n N E G M X hlarge
-  have hn1 : 1 ≤ n := hlarge.1
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hbig : 1206 ≤ (n : ℝ) ^ (δ₂ / 2) :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
   intro β hβ
-  have hfailureShape : ∀ H : X.Hist, X.Step2Fail H β →
-      X.tagMass H β β.obs < X.step2Thr β ∨
-        ∃ ℓ ∈ β.obs, X.tagMass H β β.obs <
-          X.step2Thr β * X.tagMass H β (β.obs.erase ℓ) := by
-    intro H hfail
-    exact Lane_q_s06_steps1.notStep2Tests_cases6 X H β hn1 hfail.2
   have hobsCard := occType_obs_card_le X β hβ
   have huPos : 1 ≤ β.u := by
     cases hmode : β.mode <;> simp [Type6.u, hmode]
@@ -276,9 +296,14 @@ theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     have hcardR : (β.obs.card : ℝ) ≤ 602 * (β.u : ℝ) := by exact_mod_cast hobsCard
     have huR : 1 ≤ (β.u : ℝ) := by exact_mod_cast huPos
     linarith
-  -- The mass events have the required conditional bounds, but the raw law still needs to be
-  -- factored through the base tag at `β.key` and the hidden coordinates in `β.obs`.
-  sorry
+  calc
+    X.rawHist.pr (fun H => X.Step2Fail H β) ≤
+        ((β.obs.card : ℝ) + 1) * X.step2Thr β :=
+      Lane_sol_s06_steps1.step2_raw_bound X β hn1
+    _ ≤ (603 * (β.u : ℝ)) * X.step2Thr β :=
+      mul_le_mul_of_nonneg_right hobsFactor (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+    _ ≤ (n : ℝ) ^ (-(δ₂ * β.u / 2)) :=
+      Lane_sol_s06_steps1.step2_prefactor hn1R hbig β.u huPos
 
 /-- L6.1d (domination, 06:212–220): the absolute ratio is `≤ n^{d₀ + d₁|S| + δ₂u}`, the deleted ratio
 `≤ n^{d₁ + δ₂u}`, both below `n^{d₂u}`. -/

@@ -200,6 +200,17 @@ theorem family_candidate (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
   rcases List.mem_filter.mp hfilter with ⟨_, hdec⟩
   exact (of_decide_eq_true hdec).1
 
+theorem family_badList (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
+    (t : D.Tags) (c : D.CellT) {L : D.LList c.1} (hL : L ∈ D.family Θ P t c) :
+    D.BadList Θ t c L := by
+  have hsrc := greedy_mem_source (D.listIds c.1)
+    ((D.listOrder c.1).filter fun L => decide (D.Cand P c L ∧ D.BadList Θ t c L)) hL
+  have hfilter : L ∈ (D.listOrder c.1).filter
+      (fun L => decide (D.Cand P c L ∧ D.BadList Θ t c L)) := by
+    simpa [Ctx.family] using hsrc
+  rcases List.mem_filter.mp hfilter with ⟨_, hdec⟩
+  exact (of_decide_eq_true hdec).2
+
 private noncomputable def greedyIdUnion {α β : Type*} (ids : α → Finset β) (acc : List α) : Finset β :=
   acc.foldr (fun a s => ids a ∪ s) ∅
 

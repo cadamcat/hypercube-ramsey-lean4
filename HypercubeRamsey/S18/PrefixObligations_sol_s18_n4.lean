@@ -1,6 +1,6 @@
 import HypercubeRamsey.S18.PrefixBudget_sol_s18_n4
 import HypercubeRamsey.S18.PrefixClosure_sol_s18_n4
-import HypercubeRamsey.S18.ReplayScope_sol_s18_3a_perm
+import HypercubeRamsey.S18.PoolComparison_sol_s18_3a_perm
 
 namespace HypercubeRamsey.Lane_sol_s18_n4
 open Classical Filter
@@ -53,7 +53,7 @@ theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible) (T : S
           if ∀ C ∈ X.criticalCells, D.fresh.typical C (x.1 C) then
             forcedReplayRisk D X.criticalCells (occurrencePattern D W) F x else 0) ≤
               2 * Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2] with k hn
+  filter_upwards [Lane_sol_s18_3a_perm.pinnedReplay_pool_comparison_eventually hκ T] with k hpool
   intro PT hPT D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
   dsimp only
   intro W hW
@@ -67,9 +67,16 @@ theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible) (T : S
     apply Lane_sol_s18_3a_perm.replayComparison_of_poolComparison D pin f
     have hlocal := Lane_sol_s18_3a_perm.replayPoolTest_local D hD hTransition F hkind hvalid
       (pin.map (fun p => p.1)) (occurrencePattern D W)
-    -- Remaining: the pin-uniform patch-wise permutation-to-iid comparison
-    -- on this deterministic region, and its total cost bound at most two.
-    sorry
+    apply hpool D hD F pin
+    · intro pools
+      apply Finset.sum_nonneg
+      intro tapes _
+      apply mul_nonneg ((tapeLaw D.fresh D.encoding.Ts).nonneg tapes)
+      dsimp only [f]
+      split_ifs
+      · exact Lane_q_s17_res1.finLaw_pr_nonneg _ _
+      · exact le_rfl
+    · exact hlocal
   exact hcomparison.trans (mul_le_mul_of_nonneg_left
     (Lane_sol_s18_3a_perm.iidPinnedReplayBound D hD hReplay c hTransfer F hkind hvalid pin
       (occurrencePattern D W)) (by norm_num))

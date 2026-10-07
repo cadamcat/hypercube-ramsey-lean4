@@ -293,6 +293,38 @@ private theorem condCoreMean_fiber_formula9 {P : Params9} {n N : ℕ} {M : TagMi
     (fun ω => clippedFrac9 S E G ω v b) (sameCore9 I v ω₀) hA hpos
   simpa [condCoreMean9, rawLaw9, s] using hformula
 
+private theorem raw_anchor_hit_probability9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ids : Finset I.ID) (y : Fin N) :
+    (rawLaw9 S I).pr (fun ω => ∀ c ∈ ids, Hits E G (anc9 ω c) y) =
+      ∏ i : I.ID ⊕ OddSites9 n,
+        (inputLaw9 S I i).pr (fun x =>
+          match i with
+          | Sum.inl c => if c ∈ ids then Hits E G x y else True
+          | Sum.inr _ => True) := by
+  classical
+  let C : ∀ i : I.ID ⊕ OddSites9 n, Val9 I N i → Prop
+    | Sum.inl c, x => if c ∈ ids then Hits E G x y else True
+    | Sum.inr _, _ => True
+  have hevent :
+      (fun ω : Outcome9 I N => ∀ c ∈ ids, Hits E G (anc9 ω c) y) =
+        fun ω => ∀ i, C i (ω i) := by
+    funext ω
+    apply propext
+    constructor
+    · intro h i
+      cases i with
+      | inl c =>
+          by_cases hc : c ∈ ids
+          · simpa [C, hc, anc9] using h c hc
+          · simp [C, hc]
+      | inr b => simp [C]
+    · intro h c hc
+      have h' := h (Sum.inl c)
+      simpa [C, hc, anc9] using h'
+  rw [hevent, rawLaw9]
+  exact FinProb.pi_pr_forall (inputLaw9 S I) C
+
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)
     (t : Fin 3) : List I.ID :=

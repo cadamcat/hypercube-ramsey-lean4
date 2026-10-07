@@ -12,6 +12,7 @@ namespace HypercubeRamsey.S08.Lane_q_s08_load
 
 open Classical
 open Filter
+open OAI.HypercubeRamsey
 open scoped BigOperators
 
 private theorem pr_bind_eq {α β : Type*} [Fintype α] [Fintype β]
@@ -1223,6 +1224,334 @@ private theorem bcomp_touch_cost {η₀ γ β p K cH : ℝ} {h : ℕ}
     have hcostFin : ((1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card)⁻¹ ≤ (2 : ℝ) ^ m :=
       hcost2.trans htwo
     simpa [T, bcompTouchedEvents, bcompScopeUnion] using hcostFin
+
+private theorem selected_level_eq {p : HDParams} (Sites : p.Sites) (P A : p.Loc → Bool)
+    (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hlegal : ∀ j, p.LegalAt P E v j)
+    (hsel : p.selection Sites P A E τ v = some ℓ) :
+    p.height Sites P A E p.Rlong v = ℓ.2.val := by
+  classical
+  have hH : p.height Sites P A E p.Rlong v < p.H := by
+    by_contra hh
+    simp [HDParams.selection, HDParams.selectionAt, hh] at hsel
+  let j : Fin (p.H + 1) := ⟨p.height Sites P A E p.Rlong v, by omega⟩
+  have hsel' := hsel
+  simp [HDParams.selection, HDParams.selectionAt, hH, j] at hsel'
+  rcases hsel' with ⟨_, ⟨hne, hchosen⟩⟩
+  let active : Finset p.Loc := (E v j).filter (fun z => A z = true)
+  let priorities := active.image (p.priority τ (v, j))
+  have hneP : priorities.Nonempty := by
+    rcases hne with ⟨z, hz⟩
+    exact ⟨p.priority τ (v, j) z, Finset.mem_image.mpr ⟨z, hz, rfl⟩⟩
+  let q := priorities.min' hneP
+  have hmem : ∃ z, z ∈ active ∧ p.priority τ (v, j) z = q :=
+    Finset.mem_image.mp (Finset.min'_mem priorities hneP)
+  have hchosen' : Classical.choose hmem = ℓ := by
+    simpa [active, priorities, q, j] using hchosen
+  rcases Classical.choose_spec hmem with ⟨ha, _⟩
+  rw [hchosen'] at ha
+  have hE : ℓ ∈ E v j := (Finset.mem_filter.mp ha).1
+  have hlevel := (hlegal j).1 ℓ hE
+  have hlevelVal := congrArg Fin.val hlevel.2.1
+  simpa [j] using hlevelVal.symm
+
+private theorem selected_level_of_local_legal {p : HDParams} (Sites : p.Sites)
+    (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hsite : v ∈ Sites)
+    (hlegal : p.Legal P E (p.domBall Sites v p.Rlong))
+    (hsel : p.selection Sites P A E τ v = some ℓ) :
+    p.height Sites P A E p.Rlong v = ℓ.2.val := by
+  have hvdom : v ∈ p.domBall Sites v p.Rlong := by
+    simp [HDParams.domBall, hsite]
+  apply selected_level_eq Sites P A E τ v ℓ
+  · intro j
+    exact hlegal v hvdom j
+  · exact hsel
+
+private theorem selected_pos_height_of_local_legal {p : HDParams} (Sites : p.Sites)
+    (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hsite : v ∈ Sites)
+    (hlegal : p.Legal P E (p.domBall Sites v p.Rlong))
+    (hsel : p.selection Sites P A E τ v = some ℓ) (hℓ : 0 < ℓ.2.val) :
+    0 < p.height Sites P A E p.Rlong v := by
+  rw [selected_level_of_local_legal Sites P A E τ v ℓ hsite hlegal hsel]
+  exact hℓ
+
+private theorem selected_zero_height_of_local_legal {p : HDParams} (Sites : p.Sites)
+    (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hsite : v ∈ Sites)
+    (hlegal : p.Legal P E (p.domBall Sites v p.Rlong))
+    (hsel : p.selection Sites P A E τ v = some ℓ) (hℓ : ℓ.2.val = 0) :
+    p.height Sites P A E p.Rlong v = 0 := by
+  rw [selected_level_of_local_legal Sites P A E τ v ℓ hsite hlegal hsel]
+  exact hℓ
+
+private theorem bernoulli_forced_expect {α : Type*} [Fintype α] [DecidableEq α]
+    (q : ℝ) (a : α) (f : (α → Bool) → ℝ) :
+    (FinProb.pi (fun _ : α => FinProb.bernoulli q)).expect
+        (fun P => if P a then f P else 0) =
+      (max 0 (min q 1)) *
+        (FinProb.pi (fun z : α => if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q)).expect f := by
+  classical
+  let q' : ℝ := max 0 (min q 1)
+  have hrest (P : α → Bool) :
+      (∏ z ∈ Finset.univ.erase a, (FinProb.bernoulli q).w (P z)) =
+        ∏ z ∈ Finset.univ.erase a,
+          (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z) := by
+    apply Finset.prod_congr rfl
+    intro z hz
+    have hza : z ≠ a := (Finset.mem_erase.mp hz).1
+    simp [hza]
+  have hweight (P : α → Bool) :
+      (∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then (1 : ℝ) else 0) =
+        q' * ∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z) := by
+    by_cases ha : P a
+    · have hleft := Finset.mul_prod_erase (Finset.univ : Finset α)
+        (fun z => (FinProb.bernoulli q).w (P z)) (Finset.mem_univ a)
+      have hright := Finset.mul_prod_erase (Finset.univ : Finset α)
+        (fun z => (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z))
+        (Finset.mem_univ a)
+      rw [← hleft, ← hright, hrest P]
+      simp [ha, q', FinProb.bernoulli]
+    · have hleft := Finset.mul_prod_erase (Finset.univ : Finset α)
+        (fun z => (FinProb.bernoulli q).w (P z)) (Finset.mem_univ a)
+      have hright := Finset.mul_prod_erase (Finset.univ : Finset α)
+        (fun z => (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z))
+        (Finset.mem_univ a)
+      rw [← hleft, ← hright]
+      simp [ha, FinProb.bernoulli]
+  unfold FinProb.expect FinProb.pi
+  calc
+    (∑ P, (∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then f P else 0)) =
+        ∑ P, (q' * ∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
+          apply Finset.sum_congr rfl
+          intro P _
+          calc
+            (∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then f P else 0) =
+                ((∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then (1 : ℝ) else 0)) * f P := by
+                  by_cases ha : P a <;> simp [ha] <;> ring
+            _ = (q' * ∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
+                  rw [hweight P]
+            _ = _ := by ring
+    _ = q' * ∑ P, (∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro P _
+          ring
+
+private theorem prod_expect {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α → β → ℝ) :
+    (FinProb.prod P Q).expect (fun ab => f ab.1 ab.2) =
+      P.expect (fun a => Q.expect (f a)) := by
+  classical
+  unfold FinProb.expect FinProb.prod
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a _
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b _
+  ring
+
+private noncomputable def weightedLaw {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (w : Ω → ℝ) (hw : ∀ ω, 0 ≤ w ω)
+    (m : ℝ) (hm : 0 < m) (hmEq : P.expect w = m) : FinProb Ω where
+  w ω := P.w ω * w ω / m
+  nonneg ω := div_nonneg (mul_nonneg (P.nonneg ω) (hw ω)) hm.le
+  sum_eq_one := by
+    rw [← Finset.sum_div]
+    have hsum : (∑ ω, P.w ω * w ω) = m := by
+      simpa [FinProb.expect] using hmEq
+    rw [hsum]
+    exact div_self hm.ne'
+
+private theorem weightedLaw_expect {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (w : Ω → ℝ) (hw : ∀ ω, 0 ≤ w ω)
+    (m : ℝ) (hm : 0 < m) (hmEq : P.expect w = m) (f : Ω → ℝ) :
+    P.expect (fun ω => w ω * f ω) =
+      m * (weightedLaw P w hw m hm hmEq).expect f := by
+  classical
+  unfold FinProb.expect weightedLaw
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro ω _
+  field_simp [hm.ne']
+
+private theorem tilt_anchor_mass {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N)
+    (hbase : D.BaseGates Θ g) (hΔ : D.Δ ≤ 1 / 4) :
+    (D.tilt Θ g).expect (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x) ≤
+      D.Bcomp Θ g x / 4 := by
+  classical
+  have hAG : 0 < D.AG g := by unfold Ctx.AG; positivity
+  have hZlow : (4 / 5 : ℝ) * D.AG g ≤ D.ZG Θ g := by
+    have hh := hbase.2.1.1
+    nlinarith [hh]
+  have hZ : 0 < D.ZG Θ g := lt_of_lt_of_le (mul_pos (by norm_num) hAG) hZlow
+  have hInvZ : (D.ZG Θ g)⁻¹ ≤ ((4 / 5 : ℝ) * D.AG g)⁻¹ :=
+    (inv_le_inv₀ hZ (mul_pos (by norm_num) hAG)).mpr hZlow
+  have hDelta : 0 ≤ 1 - D.Δ := by linarith
+  have hDeltaLow : (3 / 4 : ℝ) ≤ 1 - D.Δ := by linarith
+  have hCrossTerm : ∀ i : D.M.ι,
+      (D.tilt Θ g).w i * ((D.N : ℝ) * (D.anchorU Θ g i).w x) ≤
+        (5 / (3 * D.AG g)) * (D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) *
+          (if D.crossHit Θ g x then 1 else 0) := by
+    intro i
+    have hpost : 0 ≤ D.postW (Θ g) i := D.postW_nonneg _ _
+    have hminus : 0 ≤ D.dMinus Θ g i := D.dMinus_nonneg _ _ _
+    have htiltLaw : (D.tilt Θ g).w i = D.tiltW Θ g i / D.ZG Θ g := by
+      unfold Ctx.tilt
+      change (if (∑ j, D.tiltW Θ g j) = 0 then D.tagLaw.w i else
+        D.tiltW Θ g i / (∑ j, D.tiltW Θ g j)) = _
+      have htotalPos : 0 < ∑ j, D.tiltW Θ g j := by simpa [Ctx.ZG] using hZ
+      simp [Ctx.ZG, ne_of_gt htotalPos]
+    by_cases hwi : D.tiltW Θ g i = 0
+    · have hS : (D.tilt Θ g).w i = 0 := by rw [htiltLaw, hwi]; simp
+      rw [hS]
+      have hR : 0 ≤ (5 / (3 * D.AG g)) *
+          (D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) *
+            (if D.crossHit Θ g x then 1 else 0) := by
+        apply mul_nonneg
+        · apply mul_nonneg
+          · exact div_nonneg (by norm_num) (by positivity)
+          · exact mul_nonneg hpost (mul_nonneg (by positivity) ((D.M.μ i).nonneg x))
+        · exact ind_nonneg _
+      simpa using hR
+    · have hwiPos : 0 < D.tiltW Θ g i := lt_of_le_of_ne (D.tiltW_nonneg Θ g i) (Ne.symm hwi)
+      have hopen : D.GateOpen Θ g i := by
+        by_contra hnot
+        unfold Ctx.tiltW at hwiPos
+        simp [hnot] at hwiPos
+      have hcut : 0 < D.cut := by exact Real.exp_pos _
+      have hminusPos : 0 < D.dMinus Θ g i := lt_of_lt_of_le hcut hopen.1
+      have hplusLower : (3 / 4 : ℝ) * D.dMinus Θ g i ≤ D.dPlus Θ g i := by
+        calc
+          (3 / 4 : ℝ) * D.dMinus Θ g i ≤ (1 - D.Δ) * D.dMinus Θ g i :=
+            mul_le_mul_of_nonneg_right hDeltaLow hminus
+          _ ≤ D.dPlus Θ g i := hopen.2
+      have hplusPos : 0 < D.dPlus Θ g i :=
+        lt_of_lt_of_le (mul_pos (by norm_num) hminusPos) hplusLower
+      have hsumIte : (∑ y, if D.ownHit Θ g y then (D.M.μ i).w y else 0) =
+          D.dPlus Θ g i := by
+        unfold Ctx.dPlus
+        apply Finset.sum_congr rfl
+        intro y _
+        by_cases hy : D.ownHit Θ g y <;> simp [hy]
+      have htotalPosIte : 0 < ∑ y,
+          if D.ownHit Θ g y then (D.M.μ i).w y else 0 := by
+        simpa [hsumIte] using hplusPos
+      have hUformula : (D.anchorU Θ g i).w x =
+          ((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) / D.dPlus Θ g i := by
+        unfold Ctx.anchorU
+        change (if (∑ y, (D.M.μ i).w y * (if D.ownHit Θ g y then 1 else 0)) = 0 then
+          (D.M.μ i).w x else
+          ((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) /
+          (∑ y, (D.M.μ i).w y * (if D.ownHit Θ g y then 1 else 0))) = _
+        simp [Ctx.dPlus, ne_of_gt htotalPosIte]
+      have hUbound : (D.anchorU Θ g i).w x ≤
+          ((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) /
+            ((3 / 4 : ℝ) * D.dMinus Θ g i) := by
+        rw [hUformula]
+        apply div_le_div_of_nonneg_left
+        · exact mul_nonneg ((D.M.μ i).nonneg x) (ind_nonneg _)
+        · exact mul_pos (by norm_num) hminusPos
+        · exact hplusLower
+      have htiltBound : (D.tilt Θ g).w i ≤
+          (D.postW (Θ g) i * D.dMinus Θ g i) / ((4 / 5 : ℝ) * D.AG g) := by
+        rw [htiltLaw]
+        have hnum : D.tiltW Θ g i ≤ D.postW (Θ g) i * D.dMinus Θ g i := by
+          unfold Ctx.tiltW
+          split_ifs with hg <;> simp [hpost, hminus]
+        have hnum' := mul_le_mul_of_nonneg_right hnum (inv_nonneg.mpr hZ.le)
+        have hden' := mul_le_mul_of_nonneg_left hInvZ
+          (mul_nonneg hpost hminus)
+        calc
+          D.tiltW Θ g i * (D.ZG Θ g)⁻¹ ≤
+              (D.postW (Θ g) i * D.dMinus Θ g i) * (D.ZG Θ g)⁻¹ := hnum'
+          _ ≤ (D.postW (Θ g) i * D.dMinus Θ g i) * ((4 / 5 : ℝ) * D.AG g)⁻¹ := hden'
+          _ = _ := by simp only [div_eq_mul_inv]
+      have hterm0 := mul_le_mul_of_nonneg_right htiltBound
+        (mul_nonneg (by positivity : 0 ≤ (D.N : ℝ)) ((D.anchorU Θ g i).nonneg x))
+      have hterm1 := mul_le_mul_of_nonneg_left
+        (mul_le_mul_of_nonneg_left hUbound (by positivity : 0 ≤ (D.N : ℝ)))
+        (by positivity : 0 ≤ (D.postW (Θ g) i * D.dMinus Θ g i) /
+          ((4 / 5 : ℝ) * D.AG g))
+      have hterm : (D.tilt Θ g).w i * ((D.N : ℝ) * (D.anchorU Θ g i).w x) ≤
+          ((D.postW (Θ g) i * D.dMinus Θ g i) / ((4 / 5 : ℝ) * D.AG g)) *
+            ((D.N : ℝ) * (((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) /
+              ((3 / 4 : ℝ) * D.dMinus Θ g i))) := hterm0.trans hterm1
+      have hcancel :
+          ((D.postW (Θ g) i * D.dMinus Θ g i) / ((4 / 5 : ℝ) * D.AG g)) *
+            ((D.N : ℝ) * (((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) /
+              ((3 / 4 : ℝ) * D.dMinus Θ g i))) =
+          (5 / (3 * D.AG g)) *
+            (D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) *
+              (if D.ownHit Θ g x then 1 else 0) := by
+        field_simp [ne_of_gt hAG, ne_of_gt hminusPos]
+      rw [hcancel] at hterm
+      have hhit : (if D.ownHit Θ g x then (1 : ℝ) else 0) ≤
+          if D.crossHit Θ g x then 1 else 0 := by
+        by_cases hx : D.ownHit Θ g x
+        · have hcross : D.crossHit Θ g x := hx.1
+          simp [hx, hcross]
+        · simpa [hx] using ind_nonneg (D.crossHit Θ g x)
+      have hcoef : 0 ≤ (5 / (3 * D.AG g)) *
+          (D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) := by
+        apply mul_nonneg
+        · exact div_nonneg (by norm_num) (by positivity)
+        · exact mul_nonneg hpost (mul_nonneg (by positivity) ((D.M.μ i).nonneg x))
+      exact hterm.trans (mul_le_mul_of_nonneg_left hhit hcoef)
+  have hsum : (∑ i, (D.tilt Θ g).w i * ((D.N : ℝ) * (D.anchorU Θ g i).w x)) ≤
+      (5 / (3 * D.AG g)) * (if D.crossHit Θ g x then 1 else 0) *
+        ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+    calc
+      _ ≤ ∑ i, (5 / (3 * D.AG g)) *
+          (D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) *
+            (if D.crossHit Θ g x then 1 else 0) :=
+        Finset.sum_le_sum fun i _ => hCrossTerm i
+      _ = _ := by rw [Finset.mul_sum]; apply Finset.sum_congr rfl; intro i _; ring
+  have hsumNonneg : 0 ≤ ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+    apply Finset.sum_nonneg
+    intro i _
+    exact mul_nonneg (D.postW_nonneg _ _) (mul_nonneg (by positivity) ((D.M.μ i).nonneg x))
+  have hratio : 5 / (3 * D.AG g) ≤ 2 * (D.AG g)⁻¹ := by
+    have hden : 0 < 3 * D.AG g := by positivity
+    rw [div_le_iff₀ hden]
+    field_simp [ne_of_gt hAG]
+    norm_num
+  have hB : D.Bcomp Θ g x =
+      8 * (D.AG g)⁻¹ * (if D.crossHit Θ g x then 1 else 0) *
+        ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+    simp [Ctx.Bcomp, hbase]
+  have hbound : (D.tilt Θ g).expect (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x) ≤
+      (8 * (D.AG g)⁻¹ * (if D.crossHit Θ g x then 1 else 0) *
+        ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) / 4 := by
+    have hfactor : 0 ≤ (if D.crossHit Θ g x then 1 else 0) *
+        ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) :=
+      by
+        by_cases hx : D.crossHit Θ g x <;> simp [hx, hsumNonneg]
+    unfold FinProb.expect
+    calc
+      (∑ i, (D.tilt Θ g).w i * ((D.N : ℝ) * (D.anchorU Θ g i).w x)) ≤
+          (5 / (3 * D.AG g)) * (if D.crossHit Θ g x then 1 else 0) *
+            ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := hsum
+      _ ≤ 2 * (D.AG g)⁻¹ * (if D.crossHit Θ g x then 1 else 0) *
+            ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+          calc
+            _ = (5 / (3 * D.AG g)) *
+                ((if D.crossHit Θ g x then 1 else 0) *
+                  ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) := by ring
+            _ ≤ (2 * (D.AG g)⁻¹) *
+                ((if D.crossHit Θ g x then 1 else 0) *
+                  ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) :=
+              mul_le_mul_of_nonneg_right hratio hfactor
+            _ = _ := by ring
+      _ = _ := by ring
+  calc
+    (D.tilt Θ g).expect (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x) ≤
+        (8 * (D.AG g)⁻¹ * (if D.crossHit Θ g x then 1 else 0) *
+          ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) / 4 := hbound
+    _ = D.Bcomp Θ g x / 4 := by rw [hB]
 
 theorem bcomp_tail (η₀ γ β p K : ℝ) (h : ℕ) (cH : ℝ) (hcH : 0 < cH)
     (hη₀ : 0 < η₀) (hβτ : β < tau8 η₀ / 4) (hK : 0 < K) :

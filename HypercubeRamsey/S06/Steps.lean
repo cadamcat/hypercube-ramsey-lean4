@@ -19,6 +19,7 @@ from the predicates of earlier steps (stated as hypotheses, so that the section 
 namespace HypercubeRamsey
 namespace S06
 
+open Lane_q_s06_steps1
 open OAI.HypercubeRamsey
 open Classical
 open Filter

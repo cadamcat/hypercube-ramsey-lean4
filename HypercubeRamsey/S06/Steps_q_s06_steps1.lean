@@ -8,6 +8,12 @@ open OAI.HypercubeRamsey
 open Classical
 open scoped BigOperators
 
+namespace Lane_q_s06_steps1
+
+open OAI.HypercubeRamsey
+open Classical
+open scoped BigOperators
+
 def matchesPrimaryName6 {W : Type*} {m : ℕ} (β : Type6 W m) : VarName6 W m → Prop
   | .par p => p = primaryName6 β.key
   | .hid ℓ => primaryName6 ℓ.1 = primaryName6 β.key
@@ -612,12 +618,6 @@ theorem occObs_key_mem_C {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → 
       rw [hevenKey]
       simp [Ctx6.C, keyNeighborhood6, keyAdjacent6]
     · simp [highObservations6, hsev] at hℓ
-
-namespace Lane_q_s06_steps1
-
-open OAI.HypercubeRamsey
-open Classical
-open scoped BigOperators
 
 def oppositeKeyFlag6 : KeyFlag6 → KeyFlag6
   | .interior => .boundary

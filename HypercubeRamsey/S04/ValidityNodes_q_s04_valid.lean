@@ -687,6 +687,27 @@ private theorem pr_Hit_eq_rowDeg {N : ℕ} (E : Fin N → Fin N → Prop) (G : C
 
 private def finToList {α : Type*} {k : ℕ} (x : Fin k → α) : List α := List.ofFn x
 
+private def tupleLabels {k N m : ℕ} (W : Fin m → Fin k → Fin N) : List (Fin N) :=
+  (List.ofFn fun i : Fin m => finToList (W i)).flatten
+
+private theorem tupleLabels_length {k N m : ℕ} (W : Fin m → Fin k → Fin N) :
+    (tupleLabels W).length = m * k := by
+  simp [tupleLabels, finToList, List.length_flatten, List.sum_ofFn]
+
+private theorem tupleLabels_cons {k N m : ℕ} (a : Fin k → Fin N)
+    (W : Fin m → Fin k → Fin N) :
+    tupleLabels (Fin.cons a W) = finToList a ++ tupleLabels W := by
+  simp [tupleLabels, finToList]
+
+private noncomputable def OuterFirstBad {N m k : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (L : ℝ) (P : Law N) (W : Fin m → Fin k → Fin N) : Prop :=
+  ∃ i : Fin m, GoodPath E G L P (tupleLabels (prefixVals W i)) ∧
+    ∃ j : Fin k,
+      GoodPath E G L P (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j)) ∧
+        rowDeg E G (W i j)
+          (residualAfter E G P
+            (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j))) < Real.exp (-L)
+
 private theorem FirstBad_finToList_iff {N k : ℕ} (E : Fin N → Fin N → Prop)
     (G : Colour) (L : ℝ) (P : Law N) (x : Fin k → Fin N) :
     FirstBad E G L P (finToList x) ↔
@@ -767,6 +788,87 @@ private theorem FirstBad_finToList_iff {N k : ℕ} (E : Fin N → Fin N → Prop
             rcases hj with ⟨⟨hq, hgoodTail⟩, hlow⟩
             right
             exact ⟨hq, ⟨j, ⟨hgoodTail, hlow⟩⟩⟩
+
+private theorem OuterFirstBad_cons_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (L : ℝ) (P : Law N) (a : Fin k → Fin N)
+    (W : Fin m → Fin k → Fin N) :
+    OuterFirstBad E G L P (Fin.cons a W) ↔
+      FirstBad E G L P (finToList a) ∨
+        (GoodPath E G L P (finToList a) ∧
+          OuterFirstBad E G L (residualAfter E G P (finToList a)) W) := by
+  constructor
+  · rintro ⟨i, hprefix, j, hcombined, hlow⟩
+    cases i using Fin.cases with
+    | zero =>
+        left
+        have hPrefixZero : tupleLabels
+            (prefixVals (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) 0) = [] := by
+          simp [tupleLabels, prefixVals, finToList]
+        have hCurrentZero : (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) 0 = a := by simp
+        rw [hPrefixZero] at hcombined hlow
+        simp only [List.nil_append] at hcombined hlow
+        have hGood : GoodPath E G L P (finToList (prefixVals a j)) := by
+          simpa [hCurrentZero] using hcombined
+        have hLow : rowDeg E G (a j)
+            (residualAfter E G P (finToList (prefixVals a j))) < Real.exp (-L) := by
+          simpa [hCurrentZero] using hlow
+        exact (FirstBad_finToList_iff E G L P a).2 ⟨j, hGood, hLow⟩
+    | succ i =>
+        right
+        have hPrefixEq : tupleLabels
+            (prefixVals (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ) =
+            finToList a ++ tupleLabels (prefixVals W i) := by
+          rw [prefixVals_cons_succ, tupleLabels_cons]
+        have hCurrent : (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ = W i := by simp
+        have hCombinedEq :
+            tupleLabels (prefixVals (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ) ++
+                finToList (prefixVals ((Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ) j) =
+              finToList a ++
+                (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j)) := by
+          rw [hPrefixEq, hCurrent]
+          simp [List.append_assoc]
+        rw [hPrefixEq] at hprefix
+        have hPrefixParts := (GoodPath_append E G L P (finToList a)
+          (tupleLabels (prefixVals W i))).1 hprefix
+        rw [hCombinedEq] at hcombined
+        have hCombinedParts := (GoodPath_append E G L P (finToList a)
+          (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j))).1 hcombined
+        have hLow' := hlow
+        rw [hCombinedEq, residualAfter_append] at hLow'
+        have hLow : rowDeg E G ((W i) j)
+            (residualAfter E G (residualAfter E G P (finToList a))
+              (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j))) <
+              Real.exp (-L) := by simpa using hLow'
+        exact ⟨hPrefixParts.1, ⟨i, hPrefixParts.2,
+          ⟨j, hCombinedParts.2, hLow⟩⟩⟩
+  · rintro (hfirst | ⟨hfirst, ⟨i, hprefix, ⟨j, hcombined, hlow⟩⟩⟩)
+    · obtain ⟨j, hGood, hLow⟩ := (FirstBad_finToList_iff E G L P a).1 hfirst
+      refine ⟨0, ?_, j, ?_, ?_⟩
+      · simp [GoodPath, tupleLabels]
+      · simpa [tupleLabels, prefixVals] using hGood
+      · simpa [tupleLabels, prefixVals] using hLow
+    · have hPrefixEq : tupleLabels
+          (prefixVals (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ) =
+          finToList a ++ tupleLabels (prefixVals W i) := by
+        rw [prefixVals_cons_succ, tupleLabels_cons]
+      have hCurrent : (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ = W i := by simp
+      have hCombinedEq :
+          tupleLabels (prefixVals (Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ) ++
+              finToList (prefixVals ((Fin.cons a W : Fin (m + 1) → Fin k → Fin N) i.succ) j) =
+            finToList a ++
+              (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j)) := by
+        rw [hPrefixEq, hCurrent]
+        simp [List.append_assoc]
+      refine ⟨i.succ, ?_, j, ?_, ?_⟩
+      · rw [hPrefixEq]
+        exact (GoodPath_append E G L P (finToList a) (tupleLabels (prefixVals W i))).2
+          ⟨hfirst, hprefix⟩
+      · rw [hCombinedEq]
+        exact (GoodPath_append E G L P (finToList a)
+          (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j))).2
+          ⟨hfirst, hcombined⟩
+      · rw [hCombinedEq, hCurrent, residualAfter_append]
+        exact hlow
 
 private theorem FirstBad_append {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (L : ℝ) (P : Law N) (xs ys : List (Fin N)) :
@@ -928,13 +1030,6 @@ private theorem pr_HitsList_lower {N : ℕ} (E : Fin N → Fin N → Prop) (G : 
         _ = P.pr (fun y => Hits E G x y ∧ HitsList E G xs y) := hprob.symm
         _ = P.pr (HitsList E G (x :: xs)) := by rw [← hlist]
 
-private def tupleLabels {k N m : ℕ} (W : Fin m → Fin k → Fin N) : List (Fin N) :=
-  (List.ofFn fun i : Fin m => finToList (W i)).flatten
-
-private theorem tupleLabels_length {k N m : ℕ} (W : Fin m → Fin k → Fin N) :
-    (tupleLabels W).length = m * k := by
-  simp [tupleLabels, finToList, List.length_flatten, List.sum_ofFn]
-
 private theorem HitsList_tupleLabels_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
     (G : Colour) (W : Fin m → Fin k → Fin N) (y : Fin N) :
     HitsList E G (tupleLabels W) y ↔ ∀ i j, Hits E G (W i j) y := by
@@ -1057,15 +1152,7 @@ private theorem tupleArray_firstBad_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
         (2 * (n : ℝ) ^ γ)) :
     (FinProb.pi (fun i : Fin m =>
       FinProb.pi (fun _ : Fin (tupLen β γ n) => maskLaw (xm (e i).1)))).pr
-      (fun W => ∃ i, GoodPath E G (capL β γ n) (maskLaw (ym u))
-          (tupleLabels (prefixVals W i)) ∧
-        ∃ j : Fin (tupLen β γ n),
-        GoodPath E G (capL β γ n) (maskLaw (ym u))
-          (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j)) ∧
-        rowDeg E G ((W i) j)
-          (residualAfter E G (maskLaw (ym u))
-            (tupleLabels (prefixVals W i) ++ finToList (prefixVals (W i) j))) <
-          Real.exp (-capL β γ n)) ≤
+      (OuterFirstBad E G (capL β γ n) (maskLaw (ym u))) ≤
       (m : ℝ) * (tupLen β γ n : ℝ) *
         Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) := by
   classical
@@ -1075,8 +1162,8 @@ private theorem tupleArray_firstBad_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
       (Fin i.val → (Fin (tupLen β γ n) → Fin N)) →
       (Fin (tupLen β γ n) → Fin N) → Prop :=
     fun i q W =>
+      GoodPath E G (capL β γ n) (maskLaw (ym u)) (tupleLabels q) ∧
       ∃ j : Fin (tupLen β γ n),
-        GoodPath E G (capL β γ n) (maskLaw (ym u)) (tupleLabels q) ∧
         GoodPath E G (capL β γ n) (maskLaw (ym u))
           (tupleLabels q ++ finToList (prefixVals W j)) ∧
         rowDeg E G (W j) (residualAfter E G (maskLaw (ym u))
@@ -1100,10 +1187,17 @@ private theorem tupleArray_firstBad_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
     have h := tuple_entry_bad_prob M (tag ck.2) (xm ck) (maskLaw (ym u))
       hEntry hsupp base gate hWidth'
     simpa [P, bad, p, ck, base, gate] using h
-  simpa [P, bad, mul_assoc, mul_comm, mul_left_comm] using
-    (pi_pr_exists_bad_le m P bad
-      ((tupLen β γ n : ℝ) *
-        Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4))) hstep)
+  have hEvent : (fun W => ∃ i, bad i (prefixVals W i) (W i)) =
+      OuterFirstBad E G (capL β γ n) (maskLaw (ym u)) := by
+    funext W
+    simp [bad, OuterFirstBad]
+  have hprob := pi_pr_exists_bad_le m P bad
+    ((tupLen β γ n : ℝ) * Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4))) hstep
+  calc
+    (FinProb.pi P).pr (OuterFirstBad E G (capL β γ n) (maskLaw (ym u))) =
+      (FinProb.pi P).pr (fun W => ∃ i, bad i (prefixVals W i) (W i)) := by
+        rw [← hEvent]
+    _ ≤ _ := by simpa [P, mul_assoc, mul_comm, mul_left_comm] using hprob
 
 set_option maxHeartbeats 1000000 in
 private theorem tupleLaw_firstBad_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
@@ -1120,33 +1214,13 @@ private theorem tupleLaw_firstBad_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
       Law.WidthLE (residualAfter E G (maskLaw (ym u)) (tupleLabels q ++ xs))
         (2 * (n : ℝ) ^ γ)) :
     (tupleLaw M tag xm).pr (fun W =>
-      ∃ i : Fin m,
-        GoodPath E G (capL β γ n) (maskLaw (ym u))
-          (tupleLabels (prefixVals (fun i => W (e i).1) i)) ∧
-        ∃ j : Fin (tupLen β γ n),
-        GoodPath E G (capL β γ n) (maskLaw (ym u))
-          (tupleLabels (prefixVals (fun i => W (e i).1) i) ++
-            finToList (prefixVals (W (e i).1) j)) ∧
-        rowDeg E G ((W (e i).1) j)
-          (residualAfter E G (maskLaw (ym u))
-            (tupleLabels (prefixVals (fun i => W (e i).1) i) ++
-              finToList (prefixVals (W (e i).1) j))) <
-          Real.exp (-capL β γ n)) ≤
+      OuterFirstBad E G (capL β γ n) (maskLaw (ym u)) (fun i => W (e i).1)) ≤
       (m : ℝ) * (tupLen β γ n : ℝ) *
         Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) := by
   let Ppair : (Loc β γ n × Key β γ n) → FinProb (Fin (tupLen β γ n) → Fin N) :=
     fun ck => FinProb.pi (fun _ : Fin (tupLen β γ n) => maskLaw (xm ck))
-  let SeqBad : (Fin m →
-      Fin (tupLen β γ n) → Fin N) → Prop := fun V =>
-    ∃ i : Fin m,
-      GoodPath E G (capL β γ n) (maskLaw (ym u)) (tupleLabels (prefixVals V i)) ∧
-      ∃ j : Fin (tupLen β γ n),
-      GoodPath E G (capL β γ n) (maskLaw (ym u))
-        (tupleLabels (prefixVals V i) ++ finToList (prefixVals (V i) j)) ∧
-      rowDeg E G ((V i) j)
-        (residualAfter E G (maskLaw (ym u))
-          (tupleLabels (prefixVals V i) ++ finToList (prefixVals (V i) j))) <
-        Real.exp (-capL β γ n)
+  let SeqBad : (Fin m → Fin (tupLen β γ n) → Fin N) → Prop :=
+    OuterFirstBad E G (capL β γ n) (maskLaw (ym u))
   let A : (Loc β γ n × Key β γ n → Fin (tupLen β γ n) → Fin N) → Prop :=
     fun W => SeqBad (fun i => W (e i).1)
   have hA : ∀ W W', (∀ ck ∈ s, W ck = W' ck) → A W = A W' := by

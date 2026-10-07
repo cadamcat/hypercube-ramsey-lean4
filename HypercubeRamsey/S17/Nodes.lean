@@ -2,6 +2,8 @@ import HypercubeRamsey.S17.Needs
 import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S17.Nodes_sol_s17_pool
 import HypercubeRamsey.S17.Nodes_q_s17_res1
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_experiment
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_mass
 
 set_option maxHeartbeats 1000000
 

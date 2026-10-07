@@ -673,6 +673,62 @@ private theorem expect_sub_const9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
           rw [← Finset.sum_mul, P.sum_eq_one]
           ring
 
+private theorem expect_abs_diff_le_pr9 {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (bad : Ω → Prop) (f g : Ω → ℝ) (ε : ℝ)
+    (hpoint : ∀ ω, |f ω - g ω| ≤ if bad ω then 1 else 0)
+    (hbad : P.pr bad ≤ ε) :
+    |P.expect f - P.expect g| ≤ ε := by
+  classical
+  have hsub : P.expect (fun ω => f ω - g ω) = P.expect f - P.expect g := by
+    unfold FinProb.expect
+    calc
+      (∑ ω, P.w ω * (f ω - g ω)) =
+          ∑ ω, (P.w ω * f ω - P.w ω * g ω) := by
+            apply Finset.sum_congr rfl
+            intro ω _
+            ring
+      _ = (∑ ω, P.w ω * f ω) - ∑ ω, P.w ω * g ω := by
+            rw [Finset.sum_sub_distrib]
+  have habs : |P.expect (fun ω => f ω - g ω)| ≤
+      P.expect (fun ω => |f ω - g ω|) := by
+    calc
+      |P.expect (fun ω => f ω - g ω)| ≤
+          ∑ ω, |P.w ω * (f ω - g ω)| := by
+            simpa [FinProb.expect] using Finset.abs_sum_le_sum_abs
+              (fun ω => P.w ω * (f ω - g ω)) Finset.univ
+      _ = P.expect (fun ω => |f ω - g ω|) := by
+            unfold FinProb.expect
+            apply Finset.sum_congr rfl
+            intro ω hω
+            rw [abs_mul, abs_of_nonneg (P.nonneg ω)]
+  have hmono := expect_mono9 P (fun ω => |f ω - g ω|)
+    (fun ω => if bad ω then 1 else 0) hpoint
+  rw [expect_indicator9] at hmono
+  calc
+    |P.expect f - P.expect g| = |P.expect (fun ω => f ω - g ω)| := by rw [hsub]
+    _ ≤ P.expect (fun ω => |f ω - g ω|) := habs
+    _ ≤ P.pr bad := hmono
+    _ ≤ ε := hbad
+
+private theorem clippedFrac_bounds9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n}
+    (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n) :
+    |clippedFrac9 S E G ω v b - 1 / 2| ≤ 2 * P.bStar n := by
+  have hb : 0 ≤ P.bStar n := by
+    dsimp [Params9.bStar]
+    positivity
+  unfold clippedFrac9
+  have hlow : 1 / 2 - 2 * P.bStar n ≤
+      max (1 / 2 - 2 * P.bStar n) (min (1 / 2 + 2 * P.bStar n)
+        (targetFrac9 S E G ω v b)) := le_max_left _ _
+  have hhigh :
+      max (1 / 2 - 2 * P.bStar n) (min (1 / 2 + 2 * P.bStar n)
+        (targetFrac9 S E G ω v b)) ≤ 1 / 2 + 2 * P.bStar n :=
+    max_le (by linarith) (min_le_left _ _)
+  rw [abs_le]
+  constructor <;> linarith
+
 private theorem weighted_expectation_close9 {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (good : Ω → Prop) (z q : Ω → ℝ)
     (z₀ β δ ε : ℝ)
@@ -684,8 +740,9 @@ private theorem weighted_expectation_close9 {Ω : Type*} [Fintype Ω]
     (hbad : P.pr (fun ω => ¬ good ω) ≤ ε)
     (hzgood : ∀ ω, good ω → |z ω - z₀| ≤ δ * z₀)
     (hqclose : ∀ ω, |q ω - 1 / 2| ≤ β) :
-    |P.expect q - P.expect (fun ω => z ω * q ω) / P.expect z| ≤
-      8 * δ * β + 8 * ε / z₀ := by
+    z₀ / 4 ≤ P.expect z ∧
+      |P.expect q - P.expect (fun ω => z ω * q ω) / P.expect z| ≤
+        8 * δ * β + 8 * ε / z₀ := by
   classical
   let ez : ℝ := P.expect z
   let eq : ℝ := P.expect q
@@ -885,21 +942,23 @@ private theorem weighted_expectation_close9 {Ω : Type*} [Fintype Ω]
       
     rw [hnum, abs_div, abs_of_pos hdenpos]
     rw [show ez * eq - ezq = -(ezq - ez * eq) by ring, abs_neg]
-  calc
-    |P.expect q - P.expect (fun ω => z ω * q ω) / P.expect z| = |eq - ezq / ez| := by
-      simp [eq, ezq, ez]
-    _ = |ezq - ez * eq| / ez := hratio
-    _ ≤ (2 * δ * z₀ * β + 2 * ε) / ez :=
-      div_le_div_of_nonneg_right hcovBound hdenpos.le
-    _ ≤ (2 * δ * z₀ * β + 2 * ε) / (z₀ / 4) := by
-      apply (div_le_div_iff₀ hdenpos (by positivity : 0 < z₀ / 4)).2
-      exact mul_le_mul_of_nonneg_left hden (by positivity)
-    _ ≤ 8 * δ * β + 8 * ε / z₀ := by
-      have hcalc : (2 * δ * z₀ * β + 2 * ε) / (z₀ / 4) =
-          8 * δ * β + 8 * ε / z₀ := by
-        field_simp [ne_of_gt hz₀]
-        ring
-      rw [hcalc]
+  constructor
+  · exact hden
+  · calc
+      |P.expect q - P.expect (fun ω => z ω * q ω) / P.expect z| = |eq - ezq / ez| := by
+        simp [eq, ezq, ez]
+      _ = |ezq - ez * eq| / ez := hratio
+      _ ≤ (2 * δ * z₀ * β + 2 * ε) / ez :=
+        div_le_div_of_nonneg_right hcovBound hdenpos.le
+      _ ≤ (2 * δ * z₀ * β + 2 * ε) / (z₀ / 4) := by
+        apply (div_le_div_iff₀ hdenpos (by positivity : 0 < z₀ / 4)).2
+        exact mul_le_mul_of_nonneg_left hden (by positivity)
+      _ ≤ 8 * δ * β + 8 * ε / z₀ := by
+        have hcalc : (2 * δ * z₀ * β + 2 * ε) / (z₀ / 4) =
+            8 * δ * β + 8 * ε / z₀ := by
+          field_simp [ne_of_gt hz₀]
+          ring
+        rw [hcalc]
 
 private theorem one_sub_pow_lower9 {δ : ℝ} (hδ : 0 ≤ δ) (hδle : δ ≤ 1)
     (k : ℕ) : 1 - (k : ℝ) * δ ≤ (1 - δ) ^ k := by
@@ -2411,6 +2470,19 @@ private theorem law_restrict_mass9 {N : ℕ} (μ : Law N) (A B : Finset (Fin N))
           rw [← Finset.sum_filter]
     _ = (∑ y ∈ A ∩ B, μ.w y) / (∑ y ∈ A, μ.w y) := by
           rw [hfilter, Finset.sum_div]
+
+private theorem law_mass_bounds9 {N : ℕ} (μ : Law N) (A : Finset (Fin N)) :
+    0 ≤ ∑ y ∈ A, μ.w y ∧ ∑ y ∈ A, μ.w y ≤ 1 := by
+  constructor
+  · apply Finset.sum_nonneg
+    intro y hy
+    exact μ.nonneg y
+  · calc
+      ∑ y ∈ A, μ.w y ≤ ∑ y, μ.w y := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+        intro y hy hnot
+        exact μ.nonneg y
+      _ = 1 := μ.sum_eq_one
 
 private theorem delLaw_outer_restrict_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)

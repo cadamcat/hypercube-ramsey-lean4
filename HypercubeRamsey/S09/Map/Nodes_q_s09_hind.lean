@@ -503,6 +503,23 @@ private inductive HeightPath9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
       (hxy : step y x) (hp : HeightPath9 step (y :: l) start) :
       HeightPath9 step (x :: y :: l) start
 
+private def scaleBad9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s : ℝ) (Pp A : Pos9 P hc n → Bool)
+    (x : HeightState9 P hc n) : Prop :=
+  badIn9 C t Pp A x.1 x.2 ∧
+    s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C Pp x.1 x.2 : ℝ)
+
+private def scaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
+    (Pp A : Pos9 P hc n → Bool) (start : HeightState9 P hc n) : Prop :=
+  ∃ endpoint : HeightState9 P hc n, ∃ rest : List (HeightState9 P hc n),
+    HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: rest) start ∧
+    (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 start.1 ≤ 16 * R) ∧
+    (∀ x ∈ endpoint :: rest, Nat.dist x.2.val start.2.val ≤ 8 * R) ∧
+    R ≤ max (Nat.dist endpoint.2.val start.2.val)
+      ((_root_.hammingDist endpoint.1 start.1 + 1) / 2) ∧
+    (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
+
 private theorem reach_level_le_for_path9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (vq : CubeVertex n) (R : ℕ)
     {v : CubeVertex n} {j : ℕ}
@@ -627,6 +644,21 @@ private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : 
             (x.2.val + 1) := by simpa [hDown] using hreach
         exact Reach9.down y.1 x.1 x.2.val hreach' hlocalX hdist
 
+private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hp : HeightPath9 bad l start) : start ∈ l := by
+  induction hp with
+  | singleton x => simp
+  | cons hstep htail ih => exact List.mem_cons_of_mem _ ih
+
+private def rootScaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
+    (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) : Prop :=
+  ∃ start : HeightState9 P hc n,
+    _root_.hammingDist start.1 root ≤ 4 * R + 2 ∧
+      scaleFailure9 C t s η R Pp A start
+
 private theorem heightStep9_mono {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad bad' : HeightState9 P hc n → Prop}
     (hbad : ∀ x, bad x → bad' x) (x y : HeightState9 P hc n)
@@ -671,29 +703,86 @@ private theorem badAt9_implies_badIn9_degraded {P : Params9} {hc : HeightChoice9
       have hle := mul_le_mul_of_nonneg_right ht₂ hp
       simpa only [one_mul] using lt_of_le_of_lt hle hl
 
-private def scaleBad9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
-    (C : Finset (Pos9 P hc n)) (t s : ℝ) (Pp A : Pos9 P hc n → Bool)
-    (x : HeightState9 P hc n) : Prop :=
-  badIn9 C t Pp A x.1 x.2 ∧
-    s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C Pp x.1 x.2 : ℝ)
+private theorem scaleBad9_of_badAt9_counts {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s : ℝ} (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : s ≤ 1 / 2)
+    (Pp A : Pos9 P hc n → Bool)
+    (hcounts : ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (1 / 2 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ Pp v j : ℝ))
+    (x : HeightState9 P hc n)
+    (hbad : badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2) :
+    scaleBad9 Finset.univ t s Pp A x := by
+  refine ⟨badAt9_implies_badIn9_degraded ht₁ ht₂ Pp A x.1 x.2 hbad, ?_⟩
+  have hcount := hcounts x.1 x.2
+  have hn : 0 ≤ (n : ℝ) ^ (10 : ℝ) := Real.rpow_nonneg (Nat.cast_nonneg n) _
+  nlinarith
 
-private def scaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
-    (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
-    (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n)
-    (startLevel : Fin (hc.levels n + 1)) : Prop :=
-  ∃ startSite : CubeVertex n, ∃ endpoint : HeightState9 P hc n,
-    ∃ rest : List (HeightState9 P hc n),
-      HeightPath9 (heightStep9 (scaleBad9 C t s Pp A))
-        (endpoint :: rest) (startSite, startLevel) ∧
-      (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 root ≤ 16 * R) ∧
-      (∀ x ∈ endpoint :: rest, Nat.dist x.2.val startLevel.val ≤ 8 * R) ∧
-      R ≤ max (Nat.dist endpoint.2.val startLevel.val)
-        ((_root_.hammingDist endpoint.1 root + 1) / 2) ∧
-      (startLevel.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
+private theorem reach9_top_implies_rootScaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s η : ℝ} (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : s ≤ 1 / 2) (hη : 0 ≤ η)
+    (Pp A : Pos9 P hc n → Bool)
+    (hcounts : ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (1 / 2 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ Pp v j : ℝ))
+    (root : CubeVertex n)
+    (hreach : Reach9 (P := P) (hc := hc) (n := n) Pp A root (4 * hc.levels n)
+      root (hc.levels n)) :
+    rootScaleFailure9 Finset.univ t s η (hc.levels n) Pp A root := by
+  obtain ⟨start, rest, hpath, hstart0, hlocal⟩ :=
+    reach9_to_heightPath Pp A root (4 * hc.levels n) hreach
+  have hstartMem : start ∈ (root, ⟨hc.levels n, by omega⟩) :: rest :=
+    heightPath9_start_mem hpath
+  have hstartRoot : _root_.hammingDist start.1 root ≤ 4 * hc.levels n :=
+    hlocal start hstartMem
+  have hstep : ∀ x, badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2 →
+      scaleBad9 Finset.univ t s Pp A x :=
+    fun x hb => scaleBad9_of_badAt9_counts ht₁ ht₂ hs Pp A hcounts x hb
+  have hpath' := heightPath9_mono hstep hpath
+  let endpoint : HeightState9 P hc n :=
+    (root, ⟨hc.levels n, by omega⟩)
+  have hpath'' : HeightPath9 (heightStep9 (scaleBad9 Finset.univ t s Pp A))
+      (endpoint :: rest) start := by
+    simpa only [endpoint] using hpath'
+  refine ⟨start, ?_⟩
+  constructor
+  · exact hstartRoot.trans (by omega)
+  · refine ⟨endpoint, ⟨rest, ?_⟩⟩
+    constructor
+    · exact hpath''
+    constructor
+    · intro x hx
+      have hdist := hlocal x hx
+      have hstartdist := hlocal start (heightPath9_start_mem hpath)
+      have hstartdist' : _root_.hammingDist root start.1 ≤ 4 * hc.levels n := by
+        simpa [_root_.hammingDist_comm] using hstartdist
+      have htri := _root_.hammingDist_triangle x.1 root start.1
+      calc
+        _root_.hammingDist x.1 start.1 ≤
+            _root_.hammingDist x.1 root + _root_.hammingDist root start.1 := htri
+        _ ≤ 4 * hc.levels n + 4 * hc.levels n := Nat.add_le_add hdist hstartdist'
+        _ ≤ 16 * hc.levels n := by omega
+    constructor
+    · intro x hx
+      have hxlevel := x.2.isLt
+      have hx0 : start.2.val = 0 := hstart0
+      simp only [hx0, Nat.dist_zero_right]
+      omega
+    constructor
+    · have hx0 : start.2.val = 0 := hstart0
+      have hend : endpoint.2.val = hc.levels n := by simp [endpoint]
+      have hd : Nat.dist endpoint.2.val start.2.val = hc.levels n := by
+        rw [hend, hx0, Nat.dist_zero_right]
+      rw [hd]
+      exact Nat.le_max_left _ _
+    · have hx0 : start.2.val = 0 := hstart0
+      have hend : endpoint.2.val = hc.levels n := by simp [endpoint]
+      rw [hx0, hend]
+      have hHnon : 0 ≤ (hc.levels n : ℝ) := Nat.cast_nonneg _
+      have hprod : 0 ≤ η * (hc.levels n : ℝ) := mul_nonneg hη hHnon
+      simpa using add_nonneg hHnon hprod
 
 private noncomputable def scaleRootSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root : CubeVertex n) (R : ℕ) : Finset (Pos9 P hc n) :=
-  consulted9 (P := P) (hc := hc) (n := n) root (8 * R + 1)
+  consulted9 (P := P) (hc := hc) (n := n) root (10 * R + 2)
 
 private noncomputable def scaleSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (start : HeightState9 P hc n) (R : ℕ) : Finset (Pos9 P hc n) :=

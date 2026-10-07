@@ -512,7 +512,11 @@ private theorem bcompCap_small (η₀ β K : ℝ) (h : ℕ) (hη₀ : 0 < η₀)
             exact add_le_add (mul_le_mul_of_nonneg_left hbetaPow (by positivity)) le_rfl
       _ = ((h : ℝ) + 1) * (n : ℝ) ^ (tau8 η₀ / 2) := by ring
       _ ≤ ((n : ℝ) ^ (tau8 η₀ / 2)) ^ 2 := by
-        simpa [pow_two] using mul_le_mul_of_nonneg_right hnhalf hhalfNonneg
+        calc
+          ((h : ℝ) + 1) * (n : ℝ) ^ (tau8 η₀ / 2) ≤
+              (n : ℝ) ^ (tau8 η₀ / 2) * (n : ℝ) ^ (tau8 η₀ / 2) :=
+            mul_le_mul_of_nonneg_right hnhalf hhalfNonneg
+          _ = ((n : ℝ) ^ (tau8 η₀ / 2)) ^ 2 := by ring
       _ = (n : ℝ) ^ tau8 η₀ := hhalfSq
   have hpow2 : (2 : ℝ) ^ (2 * h + 1) = (2 : ℝ) ^ (2 * h) * 2 := by
     rw [pow_succ]
@@ -625,6 +629,111 @@ private theorem bcompCap_small (η₀ β K : ℝ) (h : ℕ) (hη₀ : 0 < η₀)
       Real.exp (-2 * (n : ℝ) ^ tau8 η₀) < 1 := by
     simpa [htPow, mul_assoc] using hnpoly
   exact hcapSmall.trans hnpoly.le
+
+private theorem one_sub_pow_lower (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1) (m : ℕ) :
+    1 - (m : ℝ) * x ≤ (1 - x) ^ m := by
+  have hpow_le_one : ∀ m : ℕ, (1 - x) ^ m ≤ 1 := by
+    intro m
+    induction m with
+    | zero => simp
+    | succ m ih =>
+        rw [pow_succ]
+        calc
+          (1 - x) ^ m * (1 - x) ≤ 1 * (1 - x) :=
+            mul_le_mul_of_nonneg_right ih (sub_nonneg.mpr hx1)
+          _ ≤ 1 := by nlinarith
+  induction m with
+  | zero => simp
+  | succ m ih =>
+      rw [pow_succ]
+      have hmul : x * (1 - x) ^ m ≤ x := by
+        calc
+          x * (1 - x) ^ m ≤ x * 1 :=
+            mul_le_mul_of_nonneg_left (hpow_le_one m) hx0
+          _ = x := by ring
+      calc
+        1 - ((m + 1 : ℕ) : ℝ) * x = (1 - (m : ℝ) * x) - x := by push_cast; ring
+        _ ≤ (1 - x) ^ m - x := sub_le_sub_right ih x
+        _ ≤ (1 - x) ^ m - x * (1 - x) ^ m := by linarith
+        _ = (1 - x) ^ m * (1 - x) := by ring
+
+private theorem bcompChargeSmall (η₀ cH : ℝ) (hη₀ : 0 < η₀) (hcH : 0 < cH) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      4 * Real.exp (-(n : ℝ) ^ cH) * (n : ℝ) *
+        (1 + ((2 * sC η₀ n + 1) ^ 4 : ℕ)) ≤ 1 / 4 := by
+  have hτ : 0 < tau8 η₀ := by rw [tau8_eq]; unfold eta8; positivity
+  have hτlt : tau8 η₀ < 1 := by
+    rw [tau8_eq]
+    have hη8 : eta8 η₀ ≤ 4 / 100 := min_le_right _ _
+    nlinarith
+  have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ cH) atTop atTop :=
+    (tendsto_rpow_atTop hcH).comp tendsto_natCast_atTop_atTop
+  have hpoly : Tendsto
+      (fun n : ℕ => ((n : ℝ) ^ cH) ^ (5 / cH) * Real.exp (-(n : ℝ) ^ cH))
+      atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      (5 / cH) 1 one_pos).comp htend
+    simpa [Function.comp_def] using h
+  have hscaled : Tendsto
+      (fun n : ℕ => 2504 * (((n : ℝ) ^ cH) ^ (5 / cH) * Real.exp (-(n : ℝ) ^ cH)))
+      atTop (nhds 0) := by simpa using hpoly.const_mul (2504 : ℝ)
+  have hsmall : ∀ᶠ n : ℕ in atTop,
+      2504 * (((n : ℝ) ^ cH) ^ (5 / cH) * Real.exp (-(n : ℝ) ^ cH)) < 1 / 4 :=
+    hscaled.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 4))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hsmall
+  refine ⟨max n₀ 1, ?_⟩
+  intro n hn
+  have hn0 : n₀ ≤ n := le_trans (le_max_left _ _) hn
+  have hn1 : 1 ≤ n := le_trans (le_max_right _ _) hn
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le zero_lt_one hnR
+  have hτpow : (n : ℝ) ^ tau8 η₀ ≤ n :=
+    by
+      have hp := Real.rpow_le_rpow_of_exponent_le hnR hτlt.le
+      simpa [Real.rpow_one] using hp
+  have hs : (sC η₀ n : ℝ) ≤ (n : ℝ) + 1 := by
+    unfold sC
+    exact (Nat.ceil_lt_add_one (by positivity : 0 ≤ (n : ℝ) ^ tau8 η₀)).le.trans
+      (by simpa [add_comm] using add_le_add_right hτpow 1)
+  have hsNat : sC η₀ n ≤ n + 1 := by exact_mod_cast hs
+  have hkey : (2 * sC η₀ n + 1 : ℕ) ≤ 5 * n := by
+    omega
+  have hpowkey : ((2 * sC η₀ n + 1 : ℕ) : ℝ) ^ 4 ≤ (5 * (n : ℝ)) ^ 4 := by
+    exact pow_le_pow_left₀ (by positivity) (by exact_mod_cast hkey) 4
+  have hdelta : (1 + ((2 * sC η₀ n + 1) ^ 4 : ℕ) : ℝ) ≤ 626 * (n : ℝ) ^ 4 := by
+    have hcast : ((2 * sC η₀ n + 1) ^ 4 : ℕ) =
+        ((2 * sC η₀ n + 1 : ℕ) : ℝ) ^ 4 := by norm_cast
+    rw [hcast]
+    calc
+      1 + ((2 * sC η₀ n + 1 : ℕ) : ℝ) ^ 4 ≤ 1 + (5 * (n : ℝ)) ^ 4 :=
+        by simpa [add_comm] using add_le_add_left hpowkey 1
+      _ = 1 + 625 * (n : ℝ) ^ 4 := by norm_num; ring
+      _ ≤ 626 * (n : ℝ) ^ 4 := by
+        have hone : 1 ≤ (n : ℝ) ^ 4 := by
+          simpa using pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 1) hnR 4
+        nlinarith
+  have hM : (n : ℝ) *
+      (1 + ((2 * sC η₀ n + 1) ^ 4 : ℕ)) ≤ 626 * (n : ℝ) ^ 5 := by
+    calc
+      _ ≤ (n : ℝ) * (626 * (n : ℝ) ^ 4) :=
+        mul_le_mul_of_nonneg_left hdelta (by positivity)
+      _ = 626 * (n : ℝ) ^ 5 := by rw [show (n : ℝ) ^ 5 = (n : ℝ) ^ 4 * n by ring]; ring
+  have hten : ((n : ℝ) ^ cH) ^ (5 / cH) = (n : ℝ) ^ (5 : ℕ) := by
+    rw [← Real.rpow_mul hnpos.le]
+    have he : cH * (5 / cH) = 5 := by field_simp [ne_of_gt hcH]
+    rw [he, ← Real.rpow_natCast]
+    norm_num
+  have hpolyN : 2504 * (n : ℝ) ^ 5 * Real.exp (-(n : ℝ) ^ cH) < 1 / 4 := by
+    simpa [hten, mul_assoc] using hn₀ n hn0
+  calc
+    4 * Real.exp (-(n : ℝ) ^ cH) * (n : ℝ) *
+        (1 + ((2 * sC η₀ n + 1) ^ 4 : ℕ)) ≤
+      4 * Real.exp (-(n : ℝ) ^ cH) * (626 * (n : ℝ) ^ 5) := by
+        have hmul := mul_le_mul_of_nonneg_left hM
+          (by positivity : 0 ≤ 4 * Real.exp (-(n : ℝ) ^ cH))
+        simpa [mul_assoc] using hmul
+    _ = 2504 * (n : ℝ) ^ 5 * Real.exp (-(n : ℝ) ^ cH) := by ring
+    _ ≤ 1 / 4 := hpolyN.le
 
 private theorem bcomp_le_cap {η₀ γ β p K : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     (X Y R : Finset (Fin D.N)) (hStd : Std D γ K X Y R) (hGF : GridFacts η₀ D.n)
@@ -803,6 +912,316 @@ private theorem bcomp_dep {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     intro i _
     rw [hpost]
   simp [Ctx.Bcomp, hbase, hcrossHit x, hsum]
+
+private theorem keyDist_symm {η₀ : ℝ} {n : ℕ} (a b : Key η₀ n) :
+    keyDist a b = keyDist b a := by
+  unfold keyDist
+  apply Finset.sum_congr rfl
+  intro r _
+  exact Nat.dist_comm _ _
+
+private theorem keyDist_triangle {η₀ : ℝ} {n : ℕ} (a b c : Key η₀ n) :
+    keyDist a c ≤ keyDist a b + keyDist b c := by
+  unfold keyDist
+  calc
+    (∑ r, Nat.dist (a r).val (c r).val) ≤
+        ∑ r, (Nat.dist (a r).val (b r).val + Nat.dist (b r).val (c r).val) := by
+      apply Finset.sum_le_sum
+      intro r _
+      unfold Nat.dist
+      omega
+    _ = _ := by rw [Finset.sum_add_distrib]
+
+private theorem keyBall_disjoint_of_far {η₀ : ℝ} {n : ℕ} (a b : Key η₀ n)
+    (hfar : 2 < keyDist a b) : Disjoint (keyBall a 1) (keyBall b 1) := by
+  apply Finset.disjoint_left.mpr
+  intro v hva hvb
+  have hav : keyDist a v ≤ 1 := by simpa [keyBall] using hva
+  have hbv : keyDist b v ≤ 1 := by simpa [keyBall] using hvb
+  have htri := keyDist_triangle a v b
+  have hsym := keyDist_symm b v
+  omega
+
+private theorem bcomp_nonneg {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N) : 0 ≤ D.Bcomp Θ g x := by
+  have hcross : 0 ≤ if D.crossHit Θ g x then (1 : ℝ) else 0 := ind_nonneg _
+  have hAG : 0 < D.AG g := by unfold Ctx.AG; positivity
+  have hscale : 0 ≤ (8 : ℝ) * (D.AG g)⁻¹ :=
+    mul_nonneg (by norm_num) (inv_nonneg.mpr hAG.le)
+  have hsum : 0 ≤ ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+    apply Finset.sum_nonneg
+    intro i hi
+    exact mul_nonneg (D.postW_nonneg _ _) (mul_nonneg (by positivity) ((D.M.μ i).nonneg x))
+  unfold Ctx.Bcomp
+  by_cases hBase : D.BaseGates Θ g
+  · simp only [hBase, if_true]
+    exact mul_nonneg (mul_nonneg hscale hcross) hsum
+  · simp [hBase]
+
+private def bcompScopeUnion {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) {m : ℕ}
+    (roles : Fin m → EvenRole D.n) : Finset D.KeyT :=
+  (Finset.univ : Finset (Fin m)).biUnion fun i => keyBall (keyOf η₀ (roles i).1) 1
+
+private def bcompTouchedEvents {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) {m : ℕ}
+    (roles : Fin m → EvenRole D.n) : Finset D.KeyT :=
+  Finset.univ.filter fun a => ¬ Disjoint (keyBall a 2) (bcompScopeUnion D roles)
+
+private theorem realLE_inst_eq : Real.instLE = Real.instPreorder.toLE := by
+  ext a b
+  rfl
+
+private theorem bcomp_joint_of_cost {η₀ γ β p K : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N)) (hStd : Std D γ K X Y R)
+    (hBM : D.BcompMean K) (hGF : GridFacts η₀ D.n) (hCP : CondProductBound) (hK : 0 < K)
+    (charge : ℝ) (hLLL : D.HiddenLLL charge) {m : ℕ}
+    (roles : Fin m → EvenRole D.n) (x : Fin D.N)
+    (hsep : ∀ i j : Fin m, j < i → roles i ∉ evenKeyNear η₀ 8 (roles j))
+    (hcost : ((1 - charge) ^ (bcompTouchedEvents D roles).card)⁻¹ ≤ (2 : ℝ) ^ m) :
+    D.hiddenLaw.expect (fun Θ => ∏ i : Fin m,
+      D.Bcomp Θ (keyOf η₀ (roles i).1) x) ≤ (2 : ℝ) ^ m * (40 * K) ^ m := by
+  classical
+  let row : Fin m → D.Hist → ℝ := fun i Θ => D.Bcomp Θ (keyOf η₀ (roles i).1) x
+  let scopes : Fin m → Finset D.KeyT := fun i => keyBall (keyOf η₀ (roles i).1) 1
+  let U : Finset D.KeyT := bcompScopeUnion D roles
+  let Φ : D.Hist → ℝ := fun Θ => ∏ i : Fin m, row i Θ
+  have hrow_dep (i : Fin m) : FinProb.DependsOn (row i) (scopes i) := by
+    simpa [row, scopes] using bcomp_dep D (keyOf η₀ (roles i).1) x
+  have hscope_disjoint (i j : Fin m) (hij : i ≠ j) : Disjoint (scopes i) (scopes j) := by
+    have hfar : 2 < keyDist (keyOf η₀ (roles i).1) (keyOf η₀ (roles j).1) := by
+      by_cases hji : j < i
+      · have hnot := hsep i j hji
+        have hnotDist : ¬ keyDist (keyOf η₀ (roles i).1) (keyOf η₀ (roles j).1) ≤ 8 := by
+          intro hle
+          apply hnot
+          simp [evenKeyNear, hle]
+        omega
+      · have hij' : i < j := by omega
+        have hnot := hsep j i hij'
+        have hnotDist : ¬ keyDist (keyOf η₀ (roles j).1) (keyOf η₀ (roles i).1) ≤ 8 := by
+          intro hle
+          apply hnot
+          simp [evenKeyNear, hle]
+        have hsym := keyDist_symm (keyOf η₀ (roles j).1) (keyOf η₀ (roles i).1)
+        omega
+    exact keyBall_disjoint_of_far _ _ hfar
+  have hΦdep : FinProb.DependsOn Φ U := by
+    intro Θ Θ' hEq
+    dsimp [Φ]
+    apply Finset.prod_congr rfl
+    intro i hi
+    apply hrow_dep i
+    intro v hv
+    exact hEq v (Finset.mem_biUnion.mpr ⟨i, hi, hv⟩)
+  have hΦnonneg (Θ : D.Hist) : 0 ≤ Φ Θ := by
+    dsimp [Φ]
+    apply Finset.prod_nonneg
+    intro i hi
+    exact bcomp_nonneg D Θ (keyOf η₀ (roles i).1) x
+  have hmoment : (FinProb.pi (fun _ : D.KeyT => D.R')).expect Φ =
+      ∏ i : Fin m, (FinProb.pi (fun _ : D.KeyT => D.R')).expect (row i) := by
+    simpa [Φ, row, Ctx.rawHidden] using
+      (pi_expect_prod_disjoint (fun _ : D.KeyT => D.R') Finset.univ row scopes
+        hrow_dep hscope_disjoint)
+  have hmean_product : (FinProb.pi (fun _ : D.KeyT => D.R')).expect Φ ≤ (40 * K) ^ m := by
+    rw [hmoment]
+    have hple :
+        (∏ i : Fin m, (FinProb.pi (fun _ : D.KeyT => D.R')).expect (row i)) ≤
+          ∏ i : Fin m, (40 * K : ℝ) := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact expect_nonneg _ (row i)
+          (fun Θ => bcomp_nonneg D Θ (keyOf η₀ (roles i).1) x)
+      · intro i hi
+        simpa [row, Ctx.rawHidden] using hBM (keyOf η₀ (roles i).1) x
+    simpa using hple
+  have hfree : ∀ ω : D.Hist,
+      ∑ a : (∀ v : U, D.Tup),
+        (∏ v : U, D.R'.w (a v)) * Φ (glue U ω a) ≤ (40 * K) ^ m := by
+    intro ω
+    rw [pi_free_integral_eq (fun _ : D.KeyT => D.R') U Φ hΦdep ω]
+    simpa [Ctx.rawHidden] using hmean_product
+  have hlllp : LLLInput (fun _ : D.KeyT => D.R') (fun a Θ => D.HBad Θ a)
+      (fun a => keyBall a 2) charge ((2 * sC η₀ D.n + 1) ^ 4) := by
+    simpa [Ctx.HiddenLLL] using hLLL
+  have hcond := hCP (fun _ : D.KeyT => D.R') (fun a Θ => D.HBad Θ a)
+    (fun a => keyBall a 2) charge ((2 * sC η₀ D.n + 1) ^ 4) hlllp
+  have hcondMoment : D.hiddenLaw.expect Φ ≤
+      (((1 - charge) ^
+          (Finset.univ.filter fun a : D.KeyT => ¬ Disjoint (keyBall a 2) U).card)⁻¹) *
+        (40 * K) ^ m := by
+    change (condOr D.rawHidden (fun Θ => ∀ a, ¬ D.HBad Θ a)).expect Φ ≤ _
+    simpa [Ctx.rawHidden, U, scopes, bcompTouchedEvents, bcompScopeUnion] using
+      hcond.2 U Φ hΦnonneg ((40 * K) ^ m) hfree
+  have hcostRaw : @LE.le ℝ Real.instPreorder.toLE
+      ((1 - charge) ^ (bcompTouchedEvents D roles).card)⁻¹ ((2 : ℝ) ^ m) := by
+    rw [← realLE_inst_eq]
+    exact hcost
+  have hTouchedEq : bcompTouchedEvents D roles =
+      Finset.univ.filter (fun a : D.KeyT => ¬ Disjoint (keyBall a 2) U) := by
+    apply Finset.ext
+    intro a
+    simp only [bcompTouchedEvents, Finset.mem_filter, Finset.mem_univ, true_and]
+    rfl
+  have hcostNorm :
+      @LE.le ℝ Real.instPreorder.toLE
+        (((1 - charge) ^ (Finset.univ.filter fun a : D.KeyT => ¬ Disjoint (keyBall a 2) U).card)⁻¹)
+        ((2 : ℝ) ^ m) := by
+    rw [← hTouchedEq]
+    exact hcostRaw
+  calc
+    D.hiddenLaw.expect Φ ≤
+        (((1 - charge) ^
+          (Finset.univ.filter fun a : D.KeyT => ¬ Disjoint (keyBall a 2) U).card)⁻¹) *
+          (40 * K) ^ m := hcondMoment
+    _ ≤ (2 : ℝ) ^ m * (40 * K) ^ m := by
+      exact mul_le_mul_of_nonneg_right
+        hcostNorm (by positivity)
+
+private theorem bcomp_touch_cost {η₀ γ β p K cH : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hGF : GridFacts η₀ D.n) (hη₀ : 0 < η₀) (hcH : 0 < cH)
+    (hLLL : D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH))) {m : ℕ}
+    (roles : Fin m → EvenRole D.n) (hm : m ≤ D.n)
+    (hchargeSmall : 4 * Real.exp (-(D.n : ℝ) ^ cH) * (D.n : ℝ) *
+      (1 + ((2 * sC η₀ D.n + 1) ^ 4 : ℕ)) ≤ 1 / 4)
+    (hsep : ∀ i j : Fin m, j < i → roles i ∉ evenKeyNear η₀ 8 (roles j)) :
+    ((1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ (bcompTouchedEvents D roles).card)⁻¹ ≤
+      (2 : ℝ) ^ m := by
+  classical
+  change LLLInput (fun _ : D.KeyT => D.R') (fun a Θ => D.HBad Θ a)
+      (fun a => keyBall a 2) (2 * Real.exp (-(D.n : ℝ) ^ cH))
+      ((2 * sC η₀ D.n + 1) ^ 4) at hLLL
+  let U : Finset D.KeyT := bcompScopeUnion D roles
+  let T : Finset D.KeyT := bcompTouchedEvents D roles
+  let scopes : Fin m → Finset D.KeyT := fun i => keyBall (keyOf η₀ (roles i).1) 1
+  let Δ : ℕ := (2 * sC η₀ D.n + 1) ^ 4
+  have hn0 : 1 ≤ D.n := hGF.pos.1
+  have hnR : (1 : ℝ) ≤ D.n := by exact_mod_cast hn0
+  have hs : (sC η₀ D.n : ℝ) ≤ (D.n : ℝ) + 1 := by
+    have hτlt : tau8 η₀ < 1 := by
+      rw [tau8_eq]
+      have hη8 : eta8 η₀ ≤ 4 / 100 := min_le_right _ _
+      nlinarith
+    have hpow : (D.n : ℝ) ^ tau8 η₀ ≤ D.n := by
+      have hh := Real.rpow_le_rpow_of_exponent_le hnR hτlt.le
+      simpa [Real.rpow_one] using hh
+    unfold sC
+    have hceil := (Nat.ceil_lt_add_one (by positivity : 0 ≤ (D.n : ℝ) ^ tau8 η₀)).le
+    calc
+      (Nat.ceil ((D.n : ℝ) ^ tau8 η₀) : ℝ) ≤ (D.n : ℝ) ^ tau8 η₀ + 1 := hceil
+      _ = 1 + (D.n : ℝ) ^ tau8 η₀ := by ring
+      _ ≤ 1 + D.n := by
+        calc
+          1 + (D.n : ℝ) ^ tau8 η₀ = (D.n : ℝ) ^ tau8 η₀ + 1 := by ring
+          _ ≤ (D.n : ℝ) + 1 := add_le_add_left hpow 1
+          _ = 1 + D.n := by ring
+      _ = (D.n : ℝ) + 1 := by ring
+  have hsNat : sC η₀ D.n ≤ D.n + 1 := by exact_mod_cast hs
+  have hkey : (2 * sC η₀ D.n + 1 : ℕ) ≤ 5 * D.n := by omega
+  have hΔ : Δ + 1 ≤ 626 * D.n ^ 4 := by
+    dsimp [Δ]
+    have hpow : (2 * sC η₀ D.n + 1 : ℕ) ^ 4 ≤ (5 * D.n) ^ 4 :=
+      Nat.pow_le_pow_left hkey 4
+    have hn4 : 1 ≤ D.n ^ 4 := Nat.one_le_pow 4 D.n hn0
+    calc
+      (2 * sC η₀ D.n + 1) ^ 4 + 1 ≤ (5 * D.n) ^ 4 + 1 :=
+        Nat.add_le_add_right hpow 1
+      _ ≤ 626 * D.n ^ 4 := by
+        have h5 : (5 * D.n) ^ 4 = 625 * D.n ^ 4 := by ring
+        rw [h5]
+        nlinarith
+  have hTouched : T.card ≤ m * (1 + Δ) := by
+    let nbr : Fin m → Finset D.KeyT := fun i =>
+      insert (keyOf η₀ (roles i).1) (Finset.univ.filter fun a =>
+        a ≠ keyOf η₀ (roles i).1 ∧
+          ¬ Disjoint (keyBall (keyOf η₀ (roles i).1) 2) (keyBall a 2))
+    have hsub : T ⊆ (Finset.univ : Finset (Fin m)).biUnion nbr := by
+      intro a ha
+      have hhit : ¬ Disjoint (keyBall a 2) U := (Finset.mem_filter.mp ha).2
+      have hex : ∃ v, v ∈ keyBall a 2 ∧ v ∈ U := by
+        by_contra hn
+        apply hhit
+        apply Finset.disjoint_left.mpr
+        intro v hva hvU
+        exact hn ⟨v, hva, hvU⟩
+      obtain ⟨v, hva, hvU⟩ := hex
+      obtain ⟨i, hi, hvi⟩ := Finset.mem_biUnion.mp hvU
+      have hvi2 : v ∈ keyBall (keyOf η₀ (roles i).1) 2 := by
+        have hd := (Finset.mem_filter.mp hvi).2
+        unfold keyBall
+        apply Finset.mem_filter.mpr
+        constructor
+        · exact Finset.mem_univ _
+        · omega
+      have hinter : ¬ Disjoint (keyBall (keyOf η₀ (roles i).1) 2) (keyBall a 2) := by
+        intro hd
+        have hnot := (Finset.disjoint_left.mp hd) hvi2
+        exact hnot hva
+      by_cases heq : a = keyOf η₀ (roles i).1
+      · subst a
+        exact Finset.mem_biUnion.mpr ⟨i, hi, Finset.mem_insert_self _ _⟩
+      · exact Finset.mem_biUnion.mpr ⟨i, hi,
+          Finset.mem_insert.mpr (Or.inr (Finset.mem_filter.mpr
+            ⟨Finset.mem_univ _, ⟨heq, hinter⟩⟩))⟩
+    have hnbr (i : Fin m) : (nbr i).card ≤ 1 + Δ := by
+      dsimp [nbr]
+      let Nbr : Finset D.KeyT := Finset.univ.filter fun a =>
+        a ≠ keyOf η₀ (roles i).1 ∧
+          ¬ Disjoint (keyBall (keyOf η₀ (roles i).1) 2) (keyBall a 2)
+      have hIns : (insert (keyOf η₀ (roles i).1) Nbr).card ≤ Nbr.card + 1 :=
+        Finset.card_insert_le _ _
+      have hdegree : Nbr.card ≤ Δ := by
+        simpa [Nbr, Δ] using hLLL.degree (keyOf η₀ (roles i).1)
+      change (insert (keyOf η₀ (roles i).1) Nbr).card ≤ 1 + Δ
+      omega
+    calc
+      T.card ≤ ((Finset.univ : Finset (Fin m)).biUnion nbr).card := Finset.card_le_card hsub
+      _ ≤ ∑ i ∈ (Finset.univ : Finset (Fin m)), (nbr i).card := Finset.card_biUnion_le
+      _ ≤ ∑ i ∈ (Finset.univ : Finset (Fin m)), (1 + Δ) :=
+        Finset.sum_le_sum fun i hi => hnbr i
+      _ = m * (1 + Δ) := by
+        change (∑ i : Fin m, (1 + Δ)) = m * (1 + Δ)
+        simp [Finset.sum_const, nsmul_eq_mul]
+  have hmR : (m : ℝ) ≤ D.n := by exact_mod_cast hm
+  have hΔR : (1 + (Δ : ℝ)) ≤ 626 * (D.n : ℝ) ^ 4 := by
+    have hcast : (Δ : ℝ) + 1 ≤ 626 * (D.n : ℝ) ^ 4 := by exact_mod_cast hΔ
+    nlinarith [hcast]
+  have hTle : (T.card : ℝ) ≤ (D.n : ℝ) * (1 + (Δ : ℝ)) := by
+    have hT : (T.card : ℝ) ≤ (m : ℝ) * (1 + (Δ : ℝ)) := by exact_mod_cast hTouched
+    exact hT.trans (mul_le_mul_of_nonneg_right hmR (by positivity))
+  have hMx : (T.card : ℝ) * (2 * Real.exp (-(D.n : ℝ) ^ cH)) ≤ 1 / 8 := by
+    have hsm' : 4 * Real.exp (-(D.n : ℝ) ^ cH) * (D.n : ℝ) *
+        (1 + (Δ : ℝ)) ≤ 1 / 4 := by
+      simpa [Δ] using hchargeSmall
+    calc
+      (T.card : ℝ) * (2 * Real.exp (-(D.n : ℝ) ^ cH)) ≤
+          ((D.n : ℝ) * (1 + (Δ : ℝ))) * (2 * Real.exp (-(D.n : ℝ) ^ cH)) :=
+        mul_le_mul_of_nonneg_right hTle (by positivity)
+      _ = (1 / 2 : ℝ) *
+            (4 * Real.exp (-(D.n : ℝ) ^ cH) * (D.n : ℝ) * (1 + (Δ : ℝ))) := by ring
+      _ ≤ 1 / 8 := by nlinarith [hsm']
+  by_cases hm0 : m = 0
+  · subst m
+    simp [bcompTouchedEvents, bcompScopeUnion]
+  · have hx0 : 0 ≤ 2 * Real.exp (-(D.n : ℝ) ^ cH) := by positivity
+    have hx1 : 2 * Real.exp (-(D.n : ℝ) ^ cH) ≤ 1 := hLLL.x_lt_one.le
+    have hbasePos : 0 < 1 - 2 * Real.exp (-(D.n : ℝ) ^ cH) := sub_pos.mpr hLLL.x_lt_one
+    have hden : 1 - ((T.card : ℝ) * (2 * Real.exp (-(D.n : ℝ) ^ cH))) ≤
+        (1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card :=
+      one_sub_pow_lower _ hx0 hx1 T.card
+    have hdenHalf : (1 / 2 : ℝ) ≤
+        (1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card := by linarith [hden, hMx]
+    have hcost2 : ((1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card)⁻¹ ≤ 2 := by
+      have hp : 1 / ((1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card) ≤ 2 := by
+        apply (div_le_iff₀ (pow_pos hbasePos _)).2
+        nlinarith [hdenHalf]
+      simpa [one_div] using hp
+    have hmpos : 1 ≤ m := Nat.one_le_iff_ne_zero.mpr hm0
+    have htwo : (2 : ℝ) ≤ (2 : ℝ) ^ m := by
+      have hp := pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 2) hmpos
+      simpa using hp
+    have hcostFin : ((1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card)⁻¹ ≤ (2 : ℝ) ^ m :=
+      hcost2.trans htwo
+    simpa [T, bcompTouchedEvents, bcompScopeUnion] using hcostFin
 
 theorem bcomp_mean (η₀ γ β p K : ℝ) (h : ℕ) (hη₀ : 0 < η₀) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N),

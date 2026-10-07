@@ -25,7 +25,8 @@ def BroadSideProperty (Dstar : ℝ) : Prop :=
 /-- SHARED: L6.1 (06:4–12), the broad-side lemma consumed by E7.1. -/
 theorem small_polynomial_broad_side :
     ∃ Dstar : ℝ, 0 < Dstar ∧ BroadSideProperty Dstar := by
-  sorry
+  obtain ⟨D, hD, h⟩ := HypercubeRamsey.small_polynomial_broad_side
+  exact ⟨D, hD, h⟩
 
 /-- SHARED: L4.1 (04:9–16), in the monotone consumed form used by C7.2c. -/
 theorem L4_1_consumed :

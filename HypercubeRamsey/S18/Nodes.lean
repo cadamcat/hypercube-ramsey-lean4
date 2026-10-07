@@ -12,6 +12,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5d
 import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
@@ -35,6 +36,7 @@ import HypercubeRamsey.S18.Current_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
+import HypercubeRamsey.S18.Nodes_sol_s18_6b
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
 import HypercubeRamsey.S18.Nodes_q_s18_n2
 import HypercubeRamsey.S18.Nodes_q_s18_n3
@@ -964,13 +966,7 @@ theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (Krow : ℝ) (hKrow : 0 < Krow) :
     ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → PaletteRowInput D Krow → IsolateKernelFacts D KI := by
-  refine ⟨1, by norm_num, ?_⟩
-  apply Filter.Eventually.of_forall
-  intro k PT hPT D hD hRows v hv x z
-  exact ⟨Lane_q_s18_n5.isolatedWeight_nonneg D v x z,
-    Lane_q_s18_n5.isolatedWeight_symm D v x z, by
-      sorry, by
-      sorry⟩
+  exact Lane_sol_s18_5d.isolate_facts hκ T Krow hKrow
 
 /-- P18.5e, 18:1092–1124. Remove state gates before bin comparisons and
 retain geometrically fixed bulk pair-hit queries. -/
@@ -1511,8 +1507,10 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
           ((D.paletteRows palette).powersetCard p).card ≤ 2) →
         (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧
           HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
-  let KH : ℝ := K + Cp + Cs + 1
-  have hKH : 0 < KH := by dsimp [KH]; positivity
+  let B : ℝ := 4096 * (K + 1) ^ 2
+  let KH : ℝ := B * K
+  have hB : 0 ≤ B := by dsimp [B]; positivity
+  have hKH : 0 < KH := by dsimp [KH, B]; positivity
   have hthreshold : ∀ᶠ k : ℕ in atTop, 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := by
     have hlarge := T.S.n_tendsto.eventually_ge_atTop ⌈3 / η⌉₊
     filter_upwards [hlarge] with k hk
@@ -1522,14 +1520,65 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
       have h := (div_le_iff₀ hη).mp (hceil.trans hcast)
       nlinarith
     exact Nat.le_floor h3
+  have hChord := Lane_sol_s18_6b.eventually_chordRate_le_one hκ T K hK
   refine ⟨KH, hKH, ?_⟩
-  filter_upwards [hthreshold] with k ht0
+  filter_upwards [hthreshold, hChord] with k ht0 hChord
   intro PT hPT D hD δ εterm εrun C H hEndpoint hAverage
   have hPairFacts : PairInitialFacts D δ K := hEndpoint.pair_facts
-  have hObstructionSize : 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := ht0
-  -- The remaining estimate is the connected endpoint-tree diagram sum,
-  -- with two additional mergers on the actual distinct-endpoint support.
-  sorry
+  simpa only [HallBudget, KH] using
+    (Lane_sol_s18_6b.obstruction_le_of_tuple_diagrams D C H K Cp Cs η B
+      hK hη hB hPairFacts hAverage ht0 (by
+        intro palette S hsub hthree hsmall
+        have hfloor : (⌊η * (T.S.n k : ℝ)⌋₊ : ℝ) ≤ (T.S.n k : ℝ) := by
+          have h := Nat.floor_le (mul_nonneg hη.le (Nat.cast_nonneg (T.S.n k)))
+          have hmul : η * (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) := by
+            simpa only [one_mul] using mul_le_mul_of_nonneg_right hη1.le
+              (show (0 : ℝ) ≤ (T.S.n k : ℝ) from Nat.cast_nonneg _)
+          exact h.trans hmul
+        have hSn : S.card ≤ T.S.n k := by
+          have hcast : (S.card : ℝ) ≤ (⌊η * (T.S.n k : ℝ)⌋₊ : ℝ) := by
+            exact_mod_cast hsmall
+          exact_mod_cast hcast.trans hfloor
+        let A : InitialPairData D := ⟨palette, S, hsub, hSn⟩
+        obtain ⟨ker, hnonneg, hsymm, hrow, hentry, hjoint⟩ := hEndpoint.joint A
+        have hrate := hChord PT hPT D δ hPairFacts palette S.card hSn
+        let F : ℝ := Real.exp (Cs * D.geom.r) * K ^ S.card *
+          Lane_sol_s18_6b.correction D Cp S
+        have hjoint' : ∀ assignment, endpointProbability D C H A assignment ≤
+            F * ∏ v ∈ A.rows, ker v (assignment v).1 (assignment v).2 := by
+          intro assignment
+          exact hjoint assignment
+        have hfalse := Lane_sol_s18_6b.connectedPr_le_kernelSum D C H hPairFacts A false ker F hjoint'
+        have htrue := Lane_sol_s18_6b.connectedPr_le_kernelSum D C H hPairFacts A true ker F hjoint'
+        have hcount :
+            K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S false ker ≤
+              D.paletteScale palette * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card ∧
+            K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker ≤
+              (D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+                (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card := by
+          -- The finite assignment-to-diagram injection and weighted count remain.
+          -- Distinct endpoints and palette support are retained in kernelSum.
+          sorry
+        have hfactor : 0 ≤ Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S :=
+          mul_nonneg (Real.exp_pos _).le (Lane_sol_s18_6b.correction_nonneg D Cp S)
+        constructor
+        · calc
+            _ ≤ F * Lane_sol_s18_6b.kernelSum D palette S false ker := hfalse
+            _ = (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S false ker) := by dsimp [F]; ring
+            _ ≤ (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (D.paletteScale palette * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card) :=
+              mul_le_mul_of_nonneg_left hcount.1 hfactor
+            _ = _ := by ring
+        · calc
+            _ ≤ F * Lane_sol_s18_6b.kernelSum D palette S true ker := htrue
+            _ = (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker) := by dsimp [F]; ring
+            _ ≤ (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                ((D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+                  (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card) :=
+              mul_le_mul_of_nonneg_left hcount.2 hfactor
+            _ = _ := by ring))
 
 set_option maxHeartbeats 400000
 

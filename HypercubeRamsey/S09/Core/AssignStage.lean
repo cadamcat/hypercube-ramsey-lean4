@@ -1770,7 +1770,7 @@ theorem p92_even_anchor_integral (P : Params9) (hP : P.Valid) (c : ℝ) (hc : 0 
       (S : Setup9 P n N M) (I : IDMap9 P n),
       S07.CondProductBound → AnchorLLL9 S I E G c → StarScopeFacts9 S I E G →
         StarCancel9 S I E G → EvenAnchorIntegral9 S I E G := by
-  sorry
+  exact Lane_q_s09_assign2.p92_even_anchor_integral_core P hP c hc
 
 /-- P9.2-assignC, assembled moment (09:347–349): the clock comparison at every successful prehistory and the
 anchor integral give `4^k ∏ N μ_{i_{z(v)}}(x)`. -/

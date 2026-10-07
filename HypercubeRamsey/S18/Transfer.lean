@@ -107,6 +107,8 @@ structure TransferProtocol {D : LateData hPT} (X : CriticalTransferData D) where
       ⌈Real.log (T.S.n k) ^ 20⌉₊
   output : Seed → List Reply → Law (T.S.N k)
   broad : ∀ seed s, (output seed (replies seed s steps)).WidthLE (κ.α * T.S.n k / 2)
+  output_supported : ∀ seed s,
+    (output seed (replies seed s steps)).SupportedIn (T.Y k)
   /-- Pointwise deletion and integration of erased sketches precede seed fixing. -/
   reduction : X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
     Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *

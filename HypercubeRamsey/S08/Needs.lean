@@ -1,5 +1,7 @@
 import HypercubeRamsey.Framework.Props
 import HypercubeRamsey.S04.Lemma41
+import HypercubeRamsey.S03.Mixtures
+import HypercubeRamsey.S03.Stabilization
 
 /-!
 # Shared interfaces consumed by Section 8

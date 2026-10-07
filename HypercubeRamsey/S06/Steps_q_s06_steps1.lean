@@ -1,5 +1,6 @@
 import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S06.Prob
+import HypercubeRamsey.Framework.FinProbLemmas
 
 namespace HypercubeRamsey.S06
 
@@ -10,6 +11,16 @@ open scoped BigOperators
 def matchesPrimaryName6 {W : Type*} {m : ℕ} (β : Type6 W m) : VarName6 W m → Prop
   | .par p => p = primaryName6 β.key
   | .hid ℓ => primaryName6 ℓ.1 = primaryName6 β.key
+
+theorem pi_marginal_pr6 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (A : (∀ i : {i // i ∈ s}, Ω i.1) → Prop) :
+    (FinProb.pi P).pr (fun ω => A (fun i => ω i.1)) =
+      (FinProb.pi (fun i : {i // i ∈ s} => P i.1)).pr A := by
+  classical
+  let f : (∀ i : {i // i ∈ s}, Ω i.1) → ℝ := fun a => if A a then 1 else 0
+  have h := FinProb.pi_marginal_expect P s f
+  simpa [f, FinProb.expect, FinProb.pr] using h
 
 theorem restricted_weight_formula6 {α : Type*} [Fintype α]
     (P : FinProb α) (A : α → Prop) (a₀ a : α) (hA : 0 < P.pr A) :
@@ -1215,6 +1226,73 @@ theorem predictive_deleted_bad_mass6 {Ω : Type*} [Fintype Ω]
       · simpa [hlt] using (le_of_lt hlt)
       · simp [hlt, mul_nonneg ha (hd ω)]
     _ = a * ∑ ω, d ω := by rw [Finset.mul_sum]
+
+theorem secondMixture_atom_cap6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (y : Fin N) :
+    (N : ℝ) * (secondMixture6 M).w y ≤ (n : ℝ) ^ Dstar₆ := by
+  unfold secondMixture6 Law.mix tagLaw6
+  rw [Finset.mul_sum]
+  calc
+    (∑ i, (N : ℝ) * (M.Λ i * (M.ν i).w y)) ≤
+        ∑ i, M.Λ i * (n : ℝ) ^ Dstar₆ := by
+          apply Finset.sum_le_sum
+          intro i hi
+          by_cases hΛ : M.Λ i = 0
+          · simp [hΛ]
+          · have hΛpos : 0 < M.Λ i := lt_of_le_of_ne (M.Λ_nonneg i) (Ne.symm hΛ)
+            have hcap := X.hCap i hΛpos y
+            change (N : ℝ) * (M.ν i).w y ≤ (n : ℝ) ^ Dstar₆ at hcap
+            calc
+              (N : ℝ) * (M.Λ i * (M.ν i).w y) = M.Λ i * ((N : ℝ) * (M.ν i).w y) := by ring
+              _ ≤ M.Λ i * (n : ℝ) ^ Dstar₆ := mul_le_mul_of_nonneg_left hcap (M.Λ_nonneg i)
+    _ = (n : ℝ) ^ Dstar₆ := by rw [← Finset.sum_mul, M.Λ_sum, one_mul]
+
+theorem initLaw_atom_cap6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (y : Fin N) :
+    (N : ℝ) * X.initLaw.w y ≤ 3 * (n : ℝ) ^ Dstar₆ := by
+  let mass := X.par.piPrime.pr (fun z => z ∈ X.par.S₀)
+  have hmass : 7 / 10 ≤ mass := by simpa [mass] using X.par.S₀_mass
+  have hmassPos : 0 < mass := by linarith
+  have hmassNonneg : 0 ≤ mass := le_of_lt hmassPos
+  have hinit := restricted_weight_le_div6 X.par.piPrime (fun z => z ∈ X.par.S₀) X.y₀ y hmassPos
+  have hpi : X.par.piPrime.w y ≤ 2 * (secondMixture6 M).w y := X.par.piPrime_cap y
+  have hcap := secondMixture_atom_cap6 X y
+  have hnum : (N : ℝ) * X.par.piPrime.w y ≤ 2 * (n : ℝ) ^ Dstar₆ := by
+    calc
+      (N : ℝ) * X.par.piPrime.w y ≤ (N : ℝ) * (2 * (secondMixture6 M).w y) :=
+        mul_le_mul_of_nonneg_left hpi (Nat.cast_nonneg N)
+      _ = 2 * ((N : ℝ) * (secondMixture6 M).w y) := by ring
+      _ ≤ 2 * (n : ℝ) ^ Dstar₆ := mul_le_mul_of_nonneg_left hcap (by norm_num)
+  have hdenom : X.initLaw.w y ≤ X.par.piPrime.w y / mass := by
+    simpa [Ctx6.initLaw, mass] using
+      (restricted_weight_le_div6 X.par.piPrime (fun z => z ∈ X.par.S₀) X.y₀ y hmassPos)
+  have hstep : (N : ℝ) * X.par.piPrime.w y / mass ≤
+      (2 * (n : ℝ) ^ Dstar₆) / (7 / 10) := by
+    calc
+      (N : ℝ) * X.par.piPrime.w y / mass ≤ (2 * (n : ℝ) ^ Dstar₆) / mass :=
+        div_le_div_of_nonneg_right hnum hmassNonneg
+      _ ≤ (2 * (n : ℝ) ^ Dstar₆) / (7 / 10) :=
+        div_le_div_of_nonneg_left (by positivity) (by norm_num) hmass
+  calc
+    (N : ℝ) * X.initLaw.w y ≤ (N : ℝ) * (X.par.piPrime.w y / mass) :=
+      mul_le_mul_of_nonneg_left hdenom (Nat.cast_nonneg N)
+    _ = (N : ℝ) * X.par.piPrime.w y / mass := by ring
+    _ ≤ (2 * (n : ℝ) ^ Dstar₆) / (7 / 10) := hstep
+    _ ≤ 3 * (n : ℝ) ^ Dstar₆ := by
+      have hpow : 0 ≤ (n : ℝ) ^ Dstar₆ := Real.rpow_nonneg (Nat.cast_nonneg n) _
+      norm_num at * <;> nlinarith
+
+theorem candLaw_atom_cap6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (v y : Fin N)
+    (hv : v ∈ X.par.S₀) :
+    (N : ℝ) * (X.candLaw v).w y ≤ 20 * (n : ℝ) ^ Dstar₆ := by
+  have hpartner := X.par.partner_cap v hv X.y₀ y
+  have hmix := secondMixture_atom_cap6 X y
+  calc
+    (N : ℝ) * (X.candLaw v).w y ≤ (N : ℝ) * (20 * (secondMixture6 M).w y) :=
+      mul_le_mul_of_nonneg_left hpartner (Nat.cast_nonneg N)
+    _ = 20 * ((N : ℝ) * (secondMixture6 M).w y) := by ring
+    _ ≤ 20 * (n : ℝ) ^ Dstar₆ := mul_le_mul_of_nonneg_left hmix (by norm_num)
 
 /-- A posterior atom can be large only where its predictive density is small.  The local observation law is
 `m`; `R` is any reference law which dominates every likelihood. -/

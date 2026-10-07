@@ -2,6 +2,9 @@ import HypercubeRamsey.S09.Core.Experiment
 import HypercubeRamsey.Tools.Finner
 import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.SignedTest
+import HypercubeRamsey.S09.Core.GainStage_q_s09_gain2
+
+set_option maxHeartbeats 1000000
 
 /-!
 # Proposition 9.2, core: regularity, conditional means, erasure, covariance and the gain (9.1)
@@ -147,8 +150,139 @@ theorem p92_mean_comparison (P : Params9) (hP : P.Valid) (C₁ c₁ C₂ c₂ c�
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → CondMeanCert9 S I E G C₁ c₁ → ReplaceCert9 S I E G C₂ c₂ →
         CoreHitCert9 S I E G c₃ → MeanCert9 S I E G c := by
-  sorry
-
+  obtain ⟨nE, hE⟩ :=
+    Lane_q_s09_gain2.eventual_mean_error_bound P hP C₁ C₂ c₁ c₂ hc₁ hc₂
+  let C : ℝ := min c₁ (min c₂ c₃)
+  let c : ℝ := C / 2
+  have hC : 0 < C := by dsimp [C]; exact lt_min hc₁ (lt_min hc₂ hc₃)
+  have hc : 0 < c := by dsimp [c]; linarith
+  have hu : 0 < P.u := by
+    have hxS : (0 : ℝ) < (P.xS : ℝ) := by exact_mod_cast hP.1.1
+    dsimp [Params9.u]
+    linarith
+  obtain ⟨nT, hT⟩ := Lane_q_s09_gain2.eventual_tail_sum3
+    (u := P.u) (c₁ := c₁) (c₂ := c₂) (c₃ := c₃) hu hc₁ hc₂ hc₃
+  refine ⟨c, hc, max nE nT, ?_⟩
+  intro n hn N E X Y κ G M S I hin hcond hreplace hcore
+  rcases hin with ⟨hN, hprep, hdeep, htags, hmasks, htools, hexps, hscales⟩
+  have hnE : nE ≤ n := le_trans (le_max_left nE nT) hn
+  have hnT : nT ≤ n := le_trans (le_max_right nE nT) hn
+  have htail := hT n hnT
+  have hsmall := hE n hnE
+  have hcount (v : EvenSites9 n) (b : OddSites9 n) :
+      (coreCount9 I v b : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+    unfold coreCount9
+    calc
+      ((I.seen b.1 ∩ I.core v.1).card : ℝ) ≤ (I.core v.1).card := by
+        exact_mod_cast Finset.card_le_card Finset.inter_subset_right
+      _ ≤ (n : ℝ) ^ (P.χ : ℝ) := I.core_card v.1 v.2
+  intro v b hb
+  classical
+  let A : Outcome9 I N → Prop := fun ω =>
+    C₁ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail c₁ n <
+      |condCoreMean9 S I E G v b ω -
+        rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (outerMean9 S I E G v b)
+            (coreHitSet9 E G ω v b))|
+  let B : Outcome9 I N → Prop := fun ω =>
+    C₂ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 <
+      |rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (outerMean9 S I E G v b)
+            (coreHitSet9 E G ω v b)) -
+        rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (siteSecond9 S b.1) (coreHitSet9 E G ω v b))|
+  let D : Outcome9 I N → Prop := fun ω =>
+    3 * P.aStar n * (n : ℝ) ^ (-(P.χ : ℝ)) <
+      |rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (siteSecond9 S b.1) (coreHitSet9 E G ω v b)) -
+        rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)|
+  have hAprob : (rawLaw9 S I).pr A ≤ P.tail c₁ n := by
+    simpa [A] using hcond v b hb
+  have hBprob : (rawLaw9 S I).pr B ≤ P.tail c₂ n := by
+    simpa [B] using hreplace v b hb
+  have hDprob : (rawLaw9 S I).pr D ≤ P.tail c₃ n := by
+    simpa [D] using hcore v b hb
+  have hIncl : ∀ ω, P.aStar n / 100 <
+      |condCoreMean9 S I E G v b ω -
+        rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)| →
+      A ω ∨ B ω ∨ D ω := by
+    intro ω hbad
+    by_contra hnot
+    have hnot' : ¬ A ω ∧ ¬ B ω ∧ ¬ D ω := by
+      simpa only [not_or] using hnot
+    have hAa : |condCoreMean9 S I E G v b ω -
+        rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (outerMean9 S I E G v b)
+            (coreHitSet9 E G ω v b))| ≤
+        C₁ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail c₁ n :=
+      le_of_not_gt hnot'.1
+    have hBb : |rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (outerMean9 S I E G v b)
+            (coreHitSet9 E G ω v b)) -
+        rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (siteSecond9 S b.1) (coreHitSet9 E G ω v b))| ≤
+        C₂ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 := le_of_not_gt hnot'.2.1
+    have hDb : |rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (siteSecond9 S b.1) (coreHitSet9 E G ω v b)) -
+        rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)| ≤
+        3 * P.aStar n * (n : ℝ) ^ (-(P.χ : ℝ)) := le_of_not_gt hnot'.2.2
+    have hk := hcount v b
+    have hcoeff :
+        C₁ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 +
+          C₂ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 ≤
+            (C₁ + C₂) * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n ^ 2 := by
+      have h1 := mul_le_mul_of_nonneg_right
+        (mul_le_mul_of_nonneg_left hk hC₁.le) (sq_nonneg (P.bStar n))
+      have h2 := mul_le_mul_of_nonneg_right
+        (mul_le_mul_of_nonneg_left hk hC₂.le) (sq_nonneg (P.bStar n))
+      nlinarith
+    have hbudget :
+        C₁ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail c₁ n +
+          C₂ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 +
+          3 * P.aStar n * (n : ℝ) ^ (-(P.χ : ℝ)) ≤ P.aStar n / 100 := by
+      have ht₂ : 0 ≤ P.tail c₂ n := by
+        change 0 ≤ Real.exp _
+        exact Real.exp_nonneg _
+      linarith [hsmall, hcoeff, ht₂]
+    have htri :
+        |condCoreMean9 S I E G v b ω -
+          rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)| ≤
+        C₁ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail c₁ n +
+          C₂ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 +
+          3 * P.aStar n * (n : ℝ) ^ (-(P.χ : ℝ)) := by
+      let x := condCoreMean9 S I E G v b ω
+      let y := rowDeg E G (anc9 ω (I.center v.1))
+        (restrictOr9 (outerMean9 S I E G v b)
+          (coreHitSet9 E G ω v b))
+      let z := rowDeg E G (anc9 ω (I.center v.1))
+        (restrictOr9 (siteSecond9 S b.1) (coreHitSet9 E G ω v b))
+      let t := rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)
+      have hxy : |x - y| ≤ C₁ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail c₁ n := hAa
+      have hyz : |y - z| ≤ C₂ * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 := hBb
+      have hzt : |z - t| ≤ 3 * P.aStar n * (n : ℝ) ^ (-(P.χ : ℝ)) := hDb
+      change |x - t| ≤ _
+      calc
+        |x - t| = |(x - y) + (y - z) + (z - t)| := by congr 1; ring
+        _ ≤ |(x - y) + (y - z)| + |z - t| := abs_add_le _ _
+        _ ≤ |x - y| + |y - z| + |z - t| := by
+          linarith [abs_add_le (x - y) (y - z)]
+        _ ≤ _ := by linarith [hxy, hyz, hzt]
+    exact (not_lt_of_ge (htri.trans hbudget)) hbad
+  have hmono := FinProb.pr_mono (rawLaw9 S I)
+    (fun ω => P.aStar n / 100 <
+      |condCoreMean9 S I E G v b ω -
+        rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)|)
+    (fun ω => A ω ∨ B ω ∨ D ω) hIncl
+  calc
+    (rawLaw9 S I).pr (fun ω₀ => P.aStar n / 100 <
+        |condCoreMean9 S I E G v b ω₀ -
+          rowDeg E G (anc9 ω₀ (I.center v.1)) (siteSecond9 S b.1)|) ≤
+        (rawLaw9 S I).pr (fun ω => A ω ∨ B ω ∨ D ω) := hmono
+    _ ≤ (rawLaw9 S I).pr A + (rawLaw9 S I).pr B + (rawLaw9 S I).pr D :=
+        Lane_q_s09_gain2.pr_or3_le _ A B D
+    _ ≤ P.tail c₁ n + P.tail c₂ n + P.tail c₃ n := by linarith [hAprob, hBprob, hDprob]
+    _ ≤ P.tail c n := by
+        simpa [c, C, Params9.tail] using htail
 /-! ## P9.2-gain (09:270–294) -/
 
 /-- The surplus of the conditional means (09:270–274): ordinary neighbours (residual flips, same slice as `v`)

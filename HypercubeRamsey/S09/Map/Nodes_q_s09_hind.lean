@@ -1260,13 +1260,11 @@ private theorem heightPath9_annularBlock9 {P : Params9} {hc : HeightChoice9 P} {
     (hp : HeightPath9 (heightStep9 bad) l start) {inner outer : ℕ}
     (hstart : f start = inner) (hgap : inner < outer)
     (hexit : ∃ x ∈ l, outer ≤ f x) :
-    ∃ outerHit outerRest innerHit pre post,
+    ∃ outerHit innerHit blockRest,
       f outerHit = outer ∧ f innerHit = inner ∧
-      outerHit :: outerRest = (pre ++ [innerHit]) ++ post ∧
-      (∀ z ∈ pre, f z ≠ inner) ∧
-      HeightPath9 (heightStep9 bad) (pre ++ [innerHit]) innerHit ∧
-      (∀ z ∈ pre ++ [innerHit], inner ≤ f z ∧ f z ≤ outer) ∧
-      (∀ z ∈ pre ++ [innerHit], z ∈ l) := by
+      HeightPath9 (heightStep9 bad) (outerHit :: blockRest) innerHit ∧
+      (∀ z ∈ outerHit :: blockRest, inner ≤ f z ∧ f z ≤ outer) ∧
+      (∀ z ∈ outerHit :: blockRest, z ∈ l) := by
   have hstartle : f start ≤ outer := by omega
   obtain ⟨outerHit, outerRest, houterPath, houterSub, houterClose, houterEq⟩ :=
     heightPath9_firstExitValue9 f hstep hp outer hstartle hexit
@@ -1315,14 +1313,15 @@ private theorem heightPath9_annularBlock9 {P : Params9} {hc : HeightChoice9 P} {
         rcases List.mem_cons.mp hz' with rfl | hzRest
         · rw [houterEq]
         · exact le_of_lt (houterClose z hzRest)
-      refine ⟨outerHit, outerRest, innerHit, outerHit :: preTail, post,
-        houterEq, hinnerEq, hsplit', hpreNo, ?_, ?_, ?_⟩
-      · simpa [List.append_assoc] using hblock
+      let blockRest := preTail ++ [innerHit]
+      have hblock' : HeightPath9 (heightStep9 bad) (outerHit :: blockRest) innerHit := by
+        simpa [blockRest, List.append_assoc] using hblock
+      refine ⟨outerHit, innerHit, blockRest, houterEq, hinnerEq, hblock', ?_, ?_⟩
       · intro z hz
-        exact ⟨hlow z (by simpa [List.append_assoc] using hz),
-          hupper z (by simpa [List.append_assoc] using hz)⟩
+        exact ⟨hlow z (by simpa [blockRest, List.append_assoc] using hz),
+          hupper z (by simpa [blockRest, List.append_assoc] using hz)⟩
       · intro z hz
-        exact houterSub z (hblockSub z (by simpa [List.append_assoc] using hz))
+        exact houterSub z (hblockSub z (by simpa [blockRest, List.append_assoc] using hz))
 
 private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root x y : HeightState9 P hc n) :

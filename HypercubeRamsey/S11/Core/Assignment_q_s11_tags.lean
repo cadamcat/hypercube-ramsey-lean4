@@ -866,6 +866,44 @@ theorem flipOuter_ne_self {n : ℕ} (s : OuterWord n) (j : OuterCoord n) :
   have hval := congrFun h j
   cases hs : s j <;> simp [flipOuter, hs] at hval
 
+private theorem wordDist_flipOuter {n : ℕ} (s : OuterWord n) (j : OuterCoord n) :
+    wordDist s (flipOuter s j) = 1 := by
+  have hset : (Finset.univ.filter fun k : OuterCoord n => s k ≠ flipOuter s j k) = {j} := by
+    ext k
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+    by_cases hkj : k = j
+    · subst k
+      cases h : s j <;> simp [flipOuter, h]
+    · simp [flipOuter, hkj]
+  unfold wordDist
+  rw [hset]
+  simp
+
+/-- The second bad event at `s` reads only the radius-one outer-word ball. -/
+theorem T2_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (s : OuterWord n) :
+    FinProb.DependsOn (fun t => T2 M y₀ t s) (wordBall s 1) := by
+  intro t t' hagree
+  have hs : s ∈ wordBall s 1 := by simp [wordBall, wordDist]
+  have hcenter : t s = t' s := hagree s hs
+  have hflip (j : OuterCoord n) : flipOuter s j ∈ wordBall s 1 := by
+    simp [wordBall, wordDist_flipOuter]
+  have hcount (x : Fin N) : highCount M y₀ t s x = highCount M y₀ t' s x := by
+    unfold highCount
+    have hset :
+        (Finset.univ.filter fun j : OuterCoord n =>
+          (4 / 5 : ℝ) < deg E M.G (piRow M y₀ (t (flipOuter s j))) x) =
+        (Finset.univ.filter fun j : OuterCoord n =>
+          (4 / 5 : ℝ) < deg E M.G (piRow M y₀ (t' (flipOuter s j))) x) := by
+      ext j
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      rw [hagree (flipOuter s j) (hflip j)]
+    rw [hset]
+  apply propext
+  unfold T2
+  simp_rw [hcenter, hcount]
+
 /-- The high-degree tail among a slice's outer neighboring tags under one compatible tag. -/
 theorem t2_neighbor_tail {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     {κ δ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)

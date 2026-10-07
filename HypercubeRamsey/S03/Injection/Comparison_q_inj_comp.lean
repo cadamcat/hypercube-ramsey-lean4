@@ -50,9 +50,9 @@ def pathFromPrefix {d t : ℕ} (j : Fin t)
   fun k => if hk : k.val < j.val then h ⟨k.val, hk⟩ else none
 
 private theorem usedMass_prefix_congr {d t : ℕ} (q : Fin t → Fin d → ℝ)
-    (x x' : Injection.Path t d) (j : Fin t)
-    (hprev : ∀ k : Fin t, k.val < j.val → x k = x' k)
-    (a : Fin t) (k : Fin (t + 1)) (hk : k.val ≤ j.val) :
+    (x x' : Injection.Path t d) (n : ℕ) (hn : n ≤ t)
+    (hprev : ∀ k : Fin t, k.val < n → x k = x' k)
+    (a : Fin t) (k : Fin (t + 1)) (hk : k.val ≤ n) :
     usedMass q x a k.val = usedMass q x' a k.val := by
   classical
   unfold usedMass
@@ -62,10 +62,10 @@ private theorem usedMass_prefix_congr {d t : ℕ} (q : Fin t → Fin d → ℝ)
   · simp [hlt, hprev l (lt_of_lt_of_le hlt hk)]
   · simp [hlt]
 
-private theorem trackingError_prefix_congr {d t : ℕ} (q : Fin t → Fin d → ℝ)
-    (x x' : Injection.Path t d) (j : Fin t)
-    (hprev : ∀ k : Fin t, k.val < j.val → x k = x' k) :
-    trackingError q x j.val = trackingError q x' j.val := by
+theorem trackingError_prefix_congr {d t : ℕ} (q : Fin t → Fin d → ℝ)
+    (x x' : Injection.Path t d) (n : ℕ) (hn : n ≤ t)
+    (hprev : ∀ k : Fin t, k.val < n → x k = x' k) :
+    trackingError q x n = trackingError q x' n := by
   classical
   unfold trackingError
   congr 1
@@ -75,15 +75,63 @@ private theorem trackingError_prefix_congr {d t : ℕ} (q : Fin t → Fin d → 
   · rintro (hr0 | ⟨a, k, hk, hr⟩)
     · exact Or.inl hr0
     · refine Or.inr ⟨a, k, hk, ?_⟩
-      rw [usedMass_prefix_congr q x x' j hprev a k hk] at hr
+      rw [usedMass_prefix_congr q x x' n hn hprev a k hk] at hr
       exact hr
   · rintro (hr0 | ⟨a, k, hk, hr⟩)
     · exact Or.inl hr0
     · refine Or.inr ⟨a, k, hk, ?_⟩
-      rw [usedMass_prefix_congr q x' x j (fun k hk => (hprev k hk).symm) a k hk] at hr
+      rw [usedMass_prefix_congr q x' x n hn (fun k hk => (hprev k hk).symm) a k hk] at hr
       exact hr
 
-private theorem forcingStepWeight_prefix_congr {d t : ℕ}
+theorem fin_sum_prefix_eq {n m : ℕ} (hm : m ≤ n)
+    (f : Fin n → ℝ) (g : Fin (n + 1) → ℝ)
+    (hfg : ∀ j : Fin n, j.val < m → f j = g ⟨j.val, by omega⟩) :
+    (∑ j : Fin n, if j.val < m then f j else 0) =
+      ∑ j : Fin (n + 1), if j.val < m then g j else 0 := by
+  classical
+  let fnat : ℕ → ℝ := fun r => if hr : r < n then
+    if r < m then f ⟨r, hr⟩ else 0 else 0
+  let gnat : ℕ → ℝ := fun r => if hr : r ≤ n then
+    if r < m then g ⟨r, Nat.lt_succ_of_le hr⟩ else 0 else 0
+  have hleft : (∑ j : Fin n, if j.val < m then f j else 0) =
+      ∑ r ∈ Finset.range n, fnat r := by
+    calc
+      _ = ∑ j : Fin n, fnat j.val := by
+        apply Finset.sum_congr rfl
+        intro j hj
+        by_cases hjm : j.val < m <;> simp [fnat, j.isLt, hjm]
+      _ = _ := Fin.sum_univ_eq_sum_range fnat n
+  have hright : (∑ j : Fin (n + 1), if j.val < m then g j else 0) =
+      ∑ r ∈ Finset.range (n + 1), gnat r := by
+    calc
+      _ = ∑ j : Fin (n + 1), gnat j.val := by
+        apply Finset.sum_congr rfl
+        intro j hj
+        have hjn : j.val ≤ n := Nat.le_of_lt_succ j.isLt
+        by_cases hjm : j.val < m <;> simp [gnat, hjn, hjm]
+      _ = _ := Fin.sum_univ_eq_sum_range gnat (n + 1)
+  have hprefix : (∑ r ∈ Finset.range n, fnat r) =
+      ∑ r ∈ Finset.range n, gnat r := by
+    apply Finset.sum_congr rfl
+    intro r hr
+    have hrn : r < n := Finset.mem_range.mp hr
+    have hrle : r ≤ n := Nat.le_of_lt hrn
+    by_cases hrm : r < m
+    · have h := hfg ⟨r, hrn⟩ hrm
+      simpa [fnat, gnat, hrn, hrle, hrm] using h
+    · simp [fnat, gnat, hrn, hrle, hrm]
+  have hlast : gnat n = 0 := by
+    have hnm : ¬ n < m := by omega
+    simp [gnat, hnm]
+  calc
+    (∑ j : Fin n, if j.val < m then f j else 0) =
+        ∑ r ∈ Finset.range n, fnat r := hleft
+    _ = ∑ r ∈ Finset.range n, gnat r := hprefix
+    _ = ∑ r ∈ Finset.range (n + 1), gnat r := by
+      rw [Finset.sum_range_succ, hlast, add_zero]
+    _ = ∑ j : Fin (n + 1), if j.val < m then g j else 0 := hright.symm
+
+theorem forcingStepWeight_prefix_congr {d t : ℕ}
     (q : Fin t → Fin d → ℝ) (S : Finset (Fin t)) (y : Fin t → Fin d)
     (x x' : Injection.Path t d) (j : Fin t) (z : Option (Fin d))
     (hprev : ∀ k : Fin t, k.val < j.val → x k = x' k) :
@@ -113,7 +161,7 @@ private theorem forcingStepWeight_prefix_congr {d t : ℕ}
           exact heq
         exact hinj k l hk hl heq'
   have htrack : trackingError q x j.val = trackingError q x' j.val :=
-    trackingError_prefix_congr q x x' j hprev
+    trackingError_prefix_congr q x x' j.val (Nat.le_of_lt j.isLt) hprev
   have hfree (v : Fin d) : Free x j.val v = Free x' j.val v := by
     apply propext
     constructor

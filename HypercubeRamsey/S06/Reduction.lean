@@ -50,14 +50,9 @@ structure Parameters6 (Dstar γ p₀ K : ℝ) where
   n₀ : ℕ
   C₀ : ℝ
   α : ℝ
-  geometryN₀ : ℕ
   Dstar_pos : 0 < Dstar
   alpha_pos : 0 < α
   C₀_pos : 0 < C₀
-  geometry_threshold : geometryN₀ ≤ n₀
-  geometry_available : ∀ n, geometryN₀ ≤ n →
-    ∃ g : ChunkGeometry6 n α,
-      (n : ℝ) ^ α ≤ g.m ∧ (g.m : ℝ) < (n : ℝ) ^ α + 1
 
 /-- The small universal density exponent and the later dimension/scale choices. -/
 theorem L6_1_constants : ∃ Dstar : ℝ, 0 < Dstar := by

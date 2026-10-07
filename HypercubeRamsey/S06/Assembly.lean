@@ -85,13 +85,17 @@ theorem small_polynomial_broad_side_core :
   intro γ p₀ K hγ0 hγ1 hp hK
   obtain ⟨params⟩ :=
     L6_1_parameters Dstar γ p₀ K hDstar ⟨hγ0, hγ1⟩ hp hK
-  refine ⟨params.n₀, params.C₀, ?_⟩
+  obtain ⟨geometryN₀, hGeometry⟩ := L6_1b params.α params.alpha_pos
+  let finalN₀ := max params.n₀ geometryN₀
+  refine ⟨finalN₀, params.C₀, ?_⟩
   intro n N E G M hLarge hBal hWidth hCap hDeg
-  rcases L6_1a M hLarge hBal hWidth hCap hDeg hDstar with hCube | hParents
+  have hLargeParams : LargeAt params.n₀ params.C₀ n N :=
+    ⟨le_trans (Nat.le_max_left params.n₀ geometryN₀) hLarge.1, hLarge.2.1, hLarge.2.2⟩
+  rcases L6_1a M hLargeParams hBal hWidth hCap hDeg hDstar with hCube | hParents
   · exact hCube
   · let parents : ParentCase6 n N E G M γ Dstar := Classical.choice hParents
-    obtain ⟨geometry, _hmLower, _hmUpper⟩ :=
-      params.geometry_available n (le_trans params.geometry_threshold hLarge.1)
+    obtain ⟨geometry, _hmLower, _hmUpper⟩ := hGeometry n
+      (le_trans (Nat.le_max_right params.n₀ geometryN₀) hLarge.1)
     obtain ⟨states⟩ := L6_1e geometry
     let conditioned : ConditionedCase6 n N parents geometry states :=
       Classical.choice (L6_1h parents geometry states)

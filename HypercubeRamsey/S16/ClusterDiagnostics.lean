@@ -32,7 +32,22 @@ theorem scopedEmpirical_one_slot {J Slot Bin : Type*} [DecidableEq J]
     (s : Slot) (x y : Slot → Bin) (hxy : ∀ t, t ≠ s → x t = y t) :
     |scopedEmpirical I P base f x - scopedEmpirical I P base f y| ≤
       (I.card : ℝ) * A ^ I.card / Fintype.card Slot := by
-  sorry
+  classical
+  let P' : I → FinLaw Bin := fun j => P j.1
+  let f' : (I → Bin) → ℝ := fun a => f (fillScope I base a)
+  let F : (I → Bin) → ℝ :=
+    Lane_sol_s16_prod1.empirical_weighted_kernel P' (Fintype.card Bin) f'
+  have hB : (0 : ℝ) < Fintype.card Bin := by positivity
+  have hA0 : 0 ≤ A := le_trans (by norm_num) hA
+  have hF : ∀ a, 0 ≤ F a ∧ F a ≤ A ^ Fintype.card I := by
+    simpa only [F, P', f'] using
+      (Lane_sol_s16_prod1.empirical_weighted_kernel_range
+        P' (Fintype.card Bin) A hB hA0
+        (by intro j b; exact hcap j.1 b)
+        f' (by intro a; exact hf (fillScope I base a)))
+  simpa [scopedEmpirical, F, P', f'] using
+    (Lane_sol_s16_prod1.empirical_statistic_one_slot
+      F (A ^ Fintype.card I) (pow_nonneg hA0 _) hF s x y hxy)
 
 /-- C2. Mean under iid uniform slots (from `empirical_statistic_mean`,
 `empirical_weighted_kernel_range` and `empirical_weighted_kernel_integral`).
@@ -47,7 +62,38 @@ theorem scopedEmpirical_mean {J Slot Bin : Type*} [DecidableEq J]
         (scopedEmpirical I P base f) ≤
       (FinLaw.pi (fun j : I => P j.1)).E (fun a => f (fillScope I base a)) +
         A ^ I.card * ((I.card : ℝ) ^ 2 / Fintype.card Slot) := by
-  sorry
+  classical
+  let P' : I → FinLaw Bin := fun j => P j.1
+  let f' : (I → Bin) → ℝ := fun a => f (fillScope I base a)
+  let F : (I → Bin) → ℝ :=
+    Lane_sol_s16_prod1.empirical_weighted_kernel P' (Fintype.card Bin) f'
+  have hB : (0 : ℝ) < Fintype.card Bin := by positivity
+  have hA0 : 0 ≤ A := le_trans (by norm_num) hA
+  have hF : ∀ a, 0 ≤ F a ∧ F a ≤ A ^ Fintype.card I := by
+    simpa only [F, P', f'] using
+      (Lane_sol_s16_prod1.empirical_weighted_kernel_range
+        P' (Fintype.card Bin) A hB hA0
+        (by intro j b; exact hcap j.1 b)
+        f' (by intro a; exact hf (fillScope I base a)))
+  have hmean := Lane_sol_s16_prod1.empirical_statistic_mean
+    (Index := I) (Slot := Slot) (Bin := Bin)
+    F (FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)
+    (A ^ Fintype.card I) (pow_nonneg hA0 _) hF
+  change
+    (FinLaw.pi (fun _ : Slot =>
+      FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)).E
+        (Lane_sol_s16_prod1.empirical_statistic F) ≤
+      (FinLaw.pi P').E f' +
+        A ^ I.card * ((I.card : ℝ) ^ 2 / Fintype.card Slot)
+  calc
+    _ ≤ (FinLaw.pi (fun _ : I =>
+          FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)).E F +
+          A ^ Fintype.card I * ((Fintype.card I : ℝ) ^ 2 / Fintype.card Slot) := by
+      exact hmean
+    _ = (FinLaw.pi P').E f' +
+          A ^ I.card * ((I.card : ℝ) ^ 2 / Fintype.card Slot) := by
+      rw [Lane_sol_s16_prod1.empirical_weighted_kernel_integral P' f']
+      simp only [Fintype.card_coe]
 
 /-- C3. The pool-restricted integral is bounded by the slot expansion, on
 every pool (repeated images only enlarge the right side).

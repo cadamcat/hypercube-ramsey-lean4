@@ -684,6 +684,70 @@ theorem finLaw_cond_bind_left {α β : Type*} [Fintype α] [DecidableEq α]
   rw [hdenom]
   by_cases ha : a ∈ s <;> simp [FinLaw.bind, hwt, ha] <;> ring
 
+/-- Pushforward by an equivalence commutes with conditioning, with the event
+transported to its image. -/
+theorem finLaw_map_cond_equiv {α β : Type*} [Fintype α] [DecidableEq α]
+    [Fintype β] [DecidableEq β] (P : FinLaw α) (e : α ≃ β) (s : Finset α)
+    (h : 0 < ∑ a ∈ s, P.w a) :
+    FinLaw.map (FinLaw.cond P s h) e =
+      FinLaw.cond (FinLaw.map P e) (s.image e)
+        (by
+          have hmass : ∑ b ∈ s.image e, (FinLaw.map P e).w b = ∑ a ∈ s, P.w a := by
+            calc
+              ∑ b ∈ s.image e, (FinLaw.map P e).w b =
+                  (FinLaw.map P e).pr (fun b => b ∈ s.image e) :=
+                (finLaw_pr_finset _ _).symm
+              _ = P.pr (fun a => e a ∈ s.image e) := finLaw_map_pr P e _
+              _ = P.pr (fun a => a ∈ s) := by
+                apply finLaw_pr_congr_of_supported
+                intro a _
+                simp [Finset.mem_image, e.injective]
+              _ = ∑ a ∈ s, P.w a := finLaw_pr_finset P s
+          rw [hmass]
+          exact h) := by
+  classical
+  have hmass : ∑ b ∈ s.image e, (FinLaw.map P e).w b = ∑ a ∈ s, P.w a := by
+    calc
+      ∑ b ∈ s.image e, (FinLaw.map P e).w b =
+          (FinLaw.map P e).pr (fun b => b ∈ s.image e) :=
+        (finLaw_pr_finset _ _).symm
+      _ = P.pr (fun a => e a ∈ s.image e) := finLaw_map_pr P e _
+      _ = P.pr (fun a => a ∈ s) := by
+        apply finLaw_pr_congr_of_supported
+        intro a _
+        simp [Finset.mem_image, e.injective]
+      _ = ∑ a ∈ s, P.w a := finLaw_pr_finset P s
+  apply finLaw_ext
+  intro b
+  have hmem : b ∈ s.image e ↔ e.symm b ∈ s := by
+    constructor
+    · intro hb
+      rcases Finset.mem_image.mp hb with ⟨a, ha, hab⟩
+      have : a = e.symm b := by
+        apply e.injective
+        simpa [hab]
+      simpa [this] using ha
+    · intro hb
+      exact Finset.mem_image.mpr ⟨e.symm b, hb, by simp⟩
+  have hEq (a : α) : e a = b ↔ a = e.symm b := by
+    constructor
+    · intro hab
+      apply e.injective
+      simpa [hab]
+    · intro ha
+      simpa [ha]
+  have hsum (f : α → ℝ) :
+      (∑ a, if e a = b then f a else 0) = f (e.symm b) := by
+    calc
+      (∑ a, if e a = b then f a else 0) =
+          ∑ a, if a = e.symm b then f a else 0 := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        simp [hEq a]
+      _ = f (e.symm b) := by simp
+  by_cases hb : e.symm b ∈ s <;>
+    simp [FinLaw.map, FinLaw.cond, hmem, hmass, hEq, hb]
+
 /-- An eventual index property becomes a dimension cutoff along any sequence
 whose finitely many early dimensions are bounded. -/
 theorem badSeq_dimension_cutoff (S : BadSeq) {P : ℕ → Prop}

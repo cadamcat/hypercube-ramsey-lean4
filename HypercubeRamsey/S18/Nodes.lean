@@ -586,12 +586,17 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
   refine ⟨κ.KB, hK, ?_⟩
   have hn : ∀ᶠ k in atTop, 2 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 2
   obtain ⟨Kβ, hKβ, hSchedule, hsmall⟩ := L18_0a hκ T
+  obtain ⟨K16, hquant⟩ := low_mode_quantitative_inputs hκ T
   have hlog : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
   have hscale : ∀ᶠ k in atTop, 8 * κ.KB < densityScale T k :=
     T.S.ratio_tendsto.eventually_gt_atTop (8 * κ.KB)
+  have hconflictScale : ∀ᶠ k in atTop, 48 * κ.KB * K16 * κ.Kbd ≤ densityScale T k :=
+    T.S.ratio_tendsto.eventually_ge_atTop (48 * κ.KB * K16 * κ.Kbd)
   filter_upwards [hn, hsmall (Real.log 2 / 1000) hlog,
-    hsmall (1 / 1000) (by norm_num), L18_0b hκ T, hscale] with k hk hsmall₀ hsmall₁ hcap hkScale
+    hsmall (1 / 1000) (by norm_num), L18_0b hκ T, hscale, hquant, hconflictScale]
+    with k hk hsmall₀ hsmall₁ hcap hkScale hquant hkConflictScale
   intro PT hPT D hD hTransition
+  obtain ⟨Q, _hGain⟩ := hquant PT hPT D.low_mode
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro p
     simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale,
@@ -615,7 +620,9 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     have hZ : (1 / 2 : ℝ) ≤ ∑ p : Fin (T.S.N k) × Fin (T.S.N k),
           if D.nonconflict v p.1 p.2 then
             (D.finalPrior h v).w p.1 * (D.finalPrior h v).w p.2 else 0 := by
-      sorry
+      exact Lane_sol_s18_n5.final_nonconflict_mass hκ D hD Q hC hkConflictScale δ x h hfull
+        v heven hmass (fun j => le_trans (Lane_sol_s18_n5.smallErrors_error_le D (1 / 1000)
+          (hsmall₁ PT hPT D.low_mode D.geom D.fresh D.l16_valid) v j) (by norm_num))
     exact ⟨hZ, Lane_sol_s18_n5.pairLaw_support hκ D h v
       (hfull.2.2.2.2.1 v heven) hmass hZ⟩
 

@@ -422,11 +422,15 @@ theorem p92_gain_means (P : Params9) (hP : P.Valid) (cT c₁ : ℝ) (hcT : 0 < c
     (u := P.u) (c := 1) (A := 2) (s := 1) hu (by norm_num)
   obtain ⟨nTail, hTail⟩ := Lane_q_s09_gain2.eventual_tail_sum3
     (u := P.u) (c₁ := cReg) (c₂ := c₁ / 2) (c₃ := cSpec) hu hcReg hcHalf hcSpec
-  refine ⟨c, hc, max nReg (max nDeep (max nPoly nTail)), ?_⟩
+  obtain ⟨nMargin, hMargin⟩ := Lane_q_s09_gain2.eventual_gain_mean_margin9 P hP
+  let nBase := max nReg (max nDeep (max nPoly nTail))
+  refine ⟨c, hc, max nBase nMargin, ?_⟩
   intro n hn N E X Y κ G M S I hin hTagsOK hMean
-  have hnReg : nReg ≤ n := le_trans (le_max_left nReg (max nDeep (max nPoly nTail))) hn
+  have hnBase : nBase ≤ n := le_trans (le_max_left nBase nMargin) hn
+  have hnMargin : nMargin ≤ n := le_trans (le_max_right nBase nMargin) hn
+  have hnReg : nReg ≤ n := le_trans (le_max_left nReg (max nDeep (max nPoly nTail))) hnBase
   have hnRest : max nDeep (max nPoly nTail) ≤ n :=
-    le_trans (le_max_right nReg _) hn
+    le_trans (le_max_right nReg _) hnBase
   have hnDeep : nDeep ≤ n := le_trans (le_max_left nDeep (max nPoly nTail)) hnRest
   have hnPair : max nPoly nTail ≤ n := le_trans (le_max_right nDeep _) hnRest
   have hnPoly : nPoly ≤ n := le_trans (le_max_left nPoly nTail) hnPair
@@ -950,7 +954,11 @@ theorem p92_gain_means (P : Params9) (hP : P.Valid) (cT c₁ : ℝ) (hcT : 0 < c
           (n : ℝ) / 2 + ((n : ℝ) - (P.m n : ℝ)) * P.aStar n + specialLoss -
               (n : ℝ) * P.aStar n / 100 ≥
             (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n := by
-        sorry
+        change (n : ℝ) / 2 + ((n : ℝ) - (P.m n : ℝ)) * P.aStar n +
+            Lane_q_s09_gain2.gainMeanSpecialLoss9 P n -
+              (n : ℝ) * P.aStar n / 100 ≥
+          (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n
+        linarith [hMargin n hnMargin]
       have hfinal :
           (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n ≤
             ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω :=

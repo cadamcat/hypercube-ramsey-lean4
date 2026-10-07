@@ -963,4 +963,127 @@ theorem eventual_tail_sum3 {u c₁ c₂ c₃ : ℝ} (hu : 0 < u)
       congr 1
       ring
 
+noncomputable def gainMeanSpecialLoss9 (P : Params9) (n : ℕ) : ℝ :=
+  match P.case with
+  | .sub _ _ _ => -(P.m n : ℝ) * (2 * P.bStar n)
+  | .lin _ _ _ _ => -((1 / 20 : ℝ) * P.aStar n * n)
+
+theorem eventual_gain_mean_margin9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      ((n : ℝ) - (P.m n : ℝ)) * P.aStar n + gainMeanSpecialLoss9 P n -
+          (n : ℝ) * P.aStar n / 100 ≥
+        (9 / 10 : ℝ) * n * P.aStar n := by
+  cases hcase : P.case with
+  | lin αS αD hB yB =>
+      have hbranch : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+          P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+        simpa [hcase] using hP.2.2.2.2.2.2
+      rcases hbranch with ⟨hαS, h100, hαD, _, _, _, _, _⟩
+      have hαD100 : 100 * αD < 1 := by nlinarith [hαD]
+      have hαD100R : (100 : ℝ) * (αD : ℝ) < 1 := by exact_mod_cast hαD100
+      have hαDpos : 0 < αD := by linarith
+      have hαDpos' : (0 : ℝ) < (αD : ℝ) := by exact_mod_cast hαDpos
+      refine ⟨1, ?_⟩
+      intro n hn
+      have hnR : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+      have hfloor : (P.m n : ℝ) ≤ (αD : ℝ) * n / 10 := by
+        simp only [Params9.m, hcase]
+        exact Nat.floor_le (by positivity)
+      have hmSmall : (P.m n : ℝ) ≤ (n : ℝ) / 1000 := by
+        nlinarith [hfloor, mul_lt_mul_of_pos_right hαD100R hnR]
+      have ha : 0 ≤ P.aStar n := by
+        dsimp [Params9.aStar]
+        positivity
+      have hma : (P.m n : ℝ) * P.aStar n ≤
+          (n : ℝ) * P.aStar n / 1000 := by
+        calc
+          (P.m n : ℝ) * P.aStar n ≤ ((n : ℝ) / 1000) * P.aStar n :=
+            mul_le_mul_of_nonneg_right hmSmall ha
+          _ = (n : ℝ) * P.aStar n / 1000 := by ring
+      simp only [gainMeanSpecialLoss9, hcase]
+      nlinarith [hma]
+  | sub yS yD yM =>
+      have hbranch : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧
+          1 - P.σ < yD ∧ yD < 1 ∧ P.χ < P.σ / 10 := by
+        simpa [hcase] using hP.2.2.2.2.2.2
+      rcases hbranch with ⟨_, _, hym, _, _, hχσ⟩
+      have hym' : (yM : ℝ) < 1 - (P.σ : ℝ) := by exact_mod_cast hym
+      have hχσ' : (P.χ : ℝ) < (P.σ : ℝ) / 10 := by exact_mod_cast hχσ
+      have hσ : 0 < (P.σ : ℝ) := by exact_mod_cast hP.2.2.2.1.1
+      have hdiff : (P.hPlus : ℝ) - (P.hMinus : ℝ) < (P.χ : ℝ) / 10 := by
+        exact_mod_cast hP.2.2.2.2.2.1
+      let d₁ : ℝ := 1 - (yM : ℝ)
+      let d₂ : ℝ := 1 - (yM : ℝ) - ((P.hPlus : ℝ) - (P.hMinus : ℝ))
+      have hd₁ : 0 < d₁ := by dsimp [d₁]; linarith
+      have hd₂ : 0 < d₂ := by dsimp [d₂]; nlinarith
+      obtain ⟨n₁, hsmall₁⟩ :=
+        eventual_const_mul_rpow_neg_lt (d := d₁) (A := 1) (ε := 1 / 100)
+          hd₁ (by norm_num)
+      obtain ⟨n₂, hsmall₂⟩ :=
+        eventual_const_mul_rpow_neg_lt (d := d₂) (A := 400) (ε := 1)
+          hd₂ (by norm_num)
+      refine ⟨max (max n₁ n₂) 1, ?_⟩
+      intro n hn
+      have hn12 : max n₁ n₂ ≤ n := le_trans (le_max_left (max n₁ n₂) 1) hn
+      have hn₁ : n₁ ≤ n := le_trans (le_max_left n₁ n₂) hn12
+      have hn₂ : n₂ ≤ n := le_trans (le_max_right n₁ n₂) hn12
+      have hnR : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+      have hpow₁ : (n : ℝ) ^ (-(d₁)) < 1 / 100 := by
+        simpa [d₁] using hsmall₁ n hn₁
+      have hpow₂ : 400 * (n : ℝ) ^ (-(d₂)) < 1 := by
+        simpa [d₂] using hsmall₂ n hn₂
+      have hmFloor : (P.m n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) := by
+        simp only [Params9.m, hcase]
+        exact Nat.floor_le (by positivity)
+      have hpowFactor₁ : (n : ℝ) ^ (yM : ℝ) =
+          (n : ℝ) * (n : ℝ) ^ (-(d₁)) := by
+        rw [show (yM : ℝ) = 1 + (-(d₁)) by dsimp [d₁]; ring,
+          Real.rpow_add hnR]
+        simp
+      have hmSmall : (P.m n : ℝ) ≤ (n : ℝ) / 100 := by
+        calc
+          (P.m n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) := hmFloor
+          _ = (n : ℝ) * (n : ℝ) ^ (-(d₁)) := hpowFactor₁
+          _ ≤ (n : ℝ) / 100 := by nlinarith [hpow₁, hnR]
+      have ha : 0 ≤ P.aStar n := by
+        dsimp [Params9.aStar]
+        positivity
+      have hma : (P.m n : ℝ) * P.aStar n ≤
+          (n : ℝ) * P.aStar n / 100 := by
+        calc
+          (P.m n : ℝ) * P.aStar n ≤ ((n : ℝ) / 100) * P.aStar n :=
+            mul_le_mul_of_nonneg_right hmSmall ha
+          _ = (n : ℝ) * P.aStar n / 100 := by ring
+      have hpowFactor₂ : (n : ℝ) ^ ((yM : ℝ) - (P.hMinus : ℝ)) =
+          (n : ℝ) ^ (1 - (P.hPlus : ℝ)) * (n : ℝ) ^ (-(d₂)) := by
+        rw [show (yM : ℝ) - (P.hMinus : ℝ) =
+          (1 - (P.hPlus : ℝ)) + (-(d₂)) by dsimp [d₂]; ring,
+          Real.rpow_add hnR]
+      have hpowProd : (n : ℝ) ^ (yM : ℝ) *
+          (n : ℝ) ^ (-(P.hMinus : ℝ)) =
+          (n : ℝ) ^ ((yM : ℝ) - (P.hMinus : ℝ)) := by
+        rw [← Real.rpow_add hnR]
+        congr 1 <;> ring
+      have hpowA : (n : ℝ) * (n : ℝ) ^ (-(P.hPlus : ℝ)) =
+          (n : ℝ) ^ (1 - (P.hPlus : ℝ)) := by
+        have hadd := (Real.rpow_add hnR (1 : ℝ) (-(P.hPlus : ℝ))).symm
+        simpa [sub_eq_add_neg] using hadd
+      have htargetEq : (n : ℝ) * ((n : ℝ) ^ (-(P.hPlus : ℝ)) / 2) / 100 =
+          (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 200 := by
+        rw [← hpowA]
+        ring
+      have hmb : 2 * (P.m n : ℝ) * P.bStar n ≤
+          (n : ℝ) * P.aStar n / 100 := by
+        have hmul : (P.m n : ℝ) * (n : ℝ) ^ (-(P.hMinus : ℝ)) ≤
+            (n : ℝ) ^ (yM : ℝ) * (n : ℝ) ^ (-(P.hMinus : ℝ)) :=
+          mul_le_mul_of_nonneg_right hmFloor (by positivity)
+        have hscaled := mul_le_mul_of_nonneg_left (le_of_lt hpow₂)
+          (show 0 ≤ (n : ℝ) ^ (1 - (P.hPlus : ℝ)) by positivity)
+        rw [Params9.bStar, Params9.aStar]
+        rw [htargetEq]
+        rw [hpowProd, hpowFactor₂] at hmul
+        nlinarith [hmul, hscaled]
+      simp only [gainMeanSpecialLoss9, hcase]
+      nlinarith [hma, hmb]
+
 end HypercubeRamsey.Lane_q_s09_gain2

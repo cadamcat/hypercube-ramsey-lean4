@@ -1,6 +1,7 @@
 import HypercubeRamsey.S09.Defs
 import HypercubeRamsey.S09.Regime
 import HypercubeRamsey.S09.Needs
+import HypercubeRamsey.S09.Map2Counterexample_p_s09_maps
 import HypercubeRamsey.S03.Mixtures
 import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.S03.ScatteredMoments

@@ -2566,6 +2566,18 @@ theorem stoppingTime_le_steps (P : TransferProtocol X) (seed : P.Seed)
     omega
   · omega
 
+theorem stoppingTime_stop_condition (P : TransferProtocol X) (seed : P.Seed)
+    (x : Fin (T.S.N k)) (z : Option (Fin (T.S.N k))) (s : X.Raw) (cstop : ℝ)
+    (htau : stoppingTime P seed x z s cstop < P.steps) :
+    factorException P seed x z s (stoppingTime P seed x z s cstop) ∨
+      Real.exp (Real.rpow (T.S.n k : ℝ) cstop) <
+        likelihood P seed x z s (stoppingTime P seed x z s cstop) := by
+  classical
+  dsimp only [stoppingTime] at htau ⊢
+  split_ifs at htau ⊢ with h
+  · exact (Finset.mem_filter.mp (Finset.min'_mem _ h)).2
+  · omega
+
 theorem critical_cell_hit_bound_eventually {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in (Filter.atTop : Filter ℕ), ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,

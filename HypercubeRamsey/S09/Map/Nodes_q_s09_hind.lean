@@ -573,6 +573,60 @@ private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : �
           · exact hdistRoot
           · exact hlocal _ (by simpa [x] using hz)
 
+private theorem heightPath9_suffix {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hp : HeightPath9 bad l start) {x : HeightState9 P hc n} (hx : x ∈ l) :
+    ∃ rest, HeightPath9 bad (x :: rest) start := by
+  induction hp generalizing x with
+  | singleton y =>
+      simp only [List.mem_singleton] at hx
+      subst x
+      exact ⟨[], HeightPath9.singleton y⟩
+  | cons hstep htail ih =>
+      simp only [List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact ⟨_, HeightPath9.cons hstep htail⟩
+      · exact ih (by simp [hx])
+
+private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 (fun x => badAt9 (P := P) (hc := hc) (n := n)
+        Pp A x.1 x.2)) l start)
+    (hstart : start.2.val = 0) (hlocal : ∀ x ∈ l, _root_.hammingDist x.1 root ≤ R) :
+    ∃ endpoint : HeightState9 P hc n, l.head? = some endpoint ∧
+      Reach9 (P := P) (hc := hc) (n := n) Pp A root R endpoint.1 endpoint.2.val := by
+  induction hp with
+  | singleton x =>
+      refine ⟨x, by simp, ?_⟩
+      have hx0 : x.2.val = 0 := by simpa using hstart
+      simpa [hx0] using (Reach9.start x.1 (hlocal x (by simp)))
+  | @cons x y rest start hstep htail ih =>
+      have hlocalTail : ∀ z ∈ y :: rest, _root_.hammingDist z.1 root ≤ R := by
+        intro z hz
+        exact hlocal z (by simp [hz])
+      obtain ⟨endpoint, hend, hreach⟩ := ih hstart hlocalTail
+      have hEndpoint : endpoint = y := by simpa using hend.symm
+      subst endpoint
+      have hlocalX : _root_.hammingDist x.1 root ≤ R := hlocal x (by simp)
+      refine ⟨x, by simp, ?_⟩
+      rcases hstep with ⟨hsite, hlevel, hbad⟩ | ⟨hlevel, hdist⟩
+      · have hlt : y.2.val < hc.levels n := by
+          have hxlt := x.2.isLt
+          omega
+        have hnew : x = (y.1, ⟨y.2.val + 1, by omega⟩) := by
+          apply Prod.ext
+          · exact hsite.symm
+          · apply Fin.ext
+            exact hlevel
+        rw [hnew]
+        exact Reach9.up y.1 y.2.val hlt hreach hbad
+      · have hDown : y.2.val = x.2.val + 1 := hlevel
+        have hreach' : Reach9 (P := P) (hc := hc) (n := n) Pp A root R y.1
+            (x.2.val + 1) := by simpa [hDown] using hreach
+        exact Reach9.down y.1 x.1 x.2.val hreach' hlocalX hdist
+
 private theorem heightStep9_mono {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad bad' : HeightState9 P hc n → Prop}
     (hbad : ∀ x, bad x → bad' x) (x y : HeightState9 P hc n)

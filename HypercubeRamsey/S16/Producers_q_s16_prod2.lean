@@ -748,6 +748,15 @@ theorem finLaw_map_cond_equiv {α β : Type*} [Fintype α] [DecidableEq α]
   by_cases hb : e.symm b ∈ s <;>
     simp [FinLaw.map, FinLaw.cond, hmem, hmass, hEq, hb]
 
+/-- An equivalence pushforward preserves the mass of the corresponding atom. -/
+theorem finLaw_map_equiv_weight {α β : Type*} [Fintype α] [Fintype β]
+    [DecidableEq β] (P : FinLaw α) (e : α ≃ β) (a : α) :
+    (FinLaw.map P e).w (e a) = P.w a := by
+  classical
+  change (∑ b, if e b = e a then P.w b else 0) = P.w a
+  have heq (b : α) : e b = e a ↔ b = a := e.injective.eq_iff
+  simp [heq]
+
 /-- An eventual index property becomes a dimension cutoff along any sequence
 whose finitely many early dimensions are bounded. -/
 theorem badSeq_dimension_cutoff (S : BadSeq) {P : ℕ → Prop}

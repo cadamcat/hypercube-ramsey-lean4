@@ -399,18 +399,13 @@ theorem finLaw_pr_mono {α : Type*} [Fintype α] (P : FinLaw α)
   · by_cases hB : B x <;> simp [hA, hB, P.nonneg x]
 
 theorem row_failure_probability_le {α : Type*} [Fintype α]
-    (P : FinLaw α) (cross bulk row threshold : α → ℝ)
+    (P : FinLaw α) (cross bulk row threshold : α → ℝ) (δcross δbulk : ℝ)
     (hrow : ∀ x, row x = cross x * bulk x)
     (hsmall : ∀ x, threshold x ≤ 1 / 10)
-    (hcross : ∃ δcross : ℝ, P.pr (fun x => |cross x - 1| > threshold x) ≤ δcross)
-    (hbulk : ∃ δbulk : ℝ,
-      P.pr (fun x => 9 / 10 ≤ cross x ∧ bulk x < 3 / 4) ≤ δbulk) :
-    ∃ δcross δbulk : ℝ,
-      P.pr (fun x => row x < 1 / 2) ≤ δcross + δbulk := by
+    (hcross : P.pr (fun x => |cross x - 1| > threshold x) ≤ δcross)
+    (hbulk : P.pr (fun x => 9 / 10 ≤ cross x ∧ bulk x < 3 / 4) ≤ δbulk) :
+    P.pr (fun x => row x < 1 / 2) ≤ δcross + δbulk := by
   classical
-  obtain ⟨δcross, hcross⟩ := hcross
-  obtain ⟨δbulk, hbulk⟩ := hbulk
-  refine ⟨δcross, δbulk, ?_⟩
   have hsub (x : α) (hx : row x < 1 / 2) :
       (|cross x - 1| > threshold x) ∨
         (9 / 10 ≤ cross x ∧ bulk x < 3 / 4) :=

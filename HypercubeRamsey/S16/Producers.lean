@@ -3202,10 +3202,399 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         apply Subtype.ext
         exact hflip
       rw [hread, hlabels]
-    -- The source slice and the `h` star roles now identify the local solver
-    -- experiment. Finish the product projection, calibrated-stage bounds,
-    -- and denominator budgets using this scope.
-    sorry
+    let rawFactors : ∀ s : R.Slice C, FinLaw (R.Value C s) := fun s =>
+      if hs : s = sourceSlice then hs.symm ▸ R.sliceLaw C sourceSlice else
+        FinLaw.cond (R.sliceLaw C s) (R.slicePass C s) (R.slice_pos C s)
+    let rawHistory : FinLaw (R.Hist C) := FinLaw.pi rawFactors
+    let localPass : Finset (R.Hist C) :=
+      Finset.univ.filter fun W => W sourceSlice ∈ R.slicePass C sourceSlice
+    have hLocalPassMass :
+        rawHistory.pr (fun W => W sourceSlice ∈ R.slicePass C sourceSlice) =
+          (R.sliceLaw C sourceSlice).pr (fun x => x ∈ R.slicePass C sourceSlice) := by
+      simpa [rawHistory, rawFactors] using
+        (Lane_q_s16_prod2.finLaw_pi_coordinate_pr rawFactors sourceSlice
+          (R.slicePass C sourceSlice))
+    have hLocalPassPr : rawHistory.pr (fun W => W ∈ localPass) =
+        (R.sliceLaw C sourceSlice).pr (fun x => x ∈ R.slicePass C sourceSlice) := by
+      simpa [localPass] using hLocalPassMass
+    have hSlicePos : 0 < ∑ W ∈ localPass, rawHistory.w W := by
+      rw [← Lane_q_s16_prod2.finLaw_pr_finset rawHistory localPass, hLocalPassPr,
+        Lane_q_s16_prod2.finLaw_pr_finset]
+      exact R.slice_pos C sourceSlice
+    let splitEquiv := Lane_q_s16_prod2.finLaw_pi_splitEquiv
+      (Ω := fun s : R.Slice C => R.Value C s) sourceSlice
+    let otherFactors : ∀ j : {s : R.Slice C // s ≠ sourceSlice}, FinLaw (R.Value C j.1) :=
+      fun j => FinLaw.cond (R.sliceLaw C j.1) (R.slicePass C j.1) (R.slice_pos C j.1)
+    let otherLaw := FinLaw.pi otherFactors
+    let pairPass : Finset (R.Value C sourceSlice ×
+        (∀ j : {s : R.Slice C // s ≠ sourceSlice}, R.Value C j.1)) :=
+      Finset.univ.filter fun p => p.1 ∈ R.slicePass C sourceSlice
+    have hRawSource : rawFactors sourceSlice = R.sliceLaw C sourceSlice := by
+      simp [rawFactors]
+    have hRawOtherFactor (j : {s : R.Slice C // s ≠ sourceSlice}) :
+        rawFactors j.1 = otherFactors j := by
+      simp [rawFactors, otherFactors, j.2]
+    have hRawOther :
+        FinLaw.pi (fun j : {s : R.Slice C // s ≠ sourceSlice} => rawFactors j.1) = otherLaw := by
+      apply Lane_q_s16_prod2.finLaw_ext
+      intro a
+      simp only [FinLaw.pi]
+      apply Finset.prod_congr rfl
+      intro j hj
+      rw [hRawOtherFactor j]
+    have hRawSplit :
+        FinLaw.map rawHistory splitEquiv =
+          FinLaw.bind (R.sliceLaw C sourceSlice) (fun _ => otherLaw) := by
+      calc
+        FinLaw.map rawHistory splitEquiv =
+            FinLaw.bind (rawFactors sourceSlice)
+              (fun _ => FinLaw.pi (fun j : {s : R.Slice C // s ≠ sourceSlice} => rawFactors j.1)) := by
+          simpa [rawHistory, splitEquiv, Lane_q_s16_prod2.finLaw_pi_splitEquiv] using
+            (Lane_q_s16_prod2.finLaw_pi_split rawFactors sourceSlice)
+        _ = FinLaw.bind (R.sliceLaw C sourceSlice) (fun _ => otherLaw) := by
+          rw [hRawSource, hRawOther]
+    have hPassImage : localPass.image splitEquiv = pairPass := by
+      apply Finset.ext
+      intro p
+      rcases p with ⟨x, other⟩
+      constructor
+      · intro hp
+        rcases Finset.mem_image.mp hp with ⟨W, hW, hEq⟩
+        have hWPass : W sourceSlice ∈ R.slicePass C sourceSlice := by
+          simpa [localPass] using hW
+        have hx : W sourceSlice = x := by
+          simpa [splitEquiv, Lane_q_s16_prod2.finLaw_pi_splitEquiv] using
+            congrArg Prod.fst hEq
+        rw [hx] at hWPass
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hWPass⟩
+      · intro hp
+        have hxPass : x ∈ R.slicePass C sourceSlice := (Finset.mem_filter.mp hp).2
+        refine Finset.mem_image.mpr ⟨splitEquiv.symm (x, other), ?_, ?_⟩
+        · simpa [localPass, splitEquiv, Lane_q_s16_prod2.finLaw_pi_splitEquiv] using hxPass
+        · exact splitEquiv.apply_symm_apply (x, other)
+    have hPairMass :
+        (FinLaw.bind (R.sliceLaw C sourceSlice) (fun _ => otherLaw)).pr
+            (fun p => p ∈ pairPass) =
+          ∑ x ∈ R.slicePass C sourceSlice, (R.sliceLaw C sourceSlice).w x := by
+      rw [Lane_q_s16_prod2.finLaw_bind_pr]
+      calc
+        (∑ x, (R.sliceLaw C sourceSlice).w x *
+            otherLaw.pr (fun y => (x, y) ∈ pairPass)) =
+            ∑ x, if x ∈ R.slicePass C sourceSlice then
+              (R.sliceLaw C sourceSlice).w x else 0 := by
+          apply Finset.sum_congr rfl
+          intro x hx
+          have hconst : otherLaw.pr (fun y => (x, y) ∈ pairPass) =
+              if x ∈ R.slicePass C sourceSlice then 1 else 0 := by
+            by_cases hmem : x ∈ R.slicePass C sourceSlice
+            · simp [FinLaw.pr, pairPass, hmem, otherLaw.sum_one]
+            · simp [FinLaw.pr, pairPass, hmem]
+          rw [hconst]
+          by_cases hmem : x ∈ R.slicePass C sourceSlice <;> simp [hmem]
+        _ = ∑ x ∈ R.slicePass C sourceSlice, (R.sliceLaw C sourceSlice).w x := by
+          rw [← Finset.sum_filter]
+          simp
+    have hPairPos : 0 < ∑ p ∈ pairPass,
+        (FinLaw.bind (R.sliceLaw C sourceSlice) (fun _ => otherLaw)).w p := by
+      rw [← Lane_q_s16_prod2.finLaw_pr_finset,
+        hPairMass]
+      exact R.slice_pos C sourceSlice
+    have hCondPair :
+        FinLaw.cond (FinLaw.bind (R.sliceLaw C sourceSlice) (fun _ => otherLaw))
+            pairPass hPairPos =
+          FinLaw.bind (FinLaw.cond (R.sliceLaw C sourceSlice)
+            (R.slicePass C sourceSlice) (R.slice_pos C sourceSlice)) (fun _ => otherLaw) := by
+      simpa [pairPass] using
+        (Lane_q_s16_prod2.finLaw_cond_bind_left (R.sliceLaw C sourceSlice) otherLaw
+          (R.slicePass C sourceSlice) (R.slice_pos C sourceSlice))
+    have hCondSplit :
+        FinLaw.map (FinLaw.cond rawHistory localPass hSlicePos) splitEquiv =
+          FinLaw.bind (FinLaw.cond (R.sliceLaw C sourceSlice)
+            (R.slicePass C sourceSlice) (R.slice_pos C sourceSlice)) (fun _ => otherLaw) := by
+      calc
+        FinLaw.map (FinLaw.cond rawHistory localPass hSlicePos) splitEquiv =
+          FinLaw.cond (FinLaw.map rawHistory splitEquiv) (localPass.image splitEquiv) _ :=
+          Lane_q_s16_prod2.finLaw_map_cond_equiv rawHistory splitEquiv localPass hSlicePos
+        _ = FinLaw.cond (FinLaw.bind (R.sliceLaw C sourceSlice) (fun _ => otherLaw))
+              pairPass hPairPos := by
+          apply Lane_q_s16_prod2.finLaw_ext
+          intro p
+          simp [FinLaw.cond, hRawSplit, hPassImage, pairPass]
+        _ = FinLaw.bind (FinLaw.cond (R.sliceLaw C sourceSlice)
+              (R.slicePass C sourceSlice) (R.slice_pos C sourceSlice)) (fun _ => otherLaw) := hCondPair
+    let goodFactors : ∀ s : R.Slice C, FinLaw (R.Value C s) := fun s =>
+      FinLaw.cond (R.sliceLaw C s) (R.slicePass C s) (R.slice_pos C s)
+    have hOtherGood : otherLaw = FinLaw.pi (fun j : {s : R.Slice C // s ≠ sourceSlice} =>
+        goodFactors j.1) := by
+      apply Lane_q_s16_prod2.finLaw_ext
+      intro a
+      simp only [FinLaw.pi, otherLaw]
+      apply Finset.prod_congr rfl
+      intro j hj
+      rfl
+    have hGoodSplit :
+        FinLaw.map (R.history C) splitEquiv =
+          FinLaw.bind (goodFactors sourceSlice) (fun _ => otherLaw) := by
+      calc
+        FinLaw.map (R.history C) splitEquiv =
+            FinLaw.bind (goodFactors sourceSlice)
+              (fun _ => FinLaw.pi (fun j : {s : R.Slice C // s ≠ sourceSlice} =>
+                goodFactors j.1)) := by
+          simpa [CellRawData.history, goodFactors, splitEquiv,
+            Lane_q_s16_prod2.finLaw_pi_splitEquiv] using
+            (Lane_q_s16_prod2.finLaw_pi_split goodFactors sourceSlice)
+        _ = FinLaw.bind (goodFactors sourceSlice) (fun _ => otherLaw) := by
+          rw [← hOtherGood]
+    have hCondRaw : FinLaw.cond rawHistory localPass hSlicePos = R.history C := by
+      apply Lane_q_s16_prod2.finLaw_ext
+      intro W
+      have h := congrArg (fun law => law.w (splitEquiv W)) (hCondSplit.trans hGoodSplit.symm)
+      have hMapWeight (law : FinLaw (R.Hist C)) :
+          (FinLaw.map law splitEquiv).w (splitEquiv W) = law.w W := by
+        exact Lane_q_s16_prod2.finLaw_map_equiv_weight law splitEquiv W
+      rw [hMapWeight] at h
+      rw [hMapWeight] at h
+      exact h
+    let localBase : FinLaw (Cal.Hist C) :=
+      FinLaw.map rawHistory (fun W => (hLink.histories C).symm W)
+    let localPassCal : Finset (Cal.Hist C) :=
+      localPass.image (hLink.histories C).symm
+    have hLocalCalPassPr :
+        localBase.pr (fun W => W ∈ localPassCal) =
+          rawHistory.pr (fun W => W ∈ localPass) := by
+      change (FinLaw.map rawHistory (fun W => (hLink.histories C).symm W)).pr _ = _
+      rw [Lane_q_s16_prod2.finLaw_map_pr]
+      congr 1
+      funext W
+      simp [localPassCal, localPass]
+    have hSlicePosCal : 0 < ∑ W ∈ localPassCal, localBase.w W := by
+      rw [← Lane_q_s16_prod2.finLaw_pr_finset localBase localPassCal,
+        hLocalCalPassPr, Lane_q_s16_prod2.finLaw_pr_finset]
+      exact hSlicePos
+    have hLocalPassCalImage :
+        localPass.image (hLink.histories C).symm = localPassCal := by
+      rfl
+    have hLocalCondMap :
+        FinLaw.map (FinLaw.cond rawHistory localPass hSlicePos) (hLink.histories C).symm =
+          FinLaw.cond localBase localPassCal hSlicePosCal := by
+      simpa [localBase, localPassCal] using
+        (Lane_q_s16_prod2.finLaw_map_cond_equiv rawHistory (hLink.histories C).symm
+          localPass hSlicePos)
+    have hCalHistory : FinLaw.cond localBase localPassCal hSlicePosCal = Cal.history C := by
+      calc
+        FinLaw.cond localBase localPassCal hSlicePosCal =
+            FinLaw.map (FinLaw.cond rawHistory localPass hSlicePos) (hLink.histories C).symm :=
+          hLocalCondMap.symm
+        _ = FinLaw.map (R.history C) (hLink.histories C).symm :=
+          congrArg (fun law => FinLaw.map law (hLink.histories C).symm) hCondRaw
+        _ = Cal.history C := (hLink.history_eq C).symm
+    let histMap : Cal.Hist C → Cal.Hist C × Unit := fun W => (W, ())
+    let histLaw : FinLaw (Cal.Hist C × Unit) :=
+      FinLaw.map (FinLaw.cond localBase localPassCal hSlicePosCal) histMap
+    have hHistLaw : histLaw = FinLaw.map (Cal.history C) histMap := by
+      simp [histLaw, hCalHistory]
+    have hHistWeight (W : Cal.Hist C) : histLaw.w (W, ()) = (Cal.history C).w W := by
+      rw [hHistLaw]
+      simp [FinLaw.map, histMap]
+    have hGatedWeight (pool : F.Pool C) (W : Cal.Hist C) :
+        (FinLaw.map (Cal.gatedHistory C pool) histMap).w (W, ()) =
+          (Cal.gatedHistory C pool).w W := by
+      simp [FinLaw.map, histMap]
+    let histGate (pool : F.Pool C) : Finset (Cal.Hist C × Unit) :=
+      Finset.univ.filter fun z => z.1 ∈ Cal.gate C pool
+    have hGateMass (pool : F.Pool C) :
+        (∑ z ∈ histGate pool, histLaw.w z) =
+          ∑ W ∈ Cal.gate C pool, (Cal.history C).w W := by
+      calc
+        (∑ z ∈ histGate pool, histLaw.w z) =
+            histLaw.pr (fun z => z ∈ histGate pool) :=
+          (Lane_q_s16_prod2.finLaw_pr_finset histLaw (histGate pool)).symm
+        _ = (Cal.history C).pr (fun W => W ∈ Cal.gate C pool) := by
+          rw [hHistLaw, Lane_q_s16_prod2.finLaw_map_pr]
+          simp [histGate, histMap]
+        _ = ∑ W ∈ Cal.gate C pool, (Cal.history C).w W :=
+          Lane_q_s16_prod2.finLaw_pr_finset (Cal.history C) (Cal.gate C pool)
+    let encPipe : (Cal.Hist C × Unit) ×
+        ((Cal.Group C → Bin PT.tiling (H.geom.cellPatch C)) ×
+        (OddCellRole H.geom C → Fin (T.S.N k))) → F.State C := fun z =>
+      Cal.encode C (z.1.1, z.2.1, z.2.2)
+    let P : FreshPriorPipeline F C v := {
+      LocalHist := Cal.Hist C
+      localFin := Cal.histFin C
+      localDec := Cal.histDec C
+      Aux := Unit
+      auxFin := inferInstance
+      Group := Cal.Group C
+      groupFin := Cal.groupFin C
+      groupDec := Cal.groupDec C
+      Role := OddCellRole H.geom C
+      roleFin := inferInstance
+      roleDec := inferInstance
+      baseHistory := localBase
+      slicePass := localPassCal
+      slice_pos := hSlicePosCal
+      auxHistory := FinLaw.dirac ()
+      history := histLaw
+      history_eq := by
+        apply Lane_q_s16_prod2.finLaw_ext
+        intro z
+        rcases z with ⟨W, u⟩
+        cases u
+        simp [histLaw, histMap, FinLaw.map, FinLaw.bind, FinLaw.dirac]
+      gate := histGate
+      gate_pos := by
+        intro pool ht
+        rw [hGateMass pool]
+        exact Cal.gate_pos C pool ht
+      gatedHistory := fun pool =>
+        FinLaw.map (Cal.gatedHistory C pool) histMap
+      gated_eq := by
+        intro pool ht
+        apply Lane_q_s16_prod2.finLaw_ext
+        intro z
+        rcases z with ⟨W, u⟩
+        cases u
+        rw [hGatedWeight pool W, Cal.gated_eq C pool ht]
+        simp only [FinLaw.cond]
+        rw [hGateMass pool, hHistWeight]
+        by_cases hmem : W ∈ Cal.gate C pool <;> simp [histGate, hmem]
+      qraw := fun W g => R.qraw C (hLink.histories C W) (hLink.groups C g)
+      U := fun W g D => R.U C (hLink.histories C W) (hLink.groups C g) D
+      U_support := by
+        intro W g D y hy
+        exact R.U_support C (hLink.histories C W) (hLink.groups C g) D y hy
+      groupOf := Cal.groupOf C
+      rolePosition := fun r => r.1
+      role_cell := fun r => r.2.1
+      role_odd := fun r => r.2.2
+      groupScope := groupScope
+      roleScope := roleScope
+      scopes_closed := by
+        intro r hr
+        exact Finset.mem_image.mpr ⟨r, hr, rfl⟩
+      rawPrior := fun W ys y => R.rawPrior C (hLink.histories C W) ys v y
+      prior_local := by
+        intro W ys ys' hys
+        change R.rawPrior C (hLink.histories C W) ys v =
+          R.rawPrior C (hLink.histories C W) ys' v
+        rw [hPriorIdentity, hPriorIdentity]
+        congr 1
+        funext j
+        apply hys (starRole j)
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩
+      pretrim := fun W g => R.pretrim C (hLink.histories C W) (hLink.groups C g)
+      permitted := Cal.permitted C
+      qtilde := Cal.qtilde C
+      qtilde_eq := by
+        intro pool W g D ht hW hbase
+        sorry
+      binSampler := fun pool W => Cal.binSampler C pool W.1
+      labelSampler := fun pool W a => Cal.labelSampler C pool W.1 a
+      groupRate := Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.05 : ℝ)
+      labelRate := Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.01 : ℝ)
+      rates_nonneg := by
+        have hRoom := hCalibration.room hClusterMode (H.geom.cellPatch C)
+        have hd : 0 < ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) := by
+          exact_mod_cast lt_of_lt_of_le (by norm_num : 0 < 2)
+            (le_trans (by norm_num : 2 ≤ 10 ^ 100) hRoom.2.1)
+        constructor
+        · exact le_of_lt (Real.rpow_pos_of_pos hd _)
+        · exact le_of_lt (Real.rpow_pos_of_pos hd _)
+      bin_joint := by
+        intro pool W a ht hW
+        sorry
+      bins_distinct := by
+        intro pool W a ht hW ha
+        sorry
+      label_joint := by
+        intro pool W a ys ht hW ha
+        sorry
+      encode := encPipe
+      fresh_eq := by
+        intro pool ht
+        rw [Cal.fresh_eq C pool ht]
+        apply Lane_q_s16_prod2.finLaw_ext
+        intro s
+        simp only [FinLaw.map, FinLaw.bind]
+        let StageState := (Cal.Group C → Bin PT.tiling (H.geom.cellPatch C)) ×
+          (OddCellRole H.geom C → Fin (T.S.N k))
+        let dropUnit : (Cal.Hist C × StageState) ≃ ((Cal.Hist C × Unit) × StageState) := {
+          toFun := fun z => ((z.1, ()), z.2)
+          invFun := fun z => (z.1.1, z.2)
+          left_inv := by intro z; rfl
+          right_inv := by intro z; rcases z with ⟨⟨W, u⟩, a⟩; cases u; rfl }
+        apply Fintype.sum_equiv dropUnit
+        intro z
+        rcases z with ⟨W, a⟩
+        simp [FinLaw.map, FinLaw.bind, encPipe, histMap, dropUnit,
+          hGatedWeight pool W]
+      prior_eq := by
+        intro pool W a ys ht hW ha hys
+        have hGatedWeight :
+            (FinLaw.map (Cal.gatedHistory C pool) histMap).w W =
+              (Cal.gatedHistory C pool).w W.1 := by
+          rcases W with ⟨W, u⟩
+          cases u
+          simp [FinLaw.map, histMap]
+        have hCalW : (Cal.gatedHistory C pool).w W.1 ≠ 0 := by
+          rw [← hGatedWeight]
+          exact hW
+        exact hLink.prior_eq C pool W.1 a ys v ht hCalW ha hys hcell hEven
+      label_eq := by
+        intro pool W a ys r ht hW ha hys
+        have hGatedWeight :
+            (FinLaw.map (Cal.gatedHistory C pool) histMap).w W =
+              (Cal.gatedHistory C pool).w W.1 := by
+          rcases W with ⟨W, u⟩
+          cases u
+          simp [FinLaw.map, histMap]
+        have hCalW : (Cal.gatedHistory C pool).w W.1 ≠ 0 := by
+          rw [← hGatedWeight]
+          exact hW
+        exact Cal.label_eq C pool W.1 a ys r ht hCalW ha hys
+      δgate := Cal.δgate
+      δpre := Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-10 : ℝ)
+      δperm := Cal.δperm
+      error_ranges := by
+        refine ⟨⟨Cal.gate_range.1, Cal.gate_range.2⟩,
+          ⟨?_, ?_⟩, ⟨Cal.perm_range.1, Cal.perm_range.2⟩⟩
+        · exact Real.rpow_nonneg (by positivity) _
+        · have hRoom := hCalibration.room hClusterMode (H.geom.cellPatch C)
+          have hd2Nat : 2 ≤ (PT.tiling.P (H.geom.cellPatch C)).d :=
+            (le_trans (by norm_num : 2 ≤ 10 ^ 100) hRoom.2.1)
+          have hd2 : (1 : ℝ) < (PT.tiling.P (H.geom.cellPatch C)).d := by
+            exact_mod_cast (lt_of_lt_of_le (by norm_num : 1 < 2) hd2Nat)
+          have hd : 0 < ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) := by positivity
+          have hpow : 0 < Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-10 : ℝ) :=
+            Real.rpow_pos_of_pos hd _
+          have hlt : Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-10 : ℝ) < 1 := by
+            apply Real.rpow_lt_one_of_one_lt_of_neg
+            · exact hd2
+            · norm_num
+          exact hlt
+      gate_mass := by
+        intro pool ht
+        rw [hGateMass pool]
+        exact Cal.gate_mass C pool ht
+      pretrim_mass := by
+        intro W g hW hbase hg
+        sorry
+      permission_mass := by
+        intro W g hW hbase hg
+        sorry
+      normalizer_mass := by
+        intro pool W g ht hW hbase hg
+        sorry
+      slot_pos := Cal.slot_pos C
+      stage_cost := by
+        sorry
+      slice_cost := by
+        sorry
+    }
+    refine ⟨P, ?_, ?_⟩
+    · sorry
+    · intro Φ
+      sorry
   · obtain ⟨hGroupInj, hValueUnit, hPassAll, hQUniform, hPretrimAll,
       hUDirect, hEnvExists⟩ := hDirectData C
     obtain ⟨hEnv, hRawPrior⟩ := hEnvExists

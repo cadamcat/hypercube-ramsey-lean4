@@ -1,4 +1,5 @@
 import HypercubeRamsey.S16.ProducersDefs
+import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_conc
 
 /-! Cluster diagnostics proof nodes from the S16 pool diagnosis. -/
 
@@ -914,7 +915,7 @@ theorem cluster_check_count {κ : CConsts} (hκ : κ.Admissible) :
           (T.S.n k : ℝ) ^ (200 : ℕ) * Real.exp ((T.S.n k : ℝ) ^ (1.01 : ℝ)) →
         (Fintype.card (NormalizerCheck ⊕ ClusterStarCheck R C) : ℝ) ≤
           Real.exp (3 * (T.S.n k : ℝ) ^ (1.01 : ℝ)) := by
-  sorry
+  exact Lane_q_s16_conc.total_check_count hκ
 
 
 end HypercubeRamsey.S16.ClusterDiagnostics

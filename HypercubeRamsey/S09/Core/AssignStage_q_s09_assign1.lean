@@ -1,4 +1,5 @@
 import HypercubeRamsey.Framework.FinProb
+import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.S09.Core.Scales
 import HypercubeRamsey.S09.Core.Experiment
 
@@ -7,6 +8,114 @@ namespace HypercubeRamsey.Lane_q_s09_assign1
 open Filter
 open OAI.HypercubeRamsey
 open scoped BigOperators
+
+/-- A Hamming ball of radius `r` in a Boolean cube has at most `(d + 1)^r` vertices. -/
+theorem hammingBallCardBound9 {d r : ℕ} (v : CubeVertex d) :
+    (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist v u ≤ r)).card ≤
+      (d + 1) ^ r := by
+  classical
+  let B := Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist v u ≤ r)
+  let support : CubeVertex d → Finset (Fin d) := fun u =>
+    Finset.univ.filter (fun i => u i ≠ v i)
+  have hsupportDist (u : CubeVertex d) : (support u).card = _root_.hammingDist v u := by
+    simp [support, _root_.hammingDist, ne_comm]
+  have hinj : Set.InjOn support (B : Set (CubeVertex d)) := by
+    intro x hx y hy hxy
+    funext i
+    have hiff : x i ≠ v i ↔ y i ≠ v i := by
+      have h := congrArg (fun s : Finset (Fin d) => i ∈ s) hxy
+      simpa [support] using h
+    cases hv : v i <;> cases hxv : x i <;> cases hyv : y i <;> simp_all
+  let Q := (Finset.univ : Finset (Fin d)).powerset.filter (fun s => s.card ≤ r)
+  have hsubset : B.image support ⊆ Q := by
+    intro s hs
+    rcases Finset.mem_image.mp hs with ⟨u, hu, rfl⟩
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_powerset.mpr (Finset.subset_univ _), ?_⟩
+    have hu' : u ∈ B := by simpa [B] using hu
+    have hdistle : _root_.hammingDist v u ≤ r := (Finset.mem_filter.mp hu').2
+    rw [hsupportDist]
+    exact hdistle
+  have hcard : B.card ≤ Q.card := by
+    calc
+      B.card = (B.image support).card := (Finset.card_image_of_injOn hinj).symm
+      _ ≤ Q.card := Finset.card_le_card hsubset
+  have hQsum : Q.card =
+      ∑ k ∈ Finset.range (d + 1), if k ≤ r then Nat.choose d k else 0 := by
+    calc
+      Q.card = ∑ s ∈ (Finset.univ : Finset (Fin d)).powerset,
+          if s.card ≤ r then 1 else 0 := by
+        simpa [Q] using
+          (Finset.natCast_card_filter (R := ℕ)
+            (p := fun s : Finset (Fin d) => s.card ≤ r)
+            (s := (Finset.univ : Finset (Fin d)).powerset))
+      _ = ∑ k ∈ Finset.range (d + 1),
+          Nat.choose d k * (if k ≤ r then 1 else 0) := by
+        simpa [Fintype.card_fin, nsmul_eq_mul] using
+          (Finset.sum_powerset_apply_card
+            (f := fun k : ℕ => if k ≤ r then (1 : ℕ) else 0)
+            (x := (Finset.univ : Finset (Fin d))))
+      _ = _ := by simp
+  let q := min r d
+  have hQsum' : Q.card =
+      ∑ k ∈ Finset.range (d + 1), if k ≤ q then Nat.choose d k else 0 := by
+    rw [hQsum]
+    apply Finset.sum_congr rfl
+    intro k hk
+    have hkd : k ≤ d := Nat.le_of_lt_succ (Finset.mem_range.mp hk)
+    by_cases hkr : k ≤ r
+    · have hkq : k ≤ q := by dsimp [q]; omega
+      simp [hkr, hkq]
+    · have hkq : ¬ k ≤ q := by dsimp [q]; omega
+      simp [hkr, hkq]
+  have hterm (k : ℕ) (hkd : k ≤ d) (hkq : k ≤ q) :
+      Nat.choose d k ≤ Nat.choose q k * d ^ k := by
+    have hchoose : Nat.choose d k ≤ d ^ k := Nat.choose_le_pow d k
+    have hpos : 1 ≤ Nat.choose q k := Nat.succ_le_iff.mpr (Nat.choose_pos hkq)
+    calc
+      Nat.choose d k ≤ d ^ k := hchoose
+      _ = 1 * d ^ k := by simp
+      _ ≤ Nat.choose q k * d ^ k := Nat.mul_le_mul_right _ hpos
+  have hsumle : Q.card ≤
+      ∑ k ∈ Finset.range (d + 1), Nat.choose q k * d ^ k := by
+    rw [hQsum']
+    apply Finset.sum_le_sum
+    intro k hk
+    by_cases hkq : k ≤ q
+    · simp only [if_pos hkq]
+      exact hterm k (Nat.le_of_lt_succ (Finset.mem_range.mp hk)) hkq
+    · have hqk : q < k := by omega
+      simp [hkq, Nat.choose_eq_zero_of_lt hqk]
+  have hsumEq :
+      (∑ k ∈ Finset.range (d + 1), Nat.choose q k * d ^ k) =
+        ∑ k ∈ Finset.range (q + 1), Nat.choose q k * d ^ k := by
+    have hfilter :
+        (Finset.range (d + 1)).filter (fun k => k ≤ q) = Finset.range (q + 1) := by
+      ext k
+      simp only [Finset.mem_filter, Finset.mem_range]
+      omega
+    calc
+      (∑ k ∈ Finset.range (d + 1), Nat.choose q k * d ^ k) =
+          ∑ k ∈ Finset.range (d + 1),
+            if k ≤ q then Nat.choose q k * d ^ k else 0 := by
+              apply Finset.sum_congr rfl
+              intro k hk
+              by_cases hqk : k ≤ q
+              · simp [hqk]
+              · have hqk' : q < k := by omega
+                simp [hqk, Nat.choose_eq_zero_of_lt hqk']
+      _ = ∑ k ∈ (Finset.range (d + 1)).filter (fun k => k ≤ q),
+            Nat.choose q k * d ^ k := by simp [Finset.sum_filter]
+      _ = ∑ k ∈ Finset.range (q + 1), Nat.choose q k * d ^ k := by rw [hfilter]
+  have hbin :
+      (∑ k ∈ Finset.range (q + 1), Nat.choose q k * d ^ k) = (d + 1) ^ q := by
+    simpa [mul_comm] using (add_pow d 1 q).symm
+  calc
+    B.card ≤ Q.card := hcard
+    _ ≤ ∑ k ∈ Finset.range (d + 1), Nat.choose q k * d ^ k := hsumle
+    _ = ∑ k ∈ Finset.range (q + 1), Nat.choose q k * d ^ k := hsumEq
+    _ = (d + 1) ^ q := hbin
+    _ ≤ (d + 1) ^ r := pow_le_pow_right' (by omega) (min_le_left r d)
 
 /-- Split a dependent product into one coordinate and all remaining coordinates. -/
 def coordSplitEquiv {ι : Type*} [DecidableEq ι] {Ω : ι → Type*} (j : ι) :
@@ -322,6 +431,202 @@ theorem coreOrderMemSeen9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
   classical
   have hmem : c ∈ coreIDs9 I v b := by simpa [coreOrder9] using hc
   exact (Finset.mem_inter.mp (Finset.mem_erase.mp hmem).2).1
+
+/-- The full ordered star list enumerates exactly the IDs seen at that odd row. -/
+theorem fullOrderToFinsetEqSeen9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {b : OddSites9 n} (hb : (cube n).Adj v.1 b.1) :
+    (fullOrder9 I v b).toFinset = I.seen b.1 := by
+  classical
+  have hcenterSeen : I.center v.1 ∈ I.seen b.1 := centerSeen9 hb
+  have hcenterCore : I.center v.1 ∈ I.core v.1 := I.center_mem_core v.1 v.2
+  ext c
+  simp [fullOrder9, outerIDs9, coreIDs9, hcenterSeen, hcenterCore, Finset.mem_sdiff]
+  tauto
+
+/-- The full star order has no repeated IDs. -/
+theorem fullOrderNodup9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {b : OddSites9 n} (hb : (cube n).Adj v.1 b.1) :
+    (fullOrder9 I v b).Nodup := by
+  classical
+  have hcenterSeen : I.center v.1 ∈ I.seen b.1 := centerSeen9 hb
+  have hcenterCore : I.center v.1 ∈ I.core v.1 := I.center_mem_core v.1 v.2
+  have houter : (outerIDs9 I v b).toList.Nodup := Finset.nodup_toList _
+  have hcore : (coreIDs9 I v b).toList.Nodup := Finset.nodup_toList _
+  have hblocks : ((outerIDs9 I v b).toList ++ (coreIDs9 I v b).toList).Nodup := by
+    apply List.nodup_append.mpr
+    refine ⟨houter, hcore, ?_⟩
+    intro a ha c hc
+    intro hac
+    have ha' : a ∈ outerIDs9 I v b := by simpa using ha
+    have hc' : c ∈ coreIDs9 I v b := by simpa using hc
+    have hnot : a ∉ I.core v.1 := (Finset.mem_sdiff.mp ha').2
+    have hin : c ∈ I.core v.1 :=
+      (Finset.mem_inter.mp (Finset.mem_erase.mp hc').2).2
+    have hac' : a = c := by exact hac
+    rw [hac'] at hnot
+    exact hnot hin
+  unfold fullOrder9
+  apply List.nodup_append.mpr
+  refine ⟨hblocks, by simp, ?_⟩
+  intro a ha c hc
+  intro hac
+  have hcEq : c = I.center v.1 := by simpa using hc
+  have hae : a = I.center v.1 := hac.trans hcEq
+  rcases List.mem_append.mp ha with ha | ha
+  · have ha' : a ∈ outerIDs9 I v b := by simpa using ha
+    have hnot : a ∉ I.core v.1 := (Finset.mem_sdiff.mp ha').2
+    rw [hae] at hnot
+    exact hnot hcenterCore
+  · have ha' : a ∈ coreIDs9 I v b := by simpa using ha
+    have hne : a ≠ I.center v.1 := (Finset.mem_erase.mp ha').1
+    exact hne hae
+
+/-- The full star order has one entry for each seen ID. -/
+theorem fullOrderLengthEqSeenCard9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {b : OddSites9 n} (hb : (cube n).Adj v.1 b.1) :
+    (fullOrder9 I v b).length = (I.seen b.1).card := by
+  rw [← List.toFinset_card_of_nodup (fullOrderNodup9 hb)]
+  rw [fullOrderToFinsetEqSeen9 hb]
+
+noncomputable def orderHitSet9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (ω : Outcome9 I N)
+    (order : List I.ID) (k : ℕ) : Finset (Fin N) :=
+  hitSet9 E G ω (order.take k).toFinset
+
+noncomputable def orderHitMass9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (ω : Outcome9 I N) (μ : Law N)
+    (order : List I.ID) (k : ℕ) : ℝ :=
+  ∑ y ∈ orderHitSet9 E G ω order k, μ.w y
+
+open Classical in
+/-- Extending a list prefix by its next ID adds exactly that anchor's hit filter. -/
+theorem orderHitSetSucc9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (ω : Outcome9 I N)
+    (order : List I.ID) (k : ℕ) (hk : k < order.length) :
+    orderHitSet9 E G ω order (k + 1) =
+      (orderHitSet9 E G ω order k).filter (fun y => Hits E G (anc9 ω order[k]) y) := by
+  classical
+  change hitSet9 E G ω (order.take (k + 1)).toFinset =
+    (hitSet9 E G ω (order.take k).toFinset).filter
+      (fun y => Hits E G (anc9 ω order[k]) y)
+  rw [List.take_succ_eq_append_getElem hk]
+  rw [List.toFinset_append]
+  ext y
+  simp [hitSet9] <;> tauto
+
+theorem orderHitMassSucc9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (ω : Outcome9 I N) (μ : Law N)
+    (order : List I.ID) (k : ℕ) (hk : k < order.length)
+    (hpos : 0 < orderHitMass9 E G ω μ order k) :
+    orderHitMass9 E G ω μ order (k + 1) =
+      orderHitMass9 E G ω μ order k *
+        rowDeg E G (anc9 ω order[k]) (prefixLaw9 E G ω μ order k) := by
+  classical
+  let A := orderHitSet9 E G ω order k
+  let m := ∑ y ∈ A, μ.w y
+  have hmpos : 0 < m := by
+    simpa [m, A, orderHitMass9] using hpos
+  have hprefix : prefixLaw9 E G ω μ order k = Law.restrict μ A hmpos := by
+    unfold prefixLaw9 restrictOr9
+    rw [dif_pos (by simpa [orderHitSet9, A, m, orderHitMass9] using hmpos)]
+    rfl
+  have hrestrictedSum :
+      (∑ y, (Law.restrict μ A hmpos).w y *
+        (if Hits E G (anc9 ω order[k]) y then 1 else 0)) =
+        ∑ y ∈ A, μ.w y / m * (if Hits E G (anc9 ω order[k]) y then 1 else 0) := by
+    change (∑ y, (if y ∈ A then μ.w y / m else 0) *
+      (if Hits E G (anc9 ω order[k]) y then 1 else 0)) = _
+    simp only [ite_mul, zero_mul]
+    rw [Finset.sum_ite_mem_eq]
+  have hfactor :
+      m * (∑ y ∈ A, μ.w y / m *
+        (if Hits E G (anc9 ω order[k]) y then 1 else 0)) =
+      ∑ y ∈ A, if Hits E G (anc9 ω order[k]) y then μ.w y else 0 := by
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro y hy
+    by_cases hh : Hits E G (anc9 ω order[k]) y
+    · simp [hh]
+      field_simp [ne_of_gt hmpos]
+    · simp [hh]
+  calc
+    orderHitMass9 E G ω μ order (k + 1) =
+        ∑ y ∈ A.filter (fun y => Hits E G (anc9 ω order[k]) y), μ.w y := by
+          simp [orderHitMass9, A, orderHitSetSucc9 E G ω order k hk]
+    _ = ∑ y ∈ A, if Hits E G (anc9 ω order[k]) y then μ.w y else 0 := by
+          rw [Finset.sum_filter]
+    _ = m * (∑ y ∈ A, μ.w y / m *
+        (if Hits E G (anc9 ω order[k]) y then 1 else 0)) := hfactor.symm
+    _ = m * rowDeg E G (anc9 ω order[k]) (prefixLaw9 E G ω μ order k) := by
+          rw [← hrestrictedSum, hprefix, rowDeg]
+    _ = orderHitMass9 E G ω μ order k *
+        rowDeg E G (anc9 ω order[k]) (prefixLaw9 E G ω μ order k) := by
+          rfl
+
+theorem orderHitMassLower9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (E : Fin N → Fin N → Prop) (G : Colour) (ω : Outcome9 I N) (μ : Law N)
+    (order : List I.ID) (hregular : orderRegular9 E G ω μ order)
+    (hb : P.bStar n ≤ 1 / 200) :
+    ∀ k, k ≤ order.length → (49 / 100 : ℝ) ^ k ≤ orderHitMass9 E G ω μ order k := by
+  classical
+  have haux : ∀ k, k ≤ order.length →
+      (49 / 100 : ℝ) ^ k ≤ orderHitMass9 E G ω μ order k ∧
+        ∀ j c', j < k → order[j]? = some c' →
+          (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c')
+            (prefixLaw9 E G ω μ order j) := by
+    intro k
+    induction k with
+    | zero =>
+        intro hk
+        constructor
+        · simpa [orderHitMass9, orderHitSet9, hitSet9, μ.sum_eq_one]
+        · intro j c' hj hjget
+          omega
+    | succ k ih =>
+        intro hk
+        have hklt : k < order.length := Nat.lt_of_succ_le hk
+        have ih' := ih (Nat.le_of_lt hklt)
+        have hprev : ∀ j c', j < k → order[j]? = some c' →
+            (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c')
+              (prefixLaw9 E G ω μ order j) := by
+          exact ih'.2
+        have hget : order[k]? = some order[k] :=
+          (List.getElem?_eq_some_getElem_iff hklt).2 trivial
+        have htest := hregular k order[k] hget hprev
+        have hlow : (49 / 100 : ℝ) ≤
+            rowDeg E G (anc9 ω order[k]) (prefixLaw9 E G ω μ order k) := by
+          have habs := abs_le.mp htest
+          have hb' : 2 * P.bStar n ≤ (1 / 100 : ℝ) := by linarith
+          linarith
+        have hpowpos : 0 < (49 / 100 : ℝ) ^ k := pow_pos (by norm_num) _
+        have hmasspos : 0 < orderHitMass9 E G ω μ order k :=
+          lt_of_lt_of_le hpowpos ih'.1
+        have hstep := orderHitMassSucc9 E G ω μ order k hklt hmasspos
+        have hmass : (49 / 100 : ℝ) ^ (k + 1) ≤
+            orderHitMass9 E G ω μ order k *
+              rowDeg E G (anc9 ω order[k]) (prefixLaw9 E G ω μ order k) := by
+          calc
+            (49 / 100 : ℝ) ^ (k + 1) = (49 / 100 : ℝ) ^ k * (49 / 100 : ℝ) := by rw [pow_succ]
+            _ ≤ orderHitMass9 E G ω μ order k * (49 / 100 : ℝ) :=
+              mul_le_mul_of_nonneg_right ih'.1 (by norm_num)
+            _ ≤ orderHitMass9 E G ω μ order k *
+                rowDeg E G (anc9 ω order[k]) (prefixLaw9 E G ω μ order k) :=
+              mul_le_mul_of_nonneg_left hlow hmasspos.le
+        constructor
+        · rw [hstep]
+          exact hmass
+        · intro j c' hj hjget
+          by_cases hjk : j < k
+          · exact ih'.2 j c' hjk hjget
+          · have hjeq : j = k := by omega
+            subst j
+            have hget' : order[k]? = some order[k] := hget
+            have heq : some c' = some order[k] := hjget.symm.trans hget'
+            have hc : c' = order[k] := Option.some.inj heq
+            subst c'
+            exact hlow
+  intro k hk
+  exact (haux k hk).1
 
 /-- Prefix restrictions of an ordered star row are fixed by its scope anchors. -/
 theorem prefixLawEqOfAnchors9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}

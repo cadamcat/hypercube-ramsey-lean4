@@ -521,7 +521,134 @@ theorem p92_row_cap (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
       {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RowCap9 S I E G := by
-  sorry
+  refine ⟨1, ?_⟩
+  intro n hn N E X Y κ G M S I hcore
+  rcases hcore with ⟨hN, hPrep, hDeep, hTags, hMasks, hDeepTools, hExps, hScales⟩
+  rcases hScales with ⟨hnScales, hmle, hradius, hShallow, hFilterBudget, hDeepMargin, hbStar, hGain⟩
+  intro ω hω hregular b y
+  have hnpos : 0 < n := by omega
+  let j : Fin n := ⟨0, hnpos⟩
+  let v : EvenSites9 n := ⟨cubeFlip b.1 j, (cubeFlip_parity b.1 j).2 b.2⟩
+  have hAdj : (cube n).Adj v.1 b.1 := by
+    simpa [v] using (cubeFlip_adj b.1 j).symm
+  have horderRegular :
+      orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b) :=
+    (hregular v b hAdj).1
+  let μ : Law N := maskedLaw9 S ω b
+  let order : List I.ID := fullOrder9 I v b
+  have hret := Lane_q_s09_assign1.orderHitMassLower9 E G ω μ order horderRegular hbStar
+    order.length (le_rfl)
+  have hsetFinal :
+      Lane_q_s09_assign1.orderHitSet9 E G ω order order.length =
+        hitSet9 E G ω (I.seen b.1) := by
+    unfold Lane_q_s09_assign1.orderHitSet9
+    rw [List.take_length, Lane_q_s09_assign1.fullOrderToFinsetEqSeen9 hAdj]
+  have hfinal : (49 / 100 : ℝ) ^ order.length ≤
+      ∑ z ∈ hitSet9 E G ω (I.seen b.1), μ.w z := by
+    simpa [Lane_q_s09_assign1.orderHitMass9, hsetFinal] using hret
+  have hfinalPos : 0 < ∑ z ∈ hitSet9 E G ω (I.seen b.1), μ.w z :=
+    lt_of_lt_of_le (pow_pos (by norm_num : (0 : ℝ) < 49 / 100) _) hfinal
+  have hrowRestrict : rowLaw9 S E G ω b =
+      Law.restrict μ (hitSet9 E G ω (I.seen b.1)) hfinalPos := by
+    unfold rowLaw9 restrictOr9
+    rw [dif_pos hfinalPos]
+  have hνwidth : (siteSecond9 S b.1).WidthLE (P.Ss (n : ℝ)) := by
+    rcases hPrep with ⟨_, hPrep⟩
+    have htag := hTags (specialWord9 (P.m n) b.1)
+    rcases hPrep (S.tag (specialWord9 (P.m n) b.1)) htag with
+      ⟨_, _, _, hwidth, _⟩
+    simpa [siteSecond9] using hwidth
+  have hprod :
+      (∏ i : I.ID ⊕ OddSites9 n, (inputLaw9 S I i).w (ω i)) ≠ 0 := by
+    simpa [rawLaw9, FinProb.pi] using hω
+  have hmaskWeight : (S.maskLaw b).w (msk9 ω b) ≠ 0 := by
+    have hcoord := (Finset.prod_ne_zero_iff.mp hprod) (Sum.inr b) (Finset.mem_univ _)
+    simpa [inputLaw9, msk9] using hcoord
+  have hmaskLower : (1 / 2 : ℝ) * Real.exp (-((n : ℝ) ^ P.u)) ≤
+      ∑ z ∈ msk9 ω b, (siteSecond9 S b.1).w z := hMasks.1 b (msk9 ω b) hmaskWeight
+  have hmaskArgPos : 0 < (1 / 2 : ℝ) * Real.exp (-((n : ℝ) ^ P.u)) := by positivity
+  have hmaskMassPos : 0 < ∑ z ∈ msk9 ω b, (siteSecond9 S b.1).w z :=
+    lt_of_lt_of_le hmaskArgPos hmaskLower
+  have hmaskLog : Real.log ((1 / 2 : ℝ) * Real.exp (-((n : ℝ) ^ P.u))) =
+      -((n : ℝ) ^ P.u) - Real.log 2 := by
+    rw [Real.log_mul (by norm_num : (1 / 2 : ℝ) ≠ 0)
+      (ne_of_gt (Real.exp_pos (-((n : ℝ) ^ P.u))))]
+    rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv, Real.log_exp]
+    ring
+  have hmaskLogLe :
+      Real.log ((1 / 2 : ℝ) * Real.exp (-((n : ℝ) ^ P.u))) ≤
+        Real.log (∑ z ∈ msk9 ω b, (siteSecond9 S b.1).w z) :=
+    Real.log_le_log hmaskArgPos hmaskLower
+  let baseWidth : ℝ := P.Ss (n : ℝ) + (n : ℝ) ^ P.u + Real.log 2
+  have hmaskedParam : P.Ss (n : ℝ) -
+      Real.log (∑ z ∈ msk9 ω b, (siteSecond9 S b.1).w z) ≤ baseWidth := by
+    rw [hmaskLog] at hmaskLogLe
+    dsimp [baseWidth]
+    linarith
+  have hmaskedEq : maskedLaw9 S ω b =
+      Law.restrict (siteSecond9 S b.1) (msk9 ω b) hmaskMassPos := by
+    unfold maskedLaw9 restrictOr9
+    rw [dif_pos hmaskMassPos]
+  have hmaskedWidth : μ.WidthLE baseWidth := by
+    dsimp [μ]
+    rw [hmaskedEq]
+    exact Law.WidthLE.mono (Law.WidthLE.restrict hνwidth hmaskMassPos) hmaskedParam
+  have hlen : (order.length : ℝ) ≤ P.idBudget n + (P.m n : ℝ) := by
+    have hseen : ((I.seen b.1).card : ℝ) ≤ P.idBudget n + (P.m n : ℝ) := by
+      simpa [IDMap9.seen] using I.odd_ids b.1 b.2
+    change ((fullOrder9 I v b).length : ℝ) ≤ _
+    rw [Lane_q_s09_assign1.fullOrderLengthEqSeenCard9 hAdj]
+    exact hseen
+  have hlogCoeff : 0 ≤ Real.log (100 / 49 : ℝ) :=
+    Real.log_nonneg (by norm_num : (1 : ℝ) ≤ 100 / 49)
+  have hbudget : baseWidth + (order.length : ℝ) * Real.log (100 / 49 : ℝ) ≤
+      P.filterBudget n := by
+    calc
+      baseWidth + (order.length : ℝ) * Real.log (100 / 49 : ℝ) ≤
+          baseWidth + (P.idBudget n + (P.m n : ℝ)) * Real.log (100 / 49 : ℝ) :=
+        by
+          have hmul := mul_le_mul_of_nonneg_right hlen hlogCoeff
+          linarith
+      _ = P.filterBudget n := by
+        simp [baseWidth, Params9.filterBudget]
+        ring
+  have hlogPow : Real.log ((49 / 100 : ℝ) ^ order.length) =
+      -((order.length : ℝ) * Real.log (100 / 49 : ℝ)) := by
+    rw [Real.log_pow]
+    have hratio : (49 / 100 : ℝ) = (100 / 49 : ℝ)⁻¹ := by norm_num
+    rw [hratio, Real.log_inv]
+    ring
+  have hlogFinal : Real.log ((49 / 100 : ℝ) ^ order.length) ≤
+      Real.log (∑ z ∈ hitSet9 E G ω (I.seen b.1), μ.w z) :=
+    Real.log_le_log (pow_pos (by norm_num : (0 : ℝ) < 49 / 100) _) hfinal
+  have hwidthParam : P.Ss (n : ℝ) + (n : ℝ) ^ P.u + Real.log 2 -
+      Real.log (∑ z ∈ hitSet9 E G ω (I.seen b.1), μ.w z) ≤ P.Sd (n : ℝ) := by
+    have hretainedLog := hlogFinal
+    rw [hlogPow] at hretainedLog
+    have hbase : baseWidth -
+        Real.log (∑ z ∈ hitSet9 E G ω (I.seen b.1), μ.w z) ≤
+          baseWidth + (order.length : ℝ) * Real.log (100 / 49 : ℝ) := by
+      dsimp [baseWidth]
+      linarith
+    have hsd : P.filterBudget n ≤ P.Sd (n : ℝ) := by
+      have hpow : 0 ≤ (n : ℝ) ^ P.u := by positivity
+      linarith
+    calc
+      _ = baseWidth -
+          Real.log (∑ z ∈ hitSet9 E G ω (I.seen b.1), μ.w z) := by
+            simp [baseWidth]
+      _ ≤ baseWidth + (order.length : ℝ) * Real.log (100 / 49 : ℝ) := hbase
+      _ ≤ P.filterBudget n := hbudget
+      _ ≤ P.Sd (n : ℝ) := hsd
+  have hrowWidth : (rowLaw9 S E G ω b).WidthLE (P.Sd (n : ℝ)) := by
+    rw [hrowRestrict]
+    exact Law.WidthLE.mono (Law.WidthLE.restrict hmaskedWidth hfinalPos) hwidthParam
+  have hNposR : (0 : ℝ) < N := Nat.cast_pos.mpr hN
+  calc
+    (N : ℝ) * (rowLaw9 S E G ω b).w y ≤
+        (N : ℝ) * (Real.exp (P.Sd (n : ℝ)) / N) :=
+      mul_le_mul_of_nonneg_left (hrowWidth y) (Nat.cast_nonneg N)
+    _ = Real.exp (P.Sd (n : ℝ)) := by field_simp [ne_of_gt hNposR]
 
 /-- P9.2-assignB, odd moments (09:324–327): separated odd rows (`¬ siteNear9`) have disjoint inputs (anchors of
 the IDs they see and their own masks); removing the star events touching these inputs (at most

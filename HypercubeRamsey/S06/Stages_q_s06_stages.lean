@@ -8,6 +8,7 @@ namespace HypercubeRamsey.Lane_q_s06_stages
 
 open Classical
 open HypercubeRamsey.S06
+open OAI.HypercubeRamsey
 
 theorem tagWeight_eq_of_agree
     {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
@@ -240,6 +241,15 @@ noncomputable def rate3HiddenScope
     (b : X.State) (D : Finset (Id × X.Ty)) : Finset X.HKey :=
   (D.biUnion fun e => e.2.obs) ∪ if X.stMode b = .low then {X.tgt b} else ∅
 
+noncomputable def bad3HiddenScope
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (gr : X.Bin × CubeVertex X.m) : Finset X.HKey :=
+  Finset.univ.filter fun ℓ =>
+    (∃ x : CubeVertex n, IsEvenRole x ∧ (X.g.L.key x).1 = gr.1 ∧
+      X.g.L.sign x = gr.2 ∧ ℓ ∈ (X.evenType x).obs) ∨
+    ∃ b ∈ X.g.L.oddStates, (X.g.L.stKey b).1 = gr.1 ∧ X.g.L.stSign b = gr.2 ∧
+      ∃ D ∈ X.absDescs b, ℓ ∈ rate3HiddenScope X b D
+
 private theorem lowGate_iff_of_agree
     {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
@@ -353,6 +363,131 @@ theorem s3Weight_eq_of_agree
     rw [hgateHigh, hloc, hprodHigh]
     simp [Ctx6.priorOf]
 
+theorem s3Fail_iff_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (base : X.Base) (b : X.State) (D : Finset (Id × X.Ty)) (o : X.Data Id)
+    (Z Z' : X.Hid) (hZ : ∀ ℓ ∈ rate3HiddenScope X b D, Z ℓ = Z' ℓ) :
+    X.S3Fail (base, Z) b D o ↔ X.S3Fail (base, Z') b D o := by
+  have hobs : ∀ e ∈ D, ∀ ℓ ∈ e.2.obs, Z ℓ = Z' ℓ := by
+    intro e he ℓ hℓ
+    exact hZ ℓ (Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨e, he, hℓ⟩))
+  have hMass : ∀ drop,
+      X.s3Mass (base, Z) b D o drop = X.s3Mass (base, Z') b D o drop := by
+    intro drop
+    unfold Ctx6.s3Mass
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    exact congrArg (fun f : Fin N → ℝ => f ξ) (s3Weight_eq_of_agree X base b D o drop Z Z' hZ)
+  have htests : X.S3Tests (base, Z) b D o ↔ X.S3Tests (base, Z') b D o := by
+    unfold Ctx6.S3Tests
+    constructor
+    · rintro ⟨hpos, hthr, hratio⟩
+      refine ⟨?_, ?_, ?_⟩
+      · rw [← hMass none]
+        exact hpos
+      · rw [← hMass none]
+        exact hthr
+      · intro c hc hmatch
+        rw [← hMass (some c), ← hMass none]
+        exact hratio c hc hmatch
+    · rintro ⟨hpos, hthr, hratio⟩
+      refine ⟨?_, ?_, ?_⟩
+      · rw [hMass none]
+        exact hpos
+      · rw [hMass none]
+        exact hthr
+      · intro c hc hmatch
+        rw [hMass (some c), hMass none]
+        exact hratio c hc hmatch
+  have hgate : X.S3TrueGate (base, Z) b D ↔ X.S3TrueGate (base, Z') b D := by
+    unfold Ctx6.S3TrueGate
+    cases hm : X.stMode b
+    · have htarget : X.tgt b ∈ rate3HiddenScope X b D := by
+        unfold rate3HiddenScope
+        simp [hm]
+      simp only [hm, Ctx6.trueTarget]
+      rw [hZ (X.tgt b) htarget]
+      exact lowGate_iff_of_agree X base b D (Z' (X.tgt b)) Z Z' hobs
+    · simp only [hm, Ctx6.trueTarget]
+      exact highGate_iff_of_agree X base b D ((X.parOf base).val (X.tgtName b)) Z Z' hobs
+  unfold Ctx6.S3Fail
+  constructor
+  · rintro ⟨hgate', hfail⟩
+    refine ⟨hgate.mp hgate', ?_⟩
+    intro htests'
+    exact hfail (htests.mpr htests')
+  · rintro ⟨hgate', hfail⟩
+    refine ⟨hgate.mpr hgate', ?_⟩
+    intro htests'
+    exact hfail (htests.mp htests')
+
+private theorem s3Weight_eq_of_data_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (o o' : X.Data Id)
+    (drop : Option (Id × X.Ty)) (ξ : Fin N)
+    (hO : ∀ e ∈ D, o e = o' e) :
+    X.s3Weight H b D o drop ξ = X.s3Weight H b D o' drop ξ := by
+  cases hm : X.stMode b
+  · simp only [Ctx6.s3Weight, hm]
+    unfold Ctx6.lowWeight
+    have hprod : (∏ e ∈ D, if drop = some e then 1 else X.lowLik H b ξ e.2 (o e)) =
+        ∏ e ∈ D, if drop = some e then 1 else X.lowLik H b ξ e.2 (o' e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      by_cases hd : drop = some e <;> simp [hd, hO e he]
+    rw [hprod]
+  · simp only [Ctx6.s3Weight, hm]
+    unfold Ctx6.highWeight
+    have hprod : (∏ e ∈ D, if drop = some e then 1 else X.highLik H b ξ e.2 (o e)) =
+        ∏ e ∈ D, if drop = some e then 1 else X.highLik H b ξ e.2 (o' e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      by_cases hd : drop = some e <;> simp [hd, hO e he]
+    rw [hprod]
+
+theorem s3Fail_iff_of_data_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (o o' : X.Data Id)
+    (hO : ∀ e ∈ D, o e = o' e) :
+    X.S3Fail H b D o ↔ X.S3Fail H b D o' := by
+  have hMass : ∀ drop, X.s3Mass H b D o drop = X.s3Mass H b D o' drop := by
+    intro drop
+    unfold Ctx6.s3Mass
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    exact s3Weight_eq_of_data_agree X H b D o o' drop ξ hO
+  have htests : X.S3Tests H b D o ↔ X.S3Tests H b D o' := by
+    unfold Ctx6.S3Tests
+    constructor
+    · rintro ⟨hpos, hthr, hratio⟩
+      refine ⟨?_, ?_, ?_⟩
+      · rw [← hMass none]; exact hpos
+      · rw [← hMass none]; exact hthr
+      · intro c hc hmatch
+        rw [← hMass (some c), ← hMass none]
+        exact hratio c hc hmatch
+    · rintro ⟨hpos, hthr, hratio⟩
+      refine ⟨?_, ?_, ?_⟩
+      · rw [hMass none]; exact hpos
+      · rw [hMass none]; exact hthr
+      · intro c hc hmatch
+        rw [hMass (some c), hMass none]
+        exact hratio c hc hmatch
+  unfold Ctx6.S3Fail
+  simp only [htests]
+
+theorem s3Fail_dependsOn_data
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) :
+    FinProb.DependsOn (fun o : X.Data Id => X.S3Fail H b D o) D := by
+  intro o o' hO
+  apply propext
+  exact s3Fail_iff_of_data_agree X H b D o o' hO
+
 theorem finprob_pr_eq_expect_indicator {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (A : Ω → Prop) :
     P.pr A = P.expect (fun ω => if A ω then 1 else 0) := by
@@ -434,15 +569,14 @@ private theorem finprob_nonempty_local {Ω : Type*} [Fintype Ω] (P : FinProb Ω
 theorem pi_pr_eq_of_kernel_eq_on_depends
     {ι : Type*} [Fintype ι] [DecidableEq ι] {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
     (P Q : ∀ i, FinProb (Ω i)) (S : Finset ι) (A : (∀ i, Ω i) → Prop)
-    (hdep : ∀ ω ω', (∀ i ∈ S, ω i = ω' i) → (A ω ↔ A ω'))
+    (hdep : FinProb.DependsOn A S)
     (hPQ : ∀ i ∈ S, P i = Q i) :
     (FinProb.pi P).pr A = (FinProb.pi Q).pr A := by
   classical
   let f : (∀ i, Ω i) → ℝ := fun ω => if A ω then 1 else 0
   have hf : FinProb.DependsOn f S := by
     intro ω ω' heq
-    have hprop : A ω = A ω' := propext (hdep ω ω' heq)
-    simpa [f] using congrArg (fun p : Prop => if p then (1 : ℝ) else 0) hprop
+    simpa [f] using congrArg (fun p : Prop => if p then (1 : ℝ) else 0) (hdep ω ω' heq)
   obtain ⟨ω₀⟩ := finprob_nonempty_local (FinProb.pi P)
   have hP := FinProb.pi_expect_depends P S f ω₀ hf
   have hQ := FinProb.pi_expect_depends Q S f ω₀ hf
@@ -464,6 +598,35 @@ theorem pi_pr_eq_of_kernel_eq_on_depends
           (a, fun i => ω₀ i.1))) := by rw [hsub]
     _ = (FinProb.pi Q).expect f := hQ.symm
     _ = (FinProb.pi Q).pr A := (finprob_pr_eq_expect_indicator _ _).symm
+
+theorem s3FailPr_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (b : X.State)
+    (D : Finset (Fin X.T × X.Ty)) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ rate3HiddenScope X b D, Z ℓ = Z' ℓ) :
+    (X.dataLaw (Fin X.T) (base, Z)).pr (fun o => X.S3Fail (base, Z) b D o) =
+      (X.dataLaw (Fin X.T) (base, Z')).pr (fun o => X.S3Fail (base, Z') b D o) := by
+  let P : (Fin X.T × X.Ty) → FinProb X.Tuple := fun e => X.tupleLaw (base, Z) e.2
+  let Q : (Fin X.T × X.Ty) → FinProb X.Tuple := fun e => X.tupleLaw (base, Z') e.2
+  have hPQ : ∀ e ∈ D, P e = Q e := by
+    intro e he
+    apply tupleLaw_eq_of_agree X base e.2 Z Z'
+    intro ℓ hℓ
+    exact hZ ℓ (Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨e, he, hℓ⟩))
+  have hdep := s3Fail_dependsOn_data X (base, Z') b D
+  have hprob := pi_pr_eq_of_kernel_eq_on_depends P Q D
+    (fun o => X.S3Fail (base, Z') b D o) hdep hPQ
+  have hfail : ∀ o : X.Data (Fin X.T),
+      X.S3Fail (base, Z) b D o ↔ X.S3Fail (base, Z') b D o := by
+    intro o
+    exact s3Fail_iff_of_agree X base b D o Z Z' hZ
+  change (FinProb.pi P).pr (fun o => X.S3Fail (base, Z) b D o) =
+    (FinProb.pi Q).pr (fun o => X.S3Fail (base, Z') b D o)
+  calc
+    (FinProb.pi P).pr (fun o => X.S3Fail (base, Z) b D o) =
+        (FinProb.pi P).pr (fun o => X.S3Fail (base, Z') b D o) :=
+      finprob_pr_congr_local (FinProb.pi P) hfail
+    _ = (FinProb.pi Q).pr (fun o => X.S3Fail (base, Z') b D o) := hprob
 
 theorem pi_local_mass_factor
     {ι : Type*} [Fintype ι] [DecidableEq ι] {Ω : ι → Type*}

@@ -364,6 +364,66 @@ theorem pres_tag_spec {η₀ β p : ℝ} {h : ℕ}
     rw [hval]
     exact htag
 
+theorem raw_anchors_cross_presentation_le {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (c : D.CellT) (π : D.Pres c.1)
+    (A : D.Anch → Prop)
+    (hpres : ∀ W, A W → D.presOf q W c = π)
+    (hvalid : ∀ W, A W → D.PresValid q W c) :
+    (D.rawAnchors q).pr A ≤
+      ∏ u : D.CrossSub c.1,
+        (D.anchorU q.1.1 u.1 (π.2 u).2.1).w (π.2 u).2.2 := by
+  classical
+  by_cases hExists : ∃ W, A W
+  · obtain ⟨W₀, hW₀⟩ := hExists
+    have hp := hpres W₀ hW₀
+    have hv := hvalid W₀ hW₀
+    have hselLaw (u : D.CrossSub c.1) :
+        D.Usel q (u.1, c.2) = D.anchorU q.1.1 u.1 (π.2 u).2.1 := by
+      have hsome : (D.sel q (u.1, c.2)).isSome := hv.2.2.1 u
+      have hpair := pres_cross_id_tag D q W₀ c π hp u
+      cases hsel : D.sel q (u.1, c.2) with
+      | none => simp [hsel] at hsome
+      | some ℓ =>
+          have hId : ℓ = (π.2 u).1 := by simpa [Ctx.crossId, hsel] using hpair.1
+          have htagCandidate : q.2.1.1 u.1 (π.2 u).1 = (π.2 u).2.1 := by
+            have htag0 := hpair.2
+            rw [hpair.1] at htag0
+            exact htag0
+          have htag : q.2.1.1 u.1 ℓ = (π.2 u).2.1 := by
+            rw [hId]
+            exact htagCandidate
+          simp [Ctx.Usel, Ctx.selTag, hsel, htag]
+    have hfix : ∀ W, A W → ∀ u : D.CrossSub c.1,
+        W (u.1, c.2) = (π.2 u).2.2 := by
+      intro W hW u
+      exact pres_cross_anchor D q W c π (hpres W hW) u
+    have hinj : Set.InjOn (fun u : D.CrossSub c.1 => (u.1, c.2))
+        (Finset.univ : Finset (D.CrossSub c.1)) := by
+      intro u hu v hv huv
+      apply Subtype.ext
+      exact congrArg Prod.fst huv
+    have hbound := pi_pr_le_fixed_image
+      (fun e : D.CellT => D.Usel q e)
+      (Finset.univ : Finset (D.CrossSub c.1))
+      (fun u => (u.1, c.2)) hinj (fun u => (π.2 u).2.2) A
+      (fun W hW u hu => hfix W hW u)
+    calc
+      (D.rawAnchors q).pr A ≤
+          ∏ u : D.CrossSub c.1, (D.Usel q (u.1, c.2)).w (π.2 u).2.2 := hbound
+      _ = ∏ u : D.CrossSub c.1,
+          (D.anchorU q.1.1 u.1 (π.2 u).2.1).w (π.2 u).2.2 := by
+            apply Finset.prod_congr rfl
+            intro u hu
+            rw [hselLaw u]
+  · have hzero : (D.rawAnchors q).pr A = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro W hW
+      have hnot : ¬ A W := fun hA => hExists ⟨W, hA⟩
+      simp [hnot]
+    rw [hzero]
+    exact Finset.prod_nonneg fun u hu => (D.anchorU q.1.1 u.1 (π.2 u).2.1).nonneg _
+
 theorem positive_tilt_gate {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
     (hbase : D.BaseGates Θ g) (hpos : 0 < (D.tilt Θ g).w i) :

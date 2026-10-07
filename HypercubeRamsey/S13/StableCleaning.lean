@@ -2,6 +2,7 @@ import HypercubeRamsey.S13.Allocation
 import HypercubeRamsey.PartC.Cleaning
 import HypercubeRamsey.S13.Needs
 import HypercubeRamsey.S13.StableCleaning_q_s13_clean
+import HypercubeRamsey.S13.StableCleaning_sol_s13_cleanB
 
 /-!
 # Section 13.4: stable cleaning of extracted first supports
@@ -279,7 +280,7 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
     · intro _
       exact hCodegree hCluster
 
-set_option maxHeartbeats 30000000 in
+set_option maxHeartbeats 2000000 in
 /-- L13.4b (sections/13, lines 251–257): own-patch degree trimming; direct, cluster, and bounded
 thresholds are exactly those in `OwnDegOK`. -/
 theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -335,12 +336,12 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       exact h
     rcases h𝒯.direct_data hMode i with ⟨hMaxScale, hGq, hMass, hLower, _⟩
     rcases (h𝒯.clique_scales i).2 hMode with ⟨_, hQlo, hQhi, hqQ⟩
-    have hM1 : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+    have hM1 : 0 < κ.M1 := by linarith only [hκ.M1_big.1]
     have hsqrt : 0 < Real.sqrt κ.M1 := Real.sqrt_pos.2 hM1
     have hsqrtge : 2 ≤ Real.sqrt κ.M1 := by
       have hsq : (2 : ℝ) ^ 2 ≤ κ.M1 := by exact_mod_cast hκ.M1_big.1
       have hsqrtsq : (Real.sqrt κ.M1) ^ 2 = κ.M1 := Real.sq_sqrt hM1.le
-      nlinarith [Real.sqrt_nonneg κ.M1]
+      nlinarith only [Real.sqrt_nonneg κ.M1, hsqrtsq, hsq]
     have hqBound : ((𝒯.P i).q : ℝ) < (𝒯.P i).g := by
       have hfactor : 2 / Real.sqrt κ.M1 ≤ 1 := (div_le_one hsqrt).2 hsqrtge
       have hQle : (𝒯.Q i : ℝ) ≤ (𝒯.P i).g := by
@@ -388,16 +389,16 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         calc
           κ.ξ < κ.α * Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) := hκ.ξ_rng.2
           _ ≤ κ.α := mul_le_of_le_one_right (le_of_lt hκ.α_rng.1) hpowNeg
-      linarith [hξα, hκ.α_rng.2]
+      linarith only [hξα, hκ.α_rng.2]
     have hpow4 : (1 : ℝ) ≤ 4 ^ (κ.u + 3) := one_le_pow₀ (by norm_num)
-    have hden : (3 : ℝ) ≤ 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith [hpow4]
+    have hden : (3 : ℝ) ≤ 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith only [hpow4]
     have hdenpos : (0 : ℝ) < 3 * (4 : ℝ) ^ (κ.u + 3) := by positivity
-    have hξsq : κ.ξ ^ 2 < 1 := by nlinarith [hξlt, hκ.ξ_rng.1]
+    have hξsq : κ.ξ ^ 2 < 1 := by nlinarith only [hξlt, hκ.ξ_rng.1]
     have hθlt : κ.θ < 1 := by
       have hfrac : κ.ξ ^ 2 / (3 * (4 : ℝ) ^ (κ.u + 3)) < 1 :=
-        (div_lt_one hdenpos).2 (by nlinarith [hξsq, hden])
+        (div_lt_one hdenpos).2 (by nlinarith only [hξsq, hden])
       exact lt_trans hκ.θ_rng.2 hfrac
-    have haSmall : κ.a < 1 := by rw [hκ.a_eq]; nlinarith [hθlt]
+    have haSmall : κ.a < 1 := by rw [hκ.a_eq]; nlinarith only [hθlt]
     have hLogEq : 800 / (κ.a * (1 / 400 : ℝ)) = 320000 / κ.a := by
       field_simp [ne_of_gt ha]
       norm_num
@@ -411,7 +412,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           (2 : ℝ) ^ κ.aB * (𝒯.P i).g ^ κ.aB :=
         Real.mul_rpow (by norm_num) (Nat.cast_nonneg _)
       rw [hPow]
-      nlinarith [hGap']
+      nlinarith only [hGap']
     have hbDyadic : IsDyadic (2 * (𝒯.P i).g) := by
       rcases hScales.g_dyadic κ T k (𝒯.P i).resX (𝒯.P i).resY with ⟨j, hj⟩
       refine ⟨j + 1, ?_⟩
@@ -432,7 +433,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         calc
           Real.exp (-((2 * (𝒯.P i).g : ℝ) ^ κ.aB)) ≤
               Real.exp (-((𝒯.P i).g : ℝ) ^ κ.aB - Real.log (320000 / κ.a)) :=
-            Real.exp_le_exp.mpr (by linarith [hGap])
+            Real.exp_le_exp.mpr (by linarith only [hGap])
           _ = Real.exp (-((𝒯.P i).g : ℝ) ^ κ.aB) /
               (320000 / κ.a) := by
             rw [Real.exp_sub, Real.exp_log (by positivity)]
@@ -463,14 +464,14 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
             κ.a / 800 * (𝒯.P i).M := hMassScaled
         _ < κ.a / 4 * (𝒯.P i).M := by
           apply mul_lt_mul_of_pos_right _ hMpos
-          nlinarith [ha]
+          nlinarith only [ha]
     have hYcard' : (T.S.N k : ℝ) *
         Real.exp (-((2 * (𝒯.P i).g : ℝ) ^ κ.aB)) ≤ Y.card := by
       rw [(𝒯.P i).cardY]
       have hSmall : κ.a / 800 * (𝒯.P i).M ≤ (𝒯.P i).M := by
         calc
           κ.a / 800 * (𝒯.P i).M ≤ 1 * (𝒯.P i).M :=
-            mul_le_mul_of_nonneg_right (by nlinarith [haSmall]) hMpos.le
+            mul_le_mul_of_nonneg_right (by nlinarith only [haSmall]) hMpos.le
           _ = (𝒯.P i).M := by ring
       exact le_trans hMassScaled hSmall
     have hXres : X ⊆ (𝒯.P i).resX := (h𝒯.patch_supports i).1
@@ -489,7 +490,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           Real.rpow_le_rpow_of_exponent_le hkR hIotaLe
         _ = T.S.n k := by rw [Real.rpow_one]
     have hbgBound : 2 * (𝒯.P i).g ≤ 2 * T.S.n k + 1 := by
-      exact_mod_cast (by nlinarith [hGleN] :
+      exact_mod_cast (by nlinarith only [hGleN] :
         (2 * (𝒯.P i).g : ℝ) ≤ 2 * (T.S.n k : ℝ) + 1)
     have hNpow : (T.S.n k : ℝ) ^ (-2 : ℝ) ≤
         (2 * (𝒯.P i).g : ℝ) / T.S.n k := by
@@ -621,7 +622,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     have hQbdLeB : (κ.Qbd : ℝ) ≤ b := by
       dsimp [b]
       exact_mod_cast (by omega : κ.Qbd ≤ 8 * κ.Qbd)
-    have hM1 : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+    have hM1 : 0 < κ.M1 := by linarith only [hκ.M1_big.1]
     have hM1Q0LeB : κ.M1 * κ.Q0 ≤ (b : ℝ) :=
       le_trans hM1Qbd.le hQbdLeB
     have hQ0 : κ.Q0 ≤ (b : ℝ) / κ.M1 := by
@@ -640,16 +641,16 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         calc
           κ.ξ < κ.α * Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) := hκ.ξ_rng.2
           _ ≤ κ.α := mul_le_of_le_one_right (le_of_lt hκ.α_rng.1) hpowNeg
-      linarith [hξα, hκ.α_rng.2]
+      linarith only [hξα, hκ.α_rng.2]
     have hpow4 : (1 : ℝ) ≤ 4 ^ (κ.u + 3) := one_le_pow₀ (by norm_num)
-    have hden : (3 : ℝ) ≤ 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith [hpow4]
+    have hden : (3 : ℝ) ≤ 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith only [hpow4]
     have hdenpos : (0 : ℝ) < 3 * (4 : ℝ) ^ (κ.u + 3) := by positivity
-    have hξsq : κ.ξ ^ 2 < 1 := by nlinarith [hξlt, hκ.ξ_rng.1]
+    have hξsq : κ.ξ ^ 2 < 1 := by nlinarith only [hξlt, hκ.ξ_rng.1]
     have hθlt : κ.θ < 1 := by
       have hfrac : κ.ξ ^ 2 / (3 * (4 : ℝ) ^ (κ.u + 3)) < 1 :=
-        (div_lt_one hdenpos).2 (by nlinarith [hξsq, hden])
+        (div_lt_one hdenpos).2 (by nlinarith only [hξsq, hden])
       exact lt_trans hκ.θ_rng.2 hfrac
-    have haSmall : κ.a < 1 := by rw [hκ.a_eq]; nlinarith [hθlt]
+    have haSmall : κ.a < 1 := by rw [hκ.a_eq]; nlinarith only [hθlt]
     have hLogEq : 800 / (κ.a * (1 / 400 : ℝ)) = 320000 / κ.a := by
       field_simp [ne_of_gt ha]
       norm_num
@@ -661,7 +662,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       exact lt_trans hκ.aC_rng.2 (lt_of_le_of_lt hsmall hsmall')
     have haBlt : κ.aB < 1 := by
       have h := hκ.aB_rng.2.1
-      nlinarith [haClt]
+      nlinarith only [haClt, h]
     have hFactorLe : (Real.rpow 2 κ.aB - 1) ≤ 1 := by
       have hpow : Real.rpow 2 κ.aB ≤ 2 := by
         calc
@@ -687,7 +688,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     have hRatio : Real.exp (-((b : ℝ) ^ κ.aB)) ≤ κ.a / 320000 := by
       calc
         Real.exp (-((b : ℝ) ^ κ.aB)) ≤ Real.exp (-Real.log (320000 / κ.a)) :=
-          Real.exp_le_exp.mpr (by linarith [hBudget])
+          Real.exp_le_exp.mpr (by linarith only [hBudget])
         _ = κ.a / 320000 := by
           rw [Real.exp_neg, Real.exp_log (div_pos (by norm_num) ha)]
           field_simp [ne_of_gt ha]
@@ -720,7 +721,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have hMnonneg : (0 : ℝ) ≤ (𝒯.P i).M := Nat.cast_nonneg _
         have hcoef : κ.a / 800 ≤ 1 := by
           apply (div_le_one (by norm_num : (0 : ℝ) < 800)).2
-          linarith [haSmall]
+          linarith only [haSmall]
         calc
           κ.a / 800 * (𝒯.P i).M ≤ 1 * (𝒯.P i).M :=
             mul_le_mul_of_nonneg_right hcoef hMnonneg
@@ -749,19 +750,19 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have hu' : 10 * (κ.L : ℝ) ^ 2 < (κ.u : ℝ) := by
           exact_mod_cast hκ.u_rng.2
         have hLsq : (500 : ℝ) ^ 2 ≤ (κ.L : ℝ) ^ 2 := by
-          nlinarith [sq_nonneg ((κ.L : ℝ) - 500)]
-        nlinarith [hu', hLsq]
+          nlinarith only [sq_nonneg ((κ.L : ℝ) - 500), hLcast]
+        nlinarith only [hu', hLsq]
       have hCstar : 16 ≤ Cstar κ.u κ.ξ := by
         unfold Cstar
         have hfloor : 0 ≤ (⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊ : ℝ) := Nat.cast_nonneg _
-        nlinarith [hu, hfloor]
+        nlinarith only [hu, hfloor]
       have hQbdReal : (1 : ℝ) ≤ κ.Qbd := by exact_mod_cast hQbdPos
       have hmul : 16 * (κ.Qbd : ℝ) ≤ Cstar κ.u κ.ξ * κ.Qbd :=
         mul_le_mul_of_nonneg_right hCstar (Nat.cast_nonneg _)
       have hexp := Real.add_one_le_exp (Cstar κ.u κ.ξ * κ.Qbd)
       have hexp' : 16 * (κ.Qbd : ℝ) ≤
           Real.exp (Cstar κ.u κ.ξ * κ.Qbd) := by
-        linarith [hmul, hexp]
+        linarith only [hmul, hexp]
       exact le_trans hexp' hKbdExp
     have hKbdScale : 16 * (κ.Qbd : ℝ) ≤ κ.Kbd := hQbdPowLarge
     have hKbdWindow : 2 * (b : ℝ) ≤ κ.Kbd := by
@@ -879,7 +880,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         lt_of_lt_of_le hHighCard hMassScaled
       have hLowSmall : (BadLow.card : ℝ) < κ.a / 800 * (𝒯.P i).M :=
         lt_of_lt_of_le hLowCard hMassScaled
-      nlinarith [hUnion, hHighSmall, hLowSmall, ha, hMpos]
+      nlinarith only [hUnion, hHighSmall, hLowSmall, ha, hMpos]
     let C := X \ Bad
     have hCsub : C ⊆ X := by simp [C]
     have hXdiffSub : X \ C ⊆ Bad := by
@@ -904,7 +905,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         push_neg at h
         exact hxNotLow (Finset.mem_filter.mpr ⟨hxX, h⟩)
       have hAbs : |deg (T.S.E k) 𝒯.c (π i).w x - 1 / 2| ≤ κ.Kbd / T.S.n k :=
-        abs_le.mpr ⟨by linarith [hLower], by linarith [hUpper]⟩
+        abs_le.mpr ⟨by linarith only [hLower], by linarith only [hUpper]⟩
       simpa [OwnDegOK, hMode] using hAbs
     refine ⟨⟨C, hCsub, hLoss, hOwn, ?_⟩⟩
     intro hCluster
@@ -986,13 +987,13 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     ·
       rcases h𝒯.cluster_data hMode i with
         ⟨hMaxScale, hGscale, hMass, _, _, _, _, hHeight, hHeightUpper, _, _, _⟩
-      have hM1 : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+      have hM1 : 0 < κ.M1 := by linarith only [hκ.M1_big.1]
       have hMqReal : max ((𝒯.P i).g : ℝ) ((𝒯.P i).q : ℝ) ≤
           κ.M1 * (𝒯.P i).q := by
         apply max_le hGscale
         have hfactor : 0 ≤ (κ.M1 - 1) * (𝒯.P i).q :=
-          mul_nonneg (by linarith [hκ.M1_big.1]) (Nat.cast_nonneg _)
-        nlinarith [hfactor]
+          mul_nonneg (by linarith only [hκ.M1_big.1]) (Nat.cast_nonneg _)
+        nlinarith only [hfactor]
       have hMaxReal : κ.M1 * κ.Q0 ≤
           max ((𝒯.P i).g : ℝ) ((𝒯.P i).q : ℝ) := by
         exact_mod_cast hMaxScale
@@ -1154,7 +1155,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               have h := hκ.Mhi_big.1
               have hMlo : (0 : ℝ) ≤ κ.Mlo := Nat.cast_nonneg _
               have hterm : 0 < (10 : ℝ) / κ.cq := div_pos (by norm_num) hκ.cq_rng.1
-              have hpos : 0 < (κ.Mhi : ℝ) := by linarith [h, hMlo, hterm]
+              have hpos : 0 < (κ.Mhi : ℝ) := by linarith only [h, hMlo, hterm]
               have hMhiNat : 0 < κ.Mhi := by exact_mod_cast hpos
               exact_mod_cast (show 1 ≤ κ.Mhi by omega)
             have hCoeff : (0 : ℝ) ≤ (5 : ℝ) * κ.ω :=
@@ -1163,11 +1164,11 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               calc
                 5 * κ.ω = 5 * κ.ω * 1 := by ring
                 _ ≤ 5 * κ.ω * κ.Mhi := mul_le_mul_of_nonneg_left hMhi hCoeff
-            have hsmall : κ.aC / 100 < (1 / 100 : ℝ) := by nlinarith [hAClt]
+            have hsmall : κ.aC / 100 < (1 / 100 : ℝ) := by nlinarith only [hAClt]
             have hωineq : 5 * κ.ω < (1 / 100 : ℝ) :=
               lt_of_le_of_lt hωMlo (lt_trans hκ.ω_rng.2 hsmall)
-            have hωsmall : κ.ω < (1 / 500 : ℝ) := by nlinarith [hωineq]
-            nlinarith [hωsmall]
+            have hωsmall : κ.ω < (1 / 500 : ℝ) := by nlinarith only [hωineq]
+            nlinarith only [hωsmall]
           calc
             Real.rpow 2 (4 * κ.ω) ≤ Real.rpow 2 1 :=
               Real.rpow_le_rpow_of_exponent_le (by norm_num) hExp
@@ -1219,7 +1220,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have h' : 100 * κ.aC + 100 * κ.aB < κ.Cb * κ.aB := by
           convert h using 1 <;> field_simp [ne_of_gt hκ.aB_rng.1] <;> ring
         have hleft : 2 * κ.aC ≤ 100 * κ.aC + 100 * κ.aB := by
-          nlinarith [hκ.aC_rng.1, hκ.aB_rng.1]
+          nlinarith only [hκ.aC_rng.1, hκ.aB_rng.1]
         exact le_of_lt (lt_of_le_of_lt hleft h')
       have hBsamplerLe : Bsampler ≤ Real.rpow (b : ℝ) κ.aB := by
         dsimp [Bsampler]
@@ -1288,7 +1289,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
             exact hdiv
           exact lt_of_lt_of_le haCsmall' hdiv'
         have haBquarter : κ.aB ≤ (1 / 4 : ℝ) := by
-          nlinarith [hκ.aB_rng.2.1, haCsmall]
+          nlinarith only [hκ.aB_rng.2.1, haCsmall]
         have hbLe3n : b ≤ 3 * T.S.n k := by omega
         have hbLe3nR : (b : ℝ) ≤ 3 * (T.S.n k : ℝ) := by exact_mod_cast hbLe3n
         have hBupper : Bsampler ≤ Real.rpow (3 * (T.S.n k : ℝ)) κ.aB := by
@@ -1299,7 +1300,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have h3pow : Real.rpow 3 κ.aB ≤ 3 := by
           calc
             Real.rpow 3 κ.aB ≤ Real.rpow 3 1 :=
-              Real.rpow_le_rpow_of_exponent_le (by norm_num) (by linarith [haBquarter])
+              Real.rpow_le_rpow_of_exponent_le (by norm_num) (by linarith only [haBquarter])
             _ = 3 := Real.rpow_one 3
         have hnPow : Real.rpow (T.S.n k : ℝ) κ.aB ≤
             Real.rpow (T.S.n k : ℝ) (1 / 4 : ℝ) :=
@@ -1342,7 +1343,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           exact le_trans (by norm_num) hQuarter
         have hvMul : 3 * v ≤ v * v := by
           have hprod := mul_nonneg hvNonneg (sub_nonneg.mpr hv3)
-          nlinarith [hprod]
+          nlinarith only [hprod]
         have hSqrtEq : Real.sqrt (T.S.n k : ℝ) = v * v := by
           have hpow : Real.rpow (T.S.n k : ℝ) (1 / 2 : ℝ) = v * v := by
             dsimp [v]
@@ -1363,8 +1364,8 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
             have hCb : 100 ≤ κ.Cb := by
               have hterm : 0 < 100 * κ.aC / κ.aB :=
                 div_pos (mul_pos (by norm_num) hκ.aC_rng.1) hκ.aB_rng.1
-              linarith [hκ.Cb_big]
-            nlinarith [haCsmall, hCb]
+              linarith only [hκ.Cb_big, hterm]
+            nlinarith only [haCsmall, hCb]
           have hbase : xpow ≤ 3 * (T.S.n k : ℝ) := le_trans hbx hbLe3nR
           have hmul := Real.rpow_mul (x := (q : ℝ)) (Nat.cast_nonneg _) κ.Cb (1 / 4 : ℝ)
           have hexpEq : κ.Cb * (1 / 4 : ℝ) = κ.Cb / 4 := by ring
@@ -1380,15 +1381,15 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           dsimp [e]
           have hMhiPos : 0 < (κ.Mhi : ℝ) := by
             have hterm : 0 < 10 / κ.cq := div_pos (by norm_num) hκ.cq_rng.1
-            linarith [hκ.Mhi_big.1]
+            linarith only [hκ.Mhi_big.1, hterm, show (0 : ℝ) ≤ κ.Mlo from Nat.cast_nonneg _]
           exact mul_pos (mul_pos (by norm_num) hκ.ω_rng.1) hMhiPos
         have heQuarter : e ≤ κ.Cb / 4 := by
           have hCb : 100 ≤ κ.Cb := by
             have hterm : 0 < 100 * κ.aC / κ.aB :=
               div_pos (mul_pos (by norm_num) hκ.aC_rng.1) hκ.aB_rng.1
-            linarith [hκ.Cb_big]
+            linarith only [hκ.Cb_big, hterm]
           have heSmall : e < κ.aC / 100 := homegaSmall
-          nlinarith [haCsmall, hCb, heSmall]
+          nlinarith only [haCsmall, hCb, heSmall]
         have hQeBound : Real.rpow (q : ℝ) e ≤
             Real.rpow (3 * (T.S.n k : ℝ)) (1 / 4 : ℝ) := by
           have hbase : xpow ≤ 3 * (T.S.n k : ℝ) := le_trans hbx hbLe3nR
@@ -1425,7 +1426,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have hLog400 : Real.log (400 : ℝ) ≤ 10 := by
           have hExp1 : 2 ≤ Real.exp (1 : ℝ) := by
             have h := Real.add_one_le_exp (1 : ℝ)
-            nlinarith [h]
+            nlinarith only [h]
           have hExp10 : Real.exp (1 : ℝ) ^ 10 = Real.exp (10 : ℝ) := by
             simpa using Real.exp_nat_mul (1 : ℝ) 10
           have hExp400 : 400 ≤ Real.exp (10 : ℝ) := by
@@ -1494,14 +1495,14 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have hqDoubleNonneg : 0 ≤ qDouble := by dsimp [qDouble]; positivity
         have hQDouble : qE ≤ qDouble := by
           dsimp [qE, qDouble]
-          exact Real.rpow_le_rpow (Nat.cast_nonneg _) (by nlinarith [hqNat]) hePos.le
+          exact Real.rpow_le_rpow (Nat.cast_nonneg _) (by nlinarith only [hqNat]) hePos.le
         have hCap' : cap ≤ 80 * qE := by simpa [qE] using hCap
         have hCapQuarter : cap ≤ 160 * v := by
           calc
             cap ≤ 80 * qE := hCap'
             _ ≤ 80 * Real.rpow (3 * (T.S.n k : ℝ)) (1 / 4 : ℝ) :=
               mul_le_mul_of_nonneg_left hqEBound' (by norm_num)
-            _ ≤ 160 * v := by nlinarith [hQuarterN]
+            _ ≤ 160 * v := by nlinarith only [hQuarterN]
         have hWupper : W ≤ 162 * v + 10 := by
           dsimp [W]
           calc
@@ -1513,20 +1514,19 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               have hlog400 : Real.log (400 : ℝ) ≤ 10 := hLog400
               have hcapv : cap ≤ 160 * v := hCapQuarter
               simpa [qPow] using (show qPow + Real.log (400 : ℝ) + cap ≤ 162 * v + 10 by
-                linarith [hqpv, hlog400, hcapv])
+                linarith only [hqpv, hlog400, hcapv])
         have hWsmall : W ≤ Real.sqrt (T.S.n k) := by
           rw [hSqrtEq]
           have hLargePoly : 162 * v + 10 ≤ v * v := by
             have hv1000 : 1000 ≤ v := by dsimp [v]; exact hQuarter
-            have hmargin : 162 * v + 10 ≤ 1000 * v := by linarith [hv1000]
-            have hprod := mul_nonneg hvNonneg
-              (sub_nonneg.mpr (by linarith [hv1000]))
-            have hsquare : 1000 * v ≤ v * v := by nlinarith [hprod]
+            have hmargin : 162 * v + 10 ≤ 1000 * v := by linarith only [hv1000]
+            have hprod := mul_nonneg hvNonneg (sub_nonneg.mpr hv1000)
+            have hsquare : 1000 * v ≤ v * v := by nlinarith only [hprod]
             exact le_trans hmargin hsquare
           exact le_trans hWupper hLargePoly
         have hBWall : (Bsampler + W) / 2 ≤ Real.sqrt (T.S.n k) := by
           have hSum := add_le_add hBsmall hWsmall
-          linarith [hSum]
+          linarith only [hSum]
         have hlog2 : (1 / 2 : ℝ) ≤ Real.log 2 := by
           have h := Real.one_sub_inv_le_log_of_pos (by norm_num : (0 : ℝ) < 2)
           norm_num at h ⊢
@@ -1535,7 +1535,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           calc
             Real.exp ((T.S.n k : ℝ) / 2) ≤
                 Real.exp ((T.S.n k : ℝ) * Real.log 2) :=
-              Real.exp_le_exp.mpr (by nlinarith [hlog2])
+              Real.exp_le_exp.mpr (by nlinarith only [hlog2])
             _ = Real.exp ((T.S.n k : ℝ) * Real.log 2) := by congr 1 <;> ring
             _ = Real.exp (Real.log 2) ^ T.S.n k :=
               Real.exp_nat_mul (Real.log 2) (T.S.n k)
@@ -1553,7 +1553,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               exact_mod_cast (by omega : 16 ≤ T.S.n k)
             have hprod := mul_nonneg (le_of_lt hnR) (sub_nonneg.mpr hn16)
             have hsq : (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) ^ 2 / 16 := by
-              nlinarith [hprod]
+              nlinarith only [hprod]
             calc
               (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) ^ 2 / 16 := hsq
               _ = ((T.S.n k : ℝ) / 4) ^ 2 := by ring
@@ -1565,7 +1565,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
                 Real.exp (-Real.sqrt (T.S.n k : ℝ)) := by
               rw [← Real.exp_add]
               apply Real.exp_le_exp.mpr
-              linarith [hSqrtLe]
+              linarith only [hSqrtLe]
             _ ≤ (T.S.N k : ℝ) * Real.exp (-Real.sqrt (T.S.n k : ℝ)) :=
               mul_le_mul_of_nonneg_right hExpNlower (Real.exp_nonneg _)
         have hSampleSize : (T.S.n k : ℝ) ^ 12 ≤
@@ -1575,7 +1575,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
                 (T.S.N k : ℝ) * Real.exp (-Real.sqrt (T.S.n k : ℝ)) := hNexp
             _ ≤ (T.S.N k : ℝ) * Real.exp (-(Bsampler + W) / 2) :=
               mul_le_mul_of_nonneg_left
-                (Real.exp_le_exp.mpr (by linarith [hBWall])) (Nat.cast_nonneg _)
+                (Real.exp_le_exp.mpr (by linarith only [hBWall])) (Nat.cast_nonneg _)
         have hSamplerGap' : 2 * qPow + 2 * qDouble +
             Real.log (800 / (κ.a * (1 / 400 : ℝ))) ≤ Bsampler := by
           dsimp [Bsampler, qPow, qDouble]
@@ -1585,15 +1585,15 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               Real.log (400 : ℝ) + cap + 2 := by
           by_cases hBig : 78 * qE ≤ qPow
           · have hlarge : 80 * qE ≤ qPow + 2 * qDouble := by
-              nlinarith [hBig, hQDouble]
-            nlinarith [hlarge, hLogSlack', hLog400, hCap']
+              nlinarith only [hBig, hQDouble]
+            nlinarith only [hlarge, hLogSlack', hLog400, hCap']
           · have hSmall : qPow < 78 * qE := lt_of_not_ge hBig
             have hqPos : 0 < (q : ℝ) := by exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hqNat)
             have hqLogNonneg : 0 ≤ Real.log (q : ℝ) := Real.log_nonneg hq
             have hqPowPos : 0 < qPow := by dsimp [qPow]; positivity
             have hqEPos : 0 < qE := by dsimp [qE]; positivity
             have hLogLeft : Real.log qPow < Real.log (78 * qE) :=
-              Real.log_lt_log hqPowPos (by nlinarith [hSmall])
+              Real.log_lt_log hqPowPos (by nlinarith only [hSmall])
             have hLogLeft' : κ.aC * Real.log (q : ℝ) <
                 Real.log (78 : ℝ) + e * Real.log (q : ℝ) := by
               have hLhs : Real.log qPow = κ.aC * Real.log (q : ℝ) := by
@@ -1606,22 +1606,22 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
                 rw [Real.log_rpow hqPos]
               rw [hLhs, hRhs] at hLogLeft
               exact hLogLeft
-            have hDeltaPos : 0 < κ.aC - e := by nlinarith [homegaSmall]
+            have hDeltaPos : 0 < κ.aC - e := by nlinarith only [homegaSmall, hκ.aC_rng.1]
             have hDeltaLog : (κ.aC - e) * Real.log (q : ℝ) < Real.log 78 := by
-              nlinarith [hLogLeft']
+              nlinarith only [hLogLeft']
             have heDelta : e ≤ (κ.aC - e) / 99 := by
               dsimp [e]
-              nlinarith [homegaSmall]
+              nlinarith only [homegaSmall, hκ.aC_rng.1]
             have heLog : e * Real.log (q : ℝ) < Real.log 78 / 99 := by
               have hmul := mul_le_mul_of_nonneg_right heDelta hqLogNonneg
-              nlinarith [hmul, hDeltaLog]
+              nlinarith only [hmul, hDeltaLog]
             have hLog78 : Real.log (78 : ℝ) < 99 * Real.log 2 := by
               have hpow : (78 : ℝ) < (2 : ℝ) ^ 99 := by norm_num
               have h := Real.log_lt_log (by norm_num) hpow
               rw [Real.log_pow] at h
               exact h
             have heLog2 : e * Real.log (q : ℝ) < Real.log 2 := by
-              nlinarith [heLog, hLog78]
+              nlinarith only [heLog, hLog78]
             have hLogQE : Real.log qE < Real.log 2 := by
               dsimp [qE]
               rw [Real.log_rpow hqPos]
@@ -1630,13 +1630,13 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               by_contra hnot
               have hle : 2 ≤ qE := le_of_not_gt hnot
               have hmono := Real.log_le_log (by norm_num : (0 : ℝ) < 2) hle
-              linarith [hLogQE]
+              linarith only [hLogQE, hmono]
             have hcap160 : cap ≤ 160 := by
               calc
                 cap ≤ 80 * qE := hCap'
                 _ ≤ 80 * 2 := mul_le_mul_of_nonneg_left hqElt2.le (by norm_num)
                 _ = 160 := by norm_num
-            nlinarith [hLogSlack', hLog400, hcap160, hqPowNonneg, hqDoubleNonneg]
+            nlinarith only [hLogSlack', hLog400, hcap160, hqPowNonneg, hqDoubleNonneg]
         have hGapSampler : W + 2 ≤ Bsampler := by
           calc
             W + 2 = Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) + cap + 2 := by
@@ -1653,7 +1653,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
                 _ = qPow + Real.log (400 : ℝ) + cap + 2 := by ring
             _ ≤ 2 * qPow + 2 * qDouble +
                 Real.log (800 / (κ.a * (1 / 400 : ℝ))) := by
-              linarith [hBaseGap]
+              linarith only [hBaseGap]
             _ ≤ Bsampler := hSamplerGap'
         exact ⟨hBsmall, hWsmall, hGapSampler, hSampleSize⟩
       rcases hSamplerParams with ⟨hBsmall, hWsmall, hGapSampler, hSampleSize⟩
@@ -1706,7 +1706,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               2 * Real.rpow ((𝒯.P i).q : ℝ) κ.aC +
                 2 * Real.rpow (2 * (𝒯.P i).q) (4 * κ.ω * κ.Mhi) +
                 Real.log (800 / (κ.a * (1 / 400 : ℝ))) := by
-            nlinarith [hQtwoNonneg, hXnonneg]
+            nlinarith only [hQtwoNonneg, hXnonneg]
           _ ≤ Bsampler := hLower'
           _ ≤ Real.rpow (b : ℝ) κ.aB := hBsamplerLe
       have hExpCompare : Real.exp (-Real.rpow (b : ℝ) κ.aB) ≤
@@ -1714,7 +1714,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have hGapB : Real.log (800 / (κ.a * (1 / 400 : ℝ))) ≤
             Real.rpow (b : ℝ) κ.aB -
               Real.rpow ((𝒯.P i).q : ℝ) κ.aC := by
-          linarith [hbPowCompare]
+          linarith only [hbPowCompare]
         have hlogpos : 0 < 320000 / κ.a := by positivity
         have hlogEq' : Real.log (800 / (κ.a * (1 / 400 : ℝ))) =
             Real.log (320000 / κ.a) := congrArg Real.log hLogEq
@@ -1724,7 +1724,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
                 Real.log (320000 / κ.a)) :=
             Real.exp_le_exp.mpr (by
               rw [← hlogEq']
-              linarith [hGapB])
+              linarith only [hGapB])
           _ = Real.exp (-Real.rpow ((𝒯.P i).q : ℝ) κ.aC) * (κ.a / 320000) := by
             rw [Real.exp_sub, Real.exp_log hlogpos]
             field_simp [ne_of_gt ha]
@@ -1819,7 +1819,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           2 * (b : ℝ) / T.S.n k <
             deg (T.S.E k) 𝒯.c (π i).w x - 1 / 2 := by
         have hxmem := (Finset.mem_filter.mp hx).2
-        have hnum : 2 * (b : ℝ) < 4 * xpow := by nlinarith [hbxUpper]
+        have hnum : 2 * (b : ℝ) < 4 * xpow := by nlinarith only [hbxUpper]
         have hdiv := div_lt_div_of_pos_right hnum hnR
         have hxmem' : 4 * xpow / T.S.n k <
             deg (T.S.E k) 𝒯.c (π i).w x - 1 / 2 := by
@@ -1829,7 +1829,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           2 * (b : ℝ) / T.S.n k <
             1 / 2 - deg (T.S.E k) 𝒯.c (π i).w x := by
         have hxmem := (Finset.mem_filter.mp hx).2
-        have hnum : 2 * (b : ℝ) < 4 * xpow := by nlinarith [hbxUpper]
+        have hnum : 2 * (b : ℝ) < 4 * xpow := by nlinarith only [hbxUpper]
         have hdiv := div_lt_div_of_pos_right hnum hnR
         have hxmem' : 4 * xpow / T.S.n k <
             1 / 2 - deg (T.S.E k) 𝒯.c (π i).w x := by
@@ -1861,7 +1861,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           lt_of_lt_of_le hBadHighCard hMscaled
         have hLowSmall : (BadLow.card : ℝ) < κ.a / 800 * (𝒯.P i).M :=
           lt_of_lt_of_le hBadLowCard hMscaled
-        nlinarith [hUnion, hHighSmall, hLowSmall, ha, hMpos]
+        nlinarith only [hUnion, hHighSmall, hLowSmall, ha, hMpos]
       let C := X \ Bad
       have hCsub : C ⊆ X := by simp [C]
       have hXdiffSub : X \ C ⊆ Bad := by
@@ -1880,7 +1880,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         have hxNotHigh : x ∉ BadHigh := fun h => hxNotBad (Finset.mem_union_left _ h)
         have hxNotLow : x ∉ BadLow := fun h => hxNotBad (Finset.mem_union_right _ h)
         have htNonneg : 0 ≤ xpow / T.S.n k :=
-          div_nonneg (by linarith [hxpow]) (Nat.cast_nonneg _)
+          div_nonneg (by linarith only [hxpow]) (Nat.cast_nonneg _)
         have hUpper : deg (T.S.E k) 𝒯.c (π i).w x - 1 / 2 ≤
             4 * xpow / T.S.n k := by
           by_contra h
@@ -1895,14 +1895,14 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           exact hxNotLow (Finset.mem_filter.mpr ⟨hxX, hStrict⟩)
         have hAbs : |deg (T.S.E k) 𝒯.c (π i).w x - 1 / 2| ≤
             4 * xpow / T.S.n k :=
-          abs_le.mpr ⟨by linarith [hLower], hUpper⟩
+          abs_le.mpr ⟨by linarith only [hLower], hUpper⟩
         have hWide : 4 * xpow / T.S.n k ≤
             10 * Real.rpow ((𝒯.P i).q : ℝ) κ.Cb / T.S.n k := by
           dsimp [xpow, q]
           have hpowNonneg : 0 ≤ Real.rpow ((𝒯.P i).q : ℝ) κ.Cb :=
             Real.rpow_nonneg (Nat.cast_nonneg _) _
           have hnum : 4 * Real.rpow ((𝒯.P i).q : ℝ) κ.Cb ≤
-              10 * Real.rpow ((𝒯.P i).q : ℝ) κ.Cb := by nlinarith [hpowNonneg]
+              10 * Real.rpow ((𝒯.P i).q : ℝ) κ.Cb := by nlinarith only [hpowNonneg]
           exact div_le_div_of_nonneg_right hnum (Nat.cast_nonneg _)
         have hAbs' := hAbs.trans hWide
         rcases hMode with hLow | hSmall | hLarge
@@ -1929,7 +1929,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         exact hxNotLow (Finset.mem_filter.mpr ⟨hxX, hStrict⟩)
       have hCenter : |deg (T.S.E k) 𝒯.c (π i).w x - 1 / 2| ≤
           4 * xpow / T.S.n k :=
-        abs_le.mpr ⟨by linarith [hLower], hUpper⟩
+        abs_le.mpr ⟨by linarith only [hLower], hUpper⟩
       have hNearDeg := HypercubeRamsey.S13.Lane_q_s13_clean.deg_l1
         (T.S.E k) 𝒯.c (π i) (π' i) x (hNear i)
       have hNearDeg' : |deg (T.S.E k) 𝒯.c (π' i).w x -
@@ -1945,7 +1945,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       have hErr : (T.S.n k : ℝ) ^ (-3 : ℝ) ≤ xpow / T.S.n k :=
         le_trans hNinv (div_le_div_of_nonneg_right hxpow (Nat.cast_nonneg _))
       have htNonneg : 0 ≤ xpow / T.S.n k :=
-        div_nonneg (by linarith [hxpow]) (Nat.cast_nonneg _)
+        div_nonneg (by linarith only [hxpow]) (Nat.cast_nonneg _)
       have hNearWide : (T.S.n k : ℝ) ^ (-3 : ℝ) + 4 * xpow / T.S.n k ≤
           10 * xpow / T.S.n k := by
         have hfour : 4 * xpow / T.S.n k = 4 * (xpow / T.S.n k) := by ring
@@ -1955,7 +1955,7 @@ theorem own_patch_degree_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
             (xpow / T.S.n k) + 4 * (xpow / T.S.n k) :=
           add_le_add hErr le_rfl
         have hlarge : (xpow / T.S.n k) + 4 * (xpow / T.S.n k) ≤
-            10 * (xpow / T.S.n k) := by nlinarith [htNonneg]
+            10 * (xpow / T.S.n k) := by nlinarith only [htNonneg]
         exact le_trans hsmall hlarge
       have hNearAbs : |deg (T.S.E k) 𝒯.c (π' i).w x - 1 / 2| ≤
           10 * xpow / T.S.n k := by
@@ -1991,8 +1991,144 @@ theorem own_patch_clique_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
       ∀ i (π : Fin 𝒯.m → Law (T.S.N k)), InputOK 𝒯 h𝒯 π →
         ∀ D : OwnDegreeData 𝒯 i π, Nonempty (OwnCliqueData D) := by
-      exact sorry
+  classical
+  filter_upwards [Lane_sol_s13_cleanB.sampler_numeric κ hκ T] with k hk
+  rcases hk with ⟨hn, herr, hnear, hcount, hsample⟩
+  intro 𝒯 h𝒯 i π hInput D
+  rcases Lane_sol_s13_cleanB.clique_budget κ hκ T k 𝒯 h𝒯 i π hInput with
+    ⟨hdy, hqQ, hwidth, hloss⟩
+  let m := Nat.ceil (Real.exp (𝒯.Q i : ℝ))
+  have hm : 0 < m := Nat.ceil_pos.mpr (Real.exp_pos _)
+  have hM : 0 < ((𝒯.P i).M : ℝ) := by
+    have ht := Finset.card_pos.mpr (h𝒯.patch_nonempty i).1
+    rw [(𝒯.P i).cardX] at ht
+    exact_mod_cast ht
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  by_cases hbig : T.S.N k < m
+  · refine ⟨⟨D.C, Finset.Subset.refl _, ?_, ?_⟩⟩
+    · simp only [Finset.sdiff_self, Finset.card_empty, Nat.cast_zero]
+      positivity
+    · intro π' hNear
+      rintro ⟨K, hK, hcard, _⟩
+      have ht : K.card ≤ T.S.N k := by simpa using Finset.card_le_univ K
+      rw [show K.card = m from hcard] at ht
+      omega
+  have hsmall : Real.exp (𝒯.Q i : ℝ) ≤ T.S.N k := by
+    exact (Nat.le_ceil _).trans (by exact_mod_cast le_of_not_gt hbig)
+  rcases hsample (𝒯.Q i) hsmall with ⟨hrange, hB, hsize⟩
+  let B := Real.rpow (𝒯.Q i : ℝ) κ.aC
+  let W := B - 2
+  let tests : Fin ((T.S.N k) * (T.S.N k)) → Fin (T.S.N k) → ℝ :=
+    fun j y => (fv (T.S.E k) true (finProdFinEquiv.symm j).1 y *
+      fv (T.S.E k) true (finProdFinEquiv.symm j).2 y + 1) / 2
+  have htests : ∀ j y, 0 ≤ tests j y ∧ tests j y ≤ 1 := by
+    intro j y
+    dsimp [tests]
+    unfold fv hit
+    split_ifs <;> norm_num
+  have hW : W ≤ (T.S.n k : ℝ) ^ (1 / 2 : ℝ) := by
+    dsimp [W, B]
+    simp only [Real.rpow_eq_pow] at hB ⊢
+    linarith only [hB]
+  obtain ⟨U, hU, hUpos, hUcard, hUtests⟩ := hApprox (T.S.N k)
+    ((T.S.N k) * (T.S.N k)) (T.S.n k) (π i) B W hn hB hW
+    (by dsimp [W]; linarith) hwidth hsize tests htests (by simpa [pow_two] using hcount)
+  have hUsub : U ⊆ (𝒯.P i).resY := by
+    intro y hy
+    have hyY : y ∈ (𝒯.P i).Y := by
+      by_contra hnot
+      have hz := (hInput i).1 y hnot
+      linarith [hUpos y hy]
+    exact (𝒯.P i).Y_res hyY
+  let ν := Law.unifCore U hU
+  have hCorr (x z : Fin (T.S.N k)) :
+      corr (T.S.E k) true (π i).w x z - 2 * (T.S.n k : ℝ) ^ (-2 : ℝ) ≤
+        corr (T.S.E k) true ν.w x z := by
+    let f := fun y => (fv (T.S.E k) true x y * fv (T.S.E k) true z y + 1) / 2
+    have ht := hUtests (finProdFinEquiv (x, z))
+    have htf : tests (finProdFinEquiv (x, z)) = f := by
+      have he : finProdFinEquiv.symm (finProdFinEquiv (x, z)) = (x, z) :=
+        Equiv.symm_apply_apply _ _
+      exact congrArg (fun p : Fin (T.S.N k) × Fin (T.S.N k) =>
+        fun y => (fv (T.S.E k) true p.1 y * fv (T.S.E k) true p.2 y + 1) / 2) he
+    rw [htf] at ht
+    have ht' : |ν.expect f - (π i).expect f| ≤ (T.S.n k : ℝ) ^ (-2 : ℝ) := by
+      simpa only [ν, Lane_q_s13_clean.unifCore_expect] using ht
+    have hlo := (abs_le.mp ht').1
+    have hp := Lane_q_s13_clean.corr_expect_shift (T.S.E k) (π i) x z
+    have hu := Lane_q_s13_clean.corr_expect_shift (T.S.E k) ν x z
+    change corr (T.S.E k) true (π i).w x z = 2 * (π i).expect f - 1 at hp
+    change corr (T.S.E k) true ν.w x z = 2 * ν.expect f - 1 at hu
+    linarith
+  let R := fun x z => 2 * κ.θ < corr (T.S.E k) 𝒯.c (π i).w x z
+  obtain ⟨P, hP, hDisjoint, hMax⟩ :=
+    Lane_sol_s13_cleanB.clique_pack D.C m hm R
+  let S := P.biUnion id
+  let Bins : Fin P.card → Finset (Fin (T.S.N k)) :=
+    fun j => (Lane_q_s13_clean.finsetEnum P j).val
+  have hBins (j : Fin P.card) : Bins j ∈ P := (Lane_q_s13_clean.finsetEnum P j).property
+  have hProps (A : Finset (Fin (T.S.N k))) (hA : A ∈ P) :
+      A ⊆ D.C ∧ A.card = m ∧ ∀ x ∈ A, ∀ z ∈ A, x ≠ z → R x z := by
+    exact hP A hA
+  have hBinsUnion : Finset.univ.biUnion Bins = S := by
+    ext x
+    constructor
+    · intro hx
+      rcases Finset.mem_biUnion.mp hx with ⟨j, _, hj⟩
+      exact Finset.mem_biUnion.mpr ⟨Bins j, hBins j, hj⟩
+    · intro hx
+      rcases Finset.mem_biUnion.mp hx with ⟨A, hA, hxA⟩
+      let j := (Lane_q_s13_clean.finsetEnum P).symm ⟨A, hA⟩
+      have hj : Bins j = A := by simp [Bins, j]
+      exact Finset.mem_biUnion.mpr ⟨j, Finset.mem_univ _, by rwa [hj]⟩
+  have hSSmall : (S.card : ℝ) < (T.S.N k : ℝ) * Real.exp (-B) := by
+    by_contra hlarge
+    have hlarge : (T.S.N k : ℝ) * Real.exp (-B) ≤ S.card := le_of_not_gt hlarge
+    apply hScales.cluster_absent κ T k (𝒯.P i).resX (𝒯.P i).resY (𝒯.Q i)
+      hdy (by rwa [← (h𝒯.measured_scales i).2]) hrange
+    refine ⟨true, U, hU, P.card, Bins, hUsub, ?_, ?_, ?_, hUcard, ?_, ?_⟩
+    · intro j
+      exact ((hProps _ (hBins j)).1.trans D.sub).trans (𝒯.P i).X_res
+    · intro j hj l hl hne
+      apply hDisjoint (Bins j) (hBins j) (Bins l) (hBins l)
+      intro hEq
+      have ht : Lane_q_s13_clean.finsetEnum P j = Lane_q_s13_clean.finsetEnum P l :=
+        Subtype.ext hEq
+      exact hne ((Lane_q_s13_clean.finsetEnum P).injective ht)
+    · intro j
+      rw [(hProps _ (hBins j)).2.1]
+      exact Nat.le_ceil _
+    · rw [hBinsUnion]
+      exact hlarge
+    · intro j x hx z hz hne
+      have ht := (hProps _ (hBins j)).2.2 x hx z hz hne
+      have hc := Lane_q_s13_clean.corr_color_eq (T.S.E k) 𝒯.c (π i).w x z
+      dsimp [R] at ht
+      rw [hc] at ht
+      have hu := hCorr x z
+      change κ.θ < corr (T.S.E k) true ν.w x z
+      linarith [ht, hu, herr]
+  refine ⟨⟨D.C \ S, Finset.sdiff_subset, ?_, ?_⟩⟩
+  · have hsub : D.C \ (D.C \ S) ⊆ S := by
+      intro x hx
+      simp only [Finset.mem_sdiff] at hx
+      by_contra hnot
+      exact hx.2 ⟨hx.1, hnot⟩
+    have hc : ((D.C \ (D.C \ S)).card : ℝ) ≤ (S.card : ℝ) := by
+      exact_mod_cast Finset.card_le_card hsub
+    exact hc.trans_lt (hSSmall.trans hloss)
+  · intro π' hNear
+    rintro ⟨K, hK, hcard, hpair⟩
+    have hKR : ∀ x ∈ K, ∀ z ∈ K, x ≠ z → R x z := by
+      intro x hx z hz hne
+      have hn := Lane_q_s13_clean.corr_l1 (T.S.E k) 𝒯.c (π i) (π' i) x z (hNear i)
+      have hl := (abs_le.mp hn).1
+      have hp := hpair x hx z hz hne
+      dsimp [R]
+      linarith [hnear, hl, hp]
+    exact hMax K (hK.trans Finset.sdiff_subset) hcard hKR hK
 
+set_option maxHeartbeats 2000000 in
 /-- L13.4d (sections/13, lines 267–276): clean other-patch outliers and enforce relaxed row
 tails on the fixed original first support, retaining at least `(1 - κ.a) * M` labels. -/
 theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -2016,16 +2152,29 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
   rcases hNum with ⟨hTailLoss, hLog400Xs, hXsLinear, hCountLog, hXsRoot,
     h01Root, hRootAlpha, hOutExp, hPowerGap, hLog400Iota⟩
   intro 𝒯 h𝒯 i π hInput D C
-  have hTailEvent := by cases 𝒯.c <;> assumption
-  have hRelaxEvent := by cases 𝒯.c <;> assumption
+  have hTailEvent : ∀ (X₀ : Finset (Fin (T.S.N k))) (hX₀ : X₀.Nonempty),
+      X₀ ⊆ T.X k → Real.log ((T.S.N k : ℝ) / X₀.card) ≤ (T.S.n k : ℝ) ^ (κ.xs / 4) →
+      ∀ {α : Type} (J : Finset α) (laws : α → Law (T.S.N k)),
+        (∀ j, (laws j).SupportedIn (T.Y k)) →
+        (∀ j, (laws j).WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4))) →
+        (J.card : ℝ) ≤ Real.exp ((T.S.n k : ℝ) ^ (0.1 : ℝ)) →
+        ∃ X₁ ⊆ X₀, ((X₀ \ X₁).card : ℝ) ≤
+          Real.exp (-((T.S.n k : ℝ) ^ (0.3 : ℝ))) * X₀.card ∧
+          ∀ j ∈ J, ∀ x ∈ X₁, HypercubeRamsey.S12.RowTail (T.S.E k) 𝒯.c (laws j).w X₀ (T.S.n k) κ.ξ x := by
+    cases 𝒯.c <;> assumption
+  have hRelaxEvent : ∀ (μ μ' : Law (T.S.N k)) (X₀ : Finset (Fin (T.S.N k)))
+      (x : Fin (T.S.N k)), HypercubeRamsey.S12.RowTail (T.S.E k) 𝒯.c μ.w X₀ (T.S.n k) κ.ξ x →
+      (∑ y, |μ.w y - μ'.w y|) ≤ (T.S.n k : ℝ) ^ (-3 : ℝ) →
+      RowTailRelaxed (T.S.E k) 𝒯.c μ'.w X₀ (T.S.n k) κ.ξ x := by
+    cases 𝒯.c <;> assumption
   let X := (𝒯.P i).X
   have hNpos : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
   have hnR : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast hk
   have hnPos : 0 < (T.S.n k : ℝ) := by linarith
   have hXne : X.Nonempty := by simpa [X] using (h𝒯.patch_nonempty i).1
   have hXsub : X ⊆ T.X k := by
-    exact ((h𝒯.patch_supports i).1).trans ((h𝒯.patch_supports i).2.1)
-  have hMpos : 0 < (𝒯.P i).M := by
+    exact (((h𝒯.patch_supports i).1).trans ((h𝒯.patch_supports i).2.1)).trans Finset.sdiff_subset
+  have hMpos : 0 < ((𝒯.P i).M : ℝ) := by
     have hcard := Finset.card_pos.mpr hXne
     rw [(𝒯.P i).cardX] at hcard
     exact_mod_cast hcard
@@ -2037,16 +2186,14 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
       (T.S.n k : ℝ) ^ (κ.xs / 4) := by
     calc
       (T.S.n k : ℝ) ^ κ.ι ≤ 12 * (T.S.n k : ℝ) ^ (2 * κ.ι) := by
-        nlinarith [Real.rpow_nonneg (Nat.cast_nonneg _) κ.ι, hNPowerLe]
+        have hp : 0 ≤ (T.S.n k : ℝ) ^ (2 * κ.ι) :=
+          Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) _
+        linarith only [hp, hNPowerLe]
       _ ≤ (T.S.n k : ℝ) ^ (κ.xs / 4) := hPowerGap
   have hApos : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
-  have hAone : κ.a < 1 := by
-    rw [hκ.a_eq]
-    have hθ := hκ.θ_rng.2
-    nlinarith
-  have hAhalf : κ.a < 1 / 2 := by
-    rw [hκ.a_eq]
-    nlinarith [hκ.θ_rng.2]
+  have hASmall := (Lane_sol_s13_cleanB.admissible_a_small κ hκ).2
+  have hAone : κ.a < 1 := by linarith
+  have hAhalf : κ.a < 1 / 2 := by linarith
   have hABleOne : κ.aB ≤ 1 := by
     have hACsmall : κ.aC < (1 : ℝ) := by
       have hmin : min κ.η0 (1 : ℝ) ≤ 1 := min_le_right _ _
@@ -2059,10 +2206,10 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     have hRatio : 0 ≤ 100 * κ.aC / κ.aB :=
       div_nonneg (mul_nonneg (by norm_num) hκ.aC_rng.1.le) hκ.aB_rng.1.le
     have hCb : (100 : ℝ) < κ.Cb := by linarith [hκ.Cb_big]
-    have hMlo : (200 : ℝ) < κ.Mlo := by linarith [hκ.Mlo_big.1]
+    have hMlo : (200 : ℝ) < κ.Mlo := by linarith [hκ.Mlo_big]
     linarith
   have hMloLeMhi : (κ.Mlo : ℝ) ≤ κ.Mhi := by
-    have hnonneg : 0 ≤ (10 : ℝ) / κ.cq := by positivity
+    have hnonneg : 0 ≤ (10 : ℝ) / κ.cq := div_nonneg (by norm_num) hκ.cq_rng.1.le
     calc
       (κ.Mlo : ℝ) ≤ κ.Mlo + 10 / κ.cq := by linarith
       _ ≤ κ.Mhi := hκ.Mhi_big.1
@@ -2078,17 +2225,19 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     intro j
     cases hm : 𝒯.mode with
     | bounded =>
-        rcases (h𝒯.bounded_data hm).2 j with ⟨_, _, _, _, hMass, _⟩
+        rcases (h𝒯.bounded_data hm).2 j with ⟨_, _, _, hMass, _⟩
         have hExp : Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤ 1 := by
           calc
             Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤ Real.exp 0 :=
-              Real.exp_le_exp.mpr (by positivity)
+              Real.exp_le_exp.mpr (neg_nonpos.mpr (Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) κ.ι))
             _ = 1 := Real.exp_zero
         calc
           (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤
               (T.S.N k : ℝ) / 400 :=
-            mul_le_mul_of_nonneg_left hExp (by positivity)
-          _ ≤ (𝒯.P j).M := hMass
+            by
+              have ht := mul_le_mul_of_nonneg_left hExp (div_nonneg hNpos.le (by norm_num : (0 : ℝ) ≤ 400))
+              simpa only [mul_one] using ht
+          _ ≤ (𝒯.P j).M := by simpa only [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm, one_mul] using hMass
     | lowDirect =>
         rcases h𝒯.direct_data (Or.inl hm) j with ⟨_, _, hMass, _, _, _, _⟩
         have hG := h𝒯.direct_scale_bound (Or.inl hm) j
@@ -2097,7 +2246,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           Real.rpow_le_rpow (Nat.cast_nonneg _) hG hκ.aB_rng.1.le
         have hNested : Real.rpow ((T.S.n k : ℝ) ^ (κ.ι / 2)) κ.aB =
             (T.S.n k : ℝ) ^ (κ.ι / 2 * κ.aB) := by
-          exact Real.rpow_mul (Nat.cast_nonneg _) (κ.ι / 2) κ.aB
+          exact (Real.rpow_mul (Nat.cast_nonneg (T.S.n k)) (κ.ι / 2) κ.aB).symm
         have hExpPow : Real.rpow ((𝒯.P j).g : ℝ) κ.aB ≤
             (T.S.n k : ℝ) ^ κ.ι := by
           calc
@@ -2113,7 +2262,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤
               (T.S.N k : ℝ) / 400 * Real.exp (-Real.rpow ((𝒯.P j).g : ℝ) κ.aB) :=
             mul_le_mul_of_nonneg_left hExp (by positivity)
-          _ ≤ (𝒯.P j).M := hMass
+          _ ≤ (𝒯.P j).M := by simpa only [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm, one_mul] using hMass
     | highDirect =>
         rcases h𝒯.direct_data (Or.inr hm) j with ⟨_, _, hMass, _, _, _, _⟩
         have hG := h𝒯.direct_scale_bound (Or.inr hm) j
@@ -2122,7 +2271,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           Real.rpow_le_rpow (Nat.cast_nonneg _) hG hκ.aB_rng.1.le
         have hNested : Real.rpow ((T.S.n k : ℝ) ^ (κ.ι / 2)) κ.aB =
             (T.S.n k : ℝ) ^ (κ.ι / 2 * κ.aB) :=
-          Real.rpow_mul (Nat.cast_nonneg _) (κ.ι / 2) κ.aB
+          (Real.rpow_mul (Nat.cast_nonneg (T.S.n k)) (κ.ι / 2) κ.aB).symm
         have hExpPow : Real.rpow ((𝒯.P j).g : ℝ) κ.aB ≤
             (T.S.n k : ℝ) ^ κ.ι := by
           calc
@@ -2138,7 +2287,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤
               (T.S.N k : ℝ) / 400 * Real.exp (-Real.rpow ((𝒯.P j).g : ℝ) κ.aB) :=
             mul_le_mul_of_nonneg_left hExp (by positivity)
-          _ ≤ (𝒯.P j).M := hMass
+          _ ≤ (𝒯.P j).M := by simpa only [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm, one_mul] using hMass
     | lowCluster =>
         rcases h𝒯.cluster_data (Or.inl hm) j with
           ⟨_, _, hMass, _, _, _, _, hHeight, _, _, _, _⟩
@@ -2169,7 +2318,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤
               (T.S.N k : ℝ) / 400 * Real.exp (-Real.rpow ((𝒯.P j).q : ℝ) κ.aC) :=
             mul_le_mul_of_nonneg_left hExp (by positivity)
-          _ ≤ (𝒯.P j).M := hMass
+          _ ≤ (𝒯.P j).M := by simpa only [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm, one_mul] using hMass
     | highSmall =>
         rcases h𝒯.cluster_data (Or.inr (Or.inl hm)) j with
           ⟨_, _, hMass, _, _, _, _, hHeight, _, _, _, _⟩
@@ -2200,7 +2349,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤
               (T.S.N k : ℝ) / 400 * Real.exp (-Real.rpow ((𝒯.P j).q : ℝ) κ.aC) :=
             mul_le_mul_of_nonneg_left hExp (by positivity)
-          _ ≤ (𝒯.P j).M := hMass
+          _ ≤ (𝒯.P j).M := by simpa only [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm, one_mul] using hMass
     | highLarge =>
         rcases h𝒯.cluster_data (Or.inr (Or.inr hm)) j with
           ⟨_, _, hMass, _, _, _, _, hHeight, _, _, _, _⟩
@@ -2231,8 +2380,8 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) ≤
               (T.S.N k : ℝ) / 400 * Real.exp (-Real.rpow ((𝒯.P j).q : ℝ) κ.aC) :=
             mul_le_mul_of_nonneg_left hExp (by positivity)
-          _ ≤ (𝒯.P j).M := hMass
-  have hUnionDisjoint : (Finset.univ : Finset (Fin 𝒯.m)).PairwiseDisjoint
+          _ ≤ (𝒯.P j).M := by simpa only [div_eq_mul_inv, mul_assoc, mul_left_comm, mul_comm, one_mul] using hMass
+  have hUnionDisjoint : ((Finset.univ : Finset (Fin 𝒯.m)) : Set (Fin 𝒯.m)).PairwiseDisjoint
       (fun j => (𝒯.P j).X) := by
     intro j hj l hl hjl
     exact h𝒯.patch_X_disjoint j l hjl
@@ -2240,34 +2389,34 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
   have hXallSub : Xall ⊆ T.X k := by
     intro x hx
     rcases Finset.mem_biUnion.mp hx with ⟨j, hj, hxj⟩
-    exact ((h𝒯.patch_supports j).1.trans ((h𝒯.patch_supports j).2.1)) hxj
+    exact Finset.sdiff_subset (((h𝒯.patch_supports j).1.trans ((h𝒯.patch_supports j).2.1)) hxj)
   have hSumMass : (𝒯.m : ℝ) *
       ((T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι))) ≤
-      ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), (𝒯.P j).M := by
+      ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), ((𝒯.P j).M : ℝ) := by
     calc
       (𝒯.m : ℝ) *
           ((T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι))) =
           ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)),
             ((T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι))) := by simp
-      _ ≤ ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), (𝒯.P j).M := by
+      _ ≤ ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), ((𝒯.P j).M : ℝ) := by
         apply Finset.sum_le_sum
         intro j hj
         exact hPatchMass j
   have hmNat : (𝒯.m : ℝ) ≤ 400 * Real.exp ((T.S.n k : ℝ) ^ κ.ι) := by
     have hUnionCard := Finset.card_biUnion hUnionDisjoint
     have hCardSum : (Xall.card : ℝ) =
-        ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), (𝒯.P j).M := by
+        ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), ((𝒯.P j).M : ℝ) := by
       calc
         (Xall.card : ℝ) =
             ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), ((𝒯.P j).X.card : ℝ) := by
           exact_mod_cast hUnionCard
-        _ = ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), (𝒯.P j).M := by
+        _ = ∑ j ∈ (Finset.univ : Finset (Fin 𝒯.m)), ((𝒯.P j).M : ℝ) := by
           apply Finset.sum_congr rfl
           intro j hj
           exact_mod_cast (𝒯.P j).cardX
     have hUnionBound : (Xall.card : ℝ) ≤ T.S.N k := by
       have hcard := Finset.card_le_card hXallSub
-      have hlt : (T.X k).card ≤ T.S.N k := Finset.card_le_univ _
+      have hlt : (T.X k).card ≤ T.S.N k := by simpa using Finset.card_le_univ (T.X k)
       exact_mod_cast (le_trans hcard hlt)
     have hFactorPos : 0 <
         (T.S.N k : ℝ) / 400 * Real.exp (-((T.S.n k : ℝ) ^ κ.ι)) :=
@@ -2290,145 +2439,70 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
         rw [Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 400)]
       _ ≤ Real.exp ((T.S.n k : ℝ) ^ (0.1 : ℝ)) :=
         Real.exp_le_exp.mpr hCountLog
+  have huNat : 1 ≤ κ.u := by
+    have ht := hκ.u_rng.2
+    omega
+  have huR : (1 : ℝ) ≤ κ.u := by exact_mod_cast huNat
   have hLogRatio : ∀ j : Fin 𝒯.m,
       Real.log ((T.S.N k : ℝ) / (𝒯.P j).M) ≤ (T.S.n k : ℝ) ^ κ.ι := by
     intro j
-    have hMj : 0 < (𝒯.P j).M := by
-      exact lt_of_lt_of_le
-        (mul_pos (div_pos hNpos (by norm_num)) (Real.exp_pos _)) (hPatchMass j)
-    have hAllocation := (h𝒯.allocation_bounds j).2
-    cases hm : 𝒯.mode with
-    | bounded =>
-        rcases (h𝒯.bounded_data hm).2 j with ⟨_, _, _, _, hMass, _⟩
-        have hratio : (T.S.N k : ℝ) / (𝒯.P j).M ≤ 400 := by
-          apply (div_le_iff₀ hMj).2
-          have hM := hMass
-          rw [div_le_iff₀ (by norm_num : (0 : ℝ) < 400)] at hM
-          nlinarith
-        have hlog := Real.log_le_log (div_pos hNpos hMj) hratio
-        exact hlog.trans hLog400Iota
-    | lowDirect =>
-        rcases hAllocation with hbad | ⟨_, hlog⟩
-        · simp [hm] at hbad
-        have hG := h𝒯.direct_scale_bound (Or.inl hm) j
-        have hGle : (𝒯.P j).g ≤ (T.S.n k : ℝ) ^ κ.ι := by
-          calc
-            (𝒯.P j).g ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := hG
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι :=
-              Real.rpow_le_rpow_of_exponent_le hnR (by nlinarith [hκ.ι_rng.1])
-        have hBudget : Tiling.gain 𝒯 j / (1000 * κ.u) ≤
-            (T.S.n k : ℝ) ^ κ.ι := by
-          have hu : 1 ≤ (κ.u : ℝ) := by
-            have hu' := hκ.u_rng.1
-            exact_mod_cast (by omega : 1 ≤ κ.u)
-          simp [Tiling.gain, hm]
-          have hgNonneg : 0 ≤ (𝒯.P j).g := Nat.cast_nonneg _
-          have hden : 1 ≤ (1000000 : ℝ) * κ.u := by nlinarith [hu]
-          calc
-            (((𝒯.P j).g : ℝ) / 1000) / (1000 * κ.u) =
-                (𝒯.P j).g / (1000000 * κ.u) := by field_simp; ring
-            _ ≤ (𝒯.P j).g := div_le_self hgNonneg hden
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι := hGle
-        exact le_trans hlog (by simpa [Tiling.gain, hm] using hBudget)
-    | highDirect =>
-        rcases hAllocation with hbad | ⟨_, hlog⟩
-        · simp [hm] at hbad
-        have hG := h𝒯.direct_scale_bound (Or.inr hm) j
-        have hGle : (𝒯.P j).g ≤ (T.S.n k : ℝ) ^ κ.ι := by
-          calc
-            (𝒯.P j).g ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := hG
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι :=
-              Real.rpow_le_rpow_of_exponent_le hnR (by nlinarith [hκ.ι_rng.1])
-        have hBudget : Tiling.gain 𝒯 j / (1000 * κ.u) ≤
-            (T.S.n k : ℝ) ^ κ.ι := by
-          have hu : 1 ≤ (κ.u : ℝ) := by
-            have hu' := hκ.u_rng.1
-            exact_mod_cast (by omega : 1 ≤ κ.u)
-          simp [Tiling.gain, hm]
-          have hgNonneg : 0 ≤ (𝒯.P j).g := Nat.cast_nonneg _
-          have hden : 1 ≤ (1000000 : ℝ) * κ.u := by nlinarith [hu]
-          calc
-            (((𝒯.P j).g : ℝ) / 1000) / (1000 * κ.u) =
-                (𝒯.P j).g / (1000000 * κ.u) := by field_simp; ring
-            _ ≤ (𝒯.P j).g := div_le_self hgNonneg hden
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι := hGle
-        exact le_trans hlog (by simpa [Tiling.gain, hm] using hBudget)
-    | lowCluster =>
-        rcases hAllocation with hbad | ⟨_, hlog⟩
-        · simp [hm] at hbad
-        have hHeight := (h𝒯.allocation_bounds j).1
-        have hSmall : (𝒯.P j).h < (T.S.n k : ℝ) ^ κ.ι :=
-          lt_of_le_of_lt (by exact_mod_cast (le_max_left _ _)) hHeight
-        have hBudget : Tiling.gain 𝒯 j / (1000 * κ.u) ≤
-            (T.S.n k : ℝ) ^ κ.ι := by
-          have hu : 1 ≤ (κ.u : ℝ) := by exact_mod_cast (by omega : 1 ≤ κ.u)
-          have hcoef : 0 ≤ κ.a / (10 ^ 9 * κ.u) ∧ κ.a / (10 ^ 9 * κ.u) ≤ 1 := by
-            constructor
-            · positivity
-            · apply (div_le_iff₀ (by positivity)).2
-              nlinarith [hAone, hu]
-          calc
-            Tiling.gain 𝒯 j / (1000 * κ.u) =
-                (κ.a / (10 ^ 9 * κ.u)) * (𝒯.P j).h := by
-                  simp [Tiling.gain, hm]
-                  ring
-            _ ≤ (𝒯.P j).h :=
-              mul_le_mul_of_nonneg_right hcoef.2 (Nat.cast_nonneg _)
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι := hSmall.le
-        exact le_trans hlog (by simpa [Tiling.gain, hm] using hBudget)
-    | highSmall =>
-        rcases hAllocation with hbad | ⟨_, hlog⟩
-        · simp [hm] at hbad
-        have hHeight := (h𝒯.allocation_bounds j).1
-        have hSmall : (𝒯.P j).h < (T.S.n k : ℝ) ^ κ.ι :=
-          lt_of_le_of_lt (by exact_mod_cast (le_max_left _ _)) hHeight
-        have hBudget : Tiling.gain 𝒯 j / (1000 * κ.u) ≤
-            (T.S.n k : ℝ) ^ κ.ι := by
-          have hu : 1 ≤ (κ.u : ℝ) := by exact_mod_cast (by omega : 1 ≤ κ.u)
-          have hcoef : 0 ≤ κ.a / (10 ^ 9 * κ.u) ∧ κ.a / (10 ^ 9 * κ.u) ≤ 1 := by
-            constructor
-            · positivity
-            · apply (div_le_iff₀ (by positivity)).2
-              nlinarith [hAone, hu]
-          calc
-            Tiling.gain 𝒯 j / (1000 * κ.u) =
-                (κ.a / (10 ^ 9 * κ.u)) * (𝒯.P j).h := by
-                  simp [Tiling.gain, hm]
-                  ring
-            _ ≤ (𝒯.P j).h :=
-              mul_le_mul_of_nonneg_right hcoef.2 (Nat.cast_nonneg _)
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι := hSmall.le
-        exact le_trans hlog (by simpa [Tiling.gain, hm] using hBudget)
-    | highLarge =>
-        rcases hAllocation with hbad | ⟨_, hlog⟩
-        · simp [hm] at hbad
-        have hHeight := (h𝒯.allocation_bounds j).1
-        have hSmall : (𝒯.P j).h < (T.S.n k : ℝ) ^ κ.ι :=
-          lt_of_le_of_lt (by exact_mod_cast (le_max_left _ _)) hHeight
-        have hBudget : Tiling.gain 𝒯 j / (1000 * κ.u) ≤
-            (T.S.n k : ℝ) ^ κ.ι := by
-          have hu : 1 ≤ (κ.u : ℝ) := by exact_mod_cast (by omega : 1 ≤ κ.u)
-          have hcoef : 0 ≤ κ.a / (10 ^ 9 * κ.u) ∧ κ.a / (10 ^ 9 * κ.u) ≤ 1 := by
-            constructor
-            · positivity
-            · apply (div_le_iff₀ (by positivity)).2
-              nlinarith [hAone, hu]
-          calc
-            Tiling.gain 𝒯 j / (1000 * κ.u) =
-                (κ.a / (10 ^ 9 * κ.u)) * (𝒯.P j).h := by
-                  simp [Tiling.gain, hm]
-                  ring
-            _ ≤ (𝒯.P j).h :=
-              mul_le_mul_of_nonneg_right hcoef.2 (Nat.cast_nonneg _)
-            _ ≤ (T.S.n k : ℝ) ^ κ.ι := hSmall.le
-        exact le_trans hlog (by simpa [Tiling.gain, hm] using hBudget)
+    have hMj : 0 < ((𝒯.P j).M : ℝ) :=
+      lt_of_lt_of_le (mul_pos (div_pos hNpos (by norm_num)) (Real.exp_pos _)) (hPatchMass j)
+    by_cases hb : 𝒯.mode = .bounded
+    · rcases (h𝒯.bounded_data hb).2 j with ⟨_, _, _, hMass, _⟩
+      have hMass' : (T.S.N k : ℝ) / 400 ≤ (𝒯.P j).M := by
+        simpa only [div_eq_mul_inv, one_mul, mul_comm] using hMass
+      have hratio : (T.S.N k : ℝ) / (𝒯.P j).M ≤ 400 := by
+        apply (div_le_iff₀ hMj).mpr
+        have hm := (div_le_iff₀ (by norm_num : (0 : ℝ) < 400)).mp hMass'
+        linarith only [hm]
+      exact (Real.log_le_log (div_pos hNpos hMj) hratio).trans hLog400Iota
+    · have hall := (h𝒯.allocation_bounds j).2
+      rcases hall with hbad | ⟨_, hlog⟩
+      · exact (hb hbad).elim
+      have hHeight : ((𝒯.P j).h : ℝ) < (T.S.n k : ℝ) ^ κ.ι := by
+        have hm := (h𝒯.allocation_bounds j).1
+        have hmR : max ((𝒯.P j).h : ℝ) ((𝒯.P j).ℓ : ℝ) < (T.S.n k : ℝ) ^ κ.ι := by
+          exact_mod_cast hm
+        exact (le_max_left _ _).trans_lt hmR
+      have direct (hd : 𝒯.mode = .lowDirect ∨ 𝒯.mode = .highDirect) :
+          0 ≤ 𝒯.gain j ∧ 𝒯.gain j ≤ (T.S.n k : ℝ) ^ κ.ι := by
+        have hg := h𝒯.direct_scale_bound hd j
+        have hgn : 0 ≤ ((𝒯.P j).g : ℝ) := Nat.cast_nonneg _
+        have hgle : ((𝒯.P j).g : ℝ) ≤ (T.S.n k : ℝ) ^ κ.ι :=
+          hg.trans (Real.rpow_le_rpow_of_exponent_le hnR (by linarith only [hκ.ι_rng.1]))
+        have hdv : ((𝒯.P j).g : ℝ) / 1000 ≤ (𝒯.P j).g := div_le_self hgn (by norm_num)
+        rcases hd with hd | hd <;> simpa only [Tiling.gain, hd] using
+          (show 0 ≤ ((𝒯.P j).g : ℝ) / 1000 ∧ ((𝒯.P j).g : ℝ) / 1000 ≤ (T.S.n k : ℝ) ^ κ.ι from
+            ⟨div_nonneg hgn (by norm_num), hdv.trans hgle⟩)
+      have cluster (hc : 𝒯.mode = .lowCluster ∨ 𝒯.mode = .highSmall ∨ 𝒯.mode = .highLarge) :
+          0 ≤ 𝒯.gain j ∧ 𝒯.gain j ≤ (T.S.n k : ℝ) ^ κ.ι := by
+        have hhn : 0 ≤ ((𝒯.P j).h : ℝ) := Nat.cast_nonneg _
+        have hprod := mul_le_mul_of_nonneg_right hAone.le hhn
+        have hdv : κ.a * (𝒯.P j).h / 10 ^ 6 ≤ κ.a * (𝒯.P j).h :=
+          div_le_self (mul_nonneg hApos.le hhn) (by norm_num)
+        have hle : κ.a * (𝒯.P j).h / 10 ^ 6 ≤ (T.S.n k : ℝ) ^ κ.ι := by
+          linarith only [hprod, hdv, hHeight]
+        rcases hc with hc | hc | hc <;> simpa only [Tiling.gain, hc] using
+          (show 0 ≤ κ.a * (𝒯.P j).h / 10 ^ 6 ∧ κ.a * (𝒯.P j).h / 10 ^ 6 ≤ (T.S.n k : ℝ) ^ κ.ι from
+            ⟨div_nonneg (mul_nonneg hApos.le hhn) (by norm_num), hle⟩)
+      have hg : 0 ≤ 𝒯.gain j ∧ 𝒯.gain j ≤ (T.S.n k : ℝ) ^ κ.ι := by
+        cases hm : 𝒯.mode with
+        | bounded => exact (hb hm).elim
+        | lowDirect => exact direct (Or.inl hm)
+        | highDirect => exact direct (Or.inr hm)
+        | lowCluster => exact cluster (Or.inl hm)
+        | highSmall => exact cluster (Or.inr (Or.inl hm))
+        | highLarge => exact cluster (Or.inr (Or.inr hm))
+      have hden : (1 : ℝ) ≤ 1000 * κ.u := by linarith only [huR]
+      exact hlog.trans ((div_le_self hg.1 hden).trans hg.2)
   have hLogRatioXs : ∀ j : Fin 𝒯.m,
       Real.log ((T.S.N k : ℝ) / (𝒯.P j).M) ≤ (T.S.n k : ℝ) ^ (κ.xs / 4) := by
     intro j
     exact le_trans (hLogRatio j) hNPowerXs
   have hInputWidths : ∀ j : Fin 𝒯.m, (π j).WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)) := by
     intro j
-    have hMjPos : 0 < (𝒯.P j).M := by
+    have hMjPos : 0 < ((𝒯.P j).M : ℝ) := by
       exact lt_of_lt_of_le
         (mul_pos (div_pos hNpos (by norm_num)) (Real.exp_pos _)) (hPatchMass j)
     have hj := hInput j
@@ -2443,9 +2517,9 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
         | bounded => simp [Mode.isCluster, hm] at hc
         | lowDirect => simp [Mode.isCluster, hm] at hc
         | highDirect => simp [Mode.isCluster, hm] at hc
-        | lowCluster => exact Or.inl hm
-        | highSmall => exact Or.inr (Or.inl hm)
-        | highLarge => exact Or.inr (Or.inr hm)
+        | lowCluster => exact Or.inl rfl
+        | highSmall => exact Or.inr (Or.inl rfl)
+        | highLarge => exact Or.inr (Or.inr rfl)
       have hClusterData := h𝒯.cluster_data hModes j
       rcases hClusterData with ⟨_, _, _, _, _, _, _, hHeight, _, _, _, _⟩
       have hhNat : 1 ≤ (𝒯.P j).h := by
@@ -2461,9 +2535,13 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
             simp [hm, hMhi]
         have hheight' : Real.rpow ((𝒯.P j).q : ℝ)
             (if 𝒯.mode = .lowCluster then κ.Mlo else κ.Mhi) ≤ (𝒯.P j).h := by
-          simpa only [Nat.cast_ite] using hHeight.1
+          simpa only [Nat.cast_ite] using hHeight
         have hOneHeight : (1 : ℝ) ≤ (𝒯.P j).h := by
-          have hpow := Real.one_le_rpow hq hMlo
+          have he : 0 ≤ (if 𝒯.mode = .lowCluster then (κ.Mlo : ℝ) else κ.Mhi) := by
+            simpa only [Nat.cast_ite] using (le_trans (by norm_num : (0 : ℝ) ≤ 1) hMlo)
+          have hpow : 1 ≤ Real.rpow ((𝒯.P j).q : ℝ)
+              (if 𝒯.mode = .lowCluster then (κ.Mlo : ℝ) else κ.Mhi) :=
+            Real.one_le_rpow hq he
           exact le_trans hpow hheight'
         exact_mod_cast hOneHeight
       rcases Lane_q_s13_clean.slice_bounds_by_height κ hκ (𝒯.P j).h hhNat with
@@ -2478,8 +2556,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
           (T.S.n k : ℝ) ^ (2 * κ.ι) := by
         have hadd := Real.rpow_add hnPos κ.ι κ.ι
         have hexp : κ.ι + κ.ι = 2 * κ.ι := by ring
-        rw [hexp, pow_two] at hadd
-        exact hadd.symm
+        simpa only [pow_two, hexp] using hadd.symm
       have hCapSize : 10 * (𝒯.kScale j : ℝ) * 𝒯.tScale j ≤
           10 * (T.S.n k : ℝ) ^ (2 * κ.ι) := by
         have hprod := mul_le_mul hKR hTR (Nat.cast_nonneg _) (Nat.cast_nonneg _)
@@ -2495,7 +2572,8 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
         exact le_trans htotal hPowerGap
       have hratioPos : 0 < (T.S.N k : ℝ) / (𝒯.P j).M := div_pos hNpos hMjPos
       intro y
-      rw [div_le_iff₀ hNpos]
+      apply (le_div_iff₀ hNpos).mpr
+      rw [mul_comm]
       calc
         (T.S.N k : ℝ) * (π j).w y =
             ((T.S.N k : ℝ) / (𝒯.P j).M) *
@@ -2523,21 +2601,21 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     Lane_q_s13_clean.unifCore_width X hXne
   have hLogX : Real.log ((T.S.N k : ℝ) / X.card) ≤ (T.S.n k : ℝ) ^ (κ.xs / 4) := by
     simpa [X, (𝒯.P i).cardX] using hLogRatioXs i
+  have hInputSupports : ∀ j : Fin 𝒯.m, (π j).SupportedIn (T.Y k) := by
+    intro j y hy
+    have hYsub : (𝒯.P j).Y ⊆ T.Y k :=
+      (((h𝒯.patch_supports j).2.2.1).trans
+        ((h𝒯.patch_supports j).2.2.2)).trans Finset.sdiff_subset
+    exact (hInput j).1 y (fun hyP => hy (hYsub hyP))
   have hTailOutput := hTailEvent X hXne hXsub hLogX
-    (Finset.univ : Finset (Fin 𝒯.m)) π
-    (fun j => by
-      intro y hy
-      have hYsub : (𝒯.P j).Y ⊆ T.Y k :=
-        ((h𝒯.patch_supports j).2.2.1).trans
-          ((h𝒯.patch_supports j).2.2.2.1)
-      exact (hInput j).1 y (fun hyP => hy (hYsub hyP)))
-    hInputWidths (by exact_mod_cast hmSmall)
+    (Finset.univ : Finset (Fin 𝒯.m)) π hInputSupports hInputWidths
+    (by simpa only [Finset.card_univ, Fintype.card_fin] using hmSmall)
   rcases hTailOutput with ⟨Xtail, hXtailSub, hXtailLoss, hRowsTail⟩
   let τ := Law.unifCore X hXne
   have hTailLossSmall : ((X \ Xtail).card : ℝ) ≤ κ.a / 8 * (𝒯.P i).M := by
     have h := hXtailLoss
     rw [show X.card = (𝒯.P i).M by simp [X, (𝒯.P i).cardX]] at h
-    have hmul := mul_le_mul_of_nonneg_left hTail (Nat.cast_nonneg (𝒯.P i).M)
+    have hmul := mul_le_mul_of_nonneg_right hTailLoss (Nat.cast_nonneg (𝒯.P i).M)
     exact le_trans h (by simpa [X, (𝒯.P i).cardX] using hmul)
   have hTauSupp : τ.SupportedIn (T.X k) := by
     intro x hx
@@ -2549,8 +2627,8 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     have h := hTauWidth
     simpa [X, (𝒯.P i).cardX] using h
   have hBadFamily : ∀ j : Fin 𝒯.m,
-      (Finset.univ.filter fun x : Fin (T.S.N k) =>
-        x ∈ X ∧ 2 * bstar T k <
+      (X.filter fun x : Fin (T.S.N k) =>
+        2 * bstar T k <
           |deg (T.S.E k) 𝒯.c (π j).w x - 1 / 2|).card ≤
         2 * Real.exp (Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) - κ.α * T.S.n k / 2) *
           (𝒯.P i).M := by
@@ -2558,20 +2636,22 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     let Badj := X.filter fun x => 2 * bstar T k <
       |deg (T.S.E k) 𝒯.c (π j).w x - 1 / 2|
     have hWidthPair : ((T.S.n k : ℝ) ^ (κ.xs / 4) ≤ (T.S.n k : ℝ) ^ κ.xs) :=
-      Real.rpow_le_rpow_of_exponent_le hnR (by linarith [hκ.xs_rng.2])
-    have hAlphaHalf : κ.α * T.S.n k / 2 ≤ κ.α * T.S.n k := by positivity
+      Real.rpow_le_rpow_of_exponent_le hnR (by linarith only [hκ.xs_rng.1])
+    have hAlphaHalf : κ.α * T.S.n k / 2 ≤ κ.α * T.S.n k := by
+      have hp := mul_nonneg hκ.α_rng.1.le (Nat.cast_nonneg (T.S.n k))
+      linarith
     have hbstar : 0 ≤ bstar T k := by unfold bstar; positivity
     have hOut := HypercubeRamsey.S12.exceptional_first hDisc 𝒯.c
       (w₁ := (T.S.n k : ℝ) ^ (κ.xs / 4)) (W₂ := κ.α * T.S.n k / 2)
       (w := Real.log ((T.S.N k : ℝ) / (𝒯.P i).M))
-      (Or.inl ⟨hWidthPair, hAlphaHalf⟩) (π j) (hInput j).1 (hInputWidths j)
+      (Or.inl ⟨hWidthPair, hAlphaHalf⟩) (π j) (hInputSupports j) (hInputWidths j)
       τ hTauSupp hTauWidth'
     have hBadSub : Badj ⊆ Finset.univ.filter fun x : Fin (T.S.N k) =>
         bstar T k < |deg (T.S.E k) 𝒯.c (π j).w x - 1 / 2| := by
       intro x hx
       have hmem := Finset.mem_filter.mp hx
       exact Finset.mem_filter.mpr ⟨Finset.mem_univ x,
-        lt_trans (by nlinarith [hbstar]) hmem.2⟩
+        lt_of_le_of_lt (by linarith only [hbstar] : bstar T k ≤ 2 * bstar T k) hmem.2⟩
     have hBadMass : (∑ x ∈ Badj, τ.w x) = (Badj.card : ℝ) / (𝒯.P i).M := by
       have hweight (x : Fin (T.S.N k)) (hx : x ∈ Badj) : τ.w x = ((𝒯.P i).M : ℝ)⁻¹ := by
         have hxX : x ∈ X := (Finset.mem_filter.mp hx).1
@@ -2595,12 +2675,6 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
         2 * Real.exp (Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) - κ.α * T.S.n k / 2) *
           (𝒯.P i).M := by
       exact (div_le_iff₀ hMpos).mp hMassOut'
-    have hBadEq : Badj = Finset.univ.filter fun x : Fin (T.S.N k) =>
-        x ∈ X ∧ 2 * bstar T k <
-          |deg (T.S.E k) 𝒯.c (π j).w x - 1 / 2| := by
-      ext x
-      simp [Badj, Finset.mem_filter, X]
-    rw [← hBadEq]
     exact hBadCard
   let J := Finset.univ.filter fun j : Fin 𝒯.m => j ≠ i
   let Bad := J.biUnion fun j => X.filter fun x =>
@@ -2613,7 +2687,9 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
       _ ≤ κ.α * T.S.n k / 4 := by linarith [hRootAlpha]
   have hBadBudget : (J.card : ℝ) *
       (2 * Real.exp (Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) - κ.α * T.S.n k / 2)) ≤ κ.a / 8 := by
-    have hJcard : (J.card : ℝ) ≤ (𝒯.m : ℝ) := by exact_mod_cast Finset.card_le_univ J
+    have hJcard : (J.card : ℝ) ≤ (𝒯.m : ℝ) := by
+      have ht : J.card ≤ 𝒯.m := by simpa only [Fintype.card_fin] using Finset.card_le_univ J
+      exact_mod_cast ht
     have hJexp : (J.card : ℝ) ≤ Real.exp ((T.S.n k : ℝ) ^ (0.1 : ℝ)) :=
       le_trans hJcard hmSmall
     have hExpCombo : Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) +
@@ -2627,13 +2703,17 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
         mul_le_mul_of_nonneg_right hJexp (by positivity)
       _ = 2 * Real.exp (Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) +
             (T.S.n k : ℝ) ^ (0.1 : ℝ) - κ.α * T.S.n k / 2) := by
-        rw [Real.exp_add]
+        rw [show Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) +
+            (T.S.n k : ℝ) ^ (0.1 : ℝ) - κ.α * T.S.n k / 2 =
+            (T.S.n k : ℝ) ^ (0.1 : ℝ) +
+              (Real.log ((T.S.N k : ℝ) / (𝒯.P i).M) - κ.α * T.S.n k / 2) by ring,
+          Real.exp_add]
         ring
       _ ≤ 2 * Real.exp (-κ.α * T.S.n k / 4) :=
         mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr hExpCombo) (by norm_num)
       _ ≤ κ.a / 8 := hOutExp
   have hBadCardSmall : (Bad.card : ℝ) ≤ κ.a / 8 * (𝒯.P i).M := by
-    have hcard := Finset.card_biUnion_le (s := J) (f := fun j =>
+    have hcard := Finset.card_biUnion_le (s := J) (t := fun j =>
       X.filter fun x => 2 * bstar T k <
         |deg (T.S.E k) 𝒯.c (π j).w x - 1 / 2|)
     have hsum : (∑ j ∈ J, ((X.filter fun x => 2 * bstar T k <
@@ -2667,28 +2747,17 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     intro x hx
     rcases Finset.mem_biUnion.mp hx with ⟨j, hj, hxj⟩
     exact (Finset.mem_filter.mp hxj).1
-  let cleaned := C.C ∩ Xtail \ Bad
+  let cleaned : Finset (Fin (T.S.N k)) := SDiff.sdiff (C.C ∩ Xtail) Bad
   have hCleanSub : cleaned ⊆ C.C := by
     intro x hx
     exact (Finset.mem_inter.mp (Finset.mem_sdiff.mp hx).1).1
   have hCleanX : cleaned ⊆ X := by
     intro x hx
     exact hXtailSub (Finset.mem_inter.mp (Finset.mem_sdiff.mp hx).1).2
-  have hDiffSub : X \ cleaned ⊆
-      (X \ C.C) ∪ (X \ Xtail) ∪ Bad := by
+  have hDiffSub : X \ cleaned ⊆ (X \ C.C) ∪ (X \ Xtail) ∪ Bad := by
     intro x hx
-    have hxX := (Finset.mem_sdiff.mp hx).1
-    have hxnot := (Finset.mem_sdiff.mp hx).2
-    by_cases hxc : x ∈ C.C
-    · by_cases hxt : x ∈ Xtail
-      · have hxb : x ∈ Bad := by
-          by_contra hnotBad
-          apply hxnot
-          simp [cleaned, hxc, hxt, hnotBad]
-        exact Finset.mem_union_right _ (Finset.mem_union_right _ hxb)
-      · exact Finset.mem_union_right _ (Finset.mem_union_left _
-          (Finset.mem_sdiff.mpr ⟨hxX, hxt⟩))
-    · exact Finset.mem_union_left _ (Finset.mem_sdiff.mpr ⟨hxX, hxc⟩)
+    simp only [cleaned, Finset.mem_sdiff, Finset.mem_inter, Finset.mem_union] at hx ⊢
+    tauto
   have hLossSplit : ((X \ cleaned).card : ℝ) ≤
       ((X \ C.C).card : ℝ) + ((X \ Xtail).card : ℝ) + (Bad.card : ℝ) := by
     have hCardSub := Finset.card_le_card hDiffSub
@@ -2705,7 +2774,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
       have hxX := (Finset.mem_sdiff.mp hx).1
       have hxnotC := (Finset.mem_sdiff.mp hx).2
       by_cases hxd : x ∈ D.C
-      · exact Finset.mem_union_right _ (Finset.mem_sdiff.mpr ⟨hxd, fun h => hxnotC (C.sub h)⟩)
+      · exact Finset.mem_union_right _ (Finset.mem_sdiff.mpr ⟨hxd, hxnotC⟩)
       · exact Finset.mem_union_left _ (Finset.mem_sdiff.mpr ⟨hxX, hxd⟩)
     have hcard := Finset.card_le_card hSub
     have hUnionCard : ((X \ D.C ∪ (D.C \ C.C)).card : ℝ) ≤
@@ -2722,13 +2791,13 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
   have hCleanNonempty : cleaned.Nonempty := by
     by_contra hne
     have hEmpty : cleaned = ∅ := Finset.not_nonempty_iff_eq_empty.mp hne
-    have hEq := Finset.card_sdiff_add_card_eq_card hCleanX
-    have hM : (X.card : ℝ) = (cleaned.card : ℝ) + ((X \ cleaned).card : ℝ) := by
-      exact_mod_cast (by simpa [Nat.add_comm] using hEq.symm)
-    rw [hEmpty] at hM
-    have hXcard : (X.card : ℝ) = (𝒯.P i).M := by simp [X, (𝒯.P i).cardX]
-    rw [hXcard] at hM
-    nlinarith [hTotalLoss, hMpos]
+    have he : ((X \ cleaned).card : ℝ) = (𝒯.P i).M := by
+      simp only [hEmpty, Finset.sdiff_empty, X, (𝒯.P i).cardX]
+    have hbad : ((𝒯.P i).M : ℝ) < κ.a * (𝒯.P i).M := by
+      rwa [he] at hTotalLoss
+    have hlt : κ.a * (𝒯.P i).M < (𝒯.P i).M := by
+      simpa only [one_mul] using mul_lt_mul_of_pos_right hAone hMpos
+    exact (lt_asymm hlt) hbad
   have hCardLower : (𝒯.P i).M / 2 ≤ (cleaned.card : ℝ) := by
     have hEq := Finset.card_sdiff_add_card_eq_card hCleanX
     have hM : (X.card : ℝ) = (cleaned.card : ℝ) + ((X \ cleaned).card : ℝ) := by
@@ -2736,7 +2805,14 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
     have hXcard : (X.card : ℝ) = (𝒯.P i).M := by simp [X, (𝒯.P i).cardX]
     rw [hXcard] at hM
     nlinarith [hTotalLoss, hM]
-  refine ⟨⟨cleaned, ?_, hTotalLoss, hCleanNonempty, hCardLower, ?_, ?_⟩⟩
+  have hCardWaste : (1 - κ.a) * ((𝒯.P i).M : ℝ) ≤ (cleaned.card : ℝ) := by
+    have hEq := Finset.card_sdiff_add_card_eq_card hCleanX
+    have hM : (X.card : ℝ) = (cleaned.card : ℝ) + ((X \ cleaned).card : ℝ) := by
+      exact_mod_cast (by simpa [Nat.add_comm] using hEq.symm)
+    have hXcard : (X.card : ℝ) = (𝒯.P i).M := by simp [X, (𝒯.P i).cardX]
+    rw [hXcard] at hM
+    linarith [hTotalLoss, hM]
+  refine ⟨⟨cleaned, ?_, hTotalLoss, hCleanNonempty, hCardLower, hCardWaste, ?_, ?_⟩⟩
   · intro x hx
     exact hCleanSub hx
   · intro π' hNear j hji x hx
@@ -2750,7 +2826,7 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
       exact hxNotBad hmemUnion
     have hxbase : |deg (T.S.E k) 𝒯.c (π j).w x - 1 / 2| ≤ 2 * bstar T k := by
       by_contra hlt
-      exact hxNotBadj (Finset.mem_filter.mpr ⟨(Finset.mem_sdiff.mp hx).1.1, lt_of_not_ge hlt⟩)
+      exact hxNotBadj (Finset.mem_filter.mpr ⟨hCleanX hx, lt_of_not_ge hlt⟩)
     have hNearDeg := Lane_q_s13_clean.deg_l1
       (T.S.E k) 𝒯.c (π j) (π' j) x (hNear j)
     have hNearAbs : |deg (T.S.E k) 𝒯.c (π' j).w x -
@@ -2772,8 +2848,8 @@ theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : 
       _ ≤ 3 * bstar T k := by nlinarith [hNearAbs, hxbase, hNminus, hApos]
   · intro π' hNear j x hx
     have hbase := hRowsTail j (Finset.mem_univ j) x
-      ((Finset.mem_sdiff.mp hx).1.2)
-  exact hRelaxEvent (π j) (π' j) X x hbase (hNear j)
+      ((Finset.mem_inter.mp (Finset.mem_sdiff.mp hx).1).2)
+    exact hRelaxEvent (π j) (π' j) X x hbase (hNear j)
 
 /-- L13.4 (sections/13, line 240): conflict and own-degree budgets carried
 alongside the cleaned-support properties. -/

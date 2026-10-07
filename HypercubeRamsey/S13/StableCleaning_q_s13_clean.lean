@@ -463,25 +463,27 @@ theorem unifCore_expect {N : ℕ} (A : Finset (Fin N)) (hA : A.Nonempty)
 theorem corr_expect_shift {N : ℕ} (E : Fin N → Fin N → Prop) (μ : Law N)
     (y z : Fin N) :
     corr E true μ.w y z =
-      2 * μ.expect (fun x => (fv E true x y * fv E true x z + 1) / 2) - 1 := by
+      2 * μ.expect (fun x => (fv E true y x * fv E true z x + 1) / 2) - 1 := by
   classical
-  let f : Fin N → ℝ := fun x => (fv E true x y * fv E true x z + 1) / 2
+  let f : Fin N → ℝ := fun x => (fv E true y x * fv E true z x + 1) / 2
   have hsum :
       2 * (∑ x, μ.w x * f x) =
-        (∑ x, μ.w x * (fv E true x y * fv E true x z)) + 1 := by
+        (∑ x, μ.w x * (fv E true y x * fv E true z x)) + 1 := by
     calc
       2 * (∑ x, μ.w x * f x) =
           ∑ x, 2 * (μ.w x * f x) := by rw [Finset.mul_sum]
-      _ = ∑ x, (μ.w x * (fv E true x y * fv E true x z) + μ.w x) := by
+      _ = ∑ x, (μ.w x * (fv E true y x * fv E true z x) + μ.w x) := by
         apply Finset.sum_congr rfl
         intro x hx
         dsimp [f]
         ring
-      _ = (∑ x, μ.w x * (fv E true x y * fv E true x z)) + ∑ x, μ.w x := by
+      _ = (∑ x, μ.w x * (fv E true y x * fv E true z x)) + ∑ x, μ.w x := by
         rw [Finset.sum_add_distrib]
-      _ = (∑ x, μ.w x * (fv E true x y * fv E true x z)) + 1 := by
+      _ = (∑ x, μ.w x * (fv E true y x * fv E true z x)) + 1 := by
         rw [μ.sum_eq_one]
   rw [corr, FinProb.expect]
+  dsimp only [f] at hsum
+  simp_rw [mul_assoc]
   linarith [hsum]
 
 /-- The internal slice counts fit below any admissible integer height. -/

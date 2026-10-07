@@ -1364,6 +1364,24 @@ private inductive HeightAnnularChain9 {P : Params9} {hc : HeightChoice9 P} {n : 
       HeightAnnularChain9 bad root gap endpoint (m + 1) x
         ((x.2.val : ℤ) - (outer.2.val : ℤ) + drop)
 
+private theorem annularChainHeadData9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {root endpoint : HeightState9 P hc n}
+    {gap m : ℕ} {start : HeightState9 P hc n} {drop : ℤ}
+    (chain : HeightAnnularChain9 bad root gap endpoint (m + 1) start drop) :
+    ∃ inner outer preRest blockRest tailDrop,
+      heightMetric9 inner root = heightMetric9 start root ∧
+      heightMetric9 outer root = heightMetric9 start root + gap ∧
+      HeightPath9 (heightStep9 bad) (inner :: preRest) start ∧
+      HeightPath9 (heightStep9 bad) (outer :: blockRest) inner ∧
+      (∀ z ∈ outer :: blockRest,
+        heightMetric9 start root ≤ heightMetric9 z root ∧
+          heightMetric9 z root ≤ heightMetric9 start root + gap) ∧
+      HeightAnnularChain9 bad root gap endpoint m outer tailDrop ∧
+      drop = (start.2.val : ℤ) - (outer.2.val : ℤ) + tailDrop := by
+  cases chain with
+  | cons hinner houter hpre hblock hannular htail =>
+      exact ⟨_, _, _, _, _, hinner, houter, hpre, hblock, hannular, htail, rfl⟩
+
 private theorem heightPath9_annularChain_exists9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
     {start endpoint : HeightState9 P hc n}

@@ -24,6 +24,29 @@ variable (η₀ γ β p K : ℝ) (h : ℕ)
 neighbours, the centre and anchor laws there, the references); two events meet only within grid distance four, at
 most `(2s+1)^4` of them; by the gate tail and Markov on `E_{Θ_g} q_{g,k} ≤ ε₀` (independence of `Θ_g`),
 `q_H ≤ e^{-n^{c'}} + (T+1)ε₀^{1/2} ≤ e^{-n^{c_H}}`, and `x_H = 2q_H` satisfies `q_H ≤ x_H(1-x_H)^{(2s+1)^4}`. -/
+private theorem hidden_charge_eventually (c' : ℝ) (hc' : 0 < c') :
+    ∃ cH > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      0 ≤ 2 * Real.exp (-(n : ℝ) ^ cH) ∧ 2 * Real.exp (-(n : ℝ) ^ cH) < 1 := by
+  let cH := c' / 2
+  have hcH : 0 < cH := by dsimp [cH]; linarith
+  have htend : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ cH) Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop hcH).comp tendsto_natCast_atTop_atTop
+  have hevent : ∀ᶠ n : ℕ in Filter.atTop, Real.log 4 ≤ (n : ℝ) ^ cH :=
+    htend.eventually (Filter.eventually_ge_atTop (Real.log 4))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hevent
+  refine ⟨cH, hcH, max n₀ 1, ?_⟩
+  intro n hn
+  have hn' : n₀ ≤ n := le_trans (le_max_left _ _) hn
+  have hpow := hn₀ n hn'
+  have hExp : Real.exp (-(n : ℝ) ^ cH) ≤ 1 / 4 := by
+    calc
+      Real.exp (-(n : ℝ) ^ cH) ≤ Real.exp (-Real.log 4) :=
+        Real.exp_le_exp.mpr (neg_le_neg hpow)
+      _ = (1 / 4 : ℝ) := by rw [Real.exp_neg, Real.exp_log (by norm_num)]; norm_num
+  constructor
+  · positivity
+  · linarith
+
 theorem hidden_lll (c' : ℝ) (hc' : 0 < c') (hη₀ : 0 < η₀) (hh : 1 ≤ h) :
     ∃ cH > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n →
       D.GateTail c' → D.DenTail → D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) := by

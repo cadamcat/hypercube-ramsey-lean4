@@ -128,6 +128,171 @@ private theorem condExp_eq_condLaw_expect9 {Ω : Type*} [Fintype Ω]
   intro ω hω
   by_cases h : A ω <;> simp [h] <;> ring
 
+private theorem pi_condExp_fiber_set9 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (ω₀ : ∀ i, Ω i) (f : (∀ i, Ω i) → ℝ) (A : (∀ i, Ω i) → Prop)
+    (hA : ∀ ω, A ω ↔ ∀ j : {j // j ∈ s}, ω j.1 = ω₀ j.1)
+    (hpos : 0 < (FinProb.pi P).pr A) :
+    (FinProb.pi P).condExp f A =
+      ∑ b : ∀ j : {j // j ∉ s}, Ω j.1,
+        (FinProb.pi (fun j : {j // j ∉ s} => P j.1)).w b *
+          f ((Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω).symm
+            ((fun j : {j // j ∈ s} => ω₀ j.1), b)) := by
+  classical
+  let J := {j // j ∈ s}
+  let K := {j // j ∉ s}
+  let a₀ : ∀ j : J, Ω j.1 := fun j => ω₀ j.1
+  let Ps : FinProb (∀ j : J, Ω j.1) := FinProb.pi (fun j : J => P j.1)
+  let Pc : FinProb (∀ j : K, Ω j.1) := FinProb.pi (fun j : K => P j.1)
+  let e := Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω
+  have heval (a : ∀ j : J, Ω j.1) (b : ∀ j : K, Ω j.1) (j : J) :
+      e.symm (a, b) j.1 = a j := by
+    simp [e, Equiv.piEquivPiSubtypeProd_symm_apply]
+  have heval₀ (b : ∀ j : K, Ω j.1) (j : J) :
+      e.symm (a₀, b) j.1 = ω₀ j.1 := by
+    simpa [a₀] using heval a₀ b j
+  have hFiber (a : ∀ j : J, Ω j.1) (b : ∀ j : K, Ω j.1) :
+      (∀ j : J, e.symm (a, b) j.1 = ω₀ j.1) ↔ a = a₀ := by
+    constructor
+    · intro h
+      funext j
+      calc
+        a j = e.symm (a, b) j.1 := (heval a b j).symm
+        _ = ω₀ j.1 := h j
+        _ = a₀ j := rfl
+    · intro h j
+      calc
+        e.symm (a, b) j.1 = a j := heval a b j
+        _ = a₀ j := congrFun h j
+        _ = ω₀ j.1 := rfl
+  have hind (a : ∀ j : J, Ω j.1) (b : ∀ j : K, Ω j.1) :
+      (if A (e.symm (a, b)) then 1 else 0) = if a = a₀ then 1 else 0 := by
+    have hiff : A (e.symm (a, b)) ↔ a = a₀ := (hA _).trans (hFiber a b)
+    by_cases h : a = a₀
+    · subst a
+      have htrue : A (e.symm (a₀, b)) := (hA _).2 (fun j => heval₀ b j)
+      simp [htrue]
+    · have hfalse : ¬ A (e.symm (a, b)) := fun h' => h (hiff.mp h')
+      simp [h, hfalse]
+  have hden : (FinProb.pi P).pr A = Ps.w a₀ := by
+    calc
+      (FinProb.pi P).pr A = (FinProb.pi P).expect (fun ω => if A ω then 1 else 0) := by
+        simp [FinProb.pr, FinProb.expect]
+      _ = ∑ a : ∀ j : J, Ω j.1, ∑ b : ∀ j : K, Ω j.1,
+            Ps.w a * Pc.w b * (if A (e.symm (a, b)) then 1 else 0) :=
+          Clock.pi_expect_split_p_clock_r4 P s (fun ω => if A ω then 1 else 0)
+      _ = Ps.w a₀ := by
+        rw [Finset.sum_comm]
+        calc
+          (∑ b : ∀ j : K, Ω j.1, ∑ a : ∀ j : J, Ω j.1,
+              Ps.w a * Pc.w b * (if A (e.symm (a, b)) then 1 else 0)) =
+              ∑ b, Ps.w a₀ * Pc.w b := by
+            apply Finset.sum_congr rfl
+            intro b hb
+            calc
+              (∑ a : ∀ j : J, Ω j.1,
+                  Ps.w a * Pc.w b * (if A (e.symm (a, b)) then 1 else 0)) =
+                  ∑ a, Ps.w a * Pc.w b * (if a = a₀ then 1 else 0) := by
+                apply Finset.sum_congr rfl
+                intro a ha
+                by_cases h : a = a₀
+                · subst a
+                  have htrue : A (e.symm (a₀, b)) := (hA _).2 (fun j => heval₀ b j)
+                  simp [htrue]
+                · have hfalse : ¬ A (e.symm (a, b)) := fun h' => h ((hA _).1 h' |> fun hcoords => by
+                    funext j
+                    exact (heval a b j).symm.trans (hcoords j))
+                  simp [hfalse, h]
+              _ = Ps.w a₀ * Pc.w b := by
+                rw [Finset.sum_eq_single_of_mem a₀ (Finset.mem_univ _) (by
+                  intro a ha hne
+                  simp [hne])]
+                simp
+          _ = Ps.w a₀ := by rw [← Finset.mul_sum, Pc.sum_eq_one, mul_one]
+  have hnum :
+      (FinProb.pi P).expect (fun ω => (if A ω then 1 else 0) * f ω) =
+        Ps.w a₀ * ∑ b : ∀ j : K, Ω j.1, Pc.w b * f (e.symm (a₀, b)) := by
+    calc
+      (FinProb.pi P).expect (fun ω => (if A ω then 1 else 0) * f ω) =
+          ∑ a : ∀ j : J, Ω j.1, ∑ b : ∀ j : K, Ω j.1,
+            Ps.w a * Pc.w b * ((if A (e.symm (a, b)) then 1 else 0) * f (e.symm (a, b))) :=
+        Clock.pi_expect_split_p_clock_r4 P s
+          (fun ω => (if A ω then 1 else 0) * f ω)
+      _ = Ps.w a₀ * ∑ b : ∀ j : K, Ω j.1, Pc.w b * f (e.symm (a₀, b)) := by
+        rw [Finset.sum_comm]
+        calc
+          (∑ b : ∀ j : K, Ω j.1, ∑ a : ∀ j : J, Ω j.1,
+              Ps.w a * Pc.w b * ((if A (e.symm (a, b)) then 1 else 0) * f (e.symm (a, b)))) =
+              ∑ b, Ps.w a₀ * (Pc.w b * f (e.symm (a₀, b))) := by
+            apply Finset.sum_congr rfl
+            intro b hb
+            calc
+              (∑ a : ∀ j : J, Ω j.1,
+                  Ps.w a * Pc.w b * ((if A (e.symm (a, b)) then 1 else 0) * f (e.symm (a, b)))) =
+                  ∑ a, Ps.w a * Pc.w b * ((if a = a₀ then 1 else 0) * f (e.symm (a, b))) := by
+                apply Finset.sum_congr rfl
+                intro a ha
+                by_cases h : a = a₀
+                · subst a
+                  have htrue : A (e.symm (a₀, b)) := (hA _).2 (fun j => heval₀ b j)
+                  simp [htrue]
+                · have hfalse : ¬ A (e.symm (a, b)) := fun h' => h ((hA _).1 h' |> fun hcoords => by
+                    funext j
+                    exact (heval a b j).symm.trans (hcoords j))
+                  simp [hfalse, h]
+              _ = Ps.w a₀ * (Pc.w b * f (e.symm (a₀, b))) := by
+                rw [Finset.sum_eq_single_of_mem a₀ (Finset.mem_univ _) (by
+                  intro a ha hne
+                  simp [hne])]
+                simp
+                ring
+          _ = Ps.w a₀ * ∑ b : ∀ j : K, Ω j.1, Pc.w b * f (e.symm (a₀, b)) := by
+            rw [← Finset.mul_sum]
+  have hPs : 0 < Ps.w a₀ := by rw [← hden]; exact hpos
+  rw [FinProb.condExp, hnum, hden]
+  calc
+    Ps.w a₀ * (∑ b, Pc.w b * f (e.symm (a₀, b))) / Ps.w a₀ =
+        ∑ b, Pc.w b * f (e.symm (a₀, b)) := by field_simp [ne_of_gt hPs]
+    _ = ∑ b : ∀ j : {j // j ∉ s}, Ω j.1,
+          (FinProb.pi (fun j : {j // j ∉ s} => P j.1)).w b *
+            f ((Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω).symm
+              ((fun j : {j // j ∈ s} => ω₀ j.1), b)) := by
+        rfl
+
+private theorem condCoreMean_fiber_formula9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (ω₀ : Outcome9 I N)
+    (hpos : 0 < (rawLaw9 S I).pr (sameCore9 I v ω₀)) :
+    condCoreMean9 S I E G v b ω₀ =
+      ∑ ξ : ∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1,
+        (FinProb.pi (fun j : {j // j ∉ (I.core v.1).image Sum.inl} => inputLaw9 S I j.1)).w ξ *
+          clippedFrac9 S E G
+            ((Equiv.piEquivPiSubtypeProd
+              (fun j => j ∈ (I.core v.1).image Sum.inl)
+              (fun j => Val9 I N j)).symm
+              ((fun j : {j // j ∈ (I.core v.1).image Sum.inl} => ω₀ j.1), ξ)) v b := by
+  classical
+  let s : Finset (I.ID ⊕ OddSites9 n) := (I.core v.1).image Sum.inl
+  have hA (ω : Outcome9 I N) :
+      sameCore9 I v ω₀ ω ↔ ∀ j : {j // j ∈ s}, ω j.1 = ω₀ j.1 := by
+    constructor
+    · intro h j
+      rcases Finset.mem_image.mp j.2 with ⟨c, hc, hcoord⟩
+      have j' : j = ⟨Sum.inl c, Finset.mem_image.mpr ⟨c, hc, rfl⟩⟩ :=
+        Subtype.ext hcoord.symm
+      rw [j']
+      change ω (Sum.inl c) = ω₀ (Sum.inl c)
+      exact h c hc
+    · intro h c hc
+      have hj : (Sum.inl c : I.ID ⊕ OddSites9 n) ∈ s := by
+        exact Finset.mem_image.mpr ⟨c, hc, rfl⟩
+      have := h ⟨Sum.inl c, hj⟩
+      change anc9 ω c = anc9 ω₀ c at this
+      exact this
+  have hformula := pi_condExp_fiber_set9 (inputLaw9 S I) s ω₀
+    (fun ω => clippedFrac9 S E G ω v b) (sameCore9 I v ω₀) hA hpos
+  simpa [condCoreMean9, rawLaw9, s] using hformula
+
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)
     (t : Fin 3) : List I.ID :=

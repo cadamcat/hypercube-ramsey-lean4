@@ -16,6 +16,7 @@ import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_5b
 import HypercubeRamsey.S18.Probability_sol_s18_n5
+import HypercubeRamsey.S18.ColumnMoment_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Run_sol_s18_n4
 import HypercubeRamsey.S18.Risk_sol_s18_n4
@@ -36,6 +37,8 @@ import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_sol_s18_6b
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
 import HypercubeRamsey.S18.Nodes_q_s18_n2
+import HypercubeRamsey.S18.Nodes_q_s18_n3
+import HypercubeRamsey.S18.Deletion_sol_s18_1b
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -398,7 +401,32 @@ theorem L18_1b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → TransitionData D → SmallErrors κ T k PT D.geom (Real.log 2 / 1000) →
         BroadDeletionFacts D K27 := by
-  sorry
+  obtain ⟨Kβ, _, hSchedule, hSmall⟩ := L18_0a hκ T
+  let ε : ℝ := min (1 / 1000) (κ.α / 300000)
+  have hε : 0 < ε := lt_min (by norm_num) (div_pos hκ.α_rng.1 (by norm_num))
+  refine ⟨1100, by norm_num, ?_⟩
+  filter_upwards [hSchedule, hSmall ε hε, T.S.n_tendsto.eventually_ge_atTop 1] with k hS hE hn
+  intro PT hPT D _ _ _
+  have hsmall := hE PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hlower := hS PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hnR : (1 : ℝ) ≤ T.S.n k := by exact_mod_cast hn
+  have hn0 : 0 < (T.S.n k : ℝ) := by linarith
+  have hm : 0 < sketchLength T k := by
+    unfold sketchLength
+    exact Nat.ceil_pos.mpr (Real.rpow_pos_of_pos hn0 _)
+  have hB : ∀ v j, bstar T k ≤ D.error v j ^ 4 := by
+    intro v j
+    have he := (hlower (D.geom.patchOf v)).1 j
+    change Real.rpow (T.S.n k : ℝ) (-0.02) ≤ D.error v j at he
+    calc
+      bstar T k ≤ (Real.rpow (T.S.n k : ℝ) (-0.02)) ^ 4 := by
+        unfold bstar
+        rw [Real.rpow_eq_pow, ← Real.rpow_mul_natCast hn0.le (-0.02) 4]
+        apply Real.rpow_le_rpow_of_exponent_le hnR
+        norm_num
+      _ ≤ D.error v j ^ 4 := pow_le_pow_left₀ (Real.rpow_nonneg (Nat.cast_nonneg _) _) he 4
+  exact HypercubeRamsey.Lane_sol_s18_1b.broadDeletion_of_small D hn hm hB ε hε
+    ((min_le_left _ _).trans (by norm_num)) (min_le_right _ _) hsmall
 
 /-- L18.1c, 18:225–226. Bounds an intersection, not a success-conditioned law. -/
 theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK : 0 < K27) :
@@ -560,13 +588,19 @@ theorem L18_2i {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
         TransferGeometry X → SurvivalFacts X := by
-  sorry
+  classical
+  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T] with k hcell
+  intro PT hPT D hD X hgeom
+  refine ⟨hcell PT hPT D hD X hgeom, ?_⟩
+  constructor
+  · sorry
+  · sorry
 
 /-- L18.2j, 18:500–524. Cylinder identity for the actual adaptive recurrence. -/
 theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} {D : LateData hPT} {X : CriticalTransferData D}
     (P : TransferProtocol X) : CylinderFacts P := by
-  sorry
+  exact Lane_q_s18_n3.protocol_cylinder_facts P
 
 /-- L18.2k/l, 18:526–615. The independent-witness likelihood process and
 stopped moment/exception estimates are explicit. Choose cstop before stages. -/
@@ -576,7 +610,10 @@ theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X → SurvivalFacts X →
         ∀ P : TransferProtocol X, ReplyRangeBound P → CylinderFacts P → StopFacts P cstop := by
-  sorry
+  refine ⟨κ.xs / 8, ?_, ?_, ?_⟩
+  · exact div_pos hκ.xs_rng.1 (by norm_num)
+  · nlinarith [hκ.xs_rng.1]
+  · sorry
 
 /-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
 final unconditioned prefix-failure estimate. -/
@@ -586,6 +623,7 @@ theorem L18_2m {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, ∀ P : TransferProtocol X,
           StopFacts P cstop → TiltedDeviationBound P ctilt := by
+  refine ⟨cstop, hc, ?_⟩
   sorry
 
 /-- 18:630–657. Undo survival, use its second moment and restore deletion
@@ -599,7 +637,7 @@ theorem L18_2_finish {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
           ∀ P : TransferProtocol X, TiltedDeviationBound P ctilt →
             X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
               Real.exp (-Real.rpow (T.S.n k : ℝ) c1) := by
-  sorry
+  exact Lane_q_s18_n3.finish_from_survival_tilt hκ T ctilt hc
 
 theorem L18_2 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (hDisc : DeepDisc T κ.xs κ.α 0.04) (K27 : ℝ) (hK : 0 < K27) :
@@ -679,15 +717,19 @@ theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
         Nonempty (LeafCoupling D δ) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+  have hnR := (tendsto_natCast_atTop_atTop :
+    Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  filter_upwards [Lane_sol_s18_n4.terminalScaleEventually κ T,
+    hnR.eventually_ge_atTop κ.Kcell] with k hscale hK
   intro PT hPT D hD hR hRisk
+  obtain ⟨hn8, hTs, hr⟩ := hscale D
   have hn : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
   suffices hinputs : Nonempty (Lane_sol_s18_3e.CanonicalLeafInputs D δ) by
     obtain ⟨X⟩ := hinputs
     exact ⟨Lane_sol_s18_3e.leafCouplingOfInputs D δ hRisk X
       (Lane_sol_s18_3e.late_probability_local D hD hR) hn⟩
-  -- Supply the geometric counts and patch-wise pool swaps with local tape conditioning.
-  sorry
+  exact Lane_sol_s18_3e.canonicalLeafInputs_of_bounds hκ D hD hR δ
+    (by omega) (by exact_mod_cast hTs) (by exact_mod_cast hr) hK
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
 vanishing cost for every stated local nonnegative test. The slot-count
@@ -760,11 +802,13 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
                   D.columnSum j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt)) y ^ T.S.n k else 0) ≤
                     (2 : ℝ) ^ D.geom.r *
                       (12 * (D.encoding.base.classes j).card / (D.encoding.base.latePool j).card) ^ T.S.n k := by
-    sorry
+    filter_upwards [Lane_sol_s18_n5.actual_column_moment_eventually hκ T εterm hterm] with k hk
+    intro PT hPT D hD hT hBalance _hLocal _hTransfer C A j y
+    exact hk D hD hT hBalance δ C A j y
   filter_upwards [hmoments, T.S.n_tendsto.eventually_ge_atTop 1,
     T.S.ratio_tendsto.eventually_ge_atTop (576 * 12 / κ.θ0)] with k hk hn hscale
   intro PT hPT D hD hT hBalance hLocal hTransfer C A
-  exact Lane_sol_s18_n5.fullRunProbability_of_column_moments D hD C A hLocal.2.1
+  exact Lane_sol_s18_n5.fullRunProbability_of_column_moments D hD hT C A hLocal.2.1
     hθ (by norm_num) hn hscale (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
 
 theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)

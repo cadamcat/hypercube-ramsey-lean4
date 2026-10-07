@@ -598,8 +598,8 @@ theorem L5_1g_rows : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
 /-! ### Low rows: the selection adjustment of L5.1k (05:896–1001) -/
 
 /-- The low rows (05:896–1001).  `row` is the long-rule row, `proxy` its short-rule proxy mean
-`p̄^{pr}_b(y;H)`.  For every fixed base, high history and low role, `selExp` is the finite target/presentation
-experiment of the selection table, with prior `π_ℓ`, whose mean identity integrates the target prior and the
+`p̄^{pr}_b(y;H)`.  For every fixed base, high history, low role and other low columns, `selExp` is the
+finite target/presentation experiment of the selection table, with prior `π_ℓ`, whose mean identity integrates the target prior and the
 raw centers. The row constructor bounds `proxyRadius` by a constant chosen before the dimension threshold. -/
 structure LowRows5 (L : X.CentreLayer5) (cL cH : ℝ) where
   row : X.KeyHist → X.CΩ L.ht → OddRole5 n → X.OddOut → ℝ
@@ -628,18 +628,20 @@ structure LowRows5 (L : X.CentreLayer5) (cL cH : ℝ) where
       hammingDist k.2.1 (X.g.sign y.1) ≤ proxyRadius * Nat.sqrt (X.p.m n))
   Data : X.Base → X.HighHid → OddRole5 n → Type
   dataFintype : ∀ b hi y, Fintype (Data b hi y)
-  selExp : ∀ b hi y, @SelectionExperiment5 (Fin N) (Data b hi y) _ (dataFintype b hi y)
-  selExp_prior : ∀ b hi y, X.g.low (X.p.J n) y.1 →
-    (selExp b hi y).prior = X.prior b (X.g.roleKey (X.p.J n) y.1)
-  selExp_records : ∀ b hi y, Real.exp (-(X.p.delta * X.p.kPrime n (X.g.severity y.1))) *
-    (selExp b hi y).recordBound ≤ 1
+  /-- The experiment fixes the key history except the target, so it also reads the other low
+  columns `lo` (05:898–903); the target column of `lo` is overwritten in `selExp_mean`. -/
+  selExp : ∀ b hi y (lo : X.LowHid), @SelectionExperiment5 (Fin N) (Data b hi y) _ (dataFintype b hi y)
+  selExp_prior : ∀ b hi y lo, X.g.low (X.p.J n) y.1 →
+    (selExp b hi y lo).prior = X.prior b (X.g.roleKey (X.p.J n) y.1)
+  selExp_records : ∀ b hi y lo, Real.exp (-(X.p.delta * X.p.kPrime n (X.g.severity y.1))) *
+    (selExp b hi y lo).recordBound ≤ 1
   selExp_mean : ∀ b hi y lo x, X.g.low (X.p.J n) y.1 →
     ∑ y', (X.prior b (X.g.roleKey (X.p.J n) y.1)).w y' *
         proxy (b, X.joinHidden hi (Function.update lo (X.lowIdxOf (X.g.roleKey (X.p.J n) y.1))
           (fun _ => y'))) y x =
       (N : ℝ) * @Finset.sum (Data b hi y) ℝ _ (@Finset.univ _ (dataFintype b hi y)) (fun d =>
-        (selExp b hi y).selectedMass d *
-          (selExp b hi y).proxyRow (Real.exp (-(X.p.delta * X.p.kPrime n (X.g.severity y.1)))) d x)
+        (selExp b hi y lo).selectedMass d *
+          (selExp b hi y lo).proxyRow (Real.exp (-(X.p.delta * X.p.kPrime n (X.g.severity y.1)))) d x)
 
 attribute [instance] LowRows5.dataFintype
 

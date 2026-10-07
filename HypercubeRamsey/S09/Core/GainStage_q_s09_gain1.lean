@@ -5,6 +5,7 @@ import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
 import HypercubeRamsey.S05.Clock_q_s05_even
 import HypercubeRamsey.S05.Stages_p_s05_h
 import HypercubeRamsey.Tools.Concentration
+import HypercubeRamsey.Tools.SignedTest
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
 namespace HypercubeRamsey.Lane_q_s09_gain1
@@ -1110,6 +1111,92 @@ private theorem one_sign_mass {N : ℕ} {X : Finset (Fin N)}
   have hbound := hmean ρ hρX hρwidth
   rcases abs_le.mp hbound with ⟨hlo, hhi⟩
   linarith
+
+private theorem signed_test_row_tail9 {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} (hdeep : P.DeepAt n N E X Y) (G : Colour)
+    (hn : 1 ≤ n)
+    (α : Law N) (hαX : α.SupportedIn X) (w : ℝ) (hαW : α.WidthLE w)
+    (hw : w ≤ (n : ℝ) ^ (P.xD : ℝ))
+    (lamBase : Law N) (hBaseY : lamBase.SupportedIn Y) (s : ℝ)
+    (hBaseW : lamBase.WidthLE (s - Real.log 4)) (hs : s ≤ P.Sd (n : ℝ))
+    (f : Fin N → ℝ) (hf : ∀ y, |f y| ≤ 1) :
+    ∑ x ∈ Finset.univ.filter (fun x => 4 * P.bStar n <
+      |∑ y, lamBase.w y * ((if Hits E G x y then (1 : ℝ) else 0) - 1 / 2) * f y|), α.w x ≤
+      2 * Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) := by
+  classical
+  change DiscOne E X Y ((n : ℝ) ^ (P.xD : ℝ)) (P.Sd (n : ℝ)) (P.bStar n) at hdeep
+  let g : Fin N → ℝ := fun x =>
+    ∑ y, lamBase.w y * ((if Hits E G x y then (1 : ℝ) else 0) - 1 / 2) * f y
+  have hmean (ρ : Law N) (hρX : ρ.SupportedIn X)
+      (hρW : ρ.WidthLE ((n : ℝ) ^ (P.xD : ℝ))) :
+      |∑ x, ρ.w x * g x| ≤ 4 * P.bStar n := by
+    have hBaseW' : lamBase.WidthLE
+        (P.Sd (n : ℝ) - Real.log (2 * (1 : ℝ) + 2)) := by
+      have hh := Law.WidthLE.mono hBaseW (sub_le_sub_right hs _)
+      have hlog4 : Real.log (2 * (1 : ℝ) + 2) = Real.log 4 := by norm_num
+      simpa only [hlog4] using hh
+    have hdisc := signedTest_of_discrepancy (show (0 : ℝ) ≤ 1 by norm_num)
+      hdeep ρ lamBase hρX hBaseY hρW hBaseW' f hf G
+    have heq : signedHitExpectation E G ρ lamBase f = ∑ x, ρ.w x * g x := by
+      rfl
+    calc
+      |∑ x, ρ.w x * g x| = |signedHitExpectation E G ρ lamBase f| := by rw [heq]
+      _ ≤ 2 * (1 + 1) * P.bStar n := hdisc
+      _ = 4 * P.bStar n := by ring
+  let Splus := Finset.univ.filter (fun x => 4 * P.bStar n < g x)
+  let Sminus := Finset.univ.filter (fun x => 4 * P.bStar n < -g x)
+  let Sbad := Finset.univ.filter (fun x => 4 * P.bStar n < |g x|)
+  have hplus :
+      ∑ x ∈ Finset.univ.filter (fun x => 4 * P.bStar n < g x), α.w x ≤
+        Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) := by
+    apply one_sign_mass α hαX hαW (fun x => g x)
+      (fun ρ hρX hρW => hmean ρ hρX hρW)
+    intro x hx
+    exact (Finset.mem_filter.mp hx).2
+  have hminus :
+      ∑ x ∈ Finset.univ.filter (fun x => 4 * P.bStar n < -g x), α.w x ≤
+        Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) := by
+    have hmeanNeg (ρ : Law N) (hρX : ρ.SupportedIn X)
+        (hρW : ρ.WidthLE ((n : ℝ) ^ (P.xD : ℝ))) :
+        |∑ x, ρ.w x * -g x| ≤ 4 * P.bStar n := by
+      have hneg : (∑ x, ρ.w x * -g x) = -∑ x, ρ.w x * g x := by
+        rw [← Finset.sum_neg_distrib]
+        apply Finset.sum_congr rfl
+        intro x hx
+        ring
+      rw [hneg]
+      simpa only [abs_neg] using hmean ρ hρX hρW
+    exact one_sign_mass α hαX hαW (fun x => -g x) hmeanNeg Sminus
+      (by intro x hx; exact (Finset.mem_filter.mp hx).2)
+  have hsubset : Sbad ⊆ Splus ∪ Sminus := by
+    intro x hx
+    have hx' := (Finset.mem_filter.mp hx).2
+    by_cases hnonneg : 0 ≤ g x
+    · apply Finset.mem_union.mpr
+      left
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [abs_of_nonneg hnonneg] using hx'⟩
+    · apply Finset.mem_union.mpr
+      right
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by
+        rw [abs_of_neg (lt_of_not_ge hnonneg)] at hx'
+        exact hx'⟩
+  have hdis : Disjoint Splus Sminus := by
+    rw [Finset.disjoint_left]
+    intro x hx₁ hx₂
+    have h₁ := (Finset.mem_filter.mp hx₁).2
+    have h₂ := (Finset.mem_filter.mp hx₂).2
+    have hb : 0 ≤ P.bStar n := by
+      dsimp [Params9.bStar]
+      have hnR : 0 < (n : ℝ) := by exact_mod_cast (Nat.lt_of_lt_of_le Nat.zero_lt_one hn)
+      exact le_of_lt (Real.rpow_pos_of_pos hnR _)
+    linarith
+  calc
+    (∑ x ∈ Sbad, α.w x) ≤ ∑ x ∈ Splus ∪ Sminus, α.w x :=
+      Finset.sum_le_sum_of_subset_of_nonneg hsubset (fun x hx _ => α.nonneg x)
+    _ = (∑ x ∈ Splus, α.w x) + ∑ x ∈ Sminus, α.w x := by rw [Finset.sum_union hdis]
+    _ ≤ Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) + Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) :=
+      add_le_add hplus hminus
+    _ = 2 * Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) := by ring
 
 private theorem dens_eq_rowDegree {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (μ ν : Law N) : dens E G μ ν = ∑ x, μ.w x * rowDeg E G x ν := by

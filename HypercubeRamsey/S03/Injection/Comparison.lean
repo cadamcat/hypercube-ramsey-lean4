@@ -3449,6 +3449,530 @@ theorem conditioned_comparison_transfer :
     have hEq : x a = x b := by
       rw [hsome a, hsome b, hxf, hab]
     exact hxGood.1.2 a b a.isLt b.isLt hEq
-  sorry
+  have hprLeOne (R : FinProb (Path t d)) (E : Path t d → Prop) :
+      R.pr E ≤ 1 := by
+    calc
+      R.pr E ≤ R.pr (fun _ => True) :=
+        FinProb.pr_mono R _ _ (by intro x hx; trivial)
+      _ = 1 := by simp [FinProb.pr, R.sum_eq_one]
+  have hforceTarget (i₀ : Fin t) (z : Fin d) (x : Path t d)
+      (hxGood : Good q x) (hw : forcingWeight q {i₀} (fun _ => z) x ≠ 0) :
+      x i₀ = some z := by
+    have hfactor : forcingStepWeight q {i₀} (fun _ => z) x i₀ (x i₀) ≠ 0 := by
+      unfold forcingWeight at hw
+      exact (Finset.prod_ne_zero_iff.mp hw) i₀ (Finset.mem_univ i₀)
+    have hsome : ∃ w, x i₀ = some w := hxGood.1.1 i₀ i₀.isLt
+    rcases hsome with ⟨w, hxi⟩
+    by_contra hne
+    have hiMem : i₀ ∈ ({i₀} : Finset (Fin t)) := by simp
+    by_cases hactive : PrefixValid x i₀.val ∧
+        trackingError q x i₀.val ≤ 1 / 20 ∧ Free x i₀.val z
+    · have hz : forcingStepWeight q {i₀} (fun _ => z) x i₀ (x i₀) = 0 := by
+        unfold forcingStepWeight
+        rw [if_pos hiMem, if_pos hactive]
+        simp [hne]
+      exact hfactor hz
+    · have hz : forcingStepWeight q {i₀} (fun _ => z) x i₀ (x i₀) = 0 := by
+        unfold forcingStepWeight
+        rw [if_pos hiMem, if_neg hactive]
+        simp [hxi]
+      exact hfactor hz
+  have hforceGoodTarget (i₀ : Fin t) (z : Fin d) :
+      (forcingLaw q hq.nonneg hq.row_sum {i₀} (fun _ => z)).pr (Good q) =
+      (forcingLaw q hq.nonneg hq.row_sum {i₀} (fun _ => z)).pr
+        (fun x => Good q x ∧ x i₀ = some z) := by
+    classical
+    let R := forcingLaw q hq.nonneg hq.row_sum {i₀} (fun _ => z)
+    change R.pr (Good q) = R.pr (fun x => Good q x ∧ x i₀ = some z)
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hg : Good q x
+    · by_cases hw : R.w x = 0
+      · simp [hw]
+      · have htarget := hforceTarget i₀ z x hg (by simpa [R, forcingLaw] using hw)
+        simp [hg, hw, htarget]
+    · simp [hg]
+  have hlikelihoodBounds (S : Finset (Fin t)) (y₀ : Fin t → Fin d)
+      (hpos : PositiveDistinctTargets q S y₀)
+      (hsize : (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ))
+      (x : Path t d) (hx : Good q x) (htargets : Targets S y₀ x) :
+      Real.exp (-(relativeError d / 4 * (S.card : ℝ))) ≤
+          likelihoodFactor q S y₀ x ∧
+        likelihoodFactor q S y₀ x ≤
+          Real.exp (relativeError d / 4 * (S.card : ℝ)) := by
+    let θ : ℝ := relativeError d / 4 * (S.card : ℝ)
+    rcases hLog S y₀ hpos hsize x hx htargets with ⟨hLpos, hlog⟩
+    have habs := abs_le.mp hlog
+    constructor
+    · have he := Real.exp_le_exp.mpr habs.1
+      rw [Real.exp_log hLpos] at he
+      exact he
+    · have he := Real.exp_le_exp.mpr habs.2
+      rw [Real.exp_log hLpos] at he
+      exact he
+  have hseqTargetBounds (S : Finset (Fin t)) (y₀ : Fin t → Fin d)
+      (hpos : PositiveDistinctTargets q S y₀)
+      (hsize : (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ)) :
+      let qprod : ℝ := ∏ i ∈ S, q i (y₀ i)
+      let θ : ℝ := relativeError d / 4 * (S.card : ℝ)
+      let E : Path t d → Prop := fun x => Good q x ∧ Targets S y₀ x
+      qprod * Real.exp (-θ) *
+          (forcingLaw q hq.nonneg hq.row_sum S y₀).pr E ≤ Pseq.pr E ∧
+        Pseq.pr E ≤ qprod * Real.exp θ *
+          (forcingLaw q hq.nonneg hq.row_sum S y₀).pr E := by
+    classical
+    dsimp
+    let qprod : ℝ := ∏ i ∈ S, q i (y₀ i)
+    let θ : ℝ := relativeError d / 4 * (S.card : ℝ)
+    let E : Path t d → Prop := fun x => Good q x ∧ Targets S y₀ x
+    let R : FinProb (Path t d) := forcingLaw q hq.nonneg hq.row_sum S y₀
+    have hqprod : 0 ≤ qprod := by
+      dsimp [qprod]
+      apply Finset.prod_nonneg
+      intro i hi
+      exact hq.nonneg i (y₀ i)
+    have hweighted : Pseq.pr E = qprod *
+        (∑ x, if E x then forcingWeight q S y₀ x *
+          likelihoodFactor q S y₀ x else 0) := by
+      classical
+      unfold FinProb.pr
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases he : E x
+      · rcases he with ⟨hgood, htargets⟩
+        simp [E, hgood, htargets]
+        change sequentialWeight q x = qprod *
+          (forcingWeight q S y₀ x * likelihoodFactor q S y₀ x)
+        rw [hIdentity S y₀ hpos hsize x hgood htargets]
+        ring
+      · simp [E, he]
+    have hsumUpper :
+        (∑ x, if E x then forcingWeight q S y₀ x * likelihoodFactor q S y₀ x else 0) ≤
+          Real.exp θ * R.pr E := by
+      calc
+        _ ≤ ∑ x, if E x then Real.exp θ * forcingWeight q S y₀ x else 0 := by
+          apply Finset.sum_le_sum
+          intro x hx
+          by_cases he : E x
+          · rcases he with ⟨hgood, htargets⟩
+            simp [E, hgood, htargets]
+            have hL := (hlikelihoodBounds S y₀ hpos hsize x hgood htargets).2
+            calc
+              forcingWeight q S y₀ x * likelihoodFactor q S y₀ x ≤
+                  forcingWeight q S y₀ x * Real.exp θ :=
+                mul_le_mul_of_nonneg_left hL (R.nonneg x)
+              _ = Real.exp θ * forcingWeight q S y₀ x := by ring
+          · simp [E, he]
+        _ = Real.exp θ * R.pr E := by
+          unfold FinProb.pr
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro x hx
+          by_cases he : E x <;> simp [E, he, R, forcingLaw, mul_comm]
+    have hsumLower :
+        Real.exp (-θ) * R.pr E ≤
+          ∑ x, if E x then forcingWeight q S y₀ x * likelihoodFactor q S y₀ x else 0 := by
+      calc
+        Real.exp (-θ) * R.pr E =
+            ∑ x, if E x then Real.exp (-θ) * forcingWeight q S y₀ x else 0 := by
+              unfold FinProb.pr
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro x hx
+              by_cases he : E x <;> simp [E, he, R, forcingLaw, mul_comm]
+        _ ≤ ∑ x, if E x then forcingWeight q S y₀ x *
+              likelihoodFactor q S y₀ x else 0 := by
+                apply Finset.sum_le_sum
+                intro x hx
+                by_cases he : E x
+                · rcases he with ⟨hgood, htargets⟩
+                  simp [E, hgood, htargets]
+                  have hL := (hlikelihoodBounds S y₀ hpos hsize x hgood htargets).1
+                  calc
+                    Real.exp (-θ) * forcingWeight q S y₀ x =
+                        forcingWeight q S y₀ x * Real.exp (-θ) := by ring
+                    _ ≤ forcingWeight q S y₀ x * likelihoodFactor q S y₀ x :=
+                      mul_le_mul_of_nonneg_left hL (R.nonneg x)
+                · simp [E, he]
+    constructor
+    · calc
+        qprod * Real.exp (-θ) * R.pr E =
+            qprod * (Real.exp (-θ) * R.pr E) := by ring
+        _ ≤ qprod * (∑ x, if E x then forcingWeight q S y₀ x *
+              likelihoodFactor q S y₀ x else 0) :=
+                mul_le_mul_of_nonneg_left hsumLower hqprod
+        _ = Pseq.pr E := hweighted.symm
+    · calc
+        Pseq.pr E = qprod * (∑ x, if E x then forcingWeight q S y₀ x *
+            likelihoodFactor q S y₀ x else 0) := hweighted
+        _ ≤ qprod * (Real.exp θ * R.pr E) :=
+          mul_le_mul_of_nonneg_left hsumUpper hqprod
+        _ = qprod * Real.exp θ * R.pr E := by ring
+  have hjointPositive (S : Finset (Fin t)) (y₀ : Fin t → Fin d)
+      (hpos : PositiveDistinctTargets q S y₀)
+      (hsize : (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ))
+      (hcard : 0 < S.card) :
+      Q.pr (fun f => ∀ i ∈ S, f i = y₀ i) ≤
+        Real.exp (relativeError d * S.card) * ∏ i ∈ S, q i (y₀ i) := by
+    classical
+    let qprod : ℝ := ∏ i ∈ S, q i (y₀ i)
+    let θ : ℝ := relativeError d / 4 * (S.card : ℝ)
+    let E : Path t d → Prop := fun x => Good q x ∧ Targets S y₀ x
+    let F : (Fin t → Fin d) → Prop := fun f => ∀ i ∈ S, f i = y₀ i
+    let R : FinProb (Path t d) := forcingLaw q hq.nonneg hq.row_sum S y₀
+    have hpre : (fun x => Good q x ∧ F (lab x)) = E := by
+      funext x
+      apply propext
+      by_cases hg : Good q x
+      · simpa [E, F, hg] using hreadTargets S y₀ x hg
+      · simp [hg, E]
+    have hcondEq : Q.pr F = Pseq.pr E / Pseq.pr (Good q) := by
+      calc
+        Q.pr F = Pseq.pr (fun x => Good q x ∧ F (lab x)) /
+            Pseq.pr (Good q) := hcondMapPr F
+        _ = Pseq.pr E / Pseq.pr (Good q) := by rw [hpre]
+    have hbounds := hseqTargetBounds S y₀ hpos hsize
+    have hnumUpper : Pseq.pr E ≤ qprod * Real.exp θ := by
+      have hup : Pseq.pr E ≤ qprod * Real.exp θ * R.pr E := by
+        simpa [E, qprod, θ, R] using hbounds.2
+      have hcoef : 0 ≤ qprod * Real.exp θ := by
+        have hqp : 0 ≤ qprod := by
+          dsimp [qprod]
+          apply Finset.prod_nonneg
+          intro i hi
+          exact hq.nonneg i (y₀ i)
+        exact mul_nonneg hqp (Real.exp_nonneg _)
+      calc
+        Pseq.pr E ≤ qprod * Real.exp θ * R.pr E := hup
+        _ ≤ qprod * Real.exp θ * 1 :=
+          mul_le_mul_of_nonneg_left (hprLeOne R E) hcoef
+        _ = qprod * Real.exp θ := by ring
+    have hqprod : 0 ≤ qprod := by
+      dsimp [qprod]
+      apply Finset.prod_nonneg
+      intro i hi
+      exact hq.nonneg i (y₀ i)
+    have hcardOne : (1 : ℝ) ≤ (S.card : ℝ) := by exact_mod_cast (Nat.succ_le_of_lt hcard)
+    have htheta : θ + relativeError d / 4 ≤ relativeError d * (S.card : ℝ) := by
+      dsimp [θ]
+      nlinarith [hdeltaPos, hcardOne]
+    calc
+      Q.pr F = Pseq.pr E / Pseq.pr (Good q) := hcondEq
+      _ ≤ (qprod * Real.exp θ) / Pseq.pr (Good q) :=
+        div_le_div_of_nonneg_right hnumUpper hGpos.le
+      _ = qprod * Real.exp θ * (Pseq.pr (Good q))⁻¹ := by rw [div_eq_mul_inv]
+      _ ≤ qprod * Real.exp θ * Real.exp (relativeError d / 4) :=
+        mul_le_mul_of_nonneg_left hdenInv (mul_nonneg hqprod (Real.exp_nonneg _))
+      _ = qprod * Real.exp (θ + relativeError d / 4) := by
+        calc
+          qprod * Real.exp θ * Real.exp (relativeError d / 4) =
+              qprod * (Real.exp θ * Real.exp (relativeError d / 4)) := by ring
+          _ = qprod * Real.exp (θ + relativeError d / 4) := by rw [← Real.exp_add]
+      _ ≤ qprod * Real.exp (relativeError d * (S.card : ℝ)) :=
+        mul_le_mul_of_nonneg_left
+          (Real.exp_le_exp.mpr htheta) hqprod
+      _ = Real.exp (relativeError d * S.card) *
+            ∏ i ∈ S, q i (y₀ i) := by
+              simp [qprod, mul_comm]
+  have hseqEventZero (S : Finset (Fin t)) (y₀ : Fin t → Fin d)
+      (hnot : ¬ PositiveDistinctTargets q S y₀) :
+      Pseq.pr (fun x => Good q x ∧ Targets S y₀ x) = 0 := by
+    classical
+    unfold FinProb.pr
+    apply Finset.sum_eq_zero
+    intro x hx
+    by_cases he : Good q x ∧ Targets S y₀ x
+    · rcases he with ⟨hgood, htargets⟩
+      by_cases hAtoms : ∀ i ∈ S, 0 < q i (y₀ i)
+      · have hnotInj : ¬ Set.InjOn y₀ (↑S : Set (Fin t)) := by
+          intro hInj
+          exact hnot ⟨hAtoms, hInj⟩
+        have hExists : ∃ a ∈ S, ∃ b ∈ S, a ≠ b ∧ y₀ a = y₀ b := by
+          by_contra hNo
+          apply hnotInj
+          intro a ha b hb hy
+          by_contra hab
+          exact hNo ⟨a, ha, b, hb, hab, hy⟩
+        rcases hExists with ⟨a, ha, b, hb, hab, hy⟩
+        have haS : a ∈ S := by simpa using ha
+        have hbS : b ∈ S := by simpa using hb
+        have hxa := htargets a haS
+        have hxb := htargets b hbS
+        have hEq : x a = x b := by rw [hxa, hxb, hy]
+        have := hgood.1.2 a b a.isLt b.isLt hEq
+        exact (hab this).elim
+      · push_neg at hAtoms
+        rcases hAtoms with ⟨a, ha, hnotPos⟩
+        have hqzero : q a (y₀ a) = 0 :=
+          le_antisymm hnotPos (hq.nonneg a (y₀ a))
+        have hstepzero : ordinaryWeight q x a ∅ (x a) = 0 := by
+          rw [htargets a ha]
+          unfold ordinaryWeight
+          by_cases hactive : PrefixValid x a.val ∧
+              trackingError q x a.val ≤ 1 / 20 ∧
+                0 < availableMass q x a ∅
+          · rw [if_pos hactive]
+            simp [hqzero]
+          · rw [if_neg hactive]
+            simp
+        have hseqzero : sequentialWeight q x = 0 := by
+          unfold sequentialWeight
+          exact Finset.prod_eq_zero (Finset.mem_univ a) hstepzero
+        simp [hgood, htargets, Pseq, sequentialLaw, hseqzero]
+    · simp [he]
+  refine ⟨hGpos, hQInjective, ?_, ?_⟩
+  · intro S y₀ hsize
+    by_cases hcard0 : S.card = 0
+    · have hS : S = ∅ := Finset.card_eq_zero.mp hcard0
+      subst S
+      have hQtotal : Q.pr (fun _ => True) = 1 := by
+        unfold FinProb.pr
+        simp [Q.sum_eq_one]
+      simpa [Q, conditionedLaw, Pcond, Pseq, lab] using hQtotal.le
+    · have hcard : 0 < S.card := Nat.pos_of_ne_zero hcard0
+      by_cases hpos : PositiveDistinctTargets q S y₀
+      · exact hjointPositive S y₀ hpos hsize hcard
+      · have hzero := hseqEventZero S y₀ hpos
+        have hpre :
+            (fun x => Good q x ∧ (∀ i ∈ S, lab x i = y₀ i)) =
+              (fun x => Good q x ∧ Targets S y₀ x) := by
+          funext x
+          apply propext
+          by_cases hg : Good q x
+          · simpa [hg, hreadTargets S y₀ x hg]
+          · simp [hg]
+        have hQzero : Q.pr (fun f => ∀ i ∈ S, f i = y₀ i) = 0 := by
+          rw [hcondMapPr, hpre, hzero]
+          simp
+        have hRhs : 0 ≤ Real.exp (relativeError d * S.card) *
+            ∏ i ∈ S, q i (y₀ i) := by
+          apply mul_nonneg (Real.exp_nonneg _)
+          apply Finset.prod_nonneg
+          intro i hi
+          exact hq.nonneg i (y₀ i)
+        change Q.pr (fun f => ∀ i ∈ S, f i = y₀ i) ≤ _
+        rw [hQzero]
+        exact hRhs
+  · intro i z
+    by_cases hqz : 0 < q i z
+    · let S : Finset (Fin t) := {i}
+      let y₀ : Fin t → Fin d := fun _ => z
+      let E₀ : Path t d → Prop := fun x => Good q x ∧ x i = some z
+      let R : FinProb (Path t d) := forcingLaw q hq.nonneg hq.row_sum S y₀
+      have hposS : PositiveDistinctTargets q S y₀ := by
+        constructor
+        · intro j hj
+          have hji : j = i := by simpa [S] using hj
+          subst j
+          exact hqz
+        · intro a ha b hb hab
+          have hai : a = i := by simpa [S] using ha
+          have hbi : b = i := by simpa [S] using hb
+          subst a
+          subst b
+          rfl
+      have hsizeS : (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ) := by
+        have hpow : 1 ≤ (d : ℝ) ^ (0.025 : ℝ) :=
+          Real.one_le_rpow hd100 (by norm_num)
+        simpa [S] using hpow
+      have hBounds := hseqTargetBounds S y₀ hposS hsizeS
+      have hnumLower : q i z * Real.exp (-(relativeError d / 4)) * R.pr E₀ ≤
+          Pseq.pr E₀ := by
+        simpa [S, y₀, E₀, Targets, Finset.card_singleton, mul_assoc, mul_comm]
+          using hBounds.1
+      have hnumUpper : Pseq.pr E₀ ≤
+          q i z * Real.exp (relativeError d / 4) * R.pr E₀ := by
+        simpa [S, y₀, E₀, Targets, Finset.card_singleton, mul_assoc, mul_comm]
+          using hBounds.2
+      have hforceEq :
+          R.pr (Good q) = R.pr E₀ := by
+        have h := hforceGoodTarget i z
+        simpa [R, S, y₀, E₀] using h
+      have hforceLower : 1 - failureBound d ≤ R.pr E₀ := by
+        calc
+          1 - failureBound d ≤ R.pr (Good q) := by
+            simpa [R, S, y₀] using hForcedGood i y₀ hqz
+          _ = R.pr E₀ := hforceEq
+      have hforceUpper : R.pr E₀ ≤ 1 := hprLeOne R E₀
+      have hpreMarg :
+          (fun x => Good q x ∧ lab x i = z) = E₀ := by
+        funext x
+        apply propext
+        by_cases hg : Good q x
+        · have hreadOne : lab x i = z ↔ x i = some z := by
+            constructor
+            · intro hlabel
+              rcases hg.1.1 i i.isLt with ⟨w, hw⟩
+              have hwEq : w = z := by
+                simpa [lab, readLabels, hw] using hlabel
+              simpa [hwEq] using hw
+            · intro hlabel
+              simpa [lab, readLabels, hlabel]
+          simp [E₀, hg, hreadOne]
+        · simp [E₀, hg]
+      have hp : (Q.pr (fun f => f i = z)) = Pseq.pr E₀ / Pseq.pr (Good q) := by
+        calc
+          Q.pr (fun f => f i = z) =
+              Pseq.pr (fun x => Good q x ∧ lab x i = z) / Pseq.pr (Good q) :=
+            hcondMapPr _
+          _ = Pseq.pr E₀ / Pseq.pr (Good q) := by rw [hpreMarg]
+      have hnumNonneg : 0 ≤ Pseq.pr E₀ := by
+        unfold FinProb.pr
+        apply Finset.sum_nonneg
+        intro x hx
+        split_ifs
+        · exact Pseq.nonneg x
+        · exact le_rfl
+      have hpDiv : Pseq.pr E₀ ≤ Pseq.pr E₀ / Pseq.pr (Good q) := by
+        apply (le_div_iff₀ hGpos).2
+        calc
+          Pseq.pr E₀ * Pseq.pr (Good q) ≤ Pseq.pr E₀ * 1 :=
+            mul_le_mul_of_nonneg_left hGupper hnumNonneg
+          _ = Pseq.pr E₀ := by ring
+      have hlow : q i z * (1 - relativeError d) ≤ Q.pr (fun f => f i = z) := by
+        have hcoef : 0 ≤ q i z * Real.exp (-(relativeError d / 4)) :=
+          mul_nonneg (hq.nonneg i z) (Real.exp_nonneg _)
+        have hnumLower' :
+            q i z * Real.exp (-(relativeError d / 4)) * (1 - failureBound d) ≤
+              Pseq.pr E₀ :=
+          le_trans (mul_le_mul_of_nonneg_left hforceLower hcoef) hnumLower
+        have hfailHalf : failureBound d ≤ 1 / 2 := by
+          nlinarith [hfailureSmall, hdeltaLeOne]
+        have hfactorLower :
+            1 - relativeError d ≤
+              Real.exp (-(relativeError d / 4)) * (1 - failureBound d) := by
+          have hExp := Real.one_sub_le_exp_neg (relativeError d / 4)
+          have hremainNonneg : 0 ≤ 1 - failureBound d := by linarith [hfailHalf]
+          have hmult := mul_le_mul_of_nonneg_right hExp hremainNonneg
+          have hcross : 0 ≤ (relativeError d / 4) * failureBound d :=
+            mul_nonneg (by positivity) hfailNonneg
+          have hsum : 1 - relativeError d ≤
+              (1 - relativeError d / 4) * (1 - failureBound d) := by
+            nlinarith [hcross, hfailureSmall]
+          exact hsum.trans hmult
+        have hlowNum : q i z * (1 - relativeError d) ≤ Pseq.pr E₀ := by
+          calc
+            q i z * (1 - relativeError d) ≤
+                q i z * (Real.exp (-(relativeError d / 4)) * (1 - failureBound d)) :=
+              mul_le_mul_of_nonneg_left hfactorLower (hq.nonneg i z)
+            _ = (q i z * Real.exp (-(relativeError d / 4))) *
+                  (1 - failureBound d) := by ring
+            _ ≤ Pseq.pr E₀ := by
+                  convert hnumLower' using 1 <;> ring
+        calc
+          q i z * (1 - relativeError d) ≤ Pseq.pr E₀ := hlowNum
+          _ ≤ Pseq.pr E₀ / Pseq.pr (Good q) := hpDiv
+          _ = Q.pr (fun f => f i = z) := hp.symm
+      have hexpUpper : Real.exp (relativeError d / 2) ≤ 1 + relativeError d := by
+        have hx : 0 ≤ relativeError d / 2 := by positivity
+        have hx2 : relativeError d / 2 < 2 := by linarith [hdeltaLeOne]
+        calc
+          Real.exp (relativeError d / 2) ≤
+              (2 + relativeError d / 2) / (2 - relativeError d / 2) :=
+            Real.exp_le_two_add_div_two_sub hx hx2
+          _ ≤ 1 + relativeError d := by
+            have hden : 0 < 2 - relativeError d / 2 := by linarith [hdeltaLeOne]
+            apply (div_le_iff₀ hden).2
+            nlinarith [hdeltaLeOne]
+      have hupp : Q.pr (fun f => f i = z) ≤ q i z * (1 + relativeError d) := by
+        have hnumDiv : Pseq.pr E₀ / Pseq.pr (Good q) ≤
+            (q i z * Real.exp (relativeError d / 4) * R.pr E₀) /
+              Pseq.pr (Good q) :=
+          div_le_div_of_nonneg_right hnumUpper hGpos.le
+        have hRatio :
+            (q i z * Real.exp (relativeError d / 4) * R.pr E₀) /
+                Pseq.pr (Good q) ≤
+              q i z * Real.exp (relativeError d / 2) := by
+          calc
+            _ = q i z * Real.exp (relativeError d / 4) * R.pr E₀ *
+                (Pseq.pr (Good q))⁻¹ := by rw [div_eq_mul_inv]
+            _ ≤ q i z * Real.exp (relativeError d / 4) *
+                Real.exp (relativeError d / 4) := by
+                  have hcoef : 0 ≤ q i z * Real.exp (relativeError d / 4) :=
+                    mul_nonneg (hq.nonneg i z) (Real.exp_nonneg _)
+                  calc
+                    q i z * Real.exp (relativeError d / 4) *
+                        R.pr E₀ * (Pseq.pr (Good q))⁻¹ =
+                        (q i z * Real.exp (relativeError d / 4)) *
+                          (R.pr E₀ * (Pseq.pr (Good q))⁻¹) := by ring
+                    _ ≤ (q i z * Real.exp (relativeError d / 4)) *
+                          (1 * Real.exp (relativeError d / 4)) :=
+                      mul_le_mul_of_nonneg_left
+                        (mul_le_mul hforceUpper hdenInv (by positivity) (by positivity)) hcoef
+                    _ = q i z * Real.exp (relativeError d / 4) *
+                          Real.exp (relativeError d / 4) := by ring
+            _ = q i z * Real.exp (relativeError d / 2) := by
+                  calc
+                    q i z * Real.exp (relativeError d / 4) *
+                        Real.exp (relativeError d / 4) =
+                        q i z * (Real.exp (relativeError d / 4) *
+                          Real.exp (relativeError d / 4)) := by ring
+                    _ = q i z * Real.exp (relativeError d / 4 + relativeError d / 4) := by
+                      rw [← Real.exp_add]
+                    _ = q i z * Real.exp (relativeError d / 2) := by congr 2 <;> ring
+        calc
+          Q.pr (fun f => f i = z) = Pseq.pr E₀ / Pseq.pr (Good q) := hp
+          _ ≤ _ := hnumDiv
+          _ ≤ q i z * Real.exp (relativeError d / 2) := hRatio
+          _ ≤ q i z * (1 + relativeError d) := by
+            calc
+              q i z * Real.exp (relativeError d / 2) ≤
+                  q i z * (1 + relativeError d) :=
+                mul_le_mul_of_nonneg_left hexpUpper (hq.nonneg i z)
+              _ = _ := rfl
+      have hdiff : |Q.pr (fun f => f i = z) - q i z| ≤
+          relativeError d * q i z := by
+        have hlow' : q i z - relativeError d * q i z ≤
+            Q.pr (fun f => f i = z) := by nlinarith [hlow]
+        have hupp' : Q.pr (fun f => f i = z) ≤
+            q i z + relativeError d * q i z := by nlinarith [hupp]
+        apply (abs_le).2
+        constructor <;> linarith [hlow', hupp']
+      simpa [Q, conditionedLaw, Pcond, lab] using hdiff
+    · have hqzero : q i z = 0 := le_antisymm (le_of_not_gt hqz) (hq.nonneg i z)
+      have hzeroSeq : Pseq.pr (fun x => Good q x ∧ x i = some z) = 0 := by
+        classical
+        unfold FinProb.pr
+        apply Finset.sum_eq_zero
+        intro x hx
+        by_cases he : Good q x ∧ x i = some z
+        · rcases he with ⟨hg, hxi⟩
+          have hstepzero : ordinaryWeight q x i ∅ (x i) = 0 := by
+            rw [hxi]
+            unfold ordinaryWeight
+            by_cases hactive : PrefixValid x i.val ∧
+                trackingError q x i.val ≤ 1 / 20 ∧
+                  0 < availableMass q x i ∅
+            · rw [if_pos hactive]
+              simp [hqzero]
+            · rw [if_neg hactive]
+              simp
+          have hseqzero : sequentialWeight q x = 0 := by
+            unfold sequentialWeight
+            exact Finset.prod_eq_zero (Finset.mem_univ i) hstepzero
+          simp [hg, hxi, hseqzero, Pseq, sequentialLaw]
+        · simp [he]
+      have hmapzero : Q.pr (fun f => f i = z) = 0 := by
+        rw [hcondMapPr]
+        have hpre : (fun x => Good q x ∧ lab x i = z) =
+            (fun x => Good q x ∧ x i = some z) := by
+          funext x
+          apply propext
+          by_cases hg : Good q x
+          · have hreadOneZero : lab x i = z ↔ x i = some z := by
+              constructor
+              · intro hz
+                rcases hg.1.1 i i.isLt with ⟨w, hw⟩
+                have hwEq : w = z := by simpa [lab, readLabels, hw] using hz
+                simpa [hwEq] using hw
+              · intro hz
+                simp [lab, readLabels, hz]
+            simp [hg, hreadOneZero]
+          · simp [hg]
+        rw [hpre, hzeroSeq]
+        simp
+      simpa [hqzero, hmapzero]
 
 end HypercubeRamsey.Injection

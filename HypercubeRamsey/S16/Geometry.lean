@@ -741,15 +741,16 @@ theorem low_geometry_thresholds {κ : CConsts} (hκ : κ.Admissible) :
     have hpowSplit : (2 : ℝ) ^ n = (2 : ℝ) ^ (n - ell) * (2 : ℝ) ^ ell := by
       have hs : n - ell + ell = n := Nat.sub_add_cancel hEllN
       calc
-        (2 : ℝ) ^ n = (2 : ℝ) ^ (n - ell + ell) := by
-          conv_lhs => rw [← hs]
+        (2 : ℝ) ^ n = (2 : ℝ) ^ (n - ell + ell) :=
+          congrArg (fun m : ℕ => (2 : ℝ) ^ m) hs.symm
         _ = (2 : ℝ) ^ (n - ell) * (2 : ℝ) ^ ell := by rw [pow_add]
     have hprod : (2 : ℝ) ^ ell * (d : ℝ) ≤ (n : ℝ) ^ 2 := by
       calc
         (2 : ℝ) ^ ell * (d : ℝ) ≤ (2 : ℝ) ^ ell * (n : ℝ) :=
           mul_le_mul_of_nonneg_left hdleNReal (by positivity)
         _ ≤ (n : ℝ) ^ 2 := by
-          simpa [pow_two] using mul_le_mul_of_nonneg_right hpowEllReal (Nat.cast_nonneg n)
+          rw [pow_two]
+          exact mul_le_mul_of_nonneg_right hpowEllReal (Nat.cast_nonneg n)
     have hcoeff : (1 : ℝ) ≤ 6 * κ.Kcell + 2 :=
       Lane_q_s16_geom.one_le_six_mul_add_two hKpos
     have hCross : (2 : ℝ) ^ n * (d : ℝ) ≤

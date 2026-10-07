@@ -1,4 +1,7 @@
 import HypercubeRamsey.S05.Even_sol_s05_even
+import HypercubeRamsey.S05.Even_refs_sol_s05_even
+import HypercubeRamsey.S05.Even_density_scales_sol_s05_even
+import HypercubeRamsey.S05.Even_trunc_sol_s05_even
 
 /-!
 # L5.1n–o: even rows by deletion of primitive block values, comparison means, loads
@@ -319,6 +322,7 @@ theorem L5_1n : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n
             ∃ v c, X.evenRefOf (L.elig H) H ωO.1 v = some c ∧ ¬ X.EvenTest ES H ωO.1 v c ωO.2) ≤ 1 / 100 := by
   sorry
 
+set_option maxHeartbeats 800000 in
 /-- L5.1n, row part (05:1176–1207): on the gate and the test the posterior has density at most `e^{τ₀ k n}`
 against product uniform (prior `k(log A_K + n^γ) = o(kn)`), so `μ̄(H₁) ≤ υ₁ + e^{-Ω(kn)}`; with the prior-heavy
 bound the kept mass is at least `(1 - υ₀ - υ₁)/2`, and the even row is a probability law on the common
@@ -332,7 +336,251 @@ theorem L5_1n_rows : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → 
           (∀ x, X.evenRow ES H ω O v x ≠ 0 → ∀ b ∈ star v, Hits E G x (O b).2) ∧
           (∀ x, (N : ℝ) * X.evenRow ES H ω O v x ≤
             4 / (1 - X.p.nu0 - X.p.nu1) * Real.exp (X.p.tau1 * n)) := by
-  sorry
+  classical
+  refine ⟨Lane_sol_s05_h1.stage1Request, ?_⟩
+  intro p _
+  let Kmin := max 1 (4 * p.tau1 / Lane_sol_s05_even.truncGap p)
+  obtain ⟨nD, hnD⟩ := Filter.eventually_atTop.mp (Lane_sol_s05_even.eventual_density_coefficient p)
+  obtain ⟨nT, hnT⟩ := Filter.eventually_atTop.mp (Lane_sol_s05_even.eventual_trunc_threshold p)
+  obtain ⟨nK, hnK⟩ := Filter.eventually_atTop.mp (Lane_sol_s05_even.eventual_ref_length_threshold p Kmin)
+  refine ⟨max nD (max nT nK), ?_⟩
+  intro n hn N E G X hp L cL cH LR HR ES H hStep ω O v c hc hgate htest
+  obtain ⟨hn1, hm2, hmn, hD⟩ := hnD n ((le_max_left _ _).trans hn)
+  obtain ⟨_, hnTlarge, hTsmall⟩ := hnT n ((le_max_left _ _).trans ((le_max_right _ _).trans hn))
+  obtain ⟨_, hKlarge⟩ := hnK n ((le_max_right _ _).trans ((le_max_right _ _).trans hn))
+  rw [← hp] at hm2 hmn hD hnTlarge hTsmall hKlarge
+  have hMprops := Lane_sol_s05_even.selected_ref_props X H ω (L.elig H) v c hc
+  have hIdxcard : (X.refIdx v c.2).card = c.2.card :=
+    Lane_sol_s05_even.reference_indices_card X (X.g.evenType (X.p.J n) v.1) c.2 hMprops.1
+  let I := X.refIdx v c.2
+  letI : DecidableEq I := @Subtype.instDecidableEq _ _ (instDecidableEqFin _)
+  let seg := X.p.typeSegs n (X.g.evenType (X.p.J n) v.1)
+  let k := Fintype.card I * (seg * X.p.q0)
+  have hlen : k = X.refLen (X.g.evenType (X.p.J n) v.1) c.2 := by
+    simp [k, I, seg, Setup5.refLen, Fintype.card_coe, hIdxcard, Nat.mul_comm, Nat.mul_assoc]
+  have hklower : Kmin ≤ (k : ℝ) := by
+    rw [hlen]
+    exact hKlarge.trans (Lane_sol_s05_even.selected_ref_length_lower X H ω (L.elig H) v c hc hm2)
+  have hk1 : 1 ≤ k := by
+    exact_mod_cast ((le_max_left _ _).trans hklower : (1 : ℝ) ≤ k)
+  have hkR : 0 < (k : ℝ) := by exact_mod_cast (show 0 < k by omega)
+  have hN : 0 < N := Fin.pos X.y₀
+  have hNpow : 0 < (N : ℝ) ^ k := pow_pos (by exact_mod_cast hN) _
+  have hw0 (z : X.RefVal v c.2) : 0 ≤ X.evenWeight ES H ω v c O z := by
+    unfold evenWeight
+    apply mul_nonneg
+    · exact mul_nonneg ((X.refLaw H v c.2).nonneg z) (by split_ifs <;> norm_num)
+    · exact Finset.prod_nonneg fun b _ => X.oddRow_nonneg LR HR H _ b (O b)
+  let Pz : FinProb (X.RefVal v c.2) := {
+    w z := X.evenWeight ES H ω v c O z / X.evenMass ES H ω v c O
+    nonneg z := div_nonneg (hw0 z) htest.1.le
+    sum_eq_one := by
+      rw [← Finset.sum_div]
+      change X.evenMass ES H ω v c O / X.evenMass ES H ω v c O = 1
+      exact div_self htest.1.ne' }
+  let e := Lane_sol_s05_even.arrayEquiv I seg X.p.q0 N
+  let P := FinProb.map Pz e
+  have hmarg (x : Fin N) : X.evenMarg ES H ω v c O x = averageCoordinateMarginal P x := by
+    symm
+    change averageCoordinateMarginal (FinProb.map Pz (Lane_sol_s05_even.arrayEquiv I seg X.p.q0 N)) x = _
+    rw [Lane_sol_s05_even.array_marginal_count (I := I) (s := seg) (q := X.p.q0) Pz x]
+    unfold evenMarg
+    rw [← hlen]
+    apply Finset.sum_congr rfl
+    intro z _
+    change Pz.w z * _ / (k : ℝ) = Pz.w z * (_ / (k : ℝ))
+    ring
+  have hlookup (z : X.RefVal v c.2) (i : X.refIdx v c.2) :
+      arr (replaceRef (X := X) (h := L.ht) ω v c z) c.1 (X.g.evenType (X.p.J n) v.1) i.1 = z i := by
+    funext s q
+    simp [replaceRef, arr, i.2]
+  have hPgate (z : X.RefVal v c.2) (hz : Pz.w z ≠ 0) :
+      ES.gate H v c (replaceRef (X := X) (h := L.ht) ω v c z) O := by
+    by_contra hg
+    apply hz
+    simp [Pz, evenWeight, hg]
+  let d := X.p.Kpp * (1 + ∑ ℓ ∈ (X.g.evenType (X.p.J n) v.1).2.1, (colLen5 (X.p.s n) ℓ : ℝ))
+  have hdsmall : d + (n : ℝ) ^ γ ≤ (X.p.tau0 - X.p.a 6 - X.p.delta) * n := by
+    have hcoeff := Lane_sol_s05_even.block_coefficient_bound X v hn1 (by omega) hmn
+    dsimp [d]
+    linarith
+  have hblock := hStep (X.g.evenType (X.p.J n) v.1) ⟨v.1, v.2, rfl⟩
+  have hrawcap (z : X.RefVal v c.2) :
+      (N : ℝ) ^ k * (X.refLaw H v c.2).w z ≤ Real.exp ((d + (n : ℝ) ^ γ) * k) := by
+    have hh := Lane_sol_s05_even.product_density (I := I) (X.blockLaw H (X.g.evenType (X.p.J n) v.1))
+      ((N : ℝ) ^ (X.p.q0 * seg)) (Real.exp ((d + (n : ℝ) ^ γ) * (X.p.q0 * seg : ℕ)))
+      (by positivity) (Lane_sol_s05_even.block_density_uniform X H _ hblock) z
+    have hpow : ((N : ℝ) ^ (X.p.q0 * seg)) ^ Fintype.card I = (N : ℝ) ^ k := by
+      rw [← pow_mul]
+      congr 1
+      dsimp [k]
+      ring
+    have hexp : Real.exp ((d + (n : ℝ) ^ γ) * (X.p.q0 * seg : ℕ)) ^ Fintype.card I =
+        Real.exp ((d + (n : ℝ) ^ γ) * k) := by
+      rw [← Real.exp_nat_mul]
+      congr 1
+      dsimp [k]
+      push_cast
+      ring
+    simpa only [hpow, hexp, I, Setup5.refLaw] using hh
+  have hpostdom (z : X.RefVal v c.2) : Pz.w z ≤
+      Real.exp ((X.p.a 6 + X.p.delta) * (k : ℝ) * n) * (X.refLaw H v c.2).w z := by
+    by_cases hg : ES.gate H v c (replaceRef (X := X) (h := L.ht) ω v c z) O
+    · have hcost := ES.cost_bound H v c (replaceRef (X := X) (h := L.ht) ω v c z) O hg
+      simp only [ES.refQ_invariant H v c ω z, ← hlen] at hcost
+      have hmass := htest.2
+      rw [← hlen] at hmass
+      have hmul := mul_le_mul_of_nonneg_left hmass
+        (mul_nonneg (Real.exp_pos ((X.p.a 6 + X.p.delta) * (k : ℝ) * n)).le
+          ((X.refLaw H v c.2).nonneg z))
+      have heq : Real.exp ((X.p.a 6 + X.p.delta) * (k : ℝ) * n) *
+          Real.exp (-(X.p.delta * (k : ℝ) * n)) = Real.exp (X.p.a 6 * (k : ℝ) * n) := by
+        rw [← Real.exp_add]
+        congr 1
+        ring
+      change X.evenWeight ES H ω v c O z / X.evenMass ES H ω v c O ≤ _
+      apply (div_le_iff₀ htest.1).mpr
+      unfold evenWeight
+      rw [if_pos hg, mul_one]
+      calc
+        (X.refLaw H v c.2).w z * ∏ b ∈ star v,
+            X.oddRow LR HR H (replaceRef (X := X) (h := L.ht) ω v c z) b (O b) ≤
+            (X.refLaw H v c.2).w z * (Real.exp (X.p.a 6 * (k : ℝ) * n) *
+              ∏ b ∈ star v, (ES.refQ H v c ω b).w (O b)) :=
+          mul_le_mul_of_nonneg_left hcost ((X.refLaw H v c.2).nonneg z)
+        _ = (Real.exp ((X.p.a 6 + X.p.delta) * (k : ℝ) * n) * (X.refLaw H v c.2).w z) *
+            (Real.exp (-(X.p.delta * (k : ℝ) * n)) * ∏ b ∈ star v, (ES.refQ H v c ω b).w (O b)) := by
+          rw [← heq]
+          ring
+        _ ≤ _ := hmul
+    · simp [Pz, evenWeight, hg]
+      exact mul_nonneg (Real.exp_pos _).le ((X.refLaw H v c.2).nonneg z)
+  have hcap (z : Fin k → Fin N) : (N : ℝ) ^ k * P.w z ≤ Real.exp (X.p.tau0 * k * n) := by
+    rw [show P.w z = Pz.w (e.symm z) from Lane_sol_s05_even.map_equiv_weight Pz e z]
+    calc
+      _ ≤ (N : ℝ) ^ k * (Real.exp ((X.p.a 6 + X.p.delta) * (k : ℝ) * n) *
+          (X.refLaw H v c.2).w (e.symm z)) := mul_le_mul_of_nonneg_left (hpostdom _) hNpow.le
+      _ = Real.exp ((X.p.a 6 + X.p.delta) * (k : ℝ) * n) *
+          ((N : ℝ) ^ k * (X.refLaw H v c.2).w (e.symm z)) := by ring
+      _ ≤ Real.exp ((X.p.a 6 + X.p.delta) * (k : ℝ) * n) *
+          Real.exp ((d + (n : ℝ) ^ γ) * k) :=
+        mul_le_mul_of_nonneg_left (hrawcap _) (Real.exp_pos _).le
+      _ ≤ Real.exp (X.p.tau0 * k * n) := by
+        rw [← Real.exp_add]
+        apply Real.exp_le_exp.mpr
+        have hh := mul_le_mul_of_nonneg_right hdsmall hkR.le
+        nlinarith
+  have hheavycount (z : X.RefVal v c.2) :
+      (Finset.univ.filter fun a : I × Fin seg × Fin X.p.q0 =>
+        X.PriorHeavy H (X.g.evenType (X.p.J n) v.1) (z a.1 a.2.1 a.2.2)).card =
+        X.heavyCount H (replaceRef (X := X) (h := L.ht) ω v c z) v c := by
+    have hh := Lane_sol_s05_even.count_array_subtype (X.refIdx v c.2)
+      (fun i (a : Fin seg × Fin X.p.q0) => arr (replaceRef (X := X) (h := L.ht) ω v c z) c.1
+        (X.g.evenType (X.p.J n) v.1) i a.1 a.2)
+      (X.PriorHeavy H (X.g.evenType (X.p.J n) v.1))
+    simp only [hlookup] at hh
+    simpa only [I, seg, Setup5.refIdx, Setup5.heavyCount, Finset.mem_filter, Finset.mem_univ, true_and] using hh
+  have hprior : (∑ x, if X.PriorHeavy H (X.g.evenType (X.p.J n) v.1) x then
+      averageCoordinateMarginal P x else 0) ≤ X.p.nu0 := by
+    rw [show P = FinProb.map Pz (Lane_sol_s05_even.arrayEquiv I seg X.p.q0 N) from rfl,
+      Lane_sol_s05_even.array_set_count (I := I) (s := seg) (q := X.p.q0) Pz
+        (X.PriorHeavy H (X.g.evenType (X.p.J n) v.1))]
+    calc
+      _ ≤ ∑ z, Pz.w z * X.p.nu0 := by
+        apply Finset.sum_le_sum
+        intro z _
+        by_cases hz : Pz.w z = 0
+        · simp [hz]
+        · have hh := ES.gate_heavy H v c (replaceRef (X := X) (h := L.ht) ω v c z) O (hPgate z hz)
+          rw [← hheavycount z, ← hlen] at hh
+          apply (div_le_iff₀ hkR).mpr
+          nlinarith [mul_le_mul_of_nonneg_left hh (Pz.nonneg z)]
+      _ = X.p.nu0 := by rw [← Finset.sum_mul, Pz.sum_eq_one, one_mul]
+  have hkT : 4 * X.p.tau1 / Lane_sol_s05_even.truncGap X.p ≤ (k : ℝ) := by
+    have hh : 4 * p.tau1 / Lane_sol_s05_even.truncGap p ≤ (k : ℝ) :=
+      (le_max_right _ _).trans hklower
+    rw [← hp] at hh
+    exact hh
+  have hheavy := Lane_sol_s05_even.heavy_mass_bound X.p P hN (by omega) hn1 hkT hnTlarge hcap
+  have hkeepmass : (1 - X.p.nu0 - X.p.nu1) / 2 ≤
+      ∑ x, if X.EvenKeep ES H ω v c O x then X.evenMarg ES H ω v c O x else 0 := by
+    have hh := Lane_sol_s05_even.kept_mass_lower P (by omega)
+      (X.PriorHeavy H (X.g.evenType (X.p.J n) v.1)) (X.p.tau1 * n)
+      X.p.nu0 X.p.nu1 (Real.exp (-(Lane_sol_s05_even.truncGap X.p * n / 2))) hprior hheavy
+    simp only [← hmarg] at hh
+    have hh' : 1 - X.p.nu0 - X.p.nu1 - Real.exp (-(Lane_sol_s05_even.truncGap X.p * n / 2)) ≤
+        ∑ x, if X.EvenKeep ES H ω v c O x then X.evenMarg ES H ω v c O x else 0 := by
+      convert hh using 1
+      apply Finset.sum_congr rfl
+      intro x _
+      exact PToolsMisc.ite_decidable_irrel (X.EvenKeep ES H ω v c O x) _ _ _ _
+    linarith
+  have htol : 0 < (1 - X.p.nu0 - X.p.nu1) / 2 := by linarith [X.p.hnu1.2]
+  have hroweq (x : Fin N) : X.evenRow ES H ω O v x =
+      (if X.EvenKeep ES H ω v c O x then X.evenMarg ES H ω v c O x else 0) /
+        ∑ y, if X.EvenKeep ES H ω v c O y then X.evenMarg ES H ω v c O y else 0 := by
+    simp [evenRow, hc, hgate, htest]
+  have hnorm := Lane_sol_s05_even.normalized_kept_row (X.evenMarg ES H ω v c O)
+    (X.EvenKeep ES H ω v c O) (fun x => by rw [hmarg]; exact Lane_sol_s05_even.marginal_nonneg P x)
+    ((1 - X.p.nu0 - X.p.nu1) / 2) (Real.exp (X.p.tau1 * n)) (N : ℝ)
+    htol hkeepmass (fun x hx => hx.2) (Real.exp_pos _).le
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · intro x
+    rw [hroweq]
+    exact hnorm.1 x
+  · simp_rw [hroweq]
+    exact hnorm.2.1
+  · intro x hx b hb
+    by_contra hbad
+    have hmarg0 : X.evenMarg ES H ω v c O x = 0 := by
+      unfold evenMarg
+      apply Finset.sum_eq_zero
+      intro z _
+      by_cases hz : Pz.w z = 0
+      · change Pz.w z * _ = 0
+        rw [hz, zero_mul]
+      · have hg := hPgate z hz
+        have hs := ES.gate_select H v c (replaceRef (X := X) (h := L.ht) ω v c z) O hg
+        have hprod : (∏ b ∈ star v, X.oddRow LR HR H (replaceRef (X := X) (h := L.ht) ω v c z) b (O b)) ≠ 0 := by
+          intro hzero
+          apply hz
+          simp [Pz, evenWeight, hzero]
+        have hrow : X.oddRow LR HR H (replaceRef (X := X) (h := L.ht) ω v c z) b (O b) ≠ 0 :=
+          (Finset.prod_ne_zero_iff.mp hprod) b hb
+        have hsupport : ∀ z' ∈ X.refBlocks (replaceRef (X := X) (h := L.ht) ω v c z) v c,
+            X.BlockHits (X.g.evenType (X.p.J n) v.1) z' (O b).2 := by
+          have hvb : v ∈ evenNbrs b :=
+            Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb).2⟩
+          by_cases hlowzero : LR.row H (replaceRef (X := X) (h := L.ht) ω v c z) b (O b) = 0
+          · apply HR.row_support H _ b (O b) _ v hvb c hs
+            simpa [oddRow, hlowzero] using hrow
+          · exact LR.row_support H _ b (O b) hlowzero v hvb c hs
+        have hcount0 : (Finset.univ.filter fun a : X.refIdx v c.2 × Fin seg × Fin X.p.q0 =>
+            z a.1 a.2.1 a.2.2 = x) = ∅ := by
+          apply Finset.filter_eq_empty_iff.mpr
+          intro a _ ha
+          have hmem : z a.1 ∈ X.refBlocks (replaceRef (X := X) (h := L.ht) ω v c z) v c := by
+            apply Finset.mem_image.mpr
+            exact ⟨a.1.1, a.1.2, hlookup z a.1⟩
+          have hhit := hsupport (z a.1) hmem a.2.1 a.2.2
+          exact hbad (ha ▸ hhit)
+        rw [hcount0]
+        simp
+    apply hx
+    rw [hroweq, hmarg0]
+    simp
+  · intro x
+    have hh := hnorm.2.2 x
+    rw [← hroweq] at hh
+    refine hh.trans ?_
+    have hden : 0 < 1 - X.p.nu0 - X.p.nu1 := by linarith [X.p.hnu1.2]
+    have heq : Real.exp (X.p.tau1 * n) / ((1 - X.p.nu0 - X.p.nu1) / 2) =
+        2 / (1 - X.p.nu0 - X.p.nu1) * Real.exp (X.p.tau1 * n) := by
+      field_simp
+      <;> ring
+    rw [heq]
+    gcongr
+    norm_num
 
 /-- The even column sums at every label are at most one. -/
 def EvenLoadsOK (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (O : OddRole5 n → X.OddOut) : Prop :=

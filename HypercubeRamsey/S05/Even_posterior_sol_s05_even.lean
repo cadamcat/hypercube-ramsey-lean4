@@ -88,7 +88,8 @@ theorem card_filter_equiv {α β : Type*} [Fintype α] [Fintype β]
     right_inv b := by apply Subtype.ext; simp }
   simpa only [Fintype.card_subtype] using Fintype.card_congr f
 
-theorem array_marginal_count {I : Type*} [Fintype I] {s q N : ℕ}
+theorem array_marginal_count {I : Type*} [Fintype I] [DecidableEq I] {s q N : ℕ}
+    [DecidableEq (Fin (Fintype.card I * (s * q)) → Fin N)]
     (P : FinProb (I → Fin s → Fin q → Fin N)) (x : Fin N) :
     averageCoordinateMarginal (FinProb.map P (arrayEquiv I s q N)) x =
       ∑ z, P.w z * ((Finset.univ.filter fun e : I × Fin s × Fin q => z e.1 e.2.1 e.2.2 = x).card : ℝ) /
@@ -160,7 +161,8 @@ theorem marginal_set_count {N k : ℕ} (P : FinProb (Fin k → Fin N))
       split_ifs <;> simp
     _ = _ := by rw [hcount]
 
-theorem array_set_count {I : Type*} [Fintype I] {s q N : ℕ}
+theorem array_set_count {I : Type*} [Fintype I] [DecidableEq I] {s q N : ℕ}
+    [DecidableEq (Fin (Fintype.card I * (s * q)) → Fin N)]
     (P : FinProb (I → Fin s → Fin q → Fin N)) (S : Fin N → Prop) [DecidablePred S] :
     (∑ x, if S x then averageCoordinateMarginal (FinProb.map P (arrayEquiv I s q N)) x else 0) =
       ∑ z, P.w z * ((Finset.univ.filter fun e : I × Fin s × Fin q => S (z e.1 e.2.1 e.2.2)).card : ℝ) /

@@ -749,7 +749,12 @@ theorem eligibility_from_tests (κ : CConsts) (hκ : κ.Admissible)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (L : ListFamily Geom H mask) (hcounts : PositionCountConcentration hconst H)
     (htests : GenericListBound κ 𝒯 i) : EligibilityFacts hconst Geom H mask := by
-  sorry
+  refine ⟨?_, ?_⟩
+  · intro W v j c hc
+    have hleft := (Finset.mem_sdiff.mp hc).1
+    rcases Finset.mem_filter.mp hleft with ⟨hball, hpresent⟩
+    exact ⟨hball, hpresent⟩
+  · sorry
 
 /-- The local height rule and star validity, before any bin or label draw. -/
 structure HeightFacts {κ : CConsts} {T : Stage} {k : ℕ}
@@ -773,7 +778,32 @@ theorem height_selection_at_patch (κ : CConsts) (hκ : κ.Admissible)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (he : EligibilityFacts hconst Geom H mask) : HeightFacts hconst Geom H mask := by
-  sorry
+  refine ⟨?_, ?_, ?_⟩
+  · sorry
+  · intro W v c hs
+    classical
+    unfold selected HDParams.selection HDParams.selectionAt at hs
+    dsimp only [] at hs
+    split_ifs at hs with hj hbad hne
+    let j : Fin (H.Device.H + 1) :=
+      ⟨H.Device.height (siteSet Geom) (H.present W) (H.active W)
+        (eligible Geom H mask W) H.Device.Rlong (Geom.project v.1), by omega⟩
+    let active := ((eligible Geom H mask W (Geom.project v.1) j).filter
+      fun ℓ => H.active W ℓ = true)
+    let priorities := active.image
+      (fun ℓ => H.Device.priority (H.ties W) (Geom.project v.1, j) ℓ)
+    have hq : priorities.min' hne ∈ priorities := Finset.min'_mem _ _
+    have hmem := Finset.mem_image.mp hq
+    have hsel_eq : Classical.choose hmem = c := Option.some.inj hs
+    have hchosen : c ∈ active := by
+      rw [← hsel_eq]
+      exact (Classical.choose_spec hmem).1
+    rcases Finset.mem_filter.mp hchosen with ⟨hcElig, hcActive⟩
+    have hcLevel : c.2 = j :=
+      (Finset.mem_filter.mp (he.eligible_subset W (Geom.project v.1) j c hcElig).1).2.1
+    refine ⟨?_, hcActive⟩
+    simpa [hcLevel] using hcElig
+  · sorry
 
 /-- The selected tuple's average coordinate incidence, with the actual local
 selection/validity gate and unrestricted primitive law. -/

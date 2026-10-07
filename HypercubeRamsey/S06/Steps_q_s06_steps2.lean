@@ -1431,7 +1431,7 @@ private theorem tupleLawOn_eq_of_labelLaw_eq6 {γ p₀ K : ℝ} {n N : ℕ}
   intro r hr
   rw [hLabel]
 
-private theorem lowRef_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+theorem lowRef_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (b : X.State) (β : X.Ty)
     (hbase : H.1 = H'.1) (hother : ∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) :
@@ -1464,7 +1464,7 @@ private theorem lowRef_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
   exact tupleLawOn_eq_of_labelLaw_eq6 X H H' ((reqNames6 β).erase drop)
     (X.TβDel H' β (X.tgt b)) hlabels
 
-private theorem lowGate_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+theorem lowGate_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
     (H H' : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
@@ -1473,7 +1473,7 @@ private theorem lowGate_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
   have hwith := withHid_eq_of_hidden_agree6 X H H' (X.tgt b) ξ hbase hother
   simp [Ctx6.LowGate, hbase, hwith]
 
-private theorem lowLik_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+theorem lowLik_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (b : X.State)
     (β : X.Ty) (ξ : Fin N) (o : X.Tuple)
@@ -1505,7 +1505,7 @@ private theorem lowLik_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
   unfold Ctx6.lowLik Ctx6.tupleRatio
   rw [hwith, htag, hlabels]
 
-private theorem lowWeight_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+theorem lowWeight_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
     (H H' : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (o : X.Data Id)
@@ -1529,7 +1529,7 @@ private theorem lowWeight_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
   unfold Ctx6.lowWeight
   rw [hfactor, hprod]
 
-private theorem s3Mass_low_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+theorem s3Mass_low_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
     (H H' : X.Hist) (b : X.State) (D : Finset (Id × X.Ty)) (o : X.Data Id)

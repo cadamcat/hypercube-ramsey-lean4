@@ -729,7 +729,72 @@ theorem L18_6a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cprime : ℝ)
             (∑ S ∈ (D.paletteRows palette).powersetCard p,
               Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S)) /
               ((D.paletteRows palette).powersetCard p).card ≤ 2 := by
-  sorry
+  have hlogInv : Real.log (1 / 2 : ℝ) < -1 / 2 := by
+    have h := Real.log_lt_sub_one_of_pos (by norm_num : (0 : ℝ) < 1 / 2)
+      (by norm_num : (1 / 2 : ℝ) ≠ 1)
+    norm_num at h ⊢
+    exact h
+  have hlogTwo : 1 / 2 < Real.log 2 := by
+    have h := hlogInv
+    rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv] at h
+    linarith
+  have hgap : 0 < Real.log 2 / 2 - 0.02 := by nlinarith [hlogTwo]
+  let η : ℝ := min (1 / 2) ((Real.log 2 / 2 - 0.02) / (2 * Cprime))
+  have hη : 0 < η := by
+    apply lt_min
+    · norm_num
+    · exact div_pos hgap (by positivity)
+  have hη1 : η < 1 := by
+    exact lt_of_le_of_lt (min_le_left _ _) (by norm_num)
+  have hslack : 0.02 + Cprime * η < Real.log 2 / 2 := by
+    have hη' : η ≤ (Real.log 2 / 2 - 0.02) / (2 * Cprime) := min_le_right _ _
+    have hmul : Cprime * η ≤ (Real.log 2 / 2 - 0.02) / 2 := by
+      have hmul' := mul_le_mul_of_nonneg_left hη' hCp.le
+      have hden : 2 * Cprime ≠ 0 := ne_of_gt (by positivity)
+      field_simp at hmul'
+      nlinarith
+    dsimp [η] at hη1
+    linarith
+  refine ⟨η, hη, hη1, hslack, ?_⟩
+  filter_upwards [] with k
+  intro PT hPT D hD δ hPair palette p hp
+  have hExponentBound (S : Finset (Pos T k)) :
+      0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S ≤
+        (0.02 + Cprime * η) * (T.S.n k : ℝ) * D.rank S :=
+    HypercubeRamsey.Lane_q_s18_n6.overlapMoment_exponent_bound
+      D δ K Cprime η hPair hCp.le p hp S
+  by_cases hp0 : p = 0
+  · subst p
+    rw [Finset.powersetCard_zero]
+    simp [LateData.nonisolates, LateData.rank]
+  · by_cases hp1 : p = 1
+    · subst p
+      let U : Finset (Pos T k) := D.paletteRows palette
+      have hpow : 0 < (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) :=
+        Real.rpow_pos_of_pos (by norm_num) _
+      have hcardReal : 0 < (U.card : ℝ) := by
+        dsimp [U]
+        exact lt_of_lt_of_le hpow (hPair.2.1 palette)
+      have hcard : 0 < U.card := by exact_mod_cast hcardReal
+      have hnum :
+          (∑ S ∈ U.powersetCard 1,
+            Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+              Cprime * 1 * D.rank S)) = U.card := by
+        rw [Finset.powersetCard_one, Finset.sum_map]
+        change
+          (∑ v ∈ U,
+            Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates ({v} : Finset (Pos T k))).card +
+              Cprime * 1 * D.rank {v})) = (U.card : ℝ)
+        simp_rw [HypercubeRamsey.Lane_q_s18_n6.singleton_overlap_exponent_zero]
+        simp
+      have hden : (U.powersetCard 1).card = U.card := by simp
+      dsimp [U] at hnum hden ⊢
+      simp only [Nat.cast_one] at hnum hden ⊢
+      rw [hnum, hden]
+      have hcardNe : (U.card : ℝ) ≠ 0 := by exact_mod_cast hcard.ne'
+      rw [div_self hcardNe]
+      norm_num
+    · sorry
 
 noncomputable def HallBudget {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : LateData hPT) (η K Cs : ℝ) : ℝ :=

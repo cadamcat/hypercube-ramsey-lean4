@@ -389,4 +389,51 @@ theorem rawPairHit_le_of_profile_bounds {κ : CConsts} {T : Stage} {k : ℕ}
     nlinarith [hξ, hTV]
   linarith
 
+lemma overlapMoment_exponent_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (δ K Cprime η : ℝ) (hPair : PairInitialFacts D δ K)
+    (hCp : 0 ≤ Cprime) (p : ℕ)
+    (hp : (p : ℝ) ≤ η * (T.S.n k : ℝ)) (S : Finset (Pos T k)) :
+    0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+        Cprime * p * D.rank S ≤
+      (0.02 + Cprime * η) * (T.S.n k : ℝ) * D.rank S := by
+  rcases hPair with ⟨_, _, _, hNonisolates, _⟩
+  have hNonisolates' : ((D.nonisolates S).card : ℝ) ≤ 2 * (D.rank S : ℝ) := by
+    exact_mod_cast hNonisolates S
+  have hn : 0 ≤ (T.S.n k : ℝ) := by positivity
+  have hr : 0 ≤ (D.rank S : ℝ) := by positivity
+  have hFirst := mul_le_mul_of_nonneg_left hNonisolates' (by positivity : 0 ≤ 0.01 * (T.S.n k : ℝ))
+  have hSecond := mul_le_mul_of_nonneg_right
+    (mul_le_mul_of_nonneg_left hp hCp) hr
+  have h := add_le_add hFirst hSecond
+  nlinarith [h]
+
+lemma rank_singleton {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) : D.rank {v} = 0 := by
+  simp [LateData.rank, LateData.overlapGraph, LateData.geometricAdj]
+
+lemma nonisolates_singleton {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) : D.nonisolates {v} = ∅ := by
+  ext w
+  constructor
+  · intro hw
+    rw [LateData.nonisolates, Finset.mem_filter] at hw
+    rcases hw with ⟨hw, x, hx, hadj⟩
+    have hwv : w = v := Finset.mem_singleton.mp hw
+    have hxv : x = v := Finset.mem_singleton.mp hx
+    subst w
+    subst x
+    exact False.elim (hadj.1 rfl)
+  · intro hw
+    simp at hw
+
+lemma singleton_overlap_exponent_zero {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) (Cprime : ℝ) :
+    0.01 * (T.S.n k : ℝ) * (D.nonisolates ({v} : Finset (Pos T k))).card +
+        Cprime * D.rank {v} = 0 := by
+  simp [rank_singleton, nonisolates_singleton]
+
 end HypercubeRamsey.Lane_q_s18_n6

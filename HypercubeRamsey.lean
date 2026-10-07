@@ -201,3 +201,4 @@ import HypercubeRamsey.Tools.Ramsey_p_tools_binom
 import HypercubeRamsey.S13
 import HypercubeRamsey.S14
 import HypercubeRamsey.S14.Needs
+import HypercubeRamsey.S18

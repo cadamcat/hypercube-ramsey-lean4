@@ -1,4 +1,5 @@
 import HypercubeRamsey.S09.Map.Device
+import HypercubeRamsey.S09.Map.Nodes_q_s09_map
 
 /-!
 # Proposition 9.2: good heights and the ID map (P9.2-map1, P9.2-map2)

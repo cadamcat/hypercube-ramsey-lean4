@@ -2681,7 +2681,142 @@ theorem two_row_weight_sum {T : ℕ} {R K : Type*} [Fintype R] [DecidableEq R] [
     exact le_trans hsumRoot (by
       apply mul_le_mul_of_nonneg_right hmult
       positivity)
-  · sorry
+  · let ScopeRoot := Σ k : K, {r : R // r ∈ scope k}
+    have hrootAttach (k : K) :
+        (∑ r : {r : R // r ∈ scope k}, badRootWeight k r.1) =
+          ∑ r ∈ scope k, badRootWeight k r := by
+      rw [Finset.univ_eq_attach]
+      exact Finset.sum_attach (scope k) _
+    have hscopeReindex :
+        (∑ k, ∑ r ∈ scope k, badRootWeight k r) =
+          ∑ q : ScopeRoot, badRootWeight q.1 q.2.1 := by
+      calc
+        (∑ k, ∑ r ∈ scope k, badRootWeight k r) =
+            ∑ k, ∑ r : {r : R // r ∈ scope k}, badRootWeight k r.1 := by
+              apply Finset.sum_congr rfl
+              intro k hk
+              exact (hrootAttach k).symm
+        _ = ∑ q : ScopeRoot, badRootWeight q.1 q.2.1 := by
+              rw [← Fintype.sum_sigma']
+    have hmarkedPaths :
+        (∑ k, ∑ r ∈ scope k, badRootWeight k r) ≤
+          (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) *
+            δ ^ j * scopeWalkMass (m := j)
+              (fun a y => labMarg (p a) (lab a) y) scope v := by
+      rw [hscopeReindex]
+      simpa [ScopeRoot, badRootWeight, edgeLaw] using
+        (scopeFilteredPathWeightSum_le δ hδ hδ1 p lab scope v j)
+    let rate : R → Fin g → ℝ := fun a y => labMarg (p a) (lab a) y
+    have hrate0 (a : R) (y : Fin g) : 0 ≤ rate a y := by
+      exact labMarg_nonneg (p a) (lab a) y
+    have hrowRate : ∀ a, ∑ y, rate a y = 1 := by
+      intro a
+      simpa [rate] using hrow a
+    have hcolRate : ∀ y, ∑ a, rate a y = θ := by
+      intro y
+      simpa [rate] using hcol y
+    have hlamRate : ∀ a y, rate a y ≤ lam := by
+      intro a y
+      simpa [rate] using hlam a y
+    have hmassBounds := scopeWalkMass_bound rate hrate0 scope θ D lam
+      hrowRate hcolRate hθ0 hθ1 hD hlam0 hsc hdeg hlamRate j
+    have hmassBound : scopeWalkMass (m := j) rate scope v ≤
+        (j : ℝ) * D ^ 2 * lam * (θ ^ (j / 2) / θ) := by
+      cases v with
+      | inl a => exact hmassBounds.1 a
+      | inr y =>
+          calc
+            scopeWalkMass (m := j) rate scope (Sum.inr y) ≤
+                (j : ℝ) * D ^ 2 * lam * (θ ^ ((j + 1) / 2) / θ) := hmassBounds.2 y
+            _ ≤ (j : ℝ) * D ^ 2 * lam * (θ ^ (j / 2) / θ) := by
+                apply mul_le_mul_of_nonneg_left
+                · apply div_le_div_of_nonneg_right
+                  · apply pow_le_pow_of_le_one hθ0.le hθ1
+                    omega
+                  · exact hθ0.le
+                · positivity
+    have hmassNonneg : 0 ≤ scopeWalkMass (m := j) rate scope v := by
+      unfold scopeWalkMass
+      apply Finset.sum_nonneg
+      intro q hq
+      apply Finset.sum_nonneg
+      intro w hw
+      by_cases h : w 0 = Sum.inl q.2.1 ∧
+          w (Fin.last j) = v ∧ scopeRowVisit scope q.1 w
+      · rw [if_pos h]
+        unfold walkRate
+        apply Finset.prod_nonneg
+        intro i hi
+        cases w i.castSucc <;> cases w i.succ <;> simp [transitionRate, hrate0]
+      · simp [h]
+    have hmassFactor0 :
+        0 ≤ (j : ℝ) * D ^ 2 * lam * (θ ^ (j / 2) / θ) := by
+      positivity
+    have hcount := antitoneTickCount_le T j
+    have hcountδ :
+        (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) * δ ^ j ≤
+          (((T + j : ℕ) : ℝ) ^ j / (j.factorial : ℝ)) * δ ^ j :=
+      mul_le_mul_of_nonneg_right hcount (pow_nonneg hδ j)
+    have hsmallProduct :
+        (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) *
+            δ ^ j * scopeWalkMass (m := j) rate scope v ≤
+          ((j : ℝ) * D ^ 2 * lam / θ) *
+            (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ)) := by
+      calc
+        (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) *
+              δ ^ j * scopeWalkMass (m := j) rate scope v ≤
+            (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) *
+              δ ^ j * ((j : ℝ) * D ^ 2 * lam * (θ ^ (j / 2) / θ)) := by
+                exact mul_le_mul_of_nonneg_left hmassBound
+                  (mul_nonneg (Nat.cast_nonneg _) (pow_nonneg hδ j))
+        _ ≤ (((T + j : ℕ) : ℝ) ^ j / (j.factorial : ℝ)) * δ ^ j *
+              ((j : ℝ) * D ^ 2 * lam * (θ ^ (j / 2) / θ)) :=
+                mul_le_mul_of_nonneg_right hcountδ hmassFactor0
+        _ = ((j : ℝ) * D ^ 2 * lam / θ) *
+              (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j /
+                (j.factorial : ℝ)) := by
+                  rw [mul_pow]
+                  ring
+    have hjone : (1 : ℝ) ≤ (j : ℝ) := by
+      exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hj)
+    have hjle : (j : ℝ) ≤ (j : ℝ) ^ 2 := by
+      calc
+        (j : ℝ) = (j : ℝ) * 1 := by ring
+        _ ≤ (j : ℝ) * (j : ℝ) :=
+          mul_le_mul_of_nonneg_left hjone (by positivity)
+        _ = (j : ℝ) ^ 2 := by ring
+    have hcoeff :
+        (j : ℝ) * D ^ 2 * lam / θ ≤
+          (j : ℝ) ^ 2 * D * (D * lam / θ) := by
+      calc
+        (j : ℝ) * D ^ 2 * lam / θ = (j : ℝ) * (D ^ 2 * lam / θ) := by ring
+        _ ≤ (j : ℝ) ^ 2 * (D ^ 2 * lam / θ) :=
+          mul_le_mul_of_nonneg_right hjle
+            (div_nonneg (mul_nonneg (sq_nonneg D) hlam0) hθ0.le)
+        _ = (j : ℝ) ^ 2 * D * (D * lam / θ) := by
+          field_simp [ne_of_gt hθ0]
+    have hbaseNonneg :
+        0 ≤ θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ) := by
+      apply div_nonneg
+      · exact mul_nonneg (pow_nonneg hθ0.le _) (pow_nonneg
+          (mul_nonneg (Nat.cast_nonneg _) hδ) _)
+      · positivity
+    calc
+      (∑ k, ∑ r ∈ scope k,
+          ∑ π ∈ (decPaths (Sum.inl r) v j).filter
+            (fun π => pathMeetsOtherRow π (scope k) r), pathWeight edgeLaw π) =
+          ∑ k, ∑ r ∈ scope k, badRootWeight k r := by
+            simp [badRootWeight]
+      _ ≤ (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) *
+            δ ^ j * scopeWalkMass (m := j) rate scope v := by
+              simpa [rate] using hmarkedPaths
+      _ ≤ ((j : ℝ) * D ^ 2 * lam / θ) *
+            (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j /
+              (j.factorial : ℝ)) := hsmallProduct
+      _ ≤ (j : ℝ) ^ 2 * D * (D * lam / θ) *
+            (θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j /
+              (j.factorial : ℝ)) :=
+                mul_le_mul_of_nonneg_right hcoeff hbaseNonneg
 
 /-- L3.10d-series (03:922–924): `∑_j θ^{⌊j/2⌋} x^j / j! ≤ e^{√θ x} / √θ`. -/
 theorem walk_series_bound (θ x : ℝ) (hθ0 : 0 < θ) (hθ1 : θ ≤ 1) (hx : 0 ≤ x) (M : ℕ) :

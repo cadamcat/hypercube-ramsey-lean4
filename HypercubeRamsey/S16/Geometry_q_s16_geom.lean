@@ -1,4 +1,5 @@
 import HypercubeRamsey.PartC.Resampling
+import Mathlib.Data.Fintype.CardEmbedding
 
 namespace HypercubeRamsey.Lane_q_s16_geom
 
@@ -675,5 +676,116 @@ theorem capacity_product_bound {n ell : ℕ} {K E d : ℝ}
           <;> ring
     _ ≤ (3 * K + 1) * u + u / 2 := add_le_add hfirst hsecond
     _ ≤ (6 * K + 2) * (2 : ℝ) ^ (n - ell) := by simpa [u] using hfinal
+
+end HypercubeRamsey.Lane_q_s16_geom
+
+namespace HypercubeRamsey.Lane_q_s16_geom
+
+open scoped BigOperators
+
+/-- The uniform law on injections of a `q`-element set into a `B`-element set
+is dominated, on nonnegative tests, by the iid uniform law with the usual
+falling-factorial ratio. -/
+theorem uniform_embedding_expect_le_uniform_functions
+    {α β : Type*} [Fintype α] [Fintype β] [DecidableEq α] [DecidableEq β]
+    (F : (α → β) → ℝ) (hF : ∀ f, 0 ≤ F f)
+    (hguard : 2 * (Fintype.card α) ^ 2 ≤ Fintype.card β)
+    (hBposNat : 0 < Fintype.card β)
+    (hEmb : (Finset.univ : Finset (α ↪ β)).Nonempty)
+    (hFun : (Finset.univ : Finset (α → β)).Nonempty) :
+    (FinLaw.uniform (Finset.univ : Finset (α ↪ β)) hEmb).E
+        (fun e => F e) ≤
+      (1 + (Fintype.card α : ℝ) ^ 2 / Fintype.card β) *
+        (FinLaw.uniform (Finset.univ : Finset (α → β)) hFun).E F := by
+  classical
+  let q := Fintype.card α
+  let B := Fintype.card β
+  have hqB : q ≤ B := by
+    dsimp [q, B] at *
+    by_contra h
+    have hBq : Fintype.card β < Fintype.card α := Nat.lt_of_not_ge h
+    have hqpos : 0 < Fintype.card α := by omega
+    nlinarith [hguard, hqpos]
+  have hBpos : 0 < B := hBposNat
+  have hEmbCard : Fintype.card (α ↪ β) = B.descFactorial q := by
+    simp [q, B]
+  have hEmbPos : 0 < Fintype.card (α ↪ β) := by
+    rw [hEmbCard]
+    exact Nat.descFactorial_pos.mpr hqB
+  let Inj := {f : α → β // Function.Injective f}
+  letI : Fintype Inj := Fintype.subtype
+    (Finset.univ.filter fun f : α → β => Function.Injective f) (by intro f; simp)
+  let eInj : Inj ≃ (α ↪ β) :=
+    { toFun := fun f => ⟨f.1, f.2⟩
+      invFun := fun f => ⟨f, f.injective⟩
+      left_inv := by intro f; cases f; rfl
+      right_inv := by intro f; cases f; rfl }
+  have hsumSub : (∑ e : α ↪ β, F e) ≤ ∑ f : α → β, F f := by
+    calc
+      (∑ e : α ↪ β, F e) = ∑ f : Inj, F f.1 := by
+        symm
+        exact Fintype.sum_equiv eInj (fun f : Inj => F f.1) (fun e : α ↪ β => F e)
+          (by intro f; rfl)
+      _ = ∑ f ∈ (Finset.univ.filter fun f : α → β => Function.Injective f), F f := by
+        apply Finset.sum_bij (fun f _ => f.1)
+        · intro f hf
+          exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, f.2⟩
+        · intro f hf g hg hfg
+          exact Subtype.ext hfg
+        · intro f hf
+          exact ⟨⟨f, (Finset.mem_filter.mp hf).2⟩, Finset.mem_univ _, rfl⟩
+        · intro f hf
+          rfl
+      _ ≤ ∑ f : α → β, F f := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg
+          (Finset.filter_subset _ _)
+        intro f hf hfnot
+        exact hF f
+  have hratio := descFactorial_ratio_bound (B := B) (q := q) (by simpa [B, q] using hguard)
+  have hI : (0 : ℝ) < (Fintype.card (α ↪ β) : ℝ) := by exact_mod_cast hEmbPos
+  have hB : (0 : ℝ) < (B : ℝ) := by exact_mod_cast hBpos
+  have hBpow : (0 : ℝ) < (B : ℝ) ^ q := pow_pos hB _
+  have hratioCast : (B : ℝ) ^ q / (Fintype.card (α ↪ β) : ℝ) ≤
+      1 + (q : ℝ) ^ 2 / B := by
+    simpa [hEmbCard, q, B] using hratio
+  have hcoef : 1 / (Fintype.card (α ↪ β) : ℝ) ≤
+      (1 + (q : ℝ) ^ 2 / B) / (B : ℝ) ^ q := by
+    apply (div_le_div_iff₀ hI hBpow).2
+    have hmul := (div_le_iff₀ hI).mp hratioCast
+    nlinarith
+  have hsumNonneg : 0 ≤ ∑ f : α → β, F f := Finset.sum_nonneg fun f _ => hF f
+  have hEEmb :
+      (FinLaw.uniform (Finset.univ : Finset (α ↪ β)) hEmb).E (fun e => F e) =
+        (∑ e : α ↪ β, F e) / (Fintype.card (α ↪ β) : ℝ) := by
+    simp only [FinLaw.E, FinLaw.uniform, Finset.mem_univ, if_true]
+    rw [← Finset.mul_sum]
+    simp only [Finset.card_univ]
+    ring
+  have hEAll :
+      (FinLaw.uniform (Finset.univ : Finset (α → β)) hFun).E F =
+        (∑ f : α → β, F f) / (B : ℝ) ^ q := by
+    simp only [FinLaw.E, FinLaw.uniform, Finset.mem_univ, if_true]
+    rw [← Finset.mul_sum]
+    simp only [Finset.card_univ, Fintype.card_fun, q, B]
+    have hpowCast :
+        ((Fintype.card β ^ Fintype.card α : ℕ) : ℝ) =
+          (Fintype.card β : ℝ) ^ Fintype.card α := by norm_cast
+    rw [hpowCast]
+    ring
+  rw [hEEmb, hEAll]
+  calc
+    (∑ e : α ↪ β, F e) / (Fintype.card (α ↪ β) : ℝ) ≤
+        (∑ f : α → β, F f) / (Fintype.card (α ↪ β) : ℝ) :=
+      div_le_div_of_nonneg_right hsumSub hI.le
+    _ ≤ (1 + (q : ℝ) ^ 2 / B) * ((∑ f : α → β, F f) / (B : ℝ) ^ q) := by
+      have h := mul_le_mul_of_nonneg_left hcoef hsumNonneg
+      calc
+        (∑ f : α → β, F f) / (Fintype.card (α ↪ β) : ℝ) =
+            (1 / (Fintype.card (α ↪ β) : ℝ)) * ∑ f : α → β, F f := by ring
+        _ ≤ ((1 + (q : ℝ) ^ 2 / B) / (B : ℝ) ^ q) *
+            ∑ f : α → β, F f := by
+              simpa [mul_comm, mul_left_comm, mul_assoc] using h
+        _ = (1 + (q : ℝ) ^ 2 / B) *
+            ((∑ f : α → β, F f) / (B : ℝ) ^ q) := by ring
 
 end HypercubeRamsey.Lane_q_s16_geom

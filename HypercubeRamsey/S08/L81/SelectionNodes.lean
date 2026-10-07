@@ -1311,10 +1311,31 @@ theorem bad_list_prob (D : Ctx η₀ β p h) : D.BadListProb := by
 /-- L8.1f(ix) (08:200–206): lists with disjoint ID sets have independent tags, so `n` disjoint bad lists at a cell
 have probability at most `L_n^n ε₀^{n/4} = exp(n[25(s+T) - δhs/4] log n)` (`BadListProb`, `ListCount`), which for
 `h ≥ 10⁸` beats the `exp(O(n + s log n))` cells. -/
+private theorem bad_family_witness (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (t : D.Tags)
+    (hnotfew : ¬ D.FewBad Θ P t) :
+    ∃ c : D.CellT, D.n ≤ (D.family Θ P t c).length ∧
+      (∀ L ∈ D.family Θ P t c, D.Cand P c L ∧ D.BadList Θ t c L) ∧
+      (D.family Θ P t c).Pairwise (fun L L' => Disjoint (D.listIds c.1 L) (D.listIds c.1 L')) := by
+  classical
+  have hnot : ¬ ∀ c : D.CellT, (D.family Θ P t c).length < D.n := by
+    simpa [Ctx.FewBad] using hnotfew
+  obtain ⟨c, hc⟩ := not_forall.mp hnot
+  refine ⟨c, Nat.le_of_not_lt hc, ?_, ?_⟩
+  · intro L hL
+    exact ⟨family_candidate D Θ P t c hL, family_badList D Θ P t c hL⟩
+  · exact family_pairwise_disjoint D Θ P t c
+
 theorem few_bad_tail (hη₀ : 0 < η₀) (hh : 10 ^ 8 ≤ h) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.ListCount → D.BadListProb →
       0 < D.rawHidden.pr (fun Θ => ∀ g, ¬ D.HBad Θ g) →
       D.preLaw.pr (fun q => D.PosOK q.1.2 ∧ ¬ D.FewBad q.1.1 q.1.2 q.2.1.1) ≤ Real.exp (-(D.n : ℝ)) := by
+  classical
+  refine ⟨0, ?_⟩
+  intro D _hn _hGF _hListCount _hBadListProb _hAvoid
+  have hWitness (q : D.Pre) (hNF : ¬ D.FewBad q.1.1 q.1.2 q.2.1.1) :=
+    bad_family_witness η₀ β p h D q.1.1 q.1.2 q.2.1.1 hNF
+  /- The remaining estimate unions over cells and ordered `n`-tuples of disjoint bad candidates, then factors their
+     tag events. The tag product law still needs the finite-support independence calculation and asymptotic bound. -/
   sorry
 
 /-- L8.1f(x) (08:214): eligibility in slice `g` is a function of the positions and of auxiliary randomness

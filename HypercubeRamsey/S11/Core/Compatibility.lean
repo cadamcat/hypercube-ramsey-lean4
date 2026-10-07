@@ -2477,6 +2477,33 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       · simpa [Dlaw, hq, hC] using hcliqueLawAtom q hq C hC y
       · simpa [Dlaw, hq, hC] using hD₀atom y
     · simpa [Dlaw, hq] using hD₀atom y
+  have hcliqueLawPair (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
+      (hC : C ∈ (packing q).1) (y y' : Fin N)
+      (hy : 0 < (Dlaw q C).w y) (hy' : 0 < (Dlaw q C).w y') :
+      1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ y y' := by
+    have hyImage : y ∈ C.image q.2 := by
+      by_contra hnot
+      have hLaw : Dlaw q C = cliqueLaw q hq C hC := by simp [Dlaw, hq, hC]
+      have hzero : (cliqueLaw q hq C hC).w y = 0 := by
+        dsimp [cliqueLaw, FinProb.uniform]
+        simp [hnot]
+      rw [hLaw, hzero] at hy
+      norm_num at hy
+    have hy'Image : y' ∈ C.image q.2 := by
+      by_contra hnot
+      have hLaw : Dlaw q C = cliqueLaw q hq C hC := by simp [Dlaw, hq, hC]
+      have hzero : (cliqueLaw q hq C hC).w y' = 0 := by
+        dsimp [cliqueLaw, FinProb.uniform]
+        simp [hnot]
+      rw [hLaw, hzero] at hy'
+      norm_num at hy'
+    obtain ⟨j, hjC, rfl⟩ := Finset.mem_image.mp hyImage
+    obtain ⟨k, hkC, rfl⟩ := Finset.mem_image.mp hy'Image
+    by_cases hjk : j = k
+    · subst k
+      exact hSelectedDiagLower q.1 (q.2 j) (hq.2.1 j)
+    · have hEdge := (hpackingSpec q hq).1 C hC
+      exact hEdge.2 j hjC k hkC hjk
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

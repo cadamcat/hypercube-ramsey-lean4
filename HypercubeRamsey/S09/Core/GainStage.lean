@@ -4,6 +4,7 @@ import HypercubeRamsey.Tools.Finner
 import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.SignedTest
 import HypercubeRamsey.S09.Core.GainStage_q_s09_gain2
+import HypercubeRamsey.S09.Core.GainStage_sol_s09_conc
 
 set_option maxHeartbeats 1000000
 
@@ -1038,24 +1039,7 @@ for every dimension `n ≥ 1`. -/
 theorem p92_gain_concentration {P : Params9} {n N : ℕ} {M : TagMix N} (S : Setup9 P n N M)
     (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour) (hn : 1 ≤ n) (hN : 0 < N) :
     GainConc9 S I E G := by
-  intro v ω₀
-  have hB : 0 ≤ P.bStar n := by
-    dsimp [Params9.bStar]
-    exact Real.rpow_nonneg (by positivity) _
-  have hclip (b : StarOdd9 v) (ω : Outcome9 I N) :
-      1 / 2 - 2 * P.bStar n ≤ clippedFrac9 S E G ω v b.1 ∧
-        clippedFrac9 S E G ω v b.1 ≤ 1 / 2 + 2 * P.bStar n :=
-    Lane_q_s09_gain2.clippedFrac9_bounds ω v b.1 hB
-  have hcentered (b : StarOdd9 v) (ω : Outcome9 I N) :
-      -(2 * P.bStar n) ≤ clippedFrac9 S E G ω v b.1 - 1 / 2 ∧
-        clippedFrac9 S E G ω v b.1 - 1 / 2 ≤ 2 * P.bStar n := by
-    constructor <;> linarith [(hclip b ω).1, (hclip b ω).2]
-  -- After conditioning on `sameCore9`, the row masks and noncore anchors are product inputs. The read bound
-  -- controls each anchor's degree in the scopes, so `xFinner` and Hoeffding apply to this centered sum.
-  have hWidth : ∀ b : StarOdd9 v, ∀ ω : Outcome9 I N,
-      (-(2 * P.bStar n) : ℝ) ≤ clippedFrac9 S E G ω v b.1 - 1 / 2 ∧
-        clippedFrac9 S E G ω v b.1 - 1 / 2 ≤ 2 * P.bStar n := hcentered
-  sorry
+  exact Lane_sol_s09_conc.gain_concentration9 S I E G hn
 
 /-- P9.2-gain (09:146–154, 09:286–294): on the filter tests the clipped fractions equal the actual `q_b`;
 outside the bad core histories of `GainMeanCert9` the concentration bound (exponent

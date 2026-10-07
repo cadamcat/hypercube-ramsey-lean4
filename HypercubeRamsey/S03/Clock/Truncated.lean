@@ -1127,9 +1127,10 @@ theorem truncatedExploration_complete {T : ℕ} {R : Type*} [Fintype R] [Decidab
     intro u hu
     by_contra hnot
     have hPending : u ∈ pendingEndpoints (truncatedExploration ξ roots L) := by
-      have hmem : (truncatedExploration ξ roots L).request u |>.isSome ∧
-          u ∉ (truncatedExploration ξ roots L).processed := by
-        exact ⟨by simpa [ExploreState.active] using hu, hnot⟩
+      have hReq : ((truncatedExploration ξ roots L).request u).isSome := by
+        simpa [ExploreState.active] using hu
+      have hmem : ((truncatedExploration ξ roots L).request u).isSome ∧
+          u ∉ (truncatedExploration ξ roots L).processed := ⟨hReq, hnot⟩
       simpa [pendingEndpoints] using hmem
     rw [hNoPending] at hPending
     simp at hPending

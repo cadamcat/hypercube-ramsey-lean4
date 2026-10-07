@@ -4,6 +4,7 @@ import HypercubeRamsey.Tools.CubeGeometry
 import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.Framework.Embedding
 import HypercubeRamsey.S13.Allocation_q_s13_alloc
+import HypercubeRamsey.S13.Allocation_sol_s13_allocB
 import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
@@ -3403,20 +3404,23 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
       refine ⟨hAcardOne, ?_⟩
       intro i
       rcases hbd (idx i) with ⟨hℓ, hh, hdPatch, hM, hQ⟩
-      have hidx0 : idx i = 0 := by
+      have hOnly (j : Fin f.tiling.m) : j = idx i := by
         apply Fin.ext
-        have hiLt : (idx i).val < 1 := by simpa [hm] using (idx i).isLt
+        have hj := j.isLt
+        have hi := (idx i).isLt
         omega
-      have hMassOne : (f.tiling.P 0).M = f.tiling.S := by
-        simpa [hm] using hMassSum
-      have hMassIdx : (f.tiling.P (idx i)).M = f.tiling.S := by rw [hidx0]; exact hMassOne
+      have hMassIdx : (f.tiling.P (idx i)).M = f.tiling.S := by
+        rw [← hMassSum]
+        symm
+        exact Finset.sum_eq_single (idx i)
+          (fun j _ hj => (hj (hOnly j)).elim) (by simp)
       have hRatioOne : ratio (idx i) = 1 := by
         dsimp [ratio]
         rw [hMassIdx]
         exact div_self hSpos.ne'
       have hLenZero : ell (idx i) = 0 := by
         simp [ell, allocation_roundLength, hRatioOne, Real.log_one]
-      simpa [Tnew, Pnew, hLenZero] using ⟨hLenZero, hh, hdPatch, hM, hQ⟩
+      exact ⟨hLenZero, hh, hdPatch, hM, hQ⟩
     · intro hmode i
       simpa [Tnew, Pnew, idx] using hExtracted.direct_scale_bound hmode (idx i)
     · intro hmode i
@@ -3424,20 +3428,32 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
     · intro hmode i
       simpa [Tnew, Pnew, idx] using hExtracted.cluster_data hmode (idx i)
     · intro i
-      simpa [Tnew, Pnew, idx] using hExtracted.clique_scales (idx i)
+      simpa [Tnew, Pnew, idx, Tiling.kScale] using hExtracted.clique_scales (idx i)
   have hSLower : (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S := by
     rcases hSelected with ⟨_, hsize⟩ | ⟨_, hsize⟩
     · exact hsize
     · calc
-        _ ≤ (1 / 200 : ℝ) * T.S.N k := by positivity
+        _ ≤ (1 / 200 : ℝ) * T.S.N k := by nlinarith
         _ ≤ f.tiling.S := hsize
   let R : RoundedFamily κ T k := {
     orientation := f.orientation
     tiling := Tnew
     extracted := hExtractedNew
     S_lower := hSLower
-    S_upper := hExtracted.S_upper
-    selected_mass := hSelectedMass
+    S_upper := by
+      have hN : (T.orient f.orientation).S.N k = T.S.N k := by
+        cases f.orientation <;> rfl
+      simpa [Tnew, hN] using hExtracted.S_upper
+    selected_mass := by
+      have hsum : (∑ i : Fin A.card, (Pnew i).M) = ∑ i ∈ A, (f.tiling.P i).M := by
+        calc
+          _ = ∑ z : {i : Fin f.tiling.m // i ∈ A}, (f.tiling.P z.val).M := by
+            exact Fintype.sum_equiv eA.symm _ _ (fun i => rfl)
+          _ = ∑ i ∈ A, (f.tiling.P i).M := by
+            exact Finset.sum_coe_sort (f := fun i => (f.tiling.P i).M) (s := A)
+      change (f.tiling.S : ℝ) / 2 < ((∑ i : Fin A.card, (Pnew i).M : ℕ) : ℝ)
+      rw [hsum]
+      exact hSelectedMass
     dyadic_mass_lower := by
       intro i
       simpa [Tnew, Pnew, weights] using (hRoundBounds (idx i)).1
@@ -3448,18 +3464,28 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
       calc
         _ = ∑ z : {i : Fin f.tiling.m // i ∈ A}, weights z.val := by
           exact Fintype.sum_equiv eA.symm _ _ (fun i => rfl)
-        _ = ∑ i ∈ A, weights i := by simp
+        _ = ∑ i ∈ A, weights i := by
+          exact Finset.sum_coe_sort (f := weights) (s := A)
         _ = 1 := hAweights }
-  refine ⟨R, { orientation := rfl, mode := rfl, colour := rfl, mass := rfl,
-    reserveX := HEq.rfl, reserveY := HEq.rfl, index := idx, injective := hIdxInj,
-    patches := ?_, clique_scales := ?_ }⟩
+  refine ⟨R, ⟨?_⟩⟩
+  refine {
+    orientation := rfl
+    mode := rfl
+    colour := rfl
+    mass := rfl
+    reserveX := HEq.rfl
+    reserveY := HEq.rfl
+    index := idx
+    injective := hIdxInj
+    patches := ?_
+    clique_scales := ?_ }
+
   · intro i
     dsimp [R, Tnew, Pnew]
     cases f.tiling.P (idx i)
     rfl
   · intro i
     rfl
-  sorry
 
 /-- P13.3g (sections/13, lines 170–182): Kraft's equality gives a complete prefix code. -/
 theorem kraft_prefix_code (κ : CConsts) (T : Stage) (k : ℕ)
@@ -3467,7 +3493,8 @@ theorem kraft_prefix_code (κ : CConsts) (T : Stage) (k : ℕ)
     (hLength : ∀ i, (R.tiling.P i).ℓ ≤ (T.orient R.orientation).S.n k) :
     ∃ w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k),
       PrefixCodeComplete R w := by
-  sorry
+  exact Lane_sol_s13_allocB.complete_prefix_of_kraft
+    (fun i => (R.tiling.P i).ℓ) hLength R.dyadic_sum
 
 private theorem allocation_prefixLeaf_card {n ell : ℕ} (w : CubePos n) (hell : ell < n) :
     Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w} = 2 ^ (n - ell) := by

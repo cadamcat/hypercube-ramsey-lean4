@@ -1392,6 +1392,120 @@ private theorem selected_zero_height_of_local_legal {p : HDParams} (Sites : p.Si
   rw [selected_level_of_local_legal Sites P A E τ v ℓ hsite hlegal hsel]
   exact hℓ
 
+private def loadDiffSet {d : ℕ} (v u : CubeVertex d) : Finset (Fin d) :=
+  Finset.univ.filter (fun i => u i ≠ v i)
+
+private def loadVertexOfDiff {d : ℕ} (v : CubeVertex d) (s : Finset (Fin d)) : CubeVertex d :=
+  fun i => if i ∈ s then !(v i) else v i
+
+private def loadDiffEquiv {d : ℕ} (v : CubeVertex d) : CubeVertex d ≃ Finset (Fin d) where
+  toFun := loadDiffSet v
+  invFun := loadVertexOfDiff v
+  left_inv := by
+    intro u
+    funext i
+    by_cases hi : u i = v i
+    · simp [loadVertexOfDiff, loadDiffSet, hi]
+    · have hmem : i ∈ loadDiffSet v u := by simp [loadDiffSet, hi]
+      have hbool : v i = !(u i) := by
+        cases hu : u i <;> cases hv : v i <;> simp_all
+      simp [loadVertexOfDiff, hmem, hbool]
+  right_inv := by
+    intro s
+    ext i
+    by_cases hi : i ∈ s
+    · simp [loadDiffSet, loadVertexOfDiff, hi]
+    · simp [loadDiffSet, loadVertexOfDiff, hi]
+
+private theorem loadDiffSet_card {d : ℕ} (v u : CubeVertex d) :
+    (loadDiffSet v u).card = hammingDist u v := by
+  simp [loadDiffSet, hammingDist, ne_comm]
+
+private def loadBallToSubsets {d r : ℕ} (v : CubeVertex d) :
+    {u : CubeVertex d // hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
+  toFun u := ⟨loadDiffSet v u.1, by rw [loadDiffSet_card]; exact u.2⟩
+  invFun s := ⟨loadVertexOfDiff v s.1, by
+    rw [← loadDiffSet_card]
+    simp [loadDiffSet, loadVertexOfDiff]
+    exact s.2⟩
+  left_inv := by intro u; apply Subtype.ext; exact (loadDiffEquiv v).left_inv u.1
+  right_inv := by intro s; apply Subtype.ext; exact (loadDiffEquiv v).right_inv s.1
+
+private def loadSmallSubsetFiberEquiv (d r : ℕ) (i : Fin (r + 1)) :
+    {s : {s : Finset (Fin d) // s.card ≤ r} // (⟨s.1.card, by omega⟩ : Fin (r + 1)) = i} ≃
+      {s : Finset (Fin d) // s.card = i.val} where
+  toFun s := ⟨s.1.1, by simpa using congrArg Fin.val s.2⟩
+  invFun s := ⟨⟨s.1, by rw [s.2]; omega⟩, by apply Fin.ext; exact s.2⟩
+  left_inv := by intro s; apply Subtype.ext; apply Subtype.ext; rfl
+  right_inv := by intro s; apply Subtype.ext; rfl
+
+private def loadSubsetsSmallEquiv (d r : ℕ) :
+    {s : Finset (Fin d) // s.card ≤ r} ≃
+      Σ i : Fin (r + 1), {s : Finset (Fin d) // s.card = i.val} := by
+  let f : {s : Finset (Fin d) // s.card ≤ r} → Fin (r + 1) :=
+    fun s => ⟨s.1.card, by omega⟩
+  exact (Equiv.sigmaFiberEquiv f).symm.trans
+    (Equiv.sigmaCongrRight (loadSmallSubsetFiberEquiv d r))
+
+private theorem loadCardSmallSubsets (d r : ℕ) :
+    Fintype.card {s : Finset (Fin d) // s.card ≤ r} =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  rw [Fintype.card_congr (loadSubsetsSmallEquiv d r), Fintype.card_sigma]
+  have hfiber (i : Fin (r + 1)) :
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Nat.choose d i.val := by
+    let S : Finset (Finset (Fin d)) := Finset.univ.powersetCard i.val
+    let e : {s : Finset (Fin d) // s.card = i.val} ≃ S :=
+      { toFun := fun s => ⟨s.1, by rw [Finset.mem_powersetCard]; exact ⟨Finset.subset_univ _, s.2⟩⟩
+        invFun := fun s => ⟨s.1, (Finset.mem_powersetCard.mp s.2).2⟩
+        left_inv := by intro s; apply Subtype.ext; rfl
+        right_inv := by intro s; apply Subtype.ext; rfl }
+    calc
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Fintype.card S := Fintype.card_congr e
+      _ = S.card := Fintype.card_coe S
+      _ = Nat.choose d i.val := by simp [S, Finset.card_powersetCard]
+  simp_rw [hfiber]
+  rw [← Fin.sum_univ_eq_sum_range]
+
+private theorem loadHammingBallCard (d r : ℕ) (v : CubeVertex d) :
+    (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  have hcard : Fintype.card {u : CubeVertex d // hammingDist u v ≤ r} =
+      (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card := by
+    simpa using (Fintype.card_subtype (fun u : CubeVertex d => hammingDist u v ≤ r))
+  exact hcard.symm.trans
+    ((Fintype.card_congr (loadBallToSubsets v)).trans (loadCardSmallSubsets d r))
+
+private def loadLevelBallEquiv (d H r : ℕ) (j : Fin (H + 1)) (v : CubeVertex d) :
+    {u : CubeVertex d // hammingDist u v ≤ r} ≃
+      {ℓ : CubeVertex d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} where
+  toFun u := ⟨(u.1, j), by simp [u.2]⟩
+  invFun ℓ := ⟨ℓ.1.1, ℓ.2.2⟩
+  left_inv := by intro u; apply Subtype.ext; rfl
+  right_inv := by
+    intro ℓ
+    rcases ℓ with ⟨⟨u, k⟩, ⟨hk, hdist⟩⟩
+    apply Subtype.ext
+    exact Prod.ext rfl hk.symm
+
+private theorem loadLevelBallCard (d H r : ℕ) (j : Fin (H + 1)) (v : CubeVertex d) :
+    (Finset.univ.filter (fun ℓ : CubeVertex d × Fin (H + 1) =>
+      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  calc
+    (Finset.univ.filter (fun ℓ : CubeVertex d × Fin (H + 1) =>
+      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
+        Fintype.card {ℓ : CubeVertex d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} := by
+          symm
+          exact Fintype.card_subtype _
+    _ = Fintype.card {u : CubeVertex d // hammingDist u v ≤ r} :=
+          Fintype.card_congr (loadLevelBallEquiv d H r j v).symm
+    _ = (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card :=
+          Fintype.card_subtype _
+    _ = _ := loadHammingBallCard d r v
+
 private theorem bernoulli_forced_expect {α : Type*} [Fintype α] [DecidableEq α]
     (q : ℝ) (a : α) (f : (α → Bool) → ℝ) :
     (FinProb.pi (fun _ : α => FinProb.bernoulli q)).expect

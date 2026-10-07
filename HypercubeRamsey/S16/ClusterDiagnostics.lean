@@ -1,4 +1,5 @@
 import HypercubeRamsey.S16.ProducersDefs
+import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_gate1
 
 /-! Cluster diagnostics proof nodes from the S16 pool diagnosis. -/
 
@@ -254,7 +255,7 @@ theorem pi_cond_support_map {I : Type*} [Fintype I] [DecidableEq I]
     ∃ P' : ∀ i, FinLaw {v : V i // v ∈ A i ∧ (P i).w v ≠ 0},
       FinLaw.pi (fun i => FinLaw.cond (P i) (A i) (hA i)) =
         FinLaw.map (FinLaw.pi P') (fun z i => (z i).1) := by
-  sorry
+  exact Lane_q_s16_gate1.pi_cond_support_map P A hA
 
 /-- D2. The load summand of one odd role depends on its own slice value.
 TeX 16:259–278; estimated proof: 150 lines. -/
@@ -270,7 +271,8 @@ theorem cluster_role_term_local {κ : CConsts} {T : Stage} {k : ℕ}
     (y : Fin (T.S.N k)) :
     ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y =
       ∑ b, (K.qtilde C pool W' (R.groupOf C r)).w b * (R.U C W' (R.groupOf C r) b).w y := by
-  sorry
+  exact Lane_q_s16_gate1.cluster_role_term_local R Perm K hFallback hR hc C pool W W'
+    hW hW' r heq y
 
 /-- D3. Per-role cap at pools whose normalizers pass (typical pools).
 TeX 16:274–276; estimated proof: 150 lines. -/
@@ -289,7 +291,8 @@ theorem cluster_role_term_cap {κ : CConsts} (hκ : κ.Admissible)
     ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y ≤
       64 * Real.exp (2 * (sliceK κ (PT.tiling.P (H.geom.cellPatch C)).h : ℝ) *
         sliceT κ (PT.tiling.P (H.geom.cellPatch C)).h) / (H.geom.nslot C : ℝ) := by
-  sorry
+  exact Lane_q_s16_gate1.cluster_role_term_cap hκ Q H R Perm K hR hc hPerm C pool W hW hn4
+    hmass r y
 
 /-- D4. Per-role history mean at typical pools, through `low_profile` and
 `law_cap` (T16:268-273): `4 (B/L) * 11/M`.

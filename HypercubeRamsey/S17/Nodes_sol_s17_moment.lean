@@ -1638,4 +1638,304 @@ theorem pi_E_curry_dependent {C : Type*} [Fintype C] [DecidableEq C]
   change (∏ c, ∏ j, (P c j).w (z ⟨c, j⟩)) = ∏ a : Σ c, J c, (P a.1 a.2).w (z a)
   exact (Fintype.prod_sigma (fun a : Σ c, J c => (P a.1 a.2).w (z a))).symm
 
+
+/-- Only trials exceeding the pin budget lose their sparse tail factor. -/
+theorem trial_tail_product {I : Type*} [Fintype I] [DecidableEq I]
+    (pins : I → ℕ) (s0 : ℕ) (δ : ℝ) :
+    (∏ i, if pins i ≤ s0 then δ else 1) =
+      δ ^ (Fintype.card I - (Finset.univ.filter fun i => s0 < pins i).card) := by
+  classical
+  let S := Finset.univ.filter fun i => pins i ≤ s0
+  have hprod : (∏ i, if pins i ≤ s0 then δ else 1) = ∏ i ∈ S, δ := by
+    rw [← Finset.prod_filter]
+  rw [hprod, Finset.prod_const]
+  congr 1
+  have hpartition := Finset.card_filter_add_card_filter_not (s := (Finset.univ : Finset I))
+    (p := fun i => pins i ≤ s0)
+  simp only [not_le, Finset.card_univ] at hpartition
+  dsimp [S]
+  omega
+
+/-- All trial-pin weights and omitted tails are charged to occurrence rank. -/
+theorem retained_trials_rank_budget {I J A : Type*} [Fintype I] [Fintype J]
+    [DecidableEq I] [DecidableEq J] [DecidableEq A]
+    (κ : CConsts) (n : ℝ) (hn : 1 ≤ n) (e : I × J → A) (forced : Finset A) :
+    (11 : ℝ) ^ (trialPinOccurrences e forced).card *
+      (∏ i, if (trialPins (trialPinOccurrences e forced) i).card ≤ ListGateContext.pinBudget κ
+        then 2 / n ^ (2 * κ.R) else 1) ≤
+      (2 / n ^ (2 * κ.R)) ^ Fintype.card I *
+        (121 * n) ^ (Fintype.card (I × J) - ((Finset.univ.image e) \ forced).card) := by
+  classical
+  rw [trial_tail_product]
+  apply trial_rank_budget n hn
+  · exact (Finset.card_le_card (Finset.filter_subset _ _)).trans (by simp)
+  · exact nonunique_occurrences_le_two_rank e forced
+  · exact trialPins_loss_le_rank e forced κ.R _ _ (pinBudget_rank_room κ) rfl
+
+/-- Integrating actual bin images at fixed selections leaves only collision rank. -/
+theorem fixed_slots_rank_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (heven : IsEvenRole v) (hEstimate : StarPinnedEstimate D v)
+    (hn : 1 ≤ (T.S.n k : ℝ))
+    (hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w))
+    (hBins : ∀ C, (Finset.univ : Finset (Bin PT.tiling (D.G.cellPatch C))).Nonempty)
+    (m : ℕ)
+    (slots : Fin m → ∀ w : {w : Pos T k // w ∈ D.externalEarly v}, Fin (D.G.nslot (D.G.cellOf w.1)))
+    (forced : Finset (Σ C : D.G.Cell, Fin (D.G.nslot C)))
+    (P : ∀ a : Σ C : D.G.Cell, Fin (D.G.nslot C), FinLaw (Bin PT.tiling (D.G.cellPatch a.1)))
+    (hP : ∀ a ∉ forced, P a = FinLaw.uniform Finset.univ (hBins a.1)) :
+    let e := fun o : Fin m × {w : Pos T k // w ∈ D.externalEarly v} =>
+      (⟨D.G.cellOf o.2.1, slots o.1 o.2⟩ : Σ C : D.G.Cell, Fin (D.G.nslot C))
+    (FinLaw.pi P).E (fun z =>
+      if D.LocalPoolsTypical v (fun C j => z ⟨C, j⟩) ∧ D.compatiblePool v (fun C j => z ⟨C, j⟩) then
+        ∏ i, slotTrialCost D K hQuant v (fun C j => z ⟨C, j⟩) (slots i) else 0) ≤
+      (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m *
+        (121 * (T.S.n k : ℝ)) ^
+          (Fintype.card (Fin m × {w : Pos T k // w ∈ D.externalEarly v}) -
+            ((Finset.univ.image e) \ forced).card) := by
+  classical
+  dsimp only
+  let e := fun o : Fin m × {w : Pos T k // w ∈ D.externalEarly v} =>
+    (⟨D.G.cellOf o.2.1, slots o.1 o.2⟩ : Σ C : D.G.Cell, Fin (D.G.nslot C))
+  let B := trialPinOccurrences e forced
+  have h := retained_flat_bin_integral_bound D K hQuant v heven hEstimate hL hBins m slots forced P hP
+  have ht : Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) =
+      1 / (T.S.n k : ℝ) ^ (2 * κ.R) := by
+    have hcast : (2 : ℝ) * (κ.R : ℝ) = ((2 * κ.R : ℕ) : ℝ) := by simp
+    rw [Real.rpow_eq_pow, Real.rpow_neg (by positivity), hcast, Real.rpow_natCast, one_div]
+  rw [ht] at h
+  have hb := retained_trials_rank_budget κ (T.S.n k : ℝ) hn e forced
+  simp only [Fintype.card_fin] at hb
+  refine le_trans ?_ (h.trans ?_)
+  · apply Finset.sum_le_sum
+    intro z hz
+    apply mul_le_mul_of_nonneg_left _ ((FinLaw.pi P).nonneg z)
+    exact slot_trials_retained_bound D K hQuant v m (fun C j => z ⟨C, j⟩) slots B
+  · simpa only [mul_one_div] using hb
+
+/-- Any finite family of independent readouts obeys the same collision-rank moment. -/
+theorem readout_collision_moment {I A : Type*} [Fintype I] [DecidableEq I]
+    [Fintype A] [instA : DecidableEq A] {Ω : I → Type*} [∀ i, Fintype (Ω i)]
+    (n : ℝ) (hn : 10 ≤ n) (hq : (Fintype.card I : ℝ) ≤ n ^ 2)
+    (P : ∀ i, FinLaw (Ω i)) (read : ∀ i, Ω i → A)
+    (forced : Finset A) (hforced : forced.card ≤ 1)
+    (hcap : ∀ i a, (FinLaw.map (P i) (read i)).w a ≤ 1 / n ^ 10) :
+    (FinLaw.pi P).E (fun z => (121 * n) ^
+      (Fintype.card I - ((Finset.univ.image (fun i => read i (z i))) \ forced).card)) ≤ 2 := by
+  classical
+  have hdec : instA = (fun a b => Classical.propDecidable (a = b)) := Subsingleton.elim _ _
+  rw [hdec] at hcap
+  let e := (Fintype.equivFin I).symm
+  let f := fun ys : Fin (Fintype.card I) → A =>
+    (121 * n) ^ repeatRank (Fintype.card I) forced ys
+  have hEq : (FinLaw.pi P).E (fun z => (121 * n) ^
+      (Fintype.card I - ((Finset.univ.image (fun i => read i (z i))) \ forced).card)) =
+      (FinLaw.pi P).E (fun z => f (fun i => read (e i) (z (e i)))) := by
+    congr 1
+    funext z
+    have hi : Finset.univ.image (fun i => read (e i) (z (e i))) =
+        Finset.univ.image (fun i => read i (z i)) := by
+      ext a
+      simp only [Finset.mem_image, Finset.mem_univ, true_and]
+      constructor
+      · rintro ⟨i, hi⟩; exact ⟨e i, hi⟩
+      · rintro ⟨i, hi⟩; obtain ⟨j, rfl⟩ := e.surjective i; exact ⟨j, hi⟩
+    have hr := repeatRank_add_distinct (Fintype.card I) forced (fun i => read (e i) (z (e i)))
+    rw [hi] at hr
+    dsimp [f]
+    congr 1
+    omega
+  rw [hEq, pi_E_injective_readouts P e e.injective (fun i => read (e i)) f]
+  let Q : Fin (Fintype.card I) → FinLaw A := fun i =>
+    @FinLaw.map (Ω (e i)) A _ _ (fun a b => Classical.propDecidable (a = b))
+      (P (e i)) (read (e i))
+  have hbound := collision_rank_moment_two n hn (Fintype.card I) hq Q forced hforced
+    (fun i a => hcap (e i) a)
+  unfold FinLaw.E FinLaw.pi at hbound ⊢
+  convert hbound using 1 <;> congr 1 <;> ext z <;> simp
+
+
+
+/-- Actual independent slot selections have bounded collision cost, including one global pin. -/
+theorem actual_slot_collision_moment {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (hκ : κ.Admissible)
+    (v : Pos T k) (hn : 10 ≤ (T.S.n k : ℝ))
+    (hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w))
+    (m : ℕ) (hm : (m : ℝ) ≤ (T.S.n k : ℝ))
+    (forced : Finset (Σ C : D.G.Cell, Fin (D.G.nslot C))) (hforced : forced.card ≤ 1) :
+    (FinLaw.pi fun _ : Fin m => trialSlotLaw D v hL).E (fun slots =>
+      (121 * (T.S.n k : ℝ)) ^
+        (Fintype.card (Fin m × {w : Pos T k // w ∈ D.externalEarly v}) -
+          ((Finset.univ.image (fun o : Fin m × {w : Pos T k // w ∈ D.externalEarly v} =>
+            (⟨D.G.cellOf o.2.1, slots o.1 o.2⟩ : Σ C : D.G.Cell, Fin (D.G.nslot C)))) \ forced).card)) ≤ 2 := by
+  classical
+  let J := {w : Pos T k // w ∈ D.externalEarly v}
+  let I := Σ _i : Fin m, J
+  let A := Σ C : D.G.Cell, Fin (D.G.nslot C)
+  let P := fun o : I => FinLaw.uniform (Finset.univ : Finset (Fin (D.G.nslot (D.G.cellOf o.2.1))))
+    ⟨⟨0, hL o.2.1 o.2.2⟩, Finset.mem_univ _⟩
+  let read := fun (o : I) (j : Fin (D.G.nslot (D.G.cellOf o.2.1))) =>
+    (⟨D.G.cellOf o.2.1, j⟩ : A)
+  have hn1 : 1 ≤ (T.S.n k : ℝ) := by linarith
+  have hq : (Fintype.card I : ℝ) ≤ (T.S.n k : ℝ) ^ 2 := by
+    have hd : ((D.externalEarly v).card : ℝ) ≤ (T.S.n k : ℝ) :=
+      Nat.cast_le.mpr (Lane_q_s17_pool.externalEarly_card_le D v)
+    have hc : Fintype.card I = m * (D.externalEarly v).card := by simp [I, J]
+    rw [hc, Nat.cast_mul, pow_two]
+    exact mul_le_mul hm hd (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+  have hcap : ∀ o a, (FinLaw.map (P o) (read o)).w a ≤ 1 / (T.S.n k : ℝ) ^ 10 := by
+    intro o a
+    have hinj : Function.Injective (read o) := by
+      intro j j' h
+      exact eq_of_heq (Sigma.mk.inj h).2
+    have h := uniform_slot_map_atom (D.G.nslot (D.G.cellOf o.2.1))
+      (hL o.2.1 o.2.2) (read o) hinj a
+    refine h.trans ?_
+    exact one_div_le_one_div_of_le (by positivity)
+      (actual_slots_tenth_power D K hQuant hκ hn1 (D.G.cellOf o.2.1))
+  have h := readout_collision_moment (T.S.n k : ℝ) hn hq P read forced hforced hcap
+  unfold trialSlotLaw
+  rw [pi_E_curry_dependent]
+  convert h using 1
+  congr 1
+  funext z
+  have himage : Finset.univ.image
+      (fun o : Fin m × J => (⟨D.G.cellOf o.2.1, z ⟨o.1, o.2⟩⟩ : A)) =
+      Finset.univ.image (fun o : I => read o (z o)) := by
+    ext a
+    simp only [Finset.mem_image, Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨⟨i, w⟩, hi⟩; exact ⟨⟨i, w⟩, hi⟩
+    · rintro ⟨⟨i, w⟩, hi⟩; exact ⟨(i, w), hi⟩
+  rw [himage]
+  congr 2
+  simp [I, J]
+
+/-- A raw or one-pin iid pool law has a flattened product representation. -/
+theorem iid_pool_representation {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hpools : (permPools D.G).Nonempty)
+    (hBins : ∀ C, (Finset.univ : Finset (Bin PT.tiling (D.G.cellPatch C))).Nonempty)
+    (ν : FinLaw D.PoolAssignment)
+    (hν : ν = iidPoolLaw D.G hpools ∨ ∃ (pin : D.PoolPin)
+      (hp : 0 < ∑ pools ∈ D.poolPinSet pin, (iidPoolLaw D.G hpools).w pools),
+      ν = FinLaw.cond (iidPoolLaw D.G hpools) (D.poolPinSet pin) hp) :
+    ∃ (forced : Finset (Σ C : D.G.Cell, Fin (D.G.nslot C)))
+      (P : ∀ a : Σ C : D.G.Cell, Fin (D.G.nslot C), FinLaw (Bin PT.tiling (D.G.cellPatch a.1))),
+      forced.card ≤ 1 ∧
+      (∀ a ∉ forced, P a = FinLaw.uniform Finset.univ (hBins a.1)) ∧
+      ∀ f : D.PoolAssignment → ℝ,
+        ν.E f = (FinLaw.pi P).E (fun z => f (fun C j => z ⟨C, j⟩)) := by
+  classical
+  rcases hν with rfl | ⟨pin, hp, rfl⟩
+  · refine ⟨∅, fun a => FinLaw.uniform Finset.univ (hBins a.1), by simp, ?_, ?_⟩
+    · intro a ha; rfl
+    · exact iid_pool_flat_E D hpools hBins
+  · refine ⟨{⟨pin.cell, pin.slot⟩}, fun a =>
+      if ha : a = ⟨pin.cell, pin.slot⟩ then
+        (ha.symm ▸ FinLaw.dirac pin.bin : FinLaw (Bin PT.tiling (D.G.cellPatch a.1)))
+      else FinLaw.uniform Finset.univ (hBins a.1), by simp, ?_, ?_⟩
+    · intro a ha
+      simp only [Finset.mem_singleton] at ha
+      simp only [ha, dite_false]
+    · exact iid_pool_pin_flat_E D hpools hBins pin hp
+
+/-- Average the actual raw or one-pin iid experiment over its collision ranks. -/
+theorem iid_trial_moment_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (hκ : κ.Admissible)
+    (v : Pos T k) (heven : IsEvenRole v) (hEstimate : StarPinnedEstimate D v)
+    (hn : 10 ≤ (T.S.n k : ℝ))
+    (hodd : ∀ w ∈ D.externalEarly v, ¬ IsEvenRole w)
+    (hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w))
+    (hBins : ∀ C, (Finset.univ : Finset (Bin PT.tiling (D.G.cellPatch C))).Nonempty)
+    (ν : FinLaw D.PoolAssignment)
+    (hν : ν = iidPoolLaw D.G hQuant.pool_support_nonempty ∨ ∃ (pin : D.PoolPin)
+      (hp : 0 < ∑ pools ∈ D.poolPinSet pin, (iidPoolLaw D.G hQuant.pool_support_nonempty).w pools),
+      ν = FinLaw.cond (iidPoolLaw D.G hQuant.pool_support_nonempty) (D.poolPinSet pin) hp)
+    (m : ℕ) (hm : (m : ℝ) ≤ (T.S.n k : ℝ)) :
+    ν.E (fun pools => if D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools then
+      (D.freshEventProbability v pools) ^ m else 0) ≤
+      2 * (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) ^ ((D.externalEarly v).card * m) *
+        (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m := by
+  classical
+  obtain ⟨forced, P, hforced, hP, hRep⟩ :=
+    iid_pool_representation D hQuant.pool_support_nonempty hBins ν hν
+  have hn1 : 1 ≤ (T.S.n k : ℝ) := by linarith
+  let Q := FinLaw.pi fun _ : Fin m => trialSlotLaw D v hL
+  let rank := fun slots : Fin m → ∀ w : {w : Pos T k // w ∈ D.externalEarly v},
+      Fin (D.G.nslot (D.G.cellOf w.1)) =>
+    Fintype.card (Fin m × {w : Pos T k // w ∈ D.externalEarly v}) -
+      ((Finset.univ.image (fun o : Fin m × {w : Pos T k // w ∈ D.externalEarly v} =>
+        (⟨D.G.cellOf o.2.1, slots o.1 o.2⟩ : Σ C : D.G.Cell, Fin (D.G.nslot C)))) \ forced).card
+  have hfixed : ∀ slots, ν.E (fun pools =>
+      if D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools then
+        ∏ i, slotTrialCost D K hQuant v pools (slots i) else 0) ≤
+      (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m * (121 * (T.S.n k : ℝ)) ^ rank slots := by
+    intro slots
+    rw [hRep]
+    exact fixed_slots_rank_bound D K hQuant v heven hEstimate hn1 hL hBins m slots forced P hP
+  have havg : Q.E (fun slots => ν.E (fun pools =>
+      if D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools then
+        ∏ i, slotTrialCost D K hQuant v pools (slots i) else 0)) ≤
+      (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m * 2 := by
+    calc
+      _ ≤ Q.E (fun slots =>
+        (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m * (121 * (T.S.n k : ℝ)) ^ rank slots) := by
+          apply Finset.sum_le_sum
+          intro slots hs
+          exact mul_le_mul_of_nonneg_left (hfixed slots) (Q.nonneg slots)
+      _ = (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m * Q.E (fun slots =>
+          (121 * (T.S.n k : ℝ)) ^ rank slots) := E_const_mul _ _ _
+      _ ≤ _ := mul_le_mul_of_nonneg_left
+        (actual_slot_collision_moment D K hQuant hκ v hn hL m hm forced hforced) (by positivity)
+  refine (moment_le_slot_average D K hQuant v heven ν hodd hL m).trans ?_
+  calc
+    _ ≤ (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) ^ ((D.externalEarly v).card * m) *
+        ((2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m * 2) :=
+      mul_le_mul_of_nonneg_left havg
+        (pow_nonneg (add_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)) _)
+    _ = _ := by ring
+
+
+/-- The stronger sparse-trial tail absorbs comparison errors in the permutation experiment. -/
+theorem perm_trial_moment_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (hκ : κ.Admissible)
+    (v : Pos T k) (heven : IsEvenRole v) (hEstimate : StarPinnedEstimate D v)
+    (hn : 10 ≤ (T.S.n k : ℝ)) (hR : 1 ≤ κ.R)
+    (hodd : ∀ w ∈ D.externalEarly v, ¬ IsEvenRole w)
+    (hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w))
+    (hBins : ∀ C, (Finset.univ : Finset (Bin PT.tiling (D.G.cellPatch C))).Nonempty)
+    (μ : FinLaw D.PoolAssignment)
+    (hμ : D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ)
+    (m : ℕ) (hm1 : 1 ≤ m) (hm : (m : ℝ) ≤ (T.S.n k : ℝ)) :
+    μ.E (fun pools => if D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools then
+      (D.freshEventProbability v pools) ^ m else 0) ≤
+      2 * Real.rpow (T.S.n k : ℝ) (-((κ.R : ℝ) * (m : ℝ))) := by
+  have hnNat : 2 ≤ T.S.n k := by exact_mod_cast (show (2 : ℝ) ≤ T.S.n k by linarith)
+  obtain ⟨ν, hν, hcompare⟩ := trial_moment_iid_reduction D K hQuant v heven hnNat μ hμ m
+  have hiid := iid_trial_moment_bound D K hQuant hκ v heven hEstimate hn hodd hL hBins ν hν m hm
+  have hn0 : 0 < (T.S.n k : ℝ) := by linarith
+  have hthree : Real.rpow (T.S.n k : ℝ) (-3 : ℝ) = 1 / (T.S.n k : ℝ) ^ 3 := by
+    rw [Real.rpow_eq_pow, Real.rpow_neg hn0.le, Real.rpow_ofNat, one_div]
+  have htail : Real.rpow (T.S.n k : ℝ) (-((κ.R : ℝ) * (m : ℝ))) =
+      1 / (T.S.n k : ℝ) ^ (κ.R * m) := by
+    rw [Real.rpow_eq_pow, ← Nat.cast_mul, Real.rpow_neg hn0.le, Real.rpow_natCast, one_div]
+  rw [hthree] at hcompare hiid
+  rw [htail]
+  have hbudget := comparison_tail_budget (T.S.n k : ℝ) (by linarith) κ.R
+    (D.externalEarly v).card m hR hm1
+    (Nat.cast_le.mpr (Lane_q_s17_pool.externalEarly_card_le D v)) hm
+  calc
+    _ ≤ (1 + 1 / (T.S.n k : ℝ) ^ 3) *
+        (2 * (1 + 1 / (T.S.n k : ℝ) ^ 3) ^ ((D.externalEarly v).card * m) *
+          (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m) :=
+      hcompare.trans (mul_le_mul_of_nonneg_left hiid (by positivity))
+    _ = 2 * ((1 + 1 / (T.S.n k : ℝ) ^ 3) ^ ((D.externalEarly v).card * m + 1) *
+          (2 / (T.S.n k : ℝ) ^ (2 * κ.R)) ^ m) := by rw [pow_succ]; ring
+    _ ≤ _ := mul_le_mul_of_nonneg_left hbudget (by norm_num)
+
 end HypercubeRamsey.Lane_sol_s17_moment

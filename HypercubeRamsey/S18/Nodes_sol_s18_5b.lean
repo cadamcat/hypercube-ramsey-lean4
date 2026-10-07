@@ -1,5 +1,6 @@
 import HypercubeRamsey.S18.Comparisons_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n5
+import HypercubeRamsey.S18.Supp_sol_s18_supp
 
 namespace HypercubeRamsey.S18.Lane_sol_s18_5b
 set_option maxHeartbeats 400000
@@ -50,7 +51,8 @@ theorem reference_pair_hit (D : LateData hPT) (hTransition : TransitionData D)
   let hit := fun y : Fin (T.S.N k) =>
     Hits (T.S.E k) PT.tiling.c x y ∧ Hits (T.S.E k) PT.tiling.c z y
   have hside (M : D.encoding.base.AllowedMask b.1)
-      (sk : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) :
+      (sk : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k))
+      (hcurrent : ∀ c t, (D.currentPrior j (flipPos b.1 c) h).w (sk c t) ≠ 0) :
       (∑ y : {y // y ∈ D.encoding.base.latePoolOf b.1},
         D.labelWeight j (M, sk, y) Finset.univ y.1 *
           (if D.gate j b.1 h ∧ D.R1 j (M, sk, y) ∧ D.R2 j h (M, sk, y) then
@@ -63,7 +65,10 @@ theorem reference_pair_hit (D : LateData hPT) (hTransition : TransitionData D)
       let y₀ : {y // y ∈ D.encoding.base.latePoolOf b.1} :=
         ⟨hpool.choose, hpool.choose_spec⟩
       by_cases hR : D.R1 j (M, sk, y₀) ∧ D.R2 j h (M, sk, y₀)
-      · have hp := (hBroad j b.1 h (M, sk, y₀) b.2 hg hR.1 hR.2).2.2.2 a x z hx hz hnc
+      · obtain ⟨repaired, hSupp, hR1, hR2, hlabel⟩ :=
+          Lane_sol_s18_supp.supported_replacement D j h (M, sk, y₀) hcurrent hR.1 hR.2
+        have hp := (hBroad j b.1 h repaired b.2 hg hSupp hR1 hR2).2.2.2 a x z hx hz hnc
+        simp_rw [hlabel] at hp
         have heq (y : {y // y ∈ D.encoding.base.latePoolOf b.1}) :
             D.labelWeight j (M, sk, y) Finset.univ y.1 =
               D.labelWeight j (M, sk, y₀) Finset.univ y.1 := rfl
@@ -118,22 +123,25 @@ theorem reference_pair_hit (D : LateData hPT) (hTransition : TransitionData D)
       intro M _
       apply Finset.sum_le_sum
       intro sk _
-      change (∑ y, (((D.encoding.kernels.maskProfile b.1).w M *
-          ∏ c, ∏ t, (D.currentPrior j (flipPos b.1 c) h).w (sk c t)) *
-        D.labelWeight j (M, sk, y) Finset.univ y.1) *
-        (if D.gate j b.1 h ∧ D.R1 j (M, sk, y) ∧ D.R2 j h (M, sk, y) then
-          if hit y.1 then (4 : ℝ) else 0 else 0)) ≤ _
-      simp_rw [mul_assoc]
-      rw [← Finset.mul_sum, ← Finset.mul_sum]
-      have hcoef : 0 ≤ (D.encoding.kernels.maskProfile b.1).w M *
-          ∏ c, ∏ t, (D.currentPrior j (flipPos b.1 c) h).w (sk c t) := by
-        apply mul_nonneg ((D.encoding.kernels.maskProfile b.1).nonneg M)
-        apply Finset.prod_nonneg
-        intro c _
-        apply Finset.prod_nonneg
-        intro t _
-        exact (D.currentPrior j (flipPos b.1 c) h).nonneg _
-      simpa only [mul_assoc] using mul_le_mul_of_nonneg_left (hside M sk) hcoef
+      by_cases hprod : (∏ c, ∏ t, (D.currentPrior j (flipPos b.1 c) h).w (sk c t)) = 0
+      · simp [hprod]
+      · change (∑ y, (((D.encoding.kernels.maskProfile b.1).w M *
+            ∏ c, ∏ t, (D.currentPrior j (flipPos b.1 c) h).w (sk c t)) *
+          D.labelWeight j (M, sk, y) Finset.univ y.1) *
+          (if D.gate j b.1 h ∧ D.R1 j (M, sk, y) ∧ D.R2 j h (M, sk, y) then
+            if hit y.1 then (4 : ℝ) else 0 else 0)) ≤ _
+        simp_rw [mul_assoc]
+        rw [← Finset.mul_sum, ← Finset.mul_sum]
+        have hcoef : 0 ≤ (D.encoding.kernels.maskProfile b.1).w M *
+            ∏ c, ∏ t, (D.currentPrior j (flipPos b.1 c) h).w (sk c t) := by
+          apply mul_nonneg ((D.encoding.kernels.maskProfile b.1).nonneg M)
+          apply Finset.prod_nonneg
+          intro c _
+          apply Finset.prod_nonneg
+          intro t _
+          exact (D.currentPrior j (flipPos b.1 c) h).nonneg _
+        simpa only [mul_assoc] using mul_le_mul_of_nonneg_left (hside M sk (fun c t => Finset.prod_ne_zero_iff.mp
+            (Finset.prod_ne_zero_iff.mp hprod c (Finset.mem_univ c)) t (Finset.mem_univ t))) hcoef
     _ = cost := by
       simp_rw [mul_assoc, ← Finset.mul_sum, ← Finset.sum_mul]
       rw [hsum, one_mul, (D.encoding.kernels.maskProfile b.1).sum_one, one_mul]

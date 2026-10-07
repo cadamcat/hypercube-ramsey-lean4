@@ -961,3 +961,988 @@ theorem moderate_posTerm_pointwise_helper (κ : CConsts) (hκ : κ.Admissible) (
           ring
 
 end HypercubeRamsey.S12
+
+namespace HypercubeRamsey.S12.Lane_q_s12_mom
+
+open Classical
+open scoped BigOperators
+
+/-- The alternating sum over supersets of `U` vanishes unless `U` is the full index set. -/
+lemma alternating_superset_sum {α : Type*} [Fintype α] [DecidableEq α]
+    (U : Finset α) :
+    (∑ I : Finset α, if U ⊆ I then (-1 : ℝ) ^ (Fintype.card α - I.card) else 0) =
+      if U = Finset.univ then 1 else 0 := by
+  classical
+  let V : Finset α := Finset.univ \ U
+  have hfilter :
+      (∑ I : Finset α, if U ⊆ I then (-1 : ℝ) ^ (Fintype.card α - I.card) else 0) =
+        ∑ I ∈ (Finset.univ : Finset (Finset α)).filter (fun I => U ⊆ I),
+          (-1 : ℝ) ^ (Fintype.card α - I.card) := by
+    simp only [Finset.sum_filter]
+  have hreindex :
+      (∑ I ∈ (Finset.univ : Finset (Finset α)).filter (fun I => U ⊆ I),
+        (-1 : ℝ) ^ (Fintype.card α - I.card)) =
+        ∑ J ∈ V.powerset, (-1 : ℝ) ^ (V.card - J.card) := by
+    classical
+    apply Finset.sum_bij'
+      (fun I _ => I \ U)
+      (fun J _ => U ∪ J)
+    · intro I hI
+      have hUI : U ⊆ I := (Finset.mem_filter.mp hI).2
+      change I \ U ∈ V.powerset
+      rw [Finset.mem_powerset]
+      intro x hx
+      have hxI : x ∈ I := (Finset.mem_sdiff.mp hx).1
+      have hxU : x ∉ U := (Finset.mem_sdiff.mp hx).2
+      exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ x, hxU⟩
+    · intro J hJ
+      have hU : U ⊆ U ∪ J := Finset.subset_union_left
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hU⟩
+    · intro I hI
+      have hUI : U ⊆ I := (Finset.mem_filter.mp hI).2
+      have hEq : U ∪ (I \ U) = I := Finset.union_sdiff_of_subset hUI
+      simpa [hEq]
+    · intro J hJ
+      have hJV : J ⊆ V := Finset.mem_powerset.mp hJ
+      have hJU : Disjoint J U := by
+        rw [Finset.disjoint_left]
+        intro x hxJ hxU
+        have hxV := hJV hxJ
+        exact (Finset.mem_sdiff.mp hxV).2 hxU
+      exact Finset.union_sdiff_cancel_left hJU.symm
+    · intro I hI
+      have hUI : U ⊆ I := (Finset.mem_filter.mp hI).2
+      have hcardU : U.card ≤ I.card := Finset.card_le_card hUI
+      have hcardI : I.card ≤ Fintype.card α := by
+        simpa using Finset.card_le_univ I
+      have hcardV : V.card = Fintype.card α - U.card := by
+        dsimp [V]
+        rw [Finset.card_sdiff_of_subset (Finset.subset_univ U), Finset.card_univ]
+      have hcardJ : (I \ U).card = I.card - U.card :=
+        Finset.card_sdiff_of_subset hUI
+      rw [hcardV, hcardJ]
+      congr 1
+      omega
+  have hpower :
+      (∑ J ∈ V.powerset, (-1 : ℝ) ^ (V.card - J.card)) =
+        ∏ x ∈ V, (1 + (-1 : ℝ)) := by
+    classical
+    symm
+    rw [Finset.prod_add]
+    apply Finset.sum_congr rfl
+    intro J hJ
+    have hJV : J ⊆ V := Finset.mem_powerset.mp hJ
+    rw [Finset.prod_const_one, Finset.prod_const,
+      Finset.card_sdiff_of_subset hJV]
+    simp
+  have hVempty : V = ∅ ↔ U = Finset.univ := by
+    constructor
+    · intro hV
+      apply Finset.eq_univ_iff_forall.mpr
+      intro x
+      by_contra hxU
+      have hxV : x ∈ V := Finset.mem_sdiff.mpr ⟨Finset.mem_univ x, hxU⟩
+      simpa [hV] using hxV
+    · intro hU
+      simp [V, hU]
+  rw [hfilter, hreindex, hpower]
+  by_cases hV : V = ∅
+  · have hU : U = Finset.univ := hVempty.mp hV
+    rw [hV]
+    simp [hU]
+  · have hVne : V.Nonempty := Finset.nonempty_iff_ne_empty.mpr hV
+    obtain ⟨x, hx⟩ := hVne
+    rw [show 1 + (-1 : ℝ) = 0 by ring, Finset.prod_eq_zero hx]
+    have hUne : U ≠ Finset.univ := fun hU => hV (hVempty.mpr hU)
+    rw [if_neg hUne]
+    rfl
+
+/-- After the singleton interactions vanish, a column is one plus its higher interactions. -/
+lemma column_sum_over_large_interactions {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (xs : Fin u → Fin N)
+    (I : Finset (Fin u)) (l : Fin d)
+    (hπ : ∀ l, ∑ y, π l y = 1)
+    (hdeg : ∀ l i, i ∈ I → 0 < deg E c (π l) (xs i)) :
+    (∑ y, π l y * ∏ i ∈ I, (1 + acoef E c (π l) (xs i) y)) =
+      1 + ∑ J ∈ I.powerset.filter (fun J => 2 ≤ J.card),
+        inter E c (π l) J xs := by
+  classical
+  let p : Finset (Fin u) → Prop := fun J => 2 ≤ J.card
+  have hempty : (∅ : Finset (Fin u)) ∈ I.powerset :=
+    Finset.mem_powerset.mpr (Finset.empty_subset I)
+  have hcent := (column_expansion E c π xs I hπ hdeg l).2
+  have hsmall (J : Finset (Fin u)) (hJ : J ∈ I.powerset.erase ∅)
+      (hnot : ¬ p J) : inter E c (π l) J xs = 0 := by
+    have hne : J ≠ ∅ := (Finset.mem_erase.mp hJ).1
+    have hmem : J ∈ I.powerset := (Finset.mem_erase.mp hJ).2
+    have hcardne : J.card ≠ 0 := by
+      intro hz
+      exact hne (Finset.card_eq_zero.mp hz)
+    have hcardpos : 0 < J.card := Nat.pos_of_ne_zero hcardne
+    have hcardone : J.card = 1 := by omega
+    obtain ⟨i, rflJ⟩ := Finset.card_eq_one.mp hcardone
+    have hsub : ({i} : Finset (Fin u)) ⊆ I := by
+      rw [← rflJ]
+      exact Finset.mem_powerset.mp hmem
+    rw [rflJ]
+    exact hcent i (hsub (Finset.mem_singleton_self i))
+  have hlarge_subset :
+      I.powerset.filter p ⊆ I.powerset.erase ∅ := by
+    intro J hJ
+    have hJP := (Finset.mem_filter.mp hJ).1
+    have hsize := (Finset.mem_filter.mp hJ).2
+    have hne : J ≠ ∅ := by
+      intro hz
+      subst J
+      simp [p] at hsize
+    exact Finset.mem_erase.mpr ⟨hne, hJP⟩
+  have hsum_erase :
+      (∑ J ∈ I.powerset.erase ∅, inter E c (π l) J xs) =
+        ∑ J ∈ I.powerset.filter p, inter E c (π l) J xs := by
+    symm
+    apply Finset.sum_subset hlarge_subset
+    intro J hJ hnot
+    apply hsmall J hJ
+    intro hp
+    exact hnot (Finset.mem_filter.mpr ⟨(Finset.mem_erase.mp hJ).2, hp⟩)
+  calc
+    _ = ∑ J ∈ I.powerset, inter E c (π l) J xs :=
+      (column_expansion E c π xs I hπ hdeg l).1
+    _ = inter E c (π l) ∅ xs +
+          ∑ J ∈ I.powerset.erase ∅, inter E c (π l) J xs := by
+      symm
+      exact Finset.add_sum_erase I.powerset
+        (fun J => inter E c (π l) J xs) hempty
+    _ = 1 + ∑ J ∈ I.powerset.filter p, inter E c (π l) J xs := by
+      rw [show inter E c (π l) ∅ xs = 1 by simp [inter, hπ l], hsum_erase]
+
+lemma alternating_selected_interaction {u : ℕ}
+    (U : Finset (Fin u)) (P : ℝ) :
+    (∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+      (if U ⊆ I then P else 0)) = if U = Finset.univ then P else 0 := by
+  classical
+  calc
+    _ = P * ∑ I : Finset (Fin u),
+        (if U ⊆ I then (-1 : ℝ) ^ (u - I.card) else 0) := by
+      rw [Finset.univ.mul_sum]
+      apply Finset.sum_congr rfl
+      intro I hI
+      by_cases hUI : U ⊆ I <;> simp [hUI] <;> ring
+    _ = P * (if U = Finset.univ then 1 else 0) := by
+      have hsum := alternating_superset_sum (α := Fin u) U
+      simpa [Fintype.card_fin] using congrArg (fun x : ℝ => P * x) hsum
+    _ = _ := by by_cases hU : U = Finset.univ <;> simp [hU]
+
+lemma product_interactions_expansion {d : ℕ} {α : Type*}
+    [Fintype α] [DecidableEq α]
+    (M : Fin d → α → ℝ) (opts : Finset α) :
+    (∏ l : Fin d, (1 + ∑ J ∈ opts, M l J)) =
+      ∑ K : Finset (Fin d),
+        ∑ f : (∀ l : {l // l ∈ K}, α),
+          (if ∀ l, f l ∈ opts then ∏ l, M l.1 (f l) else 0) := by
+  classical
+  calc
+    (∏ l : Fin d, (1 + ∑ J ∈ opts, M l J)) =
+        ∑ K : Finset (Fin d), ∏ l ∈ K, ∑ J ∈ opts, M l J := by
+      simpa using
+        (Finset.prod_one_add (s := (Finset.univ : Finset (Fin d)))
+          (f := fun l => ∑ J ∈ opts, M l J))
+    _ = ∑ K : Finset (Fin d),
+        ∑ f : (∀ l : {l // l ∈ K}, α),
+          (if ∀ l, f l ∈ opts then ∏ l, M l.1 (f l) else 0) := by
+      apply Finset.sum_congr rfl
+      intro K hK
+      calc
+        (∏ l ∈ K, ∑ J ∈ opts, M l J) =
+            ∏ l : {l // l ∈ K}, ∑ J ∈ opts, M l.1 J := by
+          exact (Finset.prod_coe_sort K (fun l => ∑ J ∈ opts, M l J)).symm
+        _ = ∑ f ∈ Fintype.piFinset (fun _ : {l // l ∈ K} => opts),
+              ∏ l, M l.1 (f l) := by
+          exact Finset.prod_univ_sum
+            (fun _ : {l // l ∈ K} => opts) (fun l J => M l.1 J)
+        _ = ∑ f : (∀ l : {l // l ∈ K}, α),
+              (if ∀ l, f l ∈ opts then ∏ l, M l.1 (f l) else 0) := by
+          have hpi :
+              Fintype.piFinset (fun _ : {l // l ∈ K} => opts) =
+                Finset.univ.filter (fun f : (∀ l : {l // l ∈ K}, α) =>
+                  ∀ l, f l ∈ opts) := by
+            ext f
+            simp [Fintype.mem_piFinset]
+          rw [hpi, Finset.sum_filter]
+
+def selected_interaction_union {d u : ℕ} (K : Finset (Fin d))
+    (f : ∀ l : {l // l ∈ K}, Finset (Fin u)) : Finset (Fin u) :=
+  Finset.univ.biUnion f
+
+lemma selected_alternating_sum {u d : ℕ} (K : Finset (Fin d))
+    (f : ∀ l : {l // l ∈ K}, Finset (Fin u)) (P : ℝ) :
+    (∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+      (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then P else 0)) =
+        (if (∀ l, 2 ≤ (f l).card) ∧
+            selected_interaction_union K f = Finset.univ then P else 0) := by
+  classical
+  have hvalid (I : Finset (Fin u)) :
+      (∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card)) ↔
+        (∀ l, 2 ≤ (f l).card) ∧ selected_interaction_union K f ⊆ I := by
+    constructor
+    · intro hf
+      refine ⟨fun l => (Finset.mem_filter.mp (hf l)).2, ?_⟩
+      change Finset.univ.biUnion f ⊆ I
+      rw [Finset.biUnion_subset_iff_forall_subset]
+      intro l hl
+      exact Finset.mem_powerset.mp (Finset.mem_filter.mp (hf l)).1
+    · rintro ⟨hsize, hunion⟩ l
+      change Finset.univ.biUnion f ⊆ I at hunion
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_powerset.mpr ?_, hsize l⟩
+      exact (Finset.biUnion_subset_iff_forall_subset.mp hunion) l (Finset.mem_univ l)
+  have hsum :
+      (∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+        (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then P else 0)) =
+      ∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+        (if (∀ l, 2 ≤ (f l).card) ∧ selected_interaction_union K f ⊆ I then P else 0) := by
+    apply Finset.sum_congr rfl
+    intro I hI
+    have hh := hvalid I
+    have hif :
+        (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then P else 0) =
+          (if (∀ l, 2 ≤ (f l).card) ∧ selected_interaction_union K f ⊆ I
+            then P else 0) :=
+      if_congr hh rfl rfl
+    exact congrArg (fun x : ℝ => (-1 : ℝ) ^ (u - I.card) * x) hif
+  rw [hsum]
+  by_cases hsize : ∀ l : {l // l ∈ K}, 2 ≤ (f l).card
+  · calc
+      (∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+          (if ((∀ l : {l // l ∈ K}, 2 ≤ (f l).card) ∧
+              selected_interaction_union K f ⊆ I) then P else 0)) =
+        ∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+          (if selected_interaction_union K f ⊆ I then P else 0) := by
+            apply Finset.sum_congr rfl
+            intro I hI
+            simp [hsize]
+      _ = if selected_interaction_union K f = Finset.univ then P else 0 :=
+        alternating_selected_interaction _ P
+      _ = if (∀ l, 2 ≤ (f l).card) ∧
+          selected_interaction_union K f = Finset.univ then P else 0 := by
+            simp [hsize]
+  · have hsize' :
+        ¬ (∀ (a : Fin d) (ha : a ∈ K), 2 ≤ (f ⟨a, ha⟩).card) := by
+      intro h
+      apply hsize
+      intro l
+      exact h l.1 l.2
+    simp [hsize']
+
+set_option maxHeartbeats 1000000 in
+lemma Phi_cover_expansion {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (xs : Fin u → Fin N)
+    (hπ : ∀ l, ∑ y, π l y = 1)
+    (hdeg : ∀ l i, 0 < deg E c (π l) (xs i)) :
+    Phi E c π xs =
+      ∑ K : Finset (Fin d),
+        ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+          (if (∀ l, 2 ≤ (f l).card) ∧
+              selected_interaction_union K f = Finset.univ then
+            ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+  classical
+  have hcolumns (I : Finset (Fin u)) :
+      (∏ l : Fin d,
+        ∑ y, π l y * ∏ i ∈ I, (1 + acoef E c (π l) (xs i) y)) =
+        ∑ K : Finset (Fin d),
+          ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+            (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then
+              ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+    have hcol (l : Fin d) := column_sum_over_large_interactions E c π xs I l hπ
+      (fun l i hi => hdeg l i)
+    have hprod := product_interactions_expansion
+      (fun l J => inter E c (π l) J xs)
+      (I.powerset.filter (fun J => 2 ≤ J.card))
+    calc
+      (∏ l : Fin d,
+        ∑ y, π l y * ∏ i ∈ I, (1 + acoef E c (π l) (xs i) y)) =
+          ∏ l : Fin d,
+            (1 + ∑ J ∈ I.powerset.filter (fun J => 2 ≤ J.card),
+              inter E c (π l) J xs) := by
+                apply Finset.prod_congr rfl
+                intro l hl
+                exact hcol l
+      _ = _ := hprod
+  unfold Phi posTerm
+  calc
+    _ = ∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+          ∑ K : Finset (Fin d),
+            ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+              (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then
+                ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+      apply Finset.sum_congr rfl
+      intro I hI
+      rw [← hcolumns I]
+    _ = ∑ K : Finset (Fin d),
+          ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+            ∑ I : Finset (Fin u), (-1 : ℝ) ^ (u - I.card) *
+              (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then
+                ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+      calc
+        _ = ∑ I : Finset (Fin u),
+              ∑ K : Finset (Fin d),
+                ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+                  (-1 : ℝ) ^ (u - I.card) *
+                    (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then
+                      ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+          apply Finset.sum_congr rfl
+          intro I hI
+          rw [Finset.univ.mul_sum]
+          apply Finset.sum_congr rfl
+          intro K hK
+          rw [Finset.univ.mul_sum]
+        _ = ∑ K : Finset (Fin d),
+              ∑ I : Finset (Fin u),
+                ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+                  (-1 : ℝ) ^ (u - I.card) *
+                    (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then
+                      ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+          rw [Finset.sum_comm]
+        _ = ∑ K : Finset (Fin d),
+              ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+                ∑ I : Finset (Fin u),
+                  (-1 : ℝ) ^ (u - I.card) *
+                    (if ∀ l, f l ∈ I.powerset.filter (fun J => 2 ≤ J.card) then
+                      ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+          apply Finset.sum_congr rfl
+          intro K hK
+          rw [Finset.sum_comm]
+    _ = ∑ K : Finset (Fin d),
+          ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+            (if (∀ l, 2 ≤ (f l).card) ∧
+                selected_interaction_union K f = Finset.univ then
+              ∏ l, inter E c (π l.1) (f l) xs else 0) := by
+      apply Finset.sum_congr rfl
+      intro K hK
+      apply Finset.sum_congr rfl
+      intro f hf
+      simpa only [Subtype.forall] using selected_alternating_sum K f
+        (∏ l, inter E c (π l.1) (f l) xs)
+
+lemma Phi_cover_abs_bound {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (xs : Fin u → Fin N)
+    (hπ : ∀ l, ∑ y, π l y = 1)
+    (hdeg : ∀ l i, 0 < deg E c (π l) (xs i)) :
+    |Phi E c π xs| ≤
+      ∑ K : Finset (Fin d),
+        ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+          (if (∀ l, 2 ≤ (f l).card) ∧
+              selected_interaction_union K f = Finset.univ then
+            |∏ l, inter E c (π l.1) (f l) xs| else 0) := by
+  classical
+  rw [Phi_cover_expansion E c π xs hπ hdeg]
+  calc
+    |∑ K : Finset (Fin d),
+        ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+          (if (∀ l, 2 ≤ (f l).card) ∧
+              selected_interaction_union K f = Finset.univ then
+            ∏ l, inter E c (π l.1) (f l) xs else 0)| ≤
+      ∑ K : Finset (Fin d),
+        |∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+          (if (∀ l, 2 ≤ (f l).card) ∧
+              selected_interaction_union K f = Finset.univ then
+            ∏ l, inter E c (π l.1) (f l) xs else 0)| :=
+      Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ K : Finset (Fin d),
+        ∑ f : (∀ l : {l // l ∈ K}, Finset (Fin u)),
+          |if (∀ l, 2 ≤ (f l).card) ∧
+              selected_interaction_union K f = Finset.univ then
+            ∏ l, inter E c (π l.1) (f l) xs else 0| := by
+      apply Finset.sum_le_sum
+      intro K hK
+      exact Finset.abs_sum_le_sum_abs _ _
+    _ = _ := by
+      apply Finset.sum_congr rfl
+      intro K hK
+      apply Finset.sum_congr rfl
+      intro f hf
+      by_cases hsel :
+          (∀ l, 2 ≤ (f l).card) ∧ selected_interaction_union K f = Finset.univ
+      · simp [hsel]
+      · have hsel' :
+            ¬ ((∀ (a : Fin d) (ha : a ∈ K), 2 ≤ (f ⟨a, ha⟩).card) ∧
+                selected_interaction_union K f = Finset.univ) := by
+          intro h'
+          apply hsel
+          exact ⟨fun l => h'.1 l.1 l.2, h'.2⟩
+        simp [hsel, hsel']
+
+lemma low_selection_count_bound {d u L n : ℕ} (hd : d ≤ n) (hn : 1 ≤ n) :
+    (∑ K : Finset (Fin d),
+      if K.card ≤ L then (2 ^ u) ^ K.card else 0) ≤
+        (L + 1) * n ^ L * (2 ^ u) ^ L := by
+  classical
+  have hdecomp :
+      (∑ K : Finset (Fin d),
+        if K.card ≤ L then (2 ^ u) ^ K.card else 0) =
+        ∑ z ∈ Finset.sigma (Finset.range (d + 1))
+          (fun r => (Finset.univ : Finset (Fin d)).powersetCard r),
+            if z.2.card ≤ L then (2 ^ u) ^ z.2.card else 0 := by
+    apply Finset.sum_bij'
+      (fun K _ => (⟨K.card, K⟩ : Sigma fun r : ℕ => Finset (Fin d)))
+      (fun z _ => z.2)
+    · intro K hK
+      apply Finset.mem_sigma.mpr
+      refine ⟨?_, Finset.mem_powersetCard.mpr ⟨Finset.subset_univ K, rfl⟩⟩
+      simp only [Finset.mem_range]
+      have hKd : K.card ≤ d := by simpa using Finset.card_le_univ K
+      exact Nat.lt_succ_of_le hKd
+    · intro z hz
+      exact Finset.mem_univ z.2
+    · intro K hK
+      rfl
+    · intro z hz
+      cases z with
+      | mk r K =>
+        simp only [Finset.mem_sigma] at hz
+        have hcard := (Finset.mem_powersetCard.mp hz.2).2
+        have hcard' : K.card = r := hcard
+        subst r
+        rfl
+    · intro K hK
+      rfl
+  have hinner (r : ℕ) (hr : r ≤ L) :
+      (∑ K ∈ (Finset.univ : Finset (Fin d)).powersetCard r,
+        if K.card ≤ L then (2 ^ u) ^ K.card else 0) ≤
+          n ^ L * (2 ^ u) ^ L := by
+    have hchoose : Nat.choose d r ≤ n ^ L := by
+      calc
+        Nat.choose d r ≤ d ^ r := Nat.choose_le_pow d r
+        _ ≤ n ^ r := Nat.pow_le_pow_left hd r
+        _ ≤ n ^ L := Nat.pow_le_pow_right hn hr
+    have hpcount :
+        ((Finset.univ : Finset (Fin d)).powersetCard r).card = Nat.choose d r := by
+      simp [Finset.card_powersetCard]
+    have hbase : 1 ≤ 2 ^ u := Nat.one_le_pow u 2 (by decide)
+    have hpow : (2 ^ u) ^ r ≤ (2 ^ u) ^ L := Nat.pow_le_pow_right hbase hr
+    calc
+      _ = ((Finset.univ : Finset (Fin d)).powersetCard r).card * (2 ^ u) ^ r := by
+        calc
+          _ = ∑ K ∈ (Finset.univ : Finset (Fin d)).powersetCard r,
+                (2 ^ u) ^ r := by
+              apply Finset.sum_congr rfl
+              intro K hK
+              have hKr : K.card = r := (Finset.mem_powersetCard.mp hK).2
+              simp [hKr, hr]
+          _ = _ := by simp
+      _ ≤ n ^ L * (2 ^ u) ^ L := by
+        rw [hpcount]
+        exact Nat.mul_le_mul hchoose hpow
+  have hfilterCount :
+      ((Finset.range (d + 1)).filter (fun r => r ≤ L)).card ≤ L + 1 := by
+    calc
+      ((Finset.range (d + 1)).filter (fun r => r ≤ L)).card ≤
+          (Finset.range (L + 1)).card := by
+        have hsubset :
+            (Finset.range (d + 1)).filter (fun r => r ≤ L) ⊆ Finset.range (L + 1) := by
+          intro r hr
+          have hrl := (Finset.mem_filter.mp hr).2
+          exact Finset.mem_range.mpr (Nat.lt_succ_of_le hrl)
+        exact Finset.card_le_card hsubset
+      _ = L + 1 := by simp
+  rw [hdecomp]
+  rw [Finset.sum_sigma]
+  calc
+    _ ≤ ∑ r ∈ Finset.range (d + 1),
+          (if r ≤ L then n ^ L * (2 ^ u) ^ L else 0) := by
+      apply Finset.sum_le_sum
+      intro r hr
+      by_cases hrl : r ≤ L
+      · simpa [hrl] using hinner r hrl
+      · rw [if_neg hrl]
+        have hzero :
+            (∑ K ∈ (Finset.univ : Finset (Fin d)).powersetCard r,
+              if K.card ≤ L then (2 ^ u) ^ K.card else 0) = 0 := by
+          apply Finset.sum_eq_zero
+          intro K hK
+          have hKr : K.card = r := (Finset.mem_powersetCard.mp hK).2
+          have hnot : ¬ K.card ≤ L := by omega
+          simp [hnot]
+        rw [hzero]
+    _ = ((Finset.range (d + 1)).filter (fun r => r ≤ L)).card *
+          (n ^ L * (2 ^ u) ^ L) := by simp [Finset.sum_ite]
+    _ ≤ (L + 1) * n ^ L * (2 ^ u) ^ L := by
+      calc
+        _ ≤ (L + 1) * (n ^ L * (2 ^ u) ^ L) := Nat.mul_le_mul_right _ hfilterCount
+        _ = _ := by ring
+
+lemma low_selection_count_bound_real {d u L n : ℕ} (hd : d ≤ n) (hn : 1 ≤ n) :
+    (∑ K : Finset (Fin d),
+      if K.card ≤ L then ((2 : ℝ) ^ u) ^ K.card else 0) ≤
+        ((L + 1 : ℕ) : ℝ) * (n : ℝ) ^ L * ((2 : ℝ) ^ u) ^ L := by
+  classical
+  have hnat := low_selection_count_bound (d := d) (u := u) (L := L) (n := n) hd hn
+  have hsumCast :
+      (∑ K : Finset (Fin d),
+        if K.card ≤ L then ((2 : ℝ) ^ u) ^ K.card else 0) =
+      ∑ K : Finset (Fin d),
+        ((if K.card ≤ L then (2 ^ u) ^ K.card else 0 : ℕ) : ℝ) := by
+    apply Finset.sum_congr rfl
+    intro K hK
+    by_cases hKl : K.card ≤ L <;> simp [hKl, Nat.cast_pow]
+  rw [hsumCast]
+  have hcast :
+      (∑ K : Finset (Fin d),
+        ((if K.card ≤ L then (2 ^ u) ^ K.card else 0 : ℕ) : ℝ)) ≤
+        (((L + 1) * n ^ L * (2 ^ u) ^ L : ℕ) : ℝ) := by
+    exact_mod_cast hnat
+  have hRhs :
+      (((L + 1) * n ^ L * (2 ^ u) ^ L : ℕ) : ℝ) =
+        ((L + 1 : ℕ) : ℝ) * (n : ℝ) ^ L * ((2 : ℝ) ^ u) ^ L := by
+    simp [Nat.cast_mul, Nat.cast_pow]
+  rw [← hRhs]
+  exact hcast
+
+lemma selector_function_card {d u : ℕ} (K : Finset (Fin d)) :
+    Fintype.card (∀ l : {l // l ∈ K}, Finset (Fin u)) = (2 ^ u) ^ K.card := by
+  simp [Fintype.card_fun, Fintype.card_finset, Fintype.card_fin]
+
+lemma sum_finset_sigma_card {d : ℕ} (F : Finset (Fin d) → ℝ) :
+    (∑ K : Finset (Fin d), F K) =
+      ∑ z ∈ Finset.sigma (Finset.range (d + 1))
+        (fun r => (Finset.univ : Finset (Fin d)).powersetCard r), F z.2 := by
+  classical
+  apply Finset.sum_bij'
+    (fun K _ => (⟨K.card, K⟩ : Sigma fun r : ℕ => Finset (Fin d)))
+    (fun z _ => z.2)
+  · intro K hK
+    apply Finset.mem_sigma.mpr
+    refine ⟨?_, Finset.mem_powersetCard.mpr ⟨Finset.subset_univ K, rfl⟩⟩
+    simp only [Finset.mem_range]
+    have hKd : K.card ≤ d := by simpa using Finset.card_le_univ K
+    exact Nat.lt_succ_of_le hKd
+  · intro z hz
+    exact Finset.mem_univ z.2
+  · intro K hK
+    rfl
+  · intro z hz
+    cases z with
+    | mk r K =>
+      simp only [Finset.mem_sigma] at hz
+      have hcard := (Finset.mem_powersetCard.mp hz.2).2
+      have hcard' : K.card = r := by simpa using hcard
+      subst r
+      rfl
+  · intro K hK
+    rfl
+
+lemma high_selection_weight_bound {d L : ℕ} (a : ℝ)
+    (ha0 : 0 ≤ a) (ha1 : (d : ℝ) * a ≤ 1) :
+    (∑ K : Finset (Fin d), if L < K.card then a ^ K.card else 0) ≤
+      ((d + 1 : ℕ) : ℝ) * ((d : ℝ) * a) ^ (L + 1) := by
+  classical
+  rw [sum_finset_sigma_card, Finset.sum_sigma]
+  calc
+    _ ≤ ∑ r ∈ Finset.range (d + 1), ((d : ℝ) * a) ^ (L + 1) := by
+      apply Finset.sum_le_sum
+      intro r hr
+      by_cases hLr : L < r
+      · have hsum :
+            (∑ K ∈ (Finset.univ : Finset (Fin d)).powersetCard r,
+              if L < K.card then a ^ K.card else 0) =
+              ((Finset.univ : Finset (Fin d)).powersetCard r).card * a ^ r := by
+          calc
+            _ = ∑ K ∈ (Finset.univ : Finset (Fin d)).powersetCard r, a ^ r := by
+              apply Finset.sum_congr rfl
+              intro K hK
+              have hKr : K.card = r := (Finset.mem_powersetCard.mp hK).2
+              simp [hKr, hLr]
+            _ = _ := by simp
+        have hchoose :
+            (((Finset.univ : Finset (Fin d)).powersetCard r).card : ℝ) ≤ (d : ℝ) ^ r := by
+          rw [Finset.card_powersetCard, Finset.card_univ]
+          rw [Fintype.card_fin]
+          exact_mod_cast Nat.choose_le_pow d r
+        have hchooseMul :
+            (((Finset.univ : Finset (Fin d)).powersetCard r).card : ℝ) * a ^ r ≤
+              ((d : ℝ) * a) ^ r := by
+          calc
+            _ ≤ (d : ℝ) ^ r * a ^ r := mul_le_mul_of_nonneg_right hchoose (pow_nonneg ha0 _)
+            _ = ((d : ℝ) * a) ^ r := by rw [mul_pow]
+        have hpow : ((d : ℝ) * a) ^ r ≤ ((d : ℝ) * a) ^ (L + 1) :=
+          pow_le_pow_of_le_one (mul_nonneg (by positivity) ha0) ha1 (by omega)
+        simpa [hLr] using hsum.trans_le (hchooseMul.trans hpow)
+      · have hzero :
+            (∑ s ∈ (Finset.univ : Finset (Fin d)).powersetCard r,
+              if L < (⟨r, s⟩ : Sigma fun n : ℕ => Finset (Fin d)).2.card then
+                a ^ (⟨r, s⟩ : Sigma fun n : ℕ => Finset (Fin d)).2.card else 0) = 0 := by
+          apply Finset.sum_eq_zero
+          intro s hs
+          have hscard : s.card = r := (Finset.mem_powersetCard.mp hs).2
+          have hnot : ¬ L < s.card := by omega
+          change (if L < s.card then a ^ s.card else 0) = 0
+          simp [hnot]
+        rw [hzero]
+        exact pow_nonneg (mul_nonneg (by positivity) ha0) _
+    _ = ((d + 1 : ℕ) : ℝ) * ((d : ℝ) * a) ^ (L + 1) := by simp
+
+lemma selected_cover_has_large_interaction {d u L : ℕ}
+    (hL : 0 < L) (hu : 10 * L ^ 2 < u)
+    (K : Finset (Fin d))
+    (f : ∀ l : {l // l ∈ K}, Finset (Fin u))
+    (hK : K.card ≤ L)
+    (hcover : selected_interaction_union K f = Finset.univ) :
+    ∃ l : {l // l ∈ K}, 4 * L ≤ (f l).card := by
+  classical
+  by_contra h
+  have hsmall (l : {l // l ∈ K}) : (f l).card ≤ 4 * L - 1 := by
+    have hnot : ¬ 4 * L ≤ (f l).card := by
+      intro hl
+      exact h ⟨l, hl⟩
+    omega
+  have hsum :
+      (∑ l : {l // l ∈ K}, (f l).card) ≤ K.card * (4 * L - 1) := by
+    calc
+      _ = ∑ l ∈ (Finset.univ : Finset {l // l ∈ K}), (f l).card := by
+        rfl
+      _ ≤ ∑ l ∈ (Finset.univ : Finset {l // l ∈ K}), (4 * L - 1) := by
+        apply Finset.sum_le_sum
+        intro l hl
+        exact hsmall l
+      _ = K.card * (4 * L - 1) := by simp
+  have hcardUnion :
+      (selected_interaction_union K f).card ≤
+        ∑ l : {l // l ∈ K}, (f l).card := by
+    simpa only [selected_interaction_union, Finset.sum_attach] using
+      (Finset.card_biUnion_le :
+        (Finset.univ.biUnion f).card ≤
+          ∑ l ∈ (Finset.univ : Finset {l // l ∈ K}), (f l).card)
+  have hbound : K.card * (4 * L - 1) < u := by
+    have hcoeff : 4 * L - 1 < 4 * L := by omega
+    have hmul : L * (4 * L - 1) < L * (4 * L) :=
+      Nat.mul_lt_mul_of_pos_left hcoeff hL
+    have hquart : 4 * L ^ 2 < 10 * L ^ 2 := by
+      have hsq : 0 < L ^ 2 := Nat.pow_pos hL
+      omega
+    calc
+      K.card * (4 * L - 1) ≤ L * (4 * L - 1) := Nat.mul_le_mul_right _ hK
+      _ < L * (4 * L) := hmul
+      _ = 4 * L ^ 2 := by ring
+      _ < 10 * L ^ 2 := hquart
+      _ < u := hu
+  have : u ≤ K.card * (4 * L - 1) := by
+    calc
+      u = (selected_interaction_union K f).card := by rw [hcover]; simp
+      _ ≤ ∑ l : {l // l ∈ K}, (f l).card := hcardUnion
+      _ ≤ K.card * (4 * L - 1) := hsum
+  omega
+
+lemma selected_interaction_product_abs_le {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (xs : Fin u → Fin N)
+    (K : Finset (Fin d))
+    (f : ∀ l : {l // l ∈ K}, Finset (Fin u))
+    (l₀ : {l // l ∈ K}) (t : ℝ) (ht : t ≤ 1)
+    (hsize : ∀ l, 2 ≤ (f l).card)
+    (hmoderate : Moderate E c π t xs) :
+    |∏ l : {l // l ∈ K}, inter E c (π l.1) (f l) xs| ≤
+      |inter E c (π l₀.1) (f l₀) xs| := by
+  classical
+  let g : {l // l ∈ K} → ℝ := fun l => |inter E c (π l.1) (f l) xs|
+  have hprod :
+      ∏ l : {l // l ∈ K}, g l ≤
+        ∏ l : {l // l ∈ K}, if l = l₀ then g l else 1 := by
+    apply Finset.prod_le_prod₀
+    · intro l hl
+      exact abs_nonneg _
+    · intro l hl
+      by_cases hEq : l = l₀
+      · simp [hEq]
+      · simp only [if_neg hEq]
+        have hbound := hmoderate l.1 (f l) (hsize l)
+        exact hbound.trans ht
+  have hR :
+      (∏ l : {l // l ∈ K}, if l = l₀ then g l else 1) = g l₀ := by
+    simp
+  calc
+    |∏ l : {l // l ∈ K}, inter E c (π l.1) (f l) xs| =
+        ∏ l : {l // l ∈ K}, g l := by simp [g, Finset.abs_prod]
+    _ ≤ ∏ l : {l // l ∈ K}, if l = l₀ then g l else 1 := hprod
+    _ = |inter E c (π l₀.1) (f l₀) xs| := by simpa [g] using hR
+
+lemma selected_interaction_product_abs_le_pow {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (xs : Fin u → Fin N)
+    (K : Finset (Fin d))
+    (f : ∀ l : {l // l ∈ K}, Finset (Fin u)) (t : ℝ)
+    (ht : 0 ≤ t) (hsize : ∀ l, 2 ≤ (f l).card)
+    (hmoderate : Moderate E c π t xs) :
+    |∏ l : {l // l ∈ K}, inter E c (π l.1) (f l) xs| ≤ t ^ K.card := by
+  classical
+  rw [Finset.abs_prod]
+  calc
+    ∏ l : {l // l ∈ K}, |inter E c (π l.1) (f l) xs| ≤
+        ∏ l : {l // l ∈ K}, t := by
+          apply Finset.prod_le_prod₀
+          · intro l hl
+            exact abs_nonneg _
+          · intro l hl
+            exact hmoderate l.1 (f l) (hsize l)
+    _ = t ^ K.card := by simp
+
+lemma prefix_prodW_event_mass_eq {N u' u : ℕ}
+    (τ : Law N) (hu : u' ≤ u)
+    (p : (Fin u' → Fin N) → Prop) [DecidablePred p] :
+    (∑ xs : Fin u' → Fin N, if p xs then prodW τ.w xs else 0) =
+      ∑ xs : Fin u → Fin N,
+        (if p (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩)
+          then prodW τ.w xs else 0) := by
+  classical
+  let s : Finset (Fin u) := Finset.univ.filter (fun i => i.val < u')
+  let e : Fin u' ≃ {i : Fin u // i ∈ s} := {
+    toFun := fun i => ⟨⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩, by simp [s]⟩
+    invFun := fun i => ⟨i.1.val, by simpa [s] using (Finset.mem_filter.mp i.2).2⟩
+    left_inv := by intro i; apply Fin.ext; rfl
+    right_inv := by intro i; apply Subtype.ext; apply Fin.ext; rfl
+  }
+  let ePi : (Fin u' → Fin N) ≃ (∀ i : {i : Fin u // i ∈ s}, Fin N) := {
+    toFun := fun xs i => xs (e.symm i)
+    invFun := fun a i => a (e i)
+    left_inv := by intro xs; funext i; rfl
+    right_inv := by intro a; funext i; rfl
+  }
+  let getPrefix : (Fin u → Fin N) → (Fin u' → Fin N) :=
+    fun xs i => xs (e i).1
+  let f : (Fin u → Fin N) → ℝ := fun xs => if p (getPrefix xs) then 1 else 0
+  let eFull := Equiv.piEquivPiSubtypeProd (fun i : Fin u => i ∈ s)
+    (fun _ : Fin u => Fin N)
+  have hprefix (a : ∀ i : {i : Fin u // i ∈ s}, Fin N)
+      (b : ∀ i : {i : Fin u // i ∉ s}, Fin N) :
+      getPrefix (eFull.symm (a, b)) = ePi.symm a := by
+    have hleft : ∀ i : {i : Fin u // i ∈ s}, eFull.symm (a, b) i.1 = a i := by
+      intro i
+      simp [eFull, Equiv.piEquivPiSubtypeProd]
+    funext i
+    change eFull.symm (a, b) (e i).1 = a (e i)
+    exact hleft (e i)
+  have hsplit := iid_pi_expect_split (fun _ : Fin u => τ) s f
+  have hfullIndicator :
+      (∑ xs : Fin u → Fin N, (∏ i, τ.w (xs i)) * f xs) =
+        ∑ xs : Fin u → Fin N, (if p (getPrefix xs) then prodW τ.w xs else 0) := by
+    apply Finset.sum_congr rfl
+    intro xs hxs
+    by_cases hp : p (getPrefix xs) <;> simp [f, hp, prodW]
+  have hSuffix :
+      (∑ b : (∀ i : {i : Fin u // i ∉ s}, Fin N),
+        ∏ i : {i : Fin u // i ∉ s}, τ.w (b i)) = 1 := by
+    rw [← Fintype.prod_sum]
+    simp [τ.sum_eq_one]
+  have hsplitIndicator :
+      (∑ xs : Fin u → Fin N, (∏ i, τ.w (xs i)) * f xs) =
+        ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+          (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+            (if p (ePi.symm a) then 1 else 0) := by
+    calc
+      _ = ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+            ∑ b : (∀ i : {i : Fin u // i ∉ s}, Fin N),
+              (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+                (∏ i : {i : Fin u // i ∉ s}, τ.w (b i)) *
+                  (if p (getPrefix (eFull.symm (a, b))) then 1 else 0) := by
+        simpa [f, eFull, hprefix] using hsplit
+      _ = ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+            (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+              (if p (ePi.symm a) then 1 else 0) := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        simp_rw [hprefix a]
+        calc
+          _ = (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+                (if p (ePi.symm a) then 1 else 0) *
+                ∑ b : (∀ i : {i : Fin u // i ∉ s}, Fin N),
+                  ∏ i : {i : Fin u // i ∉ s}, τ.w (b i) := by
+            rw [Finset.univ.mul_sum]
+            apply Finset.sum_congr rfl
+            intro b hb
+            ring
+          _ = _ := by rw [hSuffix]; ring
+  have hweight (a : ∀ i : {i : Fin u // i ∈ s}, Fin N) :
+      prodW τ.w (ePi.symm a) =
+        ∏ i : {i : Fin u // i ∈ s}, τ.w (a i) := by
+    change (∏ j : Fin u', τ.w ((ePi.symm a) j)) = _
+    calc
+      _ = ∏ i : {i : Fin u // i ∈ s}, τ.w ((ePi.symm a) (e.symm i)) :=
+        Fintype.prod_equiv e _ _ (by intro j; rfl)
+      _ = _ := by simp [ePi]
+  have hReindex :
+      (∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+        (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+          (if p (ePi.symm a) then 1 else 0)) =
+        ∑ xs : Fin u' → Fin N, (if p xs then prodW τ.w xs else 0) := by
+    symm
+    apply Fintype.sum_equiv ePi
+    intro xs
+    have hweightXs := hweight (ePi xs)
+    rw [ePi.symm_apply_apply] at hweightXs
+    by_cases hp : p xs <;> simp [hp, hweightXs]
+  calc
+    _ = ∑ xs : Fin u' → Fin N, (if p xs then prodW τ.w xs else 0) := by
+      apply Finset.sum_congr rfl
+      intro xs hxs
+      by_cases hp : p xs <;> simp [hp, prodW]
+    _ = ∑ a : (∀ i : {i : Fin u // i ∈ s}, Fin N),
+          (∏ i : {i : Fin u // i ∈ s}, τ.w (a i)) *
+            (if p (ePi.symm a) then 1 else 0) := hReindex.symm
+    _ = ∑ xs : Fin u → Fin N,
+          (if p (getPrefix xs) then prodW τ.w xs else 0) := by
+      rw [← hsplitIndicator, ← hfullIndicator]
+
+lemma moderate_prefix_mono {N d u' u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (t : ℝ) (hu : u' ≤ u)
+    (xs : Fin u → Fin N) :
+    Moderate E c π t xs →
+      Moderate E c π t (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩) := by
+  classical
+  intro hmod l J hJ
+  let emb : Fin u' ↪ Fin u := {
+    toFun := fun i => ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩
+    inj' := by
+      intro i j hij
+      apply Fin.ext_iff.mpr
+      simpa using congrArg (fun x : Fin u => x.val) hij
+  }
+  let Jfull : Finset (Fin u) := J.map emb
+  have hcard : Jfull.card = J.card := by simp [Jfull]
+  have hprod (y : Fin N) :
+      (∏ i ∈ Jfull, acoef E c (π l) (xs i) y) =
+        ∏ i ∈ J, acoef E c (π l)
+          (xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩) y := by
+    dsimp [Jfull]
+    rw [Finset.prod_map]
+    rfl
+  have hinter :
+      inter E c (π l) Jfull xs =
+        inter E c (π l) J (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩) := by
+    unfold inter
+    apply Finset.sum_congr rfl
+    intro y hy
+    rw [hprod y]
+  have hlarge : 2 ≤ Jfull.card := by omega
+  have hfull := hmod l Jfull hlarge
+  simpa [hinter] using hfull
+
+lemma moderate_bad_prefix_mass_le {N d u' u : ℕ}
+    (τ : Law N) (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (t : ℝ) (hu : u' ≤ u) :
+    (∑ xs : Fin u' → Fin N,
+      if ¬ Moderate E c π t xs then prodW τ.w xs else 0) ≤
+      ∑ xs : Fin u → Fin N,
+        if ¬ Moderate E c π t xs then prodW τ.w xs else 0 := by
+  classical
+  calc
+    _ = ∑ xs : Fin u → Fin N,
+          if ¬ Moderate E c π t
+              (fun i : Fin u' => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩)
+          then prodW τ.w xs else 0 :=
+      by
+        simpa using prefix_prodW_event_mass_eq τ hu
+          (fun xs : Fin u' → Fin N => ¬ Moderate E c π t xs)
+    _ ≤ _ := by
+      apply Finset.sum_le_sum
+      intro xs hxs
+      let pre : Fin u' → Fin N := fun i => xs ⟨i.val, Nat.lt_of_lt_of_le i.isLt hu⟩
+      by_cases hp : ¬ Moderate E c π t pre
+      · have hq : ¬ Moderate E c π t xs := by
+          intro hfull
+          exact hp (moderate_prefix_mono E c π t hu xs hfull)
+        simp [pre, hp, hq]
+      · by_cases hq : ¬ Moderate E c π t xs
+        · have hW : 0 ≤ prodW τ.w xs := by
+            unfold prodW
+            exact Finset.prod_nonneg fun i hi => τ.nonneg (xs i)
+          simpa [pre, hp, hq] using hW
+        · simp [pre, hp, hq]
+
+lemma weighted_event_factor_bound {N u : ℕ} (τ : Law N)
+    (p q : (Fin u → Fin N) → Prop) (f : (Fin u → Fin N) → ℝ)
+    (B M : ℝ) (hB : 0 ≤ B) (hM : 0 ≤ M)
+    (hsub : ∀ xs, p xs → q xs)
+    (hpoint : ∀ xs, p xs → (∀ i, 0 < τ.w (xs i)) → f xs ≤ B)
+    (hf : ∀ xs, 0 ≤ f xs)
+    (hmass : (∑ xs : Fin u → Fin N,
+      if q xs then prodW τ.w xs else 0) ≤ M) :
+    (∑ xs : Fin u → Fin N,
+      if p xs then prodW τ.w xs * f xs else 0) ≤ B * M := by
+  classical
+  have hw (xs : Fin u → Fin N) : 0 ≤ prodW τ.w xs := by
+    unfold prodW
+    exact Finset.prod_nonneg fun i hi => τ.nonneg (xs i)
+  have hterm (xs : Fin u → Fin N) :
+      (if p xs then prodW τ.w xs * f xs else 0) ≤
+        B * (if q xs then prodW τ.w xs else 0) := by
+    by_cases hp : p xs
+    · have hq := hsub xs hp
+      rw [if_pos hp, if_pos hq]
+      by_cases hzero : prodW τ.w xs = 0
+      · simp [hzero]
+      · have hpos : 0 < prodW τ.w xs := lt_of_le_of_ne (hw xs) (Ne.symm hzero)
+        have hcoords : ∀ i, 0 < τ.w (xs i) := by
+          intro i
+          by_contra hnot
+          have hz : τ.w (xs i) = 0 := le_antisymm (le_of_not_gt hnot) (τ.nonneg _)
+          have hprod : prodW τ.w xs = 0 := by
+            unfold prodW
+            exact Finset.prod_eq_zero (Finset.mem_univ i) hz
+          exact (ne_of_gt hpos) hprod
+        calc
+          prodW τ.w xs * f xs ≤ prodW τ.w xs * B :=
+            mul_le_mul_of_nonneg_left (hpoint xs hp hcoords) (hw xs)
+          _ = B * prodW τ.w xs := by ring
+    · rw [if_neg hp]
+      by_cases hq : q xs
+      · rw [if_pos hq]
+        exact mul_nonneg hB (hw xs)
+      · rw [if_neg hq]
+        simp
+  calc
+    _ ≤ ∑ xs : Fin u → Fin N, B * (if q xs then prodW τ.w xs else 0) :=
+      Finset.sum_le_sum fun xs hxs => hterm xs
+    _ = B * ∑ xs : Fin u → Fin N, (if q xs then prodW τ.w xs else 0) := by
+      rw [Finset.mul_sum]
+    _ ≤ B * M := mul_le_mul_of_nonneg_left hmass hB
+
+lemma sum_if_nested_split {α : Type*} [Fintype α]
+    (P Q R : α → Prop) (f : α → ℝ)
+    (hPQ : ∀ x, P x → Q x) (hQR : ∀ x, Q x → R x) :
+    (∑ x, if R x then f x else 0) =
+      (∑ x, if P x then f x else 0) +
+        (∑ x, if Q x ∧ ¬ P x then f x else 0) +
+          ∑ x, if R x ∧ ¬ Q x then f x else 0 := by
+  classical
+  calc
+    _ = ∑ x, ((if P x then f x else 0) +
+          (if Q x ∧ ¬ P x then f x else 0) +
+            if R x ∧ ¬ Q x then f x else 0) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases hp : P x
+      · have hq := hPQ x hp
+        have hr := hQR x hq
+        simp [hp, hq, hr]
+      · by_cases hq : Q x
+        · have hr := hQR x hq
+          simp [hp, hq, hr]
+        · by_cases hr : R x <;> simp [hp, hq, hr]
+    _ = _ := by simp only [Finset.sum_add_distrib]
+
+lemma Phi_abs_le_card_mul_of_posTerm_bound {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour) (π : Fin d → Fin N → ℝ)
+    (hπ : ∀ l y, 0 ≤ π l y) (xs : Fin u → Fin N) (B : ℝ)
+    (hpoint : ∀ I : Finset (Fin u), posTerm E c π I xs ≤ B) :
+    |Phi E c π xs| ≤ (Fintype.card (Finset (Fin u)) : ℝ) * B := by
+  calc
+    |Phi E c π xs| ≤ ∑ I : Finset (Fin u), posTerm E c π I xs :=
+      Phi_abs_le_posTerm_sum E c π hπ xs
+    _ ≤ ∑ I : Finset (Fin u), B :=
+      Finset.sum_le_sum fun I hI => hpoint I
+    _ = (Fintype.card (Finset (Fin u)) : ℝ) * B := by simp
+
+end HypercubeRamsey.S12.Lane_q_s12_mom

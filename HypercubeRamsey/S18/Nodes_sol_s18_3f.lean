@@ -372,50 +372,288 @@ theorem oppositePins_not_nonneighbors :
       P.pr (fun b => b = false) * P.pr (fun b => b ≠ true) := by
   norm_num [FinLaw.pr, FinLaw.uniform, Fintype.sum_bool]
 
-/-- Image tokens may be erased when their edges were already carried by domains
-or tapes. All fields of the frozen coupling contract remain satisfied. -/
-noncomputable def eraseRedundantImages (D : S18.LateData hPT) (δ : ℝ)
-    (L : S18.LeafCoupling D δ)
-    (hredundant : ∀ i j, ¬ Disjoint (L.images i) (L.images j) →
-      ¬ Disjoint (L.domains i) (L.domains j) ∨ ¬ Disjoint (L.tapes i) (L.tapes j)) :
-    S18.LeafCoupling D δ :=
-  { L with
-    images := fun _ => ∅
-    adjacent_eq := by
-      intro i j
-      rw [L.adjacent_eq]
-      simp only [Finset.disjoint_empty_left, not_true_eq_false, false_or]
-      constructor
-      · intro h
-        rcases h with hd | him | ht
-        · exact Or.inl hd
-        · exact hredundant i j him
-        · exact Or.inr ht
-      · intro h
-        rcases h with hd | ht
-        · exact Or.inl hd
-        · exact Or.inr (Or.inr ht)
-    scope_bound := by
-      intro i
-      have h := L.scope_bound i
-      have hi : 0 ≤ ((L.images i).card : ℝ) := Nat.cast_nonneg _
-      simp only [Finset.card_empty, Nat.cast_zero, add_zero]
-      push_cast at h ⊢
-      linarith }
+/-- Exact event inequality needed for coordinate fibers. This requires less
+than an explicit forcing kernel. -/
+def TestNonneighborBound (D : S18.LateData hPT) (δ : ℝ)
+    (L : S18.LeafCoupling D δ) (region : Finset D.geom.Cell) : Prop :=
+  ∀ (a : TestView D region) (S : Finset L.Leaf),
+    (∀ i ∈ S, ¬ testTouches D δ L region a i) →
+    D.encoding.permLaw.pr (fun x => testView D region x = a ∧ ∀ i ∈ S, x ∉ L.leaf i) ≤
+      D.encoding.permLaw.pr (fun x => testView D region x = a) *
+        D.encoding.permLaw.pr (fun x => ∀ i ∈ S, x ∉ L.leaf i)
 
-/-- Erasing redundant tokens rules out automatic image coverage for any occurring
-leaf that reads a domain slot. This is a contract-level obstruction, not a
-refutation of the terminal comparison theorem. -/
-theorem erasedImages_not_imageCovered (D : S18.LateData hPT) (δ : ℝ)
+private theorem pr_filter_mass {Ω : Type*} [Fintype Ω]
+    (P : FinLaw Ω) (F : Ω → Prop) [DecidablePred F] :
+    P.pr F = ∑ x ∈ Finset.univ.filter F, P.w x := by
+  unfold FinLaw.pr
+  rw [Finset.sum_filter]
+  apply Finset.sum_congr rfl
+  intro x hx
+  by_cases hf : F x <;> simp [hf]
+
+private theorem pr_nonneg {Ω : Type*} [Fintype Ω]
+    (P : FinLaw Ω) (F : Ω → Prop) : 0 ≤ P.pr F := by
+  unfold FinLaw.pr
+  exact Finset.sum_nonneg (fun x _ => by split_ifs <;> simp [P.nonneg])
+
+theorem testNonneighbor_of_fiberForcing (D : S18.LateData hPT) (δ : ℝ)
+    (L : S18.LeafCoupling D δ) (region : Finset D.geom.Cell)
+    (forcing : TestFiberForcing D δ L region) : TestNonneighborBound D δ L region := by
+  intro a S hS
+  let F := fun x : D.encoding.InitInput => testView D region x = a
+  by_cases ha : 0 < D.encoding.permLaw.pr F
+  · have hmass : 0 < ∑ x ∈ Finset.univ.filter F, D.encoding.permLaw.w x := by
+      exact lt_of_lt_of_eq ha (pr_filter_mass D.encoding.permLaw F)
+    have h := Lane_sol_s18_n4.forcingLopsided D.encoding.permLaw
+      (Finset.univ.filter F) hmass (forcing.force a hmass) (forcing.push a hmass)
+      (fun x => ∀ i ∈ S, x ∉ L.leaf i) (by
+        intro x y hxy hy i hi hx
+        exact hy i hi (forcing.preserves a hmass x y hxy i (hS i hi) hx))
+    simpa only [Finset.mem_filter, Finset.mem_univ, true_and] using h
+  · have hz : D.encoding.permLaw.pr F = 0 :=
+      le_antisymm (le_of_not_gt ha) (pr_nonneg _ _)
+    change D.encoding.permLaw.pr (fun x => F x ∧ ∀ i ∈ S, x ∉ L.leaf i) ≤ _
+    have hle : D.encoding.permLaw.pr (fun x => F x ∧ ∀ i ∈ S, x ∉ L.leaf i) ≤
+        D.encoding.permLaw.pr F := by
+      unfold FinLaw.pr
+      apply Finset.sum_le_sum
+      intro x hx
+      by_cases hf : F x
+      · simp only [hf, true_and, ite_true]
+        split_ifs <;> simp [D.encoding.permLaw.nonneg]
+      · simp [hf]
+    change _ ≤ D.encoding.permLaw.pr F * _
+    rw [hz, zero_mul]
+    exact hle.trans hz.le
+
+private theorem pr_partition {Ω I : Type*} [Fintype Ω] [Fintype I]
+    (P : FinLaw Ω) (partition : Ω → I) (F : Ω → Prop) :
+    (∑ a, P.pr (fun x => F x ∧ partition x = a)) = P.pr F := by
+  unfold FinLaw.pr
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro x hx
+  by_cases hf : F x <;> simp [hf]
+
+set_option maxHeartbeats 400000 in
+/-- The comparison follows from the fiber inequality without constructing
+a stronger pointwise forcing kernel. -/
+theorem testComparison_of_nonneighbor (D : S18.LateData hPT) (δ ε : ℝ)
     (L : S18.LeafCoupling D δ)
-    (hredundant : ∀ i j, ¬ Disjoint (L.images i) (L.images j) →
-      ¬ Disjoint (L.domains i) (L.domains j) ∨ ¬ Disjoint (L.tapes i) (L.tapes j))
-    (i : L.Leaf) (x : D.encoding.InitInput) (hx : x ∈ L.leaf i)
-    (hdom : (L.domains i).Nonempty) :
-    ¬ ImageCovered D δ (eraseRedundantImages D δ L hredundant) := by
+    (hprob : ∀ i, D.encoding.permLaw.pr (fun x => x ∈ L.leaf i) ≤ 1 / 4)
+    (hcharge : ∀ i, (∑ j, if L.adjacent i j then
+        2 * D.encoding.permLaw.pr (fun x => x ∈ L.leaf j) else 0) ≤ 1 / 2)
+    (hpositive : 0 < ∑ x ∈ S18.terminalSet D δ, D.encoding.permLaw.w x)
+    (region : Finset D.geom.Cell) (hnon : TestNonneighborBound D δ L region)
+    (hcost : ∀ a : TestView D region,
+      (∏ i ∈ Finset.univ.filter (testTouches D δ L region a),
+        (1 - 2 * D.encoding.permLaw.pr (fun x => x ∈ L.leaf i))⁻¹) ≤ 1 + ε)
+    (Ψ : D.encoding.InitInput → ℝ) (hΨ : ∀ x, 0 ≤ Ψ x)
+    (hlocal : ∀ x y, (∀ C ∈ region, x.1 C = y.1 C ∧ x.2 C = y.2 C) → Ψ x = Ψ y) :
+    (D.encoding.terminalLaw (S18.terminalSet D δ) hpositive).E Ψ ≤
+      (1 + ε) * D.encoding.permLaw.E Ψ := by
+  apply Lane_sol_s18_n4.testComparisonFromFibers _ _ Ψ hΨ (1 + ε)
+  intro v
+  have hslice (a : TestView D region) :
+      (D.encoding.terminalLaw (S18.terminalSet D δ) hpositive).pr
+        (fun x => Ψ x = v ∧ testView D region x = a) ≤
+      (1 + ε) * D.encoding.permLaw.pr
+        (fun x => Ψ x = v ∧ testView D region x = a) := by
+    let F := fun x : D.encoding.InitInput => Ψ x = v ∧ testView D region x = a
+    have hF : ∀ S : Finset L.Leaf, (∀ i ∈ S, ¬ testTouches D δ L region a i) →
+        D.encoding.permLaw.pr (fun x => F x ∧ ∀ i ∈ S, x ∉ L.leaf i) ≤
+          D.encoding.permLaw.pr F * D.encoding.permLaw.pr (fun x => ∀ i ∈ S, x ∉ L.leaf i) := by
+      intro S hS
+      by_cases hex : ∃ x, F x
+      · obtain ⟨x, hxv, hxa⟩ := hex
+        have heq : F = fun y => testView D region y = a := by
+          funext y
+          apply propext
+          constructor
+          · exact And.right
+          · intro hya
+            exact ⟨(hlocal y x (testView_local D region y x (hya.trans hxa.symm))).trans hxv, hya⟩
+        rw [heq]
+        exact hnon a S hS
+      · have hnone : ∀ x, ¬ F x := fun x hx => hex ⟨x, hx⟩
+        simp only [FinLaw.pr, hnone, false_and, ite_false, Finset.sum_const_zero,
+          zero_mul, le_refl]
+    have hraw := Lane_sol_s18_n4.leafTestProbabilityBound D δ L hprob hcharge
+      hpositive F (testTouches D δ L region a) hF
+    have hmul := mul_le_mul_of_nonneg_left (hcost a) (pr_nonneg D.encoding.permLaw F)
+    exact hraw.trans (hmul.trans_eq (mul_comm _ _))
+  rw [← pr_partition _ (testView D region) (fun x => Ψ x = v),
+    ← pr_partition D.encoding.permLaw (testView D region) (fun x => Ψ x = v),
+    Finset.mul_sum]
+  exact Finset.sum_le_sum (fun a _ => hslice a)
+
+private theorem pr_complement {Ω : Type*} [Fintype Ω]
+    (P : FinLaw Ω) (F : Ω → Prop) :
+    P.pr (fun x => ¬ F x) = 1 - P.pr F := by
+  have hsum : P.pr (fun x => ¬ F x) + P.pr F = 1 := by
+    rw [← P.sum_one]
+    unfold FinLaw.pr
+    rw [← Finset.sum_add_distrib]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hf : F x <;> simp [hf]
+  linarith
+
+/-- A positive coordinate fiber disjoint from a positive untouched leaf cannot
+satisfy the required inequality. This diagnoses the forcing step only. -/
+theorem testNonneighbor_fails_of_disjoint_leaf (D : S18.LateData hPT) (δ : ℝ)
+    (L : S18.LeafCoupling D δ) (region : Finset D.geom.Cell)
+    (a : TestView D region) (i : L.Leaf)
+    (ha : 0 < D.encoding.permLaw.pr (fun x => testView D region x = a))
+    (hi : 0 < D.encoding.permLaw.pr (fun x => x ∈ L.leaf i))
+    (huntouched : ¬ testTouches D δ L region a i)
+    (hdis : ∀ x, 0 < D.encoding.permLaw.w x → testView D region x = a → x ∉ L.leaf i) :
+    ¬ TestNonneighborBound D δ L region := by
   intro h
-  obtain ⟨s, hs⟩ := hdom
-  have hm := h i x hx s hs
-  simpa [eraseRedundantImages] using hm
+  have hb := h a {i} (by
+    intro j hj
+    have hji := Finset.mem_singleton.mp hj
+    subst j
+    exact huntouched)
+  have heq : D.encoding.permLaw.pr
+      (fun x => testView D region x = a ∧ ∀ j ∈ ({i} : Finset L.Leaf), x ∉ L.leaf j) =
+      D.encoding.permLaw.pr (fun x => testView D region x = a) := by
+    unfold FinLaw.pr
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hw : 0 < D.encoding.permLaw.w x
+    · by_cases hv : testView D region x = a
+      · simp [hv, hdis x hw hv]
+      · simp [hv]
+    · have hz : D.encoding.permLaw.w x = 0 :=
+        le_antisymm (le_of_not_gt hw) (D.encoding.permLaw.nonneg x)
+      simp [hz]
+  rw [heq] at hb
+  have havoid : (fun x => ∀ j ∈ ({i} : Finset L.Leaf), x ∉ L.leaf j) =
+      (fun x => x ∉ L.leaf i) := by funext x; simp
+  rw [havoid, pr_complement] at hb
+  have hp := mul_pos ha hi
+  nlinarith
+
+theorem no_testFiberForcing_of_disjoint_leaf (D : S18.LateData hPT) (δ : ℝ)
+    (L : S18.LeafCoupling D δ) (region : Finset D.geom.Cell)
+    (a : TestView D region) (i : L.Leaf)
+    (ha : 0 < D.encoding.permLaw.pr (fun x => testView D region x = a))
+    (hi : 0 < D.encoding.permLaw.pr (fun x => x ∈ L.leaf i))
+    (huntouched : ¬ testTouches D δ L region a i)
+    (hdis : ∀ x, 0 < D.encoding.permLaw.w x → testView D region x = a → x ∉ L.leaf i) :
+    ¬ Nonempty (TestFiberForcing D δ L region) := by
+  rintro ⟨forcing⟩
+  exact testNonneighbor_fails_of_disjoint_leaf D δ L region a i ha hi huntouched hdis
+    (testNonneighbor_of_fiberForcing D δ L region forcing)
+
+theorem permLaw_support (D : S18.LateData hPT) (x : D.encoding.InitInput)
+    (hx : 0 < D.encoding.permLaw.w x) : x.1 ∈ permPools D.geom := by
+  by_contra h
+  have hz : D.encoding.permLaw.w x = 0 := by
+    simp [LateEncoding.permLaw, LateEncoding.initialLaw, LateEncoding.poolLaw,
+      permPoolLaw, FinLaw.bind, FinLaw.uniform, h]
+  rw [hz] at hx
+  exact lt_irrefl 0 hx
+
+/-- In the actual permutation experiment, an outside prescribed pin and a
+consulted test pin with the same image have disjoint positive supports.
+If the supplied image tokens omit the collision, the test inequality fails. -/
+theorem testNonneighbor_fails_of_omitted_pin (D : S18.LateData hPT) (δ : ℝ)
+    (L : S18.LeafCoupling D δ) (region : Finset D.geom.Cell)
+    (a : TestView D region) (i : L.Leaf)
+    (ha : 0 < D.encoding.permLaw.pr (fun x => testView D region x = a))
+    (hi : 0 < D.encoding.permLaw.pr (fun x => x ∈ L.leaf i))
+    (huntouched : ¬ testTouches D δ L region a i)
+    (s : Sigma fun C : D.geom.Cell => Fin (D.geom.nslot C))
+    (hs : s ∈ L.domains i) (b : Bin PT.tiling (D.geom.cellPatch s.1))
+    (hpin : ∀ x ∈ L.leaf i, x.1 s.1 s.2 = b)
+    (C : D.geom.Cell) (hC : C ∈ region) (t : Fin (D.geom.nslot C))
+    (hpatch : D.geom.cellPatch s.1 = D.geom.cellPatch C)
+    (himage : b.1 = (a.1 ⟨C, hC⟩ t).1) :
+    ¬ TestNonneighborBound D δ L region := by
+  apply testNonneighbor_fails_of_disjoint_leaf D δ L region a i ha hi huntouched
+  intro x hx hxa hleaf
+  have hperm := (Finset.mem_filter.mp (permLaw_support D x hx)).2
+  have htest : x.1 C t = a.1 ⟨C, hC⟩ t :=
+    congrArg (fun z : TestView D region => z.1 ⟨C, hC⟩ t) hxa
+  have heq : (x.1 s.1 s.2).1 = (x.1 C t).1 := by
+    rw [hpin x hleaf, htest]
+    exact himage
+  have hcell := (hperm s.1 C s.2 t hpatch heq).1
+  have htestdom : s ∈ testDomains D region := by
+    simp only [testDomains, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact hcell.symm ▸ hC
+  apply huntouched
+  apply Or.inl
+  intro hdis
+  exact Finset.disjoint_left.mp hdis hs htestdom
+
+/-- Every part of the terminal certificate follows once the exact missing
+fiber inequality is supplied on the stated seed scopes. -/
+theorem terminalCertificateEventually_of_nonneighbor
+    {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : S18.LateData hPT, D.Spec → S18.TerminalRiskBound D δ →
+      ∀ L : S18.LeafCoupling D δ,
+        (∀ seed : Finset D.geom.Cell,
+          (seed.card : ℝ) ≤ Real.exp (Real.log (T.S.n k) ^ 3) →
+          TestNonneighborBound D δ L (D.expandCells seed)) →
+        Nonempty (S18.TerminalCertificate D δ (T.S.n k : ℝ)⁻¹) := by
+  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
+    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ,
+    testTokensEventually hκ T] with k hpositive hcost htokens
+  intro PT hPT D hD hRisk L hnon
+  have hpos := hpositive D hRisk L
+  obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk L
+  refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
+  intro seed hseed Ψ hΨ hlocal
+  apply testComparison_of_nonneighbor D δ (T.S.n k : ℝ)⁻¹ L hprob hcharge
+    hpos (D.expandCells seed) (hnon seed hseed) ?_ Ψ hΨ hlocal
+  intro a
+  have hfilter : Finset.univ.filter (testTouches D δ L (D.expandCells seed) a) =
+      Finset.univ.filter (fun i =>
+        ¬ Disjoint (L.domains i) (testDomains D (D.expandCells seed)) ∨
+        ¬ Disjoint (L.images i) (testImages D (D.expandCells seed)
+          (viewPools D (D.expandCells seed) a)) ∨
+        ¬ Disjoint (L.tapes i) (D.expandCells seed)) := by
+    ext i
+    simp only [Finset.mem_filter, testTouches]
+  rw [hfilter]
+  exact hproduct (testDomains D (D.expandCells seed))
+    (testImages D (D.expandCells seed) (viewPools D (D.expandCells seed) a))
+    (D.expandCells seed) (htokens D hD seed hseed (viewPools D (D.expandCells seed) a))
+
+/-- An independent gate can make every one-pin risk arbitrarily small. It
+does not repair an omitted image collision in a test's nonneighbor relation. -/
+noncomputable def rareGateLaw (p : ℝ) (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :
+    FinLaw (Bool × Bool) where
+  w x := (if x.2 then p else 1 - p) / 2
+  nonneg x := by
+    split_ifs
+    · positivity
+    · exact div_nonneg (sub_nonneg.mpr hp1) (by norm_num)
+  sum_one := by
+    simp only [Fintype.sum_prod_type, Fintype.sum_bool, Bool.false_eq_true,
+      ite_false, ite_true]
+    ring
+
+theorem rareGate_pinned_bounds (p : ℝ) (hp0 : 0 ≤ p) (hp1 : p ≤ 1) :
+    let P := rareGateLaw p hp0 hp1
+    ∀ b : Bool, P.pr (fun x => x.1 = b ∧ x.1 = true ∧ x.2 = true) /
+      P.pr (fun x => x.1 = b) ≤ p := by
+  intro P b
+  have hd : p / 2 + (1 - p) / 2 = (1 / 2 : ℝ) := by ring
+  have heq : p / 2 / (1 / 2 : ℝ) = p := by ring
+  cases b <;> simp [P, FinLaw.pr, rareGateLaw, Fintype.sum_prod_type, Fintype.sum_bool] <;>
+    first | linarith | rw [hd, heq]
+
+theorem rareGate_not_nonneighbor (p : ℝ) (hp0 : 0 < p) (hp1 : p ≤ 1) :
+    let P := rareGateLaw p hp0.le hp1
+    P.pr (fun x => x.1 = false ∧ ¬ (x.1 = true ∧ x.2 = true)) >
+      P.pr (fun x => x.1 = false) * P.pr (fun x => ¬ (x.1 = true ∧ x.2 = true)) := by
+  dsimp
+  simp [FinLaw.pr, rareGateLaw, Fintype.sum_prod_type, Fintype.sum_bool]
+  linarith
 
 end HypercubeRamsey.Lane_sol_s18_3f

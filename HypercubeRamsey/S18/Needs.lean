@@ -18,7 +18,8 @@ namespace S18
 
 open Filter
 
-/-- SHARED: L16.1 quantitative facts consumed by the resampling and late-process nodes. -/
+/-- SHARED: L16.1 quantitative facts and the linked physical fresh sampler
+consumed by the resampling and late-process nodes. -/
 structure L16QuantitativeValidity {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (G : LowGeom PT) (F : FreshCell G) : Prop where
   pools_nonempty : (permPools G).Nonempty
@@ -29,6 +30,9 @@ structure L16QuantitativeValidity {κ : CConsts} {T : Stage} {k : ℕ}
   slot_eq : ∀ C, G.nslot C =
     ⌈κ.Kcell * Real.rpow (T.S.n k : ℝ) κ.Ac /
       (PT.tiling.P (G.cellPatch C)).d⌉₊
+  /-- The actual Section 16 construction, including calibration, source
+  identities, typicality estimates and internal probability priors. -/
+  physical : Nonempty (PhysicalFreshCertificate G F)
   fresh_spec : ∃ validState permittedLabels, FreshCell.Spec F validState permittedLabels
   r_pos : 0 < G.r
   r_lower : κ.A0 * Real.log (T.S.n k) ≤ (G.r : ℝ)
@@ -100,13 +104,13 @@ private theorem even_of_odd_flip {n : ℕ} (v : CubePos n) (a : Fin n)
     exact h
 
 /-- Projection from the exact syndrome/cell certificate used by the fresh
-construction. The fresh specification is the only sampler input. -/
+construction, retaining its physical sampler certificate. -/
 theorem l16_validity_of_certificate {κ : CConsts} (hκ : κ.Admissible)
     {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
     (Q : S16.LowModeQuantFacts hκ (PT := PT) K16)
     (H : S16.LowGeometryCertificate hκ Q)
     (hGain : ∀ i, PT.tiling.gain i ≤ κ.KB * Real.log (T.S.n k)) (F : FreshCell H.geom)
-    (hSpec : ∃ validState permittedLabels, FreshCell.Spec F validState permittedLabels) :
+    (hPhysical : Nonempty (PhysicalFreshCertificate H.geom F)) :
     L16QuantitativeValidity H.geom F := by
   classical
   have hr : κ.A0 * Real.log (T.S.n k : ℝ) ≤ (H.geom.r : ℝ) := H.late_classes.subspace_size.1
@@ -114,7 +118,10 @@ theorem l16_validity_of_certificate {κ : CConsts} (hκ : κ.Admissible)
     pools_nonempty := H.perm_pool_nonempty
     slot_lower := ?_
     slot_eq := H.cell_partition.slot_count
-    fresh_spec := hSpec
+    physical := hPhysical
+    fresh_spec := by
+      obtain ⟨physical⟩ := hPhysical
+      exact ⟨_, _, physical.fresh_spec⟩
     r_pos := ?_
     r_lower := hr
     r_upper := ?_
@@ -176,7 +183,8 @@ theorem l16_validity_of_certificate {κ : CConsts} (hκ : κ.Admissible)
       intro hs
       obtain ⟨a, ha, hne⟩ := hdiff
       exact hne (hs a (by simpa only [H.geom.cellOf_patch b] using ha))
-    simpa only [Real.rpow_eq_pow, Real.rpow_ofNat] using hh hn
+    simpa only [Real.rpow_eq_pow, Real.rpow_ofNat, HypercubeRamsey.hammingDist,
+      _root_.hammingDist] using hh hn
   · intro C
     change (S16.CellData.positions H.data.cells C).card ≤ T.S.n k ^ κ.Ac
     simpa only [S16.CellData.positions, Real.rpow_eq_pow, Real.rpow_natCast, ← Nat.cast_pow, Nat.floor_natCast]
@@ -212,10 +220,9 @@ theorem l16_quantitative_validity {κ : CConsts} (hκ : κ.Admissible)
   obtain ⟨Q, hGain⟩ := hquant PT hPT hlow
   obtain ⟨H⟩ := hg Q (by omega) hlarge.2.1
   have hCal := cell_calibration_of_constants hκ hConstants.calibration hPT hlow
-  obtain ⟨F, validState, permittedLabels, hSpec⟩ :=
+  obtain ⟨F, hPhysical⟩ :=
     hf hDisc Q H hUniform hCal (by omega) hAt
-  exact ⟨H.geom, F, l16_validity_of_certificate hκ Q H hGain F
-    ⟨validState, permittedLabels, hSpec⟩⟩
+  exact ⟨H.geom, F, l16_validity_of_certificate hκ Q H hGain F hPhysical⟩
 
 /-- Oriented C14.F construction with corner mass and the producer's uniform
 in-bin law certificate retained for the low-mode cell construction. -/

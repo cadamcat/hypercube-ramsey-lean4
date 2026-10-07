@@ -2478,6 +2478,133 @@ private theorem mergeSortAt_mono {n : ℕ} (f g : Fin n → ℕ)
       _ = FF.card := hFFperm.symm
   omega
 
+private def mergeSortAt {n : ℕ} (f : Fin n → ℕ) (i : Fin n) : ℕ :=
+  ((List.ofFn f).mergeSort (fun a b => decide (a ≤ b))).get ⟨i.val, by simp⟩
+
+private theorem sum_ofFn_eq {n : ℕ} (f : Fin n → ℕ) :
+    (List.ofFn f).sum = ∑ i : Fin n, f i := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.ofFn_succ']
+    simp only [List.concat_eq_append, List.sum_append, List.sum_singleton]
+    rw [ih, Fin.sum_univ_castSucc]
+
+private theorem mergeSort_sum_eq (l : List ℕ) :
+    (l.mergeSort (fun a b => decide (a ≤ b))).sum = l.sum := by
+  letI : LeftCommutative (fun a b : ℕ => a + b) := ⟨by intro a b c; omega⟩
+  have h := (List.mergeSort_perm l (fun a b => decide (a ≤ b))).foldr_eq
+    (f := fun a b => a + b) (b := 0)
+  exact h
+
+private theorem mergeSortAt_add_one {n : ℕ} (f : Fin n → ℕ) (k : Fin n) :
+    mergeSortAt (fun i => f i + 1) k = mergeSortAt f k + 1 := by
+  let l := List.ofFn f
+  have hraw : l.map Nat.succ = List.ofFn (fun i : Fin n => f i + 1) := by
+    simp [l, Nat.succ_eq_add_one]
+    funext i
+    simp [Nat.succ_eq_add_one]
+  have hmap : (l.mergeSort (fun a b => decide (a ≤ b))).map Nat.succ =
+      ((l.map Nat.succ).mergeSort (fun a b => decide (a ≤ b))) := by
+    apply List.map_mergeSort
+    intro a ha b hb
+    simp
+  have hsorted :
+      (l.mergeSort (fun a b => decide (a ≤ b))).map Nat.succ =
+        (List.ofFn (fun i : Fin n => f i + 1)).mergeSort
+          (fun a b => decide (a ≤ b)) := by
+    rw [← hraw]
+    exact hmap
+  have hget := congrArg (fun L : List ℕ => L.getD k.val 0) hsorted
+  simpa [mergeSortAt, l, List.getD_map, List.getD_eq_get, Nat.succ_eq_add_one] using hget.symm
+
+private theorem mergeSort_one_change {n : ℕ} (f g : Fin n → ℕ)
+    (hfg : ∀ i, f i ≤ g i) (hgf : ∀ i, g i ≤ f i + 1)
+    (hsum : (∑ i : Fin n, f i) + 1 = ∑ i : Fin n, g i) :
+    ∃ r : Fin n, mergeSortAt g r = mergeSortAt f r + 1 ∧
+      ∀ t : Fin n, t ≠ r → mergeSortAt g t = mergeSortAt f t := by
+  classical
+  let Lf := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  let Lg := (List.ofFn g).mergeSort (fun a b => decide (a ≤ b))
+  have hlenf : Lf.length = n := by simp [Lf]
+  have hLeng : Lg.length = n := by simp [Lg]
+  let qf : Fin n → ℕ := fun i => Lf.get (Fin.cast hlenf.symm i)
+  let qg : Fin n → ℕ := fun i => Lg.get (Fin.cast hLeng.symm i)
+  have hqf : ∀ i : Fin n, qf i = mergeSortAt f i := by intro i; rfl
+  have hqg : ∀ i : Fin n, qg i = mergeSortAt g i := by intro i; rfl
+  have hOfFnF : List.ofFn qf = Lf := by
+    change List.ofFn (fun i : Fin n => Lf.get (Fin.cast hlenf.symm i)) = Lf
+    rw [← List.ofFn_congr hlenf (List.get Lf)]
+    exact List.ofFn_get Lf
+  have hOfFnG : List.ofFn qg = Lg := by
+    change List.ofFn (fun i : Fin n => Lg.get (Fin.cast hLeng.symm i)) = Lg
+    rw [← List.ofFn_congr hLeng (List.get Lg)]
+    exact List.ofFn_get Lg
+  have hlow : ∀ i, qf i ≤ qg i := by
+    intro i
+    simpa [qf, qg, Lf, Lg, mergeSortAt] using mergeSortAt_mono f g hfg i
+  have hhigh : ∀ i, qg i ≤ qf i + 1 := by
+    intro i
+    have h := mergeSortAt_mono g (fun j => f j + 1) hgf i
+    have h' : mergeSortAt g i ≤ mergeSortAt (fun j => f j + 1) i := by
+      simpa [mergeSortAt] using h
+    rw [mergeSortAt_add_one] at h'
+    rw [hqg i, hqf i]
+    exact h'
+  have hsumf : (∑ i : Fin n, qf i) = ∑ i, f i := by
+    calc
+      (∑ i : Fin n, qf i) = (List.ofFn qf).sum := (sum_ofFn_eq qf).symm
+      _ = Lf.sum := by rw [hOfFnF]
+      _ = (List.ofFn f).sum := mergeSort_sum_eq (List.ofFn f)
+      _ = ∑ i, f i := sum_ofFn_eq f
+  have hsumg : (∑ i : Fin n, qg i) = ∑ i, g i := by
+    calc
+      (∑ i : Fin n, qg i) = (List.ofFn qg).sum := (sum_ofFn_eq qg).symm
+      _ = Lg.sum := by rw [hOfFnG]
+      _ = (List.ofFn g).sum := mergeSort_sum_eq (List.ofFn g)
+      _ = ∑ i, g i := sum_ofFn_eq g
+  have hqsum : (∑ i : Fin n, qf i) + 1 = ∑ i : Fin n, qg i := by
+    rw [hsumf, hsumg]
+    exact hsum
+  have hpoint : ∀ i, qg i = qf i + if qf i < qg i then 1 else 0 := by
+    intro i
+    have hl := hlow i
+    have hh := hhigh i
+    by_cases h : qf i < qg i
+    · have h' : qg i = qf i + 1 := by omega
+      simp [h, h']
+    · have h' : qg i = qf i := by omega
+      simp [h, h']
+  have hsumPoint : (∑ i : Fin n, qg i) =
+      (∑ i : Fin n, qf i) + ∑ i : Fin n, if qf i < qg i then 1 else 0 := by
+    calc
+      (∑ i : Fin n, qg i) =
+          ∑ i : Fin n, (qf i + if qf i < qg i then 1 else 0) :=
+            Finset.sum_congr rfl (fun i _ => hpoint i)
+      _ = (∑ i : Fin n, qf i) + ∑ i : Fin n, if qf i < qg i then 1 else 0 :=
+            Finset.sum_add_distrib
+  have hdiffsum : (∑ i : Fin n, if qf i < qg i then 1 else 0) = 1 := by
+    omega
+  let D : Finset (Fin n) := Finset.univ.filter fun i => qf i < qg i
+  have hDcard : D.card = 1 := by
+    simpa [D] using hdiffsum
+  obtain ⟨r, hr⟩ := Finset.card_eq_one.mp hDcard
+  have hrD : r ∈ D := by rw [hr]; simp
+  have hrrank : qg r = qf r + 1 := by
+    have hlt := (Finset.mem_filter.mp hrD).2
+    have hl := hlow r
+    have hh := hhigh r
+    omega
+  refine ⟨r, ?_, ?_⟩
+  · simpa [hqf r, hqg r] using hrrank
+  · intro t htr
+    have htD : t ∉ D := by rw [hr]; simp [htr]
+    have hnotlt : ¬ qf t < qg t := by simpa [D] using htD
+    have hl := hlow t
+    have hh := hhigh t
+    have hEq : qg t = qf t := by omega
+    simpa [hqf t, hqg t] using hEq
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by

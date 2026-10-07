@@ -263,6 +263,8 @@ theorem ref_indep {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N �
     unfold lik
     rw [hdouble' z']
 
+set_option maxHeartbeats 1000000
+
 /-- L4.1g(2) (04:392–404): on `E` (recomputed at `z`), each neighbouring kernel `p_u` is at most
 `R_u^{-(c,g(a))}(D_u)/R_u(D_u)` times its own deleted-tuple law, which is one of the at most `exp(O(T log n))` terms
 of the mixture `Q_u` (count condition in `E`); the validity ratios give `exp(k(log 2 - c₁ a_*))` for the own-key
@@ -609,7 +611,65 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
           _ ≤ (2 * (n : ℝ) ^ σ) ^ I * (2 * (n : ℝ) ^ 2) :=
             mul_le_mul hm hr (by positivity) (by positivity)
       _ = (2 : ℝ) ^ (I + 1) * (n : ℝ) ^ (σ * I + 2) := hmain
+  have refSets_card_le {n : ℕ} (P : Pos β γ n) (u : OddRole n) (c : Loc β γ n) :
+      (refSets P u c).card ≤ ((refPool P u).card + 1) ^ (2 * setBd β γ n) := by
+    classical
+    have bounded_powerset_card (s : Finset (Loc β γ n)) (T : ℕ) :
+        ((s.powerset.filter fun D => D.card ≤ T).card) ≤ (s.card + 1) ^ (2 * T) := by
+      let U : Finset (Finset (Loc β γ n)) :=
+        (Finset.range (T + 1)).biUnion fun i => s.powersetCard i
+      have hpowersetSub : s.powerset.filter (fun D => D.card ≤ T) ⊆ U := by
+        intro D hD
+        rcases Finset.mem_filter.mp hD with ⟨hDs, hDT⟩
+        apply Finset.mem_biUnion.mpr
+        refine ⟨D.card, Finset.mem_range.mpr (Nat.lt_succ_of_le hDT), ?_⟩
+        exact Finset.mem_powersetCard.mpr ⟨Finset.mem_powerset.mp hDs, rfl⟩
+      by_cases hs : s.card = 0
+      · have hsempty : s = ∅ := Finset.card_eq_zero.mp hs
+        have hpowerset : s.powerset = {∅} := by simp [hsempty]
+        have hfilter : ({∅} : Finset (Finset (Loc β γ n))).filter
+            (fun D => D.card ≤ T) = {∅} := by
+          ext D
+          by_cases hD : D = ∅ <;> simp [hD]
+        rw [hpowerset, hfilter]
+        simp [hsempty]
+      have hq : 2 ≤ s.card + 1 := by omega
+      have hTpow : T + 1 ≤ 2 ^ T := T.lt_two_pow_self.succ_le
+      have hTbase : T + 1 ≤ (s.card + 1) ^ T := by
+        exact hTpow.trans (pow_le_pow_left' hq T)
+      have hsum : (∑ i ∈ Finset.range (T + 1), (s.powersetCard i).card) ≤
+          (T + 1) * (s.card + 1) ^ T := by
+        calc
+          _ ≤ ∑ i ∈ Finset.range (T + 1), (s.card + 1) ^ T := by
+            apply Finset.sum_le_sum
+            intro i hi
+            rw [Finset.card_powersetCard]
+            have hiT : i ≤ T := by simp only [Finset.mem_range] at hi; omega
+            calc
+              Nat.choose s.card i ≤ s.card ^ i := Nat.choose_le_pow _ _
+              _ ≤ (s.card + 1) ^ i := pow_le_pow_left' (Nat.le_succ _) _
+              _ ≤ (s.card + 1) ^ T := pow_le_pow_right' (by omega) hiT
+          _ = (T + 1) * (s.card + 1) ^ T := by simp [Finset.sum_const, nsmul_eq_mul]
+      calc
+        (s.powerset.filter fun D => D.card ≤ T).card ≤ U.card := Finset.card_le_card hpowersetSub
+        _ ≤ ∑ i ∈ Finset.range (T + 1), (s.powersetCard i).card := Finset.card_biUnion_le
+        _ ≤ (T + 1) * (s.card + 1) ^ T := hsum
+        _ ≤ (s.card + 1) ^ T * (s.card + 1) ^ T := Nat.mul_le_mul_right _ hTbase
+        _ = (s.card + 1) ^ (2 * T) := by rw [← pow_add]; congr 1 <;> omega
+    have hsub : refSets P u c ⊆
+        (refPool P u).powerset.filter (fun D => D.card ≤ setBd β γ n) := by
+      intro D hD
+      change D ∈ (refPool P u).powerset.filter
+        (fun D => c ∈ D ∧ D.card ≤ setBd β γ n) at hD
+      rcases Finset.mem_filter.mp hD with ⟨hDsub, ⟨_, hDcard⟩⟩
+      exact Finset.mem_filter.mpr ⟨hDsub, hDcard⟩
+    calc
+      (refSets P u c).card ≤ ((refPool P u).powerset.filter fun D => D.card ≤ setBd β γ n).card :=
+        Finset.card_le_card hsub
+      _ ≤ ((refPool P u).card + 1) ^ (2 * setBd β γ n) :=
+        bounded_powerset_card (refPool P u) (setBd β γ n)
   sorry
+set_option maxHeartbeats 200000
 
 /-- L4.1g(3) (04:409–427): by `LikBound` and Lemma 3.7(2) (`gated_posterior`) the posterior `π(z) F_z(y)/M_c(y)`
 is at most `exp((log 2 - c₂ a_*)kn) ε₄⁻¹ π(z)`, and `π(z) ≤ (2e^{sX}/N)^k`; it is supported on `S^k` (a positive

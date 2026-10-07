@@ -1,4 +1,11 @@
 import HypercubeRamsey.S17.Needs
+import HypercubeRamsey.S17.Nodes_q_s17_pool
+import HypercubeRamsey.S17.Nodes_sol_s17_pool
+import HypercubeRamsey.S17.Nodes_q_s17_res1
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_experiment
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_mass
+
+set_option maxHeartbeats 1000000
 
 /-!
 # Section 17 estimate and finite-resampling nodes
@@ -80,7 +87,298 @@ theorem independentPinnedSupportFailure
           (fun ys => D.gateSupportFailure v
             (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) ≤
           (1 / 2 : ℝ) * Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) := by
-  sorry
+  classical
+  have hnT : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp
+      T.S.n_tendsto
+  have hPnat : 4 ≤ κ.P := by
+    have h := hκ.P_big.2
+    rw [hκ.Ac_eq] at h
+    omega
+  have hRnat : 0 < κ.R := by
+    rw [hκ.R_eq]
+    exact Nat.pow_pos (by omega)
+  have hRpos : 0 < (κ.R : ℝ) := by exact_mod_cast hRnat
+  have hA0 : 0 < κ.A0 := by
+    have h := hκ.A0_big
+    nlinarith
+  let pinB : ℝ := (ListGateContext.pinBudget κ : ℝ)
+  let Cbulk : ℝ := 2 + 2 * κ.A0 + K + pinB
+  let Csmall : ℝ := 4 * Cbulk
+  let Y0 : ℝ := Cbulk + 3 + 2 * K + 2 * (κ.R : ℝ)
+  have hpinB : 0 ≤ pinB := by dsimp [pinB]; positivity
+  have hCbulk : 1 ≤ Cbulk := by dsimp [Cbulk]; nlinarith [hA0, hK, hpinB]
+  have hCbulkPos : 0 ≤ Cbulk := le_trans (by norm_num) hCbulk
+  have hCbulkK : K ≤ Cbulk := by dsimp [Cbulk, pinB]; linarith
+  have hCsmall : 0 ≤ Csmall := by dsimp [Csmall]; positivity
+  have hYpos : 1 ≤ Y0 := by dsimp [Y0]; nlinarith [hCbulk, hK, hRpos]
+  have hlogSmall := Lane_q_s17_pool.eventually_log4_small T Csmall hCsmall
+  have hlogT := Real.tendsto_log_atTop.comp hnT
+  have hYevent := hlogT.eventually_ge_atTop Y0
+  filter_upwards [hlogSmall, hYevent,
+    T.S.n_tendsto.eventually_ge_atTop (2 : ℕ)] with k hsmall hY hk
+  intro PT D hQuant v σ pins fixed hInput
+  let n : ℕ := T.S.n k
+  let nR : ℝ := T.S.n k
+  let y : ℝ := Real.log nR
+  have hnR : 0 < nR := by dsimp [nR]; exact_mod_cast (by omega : 0 < T.S.n k)
+  have hy1 : 1 ≤ y := by
+    have hY0 : 1 ≤ Y0 := hYpos
+    exact hY0.trans (by simpa [y, nR] using hY)
+  have hsmall' : Csmall * y ^ 4 ≤ nR / 4 := by
+    simpa [y, nR] using hsmall
+  have hY' : Cbulk + 3 + 2 * K + 2 * (κ.R : ℝ) ≤ y := by
+    simpa [Y0, Cbulk, pinB, y] using hY
+  rcases hInput with ⟨_, _, _, hpinCard, _⟩
+  obtain ⟨B0, hB0ext, hB0patch, hB0lower, hB0upper, _hB0cross⟩ :=
+    Lane_q_s17_pool.lowGeom_bulk_early_candidates D D.tiling_valid
+      hQuant.geometry.ids_injective v
+  have hExtCard := Lane_q_s17_pool.externalEarly_card_le D v
+  let i := D.G.patchOf v
+  let h := (PT.tiling.P i).h
+  let ell := (PT.tiling.P i).ℓ
+  let d : ℕ := ⌊y ^ 4⌋₊
+  have hdReal : (d : ℝ) ≤ y ^ 4 := by
+    dsimp [d]
+    exact Nat.floor_le (by positivity)
+  have hy2 : y ≤ y ^ 2 := by nlinarith [sq_nonneg (y - 1)]
+  have hySq : 1 ≤ y ^ 2 := by nlinarith [sq_nonneg (y - 1)]
+  have hy4sq : y ^ 2 ≤ y ^ 4 := by nlinarith [sq_nonneg (y ^ 2 - 1), hySq]
+  have hy4 : y ≤ y ^ 4 := hy2.trans hy4sq
+  have hhPow : Real.rpow y (1 / 10 : ℝ) ≤ y ^ 4 := by
+    calc
+      Real.rpow y (1 / 10 : ℝ) ≤ Real.rpow y 4 :=
+        Real.rpow_le_rpow_of_exponent_le hy1 (by norm_num)
+      _ = y ^ 4 := by exact Real.rpow_natCast y 4
+  have hhReal : (h : ℝ) ≤ y ^ 4 := by
+    have hh := hQuant.geometry.height_bound i
+    dsimp [h, y, nR] at hh ⊢
+    exact hh.trans hhPow
+  have hsqrt : Real.sqrt y ≤ y := by
+    apply (Real.sqrt_le_left (by positivity)).2
+    exact hy2
+  have hellReal : (ell : ℝ) ≤ K * y ^ 4 := by
+    have hell := hQuant.geometry.prefix_bound i
+    dsimp [ell, y, nR] at hell ⊢
+    calc
+      (PT.tiling.P i).ℓ ≤ K * Real.sqrt (Real.log (T.S.n k : ℝ)) := hell
+      _ ≤ K * y := mul_le_mul_of_nonneg_left hsqrt (le_of_lt hK)
+      _ ≤ K * y ^ 4 := mul_le_mul_of_nonneg_left hy4 (le_of_lt hK)
+  have hrReal : (D.G.r : ℝ) ≤ 2 * κ.A0 * y ^ 4 := by
+    have hr := hQuant.geometry.class_scale.2.le
+    dsimp [y, nR] at hr ⊢
+    calc
+      (D.G.r : ℝ) ≤ 2 * κ.A0 * y := hr
+      _ ≤ 2 * κ.A0 * y ^ 4 := mul_le_mul_of_nonneg_left hy4 (by positivity)
+  have hy4one : 1 ≤ y ^ 4 := le_trans hy1 hy4
+  have hpinReal : (ListGateContext.pinBudget κ : ℝ) ≤ pinB * y ^ 4 := by
+    dsimp [pinB]
+    have hpb : 0 ≤ (ListGateContext.pinBudget κ : ℝ) := by positivity
+    simpa using mul_le_mul_of_nonneg_left hy4one hpb
+  let loss : ℕ := h + ell + D.G.r + ListGateContext.pinBudget κ + d
+  have hLossReal : (loss : ℝ) ≤ Cbulk * y ^ 4 := by
+    dsimp [loss, Cbulk, pinB]
+    push_cast
+    nlinarith [hhReal, hellReal, hrReal, hpinReal, hdReal]
+  have hCsmallBound : Cbulk * y ^ 4 ≤ nR / 16 := by
+    dsimp [Csmall] at hsmall'
+    nlinarith [hsmall']
+  have hLossBound : (loss : ℝ) ≤ nR / 16 := hLossReal.trans hCsmallBound
+  have hLossBoundN : (loss : ℝ) ≤ nR := by linarith
+  have hLossNat : loss ≤ n := by
+    have hLossBoundNat : (loss : ℝ) ≤ (n : ℝ) := by simpa [nR, n] using hLossBoundN
+    exact_mod_cast hLossBoundNat
+  have hbaseSum : h + ell + D.G.r + d ≤ n := by
+    have hle : h + ell + D.G.r + d ≤ loss := by dsimp [loss]; omega
+    omega
+  have hB0size : d ≤ B0.card := by
+    have hlow : n - (h + ell + D.G.r) ≤ B0.card := by
+      simpa [n, h, ell, i, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB0lower
+    omega
+  have hExtD : d ≤ (D.externalEarly v).card :=
+    le_trans hB0size (Finset.card_le_card hB0ext)
+  let Family : Finset (Finset (Pos T k)) := (D.externalEarly v).powersetCard d
+  have hFamilyCard : Family.card ≤ n ^ d := by
+    dsimp [Family]
+    rw [Finset.card_powersetCard]
+    calc
+      Nat.choose (D.externalEarly v).card d ≤ (D.externalEarly v).card ^ d :=
+        Nat.choose_le_pow _ _
+      _ ≤ n ^ d := by gcongr
+  let a : ℝ := 1 / 2 + K * y / nR
+  have ha0 : 0 ≤ a := by dsimp [a]; positivity
+  have ha1 : a ≤ 1 := by
+    dsimp [a]
+    have hKy : K * y ≤ Cbulk * y ^ 4 := by
+      calc
+        K * y ≤ K * y ^ 4 := mul_le_mul_of_nonneg_left hy4 (le_of_lt hK)
+        _ ≤ Cbulk * y ^ 4 := mul_le_mul_of_nonneg_right hCbulkK (by positivity)
+    have hDiv : K * y / nR ≤ 1 / 4 := (div_le_iff₀ hnR).2 (by linarith [hKy, hCsmallBound])
+    linarith
+  have hdegree : ∀ x ∈ PT.envelope i,
+      deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤ a := by
+    intro x hx
+    have hDrift := hQuant.geometry.degree_drift i x hx
+    have hAbs : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤ K * y / nR := by
+      apply (le_div_iff₀ hnR).2
+      dsimp [y, nR] at hDrift ⊢
+      nlinarith [hDrift]
+    dsimp [a]
+    have := le_abs_self (deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2)
+    linarith
+  let μ : FinLaw (({w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k))) :=
+    D.pinnedLabelLaw v pins fixed
+  let threshold : ℝ := Real.exp (y ^ 8)
+  let rho : ℝ := ((T.S.N k : ℝ) * a ^ (n - loss)) / threshold
+  have hthreshold : 0 < threshold := by dsimp [threshold]; positivity
+  have hFamilyBound : ∀ J' ∈ Family,
+      μ.pr (fun ys => threshold <
+        (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card) ≤ rho := by
+    intro J' hJ'
+    have hJprops := Finset.mem_powersetCard.mp hJ'
+    have hJext : J' ⊆ D.externalEarly v := hJprops.1
+    have hJcard : J'.card = d := hJprops.2
+    let B : Finset (Pos T k) := B0 \ (pins ∪ J')
+    have hBext : B ⊆ D.externalEarly v := by
+      intro w hw
+      exact hB0ext (Finset.mem_sdiff.mp hw).1
+    have hBpatch : ∀ w ∈ B, D.G.patchOf w = D.G.patchOf v := by
+      intro w hw
+      exact hB0patch w (Finset.mem_sdiff.mp hw).1
+    have hBavoid : ∀ w ∈ B, w ∉ pins ∧ w ∉ J' := by
+      intro w hw
+      have hnots := (Finset.mem_sdiff.mp hw).2
+      constructor
+      · intro hp
+        exact hnots (Finset.mem_union_left _ hp)
+      · intro hj
+        exact hnots (Finset.mem_union_right _ hj)
+    have hInter : (B0 ∩ (pins ∪ J')).card ≤ ListGateContext.pinBudget κ + d := by
+      calc
+        (B0 ∩ (pins ∪ J')).card ≤ (pins ∪ J').card :=
+          Finset.card_le_card Finset.inter_subset_right
+        _ ≤ pins.card + J'.card := Finset.card_union_le pins J'
+        _ ≤ ListGateContext.pinBudget κ + d := by omega
+    have hBcard : B.card = B0.card - (B0 ∩ (pins ∪ J')).card := by
+      dsimp [B]
+      rw [Finset.card_sdiff]
+      rw [Finset.inter_comm]
+    have hBsize : n - loss ≤ B.card := by
+      rw [hBcard]
+      have hlow : n - (h + ell + D.G.r) ≤ B0.card := by
+        simpa [n, h, ell, i, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hB0lower
+      omega
+    let f : ({w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k)) → ℝ := fun ys =>
+      (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card
+    have hf : ∀ ys, 0 ≤ f ys := by
+      intro ys
+      dsimp [f]
+      exact_mod_cast (Nat.zero_le _)
+    have hE : μ.E f ≤ (T.S.N k : ℝ) * a ^ B.card := by
+      change (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => (D.omittedList v J'
+          (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card) ≤ _
+      exact Lane_q_s17_pool.pinned_support_expected_card_bound D v (T.S.N_pos k)
+        pins J' B fixed hBext hBpatch hBavoid a (by positivity) hdegree
+    have hpow : a ^ B.card ≤ a ^ (n - loss) :=
+      pow_right_anti₀ ha0 ha1 hBsize
+    have hEm : μ.E f ≤ (T.S.N k : ℝ) * a ^ (n - loss) := by
+      calc
+        μ.E f ≤ (T.S.N k : ℝ) * a ^ B.card := hE
+        _ ≤ (T.S.N k : ℝ) * a ^ (n - loss) :=
+          mul_le_mul_of_nonneg_left hpow (Nat.cast_nonneg _)
+    have hsubset : ∀ ys,
+        threshold < (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card →
+        threshold ≤ f ys := by intro ys h; simpa [f] using le_of_lt h
+    have hmark : μ.pr (fun ys => threshold ≤ f ys) ≤ μ.E f / threshold := by
+      exact Lane_q_s17_pool.pr_markov μ f threshold hf hthreshold
+    calc
+      μ.pr (fun ys => threshold <
+          (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card) ≤
+          μ.pr (fun ys => threshold ≤ f ys) := Lane_q_s17_pool.pr_mono μ hsubset
+      _ ≤ μ.E f / threshold := hmark
+      _ ≤ (T.S.N k : ℝ) * a ^ (n - loss) / threshold :=
+        div_le_div_of_nonneg_right hEm hthreshold.le
+      _ = rho := rfl
+  have hcover : ∀ ys,
+      D.gateSupportFailure v (D.labelsOfPinnedSample v (T.S.N_pos k) ys) →
+      ∃ J' ∈ Family, threshold <
+        (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card := by
+    intro ys hbad
+    rcases hbad with ⟨J, hJext, hJsize, hJlarge⟩
+    have hJreal : (J.card : ℝ) ≤ y ^ 4 := by
+      have hJsize' : (J.card : ℝ) ≤ Real.rpow y (4 : ℝ) := by
+        change (J.card : ℝ) ≤
+          Real.rpow (Real.log (T.S.n k : ℝ)) (4 : ℝ)
+        exact hJsize
+      exact hJsize'.trans (le_of_eq (Real.rpow_natCast y 4))
+    have hJnat : J.card ≤ d := Nat.le_floor hJreal
+    obtain ⟨J', hJJ', hJ'ext, hJ'card⟩ :=
+      Finset.exists_subsuperset_card_eq hJext hJnat hExtD
+    have hJmem : J' ∈ Family := by
+      change J' ∈ (D.externalEarly v).powersetCard d
+      exact Finset.mem_powersetCard.mpr ⟨hJ'ext, hJ'card⟩
+    have hList : D.omittedList v J (D.labelsOfPinnedSample v (T.S.N_pos k) ys) ⊆
+        D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys) := by
+      intro z hz
+      unfold ListGateContext.omittedList at hz ⊢
+      rcases Finset.mem_filter.mp hz with ⟨_, ⟨hzenv, hhits⟩⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, hzenv, ?_⟩
+      intro w hw
+      have hw0 := Finset.mem_sdiff.mp hw
+      have hwOld : w ∈ D.externalEarly v \ J := by
+        refine Finset.mem_sdiff.mpr ⟨hw0.1, ?_⟩
+        intro hJw
+        exact hw0.2 (hJJ' hJw)
+      exact hhits w hwOld
+    have hcard : (D.omittedList v J (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card ≤
+        (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card :=
+      Finset.card_mono hList
+    refine ⟨J', hJmem, ?_⟩
+    have hJlarge' : Real.exp (y ^ 8) <
+        (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card := by
+      have hpow8 : Real.rpow y (8 : ℝ) = y ^ 8 := Real.rpow_natCast y 8
+      have hJlarge'' : Real.exp (Real.rpow y (8 : ℝ)) <
+          (D.omittedList v J (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card := by
+        change Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) (8 : ℝ)) <
+          (D.omittedList v J (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card
+        exact hJlarge
+      rw [hpow8] at hJlarge''
+      exact lt_of_lt_of_le hJlarge''
+        (by exact_mod_cast hcard)
+    simpa [threshold] using hJlarge'
+  have hUnion := Lane_q_s17_pool.support_failure_from_union_bound μ Family
+    (fun J' ys => threshold <
+      (D.omittedList v J' (D.labelsOfPinnedSample v (T.S.N_pos k) ys)).card)
+    (fun ys => D.gateSupportFailure v (D.labelsOfPinnedSample v (T.S.N_pos k) ys))
+    hcover rho hFamilyBound
+  have hFamilyNat : Family.card ≤ n ^ d := by
+    dsimp [Family]
+    rw [Finset.card_powersetCard]
+    calc
+      Nat.choose (D.externalEarly v).card d ≤ (D.externalEarly v).card ^ d :=
+        Nat.choose_le_pow _ _
+      _ ≤ n ^ d := by gcongr
+  have hFamilyReal : (Family.card : ℝ) ≤ (n : ℝ) ^ d := by exact_mod_cast hFamilyNat
+  have hRnonneg : 0 ≤ rho := by dsimp [rho, threshold, a]; positivity
+  have hNumeric := Lane_q_s17_pool.support_union_numerical_bound
+    (n := n) (N := T.S.N k) (m := n - loss) (d := d) (loss := loss)
+    (K := K) (C := Cbulk) (R := (κ.R : ℝ)) (y := y)
+    (by exact_mod_cast (by omega : 0 < n)) hy1 (by rfl)
+    (le_of_lt hK) hCbulkPos hCbulkK (by nlinarith [hsmall'])
+    (T.S.N_le k) (Nat.sub_le _ _) (by omega) hLossReal hdReal
+    hRpos.le hY'
+  calc
+    μ.pr (fun ys => D.gateSupportFailure v
+      (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) ≤
+        (Family.card : ℝ) * rho := hUnion
+    _ ≤ (n : ℝ) ^ d * rho :=
+      mul_le_mul_of_nonneg_right hFamilyReal hRnonneg
+    _ = ((n : ℝ) ^ d * (T.S.N k : ℝ) * a ^ (n - loss)) /
+        Real.exp (y ^ 8) := by simp [rho, threshold, n, a]; ring
+    _ ≤ (1 / 2 : ℝ) * Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) := by
+      simpa [a, n, neg_mul] using hNumeric
 
 /-- L17.1 export: eventual independent pinned-label estimate. -/
 theorem independentPinnedList
@@ -156,7 +454,197 @@ theorem uniformPoolMarkov
         μ.pr (fun pools => ¬ D.LocalPoolsTypical v pools) ≤
           Real.rpow (T.S.n k : ℝ) (-((κ.R : ℝ) * initialResamplingRounds T k)) →
         D.UniformPoolEstimateAt v μ := by
-  sorry
+  classical
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2] with k hk
+  intro PT D hQuant v μ hμ hCompat hMoment hTypical
+  let n : ℝ := T.S.n k
+  let m : ℕ := initialResamplingRounds T k
+  let R : ℝ := κ.R
+  let P : ℝ := κ.P
+  have hn : 2 ≤ n := by
+    dsimp [n]
+    exact_mod_cast hk
+  have hn1 : (1 : ℝ) < n := by linarith
+  have hlog : 0 < Real.log n := Real.log_pos hn1
+  have hmpos : 0 < m := by
+    dsimp [m, initialResamplingRounds]
+    apply Nat.ceil_pos.mpr
+    exact sq_pos_of_pos hlog
+  have hmNat : 1 ≤ m := Nat.succ_le_of_lt hmpos
+  have hm : 1 ≤ (m : ℝ) := by exact_mod_cast hmNat
+  have hPnat : 4 ≤ κ.P := by
+    have h := hκ.P_big.2
+    rw [hκ.Ac_eq] at h
+    omega
+  have hPreal : (4 : ℝ) ≤ P := by
+    dsimp [P]
+    exact_mod_cast hPnat
+  have hRpow : R = P ^ 2 := by
+    dsimp [R, P]
+    exact_mod_cast hκ.R_eq
+  have hRhalf : 3 ≤ R / 2 := by
+    rw [hRpow]
+    nlinarith [sq_nonneg (P - 4)]
+  have hRgap : 3 ≤ R / 2 - P := by
+    rw [hRpow]
+    nlinarith [sq_nonneg (P - 4)]
+  have hmR : 3 ≤ R * (m : ℝ) / 2 := by
+    calc
+      3 ≤ R / 2 := hRhalf
+      _ = (R / 2) * 1 := by ring
+      _ ≤ (R / 2) * (m : ℝ) :=
+        mul_le_mul_of_nonneg_left hm (by linarith [hRhalf])
+      _ = R * (m : ℝ) / 2 := by ring
+  have hmGap : 3 ≤ (R / 2 - P) * (m : ℝ) := by
+    calc
+      3 ≤ R / 2 - P := hRgap
+      _ = (R / 2 - P) * 1 := by ring
+      _ ≤ (R / 2 - P) * (m : ℝ) :=
+        mul_le_mul_of_nonneg_left hm (by linarith [hRgap])
+  have hnumeric := Lane_q_s17_pool.pool_tail_numeric hn hmR hmGap
+  have hqnonneg : 0 ≤ Real.rpow n (-(R * (m : ℝ))) :=
+    Real.rpow_nonneg (by linarith [hn]) _
+  have htyp := hTypical
+  change μ.pr (fun pools => ¬ (D.LocalPoolsTypical v pools ∧
+      D.freshEventProbability v pools ≤ Real.rpow n (-P))) ≤
+    Real.rpow n (-(R * (m : ℝ) / 2))
+  by_cases heven : IsEvenRole v
+  · let q : ℝ := Real.rpow n (-(R * (m : ℝ)))
+    let b : ℝ := Real.rpow n (-P)
+    let good : D.PoolAssignment → Prop := fun pools =>
+      D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools
+    let f : D.PoolAssignment → ℝ := fun pools =>
+      if good pools then (D.freshEventProbability v pools) ^ m else 0
+    let atypical : D.PoolAssignment → Prop := fun pools =>
+      ¬ D.LocalPoolsTypical v pools
+    let incompatible : D.PoolAssignment → Prop := fun pools =>
+      D.compatibilityFailure v pools
+    let large : D.PoolAssignment → Prop := fun pools =>
+      good pools ∧ b < D.freshEventProbability v pools
+    have hb : 0 < b := by
+      dsimp [b]
+      exact Real.rpow_pos_of_pos (by linarith [hn]) _
+    have hbpow : 0 < b ^ m := by positivity
+    have hprob_nonneg (pools : D.PoolAssignment) :
+        0 ≤ D.freshEventProbability v pools := by
+      unfold ListGateContext.freshEventProbability FinLaw.pr
+      apply Finset.sum_nonneg
+      intro pools' hpools'
+      by_cases hevent : D.event v pools'
+      · simpa [hevent] using (D.freshConfigLaw pools).nonneg pools'
+      · simp [hevent]
+    have hfnonneg : ∀ pools, 0 ≤ f pools := by
+      intro pools
+      dsimp [f]
+      split_ifs
+      · exact pow_nonneg (hprob_nonneg pools) _
+      · exact le_rfl
+    have hfexpect : μ.E f = poolTrialMoment D v μ := by
+      rfl
+    have hfbound : μ.E f ≤ 2 * q := by
+      rw [hfexpect]
+      simpa [q, R, m, n] using hMoment
+    have hlarge_subset : ∀ pools, large pools → b ^ m ≤ f pools := by
+      intro pools hpools
+      rcases hpools with ⟨hgood, hlarge⟩
+      rcases hgood with ⟨htyp, hcompatible⟩
+      dsimp [f, good]
+      rw [if_pos ⟨htyp, hcompatible⟩]
+      have hpow : b ^ m ≤ (D.freshEventProbability v pools) ^ m := by
+        induction m with
+        | zero => simp
+        | succ m ih =>
+            rw [pow_succ, pow_succ]
+            exact mul_le_mul ih (le_of_lt hlarge)
+              (le_of_lt hb) (pow_nonneg (hprob_nonneg pools) _)
+      exact hpow
+    have hlargeMarkov : μ.pr large ≤ μ.E f / (b ^ m) := by
+      calc
+        μ.pr large ≤ μ.pr (fun pools => b ^ m ≤ f pools) :=
+          Lane_q_s17_pool.pr_mono μ hlarge_subset
+        _ ≤ μ.E f / (b ^ m) :=
+          Lane_q_s17_pool.pr_markov μ f (b ^ m) hfnonneg hbpow
+    have hquot : q / (b ^ m) = Real.rpow n (-((R - P) * (m : ℝ))) := by
+      dsimp [q, b]
+      exact Lane_q_s17_pool.rpow_quotient (by linarith [hn])
+    have hlargeBound : μ.pr large ≤
+        2 * Real.rpow n (-((R - P) * (m : ℝ))) := by
+      calc
+        μ.pr large ≤ μ.E f / (b ^ m) := hlargeMarkov
+        _ ≤ (2 * q) / (b ^ m) :=
+          div_le_div_of_nonneg_right hfbound (le_of_lt hbpow)
+        _ = 2 * (q / (b ^ m)) := by ring
+        _ = 2 * Real.rpow n (-((R - P) * (m : ℝ))) := by rw [hquot]
+    have hcover : ∀ pools,
+        ¬ (D.LocalPoolsTypical v pools ∧
+          D.freshEventProbability v pools ≤ b) →
+        (¬ D.LocalPoolsTypical v pools ∨
+          (D.compatibilityFailure v pools ∨ large pools)) := by
+      intro pools hbad
+      by_cases htyp : D.LocalPoolsTypical v pools
+      · by_cases hcompatible : D.compatiblePool v pools
+        · right
+          right
+          refine ⟨⟨htyp, hcompatible⟩, ?_⟩
+          exact lt_of_not_ge (fun hle => hbad ⟨htyp, hle⟩)
+        · right
+          left
+          exact ⟨htyp, hcompatible⟩
+      · exact Or.inl htyp
+    have hdecomp : μ.pr (fun pools =>
+        ¬ (D.LocalPoolsTypical v pools ∧
+          D.freshEventProbability v pools ≤ b)) ≤
+        μ.pr atypical + (μ.pr incompatible + μ.pr large) := by
+      calc
+        _ ≤ μ.pr (fun pools => atypical pools ∨
+            (incompatible pools ∨ large pools)) :=
+          Lane_q_s17_pool.pr_mono μ hcover
+        _ ≤ μ.pr atypical + μ.pr (fun pools => incompatible pools ∨ large pools) :=
+          FinLaw.pr_or_le μ atypical (fun pools => incompatible pools ∨ large pools)
+        _ ≤ μ.pr atypical + (μ.pr incompatible + μ.pr large) :=
+          by
+            gcongr
+            exact FinLaw.pr_or_le μ incompatible large
+    have hatypBound : μ.pr atypical ≤ q := by
+      simpa [atypical, q, R, m, n] using htyp
+    have hincBound : μ.pr incompatible ≤ q := by
+      simpa [incompatible, q, R, m, n] using hCompat heven
+    calc
+      μ.pr (fun pools =>
+          ¬ (D.LocalPoolsTypical v pools ∧
+            D.freshEventProbability v pools ≤ b)) ≤
+          μ.pr atypical + (μ.pr incompatible + μ.pr large) := hdecomp
+      _ ≤ q + (q + 2 * Real.rpow n (-((R - P) * (m : ℝ)))) :=
+          add_le_add hatypBound (add_le_add hincBound hlargeBound)
+      _ = 2 * q + 2 * Real.rpow n (-((R - P) * (m : ℝ))) := by ring
+      _ ≤ Real.rpow n (-(R * (m : ℝ) / 2)) := by
+        simpa [q, R] using hnumeric
+  · have hprobzero (pools : D.PoolAssignment) :
+        D.freshEventProbability v pools = 0 := by
+      unfold ListGateContext.freshEventProbability FinLaw.pr
+      apply Finset.sum_eq_zero
+      intro pools' hpools'
+      simp [ListGateContext.event, heven]
+    have hexception :
+        (fun pools => ¬ (D.LocalPoolsTypical v pools ∧
+          D.freshEventProbability v pools ≤ Real.rpow n (-P))) =
+        (fun pools => ¬ D.LocalPoolsTypical v pools) := by
+      funext pools
+      have hthreshold : 0 ≤ Real.rpow n (-P) := Real.rpow_nonneg (by linarith [hn]) _
+      apply propext
+      rw [hprobzero pools]
+      constructor
+      · intro h htyp
+        exact h ⟨htyp, hthreshold⟩
+      · intro h hsuccess
+        exact h hsuccess.1
+    rw [hexception]
+    have hnumeric' : Real.rpow n (-(R * (m : ℝ))) ≤
+        Real.rpow n (-(R * (m : ℝ) / 2)) := by
+      have hrest : 0 ≤ 2 * Real.rpow n (-((R - P) * (m : ℝ))) :=
+        mul_nonneg (by norm_num) (Real.rpow_nonneg (by linarith [hn]) _)
+      linarith [hnumeric, hqnonneg, hrest]
+    simpa [R, m, n] using le_trans htyp hnumeric'
 
 /-- L17.2 export: uniform raw/pinned pool estimate; consumes the L17.1 producer. -/
 theorem uniformPoolListEstimate
@@ -605,7 +1093,7 @@ theorem resampleLocality
     (tapes : ∀ C : D.G.Cell, ℕ → TapeEntry D.F C) :
     LE.CellLocalitySpec Ts order pools tapes ∧
       LE.EventTruthLocalitySpec Ts order pools tapes := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s17_res1.resampleLocality LE Ts order pools tapes
 
 /-- P17.4a: extract the executions and only untouched extra sites from the
 ever-true component; the root is not required to be an untouched test. -/
@@ -646,7 +1134,145 @@ theorem finiteResamplingWitnessTests
       WitnessReadsDisjoint LE Ts W →
       (tapeLaw D.F Ts).pr (fun tapes => WitnessTestsPass LE Ts pools tapes W) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
-  sorry
+  classical
+  intro m W hItems hReads
+  let e := Lane_q_s17_res1.flattenTapesEquiv D.F Ts
+  let Idx := Lane_q_s17_res1.TapeRoundIndex (G := D.G) Ts
+  let key (j : Fin m) (C : D.G.Cell) : Idx :=
+    ⟨C, ⟨min (witnessReadIndex LE Ts W j C) (Ts + 1), by omega⟩⟩
+  let cfg (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) : Config D.F :=
+    fun C => x (key j C) (pools C)
+  let test (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) : Prop :=
+    LE.S (W j).1 (witnessTestConfig LE Ts pools (e.symm x) W j)
+  let support (j : Fin m) : Finset Idx := Finset.univ.filter fun i =>
+    i.1 ∈ LE.scope (W j).1 ∧ i.2 = (key j i.1).2
+  have hcfg (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) :
+      cfg j x = witnessTestConfig LE Ts pools (e.symm x) W j := by
+    funext C
+    simp [cfg, witnessTestConfig, Tapes.extend, e,
+      Lane_q_s17_res1.flattenTapesEquiv, key]
+  have hdep : ∀ j, FinProb.DependsOn
+      (fun x => if test j x then (1 : ℝ) else 0) (support j) := by
+    intro j x y hxy
+    have hstates : ∀ C, C ∈ LE.scope (W j).1 →
+        (witnessTestConfig LE Ts pools (e.symm x) W j) C =
+          (witnessTestConfig LE Ts pools (e.symm y) W j) C := by
+      intro C hC
+      rw [← hcfg j x, ← hcfg j y]
+      change x (key j C) (pools C) = y (key j C) (pools C)
+      apply congrArg (fun a : TapeEntry D.F C => a (pools C))
+      apply hxy
+      simp [support, hC, key]
+    have htruth := LE.scope_ok (W j).1
+      (witnessTestConfig LE Ts pools (e.symm x) W j)
+      (witnessTestConfig LE Ts pools (e.symm y) W j) hstates
+    exact congrArg (fun p : Prop => if p then (1 : ℝ) else 0) (propext htruth)
+  have hdisj : ∀ i j, i ≠ j → Disjoint (support i) (support j) := by
+    intro i j hij
+    apply Finset.disjoint_left.mpr
+    intro x hxi hxj
+    rcases Finset.mem_filter.mp hxi with ⟨_, ⟨hCi, hki⟩⟩
+    rcases Finset.mem_filter.mp hxj with ⟨_, ⟨hCj, hkj⟩⟩
+    have hiBound := hReads.1 i x.1 hCi
+    have hjBound := hReads.1 j x.1 hCj
+    have hiVal : (key i x.1).2.val = witnessReadIndex LE Ts W i x.1 := by
+      simp [key, Nat.min_eq_left (by omega)]
+      omega
+    have hjVal : (key j x.1).2.val = witnessReadIndex LE Ts W j x.1 := by
+      simp [key, Nat.min_eq_left (by omega)]
+      omega
+    have hval := congrArg Fin.val (hki.symm.trans hkj)
+    rw [hiVal, hjVal] at hval
+    exact (hReads.2 i j hij x.1 hCi hCj) hval
+  have hmap (j : Fin m) :
+      FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j) =
+        D.freshConfigLaw pools := by
+    have hkey : Function.Injective (key j) := by
+      intro C C' h
+      exact congrArg Sigma.fst h
+    have hprod := Lane_q_s17_res1.pi_map_injective
+      (P := fun i : Idx => FinLaw.pi fun P : D.F.Pool i.1 => D.F.fresh i.1 P)
+      (key j) hkey (fun C entry => entry (pools C))
+    have hcoord (C : D.G.Cell) :
+        FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+          (fun entry => entry (pools C)) = D.F.fresh C (pools C) :=
+      Lane_q_s17_res1.pi_map_coordinate_law
+        (fun P : D.F.Pool C => D.F.fresh C P) (pools C)
+    have hcoords :
+        (fun C : D.G.Cell =>
+          FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+            (fun entry => entry (pools C))) =
+        (fun C => D.F.fresh C (pools C)) := funext hcoord
+    calc
+      FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j) =
+          FinLaw.pi (fun C : D.G.Cell =>
+            FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+              (fun entry => entry (pools C))) := by
+        simpa [Lane_q_s17_res1.flatTapeLaw, cfg] using hprod
+      _ = D.freshConfigLaw pools := by
+        rw [hcoords]
+        rfl
+  have hsingle (j : Fin m) :
+      (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) ≤
+        Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := by
+    have htest : test j = fun x => LE.S (W j).1 (cfg j x) := by
+      funext x
+      simp [test, hcfg]
+    calc
+      _ = (FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j)).pr
+          (LE.S (W j).1) := by
+        rw [htest]
+        exact (Lane_q_s17_res1.map_pr_law _ _ _).symm
+      _ = (D.freshConfigLaw pools).pr (LE.S (W j).1) := by rw [hmap j]
+      _ ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := h23 (W j).1 (hItems j)
+  let flatTests (x : ∀ i : Idx, TapeEntry D.F i.1) : Prop :=
+    WitnessTestsPass LE Ts pools (e.symm x) W
+  have hfactor :
+      (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests =
+        ∏ j ∈ (Finset.univ : Finset (Fin m)),
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) := by
+    simpa [Lane_q_s17_res1.flatTapeLaw, flatTests, WitnessTestsPass, test] using
+      Lane_q_s17_res1.pi_pr_inter_disjoint
+        (fun i : Idx => FinLaw.pi fun P : D.F.Pool i.1 => D.F.fresh i.1 P)
+        Finset.univ test support hdep hdisj
+  have hprob :
+      (tapeLaw D.F Ts).pr
+          (fun tapes => WitnessTestsPass LE Ts pools tapes W) =
+        (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests := by
+    calc
+      _ = (FinLaw.map (tapeLaw D.F Ts) e).pr flatTests := by
+        symm
+        calc
+          (FinLaw.map (tapeLaw D.F Ts) e).pr flatTests =
+              (tapeLaw D.F Ts).pr (fun tapes => flatTests (e tapes)) :=
+            Lane_q_s17_res1.map_pr_law _ _ _
+          _ = (tapeLaw D.F Ts).pr
+              (fun tapes => WitnessTestsPass LE Ts pools tapes W) := by
+            congr 1
+      _ = (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests := by
+        rw [Lane_q_s17_res1.tapeLaw_flatten]
+  calc
+    (tapeLaw D.F Ts).pr (fun tapes => WitnessTestsPass LE Ts pools tapes W) =
+        ∏ j ∈ (Finset.univ : Finset (Fin m)),
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) := by
+      rw [hprob, hfactor]
+    _ ≤ ∏ j ∈ (Finset.univ : Finset (Fin m)),
+        Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := by
+      apply Finset.prod_le_prod₀
+      · intro j hj
+        exact Lane_q_s17_res1.finLaw_pr_nonneg
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts) (test j)
+      · intro j hj
+        exact hsingle j
+    _ = (Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ))) ^ m := by simp
+    _ = Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
+      calc
+        _ = Real.rpow (T.S.n k : ℝ) ((-(κ.P : ℝ)) * (m : ℝ)) :=
+          (Real.rpow_mul_natCast (by positivity) (-(κ.P : ℝ)) m).symm
+        _ = Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
+          congr 1
+          push_cast
+          ring
 
 /-- P17.4d(i): target backward-closure extraction with exact terminal entries. -/
 theorem finiteResamplingTargetWitness

@@ -3207,4 +3207,846 @@ theorem raw_bulk_product_expectation (PT : ProfiledTiling κ T k) (hPT : PT.Vali
   have hpatch := (Finset.mem_filter.mp b.2).2.2.1
   simpa only [f, hpatch] using raw_marginal_linear_mean PT hPT hm b.1 (F b)
 
+/-- One conditional column factor in the positive interaction envelope. -/
+noncomputable def raw_column_factor (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) (b : OddPosition T k)
+    (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) : ℝ :=
+  ∑ y, clusterMarginal PT hPT hm W b y * ∏ j ∈ I, clusterNominalRatio PT hPT a (xs j) y
+
+/-- The corresponding nominal column factor. -/
+noncomputable def nominal_column_factor (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) : ℝ :=
+  ∑ y, (PT.π (patchAt PT hPT a.1)).w y * ∏ j ∈ I, clusterNominalRatio PT hPT a (xs j) y
+
+/-- The nominal moderation predicate with the redundant column index removed. -/
+def nominal_tuple_moderate (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) (xs : Fin κ.u → Fin (T.S.N k)) : Prop :=
+  ∀ J : Finset (Fin κ.u), 2 ≤ J.card →
+    |S12.inter (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w J xs| ≤ κ.ξ
+
+theorem nominal_moderate_replicated (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) {d : ℕ} (hd : 0 < d) (xs : Fin κ.u → Fin (T.S.N k)) :
+    S12.Moderate (T.S.E k) PT.tiling.c
+      (fun _ : Fin d => (PT.π (patchAt PT hPT a.1)).w) κ.ξ xs ↔ nominal_tuple_moderate PT hPT a xs := by
+  constructor
+  · intro h J hJ
+    exact h ⟨0, hd⟩ J hJ
+  · intro h l J hJ
+    exact h J hJ
+
+theorem nominal_ratio_nonneg (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) (x y : Fin (T.S.N k)) : 0 ≤ clusterNominalRatio PT hPT a x y := by
+  unfold clusterNominalRatio
+  dsimp only
+  split_ifs with h
+  · exact div_nonneg (by unfold hit; split_ifs <;> norm_num) h.le
+  · exact le_rfl
+
+theorem raw_column_factor_nonneg (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) (b : OddPosition T k)
+    (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+    0 ≤ raw_column_factor PT hPT hm W a b I xs := by
+  apply Finset.sum_nonneg
+  intro y _
+  exact mul_nonneg (conditional_odd_law PT hPT hm W b |>.nonneg y)
+    (Finset.prod_nonneg fun j _ => nominal_ratio_nonneg PT hPT a (xs j) y)
+
+theorem nominal_column_factor_nonneg (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+    0 ≤ nominal_column_factor PT hPT a I xs := by
+  exact Finset.sum_nonneg fun y _ => mul_nonneg ((PT.π _).nonneg y)
+    (Finset.prod_nonneg fun j _ => nominal_ratio_nonneg PT hPT a (xs j) y)
+
+/-- On positive nominal degree gates, the nominal factor power is the Section 12 product term. -/
+theorem nominal_factor_power_eq_posTerm (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) (d : ℕ) (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k))
+    (hpos : ∀ j ∈ I, 0 < deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w (xs j)) :
+    nominal_column_factor PT hPT a I xs ^ d =
+      S12.posTerm (T.S.E k) PT.tiling.c (fun _ : Fin d => (PT.π (patchAt PT hPT a.1)).w) I xs := by
+  have hf : nominal_column_factor PT hPT a I xs =
+      ∑ y, (PT.π (patchAt PT hPT a.1)).w y *
+        ∏ j ∈ I, (1 + S12.acoef (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w (xs j) y) := by
+    apply Finset.sum_congr rfl
+    intro y _
+    congr 1
+    apply Finset.prod_congr rfl
+    intro j hj
+    simp only [clusterNominalRatio, if_pos (hpos j hj), S12.acoef]
+    ring
+  rw [hf]
+  simp only [S12.posTerm, Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+
+/-- A positive center tuple lies on positive nominal degree gates. -/
+theorem center_tuple_nominal_positive_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ W : ClusterHistory PT hPT hm, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      ∀ a : EvenPosition T k,
+      ∀ Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1,
+      ∀ hσ : HypercubeRamsey.Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y ≠ 0,
+      ∀ xs : Fin κ.u → Fin (T.S.N k),
+      (∏ j, (center_sigma_law PT hPT hm W a Y hσ).w (xs j)) ≠ 0 →
+      ∀ j, (2 / 5 : ℝ) ≤ deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w (xs j) := by
+  have hb := (bstar_tendsto_zero T).eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 10))
+  filter_upwards [cluster_clean_scales_eventually κ hκ T, hb] with k hk hb
+  intro PT hPT hm W hW a Y hσ xs hprod j
+  obtain ⟨v, hv, hC, hs⟩ := center_sigma_clean_corner PT hPT hm W hW a Y hσ
+  have hw : (center_sigma_law PT hPT hm W a Y hσ).w (xs j) ≠ 0 :=
+    (Finset.prod_ne_zero_iff.mp hprod) j (Finset.mem_univ _)
+  have h := hC.degOwn (xs j) (hs _ hw)
+  have he := (hk PT hPT hm (patchAt PT hPT a.1)).2.2.1
+  have hd : |deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w (xs j) - 1 / 2| ≤ bstar T k := by
+    apply le_trans _ he
+    rcases hm with hmode | hmode <;> simpa [OwnDegOK, hmode] using h
+  linarith [(abs_le.mp hd).1]
+
+/-- On such a tuple a singled-out conditional envelope factor has a fixed cap. -/
+theorem raw_column_factor_le_three_pow (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) (b : OddPosition T k)
+    (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k))
+    (hpos : ∀ j, (2 / 5 : ℝ) ≤ deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT a.1)).w (xs j)) :
+    raw_column_factor PT hPT hm W a b I xs ≤ (3 : ℝ) ^ κ.u := by
+  have hrat (j : Fin κ.u) (y : Fin (T.S.N k)) : clusterNominalRatio PT hPT a (xs j) y ≤ 3 := by
+    have hd := hpos j
+    unfold clusterNominalRatio
+    rw [if_pos (by linarith)]
+    apply (div_le_iff₀ (by linarith)).mpr
+    have hh : hit (T.S.E k) PT.tiling.c (xs j) y ≤ 1 := by unfold hit; split_ifs <;> norm_num
+    linarith
+  have hprod (y : Fin (T.S.N k)) : (∏ j ∈ I, clusterNominalRatio PT hPT a (xs j) y) ≤ (3 : ℝ) ^ κ.u := by
+    calc
+      _ ≤ ∏ _j ∈ I, (3 : ℝ) := Finset.prod_le_prod₀
+        (fun j _ => nominal_ratio_nonneg PT hPT a (xs j) y) (fun j _ => hrat j y)
+      _ = (3 : ℝ) ^ I.card := Finset.prod_const _
+      _ ≤ _ := pow_le_pow_right₀ (by norm_num) (Finset.card_le_univ I |>.trans_eq (Fintype.card_fin κ.u))
+  calc
+    _ ≤ ∑ y, clusterMarginal PT hPT hm W b y * (3 : ℝ) ^ κ.u :=
+      Finset.sum_le_sum fun y _ => mul_le_mul_of_nonneg_left (hprod y) ((conditional_odd_law PT hPT hm W b).nonneg y)
+    _ = (3 : ℝ) ^ κ.u := by
+      rw [← Finset.sum_mul]
+      change (∑ y, (conditional_odd_law PT hPT hm W b).w y) * (3 : ℝ) ^ κ.u = _
+      rw [(conditional_odd_law PT hPT hm W b).sum_eq_one, one_mul]
+
+/-- The averaged remaining nominal column factors are bounded on moderate center tuples. -/
+theorem center_moderate_factor_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ W : ClusterHistory PT hPT hm, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      ∀ a : EvenPosition T k,
+      ∀ Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1,
+      ∀ hσ : HypercubeRamsey.Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y ≠ 0,
+      ∀ xs : Fin κ.u → Fin (T.S.N k),
+      (∏ j, (center_sigma_law PT hPT hm W a Y hσ).w (xs j)) ≠ 0 →
+      nominal_tuple_moderate PT hPT a xs → ∀ d : ℕ, d ≤ T.S.n k → ∀ I : Finset (Fin κ.u),
+      nominal_column_factor PT hPT a I xs ^ d ≤ Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ) := by
+  have hpoint (c : Colour) := S12.moderate_posTerm_pointwise κ hκ T hDeep c 2 (by norm_num)
+  filter_upwards [hpoint false, hpoint true, center_tuple_nominal_positive_eventually κ hκ T,
+    center_sigma_width_eventually κ hκ T, nominal_cluster_width_eventually κ hκ T]
+    with k hf ht hpos hτw hπw
+  intro PT hPT hm W hW a Y hσ xs hprod hmod d hd I
+  let τ := center_sigma_law PT hPT hm W a Y hσ
+  let π := PT.π (patchAt PT hPT a.1)
+  have hπ : π.SupportedIn (T.Y k) := by
+    intro y hy
+    apply hPT.law_supported
+    intro h
+    exact hy (Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports (patchAt PT hPT a.1)).2.2.2
+      ((hPT.tiling_valid.patch_supports (patchAt PT hPT a.1)).2.2.1 h))).1
+  let S : S12.InterSetting T k (κ.xs / 4) := {
+    d := d, d_le := hd, τ := τ, π := fun _ => π,
+    τ_supp := center_sigma_stage_support PT hPT hm W hW a Y hσ,
+    π_supp := fun _ => hπ, τ_width := hτw PT hPT hm W a Y hσ,
+    π_width := fun _ => hπw PT hPT hm (patchAt PT hPT a.1) }
+  have hsupport (j : Fin κ.u) : 0 < τ.w (xs j) := by
+    exact lt_of_le_of_ne (τ.nonneg _) ((Finset.prod_ne_zero_iff.mp hprod) j (Finset.mem_univ _)).symm
+  have hmod' : S12.Moderate (T.S.E k) PT.tiling.c (fun l => (S.π l).w) κ.ξ xs := by
+    intro l J hJ
+    exact hmod J hJ
+  have hbound : S12.posTerm (T.S.E k) PT.tiling.c (fun l => (S.π l).w) I xs ≤
+      Real.exp ((2 : ℝ) ^ κ.u * d * κ.ξ) := by
+    cases hc : PT.tiling.c
+    · exact hf S κ.ξ xs I hsupport (by simpa [hc] using hmod')
+    · exact ht S κ.ξ xs I hsupport (by simpa [hc] using hmod')
+  have heq := nominal_factor_power_eq_posTerm PT hPT a d I xs
+    (fun j _ => by linarith [hpos PT hPT hm W hW a Y hσ xs hprod j])
+  rw [heq]
+  apply hbound.trans
+  apply Real.exp_le_exp.mpr
+  exact mul_le_mul_of_nonneg_right
+    (mul_le_mul_of_nonneg_left (by exact_mod_cast hd) (by positivity : 0 ≤ (2 : ℝ) ^ κ.u)) hκ.ξ_rng.1.le
+
+/-- Product weight of a center tuple in its local reference outcome. -/
+noncomputable def center_tuple_weight (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k)
+    (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1)
+    (xs : Fin κ.u → Fin (T.S.N k)) : ℝ :=
+  ∏ j, HypercubeRamsey.Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y (xs j)
+
+/-- The column-local gated anomaly; the gate retains only coordinates involved in J. -/
+def column_gated_anomaly (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (b : OddPosition T k)
+    (J : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) : Prop :=
+  2 ≤ J.card ∧
+    (∀ j ∈ J, |clusterDegree PT hPT hm W b (xs j) - 1 / 2| ≤ 2 * bstar T k) ∧
+    2 * κ.ξ < |clusterInteraction PT hPT hm W b J xs|
+
+/-- The nominal-large part after averaging the bulk histories. -/
+noncomputable def nominal_large_piece (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) : ℝ :=
+  ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).E fun Y =>
+    ∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+      center_tuple_weight PT hPT hm W a Y xs *
+        (if ¬ nominal_tuple_moderate PT hPT a xs then
+          nominal_column_factor PT hPT a I xs ^ (clusterBulkNeighbours PT hPT a).card else 0)
+
+/-- The nominal-large part before averaging bulk histories. -/
+noncomputable def raw_large_piece (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) : ℝ :=
+  ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).E fun Y =>
+    ∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+      center_tuple_weight PT hPT hm W a Y xs *
+        (if ¬ nominal_tuple_moderate PT hPT a xs then
+          ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0)
+
+/-- One moderate-tuple witness after averaging all other bulk histories. -/
+noncomputable def moderate_witness_piece (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) (b : BulkIndex PT hPT a)
+    (J I : Finset (Fin κ.u)) : ℝ :=
+  ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).E fun Y =>
+    ∑ xs : Fin κ.u → Fin (T.S.N k), center_tuple_weight PT hPT hm W a Y xs *
+      (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+        raw_column_factor PT hPT hm W a b.1 I xs *
+          nominal_column_factor PT hPT a I xs ^ (Finset.univ.erase b).card else 0)
+
+/-- The same witness before averaging the other bulk columns. -/
+noncomputable def raw_witness_piece (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) (b : BulkIndex PT hPT a)
+    (J I : Finset (Fin κ.u)) : ℝ :=
+  ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).E fun Y =>
+    ∑ xs : Fin κ.u → Fin (T.S.N k), center_tuple_weight PT hPT hm W a Y xs *
+      (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+        ∏ b' : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b'.1 I xs else 0)
+
+/-- A zero center row gives zero tuple weight since u is positive. -/
+theorem center_tuple_weight_zero (κ : CConsts) (hκ : κ.Admissible)
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k)
+    (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1)
+    (hσ : HypercubeRamsey.Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y = 0)
+    (xs : Fin κ.u → Fin (T.S.N k)) : center_tuple_weight PT hPT hm W a Y xs = 0 := by
+  have hu : 0 < κ.u := by have h := hκ.u_rng.2; omega
+  unfold center_tuple_weight
+  rw [hσ]
+  simp [Finset.prod_const, hu.ne']
+
+theorem center_tuple_weight_nonneg (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k)
+    (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1)
+    (xs : Fin κ.u → Fin (T.S.N k)) : 0 ≤ center_tuple_weight PT hPT hm W a Y xs := by
+  exact Finset.prod_nonneg fun j _ => (clusterSolver PT hPT hm (patchAt PT hPT a.1)).σ_nonneg
+    (clusterCenterRole PT hPT hm a) (historyOnSlice W (clusterSliceAt PT hPT a.1))
+    (nbrLabels (clusterCenterRole PT hPT hm a).1 Y.2) (xs j)
+
+/-- Bound an expectation on positive support, allowing arbitrary zero-weight values. -/
+theorem finite_expectation_le_on_support {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (F : Ω → ℝ) (C : ℝ) (hF : ∀ ω, 0 < P.w ω → F ω ≤ C) : P.E F ≤ C := by
+  calc
+    P.E F ≤ P.E (fun _ => C) := by
+      apply Finset.sum_le_sum
+      intro ω _
+      by_cases h : P.w ω = 0
+      · simp [h]
+      · exact mul_le_mul_of_nonneg_left (hF ω (lt_of_le_of_ne (P.nonneg ω) (Ne.symm h))) (P.nonneg ω)
+    _ = C := by simp [FinLaw.E, ← Finset.sum_mul, P.sum_one]
+
+/-- The nominal-large piece is below half the required alarm budget. -/
+theorem nominal_large_piece_bound_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ W : ClusterHistory PT hPT hm, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      ∀ a : EvenPosition T k, nominal_large_piece PT hPT hm W a ≤
+        (1 / 2) * Real.exp (-300 * PT.tiling.gain (patchAt PT hPT a.1)) := by
+  filter_upwards [center_nominal_bad_mass_eventually κ hκ T hDeep,
+    center_tuple_nominal_positive_eventually κ hκ T, bulk_nonempty_eventually κ hκ T,
+    peeling_factor_absorbed_eventually κ hκ T] with k hbad hpositive hbulk habs
+  intro PT hPT hm W hW a
+  unfold nominal_large_piece
+  apply finite_expectation_le_on_support
+  intro Y _
+  by_cases hσ : HypercubeRamsey.Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y = 0
+  · simp only [center_tuple_weight_zero κ hκ PT hPT hm W a Y hσ, zero_mul, Finset.sum_const_zero]
+    positivity
+  · let τ := center_sigma_law PT hPT hm W a Y hσ
+    have hd : 0 < (clusterBulkNeighbours PT hPT a).card := Finset.card_pos.mpr (hbulk PT hPT a)
+    have hb := hbad PT hPT hm W hW a Y hσ
+    have heq : (∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+        center_tuple_weight PT hPT hm W a Y xs *
+          (if ¬ nominal_tuple_moderate PT hPT a xs then
+            nominal_column_factor PT hPT a I xs ^ (clusterBulkNeighbours PT hPT a).card else 0)) =
+        ∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+          if ¬ S12.Moderate (T.S.E k) PT.tiling.c
+            (fun _ : Fin (clusterBulkNeighbours PT hPT a).card => (PT.π (patchAt PT hPT a.1)).w) κ.ξ xs then
+            S12.prodW τ.w xs * S12.posTerm (T.S.E k) PT.tiling.c
+              (fun _ : Fin (clusterBulkNeighbours PT hPT a).card => (PT.π (patchAt PT hPT a.1)).w) I xs else 0 := by
+      apply Finset.sum_congr rfl
+      intro I _
+      apply Finset.sum_congr rfl
+      intro xs _
+      rw [nominal_moderate_replicated PT hPT a hd xs]
+      change (∏ j, τ.w (xs j)) * (if ¬ nominal_tuple_moderate PT hPT a xs then _ else 0) =
+        if ¬ nominal_tuple_moderate PT hPT a xs then (∏ j, τ.w (xs j)) * _ else 0
+      by_cases hmod : nominal_tuple_moderate PT hPT a xs
+      · simp only [if_neg (not_not.mpr hmod), mul_zero]
+      · simp only [if_pos hmod]
+        by_cases hp : (∏ j, τ.w (xs j)) = 0
+        · simp [hp]
+        · rw [nominal_factor_power_eq_posTerm PT hPT a _ I xs
+            (fun j _ => by linarith [hpositive PT hPT hm W hW a Y hσ xs hp j])]
+    rw [heq]
+    exact hb.trans (habs PT hPT hm (patchAt PT hPT a.1))
+
+/-- A moderate witness is charged by one-free tails after the remaining column average. -/
+theorem moderate_witness_piece_bound_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ W : ClusterHistory PT hPT hm, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      ∀ a : EvenPosition T k, ∀ b : BulkIndex PT hPT a, ∀ J I : Finset (Fin κ.u),
+      moderate_witness_piece PT hPT hm W a b J I ≤
+        (3 : ℝ) ^ κ.u * Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ) *
+          Real.exp (-(κ.α * T.S.n k / 3)) := by
+  filter_upwards [center_moderate_factor_eventually κ hκ T hDeep,
+    center_tuple_nominal_positive_eventually κ hκ T,
+    center_conditional_gated_tuple_mass_eventually κ hκ T hDeep] with k hfactor hpos htail
+  intro PT hPT hm W hW a b J I
+  unfold moderate_witness_piece
+  apply finite_expectation_le_on_support
+  intro Y _
+  by_cases hσ : HypercubeRamsey.Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y = 0
+  · simp only [center_tuple_weight_zero κ hκ PT hPT hm W a Y hσ, zero_mul, Finset.sum_const_zero]
+    positivity
+  · let τ := center_sigma_law PT hPT hm W a Y hσ
+    let C : ℝ := (3 : ℝ) ^ κ.u * Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ)
+    have hC : 0 ≤ C := by dsimp [C]; positivity
+    have hrem : (Finset.univ.erase b).card ≤ T.S.n k := by
+      calc
+        _ ≤ (Finset.univ : Finset (BulkIndex PT hPT a)).card := Finset.card_erase_le
+        _ = (clusterBulkNeighbours PT hPT a).card := by simp [BulkIndex, Fintype.card_coe]
+        _ ≤ T.S.n k := bulk_card_le PT hPT a
+    by_cases hJ : 2 ≤ J.card
+    · let B := fun xs : Fin κ.u → Fin (T.S.N k) =>
+        (∀ j ∈ J, |clusterDegree PT hPT hm W b.1 (xs j) - 1 / 2| ≤ 2 * bstar T k) ∧
+          2 * κ.ξ < |clusterInteraction PT hPT hm W b.1 J xs|
+      have hpoint (xs : Fin κ.u → Fin (T.S.N k)) :
+          center_tuple_weight PT hPT hm W a Y xs *
+            (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+              raw_column_factor PT hPT hm W a b.1 I xs *
+                nominal_column_factor PT hPT a I xs ^ (Finset.univ.erase b).card else 0) ≤
+          C * (if B xs then ∏ j, τ.w (xs j) else 0) := by
+        by_cases hg : nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs
+        · have hB : B xs := hg.2.2
+          rw [if_pos hg, if_pos hB]
+          by_cases hp : (∏ j, τ.w (xs j)) = 0
+          · change (∏ j, τ.w (xs j)) * _ ≤ _
+            simp [hp]
+          · have hnom := hfactor PT hPT hm W hW a Y hσ xs hp hg.1 (Finset.univ.erase b).card
+              hrem I
+            have hraw := raw_column_factor_le_three_pow PT hPT hm W a b.1 I xs
+              (hpos PT hPT hm W hW a Y hσ xs hp)
+            have hprod : raw_column_factor PT hPT hm W a b.1 I xs *
+                nominal_column_factor PT hPT a I xs ^ (Finset.univ.erase b).card ≤ C :=
+              mul_le_mul hraw hnom (pow_nonneg (nominal_column_factor_nonneg PT hPT a I xs) _)
+                (by positivity)
+            exact (mul_le_mul_of_nonneg_left hprod (center_tuple_weight_nonneg PT hPT hm W a Y xs)).trans_eq (mul_comm _ _)
+        · rw [if_neg hg, mul_zero]
+          split_ifs
+          · exact mul_nonneg hC (Finset.prod_nonneg fun j _ => τ.nonneg (xs j))
+          · simp only [mul_zero, le_refl]
+      calc
+        _ ≤ ∑ xs : Fin κ.u → Fin (T.S.N k), C * (if B xs then ∏ j, τ.w (xs j) else 0) :=
+          Finset.sum_le_sum fun xs _ => hpoint xs
+        _ = C * ∑ xs : Fin κ.u → Fin (T.S.N k), if B xs then ∏ j, τ.w (xs j) else 0 :=
+          (Finset.mul_sum _ _ _).symm
+        _ ≤ C * Real.exp (-(κ.α * T.S.n k / 3)) :=
+          mul_le_mul_of_nonneg_left (htail PT hPT hm W hW a Y hσ b.1 J hJ) hC
+    · simp [column_gated_anomaly, hJ]
+      positivity
+
+theorem raw_slice_records_eq (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W W' : ClusterHistory PT hPT hm) (s : ClusterSlice PT)
+    (h : ∀ r ∈ raw_slice_scope PT hPT hm s, W r = W' r) :
+    historyOnSlice W s = historyOnSlice W' s := by
+  funext r
+  exact h ⟨s, r⟩ (Finset.mem_filter.mpr ⟨Finset.mem_univ _, rfl⟩)
+
+/-- The center reference weight times its tuple weight reads only the center slice. -/
+theorem center_reference_tuple_depends (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1)
+    (xs : Fin κ.u → Fin (T.S.N k)) :
+    ClusterHistoryDependsOn (fun W =>
+      ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).w Y *
+        center_tuple_weight PT hPT hm W a Y xs)
+      (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT a.1)) := by
+  exact raw_slice_function_depends PT hPT hm (clusterSliceAt PT hPT a.1)
+    (fun R => ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw R).w Y *
+      ∏ j, (clusterSolver PT hPT hm (patchAt PT hPT a.1)).σ (clusterCenterRole PT hPT hm a) R
+        (nbrLabels (clusterCenterRole PT hPT hm a).1 Y.2) (xs j))
+
+/-- Adding a conditional witness reads the union of its slice and the center slice. -/
+theorem witness_reference_tuple_depends (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1)
+    (b : BulkIndex PT hPT a) (J I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+    ClusterHistoryDependsOn (fun W =>
+      ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).w Y *
+        center_tuple_weight PT hPT hm W a Y xs *
+          (if column_gated_anomaly PT hPT hm W b.1 J xs then raw_column_factor PT hPT hm W a b.1 I xs else 0))
+      (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT a.1) ∪
+        raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1.1)) := by
+  intro W W' h
+  have hc := center_reference_tuple_depends PT hPT hm a Y xs W W'
+    (fun r hr => h r (Finset.mem_union_left _ hr))
+  have he := raw_slice_records_eq PT hPT hm W W' (clusterSliceAt PT hPT b.1.1)
+    (fun r hr => h r (Finset.mem_union_right _ hr))
+  have hmarg (y : Fin (T.S.N k)) : clusterMarginal PT hPT hm W b.1 y = clusterMarginal PT hPT hm W' b.1 y := by
+    unfold clusterMarginal
+    dsimp only
+    rw [he]
+  have hdeg (x : Fin (T.S.N k)) : clusterDegree PT hPT hm W b.1 x = clusterDegree PT hPT hm W' b.1 x := by
+    simp only [clusterDegree, deg, hmarg]
+  have hinter : clusterInteraction PT hPT hm W b.1 J xs = clusterInteraction PT hPT hm W' b.1 J xs := by
+    simp only [clusterInteraction, hmarg, hdeg]
+  have hfactor : raw_column_factor PT hPT hm W a b.1 I xs = raw_column_factor PT hPT hm W' a b.1 I xs := by
+    simp only [raw_column_factor, hmarg]
+  have htest : column_gated_anomaly PT hPT hm W b.1 J xs ↔ column_gated_anomaly PT hPT hm W' b.1 J xs := by
+    simp only [column_gated_anomaly, hdeg, hinter]
+  have hif : (if column_gated_anomaly PT hPT hm W b.1 J xs then raw_column_factor PT hPT hm W a b.1 I xs else 0) =
+      (if column_gated_anomaly PT hPT hm W' b.1 J xs then raw_column_factor PT hPT hm W' a b.1 I xs else 0) :=
+    if_congr htest hfactor rfl
+  exact congrArg₂ (fun x y : ℝ => x * y) hc hif
+
+/-- Averaging a selected set of bulk envelope factors gives a nominal factor power. -/
+theorem raw_bulk_factor_average (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (s : Finset (BulkIndex PT hPT a))
+    (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k))
+    (G : ClusterHistory PT hPT hm → ℝ) (A : Finset (ClusterRecordIndex PT hPT hm))
+    (hG : ClusterHistoryDependsOn G A)
+    (hdisj : ∀ b ∈ s, Disjoint A (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1.1))) :
+    (clusterHistoryLaw PT hPT hm).E (fun W => G W * ∏ b ∈ s, raw_column_factor PT hPT hm W a b.1 I xs) =
+      (clusterHistoryLaw PT hPT hm).E (fun W => G W * nominal_column_factor PT hPT a I xs ^ s.card) := by
+  have hb := raw_bulk_product_expectation PT hPT hm a s
+    (fun _ y => ∏ j ∈ I, clusterNominalRatio PT hPT a (xs j) y) G A hG hdisj
+  have he : (∏ _b ∈ s, ∑ y, (PT.π (patchAt PT hPT a.1)).w y *
+      ∏ j ∈ I, clusterNominalRatio PT hPT a (xs j) y) = nominal_column_factor PT hPT a I xs ^ s.card := by
+    simp only [nominal_column_factor, Finset.prod_const]
+  rw [he] at hb
+  calc
+    _ = (clusterHistoryLaw PT hPT hm).E G * nominal_column_factor PT hPT a I xs ^ s.card := hb
+    _ = _ := by simp only [FinLaw.E, Finset.sum_mul, mul_assoc]
+
+/-- The nominal-large mean replaces every independent bulk column by its nominal law. -/
+theorem raw_large_piece_mean (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) (a : EvenPosition T k) :
+    (clusterHistoryLaw PT hPT hm).E (fun W => raw_large_piece PT hPT hm W a) =
+      (clusterHistoryLaw PT hPT hm).E (fun W => nominal_large_piece PT hPT hm W a) := by
+  unfold raw_large_piece nominal_large_piece FinLaw.E
+  simp_rw [Finset.mul_sum]
+  conv_lhs => rw [Finset.sum_comm]
+  conv_rhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro Y _
+  conv_lhs => rw [Finset.sum_comm]
+  conv_rhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro I _
+  conv_lhs => rw [Finset.sum_comm]
+  conv_rhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro xs _
+  by_cases hmod : nominal_tuple_moderate PT hPT a xs
+  · simp only [not_not, if_neg (not_not.mpr hmod), mul_zero, Finset.sum_const_zero]
+  · simp only [if_pos hmod]
+    let G := fun W : ClusterHistory PT hPT hm =>
+      ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).w Y *
+        center_tuple_weight PT hPT hm W a Y xs
+    have he := raw_bulk_factor_average PT hPT hm a Finset.univ I xs G
+      (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT a.1))
+      (center_reference_tuple_depends PT hPT hm a Y xs)
+      (fun b _ => raw_slice_scopes_disjoint PT hPT hm ((Finset.mem_filter.mp b.2).2.2.2).symm)
+    have hcard : (Finset.univ : Finset (BulkIndex PT hPT a)).card = (clusterBulkNeighbours PT hPT a).card := by
+      simp [BulkIndex, Fintype.card_coe]
+    rw [hcard] at he
+    convert he using 1 <;> apply Finset.sum_congr rfl <;> intro W _ <;> simp only [FinLaw.E, G] <;> ring
+
+/-- Freeze a moderate witness column and average every other bulk column independently. -/
+theorem raw_witness_piece_mean (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (b : BulkIndex PT hPT a) (J I : Finset (Fin κ.u)) :
+    (clusterHistoryLaw PT hPT hm).E (fun W => raw_witness_piece PT hPT hm W a b J I) =
+      (clusterHistoryLaw PT hPT hm).E (fun W => moderate_witness_piece PT hPT hm W a b J I) := by
+  unfold raw_witness_piece moderate_witness_piece FinLaw.E
+  simp_rw [Finset.mul_sum]
+  conv_lhs => rw [Finset.sum_comm]
+  conv_rhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro Y _
+  conv_lhs => rw [Finset.sum_comm]
+  conv_rhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro xs _
+  by_cases hmod : nominal_tuple_moderate PT hPT a xs
+  · simp only [hmod, true_and]
+    let G := fun W : ClusterHistory PT hPT hm =>
+      ((clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))).w Y *
+        center_tuple_weight PT hPT hm W a Y xs *
+          (if column_gated_anomaly PT hPT hm W b.1 J xs then raw_column_factor PT hPT hm W a b.1 I xs else 0)
+    have hdisj (b' : BulkIndex PT hPT a) (hb' : b' ∈ Finset.univ.erase b) :
+        Disjoint (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT a.1) ∪
+          raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1.1))
+          (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b'.1.1)) := by
+      apply Finset.disjoint_union_left.mpr
+      refine ⟨raw_slice_scopes_disjoint PT hPT hm ((Finset.mem_filter.mp b'.2).2.2.2).symm, ?_⟩
+      apply raw_slice_scopes_disjoint
+      intro hslice
+      apply (Finset.mem_erase.mp hb').1
+      apply Subtype.ext
+      exact (cluster_bulk_slices_injective PT hPT a b.2 b'.2 hslice).symm
+    have he := raw_bulk_factor_average PT hPT hm a (Finset.univ.erase b) I xs G
+      (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT a.1) ∪
+        raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1.1))
+      (witness_reference_tuple_depends PT hPT hm a Y b J I xs) hdisj
+    convert he using 1
+    · apply Finset.sum_congr rfl
+      intro W _
+      dsimp only [G]
+      by_cases h : column_gated_anomaly PT hPT hm W b.1 J xs
+      · simp only [if_pos h]
+        rw [← Finset.mul_prod_erase (Finset.univ : Finset (BulkIndex PT hPT a))
+          (fun b' => raw_column_factor PT hPT hm W a b'.1 I xs) (Finset.mem_univ b)]
+        ring
+      · simp only [if_neg h, mul_zero, zero_mul]
+    · apply Finset.sum_congr rfl
+      intro W _
+      dsimp only [G]
+      by_cases h : column_gated_anomaly PT hPT hm W b.1 J xs <;>
+        simp only [h, if_true, if_false] <;> ring
+  · simp only [hmod, false_and, if_false, mul_zero, Finset.sum_const_zero]
+
+/-- Split a weighted alarm into nominal-large tuples and a finite moderate witness union. -/
+theorem finite_weighted_alarm_split {B J : Type*} [Fintype B] [Fintype J]
+    (A M : Prop) [Decidable A] [Decidable M] (F : B → J → Prop) [∀ b j, Decidable (F b j)] (C : ℝ) (hC : 0 ≤ C)
+    (hwitness : A → M → ∃ b j, F b j) :
+    (if A then C else 0) ≤ (if ¬ M then C else 0) +
+      ∑ b, ∑ j, if M ∧ F b j then C else 0 := by
+  by_cases hM : M
+  · simp only [if_neg (not_not.mpr hM)]
+    by_cases hA : A
+    · obtain ⟨b, j, hj⟩ := hwitness hA hM
+      simp only [if_pos hA, zero_add]
+      calc
+        C = if M ∧ F b j then C else 0 := by rw [if_pos ⟨hM, hj⟩]
+        _ ≤ ∑ j', if M ∧ F b j' then C else 0 := by
+          apply Finset.single_le_sum _ (Finset.mem_univ j)
+          intro j' _
+          split_ifs <;> positivity
+        _ ≤ ∑ b', ∑ j', if M ∧ F b' j' then C else 0 := by
+          apply Finset.single_le_sum _ (Finset.mem_univ b)
+          intro b' _
+          apply Finset.sum_nonneg
+          intro j' _
+          split_ifs <;> positivity
+    · simp only [if_neg hA, zero_add]
+      apply Finset.sum_nonneg
+      intro b _
+      apply Finset.sum_nonneg
+      intro j _
+      split_ifs <;> positivity
+  · by_cases hA : A <;> simp [hA, hM, hC]
+
+/-- At each center outcome, the raw interaction integrand splits into the two positive pieces. -/
+theorem raw_interaction_integrand_split (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k)
+    (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1) :
+    HypercubeRamsey.Lane_q_s15_c1.clusterInteractionIntegrandAtCenter PT hPT hm W a Y ≤
+      (∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+        center_tuple_weight PT hPT hm W a Y xs *
+          (if ¬ nominal_tuple_moderate PT hPT a xs then
+            ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0)) +
+      ∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u),
+        ∑ xs : Fin κ.u → Fin (T.S.N k), center_tuple_weight PT hPT hm W a Y xs *
+          (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+            ∏ b' : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b'.1 I xs else 0) := by
+  let A := fun xs : Fin κ.u → Fin (T.S.N k) =>
+    (∀ j, clusterJ0 PT hPT hm W a (xs j)) ∧
+      ∃ b ∈ clusterBulkNeighbours PT hPT a, ∃ J : Finset (Fin κ.u),
+        2 ≤ J.card ∧ 2 * κ.ξ < |clusterInteraction PT hPT hm W b J xs|
+  have hwitness (xs : Fin κ.u → Fin (T.S.N k)) :
+      A xs → nominal_tuple_moderate PT hPT a xs → ∃ b : BulkIndex PT hPT a,
+        ∃ J : Finset (Fin κ.u), column_gated_anomaly PT hPT hm W b.1 J xs := by
+    rintro ⟨hg, b, hb, J, hJ, hbad⟩ _
+    refine ⟨⟨b, hb⟩, J, hJ, ?_, hbad⟩
+    intro j _
+    exact (hg j).2.1 b hb
+  have hpoint (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+      center_tuple_weight PT hPT hm W a Y xs *
+        (if A xs then ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0) ≤
+      center_tuple_weight PT hPT hm W a Y xs *
+        (if ¬ nominal_tuple_moderate PT hPT a xs then
+          ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0) +
+      ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u), center_tuple_weight PT hPT hm W a Y xs *
+        (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+          ∏ b' : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b'.1 I xs else 0) := by
+    have hC : 0 ≤ center_tuple_weight PT hPT hm W a Y xs *
+        ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs :=
+      mul_nonneg (center_tuple_weight_nonneg PT hPT hm W a Y xs)
+        (Finset.prod_nonneg fun b _ => raw_column_factor_nonneg PT hPT hm W a b.1 I xs)
+    have hb := finite_weighted_alarm_split (B := BulkIndex PT hPT a) (J := Finset (Fin κ.u)) (A xs)
+      (nominal_tuple_moderate PT hPT a xs)
+      (fun (b : BulkIndex PT hPT a) (J : Finset (Fin κ.u)) => column_gated_anomaly PT hPT hm W b.1 J xs)
+      (center_tuple_weight PT hPT hm W a Y xs * ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs)
+      hC (hwitness xs)
+    simpa only [mul_ite, mul_zero] using hb
+  have heq : HypercubeRamsey.Lane_q_s15_c1.clusterInteractionIntegrandAtCenter PT hPT hm W a Y =
+      ∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k), center_tuple_weight PT hPT hm W a Y xs *
+        (if A xs then ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0) := by
+    conv_rhs => rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro xs _
+    change center_tuple_weight PT hPT hm W a Y xs * (if A xs then clusterInteractionEnvelope PT hPT hm W a xs else 0) = _
+    by_cases hA : A xs
+    · simp only [if_pos hA, clusterInteractionEnvelope, Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro I _
+      congr 1
+      exact (Finset.prod_coe_sort (clusterBulkNeighbours PT hPT a)
+        (fun b => raw_column_factor PT hPT hm W a b I xs)).symm
+    · simp only [if_neg hA, mul_zero, Finset.sum_const_zero]
+  rw [heq]
+  calc
+    _ ≤ ∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+        (center_tuple_weight PT hPT hm W a Y xs *
+          (if ¬ nominal_tuple_moderate PT hPT a xs then
+            ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0) +
+        ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u), center_tuple_weight PT hPT hm W a Y xs *
+          (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+            ∏ b' : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b'.1 I xs else 0)) :=
+      Finset.sum_le_sum fun I _ => Finset.sum_le_sum fun xs _ => hpoint I xs
+    _ = _ := by
+      simp only [Finset.sum_add_distrib]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro I _
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro b _
+      rw [Finset.sum_comm]
+
+/-- The raw cost is bounded by its nominal-large piece plus all moderate witnesses. -/
+theorem raw_interaction_cost_split (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (a : EvenPosition T k) :
+    clusterInteractionCost PT hPT hm W a ≤ raw_large_piece PT hPT hm W a +
+      ∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u),
+        raw_witness_piece PT hPT hm W a b J I := by
+  rw [HypercubeRamsey.Lane_q_s15_c1.clusterInteractionCost_eq_centerExpectation]
+  let P := (clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw (historyOnSlice W (clusterSliceAt PT hPT a.1))
+  have hbound := (FinProb.expect_mono (as_probability P) (fun Y => raw_interaction_integrand_split PT hPT hm W a Y))
+  apply hbound.trans_eq
+  let L : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1 → ℝ := fun Y =>
+    ∑ I : Finset (Fin κ.u), ∑ xs : Fin κ.u → Fin (T.S.N k),
+      center_tuple_weight PT hPT hm W a Y xs * (if ¬ nominal_tuple_moderate PT hPT a xs then
+        ∏ b : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b.1 I xs else 0)
+  let F : Finset (Fin κ.u) → BulkIndex PT hPT a → Finset (Fin κ.u) →
+      ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1 → ℝ := fun I b J Y =>
+    ∑ xs : Fin κ.u → Fin (T.S.N k), center_tuple_weight PT hPT hm W a Y xs *
+      (if nominal_tuple_moderate PT hPT a xs ∧ column_gated_anomaly PT hPT hm W b.1 J xs then
+        ∏ b' : BulkIndex PT hPT a, raw_column_factor PT hPT hm W a b'.1 I xs else 0)
+  change P.E (fun Y => L Y + ∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a,
+    ∑ J : Finset (Fin κ.u), F I b J Y) = P.E L +
+      ∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u), P.E (F I b J)
+  unfold FinLaw.E
+  simp_rw [mul_add, Finset.sum_add_distrib]
+  congr 1
+  simp_rw [Finset.mul_sum]
+  conv_lhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro I _
+  conv_lhs => rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro b _
+  rw [Finset.sum_comm]
+
+/-- The admissible interaction threshold leaves a linear exponential margin. -/
+theorem interaction_xi_slack (κ : CConsts) (hκ : κ.Admissible) :
+    (2 : ℝ) ^ κ.u * κ.ξ ≤ κ.α / 12 := by
+  have hp : (2 : ℝ) ^ κ.u * (2 : ℝ) ^ (-(10 * (κ.u : ℝ) + 100)) ≤ 1 / 16 := by
+    rw [← Real.rpow_natCast, ← Real.rpow_add (by norm_num : (0 : ℝ) < 2)]
+    calc
+      _ ≤ (2 : ℝ) ^ (-4 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num)
+        (by linarith [show (0 : ℝ) ≤ κ.u from Nat.cast_nonneg κ.u])
+      _ = 1 / 16 := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+  have hξ := mul_le_mul_of_nonneg_left hκ.ξ_rng.2.le (show (0 : ℝ) ≤ 2 ^ κ.u by positivity)
+  simp only [Real.rpow_eq_pow] at hξ
+  have hα := mul_le_mul_of_nonneg_left hp hκ.α_rng.1.le
+  have hαpos := hκ.α_rng.1
+  calc
+    (2 : ℝ) ^ κ.u * κ.ξ ≤ κ.α * ((2 : ℝ) ^ κ.u * (2 : ℝ) ^ (-(10 * (κ.u : ℝ) + 100))) := by
+      simpa only [mul_assoc, mul_left_comm] using hξ
+    _ ≤ κ.α / 16 := by simpa only [mul_one_div] using hα
+    _ ≤ κ.α / 12 := by linarith
+
+/-- The high gain is uniformly sublinear in the host dimension. -/
+theorem high_gain_upper (κ : CConsts) (hκ : κ.Admissible)
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) (i : Fin PT.tiling.m) :
+    PT.tiling.gain i ≤ (κ.a / 10 ^ 6) * (T.S.n k : ℝ) ^ κ.ι := by
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  have hh : ((PT.tiling.P i).h : ℝ) ≤ (T.S.n k : ℝ) ^ κ.ι := by
+    have h := (hPT.tiling_valid.allocation_bounds i).1
+    have hm : ((PT.tiling.P i).h : ℝ) ≤ (max (PT.tiling.P i).h (PT.tiling.P i).ℓ : ℕ) := by
+      exact_mod_cast Nat.le_max_left (PT.tiling.P i).h (PT.tiling.P i).ℓ
+    apply hm.trans
+    simpa only [Nat.cast_max] using h.le
+  have hgain : PT.tiling.gain i = (κ.a / 10 ^ 6) * (PT.tiling.P i).h := by
+    rcases hm with hmode | hmode <;> simp [Tiling.gain, hmode] <;> ring
+  rw [hgain]
+  exact mul_le_mul_of_nonneg_left hh (by positivity)
+
+/-- All column, interaction and envelope choices are absorbed by the gain margin. -/
+theorem moderate_witness_total_absorbed_eventually (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge, ∀ i,
+      (T.S.n k : ℝ) * (12 : ℝ) ^ κ.u * Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ) *
+        Real.exp (-(κ.α * T.S.n k / 3)) ≤ (1 / 2) * Real.exp (-300 * PT.tiling.gain i) := by
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop := tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  have hα : 0 < κ.α := hκ.α_rng.1
+  let A : ℝ := 300 * (κ.a / 10 ^ 6)
+  have hA : 0 < A := by dsimp [A]; positivity
+  have hι : κ.ι < 1 := by
+    have h := hκ.ι_rng.2
+    have hm := min_le_right κ.xs (min κ.η0 0.01)
+    have hm' := min_le_right κ.η0 (0.01 : ℝ)
+    linarith
+  have hg := hn.eventually (real_eventually_rpow_le_mul (p := κ.ι) (q := 1)
+    (c := κ.α / (8 * A)) hι (by positivity))
+  have hlim : Tendsto (fun k => (12 : ℝ) ^ κ.u * (T.S.n k : ℝ) * Real.exp (-(κ.α / 8) * T.S.n k))
+      atTop (nhds 0) := by
+    have ht := ((tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero 1 (κ.α / 8) (by positivity)).comp hn).const_mul ((12 : ℝ) ^ κ.u)
+    simpa only [Real.rpow_one, mul_zero, Function.comp_def, mul_assoc] using ht
+  have hsmall := hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 2))
+  filter_upwards [hg, hsmall] with k hg hs
+  intro PT hPT hm i
+  have hn0 : 0 ≤ (T.S.n k : ℝ) := Nat.cast_nonneg _
+  have hgain : 300 * PT.tiling.gain i ≤ κ.α * T.S.n k / 8 := by
+    have h := mul_le_mul_of_nonneg_left (high_gain_upper κ hκ PT hPT hm i) (by norm_num : (0 : ℝ) ≤ 300)
+    have h2 := mul_le_mul_of_nonneg_left hg hA.le
+    have heq : A * (κ.α / (8 * A) * (T.S.n k : ℝ) ^ (1 : ℝ)) = κ.α * T.S.n k / 8 := by
+      rw [Real.rpow_one]; field_simp <;> ring
+    rw [heq] at h2
+    exact h.trans (by simpa [A, mul_assoc] using h2)
+  have hbase : ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ - κ.α * T.S.n k / 3) + 300 * PT.tiling.gain i ≤
+      -(κ.α / 8) * T.S.n k := by
+    have h := mul_le_mul_of_nonneg_right (interaction_xi_slack κ hκ) hn0
+    nlinarith
+  have hb : (T.S.n k : ℝ) * (12 : ℝ) ^ κ.u *
+      Real.exp (((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ - κ.α * T.S.n k / 3) + 300 * PT.tiling.gain i) ≤ 1 / 2 := by
+    apply le_trans (mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr hbase) (by positivity))
+    simpa only [mul_comm (T.S.n k : ℝ) ((12 : ℝ) ^ κ.u)] using hs.le
+  have hm := mul_le_mul_of_nonneg_right hb (Real.exp_nonneg (-300 * PT.tiling.gain i))
+  calc
+    _ = ((T.S.n k : ℝ) * (12 : ℝ) ^ κ.u *
+        Real.exp (((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ - κ.α * T.S.n k / 3) + 300 * PT.tiling.gain i)) *
+          Real.exp (-300 * PT.tiling.gain i) := by
+      simp only [mul_assoc, ← Real.exp_add]
+      congr 2
+      ring
+    _ ≤ _ := hm
+
+/-- Finite-law expectations distribute over addition. -/
+theorem finite_expectation_add {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (f g : Ω → ℝ) :
+    P.E (fun ω => f ω + g ω) = P.E f + P.E g := by
+  simp only [FinLaw.E, mul_add, Finset.sum_add_distrib]
+
+/-- The two positive pieces give the raw high-cluster interaction alarm mean. -/
+theorem raw_interaction_alarm_mean (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ a : EvenPosition T k,
+      (clusterHistoryLaw PT hPT hm).E (fun W => clusterInteractionCost PT hPT hm W a) ≤
+        Real.exp (-300 * PT.tiling.gain (patchAt PT hPT a.1)) := by
+  filter_upwards [nominal_large_piece_bound_eventually κ hκ T hDeep,
+    moderate_witness_piece_bound_eventually κ hκ T hDeep,
+    moderate_witness_total_absorbed_eventually κ hκ T] with k hlarge hwitness habs
+  intro PT hPT hm a
+  let P := clusterHistoryLaw PT hPT hm
+  let C : ℝ := (3 : ℝ) ^ κ.u * Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ) *
+    Real.exp (-(κ.α * T.S.n k / 3))
+  have hC : 0 ≤ C := by dsimp [C]; positivity
+  have hsplit : P.E (fun W => clusterInteractionCost PT hPT hm W a) ≤
+      P.E (fun W => nominal_large_piece PT hPT hm W a) +
+        ∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u),
+          P.E (fun W => moderate_witness_piece PT hPT hm W a b J I) := by
+    have hm' := FinProb.expect_mono (as_probability P) (fun W => raw_interaction_cost_split PT hPT hm W a)
+    apply hm'.trans_eq
+    change P.E (fun W => raw_large_piece PT hPT hm W a +
+      ∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u), raw_witness_piece PT hPT hm W a b J I) = _
+    rw [finite_expectation_add]
+    simp_rw [finite_expectation_sum]
+    simp only [P, raw_large_piece_mean, raw_witness_piece_mean]
+  have hL : P.E (fun W => nominal_large_piece PT hPT hm W a) ≤
+      (1 / 2) * Real.exp (-300 * PT.tiling.gain (patchAt PT hPT a.1)) := by
+    apply finite_expectation_le_on_support
+    intro W hW
+    exact hlarge PT hPT hm W hW a
+  have hW (I J : Finset (Fin κ.u)) (b : BulkIndex PT hPT a) :
+      P.E (fun W => moderate_witness_piece PT hPT hm W a b J I) ≤ C := by
+    apply finite_expectation_le_on_support
+    intro W hW
+    exact hwitness PT hPT hm W hW a b J I
+  have hsum : (∑ I : Finset (Fin κ.u), ∑ b : BulkIndex PT hPT a, ∑ J : Finset (Fin κ.u),
+      P.E (fun W => moderate_witness_piece PT hPT hm W a b J I)) ≤
+        (T.S.n k : ℝ) * (12 : ℝ) ^ κ.u * Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ) *
+          Real.exp (-(κ.α * T.S.n k / 3)) := by
+    have hcount : (2 : ℝ) ^ κ.u * (2 : ℝ) ^ κ.u * (3 : ℝ) ^ κ.u = (12 : ℝ) ^ κ.u := by
+      rw [← mul_pow, ← mul_pow]
+      norm_num
+    have hb : (Fintype.card (BulkIndex PT hPT a) : ℝ) ≤ T.S.n k := by
+      exact_mod_cast (show Fintype.card (BulkIndex PT hPT a) ≤ T.S.n k by
+        simpa [BulkIndex, Fintype.card_coe] using bulk_card_le PT hPT a)
+    calc
+      _ ≤ ∑ _I : Finset (Fin κ.u), ∑ _b : BulkIndex PT hPT a, ∑ _J : Finset (Fin κ.u), C :=
+        Finset.sum_le_sum fun I _ => Finset.sum_le_sum fun b _ => Finset.sum_le_sum fun J _ => hW I J b
+      _ = (Fintype.card (BulkIndex PT hPT a) : ℝ) * (12 : ℝ) ^ κ.u *
+          Real.exp ((2 : ℝ) ^ κ.u * T.S.n k * κ.ξ) * Real.exp (-(κ.α * T.S.n k / 3)) := by
+        simp only [Finset.sum_const, nsmul_eq_mul, Finset.card_univ, Fintype.card_finset,
+          Fintype.card_fin, Nat.cast_pow, Nat.cast_ofNat]
+        dsimp [C]
+        rw [← hcount]
+        ring
+      _ ≤ _ := by
+        exact mul_le_mul_of_nonneg_right
+          (mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hb (by positivity)) (Real.exp_nonneg _))
+            (Real.exp_nonneg _)
+  have hM := hsum.trans (habs PT hPT hm (patchAt PT hPT a.1))
+  exact hsplit.trans (by linarith)
+
 end HypercubeRamsey.Lane_sol_s15_alarm

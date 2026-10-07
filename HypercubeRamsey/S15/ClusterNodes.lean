@@ -88,7 +88,7 @@ theorem high_cluster_degree_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stag
 /-- L15.2b: the raw mean large-interaction estimate. -/
 theorem high_cluster_interaction_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterInteractionMeanClaim κ T := by
-  sorry
+  exact HypercubeRamsey.Lane_sol_s15_alarm.raw_interaction_alarm_mean κ hκ T hDeep
 
 /-- L15.2c: product-local-lemma conditioning of the primitive histories. -/
 theorem high_cluster_condition_histories (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

@@ -1,8 +1,191 @@
 import HypercubeRamsey.S17.Needs
+import HypercubeRamsey.Framework.FinProbLemmas
 
 namespace HypercubeRamsey.Lane_q_s17_res1
 
 open Classical
+
+private noncomputable def toFinProbLaw {Ω : Type*} [Fintype Ω]
+    (P : FinLaw Ω) : FinProb Ω where
+  w := P.w
+  nonneg := P.nonneg
+  sum_eq_one := P.sum_one
+
+private theorem finLaw_ext_of_weights {Ω : Type*} [Fintype Ω]
+    {P Q : FinLaw Ω} (h : P.w = Q.w) : P = Q := by
+  cases P with
+  | mk w hw hs =>
+      cases Q with
+      | mk w' hw' hs' =>
+          change w = w' at h
+          subst w'
+          rfl
+
+/-- A product of tests on disjoint coordinate sets has exactly the product
+of its one-test probabilities. -/
+private theorem pi_expect_prod_disjoint
+    {ι J : Type*} [Fintype ι] [DecidableEq ι] [Fintype J] [DecidableEq J]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinLaw (Ω i))
+    (s : Finset J) (f : J → (∀ i, Ω i) → ℝ) (A : J → Finset ι)
+    (hdep : ∀ j, FinProb.DependsOn (f j) (A j))
+    (hdisj : ∀ i j, i ≠ j → Disjoint (A i) (A j)) :
+    (FinLaw.pi P).E (fun x => ∏ j ∈ s, f j x) =
+      ∏ j ∈ s, (FinLaw.pi P).E (f j) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty =>
+      change (FinLaw.pi P).E (fun _ => 1) = 1
+      unfold FinLaw.E
+      simpa using (FinLaw.pi P).sum_one
+  | @insert a s ha ih =>
+      have hprodDep : FinProb.DependsOn
+          (fun x => ∏ j ∈ s, f j x) (s.biUnion A) := by
+        intro x y hxy
+        apply Finset.prod_congr rfl
+        intro j hj
+        apply hdep j
+        intro i hi
+        exact hxy i (Finset.mem_biUnion.mpr ⟨j, hj, hi⟩)
+      have hdisjUnion : Disjoint (A a) (s.biUnion A) := by
+        apply Finset.disjoint_left.mpr
+        intro i hi hmem
+        rcases Finset.mem_biUnion.mp hmem with ⟨j, hj, hji⟩
+        exact (Finset.disjoint_left.mp (hdisj a j (by
+          intro h
+          subst j
+          exact ha hj))) hi hji
+      have hmul := FinProb.pi_expect_mul_of_disjoint
+        (fun i => toFinProbLaw (P i)) (f a) (fun x => ∏ j ∈ s, f j x)
+        (A a) (s.biUnion A) (hdep a) hprodDep hdisjUnion
+      have hfactor (x : ∀ i, Ω i) :
+          (∏ j ∈ insert a s, f j x) = f a x * ∏ j ∈ s, f j x :=
+        Finset.prod_insert ha
+      have hleft : (FinLaw.pi P).E
+          (fun x => ∏ j ∈ insert a s, f j x) =
+          (FinLaw.pi P).E (fun x => f a x * ∏ j ∈ s, f j x) := by
+        unfold FinLaw.E
+        apply Finset.sum_congr rfl
+        intro x hx
+        dsimp
+        rw [hfactor x]
+      have hright :
+          (∏ j ∈ insert a s, (FinLaw.pi P).E (f j)) =
+            (FinLaw.pi P).E (f a) * ∏ j ∈ s, (FinLaw.pi P).E (f j) :=
+        Finset.prod_insert ha
+      have hmulLaw : (FinLaw.pi P).E
+          (fun x => f a x * ∏ j ∈ s, f j x) =
+          (FinLaw.pi P).E (f a) *
+            (FinLaw.pi P).E (fun x => ∏ j ∈ s, f j x) := by
+        simpa [FinLaw.E, FinProb.expect, FinLaw.pi, FinProb.pi, toFinProbLaw] using hmul
+      calc
+        (FinLaw.pi P).E (fun x => ∏ j ∈ insert a s, f j x) =
+            (FinLaw.pi P).E (fun x => f a x * ∏ j ∈ s, f j x) := hleft
+        _ = (FinLaw.pi P).E (f a) *
+            (FinLaw.pi P).E (fun x => ∏ j ∈ s, f j x) := hmulLaw
+        _ = (FinLaw.pi P).E (f a) * ∏ j ∈ s, (FinLaw.pi P).E (f j) := by rw [ih]
+        _ = ∏ j ∈ insert a s, (FinLaw.pi P).E (f j) := hright.symm
+
+private theorem indicator_prod_eq
+    {J Ω : Type*} [Fintype J] [DecidableEq J] (s : Finset J)
+    (E : J → Ω → Prop) (x : Ω) :
+    (if ∀ j ∈ s, E j x then (1 : ℝ) else 0) =
+      ∏ j ∈ s, (if E j x then (1 : ℝ) else 0) := by
+  classical
+  simpa [Finset.prod_const_one] using
+    (Finset.prod_ite_zero (s := s) (p := fun j => E j x)
+      (f := fun _ => (1 : ℝ))).symm
+
+/-- The same factorization written for event probabilities. -/
+theorem pi_pr_inter_disjoint
+    {ι J : Type*} [Fintype ι] [DecidableEq ι] [Fintype J] [DecidableEq J]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinLaw (Ω i))
+    (s : Finset J) (E : J → (∀ i, Ω i) → Prop) (A : J → Finset ι)
+    (hdep : ∀ j, FinProb.DependsOn
+      (fun x => if E j x then (1 : ℝ) else 0) (A j))
+    (hdisj : ∀ i j, i ≠ j → Disjoint (A i) (A j)) :
+    (FinLaw.pi P).pr (fun x => ∀ j ∈ s, E j x) =
+      ∏ j ∈ s, (FinLaw.pi P).pr (E j) := by
+  classical
+  have hpoint (x : ∀ i, Ω i) := indicator_prod_eq s E x
+  calc
+    (FinLaw.pi P).pr (fun x => ∀ j ∈ s, E j x) =
+        (FinLaw.pi P).E (fun x => ∏ j ∈ s,
+          (if E j x then (1 : ℝ) else 0)) := by
+      unfold FinLaw.pr FinLaw.E
+      apply Finset.sum_congr rfl
+      intro x hx
+      dsimp
+      rw [← hpoint x]
+      by_cases h : ∀ j ∈ s, E j x <;> simp [h]
+    _ = ∏ j ∈ s, (FinLaw.pi P).E
+        (fun x => if E j x then (1 : ℝ) else 0) :=
+      pi_expect_prod_disjoint P s
+        (fun j x => if E j x then (1 : ℝ) else 0) A hdep hdisj
+    _ = ∏ j ∈ s, (FinLaw.pi P).pr (E j) := by
+      apply Finset.prod_congr rfl
+      intro j hj
+      unfold FinLaw.E FinLaw.pr
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases h : E j x <;> simp [h]
+
+/-- Mapping each independent coordinate separately preserves the product law. -/
+theorem pi_map_law
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω Ξ : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, Fintype (Ξ i)]
+    (P : ∀ i, FinLaw (Ω i)) (f : ∀ i, Ω i → Ξ i) :
+    FinLaw.map (FinLaw.pi P) (fun x i => f i (x i)) =
+      FinLaw.pi (fun i => FinLaw.map (P i) (f i)) := by
+  classical
+  let L := FinLaw.map (FinLaw.pi P) (fun x i => f i (x i))
+  let R := FinLaw.pi (fun i => FinLaw.map (P i) (f i))
+  have hweight : L.w = R.w := by
+    funext y
+    change (∑ x : ∀ i, Ω i,
+        if (fun i => f i (x i)) = y then ∏ i, (P i).w (x i) else 0) =
+      ∏ i, ∑ z : Ω i, if f i z = y i then (P i).w z else 0
+    have hterm (x : ∀ i, Ω i) :
+        (if (fun i => f i (x i)) = y then ∏ i, (P i).w (x i) else 0) =
+          ∏ i, (if f i (x i) = y i then (P i).w (x i) else 0) := by
+      by_cases h : (fun i => f i (x i)) = y
+      · have heq : ∀ i, f i (x i) = y i := fun i => congrFun h i
+        simp [h, heq]
+      · have hnot : ¬ ∀ i, f i (x i) = y i := by
+          intro hall
+          apply h
+          funext i
+          exact hall i
+        push_neg at hnot
+        obtain ⟨i, hi⟩ := hnot
+        have hz : ∏ i, (if f i (x i) = y i then (P i).w (x i) else 0) = 0 := by
+          exact Finset.prod_eq_zero (s := Finset.univ)
+            (f := fun i => if f i (x i) = y i then (P i).w (x i) else 0)
+            (Finset.mem_univ i) (by simp [hi])
+        simp [h, hz]
+    calc
+      _ = ∑ x : ∀ i, Ω i, ∏ i, (if f i (x i) = y i then (P i).w (x i) else 0) := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        exact hterm x
+      _ = ∏ i, ∑ z : Ω i, if f i z = y i then (P i).w z else 0 := by
+        exact (Fintype.prod_sum
+          (fun i (z : Ω i) => if f i z = y i then (P i).w z else 0)).symm
+  exact finLaw_ext_of_weights hweight
+
+/-- Coordinate marginals of a product law, in the Section 17 law vocabulary. -/
+theorem pi_marginal_law
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (s : Finset ι) :
+    FinLaw.map (FinLaw.pi P) (fun x (i : {i // i ∈ s}) => x i.1) =
+      FinLaw.pi (fun i : {i // i ∈ s} => P i.1) := by
+  classical
+  let L := FinLaw.map (FinLaw.pi P) (fun x (i : {i // i ∈ s}) => x i.1)
+  let R := FinLaw.pi (fun i : {i // i ∈ s} => P i.1)
+  have hweight : L.w = R.w := by
+    funext x
+    exact FinProb.pi_marginal (fun i => toFinProbLaw (P i)) s x
+  exact finLaw_ext_of_weights hweight
 
 private theorem graphBall_mono_radius
     {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}

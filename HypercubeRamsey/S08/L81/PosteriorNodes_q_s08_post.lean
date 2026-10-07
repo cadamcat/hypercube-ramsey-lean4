@@ -1025,6 +1025,15 @@ theorem avgMarg_rprime {η₀ β p : ℝ} {h : ℕ}
   have hhR : (0 : ℝ) < h := by exact_mod_cast hh
   field_simp
 
+theorem avgMarg_rprime_le_balanced {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hh : 0 < h) (hN : 0 < D.N)
+    (K : ℝ) (hBal : D.M.Balanced (4 * K)) (y : Fin D.N) :
+    averageCoordinateMarginal D.R' y ≤ 4 * K / D.N := by
+  rw [avgMarg_rprime D hh y]
+  have hN' : (0 : ℝ) < D.N := by exact_mod_cast hN
+  apply (le_div_iff₀ hN').2
+  simpa [mul_comm] using hBal.2 y
+
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
   classical

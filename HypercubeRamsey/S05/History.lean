@@ -302,7 +302,101 @@ theorem L5_1d_bounds : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colou
             (∏ s : Fin (X.p.typeSegs n K), X.S.reference.w (z s)) := by
               simpa [qu, sev] using hpoint
       _ ≤ _ := hcombine
-  · sorry
+  · intro z hz ℓ hℓ h
+    have hLaw : (X.blockLaw H K).w z =
+        X.blockWeight H K K.2.1 z / X.blockMass H K K.2.1 := by
+      simpa [Setup5.blockLaw, Setup5.blockLawOn, Setup5.blockMass] using
+        (HypercubeRamsey.Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg
+          (f := fun z => X.blockWeight H K K.2.1 z) (X.fallbackBlock K) z
+          (fun z => HypercubeRamsey.Lane_q_s05_hist1b.blockWeight_nonneg X H K K.2.1 z)
+          (by simpa [Setup5.blockMass] using hmassPos))
+    have hweightNe : X.blockWeight H K K.2.1 z ≠ 0 := by
+      intro hzWeight
+      apply hz
+      rw [hLaw, hzWeight]
+      simp
+    have hweight := hweightNe
+    unfold Setup5.blockWeight at hweight
+    have hbaseGateNe : X.blockBase H.1 K z *
+        (if X.blockGate H.1 K z then 1 else 0) ≠ 0 :=
+      (mul_ne_zero_iff.mp hweight).1
+    have hblockNe : X.blockBase H.1 K z ≠ 0 :=
+      (mul_ne_zero_iff.mp hbaseGateNe).1
+    have hlikprod : ∏ k ∈ K.2.1, X.colLik H.1 K k z (H.2 k) ≠ 0 :=
+      (mul_ne_zero_iff.mp hweight).2
+    have hlik : X.colLik H.1 K ℓ z (H.2 ℓ) ≠ 0 :=
+      (Finset.prod_ne_zero_iff.mp hlikprod) ℓ hℓ
+    have hlik' := hlik
+    unfold Setup5.colLik at hlik'
+    have hcoverBin : K.1.1 ∈ binList5 ℓ.coarse := by
+      rcases hType with ⟨x, hx, hK⟩
+      have hℓ' := hℓ
+      rw [← hK] at hℓ'
+      have hmem : ℓ ∈ X.g.typeKeys (X.p.J n) x := by
+        simpa [ChunkGeometry5.evenType] using hℓ'
+      rw [← hK]
+      simpa [ChunkGeometry5.evenType] using hcover x ℓ hmem
+    have hprefix := HypercubeRamsey.Lane_q_s05_hist1b.typeSegs_le_keyPrefix5
+      X K hType ℓ hℓ
+    intro s i
+    have hratio : ratio5 ((X.priorRep H.1 ℓ K.1.1 z).w (H.2 ℓ h))
+        ((X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)).w (H.2 ℓ h)) ≠ 0 :=
+      (Finset.prod_ne_zero_iff.mp hlik') h (Finset.mem_univ _)
+    have hrepLaw : (X.priorRep H.1 ℓ K.1.1 z).w (H.2 ℓ h) ≠ 0 := by
+      by_cases hdel : (X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)).w (H.2 ℓ h) = 0
+      · simp [ratio5, hdel] at hratio
+      · have hdiv : (X.priorRep H.1 ℓ K.1.1 z).w (H.2 ℓ h) /
+            (X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)).w (H.2 ℓ h) ≠ 0 := by
+          simpa [ratio5, hdel] using hratio
+        by_contra hnum
+        apply hdiv
+        simp [hnum]
+    have hraw := HypercubeRamsey.Lane_q_s05_hist1b.priorRep_raw_nonzero5
+      X H K ℓ z hbase hblockNe hcoverBin (H.2 ℓ h) hrepLaw
+    by_cases hbnd : ℓ.coarse.2 = true
+    · have hsegment := HypercubeRamsey.Lane_q_s05_hist1b.posterior_boundary_segment_nonzero5
+        X H K ℓ z (H.2 ℓ h) hprefix hcoverBin hbnd hraw s
+      have hrawBoundary := hraw
+      simp [Setup5.colWeight, hbnd] at hrawBoundary
+      have hparentNe : X.P.prior.parent.w (H.2 ℓ h) ≠ 0 := hrawBoundary.1
+      have hparentMem : H.2 ℓ h ∈ X.P.lab0 := by
+        by_contra hnot
+        have hzero := X.P.lab0_atom (H.2 ℓ h) hnot
+        exact hparentNe hzero
+      have hterm := (Finset.prod_ne_zero_iff.mp hrawBoundary.2) K.1.1 hcoverBin
+      have hpartnerNe : (X.P.prior.partner (H.2 ℓ h) K.1.1).w
+          (H.1.2.1 K.1.1) ≠ 0 := (mul_ne_zero_iff.mp hterm).1
+      have hpartnerMem : H.1.2.1 K.1.1 ∈ X.P.prior.partnerSet (H.2 ℓ h) K.1.1 := by
+        by_contra hnot
+        have hzero := X.P.prior.partner_support (H.2 ℓ h) K.1.1
+          (H.1.2.1 K.1.1) hnot
+        exact hpartnerNe hzero
+      have hpaired := X.partner_related (H.2 ℓ h) hparentMem K.1.1
+        (H.1.2.1 K.1.1) hpartnerMem
+      have hword : (X.S.segment (H.2 ℓ h) (H.1.2.1 K.1.1)).w (z s) ≠ 0 := by
+        simpa [Setup5.segLaw, hpaired] using hsegment
+      exact (X.S.segment_hits (H.2 ℓ h) (H.1.2.1 K.1.1) (z s)
+        hpaired hword i).1
+    · have hfalse : ℓ.coarse.2 = false := by
+        cases hb : ℓ.coarse.2 <;> simp_all
+      have hsegment := HypercubeRamsey.Lane_q_s05_hist1b.posterior_interior_segment_nonzero5
+        X H K ℓ z (H.2 ℓ h) hprefix hcoverBin hfalse hraw s
+      have hrawInterior := hraw
+      simp [Setup5.colWeight, hfalse] at hrawInterior
+      have hpartnerNe : (X.P.prior.partner H.1.1 ℓ.coarse.1).w (H.2 ℓ h) ≠ 0 :=
+        hrawInterior.1
+      have hparentNe := HypercubeRamsey.Lane_q_s05_hist1b.base_parent_supported X H.1 hbase
+      have hparentMem : H.1.1 ∈ X.P.lab0 := by
+        by_contra hnot
+        exact hparentNe (X.P.lab0_atom H.1.1 hnot)
+      have hpartnerMem : H.2 ℓ h ∈ X.P.prior.partnerSet H.1.1 ℓ.coarse.1 := by
+        by_contra hnot
+        have hzero := X.P.prior.partner_support H.1.1 ℓ.coarse.1 (H.2 ℓ h) hnot
+        exact hpartnerNe hzero
+      have hpaired := X.partner_related H.1.1 hparentMem ℓ.coarse.1 (H.2 ℓ h) hpartnerMem
+      have hword : (X.S.segment H.1.1 (H.2 ℓ h)).w (z s) ≠ 0 := by
+        simpa [Setup5.segLaw, hpaired] using hsegment
+      exact (X.S.segment_hits H.1.1 (H.2 ℓ h) (z s) hpaired hword i).2
 
 /-- The Step 3 threshold of a record target: `e^{-c k'_j}` at low targets, `e^{-c s}` at high targets. -/
 def step3Scale (c : ℝ) (ℓ : X.Key) : ℝ :=

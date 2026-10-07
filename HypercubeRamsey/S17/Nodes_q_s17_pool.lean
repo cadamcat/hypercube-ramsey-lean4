@@ -429,7 +429,8 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
       (∀ w ∈ B, D.G.patchOf w = D.G.patchOf v) ∧
       T.S.n k - ((PT.tiling.P (D.G.patchOf v)).h +
         (PT.tiling.P (D.G.patchOf v)).ℓ + D.G.r) ≤ B.card ∧
-      B.card ≤ T.S.n k := by
+      B.card ≤ T.S.n k ∧
+      (D.externalEarly v \ B).card ≤ (PT.tiling.P (D.G.patchOf v)).ℓ := by
   classical
   let i := D.G.patchOf v
   let n := T.S.n k
@@ -516,7 +517,40 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
     have hpatch := lowGeom_patch_flip_of_after_prefix D.G hPT v j (by
       simpa [i, ell] using hge)
     exact ⟨hnotI, hclass, by simpa [i] using hpatch⟩
-  refine ⟨B, ?_, ?_, ?_, ?_⟩
+  have hcross_sub : D.externalEarly v \ B ⊆ Prefix.image (flipPos v) := by
+    intro w hw
+    have hwext := (Finset.mem_sdiff.mp hw).1
+    have hwnotB := (Finset.mem_sdiff.mp hw).2
+    rcases (Finset.mem_filter.mp hwext).2 with ⟨hclassw, ⟨j, hjI, hEq⟩⟩
+    have hjnotPrefix : j ∈ Prefix := by
+      by_contra hjnot
+      have hclass : D.G.classOf (flipPos v j) = none := by
+        rw [← hEq]
+        exact hclassw
+      have hjnotLate : j ∉ Late := by
+        intro hjLate
+        simp [Late, hclass] at hjLate
+      have hjnotBad : j ∉ bad := by
+        intro hjBad
+        simp only [bad, Finset.mem_union] at hjBad
+        rcases hjBad with hjIL | hjPrefix
+        · rcases hjIL with hjI' | hjLate
+          · exact hjI hjI'
+          · exact hjnotLate hjLate
+        · exact hjnot hjPrefix
+      have hjgood : j ∈ C := by
+        simp [C, hjnotBad]
+      have hwB : flipPos v j ∈ B := Finset.mem_image.mpr ⟨j, hjgood, rfl⟩
+      have hwnotB' : flipPos v j ∉ B := by simpa [hEq] using hwnotB
+      exact hwnotB' hwB
+    exact Finset.mem_image.mpr ⟨j, hjnotPrefix, hEq.symm⟩
+  have hcross_card : (D.externalEarly v \ B).card ≤ ell := by
+    calc
+      (D.externalEarly v \ B).card ≤ (Prefix.image (flipPos v)).card :=
+        Finset.card_le_card hcross_sub
+      _ = Prefix.card := Finset.card_image_of_injective _ hflip
+      _ = ell := hPrefixcard
+  refine ⟨B, ?_, ?_, ?_, ?_, ?_⟩
   · intro w hw
     rcases Finset.mem_image.mp hw with ⟨j, hj, rfl⟩
     have hg := hgood j hj
@@ -533,6 +567,7 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
       _ = B.card := hBcard.symm
   · rw [hBcard]
     simpa [n] using Finset.card_le_univ C
+  · simpa [ell] using hcross_card
 
 theorem externalEarly_card_le {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)

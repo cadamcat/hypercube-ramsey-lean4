@@ -707,15 +707,18 @@ structure ListFamily (Geom : ProjectionGeometry κ 𝒯 i)
     ((model p g W hW S hS).binDist D).w y = (mask g W).within D y
   count : ∀ p g W hW S hS, Fintype.card (model p g W hW S hS).Id ≤ 𝒯.tScale i
 
-/-- Eligibility estimates for the concrete greedy marking. No activation bit
-is required to be true before eligibility is computed (TeX 29, 68). -/
+/-- Joint position-count and eligibility estimates for the concrete greedy
+marking, before activation (TeX 29, 68). The shared gate also supplies the
+position upper bounds required by star validity (TeX 93). -/
 structure EligibilityFacts (hconst : HeightConstantContract κ)
     (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh)
     (mask : Masks H) : Prop where
   eligible_subset : ∀ W v j c, c ∈ eligible Geom H mask W v j →
     c ∈ candidateBall H v j ∧ H.present W c = true
   eligible_gate : ∀ p, (H.recLaw p).pr (fun W =>
-    ¬ ∀ v ∈ siteSet Geom, ∀ j, H.Device.lam / 2 ≤ (eligible Geom H mask W v j).card) ≤
+    ¬ (PositionCountGate H W ∧
+      ∀ v ∈ siteSet Geom, ∀ j,
+        H.Device.lam / 2 ≤ (eligible Geom H mask W v j).card)) ≤
       2 * Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) (1 + hconst.sliceExponent))
 
 end Rules

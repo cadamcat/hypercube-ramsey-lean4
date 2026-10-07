@@ -4079,7 +4079,91 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         simpa [Wraw, graw, raw, preSet, permSet, zPre] using hCalPerm
       normalizer_mass := by
         intro pool W g ht hW hbase hg
-        sorry
+        have hCalHist := hCalHistoryPos W hW hbase
+        let Wraw := hLink.histories C W
+        let graw := hLink.groups C g
+        let raw := R.qraw C Wraw graw
+        let preSet := R.pretrim C Wraw graw
+        let permSet := Cal.permitted C g
+        let poolSet := Finset.univ.image pool
+        let bothSet := (preSet ∩ permSet) ∩ poolSet
+        let zPre : ℝ := ∑ b ∈ preSet, raw.w b
+        let zPermRaw : ℝ := ∑ b ∈ preSet ∩ permSet, raw.w b
+        let zPoolRaw : ℝ := ∑ b ∈ bothSet, raw.w b
+        let zPermQin : ℝ := ∑ b ∈ permSet, (Cal.qin C W g).w b
+        let zPoolQin : ℝ := ∑ b ∈ permSet ∩ poolSet, (Cal.qin C W g).w b
+        have hIncoming : Cal.qin C W g = R.qin C Wraw graw :=
+          hLink.incoming_eq C W g
+        have hSliceInput := hRawSliceInput W hCalHist
+        have hQin (b : Bin PT.tiling (H.geom.cellPatch C)) :
+            (Cal.qin C W g).w b =
+              (if b ∈ preSet then raw.w b else 0) / zPre := by
+          rw [hIncoming]
+          have h := R.qin_eq C Wraw graw b hSliceInput
+          simpa [Wraw, graw, raw, preSet, zPre] using h
+        have hPreNe : zPre ≠ 0 := by
+          intro hz
+          have hZero (b : Bin PT.tiling (H.geom.cellPatch C)) :
+              (R.qin C Wraw graw).w b = 0 := by
+            rw [hIncoming, hQin b]
+            by_cases hb : b ∈ preSet <;> simp [hb, zPre, hz]
+          have hsum : ∑ b, (R.qin C Wraw graw).w b = 0 := by
+            apply Finset.sum_eq_zero
+            intro b hb
+            exact hZero b
+          have hone := (R.qin C Wraw graw).sum_one
+          rw [hsum] at hone
+          norm_num at hone
+        have hPermQinEq : zPermQin = zPermRaw / zPre := by
+          calc
+            zPermQin = ∑ b ∈ permSet,
+                (if b ∈ preSet then raw.w b else 0) / zPre := by
+              apply Finset.sum_congr rfl
+              intro b hb
+              exact hQin b
+            _ = (∑ b ∈ permSet, if b ∈ preSet then raw.w b else 0) / zPre := by
+              rw [Finset.sum_div]
+            _ = zPermRaw / zPre := by
+              congr 1
+              have hSet : permSet.filter (fun b => b ∈ preSet) = preSet ∩ permSet := by
+                ext b
+                simp [and_comm]
+              rw [← Finset.sum_filter, hSet]
+        have hPoolQinEq : zPoolQin = zPoolRaw / zPre := by
+          calc
+            zPoolQin = ∑ b ∈ permSet ∩ poolSet,
+                (if b ∈ preSet then raw.w b else 0) / zPre := by
+              apply Finset.sum_congr rfl
+              intro b hb
+              exact hQin b
+            _ = (∑ b ∈ permSet ∩ poolSet,
+                if b ∈ preSet then raw.w b else 0) / zPre := by
+              rw [Finset.sum_div]
+            _ = zPoolRaw / zPre := by
+              congr 1
+              have hSet : (permSet ∩ poolSet).filter (fun b => b ∈ preSet) = bothSet := by
+                ext b
+                simp [bothSet, and_assoc, and_comm]
+              rw [← Finset.sum_filter, hSet]
+        have hCalPerm := Cal.permission_mass C W g hCalHist
+        have hPermPos : 0 < zPermQin := by
+          have hRange := Cal.perm_range
+          have hPermMass : 1 - Cal.δperm ≤ zPermQin := by
+            simpa [zPermQin, permSet] using hCalPerm
+          linarith
+        have hPermRawPos : 0 < zPermRaw := by
+          have hmul : zPermQin * zPre = zPermRaw := by
+            rw [hPermQinEq]
+            field_simp [hPreNe]
+          rw [← hmul]
+          exact mul_pos hPermPos (lt_of_le_of_ne (Finset.sum_nonneg fun b hb => raw.nonneg b)
+            (Ne.symm hPreNe))
+        have hPoolReq := Cal.pool_normalizer C pool W g ht hCalHist
+        have hNormEq : zPoolQin / zPermQin = zPoolRaw / zPermRaw := by
+          rw [hPoolQinEq, hPermQinEq]
+          field_simp [hPreNe, ne_of_gt hPermRawPos]
+        rw [hNormEq] at hPoolReq
+        simpa [zPoolRaw, zPermRaw, bothSet, preSet, raw, Wraw, graw, permSet, poolSet] using hPoolReq
       slot_pos := Cal.slot_pos C
       stage_cost := by
         sorry

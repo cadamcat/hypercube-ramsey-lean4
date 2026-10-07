@@ -3,6 +3,7 @@ import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S17.Nodes_sol_s17_pool
 import HypercubeRamsey.S17.Nodes_sol_s17_pool_experiment
 import HypercubeRamsey.S17.Nodes_sol_s17_pool_mass
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_retained
 import HypercubeRamsey.S17.Nodes_q_s17_res1
 
 set_option maxHeartbeats 1000000
@@ -72,7 +73,41 @@ theorem independentPinnedMassFailure
           (fun ys => D.gateMassFailure v σ
             (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) ≤
           (1 / 2 : ℝ) * Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) := by
-  sorry
+  classical
+  let q₀ := max (Real.log (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ)) 1
+  have hq₀ : Real.log (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ) ≤ q₀ ∧ 1 ≤ q₀ :=
+    ⟨le_max_left _ _, le_max_right _ _⟩
+  have hIndex := Lane_sol_s17_pool.eventually_mass_index_bounds κ hκ T K hK
+  have hGamma := Lane_sol_s17_pool.eventually_retained_gamma κ hκ T K hK q₀
+  have hFalse := Lane_sol_s17_pool.homogeneous_bulk_product_tail κ hκ T hSource.2.1 false 1 (by norm_num)
+  have hTrue := Lane_sol_s17_pool.homogeneous_bulk_product_tail κ hκ T hSource.2.1 true 1 (by norm_num)
+  have hDiscPin := hSource.2.2
+  unfold DeepDisc at hDiscPin
+  filter_upwards [hIndex, hGamma, hFalse, hTrue, hDiscPin] with k hIndex hGamma hFalse hTrue hDiscPin
+  intro PT D hQuant v σ pins fixed hInput
+  have hn1 : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast (by have := hIndex.n_ge; omega : 1 ≤ T.S.n k)
+  have hDisc : TwoBudgetDisc T k ((T.S.n k : ℝ) ^ min κ.xι (κ.xs / 4))
+      (κ.αι * T.S.n k) ((T.S.n k : ℝ) ^ (-1 + κ.ι / 2)) :=
+    S12.TwoBudgetDisc.mono hDiscPin
+      (Real.rpow_le_rpow_of_exponent_le hn1 (min_le_left _ _)) le_rfl le_rfl
+  have hTail : ∀ H : S12.HomogeneousInput κ hκ T k PT.tiling.c 1,
+      (FinLaw.pi fun _ : Fin H.S.d => ListGateContext.lawAsFinLaw H.π).pr
+        (fun ys => Lane_sol_s17_pool.productMass H.S.τ (fun _ x y =>
+          hit (T.S.E k) PT.tiling.c x y / deg (T.S.E k) PT.tiling.c H.π.w x) ys < 2 / 3) ≤
+      (1 - (2 / 3 : ℝ)) ^ (-(κ.u : ℝ)) *
+        ((T.S.n k : ℝ) ^ (-(3 * (κ.R : ℝ))) + 4 ^ (κ.u + 1) * H.gamma) := by
+    cases hc : PT.tiling.c with
+    | false =>
+      intro H
+      exact hFalse H (2 / 3) (by norm_num) (by norm_num)
+    | true =>
+      intro H
+      exact hTrue H (2 / 3) (by norm_num) (by norm_num)
+  exact Lane_sol_s17_pool.fixed_independent_mass hκ D K hK hQuant v hInput.1 σ hInput.2.1.1
+    pins hInput.2.2.1 fixed hInput.2.2.2.1 hInput.2.2.2.2
+    ((T.S.n k : ℝ) ^ min κ.xι (κ.xs / 4)) (κ.αι * T.S.n k)
+    ((T.S.n k : ℝ) ^ (-1 + κ.ι / 2)) hDisc hIndex q₀ hq₀
+    (hGamma PT D hQuant v hInput.1 σ hInput.2.1.1) hTail
 
 /-- L17.1b: cleaned omitted-support failure, including bulk incidences. -/
 theorem independentPinnedSupportFailure

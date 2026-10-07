@@ -1,11 +1,12 @@
 import HypercubeRamsey.Framework.Props
-import HypercubeRamsey.S08.L81.Nodes
+import HypercubeRamsey.S08.L81.Assembly
 
 /-!
 # Section 8: asymmetric purity exclusion
 
-The main one-shot node is L8.1. The reversed-orientation form used by C8.2 is proved from it by transposing the
-colouring and exchanging the two sides.
+The main one-shot node is L8.1, assembled in `S08/L81/Assembly.lean` (`S08.l81_core`) from the nodes of
+`S08/L81/*Nodes.lean`. The reversed-orientation form used by C8.2 is proved from it by transposing the colouring and
+exchanging the two sides.
 -/
 
 namespace HypercubeRamsey
@@ -27,33 +28,10 @@ theorem asymmetric_purity (η₀ γ β p K : ℝ)
             (∀ y, 0 < (M.ν i).w y →
               1 - Real.exp (-((n : ℝ) ^ p)) ≤ colDeg E G (M.μ i) y)) →
           CubeAt n N E := by
-  obtain ⟨n₀, C₀, h, C_L, _hC₀, hh, hC_L, hHL, hgridAll⟩ :=
-    L81a_key_grid η₀
+  obtain ⟨n₀, C₀, hcore⟩ := S08.l81_core η₀ γ β p K hη₀ hγ₀ hγ₁ hβ₀ hβτ hp hK
   refine ⟨n₀, C₀, ?_⟩
   intro n N E X Y G M hLarge hDisc hBal hRows
-  have _hparams : 0 < η₀ ∧ 0 < γ ∧ γ < 1 ∧ 0 < β ∧ β < tau8 η₀ / 4 ∧ 0 < p ∧ 0 < K :=
-    ⟨hη₀, hγ₀, hγ₁, hβ₀, hβτ, hp, hK⟩
-  have hgrid : L81GridFacts n η₀ := hgridAll n hLarge.1
-  let input : L81Input η₀ γ β p K n₀ C₀ n N E X Y G M :=
-    ⟨hLarge, hDisc, hBal, hRows⟩
-  obtain ⟨trim⟩ := L81b_trim η₀ γ β p K (I := input) (h := h) hgrid
-  have hgate : L81GateEstimate trim := L81c_hidden_gates η₀ γ β p K (I := input) hgrid trim
-  obtain ⟨ex⟩ := L81d_centres_tags_anchors η₀ γ β p K (I := input) hgrid trim hgate
-  obtain ⟨href⟩ := L81e_fixed_presentation η₀ γ β p K (I := input) trim ex
-  obtain ⟨hsel⟩ := L81f_hidden_selection η₀ γ β p K (I := input) trim ex href hgate
-    C_L hC_L hHL
-  obtain ⟨hadj⟩ := L81g_adjusted_posterior η₀ γ β p K (I := input) trim ex href hsel
-  obtain ⟨hordinary⟩ := L81h_ordinary_hit_test η₀ γ β p K (I := input) trim ex hadj
-  have hload : L81SelectedAnchorLoad trim ex :=
-    L81i_anchor_load η₀ γ β p K (I := input) trim ex hsel hadj
-  obtain ⟨halarm⟩ :=
-    L81j_predictive_alarms η₀ γ β p K (I := input) trim ex hadj hordinary hload
-  obtain ⟨hodd⟩ :=
-    L81k_odd_column_sums η₀ γ β p K (I := input) hgrid trim ex href hsel hadj hload halarm
-  obtain ⟨rows⟩ :=
-    L81l_injection_even_rows η₀ γ β p K (I := input) hgrid trim ex href hsel hadj
-      hordinary hload halarm hodd
-  exact L81l_hall_assembly rows
+  exact hcore n N E X Y G M hLarge ⟨hLarge.2.2, hDisc, hBal, hRows⟩
 
 /-- L8.1r: the one-shot theorem with the two sides reversed. -/
 theorem asymmetric_purity_reversed (η₀ γ β p K : ℝ)

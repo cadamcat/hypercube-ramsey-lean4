@@ -1627,6 +1627,32 @@ theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
   intro ξ hξ
   rw [Lane_q_s08_post.fcand_congr_radius_two D Θ Θ' g ξ o hΘ]
 
+theorem qref_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
+    D.Qref Θ g o = D.Qref Θ' g o := by
+  classical
+  have hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u := by
+    intro u hu
+    have huDist : keyDist g u ≤ 1 := (Finset.mem_filter.mp hu).2.le
+    exact hΘ u (huDist.trans (by omega))
+  have hInt := Lane_q_s08_post.refInt_congr_of_local D Θ Θ' g hcross
+  have hCross (u : D.CrossSub g) :
+      D.refCross Θ g u.1 = D.refCross Θ' g u.1 :=
+    Lane_q_s08_post.refCross_congr_radius_two D Θ Θ' g u
+      (fun v hv => hΘ v (Finset.mem_filter.mp hv).2)
+  unfold Ctx.Qref
+  congr 1
+  · apply Finset.prod_congr rfl
+    intro j hj
+    cases ho : o.1 j with
+    | none => rfl
+    | some i => exact congrArg (fun R : FinProb D.M.ι => R.w i) hInt
+  · apply Finset.prod_congr rfl
+    intro u hu
+    exact congrArg (fun R : FinProb (D.M.ι × Fin D.N) => R.w (o.2 u)) (hCross u)
+
 set_option maxHeartbeats 1000000 in
 theorem presentation_event_congr_local {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (hS : D.SelLocal) (H H' : D.Hist)
@@ -1940,6 +1966,33 @@ theorem rawLaw_pr_congr_local {η₀ β p : ℝ} {h : ℕ}
   exact congrArg
     (fun x : ℝ => (FinProb.map (D.rawTAT H') (localTATProj D c)).w t * x)
     (hAt t)
+
+set_option maxHeartbeats 1000000 in
+theorem gsel_congr_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hS : D.SelLocal) (H H' : D.Hist)
+    (P P' : D.Pos) (c : D.CellT) (ξ : D.Tup) (π : D.Pres c.1)
+    (baseT : D.TAT) (baseW : D.Anch)
+    (hH : ∀ g, keyDist c.1 g ≤ 4 → H g = H' g)
+    (hP : ∀ g, keyDist c.1 g ≤ 3 → P g = P' g) :
+    D.Gsel H P c ξ π = D.Gsel H' P' c ξ π := by
+  have hUpd : ∀ g, keyDist c.1 g ≤ 4 →
+      Function.update H c.1 ξ g = Function.update H' c.1 ξ g := by
+    intro g hg
+    by_cases hgc : g = c.1
+    · subst g
+      simp
+    · simp [Function.update_of_ne hgc, hH g hg]
+  have hNum := rawLaw_pr_congr_local D hS
+    (Function.update H c.1 ξ) (Function.update H' c.1 ξ) P P' c π baseT baseW hUpd hP
+  have hDen := Lane_q_s08_post.qref_congr_radius_two D H H' c.1
+    (D.obsOf π) (fun g hg => hH g (hg.trans (by omega)))
+  change (D.rawLaw (Function.update H c.1 ξ) P).pr
+      (rawPresEvent D (Function.update H c.1 ξ) P c π) /
+      D.Qref H c.1 (D.obsOf π) =
+    (D.rawLaw (Function.update H' c.1 ξ) P').pr
+      (rawPresEvent D (Function.update H' c.1 ξ) P' c π) /
+      D.Qref H' c.1 (D.obsOf π)
+  rw [hNum, hDen]
 
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by

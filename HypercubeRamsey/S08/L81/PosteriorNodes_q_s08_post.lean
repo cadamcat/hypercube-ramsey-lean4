@@ -2162,6 +2162,61 @@ theorem rawPresEvent_pr_eq_qref_mul_gsel {η₀ β p : ℝ} {h : ℕ}
             D.Qref Θ c.1 (D.obsOf π))
     field_simp [ne_of_gt hQpos]
 
+set_option maxHeartbeats 1000000 in
+theorem sel_some_mem_elig {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (e : D.CellT) (ℓ : D.Loc)
+    (hsel : D.sel q e = some ℓ) :
+    ∃ j : Fin (HH η₀ D.n + 1),
+      ℓ ∈ D.elig q.1.1 q.1.2 q.2.1.1 e.1 e.2 j ∧ q.2.1.2 e.1 ℓ = true := by
+  classical
+  let p := hdP η₀ D.n
+  let P := q.1.2 e.1
+  let A := q.2.1.2 e.1
+  let E := D.elig q.1.1 q.1.2 q.2.1.1 e.1
+  let τ := q.2.2 e.1
+  let jn := p.height Finset.univ P A E p.Rlong e.2
+  have hs : p.selection Finset.univ P A E τ e.2 = some ℓ := by
+    simpa [p, P, A, E, τ, Ctx.sel] using hsel
+  have hjn : jn < p.H := by
+    by_contra htop
+    have hnone : p.selection Finset.univ P A E τ e.2 = none := by
+      simp [HDParams.selection, HDParams.selectionAt, jn, Nat.le_of_not_gt htop]
+    rw [hnone] at hs
+    cases hs
+  let j : Fin (p.H + 1) := ⟨jn, by omega⟩
+  have hbad : ¬ p.Bad P A E e.2 j := by
+    intro hb
+    have hnone : p.selection Finset.univ P A E τ e.2 = none := by
+      simp [HDParams.selection, HDParams.selectionAt, jn, hjn, j, hb]
+    rw [hnone] at hs
+    cases hs
+  let active : Finset p.Loc := (E e.2 j).filter fun x => A x = true
+  let priorities := active.image fun x => p.priority τ (e.2, j) x
+  have hne : priorities.Nonempty := by
+    by_contra hnone
+    have hselNone : p.selection Finset.univ P A E τ e.2 = none := by
+      simp [HDParams.selection, HDParams.selectionAt, jn, hjn, j, hbad, active, priorities, hnone]
+    rw [hselNone] at hs
+    cases hs
+  let hmem : ∃ x, x ∈ active ∧ p.priority τ (e.2, j) x = priorities.min' hne :=
+    Finset.mem_image.mp (Finset.min'_mem priorities hne)
+  have hchoose : Classical.choose hmem = ℓ := by
+    have h := hs
+    simp [HDParams.selection, HDParams.selectionAt, jn, hjn, j, hbad, active, priorities, hne] at h
+    convert h using 1
+    congr 1
+    funext x
+    apply propext
+    simp [HDParams.selection, HDParams.selectionAt, jn, hjn, j, hbad, active, priorities, hne]
+  have hactive : Classical.choose hmem ∈ active := (Classical.choose_spec hmem).1
+  have hE : ℓ ∈ E e.2 j := by
+    rw [← hchoose]
+    exact (Finset.mem_filter.mp hactive).1
+  have hA : A ℓ = true := by
+    rw [← hchoose]
+    exact (Finset.mem_filter.mp hactive).2
+  exact ⟨j, hE, hA⟩
+
 def localPresEvent {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
     (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch)

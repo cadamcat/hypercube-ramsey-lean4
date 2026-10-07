@@ -1,5 +1,6 @@
 import HypercubeRamsey.S03.Height.Selection_p_height_main
 import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_paths
+import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_ovl_tail
 
 set_option maxHeartbeats 400000
 
@@ -770,7 +771,104 @@ theorem overlap_bounds (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
         (p.posLaw.prod p.actLaw).pr (fun ω => actExc p C Y (hdScaleRadius p.n σ (i - 1))
             (stepEps (hdScaleIndex p.n σ ζ)) ω.1 ω.2) ≤
           stepExc p.n b σ (hdScaleRadius p.n σ (i - 1)) := by
-  sorry
+  classical
+  have hJ : 0 < J₀ := by linarith [hp.hJ]
+  have hσ : 0 < σ ∧ σ < 1 := ⟨hp.hsz.1, lt_trans hp.hsz.2.1 hp.hsz.2.2.1⟩
+  have hbJ : b ≤ J₀ := by linarith [hp.hb.2.2, hp.hJ]
+  have hb₀J : b₀ ≤ J₀ := by linarith [hp.hb.2.1, hp.hb.2.2, hp.hJ]
+  have hbσ : 0 ≤ b - 2 * σ := by
+    linarith [hp.ha.1, hp.ha.2.2, hp.hsz.1, hp.hsz.2.1, hp.hsz.2.2.2.2]
+  obtain ⟨K, hK, NV, hvol⟩ :=
+    Lane_sol_hs_ovl.volume_decay_eventually J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨NL, hlamVol⟩ :=
+    height_volume_ge_lambda_eventually J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨NT, htail⟩ :=
+    Lane_sol_hs_ovl.tail_environment_eventually J₀ b₀ b σ hJ hσ hbJ hb₀J hbσ
+  refine ⟨K, hK, max 2 (max NV (max NL NT)), ?_⟩
+  intro p hpstd hn i hi1 hih C x Y hY
+  let h := hdScaleIndex p.n σ ζ
+  let R := hdScaleRadius p.n σ (i - 1)
+  let q := stepQ p.n σ ζ K
+  let e := (p.n : ℝ) ^ (b - 2 * σ)
+  have hcfg := (Finset.mem_filter.mp hY).2
+  have hYcard : Y.card = q := hcfg.1
+  by_cases hqzero : q = 0
+  · have hYempty : Y = ∅ := Finset.card_eq_zero.mp (hYcard.trans hqzero)
+    constructor <;> simp [hYempty, posExc, actExc, FinProb.pr, stepExc, Real.exp_nonneg]
+  have hq : 0 < q := by omega
+  have hqbound : (q : ℝ) ≤ (hdScaleMultiplier p.n σ : ℝ) /
+      (16 * ((h + 1 : ℕ) : ℝ) * (2 * (K : ℝ) + 1)) := by
+    dsimp [q, stepQ, h]
+    exact Nat.floor_le (by positivity)
+  obtain ⟨he1, hmeanP, hmeanA, hτP, hτA, hpair⟩ :=
+    htail p.n (by omega) (i - 1) h K q hK hq hqbound
+  have he : 0 ≤ e := by dsimp [e]; positivity
+  have hn2 : 2 ≤ p.n := by omega
+  have hnpos : (0 : ℝ) < p.n := by exact_mod_cast (by omega : 0 < p.n)
+  have hn1 : (1 : ℝ) ≤ p.n := by exact_mod_cast (by omega : 1 ≤ p.n)
+  have hlam : 0 < p.lam := by rw [hpstd.hlam]; exact Real.rpow_pos_of_pos hnpos _
+  have hlV : p.lam ≤ (p.V : ℝ) :=
+    hlamVol p hpstd.hD hpstd.hlam (by omega) hpstd.hdlo hpstd.hreg
+  have hV : 0 < (p.V : ℝ) := hlam.trans_le hlV
+  have hP1 : p.lam / (p.V : ℝ) ≤ 1 := (div_le_one hV).2 hlV
+  have hA1 : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1 := by
+    apply (div_le_one hlam).2
+    rw [hpstd.hb₀, hpstd.hlam]
+    exact Real.rpow_le_rpow_of_exponent_le hn1 hb₀J
+  let I := (Y ×ˢ Y).filter (fun yy => yy.1 ≠ yy.2)
+  let T := fun yy : HDState p × HDState p => overlapDom p C yy.1 yy.2 R
+  have hchild : ∀ y : HDState p, childDom p y R = hdChildCenterDomain y (2 * R) := by
+    intro y
+    ext ℓ
+    simp [childDom, hdChildCenterDomain, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  have hvolT : ∀ yy ∈ I, ((T yy).card : ℝ) ≤ (p.V : ℝ) * Real.exp (-4 * (R : ℝ)) := by
+    intro yy hyy
+    obtain ⟨hyyY, hne⟩ := Finset.mem_filter.mp hyy
+    obtain ⟨hy, hy'⟩ := Finset.mem_product.mp hyyY
+    have hsep := hcfg.2 yy.1 hy yy.2 hy' hne
+    have hv := hvol p hpstd.hD hpstd.hdlo hpstd.hdhi hpstd.hreg (by omega)
+      (i - 1) (by omega) yy.1 yy.2 hsep
+    have hsub : T yy ⊆ childDom p yy.1 R ∩ childDom p yy.2 R := by
+      intro ℓ hℓ
+      obtain ⟨hℓ₁, hℓ₂⟩ := Finset.mem_inter.mp hℓ
+      exact Finset.mem_inter.mpr ⟨(Finset.mem_inter.mp hℓ₁).2, hℓ₂⟩
+    calc
+      _ ≤ ((childDom p yy.1 R ∩ childDom p yy.2 R).card : ℝ) :=
+        Nat.cast_le.mpr (Finset.card_le_card hsub)
+      _ ≤ _ := by simpa [hchild, R] using hv
+  have hcardNat : I.card ≤ q * q := by
+    calc
+      _ ≤ (Y ×ˢ Y).card := Finset.card_filter_le _ _
+      _ = q * q := by rw [Finset.card_product, hYcard]
+  have hcard : (I.card : ℝ) ≤ Real.exp (e * (R : ℝ)) := by
+    calc
+      _ ≤ (q : ℝ) ^ 2 := by exact_mod_cast (by simpa [pow_two] using hcardNat : I.card ≤ q ^ 2)
+      _ ≤ _ := hpair
+  constructor
+  · calc
+      _ ≤ p.posLaw.pr (fun P => ∃ yy ∈ I,
+          stepEps h * p.lam / (q : ℝ) < (((T yy).filter (fun ℓ => P ℓ = true)).card : ℝ)) := by
+        apply pr_mono
+        intro P hP
+        obtain ⟨y, hy, y', hy', hne, hcount⟩ := hP
+        refine ⟨(y, y'), Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hy, hy'⟩, hne⟩, ?_⟩
+        simpa [T, hYcard] using hcount
+      _ ≤ _ := Lane_sol_hs_ovl.position_regions_tail I T (stepEps h * p.lam / (q : ℝ)) e R
+        hV hlam.le hP1 he (by simpa [stepEps, hpstd.hlam] using hτP)
+        (by simpa [hpstd.hlam, R] using hmeanP) hcard hvolT
+  · calc
+      _ ≤ (p.posLaw.prod p.actLaw).pr (fun ω => ∃ yy ∈ I,
+          stepEps h * (p.n : ℝ) ^ p.b / (q : ℝ) <
+            (((T yy).filter (fun ℓ => ω.1 ℓ = true ∧ ω.2 ℓ = true)).card : ℝ)) := by
+        apply pr_mono
+        intro ω hω
+        obtain ⟨y, hy, y', hy', hne, hcount⟩ := hω
+        refine ⟨(y, y'), Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hy, hy'⟩, hne⟩, ?_⟩
+        simpa [T, hYcard] using hcount
+      _ ≤ _ := Lane_sol_hs_ovl.active_regions_tail I T
+        (stepEps h * (p.n : ℝ) ^ p.b / (q : ℝ)) e R hV hlam hP1 hA1 he
+        (by simpa [stepEps, hpstd.hb] using hτA)
+        (by simpa [hpstd.hb₀, R] using hmeanA) hcard hvolT
 
 /-- LEAF (counting). -/
 theorem configs_card_le (p : HDParams) (hD : 0 < p.D) (x : HDState p) (R g q : ℕ) :

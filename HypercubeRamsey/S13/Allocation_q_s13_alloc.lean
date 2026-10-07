@@ -152,4 +152,27 @@ theorem allocation_unifCore_sum {N : ℕ} (A : Finset (Fin N)) (hA : A.Nonempty)
   rw [div_eq_mul_inv]
   ring
 
+/-- Find the first list prefix whose weights reach a positive threshold. -/
+theorem allocation_exists_prefix_cross {α : Type*} (w : α → ℝ) (t : ℝ) (ht : 0 < t)
+    (l : List α) (hsum : t ≤ (l.map w).sum) :
+    ∃ pre a tail, l = pre ++ a :: tail ∧
+      (pre.map w).sum < t ∧ t ≤ (pre.map w).sum + w a := by
+  induction l generalizing t with
+  | nil => simp at hsum; linarith
+  | cons a l ih =>
+      simp only [List.map_cons, List.sum_cons] at hsum
+      by_cases hhead : t ≤ w a
+      · refine ⟨[], a, l, rfl, by simp [ht], ?_⟩
+        simpa using hhead
+      · have hhead' : w a < t := lt_of_not_ge hhead
+        have htail : t - w a ≤ (l.map w).sum := by linarith
+        obtain ⟨pre, b, tail, hdecomp, hpre, hcross⟩ :=
+          ih (t - w a) (sub_pos.mpr hhead') htail
+        refine ⟨a :: pre, b, tail, ?_, ?_, ?_⟩
+        · simp [hdecomp]
+        · simp only [List.map_cons, List.sum_cons]
+          linarith
+        · simp only [List.map_cons, List.sum_cons]
+          linarith
+
 end HypercubeRamsey.S13

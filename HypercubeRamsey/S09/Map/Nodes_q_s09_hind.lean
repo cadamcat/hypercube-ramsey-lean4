@@ -835,6 +835,60 @@ private theorem heightLaw9_pr_forall_disjoint {P : Params9} {hc : HeightChoice9 
               rw [ih]
         _ = ∏ i ∈ insert a I, (heightLaw9 P hc n).pr (E i) := by simp [ha]
 
+private theorem specialWord9_hammingDist_le {m n : ℕ} (hmn : m ≤ n)
+    (v w : CubeVertex n) :
+    _root_.hammingDist (specialWord9 m v) (specialWord9 m w) ≤ _root_.hammingDist v w := by
+  classical
+  let S : Finset (Fin m) := Finset.univ.filter
+    (fun i => specialWord9 m v i ≠ specialWord9 m w i)
+  let T : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let f : Fin m → Fin n := fun i => ⟨i.val, lt_of_lt_of_le i.isLt hmn⟩
+  have hmaps : ∀ i ∈ S, f i ∈ T := by
+    intro i hi
+    have hi' := (Finset.mem_filter.mp hi).2
+    have hv : specialWord9 m v i = v (f i) := by
+      simp [specialWord9, f, lt_of_lt_of_le i.isLt hmn]
+    have hw : specialWord9 m w i = w (f i) := by
+      simp [specialWord9, f, lt_of_lt_of_le i.isLt hmn]
+    simp only [T, Finset.mem_filter, Finset.mem_univ, true_and]
+    rw [← hv, ← hw]
+    exact hi'
+  have hinj : Set.InjOn f S := by
+    intro i hi j hj h
+    apply Fin.ext
+    simpa [f] using congrArg Fin.val h
+  have hcard := Finset.card_le_card_of_injOn f hmaps hinj
+  simpa [S, T, _root_.hammingDist]
+    using hcard
+
+private theorem residualWord9_hammingDist_le {m n : ℕ} (hmn : m ≤ n)
+    (v w : CubeVertex n) :
+    _root_.hammingDist (residualWord9 m v) (residualWord9 m w) ≤ _root_.hammingDist v w := by
+  classical
+  let S : Finset (Fin (n - m)) := Finset.univ.filter
+    (fun i => residualWord9 m v i ≠ residualWord9 m w i)
+  let T : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  let f : Fin (n - m) → Fin n := fun i => ⟨m + i.val, by have := i.isLt; omega⟩
+  have hmaps : ∀ i ∈ S, f i ∈ T := by
+    intro i hi
+    have hi' := (Finset.mem_filter.mp hi).2
+    have hv : residualWord9 m v i = v (f i) := by
+      rfl
+    have hw : residualWord9 m w i = w (f i) := by
+      rfl
+    simp only [T, Finset.mem_filter, Finset.mem_univ, true_and]
+    rw [← hv, ← hw]
+    exact hi'
+  have hinj : Set.InjOn f S := by
+    intro i hi j hj h
+    apply Fin.ext
+    have hval := congrArg Fin.val h
+    dsimp [f] at hval
+    omega
+  have hcard := Finset.card_le_card_of_injOn f hmaps hinj
+  simpa [S, T, _root_.hammingDist]
+    using hcard
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

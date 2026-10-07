@@ -469,6 +469,335 @@ theorem coarse_edge_distance6 (L : S06.ChunkLayout6 n) (hflips : S06.ChunkFlips6
         _ = 2 := by simp
     exact (hammingDist_encode_le_support L sx sy {cx, cy} hsub).trans (by omega)
 
+theorem fine_edge_distance6 (L : S06.ChunkLayout6 n) (hflips : S06.ChunkFlips6 L)
+    (hLen : L.fineLength ≤ n) {x y : CubeVertex n} (hxy : (cube n).Adj x y)
+    (i : Fin L.m) (k : Fin n) (hk : k ∈ L.fineChunks i) (hneq : x k ≠ y k)
+    (hsame : ∀ j, j ≠ k → x j = y j) :
+    hammingDist (encodeTuple6 L (stateOfTuple6 L x))
+        (encodeTuple6 L (stateOfTuple6 L y)) ≤ 4 := by
+  classical
+  have hcoarseBits : ∀ j a, a ∈ L.coarseChunks j → x a = y a := by
+    intro j a ha
+    by_contra hne
+    have hak : a = k := by
+      by_contra hak
+      exact hne (hsame a hak)
+    subst a
+    exact (Finset.disjoint_left.mp (L.chunks_disjoint.2.1 j i)) ha hk
+  have hresBits : ∀ a ∈ L.residual, x a = y a := by
+    intro a ha
+    by_contra hne
+    have hak : a = k := by
+      by_contra hak
+      exact hne (hsame a hak)
+    subst a
+    exact (Finset.disjoint_left.mp (L.chunks_disjoint.2.2.2.2 i)) hk ha
+  have hfineOther : ∀ j, j ≠ i → ∀ a, a ∈ L.fineChunks j → x a = y a := by
+    intro j hji a ha
+    by_contra hne
+    have hak : a = k := by
+      by_contra hak
+      exact hne (hsame a hak)
+    subst a
+    exact (Finset.disjoint_left.mp (L.chunks_disjoint.2.2.1 i j hji.symm)) hk ha
+  have hcoarse := hflips.noncoarse_flip_key x y hxy hcoarseBits
+  let sx := stateOfTuple6 L x
+  let sy := stateOfTuple6 L y
+  have hres : sx.1 = sy.1 := by
+    funext a
+    simp [sx, sy, stateOfTuple6, hresBits a.1 a.2]
+  have hbin : sx.2.1 = sy.2.1 := by
+    simpa [sx, sy, stateOfTuple6, S06.ChunkLayout6.key] using congrArg Prod.fst hcoarse
+  have hflag : sx.2.2.1 = sy.2.2.1 := by
+    simpa [sx, sy, stateOfTuple6] using congrArg Prod.snd hcoarse
+  have hcountOther (j : Fin L.m) (hji : j ≠ i) :
+      L.fineCount x j = L.fineCount y j :=
+    countOn_eq_of_agree6 (L.fineChunks j) x y (hfineOther j hji)
+  have hstateCountOther (j : Fin L.m) (hji : j ≠ i) :
+      sx.2.2.2.1 j = sy.2.2.2.1 j := by
+    simp [sx, sy, stateOfTuple6, S06.ChunkLayout6.mergedCount, hcountOther j hji]
+  let mx := L.mergedCount x i
+  let my := L.mergedCount y i
+  have hmxEll : mx ≤ L.fineLength := mergedCount_le_fineLength6 L x i
+  have hmyEll : my ≤ L.fineLength := mergedCount_le_fineLength6 L y i
+  have hmxN : mx ≤ n := hmxEll.trans hLen
+  have hmyN : my ≤ n := hmyEll.trans hLen
+  have hxCount : (sx.2.2.2.1 i).val = mx := by
+    simp [sx, mx, stateOfTuple6, Nat.min_eq_left hmxN]
+  have hyCount : (sy.2.2.2.1 i).val = my := by
+    simp [sy, my, stateOfTuple6, Nat.min_eq_left hmyN]
+  let qx : Fin (L.fineLength + 1) := ⟨mx, Nat.lt_succ_of_le hmxEll⟩
+  let qy : Fin (L.fineLength + 1) := ⟨my, Nat.lt_succ_of_le hmyEll⟩
+  let cfx : CodeCoord6 L := fineCoord6 L i qx
+  let cfy : CodeCoord6 L := fineCoord6 L i qy
+  let csx : CodeCoord6 L := severityCoord6 L sx.2.2.2.2
+  let csy : CodeCoord6 L := severityCoord6 L sy.2.2.2.2
+  let S : Finset (CodeCoord6 L) := {cfx, cfy, csx, csy}
+  have hsub : diffCoords6 L sx sy ⊆ S := by
+    intro c hc
+    have hc' : codeBit6 L sx c ≠ codeBit6 L sy c := by simpa [diffCoords6] using hc
+    rcases c with a | c
+    · exact False.elim (hc' (by simp [codeBit6, hres]))
+    · rcases c with b | c
+      · exact False.elim (hc' (by simp [codeBit6, hbin]))
+      · rcases c with _ | c
+        · exact False.elim (hc' (by simp [codeBit6, hflag]))
+        · rcases c with f | q
+          · rcases f with ⟨j, q⟩
+            by_cases hji : j = i
+            · subst j
+              by_cases hqx : q.val = (sx.2.2.2.1 i).val
+              · have hqval : q.val = qx.val := hqx.trans hxCount
+                have heq : fineCoord6 L i q = cfx := by
+                  apply congrArg (fineCoord6 L i)
+                  exact Fin.ext hqval
+                exact Finset.mem_insert.mpr (Or.inl heq)
+              · have hqy : q.val = (sy.2.2.2.1 i).val := by
+                  by_contra hnot
+                  exact hc' (by simp [codeBit6, hqx, hnot])
+                have hqval : q.val = qy.val := hqy.trans hyCount
+                have heq : fineCoord6 L i q = cfy := by
+                  apply congrArg (fineCoord6 L i)
+                  exact Fin.ext hqval
+                exact Finset.mem_insert.mpr (Or.inr (Finset.mem_insert.mpr (Or.inl heq)))
+            · exact False.elim (hc' (by simp [codeBit6, hstateCountOther j hji]))
+          · by_cases hqx : q.val = sx.2.2.2.2.val
+            · have heq : severityCoord6 L q = csx := by
+                apply congrArg (severityCoord6 L)
+                exact Fin.ext hqx
+              exact Finset.mem_insert.mpr (Or.inr (Finset.mem_insert.mpr
+                (Or.inr (Finset.mem_insert.mpr (Or.inl heq)))))
+            · have hqy : q.val = sy.2.2.2.2.val := by
+                by_contra hnot
+                exact hc' (by simp [codeBit6, hqx, hnot])
+              have heq : severityCoord6 L q = csy := by
+                apply congrArg (severityCoord6 L)
+                exact Fin.ext hqy
+              exact Finset.mem_insert.mpr (Or.inr (Finset.mem_insert.mpr
+                (Or.inr (Finset.mem_insert.mpr (Or.inr (Finset.mem_singleton.mpr heq))))))
+  have hcard : S.card ≤ 4 := by
+    change Finset.card (insert cfx (insert cfy (insert csx
+      ({csy} : Finset (CodeCoord6 L))))) ≤ 4
+    have hthree : (insert cfy (insert csx ({csy} : Finset (CodeCoord6 L)))).card ≤ 3 := by
+      calc
+        _ ≤ (insert csx ({csy} : Finset (CodeCoord6 L))).card + 1 :=
+          Finset.card_insert_le cfy _
+        _ ≤ ({csy} : Finset (CodeCoord6 L)).card + 2 := by
+          exact Nat.add_le_add_right (Finset.card_insert_le csx {csy}) 1
+        _ = 3 := by simp
+    calc
+      _ ≤ (insert cfy (insert csx ({csy} : Finset (CodeCoord6 L)))).card + 1 :=
+        Finset.card_insert_le cfx _
+      _ ≤ 3 + 1 := Nat.add_le_add_right hthree 1
+      _ = 4 := by norm_num
+  change hammingDist (encodeTuple6 L sx) (encodeTuple6 L sy) ≤ 4
+  exact (hammingDist_encode_le_support L sx sy S hsub).trans hcard
+
+theorem coordCard_formula6 (L : S06.ChunkLayout6 n) :
+    Fintype.card (CodeCoord6 L) =
+      L.residual.card + ((∑ i : Fin S06.coarseChunkCount, (binImage6 L i).card) +
+        (1 + (L.m * (L.fineLength + 1) + (L.m + 1)))) := by
+  classical
+  simp [CodeCoord6, BinCoord6, Fintype.card_sum, Fintype.card_sigma]
+
+set_option maxHeartbeats 1000000 in
+theorem coordCard_bounds6 (L : S06.ChunkLayout6 n) (hn : 400000 ≤ n)
+    (hm : (L.m : ℝ) ≤ 2 * (n : ℝ) ^ (1 / 100 : ℝ))
+    (hell : (L.fineLength : ℝ) ≤ 2 * (n : ℝ) ^ (3 / 10 : ℝ)) :
+    (1 / 2 : ℝ) * n ≤ Fintype.card (CodeCoord6 L) ∧
+      (Fintype.card (CodeCoord6 L) : ℝ) ≤ 2 * n := by
+  classical
+  let occupied := (Finset.univ.biUnion L.coarseChunks) ∪ (Finset.univ.biUnion L.fineChunks)
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hnR400000 : (400000 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn
+  have hnRpos : 0 < (n : ℝ) := by positivity
+  have hroot : Real.sqrt (n : ℝ) = (n : ℝ) ^ (1 / 2 : ℝ) := by
+    rw [Real.sqrt_eq_rpow]
+  have hpow01 : (n : ℝ) ^ (1 / 100 : ℝ) ≤ Real.sqrt (n : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR (by norm_num : (1 / 100 : ℝ) ≤ 1 / 2)
+    simpa [Real.sqrt_eq_rpow] using h
+  have hpow04 : (n : ℝ) ^ (1 / 25 : ℝ) ≤ Real.sqrt (n : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR (by norm_num : (1 / 25 : ℝ) ≤ 1 / 2)
+    simpa [Real.sqrt_eq_rpow] using h
+  have hpow31 : (n : ℝ) ^ (31 / 100 : ℝ) ≤ Real.sqrt (n : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR (by norm_num : (31 / 100 : ℝ) ≤ 1 / 2)
+    simpa [Real.sqrt_eq_rpow] using h
+  have hrootOne : 1 ≤ Real.sqrt (n : ℝ) := by
+    have h := Real.one_le_rpow hnR (by norm_num : (0 : ℝ) ≤ 1 / 2)
+    simpa [Real.sqrt_eq_rpow] using h
+  have hbinEach (i : Fin S06.coarseChunkCount) :
+      ((binImage6 L i).card : ℝ) ≤ (n : ℝ) ^ (1 / 25 : ℝ) + 1 := by
+    simpa [binImage6] using L.bin_count i
+  have hbinSum : (∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ)) ≤
+      300 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) := by
+    calc
+      _ ≤ ∑ i : Fin S06.coarseChunkCount, ((n : ℝ) ^ (1 / 25 : ℝ) + 1) :=
+        Finset.sum_le_sum fun i _ => hbinEach i
+      _ = 300 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) := by
+        simp only [Finset.sum_const, nsmul_eq_mul]
+        have hcardR : ((Finset.univ : Finset (Fin S06.coarseChunkCount)).card : ℝ) = 300 := by
+          rw [Finset.card_univ]
+          norm_num [Fintype.card_fin, S06.coarseChunkCount]
+        rw [hcardR]
+  have hbinBound : (∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ)) ≤
+      600 * Real.sqrt (n : ℝ) := by
+    nlinarith [hbinSum, hpow04, hrootOne]
+  have hFinePlus : (L.fineLength : ℝ) + 1 ≤ 3 * (n : ℝ) ^ (3 / 10 : ℝ) := by
+    have h1 : 1 ≤ (n : ℝ) ^ (3 / 10 : ℝ) := Real.one_le_rpow hnR (by norm_num)
+    linarith [hell, h1]
+  have hFineProd : (L.m : ℝ) * ((L.fineLength : ℝ) + 1) ≤
+      6 * Real.sqrt (n : ℝ) := by
+    have hmul := mul_le_mul hm hFinePlus
+      (by positivity : 0 ≤ (L.fineLength : ℝ) + 1)
+      (by positivity : 0 ≤ 2 * (n : ℝ) ^ (1 / 100 : ℝ))
+    have hpow : (n : ℝ) ^ (1 / 100 : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) =
+        (n : ℝ) ^ (31 / 100 : ℝ) := by
+      rw [← Real.rpow_add hnRpos]
+      congr 1 <;> norm_num
+    calc
+      (L.m : ℝ) * ((L.fineLength : ℝ) + 1) ≤
+          (2 * (n : ℝ) ^ (1 / 100 : ℝ)) * (3 * (n : ℝ) ^ (3 / 10 : ℝ)) := hmul
+      _ = 6 * (n : ℝ) ^ (31 / 100 : ℝ) := by rw [← hpow]; ring
+      _ ≤ 6 * Real.sqrt (n : ℝ) := by gcongr
+  have hmPlus : (L.m : ℝ) + 1 ≤ 3 * Real.sqrt (n : ℝ) := by
+    linarith [hm, hpow01, hrootOne]
+  have hExtra : (∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ)) + 1 +
+      (L.m : ℝ) * ((L.fineLength : ℝ) + 1) + ((L.m : ℝ) + 1) ≤
+      610 * Real.sqrt (n : ℝ) := by
+    nlinarith [hbinBound, hrootOne, hFineProd, hmPlus]
+  have h610sq : (610 : ℝ) ^ 2 ≤ (n : ℝ) := by norm_num; linarith [hnR400000]
+  have h610 : 610 * Real.sqrt (n : ℝ) ≤ (n : ℝ) := by
+    have hsq : Real.sqrt (n : ℝ) ^ 2 ≤ ((n : ℝ) / 610) ^ 2 := by
+      rw [Real.sq_sqrt (by positivity), div_pow]
+      apply (le_div_iff₀ (by norm_num : (0 : ℝ) < (610 : ℝ) ^ 2)).2
+      have hmul := mul_le_mul_of_nonneg_right h610sq (by positivity : 0 ≤ (n : ℝ))
+      nlinarith [hmul]
+    have hle := le_of_sq_le_sq hsq (div_nonneg (by positivity) (by norm_num : (0 : ℝ) ≤ 610))
+    have h610pos : (0 : ℝ) < 610 := by norm_num
+    nlinarith [hle, h610pos]
+  have hExtraN : (∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ)) + 1 +
+      (L.m : ℝ) * ((L.fineLength : ℝ) + 1) + ((L.m : ℝ) + 1) ≤ (n : ℝ) :=
+    hExtra.trans h610
+  have hOcc : (occupied.card : ℝ) ≤ Real.sqrt (n : ℝ) := by
+    simpa [occupied, hroot] using L.occupied_sublinear
+  have hcompSub : (Finset.univ \ occupied) ⊆ L.residual := by
+    intro a ha
+    have hcover : a ∈ ((Finset.univ.biUnion L.coarseChunks) ∪
+        (Finset.univ.biUnion L.fineChunks)) ∪ L.residual := by
+      have hu : a ∈ (Finset.univ : Finset (Fin n)) := Finset.mem_univ a
+      rw [← L.chunks_cover] at hu
+      simpa [occupied] using hu
+    rcases Finset.mem_union.mp hcover with hbad | hres
+    · exact False.elim ((Finset.mem_sdiff.mp ha).2 hbad)
+    · exact hres
+  have hoccCard : occupied.card ≤ n := by
+    simpa using (Finset.card_le_card (Finset.subset_univ occupied))
+  have hcompNat : (Finset.univ \ occupied).card = n - occupied.card := by
+    simpa [Finset.card_univ] using
+      (Finset.card_sdiff_of_subset (Finset.subset_univ occupied))
+  have hcompReal : ((Finset.univ \ occupied).card : ℝ) =
+      (n : ℝ) - (occupied.card : ℝ) := by
+    calc
+      ((Finset.univ \ occupied).card : ℝ) = ((n - occupied.card : ℕ) : ℝ) := by
+        exact_mod_cast hcompNat
+      _ = (n : ℝ) - (occupied.card : ℝ) := by
+        exact Nat.cast_sub hoccCard
+  have hresComp : ((Finset.univ \ occupied).card : ℝ) ≤ (L.residual.card : ℝ) := by
+    exact_mod_cast (Finset.card_le_card hcompSub)
+  have hresLower : (1 / 2 : ℝ) * n ≤ (L.residual.card : ℝ) := by
+    have hrootHalf : 2 * Real.sqrt (n : ℝ) ≤ (n : ℝ) := by
+      nlinarith [hnR400000, Real.sqrt_nonneg (n : ℝ),
+        Real.sq_sqrt (show (0 : ℝ) ≤ n by positivity)]
+    have hlarge : (n : ℝ) / 2 ≤ (L.residual.card : ℝ) := by
+      calc
+        (n : ℝ) / 2 ≤ (n : ℝ) - Real.sqrt (n : ℝ) := by linarith
+        _ ≤ (n : ℝ) - (occupied.card : ℝ) := by linarith [hOcc]
+        _ = ((Finset.univ \ occupied).card : ℝ) := hcompReal.symm
+        _ ≤ (L.residual.card : ℝ) := hresComp
+    nlinarith [hlarge]
+  have hCardReal : (Fintype.card (CodeCoord6 L) : ℝ) =
+      (L.residual.card : ℝ) +
+        (∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ)) + 1 +
+        (L.m : ℝ) * ((L.fineLength : ℝ) + 1) + ((L.m : ℝ) + 1) := by
+    rw [coordCard_formula6]
+    push_cast
+    ring
+  have hresUpper : (L.residual.card : ℝ) ≤ n := by
+    simpa using (Finset.card_le_card (Finset.subset_univ L.residual))
+  have hExtraNonneg : 0 ≤ (∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ)) + 1 +
+      (L.m : ℝ) * ((L.fineLength : ℝ) + 1) + ((L.m : ℝ) + 1) := by
+    have hsum : 0 ≤ ∑ i : Fin S06.coarseChunkCount, ((binImage6 L i).card : ℝ) :=
+      Finset.sum_nonneg fun i _ => Nat.cast_nonneg _
+    have hprod : 0 ≤ (L.m : ℝ) * ((L.fineLength : ℝ) + 1) := by positivity
+    have hm' : 0 ≤ (L.m : ℝ) + 1 := by positivity
+    linarith
+  constructor
+  · rw [hCardReal]
+    nlinarith [hresLower, hExtraNonneg]
+  · rw [hCardReal]
+    linarith [hresUpper, hExtraN]
+
+theorem hammingDist_symm6 {d : ℕ} (x y : CubeVertex d) :
+    hammingDist x y = hammingDist y x := by
+  classical
+  unfold HypercubeRamsey.hammingDist
+  congr 1
+  ext i
+  simp [ne_comm]
+
+noncomputable def buildStateCodeAux6 (L : S06.ChunkLayout6 n) (hflips : S06.ChunkFlips6 L)
+    (hLen : L.fineLength ≤ n)
+    (hLower : (1 / 2 : ℝ) * n ≤ Fintype.card (CodeCoord6 L))
+    (hUpper : (Fintype.card (CodeCoord6 L) : ℝ) ≤ 2 * n) : StateCodeAux6 L := by
+  classical
+  have hEdgeDistance : ∀ x y : CubeVertex n, (cube n).Adj x y →
+      hammingDist (encodeTuple6 L (stateOfTuple6 L x))
+        (encodeTuple6 L (stateOfTuple6 L y)) ≤ 4 := by
+    intro x y hxy
+    obtain ⟨k, hneq, hsame⟩ := adjData6 hxy
+    rcases coordinateClass6 L k with hres | hcoarse | hfine
+    · exact (residual_edge_distance6 L hflips hxy k hres hneq hsame).trans (by omega)
+    · obtain ⟨i, hi⟩ := hcoarse
+      have hkeyrel := hflips.coarse_flip_key x y hxy ⟨i, k, hi, hneq⟩
+      exact (coarse_edge_distance6 L hflips hxy i k hi hneq hsame hkeyrel).trans (by omega)
+    · obtain ⟨i, hi⟩ := hfine
+      exact fine_edge_distance6 L hflips hLen hxy i k hi hneq hsame
+  refine {
+    d := Fintype.card (CodeCoord6 L)
+    enc := encodeTuple6 L
+    enc_injective := ?_
+    nbr_dist := ?_
+    residual_dist := residualDist_le_encode6 L
+    d_lower := ?_
+    d_upper := ?_ }
+  · intro x y h
+    exact stateOfTuple_injective6 L hLen h
+  · intro b a ha a' ha'
+    rcases (Finset.mem_filter.mp ha).2 with ⟨u, v, hu, hv, hbu, hav, hxy⟩
+    rcases (Finset.mem_filter.mp ha').2 with ⟨u', v', hu', hv', hbu', hav', hxy'⟩
+    have h1 : hammingDist (encodeTuple6 L a) (encodeTuple6 L b) ≤ 4 := by
+      calc
+        hammingDist (encodeTuple6 L a) (encodeTuple6 L b) =
+            hammingDist (encodeTuple6 L (stateOfTuple6 L v))
+              (encodeTuple6 L (stateOfTuple6 L u)) := by rw [← hav, ← hbu]
+        _ = hammingDist (encodeTuple6 L (stateOfTuple6 L u))
+              (encodeTuple6 L (stateOfTuple6 L v)) := hammingDist_symm6 _ _
+        _ ≤ 4 := hEdgeDistance u v hxy
+    have h2 : hammingDist (encodeTuple6 L b) (encodeTuple6 L a') ≤ 4 := by
+      rw [← hbu', ← hav']
+      exact hEdgeDistance u' v' hxy'
+    calc
+      hammingDist (encodeTuple6 L a) (encodeTuple6 L a') ≤
+          hammingDist (encodeTuple6 L a) (encodeTuple6 L b) +
+            hammingDist (encodeTuple6 L b) (encodeTuple6 L a') :=
+              HypercubeRamsey.hammingDist_triangle _ _ _
+      _ ≤ 4 + 4 := Nat.add_le_add h1 h2
+      _ ≤ S06.D₀₆ := by norm_num [S06.D₀₆]
+  · rw [S06.cd₆]
+    exact hLower
+  · rw [S06.Cd₆]
+    exact hUpper
+
 end
 
 end HypercubeRamsey.Lane_q_s06_front

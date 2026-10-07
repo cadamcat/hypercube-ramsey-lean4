@@ -2013,6 +2013,114 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
           Real.exp_le_exp.mpr (by nlinarith [hn1])
         _ ≤ (r₀ : ℝ) := by simpa [r₀] using Nat.le_ceil (Real.exp (3 * (n : ℝ) / 100))
     exact Nat.cast_le.mp hsizeReal
+  have hr₀Upper : (r₀ : ℝ) ≤ 2 * Real.exp (3 * (n : ℝ) / 100) := by
+    dsimp [r₀]
+    have harg : 0 ≤ 3 * (n : ℝ) / 100 := by positivity
+    have hhalf : (1 / 2 : ℝ) ≤ Real.exp (3 * (n : ℝ) / 100) := by
+      have hone : 1 ≤ Real.exp (3 * (n : ℝ) / 100) := Real.one_le_exp_iff.mpr harg
+      linarith
+    have hhalf' : (2 : ℝ)⁻¹ ≤ Real.exp (3 * (n : ℝ) / 100) := by
+      exact (by norm_num : (2 : ℝ)⁻¹ ≤ (1 / 2 : ℝ)).trans hhalf
+    exact Nat.ceil_le_two_mul hhalf'
+  have hExpHalfSq : Real.exp (1 / 2 : ℝ) ^ 2 = Real.exp 1 := by
+    calc
+      Real.exp (1 / 2 : ℝ) ^ 2 =
+          Real.exp ((1 / 2 : ℝ) + 1 / 2) := by rw [pow_two, ← Real.exp_add]
+      _ = Real.exp 1 := by congr 1 <;> norm_num
+  have hExpHalfLt : Real.exp (1 / 2 : ℝ) < 2 := by
+    by_contra hnot
+    have hge : (2 : ℝ) ≤ Real.exp (1 / 2 : ℝ) := le_of_not_gt hnot
+    nlinarith [sq_nonneg (Real.exp (1 / 2 : ℝ) - 2), hExpHalfSq, Real.exp_one_lt_three]
+  have hExpN : Real.exp ((n : ℝ) / 2) ≤ (2 : ℝ) ^ n := by
+    have heq : Real.exp ((n : ℝ) / 2) = Real.exp (1 / 2 : ℝ) ^ n := by
+      calc
+        Real.exp ((n : ℝ) / 2) = Real.exp ((n : ℝ) * (1 / 2 : ℝ)) := by congr 1 <;> ring
+        _ = Real.exp (1 / 2 : ℝ) ^ n := Real.exp_nat_mul (1 / 2 : ℝ) n
+    rw [heq]
+    exact HypercubeRamsey.S11.Core.q_s11_compat_pow_mono
+      (Real.exp (1 / 2 : ℝ)) 2 (Real.exp_pos _).le hExpHalfLt.le n
+  have hNexp : Real.exp ((n : ℝ) / 2) ≤ (N : ℝ) := by
+    exact hExpN.trans (by exact_mod_cast hN)
+  have hFactor : 1 ≤ 2 * (t₀ : ℝ) := by norm_num [t₀, q_s11_compat_t₀]
+  have hxNonneg : 0 ≤ x := by positivity
+  have hxLinear : x ≤ (n : ℝ) / 100 := by
+    calc
+      x = 1 * x := by ring
+      _ ≤ (2 * (t₀ : ℝ)) * x := mul_le_mul_of_nonneg_right hFactor hxNonneg
+      _ ≤ (n : ℝ) / 100 := hsmallLinear.le
+  have hCexp : 1000 / etaC ≤ Real.exp ((n : ℝ) / 100) := by
+    have hCbase : 1000 / etaC ≤ (t₀ : ℝ) + 1 := by norm_num [etaC, t₀, q_s11_compat_t₀]
+    exact hCbase.trans (hExpLargeX.trans (Real.exp_le_exp.mpr hxLinear))
+  have hr₀Square : (r₀ : ℝ) ^ 2 ≤ 4 * Real.exp (3 * (n : ℝ) / 50) := by
+    calc
+      (r₀ : ℝ) ^ 2 ≤ (2 * Real.exp (3 * (n : ℝ) / 100)) ^ 2 :=
+        HypercubeRamsey.S11.Core.q_s11_compat_pow_mono
+          (r₀ : ℝ) (2 * Real.exp (3 * (n : ℝ) / 100)) (by positivity) hr₀Upper 2
+      _ = 4 * Real.exp (3 * (n : ℝ) / 50) := by
+        calc
+          (2 * Real.exp (3 * (n : ℝ) / 100)) ^ 2 =
+              4 * (Real.exp (3 * (n : ℝ) / 100) * Real.exp (3 * (n : ℝ) / 100)) := by ring
+          _ = 4 * Real.exp (3 * (n : ℝ) / 50) := by
+                rw [← Real.exp_add]
+                congr 2 <;> ring
+  have hNumerator :
+      (r₀ : ℝ) ^ 2 * (1000 / etaC) * Real.exp ((n : ℝ) / 50) ≤
+        4 * Real.exp (9 * (n : ℝ) / 100) := by
+    calc
+      (r₀ : ℝ) ^ 2 * (1000 / etaC) * Real.exp ((n : ℝ) / 50) =
+          (r₀ : ℝ) ^ 2 * ((1000 / etaC) * Real.exp ((n : ℝ) / 50)) := by ring
+      _ ≤ (4 * Real.exp (3 * (n : ℝ) / 50)) *
+            ((1000 / etaC) * Real.exp ((n : ℝ) / 50)) :=
+          mul_le_mul_of_nonneg_right hr₀Square (by positivity)
+      _ ≤ (4 * Real.exp (3 * (n : ℝ) / 50)) *
+            (Real.exp ((n : ℝ) / 100) * Real.exp ((n : ℝ) / 50)) := by
+          exact mul_le_mul_of_nonneg_left
+            (mul_le_mul_of_nonneg_right hCexp (Real.exp_pos _).le) (by positivity)
+      _ = 4 * Real.exp (9 * (n : ℝ) / 100) := by
+          calc
+            _ = 4 * (Real.exp (3 * (n : ℝ) / 50) *
+                (Real.exp ((n : ℝ) / 100) * Real.exp ((n : ℝ) / 50))) := by ring
+            _ = 4 * Real.exp (9 * (n : ℝ) / 100) := by
+              rw [← Real.exp_add, ← Real.exp_add]
+              congr 2 <;> ring
+  have hExp4Lt : 8 < Real.exp 4 := by
+    have hExp4Eq : Real.exp 4 = Real.exp 1 ^ 4 := by
+      simpa using (Real.exp_nat_mul (1 : ℝ) 4)
+    calc
+      (8 : ℝ) < 16 := by norm_num
+      _ = (2 : ℝ) ^ 4 := by norm_num
+      _ < Real.exp 1 ^ 4 := pow_lt_pow_left₀ Real.exp_one_gt_two (by norm_num) (by norm_num)
+      _ = Real.exp 4 := hExp4Eq.symm
+  have hExp4 : 8 ≤ Real.exp 4 := hExp4Lt.le
+  have hGap : 8 * Real.exp (9 * (n : ℝ) / 100) ≤ Real.exp ((n : ℝ) / 2) := by
+    have hn10R : (10 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn10
+    have hArg : (4 : ℝ) ≤ 41 * (n : ℝ) / 100 := by nlinarith [hn10R]
+    have hExpGap : 8 ≤ Real.exp (41 * (n : ℝ) / 100) :=
+      hExp4.trans (Real.exp_le_exp.mpr hArg)
+    calc
+      8 * Real.exp (9 * (n : ℝ) / 100) ≤
+          Real.exp (41 * (n : ℝ) / 100) * Real.exp (9 * (n : ℝ) / 100) :=
+        mul_le_mul_of_nonneg_right hExpGap (Real.exp_pos _).le
+      _ = Real.exp ((n : ℝ) / 2) := by rw [← Real.exp_add]; congr 1 <;> ring
+  have hCollisionBudget :
+      (r₀ : ℝ) ^ 2 * ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) ≤ 1 / 2 := by
+    have hBudgetDiv :
+        ((r₀ : ℝ) ^ 2 * (1000 / etaC) * Real.exp ((n : ℝ) / 50)) / N ≤ 1 / 2 := by
+      apply (div_le_iff₀ hNr).2
+      calc
+        (r₀ : ℝ) ^ 2 * (1000 / etaC) * Real.exp ((n : ℝ) / 50) ≤
+            4 * Real.exp (9 * (n : ℝ) / 100) := hNumerator
+        _ ≤ (N : ℝ) / 2 := by
+          have hN8 : 8 * Real.exp (9 * (n : ℝ) / 100) ≤ (N : ℝ) := hGap.trans hNexp
+          calc
+            4 * Real.exp (9 * (n : ℝ) / 100) =
+                (8 * Real.exp (9 * (n : ℝ) / 100)) / 2 := by ring
+            _ ≤ (N : ℝ) / 2 := div_le_div_of_nonneg_right hN8 (by positivity)
+        _ = (1 / 2) * (N : ℝ) := by ring
+    calc
+      (r₀ : ℝ) ^ 2 * ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) =
+          ((r₀ : ℝ) ^ 2 * (1000 / etaC) * Real.exp ((n : ℝ) / 50)) / N := by ring
+      _ ≤ 1 / 2 := hBudgetDiv
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

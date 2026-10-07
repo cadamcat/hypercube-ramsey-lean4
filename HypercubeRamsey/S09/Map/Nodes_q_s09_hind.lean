@@ -195,6 +195,80 @@ theorem badAt9_with_eligible_size_bound {P : Params9} {hc : HeightChoice9 P} {n 
   have h := hbase Finset.univ 1 (1 / 8) (by norm_num) (by norm_num) (by norm_num) v j
   simpa [badAt9, badIn9] using h
 
+theorem badAt9_with_degraded_eligible_size_bound {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {c t : ℝ} (hbase : HeightBase9 P hc n c)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1)
+    (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+    (heightLaw9 P hc n).pr (fun ω =>
+      badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 v j ∧
+        (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 Finset.univ ω.1 v j : ℝ)) ≤
+      Real.exp (-((n : ℝ) ^ c)) := by
+  have h := hbase Finset.univ t (1 / 8) ht₁ ht₂ (by norm_num) v j
+  have hbad (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+      badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 v j →
+        badIn9 Finset.univ t ω.1 ω.2 v j := by
+    intro hb
+    change badIn9 Finset.univ 1 ω.1 ω.2 v j at hb
+    change badIn9 Finset.univ t ω.1 ω.2 v j
+    rcases hb with hh | ⟨j', hj', hcrowd⟩
+    · exact Or.inl hh
+    · refine Or.inr ⟨j', hj', ?_⟩
+      rcases hcrowd with hs | ha | hl
+      · apply Or.inl
+        have hp := Real.rpow_nonneg (Nat.cast_nonneg n) ((P.χ : ℝ) / 2)
+        have hle := mul_le_mul_of_nonneg_right ht₂ hp
+        simpa only [one_mul] using lt_of_le_of_lt hle hs
+      · apply Or.inr
+        apply Or.inl
+        have hp := Real.rpow_nonneg (Nat.cast_nonneg n) ((P.χ : ℝ) / 2)
+        have hle := mul_le_mul_of_nonneg_right ht₂ hp
+        simpa only [one_mul] using lt_of_le_of_lt hle ha
+      · apply Or.inr
+        apply Or.inr
+        have hp := Real.rpow_nonneg (Nat.cast_nonneg n) (1 - (P.σ : ℝ) + hc.eps')
+        have hle := mul_le_mul_of_nonneg_right ht₂ hp
+        simpa only [one_mul] using lt_of_le_of_lt hle hl
+  calc
+    (heightLaw9 P hc n).pr (fun ω =>
+        badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 v j ∧
+          (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 Finset.univ ω.1 v j : ℝ)) ≤
+        (heightLaw9 P hc n).pr (fun ω =>
+          badIn9 Finset.univ t ω.1 ω.2 v j ∧
+            (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 Finset.univ ω.1 v j : ℝ)) :=
+      finProb_pr_mono (heightLaw9 P hc n) (by
+        intro ω hω
+        exact ⟨hbad ω hω.1, hω.2⟩)
+    _ ≤ Real.exp (-((n : ℝ) ^ c)) := h
+
+theorem badAt9_finite_union_degraded {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {c t : ℝ} (hbase : HeightBase9 P hc n c)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1)
+    (S : Finset (CubeVertex n × Fin (hc.levels n + 1))) :
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S,
+      badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 x.1 x.2 ∧
+        (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+          (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)) ≤
+      (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by
+  classical
+  calc
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S,
+        badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 x.1 x.2 ∧
+          (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+            (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)) ≤
+        ∑ x ∈ S, (heightLaw9 P hc n).pr (fun ω =>
+          badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 x.1 x.2 ∧
+            (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+              (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)) :=
+      finProb_pr_exists_finset_le_sum (heightLaw9 P hc n) S (fun x ω =>
+        badAt9 (P := P) (hc := hc) (n := n) ω.1 ω.2 x.1 x.2 ∧
+          (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+            (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ))
+    _ ≤ ∑ x ∈ S, Real.exp (-((n : ℝ) ^ c)) := by
+      apply Finset.sum_le_sum
+      intro x hx
+      exact badAt9_with_degraded_eligible_size_bound hbase ht₁ ht₂ x.1 x.2
+    _ = (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by simp
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

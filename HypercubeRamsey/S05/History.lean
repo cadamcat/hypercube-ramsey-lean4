@@ -2,6 +2,7 @@ import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
 import HypercubeRamsey.S05.History_q_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1b
+import HypercubeRamsey.S05.History_sol_s05_hist1c_apply
 import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.Parent_sol_s05_h1
@@ -87,7 +88,21 @@ constant `K'` is large. -/
 theorem L5_1c : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       X.Step1Raw := by
-  sorry
+  refine ⟨Lane_sol_s05_hist1b.capRequest χ, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := Lane_sol_s05_hist1b.eventually_prefix_scale_one p
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp
+  have hpX : (Lane_sol_s05_hist1b.capRequest χ).Holds X.p := by
+    simpa only [hXp] using hp
+  constructor
+  · intro K _ ℓ _
+    exact Lane_sol_s05_hist1b.step1_comparison_raw_bound X ℓ K.1.1 (X.p.typeSegs n K)
+  · intro ℓ _
+    apply Lane_sol_s05_hist1b.cap_raw_bound X ℓ _ hpX
+    have hx := hn₀ n hn (ℓ.level + 1)
+    rw [← hXp] at hx
+    simpa only [Nat.cast_mul] using hx
 
 /-- The conclusion of Step 2 (05:242–259): each Step 2 failure (intersected with the true-block gate) has
 raw probability at most its thresholds. -/

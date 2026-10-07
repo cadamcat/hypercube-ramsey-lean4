@@ -927,6 +927,158 @@ private theorem scaleSupport9_mem_of_relevant {P : Params9} {hc : HeightChoice9 
     true_and, and_true]
   exact ⟨⟨by omega, by omega⟩, hlevelRoot⟩
 
+private theorem filter_card_eq_after_support9 {α : Type*} [DecidableEq α]
+    (C S : Finset α) (pred : α → Prop) [DecidablePred pred]
+    (hrel : ∀ c ∈ C, pred c → c ∈ S) :
+    (C.filter pred).card = ((C ∩ S).filter pred).card := by
+  classical
+  have hset : C.filter pred = (C ∩ S).filter pred := by
+    ext c
+    simp only [Finset.mem_filter, Finset.mem_inter]
+    constructor
+    · rintro ⟨hc, hp⟩
+      exact ⟨⟨hc, hrel c hc hp⟩, hp⟩
+    · rintro ⟨⟨hc, hs⟩, hp⟩
+      exact ⟨hc, hp⟩
+  exact congrArg Finset.card hset
+
+private theorem eligCount9_restrictLocal {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hmn : P.m n ≤ n) (C : Finset (Pos9 P hc n)) (Pp : Pos9 P hc n → Bool)
+    (start state : HeightState9 P hc n) (R : ℕ)
+    (hsite : _root_.hammingDist state.1 start.1 ≤ 16 * R)
+    (hlevel : Nat.dist state.2.val start.2.val ≤ 8 * R + 2) :
+    eligCount9 C Pp state.1 state.2 =
+      eligCount9 (C ∩ scaleSupport9 start R) Pp state.1 state.2 := by
+  classical
+  unfold eligCount9
+  apply filter_card_eq_after_support9
+  intro c hc hmem
+  rcases hmem with ⟨_, hslice, hres, hclevel⟩
+  apply scaleSupport9_mem_of_relevant hmn start R state.1 state.2 hsite hlevel c
+  · rw [hslice]
+    simp
+  · exact le_trans hres (by omega)
+  · exact hclevel
+
+private theorem crowdSame9_restrictLocal {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hmn : P.m n ≤ n) (C : Finset (Pos9 P hc n)) (Pp A : Pos9 P hc n → Bool)
+    (start state : HeightState9 P hc n) (R ρ : ℕ)
+    (hsite : _root_.hammingDist state.1 start.1 ≤ 16 * R)
+    (hlevel : Nat.dist state.2.val start.2.val ≤ 8 * R + 2)
+    (hρ : ρ ≤ P.radius n + 1) :
+    crowdSame9 C Pp A state.1 state.2 ρ =
+      crowdSame9 (C ∩ scaleSupport9 start R) Pp A state.1 state.2 ρ := by
+  classical
+  unfold crowdSame9
+  apply filter_card_eq_after_support9
+  intro c hc hmem
+  rcases hmem with ⟨_, hslice, hres, hclevel⟩
+  apply scaleSupport9_mem_of_relevant hmn start R state.1 state.2 hsite hlevel c
+  · rw [hslice]
+    simp
+  · exact le_trans hres hρ
+  · exact hclevel
+
+private theorem crowdAdj9_restrictLocal {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hmn : P.m n ≤ n) (C : Finset (Pos9 P hc n)) (Pp A : Pos9 P hc n → Bool)
+    (start state : HeightState9 P hc n) (R : ℕ)
+    (hsite : _root_.hammingDist state.1 start.1 ≤ 16 * R)
+    (hlevel : Nat.dist state.2.val start.2.val ≤ 8 * R + 2) :
+    crowdAdj9 C Pp A state.1 state.2 =
+      crowdAdj9 (C ∩ scaleSupport9 start R) Pp A state.1 state.2 := by
+  classical
+  unfold crowdAdj9
+  apply filter_card_eq_after_support9
+  intro c hc hmem
+  rcases hmem with ⟨_, hslice, hres, hclevel⟩
+  apply scaleSupport9_mem_of_relevant hmn start R state.1 state.2 hsite hlevel c
+  · exact hslice.le
+  · exact le_trans hres (by omega)
+  · exact hclevel
+
+private theorem holeIn9_restrictLocal {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hmn : P.m n ≤ n) (C : Finset (Pos9 P hc n)) (Pp A : Pos9 P hc n → Bool)
+    (start state : HeightState9 P hc n) (R : ℕ)
+    (hsite : _root_.hammingDist state.1 start.1 ≤ 16 * R)
+    (hlevel : Nat.dist state.2.val start.2.val ≤ 8 * R + 2) :
+    holeIn9 C Pp A state.1 state.2 ↔
+      holeIn9 (C ∩ scaleSupport9 start R) Pp A state.1 state.2 := by
+  constructor
+  · intro h c hc' hslice hres hclevel
+    exact h c (Finset.mem_inter.mp hc').1 hslice hres hclevel
+  · intro h c hc' hslice hres hclevel
+    have hsupport := scaleSupport9_mem_of_relevant hmn start R state.1 state.2 hsite hlevel c
+      (by rw [hslice]; simp) (le_trans hres (by omega)) hclevel
+    exact h c (Finset.mem_inter.mpr ⟨hc', hsupport⟩) hslice hres hclevel
+
+private theorem scaleLevelWindow9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {start state : HeightState9 P hc n} {R : ℕ}
+    (hlevel : Nat.dist state.2.val start.2.val ≤ 8 * R)
+    {j : Fin (hc.levels n + 1)} (hwindow : Nat.dist state.2.val j.val ≤ 2) :
+    Nat.dist j.val start.2.val ≤ 8 * R + 2 := by
+  have hwindow' : Nat.dist j.val state.2.val ≤ 2 := by
+    simpa [Nat.dist_comm] using hwindow
+  calc
+    Nat.dist j.val start.2.val ≤
+        Nat.dist j.val state.2.val + Nat.dist state.2.val start.2.val :=
+      Nat.dist.triangle_inequality _ _ _
+    _ ≤ 2 + 8 * R := Nat.add_le_add hwindow' hlevel
+    _ = 8 * R + 2 := by omega
+
+private theorem badIn9_restrictLocal {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hmn : P.m n ≤ n) (C : Finset (Pos9 P hc n)) (t : ℝ) (Pp A : Pos9 P hc n → Bool)
+    (start state : HeightState9 P hc n) (R : ℕ)
+    (hsite : _root_.hammingDist state.1 start.1 ≤ 16 * R)
+    (hlevel : Nat.dist state.2.val start.2.val ≤ 8 * R) :
+    badIn9 C t Pp A state.1 state.2 ↔
+      badIn9 (C ∩ scaleSupport9 start R) t Pp A state.1 state.2 := by
+  have hlevel' : Nat.dist state.2.val start.2.val ≤ 8 * R + 2 := by omega
+  have hhole := holeIn9_restrictLocal hmn C Pp A start state R hsite hlevel'
+  unfold badIn9
+  constructor
+  · intro hb
+    rcases hb with hh | ⟨j, hj, hcrowd⟩
+    · exact Or.inl (hhole.mp hh)
+    · right
+      refine ⟨j, hj, ?_⟩
+      have hjwindow := scaleLevelWindow9 hlevel hj
+      have hsame := crowdSame9_restrictLocal hmn C Pp A start (state.1, j) R
+        (P.radius n) hsite hjwindow (by omega)
+      have hadj := crowdAdj9_restrictLocal hmn C Pp A start (state.1, j) R
+        hsite hjwindow
+      have hlarge := crowdSame9_restrictLocal hmn C Pp A start (state.1, j) R
+        (P.radius n + 1) hsite hjwindow (by omega)
+      rcases hcrowd with hs | ha | hl
+      · left
+        simpa [hsame] using hs
+      · right
+        left
+        simpa [hadj] using ha
+      · right
+        right
+        simpa [hlarge] using hl
+  · intro hb
+    rcases hb with hh | ⟨j, hj, hcrowd⟩
+    · exact Or.inl (hhole.mpr hh)
+    · right
+      refine ⟨j, hj, ?_⟩
+      have hjwindow := scaleLevelWindow9 hlevel hj
+      have hsame := crowdSame9_restrictLocal hmn C Pp A start (state.1, j) R
+        (P.radius n) hsite hjwindow (by omega)
+      have hadj := crowdAdj9_restrictLocal hmn C Pp A start (state.1, j) R
+        hsite hjwindow
+      have hlarge := crowdSame9_restrictLocal hmn C Pp A start (state.1, j) R
+        (P.radius n + 1) hsite hjwindow (by omega)
+      rcases hcrowd with hs | ha | hl
+      · left
+        simpa [← hsame] using hs
+      · right
+        left
+        simpa [← hadj] using ha
+      · right
+        right
+        simpa [← hlarge] using hl
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

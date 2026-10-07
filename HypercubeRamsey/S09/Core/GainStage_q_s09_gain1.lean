@@ -2132,6 +2132,21 @@ private theorem pr_finset_exists_le9 {α Ω : Type*} [Fintype α] [Fintype Ω]
               add_le_add le_rfl ih
         _ = ∑ c ∈ insert a s, Q.pr (A c) := by simp [ha]
 
+private theorem nat_rpow_decay_cutoff9 {a K : ℝ} (ha : 0 < a) (hK : 0 < K) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, K * (n : ℝ) ^ (-a) < 1 / 2 := by
+  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ (-a)) atTop (𝓝 0) := by
+    exact (tendsto_rpow_neg_atTop ha).comp tendsto_natCast_atTop_atTop
+  have hbound : 0 < (1 / 2 : ℝ) / K := div_pos (by norm_num) hK
+  have hevent := hT.eventually (Iio_mem_nhds hbound)
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp hevent
+  refine ⟨n₀, ?_⟩
+  intro n hn
+  have hpow := hn₀ n hn
+  calc
+    K * (n : ℝ) ^ (-a) < K * ((1 / 2 : ℝ) / K) :=
+      mul_lt_mul_of_pos_left hpow hK
+    _ = 1 / 2 := by field_simp [ne_of_gt hK]
+
 private theorem outer_mean_core_degree_exceptions9 {P : Params9} {n N : ℕ} {M : TagMix N}
     {X Y : Finset (Fin N)} {κ : ℝ} {E : Fin N → Fin N → Prop} {G : Colour}
     (hP : P.Valid) (S : Setup9 P n N M) (I : IDMap9 P n)
@@ -2225,6 +2240,81 @@ private theorem core_degree_product_regular9 {P : Params9} {n N : ℕ} {M : TagM
   exact doubled_degree_product_close9 D
     (fun c => colDeg E G (M.μ (S.tag c.slice)) y) (P.bStar n) hb hsmall
     (by simpa [D] using hsize) (by intro c hc; exact hdeg c hc)
+
+private theorem core_product_size_cutoff9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, 4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n ≤ 1 / 2 := by
+  rcases hP with ⟨_, hhm, _, _, hchi, _, _⟩
+  rcases hhm with ⟨hminuspos, _, _⟩
+  rcases hchi with ⟨_, hχbound⟩
+  have hminLe : min P.xS (min P.hMinus (1 - P.hPlus)) ≤ P.hMinus :=
+    (min_le_right _ _).trans (min_le_left _ _)
+  have hχminusQ : P.χ < P.hMinus / 100 := by
+    exact lt_of_lt_of_le hχbound (div_le_div_of_nonneg_right hminLe (by norm_num))
+  have hχminus : (P.χ : ℝ) < (P.hMinus : ℝ) := by
+    have hq : (P.χ : ℝ) < (P.hMinus : ℝ) / 100 := by exact_mod_cast hχminusQ
+    have hp : 0 < (P.hMinus : ℝ) := by exact_mod_cast hminuspos
+    linarith
+  let a : ℝ := (P.hMinus : ℝ) - (P.χ : ℝ)
+  have ha : 0 < a := by dsimp [a]; linarith
+  obtain ⟨n₀, hDecay⟩ := nat_rpow_decay_cutoff9 (a := a) (K := 8) ha (by norm_num)
+  refine ⟨max n₀ 2, ?_⟩
+  intro n hn
+  have hn₀ : n₀ ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hnTwo : 2 ≤ n := le_trans (Nat.le_max_right _ _) hn
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hdecay := hDecay n hn₀
+  have hpow : (n : ℝ) ^ (P.χ : ℝ) * P.bStar n = (n : ℝ) ^ (-a) := by
+    dsimp [Params9.bStar]
+    rw [← Real.rpow_add hnPos]
+    congr 1
+    dsimp [a]
+    ring
+  have hstrict : 4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n < 1 / 2 := by
+    calc
+      4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n =
+          4 * ((n : ℝ) ^ (P.χ : ℝ) * P.bStar n) := by ring
+      _ = 4 * (n : ℝ) ^ (-a) := by rw [hpow]
+      _ ≤ 8 * (n : ℝ) ^ (-a) := by
+          have hnonneg : 0 ≤ (n : ℝ) ^ (-a) := Real.rpow_nonneg (by positivity) _
+          nlinarith [hnonneg]
+      _ < 1 / 2 := hdecay
+  exact hstrict.le
+
+private theorem core_degree_product_good_eventually9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {M : TagMix N}
+      {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)} {κ : ℝ}
+      (S : Setup9 P n N M) (I : IDMap9 P n), CoreInput9 P κ E X Y G M S I →
+      ∀ (v : EvenSites9 n) (b : OddSites9 n) (y : Fin N),
+        (¬ ∃ c ∈ I.seen b.1 ∩ I.core v.1,
+          2 * P.bStar n < |colDeg E G (M.μ (S.tag c.slice)) y - 1 / 2|) →
+        |∏ c ∈ I.seen b.1 ∩ I.core v.1,
+            (2 * colDeg E G (M.μ (S.tag c.slice)) y) - 1| ≤
+          8 * ((I.seen b.1 ∩ I.core v.1).card : ℝ) * P.bStar n := by
+  obtain ⟨nSize, hSize⟩ := core_product_size_cutoff9 P hP
+  refine ⟨max nSize 2, ?_⟩
+  intro n hn N M E G X Y κ S I hCore v b y hgood
+  have hnSize : nSize ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hnTwo : 2 ≤ n := le_trans (Nat.le_max_right _ _) hn
+  rcases hCore with ⟨_, _, _, _, _, _, _, hAt⟩
+  rcases hAt with ⟨_, _, _, _, _, _, hbstar, _⟩
+  let D : Finset I.ID := I.seen b.1 ∩ I.core v.1
+  have hb : 0 ≤ P.bStar n := by
+    dsimp [Params9.bStar]
+    positivity
+  have hsmall : 4 * P.bStar n ≤ 1 / 2 := by nlinarith [hbstar]
+  have hDcard : (D.card : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+    have hsub : D.card ≤ (I.core v.1).card := by
+      exact Finset.card_le_card (Finset.inter_subset_right)
+    have hcast : (D.card : ℝ) ≤ (I.core v.1).card := by exact_mod_cast hsub
+    exact hcast.trans (I.core_card v.1 v.2)
+  have hsize : (D.card : ℝ) * (4 * P.bStar n) ≤ 1 / 2 := by
+    calc
+      (D.card : ℝ) * (4 * P.bStar n) ≤
+          (n : ℝ) ^ (P.χ : ℝ) * (4 * P.bStar n) :=
+            mul_le_mul_of_nonneg_right hDcard (by positivity)
+      _ = 4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n := by ring
+      _ ≤ 1 / 2 := hSize n hnSize
+  exact core_degree_product_regular9 S I v b y hb hsmall hsize (by simpa [D] using hgood)
 
 private theorem rowDeg_lipschitz_l1_9 {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (x : Fin N) (μ ν : Law N) :
@@ -3325,21 +3415,6 @@ theorem reverse_bound {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
     _ = (∑ y ∈ Splus, lam.w y) + ∑ y ∈ Sminus, lam.w y := by rw [Finset.sum_union hdis]
     _ ≤ Real.exp (s - P.Sd (n : ℝ)) + Real.exp (s - P.Sd (n : ℝ)) := add_le_add hplus hminus
     _ = 2 * Real.exp (s - P.Sd (n : ℝ)) := by ring
-
-private theorem nat_rpow_decay_cutoff9 {a K : ℝ} (ha : 0 < a) (hK : 0 < K) :
-    ∃ n₀ : ℕ, ∀ n ≥ n₀, K * (n : ℝ) ^ (-a) < 1 / 2 := by
-  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ (-a)) atTop (𝓝 0) := by
-    exact (tendsto_rpow_neg_atTop ha).comp tendsto_natCast_atTop_atTop
-  have hbound : 0 < (1 / 2 : ℝ) / K := div_pos (by norm_num) hK
-  have hevent := hT.eventually (Iio_mem_nhds hbound)
-  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp hevent
-  refine ⟨n₀, ?_⟩
-  intro n hn
-  have hpow := hn₀ n hn
-  calc
-    K * (n : ℝ) ^ (-a) < K * ((1 / 2 : ℝ) / K) :=
-      mul_lt_mul_of_pos_left hpow hK
-    _ = 1 / 2 := by field_simp [ne_of_gt hK]
 
 private theorem nat_rpow_growth_cutoff9 {u K : ℝ} (hu : 0 < u) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, K ≤ (n : ℝ) ^ u := by

@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.Steps_bayes_sol_s06_steps1
+import HypercubeRamsey.Tools.ScatteredUnion
 
 namespace HypercubeRamsey.Lane_sol_s06_loadA
 
@@ -870,6 +871,1033 @@ theorem interior_step1_product_raw_le {U : Type*} [Fintype U] [DecidableEq U]
   calc
     _ ≤ ∏ _u ∈ s, 20 * K := Finset.prod_le_prod₀ (fun u _ => hnonneg u) (fun u _ => hmean u)
     _ = _ := by simp
+
+/-- Agreement of the parent and the complete data at the listed bins. -/
+structure BaseAgree (S : Finset X.Bin) (b b' : X.Base) : Prop where
+  initial : b.1 = b'.1
+  candidate : ∀ w ∈ S, b.2.1 w = b'.2.1 w
+  tag : ∀ k : X.Key, k.1 ∈ S → b.2.2 k = b'.2.2 k
+
+theorem BaseAgree.mono {S T : Finset X.Bin} {b b' : X.Base}
+    (h : BaseAgree X T b b') (hST : S ⊆ T) : BaseAgree X S b b' :=
+  ⟨h.initial, fun w hw => h.candidate w (hST hw), fun k hk => h.tag k (hST hk)⟩
+
+theorem BaseAgree.withTag {S : Finset X.Bin} {b b' : X.Base}
+    (h : BaseAgree X S b b') (k : X.Key) (i : X.ι) :
+    BaseAgree X S (X.withTag b k i) (X.withTag b' k i) := by
+  refine ⟨h.initial, h.candidate, ?_⟩
+  intro s hs
+  by_cases hsk : s = k
+  · subst s; simp [Ctx6.withTag]
+  · simp [Ctx6.withTag, Function.update_of_ne hsk, h.tag s hs]
+
+theorem BaseAgree.withPar {S : Finset X.Bin} {b b' : X.Base}
+    (h : BaseAgree X S b b') (nm : ParentName6 X.Bin) (ξ : Fin N) :
+    BaseAgree X S (X.withPar b nm ξ) (X.withPar b' nm ξ) := by
+  cases nm with
+  | initial => exact ⟨rfl, h.candidate, h.tag⟩
+  | candidate w =>
+    refine ⟨h.initial, ?_, h.tag⟩
+    intro u hu
+    by_cases huw : u = w
+    · subst u; simp [Ctx6.withPar, Ctx6.parOf, Par6.set]
+    · simp [Ctx6.withPar, Ctx6.parOf, Par6.set, Function.update_of_ne huw,
+        h.candidate u hu]
+
+theorem bin_mem_posteriorScope (h : X.Key) : h.1 ∈ X.binsOf (X.C h) := by
+  apply Finset.mem_image.mpr
+  exact ⟨h, Finset.mem_filter.mpr ⟨Finset.mem_univ _, Or.inl rfl⟩, rfl⟩
+
+theorem hidWeight_congr_base (h : X.Key) (S : Finset X.Key) (hS : S ⊆ X.C h)
+    (b b' : X.Base) (hb : BaseAgree X (X.binsOf (X.C h)) b b') :
+    X.hidWeight b h S = X.hidWeight b' h S := by
+  funext y
+  apply hidWeight_local X h S hS b b' (fun _ => hb.initial) (fun _ => hb.candidate)
+  intro k hk
+  exact hb.tag k (Finset.mem_image.mpr ⟨k, hS hk, rfl⟩)
+
+theorem hidPost_congr_base (h : X.Key) (b b' : X.Base)
+    (hb : BaseAgree X (X.binsOf (X.C h)) b b') : X.hidPost b h = X.hidPost b' h := by
+  unfold Ctx6.hidPost
+  rw [hidWeight_congr_base X h _ Finset.Subset.rfl b b' hb]
+
+theorem hidPostDel_congr_base (h k : X.Key) (b b' : X.Base)
+    (hb : BaseAgree X (X.binsOf (X.C h)) b b') :
+    X.hidPostDel b h k = X.hidPostDel b' h k := by
+  unfold Ctx6.hidPostDel
+  rw [hidWeight_congr_base X h _ (Finset.erase_subset _ _) b b' hb]
+
+theorem hidPostRep_congr_base (h k : X.Key) (i : X.ι) (b b' : X.Base)
+    (hb : BaseAgree X (X.binsOf (X.C h)) b b') :
+    X.hidPostRep b h k i = X.hidPostRep b' h k i :=
+  hidPost_congr_base X h _ _ (hb.withTag X k i)
+
+theorem step1OK_congr_base (h : X.Key) (b b' : X.Base)
+    (hb : BaseAgree X (X.binsOf (X.C h)) b b') : X.Step1OK b h ↔ X.Step1OK b' h := by
+  simp only [Ctx6.Step1OK, Ctx6.Step1Cap, Ctx6.Step1Del,
+    hidPost_congr_base X h b b' hb, hidPostDel_congr_base X h _ b b' hb]
+
+/-- The complete coarse inputs of one type, including its realized base tag. -/
+def typeBaseScope (β : X.Ty) : Finset X.Bin :=
+  insert β.key.1 (β.obs.biUnion fun ℓ => X.binsOf (X.C ℓ.1))
+
+theorem typeBaseScope_obs (β : X.Ty) (ℓ : X.HKey) (hℓ : ℓ ∈ β.obs) :
+    X.binsOf (X.C ℓ.1) ⊆ typeBaseScope X β := by
+  intro w hw
+  exact Finset.mem_insert_of_mem (Finset.mem_biUnion.mpr ⟨ℓ, hℓ, hw⟩)
+
+theorem tagGate_congr_base (β : X.Ty) (i : X.ι) (b b' : X.Base)
+    (hb : BaseAgree X (typeBaseScope X β) b b') : X.tagGate b β i ↔ X.tagGate b' β i := by
+  unfold Ctx6.tagGate
+  apply forall₂_congr
+  intro ℓ hℓ
+  have hlocal := hb.mono X (typeBaseScope_obs X β ℓ hℓ)
+  rw [hidPostRep_congr_base X ℓ.1 β.key i b b' hlocal,
+    hidPostDel_congr_base X ℓ.1 β.key b b' hlocal]
+
+theorem tagWeight_congr_base (β : X.Ty) (S : Finset X.HKey) (hS : S ⊆ β.obs)
+    (i : X.ι) (b b' : X.Base) (Z : X.Hid)
+    (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.tagWeight (b, Z) β S i = X.tagWeight (b', Z) β S i := by
+  have hkey : β.key.1 ∈ typeBaseScope X β := Finset.mem_insert_self _ _
+  have hlaw : X.tagLawAt (X.parOf b) β.key = X.tagLawAt (X.parOf b') β.key := by
+    change X.tagLawAt (b.1, b.2.1) β.key = X.tagLawAt (b'.1, b'.2.1) β.key
+    rw [hb.initial]
+    exact tagLawAt_bin_local X b'.1 _ _ β.key (hb.candidate _ hkey)
+  unfold Ctx6.tagWeight
+  rw [hlaw, tagGate_congr_base X β i b b' hb]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro ℓ hℓ
+  have hlocal := hb.mono X (typeBaseScope_obs X β ℓ (hS hℓ))
+  rw [hidPostRep_congr_base X ℓ.1 β.key i b b' hlocal,
+    hidPostDel_congr_base X ℓ.1 β.key b b' hlocal]
+
+theorem tagMass_congr_base (β : X.Ty) (S : Finset X.HKey) (hS : S ⊆ β.obs)
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.tagMass (b, Z) β S = X.tagMass (b', Z) β S := by
+  unfold Ctx6.tagMass
+  exact Finset.sum_congr rfl (fun i _ => tagWeight_congr_base X β S hS i b b' Z hb)
+
+theorem tagPost_congr_base (β : X.Ty) (S : Finset X.HKey) (hS : S ⊆ β.obs)
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.tagPost (b, Z) β S = X.tagPost (b', Z) β S := by
+  have hw : X.tagWeight (b, Z) β S = X.tagWeight (b', Z) β S :=
+    funext (fun i => tagWeight_congr_base X β S hS i b b' Z hb)
+  unfold Ctx6.tagPost
+  rw [hw]
+
+theorem step2Tests_congr_base (β : X.Ty) (b b' : X.Base) (Z : X.Hid)
+    (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.Step2Tests (b, Z) β ↔ X.Step2Tests (b', Z) β := by
+  simp only [Ctx6.Step2Tests, tagMass_congr_base X β β.obs Finset.Subset.rfl b b' Z hb,
+    tagMass_congr_base X β _ (Finset.erase_subset _ _) b b' Z hb]
+
+theorem step2Fail_congr_base (β : X.Ty) (b b' : X.Base) (Z : X.Hid)
+    (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.Step2Fail (b, Z) β ↔ X.Step2Fail (b', Z) β := by
+  have hi := hb.tag β.key (Finset.mem_insert_self _ _)
+  simp only [Ctx6.Step2Fail, hi, tagGate_congr_base X β _ b b' hb,
+    step2Tests_congr_base X β b b' Z hb]
+
+theorem rate2Base_congr_base (β : X.Ty) (b b' : X.Base)
+    (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.rate2Base b β = X.rate2Base b' β := by
+  have hdep : FinProb.DependsOn (fun Z : X.Hid => X.Step2Fail (b', Z) β) β.obs := by
+    intro Z Z' hZ
+    exact propext (Lane_q_s06_stages.step2Fail_iff_of_agree X b' β Z Z' hZ)
+  have hlaws (ℓ : X.HKey) (hℓ : ℓ ∈ β.obs) :
+      X.hidPost b ℓ.1 = X.hidPost b' ℓ.1 :=
+    hidPost_congr_base X ℓ.1 b b' (hb.mono X (typeBaseScope_obs X β ℓ hℓ))
+  unfold Ctx6.rate2Base
+  have hevent : (fun Z : X.Hid => X.Step2Fail (b, Z) β) =
+      (fun Z : X.Hid => X.Step2Fail (b', Z) β) :=
+    funext (fun Z => propext (step2Fail_congr_base X β b b' Z hb))
+  rw [hevent]
+  exact Lane_q_s06_stages.pi_pr_eq_of_kernel_eq_on_depends _ _ β.obs _ hdep hlaws
+
+theorem reqNames_congr_base (β : X.Ty) (b b' : X.Base) (Z : X.Hid)
+    (hb : BaseAgree X (typeBaseScope X β) b b') :
+    ∀ nm ∈ reqNames6 β, X.varVal (b, Z) nm = X.varVal (b', Z) nm := by
+  intro nm hnm
+  have hprimary : (X.parOf b).val (primaryName6 β.key) =
+      (X.parOf b').val (primaryName6 β.key) := by
+    cases hf : β.key.2 <;> simp [Ctx6.parOf, primaryName6, Par6.val, hf,
+      hb.initial, hb.candidate β.key.1 (Finset.mem_insert_self _ _)]
+  have hother : (X.parOf b).val (otherPrimaryName6 β.key) =
+      (X.parOf b').val (otherPrimaryName6 β.key) := by
+    cases hf : β.key.2 <;> simp [Ctx6.parOf, otherPrimaryName6, Par6.val, hf,
+      hb.initial, hb.candidate β.key.1 (Finset.mem_insert_self _ _)]
+  cases nm with
+  | hid ℓ => rfl
+  | par p =>
+    have hp : p = primaryName6 β.key ∨ p = otherPrimaryName6 β.key := by
+      by_cases hm : β.mode = .high
+      · simpa [reqNames6, hm] using hnm
+      · have hp : p = primaryName6 β.key := by simpa [reqNames6, hm] using hnm
+        exact Or.inl hp
+    rcases hp with rfl | rfl
+    · exact hprimary
+    · exact hother
+
+theorem tupleLaw_congr_base (β : X.Ty) (b b' : X.Base) (Z : X.Hid)
+    (hb : BaseAgree X (typeBaseScope X β) b b') :
+    X.tupleLaw (b, Z) β = X.tupleLaw (b', Z) β := by
+  unfold Ctx6.tupleLaw Ctx6.Tβ
+  rw [tagPost_congr_base X β β.obs Finset.Subset.rfl b b' Z hb]
+  exact _root_.Lane_q_s06_loads.tupleLawOn_congr_varVal X _ _ _ _
+    (reqNames_congr_base X β b b' Z hb)
+
+variable {Id : Type} [Fintype Id] [DecidableEq Id]
+
+/-- Coarse observations for a descriptor, including its low target prior. -/
+def descBaseScope (b : X.State) (D : Finset (Id × X.Ty)) : Finset X.Bin :=
+  X.binsOf (X.C (X.tgt b).1) ∪ D.biUnion (fun e => typeBaseScope X e.2)
+
+theorem descBaseScope_type (b : X.State) (D : Finset (Id × X.Ty))
+    (e : Id × X.Ty) (he : e ∈ D) : typeBaseScope X e.2 ⊆ descBaseScope X b D := by
+  intro w hw
+  exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨e, he, hw⟩)
+
+theorem descBaseScope_obs (b : X.State) (D : Finset (Id × X.Ty))
+    (ℓ : X.HKey) (hℓ : ℓ ∈ X.locHid D) : X.binsOf (X.C ℓ.1) ⊆ descBaseScope X b D := by
+  obtain ⟨e, he, hobs⟩ := Finset.mem_biUnion.mp hℓ
+  exact (typeBaseScope_obs X e.2 ℓ hobs).trans (descBaseScope_type X b D e he)
+
+theorem descBaseScope_key (b : X.State) (D : Finset (Id × X.Ty))
+    (k : X.Key) (hk : k ∈ X.locKeys D) : k.1 ∈ descBaseScope X b D := by
+  rcases Finset.mem_union.mp hk with hk | hk
+  · obtain ⟨ℓ, hℓ, hk⟩ := Finset.mem_biUnion.mp hk
+    exact descBaseScope_obs X b D ℓ hℓ (Finset.mem_image.mpr ⟨k, hk, rfl⟩)
+  · obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hk
+    exact descBaseScope_type X b D e he (Finset.mem_insert_self _ _)
+
+theorem lowGate_congr_base (s : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.LowGate (b, Z) s D ξ ↔ X.LowGate (b', Z) s D ξ := by
+  have ht := hb.mono X (Finset.subset_union_left)
+  have htests : ∀ e ∈ D, X.Step2Tests (X.withHid (b, Z) (X.tgt s) ξ) e.2 =
+      X.Step2Tests (X.withHid (b', Z) (X.tgt s) ξ) e.2 := by
+    intro e he
+    exact propext (step2Tests_congr_base X e.2 b b' _
+      (hb.mono X (descBaseScope_type X s D e he)))
+  have hforall : (∀ e ∈ D, X.Step2Tests (X.withHid (b, Z) (X.tgt s) ξ) e.2) ↔
+      ∀ e ∈ D, X.Step2Tests (X.withHid (b', Z) (X.tgt s) ξ) e.2 := by
+    apply forall₂_congr
+    intro e he
+    exact Iff.of_eq (htests e he)
+  simp only [Ctx6.LowGate, Ctx6.Step1Cap, hidPost_congr_base X _ b b' ht, hforall]
+
+theorem highGate_congr_base (s : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.HighGate (b, Z) s D ξ ↔ X.HighGate (b', Z) s D ξ := by
+  have hprior : X.priorOf (b, Z) (X.tgtName s) = X.priorOf (b', Z) (X.tgtName s) := by
+    cases X.tgtName s <;> simp [Ctx6.priorOf, hb.initial]
+  have hp := hb.withPar X (X.tgtName s) ξ
+  have htests : ∀ e ∈ D, X.Step2Tests (X.withParH (b, Z) (X.tgtName s) ξ) e.2 =
+      X.Step2Tests (X.withParH (b', Z) (X.tgtName s) ξ) e.2 := by
+    intro e he
+    exact propext (step2Tests_congr_base X e.2 _ _ _
+      (hp.mono X (descBaseScope_type X s D e he)))
+  have hsteps : ∀ ℓ ∈ X.locHid D,
+      X.Step1OK (X.withParH (b, Z) (X.tgtName s) ξ).1 ℓ.1 =
+      X.Step1OK (X.withParH (b', Z) (X.tgtName s) ξ).1 ℓ.1 := by
+    intro ℓ hℓ
+    exact propext (step1OK_congr_base X ℓ.1 _ _
+      (hp.mono X (descBaseScope_obs X s D ℓ hℓ)))
+  have hforallSteps : (∀ ℓ ∈ X.locHid D,
+      X.Step1OK (X.withParH (b, Z) (X.tgtName s) ξ).1 ℓ.1) ↔
+      ∀ ℓ ∈ X.locHid D, X.Step1OK (X.withParH (b', Z) (X.tgtName s) ξ).1 ℓ.1 := by
+    apply forall₂_congr
+    intro ℓ hℓ
+    exact Iff.of_eq (hsteps ℓ hℓ)
+  have hforallTests : (∀ e ∈ D, X.Step2Tests (X.withParH (b, Z) (X.tgtName s) ξ) e.2) ↔
+      ∀ e ∈ D, X.Step2Tests (X.withParH (b', Z) (X.tgtName s) ξ) e.2 := by
+    apply forall₂_congr
+    intro e he
+    exact Iff.of_eq (htests e he)
+  simp only [Ctx6.HighGate, hprior, hforallSteps, hforallTests]
+
+theorem tupleRatio_congr_base (β : X.Ty) (b b' c c' : X.Base) (Z W : X.Hid)
+    (hb : BaseAgree X (typeBaseScope X β) b b')
+    (hc : BaseAgree X (typeBaseScope X β) c c') (T T' : FinProb X.ι)
+    (hT : T = T') (drop : X.Name) (o : X.Tuple) :
+    X.tupleRatio (b, Z) (c, W) β T drop o =
+      X.tupleRatio (b', Z) (c', W) β T' drop o := by
+  apply _root_.Lane_q_s06_loads.tupleRatio_congr_varVal X _ _ _ _ β T T' drop o
+  · exact tagPost_congr_base X β β.obs Finset.Subset.rfl b b' Z hb
+  · exact hT
+  · exact reqNames_congr_base X β b b' Z hb
+  · intro nm hnm
+    exact reqNames_congr_base X β c c' W hc nm (Finset.mem_of_mem_erase hnm)
+
+theorem locDensity_congr_base (s : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.locDensity (b, Z) (X.tgtName s) D ξ = X.locDensity (b', Z) (X.tgtName s) D ξ := by
+  have hp := hb.withPar X (X.tgtName s) ξ
+  have hprodA : (∏ u ∈ X.locBins D (X.tgtName s),
+      (N : ℝ) * (X.candLaw (X.withPar b (X.tgtName s) ξ).1).w (b.2.1 u)) =
+      ∏ u ∈ X.locBins D (X.tgtName s),
+        (N : ℝ) * (X.candLaw (X.withPar b' (X.tgtName s) ξ).1).w (b'.2.1 u) := by
+    apply Finset.prod_congr rfl
+    intro u hu
+    obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp (Finset.mem_filter.mp hu).1
+    rw [hp.initial, hb.candidate k.1 (descBaseScope_key X s D k hk)]
+  have hprodI : (∏ k ∈ X.locKeys D,
+      safeRatio6 ((X.tagLawAt (X.parOf (X.withPar b (X.tgtName s) ξ)) k).w (b.2.2 k))
+        (M.Λ (b.2.2 k))) =
+      ∏ k ∈ X.locKeys D,
+        safeRatio6 ((X.tagLawAt (X.parOf (X.withPar b' (X.tgtName s) ξ)) k).w (b'.2.2 k))
+          (M.Λ (b'.2.2 k)) := by
+    apply Finset.prod_congr rfl
+    intro k hk
+    have hm := descBaseScope_key X s D k hk
+    have hlaw : X.tagLawAt (X.parOf (X.withPar b (X.tgtName s) ξ)) k =
+        X.tagLawAt (X.parOf (X.withPar b' (X.tgtName s) ξ)) k := by
+      change X.tagLawAt ((X.withPar b (X.tgtName s) ξ).1, _) k = _
+      rw [hp.initial]
+      exact tagLawAt_bin_local X _ _ _ k (hp.candidate k.1 hm)
+    rw [hlaw, hb.tag k hm]
+  have hprodZ : (∏ ℓ ∈ X.locHid D,
+      (N : ℝ) * (X.hidPost (X.withPar b (X.tgtName s) ξ) ℓ.1).w (Z ℓ)) =
+      ∏ ℓ ∈ X.locHid D,
+        (N : ℝ) * (X.hidPost (X.withPar b' (X.tgtName s) ξ) ℓ.1).w (Z ℓ) := by
+    apply Finset.prod_congr rfl
+    intro ℓ hℓ
+    rw [hidPost_congr_base X ℓ.1 _ _ (hp.mono X (descBaseScope_obs X s D ℓ hℓ))]
+  exact congrArg₂ (fun a z => a * z) (congrArg₂ (fun a i => a * i) hprodA hprodI) hprodZ
+
+theorem s3Weight_congr_base (s : X.State) (D : Finset (Id × X.Ty))
+    (o : X.Data Id) (drop : Option (Id × X.Ty)) (ξ : Fin N)
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.s3Weight (b, Z) s D o drop ξ = X.s3Weight (b', Z) s D o drop ξ := by
+  cases hm : X.stMode s
+  · have ht := hb.mono X (Finset.subset_union_left)
+    have hprod : (∏ e ∈ D, if drop = some e then 1 else X.lowLik (b, Z) s ξ e.2 (o e)) =
+        ∏ e ∈ D, if drop = some e then 1 else X.lowLik (b', Z) s ξ e.2 (o e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      have hbβ := hb.mono X (descBaseScope_type X s D e he)
+      have href : X.TβDel (b, Z) e.2 (X.tgt s) = X.TβDel (b', Z) e.2 (X.tgt s) :=
+        tagPost_congr_base X e.2 _ (Finset.erase_subset _ _) b b' Z hbβ
+      have hlik := tupleRatio_congr_base X e.2 b b' b b'
+        (Function.update Z (X.tgt s) ξ) Z hbβ hbβ _ _ href
+        (.hid (X.tgt s)) (o e)
+      simp only [Ctx6.lowLik, Ctx6.withHid, hlik]
+    simp only [Ctx6.s3Weight, hm, Ctx6.lowWeight, hprod,
+      hidPost_congr_base X _ b b' ht, lowGate_congr_base X s D ξ b b' Z hb]
+  · have hprod : (∏ e ∈ D, if drop = some e then 1 else X.highLik (b, Z) s ξ e.2 (o e)) =
+        ∏ e ∈ D, if drop = some e then 1 else X.highLik (b', Z) s ξ e.2 (o e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      have hbβ := hb.mono X (descBaseScope_type X s D e he)
+      have hlik := tupleRatio_congr_base X e.2 _ _ b b' Z Z
+        (hbβ.withPar X (X.tgtName s) ξ) hbβ (tagLaw6 M) (tagLaw6 M) rfl
+        (.par (X.tgtName s)) (o e)
+      simp only [Ctx6.highLik, Ctx6.withParH, hlik]
+    have hprior : X.priorOf (b, Z) (X.tgtName s) = X.priorOf (b', Z) (X.tgtName s) := by
+      cases X.tgtName s <;> simp [Ctx6.priorOf, hb.initial]
+    simp only [Ctx6.s3Weight, hm, Ctx6.highWeight, hprod, hprior,
+      highGate_congr_base X s D ξ b b' Z hb, locDensity_congr_base X s D ξ b b' Z hb]
+
+theorem s3Fail_congr_base (s : X.State) (D : Finset (Id × X.Ty))
+    (o : X.Data Id) (b b' : X.Base) (Z : X.Hid)
+    (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.S3Fail (b, Z) s D o ↔ X.S3Fail (b', Z) s D o := by
+  have hmass (drop : Option (Id × X.Ty)) : X.s3Mass (b, Z) s D o drop =
+      X.s3Mass (b', Z) s D o drop :=
+    Finset.sum_congr rfl (fun ξ _ => s3Weight_congr_base X s D o drop ξ b b' Z hb)
+  have htrue : X.trueTarget (b, Z) s = X.trueTarget (b', Z) s := by
+    cases hm : X.stMode s
+    · simp [Ctx6.trueTarget, hm]
+    · have hbin : (X.g.L.stKey s).1 ∈ descBaseScope X s D :=
+        Finset.mem_union_left _ (bin_mem_posteriorScope X (X.tgt s).1)
+      cases hf : (X.g.L.stKey s).2 <;>
+        simp [Ctx6.trueTarget, hm, Ctx6.tgtName, primaryName6, hf, Ctx6.parOf,
+          Par6.val, hb.initial, hb.candidate _ hbin]
+  have hgate : X.S3TrueGate (b, Z) s D ↔ X.S3TrueGate (b', Z) s D := by
+    cases hm : X.stMode s <;>
+      simp only [Ctx6.S3TrueGate, hm, htrue,
+        lowGate_congr_base X s D _ b b' Z hb, highGate_congr_base X s D _ b b' Z hb]
+  simp only [Ctx6.S3Fail, hgate, Ctx6.S3Tests, hmass]
+
+theorem rate3_congr_base (s : X.State) (D : Finset (Fin X.T × X.Ty))
+    (b b' : X.Base) (Z : X.Hid) (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.rate3 (b, Z) s D = X.rate3 (b', Z) s D := by
+  have hevent : (fun o : X.Data (Fin X.T) => X.S3Fail (b, Z) s D o) =
+      (fun o : X.Data (Fin X.T) => X.S3Fail (b', Z) s D o) :=
+    funext (fun o => propext (s3Fail_congr_base X s D o b b' Z hb))
+  unfold Ctx6.rate3
+  rw [hevent]
+  apply Lane_q_s06_stages.pi_pr_eq_of_kernel_eq_on_depends _ _ D _
+    (Lane_q_s06_stages.s3Fail_dependsOn_data X (b', Z) s D)
+  intro e he
+  exact tupleLaw_congr_base X e.2 b b' Z (hb.mono X (descBaseScope_type X s D e he))
+
+theorem rate3Base_congr_base (s : X.State) (D : Finset (Fin X.T × X.Ty))
+    (b b' : X.Base) (hb : BaseAgree X (descBaseScope X s D) b b') :
+    X.rate3Base b s D = X.rate3Base b' s D := by
+  have hevent : (fun Z : X.Hid => X.rate3 (b, Z) s D) =
+      (fun Z : X.Hid => X.rate3 (b', Z) s D) :=
+    funext (fun Z => rate3_congr_base X s D b b' Z hb)
+  unfold Ctx6.rate3Base
+  rw [hevent]
+  apply pi_expect_congr_on _ _ (Lane_q_s06_stages.rate3HiddenScope X s D) _ (fun _ => X.y₀)
+  · intro Z Z' hZ
+    exact Lane_q_s06_stages.s3FailPr_eq_of_agree X b' s D Z Z' hZ
+  · intro ℓ hℓ
+    apply hidPost_congr_base X ℓ.1 b b'
+    apply hb.mono X
+    rcases Finset.mem_union.mp hℓ with hℓ | hℓ
+    · exact descBaseScope_obs X s D ℓ hℓ
+    · have heq : ℓ = X.tgt s := by
+        by_cases hm : X.stMode s = .low
+        · simpa [hm] using hℓ
+        · simp [hm] at hℓ
+      subst ℓ
+      exact Finset.subset_union_left
+
+/-- The exact union of coarse scopes consulted by a bin's three alarm branches. -/
+def bad2BaseScope (w : X.Bin) : Finset X.Bin :=
+  ((Finset.univ : Finset (CubeVertex n)).filter (fun x => (X.g.L.key x).1 = w)).biUnion
+    (fun x => (X.C (X.g.L.key x)).biUnion (fun h => X.binsOf (X.C h))) ∪
+  ((Finset.univ : Finset (CubeVertex n)).filter
+    (fun x => IsEvenRole x ∧ (X.g.L.key x).1 = w)).biUnion
+      (fun x => typeBaseScope X (X.evenType x)) ∪
+  (X.g.L.oddStates.filter (fun s => (X.g.L.stKey s).1 = w)).biUnion
+    (fun s => (X.absDescs s).biUnion (fun D => descBaseScope X s D))
+
+theorem bad2BaseScope_step1 (w : X.Bin) (x : CubeVertex n)
+    (hx : (X.g.L.key x).1 = w) (h : X.Key) (hh : h ∈ X.C (X.g.L.key x)) :
+    X.binsOf (X.C h) ⊆ bad2BaseScope X w := by
+  intro u hu
+  exact Finset.mem_union_left _ (Finset.mem_union_left _
+    (Finset.mem_biUnion.mpr ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hx⟩,
+      Finset.mem_biUnion.mpr ⟨h, hh, hu⟩⟩))
+
+theorem bad2BaseScope_step2 (w : X.Bin) (x : CubeVertex n)
+    (he : IsEvenRole x) (hx : (X.g.L.key x).1 = w) :
+    typeBaseScope X (X.evenType x) ⊆ bad2BaseScope X w := by
+  intro u hu
+  exact Finset.mem_union_left _ (Finset.mem_union_right _
+    (Finset.mem_biUnion.mpr ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, he, hx⟩, hu⟩))
+
+theorem bad2BaseScope_step3 (w : X.Bin) (s : X.State) (hs : s ∈ X.g.L.oddStates)
+    (hw : (X.g.L.stKey s).1 = w) (D : Finset (Fin X.T × X.Ty)) (hD : D ∈ X.absDescs s) :
+    descBaseScope X s D ⊆ bad2BaseScope X w := by
+  intro u hu
+  exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr
+    ⟨s, Finset.mem_filter.mpr ⟨hs, hw⟩, Finset.mem_biUnion.mpr ⟨D, hD, hu⟩⟩)
+
+theorem bad2_congr_base (v : Fin N) (w : X.Bin) (c c' : X.Coarse)
+    (hb : BaseAgree X (bad2BaseScope X w) (v, c) (v, c')) :
+    X.Bad2 v w c ↔ X.Bad2 v w c' := by
+  have hstep : ∀ x : CubeVertex n, (X.g.L.key x).1 = w →
+      ∀ h ∈ X.C (X.g.L.key x), X.Step1OK (v, c) h ↔ X.Step1OK (v, c') h := by
+    intro x hx h hh
+    exact step1OK_congr_base X h _ _ (hb.mono X (bad2BaseScope_step1 X w x hx h hh))
+  have hrate2 : ∀ x : CubeVertex n, IsEvenRole x → (X.g.L.key x).1 = w →
+      X.rate2Base (v, c) (X.evenType x) = X.rate2Base (v, c') (X.evenType x) := by
+    intro x he hx
+    exact rate2Base_congr_base X _ _ _ (hb.mono X (bad2BaseScope_step2 X w x he hx))
+  have hrate3 : ∀ s ∈ X.g.L.oddStates, (X.g.L.stKey s).1 = w →
+      ∀ D ∈ X.absDescs s, X.rate3Base (v, c) s D = X.rate3Base (v, c') s D := by
+    intro s hs hw D hD
+    exact rate3Base_congr_base X s D _ _ (hb.mono X (bad2BaseScope_step3 X w s hs hw D hD))
+  unfold Ctx6.Bad2
+  constructor
+  · rintro (⟨x, hx, h, hh, hfail⟩ | ⟨x, he, hx, hr⟩ | ⟨s, hs, hw, D, hD, hr⟩)
+    · exact Or.inl ⟨x, hx, h, hh, fun hgood => hfail ((hstep x hx h hh).mpr hgood)⟩
+    · exact Or.inr (Or.inl ⟨x, he, hx, (hrate2 x he hx) ▸ hr⟩)
+    · exact Or.inr (Or.inr ⟨s, hs, hw, D, hD, (hrate3 s hs hw D hD) ▸ hr⟩)
+  · rintro (⟨x, hx, h, hh, hfail⟩ | ⟨x, he, hx, hr⟩ | ⟨s, hs, hw, D, hD, hr⟩)
+    · exact Or.inl ⟨x, hx, h, hh, fun hgood => hfail ((hstep x hx h hh).mp hgood)⟩
+    · exact Or.inr (Or.inl ⟨x, he, hx, (hrate2 x he hx).symm ▸ hr⟩)
+    · exact Or.inr (Or.inr ⟨s, hs, hw, D, hD, (hrate3 s hs hw D hD).symm ▸ hr⟩)
+
+theorem bad2_depends_on_bins (v : Fin N) (w : X.Bin) :
+    FinProb.DependsOn (fun z : X.Bin → BinData X =>
+      X.Bad2 v w ((coarseBinEquiv X).symm z)) (bad2BaseScope X w) := by
+  intro z z' hz
+  apply propext
+  apply bad2_congr_base X v w
+  refine ⟨rfl, ?_, ?_⟩
+  · intro u hu
+    exact congrArg Prod.fst (hz u hu)
+  · intro k hk
+    exact congrArg (fun d : BinData X => d.2 k.2) (hz k.1 hk)
+
+/-- Exact factorization against coarse avoidance constraints outside a function's bin scope. -/
+theorem coarse_avoid_factor (v : Fin N) (S U : Finset X.Bin) (W : X.Coarse → ℝ)
+    (hW : FinProb.DependsOn (fun z => W ((coarseBinEquiv X).symm z)) U)
+    (hS : ∀ w ∈ S, Disjoint U (bad2BaseScope X w)) :
+    (∑ c ∈ LocalLemma.avoid (X.bad2Set v) S, (X.coarseLaw v).w c * W c) =
+      (X.coarseLaw v).expect W * LocalLemma.mass (X.coarseLaw v).w
+        (LocalLemma.avoid (X.bad2Set v) S) := by
+  let E' (w : X.Bin) : Finset (X.Bin → BinData X) :=
+    Finset.univ.filter (fun z => X.Bad2 v w ((coarseBinEquiv X).symm z))
+  let P := FinProb.pi (binLaw X v)
+  have hscope (w : X.Bin) (z z' : X.Bin → BinData X)
+      (hz : ∀ u ∈ bad2BaseScope X w, z u = z' u) : z ∈ E' w ↔ z' ∈ E' w := by
+    simpa only [E', Finset.mem_filter, Finset.mem_univ, true_and] using
+      (Iff.of_eq (bad2_depends_on_bins X v w z z' hz))
+  have hfactor := _root_.Lane_q_s06_loads.product_weight_avoid_factor
+    (fun w a => (binLaw X v w).w a) (fun w a => (binLaw X v w).nonneg a)
+    (fun w => (binLaw X v w).sum_eq_one) E' (bad2BaseScope X) hscope U
+    (fun z => W ((coarseBinEquiv X).symm z)) hW S hS
+  have hmem (z : X.Bin → BinData X) :
+      z ∈ LocalLemma.avoid E' S ↔ (coarseBinEquiv X).symm z ∈ LocalLemma.avoid (X.bad2Set v) S := by
+    simp [LocalLemma.avoid, E', Ctx6.bad2Set]
+  have hsum (F : X.Coarse → ℝ) :
+      (∑ c ∈ LocalLemma.avoid (X.bad2Set v) S, (X.coarseLaw v).w c * F c) =
+        ∑ z ∈ LocalLemma.avoid E' S, P.w z * F ((coarseBinEquiv X).symm z) := by
+    have hfiltered : ∀ (Q : FinProb X.Coarse),
+        (∑ c ∈ LocalLemma.avoid (X.bad2Set v) S, Q.w c * F c) =
+          Q.expect (fun c => if c ∈ LocalLemma.avoid (X.bad2Set v) S then F c else 0) := by
+      intro Q
+      simp [FinProb.expect, LocalLemma.avoid, Finset.sum_filter]
+    rw [hfiltered, coarseLaw_expect X v]
+    simp only [FinProb.expect, ← hmem]
+    simp [P, LocalLemma.avoid, Finset.sum_filter]
+  have hmass : LocalLemma.mass (X.coarseLaw v).w (LocalLemma.avoid (X.bad2Set v) S) =
+      LocalLemma.mass P.w (LocalLemma.avoid E' S) := by
+    simpa [LocalLemma.mass] using hsum (fun _ => 1)
+  rw [hsum, coarseLaw_expect X v W, hmass]
+  exact hfactor
+
+/-- Conditioning on all coarse alarms costs only the inverse charges of the touching alarms. -/
+theorem stage2_expect_le_raw_of_local (v : Fin N) (S T U : Finset X.Bin)
+    (hST : Disjoint S T) (hcover : S ∪ T = Finset.univ) (W : X.Coarse → ℝ)
+    (hW0 : ∀ c, 0 ≤ W c)
+    (hW : FinProb.DependsOn (fun z => W ((coarseBinEquiv X).symm z)) U)
+    (hS : ∀ w ∈ S, Disjoint U (bad2BaseScope X w))
+    (cert : AvoidCert6 (X.coarseLaw v).w (X.bad2Set v) ((n : ℝ) ^ (-(δ₁ / 8))))
+    (hx : (n : ℝ) ^ (-(δ₁ / 8)) < 1) :
+    (X.stage2Law v).expect W ≤
+      (∏ w ∈ T, (1 - cert.x w))⁻¹ * (X.coarseLaw v).expect W := by
+  have hpos := HypercubeRamsey.Lane_q_s06_loads.S06.AvoidCert6.mass_avoid_pos
+    cert (X.coarseLaw v).nonneg (X.coarseLaw v).sum_eq_one hx
+  have hmass : LocalLemma.mass (X.coarseLaw v).w (LocalLemma.avoid (X.bad2Set v) Finset.univ) =
+      (X.coarseLaw v).pr (fun c => ∀ w, ¬ X.Bad2 v w c) := by
+    rw [Lane_q_s06_stages.avoid_mass_eq_pr]
+    simp [Ctx6.bad2Set]
+  have hgood : 0 < (X.coarseLaw v).pr (fun c => ∀ w, ¬ X.Bad2 v w c) := hmass ▸ hpos
+  let p (w : X.Bin) : ℝ := cert.x w * ∏ j ∈ Finset.univ.filter (cert.adj w), (1 - cert.x j)
+  have hav := LocalLemma.conditional_avoidance (X.coarseLaw v).w
+    (X.coarseLaw v).nonneg (X.coarseLaw v).sum_eq_one (X.bad2Set v) cert.adj
+    cert.adj_symm cert.adj_irrefl p cert.x cert.local_bound cert.x_nonneg
+    (fun w => (cert.x_le w).trans_lt hx) (fun _ => le_rfl)
+  have hcompare := hav.2.2.1 S T hST W hW0
+  have hSpos := _root_.Lane_q_s06_loads.avoid_mass_positive_subset
+    cert (X.coarseLaw v).nonneg (X.coarseLaw v).sum_eq_one hx S
+  have hfactor := coarse_avoid_factor X v S U W hW hS
+  have hratio : (∑ c ∈ LocalLemma.avoid (X.bad2Set v) S, (X.coarseLaw v).w c * W c) /
+      LocalLemma.mass (X.coarseLaw v).w (LocalLemma.avoid (X.bad2Set v) S) =
+        (X.coarseLaw v).expect W := by
+    rw [hfactor]
+    exact mul_div_cancel_right₀ _ (ne_of_gt hSpos)
+  rw [hcover, hratio] at hcompare
+  rw [Ctx6.stage2Law, Lane_q_s06_loads.restrictOr6_expect_formula _ _ _ hgood]
+  -- Match the restriction formula's canonical decidability before comparing filtered sums.
+  have hnum : (∑ c : X.Coarse,
+      @ite ℝ (∀ w : X.Bin, ¬ X.Bad2 v w c) (Classical.propDecidable _)
+        ((X.coarseLaw v).w c * W c) 0) =
+      ∑ c ∈ LocalLemma.avoid (X.bad2Set v) Finset.univ, (X.coarseLaw v).w c * W c := by
+    rw [LocalLemma.avoid, Finset.sum_filter]
+    apply Finset.sum_congr rfl
+    intro c hc
+    by_cases hgoodc : ∀ w : X.Bin, ¬ X.Bad2 v w c <;>
+      simp [Ctx6.bad2Set, hgoodc]
+  rw [hnum, ← hmass]
+  exact hcompare
+
+/-- Alarms whose coarse input lists meet a given collection of target bins. -/
+def touchingCoarse (U : Finset X.Bin) : Finset X.Bin :=
+  Finset.univ.filter (fun w => ¬ Disjoint U (bad2BaseScope X w))
+
+/-- Distinct interior bins retain their product moment bound, multiplied only by touching-alarm charges. -/
+theorem interior_step1_product_stage2_le {R : Type*} [Fintype R] [DecidableEq R]
+    (v : Fin N) (hv : v ∈ X.par.S₀) (s : Finset R) (h : R → X.Key)
+    (hh : ∀ u, (h u).2 = .interior)
+    (hsep : ∀ u ∈ s, ∀ u' ∈ s, u ≠ u' → (h u).1 ≠ (h u').1) (y : Fin N)
+    (cert : AvoidCert6 (X.coarseLaw v).w (X.bad2Set v) ((n : ℝ) ^ (-(δ₁ / 8))))
+    (hx : (n : ℝ) ^ (-(δ₁ / 8)) < 1) :
+    (X.stage2Law v).expect (fun c => ∏ u ∈ s,
+      (if X.Step1OK (v, c) (h u) then (N : ℝ) * (X.hidPost (v, c) (h u)).w y else 0)) ≤
+        (∏ w ∈ touchingCoarse X (s.image (fun u => (h u).1)), (1 - cert.x w))⁻¹ *
+          (20 * K) ^ s.card := by
+  let U := s.image (fun u => (h u).1)
+  let T := touchingCoarse X U
+  let S := Finset.univ \ T
+  let W (c : X.Coarse) : ℝ := ∏ u ∈ s,
+    (if X.Step1OK (v, c) (h u) then (N : ℝ) * (X.hidPost (v, c) (h u)).w y else 0)
+  have hW0 (c : X.Coarse) : 0 ≤ W c := by
+    apply Finset.prod_nonneg
+    intro u hu
+    split_ifs
+    · exact mul_nonneg (Nat.cast_nonneg _) ((X.hidPost _ _).nonneg y)
+    · exact le_rfl
+  have hW : FinProb.DependsOn (fun z => W ((coarseBinEquiv X).symm z)) U := by
+    intro z z' hz
+    apply Finset.prod_congr rfl
+    intro u hu
+    apply interior_step1_depends_on_bin X v (h u) (hh u) y
+    intro w hw
+    have heq : w = (h u).1 := Finset.mem_singleton.mp hw
+    subst w
+    exact hz _ (Finset.mem_image.mpr ⟨u, hu, rfl⟩)
+  have hST : Disjoint S T := Finset.sdiff_disjoint
+  have hcover : S ∪ T = Finset.univ := by
+    ext w
+    simp [S]
+  have hS : ∀ w ∈ S, Disjoint U (bad2BaseScope X w) := by
+    intro w hw
+    have hnot := (Finset.mem_sdiff.mp hw).2
+    simpa [T, touchingCoarse] using hnot
+  have hcompare := stage2_expect_le_raw_of_local X v S T U hST hcover W hW0 hW hS cert hx
+  have hcharge : 0 ≤ (∏ w ∈ T, (1 - cert.x w))⁻¹ := by
+    apply inv_nonneg.mpr
+    apply Finset.prod_nonneg
+    intro w hw
+    exact sub_nonneg.mpr (le_of_lt ((cert.x_le w).trans_lt hx))
+  exact hcompare.trans (mul_le_mul_of_nonneg_left
+    (interior_step1_product_raw_le X v hv s h hh hsep y) hcharge)
+
+/-- Padding key paths by self edges makes the fixed-radius balls monotone. -/
+theorem keyBall_mono (root : X.Key) {r s : ℕ} (hrs : r ≤ s) :
+    Lane_q_s06_loads.keyBall6 X root r ⊆ Lane_q_s06_loads.keyBall6 X root s := by
+  induction s, hrs using Nat.le_induction with
+  | base => exact Finset.Subset.rfl
+  | succ s hrs ih =>
+    intro k hk
+    exact _root_.Lane_q_s06_loads.keyBall6_pad_self X root k s (ih hk)
+
+theorem typeBaseScope_subset_ball (root : X.Key) (β : X.Ty)
+    (hk : β.key ∈ Lane_q_s06_loads.keyBall6 X root 4)
+    (hobs : ∀ ℓ ∈ β.obs, ℓ.1 ∈ Lane_q_s06_loads.keyBall6 X root 4) :
+    typeBaseScope X β ⊆ X.binsOf (Lane_q_s06_loads.keyBall6 X root 5) := by
+  intro w hw
+  rcases Finset.mem_insert.mp hw with rfl | hw
+  · exact Finset.mem_image.mpr ⟨β.key, keyBall_mono X root (by omega) hk, rfl⟩
+  · obtain ⟨ℓ, hℓ, hw⟩ := Finset.mem_biUnion.mp hw
+    obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hw
+    exact Finset.mem_image.mpr ⟨k,
+      _root_.Lane_q_s06_loads.keyBall6_extend_C X root ℓ.1 k 4 (hobs ℓ hℓ) hk, rfl⟩
+
+theorem evenTypeBaseScope_subset_ball (w : X.Bin) (x : CubeVertex n)
+    (hx : (X.g.L.key x).1 = w) :
+    typeBaseScope X (X.evenType x) ⊆
+      X.binsOf (Lane_q_s06_loads.keyBall6 X (w, .interior) 5) := by
+  let gr : X.Bin × CubeVertex X.m := (w, X.g.L.sign x)
+  have hroot := _root_.Lane_q_s06_loads.keyBall6_contains_same_bin X gr (X.g.L.key x) hx
+  apply typeBaseScope_subset_ball X (w, .interior) (X.evenType x)
+  · have hkey : (X.evenType x).key = X.g.L.key x := by
+      unfold Ctx6.evenType makeType6
+      split_ifs <;> rfl
+    rw [hkey]
+    exact keyBall_mono X (w, .interior) (by omega) hroot
+  · intro ℓ hℓ
+    have hscope := _root_.Lane_q_s06_loads.evenType_obs_subset_bad3Scope X gr x hx rfl hℓ
+    exact (Finset.mem_product.mp hscope).1
+
+theorem descBaseScope_subset_ball (w : X.Bin) (s : X.State)
+    (hw : (X.g.L.stKey s).1 = w) (D : Finset (Fin X.T × X.Ty)) (hD : D ∈ X.absDescs s) :
+    descBaseScope X s D ⊆ X.binsOf (Lane_q_s06_loads.keyBall6 X (w, .interior) 5) := by
+  let root : X.Key := (w, .interior)
+  let gr : X.Bin × CubeVertex X.m := (w, X.g.L.stSign s)
+  have hs1 := _root_.Lane_q_s06_loads.keyBall6_contains_same_bin X gr (X.g.L.stKey s) hw
+  intro u hu
+  rcases Finset.mem_union.mp hu with hu | hu
+  · obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hu
+    exact Finset.mem_image.mpr ⟨k,
+      _root_.Lane_q_s06_loads.keyBall6_extend_C X root (X.g.L.stKey s) k 4
+        (keyBall_mono X root (by omega) hs1) hk, rfl⟩
+  · obtain ⟨e, he, hu⟩ := Finset.mem_biUnion.mp hu
+    obtain ⟨a, ha, htype⟩ := _root_.Lane_q_s06_loads.absDesc_type_mem_stNbr X s D hD e he
+    have hka : X.g.L.stKey a ∈ X.C (X.g.L.stKey s) := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ _, _root_.Lane_q_s06_loads.ctx6_stNbr_key_adjacent X s a ha⟩
+    have ha2 := _root_.Lane_q_s06_loads.keyBall6_extend_C X root
+      (X.g.L.stKey s) (X.g.L.stKey a) 1 hs1 hka
+    apply typeBaseScope_subset_ball X root e.2 ?_ ?_ hu
+    · have hkey : (X.stType a).key = X.g.L.stKey a := by
+        unfold Ctx6.stType ChunkLayout6.stType makeType6
+        split_ifs <;> rfl
+      rw [htype, hkey]
+      exact keyBall_mono X root (show 2 ≤ 4 by omega) ha2
+    · intro ℓ hℓ
+      have hscope := _root_.Lane_q_s06_loads.stType_obs_subset_bad3Scope X gr s a ha hw rfl
+        (by simpa [htype] using hℓ)
+      exact (Finset.mem_product.mp hscope).1
+
+/-- All three coarse alarms are confined to a fixed grid neighbourhood. -/
+theorem bad2BaseScope_subset_ball (w : X.Bin) :
+    bad2BaseScope X w ⊆ X.binsOf (Lane_q_s06_loads.keyBall6 X (w, .interior) 5) := by
+  let root : X.Key := (w, .interior)
+  intro u hu
+  rcases Finset.mem_union.mp hu with hu | hu
+  · rcases Finset.mem_union.mp hu with hu | hu
+    · obtain ⟨x, hx, hu⟩ := Finset.mem_biUnion.mp hu
+      obtain ⟨h, hh, hu⟩ := Finset.mem_biUnion.mp hu
+      have hxw := (Finset.mem_filter.mp hx).2
+      let gr : X.Bin × CubeVertex X.m := (w, X.g.L.sign x)
+      have hx1 := _root_.Lane_q_s06_loads.keyBall6_contains_same_bin X gr (X.g.L.key x) hxw
+      have hh2 := _root_.Lane_q_s06_loads.keyBall6_extend_C X root (X.g.L.key x) h 1 hx1 hh
+      obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hu
+      have hk3 := _root_.Lane_q_s06_loads.keyBall6_extend_C X root h k 2 hh2 hk
+      exact Finset.mem_image.mpr ⟨k, keyBall_mono X root (by omega) hk3, rfl⟩
+    · obtain ⟨x, hx, hu⟩ := Finset.mem_biUnion.mp hu
+      exact evenTypeBaseScope_subset_ball X w x (Finset.mem_filter.mp hx).2.2 hu
+  · obtain ⟨s, hs, hu⟩ := Finset.mem_biUnion.mp hu
+    obtain ⟨D, hD, hu⟩ := Finset.mem_biUnion.mp hu
+    exact descBaseScope_subset_ball X w s (Finset.mem_filter.mp hs).2 D hD hu
+
+theorem touchingCoarse_subset_ball (u : X.Bin) :
+    touchingCoarse X {u} ⊆ X.binsOf (Lane_q_s06_loads.keyBall6 X (u, .interior) 6) := by
+  intro w hw
+  obtain ⟨v, hv, hvscope⟩ := Finset.not_disjoint_iff.mp (Finset.mem_filter.mp hw).2
+  have hvu : v = u := Finset.mem_singleton.mp hv
+  subst v
+  obtain ⟨k, hk, hku⟩ := Finset.mem_image.mp (bad2BaseScope_subset_ball X w hvscope)
+  have hback := _root_.Lane_q_s06_loads.keyBall6_symm X 5 (w, .interior) k hk
+  let gr : X.Bin × CubeVertex X.m := (u, fun _ => false)
+  have hk1 := _root_.Lane_q_s06_loads.keyBall6_contains_same_bin X gr k hku
+  have hw6 := _root_.Lane_q_s06_loads.keyBall6_concat X 1 5
+    (u, .interior) k (w, .interior) hk1 hback
+  exact Finset.mem_image.mpr ⟨(w, .interior), hw6, rfl⟩
+
+theorem touchingCoarse_singleton_card_le (u : X.Bin) :
+    (touchingCoarse X {u}).card ≤ 602 ^ 6 := by
+  calc
+    _ ≤ (X.binsOf (Lane_q_s06_loads.keyBall6 X (u, .interior) 6)).card :=
+      Finset.card_le_card (touchingCoarse_subset_ball X u)
+    _ ≤ (Lane_q_s06_loads.keyBall6 X (u, .interior) 6).card := Finset.card_image_le
+    _ ≤ 602 ^ 6 := Lane_q_s06_loads.keyBall6_card_le X (u, .interior) 6
+
+theorem touchingCoarse_card_le (U : Finset X.Bin) :
+    (touchingCoarse X U).card ≤ U.card * 602 ^ 6 := by
+  have hsub : touchingCoarse X U ⊆ U.biUnion (fun u => touchingCoarse X {u}) := by
+    intro w hw
+    obtain ⟨u, hu, huscope⟩ := Finset.not_disjoint_iff.mp (Finset.mem_filter.mp hw).2
+    exact Finset.mem_biUnion.mpr ⟨u, hu, Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+      Finset.not_disjoint_iff.mpr ⟨u, Finset.mem_singleton_self _, huscope⟩⟩⟩
+  calc
+    _ ≤ (U.biUnion (fun u => touchingCoarse X {u})).card := Finset.card_le_card hsub
+    _ ≤ ∑ u ∈ U, (touchingCoarse X {u}).card := Finset.card_biUnion_le
+    _ ≤ ∑ _u ∈ U, 602 ^ 6 := Finset.sum_le_sum (fun u _ => touchingCoarse_singleton_card_le X u)
+    _ = _ := by simp
+
+/-- Restricting a cube vertex to a coordinate block preserves its count of ones on that block. -/
+theorem boolWeight_restrict_eq (A : Finset (Fin n)) (x : CubeVertex n) :
+    Lane_q_s06_front.boolWeight (fun a : {a : Fin n // a ∈ A} => x a.1) =
+      (A.filter fun a => x a = true).card := by
+  classical
+  symm
+  apply Finset.card_bij (fun a ha => ⟨a, (Finset.mem_filter.mp ha).1⟩)
+  · intro a ha
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp ha).2⟩
+  · intro a ha b hb hab
+    exact congrArg Subtype.val hab
+  · intro a ha
+    exact ⟨a.1, Finset.mem_filter.mpr ⟨a.2, (Finset.mem_filter.mp ha).2⟩, rfl⟩
+
+/-- Independent coarse blocks give the product of the individual bin-probability caps. -/
+theorem coarseBin_fiber_fraction_le (L : ChunkLayout6 n) (w : BinVector6 n) :
+    ((Finset.univ.filter fun x : CubeVertex n => L.coarseBin x = w).card : ℝ) /
+      (2 : ℝ) ^ n ≤ (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount := by
+  classical
+  let Coord (i : Fin coarseChunkCount) := {a : Fin n // a ∈ L.coarseChunks i}
+  let events (i : Fin coarseChunkCount) : Finset (Coord i → Bool) :=
+    Finset.univ.filter (fun f => L.bin i (Lane_q_s06_front.boolWeight f) = w i)
+  have hCoordCard (i : Fin coarseChunkCount) :
+      Fintype.card (Coord i) = (L.coarseChunks i).card := by
+    simp [Coord, Fintype.card_coe]
+  have hWeightBound (i : Fin coarseChunkCount) (f : Coord i → Bool) :
+      Lane_q_s06_front.boolWeight f ≤ (L.coarseChunks i).card := by
+    calc
+      _ ≤ Fintype.card (Coord i) := Finset.card_filter_le _ _
+      _ = _ := hCoordCard i
+  have hLayer (i : Fin coarseChunkCount) (q : ℕ) :
+      (Finset.univ.filter fun f : Coord i → Bool => Lane_q_s06_front.boolWeight f = q).card =
+        Nat.choose (L.coarseChunks i).card q := by
+    calc
+      _ = Fintype.card {f : Coord i → Bool // Lane_q_s06_front.boolWeight f = q} := by
+        symm
+        exact Fintype.card_subtype _
+      _ = Nat.choose (Fintype.card (Coord i)) q :=
+        Lane_q_s06_front.boolWeightLayerCard (Coord i) q
+      _ = _ := by rw [hCoordCard]
+  have hLocal (i : Fin coarseChunkCount) :
+      ((events i).card : ℝ) ≤
+        (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) * (2 : ℝ) ^ (L.coarseChunks i).card := by
+    let layer (q : ℕ) : Finset (Coord i → Bool) :=
+      (Finset.univ.filter fun f => Lane_q_s06_front.boolWeight f = q).filter
+        (fun _ => L.bin i q = w i)
+    have hUnion : events i = (Finset.range ((L.coarseChunks i).card + 1)).biUnion layer := by
+      ext f
+      simp only [events, layer, Finset.mem_filter, Finset.mem_univ, true_and,
+        Finset.mem_biUnion, Finset.mem_range]
+      constructor
+      · intro hf
+        exact ⟨Lane_q_s06_front.boolWeight f, Nat.lt_succ_of_le (hWeightBound i f), rfl, hf⟩
+      · rintro ⟨q, hq, hweight, hbin⟩
+        simpa [hweight] using hbin
+    have hLayerCard (q : ℕ) : (layer q).card =
+        if L.bin i q = w i then Nat.choose (L.coarseChunks i).card q else 0 := by
+      by_cases hq : L.bin i q = w i <;> simp [layer, hq, hLayer]
+    have hcardNat : (events i).card ≤
+        ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), (layer q).card := by
+      rw [hUnion]
+      exact Finset.card_biUnion_le
+    have hcardReal : ((events i).card : ℝ) ≤
+        ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), ((layer q).card : ℝ) := by
+      exact_mod_cast hcardNat
+    calc
+      _ ≤ ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1), ((layer q).card : ℝ) := hcardReal
+      _ = ∑ q ∈ Finset.range ((L.coarseChunks i).card + 1),
+          if L.bin i q = w i then (Nat.choose (L.coarseChunks i).card q : ℝ) else 0 := by
+        simp only [hLayerCard, Nat.cast_ite, Nat.cast_zero]
+      _ ≤ _ := L.bin_probability i (w i)
+  have hProduct := Lane_q_s06_front.cubeBlockEventFraction_le L.coarseChunks
+    L.chunks_disjoint.1 Finset.univ events (2 * (n : ℝ) ^ (-(1 / 25 : ℝ)))
+    (by positivity) (fun i _ => hLocal i)
+  have hWeightEq (i : Fin coarseChunkCount) (x : CubeVertex n) :
+      Lane_q_s06_front.boolWeight (fun a : Coord i => x a.1) = L.coarseCount x i :=
+    boolWeight_restrict_eq (L.coarseChunks i) x
+  have hEvent : (Finset.univ.filter fun x : CubeVertex n =>
+      ∀ i ∈ (Finset.univ : Finset (Fin coarseChunkCount)),
+        (fun a : Coord i => x a.1) ∈ events i) =
+      Finset.univ.filter (fun x : CubeVertex n => L.coarseBin x = w) := by
+    ext x
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, true_implies, events, hWeightEq]
+    change (∀ i : Fin coarseChunkCount, L.coarseBin x i = w i) ↔ L.coarseBin x = w
+    constructor
+    · intro hx
+      funext i
+      exact hx i
+    · intro hx i
+      exact congrFun hx i
+  rw [hEvent] at hProduct
+  simpa only [Finset.card_univ, Fintype.card_fin] using hProduct
+
+/-- The near relation required by the base moments: equal coarse-bin vectors. -/
+def sameBinNear (L : ChunkLayout6 n) (u : CubeVertex n) : Finset (CubeVertex n) :=
+  Finset.univ.filter (fun u' => L.coarseBin u' = L.coarseBin u)
+
+theorem sameBinNear_card_le (L : ChunkLayout6 n) (u : CubeVertex n) :
+    ((sameBinNear L u).card : ℝ) ≤
+      (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * Fintype.card (CubeVertex n) := by
+  have h := coarseBin_fiber_fraction_le L (L.coarseBin u)
+  have hscaled := (div_le_iff₀ (by positivity : 0 < (2 : ℝ) ^ n)).mp h
+  simpa [sameBinNear, OAI.HypercubeRamsey.card_cubeVertex] using hscaled
+
+/-- The repeated-bin contribution, including its Step 1 cap, vanishes in the n-th moment. -/
+theorem sameBinNear_moment_eventually_small :
+    ∀ᶠ n : ℕ in Filter.atTop,
+      (n : ℝ) * (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * (n : ℝ) ^ d₁ ≤ 1 := by
+  have hDecay : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (-((11 : ℝ) - d₁)))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num [d₁] : (0 : ℝ) < 11 - d₁)).comp
+      tendsto_natCast_atTop_atTop
+  have hlimit : Filter.Tendsto (fun n : ℕ => (2 : ℝ) ^ coarseChunkCount *
+      (n : ℝ) ^ (-((11 : ℝ) - d₁))) Filter.atTop (nhds 0) := by
+    simpa using hDecay.const_mul ((2 : ℝ) ^ coarseChunkCount)
+  filter_upwards [Filter.eventually_ge_atTop 1,
+    hlimit.eventually (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1))] with n hn hsmall
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hPow : ((n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount = (n : ℝ) ^ (-12 : ℝ) := by
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hnPos.le]
+    congr 1
+    norm_num [coarseChunkCount]
+  have hEq : (n : ℝ) * (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount * (n : ℝ) ^ d₁ =
+      (2 : ℝ) ^ coarseChunkCount * (n : ℝ) ^ (-((11 : ℝ) - d₁)) := by
+    rw [mul_pow, hPow]
+    calc
+      _ = (2 : ℝ) ^ coarseChunkCount *
+          ((n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (-12 : ℝ) * (n : ℝ) ^ d₁) := by
+        rw [Real.rpow_one]
+        ring
+      _ = _ := by
+        rw [← Real.rpow_add hnPos, ← Real.rpow_add hnPos]
+        congr 2
+        ring
+  rw [hEq]
+  exact hsmall.le
+
+/-- The interior odd summand used in the coarse-stage scattered moments. -/
+def interiorBaseLoadTerm (b : X.Base) (u : CubeVertex n) (y : Fin N) : ℝ :=
+  if ¬ IsEvenRole u ∧ ¬ X.g.L.boundary u then baseLoadTerm X b u y else 0
+
+theorem interiorBaseLoadTerm_nonneg (b : X.Base) (u : CubeVertex n) (y : Fin N) :
+    0 ≤ interiorBaseLoadTerm X b u y := by
+  unfold interiorBaseLoadTerm
+  split_ifs
+  · exact baseLoadTerm_nonneg X b u y
+  · exact le_rfl
+
+theorem interiorBaseLoadTerm_cap (b : X.Base) (u : CubeVertex n) (y : Fin N) :
+    interiorBaseLoadTerm X b u y ≤ (n : ℝ) ^ d₁ := by
+  unfold interiorBaseLoadTerm
+  split_ifs
+  · exact baseLoadTerm_cap X b u y
+  · exact Real.rpow_nonneg (Nat.cast_nonneg _) _
+
+theorem interiorBaseLoadTerm_le_step1 (b : X.Base) (u : CubeVertex n) (y : Fin N) :
+    interiorBaseLoadTerm X b u y ≤
+      if X.Step1OK b (X.g.L.coarseBin u, .interior) then
+        (N : ℝ) * (X.hidPost b (X.g.L.coarseBin u, .interior)).w y else 0 := by
+  have hright : 0 ≤ (if X.Step1OK b (X.g.L.coarseBin u, .interior) then
+      (N : ℝ) * (X.hidPost b (X.g.L.coarseBin u, .interior)).w y else 0) := by
+    split_ifs
+    · exact mul_nonneg (Nat.cast_nonneg _) ((X.hidPost b _).nonneg y)
+    · exact le_rfl
+  by_cases hu : ¬ IsEvenRole u ∧ ¬ X.g.L.boundary u
+  · have hkey : (X.tgt (X.g.L.stateOf u)).1 = (X.g.L.coarseBin u, .interior) := by
+      simp only [Ctx6.tgt, ChunkLayout6.stTarget]
+      rw [X.facts.key_eq, ChunkLayout6.key, ite_eq_right hu.2]
+    simp only [interiorBaseLoadTerm, hu, baseLoadTerm, hkey]
+    by_cases hl : X.stMode (X.g.L.stateOf u) = .low
+    · simp [hl]
+    · simpa [hl] using hright
+  · simpa [interiorBaseLoadTerm, hu] using hright
+
+/-- Fixed-radius touching costs are small for all sufficiently large dimensions. -/
+theorem coarse_touch_charge_eventually_small :
+    ∀ᶠ n : ℕ in atTop,
+      (n : ℝ) ^ (-(δ₁ / 8)) ≤ 1 / 2 ∧
+        2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ) ≤ Real.log 2 := by
+  have hlim : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(δ₁ / 8))) atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num [δ₁] : (0 : ℝ) < δ₁ / 8)).comp
+      tendsto_natCast_atTop_atTop
+  have hlim' : Tendsto (fun n : ℕ =>
+      2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ)) atTop (nhds 0) := by
+    simpa only [mul_zero, zero_mul] using (hlim.const_mul 2).mul_const ((602 ^ 6 : ℕ) : ℝ)
+  filter_upwards [hlim.eventually (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1 / 2)),
+    hlim'.eventually (eventually_lt_nhds (Real.log_pos (by norm_num : (1 : ℝ) < 2)))]
+    with n hhalf hsmall
+  exact ⟨hhalf.le, hsmall.le⟩
+
+/-- The separated interior product moment under coarse avoidance. -/
+theorem interiorBaseLoadTerm_product_stage2_le {R : Type*} [Fintype R] [DecidableEq R]
+    (v : Fin N) (hv : v ∈ X.par.S₀) (hK : 0 ≤ K) (s : Finset R) (u : R → CubeVertex n)
+    (hsep : ∀ i ∈ s, ∀ j ∈ s, i ≠ j → X.g.L.coarseBin (u i) ≠ X.g.L.coarseBin (u j))
+    (y : Fin N)
+    (cert : AvoidCert6 (X.coarseLaw v).w (X.bad2Set v) ((n : ℝ) ^ (-(δ₁ / 8))))
+    (hhalf : (n : ℝ) ^ (-(δ₁ / 8)) ≤ 1 / 2)
+    (hsmall : 2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ) ≤ Real.log 2) :
+    (X.stage2Law v).expect (fun c => ∏ i ∈ s, interiorBaseLoadTerm X (v,c) (u i) y) ≤
+      (2 : ℝ) ^ s.card * (20 * K) ^ s.card := by
+  let U := s.image (fun i => X.g.L.coarseBin (u i))
+  let T := touchingCoarse X U
+  have hcard : T.card ≤ s.card * 602 ^ 6 :=
+    (touchingCoarse_card_le X U).trans (Nat.mul_le_mul_right _ Finset.card_image_le)
+  have hcharge : (∏ w ∈ T, (1 - cert.x w))⁻¹ ≤ (2 : ℝ) ^ s.card := by
+    rw [← Finset.prod_inv_distrib]
+    exact _root_.Lane_q_s06_loads.avoidance_charge_product_le_two_pow T cert.x
+      ((n : ℝ) ^ (-(δ₁ / 8))) s.card (602 ^ 6)
+      (Real.rpow_nonneg (Nat.cast_nonneg _) _) hhalf
+      (fun w => ⟨cert.x_nonneg w, cert.x_le w⟩) hcard hsmall
+  have hraw := interior_step1_product_stage2_le X v hv s
+    (fun i => (X.g.L.coarseBin (u i), .interior)) (fun _ => rfl) hsep y cert
+    (by linarith : (n : ℝ) ^ (-(δ₁ / 8)) < 1)
+  calc
+    _ ≤ (X.stage2Law v).expect (fun c => ∏ i ∈ s,
+        if X.Step1OK (v,c) (X.g.L.coarseBin (u i), .interior) then
+          (N : ℝ) * (X.hidPost (v,c) (X.g.L.coarseBin (u i), .interior)).w y else 0) := by
+      apply FinProb.expect_mono
+      intro c
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact interiorBaseLoadTerm_nonneg X (v,c) (u i) y
+      · intro i hi
+        exact interiorBaseLoadTerm_le_step1 X (v,c) (u i) y
+    _ ≤ (∏ w ∈ T, (1 - cert.x w))⁻¹ * (20 * K) ^ s.card := hraw
+    _ ≤ _ := mul_le_mul_of_nonneg_right hcharge
+      (pow_nonneg (by positivity : 0 ≤ 20 * K) _)
+
+/-- Full-cube normalization of the interior odd contribution. -/
+def interiorBaseAvg (b : X.Base) (y : Fin N) : ℝ :=
+  (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, interiorBaseLoadTerm X b u y
+
+/-- Scattered moments and the label union bound for interior coarse loads. -/
+theorem interiorBaseAvg_tail (v : Fin N) (hv : v ∈ X.par.S₀) (hK : 0 ≤ K)
+    (hn : 10 ≤ n) (hN : (N : ℝ) ≤ (n : ℝ) * 2 ^ n)
+    (cert : AvoidCert6 (X.coarseLaw v).w (X.bad2Set v) ((n : ℝ) ^ (-(δ₁ / 8))))
+    (hhalf : (n : ℝ) ^ (-(δ₁ / 8)) ≤ 1 / 2)
+    (hcharge : 2 * (n : ℝ) ^ (-(δ₁ / 8)) * ((602 ^ 6 : ℕ) : ℝ) ≤ Real.log 2)
+    (hsmall : (n : ℝ) * (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount *
+      (n : ℝ) ^ d₁ ≤ 1) :
+    (X.stage2Law v).pr (fun c => ∃ y, 8 * (20 * K + 1) < interiorBaseAvg X (v,c) y) ≤
+      1 / 100 := by
+  let P := X.stage2Law v
+  let Z : CubeVertex n → Fin N → X.Coarse → ℝ := fun u y c =>
+    interiorBaseLoadTerm X (v,c) u y
+  let d : CubeVertex n → Fin N → ℝ := fun _ _ => 20 * K
+  let f : ℝ := (2 * (n : ℝ) ^ (-(1 / 25 : ℝ))) ^ coarseChunkCount
+  have hmean : ∀ y : Fin N, (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, d u y ≤ 20 * K := by
+    intro y
+    simp only [d, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    rw [← mul_assoc, inv_mul_cancel₀ (by positivity : (Fintype.card (CubeVertex n) : ℝ) ≠ 0), one_mul]
+  have hjoint : ∀ y (m : ℕ), m ≤ n → ∀ s : Fin m → CubeVertex n,
+      (∀ i j : Fin m, j < i → s i ∉ sameBinNear X.g.L (s j)) →
+        ∑ c ∈ (Finset.univ : Finset X.Coarse), P.w c * ∏ i, Z (s i) y c ≤
+          (2 : ℝ) ^ m * ∏ i, d (s i) y := by
+    intro y m hm s hsep
+    have hbins : ∀ i ∈ (Finset.univ : Finset (Fin m)), ∀ j ∈ Finset.univ, i ≠ j →
+        X.g.L.coarseBin (s i) ≠ X.g.L.coarseBin (s j) := by
+      intro i hi j hj hij
+      rcases lt_or_gt_of_ne hij with hij | hji
+      · have hnot := hsep j i hij
+        have hne : X.g.L.coarseBin (s j) ≠ X.g.L.coarseBin (s i) := by
+          simpa [sameBinNear] using hnot
+        exact hne.symm
+      · simpa [sameBinNear] using hsep i j hji
+    have hp := interiorBaseLoadTerm_product_stage2_le X v hv hK Finset.univ s hbins y
+      cert hhalf hcharge
+    simpa [P, Z, d, FinProb.expect] using hp
+  have ht := scatteredMoments_union_labels P Finset.univ Z
+    (fun u y c => interiorBaseLoadTerm_nonneg X (v,c) u y)
+    ((n : ℝ) ^ d₁) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+    (fun u y c _ => interiorBaseLoadTerm_cap X (v,c) u y)
+    (sameBinNear X.g.L) (fun u => by simp [sameBinNear]) f (by positivity)
+    (sameBinNear_card_le X.g.L) n (by omega) 2 (20 * K) (by norm_num) (by positivity)
+    d (fun _ _ => by dsimp [d]; positivity) hmean hjoint hsmall
+    (by simpa only [Fintype.card_fin] using hN)
+  have ht' : P.pr (fun c => ∃ y, 8 * (20 * K + 1) < interiorBaseAvg X (v,c) y) ≤
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    simpa [FinProb.pr, interiorBaseAvg, Z, show (4 : ℝ) * 2 = 8 by norm_num] using ht
+  exact ht'.trans (Lane_q_s06_loads.nat_two_pow_union_tail hn)
+
+/-- Splitting interior and boundary roles costs only the deterministic boundary bound. -/
+theorem odd_baseLoadTerm_full_average_le (b : X.Base) (y : Fin N) (hn : 0 < n) :
+    (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+      (∑ u : CubeVertex n, if ¬ IsEvenRole u then baseLoadTerm X b u y else 0) ≤
+        interiorBaseAvg X b y + (n : ℝ) ^ (-(1 / 20 : ℝ) + d₁) := by
+  have hpoint (u : CubeVertex n) :
+      (if ¬ IsEvenRole u then baseLoadTerm X b u y else 0) ≤
+        interiorBaseLoadTerm X b u y +
+          (if X.g.L.boundary u then baseLoadTerm X b u y else 0) := by
+    by_cases ho : IsEvenRole u <;> by_cases hb : X.g.L.boundary u
+    · simp [ho, hb, interiorBaseLoadTerm, baseLoadTerm_nonneg X b u y]
+    · simp [ho, hb, interiorBaseLoadTerm]
+    · simp [ho, hb, interiorBaseLoadTerm]
+    · simp [ho, hb, interiorBaseLoadTerm]
+  calc
+    _ ≤ (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+        ∑ u : CubeVertex n, (interiorBaseLoadTerm X b u y +
+          (if X.g.L.boundary u then baseLoadTerm X b u y else 0)) :=
+      mul_le_mul_of_nonneg_left (Finset.sum_le_sum (fun u _ => hpoint u)) (by positivity)
+    _ = interiorBaseAvg X b y + (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+        ∑ u : CubeVertex n, (if X.g.L.boundary u then baseLoadTerm X b u y else 0) := by
+      rw [Finset.sum_add_distrib, mul_add]
+      rfl
+    _ ≤ _ := by
+      have hb : (Fintype.card (CubeVertex n) : ℝ)⁻¹ *
+          (∑ u : CubeVertex n, if X.g.L.boundary u then baseLoadTerm X b u y else 0) ≤
+            (n : ℝ) ^ (-(1 / 20 : ℝ) + d₁) := by
+        simpa [OAI.HypercubeRamsey.card_cubeVertex] using boundary_baseLoadTerm_average_le X b y hn
+      exact add_le_add (le_refl _) hb
+
 
 end
 end HypercubeRamsey.Lane_sol_s06_loadA

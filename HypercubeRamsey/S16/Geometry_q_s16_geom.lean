@@ -296,4 +296,22 @@ theorem rank_eq_of_same_batch {r s q : ℕ}
     _ = s % q + q * (s / q) := by rw [hmod, hdiv]
     _ = s := Nat.mod_add_div s q
 
+/-- Any fixed positive power of `log n` is eventually bounded by any
+positive multiple of `n`. -/
+theorem eventually_log_rpow_le_linear {s ε : ℝ} (hs : 0 < s) (hε : 0 < ε) :
+    ∀ᶠ n : ℕ in Filter.atTop,
+      Real.rpow (Real.log (n : ℝ)) s ≤ ε * (n : ℝ) := by
+  have hreal : (fun x : ℝ => Real.rpow (Real.log x) s) =o[Filter.atTop] fun x => x := by
+    simpa using (isLittleO_log_rpow_rpow_atTop s (by norm_num : (0 : ℝ) < 1))
+  have hnat : (fun n : ℕ => Real.rpow (Real.log (n : ℝ)) s) =o[Filter.atTop]
+      fun n => (n : ℝ) := hreal.comp_tendsto tendsto_natCast_atTop_atTop
+  have hscaled := hnat.const_mul_right hε.ne'
+  filter_upwards [hscaled.eventuallyLE, Filter.eventually_ge_atTop (2 : ℕ)] with n h hn
+  have hn' : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hn'
+  have hleft : 0 ≤ Real.rpow (Real.log (n : ℝ)) s := Real.rpow_nonneg hlog _
+  have hright : 0 ≤ ε * (n : ℝ) := mul_nonneg hε.le (Nat.cast_nonneg _)
+  rw [Real.norm_of_nonneg hleft, Real.norm_of_nonneg hright] at h
+  exact h
+
 end HypercubeRamsey.Lane_q_s16_geom

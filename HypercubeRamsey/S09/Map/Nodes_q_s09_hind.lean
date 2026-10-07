@@ -1124,6 +1124,74 @@ private theorem list_split_first_match9 {α : Type*} (f : α → ℕ) (r : ℕ) 
             exact hhead
           · exact hpre z hzpre
 
+private inductive ListRadialUnit9 {α : Type*} (f : α → ℕ) : List α → Prop
+  | nil : ListRadialUnit9 f []
+  | one (x : α) : ListRadialUnit9 f [x]
+  | cons {x y : α} {tail : List α} (hxy : Nat.dist (f x) (f y) ≤ 1)
+      (htail : ListRadialUnit9 f (y :: tail)) : ListRadialUnit9 f (x :: y :: tail)
+
+private theorem heightPath9_radialUnitList9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : HeightState9 P hc n → ℕ)
+    (hstep : ∀ x y, heightStep9 bad x y → Nat.dist (f x) (f y) ≤ 1)
+    (hp : HeightPath9 (heightStep9 bad) l start) : ListRadialUnit9 f l := by
+  induction hp with
+  | singleton x => exact ListRadialUnit9.one x
+  | @cons head next rest start hstep' htail ih =>
+      have hxy : Nat.dist (f head) (f next) ≤ 1 := by
+        simpa [Nat.dist_comm] using hstep next head hstep'
+      exact ListRadialUnit9.cons hxy ih
+
+private theorem listRadialUnit9_prefix {α : Type*} {f : α → ℕ} {pre post : List α}
+    (h : ListRadialUnit9 f (pre ++ post)) : ListRadialUnit9 f pre := by
+  induction pre generalizing post with
+  | nil => exact ListRadialUnit9.nil
+  | cons head tail ih =>
+      cases tail with
+      | nil => exact ListRadialUnit9.one head
+      | cons next rest =>
+          have h' : ListRadialUnit9 f (head :: next :: (rest ++ post)) := by
+            simpa [List.append_assoc] using h
+          cases h' with
+          | cons hstep htail =>
+              exact ListRadialUnit9.cons hstep (by simpa [List.append_assoc] using ih htail)
+
+private theorem listRadialUnit9_lower_bound {α : Type*} {f : α → ℕ} {r : ℕ}
+    {l : List α} (hunit : ListRadialUnit9 f l)
+    (hno : ∀ z ∈ l, f z ≠ r)
+    (hstart : ∀ x, l.head? = some x → r ≤ f x) :
+    ∀ z ∈ l, r ≤ f z := by
+  induction hunit with
+  | nil => simp
+  | one x =>
+      intro z hz
+      have hzEq : z = x := by simpa using hz
+      subst z
+      exact hstart x (by simp)
+  | @cons x y tail hxy htail ih =>
+      have hfx : r ≤ f x := hstart x (by simp)
+      have hfxne : f x ≠ r := hno x (by simp)
+      have hfxgt : r < f x := by omega
+      have hyge : r ≤ f y := by
+        by_contra hy
+        have hylt : f y < r := Nat.lt_of_not_ge hy
+        have hyx : f y ≤ f x := by omega
+        rw [Nat.dist_eq_sub_of_le_right hyx] at hxy
+        omega
+      have hnoTail : ∀ z ∈ y :: tail, f z ≠ r := by
+        intro z hz
+        exact hno z (List.mem_cons_of_mem _ hz)
+      have hstartTail : ∀ z, (y :: tail).head? = some z → r ≤ f z := by
+        intro z hz
+        have hzEq : z = y := by simpa using hz.symm
+        subst z
+        exact hyge
+      have hallTail := ih hnoTail hstartTail
+      intro z hz
+      rcases List.mem_cons.mp hz with rfl | hzTail
+      · exact hfx
+      · exact hallTail z hzTail
+
 private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root x y : HeightState9 P hc n) :
     Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ heightMetric9 x y := by

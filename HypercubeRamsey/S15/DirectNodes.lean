@@ -1,5 +1,6 @@
 import HypercubeRamsey.S15.Defs
 import HypercubeRamsey.S15.DirectNodes_q_s15_direct
+import HypercubeRamsey.S15.DirectNodes_sol_s15_cross
 
 set_option maxHeartbeats 1000000
 
@@ -70,7 +71,9 @@ def DirectCertificateClaim (κ : CConsts) (T : Stage) : Prop :=
 theorem high_direct_crossing_filters (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) :
     DirectCrossingClaim κ T ∧ ClusterCrossingClaim κ T := by
-  sorry
+  constructor
+  · exact Lane_sol_s15_cross.direct_crossing_bound κ hκ T hDeep
+  · sorry
 
 /-- L15.1b: bulk lower-tail estimate, using the crossing-filter stage. -/
 theorem high_direct_bulk_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

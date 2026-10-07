@@ -1,4 +1,6 @@
 import HypercubeRamsey.S06.Defs
+import HypercubeRamsey.S06.Experiment
+import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.Framework.FinProbLemmas
 
@@ -6,6 +8,231 @@ namespace HypercubeRamsey.Lane_q_s06_stages
 
 open Classical
 open HypercubeRamsey.S06
+
+theorem tagWeight_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (S : Finset X.HKey)
+    (i : X.ι) (Z Z' : X.Hid) (hS : S ⊆ β.obs)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.tagWeight (base, Z) β S i = X.tagWeight (base, Z') β S i := by
+  unfold Ctx6.tagWeight
+  have hprod : (∏ ℓ ∈ S,
+      safeRatio6 ((X.hidPostRep base ℓ.1 β.key i).w (Z ℓ))
+        ((X.hidPostDel base ℓ.1 β.key).w (Z ℓ))) =
+      ∏ ℓ ∈ S,
+        safeRatio6 ((X.hidPostRep base ℓ.1 β.key i).w (Z' ℓ))
+          ((X.hidPostDel base ℓ.1 β.key).w (Z' ℓ)) := by
+    apply Finset.prod_congr rfl
+    intro ℓ hℓ
+    rw [hZ ℓ (hS hℓ)]
+  rw [hprod]
+
+theorem tagMass_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (S : Finset X.HKey)
+    (Z Z' : X.Hid) (hS : S ⊆ β.obs) (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.tagMass (base, Z) β S = X.tagMass (base, Z') β S := by
+  unfold Ctx6.tagMass
+  apply Finset.sum_congr rfl
+  intro i hi
+  exact tagWeight_eq_of_agree X base β S i Z Z' hS hZ
+
+theorem step2Tests_iff_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.Step2Tests (base, Z) β ↔ X.Step2Tests (base, Z') β := by
+  have hfull : X.tagMass (base, Z) β β.obs = X.tagMass (base, Z') β β.obs :=
+    tagMass_eq_of_agree X base β β.obs Z Z' (by intro ℓ hℓ; exact hℓ) hZ
+  have hdel : ∀ ℓ ∈ β.obs,
+      X.tagMass (base, Z) β (β.obs.erase ℓ) =
+        X.tagMass (base, Z') β (β.obs.erase ℓ) := by
+    intro ℓ hℓ
+    apply tagMass_eq_of_agree X base β (β.obs.erase ℓ) Z Z'
+    · intro j hj
+      exact (Finset.mem_erase.mp hj).2
+    · exact hZ
+  unfold Ctx6.Step2Tests
+  rw [hfull]
+  constructor
+  · rintro ⟨hpos, hthr, hdel'⟩
+    refine ⟨hpos, hthr, ?_⟩
+    intro ℓ hℓ
+    rw [← hdel ℓ hℓ]
+    exact hdel' ℓ hℓ
+  · rintro ⟨hpos, hthr, hdel'⟩
+    refine ⟨hpos, hthr, ?_⟩
+    intro ℓ hℓ
+    rw [hdel ℓ hℓ]
+    exact hdel' ℓ hℓ
+
+theorem step2Fail_iff_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.Step2Fail (base, Z) β ↔ X.Step2Fail (base, Z') β := by
+  have htests := step2Tests_iff_of_agree X base β Z Z' hZ
+  have hprop : X.Step2Tests (base, Z) β = X.Step2Tests (base, Z') β := propext htests
+  simp only [Ctx6.Step2Fail, hprop]
+
+private theorem finprob_eq_of_weights_eq {Ω : Type*} [Fintype Ω]
+    {P Q : FinProb Ω} (hw : ∀ ω, P.w ω = Q.w ω) : P = Q := by
+  cases P with
+  | mk pw hp hs =>
+    cases Q with
+    | mk qw hq ht =>
+      have hpw : pw = qw := funext hw
+      subst qw
+      have hproof : hp = hq := Subsingleton.elim _ _
+      have hsum : hs = ht := Subsingleton.elim _ _
+      cases hproof
+      cases hsum
+      rfl
+
+theorem tagPost_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (S : Finset X.HKey)
+    (Z Z' : X.Hid) (hS : S ⊆ β.obs) (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.tagPost (base, Z) β S = X.tagPost (base, Z') β S := by
+  apply finprob_eq_of_weights_eq
+  intro i
+  change (normalize6 (X.tagWeight (base, Z) β S) X.i₀).w i =
+    (normalize6 (X.tagWeight (base, Z') β S) X.i₀).w i
+  have hfun : X.tagWeight (base, Z) β S = X.tagWeight (base, Z') β S := by
+    funext i
+    exact tagWeight_eq_of_agree X base β S i Z Z' hS hZ
+  rw [hfun]
+
+theorem labelLaw_eq_of_name_values
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (S : Finset X.Name) (i : X.ι)
+    (Z Z' : X.Hid)
+    (hval : ∀ nm ∈ S, X.varVal (base, Z) nm = X.varVal (base, Z') nm) :
+    X.labelLaw (base, Z) S i = X.labelLaw (base, Z') S i := by
+  have hreq : X.reqNbhd (base, Z) S = X.reqNbhd (base, Z') S := by
+    ext x
+    unfold Ctx6.reqNbhd
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor <;> intro h nm hnm
+    · rw [← hval nm hnm]
+      exact h nm hnm
+    · rw [hval nm hnm]
+      exact h nm hnm
+  unfold Ctx6.labelLaw
+  rw [hreq]
+
+theorem labelLaw_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (i : X.ι)
+    (Z Z' : X.Hid) (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.labelLaw (base, Z) (reqNames6 β) i = X.labelLaw (base, Z') (reqNames6 β) i := by
+  apply labelLaw_eq_of_name_values X base (reqNames6 β) i Z Z'
+  intro nm hnm
+  cases nm with
+  | par p => rfl
+  | hid ℓ =>
+    have hℓ : ℓ ∈ β.obs := by
+      by_cases hm : β.mode = .high
+      · simpa [reqNames6, hm] using hnm
+      · simpa [reqNames6, hm] using hnm
+    exact hZ ℓ hℓ
+
+theorem tupleLaw_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (β : X.Ty) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.tupleLaw (base, Z) β = X.tupleLaw (base, Z') β := by
+  have htag := tagPost_eq_of_agree X base β β.obs Z Z' (by intro ℓ hℓ; exact hℓ) hZ
+  have hlabel : ∀ i,
+      X.labelLaw (base, Z) (reqNames6 β) i = X.labelLaw (base, Z') (reqNames6 β) i := by
+    intro i
+    exact labelLaw_eq_of_agree X base β i Z Z' hZ
+  apply finprob_eq_of_weights_eq
+  intro tup
+  simp [Ctx6.tupleLaw, Ctx6.tupleLawOn, Ctx6.Tβ, FinProb.bind, FinProb.pi, htag, hlabel]
+
+theorem tupleRatio_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (baseA baseB : X.Base) (β : X.Ty)
+    (Zξ Zξ' Z Z' : X.Hid) (hξ : ∀ ℓ ∈ β.obs, Zξ ℓ = Zξ' ℓ)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) (refTag refTag' : FinProb X.ι)
+    (href : refTag = refTag') (drop : X.Name) (o : X.Tuple) :
+    X.tupleRatio (baseA, Zξ) (baseB, Z) β refTag drop o =
+      X.tupleRatio (baseA, Zξ') (baseB, Z') β refTag' drop o := by
+  have htag := tagPost_eq_of_agree X baseA β β.obs Zξ Zξ'
+    (by intro ℓ hℓ; exact hℓ) hξ
+  have hvalξ : ∀ nm ∈ reqNames6 β,
+      X.varVal (baseA, Zξ) nm = X.varVal (baseA, Zξ') nm := by
+    intro nm hnm
+    cases nm with
+    | par p => rfl
+    | hid ℓ =>
+      have hℓ : ℓ ∈ β.obs := by
+        by_cases hm : β.mode = .high
+        · simpa [reqNames6, hm] using hnm
+        · simpa [reqNames6, hm] using hnm
+      exact hξ ℓ hℓ
+  have hlabelξ : X.labelLaw (baseA, Zξ) (reqNames6 β) o.1 =
+      X.labelLaw (baseA, Zξ') (reqNames6 β) o.1 :=
+    labelLaw_eq_of_name_values X baseA (reqNames6 β) o.1 Zξ Zξ' hvalξ
+  have hval : ∀ nm ∈ reqNames6 β,
+      X.varVal (baseB, Z) nm = X.varVal (baseB, Z') nm := by
+    intro nm hnm
+    cases nm with
+    | par p => rfl
+    | hid ℓ =>
+      have hℓ : ℓ ∈ β.obs := by
+        by_cases hm : β.mode = .high
+        · simpa [reqNames6, hm] using hnm
+        · simpa [reqNames6, hm] using hnm
+      exact hZ ℓ hℓ
+  have hlabelDel : X.labelLaw (baseB, Z) ((reqNames6 β).erase drop) o.1 =
+      X.labelLaw (baseB, Z') ((reqNames6 β).erase drop) o.1 := by
+    apply labelLaw_eq_of_name_values X baseB ((reqNames6 β).erase drop) o.1 Z Z'
+    intro nm hnm
+    exact hval nm (Finset.mem_erase.mp hnm).2
+  have htagW : (X.Tβ (baseA, Zξ) β).w o.1 =
+      (X.Tβ (baseA, Zξ') β).w o.1 := by
+    exact congrArg (fun P : FinProb X.ι => P.w o.1) (by simpa [Ctx6.Tβ] using htag)
+  have hrefW : refTag.w o.1 = refTag'.w o.1 := congrArg (fun P : FinProb X.ι => P.w o.1) href
+  unfold Ctx6.tupleRatio
+  rw [htagW, hrefW, hlabelξ, hlabelDel]
+
+theorem lowLik_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (b : X.State) (ξ : Fin N)
+    (β : X.Ty) (o : X.Tuple) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.lowLik (base, Z) b ξ β o = X.lowLik (base, Z') b ξ β o := by
+  have hξ : ∀ ℓ ∈ β.obs,
+      (Function.update Z (X.tgt b) ξ) ℓ = (Function.update Z' (X.tgt b) ξ) ℓ := by
+    intro ℓ hℓ
+    by_cases hℓt : ℓ = X.tgt b <;> simp [hℓt, hZ ℓ hℓ]
+  have htag : X.TβDel (base, Z) β (X.tgt b) = X.TβDel (base, Z') β (X.tgt b) := by
+    simpa [Ctx6.TβDel] using tagPost_eq_of_agree X base β (β.obs.erase (X.tgt b))
+      Z Z' (Finset.erase_subset _ _) hZ
+  unfold Ctx6.lowLik
+  change X.tupleRatio (base, Function.update Z (X.tgt b) ξ) (base, Z) β
+      (X.TβDel (base, Z) β (X.tgt b)) (.hid (X.tgt b)) o =
+    X.tupleRatio (base, Function.update Z' (X.tgt b) ξ) (base, Z') β
+      (X.TβDel (base, Z') β (X.tgt b)) (.hid (X.tgt b)) o
+  exact tupleRatio_eq_of_agree X base base β
+    (Function.update Z (X.tgt b) ξ) (Function.update Z' (X.tgt b) ξ) Z Z'
+    hξ hZ _ _ htag (.hid (X.tgt b)) o
+
+theorem highLik_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (base : X.Base) (b : X.State) (ξ : Fin N)
+    (β : X.Ty) (o : X.Tuple) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ β.obs, Z ℓ = Z' ℓ) :
+    X.highLik (base, Z) b ξ β o = X.highLik (base, Z') b ξ β o := by
+  unfold Ctx6.highLik
+  change X.tupleRatio (X.withPar base (X.tgtName b) ξ, Z) (base, Z) β
+      (tagLaw6 M) (.par (X.tgtName b)) o =
+    X.tupleRatio (X.withPar base (X.tgtName b) ξ, Z') (base, Z') β
+      (tagLaw6 M) (.par (X.tgtName b)) o
+  exact tupleRatio_eq_of_agree X (X.withPar base (X.tgtName b) ξ) base β
+    Z Z' Z Z' hZ hZ (tagLaw6 M) (tagLaw6 M) rfl (.par (X.tgtName b)) o
 
 theorem finprob_pr_eq_expect_indicator {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (A : Ω → Prop) :

@@ -185,7 +185,7 @@ private theorem hdScaleFailure_has_local_bad {p : HDParams} (Sites : p.Sites)
     have hRqReal : (R : ℝ) ≤ q := by exact_mod_cast hRq
     linarith [hnet', hηR, hRqReal]
 
-private theorem exists_nat_rpow_ge {e C : ℝ} (he : 0 < e) :
+theorem exists_nat_rpow_ge {e C : ℝ} (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → C ≤ (n : ℝ) ^ e := by
   have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ e) Filter.atTop Filter.atTop :=
     (tendsto_rpow_atTop he).comp tendsto_natCast_atTop_atTop
@@ -375,7 +375,7 @@ theorem hdScaleThreshold_fractions_strict {h i : ℕ} (hi : i ≤ h) (hi0 : 0 < 
     nlinarith
   exact ⟨hs, ht, heta⟩
 
-private theorem exists_nat_log_ge (C : ℝ) :
+theorem exists_nat_log_ge (C : ℝ) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → C ≤ Real.log (n : ℝ) := by
   have hlog : Filter.Tendsto (fun n : ℕ => Real.log (n : ℝ))
       Filter.atTop Filter.atTop :=
@@ -386,7 +386,7 @@ private theorem exists_nat_log_ge (C : ℝ) :
   exact ⟨n₀, fun n hn => hn₀ n hn⟩
 
 /-- Every fixed positive power eventually dominates `log n`. -/
-private theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
+theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n → Real.log (n : ℝ) ≤ (n : ℝ) ^ e := by
   let t : ℝ := e / 2
   have ht : 0 < t := by dsimp [t]; linarith
@@ -418,7 +418,7 @@ private theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
       mul_le_mul_of_nonneg_right hcoef (Real.rpow_nonneg hnpos.le t)
     _ = (n : ℝ) ^ e := hpowmul
 
-private theorem heightBaseRadius_le_logsq :
+theorem heightBaseRadius_le_logsq :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n →
       (heightBaseRadius n : ℝ) ≤ 2 * (Real.log (n : ℝ)) ^ 2 := by
   obtain ⟨N, hN⟩ := exists_nat_log_ge 1

@@ -1,6 +1,7 @@
 import HypercubeRamsey.S04.Defs
 import HypercubeRamsey.S04.PlateauProof
 import HypercubeRamsey.S04.StageProof
+import HypercubeRamsey.S04.CoreAssembly
 
 /-!
 # Lemma 4.1: bias versus purity
@@ -48,11 +49,12 @@ def L4_1_coreStatement (β γ K : ℝ) : Prop :=
 /-- L4.1-core (04:89–598): balanced prepared patches force a cube unless a pair is nearly monochromatic.
 
 The last hypothesis is the colour-`G` sparse-pair exclusion (`PureLaw β γ (h4 β γ) (!G)` in Part A).
+The proof is the assembly `S04.l41_core_proof` of the Section 4 nodes (`S04/CoreAssembly.lean`).
 -/
 theorem L4_1_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1)
     (K : ℝ) (hK : 0 < K) :
     L4_1_coreStatement β γ K := by
-  sorry
+  exact S04.l41_core_proof β γ hβ hβγ hγ K hK
 
 /-- L4.1 (04:9–16): stage wrapper from the plateau and single-index core.
 

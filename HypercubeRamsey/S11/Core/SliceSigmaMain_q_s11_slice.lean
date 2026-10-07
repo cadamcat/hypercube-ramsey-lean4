@@ -32,9 +32,9 @@ theorem pairIndex_injective_q_s11_slice {I : Type} [Fintype I] [DecidableEq I]
         exact Option.some.inj (by simpa [pairIndex_q_s11_slice, hca, hda] using h)
       have hs : ({a, c} : Finset I) = {a, d} := by
         exact congrArg Subtype.val hp
-      have hc : c ∈ ({a, d} : Finset I) := by
-        rw [← hs]
-        simp
+      have hcA : c ∈ ({a, c} : Finset I) := by simp
+      have hc : c ∈ ({a, d} : Finset I) :=
+        Eq.mp (congrArg (fun s : Finset I => c ∈ s) hs) hcA
       have hc' : c = a ∨ c = d := by simpa using hc
       rcases hc' with hc' | hcd
       · exact (hca hc').elim
@@ -175,11 +175,14 @@ theorem sigma_fail_q_s11_slice :
     · have hbad : ∃ a : I, ¬ Passes E G (gS n) μ ν (ballStar W a) := by
         simpa [passAll] using hp
       obtain ⟨a, ha⟩ := hbad
-      have hsingle := Finset.single_le_sum
-        (s := Finset.univ)
-        (f := fun b : I => if Passes E G (gS n) μ ν (ballStar W b) then (0 : ℝ) else 1)
-        (fun b hb => by split_ifs <;> norm_num)
-        (Finset.mem_univ a)
+      have hsingle : (1 : ℝ) ≤
+          ∑ b : I, (if Passes E G (gS n) μ ν (ballStar W b) then (0 : ℝ) else 1) := by
+        have hs := Finset.single_le_sum
+          (s := Finset.univ)
+          (f := fun b : I => if Passes E G (gS n) μ ν (ballStar W b) then (0 : ℝ) else 1)
+          (fun b hb => by split_ifs <;> norm_num)
+          (Finset.mem_univ a)
+        simpa [ha] using hs
       simpa [rowFail, hp, ha] using hsingle
   have hfailExpected :
       (∑ W : Option (Pair I) → T, ballW E G μ y₀ W * rowFail W) ≤

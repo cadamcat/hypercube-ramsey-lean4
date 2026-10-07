@@ -1173,6 +1173,171 @@ theorem truncatedExploration_complete {T : ℕ} {R : Type*} [Fintype R] [Decidab
       simpa [pendingEndpoints] using hmem
     rw [hNoPending] at hPending
     simp at hPending
+  have hrequestGrowInspect (u : Endpoint R g) (h : ℕ) (s : ExploreState R g)
+      (e : RowLabel R g) (v : Endpoint R g) (H : ℕ) (hv : s.request v = some H) :
+      ∃ H', (inspectEdge ξ L u h s e).request v = some H' ∧ H ≤ H' := by
+    by_cases hg : s.giant
+    · exact ⟨H, by simpa [inspectEdge, hg] using hv, le_rfl⟩
+    · have hgf : s.giant = false := by cases hb : s.giant <;> simp_all
+      cases hk : edgeArrivalKey ξ e with
+      | none => exact ⟨H, by simpa [inspectEdge, hgf, hk] using hv, le_rfl⟩
+      | some k =>
+          by_cases hkh : k < h
+          · by_cases hproc : edgeOther u e ∈ s.processed
+            · exact ⟨H, by simpa [inspectEdge, hgf, hk, hkh, hproc] using hv, le_rfl⟩
+            · by_cases hvw : v = edgeOther u e
+              · subst v
+                refine ⟨max H k, ?_, le_max_left _ _⟩
+                simp [inspectEdge, hgf, hk, hkh, hproc, hv, Function.update]
+                split_ifs <;> simp_all [Function.update]
+              · refine ⟨H, ?_, le_rfl⟩
+                simp [inspectEdge, hgf, hk, hkh, hproc, hvw, hv]
+                split_ifs <;> simp_all [Function.update]
+          · exact ⟨H, by simpa [inspectEdge, hgf, hk, hkh] using hv, le_rfl⟩
+  have hrequestGrowFold (u : Endpoint R g) (h : ℕ) (es : List (RowLabel R g))
+      (s : ExploreState R g) (v : Endpoint R g) (H : ℕ) (hv : s.request v = some H) :
+      ∃ H', (es.foldl (inspectEdge ξ L u h) s).request v = some H' ∧ H ≤ H' := by
+    induction es generalizing s H with
+    | nil => exact ⟨H, by simpa, le_rfl⟩
+    | cons e es ih =>
+        rw [List.foldl_cons]
+        obtain ⟨H₁, h₁, hle₁⟩ := hrequestGrowInspect u h s e v H hv
+        obtain ⟨H₂, h₂, hle₂⟩ := ih (inspectEdge ξ L u h s e) H₁ h₁
+        exact ⟨H₂, h₂, le_trans hle₁ hle₂⟩
+  have hrequestGrowProcess (s : ExploreState R g) (u : Endpoint R g) (v : Endpoint R g)
+      (H : ℕ) (hv : s.request v = some H) :
+      ∃ H', (processEndpoint ξ L u s).request v = some H' ∧ H ≤ H' := by
+    unfold processEndpoint
+    exact hrequestGrowFold u ((s.request u).getD 0) (incidentEdges u)
+      { s with processed := insert u s.processed } v H hv
+  have hrequestGrowRun : ∀ f (s : ExploreState R g) (v : Endpoint R g) (H : ℕ),
+      s.request v = some H →
+      ∃ H', (exploreRun ξ L f s).request v = some H' ∧ H ≤ H' := by
+    intro f
+    induction f with
+    | zero => intro s v H hv; exact ⟨H, by simpa [exploreRun] using hv, le_rfl⟩
+    | succ f ih =>
+        intro s v H hv
+        by_cases hg : s.giant
+        · exact ⟨H, by simpa [exploreRun, hg] using hv, le_rfl⟩
+        · cases hp : nextPending s with
+          | none => exact ⟨H, by simpa [exploreRun, hg, hp] using hv, le_rfl⟩
+          | some u =>
+              obtain ⟨H₁, h₁, hle₁⟩ := hrequestGrowProcess s u v H hv
+              obtain ⟨H₂, h₂, hle₂⟩ := ih (processEndpoint ξ L u s) v H₁ h₁
+              exact ⟨H₂, by simpa [exploreRun, hg, hp] using h₂, le_trans hle₁ hle₂⟩
+  have hrootRequest : ∀ r ∈ roots, ∃ H,
+      (truncatedExploration ξ roots L).request r = some H ∧ rootHorizon T R g ≤ H := by
+    intro r hr
+    have hinit : (initExploreState T roots L).request r = some (rootHorizon T R g) := by
+      simp [initExploreState, hr]
+    obtain ⟨H, hH, hle⟩ := hrequestGrowRun (Fintype.card (Endpoint R g))
+      (initExploreState T roots L) r (rootHorizon T R g) hinit
+    exact ⟨H, by simpa [truncatedExploration] using hH, hle⟩
+  have hrequestStableProcessedInspect (u : Endpoint R g) (h : ℕ) (s : ExploreState R g)
+      (e : RowLabel R g) (v : Endpoint R g) (hv : v ∈ s.processed) :
+      (inspectEdge ξ L u h s e).request v = s.request v := by
+    by_cases hg : s.giant
+    · simp [inspectEdge, hg]
+    · have hgf : s.giant = false := by cases hb : s.giant <;> simp_all
+      cases hk : edgeArrivalKey ξ e with
+      | none => simp [inspectEdge, hgf, hk]
+      | some k =>
+          by_cases hkh : k < h
+          · by_cases hproc : edgeOther u e ∈ s.processed
+            · simp [inspectEdge, hg, hk, hkh, hproc]
+            · by_cases hvw : v = edgeOther u e
+              · subst v
+                exact False.elim (hproc hv)
+              · have hne : v ≠ edgeOther u e := hvw
+                simp only [inspectEdge, hgf, hk, if_pos hkh, if_neg hproc]
+                split_ifs <;>
+                  simp only [ExploreState.request, Function.update_of_ne hne]
+          · simp [inspectEdge, hgf, hk, hkh]
+  have hrequestStableProcessedFold (u : Endpoint R g) (h : ℕ) (es : List (RowLabel R g))
+      (s : ExploreState R g) (v : Endpoint R g) (hv : v ∈ s.processed) :
+      (es.foldl (inspectEdge ξ L u h) s).request v = s.request v := by
+    induction es generalizing s with
+    | nil => rfl
+    | cons e es ih =>
+        rw [List.foldl_cons]
+        have hv' : v ∈ (inspectEdge ξ L u h s e).processed := by
+          rw [hprocessedInspect]
+          exact hv
+        rw [ih (inspectEdge ξ L u h s e) hv']
+        exact hrequestStableProcessedInspect u h s e v hv
+  have hrequestStableProcessedProcess (s : ExploreState R g) (u v : Endpoint R g)
+      (hv : v ∈ s.processed) :
+      (processEndpoint ξ L u s).request v = s.request v := by
+    unfold processEndpoint
+    exact hrequestStableProcessedFold u ((s.request u).getD 0) (incidentEdges u)
+      { s with processed := insert u s.processed } v (Finset.mem_insert_of_mem hv)
+  have hinspectAtGrow (u : Endpoint R g) (h : ℕ) (s : ExploreState R g)
+      (e : RowLabel R g) (q : RowLabel R g) (H : ℕ) (hq : s.inspectedAt q = some H) :
+      ∃ H', (inspectEdge ξ L u h s e).inspectedAt q = some H' ∧ H ≤ H' := by
+    by_cases hg : s.giant
+    · exact ⟨H, by simpa [inspectEdge, hg] using hq, le_rfl⟩
+    · have hgf : s.giant = false := by cases hb : s.giant <;> simp_all
+      by_cases hqe : q = e
+      · subst q
+        refine ⟨max H h, ?_, le_max_left _ _⟩
+        cases hk : edgeArrivalKey ξ e <;>
+          simp [inspectEdge, hgf, hk, hq] <;> split_ifs <;> simp [Function.update, hq]
+      · refine ⟨H, ?_, le_rfl⟩
+        cases hk : edgeArrivalKey ξ e <;>
+          simp [inspectEdge, hgf, hk, hq, hqe] <;> split_ifs <;> simp [Function.update, hqe, hq]
+  have hinspectAtGrowFold (u : Endpoint R g) (h : ℕ) (es : List (RowLabel R g))
+      (s : ExploreState R g) (q : RowLabel R g) (H : ℕ) (hq : s.inspectedAt q = some H) :
+      ∃ H', (es.foldl (inspectEdge ξ L u h) s).inspectedAt q = some H' ∧ H ≤ H' := by
+    induction es generalizing s H with
+    | nil => exact ⟨H, by simpa, le_rfl⟩
+    | cons e es ih =>
+        rw [List.foldl_cons]
+        obtain ⟨H₁, h₁, hle₁⟩ := hinspectAtGrow u h s e q H hq
+        obtain ⟨H₂, h₂, hle₂⟩ := ih (inspectEdge ξ L u h s e) H₁ h₁
+        exact ⟨H₂, h₂, le_trans hle₁ hle₂⟩
+  have hinspectAtGrowProcess (s : ExploreState R g) (u : Endpoint R g)
+      (q : RowLabel R g) (H : ℕ) (hq : s.inspectedAt q = some H) :
+      ∃ H', (processEndpoint ξ L u s).inspectedAt q = some H' ∧ H ≤ H' := by
+    unfold processEndpoint
+    exact hinspectAtGrowFold u ((s.request u).getD 0) (incidentEdges u)
+      { s with processed := insert u s.processed } q H hq
+  have hfoldFalseImp (u : Endpoint R g) (h : ℕ) (es : List (RowLabel R g))
+      (s : ExploreState R g) (hout : (es.foldl (inspectEdge ξ L u h) s).giant = false) :
+      s.giant = false := by
+    induction es generalizing s with
+    | nil => simpa using hout
+    | cons e es ih =>
+        rw [List.foldl_cons] at hout
+        have hmid : (inspectEdge ξ L u h s e).giant = false :=
+          ih (inspectEdge ξ L u h s e) hout
+        cases hb : s.giant with
+        | false => rfl
+        | true => simp [inspectEdge, hb] at hmid
+  have hfoldInspects (u : Endpoint R g) (h : ℕ) (es : List (RowLabel R g))
+      (s : ExploreState R g) (hout : (es.foldl (inspectEdge ξ L u h) s).giant = false) :
+      ∀ e ∈ es, ∃ H, (es.foldl (inspectEdge ξ L u h) s).inspectedAt e = some H ∧ h ≤ H := by
+    induction es generalizing s with
+    | nil => intro e he; simp at he
+    | cons e es ih =>
+        intro q hq
+        rw [List.foldl_cons] at hout ⊢
+        have hmid : (inspectEdge ξ L u h s e).giant = false := hfoldFalseImp u h es
+          (inspectEdge ξ L u h s e) hout
+        have hstart : s.giant = false := by
+          cases hb : s.giant with
+          | false => rfl
+          | true => simp [inspectEdge, hb] at hmid
+        rcases List.mem_cons.mp hq with heq | htail
+        · subst q
+          have hset : (inspectEdge ξ L u h s e).inspectedAt e =
+              some (max ((s.inspectedAt e).getD 0) h) := by
+            cases hk : edgeArrivalKey ξ e <;>
+              simp [inspectEdge, hstart, hk] <;> split_ifs <;> simp [Function.update]
+          obtain ⟨H, hH, hle⟩ := hinspectAtGrowFold u h es
+            (inspectEdge ξ L u h s e) e (max ((s.inspectedAt e).getD 0) h) hset
+          exact ⟨H, hH, le_trans (le_max_right _ _) hle⟩
+        · exact ih (inspectEdge ξ L u h s e) hout q htail
   sorry
 
 /-- L3.10b-card (03:872–874): a giant run has at least `L` active endpoints, a non-giant run fewer than `L`, and
@@ -1423,7 +1588,32 @@ theorem explorationLeaf_event_iff {T : ℕ} {R : Type*} [Fintype R] [DecidableEq
     (explorationLeaf ξ roots L).Event ξ' ↔
       truncatedExploration ξ' roots L = truncatedExploration ξ roots L ∧
         explorationLeaf ξ' roots L = explorationLeaf ξ roots L := by
-  sorry
+  classical
+  have hself (ζ : ClockField T R g Ω) : (explorationLeaf ζ roots L).Event ζ := by
+    intro e
+    cases hAt : (truncatedExploration ζ roots L).inspectedAt e with
+    | none => simp [explorationLeaf, leafConstraint, hAt, EdgeConstraint.Allows]
+    | some H =>
+        cases hζ : ζ e with
+        | noArrival => simp [explorationLeaf, leafConstraint, hAt, hζ, EdgeConstraint.Allows]
+        | tick t o =>
+            by_cases hkey : eventPriority (⟨e.1, e.2, t, o⟩ : ClockCandidate T R g Ω) < H
+            · simp [explorationLeaf, leafConstraint, hAt, hζ, hkey, EdgeConstraint.Allows]
+            · have hcut : (edgeCutoff T H e).val ≤ t.val ↔
+                  H ≤ eventPriority (⟨e.1, e.2, t, o⟩ : ClockCandidate T R g Ω) := by
+                simpa [edgeCutoff, qClockCutoffValue] using
+                  (qClockCutoffValue_le_iff (T := T) (R := R) (g := g) (H := H)
+                    e.1 e.2 t o)
+              have hle : H ≤ eventPriority (⟨e.1, e.2, t, o⟩ : ClockCandidate T R g Ω) :=
+                Nat.le_of_not_gt hkey
+              simp [explorationLeaf, leafConstraint, hAt, hζ, hkey, EdgeConstraint.Allows,
+                hcut.mpr hle]
+  constructor
+  · intro hev
+    sorry
+  · rintro ⟨_, hleaf⟩
+    rw [← hleaf]
+    exact hself ξ'
 
 /-- L3.10b-agree (03:866–867): on a non-giant leaf every clock field of the leaf agrees with `ξ` below every
 closure horizon (the run inspected every edge at each closure endpoint at its largest horizon). -/
@@ -1432,7 +1622,75 @@ theorem nongiant_leaf_agreesBelow {T : ℕ} {R : Type*} [Fintype R] [DecidableEq
     (hng : (truncatedExploration ξ roots L).giant = false)
     (hev : (explorationLeaf ξ roots L).Event ξ') :
     agreesBelowClosure roots ξ ξ' := by
-  sorry
+  classical
+  intro u h hreach c hinc hkey
+  let e : RowLabel R g := (c.1, c.2.1)
+  have hinc' : EdgeIncident u e := by simpa [e] using hinc
+  obtain ⟨H, hins, hle⟩ :=
+    (truncatedExploration_complete ξ roots L hng u h hreach).2 e hinc'
+  have hkeyH : eventPriority c < H := lt_of_lt_of_le hkey hle
+  have hcut : (edgeCutoff T H e).val ≤ c.2.2.1.val ↔ H ≤ eventPriority c := by
+    simpa [edgeCutoff, qClockCutoffValue, e] using
+      (qClockCutoffValue_le_iff (T := T) (R := R) (g := g) (H := H)
+        c.1 c.2.1 c.2.2.1 c.2.2.2)
+  have hnotAbsent (hall : (EdgeConstraint.absentBefore (edgeCutoff T H e)).Allows (ξ' e)) :
+      ¬ candidateIsArrival ξ' c := by
+    intro hc
+    have hvalue : ξ' e = .tick c.2.2.1 c.2.2.2 := by
+      simpa [candidateIsArrival, e] using hc
+    cases hx : ξ' e with
+    | noArrival => simp [hx] at hvalue
+    | tick t o =>
+        have hEq : MeshClockValue.tick t o = MeshClockValue.tick c.2.2.1 c.2.2.2 :=
+          hx.symm.trans hvalue
+        have ht : t = c.2.2.1 := (MeshClockValue.tick.inj hEq).1
+        have hcutTick : (edgeCutoff T H e).val ≤ t.val := by
+          simpa [EdgeConstraint.Allows, hx] using hall
+        have hHkey : H ≤ eventPriority c := hcut.mp (by simpa [ht] using hcutTick)
+        omega
+  have hall := hev e
+  cases hξ : ξ e with
+  | noArrival =>
+      have hbase : ¬ candidateIsArrival ξ c := by
+        simp [candidateIsArrival, e, hξ]
+      have hleaf : (explorationLeaf ξ roots L).constraint e =
+          .absentBefore (edgeCutoff T H e) := by
+        simp [explorationLeaf, leafConstraint, hins, hξ]
+      rw [hleaf] at hall
+      have hother := hnotAbsent hall
+      constructor
+      · exact False.elim ∘ hbase
+      · exact False.elim ∘ hother
+  | tick t o =>
+      let c₀ : ClockCandidate T R g Ω := ⟨e.1, e.2, t, o⟩
+      by_cases h₀ : eventPriority c₀ < H
+      · have hleaf : (explorationLeaf ξ roots L).constraint e = .exactArrival t o := by
+          simp [explorationLeaf, leafConstraint, hins, hξ, c₀, h₀]
+        rw [hleaf] at hall
+        have hξ' : ξ' e = .tick t o := by
+          simpa [EdgeConstraint.Allows] using hall
+        have heq : ξ e = ξ' e := by rw [hξ, hξ']
+        unfold candidateIsArrival
+        rw [heq]
+      · have hleaf : (explorationLeaf ξ roots L).constraint e =
+            .absentBefore (edgeCutoff T H e) := by
+          simp [explorationLeaf, leafConstraint, hins, hξ, c₀, h₀]
+        have hbase : ¬ candidateIsArrival ξ c := by
+          intro hc
+          have hvalue : ξ e = .tick c.2.2.1 c.2.2.2 := by
+            simpa [candidateIsArrival, e] using hc
+          have hEq : MeshClockValue.tick t o = MeshClockValue.tick c.2.2.1 c.2.2.2 :=
+            hξ.symm.trans hvalue
+          have ht : t = c.2.2.1 := (MeshClockValue.tick.inj hEq).1
+          have hkeyEq : eventPriority c₀ = eventPriority c := by
+            simp [c₀, eventPriority, e, ht]
+          apply h₀
+          simpa [hkeyEq] using hkeyH
+        rw [hleaf] at hall
+        have hother := hnotAbsent hall
+        constructor
+        · exact False.elim ∘ hbase
+        · exact False.elim ∘ hother
 
 /-- L3.10b-closure (03:866–867, "These inspections determine the matching decisions at the roots by backward
 closure through all earlier events they require"): agreement below the closure horizons determines the greedy
@@ -1443,6 +1701,14 @@ theorem closure_determines_root_assignment {T : ℕ} {R : Type*} [Fintype R] [De
     (ξ ξ' : ClockField T R g Ω) (roots : Finset (Endpoint R g))
     (h : agreesBelowClosure roots ξ ξ') :
     ∀ a, Sum.inl a ∈ roots → (greedyMatching ξ).assignment a = (greedyMatching ξ').assignment a := by
+  classical
+  have hrootArrival (a : R) (ha : Sum.inl a ∈ roots) (y : Fin g) (t : Fin T) (o : Ω a)
+      (hk : eventPriority (⟨a, y, t, o⟩ : ClockCandidate T R g Ω) < rootHorizon T R g) :
+      candidateIsArrival ξ (⟨a, y, t, o⟩ : ClockCandidate T R g Ω) ↔
+        candidateIsArrival ξ' (⟨a, y, t, o⟩ : ClockCandidate T R g Ω) := by
+    apply h (Sum.inl a) (rootHorizon T R g) ?_ (⟨a, y, t, o⟩ : ClockCandidate T R g Ω)
+      (Or.inl rfl) hk
+    exact ⟨Sum.inl a, ha, Relation.ReflTransGen.refl⟩
   sorry
 
 /-- L3.10c-meet (03:1123–1124, "Their intersections are product rectangles"): the intersection of finitely many
@@ -1664,6 +1930,135 @@ theorem badLeaves_incidence_le {T : ℕ} {R K : Type*} [Fintype R] [DecidableEq 
         (clockFieldLaw edgeLaw).pr ℓ.Event ≤
       (clockFieldLaw edgeLaw).pr
         (fun ξ => closureBad lab F scope L ξ t ∧ v ∈ activeEndpoints ξ scope t) := by
-  sorry
+  classical
+  let roots : Finset (Endpoint R g) := testRootEndpoints scope t
+  let P := clockFieldLaw edgeLaw
+  let S : Finset (ClockLeaf T R g Ω) :=
+    (badLeaves lab F scope L t).filter (fun ℓ : ClockLeaf T R g Ω => v ∈ ℓ.active)
+  let badEvent : ClockField T R g Ω → Prop :=
+    fun ξ => closureBad lab F scope L ξ t ∧ v ∈ activeEndpoints ξ scope t
+  have hmemWitness (ℓ : ClockLeaf T R g Ω) (hℓ : ℓ ∈ S) :
+      ∃ ξ₀, leafBad lab F scope L ξ₀ t ∧ testLeaf ξ₀ scope t L = ℓ := by
+    have hbadLeaf : ℓ ∈ badLeaves lab F scope L t := (Finset.mem_filter.mp hℓ).1
+    have hbadLeaf' :
+        ℓ ∈ ((Finset.univ.filter fun ξ₀ : ClockField T R g Ω =>
+          leafBad lab F scope L ξ₀ t).image fun ξ₀ => testLeaf ξ₀ scope t L) := by
+      simpa [badLeaves] using hbadLeaf
+    rcases Finset.mem_image.mp hbadLeaf' with ⟨ξ₀, hξ₀, hEq⟩
+    exact ⟨ξ₀, (Finset.mem_filter.mp hξ₀).2, hEq⟩
+  have hleafEq (ℓ : ClockLeaf T R g Ω) (hℓ : ℓ ∈ S) (ξ : ClockField T R g Ω)
+      (hEvent : ℓ.Event ξ) : ℓ = testLeaf ξ scope t L := by
+    obtain ⟨ξ₀, _, hEq⟩ := hmemWitness ℓ hℓ
+    have hEvent₀ : (testLeaf ξ₀ scope t L).Event ξ := by
+      simpa [hEq] using hEvent
+    have hRunLeaf :=
+      (explorationLeaf_event_iff ξ₀ ξ roots L).mp (by simpa [roots, testLeaf] using hEvent₀)
+    have hLeaf : testLeaf ξ₀ scope t L = testLeaf ξ scope t L := by
+      simpa [testLeaf, roots] using hRunLeaf.2.symm
+    exact hEq.symm.trans hLeaf
+  have hsubset (ℓ : ClockLeaf T R g Ω) (hℓ : ℓ ∈ S)
+      (ξ : ClockField T R g Ω) (hEvent : ℓ.Event ξ) : badEvent ξ := by
+    obtain ⟨ξ₀, hbad₀, hEq⟩ := hmemWitness ℓ hℓ
+    have hEvent₀ : (testLeaf ξ₀ scope t L).Event ξ := by
+      simpa [hEq] using hEvent
+    have hbadInv := leafBad_leaf_invariant lab F scope L ξ₀ ξ t hEvent₀
+    have hbadξ : leafBad lab F scope L ξ t := hbadInv.mpr hbad₀
+    have hLeaf : testLeaf ξ scope t L = ℓ := (hleafEq ℓ hℓ ξ hEvent).symm
+    have hvState : v ∈ (truncatedExploration ξ roots L).active := by
+      have hvLeaf : v ∈ (testLeaf ξ scope t L).active := by
+        rw [hLeaf]
+        exact (Finset.mem_filter.mp hℓ).2
+      simpa [testLeaf, explorationLeaf, roots] using hvLeaf
+    have hSound := truncatedExploration_sound ξ roots L
+    have hvClosure : v ∈ closureFrom ξ roots := hSound.2.2 hvState
+    have hActiveEq : activeEndpoints ξ scope t = closureFrom ξ roots := by
+      simpa [roots] using activeEndpoints_eq_closureFrom ξ scope t
+    have hvActive : v ∈ activeEndpoints ξ scope t := by
+      rw [hActiveEq]
+      exact hvClosure
+    have hClosureBad : closureBad lab F scope L ξ t := by
+      rcases hbadξ with hgiant | hbadOutcome
+      · have hgiant' : (truncatedExploration ξ roots L).giant = true := by
+          simpa [testExploration, roots] using hgiant
+        have hcard := (truncatedExploration_giant_iff ξ roots L).mp hgiant'
+        have hActiveEq' : activeEndpoints ξ scope t = closureFrom ξ roots := by
+          simpa [roots] using activeEndpoints_eq_closureFrom ξ scope t
+        change L ≤ (activeEndpoints ξ scope t).card ∨ _
+        left
+        rw [hActiveEq']
+        exact hcard
+      · exact Or.inr hbadOutcome
+    exact ⟨hClosureBad, hvActive⟩
+  have hunique (ξ : ClockField T R g Ω) (ℓ₁ ℓ₂ : ClockLeaf T R g Ω)
+      (h₁ : ℓ₁ ∈ S) (h₂ : ℓ₂ ∈ S) (he₁ : ℓ₁.Event ξ) (he₂ : ℓ₂.Event ξ) :
+      ℓ₁ = ℓ₂ := by
+    calc
+      ℓ₁ = testLeaf ξ scope t L := hleafEq ℓ₁ h₁ ξ he₁
+      _ = ℓ₂ := (hleafEq ℓ₂ h₂ ξ he₂).symm
+  have hcount (ξ : ClockField T R g Ω) :
+      (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) ≤ if badEvent ξ then 1 else 0 := by
+    by_cases hbad : badEvent ξ
+    · simp only [if_pos hbad]
+      by_cases hex : ∃ ℓ ∈ S, ℓ.Event ξ
+      · obtain ⟨ℓ₀, hℓ₀, he₀⟩ := hex
+        calc
+          (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) ≤
+              ∑ ℓ ∈ S, if ℓ = ℓ₀ then (1 : ℝ) else 0 := by
+                apply Finset.sum_le_sum
+                intro ℓ hℓ
+                by_cases he : ℓ.Event ξ
+                · have : ℓ = ℓ₀ := hunique ξ ℓ ℓ₀ hℓ hℓ₀ he he₀
+                  simp [this, he, he₀]
+                · split_ifs <;> norm_num
+          _ = 1 := by simp [hℓ₀]
+      · have hnone : ∀ ℓ ∈ S, ¬ ℓ.Event ξ := by
+          intro ℓ hℓ he
+          exact hex ⟨ℓ, hℓ, he⟩
+        have hsum0 : (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) = 0 := by
+          apply Finset.sum_eq_zero
+          intro ℓ hℓ
+          simp [hnone ℓ hℓ]
+        simp [hsum0]
+    · have hnone : ∀ ℓ ∈ S, ¬ ℓ.Event ξ := by
+        intro ℓ hℓ he
+        exact hbad (hsubset ℓ hℓ ξ he)
+      have hsum0 : (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) = 0 := by
+        apply Finset.sum_eq_zero
+        intro ℓ hℓ
+        simp [hnone ℓ hℓ]
+      simp [hsum0, hbad]
+  have hsumLeft :
+      (∑ ℓ ∈ S, P.pr ℓ.Event) =
+        ∑ ξ : ClockField T R g Ω, P.w ξ * (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) := by
+    simp only [FinProb.pr]
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    calc
+      (∑ ℓ ∈ S, if ℓ.Event ξ then P.w ξ else 0) =
+          ∑ ℓ ∈ S, P.w ξ * (if ℓ.Event ξ then (1 : ℝ) else 0) := by
+            apply Finset.sum_congr rfl
+            intro ℓ hℓ
+            split_ifs <;> simp
+      _ = P.w ξ * (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) := by
+            rw [Finset.mul_sum]
+  calc
+    (∑ ℓ ∈ (badLeaves lab F scope L t).filter (fun ℓ => v ∈ ℓ.active),
+        (clockFieldLaw edgeLaw).pr ℓ.Event) =
+      ∑ ξ : ClockField T R g Ω, P.w ξ *
+        (∑ ℓ ∈ S, if ℓ.Event ξ then (1 : ℝ) else 0) := by
+          simpa [S, P] using hsumLeft
+    _ ≤ ∑ ξ : ClockField T R g Ω, P.w ξ * (if badEvent ξ then 1 else 0) := by
+          apply Finset.sum_le_sum
+          intro ξ hξ
+          exact mul_le_mul_of_nonneg_left (hcount ξ) (P.nonneg ξ)
+    _ = P.pr badEvent := by
+          unfold FinProb.pr
+          apply Finset.sum_congr rfl
+          intro ξ hξ
+          by_cases hb : badEvent ξ <;> simp [hb]
+    _ = (clockFieldLaw edgeLaw).pr
+        (fun ξ => closureBad lab F scope L ξ t ∧ v ∈ activeEndpoints ξ scope t) := by
+          rfl
 
 end HypercubeRamsey.Clock

@@ -3468,6 +3468,36 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         Finset.mem_univ, true_and]
       refine ⟨R.axis C j, hAxis, ?_⟩
       rfl
+    have hCalHistoryPos (W : Cal.Hist C) (hW : W ∈ localPassCal)
+        (hbase : localBase.w W ≠ 0) : (Cal.history C).w W ≠ 0 := by
+      have hCondHist : (FinLaw.cond localBase localPassCal hSlicePosCal).w W ≠ 0 := by
+        simp only [FinLaw.cond]
+        rw [if_pos hW]
+        exact div_ne_zero hbase (ne_of_gt hSlicePosCal)
+      have hEq := congrArg (fun law => law.w W) hCalHistory
+      rw [← hEq]
+      exact hCondHist
+    have hRawSliceInput (W : Cal.Hist C) (hW : (Cal.history C).w W ≠ 0) :
+        ∀ s : R.Slice C,
+          (hLink.histories C W) s ∈ R.slicePass C s ∧
+            (R.sliceLaw C s).w ((hLink.histories C W) s) ≠ 0 := by
+      have hRawHist := hRawHistSupport W hW
+      intro s
+      have hCoord : (goodFactors s).w ((hLink.histories C W) s) ≠ 0 := by
+        intro hzero
+        apply hRawHist
+        change (∏ i : R.Slice C,
+          (goodFactors i).w ((hLink.histories C W) i)) = 0
+        exact Finset.prod_eq_zero (Finset.mem_univ s) hzero
+      have hpass : (hLink.histories C W) s ∈ R.slicePass C s := by
+        by_contra hnot
+        apply hCoord
+        simp [goodFactors, FinLaw.cond, hnot]
+      have hmass : (R.sliceLaw C s).w ((hLink.histories C W) s) ≠ 0 := by
+        intro hz
+        apply hCoord
+        simp [goodFactors, FinLaw.cond, hpass, hz]
+      exact ⟨hpass, hmass⟩
     let encPipe : (Cal.Hist C × Unit) ×
         ((Cal.Group C → Bin PT.tiling (H.geom.cellPatch C)) ×
         (OddCellRole H.geom C → Fin (T.S.N k))) → F.State C := fun z =>
@@ -3997,7 +4027,56 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         sorry
       permission_mass := by
         intro W g hW hbase hg
-        sorry
+        have hCalHist := hCalHistoryPos W hW hbase
+        let Wraw := hLink.histories C W
+        let graw := hLink.groups C g
+        let raw := R.qraw C Wraw graw
+        let preSet := R.pretrim C Wraw graw
+        let permSet := Cal.permitted C g
+        let zPre : ℝ := ∑ b ∈ preSet, raw.w b
+        have hSliceInput := hRawSliceInput W hCalHist
+        have hQin (b : Bin PT.tiling (H.geom.cellPatch C)) :
+            (Cal.qin C W g).w b =
+              (if b ∈ preSet then raw.w b else 0) / zPre := by
+          rw [hLink.incoming_eq C W g]
+          have h := R.qin_eq C Wraw graw b hSliceInput
+          simpa [Wraw, graw, raw, preSet, zPre] using h
+        have hPreNe : zPre ≠ 0 := by
+          intro hz
+          have hZero (b : Bin PT.tiling (H.geom.cellPatch C)) :
+              (R.qin C Wraw graw).w b = 0 := by
+            have h := hQin b
+            rw [hLink.incoming_eq C W g] at h
+            rw [h]
+            by_cases hb : b ∈ preSet <;> simp [hb, zPre, hz]
+          have hsum : ∑ b, (R.qin C Wraw graw).w b = 0 := by
+            apply Finset.sum_eq_zero
+            intro b hb
+            exact hZero b
+          have hone := (R.qin C Wraw graw).sum_one
+          rw [hsum] at hone
+          norm_num at hone
+        have hPermQinEq :
+            (∑ b ∈ permSet, (Cal.qin C W g).w b) =
+              (∑ b ∈ preSet ∩ permSet, raw.w b) / zPre := by
+          calc
+            (∑ b ∈ permSet, (Cal.qin C W g).w b) =
+                ∑ b ∈ permSet, (if b ∈ preSet then raw.w b else 0) / zPre := by
+              apply Finset.sum_congr rfl
+              intro b hb
+              exact hQin b
+            _ = (∑ b ∈ permSet, if b ∈ preSet then raw.w b else 0) / zPre := by
+              rw [Finset.sum_div]
+            _ = (∑ b ∈ preSet ∩ permSet, raw.w b) / zPre := by
+              congr 1
+              have hSet : permSet.filter (fun b => b ∈ preSet) = preSet ∩ permSet := by
+                ext b
+                simp [and_comm]
+              rw [← Finset.sum_filter]
+              rw [hSet]
+        have hCalPerm := Cal.permission_mass C W g hCalHist
+        rw [hPermQinEq] at hCalPerm
+        simpa [Wraw, graw, raw, preSet, permSet, zPre] using hCalPerm
       normalizer_mass := by
         intro pool W g ht hW hbase hg
         sorry

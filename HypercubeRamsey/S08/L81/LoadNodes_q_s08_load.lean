@@ -1,5 +1,6 @@
 import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 import HypercubeRamsey.S08.L81.PosteriorNodes
+import HypercubeRamsey.S08.L81.LoadNodes_sol_s08_load
 import HypercubeRamsey.S07.TagStage
 
 /-!
@@ -4150,6 +4151,112 @@ private theorem center_tail_scattered_at {η₀ γ β p K c : ℝ} {h : ℕ}
   change (FinProb.prod D.posLaw (D.rawTAT Θ)).pr _ ≤ _ at hbound
   simpa [P, FinProb.bind, FinProb.prod] using hbound
 
+private theorem centerRow_nonneg {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (a : EvenRole D.n) (x : Fin D.N) (z : D.Pos × D.TAT) :
+    0 ≤ centerRow D Θ a x z := by
+  apply mul_nonneg (ind_nonneg _)
+  unfold Ctx.selLoad
+  cases hsel : D.selTag ((Θ, z.1), z.2) (cellOf η₀ a.1) <;> simp [hsel]
+  exact mul_nonneg (by positivity) ((D.anchorU Θ _ _).nonneg x)
+
+private theorem centerRow_local {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (hSL : D.SelLocal) (a : EvenRole D.n) (x : Fin D.N)
+    (z z' : D.Pos × D.TAT)
+    (hEq : ∀ (g : D.KeyT) (ℓ : D.Loc), _root_.hammingDist ℓ.1 (resOf η₀ a.1) ≤ rH D.n + 4 * HH η₀ D.n + 2 →
+      z.1 g ℓ = z'.1 g ℓ ∧ z.2.1.1 g ℓ = z'.2.1.1 g ℓ ∧
+      z.2.1.2 g ℓ = z'.2.1.2 g ℓ ∧ z.2.2 g ℓ = z'.2.2 g ℓ) :
+    centerRow D Θ a x z = centerRow D Θ a x z' := by
+  let e : D.CellT := cellOf η₀ a.1
+  have hlegal := Lane_sol_s08_load.legal_local D Θ z.1 z'.1 z.2.1.1 z'.2.1.1 e
+    (fun g ℓ hℓ => ⟨(hEq g ℓ hℓ).1, (hEq g ℓ hℓ).2.1⟩)
+  have hsel : D.sel ((Θ, z.1), z.2) e = D.sel ((Θ, z'.1), z'.2) e := by
+    apply hSL
+    · intro g hg; rfl
+    · intro g hg ℓ hℓ
+      exact ⟨(hEq g ℓ hℓ).1, (hEq g ℓ hℓ).2.1⟩
+    · intro ℓ hℓ
+      exact (hEq e.1 ℓ hℓ).2.2
+  by_cases hL : D.LocalLegal Θ z.1 z.2.1.1 e
+  · have hL' := hlegal.mp hL
+    have hload : D.selLoad ((Θ, z.1), z.2) e x = D.selLoad ((Θ, z'.1), z'.2) e x := by
+      cases hs : D.sel ((Θ, z.1), z.2) e with
+      | none => simp [Ctx.selLoad, Ctx.selTag, ← hsel, hs]
+      | some ℓ =>
+        have hdist : _root_.hammingDist ℓ.1 e.2 ≤ rH D.n :=
+          selected_location_within_ball Finset.univ (z.1 e.1) (z.2.1.2 e.1)
+            (D.elig Θ z.1 z.2.1.1 e.1) (z.2.2 e.1) e.2 ℓ (by simp) hL hs
+        have htag := (hEq e.1 ℓ (by change _root_.hammingDist ℓ.1 e.2 ≤ _; omega)).2.1
+        simp [Ctx.selLoad, Ctx.selTag, ← hsel, hs, htag]
+    change (if D.LocalLegal Θ z.1 z.2.1.1 e then 1 else 0) * D.selLoad ((Θ, z.1), z.2) e x =
+      (if D.LocalLegal Θ z'.1 z'.2.1.1 e then 1 else 0) * D.selLoad ((Θ, z'.1), z'.2) e x
+    simpa only [hL, hL', ite_true, one_mul] using hload
+  · have hL' : ¬ D.LocalLegal Θ z'.1 z'.2.1.1 e := by simpa only [← hlegal] using hL
+    simp [centerRow, ← show e = cellOf η₀ a.1 from rfl, hL, hL']
+
+private theorem center_joint {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (hgood : ∀ g, ¬ D.HBad Θ g) (hSL : D.SelLocal) (hSM : D.SelectMean)
+    (x : Fin D.N) (m : ℕ) (s : Fin m → EvenRole D.n)
+    (hsep : ∀ i j : Fin m, j < i → s i ∉ evenResNear η₀
+      (2 * rH D.n + 8 * HH η₀ D.n + 4) (s j)) :
+    ∑ z ∈ centerSucc D Θ,
+      (FinProb.prod D.posLaw (D.rawTAT Θ)).w z * ∏ i, centerRow D Θ (s i) x z ≤
+        (1 : ℝ) ^ m * ∏ i, D.Bcomp Θ (keyOf η₀ (s i).1) x := by
+  let P := FinProb.prod D.posLaw (D.rawTAT Θ)
+  have hmean (i : Fin m) : P.expect (centerRow D Θ (s i) x) ≤
+      D.Bcomp Θ (keyOf η₀ (s i).1) x := by
+    calc
+      P.expect (centerRow D Θ (s i) x) =
+          D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+            (if D.LocalLegal Θ P ω.1.1 (cellOf η₀ (s i).1) then 1 else 0) *
+              D.selLoad ((Θ, P), ω) (cellOf η₀ (s i).1) x)) :=
+        prod_expect D.posLaw (D.rawTAT Θ) (fun P ω =>
+          (if D.LocalLegal Θ P ω.1.1 (cellOf η₀ (s i).1) then 1 else 0) *
+            D.selLoad ((Θ, P), ω) (cellOf η₀ (s i).1) x)
+      _ ≤ D.Bcomp Θ (keyOf η₀ (s i).1) x := hSM Θ hgood (cellOf η₀ (s i).1) x
+  calc
+    _ ≤ P.expect (fun z => ∏ i, centerRow D Θ (s i) x z) := by
+      unfold FinProb.expect
+      apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+      intro z hz hnot
+      exact mul_nonneg (P.nonneg z) (Finset.prod_nonneg fun i _ => centerRow_nonneg D Θ (s i) x z)
+    _ = ∏ i, P.expect (centerRow D Θ (s i) x) := by
+      exact Lane_sol_s08_load.center_factor D Θ s hsep
+        (fun i => centerRow D Θ (s i) x) (fun i => centerRow_local D Θ hSL (s i) x)
+    _ ≤ ∏ i, D.Bcomp Θ (keyOf η₀ (s i).1) x := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        apply expect_nonneg
+        exact centerRow_nonneg D Θ (s i) x
+      · intro i hi; exact hmean i
+    _ = _ := by simp
+
 end HypercubeRamsey.S08.Lane_q_s08_load
+
+namespace HypercubeRamsey.S08.Lane_sol_s08_load
+open Classical OAI.HypercubeRamsey
+open scoped BigOperators
+open Lane_q_s08_load
+
+theorem center_tail (η₀ γ β p K : ℝ) (h : ℕ) (c : ℝ) (hc : 0 < c)
+    (hη₀ : 0 < η₀) (hγ₁ : γ < 1) (hK : 0 < K) :
+    ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
+      GridFacts η₀ D.n → fRes η₀ D.n (2 * rH D.n + 8 * HH η₀ D.n + 4) ≤ Real.exp (-c * D.n) →
+      D.SelLocal → D.SelectMean → D.SelConseq →
+      ∀ Θ : D.Hist, (∀ g, ¬ D.HBad Θ g) → D.CompOK (8 * (40 * K + 1)) Θ →
+        (FinProb.bind D.posLaw fun _ => D.rawTAT Θ).pr
+            (fun z => D.SelOK ((Θ, z.1), z.2) ∧
+              ¬ D.LoadOK (4 * (8 * (40 * K + 1) + 1)) ((Θ, z.1), z.2)) ≤
+          (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
+  obtain ⟨n₀, hcap⟩ := centerAnchorCap_small η₀ γ p c hη₀ hγ₁ hc
+  refine ⟨n₀, ?_⟩
+  intro D hn X Y R hStd hGF hres hSL hSM hSC Θ hgood hcomp
+  apply center_tail_scattered_at D X Y R hStd hGF Θ hgood hcomp hc hγ₁ hK hres
+  · exact hcap D.n hn
+  · exact hSM
+  · exact hSC
+  · intro x m hm s hsep
+    exact center_joint D Θ hgood hSL hSM x m s hsep
+
+end HypercubeRamsey.S08.Lane_sol_s08_load
 
 end

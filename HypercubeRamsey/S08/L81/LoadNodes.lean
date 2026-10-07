@@ -68,7 +68,7 @@ theorem center_tail (c : ℝ) (hc : 0 < c) (hη₀ : 0 < η₀) (hγ₁ : γ < 1
         (FinProb.bind D.posLaw fun _ => D.rawTAT Θ).pr
             (fun z => D.SelOK ((Θ, z.1), z.2) ∧ ¬ D.LoadOK (loadC K) ((Θ, z.1), z.2)) ≤
           (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
-  sorry
+  exact Lane_sol_s08_load.center_tail η₀ γ β p K h c hc hη₀ hγ₁ hK
 
 /-- L8.1i, averaging (08:304–312): the pre-anchor law draws the hidden history from the hidden law (supported on
 histories avoiding the hidden events once these have positive raw probability), then positions, tags, activations

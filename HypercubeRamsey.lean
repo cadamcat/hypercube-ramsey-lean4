@@ -103,3 +103,17 @@ import HypercubeRamsey.S09.Core.Defs
 import HypercubeRamsey.S09.Core.Stages
 import HypercubeRamsey.S11.Needs_p_s11_a
 import HypercubeRamsey.Tools.Concentration_p_tools_conc
+import HypercubeRamsey.PartC.All
+import HypercubeRamsey.PartC.Cleaning
+import HypercubeRamsey.PartC.Consts
+import HypercubeRamsey.PartC.Core
+import HypercubeRamsey.PartC.LateProcess
+import HypercubeRamsey.PartC.LowMode
+import HypercubeRamsey.PartC.Mesh
+import HypercubeRamsey.PartC.ProfiledTiling
+import HypercubeRamsey.PartC.Resampling
+import HypercubeRamsey.PartC.SliceSolver
+import HypercubeRamsey.PartC.Tiling
+import HypercubeRamsey.S04.PlateauProof
+import HypercubeRamsey.S04.StageProof
+import HypercubeRamsey.S07.GridNodes_p_s07_c

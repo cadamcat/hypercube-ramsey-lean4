@@ -8,6 +8,8 @@ import HypercubeRamsey.S05.History_sol_s05_h5l_lll
 import HypercubeRamsey.S05.History_sol_s05_h5l_local
 import HypercubeRamsey.S05.History_sol_s05_h5l_geom
 import HypercubeRamsey.S05.History_sol_s05_h5l_bounds
+import HypercubeRamsey.S05.History_sol_s05_h5l_counts
+import HypercubeRamsey.S05.History_sol_s05_h5l_charge
 import HypercubeRamsey.S05.Parent_sol_s05_h1
 
 /-!
@@ -1031,6 +1033,359 @@ private theorem stage5_of_charges (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx �
     rw [hz, mul_zero] at hh
     exact htrimSupport lo hlo k h (le_antisymm hh ((tr k).nonneg _))
 
+private def regularGroupAlarm (b : X.Base) (hi : X.HighHid)
+    (a : Lane_sol_s05_h5l.GroupIndex X) (lo : X.LowHid) : Prop :=
+  ∃ j : Fin (X.p.J n + 1), j.val = a.2.2.val ∧
+    ∃ K ∈ Lane_sol_s05_h5l.lowTypeGroup X a.1 a.2.1 j,
+      X.step2Fail (b, X.joinHidden hi lo) K
+
+private def recordGroupAlarm (b : X.Base) (hi : X.HighHid) (cL cH : ℝ)
+    (a : Lane_sol_s05_h5l.GroupIndex X) (lo : X.LowHid) : Prop :=
+  ∃ r : X.AbsRecord, X.RecOccursAt r a.2.1 a.2.2.val ∧ r.1.coarse = a.1 ∧
+    (Lane_sol_s05_h5l.recordLowScope X r).Nonempty ∧
+    X.step3Scale (match r.1 with | .inl _ => cL / 4 | .inr _ => cH / 6) r.1 <
+      X.step3Rate (b, X.joinHidden hi lo) r
+
+private def combinedGroupAlarm (b : X.Base) (hi : X.HighHid) (cL cH : ℝ)
+    (a : Lane_sol_s05_h5l.GroupIndex X) (lo : X.LowHid) : Prop :=
+  regularGroupAlarm X b hi a lo ∨ recordGroupAlarm X b hi cL cH a lo
+
+set_option maxHeartbeats 800000 in
+private theorem combinedGroup_depends (b : X.Base) (hi : X.HighHid) (cL cH : ℝ)
+    (a : Lane_sol_s05_h5l.GroupIndex X) :
+    FinProb.DependsOn (combinedGroupAlarm X b hi cL cH a) (Lane_sol_s05_h5l.groupScope X a) := by
+  intro lo lo' h
+  have hreg : regularGroupAlarm X b hi a lo ↔ regularGroupAlarm X b hi a lo' := by
+    have hfail (j : Fin (X.p.J n + 1)) (K : X.Ty)
+        (hK : K ∈ Lane_sol_s05_h5l.lowTypeGroup X a.1 a.2.1 j) :
+        X.step2Fail (b, X.joinHidden hi lo) K = X.step2Fail (b, X.joinHidden hi lo') K := by
+      obtain ⟨x, hx, ht, hq, hs, hj⟩ := (Lane_sol_s05_h5l.mem_lowTypeGroup X a.1 a.2.1 j K).mp hK
+      have hsub := Lane_sol_s05_h5l.typeLowScope_group X x a hq hs
+      rw [ht] at hsub
+      exact Lane_sol_s05_h5l.step2_low_depends X b hi K lo lo'
+        (fun k hk => h k (hsub hk))
+    constructor
+    · rintro ⟨j, hj, K, hK, hf⟩
+      exact ⟨j, hj, K, hK, (hfail j K hK).mp hf⟩
+    · rintro ⟨j, hj, K, hK, hf⟩
+      exact ⟨j, hj, K, hK, (hfail j K hK).mpr hf⟩
+  have hrec : recordGroupAlarm X b hi cL cH a lo ↔ recordGroupAlarm X b hi cL cH a lo' := by
+    have hrate (r : X.AbsRecord) (hr : X.RecOccursAt r a.2.1 a.2.2.val) (hq : r.1.coarse = a.1) :
+        X.step3Rate (b, X.joinHidden hi lo) r = X.step3Rate (b, X.joinHidden hi lo') r := by
+      have hsub := Lane_sol_s05_h5l.recordLowScope_group X r a hr hq
+      exact Lane_sol_s05_h5l.step3_low_depends X b hi r lo lo'
+        (fun k hk => h k (hsub hk))
+    constructor
+    · rintro ⟨r, hr, hq, hn, hf⟩
+      exact ⟨r, hr, hq, hn, (hrate r hr hq) ▸ hf⟩
+    · rintro ⟨r, hr, hq, hn, hf⟩
+      exact ⟨r, hr, hq, hn, (hrate r hr hq).symm ▸ hf⟩
+  exact propext (or_congr hreg hrec)
+
+private theorem high_empty_scope_pass (b : X.Base) (hi : X.HighHid) (cH : ℝ) (hcH : 0 < cH)
+    (ν₃ : FinProb X.HighHid) (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0)
+    (r : X.AbsRecord) (hr : X.RecOccurs r) (hkey : ∃ i, r.1 = .inr i)
+    (hempty : Lane_sol_s05_h5l.recordLowScope X r = ∅) (lo : X.LowHid) :
+    X.step3Rate (b, X.joinHidden hi lo) r ≤ Real.exp (-(cH * X.p.s n) / 6) := by
+  have hconst (lo' : X.LowHid) : X.step3Rate (b, X.joinHidden hi lo') r =
+      X.step3Rate (b, X.joinHidden hi lo) r := by
+    apply Lane_sol_s05_h5l.step3_low_depends X b hi r
+    intro k hk
+    rw [hempty] at hk
+    exact False.elim (Finset.notMem_empty k hk)
+  have hh := hstage.2.2.2.1 hi hhi r hr hkey
+  simp only [hconst, FinProb.expect_const] at hh
+  exact hh.trans (Real.exp_le_exp.mpr (by have hs : (0 : ℝ) ≤ X.p.s n := Nat.cast_nonneg _; nlinarith))
+
+set_option maxHeartbeats 800000 in
+/-- A uniform group probability bound is enough once its polynomial incidence cost is small. -/
+private theorem stage5_of_group_prob (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N)
+    (cL cH ε : ℝ) (hcH : 0 < cH) (ν₃ : FinProb X.HighHid)
+    (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0) (htr : X.Stage4Laws b hi tr)
+    (hε : 0 ≤ ε) (hε1 : 2 * ε < 1)
+    (hprob : ∀ a, (X.lowLawOf tr).pr (combinedGroupAlarm X b hi cL cH a) ≤ ε)
+    (hcost : 2 * (((2 * 5 ^ coarseChunkCount5) * (X.p.m n + 1) ^ 2 *
+      (X.p.J n + 3) : ℕ) : ℝ) ^ 2 * ε ≤ 1 / 2) :
+    ∃ ν : FinProb X.LowHid, X.Stage5Law b hi tr ν cL cH := by
+  let B : ℕ := (2 * 5 ^ coarseChunkCount5) * (X.p.m n + 1) ^ 2 * (X.p.J n + 3)
+  have hB : (1 : ℝ) ≤ B := by
+    have hp : 0 < B := by dsimp [B]; positivity
+    exact_mod_cast hp
+  let P : X.LowIdx → FinProb (Fin 1 → Fin N) := fun k => FinProb.pi fun _ => tr k
+  let scope := Lane_sol_s05_h5l.groupScope X
+  let x : Lane_sol_s05_h5l.GroupIndex X → ℝ := fun _ => 2 * ε
+  have hx0 : ∀ a, 0 ≤ x a := fun _ => mul_nonneg (by norm_num) hε
+  have hvariable : ∀ k, ∑ a ∈ Finset.univ.filter (fun a => k ∈ scope a), x a ≤ (B : ℝ) * (2 * ε) := by
+    intro k
+    have hc := Lane_sol_s05_h5l.groups_touching_card X k
+    have hc' : ((Finset.univ.filter fun a => k ∈ scope a).card : ℝ) ≤ B := by exact_mod_cast hc
+    simpa only [x, Finset.sum_const, nsmul_eq_mul] using mul_le_mul_of_nonneg_right hc' (hx0 default)
+  have hvarhalf : (B : ℝ) * (2 * ε) ≤ 1 / 2 := by
+    have hh := mul_le_mul_of_nonneg_right hB (mul_nonneg (by positivity : (0 : ℝ) ≤ B) hε)
+    change 2 * (B : ℝ) ^ 2 * ε ≤ 1 / 2 at hcost
+    nlinarith
+  obtain ⟨ν, hsupport, hcompare⟩ := Lane_sol_s05_h5l.scoped_avoidance_of_charges
+    P (combinedGroupAlarm X b hi cL cH) scope (combinedGroup_depends X b hi cL cH)
+    x hx0 (fun _ => hε1) (by intro a; simpa [x, P, Setup5.lowLawOf] using hprob a)
+    (by
+      intro a
+      have hn := Lane_sol_s05_h5l.neighbor_charge_le scope x hx0 _ hvariable a
+      have hc : ((scope a).card : ℝ) ≤ B := by
+        have hh := Lane_sol_s05_h5l.groupScope_card X a
+        exact_mod_cast hh.trans (Nat.mul_le_mul_left _ (by omega : X.p.J n + 1 ≤ X.p.J n + 3))
+      have hh := mul_le_mul_of_nonneg_right hc (by positivity : 0 ≤ (B : ℝ) * (2 * ε))
+      exact hn.trans (hh.trans (by dsimp [B] at *; nlinarith [hcost])))
+    (fun k => (hvariable k).trans hvarhalf) (fun _ _ => X.y₀)
+  have htrimSupport (lo : X.LowHid) (hlo : ν.w lo ≠ 0) (k : X.LowIdx) (h : Fin 1) :
+      (tr k).w (lo k h) ≠ 0 := by
+    have hprod := (hsupport lo hlo).1
+    have hcol : (P k).w (lo k) ≠ 0 :=
+      (Finset.prod_ne_zero_iff.mp hprod) k (Finset.mem_univ _)
+    change (∏ h, (tr k).w (lo k h)) ≠ 0 at hcol
+    exact (Finset.prod_ne_zero_iff.mp hcol) h (Finset.mem_univ _)
+  refine ⟨ν, ?_, ?_, ?_, ?_⟩
+  · intro lo hlo
+    constructor
+    · intro K hK hf
+      obtain ⟨y, hy, htype⟩ := hK
+      by_cases hlow : X.g.severity y ≤ X.p.J n
+      · let j : Fin (X.p.J n + 1) := ⟨X.g.severity y, by omega⟩
+        let a : Lane_sol_s05_h5l.GroupIndex X :=
+          (X.g.key y, X.g.sign y, ⟨X.g.severity y, by omega⟩)
+        apply (hsupport lo hlo).2 a
+        apply Or.inl
+        refine ⟨j, rfl, K, ?_, hf⟩
+        exact (Lane_sol_s05_h5l.mem_lowTypeGroup X a.1 a.2.1 j K).mpr ⟨y, hy, htype, rfl, rfl, rfl⟩
+      · have hhigh : X.HighOnly K := by
+          intro ℓ hℓ
+          rw [← htype] at hℓ
+          change ℓ ∈ X.g.typeKeys (X.p.J n) y at hℓ
+          rw [ChunkGeometry5.typeKeys, ite_eq_right hlow] at hℓ
+          obtain ⟨q, hq, rfl⟩ := Finset.mem_image.mp hℓ
+          exact ⟨q, rfl⟩
+        exact hstage.1 hi hhi K ⟨y, hy, htype⟩ hhigh lo hf
+    · intro K t hopt
+      let k : X.LowIdx := (K.1, t, ⟨X.p.J n, Nat.lt_succ_self _⟩)
+      let h₀ : Fin 1 := ⟨0, by omega⟩
+      apply htr.2 k (lo k h₀) (htrimSupport lo hlo k h₀) K t hopt rfl lo
+      funext h
+      rw [Subsingleton.elim h h₀]
+  · intro lo hlo r hr
+    by_cases hn : (Lane_sol_s05_h5l.recordLowScope X r).Nonempty
+    · obtain ⟨y, μ, hy⟩ := hr
+      have hsev : X.g.severity y.1 ≤ X.p.J n + 2 := by
+        cases ht : r.1 with
+        | inl k =>
+          have hd := Lane_sol_s05_h5l.roleKey_low_data X y.1 k (hy.1.trans ht)
+          have hk := k.2.2.isLt
+          omega
+        | inr i =>
+          exact (Lane_sol_s05_h5l.high_record_low_interface X r y μ hy ⟨i, ht⟩ hn).2
+      let a : Lane_sol_s05_h5l.GroupIndex X :=
+        (r.1.coarse, X.g.sign y.1, ⟨X.g.severity y.1, by omega⟩)
+      apply le_of_not_gt
+      intro hf
+      exact (hsupport lo hlo).2 a (Or.inr ⟨r, ⟨y, μ, hy, rfl, rfl⟩, rfl, hn, hf⟩)
+    · have he : Lane_sol_s05_h5l.recordLowScope X r = ∅ := Finset.not_nonempty_iff_eq_empty.mp hn
+      have hhigh : ∃ i, r.1 = .inr i := by
+        cases ht : r.1 with
+        | inr i => exact ⟨i, rfl⟩
+        | inl k =>
+          have hk : k ∈ Lane_sol_s05_h5l.recordLowScope X r := by
+            simp [Lane_sol_s05_h5l.recordLowScope, Lane_sol_s05_h5l.recordKeys, ht]
+          rw [he] at hk
+          exact False.elim (Finset.notMem_empty k hk)
+      obtain ⟨i, hi'⟩ := hhigh
+      simpa only [hi', step3Scale, div_mul_eq_mul_div, neg_div] using
+        high_empty_scope_pass X b hi cH hcH ν₃ hstage hhi r hr ⟨i, hi'⟩ he lo
+  · intro Λ W M hW hM
+    apply hcompare Λ W M hW
+    intro lo
+    simpa only [Lane_sol_s05_h5l.resample, Setup5.resampleLow, P,
+      Lane_q_s05_h5l.pinDirac5, FinProb.dirac5] using hM lo
+  · intro lo hlo k h hz
+    have hh := htr.1 k (lo k h)
+    rw [hz, mul_zero] at hh
+    exact htrimSupport lo hlo k h (le_antisymm hh ((tr k).nonneg _))
+
+set_option maxHeartbeats 800000 in
+private theorem regular_step2_group_bound (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N)
+    (cH : ℝ) (ν₃ : FinProb X.HighHid) (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0)
+    (htr : X.Stage4Laws b hi tr) (q : CoarseKey5 n) (t : CubeVertex (X.p.m n))
+    (j : Fin (X.p.J n + 1)) (D : ℕ) (hD : (Lane_sol_s05_h5l.coarseBall 1 q).card ≤ D) :
+    (X.lowLawOf tr).pr (fun lo => ∃ K ∈ Lane_sol_s05_h5l.lowTypeGroup X q t j,
+      X.step2Fail (b, X.joinHidden hi lo) K) ≤
+      (2 : ℝ) ^ D * ((j.val : ℝ) + 1) * ((X.p.m n : ℝ) + 1) ^ j.val *
+      (2 : ℝ) ^ (coarseChunkCount5 * 4 + 3 + j.val) *
+        ((coarseChunkCount5 * 4 + 3 + j.val : ℕ) + 1) *
+          Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n j.val)) / 8) := by
+  let S := Lane_sol_s05_h5l.lowTypeGroup X q t j
+  let d : ℕ := coarseChunkCount5 * 4 + 3 + j.val
+  let e : ℝ := (2 : ℝ) ^ d * ((d : ℝ) + 1) *
+    Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n j.val)) / 8)
+  have hprob (K : X.Ty) (hK : K ∈ S) :
+      (X.lowLawOf tr).pr (fun lo => X.step2Fail (b, X.joinHidden hi lo) K) ≤ e := by
+    have hd := Lane_sol_s05_h5l.lowTypeGroup_data X q t j K hK
+    have hcard : K.2.1.card ≤ d := by dsimp [d]; omega
+    by_cases hhigh : X.HighOnly K
+    · have hz : (X.lowLawOf tr).pr (fun lo => X.step2Fail (b, X.joinHidden hi lo) K) = 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_eq_zero
+        intro lo hlo
+        simp only [if_neg (hstage.1 hi hhi K hd.1 hhigh lo)]
+      rw [hz]
+      dsimp [e]
+      positivity
+    · have hh := step2_pretrim_stage3_bound X b hi tr cH ν₃ hstage hhi htr K hd.1 hhigh
+      have hs : (Lane_sol_s05_h5l.lowTypeScope X K).card ≤ d :=
+        (Lane_sol_s05_h5l.lowTypeScope_card X K).trans hcard
+      have hsegs : X.p.typeSegs n K = X.p.uSeg n j.val := by rw [Params5.typeSegs, hd.2.2.1]
+      rw [hsegs] at hh
+      refine hh.trans ?_
+      dsimp only [e]
+      have hc' : (K.2.1.card : ℝ) + 1 ≤ (d : ℝ) + 1 := by exact_mod_cast Nat.add_le_add_right hcard 1
+      have hp : (2 : ℝ) ^ (Lane_sol_s05_h5l.lowTypeScope X K).card ≤ (2 : ℝ) ^ d :=
+        pow_le_pow_right₀ (by norm_num) hs
+      have he0 : 0 ≤ Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n j.val)) / 8) := (Real.exp_pos _).le
+      calc
+        _ = ((2 : ℝ) ^ (Lane_sol_s05_h5l.lowTypeScope X K).card * ((K.2.1.card : ℝ) + 1)) *
+            Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n j.val)) / 8) := by ring
+        _ ≤ _ := mul_le_mul_of_nonneg_right
+          (mul_le_mul hp hc' (by positivity) (by positivity)) he0
+  have hc : (S.card : ℝ) ≤ (2 : ℝ) ^ D * ((j.val : ℝ) + 1) * ((X.p.m n : ℝ) + 1) ^ j.val := by
+    exact_mod_cast Lane_sol_s05_h5l.lowTypeGroup_card X q t j D hD
+  calc
+    _ ≤ ∑ K ∈ S, (X.lowLawOf tr).pr (fun lo => X.step2Fail (b, X.joinHidden hi lo) K) :=
+      Lane_sol_s05_h5l.pr_finset_union_le _ S _
+    _ ≤ ∑ _K ∈ S, e := Finset.sum_le_sum hprob
+    _ = (S.card : ℝ) * e := by simp
+    _ ≤ ((2 : ℝ) ^ D * ((j.val : ℝ) + 1) * ((X.p.m n : ℝ) + 1) ^ j.val) * e :=
+      mul_le_mul_of_nonneg_right hc (by dsimp [e]; positivity)
+    _ = _ := by dsimp [e, d]; ring
+
+set_option maxHeartbeats 800000 in
+private theorem high_step3_group_bound (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N)
+    (cH C : ℝ) (ν₃ : FinProb X.HighHid) (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0)
+    (htr : X.Stage4Laws b hi tr) (hcount : X.RecordCount C)
+    (hbudget : (coarseChunkCount5 * 4 + 2 : ℕ) * ((X.p.J n : ℝ) + 4) * Real.log 2 ≤
+      cH * (X.p.s n : ℝ) / 12) (q : CoarseKey5 n) (t : CubeVertex (X.p.m n)) (j : ℕ) :
+    (X.lowLawOf tr).pr (fun lo => ∃ r : X.AbsRecord,
+      X.RecOccursAt r t j ∧ r.1 = .inr q ∧
+        Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      Real.exp (C * ((X.p.T n : ℝ) * Real.log (X.p.T n) +
+        ((X.p.J n : ℝ) + 1) * Real.log (X.p.m n))) *
+          Real.exp (-(cH * X.p.s n) / 4) := by
+  let S := Finset.univ.filter fun r : X.AbsRecord => X.RecOccursAt r t j ∧ r.1 = .inr q
+  let e : ℝ := Real.exp (-(cH * X.p.s n) / 4)
+  have he : (fun lo => ∃ r : X.AbsRecord, X.RecOccursAt r t j ∧ r.1 = .inr q ∧
+      Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r) =
+      (fun lo => ∃ r ∈ S, Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r) := by
+    funext lo
+    apply propext
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
+    aesop
+  rw [he]
+  have hp (r : X.AbsRecord) (hr : r ∈ S) :
+      (X.lowLawOf tr).pr (fun lo => Real.exp (-(cH * X.p.s n) / 6) <
+        X.step3Rate (b, X.joinHidden hi lo) r) ≤ e := by
+    have hh := (Finset.mem_filter.mp hr).2
+    obtain ⟨y, μ, hy, ht, hj⟩ := hh.1
+    exact high_step3_pretrim_alarm_tight X b hi tr cH ν₃ hstage hhi htr r ⟨y, μ, hy⟩ ⟨q, hh.2⟩ hbudget
+  have hc := hcount (.inr q) t j
+  simp only [HiddenKey5.level, Sum.isLeft_inr, Bool.false_eq_true, false_and, ite_false, add_zero] at hc
+  calc
+    _ ≤ ∑ r ∈ S, (X.lowLawOf tr).pr (fun lo => Real.exp (-(cH * X.p.s n) / 6) <
+        X.step3Rate (b, X.joinHidden hi lo) r) := Lane_sol_s05_h5l.pr_finset_union_le _ S _
+    _ ≤ ∑ _r ∈ S, e := Finset.sum_le_sum hp
+    _ = (S.card : ℝ) * e := by simp
+    _ ≤ _ := mul_le_mul_of_nonneg_right hc (Real.exp_pos _).le
+
+set_option maxHeartbeats 800000 in
+private theorem combinedGroup_prob_of_bounds (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N)
+    (cL cH ε : ℝ) (hε : 0 ≤ ε)
+    (hreg : ∀ q t j, (X.lowLawOf tr).pr (fun lo =>
+      ∃ K ∈ Lane_sol_s05_h5l.lowTypeGroup X q t j, X.step2Fail (b, X.joinHidden hi lo) K) ≤ ε / 3)
+    (hlow : ∀ k : X.LowIdx, (X.lowLawOf tr).pr (fun lo => ∃ r : X.AbsRecord,
+      X.RecOccurs r ∧ r.1 = .inl k ∧
+        Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r) ≤ ε / 3)
+    (hhigh : ∀ q t j, (X.lowLawOf tr).pr (fun lo => ∃ r : X.AbsRecord,
+      X.RecOccursAt r t j ∧ r.1 = .inr q ∧
+        Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r) ≤ ε / 3) :
+    ∀ a, (X.lowLawOf tr).pr (combinedGroupAlarm X b hi cL cH a) ≤ ε := by
+  intro a
+  have hregular : (X.lowLawOf tr).pr (regularGroupAlarm X b hi a) ≤ ε / 3 := by
+    by_cases hj : a.2.2.val ≤ X.p.J n
+    · let j : Fin (X.p.J n + 1) := ⟨a.2.2.val, by omega⟩
+      refine (FinProb.pr_mono _ _ _ ?_).trans (hreg a.1 a.2.1 j)
+      intro lo hf
+      obtain ⟨j', hj', K, hK, hfail⟩ := hf
+      have he : j' = j := Fin.ext hj'
+      subst j'
+      exact ⟨K, hK, hfail⟩
+    · have hz : (X.lowLawOf tr).pr (regularGroupAlarm X b hi a) ≤
+          (X.lowLawOf tr).pr (fun _ => False) := by
+        apply FinProb.pr_mono
+        intro lo hf
+        obtain ⟨j, hj', K, hK, hfail⟩ := hf
+        have hlt := j.isLt
+        omega
+      simpa only [FinProb.pr, if_false, Finset.sum_const_zero] using
+        hz.trans (show (X.lowLawOf tr).pr (fun _ => False) ≤ ε / 3 by
+          simp only [FinProb.pr, if_false, Finset.sum_const_zero]; positivity)
+  let H := fun lo => ∃ r : X.AbsRecord,
+    X.RecOccursAt r a.2.1 a.2.2.val ∧ r.1 = .inr a.1 ∧
+      Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r
+  have hH : (X.lowLawOf tr).pr H ≤ ε / 3 := hhigh a.1 a.2.1 a.2.2.val
+  have hrecord : (X.lowLawOf tr).pr (recordGroupAlarm X b hi cL cH a) ≤ 2 * ε / 3 := by
+    by_cases hj : a.2.2.val ≤ X.p.J n
+    · let k : X.LowIdx := (a.1, a.2.1, ⟨a.2.2.val, by omega⟩)
+      let L := fun lo => ∃ r : X.AbsRecord, X.RecOccurs r ∧ r.1 = .inl k ∧
+        Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r
+      have hL : (X.lowLawOf tr).pr L ≤ ε / 3 := hlow k
+      have hcover : ∀ lo, recordGroupAlarm X b hi cL cH a lo → L lo ∨ H lo := by
+        intro lo hf
+        obtain ⟨r, hr, hq, hn, hfail⟩ := hf
+        cases ht : r.1 with
+        | inl k' =>
+          obtain ⟨y, μ, hy, hs, hsev⟩ := hr
+          have hd := Lane_sol_s05_h5l.roleKey_low_data X y.1 k' (hy.1.trans ht)
+          have hkq : k'.1 = a.1 := by simpa only [ht, HiddenKey5.coarse] using hq
+          have hks : k'.2.1 = a.2.1 := hd.2.1.symm.trans hs
+          have hkj : k'.2.2.val = a.2.2.val := hd.2.2.symm.trans hsev
+          have he : k' = k := by
+            apply Prod.ext hkq
+            apply Prod.ext hks
+            exact Fin.ext hkj
+          have htarget : r.1 = .inl k := ht.trans (congrArg Sum.inl he)
+          apply Or.inl
+          refine ⟨r, ⟨y, μ, hy⟩, htarget, ?_⟩
+          simpa only [htarget, step3Scale] using hfail
+        | inr i =>
+          have he : i = a.1 := by simpa only [ht, HiddenKey5.coarse] using hq
+          apply Or.inr
+          refine ⟨r, hr, ht.trans (congrArg Sum.inr he), ?_⟩
+          simpa only [ht, step3Scale, div_mul_eq_mul_div, neg_div] using hfail
+      have hh := (FinProb.pr_mono (X.lowLawOf tr) _ _ hcover).trans (FinProb.pr_union _ L H)
+      linarith
+    · have hcover : ∀ lo, recordGroupAlarm X b hi cL cH a lo → H lo := by
+        intro lo hf
+        obtain ⟨r, hr, hq, hn, hfail⟩ := hf
+        cases ht : r.1 with
+        | inl k =>
+          obtain ⟨y, μ, hy, hs, hsev⟩ := hr
+          have hd := Lane_sol_s05_h5l.roleKey_low_data X y.1 k (hy.1.trans ht)
+          have hk := k.2.2.isLt
+          omega
+        | inr i =>
+          have he : i = a.1 := by simpa only [ht, HiddenKey5.coarse] using hq
+          refine ⟨r, hr, ht.trans (congrArg Sum.inr he), ?_⟩
+          simpa only [ht, step3Scale, div_mul_eq_mul_div, neg_div] using hfail
+      exact ((FinProb.pr_mono _ _ _ hcover).trans hH).trans (by linarith)
+  have hh := FinProb.pr_union (X.lowLawOf tr) (regularGroupAlarm X b hi a) (recordGroupAlarm X b hi cL cH a)
+  change (X.lowLawOf tr).pr (fun lo => regularGroupAlarm X b hi a lo ∨ recordGroupAlarm X b hi cL cH a lo) ≤ ε
+  linarith
+
+set_option maxHeartbeats 800000 in
 /-- L5.1h5 (05:723–744): from the product of the trimmed laws exclude the remaining Step 2 failures and the
 Step 3 alarms (Markov from the one-target bound and Stage 3); grouping by central sign, bin and severity gives
 polynomial dependency, and the pattern unions give charges `m^{-K_deg}` once `K₁, K₂, K_s` are large. -/
@@ -1041,7 +1396,65 @@ theorem L5_1h5 : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 <
         ∀ b hi (ν₃ : FinProb X.HighHid), X.Stage3Law b ν₃ (cH p.pre1) → ν₃.w hi ≠ 0 →
           ∀ tr, X.Stage4Laws b hi tr →
             ∃ ν : FinProb X.LowHid, X.Stage5Law b hi tr ν (cL p.pre1) (cH p.pre1) := by
-  sorry
+  classical
+  intro C cL cH hc
+  refine ⟨Lane_sol_s05_h5l.stage5Request C cL cH, ?_⟩
+  intro p hp
+  obtain ⟨hK1, hK2, hKs⟩ := Lane_sol_s05_h5l.stage5_request_budgets p C cL cH hc hp
+  let Dt : ℕ := 2 * 3 ^ coarseChunkCount5
+  let d : ℕ := coarseChunkCount5 * 4 + 3
+  let Ds : ℕ := 2 * 5 ^ coarseChunkCount5
+  have hreg := Lane_sol_s05_h5l.regular_group_budget_eventually p Dt d hK1
+  have hlow := Lane_sol_s05_h5l.low_group_budget_eventually p C (cL p.pre1) (hc p.pre1).1 hK2
+  have hhigh := Lane_sol_s05_h5l.high_group_budget_eventually p C (cH p.pre1) (hc p.pre1).2 hKs
+  have hcost := Lane_sol_s05_h5l.group_cost_eventually p Ds
+  have hscope := Lane_sol_s05_h5l.high_scope_budget_eventually p
+    (coarseChunkCount5 * 4 + 2) (cH p.pre1) (by positivity) (hc p.pre1).2
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1
+    (hreg.and (hlow.and (hhigh.and (hcost.and hscope))))
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp hcount hraw b hi ν₃ hstage hhi tr htr
+  obtain ⟨hregn, hlown, hhighn, hcostn, hscopen⟩ := hn₀ n hn
+  have hε : 0 ≤ Lane_sol_s05_h5l.groupEps p n := (Real.exp_pos _).le
+  have hscopeX : (coarseChunkCount5 * 4 + 2 : ℕ) * ((X.p.J n : ℝ) + 4) * Real.log 2 ≤
+      cH p.pre1 * (X.p.s n : ℝ) / 12 := by
+    simpa only [hXp, Nat.cast_add, Nat.cast_mul, Nat.cast_ofNat] using hscopen
+  apply stage5_of_group_prob X b hi tr (cL p.pre1) (cH p.pre1)
+    (Lane_sol_s05_h5l.groupEps p n) (hc p.pre1).2 ν₃ hstage hhi htr hε hcostn.1
+  · apply combinedGroup_prob_of_bounds X b hi tr (cL p.pre1) (cH p.pre1) _ hε
+    · intro q t j
+      have hD : (Lane_sol_s05_h5l.coarseBall 1 q).card ≤ Dt := by
+        dsimp only [Dt]
+        simpa only [Nat.reduceMul, Nat.reduceAdd] using Lane_sol_s05_h5l.coarseBall_card 1 q
+      have hh := regular_step2_group_bound X b hi tr (cH p.pre1) ν₃ hstage hhi htr q t j Dt hD
+      have hj : j.val ≤ p.J n := by
+        rw [← hXp]
+        exact Nat.le_of_lt_succ j.isLt
+      have hb := hregn j.val hj
+      have hbX : (2 : ℝ) ^ Dt * ((j.val : ℝ) + 1) * ((X.p.m n : ℝ) + 1) ^ j.val *
+          (2 : ℝ) ^ (d + j.val) * ((d + j.val : ℕ) + 1) *
+          Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n j.val)) / 8) ≤
+            Lane_sol_s05_h5l.groupEps p n / 3 := by simpa only [hXp] using hb
+      exact hh.trans hbX
+    · intro k
+      have hh := low_step3_group_alarm X b hi tr (cL p.pre1) (cH p.pre1) C hraw
+        hstage.2.2.2.2.1 hstage.2.2.2.2.2.1 htr hcount k
+      have hb := hlown k.2.2.val
+      have hbX : Real.exp (C * ((X.p.T n : ℝ) * Real.log (X.p.T n) +
+          ((k.2.2.val : ℝ) + 1) * Real.log (X.p.m n) +
+          (if k.2.2.val = X.p.J n then (X.p.T n : ℝ) *
+            (X.p.q0 * X.p.uStarSeg n * X.p.usedBlocks n : ℕ) else 0))) *
+          (2 * Real.exp (-(3 * cL p.pre1 / 4 * X.p.kPrime n k.2.2.val))) ≤
+            Lane_sol_s05_h5l.groupEps p n / 3 := by simpa only [hXp] using hb
+      exact hh.trans hbX
+    · intro q t j
+      have hh := high_step3_group_bound X b hi tr (cH p.pre1) C ν₃ hstage hhi htr hcount hscopeX q t j
+      have hbX : Real.exp (C * ((X.p.T n : ℝ) * Real.log (X.p.T n) +
+          ((X.p.J n : ℝ) + 1) * Real.log (X.p.m n))) *
+          Real.exp (-(cH p.pre1 * X.p.s n) / 4) ≤ Lane_sol_s05_h5l.groupEps p n / 3 := by
+        simpa only [hXp] using hhighn
+      exact hh.trans hbX
+  · simpa only [hXp, Ds] using hcostn.2
 
 /-! ### History odd loads, second part (05:1027–1041) -/
 

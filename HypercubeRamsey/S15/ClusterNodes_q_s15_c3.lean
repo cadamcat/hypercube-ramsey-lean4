@@ -175,4 +175,36 @@ theorem finLaw_pr_markov {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
     _ = (∑ ω, P.w ω * (if H ω then F ω ^ m else 0)) / t ^ m := by
       rw [Finset.sum_div (s := Finset.univ)]
 
+theorem finLaw_cond_E_eq {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    (P : FinLaw Ω) (A : Finset Ω) (hA : 0 < ∑ ω ∈ A, P.w ω)
+    (F : Ω → ℝ) :
+    (FinLaw.cond P A hA).E F =
+      (∑ ω ∈ A, P.w ω * F ω) / (∑ ω ∈ A, P.w ω) := by
+  letI : DecidableEq Ω := Classical.decEq Ω
+  simp only [FinLaw.E, FinLaw.cond]
+  calc
+    (∑ ω, ((if ω ∈ A then P.w ω else 0) / (∑ x ∈ A, P.w x)) * F ω) =
+        ∑ ω, ((if ω ∈ A then P.w ω else 0) * F ω) / (∑ x ∈ A, P.w x) := by
+          apply Finset.sum_congr rfl
+          intro ω hω
+          by_cases hmem : ω ∈ A
+          · simp [hmem]
+            ring
+          · simp [hmem]
+    _ = (∑ ω, (if ω ∈ A then P.w ω else 0) * F ω) / (∑ x ∈ A, P.w x) := by
+          rw [Finset.sum_div]
+    _ = (∑ ω ∈ A, P.w ω * F ω) / (∑ x ∈ A, P.w x) := by
+          congr 1
+          simp [Finset.sum_ite_mem, Finset.univ_inter]
+
+theorem finLaw_cond_E_le {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    (P : FinLaw Ω) (A : Finset Ω) (hA : 0 < ∑ ω ∈ A, P.w ω)
+    (F : Ω → ℝ) (hF : ∀ ω, 0 ≤ F ω) :
+    (FinLaw.cond P A hA).E F ≤ P.E F / (∑ ω ∈ A, P.w ω) := by
+  rw [finLaw_cond_E_eq]
+  apply (div_le_div_of_nonneg_right _ hA.le)
+  apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+  intro ω hω hnot
+  exact mul_nonneg (P.nonneg ω) (hF ω)
+
 end HypercubeRamsey.Lane_q_s15_c3

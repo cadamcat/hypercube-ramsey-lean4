@@ -243,20 +243,164 @@ theorem std_eventually (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
     (hp : HDAdmissible J₀ b₀ b σ ζ θ a c_d C_d D) (reg : HDRegime b₀ b D) :
     ∃ n₀ : ℕ, ∀ p : HDParams, Std J₀ b₀ b σ ζ c_d C_d D reg p → n₀ ≤ p.n →
       0 < p.D ∧ 0 < p.H ∧ 30 ≤ p.lam ∧ 4 ≤ (p.n : ℝ) ^ p.b := by
-  sorry
+  have hJ : 0 < J₀ := by linarith [hp.hJ]
+  have hb : 0 < b := by linarith [hp.hb.1, hp.hb.2.1]
+  have h1 : ∀ᶠ n : ℕ in Filter.atTop, (30 : ℝ) ≤ (n : ℝ) ^ J₀ :=
+    (Filter.tendsto_atTop.1 ((tendsto_rpow_atTop hJ).comp tendsto_natCast_atTop_atTop)) 30
+  have h2 : ∀ᶠ n : ℕ in Filter.atTop, (4 : ℝ) ≤ (n : ℝ) ^ b :=
+    (Filter.tendsto_atTop.1 ((tendsto_rpow_atTop hb).comp tendsto_natCast_atTop_atTop)) 4
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 (h1.and h2)
+  refine ⟨n₀, fun p hstd hn => ⟨?_, ?_, ?_, ?_⟩⟩
+  · rw [hstd.hD]
+    exact hp.hD
+  · rw [hstd.hH, topScale_eq_hdScaleRadius]
+    unfold hdScaleRadius
+    exact Nat.mul_pos (pow_pos (by unfold hdScaleMultiplier; omega) _)
+      (by unfold heightBaseRadius; omega)
+  · rw [hstd.hlam]
+    exact (hn₀ p.n hn).1
+  · rw [hstd.hb]
+    exact (hn₀ p.n hn).2
+
+/-- Two Boolean product laws that agree off one coordinate give the same expectation to a
+function that ignores that coordinate. -/
+theorem pi_bool_expect_eq_of_eq_off {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (Q Q' : ι → FinProb Bool) (i₀ : ι) (hQ : ∀ i, i ≠ i₀ → Q i = Q' i)
+    (f : (ι → Bool) → ℝ) (hf : ∀ ω b, f (Function.update ω i₀ b) = f ω) :
+    (FinProb.pi Q).expect f = (FinProb.pi Q').expect f := by
+  have key : ∀ Q : ι → FinProb Bool, (FinProb.pi Q).expect f =
+      (∑ ω : ι → Bool, (∏ i ∈ Finset.univ.erase i₀, (Q i).w (ω i)) * f ω) / 2 := by
+    intro Q
+    let g : (ι → Bool) → ℝ := fun ω => (∏ i ∈ Finset.univ.erase i₀, (Q i).w (ω i)) * f ω
+    let σ : (ι → Bool) → (ι → Bool) := fun ω => Function.update ω i₀ (!(ω i₀))
+    have hσ0 : ∀ ω, σ ω i₀ = !(ω i₀) := by
+      intro ω
+      simp [σ]
+    have hσσ : Function.Involutive σ := by
+      intro ω
+      funext i
+      by_cases hi : i = i₀
+      · subst hi
+        rw [hσ0, hσ0, Bool.not_not]
+      · simp [σ, Function.update_of_ne hi]
+    have hgσ : ∀ ω, g (σ ω) = g ω := by
+      intro ω
+      simp only [g]
+      congr 1
+      · apply Finset.prod_congr rfl
+        intro i hi
+        simp only [σ]
+        rw [Function.update_of_ne (Finset.ne_of_mem_erase hi)]
+      · exact hf ω _
+    have hexp : (FinProb.pi Q).expect f = ∑ ω, (Q i₀).w (ω i₀) * g ω := by
+      unfold FinProb.expect FinProb.pi
+      apply Finset.sum_congr rfl
+      intro ω _
+      simp only [g]
+      rw [← Finset.mul_prod_erase Finset.univ (fun i => (Q i).w (ω i)) (Finset.mem_univ i₀)]
+      ring
+    have hswap : ∑ ω, (Q i₀).w (ω i₀) * g ω = ∑ ω, (Q i₀).w (!(ω i₀)) * g ω := by
+      calc
+        ∑ ω, (Q i₀).w (ω i₀) * g ω = ∑ ω, (Q i₀).w (σ ω i₀) * g (σ ω) :=
+          (Equiv.sum_comp (hσσ.toPerm σ) (fun ω => (Q i₀).w (ω i₀) * g ω)).symm
+        _ = ∑ ω, (Q i₀).w (!(ω i₀)) * g ω := by
+          apply Finset.sum_congr rfl
+          intro ω _
+          rw [hσ0, hgσ]
+    have hbool : ∀ bb : Bool, (Q i₀).w bb + (Q i₀).w (!bb) = 1 := by
+      have h1 := (Q i₀).sum_eq_one
+      rw [Fintype.sum_bool] at h1
+      intro bb
+      cases bb <;> simp <;> linarith
+    have htwo : 2 * ∑ ω, (Q i₀).w (ω i₀) * g ω = ∑ ω, g ω := by
+      calc
+        2 * ∑ ω, (Q i₀).w (ω i₀) * g ω =
+            ∑ ω, (Q i₀).w (ω i₀) * g ω + ∑ ω, (Q i₀).w (!(ω i₀)) * g ω := by
+          rw [← hswap]
+          ring
+        _ = ∑ ω, ((Q i₀).w (ω i₀) + (Q i₀).w (!(ω i₀))) * g ω := by
+          rw [← Finset.sum_add_distrib]
+          apply Finset.sum_congr rfl
+          intro ω _
+          ring
+        _ = ∑ ω, g ω := by
+          apply Finset.sum_congr rfl
+          intro ω _
+          rw [hbool, one_mul]
+    rw [hexp]
+    linarith
+  rw [key Q, key Q']
+  congr 1
+  apply Finset.sum_congr rfl
+  intro ω _
+  congr 1
+  apply Finset.prod_congr rfl
+  intro i hi
+  rw [hQ i (Finset.ne_of_mem_erase hi)]
 
 /-- LEAF (forced-center transfer, TeX 03:534–541). A function that does not read the forced
 coordinate has the same expectation under the forced and the unforced position laws. -/
 theorem posLawForced_expect_eq (p : HDParams) (forced : Option p.Loc)
     (f : (p.Loc → Bool) → ℝ) (hf : FinProb.DependsOn f (forcedFree p forced)) :
     (p.posLawForced forced).expect f = p.posLaw.expect f := by
-  sorry
+  rcases forced with _ | ℓ₀
+  · rw [posLawForced_none]
+  · unfold HDParams.posLawForced HDParams.posLaw
+    apply pi_bool_expect_eq_of_eq_off _ _ ℓ₀
+    · intro i hi
+      have : ¬ (some ℓ₀ = some i) := fun h => hi (Option.some_inj.mp h).symm
+      simp only [this, if_false]
+    · intro ω bb
+      apply hf
+      intro i hi
+      have hne : i ≠ ℓ₀ := by
+        intro h
+        subst h
+        simp [forcedFree] at hi
+      exact Function.update_of_ne hne _ _
 
 /-- LEAF. `relSup` reads the prospective positions only inside its center domain. -/
 theorem relSup_dependsOn (p : HDParams) (C : Finset p.Loc) (Dom : Set (HDState p))
     (s t η : ℝ) (x : HDState p) (R : ℕ) :
     FinProb.DependsOn (relSup p C Dom s t η x R) C := by
-  sorry
+  intro P P' hPP'
+  have hcrowd : ∀ A v j, relCrowd p C P A v j = relCrowd p C P' A v j := by
+    intro A v j
+    unfold relCrowd
+    congr 1
+    apply Finset.filter_congr
+    intro u _
+    constructor
+    · rintro ⟨hC, hP, hA, hd⟩
+      exact ⟨hC, by rw [← hPP' _ hC]; exact hP, hA, hd⟩
+    · rintro ⟨hC, hP, hA, hd⟩
+      exact ⟨hC, by rw [hPP' _ hC]; exact hP, hA, hd⟩
+  have hbad : ∀ A E, relBad p C Dom t P A E = relBad p C Dom t P' A E := by
+    intro A E
+    funext v k
+    unfold relBad relBadAt
+    simp only [hcrowd]
+  have hfail : ∀ A E, relFail p C Dom t η P A E x R = relFail p C Dom t η P' A E x R := by
+    intro A E
+    unfold relFail
+    rw [hbad]
+  have hlegal : ∀ E, relLegal p C Dom s P E x R ↔ relLegal p C Dom s P' E x R := by
+    intro E
+    unfold relLegal
+    constructor
+    · intro h v j hv hd
+      obtain ⟨h1, h2⟩ := h v j hv hd
+      exact ⟨fun ℓ hℓ hC => by rw [← hPP' ℓ hC]; exact h1 ℓ hℓ hC, h2⟩
+    · intro h v j hv hd
+      obtain ⟨h1, h2⟩ := h v j hv hd
+      exact ⟨fun ℓ hℓ hC => by rw [hPP' ℓ hC]; exact h1 ℓ hℓ hC, h2⟩
+  unfold relSup
+  congr 1
+  funext E
+  simp only [hfail]
+  by_cases hL : relLegal p C Dom s P E x R
+  · rw [if_pos hL, if_pos ((hlegal E).mp hL)]
+  · rw [if_neg hL, if_neg (fun h => hL ((hlegal E).mpr h))]
 
 /-- LEAF (actual events are relaxed events, TeX 03:398–404 and 03:534–541). On legal actual
 eligibility, an actual stopped-path failure is a relaxed failure with the forced center erased;
@@ -540,7 +684,35 @@ theorem private_factorization (p : HDParams) (C : Finset p.Loc) (Dom : Set (HDSt
     (s t η : ℝ) (Y : Finset (HDState p)) (R' : ℕ) :
     p.posLaw.expect (fun P => ∏ y ∈ Y, relSup p (privateDom p C Y y R') Dom s t η y R' P) ≤
       ∏ y ∈ Y, p.posLaw.expect (relSup p (privateDom p C Y y R') Dom s t η y R') := by
-  sorry
+  have hdeg : ∀ ℓ : p.Loc,
+      (Finset.univ.filter (fun b : Y => ℓ ∈ privateDom p C Y b.1 R')).card ≤ 1 := by
+    intro ℓ
+    apply Finset.card_le_one.mpr
+    intro b₁ hb₁ b₂ hb₂
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb₁ hb₂
+    by_contra hne
+    have hne' : b₂.1 ≠ b₁.1 := fun h => hne (Subtype.ext h.symm)
+    unfold privateDom at hb₁ hb₂
+    have h1 := (Finset.mem_filter.mp hb₁).2 b₂.1 b₂.2 hne'
+    have h2 := (Finset.mem_inter.mp (Finset.mem_filter.mp hb₂).1).2
+    exact h1 h2
+  have key := xFinner (fun _ : p.Loc => FinProb.bernoulli (p.lam / (p.V : ℝ)))
+    (fun b : Y => privateDom p C Y b.1 R') 1 one_pos hdeg
+    (fun b P => relSup p (privateDom p C Y b.1 R') Dom s t η b.1 R' P)
+    (fun b P => relSup_nonneg _ _ _ _ _ _ _ _ _)
+    (fun b => relSup_dependsOn _ _ _ _ _ _ _ _)
+  simp only [pow_one, Nat.cast_one, inv_one, Real.rpow_eq_pow, Real.rpow_one] at key
+  have hL : (fun P => ∏ y ∈ Y, relSup p (privateDom p C Y y R') Dom s t η y R' P) =
+      (fun P => ∏ b : Y, relSup p (privateDom p C Y b.1 R') Dom s t η b.1 R' P) := by
+    funext P
+    exact (Finset.prod_coe_sort Y
+      (fun y => relSup p (privateDom p C Y y R') Dom s t η y R' P)).symm
+  have hR : ∏ y ∈ Y, p.posLaw.expect (relSup p (privateDom p C Y y R') Dom s t η y R') =
+      ∏ b : Y, p.posLaw.expect (relSup p (privateDom p C Y b.1 R') Dom s t η b.1 R') :=
+    (Finset.prod_coe_sort Y
+      (fun y => p.posLaw.expect (relSup p (privateDom p C Y y R') Dom s t η y R'))).symm
+  rw [hL, hR]
+  exact key
 
 /-- LEAF (Step 3 geometry and Step 4 count tails, TeX 03:449–481). For a fixed large
 separation multiple `K` (depending on the regime), every overlap exception of a separated

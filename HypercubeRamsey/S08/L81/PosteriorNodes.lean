@@ -752,6 +752,39 @@ theorem p0_local (D : Ctx η₀ β p h) (hS : D.SelLocal) : D.P0Local := by
       change (D.crossId q c u, q.2.1.1 u.1 (D.crossId q c u), W (u.1, c.2)) =
         (D.crossId q' c u, q'.2.1.1 u.1 (D.crossId q' c u), W' (u.1, c.2))
       rw [hCrossId u, congrFun hTagU (D.crossId q' c u), hAnchor]
+  have hHidden2 : ∀ g ∈ keyBall c.1 2, q.1.1 g = q'.1.1 g := by
+    intro g hg
+    have hdist := (Finset.mem_filter.mp hg).2
+    have hg4 : g ∈ keyBall c.1 4 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hdist.trans (by omega)⟩
+    exact hHidden g hg4
+  have hCandGateEq :=
+    Lane_q_s08_post.candGate_congr_of_radius_two D q.1.1 q'.1.1 c.1 hHidden2
+  have hPadKey3 (e : D.CellT) (he : PadNbr c e) : e.1 ∈ keyBall c.1 3 := by
+    apply Finset.mem_filter.mpr
+    constructor
+    · exact Finset.mem_univ e.1
+    · rcases he with ⟨hek, hOrd⟩ | ⟨hres, hCross⟩
+      · rw [hek]
+        simp [keyDist]
+      · have hdist := (Finset.mem_filter.mp hCross).2
+        exact hdist.le.trans (by omega)
+  have hPosCountEq : D.PosCountOK q.1.2 c = D.PosCountOK q'.1.2 c := by
+    apply propext
+    constructor <;> intro hPos e he j
+    · have hp := (hPosTag e.1 (hPadKey3 e he)).1
+      have hcount : D.ballCount q'.1.2 e.1 e.2 j = D.ballCount q.1.2 e.1 e.2 j := by
+        unfold Ctx.ballCount
+        rw [hp]
+      rw [hcount]
+      exact hPos e he j
+    · have hp := (hPosTag e.1 (hPadKey3 e he)).1
+      have hcount : D.ballCount q.1.2 e.1 e.2 j = D.ballCount q'.1.2 e.1 e.2 j := by
+        unfold Ctx.ballCount
+        rw [hp]
+      rw [hcount]
+      exact hPos e he j
   sorry
 
 set_option maxHeartbeats 1000000

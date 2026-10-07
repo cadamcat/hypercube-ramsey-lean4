@@ -146,6 +146,12 @@ all positions, binomial with mean `n^{b₀}`, `O(m n^{b₀} r/n)` and `O(n^{b₀
 levels of the window. -/
 theorem p92_height_base (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightBase9 P hc n c := by
+  rcases hadm with ⟨_, _, _, _, _, _, _, _, hbpos, _, _, _⟩
+  refine ⟨hc.b₀ / 2, div_pos hbpos (by norm_num), 2, ?_⟩
+  intro n hn
+  have hn2 : 2 ≤ n := by omega
+  -- The hole term has exponent `b₀`; the three crowd terms require the corresponding
+  -- product-binomial upper tails after reducing restricted domains to `univ`.
   sorry
 
 /-- P9.2-map1, position counts (09:85): each eligible-set size is binomial with mean `n^{10}` (`V` positions,
@@ -176,6 +182,18 @@ hypergeometric estimates (`hypergeometric_intersection_tail`) bound the residual
 the overlap at one level is at most `V e^{-c₀ R'}`. -/
 theorem p92_height_overlap (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ K > (0 : ℝ), ∃ c₀ > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightOverlap9 P hc n K c₀ := by
+  refine ⟨16, by norm_num, 1, by norm_num, 2, ?_⟩
+  intro n hn v v' R' j hR hsep
+  have hlocal : ∀ c : Pos9 P hc n,
+      c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R' →
+        _root_.hammingDist c.slice (specialWord9 (P.m n) v) ≤ 2 * R' + 1 ∧
+        _root_.hammingDist c.slice (specialWord9 (P.m n) v') ≤ 2 * R' + 1 ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n + 2 * R' + 1 ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v') ≤ P.radius n + 2 * R' + 1 := by
+    intro c hc
+    exact Lane_q_s09_map.sharedConsulted_local_bounds v v' R' c hc
+  -- The remaining estimate is the shell/hypergeometric bound for the two residual balls,
+  -- combined with the count of consulted slices.
   sorry
 
 /-- P9.2-map1, scale induction (09:93–100): with degraded thresholds at successive scales for every crowd count

@@ -259,7 +259,7 @@ def precompose {α : Type*} (e : α ≃ α) : Equiv.Perm α ≃ Equiv.Perm α wh
   right_inv σ := by ext x; simp
 
 /-- A greedy disjoint-family scan commutes with renaming its ground set. -/
-theorem greedy_scan_map {C : Type*} [DecidableEq C] (e : C ≃ C)
+theorem greedy_scan_map {C : Type*} [Fintype C] [DecidableEq C] (e : C ≃ C)
     (items : List (Finset C)) (bad bad' : Finset C → Prop)
     (hbad : ∀ S, bad' (S.map e.toEmbedding) ↔ bad S) :
     (items.map (fun S => S.map e.toEmbedding)).foldl
@@ -493,6 +493,55 @@ theorem internal_query_pr {G B Z J : Type*} [Fintype G] [DecidableEq G]
         (⟨U (grp z) (bins (grp z)), hU0 _ _, hU1 _ _⟩ : FinLaw (Fin N))) query hinj ys
     exact hp
   · rfl
+
+/-- Badness only reads eligibility and center bits in the crowd ball. -/
+theorem bad_congr_at (p : HDParams) (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (v : CubePos p.d) (j : Fin (p.H + 1)) (he : E v j = E' v j)
+    (ha : ∀ c ∈ E v j, A c = A' c)
+    (hc : ∀ z, hammingDist z v ≤ p.r + p.D →
+      P (z, j) = P' (z, j) ∧ A (z, j) = A' (z, j)) :
+    p.Bad P A E v j ↔ p.Bad P' A' E' v j := by
+  classical
+  have hnone : (∀ c ∈ E v j, A c = false) ↔ (∀ c ∈ E' v j, A' c = false) := by
+    rw [← he]
+    constructor <;> intro h c hc'
+    · rw [← ha c hc']
+      exact h c hc'
+    · rw [ha c hc']
+      exact h c hc'
+  have hcrowd : (Finset.univ.filter fun z : CubePos p.d =>
+      P (z, j) = true ∧ A (z, j) = true ∧ hammingDist z v ≤ p.r + p.D) =
+      (Finset.univ.filter fun z : CubePos p.d =>
+        P' (z, j) = true ∧ A' (z, j) = true ∧ hammingDist z v ≤ p.r + p.D) := by
+    apply Finset.filter_congr
+    intro z _
+    by_cases hz : hammingDist z v ≤ p.r + p.D
+    · rw [(hc z hz).1, (hc z hz).2]
+    · simp only [hz, and_false]
+  unfold HDParams.Bad
+  rw [hnone, hcrowd]
+
+/-- A union indexed by every site commutes with independent renamings. -/
+theorem biUnion_transport {A C : Type*} [Fintype A] [DecidableEq C]
+    (ea : A ≃ A) (ec : C ≃ C) (S S' : A → Finset C)
+    (hS : ∀ a, S' (ea a) = (S a).map ec.toEmbedding) :
+    (Finset.univ.biUnion S') = (Finset.univ.biUnion S).map ec.toEmbedding := by
+  classical
+  ext c
+  obtain ⟨c, rfl⟩ := ec.surjective c
+  conv_lhs => simp only [Finset.mem_biUnion, Finset.mem_univ, true_and]
+  conv_rhs => simp only [Finset.mem_map_equiv, Equiv.symm_apply_apply,
+    Finset.mem_biUnion, Finset.mem_univ, true_and]
+  constructor
+  · rintro ⟨a, hc⟩
+    obtain ⟨a, rfl⟩ := ea.surjective a
+    refine ⟨a, ?_⟩
+    rw [hS] at hc
+    simpa only [Finset.mem_map_equiv, Equiv.symm_apply_apply] using hc
+  · rintro ⟨a, hc⟩
+    refine ⟨ea a, ?_⟩
+    rw [hS]
+    exact Finset.mem_map.mpr ⟨c, hc, rfl⟩
 
 end HypercubeRamsey.Lane_sol_s14_lik
 

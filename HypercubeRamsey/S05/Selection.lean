@@ -1,4 +1,4 @@
-import HypercubeRamsey.S05.Records
+import HypercubeRamsey.S05.Defs
 
 /-!
 # L5.1k and the reusable selection-adjustment node
@@ -12,7 +12,10 @@ namespace HypercubeRamsey
 
 noncomputable section
 
-/-- A finite target/data experiment with candidate-dependent presentation likelihoods. -/
+/-- A finite target/data experiment with candidate-dependent presentation likelihoods (05:910–929).  Each gated
+observation density integrates to at most one but the gates of different records need not be disjoint, so the
+total likelihood is at most the record count `recordBound`; the presentations themselves are disjoint
+(`gated_subprob`). -/
 structure SelectionExperiment5 (Target Data : Type*) [Fintype Target] [Fintype Data] where
   prior : FinProb Target
   likelihood : Target → Data → ℝ
@@ -20,7 +23,8 @@ structure SelectionExperiment5 (Target Data : Type*) [Fintype Target] [Fintype D
   likelihood_nonneg : ∀ y d, 0 ≤ likelihood y d
   selection_nonneg : ∀ y d, 0 ≤ selection y d
   selection_le_one : ∀ y d, selection y d ≤ 1
-  likelihood_subprob : ∀ y, ∑ d, likelihood y d ≤ 1
+  recordBound : ℝ
+  likelihood_mass : ∀ y, ∑ d, likelihood y d ≤ recordBound
   gated_subprob : ∀ y, ∑ d, likelihood y d * selection y d ≤ 1
 
 /-- Unadjusted predictive mass for one recorded observation. -/
@@ -109,9 +113,11 @@ theorem L5_1k_row_comparison {Target Data : Type*} [Fintype Target] [Fintype Dat
       _ = 1 * X.baseRow d y := by ring
       _ ≤ ε⁻¹ * X.baseRow d y := mul_le_mul_of_nonneg_right hinv hrow_nonneg
 
-/-- The disjoint-presentation cancellation bound for the selection-adjusted proxy row. -/
+/-- L5.1k(2) (05:975–989): the disjoint-presentation cancellation bound for the selection-adjusted proxy row; the
+fallback part costs `ε` times the record count, which is at most `ε^{-1}`. -/
 theorem L5_1k_mean_bound {Target Data : Type*} [Fintype Target] [Fintype Data]
-    (X : SelectionExperiment5 Target Data) (ε : ℝ) (hε : 0 < ε) (hε1 : ε ≤ 1) :
+    (X : SelectionExperiment5 Target Data) (ε : ℝ) (hε : 0 < ε) (hε1 : ε ≤ 1)
+    (hR : ε * X.recordBound ≤ 1) :
     ∀ y, ∑ d, X.selectedMass d * X.proxyRow ε d y ≤ 2 * X.prior.w y := by
   intro y
   have hprior : 0 ≤ X.prior.w y := X.prior.nonneg y
@@ -215,12 +221,11 @@ theorem L5_1k_mean_bound {Target Data : Type*} [Fintype Target] [Fintype Data]
       _ ≤ X.prior.w y * 1 := mul_le_mul_of_nonneg_left (X.gated_subprob y) hprior
       _ = X.prior.w y := by ring
   have hbase_sum :
-      (∑ d, X.prior.w y * X.likelihood y d) ≤ X.prior.w y := by
+      (∑ d, X.prior.w y * X.likelihood y d) ≤ X.prior.w y * X.recordBound := by
     calc
       (∑ d, X.prior.w y * X.likelihood y d) =
           X.prior.w y * (∑ d, X.likelihood y d) := by rw [← Finset.mul_sum]
-      _ ≤ X.prior.w y * 1 := mul_le_mul_of_nonneg_left (X.likelihood_subprob y) hprior
-      _ = X.prior.w y := by ring
+      _ ≤ X.prior.w y * X.recordBound := mul_le_mul_of_nonneg_left (X.likelihood_mass y) hprior
   calc
     (∑ d, X.selectedMass d * X.proxyRow ε d y) ≤
         ∑ d, (X.prior.w y * X.likelihood y d * X.selection y d +
@@ -229,10 +234,10 @@ theorem L5_1k_mean_bound {Target Data : Type*} [Fintype Target] [Fintype Data]
     _ = (∑ d, X.prior.w y * X.likelihood y d * X.selection y d) +
           ε * (∑ d, X.prior.w y * X.likelihood y d) := by
       rw [Finset.sum_add_distrib, ← Finset.mul_sum]
-    _ ≤ X.prior.w y + ε * X.prior.w y := by
+    _ ≤ X.prior.w y + ε * (X.prior.w y * X.recordBound) := by
       exact add_le_add hgate_sum (mul_le_mul_of_nonneg_left hbase_sum hε.le)
     _ ≤ 2 * X.prior.w y := by
-      nlinarith [mul_le_mul_of_nonneg_right hε1 hprior]
+      nlinarith [mul_le_mul_of_nonneg_left hR hprior]
 
 end
 end HypercubeRamsey

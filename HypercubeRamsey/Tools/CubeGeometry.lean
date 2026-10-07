@@ -1,11 +1,12 @@
 import HypercubeRamsey.Framework.Stage
 import HypercubeRamsey.Tools.Binomial
+import HypercubeRamsey.Tools.CubeGeometry_p_tools_cube_r
 
 /-!
 # Cube geometry and Hamming-ball bounds
 
 F-Cube provides explicit finite-cube operations, parity classes, prefix leaves, internal coordinates, slices,
-and the stage-level `CubeIn` predicate. X-HammingBall supplies entropy volume, layer ratios, and the
+and the stage-level `cgCubeIn` predicate. X-HammingBall supplies entropy volume, layer ratios, and the
 hypergeometric intersection tail used by the height argument.
 -/
 
@@ -34,18 +35,18 @@ def cubeLeaf {n ell : ℕ} (hle : ell ≤ n) (w : Fin ell → Bool) : Finset (Cu
   Finset.univ.filter (fun v => ∀ j : Fin ell, v (Fin.castLE hle j) = w j)
 
 /-- The final `h` coordinates, used as an internal coordinate set. -/
-def topCoordinates (n h : ℕ) (_hle : h ≤ n) : Finset (Fin n) :=
+def cgTopCoordinates (n h : ℕ) (_hle : h ≤ n) : Finset (Fin n) :=
   Finset.univ.filter (fun j => n - h ≤ j.val)
 
 /-- A slice of a prefix leaf fixes all coordinates outside the supplied internal set. -/
-def cubeSlice {n ell : ℕ} (hle : ell ≤ n) (w : Fin ell → Bool)
+def cgCubeSlice {n ell : ℕ} (hle : ell ≤ n) (w : Fin ell → Bool)
     (internal : Finset (Fin n)) (outside : CubeVertex n) : Finset (CubeVertex n) :=
   Finset.univ.filter (fun v =>
     (∀ j : Fin ell, v (Fin.castLE hle j) = w j) ∧
     (∀ j, j ∉ internal → v j = outside j))
 
-/-- `CubeIn` is the stage-level monochromatic cube predicate from Part C §3.15. -/
-def CubeIn (T : Stage) (k : ℕ) (c : Colour) : Prop :=
+/-- `cgCubeIn` is the stage-level monochromatic cube predicate from Part C §3.15. -/
+def cgCubeIn (T : Stage) (k : ℕ) (c : Colour) : Prop :=
   Nonempty ((cube (T.S.n k)).Copy (crossGraph (Hits (T.S.E k) c)))
 
 /-- F-Cube: flipping one coordinate gives adjacent cube vertices. -/
@@ -438,6 +439,6 @@ theorem hypergeometric_intersection_tail (d s : ℕ) (hd : 0 < d) (hs : 0 < s) (
       B.card = s ∧ ((B ∩ A).card : ℝ) ≥
         (s : ℝ) * A.card / d + t)).card : ℝ) / Nat.choose d s ≤
       Real.exp (-2 * t ^ 2 / s) := by
-  sorry
+  exact CubeGeometryPToolsCubeR.hypergeometricIntersectionTailAux d s hd hs hsd A t ht
 
 end HypercubeRamsey

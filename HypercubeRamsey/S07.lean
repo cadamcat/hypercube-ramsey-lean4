@@ -1,2 +1,1 @@
 import HypercubeRamsey.S07.InitialDiscrepancy
-import HypercubeRamsey.S07.GridNodes

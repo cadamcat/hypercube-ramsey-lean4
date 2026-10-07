@@ -1,4 +1,5 @@
 import Mathlib
+import HypercubeRamsey.Tools.Ramsey_p_tools_binom
 
 /-!
 # Binomial Ramsey bound
@@ -17,7 +18,6 @@ theorem xRamseyBinom {V : Type*} [Fintype V] (G : SimpleGraph V) (s t : ℕ)
       ∀ u ∈ C, ∀ v ∈ C, u ≠ v → G.Adj u v) ∨
     (∃ I : Finset V, I.card = t ∧
       ∀ u ∈ I, ∀ v ∈ I, u ≠ v → ¬ G.Adj u v) := by
-  classical
-  sorry
+  exact xRamseyBinom_p_tools_binom G s t hs ht hcard
 
 end HypercubeRamsey

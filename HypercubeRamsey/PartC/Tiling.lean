@@ -172,6 +172,9 @@ structure Valid {κ : CConsts} {T : Stage} {k : ℕ} (𝒯 : Tiling κ T k) : Pr
   bounded_data : 𝒯.mode = .bounded → 𝒯.m = 1 ∧ ∀ i,
     (𝒯.P i).ℓ = 0 ∧ (𝒯.P i).h = 0 ∧ (𝒯.P i).d = 1 ∧
     (1 / 400 : ℝ) * T.S.N k ≤ (𝒯.P i).M ∧ 𝒯.Q i = κ.Qbd
+  /-- The eventual residual-scale estimate from Section 13, used for direct widths in Section 15. -/
+  direct_scale_bound : (𝒯.mode = .lowDirect ∨ 𝒯.mode = .highDirect) → ∀ i,
+    ((𝒯.P i).g : ℝ) ≤ (T.S.n k : ℝ) ^ (κ.ι / 2)
   direct_data : (𝒯.mode = .lowDirect ∨ 𝒯.mode = .highDirect) → ∀ i,
     κ.M1 * κ.Q0 ≤ max (𝒯.P i).g (𝒯.P i).q ∧
     κ.M1 * (𝒯.P i).q < (𝒯.P i).g ∧

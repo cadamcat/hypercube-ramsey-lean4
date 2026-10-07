@@ -129,11 +129,21 @@ set_option maxHeartbeats 1000000
 (06:231–263; uses `ChunkFlips6`). -/
 theorem L6_1e_facts (α : ℝ) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (g : ChunkGeometry6 n α) (J : ℕ), StateFacts6 g.L J := by
-  refine ⟨4, ?_⟩
+  have heventPow : ∀ᶠ n : ℕ in Filter.atTop, 15 < (n : ℝ) ^ (4 / 5 : ℝ) := by
+    have htend := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 4 / 5)).comp
+      tendsto_natCast_atTop_atTop
+    exact htend.eventually (Filter.eventually_gt_atTop 15)
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    ((Filter.eventually_ge_atTop 602).and heventPow)
+  refine ⟨n₀, ?_⟩
   intro n hn g J
+  have hlarge := hn₀ n hn
+  have hn602 : 602 ≤ n := hlarge.1
   have hnLarge : 4 ≤ n := by omega
+  have hpow15 : 15 < (n : ℝ) ^ (4 / 5 : ℝ) := hlarge.2
   have hnR4 : 4 ≤ (n : ℝ) := by exact_mod_cast hnLarge
   have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hnRpos : 0 < (n : ℝ) := by positivity
   let L := g.L
   have hfineBound (x : CubeVertex n) (i : Fin L.m) : L.fineCount x i ≤ L.fineLength := by
     calc
@@ -723,6 +733,347 @@ theorem L6_1e_facts (α : ℝ) :
       · have hc := hcount j hji
         simp [ChunkLayout6.mergedCount, hc]
     exact ⟨hkey, hres, hmerged, hsevCase⟩
+  let residualReplace (s : State6 L) (r : {r : Fin n // r ∈ L.residual}) : State6 L :=
+    (Function.update s.1 r (!s.1 r), s.2)
+  let keyReplace (s : State6 L) (k : CoarseKey6 (BinVector6 n)) : State6 L :=
+    (s.1, (k.1, k.2, s.2.2.2.1, s.2.2.2.2))
+  let fineReplace (s : State6 L) (i : Fin L.m) (c : Fin (n + 1))
+      (j : Fin (L.m + 1)) : State6 L :=
+    (s.1, (s.2.1, s.2.2.1, Function.update s.2.2.2.1 i c, j))
+  let residualCandidates (s : State6 L) : Finset (State6 L) :=
+    (Finset.univ : Finset {r : Fin n // r ∈ L.residual}).image (residualReplace s)
+  let coarseCandidates (s : State6 L) : Finset (State6 L) :=
+    (keyNeighborhood6 binAdjacent6 (L.stKey s)).image (keyReplace s)
+  let countOptions (s : State6 L) (i : Fin L.m) : Finset (Fin (n + 1)) :=
+    Finset.univ.filter fun c => Nat.dist c.val (s.2.2.2.1 i).val ≤ 2
+  let severityOptions (s : State6 L) : Finset (Fin (L.m + 1)) :=
+    Finset.univ.filter fun j => Nat.dist j.val s.2.2.2.2.val ≤ 1
+  let fineCandidates (s : State6 L) : Finset (State6 L) :=
+    (Finset.univ.biUnion fun i : Fin L.m =>
+      ((countOptions s i).product (severityOptions s)).image fun p =>
+        fineReplace s i p.1 p.2)
+  have hCountOptions (s : State6 L) (i : Fin L.m) : (countOptions s i).card ≤ 5 := by
+    simpa [countOptions] using
+      (HypercubeRamsey.Lane_q_s06_front.finDistFilterCard_le
+        (c := s.2.2.2.1 i))
+  have hSeverityOptions (s : State6 L) : (severityOptions s).card ≤ 3 := by
+    simpa [severityOptions] using
+      (HypercubeRamsey.Lane_q_s06_front.finDistFilterCard_le
+        (r := 1) (c := s.2.2.2.2))
+  have hResidualCandidates (s : State6 L) : (residualCandidates s).card ≤ n := by
+    calc
+      (residualCandidates s).card ≤
+          (Finset.univ : Finset {r : Fin n // r ∈ L.residual}).card := Finset.card_image_le
+      _ = L.residual.card := by simp [Fintype.card_coe]
+      _ ≤ n := by
+        simpa using (Finset.card_le_univ (L.residual))
+  have hCoarseCandidates (s : State6 L) : (coarseCandidates s).card ≤ 602 := by
+    calc
+      (coarseCandidates s).card ≤ (keyNeighborhood6 binAdjacent6 (L.stKey s)).card :=
+        Finset.card_image_le
+      _ ≤ 602 := g.flips.key_neighborhood_card (L.stKey s)
+  have hFineCandidates (s : State6 L) : (fineCandidates s).card ≤ 15 * L.m := by
+    calc
+      (fineCandidates s).card ≤
+          ∑ i : Fin L.m,
+            (((countOptions s i).product (severityOptions s)).image
+              (fun p => fineReplace s i p.1 p.2)).card := Finset.card_biUnion_le
+      _ ≤ ∑ i : Fin L.m, ((countOptions s i).product (severityOptions s)).card := by
+        apply Finset.sum_le_sum
+        intro i hi
+        exact Finset.card_image_le
+      _ ≤ ∑ i : Fin L.m, 15 := by
+        apply Finset.sum_le_sum
+        intro i hi
+        change ((countOptions s i) ×ˢ (severityOptions s)).card ≤ 15
+        calc
+          ((countOptions s i) ×ˢ (severityOptions s)).card =
+              (countOptions s i).card * (severityOptions s).card :=
+            Finset.card_product (countOptions s i) (severityOptions s)
+          _ ≤ 5 * 3 := Nat.mul_le_mul (hCountOptions s i) (hSeverityOptions s)
+          _ = 15 := by norm_num
+      _ = L.m * 15 := by simp [Finset.sum_const, nsmul_eq_mul]
+      _ = 15 * L.m := Nat.mul_comm _ _
+  have hCandidatesCard (s : State6 L) :
+      (residualCandidates s ∪ (coarseCandidates s ∪ fineCandidates s)).card ≤
+        n + 602 + 15 * L.m := by
+    calc
+      (residualCandidates s ∪ (coarseCandidates s ∪ fineCandidates s)).card ≤
+          (residualCandidates s).card +
+            (coarseCandidates s ∪ fineCandidates s).card :=
+              Finset.card_union_le (residualCandidates s) (coarseCandidates s ∪ fineCandidates s)
+      _ ≤ (residualCandidates s).card +
+            ((coarseCandidates s).card + (fineCandidates s).card) :=
+          Nat.add_le_add_left (Finset.card_union_le (coarseCandidates s) (fineCandidates s)) _
+      _ ≤ n + (602 + 15 * L.m) :=
+          Nat.add_le_add (hResidualCandidates s)
+            (Nat.add_le_add (hCoarseCandidates s) (hFineCandidates s))
+      _ = n + 602 + 15 * L.m := by omega
+  let fineUnion : Finset (Fin n) := Finset.univ.biUnion L.fineChunks
+  have hFineDisjoint : ((Finset.univ : Finset (Fin L.m)) : Set (Fin L.m)).PairwiseDisjoint
+      L.fineChunks := by
+    intro i hi j hj hij
+    exact L.chunks_disjoint.2.2.1 i j hij
+  have hFineUnionCard : fineUnion.card = L.m * L.fineLength := by
+    calc
+      fineUnion.card = ∑ i : Fin L.m, (L.fineChunks i).card := by
+        exact Finset.card_biUnion hFineDisjoint
+      _ = L.m * L.fineLength := by
+        simp [fineUnion, L.fine_chunk_length, Finset.sum_const, nsmul_eq_mul]
+  have hFineUnionSub : fineUnion ⊆
+      (Finset.univ.biUnion L.coarseChunks) ∪ fineUnion := Finset.subset_union_right
+  have hFineProduct : (L.m : ℝ) * (L.fineLength : ℝ) ≤ (n : ℝ) ^ (1 / 2 : ℝ) := by
+    have hNat : L.m * L.fineLength ≤
+        ((Finset.univ.biUnion L.coarseChunks) ∪ fineUnion).card := by
+      calc
+        L.m * L.fineLength = fineUnion.card := hFineUnionCard.symm
+        _ ≤ ((Finset.univ.biUnion L.coarseChunks) ∪ fineUnion).card :=
+          Finset.card_le_card hFineUnionSub
+    have hReal : (L.m : ℝ) * (L.fineLength : ℝ) ≤
+        (((Finset.univ.biUnion L.coarseChunks) ∪ fineUnion).card : ℝ) := by
+      exact_mod_cast hNat
+    exact hReal.trans (by simpa [fineUnion] using L.occupied_sublinear)
+  have hFineLowerReal : (n : ℝ) ^ (3 / 10 : ℝ) ≤ (L.fineLength : ℝ) :=
+    L.fine_length_lower
+  have hFinePositive : 0 < (L.fineLength : ℝ) := by
+    have hpowOne : 1 ≤ (n : ℝ) ^ (3 / 10 : ℝ) :=
+      Real.one_le_rpow hnR (by norm_num)
+    linarith
+  have hPow23 : (n : ℝ) ^ (1 / 5 : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) =
+      (n : ℝ) ^ (1 / 2 : ℝ) := by
+    calc
+      (n : ℝ) ^ (1 / 5 : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) =
+          (n : ℝ) ^ ((1 / 5 : ℝ) + (3 / 10 : ℝ)) :=
+        (Real.rpow_add hnRpos (1 / 5 : ℝ) (3 / 10 : ℝ)).symm
+      _ = (n : ℝ) ^ (1 / 2 : ℝ) := by
+        congr 1 <;> norm_num
+  have hMsmall : (L.m : ℝ) ≤ (n : ℝ) ^ (1 / 5 : ℝ) := by
+    have hMProductLower : (L.m : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) ≤
+        (n : ℝ) ^ (1 / 2 : ℝ) := by
+      calc
+        (L.m : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) ≤
+            (L.m : ℝ) * (L.fineLength : ℝ) :=
+          mul_le_mul_of_nonneg_left hFineLowerReal (by positivity)
+        _ ≤ (n : ℝ) ^ (1 / 2 : ℝ) := hFineProduct
+    have hMProd : (L.m : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) ≤
+        (n : ℝ) ^ (1 / 5 : ℝ) * (n : ℝ) ^ (3 / 10 : ℝ) := by
+      rw [hPow23]
+      exact hMProductLower
+    exact le_of_mul_le_mul_right hMProd (by positivity)
+  have h15m : 15 * L.m ≤ n := by
+    have hprod : (n : ℝ) ^ (1 / 5 : ℝ) * (n : ℝ) ^ (4 / 5 : ℝ) =
+        (n : ℝ) := by
+      calc
+        (n : ℝ) ^ (1 / 5 : ℝ) * (n : ℝ) ^ (4 / 5 : ℝ) =
+            (n : ℝ) ^ ((1 / 5 : ℝ) + (4 / 5 : ℝ)) :=
+          (Real.rpow_add hnRpos (1 / 5 : ℝ) (4 / 5 : ℝ)).symm
+        _ = (n : ℝ) := by
+          have hexp : (1 / 5 : ℝ) + (4 / 5 : ℝ) = 1 := by norm_num
+          rw [hexp]
+          exact Real.rpow_one (n : ℝ)
+    have hreal : (15 : ℝ) * (L.m : ℝ) ≤ (n : ℝ) := by
+      calc
+        (15 : ℝ) * (L.m : ℝ) ≤
+            (n : ℝ) ^ (4 / 5 : ℝ) * (L.m : ℝ) :=
+          mul_le_mul_of_nonneg_right (le_of_lt hpow15) (by positivity)
+        _ ≤ (n : ℝ) ^ (4 / 5 : ℝ) * (n : ℝ) ^ (1 / 5 : ℝ) :=
+          mul_le_mul_of_nonneg_left hMsmall (by positivity)
+        _ = (n : ℝ) := by rw [mul_comm]; exact hprod
+    exact_mod_cast hreal
+  have hCandidate3n (s : State6 L) :
+      (residualCandidates s ∪ (coarseCandidates s ∪ fineCandidates s)).card ≤ 3 * n := by
+    have hn602 : 602 ≤ n := by omega
+    have hcard := hCandidatesCard s
+    omega
+  have edgeCandidate {x y : CubeVertex n} (hxy : (cube n).Adj x y) :
+      L.stateOf y ∈ residualCandidates (L.stateOf x) ∪
+        (coarseCandidates (L.stateOf x) ∪ fineCandidates (L.stateOf x)) := by
+    obtain ⟨k, hkdiff, hksame⟩ := adjData hxy
+    have hkcover : k ∈ Finset.univ.biUnion L.coarseChunks ∪
+        (Finset.univ.biUnion L.fineChunks ∪ L.residual) := by
+      rw [← Finset.union_assoc, L.chunks_cover]
+      simp
+    rcases Finset.mem_union.mp hkcover with hcoarse | hrest
+    · rcases Finset.mem_biUnion.mp hcoarse with ⟨i, hi, hk⟩
+      have hfields := coarseEdgeFields hxy ⟨i, k, hk, hkdiff⟩
+      have hsev := severityEqOfCoarseFlip hxy ⟨i, k, hk, hkdiff⟩
+      have hkeyNbr : L.key y ∈ keyNeighborhood6 binAdjacent6
+          (L.stKey (L.stateOf x)) := by
+        rw [stateKeyEq]
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, keyRelOfAdj hxy⟩
+      have hstate : L.stateOf y = keyReplace (L.stateOf x) (L.key y) := by
+        simp only [ChunkLayout6.stateOf, keyReplace]
+        apply Prod.ext
+        · funext r
+          change y r.1 = x r.1
+          exact (hfields.1 r.1 r.2).symm
+        · simp [ChunkLayout6.key, hfields.2, hsev]
+      apply Finset.mem_union.mpr
+      right
+      apply Finset.mem_union.mpr
+      left
+      apply Finset.mem_image.mpr
+      exact ⟨L.key y, hkeyNbr, hstate.symm⟩
+    · rcases Finset.mem_union.mp hrest with hfine | hres
+      · rcases Finset.mem_biUnion.mp hfine with ⟨i, hi, hk⟩
+        have hresSame : ∀ a, a ∈ L.residual → x a = y a := by
+          intro a ha
+          by_cases hak : a = k
+          · subst a
+            exact False.elim ((Finset.disjoint_left.mp
+              (L.chunks_disjoint.2.2.2.2 i)) hk ha)
+          · exact hksame a hak
+        have hcoarseSame : ∀ j a, a ∈ L.coarseChunks j → x a = y a := by
+          intro j a ha
+          by_cases hak : a = k
+          · subst a
+            exact False.elim ((Finset.disjoint_left.mp
+              (L.chunks_disjoint.2.1 j i)) ha hk)
+          · exact hksame a hak
+        have hkey : L.key x = L.key y :=
+          g.flips.noncoarse_flip_key x y hxy hcoarseSame
+        have hmergedOther (j : Fin L.m) (hji : j ≠ i) :
+            L.mergedCount x j = L.mergedCount y j := by
+          have hcount : L.fineCount x j = L.fineCount y j := by
+            unfold ChunkLayout6.fineCount
+            congr 1
+            ext a
+            by_cases ha : a ∈ L.fineChunks j
+            · by_cases hak : a = k
+              · subst a
+                have hne : i ≠ j := Ne.symm hji
+                exact False.elim ((Finset.disjoint_left.mp
+                  (L.chunks_disjoint.2.2.1 i j hne)) hk ha)
+              · simp [ha, hksame a hak]
+            · simp [ha]
+          simp [ChunkLayout6.mergedCount, hcount]
+        have hseverityDist : Nat.dist (L.severity x) (L.severity y) ≤ 1 :=
+          g.flips.fine_flip_severity x y hxy ⟨i, k, hk, hkdiff⟩
+        let c : Fin (n + 1) := (L.stateOf y).2.2.2.1 i
+        let jval : Fin (L.m + 1) := (L.stateOf y).2.2.2.2
+        have hcval : c.val = L.mergedCount y i := by
+          dsimp [c, ChunkLayout6.stateOf]
+          exact Nat.min_eq_left (hmergedBound y i)
+        have hjval : jval.val = L.severity y := by
+          dsimp [jval, ChunkLayout6.stateOf, sevFin6]
+          exact Nat.min_eq_left (hseverityBound y)
+        have hmergedDist : Nat.dist (L.mergedCount y i) (L.mergedCount x i) ≤ 2 := by
+          have hstep : L.fineCount x i + 1 = L.fineCount y i ∨
+              L.fineCount y i + 1 = L.fineCount x i := by
+            simpa [ChunkLayout6.fineCount] using
+              filterCardStep (L.fineChunks i) k hk hkdiff hksame
+          rcases hstep with hstep | hstep
+          · have hy : L.fineCount y i = L.fineCount x i + 1 := by omega
+            dsimp [ChunkLayout6.mergedCount]
+            rw [hy]
+            split_ifs <;> simp [Nat.dist] <;> omega
+          · have hx : L.fineCount x i = L.fineCount y i + 1 := by omega
+            dsimp [ChunkLayout6.mergedCount]
+            rw [hx]
+            split_ifs <;> simp [Nat.dist] <;> omega
+        have hcoptions : c ∈ countOptions (L.stateOf x) i := by
+          apply Finset.mem_filter.mpr
+          refine ⟨Finset.mem_univ _, ?_⟩
+          rw [hcval]
+          dsimp [ChunkLayout6.stateOf]
+          rw [Nat.min_eq_left (hmergedBound x i)]
+          exact hmergedDist
+        have hjoptions : jval ∈ severityOptions (L.stateOf x) := by
+          apply Finset.mem_filter.mpr
+          refine ⟨Finset.mem_univ _, ?_⟩
+          rw [hjval]
+          dsimp [ChunkLayout6.stateOf, sevFin6]
+          rw [Nat.min_eq_left (hseverityBound x)]
+          simpa [Nat.dist_comm] using hseverityDist
+        have hcountUpdate :
+            (fun j : Fin L.m => (L.stateOf y).2.2.2.1 j) =
+              Function.update (fun j : Fin L.m => (L.stateOf x).2.2.2.1 j) i c := by
+          funext j'
+          by_cases hji : j' = i
+          · subst j'
+            simp [c]
+          · have hcount := hmergedOther j' hji
+            apply Fin.ext
+            simp [ChunkLayout6.stateOf, hcount, Nat.min_eq_left
+              (hmergedBound x j'), Nat.min_eq_left (hmergedBound y j'),
+              Function.update_of_ne (by simpa using hji)]
+        have hstate : L.stateOf y =
+            fineReplace (L.stateOf x) i c jval := by
+          simp only [ChunkLayout6.stateOf, fineReplace]
+          have hresMap : (fun r : {r : Fin n // r ∈ L.residual} => y r.1) =
+              (fun r => x r.1) := by
+            funext r
+            exact (hresSame r.1 r.2).symm
+          have hbin : L.coarseBin y = L.coarseBin x :=
+            (congrArg Prod.fst hkey).symm
+          have hflag : (L.key y).2 = (L.key x).2 :=
+            (congrArg Prod.snd hkey).symm
+          exact Prod.ext hresMap (Prod.ext hbin (Prod.ext hflag (Prod.ext hcountUpdate rfl)))
+        apply Finset.mem_union.mpr
+        right
+        apply Finset.mem_union.mpr
+        right
+        simp only [fineCandidates, Finset.mem_biUnion, Finset.mem_univ, true_and]
+        refine ⟨i, ?_⟩
+        apply Finset.mem_image.mpr
+        refine ⟨(c, jval), Finset.mem_product.mpr ⟨hcoptions, hjoptions⟩, ?_⟩
+        exact hstate.symm
+      · have hcoarseSame : ∀ i a, a ∈ L.coarseChunks i → x a = y a := by
+          intro i a ha
+          by_cases hak : a = k
+          · subst a
+            exact False.elim ((Finset.disjoint_left.mp
+              (L.chunks_disjoint.2.2.2.1 i)) ha hres)
+          · exact hksame a hak
+        have hfineSame : ∀ i a, a ∈ L.fineChunks i → x a = y a := by
+          intro i a ha
+          by_cases hak : a = k
+          · subst a
+            exact False.elim ((Finset.disjoint_left.mp
+              (L.chunks_disjoint.2.2.2.2 i)) ha hres)
+          · exact hksame a hak
+        have hkey : L.key x = L.key y :=
+          g.flips.noncoarse_flip_key x y hxy hcoarseSame
+        have hsev : L.severity x = L.severity y :=
+          (g.flips.nonfine_flip_fine x y hxy hfineSame).2.2
+        have hcount (i : Fin L.m) : L.mergedCount x i = L.mergedCount y i := by
+          have hcount' : L.fineCount x i = L.fineCount y i := by
+            unfold ChunkLayout6.fineCount
+            congr 1
+            ext a
+            by_cases ha : a ∈ L.fineChunks i
+            · simp [ha, hfineSame i a ha]
+            · simp [ha]
+          simp [ChunkLayout6.mergedCount, hcount']
+        have hflip : y k = !x k := by
+          cases hx : x k <;> cases hy : y k <;> simp_all
+        let r : {r : Fin n // r ∈ L.residual} := ⟨k, hres⟩
+        have hresMap : (fun a : {r : Fin n // r ∈ L.residual} => y a.1) =
+            Function.update (fun a : {r : Fin n // r ∈ L.residual} => x a.1)
+              r (!(fun a : {r : Fin n // r ∈ L.residual} => x a.1) r) := by
+          funext a
+          by_cases hak : a.1 = k
+          · have hae : a = r := by apply Subtype.ext; exact hak
+            rw [hae]
+            simp [r, hflip]
+          · have hne : a ≠ r := by
+              intro he
+              exact hak (congrArg Subtype.val he)
+            simp [Function.update_of_ne hne, hksame a.1 hak]
+        have hstate : L.stateOf y = residualReplace (L.stateOf x) r := by
+          simp only [ChunkLayout6.stateOf, residualReplace]
+          apply Prod.ext
+          · exact hresMap
+          · have hbin : L.coarseBin x = L.coarseBin y := congrArg Prod.fst hkey
+            have hflag : (L.key x).2 = (L.key y).2 := congrArg Prod.snd hkey
+            have hflag' : (if L.boundary x then KeyFlag6.boundary else KeyFlag6.interior) =
+                (if L.boundary y then KeyFlag6.boundary else KeyFlag6.interior) := by
+              simpa [ChunkLayout6.key] using hflag
+            simp [ChunkLayout6.key, hbin, hflag', hcount, hsev]
+        apply Finset.mem_union.mpr
+        left
+        apply Finset.mem_image.mpr
+        exact ⟨r, Finset.mem_univ _, hstate.symm⟩
   refine {
     key_eq := by
       intro x
@@ -733,7 +1084,17 @@ theorem L6_1e_facts (α : ℝ) :
       intro x
       change min (L.severity x) L.m = L.severity x
       exact Nat.min_eq_left (hseverityBound x)
-    nbr_card := by sorry
+    nbr_card := by
+      intro b
+      have hsubset : L.stNbr b ⊆
+          residualCandidates b ∪ (coarseCandidates b ∪ fineCandidates b) := by
+        intro a ha
+        rcases (Finset.mem_filter.mp ha).2 with
+          ⟨u, v, hu, hv, hbu, hva, hxy⟩
+        have hmem := edgeCandidate hxy
+        rw [hva, hbu] at hmem
+        exact hmem
+      exact (Finset.card_le_card hsubset).trans (hCandidate3n b)
     nbr_nonempty := by
       intro b hb
       have hb' : ∃ x : CubeVertex n, ¬ IsEvenRole x ∧ L.stateOf x = b := by
@@ -750,7 +1111,18 @@ theorem L6_1e_facts (α : ℝ) :
         simpa [y, flipVertex6, cubeFlip] using cubeFlip_adj x i
       refine ⟨L.stateOf y, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩⟩
       exact ⟨x, y, hx, hy, rfl, rfl, hxy⟩
-    odd_nbr_card := by sorry
+    odd_nbr_card := by
+      intro a
+      have hsubset : (L.oddStates.filter fun b => a ∈ L.stNbr b) ⊆
+          residualCandidates a ∪ (coarseCandidates a ∪ fineCandidates a) := by
+        intro b hb
+        rcases (Finset.mem_filter.mp hb).2 with hab
+        rcases (Finset.mem_filter.mp hab).2 with
+          ⟨u, v, hu, hv, hbu, hva, hxy⟩
+        have hmem := edgeCandidate hxy.symm
+        rw [hbu, hva] at hmem
+        exact hmem
+      exact (Finset.card_le_card hsubset).trans (hCandidate3n a)
     low_high_one := by
       intro b
       let S := (L.stNbr b).filter fun a =>

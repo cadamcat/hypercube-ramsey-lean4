@@ -1061,6 +1061,14 @@ private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoic
   · rw [Nat.dist_eq_sub_of_le_right h]
     omega
 
+private theorem heightMetric9_ge_radial_gap {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (root x y : HeightState9 P hc n) {r s D : ℕ}
+    (hx : heightMetric9 x root = r) (hy : heightMetric9 y root = s)
+    (hgap : D ≤ Nat.dist r s) : D ≤ heightMetric9 x y := by
+  have hradial := heightMetric9_radialVariation_le root x y
+  rw [hx, hy] at hradial
+  exact hgap.trans hradial
+
 private theorem heightPath9_has_intermediate_radius9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
     {start : HeightState9 P hc n} (hp : HeightPath9 (heightStep9 bad) l start)
@@ -1080,6 +1088,27 @@ private theorem heightPath9_has_intermediate_radius9 {P : Params9} {hc : HeightC
     have hr' : r ≤ heightMetric9 endpoint start := hr.trans hR
     simpa [heightMetric9] using hr'
   exact hrange r hlow hhigh
+
+private theorem heightPath9_radialFamily9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (hp : HeightPath9 (heightStep9 bad) l start)
+    {endpoint : HeightState9 P hc n} (hhead : l.head? = some endpoint) (R : ℕ)
+    (hR : R ≤ heightMetric9 endpoint start) :
+    ∃ f : Fin (R + 1) → HeightState9 P hc n,
+      ∀ r, f r ∈ l ∧ heightMetric9 (f r) start = r.val := by
+  have hstates : ∀ r : Fin (R + 1), ∃ x ∈ l, heightMetric9 x start = r.val := by
+    intro r
+    exact heightPath9_has_intermediate_radius9 hp hhead R hR r.val (by omega)
+  choose f hf using hstates
+  exact ⟨f, hf⟩
+
+private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : Fin (R + 1) → HeightState9 P hc n)
+    (hf : ∀ r, f r ∈ l ∧ heightMetric9 (f r) start = r.val)
+    (r s : Fin (R + 1)) {D : ℕ} (hgap : D ≤ Nat.dist r.val s.val) :
+    D ≤ heightMetric9 (f r) (f s) := by
+  exact heightMetric9_ge_radial_gap start (f r) (f s) (hf r).2 (hf s).2 hgap
 
 private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}

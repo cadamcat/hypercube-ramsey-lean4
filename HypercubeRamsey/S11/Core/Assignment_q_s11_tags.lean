@@ -1258,6 +1258,118 @@ private theorem compBCoord_injective_separated {n m : ℕ} (s : Fin m → OuterW
     have htri := wordDist_triangle (s q.1) (compBCoord (s q.1) q.2) (s r.1)
     omega
 
+private theorem raw_compB_product_mean_le {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (p : FinProb M.ι) (x : Fin N) (m : ℕ) (s : Fin m → OuterWord n)
+    (hsep : ∀ i j, i ≠ j → 3 ≤ wordDist (s i) (s j))
+    (hαrow : ∀ i, 0 ≤ alphaRow M y₀ i x)
+    (hπrow : ∀ i y, 0 ≤ piRow M y₀ i y)
+    (hαbar : 0 ≤ alphaBar M y₀ p x) (hπbar : ∀ y, 0 ≤ piBar M y₀ p y) :
+    (rawTags M p).expect (fun t => ∏ i, compB M y₀ p t (s i) x) ≤
+      ((N : ℝ) * alphaBar M y₀ p x) ^ m := by
+  classical
+  let D : ℝ := deg E M.G (piBar M y₀ p) x
+  let F : Option (OuterCoord n) → M.ι → ℝ := fun o i =>
+    match o with
+    | none => (N : ℝ) * alphaRow M y₀ i x
+    | some _ => deg E M.G (piRow M y₀ i) x / D
+  have hprod (t : OuterWord n → M.ι) (i : Fin m) :
+      (∏ o : Option (OuterCoord n), F o (t (compBCoord (s i) o))) =
+        compB M y₀ p t (s i) x := by
+    simp [F, compBCoord, compB, D]
+  have hsite (i : Fin m) :
+      (rawTags M p).expect (fun t => compB M y₀ p t (s i) x) =
+        ∏ o : Option (OuterCoord n), p.expect (fun a => F o a) := by
+    calc
+      _ = (rawTags M p).expect
+          (fun t => ∏ o : Option (OuterCoord n), F o (t (compBCoord (s i) o))) := by
+            unfold FinProb.expect
+            apply Finset.sum_congr rfl
+            intro t ht
+            change (rawTags M p).w t * compB M y₀ p t (s i) x =
+              (rawTags M p).w t *
+                (∏ o : Option (OuterCoord n), F o (t (compBCoord (s i) o)))
+            rw [(hprod t i).symm]
+      _ = ∏ o : Option (OuterCoord n), p.expect (fun a => F o a) := by
+            unfold rawTags
+            exact pi_expect_prod_on_injective_coords p (compBCoord (s i))
+              (compBCoord_injective (s i)) Finset.univ F
+  have hinj := compBCoord_injective_separated s hsep
+  have hfactor :
+      (rawTags M p).expect (fun t => ∏ i, compB M y₀ p t (s i) x) = ∏ i,
+        (rawTags M p).expect (fun t => compB M y₀ p t (s i) x) := by
+    calc
+      _ = (rawTags M p).expect
+          (fun t => ∏ q : Fin m × Option (OuterCoord n),
+            F q.2 (t (compBCoord (s q.1) q.2))) := by
+              unfold FinProb.expect
+              apply Finset.sum_congr rfl
+              intro t ht
+              change (rawTags M p).w t * (∏ i, compB M y₀ p t (s i) x) =
+                (rawTags M p).w t *
+                  (∏ q : Fin m × Option (OuterCoord n),
+                    F q.2 (t (compBCoord (s q.1) q.2)))
+              rw [show (∏ i : Fin m, compB M y₀ p t (s i) x) =
+                  ∏ i : Fin m, ∏ o : Option (OuterCoord n),
+                    F o (t (compBCoord (s i) o)) by
+                    apply Finset.prod_congr rfl
+                    intro i hi
+                    exact (hprod t i).symm]
+              rw [show (∏ i : Fin m, ∏ o : Option (OuterCoord n),
+                    F o (t (compBCoord (s i) o))) =
+                  ∏ q : Fin m × Option (OuterCoord n),
+                    F q.2 (t (compBCoord (s q.1) q.2)) by
+                    exact (Fintype.prod_prod_type'
+                      (fun i o => F o (t (compBCoord (s i) o)))).symm]
+      _ = ∏ q : Fin m × Option (OuterCoord n), p.expect (fun a => F q.2 a) := by
+            unfold rawTags
+            exact pi_expect_prod_on_injective_coords p
+              (fun q : Fin m × Option (OuterCoord n) => compBCoord (s q.1) q.2)
+              hinj Finset.univ (fun q a => F q.2 a)
+      _ = ∏ i, (∏ o : Option (OuterCoord n), p.expect (fun a => F o a)) := by
+            exact Fintype.prod_prod_type' (fun i o => p.expect (fun a => F o a))
+      _ = ∏ i, (rawTags M p).expect (fun t => compB M y₀ p t (s i) x) := by
+            apply Finset.prod_congr rfl
+            intro i hi
+            exact (hsite i).symm
+  have hDnonneg : 0 ≤ D := by
+    unfold D deg
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg (hπbar y) (by unfold hit; split_ifs <;> norm_num)
+  have hcomp_nonneg (t : OuterWord n → M.ι) (i : Fin m) :
+      0 ≤ compB M y₀ p t (s i) x := by
+    unfold compB
+    apply mul_nonneg (mul_nonneg (by positivity) (hαrow (t (s i))))
+    apply Finset.prod_nonneg
+    intro j hj
+    exact div_nonneg
+      (show 0 ≤ deg E M.G (piRow M y₀ (t (flipOuter (s i) j))) x from by
+        unfold deg
+        apply Finset.sum_nonneg
+        intro y hy
+        exact mul_nonneg (hπrow _ y) (by unfold hit; split_ifs <;> norm_num)) hDnonneg
+  have hsite0 (i : Fin m) :
+      0 ≤ (rawTags M p).expect (fun t => compB M y₀ p t (s i) x) := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro t ht
+    exact mul_nonneg ((rawTags M p).nonneg t) (hcomp_nonneg t i)
+  have hsitele (i : Fin m) :
+      (rawTags M p).expect (fun t => compB M y₀ p t (s i) x) ≤
+        (N : ℝ) * alphaBar M y₀ p x :=
+    raw_compB_mean_le M y₀ p (s i) x hαbar hπbar
+  rw [hfactor]
+  calc
+    (∏ i, (rawTags M p).expect (fun t => compB M y₀ p t (s i) x)) ≤
+        ∏ _i : Fin m, ((N : ℝ) * alphaBar M y₀ p x) := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact hsite0 i
+      · intro i hi
+        exact hsitele i
+    _ = ((N : ℝ) * alphaBar M y₀ p x) ^ m := by simp
+
 private theorem MassFail_dependsOn_oddNbrs {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
     (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :

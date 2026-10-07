@@ -1444,6 +1444,45 @@ private theorem prefixMass_lower9 {P : Params9} {n N : ℕ} {M : TagMix N}
             rowDeg E G (anc9 ω c) (base.restrict A hmassPrevPos) :=
           mul_le_mul hmassPrev hcurrent (by norm_num) (le_trans (by positivity) hmassPrev)
 
+private theorem prefixMass_succ_eq9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} {E : Fin N → Fin N → Prop} {G : Colour}
+    (ω : Outcome9 I N) (base : Law N) (ord : List I.ID) (k : ℕ)
+    (hk : k < ord.length) (hmass : 0 < prefixMass9 E G ω base ord k) :
+    prefixMass9 E G ω base ord (k + 1) = prefixMass9 E G ω base ord k *
+      rowDeg E G (anc9 ω ord[k]) (prefixLaw9 E G ω base ord k) := by
+  classical
+  let c : I.ID := ord[k]
+  have hmassA : 0 < ∑ y ∈ hitSet9 E G ω (ord.take k).toFinset, base.w y := by
+    simpa [prefixMass9] using hmass
+  have hprefix : prefixLaw9 E G ω base ord k =
+      base.restrict (hitSet9 E G ω (ord.take k).toFinset) hmass := by
+    change restrictOr9 base (hitSet9 E G ω (ord.take k).toFinset) = _
+    unfold restrictOr9
+    rw [dif_pos hmassA]
+  have htake : ord.take k ++ [ord[k]] = ord.take (k + 1) :=
+    List.take_concat_get' ord k hk
+  have hids : (ord.take (k + 1)).toFinset = insert c (ord.take k).toFinset := by
+    calc
+      (ord.take (k + 1)).toFinset = (ord.take k ++ [ord[k]]).toFinset := by rw [← htake]
+      _ = insert c (ord.take k).toFinset := by
+        rw [List.toFinset_append]
+        simp [c, Finset.union_comm]
+  have hset : hitSet9 E G ω (insert c (ord.take k).toFinset) =
+      (hitSet9 E G ω (ord.take k).toFinset).filter
+        (fun y => Hits E G (anc9 ω c) y) := by
+    ext y
+    simp [hitSet9, c, Finset.mem_insert, and_left_comm, and_comm]
+  have hrec : prefixMass9 E G ω base ord (k + 1) =
+      prefixMass9 E G ω base ord k *
+        rowDeg E G (anc9 ω c) (base.restrict
+          (hitSet9 E G ω (ord.take k).toFinset) hmass) := by
+    unfold prefixMass9
+    rw [hids, hset]
+    exact law_restrict_degree_mass9 E G base
+      (hitSet9 E G ω (ord.take k).toFinset) (anc9 ω c) hmassA
+  rw [← hprefix] at hrec
+  simpa [c] using hrec
+
 private theorem orderRegular_prefix_degrees9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (ω : Outcome9 I N) (base : Law N) (ord : List I.ID)
@@ -1470,6 +1509,48 @@ private theorem orderRegular_prefix_degrees9 {P : Params9} {n N : ℕ} {M : TagM
         have hlow := (abs_le.mp hregular).1
         have hbstarBound : 2 * P.bStar n ≤ 1 / 100 := by nlinarith
         linarith
+
+private theorem outerFilter_restrict_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    ∃ hm : 0 < ∑ y ∈ hitSet9 E G ω (outerIDs9 I v b), (maskedLaw9 S ω b).w y,
+      outerFilter9 S E G ω v b =
+        (maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hm := by
+  classical
+  let O := outerIDs9 I v b
+  let K := coreIDs9 I v b
+  let ord := fullOrder9 I v b
+  let base := maskedLaw9 S ω b
+  have hlen : O.card ≤ ord.length := by
+    simp [ord, fullOrder9, O, K, List.length_append]
+  have hdegrees := orderRegular_prefix_degrees9 S I E G ω base ord hregular hbstar O.card hlen
+  have hmassLB := prefixMass_lower9 S I E G ω base ord O.card hlen hdegrees
+  have htake : (ord.take O.card).toFinset = O := by
+    have hlist : ord.take O.card = O.toList := by
+      dsimp [ord, fullOrder9, O, K]
+      rw [List.take_append_of_le_length (by simp)]
+      rw [List.take_append_of_le_length (by simp)]
+      simp
+    rw [hlist]
+    simp [O]
+  have hmass : (49 / 100 : ℝ) ^ O.card ≤
+      ∑ y ∈ hitSet9 E G ω O, base.w y := by
+    calc
+      (49 / 100 : ℝ) ^ O.card ≤ prefixMass9 E G ω base ord O.card := hmassLB
+      _ = ∑ y ∈ hitSet9 E G ω O, base.w y := by
+        simp [prefixMass9, htake]
+  have hpos : 0 < ∑ y ∈ hitSet9 E G ω O, base.w y :=
+    lt_of_lt_of_le (by positivity) hmass
+  refine ⟨hpos, ?_⟩
+  have hcut : (49 / 100 : ℝ) ^ (outerIDs9 I v b).card ≤
+      ∑ y ∈ hitSet9 E G ω (outerIDs9 I v b), (maskedLaw9 S ω b).w y := by
+    simpa [O, base] using hmass
+  unfold outerFilter9
+  rw [if_pos hcut]
+  unfold restrictOr9
+  rw [dif_pos hpos]
 
 private theorem coreHit_mass_lower_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)

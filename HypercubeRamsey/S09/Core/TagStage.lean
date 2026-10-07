@@ -31,7 +31,18 @@ theorem p92_tag_bad_prob (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ) 
       ∀ z : CubeVertex (P.m n),
         (FinProb.pi (fun _ : CubeVertex (P.m n) => tagMixLaw9 M)).pr
           (fun tag => tagBad9 (P := P) E G c tag z) ≤ P.tail c' n := by
-  sorry
+  classical
+  refine ⟨1, by norm_num, 1, by norm_num, 0, ?_⟩
+  intro n hn N E X Y G M hN hprep hdeep hbroad z
+  cases hcase : P.case with
+  | sub yS yD yM =>
+      have ht : 0 ≤ P.tail 1 n := by
+        rw [Params9.tail]
+        exact Real.exp_nonneg _
+      simpa [tagBad9, hcase, FinProb.pr] using ht
+  | lin αS αD hB yB =>
+      -- The linear case needs the broad-test degree estimate and conditional Hoeffding argument.
+      sorry
 
 set_option maxHeartbeats 0 in
 /-- P9.2-tags(ii) (09:135–137): the tag events satisfy the local-lemma input with charge `e^{-c' n^u/2}`:
@@ -184,6 +195,28 @@ theorem p92_tag_loads (P : Params9) (hP : P.Valid) (hA : P.CoreAdmissible) (κ :
       TagLLL9 P n M E G c c' →
       (tagLaw9 P n M E G c).pr (fun tag => ¬ tagLoadOK9 M tag (tagLoadConst9 κ)) ≤
         2 * ((n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) := by
+  classical
+  rcases scales_eventually9 P hP with ⟨_, nScale, hScales⟩
+  obtain ⟨nWidth, hWidth⟩ := Lane_q_s09_tag.tag_first_width_budget P hP hA
+  have hsmallEventually : ∀ᶠ n : ℕ in Filter.atTop,
+      (n : ℝ) ^ 2 * P.tail c' n < 1 / 8 := by
+    have hlim := Lane_q_s09_tag.expTail_square_tendsto P hP c' hc'
+    have h := hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8))
+    filter_upwards [h] with n hn
+    simpa only [Set.mem_Iio] using hn
+  obtain ⟨nTail, hTail⟩ := Filter.eventually_atTop.mp hsmallEventually
+  refine ⟨max nScale (max nWidth nTail), ?_⟩
+  intro n hn N E X Y G M c hN hNle hprep hCond hLLL
+  have hnScale : nScale ≤ n := le_trans (le_max_left _ _) hn
+  have hnWidth : nWidth ≤ n := le_trans (le_max_left _ _) (le_trans (le_max_right _ _) hn)
+  have hnTail : nTail ≤ n :=
+    le_trans (le_trans (le_max_right nWidth nTail) (le_max_right nScale (max nWidth nTail))) hn
+  have hscale : ScalesAt9 P n := hScales n hnScale
+  have hwidth :
+      (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 +
+        Real.log (n : ℝ) ≤ (P.m n : ℝ) * Real.log 2 := hWidth n hnWidth
+  have hsmall : (n : ℝ) ^ 2 * P.tail c' n < 1 / 8 := hTail n hnTail
+  -- The remaining estimate is the two `scatteredMoments_union_labels` applications.
   sorry
 
 /-- P9.2-tags (09:137–138), choice of the fixed tags: if the avoidance event of the tag events has positive raw
@@ -363,29 +396,28 @@ theorem p92_masks {P : Params9} {n N : ℕ} {M : TagMix N} (E : Fin N → Fin N 
   let defaultMask : FinProb (Finset (Fin N)) := FinProb.uniform {∅} (by simp)
   let Sbase : Setup9 P n N M := ⟨tag, fun _ => defaultMask⟩
   let R : OddSites9 n → Finset (Fin N) → Law N := fun b A =>
-    Law.mix (rawLaw9 Sbase I) (fun ω =>
-      rowLaw9 Sbase E G (Function.update ω (Sum.inr b) A) b)
+    Lane_q_s09_tag.tagActionLaw_q_s09_tag (I := I) Sbase E G b A
   have hR (b : OddSites9 n) (A : Finset (Fin N))
       (hA : 0 < Lane_q_s09_tag.maskMass (siteSecond9 Sbase b.1) A) (y : Fin N) (hy : y ∉ A) :
       (R b A).w y = 0 := by
-    dsimp [R, Law.mix]
+    dsimp [R, Lane_q_s09_tag.tagActionLaw_q_s09_tag, Law.mix]
     apply Finset.sum_eq_zero
-    intro ω _
-    have hmask : msk9 (Function.update ω (Sum.inr b) A) b = A := by
-      simp [msk9, Function.update]
+    intro a _
+    have hmask : msk9 (Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag a b A) b = A := by
+      simp [msk9, Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag]
     have hmasked :
-        (maskedLaw9 Sbase (Function.update ω (Sum.inr b) A) b).w y = 0 := by
+        (maskedLaw9 Sbase (Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag a b A) b).w y = 0 := by
       change (restrictOr9 (siteSecond9 Sbase b.1)
-        (msk9 (Function.update ω (Sum.inr b) A) b)).w y = 0
+        (msk9 (Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag a b A) b)).w y = 0
       rw [hmask]
       apply Lane_q_s09_tag.restrictOr9_outside
       · exact hA
       · exact hy
     have hrow :
-        (rowLaw9 Sbase E G (Function.update ω (Sum.inr b) A) b).w y = 0 :=
+        (rowLaw9 Sbase E G (Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag a b A) b).w y = 0 :=
       Lane_q_s09_tag.restrictOr9_zero
-        (maskedLaw9 Sbase (Function.update ω (Sum.inr b) A) b)
-        (hitSet9 E G (Function.update ω (Sum.inr b) A) (I.seen b.1)) y hmasked
+        (maskedLaw9 Sbase (Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag a b A) b)
+        (hitSet9 E G (Lane_q_s09_tag.tagAnchorOutcome_q_s09_tag a b A) (I.seen b.1)) y hmasked
     simp [hrow]
   let pick (b : OddSites9 n) :=
     Classical.choose

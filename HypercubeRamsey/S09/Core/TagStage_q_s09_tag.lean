@@ -4,6 +4,7 @@ import HypercubeRamsey.Framework.Minimax
 namespace HypercubeRamsey.Lane_q_s09_tag
 
 open Classical Filter OAI.HypercubeRamsey
+open scoped BigOperators
 set_option maxHeartbeats 0
 
 theorem pi_expect_prod {ι : Type*} [Fintype ι] [DecidableEq ι]
@@ -296,6 +297,45 @@ theorem finite_mask_minimax {N : ℕ} [Nonempty (Fin N)] (ν : Law N) (δ : ℝ)
         ring
   rw [hrewrite] at h
   linarith
+
+noncomputable def tagAnchorSites_q_s09_tag {P : Params9} {n : ℕ}
+    (I : IDMap9 P n) : Finset (I.ID ⊕ OddSites9 n) :=
+  Finset.univ.image Sum.inl
+
+noncomputable def tagAnchorOutcome_q_s09_tag {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (a : ∀ v : tagAnchorSites_q_s09_tag I, Val9 I N v.1)
+    (b : OddSites9 n) (A : Finset (Fin N)) : Outcome9 I N :=
+  fun v => match v with
+    | .inl c => a ⟨Sum.inl c,
+        Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩⟩
+    | .inr b' => if b' = b then A else (∅ : Finset (Fin N))
+
+theorem rowLaw9_ext_q_s09_tag {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (b : OddSites9 n) {ω ω' : Outcome9 I N}
+    (hanc : ∀ c, anc9 ω c = anc9 ω' c) (hmask : msk9 ω b = msk9 ω' b) :
+    rowLaw9 S E G ω b = rowLaw9 S E G ω' b := by
+  have hhit : hitSet9 E G ω (IDMap9.seen I b.1) = hitSet9 E G ω' (IDMap9.seen I b.1) := by
+    unfold hitSet9
+    ext y
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro h c hc
+      rw [← hanc c]
+      exact h c hc
+    · intro h c hc
+      rw [hanc c]
+      exact h c hc
+  have hmasked : maskedLaw9 S ω b = maskedLaw9 S ω' b := by
+    simp [maskedLaw9, hmask]
+  unfold rowLaw9
+  rw [hmasked, hhit]
+
+noncomputable def tagActionLaw_q_s09_tag {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (b : OddSites9 n) (A : Finset (Fin N)) : Law N :=
+  Law.mix (FinProb.pi (fun v : tagAnchorSites_q_s09_tag I => inputLaw9 S I v.1))
+    (fun a => rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b)
 
 theorem flipWord_involutive {m : ℕ} (z : CubeVertex m) (j : Fin m) :
     flipWord9 (flipWord9 z j) j = z := by

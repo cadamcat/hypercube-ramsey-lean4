@@ -1,4 +1,5 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_n1
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -30,7 +31,248 @@ theorem L18_0a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       (∀ ε : ℝ, 0 < ε → ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k,
         PT.Valid → PT.tiling.mode.isLow → ∀ G : LowGeom PT, ∀ F : FreshCell G,
           L16QuantitativeValidity G F → SmallErrors κ T k PT G ε) := by
-  sorry
+  have hβ : 0 < κ.β := hκ.β_rng.1
+  have hR : 0 ≤ κ.R := by rw [hκ.R_eq]; positivity
+  have hKB : 0 ≤ κ.KB := by nlinarith [hκ.KB_big]
+  have hA0 : 0 ≤ κ.A0 := by nlinarith [hκ.A0_big]
+  have hβsum : κ.β * (1 + κ.KB + 2 * κ.A0) ≤ 0.02 := by
+    have hden : 0 < 1 + κ.KB + 2 * κ.A0 := by positivity
+    exact (le_div_iff₀ hden).1 hκ.β_rng.2.1
+  let q : ℝ := Real.rpow 2 (-κ.β)
+  have hq0 : 0 < q := by
+    dsimp [q]
+    exact Real.rpow_pos_of_pos (by norm_num) _
+  have hq1 : q < 1 := by
+    dsimp [q]
+    rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    apply Real.exp_lt_one_iff.2
+    have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+    exact mul_neg_of_pos_of_neg hlog2 (by linarith)
+  let Kβ : ℝ := 1 / (1 - q)
+  have hKβ : 0 < Kβ := by
+    dsimp [Kβ]
+    positivity
+  have hgeom (r : ℕ) : (∑ j : Fin r, q ^ (r - j.val)) ≤ Kβ := by
+    simpa [Kβ] using
+      HypercubeRamsey.Lane_q_s18_n1.finite_reverse_geometric_sum_le hq0 hq1 r
+  have hterm (m : ℕ) : Real.rpow 2 (-κ.β * (m : ℝ)) = q ^ m := by
+    calc
+      Real.rpow 2 (-κ.β * (m : ℝ)) =
+          Real.rpow (Real.rpow 2 (-κ.β)) (m : ℝ) :=
+        Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 2) (-κ.β) (m : ℝ)
+      _ = q ^ m := by simp [q, Real.rpow_natCast]
+  have hsumError {k : ℕ} {PT : ProfiledTiling κ T k}
+      (G : LowGeom PT) (i : Fin PT.tiling.m) :
+      (∑ j : Fin G.r, lateError κ T k PT i (G.r - j.val)) ≤
+        Kβ * Real.rpow (densityScale T k) (-κ.β) *
+          Real.exp (-κ.β * PT.tiling.gain i) := by
+    let A := Real.rpow (densityScale T k) (-κ.β) *
+      Real.exp (-κ.β * PT.tiling.gain i)
+    have hdpos : 0 < densityScale T k := by
+      unfold densityScale
+      exact div_pos (by exact_mod_cast T.S.N_pos k) (by positivity)
+    have hA : 0 ≤ A := by dsimp [A]; positivity
+    calc
+      (∑ j : Fin G.r, lateError κ T k PT i (G.r - j.val)) =
+          A * ∑ j : Fin G.r, q ^ (G.r - j.val) := by
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro j hj
+        simp only [A, lateError]
+        rw [hterm]
+      _ ≤ A * Kβ := mul_le_mul_of_nonneg_left (hgeom G.r) hA
+      _ = Kβ * Real.rpow (densityScale T k) (-κ.β) *
+            Real.exp (-κ.β * PT.tiling.gain i) := by
+        dsimp [A]
+        ring
+  have hsmallIndex : ∀ᶠ k in atTop, 2 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 2
+  refine ⟨Kβ, hKβ, ?_, ?_⟩
+  · filter_upwards [hsmallIndex] with k hn
+    intro PT hPT hLow G F hL16 i
+    refine ⟨?_, ?_⟩
+    · intro j
+      let n : ℝ := T.S.n k
+      let d : ℝ := densityScale T k
+      have hnreal : 1 ≤ n := by
+        dsimp [n]
+        exact_mod_cast (show 1 ≤ T.S.n k by omega)
+      have hnpos : 0 < n := lt_of_lt_of_le (by norm_num) hnreal
+      have hNpos : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+      have hdpos : 0 < d := by
+        dsimp [d, densityScale]
+        exact div_pos hNpos (by positivity)
+      have hNle : (T.S.N k : ℝ) ≤ n * (2 : ℝ) ^ T.S.n k := by
+        have hNle' : (T.S.N k : ℝ) ≤ ((T.S.n k * 2 ^ T.S.n k : ℕ) : ℝ) := by
+          exact_mod_cast T.S.N_le k
+        simpa [n] using hNle'
+      have hdle : d ≤ n := by
+        dsimp [d, densityScale]
+        exact (div_le_iff₀ (by positivity : (0 : ℝ) < (2 : ℝ) ^ T.S.n k)).2 hNle
+      have hlogn : 0 ≤ Real.log n := Real.log_nonneg hnreal
+      have hlogd : Real.log d ≤ Real.log n := Real.log_le_log hdpos hdle
+      have hlog2 : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num)
+      have hremaining : ((G.r - j.val : ℕ) : ℝ) * Real.log 2 ≤
+          2 * κ.A0 * Real.log n := by
+        have hsub : ((G.r - j.val : ℕ) : ℝ) ≤ (G.r : ℝ) := by
+          exact_mod_cast Nat.sub_le G.r j.val
+        calc
+          ((G.r - j.val : ℕ) : ℝ) * Real.log 2 ≤ (G.r : ℝ) * Real.log 2 :=
+            mul_le_mul_of_nonneg_right hsub hlog2
+          _ ≤ 2 * κ.A0 * Real.log n := by simpa [n] using hL16.r_upper
+      have hgain := hL16.gain_upper i
+      have htotal : Real.log d + PT.tiling.gain i +
+          ((G.r - j.val : ℕ) : ℝ) * Real.log 2 ≤
+          (1 + κ.KB + 2 * κ.A0) * Real.log n := by
+        calc
+          _ ≤ Real.log n + κ.KB * Real.log n + 2 * κ.A0 * Real.log n := by
+            linarith
+          _ = (1 + κ.KB + 2 * κ.A0) * Real.log n := by ring
+      have hscaled : (-κ.β) * ((1 + κ.KB + 2 * κ.A0) * Real.log n) ≤
+          (-κ.β) * (Real.log d + PT.tiling.gain i +
+            ((G.r - j.val : ℕ) : ℝ) * Real.log 2) :=
+        mul_le_mul_of_nonpos_left htotal (by linarith)
+      have hcoef : κ.β * (1 + κ.KB + 2 * κ.A0) * Real.log n ≤
+          0.02 * Real.log n :=
+        mul_le_mul_of_nonneg_right hβsum hlogn
+      have hpoworder : (-0.02) * Real.log n ≤
+          (-κ.β) * ((1 + κ.KB + 2 * κ.A0) * Real.log n) := by
+        nlinarith [hcoef]
+      calc
+        Real.rpow n (-0.02) = Real.exp (Real.log n * (-0.02)) :=
+          Real.rpow_def_of_pos hnpos (-0.02)
+        _ = Real.exp ((-0.02) * Real.log n) := by congr 1 <;> ring
+        _ ≤ Real.exp ((-κ.β) * ((1 + κ.KB + 2 * κ.A0) * Real.log n)) :=
+          Real.exp_le_exp.mpr hpoworder
+        _ ≤ Real.exp ((-κ.β) * (Real.log d + PT.tiling.gain i +
+              ((G.r - j.val : ℕ) : ℝ) * Real.log 2)) :=
+          Real.exp_le_exp.mpr hscaled
+        _ = lateError κ T k PT i (G.r - j.val) := by
+          symm
+          have hDexp : Real.rpow (densityScale T k) (-κ.β) =
+              Real.exp (Real.log (densityScale T k) * (-κ.β)) :=
+            Real.rpow_def_of_pos (by simpa [d] using hdpos) _
+          have h2exp : Real.rpow 2 (-κ.β * ((G.r - j.val : ℕ) : ℝ)) =
+              Real.exp (Real.log 2 * (-κ.β * ((G.r - j.val : ℕ) : ℝ))) :=
+            Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2) _
+          rw [lateError, hDexp, h2exp]
+          rw [← Real.exp_add, ← Real.exp_add]
+          congr 1
+          ring
+    · exact hsumError G i
+  · intro ε hε
+    let c : ℝ := κ.β * κ.a / 10 ^ 6
+    let C : ℝ := 1 + c⁻¹
+    have ha : 0 < κ.a := by
+      rw [hκ.a_eq]
+      exact div_pos hκ.θ_rng.1 (by norm_num)
+    have hc : 0 < c := by dsimp [c]; positivity
+    have hC : 0 < C := by dsimp [C]; positivity
+    have hC1 : 1 ≤ C := by
+      dsimp [C]
+      exact le_add_of_nonneg_right (inv_nonneg.mpr hc.le)
+    have hscale_tendsto : Tendsto (fun k => densityScale T k) atTop atTop := by
+      simpa [densityScale] using T.S.ratio_tendsto
+    have hpow_tendsto : Tendsto
+        (fun k => Real.rpow (densityScale T k) (-κ.β)) atTop (nhds 0) :=
+      (tendsto_rpow_neg_atTop hβ).comp hscale_tendsto
+    have hsmall : ∀ᶠ k in atTop,
+        (Kβ * C) * Real.rpow (densityScale T k) (-κ.β) < ε := by
+      have hlim := hpow_tendsto.const_mul (Kβ * C)
+      have hmem : Set.Iio ε ∈ nhds ((Kβ * C) * 0) := by
+        simpa using (Iio_mem_nhds (a := ε) (b := 0) hε)
+      have hevent := hlim.eventually hmem
+      simpa [mul_assoc] using hevent
+    filter_upwards [hsmall] with k hk
+    intro PT hPT hLow G F hL16 i
+    have hheight :
+        (max 1 (PT.tiling.P i).h : ℝ) *
+          Real.exp (-κ.β * PT.tiling.gain i) ≤ C := by
+      cases hm : PT.tiling.mode with
+      | bounded =>
+          have hh := (hPT.tiling_valid.bounded_data hm).2 i
+          rw [hh.2.1]
+          simpa [Tiling.gain, hm] using hC1
+      | lowDirect =>
+          obtain ⟨_, _, _, _, hh, _, _⟩ :=
+            hPT.tiling_valid.direct_data (Or.inl hm) i
+          rw [hh]
+          have hg : 0 ≤ PT.tiling.gain i := by
+            rw [Tiling.gain, hm]
+            positivity
+          have he : Real.exp (-κ.β * PT.tiling.gain i) ≤ 1 := by
+            apply Real.exp_le_one_iff.2
+            nlinarith
+          simpa using le_trans he hC1
+      | lowCluster =>
+          have hx : 0 ≤ ((PT.tiling.P i).h : ℝ) := by positivity
+          have hmax : (max 1 (PT.tiling.P i).h : ℝ) ≤
+              1 + (PT.tiling.P i).h := by
+            apply max_le <;> linarith
+          have hg : PT.tiling.gain i =
+              κ.a * (PT.tiling.P i).h / 10 ^ 6 := by
+            simp [Tiling.gain, hm]
+          have hexp : Real.exp (-c * (PT.tiling.P i).h) ≤ 1 := by
+            apply Real.exp_le_one_iff.2
+            have hcx : 0 ≤ c * (PT.tiling.P i).h := mul_nonneg hc.le hx
+            nlinarith [hcx]
+          have hlinear : c * (PT.tiling.P i).h ≤
+              Real.exp (c * (PT.tiling.P i).h) := by
+            have := Real.add_one_le_exp (c * (PT.tiling.P i).h)
+            linarith
+          have hdiv : (PT.tiling.P i).h ≤
+              Real.exp (c * (PT.tiling.P i).h) / c := by
+            apply (le_div_iff₀ hc).2
+            nlinarith [hlinear]
+          have htail : (PT.tiling.P i).h *
+              Real.exp (-c * (PT.tiling.P i).h) ≤ c⁻¹ := by
+            calc
+              (PT.tiling.P i).h * Real.exp (-c * (PT.tiling.P i).h) ≤
+                  (Real.exp (c * (PT.tiling.P i).h) / c) *
+                    Real.exp (-c * (PT.tiling.P i).h) :=
+                mul_le_mul_of_nonneg_right hdiv (Real.exp_nonneg _)
+              _ = c⁻¹ * (Real.exp (c * (PT.tiling.P i).h) *
+                    Real.exp (-c * (PT.tiling.P i).h)) := by ring
+              _ = c⁻¹ := by rw [← Real.exp_add]; simp
+          have hsame : Real.exp (-κ.β * PT.tiling.gain i) =
+              Real.exp (-c * (PT.tiling.P i).h) := by
+            rw [hg]
+            congr 1
+            dsimp [c]
+            ring
+          rw [hsame]
+          calc
+            (max 1 (PT.tiling.P i).h : ℝ) *
+                Real.exp (-c * (PT.tiling.P i).h) ≤
+                (1 + (PT.tiling.P i).h) * Real.exp (-c * (PT.tiling.P i).h) :=
+              mul_le_mul_of_nonneg_right hmax (Real.exp_nonneg _)
+            _ = Real.exp (-c * (PT.tiling.P i).h) +
+                  (PT.tiling.P i).h * Real.exp (-c * (PT.tiling.P i).h) := by ring
+            _ ≤ 1 + c⁻¹ := add_le_add hexp htail
+            _ = C := by rfl
+      | highSmall => simp [Mode.isLow, hm] at hLow
+      | highLarge => simp [Mode.isLow, hm] at hLow
+      | highDirect => simp [Mode.isLow, hm] at hLow
+    have hsum := hsumError G i
+    have hscale_pos : 0 < densityScale T k := by
+      unfold densityScale
+      exact div_pos (by exact_mod_cast T.S.N_pos k) (by positivity)
+    have hbase : 0 ≤ Kβ * Real.rpow (densityScale T k) (-κ.β) := by
+      exact mul_nonneg hKβ.le (Real.rpow_pos_of_pos hscale_pos _).le
+    calc
+      (max 1 (PT.tiling.P i).h : ℝ) *
+          (∑ j : Fin G.r, lateError κ T k PT i (G.r - j.val)) ≤
+          (max 1 (PT.tiling.P i).h : ℝ) *
+            (Kβ * Real.rpow (densityScale T k) (-κ.β) *
+              Real.exp (-κ.β * PT.tiling.gain i)) :=
+        mul_le_mul_of_nonneg_left hsum (by positivity)
+      _ = (Kβ * Real.rpow (densityScale T k) (-κ.β)) *
+            ((max 1 (PT.tiling.P i).h : ℝ) *
+              Real.exp (-κ.β * PT.tiling.gain i)) := by ring
+      _ ≤ (Kβ * Real.rpow (densityScale T k) (-κ.β)) * C :=
+        mul_le_mul_of_nonneg_left hheight hbase
+      _ = (Kβ * C) * Real.rpow (densityScale T k) (-κ.β) := by ring
+      _ ≤ ε := le_of_lt hk
 
 /-- P18.4a / D18.T, 18:89–113, 810–825. Choose profiles by separation on
 baseline *label* marginals, and construct their exact reference kernels. This

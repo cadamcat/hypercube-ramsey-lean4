@@ -2591,6 +2591,175 @@ private theorem topScale_le_logbase_add_product_target (n : ℕ) (σ ζ : ℝ) :
       M * (M ^ (k - 1) * R₀) ≤ M * target := Nat.mul_le_mul_left _ hprev.le
       _ ≤ R₀ + M * target := Nat.le_add_left _ _
 
+private theorem topScale_target_le (n : ℕ) (σ ζ : ℝ) :
+    ⌈(n : ℝ) ^ (1 - ζ)⌉₊ ≤ topScale n σ ζ := by
+  let R₀ : ℕ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M : ℕ := max 2 ⌈(n : ℝ) ^ σ⌉₊
+  let target : ℕ := ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+  have hM : 2 ≤ M := by dsimp [M]; omega
+  have hR : 1 ≤ R₀ := by dsimp [R₀]; omega
+  have hexists := scaleIndex_exists9 M R₀ target hM hR
+  let k := Nat.find hexists
+  change target ≤ M ^ k * R₀
+  exact Nat.find_spec hexists
+
+private theorem logSq9_le_power {x δ : ℝ} (hx : 1 ≤ x) (hδ : 0 < δ) :
+    (Real.log x) ^ 2 ≤ (2 / δ) ^ 2 * x ^ δ := by
+  have hxpos : 0 < x := lt_of_lt_of_le zero_lt_one hx
+  let ε : ℝ := δ / 2
+  have hε : 0 < ε := by dsimp [ε]; positivity
+  have hlogNonneg : 0 ≤ Real.log x := Real.log_nonneg hx
+  have hlog := Real.log_le_rpow_div (le_of_lt hxpos) hε
+  have hpow : (x ^ ε) ^ 2 = x ^ δ := by
+    calc
+      (x ^ ε) ^ 2 = (x ^ ε) ^ (2 : ℝ) := (Real.rpow_natCast (x ^ ε) 2).symm
+      _ = x ^ (ε * 2) := (Real.rpow_mul hxpos.le ε 2).symm
+      _ = x ^ δ := by rw [show ε * 2 = δ by dsimp [ε]; ring]
+  have hsq : (Real.log x) ^ 2 ≤ (x ^ ε / ε) ^ 2 := by
+    rw [pow_two, pow_two]
+    exact mul_le_mul hlog hlog
+      hlogNonneg (div_nonneg (Real.rpow_nonneg hxpos.le ε) hε.le)
+  calc
+    (Real.log x) ^ 2 ≤ (x ^ ε / ε) ^ 2 := hsq
+    _ = (x ^ ε) ^ 2 / ε ^ 2 := by ring
+    _ = x ^ δ / ε ^ 2 := by rw [hpow]
+    _ = (2 / δ) ^ 2 * x ^ δ := by
+      dsimp [ε]
+      field_simp [ne_of_gt hδ]
+
+private theorem topScale_le_power9 (n : ℕ) {σ ζ : ℝ}
+    (hσ : 0 < σ) (hσζ : σ < ζ) (hζsmall : ζ ≤ 1 / 100) (hn : 1 ≤ n) :
+    (topScale n σ ζ : ℝ) ≤ ((2 / ((ζ - σ) / 8)) ^ 2 + 8) *
+      (n : ℝ) ^ (1 - (ζ - σ)) := by
+  let d := ζ - σ
+  let δ := d / 8
+  have hd : 0 < d := sub_pos.mpr hσζ
+  have hδ : 0 < δ := by dsimp [δ, d]; positivity
+  have hsmallExp : δ ≤ 1 - d := by dsimp [δ, d]; linarith
+  have hnReal : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have hNpos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnReal
+  have hR0 : ((max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊ : ℕ) : ℝ) ≤
+      (Real.log (n : ℝ)) ^ 2 + 2 := by
+    rw [Nat.cast_max]
+    apply max_le
+    · have hsq : 0 ≤ (Real.log (n : ℝ)) ^ 2 := sq_nonneg _
+      have hreal : (1 : ℝ) ≤ (Real.log (n : ℝ)) ^ 2 + 2 := by nlinarith [hsq]
+      simpa using hreal
+    · exact (Nat.ceil_lt_add_one (sq_nonneg (Real.log (n : ℝ)))).le.trans
+        (by ring_nf; linarith)
+  have hM : ((max 2 ⌈(n : ℝ) ^ σ⌉₊ : ℕ) : ℝ) ≤
+      (n : ℝ) ^ σ + 2 := by
+    rw [Nat.cast_max]
+    apply max_le
+    · have hnonneg : 0 ≤ (n : ℝ) ^ σ := Real.rpow_nonneg (Nat.cast_nonneg n) σ
+      have hreal : (2 : ℝ) ≤ (n : ℝ) ^ σ + 2 := by linarith
+      simpa using hreal
+    · exact (Nat.ceil_lt_add_one (Real.rpow_nonneg (Nat.cast_nonneg n) σ)).le.trans
+        (by linarith)
+  have htarget : (⌈(n : ℝ) ^ (1 - ζ)⌉₊ : ℝ) ≤
+      (n : ℝ) ^ (1 - ζ) + 1 :=
+    (Nat.ceil_lt_add_one (Real.rpow_nonneg (Nat.cast_nonneg n) _)).le
+  have htargetLower : 1 ≤ (n : ℝ) ^ (1 - ζ) := by
+    calc
+      1 = (n : ℝ) ^ (0 : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ (1 - ζ) :=
+        Real.rpow_le_rpow_of_exponent_le hnReal (by linarith)
+  have htargetUpper : (n : ℝ) ^ (1 - ζ) + 1 ≤ 2 * (n : ℝ) ^ (1 - ζ) := by linarith
+  have hMupper : (n : ℝ) ^ σ + 2 ≤ 3 * (n : ℝ) ^ σ := by
+    have hp := Real.rpow_le_rpow_of_exponent_le hnReal hσ.le
+    have hpow : (1 : ℝ) ≤ (n : ℝ) ^ σ := by simpa using hp
+    have htwiceRaw := mul_le_mul_of_nonneg_left hpow (by norm_num : (0 : ℝ) ≤ 2)
+    have htwice : (2 : ℝ) ≤ 2 * (n : ℝ) ^ σ := by simpa using htwiceRaw
+    have hplus := add_le_add_left htwice ((n : ℝ) ^ σ)
+    calc
+      (n : ℝ) ^ σ + 2 ≤ (n : ℝ) ^ σ + 2 * (n : ℝ) ^ σ := by
+        simpa [add_comm, add_left_comm, add_assoc] using hplus
+      _ = 3 * (n : ℝ) ^ σ := by ring
+  have hlog := logSq9_le_power hnReal hδ
+  have hlogUpper : (Real.log (n : ℝ)) ^ 2 + 2 ≤
+      ((2 / δ) ^ 2 + 2) * (n : ℝ) ^ δ := by
+    have hpow : 1 ≤ (n : ℝ) ^ δ := by
+      calc
+        1 = (n : ℝ) ^ (0 : ℝ) := by simp
+        _ ≤ (n : ℝ) ^ δ := Real.rpow_le_rpow_of_exponent_le hnReal hδ.le
+    nlinarith [hlog]
+  have htop := topScale_le_logbase_add_product_target n σ ζ
+  have htopReal : (topScale n σ ζ : ℝ) ≤
+      ((max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊ : ℕ) : ℝ) +
+        ((max 2 ⌈(n : ℝ) ^ σ⌉₊ : ℕ) : ℝ) * (⌈(n : ℝ) ^ (1 - ζ)⌉₊ : ℝ) := by
+    exact_mod_cast htop
+  have hmain : (n : ℝ) ^ δ ≤ (n : ℝ) ^ (1 - d) :=
+    Real.rpow_le_rpow_of_exponent_le hnReal hsmallExp
+  have hpowAdd : (n : ℝ) ^ σ * (n : ℝ) ^ (1 - ζ) = (n : ℝ) ^ (1 - d) := by
+    rw [← Real.rpow_add hNpos]
+    congr 1
+    dsimp [d]
+    ring
+  calc
+    (topScale n σ ζ : ℝ) ≤
+        ((Real.log (n : ℝ)) ^ 2 + 2) + ((n : ℝ) ^ σ + 2) *
+          ((n : ℝ) ^ (1 - ζ) + 1) := by
+          exact htopReal.trans (add_le_add hR0
+            (mul_le_mul hM htarget (by positivity) (by positivity)))
+    _ ≤ ((2 / δ) ^ 2 + 2) * (n : ℝ) ^ δ +
+          (3 * (n : ℝ) ^ σ) * (2 * (n : ℝ) ^ (1 - ζ)) :=
+        add_le_add hlogUpper (mul_le_mul hMupper htargetUpper
+          (by positivity) (by positivity))
+    _ = ((2 / δ) ^ 2 + 2) * (n : ℝ) ^ δ +
+          6 * ((n : ℝ) ^ σ * (n : ℝ) ^ (1 - ζ)) := by ring
+    _ = ((2 / δ) ^ 2 + 2) * (n : ℝ) ^ δ + 6 * (n : ℝ) ^ (1 - d) := by rw [hpowAdd]
+    _ ≤ ((2 / δ) ^ 2 + 8) * (n : ℝ) ^ (1 - d) := by
+        have hcoef : 0 ≤ (2 / δ) ^ 2 + 2 := by positivity
+        have hterm := mul_le_mul_of_nonneg_left hmain hcoef
+        nlinarith
+    _ = ((2 / ((ζ - σ) / 8)) ^ 2 + 8) *
+          (n : ℝ) ^ (1 - (ζ - σ)) := by simp [d, δ]
+
+private theorem radius9_le_height9 {P : Params9} {hc : HeightChoice9 P}
+    (hP : P.Valid) (hadm : hc.Admissible) {n : ℕ} (hn : 1 ≤ n) :
+    P.radius n ≤ hc.levels n := by
+  rcases hP with ⟨hcommon, hminus, hxd, hσ, hχ, hhp, hcase⟩
+  rcases hcommon with ⟨hxS, hxSd, hxD⟩
+  rcases hσ with ⟨hσpos, hσsmall⟩
+  rcases hadm with ⟨hσh, hσζ, hζ1, hθ, hθ1, hgap, hab, hχgap,
+    hb0, hb0eps, heps, hcaseAdm⟩
+  have hPσsmall : (P.σ : ℝ) < 1 / 100 := by
+    have hxSsmall : P.xS < (1 : ℚ) / 10 := lt_trans hxSd hxD
+    have hσq : P.σ < (1 : ℚ) / 100 := by nlinarith
+    have hσreal : ((P.σ : ℚ) : ℝ) < (((1 : ℚ) / 100) : ℝ) := by exact_mod_cast hσq
+    simpa using hσreal
+  have hepsσ : P.eps ≤ (P.σ : ℝ) / 2 := by
+    cases hcase' : P.case with
+    | sub yS yD yM =>
+        simp [Params9.eps, hcase']
+        exact div_le_div_of_nonneg_right (min_le_left _ _) (by norm_num)
+    | lin αS αD hB yB => simp [Params9.eps, hcase']
+  have hζa : hc.ζ < hc.a := by
+    have hpos : 0 < 1 - hc.θ := by linarith
+    linarith
+  have hζsmall : hc.ζ < 1 / 100 := by
+    have hchain : hc.ζ < (P.σ : ℝ) / 2 := by
+      calc
+        hc.ζ < hc.a := hζa
+        _ < hc.b₀ := hab
+        _ < hc.eps' := hb0eps
+        _ < P.eps := heps
+        _ ≤ (P.σ : ℝ) / 2 := hepsσ
+    linarith
+  have hexp : (P.σ : ℝ) ≤ 1 - hc.ζ := by linarith
+  have hnReal : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have hradReal : (P.radius n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+    unfold Params9.radius
+    exact Nat.floor_le (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+  have hrpow : (n : ℝ) ^ (P.σ : ℝ) ≤ (n : ℝ) ^ (1 - hc.ζ) :=
+    Real.rpow_le_rpow_of_exponent_le hnReal hexp
+  have hceil : (n : ℝ) ^ (1 - hc.ζ) ≤
+      (⌈(n : ℝ) ^ (1 - hc.ζ)⌉₊ : ℝ) := Nat.le_ceil _
+  have hreal : (P.radius n : ℝ) ≤ (⌈(n : ℝ) ^ (1 - hc.ζ)⌉₊ : ℝ) :=
+    hradReal.trans (hrpow.trans hceil)
+  have hnat : P.radius n ≤ ⌈(n : ℝ) ^ (1 - hc.ζ)⌉₊ := by exact_mod_cast hreal
+  exact hnat.trans (topScale_target_le n hc.σh hc.ζ)
+
 private theorem topScale_add_one_le_polynomial (σ ζ : ℝ)
     (hσ : 0 < σ) (hσζ : σ < ζ) (hζ : 0 < ζ) (hζ1 : ζ < 1)
     (n : ℕ) (hn : 2 ≤ n) :

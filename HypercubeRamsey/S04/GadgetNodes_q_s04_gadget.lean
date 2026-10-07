@@ -3612,6 +3612,157 @@ private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
         exact (hrest t htr).symm
       · exact Or.inr ⟨hrank, hdown, hlow⟩
 
+private abbrev ClippedFlipRankData {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (j r : Fin (HypercubeRamsey.S04.chunkNum β γ n)) : Prop :=
+  (∀ k, k ≠ j →
+    HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.clipped β γ n g k v) ∧
+  (∀ t, t ≠ r → mergeSortAt
+    (fun k => HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i)) t =
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) t) ∧
+  ((mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+      (HypercubeRamsey.cubeFlip v i)) r =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 ∧
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g j v + 1 ∧
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+        HypercubeRamsey.S04.clipped β γ n g j v) ∨
+    (mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) r + 1 ∧
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1 ∧
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) r =
+        HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i)))
+
+private theorem clipped_flip_has_rank_data {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :
+    ∃ d : Fin (HypercubeRamsey.S04.chunkNum β γ n) ×
+        Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      ClippedFlipRankData g v i d.1 d.2 := by
+  rcases clipped_flip_sorted_change g v i with heq | ⟨j, r, hother, hrest, hdir⟩
+  · exact False.elim (hsame heq)
+  · exact ⟨(j, r), hother, hrest, hdir⟩
+
+private noncomputable def clippedFlipRankData {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :=
+  Classical.choose (clipped_flip_has_rank_data g v i hsame)
+
+private theorem clippedFlipRankData_spec {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :
+    ClippedFlipRankData g v i (clippedFlipRankData g v i hsame).1
+      (clippedFlipRankData g v i hsame).2 :=
+  Classical.choose_spec (clipped_flip_has_rank_data g v i hsame)
+
+private noncomputable def gadgetFlipCode {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    Option (Fin (HypercubeRamsey.S04.chunkNum β γ n) × Bool) := by
+  classical
+  by_cases hsame : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  · exact none
+  · let d := clippedFlipRankData g v i hsame
+    let r := d.2
+    let t := r.val + 1
+    let S := HypercubeRamsey.S04.gadgetPower β γ n
+    let R := HypercubeRamsey.S04.rankValue β γ n g v
+    let path := binarySearchPath S R (Nat.log2 S) (0, S)
+    by_cases hp : t ∈ path
+    · by_cases hc :
+        ((t * S ≤ R t) ≠
+          (t * S ≤ HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i) t))
+      · exact some (r,
+          decide (HypercubeRamsey.S04.clipped β γ n g d.1
+            (HypercubeRamsey.cubeFlip v i) =
+              HypercubeRamsey.S04.clipped β γ n g d.1 v + 1))
+      · exact none
+    · exact none
+
+private theorem gadgetFlipCode_none_eq_base {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    (hcode : gadgetFlipCode g v i = none) :
+    HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.gadgetOut β γ n g v := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  let R' := HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i)
+  let e := Nat.log2 S
+  let path := binarySearchPath S R e (0, S)
+  by_cases hsame : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  · have hprofile : ∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+        mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j v) t =
+          mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j
+            (HypercubeRamsey.cubeFlip v i)) t := by
+      intro t
+      have hfun : (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+          HypercubeRamsey.S04.clipped β γ n g j v) =
+        (fun j => HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i)) := funext hsame
+      rw [hfun]
+    have hleaf := searchLeaf_eq_of_rank_profile g v (HypercubeRamsey.cubeFlip v i) hprofile
+    exact gadgetOut_flip_eq_of_leaf g v i hleaf.symm hS
+  · let d := clippedFlipRankData g v i hsame
+    let r := d.2
+    let t := r.val + 1
+    have hdata := clippedFlipRankData_spec g v i hsame
+    have hrest := hdata.2.1
+    let b := decide (HypercubeRamsey.S04.clipped β γ n g d.1
+      (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g d.1 v + 1)
+    have hdecPath : ∀ u ∈ path, (u * S ≤ R u) ↔ (u * S ≤ R' u) := by
+      intro u hu
+      by_cases hut : u = t
+      · subst u
+        by_cases hc : (t * S ≤ R t) ≠ (t * S ≤ R' t)
+        · have hsome : gadgetFlipCode g v i = some (r, b) := by
+            simp [gadgetFlipCode, hsame, d, r, t, S, R, R', e, path, b, hu, hc]
+          simp [hsome] at hcode
+        · have heq : (t * S ≤ R t) = (t * S ≤ R' t) := by
+            by_contra hne
+            exact hc hne
+          exact Iff.of_eq heq
+      · have hrv := rankValue_eq_of_at_eq_except g v
+          (HypercubeRamsey.cubeFlip v i) r (fun t htr => (hrest t htr).symm) u (by omega)
+        have hrv' : R u = R' u := by simpa [R, R'] using hrv
+        change (u * S ≤ R u) ↔ (u * S ≤ R' u)
+        constructor
+        · intro hu
+          calc
+            u * S ≤ R u := hu
+            _ = R' u := hrv'
+        · intro hu
+          calc
+            u * S ≤ R' u := hu
+            _ = R u := hrv'.symm
+    have hleaf : HypercubeRamsey.S04.searchLeaf β γ n g v =
+        HypercubeRamsey.S04.searchLeaf β γ n g (HypercubeRamsey.cubeFlip v i) := by
+      calc
+        HypercubeRamsey.S04.searchLeaf β γ n g v = binarySearchRun S R e (0, S) := by
+          simpa [S, R, e] using gadgetSearchLeaf_eq_run g v
+        _ = binarySearchRun S R' e (0, S) := binarySearchRun_eq_of_same_path_decisions
+          S R R' e (0, S) hdecPath
+        _ = HypercubeRamsey.S04.searchLeaf β γ n g (HypercubeRamsey.cubeFlip v i) := by
+          simpa [S, R', e] using (gadgetSearchLeaf_eq_run g (HypercubeRamsey.cubeFlip v i)).symm
+    exact gadgetOut_flip_eq_of_leaf g v i hleaf.symm hS
+
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
   classical

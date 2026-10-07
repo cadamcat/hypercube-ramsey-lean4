@@ -3815,4 +3815,63 @@ private theorem targetAnchorFreeIntegralBound9 {P : Params9} {n k N : ℕ} {M : 
     _ ≤ ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x :=
       independentTargetStars9 S E G a x ω hcancel
 
+theorem p92_even_anchor_integral_core (P : Params9) (hP : P.Valid) (c : ℝ) (hc : 0 < c) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {M : TagMix N} {G : Colour}
+      (S : Setup9 P n N M) (I : IDMap9 P n),
+      S07.CondProductBound → AnchorLLL9 S I E G c → StarScopeFacts9 S I E G →
+        StarCancel9 S I E G → EvenAnchorIntegral9 S I E G := by
+  obtain ⟨n₀, htail⟩ := tail_degree_small9 P hP c hc
+  refine ⟨n₀, ?_⟩
+  intro n hn N E M G S I hCP hLLL hscope hcancel
+  change S07.LLLInput (inputLaw9 S I) (fun v ω => StarBad9 S E G ω v)
+      (starScope9 I) (P.tail c n) (lllDegree9 P n) at hLLL
+  change ∀ (x : Fin N) (k : ℕ), k ≤ n → ∀ a : Fin k → EvenSites9 n,
+    (∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) →
+    (anchorLaw9 S I E G).expect (fun ω => ∏ i, evenStar9 S E G ω (a i) x) ≤
+      2 ^ k * ∏ i, (N : ℝ) * (siteFirst9 S (a i).1).w x
+  intro x k hk a hsep
+  by_cases hk0 : k = 0
+  · subst k
+    simp [FinProb.expect_const]
+  · have hnPos : 0 < n := by
+      have hkPos : 0 < k := Nat.pos_of_ne_zero hk0
+      omega
+    let U : Finset (I.ID ⊕ OddSites9 n) := targetAnchorVars9 a
+    let Φ : Outcome9 I N → ℝ := fun ω => ∏ i : Fin k, evenStar9 S E G ω (a i) x
+    let B : ℝ := ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x
+    have hΦnonneg : ∀ ω, 0 ≤ Φ ω := by
+      intro ω
+      exact Finset.prod_nonneg fun i hi => evenStar9_nonneg S E G ω (a i) x
+    have hfree : ∀ ω,
+        ∑ s : ∀ q : U, Val9 I N q.1,
+          (∏ q : U, (inputLaw9 S I q.1).w (s q)) * Φ (S07.glue U ω s) ≤ B := by
+      intro ω
+      simpa [U, Φ, B] using targetAnchorFreeIntegralBound9 S E G a hsep ω x hcancel
+    have hbadCount :
+        (Finset.univ.filter fun v : EvenSites9 n =>
+          ¬ Disjoint (starScope9 I v) U).card ≤ k * (lllDegree9 P n + 1) := by
+      simpa [U] using targetAnchor_badCount9 S E G a hnPos hscope
+    let t := (Finset.univ.filter fun v : EvenSites9 n =>
+      ¬ Disjoint (starScope9 I v) U).card
+    have ht : t ≤ k * (lllDegree9 P n + 1) := by
+      exact hbadCount
+    have hsmall := htail n hn
+    have hsmall' : P.tail c n * ((lllDegree9 P n + 1 : ℕ) : ℝ) ≤ 1 / 4 := by
+      simpa [Nat.cast_add] using hsmall
+    have hpen := condPenalty9 hLLL.x_nonneg hsmall' ht
+    have hCPbound := hCP (inputLaw9 S I)
+      (fun v ω => StarBad9 S E G ω v) (starScope9 I) (P.tail c n) (lllDegree9 P n) hLLL
+    rcases hCPbound with ⟨havoid, hcond⟩
+    have hcondBound : (anchorLaw9 S I E G).expect Φ ≤
+        ((1 - P.tail c n) ^ t)⁻¹ * B := by
+      simpa [anchorLaw9, rawLaw9, U, Φ, t] using hcond U Φ hΦnonneg B hfree
+    have hBnonneg : 0 ≤ B := by
+      dsimp [B]
+      exact Finset.prod_nonneg fun i hi =>
+        mul_nonneg (Nat.cast_nonneg N) ((siteFirst9 S (a i).1).nonneg x)
+    calc
+      (anchorLaw9 S I E G).expect Φ ≤ ((1 - P.tail c n) ^ t)⁻¹ * B := hcondBound
+      _ ≤ (2 : ℝ) ^ k * B := mul_le_mul_of_nonneg_right hpen hBnonneg
+      _ = 2 ^ k * ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x := by rfl
+
 end HypercubeRamsey.Lane_q_s09_assign2

@@ -2,6 +2,7 @@ import HypercubeRamsey.S06.Stages
 import HypercubeRamsey.S03.Height.Selection
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import HypercubeRamsey.S06.Prob
+import HypercubeRamsey.S06.Centres_sol_s06_ci
 
 /-!
 # Centres, marking, eligibility and the height choices
@@ -522,7 +523,233 @@ theorem L6_1i_counts (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 e^{−c₂kn/2}` with `log D_n < c₂k/2`; union over states and level pairs `exp(O(n))`. -/
 theorem L6_1i_marks (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.HistSupport → X.DescCount → X.MarksBound := by
-  sorry
+  obtain ⟨nGrowth, hGrowth⟩ := Lane_sol_s06_ci.parameter_growth p₀ hadm.2.2.1
+  obtain ⟨nScale, hScale⟩ := Lane_sol_s06_ci.topScale_fourth_eventually p₀ hadm.2.2.1
+  refine ⟨max nGrowth nScale, 1, ?_⟩
+  intro n N E G M X hLarge hSupp hCount H hH
+  have hGrowthN := hGrowth n ((le_max_left _ _).trans hLarge.1)
+  obtain ⟨hJ, hT, hlogT, _, hk, hn⟩ := hGrowthN
+  have hn2 : 2 ≤ n := by omega
+  have hnpos : 0 < n := by omega
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast (show 1 ≤ n by omega)
+  have hnp : (0 : ℝ) < n := by positivity
+  have hScaleN := hScale n ((le_max_right _ _).trans hLarge.1)
+  have hHscale : X.hp.H ≤ n ^ 4 := by simpa [Ctx6.hp] using hScaleN
+  have hJX : 200000000 ≤ X.J := by simpa [Ctx6.J, X.g.m_eq, m₆] using hJ
+  have hTX : (X.T : ℝ) ≤ (1 / 10 ^ 14 : ℝ) * X.J := by
+    simpa [Ctx6.T, Ctx6.J, X.g.m_eq, m₆] using hT
+  have hlogTX : Real.log (X.T + 2) ≤ 2 * α₆ p₀ * Real.log n := by
+    simpa [Ctx6.T, X.g.m_eq, m₆] using hlogT
+  have hkX : 12000 ≤ X.k := by simpa [Ctx6.k, X.g.m_eq, m₆] using hk
+  have hkceil : κ₆ * (X.J : ℝ) * Real.log n ≤ X.k := by
+    exact Nat.le_ceil _
+  let rate : ℝ := 10 ^ 4 * (X.T * Real.log (3 * n * (4 * n ^ 10) + 2) +
+    (X.J + 1) * Real.log (X.T + 2))
+  have hRate : rate ≤ c₂ / 2 * X.k := Lane_sol_s06_ci.descriptor_rate_of_growth
+    hn2 hJX hTX hlogTX hkceil
+    (height_exponents6_admissible p₀ hadm.2.2.1).1.le (min_le_left _ _)
+  let q : ℝ := Real.exp (-c₂ * X.k)
+  let bound : ℝ := Real.exp (-(c₂ / 2) * X.k * n)
+  let counts : (X.Loc → Bool) → Prop := fun P =>
+    ∀ v ∈ X.sites, ∀ l, X.hp.lam / 2 ≤ ((X.prosp P v l).card : ℝ) ∧
+      ((X.prosp P v l).card : ℝ) ≤ 2 * X.hp.lam
+  let failed : (X.Loc → Bool) → X.Data X.Loc → X.State → Fin X.hp.H → Finset (Finset X.Loc) :=
+    fun P o b j => ((X.descsIn b (X.permAt P b j)).filter fun D => X.S3Fail H b D o).image
+      (fun D => D.image Prod.fst)
+  let bad : (X.Loc → Bool) × X.Data X.Loc → Prop := fun ω => counts ω.1 ∧
+    ∃ b ∈ X.g.L.oddStates, ∃ j, n ≤ (maxDisjoint6 (failed ω.1 ω.2 b j)).card
+  have hProj : (X.centreLaw H).pr (fun C => X.CountsOK C ∧ ¬ X.MarksOK H C) =
+      (X.hp.posLaw.prod (X.dataLaw X.Loc H)).pr bad := by
+    calc
+      _ = (X.centreLaw H).pr (fun C => bad C.1.1) := by
+        apply Lane_q_s06_stages.pr_congr
+        intro C
+        simp only [bad, counts, failed, Ctx6.CountsOK, Ctx6.MarksOK,
+          Ctx6.failedSets, Ctx6.pos, Ctx6.tup, not_forall, not_lt, exists_prop]
+        rfl
+      _ = ((X.hp.posLaw.prod (X.dataLaw X.Loc H)).prod X.hp.actLaw).pr (fun C => bad C.1) := by
+        simpa only [Ctx6.centreLaw] using Lane_sol_s06_ci.pr_prod_fst
+          ((X.hp.posLaw.prod (X.dataLaw X.Loc H)).prod X.hp.actLaw) X.hp.tieLaw
+          (fun C => bad C.1)
+      _ = _ := Lane_sol_s06_ci.pr_prod_fst _ _ _
+  have hEach (P : X.Loc → Bool) (hP : counts P) (b : X.State)
+      (hb : b ∈ X.g.L.oddStates) (j : Fin X.hp.H) :
+      (X.dataLaw X.Loc H).pr (fun o => n ≤ (maxDisjoint6 (failed P o b j)).card) ≤ bound := by
+    let ds : Finset (Finset (X.Loc × X.Ty)) := X.descsIn b (X.permAt P b j)
+    have hPerm : ∀ a : X.g.L.stNbr b, (X.permAt P b j a).card ≤ 4 * n ^ 10 := by
+      intro a
+      have haEven : a.1 ∈ X.g.L.evenStates := by
+        have ha := a.2
+        unfold ChunkLayout6.stNbr at ha
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha
+        obtain ⟨u, v, _, hv, _, hst, _⟩ := ha
+        exact Finset.mem_image.mpr ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩, hst⟩
+      have haSite : X.site a.1 ∈ X.sites :=
+        Finset.mem_image.mpr ⟨a.1, haEven, rfl⟩
+      have hcard (l : Fin (X.hp.H + 1)) : (X.prosp P (X.site a.1) l).card ≤ 2 * n ^ 10 := by
+        have hc := (hP _ haSite l).2
+        have hlam : X.hp.lam = (n : ℝ) ^ (10 : ℕ) := by
+          simp [Ctx6.hp, J₀₆, Real.rpow_natCast]
+        rw [hlam] at hc
+        exact_mod_cast hc
+      calc
+        (X.permAt P b j a).card ≤ ∑ l ∈ X.levelPair j, (X.prosp P (X.site a.1) l).card :=
+          Finset.card_biUnion_le
+        _ ≤ ∑ _l ∈ X.levelPair j, 2 * n ^ 10 := Finset.sum_le_sum fun l _ => hcard l
+        _ ≤ 4 * n ^ 10 := by
+          have hc : (X.levelPair j).card ≤ 2 := by
+            change ({j.castSucc, j.succ} : Finset _).card ≤ 2
+            exact (Finset.card_insert_le _ _).trans (by simp)
+          simp only [Finset.sum_const, nsmul_eq_mul]
+          change (X.levelPair j).card * (2 * n ^ 10) ≤ 4 * n ^ 10
+          calc
+            _ ≤ 2 * (2 * n ^ 10) := Nat.mul_le_mul_right _ hc
+            _ = _ := by ring
+    have hDsCard : (ds.card : ℝ) ≤ Real.exp rate := by
+      simpa [ds, rate, Nat.cast_mul, Nat.cast_pow] using
+        hCount X.Loc b (X.permAt P b j) (4 * n ^ 10) hb hPerm
+    let Tuples := Fin n → ds
+    let good : Tuples → Prop := fun d => Pairwise fun i j =>
+      Disjoint ((d i).1.image Prod.fst) ((d j).1.image Prod.fst)
+    let allFail : Tuples → X.Data X.Loc → Prop := fun d o =>
+      good d ∧ ∀ i, X.S3Fail H b (d i).1 o
+    have hWitness (o : X.Data X.Loc) (ho : n ≤ (maxDisjoint6 (failed P o b j)).card) :
+        ∃ d : Tuples, allFail d o := by
+      let fam := maxDisjoint6 (failed P o b j)
+      have hMax : IsMaxDisjoint6 (failed P o b j) fam := by
+        dsimp [fam]
+        unfold maxDisjoint6 at ho ⊢
+        split_ifs with hex
+        · exact Classical.choose_spec hex
+        · simp only [dif_neg hex, Finset.card_empty] at ho
+          omega
+      have hCard : Fintype.card (Fin n) ≤ Fintype.card fam := by
+        simpa only [Fintype.card_fin, Fintype.card_coe] using ho
+      let e : Fin n ↪ fam := Classical.choice (Function.Embedding.nonempty_iff_card_le.mpr hCard)
+      have hRep (i : Fin n) : ∃ D ∈ ds, X.S3Fail H b D o ∧ D.image Prod.fst = (e i).1 := by
+        have hi := hMax.1 (e i).2
+        obtain ⟨D, hD, he⟩ := Finset.mem_image.mp hi
+        exact ⟨D, (Finset.mem_filter.mp hD).1, (Finset.mem_filter.mp hD).2, he⟩
+      let d : Tuples := fun i => ⟨Classical.choose (hRep i), (Classical.choose_spec (hRep i)).1⟩
+      refine ⟨d, ?_, fun i => (Classical.choose_spec (hRep i)).2.1⟩
+      intro i j hij
+      have hei : (d i).1.image Prod.fst = (e i).1 := (Classical.choose_spec (hRep i)).2.2
+      have hej : (d j).1.image Prod.fst = (e j).1 := (Classical.choose_spec (hRep j)).2.2
+      rw [hei, hej]
+      exact hMax.2.1 _ (e i).2 _ (e j).2
+        (fun h => hij (e.injective (Subtype.ext h)))
+    have hTuple (d : Tuples) : (X.dataLaw X.Loc H).pr (allFail d) ≤ q ^ n := by
+      by_cases hd : good d
+      · have hPair : ∀ i ∈ (Finset.univ : Finset (Fin n)), ∀ j ∈ Finset.univ, i ≠ j →
+            Disjoint (d i).1 (d j).1 := by
+          intro i _ j _ hij
+          apply Finset.disjoint_left.mpr
+          intro e he he'
+          exact Finset.disjoint_left.mp (hd hij)
+            (Finset.mem_image.mpr ⟨e, he, rfl⟩) (Finset.mem_image.mpr ⟨e, he', rfl⟩)
+        have hProduct := Lane_sol_s06_ci.pr_all_failures X H b Finset.univ
+          (fun i => (d i).1) hPair
+        have hPr : (X.dataLaw X.Loc H).pr (allFail d) =
+            ∏ i, (X.dataLaw X.Loc H).pr (fun o => X.S3Fail H b (d i).1 o) := by
+          simpa [allFail, hd] using hProduct
+        rw [hPr]
+        calc
+          _ ≤ ∏ _i : Fin n, q := Finset.prod_le_prod₀
+            (fun i _ => pr_nonneg6 _ _)
+            (fun i _ => Lane_sol_s06_ci.s3Fail_pr_le X hSupp H hH b hb _ _ (d i).2)
+          _ = _ := by simp
+      · have hz : (X.dataLaw X.Loc H).pr (allFail d) = 0 := by
+          simp [allFail, hd, FinProb.pr]
+        rw [hz]
+        exact pow_nonneg (Real.exp_nonneg _) n
+    have hUnion := Lane_q_s06_stages.pr_exists_finset_le (X.dataLaw X.Loc H)
+      (Finset.univ : Finset Tuples) allFail
+    calc
+      _ ≤ (X.dataLaw X.Loc H).pr (fun o => ∃ d ∈ (Finset.univ : Finset Tuples), allFail d o) :=
+        pr_mono6 _ (fun o ho => by obtain ⟨d, hd⟩ := hWitness o ho; exact ⟨d, Finset.mem_univ _, hd⟩)
+      _ ≤ ∑ d : Tuples, (X.dataLaw X.Loc H).pr (allFail d) := hUnion
+      _ ≤ ∑ _d : Tuples, q ^ n := Finset.sum_le_sum fun d _ => hTuple d
+      _ = (ds.card : ℝ) ^ n * q ^ n := by
+        simp [Tuples, Fintype.card_fun, Nat.cast_pow]
+      _ = ((ds.card : ℝ) * q) ^ n := (mul_pow _ _ _).symm
+      _ ≤ (Real.exp (-(c₂ / 2) * X.k)) ^ n := by
+        apply pow_le_pow_left₀ (mul_nonneg (Nat.cast_nonneg _) (Real.exp_nonneg _))
+        calc
+          (ds.card : ℝ) * q ≤ Real.exp rate * q :=
+            mul_le_mul_of_nonneg_right hDsCard (Real.exp_nonneg _)
+          _ = Real.exp (rate - c₂ * X.k) := by simp [q, ← Real.exp_add, sub_eq_add_neg]
+          _ ≤ _ := Real.exp_le_exp.mpr (by linarith [hRate])
+      _ = bound := by
+        dsimp [bound]
+        rw [← Real.exp_nat_mul]
+        congr 1
+        ring
+  have hBad : (X.hp.posLaw.prod (X.dataLaw X.Loc H)).pr bad ≤
+      (X.g.L.oddStates.card : ℝ) * X.hp.H * bound := by
+    apply Lane_sol_s06_ci.pr_prod_le
+    intro P
+    by_cases hP : counts P
+    · have h := Lane_q_s06_stages.pr_exists_finset_le (X.dataLaw X.Loc H) X.g.L.oddStates
+        (fun b o => ∃ j ∈ (Finset.univ : Finset (Fin X.hp.H)),
+          n ≤ (maxDisjoint6 (failed P o b j)).card)
+      calc
+        _ = (X.dataLaw X.Loc H).pr (fun o => ∃ b ∈ X.g.L.oddStates,
+            ∃ j ∈ (Finset.univ : Finset (Fin X.hp.H)), n ≤ (maxDisjoint6 (failed P o b j)).card) := by
+          apply Lane_q_s06_stages.pr_congr
+          intro o
+          simp [bad, hP]
+        _ ≤ ∑ b ∈ X.g.L.oddStates, (X.dataLaw X.Loc H).pr (fun o =>
+            ∃ j ∈ (Finset.univ : Finset (Fin X.hp.H)), n ≤ (maxDisjoint6 (failed P o b j)).card) := h
+        _ ≤ ∑ _b ∈ X.g.L.oddStates, (X.hp.H : ℝ) * bound := by
+          apply Finset.sum_le_sum
+          intro b hb
+          calc
+            _ ≤ ∑ j : Fin X.hp.H, (X.dataLaw X.Loc H).pr
+                (fun o => n ≤ (maxDisjoint6 (failed P o b j)).card) :=
+              Lane_q_s06_stages.pr_exists_finset_le _ Finset.univ _
+            _ ≤ ∑ _j : Fin X.hp.H, bound := Finset.sum_le_sum fun j _ => hEach P hP b hb j
+            _ = _ := by simp
+        _ = _ := by simp; ring
+    · have hz : (X.dataLaw X.Loc H).pr (fun o => bad (P, o)) = 0 := by
+        simp [bad, hP, FinProb.pr]
+      rw [hz]
+      dsimp [bound]
+      positivity
+  have hOdd : (X.g.L.oddStates.card : ℝ) ≤ Real.exp n := by
+    have hcard : X.g.L.oddStates.card ≤ 2 ^ n := by
+      exact (Finset.card_image_le).trans (by
+        exact (Finset.card_filter_le _ _).trans (by simp [Fintype.card_fun, Fintype.card_fin]))
+    have hcast : (X.g.L.oddStates.card : ℝ) ≤ (2 : ℝ) ^ n := by exact_mod_cast hcard
+    have h2 : (2 : ℝ) ≤ Real.exp 1 := by
+      linarith [Real.add_one_le_exp (1 : ℝ)]
+    calc
+      _ ≤ (2 : ℝ) ^ n := hcast
+      _ ≤ (Real.exp 1) ^ n := pow_le_pow_left₀ (by norm_num) h2 n
+      _ = Real.exp n := by rw [← Real.exp_nat_mul]; congr 1; ring
+  have hLevels : (X.hp.H : ℝ) ≤ Real.exp (4 * n) := by
+    have hcast : (X.hp.H : ℝ) ≤ (n : ℝ) ^ 4 := by exact_mod_cast hHscale
+    have hnExp : (n : ℝ) ≤ Real.exp n := by linarith [Real.add_one_le_exp (n : ℝ)]
+    calc
+      _ ≤ (n : ℝ) ^ 4 := hcast
+      _ ≤ (Real.exp n) ^ 4 := pow_le_pow_left₀ (by positivity) hnExp 4
+      _ = Real.exp (4 * n) := by rw [← Real.exp_nat_mul]; norm_num
+  have hFinal : (X.g.L.oddStates.card : ℝ) * X.hp.H * bound ≤ Real.exp (-(n : ℝ)) := by
+    have hkR : (12000 : ℝ) ≤ X.k := by exact_mod_cast hkX
+    calc
+      _ ≤ (Real.exp n * Real.exp (4 * n)) * bound :=
+        mul_le_mul_of_nonneg_right (mul_le_mul hOdd hLevels (by positivity) (Real.exp_nonneg _))
+          (Real.exp_nonneg _)
+      _ = Real.exp ((n : ℝ) + 4 * n - (c₂ / 2) * X.k * n) := by
+        dsimp [bound]
+        rw [← Real.exp_add, ← Real.exp_add]
+        congr 1
+        ring
+      _ ≤ _ := Real.exp_le_exp.mpr (by
+        norm_num [c₂] at ⊢
+        nlinarith only [mul_le_mul_of_nonneg_right hkR (Nat.cast_nonneg n)])
+  rw [hProj]
+  exact hBad.trans hFinal
+
 
 /-- L6.1i (eligibility, 06:553–555): fewer than `n` marked sets per star and level pair remove `O(n²T)` centres
 from a site-level, leaving at least `λ/3`. -/

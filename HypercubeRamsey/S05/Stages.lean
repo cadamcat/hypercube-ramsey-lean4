@@ -61,7 +61,17 @@ theorem L5_1g_common_high_law {Data Ref : Type*} [Fintype Data] [Fintype Ref]
       (∀ c, ∑ h, ∑ y,
         R.w (h, y) * highDeletionCost5 R (M.deleted d) c h y ≤
           M.costBound * M.length c) := by
-  sorry
+  refine ⟨M.failure_bound, ?_⟩
+  intro d hd
+  classical
+  by_cases hRef : Nonempty Ref
+  · -- The nonempty-reference case needs the finite separation argument.
+    sorry
+  · haveI : IsEmpty Ref := ⟨fun c => hRef ⟨c⟩⟩
+    obtain ⟨R, hcap, hsupp⟩ := M.capped_feasible d hd
+    refine ⟨R, hcap, hsupp, ?_⟩
+    intro c
+    exact isEmptyElim c
 
 /-- L5.1i: a tuple whose coordinate law is dominated by `M` times a product reference has few entries in a
 small label set. -/

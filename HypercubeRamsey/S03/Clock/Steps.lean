@@ -83,7 +83,70 @@ theorem step5_giant_tail {Ω : Type*} [Fintype Ω]
     (hδ : 0 < δ)
     (hmoment : P.expect (fun ω => Real.exp (δ * (size ω : ℝ))) ≤ Real.exp (δ * roots + η)) :
     P.pr (fun ω => L ≤ (size ω : ℝ)) ≤ Real.exp (-δ * (L - roots) + η) := by
-  sorry
+  classical
+  let X : Ω → ℝ := fun ω => Real.exp (δ * (size ω : ℝ))
+  let threshold : ℝ := Real.exp (δ * L)
+  have hthreshold : 0 < threshold := by
+    dsimp [threshold]
+    exact Real.exp_pos _
+  have htail : ∀ ω, L ≤ (size ω : ℝ) → threshold ≤ X ω := by
+    intro ω hω
+    dsimp [threshold, X]
+    apply Real.exp_le_exp.mpr
+    exact mul_le_mul_of_nonneg_left hω (le_of_lt hδ)
+  have hprob :
+      P.pr (fun ω => L ≤ (size ω : ℝ)) ≤ P.pr (fun ω => threshold ≤ X ω) := by
+    unfold FinProb.pr
+    apply Finset.sum_le_sum
+    intro ω _
+    by_cases hω : L ≤ (size ω : ℝ)
+    · have hX := htail ω hω
+      simp [hω, hX]
+    · by_cases hX : threshold ≤ X ω
+      · simpa [hω, hX] using P.nonneg ω
+      · simp [hω, hX]
+  have hmarkovPoint :
+      threshold * P.pr (fun ω => threshold ≤ X ω) ≤ P.expect X := by
+    change threshold * (∑ ω, if threshold ≤ X ω then P.w ω else 0) ≤
+      ∑ ω, P.w ω * X ω
+    rw [Finset.mul_sum]
+    calc
+      (∑ ω, threshold * (if threshold ≤ X ω then P.w ω else 0)) =
+          ∑ ω, P.w ω * (if threshold ≤ X ω then threshold else 0) := by
+        apply Finset.sum_congr rfl
+        intro ω _
+        by_cases hX : threshold ≤ X ω
+        · simp [hX, mul_comm]
+        · simp [hX, mul_comm]
+      _ ≤ ∑ ω, P.w ω * X ω := by
+        apply Finset.sum_le_sum
+        intro ω _
+        by_cases hX : threshold ≤ X ω
+        · have hmul : threshold * P.w ω ≤ X ω * P.w ω :=
+            mul_le_mul_of_nonneg_right hX (P.nonneg ω)
+          simpa [hX, mul_comm] using hmul
+        · have hX0 : 0 ≤ X ω := (Real.exp_pos _).le
+          simpa [hX] using mul_nonneg (P.nonneg ω) hX0
+  have hmarkov :
+      P.pr (fun ω => threshold ≤ X ω) ≤ P.expect X / threshold := by
+    apply (le_div_iff₀ hthreshold).2
+    calc
+      P.pr (fun ω => threshold ≤ X ω) * threshold =
+          threshold * P.pr (fun ω => threshold ≤ X ω) := by ring
+      _ ≤ P.expect X := hmarkovPoint
+  have hmoment' : P.expect X ≤ Real.exp (δ * roots + η) := by
+    simpa [X] using hmoment
+  have hquot : P.expect X / threshold ≤ Real.exp (δ * roots + η) / threshold :=
+    div_le_div_of_nonneg_right hmoment' hthreshold.le
+  have hratio : Real.exp (δ * roots + η) / threshold =
+      Real.exp (-δ * (L - roots) + η) := by
+    rw [show threshold = Real.exp (δ * L) by rfl, ← Real.exp_sub]
+    congr 1 <;> ring
+  calc
+    P.pr (fun ω => L ≤ (size ω : ℝ)) ≤ P.pr (fun ω => threshold ≤ X ω) := hprob
+    _ ≤ P.expect X / threshold := hmarkov
+    _ ≤ Real.exp (δ * roots + η) / threshold := hquot
+    _ = Real.exp (-δ * (L - roots) + η) := hratio
 
 /-- One Euler step for the finite-mesh background equations `q'=-θzq`, `z'=-qz`. -/
 def backgroundStep (δ θ : ℝ) (s : ℝ × ℝ) : ℝ × ℝ :=

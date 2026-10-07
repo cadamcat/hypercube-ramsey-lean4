@@ -2080,7 +2080,7 @@ theorem height_volume_ge_lambda_eventually
       exact volume_ge_lambda_from_fixed_layer J₀ c_d k hkJ hcd p hlam (by omega) hGrowth hdim
         hRadLower hDimNat
 
-private theorem cube_ball_card_eq_choose_sum {d r : ℕ} (v : CubeVertex d) (hr : r ≤ d) :
+theorem cube_ball_card_eq_choose_sum {d r : ℕ} (v : CubeVertex d) (hr : r ≤ d) :
     (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card =
       ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
   classical
@@ -5742,7 +5742,7 @@ private theorem hammingBall_intersection_enlarged_sublinear_bound {d r T s q : �
               ((r + T : ℝ) / ((d - (r + T) + 1 : ℕ) : ℝ)) ^ (s / 3)) := htotal'
     _ ≤ _ := mul_le_mul_of_nonneg_right hvolume herror
 
-private theorem hammingDist_custom_eq_root {d : ℕ} (u v : CubeVertex d) :
+theorem hammingDist_custom_eq_root {d : ℕ} (u v : CubeVertex d) :
     hammingDist u v = _root_.hammingDist u v := by
   classical
   simp [HypercubeRamsey.hammingDist, _root_.hammingDist]

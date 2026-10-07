@@ -2727,6 +2727,70 @@ theorem consulted_overlap_total_bound {P : Params9} {hc : HeightChoice9 P} {n : 
       simp
       ring
 
+private theorem scaleSupport9_inter_overlap_bound_of_metric_separation
+    {P : Params9} {hc : HeightChoice9 P} {n R Knat : ℕ} {K c₀ : ℝ}
+    (hover : HeightOverlap9 P hc n K c₀) (hK : K ≤ (Knat : ℝ))
+    (hR : 1 ≤ R) (start start' : HeightState9 P hc n)
+    (hsep : 16 * R + 4 + 4 * Knat * R + 1 ≤ heightMetric9 start start') :
+    ((scaleSupport9 start R ∩ scaleSupport9 start' R).card : ℝ) ≤
+      ((hc.levels n + 1 : ℕ) : ℝ) * (residualBall9 P n : ℝ) *
+        Real.exp (- (c₀ * (8 * R : ℕ))) := by
+  by_cases hlevel : 16 * R + 4 < Nat.dist start.2.val start'.2.val
+  · have hdisj := scaleSupport9_disjoint_of_level_separated start start' hlevel
+    have hempty : scaleSupport9 start R ∩ scaleSupport9 start' R = ∅ :=
+      Finset.disjoint_iff_inter_eq_empty.mp hdisj
+    have hcard : (scaleSupport9 start R ∩ scaleSupport9 start' R).card = 0 := by
+      rw [hempty]
+      simp
+    have hnonneg : 0 ≤
+        ((hc.levels n + 1 : ℕ) : ℝ) * (residualBall9 P n : ℝ) *
+          Real.exp (- (c₀ * (8 * R : ℕ))) := by positivity
+    rw [hcard]
+    simpa using hnonneg
+  · have hlevel' : Nat.dist start.2.val start'.2.val ≤ 16 * R + 4 :=
+      Nat.le_of_not_gt hlevel
+    have hspace : 16 * R + 4 + 4 * Knat * R + 1 ≤
+        (_root_.hammingDist start.1 start'.1 + 1) / 2 := by
+      unfold heightMetric9 at hsep
+      rcases le_total (Nat.dist start.2.val start'.2.val)
+          ((_root_.hammingDist start.1 start'.1 + 1) / 2) with hls | hsl
+      · rw [max_eq_right hls] at hsep
+        exact hsep
+      · rw [max_eq_left hsl] at hsep
+        omega
+    have hham : 8 * Knat * R ≤ _root_.hammingDist start.1 start'.1 := by
+      have hspace2 : 2 * (16 * R + 4 + 4 * Knat * R + 1) ≤
+          _root_.hammingDist start.1 start'.1 + 1 := by
+        calc
+          2 * (16 * R + 4 + 4 * Knat * R + 1) ≤
+              2 * ((_root_.hammingDist start.1 start'.1 + 1) / 2) :=
+            Nat.mul_le_mul_left 2 hspace
+          _ ≤ _root_.hammingDist start.1 start'.1 + 1 := by omega
+      have hcoef : 8 * Knat * R = 2 * (4 * Knat * R) := by ring
+      rw [hcoef]
+      omega
+    have hsepReal : K * ((8 * R : ℕ) : ℝ) ≤
+        (_root_.hammingDist start.1 start'.1 : ℝ) := by
+      have hmul := mul_le_mul_of_nonneg_right hK
+        (by positivity : 0 ≤ ((8 * R : ℕ) : ℝ))
+      have hcast : (Knat : ℝ) * ((8 * R : ℕ) : ℝ) =
+          ((8 * Knat * R : ℕ) : ℝ) := by
+        push_cast
+        ring
+      calc
+        K * ((8 * R : ℕ) : ℝ) ≤ (Knat : ℝ) * ((8 * R : ℕ) : ℝ) := hmul
+        _ = ((8 * Knat * R : ℕ) : ℝ) := hcast
+        _ ≤ (_root_.hammingDist start.1 start'.1 : ℝ) := by exact_mod_cast hham
+    have hoverBound := consulted_overlap_total_bound hover start.1 start'.1 (8 * R)
+      (by omega) hsepReal
+    calc
+      ((scaleSupport9 start R ∩ scaleSupport9 start' R).card : ℝ) ≤
+          ((consulted9 (P := P) (hc := hc) (n := n) start.1 (8 * R) ∩
+            consulted9 start'.1 (8 * R)).card : ℝ) := by
+        exact_mod_cast scaleSupport9_inter_card_le start start'
+      _ ≤ ((hc.levels n + 1 : ℕ) : ℝ) * (residualBall9 P n : ℝ) *
+          Real.exp (- (c₀ * (8 * R : ℕ))) := hoverBound
+
 theorem position_overlap_count_tail {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (v v' : CubeVertex n) (R' t : ℕ) :
     (heightPosLaw9 P hc n).pr (fun Pp =>

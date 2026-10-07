@@ -1626,7 +1626,7 @@ theorem clock_rows :
     have hcap := (hS.rows (t (sliceOf b.1))).row_cap (starOf W b) y
     have hrow : oddRowF M t W b y ≤ Real.exp ((n : ℝ) / 50) / (N : ℝ) := by
       apply (le_div_iff₀ (by exact_mod_cast hN)).2
-      simpa [oddRowF, mul_comm] using hcap
+      simpa [oddRowF, starOf, mul_comm] using hcap
     calc
       labMarg (rows b) (lab b) y = oddRowF M t W b y := by
         simp [HypercubeRamsey.labMarg, lab, rows, rowLaw11]

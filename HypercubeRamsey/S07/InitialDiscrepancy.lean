@@ -1,4 +1,5 @@
 import HypercubeRamsey.S07.SmallGridPurity
+import HypercubeRamsey.S07.InitialDiscrepancy_p_s07_d
 
 /-!
 # Corollary 7.2: initial discrepancy
@@ -18,7 +19,8 @@ theorem sparse_rect_not_available_of_L6
     (hD₀star : D₀ < Dstar / 2) (hc : 0 < c)
     (hL6 : Needs.BroadSideProperty Dstar) :
     ∀ T : Stage, ¬ Available T (PViol D₀ c).toPatch := by
-  sorry
+  exact sparse_rect_not_available_of_L6_p_s07_d
+    Dstar D₀ c hDstar hD₀ hD₀star hc hL6
 
 /-- E7.1 packaged with the constant from L6.1. -/
 theorem sparse_rect_not_available :
@@ -36,7 +38,7 @@ theorem purity_to_grid_purity (β h : ℝ) (hβ : 0 < β) (hh : 0 < h) :
       ∀ E : Fin N → Fin N → Prop, ∀ X Y : Finset (Fin N),
         AvailableAt κ (PPure β β h).toPatch n N E X Y →
         ∃ G : Colour, AvailableAt (κ / 2) (PGridPure G (4 * β) (h / 2)).toPatch n N E X Y := by
-  sorry
+  exact purity_to_grid_purity_p_s07_d β h hβ hh
 
 /-- Membership witnesses for the rational Section 7 properties in the stabilized family. -/
 theorem pviol_mem_FamB (D₀ c : ℚ) :

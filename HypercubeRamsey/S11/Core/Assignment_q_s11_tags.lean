@@ -904,6 +904,41 @@ theorem T2_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
   unfold T2
   simp_rw [hcenter, hcount]
 
+private theorem raw_compA_product_mean {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (z : Fin N) (m : ℕ) (s : Fin m → OuterWord n)
+    (hsep : ∀ i j, i ≠ j → 3 ≤ wordDist (s i) (s j)) :
+    (rawTags M p).expect (fun t => ∏ i, compA M y₀ t (s i) z) =
+      ((N : ℝ) * piBar M y₀ p z) ^ m := by
+  classical
+  have hinj : Function.Injective s := by
+    intro i j hij
+    by_contra hne
+    have hd := hsep i j hne
+    simp [wordDist, hij] at hd
+  have hmean : ∀ i : Fin m,
+      p.expect (fun a => (N : ℝ) * piRow M y₀ a z) =
+        (N : ℝ) * piBar M y₀ p z := by
+    intro i
+    unfold FinProb.expect piBar mixW
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro a ha
+    ring
+  calc
+    (rawTags M p).expect (fun t => ∏ i, compA M y₀ t (s i) z) =
+        (FinProb.pi (fun _ : OuterWord n => p)).expect
+          (fun t => ∏ i, (N : ℝ) * piRow M y₀ (t (s i)) z) := by
+            simp [rawTags, compA]
+    _ = ∏ i, p.expect (fun a => (N : ℝ) * piRow M y₀ a z) :=
+      pi_expect_prod_on_injective_coords p s hinj Finset.univ
+        (fun i a => (N : ℝ) * piRow M y₀ a z)
+    _ = ∏ _i : Fin m, (N : ℝ) * piBar M y₀ p z := by
+      apply Finset.prod_congr rfl
+      intro i hi
+      exact hmean i
+    _ = ((N : ℝ) * piBar M y₀ p z) ^ m := by simp
+
 private theorem MassFail_dependsOn_oddNbrs {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
     (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :

@@ -774,7 +774,7 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   filter_upwards [hmoments, T.S.n_tendsto.eventually_ge_atTop 1,
     T.S.ratio_tendsto.eventually_ge_atTop (576 * 12 / κ.θ0)] with k hk hn hscale
   intro PT hPT D hD hT hBalance hLocal hTransfer C A
-  exact Lane_sol_s18_n5.fullRunProbability_of_column_moments D hD C A hLocal.2.1
+  exact Lane_sol_s18_n5.fullRunProbability_of_column_moments D hD hT C A hLocal.2.1
     hθ (by norm_num) hn hscale (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
 
 theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)

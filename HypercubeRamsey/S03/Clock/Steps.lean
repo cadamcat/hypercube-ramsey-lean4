@@ -99,8 +99,8 @@ structure BackgroundProcess (T : ℕ) (Ω : Type*) where
   rowMass : Fin (T + 1) → Ω → ℝ
   labelMass : Fin (T + 1) → Ω → ℝ
 
-/-- L3.10f (03:991–1040): bounded-jump martingale tracking for a fixed removal/insertion prescription. -/
-theorem step6_background_tracking {T : ℕ} {Ω : Type*} [Fintype Ω]
+/-- Deterministic error propagation for the finite-mesh background recursion. -/
+theorem background_trajectory_stability {T : ℕ} {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (X : BackgroundProcess T Ω) (δ θ : ℝ)
     (η : ℝ) (hη : 0 ≤ η) (hδ0 : 0 ≤ δ) (hδ1 : δ ≤ 1)
     (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1)
@@ -121,6 +121,66 @@ theorem step6_background_tracking {T : ℕ} {Ω : Type*} [Fintype Ω]
           η * (T : ℝ) * (1 + δ) ^ T) = 1 := by
   sorry
 
+/-- The greedy matching after all arrivals strictly before a mesh horizon. -/
+noncomputable def matchingThrough {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (ξ : ClockField T R g Ω) (horizon : Fin (T + 1)) : GreedyState R g Ω := by
+  classical
+  exact runGreedy ξ ((clockEventList ξ).filter (fun e => e.2.2.1.val < horizon.val))
+
+/-- Available label rate at a row after the prefix matching through `horizon`. -/
+noncomputable def availableRowRate {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (rates : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (a : R) (horizon : Fin (T + 1)) : ℝ := by
+  classical
+  let M := matchingThrough ξ horizon
+  exact ∑ y, if labelUsed M y then 0 else rates a y
+
+/-- Available row rate at a label after the prefix matching through `horizon`. -/
+noncomputable def availableLabelRate {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (rates : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (y : Fin g)
+    (horizon : Fin (T + 1)) : ℝ := by
+  classical
+  let M := matchingThrough ξ horizon
+  exact if labelUsed M y then 0
+  else ∑ a, if M.assignment a = none then rates a y else 0
+
+/-- Independent marked mesh clocks generated from the row laws and labels. -/
+noncomputable def samplingEdgeClockLaw {T : ℕ} {R : Type*} {g : ℕ}
+    {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1)
+    (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g) :
+    ∀ e : RowLabel R g, FinProb (MeshClockValue T (Ω e.1)) := by
+  classical
+  exact fun e => outputEdgeClockLaw δ hδ (p e.1) (lab e.1) e.2 (by
+    have hm := labMarg_le_one (p e.1) (lab e.1) e.2
+    have hmul : δ * labMarg (p e.1) (lab e.1) e.2 ≤ δ := by
+      simpa only [mul_one] using mul_le_mul_of_nonneg_left hm hδ
+    exact sub_nonneg.mpr (le_trans hmul hδ1))
+
+/-- L3.10f (03:991–1040): under independent first-arrival clocks with row rate one, column rate `θ`, and
+small atoms, all free masses track the discrete background recursion with exponentially small failure. -/
+theorem step6_background_tracking {n : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (B A C_g K₀ θ : ℝ) (hB : 1 ≤ B) (hK₀ : 0 < K₀)
+    (hA : 10 * (B + K₀) < A) (n₀ : ℕ) (hn : n₀ ≤ n) (hn2 : 2 ≤ n)
+    (mesh : FiniteMeshPlan n K₀) (hδ : 0 ≤ mesh.δ) (hδ1 : mesh.δ ≤ 1)
+    (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g)
+    (hlog : Real.log g ≤ C_g * n)
+    (hrow : ∀ a, ∑ y, labMarg (p a) (lab a) y = 1)
+    (hcol : ∀ y, ∑ a, labMarg (p a) (lab a) y = θ)
+    (hθ : θ ≤ 1e-6)
+    (hatom : ∀ a y, labMarg (p a) (lab a) y ≤ (n : ℝ) ^ (-A)) :
+    (clockFieldLaw (samplingEdgeClockLaw mesh.δ hδ hδ1 p lab)).pr
+      (fun ξ => ∀ t : Fin (mesh.ticks + 1),
+        (∀ a, |availableRowRate (fun a y => labMarg (p a) (lab a) y) ξ a t -
+          (backgroundTrajectory mesh.δ θ t.val).1| ≤ (n : ℝ) ^ (-3 * B)) ∧
+        (∀ y, |availableLabelRate (fun a y => labMarg (p a) (lab a) y) ξ y t -
+          θ * (backgroundTrajectory mesh.δ θ t.val).2| ≤ (n : ℝ) ^ (-3 * B))) ≥
+      1 - Real.exp (-(n : ℝ) ^ (A / 3)) := by
+  sorry
+
 /-- A target assignment is realized when the greedy matching gives every queried row its prescribed output. -/
 def matchesTargets {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
     [Fintype R] [DecidableEq R] [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
@@ -131,19 +191,20 @@ def matchesTargets {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
 finite-mesh matching law. -/
 theorem step7_target_product_bound {T n : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
     {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
-    (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1)
-    (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g)
-    (edgeLaw : ∀ e : RowLabel R g, FinProb (MeshClockValue T (Ω e.1)))
-    (hedge : ∀ a y, edgeLaw (a, y) =
-      outputEdgeClockLaw δ hδ (p a) (lab a) y
-        (by
-          have hm := labMarg_le_one (p a) (lab a) y
-          have hmul : δ * labMarg (p a) (lab a) y ≤ δ := by
-            simpa only [mul_one] using mul_le_mul_of_nonneg_left hm hδ
-          exact sub_nonneg.mpr (le_trans hmul hδ1)))
     (n₀ : ℕ) (B A C_g K₀ θ : ℝ) (hB : 1 ≤ B) (hK₀ : 0 < K₀)
     (hA : 10 * (B + K₀) < A) (hn : n₀ ≤ n) (hn2 : 2 ≤ n)
     (hlog : Real.log g ≤ C_g * n)
+    (mesh : FiniteMeshPlan n K₀) (hT : T = mesh.ticks)
+    (hδ : 0 ≤ mesh.δ) (hδ1 : mesh.δ ≤ 1)
+    (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g)
+    (edgeLaw : ∀ e : RowLabel R g, FinProb (MeshClockValue T (Ω e.1)))
+    (hedge : ∀ a y, edgeLaw (a, y) =
+      outputEdgeClockLaw mesh.δ hδ (p a) (lab a) y
+        (by
+          have hm := labMarg_le_one (p a) (lab a) y
+          have hmul : mesh.δ * labMarg (p a) (lab a) y ≤ mesh.δ := by
+            simpa only [mul_one] using mul_le_mul_of_nonneg_left hm hδ
+          exact sub_nonneg.mpr (le_trans hmul hδ1)))
     (hrow : ∀ a, ∑ y, labMarg (p a) (lab a) y = 1)
     (hcol : ∀ y, ∑ a, labMarg (p a) (lab a) y = θ)
     (hθ : θ ≤ 1e-6) (lambdaMax : ℝ)

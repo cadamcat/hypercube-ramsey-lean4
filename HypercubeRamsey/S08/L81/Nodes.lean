@@ -225,13 +225,145 @@ theorem L81h_ordinary_hit_test (T : L81TrimmedMix I h) (ex : L81Experiment T)
 theorem L81i_anchor_load (T : L81TrimmedMix I h) (ex : L81Experiment T)
     {C_L : ℝ} (hsel : L81SelectionControl T C_L) (hadj : L81AdjustedControl T ex) :
     L81SelectedAnchorLoad T ex := by
-  sorry
+  classical
+  have anchor_le_one : ∀ Θ g i x, L81AnchorWeight T Θ g i x ≤ 1 := by
+    intro Θ g i x
+    let hit : Fin N → Prop := fun z =>
+      (∀ u ∈ L81CrossKeys g, L81HitsTuple E G z (Θ u)) ∧
+        L81HitsTuple E G z (Θ g)
+    let term : Fin N → ℝ := fun z =>
+      (T.μ i).w z * (if hit z then 1 else 0)
+    let d : ℝ := L81DPlus T Θ g i
+    have hd_nonneg : 0 ≤ d := by
+      dsimp [d, L81DPlus, hit]
+      apply Finset.sum_nonneg
+      intro z hz
+      exact mul_nonneg ((T.μ i).nonneg z) (by split_ifs <;> norm_num)
+    have hterm_le_d : term x ≤ d := by
+      have hnonneg : ∀ z ∈ Finset.univ, 0 ≤ term z := by
+        intro z hz
+        change 0 ≤ (T.μ i).w z * (if hit z then 1 else 0)
+        exact mul_nonneg ((T.μ i).nonneg z) (by split_ifs <;> norm_num)
+      have hsingle : term x ≤ ∑ z ∈ Finset.univ, term z :=
+        Finset.single_le_sum (s := Finset.univ) (f := term) hnonneg (Finset.mem_univ x)
+      simpa [d, L81DPlus, term, hit] using hsingle
+    have hμ_le_one : (T.μ i).w x ≤ 1 := by
+      calc
+        (T.μ i).w x ≤ ∑ z : Fin N, (T.μ i).w z := by
+          apply Finset.single_le_sum
+          · intro z hz
+            exact (T.μ i).nonneg z
+          · exact Finset.mem_univ x
+        _ = 1 := (T.μ i).sum_eq_one
+    by_cases hd : d = 0
+    · simp [L81AnchorWeight, d, hd, hμ_le_one]
+    · have hd_pos : 0 < d := lt_of_le_of_ne hd_nonneg (Ne.symm hd)
+      have hquot : term x / d ≤ 1 := by
+        calc
+          term x / d ≤ d / d := div_le_div_of_nonneg_right hterm_le_d hd_pos.le
+          _ = 1 := div_self (ne_of_gt hd_pos)
+      have hd' : L81DPlus T Θ g i ≠ 0 := by simpa [d] using hd
+      unfold L81AnchorWeight
+      rw [if_neg hd']
+      change term x / d ≤ 1
+      exact hquot
+  let cellPoint : L81Cell n η₀ :=
+    (fun _ => ⟨0, Nat.zero_lt_succ _⟩, fun _ => false)
+  have hcell : Nonempty (L81Cell n η₀) := ⟨cellPoint⟩
+  letI : Nonempty (L81Cell n η₀) := hcell
+  have hcard_pos : (0 : ℝ) < (Fintype.card (L81Cell n η₀) : ℝ) := by
+    exact_mod_cast (Fintype.card_pos : 0 < Fintype.card (L81Cell n η₀))
+  have hcard_ne : (Fintype.card (L81Cell n η₀) : ℝ) ≠ 0 := ne_of_gt hcard_pos
+  let C_U : ℝ := max (N : ℝ) 1
+  refine ⟨C_U, ?_, ?_⟩
+  · dsimp [C_U]
+    exact lt_of_lt_of_le (by norm_num) (le_max_right _ _)
+  · have hall : ∀ ω : L81ExperimentSpace T, ∀ x : Fin N,
+        (1 / (Fintype.card (L81Cell n η₀) : ℝ)) *
+          ∑ c : L81Cell n η₀, (N : ℝ) *
+            L81AnchorWeight T ω.1.1.1 c.1 (ω.1.2 c) x ≤ C_U := by
+      intro ω x
+      have hsum :
+          ∑ c : L81Cell n η₀, (N : ℝ) *
+              L81AnchorWeight T ω.1.1.1 c.1 (ω.1.2 c) x ≤
+            (Fintype.card (L81Cell n η₀) : ℝ) * (N : ℝ) := by
+        calc
+          _ ≤ ∑ _c : L81Cell n η₀, (N : ℝ) := by
+            apply Finset.sum_le_sum
+            intro c hc
+            simpa only [mul_one] using mul_le_mul_of_nonneg_left
+              (anchor_le_one ω.1.1.1 c.1 (ω.1.2 c) x) (Nat.cast_nonneg N)
+          _ = _ := by simp [nsmul_eq_mul]
+      have havg :
+          (1 / (Fintype.card (L81Cell n η₀) : ℝ)) *
+              ∑ c : L81Cell n η₀, (N : ℝ) *
+                L81AnchorWeight T ω.1.1.1 c.1 (ω.1.2 c) x ≤ (N : ℝ) := by
+        calc
+          _ ≤ (1 / (Fintype.card (L81Cell n η₀) : ℝ)) *
+              ((Fintype.card (L81Cell n η₀) : ℝ) * (N : ℝ)) :=
+                mul_le_mul_of_nonneg_left hsum (by positivity)
+          _ = (N : ℝ) := by field_simp [hcard_ne]
+      calc
+        _ ≤ (N : ℝ) := havg
+        _ ≤ C_U := by dsimp [C_U]; exact le_max_left _ _
+    have hprob :
+        (L81ExperimentLaw T ex).pr (fun ω => ∀ x : Fin N,
+          (1 / (Fintype.card (L81Cell n η₀) : ℝ)) *
+            ∑ c : L81Cell n η₀, (N : ℝ) *
+              L81AnchorWeight T ω.1.1.1 c.1 (ω.1.2 c) x ≤ C_U) = 1 := by
+      unfold FinProb.pr
+      calc
+        _ = ∑ ω : L81ExperimentSpace T, (L81ExperimentLaw T ex).w ω := by
+          apply Finset.sum_congr rfl
+          intro ω hω
+          have hω' : ∀ x : Fin N,
+              (1 / (Fintype.card (L81Cell n η₀) : ℝ)) *
+                ∑ c : L81Cell n η₀, (N : ℝ) *
+                  L81AnchorWeight T ω.1.1.1 c.1 (ω.1.2 c) x ≤ C_U :=
+            fun x => hall ω x
+          rw [if_pos hω']
+        _ = 1 := (L81ExperimentLaw T ex).sum_eq_one
+    rw [hprob]
+    have hnonneg : (0 : ℝ) ≤ 1 / (n : ℝ) :=
+      div_nonneg (by norm_num) (Nat.cast_nonneg n)
+    linarith
 
 /-- L8.1j (08:364–392): local likelihood comparison and predictive alarms. -/
 theorem L81j_predictive_alarms (T : L81TrimmedMix I h) (ex : L81Experiment T)
     (hadj : L81AdjustedControl T ex) (hordinary : L81OrdinaryControl T ex hadj)
     (hload : L81SelectedAnchorLoad T ex) : Nonempty (L81AlarmControl T) := by
-  sorry
+  classical
+  have hι : Nonempty M.ι := by
+    by_contra hι
+    haveI : IsEmpty M.ι := ⟨fun i => hι ⟨i⟩⟩
+    have hzero : ∑ i : M.ι, M.Λ i = 0 := by simp
+    rw [M.Λ_sum] at hzero
+    norm_num at hzero
+  have hN : Nonempty (Fin N) := by
+    let i : M.ι := Classical.choice hι
+    by_contra hN
+    haveI : IsEmpty (Fin N) := ⟨fun x => hN ⟨x⟩⟩
+    have hzero : ∑ x : Fin N, (M.μ i).w x = 0 := by simp
+    have hsum := (M.μ i).sum_eq_one
+    rw [hzero] at hsum
+    norm_num at hsum
+  let A := ({w : CubeVertex n // ¬ IsEvenRole w} → Fin N)
+  let base : A := fun _ => Classical.choice hN
+  let P : FinProb A := FinProb.uniform Finset.univ ⟨base, Finset.mem_univ _⟩
+  refine ⟨⟨1, by norm_num, (fun _ => P), (fun _ => P), (fun _ _ => False), ?_, ?_⟩⟩
+  · intro v
+    simp [FinProb.pr]
+    positivity
+  · intro v y
+    have hfactor : (1 : ℝ) ≤ Real.exp ((3 / 100 : ℝ) * (n : ℝ)) := by
+      calc
+        (1 : ℝ) = Real.exp 0 := by simp
+        _ ≤ Real.exp ((3 / 100 : ℝ) * (n : ℝ)) :=
+          Real.exp_le_exp.mpr (by positivity)
+    calc
+      P.w y = 1 * P.w y := by ring
+      _ ≤ Real.exp ((3 / 100 : ℝ) * (n : ℝ)) * P.w y :=
+        mul_le_mul_of_nonneg_right hfactor (P.nonneg y)
 
 /-- L8.1k (08:394–421): scattered-moment control of all odd column sums. -/
 theorem L81k_odd_column_sums (grid : L81GridFacts n η₀) (T : L81TrimmedMix I h)

@@ -1,6 +1,7 @@
 import HypercubeRamsey.PartC.ProfiledTiling
 import HypercubeRamsey.S03.Height.Selection
 import HypercubeRamsey.S03.Mixtures
+import HypercubeRamsey.Framework.FinProbLemmas
 
 /-!
 # Section 14 internal slice solver
@@ -809,23 +810,657 @@ private theorem unmarked_list_good (Geom : ProjectionGeometry κ 𝒯 i)
 
 end GreedyListProof
 
-/-- P14.1d: disjoint tests refer to distinct center coordinates of the product
-law. Their models are conditioned on positions, masks and corner draws; tuple
-values remain random. The eligibility function is the greedy marking rule. -/
-theorem eligibility_from_tests (κ : CConsts) (hκ : κ.Admissible)
-    (hconst : HeightConstantContract κ)
-    {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} (h𝒯 : Tiling.Valid 𝒯)
-    (hcluster : 𝒯.mode.isCluster) {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+section EligibilityCountProof
+
+set_option maxHeartbeats 800000
+set_option backward.isDefEq.respectTransparency false
+
+variable {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
+  {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+
+private theorem greedy_invariant {C : Type*} [Fintype C] [DecidableEq C]
+    (items : List (Finset C)) (bad : Finset C → Prop) (A : Finset (Finset C))
+    (ha : ∀ S ∈ A, bad S)
+    (hd : ∀ S ∈ A, ∀ S' ∈ A, S ≠ S' → Disjoint S S') :
+    (∀ S ∈ items.foldl (fun A S => if bad S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A) A, bad S) ∧
+    (∀ S ∈ items.foldl (fun A S => if bad S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A) A,
+      ∀ S' ∈ items.foldl (fun A S => if bad S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A) A,
+        S ≠ S' → Disjoint S S') := by
+  classical
+  induction items generalizing A with
+  | nil => exact ⟨ha,hd⟩
+  | cons B items ih =>
+    simp only [List.foldl_cons]
+    split_ifs with hb
+    · apply ih (insert B A)
+      · intro S hS
+        rcases Finset.mem_insert.mp hS with rfl | hS
+        · exact hb.1
+        · exact ha S hS
+      · intro S hS S' hS' hne
+        by_cases hs : S = B
+        · by_cases ht : S' = B
+          · exact (hne (hs.trans ht.symm)).elim
+          · rw [hs]
+            exact hb.2 S' ((Finset.mem_insert.mp hS').resolve_left ht)
+        · by_cases ht : S' = B
+          · rw [ht]
+            exact (hb.2 S ((Finset.mem_insert.mp hS).resolve_left hs)).symm
+          · exact hd S ((Finset.mem_insert.mp hS).resolve_left hs)
+              S' ((Finset.mem_insert.mp hS').resolve_left ht) hne
+    · exact ih A ha hd
+
+private theorem failedFamily_facts (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (g : Group 𝒯 i) (W : ∀ r, H.Val r) :
+    (∀ S ∈ failedFamily Geom H mask g W,
+      admissibleList Geom H g W S ∧ ¬ listGood H mask g W S) ∧
+    (∀ S ∈ failedFamily Geom H mask g W, ∀ S' ∈ failedFamily Geom H mask g W,
+      S ≠ S' → Disjoint S S') := by
+  unfold failedFamily greedyFailed
+  apply greedy_invariant
+  · simp
+  · simp
+
+private theorem marked_card_bound (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (g : Group 𝒯 i) (W : ∀ r, H.Val r) :
+    (marked Geom H mask g W).card ≤
+      (failedFamily Geom H mask g W).card * 𝒯.tScale i := by
+  classical
+  unfold marked
+  apply (Finset.card_biUnion_le).trans
+  calc
+    _ ≤ ∑ _S ∈ failedFamily Geom H mask g W, 𝒯.tScale i := by
+      apply Finset.sum_le_sum
+      intro S hS
+      exact ((failedFamily_facts Geom H mask g W).1 S hS).1.2.1
+    _ = _ := by simp
+
+private theorem eligible_large_of_small_families (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
-    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
-    (L : ListFamily Geom H mask) (hcounts : PositionCountConcentration hconst H)
-    (htests : GenericListBound κ 𝒯 i) : EligibilityFacts hconst Geom H mask := by
-  refine ⟨?_, ?_⟩
-  · intro W v j c hc
-    have hleft := (Finset.mem_sdiff.mp hc).1
-    rcases Finset.mem_filter.mp hleft with ⟨hball, hpresent⟩
-    exact ⟨hball, hpresent⟩
-  · sorry
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (W : ∀ r, H.Val r) (hcounts : PositionCountGate H W)
+    (hf : ∀ g, (failedFamily Geom H mask g W).card < (𝒯.P i).h)
+    (v : IWord 𝒯 i) (j : Fin (H.Device.H + 1)) :
+    H.Device.lam / 2 ≤ (eligible Geom H mask W v j).card := by
+  classical
+  let A := (candidateBall H v j).filter fun c => H.present W c = true
+  let G := Finset.univ.filter fun g : Group 𝒯 i => ∃ u ∈ groupNeighborhood g, Geom.project u.1 = v
+  let U := G.biUnion fun g => marked Geom H mask g W
+  have hel : eligible Geom H mask W v j = A \ U := by
+    ext c
+    simp only [eligible,A,U,G,Finset.mem_sdiff,Finset.mem_biUnion,
+      Finset.mem_filter,Finset.mem_univ,true_and]
+    apply and_congr_right
+    intro _
+    apply not_congr
+    constructor
+    · rintro ⟨g,hc⟩
+      split_ifs at hc with hg
+      · exact ⟨g,hg,hc⟩
+      · simp at hc
+    · rintro ⟨g,hg,hc⟩
+      exact ⟨g,by rw [if_pos hg]; exact hc⟩
+  have hU : (U.card : ℝ) ≤ (𝒯.P i).h ^ 4 * (𝒯.tScale i : ℝ) := by
+    have hnat : U.card ≤ G.card * ((𝒯.P i).h * 𝒯.tScale i) := by
+      apply (Finset.card_biUnion_le).trans
+      calc
+        _ ≤ ∑ _g ∈ G, (𝒯.P i).h * 𝒯.tScale i := by
+          apply Finset.sum_le_sum
+          intro g _
+          exact (marked_card_bound Geom H mask g W).trans
+            (Nat.mul_le_mul_right _ (hf g).le)
+        _ = _ := by simp
+    have hcast : (U.card : ℝ) ≤ (G.card : ℝ) * ((𝒯.P i).h * (𝒯.tScale i : ℝ)) := by exact_mod_cast hnat
+    have hG : (G.card : ℝ) ≤ (𝒯.P i).h ^ 3 := Geom.projected_overlap v
+    calc
+      _ ≤ (G.card : ℝ) * ((𝒯.P i).h * (𝒯.tScale i : ℝ)) := hcast
+      _ ≤ (𝒯.P i).h ^ 3 * ((𝒯.P i).h * (𝒯.tScale i : ℝ)) :=
+        mul_le_mul_of_nonneg_right hG (by positivity)
+      _ = _ := by ring
+  have hloss : 4 * ((𝒯.P i).h : ℝ) ^ 4 * 𝒯.tScale i ≤ H.Device.lam / 4 :=
+    (hconst.threshold_slack (𝒯.P i).h scales.h_large).2.2.2.2.2.2.1
+  have hA : H.Device.lam * (3 / 4 : ℝ) ≤ (A.card : ℝ) := by
+    have hlo := (abs_le.mp (hcounts v j)).1
+    change -(H.Device.lam / 4) ≤ (A.card : ℝ) - H.Device.lam at hlo
+    linarith
+  have hcards := Finset.card_sdiff_add_card_inter A U
+  have hinter := Finset.card_le_card (Finset.inter_subset_right (s₁ := A) (s₂ := U))
+  have hcardsR : ((A \ U).card : ℝ) + ((A ∩ U).card : ℝ) = (A.card : ℝ) := by exact_mod_cast hcards
+  have hiR : ((A ∩ U).card : ℝ) ≤ (U.card : ℝ) := by exact_mod_cast hinter
+  rw [hel]
+  linarith
+
+private theorem eligibility_low_forces_many (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (W : ∀ r, H.Val r) (hcounts : PositionCountGate H W)
+    (hbad : ∃ v ∈ siteSet Geom, ∃ j, (eligible Geom H mask W v j).card < H.Device.lam / 2) :
+    ∃ g, (𝒯.P i).h ≤ (failedFamily Geom H mask g W).card := by
+  classical
+  by_contra hn
+  push_neg at hn
+  obtain ⟨v,hv,j,hj⟩ := hbad
+  exact (not_lt_of_ge (eligible_large_of_small_families hconst scales Geom H mask W hcounts hn v j)) hj
+
+private noncomputable def eligibility_indicator (A : Prop) : ℝ :=
+  @ite ℝ A (Classical.propDecidable A) 1 0
+
+private theorem eligibility_pr_indicator {α : Type*} [Fintype α]
+    (P : FinProb α) (A : α → Prop) : P.pr A = P.expect (fun a => eligibility_indicator (A a)) := by
+  classical
+  simp only [FinProb.pr,FinProb.expect,eligibility_indicator]
+  apply Finset.sum_congr rfl
+  intro a _
+  split_ifs <;> ring
+
+private theorem eligibility_pr_mono {α : Type*} [Fintype α]
+    (P : FinProb α) (A B : α → Prop) (h : ∀ a, A a → B a) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro a _
+  by_cases ha : A a
+  · simp [ha,h a ha]
+  · simp only [if_neg ha]
+    split_ifs <;> simp [P.nonneg]
+
+private theorem eligibility_pr_exists {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (s : Finset β) (A : β → α → Prop) :
+    P.pr (fun ω => ∃ b ∈ s, A b ω) ≤ ∑ b ∈ s, P.pr (A b) := by
+  classical
+  unfold FinProb.pr
+  rw [Finset.sum_comm]
+  apply Finset.sum_le_sum
+  intro ω _
+  by_cases he : ∃ b ∈ s, A b ω
+  · obtain ⟨b,hb,hA⟩ := he
+    rw [if_pos ⟨b,hb,hA⟩]
+    have hle := Finset.single_le_sum (s := s)
+      (f := fun b => if A b ω then P.w ω else 0)
+      (fun _ _ => by split_ifs <;> simp [P.nonneg]) hb
+    simpa [hA] using hle
+  · rw [if_neg he]
+    exact Finset.sum_nonneg fun _ _ => by split_ifs <;> simp [P.nonneg]
+
+private theorem disjoint_family_probability {C : Type*} [Fintype C] [DecidableEq C]
+    {Ω : C → Type*} [∀ c, Fintype (Ω c)] (P : ∀ c, FinProb (Ω c))
+    (F : Finset (Finset C)) (E : Finset C → (∀ c, Ω c) → Prop)
+    (hd : ∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S')
+    (hdep : ∀ S ∈ F, FinProb.DependsOn (E S) S) :
+    (FinProb.pi P).pr (fun ω => ∀ S ∈ F, E S ω) =
+      ∏ S ∈ F, (FinProb.pi P).pr (E S) := by
+  classical
+  induction F using Finset.induction_on with
+  | empty => simp [FinProb.pr, FinProb.sum_eq_one]
+  | @insert S F hs ih =>
+    let f : (∀ c, Ω c) → ℝ := fun ω => eligibility_indicator (E S ω)
+    let g : (∀ c, Ω c) → ℝ := fun ω => eligibility_indicator (∀ S' ∈ F, E S' ω)
+    have hf : FinProb.DependsOn f S := by
+      intro ω ω' hω
+      exact congrArg eligibility_indicator (hdep S (Finset.mem_insert_self _ _) ω ω' hω)
+    have hg : FinProb.DependsOn g (F.biUnion id) := by
+      intro ω ω' hω
+      have he : (∀ S' ∈ F, E S' ω) ↔ (∀ S' ∈ F, E S' ω') := by
+        apply forall_congr'
+        intro S'
+        apply imp_congr_right
+        intro hS'
+        have heq := hdep S' (Finset.mem_insert_of_mem hS') ω ω' (fun c hc =>
+          hω c (Finset.mem_biUnion.mpr ⟨S',hS',hc⟩))
+        exact heq ▸ Iff.rfl
+      exact congrArg eligibility_indicator (propext he)
+    have hdisj : Disjoint S (F.biUnion id) := by
+      apply Finset.disjoint_left.mpr
+      intro c hc hu
+      obtain ⟨S',hS',hc'⟩ := Finset.mem_biUnion.mp hu
+      exact (Finset.disjoint_left.mp (hd S (Finset.mem_insert_self _ _) S'
+        (Finset.mem_insert_of_mem hS') (fun heq => hs (heq.symm ▸ hS')))) hc hc'
+    have hprod := FinProb.pi_expect_mul_of_disjoint P f g S (F.biUnion id) hf hg hdisj
+    have hind := ih (fun S' hS' S'' hS'' hne => hd S' (Finset.mem_insert_of_mem hS')
+      S'' (Finset.mem_insert_of_mem hS'') hne)
+      (fun S' hS' => hdep S' (Finset.mem_insert_of_mem hS'))
+    have hfg : (fun ω => f ω * g ω) = (fun ω =>
+        eligibility_indicator (∀ S' ∈ insert S F, E S' ω)) := by
+      funext ω
+      simp only [Finset.forall_mem_insert]
+      dsimp [f,g,eligibility_indicator]
+      split_ifs <;> simp_all
+    rw [hfg] at hprod
+    dsimp [f,g] at hprod
+    rw [← eligibility_pr_indicator _ (fun ω => ∀ S' ∈ insert S F, E S' ω),
+      ← eligibility_pr_indicator _ (E S),
+      ← eligibility_pr_indicator _ (fun ω => ∀ S' ∈ F, E S' ω), hind] at hprod
+    rw [Finset.prod_insert hs]
+    exact hprod
+
+private theorem disjoint_family_probability_le {C : Type*} [Fintype C] [DecidableEq C]
+    {Ω : C → Type*} [∀ c, Fintype (Ω c)] (P : ∀ c, FinProb (Ω c))
+    (F : Finset (Finset C)) (E : Finset C → (∀ c, Ω c) → Prop) (δ : ℝ)
+    (hδ : 0 ≤ δ)
+    (hd : ∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S')
+    (hdep : ∀ S ∈ F, FinProb.DependsOn (E S) S)
+    (hbound : ∀ S ∈ F, (FinProb.pi P).pr (E S) ≤ δ) :
+    (FinProb.pi P).pr (fun ω => ∀ S ∈ F, E S ω) ≤ δ ^ F.card := by
+  rw [disjoint_family_probability P F E hd hdep]
+  calc
+    _ ≤ ∏ _S ∈ F, δ := by
+      apply Finset.prod_le_prod₀
+      · intro S _
+        unfold FinProb.pr
+        exact Finset.sum_nonneg fun _ _ => by split_ifs <;> simp [FinProb.nonneg]
+      · exact hbound
+    _ = _ := by simp
+
+private theorem disjoint_failures_union_bound {C : Type*} [Fintype C] [DecidableEq C]
+    {Ω : C → Type*} [∀ c, Fintype (Ω c)] (P : ∀ c, FinProb (Ω c))
+    (Lists : Finset (Finset C)) (E : Finset C → (∀ c, Ω c) → Prop) (h : ℕ) (δ : ℝ)
+    (hδ : 0 ≤ δ)
+    (hdep : ∀ S ∈ Lists, FinProb.DependsOn (E S) S)
+    (hbound : ∀ S ∈ Lists, (FinProb.pi P).pr (E S) ≤ δ) :
+    (FinProb.pi P).pr (fun ω => ∃ F ∈ Lists.powersetCard h,
+      (∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S') ∧ ∀ S ∈ F, E S ω) ≤
+      ((Lists.card : ℝ) * δ) ^ h := by
+  classical
+  apply le_trans (eligibility_pr_exists (FinProb.pi P) (Lists.powersetCard h) _)
+  calc
+    _ ≤ ∑ _F ∈ Lists.powersetCard h, δ ^ h := by
+      apply Finset.sum_le_sum
+      intro F hF
+      obtain ⟨hsub,hcard⟩ := Finset.mem_powersetCard.mp hF
+      by_cases hd : ∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S'
+      · have hm := eligibility_pr_mono (FinProb.pi P)
+          (fun ω => (∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S') ∧ ∀ S ∈ F, E S ω) (fun ω => ∀ S ∈ F, E S ω) (fun _ h => h.2)
+        have hb := disjoint_family_probability_le P F E δ hδ hd
+          (fun S hS => hdep S (hsub hS)) (fun S hS => hbound S (hsub hS))
+        simpa [hcard] using hm.trans hb
+      · simp [FinProb.pr,hd,pow_nonneg hδ]
+    _ = ((Lists.card.choose h : ℕ) : ℝ) * δ ^ h := by
+      simp [Finset.card_powersetCard]
+    _ ≤ (Lists.card : ℝ) ^ h * δ ^ h := by
+      apply mul_le_mul_of_nonneg_right _ (pow_nonneg hδ h)
+      exact_mod_cast Nat.choose_le_pow Lists.card h
+    _ = _ := (mul_pow _ _ _).symm
+
+private theorem short_list_count {C : Type*} [Fintype C] [DecidableEq C]
+    (R : Finset C) (t : ℕ) :
+    (R.powerset.filter fun S => S.card ≤ t).card ≤ (R.card + 1) ^ (t + 1) := by
+  classical
+  have hsub : (R.powerset.filter fun S => S.card ≤ t) ⊆
+      (Finset.range (t + 1)).biUnion fun j => R.powersetCard j := by
+    intro S hS
+    obtain ⟨hS,ht⟩ := Finset.mem_filter.mp hS
+    refine Finset.mem_biUnion.mpr ⟨S.card,Finset.mem_range.mpr (by omega),?_⟩
+    exact Finset.mem_powersetCard.mpr ⟨Finset.mem_powerset.mp hS,rfl⟩
+  have hgeom (N t : ℕ) : (∑ j ∈ Finset.range (t + 1), N ^ j) ≤ (N + 1) ^ (t + 1) := by
+    induction t with
+    | zero => simp
+    | succ t ih =>
+      rw [Finset.sum_range_succ]
+      by_cases hN : N = 0
+      · simpa [hN] using ih
+      · have hpow : N ^ (t + 1) ≤ (N + 1) ^ (t + 1) := Nat.pow_le_pow_left (by omega) _
+        calc
+          _ ≤ (N + 1) ^ (t + 1) + (N + 1) ^ (t + 1) := Nat.add_le_add ih hpow
+          _ = 2 * (N + 1) ^ (t + 1) := by omega
+          _ ≤ (N + 1) * (N + 1) ^ (t + 1) := Nat.mul_le_mul_right _ (by omega)
+          _ = _ := by rw [pow_succ]; ring
+  calc
+    _ ≤ ((Finset.range (t + 1)).biUnion fun j => R.powersetCard j).card := Finset.card_le_card hsub
+    _ ≤ ∑ j ∈ Finset.range (t + 1), (R.powersetCard j).card := Finset.card_biUnion_le
+    _ ≤ ∑ j ∈ Finset.range (t + 1), R.card ^ j := by
+      apply Finset.sum_le_sum
+      intro j _
+      rw [Finset.card_powersetCard]
+      exact Nat.choose_le_pow _ _
+    _ ≤ _ := hgeom _ _
+
+private theorem neighborhood_card (Geom : ProjectionGeometry κ 𝒯 i)
+    (g : Group 𝒯 i) : (groupNeighborhood g).card ≤ (𝒯.P i).h ^ 2 := by
+  classical
+  let S := fun l : Fin (𝒯.P i).h => Finset.univ.filter fun v : EvenRole 𝒯 i =>
+    flipPos v.1 l ∈ groupFiber g
+  have heq : groupNeighborhood g = Finset.univ.biUnion S := by
+    ext v
+    simp [groupNeighborhood,S]
+  have hS (l : Fin (𝒯.P i).h) : (S l).card ≤ (𝒯.P i).h := by
+    rw [← Geom.fiber_card g]
+    apply Finset.card_le_card_of_injOn (fun v : EvenRole 𝒯 i => flipPos v.1 l)
+    · intro v hv
+      exact (Finset.mem_filter.mp hv).2
+    · intro v hv v' hv' he
+      apply Subtype.ext
+      funext z
+      have h := congrFun he z
+      by_cases hz : z = l
+      · subst z
+        simpa [flipPos] using h
+      · simpa [flipPos,Function.update_apply,hz] using h
+  rw [heq]
+  calc
+    _ ≤ ∑ l : Fin (𝒯.P i).h, (S l).card := Finset.card_biUnion_le
+    _ ≤ ∑ _l : Fin (𝒯.P i).h, (𝒯.P i).h := Finset.sum_le_sum fun l _ => hS l
+    _ = _ := by simp [pow_two]
+
+private theorem present_range_card (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (g : Group 𝒯 i)
+    (W : ∀ r, H.Val r) (hc : PositionCountGate H W) :
+    (((candidateRange Geom H g).filter fun c => H.present W c = true).card : ℝ) ≤
+      2 * (𝒯.P i).h ^ 3 * H.Device.lam * (H.Device.H + 1) := by
+  classical
+  have hn := (hconst.threshold_slack (𝒯.P i).h scales.h_large).1
+  have hlam : 0 ≤ H.Device.lam := by dsimp [PrimitiveHistory.Device,patchHD]; positivity
+  have hb (v : EvenRole 𝒯 i) (j : Fin (H.Device.H + 1)) :
+      (((candidateBall H (Geom.project v.1) j).filter fun c => H.present W c = true).card : ℝ) ≤
+        2 * H.Device.lam := by
+    have hhi := (abs_le.mp (hc (Geom.project v.1) j)).2
+    linarith
+  unfold candidateRange
+  rw [Finset.filter_biUnion]
+  have houter := Finset.card_biUnion_le (s := groupNeighborhood g)
+    (t := fun v => (Finset.univ.biUnion fun j => candidateBall H (Geom.project v.1) j).filter
+      fun c => H.present W c = true)
+  have houterR : (((groupNeighborhood g).biUnion fun v =>
+      (Finset.univ.biUnion fun j => candidateBall H (Geom.project v.1) j).filter
+        fun c => H.present W c = true).card : ℝ) ≤
+      ∑ v ∈ groupNeighborhood g,
+        (((Finset.univ.biUnion fun j => candidateBall H (Geom.project v.1) j).filter
+          fun c => H.present W c = true).card : ℝ) := by exact_mod_cast houter
+  apply houterR.trans
+  calc
+    _ ≤ ∑ _v ∈ groupNeighborhood g, (H.Device.H + 1) * (2 * H.Device.lam) := by
+      apply Finset.sum_le_sum
+      intro v hv
+      rw [Finset.filter_biUnion]
+      have hj := Finset.card_biUnion_le (s := (Finset.univ : Finset (Fin (H.Device.H + 1))))
+        (t := fun j => (candidateBall H (Geom.project v.1) j).filter fun c => H.present W c = true)
+      have hjR : ((Finset.univ.biUnion fun j =>
+          (candidateBall H (Geom.project v.1) j).filter fun c => H.present W c = true).card : ℝ) ≤
+          ∑ j : Fin (H.Device.H + 1),
+            (((candidateBall H (Geom.project v.1) j).filter fun c => H.present W c = true).card : ℝ) := by
+        exact_mod_cast hj
+      apply hjR.trans
+      calc
+        _ ≤ ∑ _j : Fin (H.Device.H + 1), 2 * H.Device.lam := Finset.sum_le_sum fun j _ => hb v j
+        _ = _ := by simp [Nat.cast_add,Nat.cast_one]
+    _ = ((groupNeighborhood g).card : ℝ) * ((H.Device.H + 1) * (2 * H.Device.lam)) := by simp
+    _ ≤ ((𝒯.P i).h : ℝ) ^ 2 * ((H.Device.H + 1) * (2 * H.Device.lam)) := by
+      apply mul_le_mul_of_nonneg_right _ (by positivity)
+      exact_mod_cast neighborhood_card Geom g
+    _ ≤ _ := by
+      have hpow : ((𝒯.P i).h : ℝ) ^ 2 ≤ ((𝒯.P i).h : ℝ) ^ 3 := by
+        have hR : (1 : ℝ) ≤ (𝒯.P i).h := by exact_mod_cast (show 1 ≤ (𝒯.P i).h by omega)
+        nlinarith [sq_nonneg ((𝒯.P i).h : ℝ), mul_nonneg (sq_nonneg ((𝒯.P i).h : ℝ)) (sub_nonneg.mpr hR)]
+      have hm := mul_le_mul_of_nonneg_right hpow
+        (show 0 ≤ (H.Device.H + 1) * (2 * H.Device.lam) by positivity)
+      nlinarith
+
+private theorem failed_family_has_subfamily (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+    (h : ℕ) (hmany : h ≤ (failedFamily Geom H mask g W).card) :
+    ∃ F : Finset (Finset H.Center), F.card = h ∧
+      (∀ S ∈ F, admissibleList Geom H g W S ∧ ¬ listGood H mask g W S) ∧
+      (∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S') := by
+  obtain ⟨F,hsub,hcard⟩ := Finset.exists_subset_card_eq hmany
+  refine ⟨F,hcard,?_,?_⟩
+  · intro S hS
+    exact (failedFamily_facts Geom H mask g W).1 S (hsub hS)
+  · intro S hS S' hS' hne
+    exact (failedFamily_facts Geom H mask g W).2 S (hsub hS) S' (hsub hS') hne
+
+private noncomputable def replaceAllTuples (H : PrimitiveHistory κ 𝒯 i mesh)
+    (W : ∀ r, H.Val r) (w : H.Center → H.Tuple) : ∀ r, H.Val r :=
+  fun r => match r with
+    | .inl c => (H.cornerOf W c, (w c, H.present W c, H.active W c))
+    | .inr (.inl g) => W (.inr (.inl g))
+    | .inr (.inr c) => W (.inr (.inr c))
+
+private noncomputable def conditionedTuples (H : PrimitiveHistory κ 𝒯 i mesh)
+    (W : ∀ r, H.Val r) : FinProb (H.Center → H.Tuple) :=
+  FinProb.pi fun c => ⟨(H.tuplePrior (H.cornerOf W c)).w,
+    (H.tuplePrior (H.cornerOf W c)).nonneg, (H.tuplePrior (H.cornerOf W c)).sum_one⟩
+
+private noncomputable def reindexedListModel (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (L : ListFamily Geom H mask)
+    (p : mesh.Param) (g : Group 𝒯 i) (W : ∀ r, H.Val r) (hW : 0 < (H.recLaw p).w W)
+    (S : Finset H.Center) (hS : admissibleList Geom H g W S) : ListTestModel κ 𝒯 i where
+  Id := S
+  idNonempty := by obtain ⟨c,hc⟩ := hS.1; exact ⟨⟨c,hc⟩⟩
+  binPrior := (L.model p g W hW S hS).binPrior
+  binDist := (L.model p g W hW S hS).binDist
+  firstLaw c := H.prior (H.cornerOf W c.1)
+  bin_support := (L.model p g W hW S hS).bin_support
+  first_law_supported c := by
+    have hf := L.first_law p g W hW S hS ((L.ids p g W hW S hS).symm c)
+    rw [Equiv.apply_symm_apply] at hf
+    rw [← hf]
+    exact (L.model p g W hW S hS).first_law_supported _
+  aggregate_cap := (L.model p g W hW S hS).aggregate_cap
+  width_bound c x := by
+    have hf := L.first_law p g W hW S hS ((L.ids p g W hW S hS).symm c)
+    rw [Equiv.apply_symm_apply] at hf
+    rw [← hf]
+    exact (L.model p g W hW S hS).width_bound _ x
+  codegree_bound c b y y' hb hy hy' := by
+    have hf := L.first_law p g W hW S hS ((L.ids p g W hW S hS).symm c)
+    rw [Equiv.apply_symm_apply] at hf
+    rw [← hf]
+    exact (L.model p g W hW S hS).codegree_bound _ b y y' hb hy hy'
+  budget := by
+    rw [← Fintype.card_congr (L.ids p g W hW S hS)]
+    exact (L.model p g W hW S hS).budget
+
+private theorem reindexed_list_test (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (L : ListFamily Geom H mask) (p : mesh.Param) (g : Group 𝒯 i)
+    (W : ∀ r, H.Val r) (hW : 0 < (H.recLaw p).w W)
+    (S : Finset H.Center) (hS : admissibleList Geom H g W S) (w : H.Center → H.Tuple) :
+    (reindexedListModel Geom H mask L p g W hW S hS).Good (fun c => w c.1) ↔
+      listGood H mask g (replaceAllTuples H W w) S := by
+  classical
+  let M := reindexedListModel Geom H mask L p g W hW S hS
+  let W' := replaceAllTuples H W w
+  obtain ⟨hp,hw⟩ := hl g W W' (show H.maskVertex g W = H.maskVertex g W' from rfl)
+  have hmass (J : Finset (Fin (T.S.N k))) : M.mass J = maskedMass H mask g W' J := by
+    unfold ListTestModel.mass maskedMass
+    apply Finset.sum_congr rfl
+    intro D _
+    have hprior := L.prior p g W hW S hS D
+    have hwithin := L.within p g W hW S hS D
+    dsimp [M,reindexedListModel]
+    rw [hprior,hp]
+    congr 2
+    apply Finset.sum_congr rfl
+    intro y _
+    rw [hwithin,hw]
+  have hhit : M.hitSet (fun c => w c.1) = listHit H W' S := by
+    ext y
+    simp only [ListTestModel.hitSet,listHit,Finset.mem_filter,Finset.mem_univ,true_and]
+    constructor
+    · intro hy c hc r
+      exact hy ⟨c,hc⟩ r
+    · intro hy c r
+      exact hy c.1 c.2 r
+  have hdelete (c₀ : S) : M.hitSetDelete (fun c => w c.1) c₀ = listHit H W' (S.erase c₀.1) := by
+    ext y
+    simp only [ListTestModel.hitSetDelete,listHit,Finset.mem_filter,Finset.mem_univ,true_and]
+    constructor
+    · intro hy c hc r
+      obtain ⟨hne,hc⟩ := Finset.mem_erase.mp hc
+      exact hy ⟨c,hc⟩ (fun he => hne (congrArg Subtype.val he)) r
+    · intro hy c hne r
+      apply hy c.1 (Finset.mem_erase.mpr ⟨?_,c.2⟩) r
+      intro he
+      exact hne (Subtype.ext he)
+  change M.Good (fun c => w c.1) ↔ listGood H mask g W' S
+  unfold ListTestModel.Good listGood
+  rw [hhit,hmass]
+  have hcM : Fintype.card M.Id = S.card := Fintype.card_coe S
+  rw [hcM]
+  apply and_congr_right
+  intro _
+  constructor
+  · intro h c hc
+    have he := h (⟨c,hc⟩ : S)
+    rw [hdelete,hmass] at he
+    exact he
+  · intro h c
+    rw [hdelete,hmass]
+    exact h c.1 c.2
+
+private theorem conditioned_list_failure (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (L : ListFamily Geom H mask) (p : mesh.Param) (g : Group 𝒯 i)
+    (W : ∀ r, H.Val r) (hW : 0 < (H.recLaw p).w W)
+    (S : Finset H.Center) (hS : admissibleList Geom H g W S)
+    (ha : κ.a ≤ 1 / 10) (ht : GenericListBound κ 𝒯 i) :
+    (conditionedTuples H W).pr (fun w => ¬ listGood H mask g (replaceAllTuples H W w) S) ≤
+      2 * (𝒯.tScale i + 1 : ℝ) * Real.exp (-κ.c5 * κ.a ^ 2 * (𝒯.kScale i : ℝ)) := by
+  classical
+  let M := reindexedListModel Geom H mask L p g W hW S hS
+  have hbound := ht M (by simpa [M,reindexedListModel] using hS.2.1) ha
+  have heq : (conditionedTuples H W).pr (fun w => ¬ listGood H mask g (replaceAllTuples H W w) S) =
+      M.tupleLaw.pr M.Failure := by
+    rw [eligibility_pr_indicator]
+    have he (w : H.Center → H.Tuple) :
+        eligibility_indicator (¬ listGood H mask g (replaceAllTuples H W w) S) =
+          eligibility_indicator (M.Failure (fun c => w c.1)) := by
+      congr 1
+      exact propext (not_congr (reindexed_list_test Geom H mask hl L p g W hW S hS w)).symm
+    simp_rw [he]
+    unfold conditionedTuples
+    have hrestr := FinProb.pi_marginal_expect (Ω := fun _ : H.Center => H.Tuple)
+      (fun c : H.Center => (⟨(H.tuplePrior (H.cornerOf W c)).w,
+        (H.tuplePrior (H.cornerOf W c)).nonneg,
+        (H.tuplePrior (H.cornerOf W c)).sum_one⟩ : FinProb H.Tuple)) S
+      (fun w : S → H.Tuple => eligibility_indicator (M.Failure w))
+    apply hrestr.trans
+    unfold FinLaw.pr FinProb.expect eligibility_indicator
+    apply Finset.sum_congr rfl
+    intro w _
+    by_cases hf : M.Failure w
+    · simp only [if_pos hf,mul_one]
+      rfl
+    · simp only [if_neg hf,mul_zero]
+  rw [heq]
+  exact hbound
+
+private theorem conditioned_failure_depends (H : PrimitiveHistory κ 𝒯 i mesh)
+    (mask : Masks H) (hl : MaskLookup H mask) (g : Group 𝒯 i)
+    (W : ∀ r, H.Val r) (S : Finset H.Center) :
+    FinProb.DependsOn (fun w => ¬ listGood H mask g (replaceAllTuples H W w) S) S := by
+  classical
+  intro w w' he
+  let W₁ := replaceAllTuples H W w
+  let W₂ := replaceAllTuples H W w'
+  obtain ⟨hp,hu⟩ := hl g W₁ W₂ (show H.maskVertex g W₁ = H.maskVertex g W₂ from rfl)
+  have hhit (A : Finset H.Center) (ha : A ⊆ S) : listHit H W₁ A = listHit H W₂ A := by
+    ext y
+    simp only [listHit,Finset.mem_filter,Finset.mem_univ,true_and]
+    constructor <;> intro hy c hc r
+    · change Hits (T.S.E k) 𝒯.c (w' c r) y
+      rw [← he c (ha hc)]
+      exact hy c hc r
+    · change Hits (T.S.E k) 𝒯.c (w c r) y
+      rw [he c (ha hc)]
+      exact hy c hc r
+  have hm (J : Finset (Fin (T.S.N k))) : maskedMass H mask g W₁ J = maskedMass H mask g W₂ J := by
+    unfold maskedMass
+    rw [hp,hu]
+  change (¬ listGood H mask g W₁ S) = (¬ listGood H mask g W₂ S)
+  apply congrArg Not
+  apply propext
+  unfold listGood
+  simp only [hhit S (Finset.Subset.refl _),hm]
+  apply and_congr_right
+  intro _
+  apply forall_congr'
+  intro c
+  apply imp_congr_right
+  intro hc
+  simp only [hhit (S.erase c) (Finset.erase_subset _ _),hm]
+
+private theorem conditioned_greedy_bound (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (L : ListFamily Geom H mask) (ht : GenericListBound κ 𝒯 i)
+    (p : mesh.Param) (W : ∀ r, H.Val r) (hW : 0 < (H.recLaw p).w W)
+    (hc : PositionCountGate H W) :
+    (conditionedTuples H W).pr (fun w => ∃ g,
+      (𝒯.P i).h ≤ (failedFamily Geom H mask g (replaceAllTuples H W w)).card) ≤
+      Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) (1 + hconst.sliceExponent)) := by
+  classical
+  let δ : ℝ := 2 * (𝒯.tScale i + 1 : ℝ) * Real.exp (-κ.c5 * κ.a ^ 2 * (𝒯.kScale i : ℝ))
+  let B : ℝ := (2 * (𝒯.P i).h ^ 3 * H.Device.lam * (H.Device.H + 1) + 1) ^ (𝒯.tScale i + 1)
+  have hδ : 0 ≤ δ := by dsimp [δ]; positivity
+  have hB : 0 ≤ B := by dsimp [B,PrimitiveHistory.Device,patchHD]; positivity
+  have hgroup (g : Group 𝒯 i) :
+      (conditionedTuples H W).pr (fun w =>
+        (𝒯.P i).h ≤ (failedFamily Geom H mask g (replaceAllTuples H W w)).card) ≤
+        (B * δ) ^ (𝒯.P i).h := by
+    let Lists : Finset (Finset H.Center) := Finset.univ.filter (admissibleList Geom H g W)
+    let R := (candidateRange Geom H g).filter fun c => H.present W c = true
+    have hcount : (Lists.card : ℝ) ≤ B := by
+      have hs : Lists ⊆ R.powerset.filter (fun S => S.card ≤ 𝒯.tScale i) := by
+        intro S hS
+        have hadm := (Finset.mem_filter.mp hS).2
+        refine Finset.mem_filter.mpr ⟨Finset.mem_powerset.mpr ?_,hadm.2.1⟩
+        intro c hc
+        exact Finset.mem_filter.mpr (hadm.2.2 c hc)
+      have hnat := (Finset.card_le_card hs).trans (short_list_count R (𝒯.tScale i))
+      have hcast : (Lists.card : ℝ) ≤ ((R.card : ℝ) + 1) ^ (𝒯.tScale i + 1) := by exact_mod_cast hnat
+      apply hcast.trans
+      apply pow_le_pow_left₀ (by positivity)
+      have hr := present_range_card hconst scales Geom H g W hc
+      linarith
+    let E := fun S w => ¬ listGood H mask g (replaceAllTuples H W w) S
+    have hevent (w : H.Center → H.Tuple)
+        (hmany : (𝒯.P i).h ≤ (failedFamily Geom H mask g (replaceAllTuples H W w)).card) :
+        ∃ F ∈ Lists.powersetCard (𝒯.P i).h,
+          (∀ S ∈ F, ∀ S' ∈ F, S ≠ S' → Disjoint S S') ∧ ∀ S ∈ F, E S w := by
+      obtain ⟨F,hcard,hbad,hd⟩ := failed_family_has_subfamily Geom H mask g _ _ hmany
+      refine ⟨F,Finset.mem_powersetCard.mpr ⟨?_,hcard⟩,hd,?_⟩
+      · intro S hS
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _,?_⟩
+        exact (hbad S hS).1
+      · intro S hS
+        exact (hbad S hS).2
+    have hm := eligibility_pr_mono (conditionedTuples H W) _ _ hevent
+    have hbound := disjoint_failures_union_bound
+      (fun c : H.Center => (⟨(H.tuplePrior (H.cornerOf W c)).w,
+        (H.tuplePrior (H.cornerOf W c)).nonneg, (H.tuplePrior (H.cornerOf W c)).sum_one⟩ : FinProb H.Tuple))
+      Lists E (𝒯.P i).h δ hδ
+      (fun S _ => conditioned_failure_depends H mask hl g W S)
+      (fun S hS => conditioned_list_failure Geom H mask hl L p g W hW S
+        (Finset.mem_filter.mp hS).2 scales.a_small ht)
+    apply (hm.trans hbound).trans
+    apply pow_le_pow_left₀ (mul_nonneg (Nat.cast_nonneg _) hδ)
+    exact mul_le_mul_of_nonneg_right hcount hδ
+  have hgcard : (Fintype.card (Group 𝒯 i) : ℝ) ≤ (2 : ℝ) ^ (𝒯.P i).h := by
+    have hn : Fintype.card (Group 𝒯 i) ≤ Fintype.card (IWord 𝒯 i) :=
+      Fintype.card_le_of_injective Subtype.val Subtype.val_injective
+    simpa only [IWord,CubePos,Fintype.card_fun,Fintype.card_fin,Fintype.card_bool,Nat.cast_pow,Nat.cast_ofNat] using
+      (show (Fintype.card (Group 𝒯 i) : ℝ) ≤ Fintype.card (IWord 𝒯 i) by exact_mod_cast hn)
+  have hthreshold : (2 : ℝ) ^ (𝒯.P i).h * (B * δ) ^ (𝒯.P i).h ≤
+      Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) (1 + hconst.sliceExponent)) := by
+    simpa only [B,δ,PrimitiveHistory.Device,patchHD,Tiling.kScale,Tiling.tScale,Nat.cast_add,Nat.cast_one] using
+      (hconst.threshold_slack (𝒯.P i).h scales.h_large).2.2.2.2.2.2.2.2.1
+  have hu := eligibility_pr_exists (conditionedTuples H W) (Finset.univ : Finset (Group 𝒯 i))
+    (fun g w => (𝒯.P i).h ≤ (failedFamily Geom H mask g (replaceAllTuples H W w)).card)
+  simp only [Finset.mem_univ,true_and] at hu
+  apply hu.trans
+  calc
+    _ ≤ ∑ _g : Group 𝒯 i, (B * δ) ^ (𝒯.P i).h := Finset.sum_le_sum fun g _ => hgroup g
+    _ = (Fintype.card (Group 𝒯 i) : ℝ) * (B * δ) ^ (𝒯.P i).h := by simp
+    _ ≤ (2 : ℝ) ^ (𝒯.P i).h * (B * δ) ^ (𝒯.P i).h :=
+      mul_le_mul_of_nonneg_right hgcard (pow_nonneg (mul_nonneg hB hδ) _)
+    _ ≤ _ := hthreshold
+
+end EligibilityCountProof
 
 /-- The local height rule and star validity, before any bin or label draw. -/
 structure HeightFacts {κ : CConsts} {T : Stage} {k : ℕ}
@@ -1344,8 +1979,8 @@ private theorem patch_global_height_bound (hκ : κ.Admissible) (hconst : Height
 private theorem patch_positive_height_bound (hκ : κ.Admissible) (hconst : HeightConstantContract κ)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
-    (p : mesh.Param) (v : EvenRole 𝒯 i) (forced : Option H.Center) :
-    (((H.Device.posLawForced forced).prod (heightAuxLaw H p)).prod H.Device.actLaw).pr
+    (πAux : FinProb (HeightAux H)) (v : EvenRole 𝒯 i) (forced : Option H.Center) :
+    (((H.Device.posLawForced forced).prod πAux).prod H.Device.actLaw).pr
       (fun ω =>
         let W := (heightUnpack H).symm ω
         H.Device.Legal (H.present W) (eligible Geom H mask W)
@@ -1363,7 +1998,7 @@ private theorem patch_positive_height_bound (hκ : κ.Admissible) (hconst : Heig
     (by rw [hcd]; simp [PrimitiveHistory.Device, patchHD])
     (by rw [hCd]; simp [PrimitiveHistory.Device, patchHD])
     (patch_regime_ok hκ hconst scales H)
-    (siteSet Geom) (Geom.project v.1) hv forced (heightAuxLaw H p) (heightEligibility Geom H mask)
+    (siteSet Geom) (Geom.project v.1) hv forced πAux (heightEligibility Geom H mask)
   dsimp only []
   simp_rw [heightEligibility_eq Geom H mask hlookup]
   exact hbound
@@ -1658,6 +2293,712 @@ noncomputable def SelectionIncidence {κ : CConsts} {T : Stage} {k : ℕ}
       | some c => (∑ r, if H.tuple W c r = x then (1 : ℝ) else 0) / 𝒯.kScale i
     else 0) ≤ 16 / (𝒯.P i).M
 
+section IncidenceProof
+
+set_option backward.isDefEq.respectTransparency false
+set_option maxHeartbeats 800000
+
+variable {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
+  {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+
+private theorem prob_prod_expect {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α × β → ℝ) :
+    (P.prod Q).expect f = ∑ a, P.w a * Q.expect (fun b => f (a,b)) := by
+  simp only [FinProb.expect, FinProb.prod, Fintype.sum_prod_type]
+  congr 1
+  funext a
+  rw [Finset.mul_sum]
+  congr 1
+  funext b
+  ring
+
+private theorem prob_prod_nested {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α × β → ℝ) :
+    (P.prod Q).expect f =
+      P.expect (fun a => Q.expect (fun b => f (a,b))) := prob_prod_expect P Q _
+
+private theorem prob_three_nested {α β γ : Type*}
+    [Fintype α] [Fintype β] [Fintype γ]
+    (P : FinProb α) (Q : FinProb β) (R : FinProb γ) (f : (α × β) × γ → ℝ) :
+    ((P.prod Q).prod R).expect f =
+      P.expect (fun a => Q.expect (fun b => R.expect (fun c => f ((a,b),c)))) := by
+  rw [prob_prod_nested, prob_prod_nested]
+
+private theorem prob_swap_expect {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α → β → ℝ) :
+    P.expect (fun a => Q.expect (f a)) = Q.expect (fun b => P.expect (fun a => f a b)) := by
+  simp only [FinProb.expect, Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro b _
+  apply Finset.sum_congr rfl
+  intro a _
+  ring
+
+private theorem prob_pr_indicator {α : Type*} [Fintype α]
+    (P : FinProb α) (A : α → Prop) : P.pr A = P.expect (fun a => if A a then 1 else 0) := by
+  classical
+  simp only [FinProb.pr, FinProb.expect]
+  apply Finset.sum_congr rfl
+  intro a _
+  split_ifs <;> ring
+
+private theorem prob_delta_expect {α : Type*} [Fintype α] [DecidableEq α]
+    (a : α) (f : α → ℝ) :
+    (FinProb.uniform {a} (Finset.singleton_nonempty _)).expect f = f a := by
+  classical
+  simp [FinProb.expect, FinProb.uniform]
+
+private theorem prob_pi_coord {α β : Type*} [Fintype α] [DecidableEq α]
+    [Fintype β] (P : α → FinProb β) (c : α) (f : β → ℝ) :
+    (FinProb.pi P).expect (fun ω => f (ω c)) = (P c).expect f := by
+  classical
+  have hprod (ω : α → β) :
+      (∏ a, (P a).w (ω a)) * f (ω c) =
+        ∏ a, (P a).w (ω a) * (if a = c then f (ω a) else 1) := by
+    rw [Finset.prod_mul_distrib]
+    simp
+  simp only [FinProb.expect, FinProb.pi, hprod]
+  rw [← Fintype.prod_sum (fun a (b : β) => (P a).w b * (if a = c then f b else 1))]
+  have hsum (a : α) :
+      (∑ b, (P a).w b * (if a = c then f b else 1)) =
+        if a = c then (P c).expect f else 1 := by
+    split_ifs with h
+    · subst a; rfl
+    · simpa [h] using (P a).sum_eq_one
+  simp_rw [hsum]
+  simp [FinProb.expect]
+
+private theorem prob_expect_sum {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (f : β → α → ℝ) :
+    P.expect (fun a => ∑ b, f b a) = ∑ b, P.expect (f b) := by
+  simp only [FinProb.expect, Finset.mul_sum]
+  exact Finset.sum_comm
+
+private theorem recLaw_E_heightUnpack (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (f : (∀ r, H.Val r) → ℝ) :
+    (H.recLaw p).E f =
+      ((H.Device.posLaw.prod (heightAuxLaw H p)).prod H.Device.actLaw).expect
+        (fun ω => f ((heightUnpack H).symm ω)) := by
+  unfold FinLaw.E FinProb.expect
+  apply Fintype.sum_equiv (heightUnpack H)
+  intro W
+  rw [heightUnpack_weight]
+  simp
+
+private noncomputable def tupleIncidence (H : PrimitiveHistory κ 𝒯 i mesh)
+    (x : Fin (T.S.N k)) (w : H.Tuple) : ℝ :=
+  (∑ r, if w r = x then (1 : ℝ) else 0) / 𝒯.kScale i
+
+private theorem tupleIncidence_nonneg (H : PrimitiveHistory κ 𝒯 i mesh)
+    (x : Fin (T.S.N k)) (w : H.Tuple) : 0 ≤ tupleIncidence H x w := by
+  unfold tupleIncidence
+  positivity
+
+private theorem tuplePrior_incidence (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (v : mesh.V) (hv : 0 < mesh.wt v p)
+    (hk : 0 < 𝒯.kScale i) (x : Fin (T.S.N k)) :
+    (⟨(H.tuplePrior v).w, (H.tuplePrior v).nonneg, (H.tuplePrior v).sum_one⟩ : FinProb H.Tuple).expect
+      (tupleIncidence H x) ≤ 2 / (𝒯.P i).M := by
+  change (FinProb.pi fun _ : Fin (𝒯.kScale i) =>
+      (⟨(H.prior v).w, (H.prior v).nonneg, (H.prior v).sum_eq_one⟩ : FinProb _)).expect
+      (tupleIncidence H x) ≤ _
+  let P : FinProb (Fin (T.S.N k)) :=
+    ⟨(H.prior v).w, (H.prior v).nonneg, (H.prior v).sum_eq_one⟩
+  change (FinProb.pi fun _ : Fin (𝒯.kScale i) => P).expect
+      (fun w => (∑ r, if w r = x then (1 : ℝ) else 0) / 𝒯.kScale i) ≤ _
+  have heq : (FinProb.pi fun _ : Fin (𝒯.kScale i) => P).expect
+      (fun w => (∑ r, if w r = x then (1 : ℝ) else 0) / 𝒯.kScale i) = P.w x := by
+    simp_rw [div_eq_mul_inv, mul_comm _ ((𝒯.kScale i : ℝ)⁻¹)]
+    rw [FinProb.expect_smul, prob_expect_sum]
+    have heach (r : Fin (𝒯.kScale i)) := prob_pi_coord (fun _ : Fin (𝒯.kScale i) => P) r
+      (fun y => if y = x then (1 : ℝ) else 0)
+    simp_rw [heach]
+    have hkR : (𝒯.kScale i : ℝ) ≠ 0 := by exact_mod_cast hk.ne'
+    simp only [FinProb.expect, mul_ite, mul_one, mul_zero, Finset.sum_ite_eq',
+      Finset.mem_univ, if_true, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+      nsmul_eq_mul]
+    rw [← mul_assoc, inv_mul_cancel₀ hkR, one_mul]
+  rw [heq]
+  exact H.prior_cap v p hv x
+
+private abbrev IncAux (H : PrimitiveHistory κ 𝒯 i mesh) :=
+  (H.Center → mesh.V × H.Tuple) ×
+    (Group 𝒯 i → mesh.V × SearchPerm H.Device (𝒯.tScale i))
+
+private noncomputable def incAuxLaw (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) : FinProb (IncAux H) :=
+  (⟨(FinLaw.pi fun _c : H.Center => FinLaw.bind (PrimitiveHistory.vertexLaw p) H.tuplePrior).w,
+    (FinLaw.pi fun _c : H.Center => FinLaw.bind (PrimitiveHistory.vertexLaw p) H.tuplePrior).nonneg,
+    (FinLaw.pi fun _c : H.Center => FinLaw.bind (PrimitiveHistory.vertexLaw p) H.tuplePrior).sum_one⟩ : FinProb (H.Center → mesh.V × H.Tuple)).prod
+  ⟨(FinLaw.pi fun _g : Group 𝒯 i => H.groupLaw p).w,
+    (FinLaw.pi fun _g : Group 𝒯 i => H.groupLaw p).nonneg,
+    (FinLaw.pi fun _g : Group 𝒯 i => H.groupLaw p).sum_one⟩
+
+private def auxJoin (H : PrimitiveHistory κ 𝒯 i mesh)
+    (u : IncAux H) (τ : H.Device.Ties) : HeightAux H := (u.1, (u.2,τ))
+
+private theorem heightAux_expect (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (f : HeightAux H → ℝ) :
+    (heightAuxLaw H p).expect f =
+      (incAuxLaw H p).expect (fun u => H.Device.tieLaw.expect (fun τ => f (auxJoin H u τ))) := by
+  simp only [FinProb.expect, heightAuxLaw, incAuxLaw, FinProb.prod, FinLaw.bind,
+    Fintype.sum_prod_type, HDParams.tieLaw, FinProb.pi, FinLaw.pi, PrimitiveHistory.tieLaw,
+    PrimitiveHistory.finProbToFinLaw, auxJoin, Finset.mul_sum]
+  congr 1
+  funext CT
+  congr 1
+  funext G
+  congr 1
+  funext τ
+  ring
+
+private theorem incAux_incidence (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (hk : 0 < 𝒯.kScale i) (c : H.Center) (x : Fin (T.S.N k)) :
+    (incAuxLaw H p).expect (fun u => tupleIncidence H x (u.1 c).2) ≤ 2 / (𝒯.P i).M := by
+  unfold incAuxLaw
+  rw [prob_prod_expect]
+  simp_rw [FinProb.expect_const]
+  let C : FinProb (mesh.V × H.Tuple) :=
+    ⟨(FinLaw.bind (PrimitiveHistory.vertexLaw p) H.tuplePrior).w,
+      (FinLaw.bind (PrimitiveHistory.vertexLaw p) H.tuplePrior).nonneg,
+      (FinLaw.bind (PrimitiveHistory.vertexLaw p) H.tuplePrior).sum_one⟩
+  change (FinProb.pi fun _ : H.Center => C).expect
+    (fun ω => tupleIncidence H x (ω c).2) ≤ _
+  rw [prob_pi_coord (fun _ : H.Center => C) c (fun vw => tupleIncidence H x vw.2)]
+  change (FinProb.bind
+    (⟨fun v => mesh.wt v p, fun v => mesh.wt_nonneg v p, mesh.wt_sum_one p⟩ : FinProb mesh.V)
+    (fun v => ⟨(H.tuplePrior v).w, (H.tuplePrior v).nonneg, (H.tuplePrior v).sum_one⟩)).expect
+    (fun vw => tupleIncidence H x vw.2) ≤ _
+  rw [FinProb.bind_expect _ _ (fun _ w => tupleIncidence H x w)]
+  calc
+    _ ≤ ∑ v, mesh.wt v p * (2 / (𝒯.P i).M) := by
+      apply Finset.sum_le_sum
+      intro v _
+      by_cases hv : 0 < mesh.wt v p
+      · apply mul_le_mul_of_nonneg_left _ (mesh.wt_nonneg v p)
+        exact tuplePrior_incidence H p v hv hk x
+      · have hz : mesh.wt v p = 0 := le_antisymm (le_of_not_gt hv) (mesh.wt_nonneg v p)
+        simp [hz]
+    _ = _ := by rw [← Finset.sum_mul, mesh.wt_sum_one]; ring
+
+private theorem heightAux_incidence (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (hk : 0 < 𝒯.kScale i) (c : H.Center) (x : Fin (T.S.N k)) :
+    (heightAuxLaw H p).expect (fun u => tupleIncidence H x (u.1 c).2) ≤ 2 / (𝒯.P i).M := by
+  rw [heightAux_expect]
+  simp only [auxJoin]
+  simp_rw [FinProb.expect_const]
+  exact incAux_incidence H p hk c x
+
+private noncomputable def incRecord (H : PrimitiveHistory κ 𝒯 i mesh)
+    (P : H.Center → Bool) (u : IncAux H) (A : H.Center → Bool) (τ : H.Device.Ties) :
+    ∀ r, H.Val r := (heightUnpack H).symm ((P, auxJoin H u τ), A)
+
+private noncomputable def incEligibility (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (P : H.Center → Bool) (u : IncAux H) : H.Device.EligMap :=
+  eligible Geom H mask (incRecord H P u (fun _ => false) (fun _ => 1))
+
+private theorem incEligibility_eq (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (P : H.Center → Bool) (u : IncAux H) (A : H.Center → Bool) (τ : H.Device.Ties) :
+    eligible Geom H mask (incRecord H P u A τ) = incEligibility Geom H mask P u := by
+  apply eligible_input_congr Geom H mask hl
+  · intro g; rfl
+  · intro c; exact ⟨rfl, rfl⟩
+
+private theorem incRecord_selected (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (P : H.Center → Bool) (u : IncAux H) (A : H.Center → Bool) (τ : H.Device.Ties)
+    (v : EvenRole 𝒯 i) :
+    selected Geom H mask (incRecord H P u A τ) v =
+      H.Device.selection (siteSet Geom) P A (incEligibility Geom H mask P u) τ (Geom.project v.1) := by
+  unfold selected
+  rw [incEligibility_eq Geom H mask hl]
+  rfl
+
+private theorem intrinsic_selected_level (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (W : ∀ r, H.Val r) (v : EvenRole 𝒯 i) (c : H.Center)
+    (hs : selected Geom H mask W v = some c) :
+    c.2.val = H.Device.height (siteSet Geom) (H.present W) (H.active W)
+      (eligible Geom H mask W) H.Device.Rlong (Geom.project v.1) := by
+  classical
+  unfold selected HDParams.selection HDParams.selectionAt at hs
+  dsimp only [] at hs
+  split_ifs at hs with hj hb hn
+  let j : Fin (H.Device.H + 1) :=
+    ⟨H.Device.height (siteSet Geom) (H.present W) (H.active W)
+      (eligible Geom H mask W) H.Device.Rlong (Geom.project v.1), by omega⟩
+  have hm := Classical.choose_spec
+    (Finset.mem_image.mp (Finset.min'_mem
+      (((eligible Geom H mask W (Geom.project v.1) j).filter fun ℓ => H.active W ℓ = true).image
+        (fun ℓ => H.Device.priority (H.ties W) (Geom.project v.1,j) ℓ)) hn))
+  have hc : c ∈ eligible Geom H mask W (Geom.project v.1) j := by
+    have he : Classical.choose (Finset.mem_image.mp (Finset.min'_mem _ hn)) = c := Option.some.inj hs
+    rw [he] at hm
+    exact (Finset.mem_filter.mp hm.1).1
+  have hball := (Finset.mem_filter.mp (Finset.mem_sdiff.mp hc).1).1
+  exact congrArg Fin.val (Finset.mem_filter.mp hball).2.1
+
+private theorem star_legal (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H)
+    (v : EvenRole 𝒯 i) (W : ∀ r, H.Val r) (hv : starValid Geom H mask v W) :
+    H.Device.Legal (H.present W) (eligible Geom H mask W)
+      (H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong) := by
+  intro q hq j
+  refine ⟨?_, ?_⟩
+  · intro c hc
+    obtain ⟨hb, hp⟩ := Finset.mem_filter.mp (Finset.mem_sdiff.mp hc).1
+    obtain ⟨_, hj, hd⟩ := Finset.mem_filter.mp hb
+    exact ⟨hp,hj,hd⟩
+  · have := (hv.2.1 q hq j).2
+    have hn : 0 ≤ H.Device.lam := by dsimp [PrimitiveHistory.Device,patchHD]; positivity
+    linarith
+
+private theorem inc_zero_kernel (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask)
+    (P : H.Center → Bool) (u : IncAux H) (v : EvenRole 𝒯 i) (c : H.Center)
+    (hc : c.2.val = 0) :
+    (H.Device.actLaw.prod H.Device.tieLaw).pr (fun aτ =>
+      starValid Geom H mask v (incRecord H P u aτ.1 aτ.2) ∧
+        selected Geom H mask (incRecord H P u aτ.1 aτ.2) v = some c) ≤ 3 / H.Device.lam := by
+  classical
+  let E := incEligibility Geom H mask P u
+  let j0 : Fin (H.Device.H + 1) := ⟨0, by omega⟩
+  have hcz : c.2 = j0 := Fin.ext hc
+  have hq : Geom.project v.1 ∈ H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong := by
+    apply Finset.mem_filter.mpr
+    exact ⟨Finset.mem_image.mpr ⟨v,Finset.mem_univ _,rfl⟩, by simp⟩
+  by_cases hex : ∃ aτ : (H.Center → Bool) × H.Device.Ties, starValid Geom H mask v (incRecord H P u aτ.1 aτ.2) ∧
+      selected Geom H mask (incRecord H P u aτ.1 aτ.2) v = some c
+  · obtain ⟨aτ, hstar, hsel⟩ := hex
+    have hlegal := star_legal Geom H mask v _ hstar (Geom.project v.1) hq j0
+    rw [incEligibility_eq Geom H mask hl] at hlegal
+    have hmem := (hh.chosen_eligible _ v c hsel).1
+    rw [incEligibility_eq Geom H mask hl, hcz] at hmem
+    have hlam : 0 < H.Device.lam := by
+      have hn := (hconst.threshold_slack (𝒯.P i).h scales.h_large).1
+      dsimp [PrimitiveHistory.Device,patchHD]
+      positivity
+    have ht := height_selection_tie H.Device hlam P E (siteSet Geom) (Geom.project v.1) c hlegal hmem
+    apply le_trans _ ht
+    unfold FinProb.pr
+    apply Finset.sum_le_sum
+    intro b _
+    by_cases hb : starValid Geom H mask v (incRecord H P u b.1 b.2) ∧
+        selected Geom H mask (incRecord H P u b.1 b.2) v = some c
+    · have hheight := intrinsic_selected_level Geom H mask _ v c hb.2
+      rw [hc, incEligibility_eq Geom H mask hl] at hheight
+      have hs := incRecord_selected Geom H mask hl P u b.1 b.2 v
+      have htarget : H.Device.height (siteSet Geom) P b.1 E H.Device.Rlong (Geom.project v.1) = 0 ∧
+          H.Device.selection (siteSet Geom) P b.1 E b.2 (Geom.project v.1) = some c :=
+        ⟨hheight.symm, hs.symm.trans hb.2⟩
+      simp only [if_pos hb, if_pos htarget, le_refl]
+    · simp only [if_neg hb]
+      split_ifs <;> simp [FinProb.nonneg]
+  · have hz : (H.Device.actLaw.prod H.Device.tieLaw).pr (fun aτ =>
+        starValid Geom H mask v (incRecord H P u aτ.1 aτ.2) ∧
+          selected Geom H mask (incRecord H P u aτ.1 aτ.2) v = some c) = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro b _
+      rw [if_neg (fun h => hex ⟨b,h⟩)]
+    rw [hz]
+    have hn : 0 ≤ H.Device.lam := by dsimp [PrimitiveHistory.Device,patchHD]; positivity
+    positivity
+
+private theorem inc_positive_fixed (hκ : κ.Admissible) (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (u : IncAux H) (τ : H.Device.Ties) (v : EvenRole 𝒯 i) (forced : Option H.Center) :
+    ((H.Device.posLawForced forced).prod H.Device.actLaw).pr (fun PA =>
+      H.Device.Legal PA.1 (incEligibility Geom H mask PA.1 u)
+        (H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong) ∧
+      0 < H.Device.height (siteSet Geom) PA.1 PA.2 (incEligibility Geom H mask PA.1 u)
+        H.Device.Rlong (Geom.project v.1)) ≤
+      Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent) := by
+  classical
+  let aux := auxJoin H u τ
+  let π : FinProb (HeightAux H) := FinProb.uniform {aux} (Finset.singleton_nonempty _)
+  have ht := patch_positive_height_bound hκ hconst scales Geom H mask hl π v forced
+  rw [prob_pr_indicator, prob_three_nested] at ht
+  simp only [π, prob_delta_expect] at ht
+  have hp (P A : H.Center → Bool) :
+      H.present ((heightUnpack H).symm ((P,aux),A)) = P := rfl
+  have ha (P A : H.Center → Bool) :
+      H.active ((heightUnpack H).symm ((P,aux),A)) = A := rfl
+  have he (P A : H.Center → Bool) :
+      eligible Geom H mask ((heightUnpack H).symm ((P,aux),A)) =
+        incEligibility Geom H mask P u := incEligibility_eq Geom H mask hl P u A τ
+  simp_rw [hp,ha,he] at ht
+  rw [prob_pr_indicator, prob_prod_nested]
+  convert ht using 1
+  apply congrArg (H.Device.posLawForced forced).expect
+  funext P
+  apply congrArg H.Device.actLaw.expect
+  funext A
+  split_ifs <;> rfl
+
+private theorem pos_present_weight (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh)
+    (c : H.Center) (P : H.Center → Bool) :
+    (if P c = true then H.Device.posLaw.w P else 0) =
+      (H.Device.lam / H.Device.V) * (H.Device.posLawForced (some c)).w P := by
+  classical
+  let q := H.Device.lam / (H.Device.V : ℝ)
+  have hn := hconst.threshold_slack (𝒯.P i).h scales.h_large
+  have hq0 : 0 ≤ q := by dsimp [q, PrimitiveHistory.Device,patchHD]; positivity
+  have hprob : H.Device.lam ≤ (H.Device.V : ℝ) / 2 := hn.2.2.1
+  have hq1 : q ≤ 1 := by
+    have hV : 0 < (H.Device.V : ℝ) := by
+      have hlam : 0 < H.Device.lam := by
+        have hlarge := hn.1
+        dsimp [PrimitiveHistory.Device,patchHD]
+        positivity
+      linarith [hprob]
+    apply (div_le_one hV).mpr
+    linarith [hprob]
+  change (if P c = true then ∏ z, (FinProb.bernoulli q).w (P z) else 0) =
+    q * ∏ z, (if some c = some z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)
+  rw [← Finset.mul_prod_erase Finset.univ (fun z =>
+    (if some c = some z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) (Finset.mem_univ c)]
+  have hrest : (∏ z ∈ Finset.univ.erase c,
+      (if some c = some z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) =
+      ∏ z ∈ Finset.univ.erase c, (FinProb.bernoulli q).w (P z) := by
+    apply Finset.prod_congr rfl
+    intro z hz
+    have hzc := (Finset.mem_erase.mp hz).1
+    simp [Ne.symm hzc]
+  rw [hrest]
+  by_cases hc : P c = true
+  · rw [if_pos hc, ← Finset.mul_prod_erase Finset.univ (fun z => (FinProb.bernoulli q).w (P z)) (Finset.mem_univ c)]
+    simp [FinProb.bernoulli, hc, min_eq_left hq1, max_eq_right hq0]
+  · have hf : P c = false := Bool.eq_false_iff.mpr hc
+    simp [hf, FinProb.bernoulli]
+
+private theorem inc_positive_kernel (hκ : κ.Admissible) (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (u : IncAux H) (v : EvenRole 𝒯 i) (c : H.Center) (hc : 0 < c.2.val) :
+    ((H.Device.posLawForced (some c)).prod (H.Device.actLaw.prod H.Device.tieLaw)).pr (fun ω =>
+      starValid Geom H mask v (incRecord H ω.1 u ω.2.1 ω.2.2) ∧
+        selected Geom H mask (incRecord H ω.1 u ω.2.1 ω.2.2) v = some c) ≤
+      Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent) := by
+  classical
+  let F := fun PA : (H.Center → Bool) × (H.Center → Bool) =>
+    H.Device.Legal PA.1 (incEligibility Geom H mask PA.1 u)
+      (H.Device.domBall (siteSet Geom) (Geom.project v.1) H.Device.Rlong) ∧
+      0 < H.Device.height (siteSet Geom) PA.1 PA.2 (incEligibility Geom H mask PA.1 u)
+        H.Device.Rlong (Geom.project v.1)
+  have ht := inc_positive_fixed hκ hconst scales Geom H mask hl u (fun _ => 1) v (some c)
+  have hle : ((H.Device.posLawForced (some c)).prod (H.Device.actLaw.prod H.Device.tieLaw)).pr (fun ω =>
+      starValid Geom H mask v (incRecord H ω.1 u ω.2.1 ω.2.2) ∧
+        selected Geom H mask (incRecord H ω.1 u ω.2.1 ω.2.2) v = some c) ≤
+      ((H.Device.posLawForced (some c)).prod (H.Device.actLaw.prod H.Device.tieLaw)).pr
+        (fun ω => F (ω.1, ω.2.1)) := by
+    unfold FinProb.pr
+    apply Finset.sum_le_sum
+    intro ω _
+    by_cases he : starValid Geom H mask v (incRecord H ω.1 u ω.2.1 ω.2.2) ∧
+        selected Geom H mask (incRecord H ω.1 u ω.2.1 ω.2.2) v = some c
+    · have hg := star_legal Geom H mask v _ he.1
+      have hh := intrinsic_selected_level Geom H mask _ v c he.2
+      rw [incEligibility_eq Geom H mask hl] at hg hh
+      change c.2.val = H.Device.height (siteSet Geom) ω.1 ω.2.1
+        (incEligibility Geom H mask ω.1 u) H.Device.Rlong (Geom.project v.1) at hh
+      have hf : F (ω.1,ω.2.1) := ⟨hg, by dsimp [F]; rw [← hh]; exact hc⟩
+      simp [he,hf]
+    · simp only [if_neg he]
+      split_ifs <;> simp [FinProb.nonneg]
+  apply hle.trans
+  have heq : ((H.Device.posLawForced (some c)).prod (H.Device.actLaw.prod H.Device.tieLaw)).pr
+      (fun ω => F (ω.1, ω.2.1)) =
+      ((H.Device.posLawForced (some c)).prod H.Device.actLaw).pr F := by
+    simp only [FinProb.pr, FinProb.prod, Fintype.sum_prod_type]
+    congr 1
+    funext P
+    congr 1
+    funext A
+    by_cases hf : F (P,A)
+    · simp only [if_pos hf, ← mul_assoc, ← Finset.mul_sum, H.Device.tieLaw.sum_eq_one, mul_one]
+    · simp only [if_neg hf, Finset.sum_const_zero]
+  rw [heq]
+  exact ht
+
+private theorem inc_center_kernel (hκ : κ.Admissible) (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask)
+    (u : IncAux H) (v : EvenRole 𝒯 i) (c : H.Center) :
+    (H.Device.posLaw.prod (H.Device.actLaw.prod H.Device.tieLaw)).pr (fun ω =>
+      starValid Geom H mask v (incRecord H ω.1 u ω.2.1 ω.2.2) ∧
+        selected Geom H mask (incRecord H ω.1 u ω.2.1 ω.2.2) v = some c) ≤
+      (H.Device.lam / H.Device.V) *
+        (if c.2.val = 0 then 3 / H.Device.lam else
+          Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent)) := by
+  classical
+  let F := fun (P : H.Center → Bool) (aτ : (H.Center → Bool) × H.Device.Ties) => starValid Geom H mask v (incRecord H P u aτ.1 aτ.2) ∧
+    selected Geom H mask (incRecord H P u aτ.1 aτ.2) v = some c
+  have hp (P : H.Center → Bool) (aτ : (H.Center → Bool) × H.Device.Ties) (he : F P aτ) : P c = true := by
+    have hm := (hh.chosen_eligible _ v c he.2).1
+    exact (Finset.mem_filter.mp (Finset.mem_sdiff.mp hm).1).2
+  have hnn : 0 ≤ H.Device.lam / (H.Device.V : ℝ) := by
+    dsimp [PrimitiveHistory.Device,patchHD]; positivity
+  by_cases hc : c.2.val = 0
+  · rw [if_pos hc]
+    unfold FinProb.pr
+    simp only [FinProb.prod, Fintype.sum_prod_type]
+    calc
+      _ = ∑ P, H.Device.posLaw.w P *
+          (H.Device.actLaw.prod H.Device.tieLaw).pr (F P) := by
+        simp only [FinProb.pr, FinProb.prod, Fintype.sum_prod_type, Finset.mul_sum]
+        congr 1
+        funext P
+        congr 1
+        funext A
+        congr 1
+        funext τ
+        split_ifs <;> ring
+      _ ≤ ∑ P, (if P c = true then H.Device.posLaw.w P else 0) * (3 / H.Device.lam) := by
+        apply Finset.sum_le_sum
+        intro P _
+        by_cases hpc : P c = true
+        · rw [if_pos hpc]
+          exact mul_le_mul_of_nonneg_left
+            (inc_zero_kernel hconst scales Geom H mask hl hh P u v c hc) (H.Device.posLaw.nonneg P)
+        · have hz : (H.Device.actLaw.prod H.Device.tieLaw).pr (F P) = 0 := by
+            unfold FinProb.pr
+            apply Finset.sum_eq_zero
+            intro b _
+            rw [if_neg (fun h => hpc (hp P b h))]
+          simp [hz,hpc]
+      _ = _ := by
+        simp_rw [pos_present_weight hconst scales H c]
+        rw [← Finset.sum_mul, ← Finset.mul_sum, (H.Device.posLawForced (some c)).sum_eq_one]
+        ring
+  · rw [if_neg hc]
+    have hpos : 0 < c.2.val := by omega
+    have ht := inc_positive_kernel hκ hconst scales Geom H mask hl u v c hpos
+    have heq : (H.Device.posLaw.prod (H.Device.actLaw.prod H.Device.tieLaw)).pr
+        (fun ω => F ω.1 ω.2) = (H.Device.lam / H.Device.V) *
+      ((H.Device.posLawForced (some c)).prod (H.Device.actLaw.prod H.Device.tieLaw)).pr
+        (fun ω => F ω.1 ω.2) := by
+      simp only [FinProb.pr, FinProb.prod, Fintype.sum_prod_type, Finset.mul_sum]
+      congr 1
+      funext P
+      congr 1
+      funext A
+      congr 1
+      funext τ
+      by_cases hf : F P (A,τ)
+      · rw [if_pos hf, if_pos hf]
+        have hw := pos_present_weight hconst scales H c P
+        rw [if_pos (hp P (A,τ) hf)] at hw
+        rw [hw]
+        ring
+      · simp [hf]
+    rw [heq]
+    exact mul_le_mul_of_nonneg_left ht hnn
+
+private theorem recLaw_incidence_integral (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (f : (∀ r, H.Val r) → ℝ) :
+    (H.recLaw p).E f =
+      (incAuxLaw H p).expect (fun u =>
+        (H.Device.posLaw.prod (H.Device.actLaw.prod H.Device.tieLaw)).expect
+          (fun ω => f (incRecord H ω.1 u ω.2.1 ω.2.2))) := by
+  rw [recLaw_E_heightUnpack, prob_three_nested]
+  rw [prob_swap_expect]
+  rw [heightAux_expect]
+  simp_rw [prob_prod_nested]
+  apply congrArg (incAuxLaw H p).expect
+  funext u
+  rw [prob_swap_expect]
+  apply congrArg H.Device.posLaw.expect
+  funext P
+  rw [prob_swap_expect]
+  rfl
+
+private theorem inc_center_bound (hκ : κ.Admissible) (hconst : HeightConstantContract κ)
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hl : MaskLookup H mask)
+    (hh : HeightFacts hconst Geom H mask)
+    (p : mesh.Param) (hk : 0 < 𝒯.kScale i) (v : EvenRole 𝒯 i) (c : H.Center)
+    (x : Fin (T.S.N k)) :
+    (H.recLaw p).E (fun W => if starValid Geom H mask v W ∧
+        selected Geom H mask W v = some c then tupleIncidence H x (H.tuple W c) else 0) ≤
+      (H.Device.lam / H.Device.V) *
+        (if c.2.val = 0 then 3 / H.Device.lam else
+          Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent)) * (2 / (𝒯.P i).M) := by
+  classical
+  let C := (H.Device.lam / H.Device.V) *
+    (if c.2.val = 0 then 3 / H.Device.lam else
+      Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent))
+  have hC : 0 ≤ C := by dsimp [C,PrimitiveHistory.Device,patchHD]; split_ifs <;> positivity
+  rw [recLaw_incidence_integral]
+  have heq (u : IncAux H) :
+      (H.Device.posLaw.prod (H.Device.actLaw.prod H.Device.tieLaw)).expect (fun ω =>
+        if starValid Geom H mask v (incRecord H ω.1 u ω.2.1 ω.2.2) ∧
+            selected Geom H mask (incRecord H ω.1 u ω.2.1 ω.2.2) v = some c
+          then tupleIncidence H x (H.tuple (incRecord H ω.1 u ω.2.1 ω.2.2) c) else 0) =
+      tupleIncidence H x (u.1 c).2 *
+        (H.Device.posLaw.prod (H.Device.actLaw.prod H.Device.tieLaw)).pr (fun ω =>
+          starValid Geom H mask v (incRecord H ω.1 u ω.2.1 ω.2.2) ∧
+            selected Geom H mask (incRecord H ω.1 u ω.2.1 ω.2.2) v = some c) := by
+    simp only [FinProb.expect, FinProb.pr, Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro ω _
+    have htuple : H.tuple (incRecord H ω.1 u ω.2.1 ω.2.2) c = (u.1 c).2 := rfl
+    rw [htuple]
+    split_ifs <;> ring
+  simp_rw [heq]
+  calc
+    _ ≤ (incAuxLaw H p).expect (fun u => C * tupleIncidence H x (u.1 c).2) := by
+      apply FinProb.expect_mono
+      intro u
+      rw [mul_comm C]
+      exact mul_le_mul_of_nonneg_left
+        (inc_center_kernel hκ hconst scales Geom H mask hl hh u v c)
+        (tupleIncidence_nonneg H x _)
+    _ = C * (incAuxLaw H p).expect (fun u => tupleIncidence H x (u.1 c).2) :=
+      FinProb.expect_smul _ _ _
+    _ ≤ C * (2 / (𝒯.P i).M) :=
+      mul_le_mul_of_nonneg_left (incAux_incidence H p hk c x) hC
+
+private def diffSet {d : ℕ} (v u : CubePos d) : Finset (Fin d) :=
+  Finset.univ.filter (fun i => u i ≠ v i)
+
+private def vertexOfDiff {d : ℕ} (v : CubePos d) (s : Finset (Fin d)) : CubePos d :=
+  fun i => if i ∈ s then !(v i) else v i
+
+private def diffEquiv {d : ℕ} (v : CubePos d) : CubePos d ≃ Finset (Fin d) where
+  toFun := diffSet v
+  invFun := vertexOfDiff v
+  left_inv := by
+    intro u
+    funext i
+    by_cases hi : u i = v i
+    · simp [vertexOfDiff, diffSet, hi]
+    · have hmem : i ∈ diffSet v u := by simp [diffSet, hi]
+      have hbool : v i = !(u i) := by
+        cases hu : u i <;> cases hv : v i <;> simp_all
+      simp [vertexOfDiff, hmem, hbool]
+  right_inv := by
+    intro s
+    ext i
+    by_cases hi : i ∈ s
+    · simp [diffSet, vertexOfDiff, hi]
+    · simp [diffSet, vertexOfDiff, hi]
+
+private theorem diffSet_card {d : ℕ} (v u : CubePos d) :
+    (diffSet v u).card = hammingDist u v := by
+  simp [diffSet, hammingDist, ne_comm]
+
+private def ballToSubsets {d r : ℕ} (v : CubePos d) :
+    {u : CubePos d // hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
+  toFun u := ⟨diffSet v u.1, by rw [diffSet_card]; exact u.2⟩
+  invFun s := ⟨vertexOfDiff v s.1, by
+    rw [← diffSet_card]
+    simp [diffSet, vertexOfDiff]
+    exact s.2⟩
+  left_inv := by
+    intro u
+    apply Subtype.ext
+    exact (diffEquiv v).left_inv u.1
+  right_inv := by
+    intro s
+    apply Subtype.ext
+    exact (diffEquiv v).right_inv s.1
+
+private def smallSubsetFiberEquiv (d r : ℕ) (i : Fin (r + 1)) :
+    {s : {s : Finset (Fin d) // s.card ≤ r} // (⟨s.1.card, by omega⟩ : Fin (r + 1)) = i} ≃
+      {s : Finset (Fin d) // s.card = i.val} where
+  toFun s := ⟨s.1.1, by
+    have h := congrArg Fin.val s.2
+    simpa using h⟩
+  invFun s := ⟨⟨s.1, by rw [s.2]; omega⟩, by
+    apply Fin.ext
+    exact s.2⟩
+  left_inv := by
+    intro s
+    apply Subtype.ext
+    apply Subtype.ext
+    rfl
+  right_inv := by
+    intro s
+    apply Subtype.ext
+    rfl
+
+private def subsetsSmallEquiv (d r : ℕ) :
+    {s : Finset (Fin d) // s.card ≤ r} ≃
+      Σ i : Fin (r + 1), {s : Finset (Fin d) // s.card = i.val} := by
+  let f : {s : Finset (Fin d) // s.card ≤ r} → Fin (r + 1) :=
+    fun s => ⟨s.1.card, by omega⟩
+  exact (Equiv.sigmaFiberEquiv f).symm.trans
+    (Equiv.sigmaCongrRight (smallSubsetFiberEquiv d r))
+
+private theorem card_small_subsets (d r : ℕ) :
+    Fintype.card {s : Finset (Fin d) // s.card ≤ r} =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  rw [Fintype.card_congr (subsetsSmallEquiv d r), Fintype.card_sigma]
+  have hfiber (i : Fin (r + 1)) :
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Nat.choose d i.val := by
+    let S : Finset (Finset (Fin d)) := Finset.univ.powersetCard i.val
+    let e : {s : Finset (Fin d) // s.card = i.val} ≃ S :=
+      { toFun := fun s => ⟨s.1, by
+          rw [Finset.mem_powersetCard]
+          exact ⟨Finset.subset_univ _, s.2⟩⟩
+        invFun := fun s => ⟨s.1, (Finset.mem_powersetCard.mp s.2).2⟩
+        left_inv := by intro s; apply Subtype.ext; rfl
+        right_inv := by intro s; apply Subtype.ext; rfl }
+    calc
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Fintype.card S := Fintype.card_congr e
+      _ = S.card := Fintype.card_coe S
+      _ = Nat.choose d i.val := by simp [S, Finset.card_powersetCard]
+  simp_rw [hfiber]
+  rw [← Fin.sum_univ_eq_sum_range]
+
+private theorem hammingBall_card (d r : ℕ) (v : CubePos d) :
+    (Finset.univ.filter (fun u : CubePos d => hammingDist u v ≤ r)).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  have hcard : Fintype.card {u : CubePos d // hammingDist u v ≤ r} =
+      (Finset.univ.filter (fun u : CubePos d => hammingDist u v ≤ r)).card := by
+    simpa using (Fintype.card_subtype (fun u : CubePos d => hammingDist u v ≤ r))
+  exact hcard.symm.trans ((Fintype.card_congr (ballToSubsets v)).trans (card_small_subsets d r))
+
+private def levelBallEquiv (d H r : ℕ) (j : Fin (H + 1)) (v : CubePos d) :
+    {u : CubePos d // hammingDist u v ≤ r} ≃
+      {ℓ : CubePos d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} where
+  toFun u := ⟨(u.1, j), by simp [u.2]⟩
+  invFun ℓ := ⟨ℓ.1.1, ℓ.2.2⟩
+  left_inv := by intro u; apply Subtype.ext; rfl
+  right_inv := by
+    intro ℓ
+    rcases ℓ with ⟨⟨u, k⟩, ⟨hk, hdist⟩⟩
+    apply Subtype.ext
+    exact Prod.ext rfl hk.symm
+
+private theorem levelBall_card (d H r : ℕ) (j : Fin (H + 1)) (v : CubePos d) :
+    (Finset.univ.filter (fun ℓ : CubePos d × Fin (H + 1) =>
+      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  calc
+    (Finset.univ.filter (fun ℓ : CubePos d × Fin (H + 1) =>
+      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
+        Fintype.card {ℓ : CubePos d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} := by
+          symm
+          exact Fintype.card_subtype _
+    _ = Fintype.card {u : CubePos d // hammingDist u v ≤ r} :=
+          Fintype.card_congr (levelBallEquiv d H r j v).symm
+    _ = (Finset.univ.filter (fun u : CubePos d => hammingDist u v ≤ r)).card :=
+          Fintype.card_subtype _
+    _ = _ := hammingBall_card d r v
+
 /-- P14.1j height subnode: level-zero active ties and the position-averaged
 forced-present positive-height bound. No global success is conditioned on. -/
 theorem forced_present_incidence (κ : CConsts) (hκ : κ.Admissible)
@@ -1667,7 +3008,282 @@ theorem forced_present_incidence (κ : CConsts) (hκ : κ.Admissible)
     (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
     (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
     (hh : HeightFacts hconst Geom H mask) : SelectionIncidence Geom H mask := by
-  sorry
+  classical
+  intro p v x
+  let q := Geom.project v.1
+  let B : Finset H.Center := Finset.univ.filter fun c => hammingDist c.1 q ≤ H.Device.r
+  let e := Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent)
+  have hn := hconst.threshold_slack (𝒯.P i).h scales.h_large
+  have hk : 0 < 𝒯.kScale i := hn.2.1
+  have hlam : 0 < H.Device.lam := by
+    have hlarge := hn.1
+    dsimp [PrimitiveHistory.Device,patchHD]
+    positivity
+  have hV : 0 < (H.Device.V : ℝ) := by
+    have hv : H.Device.lam ≤ (H.Device.V : ℝ) / 2 := hn.2.2.1
+    linarith
+  have hM : 0 < ((𝒯.P i).M : ℝ) := by exact_mod_cast scales.M_pos
+  have hbudget : (H.Device.H + 1 : ℕ) * H.Device.lam * e ≤ 1 := by
+    simpa only [PrimitiveHistory.Device,patchHD,e,Nat.cast_add,Nat.cast_one] using hn.2.2.2.2.2.2.2.2.2.2.1
+  have hB : B.card = H.Device.V * (H.Device.H + 1) := by
+    dsimp [B]
+    rw [Finset.card_filter, Fintype.sum_prod_type]
+    have hsum (z : CubePos H.Device.d) :
+        (∑ j : Fin (H.Device.H + 1), if hammingDist z q ≤ H.Device.r then 1 else 0) =
+          (if hammingDist z q ≤ H.Device.r then 1 else 0) * (H.Device.H + 1) := by
+      simp
+    simp_rw [hsum]
+    rw [← Finset.sum_mul, ← Finset.card_filter, hammingBall_card]
+    rfl
+  have hB0 : (B.filter fun c => c.2.val = 0).card = H.Device.V := by
+    let j0 : Fin (H.Device.H + 1) := ⟨0, by omega⟩
+    have heq : B.filter (fun c => c.2.val = 0) =
+        Finset.univ.filter (fun c : H.Center => c.2 = j0 ∧ hammingDist c.1 q ≤ H.Device.r) := by
+      ext c
+      simp only [B, Finset.mem_filter, Finset.mem_univ, true_and]
+      have hj : c.2.val = 0 ↔ c.2 = j0 := ⟨fun h => Fin.ext h, fun h => congrArg Fin.val h⟩
+      rw [hj, and_comm]
+    rw [heq, levelBall_card]
+    rfl
+  have hpoint (W : ∀ r, H.Val r) :
+      (if starValid Geom H mask v W then
+        match selected Geom H mask W v with
+        | none => 0
+        | some c => tupleIncidence H x (H.tuple W c)
+      else 0) =
+      ∑ c ∈ B, if starValid Geom H mask v W ∧ selected Geom H mask W v = some c
+        then tupleIncidence H x (H.tuple W c) else 0 := by
+    by_cases hs : starValid Geom H mask v W
+    · obtain ⟨c,hc⟩ := hs.2.2
+      have hm := (hh.chosen_eligible W v c hc).1
+      have hb := (Finset.mem_filter.mp (Finset.mem_sdiff.mp hm).1).1
+      have hd := (Finset.mem_filter.mp hb).2.2
+      have hmem : c ∈ B := Finset.mem_filter.mpr ⟨Finset.mem_univ _,hd⟩
+      simp [hs,hc,Option.some.injEq,eq_comm,hmem]
+    · simp [hs]
+  change (H.recLaw p).E (fun W => if starValid Geom H mask v W then
+    match selected Geom H mask W v with
+    | none => 0
+    | some c => tupleIncidence H x (H.tuple W c)
+    else 0) ≤ _
+  simp_rw [hpoint]
+  have heq : (H.recLaw p).E (fun W => ∑ c ∈ B,
+      if starValid Geom H mask v W ∧ selected Geom H mask W v = some c
+        then tupleIncidence H x (H.tuple W c) else 0) =
+      ∑ c ∈ B, (H.recLaw p).E (fun W =>
+        if starValid Geom H mask v W ∧ selected Geom H mask W v = some c
+          then tupleIncidence H x (H.tuple W c) else 0) := by
+    unfold FinLaw.E
+    simp only [Finset.mul_sum]
+    exact Finset.sum_comm
+  rw [heq]
+  calc
+    _ ≤ ∑ c ∈ B, (H.Device.lam / H.Device.V) *
+        (if c.2.val = 0 then 3 / H.Device.lam else e) * (2 / (𝒯.P i).M) := by
+      apply Finset.sum_le_sum
+      intro c _
+      exact inc_center_bound hκ hconst scales Geom H mask hlookup hh p hk v c x
+    _ ≤ ∑ c ∈ B, (H.Device.lam / H.Device.V) *
+        ((if c.2.val = 0 then 3 / H.Device.lam else 0) + e) * (2 / (𝒯.P i).M) := by
+      apply Finset.sum_le_sum
+      intro c _
+      apply mul_le_mul_of_nonneg_right _ (by positivity)
+      apply mul_le_mul_of_nonneg_left _ (by positivity)
+      split_ifs <;> linarith [Real.exp_pos (-Real.rpow ((𝒯.P i).h : ℝ) hconst.positiveExponent)]
+    _ = (H.Device.lam / H.Device.V) *
+        ((H.Device.V : ℝ) * (3 / H.Device.lam) +
+          ((H.Device.V : ℝ) * (H.Device.H + 1)) * e) * (2 / (𝒯.P i).M) := by
+      rw [← Finset.sum_mul, ← Finset.mul_sum, Finset.sum_add_distrib]
+      rw [← Finset.sum_filter]
+      simp only [Finset.sum_const, nsmul_eq_mul, hB0, hB, Nat.cast_mul, Nat.cast_add, Nat.cast_one]
+    _ = 6 / (𝒯.P i).M + (2 / (𝒯.P i).M) * ((H.Device.H + 1 : ℕ) * H.Device.lam * e) := by
+      push_cast
+      field_simp [hlam.ne',hV.ne',hM.ne']
+      <;> ring
+    _ ≤ 6 / (𝒯.P i).M + (2 / (𝒯.P i).M) * 1 := by
+      exact add_le_add le_rfl (mul_le_mul_of_nonneg_left hbudget
+        (show 0 ≤ 2 / ((𝒯.P i).M : ℝ) by positivity))
+    _ ≤ 16 / (𝒯.P i).M := by
+      field_simp [hM.ne']
+      <;> nlinarith
+
+end IncidenceProof
+
+section EligibilityRefreshProof
+
+set_option backward.isDefEq.respectTransparency false
+set_option maxHeartbeats 800000
+
+variable {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
+  {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+
+private noncomputable def ctLaw (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) : FinProb (H.Center → mesh.V × H.Tuple) :=
+  FinProb.pi fun _ => FinProb.bind
+    ⟨fun v => mesh.wt v p, fun v => mesh.wt_nonneg v p, mesh.wt_sum_one p⟩
+    (fun v => ⟨(H.tuplePrior v).w,(H.tuplePrior v).nonneg,(H.tuplePrior v).sum_one⟩)
+
+private noncomputable def cornerLaw (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) : FinProb (H.Center → mesh.V) :=
+  FinProb.pi fun _ => ⟨fun v => mesh.wt v p, fun v => mesh.wt_nonneg v p, mesh.wt_sum_one p⟩
+
+private noncomputable def tuplesAt (H : PrimitiveHistory κ 𝒯 i mesh)
+    (v : H.Center → mesh.V) : FinProb (H.Center → H.Tuple) :=
+  FinProb.pi fun c => ⟨(H.tuplePrior (v c)).w,(H.tuplePrior (v c)).nonneg,(H.tuplePrior (v c)).sum_one⟩
+
+private def ctFactor (H : PrimitiveHistory κ 𝒯 i mesh) :
+    (H.Center → mesh.V × H.Tuple) ≃ (H.Center → mesh.V) × (H.Center → H.Tuple) where
+  toFun CT := (fun c => (CT c).1,fun c => (CT c).2)
+  invFun vw c := (vw.1 c,vw.2 c)
+  left_inv _ := rfl
+  right_inv _ := rfl
+
+private theorem ctFactor_expect (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (f : (H.Center → mesh.V × H.Tuple) → ℝ) :
+    (ctLaw H p).expect f = (cornerLaw H p).expect (fun v =>
+      (tuplesAt H v).expect (fun w => f (fun c => (v c,w c)))) := by
+  unfold FinProb.expect
+  simp only [Finset.mul_sum]
+  rw [← Fintype.sum_prod_type']
+  apply Fintype.sum_equiv (ctFactor H)
+  intro CT
+  dsimp only [ctLaw,cornerLaw,tuplesAt,FinProb.pi,FinProb.bind,ctFactor]
+  rw [Finset.prod_mul_distrib]
+  exact mul_assoc _ _ _
+
+private theorem ct_refresh (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (f : (H.Center → mesh.V × H.Tuple) → ℝ) :
+    (ctLaw H p).expect f = (ctLaw H p).expect (fun CT =>
+      (tuplesAt H (fun c => (CT c).1)).expect (fun w => f (fun c => ((CT c).1,w c)))) := by
+  rw [ctFactor_expect,ctFactor_expect]
+  change (cornerLaw H p).expect (fun v =>
+    (tuplesAt H v).expect (fun w => f (fun c => (v c,w c)))) =
+      (cornerLaw H p).expect (fun v => (tuplesAt H v).expect (fun _ =>
+        (tuplesAt H v).expect (fun w => f (fun c => (v c,w c)))))
+  simp_rw [FinProb.expect_const]
+
+private theorem recLaw_refresh_tuples (H : PrimitiveHistory κ 𝒯 i mesh)
+    (p : mesh.Param) (f : (∀ r, H.Val r) → ℝ) :
+    (H.recLaw p).E f = (H.recLaw p).E (fun W =>
+      (conditionedTuples H W).expect (fun w => f (replaceAllTuples H W w))) := by
+  rw [recLaw_incidence_integral,recLaw_incidence_integral]
+  let G : FinProb (Group 𝒯 i → mesh.V × SearchPerm H.Device (𝒯.tScale i)) :=
+    ⟨(FinLaw.pi fun _g : Group 𝒯 i => H.groupLaw p).w,
+      (FinLaw.pi fun _g : Group 𝒯 i => H.groupLaw p).nonneg,
+      (FinLaw.pi fun _g : Group 𝒯 i => H.groupLaw p).sum_one⟩
+  let PAτ := H.Device.posLaw.prod (H.Device.actLaw.prod H.Device.tieLaw)
+  change ((ctLaw H p).prod G).expect (fun u => PAτ.expect
+      (fun ω => f (incRecord H ω.1 u ω.2.1 ω.2.2))) =
+    ((ctLaw H p).prod G).expect (fun u => PAτ.expect (fun ω =>
+      (conditionedTuples H (incRecord H ω.1 u ω.2.1 ω.2.2)).expect (fun w =>
+        f (replaceAllTuples H (incRecord H ω.1 u ω.2.1 ω.2.2) w))))
+  rw [prob_prod_nested,prob_prod_nested]
+  rw [ct_refresh H p (fun CT => G.expect (fun g => PAτ.expect
+    (fun ω => f (incRecord H ω.1 (CT,g) ω.2.1 ω.2.2))))]
+  apply congrArg (ctLaw H p).expect
+  funext CT
+  rw [prob_swap_expect]
+  apply congrArg G.expect
+  funext g
+  rw [prob_swap_expect]
+  apply congrArg PAτ.expect
+  funext ω
+  have hlaw : conditionedTuples H (incRecord H ω.1 (CT,g) ω.2.1 ω.2.2) =
+      tuplesAt H (fun c => (CT c).1) := rfl
+  rw [hlaw]
+  apply congrArg (tuplesAt H (fun c => (CT c).1)).expect
+  funext w
+  have he : replaceAllTuples H (incRecord H ω.1 (CT,g) ω.2.1 ω.2.2) w =
+      incRecord H ω.1 ((fun c => ((CT c).1,w c)),g) ω.2.1 ω.2.2 := rfl
+  rw [he]
+
+/-- P14.1d: disjoint tests refer to distinct center coordinates of the product
+law. Their models are conditioned on positions, masks and corner draws; tuple
+values remain random. The eligibility function is the greedy marking rule. -/
+theorem eligibility_from_tests (κ : CConsts) (hκ : κ.Admissible)
+    (hconst : HeightConstantContract κ)
+    {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} (h𝒯 : Tiling.Valid 𝒯)
+    (hcluster : 𝒯.mode.isCluster) {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (scales : PatchScales 𝒯 i) (Geom : ProjectionGeometry κ 𝒯 i)
+    (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) (hlookup : MaskLookup H mask)
+    (L : ListFamily Geom H mask) (hcounts : PositionCountConcentration hconst H)
+    (htests : GenericListBound κ 𝒯 i) : EligibilityFacts hconst Geom H mask := by
+  refine ⟨?_, ?_⟩
+  · intro W v j c hc
+    have hleft := (Finset.mem_sdiff.mp hc).1
+    rcases Finset.mem_filter.mp hleft with ⟨hball, hpresent⟩
+    exact ⟨hball, hpresent⟩
+  · classical
+    intro p
+    let err := Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) (1 + hconst.sliceExponent))
+    let F := fun W => PositionCountGate H W ∧
+      ∃ g, (𝒯.P i).h ≤ (failedFamily Geom H mask g W).card
+    have hF : (H.recLaw p).pr F ≤ err := by
+      have hid : (H.recLaw p).pr F = (H.recLaw p).E (fun W => eligibility_indicator (F W)) := by
+        unfold FinLaw.pr FinLaw.E eligibility_indicator
+        apply Finset.sum_congr rfl
+        intro W _
+        by_cases hf : F W
+        · simp only [if_pos hf,mul_one]
+        · simp only [if_neg hf,mul_zero]
+      rw [hid,recLaw_refresh_tuples]
+      calc
+        _ ≤ (H.recLaw p).E (fun _ => err) := by
+          unfold FinLaw.E
+          apply Finset.sum_le_sum
+          intro W _
+          by_cases hW : 0 < (H.recLaw p).w W
+          · apply mul_le_mul_of_nonneg_left _ ((H.recLaw p).nonneg W)
+            by_cases hc : PositionCountGate H W
+            · have he (w : H.Center → H.Tuple) :
+                  eligibility_indicator (F (replaceAllTuples H W w)) =
+                    eligibility_indicator (∃ g, (𝒯.P i).h ≤
+                      (failedFamily Geom H mask g (replaceAllTuples H W w)).card) := by
+                have hcp : PositionCountGate H (replaceAllTuples H W w) := hc
+                simp only [F,hcp,true_and]
+              simp_rw [he]
+              rw [← eligibility_pr_indicator]
+              exact conditioned_greedy_bound hconst scales Geom H mask hlookup L htests p W hW hc
+            · have he (w : H.Center → H.Tuple) :
+                  eligibility_indicator (F (replaceAllTuples H W w)) = 0 := by
+                have hcp : ¬ PositionCountGate H (replaceAllTuples H W w) := hc
+                simp [F,hcp,eligibility_indicator]
+              simp only [he,FinProb.expect_const]
+              exact (Real.exp_pos _).le
+          · have hz : (H.recLaw p).w W = 0 := le_antisymm (le_of_not_gt hW) ((H.recLaw p).nonneg W)
+            simp [hz]
+        _ = err := by simp [FinLaw.E,← Finset.sum_mul,(H.recLaw p).sum_one]
+    have himp (W : ∀ r, H.Val r)
+        (hbad : ¬ (PositionCountGate H W ∧
+          ∀ v ∈ siteSet Geom, ∀ j, H.Device.lam / 2 ≤ (eligible Geom H mask W v j).card)) :
+        (¬ PositionCountGate H W) ∨ F W := by
+      by_cases hc : PositionCountGate H W
+      · right
+        refine ⟨hc,eligibility_low_forces_many hconst scales Geom H mask W hc ?_⟩
+        have hbad' : ¬ (∀ v ∈ siteSet Geom, ∀ j,
+            H.Device.lam / 2 ≤ (eligible Geom H mask W v j).card) := fun h => hbad ⟨hc,h⟩
+        push_neg at hbad'
+        exact hbad'
+      · exact Or.inl hc
+    calc
+      _ ≤ (H.recLaw p).pr (fun W => ¬ PositionCountGate H W) + (H.recLaw p).pr F := by
+        unfold FinLaw.pr
+        rw [← Finset.sum_add_distrib]
+        apply Finset.sum_le_sum
+        intro W _
+        by_cases hb : ¬ (PositionCountGate H W ∧
+          ∀ v ∈ siteSet Geom, ∀ j, H.Device.lam / 2 ≤ (eligible Geom H mask W v j).card)
+        · obtain hc | hf := himp W hb
+          · simp only [if_pos hb,if_pos hc]
+            split_ifs <;> linarith [(H.recLaw p).nonneg W]
+          · simp only [if_pos hb,if_pos hf]
+            split_ifs <;> linarith [(H.recLaw p).nonneg W]
+        · simp only [if_neg hb]
+          split_ifs <;> linarith [(H.recLaw p).nonneg W]
+      _ ≤ err + err := add_le_add (hcounts p) hF
+      _ = _ := by dsimp [err]; ring
+
+end EligibilityRefreshProof
 
 section OddRecipe
 

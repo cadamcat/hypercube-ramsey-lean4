@@ -1,0 +1,7 @@
+This project includes definitions from Google DeepMind's Formal Conjectures, commit
+9d259649abe0b02d7a25f7589b872db679b35e21, licensed under Apache-2.0.
+
+This project depends on OpenAI's openai/math library, commit
+adc7f1241b42e322a6451854ab7e4b4c146bf78a, licensed under Apache-2.0.
+
+See THIRD_PARTY.md for source paths, imported modules, and dependency information.

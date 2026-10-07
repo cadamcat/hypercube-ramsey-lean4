@@ -6,6 +6,7 @@ import HypercubeRamsey.S05.History_sol_s05_hist1c_apply
 import HypercubeRamsey.S05.History_sol_s05_hist1e_bound
 import HypercubeRamsey.S05.History_sol_s05_hist1f_low
 import HypercubeRamsey.S05.History_sol_s05_hist1f_paths
+import HypercubeRamsey.S05.History_sol_s05_1f_apply
 import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l_lll
@@ -453,7 +454,57 @@ theorem L5_1f : ∃ cL cH : Pre15 → ℝ, (∀ x, 0 < cL x ∧ 0 < cH x) ∧
     ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
       ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
         X.Step3Raw (cL p.pre1) (cH p.pre1) := by
-  sorry
+  refine ⟨Lane_sol_s05_1f.lowRate, Lane_sol_s05_1f.highRate,
+    Lane_sol_s05_1f.rates_pos, Lane_sol_s05_1f.highRequest, ?_⟩
+  intro p hR
+  obtain ⟨nL, hL⟩ := Lane_sol_s05_hist1b.step3_low_eventual_bound p
+  obtain ⟨nH, hH⟩ := Lane_sol_s05_1f.high_raw_eventual_bound p hR
+  refine ⟨max nL nH, ?_⟩
+  intro n hn N E G X hXp
+  intro H hbase hstep1 r hr
+  by_cases hl : r.1.isLeft
+  · have hh := hL n (le_trans (le_max_left _ _) hn) N E G X hXp H r hr hl
+    have hscale : X.step3Scale
+        (match r.1 with
+          | .inl _ => Lane_sol_s05_1f.lowRate p.pre1
+          | .inr _ => Lane_sol_s05_1f.highRate p.pre1) r.1 =
+        Real.exp (-((p.delta / 2) * X.p.kPrime n r.1.level)) := by
+      cases hkey : r.1 with
+      | inl k => simp only [step3Scale, hkey, HiddenKey5.level, Lane_sol_s05_1f.lowRate,
+          Lane_sol_s05_1f.pathDelta_params]
+      | inr k => simp [hkey] at hl
+    rw [hscale]
+    exact hh
+  · have hh : r.1.isRight := by
+      cases hkey : r.1 with
+      | inl k => simp [hkey] at hl
+      | inr k => simp [hkey]
+    have hocc : X.KeyOccurs r.1 := by
+      obtain ⟨y, μ, hrec⟩ := hr
+      exact Or.inl ⟨y.1, y.2, hrec.1⟩
+    have hlevel : r.1.level = X.p.J n := by
+      cases hkey : r.1 with
+      | inl k => simp [hkey] at hh
+      | inr k => rfl
+    have hprior (y : Fin N) : (N : ℝ) * (X.prior H.1 r.1).w y ≤
+        Real.exp (p.Kcap * ((p.q0 : ℝ) * p.uSeg n (p.J n + 1))) := by
+      have hncap := hstep1.2 r.1 hocc
+      have hle : (N : ℝ) * (X.prior H.1 r.1).w y ≤
+          Real.exp (X.p.Kcap * (X.p.q0 * X.p.uSeg n (r.1.level + 1))) :=
+        le_of_not_gt (fun h => hncap ⟨y, h⟩)
+      simpa only [hlevel, hXp] using hle
+    have hraw := hH n (le_trans (le_max_right _ _) hn) N E G X hXp H r hr hh hprior
+    have hscale : X.step3Scale
+        (match r.1 with
+          | .inl _ => Lane_sol_s05_1f.lowRate p.pre1
+          | .inr _ => Lane_sol_s05_1f.highRate p.pre1) r.1 =
+        Real.exp (-(Lane_sol_s05_1f.highRate p.pre1 * X.p.s n)) := by
+      cases hkey : r.1 with
+      | inl k => simp [hkey] at hh
+      | inr k => rfl
+    rw [hscale]
+    simpa only [hXp] using hraw
+
 
 /-! ### Record counts (05:331–398) -/
 

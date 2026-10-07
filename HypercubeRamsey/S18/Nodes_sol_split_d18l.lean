@@ -5,6 +5,8 @@ import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S18.PaletteRows
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_row
+import HypercubeRamsey.S18.Nodes_sol_d18l_up_pool
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -391,7 +393,20 @@ theorem D18_L_palette_row (hκ : κ.Admissible) (hThresholds : LateThresholds κ
   refine ⟨Krow, hKrow, ?_⟩
   filter_upwards [hRows] with k hRows
   intro PT hPT X hMass hLarge
-  sorry
+  let physical := Classical.choice X.l16.physical
+  let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+  have hQuant : ctx.L16QuantitativeValidity K17 := by
+    sorry
+  apply Lane_sol_d18l_row.palette_row_transport (rawData hκ X) physical
+    X.palette.hle X.palette.code X.palette.colours
+  · intro v
+    simp only [rawData, LateData.palette]
+    rw [X.palette.palettes_eq, X.palette.colour_eq]
+    simp only [Equiv.symm_apply_apply, s17Palette, ListGateContext.PaletteCode.palette]
+  · exact X.palette.chi_eq
+  · intro i
+    exact hRows PT ctx hQuant i (X.palette.hle i) (X.palette.code i)
+      (X.code_spec i) (X.palette.colours i) (X.retention i)
 
 /-- Full internal validity, adding cap and single-corner shape to the
 already proved normalization/internal-hit facts. TeX 18:43–49; 16:196–201,457–459.
@@ -518,7 +533,52 @@ theorem D18_L_upstream_bad (hκ : κ.Admissible) (hThresholds : LateThresholds �
       let D := rawData hκ X
       ∀ f, D.encoding.permLaw.pr (D.upstreamBad f) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) := by
-  sorry
+  classical
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10 + 100 * κ.Kcell * (κ.Kp : ℝ))
+  have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
+  filter_upwards [Lane_sol_d18l_up.eventually_typical_tail T (κ.P : ℝ)
+    (Nat.cast_nonneg κ.P), uniformPoolListEstimate κ hκ T hSource K17 hK17,
+    T.S.n_tendsto.eventually_ge_atTop 1,
+    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R)]
+    with k hsmall hPools hn hlocal
+  intro PT hPT X hMass hLarge
+  dsimp only
+  let D := rawData hκ X
+  let physical := Classical.choice X.l16.physical
+  intro f
+  cases f with
+  | inl C =>
+    exact Lane_sol_d18l_up.physical_initial_typical_tail D.encoding physical C hsmall
+  | inr v =>
+    by_cases heven : IsEvenRole v
+    · let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+      -- Physical geometry/sampler adapter; the corner, prior-shape,
+      -- fixed-pool singleton and pool-typicality fields are proved in the
+      -- lane helper. The remaining source/history/comparison fields are open.
+      have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty := by
+        sorry
+      have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining
+        hPT X.low physical X.l16.pools_nonempty K17 hlocal hRest
+      have hEstimate := hPools PT context hQuant v D.encoding.poolLaw (Or.inl rfl)
+      exact Lane_sol_d18l_up.physical_initial_list_tail hκ hPT X.low physical
+        D.encoding rfl (by exact_mod_cast hn) v hEstimate
+    · have hz := Lane_sol_d18l_up.physical_odd_list_probability hPT X.low physical
+        D.encoding rfl v heven
+      have hnonneg : 0 ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) :=
+        Real.rpow_nonneg (Nat.cast_nonneg _) _
+      have hfalse : ∀ x, ¬ D.upstreamBad (.inr v) x := by
+        intro x
+        change ¬ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) <
+          (FinLaw.pi fun C => X.fresh.fresh C (x.1 C)).pr (D.encoding.events.S v)
+        rw [hz x.1]
+        exact not_lt_of_ge hnonneg
+      have hpr : D.encoding.permLaw.pr (D.upstreamBad (.inr v)) = 0 := by
+        simp [FinLaw.pr, hfalse]
+      change D.encoding.permLaw.pr (D.upstreamBad (.inr v)) ≤ _
+      rw [hpr]
+      exact Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k))
+        (-((κ.P : ℝ) * D.encoding.Ts / 2))
 
 /-- The same tail with any one global slot-to-bin pin; zero-probability
 pins retain Lean's zero quotient. TeX 17:123–131; 18:678–690. -/
@@ -532,7 +592,14 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
           D.encoding.permLaw.pr (fun x => x.1 C slot = bin) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) := by
   classical
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 0] with k hk
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10 + 100 * κ.Kcell * (κ.Kp : ℝ))
+  have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
+  filter_upwards [Lane_sol_d18l_up.eventually_typical_tail T (κ.P : ℝ)
+    (Nat.cast_nonneg κ.P), uniformPoolListEstimate κ hκ T hSource K17 hK17,
+    T.S.n_tendsto.eventually_ge_atTop 1,
+    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R)]
+    with k hsmall hPools hn hlocal
   intro PT hPT X hMass hLarge
   dsimp only
   intro C slot bin f
@@ -566,7 +633,57 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
     have hpow : 0 ≤ Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) :=
       Real.rpow_nonneg (by positivity) _
     simpa [hden, hnum] using hpow
-  · sorry
+  · cases f with
+    | inl C' =>
+      exact Lane_sol_d18l_up.physical_initial_typical_tail_pinned D.encoding
+        (Classical.choice X.l16.physical) C' ⟨C, slot⟩ bin hsmall
+    | inr v =>
+      by_cases heven : IsEvenRole v
+      · let physical := Classical.choice X.l16.physical
+        let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+        have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty := by
+          sorry
+        have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining
+          hPT X.low physical X.l16.pools_nonempty K17 hlocal hRest
+        let poolPin : context.PoolPin := ⟨C, slot, bin⟩
+        have hnonneg : 0 ≤ D.encoding.permLaw.pr pin := by
+          unfold FinLaw.pr
+          apply Finset.sum_nonneg
+          intro x _
+          split_ifs <;> simp [D.encoding.permLaw.nonneg]
+        have hp : 0 < ∑ P ∈ context.poolPinSet poolPin,
+            (permPoolLaw context.G hQuant.pool_support_nonempty).w P := by
+          have hpos : 0 < D.encoding.permLaw.pr pin :=
+            lt_of_le_of_ne hnonneg (Ne.symm hden)
+          change 0 < ∑ P ∈ Finset.univ.filter (fun P => P C slot = bin),
+            D.encoding.poolLaw.w P
+          rw [Finset.sum_filter]
+          rw [Lane_sol_d18l_up.initial_pr_pool D.encoding
+            (fun P => P C slot = bin)] at hpos
+          exact hpos
+        have hEstimate := hPools PT context hQuant v
+          (context.pinnedPoolLaw hQuant.pool_support_nonempty poolPin hp)
+          (Or.inr ⟨poolPin, hp, rfl⟩)
+        exact Lane_sol_d18l_up.physical_initial_list_tail_pinned hκ hPT X.low physical
+          D.encoding rfl (by exact_mod_cast hn) v ⟨C, slot⟩ bin hp hEstimate
+      · have hz := Lane_sol_d18l_up.physical_odd_list_probability hPT X.low
+          (Classical.choice X.l16.physical) D.encoding rfl v heven
+        have hnonneg : 0 ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) :=
+          Real.rpow_nonneg (Nat.cast_nonneg _) _
+        have hfalse : ∀ x, ¬ D.upstreamBad (.inr v) x := by
+          intro x
+          change ¬ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) <
+            (FinLaw.pi fun C => X.fresh.fresh C (x.1 C)).pr (D.encoding.events.S v)
+          rw [hz x.1]
+          exact not_lt_of_ge hnonneg
+        have hnum : D.encoding.permLaw.pr (fun x => pin x ∧ bad x) = 0 := by
+          unfold FinLaw.pr
+          apply Finset.sum_eq_zero
+          intro x _
+          have hb : ¬ bad x := hfalse x
+          simp only [hb, and_false, if_false]
+        rw [hnum, zero_div]
+        exact Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) _
 
 /-- Transfer diagnostic typical positivity to the actual iid marginal
 cell-pool law. TeX 16:260–296; 18:277–285. -/

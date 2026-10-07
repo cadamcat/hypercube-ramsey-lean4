@@ -6,9 +6,8 @@ import HypercubeRamsey.Framework.OneShot
 /-!
 # Lemma 7.1: small-grid purity exclusion
 
-The internal construction nodes below are deliberately kept as theorem statements: this is the section
-skeleton. The last node returns precisely the Hall input needed by the framework, and the exported one-shot
-lemma is assembled from that node and `cubeAt_of_rows`.
+The internal probability nodes are stated in `GridNodes.lean`. The exported one-shot theorem uses the aggregate
+Hall-data bridge below and then applies the framework's `cubeAt_of_rows` theorem.
 -/
 
 namespace HypercubeRamsey.S07
@@ -34,8 +33,9 @@ def GridHallData {n N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour) : Prop 
         (cube n).Adj a.1 b.1 → Hits E G x (fB b)) ∧
       (∀ x, ∑ a, p a x ≤ 1)
 
-/-- L7.1i (07:337–391): the three-stage construction provides fractional even rows of total load at most one. -/
-theorem even_loads_and_hall_data
+/-- Aggregate bridge from the one-shot hypotheses to Hall data. The statement-only chain in `GridNodes.lean`
+is not yet assembled into this bridge. -/
+theorem grid_hall_data_from_input
     (D₀ d p₀ κ : ℝ) (hD₀ : 0 < D₀) (hD₀' : D₀ < 1 / 10)
     (hd : 0 < d) (hd' : d < D₀ / 1000) (hp₀ : 0 < p₀) (hκ : 0 < κ) :
     ∃ n₀ : ℕ, ∃ C₀ : ℝ, ∀ n N : ℕ, ∀ E : Fin N → Fin N → Prop,
@@ -53,7 +53,7 @@ theorem small_grid_purity
         LargeAt n₀ C₀ n N → Eq71At D₀ d n N E X Y →
         AvailableAt κ (PGridPure G d p₀).toPatch n N E X Y → CubeAt n N E := by
   obtain ⟨n₀, C₀, hnode⟩ := by
-    exact even_loads_and_hall_data D₀ d p₀ κ hD₀ hD₀' hd hd' hp₀ hκ
+    exact grid_hall_data_from_input D₀ d p₀ κ hD₀ hD₀' hd hd' hp₀ hκ
   refine ⟨n₀, C₀, ?_⟩
   intro n N E X Y G hlarge h71 havail
   obtain ⟨fB, p, hinj, hp0, hp1, hsupp, hload⟩ :=

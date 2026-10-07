@@ -29,6 +29,18 @@ structure GridGeom (d : ℝ) (n s ℓ q : ℕ) where
       if bin r k = b then ((Nat.choose ℓ k.val : ℕ) : ℝ) / (2 : ℝ) ^ ℓ else 0) ≤
         2 * (n : ℝ) ^ (-(d / 4))
 
+/-- A key is one bin index for each special chunk. -/
+abbrev GridGeom.Key {d : ℝ} {n s ℓ q : ℕ} (Γ : GridGeom d n s ℓ q) :=
+  ∀ r, Fin (Γ.bins r)
+
+/-- An auxiliary word records the bits on the auxiliary coordinate set. -/
+abbrev GridGeom.AuxWord {d : ℝ} {n s ℓ q : ℕ} (Γ : GridGeom d n s ℓ q) :=
+  Γ.aux → Bool
+
+/-- A grid cell pairs a key with an auxiliary word. -/
+abbrev GridGeom.Cell {d : ℝ} {n s ℓ q : ℕ} (Γ : GridGeom d n s ℓ q) :=
+  GridGeom.Key Γ × GridGeom.AuxWord Γ
+
 /-- The grid key read by a cube vertex: one bin index per special chunk and the auxiliary bits. -/
 noncomputable def GridGeom.key {d : ℝ} {n s ℓ q : ℕ} (Γ : GridGeom d n s ℓ q)
     (v : CubeVertex n) : (∀ r, Fin (Γ.bins r)) × (Γ.aux → Bool) := by

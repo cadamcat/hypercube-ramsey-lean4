@@ -2,6 +2,7 @@ import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadB
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadA
+import HypercubeRamsey.S06.OddLoads_opus_hjoint
 
 /-!
 # Odd loads through the three histories, and the additional even history mean
@@ -191,83 +192,58 @@ theorem L6_1k_hjoint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   refine ⟨max nCharge 2, 0, ?_⟩
   intro n N E G M X hLarge
   have hnCharge : nCharge ≤ n := le_trans (Nat.le_max_left _ _) hLarge.1
-  have hnTwo : 2 ≤ n := le_trans (Nat.le_max_right _ _) hLarge.1
   have hTouchCharge := hCharge n hnCharge
   intro hHiddenCert hHistSupport hProxyMean
   intro v c hv1 hVgood hc U y hUSub hUlow hUcard hFar
   let b₀ : X.Base := (v, c)
-  have hRawProxyMean (u : CubeVertex n) (hu : ¬ IsEvenRole u)
-      (hLow : X.stMode (X.g.L.stateOf u) = .low) (hy : Fin N)
-      (hBase : X.BaseSupp b₀) :
-      (X.hidLaw b₀).expect (fun Z => X.proxyMean (b₀, Z) u hy) ≤
-        2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w hy := by
+  have hStage3Support : ∃ z, (X.stage3Law b₀).w z ≠ 0 := by
+    by_contra h
+    have hz0 : ∀ z, (X.stage3Law b₀).w z = 0 := by
+      intro z
+      by_contra hne
+      exact h ⟨z, hne⟩
+    have hsum : ∑ z, (X.stage3Law b₀).w z = 0 := by simp [hz0]
+    have hsumOne := (X.stage3Law b₀).sum_eq_one
+    rw [hsum] at hsumOne
+    norm_num at hsumOne
+  obtain ⟨z₀, hz₀⟩ := hStage3Support
+  have hHistWeight : X.histLaw.w (b₀, z₀) ≠ 0 := by
+    change (X.stage1Law.w v * (X.stage2Law v).w c) * (X.stage3Law b₀).w z₀ ≠ 0
+    exact mul_ne_zero (mul_ne_zero hv1 hc) hz₀
+  obtain ⟨hBaseSupp, _, _, _, _, _⟩ := hHistSupport (b₀, z₀) hHistWeight
+  /- One target integral at arbitrary fixed other keys (06:622–637 through `ProxyMean`, 06:686–687). -/
+  have hTargetMean (u : CubeVertex n) (hu : ¬ IsEvenRole u)
+      (hLow : X.stMode (X.g.L.stateOf u) = .low) (Z : X.Hid) :
+      ∑ ξ, (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w ξ *
+          X.proxyMean (X.withHid (b₀, Z) (X.tgt (X.g.L.stateOf u)) ξ) u y ≤
+        2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y := by
     let t : X.HKey := X.tgt (X.g.L.stateOf u)
-    let S : Finset X.HKey := {t}
-    let q : X.HKey → FinProb (Fin N) := fun ℓ => X.hidPost b₀ ℓ.1
-    let e := Equiv.piEquivPiSubtypeProd (fun ℓ : X.HKey => ℓ ∈ S)
-      (fun _ : X.HKey => Fin N)
-    let f : X.Hid → ℝ := fun Z => X.proxyMean (b₀, Z) u hy
-    change (FinProb.pi q).expect f ≤ _
-    apply _root_.Lane_q_s06_loads.pi_expect_le_of_fiber_bound6 q S f
-      (2 * (N : ℝ) * (X.hidPost b₀ t.1).w hy)
-    intro b
-    let Ps := FinProb.pi (fun ℓ : {ℓ // ℓ ∈ S} => q ℓ.1)
-    let aξ : Fin N → (∀ ℓ : {ℓ // ℓ ∈ S}, Fin N) :=
-      fun ξ => (_root_.Lane_q_s06_loads.singletonPiEquiv6 t).symm ξ
-    let Z₀ : X.Hid := e.symm ((fun _ : {ℓ // ℓ ∈ S} => X.y₀), b)
-    let H₀ : X.Hist := (b₀, Z₀)
-    have hCoord (ξ : Fin N) : aξ ξ ⟨t, Finset.mem_singleton_self t⟩ = ξ := by
-      change (_root_.Lane_q_s06_loads.singletonPiEquiv6 t)
-        ((_root_.Lane_q_s06_loads.singletonPiEquiv6 t).symm ξ) = ξ
-      exact (_root_.Lane_q_s06_loads.singletonPiEquiv6 t).apply_symm_apply ξ
-    have hState (ξ : Fin N) : e.symm (aξ ξ, b) = (X.withHid H₀ t ξ).2 := by
-      funext ℓ
-      by_cases hℓ : ℓ = t
-      · subst ℓ
-        simp only [e, Equiv.piEquivPiSubtypeProd_symm_apply]
-        have ht : t ∈ S := by simp [S]
-        rw [dif_pos ht]
-        rw [hCoord ξ]
-        simp [H₀, Z₀, Ctx6.withHid]
-      · simp [e, aξ, Z₀, H₀, S, Ctx6.withHid, Equiv.piEquivPiSubtypeProd, hℓ]
-    have hSum :
-        (∑ a : ∀ ℓ : {ℓ // ℓ ∈ S}, Fin N,
-          Ps.w a * f (e.symm (a, b))) =
-          ∑ ξ, (X.hidPost b₀ t.1).w ξ * X.proxyMean (X.withHid H₀ t ξ) u hy := by
-      calc
-        _ = ∑ ξ, Ps.w (aξ ξ) * f (e.symm (aξ ξ, b)) := by
-              rw [_root_.Lane_q_s06_loads.sum_singletonPi6 t
-                (fun a => Ps.w a * f (e.symm (a, b)))]
-        _ = _ := by
-              apply Finset.sum_congr rfl
-              intro ξ hξ
-              have hw := _root_.Lane_q_s06_loads.pi_singleton_weight6 q t (aξ ξ)
-              rw [hw, hCoord ξ, hState ξ]
-              rfl
+    let H₀ : X.Hist := (b₀, Z)
+    have hBase : X.BaseSupp b₀ := hBaseSupp
     have hMeanEq (ξ : Fin N) :
-        X.proxyMean (X.withHid H₀ t ξ) u hy =
+        X.proxyMean (X.withHid H₀ t ξ) u y =
           (N : ℝ) * (X.hp.posLaw).expect (fun P =>
             (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-              X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)) := by
+              X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)) := by
       unfold Ctx6.proxyMean
       rw [_root_.Lane_q_s06_loads.centreLaw_expect_as_position_and_proxy]
       calc
         _ = (X.hp.posLaw).expect (fun P => (N : ℝ) *
               (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-                X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)) := by
+                X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)) := by
                 apply congrArg (fun g => (X.hp.posLaw).expect g)
                 funext P
                 exact FinProb.expect_smul _ _ _
         _ = _ := FinProb.expect_smul _ _ _
     have hInterchange :
-        (∑ ξ, (X.hidPost b₀ t.1).w ξ * X.proxyMean (X.withHid H₀ t ξ) u hy) =
+        (∑ ξ, (X.hidPost b₀ t.1).w ξ * X.proxyMean (X.withHid H₀ t ξ) u y) =
           (N : ℝ) * (X.hp.posLaw).expect (fun P => ∑ ξ,
             (X.hidPost b₀ t.1).w ξ *
               (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-                X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)) := by
+                X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)) := by
       let g : Fin N → (X.Loc → Bool) → ℝ := fun ξ P =>
         (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-          X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)
+          X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)
       simp_rw [hMeanEq]
       change (∑ ξ, (X.hidPost b₀ t.1).w ξ *
           ((N : ℝ) * (X.hp.posLaw).expect (g ξ))) =
@@ -321,63 +297,27 @@ theorem L6_1k_hjoint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     have hPoint (P : X.Loc → Bool) :
         (∑ ξ, (X.hidPost b₀ t.1).w ξ *
           (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-            X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)) ≤
-          2 * (X.hidPost b₀ t.1).w hy :=
-      hProxyMean H₀ P u hBase hu hLow hy
+            X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)) ≤
+          2 * (X.hidPost b₀ t.1).w y :=
+      hProxyMean H₀ P u hBase hu hLow y
     have hPosMean := FinProb.expect_mono X.hp.posLaw hPoint
     have hPosMean' :
         (X.hp.posLaw).expect (fun P => ∑ ξ,
           (X.hidPost b₀ t.1).w ξ *
             (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-              X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)) ≤
-          2 * (X.hidPost b₀ t.1).w hy := by
+              X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)) ≤
+          2 * (X.hidPost b₀ t.1).w y := by
       calc
-        _ ≤ (X.hp.posLaw).expect (fun _ => 2 * (X.hidPost b₀ t.1).w hy) := hPosMean
-        _ = 2 * (X.hidPost b₀ t.1).w hy := FinProb.expect_const _ _
+        _ ≤ (X.hp.posLaw).expect (fun _ => 2 * (X.hidPost b₀ t.1).w y) := hPosMean
+        _ = 2 * (X.hidPost b₀ t.1).w y := FinProb.expect_const _ _
     calc
-      (∑ a : ∀ ℓ : {ℓ // ℓ ∈ S}, Fin N,
-          Ps.w a * f (e.symm (a, b))) =
-          ∑ ξ, (X.hidPost b₀ t.1).w ξ * X.proxyMean (X.withHid H₀ t ξ) u hy := hSum
-      _ = (N : ℝ) * (X.hp.posLaw).expect (fun P => ∑ ξ,
+      (∑ ξ, (X.hidPost b₀ t.1).w ξ * X.proxyMean (X.withHid H₀ t ξ) u y) =
+          (N : ℝ) * (X.hp.posLaw).expect (fun P => ∑ ξ,
             (X.hidPost b₀ t.1).w ξ *
               (X.proxyLaw (X.withHid H₀ t ξ)).expect (fun ω =>
-                X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u hy)) := hInterchange
-      _ ≤ 2 * (N : ℝ) * (X.hidPost b₀ t.1).w hy := by
+                X.proxyRow (X.withHid H₀ t ξ) (X.assemble P ω) u y)) := hInterchange
+      _ ≤ 2 * (N : ℝ) * (X.hidPost b₀ t.1).w y := by
             exact (mul_le_mul_of_nonneg_left hPosMean' (by positivity)).trans_eq (by ring)
-  have hStage3Support : ∃ z, (X.stage3Law b₀).w z ≠ 0 := by
-    by_contra h
-    have hz0 : ∀ z, (X.stage3Law b₀).w z = 0 := by
-      intro z
-      by_contra hne
-      exact h ⟨z, hne⟩
-    have hsum : ∑ z, (X.stage3Law b₀).w z = 0 := by simp [hz0]
-    have hsumOne := (X.stage3Law b₀).sum_eq_one
-    rw [hsum] at hsumOne
-    norm_num at hsumOne
-  obtain ⟨z₀, hz₀⟩ := hStage3Support
-  have hHistWeight : X.histLaw.w (b₀, z₀) ≠ 0 := by
-    change (X.stage1Law.w v * (X.stage2Law v).w c) * (X.stage3Law b₀).w z₀ ≠ 0
-    exact mul_ne_zero (mul_ne_zero hv1 hc) hz₀
-  obtain ⟨hBaseSupp, _, _, _, _, _⟩ := hHistSupport (b₀, z₀) hHistWeight
-  have hMeanLocal :
-      ∀ u : CubeVertex n, ∀ Z Z' : X.Hid,
-        (∀ ℓ ∈ _root_.HypercubeRamsey.Lane_q_s06_loads.proxyHidScope6 X u,
-          Z ℓ = Z' ℓ) →
-          X.proxyMean (b₀, Z) u y = X.proxyMean (b₀, Z') u y := by
-    sorry
-  let scope : CubeVertex n → Finset X.HKey :=
-    _root_.HypercubeRamsey.Lane_q_s06_loads.proxyHidScope6 X
-  let f : CubeVertex n → X.Hid → ℝ := fun u Z => X.proxyMean (b₀, Z) u y
-  have hf : ∀ u, FinProb.DependsOn (f u) (scope u) := by
-    intro u Z Z' hZ
-    exact hMeanLocal u Z Z' hZ
-  have hdis : ∀ u ∈ U, ∀ u' ∈ U, u ≠ u' → Disjoint (scope u) (scope u') := by
-    intro u hu u' hu' hne
-    apply _root_.HypercubeRamsey.Lane_q_s06_loads.proxyHidScope6_disjoint X u u'
-    simpa [Ctx6.SignFar] using hFar u hu u' hu' hne
-  let qH : X.HKey → FinProb (Fin N) := fun ℓ => X.hidPost b₀ ℓ.1
-  have hFact := _root_.Lane_q_s06_loads.pi_expect_prod_pairwise_disjoint
-    qH U scope f hf hdis
   have hProxyNonneg (H : X.Hist) (u : CubeVertex n) : 0 ≤ X.proxyMean H u y := by
     unfold Ctx6.proxyMean FinProb.expect
     apply Finset.sum_nonneg
@@ -385,46 +325,48 @@ theorem L6_1k_hjoint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     exact mul_nonneg ((X.centreLaw H).nonneg C)
       (mul_nonneg (by positivity)
         (_root_.HypercubeRamsey.Lane_q_s06_loads.Ctx6.proxyRow_nonneg X H C u y))
-  have hRawNonneg (u : CubeVertex n) :
-      0 ≤ (X.hidLaw b₀).expect (f u) := by
-    unfold FinProb.expect
-    apply Finset.sum_nonneg
-    intro Z hZ
-    exact mul_nonneg ((X.hidLaw b₀).nonneg Z) (hProxyNonneg (b₀, Z) u)
-  have hRawMean (u : CubeVertex n) (hu : u ∈ U) :
-      (X.hidLaw b₀).expect (f u) ≤
-        2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y := by
-    apply hRawProxyMean u
-    · have huOdd : ¬ IsEvenRole u := by
-        simpa [Ctx6.oddRoles] using hUSub hu
-      exact huOdd
-    · exact hUlow u hu
-    · exact hBaseSupp
-  have hRawProduct :
-      (X.hidLaw b₀).expect (fun Z => ∏ u ∈ U, f u Z) ≤
-        ∏ u ∈ U, 2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y := by
-    change (FinProb.pi qH).expect (fun Z => ∏ u ∈ U, f u Z) ≤ _
-    rw [hFact]
-    apply Finset.prod_le_prod₀
-    · intro u hu
-      exact hRawNonneg u
-    · intro u hu
-      exact hRawMean u hu
-  let scopeUnion : Finset X.HKey :=
-    _root_.Lane_q_s06_loads.proxyHidScopeUnion6 X U
+  /- The targets of the separated roles, and the product of their proxy means. -/
+  let t : CubeVertex n → X.HKey := fun u => X.tgt (X.g.L.stateOf u)
+  let f : CubeVertex n → X.Hid → ℝ := fun u Z => X.proxyMean (b₀, Z) u y
   let W : X.Hid → ℝ := fun Z => ∏ u ∈ U, f u Z
-  have hWLocal : ∀ Z Z', (∀ ℓ ∈ scopeUnion, Z ℓ = Z' ℓ) → W Z = W Z' := by
-    intro Z Z' hZ
-    apply Finset.prod_congr rfl
-    intro u hu
-    apply hMeanLocal u Z Z'
-    intro ℓ hℓ
-    exact hZ ℓ (Finset.mem_biUnion.mpr ⟨u, hu, hℓ⟩)
+  let Tg : Finset X.HKey := U.image t
   have hW0 : ∀ Z, 0 ≤ W Z := by
     intro Z
     apply Finset.prod_nonneg
     intro u hu
     exact hProxyNonneg (b₀, Z) u
+  have hUodd (u : CubeVertex n) (hu : u ∈ U) : ¬ IsEvenRole u := by
+    simpa [Ctx6.oddRoles] using hUSub hu
+  have htNe : ∀ u ∈ U, ∀ u' ∈ U, u ≠ u' → t u ≠ t u' := by
+    intro u hu u' hu' hne
+    exact _root_.Lane_q_s06_loads.ctx6_targets_ne_of_signFar X u u'
+      (by simpa [Ctx6.SignFar] using hFar u hu u' hu' hne)
+  /- No other retained proxy mean reads a target (06:641–643, 06:688). -/
+  have hloc : ∀ u ∈ U, ∀ Z Z' : X.Hid,
+      (∀ ℓ, (∀ u' ∈ U, u' ≠ u → ℓ ≠ t u') → Z ℓ = Z' ℓ) → f u Z = f u Z' := by
+    intro u hu Z Z' hZ
+    apply Lane_opus_hjoint.proxyMean_signScope_local X b₀ u (hUodd u hu) y Z Z'
+    intro ℓ hℓ
+    apply hZ ℓ
+    intro u' hu' hne heq
+    apply Lane_opus_hjoint.signFar_target_not_mem X u u'
+      (by simpa [Ctx6.SignFar] using hFar u hu u' hu' (Ne.symm hne))
+    have hmem : t u' ∈ Lane_opus_hjoint.proxySignScope X u := heq ▸ hℓ
+    exact hmem
+  have hcT : ∀ u ∈ U, ∀ Z : X.Hid,
+      ∑ ξ, (X.hidPost b₀ (t u).1).w ξ * f u (Function.update Z (t u) ξ) ≤
+        2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y := by
+    intro u hu Z
+    exact hTargetMean u (hUodd u hu) (hUlow u hu) Z
+  /- With the other keys fixed, the distinct targets integrate under their raw priors (06:686–688). -/
+  have hfib : ∀ Z : X.Hid, ∑ Z' : X.Hid, (∏ ℓ, (X.hidPost b₀ ℓ.1).w (Z' ℓ)) *
+      W (Lane_opus_hjoint.merge Tg Z' Z) ≤
+        ∏ u ∈ U, (2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y) := by
+    intro Z
+    exact Lane_opus_hjoint.resample_prod_le (fun ℓ : X.HKey => X.hidPost b₀ ℓ.1) U t htNe f
+      (fun u Z => hProxyNonneg (b₀, Z) u) hloc _ hcT Z
+  let scopeUnion : Finset X.HKey :=
+    _root_.Lane_q_s06_loads.proxyHidScopeUnion6 X U
   obtain ⟨cert⟩ := hHiddenCert v c hVgood hc
   let xmax : ℝ := (n : ℝ) ^ (-(δ₂ / 128))
   let B : ℕ := 602 ^ 8 * (9 * (X.m + 1) ^ 8)
@@ -490,21 +432,26 @@ theorem L6_1k_hjoint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       exact ⟨cert.x_nonneg gr, by simpa [xmax] using cert.x_le gr⟩
     · exact hUnionCard
     · exact hsmall
-  have hJointGoal :
-      (X.stage3Law b₀).expect (fun Z => ∏ u ∈ U, X.proxyMean (b₀, Z) u y) ≤
-        2 ^ U.card * ∏ u ∈ U,
-          (2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y) := by
-    have hcompare := Lane_sol_s06_loadB.stage3_compare_local X b₀ xmax cert hxmax
-      scopeUnion W hWLocal hW0 S T hST hUnionST hNotTouch
-    have hraw0 : 0 ≤ (X.hidLaw b₀).expect W := by
-      unfold FinProb.expect
-      exact Finset.sum_nonneg fun Z _ => mul_nonneg ((X.hidLaw b₀).nonneg Z) (hW0 Z)
-    calc
-      _ ≤ (∏ gr ∈ T, (1 - cert.x gr)⁻¹) * (X.hidLaw b₀).expect W := hcompare
-      _ ≤ (2 : ℝ) ^ U.card * (X.hidLaw b₀).expect W :=
-        mul_le_mul_of_nonneg_right hCharge hraw0
-      _ ≤ _ := mul_le_mul_of_nonneg_left hRawProduct (by positivity)
-  exact hJointGoal
+  have hTgSub : Tg ⊆ scopeUnion := by
+    intro ℓ hℓ
+    obtain ⟨u, hu, rfl⟩ := Finset.mem_image.mp hℓ
+    exact Finset.mem_biUnion.mpr
+      ⟨u, hu, HypercubeRamsey.Lane_q_s06_loads.target_in_proxyHidScope6 X u⟩
+  have hSTg : ∀ gr ∈ S, Disjoint Tg (badScope gr) :=
+    fun gr hgr => (hNotTouch gr hgr).mono_left hTgSub
+  /- Remove the stage 3 constraints touching the targets (06:684–685) and use the fiber bound. -/
+  have hcompare := Lane_opus_hjoint.stage3_compare_targets X b₀ xmax cert hxmax Tg W hW0 _ hfib
+    S T hST hUnionST hSTg
+  have hC0 : 0 ≤ ∏ u ∈ U, (2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y) :=
+    Finset.prod_nonneg fun u _ =>
+      mul_nonneg (by positivity) ((X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).nonneg y)
+  calc
+    (X.stage3Law b₀).expect (fun Z => ∏ u ∈ U, X.proxyMean (b₀, Z) u y) ≤
+        (∏ gr ∈ T, (1 - cert.x gr)⁻¹) *
+          ∏ u ∈ U, (2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y) := hcompare
+    _ ≤ 2 ^ U.card * ∏ u ∈ U,
+          (2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y) :=
+        mul_le_mul_of_nonneg_right hCharge hC0
 
 set_option maxHeartbeats 5000000
 /-- L6.1k (hidden, 06:680–691): sign neighbourhoods of radius `O(√m)` have fraction `2^{−m+o(m)}` (repeat cost

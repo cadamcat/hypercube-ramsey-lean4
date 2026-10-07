@@ -52,9 +52,9 @@ theorem pred_fail_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
       GeoCons M tag → RefIndep M tag → Resample M tag q q' →
       (∀ ω, SPre M tag ω → InjOK M tag ω (J ω)) →
       ∑ ω, (prepLaw M tag q q').w ω *
-          (if SPre M tag ω then (J ω).pr (fun f => ∃ a, PredFail M tag ω a (nbrLabels f a)) else 0) ≤
-        1 / 10 := by
-  sorry
+        (if SPre M tag ω then (J ω).pr (fun f => ∃ a, PredFail M tag ω a (nbrLabels f a)) else 0) ≤
+      1 / 10 := by
+  exact HypercubeRamsey.Lane_q_s04_load.pred_fail_prob_proof β γ hβ hβγ hγ
 
 /-- L4.1k, comparison (04:562–574): separated even roles have disjoint neighbourhoods, so the product of their
 rows reads at most `mn ≤ n²` odd outputs; `InjOK` bounds its injection integral by twice its integral under the

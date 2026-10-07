@@ -1,5 +1,6 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.S03.NearProductInjection
+import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.Tools.ScatteredUnion
 import HypercubeRamsey.Tools.CubeGeometry
 
@@ -902,6 +903,399 @@ private theorem oddRow_nonneg
   · exact (HypercubeRamsey.S04.oddDraw M tag ω u).nonneg y
   · exact le_rfl
 
+private noncomputable def predGateWeight
+    {β γ : ℝ} {G : HypercubeRamsey.Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+    (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+    (a : HypercubeRamsey.S04.EvenRole n) (c : HypercubeRamsey.S04.Loc β γ n)
+    (ω : HypercubeRamsey.S04.Prep M tag) : ℝ :=
+  ∑ y : Fin n → Fin N,
+    (if HypercubeRamsey.S04.EvLocal M tag ω a c then 1 else 0) *
+      (∏ j, HypercubeRamsey.S04.oddRow M tag ω
+        (HypercubeRamsey.S04.oddNbr a j) (y j)) *
+      (if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then 1 else 0)
+
+private theorem predGateWeight_expect_le_eps
+    {β γ : ℝ} {G : HypercubeRamsey.Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+    (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+    (q : HypercubeRamsey.S04.XProf M tag) (q' : HypercubeRamsey.S04.YProf M tag)
+    (hRef : HypercubeRamsey.S04.RefIndep M tag)
+    (hResample : HypercubeRamsey.S04.Resample M tag q q')
+    (a : HypercubeRamsey.S04.EvenRole n) (c : HypercubeRamsey.S04.Loc β γ n) :
+    (HypercubeRamsey.S04.prepLaw M tag q q').expect
+      (predGateWeight M tag a c) ≤ HypercubeRamsey.S04.eps4 β γ n := by
+  classical
+  let κ := HypercubeRamsey.S04.key β γ n a.1
+  let ε := HypercubeRamsey.S04.eps4 β γ n
+  have hε : 0 < ε := by dsimp [ε, HypercubeRamsey.S04.eps4]; positivity
+  have hF0 (ω : HypercubeRamsey.S04.Prep M tag)
+      (z : Fin (HypercubeRamsey.S04.tupLen β γ n) → Fin N) (y : Fin n → Fin N) :
+      0 ≤ HypercubeRamsey.S04.lik M tag ω a c z y := by
+    unfold HypercubeRamsey.S04.lik
+    apply mul_nonneg
+    · split_ifs <;> norm_num
+    · apply Finset.prod_nonneg
+      intro j hj
+      exact oddRow_nonneg M tag
+        (HypercubeRamsey.S04.updW ω (c, κ) z) (HypercubeRamsey.S04.oddNbr a j) (y j)
+  have hgateBound (ω : HypercubeRamsey.S04.Prep M tag) :
+      (∑ y, if HypercubeRamsey.S04.marg M tag ω a c y <
+          ε * (HypercubeRamsey.S04.refProd M tag ω a c y) ∨
+          HypercubeRamsey.S04.marg M tag ω a c y = 0 then
+          HypercubeRamsey.S04.marg M tag ω a c y else 0) ≤ ε := by
+    let πω := HypercubeRamsey.S04.prior M tag ω c κ
+    let Q := HypercubeRamsey.FinProb.pi
+      (fun j : Fin n => HypercubeRamsey.S04.refRow M tag ω
+        (HypercubeRamsey.S04.oddNbr a j) c κ)
+    let F : (Fin (HypercubeRamsey.S04.tupLen β γ n) → Fin N) →
+        (Fin n → Fin N) → ℝ := fun z y => HypercubeRamsey.S04.lik M tag ω a c z y
+    have hQ (y : Fin n → Fin N) : Q.w y = HypercubeRamsey.S04.refProd M tag ω a c y := by
+      simp [Q, κ, HypercubeRamsey.FinProb.pi, HypercubeRamsey.S04.refProd]
+    have hGate := HypercubeRamsey.gated_posterior πω F (hF0 ω) Q ε 0 hε
+    have hGateMassRaw := hGate.1
+    change (∑ y, if (∑ z, πω.w z * F z y) < ε * Q.w y ∨
+        (∑ z, πω.w z * F z y) = 0 then (∑ z, πω.w z * F z y) else 0) ≤ ε at hGateMassRaw
+    have hMarg (y : Fin n → Fin N) :
+        HypercubeRamsey.S04.marg M tag ω a c y = ∑ z, πω.w z * F z y := by
+      rfl
+    have hGateMassQ :
+        (∑ y, if HypercubeRamsey.S04.marg M tag ω a c y < ε * Q.w y ∨
+          HypercubeRamsey.S04.marg M tag ω a c y = 0 then
+          HypercubeRamsey.S04.marg M tag ω a c y else 0) ≤ ε := by
+      simpa only [hMarg] using hGateMassRaw
+    have hGateMass :
+        (∑ y, if HypercubeRamsey.S04.marg M tag ω a c y <
+          ε * HypercubeRamsey.S04.refProd M tag ω a c y ∨
+          HypercubeRamsey.S04.marg M tag ω a c y = 0 then
+          HypercubeRamsey.S04.marg M tag ω a c y else 0) ≤ ε := by
+      convert hGateMassQ using 1 <;> simp [hQ]
+    exact hGateMass
+  have hmarg0 (ω : HypercubeRamsey.S04.Prep M tag) (y : Fin n → Fin N) :
+      0 ≤ HypercubeRamsey.S04.marg M tag ω a c y := by
+    unfold HypercubeRamsey.S04.marg
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg
+      ((HypercubeRamsey.S04.prior M tag ω c κ).nonneg z) (hF0 ω z y)
+  have hfailGate (ω : HypercubeRamsey.S04.Prep M tag) (y : Fin n → Fin N)
+      (hfail : ¬ HypercubeRamsey.S04.PredOK M tag ω a c y) :
+      HypercubeRamsey.S04.marg M tag ω a c y <
+          ε * HypercubeRamsey.S04.refProd M tag ω a c y ∨
+        HypercubeRamsey.S04.marg M tag ω a c y = 0 := by
+    by_cases hz : HypercubeRamsey.S04.marg M tag ω a c y = 0
+    · exact Or.inr hz
+    · have hpos : 0 < HypercubeRamsey.S04.marg M tag ω a c y :=
+        lt_of_le_of_ne (hmarg0 ω y) (Ne.symm hz)
+      left
+      by_contra hnot
+      have hge : ε * HypercubeRamsey.S04.refProd M tag ω a c y ≤
+          HypercubeRamsey.S04.marg M tag ω a c y := le_of_not_gt hnot
+      exact hfail ⟨hpos, hge⟩
+  have hfailMass (ω : HypercubeRamsey.S04.Prep M tag) :
+      (∑ y, if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then
+        HypercubeRamsey.S04.marg M tag ω a c y else 0) ≤ ε := by
+    calc
+      (∑ y, if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then
+          HypercubeRamsey.S04.marg M tag ω a c y else 0) ≤
+        ∑ y, if HypercubeRamsey.S04.marg M tag ω a c y <
+          ε * HypercubeRamsey.S04.refProd M tag ω a c y ∨
+          HypercubeRamsey.S04.marg M tag ω a c y = 0 then
+          HypercubeRamsey.S04.marg M tag ω a c y else 0 := by
+            apply Finset.sum_le_sum
+            intro y hy
+            by_cases hf : ¬ HypercubeRamsey.S04.PredOK M tag ω a c y
+            · have hg := hfailGate ω y hf
+              simp [hf, hg]
+            · by_cases hg : HypercubeRamsey.S04.marg M tag ω a c y <
+                  ε * HypercubeRamsey.S04.refProd M tag ω a c y ∨
+                  HypercubeRamsey.S04.marg M tag ω a c y = 0
+              · simp [hf, hg, hmarg0 ω y]
+              · simp [hf, hg]
+      _ ≤ ε := hgateBound ω
+  have hresample := hResample c κ (predGateWeight M tag a c)
+  have hinner (ω : HypercubeRamsey.S04.Prep M tag) :
+      (∑ z, (HypercubeRamsey.S04.prior M tag ω c κ).w z *
+        predGateWeight M tag a c (HypercubeRamsey.S04.updW ω (c, κ) z)) =
+      ∑ y, if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then
+        HypercubeRamsey.S04.marg M tag ω a c y else 0 := by
+    have hInv (z : Fin (HypercubeRamsey.S04.tupLen β γ n) → Fin N)
+        (y : Fin n → Fin N) :
+        HypercubeRamsey.S04.PredOK M tag
+            (HypercubeRamsey.S04.updW ω (c, κ) z) a c y ↔
+          HypercubeRamsey.S04.PredOK M tag ω a c y := by
+      have h := hRef ω a c z y
+      unfold HypercubeRamsey.S04.PredOK
+      rw [h.2, h.1]
+    unfold predGateWeight
+    calc
+      (∑ z, (HypercubeRamsey.S04.prior M tag ω c κ).w z *
+          ∑ y, (if HypercubeRamsey.S04.EvLocal M tag
+              (HypercubeRamsey.S04.updW ω (c, κ) z) a c then 1 else 0) *
+              (∏ j, HypercubeRamsey.S04.oddRow M tag
+                (HypercubeRamsey.S04.updW ω (c, κ) z)
+                (HypercubeRamsey.S04.oddNbr a j) (y j)) *
+              (if ¬ HypercubeRamsey.S04.PredOK M tag
+                  (HypercubeRamsey.S04.updW ω (c, κ) z) a c y then 1 else 0)) =
+        ∑ z, ∑ y, (HypercubeRamsey.S04.prior M tag ω c κ).w z *
+          ((if HypercubeRamsey.S04.EvLocal M tag
+              (HypercubeRamsey.S04.updW ω (c, κ) z) a c then 1 else 0) *
+            (∏ j, HypercubeRamsey.S04.oddRow M tag
+              (HypercubeRamsey.S04.updW ω (c, κ) z)
+              (HypercubeRamsey.S04.oddNbr a j) (y j)) *
+            (if ¬ HypercubeRamsey.S04.PredOK M tag
+                (HypercubeRamsey.S04.updW ω (c, κ) z) a c y then 1 else 0)) := by
+          apply Finset.sum_congr rfl
+          intro z hz
+          rw [Finset.mul_sum]
+      _ = ∑ y, ∑ z, (if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then
+          (HypercubeRamsey.S04.prior M tag ω c κ).w z *
+            HypercubeRamsey.S04.lik M tag ω a c z y else 0) := by
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro y hy
+        apply Finset.sum_congr rfl
+        intro z hz
+        by_cases hf : ¬ HypercubeRamsey.S04.PredOK M tag ω a c y
+        · have hf' : ¬ HypercubeRamsey.S04.PredOK M tag
+              (HypercubeRamsey.S04.updW ω (c, κ) z) a c y := by
+            intro hgood
+            exact hf ((hInv z y).mp hgood)
+          simp [hf, hf', HypercubeRamsey.S04.lik]
+          ring
+        · have hgood : HypercubeRamsey.S04.PredOK M tag ω a c y := by
+            by_contra hh
+            exact hf hh
+          have hgood' := (hInv z y).mpr hgood
+          simp [hf, hgood, hgood', HypercubeRamsey.S04.lik]
+      _ = ∑ y, if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then
+            HypercubeRamsey.S04.marg M tag ω a c y else 0 := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              by_cases hf : ¬ HypercubeRamsey.S04.PredOK M tag ω a c y
+              · simp [hf, κ, HypercubeRamsey.S04.marg,
+                  HypercubeRamsey.S04.prior]
+              · simp [hf]
+  calc
+    (HypercubeRamsey.S04.prepLaw M tag q q').expect (predGateWeight M tag a c) =
+        (HypercubeRamsey.S04.prepLaw M tag q q').expect
+          (fun ω => ∑ z, (HypercubeRamsey.S04.prior M tag ω c κ).w z *
+            predGateWeight M tag a c (HypercubeRamsey.S04.updW ω (c, κ) z)) :=
+      hresample
+    _ = (HypercubeRamsey.S04.prepLaw M tag q q').expect
+          (fun ω => ∑ y, if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then
+            HypercubeRamsey.S04.marg M tag ω a c y else 0) := by
+      unfold HypercubeRamsey.FinProb.expect
+      apply Finset.sum_congr rfl
+      intro ω hω
+      exact congrArg (fun t =>
+        (HypercubeRamsey.S04.prepLaw M tag q q').w ω * t) (hinner ω)
+    _ ≤ (HypercubeRamsey.S04.prepLaw M tag q q').expect (fun _ => ε) :=
+      HypercubeRamsey.FinProb.expect_mono _ (fun ω => hfailMass ω)
+    _ = ε := HypercubeRamsey.FinProb.expect_const _ ε
+
+private theorem succ_le_two_pow_of_pos {n : ℕ} (hn : 1 ≤ n) : n + 1 ≤ 2 ^ n := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    by_cases hn0 : n = 0
+    · subst n
+      norm_num
+    · have hn' : 1 ≤ n := by omega
+      have hi := ih hn'
+      have hp : 0 < 2 ^ n := Nat.pow_pos (by omega)
+      rw [pow_succ]
+      omega
+
+private theorem pred_fail_union_tail_small (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
+    (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      2 * (Fintype.card (HypercubeRamsey.S04.EvenRole n ×
+        HypercubeRamsey.S04.Loc β γ n) : ℝ) * HypercubeRamsey.S04.eps4 β γ n ≤ 1 / 10 := by
+  have hω := HypercubeRamsey.S04.omega4_pos hβ hγ
+  let η := HypercubeRamsey.omega4 β γ / 3 - HypercubeRamsey.h4 β γ
+  have hη : 0 < η := by
+    dsimp [η, HypercubeRamsey.h4]
+    nlinarith [hω]
+  let c := HypercubeRamsey.S04.c2 / 4
+  have hc : 0 < c := by dsimp [c, HypercubeRamsey.S04.c2,
+    HypercubeRamsey.S04.c1]; norm_num
+  obtain ⟨nPow, hPow⟩ := eventually_rpow_gt_const η (4 / c) hη
+  obtain ⟨nExp, hExp⟩ := eventually_small_poly_exp (Real.log 2 / 2)
+    (by positivity) (1 / 10) (by norm_num)
+  let ζ := HypercubeRamsey.S04.zetaH β γ
+  let σ := HypercubeRamsey.S04.sigmaH β γ
+  have hζ : 0 < ζ := by
+    dsimp [ζ, HypercubeRamsey.S04.zetaH, HypercubeRamsey.S04.b0H,
+      HypercubeRamsey.S04.bH]
+    positivity
+  have hζ1 : ζ < 1 := by
+    have hωlt := HypercubeRamsey.S04.omega4_lt hβ hβγ
+    dsimp [ζ, HypercubeRamsey.S04.zetaH, HypercubeRamsey.S04.b0H,
+      HypercubeRamsey.S04.bH]
+    linarith
+  have hσ : 0 < σ := by
+    dsimp [σ, HypercubeRamsey.S04.sigmaH]
+    positivity
+  have hσζ : σ < ζ / 2 := by
+    dsimp [σ, ζ, HypercubeRamsey.S04.sigmaH]
+    linarith
+  obtain ⟨nTop, hTop⟩ := topScale_small σ ζ hσ hζ hσζ hζ1
+  refine ⟨max (max nPow nExp) (max nTop 2), ?_⟩
+  intro n hn
+  have hnPow : nPow ≤ n := by omega
+  have hnExp : nExp ≤ n := by omega
+  have hnTop : nTop ≤ n := by omega
+  have hn2 : 2 ≤ n := by omega
+  have hn1 : 1 ≤ n := by omega
+  have hn0 : 0 < n := by omega
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast hn0
+  have hnR1 : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hTuple : (n : ℝ) ^ (HypercubeRamsey.omega4 β γ / 3) ≤
+      (HypercubeRamsey.S04.tupLen β γ n : ℝ) := by
+    dsimp [HypercubeRamsey.S04.tupLen]
+    exact Nat.le_ceil _
+  have hPowId : (n : ℝ) ^ (-HypercubeRamsey.h4 β γ) *
+      (n : ℝ) ^ (HypercubeRamsey.omega4 β γ / 3) = (n : ℝ) ^ η := by
+    calc
+      _ = (n : ℝ) ^ (-HypercubeRamsey.h4 β γ +
+          HypercubeRamsey.omega4 β γ / 3) :=
+        (Real.rpow_add hnR _ _).symm
+      _ = (n : ℝ) ^ η := by congr 1 <;> dsimp [η] <;> ring
+  have hProductLower : (n : ℝ) ^ η * (n : ℝ) ≤
+      HypercubeRamsey.S04.aStar β γ n *
+        (HypercubeRamsey.S04.tupLen β γ n : ℝ) * (n : ℝ) := by
+    calc
+      (n : ℝ) ^ η * (n : ℝ) =
+          ((n : ℝ) ^ (-HypercubeRamsey.h4 β γ) *
+            (n : ℝ) ^ (HypercubeRamsey.omega4 β γ / 3)) * (n : ℝ) := by
+              rw [hPowId]
+      _ ≤ (HypercubeRamsey.S04.aStar β γ n *
+          (HypercubeRamsey.S04.tupLen β γ n : ℝ)) * (n : ℝ) := by
+            apply mul_le_mul_of_nonneg_right _ hnR.le
+            simpa [HypercubeRamsey.S04.aStar] using
+              (mul_le_mul_of_nonneg_left hTuple
+                (Real.rpow_nonneg hnR.le (-HypercubeRamsey.h4 β γ)))
+      _ = HypercubeRamsey.S04.aStar β γ n *
+          (HypercubeRamsey.S04.tupLen β γ n : ℝ) * (n : ℝ) := by ring
+  have hpowLarge := hPow n hnPow
+  have hcoef : 4 ≤ c * (n : ℝ) ^ η := by
+    have hmul := mul_lt_mul_of_pos_left hpowLarge hc
+    have hcancel : c * (4 / c) = 4 := by field_simp [ne_of_gt hc]
+    linarith
+  have hExponent : 4 * (n : ℝ) ≤
+      HypercubeRamsey.S04.c2 * HypercubeRamsey.S04.aStar β γ n *
+        (HypercubeRamsey.S04.tupLen β γ n : ℝ) * (n : ℝ) / 4 := by
+    calc
+      4 * (n : ℝ) ≤ c * (n : ℝ) ^ η * (n : ℝ) := by
+        exact mul_le_mul_of_nonneg_right hcoef hnR.le
+      _ ≤ c * (HypercubeRamsey.S04.aStar β γ n *
+          (HypercubeRamsey.S04.tupLen β γ n : ℝ) * (n : ℝ)) := by
+        calc
+          c * (n : ℝ) ^ η * (n : ℝ) = c * ((n : ℝ) ^ η * (n : ℝ)) := by ring
+          _ ≤ c * (HypercubeRamsey.S04.aStar β γ n *
+              (HypercubeRamsey.S04.tupLen β γ n : ℝ) * (n : ℝ)) :=
+                mul_le_mul_of_nonneg_left hProductLower hc.le
+      _ = HypercubeRamsey.S04.c2 * HypercubeRamsey.S04.aStar β γ n *
+          (HypercubeRamsey.S04.tupLen β γ n : ℝ) * (n : ℝ) / 4 := by
+            dsimp [c]
+            ring
+  have hEps : HypercubeRamsey.S04.eps4 β γ n ≤ Real.exp (-4 * (n : ℝ)) := by
+    dsimp [HypercubeRamsey.S04.eps4]
+    apply Real.exp_le_exp.mpr
+    nlinarith [hExponent]
+  have hTopReal : (HypercubeRamsey.S04.topH β γ n : ℝ) ≤ n := by
+    have hTop' := hTop n hnTop
+    have hpowle : (n : ℝ) ^ (1 - ζ / 2) ≤ (n : ℝ) := by
+      calc
+        (n : ℝ) ^ (1 - ζ / 2) ≤ (n : ℝ) ^ (1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le hnR1 (by linarith)
+        _ = n := Real.rpow_one _
+    have hTop'' : (HypercubeRamsey.S04.topH β γ n : ℝ) ≤
+        (n : ℝ) ^ (1 - ζ / 2) := by
+      simpa [HypercubeRamsey.S04.topH, σ, ζ] using hTop'
+    exact hTop''.trans hpowle
+  have hTopNat : HypercubeRamsey.S04.topH β γ n ≤ n := by exact_mod_cast hTopReal
+  have hTopSucc : HypercubeRamsey.S04.topH β γ n + 1 ≤ 2 ^ n :=
+    (Nat.add_le_add_right hTopNat 1).trans (succ_le_two_pow_of_pos hn1)
+  have hCardLoc : Fintype.card (HypercubeRamsey.S04.Loc β γ n) =
+      2 ^ n * (HypercubeRamsey.S04.topH β γ n + 1) := by
+    simp [HypercubeRamsey.S04.Loc, OAI.HypercubeRamsey.card_cubeVertex]
+  have hLocBound : (Fintype.card (HypercubeRamsey.S04.Loc β γ n) : ℝ) ≤
+      (2 : ℝ) ^ n * (2 : ℝ) ^ n := by
+    rw [hCardLoc]
+    have hnat : 2 ^ n * (HypercubeRamsey.S04.topH β γ n + 1) ≤ 2 ^ n * 2 ^ n :=
+      Nat.mul_le_mul_left (2 ^ n) hTopSucc
+    exact_mod_cast hnat
+  have hRoleBound : (Fintype.card (HypercubeRamsey.S04.EvenRole n) : ℝ) ≤
+      (2 : ℝ) ^ n := by
+    rw [evenRole_card_eq hn0]
+    exact_mod_cast (Nat.pow_le_pow_right (by norm_num) (Nat.sub_le n 1))
+  have hCardPair : (Fintype.card (HypercubeRamsey.S04.EvenRole n ×
+      HypercubeRamsey.S04.Loc β γ n) : ℝ) ≤ (2 : ℝ) ^ (3 * n) := by
+    rw [Fintype.card_prod]
+    push_cast
+    calc
+      (Fintype.card (HypercubeRamsey.S04.EvenRole n) : ℝ) *
+          Fintype.card (HypercubeRamsey.S04.Loc β γ n) ≤
+        (2 : ℝ) ^ n * ((2 : ℝ) ^ n * (2 : ℝ) ^ n) :=
+          mul_le_mul hRoleBound hLocBound (by positivity) (by positivity)
+      _ = (2 : ℝ) ^ (3 * n) := by
+        calc
+          (2 : ℝ) ^ n * ((2 : ℝ) ^ n * (2 : ℝ) ^ n) = ((2 : ℝ) ^ n) ^ 3 := by ring
+          _ = (2 : ℝ) ^ (n * 3) := by rw [← pow_mul]
+          _ = (2 : ℝ) ^ (3 * n) := by congr 1 <;> omega
+  have hpowExp (m : ℕ) : (2 : ℝ) ^ m = Real.exp ((m : ℝ) * Real.log 2) := by
+    calc
+      (2 : ℝ) ^ m = Real.exp (Real.log ((2 : ℝ) ^ m)) :=
+        (Real.exp_log (by positivity)).symm
+      _ = Real.exp ((m : ℝ) * Real.log 2) := by rw [Real.log_pow]
+  have hlog2 : Real.log 2 ≤ 1 := by
+    have := Real.log_two_lt_d9
+    linarith
+  have hcardExp : 2 * (Fintype.card (HypercubeRamsey.S04.EvenRole n ×
+      HypercubeRamsey.S04.Loc β γ n) : ℝ) ≤ Real.exp (1 + 3 * (n : ℝ)) := by
+    calc
+      _ ≤ 2 * (2 : ℝ) ^ (3 * n) := mul_le_mul_of_nonneg_left hCardPair (by norm_num)
+      _ = Real.exp (Real.log 2 + ((3 * n : ℕ) : ℝ) * Real.log 2) := by
+        rw [hpowExp]
+        calc
+          2 * Real.exp (((3 * n : ℕ) : ℝ) * Real.log 2) =
+              Real.exp (Real.log 2) *
+                Real.exp (((3 * n : ℕ) : ℝ) * Real.log 2) := by
+                  rw [Real.exp_log (by norm_num : 0 < (2 : ℝ))]
+          _ = Real.exp (Real.log 2 + ((3 * n : ℕ) : ℝ) * Real.log 2) :=
+            (Real.exp_add _ _).symm
+      _ ≤ Real.exp (1 + 3 * (n : ℝ)) := by
+        apply Real.exp_le_exp.mpr
+        push_cast
+        nlinarith [hlog2]
+  have hsmall := hExp n hnExp
+  have hfinal : Real.exp (1 - (n : ℝ)) ≤
+      (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by
+    calc
+      Real.exp (1 - (n : ℝ)) ≤ Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by
+        apply Real.exp_le_exp.mpr
+        have hn2R : (2 : ℝ) ≤ n := by exact_mod_cast hn2
+        nlinarith [hlog2]
+      _ ≤ (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by
+        have hnSq : 1 ≤ (n : ℝ) ^ (2 : ℝ) :=
+          Real.one_le_rpow hnR1 (by norm_num)
+        simpa only [one_mul] using
+          (mul_le_mul_of_nonneg_right hnSq (Real.exp_nonneg _))
+  have hEpsNonneg : 0 ≤ HypercubeRamsey.S04.eps4 β γ n := by
+    dsimp [HypercubeRamsey.S04.eps4]
+    positivity
+  calc
+    2 * (Fintype.card (HypercubeRamsey.S04.EvenRole n ×
+        HypercubeRamsey.S04.Loc β γ n) : ℝ) * HypercubeRamsey.S04.eps4 β γ n ≤
+      Real.exp (1 + 3 * (n : ℝ)) * Real.exp (-4 * (n : ℝ)) := by
+        exact mul_le_mul hcardExp hEps hEpsNonneg (Real.exp_nonneg _)
+    _ = Real.exp (1 - (n : ℝ)) := by rw [← Real.exp_add]; congr 1 <;> ring
+    _ ≤ (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := hfinal
+    _ ≤ 1 / 10 := le_of_lt hsmall
 private theorem evenMean_nonneg
     {β γ : ℝ} {G : HypercubeRamsey.Colour} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
@@ -925,6 +1319,141 @@ private theorem lane_nonempty_of_finProb {α : Type*} [Fintype α]
   have hsum : (∑ a, P.w a) = 0 := by simp
   rw [P.sum_eq_one] at hsum
   norm_num at hsum
+
+private theorem pr_fintype_union
+    {I Ω : Type*} [Fintype I] [Fintype Ω]
+    (P : HypercubeRamsey.FinProb Ω) (A : I → Ω → Prop) :
+    P.pr (fun ω => ∃ i, A i ω) ≤ ∑ i, P.pr (A i) := by
+  classical
+  let event : Ω → Prop := fun ω => ∃ i, A i ω
+  letI : DecidablePred event := fun ω => Classical.propDecidable (event ω)
+  change P.pr event ≤ ∑ i, P.pr (A i)
+  have hpr : P.pr event = ∑ ω, if event ω then P.w ω else 0 := by rfl
+  rw [hpr]
+  calc
+    (∑ ω, if event ω then P.w ω else 0) ≤
+        ∑ ω, ∑ i, if A i ω then P.w ω else 0 := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases he : event ω
+      · obtain ⟨i, hi⟩ := he
+        have he' : event ω := ⟨i, hi⟩
+        calc
+          (if event ω then P.w ω else 0) = P.w ω := by simp [he']
+          _ = (if A i ω then P.w ω else 0) := by simp [hi]
+          _ ≤ ∑ i, if A i ω then P.w ω else 0 :=
+            Finset.single_le_sum
+              (s := Finset.univ) (f := fun j => if A j ω then P.w ω else 0)
+              (fun j hj => by
+                by_cases hAj : A j ω <;> simp [hAj, P.nonneg ω])
+              (Finset.mem_univ i)
+      · simp [he]
+        apply Finset.sum_nonneg
+        intro i hi
+        by_cases hAi : A i ω <;> simp [hAi, P.nonneg ω]
+    _ = ∑ i, P.pr (A i) := by
+      simp only [HypercubeRamsey.FinProb.pr]
+      rw [Finset.sum_comm]
+
+private theorem oddNbr_injective {n : ℕ} (a : HypercubeRamsey.S04.EvenRole n) :
+    Function.Injective (HypercubeRamsey.S04.oddNbr a) := by
+  intro i j h
+  have hval : HypercubeRamsey.cubeFlip a.1 i = HypercubeRamsey.cubeFlip a.1 j :=
+    congrArg Subtype.val h
+  by_contra hne
+  have hcoord := congrFun hval i
+  have hleft : HypercubeRamsey.cubeFlip a.1 i i = !a.1 i := by
+    simp [HypercubeRamsey.cubeFlip]
+  have hright : HypercubeRamsey.cubeFlip a.1 j i = a.1 i := by
+    simp [HypercubeRamsey.cubeFlip, hne]
+  rw [hleft, hright] at hcoord
+  cases hv : a.1 i <;> simp [hv] at hcoord
+
+private noncomputable def nbrRolesEquiv {n : ℕ} (a : HypercubeRamsey.S04.EvenRole n) :
+    Fin n ≃ {u : HypercubeRamsey.S04.OddRole n // u ∈ nbrSet a} where
+  toFun j := ⟨HypercubeRamsey.S04.oddNbr a j,
+    Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩⟩
+  invFun u := Classical.choose (Finset.mem_image.mp u.2)
+  left_inv := by
+    intro j
+    apply oddNbr_injective a
+    exact (Classical.choose_spec (Finset.mem_image.mp
+      (Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩))).2
+  right_inv := by
+    intro u
+    apply Subtype.ext
+    exact (Classical.choose_spec (Finset.mem_image.mp u.2)).2
+
+private noncomputable def nbrTupleEquiv {n N : ℕ}
+    (a : HypercubeRamsey.S04.EvenRole n) :
+    (∀ u : {u : HypercubeRamsey.S04.OddRole n // u ∈ nbrSet a}, Fin N) ≃
+      (Fin n → Fin N) where
+  toFun o j := o (nbrRolesEquiv a j)
+  invFun y u := y ((nbrRolesEquiv a).symm u)
+  left_inv := by intro o; funext u; simp
+  right_inv := by intro y; funext j; simp
+
+private theorem nbrProduct_reindex {n N : ℕ} (a : HypercubeRamsey.S04.EvenRole n)
+    (P : HypercubeRamsey.S04.OddRole n → HypercubeRamsey.FinProb (Fin N))
+    (o : ∀ u : {u : HypercubeRamsey.S04.OddRole n // u ∈ nbrSet a}, Fin N) :
+    (∏ u : {u : HypercubeRamsey.S04.OddRole n // u ∈ nbrSet a}, (P u.1).w (o u)) =
+      ∏ j : Fin n, (P (HypercubeRamsey.S04.oddNbr a j)).w (o (nbrRolesEquiv a j)) := by
+  symm
+  exact Fintype.prod_equiv (nbrRolesEquiv a)
+    (fun j => (P (HypercubeRamsey.S04.oddNbr a j)).w (o (nbrRolesEquiv a j)))
+    (fun u => (P u.1).w (o u)) (by intro j; rfl)
+
+private theorem odd_neighbor_expect {β γ : ℝ} {G : HypercubeRamsey.Colour}
+    {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+    (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+    (ω : HypercubeRamsey.S04.Prep M tag) (a : HypercubeRamsey.S04.EvenRole n)
+    (g : (Fin n → Fin N) → ℝ) :
+    (HypercubeRamsey.S04.oddDrawLaw M tag ω).expect
+        (fun f => g (HypercubeRamsey.S04.nbrLabels f a)) =
+      (HypercubeRamsey.FinProb.pi
+        (fun j : Fin n => HypercubeRamsey.S04.oddDraw M tag ω
+          (HypercubeRamsey.S04.oddNbr a j))).expect g := by
+  classical
+  let P : HypercubeRamsey.S04.OddRole n → HypercubeRamsey.FinProb (Fin N) :=
+    fun u => HypercubeRamsey.S04.oddDraw M tag ω u
+  let S := nbrSet a
+  let T := nbrTupleEquiv (N := N) a
+  let Qs := HypercubeRamsey.FinProb.pi (fun u : {u : HypercubeRamsey.S04.OddRole n // u ∈ S} => P u.1)
+  let Q := HypercubeRamsey.FinProb.pi (fun j : Fin n => P (HypercubeRamsey.S04.oddNbr a j))
+  let gS : (∀ u : {u : HypercubeRamsey.S04.OddRole n // u ∈ S}, Fin N) → ℝ :=
+    fun o => g (T o)
+  have hproj (f : HypercubeRamsey.S04.OddRole n → Fin N) :
+      g (HypercubeRamsey.S04.nbrLabels f a) = gS (fun u => f u.1) := by
+    congr 1
+  have hfull :
+      (HypercubeRamsey.S04.oddDrawLaw M tag ω).expect
+          (fun f => g (HypercubeRamsey.S04.nbrLabels f a)) =
+        (HypercubeRamsey.FinProb.pi P).expect (fun f => gS (fun u => f u.1)) := by
+    unfold HypercubeRamsey.FinProb.expect
+    apply Finset.sum_congr rfl
+    intro f hf
+    change (HypercubeRamsey.S04.oddDrawLaw M tag ω).w f *
+        g (HypercubeRamsey.S04.nbrLabels f a) =
+      (HypercubeRamsey.FinProb.pi P).w f * gS (fun u => f u.1)
+    rw [hproj]
+    simp [P, HypercubeRamsey.S04.oddDrawLaw]
+  rw [hfull, HypercubeRamsey.FinProb.pi_marginal_expect P S gS]
+  have hweight (y : Fin n → Fin N) : Qs.w (T.symm y) = Q.w y := by
+    dsimp [Qs, Q, HypercubeRamsey.FinProb.pi]
+    rw [← Finset.univ_eq_attach]
+    rw [nbrProduct_reindex]
+    simp [T, nbrTupleEquiv]
+  calc
+    Qs.expect gS = ∑ o, Qs.w o * gS o := rfl
+    _ = ∑ y, Qs.w (T.symm y) * gS (T.symm y) :=
+      Fintype.sum_equiv T _ _ (by intro o; simp)
+    _ = ∑ y, Q.w y * g y := by
+      apply Finset.sum_congr rfl
+      intro y hy
+      rw [hweight]
+      simp [gS, T]
+    _ = Q.expect g := rfl
 
 private theorem evenNearSet_card_le {n R : ℕ} (a : HypercubeRamsey.S04.EvenRole n) :
     (evenNearSet R a).card ≤ (HypercubeRamsey.S04.ballV a.1 R).card := by
@@ -2008,5 +2537,268 @@ theorem odd_load_prob_proof (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
   have hprob := hmono.trans htailP
   change P.pr (fun ω => ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) ≤ 1 / 10
   exact hprob.trans (hTail n hnTail)
+
+private theorem predGateWeight_nonneg
+    {β γ : ℝ} {G : HypercubeRamsey.Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+    (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+    (ω : HypercubeRamsey.S04.Prep M tag)
+    (a : HypercubeRamsey.S04.EvenRole n) (c : HypercubeRamsey.S04.Loc β γ n) :
+    0 ≤ predGateWeight M tag a c ω := by
+  classical
+  unfold predGateWeight
+  apply Finset.sum_nonneg
+  intro y hy
+  apply mul_nonneg
+  · apply mul_nonneg
+    · split_ifs <;> norm_num
+    · apply Finset.prod_nonneg
+      intro j hj
+      exact oddRow_nonneg M tag ω (HypercubeRamsey.S04.oddNbr a j) (y j)
+  · split_ifs <;> norm_num
+
+private theorem pred_fail_pair_bound
+    {β γ : ℝ} {G : HypercubeRamsey.Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+    (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+    (hGeo : HypercubeRamsey.S04.GeoCons M tag)
+    (ω : HypercubeRamsey.S04.Prep M tag)
+    (hSPre : HypercubeRamsey.S04.SPre M tag ω)
+    (J : HypercubeRamsey.FinProb (HypercubeRamsey.S04.OddRole n → Fin N))
+    (hInj : HypercubeRamsey.S04.InjOK M tag ω J)
+    (a : HypercubeRamsey.S04.EvenRole n)
+    (c : HypercubeRamsey.S04.Loc β γ n) :
+    J.pr (fun f => HypercubeRamsey.S04.sel M tag ω a.1 = some c ∧
+      ¬ HypercubeRamsey.S04.PredOK M tag ω a c
+        (HypercubeRamsey.S04.nbrLabels f a)) ≤
+      2 * predGateWeight M tag a c ω := by
+  classical
+  let P : HypercubeRamsey.S04.OddRole n → HypercubeRamsey.FinProb (Fin N) :=
+    fun u => HypercubeRamsey.S04.oddDraw M tag ω u
+  let S := nbrSet a
+  let failAt : (Fin n → Fin N) → Prop :=
+    fun y => HypercubeRamsey.S04.sel M tag ω a.1 = some c ∧
+      ¬ HypercubeRamsey.S04.PredOK M tag ω a c y
+  let g : (HypercubeRamsey.S04.OddRole n → Fin N) → ℝ :=
+    fun f => if failAt (HypercubeRamsey.S04.nbrLabels f a) then 1 else 0
+  let gy : (Fin n → Fin N) → ℝ := fun y => if failAt y then 1 else 0
+  let hgeo := hGeo ω hSPre.1
+  have hgood (u : HypercubeRamsey.S04.OddRole n) : HypercubeRamsey.S04.OddOK M tag ω u :=
+    hgeo.2 u
+  have hrow (u : HypercubeRamsey.S04.OddRole n) (y : Fin N) :
+      HypercubeRamsey.S04.oddRow M tag ω u y = (P u).w y := by
+    simp [P, HypercubeRamsey.S04.oddRow, hgood u]
+  have hScardNat : S.card ≤ n := by
+    dsimp [S, nbrSet]
+    calc
+      (Finset.univ.image (HypercubeRamsey.S04.oddNbr a)).card ≤
+          (Finset.univ : Finset (Fin n)).card := Finset.card_image_le
+      _ = n := by simp
+  have hnSq : (n : ℝ) ≤ (n : ℝ) ^ 2 := by
+    by_cases hn0 : n = 0
+    · simp [hn0]
+    · have hn1 : (1 : ℝ) ≤ n := by
+        exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hn0)
+      nlinarith [sq_nonneg ((n : ℝ) - 1)]
+  have hScard : (S.card : ℝ) ≤ (n : ℝ) ^ 2 := by
+    calc
+      (S.card : ℝ) ≤ n := by exact_mod_cast hScardNat
+      _ ≤ (n : ℝ) ^ 2 := hnSq
+  have hjoint : ∀ (S' : Finset (HypercubeRamsey.S04.OddRole n))
+      (o : HypercubeRamsey.S04.OddRole n → Fin N), (S'.card : ℝ) ≤ (n : ℝ) ^ 2 →
+      J.pr (fun f => ∀ u ∈ S', f u = o u) ≤
+        2 * ∏ u ∈ S', (P u).w (o u) := by
+    intro S' o hcard
+    simpa only [hrow] using hInj.2 S' o hcard
+  have hdep : HypercubeRamsey.FinProb.DependsOn g S := by
+    intro f f' hagree
+    have hlabels : HypercubeRamsey.S04.nbrLabels f a =
+        HypercubeRamsey.S04.nbrLabels f' a := by
+      funext j
+      exact hagree (HypercubeRamsey.S04.oddNbr a j) (by
+        dsimp [S, nbrSet]
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_univ j, rfl⟩)
+    simp [g, hlabels]
+  have hg0 (f : HypercubeRamsey.S04.OddRole n → Fin N) : 0 ≤ g f := by
+    dsimp [g]
+    split_ifs <;> norm_num
+  have hcomp := joint_expect_le_product P J S ((n : ℝ) ^ 2) hScard hjoint g hg0 hdep
+  have hpr : J.pr (fun f => failAt (HypercubeRamsey.S04.nbrLabels f a)) = J.expect g := by
+    unfold HypercubeRamsey.FinProb.pr HypercubeRamsey.FinProb.expect
+    apply Finset.sum_congr rfl
+    intro f hf
+    by_cases hfail : failAt (HypercubeRamsey.S04.nbrLabels f a)
+    · simp [g, hfail]
+    · simp [g, hfail]
+  have hselected_local :
+      HypercubeRamsey.S04.sel M tag ω a.1 = some c →
+        HypercubeRamsey.S04.EvLocal M tag ω a c := by
+    intro hsel
+    obtain ⟨c₀, hc₀⟩ := hgeo.1 a
+    have heq : c = c₀ := Option.some.inj (hsel.symm.trans hc₀.sel_eq)
+    subst c
+    exact hc₀
+  have hgateInd (y : Fin n → Fin N) :
+      gy y ≤
+        (if HypercubeRamsey.S04.EvLocal M tag ω a c then 1 else 0) *
+          (if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then 1 else 0) := by
+    by_cases hsel : HypercubeRamsey.S04.sel M tag ω a.1 = some c
+    · have hev := hselected_local hsel
+      simp [gy, failAt, hsel, hev]
+    · simp [gy, failAt, hsel]
+      split_ifs <;> norm_num
+  let Q : HypercubeRamsey.FinProb (Fin n → Fin N) :=
+    HypercubeRamsey.FinProb.pi (fun j : Fin n =>
+      HypercubeRamsey.S04.oddDraw M tag ω (HypercubeRamsey.S04.oddNbr a j))
+  have hQle : Q.expect gy ≤ predGateWeight M tag a c ω := by
+    unfold HypercubeRamsey.FinProb.expect predGateWeight
+    apply Finset.sum_le_sum
+    intro y hy
+    have hweight : Q.w y =
+        ∏ j, HypercubeRamsey.S04.oddRow M tag ω
+          (HypercubeRamsey.S04.oddNbr a j) (y j) := by
+      simp [Q, HypercubeRamsey.FinProb.pi, P, hrow]
+    rw [hweight]
+    have hprod0 : 0 ≤ ∏ j, HypercubeRamsey.S04.oddRow M tag ω
+        (HypercubeRamsey.S04.oddNbr a j) (y j) := by
+      apply Finset.prod_nonneg
+      intro j hj
+      exact oddRow_nonneg M tag ω (HypercubeRamsey.S04.oddNbr a j) (y j)
+    calc
+      (∏ j, HypercubeRamsey.S04.oddRow M tag ω
+          (HypercubeRamsey.S04.oddNbr a j) (y j)) * gy y ≤
+        (∏ j, HypercubeRamsey.S04.oddRow M tag ω
+          (HypercubeRamsey.S04.oddNbr a j) (y j)) *
+          ((if HypercubeRamsey.S04.EvLocal M tag ω a c then 1 else 0) *
+            (if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then 1 else 0)) :=
+          mul_le_mul_of_nonneg_left (hgateInd y) hprod0
+      _ = (if HypercubeRamsey.S04.EvLocal M tag ω a c then 1 else 0) *
+          (∏ j, HypercubeRamsey.S04.oddRow M tag ω
+            (HypercubeRamsey.S04.oddNbr a j) (y j)) *
+          (if ¬ HypercubeRamsey.S04.PredOK M tag ω a c y then 1 else 0) := by ring
+  have hodd := odd_neighbor_expect M tag ω a gy
+  have hPi : (HypercubeRamsey.FinProb.pi P).expect g = Q.expect gy := by
+    simpa [P, g, gy, Q, HypercubeRamsey.S04.oddDrawLaw] using hodd
+  calc
+    J.pr (fun f => HypercubeRamsey.S04.sel M tag ω a.1 = some c ∧
+        ¬ HypercubeRamsey.S04.PredOK M tag ω a c
+          (HypercubeRamsey.S04.nbrLabels f a)) = J.expect g := by
+            simpa [failAt] using hpr
+    _ ≤ 2 * (HypercubeRamsey.FinProb.pi P).expect g := hcomp
+    _ = 2 * Q.expect gy := by rw [hPi]
+    _ ≤ 2 * predGateWeight M tag a c ω :=
+      mul_le_mul_of_nonneg_left hQle (by norm_num)
+
+theorem pred_fail_prob_proof (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop}
+      {G : HypercubeRamsey.Colour} {X Y : Finset (Fin N)}
+      (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+      (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+      (q : HypercubeRamsey.S04.XProf M tag) (q' : HypercubeRamsey.S04.YProf M tag)
+      (J : HypercubeRamsey.S04.Prep M tag →
+        HypercubeRamsey.FinProb (HypercubeRamsey.S04.OddRole n → Fin N)),
+      HypercubeRamsey.S04.GeoCons M tag → HypercubeRamsey.S04.RefIndep M tag →
+      HypercubeRamsey.S04.Resample M tag q q' →
+      (∀ ω, HypercubeRamsey.S04.SPre M tag ω →
+        HypercubeRamsey.S04.InjOK M tag ω (J ω)) →
+      ∑ ω, (HypercubeRamsey.S04.prepLaw M tag q q').w ω *
+          (if HypercubeRamsey.S04.SPre M tag ω then
+            (J ω).pr (fun f => ∃ a, HypercubeRamsey.S04.PredFail M tag ω a
+              (HypercubeRamsey.S04.nbrLabels f a)) else 0) ≤ 1 / 10 := by
+  classical
+  obtain ⟨n₀, hTail⟩ := pred_fail_union_tail_small β γ hβ hβγ hγ
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X Y M tag q q' J hGeo hRef hResample hInj
+  let P : HypercubeRamsey.FinProb (HypercubeRamsey.S04.Prep M tag) :=
+    HypercubeRamsey.S04.prepLaw M tag q q'
+  let I := HypercubeRamsey.S04.EvenRole n × HypercubeRamsey.S04.Loc β γ n
+  let pairBad : HypercubeRamsey.S04.Prep M tag → I →
+      (HypercubeRamsey.S04.OddRole n → Fin N) → Prop :=
+    fun ω p f => HypercubeRamsey.S04.sel M tag ω p.1.1 = some p.2 ∧
+      ¬ HypercubeRamsey.S04.PredOK M tag ω p.1 p.2
+        (HypercubeRamsey.S04.nbrLabels f p.1)
+  let bad : HypercubeRamsey.S04.Prep M tag →
+      (HypercubeRamsey.S04.OddRole n → Fin N) → Prop :=
+    fun ω f => ∃ a, HypercubeRamsey.S04.PredFail M tag ω a
+      (HypercubeRamsey.S04.nbrLabels f a)
+  have hpoint (ω : HypercubeRamsey.S04.Prep M tag) :
+      (if HypercubeRamsey.S04.SPre M tag ω then (J ω).pr (bad ω) else 0) ≤
+        2 * ∑ p : I, predGateWeight M tag p.1 p.2 ω := by
+    by_cases hs : HypercubeRamsey.S04.SPre M tag ω
+    · simp only [if_pos hs]
+      have hmono : (J ω).pr (bad ω) ≤
+          (J ω).pr (fun f => ∃ p : I, pairBad ω p f) :=
+        HypercubeRamsey.S04.pr_mono (J ω) (by
+          intro f hbad
+          change ∃ a, ∃ c,
+            HypercubeRamsey.S04.sel M tag ω a.1 = some c ∧
+            ¬ HypercubeRamsey.S04.PredOK M tag ω a c
+              (HypercubeRamsey.S04.nbrLabels f a) at hbad
+          rcases hbad with ⟨a, c, hsel, hfail⟩
+          exact ⟨(a, c), hsel, hfail⟩)
+      have hUnion := pr_fintype_union (J ω) (pairBad ω)
+      calc
+        (J ω).pr (bad ω) ≤ (J ω).pr (fun f => ∃ p : I, pairBad ω p f) := hmono
+        _ ≤ ∑ p : I, (J ω).pr (pairBad ω p) := hUnion
+        _ ≤ ∑ p : I, 2 * predGateWeight M tag p.1 p.2 ω := by
+          apply Finset.sum_le_sum
+          intro p hp
+          exact pred_fail_pair_bound M tag hGeo ω hs (J ω) (hInj ω hs) p.1 p.2
+        _ = 2 * ∑ p : I, predGateWeight M tag p.1 p.2 ω := by
+          rw [← Finset.mul_sum]
+    · simp only [if_neg hs]
+      have hsum0 : 0 ≤ ∑ p : I, predGateWeight M tag p.1 p.2 ω := by
+        apply Finset.sum_nonneg
+        intro p hp
+        exact predGateWeight_nonneg M tag ω p.1 p.2
+      exact mul_nonneg (by norm_num) hsum0
+  have hsumExpect :
+      P.expect (fun ω => ∑ p : I, predGateWeight M tag p.1 p.2 ω) =
+        ∑ p : I, P.expect (fun ω => predGateWeight M tag p.1 p.2 ω) := by
+    unfold HypercubeRamsey.FinProb.expect
+    calc
+      (∑ ω, P.w ω * (∑ p : I, predGateWeight M tag p.1 p.2 ω)) =
+          ∑ ω, ∑ p : I, P.w ω * predGateWeight M tag p.1 p.2 ω := by
+        apply Finset.sum_congr rfl
+        intro ω hω
+        simpa using (Finset.mul_sum (s := (Finset.univ : Finset I))
+          (f := fun p : I => predGateWeight M tag p.1 p.2 ω) (a := P.w ω))
+      _ = ∑ p : I, ∑ ω, P.w ω * predGateWeight M tag p.1 p.2 ω := by
+        rw [Finset.sum_comm]
+  have hbound :
+      P.expect (fun ω => 2 * ∑ p : I, predGateWeight M tag p.1 p.2 ω) ≤
+        2 * (Fintype.card I : ℝ) * HypercubeRamsey.S04.eps4 β γ n := by
+    calc
+      P.expect (fun ω => 2 * ∑ p : I, predGateWeight M tag p.1 p.2 ω) =
+          2 * P.expect (fun ω => ∑ p : I, predGateWeight M tag p.1 p.2 ω) :=
+        HypercubeRamsey.FinProb.expect_smul P 2 _
+      _ = 2 * ∑ p : I, P.expect (fun ω => predGateWeight M tag p.1 p.2 ω) := by
+        rw [hsumExpect]
+      _ ≤ 2 * ∑ p : I, HypercubeRamsey.S04.eps4 β γ n := by
+        apply mul_le_mul_of_nonneg_left _ (by norm_num)
+        apply Finset.sum_le_sum
+        intro p hp
+        exact predGateWeight_expect_le_eps M tag q q' hRef hResample p.1 p.2
+      _ = 2 * (Fintype.card I : ℝ) * HypercubeRamsey.S04.eps4 β γ n := by
+        simp [Finset.sum_const, nsmul_eq_mul]
+        ring
+  have hmain :
+      P.expect (fun ω =>
+        if HypercubeRamsey.S04.SPre M tag ω then (J ω).pr (bad ω) else 0) ≤
+          1 / 10 := by
+    calc
+      P.expect (fun ω =>
+          if HypercubeRamsey.S04.SPre M tag ω then (J ω).pr (bad ω) else 0) ≤
+          P.expect (fun ω => 2 * ∑ p : I, predGateWeight M tag p.1 p.2 ω) :=
+        HypercubeRamsey.FinProb.expect_mono P hpoint
+      _ ≤ 2 * (Fintype.card I : ℝ) * HypercubeRamsey.S04.eps4 β γ n := hbound
+      _ ≤ 1 / 10 := by simpa [I] using hTail n hn
+  change P.expect (fun ω =>
+    if HypercubeRamsey.S04.SPre M tag ω then (J ω).pr
+      (fun f => ∃ a, HypercubeRamsey.S04.PredFail M tag ω a
+        (HypercubeRamsey.S04.nbrLabels f a)) else 0) ≤ 1 / 10
+  exact hmain
 
 end HypercubeRamsey.Lane_q_s04_load

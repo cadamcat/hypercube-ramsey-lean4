@@ -1552,6 +1552,124 @@ private theorem outerFilter_restrict_regular9 {P : Params9} {n N : ℕ} {M : Tag
   unfold restrictOr9
   rw [dif_pos hpos]
 
+private theorem prefixMass_suffix_bounds9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (base : Law N) (ord : List I.ID)
+    (hord : orderRegular9 E G ω base ord) (hbstar : P.bStar n ≤ 1 / 200)
+    (k : ℕ) : ∀ m : ℕ, k + m ≤ ord.length →
+      (1 / 2 - 2 * P.bStar n) ^ m * prefixMass9 E G ω base ord k ≤
+          prefixMass9 E G ω base ord (k + m) ∧
+        prefixMass9 E G ω base ord (k + m) ≤
+          (1 / 2 + 2 * P.bStar n) ^ m * prefixMass9 E G ω base ord k := by
+  classical
+  intro m
+  induction m with
+  | zero =>
+      intro hkm
+      simp
+  | succ m ih =>
+      intro hkm
+      have hstep : k + m < ord.length := by omega
+      have hdegrees := orderRegular_prefix_degrees9 S I E G ω base ord hord hbstar
+      let c : I.ID := ord[k + m]
+      have hget : ord[k + m]? = some c := by simp [c, hstep]
+      have hprev : ∀ j d, j < k + m → ord[j]? = some d →
+          (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω d) (prefixLaw9 E G ω base ord j) := by
+        intro j d hj hget'
+        exact hdegrees (k + m) (by omega) j d hj hget'
+      have hreg := hord (k + m) c hget hprev
+      have hregBounds := abs_le.mp hreg
+      have hbNonneg : 0 ≤ P.bStar n := by
+        dsimp [Params9.bStar]
+        positivity
+      have hlow : 0 ≤ (1 / 2 - 2 * P.bStar n : ℝ) := by nlinarith [hbstar]
+      have hhigh : 0 ≤ (1 / 2 + 2 * P.bStar n : ℝ) := by positivity
+      have hdegreeLow : 1 / 2 - 2 * P.bStar n ≤
+          rowDeg E G (anc9 ω c) (prefixLaw9 E G ω base ord (k + m)) := by
+        linarith
+      have hdegreeHigh : rowDeg E G (anc9 ω c) (prefixLaw9 E G ω base ord (k + m)) ≤
+          1 / 2 + 2 * P.bStar n := by
+        linarith
+      have hmassLB := prefixMass_lower9 S I E G ω base ord (k + m)
+        (by omega) (by
+          intro j d hj hget'
+          exact hdegrees (k + m) (by omega) j d hj hget')
+      have hmassPos : 0 < prefixMass9 E G ω base ord (k + m) :=
+        lt_of_lt_of_le (by positivity) hmassLB
+      have hrec := prefixMass_succ_eq9 (M := M) ω base ord (k + m) hstep hmassPos
+      have hih := ih (by omega)
+      constructor
+      · calc
+          (1 / 2 - 2 * P.bStar n) ^ (m + 1) *
+              prefixMass9 E G ω base ord k =
+              ((1 / 2 - 2 * P.bStar n) ^ m * prefixMass9 E G ω base ord k) *
+                (1 / 2 - 2 * P.bStar n) := by rw [pow_succ]; ring
+          _ ≤ prefixMass9 E G ω base ord (k + m) *
+                (1 / 2 - 2 * P.bStar n) :=
+                  mul_le_mul_of_nonneg_right hih.1 hlow
+          _ ≤ prefixMass9 E G ω base ord (k + m) *
+                rowDeg E G (anc9 ω c) (prefixLaw9 E G ω base ord (k + m)) :=
+                  mul_le_mul_of_nonneg_left hdegreeLow hmassPos.le
+          _ = prefixMass9 E G ω base ord (k + (m + 1)) := by
+                rw [show k + (m + 1) = k + m + 1 by omega, hrec]
+      · calc
+          prefixMass9 E G ω base ord (k + (m + 1)) =
+              prefixMass9 E G ω base ord (k + m) *
+                rowDeg E G (anc9 ω c) (prefixLaw9 E G ω base ord (k + m)) := by
+                  rw [show k + (m + 1) = k + m + 1 by omega, hrec]
+          _ ≤ prefixMass9 E G ω base ord (k + m) *
+                (1 / 2 + 2 * P.bStar n) :=
+                  mul_le_mul_of_nonneg_left hdegreeHigh hmassPos.le
+          _ ≤ ((1 / 2 + 2 * P.bStar n) ^ m *
+                prefixMass9 E G ω base ord k) * (1 / 2 + 2 * P.bStar n) :=
+                  mul_le_mul_of_nonneg_right hih.2 hhigh
+          _ = (1 / 2 + 2 * P.bStar n) ^ (m + 1) *
+                prefixMass9 E G ω base ord k := by rw [pow_succ]; ring
+
+private theorem outer_core_prefix_ratio_bounds9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    ∃ hm : 0 < prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+        (outerIDs9 I v b).card,
+      ((1 / 2 - 2 * P.bStar n) ^ (coreIDs9 I v b).card ≤
+          prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+            ((outerIDs9 I v b).card + (coreIDs9 I v b).card) /
+            prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+              (outerIDs9 I v b).card) ∧
+        (prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+            ((outerIDs9 I v b).card + (coreIDs9 I v b).card) /
+            prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+              (outerIDs9 I v b).card ≤
+          (1 / 2 + 2 * P.bStar n) ^ (coreIDs9 I v b).card) := by
+  classical
+  let O := outerIDs9 I v b
+  let K := coreIDs9 I v b
+  let ord := fullOrder9 I v b
+  let base := maskedLaw9 S ω b
+  have hlen : ord.length = O.card + K.card + 1 := by
+    simp [ord, O, K, fullOrder9, List.length_append]
+    omega
+  have hOlen : O.card ≤ ord.length := by omega
+  have hdegrees := orderRegular_prefix_degrees9 S I E G ω base ord hregular hbstar
+  have hdegreesO : ∀ j c', j < O.card → ord[j]? = some c' →
+      (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c') (prefixLaw9 E G ω base ord j) := by
+    intro j c' hj hget
+    exact hdegrees O.card hOlen j c' hj hget
+  have hmassLB := prefixMass_lower9 S I E G ω base ord O.card hOlen hdegreesO
+  have hm : 0 < prefixMass9 E G ω base ord O.card :=
+    lt_of_lt_of_le (by positivity) hmassLB
+  have hBounds := prefixMass_suffix_bounds9 S I E G ω base ord hregular hbstar
+    O.card K.card (by omega)
+  rcases hBounds with ⟨hbelow, habove⟩
+  refine ⟨hm, ?_⟩
+  constructor
+  · apply (le_div_iff₀ hm).2
+    exact hbelow
+  · apply (div_le_iff₀ hm).2
+    exact habove
+
 private theorem coreHit_mass_lower_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)

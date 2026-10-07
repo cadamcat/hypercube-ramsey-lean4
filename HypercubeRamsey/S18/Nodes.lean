@@ -35,6 +35,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
 import HypercubeRamsey.S18.Nodes_q_s18_n2
+import HypercubeRamsey.S18.Nodes_q_s18_n3
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -559,13 +560,19 @@ theorem L18_2i {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
         TransferGeometry X → SurvivalFacts X := by
-  sorry
+  classical
+  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T] with k hcell
+  intro PT hPT D hD X hgeom
+  refine ⟨hcell PT hPT D hD X hgeom, ?_⟩
+  constructor
+  · sorry
+  · sorry
 
 /-- L18.2j, 18:500–524. Cylinder identity for the actual adaptive recurrence. -/
 theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} {D : LateData hPT} {X : CriticalTransferData D}
     (P : TransferProtocol X) : CylinderFacts P := by
-  sorry
+  exact Lane_q_s18_n3.protocol_cylinder_facts P
 
 /-- L18.2k/l, 18:526–615. The independent-witness likelihood process and
 stopped moment/exception estimates are explicit. Choose cstop before stages. -/
@@ -575,7 +582,10 @@ theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X → SurvivalFacts X →
         ∀ P : TransferProtocol X, ReplyRangeBound P → CylinderFacts P → StopFacts P cstop := by
-  sorry
+  refine ⟨κ.xs / 8, ?_, ?_, ?_⟩
+  · exact div_pos hκ.xs_rng.1 (by norm_num)
+  · nlinarith [hκ.xs_rng.1]
+  · sorry
 
 /-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
 final unconditioned prefix-failure estimate. -/
@@ -585,6 +595,7 @@ theorem L18_2m {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, ∀ P : TransferProtocol X,
           StopFacts P cstop → TiltedDeviationBound P ctilt := by
+  refine ⟨cstop, hc, ?_⟩
   sorry
 
 /-- 18:630–657. Undo survival, use its second moment and restore deletion
@@ -598,7 +609,7 @@ theorem L18_2_finish {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
           ∀ P : TransferProtocol X, TiltedDeviationBound P ctilt →
             X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
               Real.exp (-Real.rpow (T.S.n k : ℝ) c1) := by
-  sorry
+  exact Lane_q_s18_n3.finish_from_survival_tilt hκ T ctilt hc
 
 theorem L18_2 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (hDisc : DeepDisc T κ.xs κ.α 0.04) (K27 : ℝ) (hK : 0 < K27) :

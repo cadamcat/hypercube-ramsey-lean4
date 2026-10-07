@@ -968,6 +968,19 @@ noncomputable def gainMeanSpecialLoss9 (P : Params9) (n : ℕ) : ℝ :=
   | .sub _ _ _ => -(P.m n : ℝ) * (2 * P.bStar n)
   | .lin _ _ _ _ => -((1 / 20 : ℝ) * P.aStar n * n)
 
+theorem clippedFrac9_bounds {P : Params9} {n N : ℕ} {M : TagMix N}
+    {S : Setup9 P n N M} {I : IDMap9 P n} {E : Fin N → Fin N → Prop} {G : Colour}
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hB : 0 ≤ P.bStar n) :
+    1 / 2 - 2 * P.bStar n ≤ clippedFrac9 S E G ω v b ∧
+      clippedFrac9 S E G ω v b ≤ 1 / 2 + 2 * P.bStar n := by
+  have hinterval : 1 / 2 - 2 * P.bStar n ≤ 1 / 2 + 2 * P.bStar n := by linarith
+  constructor
+  · dsimp [clippedFrac9]
+    exact le_max_left _ _
+  · dsimp [clippedFrac9]
+    exact max_le hinterval (min_le_left _ _)
+
 theorem eventual_gain_mean_margin9 (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,
       ((n : ℝ) - (P.m n : ℝ)) * P.aStar n + gainMeanSpecialLoss9 P n -

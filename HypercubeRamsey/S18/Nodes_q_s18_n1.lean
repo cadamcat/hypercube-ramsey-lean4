@@ -613,6 +613,50 @@ private theorem explicitRowKernel_mask_marginal {κ : CConsts} {T : Stage} {k : 
         (allowedMask_nonempty D j b hb mask))
   simpa [explicitRowKernel, K] using finLaw_map_bind_fst maskProfile K
 
+private noncomputable def kernelsFromProfiles {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (profiles : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b)) :
+    LateKernels D.encoding.base where
+  maskProfile := profiles
+  refK := fun j b h => explicitRowKernel D j b.1 b.2 h (profiles b.1)
+  refK_mask_marginal := fun j b h =>
+    explicitRowKernel_mask_marginal D j b.1 b.2 h (profiles b.1)
+
+private theorem transitionData_of_profiles {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (profiles : ∀ b : Pos T k, FinLaw (D.encoding.base.AllowedMask b)) :
+    TransitionData (D.withKernels (kernelsFromProfiles D profiles)) := by
+  refine ⟨?_⟩
+  intro j b h out
+  exact explicitRowKernel_formula D j b.1 b.2 h (profiles b.1) out
+
+private theorem withKernels_spec {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (hD : D.Spec) (K : LateKernels D.encoding.base) : (D.withKernels K).Spec := by
+  rcases hD with ⟨hcorner, hfresh, hthresholds, hcalibration, hbad, hbadPinned,
+    htypical, hsingleton, hscope, hcounts, hseparation, hevents, hcap,
+    hsuccess, hlocal⟩
+  have hperm : D.encoding.permLaw = (D.withKernels K).encoding.permLaw := by rfl
+  have hup (f) : D.upstreamBad f = (D.withKernels K).upstreamBad f := by
+    cases f <;> rfl
+  refine ⟨hcorner, hfresh, hthresholds, hcalibration, ?_, ?_, htypical,
+    hsingleton, ?_, hcounts, hseparation, ?_, hcap, ?_, hlocal⟩
+  · intro f
+    rw [← hperm, ← hup f]
+    exact hbad f
+  · intro C slot bin f
+    rw [← hperm, ← hup f]
+    exact hbadPinned C slot bin f
+  · intro v
+    change D.encoding.events.scope v = D.directCells v
+    exact hscope v
+  · intro v s
+    change D.encoding.events.S v s ↔ IsEvenRole v ∧ D.listFailure v s
+    exact hevents v s
+  · intro x hx htypical' havoid v hv
+    change D.initialValid v (D.encoding.initialState x)
+    exact hsuccess x hx htypical' havoid v hv
+
 private theorem lateError_pos {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (i : Fin PT.tiling.m) (remaining : ℕ) :
     0 < lateError κ T k PT i remaining := by

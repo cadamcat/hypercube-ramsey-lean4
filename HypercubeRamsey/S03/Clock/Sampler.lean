@@ -1933,7 +1933,312 @@ theorem short_path_bad_bound (B C_g : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, ∀ 
       0 < pathWeight D.edgeLaw π →
       D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n)
           (insertArrivals (pathInsertion π) ξ) (D.test' t)) ≤ clockShortBound B n := by
-  sorry
+  classical
+  let kconst : ℝ := clockK₀ B
+  have hkpos : 0 < clockK₀ B := by unfold clockK₀; linarith [hB]
+  have hA : 10 * (B + clockK₀ B) < clockA B - 1 := by
+    unfold clockA
+    nlinarith
+  obtain ⟨n₁, hgiant⟩ := clock_giant_tail B hB
+  obtain ⟨n₂, hpred⟩ := predicate_failure_under_insertion B C_g hB
+  obtain ⟨n₃, hunmatched⟩ := step7_unmatched_singleton B (clockA B - 1) C_g
+    (clockK₀ B) hB hkpos hA
+  refine ⟨max n₁ (max n₂ (max n₃ 2)), ?_⟩
+  intro n hn g hg R K _ _ _ Ω _ _ _ D t r hr v j hj π hπ havoid hweight
+  let fac : ℝ := 1 + (n : ℝ)⁻¹
+  let pn : ℝ := (n : ℝ) ^ (-(clockP B / 3))
+  have hn₁ : n₁ ≤ n := le_trans (le_max_left _ _) hn
+  have hn₂ : n₂ ≤ n := le_trans (le_max_left _ _) (le_trans (le_max_right _ _) hn)
+  have hnOuter : max n₂ (max n₃ 2) ≤ n := le_trans (le_max_right _ _) hn
+  have hnInner : max n₃ 2 ≤ n := le_trans (le_max_right _ _) hnOuter
+  have hn₃ : n₃ ≤ n := le_trans (le_max_left _ _) hnInner
+  have hn2 : 2 ≤ n := le_trans (le_max_right _ _) hnInner
+  have hnreal : (2 : ℝ) ≤ n := by exact_mod_cast hn2
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnreal
+  have hlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by linarith)
+  have hA20 : 20 ≤ clockA B := by unfold clockA clockK₀; linarith [hB]
+  have hpow20 : (10 : ℝ) ^ 6 ≤ (n : ℝ) ^ (20 : ℝ) := by
+    calc
+      (10 : ℝ) ^ 6 ≤ (2 : ℝ) ^ (20 : ℝ) := by norm_num
+      _ ≤ (n : ℝ) ^ (20 : ℝ) := Real.rpow_le_rpow (by norm_num) hnreal (by norm_num)
+  have hpowA : (n : ℝ) ^ (20 : ℝ) ≤ (n : ℝ) ^ clockA B :=
+    Real.rpow_le_rpow_of_exponent_le (le_trans (by norm_num) hnreal) hA20
+  have hgnum : (10 : ℝ) ^ 6 ≤ g :=
+    le_trans (le_trans hpow20 hpowA) (D.card_labels_ge (by omega))
+  have htheta := D.completed_theta_bounds hgnum
+  have hthetaAtom := D.completed_atom_le hn2
+  let roots : Finset (Endpoint D.Row g) := testRootEndpoints (g := g) D.scope' (D.test' t)
+  have hrootsSource :
+      ((testRootEndpoints (g := g) D.scope' (D.test' t)).card : ℝ) ≤ (n : ℝ) ^ B := by
+    cases t with
+    | predicate k =>
+        change ((testRootEndpoints (g := g) D.scope' (.predicate k)).card : ℝ) ≤
+          (n : ℝ) ^ B
+        calc
+          ((testRootEndpoints (g := g) D.scope' (.predicate k)).card : ℝ) ≤
+              ((D.scope' k).card : ℝ) := by exact_mod_cast (Finset.card_image_le)
+          _ = ((D.I.scope k).card : ℝ) := by simp [ClockData.scope']
+          _ ≤ (n : ℝ) ^ B := D.admissible.2.2.2.1 k
+    | singleton a =>
+        have hpow : (1 : ℝ) ≤ (n : ℝ) ^ B := by
+          calc
+            1 = (n : ℝ) ^ (0 : ℝ) := by simp
+            _ ≤ (n : ℝ) ^ B :=
+              Real.rpow_le_rpow_of_exponent_le (by linarith [hnreal]) (by linarith [hB])
+        have hcard : (testRootEndpoints (g := g) D.scope' (.singleton (Sum.inl a))).card ≤ 1 := by
+          simpa [testRootEndpoints, testRoots, ClockData.test'] using
+            (Finset.card_image_le (s := ({Sum.inl a} : Finset D.Row)) (f := Sum.inl))
+        have hcardReal : ((testRootEndpoints (g := g) D.scope' (.singleton (Sum.inl a))).card : ℝ) ≤ 1 :=
+          by exact_mod_cast hcard
+        exact hcardReal.trans hpow
+  have hroots : (roots.card : ℝ) ≤ (n : ℝ) ^ B := by simpa [roots] using hrootsSource
+  have hJupper : (clockJ B n : ℝ) ≤ kconst ^ 2 * Real.log (n : ℝ) := by
+    change (Nat.floor (kconst ^ 2 * Real.log (n : ℝ)) : ℝ) ≤ _
+    exact Nat.floor_le (by positivity)
+  have hpathSizeNat := insertionSize_pathInsertion_le
+    (Sum.inl (Sum.inl r)) v π hπ
+  have hpathSizeReal : (insertionSize (pathInsertion π) : ℝ) ≤ j := by exact_mod_cast hpathSizeNat
+  have hjReal : (j : ℝ) ≤ (clockJ B n : ℝ) := by exact_mod_cast hj
+  have hInsSize : (insertionSize (pathInsertion π) : ℝ) ≤
+      (kconst + 1) ^ 2 * Real.log (n : ℝ) := by
+    calc
+      (insertionSize (pathInsertion π) : ℝ) ≤ j := hpathSizeReal
+      _ ≤ clockJ B n := hjReal
+      _ ≤ kconst ^ 2 * Real.log (n : ℝ) := hJupper
+      _ ≤ (kconst + 1) ^ 2 * Real.log (n : ℝ) := by
+        gcongr
+        dsimp [kconst, clockK₀]
+        nlinarith [hB]
+  have hInsPos : ∀ e x, pathInsertion π e = some x → 0 < (D.edgeLaw e).w x := by
+    intro e x hx
+    exact HypercubeRamsey.Lane_q_clock_sampler.pathInsertion_value_pos
+      D.edgeLaw π hweight e x hx
+  have hinvalidRaw : D.law.pr
+      (fun ξ => ∃ e t o, ξ e = MeshClockValue.tick t o ∧ D.lab' e.1 o ≠ e.2) = 0 := by
+    simpa [ClockData.law, ClockData.edgeLaw] using
+      (invalid_marks_null D.mesh.δ D.mesh.δ_nonneg D.mesh.δ_le_one D.law' D.lab')
+  let invalidInserted : ClockField D.mesh.ticks D.Row g D.Out → Prop := fun ξ =>
+    ∃ e t o, (insertArrivals (pathInsertion π) ξ) e = MeshClockValue.tick t o ∧
+      D.lab' e.1 o ≠ e.2
+  have hinvalidInsertedSubset : ∀ ξ, invalidInserted ξ →
+      ∃ e t o, ξ e = MeshClockValue.tick t o ∧ D.lab' e.1 o ≠ e.2 := by
+    intro ξ hbad
+    rcases hbad with ⟨e, t, o, hfield, hlabel⟩
+    by_cases hnone : pathInsertion π e = none
+    · refine ⟨e, t, o, ?_, hlabel⟩
+      simpa [insertArrivals, hnone] using hfield
+    · obtain ⟨x, hsome⟩ := Option.ne_none_iff_exists'.mp hnone
+      have hx : x = MeshClockValue.tick t o := by
+        simpa [insertArrivals, hsome] using hfield
+      have hpositive := hInsPos e x hsome
+      have hvalid : D.lab' e.1 o = e.2 := by
+        by_contra hne
+        have hzero : (D.edgeLaw e).w (MeshClockValue.tick t o) = 0 := by
+          simp [ClockData.edgeLaw, samplingEdgeClockLaw, outputEdgeClockLaw,
+            markedClockLaw, markedClockWeight, outputMarkMass, hne]
+        rw [hx, hzero] at hpositive
+        norm_num at hpositive
+      exact False.elim (hlabel hvalid)
+  have hinvalidInsertedProb : D.law.pr invalidInserted = 0 := by
+    apply le_antisymm
+    · calc
+        _ ≤ D.law.pr
+            (fun ξ => ∃ e t o, ξ e = MeshClockValue.tick t o ∧ D.lab' e.1 o ≠ e.2) :=
+              finProb_pr_mono D.law hinvalidInsertedSubset
+        _ = 0 := hinvalidRaw
+    · exact finProb_pr_nonneg D.law _
+  have hactiveEq (ξ : ClockField D.mesh.ticks D.Row g D.Out) :
+      activeEndpoints ξ D.scope' (D.test' t) = closureFrom ξ roots := by
+    exact activeEndpoints_eq_closureFrom ξ D.scope' (D.test' t)
+  have hgiantClosure : D.law.pr
+      (fun ξ => clockLnat B n ≤ (closureFrom (insertArrivals (pathInsertion π) ξ) roots).card) ≤
+      (n : ℝ) ^ (-(2 * kconst)) := by
+    have h := hgiant n hn₁ D roots hroots (pathInsertion π) hInsSize
+    simpa [kconst] using h
+  have hgiantActive : D.law.pr
+      (fun ξ => clockLnat B n ≤ (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+        D.scope' (D.test' t)).card) ≤ (n : ℝ) ^ (-(2 * kconst)) := by
+    calc
+      _ = D.law.pr (fun ξ => clockLnat B n ≤
+          (closureFrom (insertArrivals (pathInsertion π) ξ) roots).card) := by
+            apply HypercubeRamsey.Lane_q_clock_sampler.finProb_pr_congr
+            intro ξ
+            rw [hactiveEq]
+      _ ≤ (n : ℝ) ^ (-(2 * kconst)) := hgiantClosure
+  have hUnmatchedAt := hunmatched n hn₃ D.mesh D.mesh.δ_nonneg D.mesh.δ_le_one
+    D.law' D.lab' D.C.theta hg
+    (fun y => D.completed_columns_eq y) htheta.2 (fun a y => hthetaAtom a y)
+    (pathInsertion π) hInsSize (Sum.inl r)
+  cases t with
+  | predicate k' =>
+      have hrootscope : r ∈ D.I.scope k' := by simpa [testRoots] using hr
+      have hscopeIns : ∀ e x, pathInsertion π e = some x → e.1 ∈ D.scope' k' →
+          e.1 = Sum.inl r := by
+        intro e x hins hmem
+        rcases HypercubeRamsey.Lane_q_clock_sampler.pathInsertion_row_origin π e x hins with
+          ⟨i, hrow⟩
+        have hiScope : (π i).1 ∈ D.scope' k' := by rw [hrow]; exact hmem
+        have hnotOther := havoid k' rfl
+        by_contra hne
+        exact hnotOther ⟨i, hiScope, by
+          intro heq
+          exact hne (hrow.symm.trans heq)⟩
+      have hpredBound := hpred n hn₂ g hg D k' r (pathInsertion π)
+        hInsSize hInsPos hscopeIns
+      have hpredBound' : D.law.pr
+          (fun ξ => testFails D.failure' D.scope' (greedyMatching (insertArrivals (pathInsertion π) ξ))
+            (.predicate k')) ≤
+          ((insertionSize (pathInsertion π) : ℝ) + 1) * fac * pn := by
+        simpa [fac, pn] using hpredBound
+      have hpredicateEvent : ∀ ξ,
+          closureBad D.lab' D.failure' D.scope' (clockLnat B n)
+            (insertArrivals (pathInsertion π) ξ) (.predicate k') ↔
+              (clockLnat B n ≤ (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+                D.scope' (.predicate k')).card) ∨
+                testFails D.failure' D.scope' (greedyMatching (insertArrivals (pathInsertion π) ξ))
+                  (.predicate k') := by
+        intro ξ
+        simp [closureBad, sampleTestBad]
+      have hbound : D.law.pr
+          (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n)
+            (insertArrivals (pathInsertion π) ξ) (.predicate k')) ≤
+          (n : ℝ) ^ (-(2 * kconst)) +
+            ((insertionSize (pathInsertion π) : ℝ) + 1) * fac * pn := by
+        calc
+          _ ≤ D.law.pr (fun ξ => (clockLnat B n ≤
+                (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+                  D.scope' (.predicate k')).card) ∨
+                testFails D.failure' D.scope' (greedyMatching (insertArrivals (pathInsertion π) ξ))
+                  (.predicate k')) :=
+              finProb_pr_mono D.law (by intro ξ hξ; exact (hpredicateEvent ξ).mp hξ)
+          _ ≤ D.law.pr (fun ξ => clockLnat B n ≤
+                (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+                  D.scope' (.predicate k')).card) +
+              D.law.pr (fun ξ => testFails D.failure' D.scope'
+                (greedyMatching (insertArrivals (pathInsertion π) ξ)) (.predicate k')) :=
+              FinProb.pr_union D.law _ _
+          _ ≤ (n : ℝ) ^ (-(2 * kconst)) +
+              ((insertionSize (pathInsertion π) : ℝ) + 1) * fac * pn :=
+              add_le_add hgiantActive hpredBound'
+      have hsizeplus : (insertionSize (pathInsertion π) : ℝ) + 1 ≤
+          (clockJ B n : ℝ) + 1 := by linarith [hInsSize, hjReal]
+      have hshort : (n : ℝ) ^ (-(2 * kconst)) +
+          ((insertionSize (pathInsertion π) : ℝ) + 1) * fac * pn ≤ clockShortBound B n := by
+        unfold clockShortBound
+        dsimp [fac, pn]
+        have hterm : ((insertionSize (pathInsertion π) : ℝ) + 1) *
+            (1 + (n : ℝ)⁻¹) * (n : ℝ) ^ (-(clockP B / 3)) ≤
+          ((clockJ B n : ℝ) + 1) * (1 + (n : ℝ)⁻¹) * (n : ℝ) ^ (-(clockP B / 3)) := by
+          have hbase : 0 ≤ (1 + (n : ℝ)⁻¹) * (n : ℝ) ^ (-(clockP B / 3)) := by positivity
+          simpa [mul_assoc] using mul_le_mul_of_nonneg_right hsizeplus hbase
+        have hunmatchedNonneg : 0 ≤ 2 * (n : ℝ) ^ (-(99 / 100 * kconst)) := by positivity
+        nlinarith [hterm, hunmatchedNonneg]
+      calc
+        _ = D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n)
+            (insertArrivals (pathInsertion π) ξ) (.predicate k')) := rfl
+        _ ≤ (n : ℝ) ^ (-(2 * kconst)) +
+              ((insertionSize (pathInsertion π) : ℝ) + 1) * fac * pn := hbound
+        _ ≤ clockShortBound B n := hshort
+  | singleton a =>
+      have hrSingle : r ∈ ({a} : Finset R) := by change r ∈ testRoots D.I.scope (.singleton a) at hr; simpa [testRoots] using hr
+      have hra : a = r := (Finset.mem_singleton.mp hrSingle).symm
+      subst a
+      have hbadSingleton : ∀ ξ,
+          sampleTestBad D.lab' D.failure' D.scope' (greedyMatching (insertArrivals (pathInsertion π) ξ))
+            (.singleton (Sum.inl r)) →
+            ((greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) = none) ∨
+              invalidInserted ξ := by
+        intro ξ hbad
+        by_cases hnone :
+            (greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) = none
+        · exact Or.inl hnone
+        · right
+          cases hstate : (greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) with
+          | none => exact False.elim (hnone hstate)
+          | some pair =>
+              rcases pair with ⟨y, o⟩
+              have hwrong : D.lab' (Sum.inl r) o ≠ y := by
+                intro heq
+                exact hbad ⟨y, o, hstate, heq⟩
+              obtain ⟨τ, harr⟩ := greedyMatching_assignment_origin
+                (insertArrivals (pathInsertion π) ξ) (Sum.inl r) y o hstate
+              by_cases hnoneIns : pathInsertion π (Sum.inl r, y) = none
+              · refine ⟨(Sum.inl r, y), τ, o, ?_, hwrong⟩
+                simpa [insertArrivals, hnoneIns] using harr
+              · obtain ⟨x, hxIns⟩ := Option.ne_none_iff_exists'.mp hnoneIns
+                have hx : x = MeshClockValue.tick τ o := by
+                  simpa [insertArrivals, hxIns] using harr
+                have hpositive := hInsPos (Sum.inl r, y) x hxIns
+                have hvalid : D.lab' (Sum.inl r) o = y := by
+                  by_contra hneq
+                  have hzero : (D.edgeLaw (Sum.inl r, y)).w (MeshClockValue.tick τ o) = 0 := by
+                    simp [ClockData.edgeLaw, samplingEdgeClockLaw, outputEdgeClockLaw,
+                      markedClockLaw, markedClockWeight, outputMarkMass, hneq]
+                  rw [hx, hzero] at hpositive
+                  norm_num at hpositive
+                exact False.elim (hwrong hvalid)
+      have hunmatchedBound : D.law.pr
+          (fun ξ => (greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) = none) ≤
+          2 * (n : ℝ) ^ (-((1 - D.C.theta) * kconst)) := by
+        simpa [ClockData.law, ClockData.edgeLaw] using hUnmatchedAt
+      have hthetaSmall : D.C.theta ≤ 1 / 100 := by norm_num at htheta ⊢; linarith
+      have hExp : -((1 - D.C.theta) * kconst) ≤ -(99 / 100 * kconst) := by
+        nlinarith [hthetaSmall, hkpos]
+      have hpowUnmatched : (n : ℝ) ^ (-((1 - D.C.theta) * kconst)) ≤
+          (n : ℝ) ^ (-(99 / 100 * kconst)) :=
+        Real.rpow_le_rpow_of_exponent_le (by linarith [hnreal]) hExp
+      have hOutcome : D.law.pr
+          (fun ξ => sampleTestBad D.lab' D.failure' D.scope'
+            (greedyMatching (insertArrivals (pathInsertion π) ξ)) (.singleton (Sum.inl r))) ≤
+          2 * (n : ℝ) ^ (-(99 / 100 * kconst)) := by
+        calc
+          _ ≤ D.law.pr (fun ξ =>
+              ((greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) = none) ∨
+                invalidInserted ξ) := finProb_pr_mono D.law (by intro ξ hξ; exact hbadSingleton ξ hξ)
+          _ ≤ D.law.pr (fun ξ =>
+              (greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) = none) +
+                D.law.pr invalidInserted := FinProb.pr_union D.law _ _
+          _ = D.law.pr (fun ξ =>
+              (greedyMatching (insertArrivals (pathInsertion π) ξ)).assignment (Sum.inl r) = none) := by
+                rw [hinvalidInsertedProb]
+                ring
+          _ ≤ 2 * (n : ℝ) ^ (-(99 / 100 * kconst)) :=
+                calc
+                  _ ≤ (2 : ℝ) * (n : ℝ) ^ (-((1 - D.C.theta) * kconst)) := hunmatchedBound
+                  _ ≤ (2 : ℝ) * (n : ℝ) ^ (-(99 / 100 * kconst)) :=
+                    mul_le_mul_of_nonneg_left hpowUnmatched (by norm_num)
+      have hbound : D.law.pr
+          (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n)
+            (insertArrivals (pathInsertion π) ξ) (.singleton (Sum.inl r))) ≤
+          (n : ℝ) ^ (-(2 * kconst)) + 2 * (n : ℝ) ^ (-(99 / 100 * kconst)) := by
+        have hgiant' : D.law.pr
+            (fun ξ => clockLnat B n ≤ (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+              D.scope' (.singleton (Sum.inl r))).card) ≤ (n : ℝ) ^ (-(2 * kconst)) := hgiantActive
+        calc
+          _ ≤ D.law.pr (fun ξ =>
+              (clockLnat B n ≤ (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+                D.scope' (.singleton (Sum.inl r))).card) ∨
+                sampleTestBad D.lab' D.failure' D.scope'
+                  (greedyMatching (insertArrivals (pathInsertion π) ξ)) (.singleton (Sum.inl r))) :=
+              finProb_pr_mono D.law (by intro ξ hξ; simpa [closureBad] using hξ)
+          _ ≤ D.law.pr (fun ξ => clockLnat B n ≤
+                (activeEndpoints (insertArrivals (pathInsertion π) ξ)
+                  D.scope' (.singleton (Sum.inl r))).card) +
+              D.law.pr (fun ξ => sampleTestBad D.lab' D.failure' D.scope'
+                (greedyMatching (insertArrivals (pathInsertion π) ξ)) (.singleton (Sum.inl r))) :=
+              FinProb.pr_union D.law _ _
+          _ ≤ (n : ℝ) ^ (-(2 * kconst)) + 2 * (n : ℝ) ^ (-(99 / 100 * kconst)) :=
+              add_le_add hgiant' hOutcome
+      have hshort :
+          (n : ℝ) ^ (-(2 * kconst)) + 2 * (n : ℝ) ^ (-(99 / 100 * kconst)) ≤
+            clockShortBound B n := by
+        have hthird : 0 ≤ ((clockJ B n : ℝ) + 1) * (1 + (n : ℝ)⁻¹) *
+            (n : ℝ) ^ (-(clockP B / 3)) := by positivity
+        unfold clockShortBound
+        nlinarith [hthird]
+      calc
+        _ ≤ (n : ℝ) ^ (-(2 * kconst)) + 2 * (n : ℝ) ^ (-(99 / 100 * kconst)) := hbound
+        _ ≤ clockShortBound B n := hshort
 
 /-- L3.10h-num (03:1099–1104): the final arithmetic of the incidence bound. With `D = n^B`, `x = K₀ log n + 2`,
 `J = ⌊K₀² log n⌋` and `λ = n^{-(A_*-1)}`: the one-row short paths, the two-row exception and the long paths

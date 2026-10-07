@@ -307,4 +307,66 @@ theorem pi_pr_pinned_eq_rest {ι : Type*} [Fintype ι] [DecidableEq ι]
         (fun b => F (pinCoordinateRest i o b)) := hrestSplit
     _ = (FinProb.pi (fun j : {j // j ≠ i} => P j.1)).pr
         (fun b => F (pinCoordinateRest i o b)) := by rw [hrestLaw]
+
+theorem pathInsertion_value_pos {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
+    [∀ a, Fintype (Ω a)]
+    (edgeLaw : ∀ e : HypercubeRamsey.Clock.RowLabel R g,
+      FinProb (HypercubeRamsey.Clock.MeshClockValue T (Ω e.1)))
+    {j : ℕ} (π : Fin j → HypercubeRamsey.Clock.ClockCandidate T R g Ω)
+    (hweight : 0 < HypercubeRamsey.Clock.pathWeight edgeLaw π)
+    (e : HypercubeRamsey.Clock.RowLabel R g)
+    (x : HypercubeRamsey.Clock.MeshClockValue T (Ω e.1))
+    (hins : HypercubeRamsey.Clock.pathInsertion π e = some x) :
+    0 < (edgeLaw e).w x := by
+  classical
+  have hfind : (List.ofFn π).findSome? (fun c => HypercubeRamsey.Clock.candidateValueAt c e) =
+      some x := by simpa [HypercubeRamsey.Clock.pathInsertion] using hins
+  rcases List.exists_of_findSome?_eq_some hfind with ⟨c, hc, hcv⟩
+  rcases List.mem_ofFn.mp hc with ⟨i, rfl⟩
+  have hfactor : 0 <
+      (edgeLaw ((π i).1, (π i).2.1)).w
+        (HypercubeRamsey.Clock.MeshClockValue.tick (π i).2.2.1 (π i).2.2.2) := by
+    by_contra hnot
+    have hnonneg := (edgeLaw ((π i).1, (π i).2.1)).nonneg
+      (HypercubeRamsey.Clock.MeshClockValue.tick (π i).2.2.1 (π i).2.2.2)
+    have hzero : (edgeLaw ((π i).1, (π i).2.1)).w
+        (HypercubeRamsey.Clock.MeshClockValue.tick (π i).2.2.1 (π i).2.2.2) = 0 :=
+      le_antisymm (le_of_not_gt hnot) hnonneg
+    have hprod : HypercubeRamsey.Clock.pathWeight edgeLaw π = 0 := by
+      unfold HypercubeRamsey.Clock.pathWeight
+      exact Finset.prod_eq_zero (Finset.mem_univ i) hzero
+    rw [hprod] at hweight
+    norm_num at hweight
+  unfold HypercubeRamsey.Clock.candidateValueAt at hcv
+  split at hcv
+  · rename_i hmatch
+    have hvalue := Option.some.inj hcv
+    rcases e with ⟨a, y⟩
+    have hrow : (π i).1 = a := hmatch.1
+    have hlabel : (π i).2.1 = y := hmatch.2
+    subst a
+    subst y
+    have hx : HypercubeRamsey.Clock.MeshClockValue.tick (π i).2.2.1 (π i).2.2.2 = x := by
+      simpa using hvalue
+    rw [← hx]
+    exact hfactor
+  · simp at hcv
+
+theorem pathInsertion_row_origin {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
+    {j : ℕ} (π : Fin j → HypercubeRamsey.Clock.ClockCandidate T R g Ω)
+    (e : HypercubeRamsey.Clock.RowLabel R g)
+    (x : HypercubeRamsey.Clock.MeshClockValue T (Ω e.1))
+    (hins : HypercubeRamsey.Clock.pathInsertion π e = some x) :
+    ∃ i, (π i).1 = e.1 := by
+  classical
+  have hfind : (List.ofFn π).findSome? (fun c => HypercubeRamsey.Clock.candidateValueAt c e) =
+      some x := by simpa [HypercubeRamsey.Clock.pathInsertion] using hins
+  rcases List.exists_of_findSome?_eq_some hfind with ⟨c, hc, hcv⟩
+  rcases List.mem_ofFn.mp hc with ⟨i, rfl⟩
+  unfold HypercubeRamsey.Clock.candidateValueAt at hcv
+  split at hcv
+  · rename_i hmatch
+    exact ⟨i, hmatch.1⟩
+  · simp at hcv
+
 end HypercubeRamsey.Lane_q_clock_sampler

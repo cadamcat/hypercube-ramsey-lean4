@@ -1212,7 +1212,7 @@ theorem cubeAdj_exists_flip {n : ℕ} (v w : CubeVertex n)
   · have hEq := hother j hji
     simp [cubeFlip, hji, hEq]
 
-private theorem hammingDist_cubeFlip_of_eq {d : ℕ} (x y : CubeVertex d) (i : Fin d)
+theorem hammingDist_cubeFlip_of_eq {d : ℕ} (x y : CubeVertex d) (i : Fin d)
     (hi : x i = y i) :
     _root_.hammingDist x (cubeFlip y i) = _root_.hammingDist x y + 1 := by
   classical
@@ -1229,7 +1229,7 @@ private theorem hammingDist_cubeFlip_of_eq {d : ℕ} (x y : CubeVertex d) (i : F
   rw [Finset.card_insert_of_notMem hiD]
   simp [D, _root_.hammingDist]
 
-private theorem card_flip_neighbors_bound {d : ℕ} (v : CubeVertex d)
+theorem card_flip_neighbors_bound {d : ℕ} (v : CubeVertex d)
     (B : Finset (CubeVertex d)) (D : Finset (Fin d))
     (hB : ∀ b ∈ B, ∃ i ∈ D, cubeFlip v i = b) : B.card ≤ D.card := by
   classical
@@ -1261,7 +1261,7 @@ private theorem card_flip_neighbors_bound {d : ℕ} (v : CubeVertex d)
     _ = (Finset.univ.image f).card := himagecard.symm
     _ ≤ D.card := Finset.card_le_card himage
 
-private theorem specialWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
+theorem specialWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
     (v : CubeVertex n) (i : Fin n) (hi : m ≤ i.val) :
     specialWord9 m (cubeFlip v i) = specialWord9 m v := by
   funext k
@@ -1273,7 +1273,7 @@ private theorem specialWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
     omega
   simp [specialWord9, k', cubeFlip, hki, lt_of_lt_of_le k.isLt hm]
 
-private theorem residualWord9_cubeFlip_special {m n : ℕ} (hm : m ≤ n)
+theorem residualWord9_cubeFlip_special {m n : ℕ} (hm : m ≤ n)
     (v : CubeVertex n) (i : Fin n) (hi : i.val < m) :
     residualWord9 m (cubeFlip v i) = residualWord9 m v := by
   funext k
@@ -1285,7 +1285,7 @@ private theorem residualWord9_cubeFlip_special {m n : ℕ} (hm : m ≤ n)
     omega
   simp [residualWord9, k', cubeFlip, hki]
 
-private theorem specialWord9_doubleFlip_at_first {m n : ℕ} (hm : m ≤ n)
+theorem specialWord9_doubleFlip_at_first {m n : ℕ} (hm : m ≤ n)
     (v : CubeVertex n) (i j : Fin n) (hij : i ≠ j) (hi : i.val < m) :
     specialWord9 m (cubeFlip (cubeFlip v i) j) ⟨i.val, hi⟩ ≠
       specialWord9 m v ⟨i.val, hi⟩ := by
@@ -1307,7 +1307,7 @@ private theorem specialWord9_doubleFlip_at_first {m n : ℕ} (hm : m ≤ n)
   rw [htarget, houter, hinner, hsource]
   cases hv : v k' <;> simp [hv]
 
-private theorem residualWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
+theorem residualWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
     (v : CubeVertex n) (i : Fin n) (hi : m ≤ i.val) :
     let k : Fin (n - m) := ⟨i.val - m, by omega⟩
     residualWord9 m (cubeFlip v i) = cubeFlip (residualWord9 m v) k := by
@@ -1331,5 +1331,48 @@ private theorem residualWord9_cubeFlip_residual {m n : ℕ} (hm : m ≤ n)
       dsimp [l', k] at hval ⊢
       omega
     simp [residualWord9, cubeFlip, l', k, hidx, hlk]
+
+theorem cubeFlip_involutive {d : ℕ} (v : CubeVertex d) (i : Fin d) :
+    cubeFlip (cubeFlip v i) i = v := by
+  funext k
+  by_cases hki : k = i
+  · subst k
+    simp [cubeFlip]
+  · simp [cubeFlip, hki]
+
+theorem hammingDist_two_cubeFlips {d : ℕ} (v : CubeVertex d) (i j : Fin d)
+    (hij : i ≠ j) :
+    _root_.hammingDist v (cubeFlip (cubeFlip v i) j) = 2 := by
+  classical
+  have hcoordi : cubeFlip (cubeFlip v i) j i = !v i := by
+    have houter : cubeFlip (cubeFlip v i) j i = cubeFlip v i i :=
+      Function.update_of_ne hij _ _
+    calc
+      _ = cubeFlip v i i := houter
+      _ = !v i := by simp [cubeFlip]
+  have hcoordj : cubeFlip (cubeFlip v i) j j = !v j := by
+    have hinner : cubeFlip v i j = v j := Function.update_of_ne hij.symm _ _
+    calc
+      _ = !(cubeFlip v i j) := by simp [cubeFlip]
+      _ = !v j := by rw [hinner]
+  have hcoord_other (k : Fin d) (hki : k ≠ i) (hkj : k ≠ j) :
+      cubeFlip (cubeFlip v i) j k = v k := by
+    have hinner : cubeFlip v i k = v k := Function.update_of_ne hki _ _
+    have houter : cubeFlip (cubeFlip v i) j k = cubeFlip v i k :=
+      Function.update_of_ne hkj _ _
+    exact houter.trans hinner
+  have hfilter :
+      Finset.univ.filter (fun k : Fin d => v k ≠ cubeFlip (cubeFlip v i) j k) = {i, j} := by
+    ext k
+    by_cases hki : k = i
+    · subst k
+      cases hv : v i <;> simp [hcoordi, hv, hij]
+    · by_cases hkj : k = j
+      · subst k
+        cases hv : v j <;> simp [hcoordj, hv, hij]
+      · have hcoord := hcoord_other k hki hkj
+        simp [hcoord, hki, hkj]
+  rw [_root_.hammingDist, hfilter]
+  simp [hij]
 
 end HypercubeRamsey.Lane_q_s09_map

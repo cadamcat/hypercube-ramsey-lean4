@@ -485,7 +485,379 @@ theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P)
         _ = 6 * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by ring
     exact hcoreReal.trans hcoreSlack
   · intro v hvEven id hid
-    sorry
+    classical
+    let B : Finset (CubeVertex n) := Finset.univ.filter fun b =>
+      (cube n).Adj v b ∧ id ∈ seenIDs9 center b
+    let DeltaS : Finset (Fin (P.m n)) := Finset.univ.filter fun k =>
+      id.slice k ≠ specialWord9 (P.m n) v k
+    let DeltaR : Finset (Fin (n - P.m n)) := Finset.univ.filter fun k =>
+      id.location k ≠ residualWord9 (P.m n) v k
+    let toS : Fin (P.m n) → Fin n := fun k => ⟨k.val, by omega⟩
+    let toR : Fin (n - P.m n) → Fin n := fun k => ⟨P.m n + k.val, by omega⟩
+    let DeltaSFull := DeltaS.image toS
+    let DeltaRFull := DeltaR.image toR
+    have hSCard : DeltaS.card = _root_.hammingDist id.slice (specialWord9 (P.m n) v) := by
+      simp [DeltaS, _root_.hammingDist]
+    have hRCard : DeltaR.card = _root_.hammingDist id.location (residualWord9 (P.m n) v) := by
+      simp [DeltaR, _root_.hammingDist]
+    have htoSInj : Function.Injective toS := by
+      intro k l h
+      have hv : (toS k).val = (toS l).val := congrArg Fin.val h
+      apply Fin.ext
+      simpa [toS] using hv
+    have htoRInj : Function.Injective toR := by
+      intro k l h
+      apply Fin.ext
+      have hv := congrArg Fin.val h
+      dsimp [toR] at hv
+      omega
+    have hSFullCard : DeltaSFull.card = DeltaS.card := by
+      exact Finset.card_image_of_injective DeltaS htoSInj
+    have hRFullCard : DeltaRFull.card = DeltaR.card := by
+      exact Finset.card_image_of_injective DeltaR htoRInj
+    have hmemS (k : Fin (P.m n)) (hk : id.slice k ≠ specialWord9 (P.m n) v k) :
+        toS k ∈ DeltaSFull := by
+      apply Finset.mem_image.mpr
+      exact ⟨k, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hk⟩, rfl⟩
+    have hmemR (k : Fin (n - P.m n))
+        (hk : id.location k ≠ residualWord9 (P.m n) v k) : toR k ∈ DeltaRFull := by
+      apply Finset.mem_image.mpr
+      exact ⟨k, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hk⟩, rfl⟩
+    have hcenterMem : center v ∈ core v := by
+      let j : Fin (hc.levels n + 1) := (center v).level
+      have hlevel : j.val = height9 Pp A v := (hcenter v).2.2.1
+      have hj : j ∈ levelWindow v := by simp [levelWindow, j, hlevel]
+      have hsame : center v ∈ sameLayer v j := by
+        simp only [sameLayer, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨(hcenter v).2.2.2, (hcenter v).1, (hcenter v).2.1, rfl⟩
+      exact Finset.mem_biUnion.mpr ⟨j, hj, Finset.mem_union_left _ hsame⟩
+    have hself : center v ≠ id := by
+      intro heq
+      subst id
+      exact hid hcenterMem
+    have hpath (b : CubeVertex n) (hb : b ∈ B) :
+        ∃ i j a, cubeFlip v i = b ∧
+          (cube n).Adj b a ∧ a = cubeFlip (cubeFlip v i) j ∧ center a = id ∧ i ≠ j := by
+      rcases Finset.mem_filter.mp hb with ⟨_, ⟨hvb, hseen⟩⟩
+      obtain ⟨i, hbi⟩ := Lane_q_s09_map.cubeAdj_exists_flip v b hvb
+      change id ∈ (Finset.univ.filter fun a : CubeVertex n => (cube n).Adj b a).image center at hseen
+      rcases Finset.mem_image.mp hseen with ⟨a, ha, hca⟩
+      have hba : (cube n).Adj b a := (Finset.mem_filter.mp ha).2
+      obtain ⟨j, hbj⟩ := Lane_q_s09_map.cubeAdj_exists_flip b a hba
+      have haneqv : a ≠ v := by
+        intro hav
+        apply hself
+        calc
+          center v = center a := (congrArg center hav).symm
+          _ = id := hca
+      have hformula : a = cubeFlip (cubeFlip v i) j := by
+        calc
+          a = cubeFlip b j := hbj.symm
+          _ = cubeFlip (cubeFlip v i) j := by rw [hbi]
+      have hij : i ≠ j := by
+        intro heq
+        subst j
+        rw [Lane_q_s09_map.cubeFlip_involutive] at hformula
+        exact haneqv hformula
+      exact ⟨i, j, a, hbi, hba, hformula, hca, hij⟩
+    have hcoreSame (ha : activeAt9 Pp A id)
+        (hs : id.slice = specialWord9 (P.m n) v)
+        (hd : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤ P.radius n)
+        (hl : Nat.dist id.level.val (height9 Pp A v) ≤ 1) : id ∈ core v := by
+      let j := id.level
+      have hj : j ∈ levelWindow v := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        simpa [j, Nat.dist_comm] using hl
+      have hsame : id ∈ sameLayer v j := by
+        simp only [sameLayer, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨ha, hs, hd, rfl⟩
+      exact Finset.mem_biUnion.mpr ⟨j, hj, Finset.mem_union_left _ hsame⟩
+    have hcoreAdj (ha : activeAt9 Pp A id)
+        (hs : _root_.hammingDist id.slice (specialWord9 (P.m n) v) = 1)
+        (hd : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤ P.radius n - 1)
+        (hl : Nat.dist id.level.val (height9 Pp A v) ≤ 1) : id ∈ core v := by
+      let j := id.level
+      have hj : j ∈ levelWindow v := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        simpa [j, Nat.dist_comm] using hl
+      have hadj : id ∈ adjLayer v j := by
+        simp only [adjLayer, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨ha, hs, hd, rfl⟩
+      exact Finset.mem_biUnion.mpr ⟨j, hj, Finset.mem_union_right _ hadj⟩
+    by_cases hBne : B.Nonempty
+    · obtain ⟨b₀, hb₀⟩ := hBne
+      obtain ⟨i₀, j₀, a₀, hbi₀, hba₀, hformula₀, hca₀, hij₀⟩ := hpath b₀ hb₀
+      have htwo₀ : _root_.hammingDist v a₀ = 2 := by
+        rw [hformula₀]
+        exact Lane_q_s09_map.hammingDist_two_cubeFlips v i₀ j₀ hij₀
+      have hsliceLe : _root_.hammingDist id.slice (specialWord9 (P.m n) v) ≤ 2 := by
+        have hida₀ := by simpa [hca₀] using hcenter a₀
+        calc
+          _ = _root_.hammingDist (specialWord9 (P.m n) a₀) (specialWord9 (P.m n) v) := by
+            rw [hida₀.1]
+          _ ≤ _root_.hammingDist a₀ v := Lane_q_s09_map.specialProjectionDist_le hmle a₀ v
+          _ = 2 := by rw [_root_.hammingDist_comm]; exact htwo₀
+      have hRle2 : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤
+          P.radius n + 2 := by
+        have hida₀ := by simpa [hca₀] using hcenter a₀
+        have hresdist := (Lane_q_s09_map.residualProjectionDist_le hmle a₀ v).trans
+          (by simpa [_root_.hammingDist_comm] using (le_of_eq htwo₀))
+        calc
+          _ ≤ _root_.hammingDist id.location (residualWord9 (P.m n) a₀) +
+              _root_.hammingDist (residualWord9 (P.m n) a₀) (residualWord9 (P.m n) v) :=
+                _root_.hammingDist_triangle _ _ _
+          _ ≤ P.radius n + 2 := Nat.add_le_add hida₀.2.1 hresdist
+      by_cases hs0 : _root_.hammingDist id.slice (specialWord9 (P.m n) v) = 0
+      · have hsliceEq : id.slice = specialWord9 (P.m n) v :=
+          (_root_.hammingDist_lt_one).mp (by omega)
+        have hSupport (b : CubeVertex n) (hb : b ∈ B) :
+            ∃ k ∈ DeltaRFull, cubeFlip v k = b := by
+          rcases hpath b hb with ⟨i, j, a, hbi, hba, hformula, hca, hij⟩
+          have htwo : _root_.hammingDist v a = 2 := by
+            rw [hformula]
+            exact Lane_q_s09_map.hammingDist_two_cubeFlips v i j hij
+          have hida := by simpa [hca] using hcenter a
+          have hregular : ∀ w, _root_.hammingDist v w ≤ 2 →
+              Nat.dist (height9 Pp A v) (height9 Pp A w) ≤ 1 := (hgood v).choose_spec.2
+          have hlevelClose : Nat.dist id.level.val (height9 Pp A v) ≤ 1 := by
+            rw [hida.2.2.1]
+            have hreg := hregular a (by rw [htwo])
+            simpa [Nat.dist_comm] using hreg
+          have hRgt : P.radius n < _root_.hammingDist id.location (residualWord9 (P.m n) v) := by
+            by_contra hnot
+            have hd : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤ P.radius n := by omega
+            exact hid (hcoreSame hida.2.2.2 hsliceEq hd hlevelClose)
+          have hiResidual : P.m n ≤ i.val := by
+            by_contra hnot
+            have hiSpecial : i.val < P.m n := by omega
+            have hcoord := Lane_q_s09_map.specialWord9_doubleFlip_at_first hmle v i j hij hiSpecial
+            have hcoord' : specialWord9 (P.m n) a ⟨i.val, hiSpecial⟩ ≠
+                specialWord9 (P.m n) v ⟨i.val, hiSpecial⟩ := by
+              simpa [hformula] using hcoord
+            have hidcoord : id.slice ⟨i.val, hiSpecial⟩ ≠
+                specialWord9 (P.m n) v ⟨i.val, hiSpecial⟩ := by
+              rw [hida.1]
+              exact hcoord'
+            exact hidcoord (congrArg (fun s : CubeVertex (P.m n) => s ⟨i.val, hiSpecial⟩) hsliceEq)
+          let k : Fin (n - P.m n) := ⟨i.val - P.m n, by omega⟩
+          have htoR : toR k = i := by
+            apply Fin.ext
+            dsimp [toR, k]
+            omega
+          have hresb : residualWord9 (P.m n) b =
+              cubeFlip (residualWord9 (P.m n) v) k := by
+            rw [← hbi]
+            simpa [k] using
+              (Lane_q_s09_map.residualWord9_cubeFlip_residual hmle v i hiResidual)
+          by_cases hmatch : id.location k = residualWord9 (P.m n) v k
+          · have hflipDist := Lane_q_s09_map.hammingDist_cubeFlip_of_eq id.location
+              (residualWord9 (P.m n) v) k hmatch
+            have hbaDist : _root_.hammingDist b a = 1 := by
+              simpa [OAI.HypercubeRamsey.cube] using hba
+            have hresab : _root_.hammingDist (residualWord9 (P.m n) a)
+                (residualWord9 (P.m n) b) ≤ 1 :=
+              (Lane_q_s09_map.residualProjectionDist_le hmle a b).trans (by
+                rw [_root_.hammingDist_comm]
+                exact hbaDist.le)
+            have himpossible : _root_.hammingDist id.location (residualWord9 (P.m n) v) + 1 ≤
+                P.radius n + 1 := by
+              calc
+                _ = _root_.hammingDist id.location (residualWord9 (P.m n) b) := by
+                  rw [hresb]
+                  exact hflipDist.symm
+                _ ≤ _root_.hammingDist id.location (residualWord9 (P.m n) a) +
+                      _root_.hammingDist (residualWord9 (P.m n) a) (residualWord9 (P.m n) b) :=
+                    _root_.hammingDist_triangle _ _ _
+                _ ≤ P.radius n + 1 := Nat.add_le_add hida.2.1 hresab
+            omega
+          · have hkD : k ∈ DeltaR :=
+              Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmatch⟩
+            refine ⟨toR k, ?_, ?_⟩
+            · exact Finset.mem_image.mpr ⟨k, hkD, rfl⟩
+            · rw [htoR]
+              exact hbi
+        have hcount := Lane_q_s09_map.card_flip_neighbors_bound v B DeltaRFull hSupport
+        calc
+          B.card ≤ DeltaRFull.card := hcount
+          _ = DeltaR.card := hRFullCard
+          _ = _root_.hammingDist id.location (residualWord9 (P.m n) v) := hRCard
+          _ ≤ P.radius n + 2 := hRle2
+          _ ≤ P.radius n + 3 := by omega
+      · by_cases hs1 : _root_.hammingDist id.slice (specialWord9 (P.m n) v) = 1
+        · have hresAV_le_one (a : CubeVertex n) (hca : center a = id)
+              (htwo : _root_.hammingDist v a = 2) :
+              _root_.hammingDist (residualWord9 (P.m n) a)
+                (residualWord9 (P.m n) v) ≤ 1 := by
+            have hida := by simpa [hca] using hcenter a
+            have hspeca : _root_.hammingDist (specialWord9 (P.m n) a)
+                (specialWord9 (P.m n) v) = 1 := by
+              rw [← hida.1]
+              exact hs1
+            have hsplit := Lane_q_s09_map.splitProjectionDist_add_le hmle a v
+            have hsum : _root_.hammingDist (specialWord9 (P.m n) a)
+                (specialWord9 (P.m n) v) +
+                  _root_.hammingDist (residualWord9 (P.m n) a)
+                    (residualWord9 (P.m n) v) ≤ 2 := by
+              calc
+                _ ≤ _root_.hammingDist a v := hsplit
+                _ = 2 := by rw [_root_.hammingDist_comm]; exact htwo
+            rw [hspeca] at hsum
+            omega
+          have hSupport (b : CubeVertex n) (hb : b ∈ B) :
+              ∃ k ∈ DeltaRFull ∪ DeltaSFull, cubeFlip v k = b := by
+            rcases hpath b hb with ⟨i, j, a, hbi, hba, hformula, hca, hij⟩
+            have htwo : _root_.hammingDist v a = 2 := by
+              rw [hformula]
+              exact Lane_q_s09_map.hammingDist_two_cubeFlips v i j hij
+            have hida := by simpa [hca] using hcenter a
+            have hregular : ∀ w, _root_.hammingDist v w ≤ 2 →
+                Nat.dist (height9 Pp A v) (height9 Pp A w) ≤ 1 := (hgood v).choose_spec.2
+            have hlevelClose : Nat.dist id.level.val (height9 Pp A v) ≤ 1 := by
+              rw [hida.2.2.1]
+              have hreg := hregular a (by rw [htwo])
+              simpa [Nat.dist_comm] using hreg
+            have hRge : P.radius n ≤ _root_.hammingDist id.location (residualWord9 (P.m n) v) := by
+              by_contra hnot
+              have hd : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤ P.radius n - 1 := by omega
+              exact hid (hcoreAdj hida.2.2.2 hs1 hd hlevelClose)
+            by_cases hiSpecial : i.val < P.m n
+            · have hcoord := Lane_q_s09_map.specialWord9_doubleFlip_at_first hmle v i j hij hiSpecial
+              have hcoord' : specialWord9 (P.m n) a ⟨i.val, hiSpecial⟩ ≠
+                  specialWord9 (P.m n) v ⟨i.val, hiSpecial⟩ := by
+                simpa [hformula] using hcoord
+              have hidcoord : id.slice ⟨i.val, hiSpecial⟩ ≠
+                  specialWord9 (P.m n) v ⟨i.val, hiSpecial⟩ := by
+                rw [hida.1]
+                exact hcoord'
+              refine ⟨toS ⟨i.val, hiSpecial⟩,
+                Finset.mem_union_right _ (hmemS _ hidcoord), ?_⟩
+              · rw [show toS ⟨i.val, hiSpecial⟩ = i from Fin.ext rfl]
+                exact hbi
+            · have hiResidual : P.m n ≤ i.val := by omega
+              have hjSpecial : j.val < P.m n := by
+                by_contra hjnot
+                have hjResidual : P.m n ≤ j.val := by omega
+                have hspeca : specialWord9 (P.m n) a = specialWord9 (P.m n) v := by
+                  rw [hformula]
+                  exact (Lane_q_s09_map.specialWord9_cubeFlip_residual hmle
+                    (cubeFlip v i) j hjResidual).trans
+                    (Lane_q_s09_map.specialWord9_cubeFlip_residual hmle v i hiResidual)
+                have hEq : id.slice = specialWord9 (P.m n) v := hida.1.trans hspeca
+                have hzero : _root_.hammingDist id.slice (specialWord9 (P.m n) v) = 0 := by
+                  rw [hEq]
+                  simp
+                omega
+              let k : Fin (n - P.m n) := ⟨i.val - P.m n, by omega⟩
+              have htoR : toR k = i := by
+                apply Fin.ext
+                dsimp [toR, k]
+                omega
+              have hresb : residualWord9 (P.m n) b =
+                  cubeFlip (residualWord9 (P.m n) v) k := by
+                rw [← hbi]
+                simpa [k] using
+                  (Lane_q_s09_map.residualWord9_cubeFlip_residual hmle v i hiResidual)
+              have hresa : residualWord9 (P.m n) a = residualWord9 (P.m n) b := by
+                rw [hformula, ← hbi]
+                exact Lane_q_s09_map.residualWord9_cubeFlip_special hmle
+                  (cubeFlip v i) j hjSpecial
+              have hresav := hresAV_le_one a hca htwo
+              have hRle : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤
+                  P.radius n + 1 := by
+                calc
+                  _ ≤ _root_.hammingDist id.location (residualWord9 (P.m n) a) +
+                      _root_.hammingDist (residualWord9 (P.m n) a) (residualWord9 (P.m n) v) :=
+                        _root_.hammingDist_triangle _ _ _
+                  _ ≤ P.radius n + 1 := Nat.add_le_add hida.2.1 hresav
+              by_cases hmatch : id.location k = residualWord9 (P.m n) v k
+              · have hflipDist := Lane_q_s09_map.hammingDist_cubeFlip_of_eq id.location
+                  (residualWord9 (P.m n) v) k hmatch
+                have himpossible : _root_.hammingDist id.location (residualWord9 (P.m n) v) + 1 ≤
+                    P.radius n := by
+                  calc
+                    _ = _root_.hammingDist id.location (residualWord9 (P.m n) b) := by
+                      rw [hresb]
+                      exact hflipDist.symm
+                    _ = _root_.hammingDist id.location (residualWord9 (P.m n) a) := by rw [hresa]
+                    _ ≤ P.radius n := hida.2.1
+                omega
+              · have hkD : k ∈ DeltaR :=
+                  Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmatch⟩
+                refine ⟨toR k, Finset.mem_union_left _
+                  (Finset.mem_image.mpr ⟨k, hkD, rfl⟩), ?_⟩
+                · rw [htoR]
+                  exact hbi
+          have hcount := Lane_q_s09_map.card_flip_neighbors_bound v B
+            (DeltaRFull ∪ DeltaSFull) hSupport
+          have hRle : _root_.hammingDist id.location (residualWord9 (P.m n) v) ≤
+              P.radius n + 1 := by
+            rcases hpath b₀ hb₀ with ⟨i, j, a, _, _, hformula, hca, hij⟩
+            have hida := by simpa [hca] using hcenter a
+            have htwo : _root_.hammingDist v a = 2 := by
+              rw [hformula]
+              exact Lane_q_s09_map.hammingDist_two_cubeFlips v i j hij
+            have hresav := hresAV_le_one a hca htwo
+            calc
+              _ ≤ _root_.hammingDist id.location (residualWord9 (P.m n) a) +
+                  _root_.hammingDist (residualWord9 (P.m n) a) (residualWord9 (P.m n) v) :=
+                    _root_.hammingDist_triangle _ _ _
+              _ ≤ P.radius n + 1 := Nat.add_le_add hida.2.1 hresav
+          calc
+            B.card ≤ (DeltaRFull ∪ DeltaSFull).card := hcount
+            _ ≤ DeltaRFull.card + DeltaSFull.card := Finset.card_union_le _ _
+            _ = DeltaR.card + DeltaS.card := by rw [hRFullCard, hSFullCard]
+            _ = _root_.hammingDist id.location (residualWord9 (P.m n) v) + 1 := by
+              rw [hRCard, hSCard, hs1]
+            _ ≤ P.radius n + 2 := Nat.add_le_add_right hRle 1
+            _ ≤ P.radius n + 3 := by omega
+        · have hs2 : _root_.hammingDist id.slice (specialWord9 (P.m n) v) = 2 := by omega
+          have hSupport (b : CubeVertex n) (hb : b ∈ B) :
+              ∃ k ∈ DeltaSFull, cubeFlip v k = b := by
+            rcases hpath b hb with ⟨i, j, a, hbi, hba, hformula, hca, hij⟩
+            by_contra hiNot
+            have hiResidual : P.m n ≤ i.val := by
+              by_contra hi
+              have hiSpecial : i.val < P.m n := by omega
+              have hcoord := Lane_q_s09_map.specialWord9_doubleFlip_at_first hmle v i j hij hiSpecial
+              have hcoord' : specialWord9 (P.m n) a ⟨i.val, hiSpecial⟩ ≠
+                  specialWord9 (P.m n) v ⟨i.val, hiSpecial⟩ := by
+                simpa [hformula] using hcoord
+              have hidcoord : id.slice ⟨i.val, hiSpecial⟩ ≠
+                  specialWord9 (P.m n) v ⟨i.val, hiSpecial⟩ := by
+                have hida := by simpa [hca] using hcenter a
+                rw [hida.1]
+                exact hcoord'
+              have hmem : toS ⟨i.val, hiSpecial⟩ ∈ DeltaSFull := hmemS _ hidcoord
+              exact hiNot ⟨toS ⟨i.val, hiSpecial⟩, hmem, by
+                rw [show toS ⟨i.val, hiSpecial⟩ = i from Fin.ext rfl]
+                exact hbi⟩
+            have hida := by simpa [hca] using hcenter a
+            have hspecb : specialWord9 (P.m n) b = specialWord9 (P.m n) v := by
+              rw [← hbi]
+              exact Lane_q_s09_map.specialWord9_cubeFlip_residual hmle v i hiResidual
+            have hbaDist : _root_.hammingDist a b = 1 := by
+              rw [_root_.hammingDist_comm]
+              simpa [OAI.HypercubeRamsey.cube] using hba
+            have hsliceLe' : _root_.hammingDist id.slice (specialWord9 (P.m n) v) ≤ 1 := by
+              calc
+                _ = _root_.hammingDist (specialWord9 (P.m n) a)
+                      (specialWord9 (P.m n) b) := by rw [hida.1, ← hspecb]
+                _ ≤ _root_.hammingDist a b := Lane_q_s09_map.specialProjectionDist_le hmle a b
+                _ = 1 := hbaDist
+            omega
+          have hcount := Lane_q_s09_map.card_flip_neighbors_bound v B DeltaSFull hSupport
+          calc
+            B.card ≤ DeltaSFull.card := hcount
+            _ = DeltaS.card := hSFullCard
+            _ = _root_.hammingDist id.slice (specialWord9 (P.m n) v) := hSCard
+            _ = 2 := hs2
+            _ ≤ P.radius n + 3 := by omega
+    · have hBempty : B = ∅ := Finset.not_nonempty_iff_eq_empty.mp hBne
+      change B.card ≤ P.radius n + 3
+      rw [hBempty]
+      exact Nat.zero_le _
 
 /-- P9.2-map1 and P9.2-map2 assembled (09:63–118): for all large `n` the fixed ID map exists. -/
 theorem p92_idmap (P : Params9) (hP : P.Valid) : ∃ n₀ : ℕ, ∀ n ≥ n₀, Nonempty (IDMap9 P n) := by

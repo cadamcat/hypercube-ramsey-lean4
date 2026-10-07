@@ -2714,7 +2714,136 @@ theorem posterior_good_tests (κ : CConsts) (hκ : κ.Admissible)
   · intro v W hgood
     exact hgood.2
   · intro p
-    sorry
+    let hp := (𝒯.P i).h
+    let Vh : ℕ :=
+      ∑ j ∈ Finset.range (⌊κ.ρ * hp⌋₊ + 1), Nat.choose hp j
+    let Hh := topScale hp (κ.ω / 100) (κ.ω / 30)
+    let eps := sliceEps κ hp
+    let rate : ℝ := (Vh : ℝ) * (Hh + 1 : ℝ) *
+      Real.exp (-0.01 * κ.a * (sliceK κ hp : ℝ) * hp)
+    let badValidity : (∀ r, H.Val r) → Prop := fun W =>
+      ∃ v, ¬ starValid Geom H mask v W
+    let failProb : EvenRole 𝒯 i → (∀ r, H.Val r) → ℝ := fun v W =>
+      (refLaw Geom H mask O W).pr
+        (fun ω => R.σ v W (nbrLabels v.1 ω.2) = 0)
+    let failMass : EvenRole 𝒯 i → (∀ r, H.Val r) → ℝ := fun v W =>
+      if starValid Geom H mask v W then failProb v W else 0
+    let badAbove : (∀ r, H.Val r) → Prop := fun W =>
+      ∃ v, starValid Geom H mask v W ∧ eps < failProb v W
+    have heps : 0 < eps := by
+      dsimp [eps, sliceEps]
+      exact Real.exp_pos _
+    have hslack := hconst.threshold_slack hp scales.h_large
+    rcases hslack with ⟨_, _, _, _, _, _, _, _, _, hpost, _, _, hfinal⟩
+    have hpost' :
+        (2 : ℝ) ^ hp * (Vh : ℝ) * (Hh + 1 : ℝ) *
+          Real.exp (-0.01 * κ.a * (sliceK κ hp : ℝ) * hp) / eps ≤
+            Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent)) := by
+      simpa [Section14Numerics, hp, Vh, Hh, eps, sliceEps] using hpost
+    have hfinal' :
+        2 * Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.globalExponent)) +
+          4 * Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent)) ≤
+            Real.exp (-Real.rpow (hp : ℝ) (1 + κ.c14)) := by
+      simpa [Section14Numerics, hp, Vh, Hh, eps, sliceEps] using hfinal
+    have hraw_nonneg (v : EvenRole 𝒯 i) (W : ∀ r, H.Val r) :
+        0 ≤ failProb v W := by
+      unfold failProb FinLaw.pr
+      apply Finset.sum_nonneg
+      intro ω hω
+      split_ifs
+      · exact (refLaw Geom H mask O W).nonneg ω
+      · exact le_rfl
+    have hmass_nonneg (v : EvenRole 𝒯 i) (W : ∀ r, H.Val r) :
+        0 ≤ failMass v W := by
+      by_cases hv : starValid Geom H mask v W
+      · simp [failMass, hv]
+        exact hraw_nonneg v W
+      · simp [failMass, hv]
+    have hroleMean (v : EvenRole 𝒯 i) :
+        (H.recLaw p).E (fun W => failMass v W) ≤ rate := by
+      sorry
+    have hroleAbove (v : EvenRole 𝒯 i) :
+        (H.recLaw p).pr (fun W =>
+          starValid Geom H mask v W ∧ eps < failProb v W) ≤ rate / eps := by
+      have hsub : ∀ W,
+          (starValid Geom H mask v W ∧ eps < failProb v W) → eps < failMass v W := by
+        intro W hW
+        simpa [failMass, hW.1] using hW.2
+      calc
+        _ ≤ (H.recLaw p).pr (fun W => eps < failMass v W) :=
+          HypercubeRamsey.Lane_q_s14_post.finLaw_pr_mono
+            (H.recLaw p) _ _ hsub
+        _ ≤ (H.recLaw p).E (failMass v) / eps :=
+          HypercubeRamsey.Lane_q_s14_post.finLaw_markov
+            (H.recLaw p) (failMass v) eps heps (hmass_nonneg v)
+        _ ≤ rate / eps := div_le_div_of_nonneg_right (hroleMean v) heps.le
+    have hcardRoles : Fintype.card (EvenRole 𝒯 i) ≤ 2 ^ hp := by
+      calc
+        _ ≤ Fintype.card (IWord 𝒯 i) :=
+          Fintype.card_le_of_injective Subtype.val Subtype.val_injective
+        _ = 2 ^ hp := by simp [IWord, CubePos, hp]
+    have hcardRolesReal :
+        (Fintype.card (EvenRole 𝒯 i) : ℝ) ≤ (2 : ℝ) ^ hp := by
+      exact_mod_cast hcardRoles
+    have habove : (H.recLaw p).pr badAbove ≤
+        Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent)) := by
+      calc
+        _ ≤ ∑ v : EvenRole 𝒯 i, (H.recLaw p).pr (fun W =>
+              starValid Geom H mask v W ∧ eps < failProb v W) :=
+          HypercubeRamsey.Lane_q_s14_post.finLaw_pr_exists_le_sum
+            (H.recLaw p) (fun v W =>
+              starValid Geom H mask v W ∧ eps < failProb v W)
+        _ ≤ ∑ v : EvenRole 𝒯 i, rate / eps := by
+          apply Finset.sum_le_sum
+          intro v hv
+          exact hroleAbove v
+        _ = (Fintype.card (EvenRole 𝒯 i) : ℝ) * (rate / eps) := by
+          simp [Finset.sum_const, nsmul_eq_mul]
+        _ ≤ (2 : ℝ) ^ hp * (rate / eps) :=
+          mul_le_mul_of_nonneg_right hcardRolesReal (div_nonneg (by positivity) heps.le)
+        _ ≤ Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent)) := by
+          have hrewrite : (2 : ℝ) ^ hp * (rate / eps) =
+              (2 : ℝ) ^ hp * (Vh : ℝ) * (Hh + 1 : ℝ) *
+                Real.exp (-0.01 * κ.a * (sliceK κ hp : ℝ) * hp) / eps := by
+            dsimp [rate]
+            field_simp [ne_of_gt heps]
+            <;> ring
+          rw [hrewrite]
+          exact hpost'
+    have hbadSplit : ∀ W, (∃ v, ¬ goodTest Geom H mask O L R v W) →
+        badValidity W ∨ badAbove W := by
+      intro W hW
+      rcases hW with ⟨v, hvbad⟩
+      unfold goodTest at hvbad
+      by_cases hv : starValid Geom H mask v W
+      · right
+        refine ⟨v, hv, ?_⟩
+        exact lt_of_not_ge (fun hle => hvbad ⟨hv, hle⟩)
+      · exact Or.inl ⟨v, hv⟩
+    have hbadProb : (H.recLaw p).pr
+        (fun W => ∃ v, ¬ goodTest Geom H mask O L R v W) ≤
+          (H.recLaw p).pr badValidity + (H.recLaw p).pr badAbove := by
+      calc
+        _ ≤ (H.recLaw p).pr (fun W => badValidity W ∨ badAbove W) :=
+          HypercubeRamsey.Lane_q_s14_post.finLaw_pr_mono
+            (H.recLaw p) _ _ hbadSplit
+        _ ≤ (H.recLaw p).pr badValidity + (H.recLaw p).pr badAbove :=
+          HypercubeRamsey.Lane_q_s14_post.finLaw_pr_or_le_add
+            (H.recLaw p) badValidity badAbove
+    have hvalid := hh.validity_good p
+    calc
+      _ ≤ (H.recLaw p).pr badValidity + (H.recLaw p).pr badAbove := hbadProb
+      _ ≤ (Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.globalExponent)) +
+            2 * Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent))) +
+            Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent)) :=
+          add_le_add hvalid habove
+      _ ≤ 2 * Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.globalExponent)) +
+            4 * Real.exp (-Real.rpow (hp : ℝ) (1 + hconst.sliceExponent)) := by
+          nlinarith [le_of_lt (Real.exp_pos (-Real.rpow (hp : ℝ)
+            (1 + hconst.globalExponent))),
+            le_of_lt (Real.exp_pos (-Real.rpow (hp : ℝ)
+            (1 + hconst.sliceExponent)))]
+      _ ≤ Real.exp (-Real.rpow (hp : ℝ) (1 + κ.c14)) := hfinal'
 
 /-- P14.1l: locality and complete symmetry for the concrete rules, including
 search, choice, validity, posterior and predictive-test computations. -/

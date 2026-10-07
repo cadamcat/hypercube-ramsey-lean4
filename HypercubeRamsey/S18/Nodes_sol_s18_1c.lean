@@ -5,6 +5,7 @@ import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_q_s18_n2
 
 namespace HypercubeRamsey.Lane_sol_s18_1c
 open Classical Filter
@@ -1039,5 +1040,709 @@ theorem experiment_failure_le_surviving_witness (D : LateData hPT) (X : Critical
       simp only [if_pos hb, if_pos he, le_refl]
   · simp only [if_neg hb]
     split_ifs <;> simp [X.experiment.nonneg]
+
+variable {D : LateData hPT} {X : CriticalTransferData D}
+
+private def nearInternal (a : Fin (T.S.n k)) : Prop :=
+  ∃ t ∈ PT.tiling.Icoord (D.geom.patchOf X.target),
+    D.geom.ids a - D.geom.ids t ∈ D.geom.Lsub
+
+private def sameIdCoset (D : LateData hPT) (a b : Fin (T.S.n k)) : Prop :=
+  D.geom.ids a - D.geom.ids b ∈ D.geom.Lsub
+
+private noncomputable def idCosetClass (D : LateData hPT) (c : Fin (T.S.n k)) :
+    Finset (Fin (T.S.n k)) :=
+  Finset.univ.filter fun a => sameIdCoset D a c
+
+private noncomputable def cosetParity (D : LateData hPT) (v : Pos T k)
+    (c : Fin (T.S.n k)) : ZMod 2 :=
+  ∑ a ∈ idCosetClass D c, if v a = true then 1 else 0
+
+private theorem zmodTwo_double (x : ZMod 2) : x + x = 0 := by
+  have htwo : (2 : ZMod 2) = 0 := ZMod.natCast_self 2
+  calc
+    x + x = (2 : ZMod 2) * x := (two_mul x).symm
+    _ = 0 := by rw [htwo]; simp
+
+private theorem syndrome_flip (v : Pos T k) (a : Fin (T.S.n k)) :
+    D.geom.syndrome (flipPos v a) = D.geom.syndrome v + D.geom.ids a := by
+  classical
+  let f : Fin (T.S.n k) → (Fin D.geom.Hdim → ZMod 2) := fun j =>
+    if v j = true then D.geom.ids j else 0
+  let f' : Fin (T.S.n k) → (Fin D.geom.Hdim → ZMod 2) := fun j =>
+    if flipPos v a j = true then D.geom.ids j else 0
+  have ha : f' a = f a + D.geom.ids a := by
+    have htwo : (2 : ZMod 2) = 0 := ZMod.natCast_self 2
+    have hxx (x : ZMod 2) : x + x = 0 := by
+      calc
+        x + x = (2 : ZMod 2) * x := (two_mul x).symm
+        _ = 0 := by rw [htwo]; simp
+    cases hv : v a with
+    | false => simp [f, f', flipPos, hv]
+    | true =>
+        ext j
+        simp [f, f', flipPos, hv]
+        exact (hxx (D.geom.ids a j)).symm
+  have hother : ∀ j, j ≠ a → f' j = f j := by
+    intro j hja
+    simp [f, f', flipPos, hja]
+  change ∑ j, f' j = (∑ j, f j) + D.geom.ids a
+  calc
+    ∑ j, f' j = f' a + ∑ j ∈ (Finset.univ.erase a), f' j := by
+      rw [← Finset.add_sum_erase (s := Finset.univ) (f := f') (Finset.mem_univ a)]
+    _ = (f a + D.geom.ids a) + ∑ j ∈ (Finset.univ.erase a), f j := by
+      rw [ha]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro j hj
+      exact hother j (Finset.ne_of_mem_erase hj)
+    _ = (∑ j, f j) + D.geom.ids a := by
+      rw [← Finset.add_sum_erase (s := Finset.univ) (f := f) (Finset.mem_univ a)]
+      abel
+
+private theorem cosetParity_flip (D : LateData hPT) (v : Pos T k)
+    (a c : Fin (T.S.n k)) :
+    cosetParity D (flipPos v a) c = cosetParity D v c +
+      if sameIdCoset D a c then 1 else 0 := by
+  classical
+  let S := idCosetClass D c
+  have htwo : (2 : ZMod 2) = 0 := ZMod.natCast_self 2
+  have hpoint (t : Fin (T.S.n k)) (ht : t ∈ S) :
+      (if flipPos v a t = true then (1 : ZMod 2) else 0) =
+        (if v t = true then 1 else 0) + (if t = a then 1 else 0) := by
+    by_cases hta : t = a
+    · subst t
+      cases hv : v a
+      · simp [flipPos, hv]
+      · simp [flipPos, hv]
+        rw [← two_mul (1 : ZMod 2), htwo]
+        simp
+    · cases hv : v t <;> simp [flipPos, hta, hv]
+  have hsum :
+      S.sum (fun t => if flipPos v a t = true then (1 : ZMod 2) else 0) =
+      S.sum (fun t => if v t = true then (1 : ZMod 2) else 0) +
+        S.sum (fun t => if t = a then (1 : ZMod 2) else 0) := by
+    calc
+      S.sum (fun t => if flipPos v a t = true then (1 : ZMod 2) else 0) =
+          S.sum (fun t => (if v t = true then (1 : ZMod 2) else 0) +
+            (if t = a then (1 : ZMod 2) else 0)) := by
+              apply Finset.sum_congr rfl
+              intro t ht
+              exact hpoint t ht
+      _ = S.sum (fun t => if v t = true then (1 : ZMod 2) else 0) +
+            S.sum (fun t => if t = a then (1 : ZMod 2) else 0) := by rw [Finset.sum_add_distrib]
+  by_cases hclass : sameIdCoset D a c
+  · have hmem : a ∈ S := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hclass⟩
+    have hone : (∑ t ∈ S, if t = a then (1 : ZMod 2) else 0) = 1 := by
+      simp [Finset.sum_ite_eq', hmem]
+    dsimp [cosetParity, S] at hsum ⊢
+    rw [hsum, hone]
+    simp [hclass]
+  · have hnot : a ∉ S := by
+      intro h
+      exact hclass (Finset.mem_filter.mp h).2
+    have hsum' :
+        (∑ t ∈ S, if flipPos v a t = true then (1 : ZMod 2) else 0) =
+          (∑ t ∈ S, if v t = true then (1 : ZMod 2) else 0) := by
+      apply Finset.sum_congr rfl
+      intro t ht
+      have hta : t ≠ a := by intro he; exact hnot (he ▸ ht)
+      simp [flipPos, hta]
+    dsimp [cosetParity, S] at hsum' ⊢
+    rw [hsum']
+    simp [hclass]
+
+private theorem sameIdCoset_symm (D : LateData hPT) {a b : Fin (T.S.n k)}
+    (h : sameIdCoset D a b) : sameIdCoset D b a := by
+  change D.geom.ids a - D.geom.ids b ∈ D.geom.Lsub at h
+  change D.geom.ids b - D.geom.ids a ∈ D.geom.Lsub
+  have heq : D.geom.ids b - D.geom.ids a = -(D.geom.ids a - D.geom.ids b) := by abel
+  rw [heq]
+  exact D.geom.Lsub.neg_mem h
+
+private theorem sameIdCoset_trans (D : LateData hPT) {a b c : Fin (T.S.n k)}
+    (hab : sameIdCoset D a b)
+    (hbc : sameIdCoset D b c) :
+    sameIdCoset D a c := by
+  change D.geom.ids a - D.geom.ids b ∈ D.geom.Lsub at hab
+  change D.geom.ids b - D.geom.ids c ∈ D.geom.Lsub at hbc
+  change D.geom.ids a - D.geom.ids c ∈ D.geom.Lsub
+  have heq : D.geom.ids a - D.geom.ids c =
+      (D.geom.ids a - D.geom.ids b) + (D.geom.ids b - D.geom.ids c) := by abel
+  rw [heq]
+  exact D.geom.Lsub.add_mem hab hbc
+
+private theorem syndrome_mem_of_class (D : LateData hPT) (b : Pos T k) (j : Fin D.geom.r)
+    (h : D.geom.classOf b = some j) : D.geom.syndrome b ∈ D.geom.Lsub := by
+  unfold LowGeom.classOf at h
+  split_ifs at h with hmem
+  · exact hmem.2
+
+private theorem sameIdCoset_of_late_two_flip (D : LateData hPT)
+    (b b' : Pos T k) (j j' : Fin D.geom.r) (a a' : Fin (T.S.n k))
+    (hb : D.geom.classOf b = some j) (hb' : D.geom.classOf b' = some j')
+    (hflip : flipPos b a = flipPos b' a') : sameIdCoset D a a' := by
+  have hsyndrome := congrArg D.geom.syndrome hflip
+  rw [syndrome_flip (D := D) b a, syndrome_flip (D := D) b' a'] at hsyndrome
+  have hdiff : D.geom.ids a - D.geom.ids a' =
+      D.geom.syndrome b' - D.geom.syndrome b := by
+    calc
+      D.geom.ids a - D.geom.ids a' =
+          (D.geom.syndrome b + D.geom.ids a) -
+            (D.geom.syndrome b + D.geom.ids a') := by abel
+      _ = (D.geom.syndrome b' + D.geom.ids a') -
+            (D.geom.syndrome b + D.geom.ids a') := by rw [hsyndrome]
+      _ = D.geom.syndrome b' - D.geom.syndrome b := by abel
+  change D.geom.ids a - D.geom.ids a' ∈ D.geom.Lsub
+  rw [hdiff]
+  exact D.geom.Lsub.sub_mem (syndrome_mem_of_class D b' j' hb')
+    (syndrome_mem_of_class D b j hb)
+
+private theorem flipPos_involutive {n : ℕ} (v : CubePos n) (a : Fin n) :
+    flipPos (flipPos v a) a = v := by
+  funext j
+  by_cases hja : j = a
+  · subst j
+    simp [flipPos]
+  · simp [flipPos, hja]
+
+private theorem cosetParity_flip_pair (D : LateData hPT) (v : Pos T k)
+    (a a' c : Fin (T.S.n k)) (haa' : sameIdCoset D a a') :
+    cosetParity D (flipPos (flipPos v a) a') c = cosetParity D v c := by
+  rw [cosetParity_flip D (flipPos v a) a' c, cosetParity_flip D v a c]
+  have hclass : sameIdCoset D a c ↔ sameIdCoset D a' c := by
+    constructor
+    · intro hac
+      exact sameIdCoset_trans D (sameIdCoset_symm D haa') hac
+    · intro ha'c
+      exact sameIdCoset_trans D haa' ha'c
+  have htwo : (2 : ZMod 2) = 0 := ZMod.natCast_self 2
+  have hone : (1 : ZMod 2) + 1 = 0 := by
+    calc
+      (1 : ZMod 2) + 1 = 2 := by norm_num
+      _ = 0 := htwo
+  by_cases hA : sameIdCoset D a c
+  · have hA' : sameIdCoset D a' c := hclass.mp hA
+    simp [hA, hA', hone, add_assoc]
+  · have hA' : ¬ sameIdCoset D a' c := fun h' => hA (hclass.mpr h')
+    simp [hA, hA', add_assoc]
+
+private theorem predecessors_cosetParity_eq (D : LateData hPT) (X : CriticalTransferData D) :
+    ∀ n (b : Pos T k), b ∈ X.predecessors n →
+      ∀ c, cosetParity D b c = cosetParity D X.failure.2.1.1 c := by
+  intro n
+  induction n with
+  | zero =>
+      intro b hb c
+      simp [CriticalTransferData.predecessors] at hb
+      subst b
+      rfl
+  | succ n ih =>
+      intro b hb c
+      simp only [CriticalTransferData.predecessors] at hb
+      rcases Finset.mem_union.mp hb with hb | hb
+      · exact ih b hb c
+      · rcases Finset.mem_filter.mp hb with ⟨_, hex⟩
+        rcases hex with ⟨b₀, hb₀, j, j', hj, hj', hlt, hflipExists⟩
+        rcases hflipExists with ⟨a, a', hflip⟩
+        have hsame := sameIdCoset_of_late_two_flip D b₀ b j j' a a' hj hj' hflip
+        have hbEq : b = flipPos (flipPos b₀ a) a' := by
+          have hcon := congrArg (fun w : Pos T k => flipPos w a') hflip
+          rw [flipPos_involutive] at hcon
+          exact hcon.symm
+        rw [hbEq, cosetParity_flip_pair D b₀ a a' c hsame]
+        exact ih b₀ hb₀ c
+
+private theorem class_some_of_predecessor (D : LateData hPT) (X : CriticalTransferData D) :
+    ∀ n (b : Pos T k), b ∈ X.predecessors n → ∃ j, D.geom.classOf b = some j := by
+  intro n
+  induction n with
+  | zero =>
+      intro b hb
+      simp [CriticalTransferData.predecessors] at hb
+      subst b
+      refine ⟨X.failure.1, ?_⟩
+      exact (D.encoding.base.class_of_spec X.failure.2.1.1 X.failure.1).mp X.failure.2.1.2
+  | succ n ih =>
+      intro b hb
+      simp only [CriticalTransferData.predecessors] at hb
+      rcases Finset.mem_union.mp hb with hb | hb
+      · exact ih b hb
+      · rcases Finset.mem_filter.mp hb with ⟨_, hex⟩
+        rcases hex with ⟨_, _, _, j', _, hj', _, _⟩
+        exact ⟨j', hj'⟩
+
+private theorem notEven_of_class_some (D : LateData hPT) (b : Pos T k)
+    (j : Fin D.geom.r) (h : D.geom.classOf b = some j) : ¬ IsEvenRole b := by
+  unfold LowGeom.classOf at h
+  split_ifs at h with hcond
+  · exact hcond.1
+
+private theorem cosetParity_mismatch_of_internal (D : LateData hPT) (X : CriticalTransferData D)
+    {s t : Pos T k} (q : Fin (T.S.n k))
+    (hq : q ∈ PT.tiling.Icoord (D.geom.patchOf X.target))
+    (houter : ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → s a = t a) :
+    cosetParity D s q + cosetParity D t q = if s q = t q then 0 else 1 := by
+  classical
+  let i := D.geom.patchOf X.target
+  let S := idCosetClass D q
+  have htwo : (2 : ZMod 2) = 0 := ZMod.natCast_self 2
+  have hdouble (x : ZMod 2) : x + x = 0 := by
+    calc
+      x + x = (2 : ZMod 2) * x := (two_mul x).symm
+      _ = 0 := by rw [htwo]; simp
+  have hpoint (a : Fin (T.S.n k)) (ha : a ∈ S) :
+      (if s a = true then (1 : ZMod 2) else 0) +
+        (if t a = true then 1 else 0) =
+          if a = q then (if s q = t q then 0 else 1) else 0 := by
+    by_cases haq : a = q
+    · subst a
+      cases hs : s q <;> cases htBool : t q <;> simp [hs, htBool, hdouble]
+    · have haCoset : sameIdCoset D a q := (Finset.mem_filter.mp ha).2
+      have haNotI : a ∉ PT.tiling.Icoord i := by
+        intro haI
+        have heq : a = q :=
+          D.l16_valid.internal_cosets i a q haI hq haCoset
+        exact haq heq
+      have hEq := houter a haNotI
+      cases htBool : t a <;> simp [haq, hEq, htBool, hdouble]
+  have hsum :
+      S.sum (fun a => if s a = true then (1 : ZMod 2) else 0) +
+        S.sum (fun a => if t a = true then (1 : ZMod 2) else 0) =
+      S.sum (fun a => if a = q then (if s q = t q then 0 else 1) else 0) := by
+    rw [← Finset.sum_add_distrib]
+    exact Finset.sum_congr rfl hpoint
+  have hmem : q ∈ S := Finset.mem_filter.mpr ⟨Finset.mem_univ _, by
+    change D.geom.ids q - D.geom.ids q ∈ D.geom.Lsub
+    simp⟩
+  have hsingle :
+      S.sum (fun a => if a = q then (if s q = t q then (0 : ZMod 2) else 1) else 0) =
+        (if s q = t q then 0 else 1) := by
+    simp [Finset.sum_ite_eq', hmem]
+  simpa [cosetParity, S] using hsum.trans (by rw [hsingle])
+
+private theorem cosetParity_eq_on_noInternalClass (D : LateData hPT) (s t : Pos T k)
+    (q : Fin (T.S.n k))
+    (hNo : ∀ a, a ∈ PT.tiling.Icoord (D.geom.patchOf X.target) →
+      ¬ sameIdCoset D a q)
+    (houter : ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → s a = t a) :
+    cosetParity D s q = cosetParity D t q := by
+  classical
+  unfold cosetParity idCosetClass
+  apply Finset.sum_congr rfl
+  intro a ha
+  have haClass : sameIdCoset D a q := (Finset.mem_filter.mp ha).2
+  have haI : a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) := by
+    intro hI
+    exact hNo a hI haClass
+  simpa [houter a haI]
+
+
+private theorem directEven_representation (D : LateData hPT) (X : CriticalTransferData D)
+    (w : Pos T k) (hw : w ∈ X.directEven) :
+    ∃ b ∈ X.predecessors D.geom.r, ∃ a : Fin (T.S.n k), w = flipPos b a := by
+  obtain ⟨b, hb, h⟩ := Finset.mem_biUnion.mp hw
+  obtain ⟨a, ha, heq⟩ := Finset.mem_image.mp h
+  exact ⟨b, hb, a, heq.symm⟩
+
+/-- Global coset parity permits at most h+1 direct even sites with any fixed
+outer word. This is the slice count used in the bounded-response simulation. -/
+theorem directEven_outerWord_card (D : LateData hPT) (X : CriticalTransferData D)
+    (t : Pos T k) :
+    (X.directEven.filter fun w => ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → w a = t a).card ≤
+      (PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1 := by
+  classical
+  let S := X.directEven.filter fun w => ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → w a = t a
+  let W := {w : Pos T k // w ∈ S}
+  let I := {q : Fin (T.S.n k) // q ∈ PT.tiling.Icoord (D.geom.patchOf X.target)}
+  have hrep (w : W) := directEven_representation D X w.1 (Finset.mem_filter.mp w.2).1
+  let bOf (w : W) := (hrep w).choose
+  let dOf (w : W) := (hrep w).choose_spec.2.choose
+  have hb (w : W) : bOf w ∈ X.predecessors D.geom.r := (hrep w).choose_spec.1
+  have hd (w : W) : w.1 = flipPos (bOf w) (dOf w) := (hrep w).choose_spec.2.choose_spec
+  let code (w : W) : Option I := if hn : nearInternal (D := D) (X := X) (dOf w) then
+    some ⟨hn.choose, hn.choose_spec.1⟩ else none
+  have hpar (w : W) (q : Fin (T.S.n k)) : cosetParity D w.1 q =
+      cosetParity D X.failure.2.1.1 q + (if sameIdCoset D (dOf w) q then 1 else 0) := by
+    rw [hd w, cosetParity_flip, predecessors_cosetParity_eq D X D.geom.r (bOf w) (hb w)]
+  have hcode : Function.Injective code := by
+    intro w w' heq
+    have houter : ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → w.1 a = w'.1 a := by
+      intro a ha
+      exact ((Finset.mem_filter.mp w.2).2 a ha).trans ((Finset.mem_filter.mp w'.2).2 a ha).symm
+    have hsame (q : Fin (T.S.n k)) (hq : q ∈ PT.tiling.Icoord (D.geom.patchOf X.target)) :
+        sameIdCoset D (dOf w) q ↔ sameIdCoset D (dOf w') q := by
+      by_cases hw : nearInternal (D := D) (X := X) (dOf w)
+      · by_cases hw' : nearInternal (D := D) (X := X) (dOf w')
+        · have heq' := heq
+          dsimp [code] at heq'
+          simp only [dif_pos hw, dif_pos hw'] at heq'
+          have hqq : hw.choose = hw'.choose := congrArg Subtype.val (Option.some.inj heq')
+          have hwd : sameIdCoset D (dOf w) hw.choose := hw.choose_spec.2
+          have hw'd : sameIdCoset D (dOf w') hw'.choose := hw'.choose_spec.2
+          rw [← hqq] at hw'd
+          have hww : sameIdCoset D (dOf w) (dOf w') := sameIdCoset_trans D hwd (sameIdCoset_symm D hw'd)
+          exact ⟨fun hh => sameIdCoset_trans D (sameIdCoset_symm D hww) hh,
+            fun hh => sameIdCoset_trans D hww hh⟩
+        · simp [code, hw, hw'] at heq
+      · by_cases hw' : nearInternal (D := D) (X := X) (dOf w')
+        · simp [code, hw, hw'] at heq
+        · have hn : ¬ sameIdCoset D (dOf w) q := fun h => hw ⟨q, hq, h⟩
+          have hn' : ¬ sameIdCoset D (dOf w') q := fun h => hw' ⟨q, hq, h⟩
+          simp [hn, hn']
+    apply Subtype.ext
+    funext q
+    by_cases hq : q ∈ PT.tiling.Icoord (D.geom.patchOf X.target)
+    · have hp : cosetParity D w.1 q = cosetParity D w'.1 q := by
+        rw [hpar, hpar, hsame q hq]
+      have hm := cosetParity_mismatch_of_internal D X q hq houter
+      rw [hp, zmodTwo_double] at hm
+      by_contra hn
+      simp [hn] at hm
+    · exact houter q hq
+  have hcard := Fintype.card_le_of_injective code hcode
+  simpa only [W, I, Fintype.card_coe, Fintype.card_option] using hcard
+private theorem cosetParity_doubleFlip (D : LateData hPT) (v : Pos T k)
+    (a b q : Fin (T.S.n k)) :
+    cosetParity D (flipPos (flipPos v a) b) q =
+      cosetParity D v q + (if sameIdCoset D a q then (1 : ZMod 2) else 0) +
+        (if sameIdCoset D b q then 1 else 0) := by
+  rw [cosetParity_flip D (flipPos v a) b q, cosetParity_flip D v a q]
+
+private theorem externalEarly_not_sameIdCoset (D : LateData hPT)
+    (b : Pos T k) (d j : Fin (T.S.n k))
+    (hb : ∃ i, D.geom.classOf b = some i)
+    (hj : j ∈ D.externalEarly (flipPos b d)) :
+    ¬ sameIdCoset D d j := by
+  classical
+  rcases hb with ⟨i, hclass⟩
+  have hbOdd := notEven_of_class_some D b i hclass
+  have hwEven : IsEvenRole (flipPos b d) := by
+    exact (HypercubeRamsey.S15.evenRole_flipPos b d).mpr hbOdd
+  have hvOdd : ¬ IsEvenRole (flipPos (flipPos b d) j) := by
+    intro hvEven
+    exact ((HypercubeRamsey.S15.evenRole_flipPos (flipPos b d) j).mp hvEven) hwEven
+  have hnone : D.geom.classOf (flipPos (flipPos b d) j) = none :=
+    (Finset.mem_filter.mp hj).2.2
+  have hnotSyndrome : D.geom.syndrome (flipPos (flipPos b d) j) ∉ D.geom.Lsub := by
+    by_contra hs
+    unfold LowGeom.classOf at hnone
+    have hcond : ¬ IsEvenRole (flipPos (flipPos b d) j) ∧
+        D.geom.syndrome (flipPos (flipPos b d) j) ∈ D.geom.Lsub := ⟨hvOdd, hs⟩
+    simp [hcond] at hnone
+  have hbSyndrome : D.geom.syndrome b ∈ D.geom.Lsub := syndrome_mem_of_class D b i hclass
+  intro hdj
+  have hneg (x : ZMod 2) : -x = x := by
+    calc
+      -x = -x + (x + x) := by rw [zmodTwo_double]; simp
+      _ = x := by abel
+  have hid : D.geom.ids d + D.geom.ids j ∈ D.geom.Lsub := by
+    have heq : D.geom.ids d + D.geom.ids j = D.geom.ids d - D.geom.ids j := by
+      ext q
+      simp only [Pi.add_apply, Pi.sub_apply]
+      rw [sub_eq_add_neg, hneg]
+    rw [heq]
+    exact hdj
+  have hsum : D.geom.syndrome b + D.geom.ids d + D.geom.ids j ∈ D.geom.Lsub := by
+    have htemp : D.geom.syndrome b + (D.geom.ids d + D.geom.ids j) ∈ D.geom.Lsub :=
+      D.geom.Lsub.add_mem hbSyndrome hid
+    simpa only [add_assoc] using htemp
+  have hformula : D.geom.syndrome (flipPos (flipPos b d) j) =
+      D.geom.syndrome b + D.geom.ids d + D.geom.ids j := by
+    rw [syndrome_flip, syndrome_flip]
+  exact hnotSyndrome (hformula ▸ hsum)
+
+private theorem cosetParity_doubleFlip_sum (D : LateData hPT)
+    (b b₀ : Pos T k) (d j a₀ c q : Fin (T.S.n k))
+    (hparity : cosetParity D b q = cosetParity D b₀ q) :
+    cosetParity D (flipPos (flipPos b d) j) q +
+        cosetParity D (flipPos (flipPos b₀ a₀) c) q =
+      (if sameIdCoset D d q then (1 : ZMod 2) else 0) +
+        (if sameIdCoset D j q then 1 else 0) +
+        (if sameIdCoset D a₀ q then 1 else 0) +
+        (if sameIdCoset D c q then 1 else 0) := by
+  rw [cosetParity_doubleFlip D b d j q, cosetParity_doubleFlip D b₀ a₀ c q,
+    hparity]
+  calc
+    _ = (cosetParity D b₀ q + cosetParity D b₀ q) +
+        ((if sameIdCoset D d q then (1 : ZMod 2) else 0) +
+          (if sameIdCoset D j q then 1 else 0) +
+          (if sameIdCoset D a₀ q then 1 else 0) +
+          (if sameIdCoset D c q then 1 else 0)) := by abel
+    _ = _ := by rw [zmodTwo_double]; simp
+
+
+/-- A critical external observation restricts its coordinate to the internal
+cosets, the observed critical coset, or the target coset. -/
+theorem external_observation_coordinate (D : LateData hPT) (X : CriticalTransferData D)
+    (w : Pos T k) (hw : w ∈ X.directEven) (j c : Fin (T.S.n k))
+    (hj : j ∈ D.externalEarly w)
+    (houter : ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) →
+      flipPos w j a = flipPos X.target c a) :
+    nearInternal (D := D) (X := X) j ∨ sameIdCoset D j c ∨ sameIdCoset D j X.failure.2.2.2.2 := by
+  obtain ⟨b, hb, d, hwd⟩ := directEven_representation D X w hw
+  have hnotdj : ¬ sameIdCoset D d j := by
+    apply externalEarly_not_sameIdCoset D b d j (class_some_of_predecessor D X D.geom.r b hb)
+    simpa only [hwd] using hj
+  by_contra hn
+  simp only [not_or] at hn
+  have hNo : ∀ a, a ∈ PT.tiling.Icoord (D.geom.patchOf X.target) → ¬ sameIdCoset D a j := by
+    intro a ha h
+    exact hn.1 ⟨a, ha, sameIdCoset_symm D h⟩
+  have hp := cosetParity_eq_on_noInternalClass D (flipPos w j) (flipPos X.target c) j hNo houter
+  have hs := cosetParity_doubleFlip_sum D b X.failure.2.1.1 d j X.failure.2.2.2.2 c j
+    (predecessors_cosetParity_eq D X D.geom.r b hb j)
+  have htarget : X.target = flipPos X.failure.2.1.1 X.failure.2.2.2.2 := rfl
+  rw [← hwd, ← htarget, hp, zmodTwo_double] at hs
+  have hjj : sameIdCoset D j j := by unfold sameIdCoset; simp
+  have hcj : ¬ sameIdCoset D c j := fun h => hn.2.1 (sameIdCoset_symm D h)
+  have haj : ¬ sameIdCoset D X.failure.2.2.2.2 j := fun h => hn.2.2 (sameIdCoset_symm D h)
+  simp [hnotdj, hjj, hcj, haj] at hs
+private theorem cosetCoords_card_le (a : Fin (T.S.n k)) :
+    (Finset.univ.filter fun b : Fin (T.S.n k) =>
+      D.geom.ids a - D.geom.ids b ∈ D.geom.Lsub).card ≤ D.geom.r := by
+  classical
+  let C := {b : Fin (T.S.n k) // D.geom.ids a - D.geom.ids b ∈ D.geom.Lsub}
+  let code : C → D.geom.Lsub := fun b => ⟨D.geom.ids a - D.geom.ids b.1, b.2⟩
+  have hcode : Function.Injective code := by
+    intro b c h
+    apply Subtype.ext
+    apply D.l16_valid.ids_distinct
+    have hval : D.geom.ids a - D.geom.ids b.1 = D.geom.ids a - D.geom.ids c.1 :=
+      congrArg Subtype.val h
+    simpa only [sub_right_inj] using hval
+  have hcard : Fintype.card D.geom.Lsub = D.geom.r := by
+    simpa using (Fintype.card_congr D.geom.classEnum).symm
+  calc
+    (Finset.univ.filter fun b : Fin (T.S.n k) =>
+        D.geom.ids a - D.geom.ids b ∈ D.geom.Lsub).card = Fintype.card C := by
+          simp [C, Fintype.card_subtype]
+    _ ≤ Fintype.card D.geom.Lsub := Fintype.card_le_of_injective code hcode
+    _ = D.geom.r := hcard
+
+private theorem nearInternalCoords_card_le :
+    (Finset.univ.filter fun b : Fin (T.S.n k) => nearInternal (D := D) (X := X) b).card ≤
+      (PT.tiling.Icoord (D.geom.patchOf X.target)).card * D.geom.r := by
+  classical
+  let i := D.geom.patchOf X.target
+  let C := {b : Fin (T.S.n k) // nearInternal (D := D) (X := X) b}
+  let I := {t : Fin (T.S.n k) // t ∈ PT.tiling.Icoord i}
+  let tOf (b : C) : I := ⟨Classical.choose b.2, (Classical.choose_spec b.2).1⟩
+  have hdiff (b : C) : D.geom.ids b.1 - D.geom.ids (tOf b).1 ∈ D.geom.Lsub :=
+    (Classical.choose_spec b.2).2
+  let code : C → I × D.geom.Lsub := fun b =>
+    (tOf b, ⟨D.geom.ids b.1 - D.geom.ids (tOf b).1, hdiff b⟩)
+  have hcode : Function.Injective code := by
+    intro b c hbc
+    apply Subtype.ext
+    have ht : (tOf b).1 = (tOf c).1 := congrArg (fun z => z.1.1) hbc
+    have hidsDiff : D.geom.ids b.1 - D.geom.ids (tOf b).1 =
+        D.geom.ids c.1 - D.geom.ids (tOf c).1 :=
+      congrArg (fun z => z.2.1) hbc
+    have hids : D.geom.ids b.1 = D.geom.ids c.1 := by
+      rw [ht] at hidsDiff
+      simpa only [sub_left_inj] using hidsDiff
+    exact D.l16_valid.ids_distinct hids
+  have hcardL : Fintype.card D.geom.Lsub = D.geom.r := by
+    simpa using (Fintype.card_congr D.geom.classEnum).symm
+  calc
+    (Finset.univ.filter fun b : Fin (T.S.n k) => nearInternal (D := D) (X := X) b).card =
+        Fintype.card C := by simp [C, Fintype.card_subtype]
+    _ ≤ Fintype.card (I × D.geom.Lsub) := Fintype.card_le_of_injective code hcode
+    _ = (PT.tiling.Icoord i).card * D.geom.r := by
+      rw [Fintype.card_prod, hcardL]
+      simp only [I, Fintype.card_coe]
+
+
+private noncomputable def observationCoords (D : LateData hPT) (X : CriticalTransferData D)
+    (c : Fin (T.S.n k)) : Finset (Fin (T.S.n k)) :=
+  Finset.univ.filter fun j => nearInternal (D := D) (X := X) j ∨
+    sameIdCoset D c j ∨ sameIdCoset D X.failure.2.2.2.2 j
+
+private theorem observationCoords_card (D : LateData hPT) (X : CriticalTransferData D)
+    (c : Fin (T.S.n k)) : (observationCoords D X c).card ≤
+      ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r := by
+  let N := Finset.univ.filter fun j => nearInternal (D := D) (X := X) j
+  let C := Finset.univ.filter fun j => sameIdCoset D c j
+  let A := Finset.univ.filter fun j => sameIdCoset D X.failure.2.2.2.2 j
+  have hsub : observationCoords D X c ⊆ N ∪ (C ∪ A) := by
+    intro j hj
+    simpa [observationCoords, N, C, A] using hj
+  have hn := nearInternalCoords_card_le (D := D) (X := X)
+  have hc := cosetCoords_card_le (D := D) c
+  have ha := cosetCoords_card_le (D := D) X.failure.2.2.2.2
+  change N.card ≤ (PT.tiling.Icoord (D.geom.patchOf X.target)).card * D.geom.r at hn
+  change C.card ≤ D.geom.r at hc
+  change A.card ≤ D.geom.r at ha
+  calc
+    _ ≤ (N ∪ (C ∪ A)).card := Finset.card_le_card hsub
+    _ ≤ N.card + (C.card + A.card) := (Finset.card_union_le _ _).trans
+      (Nat.add_le_add_left (Finset.card_union_le _ _) _)
+    _ ≤ ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r := by nlinarith
+
+private theorem hammingDist_flip_le_one (v : Pos T k) (a : Fin (T.S.n k)) :
+    hammingDist v (flipPos v a) ≤ 1 := by
+  classical
+  change (Finset.univ.filter (fun j : Fin (T.S.n k) => v j ≠ flipPos v a j)).card ≤ 1
+  have hsub :
+      (Finset.univ.filter (fun j : Fin (T.S.n k) => v j ≠ flipPos v a j)) ⊆ {a} := by
+    intro j hj
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hj
+    by_contra hja
+    have hjne : j ≠ a := by simpa using hja
+    apply hj
+    simp [flipPos, hjne]
+  calc
+    _ ≤ ({a} : Finset (Fin (T.S.n k))).card := Finset.card_le_card hsub
+    _ ≤ 1 := by simp
+
+private theorem hammingDist_comm_lane (v w : Pos T k) :
+    hammingDist v w = hammingDist w v := by
+  classical
+  change (Finset.univ.filter (fun j : Fin (T.S.n k) => v j ≠ w j)).card =
+    (Finset.univ.filter (fun j : Fin (T.S.n k) => w j ≠ v j)).card
+  congr 1
+  ext j
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  exact ne_comm
+
+private theorem directObservation_distance (hG : TransferGeometry X) (b : Pos T k) (d : Fin (T.S.n k))
+    (hb : b ∈ X.predecessors D.geom.r) (w v : Pos T k)
+    (hwd : w = flipPos b d) (hvw : v = w ∨ ∃ j, v = flipPos w j)
+    (c : Fin (T.S.n k)) :
+    hammingDist v (flipPos X.target c) ≤ 2 * D.geom.r + 4 := by
+  let b₀ := X.failure.2.1.1
+  let a₀ := X.failure.2.2.2.2
+  have htarget : X.target = flipPos b₀ a₀ := rfl
+  have hb₀b : hammingDist b₀ b ≤ 2 * D.geom.r := by
+    exact (Finset.mem_filter.mp (hG.predecessor_radius b hb)).2
+  have hbb₀ : hammingDist b b₀ ≤ 2 * D.geom.r := by
+    rw [hammingDist_comm_lane b b₀]
+    exact hb₀b
+  have hb₀t : hammingDist b₀ X.target ≤ 1 := by
+    rw [htarget]
+    exact hammingDist_flip_le_one b₀ a₀
+  have httc : hammingDist X.target (flipPos X.target c) ≤ 1 :=
+    hammingDist_flip_le_one X.target c
+  have hwb : hammingDist w b ≤ 1 := by
+    rw [hwd, hammingDist_comm_lane (flipPos b d) b]
+    exact hammingDist_flip_le_one b d
+  have hvw' : hammingDist v w ≤ 1 := by
+    rcases hvw with rfl | ⟨j, rfl⟩
+    · simp [hammingDist]
+    · rw [hammingDist_comm_lane (flipPos w j) w]
+      exact hammingDist_flip_le_one w j
+  have hbT : hammingDist b (flipPos X.target c) ≤ 2 * D.geom.r + 2 := by
+    have h₁ := hammingDist_triangle b b₀ (flipPos X.target c)
+    have h₂ := hammingDist_triangle b₀ X.target (flipPos X.target c)
+    omega
+  have hwT : hammingDist w (flipPos X.target c) ≤ 2 * D.geom.r + 3 := by
+    have h := hammingDist_triangle w b (flipPos X.target c)
+    omega
+  have hvT := hammingDist_triangle v w (flipPos X.target c)
+  omega
+
+
+private theorem criticalCell_outer_words (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (c : Fin (T.S.n k)) (hc : c ∈ X.criticalCoords)
+    (w : Pos T k) (hw : w ∈ X.directEven)
+    (hcell : D.geom.cellOf (flipPos X.target c) ∈ D.directCells w) :
+    (∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → w a = flipPos X.target c a) ∨
+    ∃ j ∈ observationCoords D X c,
+      ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → w a = flipPos (flipPos X.target c) j a := by
+  obtain ⟨b, hb, d, hwd⟩ := directEven_representation D X w hw
+  rcases Finset.mem_union.mp hcell with hown | hext
+  · have heq : D.geom.cellOf w = D.geom.cellOf (flipPos X.target c) := (Finset.mem_singleton.mp hown).symm
+    left
+    apply S18.Lane_q_s18_n2.sameCell_outer_eq (D := D) (X := X) w c hc heq hmargin
+    exact_mod_cast directObservation_distance hG b d hb w w hwd (Or.inl rfl) c
+  · obtain ⟨j, hj, heq⟩ := Finset.mem_image.mp hext
+    have houter := S18.Lane_q_s18_n2.sameCell_outer_eq (D := D) (X := X) (flipPos w j) c hc heq hmargin
+      (by exact_mod_cast directObservation_distance hG b d hb w (flipPos w j) hwd (Or.inr ⟨j, rfl⟩) c)
+    have hcoord := external_observation_coordinate D X w hw j c hj houter
+    have hmem : j ∈ observationCoords D X c := by
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      rcases hcoord with hn | hcos | htarget
+      · exact Or.inl hn
+      · exact Or.inr (Or.inl (sameIdCoset_symm D hcos))
+      · exact Or.inr (Or.inr (sameIdCoset_symm D htarget))
+    refine Or.inr ⟨j, hmem, ?_⟩
+    intro a ha
+    have ho := houter a ha
+    by_cases haj : a = j
+    · subst a
+      simp only [flipPos, Function.update_self] at ho ⊢
+      simpa only [Bool.not_not] using congrArg Bool.not ho
+    · simpa [flipPos, haj] using ho
+
+/-- Each critical whole cell affects only a polynomial number of direct sites
+in h and r; the bound counts their actual spatial scopes. -/
+theorem criticalCell_affected_card (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (c : Fin (T.S.n k)) (hc : c ∈ X.criticalCoords) :
+    (X.directEven.filter fun w => D.geom.cellOf (flipPos X.target c) ∈ D.directCells w).card ≤
+      (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) := by
+  let sites (t : Pos T k) := X.directEven.filter fun w =>
+    ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → w a = t a
+  let J := observationCoords D X c
+  let S := X.directEven.filter fun w => D.geom.cellOf (flipPos X.target c) ∈ D.directCells w
+  have hsub : S ⊆ sites (flipPos X.target c) ∪ J.biUnion (fun j => sites (flipPos (flipPos X.target c) j)) := by
+    intro w hw
+    obtain ⟨hw, hcell⟩ := Finset.mem_filter.mp hw
+    rcases criticalCell_outer_words D X hG hmargin c hc w hw hcell with hown | ⟨j, hj, hword⟩
+    · exact Finset.mem_union.mpr (Or.inl (Finset.mem_filter.mpr ⟨hw, hown⟩))
+    · exact Finset.mem_union.mpr (Or.inr (Finset.mem_biUnion.mpr ⟨j, hj, Finset.mem_filter.mpr ⟨hw, hword⟩⟩))
+  have hs (t : Pos T k) : (sites t).card ≤ (PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1 :=
+    directEven_outerWord_card D X t
+  have hj := observationCoords_card D X c
+  calc
+    _ ≤ (sites (flipPos X.target c) ∪ J.biUnion (fun j => sites (flipPos (flipPos X.target c) j))).card := Finset.card_le_card hsub
+    _ ≤ (sites (flipPos X.target c)).card + ∑ j ∈ J, (sites (flipPos (flipPos X.target c) j)).card :=
+      (Finset.card_union_le _ _).trans (Nat.add_le_add_left Finset.card_biUnion_le _)
+    _ ≤ ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) +
+        ∑ _j ∈ J, ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) :=
+      Nat.add_le_add (hs _) (Finset.sum_le_sum (fun j _ => hs _))
+    _ = (1 + J.card) * ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) := by simp; ring
+    _ ≤ _ := Nat.mul_le_mul_right _ (Nat.add_le_add_left hj 1)
+
+/-- Summing the whole-cell scope count gives the per-block direct-site budget. -/
+theorem block_affectedSites_card (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (a : Fin (T.S.n k)) :
+    (X.directEven.filter fun w => (D.directCells w ∩ X.blockCells a).Nonempty).card ≤
+      (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r) *
+        (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) := by
+  let J := X.criticalCoords.filter (X.sameBlock a)
+  let sites := fun c => X.directEven.filter fun w => D.geom.cellOf (flipPos X.target c) ∈ D.directCells w
+  let S := X.directEven.filter fun w => (D.directCells w ∩ X.blockCells a).Nonempty
+  have hsub : S ⊆ J.biUnion sites := by
+    intro w hw
+    obtain ⟨hw, C, hC⟩ := Finset.mem_filter.mp hw
+    obtain ⟨hscope, hblock⟩ := Finset.mem_inter.mp hC
+    obtain ⟨c, hc, heq⟩ := Finset.mem_image.mp hblock
+    exact Finset.mem_biUnion.mpr ⟨c, hc, Finset.mem_filter.mpr ⟨hw, by simpa only [heq] using hscope⟩⟩
+  have hsite (c : Fin (T.S.n k)) (hc : c ∈ J) : (sites c).card ≤
+      (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) :=
+    criticalCell_affected_card D X hG hmargin c (Finset.mem_filter.mp hc).1
+  calc
+    _ ≤ (J.biUnion sites).card := Finset.card_le_card hsub
+    _ ≤ ∑ c ∈ J, (sites c).card := Finset.card_biUnion_le
+    _ ≤ ∑ _c ∈ J, (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) := Finset.sum_le_sum fun c hc => hsite c hc
+    _ = J.card * ((1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1)) := by simp
+    _ ≤ _ := by
+      have hh := Nat.mul_le_mul_right
+        ((1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+          ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1)) (hG.block_size a)
+      simpa only [Nat.mul_assoc] using hh
 
 end HypercubeRamsey.Lane_sol_s18_1c

@@ -565,6 +565,50 @@ private theorem reach9_to_heightPath {P : Params9} {hc : HeightChoice9 P} {n : �
         · exact hdistRoot
         · exact hlocal _ (by simpa [x] using hz)
 
+private theorem heightStep9_mono {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad bad' : HeightState9 P hc n → Prop}
+    (hbad : ∀ x, bad x → bad' x) (x y : HeightState9 P hc n)
+    (h : heightStep9 bad x y) : heightStep9 bad' x y := by
+  rcases h with ⟨hxy, hlevel, hb⟩ | hdown
+  · exact Or.inl ⟨hxy, hlevel, hbad x hb⟩
+  · exact Or.inr hdown
+
+private theorem heightPath9_mono {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad bad' : HeightState9 P hc n → Prop}
+    (hbad : ∀ x, bad x → bad' x) {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (h : HeightPath9 (heightStep9 bad) l start) :
+    HeightPath9 (heightStep9 bad') l start := by
+  induction h with
+  | singleton x => exact HeightPath9.singleton x
+  | cons hstep hpath ih =>
+      exact HeightPath9.cons (heightStep9_mono hbad _ _ hstep) ih
+
+private theorem badAt9_implies_badIn9_degraded {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t : ℝ} (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1)
+    (Pp A : Pos9 P hc n → Bool) (v : CubeVertex n) (j : Fin (hc.levels n + 1))
+    (hb : badAt9 (P := P) (hc := hc) (n := n) Pp A v j) :
+    badIn9 Finset.univ t Pp A v j := by
+  change badIn9 Finset.univ 1 Pp A v j at hb
+  change badIn9 Finset.univ t Pp A v j
+  rcases hb with hh | ⟨j', hj', hcrowd⟩
+  · exact Or.inl hh
+  · refine Or.inr ⟨j', hj', ?_⟩
+    rcases hcrowd with hs | ha | hl
+    · apply Or.inl
+      have hp := Real.rpow_nonneg (Nat.cast_nonneg n) ((P.χ : ℝ) / 2)
+      have hle := mul_le_mul_of_nonneg_right ht₂ hp
+      simpa only [one_mul] using lt_of_le_of_lt hle hs
+    · apply Or.inr
+      apply Or.inl
+      have hp := Real.rpow_nonneg (Nat.cast_nonneg n) ((P.χ : ℝ) / 2)
+      have hle := mul_le_mul_of_nonneg_right ht₂ hp
+      simpa only [one_mul] using lt_of_le_of_lt hle ha
+    · apply Or.inr
+      apply Or.inr
+      have hp := Real.rpow_nonneg (Nat.cast_nonneg n) (1 - (P.σ : ℝ) + hc.eps')
+      have hle := mul_le_mul_of_nonneg_right ht₂ hp
+      simpa only [one_mul] using lt_of_le_of_lt hle hl
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

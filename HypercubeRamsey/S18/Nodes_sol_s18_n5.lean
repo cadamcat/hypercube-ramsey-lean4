@@ -1080,4 +1080,459 @@ theorem currentCap_lt_one (hκ : κ.Admissible) (D : LateData hPT)
       exact h2.trans h3
     _ < 1 := (div_lt_one hscalePos).mpr hscale
 
+private theorem law_eq_of_weights {N : ℕ} {μ ν : Law N}
+    (h : ∀ x, μ.w x = ν.w x) : μ = ν := by
+  cases μ
+  cases ν
+  congr 1
+  exact funext h
+
+theorem finalWeight_last (D : LateData hPT)
+    (h : D.encoding.base.History (Fin.last D.geom.r)) (v : Pos T k)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (hadj : (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v b)
+    (hlast : ∀ w : D.encoding.base.ProcessedRole (Fin.last D.geom.r),
+      (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 →
+      w.1 ∉ D.encoding.base.processed j.castSucc → w.1 = b)
+    (x : Fin (T.S.N k)) :
+    finalWeight D h v x =
+      weightAt D j.castSucc (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt)) v x *
+        (if Hits (T.S.E k) PT.tiling.c x
+          (D.encoding.base.rowLabel (D.pastRows h j j.isLt ⟨b, hb⟩)) then 1 else 0) := by
+  classical
+  let B : Finset (D.encoding.base.ProcessedRole (Fin.last D.geom.r)) :=
+    Finset.univ.filter fun w => w.1 ∈ D.encoding.base.processed j.castSucc
+  let f := fun w : D.encoding.base.ProcessedRole (Fin.last D.geom.r) =>
+    if (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 then
+      (if Hits (T.S.E k) PT.tiling.c x (D.encoding.base.rowLabel (h.2 w)) then (1 : ℝ) else 0)
+    else 1
+  have hpast : (∏ w ∈ B, f w) =
+      ∏ w : D.encoding.base.ProcessedRole j.castSucc,
+        if (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 then
+          (if Hits (T.S.E k) PT.tiling.c x
+            (D.encoding.base.rowLabel ((D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt)).2 w))
+            then 1 else 0) else 1 := by
+    symm
+    apply Finset.prod_bij
+      (fun w _ => (⟨w.1, D.processed_mono _ _ (Nat.le_of_lt j.isLt) w.2⟩ :
+        D.encoding.base.ProcessedRole (Fin.last D.geom.r)))
+    · intro w _
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, w.2⟩
+    · intro w _ w' _ heq
+      exact Subtype.ext (congrArg (fun z : D.encoding.base.ProcessedRole (Fin.last D.geom.r) => z.1) heq)
+    · intro w hw
+      have hw' := (Finset.mem_filter.mp hw).2
+      exact ⟨⟨w.1, hw'⟩, Finset.mem_univ _, Subtype.ext rfl⟩
+    · intro w _
+      rfl
+  have hbfull : b ∈ D.encoding.base.processed (Fin.last D.geom.r) :=
+    D.class_before j (Fin.last D.geom.r) j.isLt hb
+  have hbnot : b ∉ D.encoding.base.processed j.castSucc :=
+    fun hmem => Finset.disjoint_left.mp (D.encoding.base.class_fresh j) hb hmem
+  have hrest : (∏ w ∈ Finset.univ \ B, f w) = f ⟨b, hbfull⟩ := by
+    apply Finset.prod_eq_single
+    · intro w hw hne
+      have hwout : w.1 ∉ D.encoding.base.processed j.castSucc := by
+        simpa only [B, Finset.mem_filter, Finset.mem_univ, true_and]
+          using (Finset.mem_sdiff.mp hw).2
+      have hn : ¬ (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 := by
+        intro ha
+        exact hne (Subtype.ext (hlast w ha hwout))
+      simp [f, hn]
+    · intro hnot
+      exact False.elim (hnot (by simp [B, hbnot]))
+  have hprod := Finset.prod_sdiff (f := f) (Finset.subset_univ B)
+  rw [hrest, hpast] at hprod
+  unfold finalWeight weightAt
+  change (D.initialPrior v h.1).w x * (∏ w, f w) = _
+  rw [← hprod]
+  simp only [f, hadj, if_true]
+  change _ = (D.initialPrior v h.1).w x * _ * _
+  dsimp only [LateData.pastRows]
+  exact (mul_assoc _ _ _).symm.trans (mul_right_comm _ _ _)
+
+theorem normalize_hit_cap {D : LateData hPT}
+    (f : Fin (T.S.N k) → ℝ) (R : Fin (T.S.N k) → Prop)
+    (hf : ∀ x, 0 ≤ f x) (hpos : 0 < ∑ x, f x)
+    (c : ℝ) (hcap : ∀ x, (D.normalize f).w x ≤ c)
+    (hm : (1 / 3 : ℝ) ≤ ∑ x, if R x then (D.normalize f).w x else 0) :
+    ∀ x, (D.normalize (fun x => f x * (if R x then 1 else 0))).w x ≤ 3 * c := by
+  classical
+  have hfn : (∀ x, 0 ≤ f x) ∧ 0 < ∑ x, f x := ⟨hf, hpos⟩
+  have heq : (∑ x, if R x then (D.normalize f).w x else 0) =
+      (∑ x, f x * (if R x then 1 else 0)) / ∑ x, f x := by
+    simp only [LateData.normalize, dif_pos hfn]
+    rw [Finset.sum_div]
+    apply Finset.sum_congr rfl
+    intro x _
+    by_cases hr : R x <;> simp [hr]
+  have hrawpos : 0 < ∑ x, f x * (if R x then 1 else 0) := by
+    have hmpos : 0 < (∑ x, f x * (if R x then 1 else 0)) / ∑ x, f x := by
+      rw [← heq]
+      linarith
+    exact (div_pos_iff_of_pos_right hpos).mp hmpos
+  have hnonneg : ∀ x, 0 ≤ f x * (if R x then 1 else 0) := by
+    intro x
+    split_ifs <;> simp [hf x]
+  intro x
+  have hc : 0 ≤ c := (D.normalize f).nonneg x |>.trans (hcap x)
+  simp only [LateData.normalize, dif_pos (show (∀ x, 0 ≤ f x * (if R x then 1 else 0)) ∧
+    0 < ∑ x, f x * (if R x then 1 else 0) from ⟨hnonneg, hrawpos⟩)]
+  by_cases hr : R x
+  · simp only [if_pos hr, mul_one]
+    have hden : (∑ x, f x) / 3 ≤ ∑ x, f x * (if R x then 1 else 0) := by
+      have hm' := (le_div_iff₀ hpos).mp (heq ▸ hm)
+      linarith
+    have hx : f x ≤ c * ∑ x, f x := by
+      have hh := hcap x
+      simp only [LateData.normalize, dif_pos hfn] at hh
+      exact (div_le_iff₀ hpos).mp hh
+    apply (div_le_iff₀ hrawpos).mpr
+    nlinarith
+  · simp only [if_neg hr, mul_zero, zero_div]
+    positivity
+
+theorem full_finalPrior_cap (hκ : κ.Admissible) (D : LateData hPT) (hD : D.Spec)
+    (hC : CurrentListCapFacts D) (δ : ℝ) (input : D.encoding.InitInput)
+    (h : D.encoding.base.History (Fin.last D.geom.r)) (hfull : D.full δ input h)
+    (v : Pos T k) (hv : IsEvenRole v) (hmass : 0 < ∑ y, finalWeight D h v y)
+    (herr : ∀ j : Fin D.geom.r, D.error v j ≤ 1 / 18) :
+    ∀ x, (D.finalPrior h v).w x ≤ 24 * κ.KB / densityScale T k *
+      Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v)) := by
+  classical
+  let cap := 8 * κ.KB / densityScale T k * Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v))
+  have hcap0 : 0 ≤ cap := by
+    dsimp [cap, densityScale]
+    have hKB : 0 ≤ κ.KB := by nlinarith [hκ.KB_big]
+    positivity
+  have hvalid : D.initialValid v h.1 := hfull.2.2.2.2.1 v hv
+  let J := Finset.univ.filter fun j : Fin D.geom.r => ∃ b ∈ D.encoding.base.classes j,
+    (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v b
+  have htarget : 3 * cap = 24 * κ.KB / densityScale T k *
+      Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v)) := by dsimp [cap]; ring
+  rw [← htarget]
+  by_cases hJ : J.Nonempty
+  · let j := J.max' hJ
+    obtain ⟨b, hb, hab⟩ := (Finset.mem_filter.mp (Finset.max'_mem J hJ)).2
+    obtain ⟨a, ha⟩ := adjacent_flip v b hab
+    have hflip : flipPos b a = v := by rw [ha]; exact flipPos_involutive v a
+    let pre := D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt)
+    have hprevalid : D.initialValid v pre.1 := hvalid
+    have hlast : ∀ w : D.encoding.base.ProcessedRole (Fin.last D.geom.r),
+        (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 →
+        w.1 ∉ D.encoding.base.processed j.castSucc → w.1 = b := by
+      intro w hw hwout
+      have hwclass : ∃ s, D.geom.classOf w.1 = some s := by
+        have hm := Eq.mp (congrArg (fun S : Finset (Pos T k) => w.1 ∈ S)
+          D.encoding.base.processed_last) w.2
+        exact (Finset.mem_filter.mp hm).2
+      obtain ⟨s, hs⟩ := hwclass
+      have hsclass := (D.encoding.base.class_of_spec w.1 s).mpr hs
+      have hsJ : s ∈ J := Finset.mem_filter.mpr ⟨Finset.mem_univ _, w.1, hsclass, hw⟩
+      have hsle : s ≤ j := Finset.le_max' J s hsJ
+      have hsj : s = j := by
+        by_contra hne
+        have hlt : s.val < j.val := (lt_of_le_of_ne hsle hne : s < j)
+        exact hwout (D.class_before s j.castSucc hlt hsclass)
+      obtain ⟨a', ha'⟩ := adjacent_flip v w.1 hw
+      have hba : D.geom.classOf (flipPos v a) = some j := by
+        rw [← ha]; exact (D.encoding.base.class_of_spec b j).mp hb
+      have hwa : D.geom.classOf (flipPos v a') = some j := by rw [← ha', ← hsj]; exact hs
+      rw [ha', D.l16_valid.one_per_class v j a' a hwa hba, ← ha]
+    have hfactor := finalWeight_last D h v j b hb hab hlast
+    let R := fun x => Hits (T.S.E k) PT.tiling.c x
+      (D.encoding.base.rowLabel (D.pastRows h j j.isLt ⟨b, hb⟩))
+    let f := weightAt D j.castSucc pre v
+    have hpos : 0 < ∑ x, f x := by
+      apply lt_of_lt_of_le hmass
+      apply Finset.sum_le_sum
+      intro x _
+      rw [hfactor x]
+      change f x * (if R x then 1 else 0) ≤ f x
+      split_ifs
+      · simp
+      · simp only [mul_zero]
+        exact weightAt_nonneg D j.castSucc pre v x
+    have hgate := ((hfull.2.2.2.2.2.2 j).2.2.2.2 ⟨b, hb⟩).1
+    have hcap : ∀ x, (D.normalize f).w x ≤ cap := by
+      intro x
+      have hh := hC j b pre hgate hb a x
+      rw [hflip] at hh
+      have hp : Real.rpow 2 (-(D.remainingNeighbors v j : ℝ)) ≤ 1 :=
+        Real.rpow_le_one_of_one_le_of_nonpos (by norm_num)
+          (neg_nonpos.mpr (Nat.cast_nonneg _))
+      have hcp : cap * Real.rpow 2 (-(D.remainingNeighbors v j : ℝ)) ≤ cap := by
+        simpa only [mul_one] using mul_le_mul_of_nonneg_left hp hcap0
+      have heq : D.currentPrior j v pre = D.normalize f := by
+        simp only [LateData.currentPrior, LateData.priorAt, if_pos hprevalid]
+        rfl
+      rw [heq] at hh
+      exact hh.trans hcp
+    have hR3 := (((hfull.2.2.2.2.2.2 j).2.2.2.2 ⟨b, hb⟩).2.1) a
+    have hm : (1 / 3 : ℝ) ≤ ∑ x, if R x then (D.normalize f).w x else 0 := by
+      have heq : D.currentPrior j v pre = D.normalize f := by
+        simp only [LateData.currentPrior, LateData.priorAt, if_pos hprevalid]
+        rfl
+      change (1 / 2 : ℝ) - 3 * D.error (flipPos b a) j ≤
+        colDeg (T.S.E k) PT.tiling.c (D.currentPrior j (flipPos b a) pre)
+          (D.encoding.base.rowLabel (D.pastRows h j j.isLt ⟨b, hb⟩)) at hR3
+      rw [hflip, heq] at hR3
+      have hmassEq : colDeg (T.S.E k) PT.tiling.c (D.normalize f)
+          (D.encoding.base.rowLabel (D.pastRows h j j.isLt ⟨b, hb⟩)) =
+          ∑ x, if R x then (D.normalize f).w x else 0 := by
+        apply Finset.sum_congr rfl
+        intro x _
+        by_cases hx : R x <;> simp [R] at hx ⊢ <;> simp [hx]
+      rw [hmassEq] at hR3
+      linarith [herr j]
+    intro x
+    have heq : D.finalPrior h v = D.normalize (fun x => f x * (if R x then 1 else 0)) := by
+      simp only [LateData.finalPrior, LateData.priorAt, if_pos hvalid]
+      change D.normalize (finalWeight D h v) = _
+      congr 1
+      funext y
+      exact hfactor y
+    rw [heq]
+    exact normalize_hit_cap f R (weightAt_nonneg D _ _ _) hpos cap hcap hm x
+  · have hraw (x : Fin (T.S.N k)) : finalWeight D h v x = (D.initialPrior v h.1).w x := by
+      unfold finalWeight
+      have hprod : (∏ w : D.encoding.base.ProcessedRole (Fin.last D.geom.r),
+          if (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 then
+            (if Hits (T.S.E k) PT.tiling.c x (D.encoding.base.rowLabel (h.2 w)) then (1 : ℝ) else 0)
+          else 1) = 1 := by
+        apply Finset.prod_eq_one
+        intro w _
+        have hn : ¬ (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v w.1 := by
+          intro hw
+          have hm := Eq.mp (congrArg (fun S : Finset (Pos T k) => w.1 ∈ S)
+            D.encoding.base.processed_last) w.2
+          obtain ⟨s, hs⟩ := (Finset.mem_filter.mp hm).2
+          have hmem : s ∈ J := Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+            w.1, (D.encoding.base.class_of_spec w.1 s).mpr hs, hw⟩
+          exact hJ ⟨s, hmem⟩
+        simp [hn]
+      rw [hprod, mul_one]
+    have heq : D.finalPrior h v = D.initialPrior v h.1 := by
+      apply law_eq_of_weights
+      intro x
+      simp only [LateData.finalPrior, LateData.priorAt, if_pos hvalid]
+      change (D.normalize (finalWeight D h v)).w x = _
+      have hfun : finalWeight D h v = (D.initialPrior v h.1).w := funext hraw
+      rw [hfun]
+      have hn : (∀ y, 0 ≤ (D.initialPrior v h.1).w y) ∧ 0 < ∑ y, (D.initialPrior v h.1).w y :=
+        ⟨(D.initialPrior v h.1).nonneg, by rw [(D.initialPrior v h.1).sum_eq_one]; norm_num⟩
+      unfold LateData.normalize
+      rw [dif_pos hn]
+      change (D.initialPrior v h.1).w x / (∑ y, (D.initialPrior v h.1).w y) = _
+      rw [(D.initialPrior v h.1).sum_eq_one, div_one]
+    intro x
+    rw [heq]
+    have hh := hD.initial_cap v h.1 hv hvalid x
+    have hp : Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)) ≤ 1 :=
+      Real.rpow_le_one_of_one_le_of_nonpos (by norm_num)
+        (neg_nonpos.mpr (Nat.cast_nonneg _))
+    have hc4 : 0 ≤ 4 * κ.KB / densityScale T k * Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v)) := by
+      dsimp [densityScale]
+      have hKB : 0 ≤ κ.KB := by nlinarith [hκ.KB_big]
+      positivity
+    have hh' := mul_le_mul_of_nonneg_left hp hc4
+    simp only [mul_one] at hh'
+    apply (hh.trans hh').trans
+    have he : cap = 2 * (4 * κ.KB / densityScale T k * Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v))) := by
+      dsimp [cap]
+      ring
+    rw [he]
+    nlinarith [hc4]
+
+theorem nonconflict_mass_ge {N : ℕ} (q : Law N) (C : Finset (Fin N))
+    (R : Fin N → Fin N → Prop) (d c : ℝ)
+    (hc : 0 ≤ c) (hcap : ∀ x, q.w x ≤ c)
+    (hsupport : ∀ x, x ∉ C → q.w x = 0)
+    (hdegree : ∀ x, ((C.filter fun z => ¬ R x z).card : ℝ) ≤ d) :
+    1 - d * c ≤ ∑ p : Fin N × Fin N, if R p.1 p.2 then q.w p.1 * q.w p.2 else 0 := by
+  classical
+  have hbad (x : Fin N) : (∑ z, if ¬ R x z then q.w z else 0) ≤ d * c := by
+    calc
+      _ = ∑ z ∈ C.filter (fun z => ¬ R x z), q.w z := by
+        rw [Finset.sum_filter]
+        symm
+        apply Finset.sum_subset (Finset.subset_univ C)
+        intro z _ hz
+        simp [hsupport z hz]
+      _ ≤ ∑ _z ∈ C.filter (fun z => ¬ R x z), c :=
+        Finset.sum_le_sum (fun z _ => hcap z)
+      _ = ((C.filter fun z => ¬ R x z).card : ℝ) * c := by simp
+      _ ≤ d * c := mul_le_mul_of_nonneg_right (hdegree x) hc
+  have hrow (x : Fin N) :
+      1 - d * c ≤ ∑ z, if R x z then q.w z else 0 := by
+    have hsplit : (∑ z, if R x z then q.w z else 0) +
+        (∑ z, if ¬ R x z then q.w z else 0) = 1 := by
+      rw [← Finset.sum_add_distrib, ← q.sum_eq_one]
+      apply Finset.sum_congr rfl
+      intro z _
+      by_cases hr : R x z <;> simp [hr]
+    linarith [hbad x]
+  rw [Fintype.sum_prod_type]
+  calc
+    1 - d * c = ∑ x, q.w x * (1 - d * c) := by
+      rw [← Finset.sum_mul, q.sum_eq_one, one_mul]
+    _ ≤ ∑ x, q.w x * ∑ z, if R x z then q.w z else 0 :=
+      Finset.sum_le_sum (fun x _ => mul_le_mul_of_nonneg_left (hrow x) (q.nonneg x))
+    _ = _ := by
+      apply Finset.sum_congr rfl
+      intro x _
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro z _
+      by_cases hr : R x z <;> simp [hr]
+
+theorem finalPrior_corner (D : LateData hPT)
+    (h : D.encoding.base.History (Fin.last D.geom.r)) (v : Pos T k)
+    (hv : D.initialValid v h.1) (hmass : 0 < ∑ y, finalWeight D h v y) :
+    ∃ q ∈ PT.activeVertices, ∀ x, x ∉ PT.mesh.corner q (D.geom.patchOf v) →
+      (D.finalPrior h v).w x = 0 := by
+  obtain ⟨q, hq, hs⟩ := hv.1.2.2.2.1
+  refine ⟨q, hq, ?_⟩
+  intro x hx
+  by_contra hne
+  have hraw : finalWeight D h v x ≠ 0 := by
+    intro hz
+    apply hne
+    simp only [LateData.finalPrior, LateData.priorAt, if_pos hv]
+    change (D.normalize (finalWeight D h v)).w x = 0
+    simp only [LateData.normalize,
+      dif_pos (show (∀ y, 0 ≤ finalWeight D h v y) ∧ 0 < ∑ y, finalWeight D h v y
+        from ⟨finalWeight_nonneg D h v, hmass⟩), hz, zero_div]
+  have hinit := (mul_ne_zero_iff.mp hraw).1
+  have hU := (initialPrior_support D v h.1 hv x hinit).2
+  exact (mul_ne_zero_iff.mp hU).1 (hs x hx)
+
+theorem conflict_exponent_le (hκ : κ.Admissible) (D : LateData hPT)
+    (i : Fin PT.tiling.m) :
+    Real.exp (Cstar κ.u κ.ξ * (PT.tiling.Q i : ℝ)) ≤
+      κ.Kbd * Real.exp (PT.tiling.gain i) := by
+  have hC : 0 ≤ Cstar κ.u κ.ξ := by unfold Cstar; positivity
+  have hK : 1 ≤ κ.Kbd := hκ.bounded.2.2.2.1
+  have hupper : Real.exp (PT.tiling.gain i) ≤ κ.Kbd * Real.exp (PT.tiling.gain i) := by
+    simpa using mul_le_mul_of_nonneg_right hK (Real.exp_nonneg (PT.tiling.gain i))
+  have hLow := D.low_mode
+  cases hm : PT.tiling.mode with
+  | bounded =>
+      have hdata := (hPT.tiling_valid.bounded_data hm).2 i
+      simpa only [Tiling.gain, hm, hdata.2.2.2.2, Real.exp_zero, mul_one]
+        using hκ.bounded.2.2.2.2
+  | lowDirect =>
+      have hQ := (hPT.tiling_valid.clique_scales i).2 (Or.inl hm)
+      have hroot : 0 < Real.sqrt κ.M1 := Real.sqrt_pos.mpr (by linarith [hκ.M1_big.1])
+      have hscale := (div_le_iff₀ hroot).mp hκ.M1_big.2
+      have hbound := mul_le_mul_of_nonneg_left hQ.2.2.1 hC
+      have hg : 0 ≤ ((PT.tiling.P i).g : ℝ) := Nat.cast_nonneg _
+      have he : Cstar κ.u κ.ξ * (PT.tiling.Q i : ℝ) ≤ PT.tiling.gain i := by
+        simp only [Tiling.gain, hm]
+        have h2 : Cstar κ.u κ.ξ * (2 * (PT.tiling.P i).g / Real.sqrt κ.M1) ≤
+            (PT.tiling.P i).g / 1000 := by
+          calc
+            _ = (2 * Cstar κ.u κ.ξ / Real.sqrt κ.M1) * (PT.tiling.P i).g := by ring
+            _ ≤ 1e-4 * (PT.tiling.P i).g := mul_le_mul_of_nonneg_right hκ.M1_big.2 hg
+            _ ≤ (PT.tiling.P i).g / 1000 := by nlinarith
+        exact hbound.trans h2
+      exact (Real.exp_le_exp.mpr he).trans hupper
+  | lowCluster =>
+      have hdata := hPT.tiling_valid.cluster_data (Or.inl hm) i
+      have hM : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+      have hmax : max ((PT.tiling.P i).g : ℝ) ((PT.tiling.P i).q : ℝ) ≤
+          κ.M1 * (PT.tiling.P i).q := by
+        apply max_le hdata.2.1
+        nlinarith [hκ.M1_big.1, (Nat.cast_nonneg (PT.tiling.P i).q :
+          (0 : ℝ) ≤ (PT.tiling.P i).q)]
+      have hq : κ.Q0 ≤ ((PT.tiling.P i).q : ℝ) := by
+        have ht : κ.M1 * κ.Q0 ≤
+            max ((PT.tiling.P i).g : ℝ) ((PT.tiling.P i).q : ℝ) := by
+          simpa only [Nat.cast_max] using hdata.1
+        nlinarith [ht.trans hmax]
+      have hqcond := (hκ.Q0_large _ hq).2.2.2.2.2.2.1
+      have hheight := hdata.2.2.2.2.2.2.2.1
+      have hQ := (hPT.tiling_valid.clique_scales i).1 (Or.inl hm)
+      have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+      have hheight' : Real.rpow ((PT.tiling.P i).q : ℝ) κ.Mlo ≤ (PT.tiling.P i).h := by
+        simpa only [hm, if_true] using hheight
+      have he : Cstar κ.u κ.ξ * (PT.tiling.Q i : ℝ) ≤ PT.tiling.gain i := by
+        simp only [Tiling.gain, hm]
+        have h1 := mul_le_mul_of_nonneg_left hQ.2.2.1 hC
+        have h2 := mul_le_mul_of_nonneg_left hheight' (show 0 ≤ κ.a / 10 ^ 6 by positivity)
+        nlinarith
+      exact (Real.exp_le_exp.mpr he).trans hupper
+  | highDirect => simp_all [Mode.isLow]
+  | highSmall => simp_all [Mode.isLow]
+  | highLarge => simp_all [Mode.isLow]
+
+private theorem corr_colour {N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin N → ℝ) (x z : Fin N) : corr E c π x z = corr E true π x z := by
+  classical
+  cases c with
+  | true => rfl
+  | false =>
+      unfold corr
+      apply Finset.sum_congr rfl
+      intro y _
+      by_cases hx : E x y <;> by_cases hz : E z y <;> simp [fv, hit, Hits, hx, hz] <;> ring
+
+theorem final_nonconflict_mass (hκ : κ.Admissible) (D : LateData hPT) (hD : D.Spec)
+    {K16 : ℝ} (Q : S16.LowModeQuantFacts hκ (PT := PT) K16)
+    (hC : CurrentListCapFacts D)
+    (hscale : 48 * κ.KB * K16 * κ.Kbd ≤ densityScale T k)
+    (δ : ℝ) (input : D.encoding.InitInput)
+    (h : D.encoding.base.History (Fin.last D.geom.r)) (hfull : D.full δ input h)
+    (v : Pos T k) (hv : IsEvenRole v) (hmass : 0 < ∑ y, finalWeight D h v y)
+    (herr : ∀ j : Fin D.geom.r, D.error v j ≤ 1 / 18) :
+    (1 / 2 : ℝ) ≤ ∑ p : Fin (T.S.N k) × Fin (T.S.N k),
+      if D.nonconflict v p.1 p.2 then (D.finalPrior h v).w p.1 * (D.finalPrior h v).w p.2 else 0 := by
+  let i := D.geom.patchOf v
+  let c := 24 * κ.KB / densityScale T k * Real.exp (-199 * PT.tiling.gain i)
+  let d := K16 * κ.Kbd * Real.exp (PT.tiling.gain i)
+  have hKB : 0 ≤ κ.KB := by nlinarith [hκ.KB_big]
+  have hKbd : 0 ≤ κ.Kbd := le_trans (by norm_num) hκ.bounded.2.2.2.1
+  have hDensity : 0 < densityScale T k := by
+    unfold densityScale
+    exact div_pos (by exact_mod_cast T.S.N_pos k) (by positivity)
+  have hK16 := Q.K16_pos
+  have haPos : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  have hc : 0 ≤ c := by dsimp [c]; positivity
+  obtain ⟨q, hq, hs⟩ := finalPrior_corner D h v (hfull.2.2.2.2.1 v hv) hmass
+  have hdeg : ∀ x, (((PT.mesh.corner q i).filter fun z => ¬ D.nonconflict v x z).card : ℝ) ≤ d := by
+    intro x
+    have heq (z : Fin (T.S.N k)) :
+        pairCorr (T.S.E k) true (PT.π i) x z = corr (T.S.E k) PT.tiling.c (PT.π i).w x z := by
+      simpa only [pairCorr, ite_true] using (corr_colour (T.S.E k) PT.tiling.c (PT.π i).w x z).symm
+    have hbound := Q.conflict_bound i q hq x
+    have hset : (PT.mesh.corner q i).filter (fun z => ¬ D.nonconflict v x z) =
+        (PT.mesh.corner q i).filter fun z => κ.ξ < |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| := by
+      ext z
+      simp only [Finset.mem_filter, LateData.nonconflict, ← heq z, not_le]
+      rfl
+    rw [hset]
+    apply hbound.trans
+    simpa only [d, mul_assoc] using mul_le_mul_of_nonneg_left (conflict_exponent_le hκ D i) Q.K16_pos.le
+  have hmassBound := nonconflict_mass_ge (D.finalPrior h v) (PT.mesh.corner q i)
+    (D.nonconflict v) d c hc
+    (full_finalPrior_cap hκ D hD hC δ input h hfull v hv hmass herr) hs hdeg
+  have hgain : 0 ≤ PT.tiling.gain i := by
+    have hLow := D.low_mode
+    cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Tiling.gain] <;> positivity
+  have hproduct : d * c ≤ 1 / 2 := by
+    have he : Real.exp (-198 * PT.tiling.gain i) ≤ 1 :=
+      Real.exp_le_one_iff.mpr (by nlinarith)
+    have ha : 0 ≤ 24 * κ.KB * K16 * κ.Kbd / densityScale T k := by positivity
+    calc
+      d * c = (24 * κ.KB * K16 * κ.Kbd / densityScale T k) *
+          Real.exp (-198 * PT.tiling.gain i) := by
+        rw [show -198 * PT.tiling.gain i = PT.tiling.gain i + -199 * PT.tiling.gain i by ring,
+          Real.exp_add]
+        dsimp [d, c]
+        ring
+      _ ≤ 24 * κ.KB * K16 * κ.Kbd / densityScale T k := by
+        simpa only [mul_one] using mul_le_mul_of_nonneg_left he ha
+      _ ≤ 1 / 2 := (div_le_iff₀ hDensity).mpr (by nlinarith [hscale])
+  linarith
+
 end HypercubeRamsey.S18.Lane_sol_s18_n5

@@ -851,6 +851,10 @@ structure CubeStates5 {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) where
   stateOf : CubeVertex n → Site
   oneHot : Site → CubeVertex d
   oneHot_injective : Function.Injective oneHot
+  /-- The one-hot fine-count coordinates separate different majority signs (05:291–313,
+  978–985), so short state tubes consult only nearby low-key signs. -/
+  sign_distance : ∀ x y, hammingDist (g.sign x) (g.sign y) ≤
+    hammingDist (oneHot (stateOf x)) (oneHot (stateOf y))
   resCoord : g.residual → Fin d
   resCoord_injective : Function.Injective resCoord
   oneHot_residual : ∀ x (a : g.residual), oneHot (stateOf x) (resCoord a) = x a.1

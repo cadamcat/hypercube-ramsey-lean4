@@ -494,6 +494,12 @@ private theorem params9_small_internal_scales (P : Params9) (hP : P.Valid) :
     exact Nat.floor_le (by positivity)
   exact ⟨hm', hradius.trans hσhi', hσlo'⟩
 
+theorem height_base_small_scales9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (P.m n : ℝ) ≤ (n : ℝ) / 4 ∧
+      (P.radius n : ℝ) ≤ (n : ℝ) / 4 ∧ 11 ≤ P.radius n :=
+  params9_small_internal_scales P hP
+
 theorem height_counts9_volume_bounds (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,
       0 < residualBall9 P n ∧ P.radius n ≤ n - P.m n ∧
@@ -1635,5 +1641,503 @@ theorem height_hole_probability_bound (C : Finset (Pos9 P hc n)) (s : ℝ)
     (heightActLaw9 P hc n) Q Hole (Real.exp (-s * (n : ℝ) ^ hc.b₀))
     (Real.exp_nonneg _) hActivation
   simpa [heightLaw9, Q, Hole, and_comm] using hprod
+
+private theorem finProb_prod_expect {α β : Type*} [Fintype α] [Fintype β]
+    (μ : FinProb α) (ν : FinProb β) (f : α → β → ℝ) :
+    (FinProb.prod μ ν).expect (fun ab => f ab.1 ab.2) =
+      μ.expect (fun a => ν.expect (f a)) := by
+  unfold FinProb.expect FinProb.prod
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a ha
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b hb
+  ring
+
+private theorem finProb_expect_congr {α : Type*} [Fintype α] (μ : FinProb α)
+    {f g : α → ℝ} (h : ∀ x, f x = g x) : μ.expect f = μ.expect g := by
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro x hx
+  rw [h x]
+
+private lemma finProb_pr_exp_markov9 {Ω : Type*} [Fintype Ω] (μ : FinProb Ω)
+    (X : Ω → ℝ) (s t : ℝ) (hs : 0 ≤ s) :
+    μ.pr (fun ω => t ≤ X ω) ≤
+      Real.exp (-s * t) * μ.expect (fun ω => Real.exp (s * X ω)) := by
+  classical
+  unfold FinProb.pr FinProb.expect
+  calc
+    (∑ ω, if t ≤ X ω then μ.w ω else 0) ≤
+        ∑ ω, μ.w ω * Real.exp (s * (X ω - t)) := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases h : t ≤ X ω
+      · have he : 1 ≤ Real.exp (s * (X ω - t)) := by
+          apply Real.one_le_exp_iff.mpr
+          exact mul_nonneg hs (sub_nonneg.mpr h)
+        simp only [if_pos h]
+        simpa using (mul_le_mul_of_nonneg_left he (μ.nonneg ω))
+      · simp only [if_neg h]
+        exact mul_nonneg (μ.nonneg ω) (Real.exp_nonneg _)
+    _ = Real.exp (-s * t) * ∑ ω, μ.w ω * Real.exp (s * X ω) := by
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro ω hω
+      rw [show s * (X ω - t) = -s * t + s * X ω by ring, Real.exp_add]
+      ring
+
+private theorem exp_third_le_three_halves9 : Real.exp (1 / 3 : ℝ) ≤ 3 / 2 := by
+  have hlog := Real.log_le_sub_one_of_pos
+    (x := ((3 : ℝ) / 2)⁻¹) (inv_pos.mpr (by norm_num))
+  rw [Real.log_inv] at hlog
+  have hlog' : 1 / 3 ≤ Real.log ((3 : ℝ) / 2) := by
+    norm_num at hlog ⊢
+    linarith
+  calc
+    Real.exp (1 / 3 : ℝ) ≤ Real.exp (Real.log ((3 : ℝ) / 2)) :=
+      Real.exp_le_exp.mpr hlog'
+    _ = 3 / 2 := Real.exp_log (by norm_num)
+
+/-- Exponential moment for the number of active positions in a fixed finite set. -/
+theorem height_active_exp_mgf_bound (S : Finset (Pos9 P hc n)) (p q s : ℝ)
+    (hpEq : p = (n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ))
+    (hqEq : q = (n : ℝ) ^ (hc.b₀ - 10))
+    (hp0 : 0 ≤ p) (hp1 : p ≤ 1) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hs : 0 ≤ s) :
+    (heightLaw9 P hc n).expect (fun ω =>
+      Real.exp (s * ∑ c : Pos9 P hc n,
+        if c ∈ S ∧ ω.1 c = true ∧ ω.2 c = true then (1 : ℝ) else 0)) ≤
+      Real.exp (p * q * (S.card : ℝ) * (Real.exp s - 1)) := by
+  classical
+  let X : Pos9 P hc n → (Pos9 P hc n → Bool) → Bool → ℝ :=
+    fun c Pp b => if c ∈ S ∧ Pp c = true ∧ b = true then 1 else 0
+  have hactCoord (Pp : Pos9 P hc n → Bool) (c : Pos9 P hc n) :
+      (FinProb.bernoulli q).expect (fun b => Real.exp (s * X c Pp b)) =
+        if c ∈ S ∧ Pp c = true then 1 + q * (Real.exp s - 1) else 1 := by
+    by_cases h : c ∈ S ∧ Pp c = true
+    · simp [X, h, FinProb.expect, FinProb.bernoulli, hq0, hq1] <;> ring
+    · simp [X, h, FinProb.expect, FinProb.bernoulli, hq0, hq1]
+  have hposCoord (c : Pos9 P hc n) :
+      (FinProb.bernoulli p).expect (fun b =>
+        if c ∈ S ∧ b = true then 1 + q * (Real.exp s - 1) else 1) =
+        if c ∈ S then 1 + p * q * (Real.exp s - 1) else 1 := by
+    by_cases h : c ∈ S
+    · simp [h, FinProb.expect, FinProb.bernoulli, hp0, hp1] <;> ring
+    · have hfun : (fun b : Bool => if c ∈ S ∧ b = true then
+          1 + q * (Real.exp s - 1) else 1) = fun _ => (1 : ℝ) := by
+        funext b
+        simp [h]
+      rw [hfun]
+      rw [FinProb.expect_const]
+      simp [h]
+  have hfactor (Pp : Pos9 P hc n → Bool) :
+      (heightActLaw9 P hc n).expect (fun A =>
+        Real.exp (s * ∑ c : Pos9 P hc n, X c Pp (A c))) =
+        ∏ c : Pos9 P hc n,
+          if c ∈ S ∧ Pp c = true then 1 + q * (Real.exp s - 1) else 1 := by
+    calc
+      _ = (heightActLaw9 P hc n).expect (fun A =>
+          ∏ c : Pos9 P hc n, Real.exp (s * X c Pp (A c))) := by
+        congr 1
+        funext A
+        rw [Finset.mul_sum, Real.exp_sum]
+      _ = ∏ c : Pos9 P hc n,
+          (FinProb.bernoulli q).expect (fun b => Real.exp (s * X c Pp b)) := by
+        simpa only [heightActLaw9, hqEq] using
+          (finProb_pi_expect_prod (fun _ : Pos9 P hc n => FinProb.bernoulli q)
+            (fun c b => Real.exp (s * X c Pp b)))
+      _ = _ := by simp_rw [hactCoord]
+  have houter :
+      (heightPosLaw9 P hc n).expect (fun Pp =>
+        ∏ c : Pos9 P hc n,
+          if c ∈ S ∧ Pp c = true then 1 + q * (Real.exp s - 1) else 1) =
+      ∏ c : Pos9 P hc n,
+        if c ∈ S then 1 + p * q * (Real.exp s - 1) else 1 := by
+    calc
+      _ = ∏ c : Pos9 P hc n,
+          (FinProb.bernoulli p).expect (fun b =>
+            if c ∈ S ∧ b = true then 1 + q * (Real.exp s - 1) else 1) := by
+        simpa only [heightPosLaw9, hpEq] using
+          (finProb_pi_expect_prod (fun _ : Pos9 P hc n => FinProb.bernoulli p)
+            (fun c b => if c ∈ S ∧ b = true then 1 + q * (Real.exp s - 1) else 1))
+      _ = _ := by simp_rw [hposCoord]
+  have hprodBound :
+      (∏ c : Pos9 P hc n, if c ∈ S then 1 + p * q * (Real.exp s - 1) else 1) ≤
+        ∏ c : Pos9 P hc n,
+          Real.exp (if c ∈ S then p * q * (Real.exp s - 1) else 0) := by
+    apply Finset.prod_le_prod₀
+    · intro c hc
+      by_cases h : c ∈ S
+      · rw [if_pos h]
+        have hexp : 0 ≤ Real.exp s - 1 := by
+          have := Real.one_le_exp_iff.mpr hs
+          linarith
+        have hpq : 0 ≤ p * q := mul_nonneg hp0 hq0
+        exact add_nonneg (by norm_num) (mul_nonneg hpq hexp)
+      · simp [h]
+    · intro c hc
+      by_cases h : c ∈ S
+      · simp only [if_pos h]
+        have hterm : 0 ≤ p * q * (Real.exp s - 1) :=
+          mul_nonneg (mul_nonneg hp0 hq0) (by
+            have := Real.one_le_exp_iff.mpr hs
+            linarith)
+        have := Real.add_one_le_exp (p * q * (Real.exp s - 1))
+        nlinarith
+      · simp [h]
+  have hsum :
+      (∑ c : Pos9 P hc n, if c ∈ S then p * q * (Real.exp s - 1) else 0) =
+        p * q * (S.card : ℝ) * (Real.exp s - 1) := by
+    rw [Finset.sum_ite_mem]
+    simp [Finset.sum_const, nsmul_eq_mul]
+    ring
+  have hprodExp :
+      (∏ c : Pos9 P hc n,
+        Real.exp (if c ∈ S then p * q * (Real.exp s - 1) else 0)) =
+        Real.exp (p * q * (S.card : ℝ) * (Real.exp s - 1)) := by
+    rw [← Real.exp_sum, hsum]
+  calc
+    (heightLaw9 P hc n).expect (fun ω =>
+        Real.exp (s * ∑ c : Pos9 P hc n,
+          if c ∈ S ∧ ω.1 c = true ∧ ω.2 c = true then (1 : ℝ) else 0)) =
+        (heightPosLaw9 P hc n).expect (fun Pp =>
+          (heightActLaw9 P hc n).expect (fun A =>
+            Real.exp (s * ∑ c : Pos9 P hc n, X c Pp (A c)))) := by
+      simpa [heightLaw9, X] using
+        (finProb_prod_expect (heightPosLaw9 P hc n) (heightActLaw9 P hc n)
+          (fun Pp A => Real.exp (s * ∑ c : Pos9 P hc n,
+            if c ∈ S ∧ Pp c = true ∧ A c = true then (1 : ℝ) else 0)))
+    _ = (heightPosLaw9 P hc n).expect (fun Pp =>
+          ∏ c : Pos9 P hc n,
+            if c ∈ S ∧ Pp c = true then 1 + q * (Real.exp s - 1) else 1) := by
+      apply finProb_expect_congr
+      intro Pp
+      exact hfactor Pp
+    _ = ∏ c : Pos9 P hc n,
+          if c ∈ S then 1 + p * q * (Real.exp s - 1) else 1 := houter
+    _ ≤ ∏ c : Pos9 P hc n,
+          Real.exp (if c ∈ S then p * q * (Real.exp s - 1) else 0) := hprodBound
+    _ = Real.exp (p * q * (S.card : ℝ) * (Real.exp s - 1)) := hprodExp
+
+/-- Chernoff tail for the active positions in a fixed set when its mean is far below the threshold. -/
+theorem height_active_count_tail (S : Finset (Pos9 P hc n)) (p q τ : ℝ)
+    (hpEq : p = (n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ))
+    (hqEq : q = (n : ℝ) ^ (hc.b₀ - 10))
+    (hp0 : 0 ≤ p) (hp1 : p ≤ 1) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hτ : 0 ≤ τ) (hmean : p * q * (S.card : ℝ) ≤ τ / 6) :
+    (heightLaw9 P hc n).pr (fun ω =>
+      τ ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ)) ≤
+      Real.exp (-τ / 4) := by
+  classical
+  let X : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool) → ℝ := fun ω =>
+    ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ)
+  have hcard (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+      X ω = ∑ c : Pos9 P hc n,
+        if c ∈ S ∧ ω.1 c = true ∧ ω.2 c = true then (1 : ℝ) else 0 := by
+    dsimp [X]
+    rw [Finset.card_eq_sum_ite
+      (s := S.filter (fun c => ω.1 c = true ∧ ω.2 c = true))
+      (t := Finset.univ) (Finset.subset_univ _)]
+    push_cast
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  have hmgfRaw := height_active_exp_mgf_bound S p q (1 / 3) hpEq hqEq
+    hp0 hp1 hq0 hq1 (by norm_num)
+  have hmgf : (heightLaw9 P hc n).expect
+      (fun ω => Real.exp ((1 / 3 : ℝ) * X ω)) ≤
+        Real.exp (p * q * (S.card : ℝ) * (Real.exp (1 / 3 : ℝ) - 1)) := by
+    simpa [X, hcard] using hmgfRaw
+  have hmark := finProb_pr_exp_markov9 (heightLaw9 P hc n) X (1 / 3) τ (by norm_num)
+  have hfactor :
+      Real.exp (-(1 / 3 : ℝ) * τ) *
+        (heightLaw9 P hc n).expect (fun ω => Real.exp ((1 / 3 : ℝ) * X ω)) ≤
+      Real.exp (-τ / 4) := by
+    calc
+      _ ≤ Real.exp (-(1 / 3 : ℝ) * τ) *
+          Real.exp (p * q * (S.card : ℝ) * (Real.exp (1 / 3 : ℝ) - 1)) :=
+        mul_le_mul_of_nonneg_left hmgf (Real.exp_nonneg _)
+      _ ≤ Real.exp (-τ / 4) := by
+        rw [← Real.exp_add]
+        apply Real.exp_le_exp.mpr
+        have hthird : Real.exp (1 / 3 : ℝ) - 1 ≤ 1 / 2 := by
+          have := exp_third_le_three_halves9
+          linarith
+        have hcoef :
+            p * q * (S.card : ℝ) * (Real.exp (1 / 3 : ℝ) - 1) ≤ τ / 12 := by
+          have hnonneg : 0 ≤ p * q * (S.card : ℝ) := by positivity
+          calc
+            _ ≤ p * q * (S.card : ℝ) * (1 / 2 : ℝ) :=
+              mul_le_mul_of_nonneg_left hthird hnonneg
+            _ ≤ τ / 12 := by nlinarith [hmean]
+        nlinarith [hcoef]
+  have htailX : (heightLaw9 P hc n).pr (fun ω => τ ≤ X ω) ≤
+        Real.exp (-(1 / 3 : ℝ) * τ) *
+          (heightLaw9 P hc n).expect (fun ω => Real.exp ((1 / 3 : ℝ) * X ω)) := hmark
+  have htailX' : (heightLaw9 P hc n).pr (fun ω => τ ≤ X ω) ≤ Real.exp (-τ / 4) :=
+    htailX.trans hfactor
+  simpa [X] using htailX'
+
+private def heightDiffSet9 {d : ℕ} (v u : CubeVertex d) : Finset (Fin d) :=
+  Finset.univ.filter (fun i => u i ≠ v i)
+
+private def heightVertexOfDiff9 {d : ℕ} (v : CubeVertex d) (s : Finset (Fin d)) :
+    CubeVertex d := fun i => if i ∈ s then !(v i) else v i
+
+private def heightDiffEquiv9 {d : ℕ} (v : CubeVertex d) : CubeVertex d ≃ Finset (Fin d) where
+  toFun := heightDiffSet9 v
+  invFun := heightVertexOfDiff9 v
+  left_inv := by
+    intro u
+    funext i
+    by_cases hi : u i = v i
+    · simp [heightVertexOfDiff9, heightDiffSet9, hi]
+    · have hmem : i ∈ heightDiffSet9 v u := by simp [heightDiffSet9, hi]
+      have hbool : v i = !(u i) := by cases hu : u i <;> cases hv : v i <;> simp_all
+      simp [heightVertexOfDiff9, hmem, hbool]
+  right_inv := by
+    intro s
+    ext i
+    by_cases hi : i ∈ s
+    · simp [heightDiffSet9, heightVertexOfDiff9, hi]
+    · simp [heightDiffSet9, heightVertexOfDiff9, hi]
+
+private theorem heightDiffSet_card9 {d : ℕ} (v u : CubeVertex d) :
+    (heightDiffSet9 v u).card = _root_.hammingDist u v := by
+  simp [heightDiffSet9, _root_.hammingDist, ne_comm]
+
+private def heightBallEquiv9 {d r : ℕ} (v : CubeVertex d) :
+    {u : CubeVertex d // _root_.hammingDist u v ≤ r} ≃
+      {s : Finset (Fin d) // s.card ≤ r} where
+  toFun u := ⟨heightDiffSet9 v u.1, by rw [heightDiffSet_card9]; exact u.2⟩
+  invFun s := ⟨heightVertexOfDiff9 v s.1, by
+    rw [← heightDiffSet_card9]
+    simp [heightDiffSet9, heightVertexOfDiff9]
+    exact s.2⟩
+  left_inv := by intro u; apply Subtype.ext; exact (heightDiffEquiv9 v).left_inv u.1
+  right_inv := by intro s; apply Subtype.ext; exact (heightDiffEquiv9 v).right_inv s.1
+
+private def heightSmallSubsetFiberEquiv9 (d r : ℕ) (i : Fin (r + 1)) :
+    {s : {s : Finset (Fin d) // s.card ≤ r} // (⟨s.1.card, by omega⟩ : Fin (r + 1)) = i} ≃
+      {s : Finset (Fin d) // s.card = i.val} where
+  toFun s := ⟨s.1.1, by
+    have h := congrArg Fin.val s.2
+    simpa using h⟩
+  invFun s := ⟨⟨s.1, by rw [s.2]; omega⟩, by
+    apply Fin.ext
+    exact s.2⟩
+  left_inv := by
+    intro s
+    apply Subtype.ext
+    apply Subtype.ext
+    rfl
+  right_inv := by
+    intro s
+    apply Subtype.ext
+    rfl
+
+private def heightSmallSubsetsEquiv9 (d r : ℕ) :
+    {s : Finset (Fin d) // s.card ≤ r} ≃
+      Σ i : Fin (r + 1), {s : Finset (Fin d) // s.card = i.val} := by
+  let f : {s : Finset (Fin d) // s.card ≤ r} → Fin (r + 1) :=
+    fun s => ⟨s.1.card, by omega⟩
+  exact (Equiv.sigmaFiberEquiv f).symm.trans
+    (Equiv.sigmaCongrRight (heightSmallSubsetFiberEquiv9 d r))
+
+private theorem heightSmallSubsetsCard9 (d r : ℕ) :
+    Fintype.card {s : Finset (Fin d) // s.card ≤ r} =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  rw [Fintype.card_congr (heightSmallSubsetsEquiv9 d r), Fintype.card_sigma]
+  have hfiber (i : Fin (r + 1)) :
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Nat.choose d i.val := by
+    let S : Finset (Finset (Fin d)) := Finset.univ.powersetCard i.val
+    let e : {s : Finset (Fin d) // s.card = i.val} ≃ S :=
+      { toFun := fun s => ⟨s.1, by
+          rw [Finset.mem_powersetCard]
+          exact ⟨Finset.subset_univ _, s.2⟩⟩
+        invFun := fun s => ⟨s.1, (Finset.mem_powersetCard.mp s.2).2⟩
+        left_inv := by intro s; apply Subtype.ext; rfl
+        right_inv := by intro s; apply Subtype.ext; rfl }
+    calc
+      Fintype.card {s : Finset (Fin d) // s.card = i.val} = Fintype.card S := Fintype.card_congr e
+      _ = S.card := Fintype.card_coe S
+      _ = Nat.choose d i.val := by simp [S, Finset.card_powersetCard]
+  simp_rw [hfiber]
+  rw [← Fin.sum_univ_eq_sum_range]
+
+theorem height_hamming_ball_card9 (d r : ℕ) (v : CubeVertex d) :
+    (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  classical
+  have hcard : Fintype.card {u : CubeVertex d // _root_.hammingDist u v ≤ r} =
+      (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card := by
+    simpa using (Fintype.card_subtype (fun u : CubeVertex d => _root_.hammingDist u v ≤ r))
+  exact hcard.symm.trans
+    ((Fintype.card_congr (heightBallEquiv9 v)).trans (heightSmallSubsetsCard9 d r))
+
+private theorem height_choose_sum_shift9 (d r : ℕ) :
+    (∑ i ∈ Finset.range r, Nat.choose d (i + 1)) + Nat.choose d 0 =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+  induction r with
+  | zero => simp
+  | succ r ih =>
+      rw [Finset.sum_range_succ]
+      have hright : r + 1 + 1 = (r + 1) + 1 := by omega
+      rw [hright, Finset.sum_range_succ]
+      nlinarith [ih]
+
+theorem height_hamming_ball_prev_volume_bound9 (d r : ℕ) (hr : 1 ≤ r) (hrd : r ≤ d) :
+    (∑ i ∈ Finset.range r, Nat.choose d i) * (d - r + 1) ≤
+      r * (∑ i ∈ Finset.range (r + 1), Nat.choose d i) := by
+  have hterm (i : ℕ) (hi : i ∈ Finset.range r) :
+      Nat.choose d i * (d - r + 1) ≤ Nat.choose d (i + 1) * r := by
+    have hir : i < r := Finset.mem_range.mp hi
+    have hid : i ≤ d := le_trans (Nat.le_of_lt hir) hrd
+    have hrec := Nat.choose_succ_right_eq d i
+    have hleft : Nat.choose d i * (d - r + 1) ≤ Nat.choose d i * (d - i) := by
+      exact Nat.mul_le_mul_left _ (by omega)
+    have hright : Nat.choose d (i + 1) * (i + 1) ≤ Nat.choose d (i + 1) * r :=
+      Nat.mul_le_mul_left _ (by omega)
+    omega
+  have hsum :
+      (∑ i ∈ Finset.range r, Nat.choose d i) * (d - r + 1) ≤
+        (∑ i ∈ Finset.range r, Nat.choose d (i + 1)) * r := by
+    rw [Finset.sum_mul]
+    calc
+      _ ≤ ∑ i ∈ Finset.range r, Nat.choose d (i + 1) * r := by
+        apply Finset.sum_le_sum
+        intro i hi
+        exact hterm i hi
+      _ = (∑ i ∈ Finset.range r, Nat.choose d (i + 1)) * r := by rw [Finset.sum_mul]
+  have hshift := height_choose_sum_shift9 d r
+  have hshift' :
+      (∑ i ∈ Finset.range r, Nat.choose d (i + 1)) + 1 =
+        ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by simpa using hshift
+  have hshiftLe :
+      ∑ i ∈ Finset.range r, Nat.choose d (i + 1) ≤
+        ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
+    omega
+  exact (hsum.trans (Nat.mul_le_mul_right r hshiftLe)).trans_eq (by simp [Nat.mul_comm])
+
+theorem height_hamming_ball_next_volume_bound9 (d r : ℕ) :
+    (∑ i ∈ Finset.range (r + 2), Nat.choose d i) * (r + 1) ≤
+      (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * (r + 1 + d) := by
+  have hVplus :
+      (∑ i ∈ Finset.range (r + 2), Nat.choose d i) =
+        (∑ i ∈ Finset.range (r + 1), Nat.choose d i) + Nat.choose d (r + 1) := by
+    have hindex : r + 2 = (r + 1) + 1 := by omega
+    rw [hindex, Finset.sum_range_succ]
+  have hrec := Nat.choose_succ_right_eq d r
+  have hchooseLe : Nat.choose d r ≤ ∑ i ∈ Finset.range (r + 1), Nat.choose d i :=
+    Finset.single_le_sum (fun i hi => Nat.zero_le _) (Finset.mem_range.mpr (Nat.lt_succ_self r))
+  rw [hVplus]
+  calc
+    _ = (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * (r + 1) +
+        Nat.choose d (r + 1) * (r + 1) := by rw [Nat.add_mul]
+    _ = (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * (r + 1) +
+        Nat.choose d r * (d - r) := by rw [hrec]
+    _ ≤ (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * (r + 1) +
+        (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * d := by
+      apply Nat.add_le_add_left
+      calc
+        Nat.choose d r * (d - r) ≤
+            (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * (d - r) :=
+          Nat.mul_le_mul_right _ hchooseLe
+        _ ≤ (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * d :=
+          Nat.mul_le_mul_left _ (by omega)
+    _ = (∑ i ∈ Finset.range (r + 1), Nat.choose d i) * (r + 1 + d) := by
+      ring
+
+theorem height_slice_ball_card9 (slice : CubeVertex (P.m n))
+    (x : CubeVertex (n - P.m n)) (j : Fin (hc.levels n + 1)) (R : ℕ) :
+    (Finset.univ.filter (fun c : Pos9 P hc n =>
+      c.slice = slice ∧ _root_.hammingDist c.location x ≤ R ∧ c.level = j)).card =
+      ∑ i ∈ Finset.range (R + 1), Nat.choose (n - P.m n) i := by
+  classical
+  let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+    c.slice = slice ∧ _root_.hammingDist c.location x ≤ R ∧ c.level = j)
+  let B : Finset (CubeVertex (n - P.m n)) :=
+    Finset.univ.filter (fun u => _root_.hammingDist u x ≤ R)
+  have hcard : S.card = B.card := by
+    apply Finset.card_bij (fun c _ => c.location)
+    · intro c hcS
+      simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hcS
+      rcases hcS with ⟨_, hd, _⟩
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hd⟩
+    · intro c hcS d hdS heq
+      simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hcS hdS
+      rcases hcS with ⟨hcs, _, hcj⟩
+      rcases hdS with ⟨hds, _, hdj⟩
+      cases c with
+      | mk sc lc jc =>
+        cases d with
+        | mk sd ld jd =>
+          simp_all
+    · intro u huB
+      simp only [B, Finset.mem_filter, Finset.mem_univ, true_and] at huB
+      refine ⟨⟨slice, u, j⟩, ?_, rfl⟩
+      simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨huB, trivial⟩
+  calc
+    _ = S.card := by rfl
+    _ = B.card := hcard
+    _ = ∑ i ∈ Finset.range (R + 1), Nat.choose (n - P.m n) i := by
+      exact height_hamming_ball_card9 (n - P.m n) R x
+
+theorem height_adjacent_ball_card_le9 (slice : CubeVertex (P.m n))
+    (x : CubeVertex (n - P.m n)) (j : Fin (hc.levels n + 1)) (R : ℕ) :
+    (Finset.univ.filter (fun c : Pos9 P hc n =>
+      _root_.hammingDist c.slice slice = 1 ∧
+        _root_.hammingDist c.location x ≤ R ∧ c.level = j)).card ≤
+      P.m n * (∑ i ∈ Finset.range (R + 1), Nat.choose (n - P.m n) i) := by
+  classical
+  let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+    _root_.hammingDist c.slice slice = 1 ∧
+      _root_.hammingDist c.location x ≤ R ∧ c.level = j)
+  let T : Finset (CubeVertex (P.m n)) :=
+    Finset.univ.filter fun z => (cube (P.m n)).Adj slice z
+  let B : Finset (CubeVertex (n - P.m n)) :=
+    Finset.univ.filter (fun u => _root_.hammingDist u x ≤ R)
+  let f : Pos9 P hc n → CubeVertex (P.m n) × CubeVertex (n - P.m n) :=
+    fun c => (c.slice, c.location)
+  have hT : T.card ≤ P.m n := cube_adj_neighbors_card_le (P.m n) slice
+  have hmap : ∀ c, c ∈ S → f c ∈ T ×ˢ B := by
+    intro c hcS
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hcS
+    rcases hcS with ⟨hslice, hloc, hlevel⟩
+    rw [Finset.mem_product]
+    constructor
+    · change c.slice ∈ Finset.univ.filter (fun z : CubeVertex (P.m n) =>
+        (cube (P.m n)).Adj slice z)
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      simpa [OAI.HypercubeRamsey.cube, _root_.hammingDist_comm] using hslice
+    · exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hloc⟩
+  have hinj : Set.InjOn f S := by
+    intro c hcS d hdS hfd
+    change c ∈ S at hcS
+    change d ∈ S at hdS
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and] at hcS hdS
+    rcases hcS with ⟨_, _, hcj⟩
+    rcases hdS with ⟨_, _, hdj⟩
+    have hsl : c.slice = d.slice := by simpa [f] using congrArg Prod.fst hfd
+    have hloc : c.location = d.location := by simpa [f] using congrArg Prod.snd hfd
+    cases c with
+    | mk sc lc jc =>
+      cases d with
+      | mk sd ld jd =>
+        simp_all
+  have himage : S.card = (S.image f).card := (Finset.card_image_of_injOn hinj).symm
+  have himageSub : S.image f ⊆ T ×ˢ B := by
+    intro z hz
+    rcases Finset.mem_image.mp hz with ⟨c, hc, rfl⟩
+    exact hmap c hc
+  have hB : B.card = ∑ i ∈ Finset.range (R + 1), Nat.choose (n - P.m n) i :=
+    height_hamming_ball_card9 (n - P.m n) R x
+  calc
+    S.card = (S.image f).card := himage
+    _ ≤ (T ×ˢ B).card := Finset.card_le_card himageSub
+    _ = T.card * B.card := by rw [Finset.card_product]
+    _ ≤ P.m n * B.card := Nat.mul_le_mul_right _ hT
+    _ = P.m n * (∑ i ∈ Finset.range (R + 1), Nat.choose (n - P.m n) i) := by rw [hB]
 
 end HypercubeRamsey.Lane_q_s09_map

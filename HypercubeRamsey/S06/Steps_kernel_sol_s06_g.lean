@@ -170,6 +170,78 @@ private theorem kernelRatio_weight_le {a b : ℝ} (ha : 0 ≤ a) : b * safeRatio
         ((∏ _ℓ : Zidx, (N : ℝ)⁻¹) * (∏ ℓ : Zidx, (N : ℝ) * z ℓ)) := by ring
     _ ≤ _ := by rw [ha, hz]; exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hi han) hzn
 
+ theorem primitive_density_eq (v : Fin N) (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (l : LocalObs X nm D)
+    (hΛ : ∀ s : {s : X.Key // s ∈ X.locKeys D}, M.Λ (l.2.1 s) ≠ 0) :
+    (localReference X nm D).w l * X.locDensity (assembleLocal X v nm D l) nm D ξ =
+      (localLaw X v nm D ξ).w l := by
+  let H := assembleLocal X v nm D l
+  let B := (X.withParH H nm ξ).1
+  let Aidx := {u : X.Bin // u ∈ X.locBins D nm}
+  let Iidx := {s : X.Key // s ∈ X.locKeys D}
+  let Zidx := {ℓ : X.HKey // ℓ ∈ X.locHid D}
+  let a (u : Aidx) := (X.candLaw B.1).w (l.1 u)
+  let i (s : Iidx) := (X.tagLawAt (X.parOf B) s.1).w (l.2.1 s)
+  let z (ℓ : Zidx) := (X.hidPost B ℓ.1.1).w (l.2.2 ℓ)
+  let r (s : Iidx) := safeRatio6 (i s) (M.Λ (l.2.1 s))
+  have hn : (N : ℝ) ≠ 0 := by
+    have hp : 0 < N := lt_of_le_of_lt (Nat.zero_le X.y₀.val) X.y₀.isLt
+    exact ne_of_gt (by exact_mod_cast hp)
+  have ha : (∏ _u : Aidx, (N : ℝ)⁻¹) * (∏ u : Aidx, (N : ℝ) * a u) = ∏ u : Aidx, a u := by
+    rw [← Finset.prod_mul_distrib]
+    apply Finset.prod_congr rfl
+    intro u hu
+    rw [← mul_assoc, inv_mul_cancel₀ hn, one_mul]
+  have hz : (∏ _ℓ : Zidx, (N : ℝ)⁻¹) * (∏ ℓ : Zidx, (N : ℝ) * z ℓ) = ∏ ℓ : Zidx, z ℓ := by
+    rw [← Finset.prod_mul_distrib]
+    apply Finset.prod_congr rfl
+    intro ℓ hℓ
+    rw [← mul_assoc, inv_mul_cancel₀ hn, one_mul]
+  have hi : (∏ s : Iidx, M.Λ (l.2.1 s)) * (∏ s : Iidx, r s) = ∏ s : Iidx, i s := by
+    rw [← Finset.prod_mul_distrib]
+    apply Finset.prod_congr rfl
+    intro s hs
+    dsimp [r]
+    simp only [safeRatio6, if_neg (hΛ s)]
+    field_simp [hΛ s]
+  rw [localReference_weight, localDensity_weight, localLaw_weight]
+  change ((∏ _u : Aidx, (N : ℝ)⁻¹) * (∏ s : Iidx, M.Λ (l.2.1 s)) * (∏ _ℓ : Zidx, (N : ℝ)⁻¹)) *
+      ((∏ u : Aidx, (N : ℝ) * a u) * (∏ s : Iidx, r s) * (∏ ℓ : Zidx, (N : ℝ) * z ℓ)) =
+    (∏ u : Aidx, a u) * (∏ s : Iidx, i s) * (∏ ℓ : Zidx, z ℓ)
+  calc
+    _ = ((∏ _u : Aidx, (N : ℝ)⁻¹) * (∏ u : Aidx, (N : ℝ) * a u)) *
+        ((∏ s : Iidx, M.Λ (l.2.1 s)) * (∏ s : Iidx, r s)) *
+        ((∏ _ℓ : Zidx, (N : ℝ)⁻¹) * (∏ ℓ : Zidx, (N : ℝ) * z ℓ)) := by ring
+    _ = _ := by rw [ha, hz, hi]
+
+
+
+ theorem localLaw_positive_factors (v : Fin N) (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (l : LocalObs X nm D) (hp : 0 < (localLaw X v nm D ξ).w l) :
+    (∀ u : {u : X.Bin // u ∈ X.locBins D nm},
+      0 < (X.candLaw (X.withParH (assembleLocal X v nm D l) nm ξ).1.1).w (l.1 u)) ∧
+    (∀ s : {s : X.Key // s ∈ X.locKeys D},
+      0 < (X.tagLawAt (X.parOf (X.withParH (assembleLocal X v nm D l) nm ξ).1) s.1).w (l.2.1 s)) ∧
+    (∀ ℓ : {ℓ : X.HKey // ℓ ∈ X.locHid D},
+      0 < (X.hidPost (X.withParH (assembleLocal X v nm D l) nm ξ).1 ℓ.1.1).w (l.2.2 ℓ)) := by
+  let B := (X.withParH (assembleLocal X v nm D l) nm ξ).1
+  let a : ℝ := ∏ u : {u : X.Bin // u ∈ X.locBins D nm}, (X.candLaw B.1).w (l.1 u)
+  let i : ℝ := ∏ s : {s : X.Key // s ∈ X.locKeys D}, (X.tagLawAt (X.parOf B) s.1).w (l.2.1 s)
+  let z : ℝ := ∏ ℓ : {ℓ : X.HKey // ℓ ∈ X.locHid D}, (X.hidPost B ℓ.1.1).w (l.2.2 ℓ)
+  have ha : 0 ≤ a := Finset.prod_nonneg fun u hu => (X.candLaw B.1).nonneg _
+  have hi : 0 ≤ i := Finset.prod_nonneg fun s hs => (X.tagLawAt _ s.1).nonneg _
+  have hz : 0 ≤ z := Finset.prod_nonneg fun ℓ hℓ => (X.hidPost B ℓ.1.1).nonneg _
+  have hprod : 0 < a * i * z := by simpa only [localLaw_weight] using hp
+  have hai : 0 < a * i := (mul_pos_iff.mp hprod).elim (fun h => h.1)
+    (fun h => False.elim (not_lt_of_ge (mul_nonneg ha hi) h.1))
+  have haz : 0 < a := (mul_pos_iff.mp hai).elim (fun h => h.1) (fun h => False.elim (not_lt_of_ge ha h.1))
+  have hiz : 0 < i := (mul_pos_iff.mp hai).elim (fun h => h.2) (fun h => False.elim (not_lt_of_ge hi h.2))
+  have hzz : 0 < z := (mul_pos_iff.mp hprod).elim (fun h => h.2)
+    (fun h => False.elim (not_lt_of_ge hz h.2))
+  exact ⟨Lane_q_s06_steps1.prod_pos_each6 _ (fun u => (X.candLaw B.1).nonneg _) haz,
+    Lane_q_s06_steps1.prod_pos_each6 _ (fun s => (X.tagLawAt _ s.1).nonneg _) hiz,
+    Lane_q_s06_steps1.prod_pos_each6 _ (fun ℓ => (X.hidPost B ℓ.1.1).nonneg _) hzz⟩
+
 
 end
 end HypercubeRamsey.S06.Lane_sol_s06_g

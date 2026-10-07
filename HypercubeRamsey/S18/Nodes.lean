@@ -858,6 +858,24 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
           ((D.paletteRows palette).powersetCard p).card ≤ 2) →
         (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧
           HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
+  let KH : ℝ := K + Cp + Cs + 1
+  have hKH : 0 < KH := by dsimp [KH]; positivity
+  have hthreshold : ∀ᶠ k : ℕ in atTop, 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := by
+    have hlarge := T.S.n_tendsto.eventually_ge_atTop ⌈3 / η⌉₊
+    filter_upwards [hlarge] with k hk
+    have hcast : (⌈3 / η⌉₊ : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hk
+    have hceil : 3 / η ≤ (⌈3 / η⌉₊ : ℝ) := Nat.le_ceil _
+    have h3 : (3 : ℝ) ≤ η * (T.S.n k : ℝ) := by
+      have h := (div_le_iff₀ hη).mp (hceil.trans hcast)
+      nlinarith
+    exact Nat.le_floor h3
+  refine ⟨KH, hKH, ?_⟩
+  filter_upwards [hthreshold] with k ht0
+  intro PT hPT D hD δ εterm εrun C H hEndpoint hAverage
+  have hPairFacts : PairInitialFacts D δ K := hEndpoint.pair_facts
+  have hObstructionSize : 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := ht0
+  -- The remaining estimate is the connected endpoint-tree diagram sum,
+  -- with two additional mergers on the actual distinct-endpoint support.
   sorry
 
 /-- L18.6c, 18:1289–1299. Sum all palettes/patches; C_n→∞ supplies the

@@ -755,46 +755,68 @@ theorem L18_6a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cprime : ℝ)
       nlinarith
     dsimp [η] at hη1
     linarith
+  let a : ℝ := 0.02 + Cprime * η
+  have hRateEvent := HypercubeRamsey.Lane_q_s18_n6.eventually_overlapRate_le_half
+    hκ T η a hη1 (by dsimp [a]; exact hslack)
   refine ⟨η, hη, hη1, hslack, ?_⟩
-  filter_upwards [] with k
+  filter_upwards [hRateEvent] with k hRate
   intro PT hPT D hD δ hPair palette p hp
+  let U : Finset (Pos T k) := D.paletteRows palette
+  let Δ : ℕ := ⌈(T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5)⌉₊
   have hExponentBound (S : Finset (Pos T k)) :
       0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S ≤
         (0.02 + Cprime * η) * (T.S.n k : ℝ) * D.rank S :=
     HypercubeRamsey.Lane_q_s18_n6.overlapMoment_exponent_bound
       D δ K Cprime η hPair hCp.le p hp S
-  by_cases hp0 : p = 0
-  · subst p
-    rw [Finset.powersetCard_zero]
-    simp [LateData.nonisolates, LateData.rank]
-  · by_cases hp1 : p = 1
-    · subst p
-      let U : Finset (Pos T k) := D.paletteRows palette
-      have hpow : 0 < (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) :=
-        Real.rpow_pos_of_pos (by norm_num) _
-      have hcardReal : 0 < (U.card : ℝ) := by
-        dsimp [U]
-        exact lt_of_lt_of_le hpow (hPair.2.1 palette)
-      have hcard : 0 < U.card := by exact_mod_cast hcardReal
-      have hnum :
-          (∑ S ∈ U.powersetCard 1,
-            Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
-              Cprime * 1 * D.rank S)) = U.card := by
-        rw [Finset.powersetCard_one, Finset.sum_map]
-        change
-          (∑ v ∈ U,
-            Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates ({v} : Finset (Pos T k))).card +
-              Cprime * 1 * D.rank {v})) = (U.card : ℝ)
-        simp_rw [HypercubeRamsey.Lane_q_s18_n6.singleton_overlap_exponent_zero]
-        simp
-      have hden : (U.powersetCard 1).card = U.card := by simp
-      dsimp [U] at hnum hden ⊢
-      simp only [Nat.cast_one] at hnum hden ⊢
-      rw [hnum, hden]
-      have hcardNe : (U.card : ℝ) ≠ 0 := by exact_mod_cast hcard.ne'
-      rw [div_self hcardNe]
-      norm_num
-    · sorry
+  by_cases hpU : p ≤ U.card
+  · have hRateLocal :
+        Real.exp (a * (T.S.n k : ℝ)) * (p : ℝ) ^ 2 * Δ /
+          ((U.card : ℝ) - p + 1) ≤ 1 / 2 := by
+      simpa [a, U, Δ, Real.rpow_natCast, Nat.cast_add] using
+        hRate U (hPair.2.1 palette) p hp
+    have hdeg : ∀ v, (Finset.univ.filter fun w => D.geometricAdj v w).card ≤ Δ := by
+      intro v
+      have hdegReal := hPair.2.2.1 v
+      have hceil : (T.S.n k : ℝ) ^ (κ.Ac + 5) ≤ (Δ : ℝ) := by
+        calc
+          (T.S.n k : ℝ) ^ (κ.Ac + 5) =
+              (T.S.n k : ℝ) ^ ((κ.Ac + 5 : ℕ) : ℝ) := by rw [← Real.rpow_natCast]
+          _ = (T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5) := by congr 1 <;> norm_num
+          _ ≤ (Δ : ℝ) := by dsimp [Δ]; exact Nat.le_ceil _
+      exact_mod_cast hdegReal.trans hceil
+    have hMoment := HypercubeRamsey.Lane_q_s18_n6.overlapRank_exp_moment_le_two
+      D U p Δ (a * (T.S.n k : ℝ)) hpU hdeg (by simpa [a, U, Δ] using hRateLocal)
+    have hSum :
+        (∑ S ∈ U.powersetCard p,
+          Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+            Cprime * p * D.rank S)) ≤
+        (∑ S ∈ U.powersetCard p,
+          Real.exp (a * (T.S.n k : ℝ) * D.rank S)) := by
+      apply Finset.sum_le_sum
+      intro S hS
+      exact Real.exp_le_exp.mpr (by
+        have h := hExponentBound S
+        dsimp [a]
+        nlinarith [h])
+    have hdenPos : 0 < ((U.powersetCard p).card : ℝ) := by
+      rw [Finset.card_powersetCard]
+      exact_mod_cast Nat.choose_pos hpU
+    change
+      (∑ S ∈ U.powersetCard p,
+        Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+          Cprime * p * D.rank S)) / ((U.powersetCard p).card : ℝ) ≤ 2
+    calc
+      _ ≤ (∑ S ∈ U.powersetCard p,
+          Real.exp (a * (T.S.n k : ℝ) * D.rank S)) / ((U.powersetCard p).card : ℝ) :=
+        div_le_div_of_nonneg_right hSum hdenPos.le
+      _ ≤ 2 := hMoment
+  · have hEmpty : U.powersetCard p = ∅ := by
+      apply Finset.powersetCard_eq_empty.mpr
+      omega
+    have hlt : U.card < p := Nat.lt_of_not_ge hpU
+    dsimp [U] at hEmpty ⊢
+    rw [hEmpty]
+    simp [Nat.choose_eq_zero_of_lt hlt]
 
 noncomputable def HallBudget {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : LateData hPT) (η K Cs : ℝ) : ℝ :=

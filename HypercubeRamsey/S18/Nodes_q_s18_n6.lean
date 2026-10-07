@@ -1094,4 +1094,133 @@ theorem overlapRank_exp_moment_le_two {κ : CConsts} {T : Stage} {k : ℕ}
   rw [hdenNat]
   exact (div_le_div_of_nonneg_right htotal hdenPos.le).trans hcode
 
+theorem eventually_overlapRate_le_half {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (η a : ℝ) (hη1 : η < 1) (ha : a < Real.log 2 / 2) :
+    ∀ᶠ k in atTop, ∀ U : Finset (Pos T k),
+      (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) ≤ (U.card : ℝ) →
+      ∀ p : ℕ, (p : ℝ) ≤ η * (T.S.n k : ℝ) →
+        Real.exp (a * (T.S.n k : ℝ)) * (p : ℝ) ^ 2 *
+          (⌈(T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5)⌉₊ : ℝ) /
+            ((U.card : ℝ) - p + 1) ≤ 1 / 2 := by
+  have hnCast : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
+    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp
+      T.S.n_tendsto
+  let c : ℝ := Real.log 2 / 2
+  let gap : ℝ := c - a
+  let s : ℝ := (κ.Ac : ℝ) + 5
+  have hc : 0 < c := by
+    dsimp [c]
+    exact div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  have hgap : 0 < gap := by dsimp [gap, c]; linarith [ha]
+  have hs : 0 < s := by dsimp [s]; positivity
+  have hpoly0 : Tendsto (fun k : ℕ =>
+      (T.S.n k : ℝ) ^ (s + 2) * Real.exp (-gap * (T.S.n k : ℝ))) atTop (nhds 0) :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero (s + 2) gap hgap).comp hnCast
+  have hpoly : Tendsto (fun k : ℕ =>
+      4 * (T.S.n k : ℝ) ^ (s + 2) * Real.exp (-gap * (T.S.n k : ℝ))) atTop (nhds 0) := by
+    simpa [mul_assoc] using
+      ((tendsto_const_nhds : Tendsto (fun _ : ℕ => (4 : ℝ)) atTop (nhds 4)).mul hpoly0)
+  have hpolySmall : ∀ᶠ k : ℕ in atTop,
+      4 * (T.S.n k : ℝ) ^ (s + 2) * Real.exp (-gap * (T.S.n k : ℝ)) < 1 / 2 :=
+    hpoly.eventually (eventually_lt_nhds (by norm_num))
+  have hexpOver0 : Tendsto (fun x : ℝ => Real.exp (c * x) / x) atTop atTop := by
+    simpa [Real.rpow_one] using tendsto_exp_mul_div_rpow_atTop 1 c hc
+  have hexpOver := hexpOver0.comp hnCast
+  have hexpSmall : ∀ᶠ k : ℕ in atTop,
+      2 < Real.exp (c * (T.S.n k : ℝ)) / (T.S.n k : ℝ) :=
+    hexpOver.eventually (eventually_gt_atTop 2)
+  have hn4 : ∀ᶠ k : ℕ in atTop, 4 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 4
+  filter_upwards [hpolySmall, hexpSmall, hn4] with k hpolySmall hexpSmall hn4
+  intro U hU p hp
+  let n : ℝ := T.S.n k
+  let Δ : ℕ := ⌈n ^ s⌉₊
+  have hn4R : 4 ≤ n := by dsimp [n]; exact_mod_cast hn4
+  have hnPos : 0 < n := by linarith [hn4R]
+  have hnOne : 1 ≤ n := by linarith [hn4R]
+  have hsqrt : Real.sqrt n ≤ n / 2 := by
+    apply Real.sqrt_le_iff.mpr
+    constructor
+    · positivity
+    · nlinarith [hn4R]
+  have hExpOverN : 2 * n < Real.exp (c * n) := by
+    have hdiv := (lt_div_iff₀ hnPos).mp hexpSmall
+    exact hdiv
+  have hExpRpow : Real.exp (c * n) = (2 : ℝ) ^ (n / 2) := by
+    calc
+      Real.exp (c * n) = Real.exp (Real.log 2 * (n / 2)) := by
+        congr 1
+        dsimp [c]
+        ring
+      _ = (2 : ℝ) ^ (n / 2) :=
+        (Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2) (n / 2)).symm
+  have hExpExponent : n / 2 ≤ n - Real.sqrt n := by linarith [hsqrt]
+  have hUlarge : Real.exp (c * n) ≤ (U.card : ℝ) := by
+    calc
+      Real.exp (c * n) = (2 : ℝ) ^ (n / 2) := hExpRpow
+      _ ≤ (2 : ℝ) ^ (n - Real.sqrt n) :=
+        Real.rpow_le_rpow_of_exponent_le (by norm_num) hExpExponent
+      _ ≤ (U.card : ℝ) := hU
+  have hpN : (p : ℝ) ≤ n := by
+    have hnNonneg : 0 ≤ n := by positivity
+    nlinarith [hp, hη1]
+  have hNgt : 2 * n < (U.card : ℝ) := lt_of_lt_of_le hExpOverN hUlarge
+  have hdenLower : Real.exp (c * n) / 2 ≤ (U.card : ℝ) - p + 1 := by
+    have hpHalf : (p : ℝ) ≤ (U.card : ℝ) / 2 := by nlinarith [hpN, hNgt]
+    nlinarith [hpHalf]
+  have hDeltaCast : (Δ : ℝ) < n ^ s + 1 := by
+    dsimp [Δ]
+    exact Nat.ceil_lt_add_one (by positivity)
+  have hsNonneg : 0 ≤ s := le_of_lt hs
+  have hnPowOne : 1 ≤ n ^ s := by
+    calc
+      1 = n ^ 0 := by simp
+      _ ≤ n ^ s := Real.rpow_le_rpow_of_exponent_le hnOne hsNonneg
+  have hDeltaBound : (Δ : ℝ) ≤ 2 * n ^ s := by nlinarith [hDeltaCast, hnPowOne]
+  have hpSq : (p : ℝ) ^ 2 ≤ n ^ 2 := by nlinarith [hpN]
+  have hnum : Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ) ≤
+      2 * Real.exp (a * n) * n ^ 2 * n ^ s := by
+    calc
+      Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ) =
+          Real.exp (a * n) * ((p : ℝ) ^ 2 * (Δ : ℝ)) := by ring
+      _ ≤ Real.exp (a * n) * (n ^ 2 * (Δ : ℝ)) :=
+        mul_le_mul_of_nonneg_left
+          (mul_le_mul_of_nonneg_right hpSq (by positivity)) (Real.exp_pos _).le
+      _ ≤ Real.exp (a * n) * (n ^ 2 * (2 * n ^ s)) :=
+        mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left hDeltaBound (by positivity))
+          (Real.exp_pos _).le
+      _ = 2 * Real.exp (a * n) * n ^ 2 * n ^ s := by ring
+  have hExpRatio : Real.exp (a * n) / Real.exp (c * n) = Real.exp (-gap * n) := by
+    rw [← Real.exp_sub]
+    congr 1
+    dsimp [gap]
+    ring
+  have hpowAdd : n ^ s * n ^ (2 : ℕ) = n ^ (s + 2) := by
+    rw [← Real.rpow_natCast n 2]
+    exact (Real.rpow_add hnPos s 2).symm
+  have hratePoly :
+      Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ) / ((U.card : ℝ) - p + 1) ≤
+        4 * n ^ (s + 2) * Real.exp (-gap * n) := by
+    have hnumNonneg : 0 ≤ Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ) := by positivity
+    have hsmallDenPos : 0 < Real.exp (c * n) / 2 := by positivity
+    have hdiv := div_le_div_of_nonneg_left hnumNonneg hsmallDenPos hdenLower
+    calc
+      _ ≤ Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ) / (Real.exp (c * n) / 2) := hdiv
+      _ = 2 * (Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ)) / Real.exp (c * n) := by
+        field_simp [ne_of_gt (Real.exp_pos (c * n))]
+      _ ≤ 2 * (2 * Real.exp (a * n) * n ^ 2 * n ^ s) / Real.exp (c * n) :=
+        div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hnum (by norm_num))
+          (Real.exp_pos _).le
+      _ = 4 * n ^ 2 * n ^ s * (Real.exp (a * n) / Real.exp (c * n)) := by ring
+      _ = 4 * n ^ s * n ^ 2 * Real.exp (-gap * n) := by rw [hExpRatio]; ring
+      _ = 4 * (n ^ s * n ^ 2) * Real.exp (-gap * n) := by ring
+      _ = 4 * n ^ (s + 2) * Real.exp (-gap * n) := by
+        rw [hpowAdd]
+  calc
+    _ = Real.exp (a * n) * (p : ℝ) ^ 2 * (Δ : ℝ) /
+        ((U.card : ℝ) - p + 1) := by rfl
+    _ ≤ 4 * n ^ (s + 2) * Real.exp (-gap * n) := hratePoly
+    _ ≤ 1 / 2 := by
+      have h := hpolySmall
+      simpa [n, s, gap] using h.le
+
 end HypercubeRamsey.Lane_q_s18_n6

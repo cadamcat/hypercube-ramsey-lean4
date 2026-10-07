@@ -1375,6 +1375,32 @@ private theorem scaleFailure9_from_longPath9 {P : Params9} {hc : HeightChoice9 P
             exact ⟨childStart, hchildMem', hchildFail⟩
   exact hmain q₀ (ηp * ((q₀ * R : ℕ) : ℝ)) hp hbudget hmetric hmargin
 
+private theorem heightRadialChain9_edge_yields_child
+    {P : Params9} {hc : HeightChoice9 P} {n : ℕ} {C : Finset (Pos9 P hc n)}
+    {t s ηp η : ℝ} {q₀ R : ℕ} (Pp A : Pos9 P hc n → Bool)
+    (hη : 0 ≤ η) (hR : 0 < R)
+    (hmargin : ηp * ((q₀ * R : ℕ) : ℝ) - η * ((q₀ * R : ℕ) : ℝ) ≤ -(R : ℝ))
+    {suffix : List (HeightState9 P hc n)}
+    {start endpoint root : HeightState9 P hc n}
+    (hpath : HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: suffix) start)
+    (hend : heightMetric9 endpoint root = heightMetric9 start root + q₀ * R)
+    (hbudget : (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) +
+      ηp * ((q₀ * R : ℕ) : ℝ)) :
+    ∃ childStart ∈ endpoint :: suffix,
+      scaleFailure9 C t s η R Pp A childStart := by
+  have hstart : heightMetric9 start root = heightMetric9 start root := rfl
+  have hgap : q₀ * R ≤ Nat.dist (heightMetric9 start root) (heightMetric9 endpoint root) := by
+    rw [hend]
+    have hle : heightMetric9 start root ≤ heightMetric9 start root + q₀ * R := by omega
+    rw [Nat.dist_eq_sub_of_le hle]
+    omega
+  have hgap' : q₀ * R ≤ Nat.dist (heightMetric9 start root)
+      (heightMetric9 start root + q₀ * R) := by simpa [hend] using hgap
+  have hmetric : q₀ * R ≤ heightMetric9 endpoint start :=
+    by simpa [heightMetric9_comm] using
+      heightMetric9_ge_radial_gap root start endpoint hstart hend hgap'
+  exact scaleFailure9_from_longPath9 Pp A hη hR hmargin hpath hbudget hmetric
+
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)
     {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}

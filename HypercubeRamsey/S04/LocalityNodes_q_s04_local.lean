@@ -1332,16 +1332,16 @@ private abbrev PrepCoordIndex (β γ : ℝ) (n : ℕ) :=
 
 namespace PrepCoordIndex
 
-@[simp] private def pos : Loc β γ n → PrepCoordIndex β γ n := Sum.inl
-@[simp] private def act (c : Loc β γ n) : PrepCoordIndex β γ n := Sum.inr (Sum.inl c)
-@[simp] private def tie (c : Loc β γ n) : PrepCoordIndex β γ n := Sum.inr (Sum.inr (Sum.inl c))
-@[simp] private def xblock (ck : Loc β γ n × Key β γ n) : PrepCoordIndex β γ n :=
+private abbrev pos : Loc β γ n → PrepCoordIndex β γ n := Sum.inl
+private abbrev act (c : Loc β γ n) : PrepCoordIndex β γ n := Sum.inr (Sum.inl c)
+private abbrev tie (c : Loc β γ n) : PrepCoordIndex β γ n := Sum.inr (Sum.inr (Sum.inl c))
+private abbrev xblock (ck : Loc β γ n × Key β γ n) : PrepCoordIndex β γ n :=
   Sum.inr (Sum.inr (Sum.inr (Sum.inl ck)))
-@[simp] private def ymask (u : OddRole n) : PrepCoordIndex β γ n := Sum.inr (Sum.inr (Sum.inr (Sum.inr u)))
+private abbrev ymask (u : OddRole n) : PrepCoordIndex β γ n := Sum.inr (Sum.inr (Sum.inr (Sum.inr u)))
 
 end PrepCoordIndex
 
-private def PrepCoordTy (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) :
+private abbrev PrepCoordTy (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) :
     PrepCoordIndex β γ n → Type
   | Sum.inl _ => Bool
   | Sum.inr (Sum.inl _) => Bool
@@ -1591,6 +1591,403 @@ theorem prep_factor_proof (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M
   apply Finset.prod_congr rfl
   intro i hi
   exact (hmain (f i)).symm
+
+private theorem pi_weight_split_local {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (ω : ∀ i, Ω i) :
+    (∏ i, (P i).w (ω i)) =
+      (∏ i : {i // i ∈ s}, (P i.1).w (ω i.1)) *
+        (∏ i : {i // i ∉ s}, (P i.1).w (ω i.1)) := by
+  classical
+  let f : ι → ℝ := fun i => (P i).w (ω i)
+  let t : Finset ι := Finset.univ.filter (fun i => i ∉ s)
+  have hs : (∏ i : {i // i ∈ s}, f i.1) = ∏ i ∈ Finset.univ with i ∈ s, f i := by
+    rw [Finset.univ_eq_attach]
+    simpa [f] using Finset.prod_attach s f
+  let ecomp : {i // i ∉ s} ≃ {i // i ∈ t} := {
+    toFun := fun i => ⟨i.1, by simp [t, i.2]⟩
+    invFun := fun i => ⟨i.1, (Finset.mem_filter.mp i.2).2⟩
+    left_inv := by intro i; apply Subtype.ext; rfl
+    right_inv := by intro i; apply Subtype.ext; rfl
+  }
+  have hnot : (∏ i : {i // i ∉ s}, f i.1) = ∏ i ∈ Finset.univ with i ∉ s, f i := by
+    calc
+      (∏ i : {i // i ∉ s}, f i.1) = ∏ i : {i // i ∈ t}, f i.1 :=
+        Fintype.prod_equiv ecomp _ _ (by intro i; rfl)
+      _ = ∏ i ∈ t.attach, f i.1 := by rw [Finset.univ_eq_attach]
+      _ = ∏ i ∈ t, f i := Finset.prod_attach t f
+      _ = ∏ i ∈ Finset.univ with i ∉ s, f i := by simp [t]
+  calc
+    (∏ i, f i) =
+        (∏ i ∈ Finset.univ with i ∈ s, f i) *
+          (∏ i ∈ Finset.univ with i ∉ s, f i) :=
+      (Finset.prod_filter_mul_prod_filter_not Finset.univ (fun i : ι => i ∈ s) f).symm
+    _ = (∏ i : {i // i ∈ s}, f i.1) * (∏ i : {i // i ∉ s}, f i.1) := by
+      rw [← hs, ← hnot]
+
+private theorem pi_expect_split_local {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (f : (∀ i, Ω i) → ℝ) :
+    (FinProb.pi P).expect f =
+      ∑ a : (∀ i : {i // i ∈ s}, Ω i.1),
+        ∑ b : (∀ i : {i // i ∉ s}, Ω i.1),
+          (FinProb.pi (fun i : {i // i ∈ s} => P i.1)).w a *
+            (FinProb.pi (fun i : {i // i ∉ s} => P i.1)).w b *
+              f ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω).symm (a, b)) := by
+  classical
+  let e := Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω
+  change (∑ ω, (∏ i, (P i).w (ω i)) * f ω) = _
+  rw [← Equiv.sum_comp e.symm (fun ω => (∏ i, (P i).w (ω i)) * f ω)]
+  rw [Fintype.sum_prod_type]
+  apply Fintype.sum_congr
+  intro a
+  apply Fintype.sum_congr
+  intro b
+  rw [pi_weight_split_local P s (e.symm (a, b))]
+  change ((∏ i : {i // i ∈ s}, (P i.1).w (e.symm (a, b) i.1)) *
+      (∏ i : {i // i ∉ s}, (P i.1).w (e.symm (a, b) i.1))) * f (e.symm (a, b)) = _
+  have hleft : ∀ i : {i // i ∈ s}, e.symm (a, b) i.1 = a i := by
+    intro i
+    simp [e, Equiv.piEquivPiSubtypeProd]
+  have hright : ∀ i : {i // i ∉ s}, e.symm (a, b) i.1 = b i := by
+    intro i
+    simp only [e, Equiv.piEquivPiSubtypeProd_symm_apply, dif_neg i.2]
+  simp_rw [hleft, hright]
+  rfl
+
+private def piSingletonEquiv {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} (i : ι) :
+    (∀ j : {j // j ∈ ({i} : Finset ι)}, Ω j.1) ≃ Ω i where
+  toFun := fun x => x ⟨i, by simp⟩
+  invFun := fun x j => (Finset.mem_singleton.mp j.2).symm ▸ x
+  left_inv := by
+    intro x
+    funext j
+    have hj : j.1 = i := Finset.mem_singleton.mp j.2
+    have hj' : j = ⟨i, by simp⟩ := Subtype.ext hj
+    subst j
+    rfl
+  right_inv := by intro x; rfl
+
+private theorem pi_singleton_weight {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (i : ι) (x : ∀ j : {j // j ∈ ({i} : Finset ι)}, Ω j.1) :
+    (FinProb.pi (fun j : {j // j ∈ ({i} : Finset ι)} => P j.1)).w x =
+      (P i).w (piSingletonEquiv i x) := by
+  classical
+  letI : Unique {j // j ∈ ({i} : Finset ι)} := {
+    default := ⟨i, by simp⟩
+    uniq := by
+      intro j
+      apply Subtype.ext
+      exact Finset.mem_singleton.mp j.2
+  }
+  have hdefault : (default : {j // j ∈ ({i} : Finset ι)}) = ⟨i, by simp⟩ := by
+    apply Subtype.ext
+    rfl
+  simp [FinProb.pi, piSingletonEquiv, hdefault]
+
+private def piUpdate {ι : Type*} [DecidableEq ι] {Ω : ι → Type*}
+    (ω : ∀ j, Ω j) (i : ι) (y : Ω i) : ∀ j, Ω j :=
+  fun j => if h : j = i then h ▸ y else ω j
+
+set_option maxHeartbeats 1000000 in
+private theorem pi_expect_kernel_update {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ j, Fintype (Ω j)] (P : ∀ j, FinProb (Ω j))
+    (i : ι) (K : Ω i → FinProb (Ω i)) (f : (∀ j, Ω j) → ℝ)
+    (hinv : ∀ y, (∑ x, (P i).w x * (K x).w y) = (P i).w y) :
+    (FinProb.pi P).expect f =
+      (FinProb.pi P).expect fun ω => (K (ω i)).expect fun y => f (piUpdate ω i y) := by
+  classical
+  let s : Finset ι := {i}
+  let e := Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω
+  let Ps := FinProb.pi (fun j : {j // j ∈ s} => P j.1)
+  let Pc := FinProb.pi (fun j : {j // j ∉ s} => P j.1)
+  let σ := piSingletonEquiv (Ω := Ω) i
+  have hcoord (a : ∀ j : {j // j ∈ s}, Ω j.1)
+      (b : ∀ j : {j // j ∉ s}, Ω j.1) :
+      (Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω).symm (a, b) i = σ a := by
+    simp [e, s, σ, piSingletonEquiv, Equiv.piEquivPiSubtypeProd]
+  have hupdate (a : ∀ j : {j // j ∈ s}, Ω j.1)
+      (b : ∀ j : {j // j ∉ s}, Ω j.1) (y : Ω i) :
+      piUpdate ((Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω).symm (a, b)) i y =
+        (Equiv.piEquivPiSubtypeProd (fun j => j ∈ s) Ω).symm (σ.symm y, b) := by
+    funext j
+    by_cases hji : j = i
+    · subst j
+      simp [piUpdate, e, s, σ, piSingletonEquiv, Equiv.piEquivPiSubtypeProd]
+    · simp [piUpdate, hji, e, s, Equiv.piEquivPiSubtypeProd]
+  have hweight (a : ∀ j : {j // j ∈ s}, Ω j.1) : Ps.w a = (P i).w (σ a) := by
+    simpa [Ps, s, σ] using pi_singleton_weight P i a
+  have hsum (H : Ω i → ℝ) :
+      (∑ a : (∀ j : {j // j ∈ s}, Ω j.1), Ps.w a * H (σ a)) =
+        ∑ x, (P i).w x * H x := by
+    calc
+      _ = ∑ x, Ps.w (σ.symm x) * H x :=
+        Fintype.sum_equiv σ _ _ (by intro a; rfl)
+      _ = ∑ x, (P i).w x * H x := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        rw [hweight (σ.symm x)]
+        simp [σ]
+  rw [pi_expect_split_local P s f]
+  rw [pi_expect_split_local P s (fun ω => (K (ω i)).expect fun y => f (piUpdate ω i y))]
+  simp only [FinProb.expect]
+  simp_rw [hcoord, hupdate]
+  have hleft (b : ∀ j : {j // j ∉ s}, Ω j.1) :
+      (∑ a, Ps.w a * f (e.symm (a, b))) =
+        ∑ x, (P i).w x * f (e.symm (σ.symm x, b)) := by
+    simpa [Equiv.symm_apply_apply] using
+      (hsum (fun x => f (e.symm (σ.symm x, b))))
+  have hkernel (y : Ω i) :
+      (∑ a, Ps.w a * (K (σ a)).w y) =
+        ∑ x, (P i).w x * (K x).w y := hsum (fun x => (K x).w y)
+  have hR (b : ∀ j : {j // j ∉ s}, Ω j.1) :
+      (∑ a, Ps.w a * ∑ y, (K (σ a)).w y * f (e.symm (σ.symm y, b))) =
+        ∑ y, (P i).w y * f (e.symm (σ.symm y, b)) := by
+    calc
+      _ = ∑ y, (∑ a, Ps.w a * (K (σ a)).w y) * f (e.symm (σ.symm y, b)) := by
+        calc
+          (∑ a, Ps.w a * ∑ y, (K (σ a)).w y * f (e.symm (σ.symm y, b))) =
+              ∑ a, ∑ y, Ps.w a * (K (σ a)).w y * f (e.symm (σ.symm y, b)) := by
+                apply Finset.sum_congr rfl
+                intro a _
+                rw [Finset.mul_sum]
+                apply Finset.sum_congr rfl
+                intro y _
+                ring
+          _ = ∑ y, ∑ a, Ps.w a * (K (σ a)).w y * f (e.symm (σ.symm y, b)) :=
+                Finset.sum_comm
+          _ = ∑ y, (∑ a, Ps.w a * (K (σ a)).w y) * f (e.symm (σ.symm y, b)) := by
+                apply Finset.sum_congr rfl
+                intro y _
+                calc
+                  (∑ a, Ps.w a * (K (σ a)).w y * f (e.symm (σ.symm y, b))) =
+                      ∑ a, (Ps.w a * (K (σ a)).w y) * f (e.symm (σ.symm y, b)) := by
+                        apply Finset.sum_congr rfl
+                        intro a _
+                        ring
+                  _ = (∑ a, Ps.w a * (K (σ a)).w y) * f (e.symm (σ.symm y, b)) :=
+                        (Finset.sum_mul Finset.univ
+                          (fun a => Ps.w a * (K (σ a)).w y)
+                          (f (e.symm (σ.symm y, b)))).symm
+      _ = ∑ y, (∑ x, (P i).w x * (K x).w y) * f (e.symm (σ.symm y, b)) := by
+        apply Finset.sum_congr rfl
+        intro y _
+        rw [hkernel y]
+      _ = ∑ y, (P i).w y * f (e.symm (σ.symm y, b)) := by
+        apply Finset.sum_congr rfl
+        intro y _
+        rw [hinv y]
+  calc
+    (∑ a, ∑ b, Ps.w a * Pc.w b * f (e.symm (a, b))) =
+        ∑ b, Pc.w b * ∑ a, Ps.w a * f (e.symm (a, b)) := by
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro b _
+          calc
+            (∑ a, Ps.w a * Pc.w b * f (e.symm (a, b))) =
+                ∑ a, Pc.w b * (Ps.w a * f (e.symm (a, b))) := by
+                  apply Finset.sum_congr rfl
+                  intro a _
+                  ring
+            _ = Pc.w b * ∑ a, Ps.w a * f (e.symm (a, b)) := by
+                  rw [← Finset.mul_sum]
+    _ = ∑ b, Pc.w b * ∑ x, (P i).w x * f (e.symm (σ.symm x, b)) := by
+          apply Finset.sum_congr rfl
+          intro b _
+          apply congrArg (fun z : ℝ => Pc.w b * z)
+          exact hleft b
+    _ = ∑ b, Pc.w b * ∑ y, (P i).w y * f (e.symm (σ.symm y, b)) := by
+          rfl
+    _ = ∑ b, Pc.w b * (∑ a, Ps.w a * ∑ y, (K (σ a)).w y *
+          f (e.symm (σ.symm y, b))) := by
+          apply Finset.sum_congr rfl
+          intro b _
+          apply congrArg (fun z : ℝ => Pc.w b * z)
+          exact (hR b).symm
+    _ = ∑ a, ∑ b, Ps.w a * Pc.w b * ∑ y, (K (σ a)).w y *
+          f (e.symm (σ.symm y, b)) := by
+          calc
+            _ = ∑ b, ∑ a, Pc.w b *
+                  (Ps.w a * ∑ y, (K (σ a)).w y * f (e.symm (σ.symm y, b))) := by
+                    apply Finset.sum_congr rfl
+                    intro b _
+                    rw [← Finset.mul_sum]
+            _ = ∑ a, ∑ b, Ps.w a * Pc.w b *
+                  ∑ y, (K (σ a)).w y * f (e.symm (σ.symm y, b)) := by
+                    rw [Finset.sum_comm]
+                    apply Finset.sum_congr rfl
+                    intro a _
+                    apply Finset.sum_congr rfl
+                    intro b _
+                    ring
+
+private noncomputable def xBlockLaw (M : Menu4 β γ G n N E X Y)
+    (tag : Key β γ n → M.ι) (q : XProf M tag) (ck : Loc β γ n × Key β γ n) :
+    FinProb (PrepCoordTy M tag (PrepCoordIndex.xblock ck)) := by
+  letI : Fintype (Mask (M.μ (tag ck.2)) × (Fin (tupLen β γ n) → Fin N)) :=
+    prepCoordTyFintype M tag (PrepCoordIndex.xblock ck)
+  exact FinProb.bind (q ck) fun xm => FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm
+
+private noncomputable def xBlockKernel (M : Menu4 β γ G n N E X Y)
+    (tag : Key β γ n → M.ι) (ck : Loc β γ n × Key β γ n)
+    (b : PrepCoordTy M tag (PrepCoordIndex.xblock ck)) :
+    FinProb (PrepCoordTy M tag (PrepCoordIndex.xblock ck)) := by
+  letI : Fintype (Mask (M.μ (tag ck.2)) × (Fin (tupLen β γ n) → Fin N)) :=
+    prepCoordTyFintype M tag (PrepCoordIndex.xblock ck)
+  exact FinProb.map (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw b.1)
+    fun W => (b.1, W)
+
+private theorem xBlockKernel_weight (M : Menu4 β γ G n N E X Y)
+    (tag : Key β γ n → M.ι) (ck : Loc β γ n × Key β γ n)
+    (b b' : PrepCoordTy M tag (PrepCoordIndex.xblock ck)) :
+    (xBlockKernel M tag ck b).w b' =
+      if b.1 = b'.1 then (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw b.1).w b'.2 else 0 := by
+  classical
+  letI : Fintype (Mask (M.μ (tag ck.2)) × (Fin (tupLen β γ n) → Fin N)) :=
+    prepCoordTyFintype M tag (PrepCoordIndex.xblock ck)
+  rcases b' with ⟨xm', W'⟩
+  by_cases h : b.1 = xm'
+  · subst xm'
+    change (∑ W, if (b.1, W) = (b.1, W') then
+      (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw b.1).w W else 0) = _
+    simp
+  · have hp : ∀ W : Fin (tupLen β γ n) → Fin N, (b.1, W) ≠ (xm', W') := by
+      intro W heq
+      exact h (congrArg Prod.fst heq)
+    change (∑ W, if (b.1, W) = (xm', W') then
+      (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw b.1).w W else 0) = _
+    simp [hp]
+    intro heq
+    exact (h heq).elim
+
+private theorem xBlockKernel_stationary (M : Menu4 β γ G n N E X Y)
+    (tag : Key β γ n → M.ι) (q : XProf M tag) (ck : Loc β γ n × Key β γ n)
+    (b' : PrepCoordTy M tag (PrepCoordIndex.xblock ck)) :
+    (∑ b, (xBlockLaw M tag q ck).w b * (xBlockKernel M tag ck b).w b') =
+      (xBlockLaw M tag q ck).w b' := by
+  classical
+  letI : Fintype (Mask (M.μ (tag ck.2)) × (Fin (tupLen β γ n) → Fin N)) :=
+    prepCoordTyFintype M tag (PrepCoordIndex.xblock ck)
+  dsimp [PrepCoordTy, prepCoordTyFintype]
+  rcases b' with ⟨xm', W'⟩
+  rw [Fintype.sum_prod_type]
+  simp_rw [xBlockKernel_weight]
+  have hmass (xm : Mask (M.μ (tag ck.2))) :
+      ∑ W : Fin (tupLen β γ n) → Fin N,
+        (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm).w W = 1 :=
+    (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm).sum_eq_one
+  unfold xBlockLaw
+  simp only [FinProb.bind]
+  calc
+    (∑ xm, ∑ W, (q ck).w xm *
+        (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm).w W *
+        (if xm = xm' then (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm).w W' else 0)) =
+      ∑ xm, if xm = xm' then (q ck).w xm *
+          (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm).w W' *
+          ∑ W, (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm).w W else 0 := by
+        apply Finset.sum_congr rfl
+        intro xm _
+        by_cases h : xm = xm'
+        · subst xm
+          simp only [if_pos rfl, if_true]
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro W _
+          ring
+        · simp [h, eq_comm]
+    _ = (q ck).w xm' *
+          (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw xm').w W' := by
+        simp [hmass, eq_comm]
+    _ = (xBlockLaw M tag q ck).w (xm', W') := by
+        simp [xBlockLaw, FinProb.bind]
+
+private theorem prepCoordUpdate_toSample (M : Menu4 β γ G n N E X Y)
+    (tag : Key β γ n → M.ι) (z : ∀ i : PrepCoordIndex β γ n, PrepCoordTy M tag i)
+    (ck : Loc β γ n × Key β γ n) (W : Fin (tupLen β γ n) → Fin N) :
+    prepCoordToSample M tag
+        (piUpdate z (PrepCoordIndex.xblock ck) ((z (PrepCoordIndex.xblock ck)).1, W)) =
+      updW (prepCoordToSample M tag z) ck W := by
+  apply Prod.ext
+  · apply Prod.ext
+    · apply Prod.ext
+      · funext c'
+        simp [prepCoordToSample, piUpdate, updW, ppos, PrepCoordIndex.xblock] <;> rfl
+      · apply Prod.ext
+        · apply Prod.ext
+          · funext ck'
+            by_cases h : ck' = ck
+            · subst ck'
+              simp [prepCoordToSample, piUpdate, updW, paux, axm, PrepCoordIndex.xblock] <;> rfl
+            · simp [prepCoordToSample, piUpdate, updW, paux, axm, PrepCoordIndex.xblock, h] <;> rfl
+          · funext u
+            simp [prepCoordToSample, piUpdate, updW, paux, aym, PrepCoordIndex.xblock] <;> rfl
+        · funext ck'
+          by_cases h : ck' = ck
+          · subst ck'
+            funext j
+            simp [prepCoordToSample, piUpdate, updW, paux, aW, PrepCoordIndex.xblock] <;> rfl
+          · funext j
+            simp [prepCoordToSample, piUpdate, updW, paux, aW, PrepCoordIndex.xblock, h] <;> rfl
+    · funext c'
+      simp [prepCoordToSample, piUpdate, updW, pact, PrepCoordIndex.xblock] <;> rfl
+  · funext c'
+    simp [prepCoordToSample, piUpdate, updW, pties, PrepCoordIndex.xblock] <;> rfl
+
+theorem prep_resample_proof (M : Menu4 β γ G n N E X Y)
+    (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag) :
+    Resample M tag q q' := by
+  classical
+  intro c κ g
+  let ck : Loc β γ n × Key β γ n := (c, κ)
+  let i₀ : PrepCoordIndex β γ n := PrepCoordIndex.xblock ck
+  let P := prepCoordBlockLaw M tag q q'
+  let K : PrepCoordTy M tag i₀ → FinProb (PrepCoordTy M tag i₀) :=
+    fun b => xBlockKernel M tag ck b
+  let F : (∀ i : PrepCoordIndex β γ n, PrepCoordTy M tag i) → ℝ :=
+    fun z => g (prepCoordToSample M tag z)
+  have hInv : ∀ b, (∑ b₀, (P i₀).w b₀ * (K b₀).w b) = (P i₀).w b := by
+    intro b
+    simpa [P, i₀, K, prepCoordBlockLaw, PrepCoordLaw, PrepCoordTy,
+      prepCoordTyFintype, xBlockLaw, xBlockKernel] using
+      xBlockKernel_stationary M tag q ck b
+  have hPi := pi_expect_kernel_update P i₀ K F hInv
+  have hmain (H : Prep M tag → ℝ) :
+      (prepLaw M tag q q').expect H =
+        (FinProb.pi P).expect (fun z => H (prepCoordToSample M tag z)) := by
+    rw [prepLaw_eq_coordMap M tag q q']
+    exact FinProb.map_expect _ _ _
+  have hpoint (z : ∀ i : PrepCoordIndex β γ n, PrepCoordTy M tag i) :
+      (K (z i₀)).expect (fun b => F (piUpdate z i₀ b)) =
+        ∑ W, (prior M tag (prepCoordToSample M tag z) c κ).w W *
+          g (updW (prepCoordToSample M tag z) ck W) := by
+    change (xBlockKernel M tag ck (z (PrepCoordIndex.xblock ck))).expect
+        (fun b => g (prepCoordToSample M tag (piUpdate z (PrepCoordIndex.xblock ck) b))) = _
+    unfold xBlockKernel
+    rw [FinProb.map_expect]
+    have hsample (W : Fin (tupLen β γ n) → Fin N) :=
+      prepCoordUpdate_toSample M tag z ck W
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro W _
+    change (FinProb.pi fun _ : Fin (tupLen β γ n) => maskLaw
+        (z (PrepCoordIndex.xblock ck)).1).w W *
+        g (prepCoordToSample M tag
+          (piUpdate z (PrepCoordIndex.xblock ck) ((z (PrepCoordIndex.xblock ck)).1, W))) = _
+    rw [hsample W]
+    simp only [prior, prepCoordToSample, paux, axm]
+    simp [ck]
+  let R : Prep M tag → ℝ := fun ω =>
+    ∑ W, (prior M tag ω c κ).w W * g (updW ω ck W)
+  calc
+    (prepLaw M tag q q').expect g = (FinProb.pi P).expect F := hmain g
+    _ = (FinProb.pi P).expect fun z => (K (z i₀)).expect fun b => F (piUpdate z i₀ b) := hPi
+    _ = (FinProb.pi P).expect (fun z => R (prepCoordToSample M tag z)) := by
+          apply congrArg (FinProb.expect (FinProb.pi P))
+          funext z
+          exact hpoint z
+    _ = (prepLaw M tag q q').expect R := (hmain R).symm
 
 end
 

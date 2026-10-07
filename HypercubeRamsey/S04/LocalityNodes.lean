@@ -57,7 +57,7 @@ coordinates, so replacing it by an independent draw from `prior` leaves the prep
 theorem prep_resample {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag) :
     Resample M tag q q' := by
-  sorry
+  exact Lane_q_s04_local.prep_resample_proof M tag q q'
 
 theorem disjoint_balls {n : ℕ} {v w : CubeVertex n} {R : ℕ} (h : 2 * R < _root_.hammingDist v w) :
     Disjoint (ballV v R) (ballV w R) := by

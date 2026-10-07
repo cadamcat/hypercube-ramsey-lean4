@@ -672,6 +672,7 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     HighDegreeEv δ K := by
   classical
   let t₀ : ℕ := q_s11_compat_t₀
+  let highAggConst : ℝ := 400000 / etaC ^ 2
   have heta : 0 < etaC := by norm_num [etaC]
   have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ δ) Filter.atTop Filter.atTop :=
     (_root_.tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
@@ -711,8 +712,9 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     have hevent' : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ (-(19 / 20 : ℝ)) < etaC / 100 := by
       simpa only [Function.comp_apply] using hevent
     simpa only [bS, show -(19 : ℝ) / 20 = -(19 / 20 : ℝ) from by ring] using hevent'
-  have hKlarge : ∀ᶠ n : ℕ in Filter.atTop, K ≤ Real.exp ((n : ℝ) ^ δ) :=
-    hexp.eventually (Filter.eventually_ge_atTop K)
+  have hKlarge : ∀ᶠ n : ℕ in Filter.atTop,
+      highAggConst * K ≤ Real.exp ((n : ℝ) ^ δ) :=
+    hexp.eventually (Filter.eventually_ge_atTop (highAggConst * K))
   obtain ⟨nsmall, hnsmall⟩ := Filter.eventually_atTop.1 hsmall
   obtain ⟨nb, hnb⟩ := Filter.eventually_atTop.1 hbsmall
   obtain ⟨nK, hnK⟩ := Filter.eventually_atTop.1 hKlarge
@@ -730,7 +732,7 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
   have hn1 : 1 ≤ n := by omega
   have hpowSmall : (n : ℝ) ^ (-δ) < etaC / 1000 := hnsmall n hnsmall'
   have hbSmall : bS n < etaC / 100 := hnb n hnb'
-  have hKexp : K ≤ Real.exp ((n : ℝ) ^ δ) := hnK n hnK'
+  have hKexp : highAggConst * K ≤ Real.exp ((n : ℝ) ^ δ) := hnK n hnK'
   have hExpLarge' : (t₀ : ℝ) + 1 ≤ Real.exp ((n : ℝ) ^ ((1 : ℝ) / 100)) :=
     hnExp n hnExp'
   have hsmallRatio' :
@@ -2260,13 +2262,13 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
   have hceilS : Real.exp x ≤ (sC n : ℝ) := by
     dsimp [x, sC]
     exact Nat.le_ceil _
+  have hscRecip : (sC n : ℝ)⁻¹ ≤ Real.exp (-x) := by
+    have h := one_div_le_one_div_of_le (Real.exp_pos x) hceilS
+    simpa [Real.exp_neg] using h
   have hD₀atom (y : Fin N) : D₀.w y ≤ Real.exp (-x) := by
-    have hrecip : (sC n : ℝ)⁻¹ ≤ Real.exp (-x) := by
-      have h := one_div_le_one_div_of_le (Real.exp_pos x) hceilS
-      simpa [Real.exp_neg] using h
     by_cases hy : y ∈ A₀
     · have hcardR : (A₀.card : ℝ) = (sC n : ℝ) := by exact_mod_cast hA₀card
-      simpa [D₀, FinProb.uniform, hy, hcardR] using hrecip
+      simpa [D₀, FinProb.uniform, hy, hcardR] using hscRecip
     · simpa [D₀, FinProb.uniform, hy] using (Real.exp_pos (-x)).le
   let PackPair := Finset (Finset (Fin r₀)) × Finset (Fin r₀)
   let PackValid (q : SampleState) (P : Finset (Finset (Fin r₀))) (V : Finset (Fin r₀)) : Prop :=
@@ -2369,6 +2371,112 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     have hSqStrict : (1 / 2 + etaC / 200) ^ 2 < projection i.1 y ^ 2 :=
       (sq_lt_sq₀ (by positivity) hprojNonneg).2 hproj
     exact le_of_lt (lt_of_lt_of_le hthreshold (le_trans hSqStrict.le hprojSq))
+  let PackPair := Finset (Finset (Fin r₀)) × Finset (Fin r₀)
+  let PackValid (q : SampleState) (P : Finset (Finset (Fin r₀))) (V : Finset (Fin r₀)) : Prop :=
+    (∀ C ∈ P, C.card = sC n ∧ ∀ j ∈ C, ∀ k ∈ C, j ≠ k →
+      1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (q.2 j) (q.2 k)) ∧
+    (∀ C ∈ P, ∀ D ∈ P, C ≠ D → Disjoint C D) ∧
+    V = P.biUnion id ∧ (Finset.univ \ V).card < Nat.choose (sC n + t₀ - 2) (sC n - 1)
+  have hpackExists (q : SampleState) (hq : GoodSample q) :
+      ∃ pv : PackPair, PackValid q pv.1 pv.2 := by
+    rcases hsamplePacking q.1 r₀ q.2 hq.1 hq.2.1 hRamseySize with
+      ⟨P, V, hPClique, hPDisjoint, hVeq, hRemain⟩
+    exact ⟨(P, V), hPClique, hPDisjoint, hVeq, hRemain⟩
+  let packing (q : SampleState) : PackPair :=
+    if hq : GoodSample q then Classical.choose (hpackExists q hq) else (∅, ∅)
+  have hpackingSpec (q : SampleState) (hq : GoodSample q) :
+      PackValid q (packing q).1 (packing q).2 := by
+    dsimp [packing]
+    rw [dif_pos hq]
+    exact Classical.choose_spec (hpackExists q hq)
+  have hPackingVHalf (q : SampleState) (hq : GoodSample q) :
+      (r₀ : ℝ) / 2 < ((packing q).2.card : ℝ) := by
+    let V := (packing q).2
+    have hspec := hpackingSpec q hq
+    have hRemain : (Finset.univ \ V).card < Nat.choose (sC n + t₀ - 2) (sC n - 1) :=
+      hspec.2.2.2
+    have hRemainR : ((Finset.univ \ V).card : ℝ) <
+        (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) := by exact_mod_cast hRemain
+    have hRHalf : (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+        (r₀ : ℝ) / 2 := by
+      apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 2)).2
+      nlinarith [hRhalf]
+    have hCardEqNat : (Finset.univ \ V).card + V.card = r₀ := by
+      simpa using Finset.card_sdiff_add_card_eq_card (Finset.subset_univ V)
+    have hCardEqR : ((Finset.univ \ V).card : ℝ) + (V.card : ℝ) = (r₀ : ℝ) := by
+      exact_mod_cast hCardEqNat
+    change (r₀ : ℝ) / 2 < (V.card : ℝ)
+    nlinarith [hRemainR, hRHalf, hCardEqR]
+  have hPackingNonempty (q : SampleState) (hq : GoodSample q) :
+      (packing q).1.Nonempty := by
+    have hVne : (packing q).2.Nonempty := by
+      apply Finset.card_pos.mp
+      have hrpos : 0 < (r₀ : ℝ) := by positivity
+      exact_mod_cast (lt_trans (by positivity : (0 : ℝ) < (r₀ : ℝ) / 2) (hPackingVHalf q hq))
+    obtain ⟨j, hj⟩ := hVne
+    have hVeq : (packing q).2 = (packing q).1.biUnion id := (hpackingSpec q hq).2.2.1
+    rw [hVeq] at hj
+    obtain ⟨C, hCP, _⟩ := Finset.mem_biUnion.mp hj
+    exact ⟨C, hCP⟩
+  have hPackingCard (q : SampleState) (hq : GoodSample q) :
+      (packing q).2.card = (packing q).1.card * sC n := by
+    have hspec := hpackingSpec q hq
+    rw [hspec.2.2.1]
+    change ((packing q).1.biUnion (fun C => C)).card = (packing q).1.card * sC n
+    rw [Finset.card_biUnion (fun C hC D hD hCD => hspec.2.1 C hC D hD hCD)]
+    have hsum : (∑ C ∈ (packing q).1, C.card) = ∑ C ∈ (packing q).1, sC n := by
+      apply Finset.sum_congr rfl
+      intro C hC
+      exact (hspec.1 C hC).1
+    rw [hsum]
+    simp
+  have hImageCard (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
+      (hC : C ∈ (packing q).1) : (C.image q.2).card = sC n := by
+    rw [Finset.card_image_of_injective _ hq.1]
+    exact (hpackingSpec q hq).1 C hC |>.1
+  let cliqueLaw (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
+      (hC : C ∈ (packing q).1) : Law N :=
+    FinProb.uniform (C.image q.2)
+      (Finset.card_pos.mp (by rw [hImageCard q hq C hC]; exact hsCpos))
+  have hcliqueLawSupport (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
+      (hC : C ∈ (packing q).1) : (cliqueLaw q hq C hC).SupportedIn Y := by
+    intro y hy
+    have hnot : ¬ ∃ a, a ∈ C ∧ q.2 a = y := by
+      rintro ⟨a, ha, rfl⟩
+      exact hy (hq.2.2 a)
+    simp [cliqueLaw, FinProb.uniform, Finset.mem_image, hnot]
+  have hcliqueLawAtom (q : SampleState) (hq : GoodSample q) (C : Finset (Fin r₀))
+      (hC : C ∈ (packing q).1) (y : Fin N) :
+      (cliqueLaw q hq C hC).w y ≤ Real.exp (-x) := by
+    by_cases hy : y ∈ C.image q.2
+    · have hcardR : ((C.image q.2).card : ℝ) = (sC n : ℝ) := by
+        exact_mod_cast hImageCard q hq C hC
+      have hmem : ∃ a, a ∈ C ∧ q.2 a = y := Finset.mem_image.mp hy
+      simpa [cliqueLaw, FinProb.uniform, Finset.mem_image, hmem, hcardR] using hscRecip
+    · have hnot : ¬ ∃ a, a ∈ C ∧ q.2 a = y := by
+        intro hmem
+        exact hy (Finset.mem_image.mpr hmem)
+      simpa [cliqueLaw, FinProb.uniform, Finset.mem_image, hnot] using (Real.exp_pos (-x)).le
+  let Dlaw (q : SampleState) (C : Finset (Fin r₀)) : Law N :=
+    if hq : GoodSample q then
+      if hC : C ∈ (packing q).1 then
+        cliqueLaw q hq C hC
+      else D₀
+    else D₀
+  have hDlawSupport (q : SampleState) (C : Finset (Fin r₀)) : (Dlaw q C).SupportedIn Y := by
+    intro y hy
+    by_cases hq : GoodSample q
+    · by_cases hC : C ∈ (packing q).1
+      · simpa [Dlaw, hq, hC] using hcliqueLawSupport q hq C hC y hy
+      · simpa [Dlaw, hq, hC] using hD₀support y hy
+    · simpa [Dlaw, hq] using hD₀support y hy
+  have hDlawAtom (q : SampleState) (C : Finset (Fin r₀)) (y : Fin N) :
+      (Dlaw q C).w y ≤ Real.exp (-x) := by
+    by_cases hq : GoodSample q
+    · by_cases hC : C ∈ (packing q).1
+      · simpa [Dlaw, hq, hC] using hcliqueLawAtom q hq C hC y
+      · simpa [Dlaw, hq, hC] using hD₀atom y
+    · simpa [Dlaw, hq] using hD₀atom y
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

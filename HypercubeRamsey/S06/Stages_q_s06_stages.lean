@@ -234,6 +234,125 @@ theorem highLik_eq_of_agree
   exact tupleRatio_eq_of_agree X (X.withPar base (X.tgtName b) ξ) base β
     Z Z' Z Z' hZ hZ (tagLaw6 M) (tagLaw6 M) rfl (.par (X.tgtName b)) o
 
+noncomputable def rate3HiddenScope
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (b : X.State) (D : Finset (Id × X.Ty)) : Finset X.HKey :=
+  (D.biUnion fun e => e.2.obs) ∪ if X.stMode b = .low then {X.tgt b} else ∅
+
+private theorem lowGate_iff_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (base : X.Base) (b : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (Z Z' : X.Hid)
+    (hobs : ∀ e ∈ D, ∀ ℓ ∈ e.2.obs, Z ℓ = Z' ℓ) :
+    X.LowGate (base, Z) b D ξ ↔ X.LowGate (base, Z') b D ξ := by
+  have hupdate : ∀ e ∈ D, ∀ ℓ ∈ e.2.obs,
+      (Function.update Z (X.tgt b) ξ) ℓ = (Function.update Z' (X.tgt b) ξ) ℓ := by
+    intro e he ℓ hℓ
+    by_cases hℓt : ℓ = X.tgt b <;> simp [hℓt, hobs e he ℓ hℓ]
+  unfold Ctx6.LowGate
+  constructor
+  · rintro ⟨hpos, hcap, htests⟩
+    refine ⟨hpos, hcap, ?_⟩
+    intro e he
+    have hstep := step2Tests_iff_of_agree X base e.2
+      (Function.update Z (X.tgt b) ξ) (Function.update Z' (X.tgt b) ξ) (hupdate e he)
+    exact (hstep.mp (by simpa [Ctx6.withHid] using htests e he))
+  · rintro ⟨hpos, hcap, htests⟩
+    refine ⟨hpos, hcap, ?_⟩
+    intro e he
+    have hstep := step2Tests_iff_of_agree X base e.2
+      (Function.update Z (X.tgt b) ξ) (Function.update Z' (X.tgt b) ξ) (hupdate e he)
+    exact (hstep.mpr (by simpa [Ctx6.withHid] using htests e he))
+
+private theorem highGate_iff_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (base : X.Base) (b : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (Z Z' : X.Hid)
+    (hobs : ∀ e ∈ D, ∀ ℓ ∈ e.2.obs, Z ℓ = Z' ℓ) :
+    X.HighGate (base, Z) b D ξ ↔ X.HighGate (base, Z') b D ξ := by
+  unfold Ctx6.HighGate
+  constructor
+  · rintro ⟨hpos, hloc, htests⟩
+    refine ⟨hpos, ?_, ?_⟩
+    · simpa [Ctx6.withParH] using hloc
+    · intro e he
+      have hstep := step2Tests_iff_of_agree X (X.withPar base (X.tgtName b) ξ) e.2 Z Z'
+        (hobs e he)
+      exact (hstep.mp (by simpa [Ctx6.withParH] using htests e he))
+  · rintro ⟨hpos, hloc, htests⟩
+    refine ⟨hpos, ?_, ?_⟩
+    · simpa [Ctx6.withParH] using hloc
+    · intro e he
+      have hstep := step2Tests_iff_of_agree X (X.withPar base (X.tgtName b) ξ) e.2 Z Z'
+        (hobs e he)
+      exact (hstep.mpr (by simpa [Ctx6.withParH] using htests e he))
+
+private theorem locDensity_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (base : X.Base) (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (Z Z' : X.Hid)
+    (hobs : ∀ e ∈ D, ∀ ℓ ∈ e.2.obs, Z ℓ = Z' ℓ) :
+    X.locDensity (base, Z) nm D ξ = X.locDensity (base, Z') nm D ξ := by
+  have hloc : ∀ ℓ ∈ X.locHid D, Z ℓ = Z' ℓ := by
+    intro ℓ hℓ
+    rcases Finset.mem_biUnion.mp hℓ with ⟨e, he, hℓe⟩
+    exact hobs e he ℓ hℓe
+  have hprod : (∏ ℓ ∈ X.locHid D, (N : ℝ) *
+        (X.hidPost (X.withPar base nm ξ) ℓ.1).w (Z ℓ)) =
+      ∏ ℓ ∈ X.locHid D, (N : ℝ) *
+        (X.hidPost (X.withPar base nm ξ) ℓ.1).w (Z' ℓ) := by
+    apply Finset.prod_congr rfl
+    intro ℓ hℓ
+    rw [hloc ℓ hℓ]
+  unfold Ctx6.locDensity
+  simp only [Prod.fst]
+  rw [hprod]
+
+theorem s3Weight_eq_of_agree
+    {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (base : X.Base) (b : X.State) (D : Finset (Id × X.Ty)) (o : X.Data Id)
+    (drop : Option (Id × X.Ty)) (Z Z' : X.Hid)
+    (hZ : ∀ ℓ ∈ rate3HiddenScope X b D, Z ℓ = Z' ℓ) :
+    X.s3Weight (base, Z) b D o drop = X.s3Weight (base, Z') b D o drop := by
+  have hobs : ∀ e ∈ D, ∀ ℓ ∈ e.2.obs, Z ℓ = Z' ℓ := by
+    intro e he ℓ hℓ
+    exact hZ ℓ (Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨e, he, hℓ⟩))
+  funext ξ
+  have hgateLow : X.LowGate (base, Z) b D = X.LowGate (base, Z') b D := by
+    funext ξ
+    exact propext (lowGate_iff_of_agree X base b D ξ Z Z' hobs)
+  have hprodLow : (∏ e ∈ D, if drop = some e then 1 else X.lowLik (base, Z) b ξ e.2 (o e)) =
+      ∏ e ∈ D, if drop = some e then 1 else X.lowLik (base, Z') b ξ e.2 (o e) := by
+    apply Finset.prod_congr rfl
+    intro e he
+    by_cases hd : drop = some e
+    · simp [hd]
+    · simp [hd, lowLik_eq_of_agree X base b ξ e.2 (o e) Z Z' (hobs e he)]
+  have hgateHigh : X.HighGate (base, Z) b D = X.HighGate (base, Z') b D := by
+    funext ξ
+    exact propext (highGate_iff_of_agree X base b D ξ Z Z' hobs)
+  have hloc := locDensity_eq_of_agree X base (X.tgtName b) D ξ Z Z' hobs
+  have hprodHigh : (∏ e ∈ D, if drop = some e then 1 else X.highLik (base, Z) b ξ e.2 (o e)) =
+      ∏ e ∈ D, if drop = some e then 1 else X.highLik (base, Z') b ξ e.2 (o e) := by
+    apply Finset.prod_congr rfl
+    intro e he
+    by_cases hd : drop = some e
+    · simp [hd]
+    · simp [hd, highLik_eq_of_agree X base b ξ e.2 (o e) Z Z' (hobs e he)]
+  cases hm : X.stMode b
+  · simp only [Ctx6.s3Weight, hm]
+    unfold Ctx6.lowWeight
+    rw [hgateLow, hprodLow]
+  · simp only [Ctx6.s3Weight, hm]
+    unfold Ctx6.highWeight
+    rw [hgateHigh, hloc, hprodHigh]
+    simp [Ctx6.priorOf]
+
 theorem finprob_pr_eq_expect_indicator {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (A : Ω → Prop) :
     P.pr A = P.expect (fun ω => if A ω then 1 else 0) := by
@@ -303,6 +422,48 @@ private theorem finprob_pr_congr_local {Ω : Type*} [Fintype Ω] (P : FinProb Ω
   · simp [hA, (hAB ω).mp hA]
   · have hB : ¬ B ω := fun h => hA ((hAB ω).mpr h)
     simp [hA, hB]
+
+private theorem finprob_nonempty_local {Ω : Type*} [Fintype Ω] (P : FinProb Ω) : Nonempty Ω := by
+  classical
+  by_contra h
+  haveI : IsEmpty Ω := ⟨fun ω => h ⟨ω⟩⟩
+  have hsum : (∑ ω, P.w ω) = 0 := by simp
+  rw [P.sum_eq_one] at hsum
+  norm_num at hsum
+
+theorem pi_pr_eq_of_kernel_eq_on_depends
+    {ι : Type*} [Fintype ι] [DecidableEq ι] {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P Q : ∀ i, FinProb (Ω i)) (S : Finset ι) (A : (∀ i, Ω i) → Prop)
+    (hdep : ∀ ω ω', (∀ i ∈ S, ω i = ω' i) → (A ω ↔ A ω'))
+    (hPQ : ∀ i ∈ S, P i = Q i) :
+    (FinProb.pi P).pr A = (FinProb.pi Q).pr A := by
+  classical
+  let f : (∀ i, Ω i) → ℝ := fun ω => if A ω then 1 else 0
+  have hf : FinProb.DependsOn f S := by
+    intro ω ω' heq
+    have hprop : A ω = A ω' := propext (hdep ω ω' heq)
+    simpa [f] using congrArg (fun p : Prop => if p then (1 : ℝ) else 0) hprop
+  obtain ⟨ω₀⟩ := finprob_nonempty_local (FinProb.pi P)
+  have hP := FinProb.pi_expect_depends P S f ω₀ hf
+  have hQ := FinProb.pi_expect_depends Q S f ω₀ hf
+  have hsub : FinProb.pi (fun i : {i // i ∈ S} => P i.1) =
+      FinProb.pi (fun i : {i // i ∈ S} => Q i.1) := by
+    apply finprob_eq_of_weights_eq
+    intro a
+    simp only [FinProb.pi]
+    apply Finset.prod_congr rfl
+    intro i hi
+    exact congrArg (fun R : FinProb (Ω i.1) => R.w (a i)) (hPQ i.1 i.2)
+  calc
+    (FinProb.pi P).pr A = (FinProb.pi P).expect f := finprob_pr_eq_expect_indicator _ _
+    _ = (FinProb.pi (fun i : {i // i ∈ S} => P i.1)).expect
+        (fun a => f ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ S) Ω).symm
+          (a, fun i => ω₀ i.1))) := hP
+    _ = (FinProb.pi (fun i : {i // i ∈ S} => Q i.1)).expect
+        (fun a => f ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ S) Ω).symm
+          (a, fun i => ω₀ i.1))) := by rw [hsub]
+    _ = (FinProb.pi Q).expect f := hQ.symm
+    _ = (FinProb.pi Q).pr A := (finprob_pr_eq_expect_indicator _ _).symm
 
 theorem pi_local_mass_factor
     {ι : Type*} [Fintype ι] [DecidableEq ι] {Ω : ι → Type*}

@@ -62,7 +62,220 @@ def DiscardEv (δ x₀ K κ : ℝ) : Prop :=
 `|d_G - 1/2| = |avg m_x|/2 > b_*`, contradicting (11.1). -/
 theorem signed_outliers (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
     (hK : 0 < K) : SignedOutliersEv δ x₀ K := by
-  sorry
+  classical
+  have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ x₀) Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop hx₀).comp tendsto_natCast_atTop_atTop
+  have hexp : Filter.Tendsto (fun n : ℕ => Real.exp ((n : ℝ) ^ x₀)) Filter.atTop Filter.atTop :=
+    Real.tendsto_exp_atTop.comp hpow
+  have hKevent : ∀ᶠ n : ℕ in Filter.atTop, K ≤ Real.exp ((n : ℝ) ^ x₀) :=
+    hexp.eventually (Filter.eventually_ge_atTop K)
+  obtain ⟨nK, hKeventN⟩ := Filter.eventually_atTop.1 hKevent
+  refine ⟨max nK 1, ?_⟩
+  intro n hn N E X Y G π hN hπ0 hπsum hπsupp hπcap hdisc
+  have hnK' : nK ≤ n := le_trans (le_max_left _ _) hn
+  have hn1 : 1 ≤ n := le_trans (le_max_right _ _) hn
+  have hnKexp : K ≤ Real.exp ((n : ℝ) ^ x₀) := hKeventN n hnK'
+  have hNr : 0 < (N : ℝ) := by exact_mod_cast (Nat.lt_of_lt_of_le Nat.zero_lt_one hN)
+  let πlaw : Law N := ⟨π, hπ0, hπsum⟩
+  have hπwidth : πlaw.WidthLE ((n : ℝ) ^ x₀) := by
+    intro y
+    change π y ≤ Real.exp ((n : ℝ) ^ x₀) / N
+    apply (le_div_iff₀ hNr).2
+    calc
+      π y * (N : ℝ) = (N : ℝ) * π y := by ring
+      _ ≤ K := hπcap y
+      _ ≤ Real.exp ((n : ℝ) ^ x₀) := hnKexp
+  let O : Finset (Fin N) := X.filter fun x => 4 * bS n < |sMean E G π x|
+  let Opos : Finset (Fin N) := X.filter fun x => 4 * bS n < sMean E G π x
+  let Oneg : Finset (Fin N) := X.filter fun x => 4 * bS n < -sMean E G π x
+  have hcover : O ⊆ Opos ∪ Oneg := by
+    intro x hx
+    simp only [O, Finset.mem_filter] at hx
+    rcases hx with ⟨hxX, hout⟩
+    change x ∈ Opos ∪ Oneg
+    rw [Finset.mem_union]
+    by_cases hsign : 0 ≤ sMean E G π x
+    · left
+      simp only [Opos, Finset.mem_filter]
+      exact ⟨hxX, by simpa [abs_of_nonneg hsign] using hout⟩
+    · right
+      have hneg : sMean E G π x < 0 := lt_of_not_ge hsign
+      simp only [Oneg, Finset.mem_filter]
+      exact ⟨hxX, by simpa [abs_of_neg hneg] using hout⟩
+  have hcardCover : (O.card : ℝ) ≤ (Opos.card : ℝ) + (Oneg.card : ℝ) := by
+    calc
+      (O.card : ℝ) ≤ ((Opos ∪ Oneg).card : ℝ) := by
+        exact_mod_cast Finset.card_le_card hcover
+      _ ≤ (Opos.card : ℝ) + (Oneg.card : ℝ) := by
+        exact_mod_cast (Finset.card_union_le Opos Oneg)
+  have hmeanIdentity (μ : Law N) :
+      (∑ x, μ.w x * sMean E G π x) = 2 * dens E G μ πlaw - 1 := by
+    have hrow (x : Fin N) : sMean E G π x =
+        2 * (∑ y, π y * hit E G x y) - 1 := by
+      unfold sMean fv
+      calc
+        (∑ y, π y * (2 * hit E G x y - 1)) =
+            ∑ y, (2 * (π y * hit E G x y) - π y) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = 2 * (∑ y, π y * hit E G x y) - ∑ y, π y := by
+              rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+        _ = 2 * (∑ y, π y * hit E G x y) - 1 := by rw [hπsum]
+    have hdens (x : Fin N) :
+        (∑ y, μ.w x * πlaw.w y * (if Hits E G x y then (1 : ℝ) else 0)) =
+          μ.w x * (∑ y, π y * hit E G x y) := by
+      calc
+        (∑ y, μ.w x * πlaw.w y * (if Hits E G x y then (1 : ℝ) else 0)) =
+            ∑ y, μ.w x * (π y * hit E G x y) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              simp [πlaw, hit]
+        _ = μ.w x * (∑ y, π y * hit E G x y) := by rw [Finset.mul_sum]
+    have hdens' : dens E G μ πlaw =
+        ∑ x, μ.w x * (∑ y, π y * hit E G x y) := by
+      unfold dens
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact hdens x
+    calc
+      (∑ x, μ.w x * sMean E G π x) =
+          ∑ x, μ.w x * (2 * (∑ y, π y * hit E G x y) - 1) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [hrow x]
+      _ = 2 * (∑ x, μ.w x * (∑ y, π y * hit E G x y)) - 1 := by
+            calc
+              _ = ∑ x, (2 * (μ.w x * (∑ y, π y * hit E G x y)) - μ.w x) := by
+                    apply Finset.sum_congr rfl
+                    intro x hx
+                    ring
+              _ = 2 * (∑ x, μ.w x * (∑ y, π y * hit E G x y)) - ∑ x, μ.w x := by
+                    rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+              _ = _ := by rw [μ.sum_eq_one]
+      _ = 2 * dens E G μ πlaw - 1 := by rw [hdens']
+  have hnoSet (positive : Bool) (U : Finset (Fin N)) (hUsub : U ⊆ X)
+      (hU : ∀ x ∈ U, if positive then 4 * bS n < sMean E G π x
+        else 4 * bS n < -sMean E G π x)
+      (hUlarge : (N : ℝ) * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) ≤ U.card) : False := by
+    let T : ℝ := (n : ℝ) ^ ((1 : ℝ) - δ / 16)
+    have hUcardPos : 0 < (U.card : ℝ) :=
+      lt_of_lt_of_le (mul_pos hNr (Real.exp_pos _)) hUlarge
+    have hUne : U.Nonempty := Finset.card_pos.mp (Nat.pos_of_ne_zero (by
+      intro hzero
+      simp [hzero] at hUcardPos))
+    let μ : Law N := Law.unif U hUne
+    have hμX : μ.SupportedIn X := by
+      intro x hx
+      have hxU : x ∉ U := fun hxU => hx (hUsub hxU)
+      simp [μ, Law.unif, FinProb.uniform, hxU]
+    have hμwidth : μ.WidthLE T := by
+      intro x
+      change (if x ∈ U then (U.card : ℝ)⁻¹ else 0) ≤ Real.exp T / N
+      by_cases hx : x ∈ U
+      · rw [if_pos hx]
+        have hcardMul : (N : ℝ) ≤ (U.card : ℝ) * Real.exp T := by
+          calc
+            (N : ℝ) = (N : ℝ) * 1 := by ring
+            _ = (N : ℝ) * (Real.exp (-T) * Real.exp T) := by
+              rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
+            _ = ((N : ℝ) * Real.exp (-T)) * Real.exp T := by ring
+            _ ≤ (U.card : ℝ) * Real.exp T :=
+              mul_le_mul_of_nonneg_right (by simpa [T] using hUlarge) (le_of_lt (Real.exp_pos T))
+        rw [show (U.card : ℝ)⁻¹ = (1 : ℝ) / (U.card : ℝ) by ring]
+        rw [div_le_div_iff₀ hUcardPos hNr]
+        nlinarith [hcardMul]
+      · rw [if_neg hx]
+        positivity
+    have hμpos (x : Fin N) (hx : x ∈ U) : 0 < μ.w x := by
+      simpa [μ, Law.unif, FinProb.uniform, hx] using (inv_pos.mpr hUcardPos)
+    have hmeanPos : 0 < bS n := by
+      dsimp [bS]
+      exact Real.rpow_pos_of_pos (by exact_mod_cast hn1) _
+    have hsumConst : (∑ x, μ.w x * (4 * bS n)) = 4 * bS n := by
+      rw [← Finset.sum_mul, μ.sum_eq_one]
+      ring
+    have hsumAbs : 4 * bS n < |∑ x, μ.w x * sMean E G π x| := by
+      by_cases hp : positive
+      · have hsumlt :
+            (∑ x, μ.w x * (4 * bS n)) < ∑ x, μ.w x * sMean E G π x := by
+          apply Finset.sum_lt_sum
+          · intro x hx
+            by_cases hxU : x ∈ U
+            · have hpoint := hU x hxU
+              simp [hp] at hpoint
+              exact (mul_lt_mul_of_pos_left hpoint (hμpos x hxU)).le
+            · have hμzero : μ.w x = 0 := by
+                simp [μ, Law.unif, FinProb.uniform, hxU]
+              simp [hμzero]
+          · obtain ⟨x, hx⟩ := hUne
+            refine ⟨x, Finset.mem_univ _, ?_⟩
+            have hpoint := hU x hx
+            simp [hp] at hpoint
+            exact mul_lt_mul_of_pos_left hpoint (hμpos x hx)
+        have hsumgt : 4 * bS n < ∑ x, μ.w x * sMean E G π x := by
+          rw [← hsumConst]
+          exact hsumlt
+        rw [abs_of_pos (lt_trans (by positivity) hsumgt)]
+        exact hsumgt
+      · have hsumgt :
+            (∑ x, μ.w x * (-4 * bS n)) > ∑ x, μ.w x * sMean E G π x := by
+          apply Finset.sum_lt_sum
+          · intro x hx
+            by_cases hxU : x ∈ U
+            · have hpoint := hU x hxU
+              simp [hp] at hpoint
+              have hpoint' : sMean E G π x < -4 * bS n := by linarith
+              exact (mul_lt_mul_of_pos_left hpoint' (hμpos x hxU)).le
+            · have hμzero : μ.w x = 0 := by
+                simp [μ, Law.unif, FinProb.uniform, hxU]
+              simp [hμzero]
+          · obtain ⟨x, hx⟩ := hUne
+            refine ⟨x, Finset.mem_univ _, ?_⟩
+            have hpoint := hU x hx
+            simp [hp] at hpoint
+            have hpoint' : sMean E G π x < -4 * bS n := by linarith
+            exact mul_lt_mul_of_pos_left hpoint' (hμpos x hx)
+        have hsumConstNeg : (∑ x, μ.w x * (-4 * bS n)) = -4 * bS n := by
+          rw [← Finset.sum_mul, μ.sum_eq_one]
+          ring
+        have hsumlt' : ∑ x, μ.w x * sMean E G π x < -4 * bS n := by
+          rw [← hsumConstNeg]
+          exact hsumgt
+        have hsumNeg : ∑ x, μ.w x * sMean E G π x < 0 := by linarith
+        rw [abs_of_neg hsumNeg]
+        linarith
+    have hπlawY : πlaw.SupportedIn Y := by
+      intro y hy
+      by_contra hne
+      exact hy (hπsupp y (by simpa [πlaw] using hne))
+    have hdisc' : |dens E G μ πlaw - 1 / 2| ≤ bS n := by
+      simpa [bS] using hdisc μ πlaw hμX hπlawY hμwidth hπwidth G
+    have hmeanBound : |∑ x, μ.w x * sMean E G π x| ≤ 2 * bS n := by
+      rw [hmeanIdentity]
+      have hrewrite : 2 * dens E G μ πlaw - 1 = 2 * (dens E G μ πlaw - 1 / 2) := by ring
+      rw [hrewrite, abs_mul, abs_of_nonneg (by norm_num : (0 : ℝ) ≤ 2)]
+      exact mul_le_mul_of_nonneg_left hdisc' (by norm_num)
+    nlinarith [hmeanPos, hsumAbs, hmeanBound]
+  by_contra hnot
+  have hlarge : 2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) ≤ O.card :=
+    le_of_not_gt hnot
+  let T : ℝ := (n : ℝ) ^ ((1 : ℝ) - δ / 16)
+  have hq : 0 < (N : ℝ) * Real.exp (-T) := mul_pos hNr (Real.exp_pos _)
+  have hsumlarge : 2 * ((N : ℝ) * Real.exp (-T)) ≤ (Opos.card : ℝ) + (Oneg.card : ℝ) := by
+    dsimp [T] at hlarge ⊢
+    nlinarith [hlarge, hcardCover]
+  rcases le_total ((N : ℝ) * Real.exp (-T)) (Opos.card : ℝ) with hpos | hpos
+  · exact hnoSet true Opos (Finset.filter_subset _ _) (by
+      intro x hx
+      simpa using (Finset.mem_filter.mp hx).2) (by simpa [T] using hpos)
+  · have hneg : (N : ℝ) * Real.exp (-T) ≤ (Oneg.card : ℝ) := by
+      by_contra hsmall
+      have hsmall' : (Oneg.card : ℝ) < (N : ℝ) * Real.exp (-T) := lt_of_not_ge hsmall
+      nlinarith [hsumlarge, hpos]
+    exact hnoSet false Oneg (Finset.filter_subset _ _) (by
+      intro x hx
+      simpa using (Finset.mem_filter.mp hx).2) (by simpa [T] using hneg)
 
 /-- L11.2a(ii) (11:120–128).  Take a maximal family of disjoint `s_c`-cliques of the graph `K_π > 8n^{-δ}` on `S`,
 with union `V`; `S \ V` has no clique.  If `|V| ≥ N e^{-n^δ}`: first law `π` (width `log K ≤ n^δ`), clusters
@@ -71,7 +284,379 @@ codegree `(1 + m_x + m_{x'} + K_π)/4 ≥ 1/4 + n^{-δ}` (diagonal `(1 + m_x)/2`
 cluster witness, excluded. -/
 theorem clique_removal (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 < K) :
     CliqueRemovalEv δ K := by
-  sorry
+  classical
+  have hgap : 0 < (19 : ℝ) / 20 - δ := by nlinarith [hδ']
+  have hKevent : ∀ᶠ n : ℕ in Filter.atTop, K ≤ Real.exp ((n : ℝ) ^ δ) := by
+    have hp : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ δ) Filter.atTop Filter.atTop :=
+      (_root_.tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+    exact (Real.tendsto_exp_atTop.comp hp).eventually (Filter.eventually_ge_atTop K)
+  have hgapEvent : ∀ᶠ n : ℕ in Filter.atTop, 2 ≤ (n : ℝ) ^ ((19 : ℝ) / 20 - δ) := by
+    have hp : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ ((19 : ℝ) / 20 - δ))
+        Filter.atTop Filter.atTop := (_root_.tendsto_rpow_atTop hgap).comp tendsto_natCast_atTop_atTop
+    exact hp.eventually (Filter.eventually_ge_atTop 2)
+  have hδsmall : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ (-δ) < 1 / 8 := by
+    have hp : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (-δ)) Filter.atTop (nhds 0) := by
+      exact (tendsto_rpow_neg_atTop hδ).comp tendsto_natCast_atTop_atTop
+    exact hp.eventually (Iio_mem_nhds (by norm_num))
+  obtain ⟨nK, hKeventN⟩ := Filter.eventually_atTop.1 hKevent
+  obtain ⟨ngap, hngap⟩ := Filter.eventually_atTop.1 hgapEvent
+  obtain ⟨nδ, hnδ⟩ := Filter.eventually_atTop.1 hδsmall
+  refine ⟨max nK (max ngap (max nδ 2)), ?_⟩
+  intro n hn N E X Y G π hN hπ0 hπsum hπsupp hπcap hYX S hSsub hSdegree
+  have hnK : nK ≤ n := by omega
+  have hngapN : ngap ≤ n := by omega
+  have hnδN : nδ ≤ n := by omega
+  have hn2 : 2 ≤ n := by omega
+  have hKpow : K ≤ Real.exp ((n : ℝ) ^ δ) := hKeventN n hnK
+  have hgapPow : 2 ≤ (n : ℝ) ^ ((19 : ℝ) / 20 - δ) := hngap n hngapN
+  have hδpow : (n : ℝ) ^ (-δ) < 1 / 8 := hnδ n hnδN
+  have hnpos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hNpos : 0 < N := by
+    by_contra hN
+    have hNzero : N = 0 := Nat.eq_zero_of_not_pos hN
+    subst N
+    have hX : X = ∅ := by ext x; exact Fin.elim0 x
+    have hY : Y = ∅ := by ext y; exact Fin.elim0 y
+    have hπsum' := hπsum
+    simp [hY] at hπsum'
+  have hNr : 0 < (N : ℝ) := by exact_mod_cast hNpos
+  have hsmallb : 2 * bS n ≤ (n : ℝ) ^ (-δ) := by
+    have hbase := mul_le_mul_of_nonneg_right hgapPow
+      (Real.rpow_pos_of_pos hnpos (-(19 : ℝ) / 20)).le
+    have hpow : (n : ℝ) ^ ((19 : ℝ) / 20 - δ) * (n : ℝ) ^ (-(19 : ℝ) / 20) =
+        (n : ℝ) ^ (-δ) := by
+      rw [← Real.rpow_add hnpos]
+      congr 1 <;> ring
+    calc
+      2 * bS n = 2 * (n : ℝ) ^ (-(19 : ℝ) / 20) := by rfl
+      _ ≤ (n : ℝ) ^ ((19 : ℝ) / 20 - δ) * (n : ℝ) ^ (-(19 : ℝ) / 20) := hbase
+      _ = (n : ℝ) ^ (-δ) := hpow
+  have hdiag : (n : ℝ) ^ (-δ) + 2 * bS n ≤ 1 / 4 := by
+    have htwo : 2 * (n : ℝ) ^ (-δ) < 1 / 4 := by nlinarith [hδpow]
+    nlinarith [hsmallb, htwo]
+  let πlaw : Law N := ⟨π, hπ0, hπsum⟩
+  have hπwidth : πlaw.WidthLE ((n : ℝ) ^ δ) := by
+    intro y
+    apply (le_div_iff₀ hNr).2
+    calc
+      π y * (N : ℝ) = (N : ℝ) * π y := by ring
+      _ ≤ K := hπcap y
+      _ ≤ Real.exp ((n : ℝ) ^ δ) := hKpow
+  let IsClique (C : Finset (Fin N)) : Prop :=
+    C ⊆ S ∧ C.card = sC n ∧
+      ∀ x ∈ C, ∀ z ∈ C, x ≠ z → 8 * (n : ℝ) ^ (-δ) < corr E G π x z
+  let Cliques : Finset (Finset (Fin N)) := Finset.univ.filter IsClique
+  let IsPacking (P : Finset (Finset (Fin N))) : Prop :=
+    (∀ C ∈ P, C ∈ Cliques) ∧
+      ∀ C ∈ P, ∀ D ∈ P, C ≠ D → Disjoint C D
+  let Packings : Finset (Finset (Finset (Fin N))) := Finset.univ.filter IsPacking
+  have hPackings : Packings.Nonempty := by
+    refine ⟨∅, ?_⟩
+    simp [Packings, IsPacking]
+  obtain ⟨P, hPmem, hPmax⟩ := Finset.exists_max_image Packings Finset.card hPackings
+  have hP : IsPacking P := (Finset.mem_filter.mp hPmem).2
+  let V : Finset (Fin N) := P.biUnion (fun C => C)
+  have hVsub : V ⊆ S := by
+    intro x hx
+    obtain ⟨C, hCP, hxC⟩ := Finset.mem_biUnion.mp hx
+    have hC := hP.1 C hCP
+    exact (Finset.mem_filter.mp hC).2.1 hxC
+  have hsCpos : 0 < sC n := by
+    dsimp [sC]
+    exact Nat.ceil_pos.mpr (Real.exp_pos _)
+  have hNoClique : NoClique E G π n δ (S \ V) := by
+    intro C hC hCcard
+    by_contra hnoPair
+    have hEdges : ∀ x ∈ C, ∀ z ∈ C, x ≠ z →
+        8 * (n : ℝ) ^ (-δ) < corr E G π x z := by
+      intro x hx z hz hxz
+      by_contra hnot
+      exact hnoPair ⟨x, hx, z, hz, hxz, le_of_not_gt hnot⟩
+    have hClique : IsClique C := ⟨Finset.Subset.trans hC (Finset.sdiff_subset), hCcard, hEdges⟩
+    have hCmem : C ∈ Cliques := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hClique⟩
+    have hCne : C.Nonempty := Finset.card_pos.mp (by rw [hCcard]; exact hsCpos)
+    have hCnotP : C ∉ P := by
+      intro hCP
+      obtain ⟨x, hx⟩ := hCne
+      have hxV : x ∈ V := Finset.mem_biUnion.mpr ⟨C, hCP, hx⟩
+      exact (Finset.mem_sdiff.mp (hC hx)).2 hxV
+    have hCdisj (D : Finset (Fin N)) (hDP : D ∈ P) : Disjoint C D := by
+      have hDsub : D ⊆ V := by
+        intro x hx
+        exact Finset.mem_biUnion.mpr ⟨D, hDP, hx⟩
+      apply Finset.disjoint_left.mpr
+      intro x hxC hxD
+      exact (Finset.mem_sdiff.mp (hC hxC)).2 (hDsub hxD)
+    have hP' : IsPacking (insert C P) := by
+      refine ⟨?_, ?_⟩
+      · intro D hD
+        rcases Finset.mem_insert.mp hD with rfl | hDP
+        · exact hCmem
+        · exact hP.1 D hDP
+      · intro D hD D' hD' hne
+        rcases Finset.mem_insert.mp hD with rfl | hDP
+        · rcases Finset.mem_insert.mp hD' with rfl | hD'P
+          · exact (hne rfl).elim
+          · exact hCdisj D' hD'P
+        · rcases Finset.mem_insert.mp hD' with rfl | hD'P
+          · exact (hCdisj D hDP).symm
+          · exact hP.2 D hDP D' hD'P hne
+    have hP'mem : insert C P ∈ Packings := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hP'⟩
+    have hmax := hPmax (insert C P) hP'mem
+    have hcardInsert : (insert C P).card = P.card + 1 := Finset.card_insert_of_notMem hCnotP
+    omega
+  by_cases hVsmall : (V.card : ℝ) < (N : ℝ) * Real.exp (-((n : ℝ) ^ δ))
+  · exact ⟨V, hVsub, hVsmall, hNoClique⟩
+  · have hVlarge : (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) ≤ V.card := le_of_not_gt hVsmall
+    have hVpos : 0 < (V.card : ℝ) :=
+      lt_of_lt_of_le (mul_pos hNr (Real.exp_pos _)) hVlarge
+    have hVne : V.Nonempty := by
+      apply Finset.card_pos.mp
+      exact_mod_cast hVpos
+    have hPne : P.Nonempty := by
+      obtain ⟨x, hxV⟩ := hVne
+      obtain ⟨C, hCP, _⟩ := Finset.mem_biUnion.mp hxV
+      exact ⟨C, hCP⟩
+    have hPcard : 0 < P.card := Finset.card_pos.mpr hPne
+    have hPcardR : 0 < (P.card : ℝ) := by exact_mod_cast hPcard
+    have hVcardEq : V.card = P.card * sC n := by
+      dsimp [V]
+      rw [Finset.card_biUnion (fun C hC D hD hCD => hP.2 C hC D hD hCD)]
+      have hsum : (∑ C ∈ P, C.card) = ∑ C ∈ P, sC n := by
+        apply Finset.sum_congr rfl
+        intro C hC
+        exact (Finset.mem_filter.mp (hP.1 C hC)).2.2.1
+      rw [hsum]
+      simp
+    have hVcardR : (V.card : ℝ) = (P.card : ℝ) * (sC n : ℝ) := by
+      exact_mod_cast hVcardEq
+    let e : {C : Finset (Fin N) // C ∈ P} ≃ Fin P.card := P.equivFin
+    let block : Fin P.card → Finset (Fin N) := fun j => (e.symm j).1
+    have hblockMem (j : Fin P.card) : block j ∈ P := (e.symm j).2
+    have hblockClique (j : Fin P.card) : IsClique (block j) :=
+      (Finset.mem_filter.mp (hP.1 (block j) (hblockMem j))).2
+    have hblockCard (j : Fin P.card) : (block j).card = sC n := hblockClique j |>.2.1
+    have hblockGood (j : Fin P.card) : block j ⊆ S := hblockClique j |>.1
+    have hblockCorr (j : Fin P.card) : ∀ x ∈ block j, ∀ z ∈ block j, x ≠ z →
+        8 * (n : ℝ) ^ (-δ) < corr E G π x z := hblockClique j |>.2.2
+    have hblockDisjoint (j k : Fin P.card) (hjk : j ≠ k) : Disjoint (block j) (block k) := by
+      have hblocks : block j ≠ block k := by
+        intro heq
+        apply hjk
+        have hsub : e.symm j = e.symm k := Subtype.ext heq
+        simpa using congrArg e hsub
+      exact hP.2 (block j) (hblockMem j) (block k) (hblockMem k) hblocks
+    have hPcardRpos : 0 < (P.card : ℝ) := hPcardR
+    have hsCcastPos : 0 < (sC n : ℝ) := by exact_mod_cast hsCpos
+    let lam : Fin P.card → ℝ := fun _ => (P.card : ℝ)⁻¹
+    have hlamNonneg : ∀ j, 0 ≤ lam j := by intro j; exact (inv_nonneg.mpr hPcardR.le)
+    have hlamSum : ∑ j : Fin P.card, lam j = 1 := by
+      simp [lam, hPcardR.ne']
+    have hlamPos : ∀ j, 0 < lam j := by intro j; exact inv_pos.mpr hPcardR
+    let Dlaw : Fin P.card → Law N := fun j => Law.unif (block j)
+      (Finset.card_pos.mp (by rw [hblockCard j]; exact hsCpos))
+    have hDlawSupport : ∀ j, (Dlaw j).SupportedIn V := by
+      intro j x hx
+      by_contra hweight
+      have hxBlock : x ∈ block j := by
+        by_contra hxBlock
+        have hz : (Dlaw j).w x = 0 := by
+          simp [Dlaw, Law.unif, FinProb.uniform, hxBlock]
+        exact hweight hz
+      exact hx (Finset.mem_biUnion.mpr ⟨block j, hblockMem j, hxBlock⟩)
+    let Klarge : ℝ := (n : ℝ) ^ δ
+    have hKlarge : K ≤ Real.exp Klarge := hKpow
+    have hπwidth' : πlaw.WidthLE Klarge := by
+      intro y
+      apply (le_div_iff₀ hNr).2
+      calc
+        πlaw.w y * (N : ℝ) = (N : ℝ) * π y := by simp [πlaw]; ring
+        _ ≤ K := hπcap y
+        _ ≤ Real.exp Klarge := hKlarge
+    have hAgg (x : Fin N) :
+        (∑ j : Fin P.card, lam j * (Dlaw j).w x) ≤ (V.card : ℝ)⁻¹ := by
+      let Jx : Finset (Fin P.card) := Finset.univ.filter fun j => x ∈ block j
+      have hJcard : Jx.card ≤ 1 := by
+        apply Finset.card_le_one.mpr
+        intro j hj k hk
+        by_contra hjk
+        have hdisj := hblockDisjoint j k hjk
+        have hnot : x ∉ block k := by
+          intro hxk
+          exact Finset.disjoint_left.mp hdisj (Finset.mem_filter.mp hj).2 hxk
+        exact hnot (Finset.mem_filter.mp hk).2
+      have hrecip (j : Fin P.card) :
+          lam j * ((block j).card : ℝ)⁻¹ = (V.card : ℝ)⁻¹ := by
+        rw [hblockCard j, hVcardR]
+        dsimp [lam]
+        field_simp [ne_of_gt hPcardR, ne_of_gt hsCcastPos]
+      have hweight (j : Fin P.card) :
+          lam j * (Dlaw j).w x = if j ∈ Jx then (V.card : ℝ)⁻¹ else 0 := by
+        by_cases hj : j ∈ Jx
+        · have hxj : x ∈ block j := (Finset.mem_filter.mp hj).2
+          simp [Jx, Dlaw, Law.unif, FinProb.uniform, hxj, hrecip]
+        · have hxj : x ∉ block j := by
+            intro hxj
+            exact hj (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hxj⟩)
+          simp [Jx, Dlaw, Law.unif, FinProb.uniform, hxj, hj]
+      calc
+        (∑ j : Fin P.card, lam j * (Dlaw j).w x) =
+            ∑ j : Fin P.card, if j ∈ Jx then (V.card : ℝ)⁻¹ else 0 := by
+              apply Finset.sum_congr rfl
+              intro j hj
+              exact hweight j
+        _ = (Jx.card : ℝ) * (V.card : ℝ)⁻¹ := by
+              calc
+                _ = ∑ j : Fin P.card, (if j ∈ Jx then (1 : ℝ) else 0) *
+                    (V.card : ℝ)⁻¹ := by
+                      apply Finset.sum_congr rfl
+                      intro j hj
+                      by_cases hmem : j ∈ Jx <;> simp [hmem]
+                _ = (∑ j : Fin P.card, if j ∈ Jx then (1 : ℝ) else 0) *
+                    (V.card : ℝ)⁻¹ := by rw [← Finset.sum_mul]
+                _ = (Jx.card : ℝ) * (V.card : ℝ)⁻¹ := by simp
+        _ ≤ (V.card : ℝ)⁻¹ := by
+              have hJcardR : (Jx.card : ℝ) ≤ 1 := by exact_mod_cast hJcard
+              simpa using mul_le_mul_of_nonneg_right hJcardR
+                (inv_nonneg.mpr (show (0 : ℝ) ≤ (V.card : ℝ) from Nat.cast_nonneg _))
+    have hAtom (j : Fin P.card) (x : Fin N) : (Dlaw j).w x ≤
+        Real.exp (-((n : ℝ) ^ ((1 : ℝ) / 100))) := by
+      have hceil : Real.exp ((n : ℝ) ^ ((1 : ℝ) / 100)) ≤ (sC n : ℝ) := by
+        dsimp [sC]
+        exact Nat.le_ceil _
+      have hrecip : (sC n : ℝ)⁻¹ ≤ Real.exp (-((n : ℝ) ^ ((1 : ℝ) / 100))) := by
+        have h := one_div_le_one_div_of_le (Real.exp_pos ((n : ℝ) ^ ((1 : ℝ) / 100))) hceil
+        simpa [Real.exp_neg] using h
+      by_cases hx : x ∈ block j
+      · have hcard : (block j).card = sC n := hblockCard j
+        simpa [Dlaw, Law.unif, FinProb.uniform, hx, hcard] using hrecip
+      · simpa [Dlaw, Law.unif, FinProb.uniform, hx] using
+          ((Real.exp_pos _).le)
+    have hcodegFormula (x z : Fin N) :
+        4 * codeg (transposeRel E) G πlaw x z =
+          1 + sMean E G π x + sMean E G π z + corr E G π x z := by
+      have hcodeg : codeg (transposeRel E) G πlaw x z =
+          ∑ y, π y * (if Hits E G x y ∧ Hits E G z y then (1 : ℝ) else 0) := by
+        unfold codeg
+        apply Finset.sum_congr rfl
+        intro y hy
+        simp [πlaw, hits_transpose]
+      have hpoint (y : Fin N) :
+          4 * (if Hits E G x y ∧ Hits E G z y then (1 : ℝ) else 0) =
+            1 + fv E G x y + fv E G z y + fv E G x y * fv E G z y := by
+        by_cases hxy : Hits E G x y <;> by_cases hzy : Hits E G z y <;>
+          simp [fv, hit, hxy, hzy] <;> ring
+      have hsumIdentity :
+          (∑ y, π y *
+              (1 + fv E G x y + fv E G z y + fv E G x y * fv E G z y)) =
+            (∑ y, π y) + (∑ y, π y * fv E G x y) +
+              (∑ y, π y * fv E G z y) + (∑ y, π y * fv E G x y * fv E G z y) := by
+        calc
+          _ = ∑ y, (π y + π y * fv E G x y + π y * fv E G z y +
+              π y * fv E G x y * fv E G z y) := by
+                apply Finset.sum_congr rfl
+                intro y hy
+                ring
+          _ = _ := by simp only [Finset.sum_add_distrib]
+      calc
+        4 * codeg (transposeRel E) G πlaw x z =
+            ∑ y, π y * (4 * (if Hits E G x y ∧ Hits E G z y then (1 : ℝ) else 0)) := by
+              rw [hcodeg, Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = ∑ y, π y *
+              (1 + fv E G x y + fv E G z y + fv E G x y * fv E G z y) := by
+                apply Finset.sum_congr rfl
+                intro y hy
+                rw [hpoint y]
+        _ = (∑ y, π y) + (∑ y, π y * fv E G x y) +
+              (∑ y, π y * fv E G z y) + (∑ y, π y * fv E G x y * fv E G z y) := hsumIdentity
+        _ = 1 + sMean E G π x + sMean E G π z + corr E G π x z := by
+              simp [sMean, corr, hπsum]
+    have hVwidth : (V.card : ℝ)⁻¹ ≤ Real.exp ((n : ℝ) ^ δ) / N := by
+      have hmul : (N : ℝ) ≤ (V.card : ℝ) * Real.exp ((n : ℝ) ^ δ) := by
+        calc
+          (N : ℝ) = (N : ℝ) * 1 := by ring
+          _ = (N : ℝ) *
+              (Real.exp (-((n : ℝ) ^ δ)) * Real.exp ((n : ℝ) ^ δ)) := by
+                rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
+          _ = ((N : ℝ) * Real.exp (-((n : ℝ) ^ δ))) * Real.exp ((n : ℝ) ^ δ) := by ring
+          _ ≤ (V.card : ℝ) * Real.exp ((n : ℝ) ^ δ) :=
+                mul_le_mul_of_nonneg_right hVlarge (Real.exp_pos _).le
+      rw [show (V.card : ℝ)⁻¹ = (1 : ℝ) / V.card by ring]
+      rw [div_le_div_iff₀ hVpos hNr]
+      nlinarith [hmul]
+    have hπsupported : πlaw.SupportedIn Y := by
+      intro y hy
+      by_contra hne
+      exact hy (hπsupp y (by simpa [πlaw] using hne))
+    have hmeanLower (x : Fin N) (hx : x ∈ S) : -4 * bS n ≤ sMean E G π x :=
+      by linarith [(abs_le.mp (hSdegree x hx)).1]
+    have hcorrSelf (x : Fin N) : corr E G π x x = 1 := by
+      have hpoint (y : Fin N) : fv E G x y * fv E G x y = 1 := by
+        by_cases hxy : Hits E G x y <;> simp [fv, hit, hxy] <;> ring
+      calc
+        corr E G π x x = ∑ y, π y := by
+          unfold corr
+          apply Finset.sum_congr rfl
+          intro y hy
+          calc
+            π y * fv E G x y * fv E G x y = π y * (fv E G x y * fv E G x y) := by ring
+            _ = π y := by rw [hpoint]; ring
+        _ = 1 := hπsum
+    have hcodegBound (j : Fin P.card) (y z : Fin N)
+        (hy : 0 < (Dlaw j).w y) (hz : 0 < (Dlaw j).w z) :
+        1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg (transposeRel E) G πlaw y z := by
+      have hyBlock : y ∈ block j := by
+        by_contra hnot
+        have hzero : (Dlaw j).w y = 0 := by
+          simp [Dlaw, Law.unif, FinProb.uniform, hnot]
+        linarith
+      have hzBlock : z ∈ block j := by
+        by_contra hnot
+        have hzero : (Dlaw j).w z = 0 := by
+          simp [Dlaw, Law.unif, FinProb.uniform, hnot]
+        linarith
+      have hyS : y ∈ S := hblockGood j hyBlock
+      have hzS : z ∈ S := hblockGood j hzBlock
+      have hmy : -4 * bS n ≤ sMean E G π y := hmeanLower y hyS
+      have hmz : -4 * bS n ≤ sMean E G π z := hmeanLower z hzS
+      by_cases hyz : y = z
+      · subst z
+        have hdiag := hcodegFormula y y
+        rw [hcorrSelf y] at hdiag
+        have hcodegEq : codeg (transposeRel E) G πlaw y y = (1 + sMean E G π y) / 2 := by
+          nlinarith [hdiag]
+        rw [hcodegEq]
+        nlinarith [hdiag]
+      · have hcorr : 8 * (n : ℝ) ^ (-δ) < corr E G π y z :=
+          hblockCorr j y hyBlock z hzBlock hyz
+        have hform := hcodegFormula y z
+        nlinarith [hform, hmy, hmz, hcorr, hsmallb]
+    have hCluster : PCluster G ((1 / 100 : ℚ) : ℝ) δ n N (transposeRel E) (Y, V) := by
+      unfold PCluster
+      change ∃ μ' : Law N, ∃ K' : ℕ, ∃ lam' : Fin K' → ℝ, ∃ D' : Fin K' → Law N,
+        μ'.SupportedIn Y ∧ (∀ j, (D' j).SupportedIn V) ∧
+        (∀ j, 0 ≤ lam' j) ∧ ∑ j, lam' j = 1 ∧
+        μ'.WidthLE ((n : ℝ) ^ δ) ∧
+        (∀ y, ∑ j, lam' j * (D' j).w y ≤ Real.exp ((n : ℝ) ^ δ) / N) ∧
+        (∀ j y, (D' j).w y ≤ Real.exp (-((n : ℝ) ^ ((1 / 100 : ℚ) : ℝ)))) ∧
+        (∀ j, 0 < lam' j → ∀ y y', 0 < (D' j).w y → 0 < (D' j).w y' →
+          1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg (transposeRel E) G μ' y y')
+      have hAtom' : ∀ j x, (Dlaw j).w x ≤
+          Real.exp (-((n : ℝ) ^ ((1 / 100 : ℚ) : ℝ))) := by
+        intro j x
+        have hzeta : ((1 / 100 : ℚ) : ℝ) = (1 : ℝ) / 100 := by norm_num
+        simpa [hzeta] using hAtom j x
+      refine ⟨πlaw, P.card, lam, Dlaw, hπsupported, hDlawSupport,
+        hlamNonneg, hlamSum, hπwidth', ?_, hAtom', ?_⟩
+      · intro x
+        exact (hAgg x).trans hVwidth
+      · intro j hweight y z hy hz
+        exact hcodegBound j y z hy hz
+    have hExcluded := hYX G Y V (by simp) (Finset.Subset.trans hVsub hSsub)
+    exact False.elim (hExcluded hCluster)
 
 /-- L11.2b (11:130–159).  Suppose the violators `U` number at least `N e^{-n^δ}`; let `μ_U` be uniform on `U`.
 `E_i D_i(x) = (1 + m_x)/2` and tag mass `> η` has `D_i(x) > .8`, so `E_i D_i(x)² ≥ 1/4 + cη`.  In `L²(μ_U)` a
@@ -90,7 +675,156 @@ compatibility (its support lies in the good-degree, clique-free, violator-free l
 theorem discard_set (δ x₀ K κ : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
     (hK : 0 < K) (hκ : 0 < κ) (hSO : SignedOutliersEv δ x₀ K) (hCR : CliqueRemovalEv δ K)
     (hHD : HighDegreeEv δ K) : DiscardEv δ x₀ K κ := by
-  sorry
+  classical
+  rcases hSO with ⟨nSO, hSO⟩
+  rcases hCR with ⟨nCR, hCR⟩
+  rcases hHD with ⟨nHD, hHD⟩
+  have ha : 0 < 1 - δ / 16 := by nlinarith [hδ']
+  have hsmallExp (r : ℝ) (hr : 0 < r) :
+      ∀ᶠ n : ℕ in Filter.atTop, Real.exp (-((n : ℝ) ^ r)) < κ / 16 := by
+    have hp : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ r) Filter.atTop Filter.atTop :=
+      (_root_.tendsto_rpow_atTop hr).comp tendsto_natCast_atTop_atTop
+    have hneg : Filter.Tendsto (fun n : ℕ => -((n : ℝ) ^ r)) Filter.atTop Filter.atBot :=
+      Filter.tendsto_neg_atTop_atBot.comp hp
+    have hexp : Filter.Tendsto (fun n : ℕ => Real.exp (-((n : ℝ) ^ r)))
+        Filter.atTop (nhds 0) := Real.tendsto_exp_atBot.comp hneg
+    exact hexp.eventually (Iio_mem_nhds (by positivity))
+  obtain ⟨nA, hnAevent⟩ := Filter.eventually_atTop.1 (hsmallExp _ ha)
+  obtain ⟨nδ, hnδevent⟩ := Filter.eventually_atTop.1 (hsmallExp δ hδ)
+  refine ⟨max nA (max nδ (max nSO (max nCR nHD))), ?_⟩
+  intro n hn N E X Y G ι hι μ ν π α p hin hbal hdisc hXY hYX
+  have hnA : nA ≤ n := by omega
+  have hnδ : nδ ≤ n := by omega
+  have hnSO : nSO ≤ n := by omega
+  have hnCR : nCR ≤ n := by omega
+  have hnHD : nHD ≤ n := by omega
+  have hsmallA : Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) < κ / 16 := hnAevent n hnA
+  have hsmallδ : Real.exp (-((n : ℝ) ^ δ)) < κ / 16 := hnδevent n hnδ
+  have hrate : 2 * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) +
+      2 * Real.exp (-((n : ℝ) ^ δ)) < κ / 4 := by nlinarith
+  have hNpos : 0 < N := lt_of_lt_of_le (Nat.pow_pos (by norm_num : 0 < 2)) hin.host
+  have hNr : 0 < (N : ℝ) := by exact_mod_cast hNpos
+  have hNone : 1 ≤ N := Nat.one_le_iff_ne_zero.mpr (Nat.ne_of_gt hNpos)
+  let πbar : Fin N → ℝ := mixW p π
+  have hπbarNonneg : ∀ y, 0 ≤ πbar y := by
+    intro y
+    dsimp [πbar, mixW]
+    exact Finset.sum_nonneg fun i _ => mul_nonneg (p.nonneg i) (hin.π_nonneg i y)
+  have hπbarSum : ∑ y, πbar y = 1 := by
+    simp only [πbar, mixW]
+    rw [Finset.sum_comm]
+    simp_rw [← Finset.mul_sum, hin.π_sum]
+    simp [p.sum_eq_one]
+  have hπbarSupp : ∀ y, πbar y ≠ 0 → y ∈ Y := by
+    intro y hy
+    by_contra hyY
+    have hrowZero : ∀ i, π i y = 0 := by
+      intro i
+      by_contra hne
+      have hν := hin.π_supp i y hne
+      exact hν (hin.ν_supp i y hyY)
+    have hzero : πbar y = 0 := by
+      simp [πbar, mixW, hrowZero]
+    exact hy hzero
+  have hπbarCap : ∀ y, (N : ℝ) * πbar y ≤ K := hbal
+  have hπsuppY : ∀ i y, π i y ≠ 0 → y ∈ Y := by
+    intro i y hπ
+    have hν := hin.π_supp i y hπ
+    by_contra hyY
+    exact hν (hin.ν_supp i y hyY)
+  let πlaw : Law N := ⟨πbar, hπbarNonneg, hπbarSum⟩
+  let Out : Finset (Fin N) := X.filter fun x =>
+    4 * bS n < |sMean E G πbar x|
+  have hOutcard : (Out.card : ℝ) <
+      2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) := by
+    simpa [Out] using hSO n hnSO (G := G) (π := πbar) hNone hπbarNonneg hπbarSum
+      hπbarSupp hπbarCap hdisc
+  let Good : Finset (Fin N) := X \ Out
+  have hGoodMean : ∀ x ∈ Good, |sMean E G πbar x| ≤ 4 * bS n := by
+    intro x hx
+    have hxX : x ∈ X := (Finset.mem_sdiff.mp hx).1
+    have hxnot : x ∉ Out := (Finset.mem_sdiff.mp hx).2
+    by_contra hlarge
+    exact hxnot (Finset.mem_filter.mpr ⟨hxX, lt_of_not_ge hlarge⟩)
+  obtain ⟨V, hVsub, hVcard, hNoClique⟩ :=
+    hCR n hnCR (G := G) (π := πbar) hNone hπbarNonneg hπbarSum hπbarSupp hπbarCap
+      hYX Good (by intro x hx; exact (Finset.mem_sdiff.mp hx).1) hGoodMean
+  let High : Finset (Fin N) := X.filter fun x =>
+    |sMean E G (mixW p π) x| ≤ 4 * bS n ∧
+      etaC < ∑ i ∈ Finset.univ.filter (fun i => (4 / 5 : ℝ) < deg E G (π i) x), p.w i
+  have hHighcard : (High.card : ℝ) < (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) := by
+    simpa [High] using hHD n hnHD (G := G) (π := π) (p := p) hin.host
+      hin.π_nonneg hin.π_sum hπsuppY hin.π_cap hbal hXY
+  let D : Finset (Fin N) := Out ∪ V ∪ High
+  have hDcard : (D.card : ℝ) ≤ κ / 4 * N := by
+    have hcard : (D.card : ℝ) ≤ (Out.card : ℝ) + (V.card : ℝ) + (High.card : ℝ) := by
+      dsimp [D]
+      have h1 : ((Out ∪ V).card : ℝ) ≤ (Out.card : ℝ) + (V.card : ℝ) := by
+        exact_mod_cast (Finset.card_union_le Out V)
+      have h2 : ((Out ∪ V ∪ High).card : ℝ) ≤ ((Out ∪ V).card : ℝ) + (High.card : ℝ) := by
+        exact_mod_cast (Finset.card_union_le (Out ∪ V) High)
+      nlinarith [h1, h2]
+    have hsmallN :
+        2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) +
+          2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) < κ / 4 * N := by
+      have h := mul_lt_mul_of_pos_left hrate hNr
+      nlinarith [h]
+    have hVcard' : (V.card : ℝ) < (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) := hVcard
+    have hHighcard' : (High.card : ℝ) < (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) := hHighcard
+    have hOutcard' : (Out.card : ℝ) <
+        2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) := hOutcard
+    have hsum : (Out.card : ℝ) + (V.card : ℝ) + (High.card : ℝ) <
+        2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ ((1 : ℝ) - δ / 16))) +
+          2 * (N : ℝ) * Real.exp (-((n : ℝ) ^ δ)) := by
+      nlinarith [hOutcard', hVcard', hHighcard']
+    exact le_of_lt (lt_of_le_of_lt hcard (lt_trans hsum hsmallN))
+  refine ⟨D, hDcard, ?_⟩
+  intro i havoid
+  have hμsupp : ∀ x, (μ i).w x ≠ 0 → x ∈ X := by
+    intro x hx
+    by_contra hxX
+    exact hx (hin.μ_supp i x hxX)
+  have hnotOut : ∀ x, (μ i).w x ≠ 0 → x ∉ Out := by
+    intro x hxOut
+    intro hx
+    have hDmem : x ∈ D := Finset.mem_union_left High (Finset.mem_union_left V hx)
+    exact hxOut (havoid x hDmem)
+  have hnotV : ∀ x, (μ i).w x ≠ 0 → x ∉ V := by
+    intro x hxMu hxV
+    have hDmem : x ∈ D := Finset.mem_union_left High (Finset.mem_union_right Out hxV)
+    exact hxMu (havoid x hDmem)
+  have hnotHigh : ∀ x, (μ i).w x ≠ 0 → x ∉ High := by
+    intro x hxMu hxH
+    exact hxMu (havoid x (Finset.mem_union_right (Out ∪ V) hxH))
+  have hdeg : ∀ x, (μ i).w x ≠ 0 → |sMean E G (mixW p π) x| ≤ 4 * bS n := by
+    intro x hxMu
+    have hxX := hμsupp x hxMu
+    have hxnotOut := hnotOut x hxMu
+    have hxnotLarge : ¬ 4 * bS n < |sMean E G πbar x| := by
+      intro hxLarge
+      exact hxnotOut (Finset.mem_filter.mpr ⟨hxX, hxLarge⟩)
+    exact le_of_not_gt (by simpa [πbar] using hxnotLarge)
+  have hmass : ∀ x, (μ i).w x ≠ 0 →
+      (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p.w i') ≤ etaC := by
+    intro x hxMu
+    by_contra hlarge
+    have hxX := hμsupp x hxMu
+    have hfirst : |sMean E G (mixW p π) x| ≤ 4 * bS n := hdeg x hxMu
+    have hHigh : x ∈ High := Finset.mem_filter.mpr ⟨hxX, hfirst, lt_of_not_ge hlarge⟩
+    exact hnotHigh x hxMu hHigh
+  have hSuppSub : (Finset.univ.filter fun x => (μ i).w x ≠ 0) ⊆ Good \ V := by
+    intro x hx
+    have hxMu := (Finset.mem_filter.mp hx).2
+    have hxX := hμsupp x hxMu
+    have hxnotOut := hnotOut x hxMu
+    have hxnotV := hnotV x hxMu
+    exact Finset.mem_sdiff.mpr ⟨Finset.mem_sdiff.mpr ⟨hxX, hxnotOut⟩, hxnotV⟩
+  have hNoCompat : NoClique E G (mixW p π) n δ
+      (Finset.univ.filter fun x => (μ i).w x ≠ 0) := by
+    intro C hC hcardC
+    have hC' : C ⊆ Good \ V := Finset.Subset.trans hC hSuppSub
+    simpa [πbar] using hNoClique C hC' hcardC
+  exact ⟨hdeg, hmass, hNoCompat⟩
 
 /-- L11.2c (11:117–118, 161).  On the compact convex domain of profiles balanced with `K = 16/κ` (nonempty by
 `BalancedSub` at tolerance `κ`), the response `R(p) = {q ∈ Dom : q_i > 0 → tag i compatible with p}` is nonempty
@@ -104,7 +838,338 @@ theorem fixed_point (hBS : S07.BalancedSub) {n N : ℕ} {E : Fin N → Fin N →
       ∃ D : Finset (Fin N), (D.card : ℝ) ≤ κ / 4 * N ∧
         ∀ i, (∀ x ∈ D, (μ i).w x = 0) → CompatTag E G n δ μ π p i) :
     ∃ p : FinProb ι, Balanced (16 / κ) p π α ∧ ∀ i, p.w i ≠ 0 → CompatTag E G n δ μ π p i := by
-  sorry
+  classical
+  have hNpos : 0 < N := lt_of_lt_of_le (Nat.pow_pos (by norm_num : 0 < 2)) hin.host
+  have hNr : 0 < (N : ℝ) := by exact_mod_cast hNpos
+  have hκ4 : 0 < κ / 4 := by positivity
+  have hκN : 0 ≤ κ * (N : ℝ) := mul_nonneg hκ.le (Nat.cast_nonneg N)
+  have hbalancedMixture (D : Finset (Fin N))
+      (hD : (D.card : ℝ) ≤ κ / 4 * N) :
+      ∃ q : FinProb ι,
+        (∀ y, (N : ℝ) * (∑ i, q.w i * π i y) ≤ 16 / κ) ∧
+        (∀ x, (N : ℝ) * (∑ i, q.w i * α i x) ≤ 16 / κ) ∧
+        (∀ i, q.w i ≠ 0 → ∀ x ∈ D, (μ i).w x = 0) := by
+    let Good : ι → Prop := fun i => ∀ x ∈ D, (μ i).w x = 0
+    let I := {i : ι // Good i}
+    have hDκ : (D.card : ℝ) ≤ κ * N := by
+      nlinarith [hD, hκN]
+    have hIne : Nonempty I := by
+      obtain ⟨i, hiμ, _⟩ := hin.avail D ∅ hDκ (by simpa using hκN)
+      exact ⟨⟨i, hiμ⟩⟩
+    let πI : I → Law N := fun i =>
+      ⟨π i.1, hin.π_nonneg i.1, hin.π_sum i.1⟩
+    let αI : I → Fin N → ℝ := fun i => α i.1
+    have hαnonneg : ∀ i x, 0 ≤ αI i x := by
+      intro i x
+      exact hin.α_nonneg i.1 x
+    have hαsum : ∀ i, ∑ x, αI i x ≤ 1 := by
+      intro i
+      exact hin.α_sum i.1
+    have hAvailI : ∀ RX RY : Finset (Fin N),
+        (RX.card : ℝ) ≤ κ / 4 * N → (RY.card : ℝ) ≤ κ / 4 * N →
+        ∃ i : I, (∀ y ∈ RX, (πI i).w y = 0) ∧ (∀ x ∈ RY, αI i x = 0) := by
+      intro RX RY hRX hRY
+      have hDunion : ((D ∪ RY).card : ℝ) ≤ κ * N := by
+        have hcard : ((D ∪ RY).card : ℝ) ≤ (D.card : ℝ) + (RY.card : ℝ) := by
+          exact_mod_cast (Finset.card_union_le D RY)
+        nlinarith [hcard, hD, hRY, hκN]
+      have hRX' : (RX.card : ℝ) ≤ κ * N := by nlinarith [hRX, hκN]
+      obtain ⟨i, hiμ, hiν⟩ := hin.avail (D ∪ RY) RX hDunion hRX'
+      have hpi : ∀ y ∈ RX, π i y = 0 := by
+        intro y hy
+        by_contra hne
+        exact (hin.π_supp i y hne) (hiν y hy)
+      have halpha : ∀ x ∈ RY, α i x = 0 := by
+        intro x hx
+        by_contra hne
+        exact (hin.α_supp i x hne) (hiμ x (Finset.mem_union_right D hx))
+      refine ⟨⟨i, fun x hx => hiμ x (Finset.mem_union_left RY hx)⟩, ?_, halpha⟩
+      exact hpi
+    obtain ⟨t, hπcap, hαcap⟩ := hBS hNpos πI αI (κ / 4) hκ4
+      hαnonneg hαsum hAvailI
+    let q : FinProb ι := FinProb.map t Subtype.val
+    have hmapπ (y : Fin N) :
+        (∑ i, q.w i * π i y) = ∑ j : I, t.w j * π j.1 y := by
+      change (FinProb.map t Subtype.val).expect (fun i => π i y) =
+        t.expect (fun j => π j.1 y)
+      rw [FinProb.map_expect]
+    have hmapα (x : Fin N) :
+        (∑ i, q.w i * α i x) = ∑ j : I, t.w j * α j.1 x := by
+      change (FinProb.map t Subtype.val).expect (fun i => α i x) =
+        t.expect (fun j => α j.1 x)
+      rw [FinProb.map_expect]
+    have hscale : 4 / ((κ / 4) * (N : ℝ)) = 16 / (κ * (N : ℝ)) := by
+      field_simp [ne_of_gt hκ, ne_of_gt hNr]
+      ring
+    have hpiScale : 16 / (κ * (N : ℝ)) = (16 / κ) / N := by
+      field_simp [ne_of_gt hκ, ne_of_gt hNr]
+      <;> ring
+    refine ⟨q, ?_, ?_, ?_⟩
+    · intro y
+      rw [hmapπ y]
+      have hbound : (∑ j : I, t.w j * π j.1 y) ≤ (16 / κ) / N := by
+        calc
+          (∑ j : I, t.w j * π j.1 y) ≤ 4 / ((κ / 4) * (N : ℝ)) := by
+            simpa [πI] using hπcap y
+          _ = (16 / κ) / N := by rw [hscale, hpiScale]
+      calc
+        (N : ℝ) * (∑ j : I, t.w j * π j.1 y) ≤ (N : ℝ) * ((16 / κ) / N) :=
+          mul_le_mul_of_nonneg_left hbound hNr.le
+        _ = 16 / κ := by field_simp [ne_of_gt hNr]
+    · intro x
+      rw [hmapα x]
+      have hbound : (∑ j : I, t.w j * α j.1 x) ≤ (16 / κ) / N := by
+        calc
+          (∑ j : I, t.w j * α j.1 x) ≤ 4 / ((κ / 4) * (N : ℝ)) := by
+            simpa [αI] using hαcap x
+          _ = (16 / κ) / N := by rw [hscale, hpiScale]
+      calc
+        (N : ℝ) * (∑ j : I, t.w j * α j.1 x) ≤ (N : ℝ) * ((16 / κ) / N) :=
+          mul_le_mul_of_nonneg_left hbound hNr.le
+        _ = 16 / κ := by field_simp [ne_of_gt hNr]
+    · intro i hqi
+      by_contra hnot
+      have hqzero : q.w i = 0 := by
+        change (Finset.univ.sum fun j : I => if Subtype.val j = i then t.w j else 0) = 0
+        apply Finset.sum_eq_zero
+        intro j hj
+        by_cases hji : j.1 = i
+        · subst i
+          exact (hnot j.2).elim
+        · simp [hji]
+      exact hqi hqzero
+  let mixRaw (p : ι → ℝ) (f : ι → Fin N → ℝ) (x : Fin N) : ℝ :=
+    ∑ i, p i * f i x
+  let Simplex : Set (ι → ℝ) := stdSimplex ℝ ι
+  let toProb : ∀ p : ι → ℝ, p ∈ Simplex → FinProb ι :=
+    fun p hp => ⟨p, hp.1, hp.2⟩
+  let bal (p : ι → ℝ) : Prop :=
+    (∀ y, (N : ℝ) * mixRaw p π y ≤ 16 / κ) ∧
+    (∀ x, (N : ℝ) * mixRaw p α x ≤ 16 / κ)
+  let S : Set (ι → ℝ) := {p | p ∈ Simplex ∧ bal p}
+  have hmixCont (f : ι → Fin N → ℝ) (x : Fin N) :
+      Continuous (fun p : ι → ℝ => mixRaw p f x) := by
+    unfold mixRaw
+    fun_prop
+  have hmixLinear (p q : ι → ℝ) (a b : ℝ) (f : ι → Fin N → ℝ) (x : Fin N) :
+      mixRaw (a • p + b • q) f x = a * mixRaw p f x + b * mixRaw q f x := by
+    unfold mixRaw
+    calc
+      (∑ i, (a * p i + b * q i) * f i x) =
+          ∑ i, (a * (p i * f i x) + b * (q i * f i x)) := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            ring
+      _ = a * (∑ i, p i * f i x) + b * (∑ i, q i * f i x) := by
+            rw [Finset.sum_add_distrib, ← Finset.mul_sum, ← Finset.mul_sum]
+  have hbalClosed : IsClosed {p : ι → ℝ | bal p} := by
+    rw [show {p : ι → ℝ | bal p} =
+      (⋂ y, {p | (N : ℝ) * mixRaw p π y ≤ 16 / κ}) ∩
+      (⋂ x, {p | (N : ℝ) * mixRaw p α x ≤ 16 / κ}) by
+        ext p
+        simp [bal]]
+    apply IsClosed.inter
+    · apply isClosed_iInter
+      intro y
+      exact isClosed_le (continuous_const.mul (hmixCont π y)) continuous_const
+    · apply isClosed_iInter
+      intro x
+      exact isClosed_le (continuous_const.mul (hmixCont α x)) continuous_const
+  have hSclosed : IsClosed S := by
+    change IsClosed (Simplex ∩ {p | bal p})
+    exact (isClosed_stdSimplex ℝ ι).inter hbalClosed
+  have hScompact : IsCompact S := by
+    apply (isCompact_stdSimplex ℝ ι).of_isClosed_subset hSclosed
+    intro p hp
+    exact hp.1
+  have hSconv : Convex ℝ S := by
+    intro p hp q hq a b ha hb hab
+    refine ⟨convex_stdSimplex ℝ ι hp.1 hq.1 ha hb hab, ?_⟩
+    constructor
+    · intro y
+      rw [hmixLinear p q a b π y]
+      calc
+        (N : ℝ) * (a * mixRaw p π y + b * mixRaw q π y) =
+            a * ((N : ℝ) * mixRaw p π y) + b * ((N : ℝ) * mixRaw q π y) := by ring
+        _ ≤ a * (16 / κ) + b * (16 / κ) :=
+          add_le_add (mul_le_mul_of_nonneg_left (hp.2.1 y) ha)
+            (mul_le_mul_of_nonneg_left (hq.2.1 y) hb)
+        _ = 16 / κ := by rw [← add_mul, hab]; ring
+    · intro x
+      rw [hmixLinear p q a b α x]
+      calc
+        (N : ℝ) * (a * mixRaw p α x + b * mixRaw q α x) =
+            a * ((N : ℝ) * mixRaw p α x) + b * ((N : ℝ) * mixRaw q α x) := by ring
+        _ ≤ a * (16 / κ) + b * (16 / κ) :=
+          add_le_add (mul_le_mul_of_nonneg_left (hp.2.2 x) ha)
+            (mul_le_mul_of_nonneg_left (hq.2.2 x) hb)
+        _ = 16 / κ := by rw [← add_mul, hab]; ring
+  have hSnonempty : S.Nonempty := by
+    have hEmpty : ((∅ : Finset (Fin N)).card : ℝ) ≤ κ / 4 * N := by
+      simp
+      positivity
+    obtain ⟨p, hpπ, hpα, _⟩ := hbalancedMixture ∅ hEmpty
+    refine ⟨p.w, ?_⟩
+    exact ⟨⟨p.nonneg, p.sum_eq_one⟩, ⟨hpπ, hpα⟩⟩
+  let CompatRaw (p : ι → ℝ) (i : ι) : Prop :=
+    (∀ x, (μ i).w x ≠ 0 → |sMean E G (mixRaw p π) x| ≤ 4 * bS n) ∧
+    (∀ x, (μ i).w x ≠ 0 →
+      (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p i') ≤ etaC) ∧
+    NoClique E G (mixRaw p π) n δ (Finset.univ.filter fun x => (μ i).w x ≠ 0)
+  have hCompatClosed (i : ι) : IsClosed {p : ι → ℝ | CompatRaw p i} := by
+    have hsmCont (x : Fin N) :
+        Continuous (fun p : ι → ℝ => sMean E G (mixRaw p π) x) := by
+      unfold sMean mixRaw
+      fun_prop
+    have hcorrCont (x z : Fin N) :
+        Continuous (fun p : ι → ℝ => corr E G (mixRaw p π) x z) := by
+      unfold corr mixRaw
+      fun_prop
+    have hmassCont (x : Fin N) : Continuous (fun p : ι → ℝ =>
+        ∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p i') := by
+      fun_prop
+    have hfirst : IsClosed {p : ι → ℝ |
+        ∀ x, (μ i).w x ≠ 0 → |sMean E G (mixRaw p π) x| ≤ 4 * bS n} := by
+      rw [show {p : ι → ℝ | ∀ x, (μ i).w x ≠ 0 →
+          |sMean E G (mixRaw p π) x| ≤ 4 * bS n} =
+        ⋂ x, {p : ι → ℝ | (μ i).w x ≠ 0 →
+          |sMean E G (mixRaw p π) x| ≤ 4 * bS n} by
+            ext p
+            simp]
+      apply isClosed_iInter
+      intro x
+      by_cases hx : (μ i).w x ≠ 0
+      · simpa [hx] using
+          (isClosed_le (continuous_abs.comp (hsmCont x)) continuous_const)
+      · simp [hx]
+    have hsecond : IsClosed {p : ι → ℝ |
+        ∀ x, (μ i).w x ≠ 0 →
+          (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p i') ≤ etaC} := by
+      rw [show {p : ι → ℝ | ∀ x, (μ i).w x ≠ 0 →
+          (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p i') ≤ etaC} =
+        ⋂ x, {p : ι → ℝ | (μ i).w x ≠ 0 →
+          (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p i') ≤ etaC} by
+            ext p
+            simp]
+      apply isClosed_iInter
+      intro x
+      by_cases hx : (μ i).w x ≠ 0
+      · simpa [hx] using (isClosed_le (hmassCont x) continuous_const)
+      · simp [hx]
+    let Sᵢ : Finset (Fin N) := Finset.univ.filter fun x => (μ i).w x ≠ 0
+    have hno : IsClosed {p : ι → ℝ | NoClique E G (mixRaw p π) n δ Sᵢ} := by
+      rw [show {p : ι → ℝ | NoClique E G (mixRaw p π) n δ Sᵢ} =
+        ⋂ C : Finset (Fin N), {p : ι → ℝ | C ⊆ Sᵢ → C.card = sC n →
+          ∃ x ∈ C, ∃ z ∈ C, x ≠ z ∧
+            corr E G (mixRaw p π) x z ≤ 8 * (n : ℝ) ^ (-δ)} by
+              ext p
+              simp [NoClique, Sᵢ]]
+      apply isClosed_iInter
+      intro C
+      by_cases hsub : C ⊆ Sᵢ
+      · by_cases hcard : C.card = sC n
+        · have hpair : IsClosed {p : ι → ℝ |
+              ∃ x ∈ C, ∃ z ∈ C, x ≠ z ∧
+                corr E G (mixRaw p π) x z ≤ 8 * (n : ℝ) ^ (-δ)} := by
+            rw [show {p : ι → ℝ | ∃ x ∈ C, ∃ z ∈ C, x ≠ z ∧
+                corr E G (mixRaw p π) x z ≤ 8 * (n : ℝ) ^ (-δ)} =
+              ⋃ x ∈ (C : Set (Fin N)), ⋃ z ∈ (C : Set (Fin N)),
+                {p : ι → ℝ | x ≠ z ∧ corr E G (mixRaw p π) x z ≤ 8 * (n : ℝ) ^ (-δ)} by
+                  ext p
+                  simp [and_assoc, and_left_comm, and_comm]]
+            refine C.finite_toSet.isClosed_biUnion ?_
+            intro x hx
+            refine C.finite_toSet.isClosed_biUnion ?_
+            intro z hz
+            by_cases hxz : x ≠ z
+            · simpa [hxz] using
+                (isClosed_le (hcorrCont x z) continuous_const)
+            · simp [hxz]
+          simpa [hsub, hcard] using hpair
+        · simp [hsub, hcard]
+      · simp [hsub]
+    rw [show {p : ι → ℝ | CompatRaw p i} =
+        {p | ∀ x, (μ i).w x ≠ 0 → |sMean E G (mixRaw p π) x| ≤ 4 * bS n} ∩
+        {p | ∀ x, (μ i).w x ≠ 0 →
+          (∑ i' ∈ Finset.univ.filter (fun i' => (4 / 5 : ℝ) < deg E G (π i') x), p i') ≤ etaC} ∩
+        {p | NoClique E G (mixRaw p π) n δ Sᵢ} by
+          ext p
+          simp [CompatRaw, Sᵢ, and_assoc]]
+    exact (hfirst.inter hsecond).inter hno
+  let response (p : S) : Set (ι → ℝ) :=
+    {q | q ∈ S ∧ ∀ i, ¬ CompatRaw p.1 i → q i = 0}
+  have hresponse_subset (p : S) : response p ⊆ S := by
+    intro q hq
+    exact hq.1
+  have hresponse_convex (p : S) : Convex ℝ (response p) := by
+    intro q hq r hr a b ha hb hab
+    refine ⟨hSconv hq.1 hr.1 ha hb hab, ?_⟩
+    intro i hi
+    change a * q i + b * r i = 0
+    rw [hq.2 i hi, hr.2 i hi]
+    ring
+  have hresponse_nonempty (p : S) : (response p).Nonempty := by
+    let pLaw := toProb p.1 p.2.1
+    have hpbal : Balanced (16 / κ) pLaw π α := by
+      exact ⟨p.2.2.1, p.2.2.2⟩
+    obtain ⟨D, hD, hDcompat⟩ := hdisc pLaw hpbal
+    obtain ⟨q, hqπ, hqα, hqgood⟩ := hbalancedMixture D hD
+    refine ⟨q.w, ?_⟩
+    constructor
+    · exact ⟨⟨q.nonneg, q.sum_eq_one⟩, ⟨hqπ, hqα⟩⟩
+    · intro i hnot
+      by_contra hnonzero
+      have hGood : (∀ x ∈ D, (μ i).w x = 0) := hqgood i hnonzero
+      have hCompat : CompatRaw p.1 i := by
+        change CompatTag E G n δ μ π pLaw i
+        exact hDcompat i hGood
+      exact hnot hCompat
+  have hgraph : closedGraph response := by
+    rw [closedGraph]
+    rw [show {z : S × (ι → ℝ) | z.2 ∈ response z.1} =
+      {z | z.2 ∈ S} ∩ ⋂ i : ι,
+        ({z : S × (ι → ℝ) | CompatRaw z.1.1 i} ∪
+          {z : S × (ι → ℝ) | z.2 i = 0}) by
+            ext z
+            simp only [Set.mem_setOf_eq, Set.mem_inter_iff, Set.mem_iInter,
+              Set.mem_union, response]
+            constructor
+            · rintro ⟨hzS, hresp⟩
+              refine ⟨hzS, ?_⟩
+              intro i
+              by_cases hc : CompatRaw z.1.1 i
+              · exact Or.inl hc
+              · exact Or.inr (hresp i hc)
+            · rintro ⟨hzS, hcompat⟩
+              refine ⟨hzS, ?_⟩
+              intro i hnot
+              rcases hcompat i with hc | hz
+              · exact (hnot hc).elim
+              · exact hz]
+    apply IsClosed.inter
+    · exact hSclosed.preimage continuous_snd
+    · apply isClosed_iInter
+      intro i
+      apply IsClosed.union
+      · exact (hCompatClosed i).preimage
+          (continuous_subtype_val.comp continuous_fst)
+      · exact isClosed_eq ((continuous_apply i).comp continuous_snd) continuous_const
+  have hresponseConditions : ∀ p : S,
+      response p ⊆ S ∧ Convex ℝ (response p) ∧ (response p).Nonempty := by
+    intro p
+    exact ⟨hresponse_subset p, hresponse_convex p, hresponse_nonempty p⟩
+  obtain ⟨p, hp⟩ := kakutani_fixed_point S hSconv hScompact hSnonempty
+    response hgraph hresponseConditions
+  let pLaw := toProb p.1 p.2.1
+  refine ⟨pLaw, ?_, ?_⟩
+  · exact ⟨p.2.2.1, p.2.2.2⟩
+  · intro i hpos
+    have hCompat : CompatRaw p.1 i := by
+      by_contra hnot
+      have hzero := hp.2 i hnot
+      exact hpos (by simpa [pLaw, toProb] using hzero)
+    change CompatTag E G n δ μ π pLaw i
+    exact hCompat
 
 /-- Lemma 11.2 (11:104–161) assembled. -/
 theorem compatible_profile (δ x₀ κ : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀)

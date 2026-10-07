@@ -941,6 +941,57 @@ theorem pi_pr_not_forall_le_sum {ι : Type*} [Fintype ι] [DecidableEq ι]
   exact one_sub_prod_le_sum Finset.univ (fun i => (P i).pr (fun x => ¬ A i x))
     (fun i hi => hmiss0 i) (fun i hi => hmiss1 i)
 
+theorem pi_pr_coordinate {ι Ω : Type*} [Fintype ι] [DecidableEq ι] [Fintype Ω]
+    [DecidableEq Ω] (P : ι → FinProb Ω) (j : ι) (y : Ω) :
+    (FinProb.pi P).pr (fun ω => ω j = y) = (P j).w y := by
+  classical
+  let A : ι → Ω → Prop := fun i x => if i = j then x = y else True
+  have hiff (ω : ι → Ω) : (∀ i, A i (ω i)) ↔ ω j = y := by
+    constructor
+    · intro h
+      have hj := h j
+      simpa [A] using hj
+    · intro h i
+      by_cases hi : i = j
+      · subst i
+        simpa [A] using h
+      · simp [A, hi]
+  have hpr : (FinProb.pi P).pr (fun ω => ∀ i, A i (ω i)) =
+      (FinProb.pi P).pr (fun ω => ω j = y) := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases h : ω j = y
+    · have hall : ∀ i, A i (ω i) := hiff ω |>.2 h
+      simp [hall, h]
+    · have hnot : ¬ ∀ i, A i (ω i) := fun hall => h (hiff ω |>.1 hall)
+      simp [hnot, h]
+  have hrow : ∏ i, (P i).pr (A i) = (P j).pr (fun x => x = y) := by
+    have htrue (i : ι) : (P i).pr (fun _ : Ω => True) = 1 := by
+      unfold FinProb.pr
+      simp [ (P i).sum_eq_one ]
+    calc
+      ∏ i, (P i).pr (A i) = ∏ i, if i = j then (P j).pr (fun x => x = y) else 1 := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        by_cases h : i = j
+        · subst i
+          simp [A]
+        · simpa [A, h] using htrue i
+      _ = (P j).pr (fun x => x = y) := by simp
+  have hfactor := FinProb.pi_pr_forall P A
+  calc
+    (FinProb.pi P).pr (fun ω => ω j = y) =
+        (FinProb.pi P).pr (fun ω => ∀ i, A i (ω i)) := hpr.symm
+    _ = ∏ i, (P i).pr (A i) := hfactor
+    _ = (P j).pr (fun x => x = y) := hrow
+    _ = (P j).w y := by
+      unfold FinProb.pr
+      rw [Finset.sum_eq_single_of_mem y (Finset.mem_univ y)]
+      · simp
+      · intro x hx hxy
+        simp [hxy]
+
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
   classical

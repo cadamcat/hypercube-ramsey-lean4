@@ -1,4 +1,5 @@
 import HypercubeRamsey.Framework.LawLemmas
+import HypercubeRamsey.S08.L81.HiddenNodes_sol_s08_g34
 import HypercubeRamsey.S08.L81.Facts
 
 /-!
@@ -499,6 +500,7 @@ private theorem piCoord_pr {N h : ℕ} (ν : Law N) (hN : 0 < N)
     _ = (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) := hpi'
     _ = ν.pr B := hsub
 
+set_option maxHeartbeats 1500000 in
 /-- L8.1c(G3–G4) (08:90–105): filter the aggregates `μ̄_η = ∫ μ_i dη_g` (on (G1), `N max μ̄_η ≤ 4K e^{hn^β +
 n^{τ/2}}`) and `μ̄_Λ` (`N max ≤ 4K`) successively by the coordinates of the independent cross tuples.  Given a cross
 tuple's latent tag its coordinates are independent with law `ν_i`; after at most `2hs` regular hits the filtered
@@ -516,9 +518,9 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
   let C : ℝ := 4 * K + 1
   have hCpos : 0 < C := by dsimp [C]; linarith
   have hWidthEvent : ∀ᶠ n : ℕ in Filter.atTop,
-      2 * ((h : ℝ) + C + 1) < (n : ℝ) ^ (eta8 η₀ / 2) := by
+      10000 * ((h : ℝ) + C + 1) < (n : ℝ) ^ (eta8 η₀ / 2) := by
     have ht := (_root_.tendsto_rpow_atTop hηhalf).comp tendsto_natCast_atTop_atTop
-    filter_upwards [ht.eventually_gt_atTop (2 * ((h : ℝ) + C + 1))] with n hn
+    filter_upwards [ht.eventually_gt_atTop (10000 * ((h : ℝ) + C + 1))] with n hn
     exact hn
   obtain ⟨nW, hW⟩ := Filter.eventually_atTop.1 hWidthEvent
   refine ⟨max nF nW, ?_⟩
@@ -528,8 +530,10 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
   have hCrossCard := hGrid.crossKeys_card g
   have hStep : FilterStep η₀ β D.n := hFilter
   have hnR : 1 ≤ (D.n : ℝ) := by exact_mod_cast hGrid.pos.1
-  have hWidthScale : 2 * ((h : ℝ) + C + 1) ≤ (D.n : ℝ) ^ (eta8 η₀ / 2) :=
-    (hW D.n hnW).le
+  have hLarge := (hW D.n hnW).le
+  have hWidthScale : 2 * ((h : ℝ) + C + 1) ≤ (D.n : ℝ) ^ (eta8 η₀ / 2) := by
+    have hh0 : (0 : ℝ) ≤ (h : ℝ) := Nat.cast_nonneg _
+    linarith
   have hBetaSmall : β ≤ eta8 η₀ / 2 := by
     rw [tau8_eq] at hβτ
     linarith
@@ -702,23 +706,6 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
   have etaWidthN (Θ : D.Hist) (h1 : D.Gate1 Θ g) :
       (μEta (Θ g)).WidthLE ((D.n : ℝ) ^ eta8 η₀) :=
     Law.WidthLE.mono (etaWidth Θ h1) hExponentCap
-  have hLambdaFilter (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
-      (∑ y, (D.M.ν i).w y *
-        if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
-          |colDeg D.E D.G μLambda y - 1 / 2| then (1 : ℝ) else 0) ≤
-        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-    rcases hStd.laws i hΛ with ⟨_, hνsupport, _, hνwidth, _⟩
-    exact hFilter D.N D.E X Y D.G μLambda (D.M.ν i) hStd.disc
-      hLambdaSupport hLambdaWidthN hνsupport hνwidth
-  have hEtaFilter (Θ : D.Hist) (h1 : D.Gate1 Θ g) (i : D.M.ι)
-      (hΛ : 0 < D.M.Λ i) :
-      (∑ y, (D.M.ν i).w y *
-        if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
-          |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2| then (1 : ℝ) else 0) ≤
-        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-    rcases hStd.laws i hΛ with ⟨_, hνsupport, _, hνwidth, _⟩
-    exact hFilter D.N D.E X Y D.G (μEta (Θ g)) (D.M.ν i) hStd.disc
-      (etaSupport Θ h1) (etaWidthN Θ h1) hνsupport hνwidth
   have rPrimePrMixture (D : Ctx η₀ β p h) (A : D.Tup → Prop) :
       D.R'.pr A =
         ∑ i, D.M.Λ i * (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
@@ -769,72 +756,426 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
         apply Finset.sum_congr rfl
         intro i _
         rw [htag i]
-  have rawCoordinateBadBound (bad : Fin D.N → Prop) (j : Fin h)
-      (hBad : ∀ i, 0 < D.M.Λ i → (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) :
-      D.R'.pr (fun ξ => bad (ξ j)) ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+  let q : ℝ := (D.n : ℝ) ^ (eta8 η₀ / 2)
+  have hqpos : 0 < q := by dsimp [q]; positivity
+  have hqbig : 10000 * ((h : ℝ)+C+1) ≤ q := hLarge
+  have hh0 : (0 : ℝ) ≤ (h : ℝ) := Nat.cast_nonneg _
+  have hq1 : 1 ≤ q := by linarith
+  have hqSq : q*q = (D.n : ℝ)^eta8 η₀ := by
+    dsimp [q]
+    rw [← Real.rpow_add (by positivity)]
+    congr 1
+    ring
+  have hBetaQ : (D.n : ℝ)^β ≤ q :=
+    Real.rpow_le_rpow_of_exponent_le hnR hBetaSmall
+  have hTauQ : (D.n : ℝ)^(tau8 η₀/2) ≤ q :=
+    Real.rpow_le_rpow_of_exponent_le hnR hTauSmall
+  have hSBound : (sC η₀ D.n : ℝ) ≤ 2*q := by
+    have hceil : (sC η₀ D.n : ℝ) < (D.n : ℝ)^tau8 η₀ + 1 := by
+      exact_mod_cast Nat.ceil_lt_add_one (Real.rpow_nonneg (Nat.cast_nonneg D.n) _)
+    have hτQ : (D.n : ℝ)^tau8 η₀ ≤ q := by
+      apply Real.rpow_le_rpow_of_exponent_le hnR
+      rw [tau8_eq]
+      linarith
+    linarith
+  have hkBound : ((crossKeys g).card : ℝ) ≤ 4*q := by
+    have hk : ((crossKeys g).card : ℝ) ≤ 2*(sC η₀ D.n : ℝ) := by
+      exact_mod_cast hCrossCard
+    linarith
+  let T : ℝ := (h : ℝ)*(D.n : ℝ)^β + (D.n : ℝ)^(tau8 η₀/2) + Real.log C
+  have hT : T ≤ (h : ℝ)*q + q + C := by
+    dsimp [T]
+    nlinarith [hBetaQ, hTauQ, hLogC]
+  have hlog4 : 0 ≤ Real.log 4 ∧ Real.log 4 ≤ 3 := by
+    constructor
+    · exact Real.log_nonneg (by norm_num)
+    · have hh := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 4)
+      norm_num at hh ⊢
+      exact hh
+  have hBudget (S : Finset D.KeyT) (hS : S ⊆ crossKeys g) :
+      T + (h : ℝ)*((S.card : ℝ)+1)*Real.log 4 ≤ (D.n : ℝ)^eta8 η₀ := by
+    have hSk : (S.card : ℝ) ≤ 4*q := by
+      have hh : (S.card : ℝ) ≤ ((crossKeys g).card : ℝ) := by
+        exact_mod_cast Finset.card_le_card hS
+      linarith
+    have hSc0 : (0 : ℝ) ≤ (S.card : ℝ) := Nat.cast_nonneg _
+    have hincr : (h : ℝ)*((S.card : ℝ)+1)*Real.log 4 ≤ 15*(h : ℝ)*q := by
+      have hh := mul_le_mul_of_nonneg_left hlog4.2
+        (mul_nonneg hh0 (by linarith : 0 ≤ (S.card : ℝ)+1))
+      nlinarith [mul_nonneg hh0 (sub_nonneg.mpr hSk), mul_nonneg hh0 (sub_nonneg.mpr hq1)]
+    rw [← hqSq]
+    have hcoef : 16*(h : ℝ)+C+1 ≤ q := by linarith
+    have hh := mul_le_mul_of_nonneg_right hcoef hqpos.le
+    nlinarith [hT, hincr]
+  let δ : ℝ := 2 / (q*q)
+  let a : ℝ := 1/2 - δ
+  let b : ℝ := 1/2 + δ
+  let ε : ℝ := 2*Real.exp (-((D.n : ℝ)^eta8 η₀))
+  have hδ0 : 0 ≤ δ := by dsimp [δ]; positivity
+  have hδsmall : δ ≤ 1/4 := by
+    dsimp [δ]
+    apply (div_le_iff₀ (mul_pos hqpos hqpos)).2
+    nlinarith
+  have ha : 0 < a := by dsimp [a]; linarith
+  have hab : a ≤ b := by dsimp [a,b]; linarith
+  have hac : 1 ≤ a * Real.exp (Real.log 4) := by
+    rw [Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+    dsimp [a]
+    linarith
+  have hε0 : 0 ≤ ε := by dsimp [ε]; positivity
+  have hδId : δ = 2*(D.n : ℝ)^(-eta8 η₀) := by
+    dsimp [δ]
+    rw [hqSq, Real.rpow_neg (Nat.cast_nonneg D.n)]
+    ring
+  have degreePr (μ : Law D.N) (y : Fin D.N) :
+      μ.pr (fun x => Hits D.E D.G x y) = colDeg D.E D.G μ y := by
+    unfold FinProb.pr colDeg
+    apply Finset.sum_congr rfl
+    intro x _
+    split_ifs <;> ring
+  have step (ν : Law D.N) (hνS : ν.SupportedIn Y) (hνW : ν.WidthLE ((D.n : ℝ)^β))
+      (μ : Law D.N) (hμS : μ.SupportedIn X) (hμW : μ.WidthLE ((D.n : ℝ)^eta8 η₀)) :
+      ν.pr (fun y => ¬ (a ≤ μ.pr (fun x => Hits D.E D.G x y) ∧
+        μ.pr (fun x => Hits D.E D.G x y) ≤ b)) ≤ ε := by
+    have hf := hFilter D.N D.E X Y D.G μ ν hStd.disc hμS hμW hνS hνW
+    have hp : ν.pr (fun y => ¬ (a ≤ μ.pr (fun x => Hits D.E D.G x y) ∧
+        μ.pr (fun x => Hits D.E D.G x y) ≤ b)) =
+        ∑ y, ν.w y * if 2*(D.n : ℝ)^(-eta8 η₀) < |colDeg D.E D.G μ y - 1/2| then 1 else 0 := by
+      simp_rw [degreePr]
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro y _
+      dsimp only
+      have he : (¬ (a ≤ colDeg D.E D.G μ y ∧ colDeg D.E D.G μ y ≤ b)) ↔
+          2*(D.n : ℝ)^(-eta8 η₀) < |colDeg D.E D.G μ y - 1/2| := by
+        rw [← hδId, lt_abs]
+        dsimp [a,b]
+        constructor
+        · intro hn
+          by_cases hlo : 1/2-δ ≤ colDeg D.E D.G μ y
+          · left; have := not_le.mp (fun hu => hn ⟨hlo,hu⟩); linarith
+          · right; have := not_le.mp hlo; linarith
+        · rintro (hh|hh) hgood <;> linarith [hgood.1, hgood.2]
+      simp only [he]
+      split_ifs <;> ring
+    rw [hp]
+    exact hf
+  have tupleBound (μ : Law D.N) (hμS : μ.SupportedIn X)
+      (hμW : μ.WidthLE ((D.n : ℝ)^eta8 η₀ - (h : ℝ)*Real.log 4)) :
+      D.R'.pr (fun ξ => ¬ (a^h ≤ μ.pr (fun x => D.hitsAll x ξ) ∧
+        μ.pr (fun x => D.hitsAll x ξ) ≤ b^h)) ≤ (h : ℝ)*ε := by
     rw [rPrimePrMixture]
     calc
-      _ ≤ ∑ i, D.M.Λ i * (2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) := by
+      _ ≤ ∑ i, D.M.Λ i * ((h : ℝ)*ε) := by
         apply Finset.sum_le_sum
         intro i _
-        by_cases hΛ : 0 < D.M.Λ i
-        · have hBadPi :
-              (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr
-                (fun ξ => bad (ξ j)) ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) :=
-            (piCoord_pr (D.M.ν i) hStd.size.1 j bad).trans_le (hBad i hΛ)
-          exact mul_le_mul_of_nonneg_left hBadPi (D.M.Λ_nonneg i)
-        · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
-          simp [hΛ0]
-      _ = 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-        calc
-          _ = (∑ i, D.M.Λ i) * (2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) := by
-            rw [← Finset.sum_mul]
-          _ = _ := by rw [D.M.Λ_sum]; ring
-  have hLambdaCoordinate (j : Fin h) :
-      D.R'.pr (fun ξ => 2 * (D.n : ℝ) ^ (-eta8 η₀) <
-        |colDeg D.E D.G μLambda (ξ j) - 1 / 2|) ≤
-        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-    let bad : Fin D.N → Prop := fun y =>
-      2 * (D.n : ℝ) ^ (-eta8 η₀) < |colDeg D.E D.G μLambda y - 1 / 2|
-    have hBadTag (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
-        (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-      have hsum := hLambdaFilter i hΛ
-      have hprob :
-        (D.M.ν i).pr bad =
-          ∑ y, (D.M.ν i).w y *
-            if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
-              |colDeg D.E D.G μLambda y - 1 / 2| then (1 : ℝ) else 0 := by
+        by_cases hi : 0 < D.M.Λ i
+        · rcases hStd.laws i hi with ⟨_,hνS,_,hνW,_⟩
+          apply mul_le_mul_of_nonneg_left _ (D.M.Λ_nonneg i)
+          simpa only [Ctx.hitsAll, Lane_sol_s08_g34.mass] using
+            Lane_sol_s08_g34.sequential (Hits D.E D.G) X ((D.n : ℝ)^eta8 η₀)
+              a b (Real.log 4) ε ha hab hac hε0 hlog4.1 h (fun _ => D.M.ν i)
+              (fun _ μ hμS hμW => step (D.M.ν i) hνS hνW μ hμS hμW)
+              μ ((D.n : ℝ)^eta8 η₀ - (h : ℝ)*Real.log 4) hμS hμW (by linarith)
+        · have hi0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hi) (D.M.Λ_nonneg i)
+          simp [hi0]
+      _ = (h : ℝ)*ε := by rw [← Finset.sum_mul, D.M.Λ_sum, one_mul]
+  have hblock : 1 ≤ a^h * Real.exp ((h : ℝ)*Real.log 4) := by
+    rw [Real.exp_nat_mul, ← mul_pow]
+    exact one_le_pow₀ hac
+  have crossBound (S : Finset D.KeyT) (hS : S ⊆ crossKeys g)
+      (μ : Law D.N) (hμS : μ.SupportedIn X) (hμW : μ.WidthLE T) :
+      (FinProb.pi (fun _ : {u // u ∈ S} => D.R')).pr (fun Θ =>
+        ¬ (a^(h*S.card) ≤ μ.pr (fun x => ∀ u : {u // u ∈ S}, D.hitsAll x (Θ u)) ∧
+          μ.pr (fun x => ∀ u : {u // u ∈ S}, D.hitsAll x (Θ u)) ≤ b^(h*S.card))) ≤
+        (S.card : ℝ)*(h : ℝ)*ε := by
+    have hh := Lane_sol_s08_g34.sequential_fintype D.hitsAll X
+      ((D.n : ℝ)^eta8 η₀ - (h : ℝ)*Real.log 4) (a^h) (b^h)
+      ((h : ℝ)*Real.log 4) ((h : ℝ)*ε) (pow_pos ha _)
+      (pow_le_pow_left₀ ha.le hab _) hblock (mul_nonneg hh0 hε0)
+      (mul_nonneg hh0 hlog4.1) (fun _ : {u // u ∈ S} => D.R')
+      (fun _ μ hμS hμW => tupleBound μ hμS hμW) μ T hμS hμW
+    have hbud : T + (Fintype.card {u // u ∈ S} : ℝ)*((h : ℝ)*Real.log 4) ≤
+        (D.n : ℝ)^eta8 η₀ - (h : ℝ)*Real.log 4 := by
+      simp only [Fintype.card_coe]
+      nlinarith [hBudget S hS]
+    simpa only [Fintype.card_coe, ← pow_mul, mul_assoc] using hh hbud
+  let A : Finset D.KeyT → ℝ := fun S => ((2 : ℝ)^(h*S.card))⁻¹
+  let massS : Law D.N → Finset D.KeyT → D.Hist → ℝ := fun μ S Θ =>
+    μ.pr (fun x => ∀ u ∈ S, D.hitsAll x (Θ u))
+  let Good : Law D.N → Finset D.KeyT → D.Hist → Prop := fun μ S Θ =>
+    A S / (11/10) ≤ massS μ S Θ ∧ massS μ S Θ ≤ (11/10)*A S
+  have halfPowers (S : Finset D.KeyT) (hS : S ⊆ crossKeys g) :
+      A S / (11/10) ≤ a^(h*S.card) ∧ b^(h*S.card) ≤ (11/10)*A S := by
+    have hSk : (S.card : ℝ) ≤ 4*q := by
+      have hh : (S.card : ℝ) ≤ ((crossKeys g).card : ℝ) := by
+        exact_mod_cast Finset.card_le_card hS
+      linarith
+    have herr : ((h*S.card : ℕ) : ℝ)*(2*δ) ≤ 1/40 := by
+      dsimp [δ]
+      push_cast
+      have hden : 0 < q*q := mul_pos hqpos hqpos
+      have heq : (h : ℝ)*(S.card : ℝ)*(2*(2/(q*q))) =
+          (4*(h : ℝ)*(S.card : ℝ))/(q*q) := by ring
+      rw [heq]
+      apply (div_le_iff₀ hden).2
+      have hmul := mul_le_mul_of_nonneg_left hSk hh0
+      have hcoef : 640*(h : ℝ) ≤ q := by linarith
+      have hcoefq := mul_le_mul_of_nonneg_right hcoef hqpos.le
+      nlinarith
+    have hp := Lane_sol_s08_g34.close_powers (2*δ) (by positivity) (h*S.card) herr
+    have haId : a = (1-2*δ)/2 := by dsimp [a]; ring
+    have hbId : b = (1+2*δ)/2 := by dsimp [b]; ring
+    have hz : (0 : ℝ) < (2 : ℝ)^(h*S.card) := by positivity
+    dsimp [A]
+    rw [haId, hbId, div_pow, div_pow]
+    constructor
+    · apply (le_div_iff₀ hz).2
+      have heq : (((2 : ℝ)^(h*S.card))⁻¹/(11/10)) * (2 : ℝ)^(h*S.card) = 10/11 := by
+        field_simp
+      rw [heq]
+      exact hp.1
+    · apply (div_le_iff₀ hz).2
+      simpa [mul_assoc, ne_of_gt hz] using hp.2
+  have relativeBound (S : Finset D.KeyT) (hS : S ⊆ crossKeys g)
+      (μ : Law D.N) (hμS : μ.SupportedIn X) (hμW : μ.WidthLE T) :
+      (FinProb.pi (fun _ : {u // u ∈ S} => D.R')).pr (fun Θ =>
+        ¬ (A S/(11/10) ≤ μ.pr (fun x => ∀ u : {u // u ∈ S}, D.hitsAll x (Θ u)) ∧
+          μ.pr (fun x => ∀ u : {u // u ∈ S}, D.hitsAll x (Θ u)) ≤ (11/10)*A S)) ≤
+        (S.card : ℝ)*(h : ℝ)*ε := by
+    apply le_trans (Lane_sol_s08_g34.pr_mono _ _ _ _) (crossBound S hS μ hμS hμW)
+    intro Θ hbad hgood
+    exact hbad ⟨(halfPowers S hS).1.trans hgood.1, hgood.2.trans (halfPowers S hS).2⟩
+  have hgnot : g ∉ crossKeys g := by
+    intro hg
+    have hh := (Finset.mem_filter.mp hg).2
+    simp [keyDist] at hh
+  have aggregateBound (S : Finset D.KeyT) (hS : S ⊆ crossKeys g)
+      (μ : D.Tup → Law D.N)
+      (hμS : ∀ Θ, D.Gate1 Θ g → (μ (Θ g)).SupportedIn X)
+      (hμW : ∀ Θ, D.Gate1 Θ g → (μ (Θ g)).WidthLE T) :
+      D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ Good (μ (Θ g)) S Θ) ≤
+        (S.card : ℝ)*(h : ℝ)*ε := by
+    apply Lane_sol_s08_g34.pi_pr_slice_bound (fun _ => D.R') S
+    intro rest
+    have hgS : g ∉ S := fun hg => hgnot (hS hg)
+    let ξ : D.Tup := rest ⟨g,hgS⟩
+    let Θfix : D.Hist := fun _ => ξ
+    let glueHist : ({u // u ∈ S} → D.Tup) → D.Hist := fun c =>
+      (Equiv.piEquivPiSubtypeProd (fun u => u ∈ S) (fun _ => D.Tup)).symm (c,rest)
+    have hgEq (c : {u // u ∈ S} → D.Tup) : glueHist c g = Θfix g := by
+      simp [glueHist, Θfix, ξ, Equiv.piEquivPiSubtypeProd_symm_apply, hgS]
+    have hGate (c : {u // u ∈ S} → D.Tup) : D.Gate1 (glueHist c) g ↔ D.Gate1 Θfix g := by
+      simp only [Ctx.Gate1, hgEq]
+    by_cases h1 : D.Gate1 Θfix g
+    · have hprob := relativeBound S hS (μ (Θfix g)) (hμS Θfix h1) (hμW Θfix h1)
+      apply le_trans (Lane_sol_s08_g34.pr_mono _ _ _ _) hprob
+      intro c hc hgood
+      apply hc.2
+      have hmass : massS (μ ((glueHist c) g)) S (glueHist c) =
+          (μ (Θfix g)).pr (fun x => ∀ u : {u // u ∈ S}, D.hitsAll x (c u)) := by
+        dsimp only [massS]
+        rw [hgEq]
+        congr 1
+        funext x
+        apply propext
+        constructor
+        · intro hh u
+          have hu := hh u.1 u.2
+          simpa [glueHist, Equiv.piEquivPiSubtypeProd_symm_apply, u.2] using hu
+        · intro hh u hu
+          simpa [glueHist, Equiv.piEquivPiSubtypeProd_symm_apply, hu] using hh ⟨u,hu⟩
+      change A S/(11/10) ≤ massS _ S _ ∧ massS _ S _ ≤ (11/10)*A S
+      rw [hmass]
+      exact hgood
+    · have hzero : (FinProb.pi (fun _ : {u // u ∈ S} => D.R')).pr
+          (fun c => D.Gate1 (glueHist c) g ∧ ¬ Good (μ ((glueHist c) g)) S (glueHist c)) = 0 := by
         unfold FinProb.pr
+        apply Finset.sum_eq_zero
+        intro c _
+        simp only [hGate c, h1, false_and, ite_false]
+      rw [hzero]
+      positivity
+  have hLamWidthT : μLambda.WidthLE T := by
+    apply Law.WidthLE.mono hLambdaWidth
+    dsimp [T]
+    have hh : 0 ≤ (h : ℝ)*(D.n : ℝ)^β + (D.n : ℝ)^(tau8 η₀/2) := by positivity
+    linarith
+  have hLam (S : Finset D.KeyT) (hS : S ⊆ crossKeys g) :
+      D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ Good μLambda S Θ) ≤
+        (S.card : ℝ)*(h : ℝ)*ε :=
+    aggregateBound S hS (fun _ => μLambda) (fun _ _ => hLambdaSupport) (fun _ _ => hLamWidthT)
+  have hEta (S : Finset D.KeyT) (hS : S ⊆ crossKeys g) :
+      D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ Good (μEta (Θ g)) S Θ) ≤
+        (S.card : ℝ)*(h : ℝ)*ε :=
+    aggregateBound S hS μEta etaSupport etaWidth
+  have mixMass (ρ : FinProb D.M.ι) (S : Finset D.KeyT) (Θ : D.Hist) :
+      massS (Law.mix ρ D.M.μ) S Θ = ∑ i, ρ.w i *
+        (∑ x, (D.M.μ i).w x * if ∀ u ∈ S, D.hitsAll x (Θ u) then 1 else 0) := by
+    dsimp [massS]
+    unfold FinProb.pr Law.mix
+    calc
+      _ = ∑ x, (∑ i, ρ.w i * (D.M.μ i).w x) *
+          (if ∀ u ∈ S, D.hitsAll x (Θ u) then (1 : ℝ) else 0) := by
         apply Finset.sum_congr rfl
-        intro y _
+        intro x _
         split_ifs <;> ring
-      rw [hprob]
-      exact hsum
-    have hcoord := rawCoordinateBadBound bad j hBadTag
-    simpa [bad] using hcoord
-  have hEtaCoordinate (Θ : D.Hist) (h1 : D.Gate1 Θ g) (j : Fin h) :
-      D.R'.pr (fun ξ => 2 * (D.n : ℝ) ^ (-eta8 η₀) <
-        |colDeg D.E D.G (μEta (Θ g)) (ξ j) - 1 / 2|) ≤
-        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-    let bad : Fin D.N → Prop := fun y =>
-      2 * (D.n : ℝ) ^ (-eta8 η₀) < |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2|
-    have hBadTag (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
-        (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
-      have hsum := hEtaFilter Θ h1 i hΛ
-      have hprob :
-        (D.M.ν i).pr bad =
-          ∑ y, (D.M.ν i).w y *
-            if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
-              |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2| then (1 : ℝ) else 0 := by
-        unfold FinProb.pr
+      _ = _ := by
+        simp_rw [Finset.sum_mul]
+        rw [Finset.sum_comm]
         apply Finset.sum_congr rfl
-        intro y _
-        split_ifs <;> ring
-      rw [hprob]
-      exact hsum
-    have hcoord := rawCoordinateBadBound bad j hBadTag
-    simpa [bad] using hcoord
-  sorry
+        intro i _
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro x _
+        ring
+  have hAmain : A (crossKeys g) = D.AG g := rfl
+  have hAomit (u : D.KeyT) (hu : u ∈ crossKeys g) : A ((crossKeys g).erase u) = (2 : ℝ)^h * D.AG g := by
+    have hcard := Finset.card_erase_add_one hu
+    have hp : (2 : ℝ)^(h*(crossKeys g).card) =
+        (2 : ℝ)^(h*((crossKeys g).erase u).card) * (2 : ℝ)^h := by
+      rw [← hcard, Nat.mul_add, Nat.mul_one, pow_add]
+    dsimp [A, Ctx.AG]
+    rw [hp]
+    field_simp
+  have gates (Θ : D.Hist)
+      (hEt : Good (μEta (Θ g)) (crossKeys g) Θ)
+      (hLt : Good μLambda (crossKeys g) Θ)
+      (hDel : ∀ u ∈ crossKeys g, Good (μEta (Θ g)) ((crossKeys g).erase u) Θ ∧
+        Good μLambda ((crossKeys g).erase u) Θ) : D.Gate34 Θ g := by
+    change _ ∧ _ ∧ _
+    have dm (i : D.M.ι) : D.dMinus Θ g i = ∑ x, (D.M.μ i).w x *
+        (if ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) then (1 : ℝ) else 0) := by
+      unfold Ctx.dMinus
+      apply Finset.sum_congr rfl
+      intro x _
+      by_cases hh : ∀ u ∈ crossKeys g, D.hitsAll x (Θ u)
+      · have hh' : D.crossHit Θ g x := hh
+        simp only [if_pos hh, if_pos hh']
+      · have hh' : ¬ D.crossHit Θ g x := hh
+        simp only [if_neg hh, if_neg hh']
+    have heMain : massS (μEta (Θ g)) (crossKeys g) Θ =
+        ∑ i, D.postW (Θ g) i * D.dMinus Θ g i := by
+      simpa only [μEta, postTag, dm] using
+        mixMass (postTag (Θ g)) (crossKeys g) Θ
+    have hlMain : massS μLambda (crossKeys g) Θ =
+        ∑ i, D.M.Λ i * D.dMinus Θ g i := by
+      simpa only [μLambda, Ctx.tagLaw, dm] using
+        mixMass D.tagLaw (crossKeys g) Θ
+    refine ⟨?_,?_,?_⟩
+    · simpa only [Good, hAmain, heMain] using hEt
+    · simpa only [Good, hAmain, hlMain] using hLt
+    · intro u hu
+      have heOmit : massS (μEta (Θ g)) ((crossKeys g).erase u) Θ =
+          ∑ i, D.postW (Θ g) i * D.dOmit Θ g u i := by
+        simpa only [μEta, postTag, Ctx.dOmit] using
+          mixMass (postTag (Θ g)) ((crossKeys g).erase u) Θ
+      have hlOmit : massS μLambda ((crossKeys g).erase u) Θ =
+          ∑ i, D.M.Λ i * D.dOmit Θ g u i := by
+        simpa only [μLambda, Ctx.tagLaw, Ctx.dOmit] using
+          mixMass D.tagLaw ((crossKeys g).erase u) Θ
+      exact ⟨by simpa only [Good, hAomit u hu, heOmit, div_mul_eq_mul_div, mul_assoc] using (hDel u hu).1,
+        by simpa only [Good, hAomit u hu, hlOmit, div_mul_eq_mul_div, mul_assoc] using (hDel u hu).2⟩
+  let BadE : Finset D.KeyT → D.Hist → Prop := fun S Θ => D.Gate1 Θ g ∧ ¬ Good (μEta (Θ g)) S Θ
+  let BadL : Finset D.KeyT → D.Hist → Prop := fun S Θ => D.Gate1 Θ g ∧ ¬ Good μLambda S Θ
+  have hbadSub (Θ : D.Hist) (hh : D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g) :
+      BadE (crossKeys g) Θ ∨ BadL (crossKeys g) Θ ∨
+        ∃ u ∈ crossKeys g, BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ := by
+    by_contra hn
+    push_neg at hn
+    apply hh.2
+    apply gates Θ
+    · by_contra he
+      exact hn.1 ⟨hh.1,he⟩
+    · by_contra hl
+      exact hn.2.1 ⟨hh.1,hl⟩
+    · intro u hu
+      constructor
+      · by_contra he
+        exact (hn.2.2 u hu).1 ⟨hh.1,he⟩
+      · by_contra hl
+        exact (hn.2.2 u hu).2 ⟨hh.1,hl⟩
+  have hUnion : D.rawHidden.pr (fun Θ => ∃ u ∈ crossKeys g,
+      BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ) ≤
+      ∑ u ∈ crossKeys g, D.rawHidden.pr (fun Θ =>
+        BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ) := by
+    classical
+    unfold FinProb.pr
+    rw [Finset.sum_comm]
+    apply Finset.sum_le_sum
+    intro Θ _
+    by_cases he : ∃ u ∈ crossKeys g, BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ
+    · rw [if_pos he]
+      obtain ⟨u,hu,hbad⟩ := he
+      apply le_trans _ (Finset.single_le_sum (fun u _ => by split_ifs <;> simp [D.rawHidden.nonneg]) hu)
+      simp [hbad]
+    · simp only [he, ite_false]
+      exact Finset.sum_nonneg fun u _ => by split_ifs <;> simp [D.rawHidden.nonneg]
+  have hRawBound : D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g) ≤
+      2*((crossKeys g).card : ℝ)*(1+((crossKeys g).card : ℝ))*(h : ℝ)*ε := by
+    have hUn := FinProb.pr_union D.rawHidden (BadE (crossKeys g))
+      (fun Θ => BadL (crossKeys g) Θ ∨ ∃ u ∈ crossKeys g,
+        BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ)
+    have hUn2 := FinProb.pr_union D.rawHidden (BadL (crossKeys g))
+      (fun Θ => ∃ u ∈ crossKeys g, BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ)
+    have hSum : (∑ u ∈ crossKeys g, D.rawHidden.pr (fun Θ =>
+        BadE ((crossKeys g).erase u) Θ ∨ BadL ((crossKeys g).erase u) Θ)) ≤
+        2*((crossKeys g).card : ℝ)^2*(h : ℝ)*ε := by
+      calc
+        _ ≤ ∑ u ∈ crossKeys g, 2*((crossKeys g).card : ℝ)*(h : ℝ)*ε := by
+          apply Finset.sum_le_sum
+          intro u hu
+          have hsub := Finset.erase_subset u (crossKeys g)
+          have he := hEta ((crossKeys g).erase u) hsub
+          have hl := hLam ((crossKeys g).erase u) hsub
+          have hh := FinProb.pr_union D.rawHidden (BadE ((crossKeys g).erase u)) (BadL ((crossKeys g).erase u))
+          have hc : (((crossKeys g).erase u).card : ℝ) ≤ ((crossKeys g).card : ℝ) := by
+            exact_mod_cast Finset.card_le_card hsub
+          have hmul := mul_le_mul_of_nonneg_right hc (mul_nonneg hh0 hε0)
+          dsimp only [BadE,BadL] at hh
+          nlinarith [he,hl,hh,hmul]
+        _ = _ := by simp [Finset.sum_const, nsmul_eq_mul]; ring
+    have hmono := Lane_sol_s08_g34.pr_mono D.rawHidden _ _ hbadSub
+    have he := hEta (crossKeys g) (Finset.Subset.refl _)
+    have hl := hLam (crossKeys g) (Finset.Subset.refl _)
+    dsimp only [BadE,BadL] at hUn hUn2
+    nlinarith [hmono,hUn,hUn2,hUnion,hSum,he,hl]
+  have hCoeff : 4*((crossKeys g).card : ℝ)*(1+((crossKeys g).card : ℝ))*(h : ℝ) ≤
+      100*((h : ℝ)+1)*q^2 := by
+    have hk0 : (0 : ℝ) ≤ ((crossKeys g).card : ℝ) := Nat.cast_nonneg _
+    have hk1 : 1+((crossKeys g).card : ℝ) ≤ 5*q := by linarith
+    have hp := mul_le_mul hkBound hk1 (by positivity : 0 ≤ 1+((crossKeys g).card : ℝ)) (by positivity : 0 ≤ 4*q)
+    have hp' := mul_le_mul_of_nonneg_right hp hh0
+    nlinarith [hp',sq_nonneg q]
+  have hTail : 100*((h : ℝ)+1)*q^2 * Real.exp (-(q*q)) ≤ Real.exp (-q) := by
+    have hBpos : 0 < 100*((h : ℝ)+1) := by positivity
+    have hlogB : Real.log (100*((h : ℝ)+1)) ≤ 100*((h : ℝ)+1) := by
+      have hh := Real.log_le_sub_one_of_pos hBpos
+      linarith
+    have hlogq : Real.log q ≤ q := by
+      have hh := Real.log_le_sub_one_of_pos hqpos
+      linarith
+    have hpoly : 100*((h : ℝ)+1)+3*q ≤ q*q := by
+      have hbig : 100*((h : ℝ)+1)+4 ≤ q := by linarith
+      have hh := mul_le_mul_of_nonneg_right hbig hqpos.le
+      nlinarith [mul_nonneg (show 0 ≤ 100*((h : ℝ)+1) by positivity) (sub_nonneg.mpr hq1)]
+    rw [show 100*((h : ℝ)+1)*q^2 =
+        Real.exp (Real.log (100*((h : ℝ)+1)*q^2)) by rw [Real.exp_log (by positivity)]]
+    rw [← Real.exp_add, Real.log_mul (ne_of_gt hBpos) (by positivity), Real.log_pow]
+    apply Real.exp_le_exp.mpr
+    norm_num only [Nat.cast_ofNat]
+    nlinarith only [hlogB, hlogq, hpoly]
+  calc
+    D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g) ≤
+        2*((crossKeys g).card : ℝ)*(1+((crossKeys g).card : ℝ))*(h : ℝ)*ε := hRawBound
+    _ = 4*((crossKeys g).card : ℝ)*(1+((crossKeys g).card : ℝ))*(h : ℝ)*Real.exp (-(q*q)) := by
+      dsimp [ε]
+      rw [← hqSq]
+      ring
+    _ ≤ 100*((h : ℝ)+1)*q^2 * Real.exp (-(q*q)) :=
+      mul_le_mul_of_nonneg_right hCoeff (Real.exp_nonneg _)
+    _ ≤ Real.exp (-q) := hTail
+    _ = Real.exp (-((D.n : ℝ)^(eta8 η₀/2))) := rfl
 
 private theorem powOneSub_le {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) (h : ℕ) :
     1 - r ^ h ≤ (h : ℝ) * (1 - r) := by

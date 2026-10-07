@@ -5494,7 +5494,129 @@ theorem oddU_uniform {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k}
     ∀ g W D, 0 < oddQ Geom H mask g W D →
       ∃ support : Finset (Fin (T.S.N k)), ∃ hs : support.Nonempty,
         ∀ y, oddU Geom H mask g W D y = (FinLaw.uniform support hs).w y := by
-  sorry
+  classical
+  intro g W D hq
+  by_cases hv : groupValid Geom H mask g W
+  · have hden0 : 0 ≤ ∑ D', tiltWeight Geom H mask g W D' :=
+      Finset.sum_nonneg fun D' _ => tiltWeight_nonneg Geom H mask g W D'
+    have hnum0 : 0 ≤ tiltWeight Geom H mask g W D :=
+      tiltWeight_nonneg Geom H mask g W D
+    have hdiv : 0 < tiltWeight Geom H mask g W D ∧
+        0 < ∑ D', tiltWeight Geom H mask g W D' := by
+      have hpos : (0 < tiltWeight Geom H mask g W D ∧
+          0 < ∑ D', tiltWeight Geom H mask g W D') ∨
+          (tiltWeight Geom H mask g W D < 0 ∧
+            ∑ D', tiltWeight Geom H mask g W D' < 0) := by
+        have hq' : 0 < tiltWeight Geom H mask g W D /
+            ∑ D', tiltWeight Geom H mask g W D' := by
+          simpa only [oddQ, if_pos hv] using hq
+        exact (div_pos_iff.mp hq')
+      rcases hpos with hpos | hneg
+      · exact hpos
+      · exact False.elim ((not_lt_of_ge hnum0) hneg.1)
+    have htw : 0 < tiltWeight Geom H mask g W D := hdiv.1
+    have hrestricted : restrictedBin Geom H mask g W D := by
+      unfold tiltWeight at htw
+      split_ifs at htw with hrestricted
+      · exact hrestricted
+      · norm_num at htw
+    have hprod : 0 < (mask g W).prior D *
+        hitMass H mask g W D (realizedList Geom H mask g W) ^ 2 := by
+      rw [tiltWeight, if_pos hrestricted] at htw
+      exact htw
+    have hprior : 0 < (mask g W).prior D := by
+      by_contra h
+      have hz : (mask g W).prior D = 0 :=
+        le_antisymm (le_of_not_gt h) ((mask g W).prior_nonneg D)
+      rw [hz, zero_mul] at hprod
+      exact (lt_irrefl 0) hprod
+    have hmass : 0 < hitMass H mask g W D (realizedList Geom H mask g W) := by
+      have hnonneg := hitMass_nonneg H mask g W D (realizedList Geom H mask g W)
+      by_contra h
+      have hz : hitMass H mask g W D (realizedList Geom H mask g W) = 0 :=
+        le_antisymm (le_of_not_gt h) hnonneg
+      rw [hz] at hprod
+      norm_num at hprod
+    have hretained := prior_pos_retained H mask g W D hprior
+    let support := (listHit H W (realizedList Geom H mask g W)).filter
+      fun y => y ∈ (mask g W).cheap D
+    have hsupport : support.Nonempty := by
+      have hform : hitMass H mask g W D (realizedList Geom H mask g W) =
+          ∑ y, if y ∈ listHit H W (realizedList Geom H mask g W)
+            then (mask g W).within D y else 0 := by
+        simp [hitMass]
+      obtain ⟨y, hy⟩ := positive_summand
+        (f := fun y : Fin (T.S.N k) =>
+          if y ∈ listHit H W (realizedList Geom H mask g W)
+          then (mask g W).within D y else 0)
+        (by rw [← hform]; exact hmass)
+      have hyhit : y ∈ listHit H W (realizedList Geom H mask g W) := by
+        by_contra hyhit
+        simp [hyhit] at hy
+      have hywithin : 0 < (mask g W).within D y := by
+        simpa [hyhit] using hy
+      have hycheap : y ∈ (mask g W).cheap D := by
+        rw [(mask g W).within_uniform D y, if_pos hretained] at hywithin
+        split_ifs at hywithin with hycheap
+        · exact hycheap
+        · norm_num at hywithin
+      exact ⟨y, Finset.mem_filter.mpr ⟨hyhit, hycheap⟩⟩
+    have hcheap_pos : 0 < ((mask g W).cheap D).card :=
+      Finset.card_pos.mpr ((mask g W).cheap_nonempty D hretained)
+    have hsupport_pos : 0 < (support.card : ℝ) := by
+      exact_mod_cast Finset.card_pos.mpr hsupport
+    have hcheap_cast_pos : 0 < ((mask g W).cheap D).card := by
+      exact_mod_cast hcheap_pos
+    have hmass_eq : hitMass H mask g W D (realizedList Geom H mask g W) =
+        (support.card : ℝ) / ((mask g W).cheap D).card := by
+      calc
+        hitMass H mask g W D (realizedList Geom H mask g W) =
+            ∑ y ∈ listHit H W (realizedList Geom H mask g W),
+              if y ∈ (mask g W).cheap D then
+                (1 : ℝ) / ((mask g W).cheap D).card else 0 := by
+          unfold hitMass
+          apply Finset.sum_congr rfl
+          intro y hy
+          rw [(mask g W).within_uniform D y, if_pos hretained]
+        _ = ∑ y ∈ support, (1 : ℝ) / ((mask g W).cheap D).card := by
+          dsimp [support]
+          rw [← Finset.sum_filter]
+        _ = (support.card : ℝ) / ((mask g W).cheap D).card := by
+          simp [div_eq_mul_inv]
+    refine ⟨support, hsupport, ?_⟩
+    intro y
+    have hcond : groupValid Geom H mask g W ∧ 0 < oddQ Geom H mask g W D := ⟨hv, hq⟩
+    rw [oddU, if_pos hcond]
+    by_cases hy : y ∈ listHit H W (realizedList Geom H mask g W)
+    · rw [if_pos hy, (mask g W).within_uniform D y, if_pos hretained]
+      by_cases hycheap : y ∈ (mask g W).cheap D
+      · have hysupport : y ∈ support := Finset.mem_filter.mpr ⟨hy, hycheap⟩
+        rw [if_pos hycheap]
+        simp only [FinLaw.uniform, hysupport]
+        simp only [if_true]
+        rw [hmass_eq]
+        field_simp [ne_of_gt hcheap_cast_pos, ne_of_gt hsupport_pos]
+        <;> ring_nf
+      · have hysupport : y ∉ support := by
+          simp [support, hy, hycheap]
+        rw [if_neg hycheap]
+        simp only [FinLaw.uniform, hysupport]
+        simp
+    · have hysupport : y ∉ support := by
+        simp [support, hy]
+      rw [if_neg hy]
+      simp only [FinLaw.uniform, hysupport]
+      simp
+  · have hprior : 0 < (mask g W).prior D := by
+      simpa [oddQ, hv] using hq
+    have hretained := prior_pos_retained H mask g W D hprior
+    refine ⟨(mask g W).cheap D,
+      (mask g W).cheap_nonempty D hretained, ?_⟩
+    intro y
+    have hcond : ¬ (groupValid Geom H mask g W ∧ 0 < oddQ Geom H mask g W D) :=
+      fun h => hv h.1
+    rw [oddU, if_neg hcond, (mask g W).within_uniform D y, if_pos hretained,
+      FinLaw.uniform]
 
 theorem odd_bin_laws (κ : CConsts) (hκ : κ.Admissible)
     (hconst : HeightConstantContract κ)

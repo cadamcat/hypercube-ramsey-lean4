@@ -1991,6 +1991,129 @@ private theorem height_good_at_max {P : Params9} {hc : HeightChoice9 P} {n : ℕ
   have hle := reach_le_height Pp A v hup
   omega
 
+private theorem height9_le_neighbor_of_no_rootScaleFailure
+    {P : Params9} {hc : HeightChoice9 P} {n : ℕ} {t s η : ℝ}
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : s ≤ 1 / 2) (hη : 0 ≤ η)
+    (hH : 0 < hc.levels n) (Pp A : Pos9 P hc n → Bool)
+    (hcounts : ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (1 / 2 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ Pp v j : ℝ))
+    (hno : ∀ root : CubeVertex n,
+      ¬ rootScaleFailure9 Finset.univ t s η (hc.levels n) Pp A root)
+    (v v' : CubeVertex n) (hvv' : _root_.hammingDist v v' ≤ 2) :
+    height9 (P := P) (hc := hc) (n := n) Pp A v ≤
+      height9 (P := P) (hc := hc) (n := n) Pp A v' + 1 := by
+  let H := hc.levels n
+  have hH' : 0 < H := hH
+  have hReach := height_reachable Pp A v
+  have hmaxle := height_le_levels Pp A v
+  obtain ⟨start, rest, hpath, hstart0, hlocal⟩ :=
+    reach9_to_heightPath Pp A v (4 * H) hReach
+  let endpoint : HeightState9 P hc n := (v, ⟨height9 (P := P) (hc := hc) (n := n) Pp A v, by omega⟩)
+  have hendpoint_mem : endpoint ∈ endpoint :: rest := by simp
+  have hstart_mem : start ∈ endpoint :: rest := by
+    exact heightPath9_start_mem hpath
+  have hstart_v : _root_.hammingDist start.1 v ≤ 4 * H := by
+    exact hlocal start hstart_mem
+  have hbadTransfer : ∀ x : HeightState9 P hc n,
+      badAt9 (P := P) (hc := hc) (n := n) Pp A x.1 x.2 →
+        scaleBad9 Finset.univ t s Pp A x := by
+    intro x hb
+    exact scaleBad9_of_badAt9_counts ht₁ ht₂ hs Pp A hcounts x hb
+  have hmetricSmall : ∀ x ∈ endpoint :: rest,
+      max (Nat.dist x.2.val start.2.val) ((_root_.hammingDist x.1 start.1 + 1) / 2) < H := by
+    intro x hx
+    by_contra hnot
+    have hge : H ≤ max (Nat.dist x.2.val start.2.val)
+        ((_root_.hammingDist x.1 start.1 + 1) / 2) := Nat.le_of_not_gt hnot
+    obtain ⟨suffix, hprefix, hsub⟩ := heightPath9_suffix hpath hx
+    have hprefix' : HeightPath9 (heightStep9 (scaleBad9 Finset.univ t s Pp A))
+        (x :: suffix) start := heightPath9_mono hbadTransfer hprefix
+    have hsite : ∀ y ∈ x :: suffix, _root_.hammingDist y.1 start.1 ≤ 16 * H := by
+      intro y hy
+      have hyorig := hsub y hy
+      have hyroot := hlocal y hyorig
+      have hrootstart := hlocal start hstart_mem
+      have hrootstart' : _root_.hammingDist v start.1 ≤ 4 * H := by
+        simpa [_root_.hammingDist_comm] using hrootstart
+      have htri := _root_.hammingDist_triangle y.1 v start.1
+      calc
+        _root_.hammingDist y.1 start.1 ≤ _root_.hammingDist y.1 v +
+            _root_.hammingDist v start.1 := htri
+        _ ≤ 4 * H + 4 * H := Nat.add_le_add hyroot hrootstart'
+        _ ≤ 16 * H := by omega
+    have hlevel : ∀ y ∈ x :: suffix, Nat.dist y.2.val start.2.val ≤ 8 * H := by
+      intro y hy
+      have _hyorig := hsub y hy
+      have hylt := y.2.isLt
+      rw [hstart0, Nat.dist_zero_right]
+      omega
+    have hrise : (start.2.val : ℝ) ≤ (x.2.val : ℝ) + η * (H : ℝ) := by
+      rw [hstart0]
+      have hxnonneg : 0 ≤ (x.2.val : ℝ) := Nat.cast_nonneg _
+      have hHnonneg : 0 ≤ (H : ℝ) := Nat.cast_nonneg _
+      exact le_trans (by norm_num) (add_nonneg hxnonneg (mul_nonneg hη hHnonneg))
+    have hfail := rootScaleFailure9_of_path Pp A v start x suffix
+      (hstart_v.trans (by omega))
+      hprefix' hsite hlevel hge hrise
+    exact (hno v) hfail
+  have hspatialBound : ∀ x ∈ endpoint :: rest,
+      _root_.hammingDist x.1 start.1 ≤ 2 * H - 2 := by
+    intro x hx
+    have hm := hmetricSmall x hx
+    have hsp := lt_of_le_of_lt (Nat.le_max_right _ _) hm
+    omega
+  have hstartEndpoint : _root_.hammingDist start.1 v ≤ 2 * H - 2 := by
+    have h := hspatialBound endpoint hendpoint_mem
+    simpa [endpoint, _root_.hammingDist_comm] using h
+  have hstartV' : _root_.hammingDist start.1 v' ≤
+      _root_.hammingDist start.1 v + _root_.hammingDist v v' :=
+    _root_.hammingDist_triangle start.1 v v'
+  have hlocal' : ∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 v' ≤ 4 * H := by
+    intro x hx
+    have hxstart := hspatialBound x hx
+    calc
+      _root_.hammingDist x.1 v' ≤ _root_.hammingDist x.1 start.1 +
+          _root_.hammingDist start.1 v' := _root_.hammingDist_triangle x.1 start.1 v'
+      _ ≤ (2 * H - 2) + ((2 * H - 2) + 2) := by omega
+      _ ≤ 4 * H := by omega
+  obtain ⟨endpt, hendpt, hreachAtV'⟩ :=
+    heightPath9_to_reach9 Pp A v' (4 * H) hpath hstart0 hlocal'
+  have hendpt' : endpt = endpoint := by simpa using hendpt.symm
+  subst endpt
+  by_cases hzero : height9 (P := P) (hc := hc) (n := n) Pp A v = 0
+  · simp [hzero]
+  · have hpos : 1 ≤ height9 (P := P) (hc := hc) (n := n) Pp A v := by omega
+    have hreachLow : Reach9 (P := P) (hc := hc) (n := n) Pp A v'
+        (4 * H) v' (height9 (P := P) (hc := hc) (n := n) Pp A v - 1) := by
+      exact Reach9.down v v' (height9 (P := P) (hc := hc) (n := n) Pp A v - 1)
+        (by simpa [Nat.sub_add_cancel hpos] using hreachAtV')
+        (by simp)
+        hvv'
+    have hle := reach_le_height Pp A v' hreachLow
+    omega
+
+private theorem height9_lipschitz_of_no_rootScaleFailure
+    {P : Params9} {hc : HeightChoice9 P} {n : ℕ} {t s η : ℝ}
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : s ≤ 1 / 2) (hη : 0 ≤ η)
+    (hH : 0 < hc.levels n) (Pp A : Pos9 P hc n → Bool)
+    (hcounts : ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (1 / 2 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ Pp v j : ℝ))
+    (hno : ∀ root : CubeVertex n,
+      ¬ rootScaleFailure9 Finset.univ t s η (hc.levels n) Pp A root)
+    (v v' : CubeVertex n) (hvv' : _root_.hammingDist v v' ≤ 2) :
+    Nat.dist (height9 (P := P) (hc := hc) (n := n) Pp A v)
+      (height9 (P := P) (hc := hc) (n := n) Pp A v') ≤ 1 := by
+  have hforward := height9_le_neighbor_of_no_rootScaleFailure
+    ht₁ ht₂ hs hη hH Pp A hcounts hno v v' hvv'
+  have hsymm : _root_.hammingDist v' v ≤ 2 := by
+    simpa [_root_.hammingDist_comm] using hvv'
+  have hbackward := height9_le_neighbor_of_no_rootScaleFailure
+    ht₁ ht₂ hs hη hH Pp A hcounts hno v' v hsymm
+  unfold Nat.dist
+  omega
+
 theorem goodHeights_of_no_top_reach {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool)
     (hnot : ∀ v : CubeVertex n,

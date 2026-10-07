@@ -1,4 +1,6 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_n3
+import HypercubeRamsey.S18.Nodes_sol_fix_surv
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
 import HypercubeRamsey.S18.Nodes_q_s18_dl
@@ -602,12 +604,10 @@ theorem L18_2i {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
         TransferGeometry X → SurvivalFacts X := by
   classical
-  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T] with k hcell
+  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T,
+    Lane_sol_fix_surv.survival_moments_eventually hκ T] with k hcell hmoments
   intro PT hPT D hD X hgeom
-  refine ⟨hcell PT hPT D hD X hgeom, ?_⟩
-  constructor
-  · sorry
-  · sorry
+  exact ⟨hcell PT hPT D hD X hgeom, hmoments PT hPT D hD X hgeom⟩
 
 /-- L18.2j, 18:500–524. Cylinder identity for the actual adaptive recurrence. -/
 theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}

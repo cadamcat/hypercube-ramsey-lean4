@@ -65,8 +65,20 @@ theorem L5_1g_common_high_law {Data Ref : Type*} [Fintype Data] [Fintype Ref]
   intro d hd
   classical
   by_cases hRef : Nonempty Ref
-  · -- The nonempty-reference case needs the finite separation argument.
-    sorry
+  · by_cases hSub : Subsingleton Ref
+    · let c₀ : Ref := Classical.choice hRef
+      letI : Unique Ref := ⟨⟨c₀⟩, fun c => hSub.elim c c₀⟩
+      let price : Ref → ℝ := fun _ => 1
+      have hprice_nonneg : ∀ c, 0 ≤ price c := fun _ => by simp [price]
+      have hprice_sum : ∑ c : Ref, price c = 1 := by simp [price]
+      obtain ⟨R, hcap, hsupp, hcost⟩ := M.price_feasible d hd price hprice_nonneg hprice_sum
+      refine ⟨R, hcap, hsupp, ?_⟩
+      intro c
+      have hc : c = default := hSub.elim _ _
+      rw [hc]
+      simpa [price] using hcost
+    · -- Multiple references require the finite separation argument.
+      sorry
   · haveI : IsEmpty Ref := ⟨fun c => hRef ⟨c⟩⟩
     obtain ⟨R, hcap, hsupp⟩ := M.capped_feasible d hd
     refine ⟨R, hcap, hsupp, ?_⟩

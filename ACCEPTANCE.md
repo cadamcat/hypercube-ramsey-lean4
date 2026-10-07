@@ -1,6 +1,6 @@
 # Acceptance record
 
-The exact 129-declaration command from the lane `BRIEF.md` was run against `runs/frozen/s05v2.json` after the `Stages.lean` proof edit.
+The exact 129-declaration command from the lane `BRIEF.md` was run against `runs/frozen/s05v2.json` after the final `Stages.lean` proof edit (including the singleton-reference case).
 
 Command:
 
@@ -20,4 +20,4 @@ All 129 declarations kept their frozen types. `other_errors` was empty. Five dec
 - `HypercubeRamsey.Setup5.L5_1l3`
 - `HypercubeRamsey.L5_1g_common_high_law`
 
-For the first four, `sorryAx` comes from the proof body at `Centres.lean:239`, `:313`, `:371`, and `:419`, respectively. For the common high-law theorem, the remaining own `sorry` is at `Stages.lean:69`; its failure-bound conjunct and empty-reference case are proved at lines 64–74.
+For the first four, `sorryAx` comes from the proof body at `Centres.lean:239`, `:313`, `:371`, and `:419`, respectively. For the common high-law theorem, the remaining own `sorry` is at `Stages.lean:81`; its failure-bound conjunct, singleton-reference case, and empty-reference case are proved at lines 64–86.

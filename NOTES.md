@@ -4,8 +4,8 @@
 
 - Read `../../BRIEF-COMMON-LUNA.md`; worktree branch is `lane/q-s05-centre`.
 - Owned proof holes: `L5_1j`, `L5_1g_rows`, `L5_1k_rows`, `L5_1l3` in `S05/Centres.lean`, and `L5_1g_common_high_law` in `S05/Stages.lean`.
-- The common-high-law proof now handles the direct failure bound and empty-reference case. Four center theorems and the nonempty-reference separation step remain open.
-- Acceptance was run after the proof edit and is summarized in `ACCEPTANCE.md`; exit status 1 with only these five own `sorryAx` failures.
+- The common-high-law proof now handles the direct failure bound, empty-reference case, and singleton-reference case. Four center theorems and the multi-reference separation step remain open.
+- Acceptance was rerun after the final proof edit and is summarized in `ACCEPTANCE.md`; exit status 1 with only these five own `sorryAx` failures.
 - Next: resume with the finite separation proof in the high-law theorem, then the four center constructions. Frozen statements/definitions must remain untouched.
 
 ## Dependency audit (2026-10-07)
@@ -17,8 +17,8 @@
 
 ## Partial proof and acceptance (2026-10-07)
 
-- `Stages.lean` now proves the failure-bound conjunct of `L5_1g_common_high_law` by `M.failure_bound` and handles `IsEmpty Ref` from `M.capped_feasible`; the remaining `sorry` is only the nonempty-reference simultaneous-cost/separation argument (line 69).
-- `lake env lean HypercubeRamsey/S05/Stages.lean` succeeded after that edit (warnings include the remaining `sorry`).
+- `Stages.lean` now proves the failure-bound conjunct of `L5_1g_common_high_law` by `M.failure_bound`, handles `IsEmpty Ref` from `M.capped_feasible`, and uses `price_feasible` for a singleton reference; the remaining `sorry` is the multi-reference simultaneous-cost/separation argument (line 81).
+- `lake env lean HypercubeRamsey/S05/Stages.lean` succeeded after the latest proof edit (warnings include the remaining `sorry`).
 - Required acceptance rerun after the edit: exit status 1. All 129 frozen declarations retained their types, and `other_errors` was empty. The only failures are the five owned proof holes: `L5_1g_rows`, `L5_1j`, `L5_1k_rows`, `L5_1l3`, `L5_1g_common_high_law`; each prints `sorryAx` in addition to `propext`, `Classical.choice`, `Quot.sound`. No false-statement counterexample was established for these current s05v2 contracts.
 - The four `Centres.lean` target bodies remain at lines 239, 313, 371, 419. They need, respectively, the centre marking/height success construction; high row selection and its support/cost/locality transfer; low posterior-selection row construction; and the odd-column load concentration argument.
-- Before finalizing: commit `ACCEPTANCE.md`, updated `NOTES.md`, and `LOG.md`; then write `REPORT.md` as the final file action.
+- Before finalizing: commit the latest `Stages.lean` edit and updated acceptance/state records; then write `REPORT.md` as the final file action.

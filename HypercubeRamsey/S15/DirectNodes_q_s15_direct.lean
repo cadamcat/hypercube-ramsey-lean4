@@ -1900,6 +1900,97 @@ theorem star_card_eq_dimension {T : Stage} {k : ℕ}
     omega
   exact Nat.le_antisymm (star_card_le a) hle
 
+private theorem cubeAdj_eq_cubeFlip {n : ℕ} {v w : CubeVertex n}
+    (h : (cube n).Adj v w) : ∃ j : Fin n, w = cubeFlip v j := by
+  classical
+  change hammingDist v w = 1 at h
+  unfold hammingDist at h
+  obtain ⟨j, hj⟩ := Finset.card_eq_one.mp h
+  have hjmem : j ∈ Finset.univ.filter (fun q : Fin n => v q ≠ w q) := by
+    rw [hj]
+    simp
+  have hdiff : v j ≠ w j := (Finset.mem_filter.mp hjmem).2
+  have hsame : ∀ q : Fin n, q ≠ j → v q = w q := by
+    intro q hq
+    by_contra hne
+    have hqmem : q ∈ Finset.univ.filter (fun r : Fin n => v r ≠ w r) :=
+      Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+    have hqEq : q = j := by
+      rw [hj] at hqmem
+      simpa using hqmem
+    exact hq hqEq
+  refine ⟨j, ?_⟩
+  funext q
+  by_cases hq : q = j
+  · subst q
+    have hcoord : cubeFlip v j j = !v j := by simp [cubeFlip, Function.update_self]
+    rw [hcoord]
+    cases hv : v j <;> cases hw : w j <;> simp_all
+  · simp [cubeFlip, hq, hsame q hq]
+
+theorem highDirect_crossingNeighbours_card_le_prefix {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : S15.EvenPosition T k) (i : Fin PT.tiling.m)
+    (hi : S15.patchAt PT hPT a.1 = i) :
+    (S15.crossingNeighbours PT hPT a).card ≤ (PT.tiling.P i).ℓ := by
+  classical
+  let ell := (PT.tiling.P i).ℓ
+  let C := S15.crossingNeighbours PT hPT a
+  have haLeaf : a.1 ∈ PT.tiling.leaf i := by
+    have h : a.1 ∈ PT.tiling.leaf (S15.patchAt PT hPT a.1) := by
+      dsimp [S15.patchAt]
+      exact (Classical.choose_spec (hPT.tiling_valid.prefix_complete a.1)).1
+    rw [hi] at h
+    exact h
+  let coord (b : {b : S15.OddPosition T k // b ∈ C}) : Fin (T.S.n k) :=
+    Classical.choose (cubeAdj_eq_cubeFlip (by
+      have hb := (Finset.mem_filter.mp b.2).2.1
+      simpa [S15.Adjacent] using hb))
+  have hflip (b : {b : S15.OddPosition T k // b ∈ C}) :
+      b.1.1 = cubeFlip a.1 (coord b) :=
+    Classical.choose_spec (cubeAdj_eq_cubeFlip (by
+      have hb := (Finset.mem_filter.mp b.2).2.1
+      simpa [S15.Adjacent] using hb))
+  have hcoord_lt (b : {b : S15.OddPosition T k // b ∈ C}) :
+      (coord b).val < ell := by
+    by_contra hnot
+    have hjge : ell ≤ (coord b).val := Nat.le_of_not_gt hnot
+    have hbLeaf : b.1.1 ∈ PT.tiling.leaf i := by
+      rw [hflip b]
+      change ∀ q : Fin (T.S.n k), q.val < ell →
+        cubeFlip a.1 (coord b) q = PT.tiling.w i q
+      intro q hq
+      have hqne : q ≠ coord b := by
+        intro heq
+        have hval := congrArg Fin.val heq
+        omega
+      simpa [cubeFlip, hqne] using haLeaf q hq
+    have hbPatch : S15.patchAt PT hPT b.1.1 = i := by
+      dsimp [S15.patchAt]
+      exact ((Classical.choose_spec
+        (hPT.tiling_valid.prefix_complete b.1.1)).2 i hbLeaf).symm
+    have hcrossne := (Finset.mem_filter.mp b.2).2.2
+    rw [hbPatch, hi] at hcrossne
+    exact hcrossne rfl
+  let f : {b : S15.OddPosition T k // b ∈ C} → Fin ell := fun b =>
+    ⟨(coord b).val, hcoord_lt b⟩
+  have hf : Function.Injective f := by
+    intro b1 b2 heq
+    have hval : (coord b1).val = (coord b2).val := by
+      simpa [f] using congrArg Fin.val heq
+    have hcoord : coord b1 = coord b2 := Fin.ext hval
+    have hverts : b1.1.1 = b2.1.1 := by
+      rw [hflip b1, hflip b2, hcoord]
+    apply Subtype.ext
+    apply Subtype.ext
+    exact hverts
+  have hcardSub : Fintype.card {b : S15.OddPosition T k // b ∈ C} ≤ ell :=
+    by simpa using Fintype.card_le_of_injective f hf
+  calc
+    C.card = Fintype.card {b : S15.OddPosition T k // b ∈ C} :=
+      (Fintype.card_coe C).symm
+    _ ≤ ell := hcardSub
+
 theorem evenPatchPositions_card_eq {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (i : Fin PT.tiling.m)
     (hle : (PT.tiling.P i).ℓ < T.S.n k) :

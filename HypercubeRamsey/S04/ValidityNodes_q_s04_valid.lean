@@ -699,6 +699,38 @@ private theorem tupleLabels_cons {k N m : ℕ} (a : Fin k → Fin N)
     tupleLabels (Fin.cons a W) = finToList a ++ tupleLabels W := by
   simp [tupleLabels, finToList]
 
+private theorem tupleLabels_snoc {k N m : ℕ} (W : Fin (m + 1) → Fin k → Fin N) :
+    tupleLabels W = tupleLabels (Fin.init W) ++ finToList (W (Fin.last m)) := by
+  rw [← Fin.snoc_init_self W]
+  change (List.ofFn (fun i : Fin (m + 1) =>
+      finToList (Fin.snoc (Fin.init W) (W (Fin.last m)) i))).flatten = _
+  rw [List.ofFn_succ']
+  simp [Fin.snoc_castSucc, Fin.snoc_last, finToList, List.flatten, tupleLabels]
+
+private theorem tupleLabels_split_last {k N m : ℕ} (W : Fin m → Fin k → Fin N)
+    (last : Fin m) (hlast : last.val + 1 = m) :
+    tupleLabels W = tupleLabels (prefixVals W last) ++ finToList (W last) := by
+  let q := last.val
+  let V : Fin (q + 1) → Fin k → Fin N := fun i => W (Fin.cast hlast i)
+  have hOfFn : List.ofFn (fun i : Fin m => finToList (W i)) =
+      List.ofFn (fun i : Fin (q + 1) => finToList (W (Fin.cast hlast i))) :=
+    List.ofFn_congr hlast.symm _
+  have hInit : Fin.init V = prefixVals W last := by
+    funext j
+    apply congrArg W
+    apply Fin.ext
+    rfl
+  have hLast : V (Fin.last q) = W last := by
+    apply congrArg W
+    apply Fin.ext
+    rfl
+  calc
+    tupleLabels W = tupleLabels V := by
+      change (List.ofFn (fun i : Fin m => finToList (W i))).flatten = _
+      simpa [tupleLabels, V] using congrArg List.flatten hOfFn
+    _ = tupleLabels (Fin.init V) ++ finToList (V (Fin.last q)) := tupleLabels_snoc V
+    _ = tupleLabels (prefixVals W last) ++ finToList (W last) := by rw [hInit, hLast]
+
 private noncomputable def OuterFirstBad {N m k : ℕ} (E : Fin N → Fin N → Prop)
     (G : Colour) (L : ℝ) (P : Law N) (W : Fin m → Fin k → Fin N) : Prop :=
   ∃ i : Fin m, GoodPath E G L P (tupleLabels (prefixVals W i)) ∧
@@ -900,6 +932,23 @@ private theorem FirstBad_append {N : ℕ} (E : Fin N → Fin N → Prop) (G : Co
             (not_GoodPath_iff_FirstBad E G L (residualAfter E G P xs) ys).mpr hbad
           exact fun hboth => hnot hboth.2
 
+private theorem FirstBad_tupleLabels_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (L : ℝ) (P : Law N) (W : Fin m → Fin k → Fin N) :
+    FirstBad E G L P (tupleLabels W) ↔ OuterFirstBad E G L P W := by
+  induction m generalizing P with
+  | zero =>
+      simp [tupleLabels, OuterFirstBad, FirstBad]
+  | succ m ih =>
+      let a := W 0
+      let tail : Fin m → Fin k → Fin N := fun i => W i.succ
+      have hW : W = Fin.cons a tail := by
+        funext i
+        cases i using Fin.cases <;> simp [a, tail]
+      rw [hW, tupleLabels_cons, FirstBad_append]
+      have hIH := ih (residualAfter E G P (finToList a)) tail
+      rw [hIH]
+      exact (OuterFirstBad_cons_iff E G L P a tail).symm
+
 private theorem cond_supportedIn {N : ℕ} (P : Law N) (A : Fin N → Prop)
     (h : 0 < P.pr A) {Y : Finset (Fin N)}
     (hP : Law.SupportedIn P Y) : Law.SupportedIn (P.cond A h) Y := by
@@ -1030,6 +1079,70 @@ private theorem pr_HitsList_lower {N : ℕ} (E : Fin N → Fin N → Prop) (G : 
         _ = P.pr (fun y => Hits E G x y ∧ HitsList E G xs y) := hprob.symm
         _ = P.pr (HitsList E G (x :: xs)) := by rw [← hlist]
 
+private theorem pr_HitsList_append {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (P : Law N) (xs ys : List (Fin N)) (L : ℝ)
+    (hgood : GoodPath E G L P (xs ++ ys)) :
+    P.pr (HitsList E G (xs ++ ys)) =
+      P.pr (HitsList E G xs) * (residualAfter E G P xs).pr (HitsList E G ys) := by
+  induction xs generalizing P with
+  | nil => simp [HitsList, residualAfter, FinProb.pr, P.sum_eq_one]
+  | cons x xs ih =>
+      change Real.exp (-L) ≤ P.pr (fun y => Hits E G x y) ∧
+        GoodPath E G L (safeCond P (fun y => Hits E G x y)) (xs ++ ys) at hgood
+      have hmass : 0 < P.pr (fun y => Hits E G x y) :=
+        lt_of_lt_of_le (Real.exp_pos _) hgood.1
+      have hsafe : safeCond P (fun y => Hits E G x y) =
+          P.cond (fun y => Hits E G x y) hmass := by simp [safeCond, hmass]
+      have htail : GoodPath E G L (P.cond (fun y => Hits E G x y) hmass) (xs ++ ys) := by
+        rw [← hsafe]
+        exact hgood.2
+      have hIH := ih (P.cond (fun y => Hits E G x y) hmass) htail
+      have hres : residualAfter E G P (x :: xs) =
+          residualAfter E G (P.cond (fun y => Hits E G x y) hmass) xs := by
+        change residualAfter E G (safeCond P (fun y => Hits E G x y)) xs = _
+        rw [hsafe]
+      have hFullEvent : HitsList E G (x :: (xs ++ ys)) =
+          (fun y => Hits E G x y ∧ HitsList E G (xs ++ ys) y) := by
+        funext y
+        simp [HitsList]
+      have hBaseEvent : HitsList E G (x :: xs) =
+          (fun y => Hits E G x y ∧ HitsList E G xs y) := by
+        funext y
+        simp [HitsList]
+      have hFull := pr_inter_eq_mul_cond P (fun y => Hits E G x y)
+        (HitsList E G (xs ++ ys)) hmass
+      have hBase := pr_inter_eq_mul_cond P (fun y => Hits E G x y)
+        (HitsList E G xs) hmass
+      calc
+        P.pr (HitsList E G (x :: xs ++ ys)) =
+            P.pr (fun y => Hits E G x y ∧ HitsList E G (xs ++ ys) y) := by
+              rw [List.cons_append, hFullEvent]
+        _ = P.pr (fun y => Hits E G x y) *
+              (P.cond (fun y => Hits E G x y) hmass).pr (HitsList E G (xs ++ ys)) := hFull
+        _ = P.pr (fun y => Hits E G x y) *
+              ((P.cond (fun y => Hits E G x y) hmass).pr (HitsList E G xs) *
+                (residualAfter E G (P.cond (fun y => Hits E G x y) hmass) xs).pr
+                  (HitsList E G ys)) := by rw [hIH]
+        _ = P.pr (HitsList E G (x :: xs)) *
+              (residualAfter E G P (x :: xs)).pr (HitsList E G ys) := by
+              calc
+                P.pr (fun y => Hits E G x y) *
+                    ((P.cond (fun y => Hits E G x y) hmass).pr (HitsList E G xs) *
+                      (residualAfter E G (P.cond (fun y => Hits E G x y) hmass) xs).pr
+                        (HitsList E G ys)) =
+                    (P.pr (fun y => Hits E G x y) *
+                      (P.cond (fun y => Hits E G x y) hmass).pr (HitsList E G xs)) *
+                      (residualAfter E G (P.cond (fun y => Hits E G x y) hmass) xs).pr
+                        (HitsList E G ys) := by ring
+                _ = P.pr (fun y => Hits E G x y ∧ HitsList E G xs y) *
+                      (residualAfter E G (P.cond (fun y => Hits E G x y) hmass) xs).pr
+                        (HitsList E G ys) := by rw [← hBase]
+                _ = P.pr (HitsList E G (x :: xs)) *
+                      (residualAfter E G (P.cond (fun y => Hits E G x y) hmass) xs).pr
+                        (HitsList E G ys) := by rw [← hBaseEvent]
+                _ = P.pr (HitsList E G (x :: xs)) *
+                      (residualAfter E G P (x :: xs)).pr (HitsList E G ys) := by rw [← hres]
+
 private theorem HitsList_tupleLabels_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
     (G : Colour) (W : Fin m → Fin k → Fin N) (y : Fin N) :
     HitsList E G (tupleLabels W) y ↔ ∀ i j, Hits E G (W i j) y := by
@@ -1046,9 +1159,9 @@ private abbrev RelevantTuple {β γ : ℝ} {n : ℕ} (u : OddRole n)
   {ck : Loc β γ n × Key β γ n // ck ∈ D ×ˢ Zset β γ u}
 
 private theorem HitsList_tupleLaw_iff {β γ : ℝ} {n N : ℕ}
-    {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
-    (u : OddRole n) (D : Finset (Loc β γ n))
-    (e : Fin (D.card * (Zset β γ u).card) ≃ RelevantTuple u D)
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (u : OddRole n) (D : Finset (Loc β γ n)) (m : ℕ)
+    (e : Fin m ≃ RelevantTuple u D)
     (W : Tuples β γ n N) (y : Fin N) :
     HitsList E G (tupleLabels (fun i => W (e i).1)) y ↔
       HitsAll E G W D (Zset β γ u) y := by
@@ -1060,6 +1173,193 @@ private theorem HitsList_tupleLaw_iff {β γ : ℝ} {n N : ℕ}
   · intro h i j
     rcases Finset.mem_product.mp (e i).2 with ⟨hc, hκ⟩
     exact h (e i).1.1 hc (e i).1.2 hκ j
+
+private theorem HitsBut_tuplePrefix_iff {β γ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (u : OddRole n) (D : Finset (Loc β γ n)) (m : ℕ)
+    (e : Fin m ≃ RelevantTuple u D) (last : Fin m)
+    (hlastVal : last.val + 1 = m) (target : RelevantTuple u D) (hlast : e last = target)
+    (W : Tuples β γ n N) (y : Fin N) :
+    HitsBut E G W D (Zset β γ u) target.1.1 target.1.2 y ↔
+      HitsList E G (tupleLabels (prefixVals (fun i => W (e i).1) last)) y := by
+  have hList := HitsList_tupleLabels_iff E G
+    (prefixVals (fun i : Fin m => W (e i).1) last) y
+  rw [hList]
+  constructor
+  · intro h i j
+    let r : Fin m := ⟨i.val, Nat.lt_trans i.isLt last.isLt⟩
+    have hrne : r ≠ last := by
+      intro heq
+      have hval := congrArg Fin.val heq
+      dsimp [r] at hval
+      omega
+    have hpairne : (e r).1 ≠ target.1 := by
+      intro heq
+      apply hrne
+      apply e.injective
+      exact Subtype.ext heq |>.trans hlast.symm
+    rcases Finset.mem_product.mp (e r).2 with ⟨hc, hκ⟩
+    have hhit := h (e r).1.1 hc (e r).1.2 hκ hpairne j
+    simpa [r, prefixVals] using hhit
+  · intro h c hc κ hκ hne j
+    let q : RelevantTuple u D := ⟨(c, κ), Finset.mem_product.mpr ⟨hc, hκ⟩⟩
+    let r : Fin m := e.symm q
+    have hqne : q ≠ target := by
+      intro hEq
+      apply hne
+      exact congrArg Subtype.val hEq
+    have hrne : r ≠ last := by
+      intro hr
+      apply hqne
+      calc
+        q = e r := (Equiv.apply_symm_apply e q).symm
+        _ = e last := congrArg e hr
+        _ = target := hlast
+    have hrlt : r.val < last.val := by
+      have hrltm := r.isLt
+      have hlastm : last.val < m := last.isLt
+      omega
+    let jp : Fin last.val := ⟨r.val, hrlt⟩
+    have hprefix : prefixVals (fun i : Fin m => W (e i).1) last jp =
+        (W (e r).1) := by
+      simp [prefixVals, jp, r]
+    have her : e r = q := Equiv.apply_symm_apply e q
+    have hW : W (e r).1 = W (c, κ) := by
+      have hval := congrArg Subtype.val her
+      simpa [q] using congrArg W hval
+    have hhit := h jp j
+    rw [hprefix, hW] at hhit
+    exact hhit
+
+private theorem pr_congr {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (A B : Ω → Prop) (h : ∀ ω, A ω ↔ B ω) : P.pr A = P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  simp [h ω]
+
+private theorem mass_fail_implies_outerFirstBad {β γ : ℝ} {G : Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι)
+    (ym : YMasks M tag) (u : OddRole n) (D : Finset (Loc β γ n)) (m : ℕ)
+    (hcount : m = D.card * (Zset β γ u).card)
+    (e : Fin m ≃ RelevantTuple u D)
+    (W : Tuples β γ n N)
+    (hMass : (maskLaw (ym u)).pr
+        (HitsAll E G W D (Zset β γ u)) <
+      Real.exp (-(capL β γ n * (tupLen β γ n : ℝ) * (D.card : ℝ) *
+        ((Zset β γ u).card : ℝ)))) :
+    OuterFirstBad E G (capL β γ n)
+      (maskLaw (ym u))
+      (fun i => W (e i).1) := by
+  classical
+  let P₀ := maskLaw (ym u)
+  let V : Fin m → Fin (tupLen β γ n) → Fin N :=
+    fun i => W (e i).1
+  have hHits : P₀.pr (HitsAll E G W D (Zset β γ u)) =
+      P₀.pr (HitsList E G (tupleLabels V)) := by
+    apply pr_congr P₀
+    intro y
+    exact (HitsList_tupleLaw_iff u D m e W y).symm
+  by_contra hnot
+  have hGood : GoodPath E G (capL β γ n) P₀ (tupleLabels V) := by
+    by_contra hbad
+    have hfirst := (not_GoodPath_iff_FirstBad E G (capL β γ n) P₀
+      (tupleLabels V)).mp hbad
+    exact hnot ((FirstBad_tupleLabels_iff E G (capL β γ n) P₀ V).mp hfirst)
+  have hLower := pr_HitsList_lower E G P₀ (tupleLabels V) (capL β γ n) hGood
+  have hExp : Real.exp (-((tupleLabels V).length : ℝ) * capL β γ n) =
+      Real.exp (-(capL β γ n * (tupLen β γ n : ℝ) * (D.card : ℝ) *
+        ((Zset β γ u).card : ℝ))) := by
+    congr 1
+    rw [tupleLabels_length]
+    rw [hcount]
+    push_cast
+    ring
+  rw [hHits] at hMass
+  rw [← hExp] at hMass
+  exact (not_lt_of_ge hLower) hMass
+
+private theorem cross_fail_implies_outerFirstBad {β γ : ℝ} {G : Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι)
+    (ym : YMasks M tag) (u : OddRole n) (D : Finset (Loc β γ n)) (m : ℕ)
+    (e : Fin m ≃ RelevantTuple u D) (last : Fin m)
+    (hlast : last.val + 1 = m) (target : RelevantTuple u D) (he : e last = target)
+    (W : Tuples β γ n N) (hown : target.1.2 ≠ key β γ n u.1)
+    (hCross : (maskLaw (ym u)).pr (HitsAll E G W D (Zset β γ u)) <
+      ratioThr β γ u target.1.2 *
+        (maskLaw (ym u)).pr
+          (HitsBut E G W D (Zset β γ u) target.1.1 target.1.2)) :
+    OuterFirstBad E G (capL β γ n) (maskLaw (ym u)) (fun i => W (e i).1) := by
+  classical
+  let P₀ := maskLaw (ym u)
+  let V : Fin m → Fin (tupLen β γ n) → Fin N := fun i => W (e i).1
+  let base := tupleLabels (prefixVals V last)
+  let targetLabels := finToList (V last)
+  have hsplit : tupleLabels V = base ++ targetLabels :=
+    tupleLabels_split_last V last hlast
+  by_contra hnot
+  have hGood : GoodPath E G (capL β γ n) P₀ (tupleLabels V) := by
+    by_contra hbad
+    have hfirst := (not_GoodPath_iff_FirstBad E G (capL β γ n) P₀ (tupleLabels V)).mp hbad
+    exact hnot ((FirstBad_tupleLabels_iff E G (capL β γ n) P₀ V).mp hfirst)
+  have hGood' : GoodPath E G (capL β γ n) P₀ (base ++ targetLabels) := by
+    simpa [base, targetLabels, hsplit] using hGood
+  have hParts := (GoodPath_append E G (capL β γ n) P₀ base targetLabels).1 hGood'
+  have hAll : P₀.pr (HitsAll E G W D (Zset β γ u)) =
+      P₀.pr (HitsList E G (tupleLabels V)) := by
+    apply pr_congr P₀
+    intro y
+    exact (HitsList_tupleLaw_iff u D m e W y).symm
+  have hBut :
+      P₀.pr (HitsBut E G W D (Zset β γ u) target.1.1 target.1.2) =
+        P₀.pr (HitsList E G base) := by
+    apply pr_congr P₀
+    intro y
+    simpa [base, V] using (HitsBut_tuplePrefix_iff u D m e last hlast target he W y)
+  have hTargetLower := pr_HitsList_lower E G
+    (residualAfter E G P₀ base) targetLabels (capL β γ n) hParts.2
+  have hbasePos : 0 < P₀.pr (HitsList E G base) := by
+    exact lt_of_lt_of_le (Real.exp_pos _)
+      (pr_HitsList_lower E G P₀ base (capL β γ n) hParts.1)
+  have hbaseNonneg : 0 ≤ P₀.pr (HitsList E G base) := hbasePos.le
+  have hmassAppend := pr_HitsList_append E G P₀ base targetLabels (capL β γ n) hGood'
+  have hbound :
+      Real.exp (-((tupLen β γ n : ℝ) * capL β γ n)) *
+          P₀.pr (HitsList E G base) ≤ P₀.pr (HitsList E G (tupleLabels V)) := by
+    have htailLen : (targetLabels.length : ℝ) = tupLen β γ n := by
+      simp [targetLabels, finToList]
+    have htailExp : Real.exp (-(targetLabels.length : ℝ) * capL β γ n) =
+        Real.exp (-((tupLen β γ n : ℝ) * capL β γ n)) := by
+      rw [htailLen]
+      congr 1
+      ring
+    have htailLower :
+        Real.exp (-((tupLen β γ n : ℝ) * capL β γ n)) ≤
+          (residualAfter E G P₀ base).pr (HitsList E G targetLabels) := by
+      simpa [htailLen] using hTargetLower
+    calc
+      Real.exp (-((tupLen β γ n : ℝ) * capL β γ n)) *
+          P₀.pr (HitsList E G base) ≤
+        P₀.pr (HitsList E G base) *
+          (residualAfter E G P₀ base).pr (HitsList E G targetLabels) := by
+            calc
+              _ = P₀.pr (HitsList E G base) *
+                  Real.exp (-((tupLen β γ n : ℝ) * capL β γ n)) := by ring
+              _ ≤ _ := mul_le_mul_of_nonneg_left htailLower hbaseNonneg
+      _ = P₀.pr (HitsList E G (base ++ targetLabels)) := hmassAppend.symm
+      _ = P₀.pr (HitsList E G (tupleLabels V)) := by rw [← hsplit]
+  have hCross' :
+      P₀.pr (HitsAll E G W D (Zset β γ u)) <
+        Real.exp (-((tupLen β γ n : ℝ) * capL β γ n)) *
+          P₀.pr (HitsList E G base) := by
+    have hCross'' := hCross
+    rw [hBut] at hCross''
+    simpa [P₀, ratioThr, hown, mul_comm, mul_left_comm, mul_assoc] using hCross''
+  rw [hAll] at hCross'
+  exact (not_lt_of_ge hbound) hCross'
 
 private theorem exists_fin_equiv_last {α : Type*} [Fintype α] [DecidableEq α] (a : α) :
     ∃ (e : Fin (Fintype.card α) ≃ α) (last : Fin (Fintype.card α)),

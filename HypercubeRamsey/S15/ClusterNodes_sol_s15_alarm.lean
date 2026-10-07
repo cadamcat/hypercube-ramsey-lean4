@@ -1245,4 +1245,97 @@ theorem cluster_crossing_removed_eventually (κ : CConsts) (hκ : κ.Admissible)
       mul_le_mul_of_nonneg_right htail (Real.exp_pos _).le
     _ = _ := by rw [← Real.exp_add]; congr 1; ring
 
+
+/-- A fixed-length encoding avoids dependent casts when comparing outside words. -/
+private def slice_encoding (PT : ProfiledTiling κ T k) (s : ClusterSlice PT) : Position T k :=
+  fun j => if hj : j.val < T.S.n k - (PT.tiling.P s.1).h then s.2.1 ⟨j.val, hj⟩ else false
+
+private theorem slice_eq_gives_outside_coordinate
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (v v' : Position T k) (hv : patchAt PT hPT v = i) (hv' : patchAt PT hPT v' = i)
+    (hs : clusterSliceAt PT hPT v = clusterSliceAt PT hPT v')
+    (j : Fin (T.S.n k)) (hj : j.val < T.S.n k - (PT.tiling.P i).h) : v j = v' j := by
+  have he := congrArg (fun s => slice_encoding PT s j) hs
+  simpa [slice_encoding, clusterSliceAt, outsideWord, hv, hv', hj] using he
+
+private theorem dependent_apply_heq {A : Type*} {B : A → Type*}
+    (f : ∀ a, B a) {a b : A} (h : a = b) : HEq (f a) (f b) := by
+  cases h
+  rfl
+
+private theorem slice_eq_of_outside_word_eq
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (v v' : Position T k) (hv : patchAt PT hPT v = i) (hv' : patchAt PT hPT v' = i)
+    (he : outsideWord PT hPT i v = outsideWord PT hPT i v') :
+    clusterSliceAt PT hPT v = clusterSliceAt PT hPT v' := by
+  let V := fun i : Fin PT.tiling.m => CubePos (T.S.n k - (PT.tiling.P i).h)
+  let p : ∀ i, V i → Prop := fun i o => ∀ j : Fin (T.S.n k - (PT.tiling.P i).h),
+    j.val < (PT.tiling.P i).ℓ →
+      o j = PT.tiling.w i ⟨j.val, lt_of_lt_of_le j.isLt (Nat.sub_le _ _)⟩
+  have hfst := hv.trans hv'.symm
+  apply Sigma.ext hfst
+  apply (Subtype.heq_iff_coe_heq (congrArg V hfst) (dependent_apply_heq p hfst)).mpr
+  have hleft := dependent_apply_heq (fun j => outsideWord PT hPT j v) hv
+  have hright := dependent_apply_heq (fun j => outsideWord PT hPT j v') hv'
+  exact (hleft.trans (heq_of_eq he)).trans hright.symm
+
+private theorem outsideWord_flip_internal
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (v : Position T k) (j : Fin (T.S.n k)) (hj : T.S.n k - (PT.tiling.P i).h ≤ j.val) :
+    outsideWord PT hPT i (flipPos v j) = outsideWord PT hPT i v := by
+  funext l
+  have hne : (⟨l.val, lt_of_lt_of_le l.isLt (Nat.sub_le _ _)⟩ : Fin (T.S.n k)) ≠ j := by
+    intro h
+    have hv := congrArg Fin.val h
+    have hl := l.isLt
+    simp only at hv
+    omega
+  simp [outsideWord, flipPos, Function.update_of_ne hne]
+
+/-- Every odd neighbour is a single-coordinate flip of its even center. -/
+theorem adjacent_eq_flip (a : EvenPosition T k) (b : OddPosition T k) (hab : Adjacent a b) :
+    ∃ j : Fin (T.S.n k), b.1 = flipPos a.1 j := by
+  let D : Finset (Fin (T.S.n k)) := Finset.univ.filter fun j => a.1 j ≠ b.1 j
+  have hD : D.card = 1 := by simpa [D, Adjacent, OAI.HypercubeRamsey.cube, _root_.hammingDist] using hab
+  obtain ⟨j, hj⟩ := Finset.card_eq_one.mp hD
+  have hdiff : a.1 j ≠ b.1 j := by
+    have hmem : j ∈ D := by rw [hj]; simp
+    exact (Finset.mem_filter.mp hmem).2
+  refine ⟨j, ?_⟩
+  funext l
+  by_cases hl : l = j
+  · subst l
+    cases ha : a.1 j <;> cases hb : b.1 j <;> simp_all [flipPos]
+  · have heq : a.1 l = b.1 l := by
+      by_contra h
+      have hmem : l ∈ D := Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩
+      rw [hj] at hmem
+      exact hl (Finset.mem_singleton.mp hmem)
+    simp [flipPos, Function.update_of_ne hl, heq]
+
+/-- Bulk neighbours flip an outside coordinate, so their raw slices are pairwise distinct. -/
+theorem cluster_bulk_slices_injective
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : EvenPosition T k) :
+    Set.InjOn (fun b : OddPosition T k => clusterSliceAt PT hPT b.1)
+      (↑(clusterBulkNeighbours PT hPT a) : Set (OddPosition T k)) := by
+  intro b hb b' hb' hs
+  have hb0 := (Finset.mem_filter.mp hb).2
+  have hb1 := (Finset.mem_filter.mp hb').2
+  obtain ⟨j, hjflip⟩ := adjacent_eq_flip a b hb0.1
+  obtain ⟨j', hjflip'⟩ := adjacent_eq_flip a b' hb1.1
+  let i := patchAt PT hPT a.1
+  have hjout : j.val < T.S.n k - (PT.tiling.P i).h := by
+    by_contra h
+    have hout : outsideWord PT hPT i b.1 = outsideWord PT hPT i a.1 := by
+      rw [hjflip]
+      exact outsideWord_flip_internal PT hPT i a.1 j (le_of_not_gt h)
+    exact hb0.2.2 (slice_eq_of_outside_word_eq PT hPT i b.1 a.1 hb0.2.1 rfl hout)
+  have he := slice_eq_gives_outside_coordinate PT hPT i b.1 b'.1 hb0.2.1 hb1.2.1 hs j hjout
+  have hjj : j = j' := by
+    by_contra h
+    rw [hjflip, hjflip'] at he
+    cases ha : a.1 j <;> simp [flipPos, Function.update_of_ne h, ha] at he
+  apply Subtype.ext
+  rw [hjflip, hjflip', hjj]
+
 end HypercubeRamsey.Lane_sol_s15_alarm

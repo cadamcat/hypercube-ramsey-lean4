@@ -429,6 +429,11 @@ theorem p92_masks {P : Params9} {n N : ℕ} {M : TagMix N} (E : Fin N → Fin N 
       (Lane_q_s09_tag.finite_mask_minimax (siteSecond9 Sbase b.1) δ hδpos hδle (R b) (hR b)) y
   let maskLaw : OddSites9 n → FinProb (Finset (Fin N)) :=
     fun b => FinProb.map (pick b) Subtype.val
+  let Sfinal : Setup9 P n N M := ⟨tag, maskLaw⟩
+  have hAction (b : OddSites9 n) (A : Finset (Fin N)) :
+      Lane_q_s09_tag.tagActionLaw_q_s09_tag (I := I) Sfinal E G b A = R b A := by
+    exact Lane_q_s09_tag.tagActionLaw_eq_of_tag_eq_q_s09_tag
+      Sfinal Sbase E G b A rfl
   refine ⟨maskLaw, ?_⟩
   unfold MasksOK9
   constructor
@@ -447,7 +452,29 @@ theorem p92_masks {P : Params9} {n N : ℕ} {M : TagMix N} (E : Fin N → Fin N 
       simp [hno a]
     exact hweight (by simpa [maskLaw] using hzero)
   · intro b y
-    -- The pointwise mean is the action mixture selected by `finite_mask_minimax`.
-    sorry
+    have hmap :
+        ∑ A, (maskLaw b).w A * (R b A).w y =
+          ∑ a, (pick b).w a * (R b a.1).w y := by
+      calc
+        ∑ A, (maskLaw b).w A * (R b A).w y =
+            (FinProb.map (pick b) Subtype.val).expect (fun A => (R b A).w y) := rfl
+        _ = (pick b).expect (fun a => (R b a.1).w y) :=
+          FinProb.map_expect (pick b) Subtype.val (fun A => (R b A).w y)
+        _ = _ := rfl
+    have hmean :
+        (rawRowLaw9 Sfinal I E G b).w y =
+          ∑ a, (pick b).w a * (R b a.1).w y := by
+      rw [Lane_q_s09_tag.rawRowLaw_eq_mask_mix_q_s09_tag (I := I) Sfinal E G b]
+      simp only [Law.mix]
+      calc
+        ∑ A, (maskLaw b).w A *
+            (Lane_q_s09_tag.tagActionLaw_q_s09_tag (I := I) Sfinal E G b A).w y =
+            ∑ A, (maskLaw b).w A * (R b A).w y := by
+          apply Finset.sum_congr rfl
+          intro A hA
+          rw [hAction]
+        _ = ∑ a, (pick b).w a * (R b a.1).w y := hmap
+    rw [hmean]
+    simpa [Sfinal, Sbase, δ, siteSecond9] using hpick b y
 
 end HypercubeRamsey

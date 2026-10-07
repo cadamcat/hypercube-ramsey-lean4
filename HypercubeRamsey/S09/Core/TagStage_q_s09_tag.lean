@@ -7,6 +7,29 @@ open Classical Filter OAI.HypercubeRamsey
 open scoped BigOperators
 set_option maxHeartbeats 0
 
+private theorem finProb_ext_q_s09_tag {Ω : Type*} [Fintype Ω]
+    {P Q : FinProb Ω} (h : ∀ ω, P.w ω = Q.w ω) : P = Q := by
+  cases P with
+  | mk pw pn ps =>
+    cases Q with
+    | mk qw qn qs =>
+      have hpw : pw = qw := funext h
+      subst qw
+      have hpn : pn = qn := Subsingleton.elim _ _
+      have hps : ps = qs := Subsingleton.elim _ _
+      cases hpn
+      cases hps
+      rfl
+
+private theorem finProb_nonempty_q_s09_tag {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) : Nonempty Ω := by
+  classical
+  by_contra h
+  letI : IsEmpty Ω := ⟨fun ω => h ⟨ω⟩⟩
+  have hzero : (∑ ω, P.w ω) = 0 := by simp
+  rw [P.sum_eq_one] at hzero
+  norm_num at hzero
+
 theorem pi_expect_prod {ι : Type*} [Fintype ι] [DecidableEq ι]
     {α : ι → Type*} [∀ i, Fintype (α i)]
     (P : ∀ i, FinProb (α i)) (f : ∀ i, α i → ℝ) :
@@ -336,6 +359,33 @@ noncomputable def tagActionLaw_q_s09_tag {P : Params9} {n N : ℕ} {M : TagMix N
     (b : OddSites9 n) (A : Finset (Fin N)) : Law N :=
   Law.mix (FinProb.pi (fun v : tagAnchorSites_q_s09_tag I => inputLaw9 S I v.1))
     (fun a => rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b)
+
+theorem tagActionLaw_eq_of_tag_eq_q_s09_tag {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S S' : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (b : OddSites9 n) (A : Finset (Fin N)) (hTag : S.tag = S'.tag) :
+    tagActionLaw_q_s09_tag (I := I) S E G b A =
+      tagActionLaw_q_s09_tag (I := I) S' E G b A := by
+  classical
+  have hinput (i : tagAnchorSites_q_s09_tag I) :
+      inputLaw9 S I i.1 = inputLaw9 S' I i.1 := by
+    obtain ⟨c, _, hci⟩ := Finset.mem_image.mp i.2
+    rw [← hci]
+    simp [inputLaw9, hTag]
+    rfl
+  have hinputFun :
+      (fun i : tagAnchorSites_q_s09_tag I => inputLaw9 S I i.1) =
+        (fun i : tagAnchorSites_q_s09_tag I => inputLaw9 S' I i.1) := funext hinput
+  have hrow (a : ∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1) :
+      rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b =
+        rowLaw9 S' E G (tagAnchorOutcome_q_s09_tag a b A) b := by
+    simp [rowLaw9, maskedLaw9, siteSecond9, hTag]
+  apply finProb_ext_q_s09_tag
+  intro y
+  simp only [tagActionLaw_q_s09_tag, Law.mix]
+  rw [hinputFun]
+  apply Finset.sum_congr rfl
+  intro a _
+  rw [hrow a]
 
 theorem flipWord_involutive {m : ℕ} (z : CubeVertex m) (j : Fin m) :
     flipWord9 (flipWord9 z j) j = z := by
@@ -714,5 +764,247 @@ theorem tag_first_width_budget (P : Params9) (hP : P.Valid) (hA : P.CoreAdmissib
         ring
       rw [← hWunfold]
       exact hfinal.le
+
+noncomputable def tagRowCoords_q_s09_tag {P : Params9} {n : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n) : Finset (I.ID ⊕ OddSites9 n) :=
+  insert (Sum.inr b) (tagAnchorSites_q_s09_tag I)
+
+private theorem tagRowCoords_anchor_mem {P : Params9} {n : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n) (c : I.ID) :
+    Sum.inl c ∈ tagRowCoords_q_s09_tag I b := by
+  apply Finset.mem_insert_of_mem
+  exact Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩
+
+private theorem tagRowCoords_mask_mem {P : Params9} {n : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n) : Sum.inr b ∈ tagRowCoords_q_s09_tag I b :=
+  Finset.mem_insert_self _ _
+
+private def tagRowCoordsToPair_q_s09_tag {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n)
+    (x : ∀ i : tagRowCoords_q_s09_tag I b, Val9 I N i.1) :
+    (∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1) × Finset (Fin N) :=
+  (fun i => x ⟨i.1, Finset.mem_insert_of_mem i.2⟩,
+    x ⟨Sum.inr b, tagRowCoords_mask_mem I b⟩)
+
+private def tagRowCoordsFromPair_q_s09_tag {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n)
+    (q : (∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1) × Finset (Fin N)) :
+    ∀ i : tagRowCoords_q_s09_tag I b, Val9 I N i.1 := fun i =>
+  match i.1 with
+  | Sum.inl c => q.1 ⟨Sum.inl c,
+      Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩⟩
+  | Sum.inr b' => if b' = b then q.2 else (∅ : Finset (Fin N))
+
+noncomputable def tagRowCoordsEquiv_q_s09_tag {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n) :
+    (∀ i : tagRowCoords_q_s09_tag I b, Val9 I N i.1) ≃
+      ((∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1) × Finset (Fin N)) where
+  toFun := tagRowCoordsToPair_q_s09_tag I b
+  invFun := tagRowCoordsFromPair_q_s09_tag I b
+  left_inv := by
+    intro x
+    funext i
+    rcases i with ⟨v, hv⟩
+    cases v with
+    | inl c => simp [tagRowCoordsToPair_q_s09_tag, tagRowCoordsFromPair_q_s09_tag]
+    | inr b' =>
+        have hb : b' = b := by
+          rcases Finset.mem_insert.mp hv with heq | hanc
+          · exact Sum.inr.inj heq
+          · rcases Finset.mem_image.mp hanc with ⟨c, _, hc⟩
+            cases hc
+        subst b'
+        simp [tagRowCoordsToPair_q_s09_tag, tagRowCoordsFromPair_q_s09_tag]
+  right_inv := by
+    rintro ⟨a, A⟩
+    apply Prod.ext
+    · funext i
+      rcases i with ⟨v, hv⟩
+      cases v with
+      | inl c => simp [tagRowCoordsToPair_q_s09_tag, tagRowCoordsFromPair_q_s09_tag]
+      | inr b' =>
+          rcases Finset.mem_image.mp hv with ⟨c, _, hc⟩
+          cases hc
+    · simp [tagRowCoordsToPair_q_s09_tag, tagRowCoordsFromPair_q_s09_tag]
+
+noncomputable def tagRowIndexEquiv_q_s09_tag {P : Params9} {n : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n) :
+    tagRowCoords_q_s09_tag I b ≃ I.ID ⊕ PUnit.{1} where
+  toFun i :=
+    match i.1 with
+    | Sum.inl c => Sum.inl c
+    | Sum.inr _ => Sum.inr PUnit.unit
+  invFun j :=
+    match j with
+    | Sum.inl c => ⟨Sum.inl c, tagRowCoords_anchor_mem I b c⟩
+    | Sum.inr _ => ⟨Sum.inr b, tagRowCoords_mask_mem I b⟩
+  left_inv := by
+    intro i
+    rcases i with ⟨v, hv⟩
+    cases v with
+    | inl c => rfl
+    | inr b' =>
+        have hb : b' = b := by
+          rcases Finset.mem_insert.mp hv with heq | hanc
+          · exact Sum.inr.inj heq
+          · rcases Finset.mem_image.mp hanc with ⟨c, _, hc⟩
+            cases hc
+        subst b'
+        rfl
+  right_inv := by
+    intro j
+    cases j with
+    | inl c => rfl
+    | inr u => rfl
+
+private noncomputable def tagAnchorIndexEquiv_q_s09_tag {P : Params9} {n : ℕ}
+    (I : IDMap9 P n) : I.ID ≃ tagAnchorSites_q_s09_tag I where
+  toFun c := ⟨Sum.inl c, Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩⟩
+  invFun i := Classical.choose (Finset.mem_image.mp i.2)
+  left_inv c := by
+    have hmem : Sum.inl c ∈ tagAnchorSites_q_s09_tag I :=
+      Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩
+    have heq := (Classical.choose_spec (Finset.mem_image.mp hmem)).2
+    exact Sum.inl.inj heq
+  right_inv i := by
+    apply Subtype.ext
+    exact (Classical.choose_spec (Finset.mem_image.mp i.2)).2
+
+@[simp] theorem tagRowCoordsEquiv_symm_anchor_q_s09_tag {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n)
+    (a : ∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1) (A : Finset (Fin N))
+    (c : I.ID) :
+    (tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A)
+        ⟨Sum.inl c, tagRowCoords_anchor_mem I b c⟩ =
+      a ⟨Sum.inl c, Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩⟩ := by
+  change tagRowCoordsFromPair_q_s09_tag I b (a, A)
+      ⟨Sum.inl c, tagRowCoords_anchor_mem I b c⟩ = _
+  simp [tagRowCoordsFromPair_q_s09_tag]
+
+@[simp] theorem tagRowCoordsEquiv_symm_mask_q_s09_tag {P : Params9} {n N : ℕ}
+    (I : IDMap9 P n) (b : OddSites9 n)
+    (a : ∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1) (A : Finset (Fin N)) :
+    (tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A)
+        ⟨Sum.inr b, tagRowCoords_mask_mem I b⟩ = A := by
+  change tagRowCoordsFromPair_q_s09_tag I b (a, A)
+      ⟨Sum.inr b, tagRowCoords_mask_mem I b⟩ = _
+  simp [tagRowCoordsFromPair_q_s09_tag]
+  rfl
+
+theorem rawRowLaw_eq_mask_mix_q_s09_tag {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (b : OddSites9 n) :
+    rawRowLaw9 S I E G b =
+      Law.mix (S.maskLaw b) (fun A => tagActionLaw_q_s09_tag (I := I) S E G b A) := by
+  classical
+  apply finProb_ext_q_s09_tag
+  intro y
+  let U := tagRowCoords_q_s09_tag I b
+  let anchorP := FinProb.pi
+    (fun i : tagAnchorSites_q_s09_tag I => inputLaw9 S I i.1)
+  let f : Outcome9 I N → ℝ := fun ω => (rowLaw9 S E G ω b).w y
+  let ω₀ : Outcome9 I N := Classical.choice
+    (finProb_nonempty_q_s09_tag (FinProb.pi (inputLaw9 S I)))
+  have hf : FinProb.DependsOn f U := by
+    intro ω ω' hagree
+    apply congrArg (fun μ : Law N => μ.w y)
+    apply rowLaw9_ext_q_s09_tag S E G b
+    · intro c
+      exact hagree (Sum.inl c) (tagRowCoords_anchor_mem I b c)
+    · exact hagree (Sum.inr b) (tagRowCoords_mask_mem I b)
+  have hglue := pi_expect_glue (inputLaw9 S I) U f ω₀ hf
+  have hleft : (rawRowLaw9 S I E G b).w y = (FinProb.pi (inputLaw9 S I)).expect f := by
+    simp [rawRowLaw9, Law.mix, rawLaw9, FinProb.expect, f]
+  rw [hleft, ← hglue]
+  change (∑ x : (∀ i : U, Val9 I N i.1),
+      (∏ i : U, (inputLaw9 S I i.1).w (x i)) * f (S07.glue U ω₀ x)) = _
+  rw [← Equiv.sum_comp (tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm
+      (fun x => (∏ i : U, (inputLaw9 S I i.1).w (x i)) * f (S07.glue U ω₀ x))]
+  rw [Fintype.sum_prod_type]
+  change (∑ a : (∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1),
+      ∑ A : Finset (Fin N),
+        (∏ i : U, (inputLaw9 S I i.1).w
+          ((tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A) i)) *
+          f (S07.glue U ω₀ ((tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A)))) = _
+  simp only [FinProb.expect, anchorP, tagActionLaw_q_s09_tag, Law.mix, f]
+  have hright :
+      (∑ A : Finset (Fin N), (S.maskLaw b).w A *
+        ∑ a : (∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1),
+          anchorP.w a * (rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b).w y) =
+      ∑ a : (∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1),
+        ∑ A : Finset (Fin N),
+          ((S.maskLaw b).w A * anchorP.w a) *
+            (rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b).w y := by
+    calc
+      _ = ∑ A : Finset (Fin N),
+          ∑ a : (∀ i : tagAnchorSites_q_s09_tag I, Val9 I N i.1),
+            ((S.maskLaw b).w A * anchorP.w a) *
+              (rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b).w y := by
+        apply Finset.sum_congr rfl
+        intro A hA
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro a ha
+        ring
+      _ = _ := by rw [Finset.sum_comm]
+  rw [hright]
+  apply Fintype.sum_congr
+  intro a
+  apply Fintype.sum_congr
+  intro A
+  have hweight :
+      (∏ i : U, (inputLaw9 S I i.1).w
+          ((tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A) i)) =
+        (S.maskLaw b).w A * anchorP.w a := by
+    let ei := tagRowIndexEquiv_q_s09_tag I b
+    let qa := (tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A)
+    let g : I.ID ⊕ PUnit.{1} → ℝ := fun j =>
+      let i := ei.symm j
+      (inputLaw9 S I i.1).w (qa i)
+    have hanchor :
+        anchorP.w a = ∏ c : I.ID,
+          (M.μ (S.tag c.slice)).w
+            (a ⟨Sum.inl c, Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩⟩) := by
+      symm
+      calc
+        (∏ c : I.ID, (M.μ (S.tag c.slice)).w
+            (a ⟨Sum.inl c, Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩⟩)) =
+            ∏ i : tagAnchorSites_q_s09_tag I, (inputLaw9 S I i.1).w (a i) := by
+          exact Fintype.prod_equiv (tagAnchorIndexEquiv_q_s09_tag I) _ _ (by
+            intro c
+            simp [tagAnchorIndexEquiv_q_s09_tag, inputLaw9])
+        _ = anchorP.w a := by simp [anchorP, FinProb.pi]
+    calc
+      (∏ i : U, (inputLaw9 S I i.1).w (qa i)) =
+          ∏ j : I.ID ⊕ PUnit.{1}, g j :=
+        Fintype.prod_equiv ei _ _ (by
+          intro j
+          dsimp [g]
+          rw [ei.symm_apply_apply])
+      _ = (S.maskLaw b).w A * anchorP.w a := by
+        rw [Fintype.prod_sum_type]
+        simp [g, ei, tagRowIndexEquiv_q_s09_tag, qa,
+          tagRowCoordsEquiv_symm_anchor_q_s09_tag, tagRowCoordsEquiv_symm_mask_q_s09_tag,
+          inputLaw9, hanchor, mul_comm]
+  have hrowLaw :
+      rowLaw9 S E G (S07.glue U ω₀ ((tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A))) b =
+        rowLaw9 S E G (tagAnchorOutcome_q_s09_tag a b A) b := by
+    apply rowLaw9_ext_q_s09_tag S E G b
+    · intro c
+      dsimp [anc9]
+      change (S07.glue (tagRowCoords_q_s09_tag I b) ω₀
+          ((tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A))) (Sum.inl c) = _
+      rw [S07.glue]
+      simp only [dif_pos (tagRowCoords_anchor_mem I b c)]
+      exact tagRowCoordsEquiv_symm_anchor_q_s09_tag I b a A c
+    · dsimp [msk9]
+      change (S07.glue (tagRowCoords_q_s09_tag I b) ω₀
+          ((tagRowCoordsEquiv_q_s09_tag (N := N) I b).symm (a, A))) (Sum.inr b) = _
+      rw [S07.glue]
+      simp only [dif_pos (tagRowCoords_mask_mem I b)]
+      rw [tagRowCoordsEquiv_symm_mask_q_s09_tag]
+      simp [tagAnchorOutcome_q_s09_tag]
+      rfl
+  rw [hweight, hrowLaw]
 
 end HypercubeRamsey.Lane_q_s09_tag

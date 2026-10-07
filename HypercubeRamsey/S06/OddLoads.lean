@@ -3,6 +3,7 @@ import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadB
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadA
 import HypercubeRamsey.S06.OddLoads_opus_hjoint
+import HypercubeRamsey.S06.OddLoads_sol_s06_loadC
 
 /-!
 # Odd loads through the three histories, and the additional even history mean
@@ -1187,7 +1188,11 @@ theorem L6_1k_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 randomness; their means are the long means; caps handle close repeats. -/
 theorem L6_1k_centres (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.OddRowBounds → X.OddCentreLoad := by
-  refine ⟨2, 0, ?_⟩
+  have hp₀ : 0 < p₀ := hadm.2.2.1
+  obtain ⟨nNear, hNear⟩ := Filter.eventually_atTop.1
+    (Lane_sol_s06_loadC.residual_near_bounds_eventually
+      (γ := γ) (p₀ := p₀) (K := K) hp₀)
+  refine ⟨max nNear 10, 0, ?_⟩
   intro n N E G M X hLarge hRows H hH hLong
   have hRow0 (C : X.Centre) (u : CubeVertex n) (y : Fin N) :
       0 ≤ (N : ℝ) * X.oddRow H C u y :=
@@ -1203,8 +1208,180 @@ theorem L6_1k_centres (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     unfold Ctx6.longMean FinProb.expect
     simp_rw [Finset.mul_sum]
     rw [Finset.sum_comm]
-  -- Remaining: spatial scopes of long rows and the scattered-moment union estimate.
-  sorry
+  have hFactor (U : Finset (CubeVertex n)) (y : Fin N)
+      (hsep : ∀ u ∈ U, ∀ v ∈ U, u ≠ v →
+        Lane_sol_s06_loadC.separationRadius X < X.g.L.residualDist u v) :
+      (X.centreLaw H).expect (fun C => ∏ u ∈ U, Lane_sol_s06_loadC.rowTerm X H u y C) =
+        ∏ u ∈ U, (X.centreLaw H).expect (Lane_sol_s06_loadC.rowTerm X H u y) :=
+    Lane_sol_s06_loadC.rowTerm_expect_prod X H U y hsep
+  have hnNear : nNear ≤ n := le_trans (le_max_left _ _) hLarge.1
+  have hn10 : 10 ≤ n := le_trans (le_max_right _ _) hLarge.1
+  have hn4 : 4 ≤ n := by omega
+  have hnpos : 0 < n := by omega
+  have hKpos : 0 < K := hadm.2.2.2
+  have hCkh0 : 0 ≤ Ckh K := by unfold Ckh Ckb; positivity
+  let P := X.centreLaw H
+  let Zfun : CubeVertex n → Fin N → X.Centre → ℝ := Lane_sol_s06_loadC.rowTerm X H
+  let dfun (u : CubeVertex n) (y : Fin N) := P.expect (Zfun u y)
+  let succ : Finset X.Centre := Finset.univ
+  let cap : ℝ := 10 * Real.exp ((55 / 100 : ℝ) * n)
+  let fraction : ℝ := Real.exp (-(56 / 100 : ℝ) * n)
+  let near (u : CubeVertex n) : Finset (CubeVertex n) :=
+    Finset.univ.filter fun v => X.g.L.residualDist u v ≤ Lane_sol_s06_loadC.separationRadius X
+  let average (C : X.Centre) (y : Fin N) :=
+    (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, Zfun u y C
+  have hZ0 : ∀ u y C, 0 ≤ Zfun u y C := by
+    intro u y C
+    by_cases hu : IsEvenRole u
+    · simp [Zfun, Lane_sol_s06_loadC.rowTerm, hu]
+    · simpa [Zfun, Lane_sol_s06_loadC.rowTerm, hu] using hRow0 C u y
+  have hCap0 : 0 ≤ cap := by dsimp [cap]; positivity
+  have hZCap : ∀ u y C, C ∈ succ → Zfun u y C ≤ cap := by
+    intro u y C _
+    by_cases hu : IsEvenRole u
+    · simpa [Zfun, Lane_sol_s06_loadC.rowTerm, hu] using hCap0
+    · simpa only [Zfun, Lane_sol_s06_loadC.rowTerm, if_neg hu] using
+        (hCap C u hu y).trans (Lane_sol_s06_loadC.odd_cap_le X hn4)
+  have hD0 : ∀ u y, 0 ≤ dfun u y := by
+    intro u y
+    unfold dfun FinProb.expect
+    exact Finset.sum_nonneg fun C _ => mul_nonneg (P.nonneg C) (hZ0 u y C)
+  have hFraction0 : 0 ≤ fraction := by dsimp [fraction]; positivity
+  have hNearCount (u : CubeVertex n) :
+      ((near u).card : ℝ) ≤ fraction * Fintype.card (CubeVertex n) := by
+    exact (hNear n hnNear N E G M X u).1
+  have hSmall : (n : ℝ) * fraction * cap ≤ 1 :=
+    (hNear n hnNear N E G M X (fun _ => false)).2
+  have hSelf : ∀ u, u ∈ near u := by
+    intro u
+    simp [near, ChunkLayout6.residualDist]
+  have hResidualComm (u v : CubeVertex n) :
+      X.g.L.residualDist u v = X.g.L.residualDist v u := by
+    unfold ChunkLayout6.residualDist
+    apply congrArg Finset.card
+    apply Finset.filter_congr
+    intro a _
+    exact ne_comm
+  have hRoleCard : X.oddRoles.card = 2 ^ (n - 1) := by
+    have hpar := (parity_class_card hnpos).2
+    have hOddEq : X.oddRoles = Finset.univ \ evenRoleSet n := by
+      ext u
+      simp [Ctx6.oddRoles, evenRoleSet]
+    rw [hOddEq]
+    exact hpar
+  have hCubeCardR : (Fintype.card (CubeVertex n) : ℝ) = (2 : ℝ) ^ n := by simp
+  have hRoleCardR : (X.oddRoles.card : ℝ) = (2 : ℝ) ^ (n - 1) := by exact_mod_cast hRoleCard
+  have hPowNat : (2 : ℕ) ^ n = 2 * 2 ^ (n - 1) := by
+    calc
+      2 ^ n = 2 ^ (n - 1 + 1) := by rw [Nat.sub_add_cancel (by omega : 1 ≤ n)]
+      _ = 2 ^ (n - 1) * 2 := by rw [pow_succ]
+      _ = 2 * 2 ^ (n - 1) := by omega
+  have hPowR : (2 : ℝ) ^ n = 2 * (2 : ℝ) ^ (n - 1) := by exact_mod_cast hPowNat
+  have hCoef : (Fintype.card (CubeVertex n) : ℝ)⁻¹ * 2 = (X.oddRoles.card : ℝ)⁻¹ := by
+    rw [hCubeCardR, hRoleCardR, hPowR]
+    field_simp
+  have hRowSum (C : X.Centre) (y : Fin N) :
+      (∑ u, Zfun u y C) = ∑ u ∈ X.oddRoles, (N : ℝ) * X.oddRow H C u y := by
+    unfold Ctx6.oddRoles
+    rw [Finset.sum_filter]
+    apply Finset.sum_congr rfl
+    intro u _
+    by_cases hu : IsEvenRole u <;> simp [Zfun, Lane_sol_s06_loadC.rowTerm, hu]
+  have hAvgOdd (C : X.Centre) (y : Fin N) : X.rowAvg H C y = 2 * average C y := by
+    change (X.oddRoles.card : ℝ)⁻¹ * (∑ u ∈ X.oddRoles, (N : ℝ) * X.oddRow H C u y) =
+      2 * ((Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, Zfun u y C)
+    rw [hRowSum, ← hCoef]
+    ring
+  have hMeanAverage (y : Fin N) :
+      P.expect (fun C => average C y) = (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, dfun u y := by
+    dsimp only [average]
+    rw [FinProb.expect_smul]
+    congr 1
+    unfold dfun FinProb.expect
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+  have hRawMean (y : Fin N) : X.longAvg H y = 2 * P.expect (fun C => average C y) := by
+    calc
+      X.longAvg H y = P.expect (fun C => X.rowAvg H C y) := (hMean y).symm
+      _ = P.expect (fun C => 2 * average C y) :=
+        congrArg P.expect (funext (fun C => hAvgOdd C y))
+      _ = _ := by rw [FinProb.expect_smul]
+  have hMeanD (y : Fin N) :
+      (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, dfun u y ≤ Ckh K := by
+    have hraw := hRawMean y
+    rw [hMeanAverage y] at hraw
+    linarith [hLong y]
+  have hLabels : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := by
+    have hNupper : (N : ℝ) ≤ (n : ℝ) * (2 : ℝ) ^ n := by exact_mod_cast hLarge.2.2
+    simpa only [Fintype.card_fin] using hNupper
+  have hJoint : ∀ (y : Fin N) (m : ℕ), m ≤ n → ∀ s : Fin m → CubeVertex n,
+      (∀ i j : Fin m, j < i → s i ∉ near (s j)) →
+        (∑ C ∈ succ, P.w C * ∏ i, Zfun (s i) y C) ≤ (1 : ℝ) ^ m * ∏ i, dfun (s i) y := by
+    intro y m _ s hsep
+    let U : Finset (CubeVertex n) := Finset.univ.image s
+    have hsInj : Function.Injective s := by
+      intro i j heq
+      by_contra hne
+      rcases lt_or_gt_of_ne hne with hij | hji
+      · have hnot := hsep j i hij
+        exact hnot (by simpa [heq] using hSelf (s i))
+      · have hnot := hsep i j hji
+        exact hnot (by simpa [heq] using hSelf (s j))
+    have hFarSet : ∀ u ∈ U, ∀ v ∈ U, u ≠ v →
+        Lane_sol_s06_loadC.separationRadius X < X.g.L.residualDist u v := by
+      intro u hu v hv hne
+      obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hu
+      obtain ⟨j, _, rfl⟩ := Finset.mem_image.mp hv
+      have hij : i ≠ j := fun h => hne (congrArg s h)
+      rcases lt_or_gt_of_ne hij with hij | hji
+      · have hnot : ¬ X.g.L.residualDist (s i) (s j) ≤ Lane_sol_s06_loadC.separationRadius X := by
+          simpa only [near, Finset.mem_filter, Finset.mem_univ, true_and] using hsep j i hij
+        exact not_le.mp hnot
+      · have hnot : ¬ X.g.L.residualDist (s j) (s i) ≤ Lane_sol_s06_loadC.separationRadius X := by
+          simpa only [near, Finset.mem_filter, Finset.mem_univ, true_and] using hsep i j hji
+        rw [hResidualComm (s j) (s i)] at hnot
+        exact not_le.mp hnot
+    have hProdImage (f : CubeVertex n → ℝ) : ∏ u ∈ U, f u = ∏ i : Fin m, f (s i) := by
+      dsimp [U]
+      exact Finset.prod_image hsInj.injOn
+    have hEq : P.expect (fun C => ∏ i, Zfun (s i) y C) = ∏ i, dfun (s i) y := by
+      calc
+        _ = P.expect (fun C => ∏ u ∈ U, Zfun u y C) :=
+          congrArg P.expect (funext (fun C => (hProdImage (fun u => Zfun u y C)).symm))
+        _ = ∏ u ∈ U, dfun u y := hFactor U y hFarSet
+        _ = _ := hProdImage (fun u => dfun u y)
+    simpa only [succ, FinProb.expect, one_pow, one_mul] using hEq.le
+  have hTail := scatteredMoments_union_labels P succ Zfun hZ0 cap hCap0 hZCap
+    near hSelf fraction hFraction0 hNearCount n hnpos 1 (Ckh K) (by norm_num) hCkh0
+    dfun hD0 hMeanD hJoint hSmall hLabels
+  have hTailPr :
+      P.pr (fun C => ∃ y, 4 * (1 : ℝ) * (Ckh K + 1) < average C y) ≤
+        (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    convert hTail using 1
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro C _
+    by_cases hb : ∃ y, 4 * (1 : ℝ) * (Ckh K + 1) < average C y
+    · have hb' : ∃ y, 4 * (1 : ℝ) * (Ckh K + 1) <
+          (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, Zfun u y C := hb
+      simp only [succ, Finset.mem_univ, true_and, if_pos hb, if_pos hb']
+    · have hb' : ¬ ∃ y, 4 * (1 : ℝ) * (Ckh K + 1) <
+          (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ u, Zfun u y C := hb
+      simp only [succ, Finset.mem_univ, true_and, if_neg hb, if_neg hb']
+  have hCut : 8 * (Ckh K + 1) < Ckc K := by
+    unfold Ckc
+    have hPos : 0 < Ckh K + 1 := by linarith
+    norm_num
+    nlinarith
+  have hMono := pr_mono6 P
+    (A := fun C => X.AllOddValid H C ∧ ∃ y, Ckc K < X.rowAvg H C y)
+    (B := fun C => ∃ y, 4 * (1 : ℝ) * (Ckh K + 1) < average C y) (by
+      intro C hbad
+      obtain ⟨_, y, hy⟩ := hbad
+      refine ⟨y, ?_⟩
+      rw [hAvgOdd C y] at hy
+      nlinarith [hCut])
+  exact hMono.trans (hTailPr.trans (nat_two_pow_union_tail hn10))
 
 /-- L6.1l (base, 06:713–749): rows outside interior `j = 0` are bounded deterministically (`T_β ≤ n^{d₂u}Λ`,
 balance, rarity); at interior `j = 0` the cancellation `E_{I_h,Z_S}[f_x] ≤ N ∑_i T₀(i)μ_i(a)`, `T₀ ≤ O(η_{A_w})`,

@@ -503,6 +503,14 @@ theorem patch_mass_lower_bound {κ : CConsts} {T : Stage} {k : ℕ}
 theorem one_le_six_mul_add_two {K : ℝ} (hK : 0 < K) : 1 ≤ 6 * K + 2 := by
   nlinarith
 
+theorem finLaw_expectation_const {α : Type*} [Fintype α] (μ : FinLaw α) (c : ℝ) :
+    μ.E (fun _ => c) = c := by
+  classical
+  unfold FinLaw.E
+  calc
+    (∑ x, μ.w x * c) = (∑ x, μ.w x) * c := by rw [Finset.sum_mul]
+    _ = c := by rw [μ.sum_one]; ring
+
 theorem capacity_product_bound {n ell : ℕ} {K E d : ℝ}
     (hn : 4 ≤ n) (hell : ell ≤ n) (hpowEll : (2 : ℝ) ^ ell ≤ (n : ℝ))
     (hd : d ≤ (n : ℝ)) (hK : 0 < K) (hE : 0 ≤ E)

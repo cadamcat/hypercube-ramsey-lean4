@@ -2150,7 +2150,53 @@ theorem pool_comparison_exists {κ : CConsts} {T : Stage} {k : ℕ}
       simpa [P] using hbin
     exact hEmbedInjective hpatch ⟨⟨C, rfl⟩, s⟩ ⟨⟨C', rfl⟩, s'⟩ hbin'
   have hNonempty : (permPools G).Nonempty := ⟨P, hP⟩
-  exact ⟨hNonempty, by sorry⟩
+  have hComparison : PoolComparison G := by
+    intro i hperm S hpatch hSsize hBinGuard F hF hDepends
+    by_cases hSempty : S = ∅
+    · subst S
+      let P0 := hperm.choose
+      let c : ℝ := F P0
+      have hFconstant : ∀ P, F P = c := by
+        intro P'
+        dsimp [c]
+        apply hDepends P' P0
+        intro s hs
+        simp at hs
+      have hFeq : F = fun _ => c := by
+        funext P'
+        exact hFconstant P'
+      have hcNonneg : 0 ≤ c := by simpa [c] using hF P0
+      have hpermE : (permPoolLaw G hperm).E F = c := by
+        rw [hFeq]
+        exact Lane_q_s16_geom.finLaw_expectation_const (permPoolLaw G hperm) c
+      have hiidE : (iidPoolLaw G hperm).E F = c := by
+        rw [hFeq]
+        exact Lane_q_s16_geom.finLaw_expectation_const (iidPoolLaw G hperm) c
+      constructor
+      · rw [hpermE, hiidE]
+        simp
+      · intro s D hpinPatch hpermPin hiidPin
+        have hpermPinE :
+            (FinLaw.cond (permPoolLaw G hperm) (poolPinEvent s D) hpermPin).E F = c := by
+          rw [hFeq]
+          exact Lane_q_s16_geom.finLaw_expectation_const _ c
+        have hiidPinE :
+            (FinLaw.cond (iidPoolLaw G hperm) (poolPinEvent s D) hiidPin).E F = c := by
+          rw [hFeq]
+          exact Lane_q_s16_geom.finLaw_expectation_const _ c
+        rw [hpermPinE, hiidPinE]
+        have hcoefTerm : 0 ≤ ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
+            Fintype.card (Bin PT.tiling i) :=
+          div_nonneg (sq_nonneg _) (Nat.cast_nonneg _)
+        have hcoef : 1 ≤ 1 + ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
+            Fintype.card (Bin PT.tiling i) := by linarith
+        calc
+          c = 1 * c := by ring
+          _ ≤ (1 + ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
+              Fintype.card (Bin PT.tiling i)) * c :=
+            mul_le_mul_of_nonneg_right hcoef hcNonneg
+    · sorry
+  exact ⟨hNonempty, hComparison⟩
 
 /-- L16.1: late classes, separated cells, persistent slot pools, and tapes. -/
 theorem low_geometry_at_scale {κ : CConsts} {T : Stage} {k : ℕ}

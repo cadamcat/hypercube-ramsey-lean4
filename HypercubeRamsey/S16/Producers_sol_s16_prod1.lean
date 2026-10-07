@@ -231,4 +231,160 @@ theorem solver_pretrim_pos {κ : CConsts} {T : Stage} {k : ℕ}
   simp [hW, f, hz] at hterm
   linarith
 
+theorem pr_range {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (A : Ω → Prop) :
+    0 ≤ P.pr A ∧ P.pr A ≤ 1 := by
+  classical
+  constructor
+  · exact Finset.sum_nonneg fun ω _ => by
+      split_ifs <;> first | exact P.nonneg ω | exact le_rfl
+  · calc
+      P.pr A ≤ ∑ ω, P.w ω := by
+        apply Finset.sum_le_sum
+        intro ω _
+        split_ifs <;> first | exact le_rfl | exact P.nonneg ω
+      _ = 1 := P.sum_one
+
+theorem pi_coordinate_E {I Ω : Type*} [Fintype I] [DecidableEq I] [Fintype Ω]
+    (P : I → FinLaw Ω) (i : I) (f : Ω → ℝ) :
+    (FinLaw.pi P).E (fun x => f (x i)) = (P i).E f := by
+  classical
+  let F : I → Ω → ℝ := fun j y => (P j).w y * (if j = i then f y else 1)
+  have hprod (x : I → Ω) :
+      (∏ j, F j (x j)) = (∏ j, (P j).w (x j)) * f (x i) := by
+    dsimp only [F]
+    rw [Finset.prod_mul_distrib]
+    simp
+  have hrow (j : I) : (∑ y, F j y) = if j = i then (P i).E f else 1 := by
+    by_cases hji : j = i
+    · subst j
+      simp [F, FinLaw.E]
+    · simp [F, hji, (P j).sum_one]
+  calc
+    (FinLaw.pi P).E (fun x => f (x i)) = ∑ x : I → Ω, ∏ j, F j (x j) := by
+      apply Finset.sum_congr rfl
+      intro x _
+      exact (hprod x).symm
+    _ = ∏ j, ∑ y, F j y := (Fintype.prod_sum _).symm
+    _ = (P i).E f := by simp [hrow]
+
+theorem pi_support {I : Type*} [Fintype I] [DecidableEq I]
+    {Ω : I → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (x : ∀ i, Ω i)
+    (hx : (FinLaw.pi P).w x ≠ 0) (i : I) : (P i).w (x i) ≠ 0 := by
+  exact Finset.prod_ne_zero_iff.mp hx i (Finset.mem_univ i)
+
+theorem cond_support {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (A : Finset Ω) (hA : 0 < ∑ ω ∈ A, P.w ω) (ω : Ω)
+    (hω : (FinLaw.cond P A hA).w ω ≠ 0) : ω ∈ A ∧ P.w ω ≠ 0 := by
+  classical
+  constructor
+  · by_contra hn
+    simp [FinLaw.cond, hn] at hω
+  · intro hz
+    simp [FinLaw.cond, hz] at hω
+
+theorem flip_twice {n : ℕ} (z : CubePos n) (j : Fin n) :
+    flipPos (flipPos z j) j = z := by
+  funext a
+  by_cases ha : a = j <;> simp [flipPos, ha]
+
+theorem solver_incident_count {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m}
+    (g : HypercubeRamsey.Group 𝒯 i) :
+    (Finset.univ.filter fun v : EvenRole 𝒯 i => SliceSolver.Incident v g).card ≤
+      (𝒯.P i).h ^ 2 := by
+  classical
+  let V := Finset.univ.filter fun v : EvenRole 𝒯 i => SliceSolver.Incident v g
+  let images : Finset (IWord 𝒯 i) :=
+    Finset.univ.image fun jl : Fin (𝒯.P i).h × Fin (𝒯.P i).h =>
+      flipPos (flipPos g.1 jl.1) jl.2
+  have hsub : V.image Subtype.val ⊆ images := by
+    intro z hz
+    obtain ⟨v, hv, rfl⟩ := Finset.mem_image.mp hz
+    obtain ⟨l, hl⟩ := (Finset.mem_filter.mp hv).2
+    obtain ⟨j, _hj, heq⟩ := Finset.mem_image.mp hl
+    refine Finset.mem_image.mpr ⟨(j, l), Finset.mem_univ _, ?_⟩
+    rw [heq, flip_twice]
+  calc
+    V.card = (V.image Subtype.val).card :=
+      (Finset.card_image_of_injective _ Subtype.val_injective).symm
+    _ ≤ images.card := Finset.card_le_card hsub
+    _ ≤ (Finset.univ : Finset (Fin (𝒯.P i).h × Fin (𝒯.P i).h)).card :=
+      Finset.card_image_le
+    _ = (𝒯.P i).h ^ 2 := by simp [pow_two]
+
+/-- Union/Markov calculation before any physical-cell transport. -/
+theorem solver_pretrim_mass {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (hW : S.AllGood W)
+    (g : HypercubeRamsey.Group 𝒯 i)
+    (heps : 0 < sliceEps κ (𝒯.P i).h) :
+    1 - ((𝒯.P i).h : ℝ) ^ 2 * Real.sqrt (sliceEps κ (𝒯.P i).h) ≤
+      ∑ D ∈ S.pretrimBins W g, S.q g W D := by
+  classical
+  let t := Real.sqrt (sliceEps κ (𝒯.P i).h)
+  let V := Finset.univ.filter fun v : EvenRole 𝒯 i => SliceSolver.Incident v g
+  let m := fun (v : EvenRole 𝒯 i) (D : Bin 𝒯 i) =>
+    (S.refLaw W).pr (fun ω => ω.1 g = D ∧ S.σ v W (nbrLabels v.1 ω.2) = 0)
+  have ht : 0 < t := Real.sqrt_pos.mpr heps
+  have hm0 : ∀ v D, 0 ≤ m v D := fun v D => (pr_range _ _).1
+  have hmSum : ∀ v, ∑ D, m v D ≤ sliceEps κ (𝒯.P i).h := by
+    intro v
+    have heq : (∑ D, m v D) =
+        (S.refLaw W).pr (fun ω => S.σ v W (nbrLabels v.1 ω.2) = 0) := by
+      unfold m FinLaw.pr
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro ω _
+      by_cases hf : S.σ v W (nbrLabels v.1 ω.2) = 0
+      · simp [hf, eq_comm]
+      · simp [hf]
+    rw [heq]
+    exact S.Hgood_zero v W (hW v)
+  have hbad : ∀ D, D ∉ S.pretrimBins W g →
+      S.q g W D ≤ (∑ v ∈ V, m v D) / t := by
+    intro D hD
+    by_cases hq : 0 < S.q g W D
+    · have hfail : ∃ v : EvenRole 𝒯 i, SliceSolver.Incident v g ∧ t * S.q g W D < m v D := by
+        simpa [SliceSolver.pretrimBins, t, m, hq, not_forall, not_le] using hD
+      obtain ⟨v, hv, hlt⟩ := hfail
+      have hvV : v ∈ V := by simp [V, hv]
+      have hle := Finset.single_le_sum (s := V) (f := fun v => m v D)
+        (fun v _ => hm0 v D) hvV
+      exact (le_div_iff₀ ht).mpr (by nlinarith)
+    · have hzero : S.q g W D = 0 := le_antisymm (le_of_not_gt hq) (S.q_nonneg g W D)
+      rw [hzero]
+      exact div_nonneg (Finset.sum_nonneg fun v _ => hm0 v D) ht.le
+  have hremoved : (∑ D ∈ Finset.univ \ S.pretrimBins W g, S.q g W D) ≤
+      (V.card : ℝ) * t := by
+    calc
+      (∑ D ∈ Finset.univ \ S.pretrimBins W g, S.q g W D) ≤
+          ∑ D ∈ Finset.univ \ S.pretrimBins W g, (∑ v ∈ V, m v D) / t := by
+        apply Finset.sum_le_sum
+        intro D hD
+        exact hbad D (Finset.mem_sdiff.mp hD).2
+      _ ≤ ∑ D, (∑ v ∈ V, m v D) / t := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.sdiff_subset)
+        intro D _ _
+        exact div_nonneg (Finset.sum_nonneg fun v _ => hm0 v D) ht.le
+      _ = (∑ v ∈ V, ∑ D, m v D) / t := by
+        rw [← Finset.sum_div, Finset.sum_comm]
+      _ ≤ ((V.card : ℝ) * sliceEps κ (𝒯.P i).h) / t := by
+        apply div_le_div_of_nonneg_right _ ht.le
+        simpa using Finset.sum_le_sum (s := V) (fun v _ => hmSum v)
+      _ = (V.card : ℝ) * t := by
+        have hs := Real.sq_sqrt heps.le
+        change (V.card : ℝ) * sliceEps κ (𝒯.P i).h / t = (V.card : ℝ) * t
+        apply (div_eq_iff (ne_of_gt ht)).mpr
+        dsimp [t] at *
+        nlinarith
+  have hcard : (V.card : ℝ) ≤ ((𝒯.P i).h : ℝ) ^ 2 := by
+    exact_mod_cast solver_incident_count g
+  have hsplit := Finset.sum_sdiff (s₁ := S.pretrimBins W g) (s₂ := Finset.univ)
+    (Finset.subset_univ _) (f := S.q g W)
+  rw [S.q_sum] at hsplit
+  have hbound := mul_le_mul_of_nonneg_right hcard ht.le
+  dsimp [t] at *
+  linarith
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

@@ -48,7 +48,7 @@ the hidden law.  Rows are near when their keys are within distance eight (fracti
 `B_grid(g, 1)`, its cap is `L_B = exp(O(hs + hn^β + n^{τ/2}))` and `n f_grid L_B ≤ 1`; for separated rows, removing
 the at most `(2s+1)^3` hidden events touching each neighbourhood costs `(1 - x_H)^{-(2s+1)^3} ≤ 2`
 (`CondProductBound`) and leaves raw means at most `40K`. -/
-theorem comp_tail (cH : ℝ) (hcH : 0 < cH) (hη₀ : 0 < η₀) (hK : 0 < K) :
+theorem comp_tail (cH : ℝ) (hcH : 0 < cH) (hη₀ : 0 < η₀) (hβτ : β < tau8 η₀ / 4) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       GridFacts η₀ D.n → CondProductBound → D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) →
       D.BcompMean K →

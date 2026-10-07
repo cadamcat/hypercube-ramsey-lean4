@@ -1288,6 +1288,79 @@ private theorem selected_level_eq {p : HDParams} (Sites : p.Sites) (P A : p.Loc 
   have hlevelVal := congrArg Fin.val hlevel.2.1
   simpa [j] using hlevelVal.symm
 
+private theorem selected_eligible {p : HDParams} (Sites : p.Sites) (P A : p.Loc → Bool)
+    (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hsel : p.selection Sites P A E τ v = some ℓ) :
+    ℓ ∈ E v ⟨p.height Sites P A E p.Rlong v, by
+      have hH : p.height Sites P A E p.Rlong v < p.H := by
+        by_contra hh
+        simp [HDParams.selection, HDParams.selectionAt, hh] at hsel
+      omega⟩ := by
+  classical
+  have hH : p.height Sites P A E p.Rlong v < p.H := by
+    by_contra hh
+    simp [HDParams.selection, HDParams.selectionAt, hh] at hsel
+  let j : Fin (p.H + 1) := ⟨p.height Sites P A E p.Rlong v, by omega⟩
+  have hsel' := hsel
+  simp [HDParams.selection, HDParams.selectionAt, hH, j] at hsel'
+  rcases hsel' with ⟨_, ⟨hne, hchosen⟩⟩
+  let active : Finset p.Loc := (E v j).filter (fun z => A z = true)
+  let priorities := active.image (p.priority τ (v, j))
+  have hneP : priorities.Nonempty := by
+    rcases hne with ⟨z, hz⟩
+    exact ⟨p.priority τ (v, j) z, Finset.mem_image.mpr ⟨z, hz, rfl⟩⟩
+  let q := priorities.min' hneP
+  have hmem : ∃ z, z ∈ active ∧ p.priority τ (v, j) z = q :=
+    Finset.mem_image.mp (Finset.min'_mem priorities hneP)
+  have hchosen' : Classical.choose hmem = ℓ := by
+    simpa [active, priorities, q, j] using hchosen
+  rcases Classical.choose_spec hmem with ⟨ha, _⟩
+  rw [hchosen'] at ha
+  have hE : ℓ ∈ E v j := (Finset.mem_filter.mp ha).1
+  simpa [j] using hE
+
+private theorem selected_present_of_local_legal {p : HDParams} (Sites : p.Sites)
+    (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hsite : v ∈ Sites) (hlegal : p.Legal P E (p.domBall Sites v p.Rlong))
+    (hsel : p.selection Sites P A E τ v = some ℓ) : P ℓ = true := by
+  have hvdom : v ∈ p.domBall Sites v p.Rlong := by simp [HDParams.domBall, hsite]
+  have hmem := selected_eligible Sites P A E τ v ℓ hsel
+  have hlegalAt := (hlegal v hvdom ⟨p.height Sites P A E p.Rlong v, by
+    have hH : p.height Sites P A E p.Rlong v < p.H := by
+      by_contra hh
+      simp [HDParams.selection, HDParams.selectionAt, hh] at hsel
+    omega⟩).1 ℓ hmem
+  exact hlegalAt.1
+
+private noncomputable def selectedCenterTerm {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (e : D.CellT) (x : Fin D.N)
+    (P : D.Pos) (t : D.Tags) (A : (hdP η₀ D.n).Loc → Bool)
+    (τ : (hdP η₀ D.n).Ties) (ℓ : D.Loc) : ℝ :=
+  let q : D.Pre := ((Θ, P), ((t, fun _ => A), fun _ => τ))
+  if D.LocalLegal Θ P t e ∧ D.sel q e = some ℓ then
+    (D.N : ℝ) * (D.anchorU Θ e.1 (t e.1 ℓ)).w x
+  else 0
+
+private theorem selLoad_sum {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (q : D.Pre) (e : D.CellT) (x : Fin D.N) :
+    D.selLoad q e x =
+      ∑ ℓ : D.Loc, if D.sel q e = some ℓ then
+        (D.N : ℝ) * (D.anchorU q.1.1 e.1 (q.2.1.1 e.1 ℓ)).w x else 0 := by
+  classical
+  cases hsel : D.sel q e <;> simp [Ctx.selLoad, Ctx.selTag, hsel]
+
+private theorem selectedCenterTerm_sum {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (e : D.CellT) (x : Fin D.N)
+    (P : D.Pos) (t : D.Tags) (A : (hdP η₀ D.n).Loc → Bool)
+    (τ : (hdP η₀ D.n).Ties) :
+    (if D.LocalLegal Θ P t e then 1 else 0) *
+        D.selLoad ((Θ, P), ((t, fun _ => A), fun _ => τ)) e x =
+      ∑ ℓ : D.Loc, selectedCenterTerm D Θ e x P t A τ ℓ := by
+  classical
+  by_cases hlegal : D.LocalLegal Θ P t e
+  · simp [selectedCenterTerm, hlegal, selLoad_sum]
+  · simp [selectedCenterTerm, hlegal]
+
 private theorem selected_level_of_local_legal {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
     (hsite : v ∈ Sites)
@@ -1387,6 +1460,48 @@ private theorem prod_expect {α β : Type*} [Fintype α] [Fintype β]
   apply Finset.sum_congr rfl
   intro b _
   ring
+
+private theorem prod_swap_expect {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : β → α → ℝ) :
+    (FinProb.prod P Q).expect (fun ab => f ab.2 ab.1) =
+      (FinProb.prod Q P).expect (fun ab => f ab.1 ab.2) := by
+  calc
+    (FinProb.prod P Q).expect (fun ab => f ab.2 ab.1) =
+        P.expect (fun a => Q.expect (fun b => f b a)) :=
+      prod_expect P Q (fun a b => f b a)
+    _ = Q.expect (fun b => P.expect (fun a => f b a)) := by
+      unfold FinProb.expect
+      simp_rw [Finset.mul_sum]
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro b _
+      apply Finset.sum_congr rfl
+      intro a _
+      ring
+    _ = (FinProb.prod Q P).expect (fun ab => f ab.1 ab.2) :=
+      (prod_expect Q P (fun b a => f b a)).symm
+
+private theorem prod_expect_assoc {α β γ : Type*}
+    [Fintype α] [Fintype β] [Fintype γ]
+    (P : FinProb α) (Q : FinProb β) (R : FinProb γ) (f : α → β → γ → ℝ) :
+    (FinProb.prod (FinProb.prod P Q) R).expect
+        (fun z => f z.1.1 z.1.2 z.2) =
+      (FinProb.prod P (FinProb.prod Q R)).expect
+        (fun z => f z.1 z.2.1 z.2.2) := by
+  calc
+    (FinProb.prod (FinProb.prod P Q) R).expect
+        (fun z => f z.1.1 z.1.2 z.2) =
+      (FinProb.prod P Q).expect (fun ab => R.expect (fun c => f ab.1 ab.2 c)) :=
+        prod_expect (FinProb.prod P Q) R (fun ab c => f ab.1 ab.2 c)
+    _ = P.expect (fun a => Q.expect (fun b => R.expect (fun c => f a b c))) := by
+      exact prod_expect P Q (fun a b => R.expect (fun c => f a b c))
+    _ = P.expect (fun a => (FinProb.prod Q R).expect (fun bc => f a bc.1 bc.2)) := by
+      congr 1
+      funext a
+      exact (prod_expect Q R (f a)).symm
+    _ = (FinProb.prod P (FinProb.prod Q R)).expect
+        (fun z => f z.1 z.2.1 z.2.2) :=
+      (prod_expect P (FinProb.prod Q R) (fun a bc => f a bc.1 bc.2)).symm
 
 private theorem lane_pi_weight_split {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
@@ -1788,6 +1903,22 @@ private theorem tilt_anchor_mass {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β 
         (8 * (D.AG g)⁻¹ * (if D.crossHit Θ g x then 1 else 0) *
           ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) / 4 := hbound
     _ = D.Bcomp Θ g x / 4 := by rw [hB]
+
+private theorem tag_anchor_expect {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (g : D.KeyT) (ℓ : D.Loc) (x : Fin D.N) :
+    (D.tagLawAll Θ).expect (fun t => (D.N : ℝ) * (D.anchorU Θ g (t g ℓ)).w x) =
+      (D.tilt Θ g).expect (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x) := by
+  classical
+  calc
+    (D.tagLawAll Θ).expect (fun t => (D.N : ℝ) * (D.anchorU Θ g (t g ℓ)).w x) =
+        (FinProb.pi (fun _ : D.Loc => D.tilt Θ g)).expect
+          (fun t => (D.N : ℝ) * (D.anchorU Θ g (t ℓ)).w x) := by
+      exact pi_singleton_expect
+        (fun k : D.KeyT => FinProb.pi (fun _ : D.Loc => D.tilt Θ k))
+        g (fun t => (D.N : ℝ) * (D.anchorU Θ g (t ℓ)).w x)
+    _ = (D.tilt Θ g).expect (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x) := by
+      exact pi_singleton_expect (fun _ : D.Loc => D.tilt Θ g) ℓ
+        (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x)
 
 private theorem lane_scaleIndex_exists (M R target : ℕ) (hM : 2 ≤ M) (hR : 1 ≤ R) :
     ∃ i : ℕ, target ≤ M ^ i * R := by

@@ -567,6 +567,352 @@ private theorem direct_incoming_uniform {κ : CConsts} {T : Stage} {k : ℕ}
     simp only [Finset.mem_univ, if_true, FinLaw.sum_one, div_one]
     exact hQ W g D
 
+private theorem supported_history {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
+    (C : G.Cell) (W : R.Hist C) (hW : (R.history C).w W ≠ 0) :
+    ∀ s, W s ∈ R.slicePass C s ∧ (R.sliceLaw C s).w (W s) ≠ 0 := by
+  intro s
+  exact Lane_sol_s16_prod1.cond_support _ _ _ _
+    (Lane_sol_s16_prod1.pi_support _ W hW s)
+
+private theorem physical_group_count {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
+    (hR : R.SourceValid) (hc : PT.tiling.mode.isCluster) (C : G.Cell) (g : R.Group C) :
+    (Finset.univ.filter fun r : OddCellRole G C => R.groupOf C r = g).card ≤
+      (PT.tiling.P (G.cellPatch C)).h := by
+  classical
+  rcases hR with ⟨hMode, hUniform, hSource⟩ | ⟨hDirect, hSource⟩
+  · obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, hPrior⟩ := hSource C
+    obtain ⟨sg, hsg⟩ := groups.surjective g
+    obtain ⟨s₀, g₀⟩ := sg
+    let V := Finset.univ.filter fun r : OddCellRole G C => R.groupOf C r = g
+    let f := fun r : OddCellRole G C => (R.cellWords C).symm ⟨r.1, r.2.1⟩
+    have hf : Function.Injective f := by
+      intro r r' h
+      have heq := (R.cellWords C).symm.injective h
+      apply Subtype.ext
+      exact congrArg (fun v : {v : Pos T k // G.cellOf v = C} => v.1) heq
+    have hsub : V.image f ⊆ ({s₀} : Finset (R.Slice C)) ×ˢ groupFiber g₀ := by
+      intro sz hsz
+      obtain ⟨r, hr, rfl⟩ := Finset.mem_image.mp hsz
+      have hv : (R.cellWords C (f r)).1 = r.1 :=
+        congrArg Subtype.val ((R.cellWords C).apply_symm_apply ⟨r.1, r.2.1⟩)
+      have hz : ¬ IsEvenRole (f r).2 := by
+        intro he
+        exact r.2.2 (by rw [← hv]; exact (R.word_parity hc C _ _).mpr he)
+      have hrEq : R.groupOf C r = groups ((f r).1, S.groupOf (f r).2) := by
+        have h := hGroup (f r).1 (f r).2 (by rw [hv]; exact r.2.2)
+        simpa only [hv] using h
+      have hgEq : groups ((f r).1, S.groupOf (f r).2) = groups (s₀, g₀) := by
+        rw [← hrEq, hsg]
+        exact (Finset.mem_filter.mp hr).2
+      have hp := groups.injective hgEq
+      have hs := congrArg Prod.fst hp
+      have hg := congrArg Prod.snd hp
+      change S.groupOf (f r).2 = g₀ at hg
+      apply Finset.mem_product.mpr
+      refine ⟨Finset.mem_singleton.mpr hs, ?_⟩
+      rw [← hg]
+      exact S.groupOf_spec (f r).2 hz
+    calc
+      V.card = (V.image f).card := (Finset.card_image_of_injective _ hf).symm
+      _ ≤ (({s₀} : Finset (R.Slice C)) ×ˢ groupFiber g₀).card := Finset.card_le_card hsub
+      _ = (groupFiber g₀).card := by simp
+      _ ≤ (PT.tiling.P (G.cellPatch C)).h := by
+        change (Finset.univ.image (flipPos g₀.1)).card ≤ _
+        exact Finset.card_image_le.trans (by simp)
+  · exact (hDirect hc).elim
+
+private theorem physical_bin_count {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) (i : Fin PT.tiling.m) :
+    (Fintype.card (Bin PT.tiling i) : ℝ) * (PT.tiling.P i).d = (PT.tiling.P i).M := by
+  have h := (PT.tiling.P i).bins.sum_card_parts
+  have he : ∑ b ∈ (PT.tiling.P i).bins.parts, b.card =
+      (PT.tiling.P i).bins.parts.card * (PT.tiling.P i).d := by
+    calc
+      _ = ∑ _b ∈ (PT.tiling.P i).bins.parts, (PT.tiling.P i).d :=
+        Finset.sum_congr rfl (fun b hb => Q.profiled_valid.tiling_valid.bins_card i b hb)
+      _ = _ := by simp
+  rw [he, (PT.tiling.P i).cardY] at h
+  have hn : Fintype.card (Bin PT.tiling i) * (PT.tiling.P i).d = (PT.tiling.P i).M := by
+    change Fintype.card {b // b ∈ (PT.tiling.P i).bins.parts} * (PT.tiling.P i).d = _
+    rw [Fintype.card_of_subtype (PT.tiling.P i).bins.parts (fun _ => Iff.rfl)]
+    exact h
+  exact_mod_cast hn
+
+private theorem physical_raw_prior_width {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT}
+    (R : CellRawData G) (hR : R.SourceValid) (C : G.Cell) (v : Pos T k)
+    (hv : G.cellOf v = C) (he : IsEvenRole v)
+    (hlog : 1 ≤ Real.log (T.S.n k : ℝ))
+    (ω : (R.baseExperiment C v).State)
+    (hω : (R.baseExperiment C v).law.w ω ≠ 0)
+    (hσ : (R.baseExperiment C v).prior ω ≠ 0) :
+    ∃ τ : Law (T.S.N k), τ.w = (R.baseExperiment C v).prior ω ∧
+      τ.SupportedIn (T.X k) ∧ τ.WidthLE (Real.log 2 + 2 * Real.log (T.S.n k : ℝ)) := by
+  classical
+  let i := G.cellPatch C
+  have hN : (0 : ℝ) < T.S.N k := by
+    obtain ⟨x, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty i).1
+    exact_mod_cast (lt_of_le_of_lt (Nat.zero_le x.val) x.isLt)
+  have hPatchX : (PT.tiling.P i).X ⊆ T.X k := by
+    intro x hx
+    exact (Finset.mem_sdiff.mp ((Q.profiled_valid.tiling_valid.patch_supports i).2.1
+      ((Q.profiled_valid.tiling_valid.patch_supports i).1 hx))).1
+  rcases hR with ⟨hMode, hUniform, hSource⟩ | ⟨hc, hSource⟩
+  · have hCluster : PT.tiling.mode.isCluster := by simp [hMode, Mode.isCluster]
+    obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, hPrior⟩ := hSource C
+    let sz := (R.cellWords C).symm ⟨v, hv⟩
+    have hword : (R.cellWords C (sz.1, sz.2)).1 = v :=
+      congrArg Subtype.val ((R.cellWords C).apply_symm_apply ⟨v, hv⟩)
+    have hEven : IsEvenRole sz.2 := (R.word_parity hCluster C sz.1 sz.2).mp (by rw [hword]; exact he)
+    let w : EvenRole PT.tiling i := ⟨sz.2, hEven⟩
+    obtain ⟨fallback, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty i).2
+    let ls := nbrLabels w.1 (R.wordLabel C ω.2.2 sz.1 fallback)
+    have hrow : (R.baseExperiment C v).prior ω = S.σ w (records sz.1 (ω.1 sz.1)) ls := by
+      change R.rawPrior C ω.1 ω.2.2 v = _
+      rw [← hword]
+      exact hPrior ω.1 sz.1 w ω.2.2 fallback
+    have hσ' : S.σ w (records sz.1 (ω.1 sz.1)) ls ≠ 0 := by rw [← hrow]; exact hσ
+    let τ : Law (T.S.N k) :=
+      { w := S.σ w (records sz.1 (ω.1 sz.1)) ls
+        nonneg := S.σ_nonneg w _ ls
+        sum_eq_one := S.σ_prob w _ ls hσ' }
+    have hRaw : (R.rawHistory C).w ω.1 ≠ 0 := by
+      intro hz
+      apply hω
+      change (R.rawHistory C).w ω.1 * (R.rawLaw C ω.1).w ω.2 = 0
+      rw [hz, zero_mul]
+    have hSlice := Lane_sol_s16_prod1.pi_support (R.sliceLaw C) ω.1 hRaw sz.1
+    rw [hLaw] at hSlice
+    rw [Lane_sol_s16_prod1.map_equiv_weight] at hSlice
+    obtain ⟨u, hActive, hSupp⟩ := S.σ_support w (records sz.1 (ω.1 sz.1)) ls hσ'
+    have hact : u ∈ PT.activeVertices := by
+      simp only [ProfiledTiling.activeVertices, Finset.mem_filter, Finset.mem_univ, true_and]
+      apply hActive PT.parameter
+      exact lt_of_le_of_ne (S.recLaw PT.parameter |>.nonneg _) (Ne.symm hSlice)
+    refine ⟨τ, hrow.symm, ?_, ?_⟩
+    · intro x hx
+      by_contra hn
+      have hx' := (hSupp x hn).1
+      exact hx (hPatchX ((Q.profiled_valid.corner_clean i u hact).sub hx'))
+    · intro x
+      have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+      have hGain : 0 ≤ PT.tiling.gain i := by simp [Tiling.gain, hMode]; positivity
+      have hExp : Real.exp (-500 * PT.tiling.gain i) ≤ 1 :=
+        Real.exp_le_one_iff.mpr (by nlinarith)
+      have hCap := S.σ_cap w (records sz.1 (ω.1 sz.1)) ls x
+      have hCap' : (T.S.N k : ℝ) * τ.w x ≤ (2 : ℝ) ^ (PT.tiling.P i).h := by
+        have hh := mul_le_mul_of_nonneg_left hExp
+          (by positivity : (0 : ℝ) ≤ (2 : ℝ) ^ (PT.tiling.P i).h)
+        change _ ≤ _ at hCap
+        nlinarith
+      have hH : ((PT.tiling.P i).h : ℝ) ≤ Real.log (T.S.n k : ℝ) := by
+        apply (Q.height_bound i).trans
+        have hh := Real.rpow_le_rpow_of_exponent_le hlog (by norm_num : (1 / 10 : ℝ) ≤ 1)
+        simpa only [Real.rpow_one, Real.rpow_eq_pow] using hh
+      have hTwo : (2 : ℝ) ≤ Real.exp 1 := by nlinarith [Real.add_one_le_exp (1 : ℝ)]
+      have hpow : (2 : ℝ) ^ (PT.tiling.P i).h ≤ Real.exp ((PT.tiling.P i).h : ℝ) := by
+        calc
+          _ ≤ Real.exp 1 ^ (PT.tiling.P i).h := pow_le_pow_left₀ (by norm_num) hTwo _
+          _ = _ := by rw [← Real.exp_nat_mul]; simp
+      apply (le_div_iff₀ hN).mpr
+      have hexp : Real.exp ((PT.tiling.P i).h : ℝ) ≤
+          Real.exp (Real.log 2 + 2 * Real.log (T.S.n k : ℝ)) := by
+        apply Real.exp_le_exp.mpr
+        have h2 : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num)
+        linarith
+      simpa only [mul_comm] using hCap'.trans (hpow.trans hexp)
+  · obtain ⟨_, _, _, _, _, _, hEnv, hPrior⟩ := hSource C
+    let τ := Law.unifCore (PT.envelope i) hEnv
+    have hrow : (R.baseExperiment C v).prior ω = τ.w := hPrior ω.1 ω.2.2 v hv he
+    have hM : (0 : ℝ) < (PT.tiling.P i).M := by
+      rw [← (PT.tiling.P i).cardX]
+      exact_mod_cast Finset.card_pos.mpr (Q.profiled_valid.tiling_valid.patch_nonempty i).1
+    have hEnvCard : (PT.tiling.P i).M / 2 ≤ ((PT.envelope i).card : ℝ) := by
+      have hact : PT.activeVertices.Nonempty := by
+        have hh := Q.profiled_valid.direct_single_corner hc
+        exact Finset.card_pos.mp (by omega)
+      obtain ⟨u, hu⟩ := hact
+      apply (Q.profiled_valid.corner_clean i u hu).card_lower.trans
+      have hsub : PT.mesh.corner u i ⊆ PT.envelope i := by
+        rw [Q.profiled_valid.envelope_eq]
+        intro x hx
+        exact Finset.mem_biUnion.mpr ⟨u, hu, hx⟩
+      exact_mod_cast Finset.card_le_card hsub
+    refine ⟨τ, hrow.symm, ?_, ?_⟩
+    · intro x hx
+      have hn : x ∉ PT.envelope i := fun he => hx (hPatchX (Q.profiled_valid.envelope_subset i he))
+      simp [τ, Law.unifCore, hn]
+    · have hw : τ.WidthLE (Real.log ((T.S.N k : ℝ) / (PT.envelope i).card)) := by
+        simpa [τ, Law.unifCore, FinProb.uniform, Law.WidthLE] using Law.uniform_width (PT.envelope i) hEnv
+      apply hw.mono
+      have hcard : (0 : ℝ) < (PT.envelope i).card := by exact_mod_cast Finset.card_pos.mpr hEnv
+      have hratio : (T.S.N k : ℝ) / (PT.envelope i).card ≤ 2 * ((T.S.N k : ℝ) / (PT.tiling.P i).M) := by
+        apply (div_le_iff₀ hcard).mpr
+        have hh := mul_le_mul_of_nonneg_left hEnvCard (div_nonneg hN.le hM.le)
+        have hdiv : (T.S.N k : ℝ) / (PT.tiling.P i).M * (PT.tiling.P i).M = T.S.N k := by field_simp
+        nlinarith
+      have hlogratio := Real.log_le_log (div_pos hN hcard) hratio
+      have hsqrt : Real.sqrt (Real.log (T.S.n k : ℝ)) ≤ Real.log (T.S.n k : ℝ) := by
+        nlinarith [Real.sq_sqrt (by linarith : 0 ≤ Real.log (T.S.n k : ℝ)),
+          sq_nonneg (Real.sqrt (Real.log (T.S.n k : ℝ)) - 1)]
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) (ne_of_gt (div_pos hN hM))] at hlogratio
+      have hpatch := Q.patch_mass_bound i
+      linarith
+
+private theorem permission_average_estimate {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+      (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT}
+      (R : CellRawData G) (Perm : CellPermissions R),
+      R.SourceValid → n₀ ≤ T.S.n k →
+      TwoBudgetDisc T k ((T.S.n k : ℝ) ^ κ.xs) (κ.α * T.S.n k) (bstar T k) →
+      ∀ C inc, (∑ y, (Perm.table C).badMass inc y) ≤
+        Real.exp (-3 * (Perm.table C).cperm * (Perm.table C).n) *
+          Fintype.card (Fin (T.S.N k)) := by
+  classical
+  obtain ⟨n₁, hwidth⟩ := Lane_sol_s16_prod1.logarithmic_room κ.xs 1 (Real.log 2) 2
+    hκ.xs_rng.1 (by norm_num) (by norm_num)
+  have hc : 0 < κ.α - 3 * κ.cperm := by nlinarith [hκ.cperm_rng.2, hκ.α_rng.1]
+  obtain ⟨n₂, haverage⟩ := Lane_sol_s16_prod1.logarithmic_room 1 (κ.α - 3 * κ.cperm)
+    (Real.log 2) 0 (by norm_num) hc (by norm_num)
+  refine ⟨max (max n₁ n₂) ⌈Real.exp 1⌉₊, ?_⟩
+  intro T k PT K16 Q G R Perm hR hn hDisc C inc
+  have hn₁ : n₁ ≤ T.S.n k := le_trans (le_trans (Nat.le_max_left _ _) (Nat.le_max_left _ _)) hn
+  have hn₂ : n₂ ≤ T.S.n k := le_trans (le_trans (Nat.le_max_right _ _) (Nat.le_max_left _ _)) hn
+  have hlog : 1 ≤ Real.log (T.S.n k : ℝ) := by
+    have he : Real.exp 1 ≤ (T.S.n k : ℝ) :=
+      (Nat.le_ceil _).trans (by exact_mod_cast le_trans (Nat.le_max_right _ _) hn)
+    simpa only [Real.log_exp] using Real.log_le_log (Real.exp_pos 1) he
+  have hbudget := hwidth (T.S.n k) hn₁
+  simp only [one_mul] at hbudget
+  have havg : Real.log 2 ≤ (κ.α - 3 * κ.cperm) * T.S.n k := by
+    have hh := haverage (T.S.n k) hn₂
+    simpa only [zero_mul, add_zero, Real.rpow_one] using hh
+  have hExp : 2 * Real.exp (-(κ.α * T.S.n k)) ≤ Real.exp (-3 * κ.cperm * T.S.n k) := by
+    calc
+      _ = Real.exp (Real.log 2 - κ.α * T.S.n k) := by rw [Real.exp_sub, Real.exp_log (by norm_num), Real.exp_neg]; ring
+      _ ≤ _ := Real.exp_le_exp.mpr (by nlinarith)
+  rw [Perm.rate_eq, Perm.n_eq, Fintype.card_fin]
+  by_cases hinc : inc.2 ∉ PT.tiling.Icoord (G.cellPatch C) ∧ G.classOf inc.1.1 = none
+  · obtain ⟨hj, hclass⟩ := hinc
+    let A := (PT.tiling.P (G.cellPatch C)).Y
+    let v := flipPos inc.1.1 inc.2
+    let P := R.baseExperiment (G.cellOf v) v
+    have hEven : IsEvenRole v := Lane_sol_s16_prod1.flip_parity _ _ |>.mpr inc.1.2.2
+    have hAY : A ⊆ T.Y k := by
+      intro y hy
+      exact (Finset.mem_sdiff.mp ((Q.profiled_valid.tiling_valid.patch_supports (G.cellPatch C)).2.2.2
+        ((Q.profiled_valid.tiling_valid.patch_supports (G.cellPatch C)).2.2.1 hy))).1
+    have hrows : ∀ ω, P.law.w ω ≠ 0 → P.prior ω ≠ 0 →
+        ∃ τ : Law (T.S.N k), τ.w = P.prior ω ∧ τ.SupportedIn (T.X k) ∧
+          τ.WidthLE ((T.S.n k : ℝ) ^ κ.xs) := by
+      intro ω hω hσ
+      obtain ⟨τ, hw, hs, hwidth⟩ := physical_raw_prior_width hκ Q R hR (G.cellOf v) v rfl hEven hlog ω hω hσ
+      exact ⟨τ, hw, hs, hwidth.mono hbudget⟩
+    have h := Lane_sol_s16_prod1.prior_bad_count hDisc
+      (show 0 ≤ bstar T k from Real.rpow_nonneg (Nat.cast_nonneg _) _) PT.tiling.c P A
+      (Q.profiled_valid.tiling_valid.patch_nonempty (G.cellPatch C)).2 hAY hrows
+    have heq : (∑ y, (Perm.table C).badMass inc y) =
+        ∑ y ∈ A, P.expect (fun σ => if σ ≠ 0 ∧
+          2 * bstar T k < |(∑ x, σ x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| then 1 else 0) := by
+      simp_rw [Perm.bad_eq]
+      simp only [hj, hclass, not_false_eq_true, and_true]
+      change (∑ y, if y ∈ A then _ else 0) = _
+      exact Finset.sum_ite_mem_eq _ _
+    rw [heq]
+    exact h.trans (mul_le_mul_of_nonneg_right hExp (Nat.cast_nonneg _))
+  · have hz : ∀ y, (Perm.table C).badMass inc y = 0 := by
+      intro y
+      rw [Perm.bad_eq]
+      have hh : ¬ (y ∈ (PT.tiling.P (G.cellPatch C)).Y ∧
+          inc.2 ∉ PT.tiling.Icoord (G.cellPatch C) ∧ G.classOf inc.1.1 = none) :=
+        fun h => hinc h.2
+      rw [if_neg hh]
+    simp only [hz, Finset.sum_const_zero]
+    positivity
+
+private theorem permission_incidence_count {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT}
+    (R : CellRawData G) (Perm : CellPermissions R) (hR : R.SourceValid)
+    (C : G.Cell) (g : R.Group C) :
+    (permissionIncidences (Perm.table C) g).card ≤ (T.S.n k) ^ 2 := by
+  classical
+  let V := Finset.univ.filter fun r : OddCellRole G C => R.groupOf C r = g
+  have hcount : V.card ≤ max 1 (PT.tiling.P (G.cellPatch C)).h := by
+    by_cases hc : PT.tiling.mode.isCluster
+    · exact (physical_group_count R hR hc C g).trans (Nat.le_max_right _ _)
+    · apply le_trans _ (Nat.le_max_left 1 _)
+      apply Finset.card_le_one.mpr
+      intro r hr r' hr'
+      have hInjective : Function.Injective (R.groupOf C) := by
+        rcases hR with ⟨hMode, _, _⟩ | ⟨_, hSource⟩
+        · exact (hc (by simp [hMode, Mode.isCluster])).elim
+        · exact (hSource C).1
+      apply hInjective
+      rw [(Finset.mem_filter.mp hr).2, (Finset.mem_filter.mp hr').2]
+  have hH : (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k := by
+    simpa only [Fintype.card_fin] using Fintype.card_le_of_injective (R.axis C) (R.axis_injective C)
+  have hMax : max 1 (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k :=
+    max_le (le_trans (by norm_num) Q.n_large) hH
+  have heq : permissionIncidences (Perm.table C) g = V ×ˢ Finset.univ := by
+    ext inc
+    simp [permissionIncidences, Perm.group_eq, V]
+  rw [heq, Finset.card_product]
+  simp only [Finset.card_univ, Fintype.card_fin]
+  simpa only [pow_two] using Nat.mul_le_mul_right (T.S.n k) (hcount.trans hMax)
+
+private theorem physical_incoming_bound {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT}
+    (R : CellRawData G) (hR : R.SourceValid) (C : G.Cell) (W : R.Hist C)
+    (hW : (R.history C).w W ≠ 0) (g : R.Group C) (b : Bin PT.tiling (G.cellPatch C)) :
+    (R.qin C W g).w b ≤
+      8 * Real.exp (2 * (sliceK κ (PT.tiling.P (G.cellPatch C)).h : ℝ) *
+        sliceT κ (PT.tiling.P (G.cellPatch C)).h) /
+        Fintype.card (Bin PT.tiling (G.cellPatch C)) := by
+  classical
+  have hB : (0 : ℝ) < Fintype.card (Bin PT.tiling (G.cellPatch C)) := by
+    have hne : Nonempty (Bin PT.tiling (G.cellPatch C)) := by
+      by_contra hn
+      letI : IsEmpty (Bin PT.tiling (G.cellPatch C)) := not_nonempty_iff.mp hn
+      have hh := (R.qin C W g).sum_one
+      simp at hh
+    letI := hne
+    exact_mod_cast Fintype.card_pos
+  rcases hR with ⟨hMode, hUniform, hSource⟩ | ⟨hDirect, hSource⟩
+  · obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, hPrior⟩ := hSource C
+    obtain ⟨⟨ss, g'⟩, hsg⟩ := groups.surjective g
+    have hg : S.AllGood (records ss (W ss)) := (hPass ss (W ss)).mp (supported_history R C W hW ss).1
+    have hqin : (R.qin C W g).w b = S.qin (records ss (W ss)) g' b := by
+      rw [← hsg, R.qin_eq C W _ b (supported_history R C W hW), hTrim]
+      simp_rw [hQ]
+      unfold SliceSolver.qin
+      split_ifs <;> simp
+    rw [hqin]
+    have hc := Lane_sol_s16_prod1.solver_qin_cap S (records ss (W ss)) hg g' b
+      (Lane_sol_s16_prod1.low_cluster_pretrim_small hκ Q hMode (G.cellPatch C))
+    have hM := physical_bin_count hκ Q (G.cellPatch C)
+    have hdpos : (0 : ℝ) < (PT.tiling.P (G.cellPatch C)).d := by
+      have hMpos : (0 : ℝ) < (PT.tiling.P (G.cellPatch C)).M := by
+        rw [← (PT.tiling.P (G.cellPatch C)).cardY]
+        exact_mod_cast Finset.card_pos.mpr (Q.profiled_valid.tiling_valid.patch_nonempty _).2
+      nlinarith
+    apply hc.trans
+    rw [← hM]
+    simp only [Tiling.kScale, Tiling.tScale]
+    field_simp [hB.ne', hdpos.ne']
+    norm_num
+  · have hRaw : R.SourceValid := Or.inr ⟨hDirect, hSource⟩
+    rw [direct_incoming_uniform R hRaw hDirect C W (supported_history R C W hW) g b]
+    apply div_le_div_of_nonneg_right _ hB.le
+    have he : 1 ≤ Real.exp (2 * (sliceK κ (PT.tiling.P (G.cellPatch C)).h : ℝ) *
+        sliceT κ (PT.tiling.P (G.cellPatch C)).h) := Real.one_le_exp_iff.mpr (by positivity)
+    linarith
+
 private theorem permission_estimates {κ : CConsts} (hκ : κ.Admissible) :
     ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
       (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q)
@@ -584,9 +930,87 @@ private theorem permission_estimates {κ : CConsts} (hκ : κ.Admissible) :
         (∀ g D, (R.qin C W g).w D ≤
           Real.exp ((Perm.table C).cperm * (Perm.table C).n / 2) /
             Fintype.card (Bin PT.tiling (H.geom.cellPatch C))) := by
-  -- Remaining: exceptional_second for the actual raw posterior, the h*n
-  -- incidence bound, and the quantitative pretrim denominator.
-  sorry
+  classical
+  obtain ⟨n₁, hAverage⟩ := permission_average_estimate hκ
+  obtain ⟨n₂, hCapRoom⟩ := Lane_sol_s16_prod1.logarithmic_room 1 (κ.cperm / 2)
+    (Real.log 8) 2 (by norm_num) (div_pos hκ.cperm_rng.1 (by norm_num)) (by norm_num)
+  obtain ⟨n₃, hRatioRoom⟩ := Lane_sol_s16_prod1.logarithmic_room 1 κ.cperm
+    0 4 (by norm_num) hκ.cperm_rng.1 (by norm_num)
+  refine ⟨max n₁ (max n₂ (max n₃ ⌈Real.exp 1⌉₊)), ?_⟩
+  intro T k PT K16 Q H R Perm hR hn hDisc C W hW
+  have hn₁ : n₁ ≤ T.S.n k := le_trans (Nat.le_max_left _ _) hn
+  have hn₂ : n₂ ≤ T.S.n k := le_trans (le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _)) hn
+  have hn₃ : n₃ ≤ T.S.n k := le_trans (le_trans (le_trans (Nat.le_max_left _ _) (Nat.le_max_right _ _)) (Nat.le_max_right _ _)) hn
+  have hnE : ⌈Real.exp 1⌉₊ ≤ T.S.n k := le_trans (le_trans (le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)) (Nat.le_max_right _ _)) hn
+  have hlog : 1 ≤ Real.log (T.S.n k : ℝ) := by
+    have he : Real.exp 1 ≤ (T.S.n k : ℝ) := (Nat.le_ceil _).trans (by exact_mod_cast hnE)
+    have hh := Real.log_le_log (Real.exp_pos 1) he
+    simpa only [Real.log_exp] using hh
+  have hnpos : (0 : ℝ) < T.S.n k := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) Q.n_large
+  have hsqrt : Real.sqrt (Real.log (T.S.n k : ℝ)) ≤ Real.log (T.S.n k : ℝ) := by
+    nlinarith [Real.sq_sqrt (by linarith : 0 ≤ Real.log (T.S.n k : ℝ)),
+      sq_nonneg (Real.sqrt (Real.log (T.S.n k : ℝ)) - 1)]
+  have hB : (0 : ℝ) < Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) := by
+    obtain ⟨b, hb⟩ := (PT.tiling.P (H.geom.cellPatch C)).bins.parts_nonempty
+      (Finset.nonempty_iff_ne_empty.mp (Q.profiled_valid.tiling_valid.patch_nonempty _).2)
+    letI : Nonempty (Bin PT.tiling (H.geom.cellPatch C)) := ⟨⟨b, hb⟩⟩
+    exact_mod_cast Fintype.card_pos
+  refine ⟨hAverage Q R Perm hR hn₁ hDisc C, ?_, ?_⟩
+  · intro g
+    rw [Perm.n_eq, Perm.rate_eq, Fintype.card_fin]
+    have hcount : ((permissionIncidences (Perm.table C) g).card : ℝ) ≤ (T.S.n k : ℝ) ^ (2 : ℕ) := by
+      exact_mod_cast permission_incidence_count hκ Q R Perm hR C g
+    have hM : (0 : ℝ) < (PT.tiling.P (H.geom.cellPatch C)).M := by
+      rw [← (PT.tiling.P (H.geom.cellPatch C)).cardY]
+      exact_mod_cast Finset.card_pos.mpr (Q.profiled_valid.tiling_valid.patch_nonempty _).2
+    have hN : (0 : ℝ) < T.S.N k := by
+      obtain ⟨y, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2
+      exact_mod_cast (lt_of_le_of_lt (Nat.zero_le y.val) y.isLt)
+    have hBin := physical_bin_count hκ Q (H.geom.cellPatch C)
+    have hd : (0 : ℝ) < (PT.tiling.P (H.geom.cellPatch C)).d := by nlinarith
+    have hratio : (T.S.N k : ℝ) / Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) =
+        ((T.S.N k : ℝ) / (PT.tiling.P (H.geom.cellPatch C)).M) * (PT.tiling.P (H.geom.cellPatch C)).d := by
+      rw [← hBin]
+      field_simp
+    have hNM : (T.S.N k : ℝ) / (PT.tiling.P (H.geom.cellPatch C)).M ≤
+        Real.exp (Real.sqrt (Real.log (T.S.n k : ℝ))) := by
+      have hh := Real.exp_le_exp.mpr (Q.patch_mass_bound (H.geom.cellPatch C))
+      rw [Real.exp_log (div_pos hN hM)] at hh
+      exact hh
+    have heq : Real.exp (2 * Real.log (T.S.n k : ℝ)) = (T.S.n k : ℝ) ^ (2 : ℕ) := by
+      have hh := Real.exp_nat_mul (Real.log (T.S.n k : ℝ)) 2
+      simpa only [Nat.cast_ofNat, Real.exp_log hnpos] using hh
+    have hroom : 4 * Real.log (T.S.n k : ℝ) ≤ κ.cperm * T.S.n k := by
+      simpa only [zero_add, Real.rpow_one] using hRatioRoom (T.S.n k) hn₃
+    calc
+      _ ≤ (T.S.n k : ℝ) ^ (2 : ℕ) *
+          (Real.exp (Real.sqrt (Real.log (T.S.n k : ℝ))) * Real.exp (Real.sqrt (Real.log (T.S.n k : ℝ)))) := by
+        apply mul_le_mul hcount _ (div_nonneg hN.le hB.le) (by positivity)
+        rw [hratio]
+        exact mul_le_mul hNM (Q.bin_count_bound _) hd.le (Real.exp_pos _).le
+      _ = Real.exp (2 * Real.log (T.S.n k : ℝ) + 2 * Real.sqrt (Real.log (T.S.n k : ℝ))) := by
+        rw [Real.exp_add, heq]
+        congr 1
+        rw [← Real.exp_add]
+        congr 1
+        ring
+      _ ≤ Real.exp (4 * Real.log (T.S.n k : ℝ)) := Real.exp_le_exp.mpr (by nlinarith)
+      _ ≤ _ := Real.exp_le_exp.mpr hroom
+  · intro g b
+    rw [Perm.n_eq, Perm.rate_eq]
+    have hkt := Lane_sol_s16_prod1.slice_product_log_bound hκ
+      (PT.tiling.P (H.geom.cellPatch C)).h (Real.log (T.S.n k : ℝ)) hlog (Q.height_bound _)
+    have hroom : Real.log 8 + 2 * Real.log (T.S.n k : ℝ) ≤ κ.cperm * T.S.n k / 2 := by
+      have hh := hCapRoom (T.S.n k) hn₂
+      simp only [Real.rpow_one] at hh
+      nlinarith
+    apply (physical_incoming_bound hκ Q R hR C W hW g b).trans
+    apply div_le_div_of_nonneg_right _ hB.le
+    calc
+      _ = Real.exp (Real.log 8 + 2 * (sliceK κ (PT.tiling.P (H.geom.cellPatch C)).h : ℝ) *
+          sliceT κ (PT.tiling.P (H.geom.cellPatch C)).h) := by
+        rw [Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 8)]
+      _ ≤ _ := Real.exp_le_exp.mpr (by nlinarith)
 
 /-- S1 producer: retain the solver cap and its pretrim denominator, then
 absorb their subexponential inflation at one uniform cutoff (T16:147–156). -/
@@ -675,14 +1099,6 @@ noncomputable def binProblem (K : CellRestrictedKernels R Perm) (C : G.Cell)
   ε := sliceEps κ (PT.tiling.P (G.cellPatch C)).h
 end CellRestrictedKernels
 
-private theorem supported_history {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
-    (C : G.Cell) (W : R.Hist C) (hW : (R.history C).w W ≠ 0) :
-    ∀ s, W s ∈ R.slicePass C s ∧ (R.sliceLaw C s).w (W s) ≠ 0 := by
-  intro s
-  exact Lane_sol_s16_prod1.cond_support _ _ _ _
-    (Lane_sol_s16_prod1.pi_support _ W hW s)
-
 private theorem restricted_kernels_exists {κ : CConsts} (hκ : κ.Admissible)
     {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {G : LowGeom PT}
     (R : CellRawData G) (Perm : CellPermissions R)
@@ -693,15 +1109,9 @@ private theorem restricted_kernels_exists {κ : CConsts} (hκ : κ.Admissible)
   let mass := fun C W g => ∑ D ∈ (Perm.table C).permitted g, (R.qin C W g).w D
   have hmass : ∀ C W g, (R.history C).w W ≠ 0 → 0 < mass C W g := by
     intro C W g hW
-    obtain ⟨c, hc, _hcount, hretained⟩ := permission_loss hκ (Perm.table C) (R.qin C W)
-      (hPerm C W hW)
-    have hexp : Real.exp (-c * (Perm.table C).n) < 1 := by
-      apply Real.exp_lt_one_iff.mpr
-      have hn : (0 : ℝ) < (Perm.table C).n := by exact_mod_cast (Perm.table C).n_pos
-      nlinarith
-    have h := hretained g
-    dsimp [mass]
-    linarith
+    exact lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 2)
+      (Lane_sol_s16_prod1.permission_retained_half (Perm.table C) (R.qin C W)
+        (hPerm C W hW) g)
   let qbar : ∀ C, R.Hist C → R.Group C → FinLaw (Bin PT.tiling (G.cellPatch C)) :=
     fun C W g => if hm : 0 < mass C W g then
       FinLaw.cond (R.qin C W g) ((Perm.table C).permitted g) hm else R.qin C W g
@@ -925,54 +1335,6 @@ private theorem supported_column_load_eq {κ : CConsts} {T : Stage} {k : ℕ}
   simp only [CellRestrictedKernels.binProblem, ha, if_false]
   rw [Finset.sum_comm]
   simp
-
-private theorem physical_group_count {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
-    (hR : R.SourceValid) (hc : PT.tiling.mode.isCluster) (C : G.Cell) (g : R.Group C) :
-    (Finset.univ.filter fun r : OddCellRole G C => R.groupOf C r = g).card ≤
-      (PT.tiling.P (G.cellPatch C)).h := by
-  classical
-  rcases hR with ⟨hMode, hUniform, hSource⟩ | ⟨hDirect, hSource⟩
-  · obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, hPrior⟩ := hSource C
-    obtain ⟨sg, hsg⟩ := groups.surjective g
-    obtain ⟨s₀, g₀⟩ := sg
-    let V := Finset.univ.filter fun r : OddCellRole G C => R.groupOf C r = g
-    let f := fun r : OddCellRole G C => (R.cellWords C).symm ⟨r.1, r.2.1⟩
-    have hf : Function.Injective f := by
-      intro r r' h
-      have heq := (R.cellWords C).symm.injective h
-      apply Subtype.ext
-      exact congrArg (fun v : {v : Pos T k // G.cellOf v = C} => v.1) heq
-    have hsub : V.image f ⊆ ({s₀} : Finset (R.Slice C)) ×ˢ groupFiber g₀ := by
-      intro sz hsz
-      obtain ⟨r, hr, rfl⟩ := Finset.mem_image.mp hsz
-      have hv : (R.cellWords C (f r)).1 = r.1 :=
-        congrArg Subtype.val ((R.cellWords C).apply_symm_apply ⟨r.1, r.2.1⟩)
-      have hz : ¬ IsEvenRole (f r).2 := by
-        intro he
-        exact r.2.2 (by rw [← hv]; exact (R.word_parity hc C _ _).mpr he)
-      have hrEq : R.groupOf C r = groups ((f r).1, S.groupOf (f r).2) := by
-        have h := hGroup (f r).1 (f r).2 (by rw [hv]; exact r.2.2)
-        simpa only [hv] using h
-      have hgEq : groups ((f r).1, S.groupOf (f r).2) = groups (s₀, g₀) := by
-        rw [← hrEq, hsg]
-        exact (Finset.mem_filter.mp hr).2
-      have hp := groups.injective hgEq
-      have hs := congrArg Prod.fst hp
-      have hg := congrArg Prod.snd hp
-      change S.groupOf (f r).2 = g₀ at hg
-      apply Finset.mem_product.mpr
-      refine ⟨Finset.mem_singleton.mpr hs, ?_⟩
-      rw [← hg]
-      exact S.groupOf_spec (f r).2 hz
-    calc
-      V.card = (V.image f).card := (Finset.card_image_of_injective _ hf).symm
-      _ ≤ (({s₀} : Finset (R.Slice C)) ×ˢ groupFiber g₀).card := Finset.card_le_card hsub
-      _ = (groupFiber g₀).card := by simp
-      _ ≤ (PT.tiling.P (G.cellPatch C)).h := by
-        change (Finset.univ.image (flipPos g₀.1)).card ≤ _
-        exact Finset.card_image_le.trans (by simp)
-  · exact (hDirect hc).elim
 
 private theorem positive_pool_bin_raw {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} {R : CellRawData G}
@@ -1241,24 +1603,6 @@ private theorem physical_group_star_degree {κ : CConsts}
       ((PT.tiling.P (G.cellPatch C)).h : ℝ) ^ 2 := by exact_mod_cast hcount
   have hh := (hCalibration.room hCluster (G.cellPatch C)).2.2.2.1
   nlinarith [sq_nonneg ((PT.tiling.P (G.cellPatch C)).h : ℝ)]
-
-private theorem physical_bin_count {κ : CConsts} (hκ : κ.Admissible)
-    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
-    (Q : LowModeQuantFacts hκ (PT := PT) K16) (i : Fin PT.tiling.m) :
-    (Fintype.card (Bin PT.tiling i) : ℝ) * (PT.tiling.P i).d = (PT.tiling.P i).M := by
-  have h := (PT.tiling.P i).bins.sum_card_parts
-  have he : ∑ b ∈ (PT.tiling.P i).bins.parts, b.card =
-      (PT.tiling.P i).bins.parts.card * (PT.tiling.P i).d := by
-    calc
-      _ = ∑ _b ∈ (PT.tiling.P i).bins.parts, (PT.tiling.P i).d :=
-        Finset.sum_congr rfl (fun b hb => Q.profiled_valid.tiling_valid.bins_card i b hb)
-      _ = _ := by simp
-  rw [he, (PT.tiling.P i).cardY] at h
-  have hn : Fintype.card (Bin PT.tiling i) * (PT.tiling.P i).d = (PT.tiling.P i).M := by
-    change Fintype.card {b // b ∈ (PT.tiling.P i).bins.parts} * (PT.tiling.P i).d = _
-    rw [Fintype.card_of_subtype (PT.tiling.P i).bins.parts (fun _ => Iff.rfl)]
-    exact h
-  exact_mod_cast hn
 
 private theorem cluster_incoming_cap {κ : CConsts} (hκ : κ.Admissible)
     {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}

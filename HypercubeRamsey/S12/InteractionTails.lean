@@ -1,5 +1,6 @@
 import HypercubeRamsey.S12.Exceptional
 import HypercubeRamsey.S12.CenteredMoment
+import HypercubeRamsey.S12.InteractionTails_q_s12_tails
 
 /-!
 # Section 12 interaction tails
@@ -26,8 +27,8 @@ theorem inter_tail_one (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
             DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
             100 * 3 ^ u * C0 * bstar T k <
               |inter (T.S.E k) c (S.π l).w J (Function.update xs i₀ z)|),
-            S.τ.w z ≤ Real.exp (-(κ.α * T.S.n k / 3)) := by
-  sorry
+          S.τ.w z ≤ Real.exp (-(κ.α * T.S.n k / 3)) := by
+  exact HypercubeRamsey.Lane_q_s12_tails.prove_inter_tail_one κ hκ T hDeep c u C0 hC0
 
 /-- L12.3a: the raw one-coordinate correlation tail, without a degree gate. -/
 theorem corr_tail_one (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -39,7 +40,7 @@ theorem corr_tail_one (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           100 * 3 ^ u * C0 * bstar T k <
             |corr (T.S.E k) c (S.π l).w x z|),
           S.τ.w z ≤ Real.exp (-(κ.α * T.S.n k / 3)) := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s12_tails.prove_corr_tail_one κ hκ T hDeep c u C0 hC0
 
 /-- L12.3b: a gated two-coordinate interaction tail. -/
 theorem inter_tail_two (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -60,7 +61,8 @@ theorem inter_tail_two (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
                     (Function.update (Function.update xs i₀ z) i₁ z')|
              then S.τ.w z * S.τ.w z' else 0) ≤
             Real.exp (-((T.S.n k : ℝ) ^ (0.4 : ℝ))) := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s12_tails.prove_inter_tail_two
+    κ hκ T hDeep c u C0 hC0
 
 /-- L12.3b: the raw two-coordinate correlation tail, without a degree gate. -/
 theorem corr_tail_two (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -73,7 +75,7 @@ theorem corr_tail_two (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
               |corr (T.S.E k) c (S.π l).w z z'|
            then S.τ.w z * S.τ.w z' else 0) ≤
             Real.exp (-((T.S.n k : ℝ) ^ (0.4 : ℝ))) := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s12_tails.prove_corr_tail_two κ hκ T hDeep c u C0 hC0
 
 /-- L12.3c: mean absolute interaction size under the iid first-side law. -/
 theorem inter_mean (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -86,7 +88,7 @@ theorem inter_mean (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
         ∑ xs : Fin u → Fin (T.S.N k),
           prodW S.τ.w xs * |inter (T.S.E k) c (S.π l).w J xs| ≤
             (T.S.n k : ℝ) ^ (-0.4 * (J.card : ℝ)) := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s12_tails.prove_inter_mean κ hκ T hDeep c u C0 hC0
 
 /-- L12.3: assemble the one-free, two-free, raw-correlation, and mean interaction estimates. -/
 theorem interaction_tails (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

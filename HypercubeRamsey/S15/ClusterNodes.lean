@@ -6,6 +6,7 @@ import HypercubeRamsey.S15.ClusterNodes_sol_s15_transfer
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
 import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c2
+import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -805,7 +806,15 @@ theorem high_cluster_bin_transfer (κ : CConsts) (hκ : κ.Admissible) (T : Stag
         clusterCoreRepeatCost PT i ^ M.coreBins.card *
           clusterCrossingFraction T k ^ M.crossingBins.card *
             clusterReferenceMean PT hPT hm i x M W := by
-    sorry
+    filter_upwards [high_cluster_small_bin_splice κ hκ T hDeep,
+      Lane_sol_s15_transfer.eventual_core_radius κ hκ T,
+      Lane_sol_s15_transfer.eventual_crossing_width κ hκ T,
+      Lane_sol_s15_transfer.eventual_high_gain_le_dimension κ hκ T,
+      T.S.n_tendsto.eventually (eventually_ge_atTop 1)] with k hs hr hw hg hn
+    intro PT hPT hm hsmall i x hx M hM W
+    exact Lane_sol_s15_transfer.raw_bin_repeat_bound_small PT hPT hm hsmall i x M hM
+      (by nlinarith [hr PT hPT hm i]) hn (hw PT hPT)
+      (Lane_sol_s15_transfer.crossing_bin_cap_of_splice PT hn (hg PT hPT hm) (hs PT hPT hsmall)) W
   filter_upwards [hsmall, T.S.n_tendsto.eventually (eventually_ge_atTop 5)] with k hk hn
   intro PT hPT hm CS i x hx M hM
   exact Lane_sol_s15_transfer.bin_transfer_of_scope_and_reverse PT hPT hm CS i x M
@@ -826,7 +835,12 @@ theorem high_cluster_history_restore (κ : CConsts) (hκ : κ.Admissible) (T : S
       (clusterHistoryLaw PT hPT hm).E (clusterReferenceMean PT hPT hm i x M) =
         ∏ r ∈ clusterKeptRows M, (clusterRawReferenceLaw PT hPT hm).E
           (fun z => (PT.tiling.P i).M * clusterSigma PT hPT hm z.1 z.2 (M.positions r) x) := by
-    sorry
+    filter_upwards [Lane_sol_s15_transfer.eventual_core_radius κ hκ T,
+      Lane_sol_s15_transfer.eventual_crossing_width κ hκ T,
+      Lane_sol_s15_transfer.eventual_nominal_degrees_pos κ hκ T] with k hr hw hd
+    intro PT hPT hm i x hx M hM
+    exact Lane_sol_s15_transfer.raw_reference_factorization PT hPT hm i x M hM
+      (hr PT hPT hm i) (hw PT hPT) (hd PT hPT hm i x hx)
   filter_upwards [hfactor, T.S.n_tendsto.eventually (eventually_ge_atTop 2)] with k hk hn
   intro PT hPT hm CS i x hx M hM
   exact Lane_sol_s15_transfer.history_restore_of_scope_and_factorization PT hPT hm CS i x M

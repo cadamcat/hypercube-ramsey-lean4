@@ -2,6 +2,10 @@ import HypercubeRamsey.S05.History
 import HypercubeRamsey.S05.Selection
 import HypercubeRamsey.S03.Height.Selection
 import HypercubeRamsey.S05.Centres_sol_s05_centres_scales
+import HypercubeRamsey.S05.Centres_sol_s05_centres_records
+import HypercubeRamsey.S05.Centres_sol_s05_centres_height
+import HypercubeRamsey.S05.Centres_sol_s05_centres_low
+import HypercubeRamsey.S05.Centres_sol_s05_centres_counts
 
 /-!
 # D5.6–D5.8, L5.1j, L5.1g/k rows, L5.1l(3): centers, height choices and the odd rows
@@ -389,7 +393,207 @@ validity, with supported raw blocks and a supported true posterior path. -/
 theorem L5_1g_rows : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G)
     (L : X.CentreLayer5), (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
     X.HighChoice5 L.ht.hp.Loc → Nonempty (X.HighRows5 L) := by
-  sorry
+  classical
+  intro n N E G X L hcover Ch
+  let rActual := fun H ω y => X.actualRecord (L.elig H) H ω y
+  have hkey (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n) :
+      (rActual H ω y).1 = X.g.roleKey (X.p.J n) y.1 := rfl
+  have hlen (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n)
+      (hy : ¬ X.g.low (X.p.J n) y.1) : colLen5 (X.p.s n) (rActual H ω y).1 = X.p.s n := by
+    rw [hkey]
+    change ¬ X.g.severity y.1 ≤ X.p.J n at hy
+    simp only [ChunkGeometry5.roleKey, dif_neg hy, colLen5]
+  have hmask (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n)
+      (hy : ¬ X.g.low (X.p.J n) y.1) : (rActual H ω y).2.2.2 = none := by
+    change ¬ X.g.severity y.1 ≤ X.p.J n at hy
+    simp only [rActual, actualRecord, actualRecordAt, ChunkGeometry5.roleKey, dif_neg hy]
+  have href (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n) :
+      ∀ c ∈ (rActual H ω y).2.2.1, (c.1, c.2.1) ∈ (rActual H ω y).2.1 := by
+    intro c hc
+    change c ∈ (evenNbrs y).biUnion _ at hc
+    obtain ⟨a, ha, hc⟩ := Finset.mem_biUnion.mp hc
+    cases hs : X.selAt (L.elig H) ω L.ht.hp.Rlong a with
+    | none => simp [hs] at hc
+    | some l =>
+      by_cases ht : X.g.roleKey (X.p.J n) y.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
+          (X.g.roleKey (X.p.J n) y.1).isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome
+      · have he : c = (l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1) := by
+          simpa only [hs, if_pos ht, Finset.mem_singleton] using hc
+        subst c
+        apply Finset.mem_biUnion.mpr
+        exact ⟨a, ha, by simp [hs]⟩
+      · simp only [hs, if_neg ht, Finset.notMem_empty] at hc
+  have hfeasible (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n)
+      (hv : L.valid H ω y) (hy : ¬ X.g.low (X.p.J n) y.1) :
+      X.HighCapped H (rActual H ω y) (arraysOf ω) ∧ X.HighPriceFeasible H (rActual H ω y) (arraysOf ω) := by
+    have hr : (rActual H ω y).1.isRight := by
+      rw [hkey]
+      change ¬ X.g.severity y.1 ≤ X.p.J n at hy
+      simp [ChunkGeometry5.roleKey, hy]
+    by_contra hf
+    apply L.valid_step3 H ω y hv
+    exact ⟨L.valid_gate H ω y hv, Or.inr (Or.inr ⟨hr, hf⟩)⟩
+  let obs := fun H ω y => Lane_sol_s05_centres.observedArrays X (rActual H ω y) (arraysOf ω)
+  have hobs (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n) :
+      ∀ c ∈ (rActual H ω y).2.1, arraysOf ω c = obs H ω y c := by
+    intro c hc
+    exact (Lane_sol_s05_centres.observedArrays_eq X _ _ c hc).symm
+  have hcanon (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n)
+      (hv : L.valid H ω y) (hy : ¬ X.g.low (X.p.J n) y.1) :
+      X.HighCapped H (rActual H ω y) (obs H ω y) ∧ X.HighPriceFeasible H (rActual H ω y) (obs H ω y) := by
+    have hm : ∀ c M, (rActual H ω y).2.2.2 = some (c.1, c.2, M) → c ∈ (rActual H ω y).2.1 := by
+      intro c M hc
+      rw [hmask H ω y hy] at hc
+      cases hc
+    exact ⟨(Lane_sol_s05_centres.highCapped_arrays_congr X H _ _ _ hm (hobs H ω y)).mp
+        (hfeasible H ω y hv hy).1,
+      (Lane_sol_s05_centres.highPrice_arrays_congr X H _ _ _ hm (href H ω y) (hobs H ω y)).mp
+        (hfeasible H ω y hv hy).2⟩
+  let law := fun H ω y hv hy => Ch.law H (rActual H ω y) (obs H ω y)
+    (hcanon H ω y hv hy).1 (hcanon H ω y hv hy).2
+  let row : X.KeyHist → X.CΩ L.ht → OddRole5 n → X.OddOut → ℝ := fun H ω y o =>
+    if hv : L.valid H ω y then
+      if hy : ¬ X.g.low (X.p.J n) y.1 then Lane_sol_s05_centres.indexRow (law H ω y hv hy) (X.p.s n) o
+      else 0
+    else 0
+  have hrow (H : X.KeyHist) (ω : X.CΩ L.ht) (y : OddRole5 n)
+      (hv : L.valid H ω y) (hy : ¬ X.g.low (X.p.J n) y.1) (o : X.OddOut) :
+      row H ω y o = Lane_sol_s05_centres.indexRow (law H ω y hv hy) (X.p.s n) o := by
+    simp [row, hv, hy]
+  refine ⟨
+    { row := row
+      row_nonneg := ?_
+      row_low := ?_
+      row_index := ?_
+      row_invalid := ?_
+      row_sum := ?_
+      row_cap := ?_
+      row_support := ?_
+      row_cost := ?_
+      row_local := ?_ }⟩
+  · intro H ω y o
+    by_cases hv : L.valid H ω y
+    · by_cases hy : ¬ X.g.low (X.p.J n) y.1
+      · rw [hrow H ω y hv hy]
+        exact Lane_sol_s05_centres.indexRow_nonneg _ _ _
+      · have hl : X.g.low (X.p.J n) y.1 := Classical.not_not.mp hy
+        simp [row, hv, hl]
+    · simp [row, hv]
+  · intro H ω y o hy
+    simp [row, hy]
+  · intro H ω y o hi
+    by_cases hv : L.valid H ω y
+    · by_cases hy : ¬ X.g.low (X.p.J n) y.1
+      · rw [hrow H ω y hv hy]
+        exact Lane_sol_s05_centres.indexRow_index _ (hlen H ω y hy) o hi
+      · simp [row, hv, hy]
+    · simp [row, hv]
+  · intro H ω y o hv
+    simp [row, hv]
+  · intro H ω y hv hy
+    simp only [hrow H ω y hv hy]
+    exact Lane_sol_s05_centres.indexRow_sum _ (hlen H ω y hy)
+  · intro H ω y o
+    have hC : 0 ≤ 2 * Real.exp (X.p.DH n) / ((X.p.s n : ℝ) * N) := by positivity
+    by_cases hv : L.valid H ω y
+    · by_cases hy : ¬ X.g.low (X.p.J n) y.1
+      · rw [hrow H ω y hv hy]
+        apply Lane_sol_s05_centres.indexRow_cap _ _ hC
+        intro h x
+        simpa only [hlen H ω y hy] using Ch.cap H (rActual H ω y) (obs H ω y)
+          (hcanon H ω y hv hy).1 (hcanon H ω y hv hy).2 h x
+      · have hl : X.g.low (X.p.J n) y.1 := Classical.not_not.mp hy
+        simpa [row, hv, hl] using hC
+    · simpa [row, hv] using hC
+  · intro H ω y o ho a ha c hsel z hz
+    have hv : L.valid H ω y := by
+      by_contra hv
+      exact ho (by simp [row, hv])
+    have hy : ¬ X.g.low (X.p.J n) y.1 := by
+      by_contra hy
+      exact ho (by simp [row, hy])
+    rw [hrow H ω y hv hy] at ho
+    obtain ⟨h, _, hpos⟩ := Lane_sol_s05_centres.indexRow_support _ o ho
+    have hsource : (X.highSource H (rActual H ω y) (arraysOf ω) h).w o.2 ≠ 0 := by
+      have hp := Ch.support H (rActual H ω y) (obs H ω y) (hcanon H ω y hv hy).1
+        (hcanon H ω y hv hy).2 h o.2 hpos
+      have hm : ∀ c M, (rActual H ω y).2.2.2 = some (c.1, c.2, M) → c ∈ (rActual H ω y).2.1 := by
+        intro c M hc
+        rw [hmask H ω y hy] at hc
+        cases hc
+      rw [Lane_sol_s05_centres.highSource_arrays_congr X H _ _ _ hm (hobs H ω y)]
+      exact hp
+    cases hs : X.selLong (L.elig H) ω a with
+    | none => simp [evenRefOf, hs] at hsel
+    | some l =>
+      have hc : c = (l, X.refSubset H ω a l) := by simpa [evenRefOf, hs] using hsel.symm
+      subst c
+      obtain ⟨i, hi, rfl⟩ := Finset.mem_image.mp hz
+      have hobsMem : (l, X.g.evenType (X.p.J n) a.1) ∈ (rActual H ω y).2.1 := by
+        apply Finset.mem_biUnion.mpr
+        refine ⟨a, ha, ?_⟩
+        have hsa : X.selAt (L.elig H) ω L.ht.hp.Rlong a = some l := hs
+        simp [hsa]
+      have hkeyMem : (rActual H ω y).1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 := by
+        have hadj : (cube n).Adj a.1 y.1 := by
+          have hh := (Finset.mem_filter.mp ha).2
+          exact hh
+        rcases (L5_1e_cover X.g (X.p.J n)).1 a.1 y.1 hadj with hkey' | hopt
+        · simpa [hkey, ChunkGeometry5.evenType] using hkey'
+        · have hh : ¬ X.g.severity y.1 ≤ X.p.J n := hy
+          simp [ChunkGeometry5.optionalKey, ChunkGeometry5.roleKey, hh] at hopt
+      exact Lane_sol_s05_centres.high_source_block_hits X H (rActual H ω y) (arraysOf ω)
+        (L.valid_base_support H ω y hv) (L.valid_path_support H ω y hv)
+        (l, X.g.evenType (X.p.J n) a.1) hobsMem hkeyMem
+        (hcover a.1 _ (by simpa [hkey, ChunkGeometry5.evenType] using hkeyMem))
+        (Lane_q_s05_hist1b.typeSegs_le_keyPrefix5 X _ ⟨a.1, a.2, rfl⟩ _ hkeyMem) i
+        (L.valid_block_support H ω y hv _ hobsMem i) h o.2 hsource
+  · intro H ω y hv hy c hc
+    let R := law H ω y hv hy
+    have hm : ∀ c M, (rActual H ω y).2.2.2 = some (c.1, c.2, M) → c ∈ (rActual H ω y).2.1 := by
+      intro c M hc
+      rw [hmask H ω y hy] at hc
+      cases hc
+    have hrefs := Lane_sol_s05_centres.refsOn_arrays_congr X H (rActual H ω y)
+      (arraysOf ω) (obs H ω y) (href H ω y) (hobs H ω y)
+    have hc' : c ∈ X.refsOn H (rActual H ω y) (obs H ω y) := by rw [← hrefs]; exact hc
+    have hd : ∀ c h, X.highDeleted H (rActual H ω y) (arraysOf ω) c h =
+        X.highDeleted H (rActual H ω y) (obs H ω y) c h :=
+      Lane_sol_s05_centres.highDeleted_arrays_congr X H _ _ _ hm (hobs H ω y)
+    have he (o : X.OddOut) : X.highCost H (rActual H ω y) (arraysOf ω) c (row H ω y) o =
+        Lane_sol_s05_centres.indexCost R
+          (fun c' h' => X.highDeleted H (rActual H ω y) (arraysOf ω) c' h') c (X.p.s n) o := by
+      dsimp [highCost, idxOf, Lane_sol_s05_centres.indexCost]
+      split_ifs
+      · simp only [hrow H ω y hv hy, hlen H ω y hy, R]
+      · rfl
+    change (∑ o, row H ω y o * X.highCost H (rActual H ω y) (arraysOf ω) c (row H ω y) o) ≤ _
+    simp only [he, hrow H ω y hv hy]
+    change (∑ o, Lane_sol_s05_centres.indexRow R (X.p.s n) o *
+      Lane_sol_s05_centres.indexCost R
+        (fun c' h' => X.highDeleted H (rActual H ω y) (arraysOf ω) c' h') c (X.p.s n) o) ≤ _
+    rw [Lane_sol_s05_centres.indexCost_sum R
+      (fun c' h' => X.highDeleted H (rActual H ω y) (arraysOf ω) c' h') c (hlen H ω y hy)]
+    have hcost := Ch.cost H (rActual H ω y) (obs H ω y) (hcanon H ω y hv hy).1
+      (hcanon H ω y hv hy).2 c hc'
+    simpa only [R, law, hd] using hcost
+  · intro H y
+    intro ω ω' hω
+    have hvEq := L.valid_local H y ω ω' hω
+    dsimp only at hvEq
+    by_cases hv : L.valid H ω y
+    · have hv' : L.valid H ω' y := hvEq ▸ hv
+      by_cases hy : ¬ X.g.low (X.p.J n) y.1
+      · funext o
+        dsimp only
+        rw [hrow H ω y hv hy, hrow H ω' y hv' hy]
+        -- The remaining comparison needs locality of the actual record and
+        -- its observed arrays at this odd role's prescribed scope.
+        sorry
+      · have hl : X.g.low (X.p.J n) y.1 := Classical.not_not.mp hy
+        simp [row, hv, hv', hl]
+    · have hv' : ¬ L.valid H ω' y := by simpa only [← hvEq] using hv
+      simp [row, hv, hv']
 
 /-! ### Low rows: the selection adjustment of L5.1k (05:896–1001) -/
 

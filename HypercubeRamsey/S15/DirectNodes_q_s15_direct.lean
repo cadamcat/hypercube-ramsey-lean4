@@ -91,6 +91,36 @@ theorem self_mem_starNear {T : Stage} {k : ℕ}
     ⟨Finset.mem_univ _, by simpa [star] using hb⟩
   exact Finset.mem_biUnion.mpr ⟨b, hb, ha⟩
 
+noncomputable def starNearWithin {T : Stage} {k : ℕ}
+    (U : Finset (S15.EvenPosition T k))
+    (a : {a : S15.EvenPosition T k // a ∈ U}) :
+    Finset {a : S15.EvenPosition T k // a ∈ U} :=
+  Finset.univ.filter fun b => b.1 ∈ starNear a.1
+
+theorem self_mem_starNearWithin {T : Stage} {k : ℕ}
+    (U : Finset (S15.EvenPosition T k))
+    (a : {a : S15.EvenPosition T k // a ∈ U}) (hn : 0 < T.S.n k) :
+    a ∈ starNearWithin U a := by
+  simp [starNearWithin, self_mem_starNear a.1 hn]
+
+theorem starNearWithin_card_le_sq {T : Stage} {k : ℕ}
+    (U : Finset (S15.EvenPosition T k))
+    (a : {a : S15.EvenPosition T k // a ∈ U}) :
+    (starNearWithin U a).card ≤ (T.S.n k) ^ 2 := by
+  classical
+  have himage : (starNearWithin U a).card =
+      ((starNearWithin U a).image Subtype.val).card :=
+    (Finset.card_image_of_injective _ Subtype.val_injective).symm
+  have hsub : (starNearWithin U a).image Subtype.val ⊆ starNear a.1 := by
+    intro b hb
+    rcases Finset.mem_image.mp hb with ⟨b', hb', rfl⟩
+    exact (Finset.mem_filter.mp hb').2
+  calc
+    (starNearWithin U a).card =
+        ((starNearWithin U a).image Subtype.val).card := himage
+    _ ≤ (starNear a.1).card := Finset.card_le_card hsub
+    _ ≤ (T.S.n k) ^ 2 := starNear_card_le_sq a.1
+
 theorem prefixLeaf_card_le {n ell : ℕ} (w : CubeVertex n) (hle : ell ≤ n) :
     (Finset.univ.filter fun v : CubeVertex n => v ∈ prefixLeaf ell w).card ≤ 2 ^ (n - ell) := by
   classical

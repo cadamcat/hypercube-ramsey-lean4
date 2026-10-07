@@ -9,8 +9,6 @@ import HypercubeRamsey.S06.EvenRows_select_sol_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_q_s06_ev_d
 import HypercubeRamsey.S06.EvenRows_sol_s06_ev_d
 
-set_option maxHeartbeats 20000000
-set_option maxRecDepth 20000
 
 /-!
 # Odd injection and even posterior reconstruction

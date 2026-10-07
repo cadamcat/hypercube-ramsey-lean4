@@ -1,5 +1,6 @@
 import HypercubeRamsey.S16.ProducersDefs
 import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_gate1
+import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_conc
 
 /-! Cluster diagnostics proof nodes from the S16 pool diagnosis. -/
 
@@ -33,7 +34,22 @@ theorem scopedEmpirical_one_slot {J Slot Bin : Type*} [DecidableEq J]
     (s : Slot) (x y : Slot → Bin) (hxy : ∀ t, t ≠ s → x t = y t) :
     |scopedEmpirical I P base f x - scopedEmpirical I P base f y| ≤
       (I.card : ℝ) * A ^ I.card / Fintype.card Slot := by
-  sorry
+  classical
+  let P' : I → FinLaw Bin := fun j => P j.1
+  let f' : (I → Bin) → ℝ := fun a => f (fillScope I base a)
+  let F : (I → Bin) → ℝ :=
+    Lane_sol_s16_prod1.empirical_weighted_kernel P' (Fintype.card Bin) f'
+  have hB : (0 : ℝ) < Fintype.card Bin := by positivity
+  have hA0 : 0 ≤ A := le_trans (by norm_num) hA
+  have hF : ∀ a, 0 ≤ F a ∧ F a ≤ A ^ Fintype.card I := by
+    simpa only [F, P', f'] using
+      (Lane_sol_s16_prod1.empirical_weighted_kernel_range
+        P' (Fintype.card Bin) A hB hA0
+        (by intro j b; exact hcap j.1 b)
+        f' (by intro a; exact hf (fillScope I base a)))
+  simpa [scopedEmpirical, F, P', f'] using
+    (Lane_sol_s16_prod1.empirical_statistic_one_slot
+      F (A ^ Fintype.card I) (pow_nonneg hA0 _) hF s x y hxy)
 
 /-- C2. Mean under iid uniform slots (from `empirical_statistic_mean`,
 `empirical_weighted_kernel_range` and `empirical_weighted_kernel_integral`).
@@ -48,7 +64,38 @@ theorem scopedEmpirical_mean {J Slot Bin : Type*} [DecidableEq J]
         (scopedEmpirical I P base f) ≤
       (FinLaw.pi (fun j : I => P j.1)).E (fun a => f (fillScope I base a)) +
         A ^ I.card * ((I.card : ℝ) ^ 2 / Fintype.card Slot) := by
-  sorry
+  classical
+  let P' : I → FinLaw Bin := fun j => P j.1
+  let f' : (I → Bin) → ℝ := fun a => f (fillScope I base a)
+  let F : (I → Bin) → ℝ :=
+    Lane_sol_s16_prod1.empirical_weighted_kernel P' (Fintype.card Bin) f'
+  have hB : (0 : ℝ) < Fintype.card Bin := by positivity
+  have hA0 : 0 ≤ A := le_trans (by norm_num) hA
+  have hF : ∀ a, 0 ≤ F a ∧ F a ≤ A ^ Fintype.card I := by
+    simpa only [F, P', f'] using
+      (Lane_sol_s16_prod1.empirical_weighted_kernel_range
+        P' (Fintype.card Bin) A hB hA0
+        (by intro j b; exact hcap j.1 b)
+        f' (by intro a; exact hf (fillScope I base a)))
+  have hmean := Lane_sol_s16_prod1.empirical_statistic_mean
+    (Index := I) (Slot := Slot) (Bin := Bin)
+    F (FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)
+    (A ^ Fintype.card I) (pow_nonneg hA0 _) hF
+  change
+    (FinLaw.pi (fun _ : Slot =>
+      FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)).E
+        (Lane_sol_s16_prod1.empirical_statistic F) ≤
+      (FinLaw.pi P').E f' +
+        A ^ I.card * ((I.card : ℝ) ^ 2 / Fintype.card Slot)
+  calc
+    _ ≤ (FinLaw.pi (fun _ : I =>
+          FinLaw.uniform (Finset.univ : Finset Bin) Finset.univ_nonempty)).E F +
+          A ^ Fintype.card I * ((Fintype.card I : ℝ) ^ 2 / Fintype.card Slot) := by
+      exact hmean
+    _ = (FinLaw.pi P').E f' +
+          A ^ I.card * ((I.card : ℝ) ^ 2 / Fintype.card Slot) := by
+      rw [Lane_sol_s16_prod1.empirical_weighted_kernel_integral P' f']
+      simp only [Fintype.card_coe]
 
 /-- C3. The pool-restricted integral is bounded by the slot expansion, on
 every pool (repeated images only enlarge the right side).
@@ -124,7 +171,78 @@ theorem pinLaw_E_close {Slot Bin Hist Check : Type*}
     (s : Slot) (b : Bin) (δ : ℝ)
     (hΦ : ∀ x y, (∀ t, t ≠ s → x t = y t) → |Φ x - Φ y| ≤ δ) :
     |(D.pinLaw s b).E Φ - D.poolLaw.E Φ| ≤ δ := by
-  sorry
+  classical
+  letI : Nonempty Bin := D.bins_nonempty
+  let Ppin : Slot → FinLaw Bin := fun t =>
+    if t = s then FinLaw.dirac b else D.iidSlotLaw t
+  let Ψ : (Slot → Bin) → ℝ := fun x => Φ (Function.update x s b)
+  have hreplace : (FinLaw.pi Ppin).E Φ = (FinLaw.pi Ppin).E Ψ := by
+    unfold FinLaw.E
+    apply Finset.sum_congr rfl
+    intro x hx
+    change (∏ t, (Ppin t).w (x t)) * Φ x =
+      (∏ t, (Ppin t).w (x t)) * Φ (Function.update x s b)
+    have hprod : (∏ t, (Ppin t).w (x t)) =
+        (Ppin s).w (x s) * ∏ t ∈ Finset.univ.erase s, (Ppin t).w (x t) := by
+      rw [← Finset.mul_prod_erase _ _ (Finset.mem_univ s)]
+    rw [hprod]
+    by_cases hxs : x s = b
+    · have hupdate : Function.update x s b = x := by
+        funext t
+        by_cases ht : t = s <;> simp [ht, hxs]
+      simp [hupdate]
+    · have hzero : (Ppin s).w (x s) = 0 := by
+        simp [Ppin, hxs, FinLaw.dirac]
+      simp [hzero]
+  have hlocal : ∀ x y, (∀ t, t ∈ Finset.univ.erase s → x t = y t) → Ψ x = Ψ y := by
+    intro x y hxy
+    change Φ (Function.update x s b) = Φ (Function.update y s b)
+    congr 1
+    funext t
+    by_cases hts : t = s
+    · subst t
+      simp
+    · have ht : t ∈ Finset.univ.erase s :=
+        Finset.mem_erase.mpr ⟨hts, Finset.mem_univ t⟩
+      have h := hxy t ht
+      simp [Function.update, hts, h]
+  have hsame : ∀ t, t ∈ Finset.univ.erase s → Ppin t = D.iidSlotLaw t := by
+    intro t ht
+    have hts : t ≠ s := (Finset.mem_erase.mp ht).1
+    simp [Ppin, hts]
+  have hpin : (FinLaw.pi Ppin).E Ψ = (FinLaw.pi D.iidSlotLaw).E Ψ :=
+    Lane_sol_s16_prod1.pi_E_local Ppin D.iidSlotLaw (Finset.univ.erase s) Ψ hlocal hsame
+  have hdiff : (FinLaw.pi D.iidSlotLaw).E Ψ - (FinLaw.pi D.iidSlotLaw).E Φ =
+      (FinLaw.pi D.iidSlotLaw).E (fun x => Ψ x - Φ x) := by
+    unfold FinLaw.E
+    rw [← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro x hx
+    ring
+  change |(FinLaw.pi Ppin).E Φ - (FinLaw.pi D.iidSlotLaw).E Φ| ≤ δ
+  rw [hreplace, hpin, hdiff]
+  have hδ : 0 ≤ δ := by
+    let x : Slot → Bin := fun _ => Classical.choice D.bins_nonempty
+    have h := hΦ x x (by intro t ht; rfl)
+    simpa using h
+  have hpoint : ∀ x, |Ψ x - Φ x| ≤ δ := by
+    intro x
+    exact hΦ (Function.update x s b) x (by
+      intro t ht
+      simp [Function.update, ht])
+  unfold FinLaw.E
+  calc
+    |∑ x, (FinLaw.pi D.iidSlotLaw).w x * (Ψ x - Φ x)| ≤
+        ∑ x, |(FinLaw.pi D.iidSlotLaw).w x * (Ψ x - Φ x)| :=
+      Finset.abs_sum_le_sum_abs _ _
+    _ = ∑ x, (FinLaw.pi D.iidSlotLaw).w x * |Ψ x - Φ x| := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [abs_mul, abs_of_nonneg ((FinLaw.pi D.iidSlotLaw).nonneg x)]
+    _ ≤ ∑ x, (FinLaw.pi D.iidSlotLaw).w x * δ :=
+      Finset.sum_le_sum fun x hx =>
+        mul_le_mul_of_nonneg_left (hpoint x) ((FinLaw.pi D.iidSlotLaw).nonneg x)
+    _ = δ := by rw [← Finset.sum_mul, (FinLaw.pi D.iidSlotLaw).sum_one, one_mul]
 
 /-- C6. Per-check facts assemble the concentration record (mixed families).
 TeX 16:247–257; estimated proof: 80 lines. -/
@@ -143,7 +261,43 @@ theorem pool_concentration_of_checks {Slot Bin Hist Check : Type*}
     (hcollision : (Fintype.card Slot : ℝ) ^ 2 / Fintype.card Bin ≤
       Real.exp (-(n : ℝ) ^ c0) / 4) :
     Nonempty (PoolConcentrationHypotheses D) := by
-  sorry
+  classical
+  have hslotsReal : 0 < (Fintype.card Slot : ℝ) := by exact_mod_cast hslots
+  refine ⟨{
+    n_large := hn
+    exponent_pos := hc0
+    slots_pos := hslots
+    epsilon_pos := heps
+    tolerance_pos := htol
+    sensitivity := fun c _ => sens c
+    sensitivity_nonneg := fun c _ => (hsens c).le
+    mean_close := ?_
+    pinned_mean_close := ?_
+    one_slot_change := ?_
+    variance_budget := ?_
+    collision_budget := hcollision }⟩
+  · intro c
+    have h := hmean c
+    have hs : 0 ≤ sens c := (hsens c).le
+    linarith
+  · intro s b c
+    have hpin := pinLaw_E_close D (D.normalizer · c) s b (sens c) (hone c s)
+    have h := hmean c
+    have hsum : sens c + |D.poolLaw.E (D.normalizer · c) - D.center c| ≤
+        D.tolerance c / 2 := by linarith
+    calc
+      |(D.pinLaw s b).E (D.normalizer · c) - D.center c| ≤
+          |(D.pinLaw s b).E (D.normalizer · c) - D.poolLaw.E (D.normalizer · c)| +
+            |D.poolLaw.E (D.normalizer · c) - D.center c| :=
+        abs_sub_le _ _ _
+      _ ≤ D.tolerance c / 2 := by
+        exact (add_le_add hpin (le_refl _)).trans hsum
+  · exact hone
+  · intro c
+    have hsum : (∑ s : Slot, (fun _ : Slot => sens c) s ^ 2) =
+        (Fintype.card Slot : ℝ) * sens c ^ 2 := by simp
+    rw [hsum]
+    exact Or.inr ⟨mul_pos hslotsReal (sq_pos_of_pos (hsens c)), hvar c⟩
 
 /-- C7. Numerical room for star/pin checks: sensitivity, variance budget, cover.
 TeX 16:247–257; estimated proof: 150 lines. -/
@@ -156,7 +310,314 @@ theorem cluster_star_budget_room : ∃ n₀ : ℕ, ∀ (n h : ℕ) (L ε Checks 
       2 * (Real.rpow ε (1 / 4 : ℝ) / 8 / 2) ^ 2 / (L * (((h : ℝ) + 1) * n / L) ^ 2) ∧
     2 * Real.sqrt ε + (n : ℝ) * (h : ℝ) ^ 2 / L + Real.rpow ε (1 / 4 : ℝ) / 8 ≤
       (1 - Real.rpow (n : ℝ) (-4)) ^ h * Real.rpow ε (1 / 4 : ℝ) := by
-  sorry
+  refine ⟨2, ?_⟩
+  intro n h L ε Checks hn hn2 hh hL hεlower hepsSmall hchecks
+  let x : ℝ := n
+  let τ : ℝ := Real.rpow ε (1 / 4 : ℝ)
+  let σ : ℝ := ((h : ℝ) + 1) * x / L
+  have hx2 : (2 : ℝ) ≤ x := by dsimp [x]; exact_mod_cast hn2
+  have hx : 0 < x := by linarith
+  have hx1 : 1 ≤ x := by linarith
+  have hLp : 0 < L := lt_of_lt_of_le (pow_pos hx _) hL
+  have hhCast : (h : ℝ) ≤ x := by dsimp [x]; exact_mod_cast hh
+  have hPlus : (h : ℝ) + 1 ≤ 2 * x := by linarith
+  have hρ1 : Real.rpow x (-1) = 1 / x := by
+    rw [Real.rpow_eq_pow, Real.rpow_neg, Real.rpow_one, one_div] <;> exact hx.le
+  have hρ4 : Real.rpow x (-4) = 1 / x ^ (4 : ℕ) := by
+    rw [Real.rpow_eq_pow, Real.rpow_neg,
+      show (4 : ℝ) = ((4 : ℕ) : ℝ) by norm_num,
+      Real.rpow_natCast, one_div] <;> exact hx.le
+  have hεpos : 0 < ε := lt_of_lt_of_le (Real.rpow_pos_of_pos hx _) hεlower
+  have hεle1 : ε ≤ 1 := by linarith
+  have hεlower' : 1 / x ≤ ε := by
+    calc
+      1 / x = Real.rpow x (-1) := hρ1.symm
+      _ ≤ ε := hεlower
+  have hετ : ε ≤ τ := by
+    calc
+      ε = Real.rpow ε 1 := (Real.rpow_one _).symm
+      _ ≤ Real.rpow ε (1 / 4 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_ge hεpos hεle1
+          (by norm_num : (1 / 4 : ℝ) ≤ 1)
+      _ = τ := rfl
+  have hτpos : 0 < τ := Real.rpow_pos_of_pos hεpos _
+  have hτlower : 1 / x ≤ τ := hεlower'.trans hετ
+  have hpow101 : Real.rpow x (1.01 : ℝ) ≤ x ^ (2 : ℕ) := by
+    simpa only [Real.rpow_eq_pow, Real.rpow_two] using
+      Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1.01 : ℝ) ≤ 2)
+  have hmax : max 1 Checks ≤ Real.exp (3 * Real.rpow x (1.01 : ℝ)) := by
+    refine max_le ?_ hchecks
+    exact Real.one_le_exp_iff.mpr
+      (mul_nonneg (by norm_num) (Real.rpow_nonneg hx.le _))
+  have hlog8 : Real.log 8 ≤ 8 := by
+    have hhlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 8)
+    linarith
+  have hlog : Real.log (8 * max 1 Checks) ≤ 8 + 3 * x ^ (2 : ℕ) := by
+    calc
+      _ ≤ Real.log (8 * Real.exp (3 * Real.rpow x (1.01 : ℝ))) :=
+        Real.log_le_log (by positivity)
+          (mul_le_mul_of_nonneg_left hmax (by norm_num))
+      _ = Real.log 8 + 3 * Real.rpow x (1.01 : ℝ) := by
+        rw [Real.log_mul (by norm_num : (8 : ℝ) ≠ 0)
+          (Real.exp_pos _).ne', Real.log_exp]
+      _ ≤ 8 + 3 * x ^ (2 : ℕ) := by nlinarith [hlog8, hpow101]
+  have hroot : Real.rpow x (1 / 2 : ℝ) ≤ x := by
+    simpa only [Real.rpow_eq_pow, Real.rpow_one] using
+      Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1 / 2 : ℝ) ≤ 1)
+  have hx196 : (32 : ℝ) ≤ x ^ (196 : ℕ) := by
+    calc
+      32 = (2 : ℝ) ^ (5 : ℕ) := by norm_num
+      _ ≤ x ^ (5 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (196 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have hx195 : (4 : ℝ) ≤ x ^ (195 : ℕ) := by
+    calc
+      4 = (2 : ℝ) ^ (2 : ℕ) := by norm_num
+      _ ≤ x ^ (2 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (195 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have hσbound : σ ≤ 2 / x ^ (197 : ℕ) := by
+    calc
+      σ = ((h : ℝ) + 1) * x / L := by rfl
+      _ ≤ 2 * x ^ (2 : ℕ) / L := by
+        apply div_le_div_of_nonneg_right _ hLp.le
+        have hh := mul_le_mul_of_nonneg_right hPlus hx.le
+        nlinarith [hh]
+      _ ≤ 2 * x ^ (2 : ℕ) / x ^ (199 : ℕ) := by
+        apply (div_le_div_iff₀ hLp (pow_pos hx _)).mpr
+        exact mul_le_mul_of_nonneg_left hL (by positivity)
+      _ = 2 / x ^ (197 : ℕ) := by field_simp [hx.ne']
+  have hx197 : x ^ (197 : ℕ) = x ^ (196 : ℕ) * x := by
+    rw [show (197 : ℕ) = 196 + 1 by norm_num, pow_succ]
+  have h32x : 32 * x ≤ x ^ (197 : ℕ) := by
+    rw [hx197]
+    exact mul_le_mul_of_nonneg_right hx196 hx.le
+  have hσsmall : σ ≤ 1 / (16 * x) := by
+    calc
+      σ ≤ 2 / x ^ (197 : ℕ) := hσbound
+      _ ≤ 1 / (16 * x) := by
+        apply (div_le_div_iff₀ (pow_pos hx _) (mul_pos (by norm_num) hx)).mpr
+        nlinarith [h32x]
+  refine ⟨?_, ?_, ?_⟩
+  · calc
+      σ ≤ 1 / (16 * x) := hσsmall
+      _ = (1 / x) / 16 := by ring
+      _ ≤ τ / 16 := div_le_div_of_nonneg_right hτlower (by norm_num)
+      _ = τ / 8 / 2 := by ring
+  · have hτsq₀ : (Real.rpow ε (1 / 4 : ℝ)) ^ 2 = Real.rpow ε (1 / 2 : ℝ) := by
+      simp only [Real.rpow_eq_pow]
+      rw [← Real.rpow_natCast, ← Real.rpow_mul hεpos.le]
+      norm_num
+    have hτsq : τ ^ 2 = Real.sqrt ε := by
+      calc
+        τ ^ 2 = Real.rpow ε (1 / 2 : ℝ) := by simpa [τ] using hτsq₀
+        _ = Real.sqrt ε := (Real.sqrt_eq_rpow _).symm
+    have hεsqrt : ε ≤ Real.sqrt ε := by
+      have hεsq : ε ^ 2 ≤ ε := by
+        calc
+          ε ^ 2 = ε * ε := by rw [pow_two]
+          _ ≤ ε * 1 := mul_le_mul_of_nonneg_left hεle1 hεpos.le
+          _ = ε := by ring
+      exact (Real.le_sqrt hεpos.le hεpos.le).mpr hεsq
+    have hτsqLower : 1 / x ≤ τ ^ 2 := by rw [hτsq]; exact hεlower'.trans hεsqrt
+    have hPlusSq : ((h : ℝ) + 1) ^ 2 ≤ 4 * x ^ (2 : ℕ) := by
+      have hpow := pow_le_pow_left₀ (by positivity : 0 ≤ (h : ℝ) + 1) hPlus 2
+      calc
+        ((h : ℝ) + 1) ^ 2 ≤ (2 * x) ^ 2 := hpow
+        _ = 4 * x ^ (2 : ℕ) := by ring
+    have hden : 0 < 128 * ((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ) := by positivity
+    have hdenUpper : 128 * ((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ) ≤
+        512 * x ^ (4 : ℕ) := by
+      have hh := mul_le_mul_of_nonneg_right hPlusSq (pow_nonneg hx.le (2 : ℕ))
+      have hh' := mul_le_mul_of_nonneg_left hh (by norm_num : (0 : ℝ) ≤ 128)
+      calc
+        _ = 128 * (((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ)) := by ring
+        _ ≤ 128 * ((4 * x ^ (2 : ℕ)) * x ^ (2 : ℕ)) := hh'
+        _ = 512 * x ^ (4 : ℕ) := by ring
+    have hx192 : (4096 : ℝ) ≤ x ^ (192 : ℕ) := by
+      calc
+        4096 = (2 : ℝ) ^ (12 : ℕ) := by norm_num
+        _ ≤ x ^ (12 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+        _ ≤ x ^ (192 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+    have hx194 : x ^ (194 : ℕ) = x ^ (192 : ℕ) * x ^ (2 : ℕ) := by
+      rw [← pow_add]
+    have hx198 : x ^ (198 : ℕ) = x ^ (194 : ℕ) * x ^ (4 : ℕ) := by
+      rw [← pow_add]
+    have hnumLower : x ^ (198 : ℕ) ≤ τ ^ 2 * L := by
+      calc
+        x ^ (198 : ℕ) = (1 / x) * x ^ (199 : ℕ) := by field_simp [hx.ne']
+        _ ≤ τ ^ 2 * L := mul_le_mul hτsqLower hL (by positivity) (by positivity)
+    have hbig : 8 * x ^ (2 : ℕ) ≤ x ^ (194 : ℕ) / 512 := by
+      apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 512)).mpr
+      have hh := mul_le_mul_of_nonneg_right hx192 (pow_nonneg hx.le (2 : ℕ))
+      calc
+        8 * x ^ (2 : ℕ) * 512 = 4096 * x ^ (2 : ℕ) := by ring
+        _ ≤ x ^ (192 : ℕ) * x ^ (2 : ℕ) := by nlinarith [hh]
+        _ = x ^ (194 : ℕ) := by rw [hx194]
+    have hbudgetRaw : x ^ (194 : ℕ) / 512 ≤ τ ^ 2 * L /
+        (128 * ((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ)) := by
+      apply (div_le_div_iff₀ (by norm_num : (0 : ℝ) < 512) hden).mpr
+      calc
+        x ^ (194 : ℕ) * (128 * ((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ)) ≤
+            x ^ (194 : ℕ) * (512 * x ^ (4 : ℕ)) :=
+          mul_le_mul_of_nonneg_left hdenUpper (by positivity)
+        _ = 512 * x ^ (198 : ℕ) := by rw [hx198]; ring
+        _ ≤ 512 * (τ ^ 2 * L) := mul_le_mul_of_nonneg_left hnumLower (by norm_num)
+        _ = (τ ^ 2 * L) * 512 := by ring
+    have hbudget : 8 * x ^ (2 : ℕ) ≤ τ ^ 2 * L /
+        (128 * ((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ)) := hbig.trans hbudgetRaw
+    have hvarEq : 2 * (τ / 8 / 2) ^ 2 / (L * σ ^ 2) =
+        τ ^ 2 * L / (128 * ((h : ℝ) + 1) ^ 2 * x ^ (2 : ℕ)) := by
+      dsimp [σ]
+      field_simp [hLp.ne', hx.ne'] <;> ring
+    have hleft : Real.rpow x (1 / 2 : ℝ) + Real.log (8 * max 1 Checks) ≤
+        8 * x ^ (2 : ℕ) := by
+      calc
+        _ ≤ x + (8 + 3 * x ^ (2 : ℕ)) := add_le_add hroot hlog
+        _ = x + 8 + 3 * x ^ (2 : ℕ) := by ring
+        _ ≤ 6 * x ^ (2 : ℕ) := by
+          have hxle : x ≤ x ^ (2 : ℕ) := by
+            calc
+              x = x * 1 := by ring
+              _ ≤ x * x := mul_le_mul_of_nonneg_left hx1 hx.le
+              _ = x ^ (2 : ℕ) := by ring
+          have hxSq4 : 4 ≤ x ^ (2 : ℕ) := by
+            calc
+              4 = (2 : ℝ) ^ (2 : ℕ) := by norm_num
+              _ ≤ x ^ (2 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+          have h8 : 8 ≤ 2 * x ^ (2 : ℕ) := by
+            calc
+              8 = 2 * 4 := by norm_num
+              _ ≤ 2 * x ^ (2 : ℕ) := mul_le_mul_of_nonneg_left hxSq4 (by norm_num)
+          calc
+            x + 8 + 3 * x ^ (2 : ℕ) ≤
+                x ^ (2 : ℕ) + 2 * x ^ (2 : ℕ) + 3 * x ^ (2 : ℕ) :=
+              add_le_add (add_le_add hxle h8) le_rfl
+            _ = 6 * x ^ (2 : ℕ) := by ring
+        _ ≤ 8 * x ^ (2 : ℕ) :=
+          mul_le_mul_of_nonneg_right (by norm_num : (6 : ℝ) ≤ 8) (pow_nonneg hx.le (2 : ℕ))
+    have hbudgetGoal : Real.rpow x (1 / 2 : ℝ) + Real.log (8 * max 1 Checks) ≤
+        2 * (τ / 8 / 2) ^ 2 / (L * σ ^ 2) := by
+      rw [hvarEq]
+      exact hleft.trans hbudget
+    exact hbudgetGoal
+  · have hτcap : τ ≤ 1 / 10 := by
+      have hεquarter : ε ≤ ((1 : ℝ) / 10) ^ (4 : ℕ) := by
+        exact le_trans hepsSmall (by norm_num)
+      calc
+        τ = Real.rpow ε (1 / 4 : ℝ) := rfl
+        _ ≤ Real.rpow (((1 : ℝ) / 10) ^ (4 : ℕ)) (1 / 4 : ℝ) :=
+          Real.rpow_le_rpow hεpos.le hεquarter (by norm_num)
+        _ = 1 / 10 := by
+          have hmul : Real.rpow (Real.rpow (1 / 10 : ℝ) 4) (1 / 4 : ℝ) =
+              Real.rpow (1 / 10 : ℝ) (4 * (1 / 4 : ℝ)) :=
+            (Real.rpow_mul (by norm_num : (0 : ℝ) ≤ (1 / 10)) 4 (1 / 4 : ℝ)).symm
+          rw [show ((1 : ℝ) / 10) ^ (4 : ℕ) = Real.rpow (1 / 10 : ℝ) 4 by
+            exact (Real.rpow_natCast _ _).symm, hmul]
+          norm_num
+    have hτsq : τ ^ 2 = Real.sqrt ε := by
+      have hs : (Real.rpow ε (1 / 4 : ℝ)) ^ 2 = Real.rpow ε (1 / 2 : ℝ) := by
+        simp only [Real.rpow_eq_pow]
+        rw [← Real.rpow_natCast, ← Real.rpow_mul hεpos.le]
+        norm_num
+      calc
+        τ ^ 2 = Real.rpow ε (1 / 2 : ℝ) := by simpa [τ] using hs
+        _ = Real.sqrt ε := (Real.sqrt_eq_rpow _).symm
+    have hrootSmall : 2 * Real.sqrt ε ≤ τ / 5 := by
+      rw [← hτsq]
+      have hh := mul_le_mul_of_nonneg_left hτcap (by positivity : 0 ≤ 2 * τ)
+      nlinarith [hτpos]
+    have hLerr : 4 * x ^ (4 : ℕ) ≤ L := by
+      calc
+        4 * x ^ (4 : ℕ) ≤ x ^ (195 : ℕ) * x ^ (4 : ℕ) :=
+          mul_le_mul_of_nonneg_right hx195 (pow_nonneg hx.le _)
+        _ = x ^ (199 : ℕ) := by rw [← pow_add]
+        _ ≤ L := hL
+    have hhSq : (h : ℝ) ^ 2 ≤ x ^ (2 : ℕ) := by
+      have hh' := mul_le_mul hhCast hhCast (by positivity) (by positivity)
+      simpa only [pow_two] using hh'
+    have herr : x * (h : ℝ) ^ 2 / L ≤ τ / 4 := by
+      have hbase : x * (h : ℝ) ^ 2 / L ≤ 1 / (4 * x) := by
+        calc
+          _ ≤ x ^ (3 : ℕ) / L := by
+            apply div_le_div_of_nonneg_right _ hLp.le
+            have hh' := mul_le_mul_of_nonneg_left hhSq hx.le
+            calc
+              x * (h : ℝ) ^ 2 ≤ x * x ^ (2 : ℕ) := hh'
+              _ = x ^ (3 : ℕ) := by ring
+        _ ≤ 1 / (4 * x) := by
+            apply (div_le_div_iff₀ hLp (mul_pos (by norm_num) hx)).mpr
+            have hxpow : x ^ (3 : ℕ) * (4 * x) = 4 * x ^ (4 : ℕ) := by ring
+            rw [hxpow]
+            simpa only [one_mul] using hLerr
+      calc
+        x * (h : ℝ) ^ 2 / L ≤ 1 / (4 * x) := hbase
+        _ = (1 / x) / 4 := by ring
+        _ ≤ τ / 4 := div_le_div_of_nonneg_right hτlower (by norm_num)
+    have hfactor : (7 / 8 : ℝ) ≤ (1 - Real.rpow x (-4)) ^ h := by
+      let t : ℝ := 1 / x ^ (4 : ℕ)
+      have ht0 : 0 ≤ t := by dsimp [t]; positivity
+      have ht1 : t ≤ 1 := by
+        dsimp [t]
+        apply (div_le_iff₀ (pow_pos hx _)).mpr
+        simpa only [one_mul] using (one_le_pow₀ hx1 : (1 : ℝ) ≤ x ^ (4 : ℕ))
+      have hbern : ∀ m : ℕ, 0 ≤ t → t ≤ 1 →
+          1 - (m : ℝ) * t ≤ (1 - t) ^ m := by
+        intro m
+        induction m with
+        | zero => intro _ _; simp
+        | succ m ih =>
+            intro ht0 ht1
+            have hpow : (1 - t) ^ m ≤ 1 :=
+              pow_le_one₀ (sub_nonneg.mpr ht1) (sub_le_self 1 ht0)
+            have hprod : t * (1 - t) ^ m ≤ t := by
+              simpa only [mul_one] using mul_le_mul_of_nonneg_left hpow ht0
+            calc
+              1 - ((m + 1 : ℕ) : ℝ) * t = (1 - (m : ℝ) * t) - t := by push_cast; ring
+              _ ≤ (1 - t) ^ m - t := sub_le_sub_right (ih ht0 ht1) _
+              _ ≤ (1 - t) ^ m - t * (1 - t) ^ m :=
+                sub_le_sub_left hprod ((1 - t) ^ m)
+              _ = (1 - t) ^ (m + 1) := by rw [pow_succ]; ring
+      have hx3 : (8 : ℝ) ≤ x ^ (3 : ℕ) := by
+        calc
+          8 = (2 : ℝ) ^ (3 : ℕ) := by norm_num
+          _ ≤ x ^ (3 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      have hrecip3 : 1 / x ^ (3 : ℕ) ≤ 1 / 8 := by
+        apply (div_le_div_iff₀ (pow_pos hx _) (by norm_num)).mpr
+        simpa using hx3
+      have hxt : x * t = 1 / x ^ (3 : ℕ) := by
+        dsimp [t]
+        field_simp [hx.ne']
+      have hhT : (h : ℝ) * t ≤ x * t := mul_le_mul_of_nonneg_right hhCast ht0
+      have hber : 1 - (h : ℝ) * t ≤ (1 - t) ^ h := hbern h ht0 ht1
+      calc
+        (7 / 8 : ℝ) ≤ 1 - 1 / x ^ (3 : ℕ) := by linarith
+        _ = 1 - x * t := by rw [hxt]
+        _ ≤ 1 - (h : ℝ) * t := sub_le_sub_left hhT _
+        _ ≤ (1 - t) ^ h := hber
+        _ = (1 - Real.rpow x (-4)) ^ h := by
+          dsimp [t]
+          have hb : 1 - 1 / x ^ (4 : ℕ) = 1 - Real.rpow x (-4) := by rw [hρ4]
+          exact congrArg (fun y : ℝ => y ^ h) hb
+    have hrootQuarter : 2 * Real.sqrt ε ≤ τ / 4 := by
+      have hfrac : τ / 5 ≤ τ / 4 := by
+        apply (div_le_div_iff₀ (by norm_num) (by norm_num)).mpr
+        exact mul_le_mul_of_nonneg_left (by norm_num : (4 : ℝ) ≤ 5) hτpos.le
+      exact hrootSmall.trans hfrac
+    have hfracEighth : τ / 8 ≤ τ / 4 := by
+      apply (div_le_div_iff₀ (by norm_num) (by norm_num)).mpr
+      exact mul_le_mul_of_nonneg_left (by norm_num : (4 : ℝ) ≤ 8) hτpos.le
+    have hcoverL : 2 * Real.sqrt ε + x * (h : ℝ) ^ 2 / L + τ / 8 ≤
+        (7 / 8 : ℝ) * τ := by
+      calc
+        2 * Real.sqrt ε + x * (h : ℝ) ^ 2 / L + τ / 8 ≤ τ / 4 + τ / 4 + τ / 4 :=
+          add_le_add (add_le_add hrootQuarter herr) hfracEighth
+        _ = (3 / 4 : ℝ) * τ := by ring
+        _ ≤ (7 / 8 : ℝ) * τ :=
+          mul_le_mul_of_nonneg_right (by norm_num) hτpos.le
+    have hcoverR : (7 / 8 : ℝ) * τ ≤
+        (1 - Real.rpow x (-4)) ^ h * τ :=
+      mul_le_mul_of_nonneg_right hfactor hτpos.le
+    have hcover := hcoverL.trans hcoverR
+    exact hcover
 
 /-- C8. `cluster_normalizer_budget_room` with the total check count.
 TeX 16:206–219,247–257; estimated proof: 100 lines. -/
@@ -167,7 +628,100 @@ theorem cluster_normalizer_budget_room3 : ∃ n₀ : ℕ, ∀ (n : ℕ) (L B Che
     ((n : ℝ) * L ^ 2 / B + ((n : ℝ) + 1) / L ≤ Real.rpow (n : ℝ) (-4) / 2) ∧
     (Real.rpow (n : ℝ) (1 / 2 : ℝ) + Real.log (8 * max 1 Checks) ≤
       L * Real.rpow (n : ℝ) (-4) ^ 2 / (8 * (n : ℝ) ^ (2 : ℕ))) := by
-  sorry
+  obtain ⟨n₀, hroom⟩ := Lane_sol_s16_prod1.logarithmic_room
+    (1 / 2) 1 0 5 (by norm_num) (by norm_num) (by norm_num)
+  refine ⟨n₀, ?_⟩
+  intro n L B Checks hn hn2 hB hL hcollision hchecks
+  let x : ℝ := n
+  have hx2 : (2 : ℝ) ≤ x := by dsimp [x]; exact_mod_cast hn2
+  have hx : 0 < x := by linarith
+  have hx1 : 1 ≤ x := by linarith
+  have hLp : 0 < L := lt_of_lt_of_le (pow_pos hx _) hL
+  have hρ : Real.rpow x (-4) = 1 / x ^ (4 : ℕ) := by
+    rw [Real.rpow_eq_pow, Real.rpow_neg,
+      show (4 : ℝ) = ((4 : ℕ) : ℝ) by norm_num,
+      Real.rpow_natCast, one_div] <;> exact hx.le
+  have hsmall : Real.exp (-Real.rpow x (1 / 2 : ℝ)) ≤ 1 / x ^ (5 : ℕ) := by
+    have hr := hroom n hn
+    simp only [one_mul, zero_add] at hr
+    have he := Real.exp_le_exp.mpr (neg_le_neg hr)
+    have he5 : Real.exp (5 * Real.log x) = x ^ (5 : ℕ) := by
+      simpa only [Nat.cast_ofNat, Real.exp_log hx] using Real.exp_nat_mul (Real.log x) 5
+    change Real.exp (-Real.rpow x (1 / 2 : ℝ)) ≤ Real.exp (-(5 * Real.log x)) at he
+    rw [Real.exp_neg (5 * Real.log x), he5] at he
+    simpa only [one_div] using he
+  have h194 : (8 : ℝ) ≤ x ^ (194 : ℕ) := by
+    calc
+      8 = (2 : ℝ) ^ (3 : ℕ) := by norm_num
+      _ ≤ x ^ (3 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (194 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have h187 : (2048 : ℝ) ≤ x ^ (187 : ℕ) := by
+    calc
+      2048 = (2 : ℝ) ^ (11 : ℕ) := by norm_num
+      _ ≤ x ^ (11 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (187 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have hpinL : 8 * x ^ (5 : ℕ) ≤ L := by
+    calc
+      _ ≤ x ^ (194 : ℕ) * x ^ (5 : ℕ) :=
+        mul_le_mul_of_nonneg_right h194 (pow_nonneg hx.le _)
+      _ = x ^ (199 : ℕ) := by rw [← pow_add]
+      _ ≤ L := hL
+  have hvarL : 2048 * x ^ (12 : ℕ) ≤ L := by
+    calc
+      _ ≤ x ^ (187 : ℕ) * x ^ (12 : ℕ) :=
+        mul_le_mul_of_nonneg_right h187 (pow_nonneg hx.le _)
+      _ = x ^ (199 : ℕ) := by rw [← pow_add]
+      _ ≤ L := hL
+  refine ⟨?_, ?_⟩
+  · have hpin : (x + 1) / L ≤ Real.rpow x (-4) / 4 := by
+      calc
+        _ ≤ (2 * x) / L := div_le_div_of_nonneg_right (by linarith) hLp.le
+        _ ≤ (2 * x) / (8 * x ^ (5 : ℕ)) :=
+          div_le_div_of_nonneg_left (by positivity) (by positivity) hpinL
+        _ = _ := by rw [hρ]; field_simp <;> ring
+    have hcoll : x * L ^ 2 / B ≤ Real.rpow x (-4) / 4 := by
+      calc
+        _ = x * (L ^ 2 / B) := by ring
+        _ ≤ x * (Real.exp (-Real.rpow x (1 / 2 : ℝ)) / 4) :=
+          mul_le_mul_of_nonneg_left hcollision hx.le
+        _ ≤ x * ((1 / x ^ (5 : ℕ)) / 4) :=
+          mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right hsmall (by norm_num)) hx.le
+        _ = _ := by rw [hρ]; field_simp <;> ring
+    dsimp only [x] at *
+    linarith only [hpin, hcoll]
+  · have hpow101 : Real.rpow x (1.01 : ℝ) ≤ x ^ (2 : ℕ) := by
+      simpa only [Real.rpow_eq_pow, Real.rpow_two] using
+        Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1.01 : ℝ) ≤ 2)
+    have hmax : max 1 Checks ≤ Real.exp (3 * Real.rpow x (1.01 : ℝ)) := by
+      refine max_le ?_ hchecks
+      exact Real.one_le_exp_iff.mpr
+        (mul_nonneg (by norm_num) (Real.rpow_nonneg hx.le _))
+    have hlog8 : Real.log 8 ≤ 8 := by
+      have hh := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 8)
+      linarith
+    have hlog : Real.log (8 * max 1 Checks) ≤ 8 + 3 * x ^ (2 : ℕ) := by
+      calc
+        _ ≤ Real.log (8 * Real.exp (3 * Real.rpow x (1.01 : ℝ))) :=
+          Real.log_le_log (by positivity)
+            (mul_le_mul_of_nonneg_left hmax (by norm_num))
+        _ = Real.log 8 + 3 * Real.rpow x (1.01 : ℝ) := by
+          rw [Real.log_mul (by norm_num : (8 : ℝ) ≠ 0)
+            (Real.exp_pos _).ne', Real.log_exp]
+        _ ≤ 8 + 3 * x ^ (2 : ℕ) := by nlinarith [hlog8, hpow101]
+    have hroot : Real.rpow x (1 / 2 : ℝ) ≤ x := by
+      simpa only [Real.rpow_eq_pow, Real.rpow_one] using
+        Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1 / 2 : ℝ) ≤ 1)
+    have hpoly : 256 * x ^ (2 : ℕ) ≤ L * Real.rpow x (-4) ^ 2 /
+        (8 * x ^ (2 : ℕ)) := by
+      calc
+        _ = (2048 * x ^ (12 : ℕ)) * Real.rpow x (-4) ^ 2 /
+            (8 * x ^ (2 : ℕ)) := by rw [hρ]; field_simp <;> ring
+        _ ≤ _ := div_le_div_of_nonneg_right
+          (mul_le_mul_of_nonneg_right hvarL (sq_nonneg _)) (by positivity)
+    have hsmallLog : Real.rpow x (1 / 2 : ℝ) + Real.log (8 * max 1 Checks) ≤
+        256 * x ^ (2 : ℕ) := by
+      nlinarith [hroot, hlog, sq_nonneg (x - 2)]
+    exact hsmallLog.trans hpoly
 
 /-! ## Lane B: star/pin physics (Producers.lean, private in the real file). -/
 
@@ -364,7 +918,7 @@ theorem cluster_check_count {κ : CConsts} (hκ : κ.Admissible) :
           (T.S.n k : ℝ) ^ (200 : ℕ) * Real.exp ((T.S.n k : ℝ) ^ (1.01 : ℝ)) →
         (Fintype.card (NormalizerCheck ⊕ ClusterStarCheck R C) : ℝ) ≤
           Real.exp (3 * (T.S.n k : ℝ) ^ (1.01 : ℝ)) := by
-  sorry
+  exact Lane_q_s16_conc.total_check_count hκ
 
 
 end HypercubeRamsey.S16.ClusterDiagnostics

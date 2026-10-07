@@ -1,5 +1,6 @@
 import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
+import HypercubeRamsey.S06.OddLoads_sol_s06_loadB
 
 /-!
 # Odd loads through the three histories, and the additional even history mean
@@ -453,7 +454,16 @@ theorem L6_1k_hjoint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       (X.stage3Law b₀).expect (fun Z => ∏ u ∈ U, X.proxyMean (b₀, Z) u y) ≤
         2 ^ U.card * ∏ u ∈ U,
           (2 * (N : ℝ) * (X.hidPost b₀ (X.tgt (X.g.L.stateOf u)).1).w y) := by
-    sorry
+    have hcompare := Lane_sol_s06_loadB.stage3_compare_local X b₀ xmax cert hxmax
+      scopeUnion W hWLocal hW0 S T hST hUnionST hNotTouch
+    have hraw0 : 0 ≤ (X.hidLaw b₀).expect W := by
+      unfold FinProb.expect
+      exact Finset.sum_nonneg fun Z _ => mul_nonneg ((X.hidLaw b₀).nonneg Z) (hW0 Z)
+    calc
+      _ ≤ (∏ gr ∈ T, (1 - cert.x gr)⁻¹) * (X.hidLaw b₀).expect W := hcompare
+      _ ≤ (2 : ℝ) ^ U.card * (X.hidLaw b₀).expect W :=
+        mul_le_mul_of_nonneg_right hCharge hraw0
+      _ ≤ _ := mul_le_mul_of_nonneg_left hRawProduct (by positivity)
   exact hJointGoal
 
 set_option maxHeartbeats 5000000
@@ -1167,7 +1177,251 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 separated key lists lets their means integrate to the `φ_x`; on admitted histories `f_x` is the tag mixture. -/
 theorem L6_1l_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.HiddenCert → X.Step2Dom → X.EvenHiddenMean := by
-  sorry
+  classical
+  have hKpos : 0 < K := hadm.2.2.2
+  have hα : 0 < α₆ p₀ := (height_exponents6_admissible p₀ hadm.2.2.1).1
+  have hαsmall := (height_exponents6_admissible p₀ hadm.2.2.1).2.2.1
+  obtain ⟨nCharge, hCharge⟩ := _root_.Lane_q_s06_loads.bad3_touch_charge_small_eventually hα hαsmall
+  obtain ⟨mMoment, hMoment⟩ := sign_moment_parameters (α₆ p₀) hα
+  obtain ⟨mCap, hCap⟩ := Lane_sol_s06_loadB.even_cap_eventually (α₆ p₀) K hα hadm.2.2.2
+  have hmt : Filter.Tendsto (fun n : ℕ => (Nat.ceil ((n : ℝ) ^ α₆ p₀) : ℝ))
+      Filter.atTop Filter.atTop := by
+    apply Filter.tendsto_atTop_mono' Filter.atTop (Filter.Eventually.of_forall ?_)
+      ((tendsto_rpow_atTop hα).comp tendsto_natCast_atTop_atTop)
+    intro n
+    exact_mod_cast Nat.le_ceil ((n : ℝ) ^ α₆ p₀)
+  obtain ⟨nM, hnM⟩ := Filter.eventually_atTop.1
+    (hmt.eventually (Filter.eventually_ge_atTop ((max mMoment mCap : ℕ) : ℝ)))
+  have hSupport := (stepFacts6 γ p₀ K hadm).and (stageFacts6 γ p₀ K hadm)
+  obtain ⟨nS, CS, hS⟩ := hSupport
+  refine ⟨max nS (max nCharge (max nM 10)), CS, ?_⟩
+  intro n N E G M X hLarge hHidden hDom v c hv hV hc hPhi
+  have hnS : nS ≤ n := (le_max_left _ _).trans hLarge.1
+  have hnCharge : nCharge ≤ n := (le_max_left _ _).trans ((le_max_right _ _).trans hLarge.1)
+  have hnM' : nM ≤ n := (le_max_left _ _).trans
+    ((le_max_right _ _).trans ((le_max_right _ _).trans hLarge.1))
+  have hn10 : 10 ≤ n := (le_max_right _ _).trans
+    ((le_max_right _ _).trans ((le_max_right _ _).trans hLarge.1))
+  have hn1 : 1 ≤ n := by omega
+  have hnR1 : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hnpos : 0 < n := by omega
+  obtain ⟨hSteps, hStages⟩ := hS n N E G M X ⟨hnS, hLarge.2⟩
+  have hHistSupport : X.HistSupport := (hStages hSteps).2.2.2
+  have hmBoth : max mMoment mCap ≤ X.m := by
+    rw [Ctx6.m, X.g.m_eq]
+    exact_mod_cast hnM n hnM'
+  have hnPow : (n : ℝ) ^ α₆ p₀ ≤ (X.m : ℝ) := by
+    rw [Ctx6.m, X.g.m_eq]
+    exact_mod_cast Nat.le_ceil ((n : ℝ) ^ α₆ p₀)
+  obtain ⟨hRadius, hRadiusFrac, _, hSmall⟩ := hMoment n X.m
+    ((le_max_left _ _).trans hmBoth) hnPow
+  have hEvenCap := hCap n X.m ((le_max_right _ _).trans hmBoth) hn1 hnPow
+  have hsmallCharge : 2 * (n : ℝ) ^ (-(δ₂ / 128)) *
+      (602 ^ 8 * (9 * (X.m + 1) ^ 8) : ℝ) ≤ Real.log 2 := by
+    simpa [Ctx6.m, X.g.m_eq] using hCharge n hnCharge
+  obtain ⟨cert⟩ := hHidden v c hV hc
+  let P := X.stage3Law (v, c)
+  let succ : Finset X.Hid := Finset.univ.filter fun Z => P.w Z ≠ 0
+  let Zfun : CubeVertex n → Fin N → X.Hid → ℝ := fun x a Z =>
+    if IsEvenRole x then X.fEven ((v, c), Z) x a else 0
+  let dfun : CubeVertex n → Fin N → ℝ := fun x a =>
+    if IsEvenRole x then X.phiEven (v, c) x a else 0
+  let radius := 100 * (Nat.sqrt X.m + 1)
+  let near : CubeVertex n → Finset (CubeVertex n) := fun x => Finset.univ.filter
+    fun x' => _root_.hammingDist (X.g.L.sign x') (X.g.L.sign x) ≤ radius
+  let ballFactor : ℝ := 2 * Real.exp (Real.binEntropy (1 / 4 : ℝ) * X.m) / (2 : ℝ) ^ X.m
+  have hF0 (H : X.Hist) (x : CubeVertex n) (a : Fin N) : 0 ≤ X.fEven H x a := by
+    unfold Ctx6.fEven
+    apply mul_nonneg
+    · split_ifs <;> norm_num
+    · apply mul_nonneg (by positivity)
+      exact Finset.sum_nonneg fun i _ => mul_nonneg ((X.Tβ H (X.evenType x)).nonneg i) ((M.μ i).nonneg a)
+  have hZ0 : ∀ x a Z, 0 ≤ Zfun x a Z := by
+    intro x a Z
+    by_cases hx : IsEvenRole x <;> simp [Zfun, hx, hF0]
+  have hD0 : ∀ x a, 0 ≤ dfun x a := by
+    intro x a
+    by_cases hx : IsEvenRole x
+    · simp only [dfun, if_pos hx, Ctx6.phiEven, FinProb.expect]
+      exact Finset.sum_nonneg fun Z _ => mul_nonneg ((X.hidLaw (v,c)).nonneg Z) (hF0 _ _ _)
+    · simp [dfun, hx]
+  have hHist (Z : X.Hid) (hZ : P.w Z ≠ 0) : X.histLaw.w ((v,c),Z) ≠ 0 :=
+    mul_ne_zero (mul_ne_zero hv hc) hZ
+  have hLocal : ∀ a x, FinProb.DependsOn (Zfun x a) (Lane_q_s06_loads.proxyHidScope6 X x) := by
+    intro a x Z Z' heq
+    by_cases hx : IsEvenRole x
+    · have hobs : ∀ ℓ ∈ (X.evenType x).obs, Z ℓ = Z' ℓ := fun ℓ hℓ =>
+        heq ℓ (Lane_sol_s06_loadB.evenType_obs_subset X x hℓ)
+      have ht := _root_.Lane_q_s06_loads.Tβ_congr_hid X (v,c) Z Z' (X.evenType x) hobs
+      have htests := Lane_q_s06_loads.step2Tests_congr_hid X (v,c) Z Z' (X.evenType x) hobs
+      simp only [Zfun, if_pos hx, Ctx6.fEven]
+      rw [ht, propext htests]
+    · simp [Zfun, hx]
+  have hRaw (x : CubeVertex n) (a : Fin N) :
+      (X.hidLaw (v,c)).expect (Zfun x a) = dfun x a := by
+    by_cases hx : IsEvenRole x
+    · simp [Zfun, dfun, hx, Ctx6.phiEven]
+    · simp [Zfun, dfun, hx, FinProb.expect_const]
+  have hL : ∀ x a Z, Z ∈ succ → Zfun x a Z ≤ Real.exp ((X.m : ℝ) ^ (15 / 100 : ℝ)) := by
+    intro x a Z hZ
+    by_cases hx : IsEvenRole x
+    · have hh := hHist Z (Finset.mem_filter.mp hZ).2
+      obtain ⟨hBase, _, _, _, hTests, _⟩ := hHistSupport ((v,c),Z) hh
+      have hOcc : X.evenType x ∈ X.occTypes := Finset.mem_image.mpr
+        ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hx⟩, rfl⟩
+      have hKeySupp : X.KeysSupp (v,c) {(X.evenType x).key} := by
+        obtain ⟨hi, ha, ht⟩ := hBase
+        refine ⟨hi, ?_, ?_⟩
+        · intro u hu
+          obtain ⟨s, hs, hus⟩ := Finset.mem_image.mp hu
+          exact ha u (Finset.mem_image.mpr ⟨s, Finset.mem_univ _, hus⟩)
+        · intro s hs
+          exact ht s (Finset.mem_univ _)
+      have hdom := (hDom ((v,c),Z) (X.evenType x) hOcc hKeySupp (hTests _ hOcc)).1
+      have hPoint : (N : ℝ) * ∑ i, (X.Tβ ((v,c),Z) (X.evenType x)).w i * (M.μ i).w a ≤
+          K * (n : ℝ) ^ (d₂ * (X.evenType x).u) := by
+        calc
+          _ ≤ (N : ℝ) * ∑ i, ((n : ℝ) ^ (d₂ * (X.evenType x).u) * M.Λ i) * (M.μ i).w a :=
+            mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun i _ =>
+              mul_le_mul_of_nonneg_right (hdom i) ((M.μ i).nonneg a)) (by positivity)
+          _ = (n : ℝ) ^ (d₂ * (X.evenType x).u) * ((N : ℝ) * ∑ i, M.Λ i * (M.μ i).w a) := by
+            rw [Finset.mul_sum, Finset.mul_sum, Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro i _
+            ring
+          _ ≤ _ := by
+            simpa [mul_comm] using mul_le_mul_of_nonneg_left (X.hBal.1 a) (by positivity :
+              0 ≤ (n : ℝ) ^ (d₂ * (X.evenType x).u))
+      have hu : (X.evenType x).u ≤ X.J + 1 := by
+        by_cases hj : X.g.L.severity x ≤ X.J
+        · simpa [Ctx6.evenType, makeType6, hj, Type6.u, Type6.mode, Type6.sev, sevFin6] using
+            (show min (X.g.L.severity x) X.m + 1 ≤ X.J + 1 from
+              Nat.add_le_add_right ((min_le_left _ _).trans hj) 1)
+        · simp [Ctx6.evenType, makeType6, hj, Type6.u, Type6.mode]
+      have hp : (n : ℝ) ^ (d₂ * (X.evenType x).u) ≤ (n : ℝ) ^ (d₂ * (X.J + 1)) :=
+        Real.rpow_le_rpow_of_exponent_le hnR1
+          (mul_le_mul_of_nonneg_left (by exact_mod_cast hu) (by norm_num [d₂]))
+      calc
+        Zfun x a Z = (N : ℝ) * ∑ i, (X.Tβ ((v,c),Z) (X.evenType x)).w i * (M.μ i).w a := by
+          simp [Zfun, hx, Ctx6.fEven, hTests _ hOcc, Lane_sol_s06_loadB.histSupport_even_gate X hHistSupport _ hh x]
+        _ ≤ K * (n : ℝ) ^ (d₂ * (X.evenType x).u) := hPoint
+        _ ≤ K * (n : ℝ) ^ (d₂ * (X.J + 1)) := mul_le_mul_of_nonneg_left hp hadm.2.2.2.le
+        _ ≤ _ := hEvenCap
+    · simpa [Zfun, hx] using Real.exp_nonneg ((X.m : ℝ) ^ (15 / 100 : ℝ))
+  have hself : ∀ x, x ∈ near x := by intro x; simp [near]
+  have hBall (t : CubeVertex X.m) : (hammingBall t radius).card ≤
+      Real.exp (Real.binEntropy (1 / 4 : ℝ) * X.m) := by
+    have hmpos : 0 < X.m := by omega
+    have hb := hammingBall_volume_bound (n := X.m) (r := radius) (v := t) hmpos hRadius
+    have he := Real.binEntropy_strictMonoOn.monotoneOn
+      (show (radius : ℝ) / X.m ∈ Set.Icc 0 (2⁻¹ : ℝ) from ⟨by positivity, by linarith⟩)
+      (show (1 / 4 : ℝ) ∈ Set.Icc 0 (2⁻¹ : ℝ) by norm_num) hRadiusFrac
+    exact hb.trans (Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_right he (by positivity)))
+  have hnear (x : CubeVertex n) : (near x).card ≤ ballFactor * Fintype.card (CubeVertex n) := by
+    have hn := sign_near_card_le X.g (X.g.L.sign x) radius
+    have hball := hBall (X.g.L.sign x)
+    have hrat : (2 * (hammingBall (X.g.L.sign x) radius).card / (2 : ℝ) ^ X.m) ≤ ballFactor :=
+      div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hball (by norm_num)) (by positivity)
+    simpa using hn.trans (mul_le_mul_of_nonneg_right hrat (by positivity : 0 ≤ (2 : ℝ) ^ n))
+  have hjoint : ∀ a (k : ℕ), k ≤ n → ∀ s : Fin k → CubeVertex n,
+      (∀ i j : Fin k, j < i → s i ∉ near (s j)) →
+      ∑ Z ∈ succ, P.w Z * ∏ i, Zfun (s i) a Z ≤ (2 : ℝ) ^ k * ∏ i, dfun (s i) a := by
+    intro a k hk s hsep
+    have hinj : Function.Injective s := by
+      intro i j hij
+      by_contra hne
+      rcases lt_or_gt_of_ne hne with hij' | hij'
+      · exact hsep j i hij' (by simpa [hij] using hself (s i))
+      · exact hsep i j hij' (by simpa [hij] using hself (s j))
+    let U := Finset.univ.image s
+    have hcard : U.card = k := by simp [U, Finset.card_image_of_injective _ hinj]
+    have hdis : ∀ x ∈ U, ∀ x' ∈ U, x ≠ x' → Disjoint
+        (Lane_q_s06_loads.proxyHidScope6 X x) (Lane_q_s06_loads.proxyHidScope6 X x') := by
+      intro x hx x' hx' hne
+      obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hx
+      obtain ⟨j, _, rfl⟩ := Finset.mem_image.mp hx'
+      apply Lane_q_s06_loads.proxyHidScope6_disjoint X
+      have hij : i ≠ j := fun hij => hne (congrArg s hij)
+      rcases lt_or_gt_of_ne hij with hij' | hij'
+      · have hd : ¬ _root_.hammingDist (X.g.L.sign (s j)) (X.g.L.sign (s i)) ≤ radius :=
+          by simpa [near] using hsep j i hij'
+        simpa [radius, hammingDist_comm] using not_le.mp hd
+      · have hd : ¬ _root_.hammingDist (X.g.L.sign (s i)) (X.g.L.sign (s j)) ≤ radius :=
+          by simpa [near] using hsep i j hij'
+        exact not_le.mp hd
+    have hj := Lane_sol_s06_loadB.stage3_local_joint X (v,c) cert hsmallCharge U
+      (fun x => Zfun x a) (hLocal a) (fun x Z => hZ0 x a Z) hdis
+    have hprod (f : CubeVertex n → ℝ) : ∏ x ∈ U, f x = ∏ i, f (s i) :=
+      Finset.prod_image hinj.injOn
+    have hbound : P.expect (fun Z => ∏ i, Zfun (s i) a Z) ≤ (2 : ℝ) ^ k * ∏ i, dfun (s i) a := by
+      simpa only [hcard, hprod, hRaw] using hj
+    exact (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+      (fun Z _ _ => mul_nonneg (P.nonneg Z) (Finset.prod_nonneg fun i _ => hZ0 (s i) a Z))).trans hbound
+  have hCard : (Fintype.card (CubeVertex n) : ℝ) = 2 * (X.evenRoles.card : ℝ) := by
+    have he := (parity_class_card hnpos).1
+    have hEven : X.evenRoles = evenRoleSet n := rfl
+    rw [hEven, he]
+    have hp : (2 : ℕ) ^ n = 2 * 2 ^ (n - 1) := by
+      calc
+        2 ^ n = 2 ^ (n - 1 + 1) := by rw [Nat.sub_add_cancel (by omega : 1 ≤ n)]
+        _ = 2 ^ (n - 1) * 2 := by rw [pow_succ]
+        _ = 2 * 2 ^ (n - 1) := by omega
+    exact_mod_cast (by simpa using hp : Fintype.card (CubeVertex n) = 2 * 2 ^ (n - 1))
+  have hcoef : (X.evenRoles.card : ℝ)⁻¹ = 2 * (Fintype.card (CubeVertex n) : ℝ)⁻¹ := by rw [hCard, mul_inv_rev]; ring
+  have hsumD (a : Fin N) : (∑ x, dfun x a) = ∑ x ∈ X.evenRoles, X.phiEven (v,c) x a := by
+    simp only [dfun, Ctx6.evenRoles, Finset.sum_filter]
+  have hmean : ∀ a, (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, dfun x a ≤ Clb K := by
+    intro a
+    have hnonneg : 0 ≤ (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, dfun x a := mul_nonneg (by positivity : 0 ≤ (Fintype.card (CubeVertex n) : ℝ)⁻¹)
+      (Finset.sum_nonneg fun x _ => hD0 x a)
+    have hphi : X.phiAvg (v,c) a = 2 * ((Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, dfun x a) := by
+      rw [Ctx6.phiAvg, hcoef, ← hsumD]; ring
+    have h := hPhi a
+    rw [hphi] at h
+    linarith
+  have hClb0 : 0 ≤ Clb K := by dsimp [Clb, c₁, c₀]; positivity
+  have hlabels : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := by
+    simpa only [Fintype.card_fin] using
+      (show (N : ℝ) ≤ (n : ℝ) * 2 ^ n from by exact_mod_cast hLarge.2.2)
+  have htail := scatteredMoments_union_labels P succ Zfun hZ0
+    (Real.exp ((X.m : ℝ) ^ (15 / 100 : ℝ))) (by positivity) hL near hself
+    ballFactor (by positivity) hnear n hnpos 2 (Clb K) (by norm_num) hClb0
+    dfun hD0 hmean hjoint hSmall hlabels
+  let threshold : ℝ := 4 * 2 * (Clb K + 1)
+  have hthreshold : 2 * threshold ≤ Clh K := by dsimp [threshold, Clh]; nlinarith
+  have hmix (Z : X.Hid) (hZ : P.w Z ≠ 0) (a : Fin N) :
+      X.mixAvg ((v,c),Z) a = 2 * ((Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, Zfun x a Z) := by
+    obtain ⟨_, _, _, _, hTests, _⟩ := hHistSupport _ (hHist Z hZ)
+    have hsum : (∑ x, Zfun x a Z) = ∑ x ∈ X.evenRoles,
+        (N : ℝ) * ∑ i, (X.Tβ ((v,c),Z) (X.evenType x)).w i * (M.μ i).w a := by
+      rw [show (∑ x, Zfun x a Z) = ∑ x ∈ X.evenRoles, X.fEven ((v,c),Z) x a by
+        simp [Zfun, Ctx6.evenRoles, Finset.sum_filter]]
+      apply Finset.sum_congr rfl
+      intro x hx
+      have ho : X.evenType x ∈ X.occTypes := Finset.mem_image.mpr ⟨x, hx, rfl⟩
+      simp [Ctx6.fEven, hTests _ ho, Lane_sol_s06_loadB.histSupport_even_gate X hHistSupport _ (hHist Z hZ) x]
+    rw [Ctx6.mixAvg, hcoef, ← hsum]
+    ring
+  have hmono : P.pr (fun Z => ∃ a, Clh K < X.mixAvg ((v,c),Z) a) ≤
+      P.pr (fun Z => ∃ a, threshold < (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, Zfun x a Z) := by
+    apply pr_mono_supp6
+    intro Z hZ hbad
+    obtain ⟨a, ha⟩ := hbad
+    refine ⟨a, ?_⟩
+    rw [hmix Z hZ a] at ha
+    linarith
+  have hpr : P.pr (fun Z => ∃ a, threshold < (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, Zfun x a Z) ≤
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    unfold FinProb.pr
+    convert htail using 1
+    apply Finset.sum_congr rfl
+    intro Z _
+    by_cases hZ : P.w Z = 0
+    · simp [hZ]
+    · by_cases hb : ∃ a, threshold < (Fintype.card (CubeVertex n) : ℝ)⁻¹ * ∑ x, Zfun x a Z
+      · simp [succ, hZ, hb, threshold] at *
+      · simp [succ, hZ, hb, threshold] at *
+  exact hmono.trans (hpr.trans (nat_two_pow_union_tail hn10))
 
 /-- L6.1k and L6.1l assembled from their nodes. -/
 theorem loadFacts6 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :

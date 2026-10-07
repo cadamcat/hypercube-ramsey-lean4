@@ -2149,4 +2149,80 @@ theorem protocol_code_exponential_bound (P : TransferProtocol X)
             Real.exp_le_exp.mpr (le_trans hlogCode hcodeExp)
   simpa [M, alph, n, L] using hcodeBound
 
+/-- Pointwise comparison of normalized label kernels after removing a set of
+tests, provided both prefixes are broad and the removed tests lose at most the
+specified exponential factor. The side data remains fixed. -/
+theorem deletionWeight_le_exp
+    (D : LateData hPT) (j : Fin D.geom.r) {b : Pos T k}
+    (side : D.encoding.base.RowOut b) (omitted : Finset (Fin (T.S.n k)))
+    (hfull : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side Finset.univ)
+    (hleave : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side (Finset.univ \ omitted))
+    (hcompare : Real.exp (-D.error b j) *
+      D.retainedMass j side (Finset.univ \ omitted) ≤
+        D.retainedMass j side Finset.univ) :
+    ∀ y, D.labelWeight j side Finset.univ y ≤
+      Real.exp (D.error b j) *
+        D.labelWeight j side (Finset.univ \ omitted) y := by
+  classical
+  intro y
+  have hfullPos : 0 < D.retainedMass j side Finset.univ :=
+    lt_of_lt_of_le (Real.exp_pos _) hfull
+  have hleavePos : 0 < D.retainedMass j side (Finset.univ \ omitted) :=
+    lt_of_lt_of_le (Real.exp_pos _) hleave
+  have hcutfull : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side Finset.univ := hfull
+  have hcutleave : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side (Finset.univ \ omitted) := hleave
+  have hratio : D.retainedMass j side (Finset.univ \ omitted) /
+      D.retainedMass j side Finset.univ ≤ Real.exp (D.error b j) := by
+    apply (div_le_iff₀ hfullPos).2
+    have hexp : Real.exp (D.error b j) * Real.exp (-D.error b j) = 1 := by
+      rw [← Real.exp_add, add_neg_cancel, Real.exp_zero]
+    calc
+      D.retainedMass j side (Finset.univ \ omitted) =
+          (Real.exp (D.error b j) * Real.exp (-D.error b j)) *
+            D.retainedMass j side (Finset.univ \ omitted) := by rw [hexp, one_mul]
+      _ = Real.exp (D.error b j) *
+            (Real.exp (-D.error b j) * D.retainedMass j side (Finset.univ \ omitted)) := by ring
+      _ ≤ Real.exp (D.error b j) * D.retainedMass j side Finset.univ :=
+        mul_le_mul_of_nonneg_left hcompare (le_of_lt (Real.exp_pos _))
+  have hweight : 0 ≤ D.maskWeight side y := by
+    unfold LateData.maskWeight
+    split_ifs <;> positivity
+  by_cases hpass : D.passes j side Finset.univ y
+  · have hpassLeave : D.passes j side (Finset.univ \ omitted) y := by
+      intro a ha
+      exact hpass a (Finset.mem_univ a)
+    simp only [LateData.labelWeight, if_pos hcutfull, if_pos hcutleave,
+      if_pos hpass, if_pos hpassLeave]
+    have hquot : D.maskWeight side y /
+        D.retainedMass j side Finset.univ =
+          (D.maskWeight side y /
+            D.retainedMass j side (Finset.univ \ omitted)) *
+              (D.retainedMass j side (Finset.univ \ omitted) /
+                D.retainedMass j side Finset.univ) := by
+      field_simp
+    calc
+      D.maskWeight side y / D.retainedMass j side Finset.univ =
+          (D.maskWeight side y /
+            D.retainedMass j side (Finset.univ \ omitted)) *
+              (D.retainedMass j side (Finset.univ \ omitted) /
+                D.retainedMass j side Finset.univ) := hquot
+      _ ≤ (D.maskWeight side y /
+            D.retainedMass j side (Finset.univ \ omitted)) *
+              Real.exp (D.error b j) :=
+        mul_le_mul_of_nonneg_left hratio (div_nonneg hweight hleavePos.le)
+      _ = Real.exp (D.error b j) *
+            (D.maskWeight side y /
+              D.retainedMass j side (Finset.univ \ omitted)) := by ring
+  · simp only [LateData.labelWeight, if_pos hcutfull, if_pos hcutleave,
+      if_neg hpass]
+    by_cases hpassLeave : D.passes j side (Finset.univ \ omitted) y
+    · simp only [if_pos hpassLeave]
+      positivity
+    · simp only [if_neg hpassLeave]
+      positivity
+
 end HypercubeRamsey.S18.Lane_q_s18_n2

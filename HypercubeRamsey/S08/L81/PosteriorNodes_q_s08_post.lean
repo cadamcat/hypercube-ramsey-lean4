@@ -2227,6 +2227,20 @@ def presList {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (q : D.Pre) (c : D.CellT) : D.LList c.1 :=
   (D.intIds q c, fun u => D.crossId q c u)
 
+def presListOfPresentation {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (π : D.Pres c.1) : D.LList c.1 :=
+  ((Finset.univ.filter fun ℓ : D.Loc => (π.1 ℓ).isSome), fun u => (π.2 u).1)
+
+theorem presListOf_presOf {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT) :
+    presListOfPresentation D c (D.presOf q W c) = presList D q c := by
+  classical
+  apply Prod.ext
+  · ext ℓ
+    simp [presListOfPresentation, presList, Ctx.presOf]
+  · funext u
+    simp [presListOfPresentation, presList, Ctx.presOf, Ctx.crossId]
+
 theorem presList_cand_of_valid {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT)
     (hvalid : D.PresValid q W c) : D.Cand q.1.2 c (presList D q c) := by
@@ -2268,6 +2282,51 @@ theorem presList_cand_of_valid {η₀ β p : ℝ} {h : ℕ}
         constructor
         · simpa [presList, hEq] using hProps.1
         · simpa [presList, hEq] using hProps.2.2.1
+
+abbrev PresListData {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (L : D.LList c.1) :=
+      (({ℓ : D.Loc // ℓ ∈ L.1} → D.M.ι) ×
+        (D.CrossSub c.1 → D.M.ι × Fin D.N))
+
+def presListDataOf {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (L : D.LList c.1)
+    (default : D.M.ι) (π : D.Pres c.1) : PresListData D c L :=
+  (fun ℓ => (π.1 ℓ.1).getD default,
+    fun u => ((π.2 u).2.1, (π.2 u).2.2))
+
+def presFromListData {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (L : D.LList c.1)
+    (d : PresListData D c L) : D.Pres c.1 :=
+  (fun ℓ => if hℓ : ℓ ∈ L.1 then some (d.1 ⟨ℓ, hℓ⟩) else none,
+    fun u => (L.2 u, (d.2 u).1, (d.2 u).2))
+
+theorem pres_reconstruct_from_list {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (L : D.LList c.1)
+    (default : D.M.ι) (π : D.Pres c.1)
+    (hList : presListOfPresentation D c π = L) :
+    π = presFromListData D c L (presListDataOf D c L default π) := by
+  classical
+  have hSupport (ℓ : D.Loc) : (π.1 ℓ).isSome ↔ ℓ ∈ L.1 := by
+    have h := congrArg (fun v : D.LList c.1 => ℓ ∈ v.1) hList
+    simpa [presListOfPresentation] using h
+  apply Prod.ext
+  · funext ℓ
+    by_cases hℓ : ℓ ∈ L.1
+    · have hs : (π.1 ℓ).isSome := (hSupport ℓ).2 hℓ
+      cases ho : π.1 ℓ with
+      | none => simp [ho] at hs
+      | some i => simp [presFromListData, presListDataOf, hℓ, ho]
+    · have hs : ¬ (π.1 ℓ).isSome := fun hh => hℓ ((hSupport ℓ).1 hh)
+      cases ho : π.1 ℓ with
+      | none => simp [presFromListData, hℓ, ho]
+      | some i => simp [ho] at hs
+  · funext u
+    have hCrossId : (π.2 u).1 = L.2 u := by
+      have h := congrFun (congrArg Prod.snd hList) u
+      simpa [presListOfPresentation] using h
+    apply Prod.ext
+    · exact hCrossId
+    · rfl
 
 def localPresEvent {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)

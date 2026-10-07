@@ -291,7 +291,8 @@ theorem cluster_role_term_cap {κ : CConsts} (hκ : κ.Admissible)
     ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y ≤
       64 * Real.exp (2 * (sliceK κ (PT.tiling.P (H.geom.cellPatch C)).h : ℝ) *
         sliceT κ (PT.tiling.P (H.geom.cellPatch C)).h) / (H.geom.nslot C : ℝ) := by
-  sorry
+  exact Lane_q_s16_gate1.cluster_role_term_cap hκ Q H R Perm K hR hc hPerm C pool W hW hn4
+    hmass r y
 
 /-- D4. Per-role history mean at typical pools, through `low_profile` and
 `law_cap` (T16:268-273): `4 (B/L) * 11/M`.

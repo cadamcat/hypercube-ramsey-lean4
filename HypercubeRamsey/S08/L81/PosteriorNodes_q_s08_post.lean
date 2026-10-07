@@ -1150,6 +1150,38 @@ def localAnchorsProj {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (c : D.CellT) : D.Anch → LocalAnchorSample D c :=
   fun W e => W e.1
 
+def completeLocalTAT {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (base : D.TAT)
+    (t : LocalTATSample D c) : D.TAT :=
+  ((fun g ℓ => if hg : g ∈ keyBall c.1 3 then t.1.1 ⟨g, hg⟩ ℓ else base.1.1 g ℓ,
+    fun g ℓ => if hg : g ∈ keyBall c.1 1 then t.1.2 ⟨g, hg⟩ ℓ else base.1.2 g ℓ),
+    fun g => if hg : g ∈ keyBall c.1 1 then t.2 ⟨g, hg⟩ else base.2 g)
+
+def completeLocalAnchors {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (base : D.Anch)
+    (a : LocalAnchorSample D c) : D.Anch :=
+  fun e => if he : e ∈ crossCellSet D c then a ⟨e, he⟩ else base e
+
+theorem localTATProj_completeLocalTAT {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (base : D.TAT) (t : LocalTATSample D c) :
+    localTATProj D c (completeLocalTAT D c base t) = t := by
+  classical
+  apply Prod.ext
+  · apply Prod.ext
+    · funext g ℓ
+      simp [localTATProj, localTagsProj, completeLocalTAT]
+    · funext g ℓ
+      simp [localTATProj, localActsProj, completeLocalTAT]
+  · funext g
+    simp [localTATProj, localTiesProj, completeLocalTAT]
+
+theorem localAnchorsProj_completeLocalAnchors {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (base : D.Anch) (a : LocalAnchorSample D c) :
+    localAnchorsProj D c (completeLocalAnchors D c base a) = a := by
+  classical
+  funext e
+  simp [localAnchorsProj, completeLocalAnchors]
+
 theorem rprime_pr_coordinate {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (j : Fin h) (y : Fin D.N) :
     D.R'.pr (fun ξ => ξ j = y) = ∑ i, D.M.Λ i * (D.M.ν i).w y := by
@@ -1594,6 +1626,318 @@ theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
   apply Finset.sum_congr rfl
   intro ξ hξ
   rw [Lane_q_s08_post.fcand_congr_radius_two D Θ Θ' g ξ o hΘ]
+
+set_option maxHeartbeats 1000000 in
+theorem presentation_event_congr_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hS : D.SelLocal) (H H' : D.Hist)
+    (P P' : D.Pos) (c : D.CellT) (ω ω' : D.TAT) (W W' : D.Anch)
+    (π : D.Pres c.1)
+    (hH : ∀ g, keyDist c.1 g ≤ 4 → H g = H' g)
+    (hP : ∀ g, keyDist c.1 g ≤ 3 → P g = P' g)
+    (hT : localTATProj D c ω = localTATProj D c ω')
+    (hA : localAnchorsProj D c W = localAnchorsProj D c W') :
+    (D.PresValid ((H, P), ω) W c ∧
+        D.presOf ((H, P), ω) W c = π) ↔
+      (D.PresValid ((H', P'), ω') W' c ∧
+        D.presOf ((H', P'), ω') W' c = π) := by
+  classical
+  have hTag (g : D.KeyT) (hg : keyDist c.1 g ≤ 3) : ω.1.1 g = ω'.1.1 g := by
+    have hfun := congrArg (fun z : LocalTATSample D c => z.1.1) hT
+    have hmem : g ∈ keyBall c.1 3 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact congrFun hfun ⟨g, hmem⟩
+  have hAct (g : D.KeyT) (hg : keyDist c.1 g ≤ 1) : ω.1.2 g = ω'.1.2 g := by
+    have hfun := congrArg (fun z : LocalTATSample D c => z.1.2) hT
+    have hmem : g ∈ keyBall c.1 1 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact congrFun hfun ⟨g, hmem⟩
+  have hTie (g : D.KeyT) (hg : keyDist c.1 g ≤ 1) : ω.2 g = ω'.2 g := by
+    have hfun := congrArg (fun z : LocalTATSample D c => z.2) hT
+    have hmem : g ∈ keyBall c.1 1 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact congrFun hfun ⟨g, hmem⟩
+  have hSelEq (e : D.CellT) (he : keyDist c.1 e.1 ≤ 1) :
+      D.sel ((H, P), ω) e = D.sel ((H', P'), ω') e := by
+    apply hS
+    · intro g hg
+      have htri := keyDist_triangle_aux c.1 e.1 g
+      have heg : keyDist e.1 g ≤ 3 := (Finset.mem_filter.mp hg).2
+      have hcg : keyDist c.1 g ≤ 4 := by omega
+      exact hH g hcg
+    · intro g hg ℓ hℓ
+      have htri := keyDist_triangle_aux c.1 e.1 g
+      have heg : keyDist e.1 g ≤ 2 := (Finset.mem_filter.mp hg).2
+      have hcg : keyDist c.1 g ≤ 3 := by omega
+      exact ⟨congrFun (hP g hcg) ℓ, congrFun (hTag g hcg) ℓ⟩
+    · intro ℓ hℓ
+      exact ⟨congrFun (hAct e.1 he) ℓ, congrFun (hTie e.1 he) ℓ⟩
+  have hOrdSel (b : D.ResT) (hb : b ∈ ordNbrs c.2) :
+      D.sel ((H, P), ω) (c.1, b) = D.sel ((H', P'), ω') (c.1, b) := by
+    apply hSelEq
+    simp [keyDist]
+  have hCrossSel (u : D.CrossSub c.1) :
+      D.sel ((H, P), ω) (u.1, c.2) = D.sel ((H', P'), ω') (u.1, c.2) := by
+    apply hSelEq
+    exact (Finset.mem_filter.mp u.2).2.le
+  have hIntIds : D.intIds ((H, P), ω) c = D.intIds ((H', P'), ω') c := by
+    unfold Ctx.intIds
+    ext ℓ
+    simp only [Finset.mem_biUnion]
+    constructor
+    · rintro ⟨b, hb, hℓ⟩
+      refine ⟨b, hb, ?_⟩
+      rw [hOrdSel b hb] at hℓ
+      exact hℓ
+    · rintro ⟨b, hb, hℓ⟩
+      refine ⟨b, hb, ?_⟩
+      rw [← hOrdSel b hb] at hℓ
+      exact hℓ
+  have hCrossId (u : D.CrossSub c.1) :
+      D.crossId ((H, P), ω) c u = D.crossId ((H', P'), ω') c u := by
+    unfold Ctx.crossId
+    rw [hCrossSel u]
+  have hAnchor (u : D.CrossSub c.1) :
+      W (u.1, c.2) = W' (u.1, c.2) := by
+    have he : (u.1, c.2) ∈ crossCellSet D c :=
+      Finset.mem_image.mpr ⟨u, Finset.mem_univ u, rfl⟩
+    exact congrFun hA ⟨(u.1, c.2), he⟩
+  have hPres : D.presOf ((H, P), ω) W c = D.presOf ((H', P'), ω') W' c := by
+    apply Prod.ext
+    · funext ℓ
+      simp only [Ctx.presOf]
+      by_cases hℓ : ℓ ∈ D.intIds ((H, P), ω) c
+      · have hℓ' : ℓ ∈ D.intIds ((H', P'), ω') c := by rw [← hIntIds]; exact hℓ
+        have hc : keyDist c.1 c.1 ≤ 3 := by simp [keyDist]
+        simp [hℓ, hℓ', congrFun (hTag c.1 hc) ℓ]
+      · have hℓ' : ℓ ∉ D.intIds ((H', P'), ω') c := by rw [← hIntIds]; exact hℓ
+        simp [hℓ, hℓ']
+    · funext u
+      simp only [Ctx.presOf]
+      have hu3 : keyDist c.1 u.1 ≤ 3 := by
+        have hu1 : keyDist c.1 u.1 = 1 := (Finset.mem_filter.mp u.2).2
+        omega
+      change (D.crossId ((H, P), ω) c u,
+          ω.1.1 u.1 (D.crossId ((H, P), ω) c u), W (u.1, c.2)) =
+        (D.crossId ((H', P'), ω') c u,
+          ω'.1.1 u.1 (D.crossId ((H', P'), ω') c u), W' (u.1, c.2))
+      rw [hCrossId u, congrFun (hTag u.1 hu3) (D.crossId ((H', P'), ω') c u), hAnchor u]
+  have hHidden2 : ∀ g ∈ keyBall c.1 2, H g = H' g := by
+    intro g hg
+    have hd := (Finset.mem_filter.mp hg).2
+    exact hH g (hd.trans (by omega))
+  have hHist2 : ∀ g, keyDist c.1 g ≤ 2 → H g = H' g := by
+    intro g hg
+    have hmem : g ∈ keyBall c.1 2 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact hHidden2 g hmem
+  have hCandGate :=
+    Lane_q_s08_post.candGate_congr_of_radius_two D H H' c.1 hHidden2
+  have hPadKey3 (e : D.CellT) (he : PadNbr c e) : e.1 ∈ keyBall c.1 3 := by
+    apply Finset.mem_filter.mpr
+    constructor
+    · exact Finset.mem_univ e.1
+    · rcases he with ⟨hek, hOrd⟩ | ⟨hres, hCross⟩
+      · rw [hek]
+        simp [keyDist]
+      · have hdist := (Finset.mem_filter.mp hCross).2
+        exact hdist.le.trans (by omega)
+  have hPosCount :
+      D.PosCountOK P c = D.PosCountOK P' c := by
+    apply propext
+    constructor <;> intro hh e he j
+    · have hp := hP e.1 ((Finset.mem_filter.mp (hPadKey3 e he)).2)
+      have hcount : D.ballCount P' e.1 e.2 j = D.ballCount P e.1 e.2 j := by
+        unfold Ctx.ballCount
+        rw [hp]
+      rw [hcount]
+      exact hh e he j
+    · have hp := hP e.1 ((Finset.mem_filter.mp (hPadKey3 e he)).2)
+      have hcount : D.ballCount P e.1 e.2 j = D.ballCount P' e.1 e.2 j := by
+        unfold Ctx.ballCount
+        rw [hp]
+      rw [hcount]
+      exact hh e he j
+  have hObs : D.obsOf (D.presOf ((H, P), ω) W c) =
+      D.obsOf (D.presOf ((H', P'), ω') W' c) := congrArg D.obsOf hPres
+  have hMden :
+      D.Mden H c.1 (D.obsOf (D.presOf ((H, P), ω) W c)) =
+        D.Mden H' c.1 (D.obsOf (D.presOf ((H', P'), ω') W' c)) := by
+    rw [hObs]
+    exact Lane_q_s08_post.mden_congr_radius_two D H H' c.1
+      (D.obsOf (D.presOf ((H', P'), ω') W' c)) hHist2
+  have hOrdValid :
+      (∀ b ∈ ordNbrs c.2, (D.sel ((H, P), ω) (c.1, b)).isSome) ↔
+        (∀ b ∈ ordNbrs c.2, (D.sel ((H', P'), ω') (c.1, b)).isSome) := by
+    constructor
+    · intro hh b hb
+      rw [← hOrdSel b hb]
+      exact hh b hb
+    · intro hh b hb
+      rw [hOrdSel b hb]
+      exact hh b hb
+  have hCrossValid :
+      (∀ u : D.CrossSub c.1, (D.sel ((H, P), ω) (u.1, c.2)).isSome) ↔
+        (∀ u : D.CrossSub c.1, (D.sel ((H', P'), ω') (u.1, c.2)).isSome) := by
+    constructor
+    · intro hh u
+      rw [← hCrossSel u]
+      exact hh u
+    · intro hh u
+      rw [hCrossSel u]
+      exact hh u
+  have hValidEq : D.PresValid ((H, P), ω) W c = D.PresValid ((H', P'), ω') W' c := by
+    apply propext
+    unfold Ctx.PresValid
+    rw [hCandGate, hOrdValid, hCrossValid, hIntIds, hPosCount, hMden]
+  rw [hValidEq, hPres]
+
+def rawPresEvent {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
+    (π : D.Pres c.1) (z : D.TAT × D.Anch) : Prop :=
+  D.PresValid ((H, P), z.1) z.2 c ∧ D.presOf ((H, P), z.1) z.2 c = π
+
+def localPresEvent {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
+    (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch)
+    (t : LocalTATSample D c) (a : LocalAnchorSample D c) : Prop :=
+  D.PresValid ((H, P), completeLocalTAT D c baseT t)
+      (completeLocalAnchors D c baseW a) c ∧
+    D.presOf ((H, P), completeLocalTAT D c baseT t)
+      (completeLocalAnchors D c baseW a) c = π
+
+theorem rawPresEvent_iff_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hS : D.SelLocal) (H : D.Hist) (P : D.Pos)
+    (c : D.CellT) (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch)
+    (ω : D.TAT) (W : D.Anch) :
+    rawPresEvent D H P c π (ω, W) ↔
+      localPresEvent D H P c π baseT baseW
+        (localTATProj D c ω) (localAnchorsProj D c W) := by
+  have hT : localTATProj D c ω =
+      localTATProj D c (completeLocalTAT D c baseT (localTATProj D c ω)) :=
+    (localTATProj_completeLocalTAT D c baseT (localTATProj D c ω)).symm
+  have hA : localAnchorsProj D c W =
+      localAnchorsProj D c
+        (completeLocalAnchors D c baseW (localAnchorsProj D c W)) :=
+    (localAnchorsProj_completeLocalAnchors D c baseW (localAnchorsProj D c W)).symm
+  simpa [rawPresEvent, localPresEvent] using
+    (presentation_event_congr_local D hS H H P P c ω
+      (completeLocalTAT D c baseT (localTATProj D c ω)) W
+      (completeLocalAnchors D c baseW (localAnchorsProj D c W)) π
+      (by intro g hg; rfl) (by intro g hg; rfl) hT hA)
+
+private theorem pr_congr_local {α : Type*} [Fintype α]
+    (Q : FinProb α) (A B : α → Prop)
+    (hAB : ∀ x, A x ↔ B x) : Q.pr A = Q.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro x hx
+  simp [hAB x]
+
+set_option maxHeartbeats 3000000 in
+theorem rawLaw_pr_local_expect {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hS : D.SelLocal) (H : D.Hist) (P : D.Pos)
+    (c : D.CellT) (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch) :
+    (D.rawLaw H P).pr (rawPresEvent D H P c π) =
+      (FinProb.map (D.rawTAT H) (localTATProj D c)).expect
+        (fun t =>
+          (FinProb.map
+              (D.rawAnchors ((H, P), completeLocalTAT D c baseT t))
+              (localAnchorsProj D c)).pr
+            (fun a => localPresEvent D H P c π baseT baseW t a)) := by
+  classical
+  let f : LocalTATSample D c → ℝ := fun t =>
+    (FinProb.map
+        (D.rawAnchors ((H, P), completeLocalTAT D c baseT t))
+        (localAnchorsProj D c)).pr
+      (fun a => localPresEvent D H P c π baseT baseW t a)
+  change (D.rawLaw H P).pr (rawPresEvent D H P c π) =
+    (FinProb.map (D.rawTAT H) (localTATProj D c)).expect f
+  rw [Ctx.rawLaw, Lane_q_s08_post.bind_pr_eq_sum]
+  calc
+    (∑ ω, (D.rawTAT H).w ω *
+        (D.rawAnchors ((H, P), ω)).pr (fun W => rawPresEvent D H P c π (ω, W))) =
+      ∑ ω, (D.rawTAT H).w ω * f (localTATProj D c ω) := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      congr 1
+      let t := localTATProj D c ω
+      let ω₀ := completeLocalTAT D c baseT t
+      have hT : localTATProj D c ω = localTATProj D c ω₀ := by
+        dsimp [t, ω₀]
+        exact (localTATProj_completeLocalTAT D c baseT (localTATProj D c ω)).symm
+      have hLaw :
+          FinProb.map (D.rawAnchors ((H, P), ω)) (localAnchorsProj D c) =
+            FinProb.map (D.rawAnchors ((H, P), ω₀)) (localAnchorsProj D c) :=
+        rawAnchors_cross_projection_congr D hS H H P P c ω ω₀
+          (by intro g hg; rfl) (by intro g hg; rfl) hT
+      have hEvent := rawPresEvent_iff_local D hS H P c π baseT baseW ω
+      calc
+        (D.rawAnchors ((H, P), ω)).pr
+            (fun W => rawPresEvent D H P c π (ω, W)) =
+          (D.rawAnchors ((H, P), ω)).pr
+            (fun W => localPresEvent D H P c π baseT baseW
+              (localTATProj D c ω) (localAnchorsProj D c W)) :=
+                pr_congr_local _ _ _ hEvent
+        _ = f (localTATProj D c ω) := by
+          rw [(FinProb.map_pr _ _ _).symm]
+          dsimp [f]
+          rw [hLaw]
+    _ = (FinProb.map (D.rawTAT H) (localTATProj D c)).expect f := by
+      symm
+      exact FinProb.map_expect (D.rawTAT H) (localTATProj D c) f
+
+set_option maxHeartbeats 1000000 in
+theorem rawLaw_pr_congr_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hS : D.SelLocal) (H H' : D.Hist)
+    (P P' : D.Pos) (c : D.CellT) (π : D.Pres c.1)
+    (baseT : D.TAT) (baseW : D.Anch)
+    (hH : ∀ g, keyDist c.1 g ≤ 4 → H g = H' g)
+    (hP : ∀ g, keyDist c.1 g ≤ 3 → P g = P' g) :
+    (D.rawLaw H P).pr (rawPresEvent D H P c π) =
+      (D.rawLaw H' P').pr (rawPresEvent D H' P' c π) := by
+  classical
+  rw [rawLaw_pr_local_expect D hS H P c π baseT baseW,
+    rawLaw_pr_local_expect D hS H' P' c π baseT baseW]
+  have hProj := rawTAT_local_projection_congr D H H' c hH
+  simp only [hProj]
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro t ht
+  have hAt (t : LocalTATSample D c) :
+      (FinProb.map
+        (D.rawAnchors ((H, P), completeLocalTAT D c baseT t))
+        (localAnchorsProj D c)).pr
+          (fun a => localPresEvent D H P c π baseT baseW t a) =
+      (FinProb.map
+        (D.rawAnchors ((H', P'), completeLocalTAT D c baseT t))
+        (localAnchorsProj D c)).pr
+          (fun a => localPresEvent D H' P' c π baseT baseW t a) := by
+    let ω₀ := completeLocalTAT D c baseT t
+    have hAnchorLaw :
+        FinProb.map (D.rawAnchors ((H, P), ω₀)) (localAnchorsProj D c) =
+          FinProb.map (D.rawAnchors ((H', P'), ω₀)) (localAnchorsProj D c) :=
+      rawAnchors_cross_projection_congr D hS H H' P P' c ω₀ ω₀ hH hP rfl
+    have hEvt (a : LocalAnchorSample D c) :
+        localPresEvent D H P c π baseT baseW t a ↔
+          localPresEvent D H' P' c π baseT baseW t a := by
+      have h := presentation_event_congr_local D hS H H' P P' c ω₀ ω₀
+        (completeLocalAnchors D c baseW a) (completeLocalAnchors D c baseW a) π hH hP rfl rfl
+      simpa [localPresEvent] using h
+    calc
+      (FinProb.map (D.rawAnchors ((H, P), ω₀)) (localAnchorsProj D c)).pr
+          (fun a => localPresEvent D H P c π baseT baseW t a) =
+        (FinProb.map (D.rawAnchors ((H, P), ω₀)) (localAnchorsProj D c)).pr
+          (fun a => localPresEvent D H' P' c π baseT baseW t a) :=
+            pr_congr_local _ _ _ hEvt
+      _ = (FinProb.map (D.rawAnchors ((H', P'), ω₀)) (localAnchorsProj D c)).pr
+          (fun a => localPresEvent D H' P' c π baseT baseW t a) := by rw [hAnchorLaw]
+  dsimp
+  rw [hAt t]
 
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by

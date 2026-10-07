@@ -4347,6 +4347,150 @@ private theorem keyFlipOutput_eq_of_code_eq {β γ : ℝ} {n : ℕ}
               (HypercubeRamsey.cubeFlip v i₂) :=
             (gadgetFlipCode_none_eq_base h v i₂ hS hnone₂h).symm
 
+private theorem binarySearchPath_length (S : ℕ) (R : ℕ → ℕ) (e : ℕ)
+    (ab : ℕ × ℕ) : (binarySearchPath S R e ab).length = e := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih => simp [binarySearchPath, ih]
+
+private def keyFlipPathNode {β γ : ℝ} {n : ℕ} (v : CubeVertex n)
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (k : Fin (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))) : ℕ :=
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let path := binarySearchPath S (HypercubeRamsey.S04.rankValue β γ n g v)
+    (Nat.log2 S) (0, S)
+  path.get ⟨k.val, by
+    change k.val < (binarySearchPath S (HypercubeRamsey.S04.rankValue β γ n g v)
+      (Nat.log2 S) (0, S)).length
+    rw [binarySearchPath_length]
+    exact k.isLt⟩
+
+private def keyFlipRankDomain {β γ : ℝ} {n : ℕ} (v : CubeVertex n) :=
+  Σ g : Fin (HypercubeRamsey.S04.gadgetNum β γ n),
+    Fin (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+
+private noncomputable def keyFlipCodeTypes {β γ : ℝ} {n : ℕ} (v : CubeVertex n) :
+    Finset (Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool)) := by
+  classical
+  exact {none} ∪
+    ((Finset.univ : Finset
+      (keyFlipRankDomain (β := β) (γ := γ) v × Bool))).image
+      (fun p => some (p.1.1,
+        keyFlipPathNode (β := β) (γ := γ) v p.1.1 p.1.2, p.2))
+
+private theorem keyFlipCodeTypes_card_le {β γ : ℝ} {n : ℕ} (v : CubeVertex n) :
+    (keyFlipCodeTypes (β := β) (γ := γ) v).card ≤
+      1 + HypercubeRamsey.S04.gadgetNum β γ n *
+      (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+  classical
+  let G := HypercubeRamsey.S04.gadgetNum β γ n
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let e := Nat.log2 S
+  have hdomain : Fintype.card (keyFlipRankDomain (β := β) (γ := γ) v) = G * e := by
+    unfold keyFlipRankDomain
+    rw [Fintype.card_sigma]
+    simp [G, e]
+  let D : Finset (keyFlipRankDomain (β := β) (γ := γ) v × Bool) := Finset.univ
+  calc
+    (keyFlipCodeTypes (β := β) (γ := γ) v).card ≤
+        ({none} : Finset (Option (Fin G × ℕ × Bool))).card +
+          (D.image (fun p => some (p.1.1, p.1.2.val, p.2))).card := by
+            unfold keyFlipCodeTypes
+            exact Finset.card_union_le _ _
+    _ ≤ 1 + D.card := by
+      simp only [Finset.card_singleton]
+      exact Nat.add_le_add_left Finset.card_image_le 1
+    _ = 1 + Fintype.card (keyFlipRankDomain (β := β) (γ := γ) v × Bool) := by
+      simp only [D, Finset.card_univ]
+    _ = 1 + Fintype.card (keyFlipRankDomain (β := β) (γ := γ) v) * 2 := by
+      simp only [Fintype.card_prod, Fintype.card_bool]
+    _ = 1 + (G * e) * 2 := by rw [hdomain]
+    _ = 1 + HypercubeRamsey.S04.gadgetNum β γ n *
+          (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+      simp [G, S, e, Nat.mul_assoc]
+
+private theorem keyFlipCode_mem_types {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) :
+    keyFlipCode β γ v i ∈ keyFlipCodeTypes (β := β) (γ := γ) v := by
+  classical
+  rcases keyFlipCode_cases β γ v i with ⟨hnone, _⟩ |
+    ⟨g, r, b, hout, hlocal⟩
+  · rw [hnone]
+    simp [keyFlipCodeTypes]
+  · rcases gadgetFlipCode_some_spec g v i hlocal with
+      ⟨j, hdata, hpath, hb, hcross⟩
+    let path := binarySearchPath (HypercubeRamsey.S04.gadgetPower β γ n)
+      (HypercubeRamsey.S04.rankValue β γ n g v)
+      (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+      (0, HypercubeRamsey.S04.gadgetPower β γ n)
+    have hlen : path.length = Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) := by
+      exact binarySearchPath_length _ _ _ _
+    obtain ⟨k, hk, hget⟩ := List.getElem_of_mem hpath
+    let k' : Fin (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n)) :=
+      ⟨k, by rw [← hlen]; exact hk⟩
+    have hnode : keyFlipPathNode v g k' = r.val + 1 := by
+      unfold keyFlipPathNode
+      dsimp [k']
+      rw [List.get_eq_getElem]
+      exact hget
+    rw [hout]
+    simp only [keyFlipCodeTypes, Finset.mem_union, Finset.mem_singleton]
+    right
+    apply Finset.mem_image.mpr
+    refine ⟨(⟨g, k'⟩, b), Finset.mem_univ _, ?_⟩
+    simpa [hnode]
+
+private noncomputable def keyOutputOfFlipCode {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (c : Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool)) :
+    HypercubeRamsey.S04.Key β γ n := by
+  classical
+  exact if h : ∃ i : Fin n, keyFlipCode β γ v i = c then
+    HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v (Classical.choose h))
+  else HypercubeRamsey.S04.key β γ n v
+
+private theorem keyOutputOfFlipCode_eq {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (c : Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool))
+    (i : Fin n) (hc : keyFlipCode β γ v i = c)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    keyOutputOfFlipCode v c =
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i) := by
+  classical
+  let h : ∃ j : Fin n, keyFlipCode β γ v j = c := ⟨i, hc⟩
+  have hchosen := Classical.choose_spec h
+  unfold keyOutputOfFlipCode
+  rw [dif_pos h]
+  exact keyFlipOutput_eq_of_code_eq v (Classical.choose h) i hS
+    (hchosen.trans hc.symm)
+
+private theorem keyFlip_image_card_le_path {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    ((Finset.univ : Finset (Fin n)).image fun i =>
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i)).card ≤
+      1 + HypercubeRamsey.S04.gadgetNum β γ n *
+        (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+  classical
+  let G := HypercubeRamsey.S04.gadgetNum β γ n
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let codeSet := keyFlipCodeTypes (β := β) (γ := γ) v
+  let outputSet := codeSet.image (keyOutputOfFlipCode v)
+  let flipImage := (Finset.univ : Finset (Fin n)).image fun i =>
+    HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i)
+  have hsubset : flipImage ⊆ outputSet := by
+    intro κ hκ
+    rcases Finset.mem_image.mp hκ with ⟨i, hi, rfl⟩
+    apply Finset.mem_image.mpr
+    refine ⟨keyFlipCode β γ v i, ?_, ?_⟩
+    · exact keyFlipCode_mem_types v i
+    · exact keyOutputOfFlipCode_eq v _ i rfl hS
+  calc
+    flipImage.card ≤ outputSet.card := Finset.card_le_card hsubset
+    _ ≤ codeSet.card := Finset.card_image_le
+    _ ≤ 1 + G * (Nat.log2 S * 2) := by
+      simpa [codeSet, G, S] using keyFlipCodeTypes_card_le v
+    _ = 1 + HypercubeRamsey.S04.gadgetNum β γ n *
+          (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+      simp [G, S]
+
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
   classical

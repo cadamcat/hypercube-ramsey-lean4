@@ -2431,6 +2431,28 @@ theorem pres_reconstruct_from_list {η₀ β p : ℝ} {h : ℕ}
     · exact hCrossId
     · rfl
 
+theorem presFromListData_list {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (L : D.LList c.1)
+    (d : PresListData D c L) :
+    presListOfPresentation D c (presFromListData D c L d) = L := by
+  classical
+  apply Prod.ext
+  · ext ℓ
+    simp [presListOfPresentation, presFromListData]
+  · funext u
+    simp [presListOfPresentation, presFromListData]
+
+theorem presListDataOf_presFromListData {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (L : D.LList c.1)
+    (default : D.M.ι) (d : PresListData D c L) :
+    presListDataOf D c L default (presFromListData D c L d) = d := by
+  classical
+  apply Prod.ext
+  · funext ℓ
+    simp [presListDataOf, presFromListData]
+  · funext u
+    simp [presListDataOf, presFromListData]
+
 def localPresEvent {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
     (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch)
@@ -2537,6 +2559,585 @@ theorem qref_gsel_sum_le_one {η₀ β p : ℝ} {h : ℕ}
     _ = Q.pr V := hpartition
     _ ≤ 1 := pr_le_one_local Q V
 
+private noncomputable def presListDataLaw {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (c : D.CellT) (L : D.LList c.1) :
+    FinProb (PresListData D c L) :=
+  FinProb.bind
+    (FinProb.pi fun _ : {ℓ : D.Loc // ℓ ∈ L.1} => D.tilt Θ c.1)
+    (fun _ => FinProb.pi fun u : D.CrossSub c.1 =>
+      FinProb.bind (D.tilt Θ u.1) (fun i => D.anchorU Θ u.1 i))
+
+private theorem presListDataLaw_weight {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (c : D.CellT) (L : D.LList c.1)
+    (d : PresListData D c L) :
+    (presListDataLaw D Θ c L).w d =
+      (∏ ℓ : {ℓ : D.Loc // ℓ ∈ L.1}, (D.tilt Θ c.1).w (d.1 ℓ)) *
+      ∏ u : D.CrossSub c.1,
+        (D.tilt Θ u.1).w (d.2 u).1 * (D.anchorU Θ u.1 (d.2 u).1).w (d.2 u).2 := by
+  simp [presListDataLaw, FinProb.bind, FinProb.pi]
+
+private theorem presListDataLaw_weight_sum {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (c : D.CellT) (L : D.LList c.1) :
+    ∑ d : PresListData D c L, (presListDataLaw D Θ c L).w d = 1 :=
+  (presListDataLaw D Θ c L).sum_eq_one
+
+private theorem presentationObservedWeight_eq_dataLawWeight {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (c : D.CellT) (L : D.LList c.1)
+    (π : D.Pres c.1) (default : D.M.ι)
+    (hList : presListOfPresentation D c π = L) :
+    (∏ j, (π.1 j).elim 1 (fun i => (D.tilt Θ c.1).w i)) *
+      ∏ u : D.CrossSub c.1,
+        (D.tilt Θ u.1).w ((π.2 u).2.1) *
+          (D.anchorU Θ u.1 ((π.2 u).2.1)).w ((π.2 u).2.2) =
+      (presListDataLaw D Θ c L).w (presListDataOf D c L default π) := by
+  classical
+  rw [presListDataLaw_weight]
+  have hSupport (ℓ : D.Loc) : (π.1 ℓ).isSome ↔ ℓ ∈ L.1 := by
+    have hh := congrArg (fun v : D.LList c.1 => ℓ ∈ v.1) hList
+    simpa [presListOfPresentation] using hh
+  have hInt :
+      (∏ j, (π.1 j).elim 1 (fun i => (D.tilt Θ c.1).w i)) =
+        ∏ ℓ : {ℓ : D.Loc // ℓ ∈ L.1},
+          (D.tilt Θ c.1).w ((π.1 ℓ.1).getD default) := by
+    calc
+      (∏ j, (π.1 j).elim 1 (fun i => (D.tilt Θ c.1).w i)) =
+          ∏ j, if hj : j ∈ L.1 then
+            (D.tilt Θ c.1).w ((π.1 j).getD default) else 1 := by
+              apply Finset.prod_congr rfl
+              intro j hj
+              by_cases hmem : j ∈ L.1
+              · have hs : (π.1 j).isSome := (hSupport j).2 hmem
+                cases ho : π.1 j <;> simp_all
+              · have hs : ¬ (π.1 j).isSome := fun hs => hmem ((hSupport j).1 hs)
+                cases ho : π.1 j <;> simp_all
+      _ = ∏ j ∈ L.1, (D.tilt Θ c.1).w ((π.1 j).getD default) := by
+            simp only [dite_eq_ite]
+            rw [← Finset.prod_filter]
+            simp
+      _ = ∏ ℓ : {ℓ : D.Loc // ℓ ∈ L.1},
+            (D.tilt Θ c.1).w ((π.1 ℓ.1).getD default) := by
+            calc
+              _ = ∏ j ∈ L.1.attach,
+                    (D.tilt Θ c.1).w ((π.1 j.1).getD default) :=
+                    (Finset.prod_attach L.1
+                      (fun j : D.Loc => (D.tilt Θ c.1).w ((π.1 j).getD default))).symm
+              _ = _ := rfl
+  have hCross :
+      (∏ u : D.CrossSub c.1,
+        (D.tilt Θ u.1).w ((π.2 u).2.1) *
+          (D.anchorU Θ u.1 ((π.2 u).2.1)).w ((π.2 u).2.2)) =
+    ∏ u : D.CrossSub c.1,
+          (D.tilt Θ u.1).w ((presListDataOf D c L default π).2 u).1 *
+            (D.anchorU Θ u.1 ((presListDataOf D c L default π).2 u).1).w
+              ((presListDataOf D c L default π).2 u).2 := by
+    apply Finset.prod_congr rfl
+    intro u hu
+    simp [presListDataOf]
+  rw [hInt, hCross]
+  simp [presListDataOf]
+
+private theorem qref_mul_fcand_le_presListDataLaw {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hDB : D.DensityBounds) (Θ : D.Hist)
+    (c : D.CellT) (ξ : D.Tup) (L : D.LList c.1) (π : D.Pres c.1)
+    (default : D.M.ι) (hList : presListOfPresentation D c π = L) :
+    D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) ≤
+      (presListDataLaw D (Function.update Θ c.1 ξ) c L).w
+        (presListDataOf D c L default π) := by
+  classical
+  have hfactor := fcand_mul_qref_eq_observed D hDB Θ c ξ π
+  have hdata := presentationObservedWeight_eq_dataLawWeight D
+    (Function.update Θ c.1 ξ) c L π default hList
+  have hEq : D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) =
+      (if D.CandGate (Function.update Θ c.1 ξ) c.1 then 1 else 0) *
+        (presListDataLaw D (Function.update Θ c.1 ξ) c L).w
+          (presListDataOf D c L default π) := by
+    calc
+      _ = (if D.CandGate (Function.update Θ c.1 ξ) c.1 then 1 else 0) *
+          ((∏ j, (π.1 j).elim 1
+              (fun i => (D.tilt (Function.update Θ c.1 ξ) c.1).w i)) *
+            ∏ u : D.CrossSub c.1,
+              (D.tilt (Function.update Θ c.1 ξ) u.1).w ((π.2 u).2.1) *
+                (D.anchorU (Function.update Θ c.1 ξ) u.1 ((π.2 u).2.1)).w ((π.2 u).2.2)) := by
+            simpa [Ctx.obsOf] using hfactor
+      _ = _ := by rw [hdata]
+  have hnonneg : 0 ≤ (presListDataLaw D (Function.update Θ c.1 ξ) c L).w
+      (presListDataOf D c L default π) :=
+    (presListDataLaw D (Function.update Θ c.1 ξ) c L).nonneg _
+  by_cases hg : D.CandGate (Function.update Θ c.1 ξ) c.1
+  · have hEq' : D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) =
+        (presListDataLaw D (Function.update Θ c.1 ξ) c L).w
+          (presListDataOf D c L default π) := by
+      simpa [hg] using hEq
+    have hcomm : D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) =
+        D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) := by ring
+    rw [hcomm, hEq']
+  · have hzero : D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) = 0 := by
+      have hEq' := hEq
+      rw [if_neg hg] at hEq'
+      calc
+        _ = D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) := by ring
+        _ = 0 := by simpa using hEq'
+    rw [hzero]
+    exact hnonneg
+
+private theorem qref_fcand_sum_fixed_list_le_one {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hDB : D.DensityBounds) (Θ : D.Hist)
+    (c : D.CellT) (ξ : D.Tup) (L : D.LList c.1) (default : D.M.ι) :
+    ∑ π ∈ Finset.univ.filter
+        (fun π : D.Pres c.1 => presListOfPresentation D c π = L),
+        D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) ≤ 1 := by
+  classical
+  let S : Finset (D.Pres c.1) :=
+    Finset.univ.filter fun π => presListOfPresentation D c π = L
+  let dOf : D.Pres c.1 → PresListData D c L := presListDataOf D c L default
+  let law := presListDataLaw D (Function.update Θ c.1 ξ) c L
+  let T : Finset (PresListData D c L) := S.image dOf
+  have hsumImage :
+      ∑ π ∈ S, law.w (dOf π) = ∑ d ∈ T, law.w d := by
+    refine Finset.sum_bij (fun π _ => dOf π) ?_ ?_ ?_ ?_
+    · intro π hπ
+      exact Finset.mem_image.mpr ⟨π, hπ, rfl⟩
+    · intro π hπ π' hπ' heq
+      have hπlist : presListOfPresentation D c π = L := (Finset.mem_filter.mp hπ).2
+      have hπ'list : presListOfPresentation D c π' = L := (Finset.mem_filter.mp hπ').2
+      calc
+        π = presFromListData D c L (dOf π) :=
+          (pres_reconstruct_from_list D c L default π hπlist)
+        _ = presFromListData D c L (dOf π') := congrArg (presFromListData D c L) heq
+        _ = π' := (pres_reconstruct_from_list D c L default π' hπ'list).symm
+    · intro d hd
+      rcases Finset.mem_image.mp hd with ⟨π, hπ, rfl⟩
+      exact ⟨π, hπ, rfl⟩
+    · intro π hπ
+      rfl
+  calc
+    ∑ π ∈ S, D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) ≤
+        ∑ π ∈ S, law.w (dOf π) := by
+          apply Finset.sum_le_sum
+          intro π hπ
+          exact qref_mul_fcand_le_presListDataLaw D hDB Θ c ξ L π default
+            (Finset.mem_filter.mp hπ).2
+    _ = ∑ d ∈ T, law.w d := hsumImage
+    _ ≤ ∑ d, law.w d :=
+      Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ T)
+        (by intro d hd hdT; exact law.nonneg d)
+    _ = 1 := law.sum_eq_one
+
+private theorem qref_fcand_sum_candidates_le_card {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hDB : D.DensityBounds) (Θ : D.Hist)
+    (P : D.Pos) (c : D.CellT) (ξ : D.Tup) (y : Fin D.N) (j : Fin h)
+    (S : Finset (D.Pres c.1))
+    (hCand : ∀ π ∈ S, D.Cand P c (presListOfPresentation D c π)) :
+    ∑ π ∈ S,
+      D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) *
+        (if ξ j = y then 1 else 0) ≤
+      ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) := by
+  classical
+  let LOf : D.Pres c.1 → D.LList c.1 := presListOfPresentation D c
+  let C : Finset (D.LList c.1) := Finset.univ.filter fun L => D.Cand P c L
+  let Fiber : D.LList c.1 → Finset (D.Pres c.1) := fun L =>
+    Finset.univ.filter fun π => LOf π = L
+  have hFiber (L : D.LList c.1) :
+      ∑ π ∈ Fiber L,
+        D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) *
+          (if ξ j = y then 1 else 0) ≤ 1 := by
+    calc
+      _ ≤ ∑ π ∈ Fiber L, D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) := by
+            apply Finset.sum_le_sum
+            intro π hπ
+            have hnonneg : 0 ≤ D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) :=
+              mul_nonneg (D.Qref_nonneg Θ c.1 (D.obsOf π))
+                (D.Fcand_nonneg Θ c.1 ξ (D.obsOf π))
+            by_cases hxy : ξ j = y <;> simp [hxy, hnonneg]
+      _ ≤ 1 := by
+            simpa [Fiber, LOf] using
+              qref_fcand_sum_fixed_list_le_one D hDB Θ c ξ L (Classical.choice
+                (by
+                  have hNe : Nonempty D.M.ι := by
+                    by_contra hne
+                    haveI : IsEmpty D.M.ι := ⟨fun i => hne ⟨i⟩⟩
+                    have hsum : (∑ i, D.M.Λ i) = 0 := by simp
+                    rw [D.M.Λ_sum] at hsum
+                    norm_num at hsum
+                  exact hNe))
+  have hsumGroup :
+      ∑ π ∈ S,
+        D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) *
+          (if ξ j = y then 1 else 0) =
+        ∑ L ∈ C, ∑ π ∈ S, if L = LOf π then
+          D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) *
+            (if ξ j = y then 1 else 0) else 0 := by
+    calc
+      _ = ∑ π ∈ S, ∑ L ∈ C, if L = LOf π then
+            D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) *
+              (if ξ j = y then 1 else 0) else 0 := by
+            apply Finset.sum_congr rfl
+            intro π hπ
+            have hmem : LOf π ∈ C := by
+              simp [C, LOf, hCand π hπ]
+            simp [hmem]
+      _ = _ := by rw [Finset.sum_comm]
+  rw [hsumGroup]
+  calc
+    _ ≤ ∑ L ∈ C, ∑ π ∈ Fiber L,
+          D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) *
+            (if ξ j = y then 1 else 0) := by
+          apply Finset.sum_le_sum
+          intro L hL
+          rw [← Finset.sum_filter]
+          apply Finset.sum_le_sum_of_subset_of_nonneg
+            (by
+              intro π hπ
+              have hh := (Finset.mem_filter.mp hπ).2
+              simp [Fiber, LOf, eq_comm] at hh ⊢
+              exact hh)
+          intro π hπ hnot
+          exact mul_nonneg
+            (mul_nonneg (D.Qref_nonneg Θ c.1 (D.obsOf π))
+              (D.Fcand_nonneg Θ c.1 ξ (D.obsOf π)))
+            (by split_ifs <;> norm_num)
+    _ ≤ ∑ L ∈ C, (1 : ℝ) := by
+          apply Finset.sum_le_sum
+          intro L hL
+          exact hFiber L
+    _ = (C.card : ℝ) := by simp
+  
+
+private theorem pr_pos_has_positive_weight {α : Type*} [Fintype α]
+    (Q : FinProb α) (A : α → Prop) (hpr : 0 < Q.pr A) :
+    ∃ x, A x ∧ 0 < Q.w x := by
+  classical
+  by_contra hnone
+  push_neg at hnone
+  have hterm (x : α) : (if A x then Q.w x else 0) = 0 := by
+    by_cases hA : A x
+    · have hw : Q.w x ≤ 0 := hnone x hA
+      have hz : Q.w x = 0 := le_antisymm hw (Q.nonneg x)
+      simp [hA, hz]
+    · simp [hA]
+  have hzero : Q.pr A = 0 := by
+    unfold FinProb.pr
+    simp_rw [hterm]
+    simp
+  linarith
+
+set_option maxHeartbeats 10000000 in
+theorem p0w_bound_candidate_mden_of_mad_pos {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hP0 : D.P0Law) (hG : D.GselLeF) (Θ : D.Hist) (P : D.Pos)
+    (c : D.CellT) (π : D.Pres c.1) (y : Fin D.N)
+    (hMad : 0 < D.Mad Θ P c π) :
+    D.p0w Θ P c π y ≤
+        (5 / 2 : ℝ) * averageCoordinateMarginal (D.selPost Θ P c π) y ∧
+      D.Cand P c (presListOfPresentation D c π) ∧
+      0 < D.Mden Θ c.1 (D.obsOf π) := by
+  classical
+  have htermsNonneg (ξ : D.Tup) :
+      0 ≤ D.R'.w ξ * D.Gsel Θ P c ξ π :=
+    mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ P c ξ π)
+  have hsum : 0 < ∑ ξ, D.R'.w ξ * D.Gsel Θ P c ξ π := by
+    simpa [Ctx.Mad] using hMad
+  have hsome : ∃ ξ, 0 < D.R'.w ξ * D.Gsel Θ P c ξ π := by
+    by_contra hn
+    push_neg at hn
+    have hle : ∑ ξ, D.R'.w ξ * D.Gsel Θ P c ξ π ≤ 0 :=
+      Finset.sum_nonpos fun ξ hξ => hn ξ
+    exact (not_le_of_gt hsum) hle
+  obtain ⟨ξ, hξprod⟩ := hsome
+  have hGsel : 0 < D.Gsel Θ P c ξ π := by
+    by_contra hn
+    have hle : D.Gsel Θ P c ξ π ≤ 0 := le_of_not_gt hn
+    have hprod : D.R'.w ξ * D.Gsel Θ P c ξ π ≤ 0 :=
+      mul_nonpos_of_nonneg_of_nonpos (D.R'.nonneg ξ) hle
+    exact (not_le_of_gt hξprod) hprod
+  have hRpos : 0 < D.R'.w ξ := by
+    by_contra hn
+    have hz : D.R'.w ξ = 0 := le_antisymm (le_of_not_gt hn) (D.R'.nonneg ξ)
+    rw [hz] at hξprod
+    norm_num at hξprod
+  have hFcand : 0 < D.Fcand Θ c.1 ξ (D.obsOf π) :=
+    lt_of_lt_of_le hGsel (hG Θ P c ξ π)
+  have hMden : 0 < D.Mden Θ c.1 (D.obsOf π) := by
+    unfold Ctx.Mden
+    apply lt_of_lt_of_le (mul_pos hRpos hFcand)
+    exact Finset.single_le_sum (fun ξ' hξ' =>
+      mul_nonneg (D.R'.nonneg ξ') (D.Fcand_nonneg Θ c.1 ξ' (D.obsOf π)))
+      (Finset.mem_univ ξ)
+  have hQref : 0 < D.Qref Θ c.1 (D.obsOf π) := by
+    by_contra hn
+    have hz : D.Qref Θ c.1 (D.obsOf π) = 0 :=
+      le_antisymm (le_of_not_gt hn) (D.Qref_nonneg Θ c.1 (D.obsOf π))
+    have hzG : D.Gsel Θ P c ξ π = 0 := by simp [Ctx.Gsel, hz]
+    linarith
+  have hRaw : 0 < (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+      (rawPresEvent D (Function.update Θ c.1 ξ) P c π) := by
+    rw [rawPresEvent_pr_eq_qref_mul_gsel]
+    exact mul_pos hQref hGsel
+  obtain ⟨z, hEvent, hzWeight⟩ :=
+    pr_pos_has_positive_weight (D.rawLaw (Function.update Θ c.1 ξ) P)
+      (rawPresEvent D (Function.update Θ c.1 ξ) P c π) hRaw
+  change D.PresValid ((Function.update Θ c.1 ξ, P), z.1) z.2 c ∧
+    D.presOf ((Function.update Θ c.1 ξ, P), z.1) z.2 c = π at hEvent
+  rcases hEvent with ⟨hvalid, hpres⟩
+  have hP0data := hP0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c
+  rcases hP0data with ⟨_, hP0valid⟩
+  rcases hP0valid hvalid with ⟨_, hP0bound, _⟩
+  have hP0bound' : D.p0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c y ≤
+      (5 / 2 : ℝ) * averageCoordinateMarginal
+        (D.selPost (Function.update Θ c.1 ξ) P c π) y := by
+    simpa [hpres] using hP0bound y
+  have hp0eq : D.p0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c y =
+      D.p0w (Function.update Θ c.1 ξ) P c π y := by
+    simp [Ctx.p0, hvalid, hpres]
+  have hsel : D.selPost (Function.update Θ c.1 ξ) P c π = D.selPost Θ P c π := by
+    apply Lane_q_s08_post.selPost_congr_target_update
+    intro v hvc
+    simp [Function.update_of_ne hvc]
+  have hbound : D.p0w (Function.update Θ c.1 ξ) P c π y ≤
+      (5 / 2 : ℝ) * averageCoordinateMarginal
+        (D.selPost (Function.update Θ c.1 ξ) P c π) y := by
+    rw [← hp0eq]
+    exact hP0bound'
+  have hCand0 := presList_cand_of_valid D ((Function.update Θ c.1 ξ, P), z.1) z.2 c hvalid
+  have hList0 := presListOf_presOf D ((Function.update Θ c.1 ξ, P), z.1) z.2 c
+  rw [hpres] at hList0
+  constructor
+  · have hp0w := Lane_q_s08_post.p0w_congr_target_update D Θ P c ξ π y
+    simpa [hp0w.symm, hsel] using hbound
+  · constructor
+    · rw [hList0]
+      exact hCand0
+    · exact hMden
+
+private theorem avgMarg_mul_normOr_local {N k : ℕ} (f : (Fin k → Fin N) → ℝ)
+    (hf : ∀ ξ, 0 ≤ f ξ) (P : FinProb (Fin k → Fin N)) (hk : 0 < k)
+    (hsum : 0 < ∑ ξ, f ξ) (y : Fin N) :
+    (∑ ξ, f ξ) * averageCoordinateMarginal (normOr f hf P) y =
+      (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+        (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+  classical
+  let M : ℝ := ∑ ξ, f ξ
+  have hM : M ≠ 0 := ne_of_gt (by simpa [M] using hsum)
+  have hweight (ξ : Fin k → Fin N) : (normOr f hf P).w ξ = f ξ / M := by
+    simp [normOr, M, hM]
+  have hcoord (j : Fin k) :
+      M * (normOr f hf P).pr (fun ξ => ξ j = y) =
+        ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+    unfold FinProb.pr
+    calc
+      M * ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _)
+          ((normOr f hf P).w ξ) 0) =
+        M * ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ / M) 0) := by
+          congr 1
+          apply Finset.sum_congr rfl
+          intro ξ hξ
+          rw [hweight]
+      _ = ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro ξ hξ
+          by_cases hEq : ξ j = y
+          · simp only [hEq, if_pos]
+            field_simp
+          · simp [hEq]
+  unfold averageCoordinateMarginal
+  change M * ((k : ℝ)⁻¹ * ∑ j : Fin k,
+      (normOr f hf P).pr (fun ξ => ξ j = y)) = _
+  calc
+    _ = (k : ℝ)⁻¹ * (M * ∑ j : Fin k,
+        (normOr f hf P).pr (fun ξ => ξ j = y)) := by ring
+    _ = (k : ℝ)⁻¹ * ∑ j : Fin k,
+        M * (normOr f hf P).pr (fun ξ => ξ j = y) := by rw [Finset.mul_sum]
+    _ = (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+        (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+          congr 1
+          apply Finset.sum_congr rfl
+          intro j hj
+          exact hcoord j
+
+private theorem avgMarg_weighted_indicator_local {N k : ℕ}
+    (Q : FinProb (Fin k → Fin N)) (y : Fin N) :
+    averageCoordinateMarginal Q y =
+      (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+        Q.w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+  classical
+  unfold averageCoordinateMarginal
+  congr 1
+  apply Finset.sum_congr rfl
+  intro j hj
+  rw [pr_eq_weighted_indicator]
+
+set_option maxHeartbeats 1000000 in
+theorem fallback_base_marginal_le_list_count {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hh : 0 < h) (hDB : D.DensityBounds)
+    (Θ : D.Hist) (P : D.Pos) (c : D.CellT) (y : Fin D.N)
+    (S : Finset (D.Pres c.1))
+    (hCand : ∀ π ∈ S, D.Cand P c (presListOfPresentation D c π))
+    (hMpos : ∀ π ∈ S, 0 < D.Mden Θ c.1 (D.obsOf π)) :
+    ∑ π ∈ S, D.Qref Θ c.1 (D.obsOf π) *
+        D.Mden Θ c.1 (D.obsOf π) *
+          averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y ≤
+      ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) *
+        averageCoordinateMarginal D.R' y := by
+  classical
+  let I : ℝ := (h : ℝ)⁻¹
+  let f : D.Pres c.1 → D.Tup → ℝ := fun π ξ => D.R'.w ξ * D.Fcand Θ c.1 ξ (D.obsOf π)
+  have hI : 0 ≤ I := by dsimp [I]; positivity
+  have hscaled (π : D.Pres c.1) (hπ : π ∈ S) :
+      D.Mden Θ c.1 (D.obsOf π) *
+          averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y =
+        I * ∑ j : Fin h, ∑ ξ,
+          (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+    have hsum : 0 < ∑ ξ, f π ξ := by
+      simpa [f, Ctx.Mden] using hMpos π hπ
+    have h := avgMarg_mul_normOr_local (f π)
+      (fun ξ => mul_nonneg (D.R'.nonneg ξ)
+        (D.Fcand_nonneg Θ c.1 ξ (D.obsOf π))) D.R' hh hsum y
+    simpa [f, I, Ctx.Mden, Ctx.basePost] using h
+  have hterm (π : D.Pres c.1) (hπ : π ∈ S) :
+      D.Qref Θ c.1 (D.obsOf π) * D.Mden Θ c.1 (D.obsOf π) *
+          averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y =
+        I * ∑ j : Fin h, ∑ ξ,
+          D.Qref Θ c.1 (D.obsOf π) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+    calc
+      _ = D.Qref Θ c.1 (D.obsOf π) *
+          (D.Mden Θ c.1 (D.obsOf π) *
+            averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y) := by ring
+      _ = D.Qref Θ c.1 (D.obsOf π) *
+          (I * ∑ j : Fin h, ∑ ξ,
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0)) := by rw [hscaled π hπ]
+      _ = I * ∑ j : Fin h, ∑ ξ,
+          D.Qref Θ c.1 (D.obsOf π) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+              calc
+                _ = I * (D.Qref Θ c.1 (D.obsOf π) *
+                    ∑ j : Fin h, ∑ ξ,
+                      (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0)) := by ring
+                _ = I * ∑ j : Fin h, ∑ ξ,
+                    D.Qref Θ c.1 (D.obsOf π) *
+                      (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+                      congr 1
+                      calc
+                        _ = ∑ j : Fin h, D.Qref Θ c.1 (D.obsOf π) *
+                              ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+                                rw [Finset.mul_sum]
+                        _ = _ := by
+                              apply Finset.sum_congr rfl
+                              intro j hj
+                              rw [Finset.mul_sum]
+  have hinner (j : Fin h) (ξ : D.Tup) :
+      ∑ π ∈ S, D.Qref Θ c.1 (D.obsOf π) *
+          (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) ≤
+        (D.R'.w ξ * (if ξ j = y then 1 else 0)) *
+          ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) := by
+    by_cases hxy : ξ j = y
+    · have hsum :
+          ∑ π ∈ S, D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) ≤
+            ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) := by
+        simpa [hxy] using qref_fcand_sum_candidates_le_card D hDB Θ P c ξ y j S hCand
+      calc
+        ∑ π ∈ S, D.Qref Θ c.1 (D.obsOf π) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) =
+          ∑ π ∈ S,
+            D.Qref Θ c.1 (D.obsOf π) * (D.R'.w ξ * D.Fcand Θ c.1 ξ (D.obsOf π)) := by
+              apply Finset.sum_congr rfl
+              intro π hπ
+              simp [hxy, f]
+        _ =
+          D.R'.w ξ * ∑ π ∈ S,
+            D.Qref Θ c.1 (D.obsOf π) * D.Fcand Θ c.1 ξ (D.obsOf π) := by
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro π hπ
+              ring
+        _ ≤ D.R'.w ξ *
+            ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) :=
+              mul_le_mul_of_nonneg_left hsum (D.R'.nonneg ξ)
+        _ = (D.R'.w ξ * (if ξ j = y then 1 else 0)) *
+            ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) := by
+              rw [if_pos hxy]
+              ring
+    · simp [hxy]
+  have hsumRewrite :
+      ∑ π ∈ S, D.Qref Θ c.1 (D.obsOf π) *
+          D.Mden Θ c.1 (D.obsOf π) *
+            averageCoordinateMarginal (D.basePost Θ c.1 (D.obsOf π)) y =
+        I * ∑ j : Fin h, ∑ ξ, ∑ π ∈ S,
+          D.Qref Θ c.1 (D.obsOf π) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+    calc
+      _ = ∑ π ∈ S, I * ∑ j : Fin h, ∑ ξ,
+            D.Qref Θ c.1 (D.obsOf π) *
+              (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+            apply Finset.sum_congr rfl
+            intro π hπ
+            exact hterm π hπ
+      _ = I * ∑ π ∈ S, ∑ j : Fin h, ∑ ξ,
+            D.Qref Θ c.1 (D.obsOf π) *
+              (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+            rw [Finset.mul_sum]
+      _ = I * ∑ j : Fin h, ∑ ξ, ∑ π ∈ S,
+            D.Qref Θ c.1 (D.obsOf π) *
+              (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+            congr 1
+            calc
+              ∑ π ∈ S, ∑ j : Fin h, ∑ ξ,
+                  D.Qref Θ c.1 (D.obsOf π) *
+                    (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) =
+                ∑ j : Fin h, ∑ π ∈ S, ∑ ξ,
+                  D.Qref Θ c.1 (D.obsOf π) *
+                    (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+                      rw [Finset.sum_comm]
+              _ = ∑ j : Fin h, ∑ ξ, ∑ π ∈ S,
+                  D.Qref Θ c.1 (D.obsOf π) *
+                    (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := by
+                      apply Finset.sum_congr rfl
+                      intro j hj
+                      rw [Finset.sum_comm]
+  have hfactor :
+      ∑ j : Fin h, ∑ ξ,
+          (D.R'.w ξ * (if ξ j = y then 1 else 0)) *
+            (Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card =
+        (Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card *
+          ∑ j : Fin h, ∑ ξ,
+            D.R'.w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro j hj
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    ring
+  have hsumBound :
+      ∑ j : Fin h, ∑ ξ, ∑ π ∈ S,
+          D.Qref Θ c.1 (D.obsOf π) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) ≤
+        (Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card *
+          ∑ j : Fin h, ∑ ξ,
+            D.R'.w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+    calc
+      _ ≤ ∑ j : Fin h, ∑ ξ,
+          (D.R'.w ξ * (if ξ j = y then 1 else 0)) *
+            (Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card := by
+              apply Finset.sum_le_sum
+              intro j hj
+              apply Finset.sum_le_sum
+              intro ξ hξ
+              exact hinner j ξ
+      _ = _ := hfactor
+  calc
+    _ = I * ∑ j : Fin h, ∑ ξ, ∑ π ∈ S,
+          D.Qref Θ c.1 (D.obsOf π) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f π ξ) 0) := hsumRewrite
+    _ ≤ I * ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card *
+          ∑ j : Fin h, ∑ ξ,
+            D.R'.w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0)) :=
+          mul_le_mul_of_nonneg_left hsumBound hI
+    _ = ((Finset.univ.filter fun L : D.LList c.1 => D.Cand P c L).card : ℝ) *
+          averageCoordinateMarginal D.R' y := by
+            rw [avgMarg_weighted_indicator_local]
+            dsimp [I]
+            ring
 
 theorem rawLaw_pr_local_expect {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (hS : D.SelLocal) (H : D.Hist) (P : D.Pos)

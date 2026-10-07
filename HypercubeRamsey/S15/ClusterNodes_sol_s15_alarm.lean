@@ -1,9 +1,11 @@
 import HypercubeRamsey.S15.Capacity
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
+import HypercubeRamsey.S09.Core.GainStage_sol_s09_conc
 import HypercubeRamsey.S12.Exceptional
 import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.S15.DirectNodes_q_s15_direct
 import Mathlib.Analysis.SpecialFunctions.Log.Summable
+import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 import Mathlib.Analysis.Complex.ExponentialBounds
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
@@ -1448,5 +1450,200 @@ theorem raw_degree_mean (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
       ring
     _ = ∑ y, (PT.π s.1).w y * hit (T.S.E k) PT.tiling.c x y := by simp_rw [hmean]
     _ = _ := rfl
+
+private noncomputable def clip_half (b d : ℝ) : ℝ := max (1 / 2 - 2 * b) (min d (1 / 2 + 2 * b))
+
+private theorem clip_half_bounds (b d : ℝ) (hb : 0 ≤ b) :
+    1 / 2 - 2 * b ≤ clip_half b d ∧ clip_half b d ≤ 1 / 2 + 2 * b := by
+  constructor
+  · exact le_max_left _ _
+  · apply max_le
+    · linarith
+    · exact min_le_right _ _
+
+private theorem clip_half_eq_of_gate (b d : ℝ) (h : |d - 1 / 2| ≤ 2 * b) : clip_half b d = d := by
+  rcases abs_le.mp h with ⟨hlo, hhi⟩
+  unfold clip_half
+  rw [min_eq_left (by linarith), max_eq_right (by linarith)]
+
+/-- Clipping changes a degree mean by at most its raw degree-outlier probability. -/
+theorem clip_probability_error_le {A : Type*} [Fintype A]
+    (P : FinLaw A) (D : A → ℝ) (hD : ∀ a, 0 ≤ D a ∧ D a ≤ 1)
+    (b : ℝ) (hb : 0 ≤ b) (hbsmall : b ≤ 1 / 4) :
+    |P.E (fun a => clip_half b (D a)) - P.E D| ≤
+      P.pr (fun a => 2 * b < |D a - 1 / 2|) := by
+  have hval (a : A) : |clip_half b (D a) - D a| ≤
+      if 2 * b < |D a - 1 / 2| then 1 else 0 := by
+    by_cases h : 2 * b < |D a - 1 / 2|
+    · rw [if_pos h]
+      have hc := clip_half_bounds b (D a) hb
+      apply abs_le.mpr
+      constructor <;> linarith [hD a]
+    · rw [if_neg h, clip_half_eq_of_gate b (D a) (le_of_not_gt h)]
+      simp
+  have hdiff : P.E (fun a => clip_half b (D a)) - P.E D =
+      P.E (fun a => clip_half b (D a) - D a) := by
+    unfold FinLaw.E
+    rw [← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro a _
+    ring
+  rw [hdiff]
+  unfold FinLaw.E FinLaw.pr
+  calc
+    |∑ a, P.w a * (clip_half b (D a) - D a)| ≤
+        ∑ a, |P.w a * (clip_half b (D a) - D a)| := Finset.abs_sum_le_sum_abs _ _
+    _ = ∑ a, P.w a * |clip_half b (D a) - D a| := by
+      apply Finset.sum_congr rfl
+      intro a _
+      rw [abs_mul, abs_of_nonneg (P.nonneg a)]
+    _ ≤ ∑ a, if 2 * b < |D a - 1 / 2| then P.w a else 0 := by
+      apply Finset.sum_le_sum
+      intro a _
+      have hv := mul_le_mul_of_nonneg_left (hval a) (P.nonneg a)
+      simpa only [mul_ite, mul_one, mul_zero] using hv
+
+
+/-- Two-sided version of the existing scoped Hoeffding bound. -/
+theorem scoped_two_sided_tail {I B : Type*} [Fintype I] [DecidableEq I]
+    [Fintype B] [DecidableEq B] {O : I → Type*} [∀ i, Fintype (O i)]
+    (Q : ∀ i, FinProb (O i)) (scope : B → Finset I)
+    (hdegree : ∀ i, (Finset.univ.filter (fun b => i ∈ scope b)).card ≤ 1)
+    (X : B → (∀ i, O i) → ℝ) (hscope : ∀ b, FinProb.DependsOn (X b) (scope b))
+    (lo hi t : ℝ) (hlohi : lo < hi) (hX : ∀ b ω, lo ≤ X b ω ∧ X b ω ≤ hi)
+    (hB : 0 < Fintype.card B) (ht : 0 < t) :
+    (FinProb.pi Q).pr (fun ω => t ≤ |(∑ b, X b ω) - ∑ b, (FinProb.pi Q).expect (X b)|) ≤
+      2 * Real.exp (-(2 * t ^ 2 / ((Fintype.card B : ℝ) * (hi - lo) ^ 2))) := by
+  let R := FinProb.pi Q
+  let L := fun ω => (∑ b, X b ω) ≤ (∑ b, R.expect (X b)) - t
+  let U := fun ω => (∑ b, -X b ω) ≤ (∑ b, R.expect (fun ω => -X b ω)) - t
+  have hneg (b : B) : R.expect (fun ω => -X b ω) = -R.expect (X b) := by
+    unfold FinProb.expect
+    simp_rw [mul_neg]
+    rw [Finset.sum_neg_distrib]
+  have hL := HypercubeRamsey.Lane_sol_s09_conc.scoped_lower_tail
+    Q scope 1 (by norm_num) hdegree X hscope lo hi t hlohi hX hB ht
+  have hU := HypercubeRamsey.Lane_sol_s09_conc.scoped_lower_tail
+    Q scope 1 (by norm_num) hdegree (fun b ω => -X b ω)
+    (fun b ω ω' h => by
+      change -X b ω = -X b ω'
+      rw [hscope b ω ω' h]) (-hi) (-lo) t
+    (by linarith) (fun b ω => by constructor <;> linarith [hX b ω]) hB ht
+  have hL' : R.pr L ≤ Real.exp (-(2 * t ^ 2 / ((Fintype.card B : ℝ) * (hi - lo) ^ 2))) := by
+    simpa [R, L] using hL
+  have hU' : R.pr U ≤ Real.exp (-(2 * t ^ 2 / ((Fintype.card B : ℝ) * (hi - lo) ^ 2))) := by
+    simpa [R, U, show -lo - -hi = hi - lo by ring] using hU
+  have he : (fun ω => t ≤ |(∑ b, X b ω) - ∑ b, R.expect (X b)|) =
+      (fun ω => L ω ∨ U ω) := by
+    funext ω
+    apply propext
+    dsimp [L, U]
+    simp_rw [hneg]
+    rw [Finset.sum_neg_distrib, Finset.sum_neg_distrib]
+    by_cases hz : 0 ≤ (∑ b, X b ω) - ∑ b, R.expect (X b)
+    · rw [abs_of_nonneg hz]
+      constructor
+      · intro h; right; linarith
+      · rintro (h | h) <;> linarith
+    · rw [abs_of_neg (lt_of_not_ge hz)]
+      constructor
+      · intro h; left; linarith
+      · rintro (h | h) <;> linarith
+  change R.pr (fun ω => t ≤ |(∑ b, X b ω) - ∑ b, R.expect (X b)|) ≤ _
+  rw [he]
+  have hunion := FinProb.pr_union R L U
+  exact hunion.trans (by linarith [hL', hU'])
+
+/-- A small centered sum and narrow degree gates control the normalized degree product. -/
+theorem degree_product_gate {G : Type*} [DecidableEq G]
+    (s : Finset G) (D : G → ℝ) (d b : ℝ)
+    (hb : 0 ≤ b) (hbsmall : b ≤ 1 / 1000) (hd : (2 / 5 : ℝ) ≤ d)
+    (hdgate : |d - 1 / 2| ≤ 3 * b)
+    (hDgate : ∀ a ∈ s, |D a - 1 / 2| ≤ 2 * b)
+    (hsize : (s.card : ℝ) * b ^ 2 ≤ 1 / 100000)
+    (hsum : |(∑ a ∈ s, D a) - s.card * d| ≤ 1 / 100) :
+    (1 / 2 : ℝ) ≤ (∏ a ∈ s, D a) / d ^ s.card ∧
+      (∏ a ∈ s, D a) / d ^ s.card ≤ 2 := by
+  have hd0 : 0 < d := by linarith
+  let r : G → ℝ := fun a => (D a - d) / d
+  have hD0 (a : G) (ha : a ∈ s) : 0 < D a := by
+    have hlo := (abs_le.mp (hDgate a ha)).1
+    linarith
+  have hr (a : G) (ha : a ∈ s) : |r a| ≤ 15 * b := by
+    have hdiff : |D a - d| ≤ 5 * b := by
+      have ht := abs_sub_le (D a) (1 / 2) d
+      rw [abs_sub_comm (1 / 2) d] at ht
+      linarith [hDgate a ha]
+    dsimp [r]
+    rw [abs_div, abs_of_pos hd0]
+    apply (div_le_iff₀ hd0).mpr
+    have hp := mul_le_mul_of_nonneg_left hd (show 0 ≤ 15 * b by positivity)
+    nlinarith
+  have hrhalf (a : G) (ha : a ∈ s) : |r a| ≤ 1 / 2 := by
+    linarith [hr a ha]
+  have hrel (a : G) : 1 + r a = D a / d := by
+    dsimp [r]
+    field_simp [hd0.ne'] <;> ring
+  have hlogerr (a : G) (ha : a ∈ s) : |Real.log (D a / d) - r a| ≤ 450 * b ^ 2 := by
+    have hx : |-r a| < 1 := by rw [abs_neg]; linarith [hrhalf a ha]
+    have ht := Real.abs_log_sub_add_sum_range_le hx 1
+    norm_num only [Finset.sum_range_succ, Finset.sum_range_zero, zero_add,
+      Nat.cast_one, pow_one, div_one, abs_neg, sub_neg_eq_add] at ht
+    rw [hrel] at ht
+    have hsq : |r a| ^ 2 = (r a) ^ 2 := sq_abs _
+    rw [hsq] at ht
+    have hden : 0 < 1 - |r a| := by linarith [hrhalf a ha]
+    have hq : (r a) ^ 2 / (1 - |r a|) ≤ 2 * (r a) ^ 2 := by
+      apply (div_le_iff₀ hden).mpr
+      have hm := mul_le_mul_of_nonneg_left (hrhalf a ha) (sq_nonneg (r a))
+      nlinarith
+    have hsqb : (r a) ^ 2 ≤ 225 * b ^ 2 := by
+      rcases abs_le.mp (hr a ha) with ⟨hl, hu⟩
+      have hp := mul_nonneg (show 0 ≤ r a + 15 * b by linarith)
+        (show 0 ≤ 15 * b - r a by linarith)
+      nlinarith
+    have ht' : |Real.log (D a / d) - r a| ≤ (r a) ^ 2 / (1 - |r a|) := by
+      convert ht using 1
+      congr 1
+      ring
+    exact ht'.trans (hq.trans (by nlinarith))
+  have hsumr : (∑ a ∈ s, r a) = ((∑ a ∈ s, D a) - s.card * d) / d := by
+    dsimp [r]
+    rw [← Finset.sum_div, Finset.sum_sub_distrib]
+    simp
+  have hsumrbd : |∑ a ∈ s, r a| ≤ 1 / 40 := by
+    rw [hsumr, abs_div, abs_of_pos hd0]
+    apply (div_le_iff₀ hd0).mpr
+    linarith
+  have hsumerr : |(∑ a ∈ s, Real.log (D a / d)) - ∑ a ∈ s, r a| ≤ 1 / 40 := by
+    rw [← Finset.sum_sub_distrib]
+    calc
+      |∑ a ∈ s, (Real.log (D a / d) - r a)| ≤
+          ∑ a ∈ s, |Real.log (D a / d) - r a| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ a ∈ s, 450 * b ^ 2 := Finset.sum_le_sum hlogerr
+      _ ≤ 1 / 40 := by
+        simp only [Finset.sum_const, nsmul_eq_mul]
+        nlinarith
+  have hlogs : |∑ a ∈ s, Real.log (D a / d)| ≤ Real.log 2 := by
+    have ht := abs_add_le ((∑ a ∈ s, Real.log (D a / d)) - ∑ a ∈ s, r a) (∑ a ∈ s, r a)
+    rw [sub_add_cancel] at ht
+    linarith [Real.log_two_gt_d9]
+  have hprod : (∏ a ∈ s, D a) / d ^ s.card =
+      Real.exp (∑ a ∈ s, Real.log (D a / d)) := by
+    calc
+      (∏ a ∈ s, D a) / d ^ s.card = ∏ a ∈ s, D a / d := by
+        rw [Finset.prod_div_distrib, Finset.prod_const]
+      _ = ∏ a ∈ s, Real.exp (Real.log (D a / d)) := by
+        apply Finset.prod_congr rfl
+        intro a ha
+        rw [Real.exp_log (div_pos (hD0 a ha) hd0)]
+      _ = _ := (Real.exp_sum s (fun a => Real.log (D a / d))).symm
+  rw [hprod]
+  rcases abs_le.mp hlogs with ⟨hl, hu⟩
+  constructor
+  · have he := Real.exp_le_exp.mpr hl
+    simpa [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 2)] using he
+  · have he := Real.exp_le_exp.mpr hu
+    simpa [Real.exp_log (by norm_num : (0 : ℝ) < 2)] using he
 
 end HypercubeRamsey.Lane_sol_s15_alarm

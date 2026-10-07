@@ -1387,6 +1387,55 @@ theorem refCross_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
   simp only [Ctx.refCross, normOr]
   rw [hZ, hweight q]
 
+theorem refInt_congr_off_target {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    (hAway : ∀ v, v ≠ g → Θ v = Θ' v) :
+    D.refInt Θ g = D.refInt Θ' g := by
+  apply Lane_q_s08_post.refInt_congr_of_local D Θ Θ' g
+  intro u hu
+  exact hAway u (cross_key_ne D g ⟨u, hu⟩)
+
+theorem refCross_congr_off_target {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (u : D.CrossSub g)
+    (hAway : ∀ v, v ≠ g → Θ v = Θ' v) :
+    D.refCross Θ g u.1 = D.refCross Θ' g u.1 := by
+  classical
+  have hu_ne : u.1 ≠ g := cross_key_ne D g u
+  have hpost : D.postW (Θ u.1) = D.postW (Θ' u.1) := by
+    rw [hAway u.1 hu_ne]
+  have hOmit (x : Fin D.N) : D.omitHit Θ u.1 g x = D.omitHit Θ' u.1 g x := by
+    apply propext
+    constructor
+    · intro hx w hw
+      rcases Finset.mem_erase.mp hw with ⟨hwne, hwcross⟩
+      rw [← hAway w hwne]
+      exact hx w hw
+    · intro hx w hw
+      rcases Finset.mem_erase.mp hw with ⟨hwne, hwcross⟩
+      rw [hAway w hwne]
+      exact hx w hw
+  have hweight (q : D.M.ι × Fin D.N) :
+      D.postW (Θ u.1) q.1 * (D.M.μ q.1).w q.2 *
+          (if D.omitHit Θ u.1 g q.2 then 1 else 0) =
+        D.postW (Θ' u.1) q.1 * (D.M.μ q.1).w q.2 *
+          (if D.omitHit Θ' u.1 g q.2 then 1 else 0) := by
+    rw [hpost]
+    simp [hOmit]
+  have hZ :
+      (∑ q : D.M.ι × Fin D.N,
+        D.postW (Θ u.1) q.1 * (D.M.μ q.1).w q.2 *
+          if D.omitHit Θ u.1 g q.2 then 1 else 0) =
+        ∑ q : D.M.ι × Fin D.N,
+          D.postW (Θ' u.1) q.1 * (D.M.μ q.1).w q.2 *
+            if D.omitHit Θ' u.1 g q.2 then 1 else 0 := by
+    apply Finset.sum_congr rfl
+    intro q hq
+    exact hweight q
+  apply FinProb.ext
+  intro q
+  simp only [Ctx.refCross, normOr]
+  rw [hZ, hweight q]
+
 set_option maxHeartbeats 1000000 in
 theorem rawTAT_local_projection_congr {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (c : D.CellT)
@@ -1616,6 +1665,45 @@ theorem fcand_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
     exact hCrossRatio u
   rw [hIprod, hCprod]
 
+theorem fcand_congr_target_update {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (ξ : D.Tup)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hAway : ∀ v, v ≠ g → Θ v = Θ' v) :
+    D.Fcand Θ g ξ o = D.Fcand Θ' g ξ o := by
+  classical
+  have hUpd : Function.update Θ g ξ = Function.update Θ' g ξ := by
+    funext v
+    by_cases hvg : v = g
+    · subst v
+      simp
+    · simp [Function.update_of_ne hvg, hAway v hvg]
+  have hRefInt := Lane_q_s08_post.refInt_congr_off_target D Θ Θ' g hAway
+  have hRefCross (u : D.CrossSub g) :
+      D.refCross Θ g u.1 = D.refCross Θ' g u.1 :=
+    Lane_q_s08_post.refCross_congr_off_target D Θ Θ' g u hAway
+  have hCand : D.CandGate (Function.update Θ g ξ) g =
+      D.CandGate (Function.update Θ' g ξ) g := by rw [hUpd]
+  have hInt (j : J) : D.intRatio Θ g ξ (o.1 j) = D.intRatio Θ' g ξ (o.1 j) := by
+    unfold Ctx.intRatio
+    rw [hUpd, hRefInt]
+  have hCross (u : D.CrossSub g) :
+      D.crossRatio Θ g ξ u (o.2 u) = D.crossRatio Θ' g ξ u (o.2 u) := by
+    unfold Ctx.crossRatio
+    rw [hUpd, hRefCross u]
+  unfold Ctx.Fcand
+  rw [hCand]
+  have hIprod : (∏ j, D.intRatio Θ g ξ (o.1 j)) =
+      ∏ j, D.intRatio Θ' g ξ (o.1 j) := by
+    apply Finset.prod_congr rfl
+    intro j hj
+    exact hInt j
+  have hCprod : (∏ u, D.crossRatio Θ g ξ u (o.2 u)) =
+      ∏ u, D.crossRatio Θ' g ξ u (o.2 u) := by
+    apply Finset.prod_congr rfl
+    intro u hu
+    exact hCross u
+  rw [hIprod, hCprod]
+
 theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
     {J : Type} [Fintype J] (o : D.Obs J g)
@@ -1642,6 +1730,27 @@ theorem qref_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
       D.refCross Θ g u.1 = D.refCross Θ' g u.1 :=
     Lane_q_s08_post.refCross_congr_radius_two D Θ Θ' g u
       (fun v hv => hΘ v (Finset.mem_filter.mp hv).2)
+  unfold Ctx.Qref
+  congr 1
+  · apply Finset.prod_congr rfl
+    intro j hj
+    cases ho : o.1 j with
+    | none => rfl
+    | some i => exact congrArg (fun R : FinProb D.M.ι => R.w i) hInt
+  · apply Finset.prod_congr rfl
+    intro u hu
+    exact congrArg (fun R : FinProb (D.M.ι × Fin D.N) => R.w (o.2 u)) (hCross u)
+
+theorem qref_congr_off_target {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hAway : ∀ v, v ≠ g → Θ v = Θ' v) :
+    D.Qref Θ g o = D.Qref Θ' g o := by
+  classical
+  have hInt := Lane_q_s08_post.refInt_congr_off_target D Θ Θ' g hAway
+  have hCross (u : D.CrossSub g) :
+      D.refCross Θ g u.1 = D.refCross Θ' g u.1 :=
+    Lane_q_s08_post.refCross_congr_off_target D Θ Θ' g u hAway
   unfold Ctx.Qref
   congr 1
   · apply Finset.prod_congr rfl

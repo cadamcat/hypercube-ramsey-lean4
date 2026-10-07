@@ -2490,6 +2490,11 @@ private theorem sum_ofFn_eq {n : ℕ} (f : Fin n → ℕ) :
     simp only [List.concat_eq_append, List.sum_append, List.sum_singleton]
     rw [ih, Fin.sum_univ_castSucc]
 
+private theorem list_sum_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
+    l₁.sum = l₂.sum := by
+  letI : LeftCommutative (fun a b : ℕ => a + b) := ⟨by intro a b c; omega⟩
+  exact h.foldr_eq (f := fun a b => a + b) (b := 0)
+
 private theorem mergeSort_sum_eq (l : List ℕ) :
     (l.mergeSort (fun a b => decide (a ≤ b))).sum = l.sum := by
   letI : LeftCommutative (fun a b : ℕ => a + b) := ⟨by intro a b c; omega⟩
@@ -2604,6 +2609,90 @@ private theorem mergeSort_one_change {n : ℕ} (f g : Fin n → ℕ)
     have hh := hhigh t
     have hEq : qg t = qf t := by omega
     simpa [hqf t, hqg t] using hEq
+
+private theorem mergeSort_sum_sq {n : ℕ} (f : Fin n → ℕ) :
+    (∑ i : Fin n, (mergeSortAt f i) ^ 2) = ∑ i : Fin n, (f i) ^ 2 := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  let q : Fin n → ℕ := fun i => L.get (Fin.cast hlen.symm i)
+  have hOfFn : List.ofFn q = L := by
+    change List.ofFn (fun i : Fin n => L.get (Fin.cast hlen.symm i)) = L
+    rw [← List.ofFn_congr hlen (List.get L)]
+    exact List.ofFn_get L
+  have hq : ∀ i : Fin n, q i = mergeSortAt f i := by intro i; rfl
+  calc
+    (∑ i : Fin n, (mergeSortAt f i) ^ 2) = ∑ i : Fin n, (q i) ^ 2 :=
+      Finset.sum_congr rfl (fun i _ => by rw [hq])
+    _ = (List.ofFn (fun i : Fin n => (q i) ^ 2)).sum := (sum_ofFn_eq _).symm
+    _ = ((List.ofFn q).map fun x : ℕ => x ^ 2).sum := by
+      exact congrArg List.sum (List.ofFn_comp' q (fun x : ℕ => x ^ 2))
+    _ = ((L.map fun x : ℕ => x ^ 2)).sum := by rw [hOfFn]
+    _ = (((List.ofFn f).map fun x : ℕ => x ^ 2)).sum := by
+      apply list_sum_eq_of_perm
+      exact (List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))).map
+        (fun x : ℕ => x ^ 2)
+    _ = ∑ i : Fin n, (f i) ^ 2 := by simp [List.map_ofFn, sum_ofFn_eq]
+
+private theorem mergeSort_one_change_at {n : ℕ} (f g : Fin n → ℕ) (j : Fin n)
+    (hfg : ∀ i, f i ≤ g i) (hgf : ∀ i, g i ≤ f i + 1)
+    (hsum : (∑ i : Fin n, f i) + 1 = ∑ i : Fin n, g i)
+    (hcoord : g j = f j + 1) (hother : ∀ i, i ≠ j → g i = f i) :
+    ∃ r : Fin n, mergeSortAt f r = f j ∧
+      mergeSortAt g r = g j ∧
+      ∀ t : Fin n, t ≠ r → mergeSortAt g t = mergeSortAt f t := by
+  classical
+  obtain ⟨r, hrank, hrest⟩ := mergeSort_one_change f g hfg hgf hsum
+  have hinputSq : (∑ i : Fin n, (f i) ^ 2) + (2 * f j + 1) =
+      ∑ i : Fin n, (g i) ^ 2 := by
+    have hpoint : ∀ i : Fin n, (g i) ^ 2 = (f i) ^ 2 +
+        if i = j then 2 * f j + 1 else 0 := by
+      intro i
+      by_cases hij : i = j
+      · subst i
+        rw [hcoord]
+        simp
+        ring
+      · rw [hother i hij]
+        simp [hij]
+    calc
+      _ = (∑ i : Fin n, (f i) ^ 2) +
+          ∑ i : Fin n, (if i = j then 2 * f j + 1 else 0) := by simp
+      _ = ∑ i : Fin n, ((f i) ^ 2 + if i = j then 2 * f j + 1 else 0) :=
+        Finset.sum_add_distrib.symm
+      _ = ∑ i : Fin n, (g i) ^ 2 :=
+        Finset.sum_congr rfl (fun i _ => (hpoint i).symm)
+  have hsortedSq :
+      (∑ i : Fin n, (mergeSortAt g i) ^ 2) =
+        (∑ i : Fin n, (mergeSortAt f i) ^ 2) + (2 * mergeSortAt f r + 1) := by
+    have hpoint : ∀ i : Fin n, (mergeSortAt g i) ^ 2 =
+        (mergeSortAt f i) ^ 2 + if i = r then 2 * mergeSortAt f r + 1 else 0 := by
+      intro i
+      by_cases hir : i = r
+      · subst i
+        rw [hrank]
+        simp
+        ring
+      · rw [hrest i hir]
+        simp [hir]
+    calc
+      _ = ∑ i : Fin n,
+          ((mergeSortAt f i) ^ 2 + if i = r then 2 * mergeSortAt f r + 1 else 0) :=
+        Finset.sum_congr rfl (fun i _ => hpoint i)
+      _ = (∑ i : Fin n, (mergeSortAt f i) ^ 2) +
+          ∑ i : Fin n, (if i = r then 2 * mergeSortAt f r + 1 else 0) :=
+        Finset.sum_add_distrib
+      _ = (∑ i : Fin n, (mergeSortAt f i) ^ 2) + (2 * mergeSortAt f r + 1) := by simp
+  have hcompare : (∑ i : Fin n, (f i) ^ 2) + (2 * f j + 1) =
+      (∑ i : Fin n, (f i) ^ 2) + (2 * mergeSortAt f r + 1) := by
+    calc
+      _ = (∑ i : Fin n, (g i) ^ 2) := hinputSq
+      _ = (∑ i : Fin n, (mergeSortAt g i) ^ 2) := (mergeSort_sum_sq g).symm
+      _ = (∑ i : Fin n, (mergeSortAt f i) ^ 2) + (2 * mergeSortAt f r + 1) := hsortedSq
+      _ = (∑ i : Fin n, (f i) ^ 2) + (2 * mergeSortAt f r + 1) := by
+        rw [mergeSort_sum_sq f]
+  have hvalue : mergeSortAt f r = f j := by omega
+  exact ⟨r, hvalue, by rw [hrank, hvalue, hcoord], hrest⟩
 
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =

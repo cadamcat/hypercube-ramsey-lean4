@@ -534,6 +534,67 @@ private noncomputable def coreHistoryLift9 {P : Params9} {n N : ℕ} {M : TagMix
     (fun j : I.ID ⊕ OddSites9 n => Val9 I N j)).symm
       ((fun j : {j // j ∈ (I.core v.1).image Sum.inl} => ω₀ j.1), ξ)
 
+private theorem coreHistoryLift_anchor9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
+    (ξ : ∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1)
+    (c : I.ID) (hc : c ∈ I.core v.1) :
+    anc9 (coreHistoryLift9 (M := M) I v ω₀ ξ) c = anc9 ω₀ c := by
+  have hc' : (Sum.inl c : I.ID ⊕ OddSites9 n) ∈ (I.core v.1).image Sum.inl :=
+    Finset.mem_image.mpr ⟨c, hc, rfl⟩
+  simp [anc9, coreHistoryLift9, Equiv.piEquivPiSubtypeProd_symm_apply, hc']
+  rfl
+
+private theorem coreHistoryLift_sameCore9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
+    (ξ : ∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) :
+    sameCore9 I v ω₀ (coreHistoryLift9 (M := M) I v ω₀ ξ) := by
+  intro c hc
+  exact coreHistoryLift_anchor9 I v ω₀ ξ c hc
+
+private theorem coreHitSet_congr_sameCore9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (E : Fin N → Fin N → Prop) (G : Colour) (I : IDMap9 P n) (v : EvenSites9 n)
+    (b : OddSites9 n) (ω₀ ω : Outcome9 I N) (h : sameCore9 I v ω₀ ω) :
+    coreHitSet9 E G ω v b = coreHitSet9 E G ω₀ v b := by
+  classical
+  ext y
+  simp only [coreHitSet9, hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro hy c hc
+    have hc' : c ∈ (I.seen b.1 ∩ I.core v.1).erase (I.center v.1) := by
+      simpa [coreIDs9] using hc
+    rw [← h c (Finset.mem_inter.mp (Finset.mem_erase.mp hc').2).2]
+    exact hy c hc
+  · intro hy c hc
+    have hc' : c ∈ (I.seen b.1 ∩ I.core v.1).erase (I.center v.1) := by
+      simpa [coreIDs9] using hc
+    rw [h c (Finset.mem_inter.mp (Finset.mem_erase.mp hc').2).2]
+    exact hy c hc
+
+private theorem sameCore_fiber_positive9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
+    (hω : 0 < (rawLaw9 S I).w ω₀) :
+    0 < (rawLaw9 S I).pr (sameCore9 I v ω₀) := by
+  classical
+  have hself : sameCore9 I v ω₀ ω₀ := by
+    intro c hc
+    rfl
+  have hsingle : (rawLaw9 S I).w ω₀ ≤
+      ∑ ω, if sameCore9 I v ω₀ ω then (rawLaw9 S I).w ω else 0 := by
+    calc
+      (rawLaw9 S I).w ω₀ =
+          if sameCore9 I v ω₀ ω₀ then (rawLaw9 S I).w ω₀ else 0 := by simp [hself]
+      _ ≤ ∑ ω, if sameCore9 I v ω₀ ω then (rawLaw9 S I).w ω else 0 :=
+        Finset.single_le_sum
+          (f := fun ω : Outcome9 I N =>
+            if sameCore9 I v ω₀ ω then (rawLaw9 S I).w ω else 0)
+          (fun ω hω => by
+            by_cases h : sameCore9 I v ω₀ ω
+            · simpa [h] using (rawLaw9 S I).nonneg ω
+            · simp [h])
+          (Finset.mem_univ ω₀)
+  unfold FinProb.pr
+  exact lt_of_lt_of_le hω hsingle
+
 private theorem condCoreExpect_fiber_formula9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
     (f : Outcome9 I N → ℝ)
@@ -3172,6 +3233,425 @@ private theorem core_degree_product_good_eventually9 (P : Params9) (hP : P.Valid
       _ ≤ 1 / 8 := by nlinarith [hSize n hnSize]
       _ ≤ 1 / 2 := by norm_num
   exact core_degree_product_regular9 S I v b y hb hsmall hsize (by simpa [D] using hgood)
+
+set_option maxHeartbeats 800000 in
+theorem conditional_mean_certificate9 (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 0 < c₀) :
+    ∃ C > (0 : ℝ), ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ}
+      {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ} {G : Colour}
+      {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
+      CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ →
+        CondMeanCert9 S I E G C c := by
+  classical
+  have hP' := hP
+  rcases hP with ⟨hxs, _, _, _, hchi, _, _⟩
+  rcases hxs with ⟨hxSpos, _, _⟩
+  rcases hchi with ⟨_, hχbound⟩
+  have hu : 0 < P.u := by
+    dsimp [Params9.u]
+    exact_mod_cast (div_pos hxSpos (by norm_num : (0 : ℚ) < 2))
+  have hχx : P.χ < P.xS / 100 := by
+    exact lt_of_lt_of_le hχbound
+      (div_le_div_of_nonneg_right (min_le_left _ _) (by norm_num))
+  have hχu : (P.χ : ℝ) < P.u := by
+    dsimp [Params9.u]
+    exact_mod_cast (by nlinarith [hχx, hxSpos] : P.χ < P.xS / 2)
+  let L : ℝ := Real.log 2
+  have hL : 0 < L := by dsimp [L]; exact Real.log_pos (by norm_num)
+  obtain ⟨nSize, hSize⟩ := core_product_size_cutoff9 P hP'
+  obtain ⟨nAbsorb, hAbsorb⟩ := absorb_subpower9 (H := 0) hu hχu (by norm_num)
+    (by positivity : 0 < c₀ / 8) hL
+  have hpowTendsto : Tendsto (fun n : ℕ => (n : ℝ) ^ P.u) atTop atTop := by
+    refine Tendsto.congr' ?_ ((tendsto_rpow_atTop hu).comp tendsto_natCast_atTop_atTop)
+    filter_upwards [] with n
+    rfl
+  have hconstPos : 0 < (8 * Real.log 12) / c₀ :=
+    div_pos (mul_pos (by norm_num) (Real.log_pos (by norm_num))) hc₀
+  obtain ⟨nConst, hConst⟩ := Filter.eventually_atTop.mp
+    (hpowTendsto.eventually_ge_atTop ((8 * Real.log 12) / c₀))
+  let n₀ := max (max nSize nAbsorb) (max nConst 2)
+  refine ⟨128, by norm_num, c₀ / 4, by linarith, n₀, ?_⟩
+  intro n hn N E X Y κ G M S I hCore hReg
+  rcases hCore with ⟨_, _, _, _, _, _, _, hAt⟩
+  rcases hAt with ⟨_, _, _, _, _, _, hbstar, _⟩
+  have hnLeft : max nSize nAbsorb ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hnRight : max nConst 2 ≤ n := le_trans (Nat.le_max_right _ _) hn
+  have hnSize : nSize ≤ n := le_trans (Nat.le_max_left _ _) hnLeft
+  have hnAbsorb : nAbsorb ≤ n := le_trans (Nat.le_max_right _ _) hnLeft
+  have hnConst : nConst ≤ n := le_trans (Nat.le_max_left _ _) hnRight
+  have hnTwo : 2 ≤ n := le_trans (Nat.le_max_right _ _) hnRight
+  have hlogConst : Real.log 12 ≤ c₀ / 8 * (n : ℝ) ^ P.u := by
+    calc
+      Real.log 12 = c₀ / 8 * ((8 * Real.log 12) / c₀) := by
+        field_simp [ne_of_gt hc₀]
+      _ ≤ c₀ / 8 * (n : ℝ) ^ P.u :=
+        mul_le_mul_of_nonneg_left (hConst n hnConst) (by positivity)
+  have hAbsorbN : Real.log 2 * (n : ℝ) ^ (P.χ : ℝ) ≤
+      c₀ / 8 * (n : ℝ) ^ P.u := by
+    have h := hAbsorb n hnAbsorb
+    simpa [L] using h
+  have hSizeN : 16 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n ≤ 1 / 2 := hSize n hnSize
+  have hlog2Pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlog12Pos : 0 < Real.log 12 := Real.log_pos (by norm_num)
+  have hlog2lt : Real.log 2 < Real.log 12 :=
+    Real.log_lt_log (by norm_num) (by norm_num)
+  have hhalfExp : P.tail (c₀ / 2) n ≤ 1 / 2 := by
+    dsimp [Params9.tail]
+    have hpowNonneg : 0 ≤ (n : ℝ) ^ P.u := by positivity
+    calc
+      Real.exp (-(c₀ / 2 * (n : ℝ) ^ P.u)) ≤ Real.exp (-(Real.log 2)) :=
+        Real.exp_le_exp.mpr (by nlinarith [hlog2lt, hlogConst, hpowNonneg])
+      _ = 1 / 2 := by
+        rw [Real.exp_neg, Real.exp_log (by norm_num)]
+        norm_num
+  have hbadHistory (v : EvenSites9 n) :
+      (rawLaw9 S I).pr (fun ω₀ => P.tail (c₀ / 2) n <
+        condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) ≤
+        P.tail (c₀ / 2) n := by
+    exact regularity_core_exception9 S I E G v c₀ hc₀ hReg
+  change ∀ v : EvenSites9 n, ∀ b : OddSites9 n, (cube n).Adj v.1 b.1 → _
+  intro v b hadj
+  let ε : ℝ := P.tail (c₀ / 2) n
+  have hε : 0 ≤ ε := by dsimp [ε, Params9.tail]; positivity
+  have hεle : ε ≤ 1 / 2 := by simpa [ε] using hhalfExp
+  have herror_bound (ω₀ : Outcome9 I N)
+      (hpos : 0 < (rawLaw9 S I).pr (sameCore9 I v ω₀))
+      (hcondle : condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v) ≤ ε) :
+      |condCoreMean9 S I E G v b ω₀ -
+          rowDeg E G (anc9 ω₀ (I.center v.1))
+            (restrictOr9 (outerMean9 S I E G v b)
+              (coreHitSet9 E G ω₀ v b))| ≤
+        128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail (c₀ / 4) n := by
+    let B : Finset (Fin N) := coreHitSet9 E G ω₀ v b
+    let x : Fin N := anc9 ω₀ (I.center v.1)
+    let lift : (∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) →
+        Outcome9 I N := fun ξ => coreHistoryLift9 (M := M) I v ω₀ ξ
+    let μc := coreOutsideLaw9 S I v
+    let good : (∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) → Prop :=
+      fun ξ => starRegular9 S E G (lift ξ) v
+    let z : (∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) → ℝ :=
+      fun ξ => ∑ y ∈ B, (outerFilter9 S E G (lift ξ) v b).w y
+    let q : (∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) → ℝ :=
+      fun ξ => clippedFrac9 S E G (lift ξ) v b
+    let r : (∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) → ℝ :=
+      fun ξ => ∑ y ∈ B.filter (fun y => Hits E G x y),
+        (outerFilter9 S E G (lift ξ) v b).w y
+    let K : Finset I.ID := coreIDs9 I v b
+    let m : ℕ := K.card
+    let z₀ : ℝ := (1 / 2 : ℝ) ^ m
+    let δ : ℝ := 8 * (m : ℝ) * P.bStar n
+    let β : ℝ := 2 * P.bStar n
+    have hz₀pos : 0 < z₀ := by dsimp [z₀]; positivity
+    have hz₀le : z₀ ≤ 1 := by
+      dsimp [z₀]
+      exact pow_le_one₀ (by norm_num) (by norm_num)
+    have hKsub : K ⊆ I.core v.1 := by
+      intro d hd
+      have hd' : d ∈ (I.seen b.1 ∩ I.core v.1).erase (I.center v.1) := by
+        simpa [K, coreIDs9] using hd
+      exact (Finset.mem_inter.mp (Finset.mem_erase.mp hd').2).2
+    have hKcardNat : K.card ≤ (I.core v.1).card := Finset.card_le_card hKsub
+    have hb : 0 ≤ P.bStar n := by
+      dsimp [Params9.bStar]
+      positivity
+    have hKcard : (K.card : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+      have hKcardR : (K.card : ℝ) ≤ ((I.core v.1).card : ℝ) := by
+        exact_mod_cast hKcardNat
+      exact hKcardR.trans (I.core_card v.1 v.2)
+    have hsize : 16 * (K.card : ℝ) * P.bStar n ≤ 1 / 2 := by
+      calc
+        16 * (K.card : ℝ) * P.bStar n ≤
+            16 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n := by
+              exact mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_left hKcard (by norm_num)) hb
+        _ ≤ 1 / 2 := hSizeN
+    have hβ : 0 ≤ β := by dsimp [β]; positivity
+    have hβle : β ≤ 1 / 2 := by dsimp [β]; nlinarith [hbstar]
+    have hδ : 0 ≤ δ := by dsimp [δ]; positivity
+    have hδle : δ ≤ 1 / 2 := by
+      dsimp [δ]
+      nlinarith [hsize]
+    have hsizeCore : 16 * (coreIDs9 I v b).card * P.bStar n ≤ 1 / 2 := by
+      simpa [K] using hsize
+    have hz₀inverse : z₀⁻¹ = (2 : ℝ) ^ m := by
+      have hz₀form : z₀ = ((2 : ℝ) ^ m)⁻¹ := by
+        dsimp [z₀]
+        rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, inv_pow]
+      rw [hz₀form, inv_inv]
+    have hSame (ξ) : sameCore9 I v ω₀ (lift ξ) := by
+      exact coreHistoryLift_sameCore9 I v ω₀ ξ
+    have hBsame (ξ) : coreHitSet9 E G (lift ξ) v b = B := by
+      exact coreHitSet_congr_sameCore9 (M := M) E G I v b ω₀ (lift ξ) (hSame ξ)
+    have hXsame (ξ) : anc9 (lift ξ) (I.center v.1) = x := by
+      exact hSame ξ (I.center v.1) (I.center_mem_core v.1 v.2)
+    have hzBound (ξ) : 0 ≤ z ξ ∧ z ξ ≤ 1 := by
+      dsimp [z, B]
+      exact law_mass_bounds9 (outerFilter9 S E G (lift ξ) v b)
+        (coreHitSet9 E G ω₀ v b)
+    have hqclose (ξ) : |q ξ - 1 / 2| ≤ β := by
+      simpa [q, β] using clippedFrac_bounds9 S E G (lift ξ) v b
+    have hqBound (ξ) : 0 ≤ q ξ ∧ q ξ ≤ 1 := by
+      have hc := abs_le.mp (hqclose ξ)
+      constructor <;> linarith [hc.1, hc.2, hβle]
+    have hOrder (ξ) (hg : good ξ) :
+        orderRegular9 E G (lift ξ) (maskedLaw9 S (lift ξ) b) (fullOrder9 I v b) := by
+      have hstar := hg b hadj
+      exact hstar.1
+    have hZgood (ξ) (hg : good ξ) : |z ξ - z₀| ≤ δ * z₀ := by
+      have hrel := outerFilter_core_mass_relative_regular9 S I E G (lift ξ) v b
+        (hOrder ξ hg) hbstar hsizeCore
+      have hrel' : |z ξ * (2 : ℝ) ^ m - 1| ≤ δ := by
+        simpa [z, z₀, δ, m, K, B, hBsame ξ] using hrel
+      have hquot : z ξ * (2 : ℝ) ^ m - 1 = (z ξ - z₀) / z₀ := by
+        rw [div_eq_mul_inv, hz₀inverse]
+        ring
+      rw [hquot, abs_div, abs_of_pos hz₀pos] at hrel'
+      exact (div_le_iff₀ hz₀pos).mp hrel'
+    have hbadEq : condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v) =
+        μc.pr (fun ξ => ¬ good ξ) := by
+      unfold condCorePr9
+      change (rawLaw9 S I).condExp
+          (fun ω => if ¬ starRegular9 S E G ω v then 1 else 0)
+          (sameCore9 I v ω₀) = μc.pr (fun ξ => ¬ good ξ)
+      calc
+        (rawLaw9 S I).condExp
+            (fun ω => if ¬ starRegular9 S E G ω v then 1 else 0)
+            (sameCore9 I v ω₀) =
+          μc.expect (fun ξ =>
+            if ¬ starRegular9 S E G (lift ξ) v then 1 else 0) :=
+              condCoreExpect_fiber_formula9 S I v ω₀ _ hpos
+        _ = μc.pr (fun ξ => ¬ good ξ) := by
+              simpa [good, lift, μc] using
+                (expect_indicator9 μc (fun ξ => ¬ starRegular9 S E G (lift ξ) v))
+    have hbad : μc.pr (fun ξ => ¬ good ξ) ≤ ε := by
+      rw [← hbadEq]
+      exact hcondle
+    have hweighted := weighted_expectation_close9 μc good z q z₀ β δ ε
+      hzBound hqBound hz₀pos hz₀le hβ hβle hδ hδle hε hεle hbad hZgood hqclose
+    have hdenLower : z₀ / 4 ≤ μc.expect z := hweighted.1
+    have hdenEq : μc.expect z =
+        ∑ y ∈ B, (outerMean9 S I E G v b).w y := by
+      simpa [z, μc, B, lift] using
+        (outerFilter_complement_mass9 S I E G v b ω₀ B)
+    have hQmass : 0 < ∑ y ∈ B, (outerMean9 S I E G v b).w y := by
+      rw [← hdenEq]
+      exact lt_of_lt_of_le (by positivity) hdenLower
+    have hrestrict :
+        restrictOr9 (outerMean9 S I E G v b) B =
+          (outerMean9 S I E G v b).restrict B hQmass := by
+      unfold restrictOr9
+      rw [dif_pos hQmass]
+    have hnumEq : μc.expect r =
+        ∑ y ∈ B.filter (fun y => Hits E G x y),
+          (outerMean9 S I E G v b).w y := by
+      simpa [r, μc, B, x, lift] using
+        (outerFilter_complement_mass9 S I E G v b ω₀
+          (B.filter (fun y => Hits E G x y)))
+    have hdegree := law_restrict_degree_mass9 E G (outerMean9 S I E G v b)
+      B x hQmass
+    have hdegreeRelation : μc.expect r = μc.expect z *
+        rowDeg E G x ((outerMean9 S I E G v b).restrict B hQmass) := by
+      rw [hnumEq, hdenEq]
+      exact hdegree
+    have hdenPos : 0 < μc.expect z := lt_of_lt_of_le (by positivity) hdenLower
+    have hdegreeRatio :
+        rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B) =
+          μc.expect r / μc.expect z := by
+      rw [hrestrict]
+      calc
+        rowDeg E G x ((outerMean9 S I E G v b).restrict B hQmass) =
+            (μc.expect z *
+              rowDeg E G x ((outerMean9 S I E G v b).restrict B hQmass)) /
+                μc.expect z := by field_simp [ne_of_gt hdenPos]
+        _ = μc.expect r / μc.expect z := by rw [← hdegreeRelation]
+    have hnumErrorPoint (ξ) : |z ξ * q ξ - r ξ| ≤ if good ξ then 0 else 1 := by
+      by_cases hg : good ξ
+      · rw [if_pos hg]
+        have hregular := hOrder ξ hg
+        have hratio := targetFrac_ratio_regular9 S I E G (lift ξ) v b hregular hbstar
+        rcases hratio with ⟨_, _, _, _, hnum⟩
+        have hnumFixed : r ξ = z ξ *
+            targetFrac9 S E G (lift ξ) v b := by
+          simpa [r, z, B, x, hBsame ξ, hXsame ξ] using hnum
+        have hclip := targetFrac_regular9 S I E G (lift ξ) v b hregular hbstar
+        have hclip' : q ξ = targetFrac9 S E G (lift ξ) v b := by
+          have hbounds := abs_le.mp hclip
+          have hlo : 1 / 2 - 2 * P.bStar n ≤ targetFrac9 S E G (lift ξ) v b := by
+            linarith
+          have hhi : targetFrac9 S E G (lift ξ) v b ≤
+              1 / 2 + 2 * P.bStar n := by linarith
+          dsimp [q, clippedFrac9]
+          rw [min_eq_right hhi, max_eq_right hlo]
+        rw [hnumFixed, hclip']
+        simp
+      · rw [if_neg hg]
+        have hzv := hzBound ξ
+        have hqv := hqBound ξ
+        have hrv : 0 ≤ r ξ ∧ r ξ ≤ 1 := by
+          dsimp [r, B]
+          exact law_mass_bounds9 (outerFilter9 S E G (lift ξ) v b)
+            (coreHitSet9 E G ω₀ v b |>.filter (fun y => Hits E G x y))
+        have hp : 0 ≤ z ξ * q ξ ∧ z ξ * q ξ ≤ 1 := by
+          constructor
+          · exact mul_nonneg hzv.1 hqv.1
+          · calc
+              z ξ * q ξ ≤ 1 * q ξ :=
+                mul_le_mul_of_nonneg_right hzv.2 hqv.1
+              _ = q ξ := by ring
+              _ ≤ 1 := hqv.2
+        rw [abs_le]
+        constructor <;> linarith [hp.1, hp.2, hrv.1, hrv.2]
+    have hnumErrorPoint' (ξ) : |z ξ * q ξ - r ξ| ≤ if ¬ good ξ then 1 else 0 := by
+      by_cases hg : good ξ <;> simpa [hg] using hnumErrorPoint ξ
+    have hnumError := expect_abs_diff_le_pr9 μc good
+      (fun ξ => z ξ * q ξ) r ε hnumErrorPoint' hbad
+    have hnumRatioError :
+        |μc.expect (fun ξ => z ξ * q ξ) / μc.expect z - μc.expect r / μc.expect z| ≤
+          4 * ε / z₀ := by
+      have hsub :
+          μc.expect (fun ξ => z ξ * q ξ) / μc.expect z -
+            μc.expect r / μc.expect z =
+          (μc.expect (fun ξ => z ξ * q ξ) - μc.expect r) / μc.expect z := by ring
+      rw [hsub, abs_div, abs_of_pos hdenPos]
+      have hrecip : (μc.expect z)⁻¹ ≤ (4 : ℝ) / z₀ := by
+        change 1 / μc.expect z ≤ 4 / z₀
+        apply (div_le_div_iff₀ hdenPos hz₀pos).2
+        nlinarith [hdenLower]
+      calc
+        |μc.expect (fun ξ => z ξ * q ξ) - μc.expect r| / μc.expect z =
+            |μc.expect (fun ξ => z ξ * q ξ) - μc.expect r| *
+              (μc.expect z)⁻¹ := by rw [div_eq_mul_inv]
+        _ ≤ ε * (4 / z₀) :=
+          mul_le_mul hnumError hrecip (inv_nonneg.mpr hdenPos.le) (abs_nonneg _)
+        _ = 4 * ε / z₀ := by ring
+    have htriangle :
+        |μc.expect q - rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B)| ≤
+          |μc.expect q - μc.expect (fun ξ => z ξ * q ξ) / μc.expect z| +
+            |μc.expect (fun ξ => z ξ * q ξ) / μc.expect z -
+              rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B)| := by
+      calc
+        _ = |(μc.expect q -
+              μc.expect (fun ξ => z ξ * q ξ) / μc.expect z) +
+              (μc.expect (fun ξ => z ξ * q ξ) / μc.expect z -
+                rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B))| := by
+                  congr 1 <;> ring
+        _ ≤ _ := abs_add_le _ _
+    have hrawError :
+        |μc.expect q - rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B)| ≤
+          8 * δ * β + 12 * ε / z₀ := by
+      calc
+        _ ≤ |μc.expect q - μc.expect (fun ξ => z ξ * q ξ) / μc.expect z| +
+              |μc.expect (fun ξ => z ξ * q ξ) / μc.expect z -
+                rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B)| := htriangle
+        _ ≤ (8 * δ * β + 8 * ε / z₀) + 4 * ε / z₀ := by
+              apply add_le_add hweighted.2
+              rw [hdegreeRatio]
+              exact hnumRatioError
+        _ = 8 * δ * β + 12 * ε / z₀ := by ring
+    have hcoeff : 8 * δ * β = 128 * (m : ℝ) * P.bStar n ^ 2 := by
+      dsimp [δ, β]
+      ring
+    have hmle : (m : ℝ) ≤ (coreCount9 I v b : ℝ) := by
+      have hsub : K.card ≤ (I.seen b.1 ∩ I.core v.1).card := by
+        exact Finset.card_le_card (Finset.erase_subset _ _)
+      exact_mod_cast hsub
+    have herrorPolynomial :
+        128 * (m : ℝ) * P.bStar n ^ 2 ≤
+          128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 := by
+      exact mul_le_mul_of_nonneg_right
+        (mul_le_mul_of_nonneg_left hmle (by norm_num)) (sq_nonneg _)
+    have htailAmplified : 12 * (2 : ℝ) ^ m * ε ≤ P.tail (c₀ / 4) n := by
+      have hnχ : (m : ℝ) * Real.log 2 + Real.log 12 ≤ c₀ / 4 * (n : ℝ) ^ P.u := by
+        calc
+          (m : ℝ) * Real.log 2 + Real.log 12 ≤
+              (n : ℝ) ^ (P.χ : ℝ) * Real.log 2 + Real.log 12 := by
+                nlinarith [hKcard, hlog2Pos]
+          _ ≤ c₀ / 8 * (n : ℝ) ^ P.u + c₀ / 8 * (n : ℝ) ^ P.u :=
+                add_le_add hAbsorbN hlogConst
+          _ = c₀ / 4 * (n : ℝ) ^ P.u := by ring
+      have hcoefPos : 0 < 12 * (2 : ℝ) ^ m := by positivity
+      have hlogCoef : Real.log (12 * (2 : ℝ) ^ m) =
+          Real.log 12 + (m : ℝ) * Real.log 2 := by
+        rw [Real.log_mul (by norm_num) (by positivity), Real.log_pow]
+      dsimp [ε, Params9.tail]
+      calc
+        12 * (2 : ℝ) ^ m * Real.exp (-(c₀ / 2 * (n : ℝ) ^ P.u)) =
+            Real.exp (Real.log (12 * (2 : ℝ) ^ m) - c₀ / 2 * (n : ℝ) ^ P.u) := by
+              calc
+                _ = Real.exp (Real.log (12 * (2 : ℝ) ^ m)) *
+                    Real.exp (-(c₀ / 2 * (n : ℝ) ^ P.u)) := by
+                      rw [Real.exp_log hcoefPos]
+                _ = Real.exp (Real.log (12 * (2 : ℝ) ^ m) -
+                    c₀ / 2 * (n : ℝ) ^ P.u) := by
+                      rw [← Real.exp_add]
+                      congr 1
+        _ ≤ Real.exp (-(c₀ / 4 * (n : ℝ) ^ P.u)) := by
+              apply Real.exp_le_exp.mpr
+              rw [hlogCoef]
+              nlinarith [hnχ]
+    have htailError : 12 * ε / z₀ ≤ P.tail (c₀ / 4) n := by
+      calc
+        12 * ε / z₀ = 12 * (2 : ℝ) ^ m * ε := by
+          rw [div_eq_mul_inv, hz₀inverse]
+          ring
+        _ ≤ P.tail (c₀ / 4) n := htailAmplified
+    have hpointError :
+        |μc.expect q - rowDeg E G x (restrictOr9 (outerMean9 S I E G v b) B)| ≤
+          128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail (c₀ / 4) n := by
+      calc
+        _ ≤ 8 * δ * β + 12 * ε / z₀ := hrawError
+        _ = 128 * (m : ℝ) * P.bStar n ^ 2 + 12 * ε / z₀ := by rw [hcoeff]
+        _ ≤ 128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 +
+              P.tail (c₀ / 4) n := add_le_add herrorPolynomial htailError
+    have hmean : condCoreMean9 S I E G v b ω₀ = μc.expect q := by
+      unfold condCoreMean9
+      exact condCoreExpect_fiber_formula9 S I v ω₀
+        (fun ω => clippedFrac9 S E G ω v b) hpos
+    rw [hmean]
+    simpa [μc, B, x, lift, q] using hpointError
+  let zeroMass : Outcome9 I N → Prop := fun ω => (rawLaw9 S I).w ω = 0
+  have hzero : (rawLaw9 S I).pr zeroMass = 0 := by
+    unfold zeroMass FinProb.pr
+    apply Finset.sum_eq_zero
+    intro ω hω
+    by_cases h : (rawLaw9 S I).w ω = 0 <;> simp [h]
+  have herrorSubset : ∀ ω₀,
+      128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 + P.tail (c₀ / 4) n <
+        |condCoreMean9 S I E G v b ω₀ -
+          rowDeg E G (anc9 ω₀ (I.center v.1))
+            (restrictOr9 (outerMean9 S I E G v b) (coreHitSet9 E G ω₀ v b)) →
+        (ε < condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) ∨ zeroMass ω₀ := by
+    intro ω₀ herr
+    by_cases hpos : 0 < (rawLaw9 S I).w ω₀
+    · by_cases hbad : ε <
+          condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)
+      · exact Or.inl hbad
+      · right
+        have hcondle := le_of_not_gt hbad
+        have hpoint := herror_bound ω₀ (sameCore_fiber_positive9 S I v ω₀ hpos)
+          (by simpa [ε] using hcondle)
+        exact False.elim (not_lt_of_ge hpoint herr)
+    · right
+      have hw0 : (rawLaw9 S I).w ω₀ = 0 := by
+        have hnonneg := (rawLaw9 S I).nonneg ω₀
+        exact le_antisymm (le_of_not_gt hpos) hnonneg
+      exact hw0
+  have hunion := FinProb.pr_union_le (rawLaw9 S I)
+    (fun ω₀ => ε < condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) zeroMass
+  have hbadProbability := hbadHistory v
+  calc
+    (rawLaw9 S I).pr (fun ω₀ => 128 * (coreCount9 I v b : ℝ) * P.bStar n ^ 2 +
+        P.tail (c₀ / 4) n <
+        |condCoreMean9 S I E G v b ω₀ -
+          rowDeg E G (anc9 ω₀ (I.center v.1))
+            (restrictOr9 (outerMean9 S I E G v b) (coreHitSet9 E G ω₀ v b))|) ≤
+        (rawLaw9 S I).pr
+          (fun ω₀ => ε < condCorePr9 S I v ω₀
+            (fun ω => ¬ starRegular9 S E G ω v) ∨ zeroMass ω₀) :=
+        FinProb.pr_mono (rawLaw9 S I) _ _ herrorSubset
+    _ ≤ (rawLaw9 S I).pr
+          (fun ω₀ => ε < condCorePr9 S I v ω₀
+            (fun ω => ¬ starRegular9 S E G ω v)) + (rawLaw9 S I).pr zeroMass := hunion
+    _ ≤ ε := by rw [hzero]; simpa [ε] using hbadProbability
 
 private theorem rowDeg_lipschitz_l1_9 {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (x : Fin N) (μ ν : Law N) :

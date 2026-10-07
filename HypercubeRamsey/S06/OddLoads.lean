@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadA
+import HypercubeRamsey.S06.OddLoads_sol_s06_loadC
 
 /-!
 # Odd loads through the three histories, and the additional even history mean
@@ -1210,7 +1211,13 @@ theorem L6_1k_centres (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     unfold Ctx6.longMean FinProb.expect
     simp_rw [Finset.mul_sum]
     rw [Finset.sum_comm]
-  -- Remaining: spatial scopes of long rows and the scattered-moment union estimate.
+  have hFactor (U : Finset (CubeVertex n)) (y : Fin N)
+      (hsep : ∀ u ∈ U, ∀ v ∈ U, u ≠ v →
+        Lane_sol_s06_loadC.separationRadius X < X.g.L.residualDist u v) :
+      (X.centreLaw H).expect (fun C => ∏ u ∈ U, Lane_sol_s06_loadC.rowTerm X H u y C) =
+        ∏ u ∈ U, (X.centreLaw H).expect (Lane_sol_s06_loadC.rowTerm X H u y) :=
+    Lane_sol_s06_loadC.rowTerm_expect_prod X H U y hsep
+  -- Remaining: residual-neighbour counting, the moment/label union, and eventual numerical estimates.
   sorry
 
 /-- L6.1l (base, 06:713–749): rows outside interior `j = 0` are bounded deterministically (`T_β ≤ n^{d₂u}Λ`,

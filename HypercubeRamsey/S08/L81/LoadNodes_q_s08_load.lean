@@ -1353,6 +1353,27 @@ private theorem prod_expect {α β : Type*} [Fintype α] [Fintype β]
   intro b _
   ring
 
+private theorem rawTAT_expect_at_key {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT)
+    (f : (D.Loc → D.M.ι) → ((hdP η₀ D.n).Loc → Bool) → (hdP η₀ D.n).Ties → ℝ) :
+    (D.rawTAT Θ).expect (fun ω => f (ω.1.1 g) (ω.1.2 g) (ω.2 g)) =
+      (D.tagLawAll Θ).expect (fun t =>
+        D.actLaw.expect (fun A => D.tieLaw.expect (fun τ => f (t g) (A g) (τ g)))) := by
+  classical
+  unfold Ctx.rawTAT
+  calc
+    (((D.tagLawAll Θ).prod D.actLaw).prod D.tieLaw).expect
+        (fun ω => f (ω.1.1 g) (ω.1.2 g) (ω.2 g)) =
+      ((D.tagLawAll Θ).prod D.actLaw).expect
+        (fun z => D.tieLaw.expect (fun τ => f (z.1 g) (z.2 g) (τ g))) := by
+          exact prod_expect ((D.tagLawAll Θ).prod D.actLaw) D.tieLaw
+            (fun z τ => f (z.1 g) (z.2 g) (τ g))
+    _ = (D.tagLawAll Θ).expect
+        (fun t => D.actLaw.expect (fun A => D.tieLaw.expect (fun τ => f (t g) (A g) (τ g)))) := by
+          exact prod_expect (D.tagLawAll Θ) D.actLaw
+            (fun t A => D.tieLaw.expect (fun τ => f (t g) (A g) (τ g)))
+    _ = _ := by rfl
+
 private noncomputable def weightedLaw {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (w : Ω → ℝ) (hw : ∀ ω, 0 ≤ w ω)
     (m : ℝ) (hm : 0 < m) (hmEq : P.expect w = m) : FinProb Ω where
@@ -1552,6 +1573,152 @@ private theorem tilt_anchor_mass {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β 
         (8 * (D.AG g)⁻¹ * (if D.crossHit Θ g x then 1 else 0) *
           ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) / 4 := hbound
     _ = D.Bcomp Θ g x / 4 := by rw [hB]
+
+private theorem lane_scaleIndex_exists (M R target : ℕ) (hM : 2 ≤ M) (hR : 1 ≤ R) :
+    ∃ i : ℕ, target ≤ M ^ i * R := by
+  have hM0 : M ≠ 0 := by omega
+  induction target with
+  | zero => exact ⟨0, by simp⟩
+  | succ target ih =>
+      obtain ⟨i, hi⟩ := ih
+      let z := M ^ i * R
+      have hz0 : z ≠ 0 := by
+        dsimp [z]
+        exact Nat.mul_ne_zero (pow_ne_zero _ hM0) (by omega)
+      have hz : 1 ≤ z := by omega
+      have hstep : z + 1 ≤ 2 * z := by omega
+      have hmult : 2 * z ≤ M * z := Nat.mul_le_mul_right z hM
+      refine ⟨i + 1, ?_⟩
+      calc
+        target + 1 ≤ z + 1 := Nat.succ_le_succ hi
+        _ ≤ 2 * z := hstep
+        _ ≤ M * z := hmult
+        _ = M ^ (i + 1) * R := by dsimp [z]; rw [pow_succ]; ring
+
+private theorem topScale_sq_bound (σ ζ : ℝ) (hσ : 0 < σ) (hσζ : σ < ζ) (hζ : ζ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, topScale n σ ζ ≤ 8 * n ^ 2 := by
+  have hσ1 : σ < 1 := lt_trans hσζ hζ
+  refine ⟨1, ?_⟩
+  intro n hn
+  have hn1 : 1 ≤ n := hn
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le zero_lt_one hnR
+  let R₀ : ℕ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M : ℕ := max 2 ⌈(n : ℝ) ^ σ⌉₊
+  let target : ℕ := ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+  have hM : 2 ≤ M := by dsimp [M]; omega
+  have hR : 1 ≤ R₀ := by dsimp [R₀]; omega
+  let hexists := lane_scaleIndex_exists M R₀ target hM hR
+  let i : ℕ := Nat.find hexists
+  have htop : topScale n σ ζ = M ^ i * R₀ := by
+    dsimp [topScale, M, R₀, target, i, hexists]
+  have hRlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hnR
+  have hlogle : Real.log (n : ℝ) ≤ n := by
+    have h := Real.log_le_sub_one_of_pos hnpos
+    linarith
+  have hlogsq : (Real.log (n : ℝ)) ^ 2 ≤ (n : ℝ) ^ 2 := by nlinarith
+  have hceilR : (Nat.ceil (Real.log (n : ℝ) ^ 2) : ℝ) ≤
+      (Real.log (n : ℝ)) ^ 2 + 1 :=
+    (Nat.ceil_lt_add_one (by positivity : 0 ≤ Real.log (n : ℝ) ^ 2)).le
+  have hRcast : (R₀ : ℝ) ≤ 2 * (n : ℝ) ^ 2 := by
+    dsimp [R₀]
+    rw [Nat.cast_max]
+    apply max_le_iff.mpr
+    constructor
+    · have hn2 : (1 : ℝ) ≤ (n : ℝ) ^ 2 := by
+        simpa using (pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 1) hnR 2)
+      have htwo : (2 : ℝ) ≤ 2 * (n : ℝ) ^ 2 := by
+        simpa [mul_one] using
+          (mul_le_mul_of_nonneg_left hn2 (by norm_num : 0 ≤ (2 : ℝ)))
+      have hOne : (1 : ℝ) ≤ 2 := by norm_num
+      exact_mod_cast (le_trans hOne htwo)
+    · calc
+        (Nat.ceil (Real.log (n : ℝ) ^ 2) : ℝ) ≤ (Real.log (n : ℝ)) ^ 2 + 1 := hceilR
+        _ ≤ (n : ℝ) ^ 2 + 1 := by simpa [add_comm] using add_le_add_right hlogsq 1
+        _ ≤ 2 * (n : ℝ) ^ 2 := by nlinarith [hnR]
+  have hRnat : R₀ ≤ 2 * n ^ 2 := by exact_mod_cast hRcast
+  have hσpow : (n : ℝ) ^ σ ≤ n := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR hσ1.le
+    simpa [Real.rpow_one] using h
+  have hceilM : (Nat.ceil ((n : ℝ) ^ σ) : ℝ) ≤ (n : ℝ) ^ σ + 1 :=
+    (Nat.ceil_lt_add_one (by positivity)).le
+  have hMcast : (M : ℝ) ≤ 3 * (n : ℝ) := by
+    dsimp [M]
+    rw [Nat.cast_max]
+    apply max_le_iff.mpr
+    constructor
+    · calc
+        (2 : ℝ) ≤ 3 := by norm_num
+        _ = 3 * 1 := by ring
+        _ ≤ 3 * (n : ℝ) := mul_le_mul_of_nonneg_left hnR (by norm_num)
+    · calc
+        (Nat.ceil ((n : ℝ) ^ σ) : ℝ) ≤ (n : ℝ) ^ σ + 1 := hceilM
+        _ ≤ (n : ℝ) + 1 := by simpa [add_comm] using add_le_add_right hσpow 1
+        _ ≤ 3 * (n : ℝ) := by nlinarith [hnR]
+  have hexp : 1 - ζ ≤ 1 := by linarith [hσ, hσζ]
+  have htargetPow : (n : ℝ) ^ (1 - ζ) ≤ n := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR hexp
+    simpa [Real.rpow_one] using h
+  have hceilT : (Nat.ceil ((n : ℝ) ^ (1 - ζ)) : ℝ) ≤
+      (n : ℝ) ^ (1 - ζ) + 1 := (Nat.ceil_lt_add_one (by positivity)).le
+  have htargetCast : (target : ℝ) ≤ 2 * (n : ℝ) := by
+    dsimp [target]
+    calc
+      (Nat.ceil ((n : ℝ) ^ (1 - ζ)) : ℝ) ≤ (n : ℝ) ^ (1 - ζ) + 1 := hceilT
+      _ ≤ (n : ℝ) + 1 := by simpa [add_comm] using add_le_add_right htargetPow 1
+      _ ≤ 2 * (n : ℝ) := by nlinarith [hnR]
+  have hprodCast : (M : ℝ) * target ≤ 6 * (n : ℝ) ^ 2 := by
+    have hmul := mul_le_mul hMcast htargetCast (by positivity : 0 ≤ (target : ℝ))
+      (by positivity : 0 ≤ 3 * (n : ℝ))
+    nlinarith
+  have hprodNat : M * target ≤ 8 * n ^ 2 := by
+    have hcast : (M * target : ℝ) ≤ 8 * (n : ℝ) ^ 2 := by exact hprodCast.trans (by nlinarith)
+    exact_mod_cast hcast
+  have hiSpec : target ≤ M ^ i * R₀ := Nat.find_spec hexists
+  by_cases hi0 : i = 0
+  · rw [htop, hi0]
+    simpa using hRnat.trans (by omega : 2 * n ^ 2 ≤ 8 * n ^ 2)
+  · have hiPos : 0 < i := Nat.pos_of_ne_zero hi0
+    let j : ℕ := i - 1
+    have hjlt : j < i := by dsimp [j]; omega
+    have hprevNot : ¬ target ≤ M ^ j * R₀ := Nat.find_min hexists hjlt
+    have hprev : M ^ j * R₀ < target := by omega
+    have hpow : M ^ i * R₀ = M * (M ^ j * R₀) := by
+      have hEq : i = j + 1 := by dsimp [j]; omega
+      rw [hEq, pow_succ]
+      ring
+    have hupper : M ^ i * R₀ ≤ M * target := by
+      rw [hpow]
+      exact Nat.mul_le_mul_left M hprev.le
+    rw [htop]
+    exact hupper.trans hprodNat
+
+private theorem exp_poly_small (c : ℝ) (hc : 0 < c) (k : ℕ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, (n : ℝ) ^ k * Real.exp (-(n : ℝ) ^ c) ≤ 1 / 64 := by
+  have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ c) atTop atTop :=
+    (tendsto_rpow_atTop hc).comp tendsto_natCast_atTop_atTop
+  have hpoly : Tendsto
+      (fun n : ℕ => ((n : ℝ) ^ c) ^ ((k : ℝ) / c) * Real.exp (-(n : ℝ) ^ c))
+      atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      ((k : ℝ) / c) 1 one_pos).comp htend
+    simpa [Function.comp_def] using h
+  have hev : ∀ᶠ n : ℕ in atTop,
+      ((n : ℝ) ^ c) ^ ((k : ℝ) / c) * Real.exp (-(n : ℝ) ^ c) < 1 / 64 :=
+    hpoly.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 64))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hev
+  refine ⟨max n₀ 1, ?_⟩
+  intro n hn
+  have hn0 : n₀ ≤ n := le_trans (le_max_left _ _) hn
+  have hn1 : 1 ≤ n := le_trans (le_max_right _ _) hn
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le zero_lt_one hnR
+  have hpow : ((n : ℝ) ^ c) ^ ((k : ℝ) / c) = (n : ℝ) ^ k := by
+    rw [← Real.rpow_mul hnpos.le]
+    have he : c * ((k : ℝ) / c) = (k : ℝ) := by field_simp [ne_of_gt hc]
+    rw [he, ← Real.rpow_natCast]
+  have hsmall := hn₀ n hn0
+  simpa [hpow] using hsmall.le
 
 theorem bcomp_tail (η₀ γ β p K : ℝ) (h : ℕ) (cH : ℝ) (hcH : 0 < cH)
     (hη₀ : 0 < η₀) (hβτ : β < tau8 η₀ / 4) (hK : 0 < K) :

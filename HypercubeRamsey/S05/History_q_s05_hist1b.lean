@@ -1038,4 +1038,46 @@ theorem colWeight_delete_prefix_factor5 {γ K' χ : ℝ} {n N : ℕ}
             else 1) := by
           rw [hdeleted, htarget]
 
+theorem colLik_trueBlock_recompose5 {γ K' χ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (X : Setup5 γ K' χ n N E G) (H : X.KeyHist) (K : X.Ty) (ℓ : X.Key)
+    (hℓ : ℓ ∈ X.gateKeys K)
+    (hgate : X.blockGate H.1 K (X.trueBlock H.1 K)) :
+    (∏ h : Fin (colLen5 (X.p.s n) ℓ), (X.prior H.1 ℓ).w (H.2 ℓ h)) =
+      (∏ h : Fin (colLen5 (X.p.s n) ℓ),
+        (X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)).w (H.2 ℓ h)) *
+        X.colLik H.1 K ℓ (X.trueBlock H.1 K) (H.2 ℓ) := by
+  classical
+  let P := X.prior H.1 ℓ
+  let Q := X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)
+  have hsupport : ∀ y, Q.w y = 0 → P.w y = 0 := by
+    intro y hQ
+    have hpoint := hgate ℓ hℓ y
+    rw [priorRep_trueBlock_eq_prior X H K ℓ (typeSegs_le_streamSegs X K)] at hpoint
+    have hle : P.w y ≤ 0 := by
+      simpa [P, Q, hQ] using hpoint
+    exact le_antisymm hle (P.nonneg y)
+  have hcoord (h : Fin (colLen5 (X.p.s n) ℓ)) :
+      Q.w (H.2 ℓ h) * ratio5
+        ((X.priorRep H.1 ℓ K.1.1 (X.trueBlock H.1 K)).w (H.2 ℓ h))
+        (Q.w (H.2 ℓ h)) = P.w (H.2 ℓ h) := by
+    have h := posterior_density_recompose5 P Q hsupport (H.2 ℓ h)
+    rw [priorRep_trueBlock_eq_prior X H K ℓ (typeSegs_le_streamSegs X K)]
+    exact h
+  unfold Setup5.colLik
+  calc
+    (∏ h : Fin (colLen5 (X.p.s n) ℓ), P.w (H.2 ℓ h)) =
+        ∏ h : Fin (colLen5 (X.p.s n) ℓ),
+          Q.w (H.2 ℓ h) * ratio5
+            ((X.priorRep H.1 ℓ K.1.1 (X.trueBlock H.1 K)).w (H.2 ℓ h))
+            (Q.w (H.2 ℓ h)) := by
+      apply Finset.prod_congr rfl
+      intro h hh
+      exact (hcoord h).symm
+    _ = (∏ h : Fin (colLen5 (X.p.s n) ℓ), Q.w (H.2 ℓ h)) *
+        (∏ h : Fin (colLen5 (X.p.s n) ℓ),
+          ratio5 ((X.priorRep H.1 ℓ K.1.1 (X.trueBlock H.1 K)).w (H.2 ℓ h))
+            (Q.w (H.2 ℓ h))) := by
+      rw [Finset.prod_mul_distrib]
+
 end HypercubeRamsey.Lane_q_s05_hist1b

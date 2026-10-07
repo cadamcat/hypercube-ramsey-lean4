@@ -404,9 +404,88 @@ their heights take at most two values and the crowd bound at one site per level 
 internal IDs; the realized list is a candidate list all of whose IDs are eligible where they are used, so it is
 not bad (otherwise it meets a family list, whose IDs are forbidden there); legality follows from
 `LegalOfCounts`. -/
+private theorem height_selectionAt_spec (p : HDParams) (Sites : p.Sites)
+    (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (R : ℕ)
+    (v : CubeVertex p.d) (hheight : p.height Sites P A E R v < p.H)
+    (hbad : ¬ p.Bad P A E v ⟨p.height Sites P A E R v, by omega⟩) :
+    ∃ ℓ, p.selectionAt Sites P A E τ R v = some ℓ ∧
+      ℓ ∈ E v ⟨p.height Sites P A E R v, by omega⟩ ∧ A ℓ = true := by
+  classical
+  let j := p.height Sites P A E R v
+  let j' : Fin (p.H + 1) := ⟨j, by omega⟩
+  let active := (E v j').filter fun ℓ => A ℓ = true
+  have hActive : active.Nonempty := by
+    by_contra hne
+    have hall : ∀ ℓ ∈ E v j', A ℓ = false := by
+      intro ℓ hℓ
+      cases hA : A ℓ with
+      | false => rfl
+      | true => exact False.elim (hne ⟨ℓ, Finset.mem_filter.mpr ⟨hℓ, hA⟩⟩)
+    exact hbad (Or.inl hall)
+  let priorities := active.image (fun ℓ => p.priority τ (v, j') ℓ)
+  have hPriorities : priorities.Nonempty := by
+    obtain ⟨ℓ, hℓ⟩ := hActive
+    exact ⟨p.priority τ (v, j') ℓ, Finset.mem_image.mpr ⟨ℓ, hℓ, rfl⟩⟩
+  let q := priorities.min' hPriorities
+  have hq : q ∈ priorities := Finset.min'_mem priorities hPriorities
+  have hmem : ∃ ℓ, ℓ ∈ active ∧ p.priority τ (v, j') ℓ = q := by
+    simpa [priorities, q] using Finset.mem_image.mp hq
+  let chosen := Classical.choose hmem
+  have hchosen : chosen ∈ active ∧ p.priority τ (v, j') chosen = q := Classical.choose_spec hmem
+  refine ⟨chosen, ?_, ?_, ?_⟩
+  · simp [HDParams.selectionAt, j, j', active, priorities, q, hheight, hbad,
+      hPriorities, hq, hmem, chosen]
+  · exact (Finset.mem_filter.mp hchosen.1).1
+  · exact (Finset.mem_filter.mp hchosen.1).2
+
+private theorem sel_witness_of_good_heights (D : Ctx η₀ β p h) (q : D.Pre)
+    (hGood : D.GoodH q.1.1 q.1.2 q.2.1.1 q.2.1.2) (e : D.CellT) :
+    ∃ ℓ, D.sel q e = some ℓ ∧
+      ℓ ∈ D.elig q.1.1 q.1.2 q.2.1.1 e.1 e.2
+        ⟨(hdP η₀ D.n).height Finset.univ (q.1.2 e.1) (q.2.1.2 e.1)
+          (D.elig q.1.1 q.1.2 q.2.1.1 e.1) (hdP η₀ D.n).Rlong e.2,
+          by have hh := ((hGood e.1) e.2 (Finset.mem_univ _)).1; omega⟩ ∧
+      q.2.1.2 e.1 ℓ = true := by
+  let p := hdP η₀ D.n
+  have hGH := hGood e.1
+  obtain ⟨hheight, hnotBadN, _⟩ := hGH e.2 (Finset.mem_univ _)
+  let j := p.height Finset.univ (q.1.2 e.1) (q.2.1.2 e.1)
+    (D.elig q.1.1 q.1.2 q.2.1.1 e.1) p.Rlong e.2
+  have hj : j < p.H := by simpa [p, j] using hheight
+  have hnotBadN' : ¬ p.BadN (q.1.2 e.1) (q.2.1.2 e.1)
+      (D.elig q.1.1 q.1.2 q.2.1.1 e.1) e.2 j := by
+    simpa [p, j] using hnotBadN
+  have hbad : ¬ p.Bad (q.1.2 e.1) (q.2.1.2 e.1)
+      (D.elig q.1.1 q.1.2 q.2.1.1 e.1) e.2 ⟨j, by omega⟩ := by
+    intro hb
+    apply hnotBadN'
+    exact ⟨by omega, by simpa [p, j] using hb⟩
+  obtain ⟨ℓ, hselection, hEligible, hActive⟩ := height_selectionAt_spec p Finset.univ
+    (q.1.2 e.1) (q.2.1.2 e.1) (D.elig q.1.1 q.1.2 q.2.1.1 e.1) (q.2.2 e.1)
+    p.Rlong e.2 hheight hbad
+  refine ⟨ℓ, ?_, ?_, hActive⟩
+  · simpa [Ctx.sel, HDParams.selection, p] using hselection
+  · simpa [p, j] using hEligible
+
 theorem sel_conseq (hη₀ : 0 < η₀) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.LegalOfCounts → D.SelConseq := by
-  sorry
+  refine ⟨0, ?_⟩
+  intro D _hn _hGF hLegal q hSelOK
+  rcases hSelOK with ⟨hPos, hFew, hGood⟩
+  refine ⟨?_, ?_⟩
+  · intro e
+    obtain ⟨ℓ, hsel, _, _⟩ := sel_witness_of_good_heights η₀ β p h D q hGood e
+    simp [hsel]
+  · intro c
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · sorry
+    · intro e he j
+      exact (hPos e.1 e.2 j).2
+    · sorry
+    · change (hdP η₀ D.n).Legal (q.1.2 c.1) (D.elig q.1.1 q.1.2 q.2.1.1 c.1)
+        ((hdP η₀ D.n).domBall Finset.univ c.2 (hdP η₀ D.n).Rlong)
+      intro v hv j
+      exact hLegal q.1.1 q.1.2 q.2.1.1 hPos hFew c.1 v j
 
 /-- L8.1f(vi) (08:216–225): the selection at `(t, b)` consults eligibility in slice `t` at sites within `4H`
 (the long rule), whose forbidden IDs come from the families at incident odd cells (keys within one of `t`), whose

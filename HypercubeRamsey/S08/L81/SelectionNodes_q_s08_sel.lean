@@ -200,6 +200,100 @@ theorem family_candidate (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
   rcases List.mem_filter.mp hfilter with ⟨_, hdec⟩
   exact (of_decide_eq_true hdec).1
 
+private noncomputable def greedyIdUnion {α β : Type*} (ids : α → Finset β) (acc : List α) : Finset β :=
+  acc.foldr (fun a s => ids a ∪ s) ∅
+
+private theorem mem_greedyIdUnion_iff {α β : Type*}
+    (ids : α → Finset β) (acc : List α) (x : β) :
+    x ∈ greedyIdUnion ids acc ↔ ∃ a ∈ acc, x ∈ ids a := by
+  classical
+  induction acc with
+  | nil => simp [greedyIdUnion]
+  | cons a acc ih =>
+      simp only [greedyIdUnion, List.foldr_cons, Finset.mem_union]
+      change (x ∈ ids a ∨ x ∈ greedyIdUnion ids acc) ↔ _
+      rw [ih]
+      simp [List.mem_cons]
+
+private noncomputable def greedyStep {α β : Type*} (ids : α → Finset β) (acc : List α) (a : α) : List α :=
+  if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc
+
+private theorem mem_greedyStep_of_mem {α β : Type*} (ids : α → Finset β)
+    (acc : List α) (a x : α) (hx : x ∈ acc) : x ∈ greedyStep ids acc a := by
+  classical
+  by_cases h : Disjoint (ids a) (greedyIdUnion ids acc)
+  · have h' : Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) := by
+      simpa [greedyIdUnion] using h
+    simp [greedyStep, h', hx]
+  · have h' : ¬ Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) := by
+      simpa [greedyIdUnion] using h
+    simp [greedyStep, h', hx]
+
+private theorem mem_foldl_greedyStep_of_mem {α β : Type*} (ids : α → Finset β) :
+    ∀ (l : List α) (acc : List α) (x : α), x ∈ acc →
+      x ∈ l.foldl (greedyStep ids) acc := by
+  classical
+  intro l
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+      intro acc x hx
+      rw [List.foldl_cons]
+      exact ih (greedyStep ids acc a) x (mem_greedyStep_of_mem ids acc a x hx)
+
+private theorem greedy_collision_of_failed_step {α β : Type*}
+    (ids : α → Finset β) (acc : List α) (a : α)
+    (h : ¬ Disjoint (ids a) (greedyIdUnion ids acc)) :
+    ∃ b ∈ acc, ¬ Disjoint (ids a) (ids b) := by
+  classical
+  obtain ⟨x, hxA, hxUnion⟩ := Finset.not_disjoint_iff.mp h
+  obtain ⟨b, hb, hxb⟩ := (mem_greedyIdUnion_iff ids acc x).mp hxUnion
+  exact ⟨b, hb, Finset.not_disjoint_iff.mpr ⟨x, hxA, hxb⟩⟩
+
+private theorem foldl_greedyStep_source_hit_aux {α β : Type*}
+    (ids : α → Finset β) :
+    ∀ (l : List α) (acc : List α) (a : α), a ∈ l →
+      a ∈ l.foldl (greedyStep ids) acc ∨
+        ∃ b ∈ l.foldl (greedyStep ids) acc, ¬ Disjoint (ids a) (ids b) := by
+  classical
+  intro l
+  induction l with
+  | nil => simp
+  | cons x xs ih =>
+      intro acc a ha
+      rcases List.mem_cons.mp ha with hxa | haxs
+      · subst a
+        by_cases hdis : Disjoint (ids x) (greedyIdUnion ids acc)
+        · left
+          have hdis' : Disjoint (ids x) (acc.foldr (fun L' s => ids L' ∪ s) ∅) := by
+            simpa [greedyIdUnion] using hdis
+          have hx : x ∈ greedyStep ids acc x := by
+            simp [greedyStep, hdis']
+          exact mem_foldl_greedyStep_of_mem ids xs (greedyStep ids acc x) x hx
+        · right
+          obtain ⟨b, hb, hhit⟩ := greedy_collision_of_failed_step ids acc x hdis
+          exact ⟨b, mem_foldl_greedyStep_of_mem ids xs (greedyStep ids acc x) b
+            (mem_greedyStep_of_mem ids acc x b hb), hhit⟩
+      · simpa only [List.foldl_cons] using ih (greedyStep ids acc x) a haxs
+
+theorem greedy_mem_or_overlap {α β : Type*}
+    (ids : α → Finset β) (l : List α) {a : α} (ha : a ∈ l) :
+    a ∈ greedy ids l ∨ ∃ b ∈ greedy ids l, ¬ Disjoint (ids a) (ids b) := by
+  classical
+  have hEq : greedy ids l = l.foldl (greedyStep ids) [] := by
+    unfold greedy
+    change l.foldl (fun acc a =>
+      if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc) [] =
+      l.foldl (greedyStep ids) []
+    have hs : (fun acc a =>
+        if Disjoint (ids a) (acc.foldr (fun L' s => ids L' ∪ s) ∅) then acc ++ [a] else acc) =
+        greedyStep ids := by
+      funext acc a
+      rfl
+    rw [hs]
+  rw [hEq]
+  exact foldl_greedyStep_source_hit_aux ids l [] a ha
+
 theorem listIds_card_bound (D : Ctx η₀ β p h) (g : D.KeyT) (L : D.LList g) :
     (D.listIds g L).card ≤ L.1.card + (crossKeys g).card := by
   classical

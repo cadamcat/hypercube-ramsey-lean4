@@ -625,18 +625,21 @@ private def scaleBad9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
 
 private def scaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
-    (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) : Prop :=
-  ∃ start endpoint : HeightState9 P hc n, ∃ rest : List (HeightState9 P hc n),
-    HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: rest) start ∧
-    (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 root ≤ 4 * R + 2) ∧
-    (∀ x ∈ endpoint :: rest, Nat.dist x.2.val start.2.val ≤ 8 * R) ∧
-    R ≤ max (Nat.dist endpoint.2.val start.2.val)
-      ((_root_.hammingDist endpoint.1 root + 1) / 2) ∧
-    (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
+    (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n)
+    (startLevel : Fin (hc.levels n + 1)) : Prop :=
+  ∃ startSite : CubeVertex n, ∃ endpoint : HeightState9 P hc n,
+    ∃ rest : List (HeightState9 P hc n),
+      HeightPath9 (heightStep9 (scaleBad9 C t s Pp A))
+        (endpoint :: rest) (startSite, startLevel) ∧
+      (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 root ≤ 16 * R) ∧
+      (∀ x ∈ endpoint :: rest, Nat.dist x.2.val startLevel.val ≤ 8 * R) ∧
+      R ≤ max (Nat.dist endpoint.2.val startLevel.val)
+        ((_root_.hammingDist endpoint.1 root + 1) / 2) ∧
+      (startLevel.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
 
 private noncomputable def scaleRootSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root : CubeVertex n) (R : ℕ) : Finset (Pos9 P hc n) :=
-  consulted9 (P := P) (hc := hc) (n := n) root (2 * R + 1)
+  consulted9 (P := P) (hc := hc) (n := n) root (8 * R + 1)
 
 private noncomputable def scaleSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (start : HeightState9 P hc n) (R : ℕ) : Finset (Pos9 P hc n) :=

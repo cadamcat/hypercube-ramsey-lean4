@@ -211,7 +211,35 @@ private theorem E_mono {A : Type*} [Fintype A] (P : FinLaw A) {f g : A → ℝ}
   intro a _
   exact mul_le_mul_of_nonneg_left (hfg a) (P.nonneg a)
 
+private theorem E_mono_support {A : Type*} [Fintype A] (P : FinLaw A) {f g : A → ℝ}
+    (hfg : ∀ a, P.w a ≠ 0 → f a ≤ g a) : P.E f ≤ P.E g := by
+  apply Finset.sum_le_sum
+  intro a _
+  by_cases ha : P.w a = 0
+  · simp [ha]
+  · exact mul_le_mul_of_nonneg_left (hfg a ha) (P.nonneg a)
+
 variable {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
+
+/-- A sketch of positive iid weight lies in the initial-prior support on the gate. -/
+private theorem supported_rowSketch (D : LateData hPT)
+    (hsmall : SmallErrors κ T k PT D.geom (Real.log 2 / 1000))
+    (j : Fin D.geom.r) (b : Pos T k) (h : D.encoding.base.History j.castSucc)
+    (hg : D.gate j b h) (hb : b ∈ D.encoding.base.classes j)
+    (s : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k))
+    (hs : (rowSketchLaw D j b h).w s ≠ 0) (side : D.encoding.base.RowOut b)
+    (hside : side.2.1 = s) : InitialSketchSupport D j h side := by
+  intro a t
+  rw [hside]
+  have hx : (D.currentPrior j (flipPos b a) h).w (s a t) ≠ 0 := by
+    have hp : (∏ a, ∏ t, (D.currentPrior j (flipPos b a) h).w (s a t)) ≠ 0 := hs
+    exact (Finset.prod_ne_zero_iff.mp (Finset.prod_ne_zero_iff.mp hp a (Finset.mem_univ a)))
+      t (Finset.mem_univ t)
+  obtain ⟨hv, hm⟩ := Lane_sol_s18_n1_caps.gated_current_mass D hsmall j b h hg hb a
+  intro hz
+  apply hx
+  rw [LateData.currentPrior, Lane_sol_s18_n1_caps.priorAt_weight D h _ hv hm]
+  simp [Lane_sol_s18_n1_caps.rawWeight, hz]
 
 private theorem labelWeight_side_congr (D : LateData hPT) (j : Fin D.geom.r)
     {b : Pos T k} {side side' : D.encoding.base.RowOut b}
@@ -521,7 +549,8 @@ theorem coordinate_trueHit_tail (D : LateData hPT) (hT : TransitionData D) (K27 
   rw [pr_eq_E, refK_integral D hT]
   have hpoint (mask : D.encoding.base.AllowedMask b.1)
       (s : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k))
-      (y : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1}) :
+      (y : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1})
+      (hs : (rowSketchLaw D j b.1 h).w s ≠ 0) :
       D.labelWeight j (rowSide D j b.1 b.2 mask s) Finset.univ y.1 *
         (if D.R1 j (mask, s, y) ∧ D.R2 j h (mask, s, y) ∧
           colDeg (T.S.E k) PT.tiling.c (D.currentPrior j (flipPos b.1 a) h) y.1 <
@@ -535,7 +564,8 @@ theorem coordinate_trueHit_tail (D : LateData hPT) (hT : TransitionData D) (K27 
     by_cases hgood : D.R1 j (mask, s, y) ∧ D.R2 j h (mask, s, y) ∧
       colDeg (T.S.E k) PT.tiling.c (D.currentPrior j (flipPos b.1 a) h) y.1 <
         1 / 2 - 3 * D.error (flipPos b.1 a) j
-    · obtain ⟨hprefix, hdelete, _⟩ := hB j b.1 h (mask, s, y) b.2 hg hgood.1 hgood.2.1
+    · obtain ⟨hprefix, hdelete, _⟩ := hB j b.1 h (mask, s, y) b.2 hg
+        (supported_rowSketch D hsmall j b.1 h hg b.2 s hs _ rfl) hgood.1 hgood.2.1
       obtain ⟨order, ho, hfull⟩ := full_prefix D b.1
       have hbroad := hprefix order ho order.length le_rfl
       rw [hfull] at hbroad
@@ -570,13 +600,13 @@ theorem coordinate_trueHit_tail (D : LateData hPT) (hT : TransitionData D) (K27 
               then 1 else 0))) := by
       apply E_mono
       intro mask
-      apply E_mono
-      intro s
+      apply E_mono_support
+      intro s hs
       unfold FinLaw.E
       rw [Finset.mul_sum]
       apply Finset.sum_le_sum
       intro y _
-      convert hpoint mask s y using 1 <;> congr 1
+      convert hpoint mask s y hs using 1 <;> congr 1
       dsimp only [LateProcessBase.rowLabel]
       split_ifs <;> rfl
     _ ≤ (D.encoding.kernels.maskProfile b.1).E (fun _ =>

@@ -291,6 +291,7 @@ theorem cluster_role_term_cap {κ : CConsts} (hκ : κ.Admissible)
         sliceT κ (PT.tiling.P (H.geom.cellPatch C)).h) / (H.geom.nslot C : ℝ) := by
   sorry
 
+set_option maxHeartbeats 800000 in
 /-- D4. Per-role history mean at typical pools, through `low_profile` and
 `law_cap` (T16:268-273): `4 (B/L) * 11/M`.
 TeX 16:268–273; estimated proof: 350 lines. -/
@@ -309,7 +310,386 @@ theorem cluster_role_term_mean {κ : CConsts} (hκ : κ.Admissible)
     (R.history C).E (fun W =>
       ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y) ≤
       44 / ((H.geom.nslot C : ℝ) * (PT.tiling.P (H.geom.cellPatch C)).d) := by
-  sorry
+  classical
+  let i := H.geom.cellPatch C
+  let patch := PT.tiling.P i
+  let B : ℝ := Fintype.card (Bin PT.tiling i)
+  let L : ℝ := H.geom.nslot C
+  have hMnat : 0 < patch.M := by
+    rw [← patch.cardY]
+    exact_mod_cast Finset.card_pos.mpr
+      (Q.profiled_valid.tiling_valid.patch_nonempty i).2
+  have hMpos : 0 < (patch.M : ℝ) := by exact_mod_cast hMnat
+  have hbinSum := patch.bins.sum_card_parts
+  have hparts : (∑ b ∈ patch.bins.parts, b.card) = patch.bins.parts.card * patch.d := by
+    calc
+      _ = ∑ b ∈ patch.bins.parts, patch.d := by
+        apply Finset.sum_congr rfl
+        intro b hb
+        exact Q.profiled_valid.tiling_valid.bins_card i b hb
+      _ = _ := by simp
+  rw [hparts, patch.cardY] at hbinSum
+  have hbinNat : Fintype.card (Bin PT.tiling i) * patch.d = patch.M := by
+    change Fintype.card {b // b ∈ patch.bins.parts} * patch.d = patch.M
+    rw [Fintype.card_of_subtype patch.bins.parts (fun _ => Iff.rfl)]
+    exact hbinSum
+  have hBnat : 0 < Fintype.card (Bin PT.tiling i) := by
+    by_contra h
+    have hz : Fintype.card (Bin PT.tiling i) = 0 := Nat.eq_zero_of_not_pos h
+    rw [hz, zero_mul] at hbinNat
+    omega
+  have hdNat : 0 < patch.d := by
+    by_contra h
+    have hz : patch.d = 0 := Nat.eq_zero_of_not_pos h
+    rw [hz, Nat.mul_zero] at hbinNat
+    omega
+  have hBpos : 0 < B := by
+    dsimp [B]
+    exact_mod_cast hBnat
+  have hdpos : 0 < (patch.d : ℝ) := by exact_mod_cast hdNat
+  have hθ : 0 < κ.θstar := hκ.bucket.2.2.2.2
+  have hKcell : 0 < κ.Kcell :=
+    lt_of_lt_of_le (div_pos (by norm_num) hθ) hκ.Kcell_big
+  have hnpos : 0 < (T.S.n k : ℝ) := by
+    exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) Q.n_large
+  have hLnat : 0 < H.geom.nslot C := by
+    change 0 < H.data.cells.nslot C
+    rw [H.cell_partition.slot_count C]
+    apply Nat.ceil_pos.mpr
+    exact div_pos (mul_pos hKcell (Real.rpow_pos_of_pos hnpos _)) hdpos
+  have hLpos : 0 < L := by
+    dsimp [L]
+    exact_mod_cast hLnat
+  have hbinReal : B * (patch.d : ℝ) = patch.M := by
+    dsimp [B]
+    exact_mod_cast hbinNat
+  rcases hR with ⟨hMode, _hUniform, hSource⟩ | ⟨hNotCluster, _hSource⟩
+  · obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, _hPrior⟩ := hSource C
+    let words := R.cellWords C
+    let sz := words.symm ⟨r.1, r.2.1⟩
+    let s : R.Slice C := sz.1
+    let z := sz.2
+    have hback : words sz = ⟨r.1, r.2.1⟩ := words.apply_symm_apply _
+    have hval : (words (s, z)).1 = r.1 := by
+      simpa [s, z] using congrArg Subtype.val hback
+    have hodd : ¬ IsEvenRole (words (s, z)).1 := by
+      rw [hval]
+      exact r.2.2
+    have hrole : (⟨(words (s, z)).1, (words (s, z)).2, hodd⟩ : OddCellRole H.geom C) = r := by
+      apply Subtype.ext
+      exact hval
+    have hgroup : R.groupOf C r = groups (s, S.groupOf z) := by
+      have hh := hGroup s z hodd
+      rw [hrole] at hh
+      exact hh
+    let g := S.groupOf z
+    let P : FinLaw (∀ t, S.Val t) := S.recLaw PT.parameter
+    let good := Finset.univ.filter S.AllGood
+    have hgood : 0 < P.pr S.AllGood :=
+      Lane_sol_s16_prod1.solver_good_pos Q.profiled_valid hMode S hS
+    let condLaw : ∀ t : R.Slice C, FinLaw (R.Value C t) := fun t =>
+      FinLaw.cond (R.sliceLaw C t) (R.slicePass C t) (R.slice_pos C t)
+    have hSupported : ∀ W : R.Hist C, (R.history C).w W ≠ 0 →
+        ∀ t, W t ∈ R.slicePass C t ∧ (R.sliceLaw C t).w (W t) ≠ 0 := by
+      intro W hW t
+      have hw : (condLaw t).w (W t) ≠ 0 := by
+        exact Lane_sol_s16_prod1.pi_support condLaw W
+          (by simpa [CellRawData.history, condLaw] using hW) t
+      exact Lane_sol_s16_prod1.cond_support _ _ _ (W t) hw
+    have hqin (W : R.Hist C) (hW : (R.history C).w W ≠ 0) (b : Bin PT.tiling i) :
+        (R.qin C W (groups (s, g))).w b = S.qin (records s (W s)) g b := by
+      rw [R.qin_eq C W (groups (s, g)) b (hSupported W hW)]
+      simp_rw [hTrim W s g, hQ W s g]
+      by_cases hb : b ∈ S.pretrimBins (records s (W s)) g
+      · simp [SliceSolver.qin, hb]
+      · simp [SliceSolver.qin, hb]
+    let fRole : R.Hist C → ℝ := fun W =>
+      ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b *
+        (R.U C W (R.groupOf C r) b).w y
+    let fQin : R.Hist C → ℝ := fun W =>
+      ∑ b, (R.qin C W (R.groupOf C r)).w b *
+        (R.U C W (R.groupOf C r) b).w y
+    let fSlice : R.Value C s → ℝ := fun w =>
+      ∑ b, S.qin (records s w) g b * S.U g (records s w) b y
+    have hqinTerm (W : R.Hist C) (hW : (R.history C).w W ≠ 0) :
+        fQin W = fSlice (W s) := by
+      dsimp [fQin, fSlice]
+      rw [hgroup]
+      apply Finset.sum_congr rfl
+      intro b _
+      rw [hqin W hW b, hU W s g b y]
+    have hnormalizer (W : R.Hist C) (hW : (R.history C).w W ≠ 0) :
+        L / (2 * B) ≤
+          ∑ b ∈ Finset.univ.image pool, (K.qbar C W (groups (s, g))).w b := by
+      have hm := hmass W hW (groups (s, g))
+      have hfactor : (1 / 2 : ℝ) ≤ 1 - Real.rpow (T.S.n k : ℝ) (-4) := by
+        linarith [hn4]
+      have hLB : 0 ≤ L / B := div_nonneg hLpos.le hBpos.le
+      calc
+        L / (2 * B) = (1 / 2 : ℝ) * (L / B) := by ring
+        _ ≤ (1 - Real.rpow (T.S.n k : ℝ) (-4)) * (L / B) :=
+          mul_le_mul_of_nonneg_right hfactor hLB
+        _ ≤ _ := hm
+    have hqbar (W : R.Hist C) (hW : (R.history C).w W ≠ 0)
+        (b : Bin PT.tiling i) :
+        (K.qbar C W (groups (s, g))).w b ≤
+          2 * (R.qin C W (groups (s, g))).w b := by
+      have hret := Lane_sol_s16_prod1.permission_retained_half
+        (Perm.table C) (R.qin C W) (hPerm C W hW) (groups (s, g))
+      have hden : 0 < ∑ b' ∈ (Perm.table C).permitted (groups (s, g)),
+          (R.qin C W (groups (s, g))).w b' := by linarith
+      rw [K.qbar_eq C W (groups (s, g)) b hW]
+      by_cases hb : b ∈ (Perm.table C).permitted (groups (s, g))
+      · rw [if_pos hb]
+        calc
+          _ ≤ (R.qin C W (groups (s, g))).w b / (1 / 2 : ℝ) :=
+            div_le_div_of_nonneg_left ((R.qin C W (groups (s, g))).nonneg b)
+              (by norm_num) hret
+          _ = 2 * (R.qin C W (groups (s, g))).w b := by ring
+      · simpa [hb] using (R.qin C W (groups (s, g))).nonneg b
+    have hqtilde (W : R.Hist C) (hW : (R.history C).w W ≠ 0)
+        (b : Bin PT.tiling i) :
+        (K.qtilde C pool W (groups (s, g))).w b ≤
+          (2 * B / L) * (K.qbar C W (groups (s, g))).w b := by
+      have hZ := hnormalizer W hW
+      have hZpos : 0 < ∑ b' ∈ Finset.univ.image pool,
+          (K.qbar C W (groups (s, g))).w b' := by
+        exact lt_of_lt_of_le (div_pos hLpos (by positivity)) hZ
+      rw [K.qtilde_eq C pool W (groups (s, g)) b hW (ne_of_gt hZpos)]
+      by_cases hb : b ∈ Finset.univ.image pool
+      · rw [if_pos hb]
+        calc
+          _ ≤ (K.qbar C W (groups (s, g))).w b / (L / (2 * B)) :=
+            div_le_div_of_nonneg_left
+              ((K.qbar C W (groups (s, g))).nonneg b) (by positivity) hZ
+          _ = (2 * B / L) * (K.qbar C W (groups (s, g))).w b := by
+            field_simp [ne_of_gt hLpos] <;> ring
+      · simp only [if_neg hb, zero_div]
+        exact mul_nonneg (div_nonneg (mul_nonneg (by norm_num) hBpos.le) hLpos.le)
+          ((K.qbar C W (groups (s, g))).nonneg b)
+    have hpoint (W : R.Hist C) (hW : (R.history C).w W ≠ 0) :
+        fRole W ≤ (4 * B / L) * fQin W := by
+      dsimp [fRole, fQin]
+      rw [hgroup]
+      have hsum :
+          (∑ b, (K.qbar C W (groups (s, g))).w b *
+            (R.U C W (groups (s, g)) b).w y) ≤
+          2 * ∑ b, (R.qin C W (groups (s, g))).w b *
+            (R.U C W (groups (s, g)) b).w y := by
+        calc
+          _ ≤ ∑ b, 2 * ((R.qin C W (groups (s, g))).w b *
+              (R.U C W (groups (s, g)) b).w y) := by
+            apply Finset.sum_le_sum
+            intro b _
+            calc
+              _ ≤ (2 * (R.qin C W (groups (s, g))).w b) *
+                  (R.U C W (groups (s, g)) b).w y :=
+                mul_le_mul_of_nonneg_right (hqbar W hW b)
+                  ((R.U C W (groups (s, g)) b).nonneg y)
+              _ = _ := by ring
+          _ = _ := by rw [← Finset.mul_sum]
+      calc
+        _ ≤ (2 * B / L) *
+            ∑ b, (K.qbar C W (groups (s, g))).w b *
+              (R.U C W (groups (s, g)) b).w y := by
+          calc
+            _ ≤ ∑ b, ((2 * B / L) * (K.qbar C W (groups (s, g))).w b) *
+                (R.U C W (groups (s, g)) b).w y := by
+              apply Finset.sum_le_sum
+              intro b _
+              exact mul_le_mul_of_nonneg_right (hqtilde W hW b)
+                ((R.U C W (groups (s, g)) b).nonneg y)
+            _ = _ := by
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro b _
+              ring
+        _ ≤ (2 * B / L) *
+            (2 * ∑ b, (R.qin C W (groups (s, g))).w b *
+              (R.U C W (groups (s, g)) b).w y) :=
+          mul_le_mul_of_nonneg_left hsum (by positivity)
+        _ = (4 * B / L) *
+            ∑ b, (R.qin C W (groups (s, g))).w b *
+              (R.U C W (groups (s, g)) b).w y := by ring
+    have hEbound : (R.history C).E fRole ≤ (4 * B / L) * (R.history C).E fQin := by
+      unfold FinLaw.E
+      calc
+        _ ≤ ∑ W, (R.history C).w W * ((4 * B / L) * fQin W) := by
+          apply Finset.sum_le_sum
+          intro W _
+          by_cases hW : (R.history C).w W = 0
+          · simp [hW]
+          · exact mul_le_mul_of_nonneg_left (hpoint W hW) ((R.history C).nonneg W)
+        _ = _ := by
+          calc
+            _ = ∑ W, (4 * B / L) * ((R.history C).w W * fQin W) := by
+              apply Finset.sum_congr rfl
+              intro W _
+              ring
+            _ = _ := by rw [Finset.mul_sum]
+    have hmeanQin : (R.history C).E fQin = (PT.π i).w y := by
+      let law : ∀ t : R.Slice C, FinLaw (R.Value C t) := condLaw
+      have hreplace : (FinLaw.pi law).E fQin =
+          (FinLaw.pi law).E (fun W => fSlice (W s)) := by
+        unfold FinLaw.E
+        apply Finset.sum_congr rfl
+        intro W _
+        by_cases hW : (FinLaw.pi law).w W = 0
+        · simp [hW]
+        · have hW' : (R.history C).w W ≠ 0 := by
+            simpa [CellRawData.history, law, condLaw] using hW
+          rw [hqinTerm W hW']
+      have hcoord : (FinLaw.pi law).E (fun W => fSlice (W s)) =
+          (law s).E fSlice := by
+        let S : Finset (R.Slice C) := {s}
+        let st : {t : R.Slice C // t ∈ S} := ⟨s, by simp [S]⟩
+        letI inst : Unique {t : R.Slice C // t ∈ S} := {
+          default := st
+          uniq := by
+            intro t
+            apply Subtype.ext
+            exact Finset.mem_singleton.mp (by simpa [S] using t.2) }
+        let Qfw : ∀ t : R.Slice C, FinProb (R.Value C t) := fun t =>
+          HypercubeRamsey.S16.finLawToFramework (law t)
+        have hm := FinProb.pi_marginal_expect Qfw S (fun a => fSlice (a default))
+        let e : (∀ t : {t : R.Slice C // t ∈ S}, R.Value C t.1) ≃ R.Value C s :=
+          Equiv.piUnique (fun t : {t : R.Slice C // t ∈ S} => R.Value C t.1)
+        have hprod (a : ∀ t : {t : R.Slice C // t ∈ S}, R.Value C t.1) :
+            (∏ t, (Qfw t.1).w (a t)) = (Qfw s).w (a default) := by
+          rw [Fintype.prod_unique]
+          simp [Qfw, inst, st, S]
+        have hsingle :
+            (FinProb.pi (fun t : {t : R.Slice C // t ∈ S} => Qfw t.1)).expect
+                (fun a => fSlice (a default)) = (Qfw s).expect fSlice := by
+          calc
+            _ = ∑ a, (Qfw s).w (e a) * fSlice (e a) := by
+              unfold FinProb.expect
+              apply Finset.sum_congr rfl
+              intro a _
+              change (∏ t, (Qfw t.1).w (a t)) * fSlice (a default) = _
+              rw [hprod a]
+              change (Qfw s).w (e a) * fSlice (e a) = _
+              have he : e a = a default := rfl
+              rw [he]
+            _ = ∑ w, (Qfw s).w w * fSlice w :=
+              Equiv.sum_comp e (fun w => (Qfw s).w w * fSlice w)
+            _ = _ := rfl
+        rw [hsingle] at hm
+        simpa [FinProb.expect, FinProb.pi, FinLaw.E, FinLaw.pi, Qfw, inst, st, S,
+          HypercubeRamsey.S16.finLawToFramework] using hm
+      have hweight (w : R.Value C s) : (R.sliceLaw C s).w w = P.w (records s w) := by
+        rw [hLaw s]
+        change (FinLaw.map (S.recLaw PT.parameter) (records s).symm).w w =
+          (S.recLaw PT.parameter).w (records s w)
+        simp [FinLaw.map, Equiv.symm_apply_eq, P]
+      have hgoodDen : (∑ W ∈ good, P.w W) = P.pr S.AllGood := by
+        simpa [good, FinLaw.pr] using (Finset.sum_ite_mem_eq good P.w).symm
+      have hgoodMass : 0 < ∑ W ∈ good, P.w W := by
+        rw [hgoodDen]
+        exact hgood
+      have hden : ∑ w ∈ R.slicePass C s, (R.sliceLaw C s).w w = P.pr S.AllGood := by
+        calc
+          _ = ∑ w ∈ R.slicePass C s, P.w (records s w) := by
+            apply Finset.sum_congr rfl
+            intro w _
+            exact hweight w
+          _ = ∑ w, if w ∈ R.slicePass C s then P.w (records s w) else 0 := by
+            simp [Finset.sum_ite_mem, Finset.univ_inter]
+          _ = ∑ W, if (records s).symm W ∈ R.slicePass C s then P.w W else 0 := by
+            simpa [Equiv.apply_symm_apply] using
+              (Equiv.sum_comp (records s) (fun W =>
+                if (records s).symm W ∈ R.slicePass C s then P.w W else 0))
+          _ = P.pr S.AllGood := by
+            calc
+              _ = ∑ W, if S.AllGood W then P.w W else 0 := by
+                apply Finset.sum_congr rfl
+                intro W _
+                have hp : (records s).symm W ∈ R.slicePass C s ↔ S.AllGood W := by
+                  simpa using hPass s ((records s).symm W)
+                by_cases hg : S.AllGood W
+                · simp [hp.mpr hg, hg]
+                · have hn : (records s).symm W ∉ R.slicePass C s := by
+                    intro h
+                    exact hg (hp.mp h)
+                  simp [hn, hg]
+              _ = ∑ W ∈ good, P.w W := by
+                simpa [good] using (Finset.sum_ite_mem_eq good P.w)
+              _ = _ := hgoodDen
+      have hcondE : (law s).E fSlice =
+          (FinLaw.cond P good hgoodMass).E (fun W => fSlice ((records s).symm W)) := by
+        have hcondWeight (w : R.Value C s) : (law s).w w =
+            (FinLaw.cond P good hgoodMass).w (records s w) := by
+          simp only [law, condLaw, FinLaw.cond]
+          rw [hweight w, hden, hgoodDen]
+          have hp := hPass s w
+          simp only [good, Finset.mem_filter, Finset.mem_univ, true_and]
+          by_cases hg : S.AllGood (records s w)
+          · simp [hp.mpr hg, hg]
+          · have hn : w ∉ R.slicePass C s := fun hw => hg (hp.mp hw)
+            simp [hn, hg]
+        calc
+          _ = ∑ w, (FinLaw.cond P good hgoodMass).w (records s w) * fSlice w := by
+            unfold FinLaw.E
+            apply Finset.sum_congr rfl
+            intro w _
+            rw [hcondWeight w]
+          _ = _ := by
+            unfold FinLaw.E
+            simpa [Equiv.apply_symm_apply] using
+              (Equiv.sum_comp (records s) (fun W =>
+                (FinLaw.cond P good hgoodMass).w W * fSlice ((records s).symm W)))
+      have hlow : (FinLaw.cond P good hgoodMass).E
+          (fun W => fSlice ((records s).symm W)) = S.lowOut PT.parameter g y := by
+        have hnum :
+            (∑ W, (if S.AllGood W then P.w W else 0) *
+              fSlice ((records s).symm W)) =
+            ∑ W, P.w W * (if S.AllGood W then
+              ∑ b, S.qin W g b * S.U g W b y else 0) := by
+          apply Finset.sum_congr rfl
+          intro W _
+          by_cases hg : S.AllGood W
+          · simp [hg, fSlice, Equiv.apply_symm_apply]
+          · simp [hg]
+        have hnumS :
+            (∑ W, (if S.AllGood W then (S.recLaw PT.parameter).w W else 0) *
+              fSlice ((records s).symm W)) =
+            ∑ W, (S.recLaw PT.parameter).w W * (if S.AllGood W then
+              ∑ b, S.qin W g b * S.U g W b y else 0) := by
+          simpa [P] using hnum
+        have hgoodDenS : (∑ W ∈ good, (S.recLaw PT.parameter).w W) =
+            (S.recLaw PT.parameter).pr S.AllGood := by
+          simpa [P] using hgoodDen
+        dsimp only [FinLaw.E, FinLaw.cond, SliceSolver.lowOut, P]
+        simp only [good, Finset.mem_filter, Finset.mem_univ, true_and]
+        calc
+          _ = ∑ W, ((if S.AllGood W then (S.recLaw PT.parameter).w W else 0) *
+              fSlice ((records s).symm W)) /
+              (∑ W' ∈ good, (S.recLaw PT.parameter).w W') := by
+            apply Finset.sum_congr rfl
+            intro W _
+            simp only [good, Finset.mem_filter, Finset.mem_univ, true_and]
+            ring
+          _ = (∑ W, (if S.AllGood W then (S.recLaw PT.parameter).w W else 0) *
+              fSlice ((records s).symm W)) /
+              (∑ W' ∈ good, (S.recLaw PT.parameter).w W') := by
+            rw [← Finset.sum_div]
+          _ = _ := by rw [hgoodDenS, hnumS]
+      change (FinLaw.pi law).E fQin = (PT.π i).w y
+      calc
+        _ = (law s).E fSlice := hreplace.trans hcoord
+        _ = S.lowOut PT.parameter g y := hcondE.trans hlow
+        _ = (PT.π i).w y := (Q.profiled_valid.low_profile hMode i S hS g y).symm
+    have hcap := Q.profiled_valid.law_cap i y
+    calc
+      _ ≤ (4 * B / L) * (R.history C).E fQin := hEbound
+      _ = (4 * B / L) * (PT.π i).w y := by rw [hmeanQin]
+      _ ≤ (4 * B / L) * (11 / (patch.M : ℝ)) :=
+        mul_le_mul_of_nonneg_left hcap (by positivity)
+      _ = 44 / (L * (patch.d : ℝ)) := by
+        rw [← hbinReal]
+        field_simp [ne_of_gt hLpos, ne_of_gt hBpos, ne_of_gt hdpos]
+        ring
+  · exact False.elim (hNotCluster hc)
 
 /-- D5. Numerical room of the gate variance budget. Here `words = 2^h`,
 `A = exp(2kT)` and `slices * words` is the cell size.

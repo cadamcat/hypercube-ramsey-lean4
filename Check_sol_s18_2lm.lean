@@ -1,0 +1,8 @@
+import HypercubeRamsey.S18.Nodes_sol_s18_2lm
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.bad_constant_protocol
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.broad_degree_exception
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.stopped_change_measure
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.stopFacts_tilted_deviation_from_raw
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.tilted_bound_of_raw
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.barrier_slack_eventually
+#print axioms HypercubeRamsey.S18.Lane_sol_s18_2lm.stopped_linear_term_zero

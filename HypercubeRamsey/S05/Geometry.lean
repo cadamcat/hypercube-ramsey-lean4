@@ -208,8 +208,14 @@ theorem L5_1e_cover {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) :
 
 /-! ### D5.5: states and the one-hot embedding (05:291–313) -/
 
-/-- The state quotient (05:291–313).  Roles in one state share key, signs, severity, parity, even type and
-residual bits; the one-hot embedding is injective, reproduces the residual bits, has dimension
+/-- The outer representative of a fine count: merge distances `5.5` and `6.5` on the same side
+of mid-weight (05:291–303). -/
+def mergedFineCount5 (L q : ℕ) : ℕ :=
+  if Nat.dist (2 * q) L = 11 then (if 2 * q < L then q - 1 else q + 1) else q
+
+/-- The state quotient (05:291–313). Equal residual bits, coarse counts, merged fine counts and severity
+determine a state. Roles in one state share key, signs, severity, parity and even type;
+the one-hot embedding is injective, reproduces the residual bits, has dimension
 `n + O(√n)`, and two even states adjacent to one odd state are at ambient distance at most `8`. -/
 structure CubeStates5 {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) where
   Site : Type
@@ -226,6 +232,12 @@ structure CubeStates5 {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) where
     g.key x = g.key y ∧ g.sign x = g.sign y ∧ g.severity x = g.severity y ∧
       (IsEvenRole x ↔ IsEvenRole y) ∧ g.evenType J x = g.evenType J y ∧
         g.optionalKey J x = g.optionalKey J y ∧ g.roleKey J x = g.roleKey J y
+  data_determine_state : ∀ x y,
+    (∀ a ∈ g.residual, x a = y a) →
+    (∀ i, g.coarseCount x i = g.coarseCount y i) →
+    (∀ i, mergedFineCount5 g.fineLength (g.fineCount x i) =
+      mergedFineCount5 g.fineLength (g.fineCount y i)) →
+    g.severity x = g.severity y → stateOf x = stateOf y
   neighbors : Site → Finset Site
   mem_neighbors : ∀ s t, t ∈ neighbors s ↔
     ∃ x y, stateOf x = s ∧ stateOf y = t ∧ (cube n).Adj x y

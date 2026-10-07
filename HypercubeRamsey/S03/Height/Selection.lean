@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Height.Scale
+import HypercubeRamsey.S03.Height.Selection_p_height_main
 import OAI.Combinatorics.Ramsey.Hypercube
 
 /-!

@@ -963,12 +963,15 @@ private theorem expect_prod_left {A B : Type*} [Fintype A] [Fintype B]
   calc
     (∑ a, ∑ b, P.w a * Q.w b * f a) =
         ∑ a, (P.w a * f a) * ∑ b, Q.w b := by
-      apply Fintype.sum_congr
-      intro a
-      rw [Finset.mul_sum]
-      apply Finset.sum_congr
-      intro b
-      ring
+      apply Finset.sum_congr rfl
+      intro a ha
+      calc
+        (∑ b, P.w a * Q.w b * f a) =
+            ∑ b, (P.w a * f a) * Q.w b := by
+              apply Finset.sum_congr rfl
+              intro b hb
+              ring
+        _ = (P.w a * f a) * ∑ b, Q.w b := by rw [Finset.mul_sum]
     _ = ∑ a, P.w a * f a := by simp [Q.sum_eq_one]
 
 theorem preLaw_expect_pos (D : Ctx η₀ β p h) (f : D.Pos → ℝ) :
@@ -981,10 +984,44 @@ theorem preLaw_expect_pos (D : Ctx η₀ β p h) (f : D.Pos → ℝ) :
   calc
     D.preLaw.expect (fun q => f q.1.2) =
         ((D.posLaw.prod auxLaw).prod D.actLaw).expect
-          (fun z => f z.1.1.1) := by
+        (fun z => f z.1.1) := by
             simpa [auxLaw, F] using hNoTie
-    _ = (D.posLaw.prod auxLaw).expect (fun z => f z.1.1) :=
-      expect_prod_left (D.posLaw.prod auxLaw) D.actLaw (fun z => f z.1.1)
-    _ = D.posLaw.expect f := expect_prod_left D.posLaw auxLaw (fun z => f z.1)
+    _ = (D.posLaw.prod auxLaw).expect (fun z => f z.1) :=
+      expect_prod_left (D.posLaw.prod auxLaw) D.actLaw (fun z => f z.1)
+    _ = D.posLaw.expect f := expect_prod_left D.posLaw auxLaw f
+
+private theorem choose20_lower {d : ℕ} (hd : 40 ≤ d) :
+    (d : ℝ) ^ 20 / ((3 : ℝ) ^ 20 * (Nat.factorial 20 : ℝ)) ≤
+      (Nat.choose d 20 : ℝ) := by
+  have hdescNat : (d / 2) ^ 20 ≤ d.descFactorial 20 := by
+    rw [Nat.descFactorial_eq_prod_range]
+    calc
+      (d / 2) ^ 20 = ∏ i ∈ Finset.range 20, d / 2 := by simp
+      _ ≤ ∏ i ∈ Finset.range 20, (d - i) := by
+        apply Finset.prod_le_prod
+        intro i hi
+        have hi' : i < 20 := Finset.mem_range.mp hi
+        omega
+  have hdescReal : ((d / 2 : ℕ) : ℝ) ^ 20 ≤ (d.descFactorial 20 : ℝ) := by
+    exact_mod_cast hdescNat
+  have hdivNat : d ≤ 3 * (d / 2) := by omega
+  have hdivReal : (d : ℝ) / 3 ≤ ((d / 2 : ℕ) : ℝ) := by
+    have hcast : (d : ℝ) ≤ 3 * ((d / 2 : ℕ) : ℝ) := by exact_mod_cast hdivNat
+    linarith
+  have hpow : ((d : ℝ) / 3) ^ 20 ≤ ((d / 2 : ℕ) : ℝ) ^ 20 :=
+    pow_le_pow_left₀ (by positivity) hdivReal 20
+  have hiden : d.descFactorial 20 = Nat.factorial 20 * Nat.choose d 20 :=
+    Nat.descFactorial_eq_factorial_mul_choose d 20
+  have hidenR : (d.descFactorial 20 : ℝ) =
+      (Nat.factorial 20 : ℝ) * (Nat.choose d 20 : ℝ) := by exact_mod_cast hiden
+  have hfact : (0 : ℝ) < (Nat.factorial 20 : ℝ) := by positivity
+  calc
+    (d : ℝ) ^ 20 / ((3 : ℝ) ^ 20 * (Nat.factorial 20 : ℝ)) =
+        ((d : ℝ) / 3) ^ 20 / (Nat.factorial 20 : ℝ) := by rw [div_pow]; ring
+    _ ≤ ((d / 2 : ℕ) : ℝ) ^ 20 / (Nat.factorial 20 : ℝ) :=
+      div_le_div_of_nonneg_right hpow hfact.le
+    _ ≤ (d.descFactorial 20 : ℝ) / (Nat.factorial 20 : ℝ) :=
+      div_le_div_of_nonneg_right hdescReal hfact.le
+    _ = (Nat.choose d 20 : ℝ) := by rw [hidenR]; field_simp
 
 end HypercubeRamsey.Lane_q_s08_sel

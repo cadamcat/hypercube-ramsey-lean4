@@ -635,7 +635,7 @@ theorem p92_height_induction (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P)
     (c K c₀ : ℝ) (hc0 : 0 < c) (hK : 0 < K) (hc₀ : 0 < c₀) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightBase9 P hc n c → HeightCounts9 P hc n → HeightOverlap9 P hc n K c₀ →
       ∃ Pp A : Pos9 P hc n → Bool, GoodHeights9 Pp A := by
-  sorry
+  exact Lane_q_s09_hind.height_induction_sol_s09_hind P hP hc hadm c K c₀ hc0 hK hc₀
 
 /-- P9.2-map2 (09:102–112): from good heights choose an active eligible center at every site's height (no hole).
 At an odd row the residual-flip neighbours use IDs of the row's slice within residual distance `r + 1` at levels

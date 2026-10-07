@@ -1,4 +1,4 @@
-import HypercubeRamsey.S05.Clock
+import HypercubeRamsey.S05.Even_sol_s05_even
 
 /-!
 # L5.1n–o: even rows by deletion of primitive block values, comparison means, loads
@@ -94,7 +94,102 @@ theorem L5_1m_inputs : ∀ A P : ℝ, ∃ R : ParamReq5, ∀ p : Params5 γ K' �
         X.p.a 4 * (X.kStarLen : ℝ) * n ≤ X.p.a 5 * (X.kStarLen : ℝ) * n ∧
         Real.exp (-(2 * (X.p.a 5 * (X.kStarLen : ℝ) * n - X.p.a 4 * (X.kStarLen : ℝ) * n) ^ 2 /
           ((n : ℝ) * (X.p.DH n + Real.log 4) ^ 2))) ≤ (n : ℝ) ^ (-P) := by
-  sorry
+  classical
+  intro A P
+  refine ⟨Lane_sol_s05_h1.stage1Request, ?_⟩
+  intro p _
+  obtain ⟨nA, hnA⟩ := Filter.eventually_atTop.mp (Lane_sol_s05_even.eventual_atom_exponent p A)
+  obtain ⟨nP, hnP⟩ := Filter.eventually_atTop.mp (Lane_sol_s05_even.eventual_tail_threshold p P)
+  refine ⟨max nA nP, ?_⟩
+  intro n hn N E G X hp hNlow _ hcover L cL cH LR HR H ω hsucc
+  obtain ⟨hn1, hm2, hA⟩ := hnA n ((le_max_left _ _).trans hn)
+  obtain ⟨_, _, hP⟩ := hnP n ((le_max_right _ _).trans hn)
+  rw [← hp] at hm2 hA hP
+  obtain ⟨hs, hk⟩ := Lane_sol_s05_even.high_lengths_positive X.p n hm2
+  have hD : 0 ≤ X.p.DH n := by
+    unfold Params5.DH
+    apply mul_nonneg (mul_nonneg X.p.hKD.le (Nat.cast_nonneg _))
+    apply Real.log_nonneg
+    exact_mod_cast (show 1 ≤ X.p.m n by omega)
+  have hM : 0 ≤ X.p.DH n + Real.log 4 :=
+    add_nonneg hD (Real.log_nonneg (by norm_num))
+  have ha4 : 0 < X.p.a 4 := by
+    have h04 := X.p.ha_order 0 4 (by decide)
+    rw [X.p.ha0] at h04
+    linarith
+  have hbudget0 (v : EvenRole5 n) (b : OddRole5 n) (o : X.OddOut) :
+      0 ≤ X.budgetCost HR H ω v b o := by
+    unfold budgetCost
+    split
+    · split
+      · exact Lane_sol_s05_even.highCost_nonneg X _ _ _ _ _ _
+      · rfl
+    · rfl
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro b x
+    exact Lane_sol_s05_even.odd_atom_bound X LR HR H ω b
+      (L.success_valid H ω hsucc b) A hn1 hm2 hNlow hA x
+  · intro v b o
+    refine ⟨hbudget0 v b o, ?_⟩
+    unfold budgetCost
+    split
+    · split
+      · exact Lane_sol_s05_even.highCost_upper X _ _ _ _ (HR.row H ω b)
+          hs hD (HR.row_nonneg H ω b) (HR.row_cap H ω b) o
+      · exact hM
+    · exact hM
+  · intro v b o hadj
+    simp [budgetCost, hadj]
+  · intro v
+    have hpoint (b : OddRole5 n) :
+        (X.oddRowFP LR HR H ω b).expect (X.budgetCost HR H ω v b) ≤
+          if (cube n).Adj v.1 b.1 then X.p.a 4 * (X.kStarLen : ℝ) else 0 := by
+      have hb := L.success_valid H ω hsucc b
+      by_cases hadj : (cube n).Adj v.1 b.1
+      · rw [if_pos hadj]
+        by_cases hv : X.g.low (X.p.J n) v.1
+        · simp only [budgetCost, hv, not_true_eq_false, and_false, false_and, if_false, FinProb.expect,
+            mul_zero, Finset.sum_const_zero]
+          positivity
+        · by_cases hbl : X.g.low (X.p.J n) b.1
+          · simp only [budgetCost, hbl, not_true_eq_false, and_false, if_false, FinProb.expect,
+              mul_zero, Finset.sum_const_zero]
+            positivity
+          · cases hc : X.evenRefOf (L.elig H) H ω v with
+            | none =>
+                simp [budgetCost, hadj, hv, hbl, hc, FinProb.expect]
+                positivity
+            | some c =>
+                have href := Lane_sol_s05_even.selected_ref_mem X H ω v b c (L.elig H)
+                  hadj hv hbl (hcover v.1 b.1 hadj) hc
+                have hcost := HR.row_cost H ω b hb hbl
+                  (c.1, X.g.evenType (X.p.J n) v.1, c.2) href
+                have hlen := Lane_sol_s05_even.high_ref_length_le X H ω v c (L.elig H) hv hc
+                calc
+                  _ = ∑ o, HR.row H ω b o * X.highCost H
+                      (X.actualRecord (L.elig H) H ω b) (arraysOf ω)
+                      (c.1, X.g.evenType (X.p.J n) v.1, c.2) (HR.row H ω b) o := by
+                    simp [FinProb.expect, oddRowFP, hb, oddRow,
+                      LR.row_high H ω b _ hbl, budgetCost, hadj, hv, hbl, hc]
+                  _ ≤ X.p.a 4 * (X.refLen (X.g.evenType (X.p.J n) v.1) c.2 : ℝ) := hcost
+                  _ ≤ X.p.a 4 * (X.kStarLen : ℝ) := by
+                    apply mul_le_mul_of_nonneg_left _ ha4.le
+                    exact_mod_cast hlen
+      · simp [budgetCost, hadj, FinProb.expect]
+    calc
+      (∑ b, (X.oddRowFP LR HR H ω b).expect (X.budgetCost HR H ω v b)) ≤
+          ∑ b : OddRole5 n, if (cube n).Adj v.1 b.1 then X.p.a 4 * (X.kStarLen : ℝ) else 0 :=
+        Finset.sum_le_sum fun b _ => hpoint b
+      _ = ((oddAdjSet5 v).card : ℝ) * (X.p.a 4 * (X.kStarLen : ℝ)) := by
+        rw [← Finset.sum_filter]
+        simp [oddAdjSet5]
+      _ ≤ (n : ℝ) * (X.p.a 4 * (X.kStarLen : ℝ)) := by
+        apply mul_le_mul_of_nonneg_right _ (by positivity)
+        exact_mod_cast oddAdjSet5_card_le v
+      _ = _ := by ring
+  · exact mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_right (X.p.ha_order 4 5 (by decide)).le (by positivity)) (by positivity)
+  · exact Lane_sol_s05_even.tail_bound X.p P n X.kStarLen hn1 hm2 hk hP
 
 /-- The local gate `E` and the product reference `Q` (05:1096–1164).  `Q` is the uniform mixture over the
 possible records of the deleted references at same-mode neighbours and uniform at opposite-mode neighbours,

@@ -191,7 +191,79 @@ theorem cluster_failure_dictionary {κ : CConsts} {T : Stage} {k : ℕ}
       ⟨(R.cellWords C (s, w.1)).1, (R.cellWords C (s, w.1)).2,
         (R.word_parity hc C s w.1).mpr w.2⟩ a =
       Lane_sol_s16_prod1.solver_star_bin_failure S Z w (fun g => a (groups (s, g))) := by
-  sorry
+  classical
+  have finLaw_ext (P Q : FinLaw (Fin (T.S.N k)))
+      (hw : ∀ x, P.w x = Q.w x) : P = Q := by
+    cases P
+    cases Q
+    congr 1
+    exact funext hw
+  have flip_neighbors_injective : Function.Injective (flipPos w.1) := by
+    intro j l h
+    by_contra hjl
+    have he := congrFun h j
+    simp [flipPos, hjl] at he
+  let fallback : Fin (T.S.N k) := ⟨0, T.S.N_pos k⟩
+  have hodd : ∀ j : Fin (PT.tiling.P (G.cellPatch C)).h,
+      ¬ IsEvenRole (R.cellWords C (s, flipPos w.1 j)).1 := by
+    intro j
+    rw [R.word_parity hc, Lane_sol_s16_prod1.flip_parity]
+    exact not_not.mpr w.2
+  let neighbor : Fin (PT.tiling.P (G.cellPatch C)).h → OddCellRole G C := fun j =>
+    ⟨(R.cellWords C (s, flipPos w.1 j)).1,
+      (R.cellWords C (s, flipPos w.1 j)).2, hodd j⟩
+  have hi : Function.Injective neighbor := by
+    intro j l heq
+    have hw : R.cellWords C (s, flipPos w.1 j) = R.cellWords C (s, flipPos w.1 l) :=
+      Subtype.ext (congrArg (fun r : OddCellRole G C => r.1) heq)
+    exact flip_neighbors_injective (congrArg Prod.snd ((R.cellWords C).injective hw))
+  have hlabels (ys : OddCellRole G C → Fin (T.S.N k)) :
+      nbrLabels w.1 (R.wordLabel C ys s fallback) = fun j => ys (neighbor j) := by
+    funext j
+    simp only [nbrLabels, CellRawData.wordLabel, dif_pos (hodd j), neighbor]
+  have hprior (ys : OddCellRole G C → Fin (T.S.N k)) :
+      R.rawPrior C W ys (R.cellWords C (s, w.1)).1 =
+        S.σ w Z (fun j => ys (neighbor j)) := by
+    rw [hPrior ys fallback, hlabels]
+  let P := fun r : OddCellRole G C => R.U C W (R.groupOf C r) (a (R.groupOf C r))
+  let Q := fun z : IWord PT.tiling (G.cellPatch C) =>
+    (⟨S.U (S.groupOf z) Z (a (groups (s, S.groupOf z))),
+      S.U_nonneg (S.groupOf z) Z (a (groups (s, S.groupOf z))),
+      S.U_sum (S.groupOf z) Z (a (groups (s, S.groupOf z)))⟩ :
+        FinLaw (Fin (T.S.N k)))
+  have hrows : (fun j => P (neighbor j)) = (fun j => Q (flipPos w.1 j)) := by
+    funext j
+    dsimp only [P, neighbor]
+    rw [hGroup (flipPos w.1 j) (hodd j)]
+    calc
+      _ = (⟨S.U (S.groupOf (flipPos w.1 j)) Z
+          (a (groups (s, S.groupOf (flipPos w.1 j)))),
+        S.U_nonneg (S.groupOf (flipPos w.1 j)) Z
+          (a (groups (s, S.groupOf (flipPos w.1 j)))),
+        S.U_sum (S.groupOf (flipPos w.1 j)) Z
+          (a (groups (s, S.groupOf (flipPos w.1 j))))⟩ :
+            FinLaw (Fin (T.S.N k))) := by
+          apply finLaw_ext
+          intro y
+          exact hU _ _ y
+      _ = Q (flipPos w.1 j) := rfl
+  change (if PT.tiling.mode.isCluster then
+    (FinLaw.pi P).pr
+      (fun ys => R.rawPrior C W ys (R.cellWords C (s, w.1)).1 = 0) else 0) = _
+  rw [if_pos hc]
+  simp_rw [hprior]
+  rw [Lane_sol_s16_prod1.pr_eq_indicator_E]
+  let F : InternalLabels PT.tiling (G.cellPatch C) → ℝ :=
+    fun zs => @ite ℝ (S.σ w Z zs = 0) (Classical.propDecidable _) 1 0
+  have hleft := Lane_sol_s16_prod1.pi_injective_coordinate_E P neighbor hi F
+  have hright := Lane_sol_s16_prod1.pi_injective_coordinate_E Q (flipPos w.1)
+    flip_neighbors_injective F
+  rw [hrows] at hleft
+  unfold Lane_sol_s16_prod1.solver_star_bin_failure
+  rw [Lane_sol_s16_prod1.pr_eq_indicator_E]
+  change (FinLaw.pi P).E (fun ys => F (fun j => ys (neighbor j))) =
+    (FinLaw.pi Q).E (fun ys => F (fun j => ys (flipPos w.1 j)))
+  exact hleft.trans hright.symm
 
 /-- B2. Sharp domination of the restricted rows by the raw solver rows:
 pretrim loss `h^2 sqrt eps` and permission loss `exp(-cperm n/2)`, with the

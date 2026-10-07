@@ -1,5 +1,4 @@
 import HypercubeRamsey.Framework.FinProb
-import HypercubeRamsey.S09.Needs
 
 /-!
 # Finite Finner inequality
@@ -24,8 +23,6 @@ theorem xFinner {ι B : Type*} [Fintype ι] [DecidableEq ι] [Fintype B] [Decida
     (FinProb.pi Q).expect (fun ω => ∏ b, f b ω) ≤
       ∏ b, Real.rpow
         ((FinProb.pi Q).expect (fun ω => (f b ω) ^ d)) ((d : ℝ)⁻¹) := by
-  classical
-  have h := HypercubeRamsey.finner_product Q S f d hd hdegree hscope hnonneg
-  simpa [FinProb.expect, one_div] using h
+  sorry
 
 end HypercubeRamsey

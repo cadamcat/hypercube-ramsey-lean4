@@ -3176,6 +3176,39 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
       rw [← hRhsExp, hEcard]
       norm_num [n, nNat]
 
+theorem clusterGroupRoleCount_le_twiceHeight {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (g : ClusterGroupIndex PT) :
+    (Finset.univ.filter fun b : OddPosition T k => clusterGroupIndexAt PT hPT hm b = g).card ≤
+      2 * (PT.tiling.P g.1.1).h := by
+  let A := Finset.univ.filter fun b : OddPosition T k => clusterGroupIndexAt PT hPT hm b = g
+  have hsub : A.image (clusterSliceWord hPT) ⊆ clusterGroupWordChoices hPT hm g := by
+    intro z hz
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hz
+    have h := clusterSliceWord_mem_groupChoices (hPT := hPT) (hm := hm) b
+    rw [(Finset.mem_filter.mp hb).2] at h
+    exact h
+  calc
+    A.card = (A.image (clusterSliceWord hPT)).card :=
+      (Finset.card_image_of_injective _ (clusterSliceWord_injective hPT)).symm
+    _ ≤ (clusterGroupWordChoices hPT hm g).card := Finset.card_le_card hsub
+    _ ≤ _ := clusterGroupWordChoices_card_le g
+
+theorem clusterSameSlice_internal_neighbor {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (hn : 0 < T.S.n k)
+    (a : EvenPosition T k) (b : OddPosition T k) (hab : Adjacent a b)
+    (hs : clusterSliceAt PT hPT b.1 = clusterSliceAt PT hPT a.1) :
+    ∃ l : Fin (PT.tiling.P (patchAt PT hPT a.1)).h,
+      b.1 = flipPos a.1 ⟨T.S.n k - (PT.tiling.P (patchAt PT hPT a.1)).h + l.val,
+        by have hh := clusterHeight_le PT hPT (patchAt PT hPT a.1); have hl := l.isLt; omega⟩ := by
+  let M : ClusterMask PT := ⟨fun _ => a, ∅, ∅, ∅⟩
+  let r : Fin (T.S.n k) := ⟨0, hn⟩
+  have hmem := clusterAdjacent_sameSlice_mem_internalStarRoles (M := M) (r := r) hab hs
+  obtain ⟨l, hl, heq⟩ := Finset.mem_image.mp hmem
+  refine ⟨l, ?_⟩
+  exact (congrArg Subtype.val heq).symm
+
 theorem two_exp_le_exp_two_pow {n : ℕ} (hn : 1 ≤ n) :
     2 * Real.exp (n : ℝ) ≤ (Real.exp 2) ^ n := by
   have hnR : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn

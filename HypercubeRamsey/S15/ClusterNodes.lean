@@ -12,6 +12,8 @@ import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
 import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_c2
 import HypercubeRamsey.S15.ClusterGeometry_sol_s15_c2
+import HypercubeRamsey.S15.ClusterBinStage_sol_s15_c2
+import HypercubeRamsey.S15.ClusterLabelStage_sol_s15_c2
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -737,12 +739,75 @@ theorem high_cluster_bin_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hConditioning : ClusterHistoryConditioningClaim κ T)
     (hHistoryLoad : ClusterHistoryLoadClaim κ T) (hCapacity : ClusterCapacityClaim κ T) :
     ClusterBinStageClaim κ T := by
-  sorry
+  classical
+  obtain ⟨c, hc, hCapacity⟩ := hCapacity
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hMass, hConditioning, hHistoryLoad, hCapacity, hn] with k hMass hConditioning hHistoryLoad hCapacity hn
+  intro PT hPT hm
+  obtain ⟨H⟩ := hConditioning PT hPT hm
+  have houtputs : ∀ W, H.law.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+      Nonempty (HypercubeRamsey.Lane_sol_s15_c2.BinLawOutput PT hPT hm W) := by
+    intro W hW hload
+    have hraw : 0 < (clusterHistoryLaw PT hPT hm).w W := by
+      apply HypercubeRamsey.Lane_sol_s15_c2.avoided_history_raw_positive PT hPT hm H.positive W
+      rwa [← H.law_eq]
+    have havoid := H.avoids W hW
+    have hstar : ∀ a, (clusterIndependentBinKernel PT hPT hm W).pr
+        (fun B => (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) < clusterBinStarFailure PT hPT hm W B a) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) := by
+      intro a
+      exact HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_tail PT hPT hm W a (by omega)
+        (hMass PT hPT hm W hraw havoid a)
+    have hcert := hCapacity PT hPT hm W hload
+    sorry
+  let output (W : ClusterHistory PT hPT hm)
+      (h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W) :=
+    Classical.choice (houtputs W h.1 h.2)
+  let binLaw (W : ClusterHistory PT hPT hm) :=
+    if h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W then (output W h).law
+    else clusterIndependentBinKernel PT hPT hm W
+  refine ⟨{
+    history_positive := H.positive
+    historyLaw := H.law
+    historyLaw_eq := H.law_eq
+    binLaw := binLaw
+    history_local_upper_comparison := H.local_comparison
+    history_avoids_alarms := H.avoids
+    history_load_probability := hHistoryLoad PT hPT hm H
+    bin_requirements := ?_
+    local_upper_comparison := ?_ }⟩
+  · intro W hW hload B hB
+    have hg : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W := ⟨hW, hload⟩
+    have hgood := (output W hg).good B
+    apply hgood
+    simpa only [binLaw, dif_pos hg] using hB
+  · intro W hW hload F hF S hdep hcard
+    have hg : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W := ⟨hW, hload⟩
+    simpa only [binLaw, dif_pos hg] using
+      (output W hg).comparison F hF S hdep hcard
 
 /-- P15.3(ii): conditionally sample the labels and enforce all even-row mass gates. -/
 theorem high_cluster_label_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hMass : ClusterMassClaim κ T)
     (hBins : ClusterBinStageClaim κ T) : ClusterSampleClaim κ T := by
+  classical
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hBins, hn] with k hBins hn
+  intro PT hPT hm
+  obtain ⟨BS⟩ := hBins PT hPT hm
+  apply HypercubeRamsey.Lane_sol_s15_c2.sample_of_label_outputs PT hPT hm BS (by omega)
+  intro W hW hload B hB
+  have hgood := BS.bin_requirements W hW hload B hB
+  have hreference := HypercubeRamsey.Lane_sol_s15_c2.binStage_reference_positive
+    PT hPT hm BS (by omega) W hW hload B hB
+  have hmass : ∀ a, (clusterIndependentLabelKernel PT hPT hm W B).pr
+      (fun I => clusterRowMass PT hPT hm W I a < 1 / 2) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) := by
+    intro a
+    rw [← HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_eq PT hPT hm W B a hreference]
+    exact hgood.1 a
+  have hcolumn := hgood.2.1
+  have hdistinct := hgood.2.2
   sorry
 
 /-- P15.3 (`prop:high-cluster-sampling`, 15:119–156): assemble the history, bin, and label stages. -/

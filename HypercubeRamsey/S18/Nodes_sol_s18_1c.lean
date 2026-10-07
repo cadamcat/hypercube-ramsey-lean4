@@ -1745,4 +1745,439 @@ theorem block_affectedSites_card (D : LateData hPT) (X : CriticalTransferData D)
           ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1)) (hG.block_size a)
       simpa only [Nat.mul_assoc] using hh
 
+private theorem predecessors_mono (D : LateData hPT) (X : CriticalTransferData D) :
+    Monotone X.predecessors := by
+  apply monotone_nat_of_le_succ
+  intro n b hb
+  exact Finset.mem_union.mpr (Or.inl hb)
+
+private theorem predecessor_rank (D : LateData hPT) (X : CriticalTransferData D) :
+    ∀ n b, b ∈ X.predecessors n → ∀ j : Fin D.geom.r, D.geom.classOf b = some j →
+      j.val ≤ X.failure.1.val ∧ b ∈ X.predecessors (X.failure.1.val - j.val) := by
+  intro n
+  induction n with
+  | zero =>
+    intro b hb j hj
+    have heq : b = X.failure.2.1.1 := by simpa only [CriticalTransferData.predecessors, Finset.mem_singleton] using hb
+    subst b
+    have hroot := (D.encoding.base.class_of_spec X.failure.2.1.1 X.failure.1).mp X.failure.2.1.2
+    have hjroot : j = X.failure.1 := Option.some.inj (hj.symm.trans hroot)
+    subst j
+    simp [CriticalTransferData.predecessors]
+  | succ n ih =>
+    intro b hb j hj
+    rcases Finset.mem_union.mp hb with hb | hb
+    · exact ih b hb j hj
+    · obtain ⟨b0, hb0, j0, j1, hj0, hj1, hlt, a, a', hflip⟩ := (Finset.mem_filter.mp hb).2
+      have hjj : j1 = j := Option.some.inj (hj1.symm.trans hj)
+      subst j1
+      obtain ⟨hrank, hsmall⟩ := ih b0 hb0 j0 hj0
+      have hnew : b ∈ X.predecessors ((X.failure.1.val - j0.val) + 1) := by
+        apply Finset.mem_union.mpr
+        right
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, b0, hsmall, j0, j, hj0, hj, hlt, a, a', hflip⟩
+      refine ⟨by omega, predecessors_mono D X (by omega) hnew⟩
+
+/-- The r-step predecessor set is closed under every strictly earlier two-edge
+label dependency. The strict class rank makes the finite closure exact. -/
+theorem predecessors_closed (D : LateData hPT) (X : CriticalTransferData D)
+    (b b' : Pos T k) (hb : b ∈ X.predecessors D.geom.r)
+    (j j' : Fin D.geom.r) (hj : D.geom.classOf b = some j) (hj' : D.geom.classOf b' = some j')
+    (hlt : j'.val < j.val) (a a' : Fin (T.S.n k)) (hflip : flipPos b a = flipPos b' a') :
+    b' ∈ X.predecessors D.geom.r := by
+  obtain ⟨hrank, hsmall⟩ := predecessor_rank D X D.geom.r b hb j hj
+  have hnew : b' ∈ X.predecessors ((X.failure.1.val - j.val) + 1) := by
+    apply Finset.mem_union.mpr
+    right
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, b, hsmall, j, j', hj, hj', hlt, a, a', hflip⟩
+  exact predecessors_mono D X (by have hroot := X.failure.1.isLt; omega) hnew
+
+/-- The finite call plan includes one coordinate sketch for each predecessor
+role in its class. A later restriction will omit erased or unaffected calls. -/
+abbrev SketchCall (D : LateData hPT) (X : CriticalTransferData D) :=
+  Σ j : Fin D.geom.r, {b : Pos T k // b ∈ D.encoding.base.classes j ∧ b ∈ X.predecessors D.geom.r} × Fin (T.S.n k)
+
+noncomputable instance (D : LateData hPT) (X : CriticalTransferData D) : Fintype (SketchCall D X) := inferInstance
+
+private noncomputable def callSite (D : LateData hPT) (X : CriticalTransferData D) (c : SketchCall D X) : Pos T k :=
+  flipPos c.2.1.1 c.2.2
+
+/-- A site is queried at most once in each class in the actual finite call plan. -/
+theorem callSite_key_injective (D : LateData hPT) (X : CriticalTransferData D) :
+    Function.Injective (fun c : SketchCall D X => (c.1, callSite D X c)) := by
+  intro c c' heq
+  rcases c with ⟨j, b, a⟩
+  rcases c' with ⟨j', b', a'⟩
+  have hj : j = j' := congrArg Prod.fst heq
+  subst j'
+  have hs : flipPos b.1 a = flipPos b'.1 a' := congrArg Prod.snd heq
+  let w := flipPos b.1 a
+  have hb : D.geom.classOf b.1 = some j := (D.encoding.base.class_of_spec b.1 j).mp b.2.1
+  have hb' : D.geom.classOf b'.1 = some j := (D.encoding.base.class_of_spec b'.1 j).mp b'.2.1
+  have ha : D.geom.classOf (flipPos w a) = some j := by simpa only [w, flipPos_involutive] using hb
+  have ha' : D.geom.classOf (flipPos w a') = some j := by rw [show w = flipPos b'.1 a' from hs, flipPos_involutive]; exact hb'
+  have haa : a = a' := D.l16_valid.one_per_class w j a a' ha ha'
+  subst a'
+  have hbb : b = b' := Subtype.ext (by simpa only [flipPos_involutive] using congrArg (fun v => flipPos v a) hs)
+  subst b'
+  rfl
+
+/-- The whole-cell site budget translates to a sketch-call budget by the exact
+site/class injection; no sampling of roles is used in this count. -/
+theorem block_sketchCalls_card (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (a : Fin (T.S.n k)) :
+    (Finset.univ.filter fun c : SketchCall D X =>
+      (D.directCells (callSite D X c) ∩ X.blockCells a).Nonempty).card ≤
+      D.geom.r * ((max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r) *
+        (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1)) := by
+  classical
+  let S := X.directEven.filter fun w => (D.directCells w ∩ X.blockCells a).Nonempty
+  let C := {c : SketchCall D X // (D.directCells (callSite D X c) ∩ X.blockCells a).Nonempty}
+  let code (c : C) : Fin D.geom.r × {w : Pos T k // w ∈ S} :=
+    (c.1.1, ⟨callSite D X c.1, Finset.mem_filter.mpr ⟨
+      Finset.mem_biUnion.mpr ⟨c.1.2.1.1, c.1.2.1.2.2,
+        Finset.mem_image.mpr ⟨c.1.2.2, Finset.mem_univ _, rfl⟩⟩, c.2⟩⟩)
+  have hi : Function.Injective code := by
+    intro c c' heq
+    apply Subtype.ext
+    apply callSite_key_injective D X
+    exact congrArg (fun z => (z.1, z.2.1)) heq
+  have hcard := Fintype.card_le_of_injective code hi
+  have hraw : (Finset.univ.filter fun c : SketchCall D X =>
+      (D.directCells (callSite D X c) ∩ X.blockCells a).Nonempty).card ≤ D.geom.r * S.card := by
+    rw [Fintype.card_prod, Fintype.card_fin] at hcard
+    have hS : Fintype.card {w : Pos T k // w ∈ S} = S.card := Fintype.card_coe S
+    rw [hS] at hcard
+    simpa only [C, Fintype.card_subtype] using hcard
+  exact hraw.trans (Nat.mul_le_mul_left D.geom.r (block_affectedSites_card D X hG hmargin a))
+
+private noncomputable def criticalExternalInputs (D : LateData hPT) (X : CriticalTransferData D)
+    (w : Pos T k) : Finset (Fin (T.S.n k)) :=
+  (D.externalEarly w).filter fun j => D.geom.cellOf (flipPos w j) ∈ X.criticalCells
+
+private theorem criticalObservation_outside_internal (D : LateData hPT) (X : CriticalTransferData D)
+    (w : Pos T k) (j : Fin (T.S.n k)) (hj : j ∈ criticalExternalInputs D X w) :
+    j ∉ PT.tiling.Icoord (D.geom.patchOf X.target) := by
+  obtain ⟨hj, hcrit⟩ := Finset.mem_filter.mp hj
+  obtain ⟨c, hc, heq⟩ := Finset.mem_image.mp hcrit
+  have hp : D.geom.patchOf (flipPos w j) = D.geom.patchOf X.target := by
+    calc
+      _ = D.geom.cellPatch (D.geom.cellOf (flipPos w j)) := (D.geom.cellOf_patch _).symm
+      _ = D.geom.cellPatch (D.geom.cellOf (flipPos X.target c)) := by rw [heq]
+      _ = D.geom.patchOf (flipPos X.target c) := D.geom.cellOf_patch _
+      _ = _ := S18.Lane_q_s18_n2.patchOf_flip_bulk (D := D) (X := X) c (Finset.mem_filter.mp hc).1
+  intro hI
+  have hIp : j ∈ PT.tiling.Icoord (D.geom.patchOf (flipPos w j)) := by simpa only [hp] using hI
+  have hw := internal_patch D (flipPos w j) j hIp
+  rw [flipPos_involutive, hp] at hw
+  exact (Finset.mem_filter.mp hj).2.1 (by simpa only [hw] using hI)
+
+private theorem criticalObservation_cells_injective (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (w : Pos T k) (hw : w ∈ X.directEven)
+    (j j' : Fin (T.S.n k)) (hj : j ∈ criticalExternalInputs D X w)
+    (hj' : j' ∈ criticalExternalInputs D X w)
+    (heq : D.geom.cellOf (flipPos w j) = D.geom.cellOf (flipPos w j')) : j = j' := by
+  obtain ⟨b, hb, d, hwd⟩ := directEven_representation D X w hw
+  obtain ⟨c, hc, hcell⟩ := Finset.mem_image.mp (Finset.mem_filter.mp hj).2
+  have ho := S18.Lane_q_s18_n2.sameCell_outer_eq (D := D) (X := X) (flipPos w j) c hc hcell.symm hmargin
+    (by exact_mod_cast directObservation_distance hG b d hb w (flipPos w j) hwd (Or.inr ⟨j, rfl⟩) c)
+  have ho' := S18.Lane_q_s18_n2.sameCell_outer_eq (D := D) (X := X) (flipPos w j') c hc (heq.symm.trans hcell.symm) hmargin
+    (by exact_mod_cast directObservation_distance hG b d hb w (flipPos w j') hwd (Or.inr ⟨j', rfl⟩) c)
+  have hnotI := criticalObservation_outside_internal D X w j hj
+  have hv := (ho j hnotI).trans (ho' j hnotI).symm
+  by_contra hn
+  cases hwj : w j <;> simp [flipPos, hn, hwj] at hv
+
+/-- Omitting the one responding block removes no more early inputs than its
+critical-coordinate count, as required by the masked-list gate. -/
+theorem criticalExternalInputs_card (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (w : Pos T k) (hw : w ∈ X.directEven \ X.erased) :
+    (criticalExternalInputs D X w).card ≤ max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r := by
+  obtain ⟨a, ha⟩ := hG.one_block w hw
+  let J := criticalExternalInputs D X w
+  let code (j : {j : Fin (T.S.n k) // j ∈ J}) : {C : D.geom.Cell // C ∈ X.blockCells a} :=
+    ⟨D.geom.cellOf (flipPos w j.1), ha (Finset.mem_inter.mpr ⟨
+      Finset.mem_union.mpr (Or.inr (Finset.mem_image.mpr ⟨j.1, (Finset.mem_filter.mp j.2).1, rfl⟩)),
+      (Finset.mem_filter.mp j.2).2⟩)⟩
+  have hi : Function.Injective code := by
+    intro j j' heq
+    apply Subtype.ext
+    exact criticalObservation_cells_injective D X hG hmargin w (Finset.mem_sdiff.mp hw).1 j.1 j'.1 j.2 j'.2
+      (congrArg Subtype.val heq)
+  have hcard := Fintype.card_le_of_injective code hi
+  have hb : (X.blockCells a).card ≤ max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r :=
+    Finset.card_image_le.trans (hG.block_size a)
+  have hJ : J.card ≤ (X.blockCells a).card := by simpa only [Fintype.card_coe] using hcard
+  exact hJ.trans hb
+
+/-- The raw experiment fixes every noncritical state, including on each
+positive-weight fiber used in the witness reduction. -/
+theorem rawLaw_noncritical_fixed (D : LateData hPT) (X : CriticalTransferData D)
+    (s : X.Raw) (hs : X.rawLaw.w s ≠ 0) :
+    ∀ C, C ∉ X.criticalCells → X.state s C = X.fixed C := by
+  intro C hC
+  change (∏ C, (if C ∈ X.criticalCells then D.typicalFresh C else
+    FinLaw.dirac (D.l16_valid.pools_nonempty.choose C, X.fixed C)).w (s C)) ≠ 0 at hs
+  have hf := Finset.prod_ne_zero_iff.mp hs C (Finset.mem_univ C)
+  have heq : s C = (D.l16_valid.pools_nonempty.choose C, X.fixed C) := by
+    by_contra hn
+    exact hf (by simp only [if_neg hC, FinLaw.dirac, if_neg hn])
+  exact congrArg Prod.snd heq
+
+/-- After removing the critical inputs, the withheld list depends on the fixed
+noncritical configuration alone. -/
+theorem withheldList_noncritical_fixed (D : LateData hPT) (X : CriticalTransferData D)
+    (s : X.Raw) (hfixed : ∀ C, C ∉ X.criticalCells → X.state s C = X.fixed C) (w : Pos T k) :
+    D.withheldList w (X.state s) (criticalExternalInputs D X w) =
+      D.withheldList w X.fixed (criticalExternalInputs D X w) := by
+  have hlab (j : Fin (T.S.n k)) (hj : j ∈ D.externalEarly w \ criticalExternalInputs D X w) :
+      D.earlyLabel (X.state s) (flipPos w j) = D.earlyLabel X.fixed (flipPos w j) := by
+    have hnot : D.geom.cellOf (flipPos w j) ∉ X.criticalCells := by
+      intro hC
+      exact (Finset.mem_sdiff.mp hj).2 (Finset.mem_filter.mpr ⟨(Finset.mem_sdiff.mp hj).1, hC⟩)
+    unfold LateData.earlyLabel
+    rw [hfixed _ hnot]
+  ext x
+  simp only [LateData.withheldList, Finset.mem_filter]
+  constructor
+  · intro hx
+    exact ⟨hx.1, fun j hj => by rw [← hlab j hj]; exact hx.2 j hj⟩
+  · intro hx
+    exact ⟨hx.1, fun j hj => by rw [hlab j hj]; exact hx.2 j hj⟩
+
+/-- The original masked-list gate supplies the short fixed lists that a local
+block response encodes; no success condition is placed on erased sketches. -/
+theorem fixedWithheldList_card (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (hcount : ((max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r : ℕ) : ℝ) ≤
+      Real.log (T.S.n k : ℝ) ^ 4)
+    (w : Pos T k) (hw : w ∈ X.directEven \ X.erased)
+    (s : X.Raw) (hfixed : ∀ C, C ∉ X.criticalCells → X.state s C = X.fixed C)
+    (hv : D.initialValid w (X.state s)) :
+    (D.withheldList w X.fixed (criticalExternalInputs D X w)).card ≤
+      Real.exp (Real.log (T.S.n k : ℝ) ^ 8) := by
+  have hJ : ((criticalExternalInputs D X w).card : ℝ) ≤ Real.log (T.S.n k : ℝ) ^ 4 := by
+    have hh : ((criticalExternalInputs D X w).card : ℝ) ≤
+        ((max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r : ℕ) : ℝ) := by
+      exact_mod_cast criticalExternalInputs_card D X hG hmargin w hw
+    exact hh.trans hcount
+  apply le_of_not_gt
+  intro hbad
+  apply hv.2.1
+  right
+  refine ⟨criticalExternalInputs D X w, Finset.filter_subset _ _, hJ, ?_⟩
+  rw [withheldList_noncritical_fixed D X s hfixed w]
+  exact hbad
+
+/-- The prerequisite gate covers initial validity at every direct even site,
+which lies within 2r+1 of the current role. -/
+theorem gate_directEven_initialValid (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X)
+    (H : D.encoding.base.History X.failure.1.castSucc) (hg : D.gate X.failure.1 X.failure.2.1.1 H)
+    (w : Pos T k) (hw : w ∈ X.directEven) : D.initialValid w H.1 := by
+  obtain ⟨b, hb, d, hwd⟩ := directEven_representation D X w hw
+  obtain ⟨j, hj⟩ := class_some_of_predecessor D X D.geom.r b hb
+  have heven : IsEvenRole w := by
+    rw [hwd]
+    exact (S15.evenRole_flipPos b d).mpr (notEven_of_class_some D b j hj)
+  have hball : w ∈ cubeBall X.failure.2.1.1 (6 * D.geom.r) := by
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    have hdist := (Finset.mem_filter.mp (hG.predecessor_radius b hb)).2
+    have hflip : hammingDist b w ≤ 1 := by rw [hwd]; exact hammingDist_flip_le_one b d
+    have htri := hammingDist_triangle X.failure.2.1.1 b w
+    have hr := D.l16_valid.r_pos
+    change hammingDist X.failure.2.1.1 b ≤ 2 * D.geom.r at hdist
+    change hammingDist X.failure.2.1.1 w ≤ 6 * D.geom.r
+    omega
+  exact hg.1 w hball heven
+private theorem internalCoords_card_le (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    Fintype.card {a : Fin (T.S.n k) // a ∈ PT.tiling.Icoord i} ≤ (PT.tiling.P i).h := by
+  classical
+  let h := (PT.tiling.P i).h
+  have hhn : h ≤ T.S.n k := by
+    have hmax := Tiling.Valid.prefix_internal_length hPT.tiling_valid
+    have hhmax : (PT.tiling.P i).h ≤
+        Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).h :=
+      Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h)
+        (Finset.mem_univ i)
+    omega
+  let ix : {a : Fin (T.S.n k) // a ∈ PT.tiling.Icoord i} → Fin h := fun a =>
+    ⟨a.1.val - (T.S.n k - h), by
+      have hmem : T.S.n k - h ≤ a.1.val := by
+        simpa [Tiling.Icoord, topCoordinates, h] using a.2
+      omega⟩
+  have hinj : Function.Injective ix := by
+    intro a b hab
+    apply Subtype.ext
+    apply Fin.ext
+    have hv := congrArg Fin.val hab
+    dsimp [ix] at hv
+    have haI : T.S.n k - h ≤ a.1.val := by
+      simpa [Tiling.Icoord, topCoordinates, h] using a.2
+    have hbI : T.S.n k - h ≤ b.1.val := by
+      simpa [Tiling.Icoord, topCoordinates, h] using b.2
+    exact (tsub_left_inj haI hbI).mp hv
+  simpa using Fintype.card_le_of_injective ix hinj
+
+private theorem twice_rpow_five_hundredths_le_self {L : ℝ} (hL : 4 ≤ L) :
+    2 * Real.rpow L (1 / 20 : ℝ) ≤ L := by
+  have hLpos : 0 < L := by linarith
+  have hLone : 1 ≤ L := by linarith
+  have hsqrtSq : (Real.sqrt L) ^ 2 = L := Real.sq_sqrt (by positivity)
+  have hsqrt : 2 ≤ Real.sqrt L := by nlinarith [hsqrtSq, Real.sqrt_nonneg L]
+  have hpow : Real.rpow L (1 / 20 : ℝ) ≤ Real.rpow L (1 / 2 : ℝ) :=
+    Real.rpow_le_rpow_of_exponent_le hLone (by norm_num)
+  calc
+    2 * Real.rpow L (1 / 20 : ℝ) ≤ 2 * Real.sqrt L := by
+      rw [Real.sqrt_eq_rpow]
+      exact mul_le_mul_of_nonneg_left hpow (by norm_num)
+    _ ≤ L := by nlinarith [hsqrtSq, hsqrt]
+
+
+private theorem height_le_log (hκ : κ.Admissible) (D : LateData hPT) (i : Fin PT.tiling.m)
+    (hL4 : 4 ≤ Real.log (T.S.n k : ℝ)) : (PT.tiling.P i).h ≤ Real.log (T.S.n k : ℝ) := by
+  let n : ℝ := T.S.n k
+  let L := Real.log n
+  have hLpos : 0 < L := by dsimp [L, n]; linarith
+  have hCb : 100 < κ.Cb := by
+    have hratio : 0 < 100 * κ.aC / κ.aB :=
+      div_pos (mul_pos (by norm_num) hκ.aC_rng.1) hκ.aB_rng.1
+    linarith [hκ.Cb_big]
+  have hMlo : 0 < (κ.Mlo : ℝ) := by linarith [hκ.Mlo_big, hCb]
+  have hcm : κ.cq * (κ.Mlo : ℝ) < 1 / 20 := by
+    have hden' : 0 < 20 * (κ.Mlo : ℝ) := by positivity
+    have hmul := (lt_div_iff₀ hden').mp hκ.cq_rng.2
+    nlinarith
+  have hHeight : ((PT.tiling.P i).h : ℝ) ≤ L := by
+    cases hm : PT.tiling.mode with
+    | bounded =>
+        obtain ⟨_, hall⟩ := hPT.tiling_valid.bounded_data hm
+        obtain ⟨_, hheight, _, _, _⟩ := hall i
+        simpa [hheight] using (show (0 : ℝ) ≤ L from le_of_lt hLpos)
+    | lowDirect =>
+        obtain ⟨_, _, _, _, hheight, _, _⟩ := hPT.tiling_valid.direct_data (Or.inl hm) i
+        simpa [hheight] using (show (0 : ℝ) ≤ L from le_of_lt hLpos)
+    | lowCluster =>
+        obtain ⟨_, _, _, _, _, _, _, _, hheight, hlowQ, _, _⟩ :=
+          hPT.tiling_valid.cluster_data (Or.inl hm) i
+        have hq : ((PT.tiling.P i).q : ℝ) ≤ Real.rpow L κ.cq := by
+          simpa [L, n] using hlowQ.mp hm
+        have hqpow : Real.rpow ((PT.tiling.P i).q : ℝ) (κ.Mlo : ℝ) ≤
+            Real.rpow L (κ.cq * (κ.Mlo : ℝ)) := by
+          calc
+            Real.rpow ((PT.tiling.P i).q : ℝ) (κ.Mlo : ℝ) ≤
+                Real.rpow (Real.rpow L κ.cq) (κ.Mlo : ℝ) :=
+              Real.rpow_le_rpow (Nat.cast_nonneg _) hq (Nat.cast_nonneg _)
+            _ = Real.rpow L (κ.cq * (κ.Mlo : ℝ)) := by
+              exact (Real.rpow_mul (le_of_lt hLpos) κ.cq (κ.Mlo : ℝ)).symm
+        have hqExp : Real.rpow L (κ.cq * (κ.Mlo : ℝ)) ≤ Real.rpow L (1 / 20 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le (by linarith [hL4]) hcm.le
+        have hheightQ : ((PT.tiling.P i).h : ℝ) <
+            2 * Real.rpow ((PT.tiling.P i).q : ℝ) (κ.Mlo : ℝ) := by
+          simpa [hm] using hheight
+        have hheightL : ((PT.tiling.P i).h : ℝ) < 2 * Real.rpow L (1 / 20 : ℝ) := by
+          calc
+            ((PT.tiling.P i).h : ℝ) <
+                2 * Real.rpow ((PT.tiling.P i).q : ℝ) (κ.Mlo : ℝ) := hheightQ
+            _ ≤ 2 * Real.rpow L (1 / 20 : ℝ) :=
+              mul_le_mul_of_nonneg_left (hqpow.trans hqExp) (by norm_num)
+        exact hheightL.le.trans (twice_rpow_five_hundredths_le_self hL4)
+    | highDirect =>
+        have hlow := D.low_mode
+        simp [Mode.isLow, hm] at hlow
+    | highSmall =>
+        have hlow := D.low_mode
+        simp [Mode.isLow, hm] at hlow
+    | highLarge =>
+        have hlow := D.low_mode
+        simp [Mode.isLow, hm] at hlow
+  exact hHeight
+
+
+/-- Uniform scalar cutoffs pay cell spacing, masked-list omissions, and the
+complete per-block sketch-call budget in the protocol contract. -/
+theorem protocol_scalar_cutoffs (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+      ∀ i : Fin PT.tiling.m,
+      ((2 * D.geom.r + 4 : ℕ) : ℝ) ≤ Real.log (T.S.n k : ℝ) ^ 3 ∧
+      ((max 1 (PT.tiling.P i).h * D.geom.r : ℕ) : ℝ) ≤ Real.log (T.S.n k : ℝ) ^ 4 ∧
+      ((D.geom.r * (max 1 (PT.tiling.P i).h * D.geom.r) *
+        (1 + ((PT.tiling.Icoord i).card + 2) * D.geom.r) * ((PT.tiling.Icoord i).card + 1) : ℕ) : ℝ) ≤
+        Real.log (T.S.n k : ℝ) ^ 20 := by
+  let C : ℝ := max 1 (4 * κ.A0)
+  have hC1 : 1 ≤ C := le_max_left _ _
+  have hC0 : 0 < C := by linarith
+  have hn : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop := tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hlog := Real.tendsto_log_atTop.comp hn
+  filter_upwards [hlog.eventually_ge_atTop (max 4 (max (4 * C) (8 * C ^ 3)))] with k hk
+  intro PT hPT D i
+  let L := Real.log (T.S.n k : ℝ)
+  have hL4 : 4 ≤ L := (le_max_left _ _).trans hk
+  have hLC : 4 * C ≤ L := (le_max_right _ _).trans hk |>.trans' (le_max_left _ _)
+  have hLC3 : 8 * C ^ 3 ≤ L := (le_max_right _ _).trans hk |>.trans' (le_max_right _ _)
+  have hL1 : 1 ≤ L := by linarith
+  have hL0 : 0 < L := by linarith
+  have hHeight := height_le_log hκ D i hL4
+  have hI : ((PT.tiling.Icoord i).card : ℝ) ≤ L := by
+    have hi : (PT.tiling.Icoord i).card ≤ (PT.tiling.P i).h := by
+      simpa only [Fintype.card_coe] using internalCoords_card_le hPT i
+    exact (show ((PT.tiling.Icoord i).card : ℝ) ≤ (PT.tiling.P i).h from by exact_mod_cast hi).trans hHeight
+  have hM : ((max 1 (PT.tiling.P i).h : ℕ) : ℝ) ≤ L := by
+    rw [Nat.cast_max, Nat.cast_one]
+    exact max_le hL1 hHeight
+  have hr : (D.geom.r : ℝ) ≤ C * L := by
+    have hlog2 : 1 / 2 ≤ Real.log 2 := by linarith [Real.log_two_gt_d9]
+    have hscale : (D.geom.r : ℝ) ≤ 2 * ((D.geom.r : ℝ) * Real.log 2) := by
+      nlinarith [show (0 : ℝ) ≤ D.geom.r from Nat.cast_nonneg _]
+    have hupper : (D.geom.r : ℝ) * Real.log 2 ≤ 2 * κ.A0 * L := D.l16_valid.r_upper
+    have hh : (D.geom.r : ℝ) ≤ (4 * κ.A0) * L := by nlinarith
+    exact hh.trans (mul_le_mul_of_nonneg_right (le_max_right _ _) hL0.le)
+  have hhr : ((max 1 (PT.tiling.P i).h * D.geom.r : ℕ) : ℝ) ≤ C * L ^ 2 := by
+    rw [Nat.cast_mul]
+    calc
+      _ ≤ L * (C * L) := mul_le_mul hM hr (Nat.cast_nonneg _) hL0.le
+      _ = _ := by ring
+  have hi2 : ((PT.tiling.Icoord i).card : ℝ) + 1 ≤ 2 * L := by linarith
+  have hi3 : ((PT.tiling.Icoord i).card : ℝ) + 2 ≤ 3 * L := by linarith
+  have hbig : 1 + (((PT.tiling.Icoord i).card : ℝ) + 2) * D.geom.r ≤ 4 * C * L ^ 2 := by
+    have hm := mul_le_mul hi3 hr (Nat.cast_nonneg D.geom.r) (by positivity : (0 : ℝ) ≤ 3 * L)
+    have hu : 1 ≤ C * L ^ 2 := by
+      have hsq : 1 ≤ L ^ 2 := by nlinarith
+      simpa using mul_le_mul hC1 hsq (by norm_num : (0 : ℝ) ≤ 1) hC0.le
+    nlinarith
+  have hmargin : (2 * D.geom.r + 4 : ℕ) ≤ L ^ 3 := by
+    have hm := mul_le_mul_of_nonneg_right hLC (sq_nonneg L)
+    have hpow := mul_le_mul_of_nonneg_right hL4 (sq_nonneg L)
+    norm_num only [Nat.cast_add, Nat.cast_mul, Nat.cast_ofNat]
+    nlinarith
+  have homit : ((max 1 (PT.tiling.P i).h * D.geom.r : ℕ) : ℝ) ≤ L ^ 4 := by
+    apply hhr.trans
+    calc
+      _ ≤ L * L ^ 2 := mul_le_mul_of_nonneg_right (show C ≤ L by linarith) (sq_nonneg L)
+      _ = L ^ 3 := by ring
+      _ ≤ L ^ 4 := pow_le_pow_right₀ hL1 (by norm_num)
+  have hhr' : ((max 1 (PT.tiling.P i).h : ℕ) : ℝ) * (D.geom.r : ℝ) ≤ C * L ^ 2 := by
+    simpa only [Nat.cast_mul] using hhr
+  have hcalls : ((D.geom.r * (max 1 (PT.tiling.P i).h * D.geom.r) *
+      (1 + ((PT.tiling.Icoord i).card + 2) * D.geom.r) * ((PT.tiling.Icoord i).card + 1) : ℕ) : ℝ) ≤ L ^ 20 := by
+    simp only [Nat.cast_mul, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat]
+    calc
+      _ ≤ (C * L) * (C * L ^ 2) * (4 * C * L ^ 2) * (2 * L) := by
+        exact mul_le_mul (mul_le_mul (mul_le_mul hr hhr' (by positivity) (by positivity)) hbig
+          (by positivity) (by positivity)) hi2 (by positivity) (by positivity)
+      _ = (8 * C ^ 3) * L ^ 6 := by ring
+      _ ≤ L * L ^ 6 := mul_le_mul_of_nonneg_right hLC3 (by positivity)
+      _ = L ^ 7 := by ring
+      _ ≤ L ^ 20 := pow_le_pow_right₀ hL1 (by norm_num)
+  exact ⟨hmargin, homit, hcalls⟩
+
 end HypercubeRamsey.Lane_sol_s18_1c

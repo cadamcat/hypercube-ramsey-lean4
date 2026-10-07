@@ -121,6 +121,23 @@ theorem L6_1c_cap (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   -- factors control the posterior numerator. The remaining denominator tail is the
   -- predictive test from Lemma 3.7.
   have hpriorCap : ∀ y, 0 ≤ X.initLaw.w y := fun y => X.initLaw.nonneg y
+  have hpriorCapOnSupport : ∀ b, X.baseLaw.w b ≠ 0 → ∀ y,
+      (N : ℝ) * (if h.2 = .interior then (X.candLaw b.1).w y else X.initLaw.w y) ≤
+        20 * (n : ℝ) ^ Dstar₆ := by
+    intro b hb y
+    by_cases hflag : h.2 = .interior
+    · rcases Lane_q_s06_steps1.baseLaw_local_support6 X b hb with ⟨hinit, _, _⟩
+      have hmass : 0 < X.par.piPrime.pr (fun z => z ∈ X.par.S₀) := by
+        linarith [X.par.S₀_mass]
+      have hS₀ := restrictOr6_supp hmass (ne_of_gt hinit)
+      have hcap := Lane_q_s06_steps1.candLaw_atom_cap6 X b.1 y hS₀.1
+      simpa [hflag] using hcap
+    · have hcap := Lane_q_s06_steps1.initLaw_atom_cap6 X y
+      have hpow : 0 ≤ (n : ℝ) ^ Dstar₆ := Real.rpow_nonneg (Nat.cast_nonneg n) _
+      have hcap' : (N : ℝ) * X.initLaw.w y ≤ 20 * (n : ℝ) ^ Dstar₆ := by
+        nlinarith
+      simpa [hflag] using hcap'
+  have hkeyCard : (X.C h).card ≤ 602 := X.g.flips.key_neighborhood_card h
   sorry
 
 /-- L6.1c (deletion, 06:173–181): the incoming tag has likelihood `≤ n^{d₀} Λ(i)` at every supported parent
@@ -137,9 +154,75 @@ theorem L6_1c_del (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
           (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) := by
     intro b y
     exact Lane_q_s06_steps1.hidWeight_erase_factor X b h (X.C h) y s hs
-  -- Outside the predictive-density alarm, Bayes' formula bounds every deletion
-  -- multiplier by the incoming-tag likelihood cap divided by its predictive density.
-  sorry
+  let predGood : X.Base → Prop := fun b =>
+    (n : ℝ) ^ (-δ₁) * M.Λ (b.2.2 s) ≤
+      ∑ z, (X.hidPostDel b h s).w z *
+        (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s)
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hconditional : ∀ b, X.baseLaw.w b ≠ 0 → predGood b → X.Step1Del b h s := by
+    intro b hb hgood
+    rcases Lane_q_s06_steps1.baseLaw_local_support6 X b hb with ⟨hinit, hcands, htags⟩
+    have hactualFull := Lane_q_s06_steps1.hidWeight_pos_at_actual_parent6 X b h (X.C h)
+      ⟨hinit, hcands, htags⟩
+    have hactualDel := Lane_q_s06_steps1.hidWeight_pos_at_actual_parent6 X b h
+      ((X.C h).erase s) ⟨hinit, hcands, htags⟩
+    have hfullMass : 0 < ∑ z, X.hidWeight b h (X.C h) z := by
+      have hsingle := Finset.single_le_sum
+        (fun z hz => Lane_q_s06_steps1.hidWeight_nonneg X b h (X.C h) z)
+        (Finset.mem_univ ((X.parOf b).val (primaryName6 h)))
+      exact lt_of_lt_of_le hactualFull hsingle
+    have hdelMass : 0 < ∑ z, X.hidWeight b h ((X.C h).erase s) z := by
+      have hsingle := Finset.single_le_sum
+        (fun z hz => Lane_q_s06_steps1.hidWeight_nonneg X b h ((X.C h).erase s) z)
+        (Finset.mem_univ ((X.parOf b).val (primaryName6 h)))
+      exact lt_of_lt_of_le hactualDel hsingle
+    have hLambda : 0 < M.Λ (b.2.2 s) := by
+      have htagParent := parent_heavy_related_of_local_support X s b hinit
+        (hcands s.1)
+      have hdom := hTagDom (X.parOf b) s htagParent.1 htagParent.2 (b.2.2 s)
+      by_contra hnot
+      have hzero : M.Λ (b.2.2 s) = 0 :=
+        le_antisymm (le_of_not_gt hnot) (M.Λ_nonneg (b.2.2 s))
+      rw [hzero] at hdom
+      linarith [htags s]
+    have hlike : ∀ z, 0 < X.hidWeight b h ((X.C h).erase s) z →
+        (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s) ≤
+          (n : ℝ) ^ d₀ * M.Λ (b.2.2 s) := by
+      intro z hdelz
+      let like := (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s)
+      by_cases hzero : like = 0
+      · simpa [like, hzero] using
+          (mul_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) d₀) (M.Λ_nonneg (b.2.2 s)))
+      · have hlikePos : 0 < like :=
+          lt_of_le_of_ne ((X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).nonneg (b.2.2 s))
+            (Ne.symm hzero)
+        have hfullz : 0 < X.hidWeight b h (X.C h) z := by
+          rw [hfactor b z]
+          exact mul_pos hdelz hlikePos
+        have hparent := Lane_q_s06_steps1.hidWeight_parent_related_at_neighbor
+          X b s h z hinit hfullz hs
+        have hdom := hTagDom ((X.parOf b).set (primaryName6 h) z) s hparent.1 hparent.2 (b.2.2 s)
+        simpa [like] using hdom
+    have hpostdom := Lane_q_s06_steps1.hidPostDel_dom_of_predictive6 X b h s (b.2.2 s) hs
+      hn1R hLambda hfullMass hdelMass (by simpa [predGood] using hgood) hlike
+    simpa [Ctx6.Step1Del] using hpostdom
+  have hfailureSub : ∀ b, X.baseLaw.w b ≠ 0 → ¬ X.Step1Del b h s → ¬ predGood b := by
+    intro b hb hfail hgood
+    exact hfail (hconditional b hb hgood)
+  have hrawAlarm : X.baseLaw.pr (fun b => ¬ X.Step1Del b h s) ≤
+      X.baseLaw.pr (fun b => ¬ predGood b) :=
+    pr_mono_supp6 X.baseLaw (fun b hb hbad => hfailureSub b hb hbad)
+  have hδ1 : 0 < δ₁ := by
+    rcases constants6_facts with ⟨_, _, _, _, _, hδ1, _, _⟩
+    exact hδ1
+  have htail : X.baseLaw.pr (fun b => ¬ predGood b) ≤ (n : ℝ) ^ (-δ₁) := by
+    -- This is the raw predictive-denominator tail estimate for the local base experiment.
+    sorry
+  calc
+    X.baseLaw.pr (fun b => ¬ X.Step1Del b h s) ≤ X.baseLaw.pr (fun b => ¬ predGood b) := hrawAlarm
+    _ ≤ (n : ℝ) ^ (-δ₁) := htail
+    _ ≤ (n : ℝ) ^ (-(δ₁ / 2)) :=
+      Real.rpow_le_rpow_of_exponent_le hn1R (by linarith)
 
 namespace Ctx6
 
@@ -188,6 +271,10 @@ theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   have hobsCard := occType_obs_card_le X β hβ
   have huPos : 1 ≤ β.u := by
     cases hmode : β.mode <;> simp [Type6.u, hmode]
+  have hobsFactor : (β.obs.card : ℝ) + 1 ≤ 603 * (β.u : ℝ) := by
+    have hcardR : (β.obs.card : ℝ) ≤ 602 * (β.u : ℝ) := by exact_mod_cast hobsCard
+    have huR : 1 ≤ (β.u : ℝ) := by exact_mod_cast huPos
+    linarith
   -- The mass events have the required conditional bounds, but the raw law still needs to be
   -- factored through the base tag at `β.key` and the hidden coordinates in `β.obs`.
   sorry

@@ -1593,6 +1593,89 @@ private theorem scaleFailure9_restrictLocal {P : Params9} {hc : HeightChoice9 P}
     exact (scaleBad9_restrictLocal hmn C t s Pp A start x R
       (hsite x hx) (hlevel x hx)).mpr hbad
 
+private theorem scaleSupport9_subset_rootSupport9 {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} (hmn : P.m n ≤ n) (root : CubeVertex n) (start : HeightState9 P hc n)
+    (R : ℕ) (hstart : _root_.hammingDist start.1 root ≤ 4 * R + 2) :
+    scaleSupport9 start R ⊆ scaleRootSupport9 root R := by
+  intro c hc
+  simp only [scaleSupport9, Finset.mem_filter] at hc
+  have hconsult' : _root_.hammingDist c.slice (specialWord9 (P.m n) start.1) ≤
+        2 * (8 * R) + 1 ∧
+      _root_.hammingDist c.location (residualWord9 (P.m n) start.1) ≤
+        P.radius n + 2 * (8 * R) + 1 := by
+    simpa only [consulted9, Finset.mem_filter, Finset.mem_univ, true_and] using hc.1
+  have hconsult : _root_.hammingDist c.slice (specialWord9 (P.m n) start.1) ≤ 16 * R + 1 ∧
+      _root_.hammingDist c.location (residualWord9 (P.m n) start.1) ≤ P.radius n + 16 * R + 1 := by
+    rcases hconsult' with ⟨hsp, hres⟩
+    exact ⟨by omega, by omega⟩
+  have hspProj := specialWord9_hammingDist_le hmn start.1 root
+  have hresProj := residualWord9_hammingDist_le hmn start.1 root
+  have hspTri := _root_.hammingDist_triangle c.slice
+    (specialWord9 (P.m n) start.1) (specialWord9 (P.m n) root)
+  have hresTri := _root_.hammingDist_triangle c.location
+    (residualWord9 (P.m n) start.1) (residualWord9 (P.m n) root)
+  have hsp : _root_.hammingDist c.slice (specialWord9 (P.m n) root) ≤ 20 * R + 5 := by
+    calc
+      _root_.hammingDist c.slice (specialWord9 (P.m n) root) ≤
+          _root_.hammingDist c.slice (specialWord9 (P.m n) start.1) +
+            _root_.hammingDist (specialWord9 (P.m n) start.1) (specialWord9 (P.m n) root) := hspTri
+      _ ≤ (16 * R + 1) + (4 * R + 2) := Nat.add_le_add hconsult.1 (le_trans hspProj hstart)
+      _ ≤ 20 * R + 5 := by omega
+  have hres : _root_.hammingDist c.location (residualWord9 (P.m n) root) ≤
+      P.radius n + 20 * R + 5 := by
+    calc
+      _root_.hammingDist c.location (residualWord9 (P.m n) root) ≤
+          _root_.hammingDist c.location (residualWord9 (P.m n) start.1) +
+            _root_.hammingDist (residualWord9 (P.m n) start.1) (residualWord9 (P.m n) root) := hresTri
+      _ ≤ (P.radius n + 16 * R + 1) + (4 * R + 2) :=
+        Nat.add_le_add hconsult.2 (le_trans hresProj hstart)
+      _ ≤ P.radius n + 20 * R + 5 := by omega
+  simp only [scaleRootSupport9, consulted9, Finset.mem_filter, Finset.mem_univ,
+    true_and]
+  exact ⟨by omega, by omega⟩
+
+private theorem scaleFailure9_dependsOnSupport {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} (hmn : P.m n ≤ n) (C S : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
+    (Pp Pp' A A' : Pos9 P hc n → Bool) (start : HeightState9 P hc n)
+    (hsubset : scaleSupport9 start R ⊆ S)
+    (hagree : ∀ c ∈ S, Pp c = Pp' c ∧ A c = A' c) :
+    scaleFailure9 C t s η R Pp A start ↔ scaleFailure9 C t s η R Pp' A' start := by
+  have hlocal := scaleFailure9_restrictLocal hmn C t s η R Pp A start
+  have hlocal' := scaleFailure9_restrictLocal hmn C t s η R Pp' A' start
+  have hP : ∀ c ∈ C ∩ scaleSupport9 start R, Pp c = Pp' c := by
+    intro c hc
+    exact (hagree c (hsubset (Finset.mem_inter.mp hc).2)).1
+  have hA : ∀ c ∈ C ∩ scaleSupport9 start R, A c = A' c := by
+    intro c hc
+    exact (hagree c (hsubset (Finset.mem_inter.mp hc).2)).2
+  have hcongr := scaleFailure9_congr_on_C (C ∩ scaleSupport9 start R)
+    t s η R Pp Pp' A A' hP hA start
+  constructor
+  · intro h
+    exact hlocal'.mpr (hcongr.mp (hlocal.mp h))
+  · intro h
+    exact hlocal.mpr (hcongr.mpr (hlocal'.mp h))
+
+private theorem rootScaleFailure9_dependsOn_rootSupport {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} (hmn : P.m n ≤ n) (t s η : ℝ) (R : ℕ)
+    (Pp Pp' A A' : Pos9 P hc n → Bool) (root : CubeVertex n)
+    (hagree : ∀ c ∈ scaleRootSupport9 root R,
+      Pp c = Pp' c ∧ A c = A' c) :
+    rootScaleFailure9 Finset.univ t s η R Pp A root ↔
+      rootScaleFailure9 Finset.univ t s η R Pp' A' root := by
+  unfold rootScaleFailure9
+  constructor
+  · rintro ⟨start, hstart, hfail⟩
+    refine ⟨start, hstart, ?_⟩
+    exact (scaleFailure9_dependsOnSupport hmn Finset.univ (scaleRootSupport9 root R)
+      t s η R Pp Pp' A A' start (scaleSupport9_subset_rootSupport9 hmn root start R hstart)
+      hagree).mp hfail
+  · rintro ⟨start, hstart, hfail⟩
+    refine ⟨start, hstart, ?_⟩
+    exact (scaleFailure9_dependsOnSupport hmn Finset.univ (scaleRootSupport9 root R)
+      t s η R Pp Pp' A A' start (scaleSupport9_subset_rootSupport9 hmn root start R hstart)
+      hagree).mpr hfail
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

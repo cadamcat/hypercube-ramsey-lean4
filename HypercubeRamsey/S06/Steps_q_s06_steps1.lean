@@ -1216,6 +1216,69 @@ theorem predictive_deleted_bad_mass6 {Ω : Type*} [Fintype Ω]
       · simp [hlt, mul_nonneg ha (hd ω)]
     _ = a * ∑ ω, d ω := by rw [Finset.mul_sum]
 
+/-- A posterior atom can be large only where its predictive density is small.  The local observation law is
+`m`; `R` is any reference law which dominates every likelihood. -/
+theorem posterior_bad_mass_from_dom6 {α β : Type*} [Fintype α] [Fintype β]
+    (Q : FinProb α) (R : FinProb β) (L : α → β → ℝ)
+    (C D t s : ℝ) (hC : 0 ≤ C) (hD : 0 ≤ D) (ht : 0 < t) (hs : 0 < s)
+    (hprior : ∀ a, Q.w a ≤ C / s)
+    (hlike : ∀ a b, 0 ≤ L a b ∧ L a b ≤ D * R.w b) :
+    (∑ b, if ∃ a, t / s <
+        (Q.w a * L a b) / (∑ a', Q.w a' * L a' b)
+      then ∑ a', Q.w a' * L a' b else 0) ≤ C * D / t := by
+  let m : β → ℝ := fun b => ∑ a, Q.w a * L a b
+  have hm0 : ∀ b, 0 ≤ m b := by
+    intro b
+    apply Finset.sum_nonneg
+    intro a ha
+    exact mul_nonneg (Q.nonneg a) (hlike a b).1
+  have ha : 0 ≤ C * D / t := by positivity
+  have hlow (b : β) (hb : ∃ a, t / s <
+      (Q.w a * L a b) / (∑ a', Q.w a' * L a' b)) :
+      m b < (C * D / t) * R.w b := by
+    rcases hb with ⟨a, hpost⟩
+    have hden : 0 < m b := by
+      by_contra hnot
+      have hz : m b = 0 := le_antisymm (le_of_not_gt hnot) (hm0 b)
+      rw [show (∑ a', Q.w a' * L a' b) = m b by rfl, hz, div_zero] at hpost
+      exact (not_lt_of_ge (le_of_lt (div_pos ht (by positivity)))) hpost
+    have hcross : (t / s) * m b < Q.w a * L a b :=
+      (lt_div_iff₀ hden).mp hpost
+    have hNlik : s * (Q.w a * L a b) ≤ C * D * R.w b := by
+      have hq : s * Q.w a ≤ C := by
+        calc
+          s * Q.w a ≤ s * (C / s) := mul_le_mul_of_nonneg_left (hprior a) (le_of_lt hs)
+          _ = C := by field_simp [hs.ne']
+      have hq0 : 0 ≤ s * Q.w a := mul_nonneg (le_of_lt hs) (Q.nonneg a)
+      calc
+        s * (Q.w a * L a b) = (s * Q.w a) * L a b := by ring
+        _ ≤ C * (D * R.w b) := mul_le_mul hq (hlike a b).2 (hlike a b).1 hC
+        _ = C * D * R.w b := by ring
+    have htm : t * m b < C * D * R.w b := by
+      calc
+        t * m b = s * ((t / s) * m b) := by field_simp [hs.ne']
+        _ < s * (Q.w a * L a b) := mul_lt_mul_of_pos_left hcross hs
+        _ ≤ C * D * R.w b := hNlik
+    have hdiv : m b < (C * D * R.w b) / t := (lt_div_iff₀ ht).2 (by nlinarith [htm])
+    calc
+      m b < (C * D * R.w b) / t := hdiv
+      _ = (C * D / t) * R.w b := by ring
+  have hbound := predictive_bad_mass6 R m hm0 (C * D / t) ha
+  calc
+    (∑ b, if ∃ a, t / s <
+        (Q.w a * L a b) / (∑ a', Q.w a' * L a' b)
+      then ∑ a', Q.w a' * L a' b else 0) ≤
+      ∑ b, if m b < (C * D / t) * R.w b ∨ m b = 0 then m b else 0 := by
+        apply Finset.sum_le_sum
+        intro b hb
+        by_cases hbad : ∃ a, t / s <
+            (Q.w a * L a b) / (∑ a', Q.w a' * L a' b)
+        · rw [if_pos hbad, if_pos (Or.inl (hlow b hbad))]
+        · rw [if_neg hbad]
+          have hmnonneg := hm0 b
+          split_ifs <;> [exact hmnonneg; exact le_rfl]
+    _ ≤ C * D / t := hbound
+
 theorem notStep2Tests_cases6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
     (H : X.Hist) (β : X.Ty) (hn : 1 ≤ n) (hfail : ¬ X.Step2Tests H β) :

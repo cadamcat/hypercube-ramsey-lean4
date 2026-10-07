@@ -64,7 +64,7 @@ theorem p92_regularity (P : Params9) (hP : P.Valid) :
       {X Y : Finset (Fin N)} {κ : ℝ} {G : Colour} {M : TagMix N} (S : Setup9 P n N M)
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c := by
-  sorry
+  exact Lane_q_s09_gain1.regularity_certificate9 P hP
 
 /-! ## P9.2-condmean (09:171–184) -/
 

@@ -664,7 +664,7 @@ private theorem lik_nonneg {N : ℕ} {I : Type} [Fintype I] {k : ℕ}
     split_ifs <;> norm_num
   · exact colDeg_nonneg E G μ y
 
-private theorem oddRowW_nonneg {N : ℕ} {I : Type} [Fintype I] {k : ℕ}
+private theorem oddRowW_nonneg {N : ℕ} {I : Type} [Fintype I] [DecidableEq I] {k : ℕ}
     (E : Fin N → Fin N → Prop) (G : Colour) (g : ℝ) (μ ν : Law N)
     (ws : I → Fin k → Fin N) (y : Fin N) : 0 ≤ oddRowW E G g μ ν ws y := by
   unfold oddRowW
@@ -692,6 +692,161 @@ private theorem oddRowF_sum_one {n N : ℕ} {E : Fin N → Fin N → Prop}
   unfold oddRowF
   exact oddRowW_sum_one E M.G (gS n) (M.μ (t (sliceOf b.1)))
     (M.ν (t (sliceOf b.1))) (starOf W b)
+
+private theorem ballW_sum_one {N : ℕ} {E : Fin N → Fin N → Prop}
+    {I : Type} [Fintype I] [DecidableEq I] {k : ℕ}
+    (G : Colour) (μ : Law N) (y₀ : Fin N) :
+    ∑ W : Option (Pair I) → Fin k → Fin N, ballW E G μ y₀ W = 1 := by
+  classical
+  let P : Option (Pair I) → FinProb (Fin k → Fin N) :=
+    fun _ => tupLaw E G μ y₀ k
+  have hweight (W : Option (Pair I) → Fin k → Fin N) :
+      (FinProb.pi P).w W = ballW E G μ y₀ W := by
+    simp [FinProb.pi, P, ballW, tupLaw, tupW]
+  calc
+    ∑ W : Option (Pair I) → Fin k → Fin N, ballW E G μ y₀ W =
+        ∑ W, (FinProb.pi P).w W := by
+          apply Finset.sum_congr rfl
+          intro W hW
+          rw [hweight]
+    _ = 1 := (FinProb.pi P).sum_eq_one
+
+private theorem outW_nonneg {N : ℕ} {E : Fin N → Fin N → Prop}
+    {I : Type} [Fintype I] [DecidableEq I] {k : ℕ}
+    (G : Colour) (g : ℝ) (μ ν : Law N)
+    (W : Option (Pair I) → Fin k → Fin N) (z : I → Fin N) :
+    0 ≤ outW E G g μ ν W z := by
+  unfold outW
+  apply Finset.prod_nonneg
+  intro a ha
+  exact oddRowW_nonneg E G g μ ν (ballStar W a) (z a)
+
+private theorem outW_sum_one {N : ℕ} {E : Fin N → Fin N → Prop}
+    {I : Type} [Fintype I] [DecidableEq I] {k : ℕ}
+    (G : Colour) (g : ℝ) (μ ν : Law N)
+    (W : Option (Pair I) → Fin k → Fin N) :
+    ∑ z : I → Fin N, outW E G g μ ν W z = 1 := by
+  classical
+  let R : I → FinProb (Fin N) := fun a => {
+    w := fun y => oddRowW E G g μ ν (ballStar W a) y
+    nonneg := fun y => oddRowW_nonneg E G g μ ν (ballStar W a) y
+    sum_eq_one := oddRowW_sum_one E G g μ ν (ballStar W a) }
+  have hweight (z : I → Fin N) : (FinProb.pi R).w z = outW E G g μ ν W z := by
+    simp [FinProb.pi, R, outW]
+  calc
+    ∑ z : I → Fin N, outW E G g μ ν W z = ∑ z, (FinProb.pi R).w z := by
+      apply Finset.sum_congr rfl
+      intro z hz
+      rw [hweight]
+    _ = 1 := (FinProb.pi R).sum_eq_one
+
+theorem alphaRow_cap {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (i : M.ι) (x : Fin N) (hN : 0 < N) :
+    (N : ℝ) * alphaRow M y₀ i x ≤
+      Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)) := by
+  classical
+  let A : ℝ := (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)
+  let σ : (InnerCoord n → Fin N) → ℝ := fun z => sigmaW E M.G (gS n) (M.μ i) z x
+  have hσ (z : InnerCoord n → Fin N) : (N : ℝ) * σ z ≤ Real.exp A := by
+    unfold σ sigmaW
+    by_cases h : x ∈ commonSet E M.G (M.μ i) z ∧
+        (N : ℝ) * Real.exp (-((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n))) ≤
+          ((commonSet E M.G (M.μ i) z).card : ℝ)
+    · have hNreal : 0 < (N : ℝ) := by exact_mod_cast hN
+      have hcard : 0 < ((commonSet E M.G (M.μ i) z).card : ℝ) :=
+        lt_of_lt_of_le (mul_pos hNreal (Real.exp_pos _)) h.2
+      have hmul : (N : ℝ) ≤
+          ((commonSet E M.G (M.μ i) z).card : ℝ) * Real.exp A := by
+        have hexp : Real.exp (-A) * Real.exp A = 1 := by
+          rw [← Real.exp_add]
+          simp
+        calc
+          (N : ℝ) = (N : ℝ) * (Real.exp (-A) * Real.exp A) := by rw [hexp]; ring
+          _ = ((N : ℝ) * Real.exp (-A)) * Real.exp A := by ring
+          _ ≤ ((commonSet E M.G (M.μ i) z).card : ℝ) * Real.exp A :=
+            mul_le_mul_of_nonneg_right h.2 (Real.exp_pos A).le
+      have hdiv : (N : ℝ) / ((commonSet E M.G (M.μ i) z).card : ℝ) ≤ Real.exp A :=
+        (div_le_iff₀ hcard).2 (by nlinarith [hmul])
+      have hσeq : (N : ℝ) * ((commonSet E M.G (M.μ i) z).card : ℝ)⁻¹ =
+          (N : ℝ) / ((commonSet E M.G (M.μ i) z).card : ℝ) := by rw [div_eq_mul_inv]
+      simpa [h, A, hσeq] using hdiv
+    · simpa [h, A] using (Real.exp_nonneg A)
+  unfold alphaRow meanEvenRow
+  have hinnerEq (W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N) :
+      (N : ℝ) *
+          ∑ z : InnerCoord n → Fin N,
+            outW E M.G (gS n) (M.μ i) (M.ν i) W z * sigmaW E M.G (gS n) (M.μ i) z x =
+        ∑ z : InnerCoord n → Fin N,
+          outW E M.G (gS n) (M.μ i) (M.ν i) W z *
+            ((N : ℝ) * sigmaW E M.G (gS n) (M.μ i) z x) := by
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro z hz
+    ring
+  have houterEq :
+      (N : ℝ) *
+          ∑ W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N,
+            ballW E M.G (M.μ i) (y₀ i) W *
+              ∑ z : InnerCoord n → Fin N,
+                outW E M.G (gS n) (M.μ i) (M.ν i) W z *
+                  sigmaW E M.G (gS n) (M.μ i) z x =
+        ∑ W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N,
+          ballW E M.G (M.μ i) (y₀ i) W *
+          ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z *
+            ((N : ℝ) * sigmaW E M.G (gS n) (M.μ i) z x) := by
+    calc
+      _ = ∑ W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N, (N : ℝ) *
+          (ballW E M.G (M.μ i) (y₀ i) W *
+            ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z *
+              sigmaW E M.G (gS n) (M.μ i) z x) := by rw [Finset.mul_sum]
+      _ = ∑ W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N,
+          ballW E M.G (M.μ i) (y₀ i) W *
+          ((N : ℝ) *
+            ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z *
+              sigmaW E M.G (gS n) (M.μ i) z x) := by
+            apply Finset.sum_congr rfl
+            intro W hW
+            ring
+      _ = ∑ W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N,
+          ballW E M.G (M.μ i) (y₀ i) W *
+          ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z *
+            ((N : ℝ) * sigmaW E M.G (gS n) (M.μ i) z x) := by
+            apply Finset.sum_congr rfl
+            intro W hW
+            rw [hinnerEq W]
+  calc
+    (N : ℝ) *
+        ∑ W : Option (Pair (InnerCoord n)) → Fin (kTup n) → Fin N,
+          ballW E M.G (M.μ i) (y₀ i) W *
+            ∑ z : InnerCoord n → Fin N,
+              outW E M.G (gS n) (M.μ i) (M.ν i) W z * sigmaW E M.G (gS n) (M.μ i) z x =
+      ∑ W, ballW E M.G (M.μ i) (y₀ i) W *
+        ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z * ((N : ℝ) * σ z) := by
+          simpa [σ] using houterEq
+    _ ≤ ∑ W, ballW E M.G (M.μ i) (y₀ i) W * Real.exp A := by
+          apply Finset.sum_le_sum
+          intro W hW
+          apply mul_le_mul_of_nonneg_left _ (by
+            unfold ballW tupW
+            apply Finset.prod_nonneg
+            intro o ho
+            apply Finset.prod_nonneg
+            intro j hj
+            exact (rhoLaw E M.G (M.μ i) (y₀ i)).nonneg _)
+          calc
+            ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z * ((N : ℝ) * σ z) ≤
+                ∑ z, outW E M.G (gS n) (M.μ i) (M.ν i) W z * Real.exp A := by
+                  apply Finset.sum_le_sum
+                  intro z hz
+                  exact mul_le_mul_of_nonneg_left (hσ z)
+                    (outW_nonneg M.G (gS n) (M.μ i) (M.ν i) W z)
+            _ = Real.exp A := by
+                  rw [← Finset.sum_mul, outW_sum_one M.G (gS n) (M.μ i) (M.ν i) W]
+                  ring
+    _ = Real.exp A := by
+          rw [← Finset.sum_mul, ballW_sum_one M.G (M.μ i) (y₀ i)]
+          ring
 
 theorem rawFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)

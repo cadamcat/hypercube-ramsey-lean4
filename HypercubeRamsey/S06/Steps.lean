@@ -1,5 +1,9 @@
 import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S06.Steps_q_s06_steps1
+import HypercubeRamsey.S06.Steps_raw_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_window_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_cap_sol_s06_steps1
+import HypercubeRamsey.S06.Steps_q_s06_steps2
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -19,6 +23,7 @@ from the predicates of earlier steps (stated as hypotheses, so that the section 
 namespace HypercubeRamsey
 namespace S06
 
+open Lane_q_s06_steps1
 open OAI.HypercubeRamsey
 open Classical
 open Filter
@@ -113,15 +118,46 @@ theorem L6_1c_tag (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 predictive-denominator calculation (L3.7) with `d₀, δ₁ ≪ d₁`. -/
 theorem L6_1c_cap (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step1CapBound := by
-  refine ⟨1, 1, ?_⟩
+  let gap := d₁ - δ₁ - (Dstar₆ + 602 * d₀)
+  have hgap : 0 < gap := by norm_num [gap, d₁, δ₁, Dstar₆, d₀]
+  have htend : Tendsto (fun n : ℕ => (n : ℝ)^gap) atTop atTop :=
+    (tendsto_rpow_atTop hgap).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htend.eventually (eventually_ge_atTop ((20 : ℝ)^603)))
+  refine ⟨max 1 n₀, 1, ?_⟩
   intro n N E G M X hlarge hTagDom
-  have hn1 : 1 ≤ n := hlarge.1
-  intro h hh
-  -- On raw support, the bounded parent-prior atom and the incoming-tag likelihood
-  -- factors control the posterior numerator. The remaining denominator tail is the
-  -- predictive test from Lemma 3.7.
-  have hpriorCap : ∀ y, 0 ≤ X.initLaw.w y := fun y => X.initLaw.nonneg y
-  sorry
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hnp : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+  have hbig : (20 : ℝ)^603 ≤ (n : ℝ)^gap :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
+  have hbudget : Lane_sol_s06_steps1.capBudget n ≤ (n : ℝ)^(d₁-δ₁) := by
+    calc
+      _ = (20 : ℝ)^603 * (n : ℝ)^(Dstar₆+602*d₀) := rfl
+      _ ≤ (n : ℝ)^gap * (n : ℝ)^(Dstar₆+602*d₀) :=
+        mul_le_mul_of_nonneg_right hbig (Real.rpow_nonneg hnp.le _)
+      _ = (n : ℝ)^(d₁-δ₁) := by
+        rw [← Real.rpow_add hnp]
+        congr 1
+        dsimp [gap]
+        ring
+  intro h _hh
+  have hraw : X.baseLaw.pr (fun b => ¬ X.Step1Cap b h) ≤
+      Lane_sol_s06_steps1.capBudget n / (n : ℝ)^d₁ := by
+    simpa only [Ctx6.Step1Cap, not_forall, not_le] using
+      Lane_sol_s06_steps1.posterior_cap_bound X h hnR hTagDom ((n : ℝ)^d₁)
+        (Real.rpow_pos_of_pos hnp _)
+  calc
+    X.baseLaw.pr (fun b => ¬ X.Step1Cap b h) ≤
+        Lane_sol_s06_steps1.capBudget n / (n : ℝ)^d₁ := hraw
+    _ ≤ (n : ℝ)^(d₁-δ₁) / (n : ℝ)^d₁ :=
+      div_le_div_of_nonneg_right hbudget (Real.rpow_nonneg hnp.le _)
+    _ = (n : ℝ)^(-δ₁) := by
+      rw [← Real.rpow_sub hnp]
+      congr 1
+      ring
+    _ ≤ (n : ℝ)^(-(δ₁ / 2)) :=
+      Real.rpow_le_rpow_of_exponent_le hnR (by norm_num [δ₁])
 
 /-- L6.1c (deletion, 06:173–181): the incoming tag has likelihood `≤ n^{d₀} Λ(i)` at every supported parent
 value; its predictive density is `< n^{-δ₁}` with probability `≤ n^{-δ₁}`; Bayes off that event. -/
@@ -137,9 +173,76 @@ theorem L6_1c_del (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
           (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) := by
     intro b y
     exact Lane_q_s06_steps1.hidWeight_erase_factor X b h (X.C h) y s hs
-  -- Outside the predictive-density alarm, Bayes' formula bounds every deletion
-  -- multiplier by the incoming-tag likelihood cap divided by its predictive density.
-  sorry
+  let predGood : X.Base → Prop := fun b =>
+    (n : ℝ) ^ (-δ₁) * M.Λ (b.2.2 s) ≤
+      ∑ z, (X.hidPostDel b h s).w z *
+        (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s)
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hconditional : ∀ b, X.baseLaw.w b ≠ 0 → predGood b → X.Step1Del b h s := by
+    intro b hb hgood
+    rcases Lane_q_s06_steps1.baseLaw_local_support6 X b hb with ⟨hinit, hcands, htags⟩
+    have hactualFull := Lane_q_s06_steps1.hidWeight_pos_at_actual_parent6 X b h (X.C h)
+      ⟨hinit, hcands, htags⟩
+    have hactualDel := Lane_q_s06_steps1.hidWeight_pos_at_actual_parent6 X b h
+      ((X.C h).erase s) ⟨hinit, hcands, htags⟩
+    have hfullMass : 0 < ∑ z, X.hidWeight b h (X.C h) z := by
+      have hsingle := Finset.single_le_sum
+        (fun z hz => Lane_q_s06_steps1.hidWeight_nonneg X b h (X.C h) z)
+        (Finset.mem_univ ((X.parOf b).val (primaryName6 h)))
+      exact lt_of_lt_of_le hactualFull hsingle
+    have hdelMass : 0 < ∑ z, X.hidWeight b h ((X.C h).erase s) z := by
+      have hsingle := Finset.single_le_sum
+        (fun z hz => Lane_q_s06_steps1.hidWeight_nonneg X b h ((X.C h).erase s) z)
+        (Finset.mem_univ ((X.parOf b).val (primaryName6 h)))
+      exact lt_of_lt_of_le hactualDel hsingle
+    have hLambda : 0 < M.Λ (b.2.2 s) := by
+      have htagParent := parent_heavy_related_of_local_support X s b hinit
+        (hcands s.1)
+      have hdom := hTagDom (X.parOf b) s htagParent.1 htagParent.2 (b.2.2 s)
+      by_contra hnot
+      have hzero : M.Λ (b.2.2 s) = 0 :=
+        le_antisymm (le_of_not_gt hnot) (M.Λ_nonneg (b.2.2 s))
+      rw [hzero] at hdom
+      linarith [htags s]
+    have hlike : ∀ z, 0 < X.hidWeight b h ((X.C h).erase s) z →
+        (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s) ≤
+          (n : ℝ) ^ d₀ * M.Λ (b.2.2 s) := by
+      intro z hdelz
+      let like := (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s)
+      by_cases hzero : like = 0
+      · simpa [like, hzero] using
+          (mul_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) d₀) (M.Λ_nonneg (b.2.2 s)))
+      · have hlikePos : 0 < like :=
+          lt_of_le_of_ne ((X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).nonneg (b.2.2 s))
+            (Ne.symm hzero)
+        have hfullz : 0 < X.hidWeight b h (X.C h) z := by
+          rw [hfactor b z]
+          exact mul_pos hdelz hlikePos
+        have hparent := Lane_q_s06_steps1.hidWeight_parent_related_at_neighbor
+          X b s h z hinit hfullz hs
+        have hdom := hTagDom ((X.parOf b).set (primaryName6 h) z) s hparent.1 hparent.2 (b.2.2 s)
+        simpa [like] using hdom
+    have hpostdom := Lane_q_s06_steps1.hidPostDel_dom_of_predictive6 X b h s (b.2.2 s) hs
+      hn1R hLambda hfullMass hdelMass (by simpa [predGood] using hgood) hlike
+    simpa [Ctx6.Step1Del] using hpostdom
+  have hfailureSub : ∀ b, X.baseLaw.w b ≠ 0 → ¬ X.Step1Del b h s → ¬ predGood b := by
+    intro b hb hfail hgood
+    exact hfail (hconditional b hb hgood)
+  have hrawAlarm : X.baseLaw.pr (fun b => ¬ X.Step1Del b h s) ≤
+      X.baseLaw.pr (fun b => ¬ predGood b) :=
+    pr_mono_supp6 X.baseLaw (fun b hb hbad => hfailureSub b hb hbad)
+  have hδ1 : 0 < δ₁ := by
+    rcases constants6_facts with ⟨_, _, _, _, _, hδ1, _, _⟩
+    exact hδ1
+  have htail : X.baseLaw.pr (fun b => ¬ predGood b) ≤ (n : ℝ) ^ (-δ₁) := by
+    simpa only [predGood, not_le, Lane_sol_s06_steps1.posteriorPred] using
+      Lane_sol_s06_steps1.posterior_alarm_bound X h s hs ((n : ℝ) ^ (-δ₁))
+        (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+  calc
+    X.baseLaw.pr (fun b => ¬ X.Step1Del b h s) ≤ X.baseLaw.pr (fun b => ¬ predGood b) := hrawAlarm
+    _ ≤ (n : ℝ) ^ (-δ₁) := htail
+    _ ≤ (n : ℝ) ^ (-(δ₁ / 2)) :=
+      Real.rpow_le_rpow_of_exponent_le hn1R (by linarith)
 
 namespace Ctx6
 
@@ -175,22 +278,33 @@ end Ctx6
 /-- L6.1d (failure, 06:201–211). -/
 theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Bound := by
-  refine ⟨1, 1, ?_⟩
+  have hδ : 0 < δ₂ / 2 := by norm_num [δ₂]
+  have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ (δ₂ / 2)) atTop atTop :=
+    (tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htend.eventually (eventually_ge_atTop 1206))
+  refine ⟨max 1 n₀, 1, ?_⟩
   intro n N E G M X hlarge
-  have hn1 : 1 ≤ n := hlarge.1
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hbig : 1206 ≤ (n : ℝ) ^ (δ₂ / 2) :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
   intro β hβ
-  have hfailureShape : ∀ H : X.Hist, X.Step2Fail H β →
-      X.tagMass H β β.obs < X.step2Thr β ∨
-        ∃ ℓ ∈ β.obs, X.tagMass H β β.obs <
-          X.step2Thr β * X.tagMass H β (β.obs.erase ℓ) := by
-    intro H hfail
-    exact Lane_q_s06_steps1.notStep2Tests_cases6 X H β hn1 hfail.2
   have hobsCard := occType_obs_card_le X β hβ
   have huPos : 1 ≤ β.u := by
     cases hmode : β.mode <;> simp [Type6.u, hmode]
-  -- The mass events have the required conditional bounds, but the raw law still needs to be
-  -- factored through the base tag at `β.key` and the hidden coordinates in `β.obs`.
-  sorry
+  have hobsFactor : (β.obs.card : ℝ) + 1 ≤ 603 * (β.u : ℝ) := by
+    have hcardR : (β.obs.card : ℝ) ≤ 602 * (β.u : ℝ) := by exact_mod_cast hobsCard
+    have huR : 1 ≤ (β.u : ℝ) := by exact_mod_cast huPos
+    linarith
+  calc
+    X.rawHist.pr (fun H => X.Step2Fail H β) ≤
+        ((β.obs.card : ℝ) + 1) * X.step2Thr β :=
+      Lane_sol_s06_steps1.step2_raw_bound X β hn1
+    _ ≤ (603 * (β.u : ℝ)) * X.step2Thr β :=
+      mul_le_mul_of_nonneg_right hobsFactor (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+    _ ≤ (n : ℝ) ^ (-(δ₂ * β.u / 2)) :=
+      Lane_sol_s06_steps1.step2_prefactor hn1R hbig β.u huPos
 
 /-- L6.1d (domination, 06:212–220): the absolute ratio is `≤ n^{d₀ + d₁|S| + δ₂u}`, the deleted ratio
 `≤ n^{d₁ + δ₂u}`, both below `n^{d₂u}`. -/
@@ -819,17 +933,307 @@ def DescCount : Prop :=
 
 end Ctx6
 
+set_option maxHeartbeats 400000 in
 /-- L6.1e (sizes, 06:270–273): constantly many generic types, each with at most `T` IDs; `O(J+1)` exceptional
 states, one ID each. -/
 theorem L6_1e_size (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescSize := by
-  sorry
+  refine ⟨4, 0, ?_⟩
+  intro n N E G M X hLarge
+  have hn : 4 ≤ n := hLarge.1
+  intro Id _ _ b perm hb D hD
+  have hD' : D ∈ ((Finset.univ : Finset (X.g.L.stNbr b → Id)).filter
+      (fun φ => (∀ a, φ a ∈ perm a) ∧ (Finset.univ.image φ).card ≤ X.T)).image
+      (X.descOf b) := by
+    simpa only [Ctx6.descsIn] using hD
+  rcases Finset.mem_image.mp hD' with ⟨φ, hφ, rfl⟩
+  have hφ' := (Finset.mem_filter.mp hφ).2
+  rcases hφ' with ⟨hperm, hfan⟩
+  let S : Finset Id := Finset.univ.image φ
+  have hScard : S.card ≤ X.T := by simpa [S] using hfan
+  have hids : ∀ a, φ a ∈ S := fun a => Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩
+  let Tys : Finset X.Ty := Lane_q_s06_steps2.neighborTypeForms6 X b
+  have hTys : Tys.card ≤ 3 * 602 := Lane_q_s06_steps2.neighborTypeForms6_card X b
+  let Trans : Finset (X.g.L.stNbr b) := Finset.univ.filter
+    (fun a => X.stMode a.1 ≠ X.stMode b)
+  let Var : Finset (X.g.L.stNbr b) := Finset.univ.filter
+    (fun a => (X.stMode b = .low ∨ X.g.L.stSeverity a.1 = X.J + 1) ∧
+      (X.g.L.stSign a.1 ≠ X.g.L.stSign b ∨
+        X.g.L.stFlippable a.1 ≠ X.g.L.stFlippable b))
+  let Bad : Finset (X.g.L.stNbr b) := Trans ∪ Var
+  have hBadCard : Bad.card ≤ 1 + 21 * (X.J + 2) := by
+    simpa [Bad, Trans, Var] using Lane_q_s06_steps2.descriptorBadStates6_card X b hb hn
+  have hclass : ∀ a, X.stType a.1 ∈ Tys ∨ a ∈ Bad := by
+    intro a
+    by_cases hbad : a ∈ Bad
+    · exact Or.inr hbad
+    · have htrans : ¬ X.stMode a.1 ≠ X.stMode b := by
+        intro hmode
+        exact hbad (Finset.mem_union.mpr <| Or.inl <|
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmode⟩)
+      have hmode : X.stMode a.1 = X.stMode b := not_ne_iff.mp htrans
+      have hvar : ¬ ((X.stMode b = .low ∨ X.g.L.stSeverity a.1 = X.J + 1) ∧
+          (X.g.L.stSign a.1 ≠ X.g.L.stSign b ∨
+            X.g.L.stFlippable a.1 ≠ X.g.L.stFlippable b)) := by
+        intro hv
+        exact hbad (Finset.mem_union.mpr <| Or.inr <|
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩)
+      by_cases hlow : X.stMode b = .low
+      · by_cases hsign : X.g.L.stSign a.1 = X.g.L.stSign b
+        · by_cases hflip : X.g.L.stFlippable a.1 = X.g.L.stFlippable b
+          · exact Or.inl <| Lane_q_s06_steps2.neighbor_type_mem_forms6 X a.2 hsign hflip
+          · have hcontr := hvar ⟨Or.inl hlow, Or.inr hflip⟩
+            exact False.elim hcontr
+        · have hcontr := hvar ⟨Or.inl hlow, Or.inl hsign⟩
+          exact False.elim hcontr
+      · have hhigh : X.stMode b = .high := by
+          cases hm : X.stMode b with
+          | low => exact False.elim (hlow hm)
+          | high => rfl
+        have hmodeHigh : X.stMode a.1 = .high := hmode.trans hhigh
+        by_cases hboundary : X.g.L.stSeverity a.1 = X.J + 1
+        · by_cases hsign : X.g.L.stSign a.1 = X.g.L.stSign b
+          · by_cases hflip : X.g.L.stFlippable a.1 = X.g.L.stFlippable b
+            · exact Or.inl <| Lane_q_s06_steps2.neighbor_type_mem_forms6 X a.2 hsign hflip
+            · have hcontr := hvar ⟨Or.inr hboundary, Or.inr hflip⟩
+              exact False.elim hcontr
+          · have hcontr := hvar ⟨Or.inr hboundary, Or.inl hsign⟩
+            exact False.elim hcontr
+        · exact Or.inl <| Lane_q_s06_steps2.neighbor_type_mem_forms_high6 X a.2 hmodeHigh hboundary
+  have hdescNat : (X.descOf b φ).card ≤ 1806 * X.T + 1 + 21 * (X.J + 2) := by
+    have hsplit := Lane_q_s06_steps2.descOf_card_le_split X b φ S Tys Bad hids hclass
+    have hprod : S.card * Tys.card ≤ X.T * 1806 := by
+      exact Nat.mul_le_mul hScard (by simpa using hTys)
+    calc
+      (X.descOf b φ).card ≤ S.card * Tys.card + Bad.card := hsplit
+      _ ≤ X.T * 1806 + (1 + 21 * (X.J + 2)) := Nat.add_le_add hprod hBadCard
+      _ = 1806 * X.T + 1 + 21 * (X.J + 2) := by omega
+  have hfinal : 1806 * X.T + 1 + 21 * (X.J + 2) ≤ 10 ^ 4 * (X.T + X.J + 1) := by omega
+  exact_mod_cast hdescNat.trans hfinal
 
+set_option maxHeartbeats 1000000 in
 /-- L6.1e (counts, 06:274–281): list the at most `T` IDs, a subset for each generic type, one listed ID for each
 exceptional state. -/
 theorem L6_1e_count (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount := by
-  sorry
+  refine ⟨4, 0, ?_⟩
+  intro n N E G M X hLarge
+  have hn : 4 ≤ n := hLarge.1
+  intro Id _ _ b perm P hb hperm
+  let AllIds : Finset Id := (X.g.L.stNbr b).attach.biUnion perm
+  have hAllIds : AllIds.card ≤ 3 * n * P := by
+    calc
+      AllIds.card ≤ ∑ a ∈ (X.g.L.stNbr b).attach, (perm a).card := Finset.card_biUnion_le
+      _ ≤ ∑ _a ∈ (X.g.L.stNbr b).attach, P := by
+        apply Finset.sum_le_sum
+        intro a ha
+        exact hperm a
+      _ = (X.g.L.stNbr b).card * P := by simp
+      _ ≤ (3 * n) * P := Nat.mul_le_mul_right P (X.facts.nbr_card b)
+  let SmallIds : Finset (Finset Id) := AllIds.powerset.filter fun S => S.card ≤ X.T
+  have hSmallSub : SmallIds ⊆
+      (Finset.range (X.T + 1)).biUnion fun k => AllIds.powersetCard k := by
+    intro S hS
+    rcases Finset.mem_filter.mp hS with ⟨hSub, hCard⟩
+    apply Finset.mem_biUnion.mpr
+    refine ⟨S.card, Finset.mem_range.mpr (by omega), ?_⟩
+    exact Finset.mem_powersetCard.mpr ⟨Finset.mem_powerset.mp hSub, rfl⟩
+  have hSmallCard : SmallIds.card ≤ (AllIds.card + 2) ^ (2 * X.T) := by
+    calc
+      SmallIds.card ≤ ((Finset.range (X.T + 1)).biUnion fun k => AllIds.powersetCard k).card :=
+        Finset.card_le_card hSmallSub
+      _ ≤ (AllIds.card + 2) ^ (2 * X.T) :=
+        Lane_q_s06_steps2.smallPowersetCount6 AllIds X.T
+  let Tys : Finset X.Ty := Lane_q_s06_steps2.neighborTypeForms6 X b
+  have hTys : Tys.card ≤ 3 * 602 := Lane_q_s06_steps2.neighborTypeForms6_card X b
+  let Trans : Finset (X.g.L.stNbr b) := Finset.univ.filter
+    (fun a => X.stMode a.1 ≠ X.stMode b)
+  let Var : Finset (X.g.L.stNbr b) := Finset.univ.filter
+    (fun a => (X.stMode b = .low ∨ X.g.L.stSeverity a.1 = X.J + 1) ∧
+      (X.g.L.stSign a.1 ≠ X.g.L.stSign b ∨
+        X.g.L.stFlippable a.1 ≠ X.g.L.stFlippable b))
+  let Bad : Finset (X.g.L.stNbr b) := Trans ∪ Var
+  have hBadCard : Bad.card ≤ 1 + 21 * (X.J + 2) := by
+    simpa [Bad, Trans, Var] using Lane_q_s06_steps2.descriptorBadStates6_card X b hb hn
+  have hclass : ∀ a, X.stType a.1 ∈ Tys ∨ a ∈ Bad := by
+    intro a
+    by_cases hbad : a ∈ Bad
+    · exact Or.inr hbad
+    · have htrans : ¬ X.stMode a.1 ≠ X.stMode b := by
+        intro hmode
+        exact hbad (Finset.mem_union.mpr <| Or.inl <|
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmode⟩)
+      have hmode : X.stMode a.1 = X.stMode b := not_ne_iff.mp htrans
+      have hvar : ¬ ((X.stMode b = .low ∨ X.g.L.stSeverity a.1 = X.J + 1) ∧
+          (X.g.L.stSign a.1 ≠ X.g.L.stSign b ∨
+            X.g.L.stFlippable a.1 ≠ X.g.L.stFlippable b)) := by
+        intro hv
+        exact hbad (Finset.mem_union.mpr <| Or.inr <|
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩)
+      by_cases hlow : X.stMode b = .low
+      · by_cases hsign : X.g.L.stSign a.1 = X.g.L.stSign b
+        · by_cases hflip : X.g.L.stFlippable a.1 = X.g.L.stFlippable b
+          · exact Or.inl <| Lane_q_s06_steps2.neighbor_type_mem_forms6 X a.2 hsign hflip
+          · have hcontr := hvar ⟨Or.inl hlow, Or.inr hflip⟩
+            exact False.elim hcontr
+        · have hcontr := hvar ⟨Or.inl hlow, Or.inl hsign⟩
+          exact False.elim hcontr
+      · have hhigh : X.stMode b = .high := by
+          cases hm : X.stMode b with
+          | low => exact False.elim (hlow hm)
+          | high => rfl
+        have hmodeHigh : X.stMode a.1 = .high := hmode.trans hhigh
+        by_cases hboundary : X.g.L.stSeverity a.1 = X.J + 1
+        · by_cases hsign : X.g.L.stSign a.1 = X.g.L.stSign b
+          · by_cases hflip : X.g.L.stFlippable a.1 = X.g.L.stFlippable b
+            · exact Or.inl <| Lane_q_s06_steps2.neighbor_type_mem_forms6 X a.2 hsign hflip
+            · have hcontr := hvar ⟨Or.inr hboundary, Or.inr hflip⟩
+              exact False.elim hcontr
+          · have hcontr := hvar ⟨Or.inr hboundary, Or.inl hsign⟩
+            exact False.elim hcontr
+        · exact Or.inl <| Lane_q_s06_steps2.neighbor_type_mem_forms_high6 X a.2 hmodeHigh hboundary
+  let GoodType : Type := {β : X.Ty // β ∈ Tys}
+  let BadType : Type := {a : X.g.L.stNbr b // a ∈ Bad}
+  let SmallType : Type := {s : Finset Id // s ∈ SmallIds}
+  let Enc : Type := Σ s : SmallType, Finset (s.1 × GoodType) × (BadType → s.1)
+  let decode : Enc → Finset (Id × X.Ty) := fun code =>
+    Lane_q_s06_steps2.decodeDescCode6
+      (fun a : X.g.L.stNbr b => X.stType a.1) code.2
+  have hSmallEach : ∀ s, s ∈ SmallIds → s.card ≤ X.T := by
+    intro s hs
+    exact (Finset.mem_filter.mp hs).2
+  have hGoodCard : Fintype.card GoodType ≤ 1806 := by
+    have hTys1806 : Tys.card ≤ 1806 := by omega
+    simpa [GoodType] using hTys1806
+  let E : ℕ := 1 + 21 * (X.J + 2)
+  have hBadTypeCard : Fintype.card BadType ≤ E := by
+    simpa [BadType, E] using hBadCard
+  have hEncCard : Fintype.card Enc ≤
+      SmallIds.card * (2 ^ (X.T * 1806)) * ((X.T + 1) ^ E) :=
+    Lane_q_s06_steps2.sigmaPatternCard6 SmallIds X.T E hSmallEach hGoodCard hBadTypeCard
+  have hcover : X.descsIn b perm ⊆ Finset.univ.image decode := by
+    intro D hD
+    have hD' : D ∈ ((Finset.univ : Finset (X.g.L.stNbr b → Id)).filter
+        (fun φ => (∀ a, φ a ∈ perm a) ∧ (Finset.univ.image φ).card ≤ X.T)).image
+        (X.descOf b) := by
+      simpa only [Ctx6.descsIn] using hD
+    rcases Finset.mem_image.mp hD' with ⟨φ, hφ, rfl⟩
+    have hφ' := (Finset.mem_filter.mp hφ).2
+    rcases hφ' with ⟨hφPerm, hfan⟩
+    let S : Finset Id := Finset.univ.image φ
+    have hScard : S.card ≤ X.T := by simpa [S] using hfan
+    have hids : ∀ a, φ a ∈ S := fun a =>
+      Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩
+    have hSsub : S ⊆ AllIds := by
+      intro i hi
+      rcases Finset.mem_image.mp hi with ⟨a, ha, rfl⟩
+      exact Finset.mem_biUnion.mpr ⟨a, Finset.mem_attach _ _, hφPerm a⟩
+    have hSmem : S ∈ SmallIds :=
+      Finset.mem_filter.mpr ⟨Finset.mem_powerset.mpr hSsub, hScard⟩
+    let s : SmallType := ⟨S, hSmem⟩
+    have hDimage : X.descOf b φ =
+        Finset.univ.image (fun a : X.g.L.stNbr b => (φ a, X.stType a.1)) := rfl
+    obtain ⟨c, hcode⟩ := Lane_q_s06_steps2.exists_descCode6 S Tys Bad φ
+      (fun a : X.g.L.stNbr b => X.stType a.1) (X.descOf b φ) hDimage hids hclass
+    let code : Enc := ⟨s, c⟩
+    have hdecode : decode code = X.descOf b φ := by
+      simpa [decode, code, GoodType, BadType] using hcode
+    exact Finset.mem_image.mpr ⟨code, Finset.mem_univ _, hdecode⟩
+  have hdescEnc : (X.descsIn b perm).card ≤ Fintype.card Enc := by
+    calc
+      (X.descsIn b perm).card ≤ (Finset.univ.image decode).card := Finset.card_le_card hcover
+      _ ≤ Fintype.card Enc := by
+        calc
+          (Finset.univ.image decode).card ≤ Finset.univ.card := Finset.card_image_le
+          _ = Fintype.card Enc := by simp
+  let E : ℕ := 1 + 21 * (X.J + 2)
+  let B0 : ℕ := 3 * n * P + 2
+  have hE : E ≤ 43 * (X.J + 1) := by dsimp [E]; omega
+  have hBase : AllIds.card + 2 ≤ B0 := by dsimp [B0]; omega
+  have hBaseTwo : 2 ≤ B0 := by dsimp [B0]; omega
+  have hSmallPow : SmallIds.card ≤ B0 ^ (2 * X.T) :=
+    hSmallCard.trans (Nat.pow_le_pow_left hBase _)
+  have hGenericPow : 2 ^ (X.T * 1806) ≤ B0 ^ (X.T * 1806) :=
+    Nat.pow_le_pow_left hBaseTwo _
+  have hSmallGeneric : SmallIds.card * 2 ^ (X.T * 1806) ≤ B0 ^ (1808 * X.T) := by
+    calc
+      SmallIds.card * 2 ^ (X.T * 1806) ≤ B0 ^ (2 * X.T) * 2 ^ (X.T * 1806) :=
+        Nat.mul_le_mul_right _ hSmallPow
+      _ ≤ B0 ^ (2 * X.T) * B0 ^ (X.T * 1806) :=
+        Nat.mul_le_mul_left _ hGenericPow
+      _ = B0 ^ (1808 * X.T) := by rw [← Nat.pow_add]; congr 1 <;> omega
+  have hExceptionPow : (X.T + 1) ^ E ≤ (X.T + 2) ^ (43 * (X.J + 1)) := by
+    calc
+      (X.T + 1) ^ E ≤ (X.T + 2) ^ E := Nat.pow_le_pow_left (by omega) _
+      _ ≤ (X.T + 2) ^ (43 * (X.J + 1)) := Nat.pow_le_pow_right (by omega) hE
+  have hCodeNat : SmallIds.card * (2 ^ (X.T * 1806)) * ((X.T + 1) ^ E) ≤
+      B0 ^ (1808 * X.T) * (X.T + 2) ^ (43 * (X.J + 1)) := by
+    exact Nat.mul_le_mul hSmallGeneric hExceptionPow
+  have hDescNat : (X.descsIn b perm).card ≤
+      B0 ^ (1808 * X.T) * (X.T + 2) ^ (43 * (X.J + 1)) :=
+    hdescEnc.trans (hEncCard.trans hCodeNat)
+  have hDescRealNat : ((X.descsIn b perm).card : ℝ) ≤
+      (B0 : ℝ) ^ (1808 * X.T) * (X.T + 2 : ℝ) ^ (43 * (X.J + 1)) := by
+    exact_mod_cast hDescNat
+  have hPowB : (B0 : ℝ) ^ (1808 * X.T) =
+      Real.exp (((1808 * X.T : ℕ) : ℝ) * Real.log (B0 : ℝ)) := by
+    exact Lane_q_s06_steps2.natPow_eq_exp_log6 B0 (1808 * X.T) (by dsimp [B0]; omega)
+  have hPowT : (X.T + 2 : ℝ) ^ (43 * (X.J + 1)) =
+      Real.exp (((43 * (X.J + 1) : ℕ) : ℝ) * Real.log (X.T + 2 : ℝ)) := by
+    simpa [Nat.cast_add] using
+      Lane_q_s06_steps2.natPow_eq_exp_log6 (X.T + 2) (43 * (X.J + 1)) (by omega)
+  have hLogB : 0 ≤ Real.log (B0 : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast (show 1 ≤ B0 by dsimp [B0]; omega))
+  have hLogT : 0 ≤ Real.log (X.T + 2 : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast (show 1 ≤ X.T + 2 by omega))
+  have hCoeff :
+      (((1808 * X.T : ℕ) : ℝ) * Real.log (B0 : ℝ) +
+        ((43 * (X.J + 1) : ℕ) : ℝ) * Real.log (X.T + 2 : ℝ)) ≤
+      (10000 : ℝ) * ((X.T : ℝ) * Real.log (B0 : ℝ) +
+        (X.J + 1 : ℝ) * Real.log (X.T + 2 : ℝ)) := by
+    have hTnonneg : 0 ≤ (X.T : ℝ) := Nat.cast_nonneg _
+    have hJnonneg : 0 ≤ (X.J + 1 : ℝ) := by
+      exact_mod_cast (Nat.zero_le (X.J + 1))
+    have hTcoef : (1808 : ℝ) * (X.T : ℝ) ≤ 10000 * (X.T : ℝ) :=
+      mul_le_mul_of_nonneg_right (by norm_num) hTnonneg
+    have hJcoef : ((43 * (X.J + 1) : ℕ) : ℝ) ≤
+        (10000 : ℝ) * (X.J + 1 : ℝ) := by
+      exact_mod_cast (Nat.mul_le_mul_right (X.J + 1) (by norm_num : 43 ≤ 10000))
+    have hTterm : ((1808 * X.T : ℕ) : ℝ) * Real.log (B0 : ℝ) ≤
+        (10000 : ℝ) * ((X.T : ℝ) * Real.log (B0 : ℝ)) := by
+      rw [Nat.cast_mul]
+      calc
+        (1808 : ℝ) * (X.T : ℝ) * Real.log (B0 : ℝ) ≤
+            10000 * (X.T : ℝ) * Real.log (B0 : ℝ) :=
+          mul_le_mul_of_nonneg_right hTcoef hLogB
+        _ = (10000 : ℝ) * ((X.T : ℝ) * Real.log (B0 : ℝ)) := by ring
+    have hJterm : ((43 * (X.J + 1) : ℕ) : ℝ) * Real.log (X.T + 2 : ℝ) ≤
+        (10000 : ℝ) * ((X.J + 1 : ℝ) * Real.log (X.T + 2 : ℝ)) := by
+      calc
+        ((43 * (X.J + 1) : ℕ) : ℝ) * Real.log (X.T + 2 : ℝ) ≤
+            ((10000 : ℝ) * (X.J + 1 : ℝ)) * Real.log (X.T + 2 : ℝ) :=
+          mul_le_mul_of_nonneg_right hJcoef hLogT
+        _ = (10000 : ℝ) * ((X.J + 1 : ℝ) * Real.log (X.T + 2 : ℝ)) := by ring
+    calc
+      (((1808 * X.T : ℕ) : ℝ) * Real.log (B0 : ℝ) +
+          ((43 * (X.J + 1) : ℕ) : ℝ) * Real.log (X.T + 2 : ℝ)) ≤
+        (10000 : ℝ) * ((X.T : ℝ) * Real.log (B0 : ℝ)) +
+          (10000 : ℝ) * ((X.J + 1 : ℝ) * Real.log (X.T + 2 : ℝ)) :=
+        add_le_add hTterm hJterm
+      _ = (10000 : ℝ) * ((X.T : ℝ) * Real.log (B0 : ℝ) +
+          (X.J + 1 : ℝ) * Real.log (X.T + 2 : ℝ)) := by ring
+  calc
+    ((X.descsIn b perm).card : ℝ) ≤
+        (B0 : ℝ) ^ (1808 * X.T) * (X.T + 2 : ℝ) ^ (43 * (X.J + 1)) := hDescRealNat
+    _ = Real.exp (((1808 * X.T : ℕ) : ℝ) * Real.log (B0 : ℝ) +
+          ((43 * (X.J + 1) : ℕ) : ℝ) * Real.log (X.T + 2 : ℝ)) := by
+      rw [hPowB, hPowT, ← Real.exp_add]
+    _ ≤ Real.exp (10 ^ 4 *
+          ((X.T : ℝ) * Real.log (3 * n * P + 2) +
+            (X.J + 1 : ℝ) * Real.log (X.T + 2))) := by
+      apply Real.exp_le_exp.mpr
+      rw [show (10 : ℝ) ^ 4 = 10000 by norm_num]
+      simpa [B0, Nat.cast_mul, Nat.cast_add] using hCoeff
 
 namespace Ctx6
 

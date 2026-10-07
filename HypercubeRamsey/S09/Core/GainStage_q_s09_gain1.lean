@@ -2396,6 +2396,22 @@ private theorem law_restrict_nested9 {N : ℕ} (μ : Law N) (A B : Finset (Fin N
   · simp [Law.restrict, hyB, hyA, Finset.mem_inter]
   · simp [Law.restrict, hyB, hyA, Finset.mem_inter]
 
+private theorem law_restrict_mass9 {N : ℕ} (μ : Law N) (A B : Finset (Fin N))
+    (hA : 0 < ∑ y ∈ A, μ.w y) :
+    ∑ y ∈ B, (μ.restrict A hA).w y =
+      (∑ y ∈ A ∩ B, μ.w y) / (∑ y ∈ A, μ.w y) := by
+  classical
+  have hfilter : B.filter (fun y => y ∈ A) = A ∩ B := by
+    ext y
+    simp [Finset.mem_inter, and_comm]
+  calc
+    (∑ y ∈ B, (μ.restrict A hA).w y) =
+        ∑ y ∈ B.filter (fun y => y ∈ A), μ.w y / (∑ z ∈ A, μ.w z) := by
+          unfold Law.restrict
+          rw [← Finset.sum_filter]
+    _ = (∑ y ∈ A ∩ B, μ.w y) / (∑ y ∈ A, μ.w y) := by
+          rw [hfilter, Finset.sum_div]
+
 private theorem delLaw_outer_restrict_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
@@ -2522,6 +2538,148 @@ private theorem delLaw_outer_restrict_regular9 {P : Params9} {n N : ℕ} {M : Ta
   · calc
       prefixLaw9 E G ω base ord j = base.restrict F hFpos := hprefix
       _ = delLaw9 S E G ω b target := hdel.symm
+
+private theorem outerFilter_core_mass_ratio_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    (∑ y ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w y) =
+      prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+          ((outerIDs9 I v b).card + (coreIDs9 I v b).card) /
+        prefixMass9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+          (outerIDs9 I v b).card := by
+  classical
+  let O := outerIDs9 I v b
+  let K := coreIDs9 I v b
+  let ord := fullOrder9 I v b
+  let base := maskedLaw9 S ω b
+  let A := hitSet9 E G ω O
+  let B := coreHitSet9 E G ω v b
+  let F := hitSet9 E G ω (O ∪ K)
+  let j := O.card + K.card
+  obtain ⟨hO, houter⟩ := outerFilter_restrict_regular9 S I E G ω v b hregular hbstar
+  have hHitUnion : hitSet9 E G ω O ∩ hitSet9 E G ω K = hitSet9 E G ω (O ∪ K) := by
+    ext y
+    simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_inter]
+    constructor
+    · rintro ⟨hO', hK'⟩ c hc
+      rcases Finset.mem_union.mp hc with hcO | hcK
+      · exact hO' c hcO
+      · exact hK' c hcK
+    · intro h
+      constructor
+      · intro c hc
+        exact h c (Finset.mem_union.mpr (Or.inl hc))
+      · intro c hc
+        exact h c (Finset.mem_union.mpr (Or.inr hc))
+  have hAB : A ∩ B = F := by
+    simpa [A, B, F, coreHitSet9] using hHitUnion
+  have hlen : ord.length = O.card + K.card + 1 := by
+    simp [ord, O, K, fullOrder9, List.length_append]
+    omega
+  have htakeO : (ord.take O.card).toFinset = O := by
+    have hlist : ord.take O.card = O.toList := by
+      dsimp [ord, fullOrder9, O, K]
+      rw [List.take_append_of_le_length (by simp)]
+      rw [List.take_append_of_le_length (by simp)]
+      simp
+    rw [hlist]
+    simp [O]
+  have htakeCore : (ord.take j).toFinset = O ∪ K := by
+    have hlist : ord.take j = O.toList ++ K.toList := by
+      dsimp [ord, fullOrder9, O, K, j]
+      rw [List.take_append_of_le_length (by simp [List.length_append])]
+      simp
+    rw [hlist, List.toFinset_append]
+    simp [Finset.union_comm]
+  have hmassO :
+      prefixMass9 E G ω base ord O.card = ∑ y ∈ A, base.w y := by
+    unfold prefixMass9
+    rw [htakeO]
+  have hmassCore :
+      prefixMass9 E G ω base ord j = ∑ y ∈ F, base.w y := by
+    unfold prefixMass9
+    rw [htakeCore]
+  calc
+    (∑ y ∈ B, (outerFilter9 S E G ω v b).w y) =
+        ∑ y ∈ B, ((base.restrict A hO).w y) := by rw [houter]
+    _ = (∑ y ∈ A ∩ B, base.w y) / (∑ y ∈ A, base.w y) :=
+          law_restrict_mass9 base A B hO
+    _ = prefixMass9 E G ω base ord j / prefixMass9 E G ω base ord O.card := by
+          rw [hAB, ← hmassCore, ← hmassO]
+
+private theorem outerFilter_core_mass_relative_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200)
+    (hsize : 16 * (coreIDs9 I v b).card * P.bStar n ≤ 1 / 2) :
+    |(∑ y ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w y) /
+        (1 / 2 : ℝ) ^ (coreIDs9 I v b).card - 1| ≤
+      8 * (coreIDs9 I v b).card * P.bStar n := by
+  classical
+  let O := outerIDs9 I v b
+  let K := coreIDs9 I v b
+  let ord := fullOrder9 I v b
+  let m : ℕ := K.card
+  let z : ℝ := ∑ y ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w y
+  let z₀ : ℝ := (1 / 2 : ℝ) ^ m
+  change |z / z₀ - 1| ≤ 8 * (m : ℝ) * P.bStar n
+  have hzEq : z = prefixMass9 E G ω (maskedLaw9 S ω b) ord (O.card + K.card) /
+      prefixMass9 E G ω (maskedLaw9 S ω b) ord O.card := by
+    dsimp [z, ord, O, K]
+    exact outerFilter_core_mass_ratio_regular9 S I E G ω v b hregular hbstar
+  rcases outer_core_prefix_ratio_bounds9 S I E G ω v b hregular hbstar with
+    ⟨_, hlowPrefix, hhighPrefix⟩
+  have hlowZ : (1 / 2 - 2 * P.bStar n : ℝ) ^ m ≤ z := by
+    rw [hzEq]
+    exact hlowPrefix
+  have hhighZ : z ≤ (1 / 2 + 2 * P.bStar n : ℝ) ^ m := by
+    rw [hzEq]
+    exact hhighPrefix
+  have hz₀pos : 0 < z₀ := by
+    dsimp [z₀]
+    positivity
+  have hz₀eq : z₀ = (1 / 2 : ℝ) ^ m := rfl
+  have hlinLow : (1 / 2 - 2 * P.bStar n : ℝ) / (1 / 2) = 1 - 4 * P.bStar n := by
+    field_simp
+    ring
+  have hlinHigh : (1 / 2 + 2 * P.bStar n : ℝ) / (1 / 2) = 1 + 4 * P.bStar n := by
+    field_simp
+    ring
+  have hbaseLow : (1 - 4 * P.bStar n : ℝ) ^ m =
+      (1 / 2 - 2 * P.bStar n : ℝ) ^ m / z₀ := by
+    rw [hz₀eq, ← div_pow, hlinLow]
+  have hbaseHigh : (1 + 4 * P.bStar n : ℝ) ^ m =
+      (1 / 2 + 2 * P.bStar n : ℝ) ^ m / z₀ := by
+    rw [hz₀eq, ← div_pow, hlinHigh]
+  have hlowDiv : (1 / 2 - 2 * P.bStar n : ℝ) ^ m / z₀ ≤ z / z₀ :=
+    div_le_div_of_nonneg_right hlowZ hz₀pos.le
+  have hhighDiv : z / z₀ ≤ (1 / 2 + 2 * P.bStar n : ℝ) ^ m / z₀ :=
+    div_le_div_of_nonneg_right hhighZ hz₀pos.le
+  have hb : 0 ≤ P.bStar n := by
+    dsimp [Params9.bStar]
+    positivity
+  have hδ : 0 ≤ 4 * P.bStar n := by positivity
+  have hδle : 4 * P.bStar n ≤ 1 / 2 := by nlinarith [hbstar]
+  have hsizePow : (m : ℝ) * (4 * P.bStar n) ≤ 1 / 2 := by
+    nlinarith [hsize]
+  have hpowLow := one_sub_pow_lower9 hδ (by norm_num; linarith) m
+  have hpowHigh := one_add_pow_upper9 hδ hδle m hsizePow
+  have hratioLow : 1 - (m : ℝ) * (4 * P.bStar n) ≤ z / z₀ := by
+    calc
+      1 - (m : ℝ) * (4 * P.bStar n) ≤ (1 - 4 * P.bStar n) ^ m := hpowLow
+      _ = (1 / 2 - 2 * P.bStar n : ℝ) ^ m / z₀ := hbaseLow
+      _ ≤ z / z₀ := hlowDiv
+  have hratioHigh : z / z₀ ≤ 1 + 8 * (m : ℝ) * P.bStar n := by
+    calc
+      z / z₀ ≤ (1 / 2 + 2 * P.bStar n : ℝ) ^ m / z₀ := hhighDiv
+      _ = (1 + 4 * P.bStar n) ^ m := hbaseHigh.symm
+      _ ≤ 1 + 2 * (m : ℝ) * (4 * P.bStar n) := hpowHigh
+      _ = 1 + 8 * (m : ℝ) * P.bStar n := by ring
+  rw [abs_le]
+  constructor <;> nlinarith [hratioLow, hratioHigh, hb]
 
 private theorem targetFrac_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
@@ -2867,7 +3025,7 @@ private theorem core_degree_product_regular9 {P : Params9} {n N : ℕ} {M : TagM
     (by simpa [D] using hsize) (by intro c hc; exact hdeg c hc)
 
 private theorem core_product_size_cutoff9 (P : Params9) (hP : P.Valid) :
-    ∃ n₀ : ℕ, ∀ n ≥ n₀, 4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n ≤ 1 / 2 := by
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, 16 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n ≤ 1 / 2 := by
   rcases hP with ⟨_, hhm, _, _, hchi, _, _⟩
   rcases hhm with ⟨hminuspos, _, _⟩
   rcases hchi with ⟨_, hχbound⟩
@@ -2881,7 +3039,7 @@ private theorem core_product_size_cutoff9 (P : Params9) (hP : P.Valid) :
     linarith
   let a : ℝ := (P.hMinus : ℝ) - (P.χ : ℝ)
   have ha : 0 < a := by dsimp [a]; linarith
-  obtain ⟨n₀, hDecay⟩ := nat_rpow_decay_cutoff9 (a := a) (K := 8) ha (by norm_num)
+  obtain ⟨n₀, hDecay⟩ := nat_rpow_decay_cutoff9 (a := a) (K := 32) ha (by norm_num)
   refine ⟨max n₀ 2, ?_⟩
   intro n hn
   have hn₀ : n₀ ≤ n := le_trans (Nat.le_max_left _ _) hn
@@ -2894,12 +3052,12 @@ private theorem core_product_size_cutoff9 (P : Params9) (hP : P.Valid) :
     congr 1
     dsimp [a]
     ring
-  have hstrict : 4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n < 1 / 2 := by
+  have hstrict : 16 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n < 1 / 2 := by
     calc
-      4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n =
-          4 * ((n : ℝ) ^ (P.χ : ℝ) * P.bStar n) := by ring
-      _ = 4 * (n : ℝ) ^ (-a) := by rw [hpow]
-      _ ≤ 8 * (n : ℝ) ^ (-a) := by
+      16 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n =
+          16 * ((n : ℝ) ^ (P.χ : ℝ) * P.bStar n) := by ring
+      _ = 16 * (n : ℝ) ^ (-a) := by rw [hpow]
+      _ ≤ 32 * (n : ℝ) ^ (-a) := by
           have hnonneg : 0 ≤ (n : ℝ) ^ (-a) := Real.rpow_nonneg (by positivity) _
           nlinarith [hnonneg]
       _ < 1 / 2 := hdecay
@@ -2937,8 +3095,10 @@ private theorem core_degree_product_good_eventually9 (P : Params9) (hP : P.Valid
       (D.card : ℝ) * (4 * P.bStar n) ≤
           (n : ℝ) ^ (P.χ : ℝ) * (4 * P.bStar n) :=
             mul_le_mul_of_nonneg_right hDcard (by positivity)
-      _ = 4 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n := by ring
-      _ ≤ 1 / 2 := hSize n hnSize
+      _ = (1 / 4 : ℝ) *
+          (16 * (n : ℝ) ^ (P.χ : ℝ) * P.bStar n) := by ring
+      _ ≤ 1 / 8 := by nlinarith [hSize n hnSize]
+      _ ≤ 1 / 2 := by norm_num
   exact core_degree_product_regular9 S I v b y hb hsmall hsize (by simpa [D] using hgood)
 
 private theorem rowDeg_lipschitz_l1_9 {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)

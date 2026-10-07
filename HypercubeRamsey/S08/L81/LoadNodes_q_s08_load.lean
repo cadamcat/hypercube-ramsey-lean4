@@ -358,6 +358,452 @@ private theorem cross_survival_small (η₀ : ℝ) (hη₀ : 0 < η₀) :
       have hsmall := hn₀ n hn0
       nlinarith
 
+private theorem pi_expect_prod_disjoint {V I : Type*} [Fintype V] [DecidableEq V]
+    [Fintype I] [DecidableEq I] {Ω : V → Type*} [∀ v, Fintype (Ω v)]
+    (P : ∀ v, FinProb (Ω v)) (s : Finset I)
+    (f : I → (∀ v, Ω v) → ℝ) (S : I → Finset V)
+    (hdep : ∀ i, FinProb.DependsOn (f i) (S i))
+    (hdis : ∀ i j, i ≠ j → Disjoint (S i) (S j)) :
+    (FinProb.pi P).expect (fun ω => ∏ i ∈ s, f i ω) =
+      ∏ i ∈ s, (FinProb.pi P).expect (f i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp [FinProb.expect_const]
+  | @insert i s hi ih =>
+      let U : Finset V := s.biUnion S
+      let F : (∀ v, Ω v) → ℝ := fun ω => ∏ j ∈ s, f j ω
+      have hFdep : FinProb.DependsOn F U := by
+        intro ω ω' hEq
+        dsimp [F]
+        apply Finset.prod_congr rfl
+        intro j hj
+        apply hdep j
+        intro v hv
+        exact hEq v (Finset.mem_biUnion.mpr ⟨j, hj, hv⟩)
+      have hUF : Disjoint U (S i) := by
+        apply Finset.disjoint_left.mpr
+        intro v hvU hvI
+        obtain ⟨j, hj, hv⟩ := Finset.mem_biUnion.mp hvU
+        have hji : j ≠ i := by
+          intro hEq
+          subst j
+          exact hi hj
+        exact (Finset.disjoint_left.mp (hdis j i hji)) hv hvI
+      have hfac := FinProb.pi_expect_mul_of_disjoint P F (f i) U (S i)
+        hFdep (hdep i) hUF
+      calc
+        (FinProb.pi P).expect (fun ω => ∏ j ∈ insert i s, f j ω) =
+            (FinProb.pi P).expect (fun ω => F ω * f i ω) := by
+          apply expect_congr
+          intro ω
+          simp [F, hi, Finset.prod_insert]
+          ring
+        _ = (FinProb.pi P).expect F * (FinProb.pi P).expect (f i) := hfac
+        _ = (∏ j ∈ s, (FinProb.pi P).expect (f j)) * (FinProb.pi P).expect (f i) := by
+          rw [ih]
+        _ = ∏ j ∈ insert i s, (FinProb.pi P).expect (f j) := by
+          simp [hi, Finset.prod_insert]
+          ring
+
+private theorem pi_free_integral_eq {V : Type*} [Fintype V] [DecidableEq V]
+    {Ω : V → Type*} [∀ v, Fintype (Ω v)] [∀ v, DecidableEq (Ω v)]
+    (P : ∀ v, FinProb (Ω v)) (U : Finset V) (Φ : (∀ v, Ω v) → ℝ)
+    (hdep : FinProb.DependsOn Φ U) (ω : ∀ v, Ω v) :
+    (∑ a : (∀ v : U, Ω v), (∏ v : U, (P v.1).w (a v)) * Φ (glue U ω a)) =
+      (FinProb.pi P).expect Φ := by
+  classical
+  let e := Equiv.piEquivPiSubtypeProd (fun v => v ∈ U) Ω
+  have hext (a : ∀ v : {v // v ∈ U}, Ω v.1) :
+      e.symm (a, fun v => ω v.1) = glue U ω a := by
+    funext v
+    by_cases hv : v ∈ U <;> simp [e, Equiv.piEquivPiSubtypeProd_symm_apply, glue, hv]
+  calc
+    (∑ a : (∀ v : U, Ω v), (∏ v : U, (P v.1).w (a v)) * Φ (glue U ω a)) =
+        (FinProb.pi (fun v : {v // v ∈ U} => P v.1)).expect (fun a => Φ (glue U ω a)) := by
+      rfl
+    _ = (FinProb.pi P).expect Φ := by
+      symm
+      convert FinProb.pi_expect_depends P U Φ ω hdep using 1
+      apply expect_congr
+      intro a
+      rw [hext]
+
+private noncomputable def bcompCap (η₀ β K : ℝ) (h n : ℕ) : ℝ :=
+  32 * K * (2 : ℝ) ^ (h * (2 * sC η₀ n)) *
+    Real.exp (h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2))
+
+private theorem bcompCap_small (η₀ β K : ℝ) (h : ℕ) (hη₀ : 0 < η₀)
+    (hβτ : β < tau8 η₀ / 4) (hK : 0 < K) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, (n : ℝ) * fGrid η₀ n * bcompCap η₀ β K h n ≤ 1 := by
+  have hτ : 0 < tau8 η₀ := by rw [tau8_eq]; unfold eta8; positivity
+  have hβhalf : β < tau8 η₀ / 2 := by linarith
+  have hbaseTend : Tendsto (fun n : ℕ => (n : ℝ) ^ (1 / 100 : ℝ)) atTop atTop := by
+    exact (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 100)).comp
+      tendsto_natCast_atTop_atTop
+  have hbaseEv : ∀ᶠ n : ℕ in atTop,
+      (2 : ℝ) ^ (2 * h + 1) ≤ (n : ℝ) ^ (1 / 100 : ℝ) :=
+    Filter.tendsto_atTop.1 hbaseTend ((2 : ℝ) ^ (2 * h + 1))
+  let nlog : ℕ := Nat.ceil (Real.exp 100)
+  have hlogEv : ∀ᶠ n : ℕ in atTop, 100 ≤ Real.log (n : ℝ) := by
+    filter_upwards [eventually_ge_atTop nlog] with n hn
+    have hceil : Real.exp 100 ≤ (nlog : ℝ) := Nat.le_ceil _
+    have hnreal : (nlog : ℝ) ≤ n := by exact_mod_cast hn
+    have hle : Real.exp 100 ≤ (n : ℝ) := hceil.trans hnreal
+    have hlog := Real.log_le_log (Real.exp_pos 100) hle
+    simpa using hlog
+  have hhalfTend : Tendsto (fun n : ℕ => (n : ℝ) ^ (tau8 η₀ / 2)) atTop atTop := by
+    exact (tendsto_rpow_atTop (by linarith : (0 : ℝ) < tau8 η₀ / 2)).comp
+      tendsto_natCast_atTop_atTop
+  have hhalfEv : ∀ᶠ n : ℕ in atTop,
+      (h : ℝ) + 1 ≤ (n : ℝ) ^ (tau8 η₀ / 2) :=
+    Filter.tendsto_atTop.1 hhalfTend ((h : ℝ) + 1)
+  have hτTend : Tendsto (fun n : ℕ => (n : ℝ) ^ tau8 η₀) atTop atTop := by
+    exact (tendsto_rpow_atTop hτ).comp tendsto_natCast_atTop_atTop
+  have hpolyTend : Tendsto
+      (fun n : ℕ => ((n : ℝ) ^ tau8 η₀) ^ (10 / tau8 η₀) *
+        Real.exp (-2 * (n : ℝ) ^ tau8 η₀)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      (10 / tau8 η₀) 2 (by norm_num : (0 : ℝ) < 2)).comp hτTend
+    simpa [Function.comp_def] using h
+  have hpolyScaled : Tendsto
+      (fun n : ℕ => (32 * K) * (((n : ℝ) ^ tau8 η₀) ^ (10 / tau8 η₀) *
+        Real.exp (-2 * (n : ℝ) ^ tau8 η₀))) atTop (nhds 0) := by
+    simpa using hpolyTend.const_mul (32 * K)
+  have hpolyEv : ∀ᶠ n : ℕ in atTop,
+      (32 * K) * (((n : ℝ) ^ tau8 η₀) ^ (10 / tau8 η₀) *
+        Real.exp (-2 * (n : ℝ) ^ tau8 η₀)) < 1 :=
+    hpolyScaled.eventually (Iio_mem_nhds one_pos)
+  have hall : ∀ᶠ n : ℕ in atTop,
+      (2 : ℝ) ^ (2 * h + 1) ≤ (n : ℝ) ^ (1 / 100 : ℝ) ∧
+      100 ≤ Real.log (n : ℝ) ∧
+      (h : ℝ) + 1 ≤ (n : ℝ) ^ (tau8 η₀ / 2) ∧
+      (32 * K) * (((n : ℝ) ^ tau8 η₀) ^ (10 / tau8 η₀) *
+        Real.exp (-2 * (n : ℝ) ^ tau8 η₀)) < 1 ∧ 1 ≤ n := by
+    filter_upwards [hbaseEv, hlogEv, hhalfEv, hpolyEv, eventually_ge_atTop (1 : ℕ)]
+      with n hnBase hnlog hnhalf hnpoly hn
+    exact ⟨hnBase, hnlog, hnhalf, hnpoly, hn⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hall
+  refine ⟨n₀, ?_⟩
+  intro n hn
+  obtain ⟨hnBase, hnlog, hnhalf, hnpoly, hn1⟩ := hn₀ n hn
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le zero_lt_one hnR
+  have hsLower : (n : ℝ) ^ tau8 η₀ ≤ (sC η₀ n : ℝ) := by
+    unfold sC
+    exact Nat.le_ceil _
+  have hsCeil : (sC η₀ n : ℝ) ≤ (n : ℝ) ^ tau8 η₀ + 1 := by
+    unfold sC
+    exact (Nat.ceil_lt_add_one (by positivity : 0 ≤ (n : ℝ) ^ tau8 η₀)).le
+  have hbetaPow : (n : ℝ) ^ β ≤ (n : ℝ) ^ (tau8 η₀ / 2) :=
+    Real.rpow_le_rpow_of_exponent_le hnR (by linarith)
+  have hpositiveExp : h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2) ≤
+      (n : ℝ) ^ tau8 η₀ := by
+    have hhalfSq : ((n : ℝ) ^ (tau8 η₀ / 2)) ^ 2 = (n : ℝ) ^ tau8 η₀ := by
+      calc
+        ((n : ℝ) ^ (tau8 η₀ / 2)) ^ 2 =
+            (n : ℝ) ^ (tau8 η₀ / 2) * (n : ℝ) ^ (tau8 η₀ / 2) := by ring
+        _ = (n : ℝ) ^ ((tau8 η₀ / 2) + (tau8 η₀ / 2)) :=
+          (Real.rpow_add hnpos _ _).symm
+        _ = (n : ℝ) ^ tau8 η₀ := by congr 1 <;> ring
+    have hhalfNonneg : 0 ≤ (n : ℝ) ^ (tau8 η₀ / 2) := by positivity
+    calc
+      h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2) ≤
+          h * (n : ℝ) ^ (tau8 η₀ / 2) + (n : ℝ) ^ (tau8 η₀ / 2) := by
+            exact add_le_add (mul_le_mul_of_nonneg_left hbetaPow (by positivity)) le_rfl
+      _ = ((h : ℝ) + 1) * (n : ℝ) ^ (tau8 η₀ / 2) := by ring
+      _ ≤ ((n : ℝ) ^ (tau8 η₀ / 2)) ^ 2 := by
+        simpa [pow_two] using mul_le_mul_of_nonneg_right hnhalf hhalfNonneg
+      _ = (n : ℝ) ^ tau8 η₀ := hhalfSq
+  have hpow2 : (2 : ℝ) ^ (2 * h + 1) = (2 : ℝ) ^ (2 * h) * 2 := by
+    rw [pow_succ]
+  have hbaseBound :
+      ((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) * (2 : ℝ) ^ (2 * h) ≤
+        (n : ℝ) ^ (-(3 / 100 : ℝ)) := by
+    calc
+      ((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) * (2 : ℝ) ^ (2 * h) =
+          (2 : ℝ) ^ (2 * h + 1) * (n : ℝ) ^ (-(4 / 100 : ℝ)) := by rw [hpow2]; ring
+      _ ≤ (n : ℝ) ^ (1 / 100 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ)) :=
+        mul_le_mul_of_nonneg_right hnBase (by positivity)
+      _ = (n : ℝ) ^ (-(3 / 100 : ℝ)) := by
+        rw [← Real.rpow_add hnpos]
+        congr 1 <;> ring
+  have hsPower :
+      ((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) ^ (sC η₀ n) *
+          (2 : ℝ) ^ (h * (2 * sC η₀ n)) =
+        (((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) * (2 : ℝ) ^ (2 * h)) ^
+          (sC η₀ n) := by
+    have hexp : h * (2 * sC η₀ n) = (2 * h) * sC η₀ n := by ring
+    rw [hexp, pow_mul, ← mul_pow]
+  have hpowerExp : ((n : ℝ) ^ (-(3 / 100 : ℝ))) ^ (sC η₀ n) =
+      (n : ℝ) ^ ((-(3 / 100 : ℝ)) * (sC η₀ n : ℝ)) := by
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hnpos.le]
+  have hexpOrder : (-(3 / 100 : ℝ)) * (sC η₀ n : ℝ) ≤
+      (-(3 / 100 : ℝ)) * (n : ℝ) ^ tau8 η₀ := by nlinarith [hsLower]
+  have hpowerOrder : (n : ℝ) ^ ((-(3 / 100 : ℝ)) * (sC η₀ n : ℝ)) ≤
+      (n : ℝ) ^ ((-(3 / 100 : ℝ)) * (n : ℝ) ^ tau8 η₀) :=
+    Real.rpow_le_rpow_of_exponent_le hnR hexpOrder
+  have ht : 0 ≤ (n : ℝ) ^ tau8 η₀ := by positivity
+  have hlogMul : 100 * (n : ℝ) ^ tau8 η₀ ≤
+      (n : ℝ) ^ tau8 η₀ * Real.log (n : ℝ) := by
+    calc
+      100 * (n : ℝ) ^ tau8 η₀ = (n : ℝ) ^ tau8 η₀ * 100 := by ring
+      _ ≤ (n : ℝ) ^ tau8 η₀ * Real.log (n : ℝ) :=
+        mul_le_mul_of_nonneg_left hnlog ht
+  have hnegRpow : (n : ℝ) ^ ((-(3 / 100 : ℝ)) * (n : ℝ) ^ tau8 η₀) ≤
+      Real.exp (-3 * (n : ℝ) ^ tau8 η₀) := by
+    rw [Real.rpow_def_of_pos hnpos]
+    apply Real.exp_le_exp.mpr
+    nlinarith [hlogMul]
+  have hbasePow :
+      ((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) ^ (sC η₀ n) *
+          (2 : ℝ) ^ (h * (2 * sC η₀ n)) ≤ Real.exp (-3 * (n : ℝ) ^ tau8 η₀) := by
+    calc
+      _ = (((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) * (2 : ℝ) ^ (2 * h)) ^
+            (sC η₀ n) := hsPower
+      _ ≤ ((n : ℝ) ^ (-(3 / 100 : ℝ))) ^ (sC η₀ n) :=
+        pow_le_pow_left₀ (by positivity) hbaseBound _
+      _ = (n : ℝ) ^ ((-(3 / 100 : ℝ)) * (sC η₀ n : ℝ)) := hpowerExp
+      _ ≤ (n : ℝ) ^ ((-(3 / 100 : ℝ)) * (n : ℝ) ^ tau8 η₀) := hpowerOrder
+      _ ≤ Real.exp (-3 * (n : ℝ) ^ tau8 η₀) := hnegRpow
+  have htPow : ((n : ℝ) ^ tau8 η₀) ^ (10 / tau8 η₀) = (n : ℝ) ^ (10 : ℕ) := by
+    rw [← Real.rpow_mul hnpos.le]
+    have hexp : tau8 η₀ * (10 / tau8 η₀) = 10 := by field_simp [ne_of_gt hτ]
+    rw [hexp]
+    exact Real.rpow_natCast (n : ℝ) 10
+  have hcapSmall : (n : ℝ) * fGrid η₀ n * bcompCap η₀ β K h n ≤
+      (32 * K) * (n : ℝ) ^ 10 * Real.exp (-2 * (n : ℝ) ^ tau8 η₀) := by
+    unfold fGrid bcompCap
+    have hnTen : (n : ℝ) * (n : ℝ) ^ (9 : ℕ) = (n : ℝ) ^ 10 := by
+      rw [show (10 : ℕ) = 9 + 1 by omega, pow_succ]
+      ring
+    have hAlgebra :
+        (n : ℝ) * ((n : ℝ) ^ (9 : ℕ) *
+          ((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) ^ (sC η₀ n)) *
+          (32 * K * (2 : ℝ) ^ (h * (2 * sC η₀ n)) *
+            Real.exp (h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2))) =
+        (32 * K) * (n : ℝ) ^ 10 *
+          (((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) ^ (sC η₀ n) *
+            (2 : ℝ) ^ (h * (2 * sC η₀ n))) *
+          Real.exp (h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2)) := by
+      calc
+        _ = (32 * K) * ((n : ℝ) * (n : ℝ) ^ 9) *
+              (((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) ^ (sC η₀ n) *
+                (2 : ℝ) ^ (h * (2 * sC η₀ n))) *
+              Real.exp (h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2)) := by ring
+        _ = _ := by rw [hnTen]
+    rw [hAlgebra]
+    calc
+      (32 * K) * (n : ℝ) ^ 10 *
+          (((2 : ℝ) * (n : ℝ) ^ (-(4 / 100 : ℝ))) ^ (sC η₀ n) *
+            (2 : ℝ) ^ (h * (2 * sC η₀ n))) *
+          Real.exp (h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2)) ≤
+        (32 * K) * (n : ℝ) ^ 10 *
+          Real.exp (-3 * (n : ℝ) ^ tau8 η₀) *
+          Real.exp (h * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2)) := by
+        exact mul_le_mul_of_nonneg_right
+          (mul_le_mul_of_nonneg_left hbasePow (by positivity)) (by positivity)
+      _ ≤ (32 * K) * (n : ℝ) ^ 10 *
+          Real.exp (-3 * (n : ℝ) ^ tau8 η₀) *
+          Real.exp ((n : ℝ) ^ tau8 η₀) := by
+        exact mul_le_mul_of_nonneg_left
+          (Real.exp_le_exp.mpr hpositiveExp) (by positivity)
+      _ = (32 * K) * (n : ℝ) ^ 10 *
+          (Real.exp (-3 * (n : ℝ) ^ tau8 η₀) *
+            Real.exp ((n : ℝ) ^ tau8 η₀)) := by ring
+      _ = (32 * K) * (n : ℝ) ^ 10 *
+          Real.exp (-2 * (n : ℝ) ^ tau8 η₀) := by
+        have hExp : Real.exp (-3 * (n : ℝ) ^ tau8 η₀) *
+            Real.exp ((n : ℝ) ^ tau8 η₀) = Real.exp (-2 * (n : ℝ) ^ tau8 η₀) := by
+          calc
+            Real.exp (-3 * (n : ℝ) ^ tau8 η₀) *
+                Real.exp ((n : ℝ) ^ tau8 η₀) =
+                Real.exp (-3 * (n : ℝ) ^ tau8 η₀ + (n : ℝ) ^ tau8 η₀) := by
+              rw [← Real.exp_add]
+            _ = Real.exp (-2 * (n : ℝ) ^ tau8 η₀) := by congr 1 <;> ring
+        rw [hExp]
+  have hnpoly : (32 * K) * (n : ℝ) ^ 10 *
+      Real.exp (-2 * (n : ℝ) ^ tau8 η₀) < 1 := by
+    simpa [htPow, mul_assoc] using hnpoly
+  exact hcapSmall.trans hnpoly.le
+
+private theorem bcomp_le_cap {η₀ γ β p K : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (X Y R : Finset (Fin D.N)) (hStd : Std D γ K X Y R) (hGF : GridFacts η₀ D.n)
+    (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N) (hbase : D.BaseGates Θ g) :
+    D.Bcomp Θ g x ≤ bcompCap η₀ β K h D.n := by
+  classical
+  have hmix : ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) ≤
+      Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * (4 * K) := by
+    calc
+      ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) ≤
+          ∑ i, (Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * D.M.Λ i) *
+            ((D.N : ℝ) * (D.M.μ i).w x) := by
+        apply Finset.sum_le_sum
+        intro i hi
+        exact mul_le_mul_of_nonneg_right (hbase.1 i)
+          (mul_nonneg (by positivity) ((D.M.μ i).nonneg x))
+      _ = Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            ((D.N : ℝ) * ∑ i, D.M.Λ i * (D.M.μ i).w x) := by
+          calc
+            ∑ i, Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * D.M.Λ i *
+                ((D.N : ℝ) * (D.M.μ i).w x) =
+                Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+                  ∑ i, D.M.Λ i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro i hi
+              ring
+            _ = Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+                  ((D.N : ℝ) * ∑ i, D.M.Λ i * (D.M.μ i).w x) := by
+              congr 1
+              calc
+                ∑ i, D.M.Λ i * ((D.N : ℝ) * (D.M.μ i).w x) =
+                    ∑ i, (D.N : ℝ) * (D.M.Λ i * (D.M.μ i).w x) := by
+                  apply Finset.sum_congr rfl
+                  intro i hi
+                  ring
+                _ = (D.N : ℝ) * ∑ i, D.M.Λ i * (D.M.μ i).w x := by rw [Finset.mul_sum]
+      _ ≤ Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * (4 * K) :=
+          mul_le_mul_of_nonneg_left (hStd.bal.1 x) (by positivity)
+  have hcard : h * (crossKeys g).card ≤ h * (2 * sC η₀ D.n) :=
+    Nat.mul_le_mul_left h (hGF.crossKeys_card g)
+  have hAGinv : (D.AG g)⁻¹ ≤ (2 : ℝ) ^ (h * (2 * sC η₀ D.n)) := by
+    have hp := pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 2) hcard
+    simpa [Ctx.AG] using hp
+  have hFnonneg : 0 ≤ ∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+    apply Finset.sum_nonneg
+    intro i hi
+    exact mul_nonneg (D.postW_nonneg _ _) (mul_nonneg (by positivity) ((D.M.μ i).nonneg x))
+  have hAGpos : 0 < D.AG g := by unfold Ctx.AG; positivity
+  have hscale : 0 ≤ 8 * (D.AG g)⁻¹ := by positivity
+  have hB : D.Bcomp Θ g x ≤ 8 * (D.AG g)⁻¹ *
+      (∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) := by
+    unfold Ctx.Bcomp
+    rw [if_pos hbase]
+    by_cases hhit : D.crossHit Θ g x
+    · simp [hhit]
+    · simp [hhit]
+      exact mul_nonneg hscale hFnonneg
+  calc
+    D.Bcomp Θ g x ≤ 8 * (D.AG g)⁻¹ *
+        (∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) := hB
+    _ ≤ 8 * (2 : ℝ) ^ (h * (2 * sC η₀ D.n)) *
+          (∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) := by
+      have htemp : (D.AG g)⁻¹ *
+          (∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) ≤
+          (2 : ℝ) ^ (h * (2 * sC η₀ D.n)) *
+          (∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) :=
+        mul_le_mul_of_nonneg_right hAGinv hFnonneg
+      have htemp' := mul_le_mul_of_nonneg_left htemp (by norm_num : (0 : ℝ) ≤ 8)
+      simpa [mul_assoc] using htemp'
+    _ ≤ 8 * (2 : ℝ) ^ (h * (2 * sC η₀ D.n)) *
+          (Real.exp (h * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * (4 * K)) :=
+      mul_le_mul_of_nonneg_left hmix (by positivity)
+    _ = bcompCap η₀ β K h D.n := by
+      unfold bcompCap
+      ring
+
+private theorem bcomp_dep {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (g : D.KeyT) (x : Fin D.N) :
+    FinProb.DependsOn (fun Θ => D.Bcomp Θ g x) (keyBall g 1) := by
+  classical
+  intro Θ Θ' hEq
+  have hg : g ∈ keyBall g 1 := by
+    unfold keyBall
+    apply Finset.mem_filter.mpr
+    constructor
+    · exact Finset.mem_univ _
+    · simp [keyDist]
+  have hown : Θ g = Θ' g := hEq g hg
+  have hball (u : D.KeyT) (hu : u ∈ crossKeys g) : u ∈ keyBall g 1 := by
+    unfold keyBall
+    apply Finset.mem_filter.mpr
+    constructor
+    · exact Finset.mem_univ _
+    · have hdist := (Finset.mem_filter.mp hu).2
+      omega
+  have hcross (y : Fin D.N) (u : D.KeyT) (hu : u ∈ crossKeys g) :
+      D.hitsAll y (Θ u) = D.hitsAll y (Θ' u) :=
+    congrArg (D.hitsAll y) (hEq u (hball u hu))
+  have hcrossHit (y : Fin D.N) : D.crossHit Θ g y = D.crossHit Θ' g y := by
+    apply propext
+    change (∀ u ∈ crossKeys g, D.hitsAll y (Θ u)) ↔
+      (∀ u ∈ crossKeys g, D.hitsAll y (Θ' u))
+    constructor
+    · intro hh u hu
+      rw [← hcross y u hu]
+      exact hh u hu
+    · intro hh u hu
+      rw [hcross y u hu]
+      exact hh u hu
+  have hownhit (y : Fin D.N) : D.ownHit Θ g y = D.ownHit Θ' g y := by
+    unfold Ctx.ownHit
+    rw [hcrossHit y, congrArg (D.hitsAll y) hown]
+  have hminus (i : D.M.ι) : D.dMinus Θ g i = D.dMinus Θ' g i := by
+    unfold Ctx.dMinus
+    apply Finset.sum_congr rfl
+    intro y _
+    rw [hcrossHit y]
+  have hplus (i : D.M.ι) : D.dPlus Θ g i = D.dPlus Θ' g i := by
+    unfold Ctx.dPlus
+    apply Finset.sum_congr rfl
+    intro y _
+    rw [hownhit y]
+  have homit (i : D.M.ι) (u₀ : D.KeyT) (hu₀ : u₀ ∈ crossKeys g) :
+      D.dOmit Θ g u₀ i = D.dOmit Θ' g u₀ i := by
+    unfold Ctx.dOmit
+    apply Finset.sum_congr rfl
+    intro y _
+    have hprop : (∀ u ∈ (crossKeys g).erase u₀, D.hitsAll y (Θ u)) =
+        (∀ u ∈ (crossKeys g).erase u₀, D.hitsAll y (Θ' u)) := by
+      apply propext
+      constructor
+      · intro hh u hu
+        have huCross : u ∈ crossKeys g := (Finset.mem_erase.mp hu).2
+        rw [← hcross y u huCross]
+        exact hh u hu
+      · intro hh u hu
+        have huCross : u ∈ crossKeys g := (Finset.mem_erase.mp hu).2
+        rw [hcross y u huCross]
+        exact hh u hu
+    simp_rw [hprop]
+  have hpost (i : D.M.ι) : D.postW (Θ g) i = D.postW (Θ' g) i := by rw [hown]
+  have hgateOpen (i : D.M.ι) : D.GateOpen Θ g i = D.GateOpen Θ' g i := by
+    simp [Ctx.GateOpen, hminus i, hplus i]
+  have htilt (i : D.M.ι) : D.tiltW Θ g i = D.tiltW Θ' g i := by
+    simp [Ctx.tiltW, hpost i, hminus i, hgateOpen i]
+  have hZG : D.ZG Θ g = D.ZG Θ' g := by simp [Ctx.ZG, htilt]
+  have hG1 : D.Gate1 Θ g ↔ D.Gate1 Θ' g := by simp [Ctx.Gate1, hpost]
+  have hG2 : D.Gate2 Θ g ↔ D.Gate2 Θ' g := by simp [Ctx.Gate2, hZG]
+  have hG34 : D.Gate34 Θ g ↔ D.Gate34 Θ' g := by
+    unfold Ctx.Gate34
+    constructor
+    · rintro ⟨hη, hΛ, hrest⟩
+      refine ⟨?_, ?_, ?_⟩
+      · simpa only [hpost, hminus] using hη
+      · simpa only [hminus] using hΛ
+      · intro u hu
+        obtain ⟨⟨hηlo, hηhi⟩, ⟨hΛlo, hΛhi⟩⟩ := hrest u hu
+        simp_rw [homit _ u hu] at hηlo hηhi hΛlo hΛhi
+        simp_rw [hpost] at hηlo hηhi
+        exact ⟨⟨hηlo, hηhi⟩, ⟨hΛlo, hΛhi⟩⟩
+    · rintro ⟨hη, hΛ, hrest⟩
+      refine ⟨?_, ?_, ?_⟩
+      · simpa only [← hpost, ← hminus] using hη
+      · simpa only [← hminus] using hΛ
+      · intro u hu
+        obtain ⟨⟨hηlo, hηhi⟩, ⟨hΛlo, hΛhi⟩⟩ := hrest u hu
+        simp_rw [← homit _ u hu] at hηlo hηhi hΛlo hΛhi
+        simp_rw [← hpost] at hηlo hηhi
+        exact ⟨⟨hηlo, hηhi⟩, ⟨hΛlo, hΛhi⟩⟩
+  have hbase : D.BaseGates Θ g = D.BaseGates Θ' g :=
+    propext (and_congr hG1 (and_congr hG2 hG34))
+  have hsum : (∑ i, D.postW (Θ g) i * ((D.N : ℝ) * (D.M.μ i).w x)) =
+      ∑ i, D.postW (Θ' g) i * ((D.N : ℝ) * (D.M.μ i).w x) := by
+    apply Finset.sum_congr rfl
+    intro i _
+    rw [hpost]
+  simp [Ctx.Bcomp, hbase, hcrossHit x, hsum]
+
 theorem bcomp_mean (η₀ γ β p K : ℝ) (h : ℕ) (hη₀ : 0 < η₀) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N),
       Std D γ K X Y R → GridFacts η₀ D.n → D.BcompMean K := by

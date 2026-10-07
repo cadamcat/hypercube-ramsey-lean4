@@ -721,6 +721,7 @@ theorem one_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
         have h := (Finset.mem_filter.mp hx).2
         simpa using h)
 
+set_option maxHeartbeats 400000 in
 /-- L11.3b (11:207–252).  `t = ⌈n^.25⌉` conditioned samples from `σ|_{E_x}`, `‖E_{ρ_x} a_z‖_{L²(π)} = O(b_*)` by
 (11.1), `E‖S‖² = O_u(t)`, Fubini to a fixed norm-good tuple whose simultaneous violation set has `x`-mass
 `e^{-O(t n^.4)}` (width `O(n^.65)`), the projection identity and the equal-normalizer pair `π_±`
@@ -728,6 +729,496 @@ theorem one_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
 probability `≤ max σ ≤ e^{h}/N`. -/
 theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
     (hK : 0 < K) : TwoFreeEv δ x₀ K := by
+  classical
+  unfold TwoFreeEv
+  intro u
+  let a : ℝ := 1 - δ / 16
+  let Hbound : ℝ := (5 : ℝ) ^ u
+  let B : ℝ := 2 * Hbound
+  let tσ : ℕ → ℝ := fun n => (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)
+  have ha : 0 < a := by dsimp [a]; nlinarith
+  have hgap := OuterMoment_q_s11_outer.eventually_pow_gap
+    ((1 : ℝ) / 10) a (8 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
+  have hgapFiber := OuterMoment_q_s11_outer.eventually_pow_gap
+    ((2 : ℝ) / 5) a (8 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
+  have hgapTuple := OuterMoment_q_s11_outer.eventually_pow_gap
+    ((13 : ℝ) / 20) a (16 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
+  have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
+    simpa [bS, neg_div, Function.comp_def] using
+      (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < (19 : ℝ) / 20)).comp
+        tendsto_natCast_atTop_atTop
+  have hbSmall : ∀ᶠ n : ℕ in atTop, bS n ≤ 1 / 8 := by
+    have h := hbT.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8))
+    filter_upwards [h] with n hn
+    exact hn.le
+  have hPiTend : Tendsto (fun n : ℕ => (n : ℝ) ^ x₀) atTop atTop :=
+    (tendsto_rpow_atTop hx₀).comp tendsto_natCast_atTop_atTop
+  have hPiWidth : ∀ᶠ n : ℕ in atTop,
+      Real.log K + Real.log (2 * B + 2) ≤ (n : ℝ) ^ x₀ := by
+    filter_upwards [hPiTend.eventually_gt_atTop (Real.log K + Real.log (2 * B + 2))]
+      with n hn
+    exact hn.le
+  have hnLarge : ∀ᶠ n : ℕ in atTop, 64 ≤ n :=
+    eventually_atTop.mpr ⟨64, fun _ hn => hn⟩
+  have hScale : ∀ᶠ n : ℕ in atTop,
+      64 ≤ n ∧ bS n ≤ 1 / 8 ∧ tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 ∧
+        Real.log K + Real.log (2 * B + 2) ≤ (n : ℝ) ^ x₀ ∧
+        8 * (n : ℝ) ^ ((2 : ℝ) / 5) < (n : ℝ) ^ a ∧
+        16 * (n : ℝ) ^ ((13 : ℝ) / 20) < (n : ℝ) ^ a := by
+    filter_upwards [hnLarge, hbSmall, hgap, hPiWidth, hgapFiber, hgapTuple]
+      with n hn hb hg hp hgf hgt
+    have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+    have hpow : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+      exact Real.one_le_rpow hn1 (by norm_num)
+    have hcard : (Fintype.card (InnerCoord n) : ℝ) ≤ (hIn n : ℝ) := by
+      exact_mod_cast OuterMoment_q_s11_outer.innerCoord_card_le n
+    have hfloor := OuterMoment_q_s11_outer.hIn_real_le_pow n
+    have hgNonneg : 0 ≤ gS n := by
+      unfold gS
+      exact Real.rpow_nonneg (Nat.cast_nonneg n) _
+    have hlog2 : Real.log 2 ≤ 1 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+      linarith
+    have htσ : tσ n ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+      dsimp [tσ]
+      calc
+        (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n) ≤
+            1 * Fintype.card (InnerCoord n) := by
+              exact mul_le_mul_of_nonneg_right (by linarith)
+                (by exact_mod_cast Nat.cast_nonneg (Fintype.card (InnerCoord n)))
+        _ ≤ (hIn n : ℝ) := by simpa using hcard
+        _ ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := hfloor
+    have hlog3 : Real.log 3 ≤ 2 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 3)
+      linarith
+    have hwidth : tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
+      nlinarith [htσ, hlog3, hpow, hg]
+    exact ⟨hn, hb, hwidth, hp, hgf, hgt⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScale
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y G π σ S hO
+  intro J j j' hj hj' hjj base hbase
+  have hpars := hn₀ n hn
+  rcases hpars with ⟨hn64, hbSmallN, hwidthN, hpiWidthN, hfiberGap, htupleGap⟩
+  have hNpos : 0 < (N : ℝ) := by
+    have hNnat : 0 < N := lt_of_lt_of_le (by positivity) hO.host
+    exact_mod_cast hNnat
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  let πlaw : Law N := ⟨π, hO.pi_nonneg, hO.pi_sum⟩
+  let σlaw : Law N := ⟨σ, hO.sigma_nonneg, hO.sigma_sum⟩
+  have hπWidth : πlaw.WidthLE (Real.log K) := by
+    intro y
+    apply (le_div_iff₀ hNpos).2
+    rw [Real.exp_log hK]
+    nlinarith [hO.pi_cap y]
+  have hσWidth : σlaw.WidthLE (tσ n) := by
+    intro x
+    apply (le_div_iff₀ hNpos).2
+    change σ x * (N : ℝ) ≤ Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n))
+    nlinarith [hO.sigma_cap x]
+  have hπSupport : πlaw.SupportedIn Y := by
+    intro y hy
+    by_contra hne
+    exact hy (hO.pi_supp y hne)
+  have hσSupport : σlaw.SupportedIn S := by
+    intro x hx
+    by_contra hne
+    exact hx (hO.sigma_supp x hne)
+  have hMeanRel (x : Fin N) : sMean E G π x = 2 * deg E G π x - 1 := by
+    unfold sMean deg fv
+    calc
+      (∑ y, π y * (2 * hit E G x y - 1)) =
+          ∑ y, (2 * (π y * hit E G x y) - π y) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      _ = (∑ y, 2 * (π y * hit E G x y)) - ∑ y, π y := by
+            rw [Finset.sum_sub_distrib]
+      _ = 2 * (∑ y, π y * hit E G x y) - 1 := by
+            rw [← Finset.mul_sum, hO.pi_sum]
+  have hMeanDen (x : Fin N) : 1 + sMean E G π x = 2 * deg E G π x := by
+    rw [hMeanRel x]
+    ring
+  have hMeanAbs (x : Fin N) (hx : x ∈ S) : |sMean E G π x| ≤ 1 / 2 := by
+    calc
+      |sMean E G π x| ≤ 4 * bS n := hO.degree x hx
+      _ ≤ 4 * (1 / 8) := mul_le_mul_of_nonneg_left hbSmallN (by norm_num)
+      _ = 1 / 2 := by norm_num
+  have hDenBounds (x : Fin N) (hx : x ∈ S) :
+      1 / 2 ≤ 1 + sMean E G π x ∧ 1 + sMean E G π x ≤ 3 / 2 := by
+    have h := abs_le.mp (hMeanAbs x hx)
+    constructor <;> linarith
+  have hDegLower (x : Fin N) (hx : x ∈ S) : 1 / 4 ≤ deg E G π x := by
+    have h := hMeanDen x
+    have h' := (hDenBounds x hx).1
+    nlinarith
+  have haFid (x : Fin N) (hx : x ∈ S) (y : Fin N) :
+      aF E G π x y = (fv E G x y - sMean E G π x) / (1 + sMean E G π x) := by
+    unfold aF
+    rw [hMeanDen x]
+    unfold fv
+    have hdeg : 0 < deg E G π x := lt_of_lt_of_le (by norm_num) (hDegLower x hx)
+    field_simp [ne_of_gt hdeg]
+    <;> nlinarith [hMeanDen x]
+  have haBound (x : Fin N) (hx : x ∈ S) (y : Fin N) : |aF E G π x y| ≤ 5 := by
+    have hmean : |sMean E G π x| ≤ 1 / 2 := hMeanAbs x hx
+    have hden : 1 / 4 ≤ deg E G π x := hDegLower x hx
+    have hdenpos : 0 < deg E G π x := lt_of_lt_of_le (by norm_num) hden
+    have hhit : |hit E G x y| ≤ 1 := by
+      unfold hit
+      split_ifs <;> norm_num
+    have hfrac : |hit E G x y / deg E G π x| ≤ 4 := by
+      rw [abs_div, abs_of_pos hdenpos]
+      apply (div_le_iff₀ hdenpos).2
+      nlinarith
+    unfold aF
+    calc
+      |hit E G x y / deg E G π x - 1| ≤ |hit E G x y / deg E G π x| + 1 := by
+        simpa using abs_sub (hit E G x y / deg E G π x) 1
+      _ ≤ 5 := by linarith
+  let threshold : ℝ := (n : ℝ) ^ (-(103 : ℝ) / 100)
+  let ε : ℝ := Real.exp (-((n : ℝ) ^ ((2 : ℝ) / 5)))
+  let ρ : ℝ := ε / 4
+  have hthreshold_pos : 0 < threshold := by dsimp [threshold]; positivity
+  have hεpos : 0 < ε := by dsimp [ε]; exact Real.exp_pos _
+  have hρpos : 0 < ρ := by dsimp [ρ]; positivity
+  let pairMass (sgn : ℝ) : ℝ :=
+    ∑ x : Fin N, ∑ z : Fin N, σ x * σ z *
+      (if threshold < sgn * inter E G π J
+          (Function.update (Function.update base j x) j' z) then 1 else 0)
+  let badMass : ℝ :=
+    ∑ x : Fin N, ∑ z : Fin N, σ x * σ z *
+      (if threshold < |inter E G π J
+          (Function.update (Function.update base j x) j' z)| then 1 else 0)
+  have hbadSplit : badMass ≤ pairMass 1 + pairMass (-1) := by
+    dsimp [badMass, pairMass]
+    simp only [one_mul, neg_one_mul]
+    rw [← Finset.sum_add_distrib]
+    apply Finset.sum_le_sum
+    intro x hx
+    rw [← Finset.sum_add_distrib]
+    apply Finset.sum_le_sum
+    intro z hz
+    have hweight : 0 ≤ σ x * σ z := mul_nonneg (hO.sigma_nonneg x) (hO.sigma_nonneg z)
+    have hcoeff :
+        (if threshold < |inter E G π J (Function.update (Function.update base j x) j' z)|
+          then (1 : ℝ) else 0) ≤
+        (if threshold < inter E G π J (Function.update (Function.update base j x) j' z)
+          then (1 : ℝ) else 0) +
+        (if threshold < -inter E G π J (Function.update (Function.update base j x) j' z)
+          then (1 : ℝ) else 0) := by
+      by_cases hp : threshold < inter E G π J (Function.update (Function.update base j x) j' z)
+      · have hbad :
+            (if threshold < |inter E G π J (Function.update (Function.update base j x) j' z)|
+              then (1 : ℝ) else 0) ≤ 1 := by
+            split_ifs <;> norm_num
+        have hpos : (if threshold < inter E G π J
+            (Function.update (Function.update base j x) j' z) then (1 : ℝ) else 0) = 1 := by
+          simp [hp]
+        have hneg : 0 ≤ (if threshold < -inter E G π J
+            (Function.update (Function.update base j x) j' z) then (1 : ℝ) else 0) := by
+          split_ifs <;> positivity
+        calc
+          (if threshold < |inter E G π J
+              (Function.update (Function.update base j x) j' z)| then (1 : ℝ) else 0) ≤ 1 := hbad
+          _ ≤ (if threshold < inter E G π J
+              (Function.update (Function.update base j x) j' z) then (1 : ℝ) else 0) +
+            (if threshold < -inter E G π J
+              (Function.update (Function.update base j x) j' z) then (1 : ℝ) else 0) := by
+                rw [hpos]
+                exact le_add_of_nonneg_right hneg
+      · by_cases hm : threshold < -inter E G π J (Function.update (Function.update base j x) j' z)
+        · simp [hp, hm]
+          split_ifs <;> norm_num
+        · have habs : |inter E G π J (Function.update (Function.update base j x) j' z)| ≤ threshold := by
+            apply abs_le.mpr
+            constructor <;> linarith
+          simp only [if_neg (not_lt_of_ge habs)]
+          have hpos : 0 ≤ (if threshold < inter E G π J
+              (Function.update (Function.update base j x) j' z) then (1 : ℝ) else 0) := by
+            split_ifs <;> positivity
+          have hneg : 0 ≤ (if threshold < -inter E G π J
+              (Function.update (Function.update base j x) j' z) then (1 : ℝ) else 0) := by
+            split_ifs <;> positivity
+          linarith
+    calc
+      σ x * σ z *
+          (if threshold < |inter E G π J (Function.update (Function.update base j x) j' z)|
+            then 1 else 0) ≤
+          σ x * σ z *
+            ((if threshold < inter E G π J (Function.update (Function.update base j x) j' z)
+                then 1 else 0) +
+              (if threshold < -inter E G π J (Function.update (Function.update base j x) j' z)
+                then 1 else 0)) := mul_le_mul_of_nonneg_left hcoeff hweight
+      _ = σ x * σ z *
+            (if threshold < inter E G π J (Function.update (Function.update base j x) j' z)
+              then 1 else 0) +
+          σ x * σ z *
+            (if threshold < -inter E G π J (Function.update (Function.update base j x) j' z)
+              then 1 else 0) := by ring
+  have hσS : (∑ x ∈ S, σ x) = 1 := by
+    calc
+      (∑ x ∈ S, σ x) = ∑ x, (if x ∈ S then σ x else 0) := by
+        symm
+        exact Finset.sum_ite_mem_eq S σ
+      _ = ∑ x, σ x := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        by_cases hxS : x ∈ S
+        · simp [hxS]
+        · have hσ0 : σ x = 0 := by
+            by_contra hne
+            exact hxS (hO.sigma_supp x hne)
+          simp [hxS, hσ0]
+      _ = 1 := hO.sigma_sum
+  have hσMass : ∀ T : Finset (Fin N), (∑ z ∈ T, σ z) ≤ 1 := by
+    intro T
+    calc
+      (∑ z ∈ T, σ z) ≤ ∑ z, σ z := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg
+        · exact Finset.subset_univ T
+        · intro z hz hnot
+          exact hO.sigma_nonneg z
+      _ = 1 := hO.sigma_sum
+  by_contra hgoal
+  have hbadLarge : ε < badMass := by
+    apply lt_of_not_ge
+    simpa [TwoFree, badMass, threshold, ε] using hgoal
+  have hside : ε / 2 < pairMass 1 ∨ ε / 2 < pairMass (-1) := by
+    by_contra h
+    have hp : pairMass 1 ≤ ε / 2 := le_of_not_gt (fun hp => h (Or.inl hp))
+    have hm : pairMass (-1) ≤ ε / 2 := le_of_not_gt (fun hm => h (Or.inr hm))
+    linarith [hbadSplit]
+  let sgn : ℝ := if pairMass 1 > ε / 2 then 1 else -1
+  have hsgn : |sgn| = 1 := by
+    dsimp [sgn]
+    split_ifs <;> norm_num
+  have hchosen : ε / 2 < pairMass sgn := by
+    rcases hside with hpos | hneg
+    · have htest : ε / 2 < pairMass 1 := hpos
+      simp [sgn, htest]
+    · by_cases htest : ε / 2 < pairMass 1
+      · simp [sgn, htest]
+      · simp [sgn, htest]
+        exact hneg
+  let event (x z : Fin N) : Prop :=
+    threshold < sgn * inter E G π J
+      (Function.update (Function.update base j x) j' z)
+  let fiber (x : Fin N) : Finset (Fin N) := Finset.univ.filter (event x)
+  let fiberMass (x : Fin N) : ℝ :=
+    ∑ z, σ z * (if z ∈ fiber x then (1 : ℝ) else 0)
+  let A : Finset (Fin N) := Finset.univ.filter (fun x => ρ < fiberMass x)
+  have hindicator (T : Finset (Fin N)) :
+      (∑ z, σ z * (if z ∈ T then (1 : ℝ) else 0)) = ∑ z ∈ T, σ z := by
+    calc
+      (∑ z, σ z * (if z ∈ T then (1 : ℝ) else 0)) =
+          ∑ z, (if z ∈ T then σ z else 0) := by
+            apply Finset.sum_congr rfl
+            intro z hz
+            by_cases h : z ∈ T <;> simp [h] <;> ring
+      _ = ∑ z ∈ T, σ z := Finset.sum_ite_mem_eq T σ
+  have hFiberMassNonneg (x : Fin N) : 0 ≤ fiberMass x := by
+    dsimp [fiberMass]
+    exact Finset.sum_nonneg fun z hz =>
+      mul_nonneg (hO.sigma_nonneg z) (by split_ifs <;> positivity)
+  have hFiberMassLeOne (x : Fin N) : fiberMass x ≤ 1 := by
+    dsimp [fiberMass]
+    rw [hindicator]
+    exact hσMass (fiber x)
+  have hpairMassFiber : pairMass sgn = ∑ x, σ x * fiberMass x := by
+    dsimp [pairMass, fiberMass]
+    calc
+      (∑ x, ∑ z, σ x * σ z *
+          (if threshold < sgn * inter E G π J
+            (Function.update (Function.update base j x) j' z) then 1 else 0)) =
+        ∑ x, σ x * ∑ z, σ z *
+          (if threshold < sgn * inter E G π J
+            (Function.update (Function.update base j x) j' z) then 1 else 0) := by
+              apply Finset.sum_congr rfl
+              intro x hx
+              calc
+                (∑ z, σ x * σ z *
+                    (if threshold < sgn * inter E G π J
+                      (Function.update (Function.update base j x) j' z) then 1 else 0)) =
+                  ∑ z, σ x * (σ z *
+                    (if threshold < sgn * inter E G π J
+                      (Function.update (Function.update base j x) j' z) then 1 else 0)) := by
+                    apply Finset.sum_congr rfl
+                    intro z hz
+                    ring
+                _ = σ x * ∑ z, σ z *
+                    (if threshold < sgn * inter E G π J
+                      (Function.update (Function.update base j x) j' z) then 1 else 0) := by
+                    rw [Finset.mul_sum]
+      _ = ∑ x, σ x * ∑ z, σ z *
+          (if z ∈ fiber x then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        apply congrArg (fun q : ℝ => σ x * q)
+        apply Finset.sum_congr rfl
+        intro z hz
+        simp [fiber, event]
+      _ = ∑ x, σ x * fiberMass x := by rfl
+  have hpairMassUpper : pairMass sgn ≤ (∑ x ∈ A, σ x) + ρ := by
+    rw [hpairMassFiber]
+    calc
+      (∑ x, σ x * fiberMass x) ≤
+          ∑ x, ((if x ∈ A then σ x else 0) + ρ * σ x) := by
+            apply Finset.sum_le_sum
+            intro x hx
+            by_cases hxA : x ∈ A
+            · have hfm : fiberMass x ≤ 1 := hFiberMassLeOne x
+              have hσ : 0 ≤ σ x := hO.sigma_nonneg x
+              have hmul : σ x * fiberMass x ≤ σ x * 1 :=
+                mul_le_mul_of_nonneg_left hfm hσ
+              simp [A, hxA]
+              nlinarith [hmul, mul_nonneg hσ hρpos.le]
+            · have hfm : fiberMass x ≤ ρ := by
+                have hnot : ¬ ρ < fiberMass x := by
+                  intro hlt
+                  exact hxA (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlt⟩)
+                exact le_of_not_gt hnot
+              have hσ : 0 ≤ σ x := hO.sigma_nonneg x
+              have hmul : σ x * fiberMass x ≤ σ x * ρ :=
+                mul_le_mul_of_nonneg_left hfm hσ
+              simp [A, hxA]
+              nlinarith [hmul]
+      _ = (∑ x ∈ A, σ x) + ρ := by
+            rw [Finset.sum_add_distrib]
+            have hfirst : (∑ x, if x ∈ A then σ x else 0) = ∑ x ∈ A, σ x :=
+              Finset.sum_ite_mem_eq A σ
+            rw [hfirst, ← Finset.mul_sum, hO.sigma_sum]
+            ring
+  have hAmass : ρ < ∑ x ∈ A, σ x := by
+    have hρeq : ε / 2 = 2 * ρ := by dsimp [ρ]; ring
+    linarith [hchosen, hpairMassUpper, hρeq]
+  have hApos : 0 < ∑ x ∈ A, σ x := lt_trans hρpos hAmass
+  have hApositive (x : Fin N) (hx : x ∈ A) : ρ < fiberMass x :=
+    (Finset.mem_filter.mp hx).2
+  have hFiberMassAsSum (x : Fin N) : fiberMass x = ∑ z ∈ fiber x, σ z := by
+    dsimp [fiberMass]
+    exact hindicator (fiber x)
+  have hFiberSetMassPos (x : Fin N) (hx : x ∈ A) :
+      0 < ∑ z ∈ fiber x, σ z := by
+    rw [← hFiberMassAsSum x]
+    exact lt_trans hρpos (hApositive x hx)
+  let q (x : Fin N) (hx : x ∈ A) : Law N :=
+    Law.restrict σlaw (fiber x) (hFiberSetMassPos x hx)
+  have hqSupport (x : Fin N) (hx : x ∈ A) : (q x hx).SupportedIn (fiber x) := by
+    intro z hz
+    simp [q, Law.restrict, hz]
+  have hqWidth (x : Fin N) (hx : x ∈ A) :
+      (q x hx).WidthLE (tσ n - Real.log (∑ z ∈ fiber x, σ z)) := by
+    simpa [q] using Law.WidthLE.restrict hσWidth (hFiberSetMassPos x hx)
+  have hlog4 : Real.log 4 ≤ 3 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 4)
+    linarith
+  have hnPowFiber : 1 ≤ (n : ℝ) ^ ((2 : ℝ) / 5) := by
+    exact Real.one_le_rpow (by exact_mod_cast (by omega : 1 ≤ n)) (by norm_num)
+  have hqWidthPlusLog3 (x : Fin N) (hx : x ∈ A) :
+      tσ n - Real.log (∑ z ∈ fiber x, σ z) + Real.log 3 ≤ (n : ℝ) ^ a := by
+    have hmasslog : -((n : ℝ) ^ ((2 : ℝ) / 5)) - Real.log 4 <
+        Real.log (∑ z ∈ fiber x, σ z) := by
+      have hmass : ρ < ∑ z ∈ fiber x, σ z := by
+        rw [← hFiberMassAsSum x]
+        exact hApositive x hx
+      have h := Real.log_lt_log hρpos hmass
+      have hρlog : Real.log ρ = -((n : ℝ) ^ ((2 : ℝ) / 5)) - Real.log 4 := by
+        dsimp [ρ, ε]
+        rw [Real.log_div (ne_of_gt (Real.exp_pos _)) (by norm_num : (4 : ℝ) ≠ 0)]
+        rw [Real.log_exp]
+      rw [hρlog] at h
+      exact h
+    have hpenalty : (n : ℝ) ^ ((2 : ℝ) / 5) + Real.log 4 ≤ (n : ℝ) ^ a / 2 := by
+      nlinarith [hfiberGap, hnPowFiber]
+    have htσ : tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := hwidthN
+    linarith
+  have hqWidthForDisc (x : Fin N) (hx : x ∈ A) :
+      (q x hx).WidthLE ((n : ℝ) ^ a - Real.log 3) := by
+    exact Law.WidthLE.mono (hqWidth x hx) (by linarith [hqWidthPlusLog3 x hx])
+  have hqSupportedInS (x : Fin N) (hx : x ∈ A) : (q x hx).SupportedIn S := by
+    intro z hzS
+    have hσzero : σ z = 0 := by
+      by_contra hσne
+      exact hzS (hO.sigma_supp z hσne)
+    simp [q, Law.restrict, σlaw, hσzero]
+  let r (z : Fin N) : ℝ := if z ∈ S then (1 + sMean E G π z)⁻¹ else 0
+  have hrBounds (z : Fin N) (hz : z ∈ S) : 2 / 3 ≤ r z ∧ r z ≤ 2 := by
+    have hdenpos : 0 < 1 + sMean E G π z :=
+      lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 2) (hDenBounds z hz).1
+    have hr : r z = (1 + sMean E G π z)⁻¹ := by simp [r, hz]
+    rw [hr, inv_eq_one_div]
+    constructor
+    · apply (le_div_iff₀ hdenpos).2
+      nlinarith [(hDenBounds z hz).2]
+    · apply (div_le_iff₀ hdenpos).2
+      nlinarith [(hDenBounds z hz).1]
+  have hrNonneg (z : Fin N) : 0 ≤ r z := by
+    by_cases hz : z ∈ S
+    · linarith [(hrBounds z hz).1]
+    · simp [r, hz]
+  let c (x : Fin N) (hx : x ∈ A) : ℝ := ∑ z, (q x hx).w z * r z
+  have hcLower (x : Fin N) (hx : x ∈ A) : 2 / 3 ≤ c x hx := by
+    dsimp [c]
+    calc
+      (2 / 3 : ℝ) = (∑ z, (q x hx).w z) * (2 / 3) := by rw [(q x hx).sum_eq_one]; ring
+      _ = ∑ z, (q x hx).w z * (2 / 3) := by rw [Finset.sum_mul]
+      _ ≤ ∑ z, (q x hx).w z * r z := by
+        apply Finset.sum_le_sum
+        intro z hz
+        by_cases hzS : z ∈ S
+        · exact mul_le_mul_of_nonneg_left (hrBounds z hzS).1 ((q x hx).nonneg z)
+        · have hq0 : (q x hx).w z = 0 := hqSupportedInS x hx z hzS
+          simp [hq0]
+  have hcUpper (x : Fin N) (hx : x ∈ A) : c x hx ≤ 2 := by
+    dsimp [c]
+    calc
+      (∑ z, (q x hx).w z * r z) ≤ ∑ z, (q x hx).w z * 2 := by
+        apply Finset.sum_le_sum
+        intro z hz
+        by_cases hzS : z ∈ S
+        · exact mul_le_mul_of_nonneg_left (hrBounds z hzS).2 ((q x hx).nonneg z)
+        · have hq0 : (q x hx).w z = 0 := hqSupportedInS x hx z hzS
+          simp [hq0]
+      _ = 2 := by rw [← Finset.sum_mul, (q x hx).sum_eq_one]; ring
+  have hcPos (x : Fin N) (hx : x ∈ A) : 0 < c x hx :=
+    lt_of_lt_of_le (by norm_num : (0 : ℝ) < 2 / 3) (hcLower x hx)
+  let qtilde (x : Fin N) (hx : x ∈ A) : Law N := {
+    w := fun z => (q x hx).w z * r z / c x hx
+    nonneg := fun z => div_nonneg (mul_nonneg ((q x hx).nonneg z) (hrNonneg z))
+      (hcPos x hx).le
+    sum_eq_one := by
+      calc
+        (∑ z, (q x hx).w z * r z / c x hx) =
+            (∑ z, (q x hx).w z * r z) / c x hx := by rw [Finset.sum_div]
+        _ = c x hx / c x hx := rfl
+        _ = 1 := div_self (hcPos x hx).ne'
+  }
+  have hqtildeSupport (x : Fin N) (hx : x ∈ A) : (qtilde x hx).SupportedIn S := by
+    intro z hzS
+    have hq0 : (q x hx).w z = 0 := hqSupportedInS x hx z hzS
+    simp [qtilde, hq0]
+  have hqtildeWidth (x : Fin N) (hx : x ∈ A) :
+      (qtilde x hx).WidthLE ((n : ℝ) ^ a) := by
+    intro z
+    change (q x hx).w z * r z / c x hx ≤ Real.exp ((n : ℝ) ^ a) / N
+    have hratio : r z / c x hx ≤ 3 := by
+      by_cases hzS : z ∈ S
+      · apply (div_le_iff₀ (hcPos x hx)).2
+        nlinarith [(hrBounds z hzS).2, hcLower x hx]
+      · simp [r, hzS]
+    calc
+      (q x hx).w z * r z / c x hx = (q x hx).w z * (r z / c x hx) := by ring
+      _ ≤ (q x hx).w z * 3 :=
+        mul_le_mul_of_nonneg_left hratio ((q x hx).nonneg z)
+      _ ≤ (Real.exp ((n : ℝ) ^ a - Real.log 3) / N) * 3 :=
+        mul_le_mul_of_nonneg_right (hqWidthForDisc x hx z) (by norm_num)
+      _ = Real.exp ((n : ℝ) ^ a) / N := by
+        rw [Real.exp_sub, Real.exp_log (by norm_num : (0 : ℝ) < 3)]
+        field_simp [ne_of_gt hNpos]
+        <;> ring
+  -- The conditioned fibers have mass above `ρ`; the remaining proof bounds their
+  -- centered direction in L², samples a norm-good tuple, and applies the equal-normalizer signed test.
   sorry
 
 /-- L11.3c (11:254–268).  `E M_J² = E_{y,y'∼π} (∫ a_x(y) a_x(y') dσ)^{|J|}`; the kernel is `O(b_*)` off a

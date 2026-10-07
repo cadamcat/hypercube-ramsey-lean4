@@ -77,13 +77,63 @@ theorem greedyMatching_label_injective {T : ℕ} {R : Type*} [Fintype R] [Decida
     (ξ : ClockField T R g Ω) (a b : R) (y : Fin g) (oa : Ω a) (ob : Ω b)
     (ha : (greedyMatching ξ).assignment a = some (y, oa))
     (hb : (greedyMatching ξ).assignment b = some (y, ob)) : a = b := by
-  sorry
+  classical
+  let Inv : GreedyState R g Ω → Prop := fun s =>
+    ∀ a b y oa ob, s.assignment a = some (y, oa) →
+      s.assignment b = some (y, ob) → a = b
+  have hstep (s : GreedyState R g Ω) (hs : Inv s) (e : ClockCandidate T R g Ω) :
+      Inv (processArrival ξ s e) := by
+    dsimp [Inv] at hs ⊢
+    by_cases hacc : candidateIsArrival ξ e ∧ s.assignment e.1 = none ∧ ¬ labelUsed s e.2.1
+    · simp only [processArrival, if_pos hacc]
+      intro a b y oa ob ha hb
+      by_cases haRow : e.1 = a
+      · subst a
+        simp only [dif_pos rfl] at ha
+        by_cases hbRow : e.1 = b
+        · subst b
+          rfl
+        · simp only [dif_neg hbRow] at hb
+          have hlab : e.2.1 = y := congrArg Prod.fst (Option.some.inj ha)
+          have hstate : s.assignment b = some (e.2.1, ob) := by
+            simpa [hlab] using hb
+          exact False.elim (hacc.2.2 ⟨b, ob, hstate⟩)
+      · by_cases hbRow : e.1 = b
+        · simp only [dif_neg haRow] at ha
+          subst b
+          simp only [dif_pos rfl] at hb
+          have hlab : e.2.1 = y := congrArg Prod.fst (Option.some.inj hb)
+          have hstate : s.assignment a = some (e.2.1, oa) := by
+            simpa [hlab] using ha
+          exact False.elim (hacc.2.2 ⟨a, oa, hstate⟩)
+        · simp only [dif_neg haRow, dif_neg hbRow] at ha hb
+          exact hs a b y oa ob ha hb
+    · simpa [processArrival, hacc] using hs
+  have hfold : ∀ (events : List (ClockCandidate T R g Ω))
+      (s : GreedyState R g Ω), Inv s →
+      Inv (events.foldl (fun s e => processArrival ξ s e) s) := by
+    intro events
+    induction events with
+    | nil =>
+        intro s hs
+        exact hs
+    | cons e events ih =>
+        intro s hs
+        simpa only [List.foldl_cons] using ih (processArrival ξ s e) (hstep s hs e)
+  have hmatch : Inv (greedyMatching ξ) := by
+    change Inv (runGreedy ξ (clockEventList ξ))
+    exact hfold (clockEventList ξ) emptyGreedyState (by
+      intro a b y oa ob ha hb
+      simp [emptyGreedyState] at ha)
+  exact hmatch a b y oa ob ha hb
 
 /-- The fixed ordering processes all realized candidates in nondecreasing key order. -/
 theorem clockEventList_sorted {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
     {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (ξ : ClockField T R g Ω) :
     (clockEventList ξ).Pairwise (fun e f => eventPriority e ≤ eventPriority f) := by
-  sorry
+  classical
+  unfold clockEventList
+  exact List.pairwise_mergeSort' (r := fun e f => eventPriority e ≤ eventPriority f) _
 
 end HypercubeRamsey.Clock

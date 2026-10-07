@@ -1061,9 +1061,7 @@ private theorem walkEdgeSeqRate_sum {m : ℕ} {R : Type*} [Fintype R] {g : ℕ}
     [Decidable (∀ i : Fin m, ∃ e : RowLabel R g, walkStepEdge (w i.castSucc) (w i.succ) e)] :
     (∑ e : Fin m → RowLabel R g,
       if ∀ i : Fin m, walkStepEdge (w i.castSucc) (w i.succ) (e i) then
-        ∏ i, rate (e i).1 (e i).2 else 0) =
-      if ∀ i : Fin m, ∃ e : RowLabel R g, walkStepEdge (w i.castSucc) (w i.succ) e then
-        walkRate rate w else 0 := by
+        ∏ i, rate (e i).1 (e i).2 else 0) = walkRate rate w := by
   classical
   let edgeOK : (Fin m → RowLabel R g) → Prop := fun e =>
     ∀ i : Fin m, walkStepEdge (w i.castSucc) (w i.succ) (e i)
@@ -1101,9 +1099,6 @@ private theorem walkEdgeSeqRate_sum {m : ℕ} {R : Type*} [Fintype R] {g : ℕ}
             apply Finset.prod_congr rfl
             intro i hi
             exact (transitionRate_eq_of_walkStep rate (hedge₀ i)).symm
-      _ = if (∀ i : Fin m, ∃ e : RowLabel R g,
-          walkStepEdge (w i.castSucc) (w i.succ) e) then walkRate rate w else 0 := by
-            simp [hvalid]
   · have hno (e : Fin m → RowLabel R g) : ¬ edgeOK e := by
       intro he
       exact hvalid (fun i => ⟨e i, he i⟩)
@@ -1282,7 +1277,202 @@ theorem decPath_weight_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g 
             let G : (Fin j → Fin T) → (∀ i, Ω (e i).1) → ℝ := fun t o => H e (t, o)
             change (∑ tm : (Fin j → Fin T) × (∀ i, Ω (e i).1), G tm.1 tm.2) = _
             exact Fintype.sum_prod_type' G
-  sorry
+  let rate : R → Fin g → ℝ := fun a y => labMarg (p a) (lab a) y
+  have hmarks :
+      (∑ w : Fin (j + 1) → Endpoint R g,
+        ∑ e : Fin j → RowLabel R g,
+          ∑ t : Fin j → Fin T,
+            ∑ o : (∀ i, Ω (e i).1),
+              if w (Fin.last j) = v ∧
+                  (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) ∧
+                  Antitone fun i => (t i).val then
+                δ ^ j * ∏ i, outputMarkMass (p (e i).1) (lab (e i).1) (e i).2 (o i)
+              else 0) =
+        ∑ w : Fin (j + 1) → Endpoint R g,
+          ∑ e : Fin j → RowLabel R g,
+            ∑ t : Fin j → Fin T,
+              if w (Fin.last j) = v ∧
+                  (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) ∧
+                  Antitone fun i => (t i).val then
+                δ ^ j * ∏ i, rate (e i).1 (e i).2 else 0 := by
+    apply Finset.sum_congr rfl
+    intro w hw
+    apply Finset.sum_congr rfl
+    intro e he
+    apply Finset.sum_congr rfl
+    intro t ht
+    by_cases h : w (Fin.last j) = v ∧
+        (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) ∧
+        Antitone fun i => (t i).val
+    · simp only [if_pos h]
+      rw [← Finset.mul_sum, outputMarkProduct_sum]
+    · simp [h]
+  let tickPredicate : (Fin j → Fin T) → Prop := fun t => Antitone fun i => (t i).val
+  let TickIndex := {t : Fin j → Fin T // tickPredicate t}
+  letI : Fintype TickIndex :=
+    Fintype.subtype (Finset.univ.filter tickPredicate) (by intro t; simp)
+  have hTickCard : Fintype.card TickIndex = (Finset.univ.filter tickPredicate).card := by
+    simpa [TickIndex] using (Fintype.card_subtype tickPredicate)
+  have hTickCount : (Fintype.card TickIndex : ℝ) ≤
+      ((T + j : ℕ) : ℝ) ^ j / (j.factorial : ℝ) := by
+    simpa [TickIndex, tickPredicate] using antitoneTickCount_le T j
+  have htimeEq (w : Fin (j + 1) → Endpoint R g) (e : Fin j → RowLabel R g) :
+      (∑ t : Fin j → Fin T,
+        if w (Fin.last j) = v ∧
+            (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) ∧ tickPredicate t then
+          δ ^ j * ∏ i, rate (e i).1 (e i).2 else 0) =
+        if w (Fin.last j) = v ∧
+            (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) then
+          (Fintype.card TickIndex : ℝ) *
+            (δ ^ j * ∏ i, rate (e i).1 (e i).2) else 0 := by
+    by_cases hbase : w (Fin.last j) = v ∧
+        (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i))
+    · simp [hbase, and_assoc]
+      calc
+        (∑ t : Fin j → Fin T, if tickPredicate t then
+          δ ^ j * ∏ i, rate (e i).1 (e i).2 else 0) =
+            ∑ t ∈ Finset.univ.filter tickPredicate,
+              δ ^ j * ∏ i, rate (e i).1 (e i).2 := by
+              rw [← Finset.sum_filter]
+        _ = (Fintype.card TickIndex : ℝ) *
+              (δ ^ j * ∏ i, rate (e i).1 (e i).2) := by
+              rw [Finset.sum_const]
+              simp [nsmul_eq_mul, hTickCard]
+    · have hfalse (t : Fin j → Fin T) :
+          ¬ (w (Fin.last j) = v ∧
+            (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) ∧ tickPredicate t) := by
+        intro h
+        exact hbase ⟨h.1, h.2.1⟩
+      simp [hbase, hfalse]
+  have htimeBound :
+      (∑ w : Fin (j + 1) → Endpoint R g,
+        ∑ e : Fin j → RowLabel R g,
+          ∑ t : Fin j → Fin T,
+            if w (Fin.last j) = v ∧
+                (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) ∧ tickPredicate t then
+              δ ^ j * ∏ i, rate (e i).1 (e i).2 else 0) ≤
+        ∑ w : Fin (j + 1) → Endpoint R g,
+          ∑ e : Fin j → RowLabel R g,
+            if w (Fin.last j) = v ∧
+                (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) then
+              (Fintype.card TickIndex : ℝ) *
+                (δ ^ j * ∏ i, rate (e i).1 (e i).2) else 0 := by
+    apply Finset.sum_le_sum
+    intro w hw
+    apply Finset.sum_le_sum
+    intro e he
+    rw [htimeEq]
+  have hEdgeAgg :
+      (∑ w : Fin (j + 1) → Endpoint R g,
+        ∑ e : Fin j → RowLabel R g,
+          if w (Fin.last j) = v ∧
+              (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) then
+            (Fintype.card TickIndex : ℝ) *
+              (δ ^ j * ∏ i, rate (e i).1 (e i).2) else 0) =
+        (Fintype.card TickIndex : ℝ) * δ ^ j * terminalWalkMass (m := j) rate v := by
+    calc
+      (∑ w : Fin (j + 1) → Endpoint R g,
+        ∑ e : Fin j → RowLabel R g,
+          if w (Fin.last j) = v ∧
+              (∀ i : Fin j, walkStepEdge (w i.castSucc) (w i.succ) (e i)) then
+            (Fintype.card TickIndex : ℝ) *
+              (δ ^ j * ∏ i, rate (e i).1 (e i).2) else 0) =
+          ∑ w : Fin (j + 1) → Endpoint R g,
+            if w (Fin.last j) = v then
+              (Fintype.card TickIndex : ℝ) * δ ^ j *
+                (∑ e : Fin j → RowLabel R g,
+                  if ∀ i, walkStepEdge (w i.castSucc) (w i.succ) (e i) then
+                    ∏ i, rate (e i).1 (e i).2 else 0) else 0 := by
+              apply Finset.sum_congr rfl
+              intro w hw
+              by_cases hlast : w (Fin.last j) = v
+              · simp [hlast]
+                calc
+                  (∑ e : Fin j → RowLabel R g,
+                    if ∀ i, walkStepEdge (w i.castSucc) (w i.succ) (e i) then
+                      (Fintype.card TickIndex : ℝ) *
+                        (δ ^ j * ∏ i, rate (e i).1 (e i).2) else 0) =
+                      ∑ e : Fin j → RowLabel R g,
+                        (Fintype.card TickIndex : ℝ) * δ ^ j *
+                          (if ∀ i, walkStepEdge (w i.castSucc) (w i.succ) (e i) then
+                            ∏ i, rate (e i).1 (e i).2 else 0) := by
+                              apply Finset.sum_congr rfl
+                              intro e he
+                              by_cases hedge : ∀ i, walkStepEdge (w i.castSucc) (w i.succ) (e i)
+                              · simp [hedge]
+                                ring
+                              · simp [hedge]
+                  _ = (Fintype.card TickIndex : ℝ) * δ ^ j *
+                      ∑ e : Fin j → RowLabel R g,
+                        if ∀ i, walkStepEdge (w i.castSucc) (w i.succ) (e i) then
+                          ∏ i, rate (e i).1 (e i).2 else 0 := by
+                            rw [Finset.mul_sum]
+              · simp [hlast]
+      _ = ∑ w : Fin (j + 1) → Endpoint R g,
+            if w (Fin.last j) = v then
+              (Fintype.card TickIndex : ℝ) * δ ^ j * walkRate rate w else 0 := by
+              apply Finset.sum_congr rfl
+              intro w hw
+              by_cases hlast : w (Fin.last j) = v
+              · simp [hlast, walkEdgeSeqRate_sum]
+              · simp [hlast]
+      _ = (Fintype.card TickIndex : ℝ) * δ ^ j * terminalWalkMass (m := j) rate v := by
+              change (∑ w : Fin (j + 1) → Endpoint R g,
+                if w (Fin.last j) = v then
+                  (Fintype.card TickIndex : ℝ) * δ ^ j * walkRate rate w else 0) = _
+              unfold terminalWalkMass
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro w hw
+              by_cases hlast : w (Fin.last j) = v <;> simp [hlast, mul_assoc]
+  have hpre :
+      (∑ r, ∑ π ∈ decPaths r v j,
+        pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π) ≤
+        (Fintype.card TickIndex : ℝ) * δ ^ j * terminalWalkMass (m := j) rate v := by
+    calc
+      (∑ r, ∑ π ∈ decPaths r v j,
+        pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π) =
+          ∑ q : PathIndex, pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) q.2.1 := hsource
+      _ ≤ ∑ q : WalkIndex, pathDataTerm q.1.2 := hmapSum
+      _ = _ := hExpand
+      _ = _ := hmarks
+      _ ≤ _ := htimeBound
+      _ = _ := hEdgeAgg
+  have hrateNonneg : ∀ a y, 0 ≤ rate a y := by
+    intro a y
+    exact labMarg_nonneg (p a) (lab a) y
+  have htransitionNonneg (u v : Endpoint R g) : 0 ≤ transitionRate rate u v := by
+    cases u <;> cases v <;> simp [transitionRate, hrateNonneg]
+  have hmassNonneg : 0 ≤ terminalWalkMass (m := j) rate v := by
+    unfold terminalWalkMass
+    apply Finset.sum_nonneg
+    intro w hw
+    by_cases hvw : w (Fin.last j) = v
+    · simp only [if_pos hvw]
+      exact Finset.prod_nonneg fun i hi => htransitionNonneg (w i.castSucc) (w i.succ)
+    · simp [hvw]
+  have hmassBound : terminalWalkMass (m := j) rate v ≤ θ ^ (j / 2) :=
+    terminalWalkMass_bound rate θ hrateNonneg hrow hcol hθ0 hθ1 j v
+  let A : ℝ := (((T + j : ℕ) : ℝ) ^ j) / (j.factorial : ℝ)
+  have hA0 : 0 ≤ A := by positivity
+  have hδpow : 0 ≤ δ ^ j := pow_nonneg hδ j
+  calc
+    (∑ r, ∑ π ∈ decPaths r v j,
+        pathWeight (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) π) ≤
+        (Fintype.card TickIndex : ℝ) * δ ^ j * terminalWalkMass (m := j) rate v := hpre
+    _ ≤ A * δ ^ j * θ ^ (j / 2) := by
+        calc
+          (Fintype.card TickIndex : ℝ) * δ ^ j * terminalWalkMass (m := j) rate v =
+              (Fintype.card TickIndex : ℝ) * (δ ^ j * terminalWalkMass (m := j) rate v) := by ring
+          _ ≤ A * (δ ^ j * terminalWalkMass rate v) :=
+            mul_le_mul_of_nonneg_right hTickCount (mul_nonneg hδpow hmassNonneg)
+          _ = A * δ ^ j * terminalWalkMass (m := j) rate v := by ring
+          _ ≤ A * δ ^ j * θ ^ (j / 2) :=
+            mul_le_mul_of_nonneg_left hmassBound (mul_nonneg hA0 hδpow)
+    _ = θ ^ (j / 2) * (((T + j : ℕ) : ℝ) * δ) ^ j / (j.factorial : ℝ) := by
+        dsimp [A]
+        rw [mul_pow]
+        ring
 
 open Classical in
 /-- L3.10d-two (03:928–936): paths from a scope row `r` of a predicate meeting another row of that scope. In the

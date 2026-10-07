@@ -35,7 +35,7 @@ private def splitCube {n : ℕ} (A : Finset (Fin n)) :
     · funext i
       simp [i.2]
 
-private def cubeCountOn {n : ℕ} (A : Finset (Fin n)) (x : CubeVertex n) : ℕ :=
+def cubeCountOn {n : ℕ} (A : Finset (Fin n)) (x : CubeVertex n) : ℕ :=
   (A.attach.filter fun i => x i.1 = true).card
 
 private def boolWeight {ι : Type*} [Fintype ι] (f : ι → Bool) : ℕ :=

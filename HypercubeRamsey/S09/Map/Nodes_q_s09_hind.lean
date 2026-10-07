@@ -1134,6 +1134,54 @@ private theorem heightPath9_nextRadialState9 {P : Params9} {hc : HeightChoice9 P
   refine ⟨next, suffix, hnext, hnextRadial, hsegment, ?_⟩
   exact hsegmentSub
 
+private inductive HeightRadialChain9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (root : HeightState9 P hc n) (gap : ℕ) :
+    HeightState9 P hc n → HeightState9 P hc n → Prop
+  | nil (x : HeightState9 P hc n) : HeightRadialChain9 root gap x x
+  | cons {x y z : HeightState9 P hc n}
+      (hxy : heightMetric9 y root = heightMetric9 x root + gap)
+      (hyz : HeightRadialChain9 root gap y z) : HeightRadialChain9 root gap x z
+
+private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} {endpoint : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 bad) (endpoint :: l) start)
+    (root : HeightState9 P hc n) (r gap q : ℕ)
+    (hstart : heightMetric9 start root = r)
+    (hreach : r + q * gap ≤ heightMetric9 endpoint root) :
+    ∃ z suffix,
+      HeightRadialChain9 root gap start z ∧
+      HeightPath9 (heightStep9 bad) (endpoint :: suffix) z ∧
+      (∀ x ∈ endpoint :: suffix, x ∈ endpoint :: l) ∧
+      heightMetric9 z root = r + q * gap := by
+  induction q generalizing start l r hp hstart with
+  | zero =>
+      refine ⟨start, l, HeightRadialChain9.nil start, hp, ?_, ?_⟩
+      · intro x hx
+        exact hx
+      · simpa using hstart
+  | succ q ih =>
+      have hmul : (q + 1) * gap = q * gap + gap := by
+        rw [Nat.add_mul]
+        simp
+      have hreach' := hreach
+      rw [hmul] at hreach'
+      have hnextReach : r + gap ≤ heightMetric9 endpoint root := by omega
+      have hhead : (endpoint :: l).head? = some endpoint := by simp
+      obtain ⟨next, suffix₁, hnext, hnextRadius, hpath₁, hsub₁⟩ :=
+        heightPath9_nextRadialState9 hp hhead root r gap hstart hnextReach
+      have hremaining : (r + gap) + q * gap ≤ heightMetric9 endpoint root := by omega
+      obtain ⟨z, suffix₂, hchain, hpath₂, hsub₂, hradial⟩ :=
+        ih hpath₁ (r + gap) hnextRadius hremaining
+      have hnextRadius' : heightMetric9 next root = heightMetric9 start root + gap := by
+        rw [hstart]
+        exact hnextRadius
+      have hsub : ∀ x ∈ endpoint :: suffix₂, x ∈ endpoint :: l := by
+        intro x hx
+        exact hsub₁ x (hsub₂ x hx)
+      refine ⟨z, suffix₂, HeightRadialChain9.cons hnextRadius' hchain, hpath₂, hsub, ?_⟩
+      omega
+
 private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}
     {l : List (HeightState9 P hc n)}
     {start : HeightState9 P hc n} (f : Fin (R + 1) → HeightState9 P hc n)

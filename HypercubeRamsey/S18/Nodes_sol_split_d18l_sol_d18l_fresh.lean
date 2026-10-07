@@ -416,39 +416,4 @@ theorem physical_prior_mean_bound (hκ : κ.Admissible) (T : Stage) :
   rw [hIntegral]
   convert hMain using 1 <;> ring
 
-theorem admissible_increase_Kcell (hκ : κ.Admissible) (L : ℝ) (hL : κ.Kcell ≤ L) :
-    ({κ with Kcell := L} : CConsts).Admissible := by
-  refine { hκ with Kcell_big := hκ.Kcell_big.trans hL }
-
-theorem thresholds_increase_Kcell (hThresholds : LateThresholds κ) (L : ℝ) :
-    LateThresholds ({κ with Kcell := L} : CConsts) := hThresholds
-
-/-- The frozen numerical contracts do not entail the last scalar bound
-needed by the exported Section 16 mean-comparison route. This is a scalar
-contract obstruction, not a counterexample to the full D18_L_prior_mean. -/
-theorem mean_coefficient_not_controlled (hκ : κ.Admissible)
-    (hThresholds : LateThresholds κ) :
-    ∃ κ' : CConsts, κ'.Admissible ∧ LateThresholds κ' ∧
-      κ'.KB < (100 * κ'.Kcell * (κ'.Kp : ℝ)) * max (rowMeanConstant κ') 2 := by
-  have hKp : (0 : ℝ) < κ.Kp := by exact_mod_cast (lt_of_lt_of_le (by norm_num : (0 : ℕ) < 40) hκ.bucket.1)
-  let c : ℝ := 100 * (κ.Kp : ℝ) * max (rowMeanConstant κ) 2
-  have hc : 0 < c := by
-    dsimp [c]
-    have hh : (0 : ℝ) < max (rowMeanConstant κ) 2 := lt_of_lt_of_le (by norm_num) (le_max_right _ _)
-    positivity
-  let L := max κ.Kcell (κ.KB / c + 1)
-  let κ' : CConsts := {κ with Kcell := L}
-  refine ⟨κ', admissible_increase_Kcell hκ L (le_max_left _ _),
-    thresholds_increase_Kcell hThresholds L, ?_⟩
-  change κ.KB < (100 * L * (κ.Kp : ℝ)) * max (rowMeanConstant κ) 2
-  have hL : κ.KB / c + 1 ≤ L := le_max_right _ _
-  have hm := mul_le_mul_of_nonneg_left hL hc.le
-  have hcancel : c * (κ.KB / c + 1) = κ.KB + c := by
-    field_simp [ne_of_gt hc]
-  calc
-    κ.KB < κ.KB + c := lt_add_of_pos_right _ hc
-    _ = c * (κ.KB / c + 1) := hcancel.symm
-    _ ≤ c * L := hm
-    _ = _ := by dsimp [c]; ring
-
 end HypercubeRamsey.S18.Lane_sol_d18l_fresh

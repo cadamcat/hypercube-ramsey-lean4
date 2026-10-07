@@ -1,5 +1,7 @@
 import HypercubeRamsey.S09.Defs
+import HypercubeRamsey.S09.Core.Scales_q_s09_misc
 import HypercubeRamsey.Framework.Embedding
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # Section 9: internal scales, special and residual coordinates, the ID map
@@ -24,7 +26,7 @@ these properties, with `m`, `r` and `T` fixed by the definitions above.
 
 namespace HypercubeRamsey
 
-open OAI.HypercubeRamsey Classical
+open OAI.HypercubeRamsey Classical Filter
 open scoped BigOperators
 
 namespace Params9
@@ -177,11 +179,770 @@ def ScalesAt9 (P : Params9) (n : ℕ) : Prop :=
   ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) + (n : ℝ) ^ (P.xS : ℝ) + 4 * (n : ℝ) ^ P.u ≤
     gainConst9 * (n : ℝ) * P.aStar n / 100
 
+set_option maxHeartbeats 0 in
 /-- Arithmetic consequences of `Params9.Valid` for the internal scales: the exponent facts, and the
 per-dimension facts for all large `n`.  (In the sublinear case `y_s < y_m < 1 - σ < y_d` and `1 - σ + ε < y_d`;
 in the linear case `S_s + log(100/49)(T + m) ≈ (α_s + .0713 α_d) n + o(n) < α_d n`.) -/
 theorem scales_eventually9 (P : Params9) (hP : P.Valid) :
     ScaleExps9 P ∧ ∃ n₀ : ℕ, ∀ n ≥ n₀, ScalesAt9 P n := by
-  sorry
+  classical
+  cases hcase : P.case with
+  | sub yS yD yM =>
+      simp only [Params9.Valid, hcase] at hP
+      rcases hP with ⟨⟨hxs0, hxsxd, hxd010⟩, ⟨hm0, hmm, hmp1⟩, hmargin,
+        ⟨hsig0, hsigxs⟩, ⟨hchi0, hchibound⟩, hgap,
+        hys0, hsym, hymupper, hysigd, hyd1, hchiSig⟩
+      have hxs0R : 0 < (P.xS : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hxs0
+      have hxsxdR : (P.xS : ℝ) < (P.xD : ℝ) :=
+        Lane_q_s09_misc.ratCast_lt hxsxd
+      have hxd010R : (P.xD : ℝ) < (1 / 10 : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hxd010
+      have hminusPosR : 0 < (P.hMinus : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hm0
+      have hmmR : (P.hMinus : ℝ) < (P.hPlus : ℝ) :=
+        Lane_q_s09_misc.ratCast_lt hmm
+      have hplusPosR : 0 < (P.hPlus : ℝ) := lt_trans hminusPosR hmmR
+      have hplusOneR : (P.hPlus : ℝ) < 1 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hmp1
+      have hmarginR : (P.xD : ℝ) < (1 - (P.hPlus : ℝ)) / 10 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hmargin
+      have hsigPosR : 0 < (P.σ : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hsig0
+      have hsigXsR : (P.σ : ℝ) < (P.xS : ℝ) / 10 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hsigxs
+      have hchiPosR : 0 < (P.χ : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hchi0
+      have hchiBoundR : (P.χ : ℝ) <
+          min (P.xS : ℝ) (min (P.hMinus : ℝ) (1 - (P.hPlus : ℝ))) / 100 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hchibound
+      have hys0R : 0 < (yS : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hys0
+      have hsymR : (yS : ℝ) < (yM : ℝ) :=
+        Lane_q_s09_misc.ratCast_lt hsym
+      have hymUpperR : (yM : ℝ) < 1 - (P.σ : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hymupper
+      have hysigdR : 1 - (P.σ : ℝ) < (yD : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hysigd
+      have hyd1R : (yD : ℝ) < 1 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hyd1
+      have hepsPos : 0 < P.eps := by
+        rw [Params9.eps, hcase]
+        exact div_pos (lt_min hsigPosR (sub_pos.mpr hysigdR)) (by norm_num)
+      have hepsSigma : P.eps < (P.σ : ℝ) := by
+        rw [Params9.eps, hcase]
+        have hmin : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) ≤ P.σ :=
+          min_le_left _ _
+        nlinarith [hsigPosR]
+      have huPos : 0 < P.u := by
+        rw [Params9.u]
+        exact div_pos hxs0R (by norm_num)
+      have hsigU : (P.σ : ℝ) < P.u := by
+        rw [Params9.u]
+        linarith
+      have hchiXsR : (P.χ : ℝ) < (P.xS : ℝ) / 100 :=
+        lt_of_lt_of_le hchiBoundR
+          (div_le_div_of_nonneg_right (min_le_left _ _) (by norm_num))
+      have hchiU : (P.χ : ℝ) < P.u / 50 := by
+        rw [Params9.u]
+        nlinarith [hchiXsR]
+      have hExps : ScaleExps9 P :=
+        ⟨hepsPos, hepsSigma, huPos, hsigU, hchiU⟩
+      have hysydR : (yS : ℝ) < (yD : ℝ) :=
+        lt_trans hsymR (lt_trans hymUpperR hysigdR)
+      have hymydR : (yM : ℝ) < (yD : ℝ) :=
+        lt_trans hymUpperR hysigdR
+      have huYd : P.u < (yD : ℝ) := by
+        have hxsSmall : (P.xS : ℝ) < 1 / 10 := lt_trans hxsxdR hxd010R
+        rw [Params9.u]
+        linarith [hysigdR]
+      have hidYd : 1 - (P.σ : ℝ) + P.eps < (yD : ℝ) := by
+        rw [Params9.eps, hcase]
+        have hgapY : 0 < (yD : ℝ) - (1 - (P.σ : ℝ)) := sub_pos.mpr hysigdR
+        have hmin : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) ≤
+            (yD : ℝ) - (1 - (P.σ : ℝ)) := min_le_right _ _
+        nlinarith [hgapY]
+      have hxsPlus : (P.xS : ℝ) < (1 - (P.hPlus : ℝ)) := by
+        linarith [hmarginR, hxsxdR]
+      have huChiXd : P.u + 8 * (P.χ : ℝ) < (P.xD : ℝ) := by
+        rw [Params9.u]
+        have hchiSmall : 8 * (P.χ : ℝ) < 8 * ((P.xS : ℝ) / 100) := by
+          nlinarith [hchiXsR]
+        nlinarith [hchiXsR, hchiSmall, hxsxdR]
+      let δS : ℝ := (yM : ℝ) / 2
+      have hδSpos : 0 < δS := by
+        dsimp [δS]
+        linarith [hsymR, hys0R]
+      have hδSlt : δS < (yM : ℝ) := by dsimp [δS]; linarith [hδSpos]
+      have hCpos : 0 < Real.log (100 / 49 : ℝ) :=
+        Real.log_pos (by norm_num : (1 : ℝ) < 100 / 49)
+      have hCtwo : Real.log (100 / 49 : ℝ) < 2 := by
+        have hlog := Real.log_lt_sub_one_of_pos (by norm_num : (0 : ℝ) < 100 / 49)
+          (by norm_num : (100 / 49 : ℝ) ≠ 1)
+        norm_num at hlog ⊢
+        linarith
+      have hShallowPow : ∀ᶠ n : ℕ in atTop,
+          8 * (n : ℝ) ^ (yS : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (yS : ℝ)) (b := (yM : ℝ)) (c := 8) hsymR
+      have hShallowLog : ∀ᶠ n : ℕ in atTop,
+          (8 / δS) * (n : ℝ) ^ δS ≤ (n : ℝ) ^ (yM : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := δS) (b := (yM : ℝ)) (c := 8 / δS) hδSlt
+      have hLogEvent : ∀ᶠ n : ℕ in atTop,
+          Real.log (n : ℝ) ≤ (n : ℝ) ^ δS / δS :=
+        Lane_q_s09_misc.eventually_nat_log_le_rpow_div hδSpos
+      have hPowBig : ∀ᶠ n : ℕ in atTop, 2 ≤ (n : ℝ) ^ (yM : ℝ) := by
+        have ht : Tendsto (fun n : ℕ => (n : ℝ) ^ (yM : ℝ)) atTop atTop :=
+          (tendsto_rpow_atTop (by linarith [hys0R, hsymR])).comp tendsto_natCast_atTop_atTop
+        exact ht.eventually (eventually_ge_atTop 2)
+      have hFiltYs : ∀ᶠ n : ℕ in atTop,
+          6 * (n : ℝ) ^ (yS : ℝ) ≤ (n : ℝ) ^ (yD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (yS : ℝ)) (b := (yD : ℝ)) (c := 6) hysydR
+      have hFiltU : ∀ᶠ n : ℕ in atTop,
+          12 * (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (yD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := P.u) (b := (yD : ℝ)) (c := 12) huYd
+      have hFiltConst : ∀ᶠ n : ℕ in atTop,
+          6 * Real.log 2 ≤ (n : ℝ) ^ (yD : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 0) (b := (yD : ℝ)) (c := 6 * Real.log 2)
+          (by linarith [hys0R, hsymR, hymydR])
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hFiltId : ∀ᶠ n : ℕ in atTop,
+          (6 * Real.log (100 / 49 : ℝ)) *
+            (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) ≤ (n : ℝ) ^ (yD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 1 - (P.σ : ℝ) + P.eps) (b := (yD : ℝ))
+          (c := 6 * Real.log (100 / 49 : ℝ)) hidYd
+      have hFiltM : ∀ᶠ n : ℕ in atTop,
+          (6 * Real.log (100 / 49 : ℝ)) * (n : ℝ) ^ (yM : ℝ) ≤ (n : ℝ) ^ (yD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (yM : ℝ)) (b := (yD : ℝ)) (c := 6 * Real.log (100 / 49 : ℝ)) hymydR
+      have hAnchorXs : ∀ᶠ n : ℕ in atTop,
+          4 * (n : ℝ) ^ (P.xS : ℝ) ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (P.xS : ℝ)) (b := (P.xD : ℝ)) (c := 4) hxsxdR
+      let δA : ℝ := (P.xD : ℝ) / 2
+      have hδApos : 0 < δA := by dsimp [δA]; linarith [hxs0R, hxsxdR]
+      have hδAxd : δA < (P.xD : ℝ) := by dsimp [δA]; linarith [hδApos]
+      have hAnchorLog : ∀ᶠ n : ℕ in atTop,
+          (4 * (P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := δA) (b := (P.xD : ℝ)) (c := 4 * (P.hPlus : ℝ) / δA) hδAxd
+      have hLogAnchorEvent : ∀ᶠ n : ℕ in atTop,
+          Real.log (n : ℝ) ≤ (n : ℝ) ^ δA / δA :=
+        Lane_q_s09_misc.eventually_nat_log_le_rpow_div hδApos
+      have hAnchorConst : ∀ᶠ n : ℕ in atTop,
+          4 ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 0) (b := (P.xD : ℝ)) (c := 4) (by linarith [hxs0R, hxsxdR])
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hAnchorDeep : ∀ᶠ n : ℕ in atTop,
+          4 * (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := P.u + 8 * (P.χ : ℝ)) (b := (P.xD : ℝ)) (c := 4) huChiXd
+      have hBStar : ∀ᶠ n : ℕ in atTop,
+          200 * (n : ℝ) ^ (-(P.hMinus : ℝ)) ≤ 1 := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := -(P.hMinus : ℝ)) (b := 0) (c := 200) (by linarith [hminusPosR])
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hGainRpos : 0 < 1 - (P.hPlus : ℝ) := by linarith [hplusOneR]
+      have hSigmaGain : (P.σ : ℝ) < 1 - (P.hPlus : ℝ) := by
+        linarith [hsigXsR, hxsxdR, hmarginR]
+      let δG : ℝ := (1 - (P.hPlus : ℝ) - (P.σ : ℝ)) / 2
+      have hδGpos : 0 < δG := by dsimp [δG]; linarith [hSigmaGain]
+      have hδGone : δG ≤ 1 := by
+        dsimp [δG]
+        linarith [hplusPosR, hsigPosR]
+      have hGainPow : (P.σ : ℝ) + δG < 1 - (P.hPlus : ℝ) := by
+        dsimp [δG]
+        linarith [hSigmaGain]
+      have hGainFirst : ∀ᶠ n : ℕ in atTop,
+          (1200 * (18 / δG)) * (n : ℝ) ^ ((P.σ : ℝ) + δG) ≤
+            (n : ℝ) ^ (1 - (P.hPlus : ℝ)) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (P.σ : ℝ) + δG) (b := 1 - (P.hPlus : ℝ))
+          (c := 1200 * (18 / δG)) hGainPow
+      have hGainXs : ∀ᶠ n : ℕ in atTop,
+          1200 * (n : ℝ) ^ (P.xS : ℝ) ≤ (n : ℝ) ^ (1 - (P.hPlus : ℝ)) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (P.xS : ℝ)) (b := 1 - (P.hPlus : ℝ)) (c := 1200) (by
+            linarith [hmarginR, hxsxdR])
+      have hGainU : ∀ᶠ n : ℕ in atTop,
+          4800 * (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (1 - (P.hPlus : ℝ)) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := P.u) (b := 1 - (P.hPlus : ℝ)) (c := 4800) (by
+            rw [Params9.u]
+            linarith [hmarginR, hxsxdR])
+      have hLogGainEvent : ∀ᶠ n : ℕ in atTop,
+          Real.log ((n : ℝ) + 1) ≤ (2 / δG) * (n : ℝ) ^ δG :=
+        Lane_q_s09_misc.eventually_nat_log_succ_le_rpow hδGpos hδGone
+      have hLarge : ∀ᶠ n : ℕ in atTop, 2 ≤ n := eventually_ge_atTop 2
+      have hScales : ∀ᶠ n : ℕ in atTop, ScalesAt9 P n := by
+        filter_upwards [hLarge, hShallowPow, hShallowLog, hLogEvent, hPowBig,
+          hFiltYs, hFiltU, hFiltConst, hFiltId, hFiltM, hAnchorXs, hAnchorLog,
+          hLogAnchorEvent, hAnchorConst, hAnchorDeep, hBStar, hGainFirst,
+          hGainXs, hGainU, hLogGainEvent] with n hn hsy hslog hlogS hpowS
+          hfys hfu hfc hfi hfm haxs halog hlogA hac had hb hg1 hgx hgu hlogG
+        have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+        have hnPos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+        have hyMpos : 0 < (n : ℝ) ^ (yM : ℝ) := Real.rpow_pos_of_pos hnPos _
+        have hmFloorU : (P.m n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) := by
+          simpa [Params9.m, hcase] using Nat.floor_le (by positivity :
+            0 ≤ (n : ℝ) ^ (yM : ℝ))
+        have hmFloorL : (n : ℝ) ^ (yM : ℝ) - 1 < (P.m n : ℝ) := by
+          have hf := Nat.lt_floor_add_one ((n : ℝ) ^ (yM : ℝ))
+          have hf' : (n : ℝ) ^ (yM : ℝ) < (P.m n : ℝ) + 1 := by
+            simpa [Params9.m, hcase] using hf
+          linarith
+        have hymOne : (yM : ℝ) < 1 := lt_trans hymUpperR (by linarith [hsigPosR])
+        have hmLeNreal : (P.m n : ℝ) ≤ (n : ℝ) := by
+          calc
+            (P.m n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) := hmFloorU
+            _ ≤ (n : ℝ) ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le hnR hymOne.le
+            _ = (n : ℝ) := by simp
+        have hmLeN : P.m n ≤ n := by exact_mod_cast hmLeNreal
+        have hradiusBase : 1 ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+          calc
+            1 = (n : ℝ) ^ (0 : ℝ) := by simp
+            _ ≤ (n : ℝ) ^ (P.σ : ℝ) :=
+              Real.rpow_le_rpow_of_exponent_le hnR hsigPosR.le
+        have hradius : 1 ≤ P.radius n := by
+          change 1 ≤ Nat.floor ((n : ℝ) ^ (P.σ : ℝ))
+          exact (Nat.one_le_floor_iff _).2 hradiusBase
+        have hShallowLeft : (n : ℝ) ^ (yS : ℝ) + Real.log (n : ℝ) <
+            (P.m n : ℝ) * Real.log 2 := by
+          have hysSmall : (n : ℝ) ^ (yS : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) / 8 := by
+            linarith only [hsy]
+          have hlogSmall : Real.log (n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) / 8 := by
+            calc
+              Real.log (n : ℝ) ≤ (n : ℝ) ^ δS / δS := hlogS
+              _ = (1 / 8 : ℝ) * ((8 / δS) * (n : ℝ) ^ δS) := by ring
+              _ ≤ (1 / 8 : ℝ) * (n : ℝ) ^ (yM : ℝ) :=
+                mul_le_mul_of_nonneg_left hslog (by norm_num)
+              _ = (n : ℝ) ^ (yM : ℝ) / 8 := by ring
+          have hcoef : (1 / 4 : ℝ) < Real.log 2 / 2 := by
+            linarith only [Real.log_two_gt_d9]
+          have hcoefPow : (1 / 4 : ℝ) * (n : ℝ) ^ (yM : ℝ) <
+              (Real.log 2 / 2) * (n : ℝ) ^ (yM : ℝ) :=
+            mul_lt_mul_of_pos_right hcoef hyMpos
+          have hfloorHalf : (n : ℝ) ^ (yM : ℝ) / 2 ≤ (P.m n : ℝ) := by
+            have hhalf : (n : ℝ) ^ (yM : ℝ) / 2 ≤ (n : ℝ) ^ (yM : ℝ) - 1 := by
+              linarith only [hpowS]
+            exact le_trans hhalf hmFloorL.le
+          have hfloorLog : (Real.log 2 / 2) * (n : ℝ) ^ (yM : ℝ) ≤
+              (P.m n : ℝ) * Real.log 2 := by
+            calc
+              (Real.log 2 / 2) * (n : ℝ) ^ (yM : ℝ) =
+                  Real.log 2 * ((n : ℝ) ^ (yM : ℝ) / 2) := by ring
+              _ ≤ Real.log 2 * (P.m n : ℝ) :=
+                mul_le_mul_of_nonneg_left hfloorHalf (by positivity)
+              _ = (P.m n : ℝ) * Real.log 2 := by ring
+          linarith only [hysSmall, hlogSmall, hcoefPow, hfloorLog]
+        have hFilterEq : P.filterBudget n + (n : ℝ) ^ P.u =
+            (n : ℝ) ^ (yS : ℝ) + (n : ℝ) ^ P.u + Real.log 2 +
+              Real.log (100 / 49 : ℝ) *
+                ((n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) + (P.m n : ℝ)) +
+              (n : ℝ) ^ P.u := by
+          simp [Params9.filterBudget, Params9.Ss, Params9.idBudget, hcase]
+        have hFilter : P.filterBudget n + (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (yD : ℝ) := by
+          rw [hFilterEq]
+          have hf1 : (n : ℝ) ^ (yS : ℝ) ≤ (n : ℝ) ^ (yD : ℝ) / 6 := by nlinarith [hfys]
+          have hfu' : (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (yD : ℝ) / 12 := by nlinarith [hfu]
+          have hfc' : Real.log 2 ≤ (n : ℝ) ^ (yD : ℝ) / 6 := by nlinarith [hfc]
+          have hfi' : Real.log (100 / 49 : ℝ) *
+              (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) ≤ (n : ℝ) ^ (yD : ℝ) / 6 := by
+            nlinarith [hfi]
+          have hfm' : Real.log (100 / 49 : ℝ) * (n : ℝ) ^ (yM : ℝ) ≤
+              (n : ℝ) ^ (yD : ℝ) / 6 := by nlinarith [hfm]
+          have hfmCast : Real.log (100 / 49 : ℝ) * (P.m n : ℝ) ≤
+              Real.log (100 / 49 : ℝ) * (n : ℝ) ^ (yM : ℝ) :=
+            mul_le_mul_of_nonneg_left hmFloorU (le_of_lt hCpos)
+          have htwoU : 2 * (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (yD : ℝ) / 6 := by
+            nlinarith [hfu']
+          have hyDpos : 0 < (n : ℝ) ^ (yD : ℝ) := Real.rpow_pos_of_pos hnPos _
+          ring_nf
+          nlinarith [hf1, htwoU, hfc', hfi', hfm', hfmCast, hyDpos]
+        have hAnchor :
+            (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 +
+                (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+          have hax : (n : ℝ) ^ (P.xS : ℝ) ≤ (n : ℝ) ^ (P.xD : ℝ) / 4 := by nlinarith [haxs]
+          have halog' : (P.hPlus : ℝ) * Real.log (n : ℝ) ≤
+              (n : ℝ) ^ (P.xD : ℝ) / 4 := by
+            calc
+              (P.hPlus : ℝ) * Real.log (n : ℝ) ≤
+                  (P.hPlus : ℝ) * ((n : ℝ) ^ δA / δA) :=
+                mul_le_mul_of_nonneg_left hlogA (le_of_lt hplusPosR)
+              _ = ((P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA := by ring
+              _ ≤ (n : ℝ) ^ (P.xD : ℝ) / 4 := by
+                have hhalog : 4 * (((P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA) ≤
+                    (n : ℝ) ^ (P.xD : ℝ) := by
+                  calc
+                    4 * (((P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA) =
+                        (4 * (P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA := by ring
+                    _ ≤ (n : ℝ) ^ (P.xD : ℝ) := halog
+                apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 4)).2
+                nlinarith only [hhalog]
+          have hac' : (1 : ℝ) ≤ (n : ℝ) ^ (P.xD : ℝ) / 4 := by nlinarith [hac]
+          have had' : (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤
+              (n : ℝ) ^ (P.xD : ℝ) / 4 := by nlinarith [had]
+          linarith only [hax, halog', hac', had']
+        have hbStar : P.bStar n ≤ 1 / 200 := by
+          have hb : (n : ℝ) ^ (-(P.hMinus : ℝ)) ≤ 1 / 200 := by nlinarith only [hb]
+          simpa [Params9.bStar] using hb
+        have hGain :
+            ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) +
+                (n : ℝ) ^ (P.xS : ℝ) + 4 * (n : ℝ) ^ P.u ≤
+              gainConst9 * (n : ℝ) * P.aStar n / 100 := by
+          have hradU : (P.radius n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+            simpa [Params9.radius] using Nat.floor_le (by positivity :
+              0 ≤ (n : ℝ) ^ (P.σ : ℝ))
+          have hpowSigma : 1 ≤ (n : ℝ) ^ (P.σ : ℝ) := hradiusBase
+          have hradPlus : (P.radius n : ℝ) + 8 ≤ 9 * (n : ℝ) ^ (P.σ : ℝ) := by
+            nlinarith [hradU, hpowSigma]
+          have hlogNonneg : 0 ≤ Real.log ((n : ℝ) + 1) :=
+            Real.log_nonneg (by linarith : (1 : ℝ) ≤ (n : ℝ) + 1)
+          have hfirst : ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) ≤
+              (18 / δG) * (n : ℝ) ^ ((P.σ : ℝ) + δG) := by
+            calc
+              ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) ≤
+                  9 * (n : ℝ) ^ (P.σ : ℝ) * Real.log ((n : ℝ) + 1) :=
+                mul_le_mul_of_nonneg_right hradPlus hlogNonneg
+              _ ≤ 9 * (n : ℝ) ^ (P.σ : ℝ) * ((2 / δG) * (n : ℝ) ^ δG) := by
+                gcongr
+              _ = (18 / δG) * ((n : ℝ) ^ (P.σ : ℝ) * (n : ℝ) ^ δG) := by ring
+              _ = (18 / δG) * (n : ℝ) ^ ((P.σ : ℝ) + δG) := by
+                rw [← Real.rpow_add hnPos]
+          have hg1 : (18 / δG) * (n : ℝ) ^ ((P.σ : ℝ) + δG) ≤
+              (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 1200 := by nlinarith [hg1]
+          have hgx : (n : ℝ) ^ (P.xS : ℝ) ≤
+              (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 1200 := by nlinarith [hgx]
+          have hgu : 4 * (n : ℝ) ^ P.u ≤
+              (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 1200 := by nlinarith [hgu]
+          have hgainPow : (n : ℝ) ^ (1 - (P.hPlus : ℝ)) > 0 :=
+            Real.rpow_pos_of_pos hnPos _
+          have hgainIdentity :
+              gainConst9 * (n : ℝ) * P.aStar n / 100 =
+                (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 400 := by
+            simp only [gainConst9, Params9.aStar]
+            calc
+              (1 / 2 : ℝ) * (n : ℝ) * ((n : ℝ) ^ (-(P.hPlus : ℝ)) / 2) / 100 =
+                  (1 / 400 : ℝ) * ((n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (-(P.hPlus : ℝ))) := by
+                rw [show (n : ℝ) ^ (1 : ℝ) = (n : ℝ) by simp]
+                ring
+              _ = (1 / 400 : ℝ) * (n : ℝ) ^ (1 - (P.hPlus : ℝ)) := by
+                rw [← Real.rpow_add hnPos]
+                rw [show (1 : ℝ) + (-(P.hPlus : ℝ)) = 1 - (P.hPlus : ℝ) by ring]
+              _ = (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 400 := by
+                rw [div_eq_mul_inv]
+                <;> ring
+          rw [hgainIdentity]
+          linarith only [hfirst, hg1, hgx, hgu]
+        have hShallow : P.Ss (n : ℝ) + Real.log (n : ℝ) <
+            (P.m n : ℝ) * Real.log 2 := by
+          simpa [Params9.Ss, hcase] using hShallowLeft
+        have hFilterSd : P.filterBudget n + (n : ℝ) ^ P.u ≤ P.Sd (n : ℝ) := by
+          simpa [Params9.Sd, hcase] using hFilter
+        refine ⟨by omega, hmLeN, hradius, hShallow, hFilterSd, hAnchor, hbStar, hGain⟩
+      obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScales
+      refine ⟨hExps, n₀, ?_⟩
+      intro n hn
+      exact hn₀ n hn
+  | lin αS αD hB yB =>
+      simp only [Params9.Valid, hcase] at hP
+      rcases hP with ⟨⟨hxs0, hxsxd, hxd010⟩, ⟨hm0, hmm, hmp1⟩, hmargin,
+        ⟨hsig0, hsigxs⟩, ⟨hchi0, hchibound⟩, hgap,
+        hαSpos, h100αS, hαD010, hσχ, hPlusB, hB1, hyBpos, hyB1⟩
+      have hxs0R : 0 < (P.xS : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hxs0
+      have hxsxdR : (P.xS : ℝ) < (P.xD : ℝ) :=
+        Lane_q_s09_misc.ratCast_lt hxsxd
+      have hxd010R : (P.xD : ℝ) < (1 / 10 : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hxd010
+      have hminusPosR : 0 < (P.hMinus : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hm0
+      have hmmR : (P.hMinus : ℝ) < (P.hPlus : ℝ) :=
+        Lane_q_s09_misc.ratCast_lt hmm
+      have hplusPosR : 0 < (P.hPlus : ℝ) := lt_trans hminusPosR hmmR
+      have hplusOneR : (P.hPlus : ℝ) < 1 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hmp1
+      have hmarginR : (P.xD : ℝ) < (1 - (P.hPlus : ℝ)) / 10 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hmargin
+      have hsigPosR : 0 < (P.σ : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hsig0
+      have hsigXsR : (P.σ : ℝ) < (P.xS : ℝ) / 10 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hsigxs
+      have hchiPosR : 0 < (P.χ : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt hchi0
+      have hchiBoundR : (P.χ : ℝ) <
+          min (P.xS : ℝ) (min (P.hMinus : ℝ) (1 - (P.hPlus : ℝ))) / 100 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hchibound
+      have hαSposR : 0 < (αS : ℝ) := by
+        have h := Lane_q_s09_misc.ratCast_lt hαSpos
+        norm_num at h ⊢
+        linarith
+      have h100αSR : 100 * (αS : ℝ) < (αD : ℝ) := by
+        simpa using Lane_q_s09_misc.ratCast_lt h100αS
+      have hαD010R : (αD : ℝ) < 1 / 100 := by
+        simpa using Lane_q_s09_misc.ratCast_lt hαD010
+      have hαDposR : 0 < (αD : ℝ) := by linarith [hαSposR, h100αSR]
+      have hαSsmallR : (αS : ℝ) < (αD : ℝ) / 100 := by linarith [h100αSR]
+      have hepsPos : 0 < P.eps := by
+        rw [Params9.eps, hcase]
+        exact div_pos hsigPosR (by norm_num)
+      have hepsSigma : P.eps < (P.σ : ℝ) := by
+        rw [Params9.eps, hcase]
+        linarith [hsigPosR]
+      have huPos : 0 < P.u := by
+        rw [Params9.u]
+        exact div_pos hxs0R (by norm_num)
+      have hsigU : (P.σ : ℝ) < P.u := by
+        rw [Params9.u]
+        linarith
+      have hchiXsR : (P.χ : ℝ) < (P.xS : ℝ) / 100 :=
+        lt_of_lt_of_le hchiBoundR
+          (div_le_div_of_nonneg_right (min_le_left _ _) (by norm_num))
+      have hchiU : (P.χ : ℝ) < P.u / 50 := by
+        rw [Params9.u]
+        nlinarith [hchiXsR]
+      have hExps : ScaleExps9 P :=
+        ⟨hepsPos, hepsSigma, huPos, hsigU, hchiU⟩
+      have hxSmall : (P.xS : ℝ) < 1 / 10 := lt_trans hxsxdR hxd010R
+      have huChiXd : P.u + 8 * (P.χ : ℝ) < (P.xD : ℝ) := by
+        rw [Params9.u]
+        have hchiSmall : 8 * (P.χ : ℝ) < 8 * ((P.xS : ℝ) / 100) := by
+          nlinarith [hchiXsR]
+        nlinarith [hchiXsR, hchiSmall, hxsxdR]
+      have hCpos : 0 < Real.log (100 / 49 : ℝ) :=
+        Real.log_pos (by norm_num : (1 : ℝ) < 100 / 49)
+      have hCtwo : Real.log (100 / 49 : ℝ) < 2 := by
+        have hlog := Real.log_lt_sub_one_of_pos (by norm_num : (0 : ℝ) < 100 / 49)
+          (by norm_num : (100 / 49 : ℝ) ≠ 1)
+        norm_num at hlog ⊢
+        linarith
+      have hLeadRest : (αS : ℝ) + Real.log (100 / 49 : ℝ) * (αD : ℝ) / 10 < (αD : ℝ) := by
+        have hCα : Real.log (100 / 49 : ℝ) * (αD : ℝ) < 2 * (αD : ℝ) :=
+          mul_lt_mul_of_pos_right hCtwo hαDposR
+        nlinarith [hCα, hαSsmallR, hαDposR]
+      let margin : ℝ := (αD : ℝ) -
+        ((αS : ℝ) + Real.log (100 / 49 : ℝ) * (αD : ℝ) / 10)
+      have hMarginPos : 0 < margin := by dsimp [margin]; linarith [hLeadRest]
+      have hIdOne : 1 - (P.σ : ℝ) + P.eps < 1 := by
+        rw [Params9.eps, hcase]
+        linarith [hsigPosR]
+      have hδL : 0 < (1 / 2 : ℝ) := by norm_num
+      have hLogDom : ∀ᶠ n : ℕ in atTop,
+          (200 / (αD : ℝ)) * (n : ℝ) ^ (1 / 2 : ℝ) ≤ (n : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 1 / 2) (b := 1) (c := 200 / (αD : ℝ)) (by norm_num)
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hLogEvent : ∀ᶠ n : ℕ in atTop,
+          Real.log (n : ℝ) ≤ (n : ℝ) ^ (1 / 2 : ℝ) / (1 / 2 : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_log_le_rpow_div hδL
+      have hConstDom : ∀ᶠ n : ℕ in atTop,
+          100 * Real.log 2 / (αD : ℝ) ≤ (n : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 0) (b := 1) (c := 100 * Real.log 2 / (αD : ℝ)) (by norm_num)
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hFiltU : ∀ᶠ n : ℕ in atTop,
+          (4 / margin) * (n : ℝ) ^ P.u ≤ (n : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := P.u) (b := 1) (c := 4 / margin) (by
+            rw [Params9.u]
+            linarith [hxSmall])
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hFiltConst : ∀ᶠ n : ℕ in atTop,
+          4 * Real.log 2 / margin ≤ (n : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 0) (b := 1) (c := 4 * Real.log 2 / margin) (by norm_num)
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hFiltId : ∀ᶠ n : ℕ in atTop,
+          (4 * Real.log (100 / 49 : ℝ) / margin) *
+            (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) ≤ (n : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 1 - (P.σ : ℝ) + P.eps) (b := 1)
+          (c := 4 * Real.log (100 / 49 : ℝ) / margin) hIdOne
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hAnchorXs : ∀ᶠ n : ℕ in atTop,
+          4 * (n : ℝ) ^ (P.xS : ℝ) ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (P.xS : ℝ)) (b := (P.xD : ℝ)) (c := 4) hxsxdR
+      let δA : ℝ := (P.xD : ℝ) / 2
+      have hδApos : 0 < δA := by dsimp [δA]; linarith [hxs0R, hxsxdR]
+      have hδAxd : δA < (P.xD : ℝ) := by dsimp [δA]; linarith [hδApos]
+      have hAnchorLog : ∀ᶠ n : ℕ in atTop,
+          (4 * (P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := δA) (b := (P.xD : ℝ)) (c := 4 * (P.hPlus : ℝ) / δA) hδAxd
+      have hLogAnchorEvent : ∀ᶠ n : ℕ in atTop,
+          Real.log (n : ℝ) ≤ (n : ℝ) ^ δA / δA :=
+        Lane_q_s09_misc.eventually_nat_log_le_rpow_div hδApos
+      have hAnchorConst : ∀ᶠ n : ℕ in atTop,
+          4 ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := 0) (b := (P.xD : ℝ)) (c := 4) (by linarith [hxs0R, hxsxdR])
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hAnchorDeep : ∀ᶠ n : ℕ in atTop,
+          4 * (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤ (n : ℝ) ^ (P.xD : ℝ) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := P.u + 8 * (P.χ : ℝ)) (b := (P.xD : ℝ)) (c := 4) huChiXd
+      have hBStar : ∀ᶠ n : ℕ in atTop,
+          200 * (n : ℝ) ^ (-(P.hMinus : ℝ)) ≤ 1 := by
+        have he := Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := -(P.hMinus : ℝ)) (b := 0) (c := 200) (by linarith [hminusPosR])
+        filter_upwards [he] with n hn
+        simpa using hn
+      have hGainRpos : 0 < 1 - (P.hPlus : ℝ) := by linarith [hplusOneR]
+      have hSigmaGain : (P.σ : ℝ) < 1 - (P.hPlus : ℝ) := by
+        linarith [hsigXsR, hxsxdR, hmarginR]
+      let δG : ℝ := (1 - (P.hPlus : ℝ) - (P.σ : ℝ)) / 2
+      have hδGpos : 0 < δG := by dsimp [δG]; linarith [hSigmaGain]
+      have hδGone : δG ≤ 1 := by
+        dsimp [δG]
+        linarith [hplusPosR, hsigPosR]
+      have hGainPow : (P.σ : ℝ) + δG < 1 - (P.hPlus : ℝ) := by
+        dsimp [δG]
+        linarith [hSigmaGain]
+      have hGainFirst : ∀ᶠ n : ℕ in atTop,
+          (1200 * (18 / δG)) * (n : ℝ) ^ ((P.σ : ℝ) + δG) ≤
+            (n : ℝ) ^ (1 - (P.hPlus : ℝ)) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (P.σ : ℝ) + δG) (b := 1 - (P.hPlus : ℝ))
+          (c := 1200 * (18 / δG)) hGainPow
+      have hGainXs : ∀ᶠ n : ℕ in atTop,
+          1200 * (n : ℝ) ^ (P.xS : ℝ) ≤ (n : ℝ) ^ (1 - (P.hPlus : ℝ)) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := (P.xS : ℝ)) (b := 1 - (P.hPlus : ℝ)) (c := 1200) (by
+            linarith [hmarginR, hxsxdR])
+      have hGainU : ∀ᶠ n : ℕ in atTop,
+          4800 * (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (1 - (P.hPlus : ℝ)) :=
+        Lane_q_s09_misc.eventually_nat_rpow_const_mul_le
+          (a := P.u) (b := 1 - (P.hPlus : ℝ)) (c := 4800) (by
+            rw [Params9.u]
+            linarith [hmarginR, hxsxdR])
+      have hLogGainEvent : ∀ᶠ n : ℕ in atTop,
+          Real.log ((n : ℝ) + 1) ≤ (2 / δG) * (n : ℝ) ^ δG :=
+        Lane_q_s09_misc.eventually_nat_log_succ_le_rpow hδGpos hδGone
+      have hLarge : ∀ᶠ n : ℕ in atTop, 2 ≤ n := eventually_ge_atTop 2
+      have hScales : ∀ᶠ n : ℕ in atTop, ScalesAt9 P n := by
+        filter_upwards [hLarge, hLogDom, hLogEvent, hConstDom, hFiltU, hFiltConst,
+          hFiltId, hAnchorXs, hAnchorLog, hLogAnchorEvent, hAnchorConst, hAnchorDeep,
+          hBStar, hGainFirst, hGainXs, hGainU, hLogGainEvent] with n hn hld hlog hlc
+          hfu hfc hfi haxs halog hlogA hac had hb hg hgx hgu hlogG
+        have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+        have hnPos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+        have hmFloorU : (P.m n : ℝ) ≤ (αD : ℝ) * (n : ℝ) / 10 := by
+          simpa [Params9.m, hcase] using Nat.floor_le (by positivity :
+            0 ≤ (αD : ℝ) * (n : ℝ) / 10)
+        have hmFloorL : (αD : ℝ) * (n : ℝ) / 10 - 1 < (P.m n : ℝ) := by
+          have hf := Nat.lt_floor_add_one ((αD : ℝ) * (n : ℝ) / 10)
+          have hf' : (αD : ℝ) * (n : ℝ) / 10 < (P.m n : ℝ) + 1 := by
+            simpa [Params9.m, hcase] using hf
+          linarith
+        have hmLeNreal : (P.m n : ℝ) ≤ (n : ℝ) := by
+          calc
+            (P.m n : ℝ) ≤ (αD : ℝ) * (n : ℝ) / 10 := hmFloorU
+            _ ≤ (n : ℝ) := by nlinarith [hαD010R, hnR]
+        have hmLeN : P.m n ≤ n := by exact_mod_cast hmLeNreal
+        have hradiusBase : 1 ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+          calc
+            1 = (n : ℝ) ^ (0 : ℝ) := by simp
+            _ ≤ (n : ℝ) ^ (P.σ : ℝ) :=
+              Real.rpow_le_rpow_of_exponent_le hnR hsigPosR.le
+        have hradius : 1 ≤ P.radius n := by
+          change 1 ≤ Nat.floor ((n : ℝ) ^ (P.σ : ℝ))
+          exact (Nat.one_le_floor_iff _).2 hradiusBase
+        have hLogRoot : (n : ℝ) ^ (1 / 2 : ℝ) ≤ (αD : ℝ) / 200 * (n : ℝ) := by
+          have hfactor : (αD : ℝ) / 200 * (200 / (αD : ℝ)) = 1 := by
+            field_simp [ne_of_gt hαDposR]
+          calc
+            (n : ℝ) ^ (1 / 2 : ℝ) =
+                ((αD : ℝ) / 200 * (200 / (αD : ℝ))) * (n : ℝ) ^ (1 / 2 : ℝ) := by
+              rw [hfactor]
+              ring
+            _ = (αD : ℝ) / 200 *
+                ((200 / (αD : ℝ)) * (n : ℝ) ^ (1 / 2 : ℝ)) := by ring
+            _ ≤ (αD : ℝ) / 200 * (n : ℝ) :=
+              mul_le_mul_of_nonneg_left hld (by positivity)
+        have hLogAbs : Real.log (n : ℝ) ≤ (αD : ℝ) / 100 * (n : ℝ) := by
+          calc
+            Real.log (n : ℝ) ≤ (n : ℝ) ^ (1 / 2 : ℝ) / (1 / 2 : ℝ) := hlog
+            _ = 2 * (n : ℝ) ^ (1 / 2 : ℝ) := by ring
+            _ ≤ (αD : ℝ) / 100 * (n : ℝ) := by nlinarith [hLogRoot]
+        have hConstAbs : Real.log 2 ≤ (αD : ℝ) / 100 * (n : ℝ) := by
+          have hfactor : (αD : ℝ) / 100 * (100 * Real.log 2 / (αD : ℝ)) =
+              Real.log 2 := by
+            field_simp [ne_of_gt hαDposR]
+          calc
+            Real.log 2 =
+                ((αD : ℝ) / 100) *
+                  (100 * Real.log 2 / (αD : ℝ)) := by rw [hfactor]
+            _ ≤ ((αD : ℝ) / 100) * (n : ℝ) :=
+              mul_le_mul_of_nonneg_left hlc (by positivity)
+        have hLeadCoef : (αS : ℝ) + (αD : ℝ) / 50 <
+            Real.log 2 * (αD : ℝ) / 10 := by
+          have hlog2Half : (1 / 2 : ℝ) < Real.log 2 := by
+            linarith [Real.log_two_gt_d9]
+          have hlogAlpha : (αD : ℝ) / 2 < Real.log 2 * (αD : ℝ) := by
+            convert mul_lt_mul_of_pos_right hlog2Half hαDposR using 1 <;> ring
+          nlinarith [hαSsmallR, hlogAlpha, hαDposR]
+        have hShallow : P.Ss (n : ℝ) + Real.log (n : ℝ) <
+            (P.m n : ℝ) * Real.log 2 := by
+          have hleft : (αS : ℝ) * (n : ℝ) + Real.log (n : ℝ) +
+              Real.log 2 ≤ ((αS : ℝ) + (αD : ℝ) / 50) * (n : ℝ) := by
+            nlinarith [hLogAbs, hConstAbs]
+          have hmiddle : ((αS : ℝ) + (αD : ℝ) / 50) * (n : ℝ) <
+              Real.log 2 * (αD : ℝ) / 10 * (n : ℝ) :=
+            mul_lt_mul_of_pos_right hLeadCoef hnPos
+          have hfloor : Real.log 2 * ((αD : ℝ) * (n : ℝ) / 10 - 1) <
+              (P.m n : ℝ) * Real.log 2 :=
+            by
+              simpa [mul_comm] using
+                mul_lt_mul_of_pos_left hmFloorL (Real.log_pos (by norm_num : (1 : ℝ) < 2))
+          have hleftFloor : (αS : ℝ) * (n : ℝ) + Real.log (n : ℝ) <
+              Real.log 2 * ((αD : ℝ) * (n : ℝ) / 10 - 1) := by
+            nlinarith [hleft, hmiddle]
+          rw [Params9.Ss, hcase]
+          nlinarith [hleftFloor, hfloor]
+        have hFilterEq : P.filterBudget n + (n : ℝ) ^ P.u =
+            (αS : ℝ) * (n : ℝ) + (n : ℝ) ^ P.u + Real.log 2 +
+              Real.log (100 / 49 : ℝ) *
+                ((n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) + (P.m n : ℝ)) +
+              (n : ℝ) ^ P.u := by
+          simp [Params9.filterBudget, Params9.Ss, Params9.idBudget, hcase]
+        have hFilter : P.filterBudget n + (n : ℝ) ^ P.u ≤
+            (αD : ℝ) * (n : ℝ) := by
+          rw [hFilterEq]
+          have hfactor : margin / 4 * (4 / margin) = 1 := by
+            field_simp [ne_of_gt hMarginPos]
+          have hUbound : (n : ℝ) ^ P.u ≤ margin / 4 * (n : ℝ) := by
+            calc
+              (n : ℝ) ^ P.u = (margin / 4 * (4 / margin)) * (n : ℝ) ^ P.u := by
+                rw [hfactor]
+                ring
+              _ = margin / 4 * ((4 / margin) * (n : ℝ) ^ P.u) := by ring
+              _ ≤ margin / 4 * (n : ℝ) := mul_le_mul_of_nonneg_left hfu (by positivity)
+          have hfactorC : margin / 4 * (4 * Real.log 2 / margin) = Real.log 2 := by
+            field_simp [ne_of_gt hMarginPos]
+          have hCbound : Real.log 2 ≤ margin / 4 * (n : ℝ) := by
+            calc
+              Real.log 2 = (margin / 4 * (4 * Real.log 2 / margin)) := by rw [hfactorC]
+              _ ≤ margin / 4 * (n : ℝ) := mul_le_mul_of_nonneg_left hfc (by positivity)
+          have hfactorI : margin / 4 *
+              (4 * Real.log (100 / 49 : ℝ) / margin) = Real.log (100 / 49 : ℝ) := by
+            field_simp [ne_of_gt hMarginPos]
+          have hIbound : Real.log (100 / 49 : ℝ) *
+              (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) ≤ margin / 4 * (n : ℝ) := by
+            calc
+              Real.log (100 / 49 : ℝ) * (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) =
+                  (margin / 4 * (4 * Real.log (100 / 49 : ℝ) / margin)) *
+                    (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps) := by rw [hfactorI]
+              _ = margin / 4 * ((4 * Real.log (100 / 49 : ℝ) / margin) *
+                  (n : ℝ) ^ (1 - (P.σ : ℝ) + P.eps)) := by ring
+              _ ≤ margin / 4 * (n : ℝ) := mul_le_mul_of_nonneg_left hfi (by positivity)
+          have hMbound : Real.log (100 / 49 : ℝ) * (P.m n : ℝ) ≤
+              Real.log (100 / 49 : ℝ) * ((αD : ℝ) * (n : ℝ) / 10) :=
+            mul_le_mul_of_nonneg_left hmFloorU (le_of_lt hCpos)
+          have hLead : (αS : ℝ) * (n : ℝ) +
+              Real.log (100 / 49 : ℝ) * ((αD : ℝ) * (n : ℝ) / 10) ≤
+                ((αS : ℝ) + Real.log (100 / 49 : ℝ) * (αD : ℝ) / 10) * (n : ℝ) := by
+            ring_nf
+            exact le_rfl
+          have hMarginEq :
+              ((αS : ℝ) + Real.log (100 / 49 : ℝ) * (αD : ℝ) / 10) + margin =
+                (αD : ℝ) := by dsimp [margin]; ring
+          nlinarith [hUbound, hCbound, hIbound, hMbound, hMarginEq]
+        have hAnchor :
+            (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 +
+                (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+          have hax : (n : ℝ) ^ (P.xS : ℝ) ≤ (n : ℝ) ^ (P.xD : ℝ) / 4 := by nlinarith [haxs]
+          have halog' : (P.hPlus : ℝ) * Real.log (n : ℝ) ≤
+              (n : ℝ) ^ (P.xD : ℝ) / 4 := by
+            calc
+              (P.hPlus : ℝ) * Real.log (n : ℝ) ≤
+                  (P.hPlus : ℝ) * ((n : ℝ) ^ δA / δA) :=
+                mul_le_mul_of_nonneg_left hlogA (le_of_lt hplusPosR)
+              _ = ((P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA := by ring
+              _ ≤ (n : ℝ) ^ (P.xD : ℝ) / 4 := by
+                have hhalog : 4 * (((P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA) ≤
+                    (n : ℝ) ^ (P.xD : ℝ) := by
+                  calc
+                    4 * (((P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA) =
+                        (4 * (P.hPlus : ℝ) / δA) * (n : ℝ) ^ δA := by ring
+                    _ ≤ (n : ℝ) ^ (P.xD : ℝ) := halog
+                apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 4)).2
+                simpa [mul_assoc, mul_left_comm, mul_comm] using hhalog
+          have hac' : (1 : ℝ) ≤ (n : ℝ) ^ (P.xD : ℝ) / 4 := by nlinarith [hac]
+          have had' : (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤
+              (n : ℝ) ^ (P.xD : ℝ) / 4 := by nlinarith [had]
+          nlinarith
+        have hbStar : P.bStar n ≤ 1 / 200 := by
+          have hb : (n : ℝ) ^ (-(P.hMinus : ℝ)) ≤ 1 / 200 := by nlinarith [hg]
+          simpa [Params9.bStar] using hb
+        have hGain :
+            ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) +
+                (n : ℝ) ^ (P.xS : ℝ) + 4 * (n : ℝ) ^ P.u ≤
+              gainConst9 * (n : ℝ) * P.aStar n / 100 := by
+          have hradU : (P.radius n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+            simpa [Params9.radius] using Nat.floor_le (by positivity :
+              0 ≤ (n : ℝ) ^ (P.σ : ℝ))
+          have hradPlus : (P.radius n : ℝ) + 8 ≤ 9 * (n : ℝ) ^ (P.σ : ℝ) := by
+            nlinarith [hradU, hradiusBase]
+          have hlogNonneg : 0 ≤ Real.log ((n : ℝ) + 1) :=
+            Real.log_nonneg (by linarith : (1 : ℝ) ≤ (n : ℝ) + 1)
+          have hfirst : ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) ≤
+              (18 / δG) * (n : ℝ) ^ ((P.σ : ℝ) + δG) := by
+            calc
+              ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) ≤
+                  9 * (n : ℝ) ^ (P.σ : ℝ) * Real.log ((n : ℝ) + 1) :=
+                mul_le_mul_of_nonneg_right hradPlus hlogNonneg
+              _ ≤ 9 * (n : ℝ) ^ (P.σ : ℝ) * ((2 / δG) * (n : ℝ) ^ δG) := by
+                gcongr
+              _ = (18 / δG) * ((n : ℝ) ^ (P.σ : ℝ) * (n : ℝ) ^ δG) := by ring
+              _ = (18 / δG) * (n : ℝ) ^ ((P.σ : ℝ) + δG) := by
+                rw [← Real.rpow_add hnPos]
+          have hg1 : (18 / δG) * (n : ℝ) ^ ((P.σ : ℝ) + δG) ≤
+              (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 1200 := by nlinarith [hg]
+          have hgx : (n : ℝ) ^ (P.xS : ℝ) ≤
+              (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 1200 := by nlinarith [hgx]
+          have hgu : 4 * (n : ℝ) ^ P.u ≤
+              (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 1200 := by nlinarith [hgu]
+          have hgainIdentity :
+              gainConst9 * (n : ℝ) * P.aStar n / 100 =
+                (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 400 := by
+            simp only [gainConst9, Params9.aStar]
+            calc
+              (1 / 2 : ℝ) * (n : ℝ) * ((n : ℝ) ^ (-(P.hPlus : ℝ)) / 2) / 100 =
+                  (1 / 400 : ℝ) * ((n : ℝ) ^ (1 : ℝ) *
+                    (n : ℝ) ^ (-(P.hPlus : ℝ))) := by
+                rw [show (n : ℝ) ^ (1 : ℝ) = (n : ℝ) by simp]
+                ring
+              _ = (1 / 400 : ℝ) * (n : ℝ) ^ (1 - (P.hPlus : ℝ)) := by
+                rw [← Real.rpow_add hnPos]
+                rw [show (1 : ℝ) + (-(P.hPlus : ℝ)) = 1 - (P.hPlus : ℝ) by ring]
+              _ = (n : ℝ) ^ (1 - (P.hPlus : ℝ)) / 400 := by
+                rw [div_eq_mul_inv]
+                <;> ring
+          rw [hgainIdentity]
+          nlinarith
+        have hMarginNat : P.m n ≤ n := by exact_mod_cast hmLeNreal
+        have hFilterSd : P.filterBudget n + (n : ℝ) ^ P.u ≤ P.Sd (n : ℝ) := by
+          simpa [Params9.Sd, hcase] using hFilter
+        refine ⟨by omega, hMarginNat, hradius, hShallow, hFilterSd, hAnchor, hbStar, hGain⟩
+      obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScales
+      refine ⟨hExps, n₀, ?_⟩
+      intro n hn
+      exact hn₀ n hn
 
 end HypercubeRamsey

@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this formalization, please cite it using the metadata in this file."
+type: software
+title: "The hypercube Ramsey number has linear order in Lean 4"
+abstract: >-
+  A Lean 4 formalization of the theorem that the diagonal Ramsey number of the
+  n-dimensional hypercube is at most C times 2^n for an absolute constant C > 0.
+authors:
+  - family-names: Xu
+    given-names: Yao
+    alias: cadamcat
+repository-code: "https://github.com/cadamcat/hypercube-ramsey-lean4"
+url: "https://github.com/cadamcat/hypercube-ramsey-lean4"
+license: Apache-2.0
+version: "TODO(release: version tag)"
+date-released: "TODO(release: publication date)"
+keywords:
+  - Lean 4
+  - formalization
+  - Ramsey theory
+  - hypercube
+  - combinatorics
+references:
+  - type: article
+    authors:
+      - name: OpenAI
+    title: "The hypercube Ramsey number has linear order"
+    url: "https://github.com/openai/math/blob/adc7f1241b42e322a6451854ab7e4b4c146bf78a/preprints/The-hypercube-Ramsey-number-has-linear-order-September-23-2026/paper.pdf"

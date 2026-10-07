@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Clock.Paths
+import HypercubeRamsey.S03.Clock.Branching_sol_clock_branch
 
 /-!
 # The exploration rarely becomes giant (Lemma 3.10, Step 5 on the finite mesh)
@@ -197,6 +198,118 @@ private theorem branching_rate_sum_bound {I : Type*} [Fintype I] (rate : I → �
                   rw [← Finset.mul_sum]
             _ = δ * K * ∑ t ∈ Finset.range c, excess t := by ring
 
+private theorem branching_tick_excess {T : ℕ} {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    {g : ℕ} (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : FinProb Ω)
+    (lab : Ω → Fin g) (y : Fin g) (H : ℕ → ℝ) (hH : ∀ c, 1 ≤ H c)
+    (c : ℕ) (hc : c ≤ T) :
+    (outputEdgeClockLaw (T := T) δ hδ p lab y
+      (sub_nonneg.mpr (by
+        calc
+          δ * labMarg p lab y ≤ δ * 1 := mul_le_mul_of_nonneg_left (labMarg_le_one p lab y) hδ
+          _ = δ := by ring
+          _ ≤ 1 := hδ1))).expect (Lane_sol_clock_branch.tickExcess H c) ≤
+      δ * ∑ t ∈ Finset.range c, labMarg p lab y * (H (t + 1) - 1) := by
+  classical
+  have heq : ∀ (hb : 0 ≤ 1 - δ * labMarg p lab y),
+      (outputEdgeClockLaw (T := T) δ hδ p lab y hb).expect (Lane_sol_clock_branch.tickExcess H c) =
+      (outputEdgeClockLaw (T := T) δ hδ p lab y hb).expect (fun x => match x with
+        | .noArrival => 0
+        | .tick t o => if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0) := by
+    intro hb
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro x hx
+    cases x with
+    | noArrival => simp [Lane_sol_clock_branch.tickExcess]
+    | tick t o =>
+      by_cases hy : lab o = y
+      · simp [Lane_sol_clock_branch.tickExcess, hy]
+      · simp [Lane_sol_clock_branch.tickExcess, outputEdgeClockLaw, markedClockLaw,
+          markedClockWeight, outputMarkMass, hy]
+  rw [heq]
+  exact branching_one_edge_excess δ hδ hδ1 p lab y H hH c hc
+
+private theorem branching_local_bound {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}
+    {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g)
+    (θ δ' : ℝ)
+    (hrow : ∀ a, ∑ y, labMarg (p a) (lab a) y ≤ 1)
+    (hcol : ∀ y, ∑ a, labMarg (p a) (lab a) y ≤ θ)
+    (Hrow Hlab : ℕ → ℝ) (hH : BranchingSupersolution δ δ' θ T Hrow Hlab)
+    (ins : ∀ e : RowLabel R g, Option (MeshClockValue T (Ω e.1)))
+    (hblock : ∀ e x, ins e = some x → x = MeshClockValue.noArrival)
+    (s : Finset (Endpoint R g)) (u : Endpoint R g) (c : ℕ) (hc : c ≤ T) :
+    Real.exp δ' * (∏ e : RowLabel R g, (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab e).expect
+      (fun z => Lane_sol_clock_branch.moment (Lane_sol_clock_branch.Hends Hrow Hlab)
+        (Lane_sol_clock_branch.offspring Lane_sol_clock_branch.clockEnds
+          (Lane_sol_clock_branch.clockHit ins) s u c e z))) ≤
+      Lane_sol_clock_branch.Hends Hrow Hlab u c := by
+  classical
+  let b : RowLabel R g → ℝ := fun e => if EdgeIncident u e then
+    δ * ∑ t ∈ Finset.range c, labMarg (p e.1) (lab e.1) e.2 *
+      (Lane_sol_clock_branch.Hends Hrow Hlab (edgeOther u e) (t + 1) - 1) else 0
+  let P := samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab
+  let f := fun e z => Lane_sol_clock_branch.moment (Lane_sol_clock_branch.Hends Hrow Hlab)
+    (Lane_sol_clock_branch.offspring Lane_sol_clock_branch.clockEnds
+      (Lane_sol_clock_branch.clockHit ins) s u c e z)
+  have hge : ∀ (v : Endpoint R g) d, 1 ≤ Lane_sol_clock_branch.Hends Hrow Hlab v d := by
+    intro v d
+    cases v with
+    | inl a => exact hH.row_ge_one d
+    | inr y => exact hH.lab_ge_one d
+  have hedge (e) : (P e).expect (f e) ≤ 1 + b e := by
+    calc
+      (P e).expect (f e) ≤ (P e).expect (fun z => 1 +
+          if EdgeIncident u e then Lane_sol_clock_branch.tickExcess
+            (Lane_sol_clock_branch.Hends Hrow Hlab (edgeOther u e)) c z else 0) :=
+        FinProb.expect_mono _ (Lane_sol_clock_branch.offspring_bound Hrow Hlab
+          hH.row_ge_one hH.lab_ge_one ins hblock s u c e)
+      _ = 1 + if EdgeIncident u e then (P e).expect (Lane_sol_clock_branch.tickExcess
+            (Lane_sol_clock_branch.Hends Hrow Hlab (edgeOther u e)) c) else 0 := by
+        by_cases he : EdgeIncident u e <;> simp [he, FinProb.expect_add, FinProb.expect_const]
+      _ ≤ 1 + b e := by
+        dsimp [b]
+        by_cases he : EdgeIncident u e
+        · simp only [if_pos he]
+          have hx := branching_tick_excess δ hδ hδ1 (p e.1) (lab e.1) e.2
+            (Lane_sol_clock_branch.Hends Hrow Hlab (edgeOther u e)) (hge (edgeOther u e)) c hc
+          exact add_le_add (le_rfl : (1 : ℝ) ≤ 1) hx
+        · simp [he]
+  have hnon (e) : 0 ≤ (P e).expect (f e) := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro z hz
+    apply mul_nonneg ((P e).nonneg z)
+    exact le_trans (by norm_num) (Lane_sol_clock_branch.moment_ge_one _ hge _)
+  have hprod : (∏ e, (P e).expect (f e)) ≤ Real.exp (∑ e, b e) := by
+    calc
+      (∏ e, (P e).expect (f e)) ≤ ∏ e, Real.exp (b e) := by
+        apply Finset.prod_le_prod₀
+        · intro e he
+          exact hnon e
+        · intro e he
+          exact le_trans (hedge e) (by linarith [Real.add_one_le_exp (b e)])
+      _ = Real.exp (∑ e, b e) := (Real.exp_sum _ _).symm
+  calc
+    Real.exp δ' * (∏ e, (P e).expect (f e)) ≤ Real.exp δ' * Real.exp (∑ e, b e) :=
+      mul_le_mul_of_nonneg_left hprod (Real.exp_pos _).le
+    _ = Real.exp (δ' + ∑ e, b e) := (Real.exp_add _ _).symm
+    _ ≤ Lane_sol_clock_branch.Hends Hrow Hlab u c := by
+      cases u with
+      | inl a =>
+        have hs : (∑ e, b e) ≤ δ * ∑ t ∈ Finset.range c, (Hlab (t + 1) - 1) := by
+          simpa [b, Fintype.sum_prod_type, EdgeIncident, edgeOther, Lane_sol_clock_branch.Hends] using
+            branching_rate_sum_bound (fun y => labMarg (p a) (lab a) y) δ 1 hδ (hrow a)
+              (fun t => Hlab (t + 1) - 1) (fun t => sub_nonneg.mpr (hH.lab_ge_one _)) c
+        exact le_trans (Real.exp_le_exp.mpr (by linarith [hs])) (hH.row_step c hc)
+      | inr y =>
+        have hs : (∑ e, b e) ≤ θ * δ * ∑ t ∈ Finset.range c, (Hrow (t + 1) - 1) := by
+          simpa [b, Fintype.sum_prod_type, EdgeIncident, edgeOther, Lane_sol_clock_branch.Hends,
+            mul_comm θ δ] using
+            branching_rate_sum_bound (fun a => labMarg (p a) (lab a) y) δ θ hδ (hcol y)
+              (fun t => Hrow (t + 1) - 1) (fun t => sub_nonneg.mpr (hH.row_ge_one _)) c
+        exact le_trans (Real.exp_le_exp.mpr (by linarith [hs])) (hH.lab_step c hc)
+
 /-- The endpoints of the edges an insertion prescribes (TeX 03:948: "Include the endpoints of all inserted
 arrivals as extra full-horizon roots"). -/
 noncomputable def insertedEndpoints {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}
@@ -289,7 +402,41 @@ theorem branching_domination {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {
     (clockFieldLaw (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab)).expect
         (fun ξ => Real.exp (δ' * ((closureFrom (insertArrivals ins ξ) roots).card : ℝ))) ≤
       ∏ u ∈ roots, endpointMoment Hrow Hlab T u := by
-  sorry
+  classical
+  let H := Lane_sol_clock_branch.Hends (R := R) (g := g) Hrow Hlab
+  have hge : ∀ u c, 1 ≤ H u c := by
+    intro u c
+    cases u with
+    | inl a => exact hH.row_ge_one c
+    | inr y => exact hH.lab_ge_one c
+  have hdom := Lane_sol_clock_branch.domination
+    Lane_sol_clock_branch.clockEnds (Lane_sol_clock_branch.clockHit ins)
+    (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab) H T δ' hδ' hge
+    (branching_local_bound δ hδ hδ1 p lab θ δ' hrow hcol Hrow Hlab hH ins hblock)
+    Finset.univ (roots.toList.map fun u => (u, T))
+    (by
+      intro a ha
+      rcases List.mem_map.mp ha with ⟨u, hu, rfl⟩
+      exact ⟨Finset.mem_univ _, le_rfl⟩)
+  calc
+    (clockFieldLaw (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab)).expect
+        (fun ξ => Real.exp (δ' * ((closureFrom (insertArrivals ins ξ) roots).card : ℝ))) ≤
+        (clockFieldLaw (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab)).expect
+          (fun ξ => Real.exp (δ' * (Lane_sol_clock_branch.closure Lane_sol_clock_branch.clockEnds
+            (Lane_sol_clock_branch.clockHit ins) Finset.univ ξ
+            (roots.toList.map fun u => (u, T))).card)) := by
+      apply FinProb.expect_mono
+      intro ξ
+      apply Real.exp_le_exp.mpr
+      apply mul_le_mul_of_nonneg_left _ hδ'
+      exact_mod_cast Finset.card_le_card (Lane_sol_clock_branch.original_closure_subset ξ ins roots)
+    _ ≤ Lane_sol_clock_branch.moment H (roots.toList.map fun u => (u, T)) := hdom
+    _ = ∏ u ∈ roots, endpointMoment Hrow Hlab T u := by
+      simp only [Lane_sol_clock_branch.moment, List.map_map, Function.comp_def]
+      rw [Finset.prod_map_toList]
+      apply Finset.prod_congr rfl
+      intro u hu
+      cases u <;> rfl
 
 /-- L3.10e-ode (03:974–978, discrete): the explicit excess bounds `4δ' e^{2√θ cδ}/√θ` (rows) and `4δ' e^{2√θ cδ}`
 (labels) form a supersolution, using `e^x - 1 ≤ 2x` on `[0, 1]`, provided the exponents stay below `1` and the

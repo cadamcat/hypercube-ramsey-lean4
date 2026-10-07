@@ -1,6 +1,7 @@
 import HypercubeRamsey.S11.Core.Definitions
 import HypercubeRamsey.S07.Profiles
 import HypercubeRamsey.Tools.Ramsey
+import HypercubeRamsey.S11.Core.Compatibility_q_s11_compat
 
 /-!
 # Lemma 11.2: a compatible balanced profile
@@ -658,7 +659,7 @@ theorem clique_removal (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK :
     have hExcluded := hYX G Y V (by simp) (Finset.Subset.trans hVsub hSsub)
     exact False.elim (hExcluded hCluster)
 
-set_option maxHeartbeats 2000000
+set_option maxHeartbeats 12000000
 
 /-- L11.2b (11:130–159).  Suppose the violators `U` number at least `N e^{-n^δ}`; let `μ_U` be uniform on `U`.
 `E_i D_i(x) = (1 + m_x)/2` and tag mass `> η` has `D_i(x) > .8`, so `E_i D_i(x)² ≥ 1/4 + cη`.  In `L²(μ_U)` a
@@ -670,11 +671,31 @@ samples and tags (aggregate `O(1) π`): an `(X, Y)` cluster witness with first l
 theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 < K) :
     HighDegreeEv δ K := by
   classical
+  let t₀ : ℕ := q_s11_compat_t₀
   have heta : 0 < etaC := by norm_num [etaC]
   have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ δ) Filter.atTop Filter.atTop :=
     (_root_.tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
   have hexp : Filter.Tendsto (fun n : ℕ => Real.exp ((n : ℝ) ^ δ))
       Filter.atTop Filter.atTop := Real.tendsto_exp_atTop.comp hpow
+  have hpow01 : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ ((1 : ℝ) / 100))
+      Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop (by norm_num)).comp tendsto_natCast_atTop_atTop
+  have hexp01 : Filter.Tendsto (fun n : ℕ => Real.exp ((n : ℝ) ^ ((1 : ℝ) / 100)))
+      Filter.atTop Filter.atTop := Real.tendsto_exp_atTop.comp hpow01
+  have hexpLarge : ∀ᶠ n : ℕ in Filter.atTop,
+      (t₀ : ℝ) + 1 ≤ Real.exp ((n : ℝ) ^ ((1 : ℝ) / 100)) :=
+    hexp01.eventually (Filter.eventually_ge_atTop ((t₀ : ℝ) + 1))
+  have hpowNeg99 : Filter.Tendsto
+      (fun n : ℕ => (n : ℝ) ^ (-(99 / 100 : ℝ))) Filter.atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 99 / 100)).comp
+      tendsto_natCast_atTop_atTop
+  have hsmallRatio : ∀ᶠ n : ℕ in Filter.atTop,
+      2 * (t₀ : ℝ) * (n : ℝ) ^ (-(99 / 100 : ℝ)) < 1 / 100 := by
+    have hscaled : Filter.Tendsto
+        (fun n : ℕ => 2 * (t₀ : ℝ) * (n : ℝ) ^ (-(99 / 100 : ℝ)))
+        Filter.atTop (nhds 0) := by
+      simpa only [mul_zero] using (tendsto_const_nhds.mul hpowNeg99)
+    exact hscaled.eventually (Iio_mem_nhds (by norm_num))
   have hsmall : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ (-δ) < etaC / 1000 := by
     have hneg : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (-δ)) Filter.atTop (nhds 0) :=
       (tendsto_rpow_neg_atTop hδ).comp tendsto_natCast_atTop_atTop
@@ -695,15 +716,24 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
   obtain ⟨nsmall, hnsmall⟩ := Filter.eventually_atTop.1 hsmall
   obtain ⟨nb, hnb⟩ := Filter.eventually_atTop.1 hbsmall
   obtain ⟨nK, hnK⟩ := Filter.eventually_atTop.1 hKlarge
-  refine ⟨max nsmall (max nb (max nK 1)), ?_⟩
+  obtain ⟨nExp, hnExp⟩ := Filter.eventually_atTop.1 hexpLarge
+  obtain ⟨nRatio, hnRatio⟩ := Filter.eventually_atTop.1 hsmallRatio
+  refine ⟨max nsmall (max nb (max nK (max nExp (max nRatio 10)))), ?_⟩
   intro n hn N E X Y G ι hι π p hN hπnonneg hπsum hπsupp hπcap hmixcap hXY
   have hnsmall' : nsmall ≤ n := by omega
   have hnb' : nb ≤ n := by omega
   have hnK' : nK ≤ n := by omega
+  have hnExp' : nExp ≤ n := by omega
+  have hnRatio' : nRatio ≤ n := by omega
+  have hn10 : 10 ≤ n := by omega
   have hn1 : 1 ≤ n := by omega
   have hpowSmall : (n : ℝ) ^ (-δ) < etaC / 1000 := hnsmall n hnsmall'
   have hbSmall : bS n < etaC / 100 := hnb n hnb'
   have hKexp : K ≤ Real.exp ((n : ℝ) ^ δ) := hnK n hnK'
+  have hExpLarge' : (t₀ : ℝ) + 1 ≤ Real.exp ((n : ℝ) ^ ((1 : ℝ) / 100)) :=
+    hnExp n hnExp'
+  have hsmallRatio' :
+      2 * (t₀ : ℝ) * (n : ℝ) ^ (-(99 / 100 : ℝ)) < 1 / 100 := hnRatio n hnRatio'
   let πbar : Fin N → ℝ := mixW p π
   have hbarNonneg : ∀ y, 0 ≤ πbar y := by
     intro y
@@ -1224,11 +1254,11 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
             apply Finset.sum_congr rfl
             intro z hz
             rw [hcodegGram]
-  let t₀ : ℕ := 1000000000000
-  have ht₀pos : 0 < t₀ := by norm_num [t₀]
-  have ht₀recip : 1 / (t₀ : ℝ) < etaC / 1000 := by norm_num [t₀, etaC]
+  have ht₀pos : 0 < t₀ := by norm_num [t₀, q_s11_compat_t₀]
+  have ht₀recip : 1 / (t₀ : ℝ) < etaC / 1000 :=
+    by norm_num [t₀, q_s11_compat_t₀, etaC]
   have hprojectionGap : 1 / 4 + etaC / 1000 + 1 / (t₀ : ℝ) <
-      (1 / 2 + etaC / 200) ^ 2 := by norm_num [t₀, etaC]
+      (1 / 2 + etaC / 200) ^ 2 := by norm_num [t₀, q_s11_compat_t₀, etaC]
   have hnoIndependent (i : ι) (hi : i ∈ NormGood) (A : Finset (Fin N))
       (hA : A ⊆ selected i) (hcard : A.card = t₀)
       (hpair : ∀ y ∈ A, ∀ z ∈ A, y ≠ z →
@@ -1465,11 +1495,12 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
   have hsCpos : 0 < sC n := by
     dsimp [sC]
     exact Nat.ceil_pos.mpr (Real.exp_pos _)
+  obtain ⟨k₀, hk₀⟩ := HypercubeRamsey.S11.Core.q_s11_compat_pred_exists t₀
   have hRamseyBound : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤
-      (sC n + t₀ - 2) ^ (t₀ - 1) := by
-    have hnR : sC n + t₀ - 2 = (sC n - 1) + (t₀ - 1) := by omega
+      (sC n + t₀ - 2) ^ k₀ := by
+    have hnR : sC n + t₀ - 2 = (sC n - 1) + k₀ := by omega
     rw [Nat.choose_symm_of_eq_add hnR]
-    exact Nat.choose_le_pow (sC n + t₀ - 2) (t₀ - 1)
+    exact Nat.choose_le_pow (sC n + t₀ - 2) k₀
   have hsampleClique (i : HighTags) (r : ℕ) (z : Fin r → Fin N)
       (hzInjective : Function.Injective z)
       (hzSelected : ∀ j, z j ∈ selected i.1)
@@ -1889,6 +1920,99 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
         _ = Q.pr (fun z => Function.Injective z) + Q.expect collisionCount :=
             congrArg (fun x : ℝ => x + Q.expect collisionCount) hI'
     linarith [htotal', hcollisionBound]
+  let x : ℝ := (n : ℝ) ^ ((1 : ℝ) / 100)
+  have hExpLargeX : (t₀ : ℝ) + 1 ≤ Real.exp x := by simpa [x] using hExpLarge'
+  have hnRealPos : 0 < (n : ℝ) := by exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hn1)
+  have hpowRel : (n : ℝ) ^ ((1 : ℝ) / 100) / n = (n : ℝ) ^ (-(99 / 100 : ℝ)) := by
+    rw [← Real.rpow_sub_one (ne_of_gt hnRealPos) ((1 : ℝ) / 100)]
+    congr 1
+    ring
+  have hsmallLinear : 2 * (t₀ : ℝ) * x < (n : ℝ) / 100 := by
+    have hratio : 2 * (t₀ : ℝ) * ((n : ℝ) ^ ((1 : ℝ) / 100) / n) < 1 / 100 := by
+      rw [hpowRel]
+      exact hsmallRatio'
+    have hmul := mul_lt_mul_of_pos_right hratio hnRealPos
+    have hmulEq :
+        (2 * (t₀ : ℝ) * ((n : ℝ) ^ ((1 : ℝ) / 100) / n)) * n =
+          2 * (t₀ : ℝ) * x := by
+      dsimp [x]
+      field_simp [ne_of_gt hnRealPos]
+    calc
+      2 * (t₀ : ℝ) * x =
+          (2 * (t₀ : ℝ) * ((n : ℝ) ^ ((1 : ℝ) / 100) / n)) * n := hmulEq.symm
+      _ < (1 / 100) * n := hmul
+      _ = (n : ℝ) / 100 := by ring
+  have hsCeil : (sC n : ℝ) < Real.exp x + 1 := by
+    change (Nat.ceil (Real.exp x) : ℝ) < Real.exp x + 1
+    exact Nat.ceil_lt_add_one (Real.exp_pos x).le
+  let b : ℕ := sC n + t₀ - 2
+  have hbLE : b ≤ sC n + t₀ := by dsimp [b]; exact Nat.sub_le _ _
+  have hbaseLt : (b : ℝ) < 2 * Real.exp x := by
+    calc
+      (b : ℝ) ≤ ((sC n + t₀ : ℕ) : ℝ) := Nat.cast_le.mpr hbLE
+      _ = (sC n : ℝ) + (t₀ : ℝ) := by rw [Nat.cast_add]
+      _ < Real.exp x + 1 + t₀ := add_lt_add_left hsCeil (t₀ : ℝ)
+      _ ≤ 2 * Real.exp x := by
+        calc
+          Real.exp x + 1 + t₀ = Real.exp x + (t₀ + 1) := by ring
+          _ = (t₀ + 1) + Real.exp x := by ring
+          _ ≤ Real.exp x + Real.exp x := add_le_add_left hExpLargeX (Real.exp x)
+          _ = 2 * Real.exp x := by ring
+  have hbase : (b : ℝ) ≤ 2 * Real.exp x := hbaseLt.le
+  have hExpAtLeastTwo : 2 ≤ Real.exp x := by
+    have ht₀ : (2 : ℝ) ≤ (t₀ : ℝ) + 1 := by norm_num [t₀, q_s11_compat_t₀]
+    exact ht₀.trans hExpLargeX
+  have hbaseExp : (b : ℝ) ≤ Real.exp (2 * x) := by
+    calc
+      (b : ℝ) ≤ 2 * Real.exp x := hbase
+      _ ≤ Real.exp x * Real.exp x := by
+        calc
+          2 * Real.exp x = Real.exp x * 2 := by ring
+          _ ≤ Real.exp x * Real.exp x :=
+            mul_le_mul_of_nonneg_left hExpAtLeastTwo (Real.exp_pos x).le
+      _ = Real.exp (2 * x) := by rw [← Real.exp_add]; congr 1 <;> ring
+  let r₀ : ℕ := Nat.ceil (Real.exp (3 * (n : ℝ) / 100))
+  have hRamseyReal : (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+      Real.exp ((n : ℝ) / 100) := by
+    have hbRamseyBound : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤ b ^ k₀ := by
+      dsimp [b]
+      exact hRamseyBound
+    have hcast : (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+        (b : ℝ) ^ k₀ := by
+      exact HypercubeRamsey.S11.Core.q_s11_compat_cast_pow_bound
+        (Nat.choose (sC n + t₀ - 2) (sC n - 1)) b k₀ hbRamseyBound
+    have hExponent : k₀ * (2 * x) ≤ (n : ℝ) / 100 := by
+      have hk₀le : k₀ ≤ t₀ := by omega
+      have ht₀' : (k₀ : ℝ) ≤ (t₀ : ℝ) := Nat.cast_le.mpr hk₀le
+      have hx : 0 ≤ x := by positivity
+      calc
+        (k₀ : ℝ) * (2 * x) ≤ (t₀ : ℝ) * (2 * x) :=
+          mul_le_mul_of_nonneg_right ht₀' (by positivity)
+        _ = 2 * (t₀ : ℝ) * x := by
+          calc
+            (t₀ : ℝ) * (2 * x) = ((t₀ : ℝ) * 2) * x := by rw [← mul_assoc]
+            _ = (2 * (t₀ : ℝ)) * x := by rw [mul_comm (t₀ : ℝ) 2]
+            _ = 2 * (t₀ : ℝ) * x := rfl
+        _ ≤ (n : ℝ) / 100 := hsmallLinear.le
+    have hbNonneg : 0 ≤ (b : ℝ) := Nat.cast_nonneg b
+    calc
+      (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+          (b : ℝ) ^ k₀ := hcast
+      _ ≤ (Real.exp (2 * x)) ^ k₀ :=
+          HypercubeRamsey.S11.Core.q_s11_compat_pow_mono
+            (b : ℝ) (Real.exp (2 * x)) hbNonneg hbaseExp k₀
+      _ ≤ Real.exp ((n : ℝ) / 100) :=
+          HypercubeRamsey.S11.Core.q_s11_compat_exp_pow_le k₀ (2 * x)
+            ((n : ℝ) / 100) hExponent
+  have hRamseySize : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤ r₀ := by
+    have hsizeReal : (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤ (r₀ : ℝ) := by
+      calc
+        (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+            Real.exp ((n : ℝ) / 100) := hRamseyReal
+        _ ≤ Real.exp (3 * (n : ℝ) / 100) :=
+          Real.exp_le_exp.mpr (by nlinarith [hn1])
+        _ ≤ (r₀ : ℝ) := by simpa [r₀] using Nat.le_ceil (Real.exp (3 * (n : ℝ) / 100))
+    exact Nat.cast_le.mp hsizeReal
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

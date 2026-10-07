@@ -13,6 +13,13 @@ private theorem law_eq_of_weights {N : ℕ} {μ ν : Law N}
   congr 1
   exact funext h
 
+private theorem finLaw_eq_of_weights {A : Type*} [Fintype A] {P Q : FinLaw A}
+    (h : ∀ x, P.w x = Q.w x) : P = Q := by
+  cases P
+  cases Q
+  congr 1
+  exact funext h
+
 private theorem normalize_indicator_eq_cond {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : HypercubeRamsey.S18.LateData hPT)
     (μ : Law (T.S.N k)) (A : Finset (Fin (T.S.N k)))
@@ -295,6 +302,125 @@ private noncomputable def lateLabelLaw {κ : CConsts} {T : Stage} {k : ℕ}
           ring
     rw [hsubtype, hpoolSum]
     exact labelWeight_total D j side tests hmask
+
+private theorem allowedMask_nonempty {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (mask : D.encoding.base.AllowedMask b) : mask.1.Nonempty := by
+  have hclass : D.geom.classOf b = some j := (D.encoding.base.class_of_spec b j).1 hb
+  have hpoolpos : 0 < (D.encoding.base.latePoolOf b).card := by
+    simpa [LateProcessBase.latePoolOf, hclass] using D.late_pool_pos j
+  have hmaskpos : 0 < mask.1.card := by omega
+  exact Finset.card_pos.mp hmaskpos
+
+private noncomputable def rowSide {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (mask : D.encoding.base.AllowedMask b)
+    (sketch : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) :
+    D.encoding.base.RowOut b := by
+  let hclass : D.geom.classOf b = some j := (D.encoding.base.class_of_spec b j).1 hb
+  have hpoolpos : 0 < (D.encoding.base.latePoolOf b).card := by
+    simpa [LateProcessBase.latePoolOf, hclass] using D.late_pool_pos j
+  have hpool : Nonempty {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b} := by
+    obtain ⟨y, hy⟩ := Finset.card_pos.mp hpoolpos
+    exact ⟨⟨y, hy⟩⟩
+  let y₀ : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b} := Classical.choice hpool
+  exact ⟨mask, (sketch, y₀)⟩
+
+private noncomputable def asFinLaw {N : ℕ} (P : Law N) : FinLaw (Fin N) :=
+  ⟨P.w, P.nonneg, P.sum_eq_one⟩
+
+private noncomputable def rowSketchLaw {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k)
+    (h : D.encoding.base.History j.castSucc) :
+    FinLaw (Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) :=
+  FinLaw.pi (fun a : Fin (T.S.n k) =>
+    FinLaw.pi (fun t : Fin (sketchLength T k) =>
+      asFinLaw (D.currentPrior j (flipPos b a) h)))
+
+private noncomputable def explicitRowKernel {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (h : D.encoding.base.History j.castSucc)
+    (maskProfile : FinLaw (D.encoding.base.AllowedMask b)) :
+    FinLaw (D.encoding.base.RowOut b) :=
+  FinLaw.bind maskProfile (fun mask =>
+    FinLaw.bind (rowSketchLaw D j b h) (fun sketch =>
+      lateLabelLaw D j (rowSide D j b hb mask sketch) Finset.univ
+        (allowedMask_nonempty D j b hb mask)))
+
+private theorem finLaw_map_bind_fst {A C : Type*} [Fintype A] [Fintype C] [DecidableEq A]
+    (P : FinLaw A) (K : A → FinLaw C) :
+    FinLaw.map (FinLaw.bind P K) Prod.fst = P := by
+  apply finLaw_eq_of_weights
+  intro a
+  simp only [FinLaw.map, FinLaw.bind]
+  rw [Fintype.sum_prod_type]
+  calc
+    (∑ x, ∑ y, if x = a then P.w x * (K x).w y else 0) =
+        ∑ x, if x = a then P.w x else 0 := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases hxa : x = a
+      · subst x
+        simp only [if_pos rfl, if_true]
+        rw [← Finset.mul_sum, (K a).sum_one, mul_one]
+      · simp [hxa]
+    _ = P.w a := by simp
+
+private theorem labelWeight_side_congr {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) {b : Pos T k} {side₁ side₂ : D.encoding.base.RowOut b}
+    (hm : side₁.1 = side₂.1) (hs : side₁.2.1 = side₂.2.1)
+    (tests : Finset (Fin (T.S.n k))) (y : Fin (T.S.N k)) :
+    D.labelWeight j side₁ tests y = D.labelWeight j side₂ tests y := by
+  cases side₁ with
+  | mk m₁ r₁ =>
+    cases r₁ with
+    | mk s₁ y₁ =>
+      cases side₂ with
+      | mk m₂ r₂ =>
+        cases r₂ with
+        | mk s₂ y₂ =>
+          dsimp at hm hs
+          subst m₂
+          subst s₂
+          rfl
+
+private theorem explicitRowKernel_formula {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (h : D.encoding.base.History j.castSucc)
+    (maskProfile : FinLaw (D.encoding.base.AllowedMask b))
+    (out : D.encoding.base.RowOut b) :
+    (explicitRowKernel D j b hb h maskProfile).w out =
+      maskProfile.w out.1 *
+    (∏ a, ∏ t, (D.currentPrior j (flipPos b a) h).w (out.2.1 a t)) *
+    D.labelWeight j out Finset.univ out.2.2.1 := by
+  simp only [explicitRowKernel, FinLaw.bind, rowSketchLaw, FinLaw.pi, lateLabelLaw,
+    asFinLaw]
+  have hweight := labelWeight_side_congr (D := D) (j := j)
+    (side₁ := rowSide D j b hb out.1 out.2.1) (side₂ := out)
+    (by rfl) (by rfl) Finset.univ out.2.2.1
+  rw [hweight]
+  ring
+
+private theorem explicitRowKernel_mask_marginal {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ D.encoding.base.classes j)
+    (h : D.encoding.base.History j.castSucc)
+    (maskProfile : FinLaw (D.encoding.base.AllowedMask b)) :
+    FinLaw.map (explicitRowKernel D j b hb h maskProfile)
+      (fun out : D.encoding.base.RowOut b => out.1) = maskProfile := by
+  let K : D.encoding.base.AllowedMask b →
+      FinLaw ((Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) ×
+        {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b}) := fun mask =>
+    FinLaw.bind (rowSketchLaw D j b h) (fun sketch =>
+      lateLabelLaw D j (rowSide D j b hb mask sketch) Finset.univ
+        (allowedMask_nonempty D j b hb mask))
+  simpa [explicitRowKernel, K] using finLaw_map_bind_fst maskProfile K
 
 private theorem lateError_pos {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (i : Fin PT.tiling.m) (remaining : ℕ) :

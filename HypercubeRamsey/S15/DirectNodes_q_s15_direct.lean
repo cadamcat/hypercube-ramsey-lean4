@@ -8,6 +8,7 @@ namespace HypercubeRamsey.Lane_q_s15_direct
 
 open HypercubeRamsey OAI.HypercubeRamsey
 open Classical
+open Filter
 open scoped BigOperators
 
 noncomputable def star {T : Stage} {k : ℕ}
@@ -461,10 +462,10 @@ theorem prefix_ratio_le_exp {n ell N : ℕ} (hell : 2 * ell ≤ n)
     _ ≤ (2 : ℝ) ^ (-((n : ℝ) / 2)) := hmono
     _ = Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := hexp
 
-theorem highDirect_prefix_le_half {κ : CConsts} {T : Stage} {k : ℕ}
+theorem highDirect_prefix_gain_bound {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (hκ : κ.Admissible)
-    (hmode : PT.tiling.mode = .highDirect) (hn : 1 ≤ T.S.n k)
-    (i : Fin PT.tiling.m) : 2 * (PT.tiling.P i).ℓ ≤ T.S.n k := by
+    (hmode : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m) :
+    ((PT.tiling.P i).ℓ : ℝ) ≤ (PT.tiling.P i).g / (1000000 * κ.u) := by
   have hnotBound : PT.tiling.mode ≠ .bounded := by
     intro hb
     rw [hb] at hmode
@@ -472,10 +473,22 @@ theorem highDirect_prefix_le_half {κ : CConsts} {T : Stage} {k : ℕ}
   rcases hPT.tiling_valid.allocation_bounds i with ⟨_, halloc⟩
   rcases halloc with hb | ⟨hℓ, hlog⟩
   · exact (hnotBound hb).elim
-  have hscale := hPT.tiling_valid.direct_scale_bound (Or.inr hmode) i
   have hgain : PT.tiling.gain i = (PT.tiling.P i).g / 1000 := by
     simp [HypercubeRamsey.Tiling.gain, hmode]
   rw [hgain] at hℓ
+  have hℓ' : ((PT.tiling.P i).ℓ : ℝ) ≤
+      (PT.tiling.P i).g / (1000000 * κ.u) := by
+    calc
+      ((PT.tiling.P i).ℓ : ℝ) ≤ ((PT.tiling.P i).g / 1000) / (1000 * κ.u) := hℓ
+      _ = (PT.tiling.P i).g / (1000000 * κ.u) := by ring
+  exact hℓ'
+
+theorem highDirect_prefix_le_half {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (hκ : κ.Admissible)
+    (hmode : PT.tiling.mode = .highDirect) (hn : 1 ≤ T.S.n k)
+    (i : Fin PT.tiling.m) : 2 * (PT.tiling.P i).ℓ ≤ T.S.n k := by
+  have hscale := hPT.tiling_valid.direct_scale_bound (Or.inr hmode) i
+  have hℓ' := highDirect_prefix_gain_bound PT hPT hκ hmode i
   have hu : 1 ≤ κ.u := by
     have hlarge := hκ.u_rng.2
     omega
@@ -490,11 +503,6 @@ theorem highDirect_prefix_le_half {κ : CConsts} {T : Stage} {k : ℕ}
       (PT.tiling.P i).g ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := hscale
       _ ≤ (T.S.n k : ℝ) ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le hnR hι
       _ = (T.S.n k : ℝ) := by rw [Real.rpow_one]
-  have hℓ' : ((PT.tiling.P i).ℓ : ℝ) ≤
-      (PT.tiling.P i).g / (1000000 * κ.u) := by
-    calc
-      ((PT.tiling.P i).ℓ : ℝ) ≤ ((PT.tiling.P i).g / 1000) / (1000 * κ.u) := hℓ
-      _ = (PT.tiling.P i).g / (1000000 * κ.u) := by ring
   have huCast : (1000000 : ℝ) ≤ 1000000 * κ.u := by
     exact_mod_cast (show 1000000 ≤ 1000000 * κ.u by omega)
   have hg0 : (0 : ℝ) ≤ (PT.tiling.P i).g := by positivity
@@ -514,6 +522,96 @@ theorem highDirect_prefix_le_half {κ : CConsts} {T : Stage} {k : ℕ}
   have hdouble : 2 * ((PT.tiling.P i).ℓ : ℝ) ≤ (T.S.n k : ℝ) := by
     nlinarith
   exact_mod_cast hdouble
+
+theorem highDirect_cross_threshold_small {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid →
+      PT.tiling.mode = .highDirect → ∀ i : Fin PT.tiling.m,
+        Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1 ≤ 1 / 10 := by
+  have hnPos : ∀ᶠ k in atTop, 1 ≤ (T.S.n k : ℝ) := by
+    have hnNat : ∀ᶠ k in atTop, 1 ≤ T.S.n k :=
+      T.S.n_tendsto.eventually (eventually_ge_atTop 1)
+    filter_upwards [hnNat] with k hk
+    exact_mod_cast hk
+  have hsmall : ∀ᶠ k in atTop,
+      (1 / 50000 : ℝ) * (T.S.n k : ℝ) ^ (-(0.95 : ℝ)) ≤ Real.log (11 / 10) := by
+    have hlim := (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 0.95)).comp
+      (tendsto_natCast_atTop_atTop.comp T.S.n_tendsto)
+    have hlim' := hlim.const_mul (1 / 50000 : ℝ)
+    exact hlim'.eventually (Iic_mem_nhds (by
+      simpa using Real.log_pos (by norm_num : (1 : ℝ) < 11 / 10)))
+  filter_upwards [hnPos, hsmall] with k hn hsmall
+  intro PT hPT hmode i
+  have hprefix := highDirect_prefix_gain_bound PT hPT hκ hmode i
+  have hscale := hPT.tiling_valid.direct_scale_bound (Or.inr hmode) i
+  have hu : 1 ≤ κ.u := by
+    have hlarge := hκ.u_rng.2
+    omega
+  have hιsmall : κ.ι / 2 ≤ 1 / 100 := by
+    have hminA : min κ.η0 (0.01 : ℝ) ≤ 0.01 := min_le_right _ _
+    have hmin : min κ.xs (min κ.η0 (0.01 : ℝ)) ≤ 0.01 :=
+      le_trans (min_le_right _ _) hminA
+    have hι := hκ.ι_rng.2
+    linarith
+  have huCast : (1 : ℝ) ≤ (κ.u : ℝ) := by exact_mod_cast hu
+  have hden : (0 : ℝ) < 1000000 * (κ.u : ℝ) := by positivity
+  have hℓbound : ((PT.tiling.P i).ℓ : ℝ) ≤
+      (T.S.n k : ℝ) ^ (κ.ι / 2) / 1000000 := by
+    have hfirst : (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) ≤
+        (PT.tiling.P i).g / (1000000 : ℝ) := by
+      apply (div_le_div_iff₀ hden (by norm_num : (0 : ℝ) < 1000000)).2
+      have hnonneg : (0 : ℝ) ≤ (PT.tiling.P i).g := by positivity
+      have hdenle : (1000000 : ℝ) ≤ 1000000 * (κ.u : ℝ) := by nlinarith
+      have hmul := mul_le_mul_of_nonneg_left hdenle hnonneg
+      nlinarith
+    calc
+      ((PT.tiling.P i).ℓ : ℝ) ≤ (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) := hprefix
+      _ ≤ (PT.tiling.P i).g / 1000000 := hfirst
+      _ ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) / 1000000 :=
+        div_le_div_of_nonneg_right hscale (by norm_num)
+  have hbstar : bstar T k = (T.S.n k : ℝ) ^ (-(0.96 : ℝ)) := by
+    simp [bstar]
+    norm_num
+  have hnonnegPow : 0 ≤ (T.S.n k : ℝ) ^ (-(0.96 : ℝ)) := by positivity
+  have hcombine :
+      ((T.S.n k : ℝ) ^ (κ.ι / 2) / 1000000) *
+          (T.S.n k : ℝ) ^ (-(0.96 : ℝ)) =
+        (1 / 1000000 : ℝ) * (T.S.n k : ℝ) ^ (κ.ι / 2 - 0.96) := by
+    calc
+      ((T.S.n k : ℝ) ^ (κ.ι / 2) / 1000000) *
+          (T.S.n k : ℝ) ^ (-(0.96 : ℝ)) =
+        (1 / 1000000 : ℝ) *
+          ((T.S.n k : ℝ) ^ (κ.ι / 2) * (T.S.n k : ℝ) ^ (-(0.96 : ℝ))) := by ring
+      _ = (1 / 1000000 : ℝ) * (T.S.n k : ℝ) ^ (κ.ι / 2 - 0.96) := by
+        rw [← Real.rpow_add (by positivity : (0 : ℝ) < (T.S.n k : ℝ))]
+        ring
+  have hexp : κ.ι / 2 - 0.96 ≤ -(0.95 : ℝ) := by linarith
+  have hpowmono : (T.S.n k : ℝ) ^ (κ.ι / 2 - 0.96) ≤
+      (T.S.n k : ℝ) ^ (-(0.95 : ℝ)) :=
+    Real.rpow_le_rpow_of_exponent_le hn hexp
+  have hscaled : (PT.tiling.P i).ℓ * bstar T k ≤
+      (1 / 1000000 : ℝ) * (T.S.n k : ℝ) ^ (-(0.95 : ℝ)) := by
+    calc
+      (PT.tiling.P i).ℓ * bstar T k ≤
+          ((T.S.n k : ℝ) ^ (κ.ι / 2) / 1000000) *
+            (T.S.n k : ℝ) ^ (-(0.96 : ℝ)) := by
+        rw [hbstar]
+        exact mul_le_mul_of_nonneg_right hℓbound hnonnegPow
+      _ = (1 / 1000000 : ℝ) * (T.S.n k : ℝ) ^ (κ.ι / 2 - 0.96) := hcombine
+      _ ≤ (1 / 1000000 : ℝ) * (T.S.n k : ℝ) ^ (-(0.95 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hpowmono (by norm_num)
+  have harg : 20 * (PT.tiling.P i).ℓ * bstar T k ≤ Real.log (11 / 10) := by
+    calc
+      20 * (PT.tiling.P i).ℓ * bstar T k =
+          20 * ((PT.tiling.P i).ℓ * bstar T k) := by ring
+      _ ≤ 20 * ((1 / 1000000 : ℝ) * (T.S.n k : ℝ) ^ (-(0.95 : ℝ))) :=
+        mul_le_mul_of_nonneg_left hscaled (by norm_num)
+      _ = (1 / 50000 : ℝ) * (T.S.n k : ℝ) ^ (-(0.95 : ℝ)) := by ring
+      _ ≤ Real.log (11 / 10) := hsmall
+  calc
+    Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1 ≤
+        Real.exp (Real.log (11 / 10)) - 1 := by
+      exact sub_le_sub_right (Real.exp_le_exp.mpr harg) 1
+    _ = 1 / 10 := by rw [Real.exp_log (by norm_num : (0 : ℝ) < 11 / 10)]; norm_num
 
 theorem directRowMass_dependsOn {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)

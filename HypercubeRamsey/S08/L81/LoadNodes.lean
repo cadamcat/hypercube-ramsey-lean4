@@ -53,7 +53,7 @@ theorem comp_tail (cH : ℝ) (hcH : 0 < cH) (hη₀ : 0 < η₀) (hβτ : β < t
       GridFacts η₀ D.n → CondProductBound → D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) →
       D.BcompMean K →
       D.hiddenLaw.pr (fun Θ => ¬ D.CompOK (compC K) Θ) ≤ (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
-  sorry
+  exact Lane_q_s08_load.bcomp_tail η₀ γ β p K h cH hcH hη₀ hβτ hK
 
 /-- L8.1i(iv) (08:352–363): at a hidden history avoiding the hidden events with comparison loads at most
 `compC K`, Lemma 3.6 for the selected laws under positions, tags, activations and ties.  Selections at residual

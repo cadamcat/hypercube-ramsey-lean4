@@ -1,5 +1,6 @@
 import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 import HypercubeRamsey.S08.L81.PosteriorNodes
+import HypercubeRamsey.S07.TagStage
 
 /-!
 Private helpers for lane q-s08-load.
@@ -1222,6 +1223,97 @@ private theorem bcomp_touch_cost {η₀ γ β p K cH : ℝ} {h : ℕ}
     have hcostFin : ((1 - 2 * Real.exp (-(D.n : ℝ) ^ cH)) ^ T.card)⁻¹ ≤ (2 : ℝ) ^ m :=
       hcost2.trans htwo
     simpa [T, bcompTouchedEvents, bcompScopeUnion] using hcostFin
+
+theorem bcomp_tail (η₀ γ β p K : ℝ) (h : ℕ) (cH : ℝ) (hcH : 0 < cH)
+    (hη₀ : 0 < η₀) (hβτ : β < tau8 η₀ / 4) (hK : 0 < K) :
+    ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N),
+      Std D γ K X Y R → GridFacts η₀ D.n → CondProductBound →
+      D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) → D.BcompMean K →
+      D.hiddenLaw.pr (fun Θ => ¬ D.CompOK (8 * (40 * K + 1)) Θ) ≤
+        (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
+  classical
+  obtain ⟨ncap, hcap⟩ := bcompCap_small η₀ β K h hη₀ hβτ hK
+  obtain ⟨ncharge, hcharge⟩ := bcompChargeSmall η₀ cH hη₀ hcH
+  refine ⟨max ncap ncharge, ?_⟩
+  intro D hn X Y R hStd hGF hCP hLLL hBM
+  have hncap : ncap ≤ D.n := le_trans (le_max_left _ _) hn
+  have hncharge : ncharge ≤ D.n := le_trans (le_max_right _ _) hn
+  let L : ℝ := bcompCap η₀ β K h D.n
+  let Z : EvenRole D.n → Fin D.N → D.Hist → ℝ := fun a x Θ =>
+    D.Bcomp Θ (keyOf η₀ a.1) x
+  let d : EvenRole D.n → Fin D.N → ℝ := fun _ _ => 40 * K
+  have hroleCard : 0 < Fintype.card (EvenRole D.n) := by
+    rw [hGF.even_card]
+    positivity
+  letI : Nonempty (EvenRole D.n) := Fintype.card_pos_iff.mp hroleCard
+  have hchargeSmall : 4 * Real.exp (-(D.n : ℝ) ^ cH) * (D.n : ℝ) *
+      (1 + ((2 * sC η₀ D.n + 1) ^ 4 : ℕ)) ≤ 1 / 4 := hcharge D.n hncharge
+  have hnpos : 0 < D.n := lt_of_lt_of_le (by norm_num) hGF.pos.1
+  have hL : 0 ≤ L := by
+    dsimp [L, bcompCap]
+    positivity
+  have hZ0 : ∀ a x Θ, 0 ≤ Z a x Θ := by
+    intro a x Θ
+    exact bcomp_nonneg D Θ (keyOf η₀ a.1) x
+  have hZL : ∀ a x Θ, Θ ∈ Finset.univ → Z a x Θ ≤ L := by
+    intro a x Θ _
+    by_cases hb : D.BaseGates Θ (keyOf η₀ a.1)
+    · simpa [Z, L] using bcomp_le_cap D X Y R hStd hGF Θ (keyOf η₀ a.1) x hb
+    · simp [Z, L, Ctx.Bcomp, hb, hL]
+  have hself : ∀ a : EvenRole D.n, a ∈ evenKeyNear η₀ 8 a := by
+    intro a
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    have hdist : keyDist (keyOf η₀ a.1) (keyOf η₀ a.1) = 0 := by simp [keyDist]
+    rw [hdist]
+    norm_num
+  have hf : 0 ≤ fGrid η₀ D.n := by
+    unfold fGrid
+    positivity
+  have hnear : ∀ a : EvenRole D.n,
+      ((evenKeyNear η₀ 8 a).card : ℝ) ≤ fGrid η₀ D.n * Fintype.card (EvenRole D.n) :=
+    hGF.near_even
+  have hD0 : 0 ≤ 40 * K := by positivity
+  have hmean : ∀ x : Fin D.N,
+      (Fintype.card (EvenRole D.n) : ℝ)⁻¹ * ∑ a, d a x ≤ 40 * K := by
+    intro x
+    have hsum : (∑ a : EvenRole D.n, d a x) =
+        (Fintype.card (EvenRole D.n) : ℝ) * (40 * K) := by
+      simp [d, nsmul_eq_mul]
+    have hcard : (Fintype.card (EvenRole D.n) : ℝ) ≠ 0 := by
+      exact_mod_cast (Nat.ne_of_gt hroleCard)
+    rw [hsum]
+    field_simp [hcard]
+    norm_num
+  have hsmall : (D.n : ℝ) * fGrid η₀ D.n * L ≤ 1 := by
+    simpa [L] using hcap D.n hncap
+  have hlabels : (Fintype.card (Fin D.N) : ℝ) ≤ (D.n : ℝ) * 2 ^ D.n := by
+    rw [Fintype.card_fin]
+    exact_mod_cast hStd.size.2
+  have hjoint : ∀ (x : Fin D.N) (m : ℕ), m ≤ D.n → ∀ s : Fin m → EvenRole D.n,
+      (∀ i j : Fin m, j < i → s i ∉ evenKeyNear η₀ 8 (s j)) →
+        ∑ Θ ∈ Finset.univ, D.hiddenLaw.w Θ * ∏ i, Z (s i) x Θ ≤
+          (2 : ℝ) ^ m * ∏ i, d (s i) x := by
+    intro x m hm s hsep
+    have hcost := bcomp_touch_cost (γ := γ) (K := K) D hGF hη₀ hcH hLLL s hm hchargeSmall hsep
+    have hmoment := bcomp_joint_of_cost D X Y R hStd hBM hGF hCP hK
+      (2 * Real.exp (-(D.n : ℝ) ^ cH)) hLLL s x hsep hcost
+    simpa [FinProb.expect, Z, d, Finset.prod_const] using hmoment
+  have hthreshold : 4 * (2 : ℝ) * (40 * K + 1) = 8 * (40 * K + 1) := by
+    ring
+  have htail := HypercubeRamsey.scatteredMoments_union_labels D.hiddenLaw Finset.univ Z hZ0 L hL hZL
+    (evenKeyNear η₀ 8) hself (fGrid η₀ D.n) hf hnear D.n hnpos 2 (40 * K)
+    (by norm_num) hD0 d (by intro a x; exact hD0) hmean hjoint hsmall hlabels
+  rw [hthreshold] at htail
+  simp only [Finset.mem_univ, true_and] at htail
+  have hbad : ∀ Θ : D.Hist,
+      (¬ D.CompOK (8 * (40 * K + 1)) Θ) ↔
+        ∃ x, 8 * (40 * K + 1) < (Fintype.card (EvenRole D.n) : ℝ)⁻¹ *
+          ∑ a : EvenRole D.n, D.Bcomp Θ (keyOf η₀ a.1) x := by
+    intro Θ
+    simp [Ctx.CompOK, not_forall]
+  rw [FinProb.pr]
+  simpa only [hbad] using htail
 
 theorem bcomp_mean (η₀ γ β p K : ℝ) (h : ℕ) (hη₀ : 0 < η₀) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N),

@@ -1,4 +1,5 @@
 import HypercubeRamsey.S08.L81.HiddenNodes
+import HypercubeRamsey.S08.L81.SelectionNodes_q_s08_sel
 
 /-!
 # Lemma 8.1, Step 5: hidden-history conditioning and local selection
@@ -55,7 +56,52 @@ theorem sel_conseq (hη₀ : 0 < η₀) :
 lists read positions and tags of IDs within `r + 2` of those sites in slices within one of those keys, and `q_L`
 reads hidden tuples within two of those keys; activations and ties are read only in slice `t`. -/
 theorem sel_local (D : Ctx η₀ β p h) : D.SelLocal := by
-  sorry
+  intro q q' e hΘ hLoc hAT
+  let E := D.elig q.1.1 q.1.2 q.2.1.1 e.1
+  let E' := D.elig q'.1.1 q'.1.2 q'.2.1.1 e.1
+  unfold Ctx.sel
+  apply selection_eq_of_local_data (hdP η₀ D.n) Finset.univ
+    (q.1.2 e.1) (q'.1.2 e.1) (q.2.1.2 e.1) (q'.2.1.2 e.1)
+    E E' (q.2.2 e.1) (q'.2.2 e.1) e.2 (Finset.mem_univ _)
+  · intro v hv hdist
+    have hsite : _root_.hammingDist v e.2 ≤ 4 * HH η₀ D.n := by
+      simpa [HDParams.Rlong, hdP] using hdist
+    have hp : ∀ k ∈ keyBall e.1 2, ∀ ℓ : D.Loc,
+        _root_.hammingDist ℓ.1 e.2 ≤ rH D.n + 4 * HH η₀ D.n + 2 →
+          q.1.2 k ℓ = q'.1.2 k ℓ := by
+      intro k hk ℓ hℓ
+      exact (hLoc k hk ℓ hℓ).1
+    have ht : ∀ k ∈ keyBall e.1 2, ∀ ℓ : D.Loc,
+        _root_.hammingDist ℓ.1 e.2 ≤ rH D.n + 4 * HH η₀ D.n + 2 →
+          q.2.1.1 k ℓ = q'.2.1.1 k ℓ := by
+      intro k hk ℓ hℓ
+      exact (hLoc k hk ℓ hℓ).2
+    have hE := elig_eq_of_local_inputs D q.1.1 q'.1.1 q.1.2 q'.1.2
+      q.2.1.1 q'.2.1.1 e.1 v e.2 hsite hΘ hp ht
+    funext j
+    exact hE j
+  · intro v hv j ℓ hℓ
+    change ℓ ∈ D.elig q.1.1 q.1.2 q.2.1.1 e.1 v j at hℓ
+    simp only [Ctx.elig, Finset.mem_filter, Finset.mem_univ, true_and] at hℓ
+    rcases hℓ with ⟨_, _, hdist, _⟩
+    exact hdist
+  · intro ℓ hℓ
+    have hkey : e.1 ∈ keyBall e.1 2 := by
+      simp only [keyBall, Finset.mem_filter, Finset.mem_univ, true_and]
+      simp [keyDist]
+    have hbound : _root_.hammingDist ℓ.1 e.2 ≤ rH D.n + 4 * HH η₀ D.n + 2 := by
+      have hbound' : _root_.hammingDist ℓ.1 e.2 ≤ 4 * HH η₀ D.n + rH D.n + 2 := by
+        simpa [HDParams.Rlong, hdP] using hℓ
+      omega
+    exact (hLoc e.1 hkey ℓ hbound).1
+  · intro ℓ hℓ
+    have hbound : _root_.hammingDist ℓ.1 e.2 ≤ rH D.n + 4 * HH η₀ D.n + 2 := by
+      have hbound' : _root_.hammingDist ℓ.1 e.2 ≤ 4 * HH η₀ D.n + rH D.n + 2 := by
+        simpa [HDParams.Rlong, hdP] using hℓ
+      omega
+    exact (hAT ℓ hbound).1
+  · intro j
+    exact (hAT (e.2, j) (by simp)).2
 
 /-- L8.1f(vii) (08:211): prospective ball counts lie in `[λ/2, 2λ]` everywhere except with probability at most
 `(ℓ+1)^s · 2 · 2^{n-m} (H+1) e^{-λ/12} ≤ e^{-n}` (`height_position_counts` in every slice). -/

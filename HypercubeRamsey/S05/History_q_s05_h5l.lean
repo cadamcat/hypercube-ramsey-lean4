@@ -373,6 +373,52 @@ theorem pi_expect_prod5 {ι α : Type*} [Fintype ι] [DecidableEq ι] [Fintype �
     _ = ∏ i : ι, ∑ a : α, (P i).w a * f i a := by rw [Fintype.prod_sum]
     _ = ∏ i : ι, (P i).expect (f i) := by simp [FinProb.expect]
 
+theorem bayes_posterior_mean5 {A O : Type*} [Fintype A] [DecidableEq A] [Fintype O]
+    (P : FinProb A) (L : A → FinProb O) (a₀ fallback : A) :
+    ∑ o : O, (∑ a : A, P.w a * (L a).w o) *
+        (HypercubeRamsey.normalize5 (fun a => P.w a * (L a).w o) fallback).w a₀ = P.w a₀ := by
+  classical
+  let evidence : O → ℝ := fun o => ∑ a : A, P.w a * (L a).w o
+  have hterm (o : O) (a : A) : 0 ≤ P.w a * (L a).w o :=
+    mul_nonneg (P.nonneg a) ((L a).nonneg o)
+  have hevidence (o : O) : 0 ≤ evidence o := by
+    dsimp [evidence]
+    exact Finset.sum_nonneg fun a _ => hterm o a
+  have hmax (o : O) :
+      (∑ a : A, max 0 (P.w a * (L a).w o)) = evidence o := by
+    simp only [evidence]
+    apply Finset.sum_congr rfl
+    intro a ha
+    exact max_eq_right (hterm o a)
+  have hpoint (o : O) : evidence o *
+      (HypercubeRamsey.normalize5 (fun a => P.w a * (L a).w o) fallback).w a₀ =
+        P.w a₀ * (L a₀).w o := by
+    by_cases he : 0 < evidence o
+    · have hpost :
+      (HypercubeRamsey.normalize5 (fun a => P.w a * (L a).w o) fallback).w a₀ =
+            (P.w a₀ * (L a₀).w o) / evidence o := by
+          simp [HypercubeRamsey.normalize5, hmax, evidence, he,
+            max_eq_right (hterm o a₀)]
+      rw [hpost]
+      field_simp
+    · have heq : evidence o = 0 := le_antisymm (le_of_not_gt he) (hevidence o)
+      have hzero : P.w a₀ * (L a₀).w o = 0 := by
+        dsimp [evidence] at heq
+        have := Finset.single_le_sum (fun a ha => hterm o a)
+          (Finset.mem_univ a₀)
+        nlinarith [hterm o a₀]
+      simp [heq, hzero]
+  calc
+    ∑ o : O, evidence o *
+        (HypercubeRamsey.normalize5 (fun a => P.w a * (L a).w o) fallback).w a₀ =
+      ∑ o : O, P.w a₀ * (L a₀).w o := by
+        apply Finset.sum_congr rfl
+        intro o ho
+        exact hpoint o
+    _ = P.w a₀ := by
+      rw [← Finset.mul_sum, (L a₀).sum_eq_one]
+      ring
+
 theorem pi_expect_prod_restrict5
     {I V α : Type*} [Fintype I] [DecidableEq I] [Fintype V] [DecidableEq V] [Fintype α]
     (k : I → V) (hk : Function.Injective k) (Q : V → FinProb α) (f : I → α → ℝ) :

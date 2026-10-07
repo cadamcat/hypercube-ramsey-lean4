@@ -3,6 +3,7 @@ import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.Framework.FinProbLemmas
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s6
 
 /-!
 # Lemma 3.10, Steps 2–8

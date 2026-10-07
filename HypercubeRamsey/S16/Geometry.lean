@@ -1,5 +1,6 @@
 import HypercubeRamsey.PartC.Resampling
 import HypercubeRamsey.S16.Geometry_q_s16_geom
+import HypercubeRamsey.S16.Geometry_sol_s16_poolcmp
 
 /-!
 # Section 16 low-mode geometry and shared quantitative assumptions
@@ -2158,72 +2159,26 @@ theorem pool_comparison_exists {κ : CConsts} {T : Stage} {k : ℕ}
   have hNonempty : (permPools G).Nonempty := ⟨P, hP⟩
   have hComparison : PoolComparison G := by
     intro i hperm S hpatch hSsize hBinGuard F hF hDepends
-    by_cases hSempty : S = ∅
-    · subst S
-      let P0 := hperm.choose
-      let c : ℝ := F P0
-      have hFconstant : ∀ P, F P = c := by
-        intro P'
-        dsimp [c]
-        apply hDepends P' P0
-        intro s hs
-        simp at hs
-      have hFeq : F = fun _ => c := by
-        funext P'
-        exact hFconstant P'
-      have hcNonneg : 0 ≤ c := by simpa [c] using hF P0
-      have hpermE : (permPoolLaw G hperm).E F = c := by
-        rw [hFeq]
-        exact Lane_q_s16_geom.finLaw_expectation_const (permPoolLaw G hperm) c
-      have hiidE : (iidPoolLaw G hperm).E F = c := by
-        rw [hFeq]
-        exact Lane_q_s16_geom.finLaw_expectation_const (iidPoolLaw G hperm) c
-      constructor
-      · rw [hpermE, hiidE]
-        simp
-      · intro s D hpinPatch hpermPin hiidPin
-        have hpermPinE :
-            (FinLaw.cond (permPoolLaw G hperm) (poolPinEvent s D) hpermPin).E F = c := by
-          rw [hFeq]
-          exact Lane_q_s16_geom.finLaw_expectation_const _ c
-        have hiidPinE :
-            (FinLaw.cond (iidPoolLaw G hperm) (poolPinEvent s D) hiidPin).E F = c := by
-          rw [hFeq]
-          exact Lane_q_s16_geom.finLaw_expectation_const _ c
-        rw [hpermPinE, hiidPinE]
-        have hcoefTerm : 0 ≤ ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
-            Fintype.card (Bin PT.tiling i) :=
-          div_nonneg (sq_nonneg _) (Nat.cast_nonneg _)
-        have hcoef : 1 ≤ 1 + ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
-            Fintype.card (Bin PT.tiling i) := by linarith
-        calc
-          c = 1 * c := by ring
-          _ ≤ (1 + ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
-              Fintype.card (Bin PT.tiling i)) * c :=
-            mul_le_mul_of_nonneg_right hcoef hcNonneg
-    · let B := Fintype.card (Bin PT.tiling i)
-      have hBguardNat : 2 * (S.card + 1) ^ 2 ≤ B := by exact_mod_cast hBinGuard
-      have hscopeSquare : S.card ^ 2 ≤ (S.card + 1) ^ 2 :=
-        Nat.pow_le_pow_left (Nat.le_add_right _ _) 2
-      have hscopeGuard : 2 * S.card ^ 2 ≤ B :=
-        (Nat.mul_le_mul_left 2 hscopeSquare).trans hBguardNat
-      have hscopeRatio : (B : ℝ) ^ S.card / (B.descFactorial S.card : ℝ) ≤
-          1 + (S.card : ℝ) ^ 2 / B :=
-        Lane_q_s16_geom.descFactorial_ratio_bound hscopeGuard
-      constructor
-      · sorry
-      · intro s D hpinPatch hpermPin hiidPin
-        have hpinCard : (insert s S).card ≤ S.card + 1 := by
-          by_cases hs : s ∈ S <;> simp [hs]
-        have hpinSquare : (insert s S).card ^ 2 ≤ (S.card + 1) ^ 2 :=
-          Nat.pow_le_pow_left hpinCard 2
-        have hpinGuard : 2 * (insert s S).card ^ 2 ≤ B :=
-          (Nat.mul_le_mul_left 2 hpinSquare).trans hBguardNat
-        have hpinRatio : (B : ℝ) ^ (insert s S).card /
-            (B.descFactorial (insert s S).card : ℝ) ≤
-              1 + ((insert s S).card : ℝ) ^ 2 / B :=
-          Lane_q_s16_geom.descFactorial_ratio_bound hpinGuard
-        sorry
+    have hBguardNat : 2 * (S.card + 1) ^ 2 ≤ Fintype.card (Bin PT.tiling i) := by
+      exact_mod_cast hBinGuard
+    have hBpos : 0 < Fintype.card (Bin PT.tiling i) :=
+      lt_of_lt_of_le (by positivity : 0 < 2 * (S.card + 1) ^ 2) hBguardNat
+    have hscopeSquare : S.card ^ 2 ≤ (S.card + 1) ^ 2 :=
+      Nat.pow_le_pow_left (Nat.le_add_right _ _) 2
+    have hscopeGuard : 2 * S.card ^ 2 ≤ Fintype.card (Bin PT.tiling i) :=
+      (Nat.mul_le_mul_left 2 hscopeSquare).trans hBguardNat
+    constructor
+    · exact Lane_sol_s16_poolcmp.local_compare G hperm i S hpatch
+        hscopeGuard hBpos F hF hDepends
+    · intro s D hpinPatch hpermPin hiidPin
+      have hpinCard : (insert s S).card ≤ S.card + 1 := by
+        by_cases hs : s ∈ S <;> simp [hs]
+      have hpinSquare : (insert s S).card ^ 2 ≤ (S.card + 1) ^ 2 :=
+        Nat.pow_le_pow_left hpinCard 2
+      have hpinGuard : 2 * (insert s S).card ^ 2 ≤ Fintype.card (Bin PT.tiling i) :=
+        (Nat.mul_le_mul_left 2 hpinSquare).trans hBguardNat
+      exact Lane_sol_s16_poolcmp.local_compare_pinned G hperm i S hpatch s D hpinPatch
+        hpinGuard hBpos F hF hDepends hpermPin hiidPin
   exact ⟨hNonempty, hComparison⟩
 
 /-- L16.1: late classes, separated cells, persistent slot pools, and tapes. -/

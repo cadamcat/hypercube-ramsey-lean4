@@ -1266,6 +1266,208 @@ private theorem normalize_l1_perturbation9 {N : ℕ} (Q ν : Law N) (ψ : Fin N 
       _ = 2 * δ := by ring
   exact ⟨Z, hZ, R, hRw, hL1⟩
 
+private theorem restrict_tilt_l1_9 {N : ℕ} (Q ν : Law N) (ψ : Fin N → ℝ)
+    (B δ : ℝ) (hB : 0 ≤ B) (hBhalf : B ≤ 1 / 2)
+    (hψ : ∀ y, |ψ y| ≤ B)
+    (herr : ∑ y, |Q.w y - (1 + ψ y) * ν.w y| ≤ δ)
+    (A : Finset (Fin N)) (hm : 0 < ∑ y ∈ A, ν.w y)
+    (hδ : δ ≤ (∑ y ∈ A, ν.w y) / 24) :
+    ∃ hQ : 0 < ∑ y ∈ A, Q.w y, ∃ lamA ρ : Law N, ∃ s : Fin N → ℝ,
+      (∀ y, |s y| ≤ 4 * B) ∧
+      (∑ y, lamA.w y * s y = 0) ∧
+      (∀ y, ρ.w y = (1 + s y) * lamA.w y) ∧
+      (∑ y, |(Q.restrict A hQ).w y - ρ.w y| ≤
+        16 * δ / (∑ y ∈ A, ν.w y)) := by
+  classical
+  let m : ℝ := ∑ y ∈ A, ν.w y
+  have hm' : 0 < m := hm
+  have hδm : 2 * δ ≤ m / 12 := by dsimp [m] at hδ ⊢; linarith
+  obtain ⟨Z, hZ, R, hRw, hQR⟩ := normalize_l1_perturbation9 Q ν ψ B δ hB hBhalf hψ herr
+  have hZeq : Z = ∑ y, (1 + ψ y) * ν.w y := by
+    have hsum : (∑ y, ((1 + ψ y) * ν.w y / Z)) = 1 := by
+      calc
+        (∑ y, ((1 + ψ y) * ν.w y / Z)) = ∑ y, R.w y := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          rw [hRw]
+        _ = 1 := R.sum_eq_one
+    have hdiv : (∑ y, (1 + ψ y) * ν.w y) / Z = 1 := by
+      change (∑ y, ((1 + ψ y) * ν.w y) / Z) = 1 at hsum
+      rw [← Finset.sum_div] at hsum
+      exact hsum
+    have hmul := congrArg (fun x : ℝ => x * Z) hdiv
+    field_simp [ne_of_gt hZ] at hmul
+    linarith
+  have hZupper : Z ≤ 1 + B := by
+    have hterm (y : Fin N) : (1 + ψ y) * ν.w y ≤ (1 + B) * ν.w y := by
+      have hp : 1 + ψ y ≤ 1 + B := by linarith [(abs_le.mp (hψ y)).2]
+      exact mul_le_mul_of_nonneg_right hp (ν.nonneg y)
+    calc
+      Z = ∑ y, (1 + ψ y) * ν.w y := hZeq
+      _ ≤ ∑ y, (1 + B) * ν.w y := Finset.sum_le_sum fun y hy => hterm y
+      _ = 1 + B := by rw [← Finset.mul_sum, ν.sum_eq_one]; ring
+  let lamA : Law N := ν.restrict A hm
+  let mψ : ℝ := ∑ y, lamA.w y * ψ y
+  have hmψ : |mψ| ≤ B := by
+    calc
+      |mψ| = |∑ y, lamA.w y * ψ y| := rfl
+      _ ≤ ∑ y, |lamA.w y * ψ y| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ y, lamA.w y * B := by
+        apply Finset.sum_le_sum
+        intro y hy
+        rw [abs_mul, abs_of_nonneg (lamA.nonneg y)]
+        exact mul_le_mul_of_nonneg_left (hψ y) (lamA.nonneg y)
+      _ = B := by rw [← Finset.sum_mul, lamA.sum_eq_one]; ring
+  have hden : 0 < 1 + mψ := by
+    have hlow := (abs_le.mp hmψ).1
+    linarith
+  have hRmass_formula : (∑ y ∈ A, R.w y) = m * (1 + mψ) / Z := by
+    have hsum : (∑ y ∈ A, (1 + ψ y) * ν.w y) = m * (1 + mψ) := by
+      have hpoint (y : Fin N) (hy : y ∈ A) :
+          (1 + ψ y) * ν.w y = m * (lamA.w y * (1 + ψ y)) := by
+        have hLamWeight : lamA.w y = ν.w y / m := by simp [lamA, Law.restrict, hy, m]
+        rw [hLamWeight]
+        field_simp [ne_of_gt hm']
+      calc
+        (∑ y ∈ A, (1 + ψ y) * ν.w y) =
+            ∑ y ∈ A, m * (lamA.w y * (1 + ψ y)) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              exact hpoint y hy
+        _ = m * ∑ y ∈ A, lamA.w y * (1 + ψ y) := by rw [Finset.mul_sum]
+        _ = m * ∑ y, lamA.w y * (1 + ψ y) := by
+              congr 1
+              apply Finset.sum_subset (Finset.subset_univ A)
+              intro y hy hnot
+              have hz : lamA.w y = 0 := by simp [lamA, Law.restrict, hnot]
+              simp [hz]
+        _ = m * (1 + mψ) := by
+              have hexpand : (∑ y, lamA.w y * (1 + ψ y)) =
+                  (∑ y, lamA.w y) + ∑ y, lamA.w y * ψ y := by
+                calc
+                  (∑ y, lamA.w y * (1 + ψ y)) =
+                      ∑ y, (lamA.w y + lamA.w y * ψ y) := by
+                        apply Finset.sum_congr rfl
+                        intro y hy
+                        ring
+                  _ = (∑ y, lamA.w y) + ∑ y, lamA.w y * ψ y := Finset.sum_add_distrib
+              rw [hexpand, lamA.sum_eq_one]
+    calc
+      (∑ y ∈ A, R.w y) = (∑ y ∈ A, ((1 + ψ y) * ν.w y / Z)) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        rw [hRw]
+      _ = (∑ y ∈ A, (1 + ψ y) * ν.w y) / Z := by rw [Finset.sum_div]
+      _ = m * (1 + mψ) / Z := by rw [hsum]
+  have hRmassLower : (m / 3 : ℝ) ≤ ∑ y ∈ A, R.w y := by
+    rw [hRmass_formula]
+    have hlow : 1 / 2 ≤ 1 + mψ := by
+      have h := (abs_le.mp hmψ).1
+      linarith
+    have hupper : Z ≤ 3 / 2 := by linarith
+    have hfrac : (1 : ℝ) / 3 ≤ (1 + mψ) / Z := by
+      rw [le_div_iff₀ hZ]
+      nlinarith
+    calc
+      m / 3 = m * (1 / 3) := by ring
+      _ ≤ m * ((1 + mψ) / Z) := mul_le_mul_of_nonneg_left hfrac hm'.le
+      _ = m * (1 + mψ) / Z := by ring
+  have hRmass : 0 < ∑ y ∈ A, R.w y := lt_of_lt_of_le (div_pos hm' (by norm_num)) hRmassLower
+  have hmassdiff : |(∑ y ∈ A, Q.w y) - (∑ y ∈ A, R.w y)| ≤ 2 * δ := by
+    have hdiff : (∑ y ∈ A, Q.w y) - (∑ y ∈ A, R.w y) =
+        ∑ y ∈ A, (Q.w y - R.w y) := by rw [Finset.sum_sub_distrib]
+    rw [hdiff]
+    calc
+      |∑ y ∈ A, (Q.w y - R.w y)| ≤ ∑ y ∈ A, |Q.w y - R.w y| :=
+        Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ y, |Q.w y - R.w y| := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+        intro y hy hnot
+        positivity
+      _ ≤ 2 * δ := hQR
+  have hQmass : 0 < ∑ y ∈ A, Q.w y := by
+    have hgap : m / 4 ≤ ∑ y ∈ A, Q.w y := by
+      have := (abs_le.mp hmassdiff).1
+      dsimp [m] at hRmassLower hδm ⊢
+      linarith
+    exact lt_of_lt_of_le (by positivity) hgap
+  let ρ : Law N := R.restrict A hRmass
+  let s : Fin N → ℝ := fun y => (ψ y - mψ) / (1 + mψ)
+  have hsbound (y : Fin N) : |s y| ≤ 4 * B := by
+    have hnum : |ψ y - mψ| ≤ 2 * B := by
+      rw [abs_sub_comm]
+      calc
+        |mψ - ψ y| = |mψ + -ψ y| := by congr 1 <;> ring
+        _ ≤ |mψ| + |-ψ y| := abs_add_le _ _
+        _ = |mψ| + |ψ y| := by simp
+        _ ≤ B + B := add_le_add hmψ (hψ y)
+        _ = 2 * B := by ring
+    have hdenle : 1 / 2 ≤ 1 + mψ := by
+      have h := (abs_le.mp hmψ).1
+      linarith
+    change |(ψ y - mψ) / (1 + mψ)| ≤ 4 * B
+    rw [abs_div, abs_of_pos hden]
+    exact (div_le_iff₀ hden).2 (by nlinarith [hnum, hdenle])
+  have hsmean : ∑ y, lamA.w y * s y = 0 := by
+    have hsum : (∑ y, lamA.w y * (ψ y - mψ)) = 0 := by
+      calc
+        (∑ y, lamA.w y * (ψ y - mψ)) =
+            (∑ y, lamA.w y * ψ y) - ∑ y, lamA.w y * mψ := by
+              rw [← Finset.sum_sub_distrib]
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = mψ - mψ := by
+              have hconst : ∑ y, lamA.w y * mψ = mψ := by
+                rw [← Finset.sum_mul, lamA.sum_eq_one]
+                ring
+              change mψ - (∑ y, lamA.w y * mψ) = mψ - mψ
+              rw [hconst]
+        _ = 0 := by ring
+    calc
+      (∑ y, lamA.w y * s y) =
+          ∑ y, (lamA.w y * (ψ y - mψ)) / (1 + mψ) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            simp [s]
+            ring
+      _ = (∑ y, lamA.w y * (ψ y - mψ)) / (1 + mψ) := by rw [Finset.sum_div]
+      _ = 0 := by rw [hsum]; simp
+  have hTilt (y : Fin N) : ρ.w y = (1 + s y) * lamA.w y := by
+    by_cases hy : y ∈ A
+    · have hLamWeight : lamA.w y = ν.w y / m := by simp [lamA, Law.restrict, hy, m]
+      have hρ : ρ.w y = R.w y / (∑ z ∈ A, R.w z) := by
+        simp [ρ, Law.restrict, hy]
+      rw [hρ, hRw, hRmass_formula, hLamWeight]
+      change ((1 + ψ y) * ν.w y / Z) / (m * (1 + mψ) / Z) =
+        (1 + (ψ y - mψ) / (1 + mψ)) * (ν.w y / m)
+      field_simp [ne_of_gt hZ, ne_of_gt hm', ne_of_gt hden]
+      ring
+    · have hLamWeight : lamA.w y = 0 := by simp [lamA, Law.restrict, hy]
+      have hρ : ρ.w y = 0 := by simp [ρ, Law.restrict, hy]
+      rw [hρ, hLamWeight]
+      ring
+  have hrestrict := law_restrict_l1_bound9 Q R A hQmass hRmass (2 * δ) hQR
+  refine ⟨hQmass, lamA, ρ, s, hsbound, hsmean, hTilt, ?_⟩
+  have hmQ : m / 4 ≤ ∑ y ∈ A, Q.w y := by
+    have := (abs_le.mp hmassdiff).1
+    dsimp [m] at hRmassLower hδm ⊢
+    linarith
+  have hbound := hrestrict
+  have hdenom : 0 < m / 4 := by positivity
+  have hdiv : 2 * (2 * δ) / (∑ y ∈ A, Q.w y) ≤ 16 * δ / m := by
+    have hsumNonneg : 0 ≤ ∑ y, |Q.w y - (1 + ψ y) * ν.w y| :=
+      Finset.sum_nonneg fun y hy => abs_nonneg _
+    have hδnonneg : 0 ≤ δ := le_trans hsumNonneg herr
+    have hle := div_le_div_of_nonneg_left (by positivity : (0 : ℝ) ≤ 4 * δ)
+      hdenom hmQ
+    have hcalc : (4 * δ) / (m / 4) = 16 * δ / m := by field_simp [ne_of_gt hm']; ring
+    calc
+      2 * (2 * δ) / (∑ y ∈ A, Q.w y) = (4 * δ) / (∑ y ∈ A, Q.w y) := by ring
+      _ ≤ (4 * δ) / (m / 4) := hle
+      _ = 16 * δ / m := hcalc
+  exact le_trans hbound hdiv
+
 private theorem absorb_subpower9 {u χ H c L : ℝ} (hu : 0 < u) (hχ : χ < u)
     (hH : 0 ≤ H) (hc : 0 < c) (hL : 0 < L) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,

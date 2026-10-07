@@ -1,5 +1,6 @@
 import HypercubeRamsey.S06.Step3Defs
 import HypercubeRamsey.S06.Steps_q_s06_steps1
+import HypercubeRamsey.S06.Steps_raw_sol_s06_steps1
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -259,16 +260,18 @@ end Ctx6
 /-- L6.1d (failure, 06:201–211). -/
 theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Bound := by
-  refine ⟨1, 1, ?_⟩
+  have hδ : 0 < δ₂ / 2 := by norm_num [δ₂]
+  have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ (δ₂ / 2)) atTop atTop :=
+    (tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htend.eventually (eventually_ge_atTop 1206))
+  refine ⟨max 1 n₀, 1, ?_⟩
   intro n N E G M X hlarge
-  have hn1 : 1 ≤ n := hlarge.1
+  have hn1 : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hn1R : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hbig : 1206 ≤ (n : ℝ) ^ (δ₂ / 2) :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
   intro β hβ
-  have hfailureShape : ∀ H : X.Hist, X.Step2Fail H β →
-      X.tagMass H β β.obs < X.step2Thr β ∨
-        ∃ ℓ ∈ β.obs, X.tagMass H β β.obs <
-          X.step2Thr β * X.tagMass H β (β.obs.erase ℓ) := by
-    intro H hfail
-    exact Lane_q_s06_steps1.notStep2Tests_cases6 X H β hn1 hfail.2
   have hobsCard := occType_obs_card_le X β hβ
   have huPos : 1 ≤ β.u := by
     cases hmode : β.mode <;> simp [Type6.u, hmode]
@@ -276,9 +279,14 @@ theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     have hcardR : (β.obs.card : ℝ) ≤ 602 * (β.u : ℝ) := by exact_mod_cast hobsCard
     have huR : 1 ≤ (β.u : ℝ) := by exact_mod_cast huPos
     linarith
-  -- The mass events have the required conditional bounds, but the raw law still needs to be
-  -- factored through the base tag at `β.key` and the hidden coordinates in `β.obs`.
-  sorry
+  calc
+    X.rawHist.pr (fun H => X.Step2Fail H β) ≤
+        ((β.obs.card : ℝ) + 1) * X.step2Thr β :=
+      Lane_sol_s06_steps1.step2_raw_bound X β hn1
+    _ ≤ (603 * (β.u : ℝ)) * X.step2Thr β :=
+      mul_le_mul_of_nonneg_right hobsFactor (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+    _ ≤ (n : ℝ) ^ (-(δ₂ * β.u / 2)) :=
+      Lane_sol_s06_steps1.step2_prefactor hn1R hbig β.u huPos
 
 /-- L6.1d (domination, 06:212–220): the absolute ratio is `≤ n^{d₀ + d₁|S| + δ₂u}`, the deleted ratio
 `≤ n^{d₁ + δ₂u}`, both below `n^{d₂u}`. -/

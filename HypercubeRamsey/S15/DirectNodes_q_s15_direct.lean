@@ -386,6 +386,43 @@ theorem finLaw_pr_union {α : Type*} [Fintype α] (P : FinLaw α) (A B : α → 
     _ = (∑ x, if A x then P.w x else 0) + ∑ x, if B x then P.w x else 0 := by
       rw [Finset.sum_add_distrib]
 
+theorem finLaw_pr_mono {α : Type*} [Fintype α] (P : FinLaw α)
+    (A B : α → Prop) (hAB : ∀ x, A x → B x) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinLaw.pr
+  apply Finset.sum_le_sum
+  intro x hx
+  by_cases hA : A x
+  · have hB := hAB x hA
+    simp [hA, hB]
+  · by_cases hB : B x <;> simp [hA, hB, P.nonneg x]
+
+theorem row_failure_probability_le {α : Type*} [Fintype α]
+    (P : FinLaw α) (cross bulk row threshold : α → ℝ)
+    (hrow : ∀ x, row x = cross x * bulk x)
+    (hsmall : ∀ x, threshold x ≤ 1 / 10)
+    (hcross : ∃ δcross : ℝ, P.pr (fun x => |cross x - 1| > threshold x) ≤ δcross)
+    (hbulk : ∃ δbulk : ℝ,
+      P.pr (fun x => 9 / 10 ≤ cross x ∧ bulk x < 3 / 4) ≤ δbulk) :
+    ∃ δcross δbulk : ℝ,
+      P.pr (fun x => row x < 1 / 2) ≤ δcross + δbulk := by
+  classical
+  obtain ⟨δcross, hcross⟩ := hcross
+  obtain ⟨δbulk, hbulk⟩ := hbulk
+  refine ⟨δcross, δbulk, ?_⟩
+  have hsub (x : α) (hx : row x < 1 / 2) :
+      (|cross x - 1| > threshold x) ∨
+        (9 / 10 ≤ cross x ∧ bulk x < 3 / 4) :=
+    row_mass_failure_subset (hrow x) (hsmall x) hx
+  calc
+    P.pr (fun x => row x < 1 / 2) ≤
+        P.pr (fun x => |cross x - 1| > threshold x ∨
+          (9 / 10 ≤ cross x ∧ bulk x < 3 / 4)) :=
+      finLaw_pr_mono P _ _ hsub
+    _ ≤ P.pr (fun x => |cross x - 1| > threshold x) +
+        P.pr (fun x => 9 / 10 ≤ cross x ∧ bulk x < 3 / 4) := finLaw_pr_union P _ _
+    _ ≤ δcross + δbulk := add_le_add hcross hbulk
+
 theorem prefix_ratio_le_exp {n ell N : ℕ} (hell : 2 * ell ≤ n)
     (hN : (2 : ℝ) ^ n ≤ N) :
     (2 : ℝ) ^ ell / N ≤ Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by

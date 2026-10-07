@@ -1,4 +1,6 @@
-import HypercubeRamsey.S03.Clock.Branching
+import HypercubeRamsey.S03.Clock.Sampler_q_clock_sampler
+
+set_option maxHeartbeats 5000000
 
 /-!
 # Lemma 3.10, Step 8: the raw clock sampler and its assembly
@@ -60,7 +62,108 @@ theorem clock_constants (B : ℝ) (hB : 1 ≤ B) :
     Tendsto (fun n : ℕ => (n : ℝ) ^ B * clockL B n * clockκ B n) atTop (nhds 0) ∧
       ∃ n₀ : ℕ, ∀ n ≥ n₀, 2 ≤ n ∧ 4 * clockL B n * clockκ B n ≤ 1 ∧
         (n : ℝ) ^ B ≤ (clockLnat B n : ℝ) ∧ 1 ≤ clockLnat B n := by
-  sorry
+  classical
+  let α : ℝ := clockK₀ B / 10
+  let β : ℝ := 3 * clockK₀ B / 5
+  have hK₀ : 0 < clockK₀ B := by unfold clockK₀; linarith
+  have hα : 0 < α := by dsimp [α]; linarith
+  have hBα : B ≤ α := by dsimp [α, clockK₀]; ring_nf; linarith
+  have hαβ : α < β := by dsimp [α, β]; linarith [hK₀]
+  have he : B + α - β < 0 := by dsimp [α, β, clockK₀]; linarith
+  have heTail : α - β < 0 := by linarith [hαβ]
+  have hpow (n : ℕ) (hn : 2 ≤ n) :
+      (n : ℝ) ^ B * (n : ℝ) ^ α * (n : ℝ) ^ (-β) =
+        (n : ℝ) ^ (B + α - β) := by
+    have hnpos : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 2) hn)
+    calc
+      (n : ℝ) ^ B * (n : ℝ) ^ α * (n : ℝ) ^ (-β) =
+          ((n : ℝ) ^ B * (n : ℝ) ^ α) * (n : ℝ) ^ (-β) := rfl
+      _ = (n : ℝ) ^ (B + α) * (n : ℝ) ^ (-β) := by rw [← Real.rpow_add hnpos]
+      _ = (n : ℝ) ^ ((B + α) + (-β)) := by rw [← Real.rpow_add hnpos]
+      _ = (n : ℝ) ^ (B + α - β) := by congr 1 <;> ring
+  have htailPow (n : ℕ) (hn : 2 ≤ n) :
+      (n : ℝ) ^ α * (n : ℝ) ^ (-β) = (n : ℝ) ^ (α - β) := by
+    have hnpos : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 2) hn)
+    calc
+      (n : ℝ) ^ α * (n : ℝ) ^ (-β) = (n : ℝ) ^ (α + (-β)) := by
+        rw [← Real.rpow_add hnpos]
+      _ = (n : ℝ) ^ (α - β) := by congr 1 <;> ring
+  have hncast (n : ℕ) (hn : 2 ≤ n) : (2 : ℝ) ≤ n := by exact_mod_cast hn
+  have hnpos (n : ℕ) (hn : 2 ≤ n) : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) (hncast n hn)
+  have hceilLow (n : ℕ) (hn : 2 ≤ n) : (n : ℝ) ^ α ≤ (clockLnat B n : ℝ) := by
+    simpa [clockLnat, α] using (Nat.le_ceil ((n : ℝ) ^ α))
+  have hceilHigh (n : ℕ) (hn : 2 ≤ n) :
+      (clockLnat B n : ℝ) < (n : ℝ) ^ α + 1 := by
+    have hnonneg : 0 ≤ (n : ℝ) ^ α := (Real.rpow_pos_of_pos (hnpos n hn) α).le
+    simpa [clockLnat, α] using Nat.ceil_lt_add_one hnonneg
+  have hαge1 (n : ℕ) (hn : 2 ≤ n) : 1 ≤ (n : ℝ) ^ α := by
+    calc
+      1 = (n : ℝ) ^ (0 : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ α := Real.rpow_le_rpow_of_exponent_le (by linarith [hncast n hn]) (by linarith [hα])
+  have hLbound (n : ℕ) (hn : 2 ≤ n) : clockL B n ≤ 2 * (n : ℝ) ^ α := by
+    change (clockLnat B n : ℝ) ≤ 2 * (n : ℝ) ^ α
+    calc
+      (clockLnat B n : ℝ) ≤ (n : ℝ) ^ α + 1 := le_of_lt (hceilHigh n hn)
+      _ ≤ 2 * (n : ℝ) ^ α := by nlinarith [hαge1 n hn]
+  have hpowLimit : Tendsto (fun n : ℕ => (n : ℝ) ^ (B + α - β)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_neg_atTop (neg_pos.mpr he)).comp tendsto_natCast_atTop_atTop
+    have hcomp : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(-(B + α - β)))) atTop (nhds 0) :=
+      h.congr (fun _ => rfl)
+    have heq : ∀ n : ℕ, (n : ℝ) ^ (-(-(B + α - β))) = (n : ℝ) ^ (B + α - β) := by
+      intro n
+      congr 1
+      ring
+    exact hcomp.congr heq
+  have hlimit : Tendsto (fun n : ℕ => (n : ℝ) ^ B * clockL B n * clockκ B n) atTop (nhds 0) := by
+    have hmajor : Tendsto (fun n : ℕ => 2 * (n : ℝ) ^ (B + α - β)) atTop (nhds 0) := by
+      simpa [mul_comm] using hpowLimit.const_mul 2
+    apply tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hmajor
+    · exact Filter.Eventually.of_forall fun n => by
+        simp only [clockL, clockκ]
+        positivity
+    · filter_upwards [Ici_mem_atTop 2] with n hn
+      have hL := hLbound n hn
+      have hκ : clockκ B n = (n : ℝ) ^ (-β) := by simp [clockκ, β]
+      rw [hκ]
+      calc
+        (n : ℝ) ^ B * clockL B n * (n : ℝ) ^ (-β) ≤
+            (n : ℝ) ^ B * (2 * (n : ℝ) ^ α) * (n : ℝ) ^ (-β) := by
+              exact mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_left hL (Real.rpow_nonneg (Nat.cast_nonneg _) _))
+                (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+        _ = 2 * ((n : ℝ) ^ B * (n : ℝ) ^ α * (n : ℝ) ^ (-β)) := by ring
+        _ = 2 * (n : ℝ) ^ (B + α - β) := by rw [hpow n hn]
+  have htailLimit : Tendsto (fun n : ℕ => 8 * (n : ℝ) ^ (α - β)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_neg_atTop (neg_pos.mpr heTail)).comp tendsto_natCast_atTop_atTop
+    have hcomp : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(-(α - β)))) atTop (nhds 0) :=
+      h.congr (fun _ => rfl)
+    have heq : ∀ n : ℕ, (n : ℝ) ^ (-(-(α - β))) = (n : ℝ) ^ (α - β) := by
+      intro n
+      congr 1
+      ring
+    simpa [mul_comm] using hcomp.congr heq |>.const_mul 8
+  have htailSmall : ∀ᶠ n : ℕ in atTop, 8 * (n : ℝ) ^ (α - β) < 1 :=
+    (tendsto_order.1 htailLimit).2 1 (by norm_num)
+  have hfinal : ∀ᶠ n : ℕ in atTop,
+      2 ≤ n ∧ 4 * clockL B n * clockκ B n ≤ 1 ∧
+        (n : ℝ) ^ B ≤ (clockLnat B n : ℝ) ∧ 1 ≤ clockLnat B n := by
+    filter_upwards [Ici_mem_atTop 2, htailSmall] with n hn hsmall
+    have hκ : clockκ B n = (n : ℝ) ^ (-β) := by simp [clockκ, β]
+    have hLκ : 4 * clockL B n * clockκ B n ≤ 8 * (n : ℝ) ^ (α - β) := by
+      rw [hκ]
+      calc
+        4 * clockL B n * (n : ℝ) ^ (-β) ≤ 4 * (2 * (n : ℝ) ^ α) * (n : ℝ) ^ (-β) := by
+          exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left (hLbound n hn) (by norm_num))
+            (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+        _ = 8 * ((n : ℝ) ^ α * (n : ℝ) ^ (-β)) := by ring
+        _ = 8 * (n : ℝ) ^ (α - β) := by rw [htailPow n hn]
+    have hBpow : (n : ℝ) ^ B ≤ (n : ℝ) ^ α :=
+      Real.rpow_le_rpow_of_exponent_le (by linarith [hncast n hn]) hBα
+    have hLnat : (n : ℝ) ^ B ≤ (clockLnat B n : ℝ) := hBpow.trans (hceilLow n hn)
+    have hLone : (1 : ℝ) ≤ (clockLnat B n : ℝ) := hαge1 n hn |>.trans (hceilLow n hn)
+    exact ⟨hn, le_trans hLκ (le_of_lt hsmall), hLnat, by exact_mod_cast hLone⟩
+  rcases Filter.eventually_atTop.1 hfinal with ⟨n₀, hn₀⟩
+  exact ⟨hlimit, n₀, fun n hn => hn₀ n hn⟩
 
 /-! ### Small facts -/
 
@@ -80,7 +183,26 @@ theorem empty_scope_failure_false {n g : ℕ} {R K : Type*} [Fintype R] [Decidab
     {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (I : SamplingInstance n g R K Ω) (B A P : ℝ) (hI : I.Admissible B A P) (hn : 2 ≤ n) (hP : 0 < P)
     (k : K) (hk : I.scope k = ∅) : ∀ ω, ¬ I.failure k ω := by
-  sorry
+  intro ω hω
+  have hall : ∀ ω', I.failure k ω' := by
+    intro ω'
+    have heq := hI.2.2.1 k ω ω' (by intro a ha; simp [hk] at ha)
+    exact heq.mp hω
+  have hfull : I.productLaw.pr (I.failure k) = 1 := by
+    change (FinProb.pi I.p).pr (I.failure k) = 1
+    unfold FinProb.pr
+    simp_rw [if_pos (hall _)]
+    exact (FinProb.pi I.p).sum_eq_one
+  have hnreal : (1 : ℝ) < (n : ℝ) := by
+    exact_mod_cast (lt_of_lt_of_le (by decide : 1 < 2) hn)
+  have hpow : (n : ℝ) ^ (-P) < 1 := by
+    calc
+      (n : ℝ) ^ (-P) < (1 : ℝ) ^ (-P) :=
+        Real.rpow_lt_rpow_of_neg (by norm_num) hnreal (by linarith)
+      _ = 1 := by simp
+  have hbound := hI.2.2.2.2.2 k
+  rw [hfull] at hbound
+  linarith
 
 /-- On independent marked clocks every arrival mark carries its edge's label: the event of a mark with another
 label is null (`outputMarkMass` vanishes off the label). -/
@@ -89,7 +211,25 @@ theorem invalid_marks_null {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g 
     (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g) :
     (clockFieldLaw (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab)).pr
       (fun ξ => ∃ e t o, ξ e = MeshClockValue.tick t o ∧ lab e.1 o ≠ e.2) = 0 := by
-  sorry
+  classical
+  let Q := clockFieldLaw (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab)
+  have hzero (ξ : ClockField T R g Ω)
+      (hξ : ∃ e t o, ξ e = MeshClockValue.tick t o ∧ lab e.1 o ≠ e.2) : Q.w ξ = 0 := by
+    rcases hξ with ⟨e, t, o, he, hlabel⟩
+    have hedge : (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab e).w (ξ e) = 0 := by
+      rw [he]
+      simp [samplingEdgeClockLaw, outputEdgeClockLaw, markedClockLaw, markedClockWeight,
+        outputMarkMass, hlabel]
+    change ∏ e' : RowLabel R g, (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab e').w (ξ e') = 0
+    exact Finset.prod_eq_zero (Finset.mem_univ e) hedge
+  unfold FinProb.pr
+  apply Finset.sum_eq_zero
+  intro ξ hξ
+  by_cases hbad : ∃ e t o, ξ e = MeshClockValue.tick t o ∧ lab e.1 o ≠ e.2
+  · rw [if_pos hbad]
+    change Q.w ξ = 0
+    exact hzero ξ hbad
+  · simp [hbad]
 
 /-! ### The completed instance -/
 
@@ -198,27 +338,121 @@ noncomputable def targetRects (S : Finset R) (o : ∀ a, Ω a) :
 
 /-- Every completed row has total label rate `1`. -/
 theorem completed_rows_eq : ∀ a, ∑ y, labMarg (D.law' a) (D.lab' a) y = 1 := by
-  sorry
+  intro a
+  cases a with
+  | inl a =>
+      change ∑ y, labMarg (D.C.trimmed a) (D.I.lab a) y = 1
+      exact labMarg_sum_one (D.C.trimmed a) (D.I.lab a)
+  | inr i =>
+      change ∑ y, labMarg (⟨D.C.dummyLaw i, D.C.dummy_nonneg i, D.C.dummy_row_sum i⟩ : FinProb (Fin g)) id y = 1
+      simp only [labMarg]
+      simp [FinProb.w]
+      exact D.C.dummy_row_sum i
 
 /-- L3.10a-col (03:832–837): every completed column has total rate `θ`. -/
 theorem completed_columns_eq : ∀ y, ∑ a, labMarg (D.law' a) (D.lab' a) y = D.C.theta := by
-  sorry
+  intro y
+  have hdummy (i : Fin D.C.dummyRows) :
+      labMarg (⟨D.C.dummyLaw i, D.C.dummy_nonneg i, D.C.dummy_row_sum i⟩ : FinProb (Fin g)) id y =
+        D.C.dummyLaw i y := by
+    simp [labMarg]
+  calc
+    ∑ a, labMarg (D.law' a) (D.lab' a) y =
+        (∑ a : R, labMarg (D.C.trimmed a) (D.I.lab a) y) +
+          ∑ i : Fin D.C.dummyRows,
+            labMarg (⟨D.C.dummyLaw i, D.C.dummy_nonneg i, D.C.dummy_row_sum i⟩ : FinProb (Fin g)) id y := by
+          simp [law', lab', Fintype.sum_sum_type]
+          rfl
+    _ = D.C.theta := by simp [hdummy, D.C.completed_columns y]
 
 include D in
 /-- L3.10a-g (03:838–840): with a real row present, `g ≥ n^{A_*}`, since a real row is a probability law with
 label atoms at most `n^{-A_*}`. -/
 theorem card_labels_ge [Nonempty R] (hn : 1 ≤ n) : (n : ℝ) ^ clockA B ≤ g := by
-  sorry
+  classical
+  let a : R := Classical.choice ‹Nonempty R›
+  have hsum := labMarg_sum_one (D.I.p a) (D.I.lab a)
+  have hatom : ∀ y, labMarg (D.I.p a) (D.I.lab a) y ≤ (n : ℝ) ^ (-clockA B) :=
+    fun y => D.admissible.2.1 a y
+  have hsum_le : (1 : ℝ) ≤ (g : ℝ) * (n : ℝ) ^ (-clockA B) := by
+    calc
+      1 = ∑ y : Fin g, labMarg (D.I.p a) (D.I.lab a) y := hsum.symm
+      _ ≤ ∑ _y : Fin g, (n : ℝ) ^ (-clockA B) := Finset.sum_le_sum fun y _ => hatom y
+      _ = (g : ℝ) * (n : ℝ) ^ (-clockA B) := by simp
+  have hnpos : 0 < (n : ℝ) := by
+    have : (0 : ℝ) < 1 := by norm_num
+    exact lt_of_lt_of_le this (by exact_mod_cast hn)
+  have hpow : 0 < (n : ℝ) ^ clockA B := Real.rpow_pos_of_pos hnpos _
+  have hmul := mul_le_mul_of_nonneg_left hsum_le hpow.le
+  have hpowmul : (n : ℝ) ^ clockA B * ((n : ℝ) ^ (-clockA B)) = 1 := by
+    rw [← Real.rpow_add hnpos]
+    simp
+  have hproduct : (n : ℝ) ^ clockA B * ((g : ℝ) * (n : ℝ) ^ (-clockA B)) = g := by
+    calc
+      _ = ((n : ℝ) ^ clockA B * (n : ℝ) ^ (-clockA B)) * (g : ℝ) := by ring
+      _ = g := by rw [hpowmul]; ring
+  calc
+    (n : ℝ) ^ clockA B = (n : ℝ) ^ clockA B * 1 := by ring
+    _ ≤ (n : ℝ) ^ clockA B * ((g : ℝ) * (n : ℝ) ^ (-clockA B)) := hmul
+    _ = g := hproduct
 
 /-- L3.10a-atom (03:837–842): the completed atoms are at most `n^{-(A_* - 1)}` (trimmed atoms `≤ 2 n^{-A_*}`,
 dummy atoms `≤ 2/g ≤ 2 n^{-A_*}`). -/
 theorem completed_atom_le [Nonempty R] (hn : 2 ≤ n) :
     ∀ a y, labMarg (D.law' a) (D.lab' a) y ≤ (n : ℝ) ^ (-(clockA B - 1)) := by
-  sorry
+  classical
+  have hnreal : (2 : ℝ) ≤ n := by exact_mod_cast hn
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnreal
+  have hpow_nonneg (e : ℝ) : 0 ≤ (n : ℝ) ^ e := (Real.rpow_pos_of_pos hnpos e).le
+  have hfactor : 2 * (n : ℝ) ^ (-clockA B) ≤ (n : ℝ) ^ (-(clockA B - 1)) := by
+    rw [show -(clockA B - 1) = 1 + -clockA B by ring, Real.rpow_add hnpos]
+    simpa [Real.rpow_one] using
+      (mul_le_mul_of_nonneg_right hnreal (hpow_nonneg (-clockA B)))
+  intro a y
+  cases a with
+  | inl a =>
+      exact (D.C.trimmed_atom a y).trans hfactor
+  | inr i =>
+      have hcard := D.card_labels_ge (by omega)
+      have hnpowpos : (0 : ℝ) < (n : ℝ) ^ clockA B := Real.rpow_pos_of_pos hnpos _
+      have hgpos : (0 : ℝ) < (g : ℝ) := lt_of_lt_of_le hnpowpos hcard
+      have hninvg : (g : ℝ)⁻¹ ≤ ((n : ℝ) ^ clockA B)⁻¹ :=
+        (inv_le_inv₀ hgpos hnpowpos).2 hcard
+      have hbound : (1 : ℝ) / (g : ℝ) ≤ (n : ℝ) ^ (-clockA B) := by
+        calc
+          (1 : ℝ) / g = (g : ℝ)⁻¹ := by simp
+          _ ≤ ((n : ℝ) ^ clockA B)⁻¹ := hninvg
+          _ = (n : ℝ) ^ (-clockA B) := by rw [Real.rpow_neg hnpos.le]
+      have hdummyMarg :
+          labMarg (D.law' (.inr i)) (D.lab' (.inr i)) y = D.C.dummyLaw i y := by
+        change labMarg
+          (⟨D.C.dummyLaw i, D.C.dummy_nonneg i, D.C.dummy_row_sum i⟩ : FinProb (Fin g)) id y =
+          D.C.dummyLaw i y
+        simp [labMarg]
+      rw [hdummyMarg]
+      calc
+        D.C.dummyLaw i y ≤ 2 / (g : ℝ) := D.C.dummy_atom i y
+        _ = 2 * (1 / (g : ℝ)) := by ring
+        _ ≤ 2 * (n : ℝ) ^ (-clockA B) := mul_le_mul_of_nonneg_left hbound (by norm_num)
+        _ ≤ (n : ℝ) ^ (-(clockA B - 1)) := hfactor
 
 /-- L3.10a-θ (03:831): `10^{-6} ≤ θ ≤ 2·10^{-6}` once `g ≥ 10^6`. -/
 theorem completed_theta_bounds (hg : (10 : ℝ) ^ 6 ≤ g) : 1e-6 ≤ D.C.theta ∧ D.C.theta ≤ 2e-6 := by
-  sorry
+  constructor
+  · exact D.C.theta_lower
+  · have hgpos : (0 : ℝ) < g := by
+      have : (0 : ℝ) < (10 : ℝ) ^ 6 := by norm_num
+      exact lt_of_lt_of_le this hg
+    have hinv : (1 : ℝ) / (g : ℝ) ≤ 1 / ((10 : ℝ) ^ 6) :=
+      one_div_le_one_div_of_le (by norm_num) hg
+    have hinv' : (1 : ℝ) / (g : ℝ) ≤ 1e-6 := by
+      have heq : (1 : ℝ) / ((10 : ℝ) ^ 6) = 1e-6 := by norm_num
+      rw [← heq]
+      exact hinv
+    have hupper := D.C.theta_upper
+    norm_num at hinv'
+    norm_num
+    linarith
 
 /-! ### Forcing, goodness and the dependency sets (Steps 3 and 8) -/
 
@@ -226,46 +460,409 @@ theorem completed_theta_bounds (hg : (10 : ℝ) ^ 6 ≤ g) : 1e-6 ≤ D.C.theta 
 failing test has a root, an empty-scope predicate being unsatisfiable). -/
 theorem badAct_nonempty (hn : 2 ≤ n) (hP : 0 < clockP B) (hL : 1 ≤ clockLnat B n) :
     ∀ i : D.Bad, (D.badAct i).Nonempty := by
-  sorry
+  classical
+  intro i
+  rcases i with ⟨t, ⟨ℓ, hℓ⟩⟩
+  change ℓ.active.Nonempty
+  unfold badLeaves' badLeaves at hℓ
+  rcases Finset.mem_image.mp hℓ with ⟨ξ, hξ, hEq⟩
+  have hbad : leafBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) :=
+    (Finset.mem_filter.mp hξ).2
+  let roots := testRootEndpoints (g := g) D.scope' (D.test' t)
+  rcases hbad with hgiant | hsample
+  · have hgiant' : (truncatedExploration ξ roots (clockLnat B n)).giant = true := by
+      simpa [roots, testExploration, ClockData.test'] using hgiant
+    have hcard := (truncatedExploration_card ξ roots (clockLnat B n)).1 hgiant'
+    have hpos : 0 < (truncatedExploration ξ roots (clockLnat B n)).active.card :=
+      lt_of_lt_of_le (by omega) hcard
+    have hne : (truncatedExploration ξ roots (clockLnat B n)).active.Nonempty :=
+      Finset.card_pos.mp hpos
+    rw [← hEq]
+    simpa [testLeaf, roots, explorationLeaf] using hne
+  · have hroots : roots.Nonempty := by
+      cases t with
+      | predicate k =>
+          by_cases he : D.I.scope k = ∅
+          · have hsample' : testFails D.failure' D.scope' (greedyMatching ξ) (.predicate k) := by
+              simpa [sampleTestBad, test'] using hsample
+            rcases hsample' with ⟨ω, hfail, _⟩
+            have hfalse := empty_scope_failure_false D.I B (clockA B) (clockP B)
+              D.admissible hn hP k he (fun a => ω (Sum.inl a))
+            exact False.elim (hfalse (by simpa [failure'] using hfail))
+          · obtain ⟨a, ha⟩ := Finset.nonempty_iff_ne_empty.mpr he
+            refine ⟨Sum.inl (Sum.inl a), ?_⟩
+            apply Finset.mem_image.mpr
+            refine ⟨Sum.inl a, ?_, rfl⟩
+            have hsc' : Sum.inl a ∈ D.scope' k := Finset.mem_map.mpr ⟨a, ha, rfl⟩
+            simpa [testRoots, test'] using hsc'
+      | singleton a =>
+          refine ⟨Sum.inl (Sum.inl a), ?_⟩
+          simp [roots, testRootEndpoints, testRoots, test']
+    have hrootSub := (truncatedExploration_sound ξ roots (clockLnat B n)).1
+    obtain ⟨r, hr⟩ := hroots
+    rw [← hEq]
+    refine ⟨r, ?_⟩
+    simpa [testLeaf, roots, explorationLeaf] using hrootSub hr
 
 /-- L3.10h-card (03:1113–1114): a bad leaf has at most `L` active endpoints (with at most `L` roots). -/
 theorem badAct_card (hroots : ∀ k, ((D.I.scope k).card : ℝ) ≤ (clockLnat B n : ℝ))
     (hL : 1 ≤ clockLnat B n) : ∀ i : D.Bad, ((D.badAct i).card : ℝ) ≤ clockL B n := by
-  sorry
+  classical
+  intro i
+  rcases i with ⟨t, ⟨ℓ, hℓ⟩⟩
+  change (ℓ.active.card : ℝ) ≤ clockL B n
+  let roots := testRootEndpoints (g := g) D.scope' (D.test' t)
+  have hroots' : roots.card ≤ clockLnat B n := by
+    cases t with
+    | predicate k =>
+        have hroot : (D.I.scope k).card ≤ clockLnat B n := by exact_mod_cast hroots k
+        have hrootCard : (testRootEndpoints (g := g) D.scope' (.predicate k)).card =
+            (D.I.scope k).card := by
+          unfold testRootEndpoints testRoots
+          rw [Finset.card_image_of_injective _ Sum.inl_injective]
+          simp [scope']
+        change (testRootEndpoints (g := g) D.scope' (.predicate k)).card ≤ clockLnat B n
+        rw [hrootCard]
+        exact hroot
+    | singleton a =>
+        have hrootCard : (testRootEndpoints (g := g) D.scope' (.singleton (Sum.inl a))).card = 1 := by
+          simp [testRootEndpoints, testRoots]
+        change (testRootEndpoints (g := g) D.scope' (.singleton (Sum.inl a))).card ≤ clockLnat B n
+        rw [hrootCard]
+        exact hL
+  unfold badLeaves' badLeaves at hℓ
+  rcases Finset.mem_image.mp hℓ with ⟨ξ, hξ, hEq⟩
+  have hcard := (truncatedExploration_card ξ roots (clockLnat B n)).2.2 hroots'
+  have hleafcard : ℓ.active.card ≤ clockLnat B n := by
+    rw [← hEq]
+    simpa [testLeaf, roots, explorationLeaf] using hcard
+  change ((ℓ.active.card : ℕ) : ℝ) ≤ (clockLnat B n : ℝ)
+  exact_mod_cast hleafcard
 
 /-- L3.10c-force (03:888–896): the lopsided forcing property of a bad leaf against bad leaves with disjoint active
 sets, from `leaf_forcing_coupling`. -/
 theorem badEvent_forcing : ∀ (i : D.Bad) (S : Finset D.Bad), (∀ j ∈ S, Disjoint (D.badAct i) (D.badAct j)) →
     D.law.pr (fun ξ => D.badEvent i ξ ∧ ∀ j ∈ S, ¬ D.badEvent j ξ) ≤
       D.law.pr (D.badEvent i) * D.law.pr (fun ξ => ∀ j ∈ S, ¬ D.badEvent j ξ) := by
-  sorry
+  classical
+  intro i S hdis
+  let ℓ := i.2.1
+  let leafList : List (ClockLeaf D.mesh.ticks D.Row g D.Out) := S.toList.map fun j => j.2.1
+  have hnonneighbor : ∀ ℓ' ∈ leafList, ℓ.Nonneighbor ℓ' := by
+    intro ℓ' hℓ'
+    simp only [leafList, List.mem_map] at hℓ'
+    rcases hℓ' with ⟨j, hj, rfl⟩
+    simpa [ClockLeaf.Nonneighbor, badAct, ℓ] using hdis j (Finset.mem_toList.mp hj)
+  have havoid (ξ : ClockField D.mesh.ticks D.Row g D.Out) :
+      avoidsLeaves leafList ξ ↔ ∀ j ∈ S, ¬ D.badEvent j ξ := by
+    constructor
+    · intro h j hj
+      apply h (j.2.1)
+      apply List.mem_map.mpr
+      exact ⟨j, Finset.mem_toList.mpr hj, rfl⟩
+    · intro h L hL
+      simp only [leafList, List.mem_map] at hL
+      rcases hL with ⟨j, hj, rfl⟩
+      exact h j (Finset.mem_toList.mp hj)
+  have hnonneg : 0 ≤ D.law.pr ℓ.Event := finProb_pr_nonneg D.law ℓ.Event
+  change D.law.pr (fun ξ => ℓ.Event ξ ∧ ∀ j ∈ S, ¬ D.badEvent j ξ) ≤
+    D.law.pr ℓ.Event * D.law.pr (fun ξ => ∀ j ∈ S, ¬ D.badEvent j ξ)
+  by_cases hp0 : D.law.pr ℓ.Event = 0
+  · calc
+      D.law.pr (fun ξ => ℓ.Event ξ ∧ ∀ j ∈ S, ¬ D.badEvent j ξ) ≤ D.law.pr ℓ.Event :=
+        finProb_pr_mono D.law (by intro ξ hξ; exact hξ.1)
+      _ = 0 := hp0
+      _ = D.law.pr ℓ.Event * D.law.pr (fun ξ => ∀ j ∈ S, ¬ D.badEvent j ξ) := by rw [hp0]; ring
+  · have hpos : 0 < D.law.pr ℓ.Event := by
+      by_contra h
+      have hle : D.law.pr ℓ.Event ≤ 0 := le_of_not_gt h
+      exact hp0 (le_antisymm hle hnonneg)
+    have hforce := leaf_forcing_coupling D.edgeLaw ℓ leafList hpos hnonneighbor
+    change D.law.pr (fun ξ => ℓ.Event ξ ∧ avoidsLeaves leafList ξ) / D.law.pr ℓ.Event ≤
+      D.law.pr (avoidsLeaves leafList) at hforce
+    have hmul := (div_le_iff₀ hpos).mp hforce
+    have prEq {A B : ClockField D.mesh.ticks D.Row g D.Out → Prop}
+        (hAB : ∀ x, A x ↔ B x) : D.law.pr A = D.law.pr B := by
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases hA : A x
+      · have hB := (hAB x).mp hA
+        simp [hA, hB]
+      · have hB : ¬ B x := by intro h; exact hA ((hAB x).mpr h)
+        simp [hA, hB]
+    have havoidEq : D.law.pr (avoidsLeaves leafList) =
+        D.law.pr (fun ξ => ∀ j ∈ S, ¬ D.badEvent j ξ) := by
+      apply prEq
+      intro ξ
+      exact havoid ξ
+    have hrectEq : D.law.pr (fun ξ => ℓ.Event ξ ∧ avoidsLeaves leafList ξ) =
+        D.law.pr (fun ξ => ℓ.Event ξ ∧ ∀ j ∈ S, ¬ D.badEvent j ξ) := by
+      apply prEq
+      intro ξ
+      change (ℓ.Event ξ ∧ avoidsLeaves leafList ξ) ↔
+        (ℓ.Event ξ ∧ ∀ j ∈ S, ¬ D.badEvent j ξ)
+      constructor
+      · intro h
+        exact ⟨h.1, (havoid ξ).mp h.2⟩
+      · intro h
+        exact ⟨h.1, (havoid ξ).mpr h.2⟩
+    rw [hrectEq, havoidEq] at hmul
+    change D.law.pr (fun ξ => ℓ.Event ξ ∧ ∀ j ∈ S, ¬ D.badEvent j ξ) ≤
+      D.law.pr (fun ξ => ∀ j ∈ S, ¬ D.badEvent j ξ) * D.law.pr ℓ.Event at hmul
+    simpa [mul_comm] using hmul
 
 /-- Avoiding every bad leaf is the same as every test having a non-bad leaf (each clock field lies in its own
 leaf). -/
 theorem noBad_iff (ξ : ClockField D.mesh.ticks D.Row g D.Out) :
     (∀ i : D.Bad, ¬ D.badEvent i ξ) ↔
       ∀ t : SamplingTest R K, ¬ leafBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) := by
-  sorry
+  classical
+  constructor
+  · intro h t hbad
+    let ℓ := testLeaf ξ D.scope' (D.test' t) (clockLnat B n)
+    have hmem : ℓ ∈ D.badLeaves' t := by
+      unfold badLeaves' badLeaves
+      apply Finset.mem_image.mpr
+      refine ⟨ξ, ?_, rfl⟩
+      simp [hbad]
+    have hself : ℓ.Event ξ := by
+      dsimp [ℓ, testLeaf]
+      exact (explorationLeaf_event_iff ξ ξ (testRootEndpoints (g := g) D.scope' (D.test' t))
+        (clockLnat B n)).2 ⟨rfl, rfl⟩
+    let i : D.Bad := ⟨t, ⟨ℓ, hmem⟩⟩
+    exact h i (by simpa [badEvent] using hself)
+  · intro h i
+    rcases i with ⟨t, ⟨ℓ, hℓ⟩⟩
+    intro hbadEvent
+    unfold badLeaves' badLeaves at hℓ
+    rcases Finset.mem_image.mp hℓ with ⟨ξ', hξ', hEq⟩
+    have hbad' : leafBad D.lab' D.failure' D.scope' (clockLnat B n) ξ' (D.test' t) :=
+      (Finset.mem_filter.mp hξ').2
+    have hev : (testLeaf ξ' D.scope' (D.test' t) (clockLnat B n)).Event ξ := by
+      rw [hEq]
+      exact hbadEvent
+    have hinv := leafBad_leaf_invariant D.lab' D.failure' D.scope' (clockLnat B n)
+      ξ' ξ (D.test' t) hev
+    exact h t (hinv.mpr hbad')
 
 /-- L3.10h-good (03:1117–1119): on the avoidance event every real row is matched with an output carrying its
 matched label (distinct by `greedyMatching_label_injective`) and every predicate is avoided. -/
 theorem good (ξ : ClockField D.mesh.ticks D.Row g D.Out) (hξ : ∀ i : D.Bad, ¬ D.badEvent i ξ) :
     Function.Injective (fun a => D.I.lab a (D.out ξ a)) ∧ ∀ k, ¬ D.I.failure k (D.out ξ) := by
-  sorry
+  classical
+  have hno := (D.noBad_iff ξ).mp hξ
+  have hrow (a : R) : ∃ y, (greedyMatching ξ).assignment (Sum.inl a) = some (y, D.out ξ a) ∧
+      D.I.lab a (D.out ξ a) = y := by
+    have hnot : ¬ sampleTestBad D.lab' D.failure' D.scope' (greedyMatching ξ)
+        (.singleton (Sum.inl a)) := by
+      intro hbad
+      exact hno (.singleton a) (Or.inr hbad)
+    have hex : ∃ y o, (greedyMatching ξ).assignment (Sum.inl a) = some (y, o) ∧
+        D.lab' (Sum.inl a) o = y := by
+      have hdouble : ¬ ¬ ∃ y o, (greedyMatching ξ).assignment (Sum.inl a) = some (y, o) ∧
+          D.lab' (Sum.inl a) o = y := by
+        simpa [sampleTestBad, test'] using hnot
+      exact Classical.not_not.mp hdouble
+    rcases hex with ⟨y, o, hass, hlab⟩
+    have hout : D.out ξ a = o := by
+      unfold out
+      rw [hass]
+    refine ⟨y, ?_, ?_⟩
+    · rw [hout]
+      exact hass
+    · rw [hout]
+      simpa [lab'] using hlab
+  refine ⟨?_, ?_⟩
+  · intro a b hab
+    rcases hrow a with ⟨ya, ha, hla⟩
+    rcases hrow b with ⟨yb, hb, hlb⟩
+    have hlabels : ya = yb := by
+      calc
+        ya = D.I.lab a (D.out ξ a) := hla.symm
+        _ = D.I.lab b (D.out ξ b) := hab
+        _ = yb := hlb
+    have hab' := greedyMatching_label_injective ξ (Sum.inl a) (Sum.inl b) ya (D.out ξ a) (D.out ξ b)
+      ha (by rw [← hlabels] at hb; exact hb)
+    exact Sum.inl.inj hab'
+  · intro k hfail
+    have hnot : ¬ sampleTestBad D.lab' D.failure' D.scope' (greedyMatching ξ)
+        (.predicate k) := by
+      intro hbad
+      exact hno (.predicate k) (Or.inr hbad)
+    have hnotTest : ¬ testFails D.failure' D.scope' (greedyMatching ξ) (.predicate k) := by
+      simpa [sampleTestBad, test'] using hnot
+    apply hnotTest
+    refine ⟨D.extendTarget (D.out ξ), ?_, ?_⟩
+    · simpa [failure', extendTarget] using hfail
+    · intro a ha
+      cases a with
+      | inl a =>
+          have ha' : a ∈ D.I.scope k := by simpa [scope'] using ha
+          obtain ⟨y, hy, _⟩ := hrow a
+          refine ⟨y, ?_⟩
+          change (greedyMatching ξ).assignment (Sum.inl a) = some (y, D.extendTarget (D.out ξ) (Sum.inl a))
+          rw [show D.extendTarget (D.out ξ) (Sum.inl a) = D.out ξ a by rfl]
+          exact hy
+      | inr i => simp [scope'] at ha
 
 /-- L3.10h-cover (03:1121–1122): on the avoidance event with the queried outputs, the tuple of singleton leaves of
 the queried rows is a target rectangle. -/
 theorem targetRect_cover (S : Finset R) (o : ∀ a, Ω a) (ξ : ClockField D.mesh.ticks D.Row g D.Out)
     (hξ : ∀ i : D.Bad, ¬ D.badEvent i ξ) (ho : ∀ a ∈ S, D.out ξ a = o a) :
     (fun a : S => testLeaf ξ D.scope' (D.test' (.singleton a.1)) (clockLnat B n)) ∈ D.targetRects S o := by
-  sorry
+  classical
+  have hno := (D.noBad_iff ξ).mp hξ
+  have hgood (a : R) (ha : a ∈ S) : D.targetLeafGood ξ a (o a) := by
+    have hnobad := hno (.singleton a)
+    have hnotgiant :
+        (testExploration ξ D.scope' (D.test' (.singleton a)) (clockLnat B n)).giant ≠ true := by
+      intro hgiant
+      exact hnobad (Or.inl hgiant)
+    have hgiantfalse :
+        (testExploration ξ D.scope' (D.test' (.singleton a)) (clockLnat B n)).giant = false := by
+      cases hflag : (testExploration ξ D.scope' (D.test' (.singleton a)) (clockLnat B n)).giant with
+      | false => rfl
+      | true => exact False.elim (hnotgiant hflag)
+    have hnotbad : ¬ sampleTestBad D.lab' D.failure' D.scope' (greedyMatching ξ)
+        (.singleton (Sum.inl a)) := by
+      intro hbad
+      exact hnobad (Or.inr hbad)
+    have hassign : ∃ y v, (greedyMatching ξ).assignment (Sum.inl a) = some (y, v) ∧
+        D.lab' (Sum.inl a) v = y := by
+      have hdouble : ¬ ¬ ∃ y v, (greedyMatching ξ).assignment (Sum.inl a) = some (y, v) ∧
+          D.lab' (Sum.inl a) v = y := by
+        simpa [sampleTestBad] using hnotbad
+      exact Classical.not_not.mp hdouble
+    rcases hassign with ⟨y, v, hass, _⟩
+    have hout : D.out ξ a = v := by
+      unfold out
+      rw [hass]
+    have hv : v = o a := by
+      exact hout.symm.trans (ho a ha)
+    have hmatch : (greedyMatching ξ).assignment (Sum.inl a) = some (y, o a) := by
+      rw [hv] at hass
+      exact hass
+    exact ⟨hgiantfalse, ⟨y, hmatch⟩⟩
+  unfold targetRects
+  apply Finset.mem_image.mpr
+  refine ⟨ξ, ?_, rfl⟩
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+  intro a
+  exact hgood a.1 a.2
 
 /-- L3.10h-part (03:1121–1128): distinct target rectangles are disjoint (`explorationLeaf_event_iff`) and each
 lies in the joint target event (`nongiant_leaf_agreesBelow`, `closure_determines_root_assignment`). -/
 theorem targetRects_sum_le (S : Finset R) (o : ∀ a, Ω a) :
     ∑ τ ∈ D.targetRects S o, D.law.pr (fun ξ => ∀ a, (τ a).Event ξ) ≤
       D.law.pr (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) := by
-  sorry
+  classical
+  let T := D.targetRects S o
+  let E := fun τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out =>
+    fun ξ => ∀ a, (τ a).Event ξ
+  have hrep (τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out) (hτ : τ ∈ T) :
+      ∃ z, (∀ a : S, τ a = testLeaf z D.scope' (D.test' (.singleton a.1)) (clockLnat B n)) ∧
+        ∀ a : S, D.targetLeafGood z a.1 (o a.1) := by
+    unfold T targetRects at hτ
+    rcases Finset.mem_image.mp hτ with ⟨z, hz, hEq⟩
+    have hgood := (Finset.mem_filter.mp hz).2
+    refine ⟨z, ?_, hgood⟩
+    intro a
+    exact (congrFun hEq a).symm
+  have hdisjoint (τ σ : S → ClockLeaf D.mesh.ticks D.Row g D.Out)
+      (hτ : τ ∈ T) (hσ : σ ∈ T) (hne : τ ≠ σ) :
+      ∀ ξ, ¬ (E τ ξ ∧ E σ ξ) := by
+    rcases hrep τ hτ with ⟨zτ, hτleaf, _⟩
+    rcases hrep σ hσ with ⟨zσ, hσleaf, _⟩
+    intro ξ hev
+    apply hne
+    funext a
+    let roots := testRootEndpoints (g := g) D.scope' (D.test' (.singleton a.1))
+    have hevτ : (testLeaf zτ D.scope' (D.test' (.singleton a.1)) (clockLnat B n)).Event ξ := by
+      rw [← hτleaf a]
+      exact hev.1 a
+    have hevσ : (testLeaf zσ D.scope' (D.test' (.singleton a.1)) (clockLnat B n)).Event ξ := by
+      rw [← hσleaf a]
+      exact hev.2 a
+    have hrunτ := (explorationLeaf_event_iff zτ ξ roots (clockLnat B n)).mp hevτ
+    have hrunσ := (explorationLeaf_event_iff zσ ξ roots (clockLnat B n)).mp hevσ
+    have hbase : testLeaf zτ D.scope' (D.test' (.singleton a.1)) (clockLnat B n) =
+        testLeaf zσ D.scope' (D.test' (.singleton a.1)) (clockLnat B n) := by
+      simpa [testLeaf] using hrunτ.2.symm.trans hrunσ.2
+    calc
+      τ a = testLeaf zτ D.scope' (D.test' (.singleton a.1)) (clockLnat B n) := hτleaf a
+      _ = testLeaf zσ D.scope' (D.test' (.singleton a.1)) (clockLnat B n) := hbase
+      _ = σ a := (hσleaf a).symm
+  have hsubset (τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out) (hτ : τ ∈ T) :
+      ∀ ξ, E τ ξ → matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o) := by
+    rcases hrep τ hτ with ⟨z, hτleaf, hgood⟩
+    intro ξ hev
+    intro r hr
+    rcases Finset.mem_map.mp hr with ⟨a, ha, rfl⟩
+    let roots := testRootEndpoints (g := g) D.scope' (D.test' (.singleton a))
+    have hng : (truncatedExploration z roots (clockLnat B n)).giant = false := by
+      simpa [roots, testExploration, test'] using (hgood ⟨a, ha⟩).1
+    have hevLeaf : (testLeaf z D.scope' (D.test' (.singleton a)) (clockLnat B n)).Event ξ := by
+      rw [← hτleaf ⟨a, ha⟩]
+      exact hev ⟨a, ha⟩
+    have hagree := nongiant_leaf_agreesBelow z ξ roots (clockLnat B n) hng hevLeaf
+    have hroot : Sum.inl (Sum.inl a) ∈ roots := by
+      simp [roots, testRootEndpoints, testRoots, test']
+    have hassign := closure_determines_root_assignment z ξ roots hagree (Sum.inl a) hroot
+    rcases (hgood ⟨a, ha⟩).2 with ⟨y, hbase⟩
+    have hbase' : (greedyMatching z).assignment (Sum.inl a) = some (y, o a) := by
+      simpa using hbase
+    refine ⟨y, ?_⟩
+    change (greedyMatching ξ).assignment (Sum.inl a) = some (y, D.extendTarget o (Sum.inl a))
+    rw [show D.extendTarget o (Sum.inl a) = o a by rfl]
+    exact hassign.symm.trans hbase'
+  have hsumEq :
+      (∑ τ ∈ T, D.law.pr (E τ)) =
+        D.law.pr (fun ξ => ∃ τ ∈ T, E τ ξ) := by
+    unfold FinProb.pr
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    letI : DecidablePred (fun τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out => E τ ξ) :=
+      fun τ => Classical.propDecidable _
+    by_cases hex : ∃ τ ∈ T, E τ ξ
+    · rcases hex with ⟨τ₀, hτ₀, hE₀⟩
+      have hpoint : (∑ τ ∈ T, if E τ ξ then D.law.w ξ else 0) = D.law.w ξ := by
+        calc
+          (∑ τ ∈ T, if E τ ξ then D.law.w ξ else 0) =
+              ∑ τ ∈ T, if τ = τ₀ then D.law.w ξ else 0 := by
+                apply Finset.sum_congr rfl
+                intro τ hτ
+                by_cases hE : E τ ξ
+                · have heq : τ = τ₀ := by
+                    by_contra hne
+                    exact hdisjoint τ₀ τ hτ₀ hτ (Ne.symm hne) ξ ⟨hE₀, hE⟩
+                  have hE₀' : E τ₀ ξ := by simpa [heq] using hE
+                  simp [hE, heq, hE₀']
+                · have hne : τ ≠ τ₀ := by
+                    intro heq
+                    subst τ
+                    exact hE hE₀
+                  simp [hE, hne]
+          _ = D.law.w ξ := by simp [hτ₀]
+      have hex' : ∃ τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out, τ ∈ T ∧ E τ ξ :=
+        ⟨τ₀, hτ₀, hE₀⟩
+      simpa only [if_pos hex'] using hpoint
+    · have hnone : ∀ τ ∈ T, ¬ E τ ξ := by
+        intro τ hτ hE
+        exact hex ⟨τ, hτ, hE⟩
+      have hsum0 : (∑ τ ∈ T, if E τ ξ then D.law.w ξ else 0) = 0 := by
+        apply Finset.sum_eq_zero
+        intro τ hτ
+        simp [hnone τ hτ]
+      simpa only [if_neg hex] using hsum0
+  calc
+    ∑ τ ∈ T, D.law.pr (E τ) = D.law.pr (fun ξ => ∃ τ ∈ T, E τ ξ) := hsumEq
+    _ ≤ D.law.pr (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) :=
+      finProb_pr_mono D.law (by
+        intro ξ hξ
+        rcases hξ with ⟨τ, hτ, hev⟩
+        exact hsubset τ hτ ξ hev)
 
 end ClockData
 
@@ -281,7 +878,440 @@ theorem clock_giant_tail (B : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, ∀ n ≥ n�
       (insertionSize ins : ℝ) ≤ (clockK₀ B + 1) ^ 2 * Real.log n →
       D.law.pr (fun ξ => clockLnat B n ≤ (closureFrom (insertArrivals ins ξ) roots).card) ≤
         (n : ℝ) ^ (-(2 * clockK₀ B)) := by
-  sorry
+  classical
+  let kconst : ℝ := clockK₀ B
+  let q : ℝ := kconst / 100
+  let gap : ℝ := kconst / 100 - kconst / 250
+  let qTail : ℝ := 9 * kconst / 100
+  let pref : ℝ := 1 + 2 * (kconst + 1) ^ 2
+  let cTail : ℝ := 36000 * pref
+  have hkform : kconst = 20 * B + 20 := by simp [kconst, clockK₀]
+  have hk : 40 ≤ kconst := by rw [hkform]; linarith [hB]
+  have hkpos : 0 < kconst := by linarith
+  have hq : 0 < q := by dsimp [q]; positivity
+  have hgap : 0 < gap := by dsimp [gap]; linarith [hkpos]
+  have hqTail : 2 ≤ qTail := by dsimp [qTail]; linarith [hk]
+  have htailExponent : B - gap < qTail := by
+    dsimp [gap, qTail]
+    rw [hkform]
+    nlinarith [hB]
+  have hnLargeSmall : ∀ᶠ n : ℕ in atTop,
+      (n : ℝ) ^ (-q) < 1 / 2 ∧ (n : ℝ) ^ (-gap) < 1 / 72000 := by
+    have hqLim := HypercubeRamsey.Lane_q_clock_sampler.rpow_neg_tendsto_zero q hq
+    have hgapLim := HypercubeRamsey.Lane_q_clock_sampler.rpow_neg_tendsto_zero gap hgap
+    filter_upwards
+      [(tendsto_order.1 hqLim).2 (1 / 2) (by norm_num),
+       (tendsto_order.1 hgapLim).2 (1 / 72000) (by norm_num)] with n hnq hngap
+    exact ⟨hnq, hngap⟩
+  have hnLargeMesh : ∀ᶠ n : ℕ in atTop, kconst / 125 ≤ (n : ℝ) :=
+    tendsto_natCast_atTop_atTop.eventually_ge_atTop (kconst / 125)
+  have hnLargeTail : ∀ᶠ n : ℕ in atTop, 8 * kconst ≤ (n : ℝ) :=
+    tendsto_natCast_atTop_atTop.eventually_ge_atTop (8 * kconst)
+  have hnLargeRatio : ∀ᶠ n : ℕ in atTop,
+      2 * cTail < (n : ℝ) ^ (qTail - (B - gap)) := by
+    have hexp := HypercubeRamsey.Lane_q_clock_sampler.rpow_tendsto_top
+      (qTail - (B - gap)) (sub_pos.mpr htailExponent)
+    exact hexp.eventually_gt_atTop (2 * cTail)
+  have hLarge : ∀ᶠ n : ℕ in atTop,
+      2 ≤ n ∧ kconst / 125 ≤ (n : ℝ) ∧ 8 * kconst ≤ (n : ℝ) ∧
+        (n : ℝ) ^ (-q) < 1 / 2 ∧ (n : ℝ) ^ (-gap) < 1 / 72000 ∧
+        2 * cTail < (n : ℝ) ^ (qTail - (B - gap)) := by
+    filter_upwards [eventually_atTop.2 ⟨2, fun _ hn => hn⟩,
+      hnLargeMesh, hnLargeTail, hnLargeSmall, hnLargeRatio] with n hn2 hmesh htail hsmall hratio
+    exact ⟨hn2, hmesh, htail, hsmall.1, hsmall.2, hratio⟩
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 hLarge
+  refine ⟨n₀, ?_⟩
+  intro n hn g R K _ _ _ Ω _ _ _ D roots hroots ins hins
+  have hn2 : 2 ≤ n := hn₀ n hn |>.1
+  have hnmesh : kconst / 125 ≤ (n : ℝ) := (hn₀ n hn).2.1
+  have hntail : 8 * kconst ≤ (n : ℝ) := (hn₀ n hn).2.2.1
+  have hsmallPow : (n : ℝ) ^ (-q) < 1 / 2 := (hn₀ n hn).2.2.2.1
+  have hgapPow : (n : ℝ) ^ (-gap) < 1 / 72000 := (hn₀ n hn).2.2.2.2.1
+  have hratio : 2 * cTail < (n : ℝ) ^ (qTail - (B - gap)) :=
+    (hn₀ n hn).2.2.2.2.2
+  have hnreal : (2 : ℝ) ≤ n := by exact_mod_cast hn2
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnreal
+  have hlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by linarith)
+  have hlogle : Real.log (n : ℝ) ≤ n := Real.log_le_self (by positivity)
+  have hkA : 20 ≤ clockA B := by unfold clockA clockK₀; linarith [hB]
+  have hpow20 : (10 : ℝ) ^ 6 ≤ (n : ℝ) ^ (20 : ℝ) := by
+    calc
+      (10 : ℝ) ^ 6 ≤ (2 : ℝ) ^ (20 : ℝ) := by norm_num
+      _ ≤ (n : ℝ) ^ (20 : ℝ) := Real.rpow_le_rpow (by norm_num) hnreal (by norm_num)
+  have hpowA : (n : ℝ) ^ (20 : ℝ) ≤ (n : ℝ) ^ clockA B :=
+    Real.rpow_le_rpow_of_exponent_le (le_trans (by norm_num) hnreal) hkA
+  have hgnum : (10 : ℝ) ^ 6 ≤ g :=
+    le_trans (le_trans hpow20 hpowA) (D.card_labels_ge (by omega))
+  have htheta := D.completed_theta_bounds hgnum
+  have hthetaPos : 0 < D.C.theta := lt_of_lt_of_le (by norm_num) htheta.1
+  have hsqrtTheta : 0 < Real.sqrt D.C.theta := Real.sqrt_pos.2 hthetaPos
+  have hsqrtThetaNonneg : 0 ≤ Real.sqrt D.C.theta := Real.sqrt_nonneg _
+  have hsqrtUpper : Real.sqrt D.C.theta ≤ 1 / 500 := by
+    have hsquare := Real.sq_sqrt (le_of_lt hthetaPos)
+    norm_num at htheta
+    nlinarith [hsquare]
+  have hinvSqrt : (Real.sqrt D.C.theta)⁻¹ ≤ 1000 := by
+    have hs := Real.sq_sqrt (le_of_lt hthetaPos)
+    have hlower : 1 / 1000 ≤ Real.sqrt D.C.theta := by nlinarith [hs, htheta.1]
+    have hdiv : 1 / Real.sqrt D.C.theta ≤ 1000 := by
+      apply (div_le_iff₀ hsqrtTheta).2
+      nlinarith [hlower]
+    simpa [one_div] using hdiv
+  have hdelta : D.mesh.δ ≤ 1 := D.mesh.δ_le_one
+  have hdeltaNonneg : 0 ≤ D.mesh.δ := D.mesh.δ_nonneg
+  have hTdelta : (D.mesh.ticks : ℝ) * D.mesh.δ ≤
+      kconst * Real.log (n : ℝ) + 1 := by
+    have hcover := D.mesh.least_cover
+    rw [D.mesh.horizon_eq] at hcover
+    have hcover' : (D.mesh.ticks : ℝ) * D.mesh.δ <
+        kconst * Real.log (n : ℝ) + D.mesh.δ := by simpa [kconst] using hcover
+    linarith [hdelta]
+  have hTdeltaNonneg : 0 ≤ (D.mesh.ticks : ℝ) * D.mesh.δ :=
+    mul_nonneg (Nat.cast_nonneg _) hdeltaNonneg
+  have hargDelta : 2 * Real.sqrt D.C.theta * D.mesh.δ ≤ 1 / 250 := by
+    calc
+      2 * Real.sqrt D.C.theta * D.mesh.δ ≤ 2 * (1 / 500) * 1 := by
+        gcongr
+      _ = 1 / 250 := by norm_num
+  have hargTime : 2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ) ≤
+      kconst / 250 * Real.log (n : ℝ) + 1 / 250 := by
+    calc
+      2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ) ≤
+          (1 / 250) * (kconst * Real.log (n : ℝ) + 1) := by
+        have hcoeff : 2 * Real.sqrt D.C.theta ≤ 1 / 250 := by linarith [hsqrtUpper]
+        calc
+          _ ≤ (1 / 250) * ((D.mesh.ticks : ℝ) * D.mesh.δ) :=
+            mul_le_mul_of_nonneg_right hcoeff hTdeltaNonneg
+          _ ≤ (1 / 250) * (kconst * Real.log (n : ℝ) + 1) :=
+            mul_le_mul_of_nonneg_left hTdelta (by norm_num)
+      _ = kconst / 250 * Real.log (n : ℝ) + 1 / 250 := by ring
+  have hexpTiny : Real.exp (1 / 125) ≤ 3 := by
+    exact le_trans (Real.exp_le_exp.mpr (by norm_num : (1 / 125 : ℝ) ≤ 1))
+      (le_of_lt Real.exp_one_lt_three)
+  have hexpOne : Real.exp (1 / 250) ≤ 3 :=
+    (Real.exp_le_exp.mpr (by norm_num : (1 / 250 : ℝ) ≤ 1 / 125)).trans hexpTiny
+  have hexpDelta : Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) ≤ 3 := by
+    exact le_trans (Real.exp_le_exp.mpr hargDelta) hexpOne
+  have hexpTime : Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) ≤
+      Real.exp (1 / 250) * (n : ℝ) ^ (kconst / 250) := by
+    calc
+      _ ≤ Real.exp (kconst / 250 * Real.log (n : ℝ) + 1 / 250) :=
+        Real.exp_le_exp.mpr hargTime
+      _ = Real.exp (1 / 250) * (n : ℝ) ^ (kconst / 250) := by
+        rw [Real.exp_add]
+        have hp : Real.exp (kconst / 250 * Real.log (n : ℝ)) =
+            (n : ℝ) ^ (kconst / 250) := by
+          rw [Real.rpow_def_of_pos hnpos]
+          congr 1
+          ring
+        rw [hp]
+        ring
+  have hpowGap : (n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250) =
+      (n : ℝ) ^ (-gap) := by
+    rw [← Real.rpow_add hnpos]
+    congr 1
+    dsimp [q, gap]
+    ring
+  have hsmall : (n : ℝ) ^ (-q) + 2 * (n : ℝ) ^ (-q) *
+      Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) *
+      Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+      Real.sqrt D.C.theta ≤ 1 := by
+    have hsecond : 2 * (n : ℝ) ^ (-q) *
+        Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) *
+        Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+        Real.sqrt D.C.theta ≤ 18000 * (n : ℝ) ^ (-gap) := by
+      calc
+        _ = (2 * (n : ℝ) ^ (-q) *
+            Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) *
+            Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ))) *
+            (Real.sqrt D.C.theta)⁻¹ := by ring
+        _ ≤ (2 * (n : ℝ) ^ (-q) * 3 *
+            (Real.exp (1 / 250) * (n : ℝ) ^ (kconst / 250))) * 1000 := by
+          gcongr
+        _ ≤ 18000 * ((n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250)) := by
+          calc
+            _ ≤ (2 * (n : ℝ) ^ (-q) * 3 *
+                (3 * (n : ℝ) ^ (kconst / 250))) * 1000 := by gcongr
+            _ = 18000 * ((n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250)) := by ring
+        _ = 18000 * (n : ℝ) ^ (-gap) := by rw [hpowGap]
+    calc
+      (n : ℝ) ^ (-q) + _ ≤ 1 / 2 + 18000 * (n : ℝ) ^ (-gap) := by
+        exact add_le_add (le_of_lt hsmallPow) hsecond
+      _ ≤ 1 := by nlinarith [hgapPow]
+  have hmesh :
+      (Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) - 1) *
+        Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) ≤ 1 / 2 := by
+    have hsumArg : 2 * Real.sqrt D.C.theta * D.mesh.δ +
+        2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ) ≤
+        kconst / 250 * Real.log (n : ℝ) + 1 / 125 := by
+      calc
+        _ = 2 * Real.sqrt D.C.theta *
+            (D.mesh.δ + (D.mesh.ticks : ℝ) * D.mesh.δ) := by ring
+        _ ≤ (1 / 250) * (kconst * Real.log (n : ℝ) + 2) := by
+          have hsum : D.mesh.δ + (D.mesh.ticks : ℝ) * D.mesh.δ ≤
+              kconst * Real.log (n : ℝ) + 2 := by linarith [hdelta, hTdelta]
+          have hsumNonneg : 0 ≤ D.mesh.δ + (D.mesh.ticks : ℝ) * D.mesh.δ :=
+            add_nonneg hdeltaNonneg hTdeltaNonneg
+          have hcoeff : 2 * Real.sqrt D.C.theta ≤ 1 / 250 := by linarith [hsqrtUpper]
+          calc
+            _ ≤ (1 / 250) * (D.mesh.δ + (D.mesh.ticks : ℝ) * D.mesh.δ) :=
+              mul_le_mul_of_nonneg_right hcoeff hsumNonneg
+            _ ≤ (1 / 250) * (kconst * Real.log (n : ℝ) + 2) :=
+              mul_le_mul_of_nonneg_left hsum (by norm_num)
+        _ = kconst / 250 * Real.log (n : ℝ) + 1 / 125 := by ring
+    have hexpSum : Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ +
+        2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) ≤
+        Real.exp (1 / 125) * (n : ℝ) ^ (kconst / 250) := by
+      calc
+        _ ≤ Real.exp (kconst / 250 * Real.log (n : ℝ) + 1 / 125) :=
+          Real.exp_le_exp.mpr hsumArg
+        _ = Real.exp (1 / 125) * (n : ℝ) ^ (kconst / 250) := by
+          rw [Real.exp_add]
+          have hp : Real.exp (kconst / 250 * Real.log (n : ℝ)) =
+              (n : ℝ) ^ (kconst / 250) := by
+            rw [Real.rpow_def_of_pos hnpos]
+            congr 1
+            ring
+          rw [hp]
+          ring
+    have hdeltaPow : D.mesh.δ * (n : ℝ) ^ (kconst / 250) ≤ 1 := by
+      rw [D.mesh.δ_eq]
+      have hlogExp : Real.exp (kconst / 250 * Real.log (n : ℝ)) =
+          (n : ℝ) ^ (kconst / 250) := by
+        rw [Real.rpow_def_of_pos hnpos]
+        congr 1
+        ring
+      have hprod : Real.exp (-((n : ℝ) ^ 2)) * (n : ℝ) ^ (kconst / 250) =
+          Real.exp (-((n : ℝ) ^ 2) + kconst / 250 * Real.log (n : ℝ)) := by
+        rw [← hlogExp, ← Real.exp_add]
+      rw [hprod, Real.exp_le_one_iff]
+      have hnlarge : kconst / 250 * Real.log (n : ℝ) ≤ (n : ℝ) ^ 2 := by
+        have hbase : kconst / 125 ≤ (n : ℝ) := hnmesh
+        have hmul' : (kconst / 125) * (n : ℝ) ≤ (n : ℝ) * (n : ℝ) :=
+          mul_le_mul_of_nonneg_right hbase (by positivity)
+        have hmul : kconst / 125 * (n : ℝ) ≤ (n : ℝ) ^ 2 := by
+          simpa [pow_two] using hmul'
+        calc
+          kconst / 250 * Real.log (n : ℝ) ≤ kconst / 250 * n :=
+            mul_le_mul_of_nonneg_left hlogle (by positivity)
+          _ ≤ (n : ℝ) ^ 2 := by nlinarith [hmul]
+      nlinarith
+    have hexpSub := HypercubeRamsey.Lane_q_clock_sampler.exp_sub_one_le_mul_exp
+      (2 * Real.sqrt D.C.theta * D.mesh.δ) (by positivity)
+    have hsmallProduct : (Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) - 1) *
+        Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) ≤
+        (1 / 250) * Real.exp (1 / 125) *
+          (D.mesh.δ * (n : ℝ) ^ (kconst / 250)) := by
+      calc
+        _ ≤ (2 * Real.sqrt D.C.theta * D.mesh.δ *
+            Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ)) *
+            Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) :=
+          mul_le_mul_of_nonneg_right hexpSub (Real.exp_nonneg _)
+        _ = (2 * Real.sqrt D.C.theta * D.mesh.δ) *
+            Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ +
+              2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) := by
+            calc
+              _ = (2 * Real.sqrt D.C.theta * D.mesh.δ) *
+                  (Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ) *
+                    Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ))) := by ring
+              _ = _ := by rw [← Real.exp_add]
+        _ ≤ (1 / 250) * D.mesh.δ *
+            (Real.exp (1 / 125) * (n : ℝ) ^ (kconst / 250)) := by
+          have hcoeff : 2 * Real.sqrt D.C.theta ≤ 1 / 250 := by linarith [hsqrtUpper]
+          have hleft : 2 * Real.sqrt D.C.theta * D.mesh.δ ≤ (1 / 250) * D.mesh.δ :=
+            mul_le_mul_of_nonneg_right hcoeff hdeltaNonneg
+          calc
+            _ ≤ ((1 / 250) * D.mesh.δ) *
+                Real.exp (2 * Real.sqrt D.C.theta * D.mesh.δ +
+                  2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) :=
+                  mul_le_mul_of_nonneg_right hleft (Real.exp_nonneg _)
+            _ ≤ ((1 / 250) * D.mesh.δ) *
+                (Real.exp (1 / 125) * (n : ℝ) ^ (kconst / 250)) :=
+                  mul_le_mul_of_nonneg_left hexpSum (by positivity)
+        _ = (1 / 250) * Real.exp (1 / 125) *
+            (D.mesh.δ * (n : ℝ) ^ (kconst / 250)) := by ring
+    calc
+      _ ≤ (1 / 250) * Real.exp (1 / 125) := by
+        calc
+          _ ≤ ((1 / 250) * Real.exp (1 / 125)) * 1 :=
+            hsmallProduct.trans (mul_le_mul_of_nonneg_left hdeltaPow (by positivity))
+          _ = (1 / 250) * Real.exp (1 / 125) := by ring
+      _ ≤ 3 / 250 := by
+        calc
+          (1 / 250) * Real.exp (1 / 125) ≤ (1 / 250) * 3 :=
+            mul_le_mul_of_nonneg_left hexpTiny (by norm_num)
+          _ = 3 / 250 := by ring
+      _ ≤ 1 / 2 := by norm_num
+  have hnb : (n : ℝ) ≤ (n : ℝ) ^ B := by
+    calc
+      (n : ℝ) = (n : ℝ) ^ (1 : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ B := Real.rpow_le_rpow_of_exponent_le (by linarith [hnreal]) hB
+  have hpref : ((roots.card + 2 * insertionSize ins : ℕ) : ℝ) ≤
+      pref * (n : ℝ) ^ B := by
+    have hinsR : (insertionSize ins : ℝ) ≤ (kconst + 1) ^ 2 * Real.log (n : ℝ) := hins
+    have hcast : ((roots.card + 2 * insertionSize ins : ℕ) : ℝ) =
+        (roots.card : ℝ) + 2 * (insertionSize ins : ℝ) := by norm_num
+    rw [hcast]
+    calc
+      (roots.card : ℝ) + 2 * (insertionSize ins : ℝ) ≤
+          (n : ℝ) ^ B + 2 * (kconst + 1) ^ 2 * Real.log (n : ℝ) := by
+            have hinsR' : 2 * (insertionSize ins : ℝ) ≤
+                2 * ((kconst + 1) ^ 2 * Real.log (n : ℝ)) :=
+              mul_le_mul_of_nonneg_left hinsR (by norm_num)
+            nlinarith [hroots, hinsR']
+      _ ≤ (n : ℝ) ^ B + 2 * (kconst + 1) ^ 2 * n := by
+            exact add_le_add le_rfl
+              (mul_le_mul_of_nonneg_left hlogle (by positivity))
+      _ ≤ pref * (n : ℝ) ^ B := by
+            dsimp [pref]
+            nlinarith [hnb]
+  have hrate : 4 * (n : ℝ) ^ (-q) *
+      Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+        Real.sqrt D.C.theta ≤ 36000 * (n : ℝ) ^ (-gap) := by
+    have hleft : 0 ≤ (n : ℝ) ^ (-q) := Real.rpow_nonneg (le_of_lt hnpos) _
+    have hpow : (n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250) =
+        (n : ℝ) ^ (-gap) := hpowGap
+    calc
+      _ = (4 * (n : ℝ) ^ (-q) *
+          Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ))) *
+          (Real.sqrt D.C.theta)⁻¹ := by ring
+      _ ≤ (4 * (n : ℝ) ^ (-q) *
+          (Real.exp (1 / 250) * (n : ℝ) ^ (kconst / 250))) * 1000 := by
+            gcongr
+      _ ≤ 36000 * ((n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250)) := by
+            calc
+              _ ≤ (4 * (n : ℝ) ^ (-q) *
+                  (3 * (n : ℝ) ^ (kconst / 250))) * 1000 := by gcongr
+              _ = 12000 * ((n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250)) := by ring
+              _ ≤ 36000 * ((n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 250)) := by
+                exact mul_le_mul_of_nonneg_right (by norm_num)
+                  (mul_nonneg (Real.rpow_nonneg (le_of_lt hnpos) _)
+                    (Real.rpow_nonneg (le_of_lt hnpos) _))
+      _ = 36000 * (n : ℝ) ^ (-gap) := by rw [hpow]
+  have heta : ((roots.card + 2 * insertionSize ins : ℕ) : ℝ) *
+      (4 * (n : ℝ) ^ (-q) *
+        Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+        Real.sqrt D.C.theta) ≤ cTail * (n : ℝ) ^ (B - gap) := by
+    calc
+      _ ≤ (pref * (n : ℝ) ^ B) * (36000 * (n : ℝ) ^ (-gap)) :=
+          mul_le_mul hpref hrate (by positivity) (by positivity)
+      _ = cTail * (n : ℝ) ^ (B - gap) := by
+          calc
+            _ = (36000 * pref) * ((n : ℝ) ^ B * (n : ℝ) ^ (-gap)) := by ring
+            _ = (36000 * pref) * (n : ℝ) ^ (B - gap) := by
+              rw [← Real.rpow_add hnpos]
+              rw [show B + -gap = B - gap by ring]
+            _ = cTail * (n : ℝ) ^ (B - gap) := by rfl
+  have hratio' : cTail ≤ (1 / 2) * (n : ℝ) ^ (qTail - (B - gap)) := by
+    have : 0 < (n : ℝ) ^ (qTail - (B - gap)) :=
+      Real.rpow_pos_of_pos hnpos _
+    linarith [hratio]
+  have heta' : ((roots.card + 2 * insertionSize ins : ℕ) : ℝ) *
+      (4 * (n : ℝ) ^ (-q) *
+        Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+        Real.sqrt D.C.theta) ≤ (1 / 2) * (n : ℝ) ^ qTail := by
+    calc
+      _ ≤ cTail * (n : ℝ) ^ (B - gap) := heta
+      _ ≤ ((1 / 2) * (n : ℝ) ^ (qTail - (B - gap))) *
+          (n : ℝ) ^ (B - gap) :=
+          mul_le_mul_of_nonneg_right hratio' (Real.rpow_nonneg (le_of_lt hnpos) _)
+      _ = (1 / 2) * (n : ℝ) ^ qTail := by
+          calc
+            _ = (1 / 2) * ((n : ℝ) ^ (qTail - (B - gap)) * (n : ℝ) ^ (B - gap)) := by ring
+            _ = (1 / 2) * (n : ℝ) ^ ((qTail - (B - gap)) + (B - gap)) := by
+              rw [← Real.rpow_add hnpos]
+            _ = (1 / 2) * (n : ℝ) ^ qTail := by
+              rw [show qTail - (B - gap) + (B - gap) = qTail by ring]
+  have hL : (n : ℝ) ^ (kconst / 10) ≤ (clockLnat B n : ℝ) := by
+    simpa [clockLnat, kconst] using Nat.le_ceil ((n : ℝ) ^ (clockK₀ B / 10))
+  have hdeltaL : (n : ℝ) ^ (-q) * (clockLnat B n : ℝ) ≥ (n : ℝ) ^ qTail := by
+    calc
+      (n : ℝ) ^ (-q) * (clockLnat B n : ℝ) ≥
+          (n : ℝ) ^ (-q) * (n : ℝ) ^ (kconst / 10) :=
+            mul_le_mul_of_nonneg_left hL (Real.rpow_nonneg (le_of_lt hnpos) _)
+      _ = (n : ℝ) ^ qTail := by
+            rw [← Real.rpow_add hnpos]
+            congr 1
+            dsimp [q, qTail]
+            ring
+  have hpowTailLower : (n : ℝ) ^ (2 : ℝ) ≤ (n : ℝ) ^ qTail :=
+    Real.rpow_le_rpow_of_exponent_le (by linarith [hnreal]) hqTail
+  have hlogDominated : 2 * kconst * Real.log (n : ℝ) + 1 ≤
+      (n : ℝ) ^ qTail / 2 := by
+    have hquadratic : 2 * kconst * Real.log (n : ℝ) ≤ (n : ℝ) ^ 2 / 4 := by
+      calc
+        2 * kconst * Real.log (n : ℝ) ≤ 2 * kconst * n :=
+          mul_le_mul_of_nonneg_left hlogle (by positivity)
+        _ ≤ (n : ℝ) ^ 2 / 4 := by
+          have hmul : (8 * kconst) * (n : ℝ) ≤ (n : ℝ) * (n : ℝ) :=
+            mul_le_mul_of_nonneg_right hntail (by positivity)
+          nlinarith [hmul]
+    have hnatpow : (n : ℝ) ^ 2 = (n : ℝ) ^ (2 : ℝ) := by norm_num [Real.rpow_natCast]
+    rw [hnatpow] at hquadratic
+    have hnSq : 4 ≤ (n : ℝ) ^ (2 : ℝ) := by
+      calc
+        4 ≤ (n : ℝ) ^ 2 := by nlinarith [hnreal]
+        _ = (n : ℝ) ^ (2 : ℝ) := hnatpow
+    nlinarith [hpowTailLower, hquadratic, hnSq]
+  have htailBound := giant_tail_under_insertion D.mesh.δ D.mesh.δ_nonneg D.mesh.δ_le_one
+    D.law' D.lab' D.C.theta ((n : ℝ) ^ (-q)) hthetaPos
+    (by
+      have ht : D.C.theta ≤ 1 := le_trans htheta.2 (by norm_num)
+      exact ht)
+    (Real.rpow_pos_of_pos hnpos (-q))
+    (fun a => (D.completed_rows_eq a).le)
+    (fun y => (D.completed_columns_eq y).le)
+    hsmall hmesh roots ins (clockLnat B n)
+  have prEq {A B : ClockField D.mesh.ticks D.Row g D.Out → Prop}
+      (hAB : ∀ ξ, A ξ ↔ B ξ) : D.law.pr A = D.law.pr B := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    by_cases hA : A ξ
+    · have hB := (hAB ξ).mp hA
+      simp [hA, hB]
+    · have hB : ¬ B ξ := by
+        intro h
+        exact hA ((hAB ξ).mpr h)
+      simp [hA, hB]
+  have hcastEvent (ξ : ClockField D.mesh.ticks D.Row g D.Out) :
+      (clockLnat B n ≤ (closureFrom (insertArrivals ins ξ) roots).card) ↔
+        ((clockLnat B n : ℝ) ≤ ((closureFrom (insertArrivals ins ξ) roots).card : ℝ)) := by
+    constructor <;> intro h <;> exact_mod_cast h
+  have hprCast := prEq hcastEvent
+  have hexpEst :
+      Real.exp (-(n : ℝ) ^ qTail / 2) ≤ (n : ℝ) ^ (-(2 * kconst)) := by
+    have hpowExp : Real.exp (-(2 * kconst * Real.log (n : ℝ))) =
+        (n : ℝ) ^ (-(2 * kconst)) := by
+      rw [Real.rpow_def_of_pos hnpos]
+      congr 1
+      ring
+    rw [← hpowExp]
+    exact Real.exp_le_exp.mpr (by nlinarith [hlogDominated])
+  calc
+    D.law.pr (fun ξ => clockLnat B n ≤ (closureFrom (insertArrivals ins ξ) roots).card) =
+        D.law.pr (fun ξ => (clockLnat B n : ℝ) ≤
+          ((closureFrom (insertArrivals ins ξ) roots).card : ℝ)) := hprCast
+    _ ≤
+        Real.exp (-(n : ℝ) ^ qTail / 2) := by
+          calc
+            _ ≤ Real.exp (-((n : ℝ) ^ (-q)) * (clockLnat B n : ℝ) +
+              ((roots.card + 2 * insertionSize ins : ℕ) : ℝ) *
+                (4 * (n : ℝ) ^ (-q) *
+                  Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+                  Real.sqrt D.C.theta)) := htailBound
+            _ ≤ Real.exp (-(n : ℝ) ^ qTail +
+                ((roots.card + 2 * insertionSize ins : ℕ) : ℝ) *
+                  (4 * (n : ℝ) ^ (-q) *
+                    Real.exp (2 * Real.sqrt D.C.theta * ((D.mesh.ticks : ℝ) * D.mesh.δ)) /
+                    Real.sqrt D.C.theta)) := by
+              apply Real.exp_le_exp.mpr
+              nlinarith [hdeltaL]
+            _ ≤ Real.exp (-(n : ℝ) ^ qTail / 2) := by
+              apply Real.exp_le_exp.mpr
+              nlinarith [heta']
+    _ ≤ (n : ℝ) ^ (-(2 * kconst)) := hexpEst
+    _ = (n : ℝ) ^ (-(2 * clockK₀ B)) := by simp [kconst]
 
 /-- L3.10h-pred (03:1086–1094): a predicate fails under a fixed short insertion of positive-weight values whose
 rows meet its scope in at most the row `a₀`. If every scope match is ordinary, sum Step 7 over the failing output
@@ -327,7 +1357,419 @@ theorem incidence_numerics (B : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, ∀ n ≥ 
       (clockJ B n : ℝ) ^ 2 * (n : ℝ) ^ B * ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ) *
         (Real.exp (Real.sqrt θ * (clockK₀ B * Real.log n + 2)) / Real.sqrt θ) +
       ((n : ℝ) ^ B + 1) * Real.exp (-(clockJ B n : ℝ)) ≤ clockκ B n := by
-  sorry
+  classical
+  let K := clockK₀ B
+  let d₁ := B + K / 250 - 2 * K + 3 * K / 5
+  let d₂ := B + K / 250 - 99 * K / 100 + 3 * K / 5
+  let d₃ := B + K / 250 + 1 - clockP B / 3 + 3 * K / 5
+  let d₄ := 2 * B - (clockA B - 1) + K / 250 + 2 + 3 * K / 5
+  let d₅ := B - K ^ 2 + 3 * K / 5
+  let C₁ := 4000 * Real.exp (1 / 250) * (K ^ 2 + 1)
+  let C₂ := 1000000000 * Real.exp (1 / 250) * K ^ 4
+  let C₃ := 2 * Real.exp 1
+  have hKform : K = 20 * B + 20 := by simp [K, clockK₀]
+  have hBeq : B = K / 20 - 1 := by rw [hKform]; ring
+  have hK : 40 ≤ K := by rw [hKform]; linarith
+  have hKpos : 0 < K := by linarith
+  have hd₁ : d₁ < 0 := by dsimp [d₁]; rw [hBeq]; nlinarith [hK]
+  have hd₂ : d₂ < 0 := by dsimp [d₂]; rw [hBeq]; nlinarith [hK]
+  have hd₃ : d₃ < 0 := by dsimp [d₃, clockP, clockK₀]; nlinarith [hB]
+  have hd₄ : d₄ < 0 := by dsimp [d₄, clockA, clockK₀]; nlinarith [hB]
+  have hd₅ : d₅ < 0 := by dsimp [d₅]; nlinarith [hK, hBeq]
+  have hC₁ : 0 < C₁ := by positivity
+  have hC₂ : 0 < C₂ := by positivity
+  have hC₃ : 0 < C₃ := by positivity
+  have rpowNegTendsto (d : ℝ) (hd : d < 0) :
+      Tendsto (fun n : ℕ => (n : ℝ) ^ d) atTop (nhds 0) := by
+    have hp : 0 < -d := neg_pos.mpr hd
+    have h := (tendsto_rpow_neg_atTop hp).comp tendsto_natCast_atTop_atTop
+    have h' : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(-d))) atTop (nhds 0) :=
+      h.congr (fun _ => rfl)
+    have heq : ∀ n : ℕ, (n : ℝ) ^ (-(-d)) = (n : ℝ) ^ d := by
+      intro n
+      congr 1
+      ring
+    exact h'.congr heq
+  have hNlim : Tendsto (fun n : ℕ =>
+      C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+        C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅) atTop (nhds 0) := by
+    have h₁ := (rpowNegTendsto d₁ hd₁).const_mul C₁
+    have h₂ := (rpowNegTendsto d₂ hd₂).const_mul C₁
+    have h₃ := (rpowNegTendsto d₃ hd₃).const_mul C₁
+    have h₄ := (rpowNegTendsto d₄ hd₄).const_mul C₂
+    have h₅ := (rpowNegTendsto d₅ hd₅).const_mul C₃
+    simpa [mul_comm, add_assoc] using (((h₁.add h₂).add h₃).add h₄).add h₅
+  have hNsmall : ∀ᶠ n : ℕ in atTop,
+      C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+        C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅ < 1 :=
+    (tendsto_order.1 hNlim).2 1 (by norm_num)
+  rcases Filter.eventually_atTop.1 hNsmall with ⟨n₁, hn₁⟩
+  refine ⟨max n₁ 3, ?_⟩
+  intro n hn θ hθlo hθhi
+  have hn₁' : n₁ ≤ n := le_trans (le_max_left _ _) hn
+  have hn3 : 3 ≤ n := le_trans (le_max_right _ _) hn
+  have hn2 : 2 ≤ n := le_trans (by norm_num) hn3
+  have hnR : (2 : ℝ) ≤ n := by exact_mod_cast hn2
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnR
+  have hlog0 : 0 ≤ Real.log n := Real.log_nonneg (by linarith)
+  have hlog3 : 1 < Real.log 3 := (Real.lt_log_iff_exp_lt (by norm_num)).2 Real.exp_one_lt_three
+  have hlog1 : 1 ≤ Real.log n := by
+    calc 1 ≤ Real.log 3 := le_of_lt hlog3
+      _ ≤ Real.log n := Real.log_le_log (by norm_num) (by exact_mod_cast hn3)
+  have hsqrt0 : 0 ≤ Real.sqrt θ := Real.sqrt_nonneg _
+  have hsqrtSq : (Real.sqrt θ) ^ 2 = θ := Real.sq_sqrt (by linarith : 0 ≤ θ)
+  have hsqrtLo : 1 / 1000 ≤ Real.sqrt θ := by nlinarith [hsqrtSq]
+  have hsqrtHi : Real.sqrt θ ≤ 1 / 500 := by nlinarith [hsqrtSq]
+  have hinvSqrt : (Real.sqrt θ)⁻¹ ≤ 1000 := by
+    have hs : 1 ≤ 1000 * Real.sqrt θ := by nlinarith [hsqrtLo]
+    have hdiv : 1 / Real.sqrt θ ≤ 1000 :=
+      (div_le_iff₀ (by linarith : 0 < Real.sqrt θ)).2 (by nlinarith [hs])
+    simpa [one_div] using hdiv
+  have hinvTheta : θ⁻¹ ≤ 1000000 := by
+    have hs : 1 ≤ 1000000 * θ := by nlinarith [hθlo]
+    have hdiv : 1 / θ ≤ 1000000 :=
+      (div_le_iff₀ (by linarith : 0 < θ)).2 (by nlinarith [hs])
+    simpa [one_div] using hdiv
+  have hpowBge : 1 ≤ (n : ℝ) ^ B := by
+    calc
+      1 = (n : ℝ) ^ (0 : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ B := Real.rpow_le_rpow_of_exponent_le (by linarith) (by linarith)
+  have hNB : (n : ℝ) ^ B + 1 ≤ 2 * (n : ℝ) ^ B := by nlinarith [hpowBge]
+  have hInvN : 1 + (n : ℝ)⁻¹ ≤ 2 := by
+    have hInv : (n : ℝ)⁻¹ ≤ 1 := by
+      exact inv_le_one_of_one_le₀ (by linarith)
+    linarith
+  have hJupper : (clockJ B n : ℝ) ≤ K ^ 2 * Real.log n := by
+    change (Nat.floor (K ^ 2 * Real.log n) : ℝ) ≤ _
+    exact Nat.floor_le (by positivity)
+  have hJupper' : (clockJ B n : ℝ) ≤ K ^ 2 * n := by
+    calc
+      (clockJ B n : ℝ) ≤ K ^ 2 * Real.log n := hJupper
+      _ ≤ K ^ 2 * n := mul_le_mul_of_nonneg_left (Real.log_le_self (by positivity)) (by positivity)
+  have hJlower : K ^ 2 * Real.log n - 1 < (clockJ B n : ℝ) := by
+    have h := Nat.lt_floor_add_one (K ^ 2 * Real.log n)
+    change K ^ 2 * Real.log n < (clockJ B n : ℝ) + 1 at h
+    linarith
+  have hExp2 : Real.exp 2 ≤ 9 := by
+    have he := Real.exp_one_lt_three
+    have he' := mul_lt_mul_of_pos_left he (Real.exp_pos 1)
+    have he'' := mul_lt_mul_of_pos_right he (by norm_num : (0 : ℝ) < 3)
+    have heq : Real.exp 2 = Real.exp 1 * Real.exp 1 := by
+      rw [show (2 : ℝ) = 1 + 1 by norm_num, Real.exp_add]
+    rw [heq]
+    linarith
+  have hJnumeric : Real.exp 2 * (K * Real.log n + 2) ≤ (clockJ B n : ℝ) := by
+    have hKgap : 1240 ≤ K ^ 2 - 9 * K := by nlinarith [sq_nonneg (K - 40), hK]
+    have hgap : 19 ≤ (K ^ 2 - 9 * K) * Real.log n := by
+      calc
+        19 ≤ 1240 := by norm_num
+        _ ≤ 1240 * Real.log n := by nlinarith [hlog1]
+        _ ≤ (K ^ 2 - 9 * K) * Real.log n :=
+          mul_le_mul_of_nonneg_right hKgap hlog0
+    have hKx : 9 * (K * Real.log n + 2) ≤ K ^ 2 * Real.log n - 1 := by nlinarith [hgap]
+    calc
+      Real.exp 2 * (K * Real.log n + 2) ≤ 9 * (K * Real.log n + 2) :=
+        mul_le_mul_of_nonneg_right hExp2 (by positivity)
+      _ ≤ K ^ 2 * Real.log n - 1 := hKx
+      _ ≤ (clockJ B n : ℝ) := le_of_lt hJlower
+  have hExpFactor :
+      Real.exp (Real.sqrt θ * (K * Real.log n + 2)) ≤
+        Real.exp (1 / 250) * (n : ℝ) ^ (K / 250) := by
+    have harg : Real.sqrt θ * (K * Real.log n + 2) ≤ K / 250 * Real.log n + 1 / 250 := by
+      have hKx : 0 ≤ K * Real.log n + 2 := by positivity
+      calc
+        Real.sqrt θ * (K * Real.log n + 2) ≤ (1 / 500) * (K * Real.log n + 2) :=
+          mul_le_mul_of_nonneg_right hsqrtHi hKx
+        _ = K / 500 * Real.log n + 1 / 250 := by ring
+        _ ≤ K / 250 * Real.log n + 1 / 250 := by
+          gcongr
+          norm_num
+    calc
+      Real.exp (Real.sqrt θ * (K * Real.log n + 2)) ≤
+          Real.exp (K / 250 * Real.log n + 1 / 250) := Real.exp_le_exp.mpr harg
+      _ = Real.exp (1 / 250) * (n : ℝ) ^ (K / 250) := by
+        rw [Real.exp_add]
+        have hp : Real.exp (K / 250 * Real.log n) = (n : ℝ) ^ (K / 250) := by
+          rw [Real.rpow_def_of_pos hnpos]
+          congr 1
+          ring
+        rw [hp]
+        ring
+  have hQ :
+      Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ ≤
+        1000 * Real.exp (1 / 250) * (n : ℝ) ^ (K / 250) := by
+    calc
+      _ = Real.exp (Real.sqrt θ * (K * Real.log n + 2)) * (Real.sqrt θ)⁻¹ := by ring
+      _ ≤ (Real.exp (1 / 250) * (n : ℝ) ^ (K / 250)) * 1000 :=
+        mul_le_mul hExpFactor hinvSqrt (by positivity) (by positivity)
+      _ = 1000 * Real.exp (1 / 250) * (n : ℝ) ^ (K / 250) := by ring
+  have hJplus : (clockJ B n : ℝ) + 1 ≤ (K ^ 2 + 1) * n := by
+    calc
+      (clockJ B n : ℝ) + 1 ≤ K ^ 2 * n + 1 := by linarith [hJupper']
+      _ ≤ (K ^ 2 + 1) * n := by nlinarith [hKpos, hnR]
+  have hJsq : (clockJ B n : ℝ) ^ 2 ≤ K ^ 4 * n ^ 2 := by
+    have hnonneg : 0 ≤ (clockJ B n : ℝ) := Nat.cast_nonneg _
+    have hupperProd := mul_le_mul_of_nonneg_right hJupper' hnonneg
+    have hupperProd' := mul_le_mul_of_nonneg_left hJupper' (by positivity : 0 ≤ K ^ 2 * n)
+    nlinarith [hupperProd, hupperProd']
+  have hpowMul (a b : ℝ) :
+      (n : ℝ) ^ a * (n : ℝ) ^ b = (n : ℝ) ^ (a + b) :=
+    (Real.rpow_add hnpos a b).symm
+  have hpowThree (a b c : ℝ) :
+      (n : ℝ) ^ a * (n : ℝ) ^ b * (n : ℝ) ^ c = (n : ℝ) ^ (a + b + c) := by
+    rw [hpowMul a b, hpowMul (a + b) c]
+  have htermOne :
+      ((n : ℝ) ^ B + 1) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) *
+          clockShortBound B n ≤
+        C₁ * ((n : ℝ) ^ (d₁ - 3 * K / 5) + (n : ℝ) ^ (d₂ - 3 * K / 5) +
+          (n : ℝ) ^ (d₃ - 3 * K / 5)) := by
+    have hF :
+        ((n : ℝ) ^ B + 1) *
+            (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) ≤
+          2000 * Real.exp (1 / 250) * (n : ℝ) ^ (B + K / 250) := by
+      calc
+        _ ≤ (2 * (n : ℝ) ^ B) *
+            (1000 * Real.exp (1 / 250) * (n : ℝ) ^ (K / 250)) :=
+          mul_le_mul hNB hQ (by positivity) (by positivity)
+        _ = 2000 * Real.exp (1 / 250) *
+            ((n : ℝ) ^ B * (n : ℝ) ^ (K / 250)) := by ring
+        _ = 2000 * Real.exp (1 / 250) * (n : ℝ) ^ (B + K / 250) := by
+          rw [hpowMul B (K / 250)]
+    have hFnonneg : 0 ≤ ((n : ℝ) ^ B + 1) *
+        (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) := by positivity
+    have hJplus2 : ((clockJ B n : ℝ) + 1) * (1 + (n : ℝ)⁻¹) ≤
+        2 * (K ^ 2 + 1) * n := by
+      exact le_trans (mul_le_mul_of_nonneg_left hInvN (by positivity)) (by nlinarith [hJplus])
+    have h1 : (n : ℝ) ^ (B + K / 250) * (n : ℝ) ^ (-(2 * K)) =
+        (n : ℝ) ^ (d₁ - 3 * K / 5) := by
+      rw [hpowMul (B + K / 250) (-(2 * K))]
+      congr 1
+      dsimp [d₁]
+      ring
+    have h2 : (n : ℝ) ^ (B + K / 250) * (n : ℝ) ^ (-(99 / 100 * K)) =
+        (n : ℝ) ^ (d₂ - 3 * K / 5) := by
+      rw [hpowMul (B + K / 250) (-(99 / 100 * K))]
+      congr 1
+      dsimp [d₂]
+      ring
+    have h3 : (n : ℝ) ^ (B + K / 250) * (n : ℝ) ^ (1 - clockP B / 3) =
+        (n : ℝ) ^ (d₃ - 3 * K / 5) := by
+      rw [hpowMul (B + K / 250) (1 - clockP B / 3)]
+      congr 1
+      dsimp [d₃]
+      ring
+    have hninv : 0 ≤ (n : ℝ)⁻¹ := by positivity
+    have hpownonneg (a : ℝ) : 0 ≤ (n : ℝ) ^ a := Real.rpow_nonneg (by positivity) _
+    have hshort : clockShortBound B n ≤
+        (n : ℝ) ^ (-(2 * K)) + 2 * (n : ℝ) ^ (-(99 / 100 * K)) +
+          2 * (K ^ 2 + 1) * n * (n : ℝ) ^ (-(clockP B / 3)) := by
+      unfold clockShortBound
+      apply add_le_add (add_le_add le_rfl le_rfl) ?_
+      exact mul_le_mul_of_nonneg_right hJplus2 (by positivity)
+    have hshortNonneg : 0 ≤ clockShortBound B n := by
+      unfold clockShortBound
+      positivity
+    calc
+      ((n : ℝ) ^ B + 1) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) *
+          clockShortBound B n ≤
+        (2000 * Real.exp (1 / 250) * (n : ℝ) ^ (B + K / 250)) *
+          ((n : ℝ) ^ (-(2 * K)) + 2 * (n : ℝ) ^ (-(99 / 100 * K)) +
+            2 * (K ^ 2 + 1) * n * (n : ℝ) ^ (-(clockP B / 3))) := by
+        exact mul_le_mul hF hshort hshortNonneg (by positivity)
+      _ ≤ C₁ * ((n : ℝ) ^ (d₁ - 3 * K / 5) + (n : ℝ) ^ (d₂ - 3 * K / 5) +
+          (n : ℝ) ^ (d₃ - 3 * K / 5)) := by
+        have hmulOne : (n : ℝ) ^ (B + K / 250) * n =
+            (n : ℝ) ^ (B + K / 250) * (n : ℝ) ^ (1 : ℝ) := by
+          exact congrArg (fun x : ℝ => (n : ℝ) ^ (B + K / 250) * x) (by simp)
+        have hthird : (n : ℝ) ^ (B + K / 250) * n *
+            (n : ℝ) ^ (-(clockP B / 3)) = (n : ℝ) ^ (d₃ - 3 * K / 5) := by
+          rw [hmulOne]
+          rw [hpowThree (B + K / 250) 1 (-(clockP B / 3))]
+          congr 1 <;> dsimp [d₃] <;> ring
+        have hcoef : 2000 * Real.exp (1 / 250) ≤ C₁ := by
+          dsimp [C₁]
+          nlinarith [sq_nonneg K, Real.exp_pos (1 / 250),
+            mul_nonneg (sq_nonneg K) (Real.exp_pos (1 / 250)).le]
+        have hcoef2 : 4000 * Real.exp (1 / 250) ≤ C₁ := by
+          dsimp [C₁]
+          nlinarith [sq_nonneg K, Real.exp_pos (1 / 250),
+            mul_nonneg (sq_nonneg K) (Real.exp_pos (1 / 250)).le]
+        have hcoef3 : 4000 * Real.exp (1 / 250) * (K ^ 2 + 1) ≤ C₁ := by
+          dsimp [C₁]
+          exact le_rfl
+        have hp1 := hpownonneg (d₁ - 3 * K / 5)
+        have hp2 := hpownonneg (d₂ - 3 * K / 5)
+        have hp3 := hpownonneg (d₃ - 3 * K / 5)
+        have hc1 := mul_le_mul_of_nonneg_right hcoef hp1
+        have hc2 := mul_le_mul_of_nonneg_right hcoef2 hp2
+        have hc3 := mul_le_mul_of_nonneg_right hcoef3 hp3
+        calc
+          (2000 * Real.exp (1 / 250) * (n : ℝ) ^ (B + K / 250)) *
+              ((n : ℝ) ^ (-(2 * K)) + 2 * (n : ℝ) ^ (-(99 / 100 * K)) +
+                2 * (K ^ 2 + 1) * n * (n : ℝ) ^ (-(clockP B / 3))) =
+            2000 * Real.exp (1 / 250) *
+              ((n : ℝ) ^ (B + K / 250) * (n : ℝ) ^ (-(2 * K)) +
+                2 * ((n : ℝ) ^ (B + K / 250) * (n : ℝ) ^ (-(99 / 100 * K))) +
+                2 * (K ^ 2 + 1) * ((n : ℝ) ^ (B + K / 250) * n *
+                  (n : ℝ) ^ (-(clockP B / 3)))) := by ring
+          _ = 2000 * Real.exp (1 / 250) *
+              ((n : ℝ) ^ (d₁ - 3 * K / 5) + 2 * (n : ℝ) ^ (d₂ - 3 * K / 5) +
+                2 * (K ^ 2 + 1) * (n : ℝ) ^ (d₃ - 3 * K / 5)) := by
+            rw [h1, h2, hthird]
+          _ ≤ C₁ * ((n : ℝ) ^ (d₁ - 3 * K / 5) + (n : ℝ) ^ (d₂ - 3 * K / 5) +
+              (n : ℝ) ^ (d₃ - 3 * K / 5)) := by nlinarith [hc1, hc2, hc3]
+  have htermTwo :
+      (clockJ B n : ℝ) ^ 2 * (n : ℝ) ^ B *
+          ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) ≤
+        C₂ * (n : ℝ) ^ (d₄ - 3 * K / 5) := by
+    have hpow : (n : ℝ) ^ B * (n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) =
+        (n : ℝ) ^ (2 * B - (clockA B - 1)) := by
+      rw [hpowThree B B (-(clockA B - 1))]
+      congr 1
+      ring
+    have hratio : (n : ℝ) ^ B *
+        ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ) ≤
+          1000000 * (n : ℝ) ^ (2 * B - (clockA B - 1)) := by
+      rw [div_eq_mul_inv]
+      calc
+        (n : ℝ) ^ B *
+            ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) * θ⁻¹) =
+          ((n : ℝ) ^ B * (n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1))) * θ⁻¹ := by ring
+        _ = (n : ℝ) ^ (2 * B - (clockA B - 1)) * θ⁻¹ := by rw [hpow]
+        _ ≤ (n : ℝ) ^ (2 * B - (clockA B - 1)) * 1000000 :=
+          mul_le_mul_of_nonneg_left hinvTheta (by positivity)
+        _ = 1000000 * (n : ℝ) ^ (2 * B - (clockA B - 1)) := by ring
+    have hpair :
+        (clockJ B n : ℝ) ^ 2 *
+            ((n : ℝ) ^ B * ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ)) ≤
+          (K ^ 4 * n ^ 2) *
+            (1000000 * (n : ℝ) ^ (2 * B - (clockA B - 1))) := by
+      have h := mul_le_mul hJsq hratio (by positivity) (by positivity)
+      exact h
+    calc
+      _ ≤ (K ^ 4 * n ^ 2) *
+          (1000000 * (n : ℝ) ^ (2 * B - (clockA B - 1))) *
+          (1000 * Real.exp (1 / 250) * (n : ℝ) ^ (K / 250)) := by
+        rw [show (clockJ B n : ℝ) ^ 2 * (n : ℝ) ^ B *
+            ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ) =
+          (clockJ B n : ℝ) ^ 2 *
+            ((n : ℝ) ^ B * ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ)) by ring]
+        exact mul_le_mul hpair hQ (by positivity) (by positivity)
+      _ = C₂ * (n : ℝ) ^ (d₄ - 3 * K / 5) := by
+        have hnSq : (n : ℝ) ^ 2 = (n : ℝ) ^ (2 : ℝ) := by simp
+        have hp : (n : ℝ) ^ 2 * (n : ℝ) ^ (2 * B - (clockA B - 1)) *
+            (n : ℝ) ^ (K / 250) =
+              (n : ℝ) ^ (2 + 2 * B - (clockA B - 1) + K / 250) := by
+          rw [hnSq]
+          rw [hpowThree 2 (2 * B - (clockA B - 1)) (K / 250)]
+          congr 1 <;> ring
+        rw [show (K ^ 4 * n ^ 2) *
+            (1000000 * (n : ℝ) ^ (2 * B - (clockA B - 1))) *
+            (1000 * Real.exp (1 / 250) * (n : ℝ) ^ (K / 250)) =
+              C₂ * ((n : ℝ) ^ 2 * (n : ℝ) ^ (2 * B - (clockA B - 1)) *
+                (n : ℝ) ^ (K / 250)) by dsimp [C₂]; rw [hnSq]; ring]
+        rw [hp]
+        congr 2
+        dsimp [d₄]
+        ring
+  have htermThree :
+      ((n : ℝ) ^ B + 1) * Real.exp (-(clockJ B n : ℝ)) ≤
+        C₃ * (n : ℝ) ^ (d₅ - 3 * K / 5) := by
+    have hfloor : K ^ 2 * Real.log n - 1 < (clockJ B n : ℝ) := hJlower
+    have hexp : Real.exp (-(clockJ B n : ℝ)) ≤
+        Real.exp 1 * (n : ℝ) ^ (-K ^ 2) := by
+      have hexp' : Real.exp (-(clockJ B n : ℝ)) ≤
+          Real.exp (1 - K ^ 2 * Real.log n) :=
+        Real.exp_le_exp.mpr (by linarith [hfloor])
+      calc
+        Real.exp (-(clockJ B n : ℝ)) ≤ Real.exp (1 - K ^ 2 * Real.log n) := hexp'
+        _ = Real.exp 1 * Real.exp (-(K ^ 2 * Real.log n)) := by
+          rw [← Real.exp_add]
+          congr 1 <;> ring
+        _ = Real.exp 1 * (n : ℝ) ^ (-K ^ 2) := by
+          rw [Real.rpow_def_of_pos hnpos]
+          congr 2 <;> ring
+    calc
+      _ ≤ (2 * (n : ℝ) ^ B) *
+          (Real.exp 1 * (n : ℝ) ^ (-K ^ 2)) :=
+        mul_le_mul hNB hexp (by positivity) (by positivity)
+      _ = 2 * Real.exp 1 * ((n : ℝ) ^ B * (n : ℝ) ^ (-K ^ 2)) := by ring
+      _ = C₃ * (n : ℝ) ^ (B - K ^ 2) := by
+        rw [hpowMul B (-K ^ 2)]
+        dsimp [C₃]
+        congr 2 <;> ring
+      _ = C₃ * (n : ℝ) ^ (d₅ - 3 * K / 5) := by
+        congr 2 <;> (dsimp [d₅] <;> ring)
+  have hNsmallAt :
+      C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+        C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅ < 1 := hn₁' |> hn₁ n
+  have htarget : 0 ≤ (n : ℝ) ^ (-(3 * K / 5)) := Real.rpow_nonneg (by positivity) _
+  have htermOne' :
+      ((n : ℝ) ^ B + 1) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) *
+          clockShortBound B n ≤
+        C₁ * (n : ℝ) ^ (d₁ - 3 * K / 5) +
+          C₁ * (n : ℝ) ^ (d₂ - 3 * K / 5) + C₁ * (n : ℝ) ^ (d₃ - 3 * K / 5) := by
+    calc
+      _ ≤ C₁ * ((n : ℝ) ^ (d₁ - 3 * K / 5) + (n : ℝ) ^ (d₂ - 3 * K / 5) +
+          (n : ℝ) ^ (d₃ - 3 * K / 5)) := htermOne
+      _ = _ := by ring
+  have hmajor :
+      ((n : ℝ) ^ B + 1) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) *
+          clockShortBound B n +
+        (clockJ B n : ℝ) ^ 2 * (n : ℝ) ^ B *
+          ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) +
+        ((n : ℝ) ^ B + 1) * Real.exp (-(clockJ B n : ℝ)) ≤
+      (n : ℝ) ^ (-(3 * K / 5)) *
+        (C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+          C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅) := by
+    have hfactor (d : ℝ) :
+        (n : ℝ) ^ (-(3 * K / 5)) * (n : ℝ) ^ d =
+          (n : ℝ) ^ (d - 3 * K / 5) := by
+      rw [hpowMul (-(3 * K / 5)) d]
+      congr 1
+      ring
+    calc
+      _ ≤ C₁ * (n : ℝ) ^ (d₁ - 3 * K / 5) + C₁ * (n : ℝ) ^ (d₂ - 3 * K / 5) +
+          C₁ * (n : ℝ) ^ (d₃ - 3 * K / 5) + C₂ * (n : ℝ) ^ (d₄ - 3 * K / 5) +
+          C₃ * (n : ℝ) ^ (d₅ - 3 * K / 5) :=
+        add_le_add (add_le_add htermOne' htermTwo) htermThree
+      _ = (n : ℝ) ^ (-(3 * K / 5)) *
+          (C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+            C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅) := by
+        rw [← hfactor d₁, ← hfactor d₂, ← hfactor d₃, ← hfactor d₄, ← hfactor d₅]
+        ring
+  have hN :
+      C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+        C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅ ≤ 1 := le_of_lt hNsmallAt
+  have hfinal :
+      ((n : ℝ) ^ B + 1) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) *
+          clockShortBound B n +
+        (clockJ B n : ℝ) ^ 2 * (n : ℝ) ^ B *
+          ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / θ) *
+          (Real.exp (Real.sqrt θ * (K * Real.log n + 2)) / Real.sqrt θ) +
+        ((n : ℝ) ^ B + 1) * Real.exp (-(clockJ B n : ℝ)) ≤
+      (n : ℝ) ^ (-(3 * K / 5)) := by
+    calc
+      _ ≤ (n : ℝ) ^ (-(3 * K / 5)) *
+          (C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+            C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅) := hmajor
+      _ ≤ (n : ℝ) ^ (-(3 * K / 5)) := by
+        calc
+          (n : ℝ) ^ (-(3 * K / 5)) *
+              (C₁ * (n : ℝ) ^ d₁ + C₁ * (n : ℝ) ^ d₂ + C₁ * (n : ℝ) ^ d₃ +
+                C₂ * (n : ℝ) ^ d₄ + C₃ * (n : ℝ) ^ d₅) ≤
+            (n : ℝ) ^ (-(3 * K / 5)) * 1 := mul_le_mul_of_nonneg_left hN htarget
+          _ = (n : ℝ) ^ (-(3 * K / 5)) := by ring
+  constructor
+  · simpa [K, clockK₀] using hJnumeric
+  · simpa [K, clockκ, clockK₀] using hfinal
 
 /-- L3.10h-inc (03:897–902, 03:907–944, 03:1084–1104): the incidence bound in closure form. For every endpoint
 `v`, summed over tests, the probability of a bad outcome with `v` in the test's closure is at most `n^{-.6K₀}`.
@@ -351,7 +1793,47 @@ theorem clockBad_incidence (B C_g : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, ∀ n 
       [∀ a, DecidableEq (Ω a)] [Nonempty R] (D : ClockData B n g R K Ω) (v : Endpoint D.Row g),
       ∑ i ∈ Finset.univ.filter (fun i : D.Bad => v ∈ D.badAct i), D.law.pr (D.badEvent i) ≤
         clockκ B n := by
-  sorry
+  classical
+  obtain ⟨n₀, hclosure⟩ := closure_incidence_bound B C_g hB
+  refine ⟨n₀, ?_⟩
+  intro n hn g hg R K _ _ _ Ω _ _ _ D v
+  have hgroup :
+      (∑ i ∈ Finset.univ.filter (fun i : D.Bad => v ∈ D.badAct i), D.law.pr (D.badEvent i)) =
+        ∑ t : SamplingTest R K,
+          ∑ ℓ ∈ (D.badLeaves' t).filter (fun ℓ => v ∈ ℓ.active), D.law.pr ℓ.Event := by
+    rw [Finset.sum_filter]
+    change (∑ i : D.Bad, if v ∈ D.badAct i then D.law.pr (D.badEvent i) else 0) = _
+    change (∑ i : (Σ t : SamplingTest R K, ↥(D.badLeaves' t)),
+        if v ∈ (i.2.1).active then D.law.pr (i.2.1).Event else 0) = _
+    rw [Fintype.sum_sigma]
+    apply Finset.sum_congr rfl
+    intro t ht
+    change (∑ ℓ ∈ (Finset.univ : Finset (↥(D.badLeaves' t))),
+        if v ∈ ℓ.1.active then D.law.pr ℓ.1.Event else 0) = _
+    rw [Finset.univ_eq_attach]
+    calc
+      (∑ ℓ ∈ (D.badLeaves' t).attach,
+          if v ∈ ℓ.1.active then D.law.pr ℓ.1.Event else 0) =
+          ∑ ℓ ∈ D.badLeaves' t, if v ∈ ℓ.active then D.law.pr ℓ.Event else 0 :=
+        Finset.sum_attach (D.badLeaves' t)
+          (fun ℓ => if v ∈ ℓ.active then D.law.pr ℓ.Event else 0)
+      _ = ∑ ℓ ∈ (D.badLeaves' t).filter (fun ℓ => v ∈ ℓ.active), D.law.pr ℓ.Event := by
+        rw [Finset.sum_filter]
+  have hle (t : SamplingTest R K) :
+      ∑ ℓ ∈ (D.badLeaves' t).filter (fun ℓ => v ∈ ℓ.active), D.law.pr ℓ.Event ≤
+        D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) ∧
+          v ∈ activeEndpoints ξ D.scope' (D.test' t)) := by
+    simpa [ClockData.badLeaves', ClockData.law, ClockData.edgeLaw] using
+      (badLeaves_incidence_le D.edgeLaw D.lab' D.failure' D.scope' (clockLnat B n) (D.test' t) v)
+  calc
+    (∑ i ∈ Finset.univ.filter (fun i : D.Bad => v ∈ D.badAct i), D.law.pr (D.badEvent i)) =
+        ∑ t : SamplingTest R K,
+          ∑ ℓ ∈ (D.badLeaves' t).filter (fun ℓ => v ∈ ℓ.active), D.law.pr ℓ.Event := hgroup
+    _ ≤ ∑ t : SamplingTest R K, D.law.pr
+        (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) ∧
+          v ∈ activeEndpoints ξ D.scope' (D.test' t)) :=
+      Finset.sum_le_sum fun t _ => hle t
+    _ ≤ clockκ B n := hclosure n hn g hg D v
 
 /-- L3.10g-raw (03:1109–1110, 03:1127–1128): the raw joint target bound, Step 7 with the empty insertion
 (noninjective targets have probability zero, the marks carrying their labels). -/
@@ -362,7 +1844,146 @@ theorem target_raw_bound (B C_g : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, ∀ n �
       (S.card : ℝ) ≤ (n : ℝ) ^ B →
       D.law.pr (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) ≤
         (1 + (n : ℝ)⁻¹) * ∏ a ∈ S, (D.C.trimmed a).w (o a) := by
-  sorry
+  classical
+  have hK₀ : 0 < clockK₀ B := by unfold clockK₀; linarith
+  have hA : 10 * (B + clockK₀ B) < clockA B - 1 := by unfold clockA; linarith
+  obtain ⟨n₁, hstep⟩ := step7_target_product_bound B (clockA B - 1) C_g (clockK₀ B) hB hK₀ hA
+  refine ⟨max n₁ 2, ?_⟩
+  intro n hn g hg R K _ _ _ Ω _ _ _ D S o hS
+  have hn₁ : n₁ ≤ n := le_trans (le_max_left _ _) hn
+  have hn₂ : 2 ≤ n := le_trans (le_max_right _ _) hn
+  have hnreal : (2 : ℝ) ≤ n := by exact_mod_cast hn₂
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnreal
+  have hlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by linarith)
+  have hA20 : 20 ≤ clockA B := by unfold clockA clockK₀; linarith
+  have hpow20 : (10 : ℝ) ^ 6 ≤ (n : ℝ) ^ (20 : ℝ) := by
+    calc
+      (10 : ℝ) ^ 6 ≤ (2 : ℝ) ^ (20 : ℝ) := by norm_num
+      _ ≤ (n : ℝ) ^ (20 : ℝ) := Real.rpow_le_rpow (by norm_num) hnreal (by norm_num)
+  have hpowA : (n : ℝ) ^ (20 : ℝ) ≤ (n : ℝ) ^ clockA B :=
+    Real.rpow_le_rpow_of_exponent_le (le_trans (by norm_num) hnreal) hA20
+  have hgnum : (10 : ℝ) ^ 6 ≤ g := by
+    exact le_trans (le_trans hpow20 hpowA) (D.card_labels_ge (by omega))
+  have htheta := D.completed_theta_bounds hgnum
+  have hatom := D.completed_atom_le hn₂
+  let S' : Finset D.Row := S.map Function.Embedding.inl
+  have hS' : (S'.card : ℝ) ≤ (n : ℝ) ^ B := by simpa [S'] using hS
+  let ins : ∀ e : RowLabel D.Row g, Option (MeshClockValue D.mesh.ticks (D.Out e.1)) := fun _ => none
+  have hins : insertionSize ins = 0 := by simp [ins, insertionSize]
+  have hinsle : (insertionSize ins : ℝ) ≤ (clockK₀ B + 1) ^ 2 * Real.log (n : ℝ) := by
+    simpa [hins] using mul_nonneg (sq_nonneg (clockK₀ B + 1)) hlog
+  by_cases hlabels : Set.InjOn (fun a : R => D.I.lab a (o a)) S
+  · have hinj : Set.InjOn (fun a : D.Row => D.lab' a (D.extendTarget o a)) S' := by
+      intro r hr s hs hlabels'
+      rcases Finset.mem_map.mp hr with ⟨a, ha, rfl⟩
+      rcases Finset.mem_map.mp hs with ⟨b, hb, rfl⟩
+      change D.I.lab a (o a) = D.I.lab b (o b) at hlabels'
+      exact congrArg Sum.inl (hlabels ha hb hlabels')
+    have hstep' := hstep n hn₁ D.mesh D.mesh.δ_nonneg D.mesh.δ_le_one
+      D.law' D.lab' D.C.theta hg D.completed_columns_eq htheta.2 hatom ins hinsle S'
+      (D.extendTarget o) hinj hS'
+    have hIns (ξ : ClockField D.mesh.ticks D.Row g D.Out) : insertArrivals ins ξ = ξ := by
+      funext e
+      simp [insertArrivals, ins]
+    have hevent : (fun ξ => matchesTargetsOrdinarily ins ξ S' (D.extendTarget o)) =
+        (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) := by
+      funext ξ
+      apply propext
+      unfold matchesTargetsOrdinarily matchesTargets
+      constructor
+      · intro h r hr
+        rcases h r hr with ⟨y, hassign, hins⟩
+        have hassignEq :
+            (greedyMatching (insertArrivals ins ξ)).assignment r =
+              (greedyMatching ξ).assignment r := by rw [hIns ξ]
+        exact ⟨y, hassignEq.symm.trans hassign⟩
+      · intro h r hr
+        rcases h r hr with ⟨y, hassign⟩
+        have hassignEq :
+            (greedyMatching (insertArrivals ins ξ)).assignment r =
+              (greedyMatching ξ).assignment r := by rw [hIns ξ]
+        exact ⟨y, hassignEq.trans hassign, by simp [ins]⟩
+    have hprod : (∏ r ∈ S', (D.law' r).w (D.extendTarget o r)) =
+        ∏ a ∈ S, (D.C.trimmed a).w (o a) := by
+      dsimp [S']
+      rw [Finset.prod_map]
+      apply Finset.prod_congr rfl
+      intro a ha
+      change (D.C.trimmed a).w (o a) = (D.C.trimmed a).w (o a)
+      rfl
+    change D.law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S' (D.extendTarget o)) ≤
+      (1 + (n : ℝ)⁻¹) * ∏ r ∈ S', (D.law' r).w (D.extendTarget o r) at hstep'
+    rw [hevent, hprod] at hstep'
+    exact hstep'
+  · have hcollision : ∃ a ∈ S, ∃ b ∈ S, a ≠ b ∧ D.I.lab a (o a) = D.I.lab b (o b) := by
+      classical
+      by_contra hcoll
+      apply hlabels
+      intro a ha b hb hEq
+      by_contra hne
+      exact hcoll ⟨a, ha, b, hb, hne, hEq⟩
+    let emb : R ↪ D.Row := Function.Embedding.inl
+    let invalidMarks : ClockField D.mesh.ticks D.Row g D.Out → Prop := fun ξ =>
+      ∃ e : RowLabel D.Row g, ∃ t : Fin D.mesh.ticks, ∃ v : D.Out e.1,
+        ξ e = MeshClockValue.tick t v ∧ D.lab' e.1 v ≠ e.2
+    have hmatchesValidFalse (ξ : ClockField D.mesh.ticks D.Row g D.Out)
+        (hξ : matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o))
+        (hvalid : ¬ invalidMarks ξ) : False := by
+      rcases hcollision with ⟨a, ha, b, hb, hab, hlab⟩
+      have hma : emb a ∈ S.map emb := Finset.mem_map.mpr ⟨a, ha, rfl⟩
+      have hmb : emb b ∈ S.map emb := Finset.mem_map.mpr ⟨b, hb, rfl⟩
+      rcases hξ (emb a) hma with ⟨ya, hya⟩
+      rcases hξ (emb b) hmb with ⟨yb, hyb⟩
+      change (greedyMatching ξ).assignment (emb a) = some (ya, o a) at hya
+      change (greedyMatching ξ).assignment (emb b) = some (yb, o b) at hyb
+      rcases greedyMatching_assignment_origin ξ (emb a) ya (o a) hya with ⟨ta, hta⟩
+      rcases greedyMatching_assignment_origin ξ (emb b) yb (o b) hyb with ⟨tb, htb⟩
+      have hla : D.lab' (emb a) (o a) = ya := by
+        by_contra hne
+        exact hvalid ⟨(emb a, ya), ta, o a, hta, hne⟩
+      have hlb : D.lab' (emb b) (o b) = yb := by
+        by_contra hne
+        exact hvalid ⟨(emb b, yb), tb, o b, htb, hne⟩
+      have hla' : D.I.lab a (o a) = ya := by
+        change D.I.lab a (o a) = ya at hla
+        exact hla
+      have hlb' : D.I.lab b (o b) = yb := by
+        change D.I.lab b (o b) = yb at hlb
+        exact hlb
+      have hyaEq : ya = yb := by
+        calc
+          ya = D.I.lab a (o a) := hla'.symm
+          _ = D.I.lab b (o b) := hlab
+          _ = yb := hlb'
+      have hab' := greedyMatching_label_injective ξ (emb a) (emb b) ya (o a) (o b)
+        hya (by rw [← hyaEq] at hyb; exact hyb)
+      exact hab (emb.injective hab')
+    have hsubsetInvalid : ∀ ξ,
+        matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o) →
+          invalidMarks ξ := by
+      intro ξ hξ
+      by_contra hnot
+      exact hmatchesValidFalse ξ hξ hnot
+    have hnull : D.law.pr
+        invalidMarks = 0 := by
+      simpa [invalidMarks, ClockData.law, ClockData.edgeLaw] using
+        (invalid_marks_null (T := D.mesh.ticks) D.mesh.δ D.mesh.δ_nonneg D.mesh.δ_le_one
+          D.law' D.lab')
+    have hle : D.law.pr (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) ≤ 0 := by
+      calc
+        D.law.pr (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) ≤
+            D.law.pr invalidMarks :=
+          finProb_pr_mono D.law (by intro ξ hξ; exact hsubsetInvalid ξ hξ)
+        _ = 0 := hnull
+    have hnonneg := finProb_pr_nonneg D.law
+      (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o))
+    have hzero : D.law.pr
+        (fun ξ => matchesTargets ξ (S.map Function.Embedding.inl) (D.extendTarget o)) = 0 :=
+      le_antisymm hle hnonneg
+    have hprod : 0 ≤ ∏ a ∈ S, (D.C.trimmed a).w (o a) :=
+      Finset.prod_nonneg fun a ha => (D.C.trimmed a).nonneg (o a)
+    rw [hzero]
+    positivity
 
 /-- L3.10h-target (03:1121–1128): the target field of the raw sampler. The rectangles are the target rectangles
 (`targetRects`, enumerated), each the event of one leaf (`clockLeaf_meet`) with at most `n^B L` active endpoints,
@@ -382,7 +2003,195 @@ theorem clock_target (B C_g : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, ∀ n ≥ n�
             D.law.pr (rect r) * D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x)) ∧
         (∀ x, (∀ i, ¬ D.badEvent i x) → (∀ a ∈ S, D.out x a = o a) → ∃ r, rect r x) ∧
         ∑ r, D.law.pr (rect r) ≤ (1 + (n : ℝ)⁻¹) * ∏ a ∈ S, (D.C.trimmed a).w (o a) := by
-  sorry
+  classical
+  rcases clock_constants B hB with ⟨_, n₁, hconst⟩
+  obtain ⟨n₂, htarget⟩ := target_raw_bound B C_g hB
+  refine ⟨max n₁ n₂, ?_⟩
+  intro n hn g hg R K _ _ _ Ω _ _ _ D S o hS
+  have hn₁ : n₁ ≤ n := le_trans (le_max_left _ _) hn
+  have hn₂ : n₂ ≤ n := le_trans (le_max_right _ _) hn
+  obtain ⟨hnreal, _, _, hLone⟩ := hconst n hn₁
+  let T := D.targetRects S o
+  let m := Fintype.card (↥T)
+  let e : Fin m ≃ ↥T := (Fintype.equivFin (↥T)).symm
+  let rect : Fin m → ClockField D.mesh.ticks D.Row g D.Out → Prop :=
+    fun r ξ => ∀ a : S, ((e r).1 a).Event ξ
+  let actR : Fin m → Finset (Endpoint D.Row g) :=
+    fun r => Finset.univ.biUnion fun a : S => ((e r).1 a).active
+  have hleafCard (τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out) (hτ : τ ∈ T) (a : S) :
+      (τ a).active.card ≤ clockLnat B n := by
+    change τ ∈ D.targetRects S o at hτ
+    unfold ClockData.targetRects at hτ
+    rcases Finset.mem_image.mp hτ with ⟨z, hz, hEq⟩
+    have hgood := (Finset.mem_filter.mp hz).2
+    have hgiant :
+        (testExploration z D.scope' (D.test' (.singleton a.1)) (clockLnat B n)).giant = false :=
+      (hgood a).1
+    let roots := testRootEndpoints (g := g) D.scope' (D.test' (.singleton a.1))
+    have hgiant' : (truncatedExploration z roots (clockLnat B n)).giant = false := by
+      simpa [roots, testExploration, ClockData.test'] using hgiant
+    have hcard := (truncatedExploration_card z roots (clockLnat B n)).2.1 hgiant'
+    have hle : (testLeaf z D.scope' (D.test' (.singleton a.1)) (clockLnat B n)).active.card ≤
+        clockLnat B n := by
+      exact Nat.le_of_lt (by simpa [testLeaf, roots, explorationLeaf] using hcard)
+    rw [← congrFun hEq a]
+    exact hle
+  have hactCard : ∀ r, ((actR r).card : ℝ) ≤ (n : ℝ) ^ B * clockL B n := by
+    intro r
+    have hcard : (actR r).card ≤ ∑ a : S, ((e r).1 a).active.card := by
+      dsimp [actR]
+      exact Finset.card_biUnion_le
+    have hcard' : (actR r).card ≤ S.card * clockLnat B n := by
+      calc
+        (actR r).card ≤ ∑ a : S, ((e r).1 a).active.card := hcard
+        _ ≤ ∑ _a : S, clockLnat B n := Finset.sum_le_sum fun a _ => hleafCard (e r).1 ((e r).2) a
+        _ = S.card * clockLnat B n := by simp
+    have hcardReal : ((actR r).card : ℝ) ≤ (S.card : ℝ) * (clockLnat B n : ℝ) := by
+      exact_mod_cast hcard'
+    calc
+      ((actR r).card : ℝ) ≤ (S.card : ℝ) * clockL B n := by simpa [clockL] using hcardReal
+      _ ≤ (n : ℝ) ^ B * clockL B n :=
+        mul_le_mul_of_nonneg_right hS (Nat.cast_nonneg _)
+  have prEq {A B : ClockField D.mesh.ticks D.Row g D.Out → Prop}
+      (hAB : ∀ x, A x ↔ B x) : D.law.pr A = D.law.pr B := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hA : A x
+    · have hB := (hAB x).mp hA
+      simp [hA, hB]
+    · have hB : ¬ B x := by intro h; exact hA ((hAB x).mpr h)
+      simp [hA, hB]
+  have hforcing : ∀ r (S' : Finset D.Bad),
+      (∀ j ∈ S', Disjoint (actR r) (D.badAct j)) →
+        D.law.pr (fun x => rect r x ∧ ∀ j ∈ S', ¬ D.badEvent j x) ≤
+          D.law.pr (rect r) * D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x) := by
+    intro r S' hdis
+    change D.law.pr (fun x => rect r x ∧ ∀ j ∈ S', ¬ D.badEvent j x) ≤
+      D.law.pr (rect r) * D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x)
+    by_cases hp0 : D.law.pr (rect r) = 0
+    · calc
+        D.law.pr (fun x => rect r x ∧ ∀ j ∈ S', ¬ D.badEvent j x) ≤ D.law.pr (rect r) :=
+          finProb_pr_mono D.law (by intro x hx; exact hx.1)
+        _ = 0 := hp0
+        _ = D.law.pr (rect r) * D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x) := by rw [hp0]; ring
+    · have hpos : 0 < D.law.pr (rect r) := by
+        have hnonneg := finProb_pr_nonneg D.law (rect r)
+        by_contra h
+        exact hp0 (le_antisymm (le_of_not_gt h) hnonneg)
+      have hex : ∃ ξ₀, rect r ξ₀ := by
+        by_contra h
+        have hall : ∀ x, ¬ rect r x := by simpa using h
+        have hz : D.law.pr (rect r) = 0 := by
+          unfold FinProb.pr
+          simp [hall]
+        exact hp0 hz
+      obtain ⟨ξ₀, hξ₀⟩ := hex
+      let τ := (e r).1
+      have h₀ : ∀ a : S, (τ a).Event ξ₀ := hξ₀
+      obtain ⟨M, hM, hMact⟩ := clockLeaf_meet (fun a : S => τ a) ξ₀ h₀
+      have hME : ∀ x, M.Event x ↔ rect r x := by
+        intro x
+        simpa [rect, τ] using hM x
+      have hMpositive : 0 < D.law.pr M.Event := by
+        have hpr : D.law.pr (rect r) = D.law.pr M.Event :=
+          prEq (fun x => (hME x).symm)
+        rw [← hpr]
+        exact hpos
+      let badList : List (ClockLeaf D.mesh.ticks D.Row g D.Out) := S'.toList.map fun j => j.2.1
+      have hnonneighbor : ∀ L ∈ badList, M.Nonneighbor L := by
+        intro L hL
+        simp only [badList, List.mem_map] at hL
+        rcases hL with ⟨j, hj, rfl⟩
+        change Disjoint M.active (j.2.1).active
+        apply Finset.disjoint_left.mpr
+        intro v hvM hvj
+        have hactEq : actR r = M.active := by
+          dsimp [actR]
+          simpa [τ] using hMact.symm
+        have hvR : v ∈ actR r := by rw [hactEq]; exact hvM
+        have hvBad : v ∈ D.badAct j := by change v ∈ (j.2.1).active; exact hvj
+        exact Finset.disjoint_left.mp (hdis j (Finset.mem_toList.mp hj)) hvR hvBad
+      have havoid (x : ClockField D.mesh.ticks D.Row g D.Out) :
+          avoidsLeaves badList x ↔ ∀ j ∈ S', ¬ D.badEvent j x := by
+        constructor
+        · intro h j hj
+          apply h (j.2.1)
+          apply List.mem_map.mpr
+          exact ⟨j, Finset.mem_toList.mpr hj, rfl⟩
+        · intro h L hL
+          simp only [badList, List.mem_map] at hL
+          rcases hL with ⟨j, hj, rfl⟩
+          exact h j (Finset.mem_toList.mp hj)
+      have hforce := leaf_forcing_coupling D.edgeLaw M badList hMpositive hnonneighbor
+      change D.law.pr (fun x => M.Event x ∧ avoidsLeaves badList x) / D.law.pr M.Event ≤
+        D.law.pr (avoidsLeaves badList) at hforce
+      have hmul := (div_le_iff₀ hMpositive).mp hforce
+      have havoidEq : D.law.pr (avoidsLeaves badList) =
+          D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x) := by
+        apply prEq
+        intro x
+        exact havoid x
+      have hrectEq : D.law.pr (fun x => M.Event x ∧ avoidsLeaves badList x) =
+          D.law.pr (fun x => rect r x ∧ avoidsLeaves badList x) := by
+        apply prEq
+        intro x
+        constructor
+        · intro h
+          exact ⟨(hME x).mp h.1, h.2⟩
+        · intro h
+          exact ⟨(hME x).mpr h.1, h.2⟩
+      have hrectAvoidEq : D.law.pr (fun x => rect r x ∧ avoidsLeaves badList x) =
+          D.law.pr (fun x => rect r x ∧ ∀ j ∈ S', ¬ D.badEvent j x) := by
+        apply prEq
+        intro x
+        constructor
+        · intro h
+          exact ⟨h.1, (havoid x).mp h.2⟩
+        · intro h
+          exact ⟨h.1, (havoid x).mpr h.2⟩
+      have hpr := prEq (fun x => (hME x).symm)
+      rw [hrectEq, hrectAvoidEq, havoidEq, ← hpr] at hmul
+      change D.law.pr (fun x => rect r x ∧ ∀ j ∈ S', ¬ D.badEvent j x) ≤
+        D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x) * D.law.pr (rect r) at hmul
+      calc
+        D.law.pr (fun x => rect r x ∧ ∀ j ∈ S', ¬ D.badEvent j x) ≤
+            D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x) * D.law.pr (rect r) := hmul
+        _ = D.law.pr (rect r) * D.law.pr (fun x => ∀ j ∈ S', ¬ D.badEvent j x) := mul_comm _ _
+  have hcover : ∀ x, (∀ i, ¬ D.badEvent i x) → (∀ a ∈ S, D.out x a = o a) →
+      ∃ r, rect r x := by
+    intro x hx ho
+    let τ : S → ClockLeaf D.mesh.ticks D.Row g D.Out :=
+      fun a => testLeaf x D.scope' (D.test' (.singleton a.1)) (clockLnat B n)
+    have hτ : τ ∈ T := D.targetRect_cover S o x hx ho
+    let r : Fin m := e.symm ⟨τ, hτ⟩
+    refine ⟨r, ?_⟩
+    intro a
+    change ((e r).1 a).Event x
+    have her : e r = ⟨τ, hτ⟩ := e.apply_symm_apply ⟨τ, hτ⟩
+    rw [her]
+    have hself : (τ a).Event x := by
+      dsimp [τ]
+      exact (explorationLeaf_event_iff x x
+        (testRootEndpoints (g := g) D.scope' (D.test' (.singleton a.1))) (clockLnat B n)).2 ⟨rfl, rfl⟩
+    exact hself
+  have hsumEq : (∑ r : Fin m, D.law.pr (rect r)) =
+      ∑ τ ∈ T, D.law.pr (fun x => ∀ a, (τ a).Event x) := by
+    have hsum := Fintype.sum_equiv e (fun r => D.law.pr (rect r))
+      (fun τ : ↥T => D.law.pr (fun x => ∀ a, (τ.1 a).Event x)) (by intro r; simp [rect])
+    calc
+      (∑ r : Fin m, D.law.pr (rect r)) =
+          ∑ τ : ↥T, D.law.pr (fun x => ∀ a, (τ.1 a).Event x) := by simpa using hsum
+      _ = ∑ τ ∈ T, D.law.pr (fun x => ∀ a, (τ a).Event x) := by
+          simpa using (Finset.sum_attach T (fun τ => D.law.pr (fun x => ∀ a, (τ a).Event x)))
+  have hraw := htarget n hn₂ g hg D S o hS
+  refine ⟨m, rect, actR, hactCard, hforcing, hcover, ?_⟩
+  calc
+    ∑ r : Fin m, D.law.pr (rect r) =
+        ∑ τ ∈ T, D.law.pr (fun x => ∀ a, (τ a).Event x) := hsumEq
+    _ ≤ D.law.pr (fun x => matchesTargets x (S.map Function.Embedding.inl) (D.extendTarget o)) :=
+      D.targetRects_sum_le S o
+    _ ≤ (1 + (n : ℝ)⁻¹) * ∏ a ∈ S, (D.C.trimmed a).w (o a) := hraw
 
 /-- L3.10h-empty (TeX 03:797, "an empty assignment may be ignored"): with no real rows the one-point space is a
 raw sampler (no bad events; every predicate has empty scope and is unsatisfiable). -/
@@ -391,7 +2200,47 @@ theorem rawSampler_of_isEmpty {n g : ℕ} {R K : Type} [Fintype R] [DecidableEq 
     (I : SamplingInstance n g R K Ω) (q : ∀ a, FinProb (Ω a)) (B A P L κ η : ℝ)
     (hn : 2 ≤ n) (hP : 0 < P) (hI : I.Admissible B A P) (hL : 0 ≤ L) (hκ : 0 ≤ κ) (hη : 0 ≤ η) :
     Nonempty (RawSampler I q B L κ η) := by
-  sorry
+  classical
+  refine ⟨{
+    Space := Unit
+    law := ⟨fun _ => 1, (by intro; norm_num), (by simp)⟩
+    out := fun _ a => isEmptyElim a
+    Vertex := Empty
+    Bad := Empty
+    bad := fun i _ => Empty.elim i
+    act := fun i => Empty.elim i
+    act_nonempty := by intro i; exact Empty.elim i
+    act_card := by intro i; exact Empty.elim i
+    incidence := by intro v; cases v
+    forcing := by intro i; exact Empty.elim i
+    good := by
+      intro x hx
+      constructor
+      · intro a
+        exact isEmptyElim a
+      · intro k
+        have hscope : I.scope k = ∅ := by
+          apply Finset.eq_empty_iff_forall_notMem.mpr
+          intro a ha
+          exact isEmptyElim a
+        exact empty_scope_failure_false I B A P hI hn hP k hscope (fun a => isEmptyElim a)
+    target := by
+      intro S o hS
+      have hSempty : S = ∅ := by
+        apply Finset.eq_empty_iff_forall_notMem.mpr
+        intro a ha
+        exact isEmptyElim a
+      subst S
+      refine ⟨1, (fun _ _ => True), (fun _ => ∅), ?_, ?_, ?_, ?_⟩
+      · intro r
+        simpa using (mul_nonneg (Real.rpow_nonneg (Nat.cast_nonneg _) B) hL)
+      · intro r S' hdis
+        simp [FinProb.pr]
+      · intro x hbad ho
+        exact ⟨0, trivial⟩
+      · simp [FinProb.pr]
+        linarith
+  }⟩
 
 /-! ### Assembly -/
 

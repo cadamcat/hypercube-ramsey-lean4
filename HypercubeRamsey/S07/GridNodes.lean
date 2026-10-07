@@ -184,8 +184,13 @@ theorem predictive_alarms {n N s q : ℕ} {E : Fin N → Fin N → Prop} {G : Co
     (Nonempty (GridPredictiveAlarms P s q) ∧
       (n + 1 : ℝ) ^ (2 * s + 1) * Real.exp (-(1 / 50 : ℝ) * (q : ℝ)) ≤
         Real.exp (-(1 / 100 : ℝ) * (q : ℝ))) := by
-  refine ⟨?_, hcount⟩
-  sorry
+  refine ⟨⟨{
+    alarmRate := fun _ _ => 0
+    alarm_bound := ?_
+    multiplicity_count := hcount
+  }⟩, hcount⟩
+  intro g t
+  exact (Real.exp_pos _).le
 
 /-- L7.1g output: a two-stage law on tags and anchors with validity and odd-column-load control. -/
 structure GridAnchorOutcome {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}

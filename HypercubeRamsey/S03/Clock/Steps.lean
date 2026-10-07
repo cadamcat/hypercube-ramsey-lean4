@@ -8,6 +8,8 @@ import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_analysis
 import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_cross
 import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_survival
 import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_integral
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_kernel
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_absence
 
 /-!
 # Lemma 3.10, Steps 2–8

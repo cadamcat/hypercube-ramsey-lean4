@@ -123,6 +123,8 @@ structure OtherPatchData {κ : CConsts} {T : Stage} {k : ℕ}
   subset : cleaned ⊆ C.C
   loss : ((𝒯.P i).X \ cleaned).card < κ.a * (𝒯.P i).M
   nonempty : cleaned.Nonempty
+  /-- The cleaning loses less than half the patch (sections/13, line 232; shared `CleanProps.card_lower`). -/
+  card_lower : (𝒯.P i).M / 2 ≤ (cleaned.card : ℝ)
   degOther : ∀ π', NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
     ∀ j, j ≠ i → ∀ x ∈ cleaned,
       |deg (T.S.E k) 𝒯.c (π' j).w x - 1 / 2| ≤ 3 * bstar T k
@@ -248,7 +250,7 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
   · have hself : NearInput π π ((T.S.n k : ℝ) ^ (-3 : ℝ)) := by
       intro j
       simp
-    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, O.card_lower, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
       exact D.own x (O.subset.trans C.sub hx)
     · intro hClique
@@ -260,7 +262,7 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
     · intro hCluster
       exact hCodegree hCluster
   · intro hCluster π' hNear
-    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, O.card_lower, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
       exact D.own_near hCluster π' hNear x (O.subset.trans C.sub hx)
     · intro hClique

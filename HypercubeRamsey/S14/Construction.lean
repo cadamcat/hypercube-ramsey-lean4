@@ -860,6 +860,9 @@ structure OddKernels (Geom : ProjectionGeometry κ 𝒯 i)
   U_support_size : ∀ g W D, 0 < q g W D →
     ((Finset.univ.filter fun y => U g W D y ≠ 0).card : ℝ) ≥
       (1 / 2 : ℝ) * (𝒯.P i).d * Real.exp (-1.5 * (𝒯.kScale i : ℝ) * 𝒯.tScale i)
+  /-- Atom bound of the uniform-subset law (required by the shared `SliceSolver.U_atom_cap`). -/
+  U_atom_cap : ∀ g W D y, 0 < q g W D →
+    U g W D y ≤ 2 * Real.exp (1.5 * (𝒯.kScale i : ℝ) * 𝒯.tScale i) / (𝒯.P i).d
   cheap_mean_support : ∀ p g y,
     (H.recLaw p).E (fun W => ∑ D, q g W D * U g W D y) > 0 →
       ∃ v : mesh.V, 0 < mesh.wt v p ∧
@@ -1205,6 +1208,7 @@ noncomputable def assembleSolver {κ : CConsts} {T : Stage} {k : ℕ}
   q_cap := O.q_cap
   marginal_cap := O.marginal_cap
   U_support_size := O.U_support_size
+  U_atom_cap := O.U_atom_cap
   σ_nonneg := R.nonneg
   σ_prob := R.probability
   σ_support := hsupp

@@ -1,4 +1,5 @@
 import HypercubeRamsey.S16.Comparisons
+import HypercubeRamsey.S16.Producers_q_s16_prod1
 
 /-! Construction contracts connecting the conditional Section 16 estimates
 to physical cells. These nodes are separate proof obligations: none assumes
@@ -146,7 +147,156 @@ theorem cell_raw_data_exists {κ : CConsts} (hκ : κ.Admissible) :
       (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q),
       SolverLabelsUniform PT → n₀ ≤ T.S.n k →
       ∃ R : CellRawData H.geom, R.SourceValid := by
-  sorry
+  classical
+  refine ⟨0, ?_⟩
+  intro T k PT K16 Q H hUniform hn
+  by_cases hCluster : PT.tiling.mode.isCluster
+  · sorry
+  · have hDirect : PT.tiling.mode = .bounded ∨ PT.tiling.mode = .lowDirect := by
+      cases hmode : PT.tiling.mode with
+      | bounded => exact Or.inl rfl
+      | lowDirect => exact Or.inr rfl
+      | highDirect => have := Q.mode_low; simp [Mode.isLow, hmode] at this
+      | lowCluster => exact False.elim (hCluster (by simp [Mode.isCluster, hmode]))
+      | highSmall => have := Q.mode_low; simp [Mode.isLow, hmode] at this
+      | highLarge => have := Q.mode_low; simp [Mode.isLow, hmode] at this
+    have hHeight : ∀ i, (PT.tiling.P i).h = 0 := by
+      intro i
+      rcases hDirect with hb | hd
+      · rcases Q.profiled_valid.tiling_valid.bounded_data hb with ⟨_, hdata⟩
+        rcases hdata i with ⟨_, hh, _, _⟩
+        exact hh
+      · rcases Q.profiled_valid.tiling_valid.direct_data (Or.inl hd) i with
+          ⟨_, _, _, _, hh, _, _⟩
+        exact hh
+    have hBinSize : ∀ i, (PT.tiling.P i).d = 1 := by
+      intro i
+      rcases hDirect with hb | hd
+      · rcases Q.profiled_valid.tiling_valid.bounded_data hb with ⟨_, hdata⟩
+        rcases hdata i with ⟨_, _, hd, _⟩
+        exact hd
+      · rcases Q.profiled_valid.tiling_valid.direct_data (Or.inl hd) i with
+          ⟨_, _, _, _, _, hd, _⟩
+        exact hd
+    have hEnvelope : ∀ i, (PT.envelope i).Nonempty := by
+      intro i
+      have hcard : 0 < PT.activeVertices.card := by
+        rw [Q.profiled_valid.direct_single_corner hCluster]
+        norm_num
+      obtain ⟨v, hv⟩ := Finset.card_pos.mp hcard
+      obtain ⟨x, hx⟩ := (Q.profiled_valid.corner_clean i v hv).nonempty
+      refine ⟨x, ?_⟩
+      rw [Q.profiled_valid.envelope_eq i]
+      exact Finset.mem_biUnion.mpr ⟨v, hv, hx⟩
+    have hBins (i : Fin PT.tiling.m) : Nonempty (Bin PT.tiling i) := by
+      have hY := (Q.profiled_valid.tiling_valid.patch_nonempty i).2
+      have hYne : (PT.tiling.P i).Y ≠ ∅ := Finset.nonempty_iff_ne_empty.mp hY
+      obtain ⟨D, hD⟩ := (PT.tiling.P i).bins.parts_nonempty hYne
+      exact ⟨⟨D, hD⟩⟩
+    have hBinUniv (i : Fin PT.tiling.m) :
+        (Finset.univ : Finset (Bin PT.tiling i)).Nonempty := by
+      obtain ⟨D⟩ := hBins i
+      exact ⟨D, Finset.mem_univ D⟩
+    have hBinCard (i : Fin PT.tiling.m) (D : Bin PT.tiling i) : D.1.card = 1 := by
+      have h := Q.profiled_valid.tiling_valid.bins_card i D.1 D.2
+      rw [hBinSize i] at h
+      exact h
+    let point : ∀ (i : Fin PT.tiling.m) (D : Bin PT.tiling i), Fin (T.S.N k) :=
+      fun i D => Classical.choose (Finset.card_eq_one.mp (hBinCard i D))
+    have point_spec (i : Fin PT.tiling.m) (D : Bin PT.tiling i) :
+        D.1 = {point i D} := Classical.choose_spec (Finset.card_eq_one.mp (hBinCard i D))
+    let R : CellRawData H.geom :=
+      { Slice := fun C => Lane_q_s16_prod1.CellSlice H.geom C
+        sliceFin := fun C => inferInstance
+        sliceDec := fun C => Classical.decEq _
+        Value := fun _ _ => Unit
+        valueFin := fun _ _ => inferInstance
+        valueDec := fun _ _ => Classical.decEq _
+        sliceLaw := fun _ _ => FinLaw.dirac ()
+        slicePass := fun _ _ => Finset.univ
+        slice_pos := by
+          intro C s
+          simp [FinLaw.dirac]
+        Group := fun C => OddCellRole H.geom C
+        groupFin := fun C => inferInstance
+        groupDec := fun C => Classical.decEq _
+        groupOf := fun _ r => r
+        cellWords := fun C => Lane_q_s16_prod1.directCellWords H.geom C
+          (hHeight (H.geom.cellPatch C))
+        axis := fun C j => by
+          have hh := hHeight (H.geom.cellPatch C)
+          rw [hh] at j
+          exact Fin.elim0 j
+        axis_injective := by
+          intro C j j' hj
+          have hh := hHeight (H.geom.cellPatch C)
+          rw [hh] at j j'
+          exact Fin.elim0 j
+        axes_eq := by
+          intro C
+          apply Finset.ext
+          intro j
+          simp [Tiling.Icoord, topCoordinates, hHeight (H.geom.cellPatch C)]
+        word_parity := by
+          intro h C s z
+          exact (hCluster h).elim
+        word_flip := by
+          intro C s z j
+          have hh := hHeight (H.geom.cellPatch C)
+          rw [hh] at j
+          exact Fin.elim0 j
+        word_outer := by
+          intro C s z z' j hj
+          rfl
+        qraw := fun C _ _ => FinLaw.uniform Finset.univ (hBinUniv (H.geom.cellPatch C))
+        pretrim := fun _ _ _ => Finset.univ
+        qin := fun C _ _ => FinLaw.uniform Finset.univ (hBinUniv (H.geom.cellPatch C))
+        qin_eq := by
+          intro C W g D hW
+          have hsum : ∑ D' ∈ Finset.univ,
+              (FinLaw.uniform Finset.univ (hBinUniv (H.geom.cellPatch C))).w D' = 1 := by
+            simpa using (FinLaw.uniform Finset.univ (hBinUniv (H.geom.cellPatch C))).sum_one
+          simp [FinLaw.uniform, hsum]
+        U := fun C _ _ D => FinLaw.dirac (point (H.geom.cellPatch C) D)
+        U_support := by
+          intro C W g D y hy
+          have hy' : y = point (H.geom.cellPatch C) D := by
+            simpa [FinLaw.dirac] using hy
+          rw [point_spec (H.geom.cellPatch C) D]
+          simp [hy']
+        rawPrior := fun C _ _ _ y =>
+          (Law.unifCore (PT.envelope (H.geom.cellPatch C)) (hEnvelope (H.geom.cellPatch C))).w y
+        prior_nonneg := by
+          intro C W ys v y
+          exact (Law.unifCore (PT.envelope (H.geom.cellPatch C))
+            (hEnvelope (H.geom.cellPatch C))).nonneg y
+        prior_subprob := by
+          intro C W ys v
+          change ∑ y, (Law.unifCore (PT.envelope (H.geom.cellPatch C))
+            (hEnvelope (H.geom.cellPatch C))).w y ≤ 1
+          rw [(Law.unifCore (PT.envelope (H.geom.cellPatch C))
+            (hEnvelope (H.geom.cellPatch C))).sum_eq_one] }
+    refine ⟨R, ?_⟩
+    right
+    refine ⟨hCluster, ?_⟩
+    intro C
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    · intro r r' h
+      exact h
+    · intro s
+      exact ⟨Equiv.refl Unit⟩
+    · intro s
+      rfl
+    · intro W g D
+      simp [R, FinLaw.uniform]
+    · intro W g
+      rfl
+    · intro W g D y
+      rw [point_spec (H.geom.cellPatch C) D]
+      simp [R, FinLaw.dirac]
+    · exact hEnvelope (H.geom.cellPatch C)
+    · intro W ys v hv he
+      rfl
 
 /-- The permission table uses unrestricted priors at the actual external
 neighbor, including neighbors in other cells. No fresh prior is substituted. -/

@@ -1487,4 +1487,45 @@ theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
       simp [FinProb.expect, Finset.mul_sum, mul_assoc]
     _ = α * (FinProb.pi laws).expect F := by rw [hrawexpect]
 
+theorem pi_expect_finset_product {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (laws : ∀ i, FinProb (Ω i))
+    (S : Finset ι) (f : ∀ i, Ω i → ℝ) :
+    (FinProb.pi laws).expect (fun ω => ∏ i ∈ S, f i (ω i)) =
+      ∏ i ∈ S, (laws i).expect (f i) := by
+  classical
+  let g : ∀ i, Ω i → ℝ := fun i y =>
+    (laws i).w y * if i ∈ S then f i y else 1
+  have hterm (ω : ∀ i, Ω i) :
+      ∏ i, g i (ω i) = (∏ i, (laws i).w (ω i)) *
+        (∏ i ∈ S, f i (ω i)) := by
+    simp only [g]
+    rw [Finset.prod_mul_distrib]
+    rw [Finset.prod_ite (s := Finset.univ) (p := fun i : ι => i ∈ S)
+      (f := fun i => f i (ω i)) (g := fun _ => (1 : ℝ))]
+    simp
+  calc
+    (FinProb.pi laws).expect (fun ω => ∏ i ∈ S, f i (ω i)) =
+        ∑ ω : ∀ i, Ω i, ∏ i, g i (ω i) := by
+      simp only [FinProb.expect, FinProb.pi]
+      apply Finset.sum_congr rfl
+      intro ω hω
+      rw [hterm]
+    _ = ∏ i, ∑ y, g i y := by rw [Fintype.prod_sum]
+    _ = ∏ i ∈ S, (laws i).expect (f i) := by
+      have hsum_i (i : ι) :
+          ∑ y, g i y = if i ∈ S then (laws i).expect (f i) else 1 := by
+        by_cases hi : i ∈ S
+        · simp [g, hi, FinProb.expect]
+        · simp [g, hi, (laws i).sum_eq_one]
+      calc
+        ∏ i, ∑ y, g i y =
+            ∏ i, (if i ∈ S then (laws i).expect (f i) else 1) := by
+          apply Finset.prod_congr rfl
+          intro i hi
+          exact hsum_i i
+        _ = ∏ i ∈ S, (laws i).expect (f i) := by
+          rw [Finset.prod_ite (s := Finset.univ) (p := fun i : ι => i ∈ S)
+            (f := fun i => (laws i).expect (f i)) (g := fun _ => (1 : ℝ))]
+          simp
+
 end HypercubeRamsey.Lane_q_s15_direct

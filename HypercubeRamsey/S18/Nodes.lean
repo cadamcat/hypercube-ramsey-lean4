@@ -1,4 +1,5 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_n5
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -282,7 +283,33 @@ palette counts and computed overlap statistics. -/
 theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
     ∃ K : ℝ, 0 < K ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → PairInitialFacts D δ K := by
-  sorry
+  have hP : 0 < κ.P := by
+    rcases hκ.P_big with ⟨_, hP⟩
+    omega
+  have hR : 0 < κ.R := by
+    rw [hκ.R_eq]
+    positivity
+  have hR' : 0 < (κ.R : ℝ) := by exact_mod_cast hR
+  have hK : 0 < κ.KB := by
+    have hKB := hκ.KB_big
+    nlinarith
+  refine ⟨κ.KB, hK, ?_⟩
+  apply Filter.Eventually.of_forall
+  intro k PT hPT D hD hTransition
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · intro p
+    simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale,
+      div_eq_mul_inv, mul_assoc]
+      using (hD.palette_counts p.1 p.2).1
+  · intro p
+    simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale]
+      using (hD.palette_counts p.1 p.2).2
+  · intro v
+    sorry
+  · intro S
+    sorry
+  · intro x h hfull v heven
+    sorry
 
 /-- P18.5b, 18:993–1025. A nonnegative integral comparison retaining the
 reach and side-data gates, with uniform constants before all stage indices. -/
@@ -315,7 +342,13 @@ theorem P18_5c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
 theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → IsolateKernelFacts D KI := by
-  sorry
+  refine ⟨1, by norm_num, ?_⟩
+  apply Filter.Eventually.of_forall
+  intro k PT hPT D hD v hv x z
+  exact ⟨Lane_q_s18_n5.isolatedWeight_nonneg D v x z,
+    Lane_q_s18_n5.isolatedWeight_symm D v x z, by
+      sorry, by
+      sorry⟩
 
 /-- P18.5e, 18:1092–1124. Remove state gates before bin comparisons and
 retain geometrically fixed bulk pair-hit queries. -/

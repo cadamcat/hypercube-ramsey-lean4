@@ -243,6 +243,34 @@ private theorem pi_pr_coordinate_event
       by_cases hEy : E y <;> simp [hEy, hpoint y]
     _ = (P i).pr E := rfl
 
+theorem pi_map_coordinate_law
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (i : ι) :
+    FinLaw.map (FinLaw.pi P) (fun x => x i) = P i := by
+  apply finLaw_ext_of_weights
+  funext y
+  calc
+    (FinLaw.map (FinLaw.pi P) (fun x => x i)).w y =
+        (FinLaw.map (FinLaw.pi P) (fun x => x i)).pr (fun z => z = y) := by
+      simp [FinLaw.map, FinLaw.pr, Finset.sum_ite_eq', eq_comm]
+    _ = (FinLaw.pi P).pr (fun x => x i = y) := map_pr_law _ _ _
+    _ = (P i).pr (fun z => z = y) := by
+      simpa using pi_pr_coordinate_event P i (fun z => z = y)
+    _ = (P i).w y := by
+      unfold FinLaw.pr
+      simp [Finset.sum_ite_eq']
+
+theorem finLaw_pr_nonneg {Ω : Type*} [Fintype Ω]
+    (P : FinLaw Ω) (E : Ω → Prop) : 0 ≤ P.pr E := by
+  classical
+  unfold FinLaw.pr
+  apply Finset.sum_nonneg
+  intro x hx
+  split_ifs with h
+  · exact P.nonneg x
+  · exact le_rfl
+
 /-- Push a product law through an injectively selected family of coordinates. -/
 theorem pi_map_injective
     {ι C : Type*} [Fintype ι] [DecidableEq ι] [Fintype C] [DecidableEq C]

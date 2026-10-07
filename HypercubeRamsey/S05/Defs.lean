@@ -7,9 +7,8 @@ import HypercubeRamsey.S03.ScatteredMoments
 /-!
 # Section 5 interfaces
 
-Finite interfaces for the staged experiment in Section 5.  The parent prior, chunk/sign encoding,
-state encoding, local height data, and selected rows are parameterized so the corresponding Section 6
-nodes can reuse them with a different parent prior or selection rule.
+Basic interfaces shared by the Section 5 nodes: words, density domination, the parent prior (general enough
+for Section 6's restricted partner prior), and the final row certificate with its Hall assembly.
 -/
 
 namespace HypercubeRamsey
@@ -36,39 +35,6 @@ structure ParentPrior5 (N : ℕ) (Bin : Type*) [Fintype Bin] where
   parent_atom : ∀ y, parent.w y ≤ atomConstant / N
   partner_atom : ∀ v b y, (partner v b).w y ≤ atomConstant / N
   partner_support : ∀ v b y, y ∉ partnerSet v b → (partner v b).w y = 0
-
-/-- A chunk/sign interface whose arity and severity range are supplied by the caller. -/
-structure ChunkSignData5 (Vertex Coarse : Type*) (m : ℕ) where
-  parity : Vertex → Bool
-  coarseKey : Vertex → Coarse
-  sign : Vertex → Fin m → Bool
-  severity : Vertex → ℕ
-  boundary : Vertex → Prop
-  sensitiveChunks : Vertex → Finset (Fin m)
-  adjacent : Vertex → Vertex → Prop
-
-/-- A finite state graph and its one-hot ambient encoding. -/
-structure StateEncoding5 (State : Type*) [Fintype State] (d : ℕ) where
-  parity : State → Bool
-  ambient : State → Fin d → Bool
-  key : State → ℕ
-  neighbors : State → Finset State
-  degree_bound : ∃ C : ℝ, 0 ≤ C ∧ ∀ v, (neighbors v).card ≤ C
-  adjacent_distance : ∃ D : ℕ, ∀ u v w,
-    u ∈ neighbors v → w ∈ neighbors v →
-      (Finset.univ.filter (fun i => ambient u i ≠ ambient w i)).card ≤ D
-
-/-- Local data for a marking-and-height selection rule.  Its radius, level set, and threshold are explicit
-parameters, so Section 6 can alter the height rule without changing the interface. -/
-structure MarkingHeightData5 (Site Centre Level : Type*) where
-  site : Centre → Site
-  level : Centre → Level
-  radius : ℕ
-  threshold : ℕ
-  marked : Centre → Prop
-  eligible : Site → Centre → Prop
-  selected : Site → Centre → Prop
-  selected_eligible : ∀ v c, selected v c → eligible v c
 
 open Classical in
 /-- Probability rows on even cube roles together with an injective assignment of odd roles. -/

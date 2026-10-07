@@ -58,7 +58,8 @@ structure StreamSegments5 (n N q : ℕ) (E : Fin N → Fin N → Prop) (G : Colo
   reference_density : ∀ z,
     reference.w z ≤ Real.exp ((q : ℝ) * (n : ℝ) ^ γ) / (N : ℝ) ^ q
 
-/-- L5.1a: the good-pair construction gives parent atoms, partner sets, and stream-segment bounds.
+/-- L5.1a (05:40–79): the good-pair construction gives parent atoms, partner sets, and stream-segment bounds;
+the partner law of a parent is the same at every bin (05:50–52: `A_w` uniform on the partners of `V₀`).
 
 Only positive-mass tags need satisfy the width and good-column hypotheses; this is the one-shot convention
 used by Part B. -/
@@ -74,7 +75,8 @@ theorem L5_1a (γ K' χ : ℝ) {n N : ℕ} {ι Bin : Type*} [Fintype ι] [Fintyp
         (∀ v ∈ P.lab0, ∀ b,
           P.prior.partnerSet v b =
             Finset.univ.filter (GoodParentPair5 E G Λ μ χ v)) ∧
-        (∀ x y, S.paired x y ↔ GoodParentPair5 E G Λ μ χ x y) := by
+        (∀ x y, S.paired x y ↔ GoodParentPair5 E G Λ μ χ x y) ∧
+        (∀ v b b', P.prior.partner v b = P.prior.partner v b') := by
   sorry
 
 end HypercubeRamsey

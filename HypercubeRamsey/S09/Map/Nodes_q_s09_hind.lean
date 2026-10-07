@@ -952,6 +952,134 @@ private theorem heightPath9_has_intermediate_level {P : Params9} {hc : HeightCho
         obtain ⟨x, hx, hxlevel⟩ := htailRange j hlow' hhigh'
         exact ⟨x, List.mem_cons_of_mem _ hx, hxlevel⟩
 
+private theorem heightPath9_levelBandSegment9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 bad) l start) :
+    ∃ endpoint, l.head? = some endpoint ∧
+      ∀ j, start.2.val ≤ j → j ≤ endpoint.2.val →
+        ∃ childStart suffix,
+          HeightPath9 (heightStep9 bad) (endpoint :: suffix) childStart ∧
+          childStart.2.val = j ∧
+          (∀ z ∈ endpoint :: suffix, j ≤ z.2.val) ∧
+          (∀ z ∈ endpoint :: suffix, z ∈ l) := by
+  induction hp with
+  | singleton x =>
+      refine ⟨x, by simp, ?_⟩
+      intro j hstart hj
+      have hjEq : j = x.2.val := by omega
+      subst j
+      exact ⟨x, [], HeightPath9.singleton x, rfl, by simp, by simp⟩
+  | @cons head next rest start hstep htail ih =>
+      obtain ⟨tailHead, htailHead, htailBand⟩ := ih
+      have htailHead' : tailHead = next := by simpa using htailHead.symm
+      subst tailHead
+      refine ⟨head, by simp, ?_⟩
+      intro j hstart hj
+      by_cases hjHead : j = head.2.val
+      · subst j
+        exact ⟨head, [], HeightPath9.singleton head, rfl, by intro z hz; simp at hz; subst z; omega,
+          by simp⟩
+      · have hstepMetric := heightStep9_metric_le_one hstep
+        have hlevelDist : Nat.dist next.2.val head.2.val ≤ 1 :=
+          (Nat.le_max_left _ _).trans hstepMetric
+        have hheadLe : head.2.val ≤ next.2.val + 1 := by
+          have hsymm : Nat.dist head.2.val next.2.val ≤ 1 := by
+            simpa [Nat.dist_comm] using hlevelDist
+          have htri := Nat.dist_tri_left' head.2.val next.2.val
+          omega
+        have hjNext : j ≤ next.2.val := by omega
+        by_cases hjNextEq : j = next.2.val
+        · subst j
+          refine ⟨next, [next], HeightPath9.cons hstep (HeightPath9.singleton next), rfl, ?_, by simp⟩
+          intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with rfl | hz
+          · omega
+          · simp at hz
+            subst z
+            rfl
+        · obtain ⟨childStart, suffix, hpath, hchildLevel, hband, hsub⟩ :=
+            htailBand j hstart hjNext
+          have hchildHead : childStart.2.val = j := hchildLevel
+          refine ⟨childStart, next :: suffix, HeightPath9.cons hstep hpath,
+            hchildHead, ?_, ?_⟩
+          · intro z hz
+            rcases List.mem_cons.mp hz with rfl | hz'
+            · omega
+            · exact hband z hz'
+          · intro z hz
+            rcases List.mem_cons.mp hz with rfl | hz'
+            · simp
+            · exact List.mem_cons_of_mem _ (hsub z hz')
+
+private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hp : HeightPath9 bad l start) : start ∈ l := by
+  induction hp with
+  | singleton x => simp
+  | cons hstep htail ih => exact List.mem_cons_of_mem _ ih
+
+private theorem scaleFailure9_from_levelBand {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {C : Finset (Pos9 P hc n)} {t s η : ℝ} {R : ℕ}
+    (Pp A : Pos9 P hc n → Bool) {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (hp : HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) l start)
+    (j : ℕ) (hstart : start.2.val ≤ j)
+    {endpoint : HeightState9 P hc n} (hhead : l.head? = some endpoint)
+    (hend : j + R ≤ endpoint.2.val) (hη : 0 ≤ η) (hR : 0 < R) :
+    ∃ childStart : HeightState9 P hc n,
+      childStart ∈ l ∧ childStart.2.val = j ∧
+        scaleFailure9 C t s η R Pp A childStart := by
+  obtain ⟨head, hhead', hband⟩ :=
+    heightPath9_levelBandSegment9 hp
+  have hheadEq : head = endpoint := by simpa using hhead'.symm.trans hhead
+  subst head
+  have hjendpoint : j ≤ endpoint.2.val := by omega
+  obtain ⟨childStart, suffix, hchildPath, hchildLevel, hchildBand, hchildSub⟩ :=
+    hband j hstart hjendpoint
+  have hchildStartSeg : childStart ∈ endpoint :: suffix := by
+    exact heightPath9_start_mem hchildPath
+  have hchildMem : childStart ∈ l := hchildSub childStart hchildStartSeg
+  have htopMem : endpoint ∈ endpoint :: suffix := by simp
+  have htopDist : R ≤ Nat.dist endpoint.2.val childStart.2.val := by
+    rw [hchildLevel, Nat.dist_eq_sub_of_le_right hjendpoint]
+    omega
+  have hexit : ∃ x ∈ endpoint :: suffix, R ≤ heightMetric9 x childStart :=
+    ⟨endpoint, htopMem, htopDist.trans (Nat.le_max_left _ _)⟩
+  obtain ⟨childEnd, rest, hfirstPath, hfirstSub, hclose, hge, hle⟩ :=
+    heightPath9_firstExit9 hchildPath (fun _ _ h => heightStep9_metric_le_one h) R hR hexit
+  have hmetricAll : ∀ z ∈ childEnd :: rest, heightMetric9 z childStart ≤ R := by
+    intro z hz
+    rcases List.mem_cons.mp hz with rfl | hz
+    · exact hle
+    · exact Nat.le_of_lt (hclose z hz)
+  have hmetricEq : heightMetric9 childEnd childStart = R := by omega
+  have hmetricEq' : max (Nat.dist childEnd.2.val childStart.2.val)
+      ((_root_.hammingDist childEnd.1 childStart.1 + 1) / 2) = R := by
+    simpa [heightMetric9] using hmetricEq
+  have hsite : ∀ z ∈ childEnd :: rest, _root_.hammingDist z.1 childStart.1 ≤ 16 * R := by
+    intro z hz
+    have hzmetric := hmetricAll z hz
+    have hzspace : (_root_.hammingDist z.1 childStart.1 + 1) / 2 ≤ R := by
+      exact (Nat.le_max_right _ _).trans hzmetric
+    omega
+  have hlevel : ∀ z ∈ childEnd :: rest, Nat.dist z.2.val childStart.2.val ≤ 8 * R := by
+    intro z hz
+    have hzmetric := hmetricAll z hz
+    have hzlevel : Nat.dist z.2.val childStart.2.val ≤ R :=
+      (Nat.le_max_left _ _).trans hzmetric
+    omega
+  have hchildEndBand : j ≤ childEnd.2.val :=
+    hchildBand childEnd (hfirstSub childEnd (by simp))
+  have hrise : (childStart.2.val : ℝ) ≤ (childEnd.2.val : ℝ) + η * (R : ℝ) := by
+    rw [hchildLevel]
+    have hjreal : (j : ℝ) ≤ (childEnd.2.val : ℝ) := by exact_mod_cast hchildEndBand
+    have hηR : 0 ≤ η * (R : ℝ) := mul_nonneg hη (Nat.cast_nonneg _)
+    linarith
+  refine ⟨childStart, hchildMem, hchildLevel, ?_⟩
+  exact ⟨childEnd, rest, hfirstPath, hsite, hlevel, hmetricEq'.ge, hrise⟩
+
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)
     {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
@@ -989,14 +1117,6 @@ private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : 
         have hreach' : Reach9 (P := P) (hc := hc) (n := n) Pp A root R y.1
             (x.2.val + 1) := by simpa [hDown] using hreach
         exact Reach9.down y.1 x.1 x.2.val hreach' hlocalX hdist
-
-private theorem heightPath9_start_mem {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
-    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
-    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
-    (hp : HeightPath9 bad l start) : start ∈ l := by
-  induction hp with
-  | singleton x => simp
-  | cons hstep htail ih => exact List.mem_cons_of_mem _ ih
 
 private def rootScaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)

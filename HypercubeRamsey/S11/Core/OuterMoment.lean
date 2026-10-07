@@ -1776,6 +1776,130 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
 with `.95/2 > .4`.  Coinciding coordinates have probability `O_u(e^h/N)`. -/
 theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
     (hK : 0 < K) : MeanInterEv δ x₀ K := by
+  classical
+  unfold MeanInterEv
+  intro u
+  let a : ℝ := 1 - δ / 16
+  let tσ : ℕ → ℝ := fun n => (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)
+  have ha : 0 < a := by dsimp [a]; nlinarith
+  have hgap := OuterMoment_q_s11_outer.eventually_pow_gap
+    ((1 : ℝ) / 10) a 8 (by dsimp [a]; nlinarith) (by norm_num)
+  have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
+    simpa [bS, neg_div, Function.comp_def] using
+      (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < (19 : ℝ) / 20)).comp
+        tendsto_natCast_atTop_atTop
+  have hbSmall : ∀ᶠ n : ℕ in atTop, bS n ≤ 1 / 8 := by
+    have h := hbT.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8))
+    filter_upwards [h] with n hn
+    exact hn.le
+  have hnLarge : ∀ᶠ n : ℕ in atTop, 64 ≤ n :=
+    eventually_atTop.mpr ⟨64, fun _ hn => hn⟩
+  have hScale : ∀ᶠ n : ℕ in atTop, 64 ≤ n ∧ bS n ≤ 1 / 8 ∧
+      tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
+    filter_upwards [hnLarge, hbSmall, hgap] with n hn hb hg
+    have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+    have hpow : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) :=
+      Real.one_le_rpow hn1 (by norm_num)
+    have hcard : (Fintype.card (InnerCoord n) : ℝ) ≤ (hIn n : ℝ) := by
+      exact_mod_cast OuterMoment_q_s11_outer.innerCoord_card_le n
+    have hfloor := OuterMoment_q_s11_outer.hIn_real_le_pow n
+    have hgNonneg : 0 ≤ gS n := by
+      unfold gS
+      exact Real.rpow_nonneg (Nat.cast_nonneg n) _
+    have hlog2 : Real.log 2 ≤ 1 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+      linarith
+    have htσ : tσ n ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+      dsimp [tσ]
+      calc
+        (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n) ≤
+            1 * Fintype.card (InnerCoord n) := by
+              exact mul_le_mul_of_nonneg_right (by linarith)
+                (by exact_mod_cast Nat.cast_nonneg (Fintype.card (InnerCoord n)))
+        _ ≤ (hIn n : ℝ) := by simpa using hcard
+        _ ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := hfloor
+    have hlog3 : Real.log 3 ≤ 2 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 3)
+      linarith
+    have hwidth : tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
+      nlinarith [htσ, hlog3, hpow, hg]
+    exact ⟨hn, hb, hwidth⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScale
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y G π σ S hO
+  have ⟨hn64, hbSmallN, hwidthN⟩ := hn₀ n hn
+  have hNpos : 0 < (N : ℝ) := by
+    have hNnat : 0 < N := lt_of_lt_of_le (by positivity) hO.host
+    exact_mod_cast hNnat
+  let πlaw : Law N := ⟨π, hO.pi_nonneg, hO.pi_sum⟩
+  let σlaw : Law N := ⟨σ, hO.sigma_nonneg, hO.sigma_sum⟩
+  have hπWidth : πlaw.WidthLE (Real.log K) := by
+    intro y
+    apply (le_div_iff₀ hNpos).2
+    rw [Real.exp_log hK]
+    nlinarith [hO.pi_cap y]
+  have hσWidth : σlaw.WidthLE (tσ n) := by
+    intro x
+    apply (le_div_iff₀ hNpos).2
+    change σ x * (N : ℝ) ≤ Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n))
+    nlinarith [hO.sigma_cap x]
+  have hσSupport : σlaw.SupportedIn S := by
+    intro x hx
+    by_contra hne
+    exact hx (hO.sigma_supp x hne)
+  have hMeanRel (x : Fin N) : sMean E G π x = 2 * deg E G π x - 1 := by
+    unfold sMean deg fv
+    calc
+      (∑ y, π y * (2 * hit E G x y - 1)) =
+          ∑ y, (2 * (π y * hit E G x y) - π y) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      _ = (∑ y, 2 * (π y * hit E G x y)) - ∑ y, π y := by
+            rw [Finset.sum_sub_distrib]
+      _ = 2 * (∑ y, π y * hit E G x y) - 1 := by
+            rw [← Finset.mul_sum, hO.pi_sum]
+  have hMeanDen (x : Fin N) : 1 + sMean E G π x = 2 * deg E G π x := by
+    rw [hMeanRel x]
+    ring
+  have hMeanAbs (x : Fin N) (hx : x ∈ S) : |sMean E G π x| ≤ 1 / 2 := by
+    calc
+      |sMean E G π x| ≤ 4 * bS n := hO.degree x hx
+      _ ≤ 4 * (1 / 8) := mul_le_mul_of_nonneg_left hbSmallN (by norm_num)
+      _ = 1 / 2 := by norm_num
+  have hDenLower (x : Fin N) (hx : x ∈ S) : 1 / 2 ≤ 1 + sMean E G π x := by
+    have h := abs_le.mp (hMeanAbs x hx)
+    linarith
+  have hDegLower (x : Fin N) (hx : x ∈ S) : 1 / 4 ≤ deg E G π x := by
+    have h := hMeanDen x
+    nlinarith [hDenLower x hx]
+  have haFid (x : Fin N) (hx : x ∈ S) (y : Fin N) :
+      aF E G π x y = (fv E G x y - sMean E G π x) / (1 + sMean E G π x) := by
+    unfold aF
+    rw [hMeanDen x]
+    unfold fv
+    have hdeg : 0 < deg E G π x := lt_of_lt_of_le (by norm_num) (hDegLower x hx)
+    field_simp [ne_of_gt hdeg]
+    <;> nlinarith [hMeanDen x]
+  have haBound (x : Fin N) (hx : x ∈ S) (y : Fin N) : |aF E G π x y| ≤ 5 := by
+    have hmean : |sMean E G π x| ≤ 1 / 2 := hMeanAbs x hx
+    have hden : 1 / 4 ≤ deg E G π x := hDegLower x hx
+    have hdenpos : 0 < deg E G π x := lt_of_lt_of_le (by norm_num) hden
+    have hhit : |hit E G x y| ≤ 1 := by
+      unfold hit
+      split_ifs <;> norm_num
+    have hfrac : |hit E G x y / deg E G π x| ≤ 4 := by
+      rw [abs_div, abs_of_pos hdenpos]
+      apply (div_le_iff₀ hdenpos).2
+      nlinarith
+    unfold aF
+    calc
+      |hit E G x y / deg E G π x - 1| ≤ |hit E G x y / deg E G π x| + 1 := by
+        simpa using abs_sub (hit E G x y / deg E G π x) 1
+      _ ≤ 5 := by linarith
+  intro J hJ
+  -- The second-moment expansion reduces the target to a kernel estimate under π⊗π;
+  -- discrepancy controls that kernel outside an exponentially small set, then Cauchy--Schwarz applies.
   sorry
 
 /-- L11.3d (11:270–280).  An extension with `|M_J| > n^{-υ}` has projection `≥ c_u n^{-υ}` of `f_x` on a fixed

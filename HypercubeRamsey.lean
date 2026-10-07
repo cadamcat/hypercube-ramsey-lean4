@@ -198,3 +198,6 @@ import HypercubeRamsey.Tools.CubeGeometry_p_tools_cube_r
 import HypercubeRamsey.Tools.LinearCode_p_tools_cube_r
 import HypercubeRamsey.Tools.PToolsMisc_p_tools_misc
 import HypercubeRamsey.Tools.Ramsey_p_tools_binom
+import HypercubeRamsey.S13
+import HypercubeRamsey.S14
+import HypercubeRamsey.S14.Needs

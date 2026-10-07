@@ -5866,7 +5866,7 @@ theorem p10_1kCandidateListFamily_log_card_bound {I : Type*} [Fintype I]
     exact_mod_cast hnat
   have hpowCast : ((C.card + 1) ^ r : ℕ) = ((C.card : ℝ) + 1) ^ r := by
     norm_cast
-  have hbase : 1 ≤ (C.card : ℝ) + 1 := by positivity
+  have hbase : 1 ≤ (C.card : ℝ) + 1 := le_add_of_nonneg_left (Nat.cast_nonneg C.card)
   have hpow : 1 ≤ ((C.card : ℝ) + 1) ^ r := one_le_pow₀ hbase
   have hplus : (L.card : ℝ) + 1 ≤ 2 * ((C.card : ℝ) + 1) ^ r := by
     rw [hpowCast] at hcast

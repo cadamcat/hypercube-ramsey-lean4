@@ -1,4 +1,5 @@
 import HypercubeRamsey.S16.ProducersDefs
+import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_gate1
 
 /-! Cluster diagnostics proof nodes from the S16 pool diagnosis. -/
 
@@ -254,7 +255,7 @@ theorem pi_cond_support_map {I : Type*} [Fintype I] [DecidableEq I]
     ∃ P' : ∀ i, FinLaw {v : V i // v ∈ A i ∧ (P i).w v ≠ 0},
       FinLaw.pi (fun i => FinLaw.cond (P i) (A i) (hA i)) =
         FinLaw.map (FinLaw.pi P') (fun z i => (z i).1) := by
-  sorry
+  exact Lane_q_s16_gate1.pi_cond_support_map P A hA
 
 /-- D2. The load summand of one odd role depends on its own slice value.
 TeX 16:259–278; estimated proof: 150 lines. -/

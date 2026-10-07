@@ -138,7 +138,113 @@ theorem p92_core_hits (P : Params9) (hP : P.Valid) (c₀ c₁ : ℝ) (hc₀ : 0 
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ → CovCert9 S I E G c₁ →
         CoreHitCert9 S I E G c := by
-  sorry
+  have hu : 0 < P.u := by
+    have hxs : 0 < (P.xS : ℝ) := by exact_mod_cast hP.1.1
+    dsimp [Params9.u]
+    linarith
+  have hcHalf : 0 < c₁ / 2 := by linarith
+  let c : ℝ := min c₀ (c₁ / 2) / 2
+  have hc : 0 < c := by
+    dsimp [c]
+    exact div_pos (lt_min hc₀ hcHalf) (by norm_num)
+  obtain ⟨nPoly, hPoly⟩ := Lane_q_s09_gain2.eventual_poly_tail
+    (u := P.u) (c := c₁) (A := 1) (s := P.χ) hu hc₁
+  obtain ⟨nTail, hTail⟩ := Lane_q_s09_gain2.eventual_tail_sum2
+    (u := P.u) (c₁ := c₀) (c₂ := c₁ / 2) hu hc₀ hcHalf
+  refine ⟨c, hc, max nPoly nTail, ?_⟩
+  intro n hn N E X Y κ G M S I hin hreg hcov
+  have hnPoly : nPoly ≤ n := le_trans (le_max_left nPoly nTail) hn
+  have hnTail : nTail ≤ n := le_trans (le_max_right nPoly nTail) hn
+  have hpolyN := hPoly n hnPoly
+  have htailN := hTail n hnTail
+  rcases hin with ⟨hN, hprep, hdeep, htags, hmasks, htools, hexps, hscales⟩
+  rcases hscales with ⟨hnDim, hm, hr, hwidth, hfilter, hfirstWidth, hbsmall, hgain⟩
+  have hcount (v : EvenSites9 n) (b : OddSites9 n) :
+      (coreCount9 I v b : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+    unfold coreCount9
+    calc
+      ((I.seen b.1 ∩ I.core v.1).card : ℝ) ≤ (I.core v.1).card := by
+        exact_mod_cast
+          (Finset.card_le_card (Finset.inter_subset_right :
+            I.seen b.1 ∩ I.core v.1 ⊆ I.core v.1))
+      _ ≤ (n : ℝ) ^ (P.χ : ℝ) := I.core_card v.1 v.2
+  have hlen (v : EvenSites9 n) (b : OddSites9 n) :
+      ((coreOrder9 I v b).length : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+    have hlenNat : (coreOrder9 I v b).length ≤ coreCount9 I v b := by
+      simp only [coreOrder9, Finset.length_toList, coreIDs9, coreCount9]
+      exact Finset.card_erase_le
+    have hlenR : ((coreOrder9 I v b).length : ℝ) ≤ (coreCount9 I v b : ℝ) := by
+      exact_mod_cast hlenNat
+    exact le_trans hlenR (hcount v b)
+  intro v b hb
+  classical
+  let regBad : Outcome9 I N → Prop := fun ω => ¬ starRegular9 S E G ω v
+  let covBad : Outcome9 I N → Prop := fun ω =>
+    ∃ k ∈ Finset.range (coreOrder9 I v b).length,
+      P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) < |coreCov9 S E G ω v b k|
+  let targetBad : Outcome9 I N → Prop := fun ω =>
+    3 * P.aStar n * (n : ℝ) ^ (-(P.χ : ℝ)) <
+      |rowDeg E G (anc9 ω (I.center v.1))
+          (restrictOr9 (siteSecond9 S b.1) (coreHitSet9 E G ω v b)) -
+        rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)|
+  have hIncl : ∀ ω, targetBad ω → regBad ω ∨ covBad ω := by
+    intro ω hbad
+    by_contra hnot
+    have hregω : starRegular9 S E G ω v := by
+      by_contra h
+      exact hnot (Or.inl h)
+    have hcovω : ¬ covBad ω := by
+      intro h
+      exact hnot (Or.inr h)
+    have hCovGood : ∀ k, k < (coreOrder9 I v b).length →
+        |coreCov9 S E G ω v b k| ≤
+          P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) := by
+      intro k hk
+      by_contra hlarge
+      apply hcovω
+      exact ⟨k, Finset.mem_range.mpr hk, lt_of_not_ge hlarge⟩
+    have hdet := Lane_q_s09_gain2.core_order_hit_shift_bound
+      S I E G ω v b (hregω b hb).2.2 hbsmall hCovGood hnDim (hlen v b)
+    exact (not_lt_of_ge hdet) hbad
+  have hcovProb : (rawLaw9 S I).pr covBad ≤
+      (coreOrder9 I v b).length * P.tail c₁ n := by
+    calc
+      (rawLaw9 S I).pr covBad ≤
+          ∑ k ∈ Finset.range (coreOrder9 I v b).length,
+            (rawLaw9 S I).pr (fun ω =>
+              P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) < |coreCov9 S E G ω v b k|) := by
+        simpa [covBad] using Lane_q_s09_gain2.pr_exists_finset_le_sum
+          (rawLaw9 S I) (Finset.range (coreOrder9 I v b).length)
+          (fun k ω => P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) <
+            |coreCov9 S E G ω v b k|)
+      _ ≤ ∑ k ∈ Finset.range (coreOrder9 I v b).length, P.tail c₁ n := by
+        apply Finset.sum_le_sum
+        intro k hk
+        exact hcov v b hb k
+      _ = (coreOrder9 I v b).length * P.tail c₁ n := by simp
+  have htailNonneg : 0 ≤ P.tail c₁ n := by
+    dsimp [Params9.tail]
+    positivity
+  have hcovTail : (rawLaw9 S I).pr covBad ≤
+      Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) := by
+    calc
+      (rawLaw9 S I).pr covBad ≤ (coreOrder9 I v b).length * P.tail c₁ n := hcovProb
+      _ ≤ (n : ℝ) ^ (P.χ : ℝ) * P.tail c₁ n :=
+        mul_le_mul_of_nonneg_right (hlen v b) htailNonneg
+      _ ≤ Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) := by
+        simpa [Params9.tail, mul_assoc] using hpolyN
+  have htailCombined : P.tail c₀ n + Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) ≤
+      P.tail c n := by
+    simpa [c, Params9.tail, mul_assoc] using htailN
+  have hmono := FinProb.pr_mono (rawLaw9 S I) targetBad
+    (fun ω => regBad ω ∨ covBad ω) hIncl
+  calc
+    (rawLaw9 S I).pr targetBad ≤ (rawLaw9 S I).pr (fun ω => regBad ω ∨ covBad ω) := hmono
+    _ ≤ (rawLaw9 S I).pr regBad + (rawLaw9 S I).pr covBad :=
+      Lane_q_s09_gain2.pr_or_le (rawLaw9 S I) regBad covBad
+    _ ≤ P.tail c₀ n + Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) := by
+      exact add_le_add (hreg v) hcovTail
+    _ ≤ P.tail c n := htailCombined
 
 /-- The combined mean comparison (09:266–268): the three comparisons hold together outside raw probability
 `3 max(tails)`, and `C₁ k b_*² + e^{-c₁ n^u} + C₂ k b_*² + 3 a_* n^{-χ} ≤ a_*/100` for large `n` because

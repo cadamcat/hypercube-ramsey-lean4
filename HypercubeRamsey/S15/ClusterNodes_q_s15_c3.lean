@@ -1,8 +1,10 @@
 import HypercubeRamsey.PartC.Core
+import HypercubeRamsey.S15.Defs
 
 namespace HypercubeRamsey.Lane_q_s15_c3
 
 open scoped BigOperators
+open HypercubeRamsey.S15
 
 theorem even_prefix_card_le {n ell : ℕ} (w : CubePos n)
     (E : Finset {v : CubePos n // IsEvenRole v})
@@ -174,5 +176,102 @@ theorem finLaw_pr_markov {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
         exact div_nonneg hnonneg htpow.le
     _ = (∑ ω, P.w ω * (if H ω then F ω ^ m else 0)) / t ^ m := by
       rw [Finset.sum_div (s := Finset.univ)]
+
+theorem finLaw_cond_E_eq {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    (P : FinLaw Ω) (A : Finset Ω) (hA : 0 < ∑ ω ∈ A, P.w ω)
+    (F : Ω → ℝ) :
+    (FinLaw.cond P A hA).E F =
+      (∑ ω ∈ A, P.w ω * F ω) / (∑ ω ∈ A, P.w ω) := by
+  letI : DecidableEq Ω := Classical.decEq Ω
+  simp only [FinLaw.E, FinLaw.cond]
+  calc
+    (∑ ω, ((if ω ∈ A then P.w ω else 0) / (∑ x ∈ A, P.w x)) * F ω) =
+        ∑ ω, ((if ω ∈ A then P.w ω else 0) * F ω) / (∑ x ∈ A, P.w x) := by
+          apply Finset.sum_congr rfl
+          intro ω hω
+          by_cases hmem : ω ∈ A
+          · simp [hmem]
+            ring
+          · simp [hmem]
+    _ = (∑ ω, (if ω ∈ A then P.w ω else 0) * F ω) / (∑ x ∈ A, P.w x) := by
+          rw [Finset.sum_div]
+    _ = (∑ ω ∈ A, P.w ω * F ω) / (∑ x ∈ A, P.w x) := by
+          congr 1
+          simp [Finset.sum_ite_mem, Finset.univ_inter]
+
+theorem finLaw_cond_E_le {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    (P : FinLaw Ω) (A : Finset Ω) (hA : 0 < ∑ ω ∈ A, P.w ω)
+    (F : Ω → ℝ) (hF : ∀ ω, 0 ≤ F ω) :
+    (FinLaw.cond P A hA).E F ≤ P.E F / (∑ ω ∈ A, P.w ω) := by
+  rw [finLaw_cond_E_eq]
+  apply (div_le_div_of_nonneg_right _ hA.le)
+  apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+  intro ω hω hnot
+  exact mul_nonneg (P.nonneg ω) (hF ω)
+
+theorem finLaw_bind_E {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinLaw α) (K : α → FinLaw β) (F : α × β → ℝ) :
+    (FinLaw.bind P K).E F = P.E (fun a => (K a).E (fun b => F (a, b))) := by
+  classical
+  unfold FinLaw.E FinLaw.bind
+  rw [Fintype.sum_prod_type]
+  congr 1
+  funext a
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b hb
+  ring
+
+theorem finLaw_map_E {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β]
+    (P : FinLaw α) (f : α → β) (F : β → ℝ) :
+    (FinLaw.map P f).E F = P.E (fun a => F (f a)) := by
+  classical
+  simp only [FinLaw.E, FinLaw.map]
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro a ha
+  simp
+
+theorem finset_powerset_pow_le_exp {α : Type*} [DecidableEq α]
+    (S : Finset α) (c : ℝ) (hc : 0 ≤ c) :
+    (∑ M ∈ S.powerset, c ^ M.card) ≤ Real.exp (c * S.card) := by
+  classical
+  calc
+    (∑ M ∈ S.powerset, c ^ M.card) = ∏ a ∈ S, (1 + c) := by
+      simpa [Finset.prod_const] using
+        (Finset.prod_one_add (f := fun _ : α => c) S).symm
+    _ ≤ Real.exp (c * S.card) := by
+      simpa [Finset.sum_const, nsmul_eq_mul, mul_comm] using
+        (Real.prod_one_add_le_exp_sum S (f := fun _ : α => c) (fun _ => hc))
+
+theorem finset_average_pow_expand {α : Type*} [DecidableEq α]
+    (S : Finset α) (f : α → ℝ) (n : ℕ) :
+    ((S.card : ℝ)⁻¹ * (∑ a ∈ S, f a)) ^ n =
+      ((S.card : ℝ) ^ n)⁻¹ *
+        (∑ p ∈ Fintype.piFinset (fun _ : Fin n => S), ∏ i, f (p i)) := by
+  rw [mul_pow, inv_pow, Finset.sum_pow']
+
+theorem avoided_cluster_history_E_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (hpositive : 0 < (clusterHistoryLaw PT hPT hm).pr
+      (clusterAlarmsAvoided PT hPT hm))
+    (F : ClusterHistory PT hPT hm → ℝ) (hF : ∀ W, 0 ≤ F W) :
+    (clusterAvoidedHistoryLaw PT hPT hm hpositive).E F ≤
+      (clusterHistoryLaw PT hPT hm).E F /
+        (clusterHistoryLaw PT hPT hm).pr (clusterAlarmsAvoided PT hPT hm) := by
+  classical
+  let P := clusterHistoryLaw PT hPT hm
+  let A := Finset.univ.filter (clusterAlarmsAvoided PT hPT hm)
+  have heq : (∑ W ∈ A, P.w W) = P.pr (clusterAlarmsAvoided PT hPT hm) := by
+    unfold FinLaw.pr
+    rw [← Finset.sum_filter]
+  have hA : 0 < ∑ W ∈ A, P.w W := by
+    rw [heq]
+    exact hpositive
+  have hcond := finLaw_cond_E_le P A hA F hF
+  rw [heq] at hcond
+  simpa [clusterAvoidedHistoryLaw, P, A] using hcond
 
 end HypercubeRamsey.Lane_q_s15_c3

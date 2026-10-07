@@ -217,4 +217,295 @@ theorem nonisolates_le_twice_rank (D : LateData hPT) (S : Finset (Pos T k)) :
   rw [hcard] at hbound
   simpa [G, LateData.rank, Nat.card_eq_fintype_card] using hbound
 
+private theorem flipPos_involutive (v : Pos T k) (a : Fin (T.S.n k)) :
+    flipPos (flipPos v a) a = v := by
+  funext j
+  by_cases hj : j = a
+  · subst j
+    simp [flipPos]
+  · simp [flipPos, hj]
+
+private def oneNeighborhood (b : Pos T k) : Finset (Pos T k) :=
+  insert b ((Finset.univ : Finset (Fin (T.S.n k))).image (fun a => flipPos b a))
+
+private theorem oneNeighborhood_card (b : Pos T k) :
+    (oneNeighborhood b).card ≤ T.S.n k + 1 := by
+  classical
+  unfold oneNeighborhood
+  calc
+    _ ≤ ((Finset.univ : Finset (Fin (T.S.n k))).image (fun a => flipPos b a)).card + 1 :=
+      Finset.card_insert_le b _
+    _ ≤ (Finset.univ : Finset (Fin (T.S.n k))).card + 1 :=
+      Nat.add_le_add_right Finset.card_image_le 1
+    _ = T.S.n k + 1 := by simp
+
+private def cellSources (D : LateData hPT) (C : D.geom.Cell) : Finset (Pos T k) :=
+  Finset.univ.filter fun b => D.geom.cellOf b = C
+
+private def cellReach (D : LateData hPT) (C : D.geom.Cell) : Finset (Pos T k) :=
+  (cellSources D C).biUnion oneNeighborhood
+
+private theorem mem_cellReach_of_mem_directCells (D : LateData hPT) {C : D.geom.Cell}
+    {w : Pos T k} (hC : C ∈ D.directCells w) : w ∈ cellReach D C := by
+  classical
+  simp only [LateData.directCells, Finset.mem_union, Finset.mem_singleton, Finset.mem_image] at hC
+  rcases hC with hC | ⟨a, ha, hcell⟩
+  · apply Finset.mem_biUnion.mpr
+    refine ⟨w, ?_, ?_⟩
+    · simp [cellSources, hC]
+    · simp [oneNeighborhood]
+  · let b := flipPos w a
+    have hcell' : D.geom.cellOf b = C := by simpa [b] using hcell
+    have hflip : flipPos b a = w := by simpa [b] using flipPos_involutive w a
+    apply Finset.mem_biUnion.mpr
+    refine ⟨b, ?_, ?_⟩
+    · simp [cellSources, hcell']
+    · change w ∈ insert b ((Finset.univ : Finset (Fin (T.S.n k))).image (fun a => flipPos b a))
+      rw [← hflip]
+      apply Finset.mem_insert_of_mem
+      apply Finset.mem_image.mpr
+      exact ⟨a, Finset.mem_univ _, rfl⟩
+
+private theorem cellSources_card_le (hκ : κ.Admissible) (D : LateData hPT)
+    (C : D.geom.Cell) : (cellSources D C).card ≤ T.S.n k ^ 200 := by
+  simpa [cellSources, hκ.Ac_eq] using D.l16_valid.cell_size C
+
+private theorem cellReach_card_le (hκ : κ.Admissible) (D : LateData hPT)
+    (C : D.geom.Cell) : (cellReach D C).card ≤ T.S.n k ^ 200 * (T.S.n k + 1) := by
+  classical
+  calc
+    (cellReach D C).card ≤ ∑ b ∈ cellSources D C, (oneNeighborhood b).card :=
+      Finset.card_biUnion_le
+    _ ≤ ∑ b ∈ cellSources D C, (T.S.n k + 1) := by
+      apply Finset.sum_le_sum
+      intro b hb
+      exact oneNeighborhood_card b
+    _ = (cellSources D C).card * (T.S.n k + 1) := by simp
+    _ ≤ (T.S.n k ^ 200) * (T.S.n k + 1) :=
+      Nat.mul_le_mul_right _ (cellSources_card_le hκ D C)
+
+private theorem directCells_card_le (D : LateData hPT) (v : Pos T k) :
+    (D.directCells v).card ≤ T.S.n k + 1 := by
+  classical
+  have hext : (D.externalEarly v).card ≤ T.S.n k := by
+    simpa using (Finset.card_le_univ (D.externalEarly v))
+  calc
+    (D.directCells v).card ≤ 1 + ((D.externalEarly v).image
+        (fun a => D.geom.cellOf (flipPos v a))).card := by
+      simpa [LateData.directCells] using
+        (Finset.card_union_le ({D.geom.cellOf v})
+          ((D.externalEarly v).image (fun a => D.geom.cellOf (flipPos v a))))
+    _ ≤ 1 + (D.externalEarly v).card := Nat.add_le_add_left Finset.card_image_le 1
+    _ ≤ T.S.n k + 1 := by omega
+
+private noncomputable def directPartnerSet (D : LateData hPT) (v : Pos T k) : Finset (Pos T k) :=
+  Finset.univ.filter fun w => ¬ Disjoint (D.directCells v) (D.directCells w)
+
+private noncomputable def directCandidates (D : LateData hPT) (v : Pos T k) : Finset (Pos T k) :=
+  (D.directCells v).biUnion (cellReach D)
+
+private theorem directPartner_subset_candidates (D : LateData hPT) (v : Pos T k) :
+    directPartnerSet D v ⊆ directCandidates D v := by
+  classical
+  intro w hw
+  have hnd : ¬ Disjoint (D.directCells v) (D.directCells w) :=
+    (Finset.mem_filter.mp hw).2
+  have hcommon : ∃ C, C ∈ D.directCells v ∧ C ∈ D.directCells w := by
+    by_contra hn
+    apply hnd
+    apply Finset.disjoint_left.mpr
+    intro C hCv hCw
+    exact hn ⟨C, hCv, hCw⟩
+  obtain ⟨C, hCv, hCw⟩ := hcommon
+  apply Finset.mem_biUnion.mpr
+  exact ⟨C, hCv, mem_cellReach_of_mem_directCells D hCw⟩
+
+private theorem directCandidates_card_le (hκ : κ.Admissible) (D : LateData hPT)
+    (v : Pos T k) :
+    (directCandidates D v).card ≤ (T.S.n k + 1) * (T.S.n k ^ 200 * (T.S.n k + 1)) := by
+  classical
+  calc
+    (directCandidates D v).card ≤
+        ∑ C ∈ D.directCells v, (cellReach D C).card := Finset.card_biUnion_le
+    _ ≤ ∑ C ∈ D.directCells v, (T.S.n k ^ 200 * (T.S.n k + 1)) := by
+      apply Finset.sum_le_sum
+      intro C hC
+      exact cellReach_card_le hκ D C
+    _ = (D.directCells v).card * (T.S.n k ^ 200 * (T.S.n k + 1)) := by simp
+    _ ≤ (T.S.n k + 1) * (T.S.n k ^ 200 * (T.S.n k + 1)) :=
+      Nat.mul_le_mul_right _ (directCells_card_le D v)
+
+private theorem hammingBall_two_card_le (v : Pos T k) :
+    (hammingBall v 2).card ≤ (T.S.n k + 1) ^ 2 := by
+  classical
+  let B := hammingBall v 2
+  let support (u : Pos T k) :=
+    (Finset.univ : Finset (Fin (T.S.n k))).filter fun i => v i ≠ u i
+  let Q := (Finset.univ : Finset (Fin (T.S.n k))).powerset.filter fun s => s.card ≤ 2
+  have hsupport (u : Pos T k) : (support u).card = hammingDist v u := by
+    simp [support, hammingDist]
+  have hinj : Set.InjOn support (B : Set (Pos T k)) := by
+    intro x hx y hy hxy
+    funext i
+    have hi : (v i ≠ x i) ↔ (v i ≠ y i) := by
+      have hm := congrArg (fun s : Finset (Fin (T.S.n k)) => i ∈ s) hxy
+      simpa [support] using hm
+    cases hvi : v i <;> cases hxi : x i <;> cases hyi : y i <;> simp_all
+  have himage : B.card = (B.image support).card :=
+    (Finset.card_image_of_injOn hinj).symm
+  have hsubset : B.image support ⊆ Q := by
+    intro s hs
+    rcases Finset.mem_image.mp hs with ⟨u, hu, rfl⟩
+    have hu' : u ∈ hammingBall v 2 := by simpa [B] using hu
+    have hd : hammingDist v u ≤ 2 := (Finset.mem_filter.mp hu').2
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_powerset.mpr (Finset.subset_univ _), ?_⟩
+    calc
+      (support u).card = hammingDist v u := hsupport u
+      _ ≤ 2 := hd
+  have hQsub : Q ⊆
+      ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 0) ∪
+        ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 1) ∪
+          ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 2) := by
+    intro s hs
+    have hscard := (Finset.mem_filter.mp hs).2
+    have hssub := Finset.mem_powerset.mp (Finset.mem_filter.mp hs).1
+    by_cases h0 : s.card = 0
+    · have hm : s ∈ (Finset.univ : Finset (Fin (T.S.n k))).powersetCard 0 :=
+        Finset.mem_powersetCard.mpr ⟨hssub, h0⟩
+      exact Finset.mem_union_left _ (Finset.mem_union_left _ hm)
+    · by_cases h1 : s.card = 1
+      · have hm : s ∈ (Finset.univ : Finset (Fin (T.S.n k))).powersetCard 1 :=
+          Finset.mem_powersetCard.mpr ⟨hssub, h1⟩
+        exact Finset.mem_union_left _ (Finset.mem_union_right _ hm)
+      · have h2 : s.card = 2 := by omega
+        have hm : s ∈ (Finset.univ : Finset (Fin (T.S.n k))).powersetCard 2 :=
+          Finset.mem_powersetCard.mpr ⟨hssub, h2⟩
+        exact Finset.mem_union_right _ hm
+  have hQcard : Q.card ≤ (T.S.n k + 1) ^ 2 := by
+    calc
+      Q.card ≤ (((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 0) ∪
+          ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 1) ∪
+          ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 2)).card :=
+        Finset.card_le_card hQsub
+      _ ≤ ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 0).card +
+          ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 1).card +
+          ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 2).card := by
+        calc
+          _ ≤ (((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 0) ∪
+              ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 1)).card +
+              ((Finset.univ : Finset (Fin (T.S.n k))).powersetCard 2).card :=
+            Finset.card_union_le _ _
+          _ ≤ _ := Nat.add_le_add_right (Finset.card_union_le _ _) _
+      _ ≤ (T.S.n k + 1) ^ 2 := by
+        simp only [Finset.card_powersetCard, Finset.card_univ, Fintype.card_fin,
+          Nat.choose_zero_right, Nat.choose_one_right]
+        nlinarith [Nat.choose_le_pow (T.S.n k) 2]
+  change B.card ≤ (T.S.n k + 1) ^ 2
+  calc
+    B.card = (B.image support).card := himage
+    _ ≤ Q.card := Finset.card_le_card hsubset
+    _ ≤ (T.S.n k + 1) ^ 2 := hQcard
+
+private noncomputable def commonOddNeighborSet (v : Pos T k) : Finset (Pos T k) :=
+  Finset.univ.filter fun w => ∃ b,
+    (OAI.HypercubeRamsey.cube (T.S.n k)).Adj v b ∧
+    (OAI.HypercubeRamsey.cube (T.S.n k)).Adj w b
+
+private theorem commonOddNeighbor_subset_hammingBall (v : Pos T k) :
+    commonOddNeighborSet v ⊆ hammingBall v 2 := by
+  intro w hw
+  obtain ⟨b, hvb, hwb⟩ := (Finset.mem_filter.mp hw).2
+  have hvb' : hammingDist v b = 1 := hvb
+  have hwb' : hammingDist w b = 1 := hwb
+  have hbw' : hammingDist b w = 1 := by
+    have hs : hammingDist b w = hammingDist w b := by
+      unfold hammingDist
+      congr 1
+      ext i
+      simp [ne_comm]
+    rw [hs, hwb']
+  have hdist := hammingDist_triangle v b w
+  rw [hvb', hbw'] at hdist
+  exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [hammingBall] using hdist⟩
+
+theorem geometricAdj_degree_bound (hκ : κ.Admissible) (D : LateData hPT)
+    (hn : 2 ≤ T.S.n k) (v : Pos T k) :
+    ((Finset.univ.filter fun w => D.geometricAdj v w).card : ℝ) ≤
+      (T.S.n k : ℝ) ^ (κ.Ac + 5) := by
+  classical
+  let direct := directPartnerSet D v
+  let common := commonOddNeighborSet v
+  let all := Finset.univ.filter fun w => D.geometricAdj v w
+  have hdirect_sub : direct ⊆ directCandidates D v := directPartner_subset_candidates D v
+  have hcommon_sub : common ⊆ hammingBall v 2 := commonOddNeighbor_subset_hammingBall v
+  have hall_sub : all ⊆ direct ∪ common := by
+    intro w hw
+    rcases (Finset.mem_filter.mp hw).2 with ⟨_, hgeom⟩
+    rcases hgeom with hdisj | hneighbor
+    · exact Finset.mem_union_left _ (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdisj⟩)
+    · rcases hneighbor with ⟨b, hbclass, hvb, hwb⟩
+      exact Finset.mem_union_right _
+        (Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨b, hvb, hwb⟩⟩)
+  have hnpow : T.S.n k + 1 ≤ (T.S.n k) ^ 2 := by
+    have hnreal : (2 : ℝ) ≤ T.S.n k := by exact_mod_cast hn
+    have hreal : (T.S.n k : ℝ) + 1 ≤ (T.S.n k : ℝ) ^ 2 := by nlinarith
+    exact_mod_cast hreal
+  have hdirect : direct.card ≤ (T.S.n k) ^ 204 := by
+    have hnpow2 : (T.S.n k + 1) ^ 2 ≤ ((T.S.n k) ^ 2) ^ 2 := by
+      simpa [pow_two] using Nat.mul_le_mul hnpow hnpow
+    have hsquare : ((T.S.n k) ^ 2) ^ 2 = (T.S.n k) ^ 4 := by
+      calc
+        _ = (T.S.n k) ^ (2 * 2) := (pow_mul (T.S.n k) 2 2).symm
+        _ = (T.S.n k) ^ 4 := by norm_num
+    calc
+      direct.card ≤ (T.S.n k + 1) * (T.S.n k ^ 200 * (T.S.n k + 1)) :=
+        (Finset.card_le_card hdirect_sub).trans (directCandidates_card_le hκ D v)
+      _ = (T.S.n k ^ 200) * (T.S.n k + 1) ^ 2 := by ring
+      _ ≤ (T.S.n k ^ 200) * ((T.S.n k) ^ 2) ^ 2 :=
+        Nat.mul_le_mul_left _ hnpow2
+      _ = T.S.n k ^ 204 := by
+        rw [hsquare]
+        calc
+          _ = (T.S.n k) ^ (200 + 4) := (pow_add (T.S.n k) 200 4).symm
+          _ = (T.S.n k) ^ 204 := by norm_num
+  have hball : (hammingBall v 2).card ≤ (T.S.n k) ^ 204 := by
+    have hsquare : ((T.S.n k) ^ 2) ^ 2 = (T.S.n k) ^ 4 := by
+      calc
+        _ = (T.S.n k) ^ (2 * 2) := (pow_mul (T.S.n k) 2 2).symm
+        _ = (T.S.n k) ^ 4 := by norm_num
+    have hnpow4 : (T.S.n k + 1) ^ 2 ≤ (T.S.n k) ^ 4 := by
+      calc
+        _ ≤ ((T.S.n k) ^ 2) ^ 2 := by simpa [pow_two] using Nat.mul_le_mul hnpow hnpow
+        _ = (T.S.n k) ^ 4 := hsquare
+    have hone : 1 ≤ (T.S.n k) ^ 200 := Nat.one_le_pow 200 (T.S.n k) (by omega)
+    have hpow : (T.S.n k) ^ 4 ≤ (T.S.n k) ^ 204 := by
+      calc
+        _ ≤ (T.S.n k) ^ 4 * (T.S.n k) ^ 200 := by
+          simpa using Nat.mul_le_mul_left ((T.S.n k) ^ 4) hone
+        _ = (T.S.n k) ^ 204 := by
+          calc
+            _ = (T.S.n k) ^ (4 + 200) := (pow_add (T.S.n k) 4 200).symm
+            _ = (T.S.n k) ^ 204 := by norm_num
+    exact (hammingBall_two_card_le v).trans (hnpow4.trans hpow)
+  have hcommon : common.card ≤ (T.S.n k) ^ 204 :=
+    (Finset.card_le_card hcommon_sub).trans hball
+  have hsum : all.card ≤ 2 * (T.S.n k) ^ 204 := by
+    calc
+      all.card ≤ (direct ∪ common).card := Finset.card_le_card hall_sub
+      _ ≤ direct.card + common.card := Finset.card_union_le _ _
+      _ ≤ (T.S.n k) ^ 204 + (T.S.n k) ^ 204 := Nat.add_le_add hdirect hcommon
+      _ = 2 * (T.S.n k) ^ 204 := by ring
+  have hlast : 2 * (T.S.n k) ^ 204 ≤ (T.S.n k) ^ 205 := by
+    calc
+      _ ≤ (T.S.n k) * (T.S.n k) ^ 204 := Nat.mul_le_mul_right _ hn
+      _ = (T.S.n k) ^ 204 * (T.S.n k) := by ac_rfl
+      _ = (T.S.n k) ^ 205 := by
+        calc
+          _ = (T.S.n k) ^ (204 + 1) := (pow_succ (T.S.n k) 204).symm
+          _ = (T.S.n k) ^ 205 := by norm_num
+  have hnat : all.card ≤ (T.S.n k) ^ 205 := hsum.trans hlast
+  have hreal : (all.card : ℝ) ≤ (T.S.n k : ℝ) ^ 205 := by exact_mod_cast hnat
+  simpa [hκ.Ac_eq, Real.rpow_natCast] using hreal
+
 end HypercubeRamsey.S18.Lane_q_s18_n5

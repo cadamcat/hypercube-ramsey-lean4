@@ -37,17 +37,73 @@ theorem partC_main (T : Stage) (η0 : ℝ) (hη0 : 0 < η0) (hInit : InitDisc T 
 
 /-- Conversion: equal power budgets give part C's `InitDisc`. -/
 theorem initDisc_of_discAt {T : Stage} {η₀ : ℝ} (h : DiscAt T (pw η₀) (pw η₀) (fun n => n ^ (-η₀))) :
-    InitDisc T η₀ := sorry
+    InitDisc T η₀ := by
+  change ∀ᶠ k in atTop,
+    TwoBudgetDisc T k ((T.S.n k : ℝ) ^ η₀) ((T.S.n k : ℝ) ^ η₀)
+      ((T.S.n k : ℝ) ^ (-η₀))
+  unfold DiscAt at h
+  filter_upwards [h] with k hk
+  intro c μ ν hμ hν hbudget
+  rcases hbudget with ⟨hμw, hνw⟩ | ⟨hμw, hνw⟩
+  · exact hk c μ ν hμ hν hμw hνw
+  · exact hk c μ ν hμ hν hμw hνw
 
 /-- Conversion: both orientations of the deep regime give part C's `DeepDisc`. -/
 theorem deepDisc_of_discAt {T : Stage} {x α : ℚ} {ε : ℝ}
     (h₁ : DiscAt T (pw x) (lw α) (fun n => n ^ (-1 + ε)))
     (h₂ : DiscAt T.swap (pw x) (lw α) (fun n => n ^ (-1 + ε))) :
-    DeepDisc T x α ε := sorry
+    DeepDisc T x α ε := by
+  change ∀ᶠ k in atTop,
+    TwoBudgetDisc T k ((T.S.n k : ℝ) ^ (x : ℝ)) ((α : ℝ) * T.S.n k)
+      ((T.S.n k : ℝ) ^ (-1 + ε))
+  have dens_transpose_local {N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+      (μ ν : Law N) : dens (transposeRel E) c μ ν = dens E c ν μ := by
+    classical
+    unfold dens
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro y hy
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp only [hits_transpose]
+    ring
+  unfold DiscAt at h₁ h₂
+  filter_upwards [h₁, h₂] with k hk₁ hk₂
+  intro c μ ν hμ hν hbudget
+  rcases hbudget with ⟨hμL, hνS⟩ | ⟨hμS, hνL⟩
+  · have hd : |dens (T.S.E k) c μ ν - 1 / 2| ≤ (T.S.n k : ℝ) ^ (-1 + ε) := by
+      have hds :
+          |dens (transposeRel (T.S.E k)) c ν μ - 1 / 2| ≤ (T.S.n k : ℝ) ^ (-1 + ε) := by
+        change |dens (transposeRel (T.S.E k)) c ν μ - 1 / 2| ≤
+          (T.S.n k : ℝ) ^ (-1 + ε)
+        exact hk₂ c ν μ hν hμ hνS hμL
+      rw [dens_transpose_local] at hds
+      exact hds
+    exact hd
+  · exact hk₁ c μ ν hμ hν hμS hνL
 
 /-- Conversion: absence of part B's cluster property excludes part C's witness. -/
 theorem not_clusterWitnessAt_of_absent {T : Stage} {G : Colour} {ζ δ : ℝ}
-    (h : EventuallyAbsent T (PCluster G ζ δ)) : ∀ᶠ k in atTop, ¬ ClusterWitnessAt T k G ζ δ := sorry
+    (h : EventuallyAbsent T (PCluster G ζ δ)) : ∀ᶠ k in atTop, ¬ ClusterWitnessAt T k G ζ δ := by
+  classical
+  unfold EventuallyAbsent at h
+  filter_upwards [h] with k hk
+  intro hw
+  rcases hw with ⟨m, μ, lam, D, hμ, hD, hlam, hsum, hwidth, havg, hDj, hcodeg⟩
+  have hcodeg_eq (y y' : Fin (T.S.N k)) :
+      codeg (T.S.E k) G μ y y' =
+        ∑ x, μ.w x * hit (T.S.E k) G x y * hit (T.S.E k) G x y' := by
+    unfold codeg hit
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hy : Hits (T.S.E k) G x y <;>
+      by_cases hy' : Hits (T.S.E k) G x y' <;> simp [hy, hy']
+  have hmem : (T.X k, T.Y k) ∈ PCluster G ζ δ (T.S.n k) (T.S.N k) (T.S.E k) := by
+    refine ⟨μ, m, lam, D, hμ, hD, hlam, hsum, hwidth, havg, hDj, ?_⟩
+    intro j hpos y y' hy hy'
+    rw [hcodeg_eq]
+    exact hcodeg j y y' hy hy'
+  exact (hk (T.X k) (T.Y k) hmem) ⟨subset_rfl, subset_rfl⟩
 
 /-- `swap` and `orient` agree. -/
 theorem orient_true (T : Stage) : T.orient true = T.swap := rfl

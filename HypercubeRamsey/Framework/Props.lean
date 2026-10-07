@@ -50,9 +50,124 @@ def FamB : Set PatchProp :=
   {P | ∃ x α h : ℚ, P = (PBias (pw x) (lw α) h).toPatch ∨ P = (PBias (pw x) (lw α) h).toPatch.swap} ∪
   {P | ∃ (G : Colour) (ζ δ : ℚ), P = PCluster G ζ δ ∨ P = (PCluster G ζ δ).swap}
 
-theorem FamB_countable : FamB.Countable := sorry
+theorem FamB_countable : FamB.Countable := by
+  have countable_pair {α : Type} [Countable α] (f g : α → PatchProp) :
+      {P : PatchProp | ∃ a, P = f a ∨ P = g a}.Countable := by
+    let encode : α × Bool → PatchProp := fun p => if p.2 then g p.1 else f p.1
+    apply (Set.countable_range encode).mono
+    rintro P ⟨a, hP⟩
+    rcases hP with hP | hP
+    · exact ⟨(a, false), by simpa [encode] using hP.symm⟩
+    · exact ⟨(a, true), by simpa [encode] using hP.symm⟩
+  have hViol : {P : PatchProp | ∃ D₀ c : ℚ,
+      P = (PViol D₀ c).toPatch ∨ P = (PViol D₀ c).toPatch.swap}.Countable := by
+    apply (countable_pair
+      (fun p : ℚ × ℚ => (PViol p.1 p.2).toPatch)
+      (fun p : ℚ × ℚ => (PViol p.1 p.2).toPatch.swap)).mono
+    rintro P ⟨D₀, c, hP⟩
+    exact ⟨(D₀, c), hP⟩
+  have hPure : {P : PatchProp | ∃ β γ h : ℚ,
+      P = (PPure β γ h).toPatch ∨ P = (PPure β γ h).toPatch.swap}.Countable := by
+    apply (countable_pair
+      (fun p : ℚ × ℚ × ℚ => (PPure p.1 p.2.1 p.2.2).toPatch)
+      (fun p : ℚ × ℚ × ℚ => (PPure p.1 p.2.1 p.2.2).toPatch.swap)).mono
+    rintro P ⟨β, γ, h, hP⟩
+    exact ⟨(β, γ, h), hP⟩
+  have hBiasPP : {P : PatchProp | ∃ x y h : ℚ,
+      P = (PBias (pw x) (pw y) h).toPatch ∨ P = (PBias (pw x) (pw y) h).toPatch.swap}.Countable := by
+    apply (countable_pair
+      (fun p : ℚ × ℚ × ℚ => (PBias (pw p.1) (pw p.2.1) p.2.2).toPatch)
+      (fun p : ℚ × ℚ × ℚ => (PBias (pw p.1) (pw p.2.1) p.2.2).toPatch.swap)).mono
+    rintro P ⟨x, y, h, hP⟩
+    exact ⟨(x, y, h), hP⟩
+  have hBiasPL : {P : PatchProp | ∃ x α h : ℚ,
+      P = (PBias (pw x) (lw α) h).toPatch ∨ P = (PBias (pw x) (lw α) h).toPatch.swap}.Countable := by
+    apply (countable_pair
+      (fun p : ℚ × ℚ × ℚ => (PBias (pw p.1) (lw p.2.1) p.2.2).toPatch)
+      (fun p : ℚ × ℚ × ℚ => (PBias (pw p.1) (lw p.2.1) p.2.2).toPatch.swap)).mono
+    rintro P ⟨x, α, h, hP⟩
+    exact ⟨(x, α, h), hP⟩
+  have hCluster : {P : PatchProp | ∃ (G : Colour) (ζ δ : ℚ),
+      P = PCluster G ζ δ ∨ P = (PCluster G ζ δ).swap}.Countable := by
+    apply (countable_pair
+      (fun p : Colour × ℚ × ℚ => PCluster p.1 p.2.1 p.2.2)
+      (fun p : Colour × ℚ × ℚ => (PCluster p.1 p.2.1 p.2.2).swap)).mono
+    rintro P ⟨G, ζ, δ, hP⟩
+    exact ⟨(G, ζ, δ), hP⟩
+  unfold FamB
+  exact (((hViol.union hPure).union hBiasPP).union hBiasPL).union hCluster
 
-theorem FamB_swap : ∀ P ∈ FamB, P.swap ∈ FamB := sorry
+theorem FamB_swap : ∀ P ∈ FamB, P.swap ∈ FamB := by
+  have swap_swap (P : PatchProp) : P.swap.swap = P := by
+    funext n N E
+    ext AB
+    rfl
+  have hViol : ∀ P ∈ {P : PatchProp | ∃ D₀ c : ℚ,
+      P = (PViol D₀ c).toPatch ∨ P = (PViol D₀ c).toPatch.swap},
+      P.swap ∈ {P : PatchProp | ∃ D₀ c : ℚ,
+        P = (PViol D₀ c).toPatch ∨ P = (PViol D₀ c).toPatch.swap} := by
+    intro P hP
+    rcases hP with ⟨D₀, c, hP⟩
+    rcases hP with hP | hP
+    · subst P
+      exact ⟨D₀, c, Or.inr rfl⟩
+    · subst P
+      exact ⟨D₀, c, Or.inl (swap_swap _ )⟩
+  have hPure : ∀ P ∈ {P : PatchProp | ∃ β γ h : ℚ,
+      P = (PPure β γ h).toPatch ∨ P = (PPure β γ h).toPatch.swap},
+      P.swap ∈ {P : PatchProp | ∃ β γ h : ℚ,
+        P = (PPure β γ h).toPatch ∨ P = (PPure β γ h).toPatch.swap} := by
+    intro P hP
+    rcases hP with ⟨β, γ, h, hP⟩
+    rcases hP with hP | hP
+    · subst P
+      exact ⟨β, γ, h, Or.inr rfl⟩
+    · subst P
+      exact ⟨β, γ, h, Or.inl (swap_swap _)⟩
+  have hBiasPP : ∀ P ∈ {P : PatchProp | ∃ x y h : ℚ,
+      P = (PBias (pw x) (pw y) h).toPatch ∨ P = (PBias (pw x) (pw y) h).toPatch.swap},
+      P.swap ∈ {P : PatchProp | ∃ x y h : ℚ,
+        P = (PBias (pw x) (pw y) h).toPatch ∨ P = (PBias (pw x) (pw y) h).toPatch.swap} := by
+    intro P hP
+    rcases hP with ⟨x, y, h, hP⟩
+    rcases hP with hP | hP
+    · subst P
+      exact ⟨x, y, h, Or.inr rfl⟩
+    · subst P
+      exact ⟨x, y, h, Or.inl (swap_swap _)⟩
+  have hBiasPL : ∀ P ∈ {P : PatchProp | ∃ x α h : ℚ,
+      P = (PBias (pw x) (lw α) h).toPatch ∨ P = (PBias (pw x) (lw α) h).toPatch.swap},
+      P.swap ∈ {P : PatchProp | ∃ x α h : ℚ,
+        P = (PBias (pw x) (lw α) h).toPatch ∨ P = (PBias (pw x) (lw α) h).toPatch.swap} := by
+    intro P hP
+    rcases hP with ⟨x, α, h, hP⟩
+    rcases hP with hP | hP
+    · subst P
+      exact ⟨x, α, h, Or.inr rfl⟩
+    · subst P
+      exact ⟨x, α, h, Or.inl (swap_swap _)⟩
+  have hCluster : ∀ P ∈ {P : PatchProp | ∃ (G : Colour) (ζ δ : ℚ),
+      P = PCluster G ζ δ ∨ P = (PCluster G ζ δ).swap},
+      P.swap ∈ {P : PatchProp | ∃ (G : Colour) (ζ δ : ℚ),
+        P = PCluster G ζ δ ∨ P = (PCluster G ζ δ).swap} := by
+    intro P hP
+    rcases hP with ⟨G, ζ, δ, hP⟩
+    rcases hP with hP | hP
+    · subst P
+      exact ⟨G, ζ, δ, Or.inr rfl⟩
+    · subst P
+      exact ⟨G, ζ, δ, Or.inl (swap_swap _)⟩
+  intro P hP
+  simp only [FamB, Set.mem_union] at hP ⊢
+  rcases hP with hP | hP
+  · rcases hP with hP | hP
+    · rcases hP with hP | hP
+      · rcases hP with hP | hP
+        · exact Or.inl (Or.inl (Or.inl (Or.inl (hViol P hP))))
+        · exact Or.inl (Or.inl (Or.inl (Or.inr (hPure P hP))))
+      · exact Or.inl (Or.inl (Or.inr (hBiasPP P hP)))
+    · exact Or.inl (Or.inr (hBiasPL P hP))
+  · exact Or.inr (hCluster P hP)
 
 /-! ## Regime predicates (Definition 9.1 without limits) -/
 

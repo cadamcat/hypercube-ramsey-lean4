@@ -604,9 +604,6 @@ theorem L6_1d_supp (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   have hMatchEquiv : ∀ nm : X.Name, matchesPrimaryName6 β nm ↔ X.MatchName β nm := by
     intro nm
     cases nm <;> rfl
-  have hMatchEquiv : ∀ nm : X.Name, matchesPrimaryName6 β nm ↔ X.MatchName β nm := by
-    intro nm
-    cases nm <;> rfl
   let S : Finset X.Name := reqNames6 β
   have hbin : β.key.1 ∈ X.binsOf (X.typeKeys β) := by
     unfold Ctx6.binsOf Ctx6.typeKeys

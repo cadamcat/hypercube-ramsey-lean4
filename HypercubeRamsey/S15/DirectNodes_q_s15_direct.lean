@@ -62,6 +62,35 @@ theorem star_incidence_card_le {T : Stage} {k : ℕ}
         (cube (T.S.n k)).Adj b.1 v).card := Finset.card_le_card hsub
     _ ≤ T.S.n k := cube_adj_neighbors_card_le (T.S.n k) b.1
 
+noncomputable def starNear {T : Stage} {k : ℕ}
+    (a : S15.EvenPosition T k) : Finset (S15.EvenPosition T k) :=
+  (star a).biUnion starIncidence
+
+theorem starNear_card_le_sq {T : Stage} {k : ℕ}
+    (a : S15.EvenPosition T k) : (starNear a).card ≤ (T.S.n k) ^ 2 := by
+  classical
+  calc
+    (starNear a).card ≤ ∑ b ∈ star a, (starIncidence b).card :=
+      Finset.card_biUnion_le
+    _ ≤ ∑ _b ∈ star a, T.S.n k :=
+      Finset.sum_le_sum fun b hb => star_incidence_card_le b
+    _ = (star a).card * T.S.n k := by simp
+    _ ≤ T.S.n k * T.S.n k := Nat.mul_le_mul_right _ (star_card_le a)
+    _ = (T.S.n k) ^ 2 := by ring
+
+theorem self_mem_starNear {T : Stage} {k : ℕ}
+    (a : S15.EvenPosition T k) (hn : 0 < T.S.n k) : a ∈ starNear a := by
+  classical
+  let j : Fin (T.S.n k) := ⟨0, hn⟩
+  let b : S15.OddPosition T k := ⟨cubeFlip a.1 j, by
+    intro hEven
+    exact ((cubeFlip_parity a.1 j).mp hEven) a.2⟩
+  have hb : b ∈ star a := Finset.mem_filter.mpr
+    ⟨Finset.mem_univ _, cubeFlip_adj a.1 j⟩
+  have ha : a ∈ starIncidence b := Finset.mem_filter.mpr
+    ⟨Finset.mem_univ _, by simpa [star] using hb⟩
+  exact Finset.mem_biUnion.mpr ⟨b, hb, ha⟩
+
 theorem prefixLeaf_card_le {n ell : ℕ} (w : CubeVertex n) (hle : ell ≤ n) :
     (Finset.univ.filter fun v : CubeVertex n => v ∈ prefixLeaf ell w).card ≤ 2 ^ (n - ell) := by
   classical

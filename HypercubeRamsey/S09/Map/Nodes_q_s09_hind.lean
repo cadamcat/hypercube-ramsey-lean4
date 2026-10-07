@@ -1138,15 +1138,15 @@ private theorem heightPath9_nextRadialState9 {P : Params9} {hc : HeightChoice9 P
 
 private inductive HeightRadialChain9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (bad : HeightState9 P hc n → Prop) (root : HeightState9 P hc n) (gap : ℕ)
-    (endpoint : HeightState9 P hc n) : HeightState9 P hc n → Prop
+    (endpoint : HeightState9 P hc n) : ℕ → HeightState9 P hc n → Prop
   | terminal {x : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
       (hp : HeightPath9 (heightStep9 bad) (endpoint :: suffix) x) :
-      HeightRadialChain9 bad root gap endpoint x
-  | cons {x y : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
+      HeightRadialChain9 bad root gap endpoint 0 x
+  | cons {m : ℕ} {x y : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
       (hxy : heightMetric9 y root = heightMetric9 x root + gap)
       (hsegment : HeightPath9 (heightStep9 bad) (y :: suffix) x)
-      (hy : HeightRadialChain9 bad root gap endpoint y) :
-      HeightRadialChain9 bad root gap endpoint x
+      (hy : HeightRadialChain9 bad root gap endpoint m y) :
+      HeightRadialChain9 bad root gap endpoint (m + 1) x
 
 private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
@@ -1156,7 +1156,7 @@ private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice
     (hstart : heightMetric9 start root = r)
     (hreach : r + q * gap ≤ heightMetric9 endpoint root) :
     ∃ z suffix,
-      HeightRadialChain9 bad root gap endpoint start ∧
+      HeightRadialChain9 bad root gap endpoint q start ∧
       HeightPath9 (heightStep9 bad) (endpoint :: suffix) z ∧
       (∀ x ∈ endpoint :: suffix, x ∈ endpoint :: l) ∧
       heightMetric9 z root = r + q * gap := by

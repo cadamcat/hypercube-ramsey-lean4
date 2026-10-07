@@ -1,4 +1,5 @@
 import HypercubeRamsey.S04.CoreLemmas
+import HypercubeRamsey.S04.ValidityNodes_q_s04_valid
 
 /-!
 # L4.1e: validity of a fixed ID set
@@ -20,7 +21,7 @@ would be a pair on `X × Y` at doubled widths with `G`-density below `e^{-L} = e
 theorem entry_low (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y), NoPure β γ n N E G X Y → EntryLow M := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_valid.entry_low_core β γ hβ hβγ hγ
 
 /-- L4.1e1, own key (04:254–281): for `η` on the support of `ν_i` within the second width margin, (P4) gives
 `Pr(q > p + n^{-ω/3}) ≤ exp(-n^{β-ω/2}/4)`; `2μ_i - μ_i^S` is a law of width `≤ sX + log 2`, so (P3) and (P4) give
@@ -28,7 +29,7 @@ theorem entry_low (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
 theorem entry_own (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y), EntryOwn M := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_valid.entry_own_core β γ hβ hβγ hγ
 
 /-- L4.1e2, low part (04:235–252, 293–295): in any exposure order the first entry retaining less than `e^{-L}`
 follows a successful prefix, so (`EntryLow`, width via `KeyNbrCard`) it occurs with probability at most
@@ -39,7 +40,7 @@ theorem exposure_low (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ 
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι),
       KeyNbrCard β γ n → EntryLow M → ExposureLow M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_valid.exposure_low_core β γ hβ hβγ hγ
 
 /-- L4.1e2, own key (04:283–295): expose the own-key tuple `W_{c,g(u)}` last; a dip is an entry with
 `q < p - a_i/4`, its indicator stopped at the first entry with `q < e^{-L}`.  By `EntryOwn` the conditional dip
@@ -59,6 +60,6 @@ theorem valid_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι),
       ExposureLow M tag → OwnRatio M tag → ValidProb M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_valid.valid_prob_core β γ hβ hβγ hγ
 
 end HypercubeRamsey.S04

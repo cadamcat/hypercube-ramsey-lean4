@@ -1,5 +1,6 @@
 import HypercubeRamsey.PartC.All
 import HypercubeRamsey.Framework.LawLemmas
+import HypercubeRamsey.S15.Needs_q_s15_needs2
 
 /-!
 Contracts requested from the Section 12 producer. Those modules are not on this branch yet; these declarations
@@ -883,7 +884,106 @@ theorem inter_tail_one (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
             100 * 3 ^ u * C0 * bstar T k <
               |inter (T.S.E k) c (S.π l).w J (Function.update xs i0 z)|), S.τ.w z ≤
           Real.exp (-(κ.α * T.S.n k / 3)) := by
-  sorry
+  classical
+  have hsmall := HypercubeRamsey.Lane_q_s15_needs2.eventually_degree_radius_lt_half T C0
+  have hcore := HypercubeRamsey.S12.inter_tail_one κ hκ T hDeep c u C0 hC0
+  filter_upwards [hsmall, hcore] with k hkSmall hkCore
+  intro S l J i0 hi0 hcard xs hothers
+  let S' : HypercubeRamsey.S12.InterSetting T k (κ.xs / 4) := {
+    d := S.d
+    d_le := S.d_le
+    τ := S.τ
+    π := S.π
+    τ_supp := S.τ_supported
+    π_supp := S.π_supported
+    τ_width := S.τ_width
+    π_width := S.π_width
+  }
+  have gate_pos (x : Fin (T.S.N k))
+      (hg : DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) x) :
+      0 < deg (T.S.E k) c (S.π l).w x := by
+    have hbounds := abs_le.mp hg
+    linarith [hkSmall]
+  have interaction_eq (ys : Fin u → Fin (T.S.N k))
+      (hgate : ∀ i ∈ J, DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) (ys i)) :
+      HypercubeRamsey.S12.inter (T.S.E k) c (S.π l).w J ys =
+        inter (T.S.E k) c (S.π l).w J ys := by
+    unfold HypercubeRamsey.S12.inter inter
+    apply Finset.sum_congr rfl
+    intro y hy
+    congr 1
+    apply Finset.prod_congr rfl
+    intro i hi
+    have hpos := gate_pos (ys i) (hgate i hi)
+    simp [HypercubeRamsey.S12.acoef, acoef, hpos]
+  have hothers' : ∀ i ∈ J, i ≠ i0 →
+      HypercubeRamsey.S12.DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) (xs i) := by
+    intro i hi hne
+    exact hothers i hi hne
+  have htail := hkCore S' l J i0 hi0 hcard xs hothers'
+  have hpredicate :
+      (fun z =>
+        HypercubeRamsey.S12.DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
+          100 * 3 ^ u * C0 * bstar T k <
+            |HypercubeRamsey.S12.inter (T.S.E k) c (S.π l).w J
+              (Function.update xs i0 z)|) =
+      (fun z =>
+        DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
+          100 * 3 ^ u * C0 * bstar T k <
+            |inter (T.S.E k) c (S.π l).w J (Function.update xs i0 z)|) := by
+    funext z
+    apply propext
+    constructor
+    · rintro ⟨hg, hlarge⟩
+      have hg' : DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z := by
+        simpa [HypercubeRamsey.S12.DegGate, DegGate] using hg
+      refine ⟨hg', ?_⟩
+      have hEq := interaction_eq (Function.update xs i0 z) (by
+        intro i hi
+        by_cases heq : i = i0
+        · subst i
+          simpa [HypercubeRamsey.S12.DegGate, DegGate] using hg
+        · simpa [Function.update, heq] using hothers i hi heq)
+      rw [hEq] at hlarge
+      exact hlarge
+    · rintro ⟨hg, hlarge⟩
+      have hg' : HypercubeRamsey.S12.DegGate (T.S.E k) c (S.π l).w C0
+          (bstar T k) z := by
+        simpa [HypercubeRamsey.S12.DegGate, DegGate] using hg
+      refine ⟨hg', ?_⟩
+      have hEq := interaction_eq (Function.update xs i0 z) (by
+        intro i hi
+        by_cases heq : i = i0
+        · subst i
+          simpa [HypercubeRamsey.S12.DegGate, DegGate] using hg
+        · simpa [Function.update, heq] using hothers i hi heq)
+      rw [hEq]
+      exact hlarge
+  have hfilter :
+      Finset.univ.filter (fun z =>
+        HypercubeRamsey.S12.DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
+          100 * 3 ^ u * C0 * bstar T k <
+            |HypercubeRamsey.S12.inter (T.S.E k) c (S.π l).w J
+              (Function.update xs i0 z)|) =
+      Finset.univ.filter (fun z =>
+        DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
+          100 * 3 ^ u * C0 * bstar T k <
+            |inter (T.S.E k) c (S.π l).w J (Function.update xs i0 z)|) := by
+    apply Finset.filter_congr
+    intro z hz
+    exact Iff.of_eq (congrFun hpredicate z)
+  calc
+    (∑ z ∈ Finset.univ.filter (fun z =>
+        DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
+          100 * 3 ^ u * C0 * bstar T k <
+            |inter (T.S.E k) c (S.π l).w J (Function.update xs i0 z)|), S.τ.w z) =
+        ∑ z ∈ Finset.univ.filter (fun z =>
+          HypercubeRamsey.S12.DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) z ∧
+            100 * 3 ^ u * C0 * bstar T k <
+              |HypercubeRamsey.S12.inter (T.S.E k) c (S.π l).w J
+                (Function.update xs i0 z)|), S'.τ.w z := by
+      rw [← hfilter]
+    _ ≤ Real.exp (-(κ.α * T.S.n k / 3)) := htail
 
 /-- SHARED: L12.4, the moderate interaction moment bound. -/
 theorem moderate_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -893,7 +993,137 @@ theorem moderate_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
           if Moderate (T.S.E k) c (fun l => (S.π l).w) (2 * κ.ξ) xs
           then prodW S.τ.w xs * Phi (T.S.E k) c (fun l => (S.π l).w) xs else 0| ≤
         (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) := by
-  sorry
+  classical
+  have hsmall := HypercubeRamsey.Lane_q_s15_needs2.eventually_degree_radius_lt_half T C0
+  have hcore := HypercubeRamsey.S12.moderate_moment κ hκ T hDeep c C0 hC0
+  filter_upwards [hsmall, hcore] with k hkSmall hkCore
+  intro S hDegOK
+  let S' : HypercubeRamsey.S12.InterSetting T k (κ.xs / 4) := {
+    d := S.d
+    d_le := S.d_le
+    τ := S.τ
+    π := S.π
+    τ_supp := S.τ_supported
+    π_supp := S.π_supported
+    τ_width := S.τ_width
+    π_width := S.π_width
+  }
+  have hDegOK' : S'.DegOK c C0 := by
+    intro l x hx
+    exact hDegOK l x hx
+  have hbound := (hkCore S' hDegOK').1
+  have gate_pos (l : Fin S.d) (x : Fin (T.S.N k))
+      (hg : DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) x) :
+      0 < deg (T.S.E k) c (S.π l).w x := by
+    have hwindow := abs_le.mp hg
+    linarith [hkSmall]
+  have interaction_eq (l : Fin S.d) (J : Finset (Fin κ.u))
+      (ys : Fin κ.u → Fin (T.S.N k))
+      (hgate : ∀ i ∈ J,
+        DegGate (T.S.E k) c (S.π l).w C0 (bstar T k) (ys i)) :
+      HypercubeRamsey.S12.inter (T.S.E k) c (S.π l).w J ys =
+        inter (T.S.E k) c (S.π l).w J ys := by
+    unfold HypercubeRamsey.S12.inter inter
+    apply Finset.sum_congr rfl
+    intro y hy
+    congr 1
+    apply Finset.prod_congr rfl
+    intro i hi
+    have hpos := gate_pos l (ys i) (hgate i hi)
+    simp [HypercubeRamsey.S12.acoef, acoef, hpos]
+  have moderate_eq (ys : Fin κ.u → Fin (T.S.N k))
+      (hprodpos : 0 < prodW S.τ.w ys) :
+      Moderate (T.S.E k) c (fun l => (S.π l).w) (2 * κ.ξ) ys ↔
+        HypercubeRamsey.S12.Moderate (T.S.E k) c (fun l => (S.π l).w)
+          (2 * κ.ξ) ys := by
+    have hweight : ∀ i, 0 < S.τ.w (ys i) := by
+      intro i
+      have hnot : S.τ.w (ys i) ≠ 0 := by
+        intro hz
+        have hzero : prodW S.τ.w ys = 0 := by
+          unfold prodW
+          exact Finset.prod_eq_zero (Finset.mem_univ i) hz
+        rw [hzero] at hprodpos
+        norm_num at hprodpos
+      exact lt_of_le_of_ne (S.τ.nonneg (ys i)) (Ne.symm hnot)
+    unfold Moderate HypercubeRamsey.S12.Moderate
+    constructor <;> intro hm l J hJ
+    · have hm' : |inter (T.S.E k) c (S.π l).w J ys| ≤ 2 * κ.ξ := by
+        simpa using hm l J hJ
+      have hEq := interaction_eq l J ys (fun i hi => hDegOK l (ys i) (hweight i))
+      rw [hEq]
+      exact hm'
+    · have hm' : |HypercubeRamsey.S12.inter (T.S.E k) c (S.π l).w J ys| ≤
+          2 * κ.ξ := by
+        simpa using hm l J hJ
+      have hEq := interaction_eq l J ys (fun i hi => hDegOK l (ys i) (hweight i))
+      rw [← hEq]
+      exact hm'
+  have phi_eq (ys : Fin κ.u → Fin (T.S.N k))
+      (hprodpos : 0 < prodW S.τ.w ys) :
+      Phi (T.S.E k) c (fun l => (S.π l).w) ys =
+        HypercubeRamsey.S12.Phi (T.S.E k) c (fun l => (S.π l).w) ys := by
+    have hweight : ∀ i, 0 < S.τ.w (ys i) := by
+      intro i
+      have hnot : S.τ.w (ys i) ≠ 0 := by
+        intro hz
+        have hzero : prodW S.τ.w ys = 0 := by
+          unfold prodW
+          exact Finset.prod_eq_zero (Finset.mem_univ i) hz
+        rw [hzero] at hprodpos
+        norm_num at hprodpos
+      exact lt_of_le_of_ne (S.τ.nonneg (ys i)) (Ne.symm hnot)
+    have posTerm_eq (I : Finset (Fin κ.u)) :
+        posTerm (T.S.E k) c (fun l => (S.π l).w) I ys =
+          HypercubeRamsey.S12.posTerm (T.S.E k) c (fun l => (S.π l).w) I ys := by
+      unfold posTerm HypercubeRamsey.S12.posTerm
+      apply Finset.prod_congr rfl
+      intro l hl
+      apply Finset.sum_congr rfl
+      intro y hy
+      congr 1
+      apply Finset.prod_congr rfl
+      intro i hi
+      have hpos := gate_pos l (ys i) (hDegOK l (ys i) (hweight i))
+      simp [HypercubeRamsey.S12.acoef, acoef, hpos]
+    unfold Phi HypercubeRamsey.S12.Phi
+    apply Finset.sum_congr rfl
+    intro I hI
+    rw [posTerm_eq I]
+  have hsum :
+      (∑ ys : Fin κ.u → Fin (T.S.N k),
+        if Moderate (T.S.E k) c (fun l => (S.π l).w) (2 * κ.ξ) ys
+        then prodW S.τ.w ys * Phi (T.S.E k) c (fun l => (S.π l).w) ys else 0) =
+      (∑ ys : Fin κ.u → Fin (T.S.N k),
+        if HypercubeRamsey.S12.Moderate (T.S.E k) c (fun l => (S.π l).w)
+            (2 * κ.ξ) ys
+        then HypercubeRamsey.S12.prodW S'.τ.w ys *
+          HypercubeRamsey.S12.Phi (T.S.E k) c (fun l => (S.π l).w) ys else 0) := by
+    apply Finset.sum_congr rfl
+    intro ys hys
+    by_cases hzero : prodW S.τ.w ys = 0
+    · have hzeroS12 : HypercubeRamsey.S12.prodW S'.τ.w ys = 0 := by
+        simpa [HypercubeRamsey.S12.prodW, prodW] using hzero
+      simp [hzero, hzeroS12]
+    · have hprodpos : 0 < prodW S.τ.w ys := by
+        have hnonneg : 0 ≤ prodW S.τ.w ys := by
+          unfold prodW
+          exact Finset.prod_nonneg fun i hi => S.τ.nonneg (ys i)
+        exact lt_of_le_of_ne hnonneg (Ne.symm hzero)
+      have hmod := moderate_eq ys hprodpos
+      have hmod' :
+          Moderate (T.S.E k) c (fun l => (S.π l).w) (2 * κ.ξ) ys =
+            HypercubeRamsey.S12.Moderate (T.S.E k) c (fun l => (S.π l).w)
+              (2 * κ.ξ) ys := propext hmod
+      rw [hmod', phi_eq ys hprodpos, HypercubeRamsey.S12.prodW, prodW]
+  change |∑ ys : Fin κ.u → Fin (T.S.N k),
+      if HypercubeRamsey.S12.Moderate (T.S.E k) c (fun l => (S.π l).w)
+          (2 * κ.ξ) ys
+      then HypercubeRamsey.S12.prodW S'.τ.w ys *
+        HypercubeRamsey.S12.Phi (T.S.E k) c (fun l => (S.π l).w) ys else 0| ≤
+    (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) at hbound
+  rw [hsum]
+  exact hbound
 
 /-- SHARED: L12.5(iv), homogeneous extension peeling and the lower-tail estimate. -/
 theorem homogeneous_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -911,8 +1141,191 @@ theorem homogeneous_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       (∀ x ∈ Sp, DegGate (T.S.E k) c π.w C0 (bstar T k) x) →
       (∑ ys : Fin d → Fin (T.S.N k),
         if Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t then ∏ l, π.w (ys l) else 0) ≤
+          (1 - t) ^ (-(κ.u : ℝ)) *
+            ((T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + Cu * Γ) := by
+  classical
+  let Cu : ℝ := 4 ^ (κ.u + 1)
+  let Qmin : ℝ := max 1 (Real.log
+    (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ))
+  have hCu : 0 < Cu := by positivity
+  have hQmin : 0 < Qmin := by
+    dsimp [Qmin]
+    have h1 : (0 : ℝ) < 1 := by norm_num
+    exact lt_of_lt_of_le h1 (le_max_left _ _)
+  have hsmall := HypercubeRamsey.Lane_q_s15_needs2.eventually_degree_radius_lt_half T C0
+  have hmoderate := HypercubeRamsey.S12.moderate_moment κ hκ T hDeep c C0 hC0
+  have hpeeling := HypercubeRamsey.S12.homogeneous_peeling κ hκ T hDeep c C0 hC0 hmoderate
+  have htail := HypercubeRamsey.S12.homogeneous_lower_tail κ hκ T hDeep c C0 hC0
+    hmoderate hpeeling
+  refine ⟨Cu, Qmin, hCu, hQmin, ?_⟩
+  filter_upwards [hsmall, htail] with k hkSmall hkTail
+  intro d hd τ π Sp Q Γ t hτ hπ hτw hπw hSp hQ hNoClique hΓnonneg hΓlt hBudget ht0 ht1 hGate
+  let Sp' : Finset (Fin (T.S.N k)) := Sp ∩ T.X k
+  have hτpos_exists : ∃ x, 0 < τ.w x := by
+    by_contra h
+    push_neg at h
+    have hz : ∀ x, τ.w x = 0 := fun x => le_antisymm (h x) (τ.nonneg x)
+    have hsum : (∑ x, τ.w x) = 0 := by simp [hz]
+    rw [τ.sum_eq_one] at hsum
+    norm_num at hsum
+  obtain ⟨x0, hx0pos⟩ := hτpos_exists
+  have hx0Sp : x0 ∈ Sp := by
+    by_contra hx
+    have hz := hSp x0 hx
+    rw [hz] at hx0pos
+    norm_num at hx0pos
+  have hx0X : x0 ∈ T.X k := by
+    by_contra hx
+    have hz := hτ x0 hx
+    rw [hz] at hx0pos
+    norm_num at hx0pos
+  have hSpNonempty : Sp'.Nonempty := by
+    exact ⟨x0, Finset.mem_inter.mpr ⟨hx0Sp, hx0X⟩⟩
+  have hτsupported : τ.SupportedIn Sp' := by
+    intro x hxnot
+    by_cases hxSp : x ∈ Sp
+    · have hxX : x ∉ T.X k := by
+        intro hxX
+        exact hxnot (Finset.mem_inter.mpr ⟨hxSp, hxX⟩)
+      exact hτ x hxX
+    · exact hSp x hxSp
+  have hGatePos (x : Fin (T.S.N k)) (hx : x ∈ Sp') :
+      0 < deg (T.S.E k) c π.w x := by
+    have hg := hGate x (Finset.mem_inter.mp hx).1
+    have hb := abs_le.mp hg
+    linarith [hkSmall]
+  have hNoClique' : NoClique (T.S.E k) c Sp' π.w κ.θ Q := by
+    intro hclique
+    apply hNoClique
+    rcases hclique with ⟨C, hC, hcard, hcorr⟩
+    exact ⟨C, hC.trans Finset.inter_subset_left, hcard, hcorr⟩
+  have hQone : 1 ≤ Q := le_trans (le_max_left _ _) hQ
+  have hQlog : Real.log
+      (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ) ≤ Q :=
+    le_trans (le_max_right _ _) hQ
+  let S' : HypercubeRamsey.S12.InterSetting T k (κ.xs / 4) := {
+    d := d
+    d_le := hd
+    τ := τ
+    π := fun _ => π
+    τ_supp := hτ
+    π_supp := fun _ => hπ
+    τ_width := hτw
+    π_width := fun _ => hπw
+  }
+  let f : Fin (T.S.N k) → ℝ := fun x =>
+    τ.w x * Real.rpow (deg (T.S.E k) c π.w x) (-(d : ℝ))
+  have hpoint : ∀ x ∈ Sp', f x ≤ Γ / Real.exp (Cstar κ.u κ.ξ * Q) := by
+    intro x hx
+    have hxSp : x ∈ Sp := (Finset.mem_inter.mp hx).1
+    have hb := hBudget x hxSp
+    have hexp : 0 < Real.exp (Cstar κ.u κ.ξ * Q) := Real.exp_pos _
+    change τ.w x * Real.rpow (deg (T.S.E k) c π.w x) (-(d : ℝ)) *
+      Real.exp (Cstar κ.u κ.ξ * Q) ≤ Γ at hb
+    exact (le_div_iff₀ hexp).2 hb
+  have hsup : Sp'.sup' hSpNonempty f ≤ Γ / Real.exp (Cstar κ.u κ.ξ * Q) := by
+    refine Finset.sup'_le hSpNonempty f ?_
+    exact hpoint
+  let γ : ℝ := Real.exp (Cstar κ.u κ.ξ * Q) * Sp'.sup' hSpNonempty f
+  have hγle : γ ≤ Γ := by
+    dsimp [γ]
+    have hexp : 0 < Real.exp (Cstar κ.u κ.ξ * Q) := Real.exp_pos _
+    calc
+      Real.exp (Cstar κ.u κ.ξ * Q) * Sp'.sup' hSpNonempty f ≤
+          Real.exp (Cstar κ.u κ.ξ * Q) * (Γ / Real.exp (Cstar κ.u κ.ξ * Q)) :=
+        mul_le_mul_of_nonneg_left hsup hexp.le
+      _ = Γ := by field_simp [ne_of_gt hexp]
+  have hγnonneg : 0 ≤ γ := by
+    have hSpNeCopy := hSpNonempty
+    obtain ⟨x, hx⟩ := hSpNeCopy
+    have hfx : 0 ≤ f x := by
+      dsimp [f]
+      exact mul_nonneg (τ.nonneg x) (Real.rpow_nonneg (le_of_lt (hGatePos x hx)) _)
+    have hfsup : f x ≤ Sp'.sup' hSpNonempty f := Finset.le_sup' f hx
+    dsimp [γ]
+    exact mul_nonneg (le_of_lt (Real.exp_pos _)) (le_trans hfx hfsup)
+  have hγlt : γ < 1 := lt_of_le_of_lt hγle hΓlt
+  let hH : HypercubeRamsey.S12.HomogeneousInput κ hκ T k c C0 := {
+    S := S'
+    π := π
+    homogeneous := fun _ => rfl
+    Sp := Sp'
+    Sp_nonempty := hSpNonempty
+    Sp_subset := Finset.inter_subset_right
+    τ_supported := hτsupported
+    π_supported := hπ
+    degree_gate := fun x hx => hGate x (Finset.mem_inter.mp hx).1
+    degree_positive := hGatePos
+    Q := Q
+    Q_large := ⟨hQlog, hQone⟩
+    noClique := hNoClique'
+    gamma := γ
+    gamma_eq := rfl
+    gamma_nonneg := hγnonneg
+    gamma_lt_one := hγlt
+  }
+  have htailH := hkTail hH t ht0 ht1
+  have htailH' :
+      (∑ ys : Fin d → Fin (T.S.N k),
+        if HypercubeRamsey.S12.Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t
+        then ∏ l, π.w (ys l) else 0) ≤
         (1 - t) ^ (-(κ.u : ℝ)) *
-          ((T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + Cu * Γ) := by
-  sorry
+          ((T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + 4 ^ (κ.u + 1) * γ) := by
+    simpa [hH, S', γ] using htailH
+  have hZeq (ys : Fin d → Fin (T.S.N k)) :
+      Zmass (T.S.E k) c τ.w (fun _ => π.w) ys =
+        HypercubeRamsey.S12.Zmass (T.S.E k) c τ.w (fun _ => π.w) ys := by
+    unfold Zmass HypercubeRamsey.S12.Zmass
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hz : τ.w x = 0
+    · simp [hz]
+    · have hxpos : 0 < τ.w x := lt_of_le_of_ne (τ.nonneg x) (Ne.symm hz)
+      have hxSp' : x ∈ Sp' := by
+        by_contra hxnot
+        have hzero := hτsupported x hxnot
+        rw [hzero] at hxpos
+        norm_num at hxpos
+      have hdegpos := hGatePos x hxSp'
+      congr 1
+      apply Finset.prod_congr rfl
+      intro l hl
+      simp [HypercubeRamsey.S12.acoef, acoef, hdegpos]
+  have hsum :
+      (∑ ys : Fin d → Fin (T.S.N k),
+        if Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t
+        then ∏ l, π.w (ys l) else 0) =
+      (∑ ys : Fin d → Fin (T.S.N k),
+        if HypercubeRamsey.S12.Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t
+        then ∏ l, π.w (ys l) else 0) := by
+    apply Finset.sum_congr rfl
+    intro ys hys
+    rw [hZeq ys]
+  have hexpFactor : 0 ≤ (1 - t) ^ (-(κ.u : ℝ)) :=
+    Real.rpow_nonneg (by linarith) _
+  have hGammaTerm : 4 ^ (κ.u + 1) * γ ≤ Cu * Γ := by
+    dsimp [Cu]
+    exact mul_le_mul_of_nonneg_left hγle (by positivity)
+  have hbase :
+      (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + 4 ^ (κ.u + 1) * γ ≤
+        (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + Cu * Γ :=
+    calc
+      (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + 4 ^ (κ.u + 1) * γ =
+          4 ^ (κ.u + 1) * γ + (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) := by ring
+      _ ≤ Cu * Γ + (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) :=
+        add_le_add_left hGammaTerm _
+      _ = (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + Cu * Γ := by ring
+  calc
+    (∑ ys : Fin d → Fin (T.S.N k),
+        if Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t
+        then ∏ l, π.w (ys l) else 0) =
+        ∑ ys : Fin d → Fin (T.S.N k),
+          if HypercubeRamsey.S12.Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t
+          then ∏ l, π.w (ys l) else 0 := hsum
+    _ ≤ (1 - t) ^ (-(κ.u : ℝ)) *
+          ((T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + 4 ^ (κ.u + 1) * γ) := htailH'
+    _ ≤ (1 - t) ^ (-(κ.u : ℝ)) *
+          ((T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + Cu * Γ) :=
+      mul_le_mul_of_nonneg_left hbase hexpFactor
 
 end HypercubeRamsey.S15.Needs

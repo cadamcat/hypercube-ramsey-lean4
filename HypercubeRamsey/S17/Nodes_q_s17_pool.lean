@@ -82,6 +82,25 @@ theorem pinned_product_row_expectation {κ : CConsts} {T : Stage} {k : ℕ}
   simpa [P, f, ListGateContext.pinnedLabelLaw] using
     (pi_expect_sum_prod P σ f)
 
+theorem law_hitRatio_expectation {N : ℕ} (μ : Law N)
+    (E : Fin N → Fin N → Prop) (c : Colour) (x : Fin N)
+    (hdeg : 0 < deg E c μ.w x) :
+    (ListGateContext.lawAsFinLaw μ).E
+      (fun y => hit E c x y / deg E c μ.w x) = 1 := by
+  classical
+  change (∑ y, μ.w y * (hit E c x y / deg E c μ.w x)) = 1
+  calc
+    (∑ y, μ.w y * (hit E c x y / deg E c μ.w x)) =
+        ∑ y, (μ.w y * hit E c x y) / deg E c μ.w x := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          ring
+    _ = (∑ y, μ.w y * hit E c x y) / deg E c μ.w x := by
+          rw [Finset.sum_div]
+    _ = 1 := by
+          rw [show (∑ y, μ.w y * hit E c x y) = deg E c μ.w x by rfl]
+          exact div_self (ne_of_gt hdeg)
+
 theorem pi_pr_forall {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
     (P : ∀ i, FinLaw (Ω i)) (A : ∀ i, Ω i → Prop) :

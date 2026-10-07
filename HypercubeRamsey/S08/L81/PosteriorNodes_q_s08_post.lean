@@ -851,6 +851,24 @@ theorem glue_ordCells_eq_on_cross {η₀ β p : ℝ} {h : ℕ}
     norm_num at hu
   simp [glue, hnotmem]
 
+theorem keyDist_triangle {η₀ : ℝ} {n : ℕ}
+    (a b c : Key η₀ n) : keyDist a c ≤ keyDist a b + keyDist b c := by
+  unfold keyDist
+  calc
+    (∑ r, Nat.dist (a r).val (c r).val) ≤
+        ∑ r, (Nat.dist (a r).val (b r).val + Nat.dist (b r).val (c r).val) := by
+          apply Finset.sum_le_sum
+          intro r hr
+          exact Nat.dist_triangle _ _ _
+    _ = (∑ r, Nat.dist (a r).val (b r).val) +
+          ∑ r, Nat.dist (b r).val (c r).val := Finset.sum_add_distrib
+
+theorem keyDist_symm {η₀ : ℝ} {n : ℕ} (a b : Key η₀ n) : keyDist a b = keyDist b a := by
+  unfold keyDist
+  apply Finset.sum_congr rfl
+  intro r hr
+  exact Nat.dist_comm _ _
+
 theorem presValid_iff_cross_anchors_eq {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (q : D.Pre) (W W' : D.Anch) (c : D.CellT)
     (hcross : ∀ u : D.CrossSub c.1, W (u.1, c.2) = W' (u.1, c.2)) :

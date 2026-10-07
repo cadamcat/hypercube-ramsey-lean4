@@ -108,7 +108,7 @@ theorem p92_erase_replace (P : Params9) (hP : P.Valid) (c₀ C₁ c₁ : ℝ) (h
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ → EraseCert9 S I E G C₁ c₁ →
         ReplaceCert9 S I E G C c := by
-  sorry
+  exact Lane_q_s09_gain1.replace_certificate9 P hP c₀ C₁ c₁ hc₀ hC₁ hc₁
 
 /-! ## P9.2-cov (09:222–268) -/
 

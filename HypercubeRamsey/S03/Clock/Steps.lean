@@ -1,4 +1,6 @@
 import HypercubeRamsey.S03.Clock.Inputs
+import HypercubeRamsey.S03.ConditionalAvoidance
+import HypercubeRamsey.Framework.FinProbLemmas
 
 /-!
 # Lemma 3.10, Steps 2–8
@@ -500,10 +502,467 @@ theorem leaf_avoidance_transfer {n g : ℕ} {R K : Type} [Fintype R] [DecidableE
     (hL : 0 ≤ L) (hκ : 0 ≤ κ) (hLκ : 4 * L * κ ≤ 1) (X : RawSampler I q B L κ η) :
     ∃ J : FinProb (∀ a, Ω a),
       (∀ ω, J.w ω ≠ 0 → Function.Injective (fun a => I.lab a (ω a)) ∧ ∀ k, ¬ I.failure k ω) ∧
-      (∀ (S : Finset R) (o : ∀ a, Ω a), (S.card : ℝ) ≤ (n : ℝ) ^ B →
+    (∀ (S : Finset R) (o : ∀ a, Ω a), (S.card : ℝ) ≤ (n : ℝ) ^ B →
         J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤
           Real.exp (4 * ((n : ℝ) ^ B * L) * κ) * ((1 + η) * ∏ a ∈ S, (q a).w (o a))) := by
-  sorry
+  classical
+  let p : X.Bad → ℝ := fun i => X.law.pr (X.bad i)
+  let x : X.Bad → ℝ := fun i => 2 * p i
+  let adj : X.Bad → X.Bad → Prop := fun i j => i ≠ j ∧ ¬ Disjoint (X.act i) (X.act j)
+  haveI : DecidableRel adj := Classical.decRel _
+  let E : X.Bad → Finset X.Space := fun i => Finset.univ.filter (X.bad i)
+  let Q : X.Space → Prop := fun z => ∀ i, ¬ X.bad i z
+  have hp0 (i : X.Bad) : 0 ≤ p i := by
+    dsimp [p]
+    unfold FinProb.pr
+    exact Finset.sum_nonneg fun z _ => by
+      split_ifs
+      · exact X.law.nonneg z
+      · exact le_rfl
+  have hE0 (i : X.Bad) : 0 ≤ p i := hp0 i
+  have hact_one (i : X.Bad) : (1 : ℝ) ≤ L := by
+    have hc : 1 ≤ (X.act i).card := Finset.one_le_card.mpr (X.act_nonempty i)
+    exact le_trans (by exact_mod_cast hc) (X.act_card i)
+  have hκquarter (i : X.Bad) : κ ≤ 1 / 4 := by
+    have hprod : 0 ≤ (L - 1) * κ := mul_nonneg (sub_nonneg.mpr (hact_one i)) hκ
+    nlinarith [hLκ]
+  have hpκ (i : X.Bad) : p i ≤ κ := by
+    obtain ⟨v, hv⟩ := X.act_nonempty i
+    have hmem : i ∈ Finset.univ.filter (fun j : X.Bad => v ∈ X.act j) := by
+      simp [hv]
+    have hsingle := Finset.single_le_sum
+      (s := Finset.univ.filter (fun j : X.Bad => v ∈ X.act j))
+      (f := fun j => p j) (fun j _ => hp0 j) hmem
+    calc
+      p i ≤ ∑ j ∈ Finset.univ.filter (fun j : X.Bad => v ∈ X.act j), p j := hsingle
+      _ ≤ κ := X.incidence v
+  have hx0 (i : X.Bad) : 0 ≤ x i := by simp [x, hp0]
+  have hxhalf (i : X.Bad) : x i ≤ 1 / 2 := by
+    dsimp [x]
+    nlinarith [hpκ i, hκquarter i]
+  have hx1 (i : X.Bad) : x i < 1 := lt_of_le_of_lt (hxhalf i) (by norm_num)
+  have hincidence_sum (A : Finset X.Vertex) :
+      (∑ j ∈ Finset.univ.filter (fun j : X.Bad => ¬ Disjoint A (X.act j)), p j) ≤
+        (A.card : ℝ) * κ := by
+    let N : Finset X.Bad := Finset.univ.filter (fun j => ¬ Disjoint A (X.act j))
+    have hterm (j : X.Bad) (hj : j ∈ N) :
+        p j ≤ ∑ v ∈ A, if v ∈ X.act j then p j else 0 := by
+      have hshared : ∃ v, v ∈ A ∧ v ∈ X.act j := by
+        by_contra h
+        have hdis : Disjoint A (X.act j) := by
+          apply Finset.disjoint_left.mpr
+          intro v hvA hvj
+          exact h ⟨v, hvA, hvj⟩
+        exact (Finset.mem_filter.mp hj).2 hdis
+      obtain ⟨v, hvA, hvj⟩ := hshared
+      have hsingle := Finset.single_le_sum
+        (s := A) (f := fun v => if v ∈ X.act j then p j else 0)
+        (fun v _ => by split_ifs <;> [exact hp0 j; exact le_rfl]) hvA
+      simpa [hvj] using hsingle
+    calc
+      (∑ j ∈ Finset.univ.filter (fun j : X.Bad => ¬ Disjoint A (X.act j)), p j) ≤
+          ∑ j ∈ N, ∑ v ∈ A, if v ∈ X.act j then p j else 0 := by
+        apply Finset.sum_le_sum
+        intro j hj
+        exact hterm j (by simpa [N] using hj)
+      _ = ∑ v ∈ A, ∑ j ∈ N, if v ∈ X.act j then p j else 0 := by
+        rw [Finset.sum_comm]
+      _ ≤ ∑ v ∈ A, ∑ j ∈ Finset.univ.filter (fun j : X.Bad => v ∈ X.act j), p j := by
+        apply Finset.sum_le_sum
+        intro v hv
+        calc
+          (∑ j ∈ N, if v ∈ X.act j then p j else 0) =
+              ∑ j ∈ N.filter (fun j => v ∈ X.act j), p j := by simp [Finset.sum_filter]
+          _ ≤ ∑ j ∈ Finset.univ.filter (fun j : X.Bad => v ∈ X.act j), p j := by
+            apply Finset.sum_le_sum_of_subset_of_nonneg
+              (by
+                intro j hj
+                exact Finset.mem_filter.mpr
+                  ⟨Finset.mem_univ j, (Finset.mem_filter.mp hj).2⟩)
+              (by intro j hj _; exact hp0 j)
+      _ ≤ ∑ v ∈ A, κ := by
+        apply Finset.sum_le_sum
+        intro v hv
+        simpa [p] using X.incidence v
+      _ = (A.card : ℝ) * κ := by simp
+  have hprodLower : ∀ (S : Finset X.Bad),
+      (∀ j ∈ S, 0 ≤ x j) → (∀ j ∈ S, x j ≤ 1) →
+      1 - (∑ j ∈ S, x j) ≤ ∏ j ∈ S, (1 - x j) := by
+    intro S
+    induction S using Finset.induction_on with
+    | empty => intro _ _; simp
+    | @insert i S hi ih =>
+      intro hnon hle
+      have hnonS : ∀ j ∈ S, 0 ≤ x j := fun j hj => hnon j (Finset.mem_insert_of_mem hj)
+      have hleS : ∀ j ∈ S, x j ≤ 1 := fun j hj => hle j (Finset.mem_insert_of_mem hj)
+      have hsum0 : 0 ≤ ∑ j ∈ S, x j := Finset.sum_nonneg fun j hj => hnonS j hj
+      have hi0 : 0 ≤ x i := hnon i (Finset.mem_insert_self i S)
+      have hi1 : x i ≤ 1 := hle i (Finset.mem_insert_self i S)
+      rw [Finset.sum_insert hi, Finset.prod_insert hi]
+      calc
+        1 - (x i + ∑ j ∈ S, x j) ≤ (1 - x i) * (1 - ∑ j ∈ S, x j) := by
+          nlinarith [mul_nonneg hi0 hsum0]
+        _ ≤ (1 - x i) * ∏ j ∈ S, (1 - x j) :=
+          mul_le_mul_of_nonneg_left (ih hnonS hleS) (sub_nonneg.mpr hi1)
+  have hneighbor_sum (A : Finset X.Vertex) :
+      (∑ j ∈ Finset.univ.filter (fun j : X.Bad => ¬ Disjoint A (X.act j)), p j) ≤
+        (A.card : ℝ) * κ := hincidence_sum A
+  have hmassPr (A : Finset X.Space) :
+      LocalLemma.mass X.law.w A = X.law.pr (fun z => z ∈ A) := by
+    classical
+    letI : DecidablePred (fun z : X.Space => z ∈ A) := fun z => Classical.propDecidable _
+    unfold LocalLemma.mass
+    unfold FinProb.pr
+    exact (Finset.sum_ite_mem_eq A X.law.w).symm
+  have hmassAvoid (S : Finset X.Bad) :
+      LocalLemma.mass X.law.w (LocalLemma.avoid E S) =
+        X.law.pr (fun z => ∀ j ∈ S, ¬ X.bad j z) := by
+    rw [hmassPr]
+    congr 1
+    funext z
+    simp [LocalLemma.avoid, E]
+  have hmassBad (i : X.Bad) (S : Finset X.Bad) :
+      LocalLemma.mass X.law.w (E i ∩ LocalLemma.avoid E S) =
+        X.law.pr (fun z => X.bad i z ∧ ∀ j ∈ S, ¬ X.bad j z) := by
+    rw [hmassPr]
+    congr 1
+    funext z
+    simp [LocalLemma.avoid, E]
+  have hCA := HypercubeRamsey.LocalLemma.conditional_avoidance
+    X.law.w (fun z => X.law.nonneg z) X.law.sum_eq_one E adj
+    (by
+      intro i j hij
+      refine ⟨Ne.symm hij.1, ?_⟩
+      intro hji
+      apply hij.2
+      apply Finset.disjoint_left.mpr
+      intro v hvi hvj
+      exact (Finset.disjoint_left.mp hji) hvj hvi)
+    (by
+      intro i hi
+      exact hi.1 rfl)
+    p x
+    (by
+      intro i S hi hnon
+      rw [hmassBad, hmassAvoid]
+      apply X.forcing i S
+      intro j hj
+      have hneq : i ≠ j := by
+        intro heq
+        apply hi
+        simpa [heq] using hj
+      by_contra hdis
+      exact hnon j hj ⟨hneq, hdis⟩)
+    hx0 hx1
+    (by
+      intro i
+      let N := Finset.univ.filter (adj i)
+      have hsumP : (∑ j ∈ N, p j) ≤ (X.act i).card * κ := by
+        calc
+          (∑ j ∈ N, p j) ≤
+              ∑ j ∈ Finset.univ.filter
+                (fun j : X.Bad => ¬ Disjoint (X.act i) (X.act j)), p j := by
+              apply Finset.sum_le_sum_of_subset_of_nonneg
+                (by
+                  intro j hj
+                  have hadj : adj i j := (Finset.mem_filter.mp hj).2
+                  exact Finset.mem_filter.mpr ⟨Finset.mem_univ j, hadj.2⟩)
+                (by intro j hj _; exact hp0 j)
+          _ ≤ (X.act i).card * κ := hincidence_sum (X.act i)
+      have hsumX : (∑ j ∈ N, x j) ≤ 2 * ((X.act i).card : ℝ) * κ := by
+        dsimp [x]
+        calc
+          (∑ j ∈ N, 2 * p j) = 2 * ∑ j ∈ N, p j := by rw [Finset.mul_sum]
+          _ ≤ 2 * ((X.act i).card : ℝ) * κ := by nlinarith [hsumP]
+      have hcardprod : ((X.act i).card : ℝ) * κ ≤ L * κ :=
+        mul_le_mul_of_nonneg_right (X.act_card i) hκ
+      have hsumXhalf : (∑ j ∈ N, x j) ≤ 1 / 2 := by
+        calc
+          (∑ j ∈ N, x j) ≤ 2 * ((X.act i).card : ℝ) * κ := hsumX
+          _ ≤ 2 * (L * κ) := by nlinarith [hcardprod]
+          _ ≤ 1 / 2 := by nlinarith [hLκ]
+      have hprod := hprodLower N (fun j hj => hx0 j) (fun j hj => le_trans (hxhalf j) (by norm_num))
+      have hprodhalf : 1 / 2 ≤ ∏ j ∈ N, (1 - x j) := by linarith
+      have hpi : p i ≤ x i * ∏ j ∈ N, (1 - x j) := by
+        have h := mul_nonneg (hp0 i) (sub_nonneg.mpr hprodhalf)
+        dsimp [x, p] at *
+        nlinarith [h]
+      simpa [N, x, p] using hpi)
+  have havoid : 0 < X.law.pr Q := by
+    have h := hCA.1
+    rw [hmassAvoid] at h
+    have hEq : X.law.pr (fun z => ∀ j ∈ Finset.univ, ¬ X.bad j z) = X.law.pr Q := by
+      congr 1
+      funext z
+      simp [Q]
+    rw [hEq] at h
+    exact h
+  have havoidMass (S : Finset X.Bad) :
+      0 < LocalLemma.mass X.law.w (LocalLemma.avoid E S) := by
+    have hsub : LocalLemma.avoid E Finset.univ ⊆ LocalLemma.avoid E S := by
+      intro z hz
+      have hall : ∀ j ∈ Finset.univ, z ∉ E j := by simpa [LocalLemma.avoid] using hz
+      simpa [LocalLemma.avoid] using (show ∀ j ∈ S, z ∉ E j from fun j hj => hall j (Finset.mem_univ j))
+    have hmono := Finset.sum_le_sum_of_subset_of_nonneg hsub (by
+      intro z hz _
+      exact X.law.nonneg z)
+    have hpos : 0 < LocalLemma.mass X.law.w (LocalLemma.avoid E Finset.univ) := hCA.1
+    exact lt_of_lt_of_le hpos hmono
+  have havoidEvent :
+      LocalLemma.mass X.law.w (LocalLemma.avoid E Finset.univ) = X.law.pr Q := by
+    rw [hmassAvoid]
+    congr 1
+    funext z
+    simp [Q]
+  have havoidPos : 0 < LocalLemma.mass X.law.w (LocalLemma.avoid E Finset.univ) := by
+    rw [havoidEvent]
+    exact havoid
+  let Pcond : FinProb X.Space := X.law.cond Q havoid
+  have hcondPr (A : X.Space → Prop) :
+      Pcond.pr A = X.law.pr (fun z => A z ∧ Q z) / X.law.pr Q := by
+    classical
+    dsimp [Pcond, FinProb.pr, FinProb.cond]
+    rw [Finset.sum_div]
+    apply Finset.sum_congr rfl
+    intro z hz
+    by_cases hA : A z <;> by_cases hQ : Q z <;> simp [Pcond, hA, hQ]
+  have hcondRect (A : X.Space → Prop) (S : Finset X.Bad) (T : Finset X.Bad)
+      (hdis : Disjoint S T) (hpart : S ∪ T = Finset.univ) (hforcing :
+        X.law.pr (fun z => A z ∧ ∀ j ∈ S, ¬ X.bad j z) ≤
+          X.law.pr A * X.law.pr (fun z => ∀ j ∈ S, ¬ X.bad j z)) :
+      Pcond.pr A ≤ (∏ j ∈ T, (1 - x j))⁻¹ * X.law.pr A := by
+    have hCA3 := hCA.2.2.1 S T hdis (fun z => if A z then 1 else 0)
+      (by intro z; split_ifs <;> norm_num)
+    have hdenS : 0 < X.law.pr (fun z => ∀ j ∈ S, ¬ X.bad j z) := by
+      have := havoidMass S
+      rw [hmassAvoid] at this
+      exact this
+    have hdenQ : 0 < X.law.pr Q := havoid
+    have hnumAll :
+        (∑ z ∈ LocalLemma.avoid E (S ∪ T), X.law.w z * (if A z then 1 else 0)) =
+          X.law.pr (fun z => A z ∧ Q z) := by
+      rw [show ∑ z ∈ LocalLemma.avoid E (S ∪ T), X.law.w z * (if A z then 1 else 0) =
+          LocalLemma.mass X.law.w ((LocalLemma.avoid E (S ∪ T)).filter A) by
+        simp [LocalLemma.mass, Finset.sum_filter, mul_ite, mul_one, mul_zero]]
+      rw [hmassPr]
+      congr 1
+      funext z
+      rw [hpart]
+      simp [LocalLemma.avoid, E, Q, and_comm]
+    have hnumS :
+        (∑ z ∈ LocalLemma.avoid E S, X.law.w z * (if A z then 1 else 0)) =
+          X.law.pr (fun z => A z ∧ ∀ j ∈ S, ¬ X.bad j z) := by
+      rw [show ∑ z ∈ LocalLemma.avoid E S, X.law.w z * (if A z then 1 else 0) =
+          LocalLemma.mass X.law.w ((LocalLemma.avoid E S).filter A) by
+        simp [LocalLemma.mass, Finset.sum_filter, mul_ite, mul_one, mul_zero]]
+      rw [hmassPr]
+      congr 1
+      funext z
+      simp [LocalLemma.avoid, E, and_comm, and_left_comm, and_assoc]
+    have hforceRatio :
+        X.law.pr (fun z => A z ∧ ∀ j ∈ S, ¬ X.bad j z) /
+          X.law.pr (fun z => ∀ j ∈ S, ¬ X.bad j z) ≤ X.law.pr A := by
+      exact (div_le_iff₀ hdenS).2 (by nlinarith [hforcing])
+    have hQeq : X.law.pr Q = X.law.pr (fun z => ∀ j ∈ S ∪ T, ¬ X.bad j z) := by
+      congr 1
+      funext z
+      rw [hpart]
+      simp [Q, and_comm]
+    rw [hcondPr, hQeq]
+    calc
+      X.law.pr (fun z => A z ∧ Q z) / X.law.pr (fun z => ∀ j ∈ S ∪ T, ¬ X.bad j z) ≤
+          (∏ j ∈ T, (1 - x j))⁻¹ *
+            (X.law.pr (fun z => A z ∧ ∀ j ∈ S, ¬ X.bad j z) /
+              X.law.pr (fun z => ∀ j ∈ S, ¬ X.bad j z)) := by
+        simpa only [hnumAll, hmassAvoid, hnumS] using hCA3
+      _ ≤ (∏ j ∈ T, (1 - x j))⁻¹ * X.law.pr A := by
+        apply mul_le_mul_of_nonneg_left hforceRatio
+        exact le_of_lt (inv_pos.mpr (Finset.prod_pos fun j hj => sub_pos.mpr (hx1 j)))
+  have hneighborFactor (A : Finset X.Vertex) (hA : (A.card : ℝ) ≤ (n : ℝ) ^ B * L) :
+      (∏ j ∈ Finset.univ.filter (fun j : X.Bad => ¬ Disjoint A (X.act j)),
+          (1 - x j))⁻¹ ≤ Real.exp (4 * ((n : ℝ) ^ B * L) * κ) := by
+    let N := Finset.univ.filter (fun j : X.Bad => ¬ Disjoint A (X.act j))
+    have hsumP : (∑ j ∈ N, p j) ≤ (n : ℝ) ^ B * L * κ := by
+      calc
+        (∑ j ∈ N, p j) ≤ (A.card : ℝ) * κ := by simpa [N] using hneighbor_sum A
+        _ ≤ (n : ℝ) ^ B * L * κ := mul_le_mul_of_nonneg_right hA hκ
+    have hper (j : X.Bad) : (1 - x j)⁻¹ ≤ Real.exp (2 * x j) := by
+      have hx : 0 ≤ x j := hx0 j
+      have hx' : x j ≤ 1 / 2 := hxhalf j
+      have hden : 0 < 1 - x j := sub_pos.mpr (lt_of_le_of_lt hx' (by norm_num))
+      have hquad : 1 ≤ (1 + 2 * x j) * (1 - x j) := by
+        nlinarith [mul_nonneg hx (sub_nonneg.mpr (by nlinarith [hx']))]
+      have hexp := Real.add_one_le_exp (2 * x j)
+      have hnum : 1 + 2 * x j ≤ Real.exp (2 * x j) := by linarith
+      have hmul := mul_le_mul_of_nonneg_right hnum hden.le
+      rw [inv_le_iff_one_le_mul₀' hden]
+      nlinarith [hquad, hmul]
+    have hprod : (∏ j ∈ N, (1 - x j)⁻¹) ≤ ∏ j ∈ N, Real.exp (2 * x j) := by
+      induction N using Finset.induction_on with
+      | empty => simp
+      | @insert j N hj ih =>
+        rw [Finset.prod_insert hj, Finset.prod_insert hj]
+        have hleft : 0 ≤ ∏ k ∈ N, (1 - x k)⁻¹ :=
+          Finset.prod_nonneg fun k hk => inv_nonneg.mpr (sub_nonneg.mpr (le_of_lt (hx1 k)))
+        calc
+          (1 - x j)⁻¹ * ∏ k ∈ N, (1 - x k)⁻¹ ≤
+              Real.exp (2 * x j) * ∏ k ∈ N, (1 - x k)⁻¹ :=
+            mul_le_mul_of_nonneg_right (hper j) hleft
+          _ ≤ Real.exp (2 * x j) * ∏ k ∈ N, Real.exp (2 * x k) :=
+            mul_le_mul_of_nonneg_left ih (Real.exp_pos _).le
+    have hsumX : (∑ j ∈ N, 2 * x j) ≤ 4 * ((n : ℝ) ^ B * L) * κ := by
+      dsimp [x, p]
+      calc
+        (∑ j ∈ N, 2 * (2 * X.law.pr (X.bad j))) =
+            4 * ∑ j ∈ N, X.law.pr (X.bad j) := by
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro j hj
+          ring
+        _ ≤ 4 * ((n : ℝ) ^ B * L * κ) := by nlinarith [hsumP]
+        _ = 4 * ((n : ℝ) ^ B * L) * κ := by ring
+    calc
+      (∏ j ∈ N, (1 - x j))⁻¹ = ∏ j ∈ N, (1 - x j)⁻¹ := by
+        rw [Finset.prod_inv_distrib]
+      _ ≤ ∏ j ∈ N, Real.exp (2 * x j) := hprod
+      _ = Real.exp (∑ j ∈ N, 2 * x j) := by rw [← Real.exp_sum]
+      _ ≤ Real.exp (4 * ((n : ℝ) ^ B * L) * κ) := Real.exp_le_exp.mpr hsumX
+  have mapPr (P : FinProb X.Space) (f : X.Space → (∀ a, Ω a))
+      (A : (∀ a, Ω a) → Prop) :
+      (FinProb.map P f).pr A = P.pr (fun z => A (f z)) := by
+    classical
+    have hmapPrExpect :
+        (FinProb.map P f).pr A =
+          (FinProb.map P f).expect (fun y => if A y then 1 else 0) := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro y hy
+      by_cases hA : A y <;> simp [hA]
+    have hprExpect :
+        P.expect (fun z => if A (f z) then 1 else 0) = P.pr (fun z => A (f z)) := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro z hz
+      by_cases hA : A (f z) <;> simp [hA]
+    calc
+      (FinProb.map P f).pr A =
+          (FinProb.map P f).expect (fun y => if A y then 1 else 0) := hmapPrExpect
+      _ = P.expect (fun z => if A (f z) then 1 else 0) :=
+        FinProb.map_expect P f (fun y => if A y then 1 else 0)
+      _ = P.pr (fun z => A (f z)) := hprExpect
+  let J : FinProb (∀ a, Ω a) := FinProb.map Pcond X.out
+  refine ⟨J, ?_, ?_⟩
+  · intro ω hω
+    by_contra hgood
+    have hzero : J.w ω = 0 := by
+      dsimp [J, FinProb.map]
+      apply Finset.sum_eq_zero
+      intro z hz
+      by_cases hout : X.out z = ω
+      · have hnotQ : ¬ Q z := by
+          intro hq
+          have hgoodz := X.good z (by simpa [Q] using hq)
+          exact hgood (by simpa [hout] using hgoodz)
+        simp [Pcond, FinProb.cond, hnotQ, hout]
+      · simp [hout]
+    exact hω hzero
+  · intro S o hS
+    let target : X.Space → Prop := fun z => ∀ a ∈ S, X.out z a = o a
+    obtain ⟨m, rect, actR, hcard, hforce, hcover, hrectsum⟩ := X.target S o hS
+    have hunion (f : Fin m → X.Space → Prop) :
+        Pcond.pr (fun z => ∃ r, f r z) ≤ ∑ r, Pcond.pr (f r) := by
+      classical
+      letI : DecidablePred (fun z => ∃ r, f r z) := fun z => Classical.propDecidable _
+      unfold FinProb.pr
+      calc
+        (∑ z, if ∃ r, f r z then Pcond.w z else 0) ≤
+            ∑ z, ∑ r, if f r z then Pcond.w z else 0 := by
+          apply Finset.sum_le_sum
+          intro z hz
+          by_cases he : ∃ r, f r z
+          · obtain ⟨r, hr⟩ := he
+            have hsingle := Finset.single_le_sum
+              (s := Finset.univ) (f := fun r : Fin m => if f r z then Pcond.w z else 0)
+              (fun r _ => by split_ifs <;> [exact Pcond.nonneg z; exact le_rfl])
+              (Finset.mem_univ r)
+            have hsingle' : Pcond.w z ≤ ∑ r, if f r z then Pcond.w z else 0 := by
+              simpa [hr] using hsingle
+            rw [if_pos ⟨r, hr⟩]
+            exact hsingle'
+          · rw [if_neg he]
+            apply Finset.sum_nonneg
+            intro r hr
+            by_cases hfr : f r z <;> simp [hfr, Pcond.nonneg z]
+        _ = ∑ r, Pcond.pr (f r) := by
+          rw [Finset.sum_comm]
+          simp [FinProb.pr]
+    have hcondSupport (z : X.Space) (hz : Pcond.w z ≠ 0) : Q z := by
+      by_contra hq
+      have hz0 : Pcond.w z = 0 := by
+        simp [Pcond, FinProb.cond, hq]
+      exact hz hz0
+    have htargetCover : Pcond.pr target ≤ ∑ r, Pcond.pr (rect r) := by
+      apply le_trans ?_ (hunion rect)
+      letI : DecidablePred target := fun z => Classical.propDecidable _
+      letI : DecidablePred (fun z => ∃ r, rect r z) := fun z => Classical.propDecidable _
+      unfold FinProb.pr
+      apply Finset.sum_le_sum
+      intro z hz
+      by_cases ht : target z
+      · by_cases hw : Pcond.w z = 0
+        · rw [if_pos ht, hw]
+          by_cases he : ∃ r, rect r z <;> simp [he, hw]
+        · obtain ⟨r, hr⟩ := hcover z (hcondSupport z hw) ht
+          rw [if_pos ht, if_pos ⟨r, hr⟩]
+      · rw [if_neg ht]
+        by_cases he : ∃ r, rect r z
+        · rw [if_pos he]
+          exact Pcond.nonneg z
+        · rw [if_neg he]
+    have hrectBound (r : Fin m) :
+        Pcond.pr (rect r) ≤ Real.exp (4 * ((n : ℝ) ^ B * L) * κ) * X.law.pr (rect r) := by
+      let S0 := Finset.univ.filter (fun j : X.Bad => Disjoint (actR r) (X.act j))
+      let T0 := Finset.univ.filter (fun j : X.Bad => ¬ Disjoint (actR r) (X.act j))
+      have hdis : Disjoint S0 T0 := by
+        apply Finset.disjoint_left.mpr
+        intro j hjS hjT
+        exact (Finset.mem_filter.mp hjT).2 ((Finset.mem_filter.mp hjS).2)
+      have hpart : S0 ∪ T0 = Finset.univ := by
+        ext j
+        by_cases hd : Disjoint (actR r) (X.act j)
+        · simp [S0, T0, hd]
+        · simp [S0, T0, hd]
+      have hlocal := hcondRect (rect r) S0 T0 hdis hpart (by
+        exact hforce r S0 (by intro j hj; exact (Finset.mem_filter.mp hj).2))
+      have hfactor := hneighborFactor (actR r) (hcard r)
+      have hpr0 : 0 ≤ X.law.pr (rect r) := by
+        unfold FinProb.pr
+        apply Finset.sum_nonneg
+        intro z hz
+        by_cases hrz : rect r z <;> simp [hrz, X.law.nonneg z]
+      calc
+        Pcond.pr (rect r) ≤ (∏ j ∈ T0, (1 - x j))⁻¹ * X.law.pr (rect r) := by
+          simpa [S0, T0] using hlocal
+        _ ≤ Real.exp (4 * ((n : ℝ) ^ B * L) * κ) * X.law.pr (rect r) :=
+          mul_le_mul_of_nonneg_right hfactor hpr0
+    have hsumBound : (∑ r, Pcond.pr (rect r)) ≤
+        Real.exp (4 * ((n : ℝ) ^ B * L) * κ) *
+          ((1 + η) * ∏ a ∈ S, (q a).w (o a)) := by
+      calc
+        (∑ r, Pcond.pr (rect r)) ≤
+            ∑ r, Real.exp (4 * ((n : ℝ) ^ B * L) * κ) * X.law.pr (rect r) :=
+              Finset.sum_le_sum fun r _ => hrectBound r
+        _ = Real.exp (4 * ((n : ℝ) ^ B * L) * κ) * ∑ r, X.law.pr (rect r) := by
+              rw [Finset.mul_sum]
+        _ ≤ Real.exp (4 * ((n : ℝ) ^ B * L) * κ) *
+              ((1 + η) * ∏ a ∈ S, (q a).w (o a)) :=
+              mul_le_mul_of_nonneg_left hrectsum (Real.exp_pos _).le
+    calc
+      J.pr (fun ω => ∀ a ∈ S, ω a = o a) = Pcond.pr target := by
+        rw [mapPr]
+      _ ≤ ∑ r, Pcond.pr (rect r) := htargetCover
+      _ ≤ Real.exp (4 * ((n : ℝ) ^ B * L) * κ) *
+            ((1 + η) * ∏ a ∈ S, (q a).w (o a)) := hsumBound
 
 /-- L3.10b–h without Step 1 and without the avoidance step (TeX 03:844–1111, 03:1121–1128): from a Step 1
 certificate, the completed finite-mesh clock matching (Steps 2–7) with its truncated exploration leaves gives

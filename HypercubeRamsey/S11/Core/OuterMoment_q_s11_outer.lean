@@ -443,4 +443,56 @@ theorem tuple_event_mass_le_of_two_free {u N : ℕ} (σ : Fin N → ℝ) (S : Fi
       rw [← Finset.sum_mul, hsumRest]
       ring
 
+theorem tuple_event_mass_le_of_one_free {u N : ℕ} (σ : Fin N → ℝ) (S : Finset (Fin N))
+    (hσ : ∀ x, 0 ≤ σ x) (hσsum : ∑ x, σ x = 1)
+    (hσsupp : ∀ x, σ x ≠ 0 → x ∈ S) (j j' : Fin u) (hjj : j ≠ j')
+    (x₀ : Fin N) (hx₀ : x₀ ∈ S) (P : (Fin u → Fin N) → Prop) [DecidablePred P]
+    (ε : ℝ) (hε : 0 ≤ ε)
+    (hbound : ∀ base : Fin u → Fin N, (∀ i, base i ∈ S) →
+      (∑ x, σ x * (if P (Function.update base j x) then 1 else 0)) ≤ ε) :
+    (∑ f : Fin u → Fin N, tupWt σ f * (if P f then 1 else 0)) ≤ ε := by
+  classical
+  apply tuple_event_mass_le_of_two_free σ S hσ hσsum hσsupp j j' hjj x₀ hx₀ P ε hε
+  intro base hbase
+  have hcomm (x z : Fin N) :
+      Function.update (Function.update base j x) j' z =
+        Function.update (Function.update base j' z) j x :=
+    Function.update_comm hjj x z base
+  calc
+    (∑ x, ∑ z, σ x * σ z *
+      (if P (Function.update (Function.update base j x) j' z) then 1 else 0)) =
+      ∑ z, σ z * ∑ x, σ x *
+        (if P (Function.update (Function.update base j' z) j x) then 1 else 0) := by
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro z hz
+          calc
+            (∑ x, σ x * σ z *
+              (if P (Function.update (Function.update base j x) j' z) then 1 else 0)) =
+                ∑ x, σ z * (σ x *
+                  (if P (Function.update (Function.update base j' z) j x) then 1 else 0)) := by
+                    apply Finset.sum_congr rfl
+                    intro x hx
+                    rw [hcomm]
+                    ring
+            _ = σ z * (∑ x, σ x *
+                (if P (Function.update (Function.update base j' z) j x) then 1 else 0)) := by
+                  rw [Finset.mul_sum]
+    _ ≤ ∑ z, σ z * ε := by
+          apply Finset.sum_le_sum
+          intro z hz
+          by_cases hz0 : σ z = 0
+          · simp [hz0]
+          · have hzS : z ∈ S := hσsupp z hz0
+            apply mul_le_mul_of_nonneg_left _ (hσ z)
+            apply hbound (Function.update base j' z)
+            intro i
+            by_cases hi : i = j'
+            · subst i
+              simpa using hzS
+            · simpa [hi] using hbase i
+    _ = ε := by
+          rw [← Finset.sum_mul, hσsum]
+          ring
+
 end HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer

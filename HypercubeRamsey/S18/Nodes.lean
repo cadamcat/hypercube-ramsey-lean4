@@ -6,6 +6,8 @@ import HypercubeRamsey.S18.Nodes_q_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
+import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
+import HypercubeRamsey.S18.Isolates_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
@@ -652,11 +654,12 @@ theorem P18_5c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
           A.permTest assignment ≤ 2 * A.permFreshTest assignment ∧
           A.permFreshTest assignment ≤ 2 * A.iidFreshTest assignment := by
   filter_upwards [Lane_sol_s18_n5.eventually_scope_size T,
-    Lane_sol_s18_n5.perm_resampling_comparison hκ T] with k hscope hresampling
+    Lane_sol_s18_n5.perm_resampling_comparison hκ T,
+    Lane_sol_s18_n5.perm_iid_fresh_comparison hκ T] with k hscope hresampling hiid
   intro PT hPT D hD δ εterm C A assignment
   refine ⟨Lane_sol_s18_n5.terminal_comparison D hD A C assignment (hscope D A),
     hresampling PT hPT D hD A assignment, ?_⟩
-  sorry
+  exact hiid PT hPT D hD A assignment
 
 /-- P18.5d, 18:1058–1090. Bounds the explicitly defined isolate kernel. -/
 theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :

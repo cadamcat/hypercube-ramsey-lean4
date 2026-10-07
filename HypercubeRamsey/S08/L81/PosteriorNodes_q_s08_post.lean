@@ -2756,6 +2756,55 @@ theorem avgMarg_sum_one {N k : ℕ} (Q : FinProb (Fin k → Fin N)) (hk : 0 < k)
           exact hcoord j
     _ = 1 := by simp [hk.ne']
 
+theorem avgMarg_mul_normOr {N k : ℕ} (f : (Fin k → Fin N) → ℝ)
+    (hf : ∀ ξ, 0 ≤ f ξ) (P : FinProb (Fin k → Fin N)) (hk : 0 < k)
+    (hsum : 0 < ∑ ξ, f ξ) (y : Fin N) :
+    (∑ ξ, f ξ) * averageCoordinateMarginal (normOr f hf P) y =
+      (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+        (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+  classical
+  let M : ℝ := ∑ ξ, f ξ
+  have hM : M ≠ 0 := ne_of_gt (by simpa [M] using hsum)
+  have hweight (ξ : Fin k → Fin N) : (normOr f hf P).w ξ = f ξ / M := by
+    simp [normOr, M, hM]
+  have hcoord (j : Fin k) :
+      M * (normOr f hf P).pr (fun ξ => ξ j = y) =
+        ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+    unfold FinProb.pr
+    calc
+      M * (∑ ξ,
+          @ite ℝ (ξ j = y) (Classical.propDecidable _) ((normOr f hf P).w ξ) 0) =
+          M * ∑ ξ,
+            @ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ / M) 0 := by
+            congr 1
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            rw [hweight]
+      _ = ∑ ξ, (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            by_cases he : ξ j = y
+            · simp only [he, if_pos]
+              field_simp
+            · simp [he]
+  unfold averageCoordinateMarginal
+  change M * ((k : ℝ)⁻¹ * ∑ j : Fin k,
+    (normOr f hf P).pr (fun ξ => ξ j = y)) = _
+  calc
+    M * ((k : ℝ)⁻¹ * ∑ j : Fin k,
+        (normOr f hf P).pr (fun ξ => ξ j = y)) =
+        (k : ℝ)⁻¹ * (M * ∑ j : Fin k,
+          (normOr f hf P).pr (fun ξ => ξ j = y)) := by ring
+    _ = (k : ℝ)⁻¹ * ∑ j : Fin k,
+          M * (normOr f hf P).pr (fun ξ => ξ j = y) := by rw [Finset.mul_sum]
+    _ = (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+          (@ite ℝ (ξ j = y) (Classical.propDecidable _) (f ξ) 0) := by
+          congr 1
+          apply Finset.sum_congr rfl
+          intro j hj
+          exact hcoord j
+
 theorem avgMarg_ne_zero_support {N k : ℕ} (Q : FinProb (Fin k → Fin N)) (y : Fin N)
     (hQ : averageCoordinateMarginal Q y ≠ 0) :
     ∃ ξ j, Q.w ξ ≠ 0 ∧ ξ j = y := by

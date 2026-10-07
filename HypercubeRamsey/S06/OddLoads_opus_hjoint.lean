@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadB
+import HypercubeRamsey.S06.OddLoads_opus_hjoint_sol_s06_hjoint
 
 /-!
 # The target-only route for the odd hidden joint step (lane opus-diag-hjoint)

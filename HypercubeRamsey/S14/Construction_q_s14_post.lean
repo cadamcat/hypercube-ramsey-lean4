@@ -218,4 +218,39 @@ theorem expect_swap {α β : Type*} [Fintype α] [Fintype β]
       intro b hb
       rw [Finset.mul_sum]
 
+theorem finLaw_pr_or_le_add {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (A B : Ω → Prop) :
+    P.pr (fun ω => A ω ∨ B ω) ≤ P.pr A + P.pr B := by
+  classical
+  unfold FinLaw.pr
+  rw [← Finset.sum_add_distrib]
+  apply Finset.sum_le_sum
+  intro ω hω
+  by_cases hA : A ω
+  · by_cases hB : B ω
+    · simp [hA, hB]
+      exact P.nonneg ω
+    · simp [hA, hB]
+  · by_cases hB : B ω
+    · simp [hA, hB]
+    · simp [hA, hB]
+
+theorem finLaw_markov {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (f : Ω → ℝ) (ε : ℝ) (hε : 0 < ε) (hf : ∀ ω, 0 ≤ f ω) :
+    P.pr (fun ω => ε < f ω) ≤ P.E f / ε := by
+  classical
+  unfold FinLaw.pr FinLaw.E
+  apply (le_div_iff₀ hε).2
+  calc
+    (∑ ω, if ε < f ω then P.w ω else 0) * ε =
+        ∑ ω, (if ε < f ω then P.w ω else 0) * ε := by rw [Finset.sum_mul]
+    _ ≤ ∑ ω, P.w ω * f ω := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases hbad : ε < f ω
+      · rw [if_pos hbad]
+        exact mul_le_mul_of_nonneg_left (le_of_lt hbad) (P.nonneg ω)
+      · rw [if_neg hbad]
+        simpa using mul_nonneg (P.nonneg ω) (hf ω)
+
 end HypercubeRamsey.Lane_q_s14_post

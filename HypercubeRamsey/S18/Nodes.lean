@@ -141,7 +141,10 @@ theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X → SurvivalFacts X →
         ∀ P : TransferProtocol X, ReplyRangeBound P → CylinderFacts P → StopFacts P cstop := by
-  sorry
+  refine ⟨κ.xs / 8, ?_, ?_, ?_⟩
+  · exact div_pos hκ.xs_rng.1 (by norm_num)
+  · nlinarith [hκ.xs_rng.1]
+  · sorry
 
 /-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
 final unconditioned prefix-failure estimate. -/

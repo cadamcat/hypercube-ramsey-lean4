@@ -1300,6 +1300,46 @@ private noncomputable def scaleSupport9 {P : Params9} {hc : HeightChoice9 P} {n 
   (consulted9 (P := P) (hc := hc) (n := n) start.1 (8 * R)).filter
     (fun c => Nat.dist c.level.val start.2.val ≤ 8 * R + 2)
 
+private theorem natDist9_triangle (a b c : ℕ) :
+    Nat.dist a c ≤ Nat.dist a b + Nat.dist b c := by
+  by_cases hca : c ≤ a
+  · rw [Nat.dist_eq_sub_of_le_right hca]
+    have hab : a ≤ Nat.dist a b + b := Nat.dist_tri_left' a b
+    have hbc : b ≤ Nat.dist b c + c := Nat.dist_tri_left' b c
+    omega
+  · have hac : a ≤ c := Nat.le_of_not_ge hca
+    rw [Nat.dist_eq_sub_of_le hac]
+    have hcb : c ≤ Nat.dist c b + b := Nat.dist_tri_left' c b
+    have hba : b ≤ Nat.dist b a + a := Nat.dist_tri_left' b a
+    have hcb' : c ≤ Nat.dist b c + b := by simpa [Nat.dist_comm] using hcb
+    have hba' : b ≤ Nat.dist a b + a := by simpa [Nat.dist_comm] using hba
+    omega
+
+private theorem scaleSupport9_disjoint_of_level_separated {P : Params9} {hc : HeightChoice9 P}
+    {n R : ℕ} (start start' : HeightState9 P hc n)
+    (hsep : 16 * R + 4 < Nat.dist start.2.val start'.2.val) :
+    Disjoint (scaleSupport9 start R) (scaleSupport9 start' R) := by
+  classical
+  rw [Finset.disjoint_left]
+  intro c hleft hright
+  have hleft' := (Finset.mem_filter.mp hleft).2
+  have hright' := (Finset.mem_filter.mp hright).2
+  have hleft'' : Nat.dist start.2.val c.level.val ≤ 8 * R + 2 := by
+    simpa [Nat.dist_comm] using hleft'
+  have hright'' : Nat.dist c.level.val start'.2.val ≤ 8 * R + 2 := hright'
+  have htri := natDist9_triangle start.2.val c.level.val start'.2.val
+  omega
+
+private theorem scaleSupport9_inter_card_le {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}
+    (start start' : HeightState9 P hc n) :
+    (scaleSupport9 start R ∩ scaleSupport9 start' R).card ≤
+      (consulted9 (P := P) (hc := hc) (n := n) start.1 (8 * R) ∩
+        consulted9 start'.1 (8 * R)).card := by
+  apply Finset.card_le_card
+  intro c hc
+  rcases Finset.mem_inter.mp hc with ⟨hc₁, hc₂⟩
+  exact Finset.mem_inter.mpr ⟨(Finset.mem_filter.mp hc₁).1, (Finset.mem_filter.mp hc₂).1⟩
+
 private def HeightDepends9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (f : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → ℝ)
     (S : Finset (Pos9 P hc n)) : Prop :=

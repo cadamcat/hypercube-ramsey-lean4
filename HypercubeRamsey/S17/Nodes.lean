@@ -1,6 +1,9 @@
 import HypercubeRamsey.S17.Needs
 import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S17.Nodes_sol_s17_pool
+import HypercubeRamsey.S17.Nodes_q_s17_res1
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_experiment
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_mass
 
 set_option maxHeartbeats 1000000
 
@@ -1090,7 +1093,7 @@ theorem resampleLocality
     (tapes : ∀ C : D.G.Cell, ℕ → TapeEntry D.F C) :
     LE.CellLocalitySpec Ts order pools tapes ∧
       LE.EventTruthLocalitySpec Ts order pools tapes := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s17_res1.resampleLocality LE Ts order pools tapes
 
 /-- P17.4a: extract the executions and only untouched extra sites from the
 ever-true component; the root is not required to be an untouched test. -/
@@ -1104,7 +1107,50 @@ theorem finiteResamplingComponent
     ∃ m, Ts ≤ m ∧ 0 < m ∧ ∃ W : ComponentWitness T k Ts m,
       CandidateWitness LE Ts events v m W ∧ WitnessReadsDisjoint LE Ts W.2 ∧
         WitnessTestsPass LE Ts pools tapes W.2 := by
-  sorry
+  classical
+  by_cases hTs : Ts = 0
+  · subst Ts
+    let Q : PlaneTreeCode 1 := (fun _ => 0, fun _ => 0)
+    let items : WitnessItems T k 0 1 := fun _ => (v, none)
+    refine ⟨1, Nat.zero_le _, by norm_num, (Q, items), ?_, ?_, ?_⟩
+    · refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · change PlaneTreeSpec Q
+        constructor
+        · intro j hj
+          have hj0 : j = (0 : Fin 1) := Subsingleton.elim _ _
+          subst j
+          simp [Q]
+        · intro j hj
+          omega
+      · intro i j hij
+        exact Subsingleton.elim _ _
+      · refine ⟨by norm_num, ?_⟩
+        have hzero : (items ⟨0, by norm_num⟩).1 = v := rfl
+        rw [hzero]
+        simp [ListEvent.graphBall]
+      · intro j
+        have hj0 : j = (0 : Fin 1) := Subsingleton.elim _ _
+        subst j
+        exact hroot
+      · intro j hj
+        omega
+    · constructor
+      · intro j C hC
+        simp [items, witnessReadIndex]
+      · intro i j hij C hCi hCj
+        exact (hij (Subsingleton.elim _ _)).elim
+    · intro j
+      have hj0 : j = (0 : Fin 1) := by omega
+      subst j
+      have hcfg0 : witnessTestConfig LE 0 pools tapes
+          (fun _ : Fin 1 => (v, none)) 0 =
+          LE.resample 0 order events pools tapes.extend := by
+        funext C
+        simp [witnessTestConfig, witnessReadIndex, Tapes.extend,
+          ListEvent.resample, ListEvent.runRounds]
+      rw [hcfg0]
+      exact hfinal
+  · sorry
 
 /-- P17.4b: count plane-tree encodings, not arbitrary connected sequences. -/
 theorem finiteResamplingWitnessCount
@@ -1116,7 +1162,71 @@ theorem finiteResamplingWitnessCount
       (Finset.univ.filter fun W : ComponentWitness T k Ts m =>
         CandidateWitness LE Ts events root m W).card ≤
         (componentWitnessBase d Ts) ^ m := by
-  sorry
+  classical
+  intro m hm
+  by_cases hm1 : m = 1
+  · subst m
+    let B := LE.graphBall {root} 1
+    let WType := {W : ComponentWitness T k Ts 1 //
+      CandidateWitness LE Ts events root 1 W}
+    let Site := {x : Pos T k // x ∈ B}
+    let encode (W : WType) : Site × Option (Fin Ts) :=
+      let j : Fin 1 := ⟨0, by omega⟩
+      ⟨⟨(W.1.2 j).1, by
+          rcases W.2 with ⟨_, htail⟩
+          rcases htail with ⟨_, htail⟩
+          rcases htail with ⟨hanchor, _⟩
+          rcases hanchor with ⟨hpos, hanchor⟩
+          have hj : (⟨0, hpos⟩ : Fin 1) = j := Subsingleton.elim _ _
+          rw [← hj]
+          exact hanchor⟩,
+        (W.1.2 j).2⟩
+    have hencode : Function.Injective encode := by
+      intro W W' h
+      apply Subtype.ext
+      have htree : W.1.1 = W'.1.1 := Subsingleton.elim _ _
+      have hitem : W.1.2 (⟨0, by omega⟩ : Fin 1) =
+          W'.1.2 (⟨0, by omega⟩ : Fin 1) := by
+        have hsite : (W.1.2 (⟨0, by omega⟩ : Fin 1)).1 =
+            (W'.1.2 (⟨0, by omega⟩ : Fin 1)).1 := by
+          exact congrArg (fun z : Site × Option (Fin Ts) => z.1.1) h
+        have hround := congrArg (fun z : Site × Option (Fin Ts) => z.2) h
+        exact Prod.ext hsite hround
+      exact Prod.ext htree (funext fun j => by
+        have hj : j = (⟨0, by omega⟩ : Fin 1) := Subsingleton.elim _ _
+        simpa [hj] using hitem)
+    have hball : B.card ≤ d + 1 := by
+      simpa [B, pow_one] using
+        (HypercubeRamsey.Lane_q_s17_res1.graphBall_singleton_card_le_pow
+          LE d hdegree root 1)
+    have hcand : (Finset.univ.filter fun W : ComponentWitness T k Ts 1 =>
+        CandidateWitness LE Ts events root 1 W).card = Fintype.card WType := by
+      simp [WType, Fintype.card_subtype]
+    have hSiteCard : Fintype.card Site = B.card := by
+      simp [Site, Fintype.card_subtype]
+    have hencodeCard : Fintype.card WType ≤
+        Fintype.card (Site × Option (Fin Ts)) :=
+      Fintype.card_le_of_injective encode hencode
+    have hcoeff : d + 1 ≤ 4 * (d + 1) ^ 4 := by
+      have hd : 1 ≤ d + 1 := by omega
+      have hp : d + 1 ≤ (d + 1) ^ 4 := by
+        calc
+          d + 1 = (d + 1) * 1 := by omega
+          _ ≤ (d + 1) * (d + 1) ^ 3 :=
+            Nat.mul_le_mul_left _ (Nat.one_le_pow 3 (d + 1) hd)
+          _ = (d + 1) ^ 4 := by rw [pow_succ]; ring
+      nlinarith [hp, Nat.zero_le ((d + 1) ^ 4)]
+    calc
+      (Finset.univ.filter fun W : ComponentWitness T k Ts 1 =>
+          CandidateWitness LE Ts events root 1 W).card = Fintype.card WType := hcand
+      _ ≤ Fintype.card (Site × Option (Fin Ts)) := hencodeCard
+      _ = B.card * (Ts + 1) := by simp [Fintype.card_prod, hSiteCard]
+      _ ≤ (d + 1) * (Ts + 1) := Nat.mul_le_mul_right _ hball
+      _ ≤ componentWitnessBase d Ts := by
+        dsimp [componentWitnessBase]
+        exact Nat.mul_le_mul_right (Ts + 1) hcoeff
+      _ = componentWitnessBase d Ts ^ 1 := by simp
+  · sorry
 
 /-- P17.4c: independent entry tests for any supported typed item list.
 Tree encoding is irrelevant to this probability estimate. -/
@@ -1131,7 +1241,145 @@ theorem finiteResamplingWitnessTests
       WitnessReadsDisjoint LE Ts W →
       (tapeLaw D.F Ts).pr (fun tapes => WitnessTestsPass LE Ts pools tapes W) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
-  sorry
+  classical
+  intro m W hItems hReads
+  let e := Lane_q_s17_res1.flattenTapesEquiv D.F Ts
+  let Idx := Lane_q_s17_res1.TapeRoundIndex (G := D.G) Ts
+  let key (j : Fin m) (C : D.G.Cell) : Idx :=
+    ⟨C, ⟨min (witnessReadIndex LE Ts W j C) (Ts + 1), by omega⟩⟩
+  let cfg (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) : Config D.F :=
+    fun C => x (key j C) (pools C)
+  let test (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) : Prop :=
+    LE.S (W j).1 (witnessTestConfig LE Ts pools (e.symm x) W j)
+  let support (j : Fin m) : Finset Idx := Finset.univ.filter fun i =>
+    i.1 ∈ LE.scope (W j).1 ∧ i.2 = (key j i.1).2
+  have hcfg (j : Fin m) (x : ∀ i : Idx, TapeEntry D.F i.1) :
+      cfg j x = witnessTestConfig LE Ts pools (e.symm x) W j := by
+    funext C
+    simp [cfg, witnessTestConfig, Tapes.extend, e,
+      Lane_q_s17_res1.flattenTapesEquiv, key]
+  have hdep : ∀ j, FinProb.DependsOn
+      (fun x => if test j x then (1 : ℝ) else 0) (support j) := by
+    intro j x y hxy
+    have hstates : ∀ C, C ∈ LE.scope (W j).1 →
+        (witnessTestConfig LE Ts pools (e.symm x) W j) C =
+          (witnessTestConfig LE Ts pools (e.symm y) W j) C := by
+      intro C hC
+      rw [← hcfg j x, ← hcfg j y]
+      change x (key j C) (pools C) = y (key j C) (pools C)
+      apply congrArg (fun a : TapeEntry D.F C => a (pools C))
+      apply hxy
+      simp [support, hC, key]
+    have htruth := LE.scope_ok (W j).1
+      (witnessTestConfig LE Ts pools (e.symm x) W j)
+      (witnessTestConfig LE Ts pools (e.symm y) W j) hstates
+    exact congrArg (fun p : Prop => if p then (1 : ℝ) else 0) (propext htruth)
+  have hdisj : ∀ i j, i ≠ j → Disjoint (support i) (support j) := by
+    intro i j hij
+    apply Finset.disjoint_left.mpr
+    intro x hxi hxj
+    rcases Finset.mem_filter.mp hxi with ⟨_, ⟨hCi, hki⟩⟩
+    rcases Finset.mem_filter.mp hxj with ⟨_, ⟨hCj, hkj⟩⟩
+    have hiBound := hReads.1 i x.1 hCi
+    have hjBound := hReads.1 j x.1 hCj
+    have hiVal : (key i x.1).2.val = witnessReadIndex LE Ts W i x.1 := by
+      simp [key, Nat.min_eq_left (by omega)]
+      omega
+    have hjVal : (key j x.1).2.val = witnessReadIndex LE Ts W j x.1 := by
+      simp [key, Nat.min_eq_left (by omega)]
+      omega
+    have hval := congrArg Fin.val (hki.symm.trans hkj)
+    rw [hiVal, hjVal] at hval
+    exact (hReads.2 i j hij x.1 hCi hCj) hval
+  have hmap (j : Fin m) :
+      FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j) =
+        D.freshConfigLaw pools := by
+    have hkey : Function.Injective (key j) := by
+      intro C C' h
+      exact congrArg Sigma.fst h
+    have hprod := Lane_q_s17_res1.pi_map_injective
+      (P := fun i : Idx => FinLaw.pi fun P : D.F.Pool i.1 => D.F.fresh i.1 P)
+      (key j) hkey (fun C entry => entry (pools C))
+    have hcoord (C : D.G.Cell) :
+        FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+          (fun entry => entry (pools C)) = D.F.fresh C (pools C) :=
+      Lane_q_s17_res1.pi_map_coordinate_law
+        (fun P : D.F.Pool C => D.F.fresh C P) (pools C)
+    have hcoords :
+        (fun C : D.G.Cell =>
+          FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+            (fun entry => entry (pools C))) =
+        (fun C => D.F.fresh C (pools C)) := funext hcoord
+    calc
+      FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j) =
+          FinLaw.pi (fun C : D.G.Cell =>
+            FinLaw.map (FinLaw.pi (fun P : D.F.Pool C => D.F.fresh C P))
+              (fun entry => entry (pools C))) := by
+        simpa [Lane_q_s17_res1.flatTapeLaw, cfg] using hprod
+      _ = D.freshConfigLaw pools := by
+        rw [hcoords]
+        rfl
+  have hsingle (j : Fin m) :
+      (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) ≤
+        Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := by
+    have htest : test j = fun x => LE.S (W j).1 (cfg j x) := by
+      funext x
+      simp [test, hcfg]
+    calc
+      _ = (FinLaw.map (Lane_q_s17_res1.flatTapeLaw D.F Ts) (cfg j)).pr
+          (LE.S (W j).1) := by
+        rw [htest]
+        exact (Lane_q_s17_res1.map_pr_law _ _ _).symm
+      _ = (D.freshConfigLaw pools).pr (LE.S (W j).1) := by rw [hmap j]
+      _ ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := h23 (W j).1 (hItems j)
+  let flatTests (x : ∀ i : Idx, TapeEntry D.F i.1) : Prop :=
+    WitnessTestsPass LE Ts pools (e.symm x) W
+  have hfactor :
+      (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests =
+        ∏ j ∈ (Finset.univ : Finset (Fin m)),
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) := by
+    simpa [Lane_q_s17_res1.flatTapeLaw, flatTests, WitnessTestsPass, test] using
+      Lane_q_s17_res1.pi_pr_inter_disjoint
+        (fun i : Idx => FinLaw.pi fun P : D.F.Pool i.1 => D.F.fresh i.1 P)
+        Finset.univ test support hdep hdisj
+  have hprob :
+      (tapeLaw D.F Ts).pr
+          (fun tapes => WitnessTestsPass LE Ts pools tapes W) =
+        (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests := by
+    calc
+      _ = (FinLaw.map (tapeLaw D.F Ts) e).pr flatTests := by
+        symm
+        calc
+          (FinLaw.map (tapeLaw D.F Ts) e).pr flatTests =
+              (tapeLaw D.F Ts).pr (fun tapes => flatTests (e tapes)) :=
+            Lane_q_s17_res1.map_pr_law _ _ _
+          _ = (tapeLaw D.F Ts).pr
+              (fun tapes => WitnessTestsPass LE Ts pools tapes W) := by
+            congr 1
+      _ = (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr flatTests := by
+        rw [Lane_q_s17_res1.tapeLaw_flatten]
+  calc
+    (tapeLaw D.F Ts).pr (fun tapes => WitnessTestsPass LE Ts pools tapes W) =
+        ∏ j ∈ (Finset.univ : Finset (Fin m)),
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts).pr (test j) := by
+      rw [hprob, hfactor]
+    _ ≤ ∏ j ∈ (Finset.univ : Finset (Fin m)),
+        Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) := by
+      apply Finset.prod_le_prod₀
+      · intro j hj
+        exact Lane_q_s17_res1.finLaw_pr_nonneg
+          (Lane_q_s17_res1.flatTapeLaw D.F Ts) (test j)
+      · intro j hj
+        exact hsingle j
+    _ = (Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ))) ^ m := by simp
+    _ = Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
+      calc
+        _ = Real.rpow (T.S.n k : ℝ) ((-(κ.P : ℝ)) * (m : ℝ)) :=
+          (Real.rpow_mul_natCast (by positivity) (-(κ.P : ℝ)) m).symm
+        _ = Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * m)) := by
+          congr 1
+          push_cast
+          ring
 
 /-- P17.4d(i): target backward-closure extraction with exact terminal entries. -/
 theorem finiteResamplingTargetWitness
@@ -1142,7 +1390,81 @@ theorem finiteResamplingTargetWitness
     (tapes : Tapes D.F Ts) :
     ∃ m, ∃ W : TargetWitness T k Ts m,
       ActualTargetWitness LE order events pools targets tapes W := by
-  sorry
+  classical
+  by_cases hempty : backwardClosure LE order events pools tapes targets = ∅
+  · have hno (r : Fin Ts) (C : D.G.Cell) (hC : C ∈ targets)
+        (v : Pos T k) (hv : v ∈ activeAtRound LE Ts order events pools tapes r)
+        (hCv : C ∈ LE.scope v) : False := by
+      have ho : occurrenceExecuted LE Ts order events pools tapes (v, r) := by
+        simpa [occurrenceExecuted, activeAtRound] using hv
+      have hmem : (v, r) ∈ backwardClosure LE order events pools tapes targets := by
+        unfold backwardClosure
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ho, (v, r), ho, ?_, Relation.ReflTransGen.refl⟩
+        exact ⟨C, hC, hCv⟩
+      rw [hempty] at hmem
+      simp at hmem
+    have hrun : ∀ n, n ≤ Ts → ∀ C : D.G.Cell, C ∈ targets →
+        (LE.runRounds n order events pools tapes.extend).1 C =
+          tapes.extend C 0 (pools C) := by
+      intro n
+      induction n with
+      | zero =>
+          intro hn C hC
+          rfl
+      | succ n ih =>
+          intro hn C hC
+          have hprev := ih (by omega) C hC
+          let r : Fin Ts := ⟨n, by omega⟩
+          have hnot : ¬ ∃ v ∈ LE.active order events
+              (LE.runRounds n order events pools tapes.extend).1, C ∈ LE.scope v := by
+            rintro ⟨v, hv, hCv⟩
+            have hv' : v ∈ activeAtRound LE Ts order events pools tapes r := by
+              simpa [activeAtRound, r] using hv
+            exact hno r C hC v hv' hCv
+          rw [show LE.runRounds (n + 1) order events pools tapes.extend =
+            LE.round order events pools tapes.extend
+              (LE.runRounds n order events pools tapes.extend).1
+              (LE.runRounds n order events pools tapes.extend).2 by rfl]
+          simp [ListEvent.round, hnot, hprev]
+    let Q : PlaneTreeCode 1 := (fun _ => 0, fun _ => 0)
+    let W : TargetWitness T k Ts 0 := (Q, Fin.elim0)
+    have hTree : PlaneTreeSpec Q := by
+      constructor
+      · intro j hj
+        have hj0 : j = (0 : Fin 1) := Subsingleton.elim _ _
+        subst j
+        simp [Q]
+      · intro j hj
+        omega
+    have hCand : CandidateTargetWitness LE events targets W := by
+      refine ⟨hTree, ?_, ?_, ?_⟩
+      · intro i j hij
+        exact Fin.elim0 i
+      · intro j
+        exact Fin.elim0 j
+      · intro j
+        exact Fin.elim0 j
+    refine ⟨0, W, hCand, ?_, ?_, ?_, ?_, ?_⟩
+    · simp [W, hempty]
+    · constructor
+      · intro j
+        exact Fin.elim0 j
+      · intro i j hij C hCi hCj
+        exact Fin.elim0 i
+    · intro j
+      exact Fin.elim0 j
+    · constructor
+      · intro C hC
+        simp [targetTerminalIndex, W]
+      · intro j C hC hscope
+        exact Fin.elim0 j
+    · funext C
+      change (LE.runRounds Ts order events pools tapes.extend).1 C.1 =
+        tapes.extend C.1 (targetTerminalIndex LE W C.1) (pools C.1)
+      have hfinal := hrun Ts le_rfl C.1 C.2
+      simpa [targetTerminalIndex, W] using hfinal
+  · sorry
 
 /-- P17.4d(ii): the targets have their own auxiliary-root encoding count. -/
 theorem finiteResamplingTargetCount

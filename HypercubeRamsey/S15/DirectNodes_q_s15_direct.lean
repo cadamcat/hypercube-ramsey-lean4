@@ -770,6 +770,15 @@ theorem directFactor_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
     positivity
   · simp [hd]
 
+theorem directFactor_nonzero_hit {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
+    (ys : S15.OddAssignment T k) (b : S15.OddPosition T k)
+    (x : Fin (T.S.N k)) (hfactor : S15.directFactor PT hPT a ys b x ≠ 0) :
+    Hits (T.S.E k) PT.tiling.c x (ys b) := by
+  by_contra hnot
+  unfold S15.directFactor at hfactor
+  simp [S15.normalizedHit, HypercubeRamsey.hit, hnot] at hfactor
+
 theorem directBaseWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
     (x : Fin (T.S.N k)) : 0 ≤ S15.directBaseWeight PT hPT a x := by
@@ -899,6 +908,85 @@ theorem directNormalizedRow_supported {κ : CConsts} {T : Stage} {k : ℕ}
     hpatch.2.1 (hpatch.1 (hPT.envelope_subset _ henv))
   simp only [Finset.mem_sdiff] at hxres
   exact hxres.1
+
+theorem directNormalizedRow_common_hit {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k))
+    (hrow : S15.directNormalizedRow PT hPT ys a x ≠ 0)
+    (b : S15.OddPosition T k) (hadj : S15.Adjacent a b) :
+    Hits (T.S.E k) PT.tiling.c x (ys b) := by
+  classical
+  have hmass : 0 < S15.directRowMass PT hPT ys a := by
+    by_contra hnot
+    apply hrow
+    simp [S15.directNormalizedRow, hnot]
+  have hweight : S15.directRowWeight PT hPT ys a x ≠ 0 := by
+    intro hz
+    apply hrow
+    simp [S15.directNormalizedRow, hmass, hz]
+  have hcross : S15.directCrossingMass PT hPT ys a ≠ 0 := by
+    intro hz
+    apply hweight
+    simp [S15.directRowWeight, hz]
+  have hpost : S15.directPostCrossingWeight PT hPT ys a x ≠ 0 := by
+    intro hz
+    apply hweight
+    simp [S15.directRowWeight, hz]
+  have hbulkProd :
+      (∏ b' ∈ S15.bulkNeighbours PT hPT a, S15.directFactor PT hPT a ys b' x) ≠ 0 := by
+    intro hz
+    apply hweight
+    simp [S15.directRowWeight, hz]
+  have hcrossPos : 0 < S15.directCrossingMass PT hPT ys a :=
+    lt_of_le_of_ne (directCrossingMass_nonneg PT hPT ys a) (Ne.symm hcross)
+  have hcrossProd :
+      (∏ b' ∈ S15.crossingNeighbours PT hPT a, S15.directFactor PT hPT a ys b' x) ≠ 0 := by
+    by_contra hz
+    have hpostzero : S15.directPostCrossingWeight PT hPT ys a x = 0 := by
+      simp [S15.directPostCrossingWeight, hcrossPos, hz]
+    exact hpost hpostzero
+  have hsets : b ∈ S15.crossingNeighbours PT hPT a ∨ b ∈ S15.bulkNeighbours PT hPT a := by
+    by_cases hp : S15.patchAt PT hPT b.1 = S15.patchAt PT hPT a.1
+    · right
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hadj, hp⟩⟩
+    · left
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hadj, hp⟩⟩
+  rcases hsets with hcrossMem | hbulkMem
+  · exact directFactor_nonzero_hit PT hPT a ys b x
+      ((Finset.prod_ne_zero_iff.mp hcrossProd) b hcrossMem)
+  · exact directFactor_nonzero_hit PT hPT a ys b x
+      ((Finset.prod_ne_zero_iff.mp hbulkProd) b hbulkMem)
+
+noncomputable def directHallRows_of_sampler {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (J : S15.DirectSampler PT hPT) (ys : S15.OddAssignment T k)
+    (hys : J.law.w ys ≠ 0)
+    (hcol : ∀ x, ∑ a : S15.EvenPosition T k,
+      S15.directNormalizedRow PT hPT ys a x ≤ 1) :
+    S15.DirectHallRows (T := T) (k := k) PT.tiling.c := by
+  refine {
+    oddLabel := ys
+    odd_injective := J.injective_on_support ys hys
+    odd_in_Y := fun b => by
+      let hi := S15.patchAt PT hPT b.1
+      have hpatch := hPT.tiling_valid.patch_supports hi
+      have hlabel := J.label_supported ys hys b
+      have hlabel' : ys b ∈ (PT.tiling.P hi).Y := by simpa [hi] using hlabel
+      have hres := hpatch.2.2.1 hlabel'
+      have hwhole := hpatch.2.2.2 hres
+      exact (Finset.mem_sdiff.mp hwhole).1
+    row := fun a x => S15.directNormalizedRow PT hPT ys a x
+    row_nonneg := fun a x => directNormalizedRow_nonneg PT hPT ys a x
+    row_sum := ?_
+    row_supported := fun a x hrow => directNormalizedRow_supported PT hPT ys a x hrow
+    common_neighbour := fun a x hrow b hab =>
+      directNormalizedRow_common_hit PT hPT ys a x hrow b hab
+    column_load := hcol }
+  intro a
+  have hmass : 0 < S15.directRowMass PT hPT ys a := by
+    have hgate := J.row_mass_gate ys hys a
+    linarith
+  exact directNormalizedRow_sum PT hPT ys a hmass
 
 theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]

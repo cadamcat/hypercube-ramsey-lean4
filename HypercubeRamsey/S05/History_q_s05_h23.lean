@@ -133,6 +133,42 @@ theorem pi_pr_ext_depends5 {I : Type*} [Fintype I] [DecidableEq I]
     _ = (FinProb.pi Q).expect f := (FinProb.pi_expect_depends Q s f ω₀ hf).symm
     _ = (FinProb.pi Q).pr A := (hpr Q).symm
 
+theorem bind_pr5 {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (K : α → FinProb β) (A : α → β → Prop) :
+    (FinProb.bind P K).pr (fun ab => A ab.1 ab.2) =
+      P.expect (fun a => (K a).pr (A a)) := by
+  classical
+  unfold FinProb.pr FinProb.expect
+  change (∑ ab : α × β,
+      if A ab.1 ab.2 then P.w ab.1 * (K ab.1).w ab.2 else 0) =
+    ∑ a, P.w a * (∑ b, if A a b then (K a).w b else 0)
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a ha
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b hb
+  by_cases hA : A a b <;> simp [hA]
+
+theorem pr_mono5 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) {A B : Ω → Prop}
+    (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro ω hω
+  by_cases hA : A ω
+  · have hB := hAB ω hA
+    simp [hA, hB]
+  · by_cases hB : B ω <;> simp [hA, hB, P.nonneg ω]
+
+theorem pr_nonneg5 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    0 ≤ P.pr A := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_nonneg
+  intro ω hω
+  split_ifs <;> simp [P.nonneg ω]
+
 theorem colWeight_ext_bins5 (X : Setup5 γ K' χ n N E G) (b b' : X.Base)
     (ℓ : X.Key) (W W' : BinVector5 n → X.Stream)
     (keep : BinVector5 n → Fin (X.p.streamSegs n) → Prop)
@@ -550,9 +586,163 @@ noncomputable def stage2AlarmScope5 (X : Setup5 γ K' χ n N E G)
   | Sum.inr (Sum.inr (Sum.inr a)) =>
       blockLocalBins5 X a.1.1 (insert (X.optKeyOf a.1.1 a.1.2) a.1.1.2.1)
 
+structure Stage2RawBounds5 (X : Setup5 γ K' χ n N E G) (v : Fin N) : Prop where
+  step1 : ∀ K, X.TypeOccurs K → ∀ ℓ, ℓ ∈ X.gateKeys K →
+    (X.coarseLaw v).pr (fun c => X.step1Fail (v, c) ℓ K.1.1 (X.p.typeSegs n K)) ≤
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 2)
+  cap : ∀ ℓ, X.KeyOccurs ℓ →
+    (X.coarseLaw v).pr (fun c => X.capFail (v, c) ℓ) ≤
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n (ℓ.level + 1))) / 2)
+  step2 : ∀ K, X.TypeOccurs K →
+    (X.keyLawAt v).pr (fun cu => X.step2Fail ((v, cu.1), cu.2) K) ≤
+      ((K.2.1.card : ℝ) + 1) * Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 2)
+  optional : ∀ K t, X.OptOccurs K t →
+    (X.keyLawAt v).pr (fun cu => X.optFail ((v, cu.1), cu.2) K t) ≤
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 2)
+
+noncomputable def stage2AlarmBudget5 (X : Setup5 γ K' χ n N E G)
+    (i : Stage2AlarmIndex5 X) : ℝ :=
+  match i with
+  | Sum.inl a => Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n a.1.1)) / 2)
+  | Sum.inr (Sum.inl a) =>
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n (a.1.level + 1))) / 2)
+  | Sum.inr (Sum.inr (Sum.inl a)) =>
+      ((a.1.2.1.card : ℝ) + 1) *
+        Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n a.1)) / 4)
+  | Sum.inr (Sum.inr (Sum.inr _)) =>
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4)
+
 noncomputable def stage2AlarmBadOnPairs5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
     (i : Stage2AlarmIndex5 X) (ω : BinVector5 n → Fin N × X.Stream) : Prop :=
   stage2AlarmBad5 X v i (coarsePairEquiv5 X ω)
+
+theorem step2AlarmProb_bound5 (X : Setup5 γ K' χ n N E G) (v : Fin N) (K : X.Ty)
+    (hraw : (X.keyLawAt v).pr (fun cu => X.step2Fail ((v, cu.1), cu.2) K) ≤
+      ((K.2.1.card : ℝ) + 1) *
+        Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 2)) :
+    (X.coarseLaw v).pr (fun c =>
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 4) <
+        (X.hiddenLaw (v, c)).pr (fun U => X.step2Fail ((v, c), U) K)) ≤
+      ((K.2.1.card : ℝ) + 1) *
+        Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 4) := by
+  classical
+  let A : X.Coarse → X.Hidden → Prop := fun c U => X.step2Fail ((v, c), U) K
+  let f : X.Coarse → ℝ := fun c => (X.hiddenLaw (v, c)).pr (A c)
+  let u : ℝ := X.p.delta * (X.p.q0 * X.p.typeSegs n K)
+  let t : ℝ := Real.exp (-u / 4)
+  have ht : 0 < t := Real.exp_pos _
+  have hbind : (X.keyLawAt v).pr (fun cu => A cu.1 cu.2) =
+      (X.coarseLaw v).expect f := by
+    simpa [Setup5.keyLawAt, A, f] using
+      (bind_pr5 (X.coarseLaw v) (fun c => X.hiddenLaw (v, c)) A)
+  have hmean : (X.coarseLaw v).expect f ≤
+      ((K.2.1.card : ℝ) + 1) * Real.exp (-u / 2) := by
+    rw [← hbind]
+    simpa [u] using hraw
+  have hnonneg : ∀ c, 0 ≤ f c := fun c => pr_nonneg5 (X.hiddenLaw (v, c)) (A c)
+  have hMarkov := FinProb.markov (X.coarseLaw v) f t hnonneg ht
+  have hsubset : (X.coarseLaw v).pr (fun c => t < f c) ≤
+      (X.coarseLaw v).pr (fun c => t ≤ f c) := by
+    apply pr_mono5
+    intro c hc
+    exact le_of_lt hc
+  have hexp : Real.exp (-u / 2) / Real.exp (-u / 4) = Real.exp (-u / 4) := by
+    rw [← Real.exp_sub]
+    congr 1
+    ring
+  calc
+    (X.coarseLaw v).pr (fun c => Real.exp (-u / 4) < f c) ≤
+        (X.coarseLaw v).pr (fun c => t ≤ f c) := by
+          simpa [t] using hsubset
+    _ ≤ (X.coarseLaw v).expect f / t := hMarkov
+    _ ≤ (((K.2.1.card : ℝ) + 1) * Real.exp (-u / 2)) / t :=
+      div_le_div_of_nonneg_right hmean ht.le
+    _ = ((K.2.1.card : ℝ) + 1) * Real.exp (-u / 4) := by
+      dsimp [t]
+      calc
+        (((K.2.1.card : ℝ) + 1) * Real.exp (-u / 2)) / Real.exp (-u / 4) =
+            ((K.2.1.card : ℝ) + 1) *
+              (Real.exp (-u / 2) / Real.exp (-u / 4)) := by ring
+        _ = ((K.2.1.card : ℝ) + 1) * Real.exp (-u / 4) := by rw [hexp]
+    _ = ((K.2.1.card : ℝ) + 1) *
+        Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 4) := by rfl
+
+theorem optAlarmProb_bound5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
+    (K : X.Ty) (t : CubeVertex (X.p.m n))
+    (hraw : (X.keyLawAt v).pr (fun cu => X.optFail ((v, cu.1), cu.2) K t) ≤
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 2)) :
+    (X.coarseLaw v).pr (fun c =>
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4) <
+        (X.hiddenLaw (v, c)).pr (fun U => X.optFail ((v, c), U) K t)) ≤
+      Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4) := by
+  classical
+  let A : X.Coarse → X.Hidden → Prop := fun c U => X.optFail ((v, c), U) K t
+  let f : X.Coarse → ℝ := fun c => (X.hiddenLaw (v, c)).pr (A c)
+  let u : ℝ := X.p.delta * (X.p.q0 * X.p.uStarSeg n)
+  let r : ℝ := Real.exp (-u / 4)
+  have hr : 0 < r := Real.exp_pos _
+  have hbind : (X.keyLawAt v).pr (fun cu => A cu.1 cu.2) =
+      (X.coarseLaw v).expect f := by
+    simpa [Setup5.keyLawAt, A, f] using
+      (bind_pr5 (X.coarseLaw v) (fun c => X.hiddenLaw (v, c)) A)
+  have hmean : (X.coarseLaw v).expect f ≤ Real.exp (-u / 2) := by
+    rw [← hbind]
+    simpa [u] using hraw
+  have hnonneg : ∀ c, 0 ≤ f c := fun c => pr_nonneg5 (X.hiddenLaw (v, c)) (A c)
+  have hMarkov := FinProb.markov (X.coarseLaw v) f r hnonneg hr
+  have hsubset : (X.coarseLaw v).pr (fun c => r < f c) ≤
+      (X.coarseLaw v).pr (fun c => r ≤ f c) := by
+    apply pr_mono5
+    intro c hc
+    exact le_of_lt hc
+  have hexp : Real.exp (-u / 2) / Real.exp (-u / 4) = Real.exp (-u / 4) := by
+    rw [← Real.exp_sub]
+    congr 1
+    ring
+  calc
+    (X.coarseLaw v).pr (fun c => Real.exp (-u / 4) < f c) ≤
+        (X.coarseLaw v).pr (fun c => r ≤ f c) := by
+          simpa [r] using hsubset
+    _ ≤ (X.coarseLaw v).expect f / r := hMarkov
+    _ ≤ Real.exp (-u / 2) / r := div_le_div_of_nonneg_right hmean hr.le
+    _ = Real.exp (-u / 4) := by
+      dsimp [r]
+      exact hexp
+    _ = Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4) := by rfl
+
+theorem stage2AlarmPr_bound5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
+    (hraw : Stage2RawBounds5 X v) (i : Stage2AlarmIndex5 X) :
+    (X.coarseLaw v).pr (stage2AlarmBad5 X v i) ≤ stage2AlarmBudget5 X i := by
+  classical
+  cases i with
+  | inl a =>
+      change (X.coarseLaw v).pr
+          (fun c => X.step1Fail (v, c) a.2.1 a.1.1.1.1 (X.p.typeSegs n a.1.1)) ≤
+        Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n a.1.1)) / 2)
+      exact hraw.step1 a.1.1 a.1.2 a.2.1 a.2.2
+  | inr rest =>
+    cases rest with
+    | inl a =>
+        change (X.coarseLaw v).pr (fun c => X.capFail (v, c) a.1) ≤
+          Real.exp (-(X.p.delta * (X.p.q0 * X.p.uSeg n (a.1.level + 1))) / 2)
+        exact hraw.cap a.1 a.2
+    | inr tail =>
+      cases tail with
+      | inl a =>
+          change (X.coarseLaw v).pr (fun c =>
+            Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n a.1)) / 4) <
+              (X.hiddenLaw (v, c)).pr (fun U => X.step2Fail ((v, c), U) a.1)) ≤
+            ((a.1.2.1.card : ℝ) + 1) *
+              Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n a.1)) / 4)
+          exact step2AlarmProb_bound5 X v a.1 (hraw.step2 a.1 a.2)
+      | inr a =>
+          change (X.coarseLaw v).pr (fun c =>
+            Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4) <
+              (X.hiddenLaw (v, c)).pr
+                (fun U => X.optFail ((v, c), U) a.1.1 a.1.2)) ≤
+            Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4)
+          exact optAlarmProb_bound5 X v a.1.1 a.1.2
+            (hraw.optional a.1.1 a.1.2 a.2.2)
 
 theorem stage2AlarmBad_depends_bins5 (X : Setup5 γ K' χ n N E G) (v : Fin N)
     (i : Stage2AlarmIndex5 X) :

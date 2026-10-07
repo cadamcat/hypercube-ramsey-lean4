@@ -1,5 +1,7 @@
 import HypercubeRamsey.S09.Map.Device
 import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
+import HypercubeRamsey.S07.TagStage
+import HypercubeRamsey.S07.TagStage
 
 /-!
 Lane-local helpers for the Section 9 height induction.  In particular, these isolate the deterministic facts
@@ -73,6 +75,57 @@ private theorem finProb_prod_pr_and {α β : Type*} [Fintype α] [Fintype β]
       symm
       exact Finset.sum_mul Finset.univ (fun a => if A a then μ.w a else 0)
         (∑ b, if B b then ν.w b else 0)
+
+private noncomputable def heightPairLaw9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ} :
+    FinProb (Pos9 P hc n → Bool × Bool) :=
+  FinProb.pi (fun _ : Pos9 P hc n =>
+    FinProb.prod (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) /
+      (residualBall9 P n : ℝ)))
+      (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10))))
+
+private def heightFieldsEquiv9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ} :
+    ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) ≃
+      (Pos9 P hc n → Bool × Bool) where
+  toFun ω c := (ω.1 c, ω.2 c)
+  invFun ω := (fun c => (ω c).1, fun c => (ω c).2)
+  left_inv ω := by cases ω; rfl
+  right_inv ω := by
+    funext c
+    change ((ω c).1, (ω c).2) = ω c
+    rcases ω c with ⟨a, b⟩
+    rfl
+
+private theorem heightPairLaw9_weight {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+    (heightLaw9 P hc n).w ω =
+      (heightPairLaw9 (P := P) (hc := hc) (n := n)).w (heightFieldsEquiv9 ω) := by
+  change
+    (∏ c : Pos9 P hc n,
+      (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ))).w (ω.1 c)) *
+      ∏ c : Pos9 P hc n, (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10))).w (ω.2 c) =
+    ∏ c : Pos9 P hc n,
+      (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ))).w (ω.1 c) *
+        (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10))).w (ω.2 c)
+  exact Finset.prod_mul_distrib.symm
+
+private theorem heightLaw9_pr_eq_heightPairLaw9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (E : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop) :
+    (heightLaw9 P hc n).pr E =
+      (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr
+        (fun ω => E ((heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω)) := by
+  classical
+  unfold FinProb.pr
+  calc
+    (∑ ω, if E ω then (heightLaw9 P hc n).w ω else 0) =
+        ∑ ω, if E ω then
+          (heightPairLaw9 (P := P) (hc := hc) (n := n)).w (heightFieldsEquiv9 ω) else 0 := by
+            apply Finset.sum_congr rfl
+            intro ω hω
+            rw [heightPairLaw9_weight]
+    _ = ∑ ω, if E ((heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω) then
+          (heightPairLaw9 (P := P) (hc := hc) (n := n)).w ω else 0 := by
+            exact Fintype.sum_equiv (heightFieldsEquiv9 (P := P) (hc := hc) (n := n))
+              _ _ (by intro ω; rw [Equiv.symm_apply_apply])
 
 private theorem finProb_pr_mono {α : Type*} [Fintype α] (μ : FinProb α)
     {A B : α → Prop} (hAB : ∀ x, A x → B x) : μ.pr A ≤ μ.pr B := by

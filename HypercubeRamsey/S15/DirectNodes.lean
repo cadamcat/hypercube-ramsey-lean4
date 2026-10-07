@@ -1,5 +1,6 @@
 import HypercubeRamsey.S15.Defs
 import HypercubeRamsey.S15.DirectNodes_q_s15_direct
+import HypercubeRamsey.S15.DirectNodes_sol_s15_bulk
 
 set_option maxHeartbeats 1000000
 
@@ -76,13 +77,30 @@ theorem high_direct_crossing_filters (κ : CConsts) (hκ : κ.Admissible) (T : S
 theorem high_direct_bulk_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hCross : DirectCrossingClaim κ T) :
     DirectBulkClaim κ T := by
-  sorry
+  exact Lane_sol_s15_bulk.bulk_lower_tail κ hκ T hDeep
 
 /-- L15.1c: assemble the crossing and bulk estimates into the independent row-mass bound. -/
 theorem high_direct_mass_estimate (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hCross : DirectCrossingClaim κ T)
     (hBulk : DirectBulkClaim κ T) : DirectMassClaim κ T := by
-  sorry
+  rcases hBulk with ⟨Cbulk, hCbulk, hBulk⟩
+  filter_upwards [hBulk, Lane_sol_s15_bulk.bulk_error_half κ hκ T Cbulk hCbulk,
+    Lane_sol_s15_bulk.sharp_direct_crossing_bound κ hκ T hDeep,
+    Lane_q_s15_direct.highDirect_cross_threshold_small hκ T] with k hkBulk hkSlack hkCross hkThreshold
+  intro PT hPT hmode a
+  let i := patchAt PT hPT a.1
+  let err : ℝ := (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) / 2
+  have hcross := hkCross PT hPT hmode a
+  have hbulk : (directRawLaw PT hPT).pr (fun ys =>
+      9 / 10 ≤ directCrossingMass PT hPT ys a ∧ directBulkMass PT hPT ys a < 3 / 4) ≤ err :=
+    (hkBulk PT hPT hmode a).trans (hkSlack PT hPT hmode i)
+  have hmass := Lane_q_s15_direct.row_failure_probability_le (directRawLaw PT hPT)
+    (fun ys => directCrossingMass PT hPT ys a)
+    (fun ys => directBulkMass PT hPT ys a)
+    (fun ys => directRowMass PT hPT ys a)
+    (fun _ => Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1) err err
+    (fun _ => rfl) (fun _ => hkThreshold PT hPT hmode i) hcross hbulk
+  simpa [err, add_halves] using hmass
 
 /-- L15.1d: apply the clock sampler to the row-failure predicates. -/
 theorem high_direct_clock_injection (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

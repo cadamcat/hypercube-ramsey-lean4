@@ -1833,6 +1833,130 @@ theorem direct_raw_product_rows_expect {κ : CConsts} {T : Stage} {k m : ℕ}
       rw [← FinLaw.E, hproduct]
       ring
 
+theorem highDirect_envelope_card_lower {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hmode : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m) :
+    ((PT.tiling.P i).M : ℝ) / 2 ≤ (PT.envelope i).card := by
+  classical
+  have hnotCluster : ¬ PT.tiling.mode.isCluster := by
+    simp [hmode, Mode.isCluster]
+  have hcardone := hPT.direct_single_corner hnotCluster
+  obtain ⟨v, hv⟩ := Finset.card_eq_one.mp hcardone
+  have hvActive : v ∈ PT.activeVertices := by rw [hv]; simp
+  have henv : PT.envelope i = PT.mesh.corner v i := by
+    rw [hPT.envelope_eq i, hv]
+    simp
+  rw [henv]
+  exact (hPT.corner_clean i v hvActive).card_lower
+
+theorem highDirect_scaled_baseweight_le_two {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hmode : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m)
+    (a : S15.EvenPosition T k) (ha : S15.patchAt PT hPT a.1 = i)
+    (x : Fin (T.S.N k)) :
+    ((PT.tiling.P i).M : ℝ) * S15.directBaseWeight PT hPT a x ≤ 2 := by
+  classical
+  have hMpos : 0 < ((PT.tiling.P i).M : ℝ) := by
+    have hcard : 0 < ((PT.tiling.P i).X.card : ℝ) :=
+      Nat.cast_pos.mpr (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1)
+    rw [(PT.tiling.P i).cardX] at hcard
+    exact hcard
+  have hEnv := highDirect_envelope_card_lower PT hPT hmode i
+  have hcardPos : 0 < ((PT.envelope i).card : ℝ) := by
+    exact lt_of_lt_of_le (div_pos hMpos (by norm_num)) hEnv
+  have hratio : ((PT.tiling.P i).M : ℝ) / (PT.envelope i).card ≤ 2 := by
+    apply (div_le_iff₀ hcardPos).2
+    have hEnv' : ((PT.tiling.P i).M : ℝ) / 2 ≤ (PT.envelope i).card := by exact_mod_cast hEnv
+    nlinarith
+  by_cases hx : x ∈ PT.envelope i
+  · simpa [S15.directBaseWeight, ha, hx, div_eq_mul_inv] using hratio
+  · simp [S15.directBaseWeight, ha, hx]
+
+theorem star_card_eq_dimension {T : Stage} {k : ℕ}
+    (a : S15.EvenPosition T k) : (star a).card = T.S.n k := by
+  classical
+  let f : Fin (T.S.n k) → S15.OddPosition T k := fun j =>
+    ⟨cubeFlip a.1 j, by
+      intro hEven
+      exact ((cubeFlip_parity a.1 j).mp hEven) a.2⟩
+  have hf : Function.Injective f := by
+    intro i j hij
+    have hval : cubeFlip a.1 i = cubeFlip a.1 j := congrArg Subtype.val hij
+    by_contra hne
+    have hcoord := congrFun hval i
+    have hleft : cubeFlip a.1 i i = !a.1 i := by simp [cubeFlip]
+    have hright : cubeFlip a.1 j i = a.1 i := by simp [cubeFlip, hne]
+    rw [hleft, hright] at hcoord
+    cases hbit : a.1 i <;> simp [hbit] at hcoord
+  have himage : (Finset.univ.image f).card = T.S.n k := by
+    rw [Finset.card_image_of_injective _ hf]
+    simp
+  have hsub : Finset.univ.image f ⊆ star a := by
+    intro b hb
+    rcases Finset.mem_image.mp hb with ⟨j, hj, rfl⟩
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, cubeFlip_adj a.1 j⟩
+  have hle : T.S.n k ≤ (star a).card := by
+    have h := Finset.card_le_card hsub
+    omega
+  exact Nat.le_antisymm (star_card_le a) hle
+
+theorem evenPatchPositions_card_eq {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (i : Fin PT.tiling.m)
+    (hle : (PT.tiling.P i).ℓ < T.S.n k) :
+    (S15.evenPatchPositions PT.tiling i).card =
+      2 ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) := by
+  classical
+  let ell := (PT.tiling.P i).ℓ
+  let n := T.S.n k
+  let w := PT.tiling.w i
+  let S : Finset (Fin n) := Finset.Iio ⟨ell, hle⟩
+  let z : ∀ j : S, Bool := fun j => w j.1
+  have hScard : S.card = ell := by simp [S]
+  have hSlt : S.card < n := by rw [hScard]; exact hle
+  have hAgree (v : CubeVertex n) :
+      (∀ j : S, v j.1 = z j) ↔ v ∈ prefixLeaf ell w := by
+    change (∀ j : S, v j.1 = w j.1) ↔
+      (∀ j : Fin n, j.val < ell → v j = w j)
+    constructor
+    · intro h j hj
+      have hjS : j ∈ S := by
+        exact Finset.mem_Iio.mpr (Fin.lt_iff_val_lt_val.mpr hj)
+      exact h ⟨j, hjS⟩
+    · intro h j
+      have hjIio : j.1 ∈ Finset.Iio (⟨ell, hle⟩ : Fin n) := by
+        simpa [S] using j.2
+      have hjlt : (j.1).val < ell := by
+        have hlt := Fin.lt_iff_val_lt_val.mp (Finset.mem_Iio.mp hjIio)
+        simpa using hlt
+      exact h j.1 hjlt
+  let Eset : Finset (CubeVertex n) := Finset.univ.filter fun v =>
+    v ∈ prefixLeaf ell w ∧ IsEvenRole v
+  have hset : (evenRoleSet n).filter (fun v => ∀ j : S, v j.1 = z j) = Eset := by
+    ext v
+    simp only [Eset, evenRoleSet, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨hEven, hEq⟩
+      exact ⟨(hAgree v).mp hEq, hEven⟩
+    · rintro ⟨hPrefix, hEven⟩
+      exact ⟨hEven, (hAgree v).mpr hPrefix⟩
+  have hUniform := parity_projection_uniform S hSlt z
+  have hEcard :
+      (S15.evenPatchPositions PT.tiling i).card = Eset.card := by
+    apply Finset.card_bij (fun a _ => a.1)
+    · intro a ha
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+        ⟨(Finset.mem_filter.mp ha).2, a.2⟩⟩
+    · intro a ha b hb hab
+      exact Subtype.ext hab
+    · intro v hv
+      rcases (Finset.mem_filter.mp hv).2 with ⟨hleaf, hEven⟩
+      refine ⟨⟨v, hEven⟩, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hleaf⟩, ?_⟩
+      rfl
+  have hcardTarget : Eset.card = 2 ^ (n - ell - 1) := by
+    rw [← hset]
+    simpa [n, ell, hScard] using hUniform
+  rw [hEcard, hcardTarget]
+
 theorem direct_sampler_separated_product_bound {κ : CConsts} {T : Stage} {k m : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (J : S15.DirectSampler PT hPT) (rows : Fin m → S15.EvenPosition T k)

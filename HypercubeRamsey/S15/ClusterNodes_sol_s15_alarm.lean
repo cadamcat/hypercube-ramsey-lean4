@@ -1,4 +1,5 @@
 import HypercubeRamsey.S15.Capacity
+import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
 import HypercubeRamsey.S12.Exceptional
 import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.S15.DirectNodes_q_s15_direct
@@ -1337,5 +1338,115 @@ theorem cluster_bulk_slices_injective
     cases ha : a.1 j <;> simp [flipPos, Function.update_of_ne h, ha] at he
   apply Subtype.ext
   rw [hjflip, hjflip', hjj]
+
+
+/-- All primitive records in one raw slice. -/
+noncomputable def raw_slice_scope (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) (s : ClusterSlice PT) :
+    Finset (ClusterRecordIndex PT hPT hm) := Finset.univ.filter fun r => r.1 = s
+
+/-- The conditional degree reads only the primitive records of the odd position's slice. -/
+theorem degree_depends_on_raw_slice (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (b : OddPosition T k) (x : Fin (T.S.N k)) :
+    ClusterHistoryDependsOn (fun W => clusterDegree PT hPT hm W b x)
+      (raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1)) := by
+  intro W W' h
+  have he : historyOnSlice W (clusterSliceAt PT hPT b.1) =
+      historyOnSlice W' (clusterSliceAt PT hPT b.1) := by
+    funext r
+    exact h ⟨clusterSliceAt PT hPT b.1, r⟩ (Finset.mem_filter.mpr ⟨Finset.mem_univ _, rfl⟩)
+  unfold clusterDegree clusterMarginal
+  dsimp only
+  rw [he]
+
+/-- Finite index set of bulk neighbours of one even row. -/
+abbrev BulkIndex (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : EvenPosition T k) :=
+  {b : OddPosition T k // b ∈ clusterBulkNeighbours PT hPT a}
+
+noncomputable instance bulk_index_fintype (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : EvenPosition T k) : Fintype (BulkIndex PT hPT a) :=
+  Fintype.subtype (clusterBulkNeighbours PT hPT a) (by intro b; rfl)
+
+/-- Every primitive coordinate is consulted by at most one bulk degree. -/
+theorem bulk_raw_scopes_degree_one (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : EvenPosition T k) (r : ClusterRecordIndex PT hPT hm) :
+    (Finset.univ.filter fun b : BulkIndex PT hPT a =>
+      r ∈ raw_slice_scope PT hPT hm (clusterSliceAt PT hPT b.1.1)).card ≤ 1 := by
+  apply Finset.card_le_one.mpr
+  intro b hb b' hb'
+  have he := (Finset.mem_filter.mp (Finset.mem_filter.mp hb).2).2
+  have he' := (Finset.mem_filter.mp (Finset.mem_filter.mp hb').2).2
+  apply Subtype.ext
+  exact cluster_bulk_slices_injective PT hPT a b.2 b'.2 (he.symm.trans he')
+
+
+private def as_probability {A : Type*} [Fintype A] (P : FinLaw A) : FinProb A where
+  w := P.w
+  nonneg := P.nonneg
+  sum_eq_one := P.sum_one
+
+private theorem finite_map_expect {A B : Type*} [Fintype A] [Fintype B] [DecidableEq B]
+    (P : FinLaw A) (f : A → B) (g : B → ℝ) :
+    (FinLaw.map P f).E g = P.E (fun a => g (f a)) := by
+  change (FinProb.map (as_probability P) f).expect g =
+    (as_probability P).expect (fun a => g (f a))
+  exact FinProb.map_expect (as_probability P) f g
+
+/-- Expectations of one slice's records have their original solver record law. -/
+theorem raw_slice_expect (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (s : ClusterSlice PT)
+    (F : (∀ r, (clusterSolver PT hPT hm s.1).Val r) → ℝ) :
+    (clusterHistoryLaw PT hPT hm).E (fun W => F (historyOnSlice W s)) =
+      ((clusterSolver PT hPT hm s.1).recLaw PT.parameter).E F := by
+  let e := HypercubeRamsey.Lane_q_s15_c1.clusterHistoryCurryEquiv PT hPT hm
+  calc
+    (clusterHistoryLaw PT hPT hm).E (fun W => F (historyOnSlice W s)) =
+        (FinLaw.map (clusterHistoryLaw PT hPT hm) e).E (fun H => F (H s)) :=
+      (finite_map_expect (clusterHistoryLaw PT hPT hm) e (fun H => F (H s))).symm
+    _ = (HypercubeRamsey.Lane_q_s15_c1.clusterSlicedHistoryLaw PT hPT hm).E (fun H => F (H s)) := by
+      rw [HypercubeRamsey.Lane_q_s15_c1.clusterHistoryLaw_map_curry]
+    _ = ((clusterSolver PT hPT hm s.1).recLaw PT.parameter).E F := by
+      change (FinLaw.pi (fun s' : ClusterSlice PT =>
+        (clusterSolver PT hPT hm s'.1).recLaw PT.parameter)).E (fun H => F (H s)) = _
+      exact HypercubeRamsey.Lane_q_s15_c1.pi_E_coordinate
+        (fun s' : ClusterSlice PT => (clusterSolver PT hPT hm s'.1).recLaw PT.parameter) s F
+
+/-- High profiling identifies each raw conditional degree mean with the nominal profile degree. -/
+theorem raw_degree_mean (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (b : OddPosition T k) (x : Fin (T.S.N k)) :
+    (clusterHistoryLaw PT hPT hm).E (fun W => clusterDegree PT hPT hm W b x) =
+      deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT b.1)).w x := by
+  let s := clusterSliceAt PT hPT b.1
+  let S := clusterSolver PT hPT hm s.1
+  let g := S.groupOf (solverWordAt PT hPT hm b.1)
+  have hS : PT.solver s.1 = some S :=
+    Classical.choose_spec (hPT.cluster_solver (highMode_isCluster PT hm) s.1)
+  have hmean (y : Fin (T.S.N k)) :
+      (S.recLaw PT.parameter).E (fun W => S.oddMarginal g W y) = (PT.π s.1).w y := by
+    rw [hPT.high_profile hm s.1]
+    exact (hPT.raw_profile (highMode_isCluster PT hm) s.1 S hS g y).symm
+  change (clusterHistoryLaw PT hPT hm).E (fun W =>
+    deg (T.S.E k) PT.tiling.c (S.oddMarginal g (historyOnSlice W s)) x) = _
+  have hslice := raw_slice_expect PT hPT hm s
+    (fun W => deg (T.S.E k) PT.tiling.c (S.oddMarginal g W) x)
+  rw [hslice]
+  calc
+    (S.recLaw PT.parameter).E (fun W => deg (T.S.E k) PT.tiling.c (S.oddMarginal g W) x) =
+        ∑ y, (S.recLaw PT.parameter).E (fun W => S.oddMarginal g W y) * hit (T.S.E k) PT.tiling.c x y := by
+      unfold FinLaw.E deg
+      simp_rw [Finset.mul_sum]
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro y _
+      rw [Finset.sum_mul]
+      apply Finset.sum_congr rfl
+      intro W _
+      ring
+    _ = ∑ y, (PT.π s.1).w y * hit (T.S.E k) PT.tiling.c x y := by simp_rw [hmean]
+    _ = _ := rfl
 
 end HypercubeRamsey.Lane_sol_s15_alarm

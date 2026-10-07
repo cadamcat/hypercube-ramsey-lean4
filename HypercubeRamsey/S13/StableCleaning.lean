@@ -125,6 +125,9 @@ structure OtherPatchData {κ : CConsts} {T : Stage} {k : ℕ}
   nonempty : cleaned.Nonempty
   /-- The cleaning loses less than half the patch (sections/13, line 232; shared `CleanProps.card_lower`). -/
   card_lower : (𝒯.P i).M / 2 ≤ (cleaned.card : ℝ)
+  /-- The total waste is less than the fraction `κ.a` of the original patch
+  (sections/13, lines 226–232 and 270–278; shared `CleanProps.card_lower_waste`). -/
+  card_lower_waste : (1 - κ.a) * ((𝒯.P i).M : ℝ) ≤ (cleaned.card : ℝ)
   degOther : ∀ π', NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
     ∀ j, j ≠ i → ∀ x ∈ cleaned,
       |deg (T.S.E k) 𝒯.c (π' j).w x - 1 / 2| ≤ 3 * bstar T k
@@ -250,7 +253,8 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
   · have hself : NearInput π π ((T.S.n k : ℝ) ^ (-3 : ℝ)) := by
       intro j
       simp
-    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, O.card_lower, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, O.card_lower,
+      O.card_lower_waste, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
       exact D.own x (O.subset.trans C.sub hx)
     · intro hClique
@@ -262,7 +266,8 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
     · intro hCluster
       exact hCodegree hCluster
   · intro hCluster π' hNear
-    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, O.card_lower, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, O.card_lower,
+      O.card_lower_waste, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
       exact D.own_near hCluster π' hNear x (O.subset.trans C.sub hx)
     · intro hClique
@@ -1989,7 +1994,7 @@ theorem own_patch_clique_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       exact sorry
 
 /-- L13.4d (sections/13, lines 267–276): clean other-patch outliers and enforce relaxed row
-tails on the fixed original first support. -/
+tails on the fixed original first support, retaining at least `(1 - κ.a) * M` labels. -/
 theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0) (hDeep : OtherPatchDiscrepancyInput κ T) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),

@@ -3314,4 +3314,259 @@ private theorem independentTargetStars9 {P : Params9} {n k N : ℕ} {M : TagMix 
   · intro i hi
     exact hcancel ω (a i) x
 
+private theorem hitSet9_eq_of_anchorAgree {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (ids : Finset I.ID)
+    (hanc : ∀ c ∈ ids, anc9 ω c = anc9 ω' c) :
+    hitSet9 E G ω ids = hitSet9 E G ω' ids := by
+  classical
+  ext y
+  simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro hy d hd
+    have hval := hy d hd
+    rw [hanc d hd] at hval
+    exact hval
+  · intro hy d hd
+    have hval := hy d hd
+    rw [← hanc d hd] at hval
+    exact hval
+
+private theorem maskedLaw9_eq_of_maskAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (ω ω' : Outcome9 I N)
+    (b : OddSites9 n) (hmask : msk9 ω b = msk9 ω' b) :
+    maskedLaw9 S ω b = maskedLaw9 S ω' b := by
+  unfold maskedLaw9
+  rw [hmask]
+
+private theorem rowLaw9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (b : OddSites9 n)
+    (hanc : ∀ c ∈ I.seen b.1, anc9 ω c = anc9 ω' c)
+    (hmask : msk9 ω b = msk9 ω' b) : rowLaw9 S E G ω b = rowLaw9 S E G ω' b := by
+  unfold rowLaw9
+  rw [maskedLaw9_eq_of_maskAgree S ω ω' b hmask]
+  rw [hitSet9_eq_of_anchorAgree E G ω ω' (I.seen b.1) hanc]
+
+private theorem delLaw9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (b : OddSites9 n) (t : I.ID)
+    (hanc : ∀ c ∈ I.seen b.1, anc9 ω c = anc9 ω' c)
+    (hmask : msk9 ω b = msk9 ω' b) :
+    delLaw9 S E G ω b t = delLaw9 S E G ω' b t := by
+  unfold delLaw9
+  rw [maskedLaw9_eq_of_maskAgree S ω ω' b hmask]
+  apply congrArg (restrictOr9 (maskedLaw9 S ω' b))
+  apply hitSet9_eq_of_anchorAgree E G ω ω' ((I.seen b.1).erase t)
+  intro c hc
+  exact hanc c (Finset.mem_of_mem_erase hc)
+
+private theorem prefixLaw9_eq_of_orderAgree {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (base base' : Law N) (order : List I.ID) (k : ℕ)
+    (hbase : base = base') (hanc : ∀ c ∈ order, anc9 ω c = anc9 ω' c) :
+    prefixLaw9 E G ω base order k = prefixLaw9 E G ω' base' order k := by
+  unfold prefixLaw9
+  rw [hbase]
+  congr 1
+  apply hitSet9_eq_of_anchorAgree E G ω ω' (order.take k).toFinset
+  intro c hc
+  apply hanc c
+  exact List.Sublist.subset (List.take_sublist k order) (List.mem_toFinset.mp hc)
+
+private theorem orderRegular9_eq_of_orderAgree {P : Params9} {n N : ℕ}
+    {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (base base' : Law N) (order : List I.ID)
+    (hbase : base = base') (hanc : ∀ c ∈ order, anc9 ω c = anc9 ω' c) :
+    orderRegular9 E G ω base order ↔ orderRegular9 E G ω' base' order := by
+  have hprefix (k : ℕ) :
+      prefixLaw9 E G ω base order k = prefixLaw9 E G ω' base' order k :=
+    prefixLaw9_eq_of_orderAgree E G ω ω' base base' order k hbase hanc
+  constructor
+  · intro h k d hk hprev
+    have hd : d ∈ order := List.mem_of_getElem? hk
+    have hprev' : ∀ j d', j < k → order[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω d') (prefixLaw9 E G ω base order j) := by
+      intro j d' hj hj'
+      have hd' : d' ∈ order := List.mem_of_getElem? hj'
+      simpa [hanc d' hd', hprefix j] using hprev j d' hj hj'
+    have hval := h k d hk hprev'
+    simpa [hanc d hd, hprefix k] using hval
+  · intro h k d hk hprev
+    have hd : d ∈ order := List.mem_of_getElem? hk
+    have hprev' : ∀ j d', j < k → order[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω' d') (prefixLaw9 E G ω' base' order j) := by
+      intro j d' hj hj'
+      have hd' : d' ∈ order := List.mem_of_getElem? hj'
+      simpa [hanc d' hd', hprefix j] using hprev j d' hj hj'
+    have hval := h k d hk hprev'
+    simpa [hanc d hd, hprefix k] using hval
+
+private theorem targetFrac9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n) (b : StarOdd9 v)
+    (hanc : ∀ c ∈ I.seen b.1.1, anc9 ω c = anc9 ω' c)
+    (hmask : msk9 ω b.1 = msk9 ω' b.1) :
+    targetFrac9 S E G ω v b.1 = targetFrac9 S E G ω' v b.1 := by
+  have hcenter := hanc (I.center v.1) (center_mem_seen9 b)
+  have hdel := delLaw9_eq_of_localAgree S E G ω ω' b.1 (I.center v.1) hanc hmask
+  unfold targetFrac9
+  rw [hcenter, hdel]
+
+private theorem starValid9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ c ∈ I.seen b.1.1, anc9 ω c = anc9 ω' c)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1) :
+    starValid9 S E G ω v = starValid9 S E G ω' v := by
+  have hreg : starRegular9 S E G ω v ↔ starRegular9 S E G ω' v := by
+    unfold starRegular9
+    constructor
+    · intro h b hb
+      let sb : StarOdd9 v := ⟨b, hb⟩
+      have horder : ∀ d ∈ fullOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (fullOrder9_mem_seen hb hd)
+      have hcore : ∀ d ∈ coreOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (coreOrder9_mem_seen hd)
+      rcases h b hb with ⟨h₁, h₂, h₃⟩
+      refine ⟨?_, ?_, ?_⟩
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (maskedLaw9 S ω b) (maskedLaw9 S ω' b) (fullOrder9 I v b)
+          (maskedLaw9_eq_of_maskAgree S ω ω' b (hmask sb)) horder).mp h₁
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (fullOrder9 I v b) rfl horder).mp h₂
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (coreOrder9 I v b) rfl hcore).mp h₃
+    · intro h b hb
+      let sb : StarOdd9 v := ⟨b, hb⟩
+      have horder : ∀ d ∈ fullOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (fullOrder9_mem_seen hb hd)
+      have hcore : ∀ d ∈ coreOrder9 I v b, anc9 ω d = anc9 ω' d := by
+        intro d hd
+        exact hanc sb d (coreOrder9_mem_seen hd)
+      rcases h b hb with ⟨h₁, h₂, h₃⟩
+      refine ⟨?_, ?_, ?_⟩
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (maskedLaw9 S ω b) (maskedLaw9 S ω' b) (fullOrder9 I v b)
+          (maskedLaw9_eq_of_maskAgree S ω ω' b (hmask sb)) horder).mpr h₁
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (fullOrder9 I v b) rfl horder).mpr h₂
+      · exact (orderRegular9_eq_of_orderAgree E G ω ω'
+          (siteSecond9 S b.1) (siteSecond9 S b.1) (coreOrder9 I v b) rfl hcore).mpr h₃
+  have hgain : starGain9 S E G ω v = starGain9 S E G ω' v := by
+    unfold starGain9
+    apply Finset.sum_congr rfl
+    intro b hb
+    exact congrArg Real.log (targetFrac9_eq_of_localAgree S E G ω ω' v b (hanc b) (hmask b))
+  unfold starValid9
+  exact propext (and_congr hreg (by rw [hgain]))
+
+private theorem starLik9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n) (y : Fin N)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) :
+    starLik9 S E G ω v y ys = starLik9 S E G ω' v y ys := by
+  have hanc' : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1,
+      anc9 (updAnc9 ω (I.center v.1) y) d =
+        anc9 (updAnc9 ω' (I.center v.1) y) d := by
+    intro b d hd
+    by_cases hdc : d = I.center v.1
+    · subst d
+      simp [anc9, updAnc9, Function.update]
+    · rw [anc9_update_ne ω (I.center v.1) d y hdc,
+        anc9_update_ne ω' (I.center v.1) d y hdc]
+      exact hanc b d hd
+  have hmask' : ∀ b : StarOdd9 v,
+      msk9 (updAnc9 ω (I.center v.1) y) b.1 =
+        msk9 (updAnc9 ω' (I.center v.1) y) b.1 := by
+    intro b
+    have h₁ : msk9 (updAnc9 ω (I.center v.1) y) b.1 = msk9 ω b.1 := by
+      unfold msk9 updAnc9
+      have hne : (Sum.inr b.1 : I.ID ⊕ OddSites9 n) ≠ Sum.inl (I.center v.1) := by simp
+      rw [Function.update_of_ne hne]
+    have h₂ : msk9 (updAnc9 ω' (I.center v.1) y) b.1 = msk9 ω' b.1 := by
+      unfold msk9 updAnc9
+      have hne : (Sum.inr b.1 : I.ID ⊕ OddSites9 n) ≠ Sum.inl (I.center v.1) := by simp
+      rw [Function.update_of_ne hne]
+    exact h₁.trans ((hmask b).trans h₂.symm)
+  have hvalid : starValid9 S E G (updAnc9 ω (I.center v.1) y) v =
+      starValid9 S E G (updAnc9 ω' (I.center v.1) y) v :=
+    starValid9_eq_of_localAgree S E G (updAnc9 ω (I.center v.1) y)
+      (updAnc9 ω' (I.center v.1) y) v hanc' hmask'
+  unfold starLik9
+  rw [hvalid]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact congrArg (fun μ : Law N => μ.w (ys b))
+    (rowLaw9_eq_of_localAgree S E G (updAnc9 ω (I.center v.1) y)
+      (updAnc9 ω' (I.center v.1) y) b.1 (hanc' b) (hmask' b))
+
+private theorem starMarg9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) :
+    starMarg9 S E G ω v ys = starMarg9 S E G ω' v ys := by
+  unfold starMarg9
+  apply Finset.sum_congr rfl
+  intro y hy
+  exact congrArg (fun z : ℝ => (siteFirst9 S v.1).w y * z)
+    (starLik9_eq_of_localAgree S E G ω ω' v y hanc hmask ys)
+
+private theorem starRef9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) :
+    starRef9 S E G ω v ys = starRef9 S E G ω' v ys := by
+  unfold starRef9
+  apply Finset.prod_congr rfl
+  intro b hb
+  exact congrArg (fun μ : Law N => μ.w (ys b))
+    (delLaw9_eq_of_localAgree S E G ω ω' b.1 (I.center v.1) (hanc b) (hmask b))
+
+private theorem predFail9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) : predFail9 S E G ω v ys = predFail9 S E G ω' v ys := by
+  unfold predFail9
+  rw [starMarg9_eq_of_localAgree S E G ω ω' v hanc hmask ys,
+    starRef9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
+
+private theorem evenRowAt9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n)
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1)
+    (ys : StarOdd9 v → Fin N) (y : Fin N) :
+    evenRowAt9 S E G ω v ys y = evenRowAt9 S E G ω' v ys y := by
+  unfold evenRowAt9
+  rw [starLik9_eq_of_localAgree S E G ω ω' v y hanc hmask ys,
+    starMarg9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
+
+private theorem evenStar9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω ω' : Outcome9 I N) (v : EvenSites9 n) (x : Fin N)
+    (hcenter : anc9 ω (I.center v.1) = anc9 ω' (I.center v.1))
+    (hanc : ∀ b : StarOdd9 v, ∀ d ∈ I.seen b.1.1, anc9 ω d = anc9 ω' d)
+    (hmask : ∀ b : StarOdd9 v, msk9 ω b.1 = msk9 ω' b.1) :
+    evenStar9 S E G ω v x = evenStar9 S E G ω' v x := by
+  unfold evenStar9
+  apply Finset.sum_congr rfl
+  intro ys hys
+  rw [← hcenter]
+  rw [starLik9_eq_of_localAgree S E G ω ω' v (anc9 ω (I.center v.1)) hanc hmask ys]
+  rw [predFail9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
+  rw [evenRowAt9_eq_of_localAgree S E G ω ω' v hanc hmask ys x]
+
 end HypercubeRamsey.Lane_q_s09_assign2

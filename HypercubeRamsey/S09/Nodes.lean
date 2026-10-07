@@ -72,7 +72,42 @@ theorem p92_map2 (P : Params9) (hP : P.Valid) {n r : ℕ}
             ∀ id, id ∉ C →
               ((Finset.univ.filter (fun b : CubeVertex n =>
                 ¬ IsEvenRole b ∧ (cube n).Adj v b ∧ id ∈ seenIDs9 c b)).card : ℕ) ≤ r + 3) := by
-  sorry
+  classical
+  let exp := (1 : ℝ) - (P.σ : ℝ) + W.ε
+  let T : ℕ := Fintype.card (CubeVertex n) + ⌈(n : ℝ) ^ exp⌉₊
+  have hT : (n : ℝ) ^ exp ≤ T := by
+    dsimp [T]
+    calc
+      (n : ℝ) ^ exp ≤ (⌈(n : ℝ) ^ exp⌉₊ : ℕ) := Nat.le_ceil _
+      _ ≤ (Fintype.card (CubeVertex n) + ⌈(n : ℝ) ^ exp⌉₊ : ℕ) := by
+        exact_mod_cast (Nat.le_add_left ⌈(n : ℝ) ^ exp⌉₊
+          (Fintype.card (CubeVertex n)))
+  have hselect (v : CubeVertex n) :
+      ∃ id, id ∈ W.active ∧ id.slice = specialWord9 W.specialBits_le v ∧
+        residualDistance9 W.specialBits id.location v ≤ r ∧ id.level = W.height v := by
+    simpa [hr] using (W.height_good v).1
+  let c : CubeVertex n → CenterID9 W.specialBits n W.levels :=
+    fun v => Classical.choose (hselect v)
+  have hc (v : CubeVertex n) :
+      c v ∈ W.active ∧ (c v).slice = specialWord9 W.specialBits_le v ∧
+        residualDistance9 W.specialBits (c v).location v ≤ r ∧
+        (c v).level = W.height v :=
+    Classical.choose_spec (hselect v)
+  refine ⟨T, hT, c, ?_, ?_, ?_⟩
+  · intro v
+    rcases hc v with ⟨hactive, hslice, hdist, hlevel⟩
+    exact ⟨hslice, hdist, hlevel, hactive⟩
+  · intro b hb
+    have hseen : (seenIDs9 c b).card ≤ Fintype.card (CubeVertex n) := by
+      unfold seenIDs9
+      calc
+        ((Finset.univ.filter (fun a : CubeVertex n => (cube n).Adj a b)).image c).card ≤
+            (Finset.univ.filter (fun a : CubeVertex n => (cube n).Adj a b)).card :=
+          Finset.card_image_le
+        _ ≤ Fintype.card (CubeVertex n) := Finset.card_le_univ _
+    dsimp [T]
+    omega
+  · sorry
 
 /-- P9.2-tags through P9.2-assignC (09:120–350): the fixed tag, anchor, mask,
 regularity, conditional-mean, erasure, covariance, gain and assignment

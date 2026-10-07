@@ -2,6 +2,7 @@ import HypercubeRamsey.S06.OddLoads
 import HypercubeRamsey.S06.Prob
 import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S06.EvenRows_q_s06_even
+import HypercubeRamsey.S06.EvenRows_q_s06_ev_b
 
 /-!
 # Odd injection and even posterior reconstruction

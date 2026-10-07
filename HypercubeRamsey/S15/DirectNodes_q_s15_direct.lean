@@ -1025,6 +1025,40 @@ theorem directNormalizedRow_supported {κ : CConsts} {T : Stage} {k : ℕ}
   simp only [Finset.mem_sdiff] at hxres
   exact hxres.1
 
+theorem directNormalizedRow_envelope_supported {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k))
+    (hrow : S15.directNormalizedRow PT hPT ys a x ≠ 0) :
+    x ∈ PT.envelope (S15.patchAt PT hPT a.1) := by
+  classical
+  have hmass : 0 < S15.directRowMass PT hPT ys a := by
+    by_contra hnot
+    have hnonpos : ¬0 < S15.directRowMass PT hPT ys a := hnot
+    simp [S15.directNormalizedRow, hnonpos] at hrow
+  have hweight : S15.directRowWeight PT hPT ys a x ≠ 0 := by
+    intro hz
+    apply hrow
+    simp [S15.directNormalizedRow, hmass, hz]
+  have hbase : S15.directBaseWeight PT hPT a x ≠ 0 := by
+    intro hz
+    apply hweight
+    simp [S15.directRowWeight, S15.directPostCrossingWeight, hz]
+  by_contra hnot
+  apply hbase
+  simp [S15.directBaseWeight, hnot]
+
+theorem patchColumnAverage_directRowWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (ys : S15.OddAssignment T k) (x : Fin (T.S.N k)) :
+    0 ≤ S15.patchColumnAverage PT i (S15.directRowWeight PT hPT) ys x := by
+  classical
+  unfold S15.patchColumnAverage
+  apply mul_nonneg
+  · exact inv_nonneg.mpr (Nat.cast_nonneg _)
+  · apply Finset.sum_nonneg
+    intro a ha
+    exact mul_nonneg (Nat.cast_nonneg _) (directRowWeight_nonneg PT hPT ys a x)
+
 theorem directNormalizedRow_common_hit {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
     (a : S15.EvenPosition T k) (x : Fin (T.S.N k))
@@ -1103,6 +1137,126 @@ noncomputable def directHallRows_of_sampler {κ : CConsts} {T : Stage} {k : ℕ}
     have hgate := J.row_mass_gate ys hys a
     linarith
   exact directNormalizedRow_sum PT hPT ys a hmass
+
+theorem direct_column_le_of_patch_averages {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (J : S15.DirectSampler PT hPT) (ys : S15.OddAssignment T k)
+    (hys : J.law.w ys ≠ 0)
+    (havg : ∀ i x, S15.patchColumnAverage PT i
+      (S15.directRowWeight PT hPT) ys x ≤ (T.S.N k : ℝ) / (2 : ℝ) ^ (T.S.n k) / 1600) :
+    ∀ x, ∑ a : S15.EvenPosition T k, S15.directNormalizedRow PT hPT ys a x ≤ 1 := by
+  classical
+  intro x
+  by_cases hex : ∃ i, x ∈ PT.envelope i
+  · obtain ⟨i₀, hxi₀⟩ := hex
+    let E := S15.evenPatchPositions PT.tiling i₀
+    have hrowzero (a : S15.EvenPosition T k) (ha : a ∈ Finset.univ) (hnot : a ∉ E) :
+        S15.directNormalizedRow PT hPT ys a x = 0 := by
+      by_contra hne
+      have henv := Lane_q_s15_direct.directNormalizedRow_envelope_supported PT hPT ys a x hne
+      let j := S15.patchAt PT hPT a.1
+      have hjeq : j ≠ i₀ := by
+        intro hEq
+        apply hnot
+        have hleaf : a.1 ∈ PT.tiling.leaf j :=
+          (Classical.choose_spec (hPT.tiling_valid.prefix_complete a.1)).1
+        have hleaf' : a.1 ∈ PT.tiling.leaf i₀ := by simpa [hEq] using hleaf
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hleaf'⟩
+      have hneq : i₀ ≠ j := fun hEq => hjeq hEq.symm
+      have hdisj := hPT.tiling_valid.patch_X_disjoint i₀ j hneq
+      have hxi : x ∈ (PT.tiling.P i₀).X := hPT.envelope_subset i₀ hxi₀
+      have hxj : x ∈ (PT.tiling.P j).X := by simpa [j] using hPT.envelope_subset j henv
+      exact (Finset.disjoint_left.mp hdisj) hxi hxj
+    have hsumSupport :
+        (∑ a : S15.EvenPosition T k, S15.directNormalizedRow PT hPT ys a x) =
+          ∑ a ∈ E, S15.directNormalizedRow PT hPT ys a x := by
+      symm
+      apply Finset.sum_subset (Finset.subset_univ E)
+      intro a ha hnot
+      simp [hrowzero a (Finset.mem_univ a) hnot]
+    by_cases hEzero : E.card = 0
+    · have hEempty : E = ∅ := Finset.card_eq_zero.mp hEzero
+      rw [hsumSupport]
+      simp [hEempty]
+    · have hEpos : (0 : ℝ) < (E.card : ℝ) := by
+        exact_mod_cast (Nat.pos_of_ne_zero hEzero)
+      have hMpos : (0 : ℝ) < (PT.tiling.P i₀).M := by
+        have hcard : 0 < ((PT.tiling.P i₀).X.card : ℝ) :=
+          Nat.cast_pos.mpr (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i₀).1)
+        rw [(PT.tiling.P i₀).cardX] at hcard
+        exact hcard
+      have hsumRaw :
+          (∑ a ∈ E, S15.directRowWeight PT hPT ys a x) =
+            (E.card : ℝ) / (PT.tiling.P i₀).M *
+              S15.patchColumnAverage PT i₀ (S15.directRowWeight PT hPT) ys x := by
+        let M : ℝ := ((PT.tiling.P i₀).M : ℝ)
+        let Tot : ℝ := ∑ a ∈ E,
+          M * S15.directRowWeight PT hPT ys a x
+        have havgEq :
+            S15.patchColumnAverage PT i₀ (S15.directRowWeight PT hPT) ys x =
+              (E.card : ℝ)⁻¹ * Tot := by
+          simp [S15.patchColumnAverage, E, Tot, M]
+        calc
+          (∑ a ∈ E, S15.directRowWeight PT hPT ys a x) =
+              ∑ a ∈ E, M⁻¹ * (M * S15.directRowWeight PT hPT ys a x) := by
+            apply Finset.sum_congr rfl
+            intro a ha
+            dsimp [M]
+            field_simp [ne_of_gt hMpos]
+          _ = M⁻¹ * Tot := by
+            rw [← Finset.mul_sum]
+          _ = (E.card : ℝ) / (PT.tiling.P i₀).M *
+                S15.patchColumnAverage PT i₀ (S15.directRowWeight PT hPT) ys x := by
+            rw [havgEq]
+            dsimp [M]
+            field_simp [hEpos.ne', hMpos.ne'] <;> ring
+      have hrowFactor (a : S15.EvenPosition T k) (ha : a ∈ E) :
+          S15.directNormalizedRow PT hPT ys a x ≤
+            2 * S15.directRowWeight PT hPT ys a x := by
+        have hmass := J.row_mass_gate ys hys a
+        have hpos : 0 < S15.directRowMass PT hPT ys a := by linarith
+        have hweight0 := directRowWeight_nonneg PT hPT ys a x
+        unfold S15.directNormalizedRow
+        simp [hpos]
+        apply (div_le_iff₀ hpos).2
+        have hmul := mul_le_mul_of_nonneg_left hmass (show (0 : ℝ) ≤
+          2 * S15.directRowWeight PT hPT ys a x by positivity)
+        nlinarith
+      have hratio := evenPatchPositions_ratio_le PT hPT i₀
+      calc
+        (∑ a : S15.EvenPosition T k, S15.directNormalizedRow PT hPT ys a x) =
+            ∑ a ∈ E, S15.directNormalizedRow PT hPT ys a x := hsumSupport
+        _ ≤ 2 * ∑ a ∈ E, S15.directRowWeight PT hPT ys a x := by
+          calc
+            _ ≤ ∑ a ∈ E, 2 * S15.directRowWeight PT hPT ys a x :=
+              Finset.sum_le_sum fun a ha => hrowFactor a ha
+            _ = 2 * ∑ a ∈ E, S15.directRowWeight PT hPT ys a x := by rw [Finset.mul_sum]
+        _ = 2 * ((E.card : ℝ) / (PT.tiling.P i₀).M) *
+              S15.patchColumnAverage PT i₀ (S15.directRowWeight PT hPT) ys x := by
+          rw [hsumRaw]
+          ring
+        _ ≤ 2 * (800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k) *
+              ((T.S.N k : ℝ) / (2 : ℝ) ^ (T.S.n k) / 1600) := by
+          have hratio2 : 2 * ((E.card : ℝ) / ((PT.tiling.P i₀).M : ℝ)) ≤
+              2 * (800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k) :=
+            mul_le_mul_of_nonneg_left hratio (by norm_num)
+          have havg0 := Lane_q_s15_direct.patchColumnAverage_directRowWeight_nonneg PT hPT i₀ ys x
+          calc
+            _ ≤ 2 * (800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k) *
+                S15.patchColumnAverage PT i₀ (S15.directRowWeight PT hPT) ys x :=
+              mul_le_mul_of_nonneg_right hratio2 havg0
+            _ ≤ 2 * (800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k) *
+                ((T.S.N k : ℝ) / (2 : ℝ) ^ (T.S.n k) / 1600) :=
+              mul_le_mul_of_nonneg_left (havg i₀ x) (by positivity)
+        _ = 1 := by
+          field_simp [ne_of_gt (T.S.N_pos k), pow_ne_zero _ (by norm_num : (2 : ℝ) ≠ 0)]
+          norm_num
+  · have hzero (a : S15.EvenPosition T k) :
+        S15.directNormalizedRow PT hPT ys a x = 0 := by
+      by_contra hne
+      have hi := Lane_q_s15_direct.directNormalizedRow_envelope_supported PT hPT ys a x hne
+      exact hex ⟨S15.patchAt PT hPT a.1, hi⟩
+    simp [hzero]
 
 theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]

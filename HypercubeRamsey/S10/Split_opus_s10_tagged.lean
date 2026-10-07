@@ -1,4 +1,5 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d7
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -738,6 +739,7 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       refFail M t σ a ≤ Real.exp (-(1 / 200 : ℝ) * aG n δ * kT n δ * n) := by
   sorry
 
+set_option maxHeartbeats 5000000 in
 /-- **d7b** = P10.1i(iii) (10:246–250; ~150 lines; lemma-level): the even row
 cap `N p_v^X ≤ e^{(log 2 - .01a)n}` (light part and its mass `c₆a`). -/
 theorem d7b_even_row_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
@@ -746,7 +748,552 @@ theorem d7b_even_row_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < 
       (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I),
       2 ^ n ≤ N → ∀ h ω a x,
       (N : ℝ) * evenRow M t h ω a x ≤ Real.exp ((Real.log 2 - (1 / 100 : ℝ) * aG n δ) * n) := by
-  sorry
+  classical
+  obtain ⟨n6, h6⟩ := d6_likelihood_comparison η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨nS, hS⟩ := Filter.eventually_atTop.1
+    (Lane_q_s10_d7.evenRow_scales_eventually δ hδ (by
+      have hmin : min (min η₀ ζ) 1 ≤ 1 := min_le_right _ _
+      exact lt_of_lt_of_le hδsmall (div_le_div_of_nonneg_right hmin (by norm_num))))
+  refine ⟨max n6 nS, ?_⟩
+  intro n hn N E X Y G M t hN h ω a x
+  have hn6 : n6 ≤ n := le_trans (le_max_left _ _) hn
+  have hnS : nS ≤ n := le_trans (le_max_right _ _) hn
+  have hsc := hS n hnS
+  have h6spec := h6 n hn6 N E X Y G M t hN
+  have hBig : 1000000000000000 ≤ n := hsc.1
+  have hδbound : δ < (1 : ℝ) / 2000 := by
+    have hmin : min (min η₀ ζ) 1 ≤ 1 := min_le_right _ _
+    exact lt_of_lt_of_le hδsmall (div_le_div_of_nonneg_right hmin (by norm_num))
+  have hnNat : 0 < n := by omega
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast hnNat
+  have hnOne : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hNnat : 0 < N := by
+    have hp : 0 < 2 ^ n := Nat.pow_pos (by omega)
+    omega
+  have hNpos : 0 < (N : ℝ) := Nat.cast_pos.mpr hNnat
+  let k : ℕ := kT n δ
+  let a0 : ℝ := aG n δ
+  have hkpos : 0 < k := by
+    by_contra hk
+    have hk0 : k = 0 := Nat.eq_zero_of_not_pos hk
+    have hcontr : 200 < a0 * (k : ℝ) := by simpa [k, a0, aG] using hsc.2.2.2
+    norm_num [k, hk0] at hcontr
+  have hkRpos : 0 < (k : ℝ) := Nat.cast_pos.mpr hkpos
+  have haPos : 0 < a0 := by
+    dsimp [a0, aG]
+    exact Real.rpow_pos_of_pos hnPos _
+  have haLeOne : a0 ≤ 1 := by
+    have hpow : (n : ℝ) ^ (-δ) ≤ (n : ℝ) ^ (0 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le hnOne (by linarith [hδ])
+    simpa [a0, aG, Real.rpow_zero] using hpow
+  have haNid : a0 * (n : ℝ) = (n : ℝ) ^ (1 - δ) := by
+    dsimp [a0, aG]
+    calc
+      (n : ℝ) ^ (-δ) * (n : ℝ) =
+          (n : ℝ) ^ (-δ) * (n : ℝ) ^ (1 : ℝ) := by rw [Real.rpow_one]
+      _ = (n : ℝ) ^ (-δ + 1) := by rw [← Real.rpow_add hnPos]
+      _ = (n : ℝ) ^ (1 - δ) := by congr 1 <;> ring
+  have hscaleWidth : (n : ℝ) ^ δ < a0 * (n : ℝ) / 200 := by
+    have h := hsc.2.1
+    dsimp [a0, aG] at h ⊢
+    nlinarith
+  have hscaleLog : Real.log 2 < a0 * (n : ℝ) / 200 := by
+    have h := hsc.2.2.1
+    dsimp [a0, aG] at h ⊢
+    nlinarith
+  have hak200 : 200 < a0 * (k : ℝ) := by
+    simpa [a0, k, aG] using hsc.2.2.2
+  have hakOne : 1 ≤ a0 * (k : ℝ) := by linarith
+  have hlog2half : (1 / 2 : ℝ) < Real.log 2 := by
+    have h := Real.log_two_gt_d9
+    linarith
+  have hanOne : 1 ≤ a0 * (n : ℝ) := by
+    have hlarge : 1 < 200 * Real.log 2 := by nlinarith [hlog2half]
+    linarith [hscaleLog]
+  have haLower : (1 : ℝ) / n ≤ a0 := by
+    apply (div_le_iff₀ hnPos).2
+    nlinarith [hanOne]
+  have haInv : a0⁻¹ ≤ (n : ℝ) := by
+    have hdiv : (1 : ℝ) / a0 ≤ (n : ℝ) := by
+      apply (div_le_iff₀ haPos).2
+      nlinarith [hanOne]
+    simpa [one_div] using hdiv
+  have hsqrtLower : Real.sqrt (n : ℝ) ≤ a0 * (n : ℝ) := by
+    have hpow : (n : ℝ) ^ (1 / 2 : ℝ) ≤ (n : ℝ) ^ (1 - δ) :=
+      Real.rpow_le_rpow_of_exponent_le hnOne (by linarith [hδbound])
+    have hsqrt : Real.sqrt (n : ℝ) = (n : ℝ) ^ (1 / 2 : ℝ) := by
+      simpa using Real.sqrt_eq_rpow (n : ℝ)
+    rw [hsqrt, haNid]
+    exact hpow
+  have hnNonneg : 0 ≤ (n : ℝ) := le_of_lt hnPos
+  have hdenPos : 0 < (100 : ℝ) ^ 4 * 256 := by positivity
+  have hBigR : (1000000000000000 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hBig
+  have hlargeDen : 400 * ((100 : ℝ) ^ 4 * 256) ≤ (n : ℝ) := by
+    exact le_trans (by norm_num :
+      400 * ((100 : ℝ) ^ 4 * 256) ≤ (1000000000000000 : ℝ)) hBigR
+  have hquarticNat := Lane_q_s10_d7.exp_quartic_lower
+    (x := (n : ℝ) / 100) (by positivity)
+  have hquarticNatNum : 400 * (n : ℝ) ≤ ((n : ℝ) / 100) ^ 4 / 256 := by
+    have heq : ((n : ℝ) / 100) ^ 4 / 256 = (n : ℝ) ^ 4 / ((100 : ℝ) ^ 4 * 256) := by
+      field_simp
+      <;> ring
+    have hsq : (n : ℝ) ^ 2 ≤ (n : ℝ) ^ 4 := by
+      nlinarith [sq_nonneg ((n : ℝ) ^ 2 - 1)]
+    rw [heq]
+    apply (le_div_iff₀ hdenPos).2
+    calc
+      400 * (n : ℝ) * ((100 : ℝ) ^ 4 * 256) ≤ (n : ℝ) ^ 2 := by
+        nlinarith [mul_le_mul_of_nonneg_right hlargeDen hnNonneg]
+      _ ≤ (n : ℝ) ^ 4 := hsq
+  have hexpNat : 400 * (n : ℝ) ≤ Real.exp ((n : ℝ) / 100) :=
+    le_trans hquarticNatNum hquarticNat
+  have hsqrtQuartic := Lane_q_s10_d7.exp_quartic_lower
+    (x := Real.sqrt (n : ℝ) / 100) (by positivity)
+  have hsqrtPow : (Real.sqrt (n : ℝ)) ^ 4 = (n : ℝ) ^ 2 := by
+    calc
+      (Real.sqrt (n : ℝ)) ^ 4 = ((Real.sqrt (n : ℝ)) ^ 2) ^ 2 := by ring
+      _ = (n : ℝ) ^ 2 := by rw [Real.sq_sqrt hnNonneg]
+  have hsqrtQuarticNum : 400 * (n : ℝ) ≤
+      (Real.sqrt (n : ℝ) / 100) ^ 4 / 256 := by
+    have heq : (Real.sqrt (n : ℝ) / 100) ^ 4 / 256 =
+        (n : ℝ) ^ 2 / ((100 : ℝ) ^ 4 * 256) := by
+      rw [div_pow, hsqrtPow]
+      field_simp
+      <;> ring
+    rw [heq]
+    apply (le_div_iff₀ hdenPos).2
+    have hmul := mul_le_mul_of_nonneg_right hlargeDen hnNonneg
+    calc
+      400 * (n : ℝ) * ((100 : ℝ) ^ 4 * 256) ≤ (n : ℝ) ^ 2 := by nlinarith [hmul]
+      _ = (n : ℝ) ^ 2 := rfl
+  have hexpNorm : 400 * (n : ℝ) ≤ Real.exp (a0 * (n : ℝ) / 100) := by
+    calc
+      400 * (n : ℝ) ≤ Real.exp (Real.sqrt (n : ℝ) / 100) :=
+        le_trans hsqrtQuarticNum hsqrtQuartic
+      _ ≤ Real.exp (a0 * (n : ℝ) / 100) :=
+        Real.exp_le_exp.mpr (div_le_div_of_nonneg_right hsqrtLower (by norm_num))
+  have haNorm : 400 / a0 ≤ Real.exp (a0 * (n : ℝ) / 100) := by
+    calc
+      400 / a0 ≤ 400 * (n : ℝ) := by
+        change 400 * a0⁻¹ ≤ 400 * (n : ℝ)
+        exact mul_le_mul_of_nonneg_left haInv (by norm_num)
+      _ ≤ Real.exp (a0 * (n : ℝ) / 100) := hexpNorm
+
+  have local_cap (c : ID n δ) (ω : OddRole n → Fin N)
+      (hp : predOK M t h a c ω) :
+      ∀ x : Fin N, x ∉ heavy M t h a c ω →
+        (N : ℝ) * avgMarginal M t h a c ω x / lightMass M t h a c ω ≤
+          Real.exp ((Real.log 2 - (1 / 100 : ℝ) * a0) * n) := by
+    intro x hxlight
+    have hstar_nonneg (h' : History n N δ) : 0 ≤ starLik M t h' a ω := by
+      unfold starLik
+      apply Finset.prod_nonneg
+      intro q hq
+      apply Lane_q_s10_d7.finprob_expect_nonneg
+      intro j
+      apply Finset.prod_nonneg
+      intro b hb
+      exact (labLaw M t h' b j).nonneg (ω b)
+    have hsub_nonneg (w : Fin k → Fin N) : 0 ≤ subLik M t h a c w ω := by
+      by_cases hg : gate M t (h.setTuple c w) a c
+      · simpa [subLik, hg] using hstar_nonneg (h.setTuple c w)
+      · simp [subLik, hg]
+    have hposterior_nonneg (w : Fin k → Fin N) :
+        0 ≤ posterior M t h a c ω w := by
+      unfold posterior
+      exact div_nonneg (mul_nonneg ((tuplePrior M t c).nonneg w) (hsub_nonneg w)) hp.2.1.le
+    let Q : HypercubeRamsey.FinProb (Fin k → Fin N) := {
+      w := fun w => posterior M t h a c ω w
+      nonneg := by
+        intro w
+        exact hposterior_nonneg w
+      sum_eq_one := by
+        have hsum :
+            (∑ w : Fin k → Fin N,
+              (tuplePrior M t c).w w * subLik M t h a c w ω) = predMass M t h a c ω := by
+          unfold predMass HypercubeRamsey.FinProb.expect
+          rfl
+        change ∑ w : Fin k → Fin N,
+          ((tuplePrior M t c).w w * subLik M t h a c w ω) /
+            predMass M t h a c ω = 1
+        rw [← Finset.sum_div, hsum, div_self hp.2.1.ne']
+    }
+    have havgEq (y : Fin N) :
+        avgMarginal M t h a c ω y =
+          HypercubeRamsey.averageCoordinateMarginal Q y := by
+      classical
+      unfold avgMarginal HypercubeRamsey.averageCoordinateMarginal
+      have hcount (w : Fin k → Fin N) :
+          ((Finset.univ.filter fun i : Fin k => w i = y).card : ℝ) =
+            ∑ i : Fin k, (if w i = y then (1 : ℝ) else 0) := by
+        rw [Finset.card_filter]
+        simp
+      have hfreq (w : Fin k → Fin N) :
+          (((Finset.univ.filter fun i : Fin k => w i = y).card : ℝ) / (k : ℝ)) =
+            (k : ℝ)⁻¹ * ∑ i : Fin k, (if w i = y then (1 : ℝ) else 0) := by
+        rw [hcount, div_eq_mul_inv]
+        ring
+      calc
+        ∑ w : Fin k → Fin N, posterior M t h a c ω w *
+            (((Finset.univ.filter fun i : Fin k => w i = y).card : ℝ) / (k : ℝ)) =
+          ∑ w : Fin k → Fin N, (k : ℝ)⁻¹ *
+            ∑ i : Fin k, (if w i = y then posterior M t h a c ω w else 0) := by
+          apply Finset.sum_congr rfl
+          intro w hw
+          rw [hfreq]
+          calc
+            posterior M t h a c ω w *
+                ((k : ℝ)⁻¹ * ∑ i : Fin k, (if w i = y then (1 : ℝ) else 0)) =
+              (k : ℝ)⁻¹ * (posterior M t h a c ω w *
+                ∑ i : Fin k, (if w i = y then (1 : ℝ) else 0)) := by ring_nf
+            _ = (k : ℝ)⁻¹ * ∑ i : Fin k,
+                posterior M t h a c ω w * (if w i = y then (1 : ℝ) else 0) := by
+              rw [Finset.mul_sum]
+            _ = (k : ℝ)⁻¹ * ∑ i : Fin k,
+                (if w i = y then posterior M t h a c ω w else 0) := by
+              congr 1
+              apply Finset.sum_congr rfl
+              intro i hi
+              by_cases heq : w i = y <;> simp [heq]
+        _ = (k : ℝ)⁻¹ * ∑ i : Fin k,
+              ∑ w : Fin k → Fin N, (if w i = y then posterior M t h a c ω w else 0) := by
+          rw [← Finset.mul_sum, Finset.sum_comm]
+        _ = (k : ℝ)⁻¹ * ∑ i : Fin k, Q.pr (fun w => w i = y) := by
+          congr 1
+          apply Finset.sum_congr rfl
+          intro i hi
+          unfold HypercubeRamsey.FinProb.pr
+          apply Finset.sum_congr rfl
+          intro w hw
+          simp [Q]
+    have htotal :
+        ∑ y : Fin N, avgMarginal M t h a c ω y = 1 := by
+      calc
+        ∑ y : Fin N, avgMarginal M t h a c ω y =
+            ∑ y : Fin N, HypercubeRamsey.averageCoordinateMarginal Q y := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          exact havgEq y
+        _ = 1 := Lane_q_s10_d7.averageCoordinateMarginal_sum_one Q hkpos
+    have hHeavyEq : heavy M t h a c ω =
+        HypercubeRamsey.heavyCoordinateSet Q
+          ((Real.log 2 - (2 / 100 : ℝ) * a0) * n) := by
+      ext y
+      simp [heavy, HypercubeRamsey.heavyCoordinateSet, havgEq, a0]
+    let u : ℝ := a0 * (k : ℝ) / 100
+    let q : ℕ := k - Nat.floor u
+    have hfloorLower : a0 * (k : ℝ) / 200 ≤ (Nat.floor u : ℝ) := by
+      have hu2 : 2 ≤ u := by dsimp [u]; nlinarith [hak200]
+      have hfloor : u < (Nat.floor u : ℝ) + 1 := Nat.lt_floor_add_one u
+      dsimp [u] at hfloor hu2 ⊢
+      nlinarith
+    have hfloorLe : (Nat.floor u : ℕ) ≤ k := by
+      have huNonneg : 0 ≤ u := by dsimp [u]; positivity
+      have hfloorU : (Nat.floor u : ℝ) ≤ u := Nat.floor_le huNonneg
+      have huK : u ≤ (k : ℝ) := by
+        dsimp [u]
+        nlinarith [haLeOne]
+      exact_mod_cast (le_trans hfloorU huK)
+    have hqCast : (q : ℝ) = (k : ℝ) - (Nat.floor u : ℝ) := by
+      dsimp [q]
+      rw [Nat.cast_sub hfloorLe]
+    have hqLe : q ≤ k := by dsimp [q]; exact Nat.sub_le _ _
+    have hqLower : (1 - a0 / 100) * (k : ℝ) ≤ (q : ℝ) := by
+      rw [hqCast]
+      have hfloorUpper : (Nat.floor u : ℝ) ≤ a0 * (k : ℝ) / 100 := by
+        exact Nat.floor_le (by dsimp [u]; positivity)
+      dsimp [u] at hfloorUpper
+      nlinarith
+    have hqFrac : (q : ℝ) / (k : ℝ) ≤ 1 - a0 / 200 := by
+      rw [hqCast]
+      apply (div_le_iff₀ hkRpos).2
+      have hfloor := hfloorLower
+      nlinarith
+    have hBpos : 0 < (Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ) := by
+      have hlog2 : (1 / 2 : ℝ) < Real.log 2 := hlog2half
+      have hcoef : 0 < Real.log 2 - (2 / 100 : ℝ) * a0 := by
+        nlinarith [haLeOne]
+      exact mul_pos hcoef hnPos
+    have hcoef :
+        (Real.log 2 - (5 / 100 : ℝ) * a0) -
+            (Real.log 2 - (2 / 100 : ℝ) * a0) * (1 - a0 / 100) ≤
+          -(2 / 100 : ℝ) * a0 := by
+      have hlog2 : Real.log 2 ≤ 1 := by
+        have h := Real.log_two_lt_d9
+        linarith
+      have haLog := mul_le_mul_of_nonneg_left hlog2 haPos.le
+      nlinarith [sq_nonneg a0]
+    have hlogScaled : (k : ℝ) * Real.log 2 ≤ a0 * (n : ℝ) * (k : ℝ) / 200 := by
+      have h := le_of_lt hscaleLog
+      have hm := mul_le_mul_of_nonneg_right h (Nat.cast_nonneg k)
+      nlinarith
+    have hwidthScaled : (k : ℝ) * (n : ℝ) ^ δ ≤
+        a0 * (n : ℝ) * (k : ℝ) / 200 := by
+      have h := le_of_lt hscaleWidth
+      have hm := mul_le_mul_of_nonneg_right h (Nat.cast_nonneg k)
+      nlinarith
+    have hcoefScaled :
+        (k : ℝ) * (n : ℝ) *
+            ((Real.log 2 - (5 / 100 : ℝ) * a0) -
+              (Real.log 2 - (2 / 100 : ℝ) * a0) * (1 - a0 / 100)) ≤
+          (k : ℝ) * (n : ℝ) * (-(2 / 100 : ℝ) * a0) :=
+      mul_le_mul_of_nonneg_left hcoef (mul_nonneg (Nat.cast_nonneg k) hnPos.le)
+    have harg :
+        (k : ℝ) * Real.log 2 +
+            ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+              (k : ℝ) * (n : ℝ) ^ δ) -
+            ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ) * (q : ℝ)) ≤
+          -(1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ) := by
+      have hqB := mul_le_mul_of_nonneg_left hqLower hBpos.le
+      calc
+        _ ≤ (k : ℝ) * Real.log 2 +
+            ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+              (k : ℝ) * (n : ℝ) ^ δ) -
+            ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ) *
+              ((1 - a0 / 100) * (k : ℝ))) := by nlinarith [hqB]
+        _ ≤ -(1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ) := by
+          nlinarith [hlogScaled, hwidthScaled, hcoefScaled]
+    have hpow2 : (2 : ℝ) ^ k = Real.exp ((k : ℝ) * Real.log 2) := by
+      calc
+        (2 : ℝ) ^ k = Real.exp (Real.log ((2 : ℝ) ^ k)) := by
+          rw [Real.exp_log (by positivity)]
+        _ = Real.exp ((k : ℝ) * Real.log 2) := by rw [Real.log_pow]
+    have htailExp :
+        (2 : ℝ) ^ k * Real.exp
+            ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+              (k : ℝ) * (n : ℝ) ^ δ) *
+            Real.exp (-((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) * (q : ℝ)) ≤
+          Real.exp (-(1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) := by
+      rw [hpow2]
+      rw [← Real.exp_add, ← Real.exp_add]
+      apply Real.exp_le_exp.mpr
+      convert harg using 1 <;> ring
+    have htailToN :
+        Real.exp (-(1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) ≤
+          Real.exp (-((n : ℝ) / 100)) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [hakOne]
+    have hinvNat : (Real.exp ((n : ℝ) / 100))⁻¹ ≤ (400 * (n : ℝ))⁻¹ :=
+      (inv_le_inv₀ (Real.exp_pos _) (by positivity)).2 hexpNat
+    have htailSmall :
+        Real.exp (-(1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) ≤ a0 / 400 := by
+      calc
+        _ ≤ Real.exp (-((n : ℝ) / 100)) := htailToN
+        _ = (Real.exp ((n : ℝ) / 100))⁻¹ := by rw [Real.exp_neg]
+        _ ≤ (400 * (n : ℝ))⁻¹ := hinvNat
+        _ = ((1 : ℝ) / (n : ℝ)) / 400 := by field_simp <;> ring
+        _ ≤ a0 / 400 := div_le_div_of_nonneg_right haLower (by norm_num)
+    have hheavy := HypercubeRamsey.heavyTruncation hNnat hkpos Q
+      ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+        (k : ℝ) * (n : ℝ) ^ δ)
+      ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ))
+      (by
+        intro w
+        have hlik : subLik M t h a c w ω ≤
+            Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+              refQ M t h a c ω := h6spec h a c w ω
+        have hratio : subLik M t h a c w ω / predMass M t h a c ω ≤
+            Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) := by
+          have heps : (0 : ℝ) ≤ Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) :=
+            Real.exp_nonneg _
+          have hs : (0 : ℝ) ≤ Real.exp
+              ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) := Real.exp_nonneg _
+          have hmul :
+              subLik M t h a c w ω *
+                  Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) ≤
+                Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                  predMass M t h a c ω := by
+            have hpLower :
+                Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) *
+                    refQ M t h a c ω ≤ predMass M t h a c ω := by
+              simpa [a0, k] using hp.2.2.1
+            calc
+              _ ≤ (Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                    refQ M t h a c ω) *
+                  Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) :=
+                mul_le_mul_of_nonneg_right hlik heps
+              _ = Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                    (Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) *
+                      refQ M t h a c ω) := by ring
+              _ ≤ Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                    predMass M t h a c ω :=
+                mul_le_mul_of_nonneg_left hpLower hs
+          have hnum : subLik M t h a c w ω ≤
+              Real.exp (((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ))) *
+                predMass M t h a c ω := by
+            have hmul' := mul_le_mul_of_nonneg_right hmul
+              (Real.exp_nonneg ((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)))
+            have hcancel :
+                Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) *
+                    Real.exp ((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) = 1 := by
+              rw [← Real.exp_add]
+              simp
+            calc
+              subLik M t h a c w ω = subLik M t h a c w ω * 1 := by ring
+              _ = subLik M t h a c w ω *
+                    (Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) *
+                      Real.exp ((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) := by rw [hcancel]
+              _ = (subLik M t h a c w ω *
+                    Real.exp (-((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)))) *
+                      Real.exp ((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) := by ring
+              _ ≤ (Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                    predMass M t h a c ω) *
+                    Real.exp ((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) := hmul'
+              _ = (Real.exp ((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                    Real.exp ((1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ))) *
+                    predMass M t h a c ω := by ring
+              _ = Real.exp (((Real.log 2 - (6 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) +
+                    (1 / 100 : ℝ) * a0 * (k : ℝ) * (n : ℝ)) *
+                    predMass M t h a c ω := by rw [← Real.exp_add]
+              _ = Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) *
+                    predMass M t h a c ω := by congr 1 <;> ring
+          apply (div_le_iff₀ hp.2.1).2
+          exact hnum
+        have hratioNN : 0 ≤ subLik M t h a c w ω / predMass M t h a c ω :=
+          div_nonneg (hsub_nonneg w) hp.2.1.le
+        have htuple : (N : ℝ) ^ k * (tuplePrior M t c).w w ≤
+            Real.exp ((k : ℝ) * (n : ℝ) ^ δ) := by
+          have hμcap (i : Fin k) :
+              (N : ℝ) * (M.μ (t c.1)).w (w i) ≤ Real.exp ((n : ℝ) ^ δ) := by
+            calc
+              (N : ℝ) * (M.μ (t c.1)).w (w i) ≤
+                  (N : ℝ) * (Real.exp ((n : ℝ) ^ δ) / N) :=
+                mul_le_mul_of_nonneg_left (M.μ_width (t c.1) (w i)) (Nat.cast_nonneg N)
+              _ = Real.exp ((n : ℝ) ^ δ) := by field_simp [ne_of_gt hNpos]
+          have hprod : (N : ℝ) ^ k * (tuplePrior M t c).w w =
+              ∏ i : Fin k, (N : ℝ) * (M.μ (t c.1)).w (w i) := by
+            rw [tuplePrior, p10_1kBlockTupleArrayLaw_weight,
+              p10_1kBlockTupleArrayWeight]
+            calc
+              (N : ℝ) ^ k * ∏ i : Fin k, (M.μ (t c.1)).w (w i) =
+                  (∏ i : Fin k, (N : ℝ)) *
+                    ∏ i : Fin k, (M.μ (t c.1)).w (w i) := by simp
+              _ = ∏ i : Fin k, (N : ℝ) * (M.μ (t c.1)).w (w i) := by
+                rw [← Finset.prod_mul_distrib]
+          rw [hprod]
+          calc
+            ∏ i : Fin k, (N : ℝ) * (M.μ (t c.1)).w (w i) ≤
+                ∏ _i : Fin k, Real.exp ((n : ℝ) ^ δ) := by
+              apply Finset.prod_le_prod₀
+              · intro i hi
+                exact mul_nonneg (Nat.cast_nonneg N) ((M.μ (t c.1)).nonneg (w i))
+              · intro i hi
+                exact hμcap i
+            _ = Real.exp ((k : ℝ) * (n : ℝ) ^ δ) := by
+              rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin,
+                ← Real.exp_nat_mul]
+        calc
+          (N : ℝ) ^ k * Q.w w =
+              ((N : ℝ) ^ k * (tuplePrior M t c).w w) *
+                (subLik M t h a c w ω / predMass M t h a c ω) := by
+                  simp [Q, posterior]
+                  ring
+          _ ≤ Real.exp ((k : ℝ) * (n : ℝ) ^ δ) *
+                Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ)) :=
+              mul_le_mul htuple hratio hratioNN (Real.exp_nonneg _)
+          _ = Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+                (k : ℝ) * (n : ℝ) ^ δ) := by rw [← Real.exp_add]; congr 1 <;> ring)
+    have htail := hheavy.2 q hqLe
+    have hHeavyMass :
+        (∑ y ∈ heavy M t h a c ω, avgMarginal M t h a c ω y) ≤
+          (q : ℝ) / (k : ℝ) +
+            (2 : ℝ) ^ k *
+              Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+                (k : ℝ) * (n : ℝ) ^ δ) *
+              Real.exp (-((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) * (q : ℝ)) := by
+      simpa [hHeavyEq, havgEq] using htail
+    have htailBound :
+        (2 : ℝ) ^ k *
+            Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+              (k : ℝ) * (n : ℝ) ^ δ) *
+            Real.exp (-((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) * (q : ℝ)) ≤
+          a0 / 400 := le_trans htailExp htailSmall
+    have hHeavyUpper :
+        (∑ y ∈ heavy M t h a c ω, avgMarginal M t h a c ω y) ≤ 1 - a0 / 400 := by
+      calc
+        _ ≤ (q : ℝ) / (k : ℝ) + a0 / 400 := by
+          calc
+            _ ≤ (q : ℝ) / (k : ℝ) +
+                (2 : ℝ) ^ k *
+                  Real.exp ((Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * (n : ℝ) +
+                    (k : ℝ) * (n : ℝ) ^ δ) *
+                  Real.exp (-((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) * (q : ℝ)) := hHeavyMass
+            _ ≤ (q : ℝ) / (k : ℝ) + a0 / 400 := by linarith [htailBound]
+        _ ≤ 1 - a0 / 400 := by
+          calc
+            (q : ℝ) / (k : ℝ) + a0 / 400 ≤ (1 - a0 / 200) + a0 / 400 :=
+              by linarith [hqFrac]
+            _ = 1 - a0 / 400 := by ring
+    have hlightEq : lightMass M t h a c ω =
+        ∑ y ∈ (heavy M t h a c ω)ᶜ, avgMarginal M t h a c ω y := by
+      unfold lightMass
+      have hset : Finset.univ \ heavy M t h a c ω = (heavy M t h a c ω)ᶜ := by
+        ext y
+        simp
+      rw [hset]
+    have hparts :
+        (∑ y ∈ heavy M t h a c ω, avgMarginal M t h a c ω y) +
+            lightMass M t h a c ω = 1 := by
+      calc
+        _ = (∑ y ∈ heavy M t h a c ω, avgMarginal M t h a c ω y) +
+            ∑ y ∈ (heavy M t h a c ω)ᶜ, avgMarginal M t h a c ω y := by rw [hlightEq]
+        _ = ∑ y, avgMarginal M t h a c ω y := by rw [Finset.sum_add_sum_compl]
+        _ = 1 := htotal
+    have hlightLower : a0 / 400 ≤ lightMass M t h a c ω := by linarith [hparts, hHeavyUpper]
+    have havgCap :
+        (N : ℝ) * avgMarginal M t h a c ω x ≤
+          Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) := by
+      have hy : ¬ Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) <
+          (N : ℝ) * avgMarginal M t h a c ω x := by
+        intro hlt
+        apply hxlight
+        change x ∈ Finset.univ.filter
+          (fun z => Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) <
+            (N : ℝ) * avgMarginal M t h a c ω z)
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlt⟩
+      exact le_of_not_gt hy
+    have hnumNonneg : 0 ≤ Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) :=
+      Real.exp_nonneg _
+    have hlocal :
+        (N : ℝ) * avgMarginal M t h a c ω x / lightMass M t h a c ω ≤
+          Real.exp ((Real.log 2 - (1 / 100 : ℝ) * a0) * (n : ℝ)) := by
+      calc
+        (N : ℝ) * avgMarginal M t h a c ω x / lightMass M t h a c ω ≤
+            Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) /
+              lightMass M t h a c ω :=
+          div_le_div_of_nonneg_right havgCap hp.2.2.2.le
+        _ ≤ Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) / (a0 / 400) :=
+          div_le_div_of_nonneg_left hnumNonneg (by positivity) hlightLower
+        _ = (400 / a0) * Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) := by
+          field_simp [ne_of_gt haPos]
+          <;> ring
+        _ ≤ Real.exp (a0 * (n : ℝ) / 100) *
+              Real.exp ((Real.log 2 - (2 / 100 : ℝ) * a0) * (n : ℝ)) :=
+          mul_le_mul_of_nonneg_right haNorm (Real.exp_nonneg _)
+        _ = Real.exp ((Real.log 2 - (1 / 100 : ℝ) * a0) * (n : ℝ)) := by
+          rw [← Real.exp_add]
+          congr 1 <;> ring
+    exact hlocal
+  unfold evenRow
+  cases hcenter : centerOf M t h a with
+  | none =>
+    simp
+    positivity
+  | some c =>
+    change (N : ℝ) *
+        (if predOK M t h a c ω ∧ x ∉ heavy M t h a c ω then
+          avgMarginal M t h a c ω x / lightMass M t h a c ω else 0) ≤ _
+    by_cases hsuccess : predOK M t h a c ω ∧ x ∉ heavy M t h a c ω
+    · have hlocal := local_cap c ω hsuccess.1 x hsuccess.2
+      simp [hsuccess]
+      have heq :
+          (N : ℝ) * (avgMarginal M t h a c ω x / lightMass M t h a c ω) =
+            (N : ℝ) * avgMarginal M t h a c ω x / lightMass M t h a c ω := by
+        ring_nf
+      rw [heq]
+      simpa [a0, one_div] using hlocal
+    · simp [hsuccess]
+      positivity
 
 /-- **d7c** = P10.1i(iv) (10:252–261; ~400 lines; new argument: the integration
 identity of `p10_1i_predictive_test` turns the posterior back into the tuple prior,

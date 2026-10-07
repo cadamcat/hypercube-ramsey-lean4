@@ -433,6 +433,72 @@ theorem filter_step (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
     _ ≤ massPlus + massMinus := hbadmass
     _ ≤ 2 * small := by linarith [hplus, hminus]
 
+private theorem piCoord_pr {N h : ℕ} (ν : Law N) (hN : 0 < N)
+    (j : Fin h) (B : Fin N → Prop) :
+    (FinProb.pi (fun _ : Fin h => ν)).pr (fun ξ => B (ξ j)) = ν.pr B := by
+  classical
+  let S : Finset (Fin h) := {j}
+  let I := {k : Fin h // k ∈ S}
+  let j₀ : I := ⟨j, by simp [S]⟩
+  letI : Unique I := {
+    default := j₀
+    uniq := by
+      intro k
+      apply Subtype.ext
+      have hk : k.1 = j := Finset.mem_singleton.mp (by simpa [S] using k.2)
+      exact hk
+  }
+  let P : Fin h → FinProb (Fin N) := fun _ => ν
+  let F : (∀ k : Fin h, Fin N) → ℝ := fun ξ => if B (ξ j) then 1 else 0
+  let y₀ : Fin N := ⟨0, by omega⟩
+  have hdep : FinProb.DependsOn F S := by
+    intro ξ ξ' hagree
+    have hj := hagree j (by simp [S])
+    simp [F, hj]
+  have hpi := FinProb.pi_expect_depends P S F (fun _ => y₀) hdep
+  have hpi' :
+      (FinProb.pi P).expect F =
+        (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) := by
+    simpa [P, F, S, j₀, Equiv.piEquivPiSubtypeProd_symm_apply] using hpi
+  have hprExp :
+      (FinProb.pi P).pr (fun ξ => B (ξ j)) = (FinProb.pi P).expect F := by
+    unfold FinProb.pr FinProb.expect
+    apply Finset.sum_congr rfl
+    intro ξ _
+    by_cases hb : B (ξ j) <;> simp [F, hb]
+  let e : (∀ _ : I, Fin N) ≃ Fin N := Equiv.piUnique (fun _ : I => Fin N)
+  have hweight (a : ∀ _ : I, Fin N) :
+      (FinProb.pi (fun _ : I => ν)).w a = ν.w (a j₀) := by
+    change (∏ k : I, ν.w (a k)) = ν.w (a j₀)
+    calc
+      _ = ∏ k : I, ν.w (a j₀) := by
+        apply Finset.prod_congr rfl
+        intro k _
+        rw [show k = j₀ from Subsingleton.elim _ _]
+      _ = ν.w (a j₀) := by simp
+  have hsub :
+      (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) = ν.pr B := by
+    unfold FinProb.expect
+    calc
+      _ = ∑ a : (∀ _ : I, Fin N), ν.w (a j₀) * if B (a j₀) then (1 : ℝ) else 0 := by
+        apply Finset.sum_congr rfl
+        intro a _
+        rw [← hweight a]
+      _ = ∑ y : Fin N, ν.w y * if B y then (1 : ℝ) else 0 := by
+        exact Fintype.sum_equiv e _ _ (by
+          intro a
+          have hj : j₀ = (default : I) := Subsingleton.elim _ _
+          simp [e, hj])
+      _ = ν.pr B := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro y _
+        by_cases hb : B y <;> simp [hb]
+  calc
+    _ = (FinProb.pi P).expect F := hprExp
+    _ = (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) := hpi'
+    _ = ν.pr B := hsub
+
 /-- L8.1c(G3–G4) (08:90–105): filter the aggregates `μ̄_η = ∫ μ_i dη_g` (on (G1), `N max μ̄_η ≤ 4K e^{hn^β +
 n^{τ/2}}`) and `μ̄_Λ` (`N max ≤ 4K`) successively by the coordinates of the independent cross tuples.  Given a cross
 tuple's latent tag its coordinates are independent with law `ν_i`; after at most `2hs` regular hits the filtered
@@ -445,12 +511,474 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
       ∀ g, D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g) ≤
         Real.exp (-(D.n : ℝ) ^ (eta8 η₀ / 2)) := by
   obtain ⟨nF, hF⟩ := filter_step η₀ β hη₀ hβ₀ hβτ
-  refine ⟨nF, ?_⟩
+  have hηpos : 0 < eta8 η₀ := eta8_pos hη₀
+  have hηhalf : 0 < eta8 η₀ / 2 := by positivity
+  let C : ℝ := 4 * K + 1
+  have hCpos : 0 < C := by dsimp [C]; linarith
+  have hWidthEvent : ∀ᶠ n : ℕ in Filter.atTop,
+      2 * ((h : ℝ) + C + 1) < (n : ℝ) ^ (eta8 η₀ / 2) := by
+    have ht := (_root_.tendsto_rpow_atTop hηhalf).comp tendsto_natCast_atTop_atTop
+    filter_upwards [ht.eventually_gt_atTop (2 * ((h : ℝ) + C + 1))] with n hn
+    exact hn
+  obtain ⟨nW, hW⟩ := Filter.eventually_atTop.1 hWidthEvent
+  refine ⟨max nF nW, ?_⟩
   intro D hn X Y R hStd hGrid hFilter g
+  have hnF : nF ≤ D.n := le_trans (le_max_left _ _) hn
+  have hnW : nW ≤ D.n := le_trans (le_max_right _ _) hn
   have hCrossCard := hGrid.crossKeys_card g
   have hStep : FilterStep η₀ β D.n := hFilter
+  have hnR : 1 ≤ (D.n : ℝ) := by exact_mod_cast hGrid.pos.1
+  have hWidthScale : 2 * ((h : ℝ) + C + 1) ≤ (D.n : ℝ) ^ (eta8 η₀ / 2) :=
+    (hW D.n hnW).le
+  have hBetaSmall : β ≤ eta8 η₀ / 2 := by
+    rw [tau8_eq] at hβτ
+    linarith
+  have hTauSmall : tau8 η₀ / 2 ≤ eta8 η₀ / 2 := by
+    rw [tau8_eq]
+    linarith
+  have hLogC : Real.log C ≤ C := by
+    have h := Real.log_le_sub_one_of_pos hCpos
+    linarith
+  have hExponentCap :
+      (h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + Real.log C ≤
+        (D.n : ℝ) ^ eta8 η₀ := by
+    let t : ℝ := (D.n : ℝ) ^ (eta8 η₀ / 2)
+    have htpos : 0 ≤ t := by dsimp [t]; positivity
+    have htlarge : 1 ≤ t := by
+      have hpow : 1 ≤ (D.n : ℝ) ^ (eta8 η₀ / 2) :=
+        Real.one_le_rpow hnR (by positivity)
+      simpa [t] using hpow
+    have hbetaPow : (D.n : ℝ) ^ β ≤ t := by
+      dsimp [t]
+      exact Real.rpow_le_rpow_of_exponent_le hnR hBetaSmall
+    have htauPow : (D.n : ℝ) ^ (tau8 η₀ / 2) ≤ t := by
+      dsimp [t]
+      exact Real.rpow_le_rpow_of_exponent_le hnR hTauSmall
+    have hmulScale := mul_le_mul_of_nonneg_left hWidthScale htpos
+    have htSquare : t * t = (D.n : ℝ) ^ eta8 η₀ := by
+      dsimp [t]
+      calc
+        (D.n : ℝ) ^ (eta8 η₀ / 2) * (D.n : ℝ) ^ (eta8 η₀ / 2) =
+            (D.n : ℝ) ^ (eta8 η₀ / 2 + eta8 η₀ / 2) :=
+              (Real.rpow_add (by positivity) _ _).symm
+        _ = (D.n : ℝ) ^ eta8 η₀ := by congr 1 <;> ring
+    have hh0 : (0 : ℝ) ≤ (h : ℝ) := by exact_mod_cast Nat.zero_le h
+    have hht : (h : ℝ) ≤ t * (h : ℝ) := by
+      calc
+        (h : ℝ) = 1 * (h : ℝ) := by ring
+        _ ≤ t * (h : ℝ) := mul_le_mul_of_nonneg_right htlarge hh0
+    have hCt : C ≤ t * C := by
+      calc
+        C = C * 1 := by ring
+        _ ≤ C * t := mul_le_mul_of_nonneg_left htlarge hCpos.le
+        _ = t * C := by ring
+    let gap : ℝ := (h : ℝ) * t + 2 * C * t + t - C
+    have hgap : 0 ≤ gap := by
+      dsimp [gap]
+      have hht' : (h : ℝ) ≤ t * (h : ℝ) := by simpa [mul_comm] using hht
+      linarith [hht', hCt, htlarge, hh0, hCpos]
+    have hsmall₁ : (h : ℝ) * t + t + C ≤ 2 * ((h : ℝ) + C + 1) * t := by
+      calc
+        _ ≤ (h : ℝ) * t + t + C + gap := by dsimp [gap]; linarith
+        _ = 2 * ((h : ℝ) + C + 1) * t := by dsimp [gap]; ring
+    have hsmall : (h : ℝ) * t + t + C ≤ t * t := by
+      calc
+        _ ≤ 2 * ((h : ℝ) + C + 1) * t := hsmall₁
+        _ = t * (2 * ((h : ℝ) + C + 1)) := by ring
+        _ ≤ t * t := hmulScale
+    calc
+      _ ≤ (h : ℝ) * t + t + C := by nlinarith [hbetaPow, htauPow, hLogC]
+      _ ≤ t * t := hsmall
+      _ = (D.n : ℝ) ^ eta8 η₀ := htSquare
+  have rPrimeFormula (D : Ctx η₀ β p h) (ξ : D.Tup) :
+      D.R'.w ξ = ∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) := by
+    simp only [Ctx.R', FinProb.map, FinProb.bind, FinProb.pi]
+    rw [Fintype.sum_prod_type]
+    simp [Ctx.tagLaw]
+  have postSum (D : Ctx η₀ β p h) (ξ : D.Tup) : ∑ i, D.postW ξ i = 1 := by
+    by_cases hzero : D.R'.w ξ = 0
+    · simp [Ctx.postW, hzero, D.M.Λ_sum]
+    · have hRpos : 0 < D.R'.w ξ := lt_of_le_of_ne (D.R'.nonneg ξ) (Ne.symm hzero)
+      have hnum : ∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) = D.R'.w ξ :=
+        (rPrimeFormula D ξ).symm
+      simp only [Ctx.postW, if_neg hzero]
+      rw [← Finset.sum_div (s := Finset.univ), hnum]
+      exact div_self (ne_of_gt hRpos)
+  let μLambda : Law D.N := Law.mix D.tagLaw D.M.μ
+  let postTag : D.Tup → FinProb D.M.ι := fun ξ =>
+    ⟨fun i => D.postW ξ i, D.postW_nonneg ξ, postSum D ξ⟩
+  let μEta : D.Tup → Law D.N := fun ξ => Law.mix (postTag ξ) D.M.μ
+  have hLambdaSupport : μLambda.SupportedIn X := by
+    intro x hx
+    change (∑ i, D.M.Λ i * (D.M.μ i).w x) = 0
+    apply Finset.sum_eq_zero
+    intro i _
+    by_cases hΛ : 0 < D.M.Λ i
+    · rcases hStd.laws i hΛ with ⟨hμ, _, _, _, _⟩
+      have hxR : x ∉ R := fun hxR => hx (hStd.ret hxR)
+      simp [hμ x hxR]
+    · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
+      simp [hΛ0]
+  have hLambdaWidth : μLambda.WidthLE (Real.log C) := by
+    intro x
+    change (∑ i, D.M.Λ i * (D.M.μ i).w x) ≤ Real.exp (Real.log C) / D.N
+    have hbal := hStd.bal.1 x
+    have hNpos : 0 < (D.N : ℝ) := by exact_mod_cast hStd.size.1
+    have hcap : (∑ i, D.M.Λ i * (D.M.μ i).w x) ≤ C / D.N := by
+      apply (le_div_iff₀ hNpos).2
+      dsimp [C]
+      linarith [hbal]
+    rw [Real.exp_log hCpos]
+    exact hcap
+  have etaSupport (Θ : D.Hist) (h1 : D.Gate1 Θ g) :
+      (μEta (Θ g)).SupportedIn X := by
+    intro x hx
+    change (∑ i, D.postW (Θ g) i * (D.M.μ i).w x) = 0
+    apply Finset.sum_eq_zero
+    intro i _
+    by_cases hΛ : 0 < D.M.Λ i
+    · rcases hStd.laws i hΛ with ⟨hμ, _, _, _, _⟩
+      have hxR : x ∉ R := fun hxR => hx (hStd.ret hxR)
+      simp [hμ x hxR]
+    · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
+      have hpost0 : D.postW (Θ g) i = 0 := by
+        have hle := h1 i
+        have hle0 : D.postW (Θ g) i ≤ 0 := by simpa [hΛ0] using hle
+        exact le_antisymm hle0 (D.postW_nonneg _ _)
+      simp [hpost0]
+  have hLambdaWidthN : μLambda.WidthLE ((D.n : ℝ) ^ eta8 η₀) := by
+    apply Law.WidthLE.mono hLambdaWidth
+    have hbase : 0 ≤ (h : ℝ) * (D.n : ℝ) ^ β +
+        (D.n : ℝ) ^ (tau8 η₀ / 2) := by positivity
+    linarith [hExponentCap]
+  have etaWidth (Θ : D.Hist) (h1 : D.Gate1 Θ g) :
+      (μEta (Θ g)).WidthLE
+        ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + Real.log C) := by
+    intro x
+    change (∑ i, D.postW (Θ g) i * (D.M.μ i).w x) ≤
+      Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + Real.log C) / D.N
+    have htermBound :
+        (∑ i, D.postW (Θ g) i * (D.M.μ i).w x) ≤
+          ∑ i, Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            (D.M.Λ i * (D.M.μ i).w x) := by
+      apply Finset.sum_le_sum
+      intro i _
+      calc
+        _ ≤ (Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+              D.M.Λ i) * (D.M.μ i).w x :=
+          mul_le_mul_of_nonneg_right (h1 i) ((D.M.μ i).nonneg x)
+        _ = Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+              (D.M.Λ i * (D.M.μ i).w x) := by ring
+    have hmixFactor :
+        (∑ i, Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            (D.M.Λ i * (D.M.μ i).w x)) =
+          Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            ∑ i, D.M.Λ i * (D.M.μ i).w x := by
+      rw [← Finset.mul_sum]
+    have hmix :
+        (∑ i, D.postW (Θ g) i * (D.M.μ i).w x) ≤
+          Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            ∑ i, D.M.Λ i * (D.M.μ i).w x := htermBound.trans_eq hmixFactor
+    have hLamCap : (∑ i, D.M.Λ i * (D.M.μ i).w x) ≤ C / D.N := by
+      have hl := hLambdaWidth x
+      change (∑ i, D.M.Λ i * (D.M.μ i).w x) ≤ Real.exp (Real.log C) / D.N at hl
+      rw [Real.exp_log hCpos] at hl
+      exact hl
+    calc
+      _ ≤ Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            ∑ i, D.M.Λ i * (D.M.μ i).w x := hmix
+      _ ≤ Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+            (C / D.N) := mul_le_mul_of_nonneg_left hLamCap (Real.exp_nonneg _)
+      _ = Real.exp ((h : ℝ) * (D.n : ℝ) ^ β +
+            (D.n : ℝ) ^ (tau8 η₀ / 2) + Real.log C) / D.N := by
+          have hExpC : Real.exp (Real.log C) = C := Real.exp_log hCpos
+          calc
+            _ = (Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * C) / D.N := by ring
+            _ = (Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
+                  Real.exp (Real.log C)) / D.N := by rw [hExpC]
+            _ = _ := by
+              congr 1
+              exact (Real.exp_add _ _).symm
+  have etaWidthN (Θ : D.Hist) (h1 : D.Gate1 Θ g) :
+      (μEta (Θ g)).WidthLE ((D.n : ℝ) ^ eta8 η₀) :=
+    Law.WidthLE.mono (etaWidth Θ h1) hExponentCap
+  have hLambdaFilter (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+      (∑ y, (D.M.ν i).w y *
+        if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+          |colDeg D.E D.G μLambda y - 1 / 2| then (1 : ℝ) else 0) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    rcases hStd.laws i hΛ with ⟨_, hνsupport, _, hνwidth, _⟩
+    exact hFilter D.N D.E X Y D.G μLambda (D.M.ν i) hStd.disc
+      hLambdaSupport hLambdaWidthN hνsupport hνwidth
+  have hEtaFilter (Θ : D.Hist) (h1 : D.Gate1 Θ g) (i : D.M.ι)
+      (hΛ : 0 < D.M.Λ i) :
+      (∑ y, (D.M.ν i).w y *
+        if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+          |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2| then (1 : ℝ) else 0) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    rcases hStd.laws i hΛ with ⟨_, hνsupport, _, hνwidth, _⟩
+    exact hFilter D.N D.E X Y D.G (μEta (Θ g)) (D.M.ν i) hStd.disc
+      (etaSupport Θ h1) (etaWidthN Θ h1) hνsupport hνwidth
+  have rPrimePrMixture (D : Ctx η₀ β p h) (A : D.Tup → Prop) :
+      D.R'.pr A =
+        ∑ i, D.M.Λ i * (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
+    classical
+    have htag (i : D.M.ι) :
+        (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) =
+          (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
+      unfold FinProb.pr FinProb.pi
+      apply Finset.sum_congr rfl
+      intro ξ _
+      by_cases hA : A ξ <;> simp [hA]
+    unfold FinProb.pr
+    calc
+      _ = ∑ ξ : D.Tup, D.R'.w ξ * (if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        split_ifs <;> ring
+      _ = ∑ ξ : D.Tup,
+            (∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j)) *
+              (if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [rPrimeFormula D ξ]
+      _ = ∑ ξ : D.Tup, ∑ i, D.M.Λ i *
+            ((∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [Finset.sum_mul]
+        apply Finset.sum_congr rfl
+        intro i _
+        ring
+      _ = ∑ i, ∑ ξ : D.Tup, D.M.Λ i *
+            ((∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+        rw [Finset.sum_comm]
+      _ = ∑ i, D.M.Λ i *
+            (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        calc
+          _ = ∑ ξ, D.M.Λ i *
+                ((∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+            apply Finset.sum_congr rfl
+            intro ξ _
+            ring
+          _ = _ := by rw [← Finset.mul_sum]
+      _ = ∑ i, D.M.Λ i *
+            (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [htag i]
+  have rawCoordinateBadBound (bad : Fin D.N → Prop) (j : Fin h)
+      (hBad : ∀ i, 0 < D.M.Λ i → (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) :
+      D.R'.pr (fun ξ => bad (ξ j)) ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    rw [rPrimePrMixture]
+    calc
+      _ ≤ ∑ i, D.M.Λ i * (2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) := by
+        apply Finset.sum_le_sum
+        intro i _
+        by_cases hΛ : 0 < D.M.Λ i
+        · have hBadPi :
+              (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr
+                (fun ξ => bad (ξ j)) ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) :=
+            (piCoord_pr (D.M.ν i) hStd.size.1 j bad).trans_le (hBad i hΛ)
+          exact mul_le_mul_of_nonneg_left hBadPi (D.M.Λ_nonneg i)
+        · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
+          simp [hΛ0]
+      _ = 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+        calc
+          _ = (∑ i, D.M.Λ i) * (2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) := by
+            rw [← Finset.sum_mul]
+          _ = _ := by rw [D.M.Λ_sum]; ring
+  have hLambdaCoordinate (j : Fin h) :
+      D.R'.pr (fun ξ => 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+        |colDeg D.E D.G μLambda (ξ j) - 1 / 2|) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    let bad : Fin D.N → Prop := fun y =>
+      2 * (D.n : ℝ) ^ (-eta8 η₀) < |colDeg D.E D.G μLambda y - 1 / 2|
+    have hBadTag (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+        (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+      have hsum := hLambdaFilter i hΛ
+      have hprob :
+        (D.M.ν i).pr bad =
+          ∑ y, (D.M.ν i).w y *
+            if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+              |colDeg D.E D.G μLambda y - 1 / 2| then (1 : ℝ) else 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro y _
+        split_ifs <;> ring
+      rw [hprob]
+      exact hsum
+    have hcoord := rawCoordinateBadBound bad j hBadTag
+    simpa [bad] using hcoord
+  have hEtaCoordinate (Θ : D.Hist) (h1 : D.Gate1 Θ g) (j : Fin h) :
+      D.R'.pr (fun ξ => 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+        |colDeg D.E D.G (μEta (Θ g)) (ξ j) - 1 / 2|) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    let bad : Fin D.N → Prop := fun y =>
+      2 * (D.n : ℝ) ^ (-eta8 η₀) < |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2|
+    have hBadTag (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+        (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+      have hsum := hEtaFilter Θ h1 i hΛ
+      have hprob :
+        (D.M.ν i).pr bad =
+          ∑ y, (D.M.ν i).w y *
+            if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+              |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2| then (1 : ℝ) else 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro y _
+        split_ifs <;> ring
+      rw [hprob]
+      exact hsum
+    have hcoord := rawCoordinateBadBound bad j hBadTag
+    simpa [bad] using hcoord
   sorry
 
+private theorem powOneSub_le {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) (h : ℕ) :
+    1 - r ^ h ≤ (h : ℝ) * (1 - r) := by
+  induction h with
+  | zero => simp
+  | succ k ih =>
+    have hrk1 : r ^ k ≤ 1 := pow_le_one₀ hr0 hr1
+    have hstep : 1 - r ^ (k + 1) = (1 - r ^ k) + r ^ k * (1 - r) := by
+      rw [pow_succ]
+      ring
+    have hmul := mul_le_mul_of_nonneg_right hrk1 (sub_nonneg.mpr hr1)
+    rw [hstep]
+    push_cast
+    nlinarith [ih, hmul]
+
+private theorem ownMissBound (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N))
+    (hStd : Std D γ K X Y R) (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+    ∑ x, (D.M.μ i).w x * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) ≤
+      2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) := by
+  have hMean :
+      (∑ x, (D.M.μ i).w x * rowDeg D.E D.G x (D.M.ν i)) =
+        ∑ y, (D.M.ν i).w y * colDeg D.E D.G (D.M.μ i) y := by
+    unfold rowDeg colDeg
+    calc
+      _ = ∑ x, ∑ y, (D.M.μ i).w x *
+            ((D.M.ν i).w y * if Hits D.E D.G x y then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro x _
+        rw [Finset.mul_sum]
+      _ = ∑ y, ∑ x, (D.M.ν i).w y *
+            ((D.M.μ i).w x * if Hits D.E D.G x y then (1 : ℝ) else 0) := by
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro y _
+        apply Finset.sum_congr rfl
+        intro x _
+        ring
+      _ = ∑ y, (D.M.ν i).w y *
+            ∑ x, (D.M.μ i).w x * if Hits D.E D.G x y then (1 : ℝ) else 0 := by
+        apply Finset.sum_congr rfl
+        intro y _
+        rw [Finset.mul_sum]
+  have hColMiss :
+      ∑ y, (D.M.ν i).w y * (1 - colDeg D.E D.G (D.M.μ i) y) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ p)) := by
+    rcases hStd.laws i hΛ with ⟨_, _, _, _, hcol⟩
+    calc
+      _ ≤ ∑ y, (D.M.ν i).w y * (2 * Real.exp (-((D.n : ℝ) ^ p))) := by
+        apply Finset.sum_le_sum
+        intro y _
+        by_cases hy : 0 < (D.M.ν i).w y
+        · have hdeg := hcol y hy
+          exact mul_le_mul_of_nonneg_left (by linarith) ((D.M.ν i).nonneg y)
+        · have hy0 : (D.M.ν i).w y = 0 := le_antisymm (le_of_not_gt hy) ((D.M.ν i).nonneg y)
+          simp [hy0]
+      _ = 2 * Real.exp (-((D.n : ℝ) ^ p)) := by
+        calc
+          _ = (∑ y, (D.M.ν i).w y) * (2 * Real.exp (-((D.n : ℝ) ^ p))) := by
+            rw [← Finset.sum_mul]
+          _ = 2 * Real.exp (-((D.n : ℝ) ^ p)) := by
+            rw [(D.M.ν i).sum_eq_one]
+            ring
+  have hColIdentity :
+      (∑ y, (D.M.ν i).w y * colDeg D.E D.G (D.M.μ i) y) =
+        1 - ∑ y, (D.M.ν i).w y * (1 - colDeg D.E D.G (D.M.μ i) y) := by
+    calc
+      _ = (∑ y, (D.M.ν i).w y) -
+            ∑ y, (D.M.ν i).w y * (1 - colDeg D.E D.G (D.M.μ i) y) := by
+        rw [← Finset.sum_sub_distrib]
+        apply Finset.sum_congr rfl
+        intro y _
+        ring
+      _ = _ := by rw [(D.M.ν i).sum_eq_one]
+  have hRowMean :
+      1 - 2 * Real.exp (-((D.n : ℝ) ^ p)) ≤
+        ∑ x, (D.M.μ i).w x * rowDeg D.E D.G x (D.M.ν i) := by
+    rw [hMean, hColIdentity]
+    linarith [hColMiss]
+  have hrow01 (x : Fin D.N) : 0 ≤ rowDeg D.E D.G x (D.M.ν i) ∧
+      rowDeg D.E D.G x (D.M.ν i) ≤ 1 := by
+    constructor
+    · unfold rowDeg
+      exact Finset.sum_nonneg fun y _ => mul_nonneg ((D.M.ν i).nonneg y) (ind_nonneg _)
+    · unfold rowDeg
+      calc
+        (∑ y, (D.M.ν i).w y * if Hits D.E D.G x y then (1 : ℝ) else 0) ≤
+            ∑ y, (D.M.ν i).w y := by
+          apply Finset.sum_le_sum
+          intro y _
+          by_cases hhit : Hits D.E D.G x y <;> simp [hhit, (D.M.ν i).nonneg y]
+        _ = 1 := (D.M.ν i).sum_eq_one
+  calc
+    _ ≤ ∑ x, (D.M.μ i).w x *
+          ((h : ℝ) * (1 - rowDeg D.E D.G x (D.M.ν i))) := by
+        apply Finset.sum_le_sum
+        intro x _
+        exact mul_le_mul_of_nonneg_left (powOneSub_le (hrow01 x).1 (hrow01 x).2 h)
+          ((D.M.μ i).nonneg x)
+    _ = (h : ℝ) * (1 -
+          ∑ x, (D.M.μ i).w x * rowDeg D.E D.G x (D.M.ν i)) := by
+        calc
+          _ = (h : ℝ) * ∑ x, (D.M.μ i).w x *
+                (1 - rowDeg D.E D.G x (D.M.ν i)) := by
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro x _
+            ring
+          _ = _ := by
+            have hsum :
+                (∑ x, (D.M.μ i).w x * (1 - rowDeg D.E D.G x (D.M.ν i))) =
+                  1 - ∑ x, (D.M.μ i).w x * rowDeg D.E D.G x (D.M.ν i) := by
+              calc
+                _ = (∑ x, (D.M.μ i).w x) -
+                      ∑ x, (D.M.μ i).w x * rowDeg D.E D.G x (D.M.ν i) := by
+                  rw [← Finset.sum_sub_distrib]
+                  apply Finset.sum_congr rfl
+                  intro x _
+                  ring
+                _ = _ := by rw [(D.M.μ i).sum_eq_one]
+            rw [hsum]
+    _ ≤ 2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) := by
+      have hmiss :
+          1 - ∑ x, (D.M.μ i).w x * rowDeg D.E D.G x (D.M.ν i) ≤
+            2 * Real.exp (-((D.n : ℝ) ^ p)) := by
+        linarith [hRowMean]
+      calc
+        _ ≤ (h : ℝ) * (2 * Real.exp (-((D.n : ℝ) ^ p))) :=
+          mul_le_mul_of_nonneg_left hmiss (Nat.cast_nonneg h)
+        _ = 2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) := by ring
+
+private theorem rowDeg_bounds {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (x : Fin N) (ν : Law N) : 0 ≤ rowDeg E G x ν ∧ rowDeg E G x ν ≤ 1 := by
+  constructor
+  · unfold rowDeg
+    exact Finset.sum_nonneg fun y _ => mul_nonneg (ν.nonneg y) (ind_nonneg _)
+  · unfold rowDeg
+    calc
+      (∑ y, ν.w y * if Hits E G x y then (1 : ℝ) else 0) ≤ ∑ y, ν.w y := by
+        apply Finset.sum_le_sum
+        intro y _
+        by_cases hhit : Hits E G x y <;> simp [hhit, ν.nonneg y]
+      _ = 1 := ν.sum_eq_one
+
+set_option maxHeartbeats 400000
 /-- L8.1c(G2) (08:107–123): with `L_g = ∫ (d_i^- - d_i^+) dη_g`, the own-colour defect `2ε` and survival
 `α_x^{|E(g)|} ≤ 1.1A_g` give `E[L_g | Θ_g] ≤ 2.2hεA_g`; Markov at `.1ΔA_g` fails with probability
 `O(hε/Δ) = exp(-n^p + n^{p/2} + O_h(1))`.  On (G3), the cutoff `d^+ ≥ (1-Δ)d^-` removes at most `L_g/Δ ≤ .1A_g`,
@@ -460,6 +988,8 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       ∀ g, D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) ≤
         Real.exp (-(D.n : ℝ) ^ c) := by
+  obtain ⟨nGrid, hGridAll⟩ := grid_facts η₀ hη₀
+  have hτpos : 0 < tau8 η₀ := tau8_pos hη₀
   have rPrimeFormula (D : Ctx η₀ β p h) (ξ : D.Tup) :
       D.R'.w ξ = ∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) := by
     simp only [Ctx.R', FinProb.map, FinProb.bind, FinProb.pi]
@@ -604,6 +1134,319 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
       _ = (FinProb.pi (fun u : D.CrossSub g => D.R')).expect F := hMarg
       _ = q ^ Fintype.card (D.CrossSub g) := hP
       _ = (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by rfl
+  have piFactor (D : Ctx η₀ β p h) (F : D.KeyT → D.Tup → ℝ) :
+      D.rawHidden.expect (fun Θ => ∏ k : D.KeyT, F k (Θ k)) =
+        ∏ k : D.KeyT, D.R'.expect (F k) := by
+    classical
+    change (∑ Θ : D.Hist, (∏ k : D.KeyT, D.R'.w (Θ k)) *
+        (∏ k : D.KeyT, F k (Θ k))) =
+      ∏ k : D.KeyT, ∑ ξ : D.Tup, D.R'.w ξ * F k ξ
+    calc
+      _ = ∑ Θ : D.Hist, ∏ k : D.KeyT, D.R'.w (Θ k) * F k (Θ k) := by
+        apply Finset.sum_congr rfl
+        intro Θ _
+        rw [← Finset.prod_mul_distrib]
+      _ = ∏ k : D.KeyT, ∑ ξ : D.Tup, D.R'.w ξ * F k ξ := by
+        rw [Fintype.prod_sum]
+  have ownCrossFactor (D : Ctx η₀ β p h) (g : D.KeyT) (x : Fin D.N) (i : D.M.ι) :
+      D.rawHidden.expect (fun Θ =>
+        D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+          ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) =
+        D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) *
+          (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+    classical
+    have hNoSelf : g ∉ crossKeys g := by
+      intro hg
+      have hd : keyDist g g = 1 := (Finset.mem_filter.mp hg).2
+      simp [keyDist] at hd
+    let F : D.KeyT → D.Tup → ℝ := fun k ξ =>
+      if k = g then D.postW ξ i * (if ¬ D.hitsAll x ξ then 1 else 0)
+      else if k ∈ crossKeys g then if D.hitsAll x ξ then 1 else 0 else 1
+    have hFactor (Θ : D.Hist) :
+        (∏ k : D.KeyT, F k (Θ k)) =
+          D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0) *
+            ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+      have hsplit := (Finset.prod_filter_mul_prod_filter_not Finset.univ
+        (fun k : D.KeyT => k = g) (fun k => F k (Θ k))).symm
+      have hcrossNe (k : D.KeyT) (hk : k ∈ crossKeys g) : k ≠ g := by
+        intro heq
+        exact hNoSelf (heq ▸ hk)
+      have hsingleton : Finset.univ.filter (fun k : D.KeyT => k = g) = {g} := by
+        ext k
+        simp
+      calc
+        _ = (∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k = g), F k (Θ k)) *
+              ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g), F k (Θ k) := by
+          simpa only [ne_eq] using hsplit
+        _ = (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0)) *
+              ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g),
+                (if k ∈ crossKeys g then (if D.hitsAll x (Θ k) then (1 : ℝ) else 0) else 1) := by
+          congr 1
+          · rw [hsingleton]
+            simp [F]
+          · apply Finset.prod_congr rfl
+            intro k hk
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+            simp [F, hk]
+        _ = (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0)) *
+              ∏ k ∈ crossKeys g, if D.hitsAll x (Θ k) then (1 : ℝ) else 0 := by
+          congr 1
+          rw [← Finset.prod_filter]
+          have hfilt :
+              (Finset.univ.filter (fun k : D.KeyT => k ≠ g)).filter
+                  (fun k => k ∈ crossKeys g) = crossKeys g := by
+            ext k
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+            constructor
+            · rintro ⟨hkneq, hk⟩
+              exact hk
+            · intro hk
+              exact ⟨hcrossNe k hk, hk⟩
+          rw [hfilt]
+        _ = D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0) *
+              ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+          congr 1
+          simp only [Ctx.CrossSub]
+          rw [Finset.univ_eq_attach]
+          exact (Finset.prod_attach (crossKeys g)
+            (fun k => if D.hitsAll x (Θ k) then (1 : ℝ) else 0)).symm
+    let own : D.Tup → ℝ := fun ξ => D.postW ξ i *
+      (if ¬ D.hitsAll x ξ then (1 : ℝ) else 0)
+    let hit : D.Tup → ℝ := fun ξ => if D.hitsAll x ξ then (1 : ℝ) else 0
+    let a : ℝ := D.R'.expect own
+    let b : ℝ := D.R'.pr (fun ξ => D.hitsAll x ξ)
+    have hProdEval :
+        (∏ k : D.KeyT, if k = g then a else if k ∈ crossKeys g then b else 1) =
+          a * b ^ Fintype.card (D.CrossSub g) := by
+      have hsplit := (Finset.prod_filter_mul_prod_filter_not Finset.univ
+        (fun k : D.KeyT => k = g)
+        (fun k => if k = g then a else if k ∈ crossKeys g then b else 1)).symm
+      have hcrossNe (k : D.KeyT) (hk : k ∈ crossKeys g) : k ≠ g := by
+        intro heq
+        exact hNoSelf (heq ▸ hk)
+      have hsingleton : Finset.univ.filter (fun k : D.KeyT => k = g) = {g} := by
+        ext k
+        simp
+      calc
+        _ = (∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k = g),
+              if k = g then a else if k ∈ crossKeys g then b else 1) *
+              ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g),
+                (if k = g then a else if k ∈ crossKeys g then b else 1) := by
+          simpa only [ne_eq] using hsplit
+        _ = a * ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g),
+              (if k ∈ crossKeys g then b else 1) := by
+          congr 1
+          · rw [hsingleton]
+            simp
+          · apply Finset.prod_congr rfl
+            intro k hk
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+            simp [hk]
+        _ = a * ∏ k ∈ crossKeys g, b := by
+          congr 1
+          rw [← Finset.prod_filter]
+          have hfilt :
+              (Finset.univ.filter (fun k : D.KeyT => k ≠ g)).filter
+                  (fun k => k ∈ crossKeys g) = crossKeys g := by
+            ext k
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+            constructor
+            · rintro ⟨hkneq, hk⟩
+              exact hk
+            · intro hk
+              exact ⟨hcrossNe k hk, hk⟩
+          rw [hfilt]
+        _ = a * b ^ Fintype.card (D.CrossSub g) := by
+          congr 1
+          simp [Ctx.CrossSub, Finset.prod_const]
+    have hEvalEach (k : D.KeyT) : D.R'.expect (F k) =
+        if k = g then a else if k ∈ crossKeys g then b else 1 := by
+      by_cases hkg : k = g
+      · simp [F, hkg, a, own]
+      · by_cases hkc : k ∈ crossKeys g
+        · simp [F, hkg, hkc, b, hit, FinProb.expect, FinProb.pr]
+        · simp [F, hkg, hkc, FinProb.expect, D.R'.sum_eq_one]
+    calc
+      _ = D.rawHidden.expect (fun Θ => ∏ k : D.KeyT, F k (Θ k)) := by
+        unfold FinProb.expect
+        apply Finset.sum_congr rfl
+        intro Θ _
+        exact congrArg (fun z => D.rawHidden.w Θ * z) (hFactor Θ).symm
+      _ = ∏ k : D.KeyT, D.R'.expect (F k) := piFactor D F
+      _ = ∏ k : D.KeyT, if k = g then a else if k ∈ crossKeys g then b else 1 := by
+        apply Finset.prod_congr rfl
+        intro k _
+        exact hEvalEach k
+      _ = a * b ^ Fintype.card (D.CrossSub g) := hProdEval
+      _ = D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) *
+          (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+        have ha : a = D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
+          dsimp [a, own]
+          exact posteriorOwnMiss D x i
+        rw [ha]
+  have crossIndicator (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N) :
+      (if D.crossHit Θ g x then (1 : ℝ) else 0) =
+    ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+    classical
+    by_cases hc : D.crossHit Θ g x
+    · have hc' : ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+        simpa [Ctx.crossHit] using hc
+      have hprod :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 1 := by
+        apply Finset.prod_eq_one
+        intro u _
+        simp [hc' u.1 u.2]
+      simp [hc, hprod]
+    · have hc' : ¬ ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+        simpa [Ctx.crossHit] using hc
+      push_neg at hc'
+      obtain ⟨u, hu, hnot⟩ := hc'
+      have hzero :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_attach _ ⟨u, hu⟩) (by simp [hnot])
+      simp [hc, hzero]
+  have hitDiffIndicator (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N) :
+      (if D.crossHit Θ g x then (1 : ℝ) else 0) -
+          (if D.ownHit Θ g x then (1 : ℝ) else 0) =
+        (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+          ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+    by_cases hc : D.crossHit Θ g x
+    · have hprod :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 1 := by
+        have hc' : ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+          simpa [Ctx.crossHit] using hc
+        apply Finset.prod_eq_one
+        intro u _
+        simp [hc' u.1 u.2]
+      have hown : D.ownHit Θ g x ↔ D.hitsAll x (Θ g) := by
+        change (D.crossHit Θ g x ∧ D.hitsAll x (Θ g)) ↔ D.hitsAll x (Θ g)
+        constructor
+        · intro hh
+          exact hh.2
+        · intro hh
+          exact ⟨hc, hh⟩
+      by_cases ho : D.hitsAll x (Θ g) <;> simp [hc, ho, hown, hprod]
+    · have hprod :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 0 := by
+        have hc' : ¬ ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+          simpa [Ctx.crossHit] using hc
+        push_neg at hc'
+        obtain ⟨u, hu, hnot⟩ := hc'
+        exact Finset.prod_eq_zero (Finset.mem_attach _ ⟨u, hu⟩) (by simp [hnot])
+      have hown : ¬ D.ownHit Θ g x := by
+        intro hh
+        exact hc hh.1
+      by_cases ho : D.hitsAll x (Θ g) <;> simp [hc, hown, ho, hprod]
+  have lossForm (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) :
+      ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) =
+        ∑ i, ∑ x, (D.M.μ i).w x *
+          (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+            ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) := by
+    classical
+    calc
+      _ = ∑ i, D.postW (Θ g) i *
+            ((∑ x, (D.M.μ i).w x * if D.crossHit Θ g x then (1 : ℝ) else 0) -
+              ∑ x, (D.M.μ i).w x * if D.ownHit Θ g x then (1 : ℝ) else 0) := by
+        simp [Ctx.dMinus, Ctx.dPlus]
+      _ = ∑ i, D.postW (Θ g) i *
+            ∑ x, ((D.M.μ i).w x * (if D.crossHit Θ g x then (1 : ℝ) else 0) -
+              (D.M.μ i).w x * (if D.ownHit Θ g x then (1 : ℝ) else 0)) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [← Finset.sum_sub_distrib]
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            (D.postW (Θ g) i *
+              ((if D.crossHit Θ g x then (1 : ℝ) else 0) -
+                (if D.ownHit Θ g x then (1 : ℝ) else 0))) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro x _
+        ring
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+              ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        apply Finset.sum_congr rfl
+        intro x _
+        rw [hitDiffIndicator]
+        ring
+  have rawLossMean (D : Ctx η₀ β p h) (g : D.KeyT) :
+      D.rawHidden.expect (fun Θ =>
+        ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) =
+        ∑ i, ∑ x, (D.M.μ i).w x *
+          (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+    classical
+    let H : D.Hist → D.M.ι → Fin D.N → ℝ := fun Θ i x =>
+      D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+        ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0
+    have hswap₁ :
+        (∑ Θ : D.Hist, ∑ i, ∑ x, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x)) =
+          ∑ i, ∑ Θ : D.Hist, ∑ x, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+      rw [Finset.sum_comm]
+    have hswap₂ (i : D.M.ι) :
+        (∑ Θ : D.Hist, ∑ x, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x)) =
+          ∑ x, ∑ Θ : D.Hist, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+      rw [Finset.sum_comm]
+    calc
+      _ = ∑ Θ : D.Hist, D.rawHidden.w Θ *
+            (∑ i, ∑ x, (D.M.μ i).w x * H Θ i x) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro Θ _
+          have hpoint :
+              (∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) =
+                ∑ i, ∑ x, (D.M.μ i).w x * H Θ i x := by
+            simpa [H] using (lossForm D Θ g)
+          exact congrArg (fun z => D.rawHidden.w Θ * z) hpoint
+      _ = ∑ Θ : D.Hist, ∑ i, ∑ x,
+            D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+          apply Finset.sum_congr rfl
+          intro Θ _
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro i _
+          rw [Finset.mul_sum]
+      _ = ∑ i, ∑ x, ∑ Θ : D.Hist,
+            D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+          rw [hswap₁]
+          apply Finset.sum_congr rfl
+          intro i _
+          rw [hswap₂]
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            D.rawHidden.expect (fun Θ => H Θ i x) := by
+          apply Finset.sum_congr rfl
+          intro i _
+          apply Finset.sum_congr rfl
+          intro x _
+          calc
+            (∑ Θ : D.Hist, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x)) =
+                ∑ Θ, (D.M.μ i).w x * (D.rawHidden.w Θ * H Θ i x) := by
+              apply Finset.sum_congr rfl
+              intro Θ _
+              ring
+            _ = (D.M.μ i).w x * ∑ Θ : D.Hist, D.rawHidden.w Θ * H Θ i x := by
+              rw [Finset.mul_sum]
+            _ = (D.M.μ i).w x * D.rawHidden.expect (fun Θ => H Θ i x) := rfl
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+              (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+          apply Finset.sum_congr rfl
+          intro i _
+          apply Finset.sum_congr rfl
+          intro x _
+          rw [show D.rawHidden.expect (fun Θ => H Θ i x) =
+            D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) *
+              (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) by
+                exact ownCrossFactor D g x i]
+          ring
   have rPrimeHit (D : Ctx η₀ β p h) (x : Fin D.N) :
       D.R'.pr (fun ξ => D.hitsAll x ξ) =
         ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by
@@ -790,7 +1633,411 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     have hApos' := hApos
     norm_num at hbad
     nlinarith [hApos']
-  sorry
+  have crossSurvivalBound (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N))
+      (hStd : Std D γ K X Y R)
+      (hGrid : GridFacts η₀ D.n) (hScale : 8 ≤ (D.n : ℝ) ^ tau8 η₀)
+      (g : D.KeyT) (x : Fin D.N) (hx : x ∈ R) :
+      (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) ≤ 2 * D.AG g := by
+    let δ : ℝ := (D.n : ℝ) ^ (-(eta8 η₀ / 2))
+    let B : ℝ := ((2 : ℝ) ^ h)⁻¹
+    have hnNat : 0 < D.n := by
+      have hnN := hGrid.pos.1
+      omega
+    have hn : 1 ≤ (D.n : ℝ) := by exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hnNat.ne')
+    have hnpos : 0 < (D.n : ℝ) := by positivity
+    have hδnonneg : 0 ≤ δ := by dsimp [δ]; positivity
+    have hδeq : δ = (D.n : ℝ) ^ (-2 * tau8 η₀) := by
+      dsimp [δ]
+      congr 1
+      rw [tau8_eq]
+      ring
+    have htδ : (D.n : ℝ) ^ tau8 η₀ * δ = (D.n : ℝ) ^ (-tau8 η₀) := by
+      rw [hδeq, ← Real.rpow_add hnpos]
+      congr 1
+      ring
+    have hδle : δ ≤ (D.n : ℝ) ^ (-tau8 η₀) := by
+      rw [hδeq]
+      exact Real.rpow_le_rpow_of_exponent_le hn (by linarith [hτpos])
+    have hsCast : (sC η₀ D.n : ℝ) < (D.n : ℝ) ^ tau8 η₀ + 1 := by
+      dsimp [sC]
+      exact Nat.ceil_lt_add_one (Real.rpow_nonneg (Nat.cast_nonneg D.n) _)
+    have hsδ : (sC η₀ D.n : ℝ) * δ ≤ 2 * (D.n : ℝ) ^ (-tau8 η₀) := by
+      have hmul := mul_le_mul_of_nonneg_right hsCast.le hδnonneg
+      calc
+        (sC η₀ D.n : ℝ) * δ ≤ ((D.n : ℝ) ^ tau8 η₀ + 1) * δ := hmul
+        _ = (D.n : ℝ) ^ (-tau8 η₀) + δ := by rw [add_mul, htδ, one_mul]
+        _ ≤ 2 * (D.n : ℝ) ^ (-tau8 η₀) := by linarith [hδle]
+    have hInvTau : (D.n : ℝ) ^ (-tau8 η₀) ≤ 1 / 8 := by
+      rw [Real.rpow_neg hnpos.le]
+      simpa [one_div] using (one_div_le_one_div_of_le (by norm_num) hScale)
+    have hcard : Fintype.card (D.CrossSub g) ≤ 2 * sC η₀ D.n := by
+      have hc := hGrid.crossKeys_card g
+      simpa [Ctx.CrossSub] using hc
+    have hcardδ : (Fintype.card (D.CrossSub g) : ℝ) * δ ≤ Real.log 2 := by
+      have hmul : (Fintype.card (D.CrossSub g) : ℝ) * δ ≤
+          2 * (sC η₀ D.n : ℝ) * δ := by
+        exact mul_le_mul_of_nonneg_right (by exact_mod_cast hcard) hδnonneg
+      calc
+        (Fintype.card (D.CrossSub g) : ℝ) * δ ≤ 2 * (sC η₀ D.n : ℝ) * δ := hmul
+        _ ≤ 4 * (D.n : ℝ) ^ (-tau8 η₀) := by nlinarith [hsδ]
+        _ ≤ 1 / 2 := by nlinarith [hInvTau]
+        _ ≤ Real.log 2 := by linarith [Real.log_two_gt_d9]
+    have hbase : 0 ≤ B := by dsimp [B]; positivity
+    have hbasePos : 0 < B := by dsimp [B]; positivity
+    have hbasePow : B ^ Fintype.card (D.CrossSub g) = D.AG g := by
+      simp [B, Ctx.AG, inv_pow, pow_mul, Nat.mul_comm, Ctx.CrossSub]
+    have hq : D.R'.pr (fun ξ => D.hitsAll x ξ) ≤ B * (1 + δ) := by
+      have hsurv := hStd.survival x hx
+      have hupper := (abs_le.mp hsurv).2
+      calc
+        D.R'.pr (fun ξ => D.hitsAll x ξ) =
+            ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := rPrimeHit D x
+        _ ≤ B + B * δ := by dsimp [B, δ]; linarith [hupper]
+        _ = B * (1 + δ) := by ring
+    have hqnonneg : 0 ≤ D.R'.pr (fun ξ => D.hitsAll x ξ) := pr_nonneg D.R' _
+    have hpow :
+        (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) ≤
+          B ^ Fintype.card (D.CrossSub g) * (1 + δ) ^ Fintype.card (D.CrossSub g) := by
+      calc
+        _ ≤ (B * (1 + δ)) ^ Fintype.card (D.CrossSub g) := by gcongr
+        _ = _ := by rw [mul_pow]
+    have hAddExp : 1 + δ ≤ Real.exp δ := by
+      have h := Real.add_one_le_exp δ
+      linarith
+    have hExpo : (1 + δ) ^ Fintype.card (D.CrossSub g) ≤ 2 := by
+      calc
+        _ ≤ (Real.exp δ) ^ Fintype.card (D.CrossSub g) := by gcongr
+        _ = Real.exp ((Fintype.card (D.CrossSub g) : ℝ) * δ) := by
+          rw [← Real.exp_nat_mul]
+        _ ≤ Real.exp (Real.log 2) := Real.exp_le_exp.mpr hcardδ
+        _ = 2 := Real.exp_log (by norm_num)
+    calc
+      _ ≤ B ^ Fintype.card (D.CrossSub g) * (1 + δ) ^ Fintype.card (D.CrossSub g) := hpow
+      _ ≤ D.AG g * 2 := by
+        rw [hbasePow]
+        exact mul_le_mul_of_nonneg_left hExpo (le_of_lt (by unfold Ctx.AG; positivity))
+      _ = 2 * D.AG g := by ring
+  have expectedLossBound (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N))
+      (hStd : Std D γ K X Y R) (hGrid : GridFacts η₀ D.n)
+      (hScale : 8 ≤ (D.n : ℝ) ^ tau8 η₀) (g : D.KeyT) :
+      D.rawHidden.expect (fun Θ =>
+        ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) ≤
+          4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := by
+    rw [rawLossMean]
+    have hmiss0 (i : D.M.ι) (x : Fin D.N) :
+        0 ≤ 1 - rowDeg D.E D.G x (D.M.ν i) ^ h := by
+      have hr := rowDeg_bounds D.E D.G x (D.M.ν i)
+      have hpw : rowDeg D.E D.G x (D.M.ν i) ^ h ≤ 1 := pow_le_one₀ hr.1 hr.2
+      linarith
+    have hterm (i : D.M.ι) (hΛ : 0 < D.M.Λ i) (x : Fin D.N) :
+        (D.M.μ i).w x * (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) ≤
+          (D.M.μ i).w x * (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (2 * D.AG g) := by
+      have hcoef : 0 ≤ (D.M.μ i).w x *
+          (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) :=
+        mul_nonneg ((D.M.μ i).nonneg x)
+          (mul_nonneg (D.M.Λ_nonneg i) (hmiss0 i x))
+      by_cases hx : x ∈ R
+      · exact mul_le_mul_of_nonneg_left (crossSurvivalBound D X Y R hStd hGrid hScale g x hx) hcoef
+      · have hlaw := hStd.laws i hΛ
+        have hzero : (D.M.μ i).w x = 0 := hlaw.1 x hx
+        simp [hzero]
+    have hInner (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+        (∑ x, (D.M.μ i).w x * (D.M.Λ i *
+          (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g)) ≤
+          (D.M.Λ i * (2 * D.AG g)) *
+            (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p))) := by
+      have hown := ownMissBound η₀ γ β p K h D X Y R hStd i hΛ
+      have hAGpos : 0 < D.AG g := by unfold Ctx.AG; positivity
+      have hcoef : 0 ≤ D.M.Λ i * (2 * D.AG g) :=
+        mul_nonneg (D.M.Λ_nonneg i)
+          (mul_nonneg (by norm_num) hAGpos.le)
+      calc
+        _ ≤ ∑ x, (D.M.μ i).w x * (D.M.Λ i *
+              (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) * (2 * D.AG g) := by
+          apply Finset.sum_le_sum
+          intro x _
+          exact hterm i hΛ x
+        _ = (D.M.Λ i * (2 * D.AG g)) *
+              ∑ x, (D.M.μ i).w x * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
+          calc
+            _ = ∑ x, (D.M.Λ i * (2 * D.AG g)) *
+                  ((D.M.μ i).w x * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) := by
+              apply Finset.sum_congr rfl
+              intro x _
+              ring
+            _ = _ := by rw [Finset.mul_sum]
+        _ ≤ (D.M.Λ i * (2 * D.AG g)) *
+              (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p))) :=
+          mul_le_mul_of_nonneg_left hown hcoef
+    have hOuter :
+        (∑ i, (D.M.Λ i * (2 * D.AG g)) *
+          (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)))) ≤
+          4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := by
+      calc
+        _ = (∑ i, D.M.Λ i) *
+              ((2 * D.AG g) * (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)))) := by
+          calc
+            _ = ∑ i, D.M.Λ i *
+                  ((2 * D.AG g) * (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)))) := by
+              apply Finset.sum_congr rfl
+              intro i _
+              ring
+            _ = _ := by rw [Finset.sum_mul]
+        _ = 4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := by
+          rw [D.M.Λ_sum]
+          ring
+        _ ≤ 4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := le_rfl
+    calc
+      _ ≤ ∑ i, (D.M.Λ i * (2 * D.AG g)) *
+            (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p))) := by
+          apply Finset.sum_le_sum
+          intro i _
+          by_cases hΛ : 0 < D.M.Λ i
+          · exact hInner i hΛ
+          · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
+            rw [hΛ0]
+            simp only [zero_mul, mul_zero, Finset.sum_const_zero, le_refl]
+      _ ≤ 4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := hOuter
+  have hScaleEvent : ∀ᶠ n : ℕ in Filter.atTop, 8 < (n : ℝ) ^ tau8 η₀ := by
+    have ht := (_root_.tendsto_rpow_atTop hτpos).comp tendsto_natCast_atTop_atTop
+    filter_upwards [ht.eventually_gt_atTop 8] with n hn
+    exact hn
+  let cutScale : ℝ := 4 * ((h : ℝ) + 10)
+  have hCutScaleEvent : ∀ᶠ n : ℕ in Filter.atTop,
+      cutScale < (n : ℝ) ^ tau8 η₀ := by
+    have ht := (_root_.tendsto_rpow_atTop hτpos).comp tendsto_natCast_atTop_atTop
+    filter_upwards [ht.eventually_gt_atTop cutScale] with n hn
+    exact hn
+  have hpHalf : 0 < p / 2 := by positivity
+  have hProbScaleEvent : ∀ᶠ n : ℕ in Filter.atTop,
+      80 * (h : ℝ) + 3 < (n : ℝ) ^ (p / 2) := by
+    have ht := (_root_.tendsto_rpow_atTop hpHalf).comp tendsto_natCast_atTop_atTop
+    filter_upwards [ht.eventually_gt_atTop (80 * (h : ℝ) + 3)] with n hn
+    exact hn
+  obtain ⟨nScale, hScaleAt⟩ := Filter.eventually_atTop.1 hScaleEvent
+  obtain ⟨nCut, hCutAt⟩ := Filter.eventually_atTop.1 hCutScaleEvent
+  obtain ⟨nProb, hProbAt⟩ := Filter.eventually_atTop.1 hProbScaleEvent
+  let n₀ : ℕ := max nGrid (max nScale (max nCut nProb))
+  have cutoffBound (D : Ctx η₀ β p h) (hGrid : GridFacts η₀ D.n)
+      (hCutScale : cutScale ≤ (D.n : ℝ) ^ tau8 η₀) (g : D.KeyT) :
+      D.cut ≤ (1 / 20 : ℝ) * D.AG g := by
+    let t : ℝ := (D.n : ℝ) ^ tau8 η₀
+    let k : ℕ := h * Fintype.card (D.CrossSub g)
+    have hn : 1 ≤ D.n := hGrid.pos.1
+    have hnpos : 0 < (D.n : ℝ) := by exact_mod_cast (by omega : 0 < D.n)
+    have htpos : 0 ≤ t := by dsimp [t]; positivity
+    have hsCast : (sC η₀ D.n : ℝ) < t + 1 := by
+      dsimp [t, sC]
+      exact Nat.ceil_lt_add_one (Real.rpow_nonneg (Nat.cast_nonneg D.n) _)
+    have hcard := hGrid.crossKeys_card g
+    have hk : (k : ℝ) ≤ 2 * (h : ℝ) * (t + 1) := by
+      dsimp [k, t]
+      have hcardNat : Fintype.card (D.CrossSub g) ≤ 2 * sC η₀ D.n := by
+        have hsub : Fintype.card (D.CrossSub g) = (crossKeys g).card := by
+          simp [Ctx.CrossSub]
+        rw [hsub]
+        exact hcard
+      have hcard' : (Fintype.card (D.CrossSub g) : ℝ) ≤ 2 * (sC η₀ D.n : ℝ) := by
+        exact_mod_cast hcardNat
+      calc
+        ((h * Fintype.card (D.CrossSub g) : ℕ) : ℝ) =
+            (h : ℝ) * Fintype.card (D.CrossSub g) := by push_cast; ring
+        _ ≤ (h : ℝ) * (2 * (sC η₀ D.n : ℝ)) := by
+          exact mul_le_mul_of_nonneg_left hcard' (Nat.cast_nonneg h)
+        _ ≤ (h : ℝ) * (2 * (t + 1)) := by
+          apply mul_le_mul_of_nonneg_left _ (Nat.cast_nonneg h)
+          nlinarith [hsCast]
+        _ = 2 * (h : ℝ) * (t + 1) := by ring
+    have hquad : 20 + (k : ℝ) ≤ t * t := by
+      have hcs : 4 * ((h : ℝ) + 10) ≤ t := by simpa [cutScale, t] using hCutScale
+      have hh0 : (0 : ℝ) ≤ (h : ℝ) := by exact_mod_cast Nat.zero_le h
+      have ht40 : 40 ≤ t := by
+        calc
+          40 ≤ 4 * ((h : ℝ) + 10) := by nlinarith [hh0]
+          _ ≤ t := hcs
+      have hhBound : 2 * (h : ℝ) ≤ t / 2 := by
+        have hfour : 4 * (h : ℝ) ≤ t := by
+          calc
+            4 * (h : ℝ) ≤ 4 * ((h : ℝ) + 10) := by nlinarith [hh0]
+            _ ≤ t := hcs
+        linarith [hfour]
+      have hmulT : 2 * (h : ℝ) * (t + 1) ≤ (t / 2) * (t + 1) :=
+        mul_le_mul_of_nonneg_right hhBound (by positivity)
+      have hsmall : 20 + 2 * (h : ℝ) * (t + 1) ≤ t * t := by
+        nlinarith [hmulT, ht40]
+      linarith [hk, hsmall]
+    have htSq : t * t = (D.n : ℝ) ^ (2 * tau8 η₀) := by
+      dsimp [t]
+      calc
+        (D.n : ℝ) ^ tau8 η₀ * (D.n : ℝ) ^ tau8 η₀ =
+            (D.n : ℝ) ^ (tau8 η₀ + tau8 η₀) :=
+              by rw [← Real.rpow_add hnpos]
+        _ = (D.n : ℝ) ^ (2 * tau8 η₀) := by congr 1 <;> ring
+    have h20 : 20 ≤ Real.exp 20 := by
+      have h := Real.add_one_le_exp (20 : ℝ)
+      linarith
+    have hTwoExp (m : ℕ) : (2 : ℝ) ^ m ≤ Real.exp (m : ℝ) := by
+      calc
+        (2 : ℝ) ^ m ≤ (Real.exp 1) ^ m := by gcongr; exact Real.exp_one_gt_two.le
+        _ = Real.exp (m : ℝ) := by rw [← Real.exp_nat_mul]; simp
+    have hExpCut : 20 * (2 : ℝ) ^ k ≤ Real.exp (t * t) := by
+      calc
+        20 * (2 : ℝ) ^ k ≤ Real.exp 20 * Real.exp (k : ℝ) :=
+          mul_le_mul h20 (hTwoExp k) (by positivity) (by positivity)
+        _ = Real.exp (20 + (k : ℝ)) := by rw [← Real.exp_add]
+        _ ≤ Real.exp (t * t) := Real.exp_le_exp.mpr hquad
+    have h20powPos : 0 < (20 : ℝ) * (2 : ℝ) ^ k := by positivity
+    have hExpPos : 0 < Real.exp (t * t) := Real.exp_pos _
+    have hInv : (Real.exp (t * t))⁻¹ ≤ (20 * (2 : ℝ) ^ k)⁻¹ :=
+      (inv_le_inv₀ hExpPos h20powPos).2 hExpCut
+    calc
+      D.cut = Real.exp (-(t * t)) := by
+        unfold Ctx.cut
+        rw [← htSq]
+      _ = (Real.exp (t * t))⁻¹ := Real.exp_neg (t * t)
+      _ ≤ (20 * (2 : ℝ) ^ k)⁻¹ := hInv
+      _ = (1 / 20 : ℝ) * ((2 : ℝ) ^ k)⁻¹ := by field_simp
+      _ = (1 / 20 : ℝ) * D.AG g := by
+        unfold Ctx.AG
+        dsimp [k]
+        rw [show Fintype.card (D.CrossSub g) = (crossKeys g).card by simp [Ctx.CrossSub]]
+  have postWSum (D : Ctx η₀ β p h) (ξ : D.Tup) : ∑ i, D.postW ξ i = 1 := by
+    by_cases hzero : D.R'.w ξ = 0
+    · simp [Ctx.postW, hzero, D.M.Λ_sum]
+    · have hRpos : 0 < D.R'.w ξ := lt_of_le_of_ne (D.R'.nonneg ξ) (Ne.symm hzero)
+      have hnum : ∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j) = D.R'.w ξ :=
+        (rPrimeFormula D ξ).symm
+      simp only [Ctx.postW, if_neg hzero]
+      rw [← Finset.sum_div (s := Finset.univ), hnum]
+      exact div_self (ne_of_gt hRpos)
+  have markov (D : Ctx η₀ β p h) (f : D.Hist → ℝ) (t : ℝ) (ht : 0 < t)
+      (hf : ∀ Θ, 0 ≤ f Θ) :
+      D.rawHidden.pr (fun Θ => t < f Θ) ≤ D.rawHidden.expect f / t := by
+    classical
+    unfold FinProb.pr FinProb.expect
+    calc
+      _ ≤ ∑ Θ : D.Hist, D.rawHidden.w Θ * f Θ / t := by
+        apply Finset.sum_le_sum
+        intro Θ _
+        by_cases hbad : t < f Θ
+        · rw [if_pos hbad]
+          have hratio : 1 ≤ f Θ / t := (le_div_iff₀ ht).2 (by linarith)
+          calc
+            D.rawHidden.w Θ ≤ D.rawHidden.w Θ * (f Θ / t) := by
+              simpa using mul_le_mul_of_nonneg_left hratio (D.rawHidden.nonneg Θ)
+            _ = D.rawHidden.w Θ * f Θ / t := by ring
+        · rw [if_neg hbad]
+          exact div_nonneg (mul_nonneg (D.rawHidden.nonneg Θ) (hf Θ)) ht.le
+      _ = (∑ Θ : D.Hist, D.rawHidden.w Θ * f Θ) / t := by
+        rw [← Finset.sum_div (s := Finset.univ)]
+      _ = _ := rfl
+  refine ⟨p / 2, hpHalf, n₀, ?_⟩
+  intro D hn X Y R hStd g
+  have hnGrid : nGrid ≤ D.n := by dsimp [n₀] at hn; omega
+  have hnScale : nScale ≤ D.n := by dsimp [n₀] at hn; omega
+  have hnCut : nCut ≤ D.n := by dsimp [n₀] at hn; omega
+  have hnProb : nProb ≤ D.n := by dsimp [n₀] at hn; omega
+  have hGridD : GridFacts η₀ D.n := hGridAll D.n hnGrid
+  have hScaleD : 8 ≤ (D.n : ℝ) ^ tau8 η₀ := (hScaleAt D.n hnScale).le
+  have hCutScaleD : cutScale ≤ (D.n : ℝ) ^ tau8 η₀ := (hCutAt D.n hnCut).le
+  have hProbD : 80 * (h : ℝ) + 3 < (D.n : ℝ) ^ (p / 2) := hProbAt D.n hnProb
+  have hΔpos : 0 < D.Δ := by unfold Ctx.Δ; positivity
+  have hΔle : D.Δ ≤ 1 := by
+    unfold Ctx.Δ
+    calc
+      Real.exp (-((D.n : ℝ) ^ (p / 2))) ≤ Real.exp 0 := by
+        apply Real.exp_le_exp.mpr
+        exact neg_nonpos.mpr (Real.rpow_nonneg (Nat.cast_nonneg D.n) _)
+      _ = 1 := by simp
+  have hAGpos : 0 < D.AG g := by unfold Ctx.AG; positivity
+  let thresh : ℝ := (1 / 20 : ℝ) * D.Δ * D.AG g
+  have hthresh : 0 < thresh := by dsimp [thresh]; positivity
+  let L : D.Hist → ℝ := fun Θ =>
+    ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)
+  have hLnonneg (Θ : D.Hist) : 0 ≤ L Θ := by
+    dsimp [L]
+    rw [lossForm]
+    apply Finset.sum_nonneg
+    intro i _
+    apply Finset.sum_nonneg
+    intro x _
+    have hmiss : 0 ≤ if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0 := by
+      split_ifs <;> positivity
+    have hcross : 0 ≤ ∏ u : D.CrossSub g,
+        if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 :=
+      Finset.prod_nonneg fun u _ => by split_ifs <;> positivity
+    exact mul_nonneg ((D.M.μ i).nonneg x)
+      (mul_nonneg (mul_nonneg (D.postW_nonneg _ _) hmiss) hcross)
+  have hBadSub : ∀ Θ, D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g → thresh < L Θ := by
+    intro Θ ⟨_, h34, hnot⟩
+    dsimp [thresh, L]
+    exact cutoffLoss D Θ g h34 hnot (postWSum D (Θ g))
+      (cutoffBound D hGridD hCutScaleD g) hΔpos hΔle
+  have hPrEvent :
+      D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) ≤
+        D.rawHidden.pr (fun Θ => thresh < L Θ) :=
+    FinProb.pr_mono D.rawHidden _ _ hBadSub
+  have hExpL := expectedLossBound D X Y R hStd hGridD hScaleD g
+  have hRatio :
+      (4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g) / thresh =
+        80 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) := by
+    dsimp [thresh]
+    unfold Ctx.Δ
+    field_simp [ne_of_gt hAGpos, Real.exp_ne_zero]
+    have hExpProd :
+        Real.exp (-((D.n : ℝ) ^ (p / 2))) *
+            Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) =
+          Real.exp (-((D.n : ℝ) ^ p)) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    calc
+      _ = 80 * (h : ℝ) *
+            (Real.exp (-((D.n : ℝ) ^ (p / 2))) *
+              Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2))) := by
+        rw [← hExpProd]
+        ring
+      _ = (h : ℝ) * Real.exp (-((D.n : ℝ) ^ (p / 2))) * 80 *
+            Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) := by ring
+  have hpowProb : ((D.n : ℝ) ^ (p / 2)) * ((D.n : ℝ) ^ (p / 2)) =
+      (D.n : ℝ) ^ p := by
+    have hnNatD : 0 < D.n := by have hn1 := hGridD.pos.1; omega
+    have hnPosD : 0 < (D.n : ℝ) := by exact_mod_cast hnNatD
+    calc
+      _ = (D.n : ℝ) ^ (p / 2 + p / 2) := (Real.rpow_add hnPosD _ _).symm
+      _ = (D.n : ℝ) ^ p := by congr 1 <;> ring
+  have hprobQuad : 80 * (h : ℝ) + 2 * (D.n : ℝ) ^ (p / 2) ≤
+      ((D.n : ℝ) ^ (p / 2)) ^ 2 := by
+    nlinarith [hProbD]
+  have h80exp : 80 * (h : ℝ) ≤ Real.exp (80 * (h : ℝ)) := by
+    have hh := Real.add_one_le_exp (80 * (h : ℝ))
+    linarith
+  have hRatioTail :
+      80 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) ≤
+        Real.exp (-((D.n : ℝ) ^ (p / 2))) := by
+    calc
+      _ ≤ Real.exp (80 * (h : ℝ)) *
+            Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) :=
+          mul_le_mul_of_nonneg_right h80exp (Real.exp_nonneg _)
+      _ = Real.exp (80 * (h : ℝ) - ((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) := by
+        rw [← Real.exp_add]
+        congr 1 <;> ring
+      _ ≤ Real.exp (-((D.n : ℝ) ^ (p / 2))) := by
+        apply Real.exp_le_exp.mpr
+        rw [← hpowProb]
+        linarith [hprobQuad]
+  calc
+    _ ≤ D.rawHidden.pr (fun Θ => thresh < L Θ) := hPrEvent
+    _ ≤ D.rawHidden.expect L / thresh := markov D L thresh hthresh hLnonneg
+    _ ≤ (4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g) / thresh :=
+      div_le_div_of_nonneg_right hExpL hthresh.le
+    _ = 80 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p) + (D.n : ℝ) ^ (p / 2)) := hRatio
+    _ ≤ Real.exp (-((D.n : ℝ) ^ (p / 2))) := hRatioTail
+
+set_option maxHeartbeats 200000
 
 /-- L8.1c, union bound (08:76): three stretched-exponential tails at exponents `a, b, c` give a base-gate tail at
 exponent `min(a, b, c)/2` for large `n`. -/

@@ -1,6 +1,6 @@
 import Mathlib
 
-namespace HypercubeRamsey.S12
+namespace HypercubeRamsey.Lane_q_s12_peel
 
 open scoped BigOperators
 
@@ -169,4 +169,4 @@ theorem finite_ramsey_exists {α : Type*} [DecidableEq α]
                       exact fun hRxv => hnot (hSymm x v hRxv)
                     · exact hCind.2 x hxC y hyC hxy
 
-end HypercubeRamsey.S12
+end HypercubeRamsey.Lane_q_s12_peel

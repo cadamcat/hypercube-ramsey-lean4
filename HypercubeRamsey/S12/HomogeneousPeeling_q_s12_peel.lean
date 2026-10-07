@@ -1,8 +1,9 @@
 import HypercubeRamsey.S12.Defs
 
-namespace HypercubeRamsey.S12
+namespace HypercubeRamsey.Lane_q_s12_peel
 
 open HypercubeRamsey
+open HypercubeRamsey.S12
 open Classical
 open scoped BigOperators
 
@@ -294,4 +295,306 @@ theorem corr_sign_independent_false {N : ℕ}
       _ = (ξ / 4) ^ 2 := hquarter
   exact (not_lt_of_ge hsmall.le hdiv)
 
-end HypercubeRamsey.S12
+/-- Deleting coordinates from a homogeneous positive product term costs one
+inverse degree factor for each deleted label and column. -/
+theorem posTerm_delete {N d u : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Law N) (xs : Fin u → Fin N) (I K : Finset (Fin u))
+    (hdeg : ∀ i ∈ I, 0 < deg E c π.w (xs i)) :
+    posTerm E c (fun _ : Fin d => π.w) I xs ≤
+      (∏ i ∈ I \ K, Real.rpow (deg E c π.w (xs i)) (-(d : ℝ))) *
+        posTerm E c (fun _ : Fin d => π.w) (I ∩ K) xs := by
+  classical
+  let A := I \ K
+  let B := I ∩ K
+  let factor : ℝ := ∏ i ∈ A, (1 / deg E c π.w (xs i))
+  have hcoef (i : Fin u) (hi : i ∈ I) (y : Fin N) :
+      1 + acoef E c π.w (xs i) y = hit E c (xs i) y / deg E c π.w (xs i) := by
+    unfold acoef
+    ring
+  have hratio (i : Fin u) (hi : i ∈ I) (y : Fin N) :
+      0 ≤ hit E c (xs i) y / deg E c π.w (xs i) ∧
+        hit E c (xs i) y / deg E c π.w (xs i) ≤ 1 / deg E c π.w (xs i) := by
+    have hhit : 0 ≤ hit E c (xs i) y ∧ hit E c (xs i) y ≤ 1 := by
+      unfold hit
+      split_ifs <;> norm_num
+    have hd := hdeg i hi
+    exact ⟨div_nonneg hhit.1 hd.le, div_le_div_of_nonneg_right hhit.2 hd.le⟩
+  have hdegUpper (i : Fin u) (hi : i ∈ I) : deg E c π.w (xs i) ≤ 1 := by
+    unfold deg
+    calc
+      (∑ y, π.w y * hit E c (xs i) y) ≤ ∑ y, π.w y := by
+        apply Finset.sum_le_sum
+        intro y hy
+        have hhit : hit E c (xs i) y ≤ 1 := by
+          unfold hit
+          split_ifs <;> norm_num
+        calc
+          π.w y * hit E c (xs i) y ≤ π.w y * 1 :=
+            mul_le_mul_of_nonneg_left hhit (π.nonneg y)
+          _ = π.w y := by ring
+      _ = 1 := π.sum_eq_one
+  have hprod (y : Fin N) :
+      (∏ i ∈ I, hit E c (xs i) y / deg E c π.w (xs i)) ≤
+        factor * (∏ i ∈ B, hit E c (xs i) y / deg E c π.w (xs i)) := by
+    have hA : (∏ i ∈ A, hit E c (xs i) y / deg E c π.w (xs i)) ≤ factor := by
+      dsimp [factor, A]
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact (hratio i (Finset.mem_sdiff.mp hi).1 y).1
+      · intro i hi
+        exact (hratio i (Finset.mem_sdiff.mp hi).1 y).2
+    have hBnonneg : 0 ≤ ∏ i ∈ B, hit E c (xs i) y / deg E c π.w (xs i) := by
+      apply Finset.prod_nonneg
+      intro i hi
+      exact (hratio i (Finset.mem_inter.mp hi).1 y).1
+    calc
+      (∏ i ∈ I, hit E c (xs i) y / deg E c π.w (xs i)) =
+          (∏ i ∈ A, hit E c (xs i) y / deg E c π.w (xs i)) *
+            ∏ i ∈ B, hit E c (xs i) y / deg E c π.w (xs i) := by
+        rw [← Finset.sdiff_union_inter I K,
+          Finset.prod_union (Finset.disjoint_sdiff_inter I K)]
+      _ ≤ factor * ∏ i ∈ B, hit E c (xs i) y / deg E c π.w (xs i) :=
+        mul_le_mul_of_nonneg_right hA hBnonneg
+  have hcol (J : Finset (Fin u)) (hJ : J ⊆ I) :
+      (∑ y, π.w y * ∏ i ∈ J, (1 + acoef E c π.w (xs i) y)) ≤
+        factor * (∑ y, π.w y * ∏ i ∈ J ∩ K, (1 + acoef E c π.w (xs i) y)) := by
+    calc
+      (∑ y, π.w y * ∏ i ∈ J, (1 + acoef E c π.w (xs i) y)) ≤
+          ∑ y, π.w y * (factor * ∏ i ∈ J ∩ K,
+            hit E c (xs i) y / deg E c π.w (xs i)) := by
+        apply Finset.sum_le_sum
+        intro y hy
+        have hcoefJ : ∀ i ∈ J,
+            1 + acoef E c π.w (xs i) y = hit E c (xs i) y / deg E c π.w (xs i) :=
+          fun i hi => hcoef i (hJ hi) y
+        have hprodCoefJ :
+            (∏ i ∈ J, (1 + acoef E c π.w (xs i) y)) =
+              ∏ i ∈ J, hit E c (xs i) y / deg E c π.w (xs i) := by
+          apply Finset.prod_congr rfl
+          intro i hi
+          exact hcoefJ i hi
+        rw [hprodCoefJ]
+        have hprodJ :
+            (∏ i ∈ J, hit E c (xs i) y / deg E c π.w (xs i)) ≤
+              factor * ∏ i ∈ J ∩ K, hit E c (xs i) y / deg E c π.w (xs i) := by
+          have hAsmall :
+              (∏ i ∈ J \ K, hit E c (xs i) y / deg E c π.w (xs i)) ≤
+                ∏ i ∈ J \ K, (1 / deg E c π.w (xs i)) := by
+            apply Finset.prod_le_prod₀
+            · intro i hi
+              exact (hratio i (hJ (Finset.mem_sdiff.mp hi).1) y).1
+            · intro i hi
+              exact (hratio i (hJ (Finset.mem_sdiff.mp hi).1) y).2
+          have hsub : J \ K ⊆ I \ K := by
+            intro i hi
+            exact Finset.mem_sdiff.mpr
+              ⟨hJ (Finset.mem_sdiff.mp hi).1, (Finset.mem_sdiff.mp hi).2⟩
+          have hAsup :
+              (∏ i ∈ J \ K, (1 / deg E c π.w (xs i))) ≤ factor := by
+            dsimp [factor, A]
+            apply Finset.prod_le_prod_of_subset_of_one_le₀ hsub
+            · intro i hi
+              exact div_nonneg (by norm_num) (hdeg i (hJ (Finset.mem_sdiff.mp hi).1)).le
+            · intro i hi hni
+              have hd := hdeg i (Finset.mem_sdiff.mp hi).1
+              exact (le_div_iff₀ hd).2 (by simpa using hdegUpper i (Finset.mem_sdiff.mp hi).1)
+          have hA :
+              (∏ i ∈ J \ K, hit E c (xs i) y / deg E c π.w (xs i)) ≤ factor :=
+            hAsmall.trans hAsup
+          have hBnonneg : 0 ≤ ∏ i ∈ J ∩ K, hit E c (xs i) y / deg E c π.w (xs i) := by
+            apply Finset.prod_nonneg
+            intro i hi
+            exact (hratio i (hJ (Finset.mem_inter.mp hi).1) y).1
+          calc
+            (∏ i ∈ J, hit E c (xs i) y / deg E c π.w (xs i)) =
+                (∏ i ∈ J \ K, hit E c (xs i) y / deg E c π.w (xs i)) *
+                  ∏ i ∈ J ∩ K, hit E c (xs i) y / deg E c π.w (xs i) := by
+              calc
+                _ = (∏ i ∈ J ∩ K, hit E c (xs i) y / deg E c π.w (xs i)) *
+                    ∏ i ∈ J \ K, hit E c (xs i) y / deg E c π.w (xs i) :=
+                  (Finset.prod_inter_mul_prod_sdiff J K _).symm
+                _ = _ := by ring
+            _ ≤ factor * ∏ i ∈ J ∩ K, hit E c (xs i) y / deg E c π.w (xs i) :=
+              mul_le_mul_of_nonneg_right hA hBnonneg
+        exact mul_le_mul_of_nonneg_left hprodJ (π.nonneg y)
+      _ = ∑ y, factor *
+          (π.w y * ∏ i ∈ J ∩ K, (1 + acoef E c π.w (xs i) y)) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        have hcoefB : ∀ i ∈ J ∩ K,
+            1 + acoef E c π.w (xs i) y = hit E c (xs i) y / deg E c π.w (xs i) := by
+          intro i hi
+          exact hcoef i (hJ (Finset.mem_inter.mp hi).1) y
+        have hprodCoefB :
+            (∏ i ∈ J ∩ K, (1 + acoef E c π.w (xs i) y)) =
+              ∏ i ∈ J ∩ K, hit E c (xs i) y / deg E c π.w (xs i) := by
+          apply Finset.prod_congr rfl
+          intro i hi
+          exact hcoefB i hi
+        rw [← hprodCoefB]
+        ring
+      _ = factor * (∑ y, π.w y * ∏ i ∈ J ∩ K,
+            (1 + acoef E c π.w (xs i) y)) := by rw [← Finset.mul_sum]
+  have hcolNonneg (J : Finset (Fin u)) (hJ : J ⊆ I) :
+      0 ≤ ∑ y, π.w y * ∏ i ∈ J, (1 + acoef E c π.w (xs i) y) := by
+    apply Finset.sum_nonneg
+    intro y hy
+    apply mul_nonneg (π.nonneg y)
+    apply Finset.prod_nonneg
+    intro i hi
+    rw [hcoef i (hJ hi) y]
+    exact (hratio i (hJ hi) y).1
+  have hdelete :
+      (∏ l : Fin d, ∑ y, π.w y * ∏ i ∈ I, (1 + acoef E c π.w (xs i) y)) ≤
+        factor ^ d * ∏ l : Fin d, ∑ y, π.w y *
+          ∏ i ∈ B, (1 + acoef E c π.w (xs i) y) := by
+    calc
+      (∏ l : Fin d, ∑ y, π.w y * ∏ i ∈ I, (1 + acoef E c π.w (xs i) y)) ≤
+          ∏ l : Fin d, factor * (∑ y, π.w y *
+            ∏ i ∈ B, (1 + acoef E c π.w (xs i) y)) := by
+        apply Finset.prod_le_prod₀
+        · intro l hl
+          exact hcolNonneg I (by intro i hi; exact hi)
+        · intro l hl
+          exact hcol I (by intro i hi; exact hi)
+      _ = factor ^ d * ∏ l : Fin d, ∑ y, π.w y *
+          ∏ i ∈ B, (1 + acoef E c π.w (xs i) y) := by
+        rw [Finset.prod_mul_distrib, Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+  have hfactorEq : factor ^ d = ∏ i ∈ A,
+      Real.rpow (deg E c π.w (xs i)) (-(d : ℝ)) := by
+    dsimp [factor]
+    rw [← Finset.prod_pow]
+    apply Finset.prod_congr rfl
+    intro i hi
+    have hd := hdeg i (Finset.mem_sdiff.mp hi).1
+    calc
+      (1 / deg E c π.w (xs i)) ^ d = (deg E c π.w (xs i) ^ d)⁻¹ := by
+        rw [one_div_pow]
+        simp [div_eq_mul_inv]
+      _ = Real.rpow (deg E c π.w (xs i)) (-(d : ℝ)) := by
+        have hr := Real.rpow_neg hd.le (d : ℝ)
+        rw [Real.rpow_natCast] at hr
+        exact hr.symm
+  dsimp [posTerm, A, B]
+  rw [hfactorEq] at hdelete
+  exact hdelete
+
+theorem posTerm_nonneg {N d u : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Law N) (I : Finset (Fin u)) (xs : Fin u → Fin N) :
+    0 ≤ posTerm E c (fun l => (π l).w) I xs := by
+  classical
+  unfold posTerm
+  apply Finset.prod_nonneg
+  intro l hl
+  apply Finset.sum_nonneg
+  intro y hy
+  apply mul_nonneg ((π l).nonneg y)
+  apply Finset.prod_nonneg
+  intro i hi
+  have hhit : 0 ≤ hit E c (xs i) y := by
+    unfold hit
+    split_ifs <;> norm_num
+  have hdeg : 0 ≤ deg E c (π l).w (xs i) := by
+    unfold deg
+    apply Finset.sum_nonneg
+    intro y' hy'
+    exact mul_nonneg ((π l).nonneg y') (by
+      unfold hit
+      split_ifs <;> norm_num)
+  have hcoef : 1 + acoef E c (π l).w (xs i) y =
+      hit E c (xs i) y / deg E c (π l).w (xs i) := by
+    unfold acoef
+    ring
+  rw [hcoef]
+  exact div_nonneg hhit hdeg
+
+theorem posTerm_delete_compl {N d u : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Law N) (xs : Fin u → Fin N) (I K : Finset (Fin u))
+    (hdeg : ∀ i, 0 < deg E c π.w (xs i))
+    (hdegUpper : ∀ i, deg E c π.w (xs i) ≤ 1) :
+    posTerm E c (fun _ : Fin d => π.w) I xs ≤
+      (∏ i ∈ Kᶜ, Real.rpow (deg E c π.w (xs i)) (-(d : ℝ))) *
+        posTerm E c (fun _ : Fin d => π.w) (I ∩ K) xs := by
+  classical
+  have hsmall : posTerm E c (fun _ : Fin d => π.w) I xs ≤
+      (∏ i ∈ I \ K, Real.rpow (deg E c π.w (xs i)) (-(d : ℝ))) *
+        posTerm E c (fun _ : Fin d => π.w) (I ∩ K) xs := by
+    exact posTerm_delete (d := d) E c π xs I K (fun i hi => hdeg i)
+  have hsubset : I \ K ⊆ Kᶜ := by
+    intro i hi
+    exact Finset.mem_compl.mpr (Finset.mem_sdiff.mp hi).2
+  have hfactor : (∏ i ∈ I \ K, Real.rpow (deg E c π.w (xs i)) (-(d : ℝ))) ≤
+      ∏ i ∈ Kᶜ, Real.rpow (deg E c π.w (xs i)) (-(d : ℝ)) := by
+    apply Finset.prod_le_prod_of_subset_of_one_le₀ hsubset
+    · intro i hi
+      exact Real.rpow_nonneg (hdeg i).le _
+    · intro i hi hnot
+      exact Real.one_le_rpow_of_pos_of_le_one_of_nonpos (hdeg i) (hdegUpper i)
+        (neg_nonpos.mpr (Nat.cast_nonneg d))
+  exact le_trans hsmall
+    (mul_le_mul_of_nonneg_right hfactor (posTerm_nonneg E c (fun _ : Fin d => π) (I ∩ K) xs))
+
+/-- Interactions commute with restricting a tuple along a finite embedding. -/
+theorem inter_map_embedding {N u v : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin N → ℝ) (e : Fin v ↪ Fin u) (J : Finset (Fin v))
+    (xs : Fin u → Fin N) :
+    inter E c π (J.map e) xs = inter E c π J (fun i => xs (e i)) := by
+  classical
+  unfold inter
+  apply Finset.sum_congr rfl
+  intro y hy
+  congr 1
+  rw [Finset.prod_map]
+
+/-- Homogeneous positive product terms commute with restricting a tuple along an embedding. -/
+theorem posTerm_map_embedding {N d u v : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin N → ℝ) (e : Fin v ↪ Fin u) (J : Finset (Fin v))
+    (xs : Fin u → Fin N) :
+    posTerm E c (fun _ : Fin d => π) (J.map e) xs =
+      posTerm E c (fun _ : Fin d => π) J (fun i => xs (e i)) := by
+  classical
+  unfold posTerm
+  apply Finset.prod_congr rfl
+  intro l hl
+  apply Finset.sum_congr rfl
+  intro y hy
+  congr 1
+  rw [Finset.prod_map]
+
+/-- Every finite tuple has a largest coordinate set on which all interactions
+remain moderate. -/
+def ModerateOn {N u : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin N → ℝ) (ξ : ℝ) (xs : Fin u → Fin N) (K : Finset (Fin u)) : Prop :=
+  ∀ J : Finset (Fin u), J ⊆ K → 2 ≤ J.card → |inter E c π J xs| ≤ ξ
+
+theorem exists_maximal_moderateOn {N u : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin N → ℝ) (ξ : ℝ) (xs : Fin u → Fin N) :
+    ∃ K : Finset (Fin u), ModerateOn E c π ξ xs K ∧
+      ∀ K', ModerateOn E c π ξ xs K' → K'.card ≤ K.card := by
+  classical
+  let good : Finset (Finset (Fin u)) :=
+    Finset.univ.filter (fun K => ModerateOn E c π ξ xs K)
+  have hgood : good.Nonempty := by
+    refine ⟨∅, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩⟩
+    intro J hJ hJcard
+    have hJempty : J = ∅ := Finset.eq_empty_iff_forall_notMem.mpr (by
+      intro i hi
+      have hf : False := by simpa using hJ hi
+      exact hf)
+    subst J
+    simp at hJcard
+  obtain ⟨K, hKmem, hKmax⟩ := Finset.exists_max_image good Finset.card hgood
+  refine ⟨K, (Finset.mem_filter.mp hKmem).2, ?_⟩
+  intro K' hK'
+  exact hKmax K' (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hK'⟩)
+
+theorem moderateOn_insert_not {N u : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin N → ℝ) (ξ : ℝ) (xs : Fin u → Fin N)
+    (K : Finset (Fin u)) (hKmax : ∀ K', ModerateOn E c π ξ xs K' → K'.card ≤ K.card)
+    (i : Fin u) (hi : i ∉ K) : ¬ ModerateOn E c π ξ xs (insert i K) := by
+  intro hIns
+  have hcard := Finset.card_insert_of_notMem hi
+  have hle := hKmax (insert i K) hIns
+  omega
+
+end HypercubeRamsey.Lane_q_s12_peel

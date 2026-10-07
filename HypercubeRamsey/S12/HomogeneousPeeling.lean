@@ -10,6 +10,7 @@ import HypercubeRamsey.S12.FiniteRamsey_q_s12_peel
 namespace HypercubeRamsey.S12
 
 open HypercubeRamsey Filter
+open HypercubeRamsey.Lane_q_s12_peel
 open Classical
 open scoped BigOperators
 
@@ -849,12 +850,890 @@ theorem homogeneous_conflict_count (κ : CConsts) (hκ : κ.Admissible) (T : Sta
         Real.exp_le_exp.mpr (by nlinarith [hExpExponent])
   exact hbadExp
 
+private theorem maximal_moderate_extension_cover (κ : CConsts) (hκ : κ.Admissible)
+    (T : Stage) (k : ℕ) (c : Colour) (C0 : ℝ)
+    (H : HomogeneousInput κ hκ T k c C0)
+    (hExtension : ∀ i₀ : Fin κ.u,
+      ∀ xs : Fin κ.u → Fin (T.S.N k),
+        (∀ i, i ≠ i₀ → xs i ∈ H.Sp) →
+        ((H.Sp.filter (fun z => ∃ J : Finset (Fin κ.u),
+          i₀ ∈ J ∧ 2 ≤ J.card ∧
+            κ.ξ < |inter (T.S.E k) c H.π.w J (Function.update xs i₀ z)|)).card : ℝ) ≤
+          Real.exp (Cstar κ.u κ.ξ * H.Q)) :
+    ∀ xs : Fin κ.u → Fin (T.S.N k),
+      (∀ i, xs i ∈ H.Sp) →
+      ¬ Moderate (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) κ.ξ xs →
+      ∃ K : Finset (Fin κ.u),
+        ModerateOn (T.S.E k) c H.π.w κ.ξ xs K ∧ K ≠ Finset.univ ∧
+          ∀ i, i ∉ K →
+            ((H.Sp.filter (fun z => ∃ J : Finset (Fin κ.u),
+              i ∈ J ∧ 2 ≤ J.card ∧ κ.ξ < |inter (T.S.E k) c H.π.w J
+                (Function.update (fun j => if j ∈ K then xs j else H.Sp_nonempty.choose) i z)|)).card : ℝ) ≤
+                Real.exp (Cstar κ.u κ.ξ * H.Q) ∧
+              xs i ∈ H.Sp.filter (fun z => ∃ J : Finset (Fin κ.u),
+                i ∈ J ∧ 2 ≤ J.card ∧ κ.ξ < |inter (T.S.E k) c H.π.w J
+                  (Function.update (fun j => if j ∈ K then xs j else H.Sp_nonempty.choose) i z)|) := by
+  classical
+  intro xs hxs hnotModerate
+  have hnotFull : ¬ ModerateOn (T.S.E k) c H.π.w κ.ξ xs Finset.univ := by
+    intro hall
+    apply hnotModerate
+    intro l J hJcard
+    simpa [H.homogeneous l] using hall J (Finset.subset_univ _) hJcard
+  obtain ⟨K, hKgood, hKmax⟩ :=
+    exists_maximal_moderateOn (T.S.E k) c H.π.w κ.ξ xs
+  have hKne : K ≠ Finset.univ := by
+    intro hEq
+    apply hnotFull
+    simpa [hEq] using hKgood
+  refine ⟨K, hKgood, hKne, ?_⟩
+  intro i hi
+  have hnotIns := moderateOn_insert_not (T.S.E k) c H.π.w κ.ξ xs K hKmax i hi
+  unfold ModerateOn at hnotIns
+  push_neg at hnotIns
+  obtain ⟨J, hJsub, hJcard, hJlarge⟩ := hnotIns
+  have hiJ : i ∈ J := by
+    by_contra hni
+    have hJK : J ⊆ K := by
+      intro j hj
+      rcases Finset.mem_insert.mp (hJsub hj) with hEq | hjK
+      · subst j
+        exact False.elim (hni hj)
+      · exact hjK
+    exact (not_lt_of_ge (hKgood J hJK hJcard)) hJlarge
+  let fill : Fin κ.u → Fin (T.S.N k) :=
+    fun j => if j ∈ K then xs j else H.Sp_nonempty.choose
+  have hfillSupport : ∀ j, j ≠ i → fill j ∈ H.Sp := by
+    intro j hji
+    by_cases hjK : j ∈ K
+    · simpa [fill, hjK] using hxs j
+    · simp [fill, hjK, H.Sp_nonempty.choose_spec]
+  have hInterEq (z : Fin (T.S.N k)) :
+      inter (T.S.E k) c H.π.w J (Function.update xs i z) =
+        inter (T.S.E k) c H.π.w J (Function.update fill i z) := by
+    unfold inter
+    apply Finset.sum_congr rfl
+    intro y hy
+    congr 1
+    apply Finset.prod_congr rfl
+    intro j hj
+    by_cases hji : j = i
+    · subst j
+      simp
+    · have hjK : j ∈ K := by
+        rcases Finset.mem_insert.mp (hJsub hj) with hEq | hjK
+        · exact False.elim (hji hEq)
+        · exact hjK
+      simp [fill, hjK, hji]
+  have hcard := hExtension i fill hfillSupport
+  have hmem : xs i ∈ H.Sp.filter (fun z => ∃ J : Finset (Fin κ.u),
+      i ∈ J ∧ 2 ≤ J.card ∧ κ.ξ < |inter (T.S.E k) c H.π.w J
+        (Function.update fill i z)|) := by
+    apply Finset.mem_filter.mpr
+    refine ⟨hxs i, ⟨J, hiJ, hJcard, ?_⟩⟩
+    rw [← hInterEq (xs i)]
+    simpa [Function.update_self] using hJlarge
+  exact ⟨hcard, hmem⟩
+
+private theorem moderate_positive_sum_on_subset (κ : CConsts) (hκ : κ.Admissible)
+    (T : Stage) (k : ℕ) (c : Colour) (C0 : ℝ)
+    (H : HomogeneousInput κ hκ T k c C0)
+    (hPositive : ∀ u' ≤ κ.u, ∀ I' : Finset (Fin u'),
+      (∑ xs : Fin u' → Fin (T.S.N k),
+        if Moderate (T.S.E k) c (fun l => (H.S.π l).w) (2 * κ.ξ) xs
+        then prodW H.S.τ.w xs *
+          posTerm (T.S.E k) c (fun l => (H.S.π l).w) I' xs else 0) ≤ 2)
+    (K : Finset (Fin κ.u)) (I : Finset (Fin κ.u)) (hI : I ⊆ K)
+    (z₀ : Fin (T.S.N k)) :
+    (∑ xK : K → Fin (T.S.N k),
+      if (∀ i : K, xK i ∈ H.Sp) ∧
+          ModerateOn (T.S.E k) c H.π.w κ.ξ
+            (fun j => if h : j ∈ K then xK ⟨j, h⟩ else z₀) K
+      then (∏ i : K, H.S.τ.w (xK i)) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I
+            (fun j => if h : j ∈ K then xK ⟨j, h⟩ else z₀)
+      else 0) ≤ 2 := by
+  classical
+  let m : ℕ := K.card
+  have hm : m ≤ κ.u := by
+    dsimp [m]
+    simpa using Finset.card_le_univ K
+  let eK : Fin m ≃ K := K.orderIsoOfFin (by rfl)
+  let emb : Fin m ↪ Fin κ.u := (K.orderEmbOfFin (by rfl)).toEmbedding
+  let eFun : (Fin m → Fin (T.S.N k)) ≃ (K → Fin (T.S.N k)) :=
+    Equiv.piCongrLeft (fun _ : K => Fin (T.S.N k)) eK
+  let IFin : Finset (Fin m) := Finset.univ.filter (fun j => emb j ∈ I)
+  let fill (xK : K → Fin (T.S.N k)) : Fin κ.u → Fin (T.S.N k) :=
+    fun j => if h : j ∈ K then xK ⟨j, h⟩ else z₀
+  let Good (xK : K → Fin (T.S.N k)) : Prop :=
+    (∀ i : K, xK i ∈ H.Sp) ∧
+      ModerateOn (T.S.E k) c H.π.w κ.ξ (fill xK) K
+  have hIFinMap : IFin.map emb = I := by
+    ext i
+    constructor
+    · intro hi
+      rcases Finset.mem_map.mp hi with ⟨j, hj, rfl⟩
+      exact (Finset.mem_filter.mp hj).2
+    · intro hi
+      have hiK : i ∈ K := hI hi
+      let j : Fin m := eK.symm ⟨i, hiK⟩
+      have heq : emb j = i := by
+        have hsub : eK j = ⟨i, hiK⟩ := eK.apply_symm_apply ⟨i, hiK⟩
+        calc
+          emb j = (eK j).val := rfl
+          _ = (⟨i, hiK⟩ : K).val := congrArg Subtype.val hsub
+          _ = i := rfl
+      have hmem : emb j ∈ I := by rw [heq]; exact hi
+      apply Finset.mem_map.mpr
+      exact ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmem⟩, heq⟩
+  have hfillEmb (xK : K → Fin (T.S.N k)) (j : Fin m) :
+      fill xK (emb j) = eFun.symm xK j := by
+    have hjK : emb j ∈ K := K.orderEmbOfFin_mem (by rfl) j
+    have hsub : (⟨emb j, hjK⟩ : K) = eK j := by
+      apply Subtype.ext
+      rfl
+    calc
+      fill xK (emb j) = xK ⟨emb j, hjK⟩ := by simp [fill, hjK]
+      _ = xK (eK j) := by rw [hsub]
+      _ = eFun.symm xK j := by simp [eFun]
+  have hmapModerate (xK : K → Fin (T.S.N k)) (hg : Good xK) :
+      Moderate (T.S.E k) c (fun l => (H.S.π l).w) (2 * κ.ξ) (eFun.symm xK) := by
+    intro l J hJcard
+    have hJbigSub : J.map emb ⊆ K := by
+      intro i hi
+      rcases Finset.mem_map.mp hi with ⟨j, hj, rfl⟩
+      exact (eK j).property
+    have hJbigCard : (J.map emb).card = J.card := by simp
+    have hKbound := hg.2 (J.map emb) hJbigSub (by omega)
+    have hInterEq :
+        inter (T.S.E k) c H.π.w (J.map emb) (fill xK) =
+          inter (T.S.E k) c H.π.w J (eFun.symm xK) := by
+      have h := inter_map_embedding (T.S.E k) c H.π.w emb J (fill xK)
+      simpa [hfillEmb xK] using h
+    change |inter (T.S.E k) c (H.S.π l).w J (eFun.symm xK)| ≤ 2 * κ.ξ
+    have hLawW : (H.S.π l).w = H.π.w :=
+      congrArg (fun ν : Law (T.S.N k) => ν.w) (H.homogeneous l)
+    rw [hLawW, ← hInterEq]
+    exact le_trans hKbound (by nlinarith [hκ.ξ_rng.1])
+  have hWeightEq (xK : K → Fin (T.S.N k)) :
+      prodW H.S.τ.w (eFun.symm xK) = ∏ i : K, H.S.τ.w (xK i) := by
+    unfold prodW
+    calc
+      (∏ j : Fin m, H.S.τ.w ((eFun.symm xK) j)) =
+          ∏ j : Fin m, H.S.τ.w (xK (eK j)) := by
+        apply Finset.prod_congr rfl
+        intro j hj
+        simp [eFun]
+      _ = ∏ i : K, H.S.τ.w (xK i) :=
+        Fintype.prod_equiv eK _ _ (by intro j; rfl)
+  have hPosTermEq (xK : K → Fin (T.S.N k)) :
+      posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) =
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) IFin (eFun.symm xK) := by
+    calc
+      posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) =
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (IFin.map emb) (fill xK) := by
+            rw [hIFinMap]
+      _ = posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) IFin
+          (fun j => fill xK (emb j)) :=
+            posTerm_map_embedding (T.S.E k) c H.π.w emb IFin (fill xK)
+      _ = posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) IFin (eFun.symm xK) := by
+            congr 1
+            funext j
+            exact hfillEmb xK j
+  have hpoint : ∀ xK : K → Fin (T.S.N k),
+      (if Good xK then (∏ i : K, H.S.τ.w (xK i)) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) else 0) ≤
+        (if Moderate (T.S.E k) c (fun l => (H.S.π l).w) (2 * κ.ξ) (eFun.symm xK)
+        then prodW H.S.τ.w (eFun.symm xK) *
+          posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin (eFun.symm xK) else 0) := by
+    intro xK
+    by_cases hg : Good xK
+    · have hmod := hmapModerate xK hg
+      have hw := hWeightEq xK
+      have hp := hPosTermEq xK
+      have hpS : posTerm (T.S.E k) c (fun l => (H.S.π l).w) I (fill xK) =
+          posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin (eFun.symm xK) := by
+        simpa [H.homogeneous] using hp
+      simp only [if_pos hg, if_pos hmod]
+      have hposLeft : posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) =
+          posTerm (T.S.E k) c (fun l => (H.S.π l).w) I (fill xK) := by
+        simp [H.homogeneous]
+      have hEq :
+          (∏ i : K, H.S.τ.w (xK i)) *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) =
+            prodW H.S.τ.w (eFun.symm xK) *
+              posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin (eFun.symm xK) := by
+        calc
+          (∏ i : K, H.S.τ.w (xK i)) *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) =
+            (∏ i : K, H.S.τ.w (xK i)) *
+              posTerm (T.S.E k) c (fun l => (H.S.π l).w) I (fill xK) := by rw [hposLeft]
+          _ = (∏ i : K, H.S.τ.w (xK i)) *
+              posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin (eFun.symm xK) := by rw [hpS]
+          _ = prodW H.S.τ.w (eFun.symm xK) *
+              posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin (eFun.symm xK) := by
+            exact congrArg (fun w : ℝ =>
+              w * posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin (eFun.symm xK)) hw.symm
+      exact hEq.le
+    ·
+      rw [if_neg hg]
+      rcases Classical.em (Moderate (T.S.E k) c (fun l => (H.S.π l).w) (2 * κ.ξ) (eFun.symm xK)) with hmTrue | hmFalse
+      · have hwpos : 0 ≤ prodW H.S.τ.w (eFun.symm xK) := by
+          unfold prodW
+          apply Finset.prod_nonneg
+          intro i hi
+          exact H.S.τ.nonneg _
+        simpa [hmTrue] using mul_nonneg hwpos
+          (HypercubeRamsey.Lane_q_s12_peel.posTerm_nonneg
+            (T.S.E k) c H.S.π IFin (eFun.symm xK))
+      · simp [hmFalse]
+  have hsum :
+      (∑ xK : K → Fin (T.S.N k),
+        if Good xK then (∏ i : K, H.S.τ.w (xK i)) *
+            posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill xK) else 0) ≤ 2 := by
+    calc
+      _ = ∑ xFin : Fin m → Fin (T.S.N k),
+          (if Good (eFun xFin) then (∏ i : K, H.S.τ.w ((eFun xFin) i)) *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (fill (eFun xFin)) else 0) := by
+        symm
+        exact Fintype.sum_equiv eFun _ _ (by intro xFin; rfl)
+      _ ≤ ∑ xFin : Fin m → Fin (T.S.N k),
+          (if Moderate (T.S.E k) c (fun l => (H.S.π l).w) (2 * κ.ξ) xFin
+          then prodW H.S.τ.w xFin *
+            posTerm (T.S.E k) c (fun l => (H.S.π l).w) IFin xFin else 0) := by
+        apply Finset.sum_le_sum
+        intro xFin hx
+        simpa [Equiv.symm_apply_apply] using hpoint (eFun xFin)
+      _ ≤ 2 := hPositive m hm IFin
+  exact hsum
+
+private def peelingFill {κ : CConsts} {hκ : κ.Admissible} {T : Stage} {k : ℕ}
+    {c : Colour} {C0 : ℝ} (H : HomogeneousInput κ hκ T k c C0)
+    (K : Finset (Fin κ.u)) (z₀ : Fin (T.S.N k))
+    (xK : K → Fin (T.S.N k)) : Fin κ.u → Fin (T.S.N k) :=
+  fun j => if h : j ∈ K then xK ⟨j, h⟩ else z₀
+
+private noncomputable def peelingExtSet {κ : CConsts} {hκ : κ.Admissible} {T : Stage} {k : ℕ}
+    {c : Colour} {C0 : ℝ} (H : HomogeneousInput κ hκ T k c C0)
+    (K : Finset (Fin κ.u)) (z₀ : Fin (T.S.N k))
+    (xK : K → Fin (T.S.N k)) (i : Fin κ.u) : Finset (Fin (T.S.N k)) :=
+  H.Sp.filter (fun z => ∃ J : Finset (Fin κ.u), i ∈ J ∧ 2 ≤ J.card ∧
+    κ.ξ < |inter (T.S.E k) c H.π.w J
+      (Function.update (peelingFill H K z₀ xK) i z)|)
+
+private def peelingFixedGood {κ : CConsts} {hκ : κ.Admissible} {T : Stage} {k : ℕ}
+    {c : Colour} {C0 : ℝ} (H : HomogeneousInput κ hκ T k c C0)
+    (K : Finset (Fin κ.u)) (z₀ : Fin (T.S.N k))
+    (xs : Fin κ.u → Fin (T.S.N k)) : Prop :=
+  (∀ i ∈ K, xs i ∈ H.Sp) ∧
+    ModerateOn (T.S.E k) c H.π.w κ.ξ xs K ∧
+    ∀ i, i ∉ K → xs i ∈ peelingExtSet H K z₀ (fun j => xs j) i
+
+private theorem fixed_subset_peel_bound (κ : CConsts) (hκ : κ.Admissible)
+    (T : Stage) (k : ℕ) (c : Colour) (C0 : ℝ)
+    (H : HomogeneousInput κ hκ T k c C0)
+    (hExtension : ∀ i₀ : Fin κ.u,
+      ∀ xs : Fin κ.u → Fin (T.S.N k),
+        (∀ i, i ≠ i₀ → xs i ∈ H.Sp) →
+        ((H.Sp.filter (fun z => ∃ J : Finset (Fin κ.u),
+          i₀ ∈ J ∧ 2 ≤ J.card ∧
+            κ.ξ < |inter (T.S.E k) c H.π.w J (Function.update xs i₀ z)|)).card : ℝ) ≤
+          Real.exp (Cstar κ.u κ.ξ * H.Q))
+    (hPositive : ∀ u' ≤ κ.u, ∀ I' : Finset (Fin u'),
+      (∑ xs : Fin u' → Fin (T.S.N k),
+        if Moderate (T.S.E k) c (fun l => (H.S.π l).w) (2 * κ.ξ) xs
+        then prodW H.S.τ.w xs *
+          posTerm (T.S.E k) c (fun l => (H.S.π l).w) I' xs else 0) ≤ 2)
+    (K : Finset (Fin κ.u)) (hKne : K ≠ Finset.univ)
+    (z₀ : Fin (T.S.N k)) (hz₀ : z₀ ∈ H.Sp) :
+    ∀ I : Finset (Fin κ.u),
+      (∑ xs : Fin κ.u → Fin (T.S.N k),
+        if peelingFixedGood H K z₀ xs
+        then prodW H.S.τ.w xs * posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs
+        else 0) ≤ 2 * H.gamma := by
+  classical
+  intro I
+  let O := {i : Fin κ.u // i ∉ K}
+  let split := Equiv.piEquivPiSubtypeProd (fun i : Fin κ.u => i ∈ K)
+    (fun _ => Fin (T.S.N k))
+  let fill := peelingFill H K z₀
+  let Ext (xK : K → Fin (T.S.N k)) (i : O) := peelingExtSet H K z₀ xK i.1
+  let outWeight (xK : K → Fin (T.S.N k)) (i : O) (z : Fin (T.S.N k)) :=
+    if z ∈ Ext xK i then H.S.τ.w z *
+      Real.rpow (deg (T.S.E k) c H.π.w z) (-(H.S.d : ℝ)) else 0
+  let goodK (xK : K → Fin (T.S.N k)) :=
+    (∀ i : K, xK i ∈ H.Sp) ∧
+      ModerateOn (T.S.E k) c H.π.w κ.ξ (fill xK) K
+  have hdegUpper (x : Fin (T.S.N k)) : deg (T.S.E k) c H.π.w x ≤ 1 := by
+    unfold deg
+    calc
+      (∑ y, H.π.w y * hit (T.S.E k) c x y) ≤ ∑ y, H.π.w y := by
+        apply Finset.sum_le_sum
+        intro y hy
+        have hhit : hit (T.S.E k) c x y ≤ 1 := by
+          unfold hit
+          split_ifs <;> norm_num
+        calc
+          H.π.w y * hit (T.S.E k) c x y ≤ H.π.w y * 1 :=
+            mul_le_mul_of_nonneg_left hhit (H.π.nonneg y)
+          _ = H.π.w y := by ring
+      _ = 1 := H.π.sum_eq_one
+  have hAmaxNonneg : 0 ≤ H.Sp.sup' H.Sp_nonempty
+      (fun x => H.S.τ.w x * Real.rpow (deg (T.S.E k) c H.π.w x) (-(H.S.d : ℝ))) := by
+    obtain ⟨x, hx⟩ := H.Sp_nonempty
+    exact le_trans (mul_nonneg (H.S.τ.nonneg x)
+      (Real.rpow_nonneg (H.degree_positive x hx).le _))
+      (Finset.le_sup'
+        (fun x => H.S.τ.w x * Real.rpow (deg (T.S.E k) c H.π.w x) (-(H.S.d : ℝ)))
+        hx)
+  have hExtWeight (xK : K → Fin (T.S.N k)) (hg : goodK xK) (i : O) :
+      (∑ z, outWeight xK i z) ≤ H.gamma := by
+    let Eset := Ext xK i
+    have hfillSupport : ∀ j, j ≠ i.1 → fill xK j ∈ H.Sp := by
+      intro j hji
+      by_cases hjK : j ∈ K
+      · have hcoord : fill xK j = xK ⟨j, hjK⟩ := by
+          simp [fill, peelingFill, hjK]
+        rw [hcoord]
+        exact hg.1 ⟨j, hjK⟩
+      · have hcoord : fill xK j = z₀ := by
+          simp [fill, peelingFill, hjK]
+        rw [hcoord]
+        exact hz₀
+    have hcard := hExtension i.1 (fill xK) hfillSupport
+    have hcardR : (Eset.card : ℝ) ≤ Real.exp (Cstar κ.u κ.ξ * H.Q) := by
+      dsimp [Eset, Ext]
+      simpa [peelingExtSet, fill] using hcard
+    calc
+      (∑ z, outWeight xK i z) =
+          ∑ z ∈ Eset, H.S.τ.w z *
+            Real.rpow (deg (T.S.E k) c H.π.w z) (-(H.S.d : ℝ)) := by
+        simp [outWeight, Eset, Ext]
+      _ ≤ ∑ z ∈ Eset, H.Sp.sup' H.Sp_nonempty
+            (fun x => H.S.τ.w x *
+              Real.rpow (deg (T.S.E k) c H.π.w x) (-(H.S.d : ℝ)) ) := by
+        apply Finset.sum_le_sum
+        intro z hz
+        exact Finset.le_sup'
+          (fun x => H.S.τ.w x * Real.rpow (deg (T.S.E k) c H.π.w x) (-(H.S.d : ℝ)))
+          (Finset.mem_filter.mp hz).1
+      _ = (Eset.card : ℝ) * H.Sp.sup' H.Sp_nonempty
+            (fun x => H.S.τ.w x *
+              Real.rpow (deg (T.S.E k) c H.π.w x) (-(H.S.d : ℝ))) := by
+        simp
+      _ ≤ Real.exp (Cstar κ.u κ.ξ * H.Q) * H.Sp.sup' H.Sp_nonempty
+            (fun x => H.S.τ.w x *
+              Real.rpow (deg (T.S.E k) c H.π.w x) (-(H.S.d : ℝ))) :=
+        mul_le_mul_of_nonneg_right hcardR hAmaxNonneg
+      _ = H.gamma := H.gamma_eq.symm
+  have hOutsideSum (xK : K → Fin (T.S.N k)) (hg : goodK xK) :
+      (∑ xO : O → Fin (T.S.N k), ∏ i : O, outWeight xK i (xO i)) ≤
+        H.gamma ^ Fintype.card O := by
+    calc
+      (∑ xO : O → Fin (T.S.N k), ∏ i : O, outWeight xK i (xO i)) =
+          ∏ i : O, ∑ z, outWeight xK i z := by
+        exact (Fintype.prod_sum (fun i z => outWeight xK i z)).symm
+      _ ≤ ∏ i : O, H.gamma := by
+        apply Finset.prod_le_prod₀
+        · intro i hi
+          apply Finset.sum_nonneg
+          intro z hz
+          by_cases hzE : z ∈ Ext xK i
+          · simp [outWeight, hzE]
+            exact mul_nonneg (H.S.τ.nonneg z) (by
+              have hdz := H.degree_positive z (Finset.mem_filter.mp hzE).1
+              positivity)
+          · simp [outWeight, hzE]
+        · intro i hi
+          exact hExtWeight xK hg i
+      _ = H.gamma ^ Fintype.card O := by simp
+  have hOpos : 0 < Fintype.card O := by
+    have hex : ∃ i : Fin κ.u, i ∉ K := by
+      by_contra h
+      push_neg at h
+      apply hKne
+      ext i
+      simp [h i]
+    rcases hex with ⟨i, hi⟩
+    exact Fintype.card_pos_iff.mpr ⟨⟨i, hi⟩⟩
+  have hgammaPow : H.gamma ^ Fintype.card O ≤ H.gamma := by
+    have he : Fintype.card O = (Fintype.card O - 1) + 1 := by omega
+    rw [he, pow_add, pow_one]
+    calc
+      H.gamma ^ (Fintype.card O - 1) * H.gamma ≤ 1 * H.gamma := by
+        apply mul_le_mul_of_nonneg_right _ H.gamma_nonneg
+        exact pow_le_one₀ H.gamma_nonneg H.gamma_lt_one.le
+      _ = H.gamma := by ring
+  have hbase :
+      (∑ xK : K → Fin (T.S.N k),
+        if goodK xK then (∏ i : K, H.S.τ.w (xK i)) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) else 0) ≤ 2 := by
+    exact moderate_positive_sum_on_subset κ hκ T k c C0 H hPositive K (I ∩ K)
+      (Finset.inter_subset_right) z₀
+  let full (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k)) :=
+    split.symm (xK, xO)
+  let pairGood (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k)) :=
+    peelingFixedGood H K z₀ (full xK xO)
+  have hfullK (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k)) (i : K) :
+      full xK xO i.1 = xK i := by
+    simp [full, split, Equiv.piEquivPiSubtypeProd]
+  have hfullO (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k)) (i : O) :
+      full xK xO i.1 = xO i := by
+    change (Equiv.piEquivPiSubtypeProd (fun j : Fin κ.u => j ∈ K)
+      (fun _ => Fin (T.S.N k))).symm (xK, xO) i.1 = xO i
+    rw [Equiv.piEquivPiSubtypeProd_symm_apply]
+    simp [i.2]
+  have hpairGood (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k))
+      (hp : pairGood xK xO) :
+      goodK xK ∧ ∀ i : O, xO i ∈ Ext xK i := by
+    dsimp [pairGood, peelingFixedGood] at hp
+    rcases hp with ⟨hsp, hmod, hext⟩
+    constructor
+    · constructor
+      · intro i
+        simpa [hfullK xK xO i] using hsp i.1 i.2
+      · intro J hJ hJcard
+        have hsame : inter (T.S.E k) c H.π.w J (fill xK) =
+            inter (T.S.E k) c H.π.w J (full xK xO) := by
+          unfold inter
+          apply Finset.sum_congr rfl
+          intro y hy
+          congr 1
+          apply Finset.prod_congr rfl
+          intro j hj
+          have hjK : j ∈ K := hJ hj
+          have hcoord : fill xK j = full xK xO j := by
+            calc
+              fill xK j = xK ⟨j, hjK⟩ := by simp [fill, peelingFill, hjK]
+              _ = full xK xO j := (hfullK xK xO ⟨j, hjK⟩).symm
+          rw [hcoord]
+        have h := hmod J hJ hJcard
+        rw [hsame]
+        exact h
+    · intro i
+      have h := hext i.1 i.2
+      rw [hfullO xK xO i] at h
+      have hrestriction : (fun j : K => full xK xO j.1) = xK := by
+        funext j
+        exact hfullK xK xO j
+      simpa [Ext, hrestriction] using h
+  have hdegNonneg (x : Fin (T.S.N k)) : 0 ≤ deg (T.S.E k) c H.π.w x := by
+    unfold deg
+    apply Finset.sum_nonneg
+    intro y hy
+    apply mul_nonneg (H.π.nonneg y)
+    unfold hit
+    split_ifs <;> norm_num
+  have houtWeightNonneg (xK : K → Fin (T.S.N k)) (i : O) (z : Fin (T.S.N k)) :
+      0 ≤ outWeight xK i z := by
+    by_cases hz : z ∈ Ext xK i
+    · simp [outWeight, hz]
+      exact mul_nonneg (H.S.τ.nonneg z) (by
+        have hdz := H.degree_positive z (Finset.mem_filter.mp hz).1
+        positivity)
+    · simp [outWeight, hz]
+  have hbaseNonneg (xK : K → Fin (T.S.N k)) :
+      0 ≤ (∏ i : K, H.S.τ.w (xK i)) *
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) := by
+    apply mul_nonneg
+    · apply Finset.prod_nonneg
+      intro i hi
+      exact H.S.τ.nonneg _
+    · exact posTerm_nonneg (T.S.E k) c
+        (fun _ : Fin H.S.d => H.π) (I ∩ K) (fill xK)
+  have htermBound (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k))
+      (hp : pairGood xK xO) :
+      prodW H.S.τ.w (full xK xO) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (full xK xO) ≤
+        (∏ i : K, H.S.τ.w (xK i)) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) *
+            ∏ i : O, outWeight xK i (xO i) := by
+    obtain ⟨hg, hout⟩ := hpairGood xK xO hp
+    have hfullSupport (i : Fin κ.u) : full xK xO i ∈ H.Sp := by
+      by_cases hiK : i ∈ K
+      · have h := hg.1 ⟨i, hiK⟩
+        simpa [hfullK xK xO ⟨i, hiK⟩] using h
+      · have h := hout ⟨i, hiK⟩
+        have hsp := (Finset.mem_filter.mp h).1
+        simpa [hfullO xK xO ⟨i, hiK⟩] using hsp
+    have hdegPos (i : Fin κ.u) : 0 < deg (T.S.E k) c H.π.w (full xK xO i) :=
+      H.degree_positive _ (hfullSupport i)
+    have hdegUpper' (i : Fin κ.u) :
+        deg (T.S.E k) c H.π.w (full xK xO i) ≤ 1 := hdegUpper _
+    have hdelete := HypercubeRamsey.Lane_q_s12_peel.posTerm_delete_compl
+      (d := H.S.d) (T.S.E k) c H.π (full xK xO) I K hdegPos hdegUpper'
+    have hPosRestrict :
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (full xK xO) =
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) := by
+      unfold posTerm
+      apply Finset.prod_congr rfl
+      intro l hl
+      apply Finset.sum_congr rfl
+      intro y hy
+      congr 1
+      apply Finset.prod_congr rfl
+      intro j hj
+      have hjK : j ∈ K := (Finset.mem_inter.mp hj).2
+      have hcoord : fill xK j = full xK xO j := by
+        calc
+          fill xK j = xK ⟨j, hjK⟩ := by simp [fill, peelingFill, hjK]
+          _ = full xK xO j := (hfullK xK xO ⟨j, hjK⟩).symm
+      rw [← hcoord]
+    have hweightSplit : prodW H.S.τ.w (full xK xO) =
+        (∏ i : K, H.S.τ.w (xK i)) *
+          (∏ i : O, H.S.τ.w (xO i)) := by
+      unfold prodW
+      have hKcoord : (∏ i : K, H.S.τ.w (xK i)) =
+          ∏ i : K, H.S.τ.w (full xK xO i.1) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        rw [hfullK xK xO i]
+      have hKfinset : (∏ i : K, H.S.τ.w (full xK xO i.1)) =
+          ∏ i ∈ K, H.S.τ.w (full xK xO i) := by
+        symm
+        exact Finset.prod_subtype (p := fun i : Fin κ.u => i ∈ K)
+          (F := Finset.Subtype.fintype K) K (by intro i; simp)
+          (fun i => H.S.τ.w (full xK xO i))
+      have hOcoord : (∏ i : O, H.S.τ.w (xO i)) =
+          ∏ i : O, H.S.τ.w (full xK xO i.1) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        rw [hfullO xK xO i]
+      have hOutsideProduct (f : Fin κ.u → ℝ) :
+          (∏ i : O, f i.1) = ∏ i ∈ Kᶜ, f i := by
+        symm
+        simpa [O] using
+          (Finset.prod_subtype (Kᶜ) (by intro i; simp [O]) f)
+      have hOfinset : (∏ i : O, H.S.τ.w (full xK xO i.1)) =
+          ∏ i ∈ Kᶜ, H.S.τ.w (full xK xO i) :=
+        hOutsideProduct (fun i => H.S.τ.w (full xK xO i))
+      calc
+        (∏ i : Fin κ.u, H.S.τ.w (full xK xO i)) =
+            (∏ i ∈ K, H.S.τ.w (full xK xO i)) *
+              (∏ i ∈ Kᶜ, H.S.τ.w (full xK xO i)) := by
+          exact (Finset.prod_mul_prod_compl K
+            (fun i => H.S.τ.w (full xK xO i))).symm
+        _ = _ := by rw [← hKfinset, ← hKcoord, ← hOfinset, ← hOcoord]
+    let D (i : Fin κ.u) := Real.rpow
+      (deg (T.S.E k) c H.π.w (full xK xO i)) (-(H.S.d : ℝ))
+    have hDsubtype : (∏ i : O, D i.1) = ∏ i ∈ Kᶜ, D i := by
+      symm
+      simpa [O] using
+        (Finset.prod_subtype (Kᶜ) (by intro i; simp [O]) (fun i => D i))
+    have hWeightO : 0 ≤ ∏ i : O, H.S.τ.w (xO i) := by
+      apply Finset.prod_nonneg
+      intro i hi
+      exact H.S.τ.nonneg _
+    have hBase : 0 ≤ (∏ i : K, H.S.τ.w (xK i)) *
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) :=
+      hbaseNonneg xK
+    have hFullWNonneg : 0 ≤ prodW H.S.τ.w (full xK xO) := by
+      unfold prodW
+      apply Finset.prod_nonneg
+      intro i hi
+      exact H.S.τ.nonneg _
+    have hOutTerm :
+        (∏ i : O, H.S.τ.w (xO i) * D i.1) =
+          ∏ i : O, outWeight xK i (xO i) := by
+      apply Finset.prod_congr rfl
+      intro i hi
+      have hmember : xO i ∈ Ext xK i := hout i
+      simp [outWeight, hmember, D, hfullO xK xO i]
+    have hmulOut :
+        (∏ i : O, H.S.τ.w (xO i) * D i.1) =
+          (∏ i : O, H.S.τ.w (xO i)) * (∏ i : O, D i.1) := by
+      exact Finset.prod_mul_distrib
+    have hdelete' :
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (full xK xO) ≤
+          (∏ i ∈ Kᶜ, D i) *
+            posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) := by
+      simpa [D, hPosRestrict] using hdelete
+    calc
+      prodW H.S.τ.w (full xK xO) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (full xK xO) ≤
+          prodW H.S.τ.w (full xK xO) *
+            ((∏ i ∈ Kᶜ, D i) *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK)) :=
+        mul_le_mul_of_nonneg_left hdelete' hFullWNonneg
+      _ = ((∏ i : K, H.S.τ.w (xK i)) *
+            posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK)) *
+          ((∏ i : O, H.S.τ.w (xO i)) * (∏ i : O, D i.1)) := by
+        rw [hweightSplit, ← hDsubtype]
+        ring
+      _ = ((∏ i : K, H.S.τ.w (xK i)) *
+            posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK)) *
+          (∏ i : O, H.S.τ.w (xO i) * D i.1) := by
+        rw [← hmulOut]
+      _ = (∏ i : K, H.S.τ.w (xK i)) *
+            posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK) *
+          ∏ i : O, outWeight xK i (xO i) := by rw [hOutTerm]
+  let baseK (xK : K → Fin (T.S.N k)) :=
+    (∏ i : K, H.S.τ.w (xK i)) *
+      posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) (I ∩ K) (fill xK)
+  let outsideProd (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k)) :=
+    ∏ i : O, outWeight xK i (xO i)
+  have hbaseNonneg' (xK : K → Fin (T.S.N k)) : 0 ≤ baseK xK := hbaseNonneg xK
+  have houtsideProdNonneg (xK : K → Fin (T.S.N k)) (xO : O → Fin (T.S.N k)) :
+      0 ≤ outsideProd xK xO := by
+    apply Finset.prod_nonneg
+    intro i hi
+    exact houtWeightNonneg xK i (xO i)
+  have hreindex :
+      (∑ xs : Fin κ.u → Fin (T.S.N k),
+        if peelingFixedGood H K z₀ xs
+        then prodW H.S.τ.w xs *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs else 0) =
+      ∑ xK : K → Fin (T.S.N k), ∑ xO : O → Fin (T.S.N k),
+        if pairGood xK xO
+        then prodW H.S.τ.w (full xK xO) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (full xK xO) else 0 := by
+    calc
+      _ = ∑ p : (K → Fin (T.S.N k)) × (O → Fin (T.S.N k)),
+          if peelingFixedGood H K z₀ (split.symm p)
+          then prodW H.S.τ.w (split.symm p) *
+            posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (split.symm p) else 0 := by
+        exact Fintype.sum_equiv split
+          (fun xs => if peelingFixedGood H K z₀ xs
+            then prodW H.S.τ.w xs *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs else 0)
+          (fun p => if peelingFixedGood H K z₀ (split.symm p)
+            then prodW H.S.τ.w (split.symm p) *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (split.symm p) else 0)
+          (by intro xs; simp)
+      _ = _ := by simp only [Fintype.sum_prod_type, pairGood, full]
+  have hinner (xK : K → Fin (T.S.N k)) :
+      (∑ xO : O → Fin (T.S.N k),
+        if pairGood xK xO
+        then prodW H.S.τ.w (full xK xO) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (full xK xO) else 0) ≤
+        if goodK xK then baseK xK * (∑ xO : O → Fin (T.S.N k), outsideProd xK xO) else 0 := by
+    by_cases hg : goodK xK
+    · calc
+        _ ≤ ∑ xO : O → Fin (T.S.N k), baseK xK * outsideProd xK xO := by
+          apply Finset.sum_le_sum
+          intro xO hxO
+          by_cases hp : pairGood xK xO
+          · simpa [hp, baseK, outsideProd, pairGood, full] using htermBound xK xO hp
+          · simp [hp]
+            exact mul_nonneg (hbaseNonneg' xK) (houtsideProdNonneg xK xO)
+        _ = baseK xK * (∑ xO : O → Fin (T.S.N k), outsideProd xK xO) := by
+          rw [← Finset.mul_sum]
+        _ = if goodK xK then baseK xK * (∑ xO : O → Fin (T.S.N k), outsideProd xK xO) else 0 := by
+          simp [hg]
+    · have hpairFalse : ∀ xO : O → Fin (T.S.N k), ¬ pairGood xK xO := by
+        intro xO hp
+        exact hg (hpairGood xK xO hp).1
+      simp only [if_neg hg]
+      apply le_of_eq
+      rw [Finset.sum_eq_zero]
+      intro xO hxO
+      simp [hpairFalse xO]
+  have hdoubleBound :
+      (∑ xK : K → Fin (T.S.N k), ∑ xO : O → Fin (T.S.N k),
+        if pairGood xK xO
+        then prodW H.S.τ.w (full xK xO) *
+          posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I (full xK xO) else 0) ≤
+      ∑ xK : K → Fin (T.S.N k),
+        if goodK xK then baseK xK * (∑ xO : O → Fin (T.S.N k), outsideProd xK xO) else 0 := by
+    apply Finset.sum_le_sum
+    intro xK hxK
+    exact hinner xK
+  have houterBound :
+      (∑ xK : K → Fin (T.S.N k),
+        if goodK xK then baseK xK * (∑ xO : O → Fin (T.S.N k), outsideProd xK xO) else 0) ≤
+      ∑ xK : K → Fin (T.S.N k), if goodK xK then baseK xK * H.gamma else 0 := by
+    apply Finset.sum_le_sum
+    intro xK hxK
+    by_cases hg : goodK xK
+    · simp only [if_pos hg]
+      exact mul_le_mul_of_nonneg_left
+        (le_trans (hOutsideSum xK hg) hgammaPow) (hbaseNonneg' xK)
+    · simp [hg]
+  have hbaseSum :
+      (∑ xK : K → Fin (T.S.N k), if goodK xK then baseK xK else 0) ≤ 2 := by
+    simpa [baseK] using hbase
+  calc
+    (∑ xs : Fin κ.u → Fin (T.S.N k),
+      if peelingFixedGood H K z₀ xs
+      then prodW H.S.τ.w xs *
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs else 0) ≤
+        ∑ xK : K → Fin (T.S.N k),
+          if goodK xK then baseK xK * H.gamma else 0 := by
+      rw [hreindex]
+      exact le_trans hdoubleBound houterBound
+    _ = H.gamma * (∑ xK : K → Fin (T.S.N k),
+          if goodK xK then baseK xK else 0) := by
+      calc
+        _ = ∑ xK : K → Fin (T.S.N k),
+              H.gamma * (if goodK xK then baseK xK else 0) := by
+          apply Finset.sum_congr rfl
+          intro xK hxK
+          by_cases hg : goodK xK <;> simp [hg, mul_comm]
+        _ = _ := by rw [← Finset.mul_sum]
+    _ ≤ H.gamma * 2 := mul_le_mul_of_nonneg_left hbaseSum H.gamma_nonneg
+    _ = 2 * H.gamma := by ring
+
 /-- L12.5(iii): large-interaction tuples have bounded total positive-term mass. -/
 theorem homogeneous_peeling (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (c : Colour) (C0 : ℝ) (hC0 : 1 ≤ C0)
     (hModerate : ModerateMomentClaim κ T c C0) :
     HomogeneousPeelingClaim κ hκ T c C0 := by
-  sorry
+  classical
+  unfold HomogeneousPeelingClaim
+  filter_upwards [hModerate,
+    homogeneous_extension_count κ hκ T hDeep c C0 hC0] with k hModerateK hExtension
+  intro H
+  have hdegOK : H.S.DegOK c C0 := by
+    intro l x hx
+    have hxSp : x ∈ H.Sp := by
+      by_contra hxSp
+      have hzero := H.τ_supported x hxSp
+      rw [hzero] at hx
+      norm_num at hx
+    have hgate := H.degree_gate x hxSp
+    simpa [H.homogeneous l] using hgate
+  obtain ⟨_, hPositive⟩ := hModerateK H.S hdegOK
+  let z₀ : Fin (T.S.N k) := H.Sp_nonempty.choose
+  have hz₀ : z₀ ∈ H.Sp := H.Sp_nonempty.choose_spec
+  have hExtensionH := hExtension H
+  have hCover := maximal_moderate_extension_cover κ hκ T k c C0 H hExtensionH
+  let badTerm (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :=
+    if ¬ Moderate (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) κ.ξ xs
+    then prodW H.S.τ.w xs *
+      posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs else 0
+  let fixedTerm (K : Finset (Fin κ.u)) (I : Finset (Fin κ.u))
+      (xs : Fin κ.u → Fin (T.S.N k)) :=
+    if K ≠ Finset.univ then
+      if peelingFixedGood H K z₀ xs then prodW H.S.τ.w xs *
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs else 0
+    else 0
+  have hprodWNonneg (xs : Fin κ.u → Fin (T.S.N k)) :
+      0 ≤ prodW H.S.τ.w xs := by
+    unfold prodW
+    apply Finset.prod_nonneg
+    intro i hi
+    exact H.S.τ.nonneg (xs i)
+  have hposTermNonneg (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+      0 ≤ posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs :=
+    HypercubeRamsey.Lane_q_s12_peel.posTerm_nonneg (T.S.E k) c
+      (fun _ : Fin H.S.d => H.π) I xs
+  have htermNonneg (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+      0 ≤ prodW H.S.τ.w xs *
+        posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs :=
+    mul_nonneg (hprodWNonneg xs) (hposTermNonneg I xs)
+  have hfixedTermNonneg (K I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+      0 ≤ fixedTerm K I xs := by
+    by_cases hK : K ≠ Finset.univ
+    · by_cases hG : peelingFixedGood H K z₀ xs
+      · simp [fixedTerm, hK, hG, htermNonneg]
+      · simp [fixedTerm, hK, hG]
+    · have hEq : K = Finset.univ := by
+        by_contra hNe
+        exact hK hNe
+      simp [fixedTerm, hEq]
+  have hfixedSumBound (K I : Finset (Fin κ.u)) :
+      (∑ xs : Fin κ.u → Fin (T.S.N k), fixedTerm K I xs) ≤
+        if K ≠ Finset.univ then 2 * H.gamma else 0 := by
+    by_cases hK : K ≠ Finset.univ
+    · simp only [fixedTerm, if_pos hK]
+      exact fixed_subset_peel_bound κ hκ T k c C0 H hExtensionH hPositive
+        K hK z₀ hz₀ I
+    · have hEq : K = Finset.univ := by
+        by_contra hNe
+        exact hK hNe
+      simp [fixedTerm, hEq]
+  have hpoint (I : Finset (Fin κ.u)) (xs : Fin κ.u → Fin (T.S.N k)) :
+      badTerm I xs ≤ ∑ K : Finset (Fin κ.u), fixedTerm K I xs := by
+    by_cases hmod : Moderate (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) κ.ξ xs
+    · simp [badTerm, hmod]
+      exact Finset.sum_nonneg (fun K hK => hfixedTermNonneg K I xs)
+    · by_cases hsupport : ∀ i, xs i ∈ H.Sp
+      · obtain ⟨K, hmodOn, hK, hext⟩ := hCover xs hsupport hmod
+        have hgood : peelingFixedGood H K z₀ xs := by
+          refine ⟨?_, hmodOn, ?_⟩
+          · intro i hi
+            exact hsupport i
+          · intro i hi
+            have hmem := (hext i hi).2
+            have hfillEq : peelingFill H K z₀ (fun j : K => xs j.1) =
+                (fun j => if j ∈ K then xs j else H.Sp_nonempty.choose) := by
+              funext j
+              by_cases hj : j ∈ K
+              · simp [peelingFill, hj]
+              · simp [peelingFill, z₀, hj]
+            simpa [peelingExtSet, hfillEq] using hmem
+        have htermEq : fixedTerm K I xs =
+            prodW H.S.τ.w xs *
+              posTerm (T.S.E k) c (fun _ : Fin H.S.d => H.π.w) I xs := by
+          simp [fixedTerm, hK, hgood]
+        calc
+          badTerm I xs = fixedTerm K I xs := by
+            simp [badTerm, hmod, htermEq]
+          _ ≤ ∑ K' : Finset (Fin κ.u), fixedTerm K' I xs :=
+            Finset.single_le_sum (fun K' hK' => hfixedTermNonneg K' I xs)
+              (Finset.mem_univ K)
+      · obtain ⟨i, hi⟩ := not_forall.mp hsupport
+        have hτzero : H.S.τ.w (xs i) = 0 := H.τ_supported (xs i) hi
+        have hweightZero : prodW H.S.τ.w xs = 0 := by
+          unfold prodW
+          exact Finset.prod_eq_zero (Finset.mem_univ i) hτzero
+        simp [badTerm, hmod, hweightZero]
+        exact Finset.sum_nonneg (fun K hK => hfixedTermNonneg K I xs)
+  have hIbound (I : Finset (Fin κ.u)) :
+      (∑ xs : Fin κ.u → Fin (T.S.N k), badTerm I xs) ≤
+        (2 : ℝ) ^ κ.u * (2 * H.gamma) := by
+    calc
+      _ ≤ ∑ xs : Fin κ.u → Fin (T.S.N k),
+            ∑ K : Finset (Fin κ.u), fixedTerm K I xs := by
+        apply Finset.sum_le_sum
+        intro xs hxs
+        exact hpoint I xs
+      _ = ∑ K : Finset (Fin κ.u),
+            ∑ xs : Fin κ.u → Fin (T.S.N k), fixedTerm K I xs := by
+        rw [Finset.sum_comm]
+      _ ≤ ∑ K : Finset (Fin κ.u),
+            (if K ≠ Finset.univ then 2 * H.gamma else 0) := by
+        apply Finset.sum_le_sum
+        intro K hK
+        exact hfixedSumBound K I
+      _ ≤ ∑ K : Finset (Fin κ.u), (2 * H.gamma) := by
+        apply Finset.sum_le_sum
+        intro K hK
+        by_cases hKne : K ≠ Finset.univ
+        · simp [hKne]
+        · rw [if_neg hKne]
+          exact mul_nonneg (by norm_num : (0 : ℝ) ≤ 2) H.gamma_nonneg
+      _ = (Fintype.card (Finset (Fin κ.u)) : ℝ) * (2 * H.gamma) := by simp
+      _ = (2 : ℝ) ^ κ.u * (2 * H.gamma) := by
+        simp [Fintype.card_finset]
+  have hgammaNonneg : 0 ≤ H.gamma := H.gamma_nonneg
+  have hpow2 : (2 : ℝ) ^ κ.u * (2 : ℝ) ^ κ.u = (4 : ℝ) ^ κ.u := by
+    rw [← mul_pow]
+    norm_num
+  calc
+    (∑ I : Finset (Fin κ.u),
+      ∑ xs : Fin κ.u → Fin (T.S.N k), badTerm I xs) ≤
+        ∑ I : Finset (Fin κ.u), (2 : ℝ) ^ κ.u * (2 * H.gamma) := by
+      apply Finset.sum_le_sum
+      intro I hI
+      exact hIbound I
+    _ = (Fintype.card (Finset (Fin κ.u)) : ℝ) *
+          ((2 : ℝ) ^ κ.u * (2 * H.gamma)) := by simp
+    _ = (2 : ℝ) ^ κ.u * ((2 : ℝ) ^ κ.u * (2 * H.gamma)) := by
+      simp [Fintype.card_finset]
+    _ ≤ (4 : ℝ) ^ (κ.u + 1) * H.gamma := by
+      calc
+        (2 : ℝ) ^ κ.u * ((2 : ℝ) ^ κ.u * (2 * H.gamma)) =
+            (2 * (4 : ℝ) ^ κ.u) * H.gamma := by
+          calc
+            _ = ((2 : ℝ) ^ κ.u * (2 : ℝ) ^ κ.u) * (2 * H.gamma) := by ring
+            _ = (4 : ℝ) ^ κ.u * (2 * H.gamma) := by rw [hpow2]
+            _ = (2 * (4 : ℝ) ^ κ.u) * H.gamma := by ring
+        _ ≤ (4 : ℝ) ^ (κ.u + 1) * H.gamma := by
+          apply mul_le_mul_of_nonneg_right _ hgammaNonneg
+          rw [pow_succ]
+          have hp : 0 ≤ (4 : ℝ) ^ κ.u := pow_nonneg (by norm_num) _
+          nlinarith
 
 /-- L12.5(iv): even-moment and peeling bounds give the homogeneous lower-tail estimate. -/
 theorem homogeneous_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

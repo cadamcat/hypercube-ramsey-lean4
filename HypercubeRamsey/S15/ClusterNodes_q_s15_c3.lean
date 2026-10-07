@@ -1,8 +1,10 @@
 import HypercubeRamsey.PartC.Core
+import HypercubeRamsey.S15.Defs
 
 namespace HypercubeRamsey.Lane_q_s15_c3
 
 open scoped BigOperators
+open HypercubeRamsey.S15
 
 theorem even_prefix_card_le {n ell : ℕ} (w : CubePos n)
     (E : Finset {v : CubePos n // IsEvenRole v})
@@ -206,5 +208,51 @@ theorem finLaw_cond_E_le {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
   apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
   intro ω hω hnot
   exact mul_nonneg (P.nonneg ω) (hF ω)
+
+theorem finLaw_bind_E {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinLaw α) (K : α → FinLaw β) (F : α × β → ℝ) :
+    (FinLaw.bind P K).E F = P.E (fun a => (K a).E (fun b => F (a, b))) := by
+  classical
+  unfold FinLaw.E FinLaw.bind
+  rw [Fintype.sum_prod_type]
+  congr 1
+  funext a
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b hb
+  ring
+
+theorem finLaw_map_E {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β]
+    (P : FinLaw α) (f : α → β) (F : β → ℝ) :
+    (FinLaw.map P f).E F = P.E (fun a => F (f a)) := by
+  classical
+  simp only [FinLaw.E, FinLaw.map]
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro a ha
+  simp
+
+theorem avoided_cluster_history_E_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (hpositive : 0 < (clusterHistoryLaw PT hPT hm).pr
+      (clusterAlarmsAvoided PT hPT hm))
+    (F : ClusterHistory PT hPT hm → ℝ) (hF : ∀ W, 0 ≤ F W) :
+    (clusterAvoidedHistoryLaw PT hPT hm hpositive).E F ≤
+      (clusterHistoryLaw PT hPT hm).E F /
+        (clusterHistoryLaw PT hPT hm).pr (clusterAlarmsAvoided PT hPT hm) := by
+  classical
+  let P := clusterHistoryLaw PT hPT hm
+  let A := Finset.univ.filter (clusterAlarmsAvoided PT hPT hm)
+  have heq : (∑ W ∈ A, P.w W) = P.pr (clusterAlarmsAvoided PT hPT hm) := by
+    unfold FinLaw.pr
+    rw [← Finset.sum_filter]
+  have hA : 0 < ∑ W ∈ A, P.w W := by
+    rw [heq]
+    exact hpositive
+  have hcond := finLaw_cond_E_le P A hA F hF
+  rw [heq] at hcond
+  simpa [clusterAvoidedHistoryLaw, P, A] using hcond
 
 end HypercubeRamsey.Lane_q_s15_c3

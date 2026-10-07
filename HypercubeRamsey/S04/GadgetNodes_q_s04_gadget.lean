@@ -324,12 +324,48 @@ private theorem searchFold_interval {β γ : ℝ} {n : ℕ}
       have hs := searchStep_interval g v ab.1 ab.2 hab hb
       exact ih _ hs.1 hs.2
 
-private theorem searchLeaf_first_le_power {β γ : ℝ} {n : ℕ}
+private theorem searchStep_first_lt_power {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (a b : ℕ) (hab : a ≤ b) (ha : a < HypercubeRamsey.S04.gadgetPower β γ n)
+    (hb : b ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    (HypercubeRamsey.S04.searchStep β γ n g v (a, b)).1 <
+        HypercubeRamsey.S04.gadgetPower β γ n ∧
+      (HypercubeRamsey.S04.searchStep β γ n g v (a, b)).2 ≤
+        HypercubeRamsey.S04.gadgetPower β γ n := by
+  have hmidlt : (a + b) / 2 < HypercubeRamsey.S04.gadgetPower β γ n := by omega
+  have hmidle : (a + b) / 2 ≤ b := by omega
+  unfold HypercubeRamsey.S04.searchStep
+  split_ifs
+  · exact ⟨ha, hmidle.trans hb⟩
+  · exact ⟨hmidlt, hb⟩
+
+private theorem searchFold_first_lt_power {β γ : ℝ} {n : ℕ}
     (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
-    (HypercubeRamsey.S04.searchLeaf β γ n g v).1 ≤ HypercubeRamsey.S04.gadgetPower β γ n := by
-  have h := searchFold_interval g v (List.range (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n)))
-    (0, HypercubeRamsey.S04.gadgetPower β γ n) (by omega) le_rfl
-  simpa [HypercubeRamsey.S04.searchLeaf] using h.1.trans h.2
+    ∀ (L : List ℕ) (ab : ℕ × ℕ), ab.1 ≤ ab.2 →
+      ab.1 < HypercubeRamsey.S04.gadgetPower β γ n →
+      ab.2 ≤ HypercubeRamsey.S04.gadgetPower β γ n →
+      (L.foldl (fun ab _ => HypercubeRamsey.S04.searchStep β γ n g v ab) ab).1 <
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        (L.foldl (fun ab _ => HypercubeRamsey.S04.searchStep β γ n g v ab) ab).2 ≤
+          HypercubeRamsey.S04.gadgetPower β γ n := by
+  intro L
+  induction L with
+  | nil => intro ab hab ha hb; simpa using And.intro ha hb
+  | cons x L ih =>
+      intro ab hab ha hb
+      simp only [List.foldl_cons]
+      have hs := searchStep_interval g v ab.1 ab.2 hab hb
+      have hlt := searchStep_first_lt_power g v ab.1 ab.2 hab ha hb
+      exact ih _ hs.1 hlt.1 hs.2
+
+private theorem searchLeaf_first_lt_power {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    (HypercubeRamsey.S04.searchLeaf β γ n g v).1 < HypercubeRamsey.S04.gadgetPower β γ n := by
+  have h := searchFold_first_lt_power g v
+    (List.range (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n)))
+    (0, HypercubeRamsey.S04.gadgetPower β γ n) (by omega)
+    (HypercubeRamsey.S04.gadgetPower_pos β γ n) le_rfl
+  simpa [HypercubeRamsey.S04.searchLeaf] using h.1
 
 private def gadgetChunkEquiv (G s ℓ : ℕ) :
     (Fin G × Fin s) × Fin ℓ ≃ Fin (G * s * ℓ) :=
@@ -342,6 +378,287 @@ private theorem gadgetChunkEquiv_val {G s ℓ : ℕ}
     (gadgetChunkEquiv G s ℓ ((g, j), r)).val = (g.val * s + j.val) * ℓ + r.val := by
   simp [gadgetChunkEquiv, finProdFinEquiv]
   ring
+
+private theorem chunkEnd_le_specialNum {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j : Fin (HypercubeRamsey.S04.chunkNum β γ n)) :
+    HypercubeRamsey.S04.chunkStart β γ n g j +
+      HypercubeRamsey.S04.chunkLen β γ n ≤ HypercubeRamsey.S04.specialNum β γ n := by
+  let G := HypercubeRamsey.S04.gadgetNum β γ n
+  let s := HypercubeRamsey.S04.chunkNum β γ n
+  let ℓ := HypercubeRamsey.S04.chunkLen β γ n
+  have hs : 0 < s := Nat.lt_of_le_of_lt (Nat.zero_le j.val) j.isLt
+  have hgs : g.val * s + j.val + 1 ≤ (g.val + 1) * s := by
+    rw [Nat.add_mul, one_mul]
+    omega
+  have hG : (g.val + 1) * s ≤ G * s :=
+    Nat.mul_le_mul_right s (Nat.succ_le_of_lt g.isLt)
+  have hblock : (g.val * s + j.val) * ℓ + ℓ ≤ G * s * ℓ := by
+    calc
+      (g.val * s + j.val) * ℓ + ℓ = (g.val * s + j.val + 1) * ℓ := by
+        ring
+      _ ≤ ((g.val + 1) * s) * ℓ := Nat.mul_le_mul_right ℓ hgs
+      _ ≤ (G * s) * ℓ := Nat.mul_le_mul_right ℓ hG
+      _ = G * s * ℓ := by ring
+  simpa [HypercubeRamsey.S04.chunkStart, HypercubeRamsey.S04.chunkLen,
+    HypercubeRamsey.S04.specialNum, G, s, ℓ] using hblock
+
+private theorem chunkCount_eq_blockWeight {β γ : ℝ} {n : ℕ}
+    (hmn : HypercubeRamsey.S04.specialNum β γ n ≤ n)
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j : Fin (HypercubeRamsey.S04.chunkNum β γ n)) (v : CubeVertex n) :
+    HypercubeRamsey.S04.chunkCount β γ n g j v =
+      (Finset.univ.filter (fun r : Fin (HypercubeRamsey.S04.chunkLen β γ n) =>
+        v (Fin.castLE
+          (by simpa [HypercubeRamsey.S04.specialNum, Nat.mul_assoc] using hmn)
+          (gadgetChunkEquiv (HypercubeRamsey.S04.gadgetNum β γ n)
+            (HypercubeRamsey.S04.chunkNum β γ n)
+            (HypercubeRamsey.S04.chunkLen β γ n) ((g, j), r))) = true)).card := by
+  classical
+  let G := HypercubeRamsey.S04.gadgetNum β γ n
+  let s := HypercubeRamsey.S04.chunkNum β γ n
+  let ℓ := HypercubeRamsey.S04.chunkLen β γ n
+  have hmn' : G * s * ℓ ≤ n := by
+    simpa [HypercubeRamsey.S04.specialNum, G, s, ℓ, Nat.mul_assoc] using hmn
+  let φ : Fin ℓ → Fin n := fun r => Fin.castLE hmn' (gadgetChunkEquiv G s ℓ ((g, j), r))
+  have hφval (r : Fin ℓ) :
+      (φ r).val = (g.val * s + j.val) * ℓ + r.val := by
+    simpa [φ, G, s, ℓ] using gadgetChunkEquiv_val g j r
+  have hStartVal : HypercubeRamsey.S04.chunkStart β γ n g j =
+      (g.val * s + j.val) * ℓ := by simp [HypercubeRamsey.S04.chunkStart, G, s, ℓ]
+  have himage :
+      HypercubeRamsey.S04.chunkCoords β γ n g j =
+        (Finset.univ : Finset (Fin ℓ)).image φ := by
+    ext i
+    constructor
+    · intro hi
+      rcases Finset.mem_filter.mp hi with ⟨_, ⟨hstart, hend⟩⟩
+      let r : Fin ℓ := ⟨i.val - HypercubeRamsey.S04.chunkStart β γ n g j, by
+        have hstart' : HypercubeRamsey.S04.chunkStart β γ n g j ≤ i.val := hstart
+        have hend' : i.val <
+            HypercubeRamsey.S04.chunkStart β γ n g j + HypercubeRamsey.S04.chunkLen β γ n := hend
+        exact (Nat.sub_lt_iff_lt_add hstart').2 (by omega)⟩
+      refine Finset.mem_image.mpr ⟨r, Finset.mem_univ _, ?_⟩
+      apply Fin.ext
+      rw [hφval]
+      have hrval : r.val = i.val - HypercubeRamsey.S04.chunkStart β γ n g j := rfl
+      rw [hrval, ← hStartVal]
+      omega
+    · intro hi
+      rcases Finset.mem_image.mp hi with ⟨r, _, rfl⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      rw [HypercubeRamsey.S04.chunkStart, hφval]
+      dsimp [s, ℓ]
+      constructor <;> omega
+  have hφinj : Function.Injective φ := by
+    intro r r' h
+    apply Fin.ext
+    have hv := congrArg Fin.val h
+    rw [hφval r, hφval r'] at hv
+    omega
+  have hfilter :
+      (HypercubeRamsey.S04.chunkCoords β γ n g j).filter (fun i => v i = true) =
+        (Finset.univ.filter fun r : Fin ℓ => v (φ r) = true).image φ := by
+    ext i
+    constructor
+    · intro hi
+      rcases Finset.mem_filter.mp hi with ⟨hiCoord, hbit⟩
+      rw [himage] at hiCoord
+      rcases Finset.mem_image.mp hiCoord with ⟨r, _, hr⟩
+      refine Finset.mem_image.mpr ⟨r, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, hr⟩
+      simpa [hr] using hbit
+    · intro hi
+      rcases Finset.mem_image.mp hi with ⟨r, hr, rfl⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨?_, (Finset.mem_filter.mp hr).2⟩
+      rw [himage]
+      exact Finset.mem_image.mpr ⟨r, Finset.mem_univ _, rfl⟩
+  unfold HypercubeRamsey.S04.chunkCount
+  rw [hfilter, Finset.card_image_of_injective _ hφinj]
+
+private theorem odd_parity_projection_uniform {n : ℕ} (S : Finset (Fin n))
+    (hS : S.card < n) (z : ∀ i : S, Bool) :
+    ((Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+      (fun v : CubeVertex n => ∀ i : S, v i.1 = z i)).card = 2 ^ (n - S.card - 1) := by
+  classical
+  let agree : CubeVertex n → Prop := fun v => ∀ i : S, v i.1 = z i
+  let evenF : Finset (CubeVertex n) := (HypercubeRamsey.evenRoleSet n).filter agree
+  let oddF : Finset (CubeVertex n) := (Finset.univ \ HypercubeRamsey.evenRoleSet n).filter agree
+  obtain ⟨j, hjU, hjS⟩ := Finset.exists_mem_notMem_of_card_lt_card (by
+    simpa using hS : S.card < (Finset.univ : Finset (Fin n)).card)
+  let flip : CubeVertex n → CubeVertex n := fun v => HypercubeRamsey.cubeFlip v j
+  have hinv : Function.Involutive flip := by
+    intro v
+    funext i
+    by_cases hji : i = j
+    · subst i
+      simp [flip, HypercubeRamsey.cubeFlip]
+    · simp [flip, HypercubeRamsey.cubeFlip, hji]
+  have hpres (v : CubeVertex n) : agree (flip v) ↔ agree v := by
+    constructor <;> intro h i
+    · have hne : i.1 ≠ j := by
+        intro hEq
+        exact hjS (hEq ▸ i.2)
+      simpa [agree, flip, HypercubeRamsey.cubeFlip, Function.update_of_ne hne] using h i
+    · have hne : i.1 ≠ j := by
+        intro hEq
+        exact hjS (hEq ▸ i.2)
+      simpa [agree, flip, HypercubeRamsey.cubeFlip, Function.update_of_ne hne] using h i
+  have himage : evenF.image flip = oddF := by
+    ext y
+    constructor
+    · intro hy
+      rcases Finset.mem_image.mp hy with ⟨x, hx, rfl⟩
+      have hxE : HypercubeRamsey.IsEvenRole x := by
+        simpa [HypercubeRamsey.evenRoleSet] using (Finset.mem_filter.mp hx).1
+      have hnot : ¬ HypercubeRamsey.IsEvenRole (flip x) := by
+        intro hflip
+        exact (HypercubeRamsey.cubeFlip_parity x j).mp hflip hxE
+      have hagr : agree (flip x) := (hpres x).2 (Finset.mem_filter.mp hx).2
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, ?_⟩, hagr⟩
+      simpa [HypercubeRamsey.evenRoleSet] using hnot
+    · intro hy
+      have hodd : ¬ HypercubeRamsey.IsEvenRole y := by
+        simpa [HypercubeRamsey.evenRoleSet] using (Finset.mem_sdiff.mp (Finset.mem_filter.mp hy).1).2
+      have hagr : agree y := (Finset.mem_filter.mp hy).2
+      have hE : HypercubeRamsey.IsEvenRole (flip y) :=
+        (HypercubeRamsey.cubeFlip_parity y j).mpr hodd
+      refine Finset.mem_image.mpr ⟨flip y, ?_, hinv y⟩
+      have hagr' : agree (flip y) := (hpres y).mpr hagr
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _, hE⟩, hagr'⟩
+  have hcard : evenF.card = oddF.card := by
+    rw [← Finset.card_image_of_injective evenF hinv.injective, himage]
+  have he := HypercubeRamsey.parity_projection_uniform S hS z
+  calc
+    oddF.card = evenF.card := hcard.symm
+    _ = 2 ^ (n - S.card - 1) := by simpa [evenF, agree] using he
+
+private theorem evenProjection_event_card {n : ℕ} (S : Finset (Fin n))
+    (hS : S.card < n) (A : Finset (∀ i : S, Bool)) :
+    ((HypercubeRamsey.evenRoleSet n).filter
+      (fun v : CubeVertex n => (fun i : S => v i.1) ∈ A)).card =
+        A.card * 2 ^ (n - S.card - 1) := by
+  classical
+  let project : CubeVertex n → (∀ i : S, Bool) := fun v i => v i.1
+  have hcard := Finset.sum_card_fiberwise_eq_card_filter
+    (s := HypercubeRamsey.evenRoleSet n) (t := A) (g := project)
+  have hfiber (z : ∀ i : S, Bool) :
+      ((HypercubeRamsey.evenRoleSet n).filter fun v : CubeVertex n => project v = z).card =
+        2 ^ (n - S.card - 1) := by
+    have hEq : (HypercubeRamsey.evenRoleSet n).filter
+          (fun v : CubeVertex n => project v = z) =
+        (HypercubeRamsey.evenRoleSet n).filter
+          (fun v => ∀ i : S, v i.1 = z i) := by
+      ext v
+      simp [project, funext_iff]
+    rw [hEq]
+    exact HypercubeRamsey.parity_projection_uniform S hS z
+  calc
+    ((HypercubeRamsey.evenRoleSet n).filter
+      (fun v : CubeVertex n => project v ∈ A)).card =
+        ∑ z ∈ A, ((HypercubeRamsey.evenRoleSet n).filter
+          (fun v : CubeVertex n => project v = z)).card := hcard.symm
+    _ = ∑ _z ∈ A, 2 ^ (n - S.card - 1) := by
+      apply Finset.sum_congr rfl
+      intro z hz
+      exact hfiber z
+    _ = A.card * 2 ^ (n - S.card - 1) := by simp
+
+private theorem oddProjection_event_card {n : ℕ} (S : Finset (Fin n))
+    (hS : S.card < n) (A : Finset (∀ i : S, Bool)) :
+    ((Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+      (fun v : CubeVertex n => (fun i : S => v i.1) ∈ A)).card =
+        A.card * 2 ^ (n - S.card - 1) := by
+  classical
+  let project : CubeVertex n → (∀ i : S, Bool) := fun v i => v i.1
+  have hcard := Finset.sum_card_fiberwise_eq_card_filter
+    (s := Finset.univ \ HypercubeRamsey.evenRoleSet n) (t := A) (g := project)
+  have hfiber (z : ∀ i : S, Bool) :
+      ((Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+        (fun v : CubeVertex n => project v = z)).card =
+        2 ^ (n - S.card - 1) := by
+    have hEq : (Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+          (fun v : CubeVertex n => project v = z) =
+        (Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+          (fun v => ∀ i : S, v i.1 = z i) := by
+      ext v
+      simp [project, funext_iff]
+    rw [hEq]
+    exact odd_parity_projection_uniform S hS z
+  calc
+    ((Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+      (fun v : CubeVertex n => project v ∈ A)).card =
+        ∑ z ∈ A, ((Finset.univ \ HypercubeRamsey.evenRoleSet n).filter
+          (fun v : CubeVertex n => project v = z)).card := hcard.symm
+    _ = ∑ _z ∈ A, 2 ^ (n - S.card - 1) := by
+      apply Finset.sum_congr rfl
+      intro z hz
+      exact hfiber z
+    _ = A.card * 2 ^ (n - S.card - 1) := by simp
+
+private def firstCoordinates (n m : ℕ) : Finset (Fin n) :=
+  Finset.univ.filter fun i => i.val < m
+
+private def firstCoordinatesEquiv {m n : ℕ} (hm : m ≤ n) :
+    Fin m ≃ {i : Fin n // i ∈ firstCoordinates n m} where
+  toFun i := ⟨⟨i.val, Nat.lt_of_lt_of_le i.isLt hm⟩, by
+    simp [firstCoordinates, i.isLt]⟩
+  invFun i := ⟨i.1.val, (Finset.mem_filter.mp i.2).2⟩
+  left_inv i := by apply Fin.ext; rfl
+  right_inv i := by apply Subtype.ext; apply Fin.ext; rfl
+
+private def firstAssignmentEquiv {m n : ℕ} (hm : m ≤ n) :
+    (Fin m → Bool) ≃ (∀ i : {x : Fin n // x ∈ firstCoordinates n m}, Bool) where
+  toFun f i := f ((firstCoordinatesEquiv hm).symm i)
+  invFun z j := z (firstCoordinatesEquiv hm j)
+  left_inv f := by funext j; simp
+  right_inv z := by funext i; simp
+
+private def gadgetFirstBlocksEquiv {G s ℓ n : ℕ} (hmn : G * s * ℓ ≤ n) :
+    (∀ i : {x : Fin n // x ∈ firstCoordinates n (G * s * ℓ)}, Bool) ≃
+      (Fin G × Fin s → Fin ℓ → Bool) :=
+  (firstAssignmentEquiv (m := G * s * ℓ) (n := n) hmn).symm.trans
+    (blockAssignmentsEquiv (gadgetChunkEquiv G s ℓ))
+
+private theorem gadgetFirstBlock_constraint_count {G s ℓ n : ℕ}
+    (hmn : G * s * ℓ ≤ n) (A : (Fin G × Fin s) → Finset (Fin ℓ → Bool)) :
+    Fintype.card
+      {z : (∀ i : {x : Fin n // x ∈ firstCoordinates n (G * s * ℓ)}, Bool) //
+        ∀ b, (gadgetFirstBlocksEquiv hmn z) b ∈ A b} =
+      ∏ b, (A b).card := by
+  classical
+  let E := gadgetFirstBlocksEquiv hmn
+  let Eblock := blockAssignmentsEquiv (gadgetChunkEquiv G s ℓ)
+  let Q : (Fin G × Fin s → Fin ℓ → Bool) → Prop := fun x => ∀ b, x b ∈ A b
+  let R : (Fin (G * s * ℓ) → Bool) → Prop := fun f => ∀ b, (Eblock f) b ∈ A b
+  let eS : {z : ∀ i : {x : Fin n // x ∈ firstCoordinates n (G * s * ℓ)}, Bool //
+      Q (E z)} ≃ {x : Fin G × Fin s → Fin ℓ → Bool // Q x} := {
+    toFun := fun z => ⟨E z.1, z.2⟩
+    invFun := fun x => ⟨E.symm x.1, by simpa [E, Q] using x.2⟩
+    left_inv := by intro z; apply Subtype.ext; simp [E]
+    right_inv := by intro x; apply Subtype.ext; simp [E]
+  }
+  let eSub : {x : Fin G × Fin s → Fin ℓ → Bool // Q x} ≃
+      {f : Fin (G * s * ℓ) → Bool // R f} := {
+    toFun := fun x => ⟨Eblock.symm x.1, by
+      intro b
+      simpa [Eblock] using x.2 b⟩
+    invFun := fun f => ⟨Eblock f.1, f.2⟩
+    left_inv := by intro x; apply Subtype.ext; simp [Eblock]
+    right_inv := by intro f; apply Subtype.ext; simp [Eblock]
+  }
+  calc
+    Fintype.card {z : ∀ i : {x : Fin n // x ∈ firstCoordinates n (G * s * ℓ)}, Bool //
+      Q (E z)} = Fintype.card {x : Fin G × Fin s → Fin ℓ → Bool // Q x} := by
+        exact Fintype.card_congr eS
+    _ = Fintype.card {f : Fin (G * s * ℓ) → Bool // R f} :=
+        Fintype.card_congr eSub
+    _ = ∏ b, (A b).card := by
+      simpa [R, Eblock, blockAssignmentsEquiv] using
+        block_constraint_count (gadgetChunkEquiv G s ℓ) A
 
 private def boolComplementEquiv (ℓ : ℕ) : (Fin ℓ → Bool) ≃ (Fin ℓ → Bool) where
   toFun f := fun i => !f i
@@ -444,6 +761,77 @@ private theorem centralWeightMass_le_sixth (S ℓ : ℕ) (hS : 100 ≤ S)
       gcongr
     _ = ((S ^ 2 + 2 : ℕ) : ℝ) * (2 / (s : ℝ) ^ 3) := by rw [hsqrt]
     _ ≤ 1 / 6 := hsmall
+
+private def clippedBlockWeight (S ℓ : ℕ) (f : Fin ℓ → Bool) : ℕ :=
+  min ((trueCoordinatesEquiv f).card - (ℓ / 2 - S ^ 2 / 2)) (S ^ 2)
+
+private theorem clippedBlock_side_card_le (S ℓ t : ℕ)
+    (hendLow : ((Finset.univ.filter fun f : Fin ℓ → Bool =>
+      (trueCoordinatesEquiv f).card ≤ ℓ / 2 - S ^ 2 / 2).card : ℝ) ≥
+        (1 / 3) * (2 : ℝ) ^ ℓ)
+    (hendHigh : ((Finset.univ.filter fun f : Fin ℓ → Bool =>
+      ℓ / 2 - S ^ 2 / 2 + S ^ 2 ≤ (trueCoordinatesEquiv f).card).card : ℝ) ≥
+        (1 / 3) * (2 : ℝ) ^ ℓ)
+    (htpos : 0 < t) (htlt : t < S ^ 2) :
+    ((Finset.univ.filter fun f : Fin ℓ → Bool => t < clippedBlockWeight S ℓ f).card : ℝ) ≤
+        (2 / 3) * (2 : ℝ) ^ ℓ ∧
+    ((Finset.univ.filter fun f : Fin ℓ → Bool => clippedBlockWeight S ℓ f ≤ t).card : ℝ) ≤
+        (2 / 3) * (2 : ℝ) ^ ℓ := by
+  classical
+  let lo := ℓ / 2 - S ^ 2 / 2
+  let hi := lo + S ^ 2
+  let lowW : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f =>
+    (trueCoordinatesEquiv f).card ≤ lo
+  let highW : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f =>
+    hi ≤ (trueCoordinatesEquiv f).card
+  let above : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f =>
+    t < clippedBlockWeight S ℓ f
+  let below : Finset (Fin ℓ → Bool) := Finset.univ.filter fun f =>
+    clippedBlockWeight S ℓ f ≤ t
+  have hlowW : (lowW.card : ℝ) ≥ (1 / 3) * (2 : ℝ) ^ ℓ := by
+    simpa [lowW, lo] using hendLow
+  have hhighW : (highW.card : ℝ) ≥ (1 / 3) * (2 : ℝ) ^ ℓ := by
+    simpa [highW, lo, hi] using hendHigh
+  have hlowClip (f : Fin ℓ → Bool) (hf : f ∈ lowW) : clippedBlockWeight S ℓ f = 0 := by
+    have hw := (Finset.mem_filter.mp hf).2
+    simp [clippedBlockWeight, lo, Nat.sub_eq_zero_of_le hw]
+  have hhighClip (f : Fin ℓ → Bool) (hf : f ∈ highW) :
+      clippedBlockWeight S ℓ f = S ^ 2 := by
+    have hw := (Finset.mem_filter.mp hf).2
+    have hsub : S ^ 2 ≤ (trueCoordinatesEquiv f).card - lo := by dsimp [lo] at hw ⊢; omega
+    simp [clippedBlockWeight, lo, Nat.min_eq_right hsub]
+  have hlowNotAbove : lowW ⊆ Finset.univ.filter fun f : Fin ℓ → Bool => ¬ t < clippedBlockWeight S ℓ f := by
+    intro f hf
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    rw [hlowClip f hf]
+    omega
+  have hhighNotBelow : highW ⊆ Finset.univ.filter fun f : Fin ℓ → Bool => ¬ clippedBlockWeight S ℓ f ≤ t := by
+    intro f hf
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    rw [hhighClip f hf]
+    omega
+  have htotal : (Finset.univ : Finset (Fin ℓ → Bool)).card = 2 ^ ℓ := by simp
+  have hsplitAbove := Finset.card_filter_add_card_filter_not
+    (s := (Finset.univ : Finset (Fin ℓ → Bool)))
+    (p := fun f => t < clippedBlockWeight S ℓ f)
+  have hsplitBelow := Finset.card_filter_add_card_filter_not
+    (s := (Finset.univ : Finset (Fin ℓ → Bool)))
+    (p := fun f => clippedBlockWeight S ℓ f ≤ t)
+  have hAboveNat : above.card + lowW.card ≤ 2 ^ ℓ := by
+    have hle := Finset.card_le_card hlowNotAbove
+    dsimp [above]
+    omega
+  have hBelowNat : below.card + highW.card ≤ 2 ^ ℓ := by
+    have hle := Finset.card_le_card hhighNotBelow
+    dsimp [below]
+    omega
+  constructor
+  · have hsmall : (above.card : ℝ) + (lowW.card : ℝ) ≤ (2 : ℝ) ^ ℓ := by exact_mod_cast hAboveNat
+    nlinarith [hlowW, hsmall]
+  · have hsmall : (below.card : ℝ) + (highW.card : ℝ) ≤ (2 : ℝ) ^ ℓ := by exact_mod_cast hBelowNat
+    nlinarith [hhighW, hsmall]
 
 private theorem clipped_endpoint_counts (S ℓ : ℕ) (hS : 100 ≤ S)
     (hSeven : Even S) (hℓ : ℓ = (S - 1) ^ 6) :

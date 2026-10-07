@@ -146,13 +146,44 @@ all positions, binomial with mean `n^{b₀}`, `O(m n^{b₀} r/n)` and `O(n^{b₀
 levels of the window. -/
 theorem p92_height_base (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightBase9 P hc n c := by
-  rcases hadm with ⟨_, _, _, _, _, _, _, _, hbpos, _, _, _⟩
+  rcases hadm with ⟨_, _, _, _, _, _, _, _, hbpos, hbε, hε, _⟩
+  rcases hP with ⟨hcommon, _, _, hσ, _, _, _⟩
+  rcases hσ with ⟨_, hσsmall⟩
+  have hσlt1 : (P.σ : ℝ) < 1 := by
+    have hxS : P.xS < 1 := lt_trans hcommon.2.1 (lt_trans hcommon.2.2 (by norm_num))
+    have hσlt1q : P.σ < 1 := by linarith
+    exact_mod_cast hσlt1q
+  have hεlt1 : P.eps < 1 := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        simp [Params9.eps, hbranch]
+        have hmin : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) ≤ (P.σ : ℝ) := min_le_left _ _
+        nlinarith
+    | lin αS αD hB yB =>
+        simp [Params9.eps, hbranch]
+        linarith
+  have hb0lt1 : hc.b₀ < 1 := lt_trans hbε (lt_trans hε hεlt1)
   refine ⟨hc.b₀ / 2, div_pos hbpos (by norm_num), 2, ?_⟩
   intro n hn
   have hn2 : 2 ≤ n := by omega
-  -- The hole term has exponent `b₀`; the three crowd terms require the corresponding
-  -- product-binomial upper tails after reducing restricted domains to `univ`.
-  sorry
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hqexp : hc.b₀ - 10 ≤ 0 := by linarith
+  have hq0 : 0 ≤ (n : ℝ) ^ (hc.b₀ - 10) := Real.rpow_nonneg hnreal.le _
+  have hq1 : (n : ℝ) ^ (hc.b₀ - 10) ≤ 1 :=
+    Real.rpow_le_one_of_one_le_of_nonpos hnR hqexp
+  have hqpow : (n : ℝ) ^ (hc.b₀ - 10) * (n : ℝ) ^ (10 : ℝ) = (n : ℝ) ^ hc.b₀ := by
+    rw [← Real.rpow_add hnreal]
+    congr 1
+    ring
+  have _hHoleBound (C : Finset (Pos9 P hc n)) (s : ℝ) (hs : 0 ≤ s)
+      (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :=
+    Lane_q_s09_map.height_hole_probability_bound C s hs v j hq0 hq1 hqpow
+  -- `hHoleBound` proves the activation tail uniformly in `C`, conditional on its eligible
+  -- set size. The remaining work is the three crowd upper tails and their union estimate.
+  have hFinal : HeightBase9 P hc n (hc.b₀ / 2) := by
+    sorry
+  exact hFinal
 
 /-- P9.2-map1, position counts (09:85): each eligible-set size is binomial with mean `n^{10}` (`V` positions,
 probability `n^{10}/V`); a Chernoff lower tail `e^{-n^{10}/8}` and a union over the `2^n (H+1)` site-levels

@@ -1375,4 +1375,199 @@ theorem hammingDist_two_cubeFlips {d : ℕ} (v : CubeVertex d) (i j : Fin d)
   rw [_root_.hammingDist, hfilter]
   simp [hij]
 
+private theorem finProb_prod_pr_dep_bound {α β : Type*} [Fintype α] [Fintype β]
+    (μ : FinProb α) (ν : FinProb β) (Q : α → Prop) (E : α → β → Prop)
+    (ε : ℝ) (hε : 0 ≤ ε)
+    (hE : ∀ a, Q a → ν.pr (E a) ≤ ε) :
+    (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) ≤ ε := by
+  classical
+  have hfactor : (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) =
+      ∑ a, μ.w a * ν.pr (fun b => Q a ∧ E a b) := by
+    calc
+      (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) =
+          ∑ a, ∑ b, if Q a ∧ E a b then μ.w a * ν.w b else 0 := by
+        unfold FinProb.pr FinProb.prod
+        rw [Fintype.sum_prod_type]
+        apply Finset.sum_congr rfl
+        intro a ha
+        apply Finset.sum_congr rfl
+        intro b hb
+        simp [FinProb.prod]
+      _ = ∑ a, μ.w a * ν.pr (fun b => Q a ∧ E a b) := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        calc
+          (∑ b, if Q a ∧ E a b then μ.w a * ν.w b else 0) =
+              ∑ b, μ.w a * (if Q a ∧ E a b then ν.w b else 0) := by
+            apply Finset.sum_congr rfl
+            intro b hb
+            by_cases hab : Q a ∧ E a b <;> simp [hab, mul_assoc]
+          _ = μ.w a * ∑ b, if Q a ∧ E a b then ν.w b else 0 := by
+            rw [Finset.mul_sum]
+          _ = μ.w a * ν.pr (fun b => Q a ∧ E a b) := by
+            congr 1
+            apply Finset.sum_congr rfl
+            intro b hb
+            by_cases hab : Q a ∧ E a b <;> simp [hab]
+  calc
+    (FinProb.prod μ ν).pr (fun ab => Q ab.1 ∧ E ab.1 ab.2) =
+        ∑ a, μ.w a * ν.pr (fun b => Q a ∧ E a b) := hfactor
+    _ ≤ ∑ a, μ.w a * ε := by
+      apply Finset.sum_le_sum
+      intro a ha
+      have htail : ν.pr (fun b => Q a ∧ E a b) ≤ ε := by
+        by_cases hq : Q a
+        · simpa [hq] using hE a hq
+        · simp [FinProb.pr, hq, hε]
+      exact mul_le_mul_of_nonneg_left htail (μ.nonneg a)
+    _ = (∑ a, μ.w a) * ε := (Finset.sum_mul _ _ _).symm
+    _ = ε := by rw [μ.sum_eq_one]; ring
+
+private theorem finProb_pi_expect_prod {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (P : ι → FinProb Bool) (f : ι → Bool → ℝ) :
+    (FinProb.pi P).expect (fun ω => ∏ i, f i (ω i)) =
+      ∏ i, (P i).expect (f i) := by
+  classical
+  unfold FinProb.expect FinProb.pi
+  calc
+    _ = ∑ ω : (∀ i, Bool), ∏ i, (P i).w (ω i) * f i (ω i) := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      rw [Finset.prod_mul_distrib]
+    _ = ∏ i, ∑ b : Bool, (P i).w b * f i b := by rw [Fintype.prod_sum]
+    _ = _ := rfl
+
+private theorem bernoulli_all_false_subset_probability {ι : Type*} [Fintype ι]
+    [DecidableEq ι] (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (S : Finset ι) :
+    (FinProb.pi (fun _ : ι => FinProb.bernoulli q)).pr
+      (fun A => ∀ i ∈ S, A i = false) ≤ Real.exp (-q * (S.card : ℝ)) := by
+  classical
+  let μ : FinProb (∀ _ : ι, Bool) := FinProb.pi (fun _ : ι => FinProb.bernoulli q)
+  let E : (∀ _ : ι, Bool) → Prop := fun A => ∀ i ∈ S, A i = false
+  let f : ι → Bool → ℝ := fun i b => if i ∈ S then if b = false then 1 else 0 else 1
+  have hindicator (A : ∀ _ : ι, Bool) : (if E A then (1 : ℝ) else 0) = ∏ i, f i (A i) := by
+    by_cases hA : E A
+    · rw [if_pos hA]
+      have hprod : ∏ i, f i (A i) = 1 := by
+        rw [Finset.prod_ite_mem_eq S]
+        apply Finset.prod_eq_one
+        intro i hi
+        simp [f, hA i hi]
+      rw [hprod]
+    · have hex : ∃ i, i ∈ S ∧ A i = true := by
+        by_contra hnot
+        push_neg at hnot
+        apply hA
+        intro i hi
+        cases hval : A i <;> simp_all
+      rcases hex with ⟨i, hi, hval⟩
+      have hz : f i (A i) = 0 := by simp [f, hi, hval]
+      rw [Finset.prod_eq_zero (Finset.mem_univ i) hz]
+      simp [E, hA]
+  have hcoord (i : ι) :
+      (FinProb.bernoulli q).expect (fun b => f i b) = if i ∈ S then 1 - q else 1 := by
+    by_cases hi : i ∈ S
+    · simp [f, hi, FinProb.expect, FinProb.bernoulli, hq0, hq1]
+    · simp [f, hi, FinProb.expect, FinProb.bernoulli, hq0, hq1]
+  have hfactor : μ.pr E = ∏ i, if i ∈ S then 1 - q else 1 := by
+    calc
+      μ.pr E = μ.expect (fun A => if E A then (1 : ℝ) else 0) := by
+        unfold FinProb.pr FinProb.expect
+        apply Finset.sum_congr rfl
+        intro A hA
+        by_cases h : E A <;> simp [h]
+      _ = μ.expect (fun A => ∏ i, f i (A i)) := by
+        congr 1
+        funext A
+        exact hindicator A
+      _ = ∏ i, (FinProb.bernoulli q).expect (fun b => f i b) := by
+        simpa [μ] using
+          (finProb_pi_expect_prod (fun _ : ι => FinProb.bernoulli q) f)
+      _ = ∏ i, if i ∈ S then 1 - q else 1 := by simp_rw [hcoord]
+  have hprod_le : (∏ i, if i ∈ S then 1 - q else 1) ≤
+      ∏ i, if i ∈ S then Real.exp (-q) else 1 := by
+    apply Finset.prod_le_prod₀
+    · intro i hi
+      by_cases his : i ∈ S
+      · simp only [if_pos his]
+        linarith
+      · simp [his]
+    · intro i hi
+      by_cases his : i ∈ S
+      · simp only [if_pos his]
+        exact Real.one_sub_le_exp_neg q
+      · simp [his]
+  have hexp_prod : (∏ i, if i ∈ S then Real.exp (-q) else 1) =
+      Real.exp (-q * (S.card : ℝ)) := by
+    rw [Finset.prod_ite_mem_eq S (fun _ => Real.exp (-q))]
+    rw [← Real.exp_sum]
+    congr 1
+    simp [Finset.sum_const, nsmul_eq_mul]
+    ring
+  calc
+    μ.pr E = ∏ i, if i ∈ S then 1 - q else 1 := hfactor
+    _ ≤ ∏ i, if i ∈ S then Real.exp (-q) else 1 := hprod_le
+    _ = Real.exp (-q * (S.card : ℝ)) := hexp_prod
+
+theorem height_hole_probability_bound (C : Finset (Pos9 P hc n)) (s : ℝ)
+    (hs : 0 ≤ s) (v : CubeVertex n) (j : Fin (hc.levels n + 1))
+    (hq0 : 0 ≤ (n : ℝ) ^ (hc.b₀ - 10))
+    (hq1 : (n : ℝ) ^ (hc.b₀ - 10) ≤ 1)
+    (hqpow : (n : ℝ) ^ (hc.b₀ - 10) * (n : ℝ) ^ (10 : ℝ) =
+      (n : ℝ) ^ hc.b₀) :
+    (heightLaw9 P hc n).pr (fun ω =>
+      holeIn9 C ω.1 ω.2 v j ∧
+        s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C ω.1 v j : ℝ)) ≤
+      Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+  classical
+  let q : ℝ := (n : ℝ) ^ (hc.b₀ - 10)
+  let Q : (Pos9 P hc n → Bool) → Prop := fun Pp =>
+    s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C Pp v j : ℝ)
+  let Hole : (Pos9 P hc n → Bool) → (Pos9 P hc n → Bool) → Prop :=
+    fun Pp A => holeIn9 C Pp A v j
+  have hActivation (Pp : Pos9 P hc n → Bool) (hQ : Q Pp) :
+      (heightActLaw9 P hc n).pr (Hole Pp) ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+    let S : Finset (Pos9 P hc n) := C.filter fun c =>
+      Pp c = true ∧ c.slice = specialWord9 (P.m n) v ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n ∧ c.level = j
+    have hScard : (S.card : ℝ) = eligCount9 C Pp v j := by
+      simp [S, eligCount9]
+    have hSize : s * (n : ℝ) ^ (10 : ℝ) ≤ (S.card : ℝ) := by
+      simpa [Q, hScard] using hQ
+    have hholeSubset (A : Pos9 P hc n → Bool) (hHole : Hole Pp A) :
+        ∀ c ∈ S, A c = false := by
+      intro c hcS
+      rcases Finset.mem_filter.mp hcS with ⟨hcC, ⟨hPpc, hslice, hdist, hlevel⟩⟩
+      have hnotActive := hHole c hcC hslice hdist hlevel
+      cases hA : A c
+      · rfl
+      · exfalso
+        apply hnotActive
+        exact ⟨hPpc, hA⟩
+    have hnoActive := bernoulli_all_false_subset_probability q hq0 hq1 S
+    have hnoActive' : (heightActLaw9 P hc n).pr (fun A => ∀ c ∈ S, A c = false) ≤
+        Real.exp (-q * (S.card : ℝ)) := by
+      simpa [heightActLaw9, q] using hnoActive
+    have hmono := finProb_pr_mono (heightActLaw9 P hc n) (Hole Pp)
+      (fun A => ∀ c ∈ S, A c = false) hholeSubset
+    have hqCard : s * (n : ℝ) ^ hc.b₀ ≤ q * (S.card : ℝ) := by
+      calc
+        s * (n : ℝ) ^ hc.b₀ = s * (q * (n : ℝ) ^ (10 : ℝ)) := by
+          rw [show q = (n : ℝ) ^ (hc.b₀ - 10) by rfl, hqpow]
+        _ = q * (s * (n : ℝ) ^ (10 : ℝ)) := by ring
+        _ ≤ q * (S.card : ℝ) :=
+          mul_le_mul_of_nonneg_left hSize hq0
+    have hexp : Real.exp (-q * (S.card : ℝ)) ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [hqCard]
+    calc
+      (heightActLaw9 P hc n).pr (Hole Pp) ≤
+          (heightActLaw9 P hc n).pr (fun A => ∀ c ∈ S, A c = false) := hmono
+      _ ≤ Real.exp (-q * (S.card : ℝ)) := hnoActive'
+      _ ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := hexp
+  have hprod := finProb_prod_pr_dep_bound (heightPosLaw9 P hc n)
+    (heightActLaw9 P hc n) Q Hole (Real.exp (-s * (n : ℝ) ^ hc.b₀))
+    (Real.exp_nonneg _) hActivation
+  simpa [heightLaw9, Q, Hole, and_comm] using hprod
+
 end HypercubeRamsey.Lane_q_s09_map

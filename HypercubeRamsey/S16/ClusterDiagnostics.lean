@@ -320,7 +320,107 @@ theorem cluster_gate_budget_room {κ : CConsts} (hκ : κ.Admissible) :
       slices * words ≤ (n : ℝ) ^ (200 : ℕ) → 1 ≤ A → A ≤ n → 1 ≤ N → N ≤ n * 2 ^ n →
       (Real.rpow (n : ℝ) (1 / 2 : ℝ) + Real.log (max 1 N)) *
           (slices * (words * (64 * A / L)) ^ 2) ≤ 2 * (κ.θstar / 2) ^ 2 := by
-  sorry
+  have hθ : 0 < κ.θstar := hκ.bucket.2.2.2.2
+  let n₀ : ℕ := ⌈24576 / κ.θstar ^ 2⌉₊
+  refine ⟨n₀, ?_⟩
+  intro n L slices words A N hn₀ hn2 hL hslices hwords hwordsN hcell hA hAN hN hNbound
+  let x : ℝ := n
+  have hx2 : 2 ≤ x := by dsimp [x]; exact_mod_cast hn2
+  have hx : 0 < x := by linarith
+  have hx1 : 1 ≤ x := by linarith
+  have hLp : 0 < L := lt_of_lt_of_le (pow_pos hx _) hL
+  have hceil : 24576 / κ.θstar ^ 2 ≤ (n₀ : ℝ) := by
+    change 24576 / κ.θstar ^ 2 ≤ (⌈24576 / κ.θstar ^ 2⌉₊ : ℝ)
+    exact Nat.le_ceil _
+  have hn₀' : (n₀ : ℝ) ≤ x := by
+    dsimp [x]
+    exact_mod_cast hn₀
+  have hxpow : x ≤ x ^ (194 : ℕ) := by
+    have hh := pow_le_pow_right₀ hx1 (by norm_num : 1 ≤ (194 : ℕ))
+    simpa using hh
+  have hthreshold : 24576 / κ.θstar ^ 2 ≤ x ^ (194 : ℕ) :=
+    le_trans (le_trans hceil hn₀') hxpow
+  have hbudget : 12288 / x ^ (194 : ℕ) ≤ κ.θstar ^ 2 / 2 := by
+    apply (div_le_iff₀ (pow_pos hx 194)).2
+    have hprod : 12288 ≤ (κ.θstar ^ 2 / 2) * x ^ (194 : ℕ) := by
+      calc
+        12288 = (κ.θstar ^ 2 / 2) * (24576 / κ.θstar ^ 2) := by
+          field_simp [ne_of_gt hθ]
+          norm_num
+        _ ≤ (κ.θstar ^ 2 / 2) * x ^ (194 : ℕ) :=
+          mul_le_mul_of_nonneg_left hthreshold (by positivity)
+    nlinarith
+  have hlogx : Real.log x ≤ x := by
+    exact (Real.log_le_sub_one_of_pos hx).trans (by linarith)
+  have hlog2 : Real.log (2 : ℝ) ≤ 1 := by
+    exact (Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)).trans (by norm_num)
+  have hmax : max 1 N ≤ x * 2 ^ n := by
+    apply max_le
+    · have hxreal : (1 : ℝ) ≤ x := hx1
+      have hpow : (1 : ℝ) ≤ 2 ^ n := one_le_pow₀ (by norm_num : (1 : ℝ) ≤ 2)
+      nlinarith
+    · simpa [x] using hNbound
+  have hlog : Real.log (max 1 N) ≤ 2 * x := by
+    calc
+      Real.log (max 1 N) ≤ Real.log (x * 2 ^ n) :=
+        Real.log_le_log (by positivity) hmax
+      _ = Real.log x + (n : ℝ) * Real.log 2 := by
+        rw [Real.log_mul hx.ne' (by positivity), Real.log_pow]
+      _ ≤ x + x := by
+        have hnreal : (n : ℝ) = x := by rfl
+        rw [hnreal]
+        calc
+          Real.log x + x * Real.log 2 ≤ x + x * 1 :=
+            add_le_add hlogx (mul_le_mul_of_nonneg_left hlog2 hx.le)
+          _ = x + x := by ring
+      _ = 2 * x := by ring
+  have hrpow : Real.rpow x (1 / 2 : ℝ) ≤ x := by
+    simpa only [Real.rpow_eq_pow, Real.rpow_one] using
+      Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1 / 2 : ℝ) ≤ 1)
+  have hstat : Real.rpow x (1 / 2 : ℝ) + Real.log (max 1 N) ≤ 3 * x := by
+    linarith
+  have hratio : 0 ≤ 64 * A / L ∧ 64 * A / L ≤ 64 / x ^ (198 : ℕ) := by
+    constructor
+    · positivity
+    · calc
+        64 * A / L ≤ 64 * x / L :=
+          div_le_div_of_nonneg_right (by nlinarith) hLp.le
+        _ ≤ 64 * x / x ^ (199 : ℕ) :=
+          div_le_div_of_nonneg_left (by positivity) (pow_pos hx 199) hL
+        _ = 64 / x ^ (198 : ℕ) := by
+          rw [show (199 : ℕ) = 198 + 1 by norm_num, pow_succ]
+          field_simp [ne_of_gt hx] <;> ring
+  have hratioSq : (64 * A / L) ^ 2 ≤ (64 / x ^ (198 : ℕ)) ^ 2 := by
+    have hgap : 0 ≤ 64 / x ^ (198 : ℕ) - 64 * A / L := sub_nonneg.mpr hratio.2
+    have hplus : 0 ≤ 64 * A / L + 64 / x ^ (198 : ℕ) := by positivity
+    nlinarith [mul_nonneg hgap hplus]
+  have hsw : slices * words ≤ x ^ (200 : ℕ) := by
+    simpa [x] using hcell
+  have hcoeff : slices * words ^ 2 ≤ x ^ (201 : ℕ) := by
+    calc
+      slices * words ^ 2 = (slices * words) * words := by ring
+      _ ≤ x ^ (200 : ℕ) * x :=
+        mul_le_mul hsw hwordsN (by positivity) (by positivity)
+      _ = x ^ (201 : ℕ) := by rw [← pow_succ]
+  have hwidth : slices * (words * (64 * A / L)) ^ 2 ≤ 4096 / x ^ (195 : ℕ) := by
+    calc
+      slices * (words * (64 * A / L)) ^ 2 =
+          (slices * words ^ 2) * (64 * A / L) ^ 2 := by ring
+      _ ≤ x ^ (201 : ℕ) * (64 / x ^ (198 : ℕ)) ^ 2 :=
+        mul_le_mul hcoeff hratioSq (by positivity) (by positivity)
+      _ = 4096 / x ^ (195 : ℕ) := by
+        field_simp [ne_of_gt hx]
+        ring
+  have hstatNonneg : 0 ≤ Real.rpow x (1 / 2 : ℝ) + Real.log (max 1 N) := by
+    exact add_nonneg (Real.rpow_nonneg hx.le _) (Real.log_nonneg (le_max_left 1 N))
+  calc
+    _ ≤ (3 * x) * (4096 / x ^ (195 : ℕ)) :=
+      mul_le_mul hstat hwidth (by positivity) (by positivity)
+    _ = 12288 / x ^ (194 : ℕ) := by
+      field_simp [ne_of_gt hx]
+      ring
+    _ ≤ κ.θstar ^ 2 / 2 := hbudget
+    _ = 2 * (κ.θstar / 2) ^ 2 := by ring
 
 /-- D6. The cluster gate (assembled from D1-D5 plus Link/checks_cover).
 TeX 16:259–278; estimated proof: 250 lines. -/

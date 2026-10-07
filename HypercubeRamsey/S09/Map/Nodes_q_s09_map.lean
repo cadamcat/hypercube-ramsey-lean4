@@ -1186,4 +1186,30 @@ theorem level_window_card_le_three (H h : ℕ) :
     _ ≤ values.card := Finset.card_le_card himage
     _ ≤ 3 := hvalues
 
+theorem cubeAdj_exists_flip {n : ℕ} (v w : CubeVertex n)
+    (hadj : (cube n).Adj v w) : ∃ i : Fin n, cubeFlip v i = w := by
+  classical
+  change _root_.hammingDist v w = 1 at hadj
+  let D : Finset (Fin n) := Finset.univ.filter (fun i => v i ≠ w i)
+  have hcard : D.card = 1 := by simpa [D, _root_.hammingDist] using hadj
+  obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hcard
+  have hdiff : v i ≠ w i := by
+    have hmem : i ∈ D := by rw [hi]; simp
+    exact (Finset.mem_filter.mp hmem).2
+  have hother (j : Fin n) (hji : j ≠ i) : v j = w j := by
+    by_contra hne
+    have hmem : j ∈ D := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+    rw [hi] at hmem
+    simp at hmem
+    exact hji hmem
+  have hflip : w i = !v i := by
+    cases hv : v i <;> cases hw : w i <;> simp_all
+  refine ⟨i, ?_⟩
+  funext j
+  by_cases hji : j = i
+  · subst j
+    simp [cubeFlip, hflip]
+  · have hEq := hother j hji
+    simp [cubeFlip, hji, hEq]
+
 end HypercubeRamsey.Lane_q_s09_map

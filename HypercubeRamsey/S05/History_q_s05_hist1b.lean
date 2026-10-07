@@ -775,4 +775,120 @@ theorem typeSegs_le_keyPrefix5 {γ K' χ : ℝ} {n N : ℕ} {E : Fin N → Fin N
     rw [hlevel]
     exact uStarSeg_le_uSeg_high5 X.p n
 
+theorem finite_subdensity_lower_bad5 {Ω Ξ : Type*} [Fintype Ω] [Fintype Ξ]
+    (P : FinProb Ω) (Q : FinProb Ξ) (L : Ω → Ξ → ℝ) (gate : Ω → Prop)
+    (m : Ξ → ℝ) (ε : ℝ)
+    (hm : ∀ x, m x = ∑ ω, if gate ω then P.w ω * L ω x else 0)
+    (hε : 0 ≤ ε) :
+    ∑ ω, ∑ x, (if gate ω ∧ (m x < ε) then P.w ω * Q.w x * L ω x else 0) ≤ ε := by
+  classical
+  let bad : Ξ → ℝ := fun x => ∑ ω,
+    (if gate ω ∧ (m x < ε) then P.w ω * L ω x else 0)
+  have hbad (x : Ξ) : bad x ≤ ε := by
+    by_cases hmx : m x < ε
+    · have heq : bad x = m x := by
+        calc
+          bad x = ∑ ω, if gate ω then P.w ω * L ω x else 0 := by
+            dsimp [bad]
+            apply Finset.sum_congr rfl
+            intro ω hω
+            simp [hmx]
+          _ = m x := (hm x).symm
+      rw [heq]
+      exact le_of_lt hmx
+    · have hzero : bad x = 0 := by
+        simp [bad, hmx]
+      rw [hzero]
+      exact hε
+  have hinner (x : Ξ) :
+      (∑ ω, if gate ω ∧ (m x < ε) then P.w ω * Q.w x * L ω x else 0) =
+        Q.w x * bad x := by
+    calc
+      _ = ∑ ω, Q.w x * (if gate ω ∧ (m x < ε) then P.w ω * L ω x else 0) := by
+        apply Finset.sum_congr rfl
+        intro ω hω
+        by_cases hcond : gate ω ∧ m x < ε <;> simp [hcond] <;> ring
+      _ = Q.w x * bad x := by
+        dsimp [bad]
+        rw [← Finset.mul_sum]
+  have hswap :
+      (∑ ω, ∑ x, if gate ω ∧ (m x < ε) then P.w ω * Q.w x * L ω x else 0) =
+        ∑ x, ∑ ω, if gate ω ∧ (m x < ε) then P.w ω * Q.w x * L ω x else 0 := by
+    rw [Finset.sum_comm]
+  calc
+    _ = ∑ x, ∑ ω, if gate ω ∧ (m x < ε) then P.w ω * Q.w x * L ω x else 0 := hswap
+    _ = ∑ x, Q.w x * bad x := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact hinner x
+    _ ≤ ∑ x, Q.w x * ε := by
+      apply Finset.sum_le_sum
+      intro x hx
+      exact mul_le_mul_of_nonneg_left (hbad x) (Q.nonneg x)
+    _ = ε := by
+      rw [← Finset.sum_mul, Q.sum_eq_one]
+      ring
+
+theorem finite_subdensity_ratio_bad5 {Ω Ξ : Type*} [Fintype Ω] [Fintype Ξ]
+    (P : FinProb Ω) (Q : FinProb Ξ) (L : Ω → Ξ → ℝ) (gate : Ω → Prop)
+    (m d : Ξ → ℝ) (ε : ℝ)
+    (hm : ∀ x, m x = ∑ ω, if gate ω then P.w ω * L ω x else 0)
+    (hd : ∀ x, 0 ≤ d x)
+    (hDel : ∑ x, Q.w x * d x ≤ 1)
+    (hε : 0 ≤ ε) :
+    ∑ ω, ∑ x, (if gate ω ∧ (m x < ε * d x) then P.w ω * Q.w x * L ω x else 0) ≤ ε := by
+  classical
+  let bad : Ξ → ℝ := fun x => ∑ ω,
+    (if gate ω ∧ (m x < ε * d x) then P.w ω * L ω x else 0)
+  have hbad (x : Ξ) : bad x ≤ ε * d x := by
+    by_cases hmx : m x < ε * d x
+    · have heq : bad x = m x := by
+        calc
+          bad x = ∑ ω, if gate ω then P.w ω * L ω x else 0 := by
+            dsimp [bad]
+            apply Finset.sum_congr rfl
+            intro ω hω
+            simp [hmx]
+          _ = m x := (hm x).symm
+      rw [heq]
+      exact le_of_lt hmx
+    · have hzero : bad x = 0 := by
+        simp [bad, hmx]
+      rw [hzero]
+      exact mul_nonneg hε (hd x)
+  have hinner (x : Ξ) :
+      (∑ ω, if gate ω ∧ (m x < ε * d x) then P.w ω * Q.w x * L ω x else 0) =
+        Q.w x * bad x := by
+    calc
+      _ = ∑ ω, Q.w x * (if gate ω ∧ (m x < ε * d x) then P.w ω * L ω x else 0) := by
+        apply Finset.sum_congr rfl
+        intro ω hω
+        by_cases hcond : gate ω ∧ m x < ε * d x <;> simp [hcond] <;> ring
+      _ = Q.w x * bad x := by
+        dsimp [bad]
+        rw [← Finset.mul_sum]
+  have hswap :
+      (∑ ω, ∑ x, if gate ω ∧ (m x < ε * d x) then P.w ω * Q.w x * L ω x else 0) =
+        ∑ x, ∑ ω, if gate ω ∧ (m x < ε * d x) then P.w ω * Q.w x * L ω x else 0 := by
+    rw [Finset.sum_comm]
+  calc
+    _ = ∑ x, ∑ ω, if gate ω ∧ (m x < ε * d x) then P.w ω * Q.w x * L ω x else 0 := hswap
+    _ = ∑ x, Q.w x * bad x := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact hinner x
+    _ ≤ ε * ∑ x, Q.w x * d x := by
+      calc
+        _ ≤ ∑ x, Q.w x * (ε * d x) := by
+          apply Finset.sum_le_sum
+          intro x hx
+          exact mul_le_mul_of_nonneg_left (hbad x) (Q.nonneg x)
+        _ = ε * ∑ x, Q.w x * d x := by
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro x hx
+          ring
+    _ ≤ ε * 1 := mul_le_mul_of_nonneg_left hDel hε
+    _ = ε := by ring
+
 end HypercubeRamsey.Lane_q_s05_hist1b

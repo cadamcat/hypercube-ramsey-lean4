@@ -152,6 +152,9 @@ structure SliceSolver (κ : CConsts) {T : Stage} {k : ℕ} (𝒯 : Tiling κ T k
   U_support_size : ∀ g W D, q g W D > 0 →
     ((Finset.univ.filter fun y => U g W D y ≠ 0).card : ℝ) ≥
       (1 / 2 : ℝ) * (𝒯.P i).d * Real.exp (-1.5 * (𝒯.kScale i : ℝ) * 𝒯.tScale i)
+  /-- Atom bound of the uniform-subset law, used by the conditional injection stages. -/
+  U_atom_cap : ∀ g W D y, 0 < q g W D →
+    U g W D y ≤ 2 * Real.exp (1.5 * (𝒯.kScale i : ℝ) * 𝒯.tScale i) / (𝒯.P i).d
   σ_nonneg : ∀ v W ys x, 0 ≤ σ v W ys x
   /-- A nonzero even row is a probability law. -/
   σ_prob : ∀ v W ys, σ v W ys ≠ 0 → ∑ x, σ v W ys x = 1

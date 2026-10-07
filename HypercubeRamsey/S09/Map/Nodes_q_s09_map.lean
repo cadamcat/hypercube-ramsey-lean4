@@ -2527,4 +2527,534 @@ theorem height_base_mean_slack9 (P : Params9) (hP : P.Valid)
         nlinarith [hpow]
   exact ⟨hSameMean, hAdjacentMean, hPlusMean⟩
 
+private theorem height_pr_exists_finset_le9 {Ω ι : Type*} [Fintype Ω] [Fintype ι]
+    (μ : FinProb Ω) (S : Finset ι) (E : ι → Ω → Prop) :
+    μ.pr (fun ω => ∃ i ∈ S, E i ω) ≤ ∑ i ∈ S, μ.pr (E i) := by
+  classical
+  induction S using Finset.induction_on with
+  | empty => simp [FinProb.pr]
+  | @insert a S ha ih =>
+      have hEq : (fun ω => ∃ i ∈ insert a S, E i ω) =
+          (fun ω => E a ω ∨ ∃ i ∈ S, E i ω) := by
+        funext ω
+        apply propext
+        constructor
+        · rintro ⟨i, hi, hEi⟩
+          rcases Finset.mem_insert.mp hi with h | h
+          · subst i
+            exact Or.inl hEi
+          · exact Or.inr ⟨i, h, hEi⟩
+        · rintro (hEi | ⟨i, hi, hEi⟩)
+          · exact ⟨a, Finset.mem_insert_self _ _, hEi⟩
+          · exact ⟨i, Finset.mem_insert_of_mem hi, hEi⟩
+      rw [hEq]
+      calc
+        μ.pr (fun ω => E a ω ∨ ∃ i ∈ S, E i ω) ≤
+            μ.pr (E a) + μ.pr (fun ω => ∃ i ∈ S, E i ω) :=
+          FinProb.pr_union μ (E a) (fun ω => ∃ i ∈ S, E i ω)
+        _ ≤ μ.pr (E a) + ∑ i ∈ S, μ.pr (E i) := add_le_add le_rfl ih
+        _ = ∑ i ∈ insert a S, μ.pr (E i) := by simp [Finset.sum_insert, ha]
+
+theorem height_level_window_card_le_five9 (H h : ℕ) :
+    (Finset.univ.filter (fun j : Fin (H + 1) => Nat.dist j.val h ≤ 2)).card ≤ 5 := by
+  classical
+  let J : Finset (Fin (H + 1)) :=
+    Finset.univ.filter (fun j => Nat.dist j.val h ≤ 2)
+  let f : Fin 5 → ℕ := fun i =>
+    if i.val = 0 then h - 2 else if i.val = 1 then h - 1 else
+      if i.val = 2 then h else if i.val = 3 then h + 1 else h + 2
+  let values : Finset ℕ := Finset.univ.image f
+  have hvalues : J.image Fin.val ⊆ values := by
+    intro k hk
+    rcases Finset.mem_image.mp hk with ⟨j, hj, rfl⟩
+    have hdist : Nat.dist j.val h ≤ 2 := (Finset.mem_filter.mp hj).2
+    have hcases : j.val = h - 2 ∨ j.val = h - 1 ∨ j.val = h ∨
+        j.val = h + 1 ∨ j.val = h + 2 := by
+      unfold Nat.dist at hdist
+      omega
+    change j.val ∈ Finset.univ.image f
+    rcases hcases with hval | hval | hval | hval | hval
+    · exact Finset.mem_image.mpr ⟨⟨0, by omega⟩, Finset.mem_univ _, by simp [f, hval]⟩
+    · exact Finset.mem_image.mpr ⟨⟨1, by omega⟩, Finset.mem_univ _, by simp [f, hval]⟩
+    · exact Finset.mem_image.mpr ⟨⟨2, by omega⟩, Finset.mem_univ _, by simp [f, hval]⟩
+    · exact Finset.mem_image.mpr ⟨⟨3, by omega⟩, Finset.mem_univ _, by simp [f, hval]⟩
+    · exact Finset.mem_image.mpr ⟨⟨4, by omega⟩, Finset.mem_univ _, by simp [f, hval]⟩
+  have hvaluesCard : values.card ≤ 5 := by
+    calc
+      values.card ≤ (Finset.univ : Finset (Fin 5)).card := Finset.card_image_le
+      _ = 5 := by simp
+  calc
+    _ = J.card := by rfl
+    _ = (J.image Fin.val).card :=
+      (Finset.card_image_of_injective _ Fin.val_injective).symm
+    _ ≤ values.card := Finset.card_le_card hvalues
+    _ ≤ 5 := hvaluesCard
+
+private theorem crowdSame_le_active_slice_ball9 (C : Finset (Pos9 P hc n))
+    (Pp A : Pos9 P hc n → Bool) (v : CubeVertex n)
+    (j : Fin (hc.levels n + 1)) (R : ℕ) :
+    crowdSame9 C Pp A v j R ≤
+      ((Finset.univ.filter (fun c : Pos9 P hc n =>
+        c.slice = specialWord9 (P.m n) v ∧
+          _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ R ∧ c.level = j)).filter
+        (fun c => Pp c = true ∧ A c = true)).card := by
+  classical
+  let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+    c.slice = specialWord9 (P.m n) v ∧
+      _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ R ∧ c.level = j)
+  apply Finset.card_le_card
+  intro c hc
+  simp only [crowdSame9, Finset.mem_filter] at hc
+  rcases hc with ⟨hcC, ⟨hactive, hslice, hdist, hlevel⟩⟩
+  rcases hactive with ⟨hP, hA⟩
+  simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact ⟨⟨hslice, hdist, hlevel⟩, ⟨hP, hA⟩⟩
+
+private theorem crowdAdj_le_active_slice_ball9 (C : Finset (Pos9 P hc n))
+    (Pp A : Pos9 P hc n → Bool) (v : CubeVertex n)
+    (j : Fin (hc.levels n + 1)) :
+    crowdAdj9 C Pp A v j ≤
+      ((Finset.univ.filter (fun c : Pos9 P hc n =>
+        _root_.hammingDist c.slice (specialWord9 (P.m n) v) = 1 ∧
+          _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n - 1 ∧
+            c.level = j)).filter (fun c => Pp c = true ∧ A c = true)).card := by
+  classical
+  let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+    _root_.hammingDist c.slice (specialWord9 (P.m n) v) = 1 ∧
+      _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n - 1 ∧
+        c.level = j)
+  apply Finset.card_le_card
+  intro c hc
+  simp only [crowdAdj9, Finset.mem_filter] at hc
+  rcases hc with ⟨hcC, ⟨hactive, hslice, hdist, hlevel⟩⟩
+  rcases hactive with ⟨hP, hA⟩
+  simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact ⟨⟨hslice, hdist, hlevel⟩, ⟨hP, hA⟩⟩
+
+theorem height_base_probability_bound9 (P : Params9) (hP : P.Valid)
+    (hc : HeightChoice9 P) (hadm : hc.Admissible) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightBase9 P hc n (hc.b₀ / 4) := by
+  rcases hP with ⟨hcommon, hminus, hx, hσ, hχ, hgap, hvalidCase⟩
+  have hP' : P.Valid := ⟨hcommon, hminus, hx, hσ, hχ, hgap, hvalidCase⟩
+  rcases hadm with ⟨hσhpos, hσhζ, hζlt, hθpos, hθlt, ha, hab, hχa,
+    hbpos, hbε, heps, hcaseAdm⟩
+  let α : ℝ := (P.χ : ℝ) / 2
+  let γ : ℝ := hc.b₀ / 4
+  have hγpos : 0 < γ := by dsimp [γ]; positivity
+  have hAlphaGap : 0 < α - γ := by
+    have hσposR : 0 < (P.σ : ℝ) := by exact_mod_cast hσ.1
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        have hcase : hc.b₀ < α := by simpa [hbranch, α] using hcaseAdm
+        dsimp [γ, α] at hcase ⊢
+        nlinarith [hbpos, hcase]
+    | lin αS αD hB yB =>
+        have hcase : hc.b₀ + (P.σ : ℝ) < α := by simpa [hbranch, α] using hcaseAdm
+        have hσposR : 0 < (P.σ : ℝ) := by exact_mod_cast hσ.1
+        dsimp [γ, α] at hcase ⊢
+        nlinarith [hbpos, hσposR, hcase]
+  have hHoleGap : 0 < hc.b₀ - γ := by dsimp [γ]; linarith [hbpos]
+  have hσlt1 : (P.σ : ℝ) < 1 := by
+    have hxS : P.xS < 1 := lt_trans hcommon.2.1 (lt_trans hcommon.2.2 (by norm_num))
+    have hσq : P.σ < 1 := by linarith [hσ.2]
+    exact_mod_cast hσq
+  have hPlusGap : 0 < 1 - (P.σ : ℝ) + hc.eps' - γ := by
+    dsimp [γ]
+    have hthird : hc.b₀ / 4 < hc.eps' := by linarith [hbpos, hbε]
+    linarith
+  have hadm' : hc.Admissible :=
+    ⟨hσhpos, hσhζ, hζlt, hθpos, hθlt, ha, hab, hχa, hbpos, hbε, heps, hcaseAdm⟩
+  obtain ⟨nGeom, hGeom⟩ := height_base_small_scales9 P hP'
+  obtain ⟨nV, hV⟩ := height_counts9_volume_bounds P hP'
+  obtain ⟨nMean, hMean⟩ := height_base_mean_slack9 P hP' hc hadm'
+  obtain ⟨nTailSame, hTailSame⟩ := height_rpow_eventually_ge9 (α - γ) 24
+    hAlphaGap (by norm_num)
+  obtain ⟨nTailPlus, hTailPlus⟩ := height_rpow_eventually_ge9
+    (1 - (P.σ : ℝ) + hc.eps' - γ) 24 hPlusGap (by norm_num)
+  obtain ⟨nTailHole, hTailHole⟩ := height_rpow_eventually_ge9 (hc.b₀ - γ) 16
+    hHoleGap (by norm_num)
+  obtain ⟨nTailExp, hTailExp⟩ := height_rpow_eventually_ge9 γ 4 hγpos (by norm_num)
+  refine ⟨max nGeom (max nV (max nMean
+    (max nTailSame (max nTailPlus (max nTailHole nTailExp))))), ?_⟩
+  intro n hn
+  have hnRestGeom : max nV (max nMean
+      (max nTailSame (max nTailPlus (max nTailHole nTailExp)))) ≤ n :=
+    le_trans (le_max_right _ _) hn
+  have hnGeom : nGeom ≤ n := le_trans (le_max_left _ _) hn
+  have hnOuter : max nMean (max nTailSame (max nTailPlus (max nTailHole nTailExp))) ≤ n :=
+    le_trans (le_max_right _ _) hnRestGeom
+  have hnV : nV ≤ n := le_trans (le_max_left _ _) hnRestGeom
+  have hnMeanOuter : max nTailSame (max nTailPlus (max nTailHole nTailExp)) ≤ n :=
+    le_trans (le_max_right _ _) hnOuter
+  have hnMean : nMean ≤ n := le_trans (le_max_left _ _) hnOuter
+  have hnTailOuter : max nTailPlus (max nTailHole nTailExp) ≤ n :=
+    le_trans (le_max_right _ _) hnMeanOuter
+  have hnTailSame : nTailSame ≤ n := le_trans (le_max_left _ _) hnMeanOuter
+  have hnTailInner : max nTailHole nTailExp ≤ n := le_trans (le_max_right _ _) hnTailOuter
+  have hnTailPlus : nTailPlus ≤ n := le_trans (le_max_left _ _) hnTailOuter
+  have hnTailHole : nTailHole ≤ n := le_trans (le_max_left _ _) hnTailInner
+  have hnTailExp : nTailExp ≤ n := le_trans (le_max_right _ _) hnTailInner
+  have hgeomn := hGeom n hnGeom
+  have hradiusReal : (11 : ℝ) ≤ (P.radius n : ℝ) := by exact_mod_cast hgeomn.2.2
+  have hn44Real : 44 ≤ (n : ℝ) := by nlinarith [hgeomn.2.1, hradiusReal]
+  have hn44 : 44 ≤ n := by exact_mod_cast hn44Real
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnreal1 : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hVn := hV n hnV
+  have hMeann := hMean n hnMean
+  have hSameGapLarge := hTailSame n hnTailSame
+  have hPlusGapLarge := hTailPlus n hnTailPlus
+  have hHoleGapLarge := hTailHole n hnTailHole
+  have hExpGapLarge := hTailExp n hnTailExp
+  have hpowSameTail : (n : ℝ) ^ α = (n : ℝ) ^ γ * (n : ℝ) ^ (α - γ) := by
+    calc
+      _ = (n : ℝ) ^ (γ + (α - γ)) := by congr 1; ring
+      _ = _ := Real.rpow_add hnreal γ (α - γ)
+  have hpowPlusTail :
+      (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') =
+        (n : ℝ) ^ γ * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps' - γ) := by
+    calc
+      _ = (n : ℝ) ^ (γ + (1 - (P.σ : ℝ) + hc.eps' - γ)) := by congr 1; ring
+      _ = _ := Real.rpow_add hnreal γ _
+  have hpowHoleTail : (n : ℝ) ^ hc.b₀ =
+      (n : ℝ) ^ γ * (n : ℝ) ^ (hc.b₀ - γ) := by
+    calc
+      _ = (n : ℝ) ^ (γ + (hc.b₀ - γ)) := by congr 1; ring
+      _ = _ := Real.rpow_add hnreal γ _
+  have hSameTailExponent : 2 * (n : ℝ) ^ γ ≤ ((1 / 3 : ℝ) * (n : ℝ) ^ α) / 4 := by
+    have hmul := mul_le_mul_of_nonneg_left hSameGapLarge
+      (Real.rpow_nonneg hnreal.le γ)
+    rw [hpowSameTail]
+    dsimp [α]
+    nlinarith [hmul]
+  have hPlusTailExponent : 2 * (n : ℝ) ^ γ ≤
+      ((1 / 3 : ℝ) * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps')) / 4 := by
+    have hmul := mul_le_mul_of_nonneg_left hPlusGapLarge
+      (Real.rpow_nonneg hnreal.le γ)
+    rw [hpowPlusTail]
+    nlinarith [hmul]
+  have hHoleTailExponent : 2 * (n : ℝ) ^ γ ≤ (1 / 8 : ℝ) * (n : ℝ) ^ hc.b₀ := by
+    have hmul := mul_le_mul_of_nonneg_left hHoleGapLarge
+      (Real.rpow_nonneg hnreal.le γ)
+    rw [hpowHoleTail]
+    nlinarith [hmul]
+  have hExpLarge : 16 ≤ Real.exp ((n : ℝ) ^ γ) := by
+    have hbase : 16 ≤ Real.exp 4 := by
+      have h := two_nat_pow_le_exp 4
+      norm_num at h ⊢
+      exact h
+    exact le_trans hbase (Real.exp_le_exp.mpr hExpGapLarge)
+  have hSmallTailSum :
+      16 * Real.exp (-2 * (n : ℝ) ^ γ) ≤ Real.exp (-(n : ℝ) ^ γ) := by
+    calc
+      16 * Real.exp (-2 * (n : ℝ) ^ γ) ≤
+          Real.exp ((n : ℝ) ^ γ) * Real.exp (-2 * (n : ℝ) ^ γ) :=
+        mul_le_mul_of_nonneg_right hExpLarge (Real.exp_nonneg _)
+      _ = Real.exp (-(n : ℝ) ^ γ) := by
+        rw [← Real.exp_add]
+        congr 1
+        ring
+  have hεlt1 : P.eps < 1 := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        simp [Params9.eps, hbranch]
+        have hmin : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) ≤ (P.σ : ℝ) :=
+          min_le_left _ _
+        nlinarith [hσlt1, hmin]
+    | lin αS αD hB yB =>
+        simp [Params9.eps, hbranch]
+        nlinarith [hσlt1]
+  have hb0lt1 : hc.b₀ < 1 := lt_trans hbε (lt_trans heps hεlt1)
+  have hqexp : hc.b₀ - 10 ≤ 0 := by linarith
+  let p : ℝ := (n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ)
+  let q : ℝ := (n : ℝ) ^ (hc.b₀ - 10)
+  have hpEq : p = (n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ) := rfl
+  have hqEq : q = (n : ℝ) ^ (hc.b₀ - 10) := rfl
+  have hp0 : 0 ≤ p := by dsimp [p]; positivity
+  have hp1 : p ≤ 1 := hVn.2.2
+  have hq0 : 0 ≤ q := by dsimp [q]; positivity
+  have hq1 : q ≤ 1 := by
+    dsimp [q]
+    exact Real.rpow_le_one_of_one_le_of_nonpos hnreal1 hqexp
+  have hqpow : q * (n : ℝ) ^ (10 : ℝ) = (n : ℝ) ^ hc.b₀ := by
+    dsimp [q]
+    calc
+      _ = (n : ℝ) ^ (10 : ℝ) * (n : ℝ) ^ (hc.b₀ - 10) := by ring
+      _ = (n : ℝ) ^ ((10 : ℝ) + (hc.b₀ - 10)) :=
+        (Real.rpow_add hnreal (10 : ℝ) (hc.b₀ - 10)).symm
+      _ = _ := by congr 1 <;> ring
+  have hpqEq : p * q = (n : ℝ) ^ hc.b₀ / (residualBall9 P n : ℝ) := by
+    dsimp [p, q]
+    have hqpowRaw : (n : ℝ) ^ (hc.b₀ - 10) * (n : ℝ) ^ (10 : ℝ) =
+        (n : ℝ) ^ hc.b₀ := by simpa [q] using hqpow
+    calc
+      _ = ((n : ℝ) ^ (10 : ℝ) * (n : ℝ) ^ (hc.b₀ - 10)) /
+          (residualBall9 P n : ℝ) := by ring
+      _ = (n : ℝ) ^ (hc.b₀ - 10) * (n : ℝ) ^ (10 : ℝ) /
+          (residualBall9 P n : ℝ) := by congr 1 <;> ring
+      _ = (n : ℝ) ^ hc.b₀ / (residualBall9 P n : ℝ) := by rw [hqpowRaw]
+  let μ : FinProb ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :=
+    heightLaw9 P hc n
+  have hε : 0 ≤ Real.exp (-2 * (n : ℝ) ^ γ) := Real.exp_nonneg _
+  have hcrowd (C : Finset (Pos9 P hc n)) (t s : ℝ) (ht : 1 / 3 ≤ t)
+      (hs : 1 / 8 ≤ s) (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+      μ.pr (fun ω => badIn9 C t ω.1 ω.2 v j ∧
+        s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C ω.1 v j : ℝ)) ≤
+          Real.exp (-(n : ℝ) ^ γ) := by
+    classical
+    let Q : (Pos9 P hc n → Bool) → Prop := fun Pp =>
+      s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C Pp v j : ℝ)
+    let Hole : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop :=
+      fun ω => holeIn9 C ω.1 ω.2 v j ∧ Q ω.1
+    let J : Finset (Fin (hc.levels n + 1)) :=
+      Finset.univ.filter (fun j' => Nat.dist j.val j'.val ≤ 2)
+    let Crowd : (Pos9 P hc n → Bool) → (Pos9 P hc n → Bool) →
+        Fin (hc.levels n + 1) → Prop := fun Pp A j' =>
+      (t * (n : ℝ) ^ α < (crowdSame9 C Pp A v j' (P.radius n) : ℝ)) ∨
+      (t * (n : ℝ) ^ α < (crowdAdj9 C Pp A v j' : ℝ)) ∨
+      (t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+        (crowdSame9 C Pp A v j' (P.radius n + 1) : ℝ))
+    let CrowdBad : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop :=
+      fun ω => ∃ j' ∈ J, Crowd ω.1 ω.2 j'
+    let τ : ℝ := (1 / 3 : ℝ) * (n : ℝ) ^ α
+    let τplus : ℝ := (1 / 3 : ℝ) * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps')
+    have hSameτ : τ / 6 = (n : ℝ) ^ α / 18 := by dsimp [τ]; ring
+    have hPlusτ : τplus / 6 =
+        (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') / 18 := by dsimp [τplus]; ring
+    have hHoleProb : μ.pr Hole ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) := by
+      simpa [μ, Hole, Q] using
+        (height_hole_probability_bound (P := P) (hc := hc) (n := n) C s
+          (by linarith : 0 ≤ s) v j hq0 hq1 hqpow)
+    have hSameCrowd (j' : Fin (hc.levels n + 1)) :
+        μ.pr (fun ω => t * (n : ℝ) ^ α <
+          (crowdSame9 C ω.1 ω.2 v j' (P.radius n) : ℝ)) ≤
+            Real.exp (-2 * (n : ℝ) ^ γ) := by
+      let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+        c.slice = specialWord9 (P.m n) v ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n ∧ c.level = j')
+      have hScardNat : S.card = residualBall9 P n := by
+        simpa [S, residualBall9] using
+          (height_slice_ball_card9 (P := P) (hc := hc) (n := n)
+            (specialWord9 (P.m n) v) (residualWord9 (P.m n) v) j' (P.radius n))
+      have hScard : (S.card : ℝ) = (residualBall9 P n : ℝ) := by exact_mod_cast hScardNat
+      have hmean : p * q * (S.card : ℝ) ≤ τ / 6 := by
+        calc
+          _ = (n : ℝ) ^ hc.b₀ := by rw [hpqEq, hScard]; field_simp [ne_of_gt hVn.1]
+          _ ≤ (n : ℝ) ^ α / 18 := hMeann.1
+          _ = τ / 6 := hSameτ.symm
+      have htail := height_active_count_tail (P := P) (hc := hc) (n := n)
+        S p q τ hpEq hqEq hp0 hp1 hq0 hq1 (by positivity) hmean
+      have hdom (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool))
+          (hbad : t * (n : ℝ) ^ α <
+            (crowdSame9 C ω.1 ω.2 v j' (P.radius n) : ℝ)) :
+          τ ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ) := by
+        have hcount := crowdSame_le_active_slice_ball9 C ω.1 ω.2 v j' (P.radius n)
+        have hcountR : (crowdSame9 C ω.1 ω.2 v j' (P.radius n) : ℝ) ≤
+            ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ) := by
+          exact_mod_cast hcount
+        have htau : τ ≤ t * (n : ℝ) ^ α := by
+          dsimp [τ]
+          exact mul_le_mul_of_nonneg_right ht (Real.rpow_nonneg hnreal.le _)
+        exact le_trans (le_trans htau (le_of_lt hbad)) hcountR
+      have hmono := finProb_pr_mono μ
+        (fun ω => t * (n : ℝ) ^ α <
+          (crowdSame9 C ω.1 ω.2 v j' (P.radius n) : ℝ))
+        (fun ω => τ ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ)) hdom
+      have hexp : Real.exp (-τ / 4) ≤ Real.exp (-2 * (n : ℝ) ^ γ) :=
+        Real.exp_le_exp.mpr (by linarith [hSameTailExponent])
+      exact hmono.trans (htail.trans hexp)
+    have hAdjCrowd (j' : Fin (hc.levels n + 1)) :
+        μ.pr (fun ω => t * (n : ℝ) ^ α < (crowdAdj9 C ω.1 ω.2 v j' : ℝ)) ≤
+          Real.exp (-2 * (n : ℝ) ^ γ) := by
+      let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+        _root_.hammingDist c.slice (specialWord9 (P.m n) v) = 1 ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n - 1 ∧
+          c.level = j')
+      have hScardNat : S.card ≤ P.m n *
+          (∑ i ∈ Finset.range (P.radius n - 1 + 1),
+            Nat.choose (n - P.m n) i) := by
+        simpa [S] using
+          (height_adjacent_ball_card_le9 (P := P) (hc := hc) (n := n)
+            (specialWord9 (P.m n) v) (residualWord9 (P.m n) v) j' (P.radius n - 1))
+      have hScard : (S.card : ℝ) ≤
+          (P.m n : ℝ) * heightBallVolReal9 (n - P.m n) (P.radius n - 1) := by
+        simpa [heightBallVolReal9] using (by exact_mod_cast hScardNat)
+      have hmean : p * q * (S.card : ℝ) ≤ τ / 6 := by
+        calc
+          _ ≤ p * q * ((P.m n : ℝ) * heightBallVolReal9
+                (n - P.m n) (P.radius n - 1)) :=
+              mul_le_mul_of_nonneg_left hScard (mul_nonneg hp0 hq0)
+          _ = (n : ℝ) ^ hc.b₀ * (P.m n : ℝ) *
+                heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+                  (residualBall9 P n : ℝ) := by rw [hpqEq]; ring
+          _ ≤ (n : ℝ) ^ α / 18 := hMeann.2.1
+          _ = τ / 6 := hSameτ.symm
+      have htail := height_active_count_tail (P := P) (hc := hc) (n := n)
+        S p q τ hpEq hqEq hp0 hp1 hq0 hq1 (by positivity) hmean
+      have hdom (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool))
+          (hbad : t * (n : ℝ) ^ α < (crowdAdj9 C ω.1 ω.2 v j' : ℝ)) :
+          τ ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ) := by
+        have hcount := crowdAdj_le_active_slice_ball9 C ω.1 ω.2 v j'
+        have hcountR : (crowdAdj9 C ω.1 ω.2 v j' : ℝ) ≤
+            ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ) := by
+          exact_mod_cast hcount
+        have htau : τ ≤ t * (n : ℝ) ^ α := by
+          dsimp [τ]
+          exact mul_le_mul_of_nonneg_right ht (Real.rpow_nonneg hnreal.le _)
+        exact le_trans (le_trans htau (le_of_lt hbad)) hcountR
+      have hmono := finProb_pr_mono μ
+        (fun ω => t * (n : ℝ) ^ α < (crowdAdj9 C ω.1 ω.2 v j' : ℝ))
+        (fun ω => τ ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ)) hdom
+      have hexp : Real.exp (-τ / 4) ≤ Real.exp (-2 * (n : ℝ) ^ γ) :=
+        Real.exp_le_exp.mpr (by linarith [hSameTailExponent])
+      exact hmono.trans (htail.trans hexp)
+    have hPlusCrowd (j' : Fin (hc.levels n + 1)) :
+        μ.pr (fun ω => t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+          (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ)) ≤
+            Real.exp (-2 * (n : ℝ) ^ γ) := by
+      let S : Finset (Pos9 P hc n) := Finset.univ.filter (fun c =>
+        c.slice = specialWord9 (P.m n) v ∧
+        _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n + 1 ∧
+          c.level = j')
+      have hScardNat : S.card =
+          ∑ i ∈ Finset.range (P.radius n + 2), Nat.choose (n - P.m n) i := by
+        simpa [S] using
+          (height_slice_ball_card9 (P := P) (hc := hc) (n := n)
+            (specialWord9 (P.m n) v) (residualWord9 (P.m n) v) j' (P.radius n + 1))
+      have hScard : (S.card : ℝ) =
+          heightBallVolReal9 (n - P.m n) (P.radius n + 1) := by
+        simpa [heightBallVolReal9] using (by exact_mod_cast hScardNat)
+      have hmean : p * q * (S.card : ℝ) ≤ τplus / 6 := by
+        calc
+          _ = (n : ℝ) ^ hc.b₀ *
+                heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+                  (residualBall9 P n : ℝ) := by rw [hpqEq, hScard]; ring
+          _ ≤ (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') / 18 := hMeann.2.2
+          _ = τplus / 6 := hPlusτ.symm
+      have htail := height_active_count_tail (P := P) (hc := hc) (n := n)
+        S p q τplus hpEq hqEq hp0 hp1 hq0 hq1 (by positivity) hmean
+      have hdom (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool))
+          (hbad : t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+            (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ)) :
+          τplus ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ) := by
+        have hcount := crowdSame_le_active_slice_ball9 C ω.1 ω.2 v j' (P.radius n + 1)
+        have hcountR : (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ) ≤
+            ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ) := by
+          exact_mod_cast hcount
+        have htau : τplus ≤ t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+          dsimp [τplus]
+          exact mul_le_mul_of_nonneg_right ht (Real.rpow_nonneg hnreal.le _)
+        exact le_trans (le_trans htau (le_of_lt hbad)) hcountR
+      have hmono := finProb_pr_mono μ
+        (fun ω => t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+          (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ))
+        (fun ω => τplus ≤ ((S.filter (fun c => ω.1 c = true ∧ ω.2 c = true)).card : ℝ)) hdom
+      have hexp : Real.exp (-τplus / 4) ≤ Real.exp (-2 * (n : ℝ) ^ γ) :=
+        Real.exp_le_exp.mpr (by linarith [hPlusTailExponent])
+      exact hmono.trans (htail.trans hexp)
+    let E : Fin (hc.levels n + 1) →
+        ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop := fun j' ω =>
+      (t * (n : ℝ) ^ α < (crowdSame9 C ω.1 ω.2 v j' (P.radius n) : ℝ)) ∨
+      (t * (n : ℝ) ^ α < (crowdAdj9 C ω.1 ω.2 v j' : ℝ)) ∨
+      (t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+        (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ))
+    have hCrowdProb : μ.pr CrowdBad ≤ 15 * Real.exp (-2 * (n : ℝ) ^ γ) := by
+      have hExists := height_pr_exists_finset_le9 μ J E
+      have hEach (j' : Fin (hc.levels n + 1)) : μ.pr (E j') ≤
+          3 * Real.exp (-2 * (n : ℝ) ^ γ) := by
+        have h23 := FinProb.pr_union μ
+          (fun ω => t * (n : ℝ) ^ α < (crowdAdj9 C ω.1 ω.2 v j' : ℝ))
+          (fun ω => t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+            (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ))
+        calc
+          μ.pr (E j') ≤
+              μ.pr (fun ω => t * (n : ℝ) ^ α <
+                (crowdSame9 C ω.1 ω.2 v j' (P.radius n) : ℝ)) +
+              μ.pr (fun ω => t * (n : ℝ) ^ α <
+                (crowdAdj9 C ω.1 ω.2 v j' : ℝ) ∨
+                t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+                (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ)) :=
+            FinProb.pr_union μ _ _
+          _ ≤ Real.exp (-2 * (n : ℝ) ^ γ) +
+              (Real.exp (-2 * (n : ℝ) ^ γ) + Real.exp (-2 * (n : ℝ) ^ γ)) := by
+            have h23Bound :
+                μ.pr (fun ω => t * (n : ℝ) ^ α < (crowdAdj9 C ω.1 ω.2 v j' : ℝ) ∨
+                  t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+                    (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ)) ≤
+                  Real.exp (-2 * (n : ℝ) ^ γ) + Real.exp (-2 * (n : ℝ) ^ γ) := by
+              calc
+                _ ≤ μ.pr (fun ω => t * (n : ℝ) ^ α <
+                    (crowdAdj9 C ω.1 ω.2 v j' : ℝ)) +
+                    μ.pr (fun ω => t * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') <
+                      (crowdSame9 C ω.1 ω.2 v j' (P.radius n + 1) : ℝ)) := h23
+                _ ≤ _ := add_le_add (hAdjCrowd j') (hPlusCrowd j')
+            exact add_le_add (hSameCrowd j') h23Bound
+          _ = 3 * Real.exp (-2 * (n : ℝ) ^ γ) := by ring
+      have hsum :
+          (∑ j' ∈ J, μ.pr (E j')) ≤
+            ∑ _j' ∈ J, 3 * Real.exp (-2 * (n : ℝ) ^ γ) := by
+        apply Finset.sum_le_sum
+        intro j' hj'
+        exact hEach j'
+      have hJcardNat : J.card ≤ 5 := by
+        simpa [J, Nat.dist_comm] using
+          (height_level_window_card_le_five9 (hc.levels n) j.val)
+      have hcardJR : (J.card : ℝ) ≤ 5 := by
+        exact_mod_cast hJcardNat
+      calc
+        μ.pr CrowdBad ≤ ∑ j' ∈ J, μ.pr (E j') := by
+          simpa [CrowdBad, E] using hExists
+        _ ≤ ∑ _j' ∈ J, 3 * Real.exp (-2 * (n : ℝ) ^ γ) := hsum
+        _ = (J.card : ℝ) * (3 * Real.exp (-2 * (n : ℝ) ^ γ)) := by simp
+        _ ≤ 15 * Real.exp (-2 * (n : ℝ) ^ γ) := by
+          have hmul := mul_le_mul_of_nonneg_right hcardJR (by positivity :
+            0 ≤ 3 * Real.exp (-2 * (n : ℝ) ^ γ))
+          nlinarith [hmul]
+    have hnbase : 0 ≤ (n : ℝ) ^ hc.b₀ := Real.rpow_nonneg hnreal.le _
+    have hHoleFinal : Real.exp (-s * (n : ℝ) ^ hc.b₀) ≤
+        Real.exp (-2 * (n : ℝ) ^ γ) := by
+      have hsLow : 1 / 8 ≤ s := hs
+      have hbase : (1 / 8 : ℝ) * (n : ℝ) ^ hc.b₀ ≤ s * (n : ℝ) ^ hc.b₀ :=
+        mul_le_mul_of_nonneg_right hsLow hnbase
+      have hexp : 2 * (n : ℝ) ^ γ ≤ s * (n : ℝ) ^ hc.b₀ :=
+        le_trans (by linarith [hHoleTailExponent]) hbase
+      exact Real.exp_le_exp.mpr (by linarith [hexp])
+    have hbadSubset (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+        (badIn9 C t ω.1 ω.2 v j ∧ Q ω.1) → Hole ω ∨ CrowdBad ω := by
+      intro hbad
+      rcases hbad with ⟨hbad, hQ⟩
+      rcases hbad with hhole | ⟨j', hdist, hcounts⟩
+      · exact Or.inl ⟨hhole, hQ⟩
+      · right
+        refine ⟨j', Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdist⟩, ?_⟩
+        exact hcounts
+    have hmono := finProb_pr_mono μ
+      (fun ω => badIn9 C t ω.1 ω.2 v j ∧ Q ω.1)
+      (fun ω => Hole ω ∨ CrowdBad ω) hbadSubset
+    have hprobOr := FinProb.pr_union μ Hole CrowdBad
+    have hfinal : μ.pr (fun ω => badIn9 C t ω.1 ω.2 v j ∧ Q ω.1) ≤
+        Real.exp (-(n : ℝ) ^ γ) := by
+      calc
+        _ ≤ μ.pr (fun ω => Hole ω ∨ CrowdBad ω) := hmono
+        _ ≤ μ.pr Hole + μ.pr CrowdBad := hprobOr
+        _ ≤ Real.exp (-s * (n : ℝ) ^ hc.b₀) +
+            15 * Real.exp (-2 * (n : ℝ) ^ γ) :=
+          add_le_add hHoleProb hCrowdProb
+        _ ≤ 16 * Real.exp (-2 * (n : ℝ) ^ γ) := by
+          calc
+            _ ≤ Real.exp (-2 * (n : ℝ) ^ γ) +
+                15 * Real.exp (-2 * (n : ℝ) ^ γ) :=
+              calc
+                _ = 15 * Real.exp (-2 * (n : ℝ) ^ γ) +
+                    Real.exp (-s * (n : ℝ) ^ hc.b₀) := by ring
+                _ ≤ 15 * Real.exp (-2 * (n : ℝ) ^ γ) +
+                    Real.exp (-2 * (n : ℝ) ^ γ) :=
+                  add_le_add_right hHoleFinal _
+                _ = _ := by ring
+            _ = 16 * Real.exp (-2 * (n : ℝ) ^ γ) := by ring
+        _ ≤ Real.exp (-(n : ℝ) ^ γ) := hSmallTailSum
+    simpa only [Q] using hfinal
+  intro C t s ht htu hs v j
+  simpa [μ] using hcrowd C t s ht hs v j
+
 end HypercubeRamsey.Lane_q_s09_map

@@ -898,12 +898,21 @@ theorem moderate_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
 /-- SHARED: L12.5(iv), homogeneous extension peeling and the lower-tail estimate. -/
 theorem homogeneous_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (c : Colour) (C0 : ℝ) (hC0 : 1 ≤ C0) :
+    ∃ Cu Qmin : ℝ, 0 < Cu ∧ 0 < Qmin ∧
     ∀ᶠ k in atTop, ∀ d ≤ T.S.n k, ∀ (τ π : Law (T.S.N k)) (Sp : Finset (Fin (T.S.N k)))
-      (Q : ℝ) (t : ℝ), 0 ≤ t → t < 1 →
+      (Q Γ t : ℝ),
+      τ.SupportedIn (T.X k) → π.SupportedIn (T.Y k) →
+      τ.WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)) →
+      π.WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)) →
+      (∀ x, x ∉ Sp → τ.w x = 0) → Qmin ≤ Q →
+      NoClique (T.S.E k) c Sp π.w κ.θ Q → 0 ≤ Γ → Γ < 1 →
+      (∀ x ∈ Sp, τ.w x * (deg (T.S.E k) c π.w x) ^ (-(d : ℝ)) *
+        Real.exp (Cstar κ.u κ.ξ * Q) ≤ Γ) → 0 ≤ t → t < 1 →
       (∀ x ∈ Sp, DegGate (T.S.E k) c π.w C0 (bstar T k) x) →
       (∑ ys : Fin d → Fin (T.S.N k),
         if Zmass (T.S.E k) c τ.w (fun _ => π.w) ys < t then ∏ l, π.w (ys l) else 0) ≤
-        (1 - t) ^ (-(κ.u : ℝ)) * (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) := by
+        (1 - t) ^ (-(κ.u : ℝ)) *
+          ((T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ)) + Cu * Γ) := by
   sorry
 
 end HypercubeRamsey.S15.Needs

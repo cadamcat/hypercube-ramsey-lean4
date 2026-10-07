@@ -12,18 +12,20 @@ def DirectCrossingClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hmode : PT.tiling.mode = .highDirect, ∀ a : EvenPosition T k,
       (directRawLaw PT hPT).pr (fun ys =>
-        |directCrossingMass PT hPT ys a - 1| > 10 * bstar T k) ≤
+        |directCrossingMass PT hPT ys a - 1| >
+          Real.exp (20 * (PT.tiling.P (patchAt PT hPT a.1)).ℓ * bstar T k) - 1) ≤
           (T.S.n k : ℝ) ^ (-(κ.R : ℝ))
 
 /-- L15.1b (15:23–31): the post-crossing bulk law has a lower-tail bound. -/
 def DirectBulkClaim (κ : CConsts) (T : Stage) : Prop :=
+  ∃ Cbulk : ℝ, 0 < Cbulk ∧
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hmode : PT.tiling.mode = .highDirect, ∀ a : EvenPosition T k,
       (directRawLaw PT hPT).pr (fun ys =>
-        1 - 10 * bstar T k ≤ directCrossingMass PT hPT ys a ∧
+        9 / 10 ≤ directCrossingMass PT hPT ys a ∧
           directBulkMass PT hPT ys a < 3 / 4) ≤
             4 ^ κ.u * ((T.S.n k : ℝ) ^ (-((3 * κ.R : ℕ) : ℝ)) +
-              4 ^ (κ.u + 1) * Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)))
+              Cbulk * Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)))
 
 /-- L15.1c (15:19, 31): full independent row mass is at least one half except with probability `n^-R`. -/
 def DirectMassClaim (κ : CConsts) (T : Stage) : Prop :=

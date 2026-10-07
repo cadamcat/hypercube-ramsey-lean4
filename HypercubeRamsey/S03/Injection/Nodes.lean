@@ -8,6 +8,7 @@ witness have no local placeholder; analytic nodes remain assigned proof obligati
 
 namespace HypercubeRamsey
 
+open Filter
 open scoped BigOperators
 
 /-- Label mass of a full-output law, in the form used by the side-data transfer. -/
@@ -64,7 +65,157 @@ theorem balanced_completion_good_order :
             (∀ j y, qbar (Sum.inr j) y ≤ 10 / d) ∧
             (∀ y, ∑ j, qbar j y = (t : ℝ) / d) ∧
             Injection.OrderedInput d t (fun k y => qbar (e k) y) := by
-  sorry
+  classical
+  filter_upwards [Filter.eventually_ge_atTop 100] with d hd
+  intro R hR hdec q hq0 hqsum hqcap hqload
+  have hdR : (100 : ℝ) ≤ (d : ℝ) := by exact_mod_cast hd
+  have hdpos : (0 : ℝ) < (d : ℝ) := by linarith
+  have hbase : (1 : ℝ) ≤ (d : ℝ) := by linarith
+  have hloadTotal : (∑ y : Fin d, ∑ i : R, q i y) = (Fintype.card R : ℝ) := by
+    rw [Finset.sum_comm]
+    calc
+      (∑ i : R, ∑ y : Fin d, q i y) = ∑ i : R, (1 : ℝ) := by
+        apply Finset.sum_congr rfl
+        intro i hi
+        exact hqsum i
+      _ = (Fintype.card R : ℝ) := by simp
+  have hrowsR : (Fintype.card R : ℝ) ≤ (d : ℝ) / 2 := by
+    calc
+      (Fintype.card R : ℝ) = ∑ y : Fin d, ∑ i : R, q i y := hloadTotal.symm
+      _ ≤ ∑ y : Fin d, (1 / 2 : ℝ) :=
+        Finset.sum_le_sum fun y hy => hqload y
+      _ = (d : ℝ) / 2 := by
+        rw [Finset.sum_const]
+        simp [Fintype.card_fin, nsmul_eq_mul]
+        ring
+  let t : ℕ := Nat.ceil ((2 / 3 : ℝ) * (d : ℝ))
+  let m : ℕ := t - Fintype.card R
+  have htlo : (2 / 3 : ℝ) * (d : ℝ) ≤ (t : ℝ) := by
+    dsimp [t]
+    exact Nat.le_ceil _
+  have htup : (t : ℝ) ≤ (2 / 3 : ℝ) * (d : ℝ) + 1 := by
+    dsimp [t]
+    have hnat := Nat.ceil_le_floor_add_one ((2 / 3 : ℝ) * (d : ℝ))
+    have hnatR : (Nat.ceil ((2 / 3 : ℝ) * (d : ℝ)) : ℝ) ≤
+        (Nat.floor ((2 / 3 : ℝ) * (d : ℝ)) : ℝ) + 1 := by exact_mod_cast hnat
+    have hfloor : (Nat.floor ((2 / 3 : ℝ) * (d : ℝ)) : ℝ) ≤
+        (2 / 3 : ℝ) * (d : ℝ) := Nat.floor_le (by positivity)
+    exact hnatR.trans (by nlinarith [hfloor])
+  have htHorizon : (t : ℝ) ≤ 3 * (d : ℝ) / 4 := by
+    nlinarith [htup, hdR]
+  have hrowsReal : (Fintype.card R : ℝ) ≤ (t : ℝ) := by
+    nlinarith [hrowsR, htlo]
+  have hrows : Fintype.card R ≤ t := by exact_mod_cast hrowsReal
+  have hmcast : (m : ℝ) = (t : ℝ) - (Fintype.card R : ℝ) := by
+    rw [Nat.cast_sub hrows]
+  have hmLower : (d : ℝ) / 6 ≤ (m : ℝ) := by
+    rw [hmcast]
+    nlinarith [htlo, hrowsR]
+  have hmpos : (0 : ℝ) < (m : ℝ) := by
+    have : (0 : ℝ) < (d : ℝ) / 6 := by positivity
+    exact lt_of_lt_of_le this hmLower
+  let load : Fin d → ℝ := fun y => ∑ i : R, q i y
+  let qbar : (R ⊕ Fin m) → Fin d → ℝ := fun j y =>
+    match j with
+    | Sum.inl i => q i y
+    | Sum.inr _ => ((t : ℝ) / d - load y) / (m : ℝ)
+  have htdivLo : (2 / 3 : ℝ) ≤ (t : ℝ) / d :=
+    (le_div_iff₀ hdpos).2 htlo
+  have htdivHi : (t : ℝ) / d ≤ 1 := by
+    apply (div_le_iff₀ hdpos).2
+    nlinarith [htup, hdR]
+  have hloadNonneg (y : Fin d) : 0 ≤ load y := by
+    dsimp [load]
+    exact Finset.sum_nonneg fun i hi => hq0 i y
+  have hnumLo (y : Fin d) : 1 / 6 ≤ (t : ℝ) / d - load y := by
+    linarith [htdivLo, hqload y]
+  have hnumHi (y : Fin d) : (t : ℝ) / d - load y ≤ 1 := by
+    linarith [htdivHi, hloadNonneg y]
+  have hnumNonneg (y : Fin d) : 0 ≤ (t : ℝ) / d - load y := by
+    linarith [hnumLo y]
+  have hloadConst : ∑ y : Fin d, (t : ℝ) / d = (t : ℝ) := by
+    calc
+      ∑ y : Fin d, (t : ℝ) / d = (d : ℝ) * ((t : ℝ) / d) := by simp
+      _ = (t : ℝ) := by field_simp [ne_of_gt hdpos]
+  have hdummyRow (j : Fin m) : ∑ y : Fin d, qbar (Sum.inr j) y = 1 := by
+    calc
+      ∑ y : Fin d, qbar (Sum.inr j) y =
+          ((∑ y : Fin d, (t : ℝ) / d) - ∑ y : Fin d, load y) / (m : ℝ) := by
+            simp only [qbar]
+            rw [← Finset.sum_div, Finset.sum_sub_distrib]
+      _ = ((t : ℝ) - (Fintype.card R : ℝ)) / (m : ℝ) := by
+            rw [hloadConst, hloadTotal]
+      _ = 1 := by rw [← hmcast]; exact div_self (ne_of_gt hmpos)
+  have hqbarNonneg : ∀ j y, 0 ≤ qbar j y := by
+    intro j y
+    cases j with
+    | inl i => exact hq0 i y
+    | inr j =>
+        dsimp [qbar]
+        exact div_nonneg (hnumNonneg y) (le_of_lt hmpos)
+  have hqbarRow : ∀ j, ∑ y : Fin d, qbar j y = 1 := by
+    intro j
+    cases j with
+    | inl i => simpa [qbar] using hqsum i
+    | inr j => exact hdummyRow j
+  have hrealCol (y : Fin d) : ∑ i : R, qbar (Sum.inl i) y = load y := by
+    simp [qbar, load]
+  have hdummyCol (y : Fin d) :
+      ∑ j : Fin m, qbar (Sum.inr j) y =
+        (m : ℝ) * (((t : ℝ) / d - load y) / (m : ℝ)) := by
+    simp [qbar, Finset.sum_const, Finset.card_fin]
+  have hqbarCol (y : Fin d) : ∑ j : R ⊕ Fin m, qbar j y = (t : ℝ) / d := by
+    rw [Fintype.sum_sum_type, hrealCol y, hdummyCol y]
+    have hmne : (m : ℝ) ≠ 0 := ne_of_gt hmpos
+    field_simp [hmne]
+    ring
+  have hden : (1 : ℝ) ≤ (10 / d) * (m : ℝ) := by
+    have hm10 := mul_le_mul_of_nonneg_left hmLower (by positivity : 0 ≤ (10 : ℝ) / d)
+    have heq : (10 : ℝ) / d * ((d : ℝ) / 6) = 5 / 3 := by
+      field_simp [ne_of_gt hdpos]
+      ring
+    linarith
+  have hdummyCap : ∀ j : Fin m, ∀ y : Fin d, qbar (Sum.inr j) y ≤ 10 / d := by
+    intro j y
+    apply (div_le_iff₀ hmpos).2
+    exact (hnumHi y).trans hden
+  have hpow : (d : ℝ) ^ (-1 : ℝ) ≤ (d : ℝ) ^ (-(0.95 : ℝ)) :=
+    Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+  have hInvPow : (1 : ℝ) / d ≤ (d : ℝ) ^ (-(0.95 : ℝ)) := by
+    simpa [Real.rpow_neg_eq_inv_rpow, Real.rpow_one] using hpow
+  have hqbarAtom : ∀ j y, qbar j y ≤ 10 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+    intro j y
+    cases j with
+    | inl i =>
+        have hp := Real.rpow_nonneg (by positivity : (0 : ℝ) ≤ (d : ℝ)) (-(0.95 : ℝ))
+        dsimp [qbar]
+        nlinarith [hqcap i y]
+    | inr j =>
+        calc
+          qbar (Sum.inr j) y ≤ 10 / d := hdummyCap j y
+          _ ≤ 10 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+            simpa [div_eq_mul_inv] using
+              mul_le_mul_of_nonneg_left hInvPow (by norm_num : (0 : ℝ) ≤ 10)
+  have hcardEq : Fintype.card (R ⊕ Fin m) = t := by
+    simp [m, Nat.add_sub_of_le hrows]
+  have hcardEq' : Fintype.card (R ⊕ Fin m) = Fintype.card (Fin t) := by
+    simpa using hcardEq
+  let e : Fin t ≃ (R ⊕ Fin m) := (Fintype.equivOfCardEq hcardEq').symm
+  have hordered : Injection.OrderedInput d t (fun k y => qbar (e k) y) := by
+    refine ⟨hd, htHorizon, ?_, ?_, ?_, ?_⟩
+    · intro k y
+      exact hqbarNonneg (e k) y
+    · intro k
+      exact hqbarRow (e k)
+    · intro k y
+      exact hqbarAtom (e k) y
+    · intro b y
+      sorry
+  refine ⟨t, rfl, hrows, qbar, e, ?_, ?_, hdummyCap, hqbarCol, hordered⟩
+  · intro i y
+    rfl
+  · intro j y
+    rfl
 
 /-- Step 2 now refers to the concrete process and tracking event, not to an
 arbitrary law with additive singleton error. This is an assembly node. -/
@@ -125,7 +276,127 @@ theorem restrict_ordered_sampler {R : Type} [Fintype R] [DecidableEq R]
         P.pr (fun x => ∀ i ∈ S, x i = y i) ≤
           Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, q i (y i)) ∧
       (∀ i y, |P.pr (fun x => x i = y) - q i y| ≤ Injection.relativeError d * q i y) := by
-  sorry
+  classical
+  let f : (Fin t → Fin d) → (R → Fin d) := fun x i => x (e i)
+  let P : FinProb (R → Fin d) := FinProb.map Q f
+  have hmapPr (A : (R → Fin d) → Prop) :
+      P.pr A = Q.pr (fun x => A (f x)) := by
+    classical
+    have hprIndicator (P₀ : FinProb (R → Fin d)) (A₀ : (R → Fin d) → Prop) :
+        P₀.pr A₀ = P₀.expect (fun z => if A₀ z then 1 else 0) := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro z hz
+      by_cases hA : A₀ z <;> simp [hA]
+    have hmapExpect (g : (R → Fin d) → ℝ) : P.expect g = Q.expect (fun x => g (f x)) := by
+      classical
+      unfold P FinProb.expect FinProb.map
+      calc
+        _ = ∑ z, ∑ x, (if f x = z then Q.w x else 0) * g z := by
+          apply Finset.sum_congr rfl
+          intro z hz
+          rw [Finset.sum_mul]
+        _ = ∑ x, ∑ z, (if f x = z then Q.w x else 0) * g z := Finset.sum_comm
+        _ = ∑ x, Q.w x * g (f x) := by
+          apply Finset.sum_congr rfl
+          intro x hx
+          rw [Finset.sum_eq_single (f x)]
+          · simp
+          · intro z hz hzf
+            simp [Ne.symm hzf]
+          · simp
+    calc
+      P.pr A = P.expect (fun z => if A z then 1 else 0) := hprIndicator P A
+      _ = Q.expect (fun x => if A (f x) then 1 else 0) := hmapExpect _
+      _ = Q.pr (fun x => A (f x)) := (by
+        unfold FinProb.pr FinProb.expect
+        apply Finset.sum_congr rfl
+        intro x hx
+        by_cases hA : A (f x) <;> simp [hA])
+  have hsource : ∀ z, P.w z ≠ 0 → ∃ x, f x = z ∧ Q.w x ≠ 0 := by
+    intro z hz
+    by_contra hn
+    push_neg at hn
+    apply hz
+    change (∑ x, if f x = z then Q.w x else 0) = 0
+    apply Finset.sum_eq_zero
+    intro x hx
+    by_cases hfx : f x = z
+    · simp [hfx, hn x hfx]
+    · simp [hfx]
+  refine ⟨P, ?_, ?_, ?_⟩
+  · intro z hz
+    obtain ⟨x, hxeq, hxw⟩ := hsource z hz
+    have hxinj := hinj x hxw
+    intro i j hij
+    have hxeq' : ∀ k, x (e k) = z k := by
+      intro k
+      exact congrFun (by simpa [f] using hxeq) k
+    apply e.injective
+    exact hxinj (hxeq' i |>.trans (hij.trans (hxeq' j).symm))
+  · intro S y hsize
+    let T : Finset (Fin t) := S.image e
+    by_cases hS : S.Nonempty
+    · letI : Inhabited (Fin d) := ⟨y hS.choose⟩
+      let witness (k : Fin t) (hk : k ∈ T) : R := Classical.choose (Finset.mem_image.mp hk)
+      have witness_mem (k : Fin t) (hk : k ∈ T) : witness k hk ∈ S :=
+        (Classical.choose_spec (Finset.mem_image.mp hk)).1
+      have witness_eq (k : Fin t) (hk : k ∈ T) : e (witness k hk) = k :=
+        (Classical.choose_spec (Finset.mem_image.mp hk)).2
+      let y' : Fin t → Fin d := fun k => if hk : k ∈ T then y (witness k hk) else default
+      have hpre (x : Fin t → Fin d) :
+          (∀ i ∈ S, x (e i) = y i) ↔ ∀ k ∈ T, x k = y' k := by
+        constructor
+        · intro hx k hk
+          have h := hx (witness k hk) (witness_mem k hk)
+          simpa [y', hk, witness_eq k hk] using h
+        · intro hx i hi
+          have hk : e i ∈ T := Finset.mem_image.mpr ⟨i, hi, rfl⟩
+          have h := hx (e i) hk
+          have heq : witness (e i) hk = i := e.injective (by simpa [witness_eq (e i) hk])
+          simpa [y', hk, heq] using h
+      have hcard : T.card = S.card := by
+        dsimp [T]
+        apply Finset.card_image_iff.mpr
+        intro i hi j hj hij
+        exact e.injective hij
+      have hprod : (∏ k ∈ T, p k (y' k)) = ∏ i ∈ S, q i (y i) := by
+        rw [show T = S.image e by rfl, Finset.prod_image]
+        · apply Finset.prod_congr rfl
+          intro i hi
+          have hk : e i ∈ T := Finset.mem_image.mpr ⟨i, hi, rfl⟩
+          have hwi : witness (e i) hk = i := e.injective (witness_eq (e i) hk)
+          have hyval : y' (e i) = y i := by simp [y', hk, hwi]
+          rw [hyval, he i (y i)]
+        · intro i hi j hj hij
+          exact e.injective hij
+      have hprob : Q.pr (fun x => ∀ i ∈ S, x (e i) = y i) =
+          Q.pr (fun x => ∀ k ∈ T, x k = y' k) := by
+        have hpred : (fun x : Fin t → Fin d => ∀ i ∈ S, x (e i) = y i) =
+            (fun x => ∀ k ∈ T, x k = y' k) := by
+          funext x
+          exact propext (hpre x)
+        rw [hpred]
+      calc
+        P.pr (fun x => ∀ i ∈ S, x i = y i) =
+            Q.pr (fun x => ∀ i ∈ S, (f x) i = y i) := hmapPr _
+        _ = Q.pr (fun x => ∀ i ∈ S, x (e i) = y i) := by rfl
+        _ = Q.pr (fun x => ∀ k ∈ T, x k = y' k) := hprob
+        _ ≤ Real.exp (Injection.relativeError d * T.card) * ∏ k ∈ T, p k (y' k) :=
+          hjoint T y' (by rw [hcard]; exact hsize)
+        _ = Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, q i (y i) := by
+          rw [hcard, hprod]
+    · have hempty : S = ∅ := Finset.not_nonempty_iff_eq_empty.mp hS
+      have hfull : P.pr (fun _ => True) = 1 := by
+        unfold FinProb.pr
+        simpa using P.sum_eq_one
+      simpa [hempty] using hfull.le
+  · intro i y
+    have h := hmarg (e i) y
+    have hprob : P.pr (fun x => x i = y) = Q.pr (fun x => x (e i) = y) := by
+      rw [hmapPr]
+    rw [hprob, ← he i y]
+    exact h
 
 /-- Centered prices and the paper's explicit normalized sign perturbation (03:739–741). -/
 noncomputable def injectionPriceMean {R : Type*} [Fintype R] {d : ℕ}
@@ -158,7 +429,230 @@ theorem price_perturbation_estimates :
       (∀ i y, injectionPricePerturbation q c i y ≤ Real.exp (3 * injectionPriceDelta d) * q i y) ∧
       (∀ i, injectionPriceDelta d / 2 * (∑ y, q i y * |c i y - injectionPriceMean q c i|) ≤
         ∑ y, injectionPricePerturbation q c i y * (c i y - injectionPriceMean q c i)) := by
-  sorry
+  classical
+  have hdeltaT : Tendsto (fun n : ℕ => injectionPriceDelta n) atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.05 : ℝ))) ∘ Nat.cast) atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : 0 < (0.05 : ℝ))).comp
+      tendsto_natCast_atTop_atTop
+  have hdeltaSmall : ∀ᶠ n : ℕ in atTop, injectionPriceDelta n < 1 / 6 :=
+    hdeltaT.eventually (Iio_mem_nhds (by norm_num))
+  have hexpT : Tendsto (fun n : ℕ => Real.exp (3 * injectionPriceDelta n)) atTop (nhds 1) := by
+    have hmul : Tendsto (fun n : ℕ => 3 * injectionPriceDelta n) atTop (nhds 0) := by
+      simpa using hdeltaT.const_mul 3
+    exact Real.tendsto_exp_nhds_zero_nhds_one.comp hmul
+  have hexpSmall : ∀ᶠ n : ℕ in atTop,
+      Real.exp (3 * injectionPriceDelta n) < 5 / 4 :=
+    hexpT.eventually (Iio_mem_nhds (by norm_num))
+  filter_upwards [hdeltaSmall, hexpSmall] with d hδ hE
+  intro R instR instDecR q hnq hsq hcap hload c
+  let δ : ℝ := injectionPriceDelta d
+  let Z : R → ℝ := fun i => ∑ y, injectionPriceTilt q c i y
+  have hδnonneg : 0 ≤ δ := by
+    dsimp [δ, injectionPriceDelta]
+    exact Real.rpow_nonneg (by positivity) _
+  have hsignLo (a : ℝ) : -1 ≤ injectionPriceSign a := by
+    unfold injectionPriceSign
+    split_ifs <;> norm_num
+  have hsignHi (a : ℝ) : injectionPriceSign a ≤ 1 := by
+    unfold injectionPriceSign
+    split_ifs <;> norm_num
+  have hmultLo (a : ℝ) : 1 - δ ≤ 1 + δ * injectionPriceSign a := by
+    have := mul_le_mul_of_nonneg_left (hsignLo a) hδnonneg
+    linarith
+  have hmultHi (a : ℝ) : 1 + δ * injectionPriceSign a ≤ 1 + δ := by
+    have := mul_le_mul_of_nonneg_left (hsignHi a) hδnonneg
+    linarith
+  have hZbounds (i : R) : 1 - δ ≤ Z i ∧ Z i ≤ 1 + δ := by
+    constructor
+    · dsimp [Z, injectionPriceTilt]
+      calc
+        (∑ y, q i y * (1 + δ * injectionPriceSign
+            (c i y - injectionPriceMean q c i))) ≥
+          ∑ y, q i y * (1 - δ) := by
+            apply Finset.sum_le_sum
+            intro y hy
+            exact mul_le_mul_of_nonneg_left (hmultLo _) (hnq i y)
+        _ = (∑ y, q i y) * (1 - δ) := by rw [Finset.sum_mul]
+        _ = 1 - δ := by rw [hsq i]; ring
+    · dsimp [Z, injectionPriceTilt]
+      calc
+        (∑ y, q i y * (1 + δ * injectionPriceSign
+            (c i y - injectionPriceMean q c i))) ≤
+          ∑ y, q i y * (1 + δ) := by
+            apply Finset.sum_le_sum
+            intro y hy
+            exact mul_le_mul_of_nonneg_left (hmultHi _) (hnq i y)
+        _ = (∑ y, q i y) * (1 + δ) := by rw [Finset.sum_mul]
+        _ = 1 + δ := by rw [hsq i]; ring
+  have hZpos (i : R) : 0 < Z i := by
+    have : 0 < 1 - δ := by dsimp [δ]; linarith
+    exact lt_of_lt_of_le this (hZbounds i).1
+  have hratio : (1 + δ) / (1 - δ) ≤ Real.exp (3 * δ) := by
+    have hlin : (1 + δ) / (1 - δ) ≤ 1 + 3 * δ := by
+      apply (div_le_iff₀ (by dsimp [δ]; linarith)).2
+      have hδsq : δ * δ ≤ δ / 6 := by
+        calc
+          δ * δ ≤ δ * (1 / 6 : ℝ) := mul_le_mul_of_nonneg_left hδ.le hδnonneg
+          _ = δ / 6 := by ring
+      nlinarith [hδsq, hδnonneg]
+    have hexp : 1 + 3 * δ ≤ Real.exp (3 * δ) := by
+      have h := Real.add_one_le_exp (3 * δ)
+      linarith
+    exact hlin.trans hexp
+  have hratio' : 1 + δ ≤ Real.exp (3 * δ) * (1 - δ) :=
+    (div_le_iff₀ (by dsimp [δ]; linarith)).mp hratio
+  have hpdom (i : R) (y : Fin d) :
+      injectionPricePerturbation q c i y ≤ Real.exp (3 * δ) * q i y := by
+    have hnum : injectionPriceTilt q c i y ≤
+        Real.exp (3 * δ) * (q i y * Z i) := by
+      dsimp [injectionPriceTilt]
+      calc
+        q i y * (1 + δ * injectionPriceSign
+            (c i y - injectionPriceMean q c i)) ≤ q i y * (1 + δ) :=
+          mul_le_mul_of_nonneg_left (hmultHi _) (hnq i y)
+        _ ≤ q i y * (Real.exp (3 * δ) * (1 - δ)) :=
+          mul_le_mul_of_nonneg_left hratio' (hnq i y)
+        _ ≤ q i y * (Real.exp (3 * δ) * Z i) := by
+          apply mul_le_mul_of_nonneg_left
+          · exact mul_le_mul_of_nonneg_left (hZbounds i).1 (Real.exp_nonneg _)
+          · exact hnq i y
+        _ = Real.exp (3 * δ) * (q i y * Z i) := by ring
+    apply (div_le_iff₀ (hZpos i)).2
+    simpa [δ, Z, injectionPricePerturbation, mul_assoc] using hnum
+  have hpertNonneg (i : R) (y : Fin d) : 0 ≤ injectionPricePerturbation q c i y := by
+    have hnum : 0 ≤ injectionPriceTilt q c i y := by
+      dsimp [injectionPriceTilt]
+      exact mul_nonneg (hnq i y) (by linarith [hmultLo (c i y - injectionPriceMean q c i)])
+    exact div_nonneg hnum (le_of_lt (hZpos i))
+  have hrowSum (i : R) : ∑ y, injectionPricePerturbation q c i y = 1 := by
+    unfold injectionPricePerturbation
+    rw [← Finset.sum_div]
+    have hz : 0 < ∑ z, injectionPriceTilt q c i z := by simpa [Z] using hZpos i
+    exact div_self (ne_of_gt hz)
+  have hatom (i : R) (y : Fin d) :
+      injectionPricePerturbation q c i y ≤ 2 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+    calc
+      injectionPricePerturbation q c i y ≤ Real.exp (3 * δ) * q i y := hpdom i y
+      _ ≤ 2 * q i y := by
+        have hE2 : Real.exp (3 * δ) ≤ 2 := by dsimp [δ]; linarith
+        exact mul_le_mul_of_nonneg_right hE2 (hnq i y)
+      _ ≤ 2 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+        exact mul_le_mul_of_nonneg_left (hcap i y) (by norm_num)
+  have hcol (y : Fin d) : ∑ i, injectionPricePerturbation q c i y ≤ 1 / 2 := by
+    calc
+      (∑ i, injectionPricePerturbation q c i y) ≤ ∑ i, Real.exp (3 * δ) * q i y :=
+        Finset.sum_le_sum fun i hi => hpdom i y
+      _ = Real.exp (3 * δ) * ∑ i, q i y := by rw [Finset.mul_sum]
+      _ ≤ Real.exp (3 * δ) * (0.4 : ℝ) :=
+        mul_le_mul_of_nonneg_left (hload y) (Real.exp_nonneg _)
+      _ ≤ 1 / 2 := by
+        have hE' : Real.exp (3 * δ) ≤ 5 / 4 := by simpa [δ] using hE.le
+        calc
+          Real.exp (3 * δ) * (0.4 : ℝ) ≤ (5 / 4) * (0.4 : ℝ) :=
+            mul_le_mul_of_nonneg_right hE' (by norm_num)
+          _ = 1 / 2 := by norm_num
+  have hmean0 (i : R) :
+      ∑ y, q i y * (c i y - injectionPriceMean q c i) = 0 := by
+    calc
+      ∑ y, q i y * (c i y - injectionPriceMean q c i) =
+          ∑ y, (q i y * c i y - injectionPriceMean q c i * q i y) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      _ = (∑ y, q i y * c i y) - injectionPriceMean q c i * ∑ y, q i y := by
+            rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+      _ = 0 := by simp [injectionPriceMean, hsq i]
+  have hsignMul (a : ℝ) : injectionPriceSign a * a = |a| := by
+    by_cases ha : 0 < a
+    · simp [injectionPriceSign, ha, abs_of_pos ha]
+    · by_cases ha' : a < 0
+      · simp [injectionPriceSign, ha, ha', abs_of_neg ha']
+      · have hz : a = 0 := le_antisymm
+            (show a ≤ 0 from le_of_not_gt ha)
+            (show 0 ≤ a from le_of_not_gt ha')
+        simp [injectionPriceSign, ha, ha', hz]
+  have hgainEq (i : R) :
+      ∑ y, injectionPricePerturbation q c i y *
+          (c i y - injectionPriceMean q c i) =
+        injectionPriceDelta d / Z i *
+          (∑ y, q i y * |c i y - injectionPriceMean q c i|) := by
+    have hnum :
+        ∑ y, injectionPriceTilt q c i y *
+            (c i y - injectionPriceMean q c i) =
+          injectionPriceDelta d *
+            (∑ y, q i y * |c i y - injectionPriceMean q c i|) := by
+      calc
+        _ = ∑ y, (q i y * (c i y - injectionPriceMean q c i) +
+              injectionPriceDelta d * (q i y * |c i y - injectionPriceMean q c i|)) := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          dsimp [injectionPriceTilt]
+          calc
+            q i y * (1 + injectionPriceDelta d *
+                injectionPriceSign (c i y - injectionPriceMean q c i)) *
+                (c i y - injectionPriceMean q c i) =
+              q i y * (c i y - injectionPriceMean q c i) +
+                injectionPriceDelta d * (q i y *
+                  (injectionPriceSign (c i y - injectionPriceMean q c i) *
+                    (c i y - injectionPriceMean q c i))) := by ring
+            _ = q i y * (c i y - injectionPriceMean q c i) +
+                injectionPriceDelta d * (q i y *
+                  |c i y - injectionPriceMean q c i|) := by
+                    rw [hsignMul]
+        _ = (∑ y, q i y * (c i y - injectionPriceMean q c i)) +
+              injectionPriceDelta d * (∑ y, q i y *
+                |c i y - injectionPriceMean q c i|) := by
+          rw [Finset.sum_add_distrib, ← Finset.mul_sum]
+        _ = injectionPriceDelta d *
+              (∑ y, q i y * |c i y - injectionPriceMean q c i|) := by
+          rw [hmean0 i]
+          ring
+    calc
+      ∑ y, injectionPricePerturbation q c i y *
+          (c i y - injectionPriceMean q c i) =
+          (∑ y, injectionPriceTilt q c i y *
+            (c i y - injectionPriceMean q c i)) / Z i := by
+              unfold injectionPricePerturbation
+              calc
+                _ = ∑ y, (injectionPriceTilt q c i y *
+                    (c i y - injectionPriceMean q c i)) /
+                    (∑ z, injectionPriceTilt q c i z) := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      field_simp [ne_of_gt (by simpa [Z] using hZpos i)]
+                _ = (∑ y, injectionPriceTilt q c i y *
+                    (c i y - injectionPriceMean q c i)) / Z i := by
+                      rw [Finset.sum_div]
+      _ = injectionPriceDelta d / Z i *
+          (∑ y, q i y * |c i y - injectionPriceMean q c i|) := by rw [hnum]; ring
+  have hgain (i : R) :
+      injectionPriceDelta d / 2 * (∑ y, q i y * |c i y - injectionPriceMean q c i|) ≤
+        ∑ y, injectionPricePerturbation q c i y *
+          (c i y - injectionPriceMean q c i) := by
+    let L := ∑ y, q i y * |c i y - injectionPriceMean q c i|
+    have hL : 0 ≤ L := by
+      dsimp [L]
+      exact Finset.sum_nonneg fun y hy => mul_nonneg (hnq i y) (abs_nonneg _)
+    have hdelta0 : 0 ≤ injectionPriceDelta d := by
+      unfold injectionPriceDelta
+      exact Real.rpow_nonneg (by positivity) _
+    have hcoeff : 0 ≤ injectionPriceDelta d / 2 * L :=
+      mul_nonneg (div_nonneg hdelta0 (by norm_num)) hL
+    have hZ2 : Z i ≤ 2 := by
+      have : δ ≤ 1 := by dsimp [δ]; linarith
+      linarith [(hZbounds i).2]
+    rw [hgainEq i]
+    change injectionPriceDelta d / 2 * L ≤ injectionPriceDelta d / Z i * L
+    have hdivmul : injectionPriceDelta d / Z i * L =
+        (injectionPriceDelta d * L) / Z i := by rw [div_mul_eq_mul_div]
+    rw [hdivmul]
+    apply (le_div_iff₀ (hZpos i)).2
+    calc
+      (injectionPriceDelta d / 2 * L) * Z i ≤
+          (injectionPriceDelta d / 2 * L) * 2 :=
+        mul_le_mul_of_nonneg_left hZ2 hcoeff
+      _ = injectionPriceDelta d * L := by ring
+  exact ⟨hpertNonneg, hrowSum, hatom, hcol, hpdom, hgain⟩
 
 /-- TeX 03:753–755: relative singleton error, measured against the perturbed
 row, is dominated by its gain. Constant prices have zero centered error. -/
@@ -170,10 +664,190 @@ theorem price_gain_dominates_relative_error :
       (∀ i, injectionPriceDelta d / 2 * (∑ y, q i y * |c i y - injectionPriceMean q c i|) ≤
         ∑ y, injectionPricePerturbation q c i y * (c i y - injectionPriceMean q c i)) →
       ∀ Q : FinProb (R → Fin d),
-      (∀ i y, |Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y| ≤
-        Injection.relativeError d * injectionPricePerturbation q c i y) →
+        (∀ i y, |Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y| ≤
+          Injection.relativeError d * injectionPricePerturbation q c i y) →
         injectionTargetPrice q c ≤ injectionLabelPrice Q c := by
-  sorry
+  classical
+  have hpowerT : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.04 : ℝ))) atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.04 : ℝ))) ∘ Nat.cast) atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : 0 < (0.04 : ℝ))).comp
+      tendsto_natCast_atTop_atTop
+  have hpower : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (-(0.04 : ℝ)) < 1 / 4 :=
+    hpowerT.eventually (Iio_mem_nhds (by norm_num))
+  have hdeltaT : Tendsto (fun n : ℕ => injectionPriceDelta n) atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.05 : ℝ))) ∘ Nat.cast) atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : 0 < (0.05 : ℝ))).comp
+      tendsto_natCast_atTop_atTop
+  have hexpT : Tendsto (fun n : ℕ => Real.exp (3 * injectionPriceDelta n)) atTop (nhds 1) := by
+    have hmul : Tendsto (fun n : ℕ => 3 * injectionPriceDelta n) atTop (nhds 0) := by
+      simpa using hdeltaT.const_mul 3
+    exact Real.tendsto_exp_nhds_zero_nhds_one.comp hmul
+  have hexp : ∀ᶠ n : ℕ in atTop, Real.exp (3 * injectionPriceDelta n) < 2 :=
+    hexpT.eventually (Iio_mem_nhds (by norm_num))
+  have hcoef : ∀ᶠ n : ℕ in atTop,
+      Injection.relativeError n * Real.exp (3 * injectionPriceDelta n) ≤
+        injectionPriceDelta n / 2 := by
+    filter_upwards [hpower, hexp, Filter.eventually_gt_atTop 0] with n hp he hn
+    have hnR : (0 : ℝ) < (n : ℝ) := by exact_mod_cast hn
+    have hsplit : (n : ℝ) ^ (-(0.09 : ℝ)) =
+        injectionPriceDelta n * (n : ℝ) ^ (-(0.04 : ℝ)) := by
+      rw [injectionPriceDelta, ← Real.rpow_add hnR]
+      norm_num
+    have hdelta : 0 ≤ injectionPriceDelta n := by
+      rw [injectionPriceDelta]
+      exact Real.rpow_nonneg (by positivity) _
+    have hrel : Injection.relativeError n ≤ injectionPriceDelta n / 4 := by
+      rw [Injection.relativeError, hsplit]
+      nlinarith [mul_le_mul_of_nonneg_left hp.le hdelta]
+    calc
+      Injection.relativeError n * Real.exp (3 * injectionPriceDelta n) ≤
+          (injectionPriceDelta n / 4) * Real.exp (3 * injectionPriceDelta n) :=
+        mul_le_mul_of_nonneg_right hrel (Real.exp_nonneg _)
+      _ ≤ (injectionPriceDelta n / 4) * 2 :=
+        mul_le_mul_of_nonneg_left he.le (by positivity)
+      _ = injectionPriceDelta n / 2 := by ring
+  filter_upwards [hcoef] with d hcoef
+  intro R instR instDecR q c hnq hsq hpsum hdom hgain Q hrelQ
+  have hMargSum (i : R) : ∑ y, Q.pr (fun x => x i = y) = 1 := by
+    calc
+      (∑ y, Q.pr (fun x => x i = y)) = ∑ x, Q.w x := by
+        simp only [FinProb.pr]
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro x hx
+        rw [Finset.sum_eq_single (x i)]
+        · simp
+        · intro y hy hne
+          simp [Ne.symm hne]
+        · simp
+      _ = 1 := Q.sum_eq_one
+  let μ : R → ℝ := fun i => injectionPriceMean q c i
+  let z : R → Fin d → ℝ := fun i y => c i y - μ i
+  have hcenter (i : R) (m : Fin d → ℝ) (hm : ∑ y, m y = 1) :
+      ∑ y, c i y * m y = (∑ y, z i y * m y) + μ i := by
+    calc
+      ∑ y, c i y * m y = ∑ y, (z i y * m y + μ i * m y) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        simp [z]
+        ring
+      _ = (∑ y, z i y * m y) + μ i * ∑ y, m y := by
+        rw [Finset.sum_add_distrib, ← Finset.mul_sum]
+      _ = (∑ y, z i y * m y) + μ i := by rw [hm, mul_one]
+  have hqcenter (i : R) : ∑ y, q i y * z i y = 0 := by
+    calc
+      ∑ y, q i y * z i y = ∑ y, (q i y * c i y - μ i * q i y) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        simp [z]
+        ring
+      _ = (∑ y, q i y * c i y) - μ i * ∑ y, q i y := by
+        rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+      _ = 0 := by simp [μ, injectionPriceMean, hsq i]
+  have hsignMul (a : ℝ) : injectionPriceSign a * a = |a| := by
+    by_cases ha : 0 < a
+    · simp [injectionPriceSign, ha, abs_of_pos ha]
+    · by_cases ha' : a < 0
+      · simp [injectionPriceSign, ha, ha', abs_of_neg ha']
+      · have hz : a = 0 := le_antisymm
+            (show a ≤ 0 from le_of_not_gt ha)
+            (show 0 ≤ a from le_of_not_gt ha')
+        simp [injectionPriceSign, ha, ha', hz]
+  have hrow (i : R) :
+      (∑ y, c i y * q i y) ≤ ∑ y, c i y * Q.pr (fun x => x i = y) := by
+    let L : ℝ := ∑ y, q i y * |z i y|
+    have hL : 0 ≤ L := by
+      dsimp [L]
+      exact Finset.sum_nonneg fun y hy => mul_nonneg (hnq i y) (abs_nonneg _)
+    have herror : |(∑ y, c i y * Q.pr (fun x => x i = y)) -
+          (∑ y, c i y * injectionPricePerturbation q c i y)| ≤
+          Injection.relativeError d * Real.exp (3 * injectionPriceDelta d) * L := by
+      have hcentered :
+          (∑ y, c i y * Q.pr (fun x => x i = y)) -
+            (∑ y, c i y * injectionPricePerturbation q c i y) =
+          ∑ y, z i y * (Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y) := by
+        rw [hcenter i _ (hMargSum i), hcenter i _ (hpsum i)]
+        calc
+          (∑ y, z i y * Q.pr (fun x => x i = y) + μ i) -
+              (∑ y, z i y * injectionPricePerturbation q c i y + μ i) =
+            (∑ y, z i y * Q.pr (fun x => x i = y)) -
+              (∑ y, z i y * injectionPricePerturbation q c i y) := by ring
+          _ = ∑ y, z i y * (Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y) := by
+            rw [← Finset.sum_sub_distrib]
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      rw [hcentered]
+      calc
+        |∑ y, z i y * (Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y)| ≤
+            ∑ y, |z i y * (Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y)| :=
+          Finset.abs_sum_le_sum_abs _ _
+        _ ≤ ∑ y, Injection.relativeError d * Real.exp (3 * injectionPriceDelta d) *
+              (q i y * |z i y|) := by
+          apply Finset.sum_le_sum
+          intro y hy
+          have hr := hrelQ i y
+          have hd := hdom i y
+          have hrelNonneg : 0 ≤ Injection.relativeError d := by
+            unfold Injection.relativeError
+            exact Real.rpow_nonneg (by positivity) _
+          have hscaled : Injection.relativeError d * injectionPricePerturbation q c i y ≤
+              Injection.relativeError d * (Real.exp (3 * injectionPriceDelta d) * q i y) :=
+            mul_le_mul_of_nonneg_left hd hrelNonneg
+          calc
+            |z i y * (Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y)| =
+                |z i y| * |Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y| := by
+                  rw [abs_mul]
+            _ ≤ |z i y| * (Injection.relativeError d * injectionPricePerturbation q c i y) :=
+              mul_le_mul_of_nonneg_left hr (abs_nonneg _)
+            _ ≤ |z i y| * (Injection.relativeError d *
+                  (Real.exp (3 * injectionPriceDelta d) * q i y)) :=
+              mul_le_mul_of_nonneg_left hscaled (abs_nonneg _)
+            _ = Injection.relativeError d * Real.exp (3 * injectionPriceDelta d) *
+                  (q i y * |z i y|) := by ring
+        _ = Injection.relativeError d * Real.exp (3 * injectionPriceDelta d) * L := by
+          dsimp [L]
+          rw [← Finset.mul_sum]
+    have herrorLo :
+        -(injectionPriceDelta d / 2 * L) ≤
+          (∑ y, c i y * Q.pr (fun x => x i = y)) -
+            (∑ y, c i y * injectionPricePerturbation q c i y) := by
+      have hleft := (abs_le.mp herror).1
+      have hscale := mul_le_mul_of_nonneg_right hcoef hL
+      linarith
+    have hpertGain :
+        (∑ y, c i y * injectionPricePerturbation q c i y) -
+          (∑ y, c i y * q i y) ≥ injectionPriceDelta d / 2 * L := by
+      have hcenterP := hcenter i (fun y => injectionPricePerturbation q c i y) (hpsum i)
+      have hcenterQ := hcenter i (q i) (hsq i)
+      have hqcz : ∑ y, z i y * q i y = 0 := by
+        convert hqcenter i using 1 <;> apply Finset.sum_congr rfl <;> intro y hy <;> ring
+      have hpriceDiff :
+          (∑ y, c i y * injectionPricePerturbation q c i y) -
+            (∑ y, c i y * q i y) =
+          ∑ y, injectionPricePerturbation q c i y * z i y := by
+        calc
+          _ = ∑ y, z i y * injectionPricePerturbation q c i y := by
+            rw [hcenterP, hcenterQ, hqcz]
+            ring
+          _ = ∑ y, injectionPricePerturbation q c i y * z i y := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      have hgc : injectionPriceDelta d / 2 * L ≤
+          ∑ y, injectionPricePerturbation q c i y * z i y := by
+        simpa [L, z, μ] using hgain i
+      rw [hpriceDiff]
+      exact hgc
+    have hrowle :
+        ∑ y, c i y * q i y ≤ ∑ y, c i y * Q.pr (fun x => x i = y) := by
+      linarith [herrorLo, hpertGain]
+    exact hrowle
+  change (∑ i, ∑ y, c i y * q i y) ≤
+    ∑ i, ∑ y, c i y * Q.pr (fun x => x i = y)
+  apply Finset.sum_le_sum
+  intro i hi
+  exact hrow i
 
 /-- TeX 03:756–758: absorb perturbation and comparison slack into d^(-.04).
 The empty query has bound 1; zero atoms remain zero under pointwise domination. -/
@@ -186,7 +860,85 @@ theorem perturbed_joint_bound_transfer :
         Q.pr (fun x => ∀ i ∈ S, x i = y i) ≤
           Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, p i (y i)) →
       LabelNearProductBound d q Q := by
-  sorry
+  classical
+  have hpow01 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.01 : ℝ))) atTop (nhds 0) :=
+    by
+      change Tendsto ((fun x : ℝ => x ^ (-(0.01 : ℝ))) ∘ Nat.cast) atTop (nhds 0)
+      exact (tendsto_rpow_neg_atTop (by norm_num : 0 < (0.01 : ℝ))).comp
+        tendsto_natCast_atTop_atTop
+  have hpow05 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.05 : ℝ))) atTop (nhds 0) :=
+    by
+      change Tendsto ((fun x : ℝ => x ^ (-(0.05 : ℝ))) ∘ Nat.cast) atTop (nhds 0)
+      exact (tendsto_rpow_neg_atTop (by norm_num : 0 < (0.05 : ℝ))).comp
+        tendsto_natCast_atTop_atTop
+  have hsmall01 : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (-(0.01 : ℝ)) < 1 / 12 :=
+    hpow01.eventually (Iio_mem_nhds (by norm_num))
+  have hsmall05 : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (-(0.05 : ℝ)) < 1 / 2 :=
+    hpow05.eventually (Iio_mem_nhds (by norm_num))
+  have hcoef : ∀ᶠ n : ℕ in atTop,
+      Injection.relativeError n + 3 * injectionPriceDelta n ≤ (n : ℝ) ^ (-(0.04 : ℝ)) := by
+    filter_upwards [hsmall01, hsmall05, Filter.eventually_gt_atTop 0] with n h01 h05 hn
+    have hnR : (0 : ℝ) < (n : ℝ) := by exact_mod_cast hn
+    have hratio1 : injectionPriceDelta n = (n : ℝ) ^ (-(0.04 : ℝ)) *
+        (n : ℝ) ^ (-(0.01 : ℝ)) := by
+      rw [injectionPriceDelta, ← Real.rpow_add hnR]
+      norm_num
+    have hratio2 : Injection.relativeError n = (n : ℝ) ^ (-(0.04 : ℝ)) *
+        (n : ℝ) ^ (-(0.05 : ℝ)) := by
+      rw [Injection.relativeError, ← Real.rpow_add hnR]
+      norm_num
+    rw [hratio1, hratio2]
+    have hr : 0 ≤ (n : ℝ) ^ (-(0.04 : ℝ)) := Real.rpow_nonneg (by positivity) _
+    nlinarith [mul_le_mul_of_nonneg_left h01.le hr,
+      mul_le_mul_of_nonneg_left h05.le hr]
+  filter_upwards [hcoef] with d hcoef
+  intro R instR instDecR q p hnq hnp hpdom Q hjoint S y hsize
+  let ε := Injection.relativeError d
+  let δ := injectionPriceDelta d
+  let r := (d : ℝ) ^ (-(0.04 : ℝ))
+  have hprod : (∏ i ∈ S, p i (y i)) ≤
+      (∏ i ∈ S, Real.exp (3 * δ) * q i (y i)) := by
+    apply Finset.prod_le_prod₀
+    · intro i hi
+      exact hnp i (y i)
+    · intro i hi
+      exact hpdom i (y i)
+  have hprod' : (∏ i ∈ S, Real.exp (3 * δ) * q i (y i)) =
+      Real.exp (3 * δ * S.card) * ∏ i ∈ S, q i (y i) := by
+    calc
+      (∏ i ∈ S, Real.exp (3 * δ) * q i (y i)) =
+          Real.exp ((S.card : ℝ) * (3 * δ)) * ∏ i ∈ S, q i (y i) := by
+            rw [Finset.prod_mul_distrib, Finset.prod_const, ← Real.exp_nat_mul]
+      _ = Real.exp (3 * δ * S.card) * ∏ i ∈ S, q i (y i) := by
+            congr 2
+            ring
+  have hexp : Real.exp (ε * S.card) * (∏ i ∈ S, p i (y i)) ≤
+      Real.exp (r * S.card) * ∏ i ∈ S, q i (y i) := by
+    have hqprod : 0 ≤ ∏ i ∈ S, q i (y i) :=
+      Finset.prod_nonneg fun i hi => hnq i (y i)
+    calc
+      Real.exp (ε * S.card) * (∏ i ∈ S, p i (y i)) ≤
+          Real.exp (ε * S.card) * (∏ i ∈ S, Real.exp (3 * δ) * q i (y i)) :=
+        mul_le_mul_of_nonneg_left hprod (Real.exp_nonneg _)
+      _ = Real.exp ((ε + 3 * δ) * S.card) * ∏ i ∈ S, q i (y i) := by
+        rw [hprod']
+        calc
+          Real.exp (ε * S.card) *
+              (Real.exp (3 * δ * S.card) * ∏ i ∈ S, q i (y i)) =
+            (Real.exp (ε * S.card) * Real.exp (3 * δ * S.card)) *
+              ∏ i ∈ S, q i (y i) := by ring
+          _ = Real.exp (ε * S.card + 3 * δ * S.card) *
+              ∏ i ∈ S, q i (y i) := by rw [← Real.exp_add]
+          _ = Real.exp ((ε + 3 * δ) * S.card) * ∏ i ∈ S, q i (y i) := by
+              congr 2
+              dsimp [ε, δ]
+              ring
+      _ ≤ Real.exp (r * S.card) * ∏ i ∈ S, q i (y i) := by
+        apply mul_le_mul_of_nonneg_right _ hqprod
+        apply Real.exp_le_exp.mpr
+        dsimp [r, ε, δ]
+        exact mul_le_mul_of_nonneg_right (hcoef) (by positivity)
+  exact (hjoint S y hsize).trans hexp
 
 /-- Price-directed witness, now an assembly of Steps 1–4. Its type is unchanged. -/
 theorem price_directed_label_sampler :

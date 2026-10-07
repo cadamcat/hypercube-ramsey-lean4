@@ -213,7 +213,117 @@ theorem cluster_qbar_domination {κ : CConsts} (hκ : κ.Admissible) :
           (∀ W s g, R.pretrim C W (groups (s, g)) = S.pretrimBins (records s (W s)) g) →
           ∀ W, (R.history C).w W ≠ 0 → PermissionLossHypotheses (Perm.table C) (R.qin C W) →
           ∀ s g D, (K.qbar C W (groups (s, g))).w D ≤ c * S.q g (records s (W s)) D := by
-  sorry
+  classical
+  obtain ⟨n₁, hpermRoom⟩ := Lane_sol_s16_prod1.cluster_permission_cost_room hκ
+  refine ⟨n₁, ?_⟩
+  intro T k PT K16 Q G R Perm K hmode hn C
+  let n := T.S.n k
+  let h := (PT.tiling.P (G.cellPatch C)).h
+  let ε := sliceEps κ h
+  let u := Real.exp (-κ.cperm * (n : ℝ) / 2)
+  let v := (h : ℝ) ^ 2 * Real.sqrt ε
+  have hnlarge : 2 ≤ n := Q.n_large
+  have hheight : h ≤ n := by
+    simpa only [Fintype.card_fin] using
+      Fintype.card_le_of_injective (R.axis C) (R.axis_injective C)
+  have huNonneg : 0 ≤ u := le_of_lt (Real.exp_pos _)
+  have hrate : 0 < κ.cperm * (n : ℝ) / 2 := by
+    have hnpos : (0 : ℝ) < n := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) hnlarge
+    exact div_pos (mul_pos hκ.cperm_rng.1 hnpos) (by norm_num)
+  have huLt : u < 1 := by
+    exact Real.exp_lt_one_iff.mpr (by nlinarith [hrate])
+  have hvNonneg : 0 ≤ v := by
+    dsimp [v]
+    positivity
+  have hsmall2 : v ≤ 1 / 1000 := by
+    have hs := Lane_sol_s16_prod1.low_cluster_pretrim_power_small
+      hκ Q hmode (G.cellPatch C) 2 (by norm_num)
+    norm_num [Real.rpow_neg, Real.rpow_natCast] at hs
+    simpa [v, h, ε] using hs
+  have hsmall3 : (h : ℝ) ^ 3 * Real.sqrt ε ≤ 1 / 1000 := by
+    have hs := Lane_sol_s16_prod1.low_cluster_pretrim_power_small
+      hκ Q hmode (G.cellPatch C) 3 (by norm_num)
+    norm_num [Real.rpow_neg, Real.rpow_natCast] at hs
+    simpa [h, ε] using hs
+  have hvLt : v < 1 := by linarith
+  have hhu : (h : ℝ) * u ≤ 1 / 4 := by
+    exact hpermRoom n h hn hnlarge hheight
+  have hsmallSum : (h : ℝ) * (u + v) ≤ 1 / 2 := by
+    have hhv : (h : ℝ) * v = (h : ℝ) ^ 3 * Real.sqrt ε := by
+      dsimp [v]
+      ring
+    rw [mul_add, hhv]
+    linarith
+  have hnorm := Lane_sol_s16_prod1.normalization_product_room h h u v
+    huNonneg hvNonneg huLt hvLt le_rfl hsmallSum
+  let c : ℝ := ((1 - u) * (1 - v))⁻¹
+  have hc : 1 ≤ c := by simpa [c] using hnorm.1
+  have hcpow : c ^ h ≤ 2 := by simpa [c] using hnorm.2
+  have huPos : 0 < 1 - u := sub_pos.mpr huLt
+  have hvPos : 0 < 1 - v := sub_pos.mpr hvLt
+  refine ⟨c, hc, hcpow, ?_⟩
+  intro S records groups hPass hqraw hpretrim W hW hPerm s g D
+  have hSlices : ∀ t, W t ∈ R.slicePass C t ∧ (R.sliceLaw C t).w (W t) ≠ 0 := by
+    intro t
+    exact Lane_sol_s16_prod1.cond_support _ _ _ _
+      (Lane_sol_s16_prod1.pi_support _ W hW t)
+  have hGood : S.AllGood (records s (W s)) :=
+    (hPass s (W s)).mp (hSlices s).1
+  let rawMass : ℝ :=
+    ∑ D' ∈ S.pretrimBins (records s (W s)) g, S.q g (records s (W s)) D'
+  have hsolverMass := Lane_sol_s16_prod1.solver_pretrim_mass
+    S (records s (W s)) hGood g (Real.exp_pos _)
+  have hpreMass : 1 - v ≤ rawMass := by
+    simpa [rawMass, v, h, ε] using hsolverMass
+  have hrawMass :
+      (∑ D' ∈ R.pretrim C W (groups (s, g)),
+        (R.qraw C W (groups (s, g))).w D') = rawMass := by
+    rw [hpretrim]
+    apply Finset.sum_congr rfl
+    intro D' hD'
+    exact hqraw W s g D'
+  have hqinFormula : (R.qin C W (groups (s, g))).w D =
+      (if D ∈ S.pretrimBins (records s (W s)) g then
+        S.q g (records s (W s)) D else 0) / rawMass := by
+    rw [R.qin_eq C W (groups (s, g)) D hSlices, ← hrawMass, hpretrim, hqraw]
+  have hqinBound : (R.qin C W (groups (s, g))).w D ≤
+      S.q g (records s (W s)) D / (1 - v) := by
+    rw [hqinFormula]
+    by_cases hD : D ∈ S.pretrimBins (records s (W s)) g
+    · rw [if_pos hD]
+      exact div_le_div_of_nonneg_left (S.q_nonneg g (records s (W s)) D)
+        (sub_pos.mpr hvLt) hpreMass
+    · simp [hD]
+      exact div_nonneg (S.q_nonneg g (records s (W s)) D) (sub_nonneg.mpr hvLt.le)
+  have hpermSharp := Lane_sol_s16_prod1.permission_retained_sharp
+    (Perm.table C) (R.qin C W) hPerm (groups (s, g))
+  have hpermMass : 1 - u ≤
+      ∑ D' ∈ (Perm.table C).permitted (groups (s, g)),
+        (R.qin C W (groups (s, g))).w D' := by
+    simpa [u, n, Perm.rate_eq C, Perm.n_eq C] using hpermSharp
+  have hpermPos : 0 <
+      ∑ D' ∈ (Perm.table C).permitted (groups (s, g)),
+        (R.qin C W (groups (s, g))).w D' :=
+    lt_of_lt_of_le huPos hpermMass
+  rw [K.qbar_eq C W (groups (s, g)) D hW]
+  by_cases hD : D ∈ (Perm.table C).permitted (groups (s, g))
+  · rw [if_pos hD]
+    calc
+      _ ≤ (S.q g (records s (W s)) D / (1 - v)) /
+          (∑ D' ∈ (Perm.table C).permitted (groups (s, g)),
+            (R.qin C W (groups (s, g))).w D') :=
+        div_le_div_of_nonneg_right hqinBound hpermPos.le
+      _ ≤ (S.q g (records s (W s)) D / (1 - v)) / (1 - u) :=
+        div_le_div_of_nonneg_left
+          (div_nonneg (S.q_nonneg g (records s (W s)) D) hvPos.le)
+          huPos hpermMass
+      _ = c * S.q g (records s (W s)) D := by
+        dsimp [c, u, v]
+        field_simp [ne_of_gt huPos, ne_of_gt hvPos]
+        <;> ring
+  · simp [hD]
+    exact mul_nonneg (le_trans (by norm_num) hc)
+      (S.q_nonneg g (records s (W s)) D)
 
 /-- B3. Star and pinned-star integrals against the restricted (unpooled)
 rows: `solver_star_trimmed_mean` / `solver_star_trimmed_pin_mean` with B2.

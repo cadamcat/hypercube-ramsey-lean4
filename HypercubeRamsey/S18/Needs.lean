@@ -176,7 +176,10 @@ theorem l16_validity_of_certificate {κ : CConsts} (hκ : κ.Admissible)
       intro hs
       obtain ⟨a, ha, hne⟩ := hdiff
       exact hne (hs a (by simpa only [H.geom.cellOf_patch b] using ha))
-    simpa only [Real.rpow_eq_pow, Real.rpow_ofNat] using hh hn
+    -- `hammingDist` here may be `HypercubeRamsey.hammingDist` (definitionally Mathlib's): close up to defeq
+    have h2 := hh hn
+    simp only [Real.rpow_eq_pow, Real.rpow_ofNat] at h2
+    exact h2
   · intro C
     change (S16.CellData.positions H.data.cells C).card ≤ T.S.n k ^ κ.Ac
     simpa only [S16.CellData.positions, Real.rpow_eq_pow, Real.rpow_natCast, ← Nat.cast_pow, Nat.floor_natCast]

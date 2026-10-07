@@ -658,25 +658,8 @@ theorem anchor_lll (hη₀ : 0 < η₀) (hp : 0 < p) (hh : 1 ≤ h) :
     ∃ cA > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n →
       D.DenFailProb → D.HitFailProb → D.AlarmProb → D.CellBadScope →
       ∀ q : D.Pre, D.Good q → D.AnchorLLL q (2 * Real.exp (-(D.n : ℝ) ^ cA)) := by
-  let cA : ℝ := min (tau8 η₀ / 8) (min (p / 8) (1 / 1000))
-  have hcA : 0 < cA := by
-    dsimp [cA]
-    have htau : 0 < tau8 η₀ := by
-      rw [tau8_eq]
-      unfold eta8
-      positivity
-    positivity
-  have hAsymptotic : ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n →
-      GridFacts η₀ D.n →
-      Real.sqrt (Real.sqrt D.eps0) +
-        50 * ((D.n : ℝ) + 1) * D.Δ / (1 - D.Δ) +
-        ((D.n : ℝ) + 1) ^ (2 * sC η₀ D.n + 1) *
-          Real.exp (-(2 / 100 : ℝ) * D.n) ≤ Real.exp (-((D.n : ℝ) ^ cA)) ∧
-      (2 * sC η₀ D.n + dC η₀ D.n + 1) ^ 4 *
-        (2 * Real.exp (-((D.n : ℝ) ^ cA))) ≤ 1 / 2 ∧
-      Real.exp (-((D.n : ℝ) ^ cA)) < 1 / 2 := by
-    sorry
-  obtain ⟨n₀, hAsymptotic⟩ := hAsymptotic
+  obtain ⟨cA, hcA, n₀, hAsymptotic⟩ :=
+    Lane_q_s08_anchor.anchorLLL_asymptotic η₀ p h hη₀ hp hh
   refine ⟨cA, hcA, n₀, ?_⟩
   intro D hn hG hDen hHit hAlarm hScope q hGood
   let Delta : ℕ := (2 * sC η₀ D.n + dC η₀ D.n + 1) ^ 4

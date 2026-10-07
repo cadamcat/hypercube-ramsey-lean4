@@ -2523,6 +2523,25 @@ private theorem mergeSortAt_add_one {n : ℕ} (f : Fin n → ℕ) (k : Fin n) :
   have hget := congrArg (fun L : List ℕ => L.getD k.val 0) hsorted
   simpa [mergeSortAt, l, List.getD_map, List.getD_eq_get, Nat.succ_eq_add_one] using hget.symm
 
+private theorem rankValue_succ_eq_mergeSortAt {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (t : Fin (HypercubeRamsey.S04.chunkNum β γ n)) :
+    HypercubeRamsey.S04.rankValue β γ n g v (t.val + 1) =
+      mergeSortAt (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+        HypercubeRamsey.S04.clipped β γ n g j v) t := by
+  have hchunk : HypercubeRamsey.S04.chunkNum β γ n + 1 =
+      HypercubeRamsey.S04.gadgetPower β γ n := by
+    unfold HypercubeRamsey.S04.chunkNum
+    have hpos := HypercubeRamsey.S04.gadgetPower_pos β γ n
+    omega
+  have hpos : t.val + 1 ≠ 0 := by omega
+  have hlt : t.val + 1 < HypercubeRamsey.S04.gadgetPower β γ n := by
+    have ht := t.isLt
+    omega
+  have hne : t.val + 1 ≠ HypercubeRamsey.S04.gadgetPower β γ n := by omega
+  simp [HypercubeRamsey.S04.rankValue, hpos, hne,
+    HypercubeRamsey.S04.sortedCounts, mergeSortAt]
+
 private theorem mergeSort_one_change {n : ℕ} (f g : Fin n → ℕ)
     (hfg : ∀ i, f i ≤ g i) (hgf : ∀ i, g i ≤ f i + 1)
     (hsum : (∑ i : Fin n, f i) + 1 = ∑ i : Fin n, g i) :
@@ -2808,6 +2827,39 @@ private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
       · rw [hwidth, hmid]
         simp [half]
         omega
+
+private theorem gadgetSearchLeaf_spec {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    let S := HypercubeRamsey.S04.gadgetPower β γ n
+    let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
+    ab.2 = ab.1 + 1 ∧
+      HypercubeRamsey.S04.rankValue β γ n g v ab.1 ≤ ab.1 * S ∧
+      ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let e := max 1 (⌈Real.log ((n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)) /
+    Real.log 2⌉₊)
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
+  have hS : S = 2 ^ e := by
+    rfl
+  have he : Nat.log2 S = e := by rw [hS, Nat.log2_two_pow]
+  have hzero : R 0 = 0 := by simp [R, HypercubeRamsey.S04.rankValue]
+  have hSpos : 0 < S := by
+    exact HypercubeRamsey.S04.gadgetPower_pos β γ n
+  have hfinal : R S = S * S := by
+    simp [R, S, HypercubeRamsey.S04.rankValue, hSpos.ne', pow_two]
+  have hfold : ab = binarySearchRun S R e (0, S) := by
+    dsimp [ab, HypercubeRamsey.S04.searchLeaf]
+    rw [he]
+    change (List.range e).foldl (fun st _ => binarySearchStepR S R st) (0, S) = _
+    exact foldl_range_binarySearchRun S R e (0, S)
+  have hspec := binarySearchRun_endpoint_invariant S e R hS hzero hfinal e (Nat.le_refl _)
+  rcases hspec with ⟨hle, hwidth, hlo, hhi⟩
+  refine ⟨?_, ?_, ?_⟩
+  · simpa [ab, hfold, S] using hwidth
+  · simpa [ab, R, hfold, S] using hlo
+  · simpa [ab, R, hfold, S] using hhi
 
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =

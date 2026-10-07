@@ -3458,6 +3458,16 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         _ ≤ Finset.univ.card := Finset.card_image_le
         _ = Fintype.card (Fin (PT.tiling.P (H.geom.cellPatch C)).h) := by simp
         _ = (PT.tiling.P (H.geom.cellPatch C)).h := Fintype.card_fin _
+    let vCell : EvenCellRole H.geom C := ⟨v, hcell, hEven⟩
+    have hStarParticipant (j : Fin (PT.tiling.P (H.geom.cellPatch C)).h) :
+        starRole j ∈ K.participants C vCell := by
+      have hAxis : R.axis C j ∈ PT.tiling.Icoord (H.geom.cellPatch C) := by
+        rw [← R.axes_eq C]
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩
+      simp only [CellRestrictedKernels.participants, Finset.mem_filter,
+        Finset.mem_univ, true_and]
+      refine ⟨R.axis C j, hAxis, ?_⟩
+      rfl
     let encPipe : (Cal.Hist C × Unit) ×
         ((Cal.Group C → Bin PT.tiling (H.geom.cellPatch C)) ×
         (OddCellRole H.geom C → Fin (T.S.N k))) → F.State C := fun z =>
@@ -3785,7 +3795,54 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
             rw [hCardR, hProduct]
       bins_distinct := by
         intro pool W a ht hW ha
-        sorry
+        have hWCal : (Cal.gatedHistory C pool).w W.1 ≠ 0 := by
+          rw [← hGatedWeight pool W.1]
+          exact hW
+        obtain ⟨hGateCal, hCalHist⟩ := hCalGatedSupport pool ht W.1 hWCal
+        let Wraw := hLink.histories C W.1
+        have hRawHist := hRawHistSupport W.1 hCalHist
+        have hRawGate := hRawGateSupport pool W.1 hGateCal
+        have hStyp : S.typical C pool := (hLink.typical_eq C pool).mp ht
+        have hBinFeas := S.bin_feasible C pool Wraw hStyp hRawGate hRawHist hClusterMode
+        have hBinEq := hLink.bin_eq C pool W.1
+        have hMapPos : (FinLaw.map (S.binLaw C pool Wraw)
+            (fun x gc => x (hLink.groups C gc))).w a ≠ 0 := by
+          rw [← hBinEq]
+          exact ha
+        obtain ⟨aRaw, haMap, haRaw⟩ := Lane_q_s16_prod2.finLaw_map_nonzero_preimage
+          (S.binLaw C pool Wraw) (fun x gc => x (hLink.groups C gc)) a hMapPos
+        have hSafe := hBinFeas.1 aRaw haRaw
+        have hRawScopeParticipant (rg : R.Group C) (hrg : rg ∈ groupScopeRaw) :
+            rg ∈ (K.binProblem C pool Wraw).participants vCell := by
+          rcases Finset.mem_image.mp hrg with ⟨gc, hgc, hEqRaw⟩
+          rcases Finset.mem_image.mp hgc with ⟨r, hr, hEqGroup⟩
+          rcases Finset.mem_image.mp hr with ⟨j, hj, hEqRole⟩
+          subst r
+          have hGroupEq : hLink.groups C (Cal.groupOf C (starRole j)) =
+              R.groupOf C (starRole j) := hLink.group_eq C (starRole j)
+          have hEq : rg = R.groupOf C (starRole j) := by
+            calc
+              rg = hLink.groups C gc := hEqRaw.symm
+              _ = hLink.groups C (Cal.groupOf C (starRole j)) :=
+                congrArg (hLink.groups C) hEqGroup.symm
+              _ = R.groupOf C (starRole j) := hGroupEq
+          change rg ∈ (K.participants C vCell).image (R.groupOf C)
+          exact Finset.mem_image.mpr ⟨starRole j, hStarParticipant j, hEq.symm⟩
+        have hRawInj : Set.InjOn aRaw (groupScopeRaw : Set (R.Group C)) := by
+          intro rg hrg rg' hrg' hval
+          by_contra hne
+          exact (hSafe.1 vCell rg rg' (hRawScopeParticipant rg hrg)
+            (hRawScopeParticipant rg' hrg') hne) hval
+        intro gc hgc gc' hgc' hEq
+        have hRawEq : aRaw (hLink.groups C gc) = aRaw (hLink.groups C gc') := by
+          calc
+            aRaw (hLink.groups C gc) = a gc := congrFun haMap gc
+            _ = a gc' := hEq
+            _ = aRaw (hLink.groups C gc') := (congrFun haMap gc').symm
+        have hMapEq : hLink.groups C gc = hLink.groups C gc' :=
+          hRawInj (Finset.mem_image.mpr ⟨gc, hgc, rfl⟩)
+            (Finset.mem_image.mpr ⟨gc', hgc', rfl⟩) hRawEq
+        exact (hLink.groups C).injective hMapEq
       label_joint := by
         intro pool W a ys ht hW ha
         have hWCal : (Cal.gatedHistory C pool).w W.1 ≠ 0 := by

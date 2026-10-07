@@ -4162,6 +4162,191 @@ private theorem gadgetOut_eq_of_same_flip_code {β γ : ℝ} {n : ℕ}
     (HypercubeRamsey.cubeFlip v i₁) (HypercubeRamsey.cubeFlip v i₂)
     j₁ j₂ r hS hprofile hdata₁.1 hdata₂.1 hnear₁ hnear₂
 
+private def keyFlipHasCode (β γ : ℝ) {n : ℕ} (v : CubeVertex n) (i : Fin n) : Prop :=
+  ∃ g : Fin (HypercubeRamsey.S04.gadgetNum β γ n),
+    ∃ r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      ∃ b : Bool, gadgetFlipCode g v i = some (r, b)
+
+private noncomputable def keyFlipWitness {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) (h : keyFlipHasCode β γ v i) :
+    Fin (HypercubeRamsey.S04.gadgetNum β γ n) ×
+      Fin (HypercubeRamsey.S04.chunkNum β γ n) × Bool :=
+  (Classical.choose h, Classical.choose (Classical.choose_spec h),
+    Classical.choose (Classical.choose_spec (Classical.choose_spec h)))
+
+private theorem keyFlipWitness_spec {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) (h : keyFlipHasCode β γ v i) :
+    gadgetFlipCode (keyFlipWitness v i h).1 v i =
+      some ((keyFlipWitness v i h).2.1, (keyFlipWitness v i h).2.2) := by
+  classical
+  dsimp [keyFlipWitness]
+  exact Classical.choose_spec
+    (Classical.choose_spec (Classical.choose_spec h))
+
+private noncomputable def keyFlipCode (β γ : ℝ) {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) :
+    Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool) := by
+  classical
+  by_cases h : keyFlipHasCode β γ v i
+  · let w := keyFlipWitness v i h
+    exact some (w.1, w.2.1.val + 1, w.2.2)
+  · exact none
+
+private theorem keyFlipCode_cases (β γ : ℝ) {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) :
+    (keyFlipCode β γ v i = none ∧
+      ∀ g : Fin (HypercubeRamsey.S04.gadgetNum β γ n), gadgetFlipCode g v i = none) ∨
+    ∃ g r b, keyFlipCode β γ v i = some (g, r.val + 1, b) ∧
+      gadgetFlipCode g v i = some (r, b) := by
+  classical
+  by_cases h : keyFlipHasCode β γ v i
+  · let w := keyFlipWitness v i h
+    have hw := keyFlipWitness_spec v i h
+    right
+    refine ⟨w.1, w.2.1, w.2.2, ?_, ?_⟩
+    · simp [keyFlipCode, h, w]
+    · simpa [w] using hw
+  · left
+    have hnone : keyFlipCode β γ v i = none := by
+      simp [keyFlipCode, h]
+    refine ⟨hnone, ?_⟩
+    intro g
+    by_contra hne
+    cases hg : gadgetFlipCode g v i with
+    | none => exact hne hg
+    | some c => exact h ⟨g, c.1, c.2, hg⟩
+
+private theorem keyFlipCode_some_spec (β γ : ℝ) {n : ℕ}
+    (v : CubeVertex n) (i : Fin n)
+    {g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)} {t : ℕ} {b : Bool}
+    (hcode : keyFlipCode β γ v i = some (g, t, b)) :
+    ∃ r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      t = r.val + 1 ∧ gadgetFlipCode g v i = some (r, b) := by
+  classical
+  rcases keyFlipCode_cases β γ v i with ⟨hnone, _⟩ | ⟨g₀, r₀, b₀, hout, hg₀⟩
+  · rw [hnone] at hcode
+    cases hcode
+  · have hp : (g₀, r₀.val + 1, b₀) = (g, t, b) :=
+      Option.some.inj (hout.symm.trans hcode)
+    have hg : g₀ = g := congrArg Prod.fst hp
+    have hrest : (r₀.val + 1, b₀) = (t, b) := congrArg Prod.snd hp
+    have ht : t = r₀.val + 1 := (congrArg Prod.fst hrest).symm
+    have hb : b₀ = b := congrArg Prod.snd hrest
+    refine ⟨r₀, ht, ?_⟩
+    simpa [hg, hb] using hg₀
+
+private theorem gadgetFlipCode_some_changed_chunk {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    {r : Fin (HypercubeRamsey.S04.chunkNum β γ n)} {b : Bool}
+    (hcode : gadgetFlipCode g v i = some (r, b)) :
+    ∃ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≠
+        HypercubeRamsey.S04.clipped β γ n g j v := by
+  rcases gadgetFlipCode_some_spec g v i hcode with ⟨j, hdata, _, _, _⟩
+  refine ⟨j, ?_⟩
+  rcases hdata.2.2 with ⟨_, hchange, _⟩ | ⟨_, hchange, _⟩ <;> omega
+
+private theorem chunkCoords_mem_of_clipped_changed {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j : Fin (HypercubeRamsey.S04.chunkNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hchange : HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≠
+      HypercubeRamsey.S04.clipped β γ n g j v) :
+    i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j := by
+  by_contra hi
+  have hcount := chunkCount_flip_eq g j v i hi
+  have hclip : HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.clipped β γ n g j v := by
+    simp [HypercubeRamsey.S04.clipped, hcount]
+  exact hchange hclip
+
+private theorem gadgetFlipCode_some_unique {β γ : ℝ} {n : ℕ}
+    (g h : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hgh : ∃ r b, gadgetFlipCode g v i = some (r, b))
+    (hhh : ∃ r b, gadgetFlipCode h v i = some (r, b)) : g = h := by
+  rcases hgh with ⟨r, b, hcodeg⟩
+  rcases hhh with ⟨r', b', hcodeh⟩
+  rcases gadgetFlipCode_some_changed_chunk g v i hcodeg with ⟨j, hj⟩
+  rcases gadgetFlipCode_some_changed_chunk h v i hcodeh with ⟨k, hk⟩
+  have hjmem := chunkCoords_mem_of_clipped_changed g j v i hj
+  have hkmem := chunkCoords_mem_of_clipped_changed h k v i hk
+  by_contra hne
+  have hpair : (g, j) ≠ (h, k) := by
+    intro heq
+    exact hne (congrArg Prod.fst heq)
+  exact (Finset.disjoint_left.mp
+    (chunkCoords_pairwise_disjoint_all g h j k hpair)) hjmem hkmem
+
+private theorem keyFlipOutput_eq_of_code_eq {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i₁ i₂ : Fin n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    (hcode : keyFlipCode β γ v i₁ = keyFlipCode β γ v i₂) :
+    HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i₁) =
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i₂) := by
+  classical
+  rcases keyFlipCode_cases β γ v i₁ with ⟨hnone₁, hcodes₁⟩ |
+    ⟨g₁, r₁, b₁, hout₁, hgcode₁⟩
+  · have hnone₂ : keyFlipCode β γ v i₂ = none := by
+      rw [hnone₁] at hcode
+      exact hcode.symm
+    rcases keyFlipCode_cases β γ v i₂ with ⟨_, hcodes₂⟩ |
+      ⟨g₂, r₂, b₂, hout₂, _⟩
+    · funext h
+      change HypercubeRamsey.S04.gadgetOut β γ n h
+          (HypercubeRamsey.cubeFlip v i₁) =
+        HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₂)
+      calc
+        HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₁) =
+            HypercubeRamsey.S04.gadgetOut β γ n h v :=
+          gadgetFlipCode_none_eq_base h v i₁ hS (hcodes₁ h)
+        _ = HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₂) :=
+          (gadgetFlipCode_none_eq_base h v i₂ hS (hcodes₂ h)).symm
+    · rw [hnone₂] at hout₂
+      cases hout₂
+  · rcases keyFlipCode_cases β γ v i₂ with ⟨hnone₂, _⟩ |
+      ⟨g₂, r₂, b₂, hout₂, hgcode₂⟩
+    · rw [hout₁, hnone₂] at hcode
+      cases hcode
+    · have htuple : (g₁, r₁.val + 1, b₁) = (g₂, r₂.val + 1, b₂) :=
+        Option.some.inj (by rw [hout₁, hout₂] at hcode; exact hcode)
+      have hg : g₁ = g₂ := congrArg Prod.fst htuple
+      have htail : (r₁.val + 1, b₁) = (r₂.val + 1, b₂) := congrArg Prod.snd htuple
+      have hrank : r₁.val + 1 = r₂.val + 1 := congrArg Prod.fst htail
+      have hrval : r₁.val = r₂.val := by omega
+      have hr : r₁ = r₂ := Fin.ext hrval
+      have hb : b₁ = b₂ := congrArg Prod.snd htail
+      have hgcode₂' : gadgetFlipCode g₁ v i₂ = some (r₁, b₁) := by
+        simpa [hg, hr, hb] using hgcode₂
+      funext h
+      change HypercubeRamsey.S04.gadgetOut β γ n h
+          (HypercubeRamsey.cubeFlip v i₁) =
+        HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₂)
+      by_cases hh : h = g₁
+      · subst h
+        exact gadgetOut_eq_of_same_flip_code g₁ v i₁ i₂ hS hgcode₁ hgcode₂'
+      · have hnone₁h : gadgetFlipCode h v i₁ = none := by
+          by_contra hne
+          cases hsome : gadgetFlipCode h v i₁ with
+          | none => exact hne hsome
+          | some c =>
+            have hu := gadgetFlipCode_some_unique g₁ h v i₁
+              ⟨r₁, b₁, hgcode₁⟩ ⟨c.1, c.2, hsome⟩
+            exact hh hu.symm
+        have hnone₂h : gadgetFlipCode h v i₂ = none := by
+          by_contra hne
+          cases hsome : gadgetFlipCode h v i₂ with
+          | none => exact hne hsome
+          | some c =>
+            have hu := gadgetFlipCode_some_unique g₁ h v i₂
+              ⟨r₁, b₁, hgcode₂'⟩ ⟨c.1, c.2, hsome⟩
+            exact hh hu.symm
+        calc
+          HypercubeRamsey.S04.gadgetOut β γ n h
+              (HypercubeRamsey.cubeFlip v i₁) = HypercubeRamsey.S04.gadgetOut β γ n h v :=
+            gadgetFlipCode_none_eq_base h v i₁ hS hnone₁h
+          _ = HypercubeRamsey.S04.gadgetOut β γ n h
+              (HypercubeRamsey.cubeFlip v i₂) :=
+            (gadgetFlipCode_none_eq_base h v i₂ hS hnone₂h).symm
+
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
   classical

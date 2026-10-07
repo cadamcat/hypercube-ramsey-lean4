@@ -1,5 +1,7 @@
 import HypercubeRamsey.S11.Core.Experiment
 import HypercubeRamsey.S11.Core.Assignment_q_s11_tags
+import HypercubeRamsey.S11.Core.Assignment_sol_s11_raw
+import HypercubeRamsey.S11.Core.Assignment_sol_s11_raw_bounds
 import HypercubeRamsey.S11.Core.Compatibility
 import HypercubeRamsey.S07.SmallGridPurity
 import HypercubeRamsey.S03.ClockSampling
@@ -35,7 +37,35 @@ theorem raw_mass_failure (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
       (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι),
       Fixed11 δ x₀ K n N E X Y κ M y₀ p → OuterTailAt δ x₀ K (4 * P + 1) n →
       ∀ v : EvenRole n, (rawTags M p).expect (fun t => rawFail M y₀ p t v) ≤ (n : ℝ) ^ (-(4 * P)) := by
-  sorry
+  classical
+  obtain ⟨n₁, hσ⟩ := HypercubeRamsey.Lane_sol_s11_raw.sigma_polynomial_bound (4 * P + 1)
+  refine ⟨max 2 n₁, ?_⟩
+  intro n hn N E X Y κ M y₀ p hF hO v
+  have hn2 : 2 ≤ n := le_trans (le_max_left _ _) hn
+  have hnpos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  let ε : ℝ := (n : ℝ)^(-(4 * P + 1))
+  have hσsum :
+      (∑ i, p.w i * sigmaFail E M.G (InnerCoord n) (kTup n) (gS n) (M.μ i) (M.ν i) (y₀ i)) ≤ ε := by
+    calc
+      _ ≤ ∑ i, p.w i * ε := by
+        apply Finset.sum_le_sum
+        intro i hi
+        exact mul_le_mul_of_nonneg_left
+          (hσ n (le_trans (le_max_right _ _) hn) M y₀ hF.slice i) (p.nonneg i)
+      _ = ε := by rw [← Finset.sum_mul, p.sum_eq_one, one_mul]
+  have hpow : ε = (n : ℝ)^(-(4 * P)) * (n : ℝ)⁻¹ := by
+    dsimp [ε]
+    rw [show -(4 * P + 1) = -(4 * P) + (-1 : ℝ) by ring,
+      Real.rpow_add hnpos, Real.rpow_neg_one]
+  have htwo : (2 : ℝ) / n ≤ 1 := (div_le_one hnpos).2 (by exact_mod_cast hn2)
+  calc
+    _ ≤ (∑ i, p.w i * sigmaFail E M.G (InnerCoord n) (kTup n) (gS n) (M.μ i) (M.ν i) (y₀ i)) + ε :=
+      HypercubeRamsey.Lane_sol_s11_raw.raw_mass_bound M y₀ p hF hO v
+    _ ≤ ε + ε := add_le_add hσsum le_rfl
+    _ = ((2 : ℝ) / n) * (n : ℝ)^(-(4 * P)) := by rw [hpow]; ring
+    _ ≤ (n : ℝ)^(-(4 * P)) := by
+      simpa using mul_le_mul_of_nonneg_right htwo (Real.rpow_nonneg hnpos.le (-(4 * P)))
+
 
 /-- P11.1d1(ii), first event (11:349–350).  For fixed tags the conditional raw failure probability is the same at
 all even roles of a slice (inner translations by even vectors preserve the raw tuple law, the odd rows and the

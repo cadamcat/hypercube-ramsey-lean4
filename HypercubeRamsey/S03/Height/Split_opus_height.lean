@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Height.Selection_p_height_main
+import HypercubeRamsey.S03.Height.Split_opus_height_g_hs_count
 
 set_option maxHeartbeats 400000
 
@@ -462,13 +463,38 @@ theorem baseStarts_card_le (p : HDParams) (hD : 0 < p.D) (Dom : p.Sites)
     (v : CubeVertex p.d) (R₀ : ℕ) :
     ((baseStarts p Dom v R₀).card : ℝ) ≤
       ((p.H + 1 : ℕ) : ℝ) * ((p.d + 1 : ℕ) : ℝ) ^ (2 * p.D * R₀) := by
-  sorry
+  have hsub : baseStarts p Dom v R₀ ⊆
+      (((Finset.univ : Finset (CubeVertex p.d × Fin (p.H + 1))).filter (fun y =>
+        hdScaleDistance p.D (v, 0) (y.1, y.2.val) < 2 * R₀)).image (fun y => (y.1, y.2.val))) := by
+    intro y hy
+    simp only [baseStarts, Finset.mem_image, Finset.mem_filter, Finset.mem_univ, true_and] at hy ⊢
+    rcases hy with ⟨x, ⟨⟨_hxDom, hxdist⟩, rfl⟩⟩
+    exact ⟨x, hxdist, rfl⟩
+  have hcard := Finset.card_le_card hsub
+  have hbound := Lane_g_hs_count.scale_pairs_card_le p hD (v, 0) (2 * R₀)
+  have hle : (baseStarts p Dom v R₀).card ≤ (p.H + 1) * (p.d + 1) ^ (2 * p.D * R₀) := by
+    have hmul : p.D * (2 * R₀) = 2 * p.D * R₀ := by ring
+    rw [hmul] at hbound
+    exact hcard.trans hbound
+  exact_mod_cast hle
 
 /-- LEAF (counting). -/
 theorem midStarts_card_le (p : HDParams) (hD : 0 < p.D) (Dom : p.Sites)
     (v : CubeVertex p.d) (R : ℕ) :
     ((midStarts p Dom v R).card : ℝ) ≤ ((p.d + 1 : ℕ) : ℝ) ^ (p.D * R) := by
-  sorry
+  have hsub : midStarts p Dom v R ⊆
+      Finset.univ.filter (fun u : CubeVertex p.d => _root_.hammingDist u v ≤ p.D * R) := by
+    intro u hu
+    simp only [midStarts, Finset.mem_filter] at hu
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    have hdist := hu.2
+    have h1 := Lane_g_hs_count.hammingDist_le_of_hdScaleDistance_lt hD (v, 0) (u, 0) R hdist
+    rw [_root_.hammingDist_comm] at h1
+    exact h1
+  have hcard := Finset.card_le_card hsub
+  have hbound := Lane_g_hs_count.cube_ball_card_le_pow p.d (p.D * R) v
+  have hle : (midStarts p Dom v R).card ≤ (p.d + 1) ^ (p.D * R) := hcard.trans hbound
+  exact_mod_cast hle
 
 /-- LEAF (arithmetic, TeX 03:544–547). -/
 theorem global_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
@@ -739,7 +765,14 @@ theorem overlap_bounds (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
 theorem configs_card_le (p : HDParams) (hD : 0 < p.D) (x : HDState p) (R g q : ℕ) :
     ((configs p x R g q).card : ℝ) ≤
       (((p.H + 1 : ℕ) : ℝ) * ((p.d + 1 : ℕ) : ℝ) ^ (p.D * R)) ^ q := by
-  sorry
+  classical
+  have hpow := Lane_g_hs_count.powerset_filter_card_le_pow (scaleBall p x R) q (Separated p g)
+  have hball : (scaleBall p x R).card ≤ (p.H + 1) * (p.d + 1) ^ (p.D * R) :=
+    Lane_g_hs_count.scale_pairs_card_le p hD x R
+  have hle : (configs p x R g q).card ≤ ((p.H + 1) * (p.d + 1) ^ (p.D * R)) ^ q := by
+    unfold configs
+    exact hpow.trans (Nat.pow_le_pow_left hball q)
+  exact_mod_cast hle
 
 /-- LEAF (arithmetic, TeX 03:517–533): configuration count times the accumulated error is below
 the parent target. -/

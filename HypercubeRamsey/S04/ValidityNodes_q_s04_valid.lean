@@ -679,6 +679,95 @@ private theorem not_GoodPath_iff_FirstBad {N : ℕ} (E : Fin N → Fin N → Pro
       · have hbad : P.pr (fun y => Hits E G x y) < Real.exp (-L) := lt_of_not_ge hq
         simp [GoodPath, FirstBad, hq, hbad]
 
+private theorem pr_Hit_eq_rowDeg {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (P : Law N) (x : Fin N) :
+    P.pr (fun y => Hits E G x y) = rowDeg E G x P := by
+  classical
+  simp [FinProb.pr, rowDeg, mul_comm]
+
+private def finToList {α : Type*} {k : ℕ} (x : Fin k → α) : List α := List.ofFn x
+
+private theorem FirstBad_finToList_iff {N k : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (L : ℝ) (P : Law N) (x : Fin k → Fin N) :
+    FirstBad E G L P (finToList x) ↔
+      ∃ j : Fin k, GoodPath E G L P (finToList (prefixVals x j)) ∧
+        rowDeg E G (x j) (residualAfter E G P (finToList (prefixVals x j))) <
+          Real.exp (-L) := by
+  induction k generalizing P with
+  | zero =>
+      simp [FirstBad, finToList]
+  | succ k ih =>
+      let a := x 0
+      let tail : Fin k → Fin N := fun i => x i.succ
+      have hx : x = Fin.cons a tail := by
+        funext i
+        cases i using Fin.cases <;> simp [a, tail]
+      rw [hx]
+      have hHead : FirstBad E G L P (finToList (Fin.cons a tail)) =
+          (P.pr (fun y => Hits E G a y) < Real.exp (-L) ∨
+            (Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+              FirstBad E G L (safeCond P (fun y => Hits E G a y)) (finToList tail))) := by
+        simp [FirstBad, finToList]
+      let Q := safeCond P (fun y => Hits E G a y)
+      have hIH := ih Q tail
+      rw [hHead, hIH]
+      have hzero : finToList (prefixVals (Fin.cons a tail) (0 : Fin (k + 1))) = [] := by
+        have hfun : prefixVals (Fin.cons a tail) (0 : Fin (k + 1)) =
+            (fun j : Fin 0 => Fin.elim0 j) := by
+          funext j
+          exact Fin.elim0 j
+        simp [finToList, hfun]
+      constructor
+      · intro h
+        rcases h with hbad | ⟨hq, ⟨j, hj⟩⟩
+        · refine ⟨0, ?_⟩
+          have hlow : rowDeg E G a P < Real.exp (-L) := by
+            simpa [pr_Hit_eq_rowDeg] using hbad
+          rw [hzero]
+          simp [GoodPath, residualAfter, hlow]
+        · refine ⟨j.succ, ?_⟩
+          have hprefix :
+              finToList (prefixVals (Fin.cons a tail) j.succ) =
+                a :: finToList (prefixVals tail j) := by
+            rw [prefixVals_cons_succ]
+            simp [finToList]
+          have hres : residualAfter E G P
+              (a :: finToList (prefixVals tail j)) =
+              residualAfter E G Q (finToList (prefixVals tail j)) := rfl
+          rw [hprefix]
+          change (Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+              GoodPath E G L Q (finToList (prefixVals tail j))) ∧
+            rowDeg E G (tail j)
+              (residualAfter E G P (a :: finToList (prefixVals tail j))) < Real.exp (-L)
+          rw [hres]
+          exact ⟨⟨hq, hj.1⟩, hj.2⟩
+      · rintro ⟨j, hj⟩
+        cases j using Fin.cases with
+        | zero =>
+            rw [hzero] at hj
+            simp [GoodPath, residualAfter] at hj
+            have hlow : P.pr (fun y => Hits E G a y) < Real.exp (-L) := by
+              simpa [pr_Hit_eq_rowDeg] using hj
+            left
+            exact hlow
+        | succ j =>
+            have hprefix :
+                finToList (prefixVals (Fin.cons a tail) j.succ) =
+                  a :: finToList (prefixVals tail j) := by
+              rw [prefixVals_cons_succ]
+              simp [finToList]
+            have hres : residualAfter E G P
+                (a :: finToList (prefixVals tail j)) =
+                residualAfter E G Q (finToList (prefixVals tail j)) := rfl
+            rw [hprefix, hres] at hj
+            change (Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+                GoodPath E G L Q (finToList (prefixVals tail j))) ∧
+              rowDeg E G (tail j)
+                (residualAfter E G Q (finToList (prefixVals tail j))) < Real.exp (-L) at hj
+            rcases hj with ⟨⟨hq, hgoodTail⟩, hlow⟩
+            right
+            exact ⟨hq, ⟨j, ⟨hgoodTail, hlow⟩⟩⟩
+
 private theorem FirstBad_append {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
     (L : ℝ) (P : Law N) (xs ys : List (Fin N)) :
     FirstBad E G L P (xs ++ ys) ↔
@@ -839,8 +928,6 @@ private theorem pr_HitsList_lower {N : ℕ} (E : Fin N → Fin N → Prop) (G : 
         _ = P.pr (fun y => Hits E G x y ∧ HitsList E G xs y) := hprob.symm
         _ = P.pr (HitsList E G (x :: xs)) := by rw [← hlist]
 
-private def finToList {α : Type*} {k : ℕ} (x : Fin k → α) : List α := List.ofFn x
-
 private def tupleLabels {k N m : ℕ} (W : Fin m → Fin k → Fin N) : List (Fin N) :=
   (List.ofFn fun i : Fin m => finToList (W i)).flatten
 
@@ -848,9 +935,54 @@ private theorem tupleLabels_length {k N m : ℕ} (W : Fin m → Fin k → Fin N)
     (tupleLabels W).length = m * k := by
   simp [tupleLabels, finToList, List.length_flatten, List.sum_ofFn]
 
+private theorem HitsList_tupleLabels_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (W : Fin m → Fin k → Fin N) (y : Fin N) :
+    HitsList E G (tupleLabels W) y ↔ ∀ i j, Hits E G (W i j) y := by
+  simp [HitsList, tupleLabels, finToList, List.mem_flatten]
+  constructor
+  · intro h i j
+    exact h (W i j) i j rfl
+  · intro h x i j hEq
+    subst x
+    exact h i j
+
 private abbrev RelevantTuple {β γ : ℝ} {n : ℕ} (u : OddRole n)
     (D : Finset (Loc β γ n)) :=
   {ck : Loc β γ n × Key β γ n // ck ∈ D ×ˢ Zset β γ u}
+
+private theorem HitsList_tupleLaw_iff {β γ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
+    (u : OddRole n) (D : Finset (Loc β γ n))
+    (e : Fin (D.card * (Zset β γ u).card) ≃ RelevantTuple u D)
+    (W : Tuples β γ n N) (y : Fin N) :
+    HitsList E G (tupleLabels (fun i => W (e i).1)) y ↔
+      HitsAll E G W D (Zset β γ u) y := by
+  rw [HitsList_tupleLabels_iff]
+  constructor
+  · intro h c hc κ hκ j
+    let p : RelevantTuple u D := ⟨(c, κ), Finset.mem_product.mpr ⟨hc, hκ⟩⟩
+    simpa using h (e.symm p) j
+  · intro h i j
+    rcases Finset.mem_product.mp (e i).2 with ⟨hc, hκ⟩
+    exact h (e i).1.1 hc (e i).1.2 hκ j
+
+private theorem exists_fin_equiv_last {α : Type*} [Fintype α] [DecidableEq α] (a : α) :
+    ∃ (e : Fin (Fintype.card α) ≃ α) (last : Fin (Fintype.card α)),
+      last.val + 1 = Fintype.card α ∧ e last = a := by
+  classical
+  let m := Fintype.card α
+  have hm : 0 < m := Fintype.card_pos_iff.mpr ⟨a⟩
+  have hm1 : 1 ≤ m := Nat.one_le_iff_ne_zero.mpr hm.ne'
+  let last : Fin m := ⟨m - 1, Nat.sub_lt hm (by decide)⟩
+  let e0 : α ≃ Fin m := Fintype.equivFin α
+  let e : Fin m ≃ α := (Equiv.swap (e0 a) last).trans e0.symm
+  refine ⟨e, last, ?_, ?_⟩
+  · dsimp [last]
+    exact Nat.sub_add_cancel hm1
+  · dsimp [e]
+    calc
+      e0.symm (Equiv.swap (e0 a) last last) = e0.symm (e0 a) := by simp
+      _ = a := e0.symm_apply_apply a
 
 private theorem tuple_entry_bad_prob {β γ : ℝ} {G : Colour} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}

@@ -306,6 +306,125 @@ theorem direct_atom_bound {κ : CConsts} {T : Stage} {k : ℕ}
     _ ≤ 22 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S := hsum.le
     _ ≤ 8800 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / (T.S.N k : ℝ) := hfinal
 
+theorem eventually_two_pow_tail (A : ℝ) (hA : 0 < A) :
+    ∀ᶠ n : ℕ in Filter.atTop,
+      8800 * Real.exp (-(Real.log 2 / 2) * (n : ℝ)) ≤ (n : ℝ) ^ (-A) := by
+  have hb : 0 < Real.log 2 / 2 := by positivity
+  have hlim : Filter.Tendsto
+      (fun n : ℕ => (n : ℝ) ^ A * Real.exp (-(Real.log 2 / 2) * (n : ℝ)))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero A (Real.log 2 / 2) hb).comp
+      tendsto_natCast_atTop_atTop
+  have hsmall := hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8800))
+  filter_upwards [hsmall, Filter.eventually_gt_atTop 0] with n hn hnpos
+  have hnreal : (0 : ℝ) < n := by exact_mod_cast hnpos
+  have hpow : (n : ℝ) ^ A * (n : ℝ) ^ (-A) = 1 := by
+    rw [← Real.rpow_add hnreal]
+    simp
+  have hmul := mul_le_mul_of_nonneg_right hn.le (Real.rpow_nonneg hnreal.le (-A))
+  have hexp : Real.exp (-(Real.log 2 / 2) * (n : ℝ)) ≤
+      (1 / 8800) * (n : ℝ) ^ (-A) := by
+    calc
+      Real.exp (-(Real.log 2 / 2) * (n : ℝ)) =
+          ((n : ℝ) ^ A * (n : ℝ) ^ (-A)) *
+            Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by rw [hpow]; ring
+      _ = ((n : ℝ) ^ A * Real.exp (-(Real.log 2 / 2) * (n : ℝ))) *
+            (n : ℝ) ^ (-A) := by ring
+      _ ≤ (1 / 8800) * (n : ℝ) ^ (-A) := hmul
+  nlinarith
+
+theorem prefix_ratio_le_exp {n ell N : ℕ} (hell : 2 * ell ≤ n)
+    (hN : (2 : ℝ) ^ n ≤ N) :
+    (2 : ℝ) ^ ell / N ≤ Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by
+  have hℓn : ell ≤ n := by omega
+  have hNpos : (0 : ℝ) < N := lt_of_lt_of_le (by positivity : (0 : ℝ) < (2 : ℝ) ^ n) hN
+  have hpow : (2 : ℝ) ^ ell * (2 : ℝ) ^ (n - ell) = (2 : ℝ) ^ n := by
+    rw [← pow_add]
+    congr 1
+    omega
+  have hquot : (2 : ℝ) ^ ell / (2 : ℝ) ^ n = 1 / (2 : ℝ) ^ (n - ell) := by
+    field_simp [pow_ne_zero _ (by norm_num : (2 : ℝ) ≠ 0)]
+    exact hpow
+  have hminus :
+      1 / (2 : ℝ) ^ (n - ell) = (2 : ℝ) ^ (-((n - ell : ℕ) : ℝ)) := by
+    rw [← Real.rpow_natCast]
+    rw [Real.rpow_neg (by norm_num : (0 : ℝ) ≤ 2) ((n - ell : ℕ) : ℝ)]
+    simp [one_div]
+  have hhalf : ((n - ell : ℕ) : ℝ) ≥ (n : ℝ) / 2 := by
+    have hnat : n ≤ 2 * (n - ell) := by omega
+    have hcast : (n : ℝ) ≤ 2 * ((n - ell : ℕ) : ℝ) := by exact_mod_cast hnat
+    nlinarith
+  have hmono : (2 : ℝ) ^ (-((n - ell : ℕ) : ℝ)) ≤
+      (2 : ℝ) ^ (-((n : ℝ) / 2)) := by
+    apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
+    linarith
+  have hexp : (2 : ℝ) ^ (-((n : ℝ) / 2)) =
+      Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by
+    rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    congr 1
+    ring
+  calc
+    (2 : ℝ) ^ ell / N ≤ (2 : ℝ) ^ ell / (2 : ℝ) ^ n :=
+      div_le_div_of_nonneg_left (by positivity) (by positivity) hN
+    _ = 1 / (2 : ℝ) ^ (n - ell) := hquot
+    _ = (2 : ℝ) ^ (-((n - ell : ℕ) : ℝ)) := hminus
+    _ ≤ (2 : ℝ) ^ (-((n : ℝ) / 2)) := hmono
+    _ = Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := hexp
+
+theorem highDirect_prefix_le_half {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (hκ : κ.Admissible)
+    (hmode : PT.tiling.mode = .highDirect) (hn : 1 ≤ T.S.n k)
+    (i : Fin PT.tiling.m) : 2 * (PT.tiling.P i).ℓ ≤ T.S.n k := by
+  have hnotBound : PT.tiling.mode ≠ .bounded := by
+    intro hb
+    rw [hb] at hmode
+    cases hmode
+  rcases hPT.tiling_valid.allocation_bounds i with ⟨_, halloc⟩
+  rcases halloc with hb | ⟨hℓ, hlog⟩
+  · exact (hnotBound hb).elim
+  have hscale := hPT.tiling_valid.direct_scale_bound (Or.inr hmode) i
+  have hgain : PT.tiling.gain i = (PT.tiling.P i).g / 1000 := by
+    simp [HypercubeRamsey.Tiling.gain, hmode]
+  rw [hgain] at hℓ
+  have hu : 1 ≤ κ.u := by
+    have hlarge := hκ.u_rng.2
+    omega
+  have hmin1 := min_le_right κ.η0 (1 / 100 : ℝ)
+  have hmin2 := min_le_right κ.xs (min κ.η0 (1 / 100 : ℝ))
+  have hι : κ.ι / 2 ≤ 1 := by
+    have hι0 := hκ.ι_rng.2
+    nlinarith
+  have hnR : (1 : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hn
+  have hg : (PT.tiling.P i).g ≤ (T.S.n k : ℝ) := by
+    calc
+      (PT.tiling.P i).g ≤ (T.S.n k : ℝ) ^ (κ.ι / 2) := hscale
+      _ ≤ (T.S.n k : ℝ) ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le hnR hι
+      _ = (T.S.n k : ℝ) := by rw [Real.rpow_one]
+  have hℓ' : ((PT.tiling.P i).ℓ : ℝ) ≤
+      (PT.tiling.P i).g / (1000000 * κ.u) := by
+    calc
+      ((PT.tiling.P i).ℓ : ℝ) ≤ ((PT.tiling.P i).g / 1000) / (1000 * κ.u) := hℓ
+      _ = (PT.tiling.P i).g / (1000000 * κ.u) := by ring
+  have huCast : (1000000 : ℝ) ≤ 1000000 * κ.u := by
+    exact_mod_cast (show 1000000 ≤ 1000000 * κ.u by omega)
+  have hg0 : (0 : ℝ) ≤ (PT.tiling.P i).g := by positivity
+  have hdiv : (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) ≤
+      (PT.tiling.P i).g / (1000000 : ℝ) := by
+    have hden : (0 : ℝ) < 1000000 * κ.u := by positivity
+    have hmul := mul_le_mul_of_nonneg_left huCast hg0
+    have hcross : (PT.tiling.P i).g * 1000000 ≤
+        (PT.tiling.P i).g * (1000000 * (κ.u : ℝ)) := by nlinarith
+    exact (div_le_div_iff₀ hden (by norm_num : (0 : ℝ) < 1000000)).2 hcross
+  have hℓn : ((PT.tiling.P i).ℓ : ℝ) ≤ (T.S.n k : ℝ) / 1000000 := by
+    calc
+      ((PT.tiling.P i).ℓ : ℝ) ≤ (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) := hℓ'
+      _ ≤ (PT.tiling.P i).g / (1000000 : ℝ) := hdiv
+      _ ≤ (T.S.n k : ℝ) / 1000000 :=
+        div_le_div_of_nonneg_right hg (by norm_num)
+  have hdouble : 2 * ((PT.tiling.P i).ℓ : ℝ) ≤ (T.S.n k : ℝ) := by
+    nlinarith
+  exact_mod_cast hdouble
+
 theorem directRowMass_dependsOn {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
     (ys ys' : S15.OddAssignment T k)

@@ -1833,4 +1833,109 @@ theorem direct_raw_product_rows_expect {κ : CConsts} {T : Stage} {k m : ℕ}
       rw [← FinLaw.E, hproduct]
       ring
 
+theorem direct_sampler_separated_product_bound {κ : CConsts} {T : Stage} {k m : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (J : S15.DirectSampler PT hPT) (rows : Fin m → S15.EvenPosition T k)
+    (x : Fin (T.S.N k)) (M : ℕ) (S : Finset (S15.OddPosition T k))
+    (hM : 0 < M)
+    (hdegree : ∀ i b, b ∈ star (rows i) →
+      0 < deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x)
+    (hdisj : ∀ i j, i ≠ j → Disjoint (star (rows i)) (star (rows j)))
+    (hscope : ∀ i, star (rows i) ⊆ S)
+    (hScard : (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 5)
+    (hbase : ∀ i, (M : ℝ) * S15.directBaseWeight PT hPT (rows i) x ≤ 2)
+    (hm : 0 < m) :
+    (∑ ys ∈ Finset.univ.filter (fun ys : S15.OddAssignment T k => J.law.w ys ≠ 0),
+      J.law.w ys * ∏ i, (M : ℝ) * S15.directRowWeight PT hPT ys (rows i) x) ≤
+        4 ^ m := by
+  classical
+  let F : S15.OddAssignment T k → ℝ := fun ys =>
+    ∏ i, (M : ℝ) * S15.directRowWeight PT hPT ys (rows i) x
+  have hrow_nonneg (i : Fin m) (ys : S15.OddAssignment T k) :
+      0 ≤ S15.directRowWeight PT hPT ys (rows i) x := by
+    rw [directRowWeight_eq_base_star_prod]
+    apply mul_nonneg (directBaseWeight_nonneg PT hPT (rows i) x)
+    exact Finset.prod_nonneg fun b hb => directFactor_nonneg PT hPT (rows i) ys b x
+  have hFnonneg : ∀ ys, 0 ≤ F ys := by
+    intro ys
+    apply Finset.prod_nonneg
+    intro i hi
+    exact mul_nonneg (by positivity) (hrow_nonneg i ys)
+  have hdep : FinProb.DependsOn F S := by
+    intro ys ys' hys
+    apply Finset.prod_congr rfl
+    intro i hi
+    congr 1
+    apply directRowWeight_dependsOn PT hPT (rows i) ys ys'
+    intro b hb
+    exact hys b (hscope i hb)
+  have hrawScaled : J.rawLaw.E F ≤ 2 ^ m := by
+    have hrawProd := direct_raw_product_rows_expect PT hPT rows x hdegree hdisj
+    have hscalePoint (ys : S15.OddAssignment T k) :
+        F ys = (M : ℝ) ^ m * ∏ i, S15.directRowWeight PT hPT ys (rows i) x := by
+      dsimp [F]
+      calc
+        ∏ i, (M : ℝ) * S15.directRowWeight PT hPT ys (rows i) x =
+            (∏ i : Fin m, (M : ℝ)) *
+              ∏ i, S15.directRowWeight PT hPT ys (rows i) x := Finset.prod_mul_distrib
+        _ = (M : ℝ) ^ m *
+              ∏ i, S15.directRowWeight PT hPT ys (rows i) x := by simp
+    have hscaledMean :
+        J.rawLaw.E F = (M : ℝ) ^ m *
+          ∏ i, S15.directBaseWeight PT hPT (rows i) x := by
+      rw [J.rawLaw_eq]
+      unfold FinLaw.E
+      calc
+        (∑ ys, (S15.directRawLaw PT hPT).w ys * F ys) =
+            (M : ℝ) ^ m *
+              ∑ ys, (S15.directRawLaw PT hPT).w ys *
+                ∏ i, S15.directRowWeight PT hPT ys (rows i) x := by
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro ys hys
+          rw [hscalePoint]
+          ring
+        _ = (M : ℝ) ^ m *
+              (S15.directRawLaw PT hPT).E
+                (fun ys => ∏ i, S15.directRowWeight PT hPT ys (rows i) x) := by
+          rw [FinLaw.E]
+        _ = (M : ℝ) ^ m *
+              ∏ i, S15.directBaseWeight PT hPT (rows i) x := by rw [hrawProd]
+    have hbaseProd : (M : ℝ) ^ m *
+        ∏ i, S15.directBaseWeight PT hPT (rows i) x =
+          ∏ i, ((M : ℝ) * S15.directBaseWeight PT hPT (rows i) x) := by
+      rw [Finset.prod_mul_distrib]
+      simp
+    have hproductBound :
+        ∏ i, ((M : ℝ) * S15.directBaseWeight PT hPT (rows i) x) ≤ 2 ^ m := by
+      calc
+        _ ≤ ∏ _i : Fin m, (2 : ℝ) := by
+          apply Finset.prod_le_prod₀
+          · intro i hi
+            exact mul_nonneg (by positivity) (directBaseWeight_nonneg PT hPT (rows i) x)
+          · intro i hi
+            exact hbase i
+        _ = 2 ^ m := by simp
+    rw [hscaledMean, hbaseProd]
+    exact hproductBound
+  have hcompare : J.law.E F ≤ 2 * J.rawLaw.E F :=
+    J.local_upper_comparison F hFnonneg S hdep hScard
+  have hsupport (G : S15.OddAssignment T k → ℝ) :
+      (∑ ys ∈ Finset.univ.filter (fun ys : S15.OddAssignment T k => J.law.w ys ≠ 0),
+        J.law.w ys * G ys) = J.law.E G := by
+    unfold FinLaw.E
+    rw [Finset.sum_filter]
+    apply Finset.sum_congr rfl
+    intro ys hys
+    by_cases hz : J.law.w ys = 0 <;> simp [hz]
+  have hpower : 2 * (2 : ℝ) ^ m ≤ (4 : ℝ) ^ m := by
+    have hnat : m + 1 ≤ 2 * m := by omega
+    calc
+      2 * (2 : ℝ) ^ m = (2 : ℝ) ^ (m + 1) := by rw [pow_succ]; ring
+      _ ≤ (2 : ℝ) ^ (2 * m) := by
+        exact_mod_cast Nat.pow_le_pow_right (by norm_num : 0 < 2) hnat
+      _ = (4 : ℝ) ^ m := by rw [pow_mul]; norm_num
+  rw [hsupport F]
+  exact le_trans hcompare (le_trans (mul_le_mul_of_nonneg_left hrawScaled (by norm_num)) hpower)
+
 end HypercubeRamsey.Lane_q_s15_direct

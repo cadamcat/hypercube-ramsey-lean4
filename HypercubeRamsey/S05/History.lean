@@ -1,5 +1,6 @@
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
+import HypercubeRamsey.S05.Parent_sol_s05_h1
 
 /-!
 # L5.1c, d, f, h, l(1–2): raw test bounds and the five conditioning stages
@@ -193,7 +194,9 @@ iid given `V₀`; translating all signs preserves raw failure probabilities), ex
 theorem L5_1h1 : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       X.Step1Raw → X.Step2Raw → 99 / 100 ≤ X.P.prior.parent.pr X.Stage1Good := by
-  sorry
+  refine ⟨Lane_sol_s05_h1.stage1Request, ?_⟩
+  intro p hp
+  exact Lane_sol_s05_h1.parent_good_mass p hp
 
 /-! ### Stage 2: the coarse base (05:666–679) -/
 

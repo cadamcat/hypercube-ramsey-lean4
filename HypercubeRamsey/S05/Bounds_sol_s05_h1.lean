@@ -5,6 +5,8 @@ namespace HypercubeRamsey.Lane_sol_s05_h1
 open Classical Filter Real
 open scoped Topology BigOperators
 
+set_option maxHeartbeats 400000
+
 noncomputable section
 
 variable {γ K' χ : ℝ}
@@ -37,7 +39,8 @@ theorem uSeg0_lower (p : Params5 γ K' χ) (n : ℕ) :
   have hq : (0 : ℝ) < p.q0 := by exact_mod_cast p.hq0.1
   have h : p.K1 * (0 + 4 : ℝ) * log (p.m n : ℝ) / p.q0 ≤ (p.uSeg n 0 : ℝ) := by
     dsimp only [Params5.uSeg]
-    exact Nat.le_ceil _
+    simpa only [Nat.cast_zero] using Nat.le_ceil
+      (p.K1 * ((0 : ℝ) + 4) * log (p.m n : ℝ) / (p.q0 : ℝ))
   have h' := (div_le_iff₀ hq).1 h
   nlinarith
 
@@ -45,14 +48,14 @@ theorem regularEps_le (p : Params5 γ K' χ) (n : ℕ) (hm : 1 ≤ p.m n)
     (hk : (Fintype.card KeyCode : ℝ) + 3 ≤ p.delta * p.K1) :
     regularEps p n ≤ (p.m n : ℝ) ^ (-((Fintype.card KeyCode : ℝ) + 3)) := by
   let M := (p.m n : ℝ)
-  have hM : 1 ≤ M := by exact_mod_cast hm
+  have hM : 1 ≤ M := by dsimp only [M]; exact_mod_cast hm
   have hMpos : 0 < M := lt_of_lt_of_le (by norm_num) hM
   have hl : 0 ≤ log M := log_nonneg hM
   have hδ : 0 ≤ p.delta := p.hdelta.1.le
   have hu := mul_le_mul_of_nonneg_left (uSeg0_lower p n) hδ
   have hb : ((Fintype.card KeyCode : ℝ) + 3) * log M ≤ p.delta * (p.q0 * p.uSeg n 0) / 2 := by
     have h1 := mul_le_mul_of_nonneg_right hk hl
-    have h2 : 0 ≤ p.delta * p.K1 * log M := by positivity
+    have h2 : 0 ≤ p.delta * p.K1 * log M := mul_nonneg (mul_nonneg p.hdelta.1.le p.hK1.le) hl
     nlinarith
   unfold regularEps
   rw [rpow_def_of_pos hMpos]
@@ -70,10 +73,10 @@ theorem lowAlarm_le (p : Params5 γ K' χ) (n : ℕ)
   let D := Fintype.card KeyCode
   let M := (p.m n : ℝ)
   have hm1 : 1 ≤ p.m n := by omega
-  have hM : 1 ≤ M := by exact_mod_cast hm1
+  have hM : 1 ≤ M := by dsimp only [M]; exact_mod_cast hm1
   have hMpos : 0 < M := lt_of_lt_of_le (by norm_num) hM
-  have hlarge : (coarseKeyBound : ℝ) + 3 ≤ M := by exact_mod_cast hm
-  have hJ : (p.J n : ℝ) ≤ M := by exact_mod_cast J_le_m p n hm1
+  have hlarge : (coarseKeyBound : ℝ) + 3 ≤ M := by dsimp only [M]; exact_mod_cast hm
+  have hJ : (p.J n : ℝ) ≤ M := by dsimp only [M]; exact_mod_cast J_le_m p n hm1
   have hcard : (Fintype.card (LowShape (p.m n) (p.J n)) : ℝ) ≤
       2 * M * (fixedShapeCount : ℝ) * (2 * M) ^ D := by
     rw [lowShape_card]
@@ -89,8 +92,9 @@ theorem lowAlarm_le (p : Params5 γ K' χ) (n : ℕ)
   calc
     _ ≤ (2 * M * (fixedShapeCount : ℝ) * (2 * M) ^ D) * ((D : ℝ) + 2) *
         M ^ (-((D : ℝ) + 3)) := by
-      gcongr
-      exact regularEps_le p n hm1 hk
+      exact mul_le_mul
+        (mul_le_mul_of_nonneg_right hcard (by positivity : 0 ≤ (D : ℝ) + 2))
+        (regularEps_le p n hm1 hk) (exp_pos _).le (by positivity)
     _ = lowAlarmConstant * (M ^ D * M ^ (-((D : ℝ) + 3)) * M) := by
       rw [mul_pow]
       unfold lowAlarmConstant
@@ -135,10 +139,10 @@ theorem eventually_alarm_small (p : Params5 γ K' χ)
       (Fintype.card HighShape : ℝ) * ((Fintype.card KeyCode : ℝ) + 2) * highEps p n ≤ 1 / 200 := by
   have hm := tendsto_m p
   have hl : Tendsto (fun n => lowAlarmConstant * (p.m n : ℝ) ^ (-2 : ℝ)) atTop (𝓝 0) := by
-    simpa using ((tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 2)).comp hm).const_mul lowAlarmConstant
+    simpa only [Function.comp_apply, mul_zero] using ((tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 2)).comp hm).const_mul lowAlarmConstant
   have hh : Tendsto (fun n => (Fintype.card HighShape : ℝ) * ((Fintype.card KeyCode : ℝ) + 2) *
       highEps p n) atTop (𝓝 0) := by
-    simpa using (highEps_tendsto p).const_mul
+    simpa only [mul_zero] using (highEps_tendsto p).const_mul
       ((Fintype.card HighShape : ℝ) * ((Fintype.card KeyCode : ℝ) + 2))
   have hsmall : Set.Iio (1 / 200 : ℝ) ∈ 𝓝 (0 : ℝ) := Iio_mem_nhds (by norm_num)
   have hlarge : ∀ᶠ n in atTop, coarseKeyBound + 3 ≤ p.m n := by
@@ -157,7 +161,6 @@ theorem uSeg_mono (p : Params5 γ K' χ) (n : ℕ) (hm : 1 ≤ p.m n) {j j' : �
   unfold Params5.uSeg
   apply Nat.ceil_mono
   gcongr
-  exact_mod_cast hj
 
 theorem regular_threshold_le (p : Params5 γ K' χ) (n : ℕ) (hm : 1 ≤ p.m n) (j : ℕ) :
     exp (-(p.delta * (p.q0 * p.uSeg n j)) / 2) ≤ regularEps p n := by

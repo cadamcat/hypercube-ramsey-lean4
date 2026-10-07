@@ -7,9 +7,21 @@ open scoped BigOperators
 
 set_option synthInstance.maxSize 1024
 
+set_option maxHeartbeats 400000
+
 noncomputable section
 
 abbrev KeyCode := Bool × Fin 3 × CoarseCode
+
+-- Keep kernel conversion from enumerating these finite but enormous code spaces.
+noncomputable instance (priority := 2000) binsCodeFintype : Fintype (Finset (Fin shapeBinBound)) :=
+  Fintype.ofFinite _
+
+noncomputable instance (priority := 2000) coarseCodeFintype : Fintype CoarseCode :=
+  Fintype.ofFinite _
+
+noncomputable instance (priority := 2000) keyCodeFintype : Fintype KeyCode :=
+  Fintype.ofFinite _
 
 def slotLevel {J : ℕ} (j : Option (Fin (J + 1))) (s : Fin 3) : ℕ :=
   match j with
@@ -116,16 +128,25 @@ abbrev HighShape := Finset (Fin shapeBinBound) × CoarseCode ×
 
 def fixedShapeCount : ℕ := Fintype.card (Finset (Fin shapeBinBound)) * Fintype.card CoarseCode
 
+theorem shape_card_generic (B C D : Type*) [Fintype B] [Fintype C] [Fintype D] [DecidableEq D] (a b : ℕ) :
+    Fintype.card (Fin a × B × C × (D → Fin b)) =
+      a * (Fintype.card B * Fintype.card C) * b ^ Fintype.card D := by
+  simp only [Fintype.card_prod, Fintype.card_fin, Fintype.card_fun, Nat.mul_assoc]
+
+theorem high_card_generic (B C D : Type*) [Fintype B] [Fintype C] [Fintype D] [DecidableEq D] (b : ℕ) :
+    Fintype.card (B × C × (D → Fin b)) =
+      (Fintype.card B * Fintype.card C) * b ^ Fintype.card D := by
+  simp only [Fintype.card_prod, Fintype.card_fin, Fintype.card_fun, Nat.mul_assoc]
+
 theorem lowShape_card (m J : ℕ) :
     Fintype.card (LowShape m J) =
       (J + 1) * fixedShapeCount * (coarseKeyBound + m + 3) ^ Fintype.card KeyCode := by
-  simp only [LowShape, Fintype.card_prod, Fintype.card_fin, Fintype.card_fun,
-    fixedShapeCount, Nat.mul_assoc]
+  exact shape_card_generic (Finset (Fin shapeBinBound)) CoarseCode KeyCode
+    (J + 1) (coarseKeyBound + m + 3)
 
 theorem highShape_card :
     Fintype.card HighShape = fixedShapeCount * (coarseKeyBound + 1) ^ Fintype.card KeyCode := by
-  simp only [HighShape, Fintype.card_prod, Fintype.card_fin, Fintype.card_fun,
-    fixedShapeCount, Nat.mul_assoc]
+  exact high_card_generic (Finset (Fin shapeBinBound)) CoarseCode KeyCode (coarseKeyBound + 1)
 
 def lowShape (x : OAI.HypercubeRamsey.CubeVertex n) (hx : X.g.severity x ≤ X.p.J n) :
     LowShape (X.p.m n) (X.p.J n) :=
@@ -389,6 +410,14 @@ theorem optFail_bin_equiv (e : Equiv.Perm (BinVector5 n))
   rw [trueBlock_bin_equiv X e b i i' S S' none hi,
     blockGate_bin_equiv X e b i i' S S' none hi eg hg, hm, ha]
 
+theorem column_eq_transport (ℓ a a' : X.Key) (ha : a = a')
+    (hlen : colLen5 (X.p.s n) ℓ = colLen5 (X.p.s n) a)
+    (hlen' : colLen5 (X.p.s n) ℓ = colLen5 (X.p.s n) a')
+    (θ : Fin (colLen5 (X.p.s n) ℓ) → Fin N) (U : X.Hidden)
+    (h : colEquiv X ℓ a hlen θ = U a) : colEquiv X ℓ a' hlen' θ = U a' := by
+  subst a'
+  exact h
+
 theorem optConditional_bin_equiv (e : Equiv.Perm (BinVector5 n)) (b : X.Base)
     (i i' : CoarseKey5 n) (S S' : Finset X.Key) (hi : e i.1 = i'.1)
     (eg : X.gateKeys (i, S, none) ≃ X.gateKeys (i', S', none))
@@ -419,7 +448,8 @@ theorem optConditional_bin_equiv (e : Equiv.Perm (BinVector5 n)) (b : X.Base)
   have hcs : ∀ ℓ : S, colEquiv X ℓ.1 (es ℓ).1 (hls ℓ) (U ℓ.1) = U' (es ℓ).1 := by
     intro ℓ
     have hc := hca ⟨ℓ.1, Finset.mem_insert_of_mem ℓ.2⟩
-    simpa only [hlink ℓ] using hc
+    exact column_eq_transport X ℓ.1 (ea ⟨ℓ.1, Finset.mem_insert_of_mem ℓ.2⟩).1
+      (es ℓ).1 (hlink ℓ) (hla ⟨ℓ.1, Finset.mem_insert_of_mem ℓ.2⟩) (hls ℓ) (U ℓ.1) U' hc
   exact (optFail_bin_equiv X e b U U' i i' S S' hi eg hg es hs hls hcs t t' ea ha hla hca).symm
 
 theorem optRate_bin_equiv (v : Fin N) (e : Equiv.Perm (BinVector5 n))
@@ -564,7 +594,11 @@ theorem lowComparison_rate (v : Fin N) (x x' : OAI.HypercubeRamsey.CubeVertex n)
   have hj : j = j' := congrArg Prod.fst hshape
   have hkey : keyCode X (localNaming X.g x) (some j) ℓ (gateKey_bins_subset X x ℓ hℓ) =
       keyCode X (localNaming X.g x') (some j) ℓ' (gateKey_bins_subset X x' ℓ' hℓ') := by
-    simpa only [lowComparisonCode, ← hj] using congrArg Prod.snd h
+    have hh : keyCode X (localNaming X.g x) (some j) ℓ (gateKey_bins_subset X x ℓ hℓ) =
+        keyCode X (localNaming X.g x') (some j') ℓ' (gateKey_bins_subset X x' ℓ' hℓ') :=
+      congrArg Prod.snd h
+    rw [← hj] at hh
+    exact hh
   have hm := (keyCode_match X _ _ r (some j) ℓ ℓ' _ _ hkey
     (low_gate_compatible X x hx ℓ hℓ)
     (by simpa only [hj] using low_gate_compatible X x' hx' ℓ' hℓ')).1

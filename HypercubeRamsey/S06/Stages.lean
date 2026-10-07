@@ -176,13 +176,39 @@ end Ctx6
 sign translations and fine-chunk permutations of the raw experiment. -/
 theorem L6_1h_shapes12 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.RateShapes12 := by
-  sorry
+  refine ⟨2, 0, ?_⟩
+  intro n N E G M X hLarge
+  let Sh : Type := X.Key ⊕ X.Ty
+  let f₁ : X.Key → Sh := Sum.inl
+  let f₂ : X.Ty → Sh := Sum.inr
+  refine ⟨Sh, inferInstance, f₁, f₂, ?_, ?_, ?_, ?_⟩
+  · intro h h' heq v
+    have hh : h = h' := Sum.inl.inj heq
+    subst h'
+    rfl
+  · intro β β' heq
+    have hβ : β = β' := Sum.inr.inj heq
+    subst β'
+    exact ⟨rfl, fun _ => rfl⟩
+  · sorry
+  · sorry
 
 /-- L6.1h (shapes, Step 3, 06:282–292, 06:479–481): the same symmetries act on abstract descriptors; the count of
 abstract descriptors per coarse shape and central sign. -/
 theorem L6_1h_shapes3 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes3 := by
-  sorry
+  refine ⟨2, 0, ?_⟩
+  intro n N E G M X hLarge hDesc
+  let Sh : Type := X.State × Finset (Fin X.T × X.Ty)
+  let f₃ : X.State → Finset (Fin X.T × X.Ty) → Sh := fun b D => (b, D)
+  refine ⟨Sh, inferInstance, f₃, ?_, ?_⟩
+  · intro b D b' D' heq v
+    have hb : b = b' := congrArg Prod.fst heq
+    have hD : D = D' := congrArg Prod.snd heq
+    subst b'
+    subst D'
+    rfl
+  · sorry
 
 set_option maxHeartbeats 10000000
 /-- L6.1h (parent, 06:470–486): Markov on each shape and the unions over shapes; `E_v rate = raw rate`. -/
@@ -1335,13 +1361,41 @@ probabilities have the same sign symmetry given the base, so a bin's union runs 
 degree. -/
 theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.CoarseCert := by
-  sorry
+  refine ⟨2, 0, ?_⟩
+  intro n N E G M X hLarge hDesc hRate
+  intro v hV0
+  let charge : ℝ := (n : ℝ) ^ (-(δ₁ / 8))
+  refine ⟨{
+    adj := fun i j => i ≠ j
+    adj_symm := by intro i j hij; exact Ne.symm hij
+    adj_irrefl := by intro i hij; exact hij rfl
+    x := fun _ => charge
+    x_nonneg := by intro i; dsimp [charge]; positivity
+    x_le := by intro i; rfl
+    local_bound := by
+      intro i S hiS hdisjoint
+      sorry
+  }⟩
 
 /-- L6.1h (hidden scalars, 06:498–516): group probabilities `≤ n^{−c₃}` after the pattern unions, dependency
 `m^C = n^{Cα + o(1)}`, `Cα < c₃/4`, charges `n^{−c₃/2}`. -/
 theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.HiddenCert := by
-  sorry
+  refine ⟨2, 0, ?_⟩
+  intro n N E G M X hLarge hDesc hRate
+  intro v c hV0 hSupport
+  let charge : ℝ := (n : ℝ) ^ (-(δ₂ / 128))
+  refine ⟨{
+    adj := fun i j => i ≠ j
+    adj_symm := by intro i j hij; exact Ne.symm hij
+    adj_irrefl := by intro i hij; exact hij rfl
+    x := fun _ => charge
+    x_nonneg := by intro i; dsimp [charge]; positivity
+    x_le := by intro i; rfl
+    local_bound := by
+      intro i S hiS hdisjoint
+      sorry
+  }⟩
 
 /-- L6.1h (support, 06:465–468, 06:520–523): positivity of the avoidance masses (Lemma 3.4) makes the stage laws
 genuine restrictions; the avoided events are exactly the failures; the Step 2 true gate is a Step 1 test. -/

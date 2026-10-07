@@ -1385,16 +1385,107 @@ theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   intro n N E G M X hLarge hDesc hRate
   intro v c hV0 hSupport
   let charge : ℝ := (n : ℝ) ^ (-(δ₂ / 128))
+  let scope : X.Bin × CubeVertex X.m → Finset X.HKey := bad3HiddenScope X
+  let adj : X.Bin × CubeVertex X.m → X.Bin × CubeVertex X.m → Prop :=
+    fun i j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)
+  have hdep : ∀ gr, FinProb.DependsOn
+      (fun Z : X.Hid => Z ∈ X.bad3Set (v, c) gr) (scope gr) := by
+    intro gr Z Z' hZ
+    apply propext
+    have hbad : X.Bad3 (v, c) gr Z ↔ X.Bad3 (v, c) gr Z' := by
+      unfold Ctx6.Bad3
+      constructor
+      · intro hbad
+        rcases hbad with ⟨x, hxEven, hxBin, hxSign, hfail⟩ |
+          ⟨b, hb, hbBin, hbSign, D, hD, hrate⟩
+        · left
+          refine ⟨x, hxEven, hxBin, hxSign, ?_⟩
+          have hobs : ∀ ℓ ∈ (X.evenType x).obs, Z ℓ = Z' ℓ := by
+            intro ℓ hℓ
+            have hscope : ℓ ∈ scope gr := by
+              change ℓ ∈ bad3HiddenScope X gr
+              apply Finset.mem_filter.mpr
+              exact ⟨Finset.mem_univ _, Or.inl ⟨x, hxEven, hxBin, hxSign, hℓ⟩⟩
+            exact hZ ℓ hscope
+          exact (step2Fail_iff_of_agree X (v, c) (X.evenType x) Z Z' hobs).mp hfail
+        · right
+          refine ⟨b, hb, hbBin, hbSign, D, hD, ?_⟩
+          have hscopeD : rate3HiddenScope X b D ⊆ scope gr := by
+            intro ℓ hℓ
+            change ℓ ∈ bad3HiddenScope X gr
+            apply Finset.mem_filter.mpr
+            exact ⟨Finset.mem_univ _, Or.inr ⟨b, hb, hbBin, hbSign, D, hD, hℓ⟩⟩
+          have hrateZ : ∀ ℓ ∈ rate3HiddenScope X b D, Z ℓ = Z' ℓ := by
+            intro ℓ hℓ
+            exact hZ ℓ (hscopeD hℓ)
+          have hrateEq : X.rate3 ((v, c), Z) b D = X.rate3 ((v, c), Z') b D := by
+            simpa [Ctx6.rate3] using
+              s3FailPr_eq_of_agree X (v, c) b D Z Z' hrateZ
+          simpa [hrateEq] using hrate
+      · intro hbad
+        rcases hbad with ⟨x, hxEven, hxBin, hxSign, hfail⟩ |
+          ⟨b, hb, hbBin, hbSign, D, hD, hrate⟩
+        · left
+          refine ⟨x, hxEven, hxBin, hxSign, ?_⟩
+          have hobs : ∀ ℓ ∈ (X.evenType x).obs, Z ℓ = Z' ℓ := by
+            intro ℓ hℓ
+            have hscope : ℓ ∈ scope gr := by
+              change ℓ ∈ bad3HiddenScope X gr
+              apply Finset.mem_filter.mpr
+              exact ⟨Finset.mem_univ _, Or.inl ⟨x, hxEven, hxBin, hxSign, hℓ⟩⟩
+            exact hZ ℓ hscope
+          exact (step2Fail_iff_of_agree X (v, c) (X.evenType x) Z Z' hobs).mpr hfail
+        · right
+          refine ⟨b, hb, hbBin, hbSign, D, hD, ?_⟩
+          have hscopeD : rate3HiddenScope X b D ⊆ scope gr := by
+            intro ℓ hℓ
+            change ℓ ∈ bad3HiddenScope X gr
+            apply Finset.mem_filter.mpr
+            exact ⟨Finset.mem_univ _, Or.inr ⟨b, hb, hbBin, hbSign, D, hD, hℓ⟩⟩
+          have hrateZ : ∀ ℓ ∈ rate3HiddenScope X b D, Z ℓ = Z' ℓ := by
+            intro ℓ hℓ
+            exact hZ ℓ (hscopeD hℓ)
+          have hrateEq : X.rate3 ((v, c), Z) b D = X.rate3 ((v, c), Z') b D := by
+            simpa [Ctx6.rate3] using
+              s3FailPr_eq_of_agree X (v, c) b D Z Z' hrateZ
+          simpa [hrateEq] using hrate
+    simpa [Ctx6.bad3Set] using hbad
   refine ⟨{
-    adj := fun i j => i ≠ j
-    adj_symm := by intro i j hij; exact Ne.symm hij
-    adj_irrefl := by intro i hij; exact hij rfl
+    adj := adj
+    adj_symm := by
+      intro i j hij
+      exact ⟨Ne.symm hij.1, fun h => hij.2 (Disjoint.symm h)⟩
+    adj_irrefl := by intro i hij; exact hij.1 rfl
     x := fun _ => charge
     x_nonneg := by intro i; dsimp [charge]; positivity
     x_le := by intro i; rfl
     local_bound := by
       intro i S hiS hdisjoint
-      sorry
+      have hremote : ∀ j ∈ S, Disjoint (scope i) (scope j) := by
+        intro j hj
+        have hne : i ≠ j := by
+          intro hij
+          exact hiS (hij ▸ hj)
+        by_contra hnot
+        exact hdisjoint j hj ⟨hne, hnot⟩
+      have hfactor : LocalLemma.mass (X.hidLaw (v, c)).w
+          (X.bad3Set (v, c) i ∩ LocalLemma.avoid (X.bad3Set (v, c)) S) =
+        (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) *
+          LocalLemma.mass (X.hidLaw (v, c)).w
+            (LocalLemma.avoid (X.bad3Set (v, c)) S) := by
+        simpa [Ctx6.hidLaw, scope] using
+          pi_local_mass_factor (fun ℓ : X.HKey => X.hidPost (v, c) ℓ.1)
+            (X.Bin × CubeVertex X.m) scope (X.bad3Set (v, c)) i S hdep hremote
+      letI : DecidablePred (adj i) := fun j => Classical.propDecidable (adj i j)
+      have hprob : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) ≤
+          charge * ∏ j ∈ Finset.univ.filter (adj i), (1 - charge) := by
+        sorry
+      have hmassNonneg : 0 ≤ LocalLemma.mass (X.hidLaw (v, c)).w
+          (LocalLemma.avoid (X.bad3Set (v, c)) S) := by
+        rw [finprob_pr_finset_mass]
+        exact pr_nonneg (X.hidLaw (v, c)) _
+      rw [hfactor]
+      exact mul_le_mul_of_nonneg_right hprob hmassNonneg
   }⟩
 
 /-- L6.1h (support, 06:465–468, 06:520–523): positivity of the avoidance masses (Lemma 3.4) makes the stage laws

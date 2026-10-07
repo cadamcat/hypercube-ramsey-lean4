@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_pal
 import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
+import HypercubeRamsey.S18.PaletteRows
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
 
@@ -60,7 +61,148 @@ theorem D18_L_palettes (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
         ∀ i, PaletteRetentionSpec
           (Lane_sol_s18_dl.physical_list_context hPT hLow (Classical.choice hL16.physical))
           i (P.hle i) (P.code i) (P.colours i) := by
-  sorry
+  set_option maxHeartbeats 400000 in
+    have hKB : 0 ≤ κ.KB := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.KB_big
+    have hA : 0 ≤ κ.A0 := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.A0_big
+    filter_upwards [Lane_sol_d18l_pal.eventual_palette_codes hκ T,
+      Lane_sol_d18l_pal.polynomial_host_cutoff T (2 * κ.KB + 12) (by positivity),
+      Lane_sol_d18l_pal.late_numeric_cutoff T κ.KB κ.A0 hKB hA] with k hcodes hhost hnum
+    intro PT hPT G F hL16 hLow hMass hLarge
+    by_cases hCluster : PT.tiling.mode.isCluster
+    · have hm : PT.tiling.mode = .lowCluster := by
+        cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Mode.isCluster]
+      let physical := Classical.choice hL16.physical
+      obtain ⟨hle, hcodes⟩ := hcodes PT hPT G F hL16 hLow
+      let code (i : Fin PT.tiling.m) := Classical.choose (hcodes i)
+      have hCode : ∀ i, PaletteCodeSpec i (hle i) (code i) := fun i => Classical.choose_spec (hcodes i)
+      have hn : (100 : ℝ) ≤ T.S.n k := by exact_mod_cast hhost.1
+      have hlog : 1 ≤ Real.log (T.S.n k : ℝ) := hhost.2.1
+      have hL0 : 0 ≤ Real.log (T.S.n k : ℝ) := by linarith
+      have hRest : 0 ≤ (2 * κ.A0 / Real.log 2 + 1) * Real.log (T.S.n k : ℝ) := by positivity
+      have hKL : κ.KB * Real.log (T.S.n k : ℝ) ≤ T.S.n k := by
+        nlinarith [hnum.2.1, mul_nonneg hKB hL0]
+      have hKn : κ.KB ≤ T.S.n k := by
+        have hh := mul_le_mul_of_nonneg_left hlog hKB
+        nlinarith
+      have hgn : ∀ i, PT.tiling.gain i ≤ T.S.n k := fun i => (hL16.gain_upper i).trans hKL
+      have hsqrt : 1 ≤ Real.sqrt (Real.log (T.S.n k : ℝ)) := by
+        have hh := Real.sqrt_le_sqrt hlog
+        simpa only [Real.sqrt_one] using hh
+      have hb : 3 * bstar T k ≤ 1 / 4 := by
+        have hh := mul_le_mul_of_nonneg_left hsqrt (show 0 ≤ 12 * bstar T k by unfold bstar; positivity)
+        nlinarith [hnum.2.2]
+      have hcross : ∀ i, 12 * bstar T k * (PT.tiling.P i).ℓ ≤ 1 := by
+        intro i
+        exact (mul_le_mul_of_nonneg_left (physical.quantitative.prefix_bound i)
+          (by unfold bstar; positivity)).trans hnum.2.2
+      have hpairs : ∀ i, ∃ colours : S17PaletteAssignment (code i),
+          PaletteRetentionSpec (Lane_sol_s18_dl.physical_list_context hPT hLow physical) i (hle i) (code i) colours ∧
+          ∀ c, (Finset.univ.filter fun x : Fin (T.S.N k) => x ∈ (PT.tiling.P i).X ∧ colours x = c).Nonempty := by
+        intro i
+        exact Lane_sol_d18l_pal.cluster_palette_colouring_at hκ hPT hL16 hLow hm hn hlog
+          hhost.2.2.1 hKn hhost.2.2.2.1 hhost.2.2.2.2 hb hcross hgn i (hle i) (code i) (hCode i)
+      let colours i := Classical.choose (hpairs i)
+      have hColours := fun i => Classical.choose_spec (hpairs i)
+      let chi (i : Fin PT.tiling.m) := s17Chi (code i)
+      let e (i : Fin PT.tiling.m) : (Fin (code i).dimension → ZMod 2) ≃ Fin (chi i) :=
+        (Fintype.equivFin _).trans (finCongr (by simp [chi, s17Chi, ListGateContext.PaletteCode.chi, ZMod.card]))
+      let palettes (i : Fin PT.tiling.m) (a : Fin (chi i)) := Finset.univ.filter fun x : Fin (T.S.N k) =>
+        x ∈ (PT.tiling.P i).X ∧ colours i x = (e i).symm a
+      have hSubset : ∀ i a, palettes i a ⊆ (PT.tiling.P i).X := by
+        intro i a x hx
+        exact (Finset.mem_filter.mp hx).2.1
+      have hDisjoint : ∀ i a a', a ≠ a' → Disjoint (palettes i a) (palettes i a') := by
+        intro i a a' hne
+        apply Finset.disjoint_left.mpr
+        intro x hx hx'
+        have hh := ((Finset.mem_filter.mp hx).2.2).symm.trans (Finset.mem_filter.mp hx').2.2
+        exact hne ((e i).symm.injective hh)
+      let P : PaletteData G := {
+        hle := hle
+        code := code
+        colours := colours
+        chi := chi
+        colourEquiv := e
+        chi_eq := fun _ => rfl
+        chi_pos := by intro i; dsimp [chi, s17Chi, ListGateContext.PaletteCode.chi]; positivity
+        colourOf := fun v => e (G.patchOf v) ((code (G.patchOf v)).roleColour v)
+        colour_eq := fun _ => rfl
+        palettes := palettes
+        palettes_eq := fun _ _ => rfl
+        nonempty := fun i a => (hColours i).2 ((e i).symm a)
+        subset := hSubset
+        global_disjoint := by
+          rintro ⟨i, a⟩ ⟨j, b⟩ hne
+          by_cases hij : i = j
+          · subst j
+            apply hDisjoint
+            intro hab
+            cases hab
+            exact hne rfl
+          · exact Disjoint.mono (hSubset i a) (hSubset j b) (hPT.tiling_valid.patch_X_disjoint i j hij)
+        disjoint := hDisjoint
+        size := fun i a => (hColours i).1.1 ((e i).symm a) }
+      exact ⟨P, hCode, fun i => (hColours i).1⟩
+    · have hh : ∀ i, (PT.tiling.P i).h = 0 := by
+        intro i
+        cases hm : PT.tiling.mode with
+        | bounded => exact ((hPT.tiling_valid.bounded_data hm).2 i).2.1
+        | lowDirect => exact (hPT.tiling_valid.direct_data (Or.inl hm) i).2.2.2.2.1
+        | lowCluster => simp [hm, Mode.isCluster] at hCluster
+        | highDirect => simp [hm, Mode.isLow] at hLow
+        | highSmall => simp [hm, Mode.isLow] at hLow
+        | highLarge => simp [hm, Mode.isLow] at hLow
+      let hle : ∀ i, (PT.tiling.P i).h ≤ T.S.n k := fun i => by rw [hh i]; omega
+      let code i := Lane_sol_d18l_pal.empty_code i (hle i)
+      let colours : ∀ i, S17PaletteAssignment (code i) := fun i _ => 0
+      let e (i : Fin PT.tiling.m) : (Fin (code i).dimension → ZMod 2) ≃ Fin 1 := by
+        change (Fin 0 → ZMod 2) ≃ Fin 1
+        exact Equiv.ofUnique _ _
+      let P : PaletteData G := {
+        hle := hle
+        code := code
+        colours := colours
+        chi := fun _ => 1
+        colourEquiv := e
+        chi_eq := by intro i; simp [code, Lane_sol_d18l_pal.empty_code, s17Chi, ListGateContext.PaletteCode.chi]
+        chi_pos := fun _ => by norm_num
+        colourOf := fun _ => 0
+        colour_eq := fun v => @Subsingleton.elim (Fin 1) inferInstance _ _
+        palettes := fun i _ => (PT.tiling.P i).X
+        palettes_eq := by
+          intro i a
+          ext x
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+          constructor
+          · intro hx
+            refine ⟨hx, ?_⟩
+            exact @Subsingleton.elim (Fin 0 → ZMod 2) inferInstance _ _
+          · intro hx; exact hx.1
+        nonempty := fun i _ => (hPT.tiling_valid.patch_nonempty i).1
+        subset := fun _ _ => le_rfl
+        global_disjoint := by
+          rintro ⟨i, a⟩ ⟨j, b⟩ hne
+          have hij : i ≠ j := by
+            intro hij
+            subst j
+            apply hne
+            have hab : a = b := @Subsingleton.elim (Fin 1) inferInstance _ _
+            cases hab
+            rfl
+          exact hPT.tiling_valid.patch_X_disjoint i j hij
+        disjoint := by
+          intro i a a' hne
+          exact (hne (@Subsingleton.elim (Fin 1) inferInstance _ _)).elim
+        size := by
+          intro i a
+          rw [(PT.tiling.P i).cardX]
+          norm_num only [div_one] <;> nlinarith [(show (0 : ℝ) ≤ (PT.tiling.P i).M by positivity)] }
+      refine ⟨P, ?_, ?_⟩
+      · intro i
+        apply Lane_sol_d18l_pal.empty_code_spec i (hle i) (hh i)
+        exact Lane_sol_d18l_pal.gain_nonneg hκ i
+      · intro i
+        exact Lane_sol_d18l_pal.physical_empty_retention hPT hLow (Classical.choice hL16.physical) i (hle i)
 
 /-- Positive reserved pool sizes after one common cutoff. Natural floors
 are retained: this is positivity of N/3/r, not a real-division identity.
@@ -69,7 +211,47 @@ theorem D18_L_late_pool_positive (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ (PT : ProfiledTiling κ T k) (G : LowGeom PT)
       (F : FreshCell G), L16QuantitativeValidity G F →
       ∀ B : LateProcessBase F, ∀ j, 0 < (B.latePool j).card := by
-  sorry
+  let R : ℝ := max 1 (2 * κ.A0 / Real.log 2)
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hscale : ∀ᶠ k in atTop,
+      3 * R ≤ (T.S.N k : ℝ) / (2 : ℝ) ^ T.S.n k :=
+    T.S.ratio_tendsto.eventually_ge_atTop (3 * R)
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hscale, hn] with k hscale hn
+  intro PT G F hL16 B j
+  have hnR : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast hn
+  have hnpos : 0 < (T.S.n k : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+  have hlogn : Real.log (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) :=
+    Real.log_le_self hnpos.le
+  have hRnonneg : 0 ≤ R := by dsimp [R]; positivity
+  have hRlog : 2 * κ.A0 ≤ R * Real.log 2 := by
+    dsimp [R]
+    exact (div_le_iff₀ hlog2).mp (le_max_right _ _)
+  have hr : (G.r : ℝ) ≤ R * Real.log (T.S.n k : ℝ) := by
+    apply (mul_le_mul_iff_of_pos_right hlog2).mp
+    calc
+      (G.r : ℝ) * Real.log 2 ≤ 2 * κ.A0 * Real.log (T.S.n k : ℝ) :=
+        hL16.r_upper
+      _ ≤ R * Real.log 2 * Real.log (T.S.n k : ℝ) :=
+        mul_le_mul_of_nonneg_right hRlog (Real.log_nonneg hnR)
+      _ = (R * Real.log (T.S.n k : ℝ)) * Real.log 2 := by ring
+  have hpow : (T.S.n k : ℝ) ≤ (2 : ℝ) ^ T.S.n k := by
+    exact_mod_cast (S13.nat_le_two_pow (T.S.n k))
+  have hNreal : 3 * (G.r : ℝ) ≤ (T.S.N k : ℝ) := by
+    have hscale' : 3 * R * (2 : ℝ) ^ T.S.n k ≤ (T.S.N k : ℝ) :=
+      (le_div_iff₀ (by positivity : (0 : ℝ) < (2 : ℝ) ^ T.S.n k)).mp hscale
+    have hnRle : R * Real.log (T.S.n k : ℝ) ≤ R * (T.S.n k : ℝ) :=
+      mul_le_mul_of_nonneg_left hlogn hRnonneg
+    have hRn : R * (T.S.n k : ℝ) ≤ R * (2 : ℝ) ^ T.S.n k :=
+      mul_le_mul_of_nonneg_left hpow hRnonneg
+    nlinarith
+  have hNnat : 3 * G.r ≤ T.S.N k := by exact_mod_cast hNreal
+  have hdiv : G.r ≤ T.S.N k / 3 := by omega
+  have hpos : 0 < (T.S.N k / 3) / G.r :=
+    Nat.div_pos hdiv hL16.r_pos
+  rw [B.latePool_card j]
+  exact hpos
 
 /-- Total seed kernels for the raw encoding; P18.4a later replaces them by
 its selected reference kernels. The seed is only used to make all direct
@@ -186,6 +368,31 @@ noncomputable def rawData (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT
     early_injective := Lane_sol_s18_dl.initial_odd_labels_injective hPT physical E
     early_support := Lane_sol_s18_dl.initial_odd_label_support physical E }
 
+/-- D18.L palette-row bridge (TeX 17:278–279,303–333; 18:1079–1083).
+Apply S17's `lowModePalettePairRow` to the physical list context and the
+stored code/retention witnesses, then transport its palette and chi through
+`colourEquiv`, reindex external roles by flip coordinates, and identify the
+colour-independent nonconflict cutoff. The transport must certify S17's
+`ValidInitialPrior` for the supported typical own-cell readouts; no external
+readout is needed for this sum.
+The remaining transport is estimated at 300–600 proof lines once the S17
+producer's quantitative/prior-shape interface is aligned with S18's M/2
+corner input. The legacy (1-a)M certificate is not inferred here. -/
+theorem D18_L_palette_row (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
+    (T : Stage) (hSources : Sources κ T) :
+    ∃ Krow : ℝ, 0 < Krow ∧ ∀ᶠ k in atTop,
+      ∀ (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (X : Inputs hPT),
+        ProfileCornerMass PT → LargeIndex κ T k → PaletteRowInput (rawData hκ X) Krow := by
+  have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
+  -- A fixed upstream scale, before the index and all construction choices.
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10)
+  have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  obtain ⟨Krow, hKrow, hRows⟩ := lowModePalettePairRow κ hκ T hSource K17 hK17
+  refine ⟨Krow, hKrow, ?_⟩
+  filter_upwards [hRows] with k hRows
+  intro PT hPT X hMass hLarge
+  sorry
+
 /-- Full internal validity, adding cap and single-corner shape to the
 already proved normalization/internal-hit facts. TeX 18:43–49; 16:196–201,457–459.
 Only supported fresh states on typical pools are quantified. -/
@@ -241,11 +448,7 @@ theorem D18_L_prior_mean (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
     X.l16.pools_nonempty hMass v y he
   apply hMean.trans
   apply div_le_div_of_nonneg_right _ (Nat.cast_nonneg _)
-  -- The exported L16.7 comparison pays 100*Kcell*Kp. LateThresholds
-  -- controls 100*rowMeanConstant, but has no bound on Kcell*Kp.
-  -- mean_coefficient_not_controlled verifies that the numerical contracts
-  -- do not imply this sufficient coefficient bound.
-  sorry
+  exact hThresholds.2.1
 
 /-- One-cell separated bounded-test estimate, with its actual iid marginal
 pool law. TeX 16:469–482; 18:1134–1210. This isolates the calibration
@@ -370,7 +573,84 @@ cell-pool law. TeX 16:260–296; 18:277–285. -/
 theorem D18_L_typical_positive (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT) :
     let D := rawData hκ X
     ∀ C, 0 < ∑ P ∈ D.typicalPools C, (D.cellPoolLaw C).w P := by
-  sorry
+  change ∀ C : X.geom.Cell, 0 < ∑ P ∈ (rawData hκ X).typicalPools C,
+    ((rawData hκ X).cellPoolLaw C).w P
+  intro C
+  let physical := Classical.choice X.l16.physical
+  letI : ∀ C, Fintype (X.fresh.State C) := X.fresh.stFin
+  letI : ∀ s, Fintype (physical.raw.Value C s) := physical.raw.valueFin C
+  letI : Fintype (physical.raw.Hist C) := by
+    change Fintype ((s : physical.raw.Slice C) → physical.raw.Value C s)
+    infer_instance
+  letI : Fintype (physical.diagnostics.Check C) := physical.diagnostics.checkFin C
+  let diag := physical.diagnostics.diagnostic C
+  let P₀ := X.l16.pools_nonempty.choose
+  let Rest : Type := ∀ c : {c : X.geom.Cell // c ≠ C}, X.fresh.Pool c.1
+  let split : (∀ c, X.fresh.Pool c) ≃ X.fresh.Pool C × Rest :=
+    Equiv.piSplitAt C (fun c => X.fresh.Pool c)
+  let uPool : FinLaw (X.fresh.Pool C) :=
+    FinLaw.uniform Finset.univ ⟨P₀ C, Finset.mem_univ _⟩
+  let pairLaw : FinLaw (X.fresh.Pool C × Rest) :=
+    FinLaw.uniform Finset.univ ⟨(P₀ C, fun c => P₀ c.1), Finset.mem_univ _⟩
+  have hIidMap (A : X.fresh.Pool C × Rest → Prop) :
+      (iidPoolLaw X.geom X.l16.pools_nonempty).pr (fun P => A (split P)) = pairLaw.pr A := by
+    have hsource : (Finset.univ : Finset (∀ c, X.fresh.Pool c)).Nonempty :=
+      ⟨P₀, Finset.mem_univ _⟩
+    have htarget : (Finset.univ : Finset (X.fresh.Pool C × Rest)).Nonempty :=
+      ⟨(P₀ C, fun c => P₀ c.1), Finset.mem_univ _⟩
+    have hcard : (Finset.univ : Finset (∀ c, X.fresh.Pool c)).card =
+        (Finset.univ : Finset (X.fresh.Pool C × Rest)).card := by
+      simpa using Fintype.card_congr split
+    change (FinLaw.uniform Finset.univ hsource).pr (fun P => A (split P)) =
+      (FinLaw.uniform Finset.univ htarget).pr A
+    exact Lane_q_s16_comp1.uniform_pr_equiv Finset.univ hsource Finset.univ htarget
+      split (by intro P; simp) hcard A
+  have hMarg (A : X.fresh.Pool C → Prop) :
+      (iidPoolLaw X.geom X.l16.pools_nonempty).pr (fun P => A (P C)) = uPool.pr A := by
+    have hmap := hIidMap (fun z => A z.1)
+    have hprod := Lane_q_s16_comp1.uniform_prod_pr_fst
+      (⟨P₀ C⟩ : Nonempty (X.fresh.Pool C))
+      (⟨fun c : {c : X.geom.Cell // c ≠ C} => P₀ c.1⟩ : Nonempty Rest) A
+    calc
+      _ = pairLaw.pr (fun z => A z.1) := by
+        have hproj (P : ∀ c, X.fresh.Pool c) : (split P).1 = P C := rfl
+        have hrewrite :
+            (iidPoolLaw X.geom X.l16.pools_nonempty).pr (fun P => A (P C)) =
+              (iidPoolLaw X.geom X.l16.pools_nonempty).pr
+                (fun P => A ((split P).1)) := by
+          apply Lane_q_s16_comp1.finlaw_pr_congr
+          intro P
+          rw [hproj]
+        exact hrewrite.trans hmap
+      _ = uPool.pr A := by simpa [pairLaw, uPool] using hprod
+  have hdiagConst (P : X.fresh.Pool C) :
+      diag.poolLaw.w P = ∏ t : Fin (X.geom.nslot C),
+        (1 / (Fintype.card (Bin PT.tiling (X.geom.cellPatch C)) : ℝ)) := by
+    simp [S16.CellPoolDiagnostics.poolLaw, FinLaw.pi, diag.uniform_slots]
+  have huConst (P : X.fresh.Pool C) :
+      uPool.w P = 1 / (Fintype.card (X.fresh.Pool C) : ℝ) := by
+    simp [uPool, FinLaw.uniform]
+  have hdiag : diag.poolLaw = uPool :=
+    Lane_q_s16_comp1.finlaw_eq_of_const_weights diag.poolLaw uPool
+      (∏ t : Fin (X.geom.nslot C),
+        (1 / (Fintype.card (Bin PT.tiling (X.geom.cellPatch C)) : ℝ)))
+      (1 / (Fintype.card (X.fresh.Pool C) : ℝ)) ⟨P₀ C⟩ hdiagConst huConst
+  have hLaw : (rawData hκ X).cellPoolLaw C = diag.poolLaw := by
+    change FinLaw.map (iidPoolLaw X.geom X.l16.pools_nonempty) (fun Q => Q C) = diag.poolLaw
+    apply Lane_q_s16_comp1.finlaw_ext
+    intro P
+    change (FinLaw.map (iidPoolLaw X.geom X.l16.pools_nonempty)
+      (fun Q => Q C)).w P = diag.poolLaw.w P
+    calc
+      _ = (iidPoolLaw X.geom X.l16.pools_nonempty).pr (fun Q => Q C = P) := by
+        rw [S16.Lane_q_s16_comp2.map_weight_eq_pr]
+      _ = uPool.pr (fun Q => Q = P) := hMarg (fun Q => Q = P)
+      _ = uPool.w P := by
+        simp [FinLaw.pr, Finset.sum_ite_eq', eq_comm]
+      _ = diag.poolLaw.w P := by rw [← hdiag]
+  rw [hLaw]
+  change 0 < ∑ P ∈ Finset.univ.filter (X.fresh.typical C), diag.poolLaw.w P
+  simpa [diag] using physical.typical_positive C
 
 /-- Singleton under iid pools conditioned on individual typicality.
 TeX 16:457–468; 18:277–285. Conditioning and the (1+KB n⁻³) loss
@@ -410,7 +690,32 @@ coordinates. TeX 17:12–29,364–369; 18:62–64,937–945. -/
 theorem D18_L_scope_eq (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT) :
     let D := rawData hκ X
     ∀ v, D.encoding.events.scope v = D.directCells v := by
-  sorry
+  change ∀ v, (rawData hκ X).encoding.events.scope v = (rawData hκ X).directCells v
+  intro v
+  let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low
+    (Classical.choice X.l16.physical)
+  have hext : ctx.externalEarly v =
+      ((rawData hκ X).externalEarly v).image (fun a => flipPos v a) := by
+    classical
+    ext b
+    simp only [ListGateContext.externalEarly, LateData.externalEarly,
+      Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+    constructor
+    · rintro ⟨hclass, a, ha, rfl⟩
+      exact ⟨a, ⟨ha, hclass⟩, rfl⟩
+    · rintro ⟨a, ⟨ha, hclass⟩, rfl⟩
+      exact ⟨hclass, a, ha, rfl⟩
+  change ctx.scopeCells v = (rawData hκ X).directCells v
+  simp only [ListGateContext.scopeCells, LateData.directCells]
+  change {X.geom.cellOf v} ∪ (ctx.externalEarly v).image X.geom.cellOf =
+    {X.geom.cellOf v} ∪
+      ((rawData hκ X).externalEarly v).image (fun a => X.geom.cellOf (flipPos v a))
+  rw [hext]
+  apply congrArg (fun S : Finset X.geom.Cell => {X.geom.cellOf v} ∪ S)
+  rw [Finset.image_image]
+  apply Finset.image_congr
+  intro a ha
+  rfl
 
 /-- Palette row counts, transporting equal binary colour classes through
 the actual allocated leaves and host density. TeX 17:233–272; 18:930–936.
@@ -577,7 +882,177 @@ and row weights use the same degree denominator. TeX 17:12–29;
 theorem D18_L_events_eq (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT) :
     let D := rawData hκ X
     ∀ v s, D.encoding.events.S v s ↔ IsEvenRole v ∧ D.listFailure v s := by
-  sorry
+  change ∀ v s, (rawData hκ X).encoding.events.S v s ↔
+    IsEvenRole v ∧ (rawData hκ X).listFailure v s
+  intro v s
+  let D := rawData hκ X
+  let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low
+    (Classical.choice X.l16.physical)
+  have hflip : Function.Injective (flipPos v) := by
+    intro a a' heq
+    by_contra hne
+    have h := congrFun heq a
+    simp [flipPos, hne] at h
+  have hExt : ctx.externalEarly v = (D.externalEarly v).image (flipPos v) := by
+    classical
+    ext b
+    simp only [ListGateContext.externalEarly, LateData.externalEarly,
+      Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+    constructor
+    · rintro ⟨hclass, a, ha, rfl⟩
+      exact ⟨a, ⟨ha, hclass⟩, rfl⟩
+    · rintro ⟨a, ⟨ha, hclass⟩, rfl⟩
+      exact ⟨hclass, a, ha, rfl⟩
+  have hrow : ctx.rowMass v (ctx.prior s v) (ctx.label s) =
+      ∑ x, D.initialWeight v s x := by
+    unfold ListGateContext.rowMass ListGateContext.row LateData.initialWeight
+    rw [hExt]
+    apply Finset.sum_congr rfl
+    intro x hx
+    rw [Finset.prod_image (by
+      intro a ha a' ha' heq
+      exact hflip heq)]
+    simp only [ctx, D, rawData, Lane_sol_s18_dl.physical_list_context,
+      ListGateContext.prior, LateData.sigma, ListGateContext.hitRatio,
+      ListGateContext.label, LateData.earlyLabel]
+    congr 1
+  have hWithheld (J : Finset (Fin (T.S.n k)))
+      (hJ : J ⊆ D.externalEarly v) :
+      ctx.omittedList v (J.image (flipPos v)) (ctx.label s) = D.withheldList v s J := by
+    have hDiff : (D.externalEarly v \ J).image (flipPos v) =
+        ctx.externalEarly v \ (J.image (flipPos v)) := by
+      rw [hExt]
+      ext b
+      simp only [Finset.mem_image, Finset.mem_sdiff]
+      constructor
+      · rintro ⟨a, ⟨haE, haJ⟩, rfl⟩
+        refine ⟨⟨a, haE, rfl⟩, ?_⟩
+        rintro ⟨a', haJ', hEq⟩
+        have haa : a' = a := hflip (by simpa using hEq)
+        exact haJ (haa ▸ haJ')
+      · rintro ⟨⟨a, haE, rfl⟩, hnot⟩
+        refine ⟨a, ⟨haE, ?_⟩, rfl⟩
+        intro haJ
+        exact hnot ⟨a, haJ, rfl⟩
+    apply Finset.ext
+    intro x
+    simp only [ListGateContext.omittedList, LateData.withheldList,
+      Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨hx, hh⟩
+      refine ⟨hx, ?_⟩
+      intro a ha
+      have hmem : flipPos v a ∈ ctx.externalEarly v \ J.image (flipPos v) := by
+        rw [← hDiff]
+        exact Finset.mem_image.mpr ⟨a, ha, rfl⟩
+      simpa [ctx, D, rawData, Lane_sol_s18_dl.physical_list_context,
+        ListGateContext.label, LateData.earlyLabel] using hh _ hmem
+    · rintro ⟨hx, hh⟩
+      refine ⟨hx, ?_⟩
+      intro b hb
+      rw [← hDiff] at hb
+      rcases Finset.mem_image.mp hb with ⟨a, ha, rfl⟩
+      simpa [ctx, D, rawData, Lane_sol_s18_dl.physical_list_context,
+        ListGateContext.label, LateData.earlyLabel] using hh a ha
+  let coordsOf (J : Finset (Pos T k)) :=
+    Finset.univ.filter fun a : Fin (T.S.n k) => flipPos v a ∈ J
+  have hCoordsOf_subset (J : Finset (Pos T k)) (hJ : J ⊆ ctx.externalEarly v) :
+      coordsOf J ⊆ D.externalEarly v := by
+    intro a ha
+    have hmem := (Finset.mem_filter.mp ha).2
+    have hpos : flipPos v a ∈ ctx.externalEarly v := hJ hmem
+    rw [hExt] at hpos
+    obtain ⟨a', ha', heq⟩ := Finset.mem_image.mp hpos
+    exact (hflip heq) ▸ ha'
+  have hCoordsOf_image (J : Finset (Pos T k)) (hJ : J ⊆ ctx.externalEarly v) :
+      (coordsOf J).image (flipPos v) = J := by
+    ext b
+    simp only [Finset.mem_image]
+    constructor
+    · rintro ⟨a, ha, rfl⟩
+      exact (Finset.mem_filter.mp ha).2
+    · intro hb
+      have hmem := hJ hb
+      rw [hExt] at hmem
+      obtain ⟨a, ha, heq⟩ := Finset.mem_image.mp hmem
+      refine ⟨a, ?_, heq⟩
+      simp [coordsOf, heq, hb]
+  have hCoordsOf_card (J : Finset (Pos T k)) (hJ : J ⊆ ctx.externalEarly v) :
+      (coordsOf J).card = J.card := by
+    calc
+      (coordsOf J).card = ((coordsOf J).image (flipPos v)).card := by
+        symm
+        exact Finset.card_image_of_injective _ hflip
+      _ = J.card := congrArg Finset.card (hCoordsOf_image J hJ)
+  have hlogpow4 : (Real.log (T.S.n k : ℝ)) ^ 4 =
+      Real.rpow (Real.log (T.S.n k : ℝ)) 4 := by
+    exact (Real.rpow_natCast _ _).symm
+  have hlogpow8 : (Real.log (T.S.n k : ℝ)) ^ 8 =
+      Real.rpow (Real.log (T.S.n k : ℝ)) 8 := by
+    exact (Real.rpow_natCast _ _).symm
+  have hSupport :
+      (∃ J : Finset (Pos T k), J ⊆ ctx.externalEarly v ∧
+        (J.card : ℝ) ≤ Real.rpow (Real.log (T.S.n k : ℝ)) 4 ∧
+        Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 8) <
+          (ctx.omittedList v J (ctx.label s)).card) ↔
+      (∃ J : Finset (Fin (T.S.n k)), J ⊆ D.externalEarly v ∧
+        (J.card : ℝ) ≤ Real.rpow (Real.log (T.S.n k : ℝ)) 4 ∧
+        Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 8) <
+          (D.withheldList v s J).card) := by
+    constructor
+    · rintro ⟨J, hJ, hsize, hbig⟩
+      let J' := coordsOf J
+      have hJ' : J' ⊆ D.externalEarly v := hCoordsOf_subset J hJ
+      have hImg := hCoordsOf_image J hJ
+      have hcard := hCoordsOf_card J hJ
+      have hlist := hWithheld J' hJ'
+      have hlist' : ctx.omittedList v J (ctx.label s) = D.withheldList v s J' := by
+        have hImg' : J'.image (flipPos v) = J := by simpa [J'] using hImg
+        rw [← hImg']
+        exact hlist
+      refine ⟨J', hJ', ?_, ?_⟩
+      · have hcardR : (J'.card : ℝ) = (J.card : ℝ) := by exact_mod_cast hcard
+        have hsize' : (J'.card : ℝ) ≤ Real.rpow (Real.log (T.S.n k : ℝ)) 4 := by
+          rw [hcardR]
+          exact hsize
+        exact hsize'
+      · have hbig' : Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 8) <
+            (D.withheldList v s J').card := by
+          rw [← congrArg Finset.card hlist']
+          exact hbig
+        exact hbig'
+    · rintro ⟨J, hJ, hsize, hbig⟩
+      let J' := J.image (flipPos v)
+      have hJ' : J' ⊆ ctx.externalEarly v := by
+        rw [hExt]
+        exact Finset.image_subset_image hJ
+      have hcard : J'.card = J.card := Finset.card_image_of_injective _ hflip
+      have hlist := hWithheld J hJ
+      refine ⟨J', hJ', ?_, ?_⟩
+      · have hcardR : (J'.card : ℝ) = (J.card : ℝ) := by exact_mod_cast hcard
+        have hsize' : (J'.card : ℝ) ≤ Real.rpow (Real.log (T.S.n k : ℝ)) 4 := by
+          rw [hcardR]
+          exact hsize
+        exact hsize'
+      · have hbig' : Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 8) <
+            (ctx.omittedList v J' (ctx.label s)).card := by
+          rw [congrArg Finset.card hlist]
+          exact hbig
+        exact hbig'
+  have hGate : ctx.gateBad v (ctx.prior s v) (ctx.label s) ↔ D.listFailure v s := by
+    change (ctx.rowMass v (ctx.prior s v) (ctx.label s) < 1 / 2 ∨
+      (∃ J : Finset (Pos T k), J ⊆ ctx.externalEarly v ∧
+        (J.card : ℝ) ≤ Real.rpow (Real.log (T.S.n k : ℝ)) 4 ∧
+        Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 8) <
+          (ctx.omittedList v J (ctx.label s)).card)) ↔
+      ((∑ x, D.initialWeight v s x) < 1 / 2 ∨
+      (∃ J : Finset (Fin (T.S.n k)), J ⊆ D.externalEarly v ∧
+        (J.card : ℝ) ≤ Real.log (T.S.n k : ℝ) ^ 4 ∧
+        Real.exp (Real.log (T.S.n k : ℝ) ^ 8) < (D.withheldList v s J).card))
+    rw [hrow, hlogpow4, hlogpow8, hSupport]
+  change (ctx.asListEvent).S v s ↔ IsEvenRole v ∧ D.listFailure v s
+  change (IsEvenRole v ∧ ctx.gateBad v (ctx.prior s v) (ctx.label s)) ↔ _
+  rw [hGate]
 
 /-- Starting atom cap after palette normalization. TeX 17:298–300;
 18:126–134. Quantifies even, initially valid rows only, including the
@@ -591,7 +1066,26 @@ theorem D18_L_initial_cap (hκ : κ.Admissible) (hThresholds : LateThresholds κ
         (D.initialPrior v s).w x ≤ 4 * κ.KB / densityScale T k *
           Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v)) *
             Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)) := by
-  sorry
+  filter_upwards [Lane_sol_d18l_pal.raw_initial_atom_cap hκ hThresholds T] with k hcap
+  intro PT hPT X hMass hLarge
+  let D := rawData hκ X
+  dsimp only
+  intro v s heven hvalid x
+  have hchi : (D.chi (D.geom.patchOf v) : ℝ) ≤ Real.exp (PT.tiling.gain (D.geom.patchOf v)) := by
+    change (X.palette.chi (X.geom.patchOf v) : ℝ) ≤ Real.exp (PT.tiling.gain (X.geom.patchOf v))
+    rw [X.palette.chi_eq]
+    exact (X.code_spec _).2.2.2
+  have hKB : 0 ≤ κ.KB := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.KB_big
+  have hCpos : 0 < densityScale T k := by
+    unfold densityScale
+    have : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+    positivity
+  have hraw := hcap D (Classical.choice X.l16.physical).quantitative.prefix_bound X.palette.hle v s hvalid
+  have hp := Lane_sol_d18l_pal.initial_prior_cap_of_atom D v s hvalid hchi
+    (κ.KB / densityScale T k)
+    (Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)))
+    (div_nonneg hKB hCpos.le) (Real.rpow_nonneg (by norm_num) _) hraw x
+  simpa only [mul_div_assoc] using hp
 
 /-- Supported resampling inputs with typical pools and all list successes
 have internal validity and retained starting palette mass. TeX 17:273–300;
@@ -605,7 +1099,164 @@ theorem D18_L_initial_success (hκ : κ.Admissible) (hThresholds : LateThreshold
         (∀ C, D.fresh.typical C (x.1 C)) →
         (∀ v, ¬ D.encoding.events.S v (D.encoding.initialState x)) →
         ∀ v, IsEvenRole v → D.initialValid v (D.encoding.initialState x) := by
-  sorry
+  filter_upwards [D18_L_fresh_internal hκ hThresholds T hSources] with k hFreshInternal
+  intro PT hPT X hMass hLarge
+  change ∀ x : (rawData hκ X).encoding.InitInput,
+    0 < (rawData hκ X).encoding.permLaw.w x →
+    (∀ C, (rawData hκ X).fresh.typical C (x.1 C)) →
+    (∀ v, ¬ (rawData hκ X).encoding.events.S v
+      ((rawData hκ X).encoding.initialState x)) →
+    ∀ v, IsEvenRole v → (rawData hκ X).initialValid v
+      ((rawData hκ X).encoding.initialState x)
+  let D := rawData hκ X
+  let E := D.encoding
+  let physical := Classical.choice X.l16.physical
+  let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+  intro x hx hTypical hNoEvents v heven
+  let s := E.initialState x
+  letI : ∀ C, Fintype (X.fresh.State C) := X.fresh.stFin
+  letI : Fintype X.geom.Cell := X.geom.cellFin
+  letI : DecidableEq X.geom.Cell := X.geom.cellDec
+  have hnotFail : ¬ D.listFailure v s := by
+    intro hfail
+    apply hNoEvents v
+    exact (D18_L_events_eq hκ X v s).mpr ⟨heven, hfail⟩
+  have hnotParts : ¬ (∑ y, D.initialWeight v s y < 1 / 2) := by
+    intro hlow
+    apply hnotFail
+    exact Or.inl hlow
+  have hMass0 : (1 / 2 : ℝ) ≤ ∑ y, D.initialWeight v s y := le_of_not_gt hnotParts
+  have hflip : Function.Injective (flipPos v) := by
+    intro a a' heq
+    by_contra hne
+    have h := congrFun heq a
+    simp [flipPos, hne] at h
+  have hExt : ctx.externalEarly v = (D.externalEarly v).image (flipPos v) := by
+    classical
+    ext b
+    simp only [ListGateContext.externalEarly, LateData.externalEarly,
+      Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+    constructor
+    · rintro ⟨hclass, a, ha, rfl⟩
+      exact ⟨a, ⟨ha, hclass⟩, rfl⟩
+    · rintro ⟨a, ⟨ha, hclass⟩, rfl⟩
+      exact ⟨hclass, a, ha, rfl⟩
+  have hprod : E.poolLaw.w x.1 * (tapeLaw X.fresh E.Ts).w x.2 ≠ 0 := ne_of_gt hx
+  have hTape : (tapeLaw X.fresh E.Ts).w x.2 ≠ 0 :=
+    (mul_ne_zero_iff.mp hprod).2
+  have hTapePi :
+      (FinLaw.pi (fun C => FinLaw.pi (fun j : Fin (E.Ts + 2) =>
+        FinLaw.pi (fun P : X.fresh.Pool C => X.fresh.fresh C P)))).w x.2 ≠ 0 := by
+    simpa [tapeLaw] using hTape
+  have hEntryNe : ∀ C (j : Fin (E.Ts + 2)) (P : X.fresh.Pool C),
+      (X.fresh.fresh C P).w (x.2 C j P) ≠ 0 := by
+    intro C j P
+    letI : Fintype (X.fresh.State C) := X.fresh.stFin C
+    have hC :
+        (FinLaw.pi (fun j : Fin (E.Ts + 2) =>
+          FinLaw.pi (fun P : X.fresh.Pool C => X.fresh.fresh C P))).w (x.2 C) ≠ 0 := by
+      change (∏ C' : X.geom.Cell,
+        (FinLaw.pi (fun j : Fin (E.Ts + 2) =>
+          FinLaw.pi (fun P : X.fresh.Pool C' => X.fresh.fresh C' P))).w (x.2 C')) ≠ 0 at hTapePi
+      exact Finset.prod_ne_zero_iff.mp hTapePi C (Finset.mem_univ C)
+    have hj :
+        (FinLaw.pi (fun P : X.fresh.Pool C => X.fresh.fresh C P)).w (x.2 C j) ≠ 0 := by
+      change (∏ j' : Fin (E.Ts + 2),
+        (FinLaw.pi (fun P : X.fresh.Pool C => X.fresh.fresh C P)).w (x.2 C j')) ≠ 0 at hC
+      exact Finset.prod_ne_zero_iff.mp hC j (Finset.mem_univ j)
+    change (∏ P' : X.fresh.Pool C,
+      (X.fresh.fresh C P').w (x.2 C j P')) ≠ 0 at hj
+    exact Finset.prod_ne_zero_iff.mp hj P (Finset.mem_univ P)
+  have hEntry : ∀ C (j : Fin (E.Ts + 2)) (P : X.fresh.Pool C),
+      0 < (X.fresh.fresh C P).w (x.2 C j P) := by
+    intro C j P
+    letI : Fintype (X.fresh.State C) := X.fresh.stFin C
+    exact lt_of_le_of_ne ((X.fresh.fresh C P).nonneg (x.2 C j P))
+      (hEntryNe C j P).symm
+  have hCellSupport : ∀ C,
+      0 < (X.fresh.fresh C (x.1 C)).w (s C) := by
+    change ∀ C, 0 < (X.fresh.fresh C (x.1 C)).w
+      ((E.events.runRounds E.Ts E.order Finset.univ x.1 x.2.extend).1 C)
+    letI : ∀ C, Fintype (X.fresh.State C) := X.fresh.stFin
+    let valid : (C : X.geom.Cell) → X.fresh.State C → Prop :=
+      fun C z => 0 < (X.fresh.fresh C (x.1 C)).w z
+    change ∀ C, valid C ((E.events.runRounds E.Ts E.order Finset.univ x.1 x.2.extend).1 C)
+    have htape : ∀ C j, valid C (x.2.extend C j (x.1 C)) := by
+      intro C j
+      letI : Fintype (X.fresh.State C) := X.fresh.stFin C
+      let idx : Fin (E.Ts + 2) := ⟨min j (E.Ts + 1), by omega⟩
+      simpa [valid, Tapes.extend, idx] using hEntry C idx (x.1 C)
+    exact Lane_sol_s18_dl.runRounds_preserves_cell_validity E.events valid
+      E.Ts E.order Finset.univ x.1 x.2.extend htape
+  have hFreshConfig :
+      0 < (FinLaw.pi fun C => X.fresh.fresh C (x.1 C)).w s := by
+    change 0 < ∏ C, (X.fresh.fresh C (x.1 C)).w (s C)
+    exact Finset.prod_pos (fun C _ => hCellSupport C)
+  have hStateInternal := Lane_sol_s18_dl.initial_state_internally_valid
+    physical E x hx hTypical
+  have hrowPoint (y : Fin (T.S.N k)) :
+      ctx.row v (ctx.prior s v) (ctx.label s) y = D.initialWeight v s y := by
+    unfold ListGateContext.row LateData.initialWeight
+    rw [hExt]
+    rw [Finset.prod_image (by
+      intro a ha a' ha' heq
+      exact hflip heq)]
+    simp only [ctx, D, rawData, Lane_sol_s18_dl.physical_list_context,
+      ListGateContext.prior, LateData.sigma, ListGateContext.hitRatio,
+      ListGateContext.label, LateData.earlyLabel]
+    congr 1
+  have hrowMass : ctx.rowMass v (ctx.prior s v) (ctx.label s) =
+      ∑ y, D.initialWeight v s y := by
+    unfold ListGateContext.rowMass
+    apply Finset.sum_congr rfl
+    intro y hy
+    exact hrowPoint y
+  have hretMass :
+      1 / (4 * (s17Chi (X.palette.code (X.geom.patchOf v)) : ℝ)) ≤
+        ∑ y ∈ s17Palette (X.palette.code (X.geom.patchOf v))
+          (X.palette.colours (X.geom.patchOf v)) v,
+          ctx.row v (ctx.prior s v) (ctx.label s) y := by
+    have htypScope : ∀ C ∈ ctx.scopeCells v, X.fresh.typical C (x.1 C) :=
+      fun C _ => hTypical C
+    have hstateScope : ∀ C ∈ ctx.scopeCells v,
+        ctx.stateValid C (x.1 C) (s C) := by
+      intro C hC
+      letI : Fintype (X.fresh.State C) := X.fresh.stFin C
+      change S16.Lane_sol_fix2_s16.InternallyValid X.fresh physical.calibration C
+          (x.1 C) (s C) ∧
+        0 < (X.fresh.fresh C (x.1 C)).w (s C)
+      exact ⟨hStateInternal C, hCellSupport C⟩
+    have hrow : (1 / 2 : ℝ) ≤ ctx.rowMass v (ctx.prior s v) (ctx.label s) := by
+      rw [hrowMass]
+      exact hMass0
+    exact (X.retention (X.geom.patchOf v)).2.1 x.1 s v htypScope hstateScope
+      (X.geom.patchOf_leaf v) heven hrow
+  have hInternal := hFreshInternal PT hPT X hMass hLarge x.1 s hTypical
+    hFreshConfig v heven
+  have hPalette : D.palette v =
+      s17Palette (X.palette.code (X.geom.patchOf v))
+        (X.palette.colours (X.geom.patchOf v)) v := by
+    change X.palette.palettes (X.geom.patchOf v) (X.palette.colourOf v) = _
+    rw [X.palette.palettes_eq, X.palette.colour_eq]
+    simp [s17Palette, ListGateContext.PaletteCode.palette]
+  have hChi : D.chi (D.geom.patchOf v) = s17Chi (X.palette.code (X.geom.patchOf v)) := by
+    change X.palette.chi (X.geom.patchOf v) = _
+    exact X.palette.chi_eq (X.geom.patchOf v)
+  have hPaletteMass :
+      1 / (4 * (D.chi (D.geom.patchOf v) : ℝ)) ≤
+        ∑ y ∈ D.palette v, D.initialWeight v s y := by
+    calc
+      _ = 1 / (4 * (s17Chi (X.palette.code (X.geom.patchOf v)) : ℝ)) := by
+        rw [hChi]
+      _ ≤ ∑ y ∈ s17Palette (X.palette.code (X.geom.patchOf v))
+          (X.palette.colours (X.geom.patchOf v)) v,
+          ctx.row v (ctx.prior s v) (ctx.label s) y := hretMass
+      _ = ∑ y ∈ D.palette v, D.initialWeight v s y := by
+        rw [hPalette]
+        apply Finset.sum_congr rfl
+        intro y hy
+        exact hrowPoint y
+  exact ⟨hInternal, hnotFail, hPaletteMass⟩
 
 /-- Direct-data locality: equal own/external cells give identical initial
 weights, also on invalid configurations. TeX 18:62–71,937–945. -/

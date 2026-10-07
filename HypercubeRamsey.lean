@@ -10,6 +10,8 @@ import HypercubeRamsey.Framework.Patch
 import HypercubeRamsey.Framework.Disc
 import HypercubeRamsey.Framework.Minimax
 import HypercubeRamsey.Framework.OneShot
+import HypercubeRamsey.Framework.Props
+import HypercubeRamsey.Framework.PartC
 import HypercubeRamsey.Assembly
 import HypercubeRamsey.S03.Stabilization
 import HypercubeRamsey.S03.ConditionalAvoidance
@@ -18,3 +20,5 @@ import HypercubeRamsey.S03.ScatteredMoments
 import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S03.NearProductInjection
 import HypercubeRamsey.S03.ClockSampling
+import HypercubeRamsey.Interface
+import HypercubeRamsey.Main

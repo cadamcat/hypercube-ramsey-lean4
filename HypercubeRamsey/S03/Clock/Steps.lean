@@ -11,6 +11,7 @@ import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_integral
 import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_kernel
 import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_absence
 import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_bound
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_probability
 
 /-!
 # Lemma 3.10, Steps 2–8

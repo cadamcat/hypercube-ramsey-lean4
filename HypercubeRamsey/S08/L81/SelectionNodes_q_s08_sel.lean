@@ -1,4 +1,5 @@
 import HypercubeRamsey.S08.L81.Experiment
+import HypercubeRamsey.S08.L81.Facts
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
 namespace HypercubeRamsey.Lane_q_s08_sel
@@ -1355,6 +1356,17 @@ noncomputable def prIndicator {Ω : Type*} (A : Ω → Prop) : Ω → ℝ := by
   classical
   exact fun ω => if A ω then 1 else 0
 
+private theorem pr_le_one {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A ≤ 1 := by
+  classical
+  unfold FinProb.pr
+  calc
+    _ ≤ ∑ ω, P.w ω := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases h : A ω <;> simp [h, P.nonneg ω]
+    _ = 1 := P.sum_eq_one
+
 theorem pr_eq_expect_indicator {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (A : Ω → Prop) :
     P.pr A = P.expect (prIndicator A) := by
@@ -1692,6 +1704,57 @@ private theorem badList_depends_on_listIds (D : Ctx η₀ β p h) (Θ : D.Hist)
         (D.listCrossTag (tagCoordinatesPullback D t') c.1 L))
   rw [hq]
 
+private theorem tagEvents_pr_independent (D : Ctx η₀ β p h) (Θ : D.Hist)
+    (A B : (D.KeyT × D.Loc → D.M.ι) → Prop) (s t : Finset (D.KeyT × D.Loc))
+    (hA : FinProb.DependsOn (fun z => prIndicator A z) s)
+    (hB : FinProb.DependsOn (fun z => prIndicator B z) t)
+    (hdis : Disjoint s t) :
+    (D.tagLawAll Θ).pr (fun q : D.Tags => A (fun i => q i.1 i.2) ∧ B (fun i => q i.1 i.2)) =
+      (D.tagLawAll Θ).pr (fun q : D.Tags => A (fun i => q i.1 i.2)) *
+        (D.tagLawAll Θ).pr (fun q : D.Tags => B (fun i => q i.1 i.2)) := by
+  classical
+  let Q : FinProb (D.KeyT × D.Loc → D.M.ι) :=
+    FinProb.pi (fun i : D.KeyT × D.Loc => D.tilt Θ i.1)
+  let f : (D.KeyT × D.Loc → D.M.ι) → ℝ := fun z => prIndicator A z
+  let g : (D.KeyT × D.Loc → D.M.ι) → ℝ := fun z => prIndicator B z
+  have hmul := FinProb.pi_expect_mul_of_disjoint
+    (fun i : D.KeyT × D.Loc => D.tilt Θ i.1) f g s t hA hB hdis
+  have hprA : (D.tagLawAll Θ).pr (fun q : D.Tags => A (fun i => q i.1 i.2)) = Q.expect f := by
+    rw [pr_eq_expect_indicator]
+    have hfun : prIndicator (fun q : D.Tags => A (fun i => q i.1 i.2)) =
+        fun q : D.Tags => f (fun i => q i.1 i.2) := by
+      funext q
+      rfl
+    rw [hfun]
+    simpa [Q] using tagLawAll_expect_coordinates D Θ f
+  have hprB : (D.tagLawAll Θ).pr (fun q : D.Tags => B (fun i => q i.1 i.2)) = Q.expect g := by
+    rw [pr_eq_expect_indicator]
+    have hfun : prIndicator (fun q : D.Tags => B (fun i => q i.1 i.2)) =
+        fun q : D.Tags => g (fun i => q i.1 i.2) := by
+      funext q
+      rfl
+    rw [hfun]
+    simpa [Q] using tagLawAll_expect_coordinates D Θ g
+  have hprAB :
+      (D.tagLawAll Θ).pr (fun q : D.Tags => A (fun i => q i.1 i.2) ∧ B (fun i => q i.1 i.2)) =
+        Q.expect (fun z => f z * g z) := by
+    rw [pr_eq_expect_indicator]
+    have hfun :
+        prIndicator (fun q : D.Tags => A (fun i => q i.1 i.2) ∧ B (fun i => q i.1 i.2)) =
+          fun q : D.Tags => f (fun i => q i.1 i.2) * g (fun i => q i.1 i.2) := by
+      funext q
+      dsimp [prIndicator, f, g]
+      by_cases hA' : A (fun i => q i.1 i.2) <;>
+        by_cases hB' : B (fun i => q i.1 i.2) <;> simp [hA', hB']
+    rw [hfun]
+    simpa [Q] using tagLawAll_expect_coordinates D Θ (fun z => f z * g z)
+  calc
+    (D.tagLawAll Θ).pr (fun q : D.Tags => A (fun i => q i.1 i.2) ∧ B (fun i => q i.1 i.2)) =
+        Q.expect (fun z => f z * g z) := hprAB
+    _ = Q.expect f * Q.expect g := hmul
+    _ = (D.tagLawAll Θ).pr (fun q : D.Tags => A (fun i => q i.1 i.2)) *
+        (D.tagLawAll Θ).pr (fun q : D.Tags => B (fun i => q i.1 i.2)) := by rw [hprA, hprB]
+
 private theorem badList_pair_probability_mul (D : Ctx η₀ β p h) (Θ : D.Hist)
     (c : D.CellT) (L : D.LList c.1) (c' : D.CellT) (L' : D.LList c'.1)
     (hdis : Disjoint (D.listIds c.1 L) (D.listIds c'.1 L')) :
@@ -1757,5 +1820,133 @@ private theorem badList_pair_probability_mul (D : Ctx η₀ β p h) (Θ : D.Hist
     _ = Q.expect f * Q.expect g := hmul
     _ = (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c L) *
         (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c' L') := by rw [hprA, hprB]
+
+private theorem badListAll_depends_on_union (D : Ctx η₀ β p h) (Θ : D.Hist)
+    (c : D.CellT) (ls : List (D.LList c.1)) :
+    FinProb.DependsOn
+      (fun z : D.KeyT × D.Loc → D.M.ι =>
+        ∀ L ∈ ls, D.BadList Θ (tagCoordinatesPullback D z) c L)
+      (ls.toFinset.biUnion fun L => D.listIds c.1 L) := by
+  classical
+  intro z z' htags
+  apply propext
+  constructor
+  · intro hall L hL
+    have hLfin : L ∈ ls.toFinset := by simpa using hL
+    have hids : ∀ i ∈ D.listIds c.1 L, z i = z' i := by
+      intro i hi
+      exact htags i (Finset.mem_biUnion.mpr ⟨L, hLfin, hi⟩)
+    have hEq := badList_depends_on_listIds D Θ c L z z' hids
+    change D.BadList Θ (tagCoordinatesPullback D z) c L =
+      D.BadList Θ (tagCoordinatesPullback D z') c L at hEq
+    rw [← hEq]
+    exact hall L hL
+  · intro hall L hL
+    have hLfin : L ∈ ls.toFinset := by simpa using hL
+    have hids : ∀ i ∈ D.listIds c.1 L, z i = z' i := by
+      intro i hi
+      exact htags i (Finset.mem_biUnion.mpr ⟨L, hLfin, hi⟩)
+    have hEq := badList_depends_on_listIds D Θ c L z z' hids
+    change D.BadList Θ (tagCoordinatesPullback D z) c L =
+      D.BadList Θ (tagCoordinatesPullback D z') c L at hEq
+    rw [hEq]
+    exact hall L hL
+
+private theorem badListList_probability_le (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos)
+    (hAvoid : ∀ g, ¬ D.HBad Θ g) (hBadProb : Ctx.BadListProb D)
+    (c : D.CellT) (ls : List (D.LList c.1))
+    (hCand : ∀ L ∈ ls, D.Cand P c L)
+    (hPair : ls.Pairwise (fun L L' => Disjoint (D.listIds c.1 L) (D.listIds c.1 L'))) :
+    (D.tagLawAll Θ).pr (fun t => ∀ L ∈ ls, D.BadList Θ t c L) ≤
+      (Real.sqrt (Real.sqrt D.eps0)) ^ ls.length := by
+  classical
+  induction ls with
+  | nil =>
+    have hle := pr_le_one (D.tagLawAll Θ) (fun t => ∀ L ∈ ([] : List (D.LList c.1)), D.BadList Θ t c L)
+    simpa using hle
+  | cons L ls ih =>
+    rcases List.pairwise_cons.mp hPair with ⟨hLinks, hTailPair⟩
+    have hCandTail : ∀ L' ∈ ls, D.Cand P c L' := by
+      intro L' hL'
+      exact hCand L' (List.mem_cons_of_mem L hL')
+    let tailScope := ls.toFinset.biUnion fun L' => D.listIds c.1 L'
+    have hdis : Disjoint (D.listIds c.1 L) tailScope := by
+      apply Finset.disjoint_left.mpr
+      intro i hi htail
+      rcases Finset.mem_biUnion.mp htail with ⟨L', hL', hi'⟩
+      have hL' : L' ∈ ls := by simpa using hL'
+      exact (Finset.disjoint_left.mp (hLinks L' hL')) hi hi'
+    let A : (D.KeyT × D.Loc → D.M.ι) → Prop := fun z =>
+      D.BadList Θ (tagCoordinatesPullback D z) c L
+    let B : (D.KeyT × D.Loc → D.M.ι) → Prop := fun z =>
+      ∀ a : Finset D.Loc, ∀ b : D.CrossSub c.1 → D.Loc,
+        (a, b) ∈ ls → D.BadList Θ (tagCoordinatesPullback D z) c (a, b)
+    have hA : FinProb.DependsOn (fun z => prIndicator A z) (D.listIds c.1 L) := by
+      intro z z' htags
+      have hEq := badList_depends_on_listIds D Θ c L z z' htags
+      simp [A, prIndicator, hEq]
+    have hB : FinProb.DependsOn (fun z => prIndicator B z) tailScope := by
+      intro z z' htags
+      have hEq := badListAll_depends_on_union D Θ c ls z z' htags
+      have hEq' :
+          (∀ a : Finset D.Loc, ∀ b : D.CrossSub c.1 → D.Loc,
+            (a, b) ∈ ls → D.BadList Θ (tagCoordinatesPullback D z) c (a, b)) =
+          (∀ a : Finset D.Loc, ∀ b : D.CrossSub c.1 → D.Loc,
+            (a, b) ∈ ls → D.BadList Θ (tagCoordinatesPullback D z') c (a, b)) := by
+        simpa only [Prod.forall] using hEq
+      dsimp [prIndicator, B]
+      by_cases hz : ∀ a : Finset D.Loc, ∀ b : D.CrossSub c.1 → D.Loc,
+          (a, b) ∈ ls → D.BadList Θ (tagCoordinatesPullback D z) c (a, b)
+      · have hz' : ∀ a : Finset D.Loc, ∀ b : D.CrossSub c.1 → D.Loc,
+        (a, b) ∈ ls → D.BadList Θ (tagCoordinatesPullback D z') c (a, b) := by
+          rw [← hEq']
+          exact hz
+        rw [if_pos hz, if_pos hz']
+      · have hz' : ¬ ∀ a : Finset D.Loc, ∀ b : D.CrossSub c.1 → D.Loc,
+            (a, b) ∈ ls → D.BadList Θ (tagCoordinatesPullback D z') c (a, b) := by
+          intro hz'
+          apply hz
+          rw [hEq']
+          exact hz'
+        rw [if_neg hz, if_neg hz']
+    have hFact := tagEvents_pr_independent D Θ A B (D.listIds c.1 L) tailScope hA hB hdis
+    have hEvent (t : D.Tags) :
+        (∀ L' ∈ L :: ls, D.BadList Θ t c L') ↔
+          A (fun i => t i.1 i.2) ∧ B (fun i => t i.1 i.2) := by
+      simp [A, B, tagCoordinatesPullback_reconstruct, Prod.forall]
+    have hProbEq :
+        (D.tagLawAll Θ).pr (fun t => ∀ L' ∈ L :: ls, D.BadList Θ t c L') =
+          (D.tagLawAll Θ).pr (fun t => A (fun i => t i.1 i.2) ∧ B (fun i => t i.1 i.2)) := by
+      apply congrArg (fun E : D.Tags → Prop => (D.tagLawAll Θ).pr E)
+      funext t
+      exact propext (hEvent t)
+    have hPrA : (D.tagLawAll Θ).pr (fun t => A (fun i => t i.1 i.2)) =
+        (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c L) := by
+      congr 1
+    have hPrB : (D.tagLawAll Θ).pr (fun t => B (fun i => t i.1 i.2)) =
+        (D.tagLawAll Θ).pr (fun t => ∀ L' ∈ ls, D.BadList Θ t c L') := by
+      apply congrArg (fun E : D.Tags → Prop => (D.tagLawAll Θ).pr E)
+      funext t
+      simp [B, tagCoordinatesPullback_reconstruct, Prod.forall]
+    have hHead : (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c L) ≤
+        Real.sqrt (Real.sqrt D.eps0) :=
+      hBadProb Θ hAvoid P c L (hCand L (by simp))
+    have hTail := ih hCandTail hTailPair
+    have hHeadNonneg := pr_nonneg (D.tagLawAll Θ) (fun t => D.BadList Θ t c L)
+    have hTailNonneg := pr_nonneg (D.tagLawAll Θ)
+      (fun t => ∀ L' ∈ ls, D.BadList Θ t c L')
+    have hδ : 0 ≤ Real.sqrt (Real.sqrt D.eps0) := by positivity
+    calc
+      (D.tagLawAll Θ).pr (fun t => ∀ L' ∈ L :: ls, D.BadList Θ t c L') =
+          (D.tagLawAll Θ).pr (fun t => A (fun i => t i.1 i.2) ∧ B (fun i => t i.1 i.2)) := hProbEq
+      _ = (D.tagLawAll Θ).pr (fun t => A (fun i => t i.1 i.2)) *
+          (D.tagLawAll Θ).pr (fun t => B (fun i => t i.1 i.2)) := hFact
+      _ ≤ Real.sqrt (Real.sqrt D.eps0) *
+          (Real.sqrt (Real.sqrt D.eps0)) ^ ls.length :=
+        mul_le_mul (by simpa [hPrA] using hHead) (by simpa [hPrB] using hTail)
+          (by simpa [hPrB] using hTailNonneg) hδ
+      _ = (Real.sqrt (Real.sqrt D.eps0)) ^ (L :: ls).length := by
+        rw [List.length_cons, pow_succ]
+        ring
 
 end HypercubeRamsey.Lane_q_s08_sel

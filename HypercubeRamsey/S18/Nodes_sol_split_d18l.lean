@@ -504,7 +504,26 @@ theorem D18_L_initial_cap (hκ : κ.Admissible) (hThresholds : LateThresholds κ
         (D.initialPrior v s).w x ≤ 4 * κ.KB / densityScale T k *
           Real.exp (-199 * PT.tiling.gain (D.geom.patchOf v)) *
             Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)) := by
-  sorry
+  filter_upwards [Lane_sol_d18l_pal.raw_initial_atom_cap hκ hThresholds T] with k hcap
+  intro PT hPT X hMass hLarge
+  let D := rawData hκ X
+  dsimp only
+  intro v s heven hvalid x
+  have hchi : (D.chi (D.geom.patchOf v) : ℝ) ≤ Real.exp (PT.tiling.gain (D.geom.patchOf v)) := by
+    change (X.palette.chi (X.geom.patchOf v) : ℝ) ≤ Real.exp (PT.tiling.gain (X.geom.patchOf v))
+    rw [X.palette.chi_eq]
+    exact (X.code_spec _).2.2.2
+  have hKB : 0 ≤ κ.KB := (show (0 : ℝ) ≤ 10 ^ 6 * κ.R by positivity).trans hκ.KB_big
+  have hCpos : 0 < densityScale T k := by
+    unfold densityScale
+    have : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+    positivity
+  have hraw := hcap D (Classical.choice X.l16.physical).quantitative.prefix_bound X.palette.hle v s hvalid
+  have hp := Lane_sol_d18l_pal.initial_prior_cap_of_atom D v s hvalid hchi
+    (κ.KB / densityScale T k)
+    (Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)))
+    (div_nonneg hKB hCpos.le) (Real.rpow_nonneg (by norm_num) _) hraw x
+  simpa only [mul_div_assoc] using hp
 
 /-- Supported resampling inputs with typical pools and all list successes
 have internal validity and retained starting palette mass. TeX 17:273–300;

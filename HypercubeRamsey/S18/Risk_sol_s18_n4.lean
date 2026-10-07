@@ -96,7 +96,7 @@ theorem initialProbabilityZeroOfImpossible
   | none => simp [S18.initialProbability, FinLaw.pr, hF]
   | some p => simp [S18.initialProbability, FinLaw.pr, hF]
 
-theorem invalidPrefixTerminalPinnedBound
+ theorem invalidPrefixTerminalPinnedBound
     {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
     (F : S18.LateEvent D) (hkind : F.1.val = 1) (hvalid : ¬ D.prefixValid F.2)

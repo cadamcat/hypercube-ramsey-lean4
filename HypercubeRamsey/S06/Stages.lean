@@ -199,6 +199,9 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   have hαfacts := height_exponents6_admissible p₀ hp₀
   have hαpos : 0 < α₆ p₀ := hαfacts.1
   have hαupper : α₆ p₀ ≤ 1 / 10 ^ 12 := hαfacts.2.2.1
+  have hMnat := m₆_nat_tendsto_atTop p₀ hp₀
+  have hTJevent := hMnat.eventually eventually_T₆_le_J₆
+  obtain ⟨nTJ, hTJevent⟩ := Filter.eventually_atTop.1 hTJevent
   have hMEventually := eventually_nat_ceil_rpow_add_two_le_double hαpos
   obtain ⟨nM, hMEventually⟩ := Filter.eventually_atTop.1 hMEventually
   have hexp2pos : 0 < δ₂ / 4 - 6 * α₆ p₀ := by
@@ -208,17 +211,48 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       (10 ^ 210 : ℝ) * (n : ℝ) ^ (-(δ₂ / 4 - 6 * α₆ p₀)) < 1 / 6 :=
     eventually_const_mul_nat_rpow_neg_lt hexp2pos (by norm_num)
   obtain ⟨nTail2, hTail2⟩ := Filter.eventually_atTop.1 hTail2
-  refine ⟨max nTail1 (max nTail2 (max 2 nM)), 0, ?_⟩
+  have hTail3 : ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ (-(10 ^ 6 : ℝ)⁻¹) < 1 / 6 :=
+    by
+      simpa only [one_mul] using (eventually_const_mul_nat_rpow_neg_lt
+        (a := (10 ^ 6 : ℝ)⁻¹) (c := 1) (b := 1 / 6) (by positivity) (by norm_num))
+  obtain ⟨nTail3, hTail3⟩ := Filter.eventually_atTop.1 hTail3
+  have hLogConst : ∀ᶠ n : ℕ in Filter.atTop, (40000 : ℝ) < (n : ℝ) ^ (1 / 10 ^ 8 : ℝ) := by
+    have hpow : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (1 / 10 ^ 8 : ℝ)) Filter.atTop Filter.atTop :=
+      (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 10 ^ 8)).comp
+        tendsto_natCast_atTop_atTop
+    exact hpow.eventually_gt_atTop 40000
+  obtain ⟨nLog, hLogConst⟩ := Filter.eventually_atTop.1 hLogConst
+  let nBase := max 2 nM
+  let nScale := max nTJ nBase
+  let nLogMax := max nLog nScale
+  let nTail3Max := max nTail3 nLogMax
+  let nTail2Max := max nTail2 nTail3Max
+  let n₀ := max nTail1 nTail2Max
+  refine ⟨n₀, 0, ?_⟩
   intro n N E G M X hLarge hCap hDel hStep2 hLow hHigh hDesc hRate
   obtain ⟨hn, _, _⟩ := hLarge
-  have hnTail1 : nTail1 ≤ n := le_trans (le_max_left nTail1 _) hn
+  have hnTail1 : nTail1 ≤ n := le_trans (le_max_left nTail1 nTail2Max) hn
   have hnTail2 : nTail2 ≤ n :=
-    le_trans (le_trans (le_max_left nTail2 (max 2 nM))
-      (le_max_right nTail1 (max nTail2 (max 2 nM)))) hn
+    le_trans (le_trans (le_max_left nTail2 nTail3Max) (le_max_right nTail1 nTail2Max)) hn
+  have hnTail3 : nTail3 ≤ n :=
+    le_trans (le_trans (le_trans (le_max_left nTail3 nLogMax)
+      (le_max_right nTail2 nTail3Max)) (le_max_right nTail1 nTail2Max)) hn
+  have hnLog : nLog ≤ n :=
+    le_trans (le_trans (le_trans (le_max_left nLog nScale)
+      (le_max_right nTail3 nLogMax))
+      (le_max_right nTail2 nTail3Max))
+      (le_trans (le_max_right nTail1 nTail2Max) hn)
+  have hnTJ : nTJ ≤ n :=
+    le_trans (le_trans (le_trans (le_max_left nTJ nBase)
+      (le_max_right nLog nScale)) (le_max_right nTail3 nLogMax))
+      (le_trans (le_max_right nTail2 nTail3Max)
+        (le_trans (le_max_right nTail1 nTail2Max) hn))
   have hnM : nM ≤ n :=
-    le_trans (le_trans (le_max_right 2 nM)
-      (le_max_right nTail2 (max 2 nM)))
-      (le_trans (le_max_right nTail1 (max nTail2 (max 2 nM))) hn)
+    le_trans (le_trans (le_trans (le_max_right 2 nM)
+      (le_max_right nTJ nBase)) (le_max_right nLog nScale))
+      (le_trans (le_max_right nTail3 nLogMax)
+        (le_trans (le_max_right nTail2 nTail3Max)
+          (le_trans (le_max_right nTail1 nTail2Max) hn)))
   have hStep1Raw : ∀ h, h ∈ X.step1Keys →
       X.baseLaw.pr (fun b => ¬ X.Step1OK b h) ≤ 603 * (n : ℝ) ^ (-(δ₁ / 2)) := by
     intro h hh
@@ -457,6 +491,111 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     change (X.g.L.m : ℝ) + 2 ≤ (n : ℝ) ^ (2 * α₆ p₀)
     rw [X.g.m_eq]
     exact hMEventually n hnM
+  have hTleJ : X.T ≤ X.J := by
+    change T₆ X.g.L.m ≤ J₆ X.g.L.m
+    rw [X.g.m_eq]
+    exact hTJevent n hnTJ
+  have hmOne : 1 ≤ X.m := by
+    change 1 ≤ X.g.L.m
+    rw [X.g.m_eq]
+    exact (Nat.one_le_ceil_iff).2 (Real.rpow_pos_of_pos hnR _)
+  have hJleM : X.J ≤ X.m := by
+    change ⌊(X.g.L.m : ℝ) ^ (1 / 25 : ℝ)⌋₊ ≤ X.g.L.m
+    have hmR : 1 ≤ (X.g.L.m : ℝ) := by exact_mod_cast hmOne
+    have hpow : (X.g.L.m : ℝ) ^ (1 / 25 : ℝ) ≤ (X.g.L.m : ℝ) :=
+      by
+        have h := Real.rpow_le_rpow_of_exponent_le hmR (by norm_num : (1 / 25 : ℝ) ≤ 1)
+        simpa only [Real.rpow_one] using h
+    exact Nat.floor_le_of_le hpow
+  have hTleM : X.T ≤ X.m := hTleJ.trans hJleM
+  have hlogM : Real.log ((X.m : ℝ) + 2) ≤ 2 * α₆ p₀ * Real.log (n : ℝ) := by
+    calc
+      Real.log ((X.m : ℝ) + 2) ≤ Real.log ((n : ℝ) ^ (2 * α₆ p₀)) :=
+        Real.log_le_log (by positivity) hMbound
+      _ = 2 * α₆ p₀ * Real.log (n : ℝ) := by rw [Real.log_rpow hnR]
+  have hTplus : (X.T : ℝ) + 2 ≤ (X.m : ℝ) + 2 := by
+    exact_mod_cast Nat.add_le_add_right hTleM 2
+  have hlogT : Real.log ((X.T : ℝ) + 2) ≤ 2 * α₆ p₀ * Real.log (n : ℝ) := by
+    calc
+      Real.log ((X.T : ℝ) + 2) ≤ Real.log ((X.m : ℝ) + 2) :=
+        Real.log_le_log (by positivity) hTplus
+      _ ≤ 2 * α₆ p₀ * Real.log (n : ℝ) := hlogM
+  have hnRealOne : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hlogNNonneg : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hnRealOne
+  have hTlogNonneg : 0 ≤ Real.log ((X.T : ℝ) + 2) :=
+    Real.log_nonneg (by have h : 0 ≤ (X.T : ℝ) := Nat.cast_nonneg _; linarith)
+  have hMlogNonneg : 0 ≤ Real.log ((X.m : ℝ) + 2) :=
+    Real.log_nonneg (by have h : 0 ≤ (X.m : ℝ) := Nat.cast_nonneg _; linarith)
+  have hmPos : 0 < X.g.L.m :=
+    lt_of_lt_of_le (by norm_num : 0 < 1) hmOne
+  have hmRPos : 0 < (X.g.L.m : ℝ) := by exact_mod_cast hmPos
+  have hTOne : 1 ≤ X.T := by
+    change 1 ≤ T₆ X.g.L.m
+    exact (Nat.one_le_ceil_iff).2 (Real.rpow_pos_of_pos hmRPos _)
+  have hJOne : 1 ≤ X.J := le_trans hTOne hTleJ
+  have hJplus : (X.J : ℝ) + 1 ≤ 2 * (X.J : ℝ) := by
+    have hNat : X.J + 1 ≤ 2 * X.J := by omega
+    exact_mod_cast hNat
+  have hPfactor : (10 ^ 4 : ℝ) * ((X.T + X.J + 1 : ℕ) : ℝ) + 1 ≤
+      40000 * (X.J : ℝ) := by
+    have hNat : X.T + X.J + 1 ≤ 3 * X.J := by omega
+    have hCast : ((X.T + X.J + 1 : ℕ) : ℝ) ≤ 3 * (X.J : ℝ) := by exact_mod_cast hNat
+    have hJcast : (1 : ℝ) ≤ (X.J : ℝ) := by exact_mod_cast hJOne
+    norm_num at *
+    nlinarith
+  have hPbound : (10 ^ 4 : ℝ) * ((X.T + X.J + 1 : ℕ) : ℝ) + 1 ≤
+      40000 * (n : ℝ) ^ (2 * α₆ p₀) := by
+    have hJm : (X.J : ℝ) ≤ (X.m : ℝ) := by exact_mod_cast hJleM
+    have hJpow : (X.J : ℝ) ≤ (n : ℝ) ^ (2 * α₆ p₀) := by linarith [hMbound]
+    calc
+      _ ≤ 40000 * (X.J : ℝ) := hPfactor
+      _ ≤ 40000 * (n : ℝ) ^ (2 * α₆ p₀) := by gcongr
+  have hnPowNe : (n : ℝ) ^ (2 * α₆ p₀) ≠ 0 :=
+    ne_of_gt (Real.rpow_pos_of_pos hnR (2 * α₆ p₀))
+  have hlogP : Real.log ((10 ^ 4 : ℝ) * ((X.T + X.J + 1 : ℕ) : ℝ) + 1) ≤
+      (1 / 10 ^ 8 + 2 * α₆ p₀) * Real.log (n : ℝ) := by
+    calc
+      Real.log ((10 ^ 4 : ℝ) * ((X.T + X.J + 1 : ℕ) : ℝ) + 1) ≤
+          Real.log ((40000 : ℝ) * (n : ℝ) ^ (2 * α₆ p₀)) :=
+      Real.log_le_log (by positivity) hPbound
+      _ = Real.log 40000 + 2 * α₆ p₀ * Real.log (n : ℝ) := by
+        rw [Real.log_mul (by norm_num) hnPowNe, Real.log_rpow hnR]
+      _ ≤ (1 / 10 ^ 8) * Real.log (n : ℝ) +
+          2 * α₆ p₀ * Real.log (n : ℝ) := by
+        have hlogConst : Real.log 40000 ≤ (1 / 10 ^ 8) * Real.log (n : ℝ) := by
+          calc
+            Real.log 40000 ≤ Real.log ((n : ℝ) ^ (1 / 10 ^ 8 : ℝ)) :=
+              Real.log_le_log (by norm_num) (le_of_lt (hLogConst n hnLog))
+            _ = (1 / 10 ^ 8) * Real.log (n : ℝ) := by rw [Real.log_rpow hnR]
+        linarith [hlogConst]
+      _ = (1 / 10 ^ 8 + 2 * α₆ p₀) * Real.log (n : ℝ) := by ring
+  have hshapeBase :
+      (X.T : ℝ) * Real.log ((X.T : ℝ) + 2) +
+          ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2) ≤
+        6 * α₆ p₀ * (X.J : ℝ) * Real.log (n : ℝ) := by
+    have hTleJReal : (X.T : ℝ) ≤ (X.J : ℝ) := by exact_mod_cast hTleJ
+    have htermT : (X.T : ℝ) * Real.log ((X.T : ℝ) + 2) ≤
+        (X.J : ℝ) * (2 * α₆ p₀ * Real.log (n : ℝ)) := by
+      calc
+        _ ≤ (X.J : ℝ) * Real.log ((X.T : ℝ) + 2) :=
+          mul_le_mul_of_nonneg_right hTleJReal hTlogNonneg
+        _ ≤ (X.J : ℝ) * (2 * α₆ p₀ * Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left hlogT (Nat.cast_nonneg _)
+    have htermJ : ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2) ≤
+        (2 * (X.J : ℝ)) * (2 * α₆ p₀ * Real.log (n : ℝ)) := by
+      calc
+        _ ≤ (2 * (X.J : ℝ)) * Real.log ((X.m : ℝ) + 2) :=
+          mul_le_mul_of_nonneg_right hJplus hMlogNonneg
+        _ ≤ (2 * (X.J : ℝ)) * (2 * α₆ p₀ * Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left hlogM (by positivity)
+    nlinarith [htermT, htermJ]
+  have hshapeExp :
+      10 ^ 4 * (X.T * Real.log (X.T + 2) + (X.J + 1) * Real.log (X.m + 2)) ≤
+        60000 * α₆ p₀ * ((X.J : ℝ) * Real.log (n : ℝ)) := by
+    have hshape := hshapeBase
+    change 10 ^ 4 * ((X.T : ℝ) * Real.log ((X.T : ℝ) + 2) +
+      ((X.J : ℝ) + 1) * Real.log ((X.m : ℝ) + 2)) ≤ _
+    nlinarith [hshape]
   have hτ1 : 0 < τ1 := by dsimp [τ1]; exact Real.rpow_pos_of_pos hnR _
   have hq1 : 0 ≤ q1 := by dsimp [q1, τ1]; positivity
   have hq1Eq : q1 = 603 * (n : ℝ) ^ (-(δ₁ / 4)) := by
@@ -911,6 +1050,129 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       _ ≤ Real.exp (10 ^ 4 * (X.T * Real.log (X.T + 2) +
             (X.J + 1) * Real.log (X.m + 2))) * q₃ :=
         mul_le_mul_of_nonneg_right hS3Card hq₃
+  let P₃ : ℝ := (10 ^ 4 : ℝ) * ((X.T + X.J + 1 : ℕ) : ℝ) + 1
+  have hP₃pos : 0 < P₃ := by positivity
+  have hlogP₃ : Real.log P₃ ≤ (1 / 10 ^ 8 + 2 * α₆ p₀) * Real.log (n : ℝ) := by
+    simpa [P₃] using hlogP
+  have hP₃cast : ((X.T + X.J + 1 : ℕ) : ℝ) =
+      (X.T : ℝ) + (X.J : ℝ) + 1 := by norm_cast
+  have hP₃eq : q₃ = P₃ * Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ)) := by
+    dsimp [q₃, τ₃, P₃]
+    rw [hP₃cast]
+    calc
+      ((10 ^ 4 : ℝ) * ((X.T : ℝ) + (X.J : ℝ) + 1) + 1) *
+          Real.exp (-(2 / 100 : ℝ) * (X.k : ℝ)) /
+            Real.exp (-(9 / 1000 : ℝ) * (X.k : ℝ)) =
+          ((10 ^ 4 : ℝ) * ((X.T : ℝ) + (X.J : ℝ) + 1) + 1) *
+            (Real.exp (-(2 / 100 : ℝ) * (X.k : ℝ)) /
+              Real.exp (-(9 / 1000 : ℝ) * (X.k : ℝ))) := by ring
+      _ = ((10 ^ 4 : ℝ) * ((X.T : ℝ) + (X.J : ℝ) + 1) + 1) *
+            Real.exp (-(2 / 100 : ℝ) * (X.k : ℝ) -
+              (-(9 / 1000 : ℝ) * (X.k : ℝ))) := by rw [← Real.exp_sub]
+      _ = ((10 ^ 4 : ℝ) * ((X.T : ℝ) + (X.J : ℝ) + 1) + 1) *
+            Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ)) := by
+              rw [show -(2 / 100 : ℝ) * (X.k : ℝ) -
+                (-(9 / 1000 : ℝ) * (X.k : ℝ)) =
+                  -(11 / 1000 : ℝ) * (X.k : ℝ) by ring]
+  have hJLogNonneg : 0 ≤ (X.J : ℝ) * Real.log (n : ℝ) :=
+    mul_nonneg (Nat.cast_nonneg _) hlogNNonneg
+  have hlogP₃J : Real.log P₃ ≤
+      (1 / 10 ^ 8 + 2 * α₆ p₀) * ((X.J : ℝ) * Real.log (n : ℝ)) := by
+    have hlogNle : Real.log (n : ℝ) ≤ (X.J : ℝ) * Real.log (n : ℝ) := by
+      calc
+        Real.log (n : ℝ) = 1 * Real.log (n : ℝ) := by ring
+        _ ≤ (X.J : ℝ) * Real.log (n : ℝ) :=
+          mul_le_mul_of_nonneg_right (by exact_mod_cast hJOne) hlogNNonneg
+    calc
+      Real.log P₃ ≤ (1 / 10 ^ 8 + 2 * α₆ p₀) * Real.log (n : ℝ) := hlogP₃
+      _ ≤ (1 / 10 ^ 8 + 2 * α₆ p₀) * ((X.J : ℝ) * Real.log (n : ℝ)) :=
+        mul_le_mul_of_nonneg_left hlogNle (by positivity)
+  have hshapeLogP :
+      10 ^ 4 * (X.T * Real.log (X.T + 2) + (X.J + 1) * Real.log (X.m + 2)) +
+        Real.log P₃ ≤ (1 / 10 ^ 7) * ((X.J : ℝ) * Real.log (n : ℝ)) := by
+    have hcoeff : 60000 * α₆ p₀ + (1 / 10 ^ 8 + 2 * α₆ p₀) ≤ 1 / 10 ^ 7 := by
+      norm_num at *
+      nlinarith
+    calc
+      _ ≤ 60000 * α₆ p₀ * ((X.J : ℝ) * Real.log (n : ℝ)) +
+          (1 / 10 ^ 8 + 2 * α₆ p₀) * ((X.J : ℝ) * Real.log (n : ℝ)) :=
+        add_le_add hshapeExp hlogP₃J
+      _ = (60000 * α₆ p₀ + (1 / 10 ^ 8 + 2 * α₆ p₀)) *
+          ((X.J : ℝ) * Real.log (n : ℝ)) := by ring
+      _ ≤ (1 / 10 ^ 7) * ((X.J : ℝ) * Real.log (n : ℝ)) :=
+        mul_le_mul_of_nonneg_right hcoeff hJLogNonneg
+  have hκJlog : κ₆ * ((X.J : ℝ) * Real.log (n : ℝ)) ≤ (X.k : ℝ) := by
+    dsimp [Ctx6.k, Ctx6.J, k₆]
+    calc
+      κ₆ * ((J₆ X.g.L.m : ℝ) * Real.log (n : ℝ)) =
+          κ₆ * (J₆ X.g.L.m : ℝ) * Real.log (n : ℝ) := by ring
+      _ ≤ (⌈κ₆ * (J₆ X.g.L.m : ℝ) * Real.log (n : ℝ)⌉₊ : ℝ) := Nat.le_ceil _
+  have hStep3Exp :
+      10 ^ 4 * (X.T * Real.log (X.T + 2) + (X.J + 1) * Real.log (X.m + 2)) +
+        Real.log P₃ - (11 / 1000 : ℝ) * (X.k : ℝ) ≤
+      -(1 / 10 ^ 6 : ℝ) * ((X.J : ℝ) * Real.log (n : ℝ)) := by
+    have hdecay : (1 / 10 ^ 7 : ℝ) - (11 / 1000 : ℝ) * κ₆ =
+        -(1 / 10 ^ 6 : ℝ) := by norm_num [κ₆]
+    have hneg : -(11 / 1000 : ℝ) * (X.k : ℝ) ≤
+        -(11 / 1000 : ℝ) * (κ₆ * ((X.J : ℝ) * Real.log (n : ℝ))) := by
+      exact mul_le_mul_of_nonpos_left hκJlog (by norm_num)
+    calc
+      _ ≤ (1 / 10 ^ 7 : ℝ) * ((X.J : ℝ) * Real.log (n : ℝ)) -
+          (11 / 1000 : ℝ) * (X.k : ℝ) := by linarith [hshapeLogP]
+      _ ≤ ((1 / 10 ^ 7 : ℝ) - (11 / 1000 : ℝ) * κ₆) *
+          ((X.J : ℝ) * Real.log (n : ℝ)) := by nlinarith [hneg]
+      _ = -(1 / 10 ^ 6 : ℝ) * ((X.J : ℝ) * Real.log (n : ℝ)) := by rw [hdecay]
+  have hStep3Budget : X.initLaw.pr (fun v =>
+      ∃ b ∈ X.g.L.oddStates, ∃ D ∈ X.absDescs b, τ₃ ≤ X.rate3V0 v b D) ≤ 1 / 6 := by
+    have hExpEq : Real.exp (10 ^ 4 * (X.T * Real.log (X.T + 2) +
+        (X.J + 1) * Real.log (X.m + 2))) * q₃ =
+        Real.exp (10 ^ 4 * (X.T * Real.log (X.T + 2) +
+          (X.J + 1) * Real.log (X.m + 2)) + Real.log P₃ -
+          (11 / 1000 : ℝ) * (X.k : ℝ)) := by
+      let s : ℝ := 10 ^ 4 * (X.T * Real.log (X.T + 2) +
+        (X.J + 1) * Real.log (X.m + 2))
+      have hp : P₃ = Real.exp (Real.log P₃) := (Real.exp_log hP₃pos).symm
+      calc
+        Real.exp s * q₃ = Real.exp s * (P₃ * Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ))) := by
+          rw [hP₃eq]
+        _ = Real.exp s * (Real.exp (Real.log P₃) *
+              Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ))) := by
+                exact congrArg (fun z : ℝ => Real.exp s *
+                  (z * Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ)))) hp
+        _ = Real.exp (s + Real.log P₃ - (11 / 1000 : ℝ) * (X.k : ℝ)) := by
+          calc
+            _ = (Real.exp s * Real.exp (Real.log P₃)) *
+                Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ)) := by ring
+            _ = Real.exp (s + Real.log P₃) *
+                Real.exp (-(11 / 1000 : ℝ) * (X.k : ℝ)) := by rw [← Real.exp_add]
+            _ = Real.exp ((s + Real.log P₃) + (-(11 / 1000 : ℝ) * (X.k : ℝ))) := by
+              rw [← Real.exp_add]
+            _ = Real.exp (s + Real.log P₃ - (11 / 1000 : ℝ) * (X.k : ℝ)) := by
+              congr 1 <;> ring
+      all_goals rfl
+    have hJlogLower : Real.log (n : ℝ) ≤ (X.J : ℝ) * Real.log (n : ℝ) := by
+      calc
+        Real.log (n : ℝ) = 1 * Real.log (n : ℝ) := by ring
+        _ ≤ (X.J : ℝ) * Real.log (n : ℝ) :=
+          mul_le_mul_of_nonneg_right (by exact_mod_cast hJOne) hlogNNonneg
+    calc
+      _ ≤ Real.exp (10 ^ 4 * (X.T * Real.log (X.T + 2) +
+            (X.J + 1) * Real.log (X.m + 2))) * q₃ := hStep3Alarm
+      _ = Real.exp (10 ^ 4 * (X.T * Real.log (X.T + 2) +
+            (X.J + 1) * Real.log (X.m + 2)) + Real.log P₃ -
+            (11 / 1000 : ℝ) * (X.k : ℝ)) := hExpEq
+      _ ≤ Real.exp (-(1 / 10 ^ 6 : ℝ) * ((X.J : ℝ) * Real.log (n : ℝ))) :=
+        Real.exp_le_exp.mpr hStep3Exp
+      _ ≤ Real.exp (-(1 / 10 ^ 6 : ℝ) * Real.log (n : ℝ)) := by
+        apply Real.exp_le_exp.mpr
+        have hcoef : 0 ≤ (1 / 10 ^ 6 : ℝ) := by norm_num
+        nlinarith [hJlogLower]
+      _ = (n : ℝ) ^ (-(1 / 10 ^ 6 : ℝ)) := by
+        rw [Real.rpow_def_of_pos hnR]
+        congr 1 <;> ring
+      _ ≤ 1 / 6 := by
+        have h := (hTail3 n hnTail3).le
+        simpa [one_div] using h
   have hnotV0Split : ∀ v, ¬ X.V0Good v →
       (∃ h ∈ X.step1Keys, τ1 < X.rate1V0 v h) ∨
         (∃ β ∈ X.occTypes, τ₂ β.u < X.rate2V0 v β) ∨
@@ -1023,7 +1285,32 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
             X.initLaw.pr (fun v => ∃ β ∈ X.occTypes, τ₂ β.u ≤ X.rate2V0 v β) +
               X.initLaw.pr (fun v => ∃ b ∈ X.g.L.oddStates, ∃ D ∈ X.absDescs b,
                 τ₃ ≤ X.rate3V0 v b D) := by linarith
-  sorry
+  have hStep1AlarmSmall : X.initLaw.pr (fun v => ∃ h ∈ X.step1Keys,
+      τ1 ≤ X.rate1V0 v h) < 1 / 6 := hStep1Alarm.trans_lt hStep1Budget
+  have hbadSmall : X.initLaw.pr (fun v => ¬ X.V0Good v) < 1 / 2 := by
+    calc
+      X.initLaw.pr (fun v => ¬ X.V0Good v) ≤
+          X.initLaw.pr (fun v => ∃ h ∈ X.step1Keys, τ1 ≤ X.rate1V0 v h) +
+            X.initLaw.pr (fun v => ∃ β ∈ X.occTypes, τ₂ β.u ≤ X.rate2V0 v β) +
+              X.initLaw.pr (fun v => ∃ b ∈ X.g.L.oddStates, ∃ D ∈ X.absDescs b,
+                τ₃ ≤ X.rate3V0 v b D) := hbadV0Pr
+      _ < 1 / 2 := by linarith [hStep1AlarmSmall, hStep2Budget, hStep3Budget]
+  have hcomplement : X.initLaw.pr X.V0Good + X.initLaw.pr (fun v => ¬ X.V0Good v) = 1 := by
+    classical
+    letI : DecidablePred (fun v : Fin N => X.V0Good v) := fun v => Classical.propDecidable _
+    letI : DecidablePred (fun v : Fin N => ¬ X.V0Good v) := fun v => Classical.propDecidable _
+    unfold FinProb.pr
+    rw [← Finset.sum_add_distrib]
+    calc
+      ∑ v, ((if X.V0Good v then X.initLaw.w v else 0) +
+        (if ¬ X.V0Good v then X.initLaw.w v else 0)) = ∑ v, X.initLaw.w v := by
+        apply Finset.sum_congr rfl
+        intro v hv
+        by_cases hgood : X.V0Good v <;> simp [hgood]
+    _ = 1 := X.initLaw.sum_eq_one
+  have hgoodMass : (1 / 2 : ℝ) ≤ X.initLaw.pr X.V0Good := by
+    linarith [hcomplement, hbadSmall]
+  exact hgoodMass
 
 set_option maxHeartbeats 200000
 

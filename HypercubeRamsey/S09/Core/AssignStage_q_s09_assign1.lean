@@ -117,6 +117,212 @@ theorem hammingBallCardBound9 {d r : ℕ} (v : CubeVertex d) :
     _ = (d + 1) ^ q := hbin
     _ ≤ (d + 1) ^ r := pow_le_pow_right' (by omega) (min_le_left r d)
 
+/-- The Hamming distance on a cube is at most the sum of its special and residual coordinate distances. -/
+theorem hammingDistSplitBound9 {m n : ℕ} (u v : CubeVertex n) :
+    _root_.hammingDist u v ≤
+      _root_.hammingDist (specialWord9 m u) (specialWord9 m v) +
+        _root_.hammingDist (residualWord9 m u) (residualWord9 m v) := by
+  classical
+  let D : Finset (Fin n) := Finset.univ.filter (fun i => u i ≠ v i)
+  let S : Finset (Fin m) :=
+    Finset.univ.filter (fun i => specialWord9 m u i ≠ specialWord9 m v i)
+  let R : Finset (Fin (n - m)) :=
+    Finset.univ.filter (fun i => residualWord9 m u i ≠ residualWord9 m v i)
+  let D' := {i : Fin n // i ∈ D}
+  let S' := {i : Fin m // i ∈ S}
+  let R' := {i : Fin (n - m) // i ∈ R}
+  let f : D' → S' ⊕ R' := fun i =>
+    if hi : i.1.val < m then
+      let j : Fin m := ⟨i.1.val, hi⟩
+      have hdiff : u i.1 ≠ v i.1 := (Finset.mem_filter.mp i.2).2
+      have hj : j ∈ S := by
+        simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
+        simpa [j, specialWord9] using hdiff
+      Sum.inl ⟨j, hj⟩
+    else
+      let j : Fin (n - m) := ⟨i.1.val - m, by omega⟩
+      have hidx : (⟨m + j.val, by omega⟩ : Fin n) = i.1 := by
+        apply Fin.ext
+        dsimp [j]
+        omega
+      have hdiff : residualWord9 m u j ≠ residualWord9 m v j := by
+        have hfull : u (⟨m + j.val, by omega⟩ : Fin n) ≠
+            v (⟨m + j.val, by omega⟩ : Fin n) := by
+          simpa [hidx] using (Finset.mem_filter.mp i.2).2
+        simpa [residualWord9] using hfull
+      have hj : j ∈ R := by simpa [R, hdiff]
+      Sum.inr ⟨j, hj⟩
+  have hinj : Function.Injective f := by
+    intro i i' h
+    by_cases hi : i.1.val < m <;> by_cases hi' : i'.1.val < m
+    · have hsum := h
+      simp [f, hi, hi'] at hsum
+      have hval : i.1.val = i'.1.val := by
+        have hh := congrArg (fun q : S' ⊕ R' => q.elim (fun s => s.1.val) (fun _ => 0)) h
+        simpa [f, hi, hi'] using hh
+      apply Subtype.ext
+      exact Fin.ext hval
+    · simp [f, hi, hi'] at h
+    · simp [f, hi, hi'] at h
+    · have hval : i.1.val - m = i'.1.val - m := by
+        have hh := congrArg (fun q : S' ⊕ R' => q.elim (fun _ => 0) (fun r => r.1.val)) h
+        simpa [f, hi, hi'] using hh
+      have hval' : i.1.val = i'.1.val := by omega
+      apply Subtype.ext
+      exact Fin.ext hval'
+  have hcard' : Fintype.card D' ≤ Fintype.card S' + Fintype.card R' := by
+    calc
+      Fintype.card D' ≤ Fintype.card (S' ⊕ R') :=
+        Fintype.card_le_of_injective f hinj
+      _ = Fintype.card S' + Fintype.card R' := Fintype.card_sum
+  have hcard : D.card ≤ S.card + R.card := by
+    simpa [D', S', R'] using hcard'
+  have hD : _root_.hammingDist u v = D.card := by
+    change (Finset.univ.filter (fun i : Fin n => u i ≠ v i)).card = D.card
+    rfl
+  have hS : _root_.hammingDist (specialWord9 m u) (specialWord9 m v) = S.card := by
+    change (Finset.univ.filter
+      (fun i : Fin m => specialWord9 m u i ≠ specialWord9 m v i)).card = S.card
+    rfl
+  have hR : _root_.hammingDist (residualWord9 m u) (residualWord9 m v) = R.card := by
+    change (Finset.univ.filter
+      (fun i : Fin (n - m) => residualWord9 m u i ≠ residualWord9 m v i)).card = R.card
+    rfl
+  rw [hD, hS, hR]
+  exact hcard
+
+/-- An anchor in a star scope is seen at one of its neighboring odd rows. -/
+theorem starScopeAnchorWitness9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {c : I.ID} (h : Sum.inl c ∈ starScope9 I v) :
+    ∃ b : OddSites9 n, (cube n).Adj v.1 b.1 ∧ c ∈ I.seen b.1 := by
+  classical
+  unfold starScope9 at h
+  rcases Finset.mem_biUnion.mp h with ⟨b, hb, hcoord⟩
+  have hadj : (cube n).Adj v.1 b.1 := (Finset.mem_filter.mp hb).2
+  rcases Finset.mem_union.mp hcoord with hImage | hmask
+  · rcases Finset.mem_image.mp hImage with ⟨d, hd, hEq⟩
+    have hdc : d = c := Sum.inl.inj hEq
+    subst d
+    exact ⟨b, hadj, hd⟩
+  · have hne : Sum.inl c ≠ Sum.inr b := by intro hEq; cases hEq
+    exact False.elim (hne (Finset.mem_singleton.mp hmask))
+
+/-- A mask in a star scope is the mask of an adjacent odd row. -/
+theorem starScopeMaskWitness9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    {v : EvenSites9 n} {b : OddSites9 n} (h : Sum.inr b ∈ starScope9 I v) :
+    (cube n).Adj v.1 b.1 := by
+  classical
+  unfold starScope9 at h
+  rcases Finset.mem_biUnion.mp h with ⟨b', hb', hcoord⟩
+  have hadj : (cube n).Adj v.1 b'.1 := (Finset.mem_filter.mp hb').2
+  rcases Finset.mem_union.mp hcoord with hImage | hmask
+  · rcases Finset.mem_image.mp hImage with ⟨c, hc, hEq⟩
+    have hne : Sum.inl c ≠ Sum.inr b := by intro hEq'; cases hEq'
+    exact False.elim (hne hEq)
+  · have hEq : Sum.inr b = Sum.inr b' := Finset.mem_singleton.mp hmask
+    have hbb' : b = b' := Sum.inr.inj hEq
+    subst b'
+    exact hadj
+
+/-- Intersecting star scopes force the even sites into a Hamming ball of radius `2r+8`. -/
+theorem starScopeOverlapRadius9 {P : Params9} {n : ℕ} {I : IDMap9 P n}
+    (v v' : EvenSites9 n)
+    (h : ¬ Disjoint (starScope9 I v) (starScope9 I v')) :
+    _root_.hammingDist v.1 v'.1 ≤ 2 * P.radius n + 8 := by
+  classical
+  obtain ⟨i, hi, hi'⟩ := Finset.not_disjoint_iff.mp h
+  cases i with
+  | inr b =>
+      have hvb := starScopeMaskWitness9 hi
+      have hv'b := starScopeMaskWitness9 hi'
+      have hvbDist : _root_.hammingDist v.1 b.1 = 1 := by
+        change (cube n).Adj v.1 b.1 at hvb
+        exact hvb
+      have hv'bDist : _root_.hammingDist v'.1 b.1 = 1 := by
+        change (cube n).Adj v'.1 b.1 at hv'b
+        exact hv'b
+      calc
+        _root_.hammingDist v.1 v'.1 ≤
+            _root_.hammingDist v.1 b.1 + _root_.hammingDist b.1 v'.1 :=
+          _root_.hammingDist_triangle v.1 b.1 v'.1
+        _ = 1 + 1 := by rw [_root_.hammingDist_comm b.1 v'.1, hvbDist, hv'bDist]
+        _ ≤ 2 * P.radius n + 8 := by omega
+  | inl c =>
+      obtain ⟨b, hvb, hc⟩ := starScopeAnchorWitness9 hi
+      obtain ⟨b', hv'b', hc'⟩ := starScopeAnchorWitness9 hi'
+      have hcSeen : c ∈ I.seen b.1 := hc
+      have hcSeen' : c ∈ I.seen b'.1 := hc'
+      unfold IDMap9.seen seenIDs9 at hcSeen hcSeen'
+      obtain ⟨u, hu, hcu⟩ := Finset.mem_image.mp hcSeen
+      obtain ⟨u', hu', hcu'⟩ := Finset.mem_image.mp hcSeen'
+      have hbu : (cube n).Adj b.1 u := (Finset.mem_filter.mp hu).2
+      have hb'u' : (cube n).Adj b'.1 u' := (Finset.mem_filter.mp hu').2
+      have hcenter : I.center u = I.center u' := hcu.trans hcu'.symm
+      have hslice : specialWord9 (P.m n) u = specialWord9 (P.m n) u' := by
+        calc
+          specialWord9 (P.m n) u = (I.center u).slice := (I.center_slice u).symm
+          _ = (I.center u').slice := congrArg (fun c : I.ID => c.slice) hcenter
+          _ = specialWord9 (P.m n) u' := I.center_slice u'
+      have hloc : (I.center u).location = (I.center u').location :=
+        congrArg (fun c : I.ID => c.location) hcenter
+      have hnearU :
+          _root_.hammingDist (residualWord9 (P.m n) u) (I.center u).location ≤ P.radius n := by
+        simpa [_root_.hammingDist_comm] using I.center_near u
+      have hnearU' :
+          _root_.hammingDist (I.center u).location (residualWord9 (P.m n) u') ≤ P.radius n := by
+        simpa [hloc] using I.center_near u'
+      have hresid :
+          _root_.hammingDist (residualWord9 (P.m n) u) (residualWord9 (P.m n) u') ≤
+            2 * P.radius n := by
+        calc
+          _root_.hammingDist (residualWord9 (P.m n) u) (residualWord9 (P.m n) u') ≤
+              _root_.hammingDist (residualWord9 (P.m n) u) (I.center u).location +
+                _root_.hammingDist (I.center u).location (residualWord9 (P.m n) u') :=
+            _root_.hammingDist_triangle _ _ _
+          _ ≤ P.radius n + P.radius n := Nat.add_le_add hnearU hnearU'
+          _ = 2 * P.radius n := by omega
+      have huu' : _root_.hammingDist u u' ≤ 2 * P.radius n := by
+        have hsplit := hammingDistSplitBound9 (m := P.m n) u u'
+        rw [hslice, _root_.hammingDist_self, zero_add] at hsplit
+        exact hsplit.trans hresid
+      have hvbDist : _root_.hammingDist v.1 b.1 = 1 := by
+        change (cube n).Adj v.1 b.1 at hvb
+        exact hvb
+      have hbuDist : _root_.hammingDist b.1 u = 1 := by
+        change (cube n).Adj b.1 u at hbu
+        exact hbu
+      have hvu : _root_.hammingDist v.1 u ≤ 2 := by
+        calc
+          _root_.hammingDist v.1 u ≤
+              _root_.hammingDist v.1 b.1 + _root_.hammingDist b.1 u :=
+            _root_.hammingDist_triangle v.1 b.1 u
+          _ = 1 + 1 := by rw [hvbDist, hbuDist]
+          _ = 2 := by norm_num
+      have hb'u'Dist : _root_.hammingDist b'.1 u' = 1 := by
+        change (cube n).Adj b'.1 u' at hb'u'
+        exact hb'u'
+      have hv'b'Dist : _root_.hammingDist v'.1 b'.1 = 1 := by
+        change (cube n).Adj v'.1 b'.1 at hv'b'
+        exact hv'b'
+      have hu'v' : _root_.hammingDist u' v'.1 ≤ 2 := by
+        calc
+          _root_.hammingDist u' v'.1 ≤
+              _root_.hammingDist u' b'.1 + _root_.hammingDist b'.1 v'.1 :=
+            _root_.hammingDist_triangle u' b'.1 v'.1
+          _ = 1 + 1 := by
+            rw [_root_.hammingDist_comm u' b'.1, hb'u'Dist,
+              _root_.hammingDist_comm b'.1 v'.1, hv'b'Dist]
+          _ = 2 := by norm_num
+      calc
+        _root_.hammingDist v.1 v'.1 ≤
+            _root_.hammingDist v.1 u + _root_.hammingDist u v'.1 :=
+          _root_.hammingDist_triangle v.1 u v'.1
+        _ ≤ _root_.hammingDist v.1 u +
+              (_root_.hammingDist u u' + _root_.hammingDist u' v'.1) :=
+          Nat.add_le_add_left (_root_.hammingDist_triangle u u' v'.1) _
+        _ ≤ 2 + (2 * P.radius n + 2) := by omega
+        _ ≤ 2 * P.radius n + 8 := by omega
+
 /-- Split a dependent product into one coordinate and all remaining coordinates. -/
 def coordSplitEquiv {ι : Type*} [DecidableEq ι] {Ω : ι → Type*} (j : ι) :
     (∀ i, Ω i) ≃ Ω j × (∀ i : {i // i ≠ j}, Ω i.1) where

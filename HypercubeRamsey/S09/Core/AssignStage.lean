@@ -410,7 +410,26 @@ theorem p92_star_scope {P : Params9} {n N : ℕ} {M : TagMix N} (S : Setup9 P n 
     intro ω ω' hω
     exact Lane_q_s09_assign1.starScopeBadEq9 S E G ω ω' hω
   · intro v
-    sorry
+    let R : ℕ := 2 * P.radius n + 8
+    let C : Finset (EvenSites9 n) := Finset.univ.filter (fun v' : EvenSites9 n =>
+      v' ≠ v ∧ ¬ Disjoint (starScope9 I v) (starScope9 I v'))
+    let B : Finset (CubeVertex n) := Finset.univ.filter
+      (fun w => _root_.hammingDist v.1 w ≤ R)
+    have hsubset : C.image Subtype.val ⊆ B := by
+      intro w hw
+      rcases Finset.mem_image.mp hw with ⟨v', hv', rfl⟩
+      have hoverlap := (Finset.mem_filter.mp hv').2.2
+      have hd := Lane_q_s09_assign1.starScopeOverlapRadius9 v v' hoverlap
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [R] using hd⟩
+    have himage : (C.image Subtype.val).card = C.card :=
+      Finset.card_image_of_injective C Subtype.val_injective
+    have hball : B.card ≤ (n + 1) ^ R := by
+      simpa [B] using Lane_q_s09_assign1.hammingBallCardBound9 (r := R) v.1
+    calc
+      C.card = (C.image Subtype.val).card := himage.symm
+      _ ≤ B.card := Finset.card_le_card hsubset
+      _ ≤ (n + 1) ^ R := hball
+      _ = lllDegree9 P n := by simp [R, lllDegree9]
 
 /-- P9.2-assignA, the local-lemma input (09:316–318): charges `x = e^{-c₁ n^u/2}` meet
 `e^{-c₁ n^u} ≤ x (1 - x)^{(n+1)^{2r+8}}` for large `n`, since `r log n = o(n^u)` (`σ < u`). -/

@@ -978,6 +978,178 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
         _ = 1 / 4 + etaC / 40 + normGoodMass := hsumUpper
     have hmassLe : normGoodMass ≤ etaC / 100 := le_of_not_gt hnot
     nlinarith [hprofileSecondLower, heta]
+  have hweightedCS (f g : Fin N → ℝ) :
+      (∑ x, μ.w x * f x * g x) ^ 2 ≤
+        (∑ x, μ.w x * f x ^ 2) * (∑ x, μ.w x * g x ^ 2) := by
+    let r : Fin N → ℝ := fun x => Real.sqrt (μ.w x)
+    have hr (x : Fin N) : r x ^ 2 = μ.w x := Real.sq_sqrt (μ.nonneg x)
+    have hsumSq (f : Fin N → ℝ) :
+        ∑ x, (r x * f x) ^ 2 = ∑ x, μ.w x * f x ^ 2 := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [mul_pow, hr]
+    have h := Finset.sum_mul_sq_le_sq_mul_sq (Finset.univ)
+      (fun x => r x * f x) (fun x => r x * g x)
+    calc
+      (∑ x, μ.w x * f x * g x) ^ 2 =
+          (∑ x, (r x * f x) * (r x * g x)) ^ 2 := by
+            congr 1
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [← hr x]
+            ring
+      _ ≤ (∑ x, (r x * f x) ^ 2) * (∑ x, (r x * g x) ^ 2) := h
+      _ = (∑ x, μ.w x * f x ^ 2) * (∑ x, μ.w x * g x ^ 2) := by
+            rw [hsumSq f, hsumSq g]
+  let inner (i : ι) (y : Fin N) : ℝ :=
+    ∑ x, μ.w x * hit E G x y * deg E G (π i) x
+  have hinnerNonneg (i : ι) (y : Fin N) : 0 ≤ inner i y := by
+    dsimp [inner]
+    apply Finset.sum_nonneg
+    intro x hx
+    exact mul_nonneg (mul_nonneg (μ.nonneg x)
+      (by unfold hit; split_ifs <;> norm_num)) (hdegreeBounds i x).1
+  have hinnerUpper (i : ι) (y : Fin N) : inner i y ≤ Real.sqrt (tagMoment i) := by
+    have hcs := hweightedCS (fun x => hit E G x y) (fun x => deg E G (π i) x)
+    have hhit : ∑ x, μ.w x * (hit E G x y) ^ 2 ≤ 1 := by
+      calc
+        (∑ x, μ.w x * (hit E G x y) ^ 2) ≤ ∑ x, μ.w x * 1 := by
+          apply Finset.sum_le_sum
+          intro x hx
+          exact mul_le_mul_of_nonneg_left (by unfold hit; split_ifs <;> norm_num) (μ.nonneg x)
+        _ = 1 := by simp [μ.sum_eq_one]
+    have hsq : inner i y ^ 2 ≤ tagMoment i := by
+      dsimp [inner] at hcs ⊢
+      dsimp [tagMoment]
+      calc
+        (∑ x, μ.w x * hit E G x y * deg E G (π i) x) ^ 2 ≤
+            (∑ x, μ.w x * (hit E G x y) ^ 2) * (∑ x, μ.w x * (deg E G (π i) x) ^ 2) := by
+              simpa [mul_assoc] using hcs
+        _ ≤ 1 * (∑ x, μ.w x * (deg E G (π i) x) ^ 2) :=
+              mul_le_mul_of_nonneg_right hhit (htagMomentBounds i).1
+        _ = ∑ x, μ.w x * (deg E G (π i) x) ^ 2 := by ring
+    exact Real.le_sqrt_of_sq_le hsq
+  have hinnerAverage (i : ι) :
+      ∑ y, π i y * inner i y = tagMoment i := by
+    calc
+      (∑ y, π i y * inner i y) =
+          ∑ y, ∑ x, π i y * (μ.w x * hit E G x y * deg E G (π i) x) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            dsimp [inner]
+            rw [Finset.mul_sum]
+      _ = ∑ x, ∑ y, π i y * (μ.w x * hit E G x y * deg E G (π i) x) := by
+            rw [Finset.sum_comm]
+      _ = ∑ x, μ.w x * deg E G (π i) x *
+            (∑ y, π i y * hit E G x y) := by
+              apply Finset.sum_congr rfl
+              intro x hx
+              calc
+                (∑ y, π i y * (μ.w x * hit E G x y * deg E G (π i) x)) =
+                    ∑ y, (μ.w x * deg E G (π i) x) * (π i y * hit E G x y) := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      ring
+                _ = μ.w x * deg E G (π i) x * (∑ y, π i y * hit E G x y) := by
+                      rw [Finset.mul_sum]
+      _ = ∑ x, μ.w x * (deg E G (π i) x) ^ 2 := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [← show deg E G (π i) x = ∑ y, π i y * hit E G x y from rfl]
+            ring
+      _ = tagMoment i := rfl
+  let norm (i : ι) : ℝ := Real.sqrt (tagMoment i)
+  let projection (i : ι) (y : Fin N) : ℝ := inner i y / norm i
+  have hnormPos (i : ι) (hi : i ∈ NormGood) : 0 < norm i := by
+    have hmoment : 0 < tagMoment i := by
+      have h := (Finset.mem_filter.mp hi).2
+      linarith [heta]
+    dsimp [norm]
+    exact Real.sqrt_pos.2 hmoment
+  have hnormLower (i : ι) (hi : i ∈ NormGood) :
+      1 / 2 + etaC / 100 ≤ norm i := by
+    have hmoment := (Finset.mem_filter.mp hi).2
+    have hbase : (1 / 2 + etaC / 100) ^ 2 ≤ 1 / 4 + etaC / 40 := by
+      norm_num [etaC]
+    dsimp [norm]
+    exact Real.le_sqrt_of_sq_le (le_trans hbase (le_of_lt hmoment))
+  have hprojectionNonneg (i : ι) (hi : i ∈ NormGood) (y : Fin N) :
+      0 ≤ projection i y := by
+    dsimp [projection]
+    exact div_nonneg (hinnerNonneg i y) (Real.sqrt_nonneg _)
+  have hprojectionLeOne (i : ι) (hi : i ∈ NormGood) (y : Fin N) :
+      projection i y ≤ 1 := by
+    have hnorm := hnormPos i hi
+    apply (div_le_one hnorm).2
+    exact (hinnerUpper i y).trans_eq (by rfl)
+  have hprojectionAverage (i : ι) (hi : i ∈ NormGood) :
+      ∑ y, π i y * projection i y = norm i := by
+    have hnorm := hnormPos i hi
+    calc
+      (∑ y, π i y * projection i y) =
+          (∑ y, π i y * inner i y) / norm i := by
+            dsimp [projection]
+            calc
+              (∑ y, π i y * (inner i y / norm i)) =
+                  ∑ y, (π i y * inner i y) / norm i := by
+                    apply Finset.sum_congr rfl
+                    intro y hy
+                    ring
+              _ = (∑ y, π i y * inner i y) / norm i := by rw [Finset.sum_div]
+      _ = tagMoment i / norm i := by rw [hinnerAverage]
+      _ = norm i := by
+            apply (div_eq_iff hnorm.ne').2
+            dsimp [norm]
+            calc
+              tagMoment i = Real.sqrt (tagMoment i) ^ 2 :=
+                (Real.sq_sqrt (htagMomentBounds i).1).symm
+              _ = Real.sqrt (tagMoment i) * Real.sqrt (tagMoment i) := by ring
+  let selected (i : ι) : Finset (Fin N) :=
+    Finset.univ.filter fun y => (1 / 2 + etaC / 200) < projection i y
+  let selectedMass (i : ι) : ℝ := ∑ y ∈ selected i, π i y
+  have hselectedMass (i : ι) (hi : i ∈ NormGood) : etaC / 1000 < selectedMass i := by
+    let S := selected i
+    have hindicator :
+        (∑ y, π i y * (if y ∈ S then (1 : ℝ) else 0)) = selectedMass i := by
+      calc
+        (∑ y, π i y * (if y ∈ S then (1 : ℝ) else 0)) =
+            ∑ y, if y ∈ S then π i y else 0 := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              by_cases h : y ∈ S <;> simp [h]
+        _ = selectedMass i := by simp [selectedMass, S]
+    have hupper :
+        (∑ y, π i y * projection i y) ≤ 1 / 2 + etaC / 200 + selectedMass i := by
+      calc
+        (∑ y, π i y * projection i y) ≤
+            ∑ y, π i y * (1 / 2 + etaC / 200 + if y ∈ S then 1 else 0) := by
+              apply Finset.sum_le_sum
+              intro y hy
+              apply mul_le_mul_of_nonneg_left _ (hπnonneg i y)
+              by_cases h : y ∈ S
+              · have hp := hprojectionLeOne i hi y
+                simp [h]
+                linarith
+              · have hp : projection i y ≤ 1 / 2 + etaC / 200 := by
+                  by_contra hlarge
+                  exact h (Finset.mem_filter.mpr ⟨Finset.mem_univ _, lt_of_not_ge hlarge⟩)
+                simp [h]
+                nlinarith [hp]
+        _ = 1 / 2 + etaC / 200 + selectedMass i := by
+              calc
+                _ = ∑ y, (π i y * (1 / 2 + etaC / 200) +
+                    π i y * (if y ∈ S then 1 else 0)) := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      ring
+                _ = (∑ y, π i y * (1 / 2 + etaC / 200)) +
+                    (∑ y, π i y * (if y ∈ S then 1 else 0)) := by
+                      rw [Finset.sum_add_distrib]
+                _ = 1 / 2 + etaC / 200 + selectedMass i := by
+                      rw [← Finset.sum_mul, hπsum i, hindicator]
+                      ring
+    rw [hprojectionAverage i hi] at hupper
+    nlinarith [hnormLower i hi, heta]
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

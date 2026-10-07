@@ -104,6 +104,27 @@ theorem self_mem_starNearWithin {T : Stage} {k : ℕ}
     a ∈ starNearWithin U a := by
   simp [starNearWithin, self_mem_starNear a.1 hn]
 
+theorem stars_disjoint_of_not_mem_starNear {T : Stage} {k : ℕ}
+    (a b : S15.EvenPosition T k) (hb : b ∉ starNear a) :
+    Disjoint (star a) (star b) := by
+  classical
+  apply Finset.disjoint_left.mpr
+  intro o hoa hob
+  have hinc : b ∈ starIncidence o :=
+    Finset.mem_filter.mpr ⟨Finset.mem_univ _, hob⟩
+  have hnear : b ∈ starNear a := Finset.mem_biUnion.mpr ⟨o, hoa, hinc⟩
+  exact hb hnear
+
+theorem stars_disjoint_of_not_mem_starNearWithin {T : Stage} {k : ℕ}
+    (U : Finset (S15.EvenPosition T k))
+    (a b : {a : S15.EvenPosition T k // a ∈ U})
+    (hnot : b ∉ starNearWithin U a) :
+    Disjoint (star a.1) (star b.1) := by
+  have hnot' : b.1 ∉ starNear a.1 := by
+    intro hmem
+    exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmem⟩)
+  exact stars_disjoint_of_not_mem_starNear a.1 b.1 hnot'
+
 theorem starNearWithin_card_le_sq {T : Stage} {k : ℕ}
     (U : Finset (S15.EvenPosition T k))
     (a : {a : S15.EvenPosition T k // a ∈ U}) :

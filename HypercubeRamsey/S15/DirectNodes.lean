@@ -339,7 +339,215 @@ theorem high_direct_clock_injection (κ : CConsts) (hκ : κ.Admissible) (T : St
 theorem high_direct_column_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hSampler : DirectSamplerClaim κ T hDeep) :
     DirectMomentClaim κ T := by
-  sorry
+  classical
+  have hPpos : 0 < κ.P := by
+    have h := hκ.P_big.2
+    rw [hκ.Ac_eq] at h
+    omega
+  have hRpos : 0 < κ.R := by
+    rw [hκ.R_eq]
+    exact Nat.pow_pos hPpos
+  have hA0 : 12 ≤ κ.A0 := by
+    have h := hκ.A0_big
+    have hR : 1 ≤ (κ.R : ℝ) := by exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hRpos.ne')
+    nlinarith
+  have hcapClaim := Lane_q_s15_direct.highDirect_row_weight_cap_claim κ hκ T
+  have hslackClaim := Lane_q_s15_direct.highDirect_scattered_slack (κ := κ) hκ T
+  have hNlarge : ∀ᶠ k : ℕ in atTop, 3 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually (eventually_ge_atTop 3)
+  have hbstarSmall : ∀ᶠ k : ℕ in atTop, 3 * bstar T k ≤ 1 / 4 := by
+    have hlim : Filter.Tendsto (fun k : ℕ =>
+        (T.S.n k : ℝ) ^ (-(0.96 : ℝ))) atTop (nhds 0) :=
+      (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 0.96)).comp
+        (tendsto_natCast_atTop_atTop.comp T.S.n_tendsto)
+    have hsmall := hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 12))
+    filter_upwards [hsmall] with k hk
+    have hk' : (T.S.n k : ℝ) ^ (-1 + (0.04 : ℝ)) < 1 / 12 := by
+      convert hk using 1 <;> norm_num
+    have hb : bstar T k < 1 / 12 := by simpa [bstar] using hk'
+    nlinarith
+  filter_upwards [hcapClaim, hslackClaim, hNlarge, hbstarSmall]
+    with k hcap hslack hn hbstar
+  intro PT hPT hmode J i x hx
+  let E := evenPatchPositions PT.tiling i
+  let U := {a : EvenPosition T k // a ∈ E}
+  let n := T.S.n k
+  let nR : ℝ := n
+  let M := (PT.tiling.P i).M
+  let succ : Finset (OddAssignment T k) :=
+    Finset.univ.filter fun ys => J.law.w ys ≠ 0
+  let stats : U → OddAssignment T k → ℝ := fun a ys =>
+    (M : ℝ) * directRowWeight PT hPT ys a.1 x
+  let d : U → ℝ := fun _ => 1
+  let near : U → Finset U := fun a => Lane_q_s15_direct.starNearWithin E a
+  let f : ℝ := nR ^ 2 / (Fintype.card U : ℝ)
+  let L : ℝ := (2 : ℝ) ^ n * Real.exp (-200 * PT.tiling.gain i)
+  have hn : 0 < n := by omega
+  have hleHalf := Lane_q_s15_direct.highDirect_prefix_le_half PT hPT hκ hmode
+    (by omega) i
+  have hEllLt : (PT.tiling.P i).ℓ < n := by omega
+  have hEcard := Lane_q_s15_direct.evenPatchPositions_card_eq PT i hEllLt
+  have hEpos : 0 < E.card := by rw [hEcard]; positivity
+  have hUcard : Fintype.card U = E.card := by
+    dsimp [U]
+    exact Fintype.card_coe E
+  have hUpos : 0 < (Fintype.card U : ℝ) := by
+    rw [hUcard]
+    exact_mod_cast hEpos
+  have hUnonempty : Nonempty U := by
+    obtain ⟨a, ha⟩ := Finset.card_pos.mp hEpos
+    exact ⟨⟨a, ha⟩⟩
+  letI : Nonempty U := hUnonempty
+  have hself : ∀ a : U, a ∈ near a := by
+    intro a
+    exact Lane_q_s15_direct.self_mem_starNearWithin E a (by omega)
+  have hnearCard : ∀ a : U, ((near a).card : ℝ) ≤ nR ^ 2 := by
+    intro a
+    have hcard := Lane_q_s15_direct.starNearWithin_card_le_sq E a
+    have hcard' : ((near a).card : ℝ) ≤ (n : ℝ) ^ 2 := by exact_mod_cast hcard
+    simpa [nR, n] using hcard'
+  have hf : 0 ≤ f := by positivity [f]
+  have hnear : ∀ a : U, ((near a).card : ℝ) ≤ f * Fintype.card U := by
+    intro a
+    have hratio : f * (Fintype.card U : ℝ) = nR ^ 2 := by
+      dsimp [f]
+      field_simp [ne_of_gt hUpos]
+    exact le_trans (hnearCard a) hratio.symm.le
+  have hL : 0 ≤ L := by positivity [L]
+  have hZ0 : ∀ a ys, 0 ≤ stats a ys := by
+    intro a ys
+    exact mul_nonneg (by positivity)
+      (Lane_q_s15_direct.directRowWeight_nonneg PT hPT ys a.1 x)
+  have hsupport : ∀ ys, ys ∉ succ → J.law.w ys = 0 := by
+    intro ys hys
+    by_contra hne
+    exact hys (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+  have hZL : ∀ a ys, ys ∈ succ → stats a ys ≤ L := by
+    intro a ys hys
+    have hleaf : a.1.1 ∈ PT.tiling.leaf i := (Finset.mem_filter.mp a.2).2
+    have hpatch : S15.patchAt PT hPT a.1.1 = i :=
+      Lane_q_s15_direct.patchAt_eq_of_leaf PT hPT i a.1.1 hleaf
+    have h := hcap PT hPT hmode i a.1 hpatch x hx ys
+    simpa [stats, L, M, n] using h
+  have hd : ∀ a : U, 0 ≤ d a := by
+    intro a
+    simp [d]
+  have hmean : (Fintype.card U : ℝ)⁻¹ * ∑ a : U, d a ≤ 1 := by
+    simp [d]
+  have hsmall : (n : ℝ) * f * L ≤ 1 := by
+    have h := hslack PT hPT hmode i
+    simpa [f, L, nR, n, U, hUcard] using h
+  have hjoint : ∀ m ≤ n, ∀ s : Fin m → U,
+      (∀ i j : Fin m, j < i → s i ∉ near (s j)) →
+      (∑ ys ∈ succ, J.law.w ys * ∏ j, stats (s j) ys) ≤
+        (4 : ℝ) ^ m * ∏ j, d (s j) := by
+    intro m hm s hsep
+    by_cases hm0 : m = 0
+    · subst m
+      have hsum := Lane_q_s15_direct.finLaw_sum_support_eq_one J.law
+      have hsum' : ∑ ys ∈ succ, J.law.w ys = 1 := by simpa [succ] using hsum
+      have hle : (∑ ys ∈ succ, J.law.w ys) ≤ 1 := le_of_eq hsum'
+      simpa [succ, stats, d] using hle
+    · have hmpos : 0 < m := Nat.pos_of_ne_zero hm0
+      let rows : Fin m → EvenPosition T k := fun j => (s j).1
+      let scope : Finset (OddPosition T k) :=
+        Finset.univ.biUnion fun j : Fin m => Lane_q_s15_direct.star (rows j)
+      have hdisj : ∀ i j : Fin m, i ≠ j →
+          Disjoint (Lane_q_s15_direct.star (rows i)) (Lane_q_s15_direct.star (rows j)) := by
+        intro i j hij
+        rcases lt_trichotomy i j with hlt | heq | hgt
+        · have hnot := hsep j i hlt
+          have hnot' : (s j).1 ∉ Lane_q_s15_direct.starNear (rows i) := by
+            intro hmem
+            exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmem⟩)
+          exact Lane_q_s15_direct.stars_disjoint_of_not_mem_starNear (rows i) (rows j) hnot'
+        · exact (hij heq).elim
+        · have hnot := hsep i j hgt
+          have hnot' : (s i).1 ∉ Lane_q_s15_direct.starNear (rows j) := by
+            intro hmem
+            exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmem⟩)
+          exact (Lane_q_s15_direct.stars_disjoint_of_not_mem_starNear (rows j) (rows i) hnot').symm
+      have hscope : ∀ j, Lane_q_s15_direct.star (rows j) ⊆ scope := by
+        intro j b hb
+        exact Finset.mem_biUnion.mpr ⟨j, Finset.mem_univ _, hb⟩
+      have hscopeNat : scope.card ≤ n ^ 2 := by
+        calc
+          scope.card ≤ ∑ j : Fin m, (Lane_q_s15_direct.star (rows j)).card :=
+            Finset.card_biUnion_le
+          _ ≤ ∑ _j : Fin m, n :=
+            Finset.sum_le_sum fun j _ => Lane_q_s15_direct.star_card_le (rows j)
+          _ = m * n := by simp
+          _ ≤ n * n := Nat.mul_le_mul_right n hm
+          _ = n ^ 2 := by rw [pow_two]
+      have hn1 : 1 ≤ n := by omega
+      have hnPow : n ^ 2 ≤ n ^ 5 := by
+        calc
+          n ^ 2 = n ^ 2 * 1 := by simp
+          _ ≤ n ^ 2 * n ^ 3 := Nat.mul_le_mul_left _ (one_le_pow₀ hn1)
+          _ = n ^ 5 := by rw [← pow_add]
+      have hscopeCard : (scope.card : ℝ) ≤ (n : ℝ) ^ 5 := by
+        exact_mod_cast le_trans hscopeNat hnPow
+      have hdegree : ∀ j b, b ∈ Lane_q_s15_direct.star (rows j) →
+          0 < deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x := by
+        intro j b hb
+        have hleaf : (rows j).1 ∈ PT.tiling.leaf i :=
+          (Finset.mem_filter.mp (s j).2).2
+        have hpatch : S15.patchAt PT hPT (rows j).1 = i :=
+          Lane_q_s15_direct.patchAt_eq_of_leaf PT hPT i (rows j).1 hleaf
+        exact Lane_q_s15_direct.highDirect_star_degrees_positive PT hPT hmode i
+          (rows j) hpatch x hx (by omega) hbstar b hb
+      have hrowBase : ∀ j, (M : ℝ) *
+          S15.directBaseWeight PT hPT (rows j) x ≤ 2 := by
+        intro j
+        have hleaf : (rows j).1 ∈ PT.tiling.leaf i :=
+          (Finset.mem_filter.mp (s j).2).2
+        have hpatch : S15.patchAt PT hPT (rows j).1 = i :=
+          Lane_q_s15_direct.patchAt_eq_of_leaf PT hPT i (rows j).1 hleaf
+        simpa [M] using Lane_q_s15_direct.highDirect_scaled_baseweight_le_two
+          PT hPT hmode i (rows j) hpatch x
+      have hMpos : 0 < M := by
+        have hcard : 0 < ((PT.tiling.P i).X.card : ℝ) :=
+          Nat.cast_pos.mpr (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1)
+        rw [(PT.tiling.P i).cardX] at hcard
+        exact_mod_cast hcard
+      have hj := Lane_q_s15_direct.direct_sampler_separated_product_bound
+        PT hPT J rows x M scope hMpos hdegree hdisj hscope hscopeCard hrowBase hmpos
+      simpa [d] using hj
+  have hscattered := Lane_q_s15_direct.scattered_moment_sampler_bound
+    J.law succ hsupport stats hZ0 L hL hZL near
+    (fun a => Lane_q_s15_direct.self_mem_starNearWithin E a (by omega))
+    f (by positivity) hnear n 4 1 (by norm_num) (by norm_num) d hd hmean hsmall hjoint
+  have haverage : ∀ ys, (Fintype.card U : ℝ)⁻¹ * ∑ a : U, stats a ys =
+      patchColumnAverage PT i (directRowWeight PT hPT) ys x := by
+    intro ys
+    have hsum : ∑ a : U, stats a ys =
+        ∑ a ∈ E, (PT.tiling.P i).M * directRowWeight PT hPT ys a x := by
+      dsimp [stats, M, U]
+      change (∑ a ∈ (Finset.univ : Finset {a : EvenPosition T k // a ∈ E}),
+        (PT.tiling.P i).M * directRowWeight PT hPT ys a.1 x) = _
+      rw [Finset.univ_eq_attach]
+      exact Finset.sum_attach E
+        (fun a : EvenPosition T k => (PT.tiling.P i).M * directRowWeight PT hPT ys a x)
+    unfold patchColumnAverage
+    rw [hUcard, hsum]
+  have hMoment : (J.law).E
+      (fun ys => patchColumnAverage PT i (directRowWeight PT hPT) ys x ^ n) ≤
+        (12 : ℝ) ^ n := by
+    have hEq : (fun ys => patchColumnAverage PT i (directRowWeight PT hPT) ys x ^ n) =
+        fun ys => ((Fintype.card U : ℝ)⁻¹ * ∑ a : U, stats a ys) ^ n := by
+      funext ys
+      rw [(haverage ys).symm]
+    rw [hEq]
+    calc
+      _ ≤ (4 : ℝ) ^ n * (1 + 1) ^ n := by simpa [d] using hscattered
+      _ = (8 : ℝ) ^ n := by
+        rw [show (1 + 1 : ℝ) = 2 by norm_num, ← mul_pow]
+        norm_num
+      _ ≤ (12 : ℝ) ^ n :=
+        pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 8) (by norm_num : (8 : ℝ) ≤ 12) n
+  have hA0pow : (12 : ℝ) ^ n ≤ κ.A0 ^ n :=
+    pow_le_pow_left₀ (by norm_num) hA0 n
+  exact le_trans hMoment hA0pow
 
 /-- L15.1f: Markov, the union bound, and the mass gates yield a direct Hall certificate. -/
 theorem high_direct_load_existence (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

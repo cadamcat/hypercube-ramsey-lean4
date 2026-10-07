@@ -2,6 +2,7 @@ import HypercubeRamsey.S15.DirectNodes
 import HypercubeRamsey.S15.Masks
 import HypercubeRamsey.S15.Capacity
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_alarm
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
 import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
@@ -570,7 +571,32 @@ def ClusterCapacityClaim (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_capacity_certificates (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterCapacityClaim κ T := by
-  sorry
+  have hcp : 0 < κ.cp := hκ.bucket.2.1
+  refine ⟨κ.cp / 12, by positivity, ?_⟩
+  obtain ⟨dmin, hdmin⟩ := eventually_atTop.1
+    (HypercubeRamsey.Lane_sol_s15_alarm.capacity_charge_decay_eventually κ.cp hcp)
+  let d0 : ℕ := ⌈max dmin 1⌉₊
+  have hd0 : dmin ≤ (d0 : ℝ) := (le_max_left _ _).trans (Nat.le_ceil _)
+  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.cluster_bin_size_eventually_ge κ hκ T d0,
+    HypercubeRamsey.Lane_sol_s15_alarm.cluster_selected_atom_cap_eventually κ hκ T]
+      with k hkbin hkatom
+  intro PT hPT hm W hload
+  constructor
+  · intro i D g hpin
+    have hcard := hPT.tiling_valid.bins_card i D.1 D.2
+    have hd : dmin ≤ (D.1.card : ℝ) := by
+      rw [hcard]
+      exact hd0.trans (by exact_mod_cast hkbin PT hPT hm i)
+    have hdecay := hdmin (D.1.card : ℝ) hd
+    have hD := (PT.tiling.P i).bins.nonempty_of_mem_parts D.2
+    exact (HypercubeRamsey.Lane_sol_s15_alarm.pinned_capacity_charge_le
+      PT hPT hm W hκ D.1 hD hdecay.1 g).trans hdecay.2
+  · intro B hB havoid y
+    apply HypercubeRamsey.Lane_sol_s15_alarm.capacity_avoided_column_le
+      PT hPT hm W hκ hload B ?_ havoid y
+    intro g y'
+    exact hkatom PT hPT hm W g (B g)
+      (HypercubeRamsey.Lane_sol_s15_alarm.selected_bin_probability_pos PT hPT hm W B hB g) y'
 
 /-- The output contract of the conditioned bin stage in P15.3(i). -/
 def ClusterBinStageClaim (κ : CConsts) (T : Stage) : Prop :=

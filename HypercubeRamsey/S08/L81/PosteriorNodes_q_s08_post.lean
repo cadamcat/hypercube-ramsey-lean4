@@ -1109,6 +1109,94 @@ theorem anchorU_congr_of_local {η₀ β p : ℝ} {h : ℕ}
   simp only [Ctx.anchorU, normOr]
   rw [hZ, hweight x]
 
+theorem refInt_congr_of_local {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    (hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u) :
+    D.refInt Θ g = D.refInt Θ' g := by
+  classical
+  have hCrossHit (x : Fin D.N) : D.crossHit Θ g x = D.crossHit Θ' g x := by
+    apply propext
+    constructor
+    · intro hx u hu
+      rw [← hcross u hu]
+      exact hx u hu
+    · intro hx u hu
+      rw [hcross u hu]
+      exact hx u hu
+  have hMinus (i : D.M.ι) : D.dMinus Θ g i = D.dMinus Θ' g i := by
+    unfold Ctx.dMinus
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp [hCrossHit]
+  have hweight (i : D.M.ι) :
+      D.M.Λ i * D.dMinus Θ g i = D.M.Λ i * D.dMinus Θ' g i := by rw [hMinus]
+  have hZ : (∑ i, D.M.Λ i * D.dMinus Θ g i) =
+      ∑ i, D.M.Λ i * D.dMinus Θ' g i := by
+    apply Finset.sum_congr rfl
+    intro i hi
+    exact hweight i
+  apply FinProb.ext
+  intro i
+  simp only [Ctx.refInt, normOr]
+  rw [hZ, hweight i]
+
+theorem refCross_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (u : D.CrossSub g)
+    (hΘ : ∀ w ∈ keyBall g 2, Θ w = Θ' w) :
+    D.refCross Θ g u.1 = D.refCross Θ' g u.1 := by
+  classical
+  have huDist : keyDist g u.1 ≤ 1 := (Finset.mem_filter.mp u.2).2.le
+  have hu : u.1 ∈ keyBall g 2 := by
+    apply Finset.mem_filter.mpr
+    exact ⟨Finset.mem_univ _, huDist.trans (by omega)⟩
+  have hpost : D.postW (Θ u.1) = D.postW (Θ' u.1) := by rw [hΘ u.1 hu]
+  have hOmit (x : Fin D.N) : D.omitHit Θ u.1 g x = D.omitHit Θ' u.1 g x := by
+    apply propext
+    constructor
+    · intro hx w hw
+      rcases Finset.mem_erase.mp hw with ⟨_, hwCross⟩
+      have htri := keyDist_triangle_aux g u.1 w
+      have hgw : keyDist g w ≤ 2 := by
+        have huw : keyDist u.1 w = 1 := (Finset.mem_filter.mp hwCross).2
+        omega
+      have hwBall : w ∈ keyBall g 2 := by
+        apply Finset.mem_filter.mpr
+        exact ⟨Finset.mem_univ _, hgw⟩
+      rw [← hΘ w hwBall]
+      exact hx w hw
+    · intro hx w hw
+      rcases Finset.mem_erase.mp hw with ⟨_, hwCross⟩
+      have htri := keyDist_triangle_aux g u.1 w
+      have hgw : keyDist g w ≤ 2 := by
+        have huw : keyDist u.1 w = 1 := (Finset.mem_filter.mp hwCross).2
+        omega
+      have hwBall : w ∈ keyBall g 2 := by
+        apply Finset.mem_filter.mpr
+        exact ⟨Finset.mem_univ _, hgw⟩
+      rw [hΘ w hwBall]
+      exact hx w hw
+  have hweight (q : D.M.ι × Fin D.N) :
+      D.postW (Θ u.1) q.1 * (D.M.μ q.1).w q.2 *
+          (if D.omitHit Θ u.1 g q.2 then 1 else 0) =
+        D.postW (Θ' u.1) q.1 * (D.M.μ q.1).w q.2 *
+          (if D.omitHit Θ' u.1 g q.2 then 1 else 0) := by
+    rw [hpost]
+    simp [hOmit]
+  have hZ :
+      (∑ q : D.M.ι × Fin D.N,
+        D.postW (Θ u.1) q.1 * (D.M.μ q.1).w q.2 *
+          if D.omitHit Θ u.1 g q.2 then 1 else 0) =
+        ∑ q : D.M.ι × Fin D.N,
+          D.postW (Θ' u.1) q.1 * (D.M.μ q.1).w q.2 *
+            if D.omitHit Θ' u.1 g q.2 then 1 else 0 := by
+    apply Finset.sum_congr rfl
+    intro q hq
+    exact hweight q
+  apply FinProb.ext
+  intro q
+  simp only [Ctx.refCross, normOr]
+  rw [hZ, hweight q]
+
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
   classical

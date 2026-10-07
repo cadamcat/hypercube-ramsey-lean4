@@ -269,6 +269,100 @@ theorem badAt9_finite_union_degraded {P : Params9} {hc : HeightChoice9 P} {n : �
       exact badAt9_with_degraded_eligible_size_bound hbase ht₁ ht₂ x.1 x.2
     _ = (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by simp
 
+theorem badIn9_with_eligible_size_bound {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {c t : ℝ} (hbase : HeightBase9 P hc n c)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1)
+    (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+    (heightLaw9 P hc n).pr (fun ω =>
+      badIn9 Finset.univ t ω.1 ω.2 v j ∧
+        (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 Finset.univ ω.1 v j : ℝ)) ≤
+      Real.exp (-((n : ℝ) ^ c)) := by
+  have h := hbase Finset.univ t (1 / 8) ht₁ ht₂ (by norm_num) v j
+  simpa using h
+
+theorem badIn9_finite_union {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {c t : ℝ} (hbase : HeightBase9 P hc n c)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1)
+    (S : Finset (CubeVertex n × Fin (hc.levels n + 1))) :
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S,
+      badIn9 Finset.univ t ω.1 ω.2 x.1 x.2 ∧
+        (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+          (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)) ≤
+      (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by
+  classical
+  calc
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S,
+        badIn9 Finset.univ t ω.1 ω.2 x.1 x.2 ∧
+          (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+            (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)) ≤
+        ∑ x ∈ S, (heightLaw9 P hc n).pr (fun ω =>
+          badIn9 Finset.univ t ω.1 ω.2 x.1 x.2 ∧
+            (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+              (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)) :=
+      finProb_pr_exists_finset_le_sum (heightLaw9 P hc n) S (fun x ω =>
+        badIn9 Finset.univ t ω.1 ω.2 x.1 x.2 ∧
+          (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+            (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ))
+    _ ≤ ∑ x ∈ S, Real.exp (-((n : ℝ) ^ c)) := by
+      apply Finset.sum_le_sum
+      intro x hx
+      exact badIn9_with_eligible_size_bound hbase ht₁ ht₂ x.1 x.2
+    _ = (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by simp
+
+theorem badIn9_finite_union_on_counts {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {c t : ℝ} (hbase : HeightBase9 P hc n c) (hcounts : HeightCounts9 P hc n)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1)
+    (S : Finset (CubeVertex n × Fin (hc.levels n + 1))) :
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S, badIn9 Finset.univ t ω.1 ω.2 x.1 x.2) ≤
+      (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) + Real.exp (-(n : ℝ)) := by
+  classical
+  let small (Pp : Pos9 P hc n → Bool) : Prop :=
+    ∃ v : CubeVertex n, ∃ j : Fin (hc.levels n + 1),
+      (eligCount9 Finset.univ Pp v j : ℝ) < (n : ℝ) ^ (10 : ℝ) / 2
+  let enough (Pp : Pos9 P hc n → Bool) : Prop :=
+    ∀ v : CubeVertex n, ∀ j : Fin (hc.levels n + 1),
+      (n : ℝ) ^ (10 : ℝ) / 2 ≤ (eligCount9 Finset.univ Pp v j : ℝ)
+  let qualified (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) : Prop :=
+    ∃ x ∈ S, badIn9 Finset.univ t ω.1 ω.2 x.1 x.2 ∧
+      (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ)
+  have hqual : (heightLaw9 P hc n).pr qualified ≤
+      (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by
+    simpa [qualified] using badIn9_finite_union hbase ht₁ ht₂ S
+  have hsmall : (heightLaw9 P hc n).pr (fun ω => small ω.1) ≤ Real.exp (-(n : ℝ)) := by
+    calc
+      (heightLaw9 P hc n).pr (fun ω => small ω.1) =
+          (heightPosLaw9 P hc n).pr small := by
+            simpa [heightLaw9] using
+              (prod_pr_fst (heightPosLaw9 P hc n) (heightActLaw9 P hc n) small)
+      _ ≤ Real.exp (-(n : ℝ)) := by
+        simpa [HeightCounts9, small] using hcounts
+  have hgoodCount (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool))
+      (hg : enough ω.1) (x : CubeVertex n × Fin (hc.levels n + 1)) :
+      (1 / 8 : ℝ) * (n : ℝ) ^ (10 : ℝ) ≤
+        (eligCount9 Finset.univ ω.1 x.1 x.2 : ℝ) := by
+    have h := hg x.1 x.2
+    have hnonneg : 0 ≤ (n : ℝ) ^ (10 : ℝ) := Real.rpow_nonneg (Nat.cast_nonneg n) _
+    nlinarith
+  have hsubset (ω : (Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) :
+      (∃ x ∈ S, badIn9 Finset.univ t ω.1 ω.2 x.1 x.2) →
+        qualified ω ∨ small ω.1 := by
+    intro hbad
+    by_cases hg : enough ω.1
+    · obtain ⟨x, hx, hb⟩ := hbad
+      exact Or.inl ⟨x, hx, hb, hgoodCount ω hg x⟩
+    · right
+      unfold enough at hg
+      push_neg at hg
+      simpa [small] using hg
+  calc
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S, badIn9 Finset.univ t ω.1 ω.2 x.1 x.2) ≤
+        (heightLaw9 P hc n).pr (fun ω => qualified ω ∨ small ω.1) :=
+      finProb_pr_mono (heightLaw9 P hc n) hsubset
+    _ ≤ (heightLaw9 P hc n).pr qualified +
+        (heightLaw9 P hc n).pr (fun ω => small ω.1) := finProb_pr_union _ _ _
+    _ ≤ (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) + Real.exp (-(n : ℝ)) :=
+      add_le_add hqual hsmall
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

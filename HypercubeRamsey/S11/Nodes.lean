@@ -17,7 +17,48 @@ theorem linear_jump_selection (T : Stage) (hT : StabilizedOn T FamB)
       DiscAt T (pw ((1 : ℝ) - (δ : ℝ) / 16)) (pw x₀)
         (fun n => n ^ (-(19 : ℝ) / 20)) ∧
       AvL T ((1 / 100 : ℚ) : ℝ) ((1 / 100 : ℚ) : ℝ) ((1 / 200 : ℚ) : ℝ) := by
-  sorry
+  classical
+  let y : ℚ := 1 - δ / 16
+  have hy : 0 < y := by
+    dsimp [y]
+    linarith
+  have hy1 : y < 1 := by
+    dsimp [y]
+    linarith
+  obtain ⟨x₀, hx₀, hx₀1, hUnavailable⟩ :
+      ∃ x₀ : ℚ, 0 < x₀ ∧ x₀ < 1 ∧ ¬ AvP T.swap x₀ y (19 / 20 : ℚ) := by
+    by_contra hNoWitness
+    apply hNoHdag
+    refine ⟨(19 / 20 : ℚ), by norm_num, ?_⟩
+    intro x hx hx1
+    refine ⟨y, hy, hy1, ?_⟩
+    by_contra hNotAvailable
+    exact hNoWitness ⟨x, hx, hx1, hNotAvailable⟩
+  have hTswap : StabilizedOn T.swap FamB := hT.swap FamB_swap
+  have hDiscSwap₀ :=
+    _root_.HypercubeRamsey.discAt_of_not_AvP hTswap hx₀ hy (by norm_num) hUnavailable
+  have hy_cast : (y : ℝ) = (1 : ℝ) - (δ : ℝ) / 16 := by
+    dsimp [y]
+    push_cast
+    ring
+  have hDiscSwap :
+      DiscAt T.swap (pw (x₀ : ℝ)) (pw ((y : ℝ)))
+        (fun n => n ^ (-(19 : ℝ) / 20)) := by
+    have hErr : -((19 / 20 : ℚ) : ℝ) = -(19 : ℝ) / 20 := by norm_num
+    simpa only [hErr] using hDiscSwap₀
+  have hDisc :
+      DiscAt T (pw ((1 : ℝ) - (δ : ℝ) / 16)) (pw (x₀ : ℝ))
+        (fun n => n ^ (-(19 : ℝ) / 20)) := by
+    have h := (DiscAt.swap_iff T (pw (x₀ : ℝ)) (pw (y : ℝ))
+      (fun n => n ^ (-(19 : ℝ) / 20))).mp hDiscSwap
+    simpa only [hy_cast] using h
+  have hAvailQ : AvL T (1 / 100 : ℚ) (1 / 100 : ℚ) (1 / 200 : ℚ) :=
+    hZero (1 / 100 : ℚ) (1 / 100 : ℚ) (1 / 200 : ℚ)
+      (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  have hAvail :
+      AvL T ((1 / 100 : ℚ) : ℝ) ((1 / 100 : ℚ) : ℝ) ((1 / 200 : ℚ) : ℝ) := by
+    simpa using hAvailQ
+  exact ⟨x₀, hx₀, hx₀1, hDisc, hAvail⟩
 
 /-- P11.1c (11:9–394): the complete one-shot cube embedding for the linear-budget jump.
 

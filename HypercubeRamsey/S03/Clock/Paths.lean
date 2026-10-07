@@ -793,6 +793,45 @@ private theorem pathCandidateTicks_antitone {T : ℕ} {R : Type*} [Fintype R] [D
   intro i i' hii
   exact eventPriority_tick_le (π i) (π i') (hstrict i i' hii)
 
+private theorem decPath_cons_tail {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g n : ℕ}
+    {Ω : R → Type*} (r : R) (v : Endpoint R g)
+    (π : Fin (n + 1) → ClockCandidate T R g Ω)
+    (hπ : IsDecPath (Sum.inl r) v π) :
+    (π 0).1 = r ∧ IsDecPath (Sum.inr (π 0).2.1) v (fun i : Fin n => π i.succ) := by
+  rcases hπ with ⟨w, hw0, hwlast, hedges, hkeys, hstrict⟩
+  have hfirst := hedges (0 : Fin (n + 1))
+  have hrow : (π 0).1 = r := by
+    rcases hfirst with ⟨h0, _⟩ | ⟨h0, _⟩
+    · exact (Sum.inl.inj (hw0.symm.trans h0)).symm
+    · exact False.elim (Sum.inl_ne_inr (hw0.symm.trans h0))
+  have hlabel : w (Fin.succ (0 : Fin (n + 1))) = Sum.inr (π 0).2.1 := by
+    rcases hfirst with ⟨_, h1⟩ | ⟨h0, _⟩
+    · exact h1
+    · exact False.elim (Sum.inl_ne_inr (hw0.symm.trans h0))
+  refine ⟨hrow, ?_⟩
+  let w' : Fin (n + 1) → Endpoint R g := fun i => w i.succ
+  have hstart : w' 0 = Sum.inr (π 0).2.1 := by simpa [w'] using hlabel
+  have hlast : w' (Fin.last n) = v := by
+    change w (Fin.last n).succ = v
+    have hidx : (Fin.last n).succ = Fin.last (n + 1) := by
+      apply Fin.ext
+      simp
+    rw [hidx]
+    exact hwlast
+  have hedges' (i : Fin n) :
+      (w' i.castSucc = Sum.inl (π i.succ).1 ∧
+        w' i.succ = Sum.inr (π i.succ).2.1) ∨
+      (w' i.castSucc = Sum.inr (π i.succ).2.1 ∧
+        w' i.succ = Sum.inl (π i.succ).1) := by
+    have h := hedges i.succ
+    simpa [w', Fin.castSucc_succ] using h
+  have hkeys' (i : Fin n) : eventPriority (π i.succ) < rootHorizon T R g :=
+    hkeys i.succ
+  have hstrict' (i i' : Fin n) (hii : i < i') :
+      eventPriority (π i'.succ) < eventPriority (π i.succ) :=
+    hstrict i.succ i'.succ (Fin.strictMono_succ hii)
+  exact ⟨w', hstart, hlast, hedges', hkeys', hstrict'⟩
+
 private theorem samplingTickWeight_le_mark {T : ℕ} {R : Type*} {g : ℕ}
     {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a))
@@ -847,6 +886,45 @@ private theorem pathWeight_le_markProduct {T : ℕ} {R : Type*} [Fintype R] [Dec
     _ = δ ^ j * ∏ i, outputMarkMass (p (π i).1) (lab (π i).1) (π i).2.1 (π i).2.2.2 := by
           rw [Finset.prod_mul_distrib]
           simp
+
+private theorem samplingFirstArrivalMass_le {T : ℕ} {R : Type*} {g : ℕ}
+    {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a))
+    (lab : ∀ a, Ω a → Fin g) (r : R) (y : Fin g) :
+    (∑ t : Fin T, ∑ o : Ω r,
+      (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab (r, y)).w (.tick t o)) ≤
+      (T : ℝ) * δ * labMarg (p r) (lab r) y := by
+  classical
+  calc
+    (∑ t : Fin T, ∑ o : Ω r,
+      (samplingEdgeClockLaw (T := T) δ hδ hδ1 p lab (r, y)).w (.tick t o)) ≤
+        ∑ t : Fin T, ∑ o : Ω r, δ * outputMarkMass (p r) (lab r) y o := by
+          apply Finset.sum_le_sum
+          intro t ht
+          apply Finset.sum_le_sum
+          intro o ho
+          exact samplingTickWeight_le_mark δ hδ hδ1 p lab (r, y) t o
+    _ = (T : ℝ) * δ * labMarg (p r) (lab r) y := by
+          calc
+            (∑ t : Fin T, ∑ o : Ω r, δ * outputMarkMass (p r) (lab r) y o) =
+                ∑ t : Fin T, δ * ∑ o : Ω r, outputMarkMass (p r) (lab r) y o := by
+                  apply Finset.sum_congr rfl
+                  intro t ht
+                  rw [← Finset.mul_sum]
+            _ = ∑ _t : Fin T, δ * labMarg (p r) (lab r) y := by
+                  simp [outputMarkMass_sum]
+            _ = (Fintype.card (Fin T) : ℝ) * (δ * labMarg (p r) (lab r) y) := by
+                  simp [Finset.sum_const, nsmul_eq_mul]
+            _ = (T : ℝ) * δ * labMarg (p r) (lab r) y := by simp [mul_assoc]
+
+private theorem pathWeight_cons {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
+    [∀ a, Fintype (Ω a)] {n : ℕ}
+    (edgeLaw : ∀ e : RowLabel R g, FinProb (MeshClockValue T (Ω e.1)))
+    (c : ClockCandidate T R g Ω) (β : Fin n → ClockCandidate T R g Ω) :
+    pathWeight edgeLaw (Fin.cons c β) =
+      (edgeLaw (c.1, c.2.1)).w (.tick c.2.2.1 c.2.2.2) * pathWeight edgeLaw β := by
+  classical
+  simp [pathWeight, Fin.prod_univ_succ, Fin.cons]
 
 private def candidateSeqEquiv {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*} {j : ℕ} :
     (Fin j → ClockCandidate T R g Ω) ≃
@@ -1514,45 +1592,41 @@ theorem two_row_weight_sum {T : ℕ} {R K : Type*} [Fintype R] [DecidableEq R] [
     apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _)
     intro π hπ hπnot
     exact hpathWeight_nonneg π
-  have hscopeAttach (k : K) :
-      (∑ r : {r : R // r ∈ scope k}, badRootWeight k r.1) =
-        ∑ r ∈ scope k, badRootWeight k r := by
-    rw [Finset.univ_eq_attach]
-    exact Finset.sum_attach (scope k) _
-  let scopePairEquiv :
-      (Σ k : K, {r : R // r ∈ scope k}) ≃ Σ r : R, {k : K // r ∈ scope k} :=
-    { toFun := fun (x : Σ k : K, {r : R // r ∈ scope k}) => ⟨x.2.1, ⟨x.1, x.2.2⟩⟩
-      invFun := fun (x : Σ r : R, {k : K // r ∈ scope k}) => ⟨x.2.1, ⟨x.1, x.2.2⟩⟩
-      left_inv := by rintro ⟨k, ⟨r, hr⟩⟩; rfl
-      right_inv := by rintro ⟨r, ⟨k, hr⟩⟩; rfl }
+  have hscopeIndicator (k : K) :
+      (∑ r ∈ scope k, badRootWeight k r) =
+        ∑ r : R, if r ∈ scope k then badRootWeight k r else 0 := by
+    let P : R → Prop := fun r => r ∈ scope k
+    have hs : scope k = Finset.univ.filter P := by
+      ext r
+      simp [P]
+    calc
+      (∑ r ∈ scope k, badRootWeight k r) =
+          ∑ r ∈ Finset.univ.filter P, badRootWeight k r := by
+            exact Finset.sum_congr hs (by intro r hr; rfl)
+      _ = ∑ r : R, if r ∈ scope k then badRootWeight k r else 0 := by rw [Finset.sum_filter]
   have hswap :
       (∑ k, ∑ r ∈ scope k, badRootWeight k r) =
-        ∑ r : R, ∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r := by
+        ∑ r : R, ∑ k : K, if r ∈ scope k then badRootWeight k r else 0 := by
     calc
       (∑ k, ∑ r ∈ scope k, badRootWeight k r) =
-          ∑ k, ∑ r : {r : R // r ∈ scope k}, badRootWeight k r.1 := by
+          ∑ k, ∑ r : R, if r ∈ scope k then badRootWeight k r else 0 := by
             apply Finset.sum_congr rfl
             intro k hk
-            exact (hscopeAttach k).symm
-      _ = ∑ x : (Σ k : K, {r : R // r ∈ scope k}), badRootWeight x.1 x.2.1 := by
-            symm
-            exact Fintype.sum_sigma'
-              (fun (k : K) (r : {r : R // r ∈ scope k}) => badRootWeight k r.1)
-      _ = ∑ x : (Σ r : R, {k : K // r ∈ scope k}), badRootWeight x.2.1 x.1 := by
-            exact Fintype.sum_equiv scopePairEquiv _ _ (by intro x; rfl)
-      _ = ∑ r : R, ∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r := by
-            exact Fintype.sum_sigma'
-              (fun (r : R) (k : {k : K // r ∈ scope k}) => badRootWeight k.1 r)
+            exact hscopeIndicator k
+      _ = ∑ r : R, ∑ k : K, if r ∈ scope k then badRootWeight k r else 0 := by
+            rw [Finset.sum_comm]
   have hdegreeBound (r : R) :
-      (∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r) ≤ D * allRootWeight r := by
+      (∑ k : K, if r ∈ scope k then badRootWeight k r else 0) ≤ D * allRootWeight r := by
     calc
-      (∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r) ≤
-          ∑ k : {k : K // r ∈ scope k}, allRootWeight r := by
+      (∑ k : K, if r ∈ scope k then badRootWeight k r else 0) ≤
+          ∑ k : K, if r ∈ scope k then allRootWeight r else 0 := by
             apply Finset.sum_le_sum
             intro k hk
-            exact hbadLe k.1 r
+            by_cases h : r ∈ scope k <;> simp [h]
+            exact hbadLe k r
       _ = (Fintype.card {k : K // r ∈ scope k} : ℝ) * allRootWeight r := by
-            simp [Finset.sum_const, nsmul_eq_mul]
+            rw [← Finset.sum_filter]
+            simp [Finset.sum_const, nsmul_eq_mul, Fintype.card_subtype]
       _ ≤ D * allRootWeight r := by
             apply mul_le_mul_of_nonneg_right _ (hweightNonneg r)
             have hcard : (Fintype.card {k : K // r ∈ scope k} : ℝ) ≤ D := by
@@ -1584,7 +1658,7 @@ theorem two_row_weight_sum {T : ℕ} {R K : Type*} [Fintype R] [DecidableEq R] [
           (fun π => pathMeetsOtherRow π (scope k) r), pathWeight edgeLaw π) =
           ∑ k, ∑ r ∈ scope k, badRootWeight k r := by
             simp [badRootWeight]
-      _ = ∑ r : R, ∑ k : {k : K // r ∈ scope k}, badRootWeight k.1 r := hswap
+      _ = ∑ r : R, ∑ k : K, if r ∈ scope k then badRootWeight k r else 0 := hswap
       _ ≤ ∑ r : R, D * allRootWeight r := by
             apply Finset.sum_le_sum
             intro r hr
@@ -1602,19 +1676,10 @@ theorem two_row_weight_sum {T : ℕ} {R K : Type*} [Fintype R] [DecidableEq R] [
       have hreal : ((scope k).card : ℝ) = 0 := le_antisymm hle (by positivity)
       exact_mod_cast hreal
     simp [hempty, hD0]
-  by_cases hlarge : 1 ≤ D * lam / θ
+  by_cases hcoarse : 1 ≤ (j : ℝ) ^ 2 * (D * lam / θ)
   · have hmult : D ≤ (j : ℝ) ^ 2 * D * (D * lam / θ) := by
-      have hj1 : 1 ≤ (j : ℝ) ^ 2 := by
-        have hnat : 1 ≤ j := Nat.one_le_iff_ne_zero.mpr hj
-        have hjR : (1 : ℝ) ≤ (j : ℝ) := by exact_mod_cast hnat
-        nlinarith
-      have hfactor' := mul_le_mul_of_nonneg_left hlarge (sq_nonneg (j : ℝ))
-      have hfactor : 1 ≤ (j : ℝ) ^ 2 * (D * lam / θ) := by
-        calc
-          1 ≤ (j : ℝ) ^ 2 := hj1
-          _ ≤ (j : ℝ) ^ 2 * (D * lam / θ) := by simpa using hfactor'
       calc
-        D ≤ D * ((j : ℝ) ^ 2 * (D * lam / θ)) := le_mul_of_one_le_right hD hfactor
+        D ≤ D * ((j : ℝ) ^ 2 * (D * lam / θ)) := le_mul_of_one_le_right hD hcoarse
         _ = (j : ℝ) ^ 2 * D * (D * lam / θ) := by ring
     exact le_trans hsumRoot (by
       apply mul_le_mul_of_nonneg_right hmult

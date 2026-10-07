@@ -727,6 +727,228 @@ theorem hidWeight_nonneg {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → 
       intro s hs
       exact (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).nonneg (b.2.2 s)
 
+theorem prod_pos_each6 {α : Type*} [Fintype α] (f : α → ℝ)
+    (hf : ∀ a, 0 ≤ f a) (hprod : 0 < ∏ a, f a) : ∀ a, 0 < f a := by
+  intro a
+  have hne : f a ≠ 0 := by
+    intro hz
+    have hzero : (∏ x, f x) = 0 := Finset.prod_eq_zero (Finset.mem_univ a) hz
+    linarith
+  exact lt_of_le_of_ne (hf a) (Ne.symm hne)
+
+theorem baseLaw_local_support6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (b : X.Base)
+    (hb : X.baseLaw.w b ≠ 0) :
+    0 < X.initLaw.w b.1 ∧ (∀ u, 0 < (X.candLaw b.1).w (b.2.1 u)) ∧
+      ∀ s, 0 < (X.tagLawAt (X.parOf b) s).w (b.2.2 s) := by
+  have hbind := bind_w_ne_zero6 X.initLaw X.coarseLaw b hb
+  have hinit : 0 < X.initLaw.w b.1 :=
+    lt_of_le_of_ne (X.initLaw.nonneg b.1) (Ne.symm hbind.1)
+  have hcoarse' := bind_w_ne_zero6
+    (FinProb.pi fun _ : X.Bin => X.candLaw b.1)
+    (fun A => FinProb.pi (X.tagLawAt (b.1, A))) b.2 hbind.2
+  have hcandProb : 0 < (FinProb.pi fun _ : X.Bin => X.candLaw b.1).w b.2.1 :=
+    lt_of_le_of_ne ((FinProb.pi fun _ : X.Bin => X.candLaw b.1).nonneg b.2.1)
+      (Ne.symm hcoarse'.1)
+  have htagProb : 0 < (FinProb.pi (X.tagLawAt (b.1, b.2.1))).w b.2.2 :=
+    lt_of_le_of_ne ((FinProb.pi (X.tagLawAt (b.1, b.2.1))).nonneg b.2.2)
+      (Ne.symm hcoarse'.2)
+  have hcandProd : 0 < ∏ u : X.Bin, (X.candLaw b.1).w (b.2.1 u) := by
+    simpa [FinProb.pi] using hcandProb
+  have htagProd : 0 < ∏ s : X.Key, (X.tagLawAt (b.1, b.2.1) s).w (b.2.2 s) := by
+    simpa [FinProb.pi] using htagProb
+  refine ⟨hinit, prod_pos_each6 _ (fun u => (X.candLaw b.1).nonneg (b.2.1 u) ) hcandProd, ?_⟩
+  exact prod_pos_each6 _ (fun s => (X.tagLawAt (b.1, b.2.1) s).nonneg (b.2.2 s)) htagProd
+
+theorem hidWeight_pos_at_actual_parent6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h : X.Key) (obs : Finset X.Key)
+    (hbase : 0 < X.initLaw.w b.1 ∧ (∀ u, 0 < (X.candLaw b.1).w (b.2.1 u)) ∧
+      ∀ s, 0 < (X.tagLawAt (X.parOf b) s).w (b.2.2 s)) :
+    0 < X.hidWeight b h obs ((X.parOf b).val (primaryName6 h)) := by
+  rcases hbase with ⟨hinit, hcands, htags⟩
+  have hset : (X.parOf b).set (primaryName6 h)
+      ((X.parOf b).val (primaryName6 h)) = X.parOf b := by
+    cases hflag : h.2 <;>
+      simp [Ctx6.parOf, Par6.val, primaryName6, Par6.set, hflag, Function.update_self]
+  have htagprod : 0 < ∏ s ∈ obs,
+      (X.tagLawAt (X.parOf b) s).w (b.2.2 s) := by
+    apply Finset.prod_pos
+    intro s hs
+    exact htags s
+  cases hflag : h.2
+  · have hprior : 0 < (X.candLaw b.1).w (b.2.1 h.1) := hcands h.1
+    have hval : (X.parOf b).val (primaryName6 h) = b.2.1 h.1 := by
+      simp [Ctx6.parOf, Par6.val, primaryName6, hflag]
+    have hset' : (X.parOf b).set (primaryName6 h) (b.2.1 h.1) = X.parOf b := by
+      rw [← hval]
+      exact hset
+    rw [hval]
+    simp only [Ctx6.hidWeight, hflag]
+    rw [hset']
+    exact mul_pos hprior htagprod
+  · have hprior : 0 < X.initLaw.w b.1 *
+        ∏ u ∈ X.binsOf (X.C h), (X.candLaw b.1).w (b.2.1 u) := by
+      apply mul_pos hinit
+      apply Finset.prod_pos
+      intro u hu
+      exact hcands u
+    have hval : (X.parOf b).val (primaryName6 h) = b.1 := by
+      simp [Ctx6.parOf, Par6.val, primaryName6, hflag]
+    have hset' : (X.parOf b).set (primaryName6 h) b.1 = X.parOf b := by
+      rw [← hval]
+      exact hset
+    rw [hval]
+    simp only [Ctx6.hidWeight, hflag]
+    rw [hset']
+    exact mul_pos hprior htagprod
+
+theorem hidPost_weight_formula6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h : X.Key) (y : Fin N)
+    (hsum : 0 < ∑ z, X.hidWeight b h (X.C h) z) :
+    (X.hidPost b h).w y = X.hidWeight b h (X.C h) y / ∑ z, X.hidWeight b h (X.C h) z := by
+  simpa [Ctx6.hidPost] using
+    (normalize6_weight_formula (fun z => X.hidWeight b h (X.C h) z) X.y₀ y
+      (fun z => hidWeight_nonneg X b h (X.C h) z) hsum)
+
+theorem hidPostDel_weight_formula6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h s : X.Key) (y : Fin N)
+    (hsum : 0 < ∑ z, X.hidWeight b h ((X.C h).erase s) z) :
+    (X.hidPostDel b h s).w y =
+      X.hidWeight b h ((X.C h).erase s) y / ∑ z, X.hidWeight b h ((X.C h).erase s) z := by
+  simpa [Ctx6.hidPostDel] using
+    (normalize6_weight_formula (fun z => X.hidWeight b h ((X.C h).erase s) z) X.y₀ y
+      (fun z => hidWeight_nonneg X b h ((X.C h).erase s) z) hsum)
+
+theorem hidWeight_erase_factor_core6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h : X.Key) (obs : Finset X.Key) (y : Fin N)
+    (s : X.Key) (hs : s ∈ obs) :
+    X.hidWeight b h obs y = X.hidWeight b h (obs.erase s) y *
+      (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) := by
+  let f : X.Key → ℝ := fun t =>
+    (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) t).w (b.2.2 t)
+  have hprod : (∏ t ∈ obs, f t) = f s * ∏ t ∈ obs.erase s, f t := by
+    rw [← Finset.prod_erase_mul obs f hs]
+    ring
+  cases hflag : h.2
+  · simp only [Ctx6.hidWeight, hflag, f]
+    rw [hprod]
+    ring
+  · simp only [Ctx6.hidWeight, hflag, f]
+    rw [hprod]
+    ring
+
+set_option maxHeartbeats 600000 in
+theorem hidPostDel_dom_of_predictive6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h s : X.Key) (i : X.ι) (hs : s ∈ X.C h)
+    (hn1 : 1 ≤ (n : ℝ)) (hΛ : 0 < M.Λ i)
+    (hfull : 0 < ∑ z, X.hidWeight b h (X.C h) z)
+    (hdel : 0 < ∑ z, X.hidWeight b h ((X.C h).erase s) z)
+    (hpred : (n : ℝ) ^ (-δ₁) * M.Λ i ≤
+      ∑ z, (X.hidPostDel b h s).w z *
+        (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s))
+    (hlike : ∀ z, 0 < X.hidWeight b h ((X.C h).erase s) z →
+      (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s) ≤
+        (n : ℝ) ^ d₀ * M.Λ i) :
+    ∀ z, (X.hidPost b h).w z ≤ (n : ℝ) ^ d₁ * (X.hidPostDel b h s).w z := by
+  let fullMass := ∑ z, X.hidWeight b h (X.C h) z
+  let delMass := ∑ z, X.hidWeight b h ((X.C h).erase s) z
+  let likelihood := fun z =>
+    (X.tagLawAt ((X.parOf b).set (primaryName6 h) z) s).w (b.2.2 s)
+  let pred := ∑ z, (X.hidPostDel b h s).w z * likelihood z
+  have hfactor (z : Fin N) : X.hidWeight b h (X.C h) z =
+      X.hidWeight b h ((X.C h).erase s) z * likelihood z := by
+    simpa [likelihood] using hidWeight_erase_factor_core6 X b h (X.C h) z s hs
+  have hmassFactor : fullMass = ∑ z, X.hidWeight b h ((X.C h).erase s) z * likelihood z := by
+    unfold fullMass
+    apply Finset.sum_congr rfl
+    intro z hz
+    exact hfactor z
+  have hpredFormula : pred = fullMass / delMass := by
+    calc
+      pred = ∑ z, (X.hidWeight b h ((X.C h).erase s) z / delMass) * likelihood z := by
+        unfold pred
+        apply Finset.sum_congr rfl
+        intro z hz
+        rw [hidPostDel_weight_formula6 X b h s z hdel]
+      _ = ∑ z, (X.hidWeight b h ((X.C h).erase s) z * likelihood z) / delMass := by
+        apply Finset.sum_congr rfl
+        intro z hz
+        ring
+      _ = (∑ z, X.hidWeight b h ((X.C h).erase s) z * likelihood z) / delMass := by
+        rw [← Finset.sum_div]
+      _ = fullMass / delMass := by rw [← hmassFactor]
+  have hnpos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hn1
+  have hpredPos : 0 < pred := by
+    have hthr : 0 < (n : ℝ) ^ (-δ₁) * M.Λ i :=
+      mul_pos (Real.rpow_pos_of_pos hnpos _) hΛ
+    exact lt_of_lt_of_le hthr hpred
+  have hthresholdPos : 0 < (n : ℝ) ^ (-δ₁) * M.Λ i :=
+    mul_pos (Real.rpow_pos_of_pos hnpos _) hΛ
+  have hExp : d₀ + δ₁ ≤ d₁ := by
+    rcases constants6_facts with ⟨_, _, hExp, _, _, _, _, _⟩
+    have hd0 : 0 ≤ d₀ := by norm_num [d₀]
+    linarith
+  have hratioEq : (n : ℝ) ^ d₀ * M.Λ i /
+        ((n : ℝ) ^ (-δ₁) * M.Λ i) = (n : ℝ) ^ (d₀ + δ₁) := by
+    rw [Real.rpow_neg hnpos.le]
+    have hnδ : (n : ℝ) ^ δ₁ ≠ 0 := (Real.rpow_pos_of_pos hnpos _).ne'
+    calc
+      (n : ℝ) ^ d₀ * M.Λ i / (((n : ℝ) ^ δ₁)⁻¹ * M.Λ i) =
+          (n : ℝ) ^ d₀ * (n : ℝ) ^ δ₁ := by
+            field_simp [hΛ.ne', hnδ] <;> ring
+      _ = (n : ℝ) ^ (d₀ + δ₁) := by rw [← Real.rpow_add hnpos]
+  have hratio : (n : ℝ) ^ d₀ * M.Λ i /
+        ((n : ℝ) ^ (-δ₁) * M.Λ i) ≤ (n : ℝ) ^ d₁ := by
+    rw [hratioEq]
+    exact Real.rpow_le_rpow_of_exponent_le hn1 hExp
+  intro z
+  by_cases hz : X.hidWeight b h ((X.C h).erase s) z = 0
+  · have hfullz : X.hidWeight b h (X.C h) z = 0 := by rw [hfactor z, hz]; ring
+    have hfullpost : (X.hidPost b h).w z = 0 := by
+      rw [hidPost_weight_formula6 X b h z hfull]
+      simp [hfullz]
+    have hdelpost : (X.hidPostDel b h s).w z = 0 := by
+      rw [hidPostDel_weight_formula6 X b h s z hdel]
+      simp [hz]
+    rw [hfullpost, hdelpost]
+    simp
+  · have hzpos : 0 < X.hidWeight b h ((X.C h).erase s) z :=
+      lt_of_le_of_ne (hidWeight_nonneg X b h ((X.C h).erase s) z) (Ne.symm hz)
+    have hlikez := hlike z hzpos
+    have hdelpost := hidPostDel_weight_formula6 X b h s z hdel
+    have hfullpost := hidPost_weight_formula6 X b h z hfull
+    have hidentity : (X.hidPost b h).w z =
+        (X.hidPostDel b h s).w z * likelihood z / pred := by
+      rw [hfullpost, hdelpost, hfactor z, hpredFormula]
+      dsimp [fullMass, delMass]
+      field_simp [ne_of_gt hfull, ne_of_gt hdel]
+      <;> ring
+    rw [hidentity]
+    calc
+      (X.hidPostDel b h s).w z * likelihood z / pred ≤
+          (X.hidPostDel b h s).w z * ((n : ℝ) ^ d₀ * M.Λ i) / pred := by
+            apply div_le_div_of_nonneg_right
+            exact mul_le_mul_of_nonneg_left hlikez
+              ((X.hidPostDel b h s).nonneg z)
+            exact le_of_lt hpredPos
+      _ ≤ (X.hidPostDel b h s).w z * ((n : ℝ) ^ d₀ * M.Λ i) /
+          ((n : ℝ) ^ (-δ₁) * M.Λ i) := by
+            apply div_le_div_of_nonneg_left
+            · exact mul_nonneg ((X.hidPostDel b h s).nonneg z)
+                (mul_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) _) (M.Λ_nonneg i))
+            · exact hthresholdPos
+            · exact hpred
+      _ = (X.hidPostDel b h s).w z *
+          (((n : ℝ) ^ d₀ * M.Λ i) / ((n : ℝ) ^ (-δ₁) * M.Λ i)) := by ring
+      _ ≤ (X.hidPostDel b h s).w z * (n : ℝ) ^ d₁ :=
+            mul_le_mul_of_nonneg_left hratio ((X.hidPostDel b h s).nonneg z)
+      _ = (n : ℝ) ^ d₁ * (X.hidPostDel b h s).w z := by ring
+
 theorem hidWeight_pos_tagFactor {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
     (b : X.Base) (h : X.Key) (obs : Finset X.Key) (y : Fin N)

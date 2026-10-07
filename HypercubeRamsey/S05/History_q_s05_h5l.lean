@@ -419,6 +419,15 @@ theorem bayes_posterior_mean5 {A O : Type*} [Fintype A] [DecidableEq A] [Fintype
       rw [← Finset.mul_sum, (L a₀).sum_eq_one]
       ring
 
+theorem step1_prior_cap5 {γ K' χ : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} (X : Setup5 γ K' χ n N E G) (b : X.Base)
+    (hpass : X.Step1Pass b) (ℓ : X.Key) (hℓ : X.KeyOccurs ℓ) (y : Fin N) :
+    (N : ℝ) * (X.prior b ℓ).w y ≤
+      Real.exp (X.p.Kcap * (X.p.q0 * X.p.uSeg n (ℓ.level + 1))) := by
+  have hcap : ¬ X.capFail b ℓ := hpass.2 ℓ hℓ
+  by_contra hlt
+  exact hcap ⟨y, lt_of_not_ge hlt⟩
+
 theorem pi_expect_prod_restrict5
     {I V α : Type*} [Fintype I] [DecidableEq I] [Fintype V] [DecidableEq V] [Fintype α]
     (k : I → V) (hk : Function.Injective k) (Q : V → FinProb α) (f : I → α → ℝ) :

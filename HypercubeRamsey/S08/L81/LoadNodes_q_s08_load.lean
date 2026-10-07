@@ -37,6 +37,17 @@ private theorem pr_le_one {α : Type*} [Fintype α] (P : FinProb α) (A : α →
       Finset.sum_le_sum fun a _ => by split_ifs <;> simp [P.nonneg a]
     _ = 1 := P.sum_eq_one
 
+private theorem pr_mono {α : Type*} [Fintype α] (P : FinProb α)
+    (A B : α → Prop) (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro ω _
+  by_cases hA : A ω
+  · have hB := hAB ω hA
+    simp [hA, hB]
+  · by_cases hB : B ω <;> simp [hA, hB, P.nonneg ω]
+
 private theorem expect_congr {α : Type*} [Fintype α] (P : FinProb α)
     (f g : α → ℝ) (h : ∀ x, f x = g x) : P.expect f = P.expect g := by
   unfold FinProb.expect
@@ -270,6 +281,12 @@ private abbrev PosOutside {η₀ β p : ℝ} {h : ℕ}
 private noncomputable def reconstructPos {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (g : D.KeyT) (P : D.Loc → Bool) (O : PosOutside D g) : D.Pos :=
   fun k => if hk : k = g then P else O ⟨k, by simp [hk]⟩
+
+private theorem reconstructPos_key {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (g : D.KeyT) (P : D.Loc → Bool) (O : PosOutside D g) :
+    reconstructPos D g P O g = P := by
+  funext ℓ
+  simp [reconstructPos]
 
 private theorem rprime_hits_pr {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) (x : Fin D.N) :
     D.R'.pr (fun θ => D.hitsAll x θ) =
@@ -1332,6 +1349,22 @@ private theorem selected_present_of_local_legal {p : HDParams} (Sites : p.Sites)
     omega⟩).1 ℓ hmem
   exact hlegalAt.1
 
+private theorem selected_location_within_ball {p : HDParams} (Sites : p.Sites)
+    (P A : p.Loc → Bool) (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (ℓ : p.Loc)
+    (hsite : v ∈ Sites)
+    (hlegal : p.Legal P E (p.domBall Sites v p.Rlong))
+    (hsel : p.selection Sites P A E τ v = some ℓ) :
+    hammingDist ℓ.1 v ≤ p.r := by
+  have hvdom : v ∈ p.domBall Sites v p.Rlong := by simp [HDParams.domBall, hsite]
+  have hmem := selected_eligible Sites P A E τ v ℓ hsel
+  have hH : p.height Sites P A E p.Rlong v < p.H := by
+    by_contra hh
+    simp [HDParams.selection, HDParams.selectionAt, hh] at hsel
+  let j : Fin (p.H + 1) := ⟨p.height Sites P A E p.Rlong v, by omega⟩
+  have hmem' : ℓ ∈ E v j := by simpa [j] using hmem
+  have hparts := (hlegal v hvdom j).1 ℓ hmem'
+  exact hparts.2.2
+
 private noncomputable def selectedCenterTerm {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ : D.Hist) (e : D.CellT) (x : Fin D.N)
     (P : D.Pos) (t : D.Tags) (A : (hdP η₀ D.n).Loc → Bool)
@@ -1818,6 +1851,54 @@ private theorem rawTAT_expect_at_key {η₀ β p : ℝ} {h : ℕ}
             (fun t A => D.tieLaw.expect (fun τ => f (t g) (A g) (τ g)))
     _ = _ := by rfl
 
+private theorem rawTAT_expect_local_slices {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT)
+    (f : D.Tags → ((hdP η₀ D.n).Loc → Bool) → (hdP η₀ D.n).Ties → ℝ) :
+    (D.rawTAT Θ).expect (fun ω => f ω.1.1 (ω.1.2 g) (ω.2 g)) =
+      (D.tagLawAll Θ).expect (fun t =>
+        (hdP η₀ D.n).actLaw.expect (fun A =>
+          (hdP η₀ D.n).tieLaw.expect (fun τ => f t A τ))) := by
+  classical
+  let p₀ := hdP η₀ D.n
+  unfold Ctx.rawTAT
+  calc
+    (((D.tagLawAll Θ).prod D.actLaw).prod D.tieLaw).expect
+        (fun ω => f ω.1.1 (ω.1.2 g) (ω.2 g)) =
+      (D.tagLawAll Θ).expect (fun t => D.actLaw.expect (fun A =>
+        D.tieLaw.expect (fun τ => f t (A g) (τ g)))) := by
+          calc
+            (((D.tagLawAll Θ).prod D.actLaw).prod D.tieLaw).expect
+                (fun ω => f ω.1.1 (ω.1.2 g) (ω.2 g)) =
+              ((D.tagLawAll Θ).prod D.actLaw).expect (fun z =>
+                D.tieLaw.expect (fun τ => f z.1 (z.2 g) (τ g))) :=
+                  prod_expect ((D.tagLawAll Θ).prod D.actLaw) D.tieLaw
+                    (fun z τ => f z.1 (z.2 g) (τ g))
+            _ = (D.tagLawAll Θ).expect (fun t => D.actLaw.expect (fun A =>
+                D.tieLaw.expect (fun τ => f t (A g) (τ g)))) :=
+                  prod_expect (D.tagLawAll Θ) D.actLaw
+                    (fun t A => D.tieLaw.expect (fun τ => f t (A g) (τ g)))
+    _ = (D.tagLawAll Θ).expect (fun t => p₀.actLaw.expect (fun A =>
+        p₀.tieLaw.expect (fun τ => f t A τ))) := by
+          apply expect_congr
+          intro t
+          have hτ' (A : D.Acts) : D.tieLaw.expect (fun τ => f t (A g) (τ g)) =
+              p₀.tieLaw.expect (fun τ => f t (A g) τ) := by
+            have hτ := pi_singleton_expect
+              (fun _ : D.KeyT => p₀.tieLaw) g (fun τ => f t (A g) τ)
+            simpa [Ctx.tieLaw, p₀] using hτ
+          have hA := pi_singleton_expect
+            (fun _ : D.KeyT => p₀.actLaw) g (fun a => p₀.tieLaw.expect (fun τ => f t a τ))
+          have hA' : D.actLaw.expect (fun A => p₀.tieLaw.expect (fun τ => f t (A g) τ)) =
+              p₀.actLaw.expect (fun a => p₀.tieLaw.expect (fun τ => f t a τ)) := by
+            simpa [Ctx.actLaw, p₀] using hA
+          calc
+            D.actLaw.expect (fun A => D.tieLaw.expect (fun τ => f t (A g) (τ g))) =
+                D.actLaw.expect (fun A => p₀.tieLaw.expect (fun τ => f t (A g) τ)) := by
+                  apply expect_congr
+                  intro A
+                  exact hτ' A
+            _ = p₀.actLaw.expect (fun a => p₀.tieLaw.expect (fun τ => f t a τ)) := hA'
+
 private noncomputable def weightedLaw {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (w : Ω → ℝ) (hw : ∀ ω, 0 ≤ w ω)
     (m : ℝ) (hm : 0 < m) (hmEq : P.expect w = m) : FinProb Ω where
@@ -2179,6 +2260,166 @@ private theorem exp_poly_small (c : ℝ) (hc : 0 < c) (k : ℕ) :
     rw [he, ← Real.rpow_natCast]
   have hsmall := hn₀ n hn0
   simpa [hpow] using hsmall.le
+
+private theorem expect_const {α : Type*} [Fintype α] (P : FinProb α) (c : ℝ) :
+    P.expect (fun _ => c) = c := by
+  unfold FinProb.expect
+  calc
+    (∑ a, P.w a * c) = (∑ a, P.w a) * c := by rw [Finset.sum_mul]
+    _ = c := by rw [P.sum_eq_one]; ring
+
+private theorem expect_sum {α ι : Type*} [Fintype α] [Fintype ι]
+    (P : FinProb α) (f : α → ι → ℝ) :
+    P.expect (fun a => ∑ i, f a i) = ∑ i, P.expect (fun a => f a i) := by
+  classical
+  unfold FinProb.expect
+  change (∑ a, P.w a * ∑ i, f a i) = ∑ i, ∑ a, P.w a * f a i
+  calc
+    (∑ a, P.w a * ∑ i, f a i) = ∑ a, ∑ i, P.w a * f a i := by
+      apply Finset.sum_congr rfl
+      intro a _
+      rw [Finset.mul_sum]
+    _ = ∑ i, ∑ a, P.w a * f a i := Finset.sum_comm
+
+private theorem prod_pr_integral {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (E : α → β → Prop) :
+    (FinProb.prod P Q).pr (fun z => E z.1 z.2) =
+      P.expect (fun a => Q.pr (E a)) := by
+  classical
+  calc
+    (FinProb.prod P Q).pr (fun z => E z.1 z.2) =
+        (FinProb.prod P Q).expect (fun z => if E z.1 z.2 then 1 else 0) := by
+          simpa using (FinProb.pr_indicator (FinProb.prod P Q) (fun z => E z.1 z.2))
+    _ = P.expect (fun a => Q.expect (fun b => if E a b then 1 else 0)) :=
+          prod_expect P Q (fun a b => if E a b then 1 else 0)
+    _ = P.expect (fun a => Q.pr (E a)) := by
+          apply expect_congr
+          intro a
+          simpa using (FinProb.pr_indicator Q (E a)).symm
+
+private theorem prod_pr_ignore_right {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (E : α → Prop) :
+    (FinProb.prod P Q).pr (fun z => E z.1) = P.pr E := by
+  classical
+  rw [prod_pr_integral P Q (fun a _ => E a)]
+  calc
+    P.expect (fun a => Q.pr (fun _ => E a)) =
+        P.expect (fun a => if E a then 1 else 0) := by
+          apply expect_congr
+          intro a
+          by_cases h : E a
+          · simp [h, FinProb.pr, Q.sum_eq_one]
+          · simp [h, FinProb.pr]
+    _ = P.pr E := by simpa using (FinProb.pr_indicator P E).symm
+
+private theorem expect_event_const {α : Type*} [Fintype α]
+    (P : FinProb α) (E : α → Prop) (c : ℝ) :
+    P.expect (fun a => if E a then c else 0) = c * P.pr E := by
+  classical
+  unfold FinProb.expect FinProb.pr
+  calc
+    (∑ a, P.w a * (if E a then c else 0)) =
+        ∑ a, c * (if E a then P.w a else 0) := by
+          apply Finset.sum_congr rfl
+          intro a _
+          by_cases h : E a <;> simp [h] <;> ring
+    _ = c * ∑ a, if E a then P.w a else 0 := by rw [Finset.mul_sum]
+
+private theorem pr_congr_weights {α : Type*} [Fintype α]
+    (P Q : FinProb α) (hw : ∀ a, P.w a = Q.w a) (E : α → Prop) :
+    P.pr E = Q.pr E := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro a _
+  rw [hw]
+
+private theorem prod_pr_assoc {α β γ : Type*} [Fintype α] [Fintype β] [Fintype γ]
+    (P : FinProb α) (Q : FinProb β) (R : FinProb γ) (E : α → β → γ → Prop) :
+    (FinProb.prod P (FinProb.prod Q R)).pr
+        (fun z => E z.1 z.2.1 z.2.2) =
+      (FinProb.prod (FinProb.prod P Q) R).pr
+        (fun z => E z.1.1 z.1.2 z.2) := by
+  calc
+    (FinProb.prod P (FinProb.prod Q R)).pr
+        (fun z => E z.1 z.2.1 z.2.2) =
+      (FinProb.prod P (FinProb.prod Q R)).expect
+        (fun z => if E z.1 z.2.1 z.2.2 then 1 else 0) := by
+          simpa using (FinProb.pr_indicator (FinProb.prod P (FinProb.prod Q R))
+            (fun z => E z.1 z.2.1 z.2.2))
+    _ = (FinProb.prod (FinProb.prod P Q) R).expect
+        (fun z => if E z.1.1 z.1.2 z.2 then 1 else 0) :=
+          (prod_expect_assoc P Q R (fun a b c => if E a b c then 1 else 0)).symm
+    _ = (FinProb.prod (FinProb.prod P Q) R).pr
+        (fun z => E z.1.1 z.1.2 z.2) := by
+          simpa using (FinProb.pr_indicator (FinProb.prod (FinProb.prod P Q) R)
+            (fun z => E z.1.1 z.1.2 z.2)).symm
+
+private theorem expect_le_const {α : Type*} [Fintype α] (P : FinProb α)
+    (f : α → ℝ) (c : ℝ) (hf : ∀ a, f a ≤ c) : P.expect f ≤ c := by
+  calc
+    P.expect f ≤ P.expect (fun _ => c) := FinProb.expect_mono P hf
+    _ = c := expect_const P c
+
+private theorem weighted_product_expect_pr_bound {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (w : α → ℝ) (hw : ∀ a, 0 ≤ w a)
+    (m : ℝ) (hmEq : P.expect w = m) (hm : 0 < m) (E : α → β → Prop)
+    (b : ℝ)
+    (hprob : (FinProb.prod (weightedLaw P w hw m hm hmEq) Q).pr
+      (fun z => E z.1 z.2) ≤ b) :
+    P.expect (fun a => w a * Q.pr (E a)) ≤ m * b := by
+  have hEq := weightedLaw_expect P w hw m hm hmEq (fun a => Q.pr (E a))
+  calc
+    P.expect (fun a => w a * Q.pr (E a)) =
+        m * (weightedLaw P w hw m hm hmEq).expect (fun a => Q.pr (E a)) := hEq
+    _ = m * (FinProb.prod (weightedLaw P w hw m hm hmEq) Q).pr
+          (fun z => E z.1 z.2) := by rw [prod_pr_integral]
+    _ ≤ m * b := mul_le_mul_of_nonneg_left hprob hm.le
+
+private theorem weighted_product_expect_pr_zero {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (w : α → ℝ) (hw : ∀ a, 0 ≤ w a)
+    (m : ℝ) (hmEq : P.expect w = m) (hm : m = 0) (E : α → β → Prop) :
+    P.expect (fun a => w a * Q.pr (E a)) ≤ 0 := by
+  have hpoint : ∀ a, w a * Q.pr (E a) ≤ w a := by
+    intro a
+    have hpr := pr_le_one Q (E a)
+    calc
+      w a * Q.pr (E a) ≤ w a * 1 := mul_le_mul_of_nonneg_left hpr (hw a)
+      _ = w a := by ring
+  calc
+    P.expect (fun a => w a * Q.pr (E a)) ≤ P.expect w := FinProb.expect_mono P hpoint
+    _ = 0 := by rw [hmEq, hm]
+
+private theorem weightedLaw_prod_right {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (w : β → ℝ) (hw : ∀ b, 0 ≤ w b)
+    (m : ℝ) (hm : 0 < m) (hmEq : Q.expect w = m) (a : α) (b : β) :
+    (weightedLaw (FinProb.prod P Q) (fun z => w z.2) (fun z => hw z.2) m hm
+        (by
+          calc
+            (FinProb.prod P Q).expect (fun z => w z.2) =
+                P.expect (fun _ => Q.expect w) := prod_expect P Q (fun _ b => w b)
+            _ = m := by rw [expect_const, hmEq])).w (a, b) =
+      (FinProb.prod P (weightedLaw Q w hw m hm hmEq)).w (a, b) := by
+  simp only [weightedLaw, FinProb.prod]
+  field_simp [hm.ne']
+
+private theorem delta_small {p : ℝ} (hp : 0 < p) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, Real.exp (-(n : ℝ) ^ (p / 2)) ≤ 1 / 4 := by
+  have hrpow : Tendsto (fun n : ℕ => (n : ℝ) ^ (p / 2)) atTop atTop :=
+    (tendsto_rpow_atTop (by linarith : (0 : ℝ) < p / 2)).comp
+      tendsto_natCast_atTop_atTop
+  have hev : ∀ᶠ n : ℕ in atTop, Real.log 4 ≤ (n : ℝ) ^ (p / 2) :=
+    hrpow.eventually (eventually_ge_atTop (Real.log 4))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hev
+  refine ⟨n₀, ?_⟩
+  intro n hn
+  have hlog : Real.log 4 ≤ (n : ℝ) ^ (p / 2) := hn₀ n hn
+  calc
+    Real.exp (-(n : ℝ) ^ (p / 2)) ≤ Real.exp (-Real.log 4) :=
+      Real.exp_le_exp.mpr (by linarith)
+    _ = 1 / 4 := by
+      rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+      norm_num
 
 theorem bcomp_tail (η₀ γ β p K : ℝ) (h : ℕ) (cH : ℝ) (hcH : 0 < cH)
     (hη₀ : 0 < η₀) (hβτ : β < tau8 η₀ / 4) (hK : 0 < K) :
@@ -2580,6 +2821,677 @@ theorem load_tail {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) (C₁ C₂
     (FinProb.bind D.hiddenLaw K).pr (fun q => E q.1 q.2) ≤
         D.hiddenLaw.pr (fun Θ => ¬ D.CompOK C₁ Θ) + b := hbound
     _ ≤ a + b := by linarith [hcomp]
+
+set_option maxHeartbeats 5000000 in
+theorem select_mean (η₀ β p : ℝ) (h : ℕ) (hη₀ : 0 < η₀) (hp : 0 < p)
+    (hadm : HDAdmissible 10 (b0H η₀) (bH η₀) (sigmaH η₀) (zetaH η₀)
+      (thetaH η₀) (aH η₀) (1 / 2) 1 2) :
+    ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.SelectMean := by
+  classical
+  obtain ⟨c, hc, nHeight, hHeightAll⟩ := HypercubeRamsey.height_selection_positive
+    10 (b0H η₀) (bH η₀) (sigmaH η₀) (zetaH η₀) (thetaH η₀) (aH η₀) (1 / 2) 1 2
+    hadm (hdRegime η₀)
+  obtain ⟨nDelta, hDeltaSmall⟩ := delta_small hp
+  rcases hadm.hsz with ⟨hσ, hσζ, hζ, _hθ, _hθ₁⟩
+  obtain ⟨nScale, hScale⟩ := topScale_sq_bound (sigmaH η₀) (zetaH η₀) hσ hσζ hζ
+  obtain ⟨nPoly, hPoly⟩ := exp_poly_small c hc 12
+  let n₀ := max 1 (max nHeight (max nDelta (max nScale nPoly)))
+  refine ⟨n₀, ?_⟩
+  intro D hn hGF
+  intro Θ hgood e x
+  let p₀ := hdP η₀ D.n
+  let g : D.KeyT := e.1
+  have hnHeight : nHeight ≤ D.n := by dsimp [n₀] at hn; omega
+  have hnDelta : nDelta ≤ D.n := by dsimp [n₀] at hn; omega
+  have hnScale : nScale ≤ D.n := by dsimp [n₀] at hn; omega
+  have hnPoly : nPoly ≤ D.n := by dsimp [n₀] at hn; omega
+  have hLamPos : 0 < p₀.lam := by
+    have hnpos : (0 : ℝ) < (D.n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by omega) hGF.pos.1)
+    simpa [p₀, hdP, Real.rpow_natCast] using (Real.rpow_pos_of_pos hnpos (10 : ℝ))
+  have hVball : (Finset.univ.filter (fun u : CubeVertex p₀.d =>
+      hammingDist u e.2 ≤ p₀.r)).Nonempty := by
+    refine ⟨e.2, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩⟩
+    change hammingDist e.2 e.2 ≤ p₀.r
+    unfold hammingDist
+    simp
+  have hVnat : 0 < p₀.V := by
+    unfold HDParams.V
+    rw [← loadHammingBallCard p₀.d p₀.r e.2]
+    exact Finset.card_pos.mpr hVball
+  have hVpos : (0 : ℝ) < (p₀.V : ℝ) := by exact_mod_cast hVnat
+  let presentMass : ℝ := max 0 (min (p₀.lam / (p₀.V : ℝ)) 1)
+  have hpresenceNonneg : 0 ≤ presentMass := le_max_left _ _
+  have hLamVNonneg : 0 ≤ p₀.lam / (p₀.V : ℝ) := div_nonneg hLamPos.le hVpos.le
+  have hpresenceLe : presentMass ≤ p₀.lam / (p₀.V : ℝ) :=
+    max_le hLamVNonneg (min_le_left _ _)
+  have hΔ : D.Δ ≤ 1 / 4 := by
+    simpa [Ctx.Δ] using hDeltaSmall D.n hnDelta
+  have hbase : D.BaseGates Θ g := by
+    by_contra hb
+    exact hgood g (by simp [Ctx.HBad, hb])
+  let mass : ℝ := (D.tilt Θ g).expect
+    (fun i => (D.N : ℝ) * (D.anchorU Θ g i).w x)
+  have hmassNonneg : 0 ≤ mass := by
+    apply expect_nonneg
+    intro i
+    exact mul_nonneg (by positivity) ((D.anchorU Θ g i).nonneg x)
+  have hmassBound : mass ≤ D.Bcomp Θ g x / 4 := by
+    simpa [mass] using tilt_anchor_mass D Θ g x hbase hΔ
+  have hScaleD : p₀.H ≤ 8 * D.n ^ 2 := by
+    simpa [p₀, hdP, HH] using hScale D.n hnScale
+  have hScaleCast : (p₀.H : ℝ) ≤ 8 * (D.n : ℝ) ^ 2 := by exact_mod_cast hScaleD
+  have hLamCast : p₀.lam = (D.n : ℝ) ^ 10 := by
+    simpa [p₀, hdP] using (Real.rpow_natCast (D.n : ℝ) 10)
+  have hPolyD : (D.n : ℝ) ^ 12 * Real.exp (-(D.n : ℝ) ^ c) ≤ 1 / 64 :=
+    hPoly D.n hnPoly
+  have hHeightTail : (p₀.H : ℝ) * p₀.lam * Real.exp (-(D.n : ℝ) ^ c) ≤ 1 / 8 := by
+    calc
+      (p₀.H : ℝ) * p₀.lam * Real.exp (-(D.n : ℝ) ^ c) ≤
+          (8 * (D.n : ℝ) ^ 2) * ((D.n : ℝ) ^ 10) * Real.exp (-(D.n : ℝ) ^ c) := by
+            have hscaleLam : (p₀.H : ℝ) * p₀.lam ≤
+                (8 * (D.n : ℝ) ^ 2) * ((D.n : ℝ) ^ 10) := by
+              calc
+                (p₀.H : ℝ) * p₀.lam ≤ (8 * (D.n : ℝ) ^ 2) * p₀.lam :=
+                  mul_le_mul_of_nonneg_right hScaleCast hLamPos.le
+                _ = (8 * (D.n : ℝ) ^ 2) * ((D.n : ℝ) ^ 10) := by rw [hLamCast]
+            exact mul_le_mul_of_nonneg_right hscaleLam (by positivity)
+      _ = 8 * ((D.n : ℝ) ^ 2 * (D.n : ℝ) ^ 10) * Real.exp (-(D.n : ℝ) ^ c) := by ring
+      _ = 8 * (D.n : ℝ) ^ 12 * Real.exp (-(D.n : ℝ) ^ c) := by
+        have hpow : (D.n : ℝ) ^ 2 * (D.n : ℝ) ^ 10 = (D.n : ℝ) ^ 12 := by
+          rw [← pow_add]
+        rw [hpow]
+      _ ≤ 8 * (1 / 64 : ℝ) := by
+        calc
+          8 * (D.n : ℝ) ^ 12 * Real.exp (-(D.n : ℝ) ^ c) =
+              8 * ((D.n : ℝ) ^ 12 * Real.exp (-(D.n : ℝ) ^ c)) := by ring
+          _ ≤ 8 * (1 / 64 : ℝ) :=
+            mul_le_mul_of_nonneg_left hPolyD (by norm_num : (0 : ℝ) ≤ (8 : ℝ))
+      _ = 1 / 8 := by norm_num
+  have hHeightParams := hHeightAll p₀ rfl rfl rfl rfl rfl hnHeight
+    (by simpa [p₀, hdP] using hGF.hd_ok.2.1)
+    (by simpa [p₀, hdP] using hGF.hd_ok.2.2)
+    (by simpa [p₀, hdP, hdRegime] using hGF.hd_ok.1)
+  have hTermBound (ℓ : D.Loc) :
+      D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+        selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) ≤
+        presentMass * mass * (if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)) := by
+    let Slice := p₀.Loc → Bool
+    let Tags := D.Tags
+    let Acts := p₀.Loc → Bool
+    let Ties := p₀.Ties
+    let tagLaw : FinProb Tags := D.tagLawAll Θ
+    let w : Tags → ℝ := fun t => (D.N : ℝ) * (D.anchorU Θ g (t g ℓ)).w x
+    let ps : FinProb Slice := p₀.posLawForced (some ℓ)
+    let otherLaw : FinProb (PosOutside D g) := FinProb.pi fun _ => p₀.posLaw
+    let actLaw : FinProb Acts := p₀.actLaw
+    let tieLaw : FinProb Ties := p₀.tieLaw
+    let actTie : FinProb (Acts × Ties) := FinProb.prod actLaw tieLaw
+    let joint : FinProb (Slice × Tags) := FinProb.prod ps tagLaw
+    have hw (t : Tags) : 0 ≤ w t := by
+      exact mul_nonneg (by positivity) ((D.anchorU Θ g (t g ℓ)).nonneg x)
+    have hmTag : tagLaw.expect w = mass := by
+      simpa [tagLaw, w, mass, g] using tag_anchor_expect D Θ g ℓ x
+    have hJointMean : joint.expect (fun z => w z.2) = mass := by
+      calc
+        joint.expect (fun z => w z.2) = ps.expect (fun _ => tagLaw.expect w) :=
+          prod_expect ps tagLaw (fun _ t => w t)
+        _ = mass := by rw [expect_const, hmTag]
+    let rate : ℝ := if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)
+    have hForcedBound :
+        (FinProb.prod otherLaw ps).expect (fun z =>
+          (D.rawTAT Θ).expect (fun ω =>
+            selectedCenterTerm D Θ e x (reconstructPos D g z.2 z.1) ω.1.1
+              (ω.1.2 e.1) (ω.2 e.1) ℓ)) ≤ mass * rate := by
+      have hprod := prod_expect otherLaw ps (fun O P =>
+        (D.rawTAT Θ).expect (fun ω =>
+          selectedCenterTerm D Θ e x (reconstructPos D g P O) ω.1.1
+            (ω.1.2 e.1) (ω.2 e.1) ℓ))
+      rw [hprod]
+      apply expect_le_const
+      intro O
+      let fullPos : Slice → D.Pos := fun P => reconstructPos D g P O
+      let elig : Slice → Tags → p₀.EligMap := fun P t => D.elig Θ (fullPos P) t g
+      let Pick : (Slice × Tags) → Acts → Ties → Prop := fun z A τ =>
+        D.LocalLegal Θ (fullPos z.1) z.2 e ∧
+          p₀.selection Finset.univ ((fullPos z.1) g) A (D.elig Θ (fullPos z.1) z.2 g) τ e.2 = some ℓ
+      let HeightEvent : (Slice × Tags) → Acts → Prop := fun z A =>
+        p₀.Legal z.1 (elig z.1 z.2) (p₀.domBall Finset.univ e.2 p₀.Rlong) ∧
+          0 < p₀.height Finset.univ z.1 A (elig z.1 z.2) p₀.Rlong e.2
+      have hlocalLegal (P : Slice) (t : Tags) (hL : D.LocalLegal Θ (fullPos P) t e) :
+          p₀.Legal P (elig P t) (p₀.domBall Finset.univ e.2 p₀.Rlong) := by
+        change p₀.Legal ((fullPos P) g) (D.elig Θ (fullPos P) t g)
+          (p₀.domBall Finset.univ e.2 p₀.Rlong) at hL
+        have hkey : (fullPos P) g = P := by
+          simpa [fullPos] using reconstructPos_key D g P O
+        rw [hkey] at hL
+        simpa [elig] using hL
+      have hselection (P : Slice) (t : Tags) (A : Acts) (τ : Ties)
+          (hS : Pick (P, t) A τ) :
+          p₀.selection Finset.univ P A (elig P t) τ e.2 = some ℓ := by
+        have hkey := reconstructPos_key D g P O
+        simpa [Pick, elig, fullPos, hkey] using hS.2
+      have hlocToHeight (z : Slice × Tags) (A : Acts) (τ : Ties)
+          (hS : Pick z A τ) (hℓ : 0 < ℓ.2.val) : HeightEvent z A := by
+        have hlegal := hlocalLegal z.1 z.2 hS.1
+        have hsel := hselection z.1 z.2 A τ hS
+        have hlev := selected_level_of_local_legal Finset.univ (z.1)
+          A (elig z.1 z.2) τ e.2 ℓ (by simp)
+          hlegal hsel
+        refine ⟨hlegal, ?_⟩
+        rw [hlev]
+        exact hℓ
+      have hTieProb (hℓzero : ℓ.2.val = 0) (z : Slice × Tags) :
+          actTie.pr (fun aτ => Pick z aτ.1 aτ.2) ≤ 3 / p₀.lam := by
+        rcases z with ⟨P, t⟩
+        by_cases hL : D.LocalLegal Θ (fullPos P) t e
+        · have hlegal := hlocalLegal P t hL
+          have hsite : e.2 ∈ p₀.domBall Finset.univ e.2 p₀.Rlong := by
+            simp [HDParams.domBall]
+          let j0 : Fin (p₀.H + 1) := ⟨0, by omega⟩
+          have hlegal0 : p₀.LegalAt P (elig P t) e.2 j0 := hlegal e.2 hsite j0
+          by_cases hmem0 : ℓ ∈ elig P t e.2 j0
+          · have hIncl : ∀ aτ : Acts × Ties, Pick (P, t) aτ.1 aτ.2 →
+                p₀.height Finset.univ P aτ.1 (elig P t) p₀.Rlong e.2 = 0 ∧
+                  p₀.selection Finset.univ P aτ.1 (elig P t) aτ.2 e.2 = some ℓ := by
+              intro aτ hS
+              have hsel := hselection P t aτ.1 aτ.2 hS
+              have hheight := selected_zero_height_of_local_legal Finset.univ
+                P aτ.1 (elig P t) aτ.2 e.2 ℓ (by simp) hlegal hsel hℓzero
+              exact ⟨hheight, hsel⟩
+            calc
+              actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2) ≤
+                  actTie.pr (fun aτ => p₀.height Finset.univ P aτ.1
+                    (elig P t) p₀.Rlong e.2 = 0 ∧
+                    p₀.selection Finset.univ P aτ.1 (elig P t) aτ.2 e.2 = some ℓ) :=
+                pr_mono actTie _ _ hIncl
+              _ ≤ 3 / p₀.lam := HypercubeRamsey.height_selection_tie p₀ hLamPos
+                P (elig P t) Finset.univ e.2 ℓ hlegal0 hmem0
+          · have hempty : ∀ aτ : Acts × Ties, ¬ Pick (P, t) aτ.1 aτ.2 := by
+              intro aτ hS
+              have hsel := hselection P t aτ.1 aτ.2 hS
+              have hlev := selected_level_of_local_legal Finset.univ P
+                aτ.1 (elig P t) aτ.2 e.2 ℓ (by simp) hlegal hsel
+              have hmem := selected_eligible Finset.univ P aτ.1 (elig P t)
+                aτ.2 e.2 ℓ hsel
+              have hH : p₀.height Finset.univ P aτ.1 (elig P t) p₀.Rlong e.2 < p₀.H := by
+                by_contra hh
+                simp [HDParams.selection, HDParams.selectionAt, hh] at hsel
+              let j : Fin (p₀.H + 1) := ⟨p₀.height Finset.univ P aτ.1
+                (elig P t) p₀.Rlong e.2, by omega⟩
+              have hmem' : ℓ ∈ elig P t e.2 j := by simpa [j] using hmem
+              have hj : j = j0 := Fin.ext (by simp [j, j0, hlev, hℓzero])
+              exact hmem0 (by simpa [hj] using hmem')
+            have hzeroProb : actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2) = 0 := by
+              unfold FinProb.pr
+              simp [hempty]
+            rw [hzeroProb]
+            positivity
+        · have hempty : ∀ aτ : Acts × Ties, ¬ Pick (P, t) aτ.1 aτ.2 := by
+            intro aτ hS
+            exact hL hS.1
+          have hzeroProb : actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2) = 0 := by
+            unfold FinProb.pr
+            simp [hempty]
+          rw [hzeroProb]
+          positivity
+      by_cases hmassZero : mass = 0
+      · have hzero := weighted_product_expect_pr_zero joint actTie
+          (fun z => w z.2) (fun z => hw z.2) mass hJointMean hmassZero
+          (fun z aτ => Pick (z.1, z.2) aτ.1 aτ.2)
+        have hrawEq (P : Slice) :
+            (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+              (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ) =
+            tagLaw.expect (fun t => w t * actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2)) := by
+          let Event : Tags → Acts × Ties → Prop := fun t aτ => Pick (P, t) aτ.1 aτ.2
+          let f : Tags → Acts → Ties → ℝ := fun t A τ => by
+            exact @ite ℝ (Event t (A, τ)) (Classical.propDecidable _) (w t) 0
+          have hpoint (ω : D.TAT) :
+              selectedCenterTerm D Θ e x (fullPos P) ω.1.1
+                (ω.1.2 e.1) (ω.2 e.1) ℓ = f ω.1.1 (ω.1.2 e.1) (ω.2 e.1) := by
+            have hselCompat (t : Tags) (A : Acts) (τ : Ties) :
+                D.sel ((Θ, fullPos P), ((t, fun _ => A), fun _ => τ)) e =
+                  p₀.selection Finset.univ ((fullPos P) g) A
+                    (D.elig Θ (fullPos P) t g) τ e.2 := rfl
+            have hcondition :
+                (D.LocalLegal Θ (fullPos P) ω.1.1 e ∧
+                  D.sel ((Θ, fullPos P), ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1)) e =
+                    some ℓ) = Pick (P, ω.1.1) (ω.1.2 e.1) (ω.2 e.1) := by
+              simp only [Pick]
+              rw [hselCompat]
+            dsimp [selectedCenterTerm, f]
+            by_cases hsel : D.LocalLegal Θ (fullPos P) ω.1.1 e ∧
+                D.sel ((Θ, fullPos P), ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1)) e =
+                  some ℓ
+            · have hpick := (Iff.of_eq hcondition).mp hsel
+              have hevent : Event ω.1.1 (ω.1.2 e.1, ω.2 e.1) := by simpa [Event] using hpick
+              simp [hsel, hevent, w, g]
+            · have hnpick : ¬ Pick (P, ω.1.1) (ω.1.2 e.1) (ω.2 e.1) := by
+                intro hpick
+                exact hsel ((Iff.of_eq hcondition).mpr hpick)
+              have hnevent : ¬ Event ω.1.1 (ω.1.2 e.1, ω.2 e.1) := by
+                intro hevent
+                apply hnpick
+                simpa [Event] using hevent
+              simp [hsel, hnevent]
+          have hresult :
+              (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+                (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ) =
+                tagLaw.expect (fun t => w t * actTie.pr (Event t)) := by
+            calc
+              (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+                  (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ) =
+                (D.rawTAT Θ).expect (fun ω => f ω.1.1 (ω.1.2 e.1) (ω.2 e.1)) :=
+                  expect_congr _ _ _ hpoint
+              _ = tagLaw.expect (fun t => actLaw.expect (fun A =>
+                  tieLaw.expect (fun τ => f t A τ))) :=
+                    rawTAT_expect_local_slices D Θ g f
+              _ = tagLaw.expect (fun t => w t * actTie.pr (Event t)) := by
+                    apply expect_congr
+                    intro t
+                    letI : ∀ aτ : Acts × Ties, Decidable (Event t aτ) :=
+                      fun aτ => Classical.propDecidable _
+                    calc
+                      actLaw.expect (fun A => tieLaw.expect (fun τ => f t A τ)) =
+                          actTie.expect (fun aτ =>
+                            @ite ℝ (Event t aτ) (Classical.propDecidable _) (w t) 0) := by
+                            exact (prod_expect actLaw tieLaw
+                              (fun A τ => @ite ℝ (Event t (A, τ))
+                                (Classical.propDecidable _) (w t) 0)).symm
+                      _ = w t * actTie.pr (Event t) := expect_event_const actTie (Event t) (w t)
+          simpa [Event] using hresult
+        have hinnerEq :
+            ps.expect (fun P => (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+              (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) =
+            joint.expect (fun z => w z.2 * actTie.pr (fun aτ => Pick (z.1, z.2) aτ.1 aτ.2)) := by
+          calc
+            ps.expect (fun P => (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+              (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) =
+            ps.expect (fun P => tagLaw.expect (fun t =>
+                  w t * actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2))) := by
+                    apply expect_congr
+                    intro P
+                    exact hrawEq P
+            _ = joint.expect (fun z => w z.2 * actTie.pr (fun aτ => Pick (z.1, z.2) aτ.1 aτ.2)) :=
+                  (prod_expect ps tagLaw
+                    (fun P t => w t * actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2))).symm
+        have hinner :
+            ps.expect (fun P => (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+              (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) ≤ 0 := by
+          rw [hinnerEq]
+          exact hzero
+        simpa [hmassZero, rate] using hinner
+      · have hmassPos : 0 < mass := lt_of_le_of_ne hmassNonneg (Ne.symm hmassZero)
+        let tagWeighted := weightedLaw tagLaw w hw mass hmassPos hmTag
+        let jointWeighted := weightedLaw joint (fun z => w z.2)
+          (fun z => hw z.2) mass hmassPos hJointMean
+        have hweight (z : Slice × Tags) : jointWeighted.w z =
+            (FinProb.prod ps tagWeighted).w z := by
+          rcases z with ⟨P, t⟩
+          simpa [jointWeighted, joint, tagWeighted] using
+            weightedLaw_prod_right ps tagLaw w hw mass hmassPos hmTag P t
+        have hprobFactor : (FinProb.prod jointWeighted actTie).pr
+            (fun z => Pick (z.1.1, z.1.2) z.2.1 z.2.2) ≤ rate := by
+          by_cases hzero : ℓ.2.val = 0
+          · have hprob : (FinProb.prod jointWeighted actTie).pr
+                (fun z => Pick (z.1.1, z.1.2) z.2.1 z.2.2) ≤ 3 / p₀.lam := by
+              rw [prod_pr_integral jointWeighted actTie (fun u aτ => Pick u aτ.1 aτ.2)]
+              exact expect_le_const jointWeighted
+                (fun z => actTie.pr (fun aτ => Pick z aτ.1 aτ.2))
+                (3 / p₀.lam) (fun z => hTieProb hzero z)
+            simpa [rate, hzero] using hprob
+          · have hℓpos : 0 < ℓ.2.val := Nat.pos_of_ne_zero hzero
+            have hheightProb :
+                (FinProb.prod (FinProb.prod ps tagWeighted) actLaw).pr
+                  (fun z => HeightEvent z.1 z.2) ≤ Real.exp (-(D.n : ℝ) ^ c) := by
+              change ((FinProb.prod (p₀.posLawForced (some ℓ)) tagWeighted).prod p₀.actLaw).pr
+                (fun z => p₀.Legal z.1.1 (elig z.1.1 z.1.2)
+                  (p₀.domBall Finset.univ e.2 p₀.Rlong) ∧
+                  0 < p₀.height Finset.univ z.1.1 z.2
+                    (elig z.1.1 z.1.2) p₀.Rlong e.2) ≤ Real.exp (-(D.n : ℝ) ^ c)
+              exact hHeightParams Finset.univ e.2 (by simp) (some ℓ) tagWeighted elig
+            have hweights : ∀ z : (Slice × Tags) × Acts,
+                (jointWeighted.prod actLaw).w z =
+                  ((FinProb.prod ps tagWeighted).prod actLaw).w z := by
+              intro z
+              rcases z with ⟨u, A⟩
+              change jointWeighted.w u * actLaw.w A =
+                (ps.w u.1 * tagWeighted.w u.2) * actLaw.w A
+              rw [hweight u]
+              simp [FinProb.prod]
+            have hprobEps :
+                (FinProb.prod jointWeighted actTie).pr
+                  (fun z => Pick (z.1.1, z.1.2) z.2.1 z.2.2) ≤ Real.exp (-(D.n : ℝ) ^ c) := by
+              calc
+                (FinProb.prod jointWeighted actTie).pr
+                  (fun z => Pick (z.1.1, z.1.2) z.2.1 z.2.2) =
+                      ((FinProb.prod jointWeighted actLaw).prod tieLaw).pr
+                        (fun z => Pick z.1.1 z.1.2 z.2) := by
+                          simpa [actTie] using (prod_pr_assoc jointWeighted actLaw tieLaw
+                            (fun u A τ => Pick (u.1, u.2) A τ))
+                _ ≤ ((FinProb.prod jointWeighted actLaw).prod tieLaw).pr
+                      (fun z => HeightEvent z.1.1 z.1.2) := by
+                        apply pr_mono
+                        intro z hS
+                        exact hlocToHeight z.1.1 z.1.2 z.2 hS hℓpos
+                _ = (FinProb.prod jointWeighted actLaw).pr
+                      (fun z => HeightEvent z.1 z.2) :=
+                        prod_pr_ignore_right (FinProb.prod jointWeighted actLaw) tieLaw
+                          (fun z => HeightEvent z.1 z.2)
+                _ = (FinProb.prod (FinProb.prod ps tagWeighted) actLaw).pr
+                      (fun z => HeightEvent z.1 z.2) :=
+                        pr_congr_weights (FinProb.prod jointWeighted actLaw)
+                          (FinProb.prod (FinProb.prod ps tagWeighted) actLaw)
+                          hweights (fun z => HeightEvent z.1 z.2)
+                _ ≤ Real.exp (-(D.n : ℝ) ^ c) := hheightProb
+            simpa [rate, hzero] using hprobEps
+        have hinner :
+            ps.expect (fun P => (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+              (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) ≤ mass * rate := by
+          have hinnerEq :
+              ps.expect (fun P => (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+                (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) =
+              joint.expect (fun z => w z.2 * actTie.pr (fun aτ => Pick (z.1, z.2) aτ.1 aτ.2)) := by
+            calc
+              ps.expect (fun P => (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+                (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) =
+                  ps.expect (fun P => tagLaw.expect (fun t =>
+                    w t * actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2))) := by
+                      apply expect_congr
+                      intro P
+                      have hrawEq (P : Slice) := by
+                        let Event : Tags → Acts × Ties → Prop := fun t aτ => Pick (P, t) aτ.1 aτ.2
+                        let f : Tags → Acts → Ties → ℝ := fun t A τ => by
+                          exact @ite ℝ (Event t (A, τ)) (Classical.propDecidable _) (w t) 0
+                        have hpoint (ω : D.TAT) :
+                            selectedCenterTerm D Θ e x (fullPos P) ω.1.1
+                              (ω.1.2 e.1) (ω.2 e.1) ℓ = f ω.1.1 (ω.1.2 e.1) (ω.2 e.1) := by
+                          have hselCompat (t : Tags) (A : Acts) (τ : Ties) :
+                              D.sel ((Θ, fullPos P), ((t, fun _ => A), fun _ => τ)) e =
+                                p₀.selection Finset.univ ((fullPos P) g) A
+                                  (D.elig Θ (fullPos P) t g) τ e.2 := rfl
+                          have hcondition :
+                              (D.LocalLegal Θ (fullPos P) ω.1.1 e ∧
+                                D.sel ((Θ, fullPos P),
+                                  ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1)) e =
+                                  some ℓ) = Pick (P, ω.1.1) (ω.1.2 e.1) (ω.2 e.1) := by
+                            simp only [Pick]
+                            rw [hselCompat]
+                          dsimp [selectedCenterTerm, f]
+                          by_cases hsel : D.LocalLegal Θ (fullPos P) ω.1.1 e ∧
+                              D.sel ((Θ, fullPos P),
+                                ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1)) e = some ℓ
+                          · have hpick := (Iff.of_eq hcondition).mp hsel
+                            have hevent : Event ω.1.1 (ω.1.2 e.1, ω.2 e.1) := by
+                              simpa [Event] using hpick
+                            simp [hsel, hevent, w, g]
+                          · have hnpick : ¬ Pick (P, ω.1.1) (ω.1.2 e.1) (ω.2 e.1) := by
+                              intro hpick
+                              exact hsel ((Iff.of_eq hcondition).mpr hpick)
+                            have hnevent : ¬ Event ω.1.1 (ω.1.2 e.1, ω.2 e.1) := by
+                              intro hevent
+                              apply hnpick
+                              simpa [Event] using hevent
+                            simp [hsel, hnevent]
+                        have hresult :
+                            (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+                              (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ) =
+                              tagLaw.expect (fun t => w t * actTie.pr (Event t)) := by
+                          calc
+                            (D.rawTAT Θ).expect (fun ω => selectedCenterTerm D Θ e x
+                                (fullPos P) ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ) =
+                              (D.rawTAT Θ).expect (fun ω => f ω.1.1 (ω.1.2 e.1) (ω.2 e.1)) :=
+                                expect_congr _ _ _ hpoint
+                            _ = tagLaw.expect (fun t => actLaw.expect (fun A =>
+                                tieLaw.expect (fun τ => f t A τ))) :=
+                                  rawTAT_expect_local_slices D Θ g f
+                            _ = tagLaw.expect (fun t => w t * actTie.pr (Event t)) := by
+                                  apply expect_congr
+                                  intro t
+                                  letI : ∀ aτ : Acts × Ties, Decidable (Event t aτ) :=
+                                    fun aτ => Classical.propDecidable _
+                                  calc
+                                    actLaw.expect (fun A => tieLaw.expect (fun τ => f t A τ)) =
+                                        actTie.expect (fun aτ =>
+                                          @ite ℝ (Event t aτ) (Classical.propDecidable _) (w t) 0) := by
+                                          exact (prod_expect actLaw tieLaw
+                                            (fun A τ => @ite ℝ (Event t (A, τ))
+                                              (Classical.propDecidable _) (w t) 0)).symm
+                                    _ = w t * actTie.pr (Event t) :=
+                                          expect_event_const actTie (Event t) (w t)
+                        simpa [Event] using hresult
+                      exact hrawEq P
+              _ = joint.expect (fun z => w z.2 * actTie.pr
+                  (fun aτ => Pick (z.1, z.2) aτ.1 aτ.2)) :=
+                    (prod_expect ps tagLaw
+                      (fun P t => w t * actTie.pr (fun aτ => Pick (P, t) aτ.1 aτ.2))).symm
+          rw [hinnerEq]
+          exact weighted_product_expect_pr_bound joint actTie (fun z => w z.2)
+            (fun z => hw z.2) mass hJointMean hmassPos
+            (fun z aτ => Pick (z.1, z.2) aτ.1 aτ.2) rate hprobFactor
+        exact hinner
+    let centerTermAverage : D.Pos → ℝ := fun P =>
+      (D.rawTAT Θ).expect (fun ω =>
+        selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)
+    have hzeroIfAbsent (P : D.Pos) (hnot : ¬ P g ℓ) :
+        centerTermAverage P = 0 := by
+      have hpoint (ω : D.TAT) :
+          selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ = 0 := by
+        let q : D.Pre := ((Θ, P), ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1))
+        by_cases hL : D.LocalLegal Θ P ω.1.1 e
+        · by_cases hS : D.sel q e = some ℓ
+          · have hlegal : p₀.Legal (P e.1) (D.elig Θ P ω.1.1 e.1)
+                (p₀.domBall Finset.univ e.2 p₀.Rlong) := by
+              change p₀.Legal (P e.1) (D.elig Θ P ω.1.1 e.1) _ at hL
+              exact hL
+            have hsel : p₀.selection Finset.univ (P e.1) (ω.1.2 e.1)
+                (D.elig Θ P ω.1.1 e.1) (ω.2 e.1) e.2 = some ℓ := by
+              simpa [q, Ctx.sel] using hS
+            have hpresent := selected_present_of_local_legal Finset.univ (P e.1)
+              (ω.1.2 e.1) (D.elig Θ P ω.1.1 e.1) (ω.2 e.1) e.2 ℓ (by simp)
+              hlegal hsel
+            exact (hnot (by simpa [g] using hpresent)).elim
+          · simp [selectedCenterTerm, q, hL, hS]
+        · simp [selectedCenterTerm, q, hL]
+      calc
+        centerTermAverage P = (D.rawTAT Θ).expect (fun ω => 0) := by
+          apply expect_congr
+          intro ω
+          exact hpoint ω
+        _ = 0 := expect_const _ 0
+    have hcenterTermSplit :
+        D.posLaw.expect centerTermAverage = presentMass *
+          (FinProb.prod otherLaw ps).expect (fun z =>
+            centerTermAverage (reconstructPos D g z.2 z.1)) := by
+      have hvanish : D.posLaw.expect centerTermAverage =
+          D.posLaw.expect (fun P => if P g ℓ then centerTermAverage P else 0) := by
+        apply expect_congr
+        intro P
+        by_cases hpresent : P g ℓ
+        · simp [hpresent]
+        · simp [hpresent, hzeroIfAbsent P hpresent]
+      calc
+        D.posLaw.expect centerTermAverage =
+            D.posLaw.expect (fun P => if P g ℓ then centerTermAverage P else 0) := hvanish
+        _ = presentMass * (FinProb.prod otherLaw ps).expect (fun z =>
+              centerTermAverage (reconstructPos D g z.2 z.1)) := by
+                have hsplit := posLaw_forced_split D g ℓ centerTermAverage
+                change D.posLaw.expect (fun P => if P g ℓ then centerTermAverage P else 0) =
+                  presentMass * (FinProb.prod otherLaw ps).expect (fun z =>
+                    centerTermAverage (reconstructPos D g z.2 z.1)) at hsplit
+                exact hsplit
+    calc
+      D.posLaw.expect centerTermAverage = presentMass *
+          (FinProb.prod otherLaw ps).expect (fun z =>
+            centerTermAverage (reconstructPos D g z.2 z.1)) := hcenterTermSplit
+      _ ≤ presentMass * (mass * rate) :=
+        mul_le_mul_of_nonneg_left hForcedBound hpresenceNonneg
+      _ = presentMass * mass *
+          (if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)) := by
+            change presentMass * (mass * rate) = presentMass * mass * rate
+            ring
+  have hzeroOutside (ℓ : D.Loc) (hnot : ℓ ∉
+      ((Finset.univ.filter (fun u : CubeVertex p₀.d => hammingDist u e.2 ≤ p₀.r)).product
+        (Finset.univ : Finset (Fin (p₀.H + 1))))) :
+      D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+        selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) = 0 := by
+    have hfar : ¬ hammingDist ℓ.1 e.2 ≤ p₀.r := by
+      intro hd
+      apply hnot
+      simp [hd]
+    have hpoint (P : D.Pos) (ω : D.TAT) :
+        selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ = 0 := by
+      let q : D.Pre := ((Θ, P), ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1))
+      by_cases hL : D.LocalLegal Θ P ω.1.1 e
+      · by_cases hS : D.sel q e = some ℓ
+        · have hlegal : p₀.Legal (P e.1) (D.elig Θ P ω.1.1 e.1)
+              (p₀.domBall Finset.univ e.2 p₀.Rlong) := by
+            change p₀.Legal (P e.1) (D.elig Θ P ω.1.1 e.1) _ at hL
+            exact hL
+          have hsel : p₀.selection Finset.univ (P e.1) (ω.1.2 e.1)
+              (D.elig Θ P ω.1.1 e.1) (ω.2 e.1) e.2 = some ℓ := by
+            simpa [Ctx.sel] using hS
+          have hdist := selected_location_within_ball Finset.univ (P e.1)
+            (ω.1.2 e.1) (D.elig Θ P ω.1.1 e.1) (ω.2 e.1) e.2 ℓ (by simp)
+            hlegal hsel
+          exact (hfar hdist).elim
+        · simp [selectedCenterTerm, q, hL, hS]
+      · simp [selectedCenterTerm, q, hL]
+    calc
+      D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+          selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) =
+        D.posLaw.expect (fun _ => 0) := by
+          apply expect_congr
+          intro P
+          calc
+            (D.rawTAT Θ).expect (fun ω =>
+                selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ) =
+              (D.rawTAT Θ).expect (fun _ => 0) := by
+                apply expect_congr
+                intro ω
+                exact hpoint P ω
+            _ = 0 := expect_const _ 0
+      _ = 0 := expect_const _ 0
+  let Ball : Finset (CubeVertex p₀.d) :=
+    Finset.univ.filter (fun u => hammingDist u e.2 ≤ p₀.r)
+  let Centers : Finset D.Loc := Ball.product (Finset.univ : Finset (Fin (p₀.H + 1)))
+  have htermSum :
+      D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+        (if D.LocalLegal Θ P ω.1.1 e then 1 else 0) *
+          D.selLoad ((Θ, P), ω) e x)) =
+        ∑ ℓ : D.Loc, D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+          selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) := by
+    calc
+      _ = D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+          ∑ ℓ : D.Loc, selectedCenterTerm D Θ e x P ω.1.1
+            (ω.1.2 e.1) (ω.2 e.1) ℓ)) := by
+              apply expect_congr
+              intro P
+              apply expect_congr
+              intro ω
+              have hload : D.selLoad ((Θ, P), ω) e x =
+                  D.selLoad ((Θ, P), ((ω.1.1, fun _ => ω.1.2 e.1), fun _ => ω.2 e.1)) e x := by
+                rfl
+              rw [hload]
+              exact selectedCenterTerm_sum D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1)
+      _ = D.posLaw.expect (fun P => ∑ ℓ : D.Loc,
+            (D.rawTAT Θ).expect (fun ω =>
+              selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) := by
+              apply expect_congr
+              intro P
+              exact expect_sum (D.rawTAT Θ) (fun ω ℓ =>
+                selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)
+      _ = ∑ ℓ : D.Loc, D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+            selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) :=
+            expect_sum D.posLaw (fun P ℓ => (D.rawTAT Θ).expect (fun ω =>
+              selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ))
+  have hsumBound :
+      (∑ ℓ : D.Loc, D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+        selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ))) ≤
+        ∑ ℓ ∈ Centers, presentMass * mass *
+          (if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)) := by
+    calc
+      (∑ ℓ : D.Loc, D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+        selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ))) =
+          ∑ ℓ ∈ Centers, D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+            selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) := by
+              symm
+              apply Finset.sum_subset (Finset.subset_univ Centers)
+              intro ℓ hℓ hnot
+              exact hzeroOutside ℓ hnot
+      _ ≤ ∑ ℓ ∈ Centers, presentMass * mass *
+            (if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)) :=
+            Finset.sum_le_sum fun ℓ hℓ => hTermBound ℓ
+  have hlevelSum :
+      ∑ j : Fin (p₀.H + 1),
+        (if j.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)) =
+        3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c) := by
+    rw [Fin.sum_univ_succ]
+    simp [Finset.sum_const, nsmul_eq_mul]
+  have hcenterSum :
+      (∑ ℓ ∈ Centers, presentMass * mass *
+        (if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c))) =
+        presentMass * mass * ((Ball.card : ℝ) *
+          (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) := by
+    rw [show Centers = Ball.product (Finset.univ : Finset (Fin (p₀.H + 1))) by rfl]
+    change (∑ z ∈ Ball ×ˢ (Finset.univ : Finset (Fin (p₀.H + 1))),
+      presentMass * mass *
+        (if z.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c))) = _
+    rw [Finset.sum_product]
+    calc
+      (∑ u ∈ Ball, ∑ j ∈ (Finset.univ : Finset (Fin (p₀.H + 1))),
+          presentMass * mass *
+            (if j.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c))) =
+        ∑ u ∈ Ball, presentMass * mass *
+          (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c)) := by
+            apply Finset.sum_congr rfl
+            intro u hu
+            rw [← Finset.mul_sum, hlevelSum]
+      _ = presentMass * mass * ((Ball.card : ℝ) *
+            (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) := by
+              simp [Finset.sum_const, nsmul_eq_mul]
+              ring
+  have hBallCard : (Ball.card : ℝ) = (p₀.V : ℝ) := by
+    dsimp [Ball, p₀]
+    rw [loadHammingBallCard]
+    rfl
+  have hrateTotal :
+      presentMass * mass * ((Ball.card : ℝ) *
+          (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) ≤ 4 * mass := by
+    rw [hBallCard]
+    have hqV : presentMass * (p₀.V : ℝ) ≤ p₀.lam := by
+      have := mul_le_mul_of_nonneg_right hpresenceLe hVpos.le
+      have hdiv : (p₀.lam / (p₀.V : ℝ)) * p₀.V = p₀.lam := by
+        field_simp [ne_of_gt hVpos]
+      nlinarith
+    have hcoeff : p₀.lam *
+        (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c)) ≤ 4 := by
+      have hfirst : p₀.lam * (3 / p₀.lam) = 3 := by field_simp [ne_of_gt hLamPos]
+      nlinarith [hHeightTail]
+    calc
+      presentMass * mass * ((p₀.V : ℝ) *
+          (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) =
+        mass * (presentMass * (p₀.V : ℝ) *
+          (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) := by ring
+      _ ≤ mass * (p₀.lam *
+          (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) :=
+            mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_right hqV (by positivity)) hmassNonneg
+      _ ≤ mass * 4 := mul_le_mul_of_nonneg_left hcoeff hmassNonneg
+      _ = 4 * mass := by ring
+  have hfinal :
+      D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+        (if D.LocalLegal Θ P ω.1.1 e then 1 else 0) * D.selLoad ((Θ, P), ω) e x)) ≤
+        D.Bcomp Θ g x := by
+    calc
+      _ = ∑ ℓ : D.Loc, D.posLaw.expect (fun P => (D.rawTAT Θ).expect (fun ω =>
+            selectedCenterTerm D Θ e x P ω.1.1 (ω.1.2 e.1) (ω.2 e.1) ℓ)) := htermSum
+      _ ≤ ∑ ℓ ∈ Centers, presentMass * mass *
+            (if ℓ.2.val = 0 then 3 / p₀.lam else Real.exp (-(D.n : ℝ) ^ c)) := hsumBound
+      _ = presentMass * mass * ((Ball.card : ℝ) *
+            (3 / p₀.lam + (p₀.H : ℝ) * Real.exp (-(D.n : ℝ) ^ c))) := hcenterSum
+      _ ≤ 4 * mass := hrateTotal
+      _ ≤ D.Bcomp Θ g x := by nlinarith [hmassBound]
+  simpa [Ctx.SelectMean, g] using hfinal
 
 end HypercubeRamsey.S08.Lane_q_s08_load
 

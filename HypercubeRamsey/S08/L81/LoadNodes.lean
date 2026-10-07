@@ -33,7 +33,7 @@ the gates `S_g(i)U_{g,i}(x) ≤ η_g(i)μ_i(x)1[x hits Θ_{E(g)}]/((1-Δ)·.8A_g
 theorem select_mean (hη₀ : 0 < η₀) (hp : 0 < p)
     (hadm : HDAdmissible 10 (b0H η₀) (bH η₀) (sigmaH η₀) (zetaH η₀) (thetaH η₀) (aH η₀) (1 / 2) 1 2) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.SelectMean := by
-  sorry
+  exact Lane_q_s08_load.select_mean η₀ β p h hη₀ hp hadm
 
 /-- L8.1i(ii) (08:336–343): under the raw hidden law `E η_g = Λ` (averaging `Θ_g`), the cross tuples are independent
 of `Θ_g` and a retained `x` survives them with probability `α_x^{|E(g)|} ≤ 1.1A_g` (survival, `|E(g)| ≤ 2s`), and

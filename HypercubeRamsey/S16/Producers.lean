@@ -1,6 +1,7 @@
 import HypercubeRamsey.S16.Comparisons
 import HypercubeRamsey.S16.Producers_q_s16_prod1
 import HypercubeRamsey.S16.Producers_sol_s16_prod1
+import HypercubeRamsey.S16.Producers_sol_s16_group
 
 /-! Construction contracts connecting the conditional Section 16 estimates
 to physical cells. These nodes are separate proof obligations: none assumes
@@ -1182,6 +1183,92 @@ private theorem typical_pool_mass_ne_zero {κ : CConsts} (hκ : κ.Admissible)
   norm_num only [zero_div, zero_sub, abs_neg, abs_one] at hnorm
   linarith
 
+
+private theorem cell_pool_birthday_cutoff {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+      (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q),
+      n₀ ≤ T.S.n k → ∀ C,
+      (H.geom.nslot C : ℝ) ^ 2 / Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) ≤
+        Real.exp (-Real.rpow (T.S.n k : ℝ) (1 / 2 : ℝ)) / 4 := by
+  have hK : 0 < κ.Kcell := lt_of_lt_of_le
+    (div_pos (by norm_num) hκ.bucket.2.2.2.2) hκ.Kcell_big
+  obtain ⟨n₁, hn₁⟩ := Lane_sol_s16_prod1.polynomial_birthday_room κ.Kcell hK.le
+  refine ⟨max n₁ (max 2 ⌈Real.exp 1⌉₊), ?_⟩
+  intro T k PT K16 Q H hn C
+  let i := H.geom.cellPatch C
+  let L := H.geom.nslot C
+  have hnp : (0 : ℝ) < T.S.n k := by exact_mod_cast lt_of_lt_of_le (by norm_num) Q.n_large
+  have hnreal : (1 : ℝ) ≤ T.S.n k := by exact_mod_cast le_trans (by norm_num) Q.n_large
+  have heN : Real.exp 1 ≤ (T.S.n k : ℝ) :=
+    (Nat.le_ceil _).trans (by exact_mod_cast (le_trans
+      (le_trans (Nat.le_max_right _ _) (Nat.le_max_right _ _)) hn))
+  have hlog : 1 ≤ Real.log (T.S.n k : ℝ) := by
+    have hh := Real.log_le_log (Real.exp_pos 1) heN
+    simpa only [Real.log_exp] using hh
+  have hsqrt : Real.sqrt (Real.log (T.S.n k : ℝ)) ≤ Real.log (T.S.n k : ℝ) := by
+    nlinarith [Real.sq_sqrt (by linarith : 0 ≤ Real.log (T.S.n k : ℝ)),
+      sq_nonneg (Real.sqrt (Real.log (T.S.n k : ℝ)) - 1)]
+  have hprefix : ((PT.tiling.P i).ℓ : ℝ) ≤ Real.log (T.S.n k : ℝ) :=
+    (Q.prefix_bound i).trans hsqrt
+  have hℓ : (PT.tiling.P i).ℓ ≤ T.S.n k := by
+    have hs := Finset.le_sup (f := fun i : Fin PT.tiling.m => (PT.tiling.P i).ℓ) (Finset.mem_univ i)
+    have hb := Q.profiled_valid.tiling_valid.prefix_internal_length
+    omega
+  have hd : (0 : ℝ) < (PT.tiling.P i).d := by
+    have hM := physical_bin_count hκ Q i
+    have hMpos : (0 : ℝ) < (PT.tiling.P i).M := by
+      rw [← (PT.tiling.P i).cardY]
+      exact_mod_cast Finset.card_pos.mpr (Q.profiled_valid.tiling_valid.patch_nonempty i).2
+    by_contra hh
+    have hd0 : (PT.tiling.P i).d = 0 := by exact_mod_cast le_antisymm (le_of_not_gt hh) (Nat.cast_nonneg _)
+    rw [hd0, Nat.cast_zero, mul_zero] at hM
+    linarith
+  have hd1 : (1 : ℝ) ≤ (PT.tiling.P i).d := by exact_mod_cast Nat.one_le_iff_ne_zero.mpr (by
+    intro hh
+    simp only [hh, Nat.cast_zero, lt_self_iff_false] at hd)
+  have hpow : 0 < (T.S.n k : ℝ) ^ (200 : ℕ) := pow_pos hnp _
+  have hEq : L = ⌈κ.Kcell * (T.S.n k : ℝ) ^ (200 : ℕ) / (PT.tiling.P i).d⌉₊ := by
+    change H.data.cells.nslot C = _
+    rw [H.cell_partition.slot_count C, hκ.Ac_eq]
+    simp only [Real.rpow_eq_pow, Real.rpow_natCast, i]
+    rfl
+  have hSlotsPos : 0 < L := by
+    rw [hEq]
+    exact Nat.ceil_pos.mpr (div_pos (mul_pos hK hpow) hd)
+  have hslots : (L : ℝ) ≤ (κ.Kcell + 1) * (T.S.n k : ℝ) ^ (200 : ℕ) := by
+    have he := (Nat.ceil_lt_add_one (div_nonneg (mul_nonneg hK.le hpow.le) hd.le)).le
+    rw [← hEq] at he
+    have hb : κ.Kcell * (T.S.n k : ℝ) ^ (200 : ℕ) / (PT.tiling.P i).d ≤
+        κ.Kcell * (T.S.n k : ℝ) ^ (200 : ℕ) := by
+      apply (div_le_iff₀ hd).mpr
+      nlinarith [mul_nonneg (mul_nonneg hK.le hpow.le) (sub_nonneg.mpr hd1)]
+    have hp1 := one_le_pow₀ hnreal (n := 200)
+    nlinarith
+  have hcapacity : (Real.rpow 2 ((T.S.n k - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+      (T.S.n k : ℝ) ^ (200 : ℕ)) * L ≤ Fintype.card (Bin PT.tiling i) := by
+    have hcap := H.scale.patch_capacity i
+    rw [hκ.Ac_eq] at hcap
+    simp only [Real.rpow_eq_pow, Real.rpow_natCast] at hcap
+    rw [← hEq] at hcap
+    have hx : 0 ≤ Real.rpow 2 ((T.S.n k - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+        (T.S.n k : ℝ) ^ (200 : ℕ) := div_nonneg (Real.rpow_nonneg (by norm_num) _) hpow.le
+    have hh := mul_le_mul_of_nonneg_right
+      (show Real.rpow 2 ((T.S.n k - (PT.tiling.P i).ℓ : ℕ) : ℝ) / (T.S.n k : ℝ) ^ (200 : ℕ) ≤
+        3 * Real.rpow 2 ((T.S.n k - (PT.tiling.P i).ℓ : ℕ) : ℝ) / (T.S.n k : ℝ) ^ (200 : ℕ) +
+          Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 5) from by
+        calc
+          _ ≤ 3 * (Real.rpow 2 ((T.S.n k - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+            (T.S.n k : ℝ) ^ (200 : ℕ)) := by nlinarith only [hx]
+          _ ≤ 3 * (Real.rpow 2 ((T.S.n k - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+            (T.S.n k : ℝ) ^ (200 : ℕ)) + Real.exp (Real.rpow (Real.log (T.S.n k : ℝ)) 5) :=
+              le_add_of_nonneg_right (Real.exp_pos _).le
+          _ = _ := by ring)
+      (Nat.cast_nonneg (α := ℝ) L)
+    exact hh.trans (by simpa only [Real.rpow_eq_pow, Real.rpow_natCast] using hcap)
+  exact (Lane_sol_s16_prod1.pool_birthday_from_capacity (T.S.n k) (PT.tiling.P i).ℓ L
+    _ κ.Kcell Q.n_large hSlotsPos hK.le hℓ hprefix hslots hcapacity).trans
+      (hn₁ _ (le_trans (Nat.le_max_left _ _) hn))
+
 /-- S3 diagnostic producer. The exponent and cutoff precede every stage,
 cell, history and pin; means and sensitivities are conclusions, not inputs.
 T16:207–257 and 259–288 supply the two different concentration budgets. -/
@@ -1198,6 +1285,7 @@ theorem cell_pool_diagnostics_exists {κ : CConsts} (hκ : κ.Admissible) :
             Nonempty (CellDiagnosticLink K C D) ∧
             Nonempty (PoolConcentrationHypotheses D) ∧ Nonempty (LoadGateHypotheses D) := by
   classical
+  obtain ⟨nBirthday, hBirthday⟩ := cell_pool_birthday_cutoff hκ
   -- The physical restrictions are independent of the concentration estimates.
   -- The cutoff must still precede the cell/history/pin union budgets.
   have hBudgets : ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
@@ -1206,6 +1294,8 @@ theorem cell_pool_diagnostics_exists {κ : CConsts} (hκ : κ.Admissible) :
       (K : CellRestrictedKernels R Perm),
       R.SourceValid → n₀ ≤ T.S.n k →
       (∀ C W, (R.history C).w W ≠ 0 → PermissionLossHypotheses (Perm.table C) (R.qin C W)) →
+      (∀ C, (H.geom.nslot C : ℝ) ^ 2 / Fintype.card (Bin PT.tiling (H.geom.cellPatch C)) ≤
+        Real.exp (-Real.rpow (T.S.n k : ℝ) (1 / 2 : ℝ)) / 4) →
       ∀ C, ∃ Check : Type, ∃ _ : Fintype Check,
         ∃ D : CellPoolDiagnostics (Fin (H.geom.nslot C)) (Bin PT.tiling (H.geom.cellPatch C))
           (R.Hist C) Check (T.S.n k) (1 / 2),
@@ -1215,10 +1305,11 @@ theorem cell_pool_diagnostics_exists {κ : CConsts} (hκ : κ.Admissible) :
     -- does not give a uniform one-slot sensitivity at zero denominators.
     sorry
   obtain ⟨n₀, hBudgets⟩ := hBudgets
-  refine ⟨n₀, 1 / 2, rfl, ?_⟩
+  refine ⟨max n₀ nBirthday, 1 / 2, rfl, ?_⟩
   intro T k PT K16 Q H R Perm hR hn hPerm
   obtain ⟨K, _⟩ := restricted_kernels_exists hκ R Perm hPerm
-  exact ⟨K, hBudgets Q H R Perm K hR hn hPerm⟩
+  exact ⟨K, hBudgets Q H R Perm K hR (le_trans (Nat.le_max_left _ _) hn) hPerm
+    (hBirthday Q H (le_trans (Nat.le_max_right _ _) hn))⟩
 
 private theorem physical_participants_count {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} {R : CellRawData G}
@@ -1653,6 +1744,50 @@ private theorem cluster_incoming_cap {κ : CConsts} (hκ : κ.Admissible)
           (mul_le_mul_of_nonneg_left hexp (by norm_num : (0 : ℝ) ≤ 8))
   · exact (hDirect hc).elim
 
+
+private theorem group_contribution_minimum {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {K16 : ℝ} {hκ : κ.Admissible}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT} {R : CellRawData G}
+    {Perm : CellPermissions R} (K : CellRestrictedKernels R Perm) (hR : R.SourceValid)
+    (hc : PT.tiling.mode.isCluster) (C : G.Cell) (pool : CellPool G C) (W : R.Hist C)
+    (hW : (R.history C).w W ≠ 0)
+    (hm : ∀ g, (∑ b ∈ Finset.univ.image pool, (K.qbar C W g).w b) ≠ 0)
+    (g : R.Group C) (b : Bin PT.tiling (G.cellPatch C)) (y : Fin (T.S.N k))
+    (hcon : (K.binProblem C pool W).contribution g b y ≠ 0) :
+    1 / ((PT.tiling.P (G.cellPatch C)).d : ℝ) ≤
+      (K.binProblem C pool W).contribution g b y := by
+  classical
+  have htarget : (K.qtilde C pool W g).w b ≠ 0 := by
+    intro hh
+    simp only [CellRestrictedKernels.binProblem, hh, if_true] at hcon
+    exact hcon rfl
+  have hU : (R.U C W g b).w y ≠ 0 := by
+    intro hh
+    simp only [CellRestrictedKernels.binProblem, if_neg htarget, hh] at hcon
+    simp at hcon
+  have hg : ∃ r : OddCellRole G C, R.groupOf C r = g := by
+    by_contra hn
+    push_neg at hn
+    simp only [CellRestrictedKernels.binProblem, if_neg htarget] at hcon
+    have hh : ∀ r : OddCellRole G C, (if R.groupOf C r = g then (R.U C W g b).w y else 0) = 0 := by
+      intro r
+      rw [if_neg (hn r)]
+    simp only [hh, Finset.sum_const_zero] at hcon
+    exact hcon rfl
+  obtain ⟨r, hr⟩ := hg
+  have hlow := physical_U_atom_lower R hR hc C W g b
+    (positive_pool_bin_raw K C pool W hW hm g b htarget) y hU
+  rw [Q.profiled_valid.tiling_valid.bins_card _ _ b.2] at hlow
+  apply hlow.trans
+  change _ ≤ if (K.qtilde C pool W g).w b = 0 then 0 else _
+  rw [if_neg htarget]
+  have hsum := Finset.single_le_sum
+    (s := (Finset.univ : Finset (OddCellRole G C)))
+    (f := fun r => if R.groupOf C r = g then (R.U C W g b).w y else 0)
+    (fun r _ => by split_ifs <;> first | exact (R.U C W g b).nonneg y | exact le_rfl)
+    (Finset.mem_univ r)
+  rwa [if_pos hr] at hsum
+
 private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
     ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
       (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q)
@@ -1665,7 +1800,7 @@ private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
           ((H.geom.nslot C : ℝ) / Fintype.card (Bin PT.tiling (H.geom.cellPatch C))) - 1| ≤
             Real.rpow (T.S.n k : ℝ) (-4)) →
       ∀ g b, (K.qtilde C pool W g).w b ≤
-        Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.95) := by
+        Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-40) := by
   classical
   refine ⟨max 2 ⌈Real.exp 1⌉₊, ?_⟩
   intro T k PT K16 Q H R Perm K C pool W hR hCal hc hn hPerm hW hnorm g b
@@ -1695,17 +1830,17 @@ private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
     apply (le_div_iff₀ hκ.bucket.2.2.2.2).mpr
     have hh := thetaStar_slack hκ
     linarith
-  have h197 : (32 : ℝ) ≤ (T.S.n k : ℝ) ^ (197 : ℕ) := by
+  have h197 : (32 : ℝ) ≤ (T.S.n k : ℝ) ^ (158 : ℕ) := by
     calc
       32 = (2 : ℝ) ^ (5 : ℕ) := by norm_num
       _ ≤ (T.S.n k : ℝ) ^ (5 : ℕ) := pow_le_pow_left₀ (by norm_num) hn2 _
-      _ ≤ _ := pow_le_pow_right₀ hn1 (by norm_num : (5 : ℕ) ≤ 197)
-  have hpower : 32 * (d : ℝ) ^ (3 : ℕ) ≤ (T.S.n k : ℝ) ^ (200 : ℕ) := by
+      _ ≤ _ := pow_le_pow_right₀ hn1 (by norm_num : (5 : ℕ) ≤ 158)
+  have hpower : 32 * (d : ℝ) ^ (42 : ℕ) ≤ (T.S.n k : ℝ) ^ (200 : ℕ) := by
     calc
-      _ ≤ (T.S.n k : ℝ) ^ (197 : ℕ) * (T.S.n k : ℝ) ^ (3 : ℕ) :=
+      _ ≤ (T.S.n k : ℝ) ^ (158 : ℕ) * (T.S.n k : ℝ) ^ (42 : ℕ) :=
         mul_le_mul h197 (pow_le_pow_left₀ hdpos.le hdN _) (by positivity) (by positivity)
       _ = _ := by rw [← pow_add]
-  have hslot : 32 * (d : ℝ) ^ 2 ≤ (L : ℝ) := by
+  have hslot : 32 * (d : ℝ) ^ (41 : ℕ) ≤ (L : ℝ) := by
     have hceil : κ.Kcell * Real.rpow (T.S.n k : ℝ) κ.Ac / d ≤ (L : ℝ) := by
       change _ ≤ (H.data.cells.nslot C : ℝ)
       rw [H.cell_partition.slot_count C]
@@ -1748,12 +1883,11 @@ private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
     (fun b => K.qtilde_eq C pool W g b hW hm) b
   calc
     _ ≤ 32 * d / (L : ℝ) := by convert hcap using 1 <;> ring
-    _ ≤ 1 / (d : ℝ) := by
-      apply (div_le_div_iff₀ hL hdpos).mpr
+    _ ≤ 1 / (d : ℝ) ^ (40 : ℕ) := by
+      apply (div_le_div_iff₀ hL (pow_pos hdpos _)).mpr
       nlinarith only [hslot]
-    _ ≤ Real.rpow (d : ℝ) (-0.95) := by
-      have hh := Real.rpow_le_rpow_of_exponent_le hd1 (by norm_num : (-1 : ℝ) ≤ -0.95)
-      simpa only [Real.rpow_neg_one, one_div, Real.rpow_eq_pow] using hh
+    _ = Real.rpow (d : ℝ) (-40) := by
+      norm_num [Real.rpow_neg, Real.rpow_natCast]
 
 set_option maxHeartbeats 400000 in
 /-- S2 group producer at successful physical data. The capacity subset
@@ -1819,11 +1953,15 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
     refine ⟨group_contribution_nonneg K C pool W g b y, ?_⟩
     exact physical_group_contribution_cap hκ K hR hCalibration hCluster C pool W hW
       (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW) g b y
-  · apply hAtomCutoff Q H R Perm K C pool W hR hCalibration hCluster hn hPerm hW
-    intro g
-    have h := (D.checks_cover pool ht.2).1 (L.groupProbe g) W
-    rw [L.normalizer_eq pool W g hW] at h
-    simpa only [Fintype.card_fin] using h
+  · have hStrong := hAtomCutoff Q H R Perm K C pool W hR hCalibration hCluster hn hPerm hW
+      (fun g => by
+        have h := (D.checks_cover pool ht.2).1 (L.groupProbe g) W
+        rw [L.normalizer_eq pool W g hW] at h
+        simpa only [Fintype.card_fin] using h)
+    intro g b
+    exact (hStrong g b).trans (Real.rpow_le_rpow_of_exponent_le
+      (by exact_mod_cast (by omega : 1 ≤ (PT.tiling.P (H.geom.cellPatch C)).d))
+      (by norm_num : (-40 : ℝ) ≤ -0.95))
   · intro y
     rw [nominal_load_eq K C pool W y]
     have h := hload (L.Column.symm y)
@@ -1855,9 +1993,127 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       exact hnat.trans h
     exact le_trans (by exact_mod_cast hcard) hh
   · exact physical_group_star_degree K hR hCalibration hCluster C
-  · -- Star/repeated-bin events and capacity-subset certificates, with
-    -- reciprocal avoidance factors for every supported singleton pin.
-    sorry
+  · intro q hq
+    let P := K.binProblem C pool W
+    letI : Nonempty (Bin PT.tiling (H.geom.cellPatch C)) := (hPerm C W hW).bins_nonempty
+    have hLocal : ∀ v, DependsOn (P.failureMass v) (P.participants v : Set (R.Group C)) := by
+      intro v a a' haa
+      obtain ⟨y, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2
+      letI : Nonempty (Fin (T.S.N k)) := ⟨y⟩
+      change K.failure C W v a = K.failure C W v a'
+      simp only [CellRestrictedKernels.failure, hCluster, if_true]
+      rw [Lane_sol_s16_prod1.pr_eq_indicator_E, Lane_sol_s16_prod1.pr_eq_indicator_E]
+      apply Lane_sol_s16_prod1.pi_E_local _ _ (K.participants C v)
+      · intro ys ys' hys
+        rw [cell_raw_prior_local hκ Q K hR C W v ys ys' hys]
+      · intro r hr
+        change R.U C W (R.groupOf C r) (a (R.groupOf C r)) =
+          R.U C W (R.groupOf C r) (a' (R.groupOf C r))
+        rw [haa (R.groupOf C r) (Finset.mem_image.mpr ⟨r, hr, rfl⟩)]
+    have hMean : ∀ v, P.independentFailure v ≤ Real.rpow P.ε (1 / 4 : ℝ) := by
+      intro v
+      have h := (D.checks_cover pool ht.2).2.1 (L.starProbe v) W
+      rw [L.failure_eq pool W v hW, L.epsilon_eq] at h
+      exact h
+    have hPinMean : ∀ v g b, P.pinnedFailure v g b ≤ Real.rpow P.ε (1 / 4 : ℝ) := by
+      intro v g b
+      have h := (D.checks_cover pool ht.2).2.2 (L.pinProbe v g b) W
+      rw [L.pinned_failure_eq pool W v g b hW, L.epsilon_eq] at h
+      exact h
+    have hShort : ∀ v, ((P.participants v).card : ℝ) ≤ 2 * Real.rpow (P.d : ℝ) 0.01 := by
+      intro v
+      have hcard : (P.participants v).card ≤ (PT.tiling.P (H.geom.cellPatch C)).h :=
+        Finset.card_image_le.trans (physical_participants_count K C v)
+      have hh := hRoom.2.2.2.1
+      have hNat : ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ≤
+          2 * ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ^ 2 := by
+        have hi : (PT.tiling.P (H.geom.cellPatch C)).h = 0 ∨
+            1 ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by omega
+        rcases hi with hi | hi
+        · simp [hi]
+        · have hi' : (1 : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by exact_mod_cast hi
+          nlinarith
+      have hb : ((P.participants v).card : ℝ) ≤ Real.rpow (P.d : ℝ) 0.01 :=
+        (show ((P.participants v).card : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h by exact_mod_cast hcard).trans
+          (hNat.trans hh)
+      have hp : 0 ≤ Real.rpow (P.d : ℝ) 0.01 := Real.rpow_nonneg (Nat.cast_nonneg _) _
+      linarith
+    have hStrong := hAtomCutoff Q H R Perm K C pool W hR hCalibration hCluster hn hPerm hW
+      (fun g => by
+        have h := (D.checks_cover pool ht.2).1 (L.groupProbe g) W
+        rw [L.normalizer_eq pool W g hW] at h
+        simpa only [Fintype.card_fin] using h)
+    have hStarBounds := Lane_sol_s16_prod1.group_star_event_bounds P hlarge
+      (slice_epsilon_range hκ _).1 (by
+        intro v a
+        change 0 ≤ K.failure C W v a
+        simp only [CellRestrictedKernels.failure, hCluster, if_true]
+        exact (Lane_sol_s16_prod1.pr_range _ _).1)
+      hLocal hMean hPinMean hShort hStrong q hq
+    have hContributionLower : ∀ g b y, P.contribution g b y ≠ 0 →
+        1 / (P.d : ℝ) ≤ P.contribution g b y := by
+      intro g b y hcon
+      exact group_contribution_minimum Q K hR hCluster C pool W hW
+        (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW) g b y hcon
+    apply Lane_sol_s16_group.dyadic_group_certificates P hlarge
+      (slice_epsilon_range hκ _).1 (PT.tiling.P (H.geom.cellPatch C)).h
+      hRoom.2.2.2.2.2 (fun b => b.1)
+    · intro b
+      exact le_of_eq (Q.profiled_valid.tiling_valid.bins_card _ _ b.2)
+    · exact physical_bins_disjoint _
+    · intro g b y hcon
+      by_contra hy
+      have hzero : (R.U C W g b).w y = 0 := by
+        by_contra hn
+        exact hy (R.U_support C W g b y hn)
+      simp only [P, CellRestrictedKernels.binProblem, hzero, ite_self, Finset.sum_const_zero] at hcon
+      exact hcon rfl
+    · intro g b y
+      exact group_contribution_nonneg K C pool W g b y
+    · exact physical_group_contribution_cap hκ K hR hCalibration hCluster C pool W hW
+        (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW)
+    · exact hContributionLower
+    · intro y
+      rw [nominal_load_eq K C pool W y]
+      have h := hload (L.Column.symm y)
+      rw [L.load_eq, L.threshold_eq, L.Column.apply_symm_apply] at h
+      have hθ : κ.θstar ≤ 1 / 1000 := by
+        have hclock := hκ.clock.2.1
+        have hb := hκ.bucket
+        rw [hclock] at hb
+        have hKp : (40 : ℝ) ≤ κ.Kp := by exact_mod_cast hb.1
+        nlinarith [mul_le_mul_of_nonneg_right hKp hb.2.2.2.2.le]
+      exact h.trans hθ
+    · exact hLocal
+    · intro v
+      have hcard : (P.participants v).card ≤ (PT.tiling.P (H.geom.cellPatch C)).h :=
+        Finset.card_image_le.trans (physical_participants_count K C v)
+      have hpow : Real.rpow (P.d : ℝ) 0.025 ≤ P.d := by
+        have hbase : (1 : ℝ) ≤ P.d := by
+          exact_mod_cast (show 1 ≤ P.d from le_trans (by norm_num) hTwo)
+        have hh : Real.rpow (P.d : ℝ) 0.025 ≤ Real.rpow (P.d : ℝ) 1 :=
+          Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+        have hone : Real.rpow (P.d : ℝ) 1 = P.d := Real.rpow_one _
+        exact hh.trans_eq hone
+      have hh := hRoom.2.2.2.2.1
+      have hbound : ((P.participants v).card : ℝ) ≤ P.d := by
+        have hc : ((P.participants v).card : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by exact_mod_cast hcard
+        exact hc.trans (le_trans (by norm_num : ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ≤
+          (PT.tiling.P (H.geom.cellPatch C)).h + 1) (hh.trans hpow))
+      exact_mod_cast hbound
+    · intro g
+      have hdeg := physical_group_star_degree K hR hCalibration hCluster C g
+      have hpow : Real.rpow (P.d : ℝ) 0.01 ≤ P.d := by
+        have hbase : (1 : ℝ) ≤ P.d := by
+          exact_mod_cast (show 1 ≤ P.d from le_trans (by norm_num) hTwo)
+        have hh : Real.rpow (P.d : ℝ) 0.01 ≤ Real.rpow (P.d : ℝ) 1 :=
+          Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+        have hone : Real.rpow (P.d : ℝ) 1 = P.d := Real.rpow_one _
+        exact hh.trans_eq hone
+      exact hdeg.trans hpow
+    · exact hq
+    · exact hStarBounds.1
+    · exact hStarBounds.2
 
 /-- A role problem linked to the successful physical bins, not arbitrary
 targets/tests. In direct modes its single block is the whole cell pool. -/
@@ -2282,6 +2538,27 @@ theorem successful_role_label_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
           simpa only [Real.rpow_eq_pow] using Real.rpow_sub_one hd.ne' (0.05 : ℝ)
         rw [show (0.05 - 1 : ℝ) = -0.95 by norm_num] at hp
         exact hp.symm
+  have hIndependent : ∀ v, L.problem.independentStarFailure v ≤
+      Real.rpow (sliceEps κ (PT.tiling.P (H.geom.cellPatch C)).h) (1 / 8 : ℝ) := by
+    intro v
+    by_cases hc : PT.tiling.mode.isCluster
+    · have h := (hsafe hc).2.1 v
+      change (K.failure C W v a) ≤ _ at h
+      simp only [CellRestrictedKernels.failure, hc, ↓reduceIte] at h
+      unfold RoleLabelProblem.independentStarFailure RoleLabelProblem.productLaw
+      unfold CellRestrictedKernels.labelLaw at h
+      unfold FinLaw.pr FinLaw.pi at *
+      simpa only [L.tests_eq, L.targets_eq, hc, true_and, if_true,
+        CellRestrictedKernels.binProblem] using h
+    · have hpr : L.problem.independentStarFailure v = 0 := by
+        unfold RoleLabelProblem.independentStarFailure FinLaw.pr
+        have hn : ∀ ys, ¬ L.problem.starBad v ys := by
+          intro ys hbad
+          exact hc ((L.tests_eq v ys).mp hbad).1
+        simp only [hn, if_false, Finset.sum_const_zero]
+      rw [hpr]
+      apply Real.rpow_nonneg
+      exact (slice_epsilon_range hκ _).1.le
   have hHyp : RoleLabelHypotheses hκ L.problem := by
     refine {
       scale_large := hDscale.1
@@ -2351,29 +2628,55 @@ theorem successful_role_label_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       exact role_block_count L.problem (hClusterColumns hr) b
     · intro hr b
       exact role_block_degree K C pool W a L (role_block_count L.problem (hClusterColumns hr)) b
-    · -- Whole-bin seed comparison at h+1 roles and local-lemma pin budgets.
-      sorry
-  have hIndependent : ∀ v, L.problem.independentStarFailure v ≤
-      Real.rpow (sliceEps κ (PT.tiling.P (H.geom.cellPatch C)).h) (1 / 8 : ℝ) := by
-    intro v
-    by_cases hc : PT.tiling.mode.isCluster
-    · have h := (hsafe hc).2.1 v
-      change (K.failure C W v a) ≤ _ at h
-      simp only [CellRestrictedKernels.failure, hc, ↓reduceIte] at h
-      unfold RoleLabelProblem.independentStarFailure RoleLabelProblem.productLaw
-      unfold CellRestrictedKernels.labelLaw at h
-      unfold FinLaw.pr FinLaw.pi at *
-      simpa only [L.tests_eq, L.targets_eq, hc, true_and, if_true,
-        CellRestrictedKernels.binProblem] using h
-    · have hpr : L.problem.independentStarFailure v = 0 := by
-        unfold RoleLabelProblem.independentStarFailure FinLaw.pr
-        have hn : ∀ ys, ¬ L.problem.starBad v ys := by
-          intro ys hbad
-          exact hc ((L.tests_eq v ys).mp hbad).1
-        simp only [hn, if_false, Finset.sum_const_zero]
-      rw [hpr]
-      apply Real.rpow_nonneg
-      exact (slice_epsilon_range hκ _).1.le
+    · intro hr q hq seed
+      have hc := hRegime.mp hr
+      have hRoom := hCalibration.room hc (H.geom.cellPatch C)
+      have hd : (10 ^ 100 : ℕ) ≤ L.problem.d := by
+        rw [L.scale_eq, if_pos hc]
+        exact hRoom.2.1
+      have hSize : ∀ v, (L.problem.participants v).card ≤ L.problem.h := by
+        intro v
+        rw [L.participants_eq, L.height_eq]
+        exact physical_participants_count K C v
+      have hQuery : (L.problem.h + 1 : ℝ) ≤ Real.rpow (L.problem.d : ℝ) 0.025 := by
+        rw [L.height_eq, L.scale_eq, if_pos hc]
+        exact hRoom.2.2.2.2.1
+      have hShort : (L.problem.h + 1 : ℝ) ≤ 2 * Real.rpow (L.problem.d : ℝ) 0.01 := by
+        rw [L.height_eq, L.scale_eq, if_pos hc]
+        have hh := hRoom.2.2.2.1
+        have hd1 : (1 : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).d := by
+          exact_mod_cast le_trans (by norm_num : (1 : ℕ) ≤ 10 ^ 100) hRoom.2.1
+        have hp : (1 : ℝ) ≤ Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) 0.01 :=
+          Real.one_le_rpow hd1 (by norm_num)
+        have hNat : ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ≤
+            2 * ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ^ 2 := by
+          have hi : (PT.tiling.P (H.geom.cellPatch C)).h = 0 ∨
+              1 ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by omega
+          rcases hi with hi | hi
+          · simp [hi]
+          · have hi' : (1 : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by exact_mod_cast hi
+            nlinarith
+        linarith
+      have hLower : ∀ r y, (L.problem.target r).w y ≠ 0 →
+          1 / (L.problem.d : ℝ) ≤ (L.problem.target r).w y := by
+        intro r y hy
+        rw [L.targets_eq, if_pos hc] at hy ⊢
+        have h := physical_U_atom_lower R hR hc C W (R.groupOf C r) (a (R.groupOf C r))
+          (positive_pool_bin_raw K C pool W hW hm _ _ (hpositive hc _)) y hy
+        rw [Q.profiled_valid.tiling_valid.bins_card _ _ (a (R.groupOf C r)).2] at h
+        rw [L.scale_eq, if_pos hc]
+        exact h
+      have hroom : 16 * (L.problem.d : ℝ) ^ 2 * (L.problem.h + 1 : ℝ) ^ 2 *
+          Real.rpow (sliceEps κ (PT.tiling.P (H.geom.cellPatch C)).h) (1 / 16 : ℝ) ≤
+          Real.rpow (L.problem.d : ℝ) (-20) := by
+        rw [L.scale_eq, if_pos hc, L.height_eq]
+        exact hRoom.2.2.2.2.2
+      obtain ⟨y, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2
+      letI : Nonempty (Fin (T.S.N k)) := ⟨y⟩
+      exact Lane_sol_s16_prod1.role_star_certificates L.problem _ (slice_epsilon_range hκ _).1
+        hd hr hSize
+        (role_block_degree K C pool W a L (role_block_count L.problem (hClusterColumns hr)))
+        hQuery hShort hIndependent hLower hroom q hq seed
   refine ⟨L, hHyp, hIndependent, ?_⟩
   intro v r y
   by_cases hc : PT.tiling.mode.isCluster

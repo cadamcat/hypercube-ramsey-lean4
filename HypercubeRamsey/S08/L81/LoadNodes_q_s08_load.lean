@@ -48,6 +48,48 @@ private theorem pr_mono {α : Type*} [Fintype α] (P : FinProb α)
     simp [hA, hB]
   · by_cases hB : B ω <;> simp [hA, hB, P.nonneg ω]
 
+private theorem pr_compl {α : Type*} [Fintype α] (P : FinProb α) (A : α → Prop) :
+    P.pr A + P.pr (fun a => ¬ A a) = 1 := by
+  classical
+  letI : DecidablePred A := fun a => Classical.propDecidable (A a)
+  letI : DecidablePred (fun a => ¬ A a) := fun a => Classical.propDecidable (¬ A a)
+  unfold FinProb.pr
+  rw [← Finset.sum_add_distrib]
+  calc
+    (∑ a, ((if A a then P.w a else 0) +
+      @ite ℝ ((fun x => ¬ A x) a) (Classical.propDecidable _) (P.w a) 0)) =
+        ∑ a, P.w a := by
+          apply Finset.sum_congr rfl
+          intro a _
+          by_cases hA : A a <;> simp [hA]
+    _ = 1 := P.sum_eq_one
+
+private theorem pr_positive_weight_eq_one {α : Type*} [Fintype α] (P : FinProb α) :
+    P.pr (fun a => 0 < P.w a) = 1 := by
+  classical
+  unfold FinProb.pr
+  calc
+    (∑ a, if 0 < P.w a then P.w a else 0) = ∑ a, P.w a := by
+      apply Finset.sum_congr rfl
+      intro a _
+      by_cases h : 0 < P.w a
+      · simp [h]
+      · have hzero : P.w a = 0 := le_antisymm (le_of_not_gt h) (P.nonneg a)
+        simp [h, hzero]
+    _ = 1 := P.sum_eq_one
+
+private theorem pr_le_on_support {α : Type*} [Fintype α] (P : FinProb α)
+    (S E : α → Prop) (hbad : P.pr (fun a => ¬ S a) = 0) :
+    P.pr E ≤ P.pr (fun a => S a ∧ E a) := by
+  calc
+    P.pr E ≤ P.pr (fun a => (S a ∧ E a) ∨ ¬ S a) := by
+      apply pr_mono
+      intro a hE
+      by_cases hS : S a <;> simp [hS, hE]
+    _ ≤ P.pr (fun a => S a ∧ E a) + P.pr (fun a => ¬ S a) :=
+      FinProb.pr_union P (fun a => S a ∧ E a) (fun a => ¬ S a)
+    _ = P.pr (fun a => S a ∧ E a) := by rw [hbad]; ring
+
 private theorem expect_congr {α : Type*} [Fintype α] (P : FinProb α)
     (f g : α → ℝ) (h : ∀ x, f x = g x) : P.expect f = P.expect g := by
   unfold FinProb.expect
@@ -2312,6 +2354,436 @@ private theorem prod_pr_ignore_right {α β : Type*} [Fintype α] [Fintype β]
           · simp [h, FinProb.pr]
     _ = P.pr E := by simpa using (FinProb.pr_indicator P E).symm
 
+private theorem prod_pr_ignore_left {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (E : β → Prop) :
+    (FinProb.prod P Q).pr (fun z => E z.2) = Q.pr E := by
+  rw [prod_pr_integral P Q (fun _ b => E b), expect_const]
+
+private theorem tagLawAll_positive_support {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) :
+    (D.tagLawAll Θ).pr (fun t => ∀ g ℓ, 0 < (D.tilt Θ g).w (t g ℓ)) = 1 := by
+  classical
+  have hloc (g : D.KeyT) :
+      (FinProb.pi (fun _ : D.Loc => D.tilt Θ g)).pr
+        (fun t => ∀ ℓ, 0 < (D.tilt Θ g).w (t ℓ)) = 1 := by
+    simpa [pr_positive_weight_eq_one] using
+      (pi_pr_forall (ι := D.Loc) (Ω := fun _ : D.Loc => D.M.ι)
+        (P := fun _ : D.Loc => D.tilt Θ g) (Finset.univ : Finset D.Loc)
+        (fun _ ℓ => 0 < (D.tilt Θ g).w ℓ))
+  have hpi0 := pi_pr_forall (ι := D.KeyT) (Ω := fun _ : D.KeyT => D.Loc → D.M.ι)
+      (P := fun g => FinProb.pi (fun _ : D.Loc => D.tilt Θ g))
+      (Finset.univ : Finset D.KeyT) (fun g t => ∀ ℓ, 0 < (D.tilt Θ g).w (t ℓ))
+  have houter : (D.tagLawAll Θ).pr
+      (fun t => ∀ g ℓ, 0 < (D.tilt Θ g).w (t g ℓ)) =
+      ∏ g ∈ Finset.univ,
+        (FinProb.pi (fun _ : D.Loc => D.tilt Θ g)).pr
+          (fun t => ∀ ℓ, 0 < (D.tilt Θ g).w (t ℓ)) := by
+    simpa [Ctx.tagLawAll] using hpi0
+  rw [houter]
+  calc
+    (∏ g ∈ Finset.univ,
+        (FinProb.pi (fun _ : D.Loc => D.tilt Θ g)).pr
+          (fun t => ∀ ℓ, 0 < (D.tilt Θ g).w (t ℓ))) =
+      ∏ g ∈ Finset.univ, (1 : ℝ) := by
+        apply Finset.prod_congr rfl
+        intro g hg
+        exact hloc g
+    _ = 1 := by simp
+
+set_option maxHeartbeats 5000000 in
+private theorem rawTAT_tagSupport_pr_one {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) :
+    (D.rawTAT Θ).pr (fun ω => ∀ g ℓ, 0 < (D.tilt Θ g).w (ω.1.1 g ℓ)) = 1 := by
+  calc
+    (D.rawTAT Θ).pr (fun ω => ∀ g ℓ, 0 < (D.tilt Θ g).w (ω.1.1 g ℓ)) =
+      (((D.tagLawAll Θ).prod D.actLaw).prod D.tieLaw).pr
+        (fun z => ∀ g ℓ, 0 < (D.tilt Θ g).w (z.1.1 g ℓ)) := by
+          rfl
+    _ = ((D.tagLawAll Θ).prod D.actLaw).pr
+        (fun z => ∀ g ℓ, 0 < (D.tilt Θ g).w (z.1 g ℓ)) :=
+          prod_pr_ignore_right ((D.tagLawAll Θ).prod D.actLaw) D.tieLaw
+            (fun z : D.Tags × D.Acts => ∀ g ℓ, 0 < (D.tilt Θ g).w (z.1 g ℓ))
+    _ = (D.tagLawAll Θ).pr (fun t => ∀ g ℓ, 0 < (D.tilt Θ g).w (t g ℓ)) := by
+          exact prod_pr_ignore_right (D.tagLawAll Θ) D.actLaw
+            (fun t => ∀ g ℓ, 0 < (D.tilt Θ g).w (t g ℓ))
+    _ = 1 := tagLawAll_positive_support D Θ
+
+set_option maxHeartbeats 5000000 in
+private theorem posTAT_tagSupport_pr_one {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) :
+    (FinProb.prod D.posLaw (D.rawTAT Θ)).pr
+    (fun z => ∀ g ℓ, 0 < (D.tilt Θ g).w (z.2.1.1 g ℓ)) = 1 := by
+  calc
+    (FinProb.prod D.posLaw (D.rawTAT Θ)).pr
+        (fun z => ∀ g ℓ, 0 < (D.tilt Θ g).w (z.2.1.1 g ℓ)) =
+      (D.rawTAT Θ).pr (fun ω => ∀ g ℓ, 0 < (D.tilt Θ g).w (ω.1.1 g ℓ)) :=
+        prod_pr_ignore_left D.posLaw (D.rawTAT Θ)
+          (fun ω => ∀ g ℓ, 0 < (D.tilt Θ g).w (ω.1.1 g ℓ))
+    _ = 1 := rawTAT_tagSupport_pr_one D Θ
+
+private noncomputable def centerAnchorCap (η₀ γ : ℝ) {β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) : ℝ :=
+  Real.exp ((D.n : ℝ) ^ γ + Real.log 2 + (D.n : ℝ) ^ (2 * tau8 η₀)) / (1 - D.Δ)
+
+private theorem inv_one_sub_exp_neg_le {x : ℝ} (hx : 0 < x) :
+    (1 - Real.exp (-x))⁻¹ ≤ 1 + x⁻¹ := by
+  have hExp : 1 + x ≤ Real.exp x := by simpa [add_comm] using Real.add_one_le_exp x
+  have hInvExp : Real.exp (-x) ≤ (1 + x)⁻¹ := by
+    rw [Real.exp_neg]
+    exact (inv_le_inv₀ (Real.exp_pos x) (by positivity)).mpr hExp
+  have hLower : x / (1 + x) ≤ 1 - Real.exp (-x) := by
+    have hEq : 1 - (1 + x)⁻¹ = x / (1 + x) := by field_simp; ring
+    rw [← hEq]
+    exact sub_le_sub_left hInvExp 1
+  have hDen : 0 < 1 - Real.exp (-x) := by
+    have hlt : Real.exp (-x) < 1 := Real.exp_lt_one_iff.mpr (neg_lt_zero.mpr hx)
+    linarith
+  calc
+    (1 - Real.exp (-x))⁻¹ ≤ (x / (1 + x))⁻¹ :=
+      (inv_le_inv₀ hDen (div_pos hx (by positivity))).mpr hLower
+    _ = 1 + x⁻¹ := by field_simp [ne_of_gt hx]; ring
+
+private theorem centerAnchorCap_small (η₀ γ p c : ℝ)
+    (hη₀ : 0 < η₀) (hγ₁ : γ < 1) (hc : 0 < c) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (n : ℝ) * Real.exp (-c * n) *
+        (Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) /
+          (1 - Real.exp (-(n : ℝ) ^ (p / 2)))) ≤ 1 := by
+  have hτ : 0 < tau8 η₀ := tau8_pos hη₀
+  have h2τ : 2 * tau8 η₀ < 1 := by
+    rw [tau8_eq]
+    have hη8 : eta8 η₀ ≤ 4 / 100 := min_le_right _ _
+    nlinarith
+  let r : ℝ := max (max γ (2 * tau8 η₀)) (1 / 2)
+  have hr0 : 0 < r := by dsimp [r]; exact lt_of_lt_of_le (by norm_num) (le_max_right _ _)
+  have hr1 : r < 1 := by
+    dsimp [r]
+    exact max_lt (max_lt hγ₁ h2τ) (by norm_num)
+  let k : ℕ := Nat.ceil (max 0 (-p / 2))
+  have hk : -p / 2 ≤ (k : ℝ) := by
+    dsimp [k]
+    exact le_trans (le_max_right _ _) (Nat.le_ceil _)
+  obtain ⟨nPoly, hPoly⟩ := exp_poly_small r hr0 k
+  have hRatio : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(1 - r))) atTop (nhds 0) := by
+    have h := (tendsto_rpow_neg_atTop (by linarith : 0 < (1 - r))).comp
+      tendsto_natCast_atTop_atTop
+    simpa [Function.comp_def] using h
+  have hRatioSmall : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ (-(1 - r)) < c / 20 :=
+    hRatio.eventually (Iio_mem_nhds (by positivity))
+  obtain ⟨nRatio, hnRatio⟩ := Filter.eventually_atTop.1 hRatioSmall
+  have hPower : Tendsto (fun n : ℕ => (n : ℝ) ^ r) atTop atTop :=
+    (tendsto_rpow_atTop hr0).comp tendsto_natCast_atTop_atTop
+  have hPowerLarge : ∀ᶠ n : ℕ in atTop, Real.log 4 ≤ (n : ℝ) ^ r :=
+    hPower.eventually (eventually_ge_atTop (Real.log 4))
+  obtain ⟨nFour, hnFour⟩ := Filter.eventually_atTop.1 hPowerLarge
+  let a : ℝ := c / 2
+  have ha : 0 < a := by dsimp [a]; linarith
+  have hLinear : Tendsto (fun n : ℕ => a * (n : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.const_mul_atTop ha
+  have hDecay : Tendsto
+      (fun n : ℕ => (a * (n : ℝ)) ^ (1 : ℝ) * Real.exp (-(a * (n : ℝ))))
+      atTop (nhds 0) := by
+    simpa [Function.comp_def, Real.rpow_one, neg_mul] using
+      (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero 1 1 one_pos).comp hLinear
+  have hDecaySmall : ∀ᶠ n : ℕ in atTop,
+      (a * (n : ℝ)) ^ (1 : ℝ) * Real.exp (-(a * (n : ℝ))) < a / 4 :=
+    hDecay.eventually (Iio_mem_nhds (by positivity))
+  obtain ⟨nLin, hnLin⟩ := Filter.eventually_atTop.1 hDecaySmall
+  let n₀ := max 1 (max nPoly (max nRatio (max nFour nLin)))
+  refine ⟨n₀, ?_⟩
+  intro n hn
+  have hn1 : 1 ≤ n := by dsimp [n₀] at hn; omega
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le zero_lt_one hnR
+  have hnPoly : nPoly ≤ n := by dsimp [n₀] at hn; omega
+  have hnRatio0 : nRatio ≤ n := by dsimp [n₀] at hn; omega
+  have hnFour0 : nFour ≤ n := by dsimp [n₀] at hn; omega
+  have hnLin0 : nLin ≤ n := by dsimp [n₀] at hn; omega
+  have hrγ : γ ≤ r := by dsimp [r]; exact le_trans (le_max_left _ _) (le_max_left _ _)
+  have hrτ : 2 * tau8 η₀ ≤ r := by dsimp [r]; exact le_trans (le_max_right _ _) (le_max_left _ _)
+  have hγpow : (n : ℝ) ^ γ ≤ (n : ℝ) ^ r := Real.rpow_le_rpow_of_exponent_le hnR hrγ
+  have hτpow : (n : ℝ) ^ (2 * tau8 η₀) ≤ (n : ℝ) ^ r := Real.rpow_le_rpow_of_exponent_le hnR hrτ
+  have hxpos : 0 < (n : ℝ) ^ (p / 2) := Real.rpow_pos_of_pos hnpos _
+  have hpowNeg : (n : ℝ) ^ (-p / 2) = ((n : ℝ) ^ (p / 2))⁻¹ := by
+    have h := Real.rpow_neg (le_of_lt hnpos) (p / 2)
+    convert h using 1 <;> congr 1 <;> ring
+  have hinvDelta : (1 - Real.exp (-(n : ℝ) ^ (p / 2)))⁻¹ ≤ 1 + (n : ℝ) ^ (-p / 2) := by
+    simpa [hpowNeg] using inv_one_sub_exp_neg_le hxpos
+  have hnegativePow : (n : ℝ) ^ (-p / 2) ≤ (n : ℝ) ^ (k : ℝ) :=
+    Real.rpow_le_rpow_of_exponent_le hnR hk
+  have hpolyNow : (n : ℝ) ^ k * Real.exp (-(n : ℝ) ^ r) ≤ 1 / 64 := hPoly n hnPoly
+  have hExpBase :
+      Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) ≤
+        2 * Real.exp (2 * (n : ℝ) ^ r) := by
+    have hlog2 : Real.log 2 ≤ (n : ℝ) ^ r := by
+      calc
+        Real.log 2 ≤ Real.log 4 := Real.log_le_log (by norm_num) (by norm_num)
+        _ ≤ (n : ℝ) ^ r := hnFour n hnFour0
+    calc
+      Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) ≤
+          Real.exp (Real.log 2 + 2 * (n : ℝ) ^ r) :=
+        Real.exp_le_exp.mpr (by nlinarith [hγpow, hτpow, hlog2])
+      _ = 2 * Real.exp (2 * (n : ℝ) ^ r) := by
+        rw [Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+  have hcap :
+      Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) /
+        (1 - Real.exp (-(n : ℝ) ^ (p / 2))) ≤ 4 * Real.exp (4 * (n : ℝ) ^ r) := by
+    have hpolyExp : (n : ℝ) ^ (k : ℝ) ≤ Real.exp ((n : ℝ) ^ r) := by
+      have hpowEq : (n : ℝ) ^ (k : ℝ) = (n : ℝ) ^ k := Real.rpow_natCast (n : ℝ) k
+      have hRpowPos : 0 < Real.exp (-(n : ℝ) ^ r) := Real.exp_pos _
+      have hmul := (le_div_iff₀ hRpowPos).2 hpolyNow
+      have hdiv : (1 / 64 : ℝ) / Real.exp (-(n : ℝ) ^ r) ≤ Real.exp ((n : ℝ) ^ r) := by
+        rw [Real.exp_neg]
+        have heq : (1 / 64 : ℝ) / (Real.exp ((n : ℝ) ^ r))⁻¹ =
+            (1 / 64 : ℝ) * Real.exp ((n : ℝ) ^ r) := by
+          field_simp
+        rw [heq]
+        calc
+          (1 / 64 : ℝ) * Real.exp ((n : ℝ) ^ r) ≤
+              1 * Real.exp ((n : ℝ) ^ r) := by gcongr <;> norm_num
+          _ = Real.exp ((n : ℝ) ^ r) := by ring
+      calc
+        (n : ℝ) ^ (k : ℝ) = (n : ℝ) ^ k := hpowEq
+        _ ≤ (1 / 64 : ℝ) / Real.exp (-(n : ℝ) ^ r) := hmul
+        _ ≤ Real.exp ((n : ℝ) ^ r) := hdiv
+    have hfactor : (1 - Real.exp (-(n : ℝ) ^ (p / 2)))⁻¹ ≤
+        2 * Real.exp ((n : ℝ) ^ r) := by
+      have hle : (n : ℝ) ^ (-p / 2) ≤ (n : ℝ) ^ (k : ℝ) := hnegativePow
+      have hone : (1 : ℝ) ≤ Real.exp ((n : ℝ) ^ r) := Real.one_le_exp (by positivity)
+      calc
+        (1 - Real.exp (-(n : ℝ) ^ (p / 2)))⁻¹ ≤ 1 + (n : ℝ) ^ (-p / 2) := hinvDelta
+        _ ≤ 2 * Real.exp ((n : ℝ) ^ r) := by nlinarith [hpolyExp]
+    calc
+      _ = Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) *
+          (1 - Real.exp (-(n : ℝ) ^ (p / 2)))⁻¹ := by rw [div_eq_mul_inv]
+      _ ≤ Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) *
+          (2 * Real.exp ((n : ℝ) ^ r)) := by
+            exact mul_le_mul_of_nonneg_left hfactor (Real.exp_pos _).le
+      _ ≤ (2 * Real.exp (2 * (n : ℝ) ^ r)) * (2 * Real.exp ((n : ℝ) ^ r)) :=
+            mul_le_mul_of_nonneg_right hExpBase (by positivity)
+      _ = 4 * Real.exp (3 * (n : ℝ) ^ r) := by
+            calc
+              _ = 4 * (Real.exp (2 * (n : ℝ) ^ r) * Real.exp ((n : ℝ) ^ r)) := by ring
+              _ = 4 * Real.exp (3 * (n : ℝ) ^ r) := by
+                rw [← Real.exp_add]
+                congr 1
+                ring
+      _ ≤ 4 * Real.exp (4 * (n : ℝ) ^ r) := by
+            exact mul_le_mul_of_nonneg_left
+              (Real.exp_le_exp.mpr (by
+                have hq : 0 ≤ (n : ℝ) ^ r := (Real.rpow_pos_of_pos hnpos r).le
+                nlinarith)) (by norm_num)
+  have hfourExp : 4 ≤ Real.exp ((n : ℝ) ^ r) := by
+    calc
+      (4 : ℝ) = Real.exp (Real.log 4) := by rw [Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+      _ ≤ Real.exp ((n : ℝ) ^ r) := Real.exp_le_exp.mpr (hnFour n hnFour0)
+  have hratioNow : (n : ℝ) ^ (-(1 - r)) < c / 20 := hnRatio n hnRatio0
+  have hpowRatio : (n : ℝ) ^ r = (n : ℝ) * (n : ℝ) ^ (-(1 - r)) := by
+    calc
+      (n : ℝ) ^ r = (n : ℝ) ^ (1 + -(1 - r)) := by congr 1 <;> ring
+      _ = (n : ℝ) ^ (1 : ℝ) * (n : ℝ) ^ (-(1 - r)) := by rw [Real.rpow_add hnpos]
+      _ = (n : ℝ) * (n : ℝ) ^ (-(1 - r)) := by simp [Real.rpow_one]
+  have hsublinear : 5 * (n : ℝ) ^ r ≤ (c / 2) * (n : ℝ) := by
+    rw [hpowRatio]
+    nlinarith [hratioNow, hnR]
+  have hcapLinear :
+      Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) /
+        (1 - Real.exp (-(n : ℝ) ^ (p / 2))) ≤ Real.exp (a * (n : ℝ)) := by
+    calc
+      _ ≤ 4 * Real.exp (4 * (n : ℝ) ^ r) := hcap
+      _ ≤ Real.exp (5 * (n : ℝ) ^ r) := by
+        calc
+          4 * Real.exp (4 * (n : ℝ) ^ r) =
+              Real.exp (Real.log 4) * Real.exp (4 * (n : ℝ) ^ r) := by
+                rw [Real.exp_log (by norm_num : (0 : ℝ) < 4)]
+          _ = Real.exp (Real.log 4 + 4 * (n : ℝ) ^ r) := by rw [Real.exp_add]
+          _ ≤ Real.exp (5 * (n : ℝ) ^ r) := Real.exp_le_exp.mpr (by
+                have := hnFour n hnFour0
+                nlinarith)
+      _ ≤ Real.exp (a * (n : ℝ)) := Real.exp_le_exp.mpr (by
+        dsimp [a]
+        linarith [hsublinear])
+  have hdecayNow : (n : ℝ) * Real.exp (-(a * (n : ℝ))) ≤ 1 / 4 := by
+    have hsmall := hnLin n hnLin0
+    have hsmall' : a * (n : ℝ) * Real.exp (-(a * (n : ℝ))) < a / 4 := by
+      simpa [Real.rpow_one] using hsmall
+    have hdiv : (n : ℝ) * Real.exp (-(a * (n : ℝ))) < 1 / 4 := by
+      calc
+        (n : ℝ) * Real.exp (-(a * (n : ℝ))) =
+            (a * (n : ℝ) * Real.exp (-(a * (n : ℝ)))) / a := by
+          field_simp [ne_of_gt ha]
+        _ < (a / 4) / a := div_lt_div_of_pos_right hsmall' ha
+        _ = 1 / 4 := by field_simp [ne_of_gt ha]
+    exact hdiv.le
+  have hExpCombine : Real.exp (-c * (n : ℝ)) * Real.exp (a * (n : ℝ)) =
+      Real.exp (-(a * (n : ℝ))) := by
+    rw [← Real.exp_add]
+    congr 1
+    dsimp [a]
+    ring
+  calc
+    (n : ℝ) * Real.exp (-c * (n : ℝ)) *
+        (Real.exp ((n : ℝ) ^ γ + Real.log 2 + (n : ℝ) ^ (2 * tau8 η₀)) /
+          (1 - Real.exp (-(n : ℝ) ^ (p / 2)))) ≤
+      (n : ℝ) * Real.exp (-c * (n : ℝ)) * Real.exp (a * (n : ℝ)) := by
+        exact mul_le_mul_of_nonneg_left hcapLinear (by positivity)
+    _ = (n : ℝ) * Real.exp (-(a * (n : ℝ))) := by
+      calc
+        _ = (n : ℝ) * (Real.exp (-c * (n : ℝ)) * Real.exp (a * (n : ℝ))) := by ring
+        _ = _ := by rw [hExpCombine]
+    _ ≤ 1 := by linarith [hdecayNow]
+
+private theorem anchorU_cap_of_tag_support {η₀ γ β p K : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N)) (hStd : Std D γ K X Y R)
+    (Θ : D.Hist) (hgood : ∀ g, ¬ D.HBad Θ g) (hn : 0 < D.n)
+    (e : D.CellT) (x : Fin D.N)
+    (i : D.M.ι) (hTag : 0 < (D.tilt Θ e.1).w i) :
+    (D.N : ℝ) * (D.anchorU Θ e.1 i).w x ≤ centerAnchorCap η₀ γ D := by
+  classical
+  let g : D.KeyT := e.1
+  have hbase : D.BaseGates Θ g := by
+    by_contra hnot
+    exact hgood g (by simp [Ctx.HBad, hnot])
+  have hAG : 0 < D.AG g := by unfold Ctx.AG; positivity
+  have hZ : 0 < D.ZG Θ g := by
+    have hlow := hbase.2.1.1
+    exact lt_of_lt_of_le (mul_pos (by norm_num) hAG) hlow
+  have htiltFormula : (D.tilt Θ g).w i = D.tiltW Θ g i / D.ZG Θ g := by
+    unfold Ctx.tilt
+    unfold normOr
+    change (if (∑ j, D.tiltW Θ g j) = 0 then D.tagLaw.w i else
+      D.tiltW Θ g i / (∑ j, D.tiltW Θ g j)) = _
+    have hsum : (∑ j, D.tiltW Θ g j) = D.ZG Θ g := rfl
+    rw [hsum]
+    simp [ne_of_gt hZ]
+  have htiltW : 0 < D.tiltW Θ g i := by
+    by_contra hnot
+    have hzero : D.tiltW Θ g i = 0 := by
+      exact le_antisymm (le_of_not_gt hnot) (D.tiltW_nonneg Θ g i)
+    rw [htiltFormula, hzero] at hTag
+    norm_num at hTag
+  have hopen : D.GateOpen Θ g i := by
+    by_contra hnot
+    unfold Ctx.tiltW at htiltW
+    simp [hnot] at htiltW
+  have hcut : 0 < D.cut := Real.exp_pos _
+  have hminus : 0 < D.dMinus Θ g i := lt_of_lt_of_le hcut hopen.1
+  have hpost : 0 < D.postW (Θ g) i := by
+    by_contra hnot
+    have hzero : D.postW (Θ g) i = 0 :=
+      le_antisymm (le_of_not_gt hnot) (D.postW_nonneg _ _)
+    have htiltZero : D.tiltW Θ g i = 0 := by
+      unfold Ctx.tiltW
+      simp [hzero, hopen]
+    exact (ne_of_gt htiltW) htiltZero
+  have hLambda : 0 < D.M.Λ i := by
+    by_contra hnot
+    have hzero : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hnot) (D.M.Λ_nonneg i)
+    have hpostZero : D.postW (Θ g) i = 0 := by
+      unfold Ctx.postW
+      by_cases hR : D.R'.w (Θ g) = 0 <;> simp [hR, hzero]
+    exact (ne_of_gt hpost) hpostZero
+  have hDelta : D.Δ < 1 := by
+    have hnR : (0 : ℝ) < (D.n : ℝ) := by exact_mod_cast hn
+    have hpw : 0 < (D.n : ℝ) ^ (p / 2) := Real.rpow_pos_of_pos hnR _
+    unfold Ctx.Δ
+    exact Real.exp_lt_one_iff.mpr (neg_lt_zero.mpr hpw)
+  have hfactor : 0 < 1 - D.Δ := sub_pos.mpr hDelta
+  have hPlusLower : (1 - D.Δ) * D.cut ≤ D.dPlus Θ g i := by
+    calc
+      (1 - D.Δ) * D.cut ≤ (1 - D.Δ) * D.dMinus Θ g i :=
+        mul_le_mul_of_nonneg_left hopen.1 hfactor.le
+      _ ≤ D.dPlus Θ g i := hopen.2
+  have hPlus : 0 < D.dPlus Θ g i := lt_of_lt_of_le (mul_pos hfactor hminus) hopen.2
+  rcases hStd.laws i hLambda with ⟨_, _, hwidth, _, _⟩
+  have hNpos : 0 < (D.N : ℝ) := by exact_mod_cast hStd.size.1
+  have hNμ : (D.N : ℝ) * (D.M.μ i).w x ≤ Real.exp ((D.n : ℝ) ^ γ + Real.log 2) := by
+    calc
+      (D.N : ℝ) * (D.M.μ i).w x ≤
+          (D.N : ℝ) * (Real.exp ((D.n : ℝ) ^ γ + Real.log 2) / D.N) :=
+            mul_le_mul_of_nonneg_left (hwidth x) hNpos.le
+      _ = Real.exp ((D.n : ℝ) ^ γ + Real.log 2) := by
+            field_simp [ne_of_gt hNpos]
+  have hUformula : (D.anchorU Θ g i).w x =
+      ((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) / D.dPlus Θ g i := by
+    unfold Ctx.anchorU
+    change (if (∑ y, (D.M.μ i).w y * (if D.ownHit Θ g y then 1 else 0)) = 0 then
+        (D.M.μ i).w x else
+        ((D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0)) /
+          (∑ y, (D.M.μ i).w y * (if D.ownHit Θ g y then 1 else 0))) = _
+    have hsumNorm : (∑ y, if D.ownHit Θ g y then (D.M.μ i).w y else 0) =
+        D.dPlus Θ g i := by
+      unfold Ctx.dPlus
+      apply Finset.sum_congr rfl
+      intro y _
+      by_cases hy : D.ownHit Θ g y <;> simp [hy]
+    have hsumProd : (∑ y, (D.M.μ i).w y * (if D.ownHit Θ g y then 1 else 0)) =
+        D.dPlus Θ g i := by
+      calc
+        (∑ y, (D.M.μ i).w y * (if D.ownHit Θ g y then 1 else 0)) =
+            ∑ y, if D.ownHit Θ g y then (D.M.μ i).w y else 0 := by
+              apply Finset.sum_congr rfl
+              intro y _
+              by_cases hy : D.ownHit Θ g y <;> simp [hy]
+        _ = D.dPlus Θ g i := hsumNorm
+    rw [hsumProd]
+    simp [ne_of_gt hPlus]
+  have hnum : (D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0) ≤ (D.M.μ i).w x := by
+    have hindicator : (if D.ownHit Θ g x then (1 : ℝ) else 0) ≤ 1 := by split_ifs <;> norm_num
+    calc
+      (D.M.μ i).w x * (if D.ownHit Θ g x then 1 else 0) ≤ (D.M.μ i).w x * 1 :=
+        mul_le_mul_of_nonneg_left hindicator ((D.M.μ i).nonneg x)
+      _ = (D.M.μ i).w x := by ring
+  have hUbound : (D.anchorU Θ g i).w x ≤ (D.M.μ i).w x / D.dPlus Θ g i := by
+    rw [hUformula]
+    exact div_le_div_of_nonneg_right hnum hPlus.le
+  have hdenPos : 0 < (1 - D.Δ) * D.cut := mul_pos hfactor hcut
+  have hden : (1 - D.Δ) * D.cut ≤ D.dPlus Θ g i := hPlusLower
+  have hinv : (D.dPlus Θ g i)⁻¹ ≤ ((1 - D.Δ) * D.cut)⁻¹ :=
+    (inv_le_inv₀ hPlus hdenPos).mpr hden
+  have hbound : (D.N : ℝ) * (D.anchorU Θ g i).w x ≤
+      Real.exp ((D.n : ℝ) ^ γ + Real.log 2) / ((1 - D.Δ) * D.cut) := by
+    calc
+      (D.N : ℝ) * (D.anchorU Θ g i).w x ≤
+          (D.N : ℝ) * ((D.M.μ i).w x / D.dPlus Θ g i) :=
+            mul_le_mul_of_nonneg_left hUbound hNpos.le
+      _ = ((D.N : ℝ) * (D.M.μ i).w x) * (D.dPlus Θ g i)⁻¹ := by ring
+      _ ≤ Real.exp ((D.n : ℝ) ^ γ + Real.log 2) *
+          ((1 - D.Δ) * D.cut)⁻¹ :=
+            mul_le_mul hNμ hinv (by positivity) (by positivity)
+      _ = Real.exp ((D.n : ℝ) ^ γ + Real.log 2) / ((1 - D.Δ) * D.cut) := by rw [div_eq_mul_inv]
+  unfold centerAnchorCap
+  have hcutEq : D.cut = Real.exp (-(D.n : ℝ) ^ (2 * tau8 η₀)) := rfl
+  rw [hcutEq] at hbound
+  have hdenRewrite :
+      Real.exp ((D.n : ℝ) ^ γ + Real.log 2) /
+        ((1 - D.Δ) * Real.exp (-(D.n : ℝ) ^ (2 * tau8 η₀))) =
+      Real.exp ((D.n : ℝ) ^ γ + Real.log 2 + (D.n : ℝ) ^ (2 * tau8 η₀)) / (1 - D.Δ) := by
+    calc
+      Real.exp ((D.n : ℝ) ^ γ + Real.log 2) /
+          ((1 - D.Δ) * Real.exp (-(D.n : ℝ) ^ (2 * tau8 η₀))) =
+        Real.exp ((D.n : ℝ) ^ γ + Real.log 2) *
+          ((1 - D.Δ)⁻¹ * (Real.exp (-(D.n : ℝ) ^ (2 * tau8 η₀)))⁻¹) := by
+            rw [div_eq_mul_inv, mul_inv]
+      _ = Real.exp ((D.n : ℝ) ^ γ + Real.log 2) *
+          ((1 - D.Δ)⁻¹ * Real.exp ((D.n : ℝ) ^ (2 * tau8 η₀))) := by simp [Real.exp_neg]
+      _ = (Real.exp ((D.n : ℝ) ^ γ + Real.log 2) *
+            Real.exp ((D.n : ℝ) ^ (2 * tau8 η₀))) * (1 - D.Δ)⁻¹ := by ring
+      _ = Real.exp ((D.n : ℝ) ^ γ + Real.log 2 + (D.n : ℝ) ^ (2 * tau8 η₀)) *
+            (1 - D.Δ)⁻¹ := by
+              exact congrArg (fun z : ℝ => z * (1 - D.Δ)⁻¹)
+                (Real.exp_add ((D.n : ℝ) ^ γ + Real.log 2)
+                  ((D.n : ℝ) ^ (2 * tau8 η₀))).symm
+      _ = Real.exp ((D.n : ℝ) ^ γ + Real.log 2 + (D.n : ℝ) ^ (2 * tau8 η₀)) /
+            (1 - D.Δ) := by rw [div_eq_mul_inv]
+  calc
+    (D.N : ℝ) * (D.anchorU Θ e.1 i).w x ≤
+        Real.exp ((D.n : ℝ) ^ γ + Real.log 2) /
+          ((1 - D.Δ) * Real.exp (-(D.n : ℝ) ^ (2 * tau8 η₀))) := hbound
+    _ = centerAnchorCap η₀ γ D := by
+          unfold centerAnchorCap
+          exact hdenRewrite
+
 private theorem expect_event_const {α : Type*} [Fintype α]
     (P : FinProb α) (E : α → Prop) (c : ℝ) :
     P.expect (fun a => if E a then c else 0) = c * P.pr E := by
@@ -3492,6 +3964,191 @@ theorem select_mean (η₀ β p : ℝ) (h : ℕ) (hη₀ : 0 < η₀) (hp : 0 < 
       _ ≤ 4 * mass := hrateTotal
       _ ≤ D.Bcomp Θ g x := by nlinarith [hmassBound]
   simpa [Ctx.SelectMean, g] using hfinal
+
+private def centerRow {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) (Θ : D.Hist)
+    (a : EvenRole D.n) (x : Fin D.N) (z : D.Pos × D.TAT) : ℝ :=
+  (if D.LocalLegal Θ z.1 z.2.1.1 (cellOf η₀ a.1) then 1 else 0) *
+    D.selLoad ((Θ, z.1), z.2) (cellOf η₀ a.1) x
+
+private def centerSupport {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) (Θ : D.Hist)
+    (z : D.Pos × D.TAT) : Prop :=
+  ∀ g ℓ, 0 < (D.tilt Θ g).w (z.2.1.1 g ℓ)
+
+private def centerSucc {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) (Θ : D.Hist) :
+    Finset (D.Pos × D.TAT) :=
+  Finset.univ.filter fun z => D.SelOK ((Θ, z.1), z.2) ∧ centerSupport D Θ z
+
+set_option maxHeartbeats 5000000 in
+private theorem center_tail_scattered_at {η₀ γ β p K c : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N)) (hStd : Std D γ K X Y R)
+    (hGF : GridFacts η₀ D.n) (Θ : D.Hist) (hgood : ∀ g, ¬ D.HBad Θ g)
+    (hcomp : D.CompOK (8 * (40 * K + 1)) Θ) (hc : 0 < c) (hγ₁ : γ < 1)
+    (hK : 0 < K)
+    (hres : fRes η₀ D.n (2 * rH D.n + 8 * HH η₀ D.n + 4) ≤ Real.exp (-c * D.n))
+    (hcap : (D.n : ℝ) * Real.exp (-c * D.n) * centerAnchorCap η₀ γ D ≤ 1)
+    (hSM : D.SelectMean) (hSC : D.SelConseq)
+    (hjoint : ∀ (x : Fin D.N) (m : ℕ), m ≤ D.n → ∀ s : Fin m → EvenRole D.n,
+      (∀ i j : Fin m, j < i → s i ∉ evenResNear η₀
+        (2 * rH D.n + 8 * HH η₀ D.n + 4) (s j)) →
+      ∑ z ∈ centerSucc D Θ,
+        (FinProb.prod D.posLaw (D.rawTAT Θ)).w z * ∏ i, centerRow D Θ (s i) x z ≤
+          (1 : ℝ) ^ m * ∏ i, D.Bcomp Θ (keyOf η₀ (s i).1) x) :
+    (FinProb.bind D.posLaw fun _ => D.rawTAT Θ).pr
+        (fun z => D.SelOK ((Θ, z.1), z.2) ∧
+          ¬ D.LoadOK (4 * (8 * (40 * K + 1) + 1)) ((Θ, z.1), z.2)) ≤
+      (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
+  classical
+  let U := EvenRole D.n
+  let P := FinProb.prod D.posLaw (D.rawTAT Θ)
+  let succ := centerSucc D Θ
+  let Z : U → Fin D.N → (D.Pos × D.TAT) → ℝ := fun a x z => centerRow D Θ a x z
+  let d : U → Fin D.N → ℝ := fun a x => D.Bcomp Θ (keyOf η₀ a.1) x
+  have hcard : 0 < Fintype.card U := by rw [hGF.even_card]; positivity
+  letI : Nonempty U := Fintype.card_pos_iff.mp hcard
+  have hU : 0 < (Fintype.card U : ℝ) := Nat.cast_pos.mpr Fintype.card_pos
+  have hZ0 : ∀ a x z, 0 ≤ Z a x z := by
+    intro a x z
+    dsimp [Z, centerRow]
+    apply mul_nonneg (ind_nonneg _)
+    unfold Ctx.selLoad
+    cases hsel : D.selTag ((Θ, z.1), z.2) (cellOf η₀ a.1) <;> simp [hsel]
+    exact mul_nonneg (by positivity) ((D.anchorU Θ _ _).nonneg x)
+  have hZL : ∀ a x z, z ∈ succ → Z a x z ≤ centerAnchorCap η₀ γ D := by
+    intro a x z hz
+    have hs : D.SelOK ((Θ, z.1), z.2) := (Finset.mem_filter.mp hz).2.1
+    have htagSupport : centerSupport D Θ z := (Finset.mem_filter.mp hz).2.2
+    have hcon := hSC ((Θ, z.1), z.2) hs
+    let e : D.CellT := cellOf η₀ a.1
+    have hlegal : D.LocalLegal Θ z.1 z.2.1.1 e := (hcon.2 e).2.2.2
+    have hsome : (D.sel ((Θ, z.1), z.2) e).isSome := hcon.1 e
+    obtain ⟨i, hi⟩ := Option.isSome_iff_exists.mp hsome
+    have hselTag : D.selTag ((Θ, z.1), z.2) e = some (z.2.1.1 e.1 i) := by
+      simp [Ctx.selTag, hi]
+    have htag : 0 < (D.tilt Θ e.1).w (z.2.1.1 e.1 i) := htagSupport e.1 i
+    have hcap' := anchorU_cap_of_tag_support D X Y R hStd Θ hgood
+      (lt_of_lt_of_le (by norm_num) hGF.pos.1) e x (z.2.1.1 e.1 i) htag
+    have hload : D.selLoad ((Θ, z.1), z.2) e x ≤ centerAnchorCap η₀ γ D := by
+      simpa [Ctx.selLoad, hselTag] using hcap'
+    simpa [Z, centerRow, e, hlegal] using hload
+  have hself : ∀ a : U, a ∈ evenResNear η₀
+      (2 * rH D.n + 8 * HH η₀ D.n + 4) a := by
+    intro a
+    simp [evenResNear]
+  have hf : 0 ≤ fRes η₀ D.n (2 * rH D.n + 8 * HH η₀ D.n + 4) := by
+    unfold fRes
+    positivity
+  have hnear : ∀ a : U,
+      ((evenResNear η₀ (2 * rH D.n + 8 * HH η₀ D.n + 4) a).card : ℝ) ≤
+        fRes η₀ D.n (2 * rH D.n + 8 * HH η₀ D.n + 4) * Fintype.card U :=
+    hGF.res_near _
+  have hD0 : 0 ≤ 8 * (40 * K + 1) := by positivity
+  have hd : ∀ a x, 0 ≤ d a x := by
+    intro a x
+    exact bcomp_nonneg D Θ (keyOf η₀ a.1) x
+  have hmean : ∀ x,
+      (Fintype.card U : ℝ)⁻¹ * ∑ a, d a x ≤ 8 * (40 * K + 1) := by
+    intro x
+    simpa [d, U, Ctx.CompOK] using hcomp x
+  have hsmall : (D.n : ℝ) * fRes η₀ D.n
+      (2 * rH D.n + 8 * HH η₀ D.n + 4) * centerAnchorCap η₀ γ D ≤ 1 := by
+    have hnR : 0 < (D.n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by norm_num) hGF.pos.1)
+    have hdeltaPow : 0 < (D.n : ℝ) ^ (p / 2) := Real.rpow_pos_of_pos hnR _
+    have hdelta : D.Δ < 1 := by
+      unfold Ctx.Δ
+      exact Real.exp_lt_one_iff.mpr (neg_lt_zero.mpr hdeltaPow)
+    have hcap0 : 0 ≤ centerAnchorCap η₀ γ D := by
+      unfold centerAnchorCap
+      exact div_nonneg (Real.exp_pos _).le (sub_nonneg.mpr hdelta.le)
+    calc
+      _ ≤ (D.n : ℝ) * Real.exp (-c * D.n) * centerAnchorCap η₀ γ D := by
+        apply mul_le_mul_of_nonneg_right _ hcap0
+        exact mul_le_mul_of_nonneg_left hres hnR.le
+      _ ≤ 1 := hcap
+  have hlabels : (Fintype.card (Fin D.N) : ℝ) ≤ (D.n : ℝ) * 2 ^ D.n := by
+    rw [Fintype.card_fin]
+    exact_mod_cast hStd.size.2
+  have htail := HypercubeRamsey.scatteredMoments_union_labels P succ Z hZ0
+    (centerAnchorCap η₀ γ D) (by
+      have hnR : 0 < (D.n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by norm_num) hGF.pos.1)
+      have hdeltaPow : 0 < (D.n : ℝ) ^ (p / 2) := Real.rpow_pos_of_pos hnR _
+      have hdelta : D.Δ < 1 := by
+        unfold Ctx.Δ
+        exact Real.exp_lt_one_iff.mpr (neg_lt_zero.mpr hdeltaPow)
+      unfold centerAnchorCap
+      exact div_nonneg (Real.exp_pos _).le (sub_nonneg.mpr hdelta.le)) hZL
+    (evenResNear η₀ (2 * rH D.n + 8 * HH η₀ D.n + 4)) hself
+    (fRes η₀ D.n (2 * rH D.n + 8 * HH η₀ D.n + 4)) hf hnear D.n
+    (lt_of_lt_of_le (by norm_num) hGF.pos.1) 1 (8 * (40 * K + 1))
+    (by norm_num) hD0 d hd hmean (by
+      intro x m hm s hsep
+      simpa [P, Z, d] using hjoint x m hm s hsep) hsmall hlabels
+  have hthreshold : 4 * (1 : ℝ) * (8 * (40 * K + 1) + 1) =
+      4 * (8 * (40 * K + 1) + 1) := by ring
+  have htailPr : P.pr (fun z => z ∈ succ ∧ ∃ x,
+      4 * (8 * (40 * K + 1) + 1) < (Fintype.card U : ℝ)⁻¹ * ∑ a, Z a x z) ≤
+        (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
+    classical
+    let E : D.Pos × D.TAT → Prop := fun z => z ∈ succ ∧ ∃ x,
+      4 * (8 * (40 * K + 1) + 1) < (Fintype.card U : ℝ)⁻¹ * ∑ a, Z a x z
+    have hprsum : P.pr E =
+        ∑ z, if z ∈ succ ∧ ∃ x, 4 * (8 * (40 * K + 1) + 1) <
+          (Fintype.card U : ℝ)⁻¹ * ∑ a, Z a x z then P.w z else 0 := by
+      unfold FinProb.pr E
+      apply Finset.sum_congr rfl
+      intro z hz
+      by_cases h : z ∈ succ ∧ ∃ x, 4 * (8 * (40 * K + 1) + 1) <
+          (Fintype.card U : ℝ)⁻¹ * ∑ a, Z a x z <;> simp [h]
+    calc
+      P.pr E = _ := hprsum
+      _ ≤ (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
+        simpa [hthreshold] using htail
+  have hsupportOne : P.pr (centerSupport D Θ) = 1 := by
+    change (FinProb.prod D.posLaw (D.rawTAT Θ)).pr
+      (fun z => ∀ g ℓ, 0 < (D.tilt Θ g).w (z.2.1.1 g ℓ)) = 1
+    exact posTAT_tagSupport_pr_one D Θ
+  have hsupportZero : P.pr (fun z => ¬ centerSupport D Θ z) = 0 := by
+    have h := pr_compl P (centerSupport D Θ)
+    linarith
+  have htargetBelowSupport : P.pr (fun z =>
+      D.SelOK ((Θ, z.1), z.2) ∧
+        ¬ D.LoadOK (4 * (8 * (40 * K + 1) + 1)) ((Θ, z.1), z.2)) ≤
+      P.pr (fun z => centerSupport D Θ z ∧
+        D.SelOK ((Θ, z.1), z.2) ∧
+          ¬ D.LoadOK (4 * (8 * (40 * K + 1) + 1)) ((Θ, z.1), z.2)) := by
+    exact pr_le_on_support P (centerSupport D Θ) _ hsupportZero
+  have hsupportToTail : ∀ z, centerSupport D Θ z →
+      D.SelOK ((Θ, z.1), z.2) →
+      ¬ D.LoadOK (4 * (8 * (40 * K + 1) + 1)) ((Θ, z.1), z.2) →
+      z ∈ succ ∧ ∃ x, 4 * (8 * (40 * K + 1) + 1) <
+        (Fintype.card U : ℝ)⁻¹ * ∑ a, Z a x z := by
+    intro z hsupp hsel hnotload
+    have hcon := hSC ((Θ, z.1), z.2) hsel
+    have hrowEq : ∀ a x, Z a x z = D.selLoad ((Θ, z.1), z.2)
+        (cellOf η₀ a.1) x := by
+      intro a x
+      have hl : D.LocalLegal Θ z.1 z.2.1.1 (cellOf η₀ a.1) := (hcon.2 (cellOf η₀ a.1)).2.2.2
+      simp [Z, centerRow, hl]
+    have hsucc : z ∈ succ := Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hsel, hsupp⟩⟩
+    have hnot : ¬ ∀ x, (Fintype.card U : ℝ)⁻¹ *
+        ∑ a : U, D.selLoad ((Θ, z.1), z.2) (cellOf η₀ a.1) x ≤
+          4 * (8 * (40 * K + 1) + 1) := by
+      simpa [Ctx.LoadOK] using hnotload
+    obtain ⟨x, hx⟩ := not_forall.mp hnot
+    have hx' : 4 * (8 * (40 * K + 1) + 1) <
+        (Fintype.card U : ℝ)⁻¹ * ∑ a : U,
+          D.selLoad ((Θ, z.1), z.2) (cellOf η₀ a.1) x := by
+      exact lt_of_not_ge hx
+    refine ⟨hsucc, x, ?_⟩
+    simpa [hrowEq] using hx'
+  have htailBound := pr_mono P
+    (fun z => centerSupport D Θ z ∧ D.SelOK ((Θ, z.1), z.2) ∧
+      ¬ D.LoadOK (4 * (8 * (40 * K + 1) + 1)) ((Θ, z.1), z.2))
+    (fun z => z ∈ succ ∧ ∃ x, 4 * (8 * (40 * K + 1) + 1) <
+      (Fintype.card U : ℝ)⁻¹ * ∑ a, Z a x z)
+    (by intro z hz; exact hsupportToTail z hz.1 hz.2.1 hz.2.2)
+  have hbound := htargetBelowSupport.trans (htailBound.trans htailPr)
+  change (FinProb.prod D.posLaw (D.rawTAT Θ)).pr _ ≤ _ at hbound
+  simpa [P, FinProb.bind, FinProb.prod] using hbound
 
 end HypercubeRamsey.S08.Lane_q_s08_load
 

@@ -2481,6 +2481,86 @@ private theorem mergeSortAt_mono {n : ℕ} (f g : Fin n → ℕ)
 private def mergeSortAt {n : ℕ} (f : Fin n → ℕ) (i : Fin n) : ℕ :=
   ((List.ofFn f).mergeSort (fun a b => decide (a ≤ b))).get ⟨i.val, by simp⟩
 
+private theorem mergeSortAt_monotone {n : ℕ} (f : Fin n → ℕ) :
+    Monotone (mergeSortAt f) := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  let q : Fin n → ℕ := fun i => L.get (Fin.cast hlen.symm i)
+  have hq : ∀ i : Fin n, q i = mergeSortAt f i := by intro i; rfl
+  have hs : L.SortedLE := by
+    simpa [L] using (List.sortedLE_mergeSort (l := List.ofFn f))
+  have hqmon : Monotone q := by
+    intro i j hij
+    apply hs.monotone_get
+    simpa [q, Fin.val_cast] using hij
+  intro i j hij
+  rw [← hq i, ← hq j]
+  exact hqmon hij
+
+private theorem mergeSort_mem_gap {n : ℕ} (f : Fin n → ℕ) (p q : Fin n)
+    (hpq : q.val = p.val + 1) (x : ℕ) (hx : x ∈ List.ofFn f) :
+    x ≤ mergeSortAt f p ∨ mergeSortAt f q ≤ x := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  have hperm := List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))
+  have hxsort : x ∈ L := hperm.mem_iff.mpr hx
+  obtain ⟨i, hi⟩ := List.mem_iff_get.mp hxsort
+  let i' : Fin n := Fin.cast hlen i
+  have hival : i'.val = i.val := by simp [i']
+  have hiNat : i.val < n := by simpa [hlen] using i.isLt
+  have hival : i'.val = i.val := by simp [i']
+  have hiNat : i.val < n := by simpa [hlen] using i.isLt
+  have hxi : mergeSortAt f i' = x := by
+    dsimp [mergeSortAt, L, i']
+    simpa using hi
+  have hmon := mergeSortAt_monotone f
+  by_cases hip : i' ≤ p
+  · left
+    calc
+      x = mergeSortAt f i' := hxi.symm
+      _ ≤ mergeSortAt f p := hmon hip
+  · right
+    have hnotVal : ¬ i'.val ≤ p.val := by
+      intro hv
+      exact hip (Fin.le_iff_val_le_val.mpr hv)
+    have hqi : q.val ≤ i'.val := by omega
+    have hqi' : q ≤ i' := Fin.le_iff_val_le_val.mpr hqi
+    calc
+      mergeSortAt f q ≤ mergeSortAt f i' := hmon hqi'
+      _ = x := hxi
+
+private theorem mergeSort_mem_extremes {n : ℕ} (f : Fin n → ℕ) (hn : 0 < n)
+    (x : ℕ) (hx : x ∈ List.ofFn f) :
+    mergeSortAt f ⟨0, hn⟩ ≤ x ∧
+      x ≤ mergeSortAt f ⟨n - 1, by omega⟩ := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  have hperm := List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))
+  have hxsort : x ∈ L := hperm.mem_iff.mpr hx
+  obtain ⟨i, hi⟩ := List.mem_iff_get.mp hxsort
+  let i' : Fin n := Fin.cast hlen i
+  have hival : i'.val = i.val := by simp [i']
+  have hiNat : i.val < n := by simpa [hlen] using i.isLt
+  have hxi : mergeSortAt f i' = x := by
+    dsimp [mergeSortAt, L, i']
+    simpa using hi
+  have hmon := mergeSortAt_monotone f
+  have hiLast : i' ≤ (⟨n - 1, by omega⟩ : Fin n) := by
+    apply Fin.le_iff_val_le_val.mpr
+    exact Nat.le_sub_one_of_lt i'.isLt
+  constructor
+  · calc
+      mergeSortAt f ⟨0, hn⟩ ≤ mergeSortAt f i' :=
+        hmon (Fin.le_iff_val_le_val.mpr (by simp))
+      _ = x := hxi
+  · calc
+      x = mergeSortAt f i' := hxi.symm
+      _ ≤ mergeSortAt f ⟨n - 1, by omega⟩ :=
+        hmon hiLast
+
 private theorem sum_ofFn_eq {n : ℕ} (f : Fin n → ℕ) :
     (List.ofFn f).sum = ∑ i : Fin n, f i := by
   induction n with
@@ -2768,6 +2848,7 @@ private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
       (binarySearchRun S R k (0, S)).1 ≤ (binarySearchRun S R k (0, S)).2 ∧
       (binarySearchRun S R k (0, S)).2 =
         (binarySearchRun S R k (0, S)).1 + 2 ^ (e - k) ∧
+      (binarySearchRun S R k (0, S)).2 ≤ S ∧
       R (binarySearchRun S R k (0, S)).1 ≤
         (binarySearchRun S R k (0, S)).1 * S ∧
       (binarySearchRun S R k (0, S)).2 * S ≤
@@ -2777,7 +2858,7 @@ private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
   | zero =>
     intro hk
     simp only [binarySearchRun]
-    refine ⟨by omega, ?_, ?_, ?_⟩
+    refine ⟨by omega, ?_, by omega, ?_, ?_⟩
     · simpa using hS
     · simpa using hzero
     · exact le_of_eq hfinal.symm
@@ -2788,8 +2869,9 @@ private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
     have hab : ab.1 ≤ ab.2 := by simpa [ab] using hprev.1
     have hwidthPrev : ab.2 = ab.1 + 2 ^ (e - k) := by
       simpa [ab] using hprev.2.1
-    have hlo : R ab.1 ≤ ab.1 * S := by simpa [ab] using hprev.2.2.1
-    have hhi : ab.2 * S ≤ R ab.2 := by simpa [ab] using hprev.2.2.2
+    have habUpper : ab.2 ≤ S := by simpa [ab] using hprev.2.2.1
+    have hlo : R ab.1 ≤ ab.1 * S := by simpa [ab] using hprev.2.2.2.1
+    have hhi : ab.2 * S ≤ R ab.2 := by simpa [ab] using hprev.2.2.2.2
     have hlen : e - k = (e - (k + 1)) + 1 := by omega
     let half := 2 ^ (e - (k + 1))
     have hpow : 2 ^ (e - k) = 2 * half := by
@@ -2811,9 +2893,11 @@ private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
         simp [m, hc]
       rw [hrun]
       simp only [Prod.fst, Prod.snd]
-      refine ⟨?_, ?_, hlo, hc⟩
+      refine ⟨?_, ?_, ?_, hlo, hc⟩
       · omega
       · simpa [half] using hmid
+      · have hmle : m ≤ ab.2 := by rw [hmid, hwidth]; omega
+        exact hmle.trans habUpper
     · have hc' : R m ≤ m * S := Nat.le_of_lt (lt_of_not_ge hc)
       have hrun : binarySearchRun S R (k + 1) (0, S) = (m, ab.2) := by
         simp only [binarySearchRun]
@@ -2822,7 +2906,7 @@ private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
         simp [m, hc]
       rw [hrun]
       simp only [Prod.fst, Prod.snd]
-      refine ⟨?_, ?_, hc', hhi⟩
+      refine ⟨?_, ?_, habUpper, hc', hhi⟩
       · omega
       · rw [hwidth, hmid]
         simp [half]
@@ -2833,6 +2917,7 @@ private theorem gadgetSearchLeaf_spec {β γ : ℝ} {n : ℕ}
     let S := HypercubeRamsey.S04.gadgetPower β γ n
     let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
     ab.2 = ab.1 + 1 ∧
+      ab.2 ≤ S ∧
       HypercubeRamsey.S04.rankValue β γ n g v ab.1 ≤ ab.1 * S ∧
       ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := by
   classical
@@ -2855,11 +2940,102 @@ private theorem gadgetSearchLeaf_spec {β γ : ℝ} {n : ℕ}
     change (List.range e).foldl (fun st _ => binarySearchStepR S R st) (0, S) = _
     exact foldl_range_binarySearchRun S R e (0, S)
   have hspec := binarySearchRun_endpoint_invariant S e R hS hzero hfinal e (Nat.le_refl _)
-  rcases hspec with ⟨hle, hwidth, hlo, hhi⟩
-  refine ⟨?_, ?_, ?_⟩
+  rcases hspec with ⟨hle, hwidth, habUpper, hlo, hhi⟩
+  refine ⟨?_, ?_, ?_, ?_⟩
   · simpa [ab, hfold, S] using hwidth
+  · simpa [ab, hfold, S] using habUpper
   · simpa [ab, R, hfold, S] using hlo
   · simpa [ab, R, hfold, S] using hhi
+
+private theorem clipped_gap_of_search {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v ≤
+          (HypercubeRamsey.S04.searchLeaf β γ n g v).1 *
+            HypercubeRamsey.S04.gadgetPower β γ n ∨
+        (HypercubeRamsey.S04.searchLeaf β γ n g v).2 *
+            HypercubeRamsey.S04.gadgetPower β γ n ≤
+          HypercubeRamsey.S04.clipped β γ n g j v := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
+  let f : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
+    fun j => HypercubeRamsey.S04.clipped β γ n g j v
+  have hspec : ab.2 = ab.1 + 1 ∧ ab.2 ≤ S ∧
+      HypercubeRamsey.S04.rankValue β γ n g v ab.1 ≤ ab.1 * S ∧
+      ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := by
+    simpa [ab, S] using gadgetSearchLeaf_spec g v
+  have hchunk : HypercubeRamsey.S04.chunkNum β γ n + 1 = S := by
+    unfold HypercubeRamsey.S04.chunkNum
+    have hpos := HypercubeRamsey.S04.gadgetPower_pos β γ n
+    omega
+  have hn : 0 < HypercubeRamsey.S04.chunkNum β γ n := by omega
+  intro j
+  change f j ≤ ab.1 * S ∨ ab.2 * S ≤ f j
+  have hxmem : f j ∈ List.ofFn f := List.mem_ofFn.mpr ⟨j, rfl⟩
+  by_cases hzero : ab.1 = 0
+  · have hfirstRank : HypercubeRamsey.S04.rankValue β γ n g v 1 =
+        mergeSortAt f ⟨0, hn⟩ := by
+      simpa [f] using rankValue_succ_eq_mergeSortAt g v ⟨0, hn⟩
+    have hfirst : S ≤ mergeSortAt f ⟨0, hn⟩ := by
+      have hb : ab.2 = 1 := by omega
+      simpa [hzero, hb, hfirstRank] using hspec.2.2.2
+    have hmin := mergeSort_mem_extremes f hn (f j) hxmem
+    right
+    have hb : ab.2 = 1 := by omega
+    rw [hb]
+    simpa using hfirst.trans hmin.1
+  · by_cases htop : ab.2 = S
+    · have haPos : 0 < ab.1 := Nat.pos_of_ne_zero hzero
+      let p : Fin (HypercubeRamsey.S04.chunkNum β γ n) := ⟨ab.1 - 1, by omega⟩
+      have hpVal : p.val + 1 = ab.1 := by dsimp [p]; omega
+      have hlastRank : HypercubeRamsey.S04.rankValue β γ n g v ab.1 =
+          mergeSortAt f p := by
+        have h := rankValue_succ_eq_mergeSortAt g v p
+        rw [hpVal] at h
+        simpa [f] using h
+      have hlastFin : p = ⟨HypercubeRamsey.S04.chunkNum β γ n - 1, by omega⟩ := by
+        apply Fin.ext
+        dsimp [p]
+        omega
+      have hmax := mergeSort_mem_extremes f hn (f j) hxmem
+      have hmax' : f j ≤ mergeSortAt f p := by
+        simpa [hlastFin] using hmax.2
+      left
+      calc
+        f j ≤ mergeSortAt f p := hmax'
+        _ = HypercubeRamsey.S04.rankValue β γ n g v ab.1 := hlastRank.symm
+        _ ≤ ab.1 * S := hspec.2.2.1
+    · have ha : ab.1 < HypercubeRamsey.S04.chunkNum β γ n := by
+        have hstrict : ab.2 < S := lt_of_le_of_ne hspec.2.1 htop
+        omega
+      let p : Fin (HypercubeRamsey.S04.chunkNum β γ n) := ⟨ab.1 - 1, by omega⟩
+      let q : Fin (HypercubeRamsey.S04.chunkNum β γ n) := ⟨ab.1, ha⟩
+      have hpVal : p.val + 1 = ab.1 := by dsimp [p]; omega
+      have hqVal : q.val + 1 = ab.2 := by dsimp [q]; omega
+      have hpRank : HypercubeRamsey.S04.rankValue β γ n g v ab.1 =
+          mergeSortAt f p := by
+        have h := rankValue_succ_eq_mergeSortAt g v p
+        rw [hpVal] at h
+        simpa [f] using h
+      have hqRank : HypercubeRamsey.S04.rankValue β γ n g v ab.2 =
+          mergeSortAt f q := by
+        have h := rankValue_succ_eq_mergeSortAt g v q
+        rw [hqVal] at h
+        simpa [f] using h
+      have hpq : q.val = p.val + 1 := by dsimp [p, q]; omega
+      rcases mergeSort_mem_gap f p q hpq (f j) hxmem with hlow | hhigh
+      · left
+        calc
+          f j ≤ mergeSortAt f p := hlow
+          _ = HypercubeRamsey.S04.rankValue β γ n g v ab.1 := hpRank.symm
+          _ ≤ ab.1 * S := hspec.2.2.1
+      · right
+        calc
+          ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := hspec.2.2.2
+          _ = mergeSortAt f q := hqRank
+          _ ≤ f j := hhigh
 
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =

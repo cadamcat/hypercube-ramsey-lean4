@@ -3,6 +3,9 @@ import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_query
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_raw
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_bounds
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_finish
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -250,7 +253,7 @@ theorem D18_L_cell_query_calibration (hκ : κ.Admissible) (hThresholds : LateTh
     ∀ᶠ k in atTop, ∀ (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (X : Inputs hPT),
       ProfileCornerMass PT → LargeIndex κ T k → CellQueryCalibration (rawData hκ X) := by
   classical
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1000000] with k hn
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop (max 100 ⌈Real.exp 100⌉₊)] with k hn
   intro PT hPT X hMass hLarge
   let D := rawData hκ X
   change CellQueryCalibration D
@@ -264,25 +267,91 @@ theorem D18_L_cell_query_calibration (hκ : κ.Admissible) (hThresholds : LateTh
   have hroles : Function.Injective roles := by
     intro a b hab
     exact hodd (congrArg Subtype.val hab)
-  by_cases hCluster : PT.tiling.mode.isCluster
-  · have hSepC : ∀ a b, a ≠ b →
-        50 * κ.ρ * (PT.tiling.P (D.geom.cellPatch C)).h <
-          (hammingDist (roles a).1 (roles b).1 : ℝ) := by
-      intro a b hab
-      have hpatch : D.geom.patchOf (odd a) = D.geom.cellPatch C := by
-        rw [← D.geom.cellOf_patch (odd a), hCell a]
-      simpa only [hpatch] using hSep a b hab
-    have hGroups : Function.Injective (fun a => physical.raw.groupOf C (roles a)) :=
+  have hn100 : 100 ≤ T.S.n k := (Nat.le_max_left _ _).trans hn
+  have hn10 : 10 ≤ T.S.n k := by omega
+  have hnExp : Real.exp 100 ≤ (T.S.n k : ℝ) :=
+    (Nat.le_ceil _).trans (by exact_mod_cast (Nat.le_max_right 100 ⌈Real.exp 100⌉₊).trans hn)
+  have hLowCluster (hc : PT.tiling.mode.isCluster) : PT.tiling.mode = .lowCluster := by
+    have hl := X.low
+    cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Mode.isCluster]
+  have hSepC : ∀ a b, a ≠ b →
+      50 * κ.ρ * (PT.tiling.P (D.geom.cellPatch C)).h <
+        (hammingDist (roles a).1 (roles b).1 : ℝ) := by
+    intro a b hab
+    have hpatch : D.geom.patchOf (odd a) = D.geom.cellPatch C := by
+      rw [← D.geom.cellOf_patch (odd a), hCell a]
+    simpa only [hpatch] using hSep a b hab
+  have hGroups : Function.Injective (fun a => physical.raw.groupOf C (roles a)) := by
+    by_cases hCluster : PT.tiling.mode.isCluster
+    · exact
       Lane_sol_d18l_cal.query_groups_injective hκ hThresholds hPT
         physical.raw physical.source_valid hCluster X.low C roles hSepC
-    sorry
-  · have hRawGroups : Function.Injective (physical.raw.groupOf C) := by
-      rcases physical.source_valid with ⟨hm, _, hSource⟩ | ⟨_, hSource⟩
-      · exact (hCluster (by simp [hm, Mode.isCluster])).elim
-      · exact (hSource C).1
-    have hGroups : Function.Injective (fun a => physical.raw.groupOf C (roles a)) :=
-      hRawGroups.comp hroles
-    sorry
+    · have hRawGroups : Function.Injective (physical.raw.groupOf C) := by
+        rcases physical.source_valid with ⟨hm, _, hSource⟩ | ⟨_, hSource⟩
+        · exact (hCluster (by simp [hm, Mode.isCluster])).elim
+        · exact (hSource C).1
+      exact hRawGroups.comp hroles
+  have hMargin : PT.tiling.mode.isCluster →
+      2 < 20 * κ.ρ * (PT.tiling.P (D.geom.cellPatch C)).h := fun hc =>
+    Lane_sol_d18l_cal.patch_threshold hκ hThresholds hPT (hLowCluster hc) _
+  have hHeight : PT.tiling.mode.isCluster → 1 ≤ (PT.tiling.P (D.geom.cellPatch C)).h := by
+    intro hc
+    have hm := hMargin hc
+    by_contra hh
+    have hz : (PT.tiling.P (D.geom.cellPatch C)).h = 0 := by omega
+    simp [hz] at hm
+    norm_num at hm
+  obtain ⟨y, hy⟩ := (hPT.tiling_valid.patch_nonempty (D.geom.cellPatch C)).2
+  obtain ⟨B, hB, hyB⟩ := (PT.tiling.P (D.geom.cellPatch C)).bins.exists_mem hy
+  have hBins : (Finset.univ : Finset (Bin PT.tiling (D.geom.cellPatch C))).Nonempty :=
+    ⟨⟨B, hB⟩, Finset.mem_univ _⟩
+  have hM : 0 < (PT.tiling.P (D.geom.cellPatch C)).M := by
+    rw [← (PT.tiling.P (D.geom.cellPatch C)).cardY]
+    exact Finset.card_pos.mpr ⟨y, hy⟩
+  have hCount := Lane_sol_d18l_cal.source_bin_count hκ physical.quantitative (D.geom.cellPatch C)
+  have hd : 0 < (PT.tiling.P (D.geom.cellPatch C)).d := by
+    by_contra hh
+    have hz : (PT.tiling.P (D.geom.cellPatch C)).d = 0 := by omega
+    rw [hz] at hCount
+    have hmR : (0 : ℝ) < (PT.tiling.P (D.geom.cellPatch C)).M := by exact_mod_cast hM
+    simp at hCount
+    linarith
+  have hSlot : (T.S.n k : ℝ) ^ (200 : ℕ) ≤
+      (D.geom.nslot C : ℝ) * (PT.tiling.P (D.geom.cellPatch C)).d := by
+    have hK := Lane_sol_d18l_cal.Kcell_ge_one hκ
+    have hs := X.l16.slot_lower C
+    rw [hκ.Ac_eq] at hs
+    exact (show (T.S.n k : ℝ) ^ (200 : ℕ) ≤ κ.Kcell * (T.S.n k : ℝ) ^ (200 : ℕ) by
+      simpa only [one_mul] using mul_le_mul_of_nonneg_right hK (by positivity)).trans hs
+  have hDirect (hc : ¬ PT.tiling.mode.isCluster) :
+      (q : ℝ) ≤ Real.rpow (D.geom.nslot C : ℝ) 0.025 ∧
+        Real.rpow (D.geom.nslot C : ℝ) (-0.04) ≤ 0.001 := by
+    have hd := Lane_sol_d18l_cal.source_direct_bin_size hκ physical.quantitative hc (D.geom.cellPatch C)
+    have hs : (T.S.n k : ℝ) ^ (200 : ℕ) ≤ (D.geom.nslot C : ℝ) := by
+      simpa only [hd, Nat.cast_one, mul_one] using hSlot
+    exact Lane_sol_d18l_cal.direct_slot_query_room (T.S.n k) q (D.geom.nslot C : ℝ) hn10 hq hs
+  have hRate : Lane_sol_d18l_cal.cell_query_rate D.geom C ≤ 0.001 := by
+    by_cases hc : PT.tiling.mode.isCluster
+    · simpa only [Lane_sol_d18l_cal.cell_query_rate, if_pos hc] using
+        (Lane_sol_d18l_cal.patch_rate_and_error hκ hPT (hLowCluster hc) (D.geom.cellPatch C)).1
+    · simpa only [Lane_sol_d18l_cal.cell_query_rate, if_neg hc] using (hDirect hc).2
+  have hRoom := Lane_sol_d18l_cal.bin_square_room (T.S.n k)
+    (PT.tiling.P (D.geom.cellPatch C)).d hnExp (physical.quantitative.bin_count_bound _)
+  have hq0 : 0 < q := by omega
+  have hBound := Lane_sol_d18l_cal.physical_cell_query_bound physical C hBins hq0 hq roles hroles hGroups
+    hHeight (fun hc => (hDirect hc).1) hMargin hSepC hn100 hRoom hd hSlot hRate f hf
+  rw [Lane_sol_d18l_cal.cell_pool_law_iid D C hBins]
+  have hRhs : (∏ a, ((∑ y, (PT.πraw (D.geom.cellPatch C)).w y * f a y) +
+      Real.rpow (T.S.n k : ℝ) (-197))) =
+      ∏ a, ((∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +
+        Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3))) := by
+    apply Finset.prod_congr rfl
+    intro a _
+    have hp : D.geom.patchOf (odd a) = D.geom.cellPatch C := by
+      rw [← D.geom.cellOf_patch (odd a), hCell a]
+    rw [hp, hκ.Ac_eq]
+    norm_num
+  exact hBound.trans_eq (congrArg (fun x => Real.exp (0.002 * q) * x) hRhs)
 
 /-- Product-pool/product-fresh algebra, without positivity or typicality
 assumptions on unconsulted cells. TeX 18:277–285,1134–1210. -/

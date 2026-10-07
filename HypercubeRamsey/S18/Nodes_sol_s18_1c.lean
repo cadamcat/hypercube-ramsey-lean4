@@ -6,6 +6,7 @@ import HypercubeRamsey.S17.Nodes_q_s17_pool
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n2
+import HypercubeRamsey.S18.Locality_sol_s18_n4
 
 namespace HypercubeRamsey.Lane_sol_s18_1c
 open Classical Filter
@@ -2179,5 +2180,245 @@ theorem protocol_scalar_cutoffs (hκ : κ.Admissible) (T : Stage) :
       _ = L ^ 7 := by ring
       _ ≤ L ^ 20 := pow_le_pow_right₀ hL1 (by norm_num)
   exact ⟨hmargin, homit, hcalls⟩
+
+private theorem singleton_batches_pairwise {A : Type*} [DecidableEq A]
+    (L : List A) (hL : L.Nodup) :
+    (L.map fun a => ({a} : Finset A)).Pairwise Disjoint := by
+  induction L with
+  | nil => simp
+  | cons a L ih =>
+    obtain ⟨ha, hL⟩ := List.nodup_cons.mp hL
+    rw [List.map_cons, List.pairwise_cons]
+    refine ⟨?_, ih hL⟩
+    intro B hB
+    obtain ⟨b, hb, rfl⟩ := List.mem_map.mp hB
+    rw [Finset.disjoint_singleton]
+    intro heq
+    exact ha (heq.symm ▸ hb)
+
+private theorem base_batch_type (D : LateData hPT) (b : Pos T k)
+    (B : Finset (Fin (T.S.n k)))
+    (hB : B ∈ (Finset.univ \ PT.tiling.Icoord (D.geom.patchOf b)).toList.map (fun a => ({a} : Finset (Fin (T.S.n k)))) ++
+      (if PT.tiling.Icoord (D.geom.patchOf b) = ∅ then [] else [PT.tiling.Icoord (D.geom.patchOf b)])) :
+    B = PT.tiling.Icoord (D.geom.patchOf b) ∨
+      ∃ a ∈ Finset.univ \ PT.tiling.Icoord (D.geom.patchOf b), B = {a} := by
+  rcases List.mem_append.mp hB with hB | hB
+  · obtain ⟨a, ha, heq⟩ := List.mem_map.mp hB
+    exact Or.inr ⟨a, by simpa using ha, heq.symm⟩
+  · by_cases hi : PT.tiling.Icoord (D.geom.patchOf b) = ∅
+    · simp [hi] at hB
+    · exact Or.inl (by simpa [hi] using hB)
+
+/-- Every batch in the frozen test orders is the internal batch or one external
+singleton, and batches in one order are pairwise disjoint. -/
+theorem testOrders_disjoint_batches (D : LateData hPT) (b : Pos T k) :
+    ∀ order ∈ D.testOrders b, order.Pairwise Disjoint ∧
+      ∀ B ∈ order, B = PT.tiling.Icoord (D.geom.patchOf b) ∨
+        ∃ a ∈ Finset.univ \ PT.tiling.Icoord (D.geom.patchOf b), B = {a} := by
+  let intern := PT.tiling.Icoord (D.geom.patchOf b)
+  let extern := Finset.univ \ intern
+  let base := extern.toList.map (fun a => ({a} : Finset (Fin (T.S.n k)))) ++
+    (if intern = ∅ then [] else [intern])
+  have hExt : (extern.toList.map (fun a => ({a} : Finset (Fin (T.S.n k))))).Pairwise Disjoint :=
+    singleton_batches_pairwise _ extern.nodup_toList
+  have hBase : base.Pairwise Disjoint := by
+    dsimp [base]
+    by_cases hi : intern = ∅
+    · simpa only [if_pos hi, List.append_nil] using hExt
+    · rw [if_neg hi, List.pairwise_append]
+      refine ⟨hExt, by simp, ?_⟩
+      intro A hA B hB
+      obtain ⟨a, ha, rfl⟩ := List.mem_map.mp hA
+      have heq : B = intern := by simpa using hB
+      subst B
+      rw [Finset.disjoint_singleton_left]
+      exact (Finset.mem_sdiff.mp (show a ∈ extern from by simpa using ha)).2
+  have hType (B : Finset (Fin (T.S.n k))) (hB : B ∈ base) :
+      B = intern ∨ ∃ a ∈ extern, B = {a} := base_batch_type D b B hB
+  intro order ho
+  change order ∈ base :: extern.toList.map _ at ho
+  rcases List.mem_cons.mp ho with rfl | ho
+  · exact ⟨hBase, hType⟩
+  · obtain ⟨a, ha, rfl⟩ := List.mem_map.mp ho
+    have haext : a ∈ extern := by simpa using ha
+    have hPair : (base.filter (fun B => B ≠ {a}) ++ [{a}]).Pairwise Disjoint := by
+      rw [List.pairwise_append]
+      refine ⟨hBase.sublist List.filter_sublist, by simp, ?_⟩
+      intro B hB C hC
+      have hBe : B ∈ base := (List.mem_filter.mp hB).1
+      have hne : B ≠ {a} := by simpa using (List.mem_filter.mp hB).2
+      have hCa : C = {a} := by simpa using hC
+      subst C
+      rcases hType B hBe with heq | ⟨t, ht, heq⟩
+      · subst B
+        rw [Finset.disjoint_singleton_right]
+        exact (Finset.mem_sdiff.mp haext).2
+      · subst B
+        rw [Finset.disjoint_singleton]
+        intro heq
+        exact hne (congrArg (fun x => ({x} : Finset (Fin (T.S.n k)))) heq)
+    refine ⟨hPair, ?_⟩
+    intro B hB
+    rcases List.mem_append.mp hB with hB | hB
+    · exact hType B (List.mem_filter.mp hB).1
+    · exact Or.inr ⟨a, haext, by simpa using hB⟩
+
+/-- A tested prefix is disjoint from the current batch. -/
+theorem prefix_disjoint_current_batch (D : LateData hPT) (b : Pos T k)
+    (order : List (Finset (Fin (T.S.n k)))) (ho : order ∈ D.testOrders b)
+    (q : ℕ) (hq : q < order.length) :
+    Disjoint (D.prefixTests order q) (order.getD q ∅) := by
+  have hPw := (testOrders_disjoint_batches D b order ho).1
+  apply Finset.disjoint_left.mpr
+  intro a ha hcur
+  have hm : ∃ B ∈ order.take q, a ∈ B := by
+    simpa only [LateData.prefixTests, mem_foldl_union, Finset.notMem_empty, false_or] using ha
+  obtain ⟨B, hB, hab⟩ := hm
+  obtain ⟨p, hp, hBp⟩ := List.mem_iff_getElem.mp hB
+  have hpmin : p < min q order.length := by simpa only [List.length_take] using hp
+  have hpq : p < q := hpmin.trans_le (Nat.min_le_left _ _)
+  have hpl : p < order.length := hpmin.trans_le (Nat.min_le_right _ _)
+  have hBi : order[p] = B := by simpa only [List.getElem_take] using hBp
+  have hd := List.pairwise_iff_getElem.mp hPw p q hpl hq hpq
+  have hcur' : a ∈ order[q] := by
+    rw [List.getD_eq_getElem order ∅ hq] at hcur
+    exact hcur
+  exact Finset.disjoint_left.mp hd (by rw [hBi]; exact hab) hcur'
+
+/-- The current tested prefix already omits all sketches in the erased word. -/
+theorem prefix_tests_exclude_erased (D : LateData hPT) (X : CriticalTransferData D) :
+    ∀ a ∈ D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val,
+      flipPos X.failure.2.1.1 a ∉ X.erased := by
+  let b := X.failure.2.1.1
+  let a0 := X.failure.2.2.2.2
+  let order := D.prefixOrder X.failure
+  let q := X.failure.2.2.2.1.val
+  let intern := PT.tiling.Icoord (D.geom.patchOf b)
+  have ho : order ∈ D.testOrders b := by
+    have heq := List.getD_eq_getElem (D.testOrders b) [] X.valid.1
+    change (D.testOrders b).getD X.failure.2.2.1.val [] ∈ D.testOrders b
+    rw [heq]
+    exact List.getElem_mem X.valid.1
+  have hq : q < order.length := X.valid.2.1
+  have ha0 : a0 ∈ order.getD q ∅ := X.valid.2.2
+  have hDisj := prefix_disjoint_current_batch D b order ho q hq
+  have htarget : X.target = flipPos b a0 := rfl
+  intro a ha hErased
+  have haa0 : a ≠ a0 := by
+    intro heq
+    subst a
+    exact Finset.disjoint_left.mp hDisj ha ha0
+  have hOuter := (Finset.mem_filter.mp hErased).2
+  by_cases ha0I : a0 ∈ intern
+  · have hp : D.geom.patchOf X.target = D.geom.patchOf b := by
+      rw [htarget]
+      exact internal_patch D b a0 ha0I
+    have hbatch : order.getD q ∅ = intern := by
+      have hm := List.getD_eq_getElem order ∅ hq
+      have hbmem : order.getD q ∅ ∈ order := by rw [hm]; exact List.getElem_mem hq
+      rcases (testOrders_disjoint_batches D b order ho).2 _ hbmem with hB | ⟨t, ht, hB⟩
+      · exact hB
+      · have hat : a0 = t := by simpa only [hB, Finset.mem_singleton] using ha0
+        subst t
+        exact False.elim ((Finset.mem_sdiff.mp ht).2 ha0I)
+    have haI : a ∉ intern := fun hi => Finset.disjoint_left.mp hDisj ha (by simpa only [hbatch] using hi)
+    have haTarget : a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) := by simpa only [hp] using haI
+    have hv := hOuter a haTarget
+    rw [htarget] at hv
+    change flipPos b a a = flipPos b a0 a at hv
+    cases hbval : b a <;> simp [flipPos, haa0, hbval] at hv
+  · have ha0Target : a0 ∉ PT.tiling.Icoord (D.geom.patchOf X.target) := by
+      intro hI
+      have hp := internal_patch D X.target a0 hI
+      rw [htarget, flipPos_involutive] at hp
+      apply ha0I
+      change a0 ∈ PT.tiling.Icoord (D.geom.patchOf b)
+      rw [hp]
+      exact hI
+    have hv := hOuter a0 ha0Target
+    rw [htarget] at hv
+    change flipPos b a a0 = flipPos b a0 a0 at hv
+    cases hbval : b a0 <;> simp [flipPos, haa0.symm, hbval] at hv
+
+/-- Changing erased sketch coordinates leaves the current prefix label law
+unchanged at the same mask. This is an identity before any seed is fixed. -/
+theorem prefixLabelWeight_erased_invariant (D : LateData hPT) (X : CriticalTransferData D)
+    (out out' : D.encoding.base.RowOut X.failure.2.1.1)
+    (hmask : out.1 = out'.1)
+    (hsketch : ∀ a, flipPos X.failure.2.1.1 a ∉ X.erased → out.2.1 a = out'.2.1 a)
+    (y : Fin (T.S.N k)) :
+    D.labelWeight X.failure.1 out (D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val) y =
+      D.labelWeight X.failure.1 out' (D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val) y := by
+  let tests := D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val
+  have hp (u : Fin (T.S.N k)) : D.passes X.failure.1 out tests u ↔ D.passes X.failure.1 out' tests u := by
+    constructor <;> intro h a ha <;>
+      simpa only [LateData.sketchHit, hsketch a (prefix_tests_exclude_erased D X a ha)] using h a ha
+  have hm (u : Fin (T.S.N k)) : D.maskWeight out u = D.maskWeight out' u := by
+    unfold LateData.maskWeight
+    rw [hmask]
+  have hmass : D.retainedMass X.failure.1 out tests = D.retainedMass X.failure.1 out' tests := by
+    unfold LateData.retainedMass
+    simp_rw [hp, hm]
+  change D.labelWeight X.failure.1 out tests y = D.labelWeight X.failure.1 out' tests y
+  unfold LateData.labelWeight
+  rw [hmass, hp, hm]
+
+/-- A responding block fills its own cells from the raw input and uses the fixed
+configuration everywhere else, giving a total computation off the sampled path. -/
+noncomputable def blockConfig (D : LateData hPT) (X : CriticalTransferData D)
+    (a : Fin (T.S.n k)) (s : X.Raw) : Config D.fresh :=
+  fun C => if C ∈ X.blockCells a then X.state s C else X.fixed C
+
+/-- The block computation reads only the requested whole-cell input. -/
+theorem blockConfig_local (D : LateData hPT) (X : CriticalTransferData D)
+    (a : Fin (T.S.n k)) (s s' : X.Raw)
+    (hs : ∀ C ∈ X.blockCells a, s C = s' C) : blockConfig D X a s = blockConfig D X a s' := by
+  funext C
+  unfold blockConfig
+  by_cases hC : C ∈ X.blockCells a
+  · simp only [if_pos hC]
+    exact congrArg Prod.snd (hs C hC)
+  · simp only [if_neg hC]
+
+/-- On a raw-law support point, replacing other cells by fixed inputs preserves
+all direct data of a site assigned to this block. -/
+theorem blockConfig_agrees (D : LateData hPT) (X : CriticalTransferData D)
+    (a : Fin (T.S.n k)) (s : X.Raw) (hs : X.rawLaw.w s ≠ 0) (w : Pos T k)
+    (hscope : D.directCells w ∩ X.criticalCells ⊆ X.blockCells a) :
+    ∀ C ∈ D.directCells w, X.state s C = blockConfig D X a s C := by
+  have hfixed := rawLaw_noncritical_fixed D X s hs
+  intro C hC
+  unfold blockConfig
+  by_cases hblock : C ∈ X.blockCells a
+  · simp only [if_pos hblock]
+  · simp only [if_neg hblock]
+    apply hfixed
+    intro hcrit
+    exact hblock (hscope (Finset.mem_inter.mpr ⟨hC, hcrit⟩))
+
+/-- The local block history produces exactly the original current prior on the
+supported path and keeps the fixed fallback on invalid or zero computations. -/
+theorem block_currentPrior_eq (D : LateData hPT) (X : CriticalTransferData D) (hD : D.Spec)
+    (a : Fin (T.S.n k)) (s : X.Raw) (hs : X.rawLaw.w s ≠ 0)
+    (j : Fin D.geom.r) (w : Pos T k) (H : D.encoding.base.History j.castSucc)
+    (hinit : H.1 = X.state s) (hscope : D.directCells w ∩ X.criticalCells ⊆ X.blockCells a) :
+    D.currentPrior j w H = D.currentPrior j w (blockConfig D X a s, H.2) := by
+  apply Lane_sol_s18_n4.priorAt_local D hD j.castSucc w
+  · intro C hC
+    rw [hinit]
+    exact blockConfig_agrees D X a s hs w hscope C hC
+  · intro b hb
+    rfl
+
+/-- Arbitrary off-path raw inputs agreeing on one block produce the same local
+prior when the preceding row labels are supplied by the transcript. -/
+theorem block_currentPrior_local (D : LateData hPT) (X : CriticalTransferData D)
+    (a : Fin (T.S.n k)) (s s' : X.Raw)
+    (hs : ∀ C ∈ X.blockCells a, s C = s' C)
+    (j : Fin D.geom.r) (w : Pos T k)
+    (rows : ∀ b : D.encoding.base.ProcessedRole j.castSucc, D.encoding.base.RowOut b.1) :
+    D.currentPrior j w (blockConfig D X a s, rows) =
+      D.currentPrior j w (blockConfig D X a s', rows) := by
+  rw [blockConfig_local D X a s s' hs]
 
 end HypercubeRamsey.Lane_sol_s18_1c

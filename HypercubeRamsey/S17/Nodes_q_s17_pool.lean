@@ -101,6 +101,34 @@ theorem law_hitRatio_expectation {N : ℕ} (μ : Law N)
           rw [show (∑ y, μ.w y * hit E c x y) = deg E c μ.w x by rfl]
           exact div_self (ne_of_gt hdeg)
 
+theorem pinned_product_row_expectation_simplified {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (pins : Finset (Pos T k)) (fixed : Pos T k → Fin (T.S.N k))
+    (hdeg : ∀ x, σ x ≠ 0 → ∀ w ∈ D.externalEarly v,
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) :
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+          D.hitRatio w.1 x (ys w)) =
+      ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+        if w.1 ∈ pins then
+          D.hitRatio w.1 x (fixed w.1) else 1 := by
+  classical
+  rw [pinned_product_row_expectation]
+  apply Finset.sum_congr rfl
+  intro x hx
+  by_cases hσ : σ x = 0
+  · simp [hσ]
+  · congr 1
+    apply Finset.prod_congr rfl
+    intro w hw
+    by_cases hp : w.1 ∈ pins
+    · simp [hp, FinLaw.dirac, FinLaw.E]
+    · have hratio := law_hitRatio_expectation
+        (PT.π (D.G.patchOf w.1)) (T.S.E k) PT.tiling.c x
+        (hdeg x hσ w.1 w.2)
+      simpa [hp, ListGateContext.lawAsFinLaw, ListGateContext.hitRatio] using hratio
+
 theorem pi_pr_forall {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
     (P : ∀ i, FinLaw (Ω i)) (A : ∀ i, Ω i → Prop) :

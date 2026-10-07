@@ -205,6 +205,37 @@ private theorem stNbr_witness6 {n : ℕ} (L : ChunkLayout6 n) (b a : State6 L)
       L.stateOf u = b ∧ L.stateOf v = a ∧ (cube n).Adj u v := by
   simpa only [ChunkLayout6.stNbr, Finset.mem_filter, Finset.mem_univ, true_and] using ha
 
+theorem neighbor_state_type_occurs6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {b a : X.State} (ha : a ∈ X.g.L.stNbr b) :
+    X.stType a ∈ X.occTypes := by
+  obtain ⟨u, v, huodd, hveven, hub, hva, hadj⟩ := stNbr_witness6 X.g.L b a ha
+  have hkey : X.g.L.stKey a = X.g.L.key v := by
+    calc
+      X.g.L.stKey a = X.g.L.stKey (X.g.L.stateOf v) := by
+        exact congrArg X.g.L.stKey hva.symm
+      _ = X.g.L.key v := X.facts.key_eq v
+  have hsign : X.g.L.stSign a = X.g.L.sign v := by
+    calc
+      X.g.L.stSign a = X.g.L.stSign (X.g.L.stateOf v) := by
+        exact congrArg X.g.L.stSign hva.symm
+      _ = X.g.L.sign v := X.facts.sign_eq v
+  have hflip : X.g.L.stFlippable a = X.g.L.flippable v := by
+    calc
+      X.g.L.stFlippable a = X.g.L.stFlippable (X.g.L.stateOf v) := by
+        exact congrArg X.g.L.stFlippable hva.symm
+      _ = X.g.L.flippable v := X.facts.flippable_eq v
+  have hsev : X.g.L.stSeverity a = X.g.L.severity v := by
+    calc
+      X.g.L.stSeverity a = X.g.L.stSeverity (X.g.L.stateOf v) := by
+        exact congrArg X.g.L.stSeverity hva.symm
+      _ = X.g.L.severity v := X.facts.severity_eq v
+  have htype : X.stType a = X.evenType v := by
+    simp [Ctx6.stType, ChunkLayout6.stType, Ctx6.evenType, hkey, hsign, hflip, hsev]
+  rw [htype]
+  apply Finset.mem_image.mpr
+  refine ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hveven⟩, rfl⟩
+
 private theorem edge_key_severity {n : ℕ} (L : ChunkLayout6 n) (F : ChunkFlips6 L)
     (u v : CubeVertex n) (h : (cube n).Adj u v) :
     keyAdjacent6 binAdjacent6 (L.key u) (L.key v) ∧ Nat.dist (L.severity u) (L.severity v) ≤ 1 := by
@@ -1382,7 +1413,7 @@ private theorem finProb_ext_weight6 {Ω : Type*} [Fintype Ω]
       cases hsumEq
       rfl
 
-private theorem tagPost_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
+theorem tagPost_eq_of_hidden_agree6 {γ p₀ K : ℝ} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
     (X : Ctx6 γ p₀ K n N E G M) (H H' : X.Hist) (β : X.Ty)
     (S : Finset X.HKey) (hbase : H.1 = H'.1)

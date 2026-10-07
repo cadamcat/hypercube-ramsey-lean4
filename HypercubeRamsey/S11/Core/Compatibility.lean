@@ -1512,6 +1512,111 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
           exact hnot ⟨hjk, hedge⟩
         exact lt_of_not_ge hnotle
       exact False.elim (hnoIndependent i.1 i.2 labels hlabelsSub hlabelsCard hlabelsPair)
+  have hsamplePacking (i : HighTags) (r : ℕ) (z : Fin r → Fin N)
+      (hzInjective : Function.Injective z)
+      (hzSelected : ∀ j, z j ∈ selected i.1)
+      (hR : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤ r) :
+      ∃ P : Finset (Finset (Fin r)), ∃ V : Finset (Fin r),
+        (∀ C ∈ P, C.card = sC n ∧
+          ∀ j ∈ C, ∀ k ∈ C, j ≠ k →
+            1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k)) ∧
+        (∀ C ∈ P, ∀ D ∈ P, C ≠ D → Disjoint C D) ∧
+        V = P.biUnion id ∧
+        (Finset.univ \ V).card < Nat.choose (sC n + t₀ - 2) (sC n - 1) := by
+    let IsClique (C : Finset (Fin r)) : Prop :=
+      C.card = sC n ∧
+        ∀ j ∈ C, ∀ k ∈ C, j ≠ k →
+          1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k)
+    let Cliques : Finset (Finset (Fin r)) := Finset.univ.filter IsClique
+    let IsPacking (P : Finset (Finset (Fin r))) : Prop :=
+      (∀ C ∈ P, C ∈ Cliques) ∧
+        ∀ C ∈ P, ∀ D ∈ P, C ≠ D → Disjoint C D
+    let Packings : Finset (Finset (Finset (Fin r))) := Finset.univ.filter IsPacking
+    have hPackings : Packings.Nonempty := by
+      refine ⟨∅, ?_⟩
+      simp [Packings, IsPacking]
+    obtain ⟨P, hPmem, hPmax⟩ := Finset.exists_max_image Packings Finset.card hPackings
+    have hP : IsPacking P := (Finset.mem_filter.mp hPmem).2
+    let V : Finset (Fin r) := P.biUnion id
+    have hNoClique : ∀ C, C ⊆ Finset.univ \ V → C.card = sC n →
+        ¬ (∀ j ∈ C, ∀ k ∈ C, j ≠ k →
+          1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k)) := by
+      intro C hC hCcard hEdges
+      have hCis : IsClique C := ⟨hCcard, hEdges⟩
+      have hCmem : C ∈ Cliques := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hCis⟩
+      have hCne : C.Nonempty := Finset.card_pos.mp (by rw [hCcard]; exact hsCpos)
+      have hCnotP : C ∉ P := by
+        intro hCP
+        obtain ⟨j, hj⟩ := hCne
+        have hjV : j ∈ V := Finset.mem_biUnion.mpr ⟨C, hCP, hj⟩
+        exact (Finset.mem_sdiff.mp (hC hj)).2 hjV
+      have hCdisj (D : Finset (Fin r)) (hDP : D ∈ P) : Disjoint C D := by
+        have hDsub : D ⊆ V := by
+          intro j hj
+          exact Finset.mem_biUnion.mpr ⟨D, hDP, hj⟩
+        apply Finset.disjoint_left.mpr
+        intro j hjC hjD
+        exact (Finset.mem_sdiff.mp (hC hjC)).2 (hDsub hjD)
+      have hP' : IsPacking (insert C P) := by
+        refine ⟨?_, ?_⟩
+        · intro D hD
+          rcases Finset.mem_insert.mp hD with rfl | hDP
+          · exact hCmem
+          · exact hP.1 D hDP
+        · intro D hD D' hD' hne
+          rcases Finset.mem_insert.mp hD with rfl | hDP
+          · rcases Finset.mem_insert.mp hD' with rfl | hD'P
+            · exact (hne rfl).elim
+            · exact hCdisj D' hD'P
+          · rcases Finset.mem_insert.mp hD' with rfl | hD'P
+            · exact (hCdisj D hDP).symm
+            · exact hP.2 D hDP D' hD'P hne
+      have hP'mem : insert C P ∈ Packings :=
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, hP'⟩
+      have hmax := hPmax (insert C P) hP'mem
+      have hcardInsert : (insert C P).card = P.card + 1 :=
+        Finset.card_insert_of_notMem hCnotP
+      omega
+    have hLeftLess : (Finset.univ \ V).card <
+        Nat.choose (sC n + t₀ - 2) (sC n - 1) := by
+      by_contra hnot
+      have hLeftLarge : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤ (Finset.univ \ V).card :=
+        le_of_not_gt hnot
+      let L : Finset (Fin r) := Finset.univ \ V
+      let e : {j : Fin r // j ∈ L} ≃ Fin L.card := L.equivFin
+      let zL : Fin L.card → Fin N := fun j => z (e.symm j).1
+      have hzLinj : Function.Injective zL := by
+        intro a b hab
+        have hval : (e.symm a).1 = (e.symm b).1 := hzInjective hab
+        have hsub : e.symm a = e.symm b := Subtype.ext hval
+        exact e.symm.injective hsub
+      have hzLselected : ∀ j, zL j ∈ selected i.1 := fun j => hzSelected _
+      obtain ⟨C, hCcard, hCedge⟩ := hsampleClique i L.card zL hzLinj hzLselected hLeftLarge
+      let C' : Finset (Fin r) := C.image fun j => (e.symm j).1
+      have himageInj : Function.Injective (fun j : Fin L.card => (e.symm j).1) := by
+        intro a b hab
+        exact e.symm.injective (Subtype.ext hab)
+      have hC'card : C'.card = sC n := by
+        dsimp [C']
+        rw [Finset.card_image_of_injective _ himageInj, hCcard]
+      have hC'sub : C' ⊆ L := by
+        intro j hj
+        obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hj
+        exact (e.symm k).2
+      have hC'edge : ∀ j ∈ C', ∀ k ∈ C', j ≠ k →
+          1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k) := by
+        intro j hj k hk hjk
+        obtain ⟨a, ha, rfl⟩ := Finset.mem_image.mp hj
+        obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hk
+        have hab : a ≠ b := by
+          intro hab
+          exact hjk (congrArg (fun c => (e.symm c).1) hab)
+        simpa [zL] using hCedge a ha b hb hab
+      have hC'sub' : C' ⊆ Finset.univ \ V := by simpa [L] using hC'sub
+      exact hNoClique C' hC'sub' hC'card hC'edge
+    refine ⟨P, V, ?_, hP.2, rfl, hLeftLess⟩
+    intro C hC
+    exact (Finset.mem_filter.mp (hP.1 C hC)).2
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

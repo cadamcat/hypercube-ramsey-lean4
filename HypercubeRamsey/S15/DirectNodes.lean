@@ -73,7 +73,7 @@ theorem high_direct_crossing_filters (κ : CConsts) (hκ : κ.Admissible) (T : S
     DirectCrossingClaim κ T ∧ ClusterCrossingClaim κ T := by
   constructor
   · exact Lane_sol_s15_cross.direct_crossing_bound κ hκ T hDeep
-  · sorry
+  · exact Lane_sol_s15_cross.cluster_crossing_bound κ hκ T hDeep
 
 /-- L15.1b: bulk lower-tail estimate, using the crossing-filter stage. -/
 theorem high_direct_bulk_lower_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

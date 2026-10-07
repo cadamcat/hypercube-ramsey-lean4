@@ -1738,6 +1738,240 @@ private theorem eventual_residual_width_budget (β γ : ℝ) (hβ : 0 < β)
     (hFactors n hnFactors).2.2.1 (hFactors n hnFactors).2.2.2
     xs hxs hgood
 
+private theorem residual_own_width_budget_of_length {β γ : ℝ} {G : Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι)
+    (u : OddRole n) (S₀ : Mask (M.ν (tag (key β γ n u.1))))
+    (xs : List (Fin N))
+    (hcost : (xs.length : ℝ) * capL β γ n ≤ (n : ℝ) ^ (γ - omega4 β γ / 2) / 8)
+    (hlog : 1 + Real.log 2 ≤ (n : ℝ) ^ (γ - omega4 β γ / 2) / 8)
+    (hgood : GoodPath E G (capL β γ n) (maskLaw S₀) xs) :
+    Law.WidthLE (residualAfter E G (maskLaw S₀) xs)
+      (M.sY (tag (key β γ n u.1)) + (n : ℝ) ^ (γ - omega4 β γ / 2) / 4) := by
+  let i := tag (key β γ n u.1)
+  have hνWidth : Law.WidthLE (M.ν i) (M.sY i + 1) := (M.prep i).2.2.2.2.2.1
+  have hbase : Law.WidthLE (maskLaw S₀) (M.sY i + 1 + Real.log 2) := by
+    have hm := mask_width S₀ hνWidth
+    exact hm.mono (by rfl)
+  have htail := residualAfter_width E G (maskLaw S₀) xs hbase hgood
+  apply Law.WidthLE.mono htail
+  linarith [hcost, hlog]
+
+private theorem eventual_own_residual_width_budget (β γ : ℝ) (hβ : 0 < β)
+    (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
+      {X Y : Finset (Fin N)} (M : Menu4 β γ G n N E X Y) (u : OddRole n)
+      (tag : Key β γ n → M.ι) (D : Finset (Loc β γ n))
+      (S₀ : Mask (M.ν (tag (key β γ n u.1)))) (xs : List (Fin N)),
+      D.card ≤ setBd β γ n → KeyNbrCard β γ n →
+      xs.length ≤ tupLen β γ n * D.card * (Zset β γ u).card →
+      GoodPath E G (capL β γ n) (maskLaw S₀) xs →
+      Law.WidthLE (residualAfter E G (maskLaw S₀) xs)
+        (M.sY (tag (key β γ n u.1)) + (n : ℝ) ^ (γ - omega4 β γ / 2) / 4) := by
+  let ω := omega4 β γ
+  let gap := ω / 30 - h4 β γ
+  let margin := γ - ω / 2
+  have hω : 0 < ω := omega4_pos hβ hγ
+  have hωβ : ω ≤ β / 1000 := by
+    dsimp [ω, omega4]
+    exact div_le_div_of_nonneg_right (min_le_left β (1 - γ)) (by norm_num)
+  have hgap : 0 < gap := by dsimp [gap, h4]; nlinarith [hω]
+  have hmargin : 0 < margin := by dsimp [margin]; nlinarith [hβγ, hωβ]
+  have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  obtain ⟨nFactors, hFactors⟩ := eventual_width_budget_factors β γ hβ hβγ hγ
+  obtain ⟨nGap, hGap⟩ := eventually_rpow_gt (a := gap) (c := 64) hgap
+  obtain ⟨nMargin, hMargin⟩ := eventually_rpow_gt (a := margin)
+    (c := 8 * (1 + Real.log 2)) hmargin
+  refine ⟨max 1 (max nFactors (max nGap nMargin)), ?_⟩
+  intro n hn N E G X Y M u tag D S₀ xs hD hKey hxs hgood
+  have hnOne : 1 ≤ n := le_trans (Nat.le_max_left 1 _) hn
+  have hnFactors : nFactors ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_left nFactors (max nGap nMargin))
+      (Nat.le_max_right 1 (max nFactors (max nGap nMargin)))
+  have hnGap : nGap ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_left nGap nMargin)
+      (le_trans (Nat.le_max_right nFactors (max nGap nMargin))
+        (Nat.le_max_right 1 (max nFactors (max nGap nMargin))))
+  have hnMargin : nMargin ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_right nGap nMargin)
+      (le_trans (Nat.le_max_right nFactors (max nGap nMargin))
+        (Nat.le_max_right 1 (max nFactors (max nGap nMargin))))
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hnr : 0 < (n : ℝ) := lt_of_lt_of_le (by norm_num) hnR
+  let r := (n : ℝ)
+  let a := omega4 β γ / 3
+  let b := omega4 β γ / 30
+  let z := γ - 9 / 10 * omega4 β γ
+  let h := h4 β γ
+  have hset := (hFactors n hnFactors).1
+  have htuple := (hFactors n hnFactors).2.1
+  have hDreal : (D.card : ℝ) ≤ (setBd β γ n : ℝ) := by exact_mod_cast hD
+  have hDbound : (D.card : ℝ) ≤ 4 * r ^ b := hDreal.trans (by simpa [r, b] using hset)
+  have hZbound : ((Zset β γ u).card : ℝ) ≤ r ^ z := hKey u
+  have hKD : (tupLen β γ n : ℝ) * (D.card : ℝ) ≤ (2 * r ^ a) * (4 * r ^ b) :=
+    mul_le_mul htuple (by simpa [r, b] using hDbound) (by positivity) (by positivity)
+  have hKDZ : (tupLen β γ n : ℝ) * (D.card : ℝ) * ((Zset β γ u).card : ℝ) ≤
+      ((2 * r ^ a) * (4 * r ^ b)) * r ^ z :=
+    mul_le_mul hKD hZbound (by positivity) (by positivity)
+  have hpowProd : r ^ a * r ^ b * r ^ z * r ^ h =
+      r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) := by
+    calc
+      r ^ a * r ^ b * r ^ z * r ^ h = (r ^ a * r ^ b) * (r ^ z * r ^ h) := by ring
+      _ = r ^ (a + b) * r ^ (z + h) := by
+        rw [← Real.rpow_add hnr a b, ← Real.rpow_add hnr z h]
+      _ = r ^ ((a + b) + (z + h)) := (Real.rpow_add hnr (a + b) (z + h)).symm
+      _ = r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) := by
+        congr 1
+        dsimp [a, b, z, h]
+        ring
+  have hcostRaw : (xs.length : ℝ) * capL β γ n ≤
+      8 * r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) := by
+    have hxsReal : (xs.length : ℝ) ≤
+        (tupLen β γ n : ℝ) * (D.card : ℝ) * ((Zset β γ u).card : ℝ) := by
+      exact_mod_cast hxs
+    calc
+      (xs.length : ℝ) * capL β γ n ≤
+          ((tupLen β γ n : ℝ) * (D.card : ℝ) * ((Zset β γ u).card : ℝ)) * r ^ h := by
+            exact mul_le_mul_of_nonneg_right hxsReal (Real.rpow_pos_of_pos hnr h).le
+      _ ≤ ((2 * r ^ a) * (4 * r ^ b) * r ^ z) * r ^ h := by
+            exact mul_le_mul_of_nonneg_right hKDZ (Real.rpow_pos_of_pos hnr h).le
+      _ = 8 * r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) := by
+            calc
+              ((2 * r ^ a) * (4 * r ^ b) * r ^ z) * r ^ h =
+                  8 * (r ^ a * r ^ b * r ^ z * r ^ h) := by ring
+              _ = 8 * r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) := by rw [hpowProd]
+  have hgapPow : 64 < r ^ gap := by simpa [r, gap] using hGap n hnGap
+  have hmarginPow : 8 * (1 + Real.log 2) < r ^ margin := by
+    simpa [r, margin] using hMargin n hnMargin
+  have hsplit : r ^ margin =
+      r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) * r ^ gap := by
+    rw [← Real.rpow_add hnr (γ - 8 / 15 * omega4 β γ + h4 β γ) gap]
+    congr 1
+    dsimp [gap, margin, h4]
+    ring
+  have hcost : (xs.length : ℝ) * capL β γ n ≤ r ^ margin / 8 := by
+    have hcoeff : 8 ≤ r ^ gap / 8 := by nlinarith [hgapPow]
+    have hpos : 0 < r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) :=
+      Real.rpow_pos_of_pos hnr _
+    have hmul := mul_le_mul_of_nonneg_left hcoeff hpos.le
+    calc
+      (xs.length : ℝ) * capL β γ n ≤
+          8 * r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) := hcostRaw
+      _ ≤ r ^ (γ - 8 / 15 * omega4 β γ + h4 β γ) * r ^ gap / 8 := by
+          nlinarith [hmul]
+      _ = r ^ margin / 8 := by rw [← hsplit]
+  have hlog : 1 + Real.log 2 ≤ r ^ margin / 8 := by nlinarith [hmarginPow]
+  exact residual_own_width_budget_of_length M tag u S₀ xs (by simpa [r, margin] using hcost)
+    (by simpa [r, margin] using hlog) hgood
+
+private theorem own_product_bound_of_dips {k : ℕ} (a L : ℝ) (q : Fin k → ℝ)
+    (dips : Finset (Fin k))
+    (ha : 0 < a) (haHalf : a ≤ 1 / 2) (hL : 0 < L)
+    (hgood : ∀ j ∉ dips, 1 / 2 + 3 / 4 * a ≤ q j)
+    (hbad : ∀ j ∈ dips, Real.exp (-L) ≤ q j)
+    (hcount : (dips.card : ℝ) ≤ a * (k : ℝ) / (20 * L)) :
+    Real.exp ((k : ℝ) * (-Real.log 2 + c1 * a)) ≤ ∏ j : Fin k, q j := by
+  classical
+  have ha0 : 0 ≤ a := ha.le
+  have hlog2 : 1 / 2 ≤ Real.log 2 := by
+    have h := Real.log_le_sub_one_of_pos (x := (2 : ℝ)⁻¹) (inv_pos.mpr (by norm_num))
+    rw [Real.log_inv] at h
+    norm_num at h ⊢
+    linarith
+  have hqpos : ∀ j, 0 < q j := by
+    intro j
+    by_cases hj : j ∈ dips
+    · exact lt_of_lt_of_le (Real.exp_pos _) (hbad j hj)
+    · exact lt_of_lt_of_le (by positivity) (hgood j hj)
+  have htpos : 0 < 1 + 3 / 2 * a := by positivity
+  have hlogFactor : 7 / 10 * a ≤ Real.log (1 + 3 / 2 * a) := by
+    have hinvpos : 0 < (1 + 3 / 2 * a)⁻¹ := inv_pos.mpr htpos
+    have hlog := Real.log_le_sub_one_of_pos hinvpos
+    rw [Real.log_inv] at hlog
+    have hratio : 1 - (1 + 3 / 2 * a)⁻¹ = (3 / 2 * a) / (1 + 3 / 2 * a) := by
+      field_simp [ne_of_gt htpos]
+      ring
+    have hratioLog : (3 / 2 * a) / (1 + 3 / 2 * a) ≤ Real.log (1 + 3 / 2 * a) := by
+      rw [← hratio]
+      linarith
+    have haSq : a * a ≤ a / 2 := by
+      have h := mul_le_mul_of_nonneg_left haHalf ha0
+      nlinarith
+    have hfrac : 7 / 10 * a ≤ (3 / 2 * a) / (1 + 3 / 2 * a) := by
+      rw [le_div_iff₀ htpos]
+      nlinarith [haSq]
+    exact hfrac.trans hratioLog
+  have hg : -Real.log 2 + 7 / 10 * a ≤ 0 := by nlinarith [hlog2, haHalf]
+  have hlogGood : ∀ j ∉ dips, -Real.log 2 + 7 / 10 * a ≤ Real.log (q j) := by
+    intro j hj
+    have hlow : 0 < 1 / 2 * (1 + 3 / 2 * a) := by positivity
+    have hle : 1 / 2 * (1 + 3 / 2 * a) ≤ q j := by
+      have := hgood j hj
+      nlinarith
+    have hlog := Real.log_le_log hlow hle
+    have hlogMul : Real.log (1 / 2 * (1 + 3 / 2 * a)) =
+        -Real.log 2 + Real.log (1 + 3 / 2 * a) := by
+      rw [Real.log_mul (by norm_num) (ne_of_gt htpos)]
+      have hinv : (1 / 2 : ℝ) = (2 : ℝ)⁻¹ := by norm_num
+      rw [hinv, Real.log_inv]
+    rw [hlogMul] at hlog
+    linarith [hlogFactor]
+  have hlogBad : ∀ j ∈ dips, -L ≤ Real.log (q j) := by
+    intro j hj
+    have hlog := Real.log_le_log (Real.exp_pos _) (hbad j hj)
+    rw [Real.log_exp] at hlog
+    exact hlog
+  have hpoint : ∀ j : Fin k,
+      -Real.log 2 + 7 / 10 * a - L * (if j ∈ dips then (1 : ℝ) else 0) ≤
+        Real.log (q j) := by
+    intro j
+    by_cases hj : j ∈ dips
+    · simp [hj]
+      linarith [hlogBad j hj, hg]
+    · simp [hj]
+      linarith [hlogGood j hj]
+  have hIndicator : ∑ j : Fin k, (if j ∈ dips then (1 : ℝ) else 0) = (dips.card : ℝ) := by
+    have hNat := Finset.card_filter (fun j : Fin k => j ∈ dips) Finset.univ
+    have hReal : ((Finset.univ.filter fun j : Fin k => j ∈ dips).card : ℝ) =
+        ∑ j : Fin k, (if j ∈ dips then (1 : ℝ) else 0) := by
+      exact_mod_cast hNat
+    simpa using hReal.symm
+  have hsum : (k : ℝ) * (-Real.log 2 + 7 / 10 * a) -
+      (dips.card : ℝ) * L ≤ ∑ j : Fin k, Real.log (q j) := by
+    have h := Finset.sum_le_sum (s := Finset.univ) (fun j hj => hpoint j)
+    have hsumEq : ∑ j : Fin k,
+        (-Real.log 2 + 7 / 10 * a - L * (if j ∈ dips then (1 : ℝ) else 0)) =
+        (k : ℝ) * (-Real.log 2 + 7 / 10 * a) - (dips.card : ℝ) * L := by
+      rw [Finset.sum_sub_distrib]
+      have hconst : ∑ j : Fin k, (-Real.log 2 + 7 / 10 * a) =
+          (k : ℝ) * (-Real.log 2 + 7 / 10 * a) := by
+        simp [Finset.sum_const, nsmul_eq_mul] <;> ring
+      rw [hconst, ← Finset.mul_sum, hIndicator]
+      ring
+    rw [hsumEq] at h
+    exact h
+  have hcountLoss : (dips.card : ℝ) * L ≤ a * (k : ℝ) / 20 := by
+    have h := (le_div_iff₀ (mul_pos (by norm_num : (0 : ℝ) < 20) hL)).mp hcount
+    nlinarith
+  have htarget : (k : ℝ) * (-Real.log 2 + c1 * a) ≤
+      (k : ℝ) * (-Real.log 2 + 7 / 10 * a) - (dips.card : ℝ) * L := by
+    dsimp [c1]
+    have hk : 0 ≤ (k : ℝ) := by positivity
+    nlinarith [mul_nonneg hk ha0]
+  have hlogProd : Real.log (∏ j : Fin k, q j) = ∑ j : Fin k, Real.log (q j) := by
+    rw [Real.log_prod]
+    intro j hj
+    exact (hqpos j).ne'
+  have hprodPos : 0 < ∏ j : Fin k, q j := Finset.prod_pos fun j hj => hqpos j
+  calc
+    Real.exp ((k : ℝ) * (-Real.log 2 + c1 * a)) ≤
+        Real.exp (Real.log (∏ j : Fin k, q j)) :=
+      Real.exp_le_exp.mpr (by rw [hlogProd]; exact htarget.trans hsum)
+    _ = ∏ j : Fin k, q j := Real.exp_log hprodPos
+
 private theorem eventual_exposure_factor (β γ : ℝ) (hβ : 0 < β)
     (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,

@@ -294,7 +294,42 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
         D.encoding.permLaw.pr (fun x => x.1 C slot = bin ∧ D.upstreamBad f x) /
           D.encoding.permLaw.pr (fun x => x.1 C slot = bin) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) := by
-  sorry
+  classical
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 0] with k hk
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro C slot bin f
+  let D := rawData hκ X
+  let pin : D.encoding.InitInput → Prop := fun x => x.1 C slot = bin
+  let bad : D.encoding.InitInput → Prop := D.upstreamBad f
+  change D.encoding.permLaw.pr (fun x => pin x ∧ bad x) /
+      D.encoding.permLaw.pr pin ≤ _
+  -- The zero-denominator pin retains Lean's zero quotient. The positive-pin
+  -- case needs the actual S17 pinned pool/list tail.
+  by_cases hden : D.encoding.permLaw.pr pin = 0
+  · have hnum_nonneg : 0 ≤ D.encoding.permLaw.pr (fun x => pin x ∧ bad x) := by
+      unfold FinLaw.pr
+      apply Finset.sum_nonneg
+      intro x hx
+      split_ifs
+      · exact D.encoding.permLaw.nonneg x
+      · exact le_rfl
+    have hnum_le : D.encoding.permLaw.pr (fun x => pin x ∧ bad x) ≤
+        D.encoding.permLaw.pr pin := by
+      unfold FinLaw.pr
+      apply Finset.sum_le_sum
+      intro x hx
+      by_cases hp : pin x
+      · by_cases hb : bad x
+        · simp [hp, hb]
+        · simpa [hp, hb] using D.encoding.permLaw.nonneg x
+      · simp [hp]
+    have hnum : D.encoding.permLaw.pr (fun x => pin x ∧ bad x) = 0 := by
+      linarith
+    have hpow : 0 ≤ Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) :=
+      Real.rpow_nonneg (by positivity) _
+    simpa [hden, hnum] using hpow
+  · sorry
 
 /-- Transfer diagnostic typical positivity to the actual iid marginal
 cell-pool law. TeX 16:260–296; 18:277–285. -/

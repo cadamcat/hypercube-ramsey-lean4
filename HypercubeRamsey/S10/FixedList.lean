@@ -1001,7 +1001,7 @@ theorem p10_1c_fixed_list_squared_mass_test : P10_1cFixedListTest := by
             badStep W (canonicalPrefix i.castSucc) (order.symm i)) ≤
             ∑ i : Fin M, P.pr (fun W =>
               badStep W (canonicalPrefix i.castSucc) (order.symm i)) :=
-          FinProb.pr_iUnion_le P _
+          FinProb.pr_iUnion_le_s10 P _
         _ ≤ ∑ i : Fin M, pExc := by
           apply Finset.sum_le_sum
           intro i hi
@@ -1198,7 +1198,7 @@ theorem p10_1c_fixed_list_squared_mass_test : P10_1cFixedListTest := by
         P.pr (fun W => ∃ c : α,
             badStep W (deletePrefix c.1 (Fin.rev c.2).castSucc) c) ≤
             ∑ c : α, P.pr (fun W => badStep W (deletePrefix c.1 (Fin.rev c.2).castSucc) c) :=
-          FinProb.pr_iUnion_le P _
+          FinProb.pr_iUnion_le_s10 P _
         _ ≤ ∑ c : α, pExc := by
           apply Finset.sum_le_sum
           intro c hc
@@ -1820,7 +1820,7 @@ theorem p10_1c_fixed_list_squared_mass_test : P10_1cFixedListTest := by
               FixedListOwnBlock E G ρ D (μ b) a ∧
                 ∑ i : Fin k, ownDelta b i W <
                   (-Real.log 4 + (2 / 5 : ℝ) * a) * (k : ℝ)) :=
-          FinProb.pr_iUnion_le P _
+          FinProb.pr_iUnion_le_s10 P _
         _ ≤ ∑ b : Fin r, Real.exp (-(a ^ 2 * (k : ℝ)) / 32) := by
           apply Finset.sum_le_sum
           intro b hb

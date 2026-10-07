@@ -264,7 +264,7 @@ theorem FinProb.expect_rowDeg_sq_eq_codeg {N : ℕ}
             (if Hits E G x y ∧ Hits E G x y' then (1 : ℝ) else 0) := rfl
 
 /-- A finite union bound for events in a finite probability space. -/
-theorem FinProb.pr_iUnion_le
+theorem FinProb.pr_iUnion_le_s10
     {Ω ι : Type*} [Fintype Ω] [Fintype ι]
     (P : FinProb Ω) (A : ι → Ω → Prop) :
     P.pr (fun ω => ∃ i, A i ω) ≤ ∑ i, P.pr (A i) := by

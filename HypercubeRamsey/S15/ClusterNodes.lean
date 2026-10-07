@@ -57,11 +57,12 @@ def ClusterHistoryConditioningClaim (κ : CConsts) (T : Stage) : Prop :=
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
       Nonempty (ClusterHistoryConditioning PT hPT hm)
 
-/-- L15.2d: the conditional high-cluster mass tail for every alarm-avoiding history. -/
+/-- L15.2d: the conditional mass tail on positive raw-history support avoiding the alarms. -/
 def ClusterMassClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
-    ∀ W, clusterAlarmsAvoided PT hPT hm W → ∀ a : EvenPosition T k,
+    ∀ W, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      clusterAlarmsAvoided PT hPT hm W → ∀ a : EvenPosition T k,
       (clusterInternalKernel PT hPT hm W).pr
         (fun I => clusterRowMass PT hPT hm W I a < 1 / 2) ≤
           (T.S.n k : ℝ) ^ (-(κ.R : ℝ))

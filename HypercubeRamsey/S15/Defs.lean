@@ -513,11 +513,12 @@ def clusterAlarmsAvoided {κ : CConsts} {T : Stage} {k : ℕ}
   ∀ a, ¬ clusterAlarm1 PT hPT hm W a ∧
     ¬ clusterAlarm2 PT hPT hm W a ∧ ¬ clusterAlarm3 PT hPT hm W a
 
-/-- The cluster-mode part of L15.1a's reusable crossing-filter estimate. -/
+/-- The cluster-mode part of L15.1a's crossing estimate on positive raw-history support. -/
 def ClusterCrossingClaim (κ : CConsts) (T : Stage) : Prop :=
   ∀ᶠ k in Filter.atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
-    ∀ W, clusterAlarmsAvoided PT hPT hm W → ∀ a : EvenPosition T k,
+    ∀ W, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      clusterAlarmsAvoided PT hPT hm W → ∀ a : EvenPosition T k,
       (clusterInternalKernel PT hPT hm W).pr (fun I =>
         (∑ x, clusterSigma PT hPT hm W I a x) = 1 ∧
           |clusterCrossingMass PT hPT hm W I a - 1| >
@@ -905,11 +906,12 @@ structure ClusterSample {κ : CConsts} {T : Stage} {k : ℕ}
     ClusterLabelQueryOK PT hPT hm B S →
       (preLabelKernel W B).E F ≤ clusterLabelError PT hPT hm B S *
         (clusterIndependentLabelKernel PT hPT hm W B).E F
+  /-- The clock's `1 + o(1)` comparison is eventually bounded by two. -/
   label_local_upper_comparison : ∀ W, binStage.historyLaw.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
     ∀ B, (binStage.binLaw W).w B ≠ 0 → ∀ F : ClusterInternalData PT → ℝ,
     (∀ I, 0 ≤ F I) → ∀ S : Finset (OddPosition T k),
     ClusterLabelDependsOn hPT hm F S → (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
-      (labelKernel W B).E F ≤ (1 + 1 / (T.S.n k : ℝ)) * (preLabelKernel W B).E F
+      (labelKernel W B).E F ≤ 2 * (preLabelKernel W B).E F
   row : Outcome → EvenPosition T k → Fin (T.S.N k) → ℝ
   historyLoad : Outcome → Prop
   history_eq : ∀ ω, historyLoad ω ↔ clusterHistoryLoad PT hPT hm (history ω)

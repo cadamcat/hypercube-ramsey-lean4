@@ -4,6 +4,39 @@ namespace HypercubeRamsey.Lane_q_s18_n1
 
 open scoped BigOperators
 
+private theorem law_eq_of_weights {N : ℕ} {μ ν : Law N}
+    (h : ∀ x, μ.w x = ν.w x) : μ = ν := by
+  cases μ
+  cases ν
+  congr 1
+  exact funext h
+
+private theorem normalize_indicator_eq_cond {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : HypercubeRamsey.S18.LateData hPT)
+    (μ : Law (T.S.N k)) (A : Finset (Fin (T.S.N k)))
+    (hA : 0 < ∑ x ∈ A, μ.w x) :
+    D.normalize (fun x => μ.w x * (if x ∈ A then (1 : ℝ) else 0)) = μ.cond A hA := by
+  classical
+  have hmass : (∑ x, μ.w x * (if x ∈ A then (1 : ℝ) else 0)) =
+      ∑ x ∈ A, μ.w x := by
+    simp [Finset.sum_ite_mem]
+  have hnonneg : ∀ x, 0 ≤ μ.w x * (if x ∈ A then (1 : ℝ) else 0) := by
+    intro x
+    split_ifs with hx
+    · exact mul_nonneg (μ.nonneg x) (by norm_num)
+    · simp
+  have hpos : 0 < ∑ x, μ.w x * (if x ∈ A then (1 : ℝ) else 0) := by
+    rw [hmass]
+    exact hA
+  have hbranch :
+      (∀ x, 0 ≤ μ.w x * (if x ∈ A then (1 : ℝ) else 0)) ∧
+        0 < ∑ x, μ.w x * (if x ∈ A then (1 : ℝ) else 0) := ⟨hnonneg, hpos⟩
+  apply law_eq_of_weights
+  intro x
+  simp only [HypercubeRamsey.S18.LateData.normalize, dif_pos hbranch]
+  simp only [Law.cond, Law.restrict]
+  by_cases hx : x ∈ A <;> simp [hx]
+
 /-- The finite reverse geometric sum is bounded by the infinite geometric sum. -/
 theorem finite_reverse_geometric_sum_le {q : ℝ} (hq0 : 0 < q) (hq1 : q < 1) (r : ℕ) :
     (∑ j : Fin r, q ^ (r - j.val)) ≤ 1 / (1 - q) := by

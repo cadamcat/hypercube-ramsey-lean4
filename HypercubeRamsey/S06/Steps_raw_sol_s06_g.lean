@@ -326,5 +326,140 @@ theorem hidden_post_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
   rw [hc, ht, hz]
 
 
+ theorem tag_post_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (ξ : Fin N) (e : Id × X.Ty) (he : e ∈ D) :
+    X.Tβ (X.withParH H nm ξ) e.2 = X.Tβ (X.withParH H' nm ξ) e.2 := by
+  unfold Ctx6.Tβ Ctx6.tagPost
+  congr 1
+  funext i
+  exact tag_weight_local_eq X nm D H H' h ξ e he _ (Finset.Subset.refl _) i
+
+ theorem substituted_primary_value_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (ξ : Fin N) (s : X.Key) (hs : s ∈ X.locKeys D) :
+    X.varVal (X.withParH H nm ξ) (.par (primaryName6 s)) =
+      X.varVal (X.withParH H' nm ξ) (.par (primaryName6 s)) := by
+  have hinit := substituted_initial_eq X nm D H H' h ξ
+  have hbin := substituted_candidate_eq X nm D H H' h ξ s.1 (Finset.mem_image.mpr ⟨s, hs, rfl⟩)
+  cases hf : s.2 <;> simp only [Ctx6.varVal, Ctx6.parOf, primaryName6, hf, Par6.val, hinit, hbin]
+
+ theorem substituted_opposite_value_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (ξ : Fin N) (s : X.Key) (hs : s ∈ X.locKeys D) :
+    X.varVal (X.withParH H nm ξ) (.par (otherPrimaryName6 s)) =
+      X.varVal (X.withParH H' nm ξ) (.par (otherPrimaryName6 s)) := by
+  have hinit := substituted_initial_eq X nm D H H' h ξ
+  have hbin := substituted_candidate_eq X nm D H H' h ξ s.1 (Finset.mem_image.mpr ⟨s, hs, rfl⟩)
+  cases hf : s.2 <;> simp only [Ctx6.varVal, Ctx6.parOf, otherPrimaryName6, hf, Par6.val, hinit, hbin]
+
+ theorem required_values_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (ξ : Fin N) (e : Id × X.Ty) (he : e ∈ D)
+    (v : X.Name) (hv : v ∈ reqNames6 e.2) :
+    X.varVal (X.withParH H nm ξ) v = X.varVal (X.withParH H' nm ξ) v := by
+  have hkey : e.2.key ∈ X.locKeys D := Finset.mem_union_right _ (Finset.mem_image.mpr ⟨e, he, rfl⟩)
+  cases v with
+  | hid ℓ =>
+    have hobs : ℓ ∈ e.2.obs := by
+      by_cases hm : e.2.mode = .high <;> simpa [reqNames6, hm] using hv
+    exact h.2.2.2 ℓ (Finset.mem_biUnion.mpr ⟨e, he, hobs⟩)
+  | par p =>
+    have hp : p = primaryName6 e.2.key ∨ p = otherPrimaryName6 e.2.key := by
+      by_cases hm : e.2.mode = .high
+      · simpa [reqNames6, hm] using hv
+      · exact Or.inl (by simpa [reqNames6, hm] using hv)
+    rcases hp with rfl | rfl
+    · exact substituted_primary_value_eq X nm D H H' h ξ e.2.key hkey
+    · exact substituted_opposite_value_eq X nm D H H' h ξ e.2.key hkey
+
+ theorem substituted_other_value (H : X.Hist) (nm : ParentName6 X.Bin) (ξ : Fin N)
+    (v : X.Name) (hv : v ≠ .par nm) : X.varVal (X.withParH H nm ξ) v = X.varVal H v := by
+  cases v with
+  | hid ℓ => rfl
+  | par p =>
+    cases nm with
+    | initial => cases p with
+      | initial => exact False.elim (hv rfl)
+      | candidate u => rfl
+    | candidate u => cases p with
+      | initial => rfl
+      | candidate v =>
+        have hne : v ≠ u := by intro h; apply hv; simp [h]
+        simp [Ctx6.varVal, Ctx6.withParH, Ctx6.withPar, Ctx6.parOf, Par6.set, Par6.val, hne]
+
+ theorem omitted_values_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (e : Id × X.Ty) (he : e ∈ D)
+    (v : X.Name) (hv : v ∈ (reqNames6 e.2).erase (.par nm)) : X.varVal H v = X.varVal H' v := by
+  have hc := required_values_local_eq X nm D H H' h X.y₀ e he v (Finset.mem_of_mem_erase hv)
+  simpa only [substituted_other_value X H nm X.y₀ v (Finset.mem_erase.mp hv).1,
+    substituted_other_value X H' nm X.y₀ v (Finset.mem_erase.mp hv).1] using hc
+
+
+ theorem label_law_values_eq (H H' : X.Hist) (S : Finset X.Name) (i : X.ι)
+    (h : ∀ v ∈ S, X.varVal H v = X.varVal H' v) : X.labelLaw H S i = X.labelLaw H' S i := by
+  have heq : X.reqNbhd H S = X.reqNbhd H' S := by
+    ext y
+    simp only [Ctx6.reqNbhd, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro hy v hv
+      rw [← h v hv]
+      exact hy v hv
+    · intro hy v hv
+      rw [h v hv]
+      exact hy v hv
+  simp only [Ctx6.labelLaw, heq]
+
+ theorem high_reference_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (b : X.State) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X (X.tgtName b) D H H') (e : Id × X.Ty) (he : e ∈ D) :
+    X.highRef H b e.2 = X.highRef H' b e.2 := by
+  have hl (i : X.ι) := label_law_values_eq X H H' ((reqNames6 e.2).erase (.par (X.tgtName b))) i
+    (fun v hv => omitted_values_local_eq X (X.tgtName b) D H H' h e he v hv)
+  unfold Ctx6.highRef Ctx6.tupleRef Ctx6.tupleLawOn
+  congr 1
+  funext i
+  congr 1
+  funext r
+  exact hl i
+
+ theorem high_likelihood_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (b : X.State) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X (X.tgtName b) D H H') (e : Id × X.Ty) (he : e ∈ D) (ξ : Fin N) (o : X.Tuple) :
+    X.highLik H b ξ e.2 o = X.highLik H' b ξ e.2 o := by
+  have ht := tag_post_local_eq X (X.tgtName b) D H H' h ξ e he
+  have hr (i : X.ι) := label_law_values_eq X (X.withParH H (X.tgtName b) ξ)
+    (X.withParH H' (X.tgtName b) ξ) (reqNames6 e.2) i
+      (fun v hv => required_values_local_eq X (X.tgtName b) D H H' h ξ e he v hv)
+  have hq (i : X.ι) := label_law_values_eq X H H' ((reqNames6 e.2).erase (.par (X.tgtName b))) i
+    (fun v hv => omitted_values_local_eq X (X.tgtName b) D H H' h e he v hv)
+  unfold Ctx6.highLik Ctx6.tupleRatio
+  rw [ht, hr, hq]
+
+ theorem high_weight_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (b : X.State) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X (X.tgtName b) D H H') (o : X.Data Id) (drop : Option (Id × X.Ty)) (ξ : Fin N) :
+    X.highWeight H b D o drop ξ = X.highWeight H' b D o drop ξ := by
+  have hp := prior_local_eq X (X.tgtName b) D H H' h
+  have hg := propext (high_gate_local_iff X b D H H' h ξ)
+  have hd := loc_density_local_eq X (X.tgtName b) D H H' h ξ
+  unfold Ctx6.highWeight
+  rw [hp, hg, hd]
+  congr 1
+  apply Finset.prod_congr rfl
+  intro e he
+  rw [high_likelihood_local_eq X b D H H' h e he ξ (o e)]
+
+ theorem high_mass_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (b : X.State) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X (X.tgtName b) D H H') (o : X.Data Id) (drop : Option (Id × X.Ty))
+    (hm : X.stMode b = .high) : X.s3Mass H b D o drop = X.s3Mass H' b D o drop := by
+  unfold Ctx6.s3Mass
+  apply Finset.sum_congr rfl
+  intro ξ hξ
+  simpa only [Ctx6.s3Weight, hm] using high_weight_local_eq X b D H H' h o drop ξ
+
+
 end
 end HypercubeRamsey.S06.Lane_sol_s06_g

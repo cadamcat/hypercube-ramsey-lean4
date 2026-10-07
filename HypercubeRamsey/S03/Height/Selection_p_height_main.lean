@@ -418,7 +418,7 @@ private theorem log_le_rpow_eventually (e : ℝ) (he : 0 < e) :
       mul_le_mul_of_nonneg_right hcoef (Real.rpow_nonneg hnpos.le t)
     _ = (n : ℝ) ^ e := hpowmul
 
-private theorem heightBaseRadius_le_logsq :
+theorem heightBaseRadius_le_logsq :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n →
       (heightBaseRadius n : ℝ) ≤ 2 * (Real.log (n : ℝ)) ^ 2 := by
   obtain ⟨N, hN⟩ := exists_nat_log_ge 1
@@ -433,7 +433,7 @@ private theorem heightBaseRadius_le_logsq :
   have hone : (1 : ℝ) ≤ 2 * (Real.log (n : ℝ)) ^ 2 := by nlinarith
   simpa [heightBaseRadius] using (max_le hone hceil)
 
-private theorem heightBaseRadius_times_D_le_dimension_eventually
+theorem heightBaseRadius_times_D_le_dimension_eventually
     (D : ℕ) (c_d : ℝ) (hD : 0 < D) (hcd : 0 < c_d) :
     ∃ n₀ : ℕ, ∀ n d : ℕ, n₀ ≤ n → c_d * (n : ℝ) ≤ (d : ℝ) →
       D * heightBaseRadius n ≤ d := by
@@ -913,7 +913,7 @@ private theorem finprob_prod_pr_left {α β : Type*} [Fintype α] [Fintype β]
   · simp [hA, Q.sum_eq_one]
   · simp [hA]
 
-private theorem finprob_prod_pr_le_bad_or_small {α β : Type*} [Fintype α] [Fintype β]
+theorem finprob_prod_pr_le_bad_or_small {α β : Type*} [Fintype α] [Fintype β]
     (P : FinProb α) (Q : FinProb β) (Bad : α → Prop) (F : α → β → Prop)
     (δ : ℝ) (hδ : 0 ≤ δ)
     (hF : ∀ a, ¬ Bad a → Q.pr (F a) ≤ δ) :
@@ -1572,7 +1572,7 @@ theorem position_count_upper_three_halves {p : HDParams} (T : Finset p.Loc)
   simpa [HDParams.posLaw, q, X, mul_div_assoc] using hhigh
 
 /-- A sharper position-count cutoff at `11/10` of the mean. -/
-private theorem position_count_upper_eleven_tenths {p : HDParams} (T : Finset p.Loc)
+theorem position_count_upper_eleven_tenths {p : HDParams} (T : Finset p.Loc)
     (hq0 : 0 < p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1) :
     p.posLaw.pr (fun P => (11 / 10 : ℝ) * (T.card : ℝ) * (p.lam / (p.V : ℝ)) <
       ∑ ℓ, if ℓ ∈ T ∧ P ℓ = true then (1 : ℝ) else 0) ≤
@@ -1686,12 +1686,12 @@ private theorem height_crowd_count_eq_sum {p : HDParams} (P A : p.Loc → Bool)
                 exact False.elim (hj (Finset.mem_univ j))
     _ = _ := by rw [Finset.sum_boole]
 
-private def heightCrowdIDs {p : HDParams} (P : p.Loc → Bool)
+def heightCrowdIDs {p : HDParams} (P : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) : Finset p.Loc :=
   Finset.univ.filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧
     _root_.hammingDist ℓ.1 v ≤ p.r + p.D)
 
-private def heightCrowdRegion {p : HDParams} (v : CubeVertex p.d)
+def heightCrowdRegion {p : HDParams} (v : CubeVertex p.d)
     (j : Fin (p.H + 1)) : Finset p.Loc :=
   Finset.univ.filter (fun ℓ => ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r + p.D)
 
@@ -1876,7 +1876,7 @@ theorem hdScaleSeparated_spatial_distance_lower {p : HDParams} (hD : 0 < p.D)
     p.D * (gap - 1) = (gap - 1) * p.D := Nat.mul_comm _ _
     _ ≤ _ := Nat.le_of_succ_le hnum'
 
-private theorem heightCrowdIDs_card_eq_position_count {p : HDParams}
+theorem heightCrowdIDs_card_eq_position_count {p : HDParams}
     (P : p.Loc → Bool) (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
     ((heightCrowdIDs P v j).card : ℝ) =
       ∑ ℓ : p.Loc, if ℓ ∈ heightCrowdRegion v j ∧ P ℓ = true then (1 : ℝ) else 0 := by
@@ -2246,7 +2246,7 @@ private theorem hdScaleBallSiteLevels_card_bound {p : HDParams} (Sites : p.Sites
 
 /-- At the logarithmic initial scale, the number of possible bad site-levels is
 subexponential in every fixed positive power of `n`. -/
-private theorem hdScaleBallSiteLevels_exp_bound
+theorem hdScaleBallSiteLevels_exp_bound
     (D : ℕ) (C_d e : ℝ) (hD : 0 < D) (hC : 0 < C_d) (he : 0 < e) :
     ∃ n₀ : ℕ, ∀ {p : HDParams} (Sites : p.Sites) (start : HDState p) (R : ℕ),
       n₀ ≤ p.n → p.D = D → (p.d : ℝ) ≤ C_d * p.n →
@@ -2457,7 +2457,7 @@ private theorem hdScaleBallSiteLevels_exp_bound
   have hKexp : K ≤ Real.exp ((p.n : ℝ) ^ e) := Real.le_exp_of_log_le hlogKle
   exact hcount.trans hKexp
 
-private theorem height_base_exp_arithmetic (a b₀ θ : ℝ)
+theorem height_base_exp_arithmetic (a b₀ θ : ℝ)
     (ha : 0 < a) (hab : a < b₀) (hθ : 0 < θ ∧ θ < 1) :
     ∃ n₀ : ℕ, ∀ n : ℕ, n₀ ≤ n →
       4 * Real.exp ((n : ℝ) ^ (b₀ / 2) - (n : ℝ) ^ b₀ / 8) ≤
@@ -2702,7 +2702,7 @@ private theorem hammingBall_volume_add_bound {d r D : ℕ} (hr : 0 < r)
           nlinarith [htail, hcoeff]
     _ = V₀ * (1 + (D : ℝ) * x ^ D) := by ring
 
-private theorem height_crowd_active_count_eq {p : HDParams} (P A : p.Loc → Bool)
+theorem height_crowd_active_count_eq {p : HDParams} (P A : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
     (∑ ℓ : p.Loc, if ℓ ∈ heightCrowdIDs P v j ∧ A ℓ = true then (1 : ℝ) else 0) =
     ((Finset.univ.filter (fun u : CubeVertex p.d =>

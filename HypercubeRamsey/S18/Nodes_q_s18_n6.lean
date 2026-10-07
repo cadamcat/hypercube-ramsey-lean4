@@ -441,6 +441,135 @@ def rootedAdjacencyChain {V : Type*} [DecidableEq V] (G : SimpleGraph V)
   | [] => True
   | v :: rest => (∃ u ∈ A, G.Adj u v) ∧ rootedAdjacencyChain G (insert v A) rest
 
+theorem rootedAdjacencyChain_map {V W : Type*} [DecidableEq V] [DecidableEq W]
+    (G : SimpleGraph V) (H : SimpleGraph W) (f : V → W)
+    (hf : ∀ u v, G.Adj u v → H.Adj (f u) (f v))
+    (A : Finset V) {l : List V} (h : rootedAdjacencyChain G A l) :
+    rootedAdjacencyChain H (A.image f) (l.map f) := by
+  induction l generalizing A with
+  | nil => trivial
+  | cons v rest ih =>
+    rcases h with ⟨⟨u, hu, huv⟩, hrest⟩
+    refine ⟨⟨f u, Finset.mem_image.mpr ⟨u, hu, rfl⟩, hf _ _ huv⟩, ?_⟩
+    simpa only [Finset.image_insert, List.map_cons] using ih (A := insert v A) hrest
+
+noncomputable def overlapAmbientGraph {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT) :
+  SimpleGraph (Pos T k) where
+  Adj := D.geometricAdj
+  symm := by
+    constructor
+    intro v w h
+    rcases h with ⟨hne, h⟩
+    refine ⟨hne.symm, ?_⟩
+    rcases h with hd | ⟨b, hb, hv, hw⟩
+    · exact Or.inl (fun hd' => hd hd'.symm)
+    · exact Or.inr ⟨b, hb, hw, hv⟩
+  loopless := by
+    constructor
+    intro v h
+    exact h.1 rfl
+
+noncomputable def adjacencyNeighborhood {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (A : Finset V) : Finset V :=
+  A.biUnion fun u => Finset.univ.filter fun v => G.Adj u v
+
+lemma mem_adjacencyNeighborhood {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (A : Finset V) (v : V) :
+    v ∈ adjacencyNeighborhood G A ↔ ∃ u ∈ A, G.Adj u v := by
+  simp [adjacencyNeighborhood]
+
+lemma adjacencyNeighborhood_card_le {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (A : Finset V) (Δ : ℕ)
+    (hdeg : ∀ u, (Finset.univ.filter fun v => G.Adj u v).card ≤ Δ) :
+    (adjacencyNeighborhood G A).card ≤ A.card * Δ := by
+  classical
+  unfold adjacencyNeighborhood
+  calc
+    (A.biUnion fun u => Finset.univ.filter fun v => G.Adj u v).card ≤
+        ∑ u ∈ A, (Finset.univ.filter fun v => G.Adj u v).card := Finset.card_biUnion_le
+    _ ≤ ∑ _u ∈ A, Δ := Finset.sum_le_sum fun u hu => hdeg u
+    _ = A.card * Δ := by simp
+
+noncomputable def adjacencySequences {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] : ℕ → Finset V → Finset (List V)
+  | 0, _ => {[]}
+  | n + 1, A =>
+      (adjacencyNeighborhood G A).biUnion fun v =>
+      (adjacencySequences G n (insert v A)).image fun l => v :: l
+
+noncomputable def rootedSequenceCodeSet {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (U : Finset V) (p j : ℕ) :
+    Finset (Finset V × List V) :=
+  (U.powersetCard (p - j)).biUnion fun roots =>
+    (adjacencySequences G j roots).image fun l => (roots, l)
+
+theorem rootedAdjacencyChain_mem_sequences {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] {A : Finset V} {l : List V}
+    (hchain : rootedAdjacencyChain G A l) :
+    l ∈ adjacencySequences G l.length A := by
+  classical
+  induction l generalizing A with
+  | nil => simp [adjacencySequences]
+  | cons v rest ih =>
+    rcases hchain with ⟨⟨u, hu, huv⟩, hrest⟩
+    have hv : v ∈ adjacencyNeighborhood G A :=
+      (mem_adjacencyNeighborhood G A v).2 ⟨u, hu, huv⟩
+    have hr := ih (A := insert v A) hrest
+    apply Finset.mem_biUnion.mpr
+    refine ⟨v, hv, Finset.mem_image.mpr ?_⟩
+    exact ⟨rest, hr, rfl⟩
+
+theorem adjacencySequences_card_le {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (A : Finset V) (n p Δ : ℕ)
+    (hdeg : ∀ u, (Finset.univ.filter fun v => G.Adj u v).card ≤ Δ)
+    (hsize : A.card + n ≤ p) :
+    (adjacencySequences G n A).card ≤ (p * Δ) ^ n := by
+  classical
+  induction n generalizing A with
+  | zero => simp [adjacencySequences]
+  | succ n ih =>
+    have hA : A.card ≤ p := by omega
+    have hneighbors : (adjacencyNeighborhood G A).card ≤ p * Δ := by
+      exact (adjacencyNeighborhood_card_le G A Δ hdeg).trans
+        (Nat.mul_le_mul_right Δ hA)
+    have hnext (v : V) (hv : v ∈ adjacencyNeighborhood G A) :
+        (insert v A).card + n ≤ p := by
+      have hi : (insert v A).card ≤ A.card + 1 := Finset.card_insert_le v A
+      omega
+    calc
+      (adjacencySequences G (n + 1) A).card ≤
+          ∑ v ∈ adjacencyNeighborhood G A,
+            ((adjacencySequences G n (insert v A)).image fun l => v :: l).card :=
+        Finset.card_biUnion_le
+      _ ≤ ∑ v ∈ adjacencyNeighborhood G A, (p * Δ) ^ n := by
+        apply Finset.sum_le_sum
+        intro v hv
+        exact (Finset.card_image_le.trans (ih (A := insert v A) (hnext v hv)))
+      _ = (adjacencyNeighborhood G A).card * (p * Δ) ^ n := by simp
+      _ ≤ (p * Δ) * (p * Δ) ^ n := Nat.mul_le_mul_right _ hneighbors
+      _ = (p * Δ) ^ (n + 1) := by rw [pow_succ]; ring
+
+theorem rootedSequenceCodeSet_card_le {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (U : Finset V) (p j Δ : ℕ)
+    (hj : j ≤ p)
+    (hdeg : ∀ u, (Finset.univ.filter fun v => G.Adj u v).card ≤ Δ) :
+    (rootedSequenceCodeSet G U p j).card ≤ Nat.choose U.card (p - j) * (p * Δ) ^ j := by
+  classical
+  unfold rootedSequenceCodeSet
+  calc
+    _ ≤ ∑ roots ∈ U.powersetCard (p - j),
+        ((adjacencySequences G j roots).image fun l => (roots, l)).card := Finset.card_biUnion_le
+    _ ≤ ∑ _roots ∈ U.powersetCard (p - j), (p * Δ) ^ j := by
+      apply Finset.sum_le_sum
+      intro roots hroots
+      apply Finset.card_image_le.trans
+      apply adjacencySequences_card_le G roots j p Δ hdeg
+      have hrootcard := (Finset.mem_powersetCard.mp hroots).2
+      omega
+    _ = (U.powersetCard (p - j)).card * (p * Δ) ^ j := by simp
+    _ = Nat.choose U.card (p - j) * (p * Δ) ^ j := by simp
+
 theorem exists_rootedAdjacencyChain {V : Type*} [Fintype V] [DecidableEq V]
     (G : SimpleGraph V) [DecidableRel G.Adj] (A todo : Finset V)
     (hdisj : Disjoint A todo) (hcover : A ∪ todo = Finset.univ)
@@ -574,5 +703,89 @@ theorem exists_overlapRootedChain_rank {κ : CConsts} {T : Stage} {k : ℕ}
       rw [hroots]
       simp
     _ = D.rank S := rfl
+
+theorem exists_overlapAmbientWitness {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (S : Finset (Pos T k)) :
+    ∃ roots : Finset (Pos T k), roots ⊆ S ∧
+      roots.card = Nat.card (D.overlapGraph S).ConnectedComponent ∧
+      ∃ l : List (Pos T k), l.Nodup ∧ l.toFinset = S \ roots ∧
+        l.length = D.rank S ∧ rootedAdjacencyChain (overlapAmbientGraph D) roots l := by
+  classical
+  obtain ⟨rootsSub, lSub, hroots, hnodup, hto, hlen, hchain⟩ :=
+    exists_overlapRootedChain_rank D S
+  let roots := rootsSub.image Subtype.val
+  let l := lSub.map Subtype.val
+  have hrootsSubset : roots ⊆ S := by
+    intro x hx
+    rcases Finset.mem_image.mp hx with ⟨v, hv, rfl⟩
+    exact v.property
+  have hrootsCard : roots.card = Nat.card (D.overlapGraph S).ConnectedComponent := by
+    dsimp [roots]
+    rw [Finset.card_image_of_injective _ Subtype.val_injective, hroots]
+  have hImage : (Finset.univ \ rootsSub).image Subtype.val = S \ roots := by
+    ext x
+    constructor
+    · intro hx
+      rcases Finset.mem_image.mp hx with ⟨v, hv, hvx⟩
+      rcases Finset.mem_sdiff.mp hv with ⟨_, hvnot⟩
+      have hxS : x ∈ S := hvx ▸ v.property
+      refine Finset.mem_sdiff.mpr ⟨hxS, ?_⟩
+      intro hxroot
+      rcases Finset.mem_image.mp hxroot with ⟨w, hw, hwx⟩
+      have hvw : v = w := Subtype.ext (hvx.trans hwx.symm)
+      exact hvnot (hvw ▸ hw)
+    · intro hx
+      rcases Finset.mem_sdiff.mp hx with ⟨hxS, hxroot⟩
+      let v : {v : Pos T k // v ∈ S} := ⟨x, hxS⟩
+      have hvnot : v ∉ rootsSub := by
+        intro hv
+        exact hxroot (Finset.mem_image.mpr ⟨v, hv, rfl⟩)
+      apply Finset.mem_image.mpr
+      exact ⟨v, Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, hvnot⟩, rfl⟩
+  have hlistSet : l.toFinset = S \ roots := by
+    dsimp [l]
+    calc
+      (lSub.map Subtype.val).toFinset = lSub.toFinset.image Subtype.val := by
+        simpa using (Finset.image_toFinset
+          (s := (lSub : Multiset {v : Pos T k // v ∈ S})) (f := Subtype.val)).symm
+      _ = (Finset.univ \ rootsSub).image Subtype.val := by rw [hto]
+      _ = S \ roots := hImage
+  have hlistNodup : l.Nodup := hnodup.map Subtype.val_injective
+  have hlistLength : l.length = D.rank S := by simpa [l] using hlen
+  have hchain' : rootedAdjacencyChain (overlapAmbientGraph D) roots l :=
+    rootedAdjacencyChain_map (D.overlapGraph S) (overlapAmbientGraph D) Subtype.val
+      (by intro v w h; exact h) rootsSub hchain
+  exact ⟨roots, hrootsSubset, hrootsCard, l, hlistNodup, hlistSet, hlistLength, hchain'⟩
+
+theorem exists_overlapWitnessCode {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    {S U : Finset (Pos T k)} (hSU : S ⊆ U) :
+    ∃ roots ∈ U.powersetCard (S.card - D.rank S),
+      ∃ l ∈ adjacencySequences (overlapAmbientGraph D) (D.rank S) roots,
+        roots ∪ l.toFinset = S := by
+  classical
+  obtain ⟨roots, hrootsSub, hrootsCard, l, hnodup, hlistSet, hlen, hchain⟩ :=
+    exists_overlapAmbientWitness D S
+  have hrootcard : roots.card = S.card - D.rank S := by
+    have hle : Nat.card (D.overlapGraph S).ConnectedComponent ≤ S.card := by
+      have := Finset.card_le_card hrootsSub
+      simpa [hrootsCard] using this
+    rw [hrootsCard]
+    have hle' : Fintype.card (D.overlapGraph S).ConnectedComponent ≤ S.card := by
+      simpa using hle
+    simp only [LateData.rank, Nat.card_eq_fintype_card]
+    omega
+  have hrootsU : roots ⊆ U := hrootsSub.trans hSU
+  have hrootMem : roots ∈ U.powersetCard (S.card - D.rank S) := by
+    exact Finset.mem_powersetCard.mpr ⟨hrootsU, hrootcard⟩
+  have hseq : l ∈ adjacencySequences (overlapAmbientGraph D) (D.rank S) roots := by
+    have h := rootedAdjacencyChain_mem_sequences
+      (G := overlapAmbientGraph D) (A := roots) (l := l) hchain
+    rw [hlen] at h
+    exact h
+  refine ⟨roots, hrootMem, l, hseq, ?_⟩
+  rw [hlistSet]
+  exact Finset.union_sdiff_of_subset hrootsSub
 
 end HypercubeRamsey.Lane_q_s18_n6

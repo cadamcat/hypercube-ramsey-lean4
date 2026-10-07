@@ -1854,6 +1854,28 @@ private noncomputable def outerCoordEquiv (n : ℕ) : OuterCoord n ≃ Fin (n - 
 theorem outerCoord_card (n : ℕ) : Fintype.card (OuterCoord n) = n - hIn n := by
   simpa using Fintype.card_congr (outerCoordEquiv n)
 
+theorem innerCoord_card {n : ℕ} (h : hIn n ≤ n) :
+    Fintype.card (InnerCoord n) = hIn n := by
+  classical
+  let e : InnerCoord n ≃ Fin (hIn n) := {
+    toFun := fun (j : InnerCoord n) => (⟨j.1.val, j.2⟩ : Fin (hIn n))
+    invFun := fun (j : Fin (hIn n)) =>
+      (⟨⟨j.val, lt_of_lt_of_le j.isLt h⟩, j.isLt⟩ : InnerCoord n)
+    left_inv := by
+      intro j
+      apply Subtype.ext
+      apply Fin.ext
+      rfl
+    right_inv := by
+      intro j
+      apply Fin.ext
+      rfl }
+  simpa using Fintype.card_congr e
+
+theorem outerWord_card (n : ℕ) :
+    Fintype.card (OuterWord n) = 2 ^ Fintype.card (OuterCoord n) := by
+  simp [OuterWord]
+
 theorem hIn_le_half {n : ℕ} (hn : 4 ≤ n) : hIn n ≤ n / 2 := by
   have hnreal : (4 : ℝ) ≤ n := by exact_mod_cast hn
   have hn1 : (1 : ℝ) ≤ n := by linarith

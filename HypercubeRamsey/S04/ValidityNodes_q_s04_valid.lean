@@ -1,6 +1,8 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.Tools.Concentration
+import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
+import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 
 namespace HypercubeRamsey.Lane_q_s04_valid
 
@@ -639,6 +641,170 @@ private theorem cond_true_eq_self {α : Type*} [Fintype α] [DecidableEq α] (P 
   apply finProb_ext
   intro a
   simp [FinProb.cond, hp]
+
+private theorem pr_eq_weight_singleton {α : Type*} [Fintype α] [DecidableEq α]
+    (P : FinProb α) (a : α) : P.pr (fun x => x = a) = P.w a := by
+  classical
+  unfold FinProb.pr
+  rw [Finset.sum_eq_single a]
+  · simp
+  · intro x hx hne
+    simp [hne]
+  · simp
+
+private theorem pr_congr_local_early {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (A B : Ω → Prop) (h : ∀ ω, A ω ↔ B ω) : P.pr A = P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  simp [h ω]
+
+private theorem pi_cond_prefix_expect_next {α : Type*} [Fintype α] [DecidableEq α]
+    {k : ℕ} (P : Fin k → FinProb α) (i : Fin k) (p : Fin i.val → α)
+    (hpos : 0 < (FinProb.pi P).pr (fun x => prefixVals x i = p)) (f : α → ℝ) :
+    ((FinProb.pi P).cond (fun x => prefixVals x i = p) hpos).expect (fun x => f (x i)) =
+      (P i).expect f := by
+  classical
+  let C : Fin k → α → Prop := fun j a =>
+    ∀ hj : j.val < i.val, a = p ⟨j.val, hj⟩
+  have hEvent : (fun x : Fin k → α => prefixVals x i = p) =
+      (fun x => ∀ j, C j (x j)) := by
+    funext x
+    apply propext
+    constructor
+    · intro hp j hj
+      let q : Fin i.val := ⟨j.val, hj⟩
+      have hindex : (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = j := by
+        apply Fin.ext
+        rfl
+      have h := congrFun hp q
+      have hx : prefixVals x i q = x j := by
+        change x (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = x j
+        rw [hindex]
+      rw [hx] at h
+      simpa [q] using h
+    · intro hall
+      funext q
+      let j : Fin k := ⟨q.val, lt_trans q.isLt i.isLt⟩
+      have hmem : j.val < i.val := by simpa [j] using q.isLt
+      have hvalue : x j = p ⟨j.val, hmem⟩ := hall j hmem
+      have hpeq : (⟨j.val, hmem⟩ : Fin i.val) = q := by
+        apply Fin.ext
+        rfl
+      rw [hpeq] at hvalue
+      have hindex : (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = j := by
+        apply Fin.ext
+        rfl
+      have hx : prefixVals x i q = x j := by
+        change x (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = x j
+        rw [hindex]
+      rw [hx]
+      exact hvalue
+  have hfactor : (FinProb.pi P).pr (fun x => prefixVals x i = p) =
+      ∏ j, (P j).pr (C j) := by
+    rw [hEvent]
+    exact FinProb.pi_pr_forall P C
+  have hfactorPos : 0 < ∏ j : Fin k, (P j).pr (C j) := by
+    rw [← hfactor]
+    exact hpos
+  have hcoord (j : Fin k) : 0 < (P j).pr (C j) := by
+    by_cases hj : j.val < i.val
+    · by_contra hnot
+      have hnon : 0 ≤ (P j).pr (C j) := FinProb.pr_nonneg (P j) (C j)
+      have hzero : (P j).pr (C j) = 0 := le_antisymm (le_of_not_gt hnot) hnon
+      have hprodZero : (∏ j' : Fin k, (P j').pr (C j')) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_univ j) hzero
+      rw [hprodZero] at hfactorPos
+      exact (lt_irrefl 0) hfactorPos
+    · have hC : C j = (fun _ => True) := by
+        funext a
+        apply propext
+        constructor
+        · intro _
+          trivial
+        · intro _ hmem
+          exact (hj hmem).elim
+      rw [hC]
+      simp [FinProb.pr, (P j).sum_eq_one]
+  let Q : Fin k → FinProb α := fun j => (P j).cond (C j) (hcoord j)
+  have hrectPos : 0 < (FinProb.pi P).pr (fun x => ∀ j, C j (x j)) := by
+    simpa [hEvent] using hpos
+  have hcond : (FinProb.pi P).cond (fun x => prefixVals x i = p) hpos = FinProb.pi Q := by
+    simpa [hEvent] using FinProb.pi_cond_forall P C hcoord hrectPos
+  have hsupport : ∀ x : Fin k → α,
+      (FinProb.pi Q).w x = 0 ∨
+        (if prefixVals x i = p then f (x i) else 0) = f (x i) := by
+    intro x
+    by_cases hp : prefixVals x i = p
+    · exact Or.inr (by simp [hp])
+    · left
+      have hex : ∃ j : Fin k, ¬ C j (x j) := by
+        have hnot : ¬ (∀ j, C j (x j)) := by
+          intro hall
+          exact hp ((Iff.of_eq (congrFun hEvent x)).2 hall)
+        exact not_forall.mp hnot
+      obtain ⟨j, hj⟩ := hex
+      have hz : (Q j).w (x j) = 0 := by simp [Q, FinProb.cond, hj]
+      unfold FinProb.pi
+      exact Finset.prod_eq_zero (Finset.mem_univ j) hz
+  have hweight (j : Fin i.val) :
+      (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j) = 1 := by
+    let q : Fin k := ⟨j.val, lt_trans j.isLt i.isLt⟩
+    have hmem : q.val < i.val := by exact j.isLt
+    have hprob : (P q).pr (fun a => a = p j) = (P q).w (p j) :=
+      pr_eq_weight_singleton (P q) (p j)
+    have hCq : C q = (fun a => a = p j) := by
+      funext a
+      apply propext
+      constructor
+      · intro h
+        exact h hmem
+      · intro ha hq
+        have heq : (⟨q.val, hq⟩ : Fin i.val) = j := by
+          apply Fin.ext
+          rfl
+        simpa [heq] using ha
+    have hpr : (P q).pr (C q) = (P q).w (p j) := by
+      calc
+        (P q).pr (C q) = (P q).pr (fun a => a = p j) := by
+          apply pr_congr_local_early
+          intro a
+          exact Iff.of_eq (congrFun hCq a)
+        _ = (P q).w (p j) := hprob
+    have hposWeight : 0 < (P q).w (p j) := by
+      rw [← hpr]
+      exact hcoord q
+    have hCpoint : C q (p j) := by
+      intro hq
+      have heq : (⟨q.val, hq⟩ : Fin i.val) = j := by
+        apply Fin.ext
+        rfl
+      exact (congrArg p heq).symm
+    have hQeq : Q ⟨j.val, lt_trans j.isLt i.isLt⟩ =
+        (P q).cond (C q) (hcoord q) := by
+      rfl
+    rw [hQeq]
+    simp only [FinProb.cond]
+    rw [if_pos hCpoint, hpr]
+    exact div_self (ne_of_gt hposWeight)
+  have hprefixProd :
+      (∏ j : Fin i.val, (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j)) = 1 := by
+    apply Finset.prod_eq_one
+    intro j hj
+    exact hweight j
+  have hcurrent : Q i = P i := by
+    apply finProb_ext
+    intro a
+    simp [Q, C, FinProb.cond, FinProb.pr, (P i).sum_eq_one]
+  calc
+    ((FinProb.pi P).cond (fun x => prefixVals x i = p) hpos).expect (fun x => f (x i)) =
+        (FinProb.pi Q).expect (fun x => f (x i)) := by rw [hcond]
+    _ = (FinProb.pi Q).expect (fun x => if prefixVals x i = p then f (x i) else 0) :=
+      (expect_eq_on_support (FinProb.pi Q) _ _ hsupport).symm
+    _ = (∏ j : Fin i.val, (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j)) * (Q i).expect f :=
+      expect_pi_prefix_fiber Q i p f
+    _ = (P i).expect f := by rw [hprefixProd, hcurrent]; ring
 
 private theorem pr_pi_cons {α : Type*} [Fintype α] {k : ℕ}
     (P : Fin (k + 1) → FinProb α) (A : (Fin (k + 1) → α) → Prop) :

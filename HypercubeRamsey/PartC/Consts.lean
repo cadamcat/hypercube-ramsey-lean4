@@ -1,5 +1,6 @@
 import HypercubeRamsey.PartC.Core
 import HypercubeRamsey.S03.NearProductInjection
+import HypercubeRamsey.PartC.Consts_sol_consts_adm
 
 /-!
 # Part C constant bundle
@@ -232,6 +233,188 @@ theorem exists_admissible (T : Stage) (η0 : ℝ) (hη0 : 0 < η0)
     (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε) :
     ∃ κ : CConsts, κ.Admissible ∧ κ.η0 = η0 ∧
       DeepDisc T κ.xs κ.α 0.04 ∧ DeepDisc T κ.xι κ.αι (κ.ι / 2) := by
-  sorry
+  classical
+  obtain ⟨x, α₀, hx, hα₀, hdisc⟩ := hDeep 0.04 (by norm_num)
+  obtain ⟨xs, hxs, hxs'⟩ := exists_between (show (0 : ℝ) < min x 0.01 by positivity)
+  obtain ⟨α, hα, hα'⟩ := exists_between (show (0 : ℝ) < min α₀ 0.01 by positivity)
+  have hxsx : xs ≤ x := (hxs'.trans_le (min_le_left _ _)).le
+  have hxs01 : xs < 0.01 := hxs'.trans_le (min_le_right _ _)
+  have hαα : α ≤ α₀ := (hα'.trans_le (min_le_left _ _)).le
+  have hα01 : α < 0.01 := hα'.trans_le (min_le_right _ _)
+  have hdisc' := Lane_sol_consts_adm.deep_mono hdisc hxsx hαα
+  obtain ⟨ι, hι, hι'⟩ := exists_between
+    (show (0 : ℝ) < min xs (min η0 0.01) / 1000 by positivity)
+  obtain ⟨xι, αι, hxι, hαι, hdiscι⟩ := hDeep (ι / 2) (by positivity)
+  obtain ⟨A', P', n₀, ε, hε, hclock⟩ := clock_sampling 5 2 (by norm_num)
+  let A := max A' 1
+  let Pc := max P' 1
+  let Astar := ⌈A⌉₊
+  let Pstar := ⌈Pc⌉₊
+  have hA : 0 < A := lt_of_lt_of_le (by norm_num) (le_max_right _ _)
+  have hPc : 0 < Pc := lt_of_lt_of_le (by norm_num) (le_max_right _ _)
+  have hclock' : ClockConstants 5 2 Astar Pstar 1e-8 := by
+    refine ⟨by norm_num, rfl, A, Pc, max n₀ 1, ε, hA, hPc,
+      Nat.le_ceil _, Nat.le_ceil _, le_max_right _ _, hε, ?_⟩
+    intro n hn g hg R K _ _ _ Ω _ _ lab laws F sc h1 h2 h3 h4 h5 h6
+    have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast (le_max_right n₀ 1).trans hn
+    apply hclock n ((le_max_left _ _).trans hn) g hg lab laws F sc h1
+    · intro a y
+      exact (h2 a y).trans (Real.rpow_le_rpow_of_exponent_le hn1
+        (neg_le_neg (le_max_left _ _)))
+    · exact h3
+    · exact h4
+    · exact h5
+    · intro k
+      exact (h6 k).trans (Real.rpow_le_rpow_of_exponent_le hn1
+        (neg_le_neg (le_max_left _ _)))
+  let P := max Pstar (100 * (200 + 10))
+  let R := P ^ 2
+  let L := 500 * R
+  let u := 2 * (10 * L ^ 2 + 1)
+  have hu : Even u ∧ 10 * L ^ 2 < u := by
+    constructor
+    · exact ⟨10 * L ^ 2 + 1, by dsimp [u]; omega⟩
+    · dsimp [u]
+      omega
+  have hu0 : (0 : ℝ) < u := by exact_mod_cast (by omega : 0 < u)
+  obtain ⟨ξ, hξ, hξ'⟩ := exists_between
+    (show (0 : ℝ) < α * Real.rpow 2 (-(10 * (u : ℝ) + 100)) from
+      mul_pos hα (Real.rpow_pos_of_pos (by norm_num) _))
+  obtain ⟨θ, hθ, hθ'⟩ := exists_between
+    (show (0 : ℝ) < ξ ^ 2 / (3 * 4 ^ (u + 3)) by positivity)
+  let a := θ / 100
+  have ha : 0 < a := by dsimp [a]; positivity
+  obtain ⟨aC, haC, haC'⟩ := exists_between
+    (show (0 : ℝ) < min η0 1 / 10 ^ 6 by positivity)
+  obtain ⟨aB, haB, haB'⟩ := exists_between
+    (show (0 : ℝ) < min (aC / 1000) xι by positivity)
+  have haBaC : aB < aC / 1000 := haB'.trans_le (min_le_left _ _)
+  have haBxι : aB ≤ xι := (haB'.trans_le (min_le_right _ _)).le
+  have haC1 : aC < 1 / 10 ^ 6 := haC'.trans_le
+    (div_le_div_of_nonneg_right (min_le_right _ _) (by positivity))
+  have haB1 : aB < 1 := by linarith only [haBaC, haC1]
+  let C := Cstar u ξ
+  let m := max 2 (20000 * |C| + 2)
+  let M1 := m ^ 2
+  have hm : 0 < m := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  have hM1 : 4 ≤ M1 ∧ 2 * C / Real.sqrt M1 ≤ 1e-4 := by
+    constructor
+    · have he : 2 ≤ m := le_max_left _ _
+      dsimp [M1]
+      nlinarith only [he]
+    · rw [show Real.sqrt M1 = m by exact Real.sqrt_sq hm.le]
+      apply (div_le_iff₀ hm).mpr
+      have he : 20000 * |C| + 2 ≤ m := le_max_right _ _
+      nlinarith only [he, le_abs_self C]
+  have hM1pos : 0 < M1 := lt_of_lt_of_le (by norm_num) hM1.1
+  let Cb := 100 * aC / aB + 101
+  have hCbEq : Cb * aB = 100 * aC + 101 * aB := by
+    dsimp [Cb]
+    field_simp [haB.ne']
+  have hCb100 : 100 * aC / aB + 100 < Cb := by dsimp [Cb]; linarith only []
+  have hCb1 : 1 < Cb := by
+    have hr : 0 < 100 * aC / aB := by positivity
+    dsimp [Cb]
+    linarith only [hr]
+  obtain ⟨Mlo, hMlo⟩ := exists_nat_gt (Cb + 100)
+  have hMlopos : (0 : ℝ) < Mlo := by linarith only [hMlo, hCb1]
+  obtain ⟨cq, hcq, hcq'⟩ := exists_between
+    (show (0 : ℝ) < 1 / (20 * (Mlo : ℝ)) by positivity)
+  obtain ⟨Mhi, hMhi⟩ := exists_nat_gt ((Mlo : ℝ) + 10 / cq + 10 / cq)
+  have hdiv : 0 < 10 / cq := div_pos (by norm_num) hcq
+  have hMhi1 : (Mlo : ℝ) + 10 / cq ≤ Mhi := by linarith only [hMhi, hdiv]
+  have hMhipos : (0 : ℝ) < Mhi := by linarith only [hMhi1, hMlopos, hdiv]
+  have hcqMhi : 5 < cq * Mhi := by
+    have he : 10 / cq < (Mhi : ℝ) := by linarith only [hMhi1, hMlopos]
+    have he' := (div_lt_iff₀ hcq).mp he
+    nlinarith only [he']
+  obtain ⟨ω, hω, hω'⟩ := exists_between
+    (show (0 : ℝ) < aC / (500 * (Mhi : ℝ)) by positivity)
+  have hωsmall : 5 * ω * Mhi < aC / 100 := by
+    have he := (lt_div_iff₀ (show 0 < 500 * (Mhi : ℝ) by positivity)).mp hω'
+    nlinarith only [he]
+  obtain ⟨ρ, hρ, hρ', hentropy⟩ := Lane_sol_consts_adm.entropy_small a ha
+  have hρentropy : binEntropy (1000 * ρ) < a / 10 ^ 9 := by
+    have h0 : 1000 * ρ ≠ 0 := ne_of_gt (by positivity)
+    have h1 : 1000 * ρ ≠ 1 := by nlinarith only [hρ']
+    simpa only [binEntropy, ite_eq_right h0, ite_eq_right h1] using hentropy
+  let KB := 10 ^ 6 * (R : ℝ)
+  let A0 := 10 ^ 6 * (R : ℝ)
+  let θstar : ℝ := 1e-8 / (4 * 40)
+  let cp : ℝ := 1e-8 / 16
+  let Kcell := 100 / θstar
+  obtain ⟨cperm, hcperm, hcperm'⟩ := exists_between (show (0 : ℝ) < α / 10 by positivity)
+  obtain ⟨d₀, hd₀⟩ := near_product_injection
+  let d0 := max d₀ 1
+  have hd0 : NearProductConstants d0 := by
+    intro d hd
+    exact hd₀ d ((le_max_left _ _).trans hd)
+  have hlarge := Lane_sol_consts_adm.large_bounds a aC aB M1 Cb Mlo Mhi ω C u
+    ha hu0 hM1pos haC haB haB1 hCb1
+    (by linarith only [hMlo, hCb1, haC1])
+    (by linarith only [hMlo, hCb1]) (by linarith only [hMlo])
+    (by nlinarith only [hCbEq, haC, haB])
+    (by nlinarith only [hCbEq, hωsmall, haC, haB])
+    (by nlinarith only [hωsmall, haC])
+  obtain ⟨H, hH⟩ := eventually_atTop.mp (Lane_sol_consts_adm.height_bounds a ω ha hω)
+  have hheight : ∀ᶠ q : ℝ in atTop, H ≤ q ^ (Mlo : ℝ) :=
+    (tendsto_rpow_atTop hMlopos).eventually (eventually_ge_atTop H)
+  obtain ⟨Q0, hQ0⟩ := eventually_atTop.mp
+    (hlarge.and ((Lane_sol_consts_adm.bin_bounds Mhi d0).and hheight))
+  have hdyad : Tendsto (fun j : ℕ => ((2 : ℕ) ^ j : ℝ)) atTop atTop := by
+    simpa only [Nat.cast_pow, Nat.cast_ofNat] using
+      (tendsto_pow_atTop_atTop_of_one_lt (by norm_num : (1 : ℝ) < 2))
+  have hdyadexp := (Lane_sol_consts_adm.tendsto_power_exp_power 0 aC 1 haC
+    (by norm_num)).comp hdyad
+  obtain ⟨j, hj, hjexp⟩ := ((hdyad.eventually (eventually_gt_atTop (M1 * Q0))).and
+    (hdyadexp.eventually (gt_mem_nhds (show (0 : ℝ) < a / 4000 by positivity)))).exists
+  let Qbd := 2 ^ j
+  let Kbd := max 1 (Real.exp (C * Qbd))
+  obtain ⟨β, hβ, hβ'⟩ := exists_between
+    (show (0 : ℝ) < min (0.02 / (1 + KB + 2 * A0)) (1 / 16) by
+      dsimp [KB, A0]
+      positivity)
+  let κ : CConsts := {
+    η0 := η0, xs := xs, α := α, ι := ι, xι := xι, αι := αι,
+    Ac := 200, P := P, R := R, L := L, u := u, ξ := ξ, θ := θ,
+    Astar := Astar, Pstar := Pstar, θ0 := 1e-8,
+    aC := aC, aB := aB, M1 := M1, Cb := Cb, Mlo := Mlo, Mhi := Mhi,
+    cq := cq, ω := ω, a := a, ρ := ρ, KB := KB, A0 := A0,
+    Q0 := Q0, Kbd := Kbd, Qbd := Qbd, θstar := θstar, Kp := 40, cp := cp,
+    Kcell := Kcell, cperm := cperm, β := β, c5 := 1 / 1000,
+    c14 := 1, cChernoff := 1, h0 := 1, d0 := d0 }
+  refine ⟨κ, ?_, rfl, hdisc', hdiscι⟩
+  refine {
+    η0_pos := hη0, xs_rng := ⟨hxs, hxs01⟩, α_rng := ⟨hα, hα01⟩,
+    ι_rng := ⟨hι, hι'⟩, xι_pos := hxι, αι_pos := hαι,
+    Ac_eq := rfl, P_big := ⟨le_max_left _ _, le_max_right _ _⟩,
+    R_eq := rfl, L_eq := rfl, u_rng := hu, ξ_rng := ⟨hξ, hξ'⟩,
+    θ_rng := ⟨hθ, hθ'⟩, clock := hclock', aC_rng := ⟨haC, haC'⟩,
+    aB_rng := ⟨haB, haBaC, haBxι⟩, M1_big := hM1, Cb_big := hCb100,
+    Mlo_big := hMlo, cq_rng := ⟨hcq, hcq'⟩, Mhi_big := ⟨hMhi1, hcqMhi⟩,
+    ω_rng := ⟨hω, hωsmall⟩, a_eq := rfl, ρ_rng := ⟨hρ, hρ', hρentropy⟩,
+    KB_big := le_rfl, A0_big := le_rfl,
+    bucket := by norm_num [κ, θstar, cp], Kcell_big := le_rfl,
+    cperm_rng := ⟨hcperm, hcperm'⟩, c5_pos := by norm_num [κ],
+    c5_le := le_rfl, c14_pos := by norm_num [κ], cChernoff_pos := by norm_num [κ],
+    h0_pos := by norm_num [κ], d0_pos := lt_of_lt_of_le (by norm_num) (le_max_right _ _),
+    nearProduct := hd0, Q0_large := ?_, bounded := ?_,
+    β_rng := ⟨hβ, (hβ'.trans_le (min_le_left _ _)).le, hβ'.trans_le (min_le_right _ _)⟩ }
+  · intro q hq
+    obtain ⟨hl, hb, hh⟩ := hQ0 q hq
+    rcases hl with ⟨hl1, hl2, hl3, hl4, hl5, hl6, hl7, hl8⟩
+    refine ⟨hl1, hl2, hl3, hl4, hl5, hl6, hl7, hl8, ?_⟩
+    intro h hlow hhigh
+    have hheight := hH (h : ℝ) (hh.trans hlow)
+    rcases hheight with ⟨hh1, hht, hhl, hh2, hh3, hh4, hh5⟩
+    refine ⟨by exact_mod_cast hh1, hht, hhl, hh2, hh3, hh4, ?_, hb.1, hb.2.1, ?_, ?_⟩
+    · simpa only [κ, sliceEps, sliceK, Nat.cast_ofNat, Real.rpow_eq_pow, Real.rpow_ofNat,
+        show (1 : ℝ) + 1 = 2 by norm_num] using hh5
+    · exact hhigh.le.trans hb.2.2.1
+    · simpa only [κ, neg_mul, one_mul] using hb.2.2.2
+  · refine ⟨⟨j, rfl⟩, ?_, ?_, le_max_left _ _, le_max_right _ _⟩
+    · simpa only [κ, Qbd, Nat.cast_pow, Nat.cast_ofNat] using hj
+    · simpa only [κ, Qbd, Function.comp_def, Real.rpow_eq_pow, Nat.cast_pow,
+        Nat.cast_ofNat, Real.rpow_zero, one_mul, neg_mul] using hjexp.le
 
 end HypercubeRamsey

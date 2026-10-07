@@ -2,6 +2,7 @@ import HypercubeRamsey.S11.Core.Definitions
 import HypercubeRamsey.S07.Profiles
 import HypercubeRamsey.Tools.Ramsey
 import HypercubeRamsey.S11.Core.Compatibility_q_s11_compat
+import HypercubeRamsey.S11.Core.Compatibility_sol_s11_compatB
 
 /-!
 # Lemma 11.2: a compatible balanced profile
@@ -2541,121 +2542,120 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     have hLaw : Dlaw q C = cliqueLaw q hq C hC := by simp [Dlaw, hq, hC]
     rw [hLaw]
     simp [cliqueLaw, FinProb.uniform, hImageCard q hq C hC]
-  have hsamplePackMass (q : SampleState) (hq : GoodSample q) (y : Fin N) :
-      (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
-        joint.w q * (2 / (r₀ : ℝ)) := by
-    let P := (packing q).1
-    have hPne : P.Nonempty := hPackingNonempty q hq
-    have hPpos : 0 < (P.card : ℝ) := by exact_mod_cast (Finset.card_pos.mpr hPne)
-    have hsCposR : 0 < (sC n : ℝ) := by exact_mod_cast hsCpos
-    have hr₀pos : 0 < (r₀ : ℝ) := by positivity
-    have hPackingCardR : ((packing q).2.card : ℝ) =
-        (P.card : ℝ) * (sC n : ℝ) := by
-      exact_mod_cast hPackingCard q hq
-    have hdenom : (r₀ : ℝ) / 2 < (P.card : ℝ) * (sC n : ℝ) := by
-      rw [← hPackingCardR]
-      exact hPackingVHalf q hq
-    have hfactor : (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ ≤ 2 / (r₀ : ℝ) := by
-      have hrecip := one_div_le_one_div_of_le
-        (by positivity : (0 : ℝ) < (r₀ : ℝ) / 2) hdenom.le
-      have hrecip' : ((P.card : ℝ) * (sC n : ℝ))⁻¹ ≤ ((r₀ : ℝ) / 2)⁻¹ := by
-        simpa only [one_div] using hrecip
-      have hinvprod : (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ =
-          ((P.card : ℝ) * (sC n : ℝ))⁻¹ := by
-        calc
-          (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ =
-              (sC n : ℝ)⁻¹ * (P.card : ℝ)⁻¹ := mul_comm _ _
-          _ = ((P.card : ℝ) * (sC n : ℝ))⁻¹ := (mul_inv_rev _ _).symm
-      calc
-        (P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹ =
-            ((P.card : ℝ) * (sC n : ℝ))⁻¹ := hinvprod
-        _ ≤ ((r₀ : ℝ) / 2)⁻¹ := hrecip'
-        _ = 2 / (r₀ : ℝ) := by field_simp [ne_of_gt hr₀pos]
-    have hunique : ∀ C ∈ P, ∀ D ∈ P,
-        (y ∈ C.image q.2) → (y ∈ D.image q.2) → C = D := by
-      intro C hC D hD hyC hyD
-      obtain ⟨j, hjC, hjy⟩ := Finset.mem_image.mp hyC
-      obtain ⟨k, hkD, hky⟩ := Finset.mem_image.mp hyD
-      have hjk : j = k := hq.1 (hjy.trans hky.symm)
-      subst k
-      by_contra hCD
-      have hdisj := (hpackingSpec q hq).2.1 C hC D hD hCD
-      exact (Finset.disjoint_left.mp hdisj) j hkD hjC
-    have hcount := HypercubeRamsey.S11.Core.q_s11_compat_sum_unique_indicator
-      P (fun C => y ∈ C.image q.2) hunique
-    have hmassEq :
-        (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) =
-          (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) *
-            (∑ C : Finset (Fin r₀),
-              if C ∈ P then if y ∈ C.image q.2 then (1 : ℝ) else 0 else 0) := by
-      calc
-        _ = ∑ C : Finset (Fin r₀),
-              (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) *
-                (if C ∈ P then if y ∈ C.image q.2 then (1 : ℝ) else 0 else 0) := by
-              apply Finset.sum_congr rfl
-              intro C hCsum
-              by_cases hC : C ∈ P
-              · have hC' : C ∈ (packing q).1 := by simpa [P] using hC
-                rw [hDlawPacked q hq C hC' y]
-                by_cases hy : y ∈ C.image q.2
-                · simp [clusterWeight, hC', hy]
-                  ring
-                · simp [clusterWeight, hC', hy]
-                  ring
-              · have hC' : C ∉ (packing q).1 := by simpa [P] using hC
-                simp [clusterWeight, hC']
-        _ = _ := by rw [Finset.mul_sum]
-    calc
-      (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) =
-          (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) *
-            (∑ C : Finset (Fin r₀),
-              if C ∈ P then if y ∈ C.image q.2 then (1 : ℝ) else 0 else 0) := hmassEq
-      _ ≤ joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹) := by
-            calc
-              _ ≤ (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) * 1 :=
-                mul_le_mul_of_nonneg_left hcount (by positivity)
-              _ = _ := by ring
-      _ ≤ joint.w q * (2 / (r₀ : ℝ)) :=
-            mul_le_mul_of_nonneg_left hfactor (joint.nonneg q)
+  have hr₀posNat : 0 < r₀ := Nat.ceil_pos.mpr (Real.exp_pos _)
   have hsampleAggCoord (q : SampleState) (y : Fin N) :
       (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
         (joint.w q * (2 / (r₀ : ℝ))) *
           (∑ j : Fin r₀, if q.2 j = y then (1 : ℝ) else 0) := by
     by_cases hqzero : joint.w q = 0
-    · simp [clusterWeight, hqzero]
-    · have hqpos : 0 < joint.w q := lt_of_le_of_ne (joint.nonneg q) (Ne.symm hqzero)
-      have hqgood := hjointGood q (ne_of_gt hqpos)
-      by_cases hcoord : ∃ j : Fin r₀, q.2 j = y
-      · obtain ⟨j, hj⟩ := hcoord
-        have hcount : 1 ≤ ∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0 := by
-          calc
-            1 = (if q.2 j = y then (1 : ℝ) else 0) := by simp [hj]
-            _ ≤ ∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0 :=
-              Finset.single_le_sum (fun j' hj' => by positivity)
-                (Finset.mem_univ j)
+    · simp only [clusterWeight, hqzero, zero_mul, Finset.sum_const_zero, le_refl]
+    · have hq := hjointGood q hqzero
+      have hCard : ((packing q).2.card : ℝ) =
+          ((packing q).1.card : ℝ) * (sC n : ℝ) := by
+        exact_mod_cast hPackingCard q hq
+      have hdenom : (r₀ : ℝ) / 2 < ((packing q).1.card : ℝ) * (sC n : ℝ) := by
+        rw [← hCard]
+        exact hPackingVHalf q hq
+      exact HypercubeRamsey.Lane_sol_s11_compatB.packing_average_le (sC n) hr₀posNat hsCpos
+        q.2 hq.1 (packing q).1 (hPackingNonempty q hq) (hpackingSpec q hq).2.1 hdenom
+        (Dlaw q) (hDlawPacked q hq) (joint.w q) (joint.nonneg q) y
+  have hrhoDom (i : HighTags) (y : Fin N) :
+      (rho i).w y ≤ (1000 / etaC) * π i.1 y := by
+    have hmass := hselectedMass i.1 i.2
+    have hrecip : (selectedMass i.1)⁻¹ ≤ 1000 / etaC := by
+      have h := one_div_le_one_div_of_le (by positivity : (0 : ℝ) < etaC / 1000) hmass.le
+      simpa [one_div, inv_div] using h
+    by_cases hy : y ∈ selected i.1
+    · have hrhow : (rho i).w y = π i.1 y / selectedMass i.1 := by
+        simp [rho, Law.restrict, πlaw, hy, selectedMass]
+      rw [hrhow, div_eq_mul_inv]
+      calc
+        π i.1 y * (selectedMass i.1)⁻¹ ≤ π i.1 y * (1000 / etaC) :=
+          mul_le_mul_of_nonneg_left hrecip (hπnonneg i.1 y)
+        _ = (1000 / etaC) * π i.1 y := mul_comm _ _
+    · have hzero : (rho i).w y = 0 := by simp [rho, Law.restrict, hy]
+      rw [hzero]
+      exact mul_nonneg (by positivity) (hπnonneg i.1 y)
+  have hpriorDom (i : HighTags) : tagPrior.w i ≤ (100 / etaC) * p.w i.1 := by
+    have hrecip : normGoodMass⁻¹ ≤ 100 / etaC := by
+      have h := one_div_le_one_div_of_le (by positivity : (0 : ℝ) < etaC / 100)
+        hnormGoodMass.le
+      simpa [one_div, inv_div] using h
+    change p.w i.1 / normGoodMass ≤ _
+    rw [div_eq_mul_inv]
+    calc
+      p.w i.1 * normGoodMass⁻¹ ≤ p.w i.1 * (100 / etaC) :=
+        mul_le_mul_of_nonneg_left hrecip (p.nonneg i.1)
+      _ = (100 / etaC) * p.w i.1 := mul_comm _ _
+  have htagAverage (y : Fin N) :
+      (∑ i : HighTags, tagPrior.w i * (rho i).w y) ≤
+        (100000 / etaC ^ 2) * πbar y := by
+    calc
+      _ ≤ ∑ i : HighTags, (100000 / etaC ^ 2) * (p.w i.1 * π i.1 y) := by
+        apply Finset.sum_le_sum
+        intro i _
         calc
-          (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
-              joint.w q * (2 / (r₀ : ℝ)) := hsamplePackMass q hqgood y
-          _ ≤ (joint.w q * (2 / (r₀ : ℝ))) *
-              (∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0) :=
-                mul_le_mul_of_nonneg_left hcount (by positivity)
-      · have hsumZero :
-          (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) = 0 := by
-        apply Finset.sum_eq_zero
-        intro C hCsum
-        by_cases hC : C ∈ (packing q).1
-        · have hnot : y ∉ C.image q.2 := by
-            intro hy
-            obtain ⟨j, hjC, hjy⟩ := Finset.mem_image.mp hy
-            exact hcoord ⟨j, hjy⟩
-          rw [hDlawPacked q hqgood C hC y]
-          simp [clusterWeight, hC, hnot]
-        · simp [clusterWeight, hC]
-      have hneq (j : Fin r₀) : q.2 j ≠ y := by
-        intro hj
-        exact hcoord ⟨j, hj⟩
-      simp [hsumZero, hneq]
-  sorry
+          tagPrior.w i * (rho i).w y ≤
+              tagPrior.w i * ((1000 / etaC) * π i.1 y) :=
+            mul_le_mul_of_nonneg_left (hrhoDom i y) (tagPrior.nonneg i)
+          _ ≤ ((100 / etaC) * p.w i.1) * ((1000 / etaC) * π i.1 y) :=
+            mul_le_mul_of_nonneg_right (hpriorDom i) (mul_nonneg (by positivity) (hπnonneg i.1 y))
+          _ = (100000 / etaC ^ 2) * (p.w i.1 * π i.1 y) := by ring
+      _ = (100000 / etaC ^ 2) * ∑ i : HighTags, p.w i.1 * π i.1 y := by
+        rw [Finset.mul_sum]
+      _ ≤ (100000 / etaC ^ 2) * ∑ i, p.w i * π i y :=
+        mul_le_mul_of_nonneg_left
+          (HypercubeRamsey.Lane_sol_s11_compatB.subtype_sum_le NormGood
+            (fun i => p.w i * π i y) (fun i => mul_nonneg (p.nonneg i) (hπnonneg i y)))
+          (by positivity)
+      _ = (100000 / etaC ^ 2) * πbar y := rfl
+  have hAgg (y : Fin N) :
+      (∑ qc : SampleState × Finset (Fin r₀), clusterLaw.w qc * (Dlaw qc.1 qc.2).w y) ≤
+        highAggConst * πbar y := by
+    calc
+      _ = ∑ q : SampleState, ∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y := by
+        rw [Fintype.sum_prod_type]
+        rfl
+      _ ≤ ∑ q : SampleState, (joint.w q * (2 / (r₀ : ℝ))) *
+          (∑ j : Fin r₀, if q.2 j = y then (1 : ℝ) else 0) :=
+        Finset.sum_le_sum fun q _ => hsampleAggCoord q y
+      _ ≤ 4 * ∑ i : HighTags, tagPrior.w i * (rho i).w y :=
+        HypercubeRamsey.Lane_sol_s11_compatB.sample_average_le r₀ hr₀posNat tagPrior rowCond
+          (fun i y => (rho i).w y) hcondMarginal y
+      _ ≤ 4 * ((100000 / etaC ^ 2) * πbar y) :=
+        mul_le_mul_of_nonneg_left (htagAverage y) (by norm_num)
+      _ = highAggConst * πbar y := by dsimp [highAggConst]; ring
+  have hAggWidth (y : Fin N) :
+      (∑ qc : SampleState × Finset (Fin r₀), clusterLaw.w qc * (Dlaw qc.1 qc.2).w y) ≤
+        Real.exp ((n : ℝ) ^ δ) / N := by
+    have hbarWidth : highAggConst * πbar y ≤ Real.exp ((n : ℝ) ^ δ) / N := by
+      apply (le_div_iff₀ hNr).2
+      calc
+        (highAggConst * πbar y) * (N : ℝ) = highAggConst * ((N : ℝ) * πbar y) := by ring
+        _ ≤ highAggConst * K := mul_le_mul_of_nonneg_left (hmixcap y) (by positivity)
+        _ ≤ Real.exp ((n : ℝ) ^ δ) := hKexp
+    exact (hAgg y).trans hbarWidth
+  have hCluster : PCluster G ((1 / 100 : ℚ) : ℝ) δ n N E (X, Y) := by
+    apply HypercubeRamsey.Lane_sol_s11_compatB.cluster_of_finprob μ clusterLaw
+      (fun qc => Dlaw qc.1 qc.2) hμX (fun qc => hDlawSupport qc.1 qc.2) hμWidth hAggWidth
+    · intro qc y
+      have hzeta : ((1 / 100 : ℚ) : ℝ) = (1 : ℝ) / 100 := by norm_num
+      simpa only [x, hzeta] using hDlawAtom qc.1 qc.2 y
+    · intro qc hweight y y' hy hy'
+      have hqNZ : joint.w qc.1 ≠ 0 := by
+        intro hzero
+        have hzero' : clusterLaw.w qc = 0 := by
+          simp [clusterLaw, q_s11_compat_uniformIndexLaw, hzero]
+        rw [hzero'] at hweight
+        norm_num at hweight
+      have hC : qc.2 ∈ (packing qc.1).1 := by
+        by_contra hnot
+        have hzero : clusterLaw.w qc = 0 := by
+          simp [clusterLaw, q_s11_compat_uniformIndexLaw, hnot]
+        rw [hzero] at hweight
+        norm_num at hweight
+      exact hcliqueLawPair qc.1 (hjointGood qc.1 hqNZ) qc.2 hC y y' hy hy'
+  exact hXY G X Y (Finset.Subset.refl X) (Finset.Subset.refl Y) hCluster
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the
 high-degree violators number `o(N) ≤ κN/4`; a tag whose first support avoids them meets both conditions of

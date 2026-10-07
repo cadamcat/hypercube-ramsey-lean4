@@ -1,6 +1,9 @@
+import HypercubeRamsey.S07.SmallGridPurity_q_s07_even
 import HypercubeRamsey.S07.Support
 import HypercubeRamsey.S07.EvenStage
 import HypercubeRamsey.Framework.OneShot
+
+set_option maxHeartbeats 1000000
 
 /-!
 # Lemma 7.1: small-grid purity exclusion
@@ -56,13 +59,365 @@ theorem grid_realization_of :
         ∀ J : (Γ.Cell → Fin N) → FinProb (OddRole n → Fin N),
           (∀ W, GoodPre Γ M σ W → ClockOK Γ M σ W (J W)) →
           ∑ W, (anchorLaw Γ M σ).w W *
-              (if GoodPre Γ M σ W then (J W).pr (fun f => ∃ x, 1 < evenColumn Γ M σ W f x) else 0) ≤
-            (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) →
+            (if GoodPre Γ M σ W then (J W).pr (fun f => ∃ x, 1 < evenColumn Γ M σ W f x) else 0) ≤
+          (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) →
       ∃ (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) (f : OddRole n → Fin N),
         (∀ c, CellValid Γ M σ W c) ∧ Function.Injective f ∧
         (∀ a : EvenRole n, ¬ PredFail Γ M σ W a.1 (nbrLabels f a)) ∧
         ∀ x, evenColumn Γ M σ W f x ≤ 1 := by
-  sorry
+  classical
+  refine ⟨4, ?_⟩
+  intro n hn d s ℓ q N E G X Y p κ Γ M Q D₀ C hN htyp hodd htag hcell hclock heven
+  let δ : ℝ := (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n
+  have hNatPow : ∀ k : ℕ, 4 ≤ k → 4 * k ≤ 2 ^ k := by
+    intro k
+    induction k with
+    | zero => intro hk; omega
+    | succ k ih =>
+        intro hk
+        by_cases hkeq : k = 3
+        · subst k
+          norm_num
+        have hk4 : 4 ≤ k := by omega
+        have hbase : 4 ≤ 2 ^ k := by
+          obtain ⟨j, rfl⟩ := Nat.exists_eq_add_of_le hk4
+          have hpow : 1 ≤ 2 ^ j := Nat.one_le_pow _ _ (by omega)
+          calc
+            4 = 4 * 1 := by norm_num
+            _ ≤ 4 * 2 ^ j := Nat.mul_le_mul_left _ hpow
+            _ ≤ 2 ^ 4 * 2 ^ j := by norm_num
+            _ = 2 ^ (4 + j) := by rw [Nat.pow_add]
+        rw [pow_succ]
+        nlinarith [ih hk4, hbase]
+  have hNat : 4 * n ≤ 2 ^ n := hNatPow n hn
+  have hDelta : δ ≤ 1 / 4 := by
+    have hpow : (2 : ℝ) ^ n * (1 / 4 : ℝ) ^ n = (1 / 2 : ℝ) ^ n := by
+      rw [← mul_pow]
+      norm_num
+    have hdiv : (1 / 2 : ℝ) ^ n = 1 / (2 : ℝ) ^ n := by
+      rw [one_div_pow]
+    have hratio : (n : ℝ) / (2 : ℝ) ^ n ≤ 1 / 4 := by
+      apply (div_le_iff₀ (by positivity)).2
+      have hcast : (4 : ℝ) * n ≤ (2 : ℝ) ^ n := by exact_mod_cast hNat
+      nlinarith
+    calc
+      δ = (n : ℝ) * (2 ^ n * (1 / 4 : ℝ) ^ n) := by dsimp [δ]; ring
+      _ = (n : ℝ) * (1 / 2 : ℝ) ^ n := by rw [hpow]
+      _ = (n : ℝ) / (2 : ℝ) ^ n := by rw [hdiv]; ring
+      _ ≤ 1 / 4 := hratio
+  have h3δ : 3 * δ < 1 := by nlinarith
+  have htagSupport : ∀ σ, (tagLaw Γ M Q D₀).w σ ≠ 0 → ∀ g, ¬ TagBad Γ M D₀ σ g := by
+    intro σ hσ g
+    apply condOr_weight_support (P := FinProb.pi Q)
+      (A := fun σ => ∀ g, ¬ TagBad Γ M D₀ σ g) htag
+    simpa [tagLaw] using hσ
+  have hcellSupport : ∀ σ, (∀ g, ¬ TagBad Γ M D₀ σ g) →
+      ∀ W, (anchorLaw Γ M σ).w W ≠ 0 → ∀ c, ¬ CellBad Γ M σ W c := by
+    intro σ hσ W hW c
+    apply condOr_weight_support (P := rawAnchors Γ M σ)
+      (A := fun W => ∀ c, ¬ CellBad Γ M σ W c) (hcell σ hσ)
+    simpa [anchorLaw] using hW
+  have hcellAvoidZero : ∀ σ, (∀ g, ¬ TagBad Γ M D₀ σ g) →
+      (anchorLaw Γ M σ).pr (fun W => ¬ ∀ c, ¬ CellBad Γ M σ W c) = 0 := by
+    intro σ hσ
+    simpa [anchorLaw] using condOr_pr_not (rawAnchors Γ M σ)
+      (fun W => ∀ c, ¬ CellBad Γ M σ W c) (hcell σ hσ)
+  let μ₀ : FinProb (Fin N) := FinProb.uniform Finset.univ
+    ⟨⟨0, by omega⟩, Finset.mem_univ _⟩
+  let J₀ : FinProb (OddRole n → Fin N) := FinProb.pi fun _ => μ₀
+  let Jfam : (Γ.Key → M.ι) → (Γ.Cell → Fin N) → FinProb (OddRole n → Fin N) :=
+    fun σ W => if h : GoodPre Γ M σ W then Classical.choose (hclock σ W h) else J₀
+  have hJfam (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) (hpre : GoodPre Γ M σ W) :
+      ClockOK Γ M σ W (Jfam σ W) := by
+    simp [Jfam, hpre]
+    exact Classical.choose_spec (hclock σ W hpre)
+  let P : FinProb ((Γ.Key → M.ι) × ((Γ.Cell → Fin N) × (OddRole n → Fin N))) :=
+    FinProb.bind (tagLaw Γ M Q D₀) (fun σ => FinProb.bind (anchorLaw Γ M σ) (Jfam σ))
+  let tagBad (σ : Γ.Key → M.ι) : Prop := ¬ Typical Γ M C σ
+  let cellBad (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) : Prop :=
+    ¬ ∀ c, ¬ CellBad Γ M σ W c
+  let oddBad (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) : Prop :=
+    ∃ y, (1e-8 : ℝ) < oddColumn Γ M σ W y
+  let evenBad (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) (f : OddRole n → Fin N) : Prop :=
+    ∃ x, 1 < evenColumn Γ M σ W f x
+  let success (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) (f : OddRole n → Fin N) : Prop :=
+    Typical Γ M C σ ∧ GoodPre Γ M σ W ∧ ∀ x, evenColumn Γ M σ W f x ≤ 1
+  have hδ_nonneg : 0 ≤ δ := by
+    dsimp [δ]
+    positivity
+  letI : DecidablePred tagBad := fun σ => Classical.propDecidable (tagBad σ)
+  letI : ∀ σ, DecidablePred (cellBad σ) := fun σ W => Classical.propDecidable (cellBad σ W)
+  letI : ∀ σ, DecidablePred (oddBad σ) := fun σ W => Classical.propDecidable (oddBad σ W)
+  letI : ∀ σ W, DecidablePred (evenBad σ W) := fun σ W f => Classical.propDecidable (evenBad σ W f)
+  letI : ∀ σ W, DecidablePred (success σ W) := fun σ W f => Classical.propDecidable (success σ W f)
+  have htagP : P.pr (fun ω => tagBad ω.1) = (tagLaw Γ M Q D₀).pr tagBad := by
+    have hexpand : P.pr (fun ω => tagBad ω.1) =
+        ∑ σ, (tagLaw Γ M Q D₀).w σ *
+          (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun _ => tagBad σ) := by
+      simpa [P] using bind_pr_eq (tagLaw Γ M Q D₀)
+        (fun σ => FinProb.bind (anchorLaw Γ M σ) (Jfam σ)) (fun σ _ => tagBad σ)
+    calc
+      P.pr (fun ω => tagBad ω.1) =
+        ∑ σ, (tagLaw Γ M Q D₀).w σ *
+          (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun _ => tagBad σ) := hexpand
+      _ =
+          ∑ σ, (tagLaw Γ M Q D₀).w σ * (if tagBad σ then 1 else 0) := by
+            apply Finset.sum_congr rfl
+            intro σ hσ
+            rw [pr_const]
+      _ = (tagLaw Γ M Q D₀).pr tagBad := by
+        simpa using (pr_as_weight_sum (tagLaw Γ M Q D₀) tagBad).symm
+  have hoddKernel (σ : Γ.Key → M.ι) :
+      (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+          (fun wf => oddBad σ wf.1) = (anchorLaw Γ M σ).pr (oddBad σ) := by
+    have hexpand := bind_pr_eq (anchorLaw Γ M σ) (Jfam σ) (fun W _ => oddBad σ W)
+    calc
+      (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun wf => oddBad σ wf.1) =
+          ∑ W, (anchorLaw Γ M σ).w W * (Jfam σ W).pr (fun _ => oddBad σ W) := hexpand
+      _ =
+          ∑ W, (anchorLaw Γ M σ).w W * (if oddBad σ W then 1 else 0) := by
+            apply Finset.sum_congr rfl
+            intro W hW
+            rw [pr_const]
+      _ = (anchorLaw Γ M σ).pr (oddBad σ) := by
+        simpa using (pr_as_weight_sum (anchorLaw Γ M σ) (oddBad σ)).symm
+  have hoddP : P.pr (fun ω => oddBad ω.1 ω.2.1) =
+      (FinProb.bind (tagLaw Γ M Q D₀) (anchorLaw Γ M)).pr (fun ω => oddBad ω.1 ω.2) := by
+    have hexpand : P.pr (fun ω => oddBad ω.1 ω.2.1) =
+        ∑ σ, (tagLaw Γ M Q D₀).w σ *
+          (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun wf => oddBad σ wf.1) := by
+      simpa [P] using bind_pr_eq (tagLaw Γ M Q D₀)
+        (fun σ => FinProb.bind (anchorLaw Γ M σ) (Jfam σ)) (fun σ wf => oddBad σ wf.1)
+    calc
+      P.pr (fun ω => oddBad ω.1 ω.2.1) =
+        ∑ σ, (tagLaw Γ M Q D₀).w σ *
+          (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun wf => oddBad σ wf.1) := hexpand
+      _ =
+          ∑ σ, (tagLaw Γ M Q D₀).w σ * (anchorLaw Γ M σ).pr (oddBad σ) := by
+            apply Finset.sum_congr rfl
+            intro σ hσ
+            rw [hoddKernel]
+      _ = (FinProb.bind (tagLaw Γ M Q D₀) (anchorLaw Γ M)).pr (fun ω => oddBad ω.1 ω.2) :=
+        (bind_pr_eq (tagLaw Γ M Q D₀) (anchorLaw Γ M) (fun σ W => oddBad σ W)).symm
+  have hcellKernel (σ : Γ.Key → M.ι) :
+      (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+          (fun wf => cellBad σ wf.1) = (anchorLaw Γ M σ).pr (cellBad σ) := by
+    have hexpand := bind_pr_eq (anchorLaw Γ M σ) (Jfam σ) (fun W _ => cellBad σ W)
+    calc
+      (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun wf => cellBad σ wf.1) =
+          ∑ W, (anchorLaw Γ M σ).w W * (Jfam σ W).pr (fun _ => cellBad σ W) := hexpand
+      _ =
+          ∑ W, (anchorLaw Γ M σ).w W * (if cellBad σ W then 1 else 0) := by
+            apply Finset.sum_congr rfl
+            intro W hW
+            rw [pr_const]
+      _ = (anchorLaw Γ M σ).pr (cellBad σ) := by
+        simpa using (pr_as_weight_sum (anchorLaw Γ M σ) (cellBad σ)).symm
+  have hcellP : P.pr (fun ω => cellBad ω.1 ω.2.1) = 0 := by
+    have hexpand : P.pr (fun ω => cellBad ω.1 ω.2.1) =
+        ∑ σ, (tagLaw Γ M Q D₀).w σ *
+          (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr (fun wf => cellBad σ wf.1) := by
+      simpa [P] using bind_pr_eq (tagLaw Γ M Q D₀)
+        (fun σ => FinProb.bind (anchorLaw Γ M σ) (Jfam σ)) (fun σ wf => cellBad σ wf.1)
+    rw [hexpand]
+    apply Finset.sum_eq_zero
+    intro σ hσ
+    by_cases hweight : (tagLaw Γ M Q D₀).w σ = 0
+    · simp [hweight]
+    · have hσgood := htagSupport σ hweight
+      rw [hcellKernel]
+      have hzero : (anchorLaw Γ M σ).pr (cellBad σ) = 0 := by
+        simpa [cellBad] using hcellAvoidZero σ hσgood
+      simp [hweight, hzero]
+  have hevenKernel (σ : Γ.Key → M.ι) :
+      (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+          (fun wf => Typical Γ M C σ ∧ GoodPre Γ M σ wf.1 ∧ evenBad σ wf.1 wf.2) =
+        if Typical Γ M C σ then
+          ∑ W, (anchorLaw Γ M σ).w W *
+            (if GoodPre Γ M σ W then (Jfam σ W).pr (evenBad σ W) else 0)
+        else 0 := by
+    have hexpand := bind_pr_eq (anchorLaw Γ M σ) (Jfam σ)
+      (fun W f => Typical Γ M C σ ∧ GoodPre Γ M σ W ∧ evenBad σ W f)
+    by_cases htyp0 : Typical Γ M C σ
+    · calc
+        (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+            (fun wf => Typical Γ M C σ ∧ GoodPre Γ M σ wf.1 ∧ evenBad σ wf.1 wf.2) =
+          ∑ W, (anchorLaw Γ M σ).w W *
+            (Jfam σ W).pr (fun f => Typical Γ M C σ ∧ GoodPre Γ M σ W ∧ evenBad σ W f) := hexpand
+        _ = ∑ W, (anchorLaw Γ M σ).w W *
+            (if GoodPre Γ M σ W then (Jfam σ W).pr (evenBad σ W) else 0) := by
+              apply Finset.sum_congr rfl
+              intro W hW
+              by_cases hpre : GoodPre Γ M σ W
+              · simp only [htyp0, hpre, ↓reduceIte, true_and]
+              · simp only [htyp0, hpre, ↓reduceIte, true_and, false_and,
+                  pr_const, if_false, mul_zero]
+        _ = if Typical Γ M C σ then
+              ∑ W, (anchorLaw Γ M σ).w W *
+                (if GoodPre Γ M σ W then (Jfam σ W).pr (evenBad σ W) else 0)
+            else 0 := by simp [htyp0]
+    · calc
+        (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+            (fun wf => Typical Γ M C σ ∧ GoodPre Γ M σ wf.1 ∧ evenBad σ wf.1 wf.2) =
+          ∑ W, (anchorLaw Γ M σ).w W *
+            (Jfam σ W).pr (fun f => Typical Γ M C σ ∧ GoodPre Γ M σ W ∧ evenBad σ W f) := hexpand
+      _ = 0 := by
+        apply Finset.sum_eq_zero
+        intro W hW
+        simp only [htyp0, false_and, pr_const, if_false, mul_zero]
+      _ = if Typical Γ M C σ then
+            ∑ W, (anchorLaw Γ M σ).w W *
+              (if GoodPre Γ M σ W then (Jfam σ W).pr (evenBad σ W) else 0)
+          else 0 := by simp [htyp0]
+  have hevenP : P.pr (fun ω => Typical Γ M C ω.1 ∧
+      GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2) ≤ δ := by
+    have hexpand : P.pr (fun ω => Typical Γ M C ω.1 ∧
+        GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2) =
+      ∑ σ, (tagLaw Γ M Q D₀).w σ *
+        (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+          (fun wf => Typical Γ M C σ ∧ GoodPre Γ M σ wf.1 ∧ evenBad σ wf.1 wf.2) := by
+        simpa [P] using bind_pr_eq (tagLaw Γ M Q D₀)
+          (fun σ => FinProb.bind (anchorLaw Γ M σ) (Jfam σ))
+          (fun σ wf => Typical Γ M C σ ∧ GoodPre Γ M σ wf.1 ∧ evenBad σ wf.1 wf.2)
+    calc
+      P.pr (fun ω => Typical Γ M C ω.1 ∧
+          GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2) =
+          ∑ σ, (tagLaw Γ M Q D₀).w σ *
+        (FinProb.bind (anchorLaw Γ M σ) (Jfam σ)).pr
+          (fun wf => Typical Γ M C σ ∧ GoodPre Γ M σ wf.1 ∧ evenBad σ wf.1 wf.2) := hexpand
+      _ =
+          ∑ σ, (tagLaw Γ M Q D₀).w σ *
+            (if Typical Γ M C σ then
+              ∑ W, (anchorLaw Γ M σ).w W *
+                (if GoodPre Γ M σ W then (Jfam σ W).pr (evenBad σ W) else 0)
+             else 0) := by
+              apply Finset.sum_congr rfl
+              intro σ hσ
+              rw [hevenKernel]
+      _ ≤ ∑ σ, (tagLaw Γ M Q D₀).w σ * δ := by
+        apply Finset.sum_le_sum
+        intro σ hσ
+        by_cases hweight : (tagLaw Γ M Q D₀).w σ = 0
+        · rw [hweight]
+          simp
+        · have hσgood := htagSupport σ hweight
+          by_cases htyp0 : Typical Γ M C σ
+          · have hbound := heven σ hσgood htyp0 (Jfam σ) (hJfam σ)
+            simp only [htyp0, ↓reduceIte]
+            exact mul_le_mul_of_nonneg_left hbound ((tagLaw Γ M Q D₀).nonneg σ)
+          · simp only [htyp0, ↓reduceIte]
+            exact mul_le_mul_of_nonneg_left hδ_nonneg ((tagLaw Γ M Q D₀).nonneg σ)
+      _ = δ := by
+        calc
+          (∑ σ, (tagLaw Γ M Q D₀).w σ * δ) =
+              (∑ σ, (tagLaw Γ M Q D₀).w σ) * δ := by rw [Finset.sum_mul]
+          _ = δ := by rw [(tagLaw Γ M Q D₀).sum_eq_one]; ring
+  let badUnion (σ : Γ.Key → M.ι) (W : Γ.Cell → Fin N) (f : OddRole n → Fin N) : Prop :=
+    ((tagBad σ ∨ cellBad σ W) ∨ oddBad σ W) ∨
+      (Typical Γ M C σ ∧ GoodPre Γ M σ W ∧ evenBad σ W f)
+  have hbadUnion : P.pr (fun ω => badUnion ω.1 ω.2.1 ω.2.2) ≤ 3 * δ := by
+    calc
+      P.pr (fun ω => badUnion ω.1 ω.2.1 ω.2.2) =
+          P.pr (fun ω => ((tagBad ω.1 ∨ cellBad ω.1 ω.2.1) ∨ oddBad ω.1 ω.2.1) ∨
+            (Typical Γ M C ω.1 ∧ GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2)) := rfl
+      _ ≤ P.pr (fun ω => (tagBad ω.1 ∨ cellBad ω.1 ω.2.1) ∨ oddBad ω.1 ω.2.1) +
+          P.pr (fun ω => Typical Γ M C ω.1 ∧ GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2) :=
+        FinProb.pr_union P _ _
+      _ ≤ (P.pr (fun ω => tagBad ω.1 ∨ cellBad ω.1 ω.2.1) +
+            P.pr (fun ω => oddBad ω.1 ω.2.1)) +
+          P.pr (fun ω => Typical Γ M C ω.1 ∧ GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2) := by
+        have h := FinProb.pr_union P (fun ω => tagBad ω.1 ∨ cellBad ω.1 ω.2.1)
+          (fun ω => oddBad ω.1 ω.2.1)
+        nlinarith [h]
+      _ ≤ ((P.pr (fun ω => tagBad ω.1) + P.pr (fun ω => cellBad ω.1 ω.2.1)) +
+            P.pr (fun ω => oddBad ω.1 ω.2.1)) +
+          P.pr (fun ω => Typical Γ M C ω.1 ∧ GoodPre Γ M ω.1 ω.2.1 ∧ evenBad ω.1 ω.2.1 ω.2.2) := by
+        have h := FinProb.pr_union P (fun ω => tagBad ω.1) (fun ω => cellBad ω.1 ω.2.1)
+        nlinarith [h]
+      _ ≤ δ + (0 + (δ + δ)) := by
+        rw [htagP, hcellP, hoddP]
+        have htyp' : (tagLaw Γ M Q D₀).pr tagBad ≤ δ := by
+          simpa [δ, tagBad] using htyp
+        have hodd' : (FinProb.bind (tagLaw Γ M Q D₀) (anchorLaw Γ M)).pr
+            (fun ω => oddBad ω.1 ω.2) ≤ δ := by
+          simpa [δ, oddBad] using hodd
+        nlinarith [htyp', hodd', hevenP]
+      _ = 3 * δ := by ring
+  have hnotSuccess : ∀ (ω : (Γ.Key → M.ι) × ((Γ.Cell → Fin N) × (OddRole n → Fin N))),
+      ¬ success ω.1 ω.2.1 ω.2.2 →
+      badUnion ω.1 ω.2.1 ω.2.2 := by
+    intro ω hfail
+    by_cases htyp0 : Typical Γ M C ω.1
+    · by_cases hpre : GoodPre Γ M ω.1 ω.2.1
+      · by_cases he : evenBad ω.1 ω.2.1 ω.2.2
+        · exact Or.inr ⟨htyp0, hpre, he⟩
+        · exfalso
+          apply hfail
+          refine ⟨htyp0, hpre, ?_⟩
+          intro x
+          exact le_of_not_gt (fun hx => he ⟨x, hx⟩)
+      · have hpre' : ¬ ((∀ c, ¬ CellBad Γ M ω.1 ω.2.1 c) ∧
+            ∀ y, oddColumn Γ M ω.1 ω.2.1 y ≤ (1e-8 : ℝ)) := by
+          simpa [GoodPre] using hpre
+        rcases (not_and_or.mp hpre') with hcell | hodd
+        · exact Or.inl (Or.inl (Or.inr hcell))
+        · have hy : ∃ y, (1e-8 : ℝ) < oddColumn Γ M ω.1 ω.2.1 y := by
+            by_contra hnone
+            have hall : ∀ y, oddColumn Γ M ω.1 ω.2.1 y ≤ (1e-8 : ℝ) := by
+              intro y
+              exact le_of_not_gt (fun hy => hnone ⟨y, hy⟩)
+            exact hodd hall
+          exact Or.inl (Or.inr hy)
+    · exact Or.inl (Or.inl (Or.inl htyp0))
+  have hbadMass : P.pr (fun ω => ¬ success ω.1 ω.2.1 ω.2.2) ≤ 3 * δ :=
+    le_trans (pr_mono P (fun ω h => hnotSuccess ω h)) hbadUnion
+  have hsuccessPos : 0 < P.pr (fun ω => success ω.1 ω.2.1 ω.2.2) := by
+    have hcomp := pr_compl P (fun ω => success ω.1 ω.2.1 ω.2.2)
+    linarith
+  have hexists : ∃ ω, P.w ω ≠ 0 ∧ success ω.1 ω.2.1 ω.2.2 := by
+    by_contra hnone
+    push_neg at hnone
+    have hzero : ∀ ω,
+        (if success ω.1 ω.2.1 ω.2.2 then P.w ω else 0) = 0 := by
+      intro ω
+      by_cases hs : success ω.1 ω.2.1 ω.2.2
+      · have hw : P.w ω = 0 := by
+          by_contra hw
+          exact (hnone ω hw) hs
+        simp [hs, hw]
+      · simp [hs]
+    have : P.pr (fun ω => success ω.1 ω.2.1 ω.2.2) = 0 := by
+      unfold FinProb.pr
+      simp [hzero]
+    linarith
+  obtain ⟨ω, hωweight, hωsuccess⟩ := hexists
+  obtain ⟨σ, ⟨W, f⟩⟩ := ω
+  have htagWeight : (tagLaw Γ M Q D₀).w σ ≠ 0 := by
+    intro hz
+    apply hωweight
+    simp [P, FinProb.bind, hz]
+  have hWWeight : (anchorLaw Γ M σ).w W ≠ 0 := by
+    intro hz
+    apply hωweight
+    simp [P, FinProb.bind, hz]
+  have hfWeight : (Jfam σ W).w f ≠ 0 := by
+    intro hz
+    apply hωweight
+    simp [P, FinProb.bind, hz]
+  have hσ : ∀ g, ¬ TagBad Γ M D₀ σ g := htagSupport σ htagWeight
+  have hcells : ∀ c, ¬ CellBad Γ M σ W c := hcellSupport σ hσ W hWWeight
+  have hpre : GoodPre Γ M σ W := by
+    rcases hωsuccess with ⟨htyp0, hpre, hcol⟩
+    exact hpre
+  have hclockOK : ClockOK Γ M σ W (Jfam σ W) := hJfam σ W hpre
+  have hsample := (hclockOK.1 f hfWeight)
+  refine ⟨σ, W, f, ?_, hsample.1, ?_, ?_⟩
+  · intro c
+    by_contra hvalid
+    exact hcells c (Or.inl hvalid)
+  · exact hsample.2
+  · rcases hωsuccess with ⟨_, _, hcol⟩
+    exact hcol
 
 /-- F-HallEmbed input from a good realization (07:389–392): the posterior even rows are probability laws on the
 common neighbourhoods of the injective odd labels, with column sums at most one. -/

@@ -1,4 +1,4 @@
-import HypercubeRamsey.S08.L81.SelectionNodes
+import HypercubeRamsey.S08.L81.PosteriorNodes_q_s08_post
 
 /-!
 # Lemma 8.1, Steps 6–8: selection adjustment, posterior truncation, the ordinary-anchor hit test
@@ -30,7 +30,109 @@ density at most `e^{1.5δhs log n}`; the selected posterior `F_ξ a_ξ dR'/M^a` 
 times the base posterior (`a_ξ ≤ 1`); `2.5δ ≤ .003`. -/
 theorem sel_post_cap (hh : 1 ≤ h) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → D.PostCap → D.GselLeF → D.SelPostCap := by
-  sorry
+  classical
+  refine ⟨1, ?_⟩
+  intro D hn hPost hG
+  have hlogn : 0 ≤ Real.log D.n := by
+    rw [← Real.log_one]
+    exact Real.log_le_log (by norm_num) (by exact_mod_cast hn)
+  have hx : 0 ≤ (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n :=
+    mul_nonneg (mul_nonneg (Nat.cast_nonneg h) (Nat.cast_nonneg _)) hlogn
+  have hepspos : 0 < D.eps0 := Real.exp_pos _
+  have hepsinv : D.eps0⁻¹ =
+      Real.exp ((1 / 10000 : ℝ) * h * sC η₀ D.n * Real.log D.n) := by
+    simp [Ctx.eps0, Real.exp_neg]
+  have hcoeff :
+      (15 / 100000 : ℝ) * (h : ℝ) * sC η₀ D.n * Real.log D.n +
+          (1 / 10000 : ℝ) * h * sC η₀ D.n * Real.log D.n ≤
+        (3 / 1000 : ℝ) * h * sC η₀ D.n * Real.log D.n := by
+    nlinarith [hx]
+  intro q W c hvalid ξ
+  let π : D.Pres c.1 := D.presOf q W c
+  have hpv : D.PresValid q W c := hvalid
+  have hden : D.eps0 ≤ D.Mden q.1.1 c.1 (D.obsOf π) := hpv.2.2.2.2.2
+  have hMpos : 0 < D.Mden q.1.1 c.1 (D.obsOf π) := lt_of_lt_of_le hepspos hden
+  have hcardInt : (D.intIds q c).card ≤ TC η₀ D.n := hpv.2.2.2.1
+  have hfilter :
+      (Finset.univ.filter fun ℓ : D.Loc => ((D.obsOf π).1 ℓ).isSome) = D.intIds q c := by
+    ext ℓ
+    simp [π, Ctx.obsOf, Ctx.presOf]
+  have hobsCard :
+      (Finset.univ.filter fun ℓ : D.Loc => ((D.obsOf π).1 ℓ).isSome).card ≤ TC η₀ D.n := by
+    rw [hfilter]
+    exact hcardInt
+  have hbasecap : (D.N : ℝ) ^ h * (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ ≤
+      Real.exp ((15 / 100000 : ℝ) * h * sC η₀ D.n * Real.log D.n) :=
+    hPost q.1.1 c.1 (D.obsOf π) hobsCard hden ξ
+  have hbaseEq : (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ =
+      D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf π) /
+        D.Mden q.1.1 c.1 (D.obsOf π) := by
+    have hsumpos : 0 < ∑ ξ', D.R'.w ξ' * D.Fcand q.1.1 c.1 ξ' (D.obsOf π) := by
+      simpa [Ctx.Mden] using hMpos
+    change (if ∑ ξ', D.R'.w ξ' * D.Fcand q.1.1 c.1 ξ' (D.obsOf π) = 0 then
+        D.R'.w ξ else
+        D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf π) /
+          ∑ ξ', D.R'.w ξ' * D.Fcand q.1.1 c.1 ξ' (D.obsOf π)) = _
+    rw [if_neg (ne_of_gt hsumpos)]
+    rfl
+  by_cases hadj : D.eps0 * D.Mden q.1.1 c.1 (D.obsOf π) ≤ D.Mad q.1.1 q.1.2 c π
+  · have hMadpos : 0 < D.Mad q.1.1 q.1.2 c π := lt_of_lt_of_le (mul_pos hepspos hMpos) hadj
+    have hsumMadPos : 0 < ∑ ξ', D.R'.w ξ' * D.Gsel q.1.1 q.1.2 c ξ' π := by
+      simpa [Ctx.Mad] using hMadpos
+    have hGξ : D.Gsel q.1.1 q.1.2 c ξ π ≤ D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+      hG q.1.1 q.1.2 c ξ π
+    have hnumle : D.R'.w ξ * D.Gsel q.1.1 q.1.2 c ξ π ≤
+        D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+      mul_le_mul_of_nonneg_left hGξ (D.R'.nonneg ξ)
+    have hnumNonneg : 0 ≤ D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+      mul_nonneg (D.R'.nonneg ξ) (D.Fcand_nonneg q.1.1 c.1 ξ (D.obsOf π))
+    have hselEq : (D.selPost q.1.1 q.1.2 c π).w ξ =
+        (D.R'.w ξ * D.Gsel q.1.1 q.1.2 c ξ π) / D.Mad q.1.1 q.1.2 c π := by
+      unfold Ctx.selPost
+      rw [if_pos hadj]
+      change (if ∑ ξ', D.R'.w ξ' * D.Gsel q.1.1 q.1.2 c ξ' π = 0 then
+          (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ else
+          D.R'.w ξ * D.Gsel q.1.1 q.1.2 c ξ π /
+            ∑ ξ', D.R'.w ξ' * D.Gsel q.1.1 q.1.2 c ξ' π) = _
+      rw [if_neg (ne_of_gt hsumMadPos)]
+      rfl
+    have hselbase : (D.selPost q.1.1 q.1.2 c π).w ξ ≤
+        D.eps0⁻¹ * (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ := by
+      calc
+        (D.selPost q.1.1 q.1.2 c π).w ξ =
+            (D.R'.w ξ * D.Gsel q.1.1 q.1.2 c ξ π) / D.Mad q.1.1 q.1.2 c π := hselEq
+        _ ≤ (D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf π)) / D.Mad q.1.1 q.1.2 c π :=
+            div_le_div_of_nonneg_right hnumle hMadpos.le
+        _ ≤ (D.R'.w ξ * D.Fcand q.1.1 c.1 ξ (D.obsOf π)) /
+            (D.eps0 * D.Mden q.1.1 c.1 (D.obsOf π)) :=
+              div_le_div_of_nonneg_left hnumNonneg (mul_pos hepspos hMpos) hadj
+        _ = D.eps0⁻¹ * (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ := by
+              rw [hbaseEq]
+              field_simp [ne_of_gt hepspos, ne_of_gt hMpos]
+    calc
+      (D.N : ℝ) ^ h * (D.selPost q.1.1 q.1.2 c π).w ξ ≤
+          (D.N : ℝ) ^ h * (D.eps0⁻¹ * (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ) :=
+            mul_le_mul_of_nonneg_left hselbase (by positivity)
+      _ = D.eps0⁻¹ * ((D.N : ℝ) ^ h * (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ) := by ring
+      _ ≤ D.eps0⁻¹ * Real.exp ((15 / 100000 : ℝ) * h * sC η₀ D.n * Real.log D.n) :=
+            mul_le_mul_of_nonneg_left hbasecap (inv_nonneg.mpr hepspos.le)
+      _ = Real.exp ((1 / 10000 : ℝ) * h * sC η₀ D.n * Real.log D.n +
+            (15 / 100000 : ℝ) * h * sC η₀ D.n * Real.log D.n) := by
+            rw [hepsinv, ← Real.exp_add]
+      _ ≤ Real.exp ((3 / 1000 : ℝ) * h * sC η₀ D.n * Real.log D.n) := by
+            apply Real.exp_le_exp.mpr
+            nlinarith [hcoeff]
+  · have hselEq : (D.selPost q.1.1 q.1.2 c π).w ξ =
+        (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ := by
+      unfold Ctx.selPost
+      rw [if_neg hadj]
+    calc
+      (D.N : ℝ) ^ h * (D.selPost q.1.1 q.1.2 c π).w ξ =
+          (D.N : ℝ) ^ h * (D.basePost q.1.1 c.1 (D.obsOf π)).w ξ := by rw [hselEq]
+      _ ≤ Real.exp ((15 / 100000 : ℝ) * h * sC η₀ D.n * Real.log D.n) := hbasecap
+      _ ≤ Real.exp ((3 / 1000 : ℝ) * h * sC η₀ D.n * Real.log D.n) := by
+            apply Real.exp_le_exp.mpr
+            nlinarith [hx]
 
 /-- L8.1g(iii) (08:256–264): with `q` the average coordinate marginal of the selected posterior and
 `𝓗 = {y : Nq(y) > e^{.01 s log n}}`, `F-HeavyTrunc` (`heavyTruncation` with `A = .003hs log n`,
@@ -38,13 +140,287 @@ theorem sel_post_cap (hh : 1 ≤ h) :
 `.4`; `p⁰` is `q` off `𝓗` normalized. -/
 theorem p0_law (hh : 10 ≤ h) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.SelPostCap → D.P0Law := by
-  sorry
+  classical
+  obtain ⟨n₀, hn₀⟩ := exists_nat_gt (Real.exp (10000 : ℝ))
+  refine ⟨n₀, ?_⟩
+  intro D hn hGrid hSel
+  have htag : Nonempty D.M.ι := by
+    by_contra htag
+    haveI : IsEmpty D.M.ι := ⟨fun i => htag ⟨i⟩⟩
+    have hsum : (∑ i, D.M.Λ i) = 0 := by simp
+    rw [D.M.Λ_sum] at hsum
+    norm_num at hsum
+  have hNpos : 0 < D.N := by
+    obtain ⟨i⟩ := htag
+    have hNnonempty : Nonempty (Fin D.N) := by
+      by_contra hN
+      haveI : IsEmpty (Fin D.N) := ⟨fun x => hN ⟨x⟩⟩
+      have hsum : (∑ x, (D.M.μ i).w x) = 0 := by simp
+      rw [(D.M.μ i).sum_eq_one] at hsum
+      norm_num at hsum
+    obtain ⟨x⟩ := hNnonempty
+    apply Nat.pos_of_ne_zero
+    intro hzero
+    have hxlt : x.val < 0 := by simpa [hzero] using x.isLt
+    exact Nat.not_lt_zero _ hxlt
+  have hn₀pos : 1 ≤ n₀ := by
+    have hpos : (0 : ℝ) < (n₀ : ℝ) := lt_trans (Real.exp_pos _) hn₀
+    exact_mod_cast hpos
+  have hnpos : 1 ≤ D.n := le_trans hn₀pos hn
+  have hlarge : Real.exp (10000 : ℝ) ≤ (D.n : ℝ) :=
+    le_of_lt (lt_of_lt_of_le hn₀ (by exact_mod_cast hn))
+  have hlogn : 10000 ≤ Real.log D.n := by
+    have := Real.log_le_log (Real.exp_pos (10000 : ℝ)) hlarge
+    simpa using this
+  have hs : 1 ≤ sC η₀ D.n := hGrid.pos.2.2
+  have hsReal : 1 ≤ (sC η₀ D.n : ℝ) := by exact_mod_cast hs
+  have hhpos : 0 < h := by omega
+  have htwo : (2 : ℝ) ≤ Real.exp 1 := by
+    have := Real.add_one_le_exp (1 : ℝ)
+    linarith
+  have hpow : (2 : ℝ) ^ h ≤ Real.exp (h : ℝ) := by
+    calc
+      (2 : ℝ) ^ h ≤ (Real.exp 1) ^ h := by gcongr
+      _ = Real.exp (h : ℝ) := by rw [← Real.exp_nat_mul]; norm_num
+  have hheavy_bound (Q : FinProb D.Tup)
+      (hcap : ∀ ξ, (D.N : ℝ) ^ h * Q.w ξ ≤
+        Real.exp ((3 / 1000 : ℝ) * h * sC η₀ D.n * Real.log D.n)) :
+      ∑ y ∈ heavyCoordinateSet Q D.heavyB, averageCoordinateMarginal Q y ≤ 3 / 5 := by
+    let A : ℝ := (3 / 1000 : ℝ) * h * sC η₀ D.n * Real.log D.n
+    let B : ℝ := D.heavyB
+    let q : ℕ := h / 2
+    let H : Finset (Fin D.N) := heavyCoordinateSet Q B
+    let x : ℝ := (sC η₀ D.n : ℝ) * Real.log D.n
+    have hqle : q ≤ h := by dsimp [q]; omega
+    have hqNat : h - 1 ≤ 2 * q := by dsimp [q]; omega
+    have hhReal : 10 ≤ (h : ℝ) := by exact_mod_cast hh
+    have hqNatLower : 45 * h ≤ 100 * q := by dsimp [q]; omega
+    have hqLower : (45 / 100 : ℝ) * (h : ℝ) ≤ (q : ℝ) := by
+      have hcast : (45 : ℝ) * (h : ℝ) ≤ 100 * (q : ℝ) := by exact_mod_cast hqNatLower
+      nlinarith [hcast]
+    have hx : 10000 ≤ x := by
+      dsimp [x]
+      calc
+        (10000 : ℝ) ≤ 1 * Real.log D.n := by nlinarith [hlogn]
+        _ ≤ (sC η₀ D.n : ℝ) * Real.log D.n :=
+          mul_le_mul_of_nonneg_right hsReal (by linarith [hlogn])
+    have hxnonneg : 0 ≤ x := le_trans (by norm_num : (0 : ℝ) ≤ 10000) hx
+    have hqX : (45 / 100 : ℝ) * (h : ℝ) * x ≤ (q : ℝ) * x :=
+      mul_le_mul_of_nonneg_right hqLower hxnonneg
+    have hHx : 10000 * (h : ℝ) ≤ (h : ℝ) * x := by
+      calc
+        10000 * (h : ℝ) = (h : ℝ) * 10000 := by ring
+        _ ≤ (h : ℝ) * x := mul_le_mul_of_nonneg_left hx (Nat.cast_nonneg h)
+    have hErrExp : (h : ℝ) + (3 / 1000 : ℝ) * (h : ℝ) * x -
+        (1 / 100 : ℝ) * x * (q : ℝ) ≤ -140 := by
+      calc
+        (h : ℝ) + (3 / 1000 : ℝ) * (h : ℝ) * x -
+            (1 / 100 : ℝ) * x * (q : ℝ) ≤
+        (h : ℝ) + (3 / 1000 : ℝ) * (h : ℝ) * x -
+            (45 / 10000 : ℝ) * (h : ℝ) * x := by nlinarith [hqX]
+        _ = (h : ℝ) - (15 / 10000 : ℝ) * (h : ℝ) * x := by ring
+        _ ≤ (h : ℝ) - 15 * (h : ℝ) := by nlinarith [hHx]
+        _ ≤ -140 := by nlinarith [hhReal]
+    have hcap' : ∀ ξ, (D.N : ℝ) ^ h * Q.w ξ ≤ Real.exp A := by simpa [A] using hcap
+    have htr := heavyTruncation hNpos hhpos Q A B hcap'
+    have hErr : (2 : ℝ) ^ h * Real.exp A * Real.exp (-B * (q : ℝ)) ≤ Real.exp (-140) := by
+      calc
+        (2 : ℝ) ^ h * Real.exp A * Real.exp (-B * (q : ℝ)) ≤
+            Real.exp (h : ℝ) * Real.exp A * Real.exp (-B * (q : ℝ)) := by gcongr
+        _ = Real.exp ((h : ℝ) + A - B * (q : ℝ)) := by
+            rw [← Real.exp_add, ← Real.exp_add]
+            congr 1 <;> ring
+        _ ≤ Real.exp (-140) := by
+            apply Real.exp_le_exp.mpr
+            have hexp : (h : ℝ) + A - B * (q : ℝ) =
+                (h : ℝ) + (3 / 1000 : ℝ) * (h : ℝ) * x -
+                  (1 / 100 : ℝ) * x * (q : ℝ) := by
+              dsimp [A, B, x, Ctx.heavyB]
+              ring
+            rw [hexp]
+            exact hErrExp
+    have h141 : (141 : ℝ) ≤ Real.exp 140 := by
+      have := Real.add_one_le_exp (140 : ℝ)
+      linarith
+    have hErrSmall : Real.exp (-140) ≤ 1 / 10 := by
+      have hinv : (Real.exp 140)⁻¹ ≤ (141 : ℝ)⁻¹ :=
+        (inv_le_inv₀ (Real.exp_pos _) (by norm_num)).mpr h141
+      calc
+        Real.exp (-140) = (Real.exp 140)⁻¹ := by rw [Real.exp_neg]
+        _ ≤ (141 : ℝ)⁻¹ := hinv
+        _ ≤ 1 / 10 := by norm_num
+    have hratio : (q : ℝ) / (h : ℝ) ≤ 1 / 2 := by
+      have hhRpos : 0 < (h : ℝ) := by exact_mod_cast hhpos
+      have hqNat' : 2 * q ≤ h := by dsimp [q]; omega
+      have hqCast' : 2 * (q : ℝ) ≤ (h : ℝ) := by exact_mod_cast hqNat'
+      apply (div_le_iff₀ hhRpos).2
+      nlinarith [hqCast']
+    have hmassH : ∑ y ∈ H, averageCoordinateMarginal Q y ≤
+        (q : ℝ) / h + (2 : ℝ) ^ h * Real.exp A * Real.exp (-B * (q : ℝ)) := by
+      simpa [H] using htr.2 q hqle
+    have hmassH' : (∑ y ∈ H, averageCoordinateMarginal Q y) ≤ 3 / 5 := by
+      calc
+        (∑ y ∈ H, averageCoordinateMarginal Q y) ≤
+            (q : ℝ) / h + (2 : ℝ) ^ h * Real.exp A * Real.exp (-B * (q : ℝ)) := hmassH
+        _ ≤ 1 / 2 + 1 / 10 := add_le_add hratio (le_trans hErr hErrSmall)
+        _ = 3 / 5 := by norm_num
+    exact hmassH'
+  have hlight_nonneg (Q : FinProb D.Tup) : 0 ≤ D.lightMass Q := by
+    unfold Ctx.lightMass
+    apply Finset.sum_nonneg
+    intro y hy
+    have hI : 0 ≤ (if y ∈ heavyCoordinateSet Q D.heavyB then (0 : ℝ) else 1) := by
+      split_ifs <;> norm_num
+    exact mul_nonneg (avgMarg_nonneg Q y) hI
+  intro q W c
+  refine ⟨?_, ?_⟩
+  · intro y
+    by_cases hv : D.PresValid q W c
+    · let Q : FinProb D.Tup := D.selPost q.1.1 q.1.2 c (D.presOf q W c)
+      have hm : 0 ≤ D.lightMass Q := hlight_nonneg Q
+      unfold Ctx.p0
+      simp only [if_pos hv]
+      by_cases hz : D.lightMass Q = 0
+      · simp [Ctx.p0w, Q, hz]
+      · have hmpos : 0 < D.lightMass Q := lt_of_le_of_ne hm (Ne.symm hz)
+        have hI : 0 ≤ (if y ∈ heavyCoordinateSet Q D.heavyB then (0 : ℝ) else 1) := by
+          split_ifs <;> norm_num
+        simpa [Ctx.p0w, Q, hz] using
+          (div_nonneg (mul_nonneg (avgMarg_nonneg Q y) hI) hmpos.le)
+    · simp [Ctx.p0, hv]
+  · intro hv
+    let π : D.Pres c.1 := D.presOf q W c
+    let Q : FinProb D.Tup := D.selPost q.1.1 q.1.2 c π
+    have hcap : ∀ ξ, (D.N : ℝ) ^ h * Q.w ξ ≤
+        Real.exp ((3 / 1000 : ℝ) * h * sC η₀ D.n * Real.log D.n) := by
+      intro ξ
+      exact hSel q W c hv ξ
+    have hheavy := hheavy_bound Q hcap
+    have hLightLower : (2 / 5 : ℝ) ≤ D.lightMass Q := by
+      have htotal : ∑ y : Fin D.N, averageCoordinateMarginal Q y = 1 := avgMarg_sum_one Q hhpos
+      have hlightEq : D.lightMass Q = ∑ y ∈ (heavyCoordinateSet Q D.heavyB)ᶜ,
+          averageCoordinateMarginal Q y := by
+        unfold Ctx.lightMass
+        calc
+          ∑ y, averageCoordinateMarginal Q y *
+              (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1) =
+            ∑ y, if y ∈ (heavyCoordinateSet Q D.heavyB)ᶜ then averageCoordinateMarginal Q y else 0 := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              by_cases hyH : y ∈ heavyCoordinateSet Q D.heavyB <;> simp [hyH]
+          _ = ∑ y ∈ (heavyCoordinateSet Q D.heavyB)ᶜ, averageCoordinateMarginal Q y := by
+              rw [Finset.sum_ite_mem_eq]
+      have hparts : (∑ y ∈ heavyCoordinateSet Q D.heavyB, averageCoordinateMarginal Q y) +
+          D.lightMass Q = 1 := by
+        calc
+          _ = (∑ y ∈ heavyCoordinateSet Q D.heavyB, averageCoordinateMarginal Q y) +
+              (∑ y ∈ (heavyCoordinateSet Q D.heavyB)ᶜ, averageCoordinateMarginal Q y) := by rw [hlightEq]
+          _ = ∑ y, averageCoordinateMarginal Q y := by rw [Finset.sum_add_sum_compl]
+          _ = 1 := htotal
+      linarith [hparts, hheavy]
+    have hLightPos : 0 < D.lightMass Q := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 2 / 5) hLightLower
+    have hrow (y : Fin D.N) : D.p0 q W c y =
+        averageCoordinateMarginal Q y *
+          (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1) / D.lightMass Q := by
+      simp [Ctx.p0, hv, Ctx.p0w, Q, π, ne_of_gt hLightPos]
+    have hnumerSum :
+        (∑ y, averageCoordinateMarginal Q y *
+          (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1)) = D.lightMass Q := by
+      unfold Ctx.lightMass
+      rfl
+    have hMargBound (y : Fin D.N) : D.p0 q W c y ≤ (5 / 2 : ℝ) * averageCoordinateMarginal Q y := by
+      have hind : (if y ∈ heavyCoordinateSet Q D.heavyB then (0 : ℝ) else 1) ≤ 1 := by
+        split_ifs <;> norm_num
+      have hnum : averageCoordinateMarginal Q y *
+          (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1) ≤ averageCoordinateMarginal Q y := by
+        calc
+          _ ≤ averageCoordinateMarginal Q y * 1 :=
+            mul_le_mul_of_nonneg_left hind (avgMarg_nonneg Q y)
+          _ = averageCoordinateMarginal Q y := by ring
+      calc
+        D.p0 q W c y =
+            averageCoordinateMarginal Q y *
+              (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1) / D.lightMass Q := hrow y
+        _ ≤ averageCoordinateMarginal Q y / D.lightMass Q :=
+            div_le_div_of_nonneg_right hnum hLightPos.le
+        _ ≤ averageCoordinateMarginal Q y / (2 / 5 : ℝ) :=
+            div_le_div_of_nonneg_left (avgMarg_nonneg Q y) (by norm_num) hLightLower
+        _ = (5 / 2 : ℝ) * averageCoordinateMarginal Q y := by field_simp <;> ring
+    refine ⟨?_, ?_, ?_⟩
+    · calc
+        ∑ y, D.p0 q W c y =
+            ∑ y, averageCoordinateMarginal Q y *
+              (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1) / D.lightMass Q := by
+                apply Finset.sum_congr rfl
+                intro y hy
+                exact hrow y
+        _ = (∑ y, averageCoordinateMarginal Q y *
+              (if y ∈ heavyCoordinateSet Q D.heavyB then 0 else 1)) / D.lightMass Q := by
+                rw [← Finset.sum_div]
+        _ = 1 := by rw [hnumerSum, div_self (ne_of_gt hLightPos)]
+    · exact hMargBound
+    · intro y
+      by_cases hy : y ∈ heavyCoordinateSet Q D.heavyB
+      · have hzero : D.p0 q W c y = 0 := by rw [hrow y]; simp [hy]
+        rw [hzero]
+        have hnonneg : 0 ≤ (3 : ℝ) * Real.exp D.heavyB :=
+          mul_nonneg (by norm_num) (Real.exp_nonneg _)
+        simpa using hnonneg
+      · have hcapLight : (D.N : ℝ) * averageCoordinateMarginal Q y ≤ Real.exp D.heavyB := by
+          by_contra hnot
+          have hlt : Real.exp D.heavyB < (D.N : ℝ) * averageCoordinateMarginal Q y := lt_of_not_ge hnot
+          apply hy
+          simp [heavyCoordinateSet, hlt]
+        calc
+          (D.N : ℝ) * D.p0 q W c y ≤
+              (D.N : ℝ) * ((5 / 2 : ℝ) * averageCoordinateMarginal Q y) :=
+                mul_le_mul_of_nonneg_left (hMargBound y) (Nat.cast_nonneg D.N)
+          _ = (5 / 2 : ℝ) * ((D.N : ℝ) * averageCoordinateMarginal Q y) := by ring
+          _ ≤ (5 / 2 : ℝ) * Real.exp D.heavyB :=
+                mul_le_mul_of_nonneg_left hcapLight (by norm_num)
+          _ ≤ 3 * Real.exp D.heavyB :=
+                mul_le_mul_of_nonneg_right (by norm_num) (Real.exp_nonneg _)
 
 /-- L8.1g(iv) (08:171–176, 293): a label in the support of `p⁰` is a coordinate of a candidate with positive
 selected posterior, hence with `F_ξ > 0` (directly, or through `F_ξ a_ξ ≤ F_ξ`), hence hitting every observed cross
 anchor. -/
 theorem p0_support (D : Ctx η₀ β p h) (hF : D.FSupport) (hG : D.GselLeF) : D.P0Support := by
-  sorry
+  classical
+  unfold Ctx.P0Support
+  intro q W c y hp0 u hu
+  have hvalid : D.PresValid q W c := by
+    by_contra hnot
+    apply hp0
+    simp [Ctx.p0, hnot]
+  have hden : D.eps0 ≤ D.Mden q.1.1 c.1 (D.obsOf (D.presOf q W c)) :=
+    hvalid.2.2.2.2.2
+  have hM : 0 < D.Mden q.1.1 c.1 (D.obsOf (D.presOf q W c)) :=
+    lt_of_lt_of_le (Real.exp_pos _) hden
+  have hp0w : D.p0w q.1.1 q.1.2 c (D.presOf q W c) y ≠ 0 := by
+    intro hz
+    apply hp0
+    simp [Ctx.p0, hvalid, hz]
+  let π : D.Pres c.1 := D.presOf q W c
+  let Q : FinProb D.Tup := D.selPost q.1.1 q.1.2 c π
+  have hlight : D.lightMass Q ≠ 0 := by
+    intro hz
+    apply hp0w
+    simp [Ctx.p0w, π, Q, hz]
+  have hMarg : averageCoordinateMarginal Q y ≠ 0 := by
+    intro hz
+    apply hp0w
+    simp [Ctx.p0w, π, Q, hlight, hz]
+  obtain ⟨ξ, j, hξ, hcoord⟩ := avgMarg_ne_zero_support Q y hMarg
+  have hQpos : 0 < Q.w ξ := lt_of_le_of_ne (Q.nonneg ξ) (Ne.symm hξ)
+  have hGξ : D.Gsel q.1.1 q.1.2 c ξ π ≤ D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+    hG q.1.1 q.1.2 c ξ π
+  have hFcand : 0 < D.Fcand q.1.1 c.1 ξ (D.obsOf π) :=
+    selPost_pos_fcand_pos D q.1.1 q.1.2 c π ξ hM hGξ (by simpa [Q] using hQpos)
+  have hfs := hF q.1.1 c.1 ξ (D.obsOf π) (ne_of_gt hFcand)
+  have hh := hfs.1 ⟨u, hu⟩ j
+  change Hits D.E D.G (W (u, c.2)) (ξ j) at hh
+  rw [hcoord] at hh
+  exact hh
 
 /-- L8.1g(v) (08:266–283): valid data for a presentation `π` have subdensity `M^a_π` against `Q_π`; on the
 selected-posterior cases cancellation gives at most `dR'(ξ) Σ_π ∫ F_ξ a_ξ dQ_π ≤ dR'(ξ)`; on the other cases
@@ -78,7 +454,148 @@ theorem hit_tail (D : Ctx η₀ β p h) (hn : 1 ≤ D.n) (hF : D.FSupport) (hG :
 padded even anchor. -/
 theorem prow_facts :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → D.P0Law → D.P0Support → D.PRowFacts := by
-  sorry
+  classical
+  let C : ℝ := 3 / (98 / 100)
+  have hC : 0 < C := by norm_num [C]
+  obtain ⟨n₀, hn₀⟩ := exists_nat_gt (Real.exp (100 * Real.log C))
+  refine ⟨n₀, ?_⟩
+  intro D hn hL hS
+  have hn₀pos : 1 ≤ n₀ := by
+    have hpos : (0 : ℝ) < (n₀ : ℝ) := lt_trans (Real.exp_pos _) hn₀
+    exact_mod_cast hpos
+  have hnpos : 1 ≤ D.n := le_trans hn₀pos hn
+  have hlarge : Real.exp (100 * Real.log C) ≤ (D.n : ℝ) := by
+    exact le_of_lt (lt_of_lt_of_le hn₀ (by exact_mod_cast hn))
+  have hloglarge : 100 * Real.log C ≤ Real.log D.n := by
+    have := Real.log_le_log (Real.exp_pos _) hlarge
+    simpa using this
+  have hlogn : 0 ≤ Real.log D.n := by
+    rw [← Real.log_one]
+    exact Real.log_le_log (by norm_num) (by exact_mod_cast hnpos)
+  have hs : 1 ≤ sC η₀ D.n := by
+    unfold sC
+    apply Nat.one_le_ceil_iff.mpr
+    exact Real.rpow_pos_of_pos (by exact_mod_cast hnpos) _
+  have hsreal : 1 ≤ (sC η₀ D.n : ℝ) := by exact_mod_cast hs
+  have hlogC : Real.log C ≤ (1 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n := by
+    have hlogsmall : Real.log C ≤ (1 / 100 : ℝ) * Real.log D.n := by
+      calc
+        Real.log C = (1 / 100 : ℝ) * (100 * Real.log C) := by ring
+        _ ≤ (1 / 100 : ℝ) * Real.log D.n := mul_le_mul_of_nonneg_left hloglarge (by norm_num)
+    have hmul : (1 / 100 : ℝ) * Real.log D.n ≤
+        (1 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n := by
+      have hnonneg : 0 ≤ (1 / 100 : ℝ) * Real.log D.n := mul_nonneg (by norm_num) hlogn
+      calc
+        (1 / 100 : ℝ) * Real.log D.n = 1 * ((1 / 100 : ℝ) * Real.log D.n) := by ring
+        _ ≤ (sC η₀ D.n : ℝ) * ((1 / 100 : ℝ) * Real.log D.n) :=
+          mul_le_mul_of_nonneg_right hsreal hnonneg
+        _ = (1 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n := by ring
+    exact le_trans hlogsmall hmul
+  have hCexp : C ≤ Real.exp D.heavyB := by
+    rw [← Real.exp_log hC]
+    apply Real.exp_le_exp.mpr
+    change Real.log C ≤ (1 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n
+    exact hlogC
+  have hExp : C * Real.exp D.heavyB ≤
+      Real.exp ((2 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n) := by
+    calc
+      C * Real.exp D.heavyB ≤ Real.exp D.heavyB * Real.exp D.heavyB :=
+        mul_le_mul_of_nonneg_right hCexp (Real.exp_nonneg _)
+      _ = Real.exp (D.heavyB + D.heavyB) := by rw [← Real.exp_add]
+      _ = Real.exp ((2 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n) := by
+        congr 1 <;> dsimp [Ctx.heavyB] <;> ring
+  intro q W c
+  refine ⟨?_, ?_, ?_⟩
+  · intro y
+    by_cases hv : D.Valid8 q W c
+    · have hret : 0 < D.ordRet q W c :=
+        lt_of_lt_of_le (by norm_num : (0 : ℝ) < 98 / 100) hv.2
+      have hnum : 0 ≤ D.p0 q W c y * if D.OrdHit W c y then 1 else 0 :=
+        mul_nonneg ((hL q W c).1 y) (ind_nonneg _)
+      unfold Ctx.prow
+      simp only [if_pos hv]
+      exact div_nonneg hnum hret.le
+    · simp [Ctx.prow, hv]
+  · intro y hp e he
+    have hv : D.Valid8 q W c := by
+      by_contra hnot
+      apply hp
+      simp [Ctx.prow, hnot]
+    have hp0 : D.p0 q W c y ≠ 0 := by
+      intro hz
+      apply hp
+      simp [Ctx.prow, hv, hz]
+    have hord : D.OrdHit W c y := by
+      by_contra hnot
+      apply hp
+      simp [Ctx.prow, hv, hnot]
+    rcases he with ⟨hek, hOrd⟩ | ⟨hek, hCross⟩
+    · change Hits D.E D.G (W (e.1, e.2)) y
+      rw [hek]
+      exact hord e.2 hOrd
+    · change Hits D.E D.G (W (e.1, e.2)) y
+      rw [hek]
+      exact hS q W c y hp0 e.1 hCross
+  · intro hv
+    have hret : 0 < D.ordRet q W c :=
+      lt_of_lt_of_le (by norm_num : (0 : ℝ) < 98 / 100) hv.2
+    have hretne : D.ordRet q W c ≠ 0 := ne_of_gt hret
+    have hp0nonneg (y : Fin D.N) : 0 ≤ D.p0 q W c y := (hL q W c).1 y
+    have hrow (y : Fin D.N) :
+        D.prow q W c y =
+          (D.p0 q W c y * (if D.OrdHit W c y then 1 else 0)) / D.ordRet q W c := by
+      simp [Ctx.prow, hv]
+    have hrowBound (y : Fin D.N) : D.prow q W c y ≤ D.p0 q W c y / (98 / 100 : ℝ) := by
+      have hindicator : (if D.OrdHit W c y then (1 : ℝ) else 0) ≤ 1 := by split_ifs <;> norm_num
+      have hnum : D.p0 q W c y * (if D.OrdHit W c y then 1 else 0) ≤ D.p0 q W c y := by
+        calc
+          D.p0 q W c y * (if D.OrdHit W c y then 1 else 0) ≤ D.p0 q W c y * 1 :=
+            mul_le_mul_of_nonneg_left hindicator (hp0nonneg y)
+          _ = D.p0 q W c y := by ring
+      calc
+        D.prow q W c y =
+            (D.p0 q W c y * (if D.OrdHit W c y then 1 else 0)) / D.ordRet q W c := hrow y
+        _ ≤ D.p0 q W c y / D.ordRet q W c := div_le_div_of_nonneg_right hnum hret.le
+        _ ≤ D.p0 q W c y / (98 / 100 : ℝ) :=
+          div_le_div_of_nonneg_left (hp0nonneg y) (by norm_num) hv.2
+    refine ⟨?_, ?_, ?_⟩
+    · calc
+        ∑ y, D.prow q W c y =
+            ∑ y, (D.p0 q W c y * (if D.OrdHit W c y then 1 else 0)) / D.ordRet q W c := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              exact hrow y
+        _ = (∑ y, D.p0 q W c y * (if D.OrdHit W c y then 1 else 0)) / D.ordRet q W c := by
+              rw [← Finset.sum_div]
+        _ = 1 := by
+              have hsumne : (∑ y, D.p0 q W c y * (if D.OrdHit W c y then 1 else 0)) ≠ 0 := by
+                simpa [Ctx.ordRet] using hretne
+              rw [Ctx.ordRet]
+              exact div_self hsumne
+    · intro y
+      have hindicator : (if D.OrdHit W c y then (1 : ℝ) else 0) ≤ 1 := by split_ifs <;> norm_num
+      have hnum : D.p0 q W c y * (if D.OrdHit W c y then 1 else 0) ≤ D.p0 q W c y := by
+        calc
+          D.p0 q W c y * (if D.OrdHit W c y then 1 else 0) ≤ D.p0 q W c y * 1 :=
+            mul_le_mul_of_nonneg_left hindicator (hp0nonneg y)
+          _ = D.p0 q W c y := by ring
+      calc
+        D.prow q W c y =
+            (D.p0 q W c y * (if D.OrdHit W c y then 1 else 0)) / D.ordRet q W c := hrow y
+        _ ≤ D.p0 q W c y / D.ordRet q W c := div_le_div_of_nonneg_right hnum hret.le
+        _ ≤ D.p0 q W c y / (98 / 100 : ℝ) :=
+          div_le_div_of_nonneg_left (hp0nonneg y) (by norm_num) hv.2
+    · intro y
+      have hnum : (D.N : ℝ) * D.p0 q W c y ≤ 3 * Real.exp D.heavyB :=
+        ((hL q W c).2 hv.1).2.2 y
+      calc
+        (D.N : ℝ) * D.prow q W c y ≤ (D.N : ℝ) * (D.p0 q W c y / (98 / 100 : ℝ)) :=
+          mul_le_mul_of_nonneg_left (hrowBound y) (Nat.cast_nonneg D.N)
+        _ = ((D.N : ℝ) * D.p0 q W c y) / (98 / 100 : ℝ) := by ring
+        _ ≤ (3 * Real.exp D.heavyB) / (98 / 100 : ℝ) :=
+          div_le_div_of_nonneg_right hnum (by norm_num)
+        _ = C * Real.exp D.heavyB := by dsimp [C]; ring
+        _ ≤ Real.exp ((2 / 100 : ℝ) * (sC η₀ D.n : ℝ) * Real.log D.n) := hExp
 
 end Nodes
 

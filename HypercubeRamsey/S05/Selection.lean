@@ -56,13 +56,183 @@ unadjusted posterior. -/
 theorem L5_1k_row_comparison {Target Data : Type*} [Fintype Target] [Fintype Data]
     (X : SelectionExperiment5 Target Data) (ε : ℝ) (hε : 0 < ε) (hε1 : ε ≤ 1) :
     ∀ d y, X.proxyRow ε d y ≤ ε⁻¹ * X.baseRow d y := by
-  sorry
+  intro d y
+  have hbaseMass : 0 ≤ X.baseMass d := by
+    unfold SelectionExperiment5.baseMass
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg (X.prior.nonneg z) (X.likelihood_nonneg z d)
+  have hselectedMass : 0 ≤ X.selectedMass d := by
+    unfold SelectionExperiment5.selectedMass
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg (mul_nonneg (X.prior.nonneg z) (X.likelihood_nonneg z d))
+      (X.selection_nonneg z d)
+  have hrow_nonneg : 0 ≤ X.baseRow d y := by
+    unfold SelectionExperiment5.baseRow
+    split_ifs with h
+    · exact le_rfl
+    · exact div_nonneg (mul_nonneg (X.prior.nonneg y) (X.likelihood_nonneg y d)) hbaseMass
+  by_cases hproxy : X.baseMass d ≠ 0 ∧ ε * X.baseMass d ≤ X.selectedMass d
+  · rcases hproxy with ⟨hbase_ne, hthreshold⟩
+    have hproxy' : X.baseMass d ≠ 0 ∧ ε * X.baseMass d ≤ X.selectedMass d :=
+      ⟨hbase_ne, hthreshold⟩
+    have hbase_pos : 0 < X.baseMass d := by
+      by_contra h
+      have hz : X.baseMass d = 0 := le_antisymm (le_of_not_gt h) hbaseMass
+      exact hbase_ne hz
+    have hselected_pos : 0 < X.selectedMass d :=
+      lt_of_lt_of_le (mul_pos hε hbase_pos) hthreshold
+    let p := X.prior.w y * X.likelihood y d
+    have hp : 0 ≤ p := mul_nonneg (X.prior.nonneg y) (X.likelihood_nonneg y d)
+    have hnum : p * X.selection y d ≤ p := by
+      calc
+        p * X.selection y d ≤ p * 1 :=
+          mul_le_mul_of_nonneg_left (X.selection_le_one y d) hp
+        _ = p := by ring
+    calc
+      X.proxyRow ε d y = X.adjustedRow d y := by
+        simp [SelectionExperiment5.proxyRow, hproxy']
+      _ = (p * X.selection y d) / X.selectedMass d := by
+        simp [SelectionExperiment5.adjustedRow, p, ne_of_gt hselected_pos]
+      _ ≤ p / X.selectedMass d := div_le_div_of_nonneg_right hnum hselected_pos.le
+      _ ≤ p / (ε * X.baseMass d) :=
+        div_le_div_of_nonneg_left hp (mul_pos hε hbase_pos) hthreshold
+      _ = ε⁻¹ * (p / X.baseMass d) := by
+        field_simp [ne_of_gt hε, ne_of_gt hbase_pos]
+      _ = ε⁻¹ * X.baseRow d y := by
+        simp [SelectionExperiment5.baseRow, p, hbase_ne]
+  · have hinv : 1 ≤ ε⁻¹ := (one_le_inv₀ hε).2 hε1
+    calc
+      X.proxyRow ε d y = X.baseRow d y := by
+        simp [SelectionExperiment5.proxyRow, hproxy]
+      _ = 1 * X.baseRow d y := by ring
+      _ ≤ ε⁻¹ * X.baseRow d y := mul_le_mul_of_nonneg_right hinv hrow_nonneg
 
 /-- The disjoint-presentation cancellation bound for the selection-adjusted proxy row. -/
 theorem L5_1k_mean_bound {Target Data : Type*} [Fintype Target] [Fintype Data]
     (X : SelectionExperiment5 Target Data) (ε : ℝ) (hε : 0 < ε) (hε1 : ε ≤ 1) :
     ∀ y, ∑ d, X.selectedMass d * X.proxyRow ε d y ≤ 2 * X.prior.w y := by
-  sorry
+  intro y
+  have hprior : 0 ≤ X.prior.w y := X.prior.nonneg y
+  have hbaseMass : ∀ d, 0 ≤ X.baseMass d := by
+    intro d
+    unfold SelectionExperiment5.baseMass
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg (X.prior.nonneg z) (X.likelihood_nonneg z d)
+  have hselectedMass : ∀ d, 0 ≤ X.selectedMass d := by
+    intro d
+    unfold SelectionExperiment5.selectedMass
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg (mul_nonneg (X.prior.nonneg z) (X.likelihood_nonneg z d))
+      (X.selection_nonneg z d)
+  have hselected_le_base : ∀ d, X.selectedMass d ≤ X.baseMass d := by
+    intro d
+    unfold SelectionExperiment5.selectedMass SelectionExperiment5.baseMass
+    apply Finset.sum_le_sum
+    intro z hz
+    have hp : 0 ≤ X.prior.w z * X.likelihood z d :=
+      mul_nonneg (X.prior.nonneg z) (X.likelihood_nonneg z d)
+    calc
+      X.prior.w z * X.likelihood z d * X.selection z d ≤
+          X.prior.w z * X.likelihood z d * 1 :=
+        mul_le_mul_of_nonneg_left (X.selection_le_one z d) hp
+      _ = X.prior.w z * X.likelihood z d := by ring
+  have hpoint : ∀ d,
+      X.selectedMass d * X.proxyRow ε d y ≤
+        X.prior.w y * X.likelihood y d * X.selection y d +
+          ε * (X.prior.w y * X.likelihood y d) := by
+    intro d
+    let p := X.prior.w y * X.likelihood y d
+    have hp : 0 ≤ p := mul_nonneg (X.prior.nonneg y) (X.likelihood_nonneg y d)
+    by_cases hproxy : X.baseMass d ≠ 0 ∧ ε * X.baseMass d ≤ X.selectedMass d
+    · rcases hproxy with ⟨hbase_ne, hthreshold⟩
+      have hproxy' : X.baseMass d ≠ 0 ∧ ε * X.baseMass d ≤ X.selectedMass d :=
+        ⟨hbase_ne, hthreshold⟩
+      have hbase_pos : 0 < X.baseMass d := by
+        by_contra h
+        have hz : X.baseMass d = 0 := le_antisymm (le_of_not_gt h) (hbaseMass d)
+        exact hbase_ne hz
+      have hselected_pos : 0 < X.selectedMass d :=
+        lt_of_lt_of_le (mul_pos hε hbase_pos) hthreshold
+      rw [SelectionExperiment5.proxyRow, if_pos hproxy']
+      rw [SelectionExperiment5.adjustedRow, if_neg (ne_of_gt hselected_pos)]
+      change X.selectedMass d * (p * X.selection y d / X.selectedMass d) ≤
+        p * X.selection y d + ε * p
+      rw [← mul_div_assoc, mul_div_cancel_left₀ _ (ne_of_gt hselected_pos)]
+      nlinarith [mul_nonneg hε.le hp]
+    · by_cases hzero : X.baseMass d = 0
+      · have hselected_zero : X.selectedMass d = 0 := by
+          apply le_antisymm
+          · simpa [hzero] using hselected_le_base d
+          · exact hselectedMass d
+        rw [SelectionExperiment5.proxyRow, if_neg hproxy, hselected_zero]
+        change 0 * X.baseRow d y ≤ p * X.selection y d + ε * p
+        simp [SelectionExperiment5.baseRow, hzero, p]
+        exact add_nonneg
+          (mul_nonneg hp (X.selection_nonneg y d))
+          (mul_nonneg hε.le hp)
+      · have hbase_pos : 0 < X.baseMass d := by
+          by_contra h
+          have hz : X.baseMass d = 0 := le_antisymm (le_of_not_gt h) (hbaseMass d)
+          exact hzero hz
+        have hthreshold : X.selectedMass d ≤ ε * X.baseMass d := by
+          by_contra h
+          have hgt : ε * X.baseMass d < X.selectedMass d := lt_of_not_ge h
+          exact hproxy ⟨hzero, le_of_lt hgt⟩
+        have hrow : X.baseRow d y = p / X.baseMass d := by
+          simp [SelectionExperiment5.baseRow, p, hzero]
+        have hrow_nonneg : 0 ≤ X.baseRow d y := by
+          rw [hrow]
+          exact div_nonneg hp hbase_pos.le
+        have hlow : X.selectedMass d * X.baseRow d y ≤ ε * p := by
+          rw [hrow]
+          calc
+            X.selectedMass d * (p / X.baseMass d) ≤
+                (ε * X.baseMass d) * (p / X.baseMass d) :=
+              mul_le_mul_of_nonneg_right hthreshold (div_nonneg hp hbase_pos.le)
+            _ = ε * p := by
+              field_simp [ne_of_gt hbase_pos]
+        rw [SelectionExperiment5.proxyRow, if_neg hproxy]
+        change X.selectedMass d * X.baseRow d y ≤ p * X.selection y d + ε * p
+        have hgate : 0 ≤ p * X.selection y d := mul_nonneg hp (X.selection_nonneg y d)
+        nlinarith
+  have hgate_sum :
+      (∑ d, X.prior.w y * X.likelihood y d * X.selection y d) ≤ X.prior.w y := by
+    calc
+      (∑ d, X.prior.w y * X.likelihood y d * X.selection y d) =
+          X.prior.w y * (∑ d, X.likelihood y d * X.selection y d) := by
+        calc
+          (∑ d, X.prior.w y * X.likelihood y d * X.selection y d) =
+              ∑ d, X.prior.w y * (X.likelihood y d * X.selection y d) := by
+            apply Finset.sum_congr rfl
+            intro d hd
+            ring
+          _ = X.prior.w y * (∑ d, X.likelihood y d * X.selection y d) := by
+            rw [← Finset.mul_sum]
+      _ ≤ X.prior.w y * 1 := mul_le_mul_of_nonneg_left (X.gated_subprob y) hprior
+      _ = X.prior.w y := by ring
+  have hbase_sum :
+      (∑ d, X.prior.w y * X.likelihood y d) ≤ X.prior.w y := by
+    calc
+      (∑ d, X.prior.w y * X.likelihood y d) =
+          X.prior.w y * (∑ d, X.likelihood y d) := by rw [← Finset.mul_sum]
+      _ ≤ X.prior.w y * 1 := mul_le_mul_of_nonneg_left (X.likelihood_subprob y) hprior
+      _ = X.prior.w y := by ring
+  calc
+    (∑ d, X.selectedMass d * X.proxyRow ε d y) ≤
+        ∑ d, (X.prior.w y * X.likelihood y d * X.selection y d +
+          ε * (X.prior.w y * X.likelihood y d)) :=
+      Finset.sum_le_sum fun d hd => hpoint d
+    _ = (∑ d, X.prior.w y * X.likelihood y d * X.selection y d) +
+          ε * (∑ d, X.prior.w y * X.likelihood y d) := by
+      rw [Finset.sum_add_distrib, ← Finset.mul_sum]
+    _ ≤ X.prior.w y + ε * X.prior.w y := by
+      exact add_le_add hgate_sum (mul_le_mul_of_nonneg_left hbase_sum hε.le)
+    _ ≤ 2 * X.prior.w y := by
+      nlinarith [mul_le_mul_of_nonneg_right hε1 hprior]
 
 end
 end HypercubeRamsey

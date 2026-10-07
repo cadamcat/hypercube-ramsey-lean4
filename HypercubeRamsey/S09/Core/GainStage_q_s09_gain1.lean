@@ -2178,6 +2178,206 @@ private theorem law_restrict_supported9 {N : ℕ} {Y A : Finset (Fin N)} {μ : L
   · simp [Law.restrict, hA, hμ y hy]
   · simp [Law.restrict, hA]
 
+private theorem law_restrict_nested9 {N : ℕ} (μ : Law N) (A B : Finset (Fin N))
+    (hA : 0 < ∑ y ∈ A, μ.w y) (hAB : 0 < ∑ y ∈ A ∩ B, μ.w y) :
+    ∃ hB : 0 < ∑ y ∈ B, (μ.restrict A hA).w y,
+      (μ.restrict A hA).restrict B hB = μ.restrict (A ∩ B) hAB := by
+  classical
+  let a : ℝ := ∑ y ∈ A, μ.w y
+  let ab : ℝ := ∑ y ∈ A ∩ B, μ.w y
+  have ha : 0 < a := hA
+  have hab : 0 < ab := hAB
+  have hfilter : B.filter (fun y => y ∈ A) = A ∩ B := by
+    ext y
+    simp [Finset.mem_inter, and_comm]
+  have hmassB : ∑ y ∈ B, (μ.restrict A hA).w y = ab / a := by
+    calc
+      (∑ y ∈ B, (μ.restrict A hA).w y) =
+          ∑ y ∈ B.filter (fun y => y ∈ A), μ.w y / a := by
+            unfold Law.restrict
+            rw [← Finset.sum_filter]
+      _ = ab / a := by
+            rw [hfilter, Finset.sum_div]
+  have hBpos : 0 < ∑ y ∈ B, (μ.restrict A hA).w y := by
+    rw [hmassB]
+    exact div_pos hab ha
+  refine ⟨hBpos, ?_⟩
+  have hmassB' :
+      (∑ y ∈ B, if y ∈ A then μ.w y / (∑ z ∈ A, μ.w z) else 0) =
+        (∑ y ∈ A ∩ B, μ.w y) / (∑ z ∈ A, μ.w z) := by
+    simpa [Law.restrict, a, ab] using hmassB
+  apply FinProb.ext
+  intro y
+  simp only [Law.restrict]
+  rw [hmassB']
+  by_cases hyA : y ∈ A <;> by_cases hyB : y ∈ B
+  · simp [hyA, hyB]
+    field_simp [ne_of_gt hA, ne_of_gt hAB]
+  · simp [Law.restrict, hyB, hyA, Finset.mem_inter]
+  · simp [Law.restrict, hyB, hyA, Finset.mem_inter]
+  · simp [Law.restrict, hyB, hyA, Finset.mem_inter]
+
+private theorem delLaw_outer_restrict_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    ∃ hO : 0 < ∑ y ∈ hitSet9 E G ω (outerIDs9 I v b), (maskedLaw9 S ω b).w y,
+      ∃ hK : 0 < ∑ y ∈ coreHitSet9 E G ω v b,
+        ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).w y,
+        outerFilter9 S E G ω v b =
+          (maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO ∧
+        delLaw9 S E G ω b (I.center v.1) =
+          ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
+            (coreHitSet9 E G ω v b) hK := by
+  classical
+  let O := outerIDs9 I v b
+  let K := coreIDs9 I v b
+  let target := I.center v.1
+  let ord := fullOrder9 I v b
+  let base := maskedLaw9 S ω b
+  obtain ⟨hO, houter⟩ := outerFilter_restrict_regular9 S I E G ω v b hregular hbstar
+  have hlen : ord.length = O.card + K.card + 1 := by
+    simp [ord, O, K, fullOrder9, List.length_append]
+    omega
+  let j := O.card + K.card
+  have hjle : j ≤ ord.length := by dsimp [j]; omega
+  have hdegrees := orderRegular_prefix_degrees9 S I E G ω base ord hregular hbstar
+  have hprev : ∀ l c, l < j → ord[l]? = some c →
+      (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c) (prefixLaw9 E G ω base ord l) := by
+    intro l c hl hget
+    exact hdegrees j hjle l c hl hget
+  have hmassLB := prefixMass_lower9 S I E G ω base ord j hjle hprev
+  have htake : (ord.take j).toFinset = O ∪ K := by
+    have hlist : ord.take j = O.toList ++ K.toList := by
+      dsimp [ord, fullOrder9, O, K, j]
+      rw [List.take_append_of_le_length (by simp [List.length_append])]
+      simp
+    rw [hlist, List.toFinset_append]
+    simp [Finset.union_comm]
+  have hIDs : O ∪ K = (I.seen b.1).erase target := by
+    have htargetCore : target ∈ I.core v.1 := I.center_mem_core v.1 v.2
+    ext c
+    by_cases hcCore : c ∈ I.core v.1
+    · by_cases hct : c = target
+      · subst c
+        simp [O, K, target, outerIDs9, coreIDs9, htargetCore]
+      · simp [O, K, target, outerIDs9, coreIDs9, hcCore, hct]
+    · have hct : c ≠ target := by
+        intro h
+        subst c
+        exact hcCore htargetCore
+      simp [O, K, target, outerIDs9, coreIDs9, hcCore, hct]
+  have hHitUnion :
+      hitSet9 E G ω O ∩ hitSet9 E G ω K = hitSet9 E G ω (O ∪ K) := by
+    ext y
+    simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_inter]
+    constructor
+    · rintro ⟨hO', hK'⟩ c hc
+      rcases Finset.mem_union.mp hc with hcO | hcK
+      · exact hO' c hcO
+      · exact hK' c hcK
+    · intro h
+      constructor
+      · intro c hc
+        exact h c (Finset.mem_union.mpr (Or.inl hc))
+      · intro c hc
+        exact h c (Finset.mem_union.mpr (Or.inr hc))
+  let A := hitSet9 E G ω O
+  let B := coreHitSet9 E G ω v b
+  let F := hitSet9 E G ω ((I.seen b.1).erase target)
+  have hABset : A ∩ B = F := by
+    dsimp [A, B, F, coreHitSet9]
+    rw [hHitUnion, hIDs]
+  have hmassEq : prefixMass9 E G ω base ord j = ∑ y ∈ F, base.w y := by
+    unfold prefixMass9
+    rw [htake, hIDs]
+  have hABpos : 0 < ∑ y ∈ A ∩ B, base.w y := by
+    rw [hABset, ← hmassEq]
+    exact lt_of_lt_of_le (by positivity) hmassLB
+  have hFpos : 0 < ∑ y ∈ F, base.w y := by
+    rw [← hABset]
+    exact hABpos
+  have hdel : delLaw9 S E G ω b target = base.restrict F hFpos := by
+    unfold delLaw9 restrictOr9
+    rw [dif_pos hFpos]
+  rcases law_restrict_nested9 base A B hO hABpos with ⟨hBpos, hnest⟩
+  have hABmass : ∑ y ∈ A ∩ B, base.w y = ∑ y ∈ F, base.w y := by
+    rw [hABset]
+  have hnorm : base.restrict (A ∩ B) hABpos = base.restrict F hFpos := by
+    apply FinProb.ext
+    intro y
+    simp only [Law.restrict]
+    by_cases hyAB : y ∈ A ∩ B
+    · have hyA : y ∈ A := (Finset.mem_inter.mp hyAB).1
+      have hyB : y ∈ B := (Finset.mem_inter.mp hyAB).2
+      have hyF : y ∈ F := by rw [← hABset]; exact hyAB
+      simp only [hyA, hyB, hyAB, hyF, if_true]
+      rw [hABmass]
+    · have hyF : y ∉ F := by
+        intro hF'
+        apply hyAB
+        rw [hABset]
+        exact hF'
+      simp [hyAB, hyF]
+  refine ⟨hO, hBpos, houter, ?_⟩
+  calc
+    delLaw9 S E G ω b target = base.restrict F hFpos := hdel
+    _ = base.restrict (A ∩ B) hABpos := hnorm.symm
+    _ = (base.restrict A hO).restrict B hBpos := hnest.symm
+    _ = ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
+          (coreHitSet9 E G ω v b) hBpos := by rfl
+
+private theorem targetFrac_ratio_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    ∃ hO hK, outerFilter9 S E G ω v b =
+        (maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO ∧
+      delLaw9 S E G ω b (I.center v.1) =
+        ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
+          (coreHitSet9 E G ω v b) hK ∧
+      (∑ y ∈ (coreHitSet9 E G ω v b).filter
+          (fun y => Hits E G (anc9 ω (I.center v.1)) y),
+        (outerFilter9 S E G ω v b).w y) =
+        (∑ y ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w y) *
+          targetFrac9 S E G ω v b := by
+  classical
+  rcases delLaw_outer_restrict_regular9 S I E G ω v b hregular hbstar with
+    ⟨hO, hK, houter, hdel⟩
+  have hKOuter : 0 < ∑ y ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w y := by
+    simpa [houter] using hK
+  have hdegree := law_restrict_degree_mass9 E G (outerFilter9 S E G ω v b)
+    (coreHitSet9 E G ω v b) (anc9 ω (I.center v.1)) hKOuter
+  have hdelOuter : delLaw9 S E G ω b (I.center v.1) =
+      (outerFilter9 S E G ω v b).restrict (coreHitSet9 E G ω v b) hKOuter := by
+    apply FinProb.ext
+    intro y
+    have houtw (x : Fin N) :
+        (outerFilter9 S E G ω v b).w x =
+          ((maskedLaw9 S ω b).restrict
+            (hitSet9 E G ω (outerIDs9 I v b)) hO).w x :=
+      congrArg (fun μ : Law N => μ.w x) houter
+    have hmass :
+        (∑ x ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w x) =
+          ∑ x ∈ coreHitSet9 E G ω v b,
+            ((maskedLaw9 S ω b).restrict
+              (hitSet9 E G ω (outerIDs9 I v b)) hO).w x := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact houtw x
+    rw [hdel]
+    simp only [Law.restrict]
+    by_cases hy : y ∈ coreHitSet9 E G ω v b
+    · simp only [hy, if_true]
+      rw [houtw y, hmass]
+      simp only [Law.restrict]
+    · simp only [hy, if_false]
+  rw [← hdelOuter] at hdegree
+  refine ⟨hO, hK, houter, hdel, ?_⟩
+  simpa [targetFrac9] using hdegree
+
 private theorem restrictOr_supported9 {N : ℕ} {Y A : Finset (Fin N)} {μ : Law N}
     (hμ : μ.SupportedIn Y) : (restrictOr9 μ A).SupportedIn Y := by
   classical

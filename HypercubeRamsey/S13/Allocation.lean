@@ -402,7 +402,111 @@ theorem type_selection (κ : CConsts) (T : Stage) (k : ℕ)
     ∃ f : PassFamily κ T k, f ∈ families ∧
       ((f.tiling.mode = .bounded ∧ (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S) ∨
        (f.tiling.mode ≠ .bounded ∧ (1 / 200 : ℝ) * T.S.N k ≤ f.tiling.S)) := by
-  sorry
+  classical
+  rcases hmass with hbounded | hnonbounded
+  · rcases hbounded with ⟨f, hf, hmode, hsize⟩
+    exact ⟨f, hf, Or.inl ⟨hmode, hsize⟩⟩
+  · let tag : PassFamily κ T k → Bool × Mode × Colour :=
+      fun f => (f.orientation, f.tiling.mode, f.tiling.c)
+    let L := families.filter fun f => f.tiling.mode ≠ .bounded
+    have htagsL : (L.map tag).Nodup := by
+      apply List.Nodup.sublist _ htags
+      exact (List.filter_sublist).map tag
+    let possible : Finset (Bool × Mode × Colour) :=
+      Finset.univ.filter fun t => t.2.1 ≠ .bounded
+    have hpossible : possible.card = 20 := by
+      decide
+    have hlen : L.length ≤ 20 := by
+      let s := (L.map tag).toFinset
+      have hs : s ⊆ possible := by
+        intro t ht
+        rcases List.mem_toFinset.mp ht with ht
+        rcases List.mem_map.mp ht with ⟨f, hf, rfl⟩
+        simp only [possible, Finset.mem_filter, Finset.mem_univ, true_and]
+        simpa [L] using (List.mem_filter.mp hf).2
+      calc
+        L.length = s.card := by
+          simpa [s] using (List.toFinset_card_of_nodup htagsL).symm
+        _ ≤ possible.card := Finset.card_le_card hs
+        _ = 20 := hpossible
+    have hNpos : 0 < T.S.N k := T.S.N_pos k
+    have hmassNat : (L.map fun f => f.tiling.S).sum * 10 ≥ T.S.N k := by
+      simpa [L] using hnonbounded
+    have hLne : L ≠ [] := by
+      intro hnil
+      simp [hnil] at hmassNat
+      omega
+    by_contra hnone
+    have hsmall : ∀ f ∈ L, (f.tiling.S : ℝ) < (1 / 200 : ℝ) * T.S.N k := by
+      intro f hf
+      rcases (show f ∈ families ∧ f.tiling.mode ≠ .bounded by simpa [L] using hf) with
+        ⟨hfam, hmode⟩
+      have hnot : ¬ (1 / 200 : ℝ) * T.S.N k ≤ f.tiling.S := by
+        intro hs
+        exact hnone ⟨f, hfam, Or.inr ⟨hmode, hs⟩⟩
+      exact lt_of_not_ge hnot
+    have hsum_bound : ∀ xs : List (PassFamily κ T k),
+        (∀ f ∈ xs, (f.tiling.S : ℝ) < (1 / 200 : ℝ) * T.S.N k) →
+        (xs.map fun f => (f.tiling.S : ℝ)).sum ≤
+          (xs.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) := by
+      intro xs
+      induction xs with
+      | nil => simp
+      | cons a xs ih =>
+        intro hall
+        have ha := hall a (by simp)
+        have htail := ih (by
+          intro f hf
+          exact hall f (by simp [hf]))
+        simp only [List.map_cons, List.sum_cons, List.length_cons]
+        calc
+          _ ≤ (1 / 200 : ℝ) * T.S.N k + (xs.map fun f => (f.tiling.S : ℝ)).sum :=
+            by simpa [add_comm] using
+              add_le_add_right ha.le ((xs.map fun f => (f.tiling.S : ℝ)).sum)
+          _ ≤ (1 / 200 : ℝ) * T.S.N k +
+              (xs.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) :=
+            by simpa [add_comm] using add_le_add_left htail ((1 / 200 : ℝ) * T.S.N k)
+          _ = ((xs.length : ℝ) + 1) * ((1 / 200 : ℝ) * T.S.N k) := by ring
+    obtain ⟨f₀, xs, hLdef⟩ := List.exists_cons_of_ne_nil hLne
+    have hhead : (f₀.tiling.S : ℝ) < (1 / 200 : ℝ) * T.S.N k := by
+      apply hsmall f₀
+      rw [hLdef]
+      simp
+    have htail := hsum_bound xs (by
+      intro f hf
+      apply hsmall f
+      rw [hLdef]
+      exact List.mem_cons_of_mem _ hf)
+    have hsumlt : (L.map fun f => (f.tiling.S : ℝ)).sum <
+        (L.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) := by
+      rw [hLdef]
+      simp only [List.map_cons, List.sum_cons, List.length_cons]
+      apply lt_of_lt_of_le
+      · simpa [add_comm] using
+          add_lt_add_right hhead ((xs.map fun f => (f.tiling.S : ℝ)).sum)
+      · calc
+          _ ≤ (1 / 200 : ℝ) * T.S.N k +
+              (xs.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) :=
+            by simpa [add_comm] using add_le_add_left htail ((1 / 200 : ℝ) * T.S.N k)
+          _ = ((xs.length : ℝ) + 1) * ((1 / 200 : ℝ) * T.S.N k) := by ring
+    have hlenR : (L.length : ℝ) ≤ 20 := by exact_mod_cast hlen
+    have hmassR : (T.S.N k : ℝ) ≤
+        (L.map fun f => (f.tiling.S : ℝ)).sum * 10 := by
+      have hc : (T.S.N k : ℝ) ≤
+          (((L.map fun f => f.tiling.S).sum * 10 : ℕ) : ℝ) := by
+        exact_mod_cast hmassNat
+      simpa [Nat.cast_mul, Nat.cast_sum, List.map_map, Function.comp_def] using hc
+    have hsumSmall : (L.map fun f => (f.tiling.S : ℝ)).sum * 10 <
+        (T.S.N k : ℝ) := by
+      have htarget : 0 ≤ (1 / 200 : ℝ) * T.S.N k := by positivity
+      calc
+        _ < ((L.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k)) * 10 :=
+          mul_lt_mul_of_pos_right hsumlt (by norm_num)
+        _ ≤ (20 : ℝ) * ((1 / 200 : ℝ) * T.S.N k) * 10 := by
+          gcongr
+        _ = T.S.N k := by ring
+    exact (not_lt_of_ge hmassR) hsumSmall
+    
 
 /-- P13.3f (sections/13, lines 170–182): round dyadic masses upward and retain the first complete segment. -/
 theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)

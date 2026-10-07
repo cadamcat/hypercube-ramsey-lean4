@@ -1123,6 +1123,115 @@ private theorem wordDist_triangle {n : ℕ} (s t u : OuterWord n) :
   change A.card ≤ B.card + C.card
   exact (Finset.card_le_card hsub).trans (Finset.card_union_le B C)
 
+private noncomputable def wordDiffSet {n : ℕ} (s t : OuterWord n) : Finset (OuterCoord n) :=
+  Finset.univ.filter fun j => s j ≠ t j
+
+private noncomputable def wordFromDiff {n : ℕ} (s : OuterWord n) (A : Finset (OuterCoord n)) : OuterWord n :=
+  fun j => if j ∈ A then !s j else s j
+
+private noncomputable def wordDiffEquiv {n : ℕ} (s : OuterWord n) : OuterWord n ≃ Finset (OuterCoord n) where
+  toFun := wordDiffSet s
+  invFun := wordFromDiff s
+  left_inv := by
+    intro t
+    funext j
+    by_cases hj : s j = t j
+    · simp [wordFromDiff, wordDiffSet, hj]
+    · have hmem : j ∈ wordDiffSet s t := by simp [wordDiffSet, hj]
+      have hbool : t j = !s j := by
+        cases hs : s j <;> cases ht : t j <;> simp_all
+      simp [wordFromDiff, hmem, hbool]
+  right_inv := by
+    intro A
+    ext j
+    by_cases hj : j ∈ A <;> simp [wordDiffSet, wordFromDiff, hj]
+
+private noncomputable def wordBallToSubsets {n r : ℕ} (s : OuterWord n) :
+    {t : OuterWord n // wordDist s t ≤ r} ≃
+      {A : Finset (OuterCoord n) // A.card ≤ r} where
+  toFun t := ⟨wordDiffSet s t.1, by
+    change (wordDiffSet s t.1).card ≤ r
+    simpa [wordDiffSet, wordDist, ne_comm] using t.2⟩
+  invFun A := ⟨wordFromDiff s A.1, by
+    change (wordDiffSet s (wordFromDiff s A.1)).card ≤ r
+    have hset : wordDiffSet s (wordFromDiff s A.1) = A.1 := by
+      exact (wordDiffEquiv s).right_inv A.1
+    rw [hset]
+    exact A.2⟩
+  left_inv := by
+    intro t
+    apply Subtype.ext
+    exact (wordDiffEquiv s).left_inv t.1
+  right_inv := by
+    intro A
+    apply Subtype.ext
+    exact (wordDiffEquiv s).right_inv A.1
+
+private def smallWordSubsetFiberEquiv {D : Type*} [Fintype D] [DecidableEq D] (r : ℕ)
+    (i : Fin (r + 1)) :
+    {A : {A : Finset D // A.card ≤ r} // (⟨A.1.card, by omega⟩ : Fin (r + 1)) = i} ≃
+      {A : Finset D // A.card = i.val} where
+  toFun A := ⟨A.1.1, by
+    have h := congrArg Fin.val A.2
+    simpa using h⟩
+  invFun A := ⟨⟨A.1, by rw [A.2]; omega⟩, by
+    apply Fin.ext
+    exact A.2⟩
+  left_inv := by intro A; apply Subtype.ext; apply Subtype.ext; rfl
+  right_inv := by intro A; apply Subtype.ext; rfl
+
+private def smallWordSubsetsEquiv {D : Type*} [Fintype D] [DecidableEq D] (r : ℕ) :
+    {A : Finset D // A.card ≤ r} ≃
+      Σ i : Fin (r + 1), {A : Finset D // A.card = i.val} := by
+  let f : {A : Finset D // A.card ≤ r} → Fin (r + 1) :=
+    fun A => ⟨A.1.card, by omega⟩
+  exact (Equiv.sigmaFiberEquiv f).symm.trans (Equiv.sigmaCongrRight (smallWordSubsetFiberEquiv r))
+
+private theorem smallWordSubsets_card {D : Type*} [Fintype D] [DecidableEq D] (r : ℕ) :
+    Fintype.card {A : Finset D // A.card ≤ r} =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose (Fintype.card D) i := by
+  classical
+  rw [Fintype.card_congr (smallWordSubsetsEquiv r), Fintype.card_sigma]
+  have hfiber (i : Fin (r + 1)) :
+      Fintype.card {A : Finset D // A.card = i.val} = Nat.choose (Fintype.card D) i.val := by
+    let S : Finset (Finset D) := Finset.univ.powersetCard i.val
+    let e : {A : Finset D // A.card = i.val} ≃ S :=
+      { toFun := fun A => ⟨A.1, by
+          rw [Finset.mem_powersetCard]
+          exact ⟨Finset.subset_univ _, A.2⟩⟩
+        invFun := fun A => ⟨A.1, (Finset.mem_powersetCard.mp A.2).2⟩
+        left_inv := by intro A; apply Subtype.ext; rfl
+        right_inv := by intro A; apply Subtype.ext; rfl }
+    calc
+      Fintype.card {A : Finset D // A.card = i.val} = Fintype.card S := Fintype.card_congr e
+      _ = S.card := Fintype.card_coe S
+      _ = Nat.choose (Fintype.card D) i.val := by simp [S, Finset.card_powersetCard]
+  simp_rw [hfiber]
+  rw [← Fin.sum_univ_eq_sum_range]
+
+private theorem wordBall_card_formula {n r : ℕ} (s : OuterWord n) :
+    (wordBall s r).card =
+      ∑ i ∈ Finset.range (r + 1), Nat.choose (Fintype.card (OuterCoord n)) i := by
+  classical
+  have hcard : Fintype.card {t : OuterWord n // wordDist s t ≤ r} = (wordBall s r).card := by
+    simpa [wordBall] using (Fintype.card_subtype (fun t : OuterWord n => wordDist s t ≤ r))
+  exact hcard.symm.trans ((Fintype.card_congr (wordBallToSubsets s)).trans (smallWordSubsets_card r))
+
+private theorem wordBall_card_two_le {n : ℕ} (s : OuterWord n) :
+    ((wordBall s 2).card : ℝ) ≤ (Fintype.card (OuterCoord n) + 1 : ℝ) ^ 2 := by
+  have hformula := wordBall_card_formula (r := 2) s
+  rw [hformula]
+  have hsum :
+      (∑ i ∈ Finset.range (2 + 1), Nat.choose (Fintype.card (OuterCoord n)) i) =
+        1 + Fintype.card (OuterCoord n) + Nat.choose (Fintype.card (OuterCoord n)) 2 := by
+    norm_num [Finset.sum_range_succ]
+  rw [hsum]
+  have hchoose := Nat.choose_le_pow (Fintype.card (OuterCoord n)) 2
+  have hchooseR : (Nat.choose (Fintype.card (OuterCoord n)) 2 : ℝ) ≤
+      (Fintype.card (OuterCoord n) : ℝ) ^ 2 := by exact_mod_cast hchoose
+  push_cast
+  nlinarith
+
 private theorem wordDist_compBCoord_le_one {n : ℕ} (s : OuterWord n) (o : Option (OuterCoord n)) :
     wordDist s (compBCoord s o) ≤ 1 := by
   cases o with

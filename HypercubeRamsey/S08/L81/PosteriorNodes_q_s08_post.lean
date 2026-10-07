@@ -1736,6 +1736,65 @@ theorem qref_congr_off_target {η₀ β p : ℝ} {h : ℕ}
     intro u hu
     exact congrArg (fun R : FinProb (D.M.ι × Fin D.N) => R.w (o.2 u)) (hCross u)
 
+theorem fcand_zero_of_qref_zero {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) (ξ : D.Tup)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hQ : D.Qref Θ g o = 0) : D.Fcand Θ g ξ o = 0 := by
+  classical
+  let I : ℝ := ∏ j, (o.1 j).elim 1 (fun i => (D.refInt Θ g).w i)
+  let C : ℝ := ∏ u : D.CrossSub g, (D.refCross Θ g u.1).w (o.2 u)
+  have hIC : I * C = 0 := by simpa [I, C, Ctx.Qref] using hQ
+  rcases mul_eq_zero.mp hIC with hI | hC
+  · have hzero : ∃ j, (o.1 j).elim 1 (fun i => (D.refInt Θ g).w i) = 0 := by
+      by_contra hn
+      have hne : ∀ j, (o.1 j).elim 1 (fun i => (D.refInt Θ g).w i) ≠ 0 := by
+        intro j
+        exact fun hz => hn ⟨j, hz⟩
+      have hprod : I ≠ 0 := Finset.prod_ne_zero_iff.mpr (by
+        intro j hj
+        exact hne j)
+      exact hprod hI
+    obtain ⟨j, hj⟩ := hzero
+    cases ho : o.1 j with
+    | none => simp [ho] at hj
+    | some i =>
+      have hRef : (D.refInt Θ g).w i = 0 := by simpa [ho] using hj
+      have hRatio : D.intRatio Θ g ξ (o.1 j) = 0 := by
+        unfold Ctx.intRatio
+        simp [ho, hRef]
+      have hfactor : ∏ j, D.intRatio Θ g ξ (o.1 j) = 0 := by
+        apply Finset.prod_eq_zero (Finset.mem_univ j)
+        exact hRatio
+      unfold Ctx.Fcand
+      by_cases hgate : D.CandGate (Function.update Θ g ξ) g
+      · simp only [if_pos hgate, one_mul]
+        rw [hfactor]
+        ring
+      · simp [hgate]
+  · have hzero : ∃ u : D.CrossSub g,
+      (D.refCross Θ g u.1).w (o.2 u) = 0 := by
+      by_contra hn
+      have hne : ∀ u : D.CrossSub g, (D.refCross Θ g u.1).w (o.2 u) ≠ 0 := by
+        intro u
+        exact fun hz => hn ⟨u, hz⟩
+      have hprod : C ≠ 0 := Finset.prod_ne_zero_iff.mpr (by
+        intro u hu
+        exact hne u)
+      exact hprod hC
+    obtain ⟨u, hu⟩ := hzero
+    have hRatio : D.crossRatio Θ g ξ u (o.2 u) = 0 := by
+      unfold Ctx.crossRatio
+      simp [hu]
+    unfold Ctx.Fcand
+    have hfactor : ∏ u : D.CrossSub g, D.crossRatio Θ g ξ u (o.2 u) = 0 := by
+      apply Finset.prod_eq_zero (Finset.mem_univ u)
+      exact hRatio
+    by_cases hgate : D.CandGate (Function.update Θ g ξ) g
+    · simp only [if_pos hgate, one_mul]
+      rw [hfactor]
+      ring
+    · simp [hgate]
+
 theorem normOr_congr {α : Type*} [Fintype α]
     (f g : α → ℝ) (hf : ∀ x, 0 ≤ f x) (hg : ∀ x, 0 ≤ g x)
     (P Q : FinProb α) (hPQ : ∀ x, P.w x = Q.w x) (hfg : ∀ x, f x = g x) :

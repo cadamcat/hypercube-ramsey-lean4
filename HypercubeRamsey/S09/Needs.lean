@@ -1,4 +1,5 @@
 import HypercubeRamsey.S09.Defs
+import HypercubeRamsey.Tools.Finner
 
 /-!
 # Shared Section 9 tools requested by this lane
@@ -27,7 +28,8 @@ theorem finner_product {ι κ : Type*} [Fintype ι] [Fintype κ] [DecidableEq κ
       ∏ i, Real.rpow
         (FinProb.expect (FinProb.pi P) (fun ω => (f i ω) ^ d))
         (1 / (d : ℝ)) := by
-  sorry
+  classical
+  simpa [one_div] using xFinner P S d hd hdep f hnonneg hdepends
 
 structure CenterID9 (m n H : ℕ) where
   slice : CubeVertex m

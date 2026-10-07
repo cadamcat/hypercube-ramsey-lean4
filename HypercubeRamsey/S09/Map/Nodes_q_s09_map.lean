@@ -14,7 +14,7 @@ namespace HypercubeRamsey.Lane_q_s09_map
 
 open OAI.HypercubeRamsey Classical
 open Filter
-open scoped BigOperators
+open scoped BigOperators symmDiff
 
 set_option maxHeartbeats 600000
 
@@ -1905,6 +1905,74 @@ private theorem heightDiffSet_card9 {d : ℕ} (v u : CubeVertex d) :
     (heightDiffSet9 v u).card = _root_.hammingDist u v := by
   simp [heightDiffSet9, _root_.hammingDist, ne_comm]
 
+private theorem heightDiffSet_symmDiff9 {d : ℕ} (x y u : CubeVertex d) :
+    heightDiffSet9 y u = heightDiffSet9 x u ∆ heightDiffSet9 x y := by
+  ext i
+  simp only [heightDiffSet9, Finset.mem_filter, Finset.mem_univ, true_and,
+    Finset.mem_symmDiff]
+  cases x i <;> cases y i <;> cases u i <;> simp
+
+private theorem height_card_symmDiff9 {α : Type*} [DecidableEq α]
+    (A B : Finset α) :
+    (A ∆ B).card + 2 * (A ∩ B).card = A.card + B.card := by
+  have hdisj : Disjoint (A \ B) (B \ A) := by
+    apply Finset.disjoint_left.mpr
+    intro x hxA hxB
+    exact (Finset.mem_sdiff.mp hxA).2 (Finset.mem_sdiff.mp hxB).1
+  rw [Finset.symmDiff_def, Finset.card_union_of_disjoint hdisj]
+  have hA := Finset.card_sdiff_add_card_inter A B
+  have hB := Finset.card_sdiff_add_card_inter B A
+  have hcomm : (B ∩ A).card = (A ∩ B).card := by rw [Finset.inter_comm]
+  omega
+
+private theorem height_hamming_sphere_card9 {d : ℕ} (r : ℕ) (x : CubeVertex d) :
+    (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u x = r)).card =
+      Nat.choose d r := by
+  classical
+  let S : Finset (Finset (Fin d)) := Finset.univ.powersetCard r
+  have hcard :
+      (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u x = r)).card = S.card := by
+    apply Finset.card_bij (fun u _ => heightDiffSet9 x u)
+    · intro u hu
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu
+      refine Finset.mem_powersetCard.mpr ⟨Finset.subset_univ _, ?_⟩
+      have hcard' := heightDiffSet_card9 x u
+      rw [hcard']
+      exact hu
+    · intro u hu v hv huv
+      exact (heightDiffEquiv9 x).injective huv
+    · intro s hs
+      have hsCard := (Finset.mem_powersetCard.mp hs).2
+      have hdiff : heightDiffSet9 x (heightVertexOfDiff9 x s) = s :=
+        (heightDiffEquiv9 x).right_inv s
+      refine ⟨heightVertexOfDiff9 x s,
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, hdiff⟩
+      have hdistEq := (heightDiffSet_card9 x (heightVertexOfDiff9 x s)).symm
+      rw [hdiff] at hdistEq
+      exact hdistEq.trans hsCard
+  calc
+    _ = S.card := hcard
+    _ = Nat.choose d r := by simp [S, Finset.card_powersetCard]
+
+theorem height_binomial_ball_power_bound9 (m n s : ℕ)
+    (hm : m ≤ n) (hn : 1 ≤ n) :
+    (∑ i ∈ Finset.range (s + 1), (Nat.choose m i : ℝ)) ≤
+      ((s + 1 : ℕ) : ℝ) * (n : ℝ) ^ s := by
+  have hmR : (m : ℝ) ≤ (n : ℝ) := by exact_mod_cast hm
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  calc
+    (∑ i ∈ Finset.range (s + 1), (Nat.choose m i : ℝ)) ≤
+        ∑ _i ∈ Finset.range (s + 1), (n : ℝ) ^ s := by
+      apply Finset.sum_le_sum
+      intro i hi
+      have his : i ≤ s := Nat.lt_succ_iff.mp (Finset.mem_range.mp hi)
+      have hchoose : (Nat.choose m i : ℝ) ≤ (m : ℝ) ^ i := by
+        exact_mod_cast Nat.choose_le_pow m i
+      have hbase : (m : ℝ) ^ i ≤ (n : ℝ) ^ i := by gcongr
+      have hexp : (n : ℝ) ^ i ≤ (n : ℝ) ^ s := by gcongr
+      exact hchoose.trans (hbase.trans hexp)
+    _ = ((s + 1 : ℕ) : ℝ) * (n : ℝ) ^ s := by simp
+
 private def heightBallEquiv9 {d r : ℕ} (v : CubeVertex d) :
     {u : CubeVertex d // _root_.hammingDist u v ≤ r} ≃
       {s : Finset (Fin d) // s.card ≤ r} where
@@ -3088,5 +3156,584 @@ theorem sharedConsulted_residual_separation_general9
       (_root_.hammingDist (residualWord9 (P.m n) v)
         (residualWord9 (P.m n) v') : ℝ) := by exact_mod_cast hproj
   linarith
+
+private theorem uniform_subset_contains_probability9 {d s : ℕ}
+    (hd : 0 < d) (hsd : s ≤ d) (A : Finset (Fin d)) (hAs : A.card ≤ s) :
+    (CubeGeometryPToolsCubeR.sampleLaw d s hsd).pr
+        (fun B : Finset (Fin d) => A ⊆ B) ≤ ((s : ℝ) / (d : ℝ)) ^ A.card := by
+  classical
+  let μ := CubeGeometryPToolsCubeR.sampleLaw d s hsd
+  let X : Finset (Fin d) → ℝ := fun B =>
+    (Nat.choose (A ∩ B).card A.card : ℝ)
+  have hXnonneg : ∀ B, 0 ≤ X B := by
+    intro B
+    dsimp [X]
+    positivity
+  have hsubset (B : Finset (Fin d)) (hAB : A ⊆ B) : 1 ≤ X B := by
+    have hinter : A ∩ B = A := Finset.inter_eq_left.mpr hAB
+    simp [X, hinter]
+  have hmono := finProb_pr_mono μ (fun B => A ⊆ B) (fun B => 1 ≤ X B) hsubset
+  have hmark := FinProb.markov μ X 1 hXnonneg (by norm_num)
+  have hmoment := CubeGeometryPToolsCubeR.sampleLaw_factorialMoment
+    A hsd hAs
+  have hmoment' : μ.expect X =
+      (Nat.choose s A.card : ℝ) / (Nat.choose d A.card : ℝ) := by
+    simpa [μ, X, CubeGeometryPToolsCubeR.intersectionWeight, div_eq_mul_inv] using hmoment
+  have hratio := CubeGeometryPToolsCubeR.choose_ratio_le_pow
+    (K := s) (d := d) (j := A.card) hsd hd
+  calc
+    μ.pr (fun B => A ⊆ B) ≤ μ.pr (fun B => 1 ≤ X B) := hmono
+    _ ≤ μ.expect X / 1 := hmark
+    _ = (Nat.choose s A.card : ℝ) / (Nat.choose d A.card : ℝ) := by rw [hmoment']; norm_num
+    _ ≤ ((s : ℝ) / (d : ℝ)) ^ A.card := by
+      simpa using hratio
+
+private theorem uniform_subset_intersection_ge_probability9 {d s : ℕ}
+    (hd : 0 < d) (hsd : s ≤ d) (A : Finset (Fin d)) (k : ℕ)
+    (hk : 1 ≤ k) (hks : k ≤ s) :
+    (CubeGeometryPToolsCubeR.sampleLaw d s hsd).pr
+        (fun B : Finset (Fin d) => k ≤ (A ∩ B).card) ≤
+      (2 : ℝ) ^ A.card * ((s : ℝ) / (d : ℝ)) ^ k := by
+  classical
+  let μ := CubeGeometryPToolsCubeR.sampleLaw d s hsd
+  let Ts : Finset (Finset (Fin d)) := A.powersetCard k
+  let E : Finset (Fin d) → Prop := fun B => k ≤ (A ∩ B).card
+  let F : Finset (Fin d) → Prop := fun B => ∃ T ∈ Ts, T ⊆ B
+  have hEF (B : Finset (Fin d)) (hB : E B) : F B := by
+    obtain ⟨T, hTA, hTcard⟩ := Finset.exists_subset_card_eq hB
+    have hTsubA : T ⊆ A := by
+      intro x hx
+      exact (Finset.mem_inter.mp (hTA hx)).1
+    have hTsubB : T ⊆ B := by
+      intro x hx
+      exact (Finset.mem_inter.mp (hTA hx)).2
+    have hTmem : T ∈ Ts := by
+      exact Finset.mem_powersetCard.mpr ⟨hTsubA, hTcard⟩
+    exact ⟨T, hTmem, hTsubB⟩
+  have hmono := finProb_pr_mono μ E F hEF
+  have hEach (T : Finset (Fin d)) (hT : T ∈ Ts) :
+      μ.pr (fun B => T ⊆ B) ≤ ((s : ℝ) / (d : ℝ)) ^ k := by
+    have hTprop := Finset.mem_powersetCard.mp hT
+    have hTcard : T.card = k := hTprop.2
+    have hTk : T.card ≤ s := by omega
+    simpa [μ, hTcard] using uniform_subset_contains_probability9
+      (d := d) (s := s) hd hsd T hTk
+  have hExists := height_pr_exists_finset_le9 μ Ts (fun T B => T ⊆ B)
+  have hcardTs : Ts.card = Nat.choose A.card k := by
+    simp [Ts, Finset.card_powersetCard]
+  have hchoose : (Ts.card : ℝ) ≤ (2 : ℝ) ^ A.card := by
+    rw [hcardTs]
+    exact_mod_cast Nat.choose_le_two_pow A.card k
+  have hsum : (∑ T ∈ Ts, μ.pr (fun B => T ⊆ B)) ≤
+      (Ts.card : ℝ) * ((s : ℝ) / (d : ℝ)) ^ k := by
+    calc
+      _ ≤ ∑ _T ∈ Ts, ((s : ℝ) / (d : ℝ)) ^ k := by
+        apply Finset.sum_le_sum
+        intro T hT
+        exact hEach T hT
+      _ = (Ts.card : ℝ) * ((s : ℝ) / (d : ℝ)) ^ k := by simp
+  have hbase := hmono.trans hExists
+  calc
+    μ.pr E ≤ ∑ T ∈ Ts, μ.pr (fun B => T ⊆ B) := hbase
+    _ ≤ (Ts.card : ℝ) * ((s : ℝ) / (d : ℝ)) ^ k := hsum
+    _ ≤ (2 : ℝ) ^ A.card * ((s : ℝ) / (d : ℝ)) ^ k :=
+      mul_le_mul_of_nonneg_right hchoose (by positivity)
+
+private theorem shell_subset_intersection_count9 {d s : ℕ}
+    (A : Finset (Fin d)) (k : ℕ) (hsd : s ≤ d)
+    (hk : 1 ≤ k) (hks : k ≤ s) :
+    (let Bset : Finset (Finset (Fin d)) := Finset.univ.filter (fun B =>
+      B.card = s ∧ k ≤ (A ∩ B).card);
+     (Bset.card : ℝ) ≤
+      (Nat.choose d s : ℝ) *
+        ((2 : ℝ) ^ A.card * ((s : ℝ) / (d : ℝ)) ^ k)) := by
+  classical
+  let Bset : Finset (Finset (Fin d)) := Finset.univ.filter (fun B =>
+    B.card = s ∧ k ≤ (A ∩ B).card)
+  let μ := CubeGeometryPToolsCubeR.sampleLaw d s hsd
+  let E : Finset (Fin d) → Prop := fun B => k ≤ (A ∩ B).card
+  letI : DecidablePred E := fun B => Classical.propDecidable (E B)
+  have hset : (CubeGeometryPToolsCubeR.samples d s).filter E = Bset := by
+    ext X
+    simp [Bset, CubeGeometryPToolsCubeR.samples, E, and_comm]
+  have hprob := uniform_subset_intersection_ge_probability9
+    (d := d) (s := s) (by omega : 0 < d) hsd A k hk hks
+  have hchoosePos : 0 < (Nat.choose d s : ℝ) := by
+    exact_mod_cast Nat.choose_pos hsd
+  have hprobEq : μ.pr E = (Bset.card : ℝ) / (Nat.choose d s : ℝ) := by
+    calc
+      μ.pr E =
+          ((CubeGeometryPToolsCubeR.samples d s).filter E).card /
+            (Nat.choose d s : ℝ) := by
+          simpa [μ] using CubeGeometryPToolsCubeR.sampleLaw_pr hsd E
+      _ = _ := by rw [hset]
+  have hratio : (Bset.card : ℝ) / (Nat.choose d s : ℝ) ≤
+      (2 : ℝ) ^ A.card * ((s : ℝ) / (d : ℝ)) ^ k := by
+    calc
+      _ = μ.pr E := hprobEq.symm
+      _ ≤ _ := hprob
+  have hmul := (div_le_iff₀ hchoosePos).1 hratio
+  have hmul' : (Bset.card : ℝ) ≤
+      (2 : ℝ) ^ A.card * ((s : ℝ) / (d : ℝ)) ^ k *
+        (Nat.choose d s : ℝ) := by simpa [mul_assoc] using hmul
+  simpa [mul_comm, mul_left_comm, mul_assoc] using hmul'
+
+private theorem choose_lower_layer_ratio9 (d R i : ℕ)
+    (hi : i ≤ R) (hR : 1 ≤ R) (hRhalf : 2 * R ≤ d) :
+    (Nat.choose d i : ℝ) / Nat.choose d R ≤
+      ((2 * (R : ℝ)) / (d : ℝ)) ^ (R - i) := by
+  have hdi : R ≤ d - i := by omega
+  have hdiPos : 0 < d - i := by omega
+  have hChooseMulNat : Nat.choose d R * Nat.choose R i =
+      Nat.choose d i * Nat.choose (d - i) (R - i) := Nat.choose_mul hi
+  have hChooseMul : (Nat.choose d R : ℝ) * Nat.choose R i =
+      (Nat.choose d i : ℝ) * Nat.choose (d - i) (R - i) := by
+    exact_mod_cast hChooseMulNat
+  have hDen : (Nat.choose d R : ℝ) ≠ 0 := by
+    exact_mod_cast (Nat.choose_pos (by omega : R ≤ d)).ne'
+  have hDenSub : (Nat.choose (d - i) (R - i) : ℝ) ≠ 0 := by
+    exact_mod_cast (Nat.choose_pos (by omega : R - i ≤ d - i)).ne'
+  have hratioEq : (Nat.choose d i : ℝ) / Nat.choose d R =
+      (Nat.choose R i : ℝ) / Nat.choose (d - i) (R - i) := by
+    apply (div_eq_div_iff hDen hDenSub).2
+    nlinarith [hChooseMul]
+  have hsum : R = i + (R - i) := by omega
+  have hsymm : Nat.choose R i = Nat.choose R (R - i) := Nat.choose_symm_of_eq_add hsum
+  have hratioPow := CubeGeometryPToolsCubeR.choose_ratio_le_pow
+    (K := R) (d := d - i) (j := R - i) hdi hdiPos
+  have hbase : (R : ℝ) / (d - i : ℕ) ≤ 2 * (R : ℝ) / d := by
+    apply (div_le_div_iff₀ (by exact_mod_cast hdiPos) (by exact_mod_cast (show 0 < d by omega))).2
+    have hden : (d : ℝ) / 2 ≤ ((d - i : ℕ) : ℝ) := by
+      have hDi : ((d - i : ℕ) : ℝ) = (d : ℝ) - (i : ℝ) := Nat.cast_sub (by omega)
+      rw [hDi]
+      have hiR : (i : ℝ) ≤ (R : ℝ) := by exact_mod_cast hi
+      have hRhalfR : 2 * (R : ℝ) ≤ (d : ℝ) := by exact_mod_cast hRhalf
+      nlinarith
+    have hRposR : 0 ≤ (R : ℝ) := Nat.cast_nonneg _
+    nlinarith [hden, hRposR]
+  calc
+    _ = (Nat.choose R i : ℝ) / Nat.choose (d - i) (R - i) := hratioEq
+    _ = (Nat.choose R (R - i) : ℝ) / Nat.choose (d - i) (R - i) := by rw [hsymm]
+    _ ≤ ((R : ℝ) / (d - i : ℕ)) ^ (R - i) := hratioPow
+    _ ≤ ((2 * (R : ℝ)) / (d : ℝ)) ^ (R - i) := by gcongr
+
+theorem choose_upper_layer_ratio9 (d r k : ℕ)
+    (hr : 1 ≤ r) (hrk : r + k ≤ d) :
+    (Nat.choose d (r + k) : ℝ) / Nat.choose d r ≤ ((d : ℝ) / r) ^ k := by
+  induction k with
+  | zero =>
+      have hchoosePos : 0 < (Nat.choose d r : ℝ) := by
+        exact_mod_cast Nat.choose_pos (by omega : r ≤ d)
+      simp only [Nat.add_zero, pow_zero]
+      exact le_of_eq (div_self hchoosePos.ne')
+  | succ k ih =>
+      have hrk' : r + k ≤ d := by omega
+      let s := r + k
+      have hsle : s ≤ d := by dsimp [s]; omega
+      have hspos : 0 < s + 1 := by omega
+      have hChoosePos : 0 < (Nat.choose d s : ℝ) := by
+        exact_mod_cast Nat.choose_pos hsle
+      have hChooseNextPos : 0 < (Nat.choose d (s + 1) : ℝ) := by
+        exact_mod_cast Nat.choose_pos (by dsimp [s]; omega)
+      have hChooseRPos : 0 < (Nat.choose d r : ℝ) := by
+        exact_mod_cast Nat.choose_pos (by omega)
+      have hrec := Nat.choose_succ_right_eq d s
+      have hrecR : (Nat.choose d (s + 1) : ℝ) * (s + 1) =
+          (Nat.choose d s : ℝ) * (d - s) := by exact_mod_cast hrec
+      have hstep : (Nat.choose d (s + 1) : ℝ) / Nat.choose d s ≤
+          (d : ℝ) / (s + 1) := by
+        apply (div_le_div_iff₀ hChoosePos (by positivity : (0 : ℝ) < s + 1)).2
+        nlinarith [hrecR]
+      have hstep' : (d : ℝ) / (s + 1) ≤ (d : ℝ) / r := by
+        apply div_le_div_of_nonneg_left (by positivity : 0 ≤ (d : ℝ))
+          (by exact_mod_cast hr : (0 : ℝ) < r)
+        exact_mod_cast (show r ≤ s + 1 by dsimp [s]; omega)
+      have hsplit :
+          (Nat.choose d (s + 1) : ℝ) / Nat.choose d r =
+            ((Nat.choose d (s + 1) : ℝ) / Nat.choose d s) *
+              ((Nat.choose d s : ℝ) / Nat.choose d r) := by
+        field_simp [ne_of_gt hChoosePos, ne_of_gt hChooseRPos]
+        <;> ring
+      calc
+        _ = ((Nat.choose d (s + 1) : ℝ) / Nat.choose d s) *
+              ((Nat.choose d s : ℝ) / Nat.choose d r) := hsplit
+        _ ≤ ((d : ℝ) / r) * ((d : ℝ) / r) ^ k :=
+          mul_le_mul (hstep.trans hstep') (ih hrk') (by positivity) (by positivity)
+        _ = ((d : ℝ) / r) ^ (k + 1) := by rw [pow_succ]; ring
+
+private theorem height_vertex_shell_intersection_count9 {d R D i k : ℕ}
+    (x y : CubeVertex d) (hD : _root_.hammingDist x y = D)
+    (hi : i ≤ d) (hDle : D ≤ d) (hk : 1 ≤ k) (hki : k ≤ i)
+    (hneed : ∀ u : CubeVertex d, _root_.hammingDist u x = i →
+      _root_.hammingDist u y ≤ R →
+        k ≤ (heightDiffSet9 x u ∩ heightDiffSet9 x y).card) :
+    ((Finset.univ.filter (fun u : CubeVertex d =>
+      _root_.hammingDist u x = i ∧ _root_.hammingDist u y ≤ R)).card : ℝ) ≤
+      (Nat.choose d i : ℝ) *
+        ((2 : ℝ) ^ D * ((i : ℝ) / (d : ℝ)) ^ k) := by
+  classical
+  let A : Finset (Fin d) := heightDiffSet9 x y
+  let U : Finset (CubeVertex d) := Finset.univ.filter (fun u =>
+    _root_.hammingDist u x = i ∧ _root_.hammingDist u y ≤ R)
+  let B : Finset (Finset (Fin d)) := Finset.univ.filter (fun S =>
+    S.card = i ∧ k ≤ (S ∩ A).card)
+  have hAcard : A.card = D := by
+    have h := heightDiffSet_card9 x y
+    dsimp [A]
+    simpa [_root_.hammingDist_comm, hD] using h
+  have hmap : ∀ u, u ∈ U → heightDiffSet9 x u ∈ B := by
+    intro u hu
+    simp only [U, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+    have hcard : (heightDiffSet9 x u).card = i := by
+      rw [heightDiffSet_card9]
+      simpa [_root_.hammingDist_comm] using hu.1
+    have hint := hneed u hu.1 hu.2
+    simp only [B, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨hcard, by simpa [A] using hint⟩
+  have hinj : Set.InjOn (heightDiffSet9 x) U := by
+    intro u hu v hv huv
+    exact (heightDiffEquiv9 x).injective huv
+  have himageSub : U.image (heightDiffSet9 x) ⊆ B := by
+    intro S hS
+    rcases Finset.mem_image.mp hS with ⟨u, hu, rfl⟩
+    exact hmap u hu
+  have hcard : U.card ≤ B.card := by
+    calc
+      U.card = (U.image (heightDiffSet9 x)).card :=
+        (Finset.card_image_of_injOn hinj).symm
+      _ ≤ B.card := Finset.card_le_card himageSub
+  have hBbound : (B.card : ℝ) ≤
+      (Nat.choose d i : ℝ) * ((2 : ℝ) ^ A.card * ((i : ℝ) / (d : ℝ)) ^ k) := by
+    simpa [B, Finset.inter_comm] using
+      shell_subset_intersection_count9 (d := d) (s := i) A k hi hk hki
+  have hcardR : (U.card : ℝ) ≤ (B.card : ℝ) := by exact_mod_cast hcard
+  calc
+    (U.card : ℝ) ≤ (B.card : ℝ) := hcardR
+    _ ≤ (Nat.choose d i : ℝ) *
+        ((2 : ℝ) ^ A.card * ((i : ℝ) / (d : ℝ)) ^ k) := hBbound
+    _ = (Nat.choose d i : ℝ) *
+        ((2 : ℝ) ^ D * ((i : ℝ) / (d : ℝ)) ^ k) := by rw [hAcard]
+
+private theorem height_diff_intersection_lower9 {d i R D k : ℕ}
+    (x y u : CubeVertex d) (hD : _root_.hammingDist x y = D)
+    (hix : _root_.hammingDist u x = i) (hiy : _root_.hammingDist u y ≤ R)
+    (hneed : R - i + 2 * k ≤ D) :
+    k ≤ (heightDiffSet9 x u ∩ heightDiffSet9 x y).card := by
+  have hSCard : (heightDiffSet9 x u).card = i := by
+    rw [heightDiffSet_card9]
+    simpa [_root_.hammingDist_comm] using hix
+  have hACard : (heightDiffSet9 x y).card = D := by
+    have h := heightDiffSet_card9 x y
+    simpa [_root_.hammingDist_comm, hD] using h
+  have hdistSet :
+      _root_.hammingDist u y =
+        (heightDiffSet9 x u ∆ heightDiffSet9 x y).card := by
+    rw [← heightDiffSet_card9 y u, heightDiffSet_symmDiff9]
+  have hsymm := height_card_symmDiff9 (heightDiffSet9 x u) (heightDiffSet9 x y)
+  rw [hSCard, hACard] at hsymm
+  rw [hdistSet] at hiy
+  have hsum : i + D ≤ R + 2 * (heightDiffSet9 x u ∩ heightDiffSet9 x y).card := by
+    omega
+  omega
+
+theorem height_ball_intersection_shell_sum9 {d R D k : ℕ}
+    (x y : CubeVertex d) (hD : _root_.hammingDist x y = D)
+    (hDle : D ≤ d) (hRhalf : 2 * R ≤ d)
+    (hRpos : 1 ≤ R) (hk : 1 ≤ k) (hk4 : 4 * k ≤ D) :
+    ((Finset.univ.filter (fun u : CubeVertex d =>
+      _root_.hammingDist u x ≤ R ∧ _root_.hammingDist u y ≤ R)).card : ℝ) ≤
+      ((R + 1 : ℕ) : ℝ) * (Nat.choose d R : ℝ) *
+        ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k +
+          ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by
+  classical
+  let I : Finset (CubeVertex d) := Finset.univ.filter (fun u =>
+    _root_.hammingDist u x ≤ R ∧ _root_.hammingDist u y ≤ R)
+  let shell : ℕ → Finset (CubeVertex d) := fun i => Finset.univ.filter (fun u =>
+    _root_.hammingDist u x = i ∧ _root_.hammingDist u y ≤ R)
+  have hcover : I ⊆ (Finset.range (R + 1)).biUnion shell := by
+    intro u hu
+    simp only [I, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+    refine Finset.mem_biUnion.mpr ⟨_root_.hammingDist u x,
+      Finset.mem_range.mpr (by omega), ?_⟩
+    simp [shell, hu.1, hu.2]
+  have hCRpos : 0 < (Nat.choose d R : ℝ) := by
+    exact_mod_cast Nat.choose_pos (by omega : R ≤ d)
+  have hdPos : 0 < (d : ℝ) := by exact_mod_cast (by omega : 0 < d)
+  have hbase0 : 0 ≤ (2 * (R : ℝ)) / (d : ℝ) := by positivity
+  have hbase1 : (2 * (R : ℝ)) / (d : ℝ) ≤ 1 := by
+    rw [div_le_one₀ hdPos]
+    exact_mod_cast hRhalf
+  have hchooseMono (i : ℕ) (hi : i ≤ R) :
+      (Nat.choose d i : ℝ) ≤ Nat.choose d R := by
+    have hratio := choose_lower_layer_ratio9 d R i hi hRpos hRhalf
+    have hpow : ((2 * (R : ℝ)) / (d : ℝ)) ^ (R - i) ≤ 1 :=
+      pow_le_one₀ hbase0 hbase1
+    exact (div_le_one₀ hCRpos).1 (hratio.trans hpow)
+  have hShellBound (i : ℕ) (hi : i ≤ R) :
+      (shell i).card ≤
+        (Nat.choose d R : ℝ) *
+          ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k +
+            ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by
+    by_cases hhigh : 2 * (R - i) ≤ D
+    · have hneed : R - i + 2 * k ≤ D := by omega
+      by_cases hki : k ≤ i
+      · have hcount := height_vertex_shell_intersection_count9
+          (d := d) (R := R) (D := D) (i := i) (k := k) x y hD
+          (by omega) (by omega) hk hki (by
+            intro u hux huy
+            exact height_diff_intersection_lower9 x y u hD hux huy hneed)
+        have hchoose := hchooseMono i hi
+        have hiratio : (i : ℝ) / (d : ℝ) ≤ (R : ℝ) / (d : ℝ) := by
+          exact div_le_div_of_nonneg_right (by exact_mod_cast hi) hdPos.le
+        have hpowratio : ((i : ℝ) / (d : ℝ)) ^ k ≤
+            ((R : ℝ) / (d : ℝ)) ^ k := by gcongr
+        have hcountCast : ((shell i).card : ℝ) ≤
+            (Nat.choose d R : ℝ) *
+              ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k) := by
+          have hcount' : ((shell i).card : ℝ) ≤
+              (Nat.choose d i : ℝ) *
+                ((2 : ℝ) ^ D * ((i : ℝ) / (d : ℝ)) ^ k) := by
+            simpa [shell] using hcount
+          calc
+            ((shell i).card : ℝ) ≤ (Nat.choose d i : ℝ) *
+                ((2 : ℝ) ^ D * ((i : ℝ) / (d : ℝ)) ^ k) := hcount'
+            _ ≤ (Nat.choose d R : ℝ) *
+                ((2 : ℝ) ^ D * ((i : ℝ) / (d : ℝ)) ^ k) :=
+              mul_le_mul_of_nonneg_right hchoose (by positivity)
+            _ ≤ _ := mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_left hpowratio (by positivity))
+              (Nat.cast_nonneg _)
+        calc
+          ((shell i).card : ℝ) ≤ (Nat.choose d R : ℝ) *
+              ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k) := hcountCast
+          _ ≤ (Nat.choose d R : ℝ) *
+              ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k +
+                ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by
+            have hterm : (0 : ℝ) ≤ ((Nat.choose d R : ℝ) *
+                ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by positivity
+            calc
+              _ = (Nat.choose d R : ℝ) *
+                  ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k) + 0 := by ring
+              _ ≤ (Nat.choose d R : ℝ) *
+                    ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k) +
+                    ((Nat.choose d R : ℝ) *
+                      ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) :=
+                add_le_add_right hterm _
+              _ = _ := by ring
+      · have hempty : shell i = ∅ := by
+          apply Finset.eq_empty_iff_forall_notMem.mpr
+          intro u hu
+          simp only [shell, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+          have hq := height_diff_intersection_lower9 x y u hD hu.1 hu.2 hneed
+          have hqle : (heightDiffSet9 x u ∩ heightDiffSet9 x y).card ≤ i := by
+            calc
+              _ ≤ (heightDiffSet9 x u).card := Finset.card_le_card Finset.inter_subset_left
+              _ = i := by rw [heightDiffSet_card9]; simpa [_root_.hammingDist_comm] using hu.1
+          omega
+        simp only [hempty, Finset.card_empty, Nat.cast_zero]
+        positivity
+    · have hlow : D / 2 ≤ R - i := by omega
+      have hratio := choose_lower_layer_ratio9 d R i hi hRpos hRhalf
+      have hbasePow : ((2 * (R : ℝ)) / (d : ℝ)) ^ (R - i) ≤
+          ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2) :=
+        pow_le_pow_of_le_one hbase0 hbase1 hlow
+      have hchooseLe : (Nat.choose d i : ℝ) ≤
+          (Nat.choose d R : ℝ) *
+            ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2) := by
+        have hratio' := hratio.trans hbasePow
+        have hchooseLe' : (Nat.choose d i : ℝ) ≤
+            (((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) *
+              (Nat.choose d R : ℝ) := (div_le_iff₀ hCRpos).1 hratio'
+        calc
+          (Nat.choose d i : ℝ) ≤
+              (((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) *
+                (Nat.choose d R : ℝ) := hchooseLe'
+          _ = (Nat.choose d R : ℝ) *
+              (((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by ring
+      have hcardLe : (shell i).card ≤ Nat.choose d i := by
+        have hsphere : (Finset.univ.filter (fun u : CubeVertex d =>
+            _root_.hammingDist u x = i)).card = Nat.choose d i :=
+          height_hamming_sphere_card9 (d := d) i x
+        have hsubSphere : shell i ⊆ Finset.univ.filter
+            (fun u : CubeVertex d => _root_.hammingDist u x = i) := by
+          intro u hu
+          simp only [shell, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+          exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hu.1⟩
+        calc
+          (shell i).card ≤ (Finset.univ.filter (fun u : CubeVertex d =>
+              _root_.hammingDist u x = i)).card := Finset.card_le_card hsubSphere
+          _ = Nat.choose d i := hsphere
+      have hcountCast : ((shell i).card : ℝ) ≤
+          (Nat.choose d R : ℝ) * ((2 * (R : ℝ) / (d : ℝ)) ^ (D / 2)) := by
+        exact (Nat.cast_le.mpr hcardLe).trans hchooseLe
+      calc
+        ((shell i).card : ℝ) ≤
+            (Nat.choose d R : ℝ) * (((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := hcountCast
+        _ ≤ (Nat.choose d R : ℝ) *
+            ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k +
+              ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by
+          have hterm : (0 : ℝ) ≤ ((Nat.choose d R : ℝ) *
+              ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k)) := by positivity
+          calc
+            _ = (Nat.choose d R : ℝ) *
+                ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2) + 0 := by ring
+            _ ≤ (Nat.choose d R : ℝ) *
+                  ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2) +
+                  (Nat.choose d R : ℝ) *
+                    ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k) :=
+              add_le_add_right hterm _
+            _ = _ := by ring
+  have hsumNat : I.card ≤
+      ∑ i ∈ Finset.range (R + 1), (shell i).card := by
+    calc
+      I.card ≤ ((Finset.range (R + 1)).biUnion shell).card :=
+        Finset.card_le_card hcover
+      _ ≤ _ := Finset.card_biUnion_le
+  have hsumReal : (I.card : ℝ) ≤
+      ((R + 1 : ℕ) : ℝ) * (Nat.choose d R : ℝ) *
+        ((2 : ℝ) ^ D * ((R : ℝ) / (d : ℝ)) ^ k +
+          ((2 * (R : ℝ)) / (d : ℝ)) ^ (D / 2)) := by
+    calc
+      _ ≤ (∑ i ∈ Finset.range (R + 1), (shell i).card : ℝ) := by exact_mod_cast hsumNat
+      _ ≤ _ := by
+        apply Finset.sum_le_sum
+        intro i hi
+        have hiR : i ≤ R := Nat.lt_succ_iff.mp (Finset.mem_range.mp hi)
+        exact_mod_cast hShellBound i hiR
+      _ = _ := by simp; ring
+  simpa [I] using hsumReal
+
+theorem height_overlap_shell_decay9 {n R' D k : ℕ} (q : ℝ)
+    (hn : 2 ≤ n) (hR : 1 ≤ R')
+    (hpow40 : 2 ≤ (n : ℝ) ^ (1 / 40 : ℝ))
+    (hpow8 : 2 ≤ (n : ℝ) ^ (1 / 8 : ℝ))
+    (hq0 : 0 ≤ q) (hq : q ≤ (n : ℝ) ^ (-(1 / 4 : ℝ)))
+    (hk : D ≤ 5 * k) (hD : 1018 * R' ≤ D) :
+    (n : ℝ) ^ ((11 * R' : ℕ) : ℝ) *
+      ((2 : ℝ) ^ D * q ^ k + (2 * q) ^ (D / 2)) ≤
+      Real.exp (-(Real.log 2 * (R' : ℝ))) := by
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnR1 : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hRcast : (1 : ℝ) ≤ (R' : ℝ) := by exact_mod_cast hR
+  have hDcast : (1018 : ℝ) * (R' : ℝ) ≤ (D : ℝ) := by exact_mod_cast hD
+  have hkcast : (D : ℝ) ≤ 5 * (k : ℝ) := by exact_mod_cast hk
+  have hfirstExp : (D : ℝ) / 40 - (k : ℝ) / 4 ≤ -(25 * (R' : ℝ)) := by
+    nlinarith
+  have hsecondExp : -((D / 2 : ℕ) : ℝ) / 8 ≤ -(25 * (R' : ℝ)) := by
+    have hfloorNat : 2 * D ≤ 5 * (D / 2) := by omega
+    have hfloor : (2 : ℝ) * (D : ℝ) ≤ 5 * ((D / 2 : ℕ) : ℝ) := by
+      exact_mod_cast hfloorNat
+    nlinarith
+  have htwoD : (2 : ℝ) ^ D ≤
+      (n : ℝ) ^ ((D : ℝ) / 40) := by
+    calc
+      (2 : ℝ) ^ D ≤ ((n : ℝ) ^ (1 / 40 : ℝ)) ^ D :=
+        pow_le_pow_left₀ (by norm_num) hpow40 D
+      _ = (n : ℝ) ^ ((D : ℝ) / 40) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_mul hnR.le]
+        congr 1
+        push_cast
+        ring
+  have hqk : q ^ k ≤
+      (n : ℝ) ^ (-(k : ℝ) / 4) := by
+    calc
+      q ^ k ≤ ((n : ℝ) ^ (-(1 / 4 : ℝ))) ^ k :=
+        pow_le_pow_left₀ hq0 hq k
+      _ = (n : ℝ) ^ (-(k : ℝ) / 4) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_mul hnR.le]
+        congr 1
+        push_cast
+        ring
+  have hfirst : (2 : ℝ) ^ D * q ^ k ≤
+      (n : ℝ) ^ (-(25 * (R' : ℝ))) := by
+    calc
+      (2 : ℝ) ^ D * q ^ k ≤
+          (n : ℝ) ^ ((D : ℝ) / 40) * (n : ℝ) ^ (-(k : ℝ) / 4) :=
+        mul_le_mul htwoD hqk (by positivity) (by positivity)
+      _ = (n : ℝ) ^ ((D : ℝ) / 40 - (k : ℝ) / 4) := by
+        rw [← Real.rpow_add hnR]
+        congr 1
+        ring
+      _ ≤ (n : ℝ) ^ (-(25 * (R' : ℝ))) :=
+        Real.rpow_le_rpow_of_exponent_le hnR1 hfirstExp
+  have htwoq : 2 * q ≤ (n : ℝ) ^ (-(1 / 8 : ℝ)) := by
+    calc
+      2 * q ≤ 2 * (n : ℝ) ^ (-(1 / 4 : ℝ)) :=
+        mul_le_mul_of_nonneg_left hq (by norm_num)
+      _ ≤ (n : ℝ) ^ (1 / 8 : ℝ) * (n : ℝ) ^ (-(1 / 4 : ℝ)) :=
+        mul_le_mul_of_nonneg_right hpow8 (by positivity)
+      _ = (n : ℝ) ^ (-(1 / 8 : ℝ)) := by
+        rw [← Real.rpow_add hnR]
+        congr 1
+        norm_num
+  have hsecondPow : (2 * q) ^ (D / 2) ≤
+      (n : ℝ) ^ (-((D / 2 : ℕ) : ℝ) / 8) := by
+    calc
+      (2 * q) ^ (D / 2) ≤
+          ((n : ℝ) ^ (-(1 / 8 : ℝ))) ^ (D / 2) :=
+        pow_le_pow_left₀ (by positivity) htwoq (D / 2)
+      _ = (n : ℝ) ^ (-((D / 2 : ℕ) : ℝ) / 8) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_mul hnR.le]
+        congr 1
+        push_cast
+        ring
+  have hsecond : (2 * q) ^ (D / 2) ≤
+      (n : ℝ) ^ (-(25 * (R' : ℝ))) := by
+    exact hsecondPow.trans (Real.rpow_le_rpow_of_exponent_le hnR1 hsecondExp)
+  have hsum : (2 : ℝ) ^ D * q ^ k + (2 * q) ^ (D / 2) ≤
+      2 * (n : ℝ) ^ (-(25 * (R' : ℝ))) := by
+    calc
+      _ ≤ (n : ℝ) ^ (-(25 * (R' : ℝ))) +
+          (n : ℝ) ^ (-(25 * (R' : ℝ))) := add_le_add hfirst hsecond
+      _ = _ := by ring
+  have htwoR : 2 ≤ (2 : ℝ) ^ ((R' : ℕ) : ℝ) := by
+    have htwoNat : 2 ≤ (2 : ℝ) ^ R' := by
+      calc
+        2 = (2 : ℝ) ^ 1 := by norm_num
+        _ ≤ (2 : ℝ) ^ R' := pow_le_pow_right₀ (by norm_num) hR
+    simpa [Real.rpow_natCast] using htwoNat
+  have hpowR : (2 : ℝ) ^ ((R' : ℕ) : ℝ) ≤ (n : ℝ) ^ ((R' : ℕ) : ℝ) := by
+    have hpowNat : (2 : ℝ) ^ R' ≤ (n : ℝ) ^ R' :=
+      pow_le_pow_left₀ (by norm_num) (by exact_mod_cast hn) R'
+    simpa [Real.rpow_natCast] using hpowNat
+  have hpowRtwo : 2 ≤ (n : ℝ) ^ ((R' : ℕ) : ℝ) := htwoR.trans hpowR
+  have hsumOne : 2 * (n : ℝ) ^ (-(25 * (R' : ℝ))) ≤
+      (n : ℝ) ^ (-(24 * (R' : ℝ))) := by
+    calc
+      _ ≤ (n : ℝ) ^ (R' : ℝ) * (n : ℝ) ^ (-(25 * (R' : ℝ))) :=
+        mul_le_mul_of_nonneg_right hpowRtwo (by positivity)
+      _ = (n : ℝ) ^ (-(24 * (R' : ℝ))) := by
+        rw [← Real.rpow_add hnR]
+        congr 1
+        ring
+  have hsumFinal : (2 : ℝ) ^ D * q ^ k + (2 * q) ^ (D / 2) ≤
+      (n : ℝ) ^ (-(24 * (R' : ℝ))) := hsum.trans hsumOne
+  have hproduct : (n : ℝ) ^ ((11 * R' : ℕ) : ℝ) *
+      ((2 : ℝ) ^ D * q ^ k + (2 * q) ^ (D / 2)) ≤
+      (n : ℝ) ^ (-(13 * (R' : ℝ))) := by
+    rw [show ((11 * R' : ℕ) : ℝ) = 11 * (R' : ℝ) by norm_num]
+    calc
+      _ ≤ (n : ℝ) ^ (11 * (R' : ℝ)) *
+          (n : ℝ) ^ (-(24 * (R' : ℝ))) :=
+        mul_le_mul_of_nonneg_left hsumFinal (by positivity)
+      _ = (n : ℝ) ^ (-(13 * (R' : ℝ))) := by
+        rw [← Real.rpow_add hnR]
+        congr 1
+        push_cast
+        ring
+  have hweak : (n : ℝ) ^ (-(13 * (R' : ℝ))) ≤
+      (n : ℝ) ^ (-(R' : ℝ)) := by
+    apply Real.rpow_le_rpow_of_exponent_le hnR1
+    nlinarith [hRcast]
+  have hlog : Real.log 2 ≤ Real.log (n : ℝ) :=
+    Real.log_le_log (by norm_num) (by exact_mod_cast hn)
+  have hfinal : (n : ℝ) ^ (-(R' : ℝ)) ≤
+      Real.exp (-(Real.log 2 * (R' : ℝ))) := by
+    rw [Real.rpow_def_of_pos hnR]
+    apply Real.exp_le_exp.mpr
+    nlinarith
+  exact hproduct.trans (hweak.trans hfinal)
+
+
 
 end HypercubeRamsey.Lane_q_s09_map

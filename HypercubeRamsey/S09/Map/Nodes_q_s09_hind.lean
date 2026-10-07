@@ -525,6 +525,34 @@ private noncomputable def scaleBall9 {P : Params9} {hc : HeightChoice9 P} {n : �
   Finset.univ.filter (fun x => _root_.hammingDist x.1 start.1 ≤ 16 * R ∧
     Nat.dist x.2.val start.2.val ≤ 8 * R)
 
+private theorem scaleBall9_card_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (start : HeightState9 P hc n) (R : ℕ) :
+    (scaleBall9 start R).card ≤
+      (hc.levels n + 1) * (16 * R + 1) * (n + 1) ^ (16 * R) := by
+  classical
+  let B : Finset (CubeVertex n) :=
+    Finset.univ.filter (fun v => _root_.hammingDist v start.1 ≤ 16 * R)
+  have hsub : scaleBall9 start R ⊆ B ×ˢ (Finset.univ : Finset (Fin (hc.levels n + 1))) := by
+    intro x hx
+    have hx' : _root_.hammingDist x.1 start.1 ≤ 16 * R ∧
+        Nat.dist x.2.val start.2.val ≤ 8 * R := by
+      simpa [scaleBall9] using (Finset.mem_filter.mp hx).2
+    simp only [Finset.mem_product, B, Finset.mem_filter, Finset.mem_univ,
+      true_and]
+    exact ⟨hx'.1, trivial⟩
+  have hcard : (scaleBall9 start R).card ≤ B.card * (hc.levels n + 1) := by
+    calc
+      (scaleBall9 start R).card ≤
+          (B ×ˢ (Finset.univ : Finset (Fin (hc.levels n + 1)))).card :=
+        Finset.card_le_card hsub
+      _ = B.card * (hc.levels n + 1) := by simp [Finset.card_product]
+  have hball := hammingBall9H_card_le n (16 * R) start.1
+  calc
+    (scaleBall9 start R).card ≤ B.card * (hc.levels n + 1) := hcard
+    _ ≤ ((16 * R + 1) * (n + 1) ^ (16 * R)) * (hc.levels n + 1) :=
+      Nat.mul_le_mul_right _ (by simpa [B] using hball)
+    _ = (hc.levels n + 1) * (16 * R + 1) * (n + 1) ^ (16 * R) := by ring
+
 private theorem heightPath9_head_bounds_of_good {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
     {start : HeightState9 P hc n}

@@ -1,6 +1,7 @@
 import HypercubeRamsey.S15.Defs
 import HypercubeRamsey.S15.Needs
 import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S15.DirectNodes_q_s15_direct
 
 namespace HypercubeRamsey.Lane_sol_s15_cross
 
@@ -525,5 +526,423 @@ theorem product_tail (Q : CrossingExperiment T k ι Ω) {w0 wS wL w : ℝ}
   exact hpartial Q.C (Finset.Subset.refl _)
 
 end CrossingExperiment
+
+end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey Filter
+open scoped BigOperators
+set_option maxHeartbeats 600000
+
+variable {κ : CConsts} {T : Stage} {k : ℕ}
+
+theorem highDirect_envelope_nonempty (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m) : (PT.envelope i).Nonempty := by
+  have hM : 0 < ((PT.tiling.P i).M : ℝ) := by
+    rw [← (PT.tiling.P i).cardX]
+    exact_mod_cast Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1
+  have hsize := Lane_q_s15_direct.highDirect_envelope_card_lower PT hPT hm i
+  apply Finset.card_pos.mp
+  have hsizeR : ((PT.tiling.P i).M : ℝ) / 2 ≤ ((PT.envelope i).card : ℝ) := hsize
+  exact_mod_cast (show (0 : ℝ) < (PT.envelope i).card by linarith)
+
+noncomputable def directBaseLaw (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highDirect) (a : S15.EvenPosition T k) : Law (T.S.N k) :=
+  FinProb.uniform (PT.envelope (S15.patchAt PT hPT a.1))
+    (highDirect_envelope_nonempty PT hPT hm _)
+
+theorem directBaseLaw_w (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highDirect) (a : S15.EvenPosition T k) (x : Fin (T.S.N k)) :
+    (directBaseLaw PT hPT hm a).w x = S15.directBaseWeight PT hPT a x := rfl
+
+theorem law_width_of_cap {N M : ℕ} (hN : 0 < N) (hM : 0 < M)
+    (P : Law N) {C v : ℝ} (hC : 0 < C)
+    (hcap : ∀ x, (M : ℝ) * P.w x ≤ C)
+    (hlog : Real.log ((N : ℝ) / M) ≤ v) : P.WidthLE (Real.log C + v) := by
+  have hNR : (0 : ℝ) < N := by exact_mod_cast hN
+  have hMR : (0 : ℝ) < M := by exact_mod_cast hM
+  intro x
+  calc
+    P.w x ≤ C / M := (le_div_iff₀ hMR).2 (by simpa [mul_comm] using hcap x)
+    _ = Real.exp (Real.log C + Real.log ((N : ℝ) / M)) / N := by
+      rw [Real.exp_add, Real.exp_log hC, Real.exp_log (div_pos hNR hMR)]
+      field_simp
+    _ ≤ Real.exp (Real.log C + v) / N :=
+      div_le_div_of_nonneg_right (Real.exp_le_exp.mpr (by linarith)) hNR.le
+
+theorem direct_patch_log_width (hκ : κ.Admissible) (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highDirect) (hn : 1 ≤ (T.S.n k : ℝ)) (i : Fin PT.tiling.m) :
+    Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M) ≤ (T.S.n k : ℝ) ^ κ.ι := by
+  have hu : (1 : ℝ) ≤ κ.u := by exact_mod_cast (show 1 ≤ κ.u by have := hκ.u_rng.2; omega)
+  rcases (hPT.tiling_valid.allocation_bounds i).2 with hb | ⟨_, hlog⟩
+  · rw [hm] at hb; cases hb
+  have hg := hPT.tiling_valid.direct_scale_bound (Or.inr hm) i
+  have hpow := Real.rpow_le_rpow_of_exponent_le hn (show κ.ι / 2 ≤ κ.ι by linarith [hκ.ι_rng.1])
+  have hgain : PT.tiling.gain i ≤ (T.S.n k : ℝ) ^ κ.ι := by
+    simp only [Tiling.gain, hm]
+    have hg0 : (0 : ℝ) ≤ (PT.tiling.P i).g := by positivity
+    linarith
+  have hgain0 : 0 ≤ PT.tiling.gain i := by simp [Tiling.gain, hm]; positivity
+  have hdiv : PT.tiling.gain i / (1000 * (κ.u : ℝ)) ≤ PT.tiling.gain i := by
+    apply (div_le_iff₀ (by positivity : (0 : ℝ) < 1000 * (κ.u : ℝ))).2
+    nlinarith
+  exact hlog.trans (hdiv.trans hgain)
+
+theorem exp_window_abs {r ℓ : ℕ} {b M : ℝ} (hb : 0 ≤ b) (hr : r ≤ ℓ)
+    (hlo : Real.exp (-10 * r * b) ≤ M) (hhi : M ≤ Real.exp (10 * r * b)) :
+    |M - 1| ≤ Real.exp (20 * ℓ * b) - 1 := by
+  have harg : 10 * (r : ℝ) * b ≤ 20 * (ℓ : ℝ) * b := by
+    have hc : (r : ℝ) ≤ ℓ := by exact_mod_cast hr
+    have hm := mul_le_mul_of_nonneg_right hc hb
+    nlinarith [show (0 : ℝ) ≤ ℓ by positivity]
+  have he := Real.exp_le_exp.mpr harg
+  have ha := Real.add_one_le_exp (10 * (r : ℝ) * b)
+  have hb' := Real.add_one_le_exp (-10 * (r : ℝ) * b)
+  exact abs_le.mpr ⟨by linarith, by linarith⟩
+
+noncomputable def directExperiment (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highDirect) (a : S15.EvenPosition T k) :
+    CrossingExperiment T k (S15.OddPosition T k) (fun _ => Fin (T.S.N k)) where
+  P := S15.lawAtOdd PT hPT
+  label := fun _ y => y
+  ν := S15.lawAtOdd PT hPT
+  marginal := by
+    intro b
+    apply FinProb.ext
+    intro y
+    simp [FinProb.map]
+  c := PT.tiling.c
+  C := S15.crossingNeighbours PT hPT a
+  μ := fun _ => directBaseLaw PT hPT hm a
+  A := fun _ => True
+  μ_update := by intros; rfl
+  A_update := by intros; rfl
+
+ theorem crossing_parameters (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, 1 ≤ (T.S.n k : ℝ) ∧ bstar T k ≤ 1 / 100 ∧
+      20 * (T.S.n k : ℝ) ^ κ.ι ≤ (T.S.n k : ℝ) ^ κ.xs ∧
+      20 * (T.S.n k : ℝ) ^ κ.ι ≤ κ.α * T.S.n k / 2 ∧
+      8 * (T.S.n k : ℝ) ^ (2 : ℕ) * Real.exp (-κ.α * T.S.n k / 2) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) := by
+  have hn := (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  have hιxs : κ.ι < κ.xs := by
+    have hi := hκ.ι_rng.2
+    have hm := min_le_left κ.xs (min κ.η0 (0.01 : ℝ))
+    linarith [hκ.xs_rng.1]
+  have hι1 : κ.ι < 1 := by linarith [hκ.xs_rng.2]
+  have hs := hn.eventually (Lane_sol_consts_adm.eventually_power_bound κ.ι κ.xs 20 1 hιxs (by norm_num))
+  have hl := hn.eventually (Lane_sol_consts_adm.eventually_power_bound κ.ι 1 20 (κ.α / 2) hι1 (by positivity [hκ.α_rng.1]))
+  have hblim : Tendsto (fun k => bstar T k) atTop (nhds 0) := by
+    convert (tendsto_rpow_neg_atTop (show (0 : ℝ) < 0.96 by norm_num)).comp hn using 1
+    funext k
+    norm_num [bstar]
+  have hb := hblim.eventually (Iic_mem_nhds (show (0 : ℝ) < 1 / 100 by norm_num))
+  have htailim := ((tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero ((κ.R : ℝ) + 2)
+    (κ.α / 2) (by positivity [hκ.α_rng.1])).const_mul 8).comp hn
+  have ht := htailim.eventually (Iic_mem_nhds (show 8 * (0 : ℝ) < 1 by norm_num))
+  filter_upwards [hn.eventually (eventually_ge_atTop 1), hs, hl, hb, ht] with k hk hs hl hb ht
+  change 1 ≤ (T.S.n k : ℝ) at hk
+  refine ⟨hk, hb, by simpa using hs, by simpa [Real.rpow_one, div_mul_eq_mul_div] using hl, ?_⟩
+  have hpos : (0 : ℝ) < T.S.n k := by linarith
+  have hmul := mul_le_mul_of_nonneg_right ht (Real.rpow_nonneg hpos.le (-(κ.R : ℝ)))
+  have he : (T.S.n k : ℝ) ^ ((κ.R : ℝ) + 2) * (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) =
+      (T.S.n k : ℝ) ^ (2 : ℕ) := by
+    rw [← Real.rpow_add hpos]
+    norm_num
+  have hneg : -(κ.α / 2) * (T.S.n k : ℝ) = -κ.α * T.S.n k / 2 := by ring
+  dsimp at hmul
+  rw [hneg] at hmul
+  calc
+    8 * (T.S.n k : ℝ) ^ (2 : ℕ) * Real.exp (-κ.α * T.S.n k / 2) =
+        (8 * ((T.S.n k : ℝ) ^ ((κ.R : ℝ) + 2) * Real.exp (-κ.α * T.S.n k / 2))) *
+          (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) := by rw [← he]; ring
+    _ ≤ 1 * (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) := hmul
+    _ = _ := one_mul _
+
+end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey Filter
+open scoped BigOperators
+open Classical
+set_option maxHeartbeats 600000
+
+theorem direct_crossing_exp_bound (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highDirect, ∀ a : S15.EvenPosition T k,
+        (S15.directRawLaw PT hPT).pr (fun ys =>
+          |S15.directCrossingMass PT hPT ys a - 1| >
+            Real.exp (20 * (PT.tiling.P (S15.patchAt PT hPT a.1)).ℓ * bstar T k) - 1) ≤
+              2 * (T.S.n k : ℝ) * Real.exp (-κ.α * T.S.n k / 2) := by
+  filter_upwards [hDeep, crossing_parameters κ hκ T] with k hD hp
+  intro PT hPT hm a
+  rcases hp with ⟨hn, hb, hs, hl, ht⟩
+  let i := S15.patchAt PT hPT a.1
+  let Q := directExperiment PT hPT hm a
+  let n := (T.S.n k : ℝ)
+  have hN := T.S.N_pos k
+  have hpow : 1 ≤ n ^ κ.ι := Real.one_le_rpow hn hκ.ι_rng.1.le
+  have hb0 : 0 ≤ bstar T k := by unfold bstar; positivity
+  have hM (j : Fin PT.tiling.m) : 0 < (PT.tiling.P j).M := by
+    rw [← (PT.tiling.P j).cardX]
+    exact Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty j).1
+  have hMR (j : Fin PT.tiling.m) : (0 : ℝ) < (PT.tiling.P j).M := by exact_mod_cast hM j
+  have hμ : ∀ ys, Q.A ys → (Q.μ ys).SupportedIn (T.X k) := by
+    intro ys hys x hx
+    have hsub : PT.envelope i ⊆ T.X k :=
+      (hPT.envelope_subset i).trans ((hPT.tiling_valid.patch_supports i).1.trans
+        (fun z hz => (Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports i).2.1 hz)).1))
+    have hx' : x ∉ PT.envelope i := fun he => hx (hsub he)
+    change (directBaseLaw PT hPT hm a).w x = 0
+    rw [directBaseLaw_w]
+    simp [S15.directBaseWeight, i, hx']
+  have hwμ : ∀ ys, Q.A ys → (Q.μ ys).WidthLE (2 * n ^ κ.ι) := by
+    intro ys hys
+    have hcap : ∀ x, ((PT.tiling.P i).M : ℝ) * (directBaseLaw PT hPT hm a).w x ≤ 2 := by
+      intro x
+      rw [directBaseLaw_w]
+      exact Lane_q_s15_direct.highDirect_scaled_baseweight_le_two PT hPT hm i a rfl x
+    have hw := law_width_of_cap hN (hM i) (directBaseLaw PT hPT hm a)
+      (by norm_num : (0 : ℝ) < 2) hcap (direct_patch_log_width hκ PT hPT hm hn i)
+    apply Law.WidthLE.mono hw
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    norm_num at hlog
+    dsimp [n]
+    linarith
+  have hν : ∀ b ∈ Q.C, (Q.ν b).SupportedIn (T.Y k) := by
+    intro b hb' y hy
+    let j := S15.patchAt PT hPT b.1
+    have hsub : (PT.tiling.P j).Y ⊆ T.Y k :=
+      (hPT.tiling_valid.patch_supports j).2.2.1.trans
+        (fun z hz => (Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports j).2.2.2 hz)).1)
+    exact hPT.law_supported j y (fun he => hy (hsub he))
+  have hwν : ∀ b ∈ Q.C, (Q.ν b).WidthLE (11 * n ^ κ.ι) := by
+    intro b hb'
+    let j := S15.patchAt PT hPT b.1
+    have hcap : ∀ y, ((PT.tiling.P j).M : ℝ) * (PT.π j).w y ≤ 11 := by
+      intro y
+      have hh := (le_div_iff₀ (hMR j)).mp (hPT.law_cap j y)
+      simpa [mul_comm] using hh
+    have hw := law_width_of_cap hN (hM j) (PT.π j)
+      (by norm_num : (0 : ℝ) < 11) hcap (direct_patch_log_width hκ PT hPT hm hn j)
+    apply Law.WidthLE.mono hw
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 11)
+    norm_num at hlog
+    dsimp [n]
+    linarith
+  have hdeg : ∀ ys, Q.A ys → ∀ b ∈ Q.C, ∀ x, (Q.μ ys).w x ≠ 0 →
+      |deg (T.S.E k) Q.c (Q.ν b).w x - 1 / 2| ≤ 3 * bstar T k := by
+    intro ys hys b hb' x hxNe
+    have hx : x ∈ PT.envelope i := by
+      change (directBaseLaw PT hPT hm a).w x ≠ 0 at hxNe
+      rw [directBaseLaw_w] at hxNe
+      by_contra hx
+      apply hxNe
+      simp [S15.directBaseWeight, i, hx]
+    have hj : S15.patchAt PT hPT b.1 ≠ i := (Finset.mem_filter.mp hb').2.2
+    exact hPT.envelope_other_degree i (S15.patchAt PT hPT b.1) hj x hx
+  have hcNat := Lane_q_s15_direct.highDirect_crossingNeighbours_card_le_prefix PT hPT a i rfl
+  have hc : (Q.C.card : ℝ) ≤ n ^ κ.ι := by
+    have hc' : (Q.C.card : ℝ) ≤ (PT.tiling.P i).ℓ := by exact_mod_cast hcNat
+    have he : ((PT.tiling.P i).ℓ : ℝ) ≤ (max (PT.tiling.P i).h (PT.tiling.P i).ℓ : ℝ) := by
+      exact_mod_cast (le_max_right (PT.tiling.P i).h (PT.tiling.P i).ℓ)
+    exact hc'.trans (he.trans (hPT.tiling_valid.allocation_bounds i).1.le)
+  have hbudget : 2 * n ^ κ.ι + (Q.C.card : ℝ) * (Real.log 4 + 10 * bstar T k) ≤ n ^ κ.xs := by
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 4)
+    norm_num at hlog
+    have hf : Real.log 4 + 10 * bstar T k ≤ 4 := by linarith
+    have hm1 := mul_le_mul_of_nonneg_left hf (show (0 : ℝ) ≤ Q.C.card by positivity)
+    have hm2 := mul_le_mul_of_nonneg_right hc (by norm_num : (0 : ℝ) ≤ 4)
+    dsimp [n] at *
+    nlinarith [Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) κ.ι]
+  have hD' : TwoBudgetDisc T k (n ^ κ.xs) (κ.α * T.S.n k) (bstar T k) := by
+    simpa [n, bstar] using hD
+  have htail := Q.product_tail hD' hN hb0 hb hbudget hμ hwμ hν hwν hdeg
+  have hcN : (Q.C.card : ℝ) ≤ n := by
+    have hs : Q.C ⊆ Lane_q_s15_direct.star a := by
+      intro b hb'
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb').2.1⟩
+    dsimp [n]
+    exact_mod_cast (Finset.card_le_card hs).trans (Lane_q_s15_direct.star_card_le a)
+  have he : Real.exp (11 * n ^ κ.ι - κ.α * T.S.n k) ≤ Real.exp (-κ.α * T.S.n k / 2) := by
+    apply Real.exp_le_exp.mpr
+    nlinarith [Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) κ.ι]
+  calc
+    (S15.directRawLaw PT hPT).pr (fun ys => |S15.directCrossingMass PT hPT ys a - 1| >
+        Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1) ≤
+      (FinProb.pi Q.P).pr (fun ys => Q.A ys ∧ ¬ Q.Good Q.C ys) := by
+        change (FinProb.pi Q.P).pr _ ≤ _
+        apply CrossingExperiment.pr_mono
+        intro ys hbad
+        refine ⟨True.intro, ?_⟩
+        intro hgood
+        have hbound := exp_window_abs hb0 hcNat hgood.1 hgood.2
+        exact not_lt_of_ge hbound hbad
+    _ ≤ (Q.C.card : ℝ) * (2 * Real.exp (11 * n ^ κ.ι - κ.α * T.S.n k)) := htail
+    _ ≤ n * (2 * Real.exp (-κ.α * T.S.n k / 2)) :=
+      mul_le_mul hcN (mul_le_mul_of_nonneg_left he (by norm_num)) (by positivity) (by positivity)
+    _ = 2 * (T.S.n k : ℝ) * Real.exp (-κ.α * T.S.n k / 2) := by dsimp [n]; ring
+
+theorem direct_crossing_bound (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highDirect, ∀ a : S15.EvenPosition T k,
+        (S15.directRawLaw PT hPT).pr (fun ys =>
+          |S15.directCrossingMass PT hPT ys a - 1| >
+            Real.exp (20 * (PT.tiling.P (S15.patchAt PT hPT a.1)).ℓ * bstar T k) - 1) ≤
+              (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) := by
+  filter_upwards [direct_crossing_exp_bound κ hκ T hDeep, crossing_parameters κ hκ T] with k hk hp
+  intro PT hPT hm a
+  have hprob := hk PT hPT hm a
+  rcases hp with ⟨hn, _, _, _, ht⟩
+  have hn2 : (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) ^ (2 : ℕ) := by nlinarith
+  apply hprob.trans
+  calc
+    2 * (T.S.n k : ℝ) * Real.exp (-κ.α * T.S.n k / 2) ≤
+        8 * (T.S.n k : ℝ) ^ (2 : ℕ) * Real.exp (-κ.α * T.S.n k / 2) := by
+      nlinarith [Real.exp_pos (-κ.α * T.S.n k / 2)]
+    _ ≤ (T.S.n k : ℝ) ^ (-(κ.R : ℝ)) := ht
+
+end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey OAI.HypercubeRamsey
+open scoped BigOperators
+open Classical
+set_option maxHeartbeats 600000
+
+variable {κ : CConsts} {T : Stage} {k : ℕ}
+
+private theorem crossing_adj_flip {n : ℕ} {v w : CubeVertex n}
+    (h : (cube n).Adj v w) : ∃ j : Fin n, w = cubeFlip v j := by
+  classical
+  change hammingDist v w = 1 at h
+  unfold hammingDist at h
+  obtain ⟨j, hj⟩ := Finset.card_eq_one.mp h
+  have hjmem : j ∈ Finset.univ.filter (fun q : Fin n => v q ≠ w q) := by
+    rw [hj]
+    simp
+  have hdiff : v j ≠ w j := (Finset.mem_filter.mp hjmem).2
+  have hsame : ∀ q : Fin n, q ≠ j → v q = w q := by
+    intro q hq
+    by_contra hne
+    have hqmem : q ∈ Finset.univ.filter (fun r : Fin n => v r ≠ w r) :=
+      Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+    have hqEq : q = j := by
+      rw [hj] at hqmem
+      simpa using hqmem
+    exact hq hqEq
+  refine ⟨j, ?_⟩
+  funext q
+  by_cases hq : q = j
+  · subst q
+    have hcoord : cubeFlip v j j = !v j := by simp [cubeFlip, Function.update_self]
+    rw [hcoord]
+    cases hv : v j <;> cases hw : w j <;> simp_all
+  · simp [cubeFlip, hq, hsame q hq]
+
+theorem crossing_patch_injective (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : S15.EvenPosition T k) :
+    Set.InjOn (fun b : S15.OddPosition T k => S15.patchAt PT hPT b.1)
+      (S15.crossingNeighbours PT hPT a : Set (S15.OddPosition T k)) := by
+  intro b hb c hc hbc
+  obtain ⟨jb, hfb⟩ := crossing_adj_flip
+    (show (cube (T.S.n k)).Adj a.1 b.1 from (Finset.mem_filter.mp hb).2.1)
+  obtain ⟨jc, hfc⟩ := crossing_adj_flip
+    (show (cube (T.S.n k)).Adj a.1 c.1 from (Finset.mem_filter.mp hc).2.1)
+  let j := S15.patchAt PT hPT b.1
+  have hbLeaf : b.1 ∈ PT.tiling.leaf j := (Classical.choose_spec (hPT.tiling_valid.prefix_complete b.1)).1
+  have hcLeaf : c.1 ∈ PT.tiling.leaf j := by
+    change c.1 ∈ PT.tiling.leaf (S15.patchAt PT hPT b.1)
+    change S15.patchAt PT hPT b.1 = S15.patchAt PT hPT c.1 at hbc
+    rw [hbc]
+    exact (Classical.choose_spec (hPT.tiling_valid.prefix_complete c.1)).1
+  have hjb : jb.val < (PT.tiling.P j).ℓ := by
+    by_contra hnot
+    have haLeaf : a.1 ∈ PT.tiling.leaf j := by
+      intro q hq
+      have hne : q ≠ jb := by intro h; subst q; omega
+      have hx := hbLeaf q hq
+      rw [hfb] at hx
+      simpa [cubeFlip, hne] using hx
+    have hpa : S15.patchAt PT hPT a.1 = j :=
+      ((Classical.choose_spec (hPT.tiling_valid.prefix_complete a.1)).2 j haLeaf).symm
+    exact (Finset.mem_filter.mp hb).2.2 hpa.symm
+  have hcoord : jb = jc := by
+    by_contra hne
+    have he : b.1 jb = c.1 jb := (hbLeaf jb hjb).trans (hcLeaf jb hjb).symm
+    rw [hfb, hfc] at he
+    have hne' : jb ≠ jc := hne
+    cases hv : a.1 jb <;> simp [cubeFlip, hne', hv] at he
+  apply Subtype.ext
+  rw [hfb, hfc, hcoord]
+
+theorem crossing_slice_injective (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : S15.EvenPosition T k) :
+    Set.InjOn (fun b : S15.OddPosition T k => S15.clusterSliceAt PT hPT b.1)
+      (S15.clusterCrossingNeighbours PT hPT a : Set (S15.OddPosition T k)) := by
+  intro b hb c hc he
+  apply crossing_patch_injective PT hPT a hb hc
+  exact congrArg Sigma.fst he
+
+theorem crossing_slice_ne_own (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : S15.EvenPosition T k) (b : S15.OddPosition T k)
+    (hb : b ∈ S15.clusterCrossingNeighbours PT hPT a) :
+    S15.clusterSliceAt PT hPT b.1 ≠ S15.clusterSliceAt PT hPT a.1 := by
+  intro he
+  exact (Finset.mem_filter.mp hb).2.2 (congrArg Sigma.fst he)
+
+theorem history_slice_positive (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm)
+    (hW : 0 < (S15.clusterHistoryLaw PT hPT hm).w W) (s : S15.ClusterSlice PT) :
+    0 < ((S15.clusterSolver PT hPT hm s.1).recLaw PT.parameter).w (S15.historyOnSlice W s) := by
+  have hglobal : (∏ r : S15.ClusterRecordIndex PT hPT hm,
+      (S15.clusterSolver PT hPT hm r.1.1).lawRec PT.parameter r.2 (W r)) ≠ 0 := hW.ne'
+  have hnonzero := Finset.prod_ne_zero_iff.mp hglobal
+  change 0 < ∏ r, (S15.clusterSolver PT hPT hm s.1).lawRec PT.parameter r
+    (S15.historyOnSlice W s r)
+  apply Finset.prod_pos
+  intro r hr
+  have hn := hnonzero ⟨s, r⟩ (Finset.mem_univ _)
+  exact lt_of_le_of_ne ((S15.clusterSolver PT hPT hm s.1).lawRec_nonneg PT.parameter r _)
+    (Ne.symm hn)
+
+noncomputable def sigmaLaw (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (I : S15.ClusterInternalData PT)
+    (a : S15.EvenPosition T k) (hprob : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1) :
+    Law (T.S.N k) where
+  w := S15.clusterSigma PT hPT hm W I a
+  nonneg := fun x => (S15.clusterSolver PT hPT hm (S15.patchAt PT hPT a.1)).σ_nonneg _ _ _ x
+  sum_eq_one := hprob
+
+theorem sigmaLaw_supported (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (hW : 0 < (S15.clusterHistoryLaw PT hPT hm).w W)
+    (I : S15.ClusterInternalData PT) (a : S15.EvenPosition T k)
+    (hprob : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1) :
+    (sigmaLaw PT hPT hm W I a hprob).SupportedIn (T.X k) := by
+  let s := S15.clusterSliceAt PT hPT a.1
+  let S := S15.clusterSolver PT hPT hm s.1
+  have hnonzero : S.σ (S15.clusterCenterRole PT hPT hm a) (S15.historyOnSlice W s)
+      (nbrLabels (S15.clusterCenterRole PT hPT hm a).1 (I s).2) ≠ 0 := by
+    intro hz
+    have hfun : S15.clusterSigma PT hPT hm W I a = 0 := hz
+    have hs : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 0 := by
+      rw [hfun]
+      simp
+    linarith
+  obtain ⟨v, hv, hsupp⟩ := S.σ_support _ _ _ hnonzero
+  have hv' : v ∈ PT.activeVertices := Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+    hv PT.parameter (history_slice_positive PT hPT hm W hW s)⟩
+  intro x hx
+  by_contra hn
+  have hxc := (hsupp x hn).1
+  have hxp := (hPT.corner_clean s.1 v hv').sub hxc
+  have hxT := (Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports s.1).2.1
+    ((hPT.tiling_valid.patch_supports s.1).1 hxp))).1
+  exact hx hxT
 
 end HypercubeRamsey.Lane_sol_s15_cross

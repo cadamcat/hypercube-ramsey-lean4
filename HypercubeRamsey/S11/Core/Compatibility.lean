@@ -2580,7 +2580,7 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       subst k
       by_contra hCD
       have hdisj := (hpackingSpec q hq).2.1 C hC D hD hCD
-      exact (Finset.disjoint_left.mp hdisj) j hkD hjC
+      exact (Finset.disjoint_left.mp hdisj) hjC hkD
     have hcount := HypercubeRamsey.S11.Core.q_s11_compat_sum_unique_indicator
       P (fun C => y ∈ C.image q.2) hunique
     have hmassEq :
@@ -2598,12 +2598,10 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
               · have hC' : C ∈ (packing q).1 := by simpa [P] using hC
                 rw [hDlawPacked q hq C hC' y]
                 by_cases hy : y ∈ C.image q.2
-                · simp [clusterWeight, hC', hy]
-                  ring
-                · simp [clusterWeight, hC', hy]
-                  ring
+                · simp [clusterWeight, P, hC', hy] <;> ring
+                · simp [clusterWeight, P, hC', hy]
               · have hC' : C ∉ (packing q).1 := by simpa [P] using hC
-                simp [clusterWeight, hC']
+                simp [clusterWeight, hC', hC]
         _ = _ := by rw [Finset.mul_sum]
     calc
       (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) =
@@ -2613,7 +2611,10 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       _ ≤ joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹) := by
             calc
               _ ≤ (joint.w q * ((P.card : ℝ)⁻¹ * (sC n : ℝ)⁻¹)) * 1 :=
-                mul_le_mul_of_nonneg_left hcount (by positivity)
+                mul_le_mul_of_nonneg_left hcount
+                  (mul_nonneg (joint.nonneg q)
+                    (mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _))
+                      (inv_nonneg.mpr (Nat.cast_nonneg _))))
               _ = _ := by ring
       _ ≤ joint.w q * (2 / (r₀ : ℝ)) :=
             mul_le_mul_of_nonneg_left hfactor (joint.nonneg q)
@@ -2631,30 +2632,34 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
           calc
             1 = (if q.2 j = y then (1 : ℝ) else 0) := by simp [hj]
             _ ≤ ∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0 :=
-              Finset.single_le_sum (fun j' hj' => by positivity)
+              Finset.single_le_sum
+                (f := fun j' : Fin r₀ => if q.2 j' = y then (1 : ℝ) else 0)
+                (fun j' hj' => by split_ifs <;> norm_num)
                 (Finset.mem_univ j)
         calc
           (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) ≤
               joint.w q * (2 / (r₀ : ℝ)) := hsamplePackMass q hqgood y
           _ ≤ (joint.w q * (2 / (r₀ : ℝ))) *
-              (∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0) :=
-                mul_le_mul_of_nonneg_left hcount (by positivity)
+              (∑ j' : Fin r₀, if q.2 j' = y then (1 : ℝ) else 0) := by
+                simpa only [mul_one] using mul_le_mul_of_nonneg_left hcount
+                  (mul_nonneg (joint.nonneg q)
+                    (div_nonneg (by norm_num : (0 : ℝ) ≤ 2) (Nat.cast_nonneg r₀)))
       · have hsumZero :
           (∑ C : Finset (Fin r₀), clusterWeight q C * (Dlaw q C).w y) = 0 := by
-        apply Finset.sum_eq_zero
-        intro C hCsum
-        by_cases hC : C ∈ (packing q).1
-        · have hnot : y ∉ C.image q.2 := by
-            intro hy
-            obtain ⟨j, hjC, hjy⟩ := Finset.mem_image.mp hy
-            exact hcoord ⟨j, hjy⟩
-          rw [hDlawPacked q hqgood C hC y]
-          simp [clusterWeight, hC, hnot]
-        · simp [clusterWeight, hC]
-      have hneq (j : Fin r₀) : q.2 j ≠ y := by
-        intro hj
-        exact hcoord ⟨j, hj⟩
-      simp [hsumZero, hneq]
+          apply Finset.sum_eq_zero
+          intro C hCsum
+          by_cases hC : C ∈ (packing q).1
+          · have hnot : y ∉ C.image q.2 := by
+              intro hy
+              obtain ⟨j, hjC, hjy⟩ := Finset.mem_image.mp hy
+              exact hcoord ⟨j, hjy⟩
+            rw [hDlawPacked q hqgood C hC y]
+            simp [clusterWeight, hC, hnot]
+          · simp [clusterWeight, hC]
+        have hneq (j : Fin r₀) : q.2 j ≠ y := by
+          intro hj
+          exact hcoord ⟨j, hj⟩
+        simp [hsumZero, hneq]
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

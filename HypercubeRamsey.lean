@@ -122,3 +122,17 @@ import HypercubeRamsey.PartC.SliceSolver
 import HypercubeRamsey.PartC.Tiling
 import HypercubeRamsey.S04.PlateauProof
 import HypercubeRamsey.S04.StageProof
+import HypercubeRamsey.S09.Nodes_p_s09_select
+import HypercubeRamsey.S12
+import HypercubeRamsey.S12.CenteredMoment
+import HypercubeRamsey.S12.DeepDiscrepancy
+import HypercubeRamsey.S12.Defs
+import HypercubeRamsey.S12.Exceptional
+import HypercubeRamsey.S12.HomogeneousPeeling
+import HypercubeRamsey.S12.InteractionTails
+import HypercubeRamsey.S12.ModerateMoment
+import HypercubeRamsey.S12.RowTrimming
+import HypercubeRamsey.Tools.Binomial_p_tools_binom
+import HypercubeRamsey.Tools.CubeGeometry_p_tools_cube_r
+import HypercubeRamsey.Tools.LinearCode_p_tools_cube_r
+import HypercubeRamsey.Tools.Ramsey_p_tools_binom

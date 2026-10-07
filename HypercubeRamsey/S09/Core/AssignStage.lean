@@ -123,7 +123,7 @@ theorem p92_star_lik_bound (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
       {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → StarLikBound9 S I E G := by
-  sorry
+  exact Lane_q_s09_assign2.p92_star_lik_bound_core P hP
 
 /-- P9.2-assignC, posterior rows (09:331–335): on predictive success `M_v > 0`, so the posterior row is a
 probability law; a nonzero entry at `x` forces `𝒱` with `W_* = x`, hence every neighbour label hits `x`

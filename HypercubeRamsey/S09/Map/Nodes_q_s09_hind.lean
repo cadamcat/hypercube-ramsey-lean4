@@ -1937,6 +1937,63 @@ private theorem local_lemma_charge9 (Δ : ℕ) (p : ℝ)
     _ = x / 2 := by dsimp [x]; field_simp; norm_num
     _ ≤ x * (1 - x) ^ Δ := by nlinarith [hx0, hpow]
 
+private theorem heightRootLLLInput9_of_small {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s η ε : ℝ} {Δ : ℕ}
+    (hmn : P.m n ≤ n) (hcounts : HeightCounts9 P hc n)
+    (hdegree : ∀ root : CubeVertex n,
+      (Finset.univ.filter
+        (fun root' => root' ≠ root ∧ ¬ Disjoint
+          (scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n))
+          (scaleRootSupport9 (P := P) (hc := hc) (n := n) root' (hc.levels n)))).card ≤ Δ)
+    (hscale : ∀ root : CubeVertex n,
+      (heightLaw9 P hc n).pr (fun ω =>
+        rootScaleFailure9 Finset.univ t s η (hc.levels n) ω.1 ω.2 root) ≤ ε)
+    (hsmall : ε + Real.exp (-(n : ℝ)) ≤ 1 / (4 * ((Δ + 1 : ℕ) : ℝ))) :
+    ∃ x : ℝ, 0 ≤ x ∧ x < 1 ∧ S07.LLLInput
+      (fun _ : Pos9 P hc n => FinProb.prod
+        (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ)))
+        (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10))))
+      (fun root ω => rootBadPair9 t s η root ω)
+      (fun root => scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n)) x Δ := by
+  obtain ⟨x, hx0, hx1, hcharge⟩ :=
+    local_lemma_charge9 Δ (ε + Real.exp (-(n : ℝ))) hsmall
+  exact ⟨x, hx0, hx1,
+    heightRootLLLInput9 hmn hcounts hx0 hx1 hdegree hscale hcharge⟩
+
+private theorem exists_pair_fields_avoiding_rootBad9 {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} {t s η x : ℝ} {Δ : ℕ}
+    (hinput : S07.LLLInput
+      (fun _ : Pos9 P hc n => FinProb.prod
+        (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ)))
+        (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10))))
+      (fun root ω => rootBadPair9 t s η root ω)
+      (fun root => scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n)) x Δ) :
+    ∃ ω : Pos9 P hc n → Bool × Bool, ∀ root, ¬ rootBadPair9 t s η root ω := by
+  let coord : Pos9 P hc n → FinProb (Bool × Bool) := fun _ =>
+    FinProb.prod
+      (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ)))
+      (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10)))
+  let Bad : CubeVertex n → (Pos9 P hc n → Bool × Bool) → Prop :=
+    fun root ω => rootBadPair9 t s η root ω
+  let scopes : CubeVertex n → Finset (Pos9 P hc n) :=
+    fun root => scaleRootSupport9 root (hc.levels n)
+  rcases S07.cond_product_bound coord Bad scopes x Δ hinput with ⟨hpositive, _⟩
+  change 0 < (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr
+    (fun ω => ∀ root, ¬ rootBadPair9 t s η root ω) at hpositive
+  by_contra hnone
+  push_neg at hnone
+  have hzero : (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr
+      (fun ω => ∀ root, ¬ rootBadPair9 t s η root ω) = 0 := by
+    unfold FinProb.pr
+    apply Finset.sum_eq_zero
+    intro ω hω
+    have hnot : ¬ (∀ root, ¬ rootBadPair9 t s η root ω) := by
+      intro hall
+      obtain ⟨root, hbad⟩ := hnone ω
+      exact hall root hbad
+    simp [hnot]
+  linarith
+
 private theorem rootSupport9_overlap_projection_bounds {P : Params9} {hc : HeightChoice9 P}
     {n R : ℕ} (hmn : P.m n ≤ n) (root root' : CubeVertex n)
     (hoverlap : ¬ Disjoint (scaleRootSupport9 (P := P) (hc := hc) (n := n) root R)
@@ -2479,6 +2536,60 @@ private theorem topScale_le_of_candidate (n : ℕ) (σ ζ : ℝ) (i : ℕ)
   apply Nat.mul_le_mul_right
   exact pow_le_pow_right₀ (by omega)
     (Nat.find_min' hexists hcand)
+
+private theorem scaleIndex_exists9 (M R target : ℕ) (hM : 2 ≤ M) (hR : 1 ≤ R) :
+    ∃ i : ℕ, target ≤ M ^ i * R := by
+  have hM0 : M ≠ 0 := by omega
+  induction target with
+  | zero => exact ⟨0, by simp⟩
+  | succ target ih =>
+      obtain ⟨i, hi⟩ := ih
+      let x := M ^ i * R
+      have hx0 : x ≠ 0 := by
+        dsimp [x]
+        exact Nat.mul_ne_zero (pow_ne_zero _ hM0) (by omega)
+      have hx : 1 ≤ x := by omega
+      have hstep : x + 1 ≤ 2 * x := by omega
+      have hmult : 2 * x ≤ M * x := Nat.mul_le_mul_right x hM
+      refine ⟨i + 1, ?_⟩
+      calc
+        target + 1 ≤ x + 1 := Nat.succ_le_succ hi
+        _ ≤ 2 * x := hstep
+        _ ≤ M * x := hmult
+        _ = M ^ (i + 1) * R := by dsimp [x]; rw [pow_succ]; ring
+
+private theorem topScale_le_logbase_add_product_target (n : ℕ) (σ ζ : ℝ) :
+    topScale n σ ζ ≤
+      max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊ +
+        (max 2 ⌈(n : ℝ) ^ σ⌉₊) * ⌈(n : ℝ) ^ (1 - ζ)⌉₊ := by
+  classical
+  let R₀ : ℕ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M : ℕ := max 2 ⌈(n : ℝ) ^ σ⌉₊
+  let target : ℕ := ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+  have hM : 2 ≤ M := by dsimp [M]; omega
+  have hR : 1 ≤ R₀ := by dsimp [R₀]; omega
+  have hexists := scaleIndex_exists9 M R₀ target hM hR
+  let k := Nat.find hexists
+  have hspec : target ≤ M ^ k * R₀ := Nat.find_spec hexists
+  change M ^ k * R₀ ≤ R₀ + M * target
+  by_cases hk0 : k = 0
+  · have hkpow : M ^ k * R₀ = R₀ := by rw [hk0, pow_zero]; simp
+    rw [hkpow]
+    omega
+  · have hkpos : 0 < k := Nat.pos_of_ne_zero hk0
+    have hprevNot : ¬ target ≤ M ^ (k - 1) * R₀ :=
+      Nat.find_min hexists (Nat.sub_lt hkpos (by omega))
+    have hprev : M ^ (k - 1) * R₀ < target := Nat.lt_of_not_ge hprevNot
+    have hpow : M ^ k * R₀ = M * (M ^ (k - 1) * R₀) := by
+      have hkEq : (k - 1) + 1 = k := by omega
+      calc
+        M ^ k * R₀ = M ^ ((k - 1) + 1) * R₀ := by rw [hkEq]
+        _ = (M ^ (k - 1) * M) * R₀ := by rw [pow_succ]
+        _ = M * (M ^ (k - 1) * R₀) := by ring
+    rw [hpow]
+    calc
+      M * (M ^ (k - 1) * R₀) ≤ M * target := Nat.mul_le_mul_left _ hprev.le
+      _ ≤ R₀ + M * target := Nat.le_add_left _ _
 
 private theorem topScale_add_one_le_polynomial (σ ζ : ℝ)
     (hσ : 0 < σ) (hσζ : σ < ζ) (hζ : 0 < ζ) (hζ1 : ζ < 1)

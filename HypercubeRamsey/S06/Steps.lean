@@ -113,12 +113,32 @@ theorem L6_1c_tag (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 predictive-denominator calculation (L3.7) with `d₀, δ₁ ≪ d₁`. -/
 theorem L6_1c_cap (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step1CapBound := by
+  refine ⟨1, 1, ?_⟩
+  intro n N E G M X hlarge hTagDom
+  have hn1 : 1 ≤ n := hlarge.1
+  intro h hh
+  -- On raw support, the bounded parent-prior atom and the incoming-tag likelihood
+  -- factors control the posterior numerator. The remaining denominator tail is the
+  -- predictive test from Lemma 3.7.
+  have hpriorCap : ∀ y, 0 ≤ X.initLaw.w y := fun y => X.initLaw.nonneg y
   sorry
 
 /-- L6.1c (deletion, 06:173–181): the incoming tag has likelihood `≤ n^{d₀} Λ(i)` at every supported parent
 value; its predictive density is `< n^{-δ₁}` with probability `≤ n^{-δ₁}`; Bayes off that event. -/
 theorem L6_1c_del (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step1DelBound := by
+  refine ⟨1, 1, ?_⟩
+  intro n N E G M X hlarge hTagDom
+  intro h hh s hs
+  have hn1 : 1 ≤ n := hlarge.1
+  have hfactor : ∀ (b : X.Base) (y : Fin N),
+      X.hidWeight b h (X.C h) y =
+        X.hidWeight b h ((X.C h).erase s) y *
+          (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) := by
+    intro b y
+    exact Lane_q_s06_steps1.hidWeight_erase_factor X b h (X.C h) y s hs
+  -- Outside the predictive-density alarm, Bayes' formula bounds every deletion
+  -- multiplier by the incoming-tag likelihood cap divided by its predictive density.
   sorry
 
 namespace Ctx6
@@ -155,6 +175,21 @@ end Ctx6
 /-- L6.1d (failure, 06:201–211). -/
 theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Bound := by
+  refine ⟨1, 1, ?_⟩
+  intro n N E G M X hlarge
+  have hn1 : 1 ≤ n := hlarge.1
+  intro β hβ
+  have hfailureShape : ∀ H : X.Hist, X.Step2Fail H β →
+      X.tagMass H β β.obs < X.step2Thr β ∨
+        ∃ ℓ ∈ β.obs, X.tagMass H β β.obs <
+          X.step2Thr β * X.tagMass H β (β.obs.erase ℓ) := by
+    intro H hfail
+    exact Lane_q_s06_steps1.notStep2Tests_cases6 X H β hn1 hfail.2
+  have hobsCard := occType_obs_card_le X β hβ
+  have huPos : 1 ≤ β.u := by
+    cases hmode : β.mode <;> simp [Type6.u, hmode]
+  -- The mass events have the required conditional bounds, but the raw law still needs to be
+  -- factored through the base tag at `β.key` and the hidden coordinates in `β.obs`.
   sorry
 
 /-- L6.1d (domination, 06:212–220): the absolute ratio is `≤ n^{d₀ + d₁|S| + δ₂u}`, the deleted ratio

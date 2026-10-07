@@ -608,6 +608,25 @@ theorem hidWeight_pos_tagFactor {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin
     ((X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).nonneg (b.2.2 s))
     (Ne.symm hfactor_ne)
 
+theorem hidWeight_erase_factor {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (b : X.Base) (h : X.Key) (obs : Finset X.Key) (y : Fin N)
+    (s : X.Key) (hs : s ∈ obs) :
+    X.hidWeight b h obs y = X.hidWeight b h (obs.erase s) y *
+      (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) s).w (b.2.2 s) := by
+  let f : X.Key → ℝ := fun t =>
+    (X.tagLawAt ((X.parOf b).set (primaryName6 h) y) t).w (b.2.2 t)
+  have hprod : (∏ t ∈ obs, f t) = f s * ∏ t ∈ obs.erase s, f t := by
+    rw [← Finset.prod_erase_mul obs f hs]
+    ring
+  cases hflag : h.2
+  · simp only [Ctx6.hidWeight, hflag, f]
+    rw [hprod]
+    ring
+  · simp only [Ctx6.hidWeight, hflag, f]
+    rw [hprod]
+    ring
+
 theorem hidWeight_pos_localPrior {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
     (b : X.Base) (h : X.Key) (z : Fin N) (hw : 0 < X.hidWeight b h (X.C h) z) :
@@ -1166,6 +1185,54 @@ theorem eventually_m6_req_error {p₀ : ℝ} (hp₀ : 0 < p₀) :
     _ ≤ 1810 / (3620 / c₁) := by
       exact div_le_div_of_nonneg_left (by norm_num) hC hpow
     _ = c₁ / 2 := by field_simp [show c₁ ≠ 0 by norm_num [c₁, c₀]]; norm_num
+
+theorem predictive_bad_mass6 {Ω : Type*} [Fintype Ω] (Q : FinProb Ω) (m : Ω → ℝ)
+    (hm : ∀ ω, 0 ≤ m ω) (a : ℝ) (ha : 0 ≤ a) :
+    (∑ ω, if m ω < a * Q.w ω ∨ m ω = 0 then m ω else 0) ≤ a := by
+  calc
+    (∑ ω, if m ω < a * Q.w ω ∨ m ω = 0 then m ω else 0) ≤
+        ∑ ω, a * Q.w ω := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases hbad : m ω < a * Q.w ω ∨ m ω = 0
+      · rcases hbad with hlt | hz
+        · rw [if_pos (Or.inl hlt)]
+          exact le_of_lt hlt
+        · rw [if_pos (Or.inr hz)]
+          simpa [hz] using mul_nonneg ha (Q.nonneg ω)
+      · rw [if_neg hbad]
+        exact mul_nonneg ha (Q.nonneg ω)
+    _ = a := by rw [← Finset.mul_sum, Q.sum_eq_one, mul_one]
+
+theorem predictive_deleted_bad_mass6 {Ω : Type*} [Fintype Ω]
+    (m d : Ω → ℝ) (hm : ∀ ω, 0 ≤ m ω) (hd : ∀ ω, 0 ≤ d ω) (a : ℝ) (ha : 0 ≤ a) :
+    (∑ ω, if m ω < a * d ω then m ω else 0) ≤ a * ∑ ω, d ω := by
+  calc
+    (∑ ω, if m ω < a * d ω then m ω else 0) ≤ ∑ ω, a * d ω := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases hlt : m ω < a * d ω
+      · simpa [hlt] using (le_of_lt hlt)
+      · simp [hlt, mul_nonneg ha (hd ω)]
+    _ = a * ∑ ω, d ω := by rw [Finset.mul_sum]
+
+theorem notStep2Tests_cases6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (H : X.Hist) (β : X.Ty) (hn : 1 ≤ n) (hfail : ¬ X.Step2Tests H β) :
+    X.tagMass H β β.obs < X.step2Thr β ∨
+      ∃ ℓ ∈ β.obs, X.tagMass H β β.obs <
+        X.step2Thr β * X.tagMass H β (β.obs.erase ℓ) := by
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have hnp : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hnR
+  have hthr : 0 < X.step2Thr β := by
+    rw [Ctx6.step2Thr]
+    exact Real.rpow_pos_of_pos hnp _
+  by_contra h
+  push_neg at h
+  have htests : X.Step2Tests H β := by
+    refine ⟨?_, h.1, h.2⟩
+    exact lt_of_lt_of_le hthr h.1
+  exact hfail htests
 
 end Lane_q_s06_steps1
 

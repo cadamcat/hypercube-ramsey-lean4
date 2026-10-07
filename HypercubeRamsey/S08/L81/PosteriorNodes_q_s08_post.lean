@@ -1937,7 +1937,9 @@ theorem rawLaw_pr_congr_local {η₀ β p : ℝ} {h : ℕ}
       _ = (FinProb.map (D.rawAnchors ((H', P'), ω₀)) (localAnchorsProj D c)).pr
           (fun a => localPresEvent D H' P' c π baseT baseW t a) := by rw [hAnchorLaw]
   dsimp
-  rw [hAt t]
+  exact congrArg
+    (fun x : ℝ => (FinProb.map (D.rawTAT H') (localTATProj D c)).w t * x)
+    (hAt t)
 
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by

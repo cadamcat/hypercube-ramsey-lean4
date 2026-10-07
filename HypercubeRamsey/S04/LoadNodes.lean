@@ -1,4 +1,5 @@
 import HypercubeRamsey.S04.CoreLemmas
+import HypercubeRamsey.S04.LoadNodes_q_s04_load
 
 /-!
 # L4.1i–k: odd loads and the odd injection, predictive thresholds, even loads
@@ -36,7 +37,7 @@ theorem injection_exists (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ :
         (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι),
         GeoCons M tag → OddCap M tag →
         ∀ ω : Prep M tag, SPre M tag ω → ∃ J, InjOK M tag ω J := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.injection_exists β γ hβ hβγ hγ
 
 /-- L4.1j (04:528–551): for a fixed even role `a` and reference `c`, on `S_pre` with `sel a = c` the event `E`
 holds (`GeoCons`); the injection comparison (`InjOK`, the `n` neighbouring outputs) bounds the failure by twice its
@@ -61,7 +62,7 @@ product of the odd rows, which on `S_pre` are the sampling laws (`GeoCons`), and
 product factors into the mean rows. -/
 theorem even_clock {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_hgeo : GeoCons M tag) : EvenClock M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.even_clock M tag _hgeo
 
 /-- L4.1k, even loads (04:553–591): Lemma 3.6 with weights `prepLaw(ω) 1_{S_pre}(ω) J_ω(f)`, `Z_a = N p_a(x)`,
 cap `exp((log 2 - c₂ a_*/2) n)` (`EvenRowFacts`), near sets of radius `2 locR` (`n · fraction · cap → 0` since

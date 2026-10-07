@@ -6,6 +6,82 @@ open Classical
 open Filter
 open scoped BigOperators
 
+theorem pi_expect_prod {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (f : ∀ i, Ω i → ℝ) :
+    (FinLaw.pi P).E (fun ω => ∏ i, f i (ω i)) =
+      ∏ i, (P i).E (f i) := by
+  classical
+  let g : ∀ i, Ω i → ℝ := fun i x => (P i).w x * f i x
+  have hsum : (∑ ω : (∀ i, Ω i), ∏ i, g i (ω i)) =
+      ∏ i, ∑ x : Ω i, g i x := by
+    rw [← Fintype.prod_sum]
+  calc
+    (∑ ω : (∀ i, Ω i), (∏ i, (P i).w (ω i)) * (∏ i, f i (ω i))) =
+        ∑ ω : (∀ i, Ω i), ∏ i, g i (ω i) := by
+      apply Finset.sum_congr rfl
+      intro ω hω
+      simp [g, Finset.prod_mul_distrib]
+    _ = ∏ i, ∑ x : Ω i, (P i).w x * f i x := by
+      simpa [g] using hsum
+    _ = ∏ i, (∑ x : Ω i, (P i).w x * f i x) := rfl
+
+theorem pi_expect_sum_prod {ι α : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype α] {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (c : α → ℝ)
+    (f : α → ∀ i, Ω i → ℝ) :
+    (FinLaw.pi P).E (fun ω => ∑ a, c a * ∏ i, f a i (ω i)) =
+      ∑ a, c a * ∏ i, (P i).E (f a i) := by
+  classical
+  change (∑ ω : (∀ i, Ω i), (∏ i, (P i).w (ω i)) *
+      (∑ a, c a * ∏ i, f a i (ω i))) =
+    ∑ a, c a * ∏ i, ∑ y : Ω i, (P i).w y * f a i y
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro a ha
+  let g : ∀ i, Ω i → ℝ := fun i y => (P i).w y * f a i y
+  have hsum : (∑ ω : (∀ i, Ω i), ∏ i, g i (ω i)) =
+      ∏ i, ∑ y : Ω i, g i y := by
+    rw [← Fintype.prod_sum]
+  calc
+    (∑ ω : (∀ i, Ω i), (∏ i, (P i).w (ω i)) *
+        (c a * ∏ i, f a i (ω i))) =
+      c a * ∑ ω : (∀ i, Ω i), ∏ i, g i (ω i) := by
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro ω hω
+        calc
+          (∏ i, (P i).w (ω i)) * (c a * ∏ i, f a i (ω i)) =
+              c a * ((∏ i, (P i).w (ω i)) * ∏ i, f a i (ω i)) := by ring
+          _ = c a * ∏ i, g i (ω i) := by
+            congr 1
+            rw [← Finset.prod_mul_distrib]
+    _ = c a * ∏ i, ∑ y : Ω i, (P i).w y * f a i y := by
+      simpa [g] using congrArg (fun z : ℝ => c a * z) hsum
+    _ = c a * ∏ i, (∑ y : Ω i, (P i).w y * f a i y) := rfl
+
+theorem pinned_product_row_expectation {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (pins : Finset (Pos T k)) (fixed : Pos T k → Fin (T.S.N k)) :
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+          D.hitRatio w.1 x (ys w)) =
+      ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+        (if w.1 ∈ pins then FinLaw.dirac (fixed w.1)
+         else ListGateContext.lawAsFinLaw (PT.π (D.G.patchOf w.1))).E
+          (fun y => D.hitRatio w.1 x y) := by
+  classical
+  let P : ∀ w : {w : Pos T k // w ∈ D.externalEarly v}, FinLaw (Fin (T.S.N k)) :=
+    fun w => if w.1 ∈ pins then FinLaw.dirac (fixed w.1)
+      else ListGateContext.lawAsFinLaw (PT.π (D.G.patchOf w.1))
+  let f : Fin (T.S.N k) →
+      ∀ w : {w : Pos T k // w ∈ D.externalEarly v}, Fin (T.S.N k) → ℝ :=
+    fun x w y => D.hitRatio w.1 x y
+  simpa [P, f, ListGateContext.pinnedLabelLaw] using
+    (pi_expect_sum_prod P σ f)
+
 theorem pi_pr_forall {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
     (P : ∀ i, FinLaw (Ω i)) (A : ∀ i, Ω i → Prop) :

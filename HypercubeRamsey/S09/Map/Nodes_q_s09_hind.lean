@@ -723,7 +723,7 @@ private theorem scaleFailure9_forces_bad {P : Params9} {hc : HeightChoice9 P} {n
     {C : Finset (Pos9 P hc n)} {t s η : ℝ} {R : ℕ}
     {Pp A : Pos9 P hc n → Bool} {start : HeightState9 P hc n}
     (hfail : scaleFailure9 C t s η R Pp A start)
-    (hη : 0 ≤ η) (hηhalf : η ≤ 1 / 2) (hR : 0 < R) :
+    (hηlt : η < 1) (hR : 0 < R) :
     ∃ x ∈ scaleBall9 start R, scaleBad9 C t s Pp A x := by
   classical
   by_contra hnone
@@ -754,13 +754,15 @@ private theorem scaleFailure9_forces_bad {P : Params9} {hc : HeightChoice9 P} {n
       rw [Nat.cast_sub hheadLevel]
     rw [hkEq]
     linarith [hrise]
-  have hkhalf : (k : ℝ) ≤ (R : ℝ) / 2 := by
-    have hmul := mul_le_mul_of_nonneg_right hηhalf (Nat.cast_nonneg R)
-    nlinarith [hkcast, hmul]
-  have htwoReal : (2 : ℝ) * (k : ℝ) ≤ (R : ℝ) := by nlinarith [hkhalf]
-  have htwo : 2 * k ≤ R := by exact_mod_cast htwoReal
   have hRk : R ≤ k := hmetric.trans hmax
-  omega
+  have hRposReal : 0 < (R : ℝ) := by exact_mod_cast hR
+  have hηRlt : η * (R : ℝ) < (R : ℝ) := by
+    calc
+      η * (R : ℝ) < 1 * (R : ℝ) := mul_lt_mul_of_pos_right hηlt hRposReal
+      _ = (R : ℝ) := by ring
+  have hklt : (k : ℝ) < (R : ℝ) := hkcast.trans_lt hηRlt
+  have hRkReal : (R : ℝ) ≤ (k : ℝ) := by exact_mod_cast hRk
+  linarith
 
 private theorem scaleBad9_finite_union_probability {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {c t s : ℝ} (hbase : HeightBase9 P hc n c)
@@ -783,7 +785,7 @@ private theorem scaleFailure9_fixed_start_probability {P : Params9} {hc : Height
     {n : ℕ} {c t s η : ℝ} {R : ℕ}
     (hbase : HeightBase9 P hc n c)
     (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : 1 / 8 ≤ s)
-    (hη : 0 ≤ η) (hηhalf : η ≤ 1 / 2) (hR : 0 < R)
+    (hηlt : η < 1) (hR : 0 < R)
     (C : Finset (Pos9 P hc n)) (start : HeightState9 P hc n) :
     (heightLaw9 P hc n).pr (fun ω => scaleFailure9 C t s η R ω.1 ω.2 start) ≤
       ((scaleBall9 start R).card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by
@@ -793,7 +795,7 @@ private theorem scaleFailure9_fixed_start_probability {P : Params9} {hc : Height
           scaleBad9 C t s ω.1 ω.2 x) := by
             apply finProb_pr_mono (heightLaw9 P hc n)
             intro ω hω
-            exact scaleFailure9_forces_bad hω hη hηhalf hR
+            exact scaleFailure9_forces_bad hω hηlt hR
     _ ≤ ((scaleBall9 start R).card : ℝ) * Real.exp (-((n : ℝ) ^ c)) :=
       scaleBad9_finite_union_probability hbase ht₁ ht₂ hs C (scaleBall9 start R)
 
@@ -1259,6 +1261,119 @@ private theorem scaleFailure9_from_levelBand {P : Params9} {hc : HeightChoice9 P
     linarith
   refine ⟨childStart, hchildMem, hchildLevel, ?_⟩
   exact ⟨childEnd, rest, hfirstPath, hsite, hlevel, hmetricEq'.ge, hrise⟩
+
+private theorem scaleFailure9_of_metricExit9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {C : Finset (Pos9 P hc n)} {t s η : ℝ} {R : ℕ}
+    (Pp A : Pos9 P hc n → Bool) {l : List (HeightState9 P hc n)}
+    {start endpoint : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: l) start)
+    (hmetricEq : heightMetric9 endpoint start = R)
+    (hmetricAll : ∀ z ∈ endpoint :: l, heightMetric9 z start ≤ R)
+    (hrise : (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)) :
+    scaleFailure9 C t s η R Pp A start := by
+  have hmetricEq' : max (Nat.dist endpoint.2.val start.2.val)
+      ((_root_.hammingDist endpoint.1 start.1 + 1) / 2) = R := by
+    simpa [heightMetric9] using hmetricEq
+  have hsite : ∀ z ∈ endpoint :: l, _root_.hammingDist z.1 start.1 ≤ 16 * R := by
+    intro z hz
+    have hzmetric := hmetricAll z hz
+    have hzspace : (_root_.hammingDist z.1 start.1 + 1) / 2 ≤ R :=
+      (Nat.le_max_right _ _).trans hzmetric
+    omega
+  have hlevel : ∀ z ∈ endpoint :: l, Nat.dist z.2.val start.2.val ≤ 8 * R := by
+    intro z hz
+    have hzmetric := hmetricAll z hz
+    have hzlevel : Nat.dist z.2.val start.2.val ≤ R :=
+      (Nat.le_max_left _ _).trans hzmetric
+    omega
+  refine ⟨endpoint, l, hp, hsite, hlevel, ?_, hrise⟩
+  exact hmetricEq'.ge
+
+private theorem scaleFailure9_from_longPath9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {C : Finset (Pos9 P hc n)} {t s ηp η : ℝ} {R q₀ : ℕ}
+    (Pp A : Pos9 P hc n → Bool) (hη : 0 ≤ η) (hR : 0 < R)
+    (hmargin : ηp * ((q₀ * R : ℕ) : ℝ) - η * ((q₀ * R : ℕ) : ℝ) ≤ -(R : ℝ))
+    {l : List (HeightState9 P hc n)} {start endpoint : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: l) start)
+    (hbudget : (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + ηp * ((q₀ * R : ℕ) : ℝ))
+    (hmetric : q₀ * R ≤ heightMetric9 endpoint start) :
+    ∃ childStart ∈ endpoint :: l, scaleFailure9 C t s η R Pp A childStart := by
+  have hmain : ∀ q : ℕ, ∀ budget : ℝ,
+      ∀ {xs : List (HeightState9 P hc n)} {x : HeightState9 P hc n},
+      HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: xs) x →
+      (x.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + budget →
+      q * R ≤ heightMetric9 endpoint x →
+      budget - η * ((q * R : ℕ) : ℝ) ≤ -(R : ℝ) →
+      ∃ childStart ∈ endpoint :: xs, scaleFailure9 C t s η R Pp A childStart := by
+    intro q
+    induction q using Nat.strong_induction_on with
+    | h q ih =>
+        intro budget xs x hp' hbudget' hmetric' hmargin'
+        by_cases hqzero : q = 0
+        · subst q
+          have hbudgetR : budget ≤ -(R : ℝ) := by simpa using hmargin'
+          have hendRise : x.2.val + R ≤ endpoint.2.val := by
+            have hcast := hbudget'
+            push_cast at hcast
+            exact_mod_cast (by linarith : (x.2.val : ℝ) + (R : ℝ) ≤ (endpoint.2.val : ℝ))
+          obtain ⟨childStart, hmem, hlevel, hfail⟩ :=
+            scaleFailure9_from_levelBand Pp A hp' x.2.val (by omega)
+              (by simp) hendRise hη hR
+          exact ⟨childStart, hmem, hfail⟩
+        · have hqpos : 1 ≤ q := by omega
+          have hRle : R ≤ q * R := by
+            have hm := Nat.mul_le_mul_right R hqpos
+            simpa using hm
+          have hexit : ∃ z ∈ endpoint :: xs, R ≤ heightMetric9 z x :=
+            ⟨endpoint, by simp, hRle.trans hmetric'⟩
+          obtain ⟨next, rest, hfirst, hfirstSub, hclose, hge, hle⟩ :=
+            heightPath9_firstExit9 hp' (fun _ _ h => heightStep9_metric_le_one h) R hR hexit
+          have hmetricEq : heightMetric9 next x = R := by omega
+          have hmetricAll : ∀ z ∈ next :: rest, heightMetric9 z x ≤ R := by
+            intro z hz
+            rcases List.mem_cons.mp hz with rfl | hz
+            · exact hle
+            · exact Nat.le_of_lt (hclose z hz)
+          by_cases hgood : (x.2.val : ℝ) ≤ (next.2.val : ℝ) + η * (R : ℝ)
+          · have hfail := scaleFailure9_of_metricExit9 Pp A hfirst hmetricEq hmetricAll hgood
+            exact ⟨x, heightPath9_start_mem hp', hfail⟩
+          · have hbad : (next.2.val : ℝ) + η * (R : ℝ) < (x.2.val : ℝ) :=
+              lt_of_not_ge hgood
+            have hnextMem : next ∈ endpoint :: xs := hfirstSub next (by simp)
+            obtain ⟨segHead, suffix, hsegHead, hseg, _hsegSub⟩ :=
+              heightPath9_segmentFromMember hp' hnextMem
+            have hsegHead' : segHead = endpoint := by
+              simpa using hsegHead.symm.trans (by simp : (endpoint :: xs).head? = some endpoint)
+            subst segHead
+            have htri := heightMetric9_triangle endpoint next x
+            have hmul : q * R = (q - 1) * R + R := by
+              have hq : (q - 1) + 1 = q := by omega
+              rw [← hq, Nat.add_mul]
+              simp
+            have hmetricNext : (q - 1) * R ≤ heightMetric9 endpoint next := by
+              have htri' : heightMetric9 endpoint x ≤ heightMetric9 endpoint next + R := by
+                simpa [hmetricEq] using htri
+              omega
+            let budgetNext := budget - η * (R : ℝ)
+            have hbudgetNext : (next.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + budgetNext := by
+              dsimp [budgetNext]
+              linarith [hbudget', hbad]
+            have hmulReal : ((q * R : ℕ) : ℝ) =
+                (((q - 1) * R : ℕ) : ℝ) + (R : ℝ) := by exact_mod_cast hmul
+            have hmarginNext : budgetNext - η * ((((q - 1) * R : ℕ) : ℝ)) ≤ -(R : ℝ) := by
+              calc
+                budgetNext - η * ((((q - 1) * R : ℕ) : ℝ)) =
+                    budget - η * ((((q - 1) * R : ℕ) : ℝ) + (R : ℝ)) := by
+                      dsimp [budgetNext]
+                      ring
+                _ = budget - η * ((q * R : ℕ) : ℝ) := by rw [← hmulReal]
+                _ ≤ -(R : ℝ) := hmargin'
+            obtain ⟨childStart, hchildMem, hchildFail⟩ :=
+              ih (q - 1) (by omega) budgetNext hseg hbudgetNext hmetricNext hmarginNext
+            have hchildMem' : childStart ∈ endpoint :: xs :=
+              _hsegSub childStart hchildMem
+            exact ⟨childStart, hchildMem', hchildFail⟩
+  exact hmain q₀ (ηp * ((q₀ * R : ℕ) : ℝ)) hp hbudget hmetric hmargin
 
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)

@@ -5,6 +5,7 @@ import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.SignedTest
 import HypercubeRamsey.S09.Core.GainStage_q_s09_gain2
 import HypercubeRamsey.S09.Core.GainStage_sol_s09_conc
+import HypercubeRamsey.S09.Core.GainStage_sol_s09_cov
 
 set_option maxHeartbeats 1000000
 
@@ -128,51 +129,7 @@ theorem p92_covariance (P : Params9) (hP : P.Valid) (c₀ : ℝ) (hc₀ : 0 < c�
       {X Y : Finset (Fin N)} {κ : ℝ} {G : Colour} {M : TagMix N} (S : Setup9 P n N M)
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → RegularityCert9 S I E G c₀ → CovCert9 S I E G c := by
-  let c := c₀ / 2
-  have hc : 0 < c := by dsimp [c]; linarith
-  refine ⟨c, hc, 1, ?_⟩
-  intro n hn N E X Y κ G M S I hin hreg
-  intro v b hadj k
-  by_cases hk : (coreOrder9 I v b)[k]? = none
-  · have ha : 0 ≤ P.aStar n := by
-      dsimp [Params9.aStar]
-      positivity
-    have hp : 0 ≤ (n : ℝ) ^ (-(2 * (P.χ : ℝ))) :=
-      Real.rpow_nonneg (by positivity) _
-    have hthreshold : 0 ≤ P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) :=
-      mul_nonneg ha hp
-    have hzero : ∀ ω : Outcome9 I N, coreCov9 S E G ω v b k = 0 := by
-      intro ω
-      simp [coreCov9, hk]
-    have hfalse : ∀ ω : Outcome9 I N, ¬ P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) <
-        |coreCov9 S E G ω v b k| := by
-      intro ω hbad
-      rw [hzero ω, abs_zero] at hbad
-      exact (not_lt_of_ge hthreshold) hbad
-    have hprob : (rawLaw9 S I).pr (fun ω =>
-        P.aStar n * (n : ℝ) ^ (-(2 * (P.χ : ℝ))) <
-          |coreCov9 S E G ω v b k|) = 0 := by
-      unfold FinProb.pr
-      apply Finset.sum_eq_zero
-      intro ω hω
-      simp [hfalse ω]
-    rw [hprob]
-    exact Real.exp_nonneg _
-  · rcases Option.ne_none_iff_exists'.mp hk with ⟨w, hw⟩
-    let lam := fun ω : Outcome9 I N =>
-      prefixLaw9 E G ω (siteSecond9 S b.1) (coreOrder9 I v b) k
-    have hnext : (coreOrder9 I v b)[k]? = some w := hw
-    have hcovFormula (ω : Outcome9 I N) :
-        coreCov9 S E G ω v b k =
-          (lam ω).expect (fun y => hitInd9 E G (anc9 ω w) y *
-            hitInd9 E G (anc9 ω (I.center v.1)) y) -
-            (lam ω).expect (hitInd9 E G (anc9 ω w)) *
-              (lam ω).expect (hitInd9 E G (anc9 ω (I.center v.1))) := by
-      simp [coreCov9, lam, hnext]
-    -- The remaining case is the signed-test contradiction: condition the next-anchor law on each signed
-    -- covariance witness, sample a norm-good tuple, then apply `signedTest_equalNormalizer` against `DeepAt`.
-    -- The finite Fubini selection and the conditioned-width accounting remain to be formalized here.
-    sorry
+  exact Lane_sol_s09_cov.covariance_certificate9 P hP c₀ hc₀
 
 /-- The effect of the core hits (09:222–225, 09:264–266): along the unmasked core order the degree of the target
 changes at each hit by `cov_λ(g_w, g_x)/d_G(w; λ)` with `d_G(w; λ) ≥ .49` on the core-order tests; at most

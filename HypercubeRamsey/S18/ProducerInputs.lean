@@ -14,9 +14,11 @@ open Classical Filter
 open scoped BigOperators
 open S16 S16.Lane_sol_fix2_s16
 
-/-- Fixed cluster-query threshold from 18:1118–1123. -/
+/-- Fixed cluster-query threshold from 18:1118–1123. The second conjunct is the fresh prior-mean coefficient
+(`D18_L_prior_mean`, via the S16 mean comparison): `KB` is chosen after `Kcell` and `Kp`. -/
 def LateThresholds (κ : CConsts) : Prop :=
   Real.exp (100 * κ.Kbd) + 100 * rowMeanConstant κ + κ.A0 ≤ κ.KB ∧
+  (100 * κ.Kcell * (κ.Kp : ℝ)) * max (rowMeanConstant κ) 2 ≤ κ.KB ∧
   ∀ h : ℕ, Real.rpow (κ.M1 * κ.Q0) κ.Mlo ≤ (h : ℝ) → 2 < 20 * κ.ρ * h
 
 /-- Fixed Q0 inequalities used by both calibration stages (16:338–342,

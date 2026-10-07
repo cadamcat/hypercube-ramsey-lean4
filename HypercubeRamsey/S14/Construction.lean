@@ -6,6 +6,7 @@ import HypercubeRamsey.S14.Construction_q_s14_hist
 import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S14.Construction_q_s14_post
 import HypercubeRamsey.S14.Construction_sol_s14_post
+import HypercubeRamsey.S14.Construction_sol_s14_lik
 
 /-!
 # Section 14 internal slice solver
@@ -6134,6 +6135,316 @@ theorem likelihood_ratio_domination (κ : CConsts) (hκ : κ.Admissible)
         intro g hg
         exact hgroupFactor v c W ys g
       _ = referenceWeight Geom H mask v c W ys := rfl
+  have hdeletedGroup0 (v : EvenRole 𝒯 i) (g : Group 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (S : Finset H.Center) (ys : InternalLabels 𝒯 i) :
+      0 ≤ groupLabelMass Geom v g (deletedQ H mask g c W S)
+        (deletedU H mask g c W S) ys := by
+    unfold groupLabelMass
+    exact Finset.sum_nonneg fun D _ => mul_nonneg (hdeletedQ_nonneg g W c S D)
+      (Finset.prod_nonneg fun l _ => by
+        split_ifs <;> first | exact hdeletedU_nonneg g W c S D (ys l) | norm_num)
+  have hoddGroup0 (v : EvenRole 𝒯 i) (g : Group 𝒯 i)
+      (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i) :
+      0 ≤ groupLabelMass Geom v g (O.q g W) (O.U g W) ys := by
+    unfold groupLabelMass
+    exact Finset.sum_nonneg fun D _ => mul_nonneg (O.q_nonneg g W D)
+      (Finset.prod_nonneg fun l _ => by
+        split_ifs <;> first | exact O.U_nonneg g W D (ys l) | norm_num)
+  have hbinDeletion (v : EvenRole 𝒯 i) (g : Group 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i)
+      (hv : groupValid Geom H mask g W)
+      (hc : c ∈ realizedList Geom H mask g W)
+      (hj : 2 ≤ (Finset.univ.filter fun l => Geom.groupOf (flipPos v.1 l) = g).card) :
+      groupLabelMass Geom v g (O.q g W) (O.U g W) ys ≤
+        (2 * Real.exp (((Real.log 2 - 0.08 * κ.a) *
+          (Finset.univ.filter fun l => Geom.groupOf (flipPos v.1 l) = g).card -
+          0.24 * κ.a) * (𝒯.kScale i : ℝ))) *
+        groupLabelMass Geom v g
+          (deletedQ H mask g c W (realizedList Geom H mask g W))
+          (deletedU H mask g c W (realizedList Geom H mask g W)) ys := by
+    let S := realizedList Geom H mask g W
+    let I := Finset.univ.filter fun l => Geom.groupOf (flipPos v.1 l) = g
+    let A := maskedMass H mask g W (listHit H W S)
+    let B := maskedMass H mask g W (listHit H W (S.erase c))
+    let Z := ∑ D, tiltWeight Geom H mask g W D
+    let C := 2 * Real.exp (((Real.log 2 - 0.08 * κ.a) * I.card -
+      0.24 * κ.a) * (𝒯.kScale i : ℝ))
+    have hsubset : listHit H W S ⊆ listHit H W (S.erase c) := by
+      intro y hy
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      intro d hd r
+      exact (Finset.mem_filter.mp hy).2 d (Finset.mem_of_mem_erase hd) r
+    have hmass (D : Bin 𝒯 i) : hitMass H mask g W D S ≤
+        hitMass H mask g W D (S.erase c) :=
+      Finset.sum_le_sum_of_subset_of_nonneg hsubset
+        (fun y _ _ => (mask g W).within_nonneg D y)
+    have hApos : 0 < A := lt_of_lt_of_le (Real.exp_pos _) hv.2.2.1
+    have hAB : A ≤ B := by
+      apply Finset.sum_le_sum
+      intro D _
+      exact mul_le_mul_of_nonneg_left
+        (pow_le_pow_left₀ (hitMass_nonneg H mask g W D S) (hmass D) 2)
+        ((mask g W).prior_nonneg D)
+    have hBpos : 0 < B := hApos.trans_le hAB
+    have hret : A / 2 ≤ Z := O.restricted_mass g W hv
+    have hZpos : 0 < Z := lt_of_lt_of_le (half_pos hApos) hret
+    have hAdel : Real.exp ((-Real.log 4 + 0.4 * κ.a) * (𝒯.kScale i : ℝ)) * B ≤ A :=
+      hv.2.2.2 c hc
+    have hprod (U : Bin 𝒯 i → Fin (T.S.N k) → ℝ) (D : Bin 𝒯 i) :
+        (∏ l, if Geom.groupOf (flipPos v.1 l) = g then U D (ys l) else 1) =
+        ∏ l ∈ I, U D (ys l) := by
+      simp [I, Finset.prod_filter]
+    have hterm (D : Bin 𝒯 i) :
+        O.q g W D * (∏ l ∈ I, O.U g W D (ys l)) ≤
+          C * (deletedQ H mask g c W S D *
+            ∏ l ∈ I, deletedU H mask g c W S D (ys l)) := by
+      by_cases hq : O.q g W D = 0
+      · rw [hq, zero_mul]
+        exact mul_nonneg (by dsimp [C]; positivity)
+          (mul_nonneg (hdeletedQ_nonneg g W c S D)
+            (Finset.prod_nonneg fun l _ => hdeletedU_nonneg g W c S D (ys l)))
+      have hqpos : 0 < O.q g W D := lt_of_le_of_ne (O.q_nonneg g W D) (Ne.symm hq)
+      have htpos : 0 < tiltWeight Geom H mask g W D := by
+        have heq : O.q g W D = tiltWeight Geom H mask g W D / Z := by
+          rw [O.q_eq]
+          simp only [oddQ, if_pos hv]
+          rfl
+        rw [heq] at hqpos
+        exact (div_pos_iff.mp hqpos).resolve_right (fun h => (not_lt_of_ge hZpos.le) h.2) |>.1
+      have hr : restrictedBin Geom H mask g W D := by
+        by_contra hn
+        simp [tiltWeight, hn] at htpos
+      let m := hitMass H mask g W D S
+      let n := hitMass H mask g W D (S.erase c)
+      have hm : 0 < m := lt_of_lt_of_le (Real.exp_pos _) hr.1
+      have hn : 0 < n := hm.trans_le (hmass D)
+      let f := fun l => if ys l ∈ listHit H W S then (mask g W).within D (ys l) else 0
+      have hf : ∀ l ∈ I, 0 ≤ f l := by
+        intro l _
+        dsimp [f]
+        split_ifs <;> first | exact (mask g W).within_nonneg D (ys l) | exact le_rfl
+      have hU (l : Fin (𝒯.P i).h) : O.U g W D (ys l) = f l / m := by
+        rw [O.U_eq]
+        have hcond : groupValid Geom H mask g W ∧ 0 < oddQ Geom H mask g W D :=
+          ⟨hv, by simpa only [O.q_eq] using hqpos⟩
+        rw [oddU, if_pos hcond]
+        dsimp only [f, m, S]
+        split_ifs <;> simp
+      have hUd (l : Fin (𝒯.P i).h) : f l / n ≤ deletedU H mask g c W S D (ys l) := by
+        have hn' : 0 < hitMass H mask g W D (S.erase c) := hn
+        by_cases hy : ys l ∈ listHit H W S
+        · simp only [deletedU, if_pos hn', if_pos (hsubset hy)]
+          simp only [f, if_pos hy]
+          exact le_rfl
+        · simp only [f, if_neg hy, zero_div]
+          exact hdeletedU_nonneg g W c S D (ys l)
+      have hQ : O.q g W D = (mask g W).prior D * m ^ 2 / Z := by
+        rw [O.q_eq]
+        simp only [oddQ, if_pos hv, tiltWeight, if_pos hr]
+        rfl
+      have hQd : deletedQ H mask g c W S D = (mask g W).prior D * n ^ 2 / B := by
+        have hBpos' : 0 < maskedMass H mask g W (listHit H W (S.erase c)) := hBpos
+        rw [deletedQ, if_pos hBpos']
+      have hd := Lane_sol_s14_lik.deletion_label_product_le I
+        ((mask g W).prior D) m n A B Z κ.a (𝒯.kScale i) f
+        ((mask g W).prior_nonneg D) hf hm hn hBpos hZpos hAdel hret (hr.2 c hc) hj
+      calc
+        _ = ((mask g W).prior D * m ^ 2 / Z) * ∏ l ∈ I, f l / m := by
+          rw [hQ]
+          simp_rw [hU]
+        _ ≤ C * (((mask g W).prior D * n ^ 2 / B) * ∏ l ∈ I, f l / n) := hd
+        _ ≤ C * (deletedQ H mask g c W S D *
+            ∏ l ∈ I, deletedU H mask g c W S D (ys l)) := by
+          rw [← hQd]
+          apply mul_le_mul_of_nonneg_left _ (by dsimp [C]; positivity)
+          apply mul_le_mul_of_nonneg_left _ (hdeletedQ_nonneg g W c S D)
+          exact Finset.prod_le_prod₀ (fun l hl => div_nonneg (hf l hl) hn.le)
+            (fun l _ => hUd l)
+    unfold groupLabelMass
+    simp_rw [hprod]
+    rw [Finset.mul_sum]
+    exact Finset.sum_le_sum fun D _ => hterm D
+  have hlam0 : 0 ≤ H.Device.lam := by
+    dsimp [PrimitiveHistory.Device, patchHD]
+    positivity
+  let Bcount : ℝ := (2 * (𝒯.P i).h ^ 3 * H.Device.lam * (H.Device.H + 1) + 1) ^
+    (𝒯.tScale i + 1)
+  have hBcost : 2 * Bcount ≤ Real.exp (0.04 * κ.a * (𝒯.kScale i : ℝ)) := by
+    have hnums := hconst.threshold_slack (𝒯.P i).h scales.h_large
+    rcases hnums with ⟨hh, hK, hV, hLam, hlocal, hT, hloss, hpos, hfail, rest⟩
+    apply Lane_sol_s14_lik.mixture_cost_le Bcount κ.a (𝒯.kScale i) κ.c5
+      hconst.sliceExponent (𝒯.P i).h (𝒯.tScale i) hh (by
+        have hθ := hκ.θ_rng.1
+        rw [hκ.a_eq]
+        positivity) scales.a_small (by positivity) hκ.c5_le (by dsimp [Bcount]; positivity)
+    simpa [Bcount, PrimitiveHistory.Device, patchHD, Tiling.kScale, Tiling.tScale] using hfail
+  have hlistCost (v : EvenRole 𝒯 i) (c : H.Center) (W : ∀ r, H.Val r)
+      (hv : starValid Geom H mask v W) (g : Group 𝒯 i)
+      (hg : v ∈ groupNeighborhood g) :
+      2 * ((referenceLists Geom H g c W).card : ℝ) ≤
+        Real.exp (0.04 * κ.a * (𝒯.kScale i : ℝ)) := by
+    let R := (candidateRange Geom H g).filter fun d => H.present W d = true
+    have hH : 0 < H.Device.H := by
+      dsimp [PrimitiveHistory.Device, patchHD, topScale]
+      positivity
+    have hRlong : 6 ≤ H.Device.Rlong := by
+      change 6 ≤ 2 * 6 * H.Device.H
+      omega
+    have hcounts (u : EvenRole 𝒯 i) (hu : u ∈ groupNeighborhood g)
+        (j : Fin (H.Device.H + 1)) :
+        (((candidateBall H (Geom.project u.1) j).filter fun d => H.present W d = true).card : ℝ) ≤
+          2 * H.Device.lam := by
+      apply (hv.2.1 (Geom.project u.1) ?_ j).1
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_image.mpr ⟨u, Finset.mem_univ _, rfl⟩, ?_⟩
+      exact (Geom.projected_distance g u v hu hg).trans hRlong
+    have hR : (R.card : ℝ) ≤ 2 * (𝒯.P i).h ^ 3 * H.Device.lam * (H.Device.H + 1) := by
+      dsimp [R, candidateRange]
+      rw [Finset.filter_biUnion]
+      have houter := Finset.card_biUnion_le (s := groupNeighborhood g)
+        (t := fun u => (Finset.univ.biUnion fun j => candidateBall H (Geom.project u.1) j).filter
+          fun d => H.present W d = true)
+      have houterR :
+          (((groupNeighborhood g).biUnion fun u =>
+            (Finset.univ.biUnion fun j => candidateBall H (Geom.project u.1) j).filter
+              fun d => H.present W d = true).card : ℝ) ≤
+            ∑ u ∈ groupNeighborhood g,
+              (((Finset.univ.biUnion fun j => candidateBall H (Geom.project u.1) j).filter
+                fun d => H.present W d = true).card : ℝ) := by exact_mod_cast houter
+      apply houterR.trans
+      calc
+        _ ≤ ∑ _u ∈ groupNeighborhood g, (H.Device.H + 1) * (2 * H.Device.lam) := by
+          apply Finset.sum_le_sum
+          intro u hu
+          rw [Finset.filter_biUnion]
+          have hinner := Finset.card_biUnion_le
+            (s := (Finset.univ : Finset (Fin (H.Device.H + 1))))
+            (t := fun j => (candidateBall H (Geom.project u.1) j).filter fun d => H.present W d = true)
+          have hinnerR :
+              ((Finset.univ.biUnion fun j =>
+                (candidateBall H (Geom.project u.1) j).filter fun d => H.present W d = true).card : ℝ) ≤
+                ∑ j : Fin (H.Device.H + 1),
+                  (((candidateBall H (Geom.project u.1) j).filter fun d => H.present W d = true).card : ℝ) := by
+            exact_mod_cast hinner
+          exact hinnerR.trans (by
+            calc
+              _ ≤ ∑ _j : Fin (H.Device.H + 1), 2 * H.Device.lam :=
+                Finset.sum_le_sum fun j _ => hcounts u hu j
+              _ = _ := by simp)
+        _ = (groupNeighborhood g).card * ((H.Device.H + 1) * (2 * H.Device.lam)) := by simp
+        _ ≤ (𝒯.P i).h ^ 3 * ((H.Device.H + 1) * (2 * H.Device.lam)) := by
+          apply mul_le_mul_of_nonneg_right _ (by positivity)
+          have hcard : ((groupNeighborhood g).card : ℝ) ≤ (𝒯.P i).h ^ 2 := by
+            exact_mod_cast neighborhood_card Geom g
+          have hh : (1 : ℝ) ≤ (𝒯.P i).h := by
+            exact_mod_cast (by have h := (hconst.threshold_slack _ scales.h_large).1; omega : 1 ≤ (𝒯.P i).h)
+          have hpow : ((𝒯.P i).h : ℝ) ^ 2 ≤ ((𝒯.P i).h : ℝ) ^ 3 := by
+            nlinarith only [mul_nonneg (sq_nonneg ((𝒯.P i).h : ℝ)) (sub_nonneg.mpr hh)]
+          exact hcard.trans hpow
+        _ = _ := by ring
+    have hsub : referenceLists Geom H g c W ⊆
+        R.powerset.filter fun S => S.card ≤ 𝒯.tScale i := by
+      intro S hS
+      obtain ⟨hS, hc⟩ := (Finset.mem_filter.mp hS).2
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_powerset.mpr ?_, hS.2.1⟩
+      intro d hd
+      exact Finset.mem_filter.mpr (hS.2.2 d hd)
+    have hn := (Finset.card_le_card hsub).trans (short_list_count R (𝒯.tScale i))
+    have hcount : ((referenceLists Geom H g c W).card : ℝ) ≤ Bcount := by
+      have hcast : ((referenceLists Geom H g c W).card : ℝ) ≤
+          ((R.card : ℝ) + 1) ^ (𝒯.tScale i + 1) := by exact_mod_cast hn
+      exact hcast.trans (pow_le_pow_left₀ (by positivity) (by linarith [hR]) _)
+    exact (mul_le_mul_of_nonneg_left hcount (by norm_num)).trans hBcost
+  have hlabelMarginal (v : EvenRole 𝒯 i) (W : ∀ r, H.Val r)
+      (ys : InternalLabels 𝒯 i) :
+      (refLaw Geom H mask O W).pr (fun ω => nbrLabels v.1 ω.2 = ys) =
+        ∏ g, groupLabelMass Geom v g (O.q g W) (O.U g W) ys := by
+    have hinj : Function.Injective (flipPos v.1) := by
+      intro l l' h
+      by_contra hn
+      have hb := congrFun h l
+      simp [flipPos, hn] at hb
+    have hquery (d : Group 𝒯 i → Bin 𝒯 i) :
+        (FinLaw.pi fun z : IWord 𝒯 i =>
+          (⟨O.U (Geom.groupOf z) W (d (Geom.groupOf z)), O.U_nonneg _ _ _, O.U_sum _ _ _⟩ :
+            FinLaw (Fin (T.S.N k)))).pr (fun lab => nbrLabels v.1 lab = ys) =
+          ∏ l, O.U (Geom.groupOf (flipPos v.1 l)) W
+            (d (Geom.groupOf (flipPos v.1 l))) (ys l) :=
+      Lane_sol_s14_lik.pi_query_probability _ (flipPos v.1) hinj ys
+    simp only [refLaw, internalRefLaw, FinLaw.pr, FinLaw.bind, FinLaw.pi]
+    rw [Fintype.sum_prod_type]
+    calc
+      _ = ∑ d : Group 𝒯 i → Bin 𝒯 i, (∏ g, O.q g W (d g)) *
+          (FinLaw.pi fun z : IWord 𝒯 i =>
+            (⟨O.U (Geom.groupOf z) W (d (Geom.groupOf z)), O.U_nonneg _ _ _, O.U_sum _ _ _⟩ :
+              FinLaw (Fin (T.S.N k)))).pr (fun lab => nbrLabels v.1 lab = ys) := by
+        apply Finset.sum_congr rfl
+        intro d _
+        unfold FinLaw.pr
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro lab _
+        split_ifs <;> simp [FinLaw.pi]
+      _ = ∑ d : Group 𝒯 i → Bin 𝒯 i, (∏ g, O.q g W (d g)) *
+          ∏ l, O.U (Geom.groupOf (flipPos v.1 l)) W
+            (d (Geom.groupOf (flipPos v.1 l))) (ys l) := by simp_rw [hquery]
+      _ = _ := Lane_q_s14_post.sum_pi_grouped
+        (fun l => Geom.groupOf (flipPos v.1 l)) (fun g => O.q g W)
+        (fun g => O.U g W) ys
+  have howner (v : EvenRole 𝒯 i) (g : Group 𝒯 i) (l : Fin (𝒯.P i).h) :
+      Geom.groupOf (flipPos v.1 l) = g ↔ flipPos v.1 l ∈ groupFiber g := by
+    have hodd : ¬ IsEvenRole (flipPos v.1 l) := by
+      let A : Finset (Fin (𝒯.P i).h) := Finset.univ.filter fun j => v.1 j = true
+      let B : Finset (Fin (𝒯.P i).h) := Finset.univ.filter fun j => flipPos v.1 l j = true
+      have hEvenA : Even A.card := by simpa [A, IsEvenRole] using v.2
+      change ¬ Even B.card
+      cases hbit : v.1 l with
+      | true =>
+        have hlA : l ∈ A := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hbit⟩
+        have hBA : B = A.erase l := by
+          ext j
+          by_cases hj : j = l
+          · subst j; simp [A, B, flipPos, hbit]
+          · simp [A, B, flipPos, hj, Ne.symm hj, hbit]
+        intro hEvenB
+        have hEvenSub : Even (A.card - 1) := by
+          rw [← Finset.card_erase_of_mem hlA, ← hBA]
+          exact hEvenB
+        rcases hEvenA with ⟨a, ha⟩
+        rcases hEvenSub with ⟨b, hb⟩
+        have hposA : 0 < A.card := Finset.card_pos.mpr ⟨l, hlA⟩
+        omega
+      | false =>
+        have hlA : l ∉ A := by simp [A, hbit]
+        have hBA : B = insert l A := by
+          ext j
+          by_cases hj : j = l
+          · subst j; simp [A, B, flipPos, hbit]
+          · simp [A, B, flipPos, hj, Ne.symm hj, hbit]
+        intro hEvenB
+        have hEvenIns : Even (A.card + 1) := by
+          rw [← Finset.card_insert_of_notMem hlA, ← hBA]
+          exact hEvenB
+        rcases hEvenA with ⟨a, ha⟩
+        rcases hEvenIns with ⟨b, hb⟩
+        omega
+    constructor
+    · intro heq
+      rw [← heq]
+      exact Geom.groupOf_spec _ hodd
+    · intro hmem
+      obtain ⟨g₀, hg₀, huniq⟩ := Geom.partition _ hodd
+      exact (huniq _ (Geom.groupOf_spec _ hodd)).trans (huniq g hmem).symm
+  have hcard (v : EvenRole 𝒯 i) (g : Group 𝒯 i) :
+      (Finset.univ.filter fun l => Geom.groupOf (flipPos v.1 l) = g).card =
+        Geom.multiplicity v g := by
+    rw [Geom.multiplicity_eq]
+    congr 1
+    ext l
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    exact howner v g l
   refine ⟨{
     reference := makeReference
     reference_eq := hreference_eq
@@ -6153,7 +6464,146 @@ theorem likelihood_ratio_domination (κ : CConsts) (hκ : κ.Admissible)
         simp only [FinLaw.mk.injEq]
         simpa [hleft, hright] using hw
   · intro v c W w ys
-    sorry
+    let W' := H.replaceTuple W c w
+    let mix := fun g : Group 𝒯 i =>
+      if (referenceLists Geom H g c W').Nonempty then
+        (∑ S ∈ referenceLists Geom H g c W', groupLabelMass Geom v g
+          (deletedQ H mask g c W' S) (deletedU H mask g c W' S) ys) /
+          (referenceLists Geom H g c W').card
+      else groupLabelMass Geom v g (mask g W').prior (mask g W').within ys
+    have hmix0 (g : Group 𝒯 i) : 0 ≤ mix g := by
+      dsimp [mix]
+      split_ifs
+      · apply div_nonneg _ (by positivity)
+        exact Finset.sum_nonneg fun S _ => Finset.sum_nonneg fun D _ =>
+          mul_nonneg (hdeletedQ_nonneg g W' c S D)
+            (Finset.prod_nonneg fun l _ => by
+              split_ifs <;> first | exact hdeletedU_nonneg g W' c S D (ys l) | norm_num)
+      · exact Finset.sum_nonneg fun D _ =>
+          mul_nonneg ((mask g W').prior_nonneg D)
+            (Finset.prod_nonneg fun l _ => by
+              split_ifs <;> first | exact (mask g W').within_nonneg D (ys l) | norm_num)
+    have href0 : 0 ≤ referenceWeight Geom H mask v c W ys := by
+      rw [← hreference_eq]
+      exact (makeReference v c W).nonneg ys
+    by_cases hv : selected Geom H mask W' v = some c ∧ starValid Geom H mask v W'
+    · have hgroup (g : Group 𝒯 i) :
+          groupLabelMass Geom v g (O.q g W') (O.U g W') ys ≤
+            Real.exp ((Real.log 2 - 0.08 * κ.a) * (𝒯.kScale i : ℝ) *
+              Geom.multiplicity v g) * mix g := by
+        by_cases hj : Geom.multiplicity v g = 0
+        · have hnone (l : Fin (𝒯.P i).h) : Geom.groupOf (flipPos v.1 l) ≠ g := by
+            intro hl
+            have hmem : l ∈ Finset.univ.filter fun l => Geom.groupOf (flipPos v.1 l) = g := by simp [hl]
+            have hpos := Finset.card_pos.mpr ⟨l, hmem⟩
+            rw [hcard, hj] at hpos
+            omega
+          have hact : groupLabelMass Geom v g (O.q g W') (O.U g W') ys = 1 := by
+            simp [groupLabelMass, hnone, O.q_sum]
+          have hmix : mix g = 1 := by
+            dsimp [mix]
+            split_ifs with hL
+            · have hLs : (referenceLists Geom H g c W').card ≠ 0 :=
+                (Finset.card_pos.mpr hL).ne'
+              simp [groupLabelMass, hnone, hdeletedQ_sum, hLs]
+            · simp [groupLabelMass, hnone, (mask g W').prior_sum]
+          simp [hj, hact, hmix]
+        have hpos : 0 < Geom.multiplicity v g := Nat.pos_of_ne_zero hj
+        have hg : v ∈ groupNeighborhood g := by
+          have hfilter : 0 < (Finset.univ.filter fun l => Geom.groupOf (flipPos v.1 l) = g).card := by
+            rw [hcard]; exact hpos
+          obtain ⟨l, hl⟩ := Finset.card_pos.mp hfilter
+          exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, l,
+            (howner v g l).mp (Finset.mem_filter.mp hl).2⟩
+        have hvalid := hv.2.1 g hg
+        let S := realizedList Geom H mask g W'
+        have hcS : c ∈ S := Finset.mem_filter.mpr ⟨Finset.mem_univ _, v, hg, hv.1⟩
+        have hS : S ∈ referenceLists Geom H g c W' :=
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hvalid.2.1, hcS⟩
+        have hL : (referenceLists Geom H g c W').Nonempty := ⟨S, hS⟩
+        have hLp : (0 : ℝ) < (referenceLists Geom H g c W').card := by
+          exact_mod_cast Finset.card_pos.mpr hL
+        have hmix : groupLabelMass Geom v g
+            (deletedQ H mask g c W' S) (deletedU H mask g c W' S) ys ≤
+              (referenceLists Geom H g c W').card * mix g := by
+          have hs := Finset.single_le_sum (s := referenceLists Geom H g c W')
+            (fun S _ => hdeletedGroup0 v g c W' S ys) hS
+          have heq : (referenceLists Geom H g c W').card * mix g =
+              ∑ S ∈ referenceLists Geom H g c W', groupLabelMass Geom v g
+                (deletedQ H mask g c W' S) (deletedU H mask g c W' S) ys := by
+            dsimp [mix]
+            rw [if_pos hL]
+            field_simp [hLp.ne']
+          rw [heq]
+          exact hs
+        let C := 2 * Real.exp (((Real.log 2 - 0.08 * κ.a) *
+          Geom.multiplicity v g - 0.24 * κ.a) * (𝒯.kScale i : ℝ))
+        have hbin : groupLabelMass Geom v g (O.q g W') (O.U g W') ys ≤
+            C * groupLabelMass Geom v g
+              (deletedQ H mask g c W' S) (deletedU H mask g c W' S) ys := by
+          have h := hbinDeletion v g c W' ys hvalid hcS (by
+            rw [hcard]; exact Geom.multiplicity_lower v g hpos)
+          simpa only [hcard] using h
+        have hC : C * (referenceLists Geom H g c W').card ≤
+            Real.exp ((Real.log 2 - 0.08 * κ.a) * (𝒯.kScale i : ℝ) * Geom.multiplicity v g) := by
+          have ha0 : 0 ≤ κ.a := by
+            rw [hκ.a_eq]
+            exact div_nonneg hκ.θ_rng.1.le (by norm_num)
+          calc
+            _ = (2 * ((referenceLists Geom H g c W').card : ℝ)) *
+                Real.exp (((Real.log 2 - 0.08 * κ.a) *
+                  Geom.multiplicity v g - 0.24 * κ.a) * (𝒯.kScale i : ℝ)) := by dsimp [C]; ring
+            _ ≤ Real.exp (0.04 * κ.a * (𝒯.kScale i : ℝ)) *
+                Real.exp (((Real.log 2 - 0.08 * κ.a) *
+                  Geom.multiplicity v g - 0.24 * κ.a) * (𝒯.kScale i : ℝ)) :=
+              mul_le_mul_of_nonneg_right (hlistCost v c W' hv.2 g hg) (Real.exp_pos _).le
+            _ = Real.exp (0.04 * κ.a * (𝒯.kScale i : ℝ) +
+                ((Real.log 2 - 0.08 * κ.a) * Geom.multiplicity v g - 0.24 * κ.a) *
+                  (𝒯.kScale i : ℝ)) := (Real.exp_add _ _).symm
+            _ ≤ _ := by
+              apply Real.exp_le_exp.mpr
+              nlinarith [show (0 : ℝ) ≤ 𝒯.kScale i by positivity]
+        calc
+          _ ≤ C * groupLabelMass Geom v g
+              (deletedQ H mask g c W' S) (deletedU H mask g c W' S) ys := hbin
+          _ ≤ C * ((referenceLists Geom H g c W').card * mix g) :=
+            mul_le_mul_of_nonneg_left hmix (by dsimp [C]; positivity)
+          _ = (C * (referenceLists Geom H g c W').card) * mix g := by ring
+          _ ≤ _ := mul_le_mul_of_nonneg_right hC (hmix0 g)
+      have hprod : (∏ g, groupLabelMass Geom v g (O.q g W') (O.U g W') ys) ≤
+          ∏ g, Real.exp ((Real.log 2 - 0.08 * κ.a) * (𝒯.kScale i : ℝ) *
+            Geom.multiplicity v g) * mix g :=
+        Finset.prod_le_prod₀ (fun g _ => hoddGroup0 v g W' ys) (fun g _ => hgroup g)
+      have hexp : (∏ g, Real.exp ((Real.log 2 - 0.08 * κ.a) * (𝒯.kScale i : ℝ) *
+          Geom.multiplicity v g)) =
+          Real.exp ((Real.log 2 - 0.08 * κ.a) * (𝒯.kScale i : ℝ) * (𝒯.P i).h) := by
+        rw [← Real.exp_sum]
+        congr 1
+        rw [← Finset.mul_sum, ← Nat.cast_sum, Geom.multiplicity_sum]
+      rw [Finset.prod_mul_distrib, hexp] at hprod
+      have hmixWeight : (∏ g, mix g) = referenceWeight Geom H mask v c W ys := by
+        change referenceWeight Geom H mask v c W' ys = _
+        exact hreferenceWeightTransport v c W w ys
+      rw [hmixWeight] at hprod
+      have hsub : subLikelihood Geom H mask O v c W w ys =
+          (refLaw Geom H mask O W').pr (fun ω => nbrLabels v.1 ω.2 = ys) := by
+        have hgate : selected Geom H mask (H.replaceTuple W c w) v = some c ∧
+            starValid Geom H mask v (H.replaceTuple W c w) := hv
+        rw [subLikelihood, if_pos hgate]
+      rw [hsub, hlabelMarginal]
+      apply hprod.trans
+      apply mul_le_mul_of_nonneg_right _ href0
+      apply Real.exp_le_exp.mpr
+      have ha0 : 0 ≤ κ.a := by
+        rw [hκ.a_eq]
+        exact div_nonneg hκ.θ_rng.1.le (by norm_num)
+      have hK0 : (0 : ℝ) ≤ 𝒯.kScale i := by positivity
+      have hh0 : (0 : ℝ) ≤ (𝒯.P i).h := by positivity
+      nlinarith [mul_nonneg ha0 (mul_nonneg hK0 hh0)]
+    · have hgate : ¬ (selected Geom H mask (H.replaceTuple W c w) v = some c ∧
+          starValid Geom H mask v (H.replaceTuple W c w)) := hv
+      rw [subLikelihood, if_neg hgate]
+      exact mul_nonneg (Real.exp_pos _).le href0
 
 section Rows
 
@@ -8008,6 +8458,120 @@ theorem locality_and_symmetry (κ : CConsts) (hκ : κ.Admissible)
     (L : LikelihoodData Geom H mask O) (R : EvenRows Geom H mask O L)
     (Tests : GoodTests Geom H mask O L R) (hh : HeightFacts hconst Geom H mask) :
     Nonempty (LocalSymmetry Geom H mask O L R Tests) := by
+  classical
+  have hgeometry (g g' : Group 𝒯 i) :
+      ∃ (e : IWord 𝒯 i ≃ IWord 𝒯 i)
+        (eg : Group 𝒯 i ≃ Group 𝒯 i) (ev : EvenRole 𝒯 i ≃ EvenRole 𝒯 i),
+        eg g = g' ∧ (∀ a, (eg a).1 = e a.1) ∧
+        (∀ v, (ev v).1 = e v.1) ∧
+        (∀ z l, e (flipPos z l) = flipPos (e z) l) ∧
+        (∀ z z', hammingDist (e z) (e z') = hammingDist z z') ∧
+        (∀ z, Geom.project (e z) = e (Geom.project z)) := by
+    let s := Lane_sol_s14_lik.shift g.1 g'.1
+    have hsEven : IsEvenRole s :=
+      (Lane_sol_s14_lik.shift_even g.1 g'.1 g.2.1).mpr g'.2.1
+    have hsZero : wordSyndrome s = 0 := by
+      rw [Lane_sol_s14_lik.shift_syndrome, g.2.2, g'.2.2, zero_add]
+    let e := Lane_sol_s14_lik.shiftEquiv s
+    have hsynd (z : IWord 𝒯 i) : wordSyndrome (e z) = wordSyndrome z := by
+      change wordSyndrome (Lane_sol_s14_lik.shift s z) = _
+      rw [Lane_sol_s14_lik.shift_syndrome, hsZero, zero_add]
+    let eg : Group 𝒯 i ≃ Group 𝒯 i := Equiv.subtypeEquiv e (fun z => by
+      change (IsEvenRole z ∧ wordSyndrome z = 0) ↔
+        (IsEvenRole (e z) ∧ wordSyndrome (e z) = 0)
+      rw [hsynd]
+      have hp : IsEvenRole z ↔ IsEvenRole (e z) :=
+        (Lane_sol_s14_lik.shift_even s z hsEven).symm
+      exact and_congr hp Iff.rfl)
+    let ev : EvenRole 𝒯 i ≃ EvenRole 𝒯 i :=
+      Equiv.subtypeEquiv e (fun z => (Lane_sol_s14_lik.shift_even s z hsEven).symm)
+    have htarget : eg g = g' := by
+      apply Subtype.ext
+      change Lane_sol_s14_lik.shift (Lane_sol_s14_lik.shift g.1 g'.1) g.1 = g'.1
+      funext l
+      cases hg : g.1 l <;> cases hg' : g'.1 l <;> simp [Lane_sol_s14_lik.shift, hg, hg']
+    refine ⟨e, eg, ev, htarget, (fun _ => rfl), (fun _ => rfl),
+      (fun z l => Lane_sol_s14_lik.shift_flip s z l),
+      (fun z z' => Lane_sol_s14_lik.shift_distance s z z'), ?_⟩
+    intro z
+    have hindex : Geom.syndromeIndex (e z) = Geom.syndromeIndex z := by
+      apply Fin.ext
+      apply Nat.eq_of_testBit_eq
+      intro j
+      apply Bool.eq_iff_iff.mpr
+      rw [Geom.syndromeIndex_spec, Geom.syndromeIndex_spec]
+      rw [hsynd]
+    rw [Geom.project_eq, Geom.project_eq, hindex]
+    exact (Lane_sol_s14_lik.shift_flip s z _).symm
+  have hincidenceTransport (e : IWord 𝒯 i ≃ IWord 𝒯 i)
+      (eg : Group 𝒯 i ≃ Group 𝒯 i) (ev : EvenRole 𝒯 i ≃ EvenRole 𝒯 i)
+      (hgroup : ∀ a, (eg a).1 = e a.1) (hrole : ∀ v, (ev v).1 = e v.1)
+      (hflip : ∀ z l, e (flipPos z l) = flipPos (e z) l)
+      (v : EvenRole 𝒯 i) (a : Group 𝒯 i) :
+      ev v ∈ groupNeighborhood (eg a) ↔ v ∈ groupNeighborhood a := by
+    simp only [groupNeighborhood, Finset.mem_filter, Finset.mem_univ, true_and,
+      groupFiber, Finset.mem_image]
+    simp_rw [hgroup, hrole, ← hflip]
+    simp only [e.injective.eq_iff]
+
+  have hmaskEqual (a b : Group 𝒯 i) (W W' : ∀ r, H.Val r)
+      (hvertex : H.maskVertex a W = H.maskVertex b W') :
+      (mask a W).prior = (mask b W').prior ∧ (mask a W).within = (mask b W').within := by
+    have hcheap (D : Bin 𝒯 i) : (mask a W).cheap D = (mask b W').cheap D := by
+      rw [(mask a W).cheap_eq, (mask b W').cheap_eq, hvertex]
+    have hret : (mask a W).retained = (mask b W').retained := by
+      ext D
+      rw [(mask a W).retained_spec, (mask b W').retained_spec, hcheap]
+    constructor
+    · funext D
+      rw [(mask a W).prior_uniform, (mask b W').prior_uniform, hret]
+    · funext D y
+      rw [(mask a W).within_uniform, (mask b W').within_uniform, hret, hcheap]
+  have hrecordTransport (ec : H.Center ≃ H.Center) (eg : Group 𝒯 i ≃ Group 𝒯 i)
+      (pl : SearchPerm H.Device (𝒯.tScale i)) (pc : H.Device.TiePerm) :
+      ∃ eh : (∀ r, H.Val r) ≃ (∀ r, H.Val r),
+        (∀ p W, (H.recLaw p).w (eh W) = (H.recLaw p).w W) ∧
+        (∀ W c, (eh W) (.inl (ec c)) = W (.inl c)) ∧
+        (∀ W a, (eh W) (.inr (.inl (eg a))) =
+          ((W (.inr (.inl a))).1, (W (.inr (.inl a))).2.trans pl)) ∧
+        (∀ W c, (eh W) (.inr (.inr (ec c))) = pc.symm.trans (W (.inr (.inr c)))) := by
+    let er := Equiv.sumCongr ec (Equiv.sumCongr eg ec)
+    let fiber : ∀ r, H.Val r ≃ H.Val (er r) := fun r => by
+      cases r with
+      | inl c => exact Equiv.refl _
+      | inr r => cases r with
+        | inl a => exact Equiv.prodCongr (Equiv.refl _) (Lane_sol_s14_lik.postcompose pl)
+        | inr c => exact Lane_sol_s14_lik.precompose pc.symm
+    let eh := Equiv.piCongr er fiber
+    have hpres (p : mesh.Param) (r : H.Rec) (x : H.Val r) :
+        (H.record p (er r)).w (fiber r x) = (H.record p r).w x := by
+      cases r with
+      | inl c => rfl
+      | inr r => cases r with
+        | inl a =>
+          rcases x with ⟨u, σ⟩
+          simp [PrimitiveHistory.record, er, fiber, Lane_sol_s14_lik.postcompose,
+            PrimitiveHistory.groupLaw, FinLaw.bind, PrimitiveHistory.finProbToFinLaw,
+            FinProb.uniformAll, FinProb.uniform] <;> rfl
+        | inr c =>
+          simp [PrimitiveHistory.record, er, fiber, Lane_sol_s14_lik.precompose,
+            PrimitiveHistory.tieLaw, PrimitiveHistory.finProbToFinLaw,
+            FinProb.uniformAll, FinProb.uniform]
+    refine ⟨eh, ?_, ?_, ?_, ?_⟩
+    · intro p W
+      change (∏ r, (H.record p r).w (eh W r)) = ∏ r, (H.record p r).w (W r)
+      rw [← er.prod_comp (fun r => (H.record p r).w (eh W r))]
+      apply Finset.prod_congr rfl
+      intro r _
+      rw [show eh W (er r) = fiber r (W r) from Equiv.piCongr_apply_apply er fiber W r]
+      exact hpres p r (W r)
+    · intro W c
+      exact Equiv.piCongr_apply_apply er fiber W (.inl c)
+    · intro W a
+      exact Equiv.piCongr_apply_apply er fiber W (.inr (.inl a))
+    · intro W c
+      exact Equiv.piCongr_apply_apply er fiber W (.inr (.inr c))
+
   sorry
 
 /-- Canonical mask equations make every mask family a fixed vertex lookup. -/

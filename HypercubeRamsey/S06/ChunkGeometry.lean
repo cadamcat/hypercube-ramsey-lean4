@@ -584,7 +584,376 @@ theorem L6_1b_boundary :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ L : ChunkLayout6 n,
       ((Finset.univ.filter fun x : CubeVertex n => L.boundary x).card : ℝ) / (2 : ℝ) ^ n ≤
         (n : ℝ) ^ (-(1 / 20 : ℝ)) := by
-  sorry
+  classical
+  have heventX : ∀ᶠ n : ℕ in Filter.atTop, 4 < (n : ℝ) ^ (1 / 5 : ℝ) := by
+    have htend := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 5)).comp
+      tendsto_natCast_atTop_atTop
+    exact htend.eventually (Filter.eventually_gt_atTop 4)
+  have heventC : ∀ᶠ n : ℕ in Filter.atTop, 4800 < (n : ℝ) ^ (1 / 100 : ℝ) := by
+    have htend := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 100)).comp
+      tendsto_natCast_atTop_atTop
+    exact htend.eventually (Filter.eventually_gt_atTop 4800)
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    ((Filter.eventually_ge_atTop 2).and (heventX.and heventC))
+  refine ⟨n₀, ?_⟩
+  intro n hn L
+  have hdata := hn₀ n hn
+  have hn2 : 2 ≤ n := hdata.1
+  have hpowX : 4 < (n : ℝ) ^ (1 / 5 : ℝ) := hdata.2.1
+  have hpowC : 4800 ≤ (n : ℝ) ^ (1 / 100 : ℝ) := le_of_lt hdata.2.2
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hnRpos : 0 < (n : ℝ) := by positivity
+  let δ : ℝ := (n : ℝ) ^ (-(1 / 10 : ℝ))
+  have hδ : 0 < δ := by dsimp [δ]; positivity
+  have hδ2 : δ * δ = (n : ℝ) ^ (-(1 / 5 : ℝ)) := by
+    dsimp [δ]
+    rw [← Real.rpow_add hnRpos]
+    congr 1 <;> norm_num
+  have hδProd : (n : ℝ) ^ (-(1 / 5 : ℝ)) *
+      (n : ℝ) ^ (1 / 5 : ℝ) = (n : ℝ) ^ (0 : ℝ) := by
+    rw [← Real.rpow_add hnRpos]
+    congr 1 <;> norm_num
+  have hδChunk : δ * δ * ((n : ℝ) ^ (1 / 5 : ℝ) / 2) = 1 / 2 := by
+    rw [hδ2]
+    calc
+      (n : ℝ) ^ (-(1 / 5 : ℝ)) * ((n : ℝ) ^ (1 / 5 : ℝ) / 2) =
+          ((n : ℝ) ^ (-(1 / 5 : ℝ)) * (n : ℝ) ^ (1 / 5 : ℝ)) / 2 := by ring
+      _ = (n : ℝ) ^ (0 : ℝ) / 2 := by rw [hδProd]
+      _ = 1 / 2 := by simp
+  let ell (i : Fin coarseChunkCount) : ℕ := (L.coarseChunks i).card
+  have hell (i : Fin coarseChunkCount) : ell i = ⌊(n : ℝ) ^ (1 / 5 : ℝ)⌋₊ :=
+    L.coarse_length i
+  have hellPos (i : Fin coarseChunkCount) : 0 < ell i := by
+    rw [hell]
+    apply Nat.floor_pos.mpr
+    linarith
+  have hellLower (i : Fin coarseChunkCount) :
+      (n : ℝ) ^ (1 / 5 : ℝ) / 2 ≤ (ell i : ℝ) := by
+    have hfloorReal : (ell i : ℝ) = ⌊(n : ℝ) ^ (1 / 5 : ℝ)⌋₊ := by
+      exact_mod_cast hell i
+    rw [hfloorReal]
+    have hlt := Nat.lt_floor_add_one ((n : ℝ) ^ (1 / 5 : ℝ))
+    linarith
+  have hδEll (i : Fin coarseChunkCount) :
+      1 / 2 ≤ δ * δ * (ell i : ℝ) := by
+    have hmono := mul_le_mul_of_nonneg_left (hellLower i)
+      (mul_nonneg hδ.le hδ.le)
+    rw [hδChunk] at hmono
+    nlinarith [hmono]
+  have hCentral (i : Fin coarseChunkCount) :
+      2 / Real.sqrt (ell i : ℝ) ≤ 4 * δ := by
+    have hsqrtPos : 0 < Real.sqrt (ell i : ℝ) :=
+      Real.sqrt_pos.2 (by exact_mod_cast hellPos i)
+    have hsqrtSq : Real.sqrt (ell i : ℝ) ^ 2 = (ell i : ℝ) :=
+      Real.sq_sqrt (by exact_mod_cast Nat.zero_le (ell i))
+    have hmul : 2 ≤ 4 * δ * Real.sqrt (ell i : ℝ) := by
+      apply le_of_sq_le_sq
+      · rw [mul_pow, hsqrtSq]
+        nlinarith [hδEll i]
+      · positivity
+    exact (div_le_iff₀ hsqrtPos).2 (by simpa [mul_assoc] using hmul)
+  have hcountEq (i : Fin coarseChunkCount) (x : CubeVertex n) :
+      L.coarseCount x i =
+        HypercubeRamsey.Lane_q_s06_front.cubeCountOn (L.coarseChunks i) x := by
+    classical
+    have hcardAttach (S : Finset (Fin n)) (z : CubeVertex n) :
+        (S.filter fun b => z b = true).card =
+          (S.attach.filter fun b => z b.1 = true).card := by
+      apply Finset.card_bij (fun b hb => ⟨b, (Finset.mem_filter.mp hb).1⟩)
+      · intro b hb
+        rcases Finset.mem_filter.mp hb with ⟨hbS, hzb⟩
+        exact Finset.mem_filter.mpr ⟨Finset.mem_attach S ⟨b, hbS⟩, hzb⟩
+      · intro b hb c hc hbc
+        exact congrArg Subtype.val hbc
+      · intro c hc
+        rcases Finset.mem_filter.mp hc with ⟨hcS, hzc⟩
+        exact ⟨c.1, Finset.mem_filter.mpr ⟨c.2, hzc⟩, by apply Subtype.ext; rfl⟩
+    unfold ChunkLayout6.coarseCount HypercubeRamsey.Lane_q_s06_front.cubeCountOn
+    exact hcardAttach (L.coarseChunks i) x
+  have hfiberEq (i : Fin coarseChunkCount) (q : ℕ) :
+      (Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i = q).card =
+        Nat.choose (ell i) q * 2 ^ (n - ell i) := by
+    have hset : (Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i = q) =
+        (Finset.univ.filter fun x : CubeVertex n =>
+          HypercubeRamsey.Lane_q_s06_front.cubeCountOn (L.coarseChunks i) x = q) := by
+      ext x
+      simp [hcountEq]
+    rw [hset]
+    simpa [ell] using
+      HypercubeRamsey.Lane_q_s06_front.cubeCountOn_card (L.coarseChunks i) q
+  have hFiberProb (i : Fin coarseChunkCount) (q : ℕ) (hq : q ≤ ell i) :
+      ((Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i = q).card : ℝ) /
+          (2 : ℝ) ^ n ≤ 4 * δ := by
+    have hellLe : ell i ≤ n := by
+      simpa [ell, Fintype.card_fin] using Finset.card_le_univ (L.coarseChunks i)
+    have hsum : ell i + (n - ell i) = n := Nat.add_sub_of_le hellLe
+    have hpow : (2 : ℝ) ^ n = (2 : ℝ) ^ ell i * (2 : ℝ) ^ (n - ell i) := by
+      calc
+        (2 : ℝ) ^ n = (2 : ℝ) ^ (ell i + (n - ell i)) :=
+          congrArg (fun k : ℕ => (2 : ℝ) ^ k) hsum.symm
+        _ = (2 : ℝ) ^ ell i * (2 : ℝ) ^ (n - ell i) := by rw [pow_add]
+    have hcentral := centralBinomialUpper (ell i) (hellPos i) q hq
+    calc
+      ((Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i = q).card : ℝ) /
+          (2 : ℝ) ^ n =
+        (Nat.choose (ell i) q : ℝ) / (2 : ℝ) ^ (ell i) := by
+          rw [hfiberEq i q]
+          push_cast
+          rw [hpow]
+          field_simp [pow_ne_zero _ (by norm_num : (2 : ℝ) ≠ 0)]
+      _ ≤ 2 / Real.sqrt (ell i : ℝ) := hcentral
+      _ ≤ 4 * δ := hCentral i
+  let endpoints (i : Fin coarseChunkCount) :=
+    HypercubeRamsey.Lane_q_s06_front.binTransitionEndpoints (ell i) (L.bin i)
+  have hEndpointsCard (i : Fin coarseChunkCount) :
+      ((endpoints i).card : ℝ) ≤ 2 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) := by
+    have hcard := HypercubeRamsey.Lane_q_s06_front.binTransitionEndpoints_card_le
+      (ell := ell i) (bin := L.bin i) (fun a b hab => L.bin_monotone i a b hab)
+    have hcardR : ((endpoints i).card : ℝ) ≤
+        2 * (((Finset.range (ell i + 1)).image (L.bin i)).card : ℝ) := by
+      exact_mod_cast hcard
+    exact hcardR.trans (mul_le_mul_of_nonneg_left (L.bin_count i) (by norm_num))
+  have hEventProb (i : Fin coarseChunkCount) :
+      ((Finset.univ.filter fun x : CubeVertex n =>
+        L.coarseCount x i ∈ endpoints i).card : ℝ) / (2 : ℝ) ^ n ≤
+          8 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ := by
+    let F (q : ℕ) := Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i = q
+    have hUnion : (Finset.univ.filter fun x : CubeVertex n =>
+        L.coarseCount x i ∈ endpoints i) = (endpoints i).biUnion F := by
+      ext x
+      simp [F, Finset.mem_biUnion]
+    have hcard :
+        ((Finset.univ.filter fun x : CubeVertex n =>
+          L.coarseCount x i ∈ endpoints i).card : ℝ) / (2 : ℝ) ^ n ≤
+          ∑ q ∈ endpoints i, ((F q).card : ℝ) / (2 : ℝ) ^ n := by
+      have hcardNat :
+          (Finset.univ.filter fun x : CubeVertex n =>
+            L.coarseCount x i ∈ endpoints i).card ≤
+            ∑ q ∈ endpoints i, (F q).card := by
+        rw [hUnion]
+        exact Finset.card_biUnion_le
+      have hcardReal :
+          ((Finset.univ.filter fun x : CubeVertex n =>
+            L.coarseCount x i ∈ endpoints i).card : ℝ) ≤
+            ∑ q ∈ endpoints i, ((F q).card : ℝ) := by exact_mod_cast hcardNat
+      calc
+        ((Finset.univ.filter fun x : CubeVertex n =>
+          L.coarseCount x i ∈ endpoints i).card : ℝ) / (2 : ℝ) ^ n ≤
+            (∑ q ∈ endpoints i, ((F q).card : ℝ)) / (2 : ℝ) ^ n :=
+          div_le_div_of_nonneg_right hcardReal (by positivity)
+        _ = ∑ q ∈ endpoints i, ((F q).card : ℝ) / (2 : ℝ) ^ n := by
+          rw [Finset.sum_div]
+    have hsum : (∑ q ∈ endpoints i, ((F q).card : ℝ) / (2 : ℝ) ^ n) ≤
+        (endpoints i).card * (4 * δ) := by
+      calc
+        (∑ q ∈ endpoints i, ((F q).card : ℝ) / (2 : ℝ) ^ n) ≤
+            ∑ q ∈ endpoints i, 4 * δ := by
+              apply Finset.sum_le_sum
+              intro q hq
+              have hqle : q ≤ ell i := by
+                change q ∈ HypercubeRamsey.Lane_q_s06_front.binTransitionEndpoints
+                  (ell i) (L.bin i) at hq
+                simp [HypercubeRamsey.Lane_q_s06_front.binTransitionEndpoints,
+                  HypercubeRamsey.Lane_q_s06_front.binTransitionSet] at hq
+                rcases hq with hq | hq
+                · exact Nat.le_of_lt hq.1
+                · rcases hq with ⟨r, ⟨hrange, _, hqeq⟩⟩
+                  omega
+              simpa [F] using hFiberProb i q hqle
+        _ = (endpoints i).card * (4 * δ) := by simp [Finset.sum_const, nsmul_eq_mul]
+    calc
+      ((Finset.univ.filter fun x : CubeVertex n =>
+        L.coarseCount x i ∈ endpoints i).card : ℝ) / (2 : ℝ) ^ n ≤
+          (endpoints i).card * (4 * δ) := hcard.trans hsum
+      _ ≤ 2 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * (4 * δ) :=
+          mul_le_mul_of_nonneg_right (hEndpointsCard i) (by positivity)
+      _ = 8 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ := by ring
+  let boundaryVertices := Finset.univ.filter fun x : CubeVertex n => L.boundary x
+  let allCoarseEvents := Finset.univ.biUnion fun i : Fin coarseChunkCount =>
+    Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i
+  have hboundarySubset : boundaryVertices ⊆ allCoarseEvents := by
+    intro x hx
+    rcases (Finset.mem_filter.mp hx).2 with ⟨i, a, ha, hchange⟩
+    let q := L.coarseCount x i
+    let y := flipVertex6 x a
+    have hcountStep : L.coarseCount y i = q + 1 ∨ L.coarseCount y i + 1 = q := by
+      cases hxa : x a
+      · left
+        have hset : (L.coarseChunks i).filter (fun b => flipVertex6 x a b = true) =
+            insert a ((L.coarseChunks i).filter (fun b => x b = true)) := by
+          ext b
+          by_cases hba : b = a
+          · subst b
+            simp [flipVertex6, hxa, ha]
+          · have hflip : flipVertex6 x a b = x b := by simp [flipVertex6, hba]
+            simp [hba, hflip]
+        have hnot : a ∉ (L.coarseChunks i).filter (fun b => x b = true) := by
+          simp [hxa]
+        have hcard := congrArg Finset.card hset
+        rw [Finset.card_insert_of_notMem hnot] at hcard
+        change ((L.coarseChunks i).filter (fun b => y b = true)).card =
+          ((L.coarseChunks i).filter (fun b => x b = true)).card + 1
+        simpa [y] using hcard
+      · right
+        have hset : (L.coarseChunks i).filter (fun b => x b = true) =
+            insert a ((L.coarseChunks i).filter (fun b => flipVertex6 x a b = true)) := by
+          ext b
+          by_cases hba : b = a
+          · subst b
+            simp [flipVertex6, hxa, ha]
+          · have hflip : flipVertex6 x a b = x b := by simp [flipVertex6, hba]
+            simp [hba, hflip]
+        have hnot : a ∉ (L.coarseChunks i).filter (fun b => flipVertex6 x a b = true) := by
+          simp [flipVertex6, hxa]
+        have hcard := congrArg Finset.card hset
+        rw [Finset.card_insert_of_notMem hnot] at hcard
+        change ((L.coarseChunks i).filter (fun b => y b = true)).card + 1 =
+          ((L.coarseChunks i).filter (fun b => x b = true)).card
+        simpa [y] using hcard.symm
+    have hcountOther (j : Fin coarseChunkCount) (hji : j ≠ i) :
+        L.coarseCount y j = L.coarseCount x j := by
+      have hdisj := L.chunks_disjoint.1 j i hji
+      have hnot : a ∉ L.coarseChunks j := by
+        intro haJ
+        exact (Finset.disjoint_left.mp hdisj) haJ ha
+      unfold ChunkLayout6.coarseCount
+      apply congrArg Finset.card
+      ext b
+      by_cases hb : b ∈ L.coarseChunks j
+      · have hba : b ≠ a := by intro heq; subst b; exact hnot hb
+        simp [hb, hba, flipVertex6, y]
+      · simp [hb]
+    have hbinAt : L.bin i (L.coarseCount y i) ≠ L.bin i q := by
+      intro heq
+      apply hchange
+      funext j
+      by_cases hji : j = i
+      · subst j
+        change L.bin i (L.coarseCount y i) = L.bin i q
+        exact heq
+      · change L.bin j (L.coarseCount y j) = L.bin j (L.coarseCount x j)
+        exact congrArg (L.bin j) (hcountOther j hji)
+    have hqle : q ≤ ell i := by
+      dsimp [q, ell]
+      unfold ChunkLayout6.coarseCount
+      exact Finset.card_filter_le _ _
+    have hmemEnd : q ∈ endpoints i := by
+      rcases hcountStep with hup | hdown
+      · have ht : q ∈ HypercubeRamsey.Lane_q_s06_front.binTransitionSet (ell i) (L.bin i) := by
+          have hyqle : L.coarseCount y i ≤ ell i := by
+            dsimp [ell]
+            unfold ChunkLayout6.coarseCount
+            exact Finset.card_filter_le _ _
+          have hqLt : q < ell i := by omega
+          apply Finset.mem_filter.mpr
+          exact ⟨Finset.mem_range.mpr hqLt, by simpa [hup] using hbinAt⟩
+        exact Finset.mem_union.mpr (Or.inl ht)
+      · have hrange : L.coarseCount y i < ell i := by
+          omega
+        have ht : L.coarseCount y i ∈
+            HypercubeRamsey.Lane_q_s06_front.binTransitionSet (ell i) (L.bin i) := by
+          have htrans : L.bin i (L.coarseCount y i + 1) ≠ L.bin i (L.coarseCount y i) := by
+            intro heq
+            apply hbinAt
+            rw [← hdown]
+            exact heq.symm
+          apply Finset.mem_filter.mpr
+          exact ⟨Finset.mem_range.mpr hrange, htrans⟩
+        apply Finset.mem_union.mpr
+        right
+        apply Finset.mem_image.mpr
+        exact ⟨L.coarseCount y i, ht, by omega⟩
+    change x ∈ Finset.univ.biUnion (fun j : Fin coarseChunkCount =>
+      Finset.univ.filter fun z : CubeVertex n => L.coarseCount z j ∈ endpoints j)
+    exact Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _,
+      Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmemEnd⟩⟩
+  have hunionCard : boundaryVertices.card ≤
+      ∑ i : Fin coarseChunkCount,
+        (Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i).card := by
+    calc
+      boundaryVertices.card ≤ allCoarseEvents.card := Finset.card_le_card hboundarySubset
+      _ ≤ ∑ i : Fin coarseChunkCount,
+          (Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i).card :=
+        Finset.card_biUnion_le
+  have hunionFraction : (boundaryVertices.card : ℝ) / (2 : ℝ) ^ n ≤
+      ∑ i : Fin coarseChunkCount,
+        ((Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i).card : ℝ) /
+          (2 : ℝ) ^ n := by
+    have hcast : (boundaryVertices.card : ℝ) ≤
+        ∑ i : Fin coarseChunkCount,
+          ((Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i).card : ℝ) :=
+      by exact_mod_cast hunionCard
+    calc
+      (boundaryVertices.card : ℝ) / (2 : ℝ) ^ n ≤
+          (∑ i : Fin coarseChunkCount,
+            ((Finset.univ.filter fun x : CubeVertex n =>
+              L.coarseCount x i ∈ endpoints i).card : ℝ)) / (2 : ℝ) ^ n :=
+        div_le_div_of_nonneg_right hcast (by positivity)
+      _ = ∑ i : Fin coarseChunkCount,
+          ((Finset.univ.filter fun x : CubeVertex n =>
+            L.coarseCount x i ∈ endpoints i).card : ℝ) / (2 : ℝ) ^ n := by
+          rw [Finset.sum_div]
+  have hsumBound :
+      (∑ i : Fin coarseChunkCount,
+        ((Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i).card : ℝ) /
+          (2 : ℝ) ^ n) ≤
+        2400 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ := by
+    calc
+      (∑ i : Fin coarseChunkCount,
+        ((Finset.univ.filter fun x : CubeVertex n => L.coarseCount x i ∈ endpoints i).card : ℝ) /
+          (2 : ℝ) ^ n) ≤
+        ∑ i : Fin coarseChunkCount, 8 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ := by
+            apply Finset.sum_le_sum
+            intro i hi
+            exact hEventProb i
+      _ = (Fintype.card (Fin coarseChunkCount) : ℝ) *
+          (8 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ) := by
+            simp [Finset.sum_const, nsmul_eq_mul]
+      _ = 2400 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ := by
+            have hcard : Fintype.card (Fin coarseChunkCount) = 300 := by
+              change Fintype.card (Fin 300) = 300
+              exact Fintype.card_fin 300
+            rw [hcard]
+            norm_num
+            ring
+  have hproduct : (n : ℝ) ^ (1 / 25 : ℝ) * δ = (n : ℝ) ^ (-(3 / 50 : ℝ)) := by
+    dsimp [δ]
+    rw [← Real.rpow_add hnRpos]
+    congr 1 <;> norm_num
+  have hpowMono : δ ≤ (n : ℝ) ^ (-(3 / 50 : ℝ)) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR (by norm_num : (-(1 / 10 : ℝ)) ≤ -(3 / 50 : ℝ))
+    simpa [δ] using h
+  have hmain : 2400 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ ≤
+      (n : ℝ) ^ (-(1 / 20 : ℝ)) := by
+    have hsum : ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ ≤
+        2 * (n : ℝ) ^ (-(3 / 50 : ℝ)) := by
+      rw [add_mul, hproduct, one_mul]
+      calc
+        (n : ℝ) ^ (-(3 / 50 : ℝ)) + δ =
+            δ + (n : ℝ) ^ (-(3 / 50 : ℝ)) := by ring
+        _ ≤ (n : ℝ) ^ (-(3 / 50 : ℝ)) + (n : ℝ) ^ (-(3 / 50 : ℝ)) :=
+          add_le_add_left hpowMono ((n : ℝ) ^ (-(3 / 50 : ℝ)))
+        _ = 2 * (n : ℝ) ^ (-(3 / 50 : ℝ)) := by ring
+    calc
+      2400 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ ≤
+          4800 * (n : ℝ) ^ (-(3 / 50 : ℝ)) := by
+            calc
+              2400 * ((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ ≤
+                  2400 * (((n : ℝ) ^ (1 / 25 : ℝ) + 1) * δ) := by rw [mul_assoc]
+              _ ≤ 2400 * (2 * (n : ℝ) ^ (-(3 / 50 : ℝ))) :=
+                mul_le_mul_of_nonneg_left hsum (by norm_num : (0 : ℝ) ≤ 2400)
+              _ = 4800 * (n : ℝ) ^ (-(3 / 50 : ℝ)) := by ring
+      _ ≤ (n : ℝ) ^ (-(1 / 20 : ℝ)) := by
+        have hprod : (n : ℝ) ^ (1 / 100 : ℝ) * (n : ℝ) ^ (-(3 / 50 : ℝ)) =
+            (n : ℝ) ^ (-(1 / 20 : ℝ)) := by
+          rw [← Real.rpow_add hnRpos]
+          congr 1 <;> norm_num
+        calc
+          4800 * (n : ℝ) ^ (-(3 / 50 : ℝ)) ≤
+              (n : ℝ) ^ (1 / 100 : ℝ) * (n : ℝ) ^ (-(3 / 50 : ℝ)) :=
+                mul_le_mul_of_nonneg_right hpowC (by positivity)
+          _ = (n : ℝ) ^ (-(1 / 20 : ℝ)) := hprod
+  exact hunionFraction.trans (hsumBound.trans hmain)
 
 set_option maxRecDepth 4096
 /-- L6.1b (flips): coarse flips stay in the key relation, a bin change has boundary ends, fine flips change

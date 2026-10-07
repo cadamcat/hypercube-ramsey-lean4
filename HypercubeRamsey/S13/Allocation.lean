@@ -46,9 +46,673 @@ def LawSubsampleStatement : Prop :=
       (V.card : ℝ) ≥ t / 2 ∧
       ∀ j, |(∑ y ∈ V, f j y) / V.card - π.expect (f j)| ≤ (n : ℝ) ^ (-2 : ℝ)
 
+set_option maxHeartbeats 1000000 in
 /-- L13.0a (sections/13, lines 147–148): exact-size sampling with at most exponentially many tests. -/
 theorem uniform_subsample : UniformSubsampleStatement := by
-  sorry
+  classical
+  intro N J m n V f hn hm hmn hJ htests
+  have hmpos : 0 < m := by
+    have hn12 : 1 ≤ n ^ 12 := Nat.one_le_pow _ _ (by omega)
+    omega
+  have hVpos : 0 < V.card := lt_of_lt_of_le hmpos hm
+  obtain ⟨S, hSsub, hScard⟩ := Finset.exists_subset_card_eq hm
+  by_cases hn1 : n = 1
+  · subst n
+    refine ⟨S, hSsub, hScard, ?_⟩
+    intro j
+    have hSlo : 0 ≤ ∑ y ∈ S, f j y := by
+      apply Finset.sum_nonneg
+      intro y hy
+      exact (htests j y).1
+    have hShi : (∑ y ∈ S, f j y) ≤ (S.card : ℝ) := by
+      calc
+        _ ≤ ∑ y ∈ S, (1 : ℝ) := Finset.sum_le_sum fun y hy => (htests j y).2
+        _ = (S.card : ℝ) := by simp
+    have hVlo : 0 ≤ ∑ y ∈ V, f j y := by
+      apply Finset.sum_nonneg
+      intro y hy
+      exact (htests j y).1
+    have hVhi : (∑ y ∈ V, f j y) ≤ (V.card : ℝ) := by
+      calc
+        _ ≤ ∑ y ∈ V, (1 : ℝ) := Finset.sum_le_sum fun y hy => (htests j y).2
+        _ = (V.card : ℝ) := by simp
+    have hSreal : (S.card : ℝ) = m := by norm_cast
+    have hSrealPos : 0 < (S.card : ℝ) := by rw [hSreal]; exact_mod_cast hmpos
+    have hSavglo : 0 ≤ (∑ y ∈ S, f j y) / m := div_nonneg hSlo (by positivity)
+    have hSavghi : (∑ y ∈ S, f j y) / m ≤ 1 := by
+      rw [← hSreal]
+      exact (div_le_one hSrealPos).2 hShi
+    have hVavglo : 0 ≤ (∑ y ∈ V, f j y) / V.card := div_nonneg hVlo (by positivity)
+    have hVavghi : (∑ y ∈ V, f j y) / V.card ≤ 1 :=
+      (div_le_one (by exact_mod_cast hVpos)).2 hVhi
+    apply abs_le.mpr
+    constructor <;> linarith
+  · have hn2 : 2 ≤ n := by omega
+    have hnreal : (2 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn2
+    have hDpos : 0 < V.card := hVpos
+    have hDreal : 0 < (V.card : ℝ) := by exact_mod_cast hDpos
+    have hmD : m ≤ V.card := hm
+    let α := {y : Fin N // y ∈ V}
+    have hcardα : Fintype.card α = V.card := by simp [α]
+    let e : α ≃ Fin V.card := Fintype.equivFinOfCardEq hcardα
+    have hcarde : Fintype.card α = V.card := hcardα
+    have hmcast : (m : ℝ) ≤ (V.card : ℝ) := by exact_mod_cast hmD
+    let K : ℕ := 4 * n ^ 2
+    let η : ℝ := 1 / (2 * (n : ℝ) ^ 2)
+    have hKpos : 0 < K := by dsimp [K]; positivity
+    have hKrealpos : 0 < (K : ℝ) := by exact_mod_cast hKpos
+    have hKcast : (K : ℝ) = 4 * (n : ℝ) ^ 2 := by
+      dsimp [K]
+      norm_num
+    have hηpos : 0 < η := by dsimp [η]; positivity
+    let f' : Fin J → Fin V.card → ℝ := fun j x => f j (e.symm x).val
+    have hf' (j : Fin J) (x : Fin V.card) : 0 ≤ f' j x ∧ f' j x ≤ 1 :=
+      htests j _
+    let q : Fin J → Fin V.card → ℝ := fun j x =>
+      (⌊(K : ℝ) * f' j x⌋₊ : ℝ) / (K : ℝ)
+    have hqBounds (j : Fin J) (x : Fin V.card) :
+        0 ≤ q j x ∧ q j x ≤ f' j x ∧ f' j x - q j x ≤ 1 / (K : ℝ) := by
+      have hfloorNonneg : (0 : ℝ) ≤ (⌊(K : ℝ) * f' j x⌋₊ : ℝ) := by positivity
+      have hfloorle : (⌊(K : ℝ) * f' j x⌋₊ : ℝ) ≤ (K : ℝ) * f' j x :=
+        Nat.floor_le (mul_nonneg hKrealpos.le (hf' j x).1)
+      have hfloorlt : (K : ℝ) * f' j x <
+          (⌊(K : ℝ) * f' j x⌋₊ : ℝ) + 1 := by
+        simpa only [Nat.cast_succ] using
+          (Nat.lt_succ_floor ((K : ℝ) * f' j x))
+      have hq0 : 0 ≤ q j x := div_nonneg hfloorNonneg hKrealpos.le
+      have hqle : q j x ≤ f' j x :=
+        (div_le_iff₀ hKrealpos).2 (by simpa [mul_comm] using hfloorle)
+      have herr : f' j x - q j x ≤ 1 / (K : ℝ) := by
+        dsimp [q]
+        rw [sub_le_iff_le_add]
+        rw [← add_div]
+        exact (le_div_iff₀ hKrealpos).2 (by simpa [mul_comm, add_comm] using hfloorlt.le)
+      exact ⟨hq0, hqle, herr⟩
+    let A : Fin J → Fin K → Finset (Fin V.card) := fun j r =>
+      Finset.univ.filter fun x => ((r.val + 1 : ℝ) / (K : ℝ)) ≤ f' j x
+    let μ : Fin J → Fin K → ℝ := fun j r => (A j r).card / (V.card : ℝ)
+    let Acomp : Fin J → Fin K → Finset (Fin V.card) := fun j r => (A j r)ᶜ
+    let μcomp : Fin J → Fin K → ℝ := fun j r => (Acomp j r).card / (V.card : ℝ)
+    have hAcompAdd (j : Fin J) (r : Fin K) :
+        (A j r).card + (Acomp j r).card = V.card := by
+      have hUnion : A j r ∪ Acomp j r = Finset.univ := by
+        ext x
+        by_cases hx : x ∈ A j r
+        · simp [hx]
+        · simp [Acomp, hx]
+      have hdisj : Disjoint (A j r) (Acomp j r) := by
+        apply Finset.disjoint_left.mpr
+        intro x hx hx'
+        have hxnot : x ∉ A j r := by simpa [Acomp] using hx'
+        exact hxnot hx
+      calc
+        _ = (A j r ∪ Acomp j r).card := (Finset.card_union_of_disjoint hdisj).symm
+        _ = V.card := by rw [hUnion]; simp
+    have hμcomp (j : Fin J) (r : Fin K) : μ j r + μcomp j r = 1 := by
+      change (A j r).card / (V.card : ℝ) +
+        (Acomp j r).card / (V.card : ℝ) = 1
+      have hcast : ((A j r).card : ℝ) + (Acomp j r).card = (V.card : ℝ) := by
+        exact_mod_cast hAcompAdd j r
+      rw [← add_div, hcast, div_self hDreal.ne']
+    let Up : Fin J × Fin K → Finset (Finset (Fin V.card)) := fun p =>
+      Finset.univ.filter fun B => B.card = m ∧
+        μ p.1 p.2 + η ≤ ((B ∩ A p.1 p.2).card : ℝ) / m
+    let Down : Fin J × Fin K → Finset (Finset (Fin V.card)) := fun p =>
+      Finset.univ.filter fun B => B.card = m ∧
+        μcomp p.1 p.2 + η ≤ ((B ∩ Acomp p.1 p.2).card : ℝ) / m
+    have hmrealpos : 0 < (m : ℝ) := by exact_mod_cast hmpos
+    have hchoosepos : 0 < Nat.choose V.card m := Nat.choose_pos hmD
+    have hchooser : 0 < (Nat.choose V.card m : ℝ) := by exact_mod_cast hchoosepos
+    have hrate (j : Fin J) (r : Fin K) :
+        ((Up (j, r)).card : ℝ) / (Nat.choose V.card m : ℝ) ≤
+          Real.exp (-2 * (m : ℝ) * η ^ 2) := by
+      let C := (A j r)
+      have hTail := hypergeometric_intersection_tail V.card m hDpos hmpos hmD C
+        ((m : ℝ) * η) (by positivity)
+      have hμrewrite : (m : ℝ) * μ j r =
+          (m : ℝ) * (C.card : ℝ) / (V.card : ℝ) := by
+        dsimp [μ, C]
+        ring
+      have hset : Up (j, r) = Finset.univ.filter (fun B : Finset (Fin V.card) =>
+          B.card = m ∧ ((B ∩ C).card : ℝ) ≥
+            (m : ℝ) * (C.card : ℝ) / (V.card : ℝ) + (m : ℝ) * η) := by
+        ext B
+        simp only [Up, Finset.mem_filter, Finset.mem_univ, true_and]
+        constructor
+        · rintro ⟨hB, hdev⟩
+          refine ⟨hB, ?_⟩
+          have hmul := (le_div_iff₀ hmrealpos).mp hdev
+          have hmul' : (m : ℝ) * μ j r + (m : ℝ) * η ≤
+              (B ∩ A j r).card := by simpa [mul_add, mul_comm] using hmul
+          rw [hμrewrite] at hmul'
+          simpa [C] using hmul'
+        · rintro ⟨hB, hcount⟩
+          refine ⟨hB, ?_⟩
+          have hmul : (m : ℝ) * (μ j r + η) ≤ (B ∩ C).card := by
+            rw [mul_add, hμrewrite]
+            simpa [C] using hcount
+          exact (le_div_iff₀ hmrealpos).2 (by simpa [mul_comm] using hmul)
+      have hrateEq : -(2 * ((m : ℝ) * η) ^ 2) / (m : ℝ) =
+          -2 * (m : ℝ) * η ^ 2 := by
+        field_simp [ne_of_gt hmrealpos]
+        <;> ring
+      rw [hset]
+      simpa [hrateEq] using hTail
+    have hrateComp (j : Fin J) (r : Fin K) :
+        ((Down (j, r)).card : ℝ) / (Nat.choose V.card m : ℝ) ≤
+          Real.exp (-2 * (m : ℝ) * η ^ 2) := by
+      let C := Acomp j r
+      have hTail := hypergeometric_intersection_tail V.card m hDpos hmpos hmD C
+        ((m : ℝ) * η) (by positivity)
+      have hμrewrite : (m : ℝ) * μcomp j r =
+          (m : ℝ) * (C.card : ℝ) / (V.card : ℝ) := by
+        dsimp [μcomp, C]
+        ring
+      have hset : Down (j, r) = Finset.univ.filter (fun B : Finset (Fin V.card) =>
+          B.card = m ∧ ((B ∩ C).card : ℝ) ≥
+            (m : ℝ) * (C.card : ℝ) / (V.card : ℝ) + (m : ℝ) * η) := by
+        ext B
+        simp only [Down, Finset.mem_filter, Finset.mem_univ, true_and]
+        constructor
+        · rintro ⟨hB, hdev⟩
+          refine ⟨hB, ?_⟩
+          have hmul := (le_div_iff₀ hmrealpos).mp hdev
+          have hmul' : (m : ℝ) * μcomp j r + (m : ℝ) * η ≤
+              (B ∩ Acomp j r).card := by simpa [mul_add, mul_comm] using hmul
+          rw [hμrewrite] at hmul'
+          simpa [C] using hmul'
+        · rintro ⟨hB, hcount⟩
+          refine ⟨hB, ?_⟩
+          have hmul : (m : ℝ) * (μcomp j r + η) ≤ (B ∩ C).card := by
+            rw [mul_add, hμrewrite]
+            simpa [C] using hcount
+          exact (le_div_iff₀ hmrealpos).2 (by simpa [mul_comm] using hmul)
+      have hrateEq : -(2 * ((m : ℝ) * η) ^ 2) / (m : ℝ) =
+          -2 * (m : ℝ) * η ^ 2 := by
+        field_simp [ne_of_gt hmrealpos]
+        <;> ring
+      rw [hset]
+      simpa [hrateEq] using hTail
+    let idx : Finset (Fin J × Fin K) := Finset.univ
+    let bad : Finset (Finset (Fin V.card)) :=
+      idx.biUnion fun p => Up p ∪ Down p
+    have hbadCard : bad.card ≤ ∑ p ∈ idx, ((Up p).card + (Down p).card) := by
+      calc
+        _ ≤ ∑ p ∈ idx, (Up p ∪ Down p).card := Finset.card_biUnion_le
+        _ ≤ ∑ p ∈ idx, ((Up p).card + (Down p).card) := by
+          apply Finset.sum_le_sum
+          intro p hp
+          exact Finset.card_union_le (Up p) (Down p)
+    have hbadReal : (bad.card : ℝ) ≤
+        (2 * (J : ℝ) * (K : ℝ)) * (Nat.choose V.card m : ℝ) *
+          Real.exp (-2 * (m : ℝ) * η ^ 2) := by
+      calc
+        _ ≤ ∑ p ∈ idx,
+            (((Up p).card : ℝ) + ((Down p).card : ℝ)) := by
+          exact_mod_cast hbadCard
+        _ ≤ ∑ p ∈ idx, (2 * (Nat.choose V.card m : ℝ) *
+            Real.exp (-2 * (m : ℝ) * η ^ 2)) := by
+          apply Finset.sum_le_sum
+          intro p hp
+          rcases p with ⟨j, r⟩
+          have hu := hrate j r
+          have hd := hrateComp j r
+          have huc := (div_le_iff₀ hchooser).mp hu
+          have hdc := (div_le_iff₀ hchooser).mp hd
+          have huc' : ((Up (j, r)).card : ℝ) ≤
+              (Nat.choose V.card m : ℝ) * Real.exp (-2 * (m : ℝ) * η ^ 2) := by
+            simpa [mul_comm] using huc
+          have hdc' : ((Down (j, r)).card : ℝ) ≤
+              (Nat.choose V.card m : ℝ) * Real.exp (-2 * (m : ℝ) * η ^ 2) := by
+            simpa [mul_comm] using hdc
+          calc
+            _ ≤ (Nat.choose V.card m : ℝ) * Real.exp (-2 * (m : ℝ) * η ^ 2) +
+                (Nat.choose V.card m : ℝ) * Real.exp (-2 * (m : ℝ) * η ^ 2) :=
+              add_le_add huc' hdc'
+            _ = _ := by ring
+        _ = (2 * (J : ℝ) * (K : ℝ)) * (Nat.choose V.card m : ℝ) *
+              Real.exp (-2 * (m : ℝ) * η ^ 2) := by
+          simp [idx, Finset.sum_const, Finset.card_univ, Fintype.card_prod]
+          ring
+    have hceil : (Nat.ceil (Real.exp (2 * (n : ℝ))) : ℝ) ≤
+        2 * Real.exp (2 * (n : ℝ)) := by
+      have hx : 1 ≤ Real.exp (2 * (n : ℝ)) := by
+        have h := Real.add_one_le_exp (2 * (n : ℝ))
+        linarith
+      have hlt : (Nat.ceil (Real.exp (2 * (n : ℝ))) : ℝ) <
+          Real.exp (2 * (n : ℝ)) + 1 := Nat.ceil_lt_add_one (by positivity)
+      linarith
+    have hJreal : (J : ℝ) ≤
+        (Nat.ceil (Real.exp (2 * (n : ℝ))) : ℝ) * (n : ℝ) ^ 4 := by
+      exact_mod_cast hJ
+    have hcoeff : 2 * (J : ℝ) * (K : ℝ) ≤
+        16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 := by
+      calc
+        _ ≤ 2 * ((Nat.ceil (Real.exp (2 * (n : ℝ))) : ℝ) *
+            (n : ℝ) ^ 4) * (K : ℝ) := by rw [hKcast]; gcongr
+        _ ≤ 2 * (2 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 4) *
+            (4 * (n : ℝ) ^ 2) := by rw [hKcast]; gcongr
+        _ = 16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 := by ring
+    have hetaRate : 2 * (m : ℝ) * η ^ 2 =
+        (m : ℝ) / (2 * (n : ℝ) ^ 4) := by
+      dsimp [η]
+      field_simp
+      <;> ring
+    have hmnreal : (n : ℝ) ^ 12 ≤ (m : ℝ) := by exact_mod_cast hmn
+    have hrateLower : (n : ℝ) ^ 8 / 2 ≤ 2 * (m : ℝ) * η ^ 2 := by
+      rw [hetaRate]
+      apply (div_le_div_iff₀ (by norm_num : (0 : ℝ) < 2)
+        (by positivity : (0 : ℝ) < 2 * (n : ℝ) ^ 4)).2
+      have hpow : (n : ℝ) ^ 8 * (n : ℝ) ^ 4 = (n : ℝ) ^ 12 := by
+        rw [← pow_add]
+        <;> norm_num
+      nlinarith [hmnreal, hpow]
+    have hExpTail : Real.exp (-2 * (m : ℝ) * η ^ 2) ≤
+        Real.exp (-((n : ℝ) ^ 8 / 2)) := by
+      apply Real.exp_le_exp.mpr
+      calc
+        -2 * (m : ℝ) * η ^ 2 = -(2 * (m : ℝ) * η ^ 2) := by ring
+        _ ≤ -((n : ℝ) ^ 8 / 2) := neg_le_neg hrateLower
+    have hExpOne : (2 : ℝ) ≤ Real.exp 1 := by
+      have h := Real.add_one_le_exp (1 : ℝ)
+      norm_num at h ⊢
+      <;> exact h
+    have hExpFour : Real.exp 4 = Real.exp 1 ^ 4 := by
+      rw [← Real.exp_nat_mul]
+      norm_num
+    have hExpFourLower : (16 : ℝ) ≤ Real.exp 4 := by
+      rw [hExpFour]
+      calc
+        _ = (2 : ℝ) ^ 4 := by norm_num
+        _ ≤ Real.exp 1 ^ 4 := by gcongr
+    have hlog16 : Real.log 16 ≤ 4 :=
+      (Real.log_le_iff_le_exp (by norm_num : (0 : ℝ) < 16)).2 hExpFourLower
+    have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) - 1 :=
+      Real.log_le_sub_one_of_pos (by exact_mod_cast (show 0 < n by omega))
+    have hn7 : (16 : ℝ) ≤ (n : ℝ) ^ 7 := by
+      have hp : (2 : ℝ) ^ 7 ≤ (n : ℝ) ^ 7 :=
+        pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 2) hnreal 7
+      norm_num at hp ⊢
+      <;> exact le_trans (by norm_num) hp
+    have hn8 : 16 * (n : ℝ) ≤ (n : ℝ) ^ 8 := by
+      have hp := mul_le_mul_of_nonneg_left hn7 (by positivity : (0 : ℝ) ≤ n)
+      have hpow : (n : ℝ) ^ 7 * (n : ℝ) = (n : ℝ) ^ 8 := by
+        simpa [Nat.cast_succ] using (pow_succ (n : ℝ) 7).symm
+      calc
+        _ = (n : ℝ) * 16 := by ring
+        _ ≤ (n : ℝ) * (n : ℝ) ^ 7 := hp
+        _ = (n : ℝ) ^ 7 * (n : ℝ) := by ring
+        _ = (n : ℝ) ^ 8 := hpow
+    have hpoly : 8 * (n : ℝ) - 2 < (n : ℝ) ^ 8 / 2 := by nlinarith [hn8]
+    have hlogFactor :
+        Real.log (16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6) <
+          (n : ℝ) ^ 8 / 2 := by
+      have hlogs : Real.log (16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6) =
+          Real.log 16 + 2 * (n : ℝ) + 6 * Real.log (n : ℝ) := by
+        rw [show 16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 =
+          (16 * Real.exp (2 * (n : ℝ))) * (n : ℝ) ^ 6 by ring,
+          Real.log_mul (by positivity) (by positivity),
+          Real.log_mul (by norm_num) (by positivity), Real.log_exp, Real.log_pow]
+        ring
+      rw [hlogs]
+      linarith
+    have hExpFactor :
+        16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 <
+          Real.exp ((n : ℝ) ^ 8 / 2) :=
+      (Real.log_lt_iff_lt_exp (by positivity)).mp hlogFactor
+    have hsmall :
+        16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 *
+          Real.exp (-((n : ℝ) ^ 8 / 2)) < 1 := by
+      have hquot :
+          (16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6) /
+            Real.exp ((n : ℝ) ^ 8 / 2) < 1 :=
+        (div_lt_one (Real.exp_pos _)).2 hExpFactor
+      calc
+        _ = (16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6) /
+            Real.exp ((n : ℝ) ^ 8 / 2) := by
+              rw [Real.exp_neg]
+              field_simp
+              <;> ring
+        _ < 1 := hquot
+    have hbadFactor : (2 * (J : ℝ) * (K : ℝ)) *
+        Real.exp (-2 * (m : ℝ) * η ^ 2) < 1 := by
+      calc
+        _ ≤ 16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 *
+            Real.exp (-2 * (m : ℝ) * η ^ 2) :=
+          mul_le_mul_of_nonneg_right hcoeff (Real.exp_nonneg _)
+        _ ≤ 16 * Real.exp (2 * (n : ℝ)) * (n : ℝ) ^ 6 *
+            Real.exp (-((n : ℝ) ^ 8 / 2)) :=
+          mul_le_mul_of_nonneg_left hExpTail (by positivity)
+        _ < 1 := hsmall
+    let Samples : Finset (Finset (Fin V.card)) := Finset.univ.powersetCard m
+    have hSamplesCard : Samples.card = Nat.choose V.card m := by
+      simp [Samples]
+    have hbadRealLt : (bad.card : ℝ) < (Nat.choose V.card m : ℝ) := by
+      calc
+        _ ≤ (2 * (J : ℝ) * (K : ℝ)) *
+            (Nat.choose V.card m : ℝ) * Real.exp (-2 * (m : ℝ) * η ^ 2) := hbadReal
+        _ = (Nat.choose V.card m : ℝ) *
+            ((2 * (J : ℝ) * (K : ℝ)) * Real.exp (-2 * (m : ℝ) * η ^ 2)) := by ring
+        _ < (Nat.choose V.card m : ℝ) * 1 :=
+          mul_lt_mul_of_pos_left hbadFactor hchooser
+        _ = Nat.choose V.card m := by ring
+    have hbadLt : bad.card < Samples.card := by
+      rw [hSamplesCard]
+      exact_mod_cast hbadRealLt
+    obtain ⟨B, hBmem, hBnot⟩ := Finset.exists_mem_notMem_of_card_lt_card hbadLt
+    have hBcard : B.card = m := (Finset.mem_powersetCard.mp hBmem).2
+    have hPartition (j : Fin J) (r : Fin K) :
+        (B ∩ A j r).card + (B ∩ Acomp j r).card = m := by
+      have hUnion : (B ∩ A j r) ∪ (B ∩ Acomp j r) = B := by
+        ext x
+        constructor
+        · intro hx
+          rcases Finset.mem_union.mp hx with hx | hx
+          · exact (Finset.mem_inter.mp hx).1
+          · exact (Finset.mem_inter.mp hx).1
+        · intro hxB
+          by_cases hxA : x ∈ A j r
+          · exact Finset.mem_union.mpr (Or.inl (Finset.mem_inter.mpr ⟨hxB, hxA⟩))
+          · exact Finset.mem_union.mpr (Or.inr
+              (Finset.mem_inter.mpr ⟨hxB, by simpa [Acomp, hxA]⟩))
+      have hdisj : Disjoint (B ∩ A j r) (B ∩ Acomp j r) := by
+        apply Finset.disjoint_left.mpr
+        intro x hx hx'
+        have hxA : x ∈ A j r := (Finset.mem_inter.mp hx).2
+        have hxNotA : x ∉ A j r := by
+          simpa [Acomp] using (Finset.mem_inter.mp hx').2
+        exact hxNotA hxA
+      calc
+        _ = ((B ∩ A j r) ∪ (B ∩ Acomp j r)).card :=
+          (Finset.card_union_of_disjoint hdisj).symm
+        _ = B.card := congrArg Finset.card hUnion
+        _ = m := hBcard
+    have hIndicatorClose (j : Fin J) (r : Fin K) :
+        |((B ∩ A j r).card : ℝ) / m - μ j r| ≤ η := by
+      have hnotUp : B ∉ Up (j, r) := by
+        intro hmem
+        apply hBnot
+        exact Finset.mem_biUnion.mpr ⟨(j, r), Finset.mem_univ _,
+          Finset.mem_union.mpr (Or.inl hmem)⟩
+      have hnotDown : B ∉ Down (j, r) := by
+        intro hmem
+        apply hBnot
+        exact Finset.mem_biUnion.mpr ⟨(j, r), Finset.mem_univ _,
+          Finset.mem_union.mpr (Or.inr hmem)⟩
+      have hnotUpperDev :
+          ¬ μ j r + η ≤ ((B ∩ A j r).card : ℝ) / m := by
+        intro hdev
+        exact hnotUp (by simp [Up, hBcard, hdev])
+      have hnotLowerDev :
+          ¬ μcomp j r + η ≤ ((B ∩ Acomp j r).card : ℝ) / m := by
+        intro hdev
+        exact hnotDown (by simp [Down, hBcard, hdev])
+      have hcountSum :
+          ((B ∩ A j r).card : ℝ) / m + ((B ∩ Acomp j r).card : ℝ) / m = 1 := by
+        have hcast : ((B ∩ A j r).card : ℝ) +
+            ((B ∩ Acomp j r).card : ℝ) = (m : ℝ) := by
+          exact_mod_cast hPartition j r
+        rw [← add_div, hcast, div_self hmrealpos.ne']
+      have hupper : ((B ∩ A j r).card : ℝ) / m < μ j r + η :=
+        lt_of_not_ge hnotUpperDev
+      have hlower : μ j r - η < ((B ∩ A j r).card : ℝ) / m := by
+        by_contra h
+        have hle : ((B ∩ A j r).card : ℝ) / m ≤ μ j r - η := le_of_not_gt h
+        have hcompAvg : ((B ∩ Acomp j r).card : ℝ) / m =
+            1 - ((B ∩ A j r).card : ℝ) / m := by linarith [hcountSum]
+        have hμcomp' : μcomp j r = 1 - μ j r := by linarith [hμcomp j r]
+        have hcomp : μcomp j r + η ≤
+            ((B ∩ Acomp j r).card : ℝ) / m := by
+          rw [hcompAvg, hμcomp']
+          linarith
+        exact hnotLowerDev hcomp
+      apply abs_le.mpr
+      constructor <;> linarith
+    have hfloorBound (j : Fin J) (x : Fin V.card) :
+        ⌊(K : ℝ) * f' j x⌋₊ ≤ K := by
+      have hfloorle : (⌊(K : ℝ) * f' j x⌋₊ : ℝ) ≤ (K : ℝ) * f' j x :=
+        Nat.floor_le (mul_nonneg hKrealpos.le (hf' j x).1)
+      have hprod : (K : ℝ) * f' j x ≤ (K : ℝ) :=
+        by
+          calc
+            _ ≤ (K : ℝ) * 1 := mul_le_mul_of_nonneg_left (hf' j x).2 hKrealpos.le
+            _ = (K : ℝ) := by ring
+      exact_mod_cast (hfloorle.trans hprod)
+    have hThreshold (j : Fin J) (r : Fin K) (x : Fin V.card) :
+        ((r.val + 1 : ℝ) / (K : ℝ)) ≤ f' j x ↔
+          r.val < ⌊(K : ℝ) * f' j x⌋₊ := by
+      rw [div_le_iff₀ hKrealpos]
+      rw [Nat.lt_iff_add_one_le,
+        Nat.le_floor_iff' (by omega : r.val + 1 ≠ 0)]
+      push_cast
+      simpa [mul_comm]
+    have hThresholdCard (j : Fin J) (x : Fin V.card) :
+        (Finset.univ.filter fun r : Fin K => x ∈ A j r).card =
+          ⌊(K : ℝ) * f' j x⌋₊ := by
+      have hset : (Finset.univ.filter fun r : Fin K => x ∈ A j r) =
+          Finset.univ.filter (fun r : Fin K => r.val <
+            ⌊(K : ℝ) * f' j x⌋₊) := by
+        ext r
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, A]
+        exact hThreshold j r x
+      rw [hset, Fin.card_filter_val_lt, Nat.min_eq_right (hfloorBound j x)]
+    have hqRep (j : Fin J) (x : Fin V.card) :
+        q j x =
+          (∑ r : Fin K, if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by
+      have hsum : (∑ r : Fin K, if x ∈ A j r then (1 : ℝ) else 0) =
+          (⌊(K : ℝ) * f' j x⌋₊ : ℝ) := by
+        calc
+          _ = ((Finset.univ.filter fun r : Fin K => x ∈ A j r).card : ℝ) := by simp
+          _ = _ := by exact_mod_cast hThresholdCard j x
+      dsimp [q]
+      rw [← hsum]
+    have hsumIndicatorB (j : Fin J) (r : Fin K) :
+        (∑ x ∈ B, if x ∈ A j r then (1 : ℝ) else 0) =
+          (B ∩ A j r).card := by
+      calc
+        _ = ∑ x ∈ B.filter (fun x => x ∈ A j r), (1 : ℝ) := by
+          rw [← Finset.sum_filter]
+        _ = (B ∩ A j r).card := by
+          have heq : B.filter (fun x => x ∈ A j r) = B ∩ A j r := by
+            ext x
+            simp
+          rw [heq]
+          simp
+    have hsumIndicatorAll (j : Fin J) (r : Fin K) :
+        (∑ x : Fin V.card, if x ∈ A j r then (1 : ℝ) else 0) =
+          (A j r).card := by
+      calc
+        _ = ∑ x ∈ (Finset.univ : Finset (Fin V.card)).filter
+            (fun x => x ∈ A j r), (1 : ℝ) := by rw [← Finset.sum_filter]
+        _ = (A j r).card := by
+          have heq : (Finset.univ : Finset (Fin V.card)).filter
+              (fun x => x ∈ A j r) = A j r := by
+            ext x
+            simp
+          rw [heq]
+          simp
+    have hqSumB (j : Fin J) :
+        (∑ x ∈ B, q j x) =
+          (∑ r : Fin K, ((B ∩ A j r).card : ℝ)) / (K : ℝ) := by
+      calc
+        _ = ∑ x ∈ B,
+            (∑ r : Fin K, if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by
+              apply Finset.sum_congr rfl
+              intro x hx
+              exact hqRep j x
+        _ = (∑ x ∈ B, ∑ r : Fin K,
+            if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by rw [Finset.sum_div]
+        _ = (∑ r : Fin K, ∑ x ∈ B,
+            if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by
+              congr 1
+              rw [Finset.sum_comm]
+        _ = _ := by
+          apply congrArg (fun z : ℝ => z / (K : ℝ))
+          apply Finset.sum_congr rfl
+          intro r hr
+          exact hsumIndicatorB j r
+    have hqSumAll (j : Fin J) :
+        (∑ x : Fin V.card, q j x) =
+          (∑ r : Fin K, ((A j r).card : ℝ)) / (K : ℝ) := by
+      calc
+        _ = ∑ x : Fin V.card,
+            (∑ r : Fin K, if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by
+              apply Finset.sum_congr rfl
+              intro x hx
+              exact hqRep j x
+        _ = (∑ x : Fin V.card, ∑ r : Fin K,
+            if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by rw [Finset.sum_div]
+        _ = (∑ r : Fin K, ∑ x : Fin V.card,
+            if x ∈ A j r then (1 : ℝ) else 0) / (K : ℝ) := by
+              congr 1
+              rw [Finset.sum_comm]
+        _ = _ := by
+          apply congrArg (fun z : ℝ => z / (K : ℝ))
+          apply Finset.sum_congr rfl
+          intro r hr
+          exact hsumIndicatorAll j r
+    have hsumIndicators (j : Fin J) :
+        Finset.univ.sum (fun r : Fin K =>
+          ((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ)) =
+        (Finset.univ.sum fun r : Fin K => ((B ∩ A j r).card : ℝ)) / m -
+          (Finset.univ.sum fun r : Fin K => (A j r).card) / (V.card : ℝ) := by
+      rw [Finset.sum_sub_distrib, ← Finset.sum_div, ← Finset.sum_div]
+      simp only [Nat.cast_sum]
+    have hdivAlgebra (a b : ℝ) :
+        (a / (K : ℝ)) / m - (b / (K : ℝ)) / (V.card : ℝ) =
+          (1 / (K : ℝ)) * (a / m - b / (V.card : ℝ)) := by
+      field_simp [ne_of_gt hKrealpos, ne_of_gt hmrealpos, ne_of_gt hDreal]
+      <;> ring
+    have hqDiffExact (j : Fin J) :
+        (∑ x ∈ B, q j x) / m - (∑ x : Fin V.card, q j x) / (V.card : ℝ) =
+          (1 / (K : ℝ)) *
+            Finset.univ.sum (fun r : Fin K =>
+              ((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ)) := by
+      rw [hqSumB, hqSumAll]
+      rw [hsumIndicators j]
+      simpa [Nat.cast_sum] using
+        (hdivAlgebra
+          (Finset.univ.sum fun r : Fin K => ((B ∩ A j r).card : ℝ))
+          (Finset.univ.sum fun r : Fin K => (A j r).card))
+    have hqDiff (j : Fin J) :
+        |(∑ x ∈ B, q j x) / m - (∑ x : Fin V.card, q j x) / (V.card : ℝ)| ≤ η := by
+      rw [hqDiffExact]
+      rw [abs_mul, abs_of_pos (by positivity : 0 < 1 / (K : ℝ))]
+      have hsumAbs :
+          |Finset.univ.sum (fun r : Fin K =>
+              ((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ))| ≤
+            Finset.univ.sum (fun r : Fin K =>
+              |((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ)|) :=
+        Finset.abs_sum_le_sum_abs _ _
+      have hsumLe :
+          Finset.univ.sum (fun r : Fin K =>
+            |((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ)|) ≤
+            (K : ℝ) * η := by
+        calc
+          _ ≤ Finset.univ.sum (fun r : Fin K => η) :=
+            Finset.sum_le_sum fun r hr => hIndicatorClose j r
+          _ = (K : ℝ) * η := by simp
+      calc
+        (1 / (K : ℝ)) *
+            |Finset.univ.sum (fun r : Fin K =>
+              ((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ))|
+            ≤ (1 / (K : ℝ)) *
+              Finset.univ.sum (fun r : Fin K =>
+                |((B ∩ A j r).card : ℝ) / m - (A j r).card / (V.card : ℝ)|) :=
+          mul_le_mul_of_nonneg_left hsumAbs (by positivity)
+        _ ≤ (1 / (K : ℝ)) * ((K : ℝ) * η) :=
+          mul_le_mul_of_nonneg_left hsumLe (by positivity)
+        _ = η := by field_simp [ne_of_gt hKrealpos]
+    have hAvgQError (D : Finset (Fin V.card)) (hD : 0 < D.card) (j : Fin J) :
+        |(∑ x ∈ D, f' j x) / D.card - (∑ x ∈ D, q j x) / D.card| ≤
+          1 / (K : ℝ) := by
+      have hsubNonneg : 0 ≤ ∑ x ∈ D, (f' j x - q j x) := by
+        apply Finset.sum_nonneg
+        intro x hx
+        exact sub_nonneg.mpr (hqBounds j x).2.1
+      have hsubLe : (∑ x ∈ D, (f' j x - q j x)) ≤
+          (D.card : ℝ) / (K : ℝ) := by
+        calc
+          _ ≤ ∑ x ∈ D, (1 / (K : ℝ)) :=
+            Finset.sum_le_sum fun x hx => (hqBounds j x).2.2
+          _ = (D.card : ℝ) / (K : ℝ) := by
+            simp [Finset.sum_const, div_eq_mul_inv, mul_comm]
+      have hdiff :
+          (∑ x ∈ D, f' j x) / D.card - (∑ x ∈ D, q j x) / D.card =
+            (∑ x ∈ D, (f' j x - q j x)) / D.card := by
+        rw [Finset.sum_sub_distrib, div_sub_div_same]
+      rw [hdiff]
+      have hratio : 0 ≤
+          (∑ x ∈ D, (f' j x - q j x)) / D.card ∧
+          (∑ x ∈ D, (f' j x - q j x)) / D.card ≤ 1 / (K : ℝ) := by
+        constructor
+        · exact div_nonneg hsubNonneg (Nat.cast_nonneg _)
+        · calc
+            _ ≤ ((D.card : ℝ) / (K : ℝ)) / D.card :=
+              div_le_div_of_nonneg_right hsubLe (by exact_mod_cast hD.le)
+            _ = 1 / (K : ℝ) := by field_simp [ne_of_gt (by exact_mod_cast hD)]
+      exact abs_le.mpr ⟨by linarith [hratio.1], hratio.2⟩
+    have hBpos : 0 < B.card := by rw [hBcard]; exact hmpos
+    have hunivpos : 0 < (Finset.univ : Finset (Fin V.card)).card := by
+      simpa using hDpos
+    have hApproxFin (j : Fin J) :
+        |(∑ x ∈ B, f' j x) / m -
+          (∑ x : Fin V.card, f' j x) / (V.card : ℝ)| ≤ 1 / (n : ℝ) ^ 2 := by
+      have hBerr := hAvgQError B hBpos j
+      have hUerr := hAvgQError Finset.univ hunivpos j
+      have hsumEq :
+          (∑ x ∈ B, f' j x) / m - (∑ x : Fin V.card, f' j x) / (V.card : ℝ) =
+            ((∑ x ∈ B, f' j x) / m - (∑ x ∈ B, q j x) / m) +
+              ((∑ x ∈ B, q j x) / m - (∑ x : Fin V.card, q j x) / (V.card : ℝ)) +
+              ((∑ x : Fin V.card, q j x) / (V.card : ℝ) -
+                (∑ x : Fin V.card, f' j x) / (V.card : ℝ)) := by ring
+      rw [hsumEq]
+      let a := (∑ x ∈ B, f' j x) / m - (∑ x ∈ B, q j x) / m
+      let b := (∑ x ∈ B, q j x) / m - (∑ x : Fin V.card, q j x) / (V.card : ℝ)
+      let c := (∑ x : Fin V.card, q j x) / (V.card : ℝ) -
+        (∑ x : Fin V.card, f' j x) / (V.card : ℝ)
+      have htriangle : |(a + b) + c| ≤ |a| + |b| + |c| := by
+        calc
+          _ ≤ |a + b| + |c| := abs_add_le _ _
+          _ = |c| + |a + b| := by ring
+          _ ≤ |c| + (|a| + |b|) := by nlinarith [abs_add_le a b]
+          _ = |a| + |b| + |c| := by ring
+      have hBerr' : |a| ≤ 1 / (K : ℝ) := by simpa [a, hBcard] using hBerr
+      have hUerr' :
+          |c| ≤ 1 / (K : ℝ) := by simpa [c, abs_sub_comm] using hUerr
+      calc
+        _ ≤ |a| + |b| + |c| := by simpa [a, b, c] using htriangle
+        _ ≤ 1 / (K : ℝ) + η + 1 / (K : ℝ) := by
+          exact add_le_add (add_le_add hBerr' (hqDiff j)) hUerr'
+        _ = 1 / (n : ℝ) ^ 2 := by
+          rw [hKcast]
+          dsimp [η]
+          field_simp
+          ring
+    let Bα : Finset α := B.image e.symm
+    let V' : Finset (Fin N) := Bα.image Subtype.val
+    have hV'sub : V' ⊆ V := by
+      intro y hy
+      rcases Finset.mem_image.mp hy with ⟨a, ha, rfl⟩
+      exact a.property
+    have hV'card : V'.card = m := by
+      dsimp [V', Bα]
+      rw [Finset.card_image_of_injective _ Subtype.val_injective,
+        Finset.card_image_of_injective _ e.symm.injective, hBcard]
+    have hsumB' (j : Fin J) :
+        (∑ y ∈ V', f j y) = ∑ x ∈ B, f' j x := by
+      dsimp [V', Bα, f']
+      rw [Finset.sum_image (fun _ _ _ _ h => Subtype.val_injective h),
+        Finset.sum_image (fun _ _ _ _ h => e.symm.injective h)]
+    have hsumFull' (j : Fin J) :
+        (∑ x : Fin V.card, f' j x) = ∑ y ∈ V, f j y := by
+      calc
+        _ = ∑ x : α, f j x.val := Equiv.sum_comp e.symm (fun x : α => f j x.val)
+        _ = ∑ y ∈ V, f j y := by
+          simpa [α] using (Finset.sum_attach V (fun y => f j y))
+    refine ⟨V', hV'sub, hV'card, ?_⟩
+    intro j
+    simpa [hsumB' j, hsumFull' j] using hApproxFin j
 
 private theorem allocation_product_additive_tail
     {ι : Type*} [Fintype ι] [DecidableEq ι]

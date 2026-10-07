@@ -1,4 +1,5 @@
 import HypercubeRamsey.S18.ProducerInputs
+import HypercubeRamsey.S18.ProfileBridge_q_s18_bridge
 
 namespace HypercubeRamsey.S18
 
@@ -18,7 +19,7 @@ theorem cleaned_profile_mesh_exists {κ : CConsts} {T : Stage} {k : ℕ}
           NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) → CleanProps 𝒯 i π' C)) :
     ∃ mesh : Mesh 𝒯, S14.MeshCleaned mesh ∧ Nonempty (S14.MeshProfileDomain mesh) ∧
       S14.MeshReady mesh := by
-  sorry
+  exact Lane_q_s18_bridge.cleaned_profile_mesh_exists_helper 𝒯 h𝒯 hcluster hclean
 
 private def zeroGroup {κ : CConsts} {T : Stage} {k : ℕ}
     (𝒯 : Tiling κ T k) (i : Fin 𝒯.m) : Group 𝒯 i :=

@@ -9,6 +9,9 @@ import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
+import HypercubeRamsey.S18.Completion_sol_s18_n5
+import HypercubeRamsey.S18.Locality_sol_s18_n5
+import HypercubeRamsey.S18.Backward_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
@@ -581,7 +584,25 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
         ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
           TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
             ∀ A : ClassSamplerData D δ, FullRunProbability D C A (εrun k) := by
-  sorry
+  let εrun : ℕ → ℝ := fun k => 1 / ((T.S.n k + 1 : ℕ) : ℝ)
+  have hlim : Tendsto εrun atTop (nhds 0) := by
+    have hn : Tendsto (fun k => ((T.S.n k + 1 : ℕ) : ℝ)) atTop atTop :=
+      tendsto_natCast_atTop_atTop.comp ((tendsto_add_atTop_nat 1).comp T.S.n_tendsto)
+    simpa only [Function.comp_def, εrun, one_div] using tendsto_inv_atTop_zero.comp hn
+  refine ⟨εrun, (fun k => by dsimp [εrun]; positivity), hlim, ?_⟩
+  have hstop : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
+        TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
+          ∀ A : ClassSamplerData D δ,
+            (FinLaw.bind (D.encoding.terminalLaw (terminalSet D δ) C.positive)
+              (fun x => D.encoding.base.runFull A.act (D.encoding.initialState x))).pr
+                (fun z => ∃ j : Fin D.geom.r, Lane_sol_s18_n5.reached D δ j z.2 ∧
+                  ¬ D.enter δ j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt))) ≤ εrun k := by
+    sorry
+  filter_upwards [hstop] with k hk
+  intro PT hPT D hD hT hBalance hLocal hTransfer C A
+  exact Lane_sol_s18_n5.fullRunProbability_of_first_stop D hD C A hLocal.2.1
+    (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
 
 theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)

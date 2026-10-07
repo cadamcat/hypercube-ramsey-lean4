@@ -283,6 +283,67 @@ theorem terminal_initial_incoming (D : LateData hPT) {δ ε : ℝ}
   simpa only [LateData.pLate, LateData.threshold, Nat.cast_zero, zero_mul, zero_div, add_zero]
     using C.late x hx f
 
+theorem extend_beforeHistory (D : LateData hPT)
+    (h : D.encoding.base.History (Fin.last D.geom.r)) (j : Fin D.geom.r) :
+    D.encoding.base.extend j
+      (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt)) (D.pastRows h j j.isLt) =
+      D.beforeHistory h j.succ (by simpa only [Fin.val_succ, Fin.val_last] using Nat.succ_le_of_lt j.isLt) := by
+  apply Prod.ext
+  · rfl
+  · funext b
+    by_cases hb : b.1 ∈ D.encoding.base.processed j.castSucc
+    · simp only [LateProcessBase.extend, LateData.beforeHistory, dif_pos hb]
+    · simp only [LateProcessBase.extend, LateData.beforeHistory, LateData.pastRows, dif_neg hb]
+
+private theorem futureRisk_before_congr (D : LateData hPT)
+    (h : D.encoding.base.History (Fin.last D.geom.r)) (f : LateEvent D)
+    (j j' : Fin (D.geom.r + 1)) (hj : j.val ≤ D.geom.r) (hj' : j'.val ≤ D.geom.r)
+    (heq : j = j') : D.futureRisk f (D.beforeHistory h j hj) =
+      D.futureRisk f (D.beforeHistory h j' hj') := by
+  subst j'
+  rfl
+
+/-- Alarm avoidance transports every future-risk threshold to the next
+reached history. The base case is the terminal certificate's late bound. -/
+theorem reached_futureRisk (D : LateData hPT) {δ ε : ℝ}
+    (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
+    (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+    (hw : (FinLaw.bind (D.encoding.terminalLaw (terminalSet D δ) C.positive)
+      (fun x => D.encoding.base.runFull A.act (D.encoding.initialState x))).w (x, h) ≠ 0)
+    (j : Fin D.geom.r)
+    (hr : ∀ s : Fin D.geom.r, s.val < j.val →
+      D.enter δ s (D.beforeHistory h s.castSucc (Nat.le_of_lt s.isLt))) :
+    ∀ f : LateEvent D, j.val ≤ f.2.1.val →
+      D.futureRisk f (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt)) ≤ D.threshold δ j.val := by
+  obtain ⟨hx, hh⟩ := mul_ne_zero_iff.mp hw
+  obtain ⟨hinit, hsteps⟩ := runFrom_support D A.act (D.encoding.initialState x)
+    D.geom.r le_rfl h hh
+  have hterm := (terminal_input_support D C x hx).1
+  intro f hf
+  by_cases hz : j.val = 0
+  · have hi : j.castSucc = (0 : Fin (D.geom.r + 1)) := Fin.ext (by simpa only [Fin.val_castSucc, Fin.val_zero] using hz)
+    rw [futureRisk_before_congr D h f j.castSucc 0 _ (by simp) hi,
+      beforeHistory_zero, hinit, futureRisk_initial, hz]
+    simpa only [LateData.pLate, LateData.threshold, Nat.cast_zero, zero_mul, zero_div, add_zero]
+      using C.late x hterm f
+  · let s : Fin D.geom.r := ⟨j.val - 1, by omega⟩
+    have hs : s.val < j.val := by dsimp [s]; omega
+    have hval : s.val + 1 = j.val := by dsimp [s]; omega
+    have hi : s.succ = j.castSucc := Fin.ext (by simpa only [Fin.val_succ, Fin.val_castSucc] using hval)
+    have hext : D.futureRisk f
+        (D.encoding.base.extend s (D.beforeHistory h s.castSucc (Nat.le_of_lt s.isLt))
+          (D.pastRows h s s.isLt)) =
+        D.futureRisk f (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt)) := by
+      rw [extend_beforeHistory]
+      exact futureRisk_before_congr D h f s.succ j.castSucc _ _ hi
+    have halarm := ((A.sampler s _ (hr s hs)).1 _ (hsteps s s.isLt)).2.2
+    by_contra hn
+    apply halarm
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, f, lt_of_lt_of_le hs hf, ?_⟩
+    rw [hval, hext]
+    exact lt_of_not_ge hn
+
 theorem actual_supported_full (D : LateData hPT) (hD : D.Spec)
     {δ ε K27 : ℝ} (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
     (hBroad : BroadDeletionFacts D K27) (x : D.encoding.InitInput)

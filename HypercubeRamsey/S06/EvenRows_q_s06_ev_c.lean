@@ -1,7 +1,6 @@
 import HypercubeRamsey.S06.OddLoads
 import HypercubeRamsey.S06.EvenRows_q_s06_even
 
-set_option maxHeartbeats 1000000
 
 namespace HypercubeRamsey.S06.Lane_q_s06_ev_c
 
@@ -58,6 +57,32 @@ theorem expect_prod6 {α β : Type*} [Fintype α] [Fintype β]
   apply Finset.sum_congr rfl
   intro b hb
   ring
+
+/-- Exchange a finite weighted sum with expectation under another finite law. -/
+theorem expect_sum_swap6 {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α → β → ℝ) :
+    (∑ a, P.w a * Q.expect (f a)) =
+      Q.expect (fun b => ∑ a, P.w a * f a b) := by
+  classical
+  unfold FinProb.expect
+  calc
+    (∑ a, P.w a * ∑ b, Q.w b * f a b) =
+        ∑ a, ∑ b, P.w a * Q.w b * f a b := by
+          apply Finset.sum_congr rfl
+          intro a ha
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro b hb
+          ring
+    _ = ∑ b, ∑ a, P.w a * Q.w b * f a b := by rw [Finset.sum_comm]
+    _ = ∑ b, Q.w b * ∑ a, P.w a * f a b := by
+          apply Finset.sum_congr rfl
+          intro b hb
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro a ha
+          ring
+    _ = Q.expect (fun b => ∑ a, P.w a * f a b) := rfl
 
 /-- Pull the last finite sum through four independent weighted sums. -/
 theorem sum_pull_last5 {A B C D Z : Type*} [Fintype A] [Fintype B] [Fintype C]

@@ -495,10 +495,524 @@ def Step3HighBounds : Prop :=
 
 end Ctx6
 
+set_option maxHeartbeats 400000 in
+private theorem lowConditionalMassTest6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (H : X.Hist) (b : X.State) (hmode : X.stMode b = .low)
+    (hStep2Supp : X.Step2Supp) (hBaseSupp : X.BaseSupp H.1)
+    (D : Finset (Id × X.Ty)) (hTypes : ∀ e ∈ D, e.2 ∈ X.occTypes) :
+    (∑ ξ, (X.hidPost H.1 (X.tgt b).1).w ξ *
+      (X.dataLaw Id (X.withHid H (X.tgt b) ξ)).pr
+        (fun o => X.LowGate H b D ξ ∧ X.s3Mass H b D o none < X.s3Thr) ≤ X.s3Thr) ∧
+      ∀ c ∈ D, ∑ ξ, (X.hidPost H.1 (X.tgt b).1).w ξ *
+        (X.dataLaw Id (X.withHid H (X.tgt b) ξ)).pr
+          (fun o => X.LowGate H b D ξ ∧
+            X.s3Mass H b D o none < X.s3Thr * X.s3Mass H b D o (some c)) ≤ X.s3Thr := by
+  classical
+  let t := X.tgt b
+  let Idx := {e : Id × X.Ty // e ∈ D}
+  let Ω := ∀ e : Idx, X.Tuple
+  let eD := Equiv.piEquivPiSubtypeProd (fun e : Id × X.Ty => e ∈ D)
+    (fun _ => X.Tuple)
+  let o₀ : X.Data Id := fun _ => (X.i₀, fun _ => X.y₀)
+  let complete : Ω → X.Data Id := fun a => eD.symm (a, fun e => o₀ e.1)
+  let π : Law N := X.hidPost H.1 t.1
+  let Qcoord : Idx → FinProb X.Tuple := fun e => X.lowRef H b e.1.2
+  let Q : FinProb Ω := FinProb.pi Qcoord
+  let P : Fin N → FinProb Ω := fun ξ =>
+    FinProb.pi fun e : Idx => X.tupleLaw (X.withHid H t ξ) e.1.2
+  let gate : Fin N → Prop := fun ξ => X.LowGate H b D ξ
+  let lik : Fin N → Ω → ℝ := fun ξ a =>
+    ∏ e ∈ D, X.lowLik H b ξ e.2 (complete a e)
+  let likDel : Fin N → (Id × X.Ty) → Ω → ℝ := fun ξ c a =>
+    ∏ e ∈ D, if (some c : Option (Id × X.Ty)) = some e then 1 else
+      X.lowLik H b ξ e.2 (complete a e)
+  let mass : Ω → ℝ := fun a => X.s3Mass H b D (complete a) none
+  let massDel : (Id × X.Ty) → Ω → ℝ := fun c a =>
+    X.s3Mass H b D (complete a) (some c)
+  have hComplete (a : Ω) (e : Id × X.Ty) (he : e ∈ D) :
+      complete a e = a ⟨e, he⟩ := by
+    simp [complete, eD, Equiv.piEquivPiSubtypeProd_symm_apply, he]
+  have hproduct (ξ : Fin N) (a : Ω) :
+      (∏ e ∈ D, if (none : Option (Id × X.Ty)) = some e then 1 else
+        X.lowLik H b ξ e.2 (complete a e)) = lik ξ a := by
+    simp [lik]
+  have hprod (ξ : Fin N) (a : Ω) :
+      lik ξ a = ∏ e : Idx, X.lowLik H b ξ e.1.2 (a e) := by
+    let f : Id × X.Ty → ℝ := fun e => X.lowLik H b ξ e.2 (complete a e)
+    have hattach : (∏ e : Idx, f e.1) = ∏ e ∈ D, f e := by
+      rw [Finset.univ_eq_attach]
+      simpa [f] using Finset.prod_attach D f
+    calc
+      lik ξ a = ∏ e ∈ D, f e := rfl
+      _ = ∏ e : Idx, f e.1 := hattach.symm
+      _ = ∏ e : Idx, X.lowLik H b ξ e.1.2 (a e) := by
+        apply Finset.prod_congr rfl
+        intro e he
+        dsimp [f]
+        rw [hComplete a e.1 e.2]
+  have hKeySupp : ∀ β : X.Ty, X.KeysSupp H.1 (X.typeKeys β) := by
+    change X.KeysSupp H.1 Finset.univ at hBaseSupp
+    intro β
+    rcases hBaseSupp with ⟨hinit, hbins, htags⟩
+    refine ⟨hinit, ?_, ?_⟩
+    · intro u hu
+      apply hbins u
+      rcases Finset.mem_image.mp hu with ⟨k, hk, rfl⟩
+      exact Finset.mem_image.mpr ⟨k, Finset.mem_univ k, rfl⟩
+    · intro s hs
+      exact htags s (Finset.mem_univ s)
+  have hmix : ∀ a : Ω,
+      mass a = ∑ ξ, if gate ξ then π.w ξ * lik ξ a else 0 := by
+    intro a
+    unfold mass Ctx6.s3Mass
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    have hterm : X.s3Weight H b D (complete a) none ξ =
+        if gate ξ then π.w ξ * lik ξ a else 0 := by
+      by_cases hg : gate ξ
+      · simp only [Ctx6.s3Weight, hmode, Ctx6.lowWeight, gate, if_pos hg]
+        rw [hproduct ξ a]
+        simp only [mul_one]
+        change (X.hidPost H.1 t.1).w ξ * lik ξ a = π.w ξ * lik ξ a
+        rfl
+      · simp only [Ctx6.s3Weight, hmode, Ctx6.lowWeight, gate, if_neg hg]
+        simp
+    exact hterm
+  have hmixDel (c : Id × X.Ty) (a : Ω) :
+      massDel c a = ∑ ξ, if gate ξ then π.w ξ * likDel ξ c a else 0 := by
+    unfold massDel Ctx6.s3Mass
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    by_cases hg : gate ξ
+    · simp only [Ctx6.s3Weight, hmode, Ctx6.lowWeight, gate, if_pos hg]
+      simp only [mul_one]
+      change π.w ξ *
+          (∏ e ∈ D, if (some c : Option (Id × X.Ty)) = some e then 1 else
+            X.lowLik H b ξ e.2 (complete a e)) = π.w ξ * likDel ξ c a
+      rfl
+    · simp only [Ctx6.s3Weight, hmode, Ctx6.lowWeight, gate, if_neg hg]
+      simp
+  have hmassDelNonneg (c : Id × X.Ty) (a : Ω) : 0 ≤ massDel c a := by
+    unfold massDel Ctx6.s3Mass
+    apply Finset.sum_nonneg
+    intro ξ hξ
+    simp only [Ctx6.s3Weight, hmode, Ctx6.lowWeight]
+    apply mul_nonneg
+    · apply mul_nonneg ((X.hidPost H.1 (X.tgt b).1).nonneg ξ)
+      split_ifs <;> norm_num
+    · apply Finset.prod_nonneg
+      intro e he
+      split_ifs
+      · norm_num
+      · exact Lane_q_s06_steps2.lowLik_nonneg6 X H b ξ e.2 (complete a e)
+  have hdom : ∀ ξ (a : Ω), gate ξ → (P ξ).w a ≤ Q.w a * lik ξ a := by
+    intro ξ a hg
+    have hgate := hg
+    unfold gate Ctx6.LowGate at hgate
+    rcases hgate with ⟨hprior, hcap, htests⟩
+    have hprodle :
+        (∏ e : Idx, (X.tupleLaw (X.withHid H t ξ) e.1.2).w (a e)) ≤
+          ∏ e : Idx, (X.lowRef H b e.1.2).w (a e) *
+            X.lowLik H b ξ e.1.2 (a e) := by
+      apply Finset.prod_le_prod₀
+      · intro e he
+        exact (X.tupleLaw (X.withHid H t ξ) e.1.2).nonneg (a e)
+      · intro e he
+        have hstep : X.Step2Tests (X.withHid H t ξ) e.1.2 := htests e.1 e.2
+        have hlabel (i : X.ι) (hi : 0 <
+            (X.Tβ (X.withHid H t ξ) e.1.2).w i) :
+            0 < ∑ x ∈ X.reqNbhd (X.withHid H t ξ) (reqNames6 e.1.2), (M.μ i).w x := by
+          have hs := hStep2Supp (X.withHid H t ξ) e.1.2
+            (hTypes e.1 e.2) (hKeySupp e.1.2) hstep i hi
+          exact lt_of_lt_of_le (by norm_num [c₁, c₀]) hs.1
+        exact Lane_q_s06_steps2.lowTupleLaw_subdensity6 X H b e.1.2 ξ hstep hlabel (a e)
+    have hPweight : (P ξ).w a =
+      ∏ e : Idx, (X.tupleLaw (X.withHid H t ξ) e.1.2).w (a e) := rfl
+    have hQweight : Q.w a =
+        ∏ e : Idx, (X.lowRef H b e.1.2).w (a e) := rfl
+    calc
+      (P ξ).w a = ∏ e : Idx, (X.tupleLaw (X.withHid H t ξ) e.1.2).w (a e) := hPweight
+      _ ≤ ∏ e : Idx, (X.lowRef H b e.1.2).w (a e) *
+            X.lowLik H b ξ e.1.2 (a e) := hprodle
+      _ = Q.w a * lik ξ a := by
+        rw [Finset.prod_mul_distrib, ← hQweight, ← hprod ξ a]
+  have hsmall :
+      (∑ a : Ω, if mass a < X.s3Thr then Q.w a * mass a else 0) ≤ X.s3Thr :=
+    Lane_q_s06_steps2.subdensity_small_mass6 Q mass X.s3Thr
+      (le_of_lt (by unfold Ctx6.s3Thr; exact Real.exp_pos _))
+  have hmixBound := Lane_q_s06_steps2.mixture_subdensity_bound6 π Q P gate lik mass
+    (fun _ => X.s3Thr) X.s3Thr hmix hdom hsmall
+  have hmassDep (H' : X.Hist) (drop : Option (Id × X.Ty)) (o o' : X.Data Id)
+      (hag : ∀ e ∈ D, o e = o' e) :
+      X.s3Mass H' b D o drop = X.s3Mass H' b D o' drop := by
+    unfold Ctx6.s3Mass
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    simp only [Ctx6.s3Weight, hmode, Ctx6.lowWeight]
+    congr 1
+    apply Finset.prod_congr rfl
+    intro e he
+    rw [hag e he]
+  have hprob (ξ : Fin N) :
+      (X.dataLaw Id (X.withHid H t ξ)).pr
+        (fun o => gate ξ ∧ X.s3Mass H b D o none < X.s3Thr) =
+      (P ξ).pr (fun a => gate ξ ∧ mass a < X.s3Thr) := by
+    have hAdep : ∀ o o', (∀ e ∈ D, o e = o' e) →
+        ((gate ξ ∧ X.s3Mass H b D o none < X.s3Thr) ↔
+          (gate ξ ∧ X.s3Mass H b D o' none < X.s3Thr)) := by
+      intro o o' hag
+      rw [hmassDep H none o o' hag]
+    have hred := Lane_q_s06_steps2.dataLaw_pr_depends6 X
+      (X.withHid H t ξ) D (fun o => gate ξ ∧ X.s3Mass H b D o none < X.s3Thr)
+      hAdep o₀
+    simpa [P, mass, complete, gate] using hred
+  have hprobDel (ξ : Fin N) (c : Id × X.Ty) :
+      (X.dataLaw Id (X.withHid H t ξ)).pr
+        (fun o => gate ξ ∧ X.s3Mass H b D o none <
+          X.s3Thr * X.s3Mass H b D o (some c)) =
+      (P ξ).pr (fun a => gate ξ ∧ mass a < X.s3Thr * massDel c a) := by
+    have hAdep : ∀ o o', (∀ e ∈ D, o e = o' e) →
+        ((gate ξ ∧ X.s3Mass H b D o none <
+            X.s3Thr * X.s3Mass H b D o (some c)) ↔
+          (gate ξ ∧ X.s3Mass H b D o' none <
+            X.s3Thr * X.s3Mass H b D o' (some c))) := by
+      intro o o' hag
+      rw [hmassDep H none o o' hag, hmassDep H (some c) o o' hag]
+    have hred := Lane_q_s06_steps2.dataLaw_pr_depends6 X
+      (X.withHid H t ξ) D
+      (fun o => gate ξ ∧ X.s3Mass H b D o none <
+        X.s3Thr * X.s3Mass H b D o (some c)) hAdep o₀
+    simpa [P, mass, massDel, complete, gate] using hred
+  have hmassDelNN (c : Id × X.Ty) : ∀ a : Ω, 0 ≤ massDel c a := by
+    intro a
+    exact hmassDelNonneg c a
+  have hdelInt (ξ : Fin N) (c : Id × X.Ty) :
+      ∑ a : Ω, Q.w a * likDel ξ c a ≤ 1 := by
+    let fdel : Idx → X.Tuple → ℝ := fun e o =>
+      if (some c : Option (Id × X.Ty)) = some e.1 then 1 else
+        X.lowLik H b ξ e.1.2 o
+    have hfdel : ∀ e o, 0 ≤ fdel e o := by
+      intro e o
+      by_cases he : e.1 = c
+      · simp [fdel, he]
+      · have hne : c ≠ e.1 := Ne.symm he
+        simp [fdel, hne, Lane_q_s06_steps2.lowLik_nonneg6]
+    have hInt : ∀ e : Idx, ∑ o, (Qcoord e).w o * fdel e o ≤ 1 := by
+      intro e
+      by_cases he : e.1 = c
+      · simp [fdel, he, (Qcoord e).sum_eq_one]
+      · have hne : c ≠ e.1 := Ne.symm he
+        have hratio := Lane_q_s06_steps2.lowLik_integral_le_one6 X H b ξ e.1.2
+        simpa [fdel, hne, Qcoord] using hratio
+    have hprodDel (a : Ω) : likDel ξ c a = ∏ e : Idx, fdel e (a e) := by
+      let g : Id × X.Ty → ℝ := fun e =>
+        if (some c : Option (Id × X.Ty)) = some e then 1 else
+          X.lowLik H b ξ e.2 (complete a e)
+      have hattach : (∏ e : Idx, g e.1) = ∏ e ∈ D, g e := by
+        rw [Finset.univ_eq_attach]
+        simpa [g] using Finset.prod_attach D g
+      calc
+        likDel ξ c a = ∏ e ∈ D, g e := rfl
+        _ = ∏ e : Idx, g e.1 := hattach.symm
+        _ = ∏ e : Idx, fdel e (a e) := by
+          apply Finset.prod_congr rfl
+          intro e he
+          simp [fdel, g, hComplete a e.1 e.2]
+    have hsumInt :
+        ∑ a : Ω, Q.w a * likDel ξ c a =
+          ∏ e : Idx, ∑ o, (Qcoord e).w o * fdel e o := by
+      calc
+        ∑ a : Ω, Q.w a * likDel ξ c a =
+            ∑ a : Ω, (∏ e : Idx, (Qcoord e).w (a e)) *
+              (∏ e : Idx, fdel e (a e)) := by
+          apply Finset.sum_congr rfl
+          intro a ha
+          change (∏ e : Idx, (Qcoord e).w (a e)) * likDel ξ c a = _
+          rw [hprodDel a]
+        _ = ∑ a : Ω, ∏ e : Idx, ((Qcoord e).w (a e) * fdel e (a e)) := by
+          apply Finset.sum_congr rfl
+          intro a ha
+          rw [← Finset.prod_mul_distrib]
+        _ = ∏ e : Idx, ∑ o, (Qcoord e).w o * fdel e o :=
+          (Fintype.prod_sum (fun e o => (Qcoord e).w o * fdel e o)).symm
+    have hprodle : ∀ s : Finset Idx,
+        (∏ e ∈ s, ∑ o, (Qcoord e).w o * fdel e o) ≤ 1 := by
+      intro s
+      induction s using Finset.induction_on with
+      | empty => simp
+      | @insert e s he ih =>
+        rw [Finset.prod_insert he]
+        have hnonneg : 0 ≤ ∏ e ∈ s, ∑ o, (Qcoord e).w o * fdel e o :=
+          Finset.prod_nonneg fun i hi => Finset.sum_nonneg fun o ho =>
+            mul_nonneg ((Qcoord i).nonneg o) (hfdel i o)
+        exact mul_le_one₀ (hInt e) hnonneg ih
+    calc
+      ∑ a : Ω, Q.w a * likDel ξ c a =
+          ∏ e : Idx, ∑ o, (Qcoord e).w o * fdel e o := hsumInt
+      _ ≤ 1 := by simpa using hprodle Finset.univ
+  have hdelMassInt (c : Id × X.Ty) :
+      ∑ a : Ω, Q.w a * massDel c a ≤ 1 := by
+    calc
+      ∑ a : Ω, Q.w a * massDel c a =
+          ∑ a : Ω, Q.w a * ∑ ξ, if gate ξ then π.w ξ * likDel ξ c a else 0 := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        rw [hmixDel c a]
+      _ = ∑ a : Ω, ∑ ξ, Q.w a *
+          (if gate ξ then π.w ξ * likDel ξ c a else 0) := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        rw [Finset.mul_sum]
+      _ = ∑ ξ, ∑ a : Ω, Q.w a *
+          (if gate ξ then π.w ξ * likDel ξ c a else 0) := by
+        rw [Finset.sum_comm]
+      _ = ∑ ξ, π.w ξ *
+          (if gate ξ then ∑ a : Ω, Q.w a * likDel ξ c a else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ hξ
+        by_cases hg : gate ξ
+        · simp only [if_pos hg]
+          calc
+            (∑ a : Ω, Q.w a * (π.w ξ * likDel ξ c a)) =
+                ∑ a : Ω, π.w ξ * (Q.w a * likDel ξ c a) := by
+              apply Finset.sum_congr rfl
+              intro a ha
+              ring
+            _ = π.w ξ * ∑ a : Ω, Q.w a * likDel ξ c a := by rw [Finset.mul_sum]
+        · simp [hg]
+      _ ≤ ∑ ξ, π.w ξ := by
+        apply Finset.sum_le_sum
+        intro ξ hξ
+        by_cases hg : gate ξ
+        · simp only [if_pos hg]
+          calc
+            π.w ξ * ∑ a : Ω, Q.w a * likDel ξ c a ≤ π.w ξ * 1 :=
+              mul_le_mul_of_nonneg_left (hdelInt ξ c) (π.nonneg ξ)
+            _ = π.w ξ := by ring
+        · simp only [if_neg hg, mul_zero]
+          exact π.nonneg ξ
+      _ = 1 := π.sum_eq_one
+  have hthr : 0 < X.s3Thr := by
+    unfold Ctx6.s3Thr
+    exact Real.exp_pos _
+  have hsmallRatio (c : Id × X.Ty) :
+      (∑ a : Ω, if mass a < X.s3Thr * massDel c a then Q.w a * mass a else 0) ≤ X.s3Thr :=
+    Lane_q_s06_steps2.subdensity_ratio_small_mass6 Q mass (massDel c) X.s3Thr
+      (hmassDelNN c) hthr.le
+      (hdelMassInt c)
+  have hmixBoundRatio (c : Id × X.Ty) :
+      ∑ ξ, π.w ξ * (P ξ).pr (fun a => gate ξ ∧ mass a < X.s3Thr * massDel c a) ≤ X.s3Thr := by
+    exact Lane_q_s06_steps2.mixture_subdensity_bound6 π Q P gate lik mass
+      (fun a => X.s3Thr * massDel c a) X.s3Thr hmix hdom (hsmallRatio c)
+  constructor
+  · calc
+      ∑ ξ, π.w ξ *
+          (X.dataLaw Id (X.withHid H t ξ)).pr
+            (fun o => gate ξ ∧ X.s3Mass H b D o none < X.s3Thr) =
+        ∑ ξ, π.w ξ * (P ξ).pr (fun a => gate ξ ∧ mass a < X.s3Thr) := by
+          apply Finset.sum_congr rfl
+          intro ξ hξ
+          rw [hprob ξ]
+      _ ≤ X.s3Thr := by simpa [π, gate] using hmixBound
+  · intro c hc
+    calc
+      ∑ ξ, π.w ξ *
+          (X.dataLaw Id (X.withHid H t ξ)).pr
+            (fun o => gate ξ ∧
+              X.s3Mass H b D o none < X.s3Thr * X.s3Mass H b D o (some c)) =
+        ∑ ξ, π.w ξ *
+          (P ξ).pr (fun a => gate ξ ∧ mass a < X.s3Thr * massDel c a) := by
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            rw [hprobDel ξ c]
+      _ ≤ X.s3Thr := hmixBoundRatio c
+
+set_option maxHeartbeats 400000 in
+private theorem rawLowTestBound6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (b : X.State) (hmode : X.stMode b = .low) (D : Finset (Id × X.Ty))
+    (del : X.Hist → X.Data Id → ℝ)
+    (hdelInv : ∀ H H' : X.Hist, H.1 = H'.1 →
+      (∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) → ∀ o, del H o = del H' o)
+    (hcond : ∀ H : X.Hist, X.BaseSupp H.1 →
+      ∑ ξ, (X.hidPost H.1 (X.tgt b).1).w ξ *
+        (X.dataLaw Id (X.withHid H (X.tgt b) ξ)).pr
+          (fun o => X.LowGate H b D ξ ∧ X.s3Mass H b D o none < X.s3Thr * del H o) ≤ X.s3Thr) :
+    (X.rawHistData Id).pr
+      (fun ω => X.S3TrueGate ω.1 b D ∧ X.s3Mass ω.1 b D ω.2 none <
+        X.s3Thr * del ω.1 ω.2) ≤ X.s3Thr := by
+  classical
+  let failure : X.Hist → X.Data Id → Prop := fun H o =>
+    X.S3TrueGate H b D ∧ X.s3Mass H b D o none < X.s3Thr * del H o
+  rw [Lane_q_s06_steps2.rawHistData_pr_expand6 X failure]
+  have hhidden (base : X.Base) (hBaseSupp : X.BaseSupp base) :
+      (X.hidLaw base).expect (fun z =>
+        (X.dataLaw Id (base, z)).pr (failure (base, z))) ≤ X.s3Thr := by
+    let target := X.tgt b
+    let P : X.HKey → Law N := fun ℓ => X.hidPost base ℓ.1
+    let restLaw : FinProb (({h : X.HKey // h ∉ ({target} : Finset X.HKey)} → Fin N)) :=
+      FinProb.pi fun h : {h : X.HKey // h ∉ ({target} : Finset X.HKey)} =>
+        X.hidPost base h.1.1
+    let F : X.Hid → ℝ := fun z =>
+      (X.dataLaw Id (base, z)).pr (failure (base, z))
+    have hsplit := Lane_q_s06_steps2.pi_expect_split_coord6 P target F
+    have hrest (r : {h : X.HKey // h ∉ ({target} : Finset X.HKey)} → Fin N) :
+        ∑ ξ, (X.hidPost base target.1).w ξ *
+          F (Lane_q_s06_steps2.piCoordAssemble6 target r ξ) ≤ X.s3Thr := by
+      let z₀ : X.Hid := Lane_q_s06_steps2.piCoordAssemble6 target r X.y₀
+      let H₀ : X.Hist := (base, z₀)
+      have hcondBound :
+          ∑ ξ, (X.hidPost H₀.1 target.1).w ξ *
+            (X.dataLaw Id (X.withHid H₀ target ξ)).pr
+              (fun o => X.LowGate H₀ b D ξ ∧ X.s3Mass H₀ b D o none <
+                X.s3Thr * del H₀ o) ≤ X.s3Thr := by
+        exact hcond H₀ hBaseSupp
+      have hpr (ξ : Fin N) :
+          F (Lane_q_s06_steps2.piCoordAssemble6 target r ξ) =
+            (X.dataLaw Id (X.withHid H₀ target ξ)).pr
+              (fun o => X.LowGate H₀ b D ξ ∧ X.s3Mass H₀ b D o none <
+                X.s3Thr * del H₀ o) := by
+        let zξ : X.Hid := Lane_q_s06_steps2.piCoordAssemble6 target r ξ
+        let Hξ : X.Hist := (base, zξ)
+        have hz : zξ = Function.update z₀ target ξ := by
+          funext h
+          by_cases hh : h = target
+          · subst h
+            simp [zξ, z₀, Lane_q_s06_steps2.piCoordAssemble6]
+          · simp [zξ, z₀, Lane_q_s06_steps2.piCoordAssemble6, hh]
+        have hHist : Hξ = X.withHid H₀ target ξ := by
+          apply Prod.ext
+          · rfl
+          · exact hz
+        have hbase : Hξ.1 = H₀.1 := rfl
+        have hother : ∀ h, h ≠ target → Hξ.2 h = H₀.2 h := by
+          intro h hne
+          rw [hHist]
+          simp [Ctx6.withHid, hne]
+        have htrue : X.trueTarget Hξ b = ξ := by
+          simp [Ctx6.trueTarget, hmode, Hξ, zξ, target,
+            Lane_q_s06_steps2.piCoordAssemble6]
+        have hgate : X.S3TrueGate Hξ b D ↔ X.LowGate H₀ b D ξ := by
+          have hagree := Lane_q_s06_steps2.lowGate_eq_of_hidden_agree6 X Hξ H₀ b D ξ
+            hbase hother
+          simpa [Ctx6.S3TrueGate, hmode, htrue] using Iff.of_eq hagree
+        have hmass (o : X.Data Id) :
+            X.s3Mass Hξ b D o none = X.s3Mass H₀ b D o none :=
+          Lane_q_s06_steps2.s3Mass_low_eq_of_hidden_agree6 X Hξ H₀ b D o none
+            hmode hbase hother
+        have hdel (o : X.Data Id) : del Hξ o = del H₀ o :=
+          hdelInv Hξ H₀ hbase hother o
+        have hEvent (o : X.Data Id) :
+            failure Hξ o ↔ X.LowGate H₀ b D ξ ∧ X.s3Mass H₀ b D o none <
+              X.s3Thr * del H₀ o := by
+          simp only [failure, hgate, hmass, hdel]
+        have hEvent' (o : X.Data Id) :
+            failure (X.withHid H₀ target ξ) o ↔
+              X.LowGate H₀ b D ξ ∧ X.s3Mass H₀ b D o none <
+                X.s3Thr * del H₀ o := by
+          rw [← hHist]
+          exact hEvent o
+        change (X.dataLaw Id Hξ).pr (failure Hξ) = _
+        rw [hHist]
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro o ho
+        have hev := propext (hEvent' o)
+        simp [hev]
+      calc
+        ∑ ξ, (X.hidPost base target.1).w ξ *
+            F (Lane_q_s06_steps2.piCoordAssemble6 target r ξ) =
+          ∑ ξ, (X.hidPost H₀.1 target.1).w ξ *
+            (X.dataLaw Id (X.withHid H₀ target ξ)).pr
+              (fun o => X.LowGate H₀ b D ξ ∧ X.s3Mass H₀ b D o none <
+                X.s3Thr * del H₀ o) := by
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            rw [hpr ξ]
+        _ ≤ X.s3Thr := by simpa [H₀] using hcondBound
+    change (FinProb.pi P).expect F ≤ X.s3Thr
+    rw [Lane_q_s06_steps2.pi_expect_split_coord6 P target F]
+    calc
+      (∑ r : {h : X.HKey // h ∉ ({target} : Finset X.HKey)} → Fin N,
+          (restLaw.w r) * ∑ ξ, (X.hidPost base target.1).w ξ *
+            F (Lane_q_s06_steps2.piCoordAssemble6 target r ξ)) ≤
+        ∑ r : {h : X.HKey // h ∉ ({target} : Finset X.HKey)} → Fin N,
+          restLaw.w r * X.s3Thr := by
+        apply Finset.sum_le_sum
+        intro r hr
+        exact mul_le_mul_of_nonneg_left (hrest r) (restLaw.nonneg r)
+      _ = X.s3Thr := by
+        rw [← Finset.sum_mul, restLaw.sum_eq_one]
+        ring
+  have hbaseBound (base : X.Base) :
+      X.baseLaw.w base * (X.hidLaw base).expect (fun z =>
+        (X.dataLaw Id (base, z)).pr (failure (base, z))) ≤
+        X.baseLaw.w base * X.s3Thr := by
+    by_cases hz : X.baseLaw.w base = 0
+    · simp [hz]
+    · have hpos : 0 < X.baseLaw.w base := by
+        exact lt_of_le_of_ne (X.baseLaw.nonneg base) (Ne.symm hz)
+      have hfac := Lane_q_s06_steps2.baseLaw_pos_factors6 X base hpos
+      have hBaseSupp : X.BaseSupp base := by
+        change X.KeysSupp base Finset.univ
+        rcases hfac with ⟨hinit, hcand, htags⟩
+        exact ⟨hinit, (fun u hu => hcand u), (fun s hs => htags s)⟩
+      exact mul_le_mul_of_nonneg_left (hhidden base hBaseSupp) (X.baseLaw.nonneg base)
+  calc
+    (∑ base : X.Base, X.baseLaw.w base *
+        (X.hidLaw base).expect (fun z =>
+          (X.dataLaw Id (base, z)).pr (failure (base, z)))) ≤
+      ∑ base : X.Base, X.baseLaw.w base * X.s3Thr := by
+        apply Finset.sum_le_sum
+        intro base hbase
+        exact hbaseBound base
+    _ = X.s3Thr := by
+      rw [← Finset.sum_mul, X.baseLaw.sum_eq_one]
+      ring
+
 /-- L6.1f (tests, 06:340–353): `M` is the true-gated subdensity relative to `Q^data` and `∫ M_{−c} dQ^data ≤ 1`. -/
 theorem L6_1f_tests (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Supp → X.Step3TestLow := by
-  sorry
+  classical
+  refine ⟨0, 0, ?_⟩
+  intro n N E G M X hLarge
+  intro hStep2Supp
+  intro Id instFin instDec b hb hmode D hTypes
+  constructor
+  · let delOne : X.Hist → X.Data Id → ℝ := fun _ _ => 1
+    have hdelInv : ∀ H H' : X.Hist, H.1 = H'.1 →
+        (∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) → ∀ o, delOne H o = delOne H' o := by
+      intro H H' hbase hother o
+      rfl
+    have hcond : ∀ H : X.Hist, X.BaseSupp H.1 →
+        ∑ ξ, (X.hidPost H.1 (X.tgt b).1).w ξ *
+          (X.dataLaw Id (X.withHid H (X.tgt b) ξ)).pr
+            (fun o => X.LowGate H b D ξ ∧ X.s3Mass H b D o none < X.s3Thr * delOne H o) ≤ X.s3Thr := by
+      intro H hBaseSupp
+      have hc := lowConditionalMassTest6 X H b hmode hStep2Supp hBaseSupp D hTypes
+      simpa [delOne] using hc.1
+    have hraw := rawLowTestBound6 X b hmode D delOne hdelInv hcond
+    simpa [delOne] using hraw
+  · intro c hc
+    let delC : X.Hist → X.Data Id → ℝ := fun H o => X.s3Mass H b D o (some c)
+    have hdelInv : ∀ H H' : X.Hist, H.1 = H'.1 →
+        (∀ h, h ≠ X.tgt b → H.2 h = H'.2 h) → ∀ o, delC H o = delC H' o := by
+      intro H H' hbase hother o
+      exact Lane_q_s06_steps2.s3Mass_low_eq_of_hidden_agree6 X H H' b D o
+        (some c) hmode hbase hother
+    have hcond : ∀ H : X.Hist, X.BaseSupp H.1 →
+        ∑ ξ, (X.hidPost H.1 (X.tgt b).1).w ξ *
+          (X.dataLaw Id (X.withHid H (X.tgt b) ξ)).pr
+            (fun o => X.LowGate H b D ξ ∧
+              X.s3Mass H b D o none < X.s3Thr * delC H o) ≤ X.s3Thr := by
+      intro H hBaseSupp
+      have hcnd := lowConditionalMassTest6 X H b hmode hStep2Supp hBaseSupp D hTypes
+      simpa [delC] using hcnd.2 c hc
+    have hraw := rawLowTestBound6 X b hmode D delC hdelInv hcond
+    simpa [delC] using hraw
 
 /-- L6.1f (bounds, 06:324–336, 06:355–366): tuple ratios `n^{d₂u}(1+4ε/c₁)^k` (matching), `n^{d₂u}(2/c₁)^k`
 (nonmatching, at most one); prior cap, `O(T+J)` tuples; `O(J² log n) = o(m^{.15})`. -/

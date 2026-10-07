@@ -1761,6 +1761,353 @@ theorem baseLaw_pos_factors6 {γ p₀ K : ℝ} {n N : ℕ}
       apply (Finset.prod_ne_zero_iff.mp htagProd.ne') s (Finset.mem_univ _)
     exact lt_of_le_of_ne ((X.tagLawAt (X.parOf b) s).nonneg (b.2.2 s)) (Ne.symm hne)
 
+private theorem safeRatio6_nonneg_qs6 {a b : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) :
+    0 ≤ safeRatio6 a b := by
+  unfold safeRatio6
+  split_ifs with h
+  · exact le_rfl
+  · exact div_nonneg ha hb
+
+private theorem tagWeight_nonneg_qs6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (β : X.Ty)
+    (S : Finset X.HKey) (i : X.ι) : 0 ≤ X.tagWeight H β S i := by
+  unfold Ctx6.tagWeight
+  apply mul_nonneg
+  · apply mul_nonneg ((X.tagLawAt (X.parOf H.1) β.key).nonneg i)
+    split_ifs <;> norm_num
+  · apply Finset.prod_nonneg
+    intro ℓ hℓ
+    exact safeRatio6_nonneg_qs6
+      ((X.hidPostRep H.1 ℓ.1 β.key i).nonneg (H.2 ℓ))
+      ((X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ))
+
+private theorem normalize6_pos_iff_qs6 {Ω : Type*} [Fintype Ω]
+    (f : Ω → ℝ) (fallback x : Ω) (hf : ∀ z, 0 ≤ f z)
+    (hsum : 0 < ∑ z, f z) :
+    0 < (normalize6 f fallback).w x ↔ 0 < f x := by
+  have hsum' : 0 < ∑ z, max 0 (f z) := by
+    simpa only [max_eq_right (hf _)] using hsum
+  unfold normalize6
+  rw [dif_pos hsum']
+  change 0 < max 0 (f x) / (∑ z, max 0 (f z)) ↔ 0 < f x
+  constructor
+  · intro hx
+    by_contra hnot
+    have hle : f x ≤ 0 := le_of_not_gt hnot
+    rw [max_eq_left hle] at hx
+    simp at hx
+  · intro hx
+    rw [max_eq_right (le_of_lt hx)]
+    exact div_pos hx hsum'
+
+private theorem tagPost_erase_pos_qs6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (β : X.Ty)
+    (ℓ : X.HKey) (i : X.ι) (hstep : X.Step2Tests H β)
+    (hi : 0 < (X.Tβ H β).w i) :
+    0 < (X.TβDel H β ℓ).w i := by
+  have hfullsum : 0 < ∑ j, X.tagWeight H β β.obs j := by
+    simpa [Ctx6.tagMass] using hstep.1
+  have hfull : 0 < X.tagWeight H β β.obs i :=
+    (normalize6_pos_iff_qs6 _ _ _ (tagWeight_nonneg_qs6 X H β β.obs) hfullsum).mp
+      (by simpa [Ctx6.Tβ, Ctx6.tagPost] using hi)
+  by_cases hℓ : ℓ ∈ β.obs
+  · let r : ℝ := safeRatio6
+      ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+      ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ))
+    have hfactor : X.tagWeight H β β.obs i =
+        X.tagWeight H β (β.obs.erase ℓ) i * r := by
+      unfold Ctx6.tagWeight r
+      rw [← Finset.prod_erase_mul β.obs
+        (fun s => safeRatio6
+          ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+          ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) hℓ]
+      ring
+    have hrnonneg : 0 ≤ r := safeRatio6_nonneg_qs6
+      ((X.hidPostRep H.1 ℓ.1 β.key i).nonneg (H.2 ℓ))
+      ((X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ))
+    have hdelnonneg : 0 ≤ X.tagWeight H β (β.obs.erase ℓ) i :=
+      tagWeight_nonneg_qs6 X H β (β.obs.erase ℓ) i
+    have hdelraw : 0 < X.tagWeight H β (β.obs.erase ℓ) i := by
+      by_contra hnot
+      have hle : X.tagWeight H β (β.obs.erase ℓ) i ≤ 0 := le_of_not_gt hnot
+      have hmul : X.tagWeight H β (β.obs.erase ℓ) i * r ≤ 0 :=
+        mul_nonpos_of_nonpos_of_nonneg hle hrnonneg
+      rw [← hfactor] at hmul
+      linarith
+    have hdelSum : 0 < ∑ j, X.tagWeight H β (β.obs.erase ℓ) j := by
+      have hle := Finset.single_le_sum
+        (fun j hj => tagWeight_nonneg_qs6 X H β (β.obs.erase ℓ) j)
+        (Finset.mem_univ i)
+      linarith
+    exact (normalize6_pos_iff_qs6 _ _ _
+      (tagWeight_nonneg_qs6 X H β (β.obs.erase ℓ)) hdelSum).mpr hdelraw
+  · have hsame : β.obs.erase ℓ = β.obs := Finset.erase_eq_of_notMem hℓ
+    simpa [Ctx6.Tβ, Ctx6.TβDel, Ctx6.tagPost, hsame] using hi
+
+private theorem labelLaw_pos_iff_qs6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (S : Finset X.Name)
+    (i : X.ι) (x : Fin N) (hmass : 0 < ∑ y ∈ X.reqNbhd H S, (M.μ i).w y) :
+    0 < (X.labelLaw H S i).w x ↔
+      x ∈ X.reqNbhd H S ∧ 0 < (M.μ i).w x := by
+  classical
+  letI : DecidablePred (fun y : Fin N => y ∈ X.reqNbhd H S) :=
+    fun y => Classical.propDecidable (y ∈ X.reqNbhd H S)
+  let f : Fin N → ℝ := fun y =>
+    if y ∈ X.reqNbhd H S then (M.μ i).w y else 0
+  have hf : ∀ y, 0 ≤ f y := by
+    intro y
+    by_cases hmem : y ∈ X.reqNbhd H S
+    · simp [f, hmem, (M.μ i).nonneg y]
+    · simp [f, hmem]
+  have hsum : 0 < ∑ y, f y := by
+    have heq : (∑ y, f y) = ∑ y ∈ X.reqNbhd H S, (M.μ i).w y := by
+      simp [f, Finset.sum_ite_mem]
+    rw [heq]
+    exact hmass
+  have hnorm := normalize6_pos_iff_qs6 f X.y₀ x hf hsum
+  have hnorm' : 0 < (X.labelLaw H S i).w x ↔ 0 < f x := by
+    simpa [Ctx6.labelLaw, restrictOr6, f] using hnorm
+  rw [hnorm']
+  by_cases hmem : x ∈ X.reqNbhd H S <;> simp [f, hmem]
+
+theorem lowTupleLaw_subdensity6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (b : X.State)
+    (β : X.Ty) (ξ : Fin N)
+    (hstep : X.Step2Tests (X.withHid H (X.tgt b) ξ) β)
+    (hsupport : ∀ i, 0 < (X.Tβ (X.withHid H (X.tgt b) ξ) β).w i →
+      0 < ∑ x ∈ X.reqNbhd (X.withHid H (X.tgt b) ξ) (reqNames6 β), (M.μ i).w x)
+    (o : X.Tuple) :
+    (X.tupleLaw (X.withHid H (X.tgt b) ξ) β).w o ≤
+      (X.lowRef H b β).w o * X.lowLik H b ξ β o := by
+  classical
+  let Hξ := X.withHid H (X.tgt b) ξ
+  let T := X.Tβ Hξ β
+  let Tdel := X.TβDel Hξ β (X.tgt b)
+  let Sraw := reqNames6 β
+  let Sref := (reqNames6 β).erase (.hid (X.tgt b))
+  have hrawweight : (X.tupleLaw Hξ β).w o =
+      T.w o.1 * ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) := by
+    simpa [Ctx6.tupleLaw, T, Sraw] using tupleLawOn_weight6 X Hξ Sraw T o
+  by_cases hP : (X.tupleLaw Hξ β).w o = 0
+  · have hratio : 0 ≤ X.lowLik H b ξ β o := by
+      unfold Ctx6.lowLik Ctx6.tupleRatio
+      apply mul_nonneg
+      · exact safeRatio6_nonneg_qs6
+          ((X.Tβ (X.withHid H (X.tgt b) ξ) β).nonneg o.1)
+          ((X.TβDel H β (X.tgt b)).nonneg o.1)
+      · apply Finset.prod_nonneg
+        intro r hr
+        exact safeRatio6_nonneg_qs6
+          ((X.labelLaw (X.withHid H (X.tgt b) ξ) (reqNames6 β) o.1).nonneg (o.2 r))
+          ((X.labelLaw H ((reqNames6 β).erase (.hid (X.tgt b))) o.1).nonneg (o.2 r))
+    rw [hP]
+    exact mul_nonneg ((X.lowRef H b β).nonneg o) hratio
+  · have hPpos : 0 < (X.tupleLaw Hξ β).w o :=
+      lt_of_le_of_ne ((X.tupleLaw Hξ β).nonneg o) (Ne.symm hP)
+    rw [hrawweight] at hPpos
+    have htagpos : 0 < T.w o.1 := by
+      have hprodnon : 0 ≤ ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) :=
+        Finset.prod_nonneg fun r hr => (X.labelLaw Hξ Sraw o.1).nonneg (o.2 r)
+      by_contra hnot
+      have hle : T.w o.1 ≤ 0 := le_of_not_gt hnot
+      nlinarith [T.nonneg o.1]
+    have hdelpos : 0 < Tdel.w o.1 :=
+      tagPost_erase_pos_qs6 X Hξ β (X.tgt b) o.1 hstep (by simpa [T] using htagpos)
+    have hdelEq : X.TβDel H β (X.tgt b) = Tdel := by
+      change X.tagPost H β (β.obs.erase (X.tgt b)) =
+        X.tagPost Hξ β (β.obs.erase (X.tgt b))
+      apply tagPost_eq_of_hidden_agree6 X H Hξ β (β.obs.erase (X.tgt b)) rfl
+      intro h hh
+      have hne : h ≠ X.tgt b := (Finset.mem_erase.mp hh).1
+      simp [Hξ, Ctx6.withHid, Function.update, hne]
+    have hdelref : 0 < (X.TβDel H β (X.tgt b)).w o.1 := by
+      rw [hdelEq]
+      exact hdelpos
+    have hprodpos : 0 < ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) := by
+      have hprodnon : 0 ≤ ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) :=
+        Finset.prod_nonneg fun r hr => (X.labelLaw Hξ Sraw o.1).nonneg (o.2 r)
+      by_contra hnot
+      have hle : ∏ r, (X.labelLaw Hξ Sraw o.1).w (o.2 r) ≤ 0 := le_of_not_gt hnot
+      nlinarith [T.nonneg o.1]
+    have hlabelspos : ∀ r, 0 < (X.labelLaw Hξ Sraw o.1).w (o.2 r) := by
+      intro r
+      have hne : (X.labelLaw Hξ Sraw o.1).w (o.2 r) ≠ 0 :=
+        (Finset.prod_ne_zero_iff.mp hprodpos.ne') r (Finset.mem_univ _)
+      exact lt_of_le_of_ne ((X.labelLaw Hξ Sraw o.1).nonneg (o.2 r)) (Ne.symm hne)
+    have hmass := hsupport o.1 (by simpa [T] using htagpos)
+    have hsub : X.reqNbhd Hξ Sraw ⊆ X.reqNbhd H Sref := by
+      intro x hx
+      simp only [Ctx6.reqNbhd, Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
+      intro nm hnm
+      have hmem : nm ∈ Sraw := Finset.mem_of_mem_erase hnm
+      have hne : nm ≠ .hid (X.tgt b) := (Finset.mem_erase.mp hnm).1
+      have hval : X.varVal Hξ nm = X.varVal H nm := by
+        cases nm with
+        | par p => rfl
+        | hid h =>
+            have hne' : h ≠ X.tgt b := by
+              intro heq
+              apply hne
+              simp [heq]
+            simp [Hξ, Ctx6.withHid, Ctx6.varVal, Function.update, hne']
+      rw [← hval]
+      exact hx nm hmem
+    have hlabelref : ∀ r, (X.labelLaw H Sref o.1).w (o.2 r) ≠ 0 := by
+      intro r
+      have hraw := (labelLaw_pos_iff_qs6 X Hξ Sraw o.1 (o.2 r) hmass).mp (hlabelspos r)
+      have hmassRef : 0 < ∑ x ∈ X.reqNbhd H Sref, (M.μ o.1).w x := by
+        have hle := Finset.sum_le_sum_of_subset_of_nonneg hsub
+          (by intro x hx hx'; exact (M.μ o.1).nonneg x)
+        linarith
+      have hpos := (labelLaw_pos_iff_qs6 X H Sref o.1 (o.2 r) hmassRef).2
+        ⟨hsub hraw.1, hraw.2⟩
+      exact ne_of_gt hpos
+    have htagref : (X.TβDel H β (X.tgt b)).w o.1 ≠ 0 := ne_of_gt hdelref
+    have hratio := tupleLawOn_ratio6 X Hξ H Sraw Sref T
+      (X.TβDel H β (X.tgt b)) o htagref hlabelref
+    change (X.tupleLaw Hξ β).w o ≤
+      (X.tupleRef H β (X.TβDel H β (X.tgt b)) (.hid (X.tgt b))).w o *
+        X.tupleRatio Hξ H β (X.TβDel H β (X.tgt b)) (.hid (X.tgt b)) o
+    rw [Ctx6.tupleLaw, hratio]
+    rfl
+
+theorem lowLik_nonneg6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (b : X.State)
+    (ξ : Fin N) (β : X.Ty) (o : X.Tuple) :
+    0 ≤ X.lowLik H b ξ β o := by
+  unfold Ctx6.lowLik Ctx6.tupleRatio
+  apply mul_nonneg
+  · exact safeRatio6_nonneg_qs6
+      ((X.Tβ (X.withHid H (X.tgt b) ξ) β).nonneg o.1)
+      ((X.TβDel H β (X.tgt b)).nonneg o.1)
+  · apply Finset.prod_nonneg
+    intro r hr
+    exact safeRatio6_nonneg_qs6
+      ((X.labelLaw (X.withHid H (X.tgt b) ξ) (reqNames6 β) o.1).nonneg (o.2 r))
+      ((X.labelLaw H ((reqNames6 β).erase (.hid (X.tgt b))) o.1).nonneg (o.2 r))
+
+theorem lowLik_integral_le_one6 {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (b : X.State)
+    (ξ : Fin N) (β : X.Ty) :
+    ∑ o, (X.lowRef H b β).w o * X.lowLik H b ξ β o ≤ 1 := by
+  classical
+  let Hξ := X.withHid H (X.tgt b) ξ
+  let T := X.Tβ Hξ β
+  let Tdel := X.TβDel H β (X.tgt b)
+  let Sraw := reqNames6 β
+  let Sref := (reqNames6 β).erase (.hid (X.tgt b))
+  have hpoint (o : X.Tuple) :
+      (X.lowRef H b β).w o * X.lowLik H b ξ β o ≤ (X.tupleLaw Hξ β).w o := by
+    by_cases hq : (X.lowRef H b β).w o = 0
+    · simp [hq, (X.tupleLaw Hξ β).nonneg o]
+    · have hqpos : 0 < (X.lowRef H b β).w o :=
+        lt_of_le_of_ne ((X.lowRef H b β).nonneg o) (Ne.symm hq)
+      have hQweight : (X.lowRef H b β).w o =
+          Tdel.w o.1 * ∏ r, (X.labelLaw H Sref o.1).w (o.2 r) := by
+        simpa [Ctx6.lowRef, Ctx6.tupleRef, Ctx6.tupleLawOn, FinProb.bind, FinProb.pi,
+          Tdel, Sref] using tupleLawOn_weight6 X H Sref Tdel o
+      rw [hQweight] at hqpos
+      have hprodnon : 0 ≤ ∏ r, (X.labelLaw H Sref o.1).w (o.2 r) :=
+        Finset.prod_nonneg fun r hr => (X.labelLaw H Sref o.1).nonneg (o.2 r)
+      have htagpos : 0 < Tdel.w o.1 := by
+        by_contra hnot
+        have hle : Tdel.w o.1 ≤ 0 := le_of_not_gt hnot
+        nlinarith [Tdel.nonneg o.1]
+      have hprodpos : 0 < ∏ r, (X.labelLaw H Sref o.1).w (o.2 r) := by
+        by_contra hnot
+        have hle : ∏ r, (X.labelLaw H Sref o.1).w (o.2 r) ≤ 0 := le_of_not_gt hnot
+        nlinarith [Tdel.nonneg o.1]
+      have hlabels : ∀ r, (X.labelLaw H Sref o.1).w (o.2 r) ≠ 0 := by
+        intro r
+        exact (Finset.prod_ne_zero_iff.mp hprodpos.ne') r (Finset.mem_univ _)
+      have hratio := tupleLawOn_ratio6 X Hξ H Sraw Sref T Tdel o
+        (ne_of_gt htagpos) hlabels
+      have hratio' : (X.tupleLaw Hξ β).w o =
+          (X.lowRef H b β).w o * X.lowLik H b ξ β o := by
+        simpa [Ctx6.tupleLaw, Ctx6.tupleLawOn, Ctx6.lowRef, Ctx6.lowLik,
+          Ctx6.tupleRef, Ctx6.tupleRatio, FinProb.bind, FinProb.pi,
+          T, Tdel, Sraw, Sref] using hratio
+      rw [hratio']
+  calc
+    (∑ o, (X.lowRef H b β).w o * X.lowLik H b ξ β o) ≤
+        ∑ o, (X.tupleLaw Hξ β).w o := by
+      apply Finset.sum_le_sum
+      intro o ho
+      exact hpoint o
+    _ = 1 := (X.tupleLaw Hξ β).sum_eq_one
+
+def piCoordAssemble6 {ι Ω : Type*} [DecidableEq ι]
+    (i : ι) (rest : {j : ι // j ∉ ({i} : Finset ι)} → Ω) (x : Ω) : ι → Ω :=
+  fun j => if h : j = i then x else rest ⟨j, by simp [h]⟩
+
+theorem pi_expect_split_coord6 {ι Ω : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype Ω] (P : ι → FinProb Ω) (i : ι) (f : (ι → Ω) → ℝ) :
+    (FinProb.pi P).expect f =
+      ∑ rest : {j : ι // j ∉ ({i} : Finset ι)} → Ω,
+        (FinProb.pi (fun j : {j : ι // j ∉ ({i} : Finset ι)} => P j.1)).w rest *
+          ∑ x, (P i).w x * f (piCoordAssemble6 i rest x) := by
+  classical
+  let s : Finset ι := {i}
+  let I := {j : ι // j ∈ s}
+  letI : Unique I := {
+    default := ⟨i, by simp [s]⟩
+    uniq := by
+      intro j
+      apply Subtype.ext
+      exact Finset.mem_singleton.mp (by simpa [s] using j.2)
+  }
+  let eI : (I → Ω) ≃ Ω := Equiv.piUnique (fun _ : I => Ω)
+  let e := Equiv.piEquivPiSubtypeProd (fun j : ι => j ∈ s) (fun _ => Ω)
+  have hdef : (default : I).1 = i := rfl
+  have hIweight (a : I → Ω) :
+      (FinProb.pi (fun j : I => P j.1)).w a =
+        (P i).w (eI a) := by
+    simp [FinProb.pi, s, eI, hdef]
+  have hsym (a : I → Ω) (rest : {j : ι // j ∉ s} → Ω) :
+    e.symm (a, rest) =
+        piCoordAssemble6 i rest (eI a) := by
+    funext j
+    by_cases hj : j = i
+    · subst j
+      simp [e, eI, piCoordAssemble6, Equiv.piEquivPiSubtypeProd_symm_apply, s, hdef]
+      have hidx : (⟨i, by simp [s]⟩ : I) = default := by
+        apply Subtype.ext
+        exact hdef.symm
+      exact congrArg a hidx
+    · simp [e, eI, piCoordAssemble6, Equiv.piEquivPiSubtypeProd_symm_apply, s, hj]
+  rw [pi_expect_split6 P s f]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro rest hr
+  calc
+    (∑ a : I → Ω,
+        ((FinProb.pi (fun j : I => P j.1)).w a *
+          (FinProb.pi (fun j : {j : ι // j ∉ s} => P j.1)).w rest) *
+            f (e.symm (a, rest))) =
+      (FinProb.pi (fun j : {j : ι // j ∉ s} => P j.1)).w rest *
+        ∑ a : I → Ω, (FinProb.pi (fun j : I => P j.1)).w a * f (e.symm (a, rest)) := by
+      calc
+        _ = ∑ a : I → Ω,
+            (FinProb.pi (fun j : {j : ι // j ∉ s} => P j.1)).w rest *
+              ((FinProb.pi (fun j : I => P j.1)).w a * f (e.symm (a, rest))) := by
+                apply Finset.sum_congr rfl
+                intro a ha
+                ring
+        _ = _ := by rw [Finset.mul_sum]
+    _ = (FinProb.pi (fun j : {j : ι // j ∉ s} => P j.1)).w rest *
+        ∑ x, (P i).w x * f (piCoordAssemble6 i rest x) := by
+      congr 1
+      exact Fintype.sum_equiv eI
+        (fun a : I → Ω => (FinProb.pi (fun j : I => P j.1)).w a * f (e.symm (a, rest)))
+        (fun x => (P i).w x * f (piCoordAssemble6 i rest x))
+        (by intro a; rw [hIweight, hsym])
+
 end Lane_q_s06_steps2
 end S06
 end HypercubeRamsey

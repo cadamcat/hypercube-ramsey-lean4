@@ -108,7 +108,23 @@ theorem private_child_product_estimate {Config Position Activation : Type*}
     [Fintype Config] [Fintype Position] [Fintype Activation] {Rule : Type*}
     (I : ScaleInductionInput Config Rule Position Activation) (c : Config) (rule : Rule) :
     I.positions.expect (fun P => ∏ i, I.privateChildSup c rule i P) ≤ I.epsBase ^ I.children := by
-  sorry
+  have hprod :
+      (∏ i : Fin I.children, I.positions.expect (I.privateChildSup c rule i)) ≤
+        ∏ i : Fin I.children, I.epsBase := by
+    apply Finset.prod_le_prod₀
+    · intro i hi
+      unfold FinProb.expect
+      apply Finset.sum_nonneg
+      intro P hP
+      exact mul_nonneg (I.positions.nonneg P) (I.private_child_nonneg c rule i P)
+    · intro i hi
+      exact I.base_estimate c rule i
+  calc
+    I.positions.expect (fun P => ∏ i, I.privateChildSup c rule i P) ≤
+        ∏ i : Fin I.children, I.positions.expect (I.privateChildSup c rule i) :=
+      I.private_factorization c rule
+    _ ≤ ∏ i : Fin I.children, I.epsBase := hprod
+    _ = I.epsBase ^ I.children := by simp
 
 /--
 L3.8e (abstract scale-induction step). `base_estimate` is the child-scale input; the two overlap estimates
@@ -123,6 +139,94 @@ theorem scale_induction_step {Config Position Activation Rule : Type*}
     (I : ScaleInductionInput Config Rule Position Activation) (rule : Rule) :
     (I.positions.prod I.activations).pr
       (fun ω => ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2) ≤ I.scaleTarget := by
-  sorry
+  classical
+  let μ : FinProb (Position × Activation) := I.positions.prod I.activations
+  letI : ∀ ω : Position × Activation,
+      Decidable (∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2) :=
+    fun _ => Classical.propDecidable _
+  letI : ∀ c : Config, ∀ ω : Position × Activation,
+      Decidable (I.parentFailure c rule ω.1 ω.2) :=
+    fun _ _ => Classical.propDecidable _
+  have hunion (ω : Position × Activation) :
+      (if ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2 then μ.w ω else 0) ≤
+        ∑ c ∈ I.configurations,
+          if I.parentFailure c rule ω.1 ω.2 then μ.w ω else 0 := by
+    by_cases he : ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2
+    · obtain ⟨c, hc, hfail⟩ := he
+      have he' : ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2 :=
+        ⟨c, hc, hfail⟩
+      let g : Config → ℝ := fun c' =>
+        if I.parentFailure c' rule ω.1 ω.2 then μ.w ω else 0
+      have hsum : μ.w ω ≤ ∑ c ∈ I.configurations, g c := by
+        calc
+          μ.w ω = g c := by simp [g, hfail]
+          _ ≤ ∑ c ∈ I.configurations, g c :=
+            Finset.single_le_sum
+              (fun c' hc' => by
+                by_cases hfail' : I.parentFailure c' rule ω.1 ω.2
+                · simp [g, hfail', μ.nonneg ω]
+                · simp [g, hfail'])
+              hc
+      simpa [he', g] using hsum
+    · have hnonneg :
+          0 ≤ ∑ c ∈ I.configurations,
+            (if I.parentFailure c rule ω.1 ω.2 then μ.w ω else 0) := by
+        apply Finset.sum_nonneg
+        intro c hc
+        by_cases hfail : I.parentFailure c rule ω.1 ω.2
+        · simpa [hfail] using μ.nonneg ω
+        · simp [hfail]
+      simpa [he] using hnonneg
+  have hprob :
+      μ.pr (fun ω => ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2) ≤
+        ∑ c ∈ I.configurations,
+          μ.pr (fun ω => I.parentFailure c rule ω.1 ω.2) := by
+    unfold FinProb.pr
+    calc
+      (∑ ω, if ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2 then μ.w ω else 0) ≤
+          ∑ ω, ∑ c ∈ I.configurations,
+            if I.parentFailure c rule ω.1 ω.2 then μ.w ω else 0 :=
+        Finset.sum_le_sum fun ω hω => hunion ω
+      _ = ∑ c ∈ I.configurations,
+            ∑ ω, if I.parentFailure c rule ω.1 ω.2 then μ.w ω else 0 := by
+        rw [Finset.sum_comm]
+  have hbound (c : Config) (hc : c ∈ I.configurations) :
+      μ.pr (fun ω => I.parentFailure c rule ω.1 ω.2) ≤
+        I.epsPosition + I.epsActivation + I.epsBase ^ I.children := by
+    calc
+      μ.pr (fun ω => I.parentFailure c rule ω.1 ω.2) ≤
+          I.positions.pr (I.positionOverlapException c rule) +
+            (I.positions.prod I.activations).pr
+              (fun ω => I.activationOverlapException c rule ω.1 ω.2) +
+            I.positions.expect (fun P => ∏ i, I.privateChildSup c rule i P) := by
+        simpa [μ] using I.factorization c rule
+      _ ≤ I.epsPosition + I.epsActivation + I.epsBase ^ I.children := by
+        exact add_le_add (add_le_add (I.position_overlap_estimate c rule)
+          (I.activation_overlap_estimate c rule))
+          (private_child_product_estimate I c rule)
+  have hsum :
+      (∑ c ∈ I.configurations,
+          μ.pr (fun ω => I.parentFailure c rule ω.1 ω.2)) ≤
+        (I.configurations.card : ℝ) *
+          (I.epsPosition + I.epsActivation + I.epsBase ^ I.children) := by
+    calc
+      (∑ c ∈ I.configurations,
+          μ.pr (fun ω => I.parentFailure c rule ω.1 ω.2)) ≤
+          ∑ _c ∈ I.configurations,
+            (I.epsPosition + I.epsActivation + I.epsBase ^ I.children) := by
+        apply Finset.sum_le_sum
+        intro c hc
+        exact hbound c hc
+      _ = (I.configurations.card : ℝ) *
+          (I.epsPosition + I.epsActivation + I.epsBase ^ I.children) := by
+        simp
+        ring
+  calc
+    μ.pr (fun ω => ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2) ≤
+        ∑ c ∈ I.configurations,
+          μ.pr (fun ω => I.parentFailure c rule ω.1 ω.2) := hprob
+    _ ≤ (I.configurations.card : ℝ) *
+          (I.epsPosition + I.epsActivation + I.epsBase ^ I.children) := hsum
+    _ ≤ I.scaleTarget := I.exponent_comparison
 
 end HypercubeRamsey

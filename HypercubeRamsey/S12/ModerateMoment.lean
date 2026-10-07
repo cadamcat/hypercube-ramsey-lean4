@@ -676,9 +676,8 @@ theorem moderate_cancellation (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     calc
       (6 * A * n ^ (-δL)) * (n ^ (-(3 * (κ.R : ℝ))) / 6) =
           A * (n ^ (-δL) * n ^ (-(3 * (κ.R : ℝ)))) := by ring
-      _ = A * n ^ (-δL - 3 * (κ.R : ℝ)) := by
+      _ = A * n ^ ((-δL) + (-(3 * (κ.R : ℝ)))) := by
         rw [← Real.rpow_add hnpos]
-        ring
       _ = A * n ^ (-(0.5 : ℝ) * (κ.L : ℝ)) := by
         congr 1
         dsimp [δL]
@@ -713,9 +712,8 @@ theorem moderate_cancellation (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     calc
       (12 * n ^ (-δH)) * (n ^ (-(3 * (κ.R : ℝ))) / 6) =
           2 * (n ^ (-δH) * n ^ (-(3 * (κ.R : ℝ)))) := by ring
-      _ = 2 * n ^ (-δH - 3 * (κ.R : ℝ)) := by
+      _ = 2 * n ^ ((-δH) + (-(3 * (κ.R : ℝ)))) := by
         rw [← Real.rpow_add hnpos]
-        ring
       _ = 2 * n ^ (1 - (0.02 : ℝ) * ((κ.L + 1 : ℕ) : ℝ)) := by
         congr 1
         dsimp [δH]

@@ -34,7 +34,192 @@ from at most `(n+1)(H+1) 2λ ≤ n^{13}` IDs (`≤ T` of them) and each of the `
 so there are at most `exp(25(s+T) log n)` candidate lists; the constant does not depend on `h`. -/
 theorem list_count (hη₀ : 0 < η₀) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.ListCount := by
-  sorry
+  classical
+  obtain ⟨nScale, hScale⟩ := gridScaleBounds η₀ hη₀
+  let n₀ := max nScale 9
+  refine ⟨n₀, ?_⟩
+  intro D hn hGF P c hPosCount
+  have hn9 : 9 ≤ D.n := le_trans (Nat.le_max_right nScale 9) hn
+  have hn4 : 4 ≤ D.n := by omega
+  have hn3 : 3 ≤ D.n := by omega
+  have hscale := hScale D.n (le_trans (Nat.le_max_left nScale 9) hn)
+  obtain ⟨hs, hT, hH⟩ := hscale
+  have hd : dC η₀ D.n ≤ D.n := by
+    have hreal := hGF.hd_ok.2.2
+    exact_mod_cast (by simpa using hreal)
+  have hOrd : (ordNbrs c.2).card ≤ 2 * D.n := by
+    calc
+      (ordNbrs c.2).card ≤ dC η₀ D.n + 1 := ordNbrs_card_bound c.2
+      _ ≤ D.n + 1 := Nat.add_le_add_right hd 1
+      _ ≤ 2 * D.n := by omega
+  have hLevels : HH η₀ D.n + 1 ≤ 2 * D.n := by omega
+  have hCountAt (k : D.KeyT) (v : D.ResT) (j : Fin (HH η₀ D.n + 1))
+      (he : PadNbr c (k, v)) : D.ballCount P k v j ≤ 2 * D.n ^ 10 := by
+    have hReal : (D.ballCount P k v j : ℝ) ≤ 2 * (D.n : ℝ) ^ 10 := by
+      simpa [hdP, HDParams.lam, Real.rpow_natCast] using hPosCount (k, v) he j
+    exact_mod_cast hReal
+  let internalPool : Finset D.Loc := (ordNbrs c.2).biUnion fun v =>
+    (Finset.univ : Finset (Fin (HH η₀ D.n + 1))).biUnion fun j =>
+      localIdsAt D P c.1 v j
+  have hInternalCard : internalPool.card ≤ 8 * D.n ^ 12 := by
+    calc
+      internalPool.card ≤ ∑ v ∈ ordNbrs c.2,
+          ((Finset.univ : Finset (Fin (HH η₀ D.n + 1))).biUnion
+            (fun j => localIdsAt D P c.1 v j)).card :=
+        Finset.card_biUnion_le (s := ordNbrs c.2)
+          (t := fun v => (Finset.univ : Finset (Fin (HH η₀ D.n + 1))).biUnion
+            (fun j => localIdsAt D P c.1 v j))
+      _ ≤ ∑ v ∈ ordNbrs c.2, ∑ j : Fin (HH η₀ D.n + 1),
+          (localIdsAt D P c.1 v j).card := by
+        apply Finset.sum_le_sum
+        intro v hv
+        exact Finset.card_biUnion_le (s := (Finset.univ : Finset (Fin (HH η₀ D.n + 1))))
+          (t := fun j => localIdsAt D P c.1 v j)
+      _ ≤ ∑ v ∈ ordNbrs c.2, ∑ j : Fin (HH η₀ D.n + 1), 2 * D.n ^ 10 := by
+        apply Finset.sum_le_sum
+        intro v hv
+        apply Finset.sum_le_sum
+        intro j hj
+        rw [localIdsAt_card]
+        exact hCountAt c.1 v j (Or.inl ⟨rfl, hv⟩)
+      _ = (ordNbrs c.2).card * (HH η₀ D.n + 1) * (2 * D.n ^ 10) := by
+        simp [Finset.sum_const, Nat.mul_assoc]
+      _ ≤ (2 * D.n) * (2 * D.n) * (2 * D.n ^ 10) := by gcongr
+      _ = 8 * D.n ^ 12 := by ring
+  have hInternalPlus : internalPool.card + 1 ≤ D.n ^ 13 := by
+    have hn12 : 1 ≤ D.n ^ 12 := Nat.one_le_pow 12 D.n (by omega)
+    calc
+      internalPool.card + 1 ≤ 8 * D.n ^ 12 + 1 := Nat.add_le_add_right hInternalCard 1
+      _ ≤ 9 * D.n ^ 12 := by omega
+      _ ≤ D.n * D.n ^ 12 := Nat.mul_le_mul_right _ (by omega)
+      _ = D.n ^ 13 := by rw [pow_succ]; ring
+  let crossPool (u : D.CrossSub c.1) : Finset D.Loc :=
+    Finset.univ.filter fun ℓ => P u.1 ℓ = true ∧ _root_.hammingDist ℓ.1 c.2 ≤ rH D.n
+  have hCrossPoolCard (u : D.CrossSub c.1) : (crossPool u).card ≤ D.n ^ 12 := by
+    let allLevels : Finset D.Loc :=
+      (Finset.univ : Finset (Fin (HH η₀ D.n + 1))).biUnion fun j =>
+        localIdsAt D P u.1 c.2 j
+    have hsub : crossPool u ⊆ allLevels := by
+      intro ℓ hℓ
+      rcases Finset.mem_filter.mp hℓ with ⟨_, ⟨hp, hdℓ⟩⟩
+      have heq : (ℓ.1, ℓ.2) = ℓ := by cases ℓ; rfl
+      have hp' : P u.1 (ℓ.1, ℓ.2) = true := by rw [heq]; exact hp
+      refine Finset.mem_biUnion.mpr ⟨ℓ.2, Finset.mem_univ _, ?_⟩
+      simp only [localIdsAt, Finset.mem_image]
+      refine ⟨ℓ.1, ?_, heq⟩
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨hp', hdℓ⟩
+    calc
+      (crossPool u).card ≤ allLevels.card := Finset.card_le_card hsub
+      _ ≤ ∑ j : Fin (HH η₀ D.n + 1), (localIdsAt D P u.1 c.2 j).card :=
+        Finset.card_biUnion_le (s := (Finset.univ : Finset (Fin (HH η₀ D.n + 1))))
+          (t := fun j => localIdsAt D P u.1 c.2 j)
+      _ ≤ ∑ j : Fin (HH η₀ D.n + 1), 2 * D.n ^ 10 := by
+        apply Finset.sum_le_sum
+        intro j hj
+        rw [localIdsAt_card]
+        exact hCountAt u.1 c.2 j (Or.inr ⟨rfl, u.2⟩)
+      _ = (HH η₀ D.n + 1) * (2 * D.n ^ 10) := by simp [Finset.sum_const]
+      _ ≤ D.n ^ 12 := by
+        calc
+          (HH η₀ D.n + 1) * (2 * D.n ^ 10) ≤ (2 * D.n) * (2 * D.n ^ 10) := by gcongr
+          _ = 4 * D.n ^ 11 := by ring
+          _ ≤ D.n * D.n ^ 11 := Nat.mul_le_mul_right _ (by omega)
+          _ = D.n ^ 12 := by rw [pow_succ]; ring
+  have hTpos : 1 ≤ TC η₀ D.n := by
+    have hτ : 0 < tau8 η₀ := by
+      rw [tau8_eq]
+      have hη : 0 < eta8 η₀ := lt_min (by linarith) (by norm_num)
+      exact div_pos hη (by norm_num)
+    have hnR : (1 : ℝ) ≤ (D.n : ℝ) := by exact_mod_cast (by omega : 1 ≤ D.n)
+    have hpow : (1 : ℝ) ≤ (D.n : ℝ) ^ (tau8 η₀ / 8) :=
+      Real.one_le_rpow hnR (by positivity)
+    have hceil : (1 : ℝ) ≤ (⌈(D.n : ℝ) ^ (tau8 η₀ / 8)⌉₊ : ℝ) :=
+      hpow.trans (Nat.le_ceil ((D.n : ℝ) ^ (tau8 η₀ / 8)))
+    exact_mod_cast (by simpa [TC] using hceil)
+  have hspos : 1 ≤ sC η₀ D.n := hGF.pos.2.2
+  let intChoices := internalPool.powerset.filter fun A : Finset D.Loc => A.card ≤ TC η₀ D.n
+  let crossChoices := Fintype.piFinset crossPool
+  have hIntChoices : intChoices.card ≤ (D.n ^ 13) ^ (TC η₀ D.n + 1) := by
+    calc
+      intChoices.card ≤ (internalPool.card + 1) ^ (TC η₀ D.n + 1) := by
+        simpa [intChoices] using small_powerset_card internalPool (TC η₀ D.n)
+      _ ≤ (D.n ^ 13) ^ (TC η₀ D.n + 1) := by gcongr
+  have hCrossChoices : crossChoices.card ≤ (D.n ^ 12) ^ (2 * sC η₀ D.n) := by
+    have hcrossCard : Fintype.card (D.CrossSub c.1) ≤ 2 * sC η₀ D.n := by
+      simpa [Ctx.CrossSub] using hGF.crossKeys_card c.1
+    calc
+      crossChoices.card = ∏ u : D.CrossSub c.1, (crossPool u).card := by
+        simp [crossChoices, Fintype.card_piFinset]
+      _ ≤ (D.n ^ 12) ^ Fintype.card (D.CrossSub c.1) :=
+        Finset.prod_le_pow_card Finset.univ (fun u => (crossPool u).card) (D.n ^ 12)
+          (by intro u hu; exact hCrossPoolCard u)
+      _ ≤ (D.n ^ 12) ^ (2 * sC η₀ D.n) := by gcongr
+      _ = (D.n ^ 12) ^ (2 * sC η₀ D.n) := rfl
+  let candidates : Finset (D.LList c.1) := Finset.univ.filter fun L => D.Cand P c L
+  have hInternalSubset (L : D.LList c.1) (hL : D.Cand P c L) : L.1 ⊆ internalPool := by
+    intro ℓ hℓ
+    rcases hL.2.1 ℓ hℓ with ⟨hp, b, hb, hdist⟩
+    have heq : (ℓ.1, ℓ.2) = ℓ := by cases ℓ; rfl
+    have hp' : P c.1 (ℓ.1, ℓ.2) = true := by rw [heq]; exact hp
+    refine Finset.mem_biUnion.mpr ⟨b, hb,
+      Finset.mem_biUnion.mpr ⟨ℓ.2, Finset.mem_univ _, ?_⟩⟩
+    simp only [localIdsAt, Finset.mem_image]
+    refine ⟨ℓ.1, ?_, heq⟩
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨hp', hdist⟩
+  have hinjective : Function.Injective (fun L : D.LList c.1 => (L.1, L.2)) := by
+    intro L L' h
+    exact Prod.ext (congrArg Prod.fst h) (congrArg Prod.snd h)
+  have hImageSubset : candidates.image (fun L => (L.1, L.2)) ⊆ intChoices ×ˢ crossChoices := by
+    intro z hz
+    rcases Finset.mem_image.mp hz with ⟨L, hL, rfl⟩
+    have hCand := (Finset.mem_filter.mp hL).2
+    have hIntMem : L.1 ∈ intChoices := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_powerset.mpr (hInternalSubset L hCand), hCand.1⟩
+    have hCrossMem : L.2 ∈ crossChoices := by
+      apply Fintype.mem_piFinset.mpr
+      intro u
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ _, (hCand.2.2 u).1, (hCand.2.2 u).2⟩
+    exact Finset.mem_product.mpr ⟨hIntMem, hCrossMem⟩
+  have hCandidateCount : candidates.card ≤ intChoices.card * crossChoices.card := by
+    calc
+      candidates.card = (candidates.image (fun L => (L.1, L.2))).card := by
+        symm
+        exact Finset.card_image_of_injective candidates hinjective
+      _ ≤ (intChoices ×ˢ crossChoices).card := Finset.card_le_card hImageSubset
+      _ = intChoices.card * crossChoices.card := by simp
+  have hCandidateNat : candidates.card ≤ D.n ^ (25 * (sC η₀ D.n + TC η₀ D.n)) := by
+    calc
+      candidates.card ≤ intChoices.card * crossChoices.card := hCandidateCount
+      _ ≤ (D.n ^ 13) ^ (TC η₀ D.n + 1) * (D.n ^ 12) ^ (2 * sC η₀ D.n) :=
+        Nat.mul_le_mul hIntChoices hCrossChoices
+      _ = D.n ^ (13 * (TC η₀ D.n + 1) + 12 * (2 * sC η₀ D.n)) := by
+        calc
+          (D.n ^ 13) ^ (TC η₀ D.n + 1) * (D.n ^ 12) ^ (2 * sC η₀ D.n) =
+              D.n ^ (13 * (TC η₀ D.n + 1)) * (D.n ^ 12) ^ (2 * sC η₀ D.n) := by
+            rw [(Nat.pow_mul D.n 13 (TC η₀ D.n + 1)).symm]
+          _ = D.n ^ (13 * (TC η₀ D.n + 1)) * D.n ^ (12 * (2 * sC η₀ D.n)) := by
+            rw [(Nat.pow_mul D.n 12 (2 * sC η₀ D.n)).symm]
+          _ = D.n ^ (13 * (TC η₀ D.n + 1) + 12 * (2 * sC η₀ D.n)) := by
+            rw [← Nat.pow_add]
+      _ ≤ D.n ^ (25 * (sC η₀ D.n + TC η₀ D.n)) := by
+        exact Nat.pow_le_pow_right (by omega) (by omega)
+  have hnReal : (0 : ℝ) < D.n := by exact_mod_cast (by omega : 0 < D.n)
+  have hPowExp : (D.n : ℝ) ^ (25 * (sC η₀ D.n + TC η₀ D.n)) =
+      Real.exp (25 * (sC η₀ D.n + TC η₀ D.n : ℝ) * Real.log (D.n : ℝ)) := by
+    rw [← Real.rpow_natCast, Real.rpow_def_of_pos hnReal]
+    congr 1
+    push_cast
+    ring
+  change (candidates.card : ℝ) ≤
+    Real.exp (25 * (sC η₀ D.n + TC η₀ D.n : ℝ) * Real.log (D.n : ℝ))
+  calc
+    (candidates.card : ℝ) ≤ (D.n : ℝ) ^ (25 * (sC η₀ D.n + TC η₀ D.n)) := by
+      exact_mod_cast hCandidateNat
+    _ = Real.exp (25 * (sC η₀ D.n + TC η₀ D.n : ℝ) * Real.log (D.n : ℝ)) := hPowExp
 
 /-- L8.1f(iv) (08:208–212): a family has fewer than `n` lists of at most `T + 2s` IDs; an even site has at most
 `(n - m + 1) + 2s` incident odd cells; so at most `n(n+1+2s)(T+2s) = o(λ)` IDs are forbidden at a site-level, and

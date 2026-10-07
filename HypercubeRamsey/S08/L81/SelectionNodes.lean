@@ -1242,7 +1242,68 @@ theorem pos_tail (hη₀ : 0 < η₀) :
 internal observations are indexed); at a hidden history avoiding the hidden events `q_{g,k} ≤ ε₀^{1/2}`, and
 Markov gives `Pr(q_L > ε₀^{1/4}) ≤ ε₀^{1/4}`. -/
 theorem bad_list_prob (D : Ctx η₀ β p h) : D.BadListProb := by
-  sorry
+  classical
+  intro Θ hΘ P c L hCand
+  let δ := Real.sqrt (Real.sqrt D.eps0)
+  let f : D.Tags → ℝ := fun t => D.qL Θ c.1 (D.listInt t c.1 L) (D.listCrossTag t c.1 L)
+  have hNoBad (g : D.KeyT) :
+      ¬ (¬ D.BaseGates Θ g ∨ ∃ k ≤ TC η₀ D.n, Real.sqrt D.eps0 < D.qgk Θ g k) := by
+    simpa [Ctx.HBad] using hΘ g
+  have hqgk (k : ℕ) (hk : k ≤ TC η₀ D.n) :
+      D.qgk Θ c.1 k ≤ Real.sqrt D.eps0 := by
+    by_contra hlarge
+    apply hNoBad c.1
+    exact Or.inr ⟨k, hk, lt_of_not_ge hlarge⟩
+  have hExpIdentity : (D.tagLawAll Θ).expect f = D.qgk Θ c.1 L.1.card := by
+    /- Reindex the internal tag coordinates by `Fin L.1.card`; this also needs the permutation invariance of `Mden`. -/
+    sorry
+  have hfNonneg : ∀ t, 0 ≤ f t := by
+    intro t
+    dsimp [f]
+    unfold Ctx.qL
+    apply Finset.sum_nonneg
+    intro x hx
+    apply mul_nonneg
+    · apply mul_nonneg
+      · exact ind_nonneg _
+      · apply Finset.prod_nonneg
+        intro u hu
+        exact (D.anchorU Θ u.1 (D.listCrossTag t c.1 L u)).nonneg (x u)
+    · exact ind_nonneg _
+  have heps : 0 < D.eps0 := by
+    unfold Ctx.eps0
+    exact Real.exp_pos _
+  have hδ : 0 < δ := Real.sqrt_pos.2 (Real.sqrt_pos.2 heps)
+  have hqLavg : (D.tagLawAll Θ).expect f ≤ Real.sqrt D.eps0 := by
+    rw [hExpIdentity]
+    exact hqgk L.1.card hCand.1
+  have hprobSub : (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c L) ≤
+      (D.tagLawAll Θ).pr (fun t => δ ≤ f t) := by
+    unfold FinProb.pr
+    apply Finset.sum_le_sum
+    intro t ht
+    by_cases hbad : D.BadList Θ t c L
+    · have hlarge : δ < f t := by simpa [Ctx.BadList, δ, f] using hbad
+      have hle : δ ≤ f t := le_of_lt hlarge
+      simp [hbad, hle]
+    · simp only [if_neg hbad]
+      by_cases hle : δ ≤ f t
+      · simpa [hle] using (D.tagLawAll Θ).nonneg t
+      · simp [hle]
+  have hmarkov := FinProb.markov (D.tagLawAll Θ) f δ hfNonneg hδ
+  have hδsq : δ ^ 2 = Real.sqrt D.eps0 := by
+    dsimp [δ]
+    exact Real.sq_sqrt (Real.sqrt_nonneg _)
+  have htail : (D.tagLawAll Θ).expect f / δ ≤ δ := by
+    apply (div_le_iff₀ hδ).2
+    calc
+      (D.tagLawAll Θ).expect f ≤ Real.sqrt D.eps0 := hqLavg
+      _ = δ * δ := by rw [← hδsq]; ring
+  calc
+    (D.tagLawAll Θ).pr (fun t => D.BadList Θ t c L) ≤
+        (D.tagLawAll Θ).pr (fun t => δ ≤ f t) := hprobSub
+    _ ≤ (D.tagLawAll Θ).expect f / δ := hmarkov
+    _ ≤ δ := htail
 
 /-- L8.1f(ix) (08:200–206): lists with disjoint ID sets have independent tags, so `n` disjoint bad lists at a cell
 have probability at most `L_n^n ε₀^{n/4} = exp(n[25(s+T) - δhs/4] log n)` (`BadListProb`, `ListCount`), which for

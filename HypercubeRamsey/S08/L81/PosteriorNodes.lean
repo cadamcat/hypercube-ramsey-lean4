@@ -785,6 +785,45 @@ theorem p0_local (D : Ctx η₀ β p h) (hS : D.SelLocal) : D.P0Local := by
         rw [hp]
       rw [hcount]
       exact hPos e he j
+  have hHist2 : ∀ g, keyDist c.1 g ≤ 2 → q.1.1 g = q'.1.1 g := by
+    intro g hg
+    have hg4 : keyDist c.1 g ≤ 4 := hg.trans (by omega)
+    have hmem : g ∈ keyBall c.1 4 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg4⟩
+    exact hHidden g hmem
+  have hObs : D.obsOf (D.presOf q W c) = D.obsOf (D.presOf q' W' c) :=
+    congrArg D.obsOf hPres
+  have hMdenEq :
+      D.Mden q.1.1 c.1 (D.obsOf (D.presOf q W c)) =
+        D.Mden q'.1.1 c.1 (D.obsOf (D.presOf q' W' c)) := by
+    rw [hObs]
+    exact Lane_q_s08_post.mden_congr_radius_two D q.1.1 q'.1.1 c.1
+      (D.obsOf (D.presOf q' W' c)) hHist2
+  have hOrdValid :
+      (∀ b ∈ ordNbrs c.2, (D.sel q (c.1, b)).isSome) ↔
+        (∀ b ∈ ordNbrs c.2, (D.sel q' (c.1, b)).isSome) := by
+    constructor
+    · intro hh b hb
+      rw [← hOrdSel b hb]
+      exact hh b hb
+    · intro hh b hb
+      rw [hOrdSel b hb]
+      exact hh b hb
+  have hCrossValid :
+      (∀ u : D.CrossSub c.1, (D.sel q (u.1, c.2)).isSome) ↔
+        (∀ u : D.CrossSub c.1, (D.sel q' (u.1, c.2)).isSome) := by
+    constructor
+    · intro hh u
+      rw [← hCrossSel u]
+      exact hh u
+    · intro hh u
+      rw [hCrossSel u]
+      exact hh u
+  have hPresValidEq : D.PresValid q W c = D.PresValid q' W' c := by
+    apply propext
+    unfold Ctx.PresValid
+    rw [hCandGateEq, hOrdValid, hCrossValid, hIntIds, hPosCountEq, hMdenEq]
   sorry
 
 set_option maxHeartbeats 1000000

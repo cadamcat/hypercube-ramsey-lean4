@@ -787,4 +787,62 @@ theorem kept_label_integral_skip_group {κ : CConsts} {T : Stage} {k : ℕ}
   apply Function.update_of_ne
   exact fun heq => hg (heq ▸ hg')
 
+theorem slice_eq_of_patch_and_outside {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (v w : Position T k)
+    (hp : patchAt PT hPT v = patchAt PT hPT w)
+    (ho : HEq (outsideWord PT hPT (patchAt PT hPT v) v)
+      (outsideWord PT hPT (patchAt PT hPT w) w)) :
+    clusterSliceAt PT hPT v = clusterSliceAt PT hPT w := by
+  apply Sigma.ext hp
+  apply (Subtype.heq_iff_coe_heq
+    (congrArg (fun i : Fin PT.tiling.m => CubeVertex (T.S.n k - (PT.tiling.P i).h)) hp)
+    (dependent_heq (fun i : Fin PT.tiling.m =>
+      fun o : CubeVertex (T.S.n k - (PT.tiling.P i).h) =>
+        ∀ j : Fin (T.S.n k - (PT.tiling.P i).h), j.val < (PT.tiling.P i).ℓ →
+          o j = PT.tiling.w i ⟨j.val, by have := j.isLt; omega⟩) hp)).2
+  exact ho
+
+theorem bulk_flip_coordinate_outside {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : EvenPosition T k)
+    {b : OddPosition T k} (hb : b ∈ clusterBulkNeighbours PT hPT a)
+    {c : Fin (T.S.n k)} (hc : b.1 = flipPos a.1 c) :
+    c.val < T.S.n k - (PT.tiling.P (patchAt PT hPT a.1)).h := by
+  have hparts := (Finset.mem_filter.mp hb).2
+  by_contra hge
+  apply hparts.2.2
+  apply slice_eq_of_patch_and_outside PT hPT b.1 a.1 hparts.2.1
+  apply HEq.trans (dependent_heq (fun i => outsideWord PT hPT i b.1) hparts.2.1)
+  apply heq_of_eq
+  funext j
+  have hjc : (⟨j.val, by have := j.isLt; omega⟩ : Fin (T.S.n k)) ≠ c := by
+    intro h
+    have hv := congrArg Fin.val h
+    have hj := j.isLt
+    simp only [Fin.val_mk] at hv
+    omega
+  simp only [outsideWord, hc, flipPos]
+  exact Function.update_of_ne hjc _ _
+
+theorem bulk_slices_injective {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : EvenPosition T k) :
+    Set.InjOn (fun b : OddPosition T k => clusterSliceAt PT hPT b.1)
+      (clusterBulkNeighbours PT hPT a) := by
+  intro b hb b' hb' hs
+  have hp := (Finset.mem_filter.mp hb).2
+  have hp' := (Finset.mem_filter.mp hb').2
+  obtain ⟨c, hc⟩ := adjacent_eq_flip hp.1
+  obtain ⟨d, hd⟩ := adjacent_eq_flip hp'.1
+  have hcsmall := bulk_flip_coordinate_outside PT hPT a hb hc
+  have hout := same_slice_outside_eq_on_patch PT hPT (patchAt PT hPT a.1) b.1 b'.1
+    hp.2.1 hp'.2.1 hs
+  have hcd : c = d := by
+    by_contra hne
+    have heq := congrFun hout ⟨c.val, hcsmall⟩
+    have hidx : (⟨c.val, by have := hcsmall; omega⟩ : Fin (T.S.n k)) = c := rfl
+    change b.1 c = b'.1 c at heq
+    rw [hc, hd] at heq
+    cases ha : a.1 c <;> simp [flipPos, hne, ha] at heq
+  apply Subtype.ext
+  rw [hc, hd, hcd]
+
 end HypercubeRamsey.Lane_sol_s15_transfer

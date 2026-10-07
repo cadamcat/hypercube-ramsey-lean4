@@ -82,9 +82,7 @@ import HypercubeRamsey.S05.Stages
 import HypercubeRamsey.S06.Assembly
 import HypercubeRamsey.S06.ChunkGeometry
 import HypercubeRamsey.S06.Defs
-import HypercubeRamsey.S06.Needs
 import HypercubeRamsey.S06.Reduction
-import HypercubeRamsey.S06.Selection
 import HypercubeRamsey.S07
 import HypercubeRamsey.S07.Acceptance
 import HypercubeRamsey.S07.AnchorStage
@@ -104,7 +102,6 @@ import HypercubeRamsey.S08.L81.Definitions
 import HypercubeRamsey.S08.L81.Nodes
 import HypercubeRamsey.S03.Height.Selection_p_height_small
 import HypercubeRamsey.S05.Stages_p_s05_h
-import HypercubeRamsey.S06.SelectionCounterexample_p_s06_c
 import HypercubeRamsey.S09.Core.Defs
 import HypercubeRamsey.S09.Core.Stages
 import HypercubeRamsey.S11.Needs_p_s11_a

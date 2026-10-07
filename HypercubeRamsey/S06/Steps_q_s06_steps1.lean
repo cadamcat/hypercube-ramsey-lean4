@@ -22,6 +22,119 @@ theorem pi_marginal_pr6 {ι : Type*} [Fintype ι] [DecidableEq ι]
   have h := FinProb.pi_marginal_expect P s f
   simpa [f, FinProb.expect, FinProb.pr] using h
 
+theorem keyNeighbor_bin_eq_of_interior6 {W : Type*} [Fintype W]
+    (binAdjacent : W → W → Prop) (h s : CoarseKey6 W)
+    (hs : s ∈ keyNeighborhood6 binAdjacent h) (hflag : h.2 = .interior) : s.1 = h.1 := by
+  have hadj : keyAdjacent6 binAdjacent h s := (Finset.mem_filter.mp hs).2
+  unfold keyAdjacent6 at hadj
+  rcases hadj with heq | hbin | hboundary
+  · exact (congrArg Prod.fst heq).symm
+  · exact hbin.symm
+  · rcases hboundary with ⟨hh, _, _⟩
+    rw [hflag] at hh
+    cases hh
+
+theorem tagLawAt_eq_of_parent_values6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (pv pv' : Par6 X.Bin N) (s : X.Key)
+    (hp : pv.val (primaryName6 s) = pv'.val (primaryName6 s))
+    (ho : pv.val (otherPrimaryName6 s) = pv'.val (otherPrimaryName6 s)) :
+    X.tagLawAt pv s = X.tagLawAt pv' s := by
+  unfold Ctx6.tagLawAt
+  rw [hp, ho]
+
+theorem tagLawAt_eq_of_local_interior6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (h s : X.Key) (hs : s ∈ X.C h) (hflag : h.2 = .interior)
+    (v : Fin N) (A A' : X.Bin → Fin N) (hA : A h.1 = A' h.1) :
+    X.tagLawAt (v, A) s = X.tagLawAt (v, A') s := by
+  have hbin : s.1 = h.1 := keyNeighbor_bin_eq_of_interior6 binAdjacent6 h s hs hflag
+  apply tagLawAt_eq_of_parent_values6 X (v, A) (v, A') s
+  · cases hsflag : s.2 <;>
+      simp [primaryName6, otherPrimaryName6, Par6.val, hbin, hA, hsflag]
+  · cases hsflag : s.2 <;>
+      simp [primaryName6, otherPrimaryName6, Par6.val, hbin, hA, hsflag]
+
+theorem tagLawAt_eq_of_local_boundary6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (h s : X.Key) (hs : s ∈ X.C h) (v : Fin N) (A A' : X.Bin → Fin N)
+    (hA : ∀ u ∈ X.binsOf (X.C h), A u = A' u) :
+    X.tagLawAt (v, A) s = X.tagLawAt (v, A') s := by
+  have hbin : s.1 ∈ X.binsOf (X.C h) := Finset.mem_image.mpr ⟨s, hs, rfl⟩
+  apply tagLawAt_eq_of_parent_values6 X (v, A) (v, A') s
+  · cases hsflag : s.2 <;>
+      simp [primaryName6, otherPrimaryName6, Par6.val, hsflag, hA s.1 hbin]
+  · cases hsflag : s.2 <;>
+      simp [primaryName6, otherPrimaryName6, Par6.val, hsflag, hA s.1 hbin]
+
+set_option maxHeartbeats 600000 in
+theorem hidWeight_eq_of_local_interior6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (h : X.Key) (b b' : X.Base) (hflag : h.2 = .interior)
+    (hb : b.1 = b'.1) (hA : b.2.1 h.1 = b'.2.1 h.1)
+    (hI : ∀ s ∈ X.C h, b.2.2 s = b'.2.2 s) (y : Fin N) :
+    X.hidWeight b h (X.C h) y = X.hidWeight b' h (X.C h) y := by
+  have hpar : (X.parOf b).set (primaryName6 h) y =
+      (b.1, Function.update b.2.1 h.1 y) := by
+    simp [Ctx6.parOf, primaryName6, Par6.set, hflag]
+  have hpar' : (X.parOf b').set (primaryName6 h) y =
+      (b'.1, Function.update b'.2.1 h.1 y) := by
+    simp [Ctx6.parOf, primaryName6, Par6.set, hflag]
+  cases hflag' : h.2
+  · simp only [Ctx6.hidWeight, hflag']
+    rw [hpar, hpar']
+    have hprior : (X.candLaw b.1).w y = (X.candLaw b'.1).w y := congrArg (fun z => (X.candLaw z).w y) hb
+    have hprod : (∏ s ∈ X.C h,
+        (X.tagLawAt (b.1, Function.update b.2.1 h.1 y) s).w (b.2.2 s)) =
+        ∏ s ∈ X.C h,
+          (X.tagLawAt (b'.1, Function.update b'.2.1 h.1 y) s).w (b'.2.2 s) := by
+      apply Finset.prod_congr rfl
+      intro s hs
+      have hlaw : X.tagLawAt (b.1, Function.update b.2.1 h.1 y) s =
+          X.tagLawAt (b'.1, Function.update b'.2.1 h.1 y) s := by
+        rw [← hb]
+        apply tagLawAt_eq_of_local_interior6 X h s hs hflag'
+        simp [Function.update]
+      calc
+        (X.tagLawAt (b.1, Function.update b.2.1 h.1 y) s).w (b.2.2 s) =
+            (X.tagLawAt (b'.1, Function.update b'.2.1 h.1 y) s).w (b.2.2 s) :=
+              congrArg (fun μ => μ.w (b.2.2 s)) hlaw
+        _ = (X.tagLawAt (b'.1, Function.update b'.2.1 h.1 y) s).w (b'.2.2 s) := by
+              rw [hI s hs]
+    simpa only [hprior, hprod]
+  · rw [hflag] at hflag'
+    cases hflag'
+
+set_option maxHeartbeats 600000 in
+theorem hidWeight_eq_of_local_boundary6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (h : X.Key) (b b' : X.Base) (hflag : h.2 = .boundary)
+    (hb : b.1 = b'.1)
+    (hA : ∀ u ∈ X.binsOf (X.C h), b.2.1 u = b'.2.1 u)
+    (hI : ∀ s ∈ X.C h, b.2.2 s = b'.2.2 s) (y : Fin N) :
+    X.hidWeight b h (X.C h) y = X.hidWeight b' h (X.C h) y := by
+  have hpar : (X.parOf b).set (primaryName6 h) y = (y, b.2.1) := by
+    simp [Ctx6.parOf, primaryName6, Par6.set, hflag]
+  have hpar' : (X.parOf b').set (primaryName6 h) y = (y, b'.2.1) := by
+    simp [Ctx6.parOf, primaryName6, Par6.set, hflag]
+  cases hflag' : h.2
+  · rw [hflag] at hflag'
+    cases hflag'
+  · simp only [Ctx6.hidWeight, hflag']
+    rw [hpar, hpar']
+    have hcandprod : (∏ u ∈ X.binsOf (X.C h), (X.candLaw y).w (b.2.1 u)) =
+        ∏ u ∈ X.binsOf (X.C h), (X.candLaw y).w (b'.2.1 u) := by
+      apply Finset.prod_congr rfl
+      intro u hu
+      exact congrArg (fun z => (X.candLaw y).w z) (hA u hu)
+    have htagprod : (∏ s ∈ X.C h, (X.tagLawAt (y, b.2.1) s).w (b.2.2 s)) =
+        ∏ s ∈ X.C h, (X.tagLawAt (y, b'.2.1) s).w (b'.2.2 s) := by
+      apply Finset.prod_congr rfl
+      intro s hs
+      have hlaw : X.tagLawAt (y, b.2.1) s = X.tagLawAt (y, b'.2.1) s :=
+        tagLawAt_eq_of_local_boundary6 X h s hs y b.2.1 b'.2.1 hA
+      rw [hlaw, hI s hs]
+    simpa only [hcandprod, htagprod]
 theorem restricted_weight_formula6 {α : Type*} [Fintype α]
     (P : FinProb α) (A : α → Prop) (a₀ a : α) (hA : 0 < P.pr A) :
     (restrictOr6 P A a₀).w a = (if A a then P.w a else 0) / P.pr A := by
@@ -247,6 +360,19 @@ theorem parent_heavy_related_of_local_support
       have hheavy := hheavyPrime _ hinitSupp.2
       have hrel := hcandSupp.1
       simpa [primaryName6, otherPrimaryName6, hflag, Par6.val, pv] using ⟨hheavy, hrel⟩
+
+theorem tagLaw_dom_of_base_support6 {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M)
+    (hTagDom : ∀ (pv : Par6 X.Bin N) (h : X.Key),
+      pv.val (primaryName6 h) ∈ X.par.heavy →
+        related6 E G M (pv.val (primaryName6 h)) (pv.val (otherPrimaryName6 h)) →
+          ∀ i, (X.tagLawAt pv h).w i ≤ (n : ℝ) ^ d₀ * M.Λ i)
+    (b : X.Base) (h : X.Key)
+    (hinit : 0 < X.initLaw.w b.1)
+    (hcand : 0 < (X.candLaw b.1).w (b.2.1 h.1)) :
+    ∀ i, (X.tagLawAt (X.parOf b) h).w i ≤ (n : ℝ) ^ d₀ * M.Λ i := by
+  have hparent := parent_heavy_related_of_local_support X h b hinit hcand
+  exact hTagDom (X.parOf b) h hparent.1 hparent.2
 
 theorem occType_obs_card_le {γ p₀ K : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} (X : Ctx6 γ p₀ K n N E G M) (β : X.Ty)

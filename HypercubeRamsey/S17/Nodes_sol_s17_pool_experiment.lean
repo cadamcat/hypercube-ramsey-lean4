@@ -387,4 +387,336 @@ theorem uniform_bin_restores_label {κ : CConsts} {T : Stage} {k : ℕ}
     · simp
   · simp [hPT.law_supported i y hy, FinLaw.E]
 
+/-- At a fixed pool the full experiment is an own-tape sum followed by a
+product of external singleton atoms. -/
+theorem freshEventProbability_star_sum {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (heven : IsEvenRole v) (pools : D.PoolAssignment) :
+    D.freshEventProbability v pools =
+      ∑ s : D.F.State (D.G.cellOf v),
+        (D.F.fresh (D.G.cellOf v) (pools (D.G.cellOf v))).w s *
+          ∑ ys : {w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k),
+            (∏ w, (externalLabelLaw D pools w.1).w (ys w)) *
+              if D.gateBad v (D.F.prior (D.G.cellOf v) s v)
+                (D.labelsOfPinnedSample v (T.S.N_pos k) ys) then 1 else 0 := by
+  classical
+  rw [freshEventProbability_star D K hQuant v heven pools]
+  unfold FinLaw.pr
+  let e := Equiv.piOptionEquivProd (β := StarDatum D v)
+  let f : (∀ i, StarDatum D v i) → ℝ := fun z =>
+    if D.gateBad v (D.F.prior (D.G.cellOf v) (z none) v)
+      (D.labelsOfPinnedSample v (T.S.N_pos k) (fun w => z (some w))) then
+        (FinLaw.pi (starDatumLaw D v pools)).w z else 0
+  change (∑ z, f z) = _
+  have heq : (∑ z, f z) = ∑ p, f (e.symm p) :=
+    Fintype.sum_equiv e f (fun p => f (e.symm p)) (fun z => by simp)
+  rw [heq, Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro s hs
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro ys hys
+  change (if D.gateBad v (D.F.prior (D.G.cellOf v) s v)
+      (D.labelsOfPinnedSample v (T.S.N_pos k) ys) then
+        ∏ i, (starDatumLaw D v pools i).w
+          ((Equiv.piOptionEquivProd (β := StarDatum D v)).symm (s, ys) i) else 0) = _
+  rw [Fintype.prod_option]
+  by_cases h : D.gateBad v (D.F.prior (D.G.cellOf v) s v)
+      (D.labelsOfPinnedSample v (T.S.N_pos k) ys)
+  · simp [h, starDatumLaw, Equiv.piOptionEquivProd]
+  · simp [h]
+
+/-- The product of actual slot weights averages into the product of the
+singleton slot averages. -/
+theorem slot_average_product {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (pools : D.PoolAssignment)
+    (hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w))
+    (ys : {w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k)) :
+    (FinLaw.pi (fun w : {w : Pos T k // w ∈ D.externalEarly v} =>
+      FinLaw.uniform (Finset.univ : Finset (Fin (D.G.nslot (D.G.cellOf w.1))))
+        ⟨⟨0, hL w.1 w.2⟩, Finset.mem_univ _⟩)).E (fun slots =>
+          ∏ w, externalSlotWeight D K hQuant w.1 (pools (D.G.cellOf w.1)) (slots w) (ys w)) =
+      ∏ w, (∑ j, externalSlotWeight D K hQuant w.1 (pools (D.G.cellOf w.1)) j (ys w)) /
+        (D.G.nslot (D.G.cellOf w.1) : ℝ) := by
+  classical
+  let P : ∀ w : {w : Pos T k // w ∈ D.externalEarly v},
+      FinLaw (Fin (D.G.nslot (D.G.cellOf w.1))) := fun w =>
+    FinLaw.uniform Finset.univ ⟨⟨0, hL w.1 w.2⟩, Finset.mem_univ _⟩
+  change (FinLaw.pi P).E (fun slots =>
+    ∏ w, externalSlotWeight D K hQuant w.1 (pools (D.G.cellOf w.1)) (slots w) (ys w)) = _
+  rw [Lane_q_s17_pool.pi_expect_prod P
+    (fun w j => externalSlotWeight D K hQuant w.1 (pools (D.G.cellOf w.1)) j (ys w))]
+  apply Finset.prod_congr rfl
+  intro w hw
+  unfold FinLaw.E P
+  simp only [FinLaw.uniform, Finset.mem_univ, ite_true, Finset.card_univ, Fintype.card_fin]
+  rw [← Finset.mul_sum]
+  ring
+
+/-- Expanding the fresh star and using all singleton comparisons gives the
+actual independently selected-slot experiment, with one error factor per
+external incidence. -/
+theorem fresh_star_slot_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (heven : IsEvenRole v) (pools : D.PoolAssignment)
+    (htyp : D.LocalPoolsTypical v pools)
+    (hodd : ∀ w ∈ D.externalEarly v, ¬ IsEvenRole w)
+    (hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w)) :
+    D.freshEventProbability v pools ≤
+      (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) ^ (D.externalEarly v).card *
+        ∑ s : D.F.State (D.G.cellOf v),
+          (D.F.fresh (D.G.cellOf v) (pools (D.G.cellOf v))).w s *
+            ∑ ys : {w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k),
+              (FinLaw.pi (fun w : {w : Pos T k // w ∈ D.externalEarly v} =>
+                FinLaw.uniform (Finset.univ : Finset (Fin (D.G.nslot (D.G.cellOf w.1))))
+                  ⟨⟨0, hL w.1 w.2⟩, Finset.mem_univ _⟩)).E (fun slots =>
+                    ∏ w, externalSlotWeight D K hQuant w.1
+                      (pools (D.G.cellOf w.1)) (slots w) (ys w)) *
+                if D.gateBad v (D.F.prior (D.G.cellOf v) s v)
+                  (D.labelsOfPinnedSample v (T.S.N_pos k) ys) then 1 else 0 := by
+  classical
+  let ε : ℝ := 1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)
+  have hε : 0 ≤ ε := add_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+  have hExtTyp (w : {w : Pos T k // w ∈ D.externalEarly v}) :
+      D.F.typical (D.G.cellOf w.1) (pools (D.G.cellOf w.1)) :=
+    htyp _ (Finset.mem_union.mpr (Or.inr (Finset.mem_image.mpr ⟨w.1, w.2, rfl⟩)))
+  rw [freshEventProbability_star_sum D K hQuant v heven pools, Finset.mul_sum]
+  apply Finset.sum_le_sum
+  intro s hs
+  rw [mul_left_comm]
+  apply mul_le_mul_of_nonneg_left _ ((D.F.fresh _ _).nonneg s)
+  rw [Finset.mul_sum]
+  apply Finset.sum_le_sum
+  intro ys hys
+  let A : {w : Pos T k // w ∈ D.externalEarly v} → ℝ := fun w =>
+    (∑ j, externalSlotWeight D K hQuant w.1 (pools (D.G.cellOf w.1)) j (ys w)) /
+      (D.G.nslot (D.G.cellOf w.1) : ℝ)
+  have hprod : (∏ w, (externalLabelLaw D pools w.1).w (ys w)) ≤
+      ε ^ (D.externalEarly v).card * ∏ w, A w := by
+    calc
+      _ ≤ ∏ w, ε * A w := by
+        apply Finset.prod_le_prod₀
+        · intro w hw
+          exact (externalLabelLaw D pools w.1).nonneg (ys w)
+        · intro w hw
+          exact singleton_le_slot_average D K hQuant w.1 pools (hExtTyp w)
+            (hodd w.1 w.2) (hL w.1 w.2) (ys w)
+      _ = ε ^ (D.externalEarly v).card * ∏ w, A w := by
+        rw [Finset.prod_mul_distrib, Finset.prod_const, Finset.card_univ, Fintype.card_coe]
+  have hAvg := slot_average_product D K hQuant v pools hL ys
+  dsimp [A] at hprod
+  rw [← Finset.univ_eq_attach] at hprod
+  rw [← hAvg] at hprod
+  have hh := mul_le_mul_of_nonneg_right hprod
+    (show 0 ≤ (if D.gateBad v (D.F.prior (D.G.cellOf v) s v)
+      (D.labelsOfPinnedSample v (T.S.N_pos k) ys) then (1 : ℝ) else 0) by split_ifs <;> norm_num)
+  convert hh using 1 <;> ring
+
+/-- Every actual slot in the cell scope of one star. -/
+noncomputable def starSlots {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT) (v : Pos T k) :
+    Finset (Σ C : D.G.Cell, Fin (D.G.nslot C)) :=
+  (D.scopeCells v).sigma (fun _ => Finset.univ)
+
+theorem starSlots_card_le {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (hn : 2 ≤ T.S.n k) : (starSlots D v).card ≤ (T.S.n k) ^ (κ.Ac + 4) := by
+  classical
+  let n := T.S.n k
+  have hscope : (D.scopeCells v).card ≤ n + 1 := by
+    unfold ListGateContext.scopeCells
+    calc
+      _ ≤ ({D.G.cellOf v} : Finset D.G.Cell).card +
+          ((D.externalEarly v).image D.G.cellOf).card := Finset.card_union_le _ _
+      _ ≤ 1 + (D.externalEarly v).card := by
+        simp only [Finset.card_singleton]
+        exact Nat.add_le_add_left (Finset.card_image_le) 1
+      _ ≤ n + 1 := by have he := Lane_q_s17_pool.externalEarly_card_le D v; omega
+  have hslots (C : D.G.Cell) : D.G.nslot C ≤ n ^ (κ.Ac + 1) := by
+    have hh := hQuant.geometry.slots_upper C
+    rw [show (κ.Ac : ℝ) + 1 = ((κ.Ac + 1 : ℕ) : ℝ) by push_cast; rfl] at hh
+    change (D.G.nslot C : ℝ) ≤ (T.S.n k : ℝ) ^ ((κ.Ac + 1 : ℕ) : ℝ) at hh
+    rw [Real.rpow_natCast (T.S.n k : ℝ) (κ.Ac + 1)] at hh
+    exact_mod_cast hh
+  unfold starSlots
+  rw [Finset.card_sigma]
+  simp only [Finset.card_univ, Fintype.card_fin]
+  calc
+    _ ≤ ∑ _C ∈ D.scopeCells v, n ^ (κ.Ac + 1) :=
+      Finset.sum_le_sum (fun C _ => hslots C)
+    _ = (D.scopeCells v).card * n ^ (κ.Ac + 1) := by simp
+    _ ≤ (n + 1) * n ^ (κ.Ac + 1) := Nat.mul_le_mul_right _ hscope
+    _ ≤ n ^ 2 * n ^ (κ.Ac + 1) := by
+      apply Nat.mul_le_mul_right
+      dsimp [n] at hn ⊢
+      nlinarith
+    _ = n ^ (κ.Ac + 3) := by rw [← pow_add]; congr 1; omega
+    _ ≤ n ^ (κ.Ac + 4) := Nat.pow_le_pow_right (by dsimp [n]; omega) (by omega)
+
+/-- Reading all slots of the local scope is still polynomially small, so
+the quantitative producer comparison applies directly to any local pool test. -/
+theorem local_pool_iid_comparison {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (hn : 2 ≤ T.S.n k) (μ : FinLaw D.PoolAssignment)
+    (hμ : D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ) :
+    ∃ ν : FinLaw D.PoolAssignment,
+      (ν = iidPoolLaw D.G hQuant.pool_support_nonempty ∨
+        ∃ (pin : D.PoolPin) (hpin : 0 < ∑ pools ∈ D.poolPinSet pin,
+          (iidPoolLaw D.G hQuant.pool_support_nonempty).w pools),
+          ν = FinLaw.cond (iidPoolLaw D.G hQuant.pool_support_nonempty) (D.poolPinSet pin) hpin) ∧
+      ∀ f : D.PoolAssignment → ℝ, (∀ pools, 0 ≤ f pools) →
+        (∀ p q, (∀ C ∈ D.scopeCells v, p C = q C) → f p = f q) →
+        μ.E f ≤ (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) * ν.E f := by
+  obtain ⟨ν, hν, hcompare⟩ := hQuant.pool_iid_comparison μ hμ
+  refine ⟨ν, hν, fun f hf hlocal => ?_⟩
+  apply hcompare (starSlots D v) f (starSlots_card_le D K hQuant v hn) hf
+  intro p q hslots
+  apply hlocal p q
+  intro C hC
+  funext j
+  exact hslots ⟨C, j⟩ (by simp [starSlots, Finset.mem_sigma, hC])
+
+/-- The local typicality and compatibility tests read only pools in the star scope. -/
+theorem pool_predicates_local {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT) (v : Pos T k)
+    (p q : D.PoolAssignment) (h : ∀ C ∈ D.scopeCells v, p C = q C) :
+    (D.LocalPoolsTypical v p ↔ D.LocalPoolsTypical v q) ∧
+      (D.compatiblePool v p ↔ D.compatiblePool v q) := by
+  classical
+  have ho : p (D.G.cellOf v) = q (D.G.cellOf v) := h _ (by simp [ListGateContext.scopeCells])
+  have he (w : Pos T k) (hw : w ∈ D.externalEarly v) :
+      p (D.G.cellOf w) = q (D.G.cellOf w) :=
+    h _ (Finset.mem_union.mpr (Or.inr (Finset.mem_image.mpr ⟨w, hw, rfl⟩)))
+  constructor
+  · constructor
+    · intro ht C hC
+      rw [← h C hC]
+      exact ht C hC
+    · intro ht C hC
+      rw [h C hC]
+      exact ht C hC
+  · constructor
+    · intro hc pins hpins hcard fixed hperm
+      have hf : ∀ w ∈ pins, fixed w ∈ D.permittedLabels (D.G.cellOf w) (p (D.G.cellOf w)) w := by
+        intro w hw
+        rw [he w (hpins hw)]
+        exact hperm w hw
+      simpa only [ho] using hc pins hpins hcard fixed hf
+    · intro hc pins hpins hcard fixed hperm
+      have hf : ∀ w ∈ pins, fixed w ∈ D.permittedLabels (D.G.cellOf w) (q (D.G.cellOf w)) w := by
+        intro w hw
+        rw [← he w (hpins hw)]
+        exact hperm w hw
+      simpa only [ho] using hc pins hpins hcard fixed hf
+
+/-- The exact fresh star probability also depends only on the local pool scope. -/
+theorem fresh_probability_local {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k) (heven : IsEvenRole v)
+    (p q : D.PoolAssignment) (h : ∀ C ∈ D.scopeCells v, p C = q C) :
+    D.freshEventProbability v p = D.freshEventProbability v q := by
+  classical
+  have ho : p (D.G.cellOf v) = q (D.G.cellOf v) := h _ (by simp [ListGateContext.scopeCells])
+  have he (w : {w : Pos T k // w ∈ D.externalEarly v}) :
+      externalLabelLaw D p w.1 = externalLabelLaw D q w.1 := by
+    unfold externalLabelLaw
+    rw [h _ (Finset.mem_union.mpr (Or.inr (Finset.mem_image.mpr ⟨w.1, w.2, rfl⟩)))]
+  rw [freshEventProbability_star_sum D K hQuant v heven p,
+    freshEventProbability_star_sum D K hQuant v heven q, ho]
+  simp_rw [he]
+
+/-- The permutation-pool repeated-trial moment reduces to a raw or one-pin
+iid experiment with the producer's single comparison factor. -/
+theorem trial_moment_iid_reduction {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k) (heven : IsEvenRole v)
+    (hn : 2 ≤ T.S.n k) (μ : FinLaw D.PoolAssignment)
+    (hμ : D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ) (m : ℕ) :
+    ∃ ν : FinLaw D.PoolAssignment,
+      (ν = iidPoolLaw D.G hQuant.pool_support_nonempty ∨
+        ∃ (pin : D.PoolPin) (hpin : 0 < ∑ pools ∈ D.poolPinSet pin,
+          (iidPoolLaw D.G hQuant.pool_support_nonempty).w pools),
+          ν = FinLaw.cond (iidPoolLaw D.G hQuant.pool_support_nonempty) (D.poolPinSet pin) hpin) ∧
+      μ.E (fun pools => if D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools then
+          (D.freshEventProbability v pools) ^ m else 0) ≤
+        (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) *
+          ν.E (fun pools => if D.LocalPoolsTypical v pools ∧ D.compatiblePool v pools then
+            (D.freshEventProbability v pools) ^ m else 0) := by
+  classical
+  obtain ⟨ν, hν, hcompare⟩ := local_pool_iid_comparison D K hQuant v hn μ hμ
+  refine ⟨ν, hν, hcompare _ ?_ ?_⟩
+  · intro pools
+    split_ifs
+    · apply pow_nonneg
+      unfold ListGateContext.freshEventProbability FinLaw.pr
+      exact Finset.sum_nonneg (fun s _ => by split_ifs; exact (D.freshConfigLaw pools).nonneg s; exact le_rfl)
+    · exact le_rfl
+  · intro p q hlocal
+    obtain ⟨ht, hc⟩ := pool_predicates_local D v p q hlocal
+    have hf := fresh_probability_local D K hQuant v heven p q hlocal
+    simp only [ht, hc, hf]
+
+/-- Uniform independent coordinates give the uniform law on all assignments. -/
+theorem uniform_pi {I : Type*} [Fintype I] [DecidableEq I]
+    {Ω : I → Type*} [∀ i, Fintype (Ω i)]
+    (hΩ : ∀ i, (Finset.univ : Finset (Ω i)).Nonempty)
+    (hAll : (Finset.univ : Finset (∀ i, Ω i)).Nonempty) :
+    FinLaw.pi (fun i => FinLaw.uniform Finset.univ (hΩ i)) =
+      FinLaw.uniform Finset.univ hAll := by
+  classical
+  apply finLaw_ext
+  intro s
+  simp only [FinLaw.pi, FinLaw.uniform, Finset.mem_univ, ite_true, Finset.card_univ]
+  rw [Fintype.card_pi]
+  push_cast
+  rw [Finset.prod_div_distrib]
+  simp
+
+/-- A coordinate pin in a product law leaves all other coordinates independent. -/
+theorem pi_condition_coordinate {I : Type*} [Fintype I] [DecidableEq I]
+    {Ω : I → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (j : I) (y : Ω j)
+    (hp : 0 < ∑ s ∈ Finset.univ.filter (fun s : ∀ i, Ω i => s j = y), (FinLaw.pi P).w s) :
+    FinLaw.cond (FinLaw.pi P) (Finset.univ.filter (fun s : ∀ i, Ω i => s j = y)) hp =
+      FinLaw.pi (fun i => if h : i = j then
+        (h.symm ▸ FinLaw.dirac y : FinLaw (Ω i)) else P i) := by
+  classical
+  let base : ∀ i, Ω i := Classical.choice (S16.Lane_q_s16_comp2.nonempty_of_finLaw (FinLaw.pi P))
+  let z := Function.update base j y
+  have hcoord : (FinLaw.pi P).pr (fun s => s j = y) = (P j).w y := by
+    have h := S16.Lane_q_s16_comp2.pi_pr_cylinder P {j} z
+    simpa [z] using h
+  have hMass : (∑ s ∈ Finset.univ.filter (fun s : ∀ i, Ω i => s j = y), (FinLaw.pi P).w s) =
+      (P j).w y := by
+    simpa [FinLaw.pr, Finset.sum_filter] using hcoord
+  have hpy : 0 < (P j).w y := hMass ▸ hp
+  apply finLaw_ext
+  intro s
+  simp only [FinLaw.cond, hMass, Finset.mem_filter, Finset.mem_univ, true_and]
+  by_cases hsy : s j = y
+  · simp only [hsy, ite_true]
+    change (∏ i, (P i).w (s i)) / (P j).w y =
+      ∏ i, (if h : i = j then (h.symm ▸ FinLaw.dirac y : FinLaw (Ω i)) else P i).w (s i)
+    rw [← Finset.prod_erase_mul _ _ (Finset.mem_univ j)]
+    rw [← Finset.prod_erase_mul _ _ (Finset.mem_univ j)]
+    simp only [dite_true, FinLaw.dirac, hsy, ite_true, mul_one]
+    have hOther : (∏ i ∈ Finset.univ.erase j,
+        (if h : i = j then (h.symm ▸ FinLaw.dirac y : FinLaw (Ω i)) else P i).w (s i)) =
+        ∏ i ∈ Finset.univ.erase j, (P i).w (s i) := by
+      apply Finset.prod_congr rfl
+      intro i hi
+      simp [Finset.ne_of_mem_erase hi]
+    exact (mul_div_cancel_right₀ _ hpy.ne').trans (by
+      simpa only [FinLaw.dirac] using hOther.symm)
+  · simp only [hsy, ite_false, zero_div]
+    symm
+    apply Finset.prod_eq_zero (Finset.mem_univ j)
+    simp [FinLaw.dirac, hsy]
+
 end HypercubeRamsey.Lane_sol_s17_pool

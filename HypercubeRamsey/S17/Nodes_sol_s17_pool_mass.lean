@@ -295,4 +295,289 @@ theorem forced_permission_average {κ : CConsts} {T : Stage} {k : ℕ}
   rw [hE]
   exact mul_le_mul_of_nonneg_left hBase hK
 
+/-- Small degree errors retain the prescribed ninety-percent pin threshold. -/
+theorem short_hit_mass_threshold (s : ℕ) (err : ℝ) (he : 0 ≤ err)
+    (heSmall : err ≤ 1 / 4) (hs : 2 * (s : ℝ) * err ≤ 1 / 10) :
+    (9 / 10 : ℝ) * Real.rpow 2 (-(s : ℝ)) ≤ (1 / 2 - err) ^ s := by
+  have hBern : 1 + (s : ℝ) * (-2 * err) ≤ (1 + (-2 * err)) ^ s :=
+    one_add_mul_le_pow (by linarith) s
+  have hPower : (9 / 10 : ℝ) ≤ (1 - 2 * err) ^ s := by
+    rw [show 1 + (-2 * err) = 1 - 2 * err by ring] at hBern
+    exact (show (9 / 10 : ℝ) ≤ 1 + (s : ℝ) * (-2 * err) by nlinarith).trans hBern
+  have hTwo : Real.rpow (2 : ℝ) (-(s : ℝ)) = (1 / 2 : ℝ) ^ s := by
+    change ((2 : ℝ) ^ (-(s : ℝ))) = (1 / 2 : ℝ) ^ s
+    rw [Real.rpow_neg (x := (2 : ℝ)) (y := (s : ℝ)) (by norm_num), Real.rpow_natCast]
+    simp [one_div, inv_pow]
+  rw [hTwo, show (1 / 2 - err) = (1 / 2 : ℝ) * (1 - 2 * err) by ring, mul_pow]
+  simpa [mul_comm] using mul_le_mul_of_nonneg_left hPower
+    (pow_nonneg (by norm_num : (0 : ℝ) ≤ 1 / 2) s)
+
+/-- The adaptive small-width estimate reaches the exact compatibility
+threshold for a fixed set of independent unforced bin labels. -/
+theorem independent_pin_mass_tail {T : Stage} {k s : ℕ}
+    {wS wL err W : ℝ} (hDisc : TwoBudgetDisc T k wS wL err)
+    (c : Colour) (μ : Law (T.S.N k)) (ν : Fin s → Law (T.S.N k))
+    (hμ : μ.SupportedIn (T.X k)) (he : 0 ≤ err) (heSmall : err ≤ 1 / 4)
+    (hs : 2 * (s : ℝ) * err ≤ 1 / 10)
+    (hCap : μ.CapLE (Real.exp wS * (1 / 2 - err) ^ s))
+    (hν : ∀ i, (ν i).SupportedIn (T.Y k)) (hνW : ∀ i, (ν i).WidthLE W) :
+    (FinLaw.pi fun i => ListGateContext.lawAsFinLaw (ν i)).pr (fun ys =>
+      productMass μ (fun _ x y => hit (T.S.E k) c x y) ys <
+        (9 / 10 : ℝ) * Real.rpow 2 (-(s : ℝ))) ≤
+      (s : ℝ) * (2 * Real.exp (W - wL)) := by
+  have ht := independent_hits_lower_tail hDisc c μ ν hμ (by linarith) he hCap hν hνW
+  apply le_trans _ ht
+  apply Lane_q_s17_pool.pr_mono
+  intro ys hy
+  exact hy.trans_le (short_hit_mass_threshold s err he heSmall hs)
+
+/-- The unforced-label compatibility tail remains uniform after averaging
+the actual fresh own tape on any typical own pool, including a pinned one. -/
+theorem fresh_own_independent_pin_mass_tail {κ : CConsts} {T : Stage} {k s : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k) (heven : IsEvenRole v)
+    (P : D.F.Pool (D.G.cellOf v)) (htyp : D.F.typical (D.G.cellOf v) P)
+    {wS wL err W : ℝ} (hDisc : TwoBudgetDisc T k wS wL err)
+    (ν : Fin s → Law (T.S.N k)) (he : 0 ≤ err) (heSmall : err ≤ 1 / 4)
+    (hs : 2 * (s : ℝ) * err ≤ 1 / 10)
+    (hCap : ∀ σ, D.ValidInitialPrior v σ → ∀ hσ : D.CleanInitialPrior v σ,
+      (cleanPriorLaw D v σ hσ).CapLE (Real.exp wS * (1 / 2 - err) ^ s))
+    (hν : ∀ i, (ν i).SupportedIn (T.Y k)) (hνW : ∀ i, (ν i).WidthLE W) :
+    (FinLaw.bind (D.F.fresh (D.G.cellOf v) P)
+      (fun _ => FinLaw.pi fun i => ListGateContext.lawAsFinLaw (ν i))).pr (fun ω =>
+        (∑ x, D.F.prior (D.G.cellOf v) ω.1 v x *
+          ∏ i, hit (T.S.E k) PT.tiling.c x (ω.2 i)) <
+            (9 / 10 : ℝ) * Real.rpow 2 (-(s : ℝ))) ≤
+      (s : ℝ) * (2 * Real.exp (W - wL)) := by
+  classical
+  let ρ := (s : ℝ) * (2 * Real.exp (W - wL))
+  rw [bind_pr]
+  change (D.F.fresh (D.G.cellOf v) P).E _ ≤ ρ
+  calc
+    _ ≤ ∑ t, (D.F.fresh (D.G.cellOf v) P).w t * ρ := by
+      apply Finset.sum_le_sum
+      intro t ht
+      by_cases hz : (D.F.fresh (D.G.cellOf v) P).w t = 0
+      · simp [hz]
+      · have hp : 0 < (D.F.fresh (D.G.cellOf v) P).w t :=
+          lt_of_le_of_ne ((D.F.fresh _ _).nonneg t) (Ne.symm hz)
+        have hsv := D.fresh_spec.fresh_valid _ _ t htyp hp
+        have hclean := hQuant.prior_shape v P t heven htyp hsv
+        have hvalid : D.ValidInitialPrior v (D.F.prior (D.G.cellOf v) t v) :=
+          ⟨hclean, P, t, htyp, hsv, fun _ => rfl⟩
+        apply mul_le_mul_of_nonneg_left _ ((D.F.fresh _ _).nonneg t)
+        exact independent_pin_mass_tail hDisc PT.tiling.c (cleanPriorLaw D v _ hclean) ν
+          (cleanPriorLaw_supported D v _ hclean) he heSmall hs
+          (hCap _ hvalid hclean) hν hνW
+    _ = ρ := by rw [← Finset.sum_mul, (D.F.fresh _ _).sum_one, one_mul]
+
+/-- Restriction does not enlarge the original cleaned corner support. -/
+theorem restricted_row_corner_support {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) (τ : Law (T.S.N k))
+    (a : PT.mesh.V) (hσ : ∀ x, σ x ≠ 0 → x ∈ PT.mesh.corner a (D.G.patchOf v))
+    (f : Fin (T.S.N k) → ℝ) (Z : ℝ) (hZ : 0 < Z)
+    (hrow : ∀ x, Z * τ.w x = σ x * f x) :
+    τ.SupportedIn (PT.mesh.corner a (D.G.patchOf v)) := by
+  intro x hx
+  have hz : σ x = 0 := by by_contra hne; exact hx (hσ x hne)
+  have hh := hrow x
+  rw [hz, zero_mul] at hh
+  exact (mul_eq_zero.mp hh).resolve_left hZ.ne'
+
+/-- Construct the homogeneous bulk experiment on its actual cleaned corner.
+Only the quantitative width, degree, clique-scale and gamma budgets remain
+to be supplied by the mode-dependent calculation. -/
+noncomputable def cornerHomogeneousInput {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    (D : ListGateContext κ T k PT) (v : Pos T k)
+    (a : PT.mesh.V) (ha : a ∈ PT.activeVertices) (τ : Law (T.S.N k))
+    (d : ℕ) (hd : d ≤ T.S.n k)
+    (hτ : τ.SupportedIn (PT.mesh.corner a (D.G.patchOf v)))
+    (hτwidth : τ.WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)))
+    (hπwidth : (PT.π (D.G.patchOf v)).WidthLE ((T.S.n k : ℝ) ^ (κ.xs / 4)))
+    (C0 : ℝ)
+    (hGate : ∀ x ∈ PT.mesh.corner a (D.G.patchOf v),
+      S12.DegGate (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf v)).w C0 (bstar T k) x)
+    (hPos : ∀ x ∈ PT.mesh.corner a (D.G.patchOf v),
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf v)).w x)
+    (hQ : Real.log (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ) ≤
+      PT.tiling.Q (D.G.patchOf v) ∧ 1 ≤ (PT.tiling.Q (D.G.patchOf v) : ℝ))
+    (γ : ℝ)
+    (hγ : γ = Real.exp (Cstar κ.u κ.ξ * (PT.tiling.Q (D.G.patchOf v) : ℝ)) *
+      (PT.mesh.corner a (D.G.patchOf v)).sup'
+        (D.tiling_valid.corner_clean _ a ha).nonempty (fun x => τ.w x *
+          Real.rpow (deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf v)).w x) (-(d : ℝ))))
+    (hγ0 : 0 ≤ γ) (hγ1 : γ < 1) :
+    S12.HomogeneousInput κ hκ T k PT.tiling.c C0 := by
+  let i := D.G.patchOf v
+  have hClean := D.tiling_valid.corner_clean i a ha
+  have hSp : PT.mesh.corner a i ⊆ T.X k := by
+    intro x hx
+    exact (Finset.mem_sdiff.mp ((D.tiling_valid.tiling_valid.patch_supports i).2.1
+      ((D.tiling_valid.tiling_valid.patch_supports i).1 (hClean.sub hx)))).1
+  have hπY : (PT.π i).SupportedIn (T.Y k) := by
+    intro y hy
+    apply D.tiling_valid.law_supported i y
+    intro hyY
+    exact hy (Finset.mem_sdiff.mp ((D.tiling_valid.tiling_valid.patch_supports i).2.2.2
+      ((D.tiling_valid.tiling_valid.patch_supports i).2.2.1 hyY))).1
+  refine {
+    S := {
+      d := d
+      d_le := hd
+      τ := τ
+      π := fun _ => PT.π i
+      τ_supp := fun x hx => hτ x (fun hxSp => hx (hSp hxSp))
+      π_supp := fun _ => hπY
+      τ_width := hτwidth
+      π_width := fun _ => hπwidth }
+    π := PT.π i
+    homogeneous := fun _ => rfl
+    Sp := PT.mesh.corner a i
+    Sp_nonempty := hClean.nonempty
+    Sp_subset := hSp
+    τ_supported := hτ
+    π_supported := hπY
+    degree_gate := hGate
+    degree_positive := hPos
+    Q := PT.tiling.Q i
+    Q_large := hQ
+    noClique := hClean.noClique
+    gamma := γ
+    gamma_eq := hγ
+    gamma_nonneg := hγ0
+    gamma_lt_one := hγ1 }
+
+/-- S12's homogeneous lower tail applies directly to the bulk product of
+hit ratios used by the actual initial row. -/
+theorem homogeneous_bulk_product_tail (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) (c : Colour) (C0 : ℝ) (hC0 : 1 ≤ C0) :
+    ∀ᶠ k in atTop, ∀ (H : S12.HomogeneousInput κ hκ T k c C0)
+      (t : ℝ), 0 ≤ t → t < 1 →
+      (FinLaw.pi fun _ : Fin H.S.d => ListGateContext.lawAsFinLaw H.π).pr (fun ys =>
+        productMass H.S.τ (fun _ x y => hit (T.S.E k) c x y / deg (T.S.E k) c H.π.w x) ys < t) ≤
+          (1 - t) ^ (-(κ.u : ℝ)) *
+            ((T.S.n k : ℝ) ^ (-(3 * (κ.R : ℝ))) + 4 ^ (κ.u + 1) * H.gamma) := by
+  have hm := S12.moderate_moment κ hκ T hDeep c C0 hC0
+  have hp := S12.homogeneous_peeling κ hκ T hDeep c C0 hC0 hm
+  have hTail := S12.homogeneous_lower_tail κ hκ T hDeep c C0 hC0 hm hp
+  filter_upwards [hTail] with k hk
+  intro H t ht0 ht1
+  have hZ (ys : Fin H.S.d → Fin (T.S.N k)) :
+      S12.Zmass (T.S.E k) c H.S.τ.w (fun _ : Fin H.S.d => H.π.w) ys =
+        productMass H.S.τ (fun _ x y => hit (T.S.E k) c x y / deg (T.S.E k) c H.π.w x) ys := by
+    unfold S12.Zmass productMass
+    apply Finset.sum_congr rfl
+    intro x hx
+    congr 1
+    apply Finset.prod_congr rfl
+    intro l hl
+    unfold S12.acoef
+    ring
+  have h := hk H t ht0 ht1
+  simp_rw [hZ] at h
+  exact h
+
+/-- The external early incidence count retains the exact late-role saving
+used in the homogeneous gamma estimate. -/
+theorem externalEarly_late_budget {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k) (heven : IsEvenRole v)
+    (hh : (PT.tiling.P (D.G.patchOf v)).h ≤ T.S.n k) :
+    ((D.externalEarly v).card : ℝ) + (PT.tiling.P (D.G.patchOf v)).h +
+      κ.A0 * Real.log (T.S.n k : ℝ) / 2 ≤ (T.S.n k : ℝ) + 1 := by
+  classical
+  let I := PT.tiling.Icoord (D.G.patchOf v)
+  let L : Finset (Fin (T.S.n k)) := Finset.univ.filter fun j =>
+    (D.G.classOf (flipPos v j)).isSome
+  let E : Finset (Fin (T.S.n k)) := Finset.univ \ (I ∪ L)
+  have hnone (j : Fin (T.S.n k)) : D.G.classOf (flipPos v j) = none ↔ j ∉ L := by
+    cases h : D.G.classOf (flipPos v j) <;> simp [L, h]
+  have hExt : D.externalEarly v = E.image (flipPos v) := by
+    ext w
+    simp only [ListGateContext.externalEarly, Finset.mem_filter, Finset.mem_univ, true_and,
+      Finset.mem_image]
+    constructor
+    · rintro ⟨hclass, j, hj, rfl⟩
+      exact ⟨j, by simpa [E, I, Finset.mem_union] using And.intro hj ((hnone j).mp hclass), rfl⟩
+    · rintro ⟨j, hj, rfl⟩
+      have hj' : j ∉ I ∧ j ∉ L := by simpa [E] using hj
+      exact ⟨(hnone j).mpr hj'.2, j, hj'.1, rfl⟩
+  have hflip : Function.Injective (flipPos v) := by
+    intro a b hab
+    by_contra hne
+    have heq := congrArg (fun z : Pos T k => z a) hab
+    have hleft : flipPos v a a = !v a := by simp [flipPos]
+    have hright : flipPos v b a = v a := by simp [flipPos, hne]
+    rw [hleft, hright] at heq
+    cases hv : v a <;> simp [hv] at heq
+  have hExtCard : (D.externalEarly v).card = E.card := by
+    rw [hExt, Finset.card_image_of_injective _ hflip]
+  have hIcard : I.card = (PT.tiling.P (D.G.patchOf v)).h :=
+    Lane_q_s17_pool.tiling_internal_coord_card PT.tiling _ hh
+  have hLateI : I ∩ L = I.filter (fun j => (D.G.classOf (flipPos v j)).isSome) := by
+    ext j
+    simp [L]
+  have hOverlap : (I ∩ L).card ≤ 1 := by
+    rw [hLateI]
+    exact hQuant.geometry.internal_late_count v heven
+  have hComplement := Finset.card_sdiff_add_card_eq_card (Finset.subset_univ (I ∪ L))
+  have hUnion := Finset.card_union_add_card_inter I L
+  have hCount : (D.externalEarly v).card + (PT.tiling.P (D.G.patchOf v)).h + L.card ≤ T.S.n k + 1 := by
+    simp only [Finset.card_univ, Fintype.card_fin] at hComplement
+    dsimp [E] at hExtCard
+    omega
+  have hCountR : ((D.externalEarly v).card : ℝ) + (PT.tiling.P (D.G.patchOf v)).h +
+      (L.card : ℝ) ≤ (T.S.n k : ℝ) + 1 := by exact_mod_cast hCount
+  have hLate : (D.G.r : ℝ) / 2 ≤ (L.card : ℝ) := hQuant.geometry.late_count v heven
+  have hScale := hQuant.geometry.class_scale.1
+  linarith
+
+/-- Bounded-mode bulk degree drift has a fixed exponential cost rather than
+a polynomial loss with the arbitrary upstream geometry constant. -/
+theorem bounded_bulk_denominator_cost (n d : ℕ) (K D : ℝ)
+    (hn : 0 < (n : ℝ)) (hd : d ≤ n) (hK : 0 ≤ K)
+    (hSmall : 4 * K ≤ (n : ℝ)) (hD : (1 / 2 : ℝ) - K / n ≤ D) :
+    Real.rpow D (-(d : ℝ)) ≤ (2 : ℝ) ^ d * Real.exp (4 * K) := by
+  have hRatio : K / (n : ℝ) ≤ 1 / 4 := (div_le_iff₀ hn).2 (by linarith)
+  have hDquarter : (1 / 4 : ℝ) ≤ D := by linarith
+  have hDpos : 0 < D := lt_of_lt_of_le (by norm_num) hDquarter
+  have hTwoD : 0 < 2 * D := by positivity
+  have hInv : (2 * D)⁻¹ - 1 ≤ 4 * K / n := by
+    apply (le_div_iff₀ hn).2
+    have h' : (2 * D)⁻¹ - 1 = (1 - 2 * D) / (2 * D) := by field_simp <;> ring
+    rw [h']
+    have hLinear : (1 - 2 * D) * (n : ℝ) ≤ 2 * K := by
+      have hmul := mul_le_mul_of_nonneg_right hD hn.le
+      have hcancel : K / (n : ℝ) * n = K := div_mul_cancel₀ _ hn.ne'
+      nlinarith [hmul, hcancel]
+    rw [div_mul_eq_mul_div]
+    apply (div_le_iff₀ hTwoD).2
+    nlinarith
+  have hLog : -Real.log (2 * D) ≤ 4 * K / n := by
+    have hh := Real.one_sub_inv_le_log_of_pos hTwoD
+    linarith
+  have hDreal : (d : ℝ) ≤ (n : ℝ) := by exact_mod_cast hd
+  have hScale : -(d : ℝ) * Real.log (2 * D) ≤ 4 * K := by
+    have hh := mul_le_mul_of_nonneg_left hLog (Nat.cast_nonneg d)
+    have hnratio : (d : ℝ) / (n : ℝ) ≤ 1 := (div_le_one hn).2 hDreal
+    have hc := mul_le_mul_of_nonneg_left hnratio (show 0 ≤ 4 * K by positivity)
+    calc
+      _ = (d : ℝ) * (-Real.log (2 * D)) := by ring
+      _ ≤ (d : ℝ) * (4 * K / n) := hh
+      _ = 4 * K * ((d : ℝ) / n) := by ring
+      _ ≤ 4 * K := by simpa using hc
+  have hLogD : Real.log (2 * D) = Real.log 2 + Real.log D :=
+    Real.log_mul (by norm_num) hDpos.ne'
+  change D ^ (-(d : ℝ)) ≤ _
+  rw [Real.rpow_def_of_pos hDpos]
+  have hExp : Real.exp ((d : ℝ) * Real.log 2) = (2 : ℝ) ^ d := by
+    rw [Real.exp_nat_mul, Real.exp_log (by norm_num)]
+  calc
+    _ ≤ Real.exp ((d : ℝ) * Real.log 2 + 4 * K) := by
+      apply Real.exp_le_exp.mpr
+      nlinarith [hScale, hLogD]
+    _ = (2 : ℝ) ^ d * Real.exp (4 * K) := by rw [Real.exp_add, hExp]
+
 end HypercubeRamsey.Lane_sol_s17_pool

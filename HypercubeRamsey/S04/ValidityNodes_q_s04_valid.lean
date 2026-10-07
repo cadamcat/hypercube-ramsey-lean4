@@ -466,6 +466,162 @@ private theorem expect_pi_cons {α : Type*} [Fintype α] {k : ℕ}
   rw [hsumCons]
   simp [FinProb.pi, Finset.mul_sum, Fin.prod_univ_succ, mul_assoc, mul_comm, mul_left_comm]
 
+private theorem expect_if_eq {α : Type*} [Fintype α] [DecidableEq α]
+    (P : FinProb α) (a₀ : α) (c : ℝ) :
+    P.expect (fun a => if a = a₀ then c else 0) = P.w a₀ * c := by
+  classical
+  unfold FinProb.expect
+  rw [Finset.sum_eq_single a₀]
+  · simp
+  · intro a ha hne
+    simp [hne]
+  · simp
+
+private theorem expect_pi_prefix_fiber {α : Type*} [Fintype α] [DecidableEq α] {k : ℕ}
+    (Q : Fin k → FinProb α) (i : Fin k) (p : Fin i.val → α) (f : α → ℝ) :
+    (FinProb.pi Q).expect (fun x => if prefixVals x i = p then f (x i) else 0) =
+      (∏ j : Fin i.val, (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j)) * (Q i).expect f := by
+  induction k with
+  | zero => exact Fin.elim0 i
+  | succ k ih =>
+      cases i using Fin.cases with
+      | zero =>
+          have hpref (x : Fin (k + 1) → α) : prefixVals x 0 = p := by
+            funext j
+            exact Fin.elim0 j
+          have hcons := expect_pi_cons Q
+            (fun x => if prefixVals x 0 = p then f (x 0) else 0)
+          have htail (a : α) :
+              (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                  (fun x => if prefixVals (Fin.cons a x) 0 = p then f a else 0) = f a := by
+            have hf : (fun x : Fin k → α =>
+                if prefixVals (Fin.cons a x) 0 = p then f a else 0) = (fun _ => f a) := by
+              funext x
+              rw [if_pos (hpref (Fin.cons a x))]
+            rw [hf, FinProb.expect_const]
+          calc
+            _ = (Q 0).expect (fun a =>
+                  (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                    (fun x => if prefixVals (Fin.cons a x) 0 = p then f a else 0)) := hcons
+            _ = (Q 0).expect f := by
+                  congr 1
+                  funext a
+                  exact htail a
+            _ = _ := by
+              change (Q 0).expect f = 1 * (Q 0).expect f
+              ring
+      | succ i =>
+          let p₀ := p ⟨0, Nat.zero_lt_succ _⟩
+          let pt : Fin i.val → α := fun j => p j.succ
+          have hp : p = (Fin.cons (α := fun _ : Fin i.val.succ => α) p₀ pt) := by
+            funext j
+            cases j using Fin.cases with
+            | zero => simp [p₀]
+            | succ j => rfl
+          have hcons := expect_pi_cons Q
+            (fun x => if prefixVals x i.succ = p then f (x i.succ) else 0)
+          have hfun (a : α) (x : Fin k → α) :
+              (if prefixVals (Fin.cons (α := fun _ : Fin (k + 1) => α) a x) i.succ = p then
+                f ((Fin.cons (α := fun _ : Fin (k + 1) => α) a x) i.succ) else 0) =
+              (if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0) := by
+            rw [prefixVals_cons_succ, hp]
+            have hconsEq : (Fin.cons (α := fun _ : Fin i.val.succ => α) a (prefixVals x i)) =
+                (Fin.cons (α := fun _ : Fin i.val.succ => α) p₀ pt) ↔
+                a = p₀ ∧ prefixVals x i = pt := by
+              constructor
+              · intro h
+                constructor
+                · have h0 := congrFun h ⟨0, Nat.zero_lt_succ _⟩
+                  simpa using h0
+                · apply funext
+                  intro j
+                  have hj := congrFun h j.succ
+                  simpa using hj
+              · rintro ⟨ha, htail⟩
+                subst a
+                funext j
+                cases j using Fin.cases with
+                | zero => rfl
+                | succ j => simp [htail]
+            by_cases hc : a = p₀ ∧ prefixVals x i = pt
+            · have hceq := hconsEq.mpr hc
+              simp [hceq, hc]
+            · have hne : Fin.cons (α := fun _ : Fin i.val.succ => α) a
+                    (prefixVals x i) ≠ Fin.cons p₀ pt := by
+                  intro h
+                  exact hc (hconsEq.mp h)
+              have hcur :
+                  (Fin.cons (α := fun _ : Fin (k + 1) => α) a x) i.succ = x i := by simp
+              simp [hc, hne, hcur]
+          have hcons' : (FinProb.pi Q).expect
+              (fun x => if prefixVals x i.succ = p then f (x i.succ) else 0) =
+              (Q 0).expect (fun a => (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                (fun x => if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0)) := by
+            rw [hcons]
+            congr 1
+            funext a
+            congr 1
+            funext x
+            exact hfun a x
+          have htail := ih (fun j : Fin k => Q j.succ) i pt
+          have hsplit : (Q 0).expect (fun a =>
+              (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                (fun x => if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0)) =
+              (Q 0).w p₀ *
+                (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                  (fun x => if prefixVals x i = pt then f (x i) else 0) := by
+            have hinner (a : α) :
+                (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                    (fun x => if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0) =
+                  if a = p₀ then
+                    (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                      (fun x => if prefixVals x i = pt then f (x i) else 0) else 0 := by
+              by_cases ha : a = p₀
+              · subst a
+                simp
+              · have hz : (fun x : Fin k → α =>
+                    if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0) = fun _ => 0 := by
+                  funext x
+                  simp [ha]
+                rw [hz, FinProb.expect_const]
+                simp [ha]
+            calc
+              _ = (Q 0).expect (fun a => if a = p₀ then
+                    (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                      (fun x => if prefixVals x i = pt then f (x i) else 0) else 0) := by
+                    congr 1
+                    funext a
+                    exact hinner a
+              _ = (Q 0).w p₀ *
+                    (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                      (fun x => if prefixVals x i = pt then f (x i) else 0) := by
+                    exact expect_if_eq (Q 0) p₀ _
+          have hprod :
+              (∏ j : Fin i.val.succ,
+                (Q ⟨j.val, lt_trans j.isLt i.succ.isLt⟩).w (p j)) =
+              (Q 0).w p₀ * ∏ j : Fin i.val,
+                (Q (⟨j.val, lt_trans j.isLt i.isLt⟩ : Fin k).succ).w (pt j) := by
+            rw [Fin.prod_univ_succ]
+            apply congrArg₂ (fun x y : ℝ => x * y)
+            · simp [p₀]
+            · apply Finset.prod_congr rfl
+              intro j hj
+              have hidx :
+                  (⟨j.succ.val, lt_trans j.succ.isLt i.succ.isLt⟩ : Fin (k + 1)) =
+                    (⟨j.val, lt_trans j.isLt i.isLt⟩ : Fin k).succ := by
+                apply Fin.ext
+                rfl
+              rw [hidx]
+          calc
+            _ = ((Q 0).w p₀ *
+                  (∏ j : Fin i.val, (Q (⟨j.val, lt_trans j.isLt i.isLt⟩ : Fin k).succ).w
+                    (pt j))) * (Q i.succ).expect f := by
+                  rw [hcons', hsplit, htail]
+                  ring
+            _ = (∏ j : Fin i.val.succ,
+                  (Q ⟨j.val, lt_trans j.isLt i.succ.isLt⟩).w (p j)) *
+                  (Q i.succ).expect f := by rw [← hprod]
+
 private theorem pr_pi_cons {α : Type*} [Fintype α] {k : ℕ}
     (P : Fin (k + 1) → FinProb α) (A : (Fin (k + 1) → α) → Prop) :
     (FinProb.pi P).pr A =

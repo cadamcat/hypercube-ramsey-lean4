@@ -102,6 +102,53 @@ private theorem hammingBall_card_le_sum_choose {d R : ℕ} (v : CubeVertex d) :
     _ = ∑ j ∈ S, Nat.choose d j := hQtoS
     _ ≤ ∑ j ∈ Finset.range (R + 1), Nat.choose d j := hsum
 
+private theorem small_powerset_card {α : Type*} [DecidableEq α] (U : Finset α) (T : ℕ) :
+    (U.powerset.filter fun S => S.card ≤ T).card ≤ (U.card + 1) ^ (T + 1) := by
+  classical
+  let Q := U.powerset.filter fun S => S.card ≤ T
+  have hcount : Q.card =
+      ∑ k ∈ Finset.range (U.card + 1),
+        if k ≤ T then Nat.choose U.card k else 0 := by
+    calc
+      Q.card = ∑ S ∈ U.powerset, if S.card ≤ T then 1 else 0 := by
+        simpa [Q] using (Finset.natCast_card_filter
+          (p := fun S : Finset α => S.card ≤ T) (s := U.powerset))
+      _ = ∑ k ∈ Finset.range (U.card + 1),
+          Nat.choose U.card k * (if k ≤ T then 1 else 0) := by
+        simpa [Fintype.card_fin, nsmul_eq_mul] using
+          (Finset.sum_powerset_apply_card
+            (f := fun k : ℕ => if k ≤ T then (1 : ℕ) else 0) (x := U))
+      _ = _ := by simp
+  have hbase : 1 ≤ U.card + 1 := by omega
+  have hterm (k : ℕ) : (if k ≤ T then Nat.choose U.card k else 0) ≤
+      (U.card + 1) ^ T := by
+    by_cases hk : k ≤ T
+    · simp [hk]
+      calc
+        Nat.choose U.card k ≤ U.card ^ k := Nat.choose_le_pow _ _
+        _ ≤ (U.card + 1) ^ k := Nat.pow_le_pow_left (by omega) _
+        _ ≤ (U.card + 1) ^ T := Nat.pow_le_pow_right (by omega) hk
+    · simp [hk]
+  calc
+    Q.card ≤ ∑ k ∈ Finset.range (U.card + 1), (U.card + 1) ^ T := by
+      rw [hcount]
+      exact Finset.sum_le_sum fun k hk => hterm k
+    _ = (U.card + 1) * (U.card + 1) ^ T := by simp [Finset.sum_const, nsmul_eq_mul]
+    _ = (U.card + 1) ^ (T + 1) := by rw [pow_succ]; ring
+
+private theorem ordNbrs_card_bound {η₀ : ℝ} {n : ℕ} (a : Res η₀ n) :
+    (ordNbrs a).card ≤ dC η₀ n + 1 := by
+  have hball : ordNbrs a = hammingBall a 1 := by
+    ext b
+    simp [ordNbrs, hammingBall, HypercubeRamsey.hammingDist, _root_.hammingDist]
+  calc
+    (ordNbrs a).card = (hammingBall a 1).card := by rw [hball]
+    _ ≤ ∑ j ∈ Finset.range (1 + 1), Nat.choose (dC η₀ n) j :=
+      hammingBall_card_le_sum_choose (d := dC η₀ n) (R := 1) a
+    _ = Nat.choose (dC η₀ n) 0 + Nat.choose (dC η₀ n) 1 := by
+      simp [Finset.sum_range_succ, Nat.choose_zero_right, Nat.choose_one_right]
+    _ = dC η₀ n + 1 := by simp [Nat.choose_zero_right, Nat.choose_one_right]; omega
+
 private theorem keyDist_triangle {η₀ : ℝ} {n : ℕ} (a b c : Key η₀ n) :
     keyDist a c ≤ keyDist a b + keyDist b c := by
   unfold keyDist

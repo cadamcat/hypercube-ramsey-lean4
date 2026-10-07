@@ -81,9 +81,11 @@ structure ScaleInductionInput (Config Rule Position Activation : Type*)
   epsBase : ℝ
   epsPosition : ℝ
   epsActivation : ℝ
+  scaleTarget : ℝ
   base_nonneg : 0 ≤ epsBase
   position_nonneg : 0 ≤ epsPosition
   activation_nonneg : 0 ≤ epsActivation
+  scale_target_nonneg : 0 ≤ scaleTarget
   private_child_nonneg : ∀ c rule i P, 0 ≤ privateChildSup c rule i P
   base_estimate : ∀ c rule i, positions.expect (privateChildSup c rule i) ≤ epsBase
   private_factorization : ∀ c rule,
@@ -98,6 +100,8 @@ structure ScaleInductionInput (Config Rule Position Activation : Type*)
       positions.pr (positionOverlapException c rule) +
         (positions.prod activations).pr (fun ω => activationOverlapException c rule ω.1 ω.2) +
         positions.expect (fun P => ∏ i, privateChildSup c rule i P)
+  exponent_comparison : (configurations.card : ℝ) *
+      (epsPosition + epsActivation + epsBase ^ children) ≤ scaleTarget
 
 /-- The expected product of private child bounds is at most the product of the base-scale bounds. -/
 theorem private_child_product_estimate {Config Position Activation : Type*}
@@ -111,14 +115,14 @@ L3.8e (abstract scale-induction step). `base_estimate` is the child-scale input;
 are supplied separately for prospective positions and activations; `private_factorization` records the
 independence after deleting overlaps. `factorization` is uniform in the fixed eligibility rule, so consumers
 may use several crowd tests or restrict paths through slices without changing this induction interface.
+`exponent_comparison` packages the count and exponent comparisons that turn the accumulated error into the
+next-scale target bound.
 -/
 theorem scale_induction_step {Config Position Activation Rule : Type*}
     [Fintype Config] [Fintype Position] [Fintype Activation]
     (I : ScaleInductionInput Config Rule Position Activation) (rule : Rule) :
     (I.positions.prod I.activations).pr
-      (fun ω => ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2) ≤
-      (I.configurations.card : ℝ) *
-        (I.epsPosition + I.epsActivation + I.epsBase ^ I.children) := by
+      (fun ω => ∃ c ∈ I.configurations, I.parentFailure c rule ω.1 ω.2) ≤ I.scaleTarget := by
   sorry
 
 end HypercubeRamsey

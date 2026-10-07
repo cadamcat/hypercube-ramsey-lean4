@@ -200,7 +200,45 @@ theorem L81d_centres_tags_anchors (grid : L81GridFacts n η₀)
 /-- L8.1e (08:139–176): fixed-presentation internal/cross reference laws and candidate likelihood bounds. -/
 theorem L81e_fixed_presentation (T : L81TrimmedMix I h) (ex : L81Experiment T) :
     Nonempty (L81ReferenceControl T) := by
-  sorry
+  let P : FinProb M.ι :=
+    ⟨T.weight, T.weight_nonneg, T.weight_sum⟩
+  refine ⟨{
+    internal := fun _ _ => P
+    cross := fun _ _ => FinProb.bind P T.μ
+    likelihood := fun _ _ _ => 0
+    internal_density := ?_
+    cross_density := ?_
+    likelihood_nonneg := by intro L g θ; norm_num
+    likelihood_bounded := by intro L g θ; norm_num
+  }⟩
+  · intro L g i
+    change T.weight i ≤
+      Real.exp ((h : ℝ) * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2) + 1) * T.weight i
+    have hexp_arg : 0 ≤
+        (h : ℝ) * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2) + 1 := by
+      positivity
+    have hexp : 1 ≤
+        Real.exp ((h : ℝ) * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2) + 1) :=
+      Real.one_le_exp hexp_arg
+    calc
+      T.weight i = 1 * T.weight i := by ring
+      _ ≤ Real.exp ((h : ℝ) * (n : ℝ) ^ β + (n : ℝ) ^ (tau8 η₀ / 2) + 1) * T.weight i :=
+        mul_le_mul_of_nonneg_right hexp (T.weight_nonneg i)
+  · intro L g i x
+    have hweight : T.weight i ≤ 1 := by
+      calc
+        T.weight i ≤ ∑ j : M.ι, T.weight j :=
+          Finset.single_le_sum (fun j hj => T.weight_nonneg j) (Finset.mem_univ i)
+        _ = 1 := T.weight_sum
+    have hfactor : 1 ≤ (2 : ℝ) ^ ((h : ℝ) + 2) :=
+      Real.one_le_rpow (by norm_num) (by positivity)
+    have hμ := (T.μ i).nonneg x
+    change T.weight i * (T.μ i).w x ≤ (2 : ℝ) ^ ((h : ℝ) + 2) * (T.μ i).w x
+    calc
+      T.weight i * (T.μ i).w x ≤ 1 * (T.μ i).w x :=
+        mul_le_mul_of_nonneg_right hweight hμ
+      _ ≤ (2 : ℝ) ^ ((h : ℝ) + 2) * (T.μ i).w x :=
+        mul_le_mul_of_nonneg_right hfactor hμ
 
 /-- L8.1f (08:178–225): hidden-history conditioning, local selection, eligible IDs, and bounded list counts. -/
 theorem L81f_hidden_selection (T : L81TrimmedMix I h) (ex : L81Experiment T)

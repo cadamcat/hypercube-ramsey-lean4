@@ -1,405 +1,246 @@
 import HypercubeRamsey.S05.Parents
-import HypercubeRamsey.Tools.CubeGeometry
 
 /-!
-# D5.3 and D5.5: chunk/sign keys and one-hot state geometry
+# D5.3, D5.5, L5.1b, L5.1e0: chunks, keys, even types and states
 
-The chunk/sign certificate and state encoding are interfaces over their ambient finite sets.  They retain
-the bounds and adjacency facts needed by Sections 5 and 6 without fixing the caller's parent prior.
+The cube coordinates are split into 300 coarse chunks, `m` odd fine chunks and residual coordinates
+(05:81–109).  Counts, bins, majority signs, the flippable set `F` and the severity `j` are *definitions* from
+the layout; `ChunkGeometry5` records the layout and the three probability estimates of L5.1b.  Hidden-column
+keys and even types (05:111–149) are definitions from the geometry.  `CubeStates5` is the state quotient with
+its one-hot embedding (05:291–329); every role in a state has the same key, sign, severity, parity, type and
+residual bits.
 -/
 
 namespace HypercubeRamsey
 
 open Classical OAI.HypercubeRamsey
-open Filter
 
-/-- A hidden-column key: coarse key, majority-sign vector, and low severity (`none` is high severity). -/
-structure ColumnKey5 (Coarse : Type*) (m : ℕ) where
-  coarse : Coarse
-  signs : Fin m → Bool
-  severity : Option ℕ
-  deriving DecidableEq
+/-- Even cube roles (embedded on the first side `X`). -/
+abbrev EvenRole5 (n : ℕ) := {v : CubeVertex n // IsEvenRole v}
 
-/-- A finite chunk/sign layout together with the geometric facts about its keys. -/
-structure ChunkSignCertificate5 (Vertex Coarse : Type*) [Fintype Vertex] (m n : ℕ) where
-  layout : ChunkSignData5 Vertex Coarse m
-  measure : FinProb Vertex
-  coarseBin : Vertex → Coarse
-  coarseCandidates : Vertex → Finset Coarse
-  columnKey : Vertex → ColumnKey5 Coarse m
-  paddedKeys : Vertex → Finset (ColumnKey5 Coarse m)
-  parity_mass : ∀ c, measure.pr (fun v => layout.parity v = c) = 1 / 2
-  signs_uniform_on_parity : ∀ c t,
-    measure.pr (fun v => layout.parity v = c ∧ layout.sign v = t) =
-      measure.pr (fun v => layout.parity v = c) / 2 ^ m
-  severity_tail : ∀ h, 1 ≤ h → h ≤ m →
-    measure.pr (fun v => h ≤ layout.severity v) ≤ (n : ℝ) ^ (-(13 / 100 : ℝ) * h)
-  boundary_small : measure.pr layout.boundary ≤ (n : ℝ) ^ (-(5 / 100 : ℝ))
-  own_coarse_is_candidate : ∀ v, coarseBin v ∈ coarseCandidates v
-  adjacent_coarse_is_candidate : ∀ v u, layout.adjacent v u →
-    coarseBin u ∈ coarseCandidates v
-  adjacent_key_is_padded : ∀ v u, layout.adjacent v u → columnKey u ∈ paddedKeys v
+/-- Odd cube roles (embedded on the second side `Y`). -/
+abbrev OddRole5 (n : ℕ) := {v : CubeVertex n // ¬ IsEvenRole v}
 
-/-- Uniform law on the vertices of the Boolean cube. -/
-noncomputable def uniformCube5 (n : ℕ) : FinProb (CubeVertex n) :=
-  FinProb.uniform Finset.univ (Finset.univ_nonempty)
+/-- Number of coarse chunks, `d_c = 300` (05:81). -/
+def coarseChunkCount5 : ℕ := 300
 
-/-- L5.1b: the cube's coarse bins and majority signs have the rarity and neighbor-cover properties.
+/-- A vector of coarse bins, one per coarse chunk. -/
+abbrev BinVector5 (n : ℕ) := Fin coarseChunkCount5 → Fin (n + 1)
 
-The construction keeps the 300 coarse chunks, the odd fine chunks, the `5.5` interface threshold, and the
-padded hidden-key list used by each even type. -/
-theorem L5_1b (γ K' χ : ℝ) (p : Params5 γ K' χ) :
-    ∃ n₀ : ℕ, ∀ n ≥ n₀,
-      ∃ C : ChunkSignCertificate5 (CubeVertex n) (Fin 300) (p.m n) n,
-        C.measure = uniformCube5 n := by
-  classical
-  have halpha : p.alpha < 1 := lt_trans p.halpha.2 (by norm_num)
-  have hlim : Tendsto (fun k : ℕ => (k : ℝ) ^ (p.alpha - 1)) atTop (nhds 0) := by
-    have h := (tendsto_rpow_neg_atTop (y := 1 - p.alpha) (by linarith : 0 < 1 - p.alpha)).comp
-      tendsto_natCast_atTop_atTop
-    convert h using 1
-    funext k
-    congr 1
-    ring
-  obtain ⟨n₁, hn₁⟩ := Filter.eventually_atTop.1
-    (hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 2)))
-  refine ⟨max n₁ 2, ?_⟩
-  intro n hn
-  have hn₁' : n₁ ≤ n := le_trans (Nat.le_max_left _ _) hn
-  have hn2 : 2 ≤ n := le_trans (Nat.le_max_right _ _) hn
-  have hnpos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
-  have hratio : (n : ℝ) ^ (p.alpha - 1) < 1 / 2 := hn₁ n hn₁'
-  have hpow : (n : ℝ) ^ p.alpha = (n : ℝ) ^ (p.alpha - 1) * n := by
-    calc
-      (n : ℝ) ^ p.alpha = (n : ℝ) ^ ((p.alpha - 1) + 1) := by congr 1 <;> ring
-      _ = (n : ℝ) ^ (p.alpha - 1) * n := by
-        rw [Real.rpow_add_one hnpos.ne']
-  have hsmall : (n : ℝ) ^ p.alpha < (n : ℝ) / 2 := by
-    calc
-      (n : ℝ) ^ p.alpha = (n : ℝ) ^ (p.alpha - 1) * n := hpow
-      _ < (1 / 2) * n := mul_lt_mul_of_pos_right hratio hnpos
-      _ = (n : ℝ) / 2 := by ring
-  have hn_half : (n : ℝ) / 2 ≤ (n : ℝ) - 1 := by
-    have hnR : (2 : ℝ) ≤ n := by exact_mod_cast hn2
-    linarith
-  have hm_le : p.m n ≤ n - 1 := by
-    unfold Params5.m
-    apply Nat.ceil_le.mpr
-    have hcast : ((n - 1 : ℕ) : ℝ) = (n : ℝ) - 1 := by
-      rw [Nat.cast_sub (by omega : 1 ≤ n)]
-      norm_num
-    rw [hcast]
-    exact hsmall.le.trans hn_half
-  have hplus : p.m n + 1 ≤ n := by omega
-  have hml : p.m n ≤ n := by omega
-  let S : Finset (Fin n) := Finset.univ.filter (fun i => i.val < p.m n)
-  have hScard : S.card = p.m n := by
-    have hcard := Fin.card_filter_val_lt (n := n) (m := p.m n)
-    simpa [S, Nat.min_eq_right hml] using hcard
-  have eS : Fin (p.m n) ≃ S := Fintype.equivOfCardEq (by simp [hScard])
-  let sgn : CubeVertex n → Fin (p.m n) → Bool := fun v i => v (eS i).1
-  let layout : ChunkSignData5 (CubeVertex n) (Fin 300) (p.m n) := {
-    parity := fun v => decide (IsEvenRole v)
-    coarseKey := fun _ => 0
-    sign := sgn
-    severity := fun _ => 0
-    boundary := fun _ => False
-    sensitiveChunks := fun _ => ∅
-    adjacent := fun _ _ => False
-  }
-  have hnpos' : 0 < n := by omega
-  have hEvenCard : (Finset.univ.filter (fun v : CubeVertex n => IsEvenRole v)).card =
-      2 ^ (n - 1) := by
-    simpa [evenRoleSet] using (parity_class_card (n := n) hnpos').1
-  have hOddCard : (Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v)).card =
-      2 ^ (n - 1) := by
-    have hfin : Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v) =
-        Finset.univ \ evenRoleSet n := by
-      ext v
-      simp [evenRoleSet]
-    rw [hfin]
-    exact (parity_class_card (n := n) hnpos').2
-  have huniform_pr (A : CubeVertex n → Prop) :
-      (uniformCube5 n).pr A =
-        (Finset.univ.filter A).card / (Fintype.card (CubeVertex n) : ℝ) := by
-    classical
-    unfold FinProb.pr uniformCube5 FinProb.uniform
-    simp only [Finset.mem_univ, if_true]
-    simp only [Finset.card_univ, card_cubeVertex]
-    rw [← Finset.sum_filter]
-    simp [div_eq_mul_inv, mul_comm]
-  have hEvenMass : (uniformCube5 n).pr IsEvenRole = 1 / 2 := by
-    rw [huniform_pr, hEvenCard]
-    simp only [card_cubeVertex]
-    have heq : n - 1 + 1 = n := by omega
-    rw [← heq, pow_succ]
-    push_cast
-    field_simp
-  have hOddMass : (uniformCube5 n).pr (fun v => ¬ IsEvenRole v) = 1 / 2 := by
-    have hOddCardR : ((Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v)).card : ℝ) =
-        (2 : ℝ) ^ (n - 1) := by exact_mod_cast hOddCard
-    have hcardR : (Fintype.card (CubeVertex n) : ℝ) = (2 : ℝ) ^ n := by
-      norm_cast
-      simp [card_cubeVertex]
-    have heq : n - 1 + 1 = n := by omega
-    have hpow : (2 : ℝ) ^ n = (2 : ℝ) ^ (n - 1) * 2 := by
-      calc
-        (2 : ℝ) ^ n = (2 : ℝ) ^ ((n - 1) + 1) := by rw [heq]
-        _ = (2 : ℝ) ^ (n - 1) * 2 := by rw [pow_succ]
-    calc
-      (uniformCube5 n).pr (fun v => ¬ IsEvenRole v) =
-          (Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v)).card /
-            (Fintype.card (CubeVertex n) : ℝ) := by
-              rw [huniform_pr]
-              field_simp [show Fintype.card (CubeVertex n) ≠ 0 by simp [card_cubeVertex]]
-              norm_cast
-              congr 1
-              ext v
-              simp
-      _ = (2 : ℝ) ^ (n - 1) / (2 : ℝ) ^ n := by rw [hOddCardR, hcardR]
-      _ = 1 / 2 := by
-        rw [hpow]
-        field_simp
-  have hParityMass : ∀ c, (uniformCube5 n).pr (fun v => layout.parity v = c) = 1 / 2 := by
-    intro c
-    cases c
-    · simpa [layout] using hOddMass
-    · simpa [layout] using hEvenMass
-  let hi0 : Fin n := ⟨p.m n, by omega⟩
-  have hi0_notS : hi0 ∉ S := by
-    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
-    rw [show hi0.val = p.m n by rfl]
-    omega
-  have hsign_eq (t : Fin (p.m n) → Bool) :
-      (fun v : CubeVertex n => IsEvenRole v ∧ sgn v = t) =
-        (fun v => IsEvenRole v ∧ ∀ j : S, v j.1 = t (eS.symm j)) := by
-    funext v
-    apply propext
-    constructor
-    · rintro ⟨he, hs⟩
-      refine ⟨he, ?_⟩
-      intro j
-      have hj := congrFun hs (eS.symm j)
-      simpa [sgn] using hj
-    · rintro ⟨he, hs⟩
-      refine ⟨he, ?_⟩
-      funext i
-      have hi := hs (eS i)
-      simpa [sgn] using hi
-  have hEvenCount (t : Fin (p.m n) → Bool) :
-      (Finset.univ.filter (fun v : CubeVertex n => IsEvenRole v ∧ sgn v = t)).card =
-        2 ^ (n - p.m n - 1) := by
-    have hproj := parity_projection_uniform S (by omega) (fun j : S => t (eS.symm j))
-    have hfilter : Finset.univ.filter (fun v : CubeVertex n => IsEvenRole v ∧ sgn v = t) =
-        (evenRoleSet n).filter (fun v => ∀ j : S, v j.1 = t (eS.symm j)) := by
-      ext v
-      simp [evenRoleSet, hsign_eq t]
-    rw [hfilter]
-    simpa [hScard] using hproj
-  let A (t : Fin (p.m n) → Bool) :=
-    {v : CubeVertex n // IsEvenRole v ∧ sgn v = t}
-  let B (t : Fin (p.m n) → Bool) :=
-    {v : CubeVertex n // ¬ IsEvenRole v ∧ sgn v = t}
-  have hsign_flip (t : Fin (p.m n) → Bool) (v : CubeVertex n) :
-      sgn (cubeFlip v hi0) = sgn v := by
-    funext i
-    have hne : (eS i).1 ≠ hi0 := by
-      intro h
-      exact hi0_notS (h ▸ (eS i).2)
-    simp [sgn, cubeFlip, hne]
-  have eAB (t : Fin (p.m n) → Bool) : A t ≃ B t := by
-    refine {
-      toFun := fun v => ⟨cubeFlip v.1 hi0, ?_⟩
-      invFun := fun v => ⟨cubeFlip v.1 hi0, ?_⟩
-      left_inv := ?_
-      right_inv := ?_
-    }
-    · constructor
-      · intro h
-        exact ((cubeFlip_parity v.1 hi0).mp h) v.2.1
-      · exact (hsign_flip t v.1).trans v.2.2
-    · constructor
-      · exact (cubeFlip_parity v.1 hi0).mpr v.2.1
-      · exact (hsign_flip t v.1).trans v.2.2
-    · intro v
-      apply Subtype.ext
-      funext i
-      simp [cubeFlip]
-    · intro v
-      apply Subtype.ext
-      funext i
-      simp [cubeFlip]
-  have hOddCount (t : Fin (p.m n) → Bool) :
-      (Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v ∧ sgn v = t)).card =
-        2 ^ (n - p.m n - 1) := by
-    have hc := Fintype.card_congr (eAB t)
-    have hc' :
-        (Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v ∧ sgn v = t)).card =
-          (Finset.univ.filter (fun v : CubeVertex n => IsEvenRole v ∧ sgn v = t)).card := by
-      simpa [A, B, Fintype.card_subtype] using hc.symm
-    rw [hc', hEvenCount]
-  have hratio : (2 : ℝ) ^ (n - p.m n - 1) / (2 : ℝ) ^ n =
-      (1 / 2) / (2 : ℝ) ^ p.m n := by
-    have heq : n - p.m n - 1 + (p.m n + 1) = n := by omega
-    have hpow : (2 : ℝ) ^ n =
-        (2 : ℝ) ^ (n - p.m n - 1) * (2 : ℝ) ^ (p.m n + 1) := by
-      calc
-        (2 : ℝ) ^ n = (2 : ℝ) ^ (n - p.m n - 1 + (p.m n + 1)) := by rw [heq]
-        _ = (2 : ℝ) ^ (n - p.m n - 1) * (2 : ℝ) ^ (p.m n + 1) := by rw [pow_add]
-    rw [hpow, pow_succ]
-    field_simp
-  have hEvenJoint (t : Fin (p.m n) → Bool) :
-      (uniformCube5 n).pr (fun v => IsEvenRole v ∧ sgn v = t) =
-        (1 / 2) / (2 : ℝ) ^ p.m n := by
-    have hcountR : ((Finset.univ.filter (fun v : CubeVertex n =>
-        IsEvenRole v ∧ sgn v = t)).card : ℝ) =
-          (2 : ℝ) ^ (n - p.m n - 1) := by exact_mod_cast hEvenCount t
-    have hcardR : (Fintype.card (CubeVertex n) : ℝ) = (2 : ℝ) ^ n := by
-      norm_cast
-      simp [card_cubeVertex]
-    calc
-      (uniformCube5 n).pr (fun v => IsEvenRole v ∧ sgn v = t) =
-          (Finset.univ.filter (fun v : CubeVertex n => IsEvenRole v ∧ sgn v = t)).card /
-            (Fintype.card (CubeVertex n) : ℝ) := by
-              rw [huniform_pr]
-              field_simp [show Fintype.card (CubeVertex n) ≠ 0 by simp [card_cubeVertex]]
-              norm_cast
-              congr 1
-              ext v
-              simp
-      _ = (2 : ℝ) ^ (n - p.m n - 1) / (2 : ℝ) ^ n := by rw [hcountR, hcardR]
-      _ = (1 / 2) / (2 : ℝ) ^ p.m n := hratio
-  have hOddJoint (t : Fin (p.m n) → Bool) :
-      (uniformCube5 n).pr (fun v => ¬ IsEvenRole v ∧ sgn v = t) =
-        (1 / 2) / (2 : ℝ) ^ p.m n := by
-    have hcountR : ((Finset.univ.filter (fun v : CubeVertex n =>
-        ¬ IsEvenRole v ∧ sgn v = t)).card : ℝ) =
-          (2 : ℝ) ^ (n - p.m n - 1) := by exact_mod_cast hOddCount t
-    have hcardR : (Fintype.card (CubeVertex n) : ℝ) = (2 : ℝ) ^ n := by
-      norm_cast
-      simp [card_cubeVertex]
-    calc
-      (uniformCube5 n).pr (fun v => ¬ IsEvenRole v ∧ sgn v = t) =
-          (Finset.univ.filter (fun v : CubeVertex n => ¬ IsEvenRole v ∧ sgn v = t)).card /
-            (Fintype.card (CubeVertex n) : ℝ) := by
-              rw [huniform_pr]
-              field_simp [show Fintype.card (CubeVertex n) ≠ 0 by simp [card_cubeVertex]]
-              norm_cast
-              congr 1
-              ext v
-              simp
-      _ = (2 : ℝ) ^ (n - p.m n - 1) / (2 : ℝ) ^ n := by rw [hcountR, hcardR]
-      _ = (1 / 2) / (2 : ℝ) ^ p.m n := hratio
-  refine ⟨{
-    layout := layout
-    measure := uniformCube5 n
-    coarseBin := fun _ => 0
-    coarseCandidates := fun _ => {0}
-    columnKey := fun v => ⟨0, sgn v, some 0⟩
-    paddedKeys := fun v => {⟨0, sgn v, some 0⟩}
-    parity_mass := hParityMass
-    signs_uniform_on_parity := by
-      intro c t
-      cases c <;> simp [layout, hEvenJoint, hOddJoint, hEvenMass, hOddMass]
-    severity_tail := by
-      intro h hh₁ hh₂
-      have hfalse : (fun v : CubeVertex n => h ≤ layout.severity v) = fun _ => False := by
-        funext v
-        simp [layout]
-        omega
-      rw [hfalse]
-      simp [FinProb.pr]
-      exact Real.rpow_nonneg (by positivity) _
-    boundary_small := by
-      simp [layout, FinProb.pr]
-      exact Real.rpow_nonneg (by positivity) _
-    own_coarse_is_candidate := by intro v; simp
-    adjacent_coarse_is_candidate := by intro v u hadj; simp [layout] at hadj
-    adjacent_key_is_padded := by intro v u hadj; simp [layout] at hadj
-  }, rfl⟩
+/-- A coarse key `i(P)`: the bin vector and the boundary flag (`true` = boundary) (05:84–90). -/
+abbrev CoarseKey5 (n : ℕ) := BinVector5 n × Bool
 
-/-- A state quotient with its one-hot embedding and the bounded odd/even neighborhood geometry. -/
-structure CubeStateEncoding5 (n s d J : ℕ) where
-  stateOf : CubeVertex n → Fin s
-  oneHot : Fin s → Fin d → Bool
-  evenState : Fin s → Prop
-  stateKey : Fin s → ℕ
-  severity : Fin s → ℕ
-  neighbors : Fin s → Finset (Fin s)
-  state_edge : ∀ u v, (cube n).Adj u v → stateOf v ∈ neighbors (stateOf u)
-  parity_exact : ∀ v, evenState (stateOf v) ↔ IsEvenRole v
-  degree_linear : ∃ C : ℝ, 0 ≤ C ∧ ∀ v, (neighbors v).card ≤ C * n
-  two_even_distance : ∀ b u v, u ∈ neighbors b → v ∈ neighbors b →
-    evenState u → evenState v →
-      (Finset.univ.filter (fun i => oneHot u i ≠ oneHot v i)).card ≤ 8
-  low_high_neighbors_coalesce : ∀ b, ∀ u v,
-    u ∈ neighbors b → v ∈ neighbors b →
-      severity u ≤ J → severity v ≤ J → stateKey u = stateKey v
+/-- Flip one coordinate of a cube vertex. -/
+def flipVertex5 {n : ℕ} (x : CubeVertex n) (a : Fin n) : CubeVertex n :=
+  Function.update x a (!x a)
 
-/-- L5.1e0: the count-state quotient has dimension `(1+o(1))n`, exact parity, bounded degree, and
-ambient distance at most eight between even neighbors of one odd state. -/
-theorem L5_1e0 (γ K' χ : ℝ) (p : Params5 γ K' χ) :
-    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ ε : ℝ, 0 < ε →
-      ∃ s d : ℕ, ∃ C : CubeStateEncoding5 n s d (p.J n),
-        (d : ℝ) ≤ (1 + ε) * n := by
-  refine ⟨1, ?_⟩
-  intro n hn ε hε
-  let s := Fintype.card (CubeVertex n)
-  let e : CubeVertex n ≃ Fin s := Fintype.equivFin (CubeVertex n)
-  refine ⟨s, n, {
-    stateOf := e
-    oneHot := fun x i => e.symm x i
-    evenState := fun x => IsEvenRole (e.symm x)
-    stateKey := fun _ => 0
-    severity := fun _ => p.J n + 1
-    neighbors := fun x => Finset.univ.filter (fun y =>
-      (cube n).Adj (e.symm x) (e.symm y))
-    state_edge := by
-      intro u v huv
-      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa using huv⟩
-    parity_exact := by
-      intro v
-      simp
-    degree_linear := by
-      refine ⟨(s : ℝ), by positivity, ?_⟩
-      intro v
-      have hcard : (Finset.univ.filter (fun y : Fin s =>
-          (cube n).Adj (e.symm v) (e.symm y))).card ≤ Fintype.card (Fin s) :=
-        Finset.card_filter_le _ _
-      have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn
-      calc
-        ((Finset.univ.filter (fun y : Fin s =>
-          (cube n).Adj (e.symm v) (e.symm y))).card : ℝ) ≤
-            (Fintype.card (Fin s) : ℝ) := by exact_mod_cast hcard
-        _ = (s : ℝ) := by simp
-        _ ≤ (s : ℝ) * n := by nlinarith [mul_nonneg (show 0 ≤ (s : ℝ) by positivity) (sub_nonneg.mpr hnR)]
-    two_even_distance := by
-      intro b u v hu hv _ _
-      have hu' : (cube n).Adj (e.symm b) (e.symm u) := (Finset.mem_filter.mp hu).2
-      have hv' : (cube n).Adj (e.symm b) (e.symm v) := (Finset.mem_filter.mp hv).2
-      have hbu : _root_.hammingDist (e.symm b) (e.symm u) = 1 := by
-        change _root_.hammingDist (e.symm b) (e.symm u) = 1 at hu'
-        exact hu'
-      have hbv : _root_.hammingDist (e.symm b) (e.symm v) = 1 := by
-        change _root_.hammingDist (e.symm b) (e.symm v) = 1 at hv'
-        exact hv'
-      have hub : _root_.hammingDist (e.symm u) (e.symm b) = 1 := by
-        rw [_root_.hammingDist_comm]
-        exact hbu
-      have hdist : _root_.hammingDist (e.symm u) (e.symm v) ≤ 2 := by
-        calc
-          _root_.hammingDist (e.symm u) (e.symm v) ≤
-                _root_.hammingDist (e.symm u) (e.symm b) + _root_.hammingDist (e.symm b) (e.symm v) :=
-                _root_.hammingDist_triangle _ _ _
-          _ = 2 := by rw [hub, hbv]
-      change _root_.hammingDist (e.symm u) (e.symm v) ≤ 8
-      omega
-    low_high_neighbors_coalesce := by
-      intro b u v _ _ hu hv
-      change p.J n + 1 ≤ p.J n at hu
-      omega
-  }, ?_⟩
-  norm_num
-  nlinarith [mul_nonneg hε.le (show 0 ≤ (n : ℝ) by positivity)]
+/-- Grid neighbours of bin vectors: exactly one coordinate differs, by one. -/
+def binAdjacent5 {n : ℕ} (w w' : BinVector5 n) : Prop :=
+  (Finset.univ.filter (fun i => w i ≠ w' i)).card = 1 ∧ ∀ i, Nat.dist (w i).val (w' i).val ≤ 1
+
+/-- D5.3 layout (05:81–109): disjoint coarse chunks of length `⌊n^{1/5}⌋`, `m` fine chunks of a common odd
+length `≍ n^{.3}`, residual coordinates, and consecutive count bins of binomial probability `≤ 2n^{-.04}`.
+The fields `sign_uniform`, `severity_tail` and `boundary_fraction` are the probability estimates of L5.1b. -/
+structure ChunkGeometry5 (n m : ℕ) where
+  fineLength : ℕ
+  coarseChunks : Fin coarseChunkCount5 → Finset (Fin n)
+  fineChunks : Fin m → Finset (Fin n)
+  residual : Finset (Fin n)
+  chunks_disjoint : (∀ i j, i ≠ j → Disjoint (coarseChunks i) (coarseChunks j)) ∧
+    (∀ i j, Disjoint (coarseChunks i) (fineChunks j)) ∧
+    (∀ i j, i ≠ j → Disjoint (fineChunks i) (fineChunks j)) ∧
+    (∀ i, Disjoint (coarseChunks i) residual) ∧
+    (∀ i, Disjoint (fineChunks i) residual)
+  chunks_cover : (Finset.univ.biUnion coarseChunks) ∪ (Finset.univ.biUnion fineChunks) ∪ residual =
+    Finset.univ
+  occupied_sublinear :
+    (((Finset.univ.biUnion coarseChunks) ∪ (Finset.univ.biUnion fineChunks)).card : ℝ) ≤
+      (n : ℝ) ^ (1 / 2 : ℝ)
+  coarse_length : ∀ i, (coarseChunks i).card = ⌊(n : ℝ) ^ (1 / 5 : ℝ)⌋₊
+  bin : Fin coarseChunkCount5 → ℕ → Fin (n + 1)
+  bin_monotone : ∀ i a b, a ≤ b → (bin i a).val ≤ (bin i b).val
+  bin_consecutive : ∀ i a, (bin i (a + 1)).val ≤ (bin i a).val + 1
+  bin_probability_bound : ∀ i j,
+    (∑ q ∈ Finset.range ((coarseChunks i).card + 1),
+      if bin i q = j then (Nat.choose (coarseChunks i).card q : ℝ) else 0) ≤
+        2 * (n : ℝ) ^ (-(4 / 100 : ℝ)) * (2 : ℝ) ^ (coarseChunks i).card
+  fine_length_odd : Odd fineLength
+  fine_length_lower : (n : ℝ) ^ (3 / 10 : ℝ) ≤ fineLength
+  fine_length_upper : (fineLength : ℝ) ≤ 2 * (n : ℝ) ^ (3 / 10 : ℝ)
+  fine_chunk_length : ∀ i, (fineChunks i).card = fineLength
+  residual_nonempty : residual.Nonempty
+
+namespace ChunkGeometry5
+
+variable {n m : ℕ} (g : ChunkGeometry5 n m)
+
+/-- Count of ones in a coarse chunk. -/
+noncomputable def coarseCount (x : CubeVertex n) (i : Fin coarseChunkCount5) : ℕ :=
+  ((g.coarseChunks i).filter fun a => x a = true).card
+
+/-- Bin vector `w(P)`. -/
+noncomputable def coarseBin (x : CubeVertex n) : BinVector5 n := fun i => g.bin i (g.coarseCount x i)
+
+/-- Boundary flag: some single coarse bit flip changes a bin. -/
+def boundary (x : CubeVertex n) : Prop :=
+  ∃ i, ∃ a ∈ g.coarseChunks i, g.coarseBin (flipVertex5 x a) ≠ g.coarseBin x
+
+/-- Coarse key `i(P)`. -/
+noncomputable def key (x : CubeVertex n) : CoarseKey5 n := (g.coarseBin x, decide (g.boundary x))
+
+/-- Count of ones in a fine chunk. -/
+noncomputable def fineCount (x : CubeVertex n) (i : Fin m) : ℕ :=
+  ((g.fineChunks i).filter fun a => x a = true).card
+
+/-- Majority signs `t ∈ Q_m`. -/
+noncomputable def sign (x : CubeVertex n) : CubeVertex m := fun i => decide (g.fineLength < 2 * g.fineCount x i)
+
+/-- The flippable chunks `F`: count at distance `1/2` from mid-weight. -/
+noncomputable def flippable (x : CubeVertex n) : Finset (Fin m) :=
+  Finset.univ.filter fun i => Nat.dist (2 * g.fineCount x i) g.fineLength = 1
+
+/-- Severity `j`: the number of fine chunks within `R_f = 5.5` of mid-weight. -/
+noncomputable def severity (x : CubeVertex n) : ℕ :=
+  (Finset.univ.filter fun i : Fin m => Nat.dist (2 * g.fineCount x i) g.fineLength ≤ 11).card
+
+/-- Coarse coordinates. -/
+noncomputable def coarseCoords : Finset (Fin n) := Finset.univ.biUnion g.coarseChunks
+
+/-- Residual Hamming distance between two roles. -/
+noncomputable def residualDist (x y : CubeVertex n) : ℕ :=
+  (g.residual.filter fun a => x a ≠ y a).card
+
+end ChunkGeometry5
+
+/-- The candidate bin list `C_i` of a coarse key: `{w}` at interior keys, `w` and its grid neighbours at
+boundary keys (05:88–91). -/
+noncomputable def binList5 {n : ℕ} (i : CoarseKey5 n) : Finset (BinVector5 n) :=
+  if i.2 then Finset.univ.filter (fun w => w = i.1 ∨ binAdjacent5 i.1 w) else {i.1}
+
+/-- L5.1b (05:81–109): the layout exists for large `n`, with the three probability estimates: signs uniform on
+each parity class, `Pr(j ≥ h) ≤ n^{-.13h}` for `1 ≤ h ≤ m`, and `Pr(boundary) ≤ n^{-.05}`. -/
+structure ChunkEstimates5 {n m : ℕ} (g : ChunkGeometry5 n m) : Prop where
+  sign_uniform : ∀ (b : Bool) (t : CubeVertex m),
+    ((Finset.univ.filter fun x : CubeVertex n => decide (IsEvenRole x) = b ∧ g.sign x = t).card : ℝ) *
+        (2 : ℝ) ^ m =
+      ((Finset.univ.filter fun x : CubeVertex n => decide (IsEvenRole x) = b).card : ℝ)
+  severity_tail : ∀ h : ℕ, 1 ≤ h → h ≤ m →
+    ((Finset.univ.filter fun x : CubeVertex n => h ≤ g.severity x).card : ℝ) / (2 : ℝ) ^ n ≤
+      (n : ℝ) ^ (-(13 / 100 : ℝ) * h)
+  boundary_fraction :
+    ((Finset.univ.filter fun x : CubeVertex n => g.boundary x).card : ℝ) / (2 : ℝ) ^ n ≤
+      (n : ℝ) ^ (-(5 / 100 : ℝ))
+
+/-- L5.1b (05:81–109): for every fixed `0 < α < 1/50`, the D5.3 layout with `m = ⌈n^α⌉` fine chunks exists
+for all large `n` and has the L5.1b estimates. -/
+theorem L5_1b (α : ℝ) (hα : 0 < α) (hα' : α < 1 / 50) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∃ g : ChunkGeometry5 n ⌈(n : ℝ) ^ α⌉₊, ChunkEstimates5 g := by
+  sorry
+
+/-! ### Keys and even types (05:111–149) -/
+
+/-- Hidden-column keys: low keys `(i, t, j)` with `j ≤ J`, and high keys `(i, *)`. -/
+abbrev HiddenKey5 (n m J : ℕ) := (CoarseKey5 n × CubeVertex m × Fin (J + 1)) ⊕ CoarseKey5 n
+
+/-- Coarse key of a hidden key. -/
+def HiddenKey5.coarse {n m J : ℕ} : HiddenKey5 n m J → CoarseKey5 n
+  | .inl k => k.1
+  | .inr i => i
+
+/-- Severity level read by a key's posterior: `j` at low keys, `J` at high keys (05:127–130). -/
+def HiddenKey5.level {n m J : ℕ} : HiddenKey5 n m J → ℕ
+  | .inl k => k.2.2.val
+  | .inr _ => J
+
+/-- An even type: coarse key, the padded key list `S`, and the severity (`some j`, low) or `none` (high). -/
+abbrev EvenType5 (n m J : ℕ) := CoarseKey5 n × Finset (HiddenKey5 n m J) × Option (Fin (J + 1))
+
+/-- The low key at coarse key `i`, signs `t` and severity `j'`, replaced by the high key above `J`. -/
+noncomputable def keyAt5 {n m : ℕ} (J : ℕ) (i : CoarseKey5 n) (t : CubeVertex m) (j' : ℕ) :
+    HiddenKey5 n m J :=
+  if h : j' ≤ J then .inl (i, t, ⟨j', Nat.lt_succ_of_le h⟩) else .inr i
+
+namespace ChunkGeometry5
+
+variable {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ)
+
+/-- Low/high split at `J`. -/
+def low (x : CubeVertex n) : Prop := g.severity x ≤ J
+
+/-- The key of a role (05:118–122). -/
+noncomputable def roleKey (x : CubeVertex n) : HiddenKey5 n m J :=
+  if h : g.severity x ≤ J then .inl (g.key x, g.sign x, ⟨g.severity x, Nat.lt_succ_of_le h⟩)
+  else .inr (g.key x)
+
+/-- Coarse keys of `x` and of its single coarse flips. -/
+noncomputable def coarseRange (x : CubeVertex n) : Finset (CoarseKey5 n) :=
+  insert (g.key x) (g.coarseCoords.image fun a => g.key (flipVertex5 x a))
+
+
+/-- The padded key list `S(v)` of an even role (05:133–144). -/
+noncomputable def typeKeys (x : CubeVertex n) : Finset (HiddenKey5 n m J) :=
+  if g.severity x ≤ J then
+    (g.coarseRange x).image (fun i => keyAt5 J i (g.sign x) (g.severity x)) ∪
+      (g.flippable x).image (fun h => keyAt5 J (g.key x) (Function.update (g.sign x) h
+        (!g.sign x h)) (g.severity x)) ∪
+      Finset.image (fun j' => keyAt5 J (g.key x) (g.sign x) j')
+        (({g.severity x + 1} : Finset ℕ) ∪ (if 0 < g.severity x then {g.severity x - 1} else ∅))
+  else (g.coarseRange x).image (fun i => (.inr i : HiddenKey5 n m J))
+
+/-- The even type `K(v)` (05:138–141). -/
+noncomputable def evenType (x : CubeVertex n) : EvenType5 n m J :=
+  (g.key x, g.typeKeys J x,
+    if h : g.severity x ≤ J then some ⟨g.severity x, Nat.lt_succ_of_le h⟩ else none)
+
+/-- The optional low key `(i(P), t, J)` of a high even role with `j = J + 1` (05:141–144). -/
+noncomputable def optionalKey (x : CubeVertex n) : Option (HiddenKey5 n m J) :=
+  if g.severity x = J + 1 then some (.inl (g.key x, g.sign x, ⟨J, Nat.lt_succ_self J⟩)) else none
+
+end ChunkGeometry5
+
+/-- L5.1e, coverage part (05:144–147): the padded list and the optional key cover the keys of all actual odd
+neighbours of an even role, and every key in a type list has the role's bin in its candidate list. -/
+theorem L5_1e_cover {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) :
+    (∀ x y : CubeVertex n, (cube n).Adj x y →
+      g.roleKey J y ∈ g.typeKeys J x ∨ g.optionalKey J x = some (g.roleKey J y)) ∧
+    (∀ x : CubeVertex n, ∀ ℓ ∈ g.typeKeys J x, (g.key x).1 ∈ binList5 ℓ.coarse) := by
+  sorry
+
+/-! ### D5.5: states and the one-hot embedding (05:291–313) -/
+
+/-- The state quotient (05:291–313).  Roles in one state share key, signs, severity, parity, even type and
+residual bits; the one-hot embedding is injective, reproduces the residual bits, has dimension
+`n + O(√n)`, and two even states adjacent to one odd state are at ambient distance at most `8`. -/
+structure CubeStates5 {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) where
+  Site : Type
+  [siteFintype : Fintype Site]
+  [siteDecEq : DecidableEq Site]
+  d : ℕ
+  stateOf : CubeVertex n → Site
+  oneHot : Site → CubeVertex d
+  oneHot_injective : Function.Injective oneHot
+  resCoord : g.residual → Fin d
+  resCoord_injective : Function.Injective resCoord
+  oneHot_residual : ∀ x (a : g.residual), oneHot (stateOf x) (resCoord a) = x a.1
+  state_determines : ∀ x y, stateOf x = stateOf y →
+    g.key x = g.key y ∧ g.sign x = g.sign y ∧ g.severity x = g.severity y ∧
+      (IsEvenRole x ↔ IsEvenRole y) ∧ g.evenType J x = g.evenType J y ∧
+        g.optionalKey J x = g.optionalKey J y ∧ g.roleKey J x = g.roleKey J y
+  neighbors : Site → Finset Site
+  mem_neighbors : ∀ s t, t ∈ neighbors s ↔
+    ∃ x y, stateOf x = s ∧ stateOf y = t ∧ (cube n).Adj x y
+  degree_bound : ∀ s, (neighbors s).card ≤ 2 * n
+  even_distance : ∀ b a a', a ∈ neighbors b → a' ∈ neighbors b →
+    (∃ x, stateOf x = a ∧ IsEvenRole x) → (∃ x, stateOf x = a' ∧ IsEvenRole x) →
+      hammingDist (oneHot a) (oneHot a') ≤ 8
+  dimension_upper : (d : ℝ) ≤ n + 3 * (n : ℝ) ^ (1 / 2 : ℝ) + 301
+
+attribute [instance] CubeStates5.siteFintype CubeStates5.siteDecEq
+
+/-- L5.1e0 (05:291–313), with the constants in the order `∀ ε, ∃ n₀`: the state quotient exists at every
+layout, and its dimension is at most `(1 + ε) n` once `n ≥ n₀(ε)`. -/
+theorem L5_1e0 : ∀ ε : ℝ, 0 < ε → ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (m J : ℕ) (g : ChunkGeometry5 n m),
+    ∃ S : CubeStates5 g J, (S.d : ℝ) ≤ (1 + ε) * n := by
+  sorry
 
 end HypercubeRamsey

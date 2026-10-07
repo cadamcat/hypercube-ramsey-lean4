@@ -444,6 +444,11 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
       GridFacts η₀ D.n → FilterStep η₀ β D.n →
       ∀ g, D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g) ≤
         Real.exp (-(D.n : ℝ) ^ (eta8 η₀ / 2)) := by
+  obtain ⟨nF, hF⟩ := filter_step η₀ β hη₀ hβ₀ hβτ
+  refine ⟨nF, ?_⟩
+  intro D hn X Y R hStd hGrid hFilter g
+  have hCrossCard := hGrid.crossKeys_card g
+  have hStep : FilterStep η₀ β D.n := hFilter
   sorry
 
 /-- L8.1c(G2) (08:107–123): with `L_g = ∫ (d_i^- - d_i^+) dη_g`, the own-colour defect `2ε` and survival

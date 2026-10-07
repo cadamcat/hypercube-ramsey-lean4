@@ -1,5 +1,6 @@
 import HypercubeRamsey.S17.Needs
 import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S03.Clock.Inputs_p_clock_r1
 
 namespace HypercubeRamsey.Lane_q_s17_res1
 
@@ -185,6 +186,158 @@ theorem pi_marginal_law
   have hweight : L.w = R.w := by
     funext x
     exact FinProb.pi_marginal (fun i => toFinProbLaw (P i)) s x
+  exact finLaw_ext_of_weights hweight
+
+theorem map_pr_law {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β]
+    (P : FinLaw α) (f : α → β) (E : β → Prop) :
+    (FinLaw.map P f).pr E = P.pr (fun x => E (f x)) := by
+  classical
+  have h := FinProb.map_expect (toFinProbLaw P) f
+    (fun y => if E y then (1 : ℝ) else 0)
+  simpa [FinLaw.map, FinLaw.pr, FinProb.map, FinProb.expect, FinProb.pr,
+    toFinProbLaw] using h
+
+private theorem pi_pr_coordinate_event
+    {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) (i : ι) (E : Ω i → Prop) :
+    (FinLaw.pi P).pr (fun x => E (x i)) = (P i).pr E := by
+  classical
+  have hpoint (y : Ω i) : (FinLaw.pi P).pr (fun x => x i = y) = (P i).w y := by
+    simpa [FinLaw.pr, FinProb.pr, FinLaw.pi, FinProb.pi, toFinProbLaw] using
+      Clock.pi_pr_coordinate (fun j => toFinProbLaw (P j)) i y
+  have hsplit (x : ∀ j, Ω j) :
+      (if E (x i) then (FinLaw.pi P).w x else 0) =
+        ∑ y : Ω i, (if E y ∧ x i = y then (FinLaw.pi P).w x else 0) := by
+    have hterm (y : Ω i) :
+        (if E y ∧ x i = y then (FinLaw.pi P).w x else 0) =
+          (if y = x i then (if E (x i) then (FinLaw.pi P).w x else 0) else 0) := by
+      by_cases hy : y = x i <;> simp [hy, eq_comm]
+    symm
+    calc
+      ∑ y : Ω i, (if E y ∧ x i = y then (FinLaw.pi P).w x else 0) =
+          ∑ y : Ω i, (if y = x i then
+            (if E (x i) then (FinLaw.pi P).w x else 0) else 0) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        exact hterm y
+      _ = if E (x i) then (FinLaw.pi P).w x else 0 := by simp
+  calc
+    (FinLaw.pi P).pr (fun x => E (x i)) =
+        ∑ x : (∀ j, Ω j), ∑ y : Ω i,
+          (if E y ∧ x i = y then (FinLaw.pi P).w x else 0) := by
+      unfold FinLaw.pr
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact hsplit x
+    _ = ∑ y : Ω i, ∑ x : (∀ j, Ω j),
+        if E y ∧ x i = y then (FinLaw.pi P).w x else 0 := Finset.sum_comm
+    _ = ∑ y : Ω i, if E y then
+        (FinLaw.pi P).pr (fun x => x i = y) else 0 := by
+      apply Finset.sum_congr rfl
+      intro y hy
+      by_cases hEy : E y <;> simp [hEy, FinLaw.pr]
+    _ = ∑ y : Ω i, if E y then (P i).w y else 0 := by
+      apply Finset.sum_congr rfl
+      intro y hy
+      by_cases hEy : E y <;> simp [hEy, hpoint y]
+    _ = (P i).pr E := rfl
+
+/-- Push a product law through an injectively selected family of coordinates. -/
+theorem pi_map_injective
+    {ι C : Type*} [Fintype ι] [DecidableEq ι] [Fintype C] [DecidableEq C]
+    {Ω : ι → Type*} {Ξ : C → Type*}
+    [∀ i, Fintype (Ω i)] [∀ c, Fintype (Ξ c)]
+    (P : ∀ i, FinLaw (Ω i)) (g : C → ι) (hg : Function.Injective g)
+    (f : ∀ c, Ω (g c) → Ξ c) :
+    FinLaw.map (FinLaw.pi P) (fun x c => f c (x (g c))) =
+      FinLaw.pi (fun c => FinLaw.map (P (g c)) (f c)) := by
+  classical
+  let L := FinLaw.map (FinLaw.pi P) (fun x c => f c (x (g c)))
+  let R := FinLaw.pi (fun c => FinLaw.map (P (g c)) (f c))
+  have hweight : L.w = R.w := by
+    funext y
+    have hsingle (c : C) :
+        (FinLaw.pi P).pr (fun x => f c (x (g c)) = y c) =
+          (FinLaw.map (P (g c)) (f c)).w (y c) := by
+      calc
+        _ = (P (g c)).pr (fun z => f c z = y c) :=
+          pi_pr_coordinate_event P (g c) _
+        _ = (FinLaw.map (P (g c)) (f c)).w (y c) := rfl
+    have hdep : ∀ c, FinProb.DependsOn
+        (fun x => if f c (x (g c)) = y c then (1 : ℝ) else 0) {g c} := by
+      intro c x x' hxy
+      have hx := hxy (g c) (by simp)
+      simp [hx]
+    have hdisj : ∀ c d, c ≠ d → Disjoint ({g c} : Finset ι) {g d} := by
+      intro c d hcd
+      apply Finset.disjoint_left.mpr
+      intro z hz hz'
+      simp only [Finset.mem_singleton] at hz hz'
+      exact hcd (hg (hz.symm.trans hz'))
+    have hfac := pi_pr_inter_disjoint P Finset.univ
+      (fun c x => f c (x (g c)) = y c) (fun c => {g c}) hdep hdisj
+    change (FinLaw.pi P).pr
+        (fun x => ∀ c ∈ (Finset.univ : Finset C), f c (x (g c)) = y c) = _ at hfac
+    calc
+      L.w y = (FinLaw.pi P).pr
+          (fun x => ∀ c ∈ (Finset.univ : Finset C), f c (x (g c)) = y c) := by
+        simp [L, FinLaw.map, FinLaw.pr, FinLaw.pi, funext_iff]
+      _ = ∏ c ∈ (Finset.univ : Finset C),
+          (FinLaw.pi P).pr (fun x => f c (x (g c)) = y c) := hfac
+      _ = ∏ c ∈ (Finset.univ : Finset C),
+          (FinLaw.map (P (g c)) (f c)).w (y c) := by
+        apply Finset.prod_congr rfl
+        intro c hc
+        exact hsingle c
+      _ = R.w y := rfl
+  exact finLaw_ext_of_weights hweight
+
+abbrev TapeRoundIndex {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (Ts : ℕ) :=
+  Σ C : G.Cell, Fin (Ts + 2)
+
+def flattenTapesEquiv
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {G : LowGeom PT} (F : FreshCell G) (Ts : ℕ) :
+    Tapes F Ts ≃ (∀ i : TapeRoundIndex (G := G) Ts, TapeEntry F i.1) where
+  toFun tapes i := tapes i.1 i.2
+  invFun flat C r := flat ⟨C, r⟩
+  left_inv := by intro tapes; funext C r; rfl
+  right_inv := by intro flat; funext i; cases i; rfl
+
+noncomputable def flatTapeLaw
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {G : LowGeom PT} (F : FreshCell G) (Ts : ℕ) :
+    FinLaw (∀ i : TapeRoundIndex (G := G) Ts, TapeEntry F i.1) :=
+  FinLaw.pi fun i => FinLaw.pi fun P : F.Pool i.1 => F.fresh i.1 P
+
+theorem tapeLaw_flatten
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {G : LowGeom PT} (F : FreshCell G) (Ts : ℕ) :
+    FinLaw.map (tapeLaw F Ts) (flattenTapesEquiv F Ts) = flatTapeLaw F Ts := by
+  classical
+  let e := flattenTapesEquiv F Ts
+  let L := FinLaw.map (tapeLaw F Ts) e
+  let R := flatTapeLaw F Ts
+  have hweight : L.w = R.w := by
+    funext x
+    have hsum : (∑ tapes : Tapes F Ts,
+        if e tapes = x then (tapeLaw F Ts).w tapes else 0) =
+        (tapeLaw F Ts).w (e.symm x) := by
+      rw [← Equiv.sum_comp e.symm]
+      simp only [Equiv.apply_symm_apply]
+      rw [Finset.sum_ite_eq' Finset.univ x]
+      simp
+    change (∑ tapes : Tapes F Ts,
+        if e tapes = x then (tapeLaw F Ts).w tapes else 0) = R.w x
+    rw [hsum]
+    change ∏ C : G.Cell, ∏ r : Fin (Ts + 2), ∏ P : F.Pool C,
+        (F.fresh C P).w ((e.symm x) C r P) =
+      ∏ i : TapeRoundIndex (G := G) Ts, ∏ P : F.Pool i.1,
+        (F.fresh i.1 P).w (x i P)
+    rw [← Fintype.prod_sigma']
+    rfl
   exact finLaw_ext_of_weights hweight
 
 private theorem graphBall_mono_radius

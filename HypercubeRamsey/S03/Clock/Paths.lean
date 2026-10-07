@@ -1,5 +1,6 @@
 import HypercubeRamsey.S03.Clock.Steps
 import HypercubeRamsey.S03.Clock.Truncated
+import Mathlib.Data.Sym.Card
 
 /-!
 # Inserted paths bound the incidence sum (Lemma 3.10, Step 4 on the finite mesh)
@@ -723,6 +724,37 @@ theorem closure_path_union {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g 
 endpoints, are at most the reversed-walk rate product `θ^{⌊j/2⌋}` (`step4_path_insertion_bound`; rows have
 total rate `1`, labels `θ`) times the mesh time sum: each arrival weight is at most `δ` times its mark mass, and
 the ticks along a decreasing path are non-increasing, so there are at most `(T + j)^j / j!` tick sequences. -/
+private theorem antitoneTickCount_le (T j : ℕ) :
+    (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) ≤
+      ((T + j : ℕ) : ℝ) ^ j / (j.factorial : ℝ) := by
+  classical
+  let toSym : {t : Fin j → Fin T // Antitone fun i => (t i).val} → Sym (Fin T) j :=
+    fun t => ⟨Multiset.ofList (List.ofFn t.1), by simp⟩
+  have htoSym : Function.Injective toSym := by
+    intro t u h
+    apply Subtype.ext
+    have hm : Multiset.ofList (List.ofFn t.1) = Multiset.ofList (List.ofFn u.1) :=
+      congrArg Subtype.val h
+    have hp : (List.ofFn t.1).Perm (List.ofFn u.1) := by
+      exact Multiset.coe_eq_coe.mp hm
+    have hs₁ : (List.ofFn t.1).SortedGE := List.sortedGE_ofFn_iff.mpr t.2
+    have hs₂ : (List.ofFn u.1).SortedGE := List.sortedGE_ofFn_iff.mpr u.2
+    exact List.ofFn_injective (hp.eq_of_sortedGE hs₁ hs₂)
+  have hcard :
+      Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} ≤
+        Nat.choose (T + j) j := by
+    calc
+      Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} ≤
+          Fintype.card (Sym (Fin T) j) := Fintype.card_le_of_injective toSym htoSym
+      _ = Nat.multichoose T j := by rw [Sym.card_sym_fin_eq_multichoose]
+      _ = Nat.choose (T + j - 1) j := Nat.multichoose_eq T j
+      _ ≤ Nat.choose (T + j) j := Nat.choose_le_choose j (Nat.sub_le _ _)
+  have hchoose := Nat.choose_le_pow_div (α := ℝ) j (T + j)
+  have hcard' :
+      (Fintype.card {t : Fin j → Fin T // Antitone fun i => (t i).val} : ℝ) ≤
+        (Nat.choose (T + j) j : ℝ) := by exact_mod_cast hcard
+  exact hcard'.trans hchoose
+
 theorem decPath_weight_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}
     {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g) (θ : ℝ)

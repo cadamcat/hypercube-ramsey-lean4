@@ -2140,4 +2140,142 @@ theorem height_adjacent_ball_card_le9 (slice : CubeVertex (P.m n))
     _ ≤ P.m n * B.card := Nat.mul_le_mul_right _ hT
     _ = P.m n * (∑ i ∈ Finset.range (R + 1), Nat.choose (n - P.m n) i) := by rw [hB]
 
+private noncomputable def heightBallVolReal9 (d r : ℕ) : ℝ :=
+  ∑ i ∈ Finset.range (r + 1), (Nat.choose d i : ℝ)
+
+theorem height_rpow_eventually_ge9 (δ K : ℝ) (hδ : 0 < δ) (hK : 0 < K) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, K ≤ (n : ℝ) ^ δ := by
+  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ δ) atTop atTop :=
+    (tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (Filter.tendsto_atTop.1 hT K)
+  exact ⟨n₀, hn₀⟩
+
+theorem height_base_volume_ratio_bounds9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      0 < (residualBall9 P n : ℝ) ∧
+      heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+          (residualBall9 P n : ℝ) ≤ 2 * (P.radius n : ℝ) / (n : ℝ) ∧
+      heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+          (residualBall9 P n : ℝ) ≤ 2 * (n : ℝ) ^ (1 - (P.σ : ℝ)) := by
+  obtain ⟨nGeom, hGeom⟩ := height_base_small_scales9 P hP
+  obtain ⟨nVol, hVol⟩ := height_counts9_volume_bounds P hP
+  refine ⟨max nGeom nVol, ?_⟩
+  intro n hn
+  have hnGeom : nGeom ≤ n := le_trans (le_max_left _ _) hn
+  have hnVol : nVol ≤ n := le_trans (le_max_right _ _) hn
+  have hsmall := hGeom n hnGeom
+  have hvolume := hVol n hnVol
+  have hn1 : 1 ≤ n := by omega
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnreal1 : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hmquarter : (P.m n : ℝ) ≤ (n : ℝ) / 4 := hsmall.1
+  have hrquarter : (P.radius n : ℝ) ≤ (n : ℝ) / 4 := hsmall.2.1
+  have hr11 : 11 ≤ P.radius n := hsmall.2.2
+  have hrpos : 1 ≤ P.radius n := by omega
+  have hrd : P.radius n ≤ n - P.m n := hvolume.2.1
+  have hmle : P.m n ≤ n := by
+    have h : (P.m n : ℝ) ≤ (n : ℝ) := by linarith
+    exact_mod_cast h
+  have hdcast : ((n - P.m n : ℕ) : ℝ) = (n : ℝ) - (P.m n : ℝ) :=
+    Nat.cast_sub hmle
+  have hden : (n : ℝ) / 2 ≤ ((n - P.m n - P.radius n + 1 : ℕ) : ℝ) := by
+    have hcastSub : ((n - P.m n - P.radius n : ℕ) : ℝ) =
+        (n : ℝ) - (P.m n : ℝ) - (P.radius n : ℝ) := by
+      rw [Nat.cast_sub hrd, hdcast]
+    rw [Nat.cast_add, hcastSub]
+    nlinarith
+  have hdenpos : 0 < ((n - P.m n - P.radius n + 1 : ℕ) : ℝ) :=
+    lt_of_lt_of_le (by positivity) hden
+  have hVpos : 0 < (residualBall9 P n : ℝ) := by exact_mod_cast hvolume.1
+  have hprevNat := height_hamming_ball_prev_volume_bound9
+    (n - P.m n) (P.radius n) hrpos hrd
+  have hrsub : P.radius n - 1 + 1 = P.radius n := Nat.sub_add_cancel hrpos
+  have hprev :
+      heightBallVolReal9 (n - P.m n) (P.radius n - 1) *
+          ((n - P.m n - P.radius n + 1 : ℕ) : ℝ) ≤
+        (P.radius n : ℝ) * (residualBall9 P n : ℝ) := by
+    simpa [heightBallVolReal9, residualBall9, hrsub] using (by exact_mod_cast hprevNat)
+  have hratioPrev :
+      heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+          (residualBall9 P n : ℝ) ≤
+        (P.radius n : ℝ) / ((n - P.m n - P.radius n + 1 : ℕ) : ℝ) := by
+    apply (div_le_div_iff₀ hVpos hdenpos).2
+    nlinarith [hprev]
+  have hrposR : 0 ≤ (P.radius n : ℝ) := Nat.cast_nonneg _
+  have hratioPrev2 :
+      (P.radius n : ℝ) / ((n - P.m n - P.radius n + 1 : ℕ) : ℝ) ≤
+        2 * (P.radius n : ℝ) / (n : ℝ) := by
+    apply (div_le_div_iff₀ hdenpos hnreal).2
+    nlinarith [hden, hrposR]
+  have hnextNat := height_hamming_ball_next_volume_bound9
+    (n - P.m n) (P.radius n)
+  have hVeq : heightBallVolReal9 (n - P.m n) (P.radius n) =
+      (residualBall9 P n : ℝ) := by simp [heightBallVolReal9, residualBall9]
+  have hnextReal :
+      heightBallVolReal9 (n - P.m n) (P.radius n + 1) *
+          ((P.radius n + 1 : ℕ) : ℝ) ≤
+        (residualBall9 P n : ℝ) *
+          ((P.radius n + 1 + (n - P.m n) : ℕ) : ℝ) := by
+    rw [← hVeq]
+    have hnextCast :
+        ((∑ i ∈ Finset.range (P.radius n + 2), Nat.choose (n - P.m n) i : ℕ) : ℝ) *
+            ((P.radius n + 1 : ℕ) : ℝ) ≤
+          ((∑ i ∈ Finset.range (P.radius n + 1), Nat.choose (n - P.m n) i : ℕ) : ℝ) *
+            ((P.radius n + 1 + (n - P.m n) : ℕ) : ℝ) := by exact_mod_cast hnextNat
+    simpa [heightBallVolReal9] using hnextCast
+  have hrplus : 0 < ((P.radius n + 1 : ℕ) : ℝ) := by positivity
+  have hratioNext :
+      heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+          (residualBall9 P n : ℝ) ≤
+        ((P.radius n + 1 + (n - P.m n) : ℕ) : ℝ) /
+          ((P.radius n + 1 : ℕ) : ℝ) := by
+    apply (div_le_div_iff₀ hVpos hrplus).2
+    nlinarith [hnextReal]
+  have hdle : ((n - P.m n : ℕ) : ℝ) ≤ (n : ℝ) := by
+    rw [hdcast]
+    have : 0 ≤ (P.m n : ℝ) := Nat.cast_nonneg _
+    linarith
+  have hrpow : (n : ℝ) ^ (P.σ : ℝ) < ((P.radius n + 1 : ℕ) : ℝ) := by
+    simpa [Params9.radius] using (Nat.lt_floor_add_one ((n : ℝ) ^ (P.σ : ℝ)))
+  have hrpowpos : 0 < (n : ℝ) ^ (P.σ : ℝ) := Real.rpow_pos_of_pos hnreal _
+  have hdenPow :
+      ((n - P.m n : ℕ) : ℝ) / ((P.radius n + 1 : ℕ) : ℝ) ≤
+        (n : ℝ) ^ (1 - (P.σ : ℝ)) := by
+    calc
+      _ ≤ (n : ℝ) / ((P.radius n + 1 : ℕ) : ℝ) :=
+        div_le_div_of_nonneg_right hdle hrplus.le
+      _ ≤ (n : ℝ) / (n : ℝ) ^ (P.σ : ℝ) :=
+        div_le_div_of_nonneg_left (by positivity) hrpowpos hrpow.le
+      _ = (n : ℝ) ^ (1 - (P.σ : ℝ)) := by
+        calc
+          (n : ℝ) / (n : ℝ) ^ (P.σ : ℝ) =
+              (n : ℝ) ^ (1 : ℝ) / (n : ℝ) ^ (P.σ : ℝ) := by rw [Real.rpow_one]
+          _ = (n : ℝ) ^ (1 - (P.σ : ℝ)) :=
+            (Real.rpow_sub hnreal 1 (P.σ : ℝ)).symm
+  have hratioNextBound :
+      heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+          (residualBall9 P n : ℝ) ≤ 2 * (n : ℝ) ^ (1 - (P.σ : ℝ)) := by
+    have hratioEq :
+        ((P.radius n + 1 + (n - P.m n) : ℕ) : ℝ) /
+            ((P.radius n + 1 : ℕ) : ℝ) =
+          1 + ((n - P.m n : ℕ) : ℝ) /
+            ((P.radius n + 1 : ℕ) : ℝ) := by
+      rw [Nat.cast_add]
+      field_simp [ne_of_gt hrplus]
+      <;> ring
+    have hσsmall : (P.σ : ℝ) < 1 := by
+      rcases hP with ⟨hcommon, _, _, hσ, _, _, _⟩
+      have hxS : P.xS < 1 := lt_trans hcommon.2.1 (lt_trans hcommon.2.2 (by norm_num))
+      have hσq : P.σ < 1 := by linarith [hσ.2]
+      exact_mod_cast hσq
+    have hpow1 : 1 ≤ (n : ℝ) ^ (1 - (P.σ : ℝ)) :=
+      Real.one_le_rpow hnreal1 (by linarith)
+    calc
+      _ ≤ 1 + ((n - P.m n : ℕ) : ℝ) /
+            ((P.radius n + 1 : ℕ) : ℝ) := by rw [← hratioEq]; exact hratioNext
+      _ ≤ 1 + (n : ℝ) ^ (1 - (P.σ : ℝ)) := by linarith [hdenPow]
+      _ ≤ 2 * (n : ℝ) ^ (1 - (P.σ : ℝ)) := by nlinarith [hpow1]
+  exact ⟨hVpos, hratioPrev.trans hratioPrev2, hratioNextBound⟩
+
 end HypercubeRamsey.Lane_q_s09_map

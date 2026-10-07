@@ -839,6 +839,185 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
         (mul_nonneg (Nat.cast_nonneg _)
           (inv_nonneg.mpr hratioPos.le))
         ((refRow M tag ω u c κ).nonneg (y j))
+  have hωpos : 0 < omega4 β γ := omega4_pos hβ hγ
+  have hωlt : omega4 β γ < 1 / 1000 := omega4_lt hβ hβγ
+  have hωsmall : omega4 β γ ≤ (1 - γ) / 1000 := by
+    dsimp [omega4]
+    have := min_le_right β (1 - γ)
+    nlinarith
+  have heta : 0 < omega4 β γ / 10 := by positivity
+  have heps : 0 < (c1 - c2) / 4 := by norm_num [c1, c2]
+  have hδcross : 0 < 1 - γ - 14 * omega4 β γ - 2 * h4 β γ := by
+    dsimp [h4]
+    nlinarith [hωsmall]
+  have hδmix : 0 < omega4 β γ / 3 - h4 β γ - bH β γ - omega4 β γ / 10 := by
+    dsimp [h4, bH]
+    nlinarith [hωpos]
+  let η : ℝ := omega4 β γ / 10
+  let I₀ : ℕ := ⌈(2 - zetaH β γ) / sigmaH β γ⌉₊
+  let A₀ : ℝ := (2 : ℝ) ^ (I₀ + 1)
+  let K₀ : ℝ := 2 * (A₀ + 1) + 1
+  let Cmix : ℝ := 8 * (K₀ + 16 / η)
+  have hK₀pos : 0 < K₀ := by dsimp [K₀]; positivity
+  have poolLogBound (n : ℕ) (hn2 : 2 ≤ n) :
+      Real.log (((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ^
+        (2 * setBd β γ n)) ≤ Cmix * (n : ℝ) ^ (bH β γ + η) := by
+    let σ : ℝ := sigmaH β γ
+    let ζ : ℝ := zetaH β γ
+    let I : ℕ := I₀
+    have hσpos : 0 < σ := by dsimp [σ, sigmaH, zetaH, b0H, bH]; positivity
+    have hζpos : 0 < ζ := by dsimp [ζ, zetaH, b0H, bH]; positivity
+    have hζlt : ζ < 1 := by
+      have hω' := omega4_lt hβ hβγ
+      dsimp [ζ, zetaH, b0H, bH]
+      linarith
+    have hσlt : σ < 1 := by
+      have hω' := omega4_lt hβ hβγ
+      dsimp [σ, sigmaH, zetaH, b0H, bH]
+      linarith
+    have hIceil : (I : ℝ) < (2 - ζ) / σ + 1 := by
+      dsimp [I, I₀]
+      apply Nat.ceil_lt_add_one
+      exact div_nonneg (by linarith [hζlt]) hσpos.le
+    have hσI : σ * (I : ℝ) < 2 - ζ + σ := by
+      calc
+        σ * (I : ℝ) < σ * ((2 - ζ) / σ + 1) := mul_lt_mul_of_pos_left hIceil hσpos
+        _ = 2 - ζ + σ := by field_simp [ne_of_gt hσpos]
+    have hExp : σ * (I : ℝ) + 2 ≤ 5 := by linarith [hζpos, hσlt, hσI]
+    have hnreal : (1 : ℝ) ≤ n := by exact_mod_cast (show 1 ≤ n by omega)
+    have hnpos : (0 : ℝ) < n := by linarith
+    have hHexp : (n : ℝ) ^ (σ * (I : ℝ) + 2) ≤ (n : ℝ) ^ (5 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le hnreal hExp
+    have hH : (topH β γ n : ℝ) ≤ A₀ * (n : ℝ) ^ (5 : ℝ) := by
+      calc
+        (topH β γ n : ℝ) ≤
+            (2 : ℝ) ^ (I + 1) * (n : ℝ) ^ (σ * (I : ℝ) + 2) := by
+              simpa [I, I₀, σ, sigmaH] using topH_poly n hn2
+        _ ≤ A₀ * (n : ℝ) ^ (5 : ℝ) := by
+              dsimp [A₀]
+              exact mul_le_mul_of_nonneg_left hHexp (by positivity)
+    have hn5 : (1 : ℝ) ≤ (n : ℝ) ^ (5 : ℝ) := by
+      exact Real.one_le_rpow hnreal (by norm_num)
+    have hn5Nat : (1 : ℝ) ≤ (n : ℝ) ^ 5 := one_le_pow₀ hnreal
+    have hHplus : ((topH β γ n + 1 : ℕ) : ℝ) ≤ (A₀ + 1) * (n : ℝ) ^ 5 := by
+      rw [Nat.cast_add, Nat.cast_one]
+      have hn5' : (n : ℝ) ^ (5 : ℝ) = (n : ℝ) ^ 5 :=
+        Real.rpow_natCast (n : ℝ) 5
+      rw [hn5'] at hH
+      calc
+        (topH β γ n : ℝ) + 1 ≤ A₀ * (n : ℝ) ^ 5 + 1 := by
+          simpa [add_comm] using add_le_add_right hH 1
+        _ ≤ A₀ * (n : ℝ) ^ 5 + (n : ℝ) ^ 5 := by
+          calc
+            A₀ * (n : ℝ) ^ 5 + 1 = 1 + A₀ * (n : ℝ) ^ 5 := by ring
+            _ ≤ (n : ℝ) ^ 5 + A₀ * (n : ℝ) ^ 5 :=
+              add_le_add_left hn5Nat (A₀ * (n : ℝ) ^ 5)
+            _ = A₀ * (n : ℝ) ^ 5 + (n : ℝ) ^ 5 := by ring
+        _ = (A₀ + 1) * (n : ℝ) ^ 5 := by ring_nf
+    have hpow16 : (n : ℝ) * (n : ℝ) ^ 5 * (n : ℝ) ^ 10 = (n : ℝ) ^ 16 := by
+      calc
+        (n : ℝ) * (n : ℝ) ^ 5 * (n : ℝ) ^ 10 =
+            ((n : ℝ) ^ 1) * (n : ℝ) ^ 5 * (n : ℝ) ^ 10 := by rw [pow_one]
+        _ = (n : ℝ) ^ (1 + 5) * (n : ℝ) ^ 10 := by rw [← pow_add]
+        _ = (n : ℝ) ^ (1 + 5 + 10) := by rw [← pow_add]
+        _ = (n : ℝ) ^ 16 := by norm_num
+    have hn10' : (n : ℝ) ^ (10 : ℝ) = (n : ℝ) ^ 10 :=
+      Real.rpow_natCast (n : ℝ) 10
+    have hPB :
+        (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) ≤
+          2 * (A₀ + 1) * (n : ℝ) ^ 16 := by
+      calc
+        (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) ≤
+            (n : ℝ) * ((A₀ + 1) * (n : ℝ) ^ 5) * (2 * (n : ℝ) ^ 10) := by
+              dsimp [lamH]
+              rw [hn10']
+              gcongr <;> rfl
+        _ = 2 * (A₀ + 1) * ((n : ℝ) * (n : ℝ) ^ 5 * (n : ℝ) ^ 10) := by ring
+        _ = 2 * (A₀ + 1) * (n : ℝ) ^ 16 := by rw [hpow16]
+    have hn16 : (1 : ℝ) ≤ (n : ℝ) ^ 16 := by
+      exact one_le_pow₀ hnreal
+    have hPBplus :
+        (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1 ≤
+          K₀ * (n : ℝ) ^ 16 := by
+      have hsum :
+          (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1 ≤
+            2 * (A₀ + 1) * (n : ℝ) ^ 16 + 1 := by
+          simpa [add_comm] using add_le_add_right hPB 1
+      have hPBstep :
+          2 * (A₀ + 1) * (n : ℝ) ^ 16 + 1 ≤
+            (2 * (A₀ + 1) + 1) * (n : ℝ) ^ 16 := by
+        calc
+          2 * (A₀ + 1) * (n : ℝ) ^ 16 + 1 = 1 + 2 * (A₀ + 1) * (n : ℝ) ^ 16 := by ring
+          _ ≤ (n : ℝ) ^ 16 + 2 * (A₀ + 1) * (n : ℝ) ^ 16 :=
+            add_le_add_left hn16 (2 * (A₀ + 1) * (n : ℝ) ^ 16)
+          _ = (2 * (A₀ + 1) + 1) * (n : ℝ) ^ 16 := by ring
+      calc
+        (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1 ≤
+            2 * (A₀ + 1) * (n : ℝ) ^ 16 + 1 := hsum
+        _ ≤ (2 * (A₀ + 1) + 1) * (n : ℝ) ^ 16 := hPBstep
+        _ = K₀ * (n : ℝ) ^ 16 := by rfl
+    have hPBpos : 0 ≤ (n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) := by
+      have hn0 : 0 ≤ (n : ℝ) := by positivity
+      have hH0 : 0 ≤ ((topH β γ n + 1 : ℕ) : ℝ) := Nat.cast_nonneg _
+      have hLamNonneg : 0 ≤ lamH n := by dsimp [lamH]; positivity
+      exact mul_nonneg (mul_nonneg hn0 hH0) (mul_nonneg (by norm_num) hLamNonneg)
+    have hnpos : (0 : ℝ) < n := by positivity
+    have hlogBase :
+        Real.log ((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ≤
+          (K₀ + 16 / η) * (n : ℝ) ^ η := by
+      have hlogmul : Real.log (K₀ * (n : ℝ) ^ 16) = Real.log K₀ + 16 * Real.log (n : ℝ) := by
+        rw [Real.log_mul (ne_of_gt hK₀pos) (ne_of_gt (pow_pos hnpos 16)), Real.log_pow]
+        push_cast <;> ring
+      have hlogn := Real.log_natCast_le_rpow_div n heta
+      have hnη : (1 : ℝ) ≤ (n : ℝ) ^ η := Real.one_le_rpow hnreal heta.le
+      have hKterm : K₀ ≤ K₀ * (n : ℝ) ^ η := by
+        simpa [mul_one] using mul_le_mul_of_nonneg_left hnη hK₀pos.le
+      calc
+        Real.log ((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ≤
+            Real.log (K₀ * (n : ℝ) ^ 16) :=
+          Real.log_le_log (by linarith [hPBpos]) hPBplus
+        _ = Real.log K₀ + 16 * Real.log (n : ℝ) := hlogmul
+        _ ≤ K₀ + 16 * ((n : ℝ) ^ η / η) := by
+          exact add_le_add (Real.log_le_self hK₀pos.le)
+            (mul_le_mul_of_nonneg_left hlogn (by norm_num))
+        _ ≤ (K₀ + 16 / η) * (n : ℝ) ^ η := by
+          have hsum : K₀ + 16 * ((n : ℝ) ^ η / η) ≤
+              K₀ * (n : ℝ) ^ η + 16 * ((n : ℝ) ^ η / η) := by nlinarith [hKterm]
+          calc
+            _ ≤ K₀ * (n : ℝ) ^ η + 16 * ((n : ℝ) ^ η / η) := hsum
+            _ = (K₀ + 16 / η) * (n : ℝ) ^ η := by ring
+    have hbpos : 0 < bH β γ := by dsimp [bH]; positivity
+    have hnpowb : (1 : ℝ) ≤ (n : ℝ) ^ bH β γ := Real.one_le_rpow hnreal hbpos.le
+    have hTceil : (setBd β γ n : ℝ) < 3 * (n : ℝ) ^ bH β γ + 1 := by
+      simpa [setBd] using Nat.ceil_lt_add_one (show 0 ≤ 3 * (n : ℝ) ^ bH β γ by positivity)
+    have hT : (setBd β γ n : ℝ) ≤ 4 * (n : ℝ) ^ bH β γ := by nlinarith [hTceil, hnpowb]
+    have hT2 : ((2 * setBd β γ n : ℕ) : ℝ) ≤ 8 * (n : ℝ) ^ bH β γ := by
+      push_cast
+      linarith
+    have hlogbase0 :
+        0 ≤ Real.log ((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) :=
+      Real.log_nonneg (by linarith [hPBpos])
+    have hpowprod : (n : ℝ) ^ bH β γ * (n : ℝ) ^ η =
+        (n : ℝ) ^ (bH β γ + η) := by
+      rw [← Real.rpow_add hnpos]
+    have hlogM :
+        Real.log (((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ^
+          (2 * setBd β γ n)) ≤ Cmix * (n : ℝ) ^ (bH β γ + η) := by
+      rw [Real.log_pow]
+      calc
+        ((2 * setBd β γ n : ℕ) : ℝ) *
+            Real.log ((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ≤
+          8 * (n : ℝ) ^ bH β γ *
+            Real.log ((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) :=
+          mul_le_mul_of_nonneg_right hT2 hlogbase0
+        _ ≤ 8 * (n : ℝ) ^ bH β γ * ((K₀ + 16 / η) * (n : ℝ) ^ η) :=
+          mul_le_mul_of_nonneg_left hlogBase (by positivity)
+        _ = Cmix * (n : ℝ) ^ (bH β γ + η) := by
+          dsimp [Cmix]
+          calc
+            _ = 8 * (K₀ + 16 / η) * ((n : ℝ) ^ bH β γ * (n : ℝ) ^ η) := by ring
+            _ = 8 * (K₀ + 16 / η) * (n : ℝ) ^ (bH β γ + η) := by rw [hpowprod]
+    exact hlogM
   sorry
 set_option maxHeartbeats 200000
 

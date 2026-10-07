@@ -15,7 +15,31 @@ finite comparison node, not by taking a logarithm of a zero atom.
 namespace HypercubeRamsey.Injection
 
 open Filter
+open HypercubeRamsey.Lane_q_inj_comp
 open scoped BigOperators
+
+private theorem lane_q_inj_comp_pr_finset_exists_le
+    {Ω ι : Type*} [Fintype Ω] (P : FinProb Ω)
+    (E : ι → Ω → Prop) (s : Finset ι) :
+    P.pr (fun x => ∃ a ∈ s, E a x) ≤ ∑ a ∈ s, P.pr (E a) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty =>
+      simp [FinProb.pr]
+  | @insert a s ha ih =>
+      have heq :
+          (fun x => ∃ b ∈ insert a s, E b x) =
+            (fun x => E a x ∨ ∃ b ∈ s, E b x) := by
+        funext x
+        simp [Finset.mem_insert, ha, or_left_comm, or_assoc]
+      rw [heq]
+      calc
+        P.pr (fun x => E a x ∨ ∃ b ∈ s, E b x) ≤
+            P.pr (E a) + P.pr (fun x => ∃ b ∈ s, E b x) :=
+          FinProb.pr_union_le _ _ _
+        _ ≤ P.pr (E a) + ∑ b ∈ s, P.pr (E b) :=
+          add_le_add le_rfl ih
+        _ = ∑ b ∈ insert a s, P.pr (E b) := by simp [ha]
 
 def Targets {d t : ℕ} (S : Finset (Fin t)) (y : Fin t → Fin d) (x : Path t d) : Prop :=
   ∀ i ∈ S, x i = some (y i)
@@ -2101,7 +2125,453 @@ theorem forced_martingale_concentration :
     ∀ᶠ d : ℕ in atTop, ∀ t (q : Fin t → Fin d → ℝ) (h : OrderedInput d t q),
       ∀ i y, 0 < q i (y i) → 1 - failureBound d ≤
         (forcingLaw q h.nonneg h.row_sum {i} y).pr (ForcedMartingaleGood q {i} y) := by
-  sorry
+  have huTop : Tendsto (fun n : ℕ => (n : ℝ) ^ (0.1 : ℝ)) atTop atTop := by
+    exact (tendsto_rpow_atTop (by norm_num : (0.1 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hgainTop : Tendsto (fun n : ℕ => (n : ℝ) ^ (0.55 : ℝ)) atTop atTop := by
+    exact (tendsto_rpow_atTop (by norm_num : (0.55 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hpolyTail : Tendsto
+      (fun n : ℕ => 2 * ((n : ℝ) ^ (0.1 : ℝ)) ^ (20 : ℕ) *
+        Real.exp (-((n : ℝ) ^ (0.1 : ℝ)))) atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      (20 : ℝ) (1 : ℝ) (by norm_num : (0 : ℝ) < 1)).comp huTop
+    simpa [Function.comp_def, mul_comm, mul_assoc] using h.const_mul (2 : ℝ)
+  obtain ⟨nTail, hnTail⟩ := Filter.eventually_atTop.1
+    (hpolyTail.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1)))
+  obtain ⟨nGain, hnGain⟩ := Filter.eventually_atTop.1
+    (Filter.tendsto_atTop.1 hgainTop (1200 : ℝ))
+  filter_upwards [eventually_ge_atTop nTail, eventually_ge_atTop nGain]
+    with d hdTail hdGain
+  intro t q h i y htarget
+  classical
+  by_cases ht0 : t = 0
+  · subst t
+    exact False.elim (Fin.elim0 i)
+  have hdNat : 0 < d := lt_of_lt_of_le (by decide : 0 < 100) h.dimension
+  have hd : 0 < (d : ℝ) := by exact_mod_cast hdNat
+  have htNat : 0 < t := Nat.pos_of_ne_zero ht0
+  have ht : (t : ℝ) ≤ 3 * (d : ℝ) / 4 := h.horizon
+  have hd100real : (100 : ℝ) ≤ (d : ℝ) := by exact_mod_cast h.dimension
+  have htLe : (t : ℝ) ≤ (d : ℝ) := by nlinarith [ht, hd100real]
+  have ht1Le : (t : ℝ) + 1 ≤ (d : ℝ) := by nlinarith [ht, hd100real]
+  have ht1Cast : ((t + 1 : ℕ) : ℝ) ≤ (d : ℝ) := by simpa using ht1Le
+  have huPos : 0 < (d : ℝ) ^ (0.1 : ℝ) := Real.rpow_pos_of_pos hd _
+  have hpolySmall :
+      2 * ((d : ℝ) ^ (0.1 : ℝ)) ^ (20 : ℕ) *
+        Real.exp (-((d : ℝ) ^ (0.1 : ℝ))) < 1 := hnTail d hdTail
+  have hgain : 1200 ≤ (d : ℝ) ^ (0.55 : ℝ) := hnGain d hdGain
+  have hpowFactor : (d : ℝ) ^ (0.65 : ℝ) =
+      (d : ℝ) ^ (0.1 : ℝ) * (d : ℝ) ^ (0.55 : ℝ) := by
+    rw [← Real.rpow_add hd]
+    norm_num
+  have hdom : 2 * (d : ℝ) ^ (0.1 : ℝ) ≤
+      (1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ) := by
+    have hmul := mul_le_mul_of_nonneg_left hgain
+      (Real.rpow_nonneg hd.le (0.1 : ℝ))
+    rw [hpowFactor]
+    nlinarith [hmul]
+  have hpow20 : ((d : ℝ) ^ (0.1 : ℝ)) ^ (20 : ℕ) = (d : ℝ) ^ 2 := by
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hd.le]
+    norm_num
+  have hfinalTail :
+      2 * (d : ℝ) ^ 2 *
+        Real.exp (-2 * (d : ℝ) ^ (0.1 : ℝ)) ≤ failureBound d := by
+    rw [failureBound]
+    rw [← hpow20]
+    have hExpSquare :
+        Real.exp (-2 * (d : ℝ) ^ (0.1 : ℝ)) =
+          Real.exp (-((d : ℝ) ^ (0.1 : ℝ))) *
+            Real.exp (-((d : ℝ) ^ (0.1 : ℝ))) := by
+      calc
+        Real.exp (-2 * (d : ℝ) ^ (0.1 : ℝ)) =
+            Real.exp ((-(d : ℝ) ^ (0.1 : ℝ)) + (-(d : ℝ) ^ (0.1 : ℝ))) := by
+              congr 1
+              ring
+        _ = _ := Real.exp_add _ _
+    have hsplit :
+        2 * ((d : ℝ) ^ (0.1 : ℝ)) ^ (20 : ℕ) *
+          Real.exp (-2 * (d : ℝ) ^ (0.1 : ℝ)) =
+        (2 * ((d : ℝ) ^ (0.1 : ℝ)) ^ (20 : ℕ) *
+          Real.exp (-((d : ℝ) ^ (0.1 : ℝ)))) *
+          Real.exp (-((d : ℝ) ^ (0.1 : ℝ))) := by
+      rw [hExpSquare]
+      ring
+    rw [hsplit]
+    calc
+      (2 * ((d : ℝ) ^ (0.1 : ℝ)) ^ (20 : ℕ) *
+          Real.exp (-((d : ℝ) ^ (0.1 : ℝ)))) *
+          Real.exp (-((d : ℝ) ^ (0.1 : ℝ)) ) ≤
+        1 * Real.exp (-((d : ℝ) ^ (0.1 : ℝ))) :=
+          mul_le_mul_of_nonneg_right hpolySmall.le (Real.exp_nonneg _)
+      _ = _ := by ring
+  let P : FinProb (Path t d) := forcingLaw q h.nonneg h.row_sum {i} y
+  let K : ∀ n, (Fin n → Option (Fin d)) → FinProb (Option (Fin d)) :=
+    forcingKernelFamily q h.nonneg {i} y
+  have hPweight (x : Path t d) :
+      P.w x = (triangularLaw K t).w x := by
+    change forcingWeight q {i} y x = _
+    exact forcingWeight_eq_triangularLaw_weight q h.nonneg {i} y x
+  have hPexpect (G : Path t d → ℝ) :
+      P.expect G = (triangularLaw K t).expect G := by
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro x hx
+    rw [hPweight x]
+  let hbad : Fin t → Fin (t + 1) → Path t d → Prop := fun a b x =>
+    (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ)) <
+      |forcedMartingalePart q {i} y x a b.val|
+  have hpairTail (a : Fin t) (b : Fin (t + 1)) :
+      P.pr (hbad a b) ≤ 2 * Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) := by
+    let M : ℝ := 10 * (d : ℝ) ^ (-(0.95 : ℝ))
+    let ε : ℝ := (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ))
+    let lo : Fin t → ℝ := fun _ => -M
+    let hi : Fin t → ℝ := fun _ => M
+    let width : ℝ := ∑ r : Fin t, (hi r - lo r) ^ 2
+    let Δ : Fin t → Path t d → ℝ := fun r x =>
+      if r.val < b.val then
+        (x r).elim 0 (q a) - forcedStepDrift q {i} y x a r else 0
+    let H : Fin (t + 1) → Type := fun m => Fin m.val → Option (Fin d)
+    let history : ∀ m : Fin (t + 1), Path t d → H m :=
+      fun m x => takePrefix (Nat.le_of_lt_succ m.isLt) x
+    let project : ∀ r : Fin t, H r.succ → H r.castSucc :=
+      fun r g => takePrefix (Nat.le_succ r.val) g
+    have hMnonneg : 0 ≤ M := by dsimp [M]; positivity
+    have hεpos : 0 < ε := by dsimp [ε]; positivity
+    have hfiltration (r : Fin t) (x : Path t d) :
+        history r.castSucc x = project r (history r.succ x) := by
+      funext k
+      simp [history, project, takePrefix]
+    have hAdapted :
+        ∀ (m : ℕ) (hm : m ≤ t) (r : Fin t), r.val < m →
+          ∀ x x', history ⟨m, Nat.lt_succ_of_le hm⟩ x =
+            history ⟨m, Nat.lt_succ_of_le hm⟩ x' → Δ r x = Δ r x' := by
+      intro m hm r hr x x' hhist
+      have hcoord (k : Fin t) (hkm : k.val < m) : x k = x' k := by
+        have hh := congrFun hhist ⟨k.val, hkm⟩
+        simpa [history, takePrefix] using hh
+      have hri : x r = x' r := hcoord r hr
+      have hprefix :
+          takePrefix (Nat.le_of_lt r.isLt) x =
+            takePrefix (Nat.le_of_lt r.isLt) x' := by
+        funext k
+        have hkm : k.val < m := by omega
+        have hkt : k.val < t := by omega
+        have hh := hcoord ⟨k.val, hkt⟩ hkm
+        simpa [takePrefix] using hh
+      have hDrift : forcedStepDrift q {i} y x a r =
+          forcedStepDrift q {i} y x' a r := by
+        rw [← forcingKernel_expect_step q h.nonneg {i} y x r a,
+          ← forcingKernel_expect_step q h.nonneg {i} y x' r a]
+        rw [hprefix]
+      by_cases hmask : r.val < b.val <;> simp [Δ, hmask, hri, hDrift]
+    have hObsRange (z : Option (Fin d)) :
+        0 ≤ z.elim 0 (q a) ∧ z.elim 0 (q a) ≤ M := by
+      cases z with
+      | none => simp [M, hMnonneg]
+      | some z =>
+          constructor
+          · exact h.nonneg a z
+          · exact h.atom a z
+    have hForceRange (r : Fin t) (x : Path t d) :
+        0 ≤ forcedStepDrift q {i} y x a r ∧
+          forcedStepDrift q {i} y x a r ≤ M := by
+      let R := forcingKernel q h.nonneg {i} y r
+        (takePrefix (Nat.le_of_lt r.isLt) x)
+      have hlow := FinProb.expect_mono R (fun z => (hObsRange z).1)
+      have hhigh := FinProb.expect_mono R (fun z => (hObsRange z).2)
+      have hstep := forcingKernel_expect_step q h.nonneg {i} y x r a
+      constructor
+      · calc
+          0 = R.expect (fun _ => 0) := by simp [R, FinProb.expect_const]
+          _ ≤ R.expect (fun z => z.elim 0 (q a)) := hlow
+          _ = forcedStepDrift q {i} y x a r := hstep
+      · calc
+          forcedStepDrift q {i} y x a r =
+              R.expect (fun z => z.elim 0 (q a)) := hstep.symm
+          _ ≤ R.expect (fun _ => M) := hhigh
+          _ = M := by simp [R, FinProb.expect_const]
+    have hBound : ∀ r x, lo r ≤ Δ r x ∧ Δ r x ≤ hi r := by
+      intro r x
+      by_cases hmask : r.val < b.val
+      · have hobs := hObsRange (x r)
+        have hdrift := hForceRange r x
+        simp [lo, hi, Δ, hmask]
+        constructor <;> linarith [hobs.1, hobs.2, hdrift.1, hdrift.2]
+      · simp [lo, hi, Δ, hmask, hMnonneg]
+    have hwidth : 0 < width := by
+      have hwidthEq : width = (t : ℝ) * (2 * M) ^ 2 := by
+        have hterm (r : Fin t) : (hi r - lo r) ^ 2 = (2 * M) ^ 2 := by
+          dsimp [hi, lo]
+          ring
+        change (∑ r : Fin t, (hi r - lo r) ^ 2) = _
+        calc
+          _ = ∑ r : Fin t, (2 * M) ^ 2 := by
+            apply Finset.sum_congr rfl
+            intro r hr
+            exact hterm r
+          _ = _ := by simp
+      rw [hwidthEq]
+      positivity
+    have hWidthUpper :
+        width ≤ 300 * (d : ℝ) ^ (-(0.9 : ℝ)) := by
+      have hpowSq : ((d : ℝ) ^ (-(0.95 : ℝ))) ^ 2 =
+          (d : ℝ) ^ (-(1.9 : ℝ)) := by
+        rw [← Real.rpow_natCast, ← Real.rpow_mul hd.le]
+        norm_num
+      have hWformula : width = (t : ℝ) * (2 * M) ^ 2 := by
+        have hterm (r : Fin t) : (hi r - lo r) ^ 2 = (2 * M) ^ 2 := by
+          dsimp [hi, lo]
+          ring
+        change (∑ r : Fin t, (hi r - lo r) ^ 2) = _
+        calc
+          _ = ∑ r : Fin t, (2 * M) ^ 2 := by
+            apply Finset.sum_congr rfl
+            intro r hr
+            exact hterm r
+          _ = _ := by simp
+      rw [hWformula]
+      calc
+        (t : ℝ) * (2 * M) ^ 2 =
+            (t : ℝ) * (400 * (d : ℝ) ^ (-(1.9 : ℝ))) := by
+              dsimp [M]
+              rw [show (2 * (10 * (d : ℝ) ^ (-(0.95 : ℝ))) ) ^ 2 =
+                400 * ((d : ℝ) ^ (-(0.95 : ℝ))) ^ 2 by ring, hpowSq]
+        _ ≤ (3 * (d : ℝ) / 4) * (400 * (d : ℝ) ^ (-(1.9 : ℝ))) :=
+          mul_le_mul_of_nonneg_right h.horizon (by positivity)
+        _ = 300 * (d : ℝ) ^ (-(0.9 : ℝ)) := by
+              calc
+                _ = 300 * ((d : ℝ) * (d : ℝ) ^ (-(1.9 : ℝ))) := by ring
+                _ = _ := by
+                  have hmul : (d : ℝ) * (d : ℝ) ^ (-(1.9 : ℝ)) =
+                      (d : ℝ) ^ (-(0.9 : ℝ)) := by
+                    calc
+                      (d : ℝ) * (d : ℝ) ^ (-(1.9 : ℝ)) =
+                          (d : ℝ) ^ (1 : ℝ) * (d : ℝ) ^ (-(1.9 : ℝ)) := by
+                            exact congrArg (fun z : ℝ => z * (d : ℝ) ^ (-(1.9 : ℝ)))
+                              (Real.rpow_one (d : ℝ)).symm
+                      _ = (d : ℝ) ^ ((1 : ℝ) + -(1.9 : ℝ)) :=
+                        (Real.rpow_add hd 1 (-(1.9 : ℝ))).symm
+                      _ = (d : ℝ) ^ (-(0.9 : ℝ)) := by congr 1 <;> norm_num
+                  rw [hmul]
+    have hpowSqEps : ((d : ℝ) ^ (-(1 / 8 : ℝ))) ^ 2 =
+        (d : ℝ) ^ (-(1 / 4 : ℝ)) := by
+      rw [← Real.rpow_natCast, ← Real.rpow_mul hd.le]
+      norm_num
+    have hnum : 2 * ε ^ 2 =
+        (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 4 : ℝ)) := by
+      dsimp [ε]
+      rw [mul_pow]
+      rw [hpowSqEps]
+      norm_num
+      ring_nf
+    have hExponent :
+        (1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ) ≤ 2 * ε ^ 2 / width := by
+      apply (le_div_iff₀ hwidth).2
+      have hpowFactor : (d : ℝ) ^ (0.65 : ℝ) *
+          (d : ℝ) ^ (-(0.9 : ℝ)) = (d : ℝ) ^ (-(0.25 : ℝ)) := by
+        rw [← Real.rpow_add hd]
+        norm_num
+      calc
+        (1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ) * width ≤
+            (1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ) *
+              (300 * (d : ℝ) ^ (-(0.9 : ℝ))) :=
+          mul_le_mul_of_nonneg_left hWidthUpper
+            (mul_nonneg (by norm_num) (Real.rpow_nonneg hd.le _))
+        _ = (1 / 2 : ℝ) * (d : ℝ) ^ (-(0.25 : ℝ)) := by
+              calc
+                _ = (1 / 2 : ℝ) *
+                    ((d : ℝ) ^ (0.65 : ℝ) * (d : ℝ) ^ (-(0.9 : ℝ))) := by ring
+                _ = _ := by rw [hpowFactor]
+        _ = 2 * ε ^ 2 := by convert hnum.symm using 1 <;> norm_num
+    have hcenteredFull (r : Fin t) (g : H r.castSucc) :
+        (∑ x, if history r.castSucc x = g then P.w x * Δ r x else 0) = 0 := by
+      by_cases hrb : r.val < b.val
+      · have hc := forcingLaw_centered_step q h.nonneg h.row_sum
+          {i} y r a g
+        simpa [P, forcingLaw, history, Δ, hrb] using hc
+      · simp [history, Δ, hrb]
+    have hAzumaMean (r : Fin t) (g : H r.castSucc) :
+        P.pr (fun x => history r.castSucc x = g) = 0 ∨
+          (0 : ℝ) * P.pr (fun x => history r.castSucc x = g) ≤
+            (∑ x, if history r.castSucc x = g then P.w x * Δ r x else 0) := by
+      right
+      rw [zero_mul, hcenteredFull r g]
+    have htail (D : Fin t → Path t d → ℝ)
+        (hadapted : ∀ (m : ℕ) (hm : m ≤ t) (r : Fin t), r.val < m →
+          ∀ x x', history ⟨m, Nat.lt_succ_of_le hm⟩ x =
+            history ⟨m, Nat.lt_succ_of_le hm⟩ x' → D r x = D r x')
+        (hD : ∀ r x, lo r ≤ D r x ∧ D r x ≤ hi r)
+        (hmeanD : ∀ r (g : H r.castSucc),
+          P.pr (fun x => history r.castSucc x = g) = 0 ∨
+            (0 : ℝ) * P.pr (fun x => history r.castSucc x = g) ≤
+              (∑ x, if history r.castSucc x = g then P.w x * D r x else 0)) :
+      P.pr (fun x => ∑ r, D r x < -ε) ≤
+        Real.exp (-2 * ε ^ 2 / width) := by
+      simpa [width] using
+        xAzuma H P history project hfiltration D hadapted
+          (fun _ => 0) lo hi hD hmeanD hwidth ε hεpos
+    have htailDown := htail Δ hAdapted hBound hAzumaMean
+    let Δneg : Fin t → Path t d → ℝ := fun r x => -Δ r x
+    have hAdaptedNeg :
+        ∀ (m : ℕ) (hm : m ≤ t) (r : Fin t), r.val < m →
+          ∀ x x', history ⟨m, Nat.lt_succ_of_le hm⟩ x =
+            history ⟨m, Nat.lt_succ_of_le hm⟩ x' → Δneg r x = Δneg r x' := by
+      intro m hm r hr x x' heq
+      simp [Δneg, hAdapted m hm r hr x x' heq]
+    have hBoundNeg : ∀ r x, lo r ≤ Δneg r x ∧ Δneg r x ≤ hi r := by
+      intro r x
+      rcases hBound r x with ⟨hl, hu⟩
+      constructor <;> dsimp [Δneg, lo, hi] <;> linarith
+    have hAzumaMeanNeg :
+        ∀ r (g : H r.castSucc),
+          P.pr (fun x => history r.castSucc x = g) = 0 ∨
+            (0 : ℝ) * P.pr (fun x => history r.castSucc x = g) ≤
+              (∑ x, if history r.castSucc x = g then P.w x * Δneg r x else 0) := by
+      intro r g
+      right
+      simp only [zero_mul]
+      have hsumNeg :
+          (∑ x, if history r.castSucc x = g then
+            P.w x * Δneg r x else 0) =
+            -(∑ x, if history r.castSucc x = g then
+              P.w x * Δ r x else 0) := by
+        dsimp [Δneg]
+        calc
+          (∑ x, if history r.castSucc x = g then P.w x * -Δ r x else 0) =
+              ∑ x, -(if history r.castSucc x = g then P.w x * Δ r x else 0) := by
+                apply Finset.sum_congr rfl
+                intro x hx
+                by_cases hEq : history r.castSucc x = g <;> simp [hEq] <;> ring
+          _ = -(∑ x, if history r.castSucc x = g then
+                P.w x * Δ r x else 0) := by rw [Finset.sum_neg_distrib]
+      rw [hsumNeg, hcenteredFull r g]
+      simp
+    have htailUp := htail Δneg hAdaptedNeg hBoundNeg hAzumaMeanNeg
+    have hpairBad (x : Path t d) :
+        hbad a b x → (∑ r, Δ r x < -ε) ∨ (∑ r, Δneg r x < -ε) := by
+      intro hbad'
+      have hsum : (∑ r, Δ r x) =
+          forcedMartingalePart q {i} y x a b.val := by rfl
+      have hbad'' : ε < |∑ r, Δ r x| := by
+        dsimp [ε]
+        dsimp [hbad, ε] at hbad'
+        rw [← hsum] at hbad'
+        exact hbad'
+      by_cases hnonneg : 0 ≤ ∑ r, Δ r x
+      · right
+        have habs := abs_of_nonneg hnonneg
+        rw [habs] at hbad''
+        change (∑ r, -Δ r x) < -ε
+        rw [Finset.sum_neg_distrib]
+        linarith
+      · left
+        have hnonpos : ∑ r, Δ r x ≤ 0 := le_of_not_ge hnonneg
+        have habs := abs_of_nonpos hnonpos
+        rw [habs] at hbad''
+        linarith
+    calc
+      P.pr (hbad a b) ≤
+          P.pr (fun x => (∑ r, Δ r x < -ε) ∨
+            (∑ r, Δneg r x < -ε)) :=
+        FinProb.pr_mono P _ _ hpairBad
+      _ ≤ P.pr (fun x => ∑ r, Δ r x < -ε) +
+            P.pr (fun x => ∑ r, Δneg r x < -ε) :=
+        FinProb.pr_union_le _ _ _
+      _ ≤ Real.exp (-2 * ε ^ 2 / width) +
+            Real.exp (-2 * ε ^ 2 / width) := add_le_add htailDown htailUp
+      _ ≤ 2 * Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) := by
+        have harg : (-2 * ε ^ 2) / width ≤
+            -(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ) := by
+          have hneg := neg_le_neg hExponent
+          simpa [div_eq_mul_inv] using hneg
+        have hle : Real.exp (-2 * ε ^ 2 / width) ≤
+            Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) :=
+          Real.exp_le_exp.mpr harg
+        nlinarith
+  let badPair : (Fin t × Fin (t + 1)) → Path t d → Prop :=
+    fun ab x => hbad ab.1 ab.2 x
+  have hbadAny (x : Path t d) :
+      ¬ ForcedMartingaleGood q {i} y x →
+        ∃ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))), badPair ab x := by
+    intro hnot
+    dsimp [ForcedMartingaleGood] at hnot
+    push_neg at hnot
+    rcases hnot with ⟨a, b, hbad'⟩
+    have hh : hbad a b x := by
+      dsimp [hbad]
+      exact hbad'
+    exact ⟨(a, b), Finset.mem_univ _, by dsimp [badPair]; exact hh⟩
+  have hbadProb :
+      P.pr (fun x => ∃ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))),
+        badPair ab x) ≤ 2 * (d : ℝ) ^ 2 *
+          Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) := by
+    calc
+      P.pr (fun x => ∃ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))),
+          badPair ab x) ≤
+          ∑ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))),
+            P.pr (badPair ab) :=
+        lane_q_inj_comp_pr_finset_exists_le P badPair Finset.univ
+      _ ≤ ∑ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))),
+            2 * Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) := by
+              apply Finset.sum_le_sum
+              intro ab hab
+              exact hpairTail ab.1 ab.2
+      _ ≤ _ := by
+            have htcard : (Fintype.card (Fin t × Fin (t + 1)) : ℝ) ≤
+                (d : ℝ) ^ 2 := by
+              have hcast : (Fintype.card (Fin t × Fin (t + 1)) : ℝ) =
+                  (t : ℝ) * ((t + 1 : ℕ) : ℝ) := by simp
+              rw [hcast]
+              calc
+                (t : ℝ) * ((t + 1 : ℕ) : ℝ) ≤
+                    (d : ℝ) * ((t + 1 : ℕ) : ℝ) :=
+                  mul_le_mul_of_nonneg_right htLe (by positivity)
+                _ ≤ (d : ℝ) * (d : ℝ) :=
+                  mul_le_mul_of_nonneg_left ht1Cast (by positivity)
+                _ = (d : ℝ) ^ 2 := by ring
+            calc
+              (∑ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))),
+                  2 * Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ))) =
+                  (Fintype.card (Fin t × Fin (t + 1)) : ℝ) *
+                    (2 * Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ))) := by simp
+              _ ≤ (d : ℝ) ^ 2 *
+                    (2 * Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ))) :=
+                mul_le_mul_of_nonneg_right htcard (by positivity)
+              _ = 2 * (d : ℝ) ^ 2 *
+                    Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) := by ring
+  have hbadBound :
+      P.pr (fun x => ¬ ForcedMartingaleGood q {i} y x) ≤ failureBound d := by
+    calc
+      P.pr (fun x => ¬ ForcedMartingaleGood q {i} y x) ≤
+          P.pr (fun x => ∃ ab ∈ (Finset.univ : Finset (Fin t × Fin (t + 1))),
+            badPair ab x) :=
+        FinProb.pr_mono P _ _ hbadAny
+      _ ≤ 2 * (d : ℝ) ^ 2 *
+          Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) := hbadProb
+      _ ≤ failureBound d := by
+        have hExp : Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) ≤
+            Real.exp (-2 * (d : ℝ) ^ (0.1 : ℝ)) :=
+          Real.exp_le_exp.mpr (by linarith [hdom])
+        calc
+          2 * (d : ℝ) ^ 2 *
+              Real.exp (-(1 / 600 : ℝ) * (d : ℝ) ^ (0.65 : ℝ)) ≤
+            2 * (d : ℝ) ^ 2 * Real.exp (-2 * (d : ℝ) ^ (0.1 : ℝ)) :=
+              mul_le_mul_of_nonneg_left hExp (by positivity)
+          _ ≤ failureBound d := hfinalTail
+  have htotal :
+      P.pr (ForcedMartingaleGood q {i} y) +
+        P.pr (fun x => ¬ ForcedMartingaleGood q {i} y x) = 1 := by
+    classical
+    unfold FinProb.pr
+    rw [← Finset.sum_add_distrib, ← P.sum_eq_one]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hg : ForcedMartingaleGood q {i} y x <;> simp [hg]
+  have hsuccess :
+      1 - failureBound d ≤ P.pr (ForcedMartingaleGood q {i} y) := by
+    linarith [htotal, hbadBound]
+  simpa [P] using hsuccess
 
 /-- Reuses the deterministic recurrence with the forced martingale and drift change. -/
 theorem singleton_forcing_tracking_transfer (K : ℝ) (hK : 1 ≤ K) :

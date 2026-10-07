@@ -521,4 +521,105 @@ theorem triangularLaw_last_centered_fiber {α : Type*} [Fintype α] [DecidableEq
         simp [hne]
       · simp
 
+theorem forcingLaw_centered_step {d t : ℕ}
+    (q : Fin t → Fin d → ℝ) (hn : ∀ i y, 0 ≤ q i y)
+    (hs : ∀ i, ∑ y, q i y = 1) (S : Finset (Fin t))
+    (y : Fin t → Fin d) (j a : Fin t) (h : Fin j.val → Option (Fin d)) :
+    (∑ x : Injection.Path t d,
+      if takePrefix (Nat.le_of_lt j.isLt) x = h then
+        forcingWeight q S y x *
+          ((x j).elim 0 (q a) - forcedStepDrift q S y x a j) else 0) = 0 := by
+  classical
+  let K := forcingKernelFamily q hn S y
+  let P := forcingLaw q hn hs S y
+  let X : Option (Fin d) → ℝ := fun z => z.elim 0 (q a)
+  let m := j.val + 1
+  have hm : m ≤ t := Nat.succ_le_of_lt j.isLt
+  let F : (Fin m → Option (Fin d)) → ℝ := fun p =>
+    if takePrefix (Nat.le_succ j.val) p = h then
+      X (lastValue p) - (K j.val h).expect X else 0
+  have hpref (x : Injection.Path t d) :
+      takePrefix (Nat.le_succ j.val) (takePrefix hm x) =
+        takePrefix (Nat.le_of_lt j.isLt) x := by
+    funext k
+    simp [takePrefix]
+  have hlast (x : Injection.Path t d) :
+      lastValue (takePrefix hm x) = x j := by
+    simp [lastValue, takePrefix]
+  have hkernelDrift (x : Injection.Path t d) :
+      (K j.val (takePrefix (Nat.le_of_lt j.isLt) x)).expect X =
+        forcedStepDrift q S y x a j := by
+    simpa [K, forcingKernelFamily, j.isLt] using
+      forcingKernel_expect_step q hn S y x j a
+  have hpoint (x : Injection.Path t d) :
+      (if takePrefix (Nat.le_of_lt j.isLt) x = h then
+        X (x j) - forcedStepDrift q S y x a j else 0) =
+        F (takePrefix hm x) := by
+    dsimp [F]
+    by_cases heq : takePrefix (Nat.le_of_lt j.isLt) x = h
+    · rw [hpref x]
+      simp only [if_pos heq]
+      rw [hlast x]
+      rw [← hkernelDrift x, heq]
+    · simp [F, heq, hpref x]
+  have hweight (x : Injection.Path t d) :
+      P.w x = (triangularLaw K t).w x := by
+    dsimp [P, K, forcingLaw]
+    exact forcingWeight_eq_triangularLaw_weight q hn S y x
+  have hexpect (G : Injection.Path t d → ℝ) :
+      P.expect G = (triangularLaw K t).expect G := by
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro x hx
+    rw [hweight x]
+  have hsumExpect :
+      (∑ x : Injection.Path t d,
+        if takePrefix (Nat.le_of_lt j.isLt) x = h then
+          P.w x * (X (x j) - forcedStepDrift q S y x a j) else 0) =
+        P.expect (fun x =>
+          if takePrefix (Nat.le_of_lt j.isLt) x = h then
+            X (x j) - forcedStepDrift q S y x a j else 0) := by
+    unfold FinProb.expect
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases heq : takePrefix (Nat.le_of_lt j.isLt) x = h <;> simp [heq]
+  have hsumExpect' :
+      (∑ x : Injection.Path t d,
+        if takePrefix (Nat.le_of_lt j.isLt) x = h then
+          forcingWeight q S y x *
+            (X (x j) - forcedStepDrift q S y x a j) else 0) =
+        P.expect (fun x =>
+          if takePrefix (Nat.le_of_lt j.isLt) x = h then
+            X (x j) - forcedStepDrift q S y x a j else 0) := by
+    simpa [P, forcingLaw] using hsumExpect
+  have hcentExp :
+      P.expect (fun x =>
+        if takePrefix (Nat.le_of_lt j.isLt) x = h then
+          X (x j) - forcedStepDrift q S y x a j else 0) = 0 := by
+    calc
+      _ = P.expect (fun x => F (takePrefix hm x)) := by
+        apply congrArg (fun G => P.expect G)
+        funext x
+        exact hpoint x
+      _ = (triangularLaw K t).expect (fun x => F (takePrefix hm x)) :=
+        hexpect _
+      _ = (triangularLaw K m).expect F :=
+        triangularLaw_prefix_expect K hm F
+      _ = 0 := by
+        have hfiber := triangularLaw_last_centered_fiber K j.val h X
+        have hfiberExp :
+            (triangularLaw K m).expect F =
+              ∑ p : Fin m → Option (Fin d),
+                if takePrefix (Nat.le_succ j.val) p = h then
+                  (triangularLaw K m).w p *
+                    (X (lastValue p) - (K j.val h).expect X) else 0 := by
+          change (∑ p, (triangularLaw K m).w p * F p) = _
+          apply Finset.sum_congr rfl
+          intro p hp
+          by_cases hph : takePrefix (Nat.le_succ j.val) p = h <;> simp [F, hph]
+        rw [hfiberExp]
+        simpa [m] using hfiber
+  exact hsumExpect'.trans hcentExp
+
+
 end HypercubeRamsey.Lane_q_inj_comp

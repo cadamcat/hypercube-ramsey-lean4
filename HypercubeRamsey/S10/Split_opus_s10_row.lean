@@ -1,6 +1,7 @@
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
 import HypercubeRamsey.S10.LocalNodes
 import HypercubeRamsey.Framework.Props
+import HypercubeRamsey.S10.Split_opus_s10_row_q_s10_c
 
 /-!
 # Section 10: split of the even-row construction (TeX 10:23–294)

@@ -3022,6 +3022,38 @@ private noncomputable def targetAnchorVars9 {P : Params9} {n k : ℕ} {I : IDMap
     (a : Fin k → EvenSites9 n) : Finset (I.ID ⊕ OddSites9 n) :=
   Finset.univ.image (fun i : Fin k => Sum.inl (I.center (a i).1))
 
+private noncomputable def targetAnchorEquiv9 {P : Params9} {n k : ℕ} {I : IDMap9 P n}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    Fin k ≃ targetAnchorVars9 (I := I) a := by
+  classical
+  let f : Fin k → targetAnchorVars9 (I := I) a := fun i =>
+    ⟨Sum.inl (I.center (a i).1), Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩⟩
+  have hf : Function.Injective f := by
+    intro i j hij
+    apply targetCenters_injective9 a hsep
+    exact Sum.inl.inj (congrArg Subtype.val hij)
+  have hsurj : Function.Surjective f := by
+    intro q
+    rcases Finset.mem_image.mp q.2 with ⟨i, hi, hqi⟩
+    refine ⟨i, ?_⟩
+    apply Subtype.ext
+    exact hqi
+  exact Equiv.ofBijective f ⟨hf, hsurj⟩
+
+private noncomputable def targetAssignmentEquiv9 {P : Params9} {n k N : ℕ}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    (∀ q : targetAnchorVars9 (I := I) a, Val9 I N q.1) ≃ (Fin k → Fin N) := by
+  classical
+  let e : Fin k ≃ targetAnchorVars9 (I := I) a := targetAnchorEquiv9 (I := I) a hsep
+  have hcoord (i : Fin k) : (e i).1 = Sum.inl (I.center (a i).1) := rfl
+  have hval (i : Fin k) : Val9 I N (e i).1 = Fin N := by
+    rw [hcoord i]
+    rfl
+  exact (Equiv.piCongrLeft (fun q : targetAnchorVars9 (I := I) a => Val9 I N q.1) e).symm.trans
+    (Equiv.piCongrRight fun i => Equiv.cast (hval i))
+
 private theorem targetAnchor_badCount9 {P : Params9} {n k N : ℕ} {M : TagMix N}
     {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
     (a : Fin k → EvenSites9 n) (hn : 0 < n)
@@ -3568,5 +3600,72 @@ private theorem evenStar9_eq_of_localAgree {P : Params9} {n N : ℕ} {M : TagMix
   rw [starLik9_eq_of_localAgree S E G ω ω' v (anc9 ω (I.center v.1)) hanc hmask ys]
   rw [predFail9_eq_of_localAgree S E G ω ω' v hanc hmask ys]
   rw [evenRowAt9_eq_of_localAgree S E G ω ω' v hanc hmask ys x]
+
+private theorem glueStarLocalAgree9 {P : Params9} {n k N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (ω : Outcome9 I N) (s : ∀ q : targetAnchorVars9 a, Val9 I N q.1) (i : Fin k) :
+    ∃ y : Fin N,
+      (∀ b : StarOdd9 (a i), ∀ c ∈ I.seen b.1.1,
+        anc9 (S07.glue (targetAnchorVars9 a) ω s) c =
+          anc9 (updAnc9 ω (I.center (a i).1) y) c) ∧
+      (∀ b : StarOdd9 (a i),
+        msk9 (S07.glue (targetAnchorVars9 a) ω s) b.1 =
+          msk9 (updAnc9 ω (I.center (a i).1) y) b.1) := by
+  classical
+  let q₀ : I.ID ⊕ OddSites9 n := Sum.inl (I.center (a i).1)
+  have hq₀ : q₀ ∈ targetAnchorVars9 a := by
+    unfold q₀ targetAnchorVars9
+    apply Finset.mem_image.mpr
+    exact ⟨i, Finset.mem_univ _, rfl⟩
+  have hqCenter : (Sum.inl (I.center (a i).1) : I.ID ⊕ OddSites9 n) ∈
+      targetAnchorVars9 a := by simpa [q₀] using hq₀
+  let y : Fin N := by
+    simpa [Val9] using s ⟨Sum.inl (I.center (a i).1), hqCenter⟩
+  refine ⟨y, ?_, ?_⟩
+  · intro b c hc
+    by_cases hq : (Sum.inl c : I.ID ⊕ OddSites9 n) ∈ targetAnchorVars9 a
+    · rcases Finset.mem_image.mp hq with ⟨j, hj, hqj⟩
+      have hcenter : I.center (a j).1 = c := Sum.inl.inj hqj
+      have hji : j = i := by
+        by_contra hne
+        have hne' : i ≠ j := by
+          intro h
+          apply hne
+          exact h.symm
+        have hnot := otherTarget9_not_seen (P := P) (n := n) (k := k) (N := N)
+          (M := M) (I := I) a hsep (i := i) (j := j) hne' b
+        have hseen : I.center (a j).1 ∈ I.seen b.1.1 := by simpa [hcenter] using hc
+        exact hnot hseen
+      have hc_eq : c = I.center (a i).1 := by simpa [hji] using hcenter.symm
+      rw [hc_eq]
+      have hglue : S07.glue (targetAnchorVars9 a) ω s
+          (Sum.inl (I.center (a i).1)) = y := by
+        unfold S07.glue
+        rw [dif_pos hqCenter]
+      calc
+        anc9 (S07.glue (targetAnchorVars9 a) ω s) (I.center (a i).1) = y := by
+          simpa [anc9, Val9] using hglue
+        _ = anc9 (updAnc9 ω (I.center (a i).1) y) (I.center (a i).1) := by
+          simp [anc9, updAnc9, Function.update]
+    · have hne : c ≠ I.center (a i).1 := by
+        intro heq
+        subst c
+        exact hq hqCenter
+      have hglue : S07.glue (targetAnchorVars9 a) ω s (Sum.inl c) = ω (Sum.inl c) := by
+        simp [S07.glue, hq, Val9]
+        rfl
+      calc
+        anc9 (S07.glue (targetAnchorVars9 a) ω s) c = anc9 ω c := by
+          simpa [anc9, Val9] using hglue
+        _ = anc9 (updAnc9 ω (I.center (a i).1) y) c := by
+          rw [anc9_update_ne ω (I.center (a i).1) c y hne]
+  · intro b
+    have hnot : (Sum.inr b.1 : I.ID ⊕ OddSites9 n) ∉ targetAnchorVars9 a := by
+      intro h
+      rcases Finset.mem_image.mp h with ⟨j, hj, heq⟩
+      cases heq
+    simp [msk9, S07.glue, hnot, updAnc9, Function.update, Val9]
+    rfl
 
 end HypercubeRamsey.Lane_q_s09_assign2

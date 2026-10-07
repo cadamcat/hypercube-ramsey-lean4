@@ -1276,6 +1276,33 @@ theorem prescribed_loss_total {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
       rw [← Finset.sum_filter]
       simp [prescribedCount]
 
+theorem prefixCoordinate_tick {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g k : ℕ} (hk : k ≤ T) (t : Fin k) (e : RowLabel R g) :
+    prefixCoordinate (Nat.mul_le_mul_right (Fintype.card R * g) hk)
+      (timeEdgeEquiv (t, e)) = (t.castLE hk, e) := by
+  have hkey : edgeKey
+      (prefixCoordinate (Nat.mul_le_mul_right (Fintype.card R * g) hk) (timeEdgeEquiv (t, e))).2
+      (prefixCoordinate (Nat.mul_le_mul_right (Fintype.card R * g) hk) (timeEdgeEquiv (t, e))).1.val =
+        edgeKey e (t.castLE hk).val := by
+    rw [prefixCoordinate_key]
+    simpa only [Fin.val_castLE] using timeEdgeEquiv_val t e
+  exact edgeKey_injective hkey
+
+theorem prefix_tick_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g k : ℕ} (hk : k ≤ T) (f : Fin T → RowLabel R g → ℝ) :
+    (∑ i : Fin (k * (Fintype.card R * g)),
+      f (prefixCoordinate (Nat.mul_le_mul_right (Fintype.card R * g) hk) i).1
+        (prefixCoordinate (Nat.mul_le_mul_right (Fintype.card R * g) hk) i).2) =
+      ∑ t : Fin k, ∑ e : RowLabel R g, f (t.castLE hk) e := by
+  calc
+    _ = ∑ p : Fin k × RowLabel R g, f (p.1.castLE hk) p.2 := by
+      symm
+      apply Fintype.sum_equiv timeEdgeEquiv
+      intro p
+      rw [prefixCoordinate_tick hk]
+    _ = _ := Fintype.sum_prod_type (fun p : Fin k × RowLabel R g => f (p.1.castLE hk) p.2)
+
+
 /-- Two-sided concentration of the ordinary compensated mass decrements
 through any fixed prefix of the prescribed background matching. -/
 theorem ordinary_prefix_tail {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
@@ -1344,6 +1371,38 @@ theorem prefix_sum_le {N M : ℕ} (hNM : N ≤ M) (f : Fin M → ℝ)
       apply Finset.sum_le_sum_of_subset_of_nonneg
       · intro i _; exact Finset.mem_univ i
       · intro i _ _; exact hf i
+
+theorem prescribed_prefix_loss_bound {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (ins : ∀ e : RowLabel R g, Option (MeshClockValue T (Ω e.1)))
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g))
+    (w : RowLabel R g → ℝ) (atom : ℝ) (hAtom : 0 ≤ atom)
+    (hw0 : ∀ e, 0 ≤ w e) (hwAtom : ∀ e, w e ≤ atom)
+    {N : ℕ} (hN : N ≤ T * (Fintype.card R * g)) :
+    0 ≤ (∑ i : Fin N, prescribedLoss ins ξ removedRows removedLabels
+        (prefixCoordinate hN i).2 (prefixCoordinate hN i).1 (w (prefixCoordinate hN i).2)) ∧
+    (∑ i : Fin N, prescribedLoss ins ξ removedRows removedLabels
+        (prefixCoordinate hN i).2 (prefixCoordinate hN i).1 (w (prefixCoordinate hN i).2)) ≤
+      (prescribedCount ins : ℝ) * atom := by
+  have hnonneg (t : Fin T) (e : RowLabel R g) :
+      0 ≤ prescribedLoss ins ξ removedRows removedLabels e t (w e) := by
+    unfold prescribedLoss
+    split_ifs <;> simp [hw0 e]
+  constructor
+  · exact Finset.sum_nonneg fun i _ => hnonneg _ _
+  · calc
+      _ ≤ ∑ i : Fin (T * (Fintype.card R * g)), prescribedLoss ins ξ removedRows removedLabels
+            (timeEdgeEquiv.symm i).2 (timeEdgeEquiv.symm i).1 (w (timeEdgeEquiv.symm i).2) := by
+        simpa only [prefixCoordinate] using prefix_sum_le hN
+          (fun i => prescribedLoss ins ξ removedRows removedLabels
+            (timeEdgeEquiv.symm i).2 (timeEdgeEquiv.symm i).1 (w (timeEdgeEquiv.symm i).2))
+          (fun i => hnonneg _ _)
+      _ = ∑ p : Fin T × RowLabel R g, prescribedLoss ins ξ removedRows removedLabels p.2 p.1 (w p.2) := by
+        symm
+        apply Fintype.sum_equiv timeEdgeEquiv
+        intro p
+        simp
+      _ ≤ _ := prescribed_loss_total ins ξ removedRows removedLabels w atom hAtom hw0 hwAtom
 
 /-- Summing the edgewise predictable-variance allowances uses the weighted
 rate load, rather than the number of edge coordinates. -/
@@ -1440,6 +1499,60 @@ noncomputable def massNoise {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
     ordinaryIncrement δ r ins removedRows removedLabels
       (prefixCoordinate (boundaryPrefix_le t) i).2 (prefixCoordinate (boundaryPrefix_le t) i).1
       (w (prefixCoordinate (boundaryPrefix_le t) i).2) ξ
+
+/-- The mesh-boundary mass identity separates compensated ordinary noise,
+ordinary drift, and the total prescribed loss. -/
+theorem prefix_mass_balance {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (r : R → Fin g → ℝ)
+    (ins : ∀ e : RowLabel R g, Option (MeshClockValue T (Ω e.1)))
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g))
+    (t : Fin (T + 1)) (u : Endpoint R g) :
+    endpointMass r (prescribedField ins ξ) removedRows removedLabels
+        (t.val * (Fintype.card R * g)) u =
+      endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u -
+        massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ -
+        δ * (∑ j : Fin t.val, tickDrift r ins ξ removedRows removedLabels j.val u) -
+        (∑ i : Fin (t.val * (Fintype.card R * g)),
+          prescribedLoss ins ξ removedRows removedLabels (prefixCoordinate (boundaryPrefix_le t) i).2
+            (prefixCoordinate (boundaryPrefix_le t) i).1
+            (endpointWeight r u (prefixCoordinate (boundaryPrefix_le t) i).2)) := by
+  classical
+  let hN := boundaryPrefix_le (R := R) (g := g) t
+  have hm := prefix_mass_loss r (prescribedField ins ξ) removedRows removedLabels u
+    (t.val * (Fintype.card R * g)) hN
+  have hsplit (i : Fin (t.val * (Fintype.card R * g))) :
+      (if keyFree (prescribedField ins ξ) removedRows removedLabels i.val (prefixCoordinate hN i).2 ∧
+          (∃ o, prescribedField ins ξ (prefixCoordinate hN i).2 = .tick (prefixCoordinate hN i).1 o)
+        then endpointWeight r u (prefixCoordinate hN i).2 else 0) =
+      ordinaryIncrement δ (fun e => r e.1 e.2) ins removedRows removedLabels
+        (prefixCoordinate hN i).2 (prefixCoordinate hN i).1
+          (endpointWeight r u (prefixCoordinate hN i).2) ξ +
+      δ * (if ins (prefixCoordinate hN i).2 = none ∧
+          keyFree (prescribedField ins ξ) removedRows removedLabels i.val (prefixCoordinate hN i).2 then
+        r (prefixCoordinate hN i).2.1 (prefixCoordinate hN i).2.2 *
+          endpointWeight r u (prefixCoordinate hN i).2 else 0) +
+      prescribedLoss ins ξ removedRows removedLabels (prefixCoordinate hN i).2
+        (prefixCoordinate hN i).1 (endpointWeight r u (prefixCoordinate hN i).2) := by
+    simpa only [prefixCoordinate_key] using accepted_loss_decomposition δ (fun e => r e.1 e.2)
+      ins ξ removedRows removedLabels (prefixCoordinate hN i).2 (prefixCoordinate hN i).1
+        (endpointWeight r u (prefixCoordinate hN i).2)
+  simp_rw [hsplit] at hm
+  rw [Finset.sum_add_distrib, Finset.sum_add_distrib, ← Finset.mul_sum] at hm
+  have hsum : (∑ i : Fin (t.val * (Fintype.card R * g)),
+      if ins (prefixCoordinate hN i).2 = none ∧
+          keyFree (prescribedField ins ξ) removedRows removedLabels i.val (prefixCoordinate hN i).2 then
+        r (prefixCoordinate hN i).2.1 (prefixCoordinate hN i).2.2 *
+          endpointWeight r u (prefixCoordinate hN i).2 else 0) =
+      ∑ j : Fin t.val, tickDrift r ins ξ removedRows removedLabels j.val u := by
+    have h := prefix_tick_sum (Nat.le_of_lt_succ t.isLt)
+      (fun (s : Fin T) (e : RowLabel R g) =>
+        if ins e = none ∧ keyFree (prescribedField ins ξ) removedRows removedLabels (edgeKey e s.val) e
+          then r e.1 e.2 * endpointWeight r u e else 0)
+    simpa only [prefixCoordinate_key, tickDrift, Fin.val_castLE, hN] using h
+  rw [hsum] at hm
+  dsimp only [massNoise]
+  linarith
 
 /-- Simultaneous compensated-noise control at all mesh boundaries and all
 members of a finite family of queried masses. -/
@@ -1599,6 +1712,249 @@ theorem cumulative_gronwall_implicit {T : ℕ} (E : ℕ → ℝ) (ε δ : ℝ)
       · exact Real.exp_nonneg _
       · exact mul_nonneg (by norm_num) hε
 
+noncomputable def trackingError {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (removedRows : Finset R)
+    (removedLabels : Finset (Fin g)) (target : ℕ → Endpoint R g → ℝ) (k : ℕ) : ℝ :=
+  Finset.univ.sup' (Finset.univ_nonempty :
+    (Finset.univ : Finset (Option (Fin (T + 1) × Endpoint R g))).Nonempty)
+    (fun p => match p with
+      | none => 0
+      | some (t, u) => if t.val ≤ k then
+          |endpointMass r ξ removedRows removedLabels (t.val * (Fintype.card R * g)) u - target t.val u|
+        else 0)
+
+theorem trackingError_nonneg {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (removedRows : Finset R)
+    (removedLabels : Finset (Fin g)) (target : ℕ → Endpoint R g → ℝ) (k : ℕ) :
+    0 ≤ trackingError r ξ removedRows removedLabels target k := by
+  unfold trackingError
+  apply (Finset.le_sup'_iff _).mpr
+  exact ⟨none, Finset.mem_univ _, le_refl 0⟩
+
+theorem trackingError_ge {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (removedRows : Finset R)
+    (removedLabels : Finset (Fin g)) (target : ℕ → Endpoint R g → ℝ)
+    (t : Fin (T + 1)) (u : Endpoint R g) {k : ℕ} (ht : t.val ≤ k) :
+    |endpointMass r ξ removedRows removedLabels (t.val * (Fintype.card R * g)) u - target t.val u| ≤
+      trackingError r ξ removedRows removedLabels target k := by
+  unfold trackingError
+  apply (Finset.le_sup'_iff _).mpr
+  refine ⟨some (t, u), Finset.mem_univ _, ?_⟩
+  simp [ht]
+
+theorem trackingError_mono {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (removedRows : Finset R)
+    (removedLabels : Finset (Fin g)) (target : ℕ → Endpoint R g → ℝ) :
+    Monotone (trackingError r ξ removedRows removedLabels target) := by
+  intro k m hkm
+  unfold trackingError
+  apply Finset.sup'_mono_fun
+  intro p _
+  cases p with
+  | none => exact le_refl 0
+  | some p =>
+      rcases p with ⟨t, u⟩
+      by_cases ht : t.val ≤ k
+      · simp [ht, ht.trans hkm]
+      · simp only [if_neg ht]
+        split_ifs <;> simp [abs_nonneg]
+
+theorem trackingError_le {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (ξ : ClockField T R g Ω) (removedRows : Finset R)
+    (removedLabels : Finset (Fin g)) (target : ℕ → Endpoint R g → ℝ)
+    (k : ℕ) (b : ℝ) (hb : 0 ≤ b)
+    (hpoint : ∀ (t : Fin (T + 1)) u, t.val ≤ k →
+      |endpointMass r ξ removedRows removedLabels (t.val * (Fintype.card R * g)) u - target t.val u| ≤ b) :
+    trackingError r ξ removedRows removedLabels target k ≤ b := by
+  apply Finset.sup'_le
+  intro p _
+  cases p with
+  | none => exact hb
+  | some p =>
+      rcases p with ⟨t, u⟩
+      by_cases ht : t.val ≤ k
+      · simp only [if_pos ht]; exact hpoint t u ht
+      · simp only [if_neg ht]; exact hb
+
+theorem target_telescope {T : ℕ} (target d : ℕ → ℝ) (δ : ℝ)
+    (hstep : ∀ j < T, target (j + 1) = target j - δ * d j) :
+    ∀ k ≤ T, target k = target 0 - δ * ∑ j ∈ Finset.range k, d j := by
+  intro k
+  induction k with
+  | zero => intro _; simp
+  | succ k ih =>
+      intro hk
+      rw [hstep k (by omega), ih (by omega), Finset.sum_range_succ]
+      ring
+
+theorem tracking_error_recurrence {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (hr : ∀ a y, 0 ≤ r a y)
+    (atom : ℝ) (hAtom : 0 ≤ atom) (hrAtom : ∀ a y, r a y ≤ atom)
+    (δ : ℝ) (hδ : 0 ≤ δ)
+    (ins : ∀ e : RowLabel R g, Option (MeshClockValue T (Ω e.1)))
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g))
+    (target : ℕ → Endpoint R g → ℝ) (d : ℕ → ℝ)
+    (initial ε : ℝ) (hinitial : 0 ≤ initial) (hε : 0 ≤ ε)
+    (htarget : ∀ j < T, ∀ u, target (j + 1) u = target j u - δ * d j)
+    (hdstep : ∀ j < T, |d (j + 1) - d j| ≤ 2 * δ)
+    (hinit : ∀ u, |endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u| ≤ initial)
+    (happrox : ∀ j ≤ T, ∀ u,
+      |fullDrift r (prescribedField ins ξ) removedRows removedLabels
+          (j * (Fintype.card R * g)) u - d j| ≤
+        2 * trackingError r (prescribedField ins ξ) removedRows removedLabels target j)
+    (hnoise : ∀ (t : Fin (T + 1)) u,
+      |massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ| ≤ ε) :
+    ∀ k ≤ T, trackingError r (prescribedField ins ξ) removedRows removedLabels target k ≤
+      initial + ε + (prescribedCount ins : ℝ) * atom +
+        (T : ℝ) * δ * ((prescribedCount ins : ℝ) * atom ^ 2 + 2 * δ) +
+        2 * δ * ∑ j ∈ Finset.range (k + 1),
+          trackingError r (prescribedField ins ξ) removedRows removedLabels target j := by
+  classical
+  let E := trackingError r (prescribedField ins ξ) removedRows removedLabels target
+  let skip := (prescribedCount ins : ℝ) * atom ^ 2 + 2 * δ
+  have hskip : 0 ≤ skip := by dsimp [skip]; positivity
+  have hE : ∀ j, 0 ≤ E j := trackingError_nonneg r (prescribedField ins ξ) removedRows removedLabels target
+  have hmono : Monotone E := trackingError_mono r (prescribedField ins ξ) removedRows removedLabels target
+  intro k hk
+  apply trackingError_le
+  · exact add_nonneg (by positivity)
+      (mul_nonneg (mul_nonneg (by norm_num) hδ) (Finset.sum_nonneg fun j _ => hE j))
+  · intro t u ht
+    have htT : t.val ≤ T := Nat.le_of_lt_succ t.isLt
+    have hmass := prefix_mass_balance δ r ins ξ removedRows removedLabels t u
+    have htargetSum := target_telescope (fun j => target j u) d δ
+      (by intro j hj; exact htarget j hj u) t.val htT
+    rw [← Fin.sum_univ_eq_sum_range] at htargetSum
+    have hw0 (e : RowLabel R g) : 0 ≤ endpointWeight r u e := by
+      rcases u with a | y
+      · exact hr a e.2
+      · exact hr e.1 y
+    have hwAtom (e : RowLabel R g) : endpointWeight r u e ≤ atom := by
+      rcases u with a | y
+      · exact hrAtom a e.2
+      · exact hrAtom e.1 y
+    have hpres := prescribed_prefix_loss_bound ins ξ removedRows removedLabels
+      (endpointWeight r u) atom hAtom hw0 hwAtom (boundaryPrefix_le t)
+    have hdiff (j : Fin t.val) :
+        |tickDrift r ins ξ removedRows removedLabels j.val u - d j.val| ≤ 2 * E (j.val + 1) + skip := by
+      have hjT : j.val < T := lt_of_lt_of_le j.isLt htT
+      have hj1 : j.val + 1 ≤ T := Nat.succ_le_of_lt hjT
+      have hs := tickDrift_sandwich r hr atom hAtom hrAtom ins ξ removedRows removedLabels j.val u
+      have hstart := abs_le.mp (happrox j.val hjT.le u)
+      have hend := abs_le.mp (happrox (j.val + 1) hj1 u)
+      have hd := abs_le.mp (hdstep j.val hjT)
+      have hmon := hmono (Nat.le_succ j.val)
+      apply abs_le.mpr
+      dsimp [skip, E] at *
+      constructor <;> linarith
+    have hsumErr : (∑ j : Fin t.val, E (j.val + 1)) ≤ ∑ j ∈ Finset.range (k + 1), E j := by
+      calc
+        _ ≤ ∑ j : Fin (t.val + 1), E j.val := by
+          rw [Fin.sum_univ_succ]
+          simp only [Fin.val_zero, Fin.val_succ]
+          linarith [hE 0]
+        _ ≤ ∑ j : Fin (k + 1), E j.val := by
+          simpa only [Fin.val_castLE] using prefix_sum_le (Nat.succ_le_succ ht)
+            (fun j : Fin (k + 1) => E j.val) (fun j => hE j.val)
+        _ = _ := Fin.sum_univ_eq_sum_range E (k + 1)
+    have hsumDiff : |δ * (∑ j : Fin t.val,
+        (tickDrift r ins ξ removedRows removedLabels j.val u - d j.val))| ≤
+        2 * δ * (∑ j ∈ Finset.range (k + 1), E j) + (T : ℝ) * δ * skip := by
+      calc
+        _ = δ * |∑ j : Fin t.val, (tickDrift r ins ξ removedRows removedLabels j.val u - d j.val)| := by
+          rw [abs_mul, abs_of_nonneg hδ]
+        _ ≤ δ * ∑ j : Fin t.val, |(tickDrift r ins ξ removedRows removedLabels j.val u - d j.val)| :=
+          mul_le_mul_of_nonneg_left (Finset.abs_sum_le_sum_abs _ _) hδ
+        _ ≤ δ * ∑ j : Fin t.val, (2 * E (j.val + 1) + skip) :=
+          mul_le_mul_of_nonneg_left (Finset.sum_le_sum fun j _ => hdiff j) hδ
+        _ = 2 * δ * (∑ j : Fin t.val, E (j.val + 1)) + (t.val : ℝ) * δ * skip := by
+          rw [Finset.sum_add_distrib, ← Finset.mul_sum]
+          simp
+          ring
+        _ ≤ 2 * δ * (∑ j ∈ Finset.range (k + 1), E j) + (T : ℝ) * δ * skip := by
+          apply add_le_add
+          · exact mul_le_mul_of_nonneg_left hsumErr (mul_nonneg (by norm_num) hδ)
+          · have htR : (t.val : ℝ) ≤ (T : ℝ) := by exact_mod_cast htT
+            simpa only [mul_assoc] using mul_le_mul_of_nonneg_right htR (mul_nonneg hδ hskip)
+    have hsum : (∑ j : Fin t.val, (tickDrift r ins ξ removedRows removedLabels j.val u - d j.val)) =
+        (∑ j : Fin t.val, tickDrift r ins ξ removedRows removedLabels j.val u) - ∑ j : Fin t.val, d j.val := by
+      rw [Finset.sum_sub_distrib]
+    have herrEq : endpointMass r (prescribedField ins ξ) removedRows removedLabels
+          (t.val * (Fintype.card R * g)) u - target t.val u =
+        ((endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u) -
+          massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ) -
+          (∑ i : Fin (t.val * (Fintype.card R * g)), prescribedLoss ins ξ removedRows removedLabels
+            (prefixCoordinate (boundaryPrefix_le t) i).2 (prefixCoordinate (boundaryPrefix_le t) i).1
+            (endpointWeight r u (prefixCoordinate (boundaryPrefix_le t) i).2)) -
+          δ * (∑ j : Fin t.val, (tickDrift r ins ξ removedRows removedLabels j.val u - d j.val)) := by
+      rw [hmass, htargetSum, hsum]
+      ring
+    rw [herrEq]
+    have hAbs (x y : ℝ) : |x - y| ≤ |x| + |y| := by
+      simpa [sub_eq_add_neg] using abs_add_le x (-y)
+    have h1 := hAbs
+      (endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u)
+      (massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ)
+    have h2 := hAbs
+      ((endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u) -
+        massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ)
+      (∑ i : Fin (t.val * (Fintype.card R * g)), prescribedLoss ins ξ removedRows removedLabels
+        (prefixCoordinate (boundaryPrefix_le t) i).2 (prefixCoordinate (boundaryPrefix_le t) i).1
+        (endpointWeight r u (prefixCoordinate (boundaryPrefix_le t) i).2))
+    have h3 := hAbs
+      (((endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u) -
+        massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ) -
+        (∑ i : Fin (t.val * (Fintype.card R * g)), prescribedLoss ins ξ removedRows removedLabels
+          (prefixCoordinate (boundaryPrefix_le t) i).2 (prefixCoordinate (boundaryPrefix_le t) i).1
+          (endpointWeight r u (prefixCoordinate (boundaryPrefix_le t) i).2)))
+      (δ * (∑ j : Fin t.val, (tickDrift r ins ξ removedRows removedLabels j.val u - d j.val)))
+    rw [abs_of_nonneg hpres.1] at h2
+    have hi := hinit u
+    have hn := hnoise t u
+    dsimp [skip, E] at hsumDiff
+    linarith
+
+theorem finite_tracking_bound {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (hr : ∀ a y, 0 ≤ r a y)
+    (atom : ℝ) (hAtom : 0 ≤ atom) (hrAtom : ∀ a y, r a y ≤ atom)
+    (δ : ℝ) (hδ : 0 ≤ δ) (hδsmall : δ ≤ 1 / 6)
+    (ins : ∀ e : RowLabel R g, Option (MeshClockValue T (Ω e.1)))
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g))
+    (target : ℕ → Endpoint R g → ℝ) (d : ℕ → ℝ)
+    (initial ε : ℝ) (hinitial : 0 ≤ initial) (hε : 0 ≤ ε)
+    (htarget : ∀ j < T, ∀ u, target (j + 1) u = target j u - δ * d j)
+    (hdstep : ∀ j < T, |d (j + 1) - d j| ≤ 2 * δ)
+    (hinit : ∀ u, |endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u| ≤ initial)
+    (happrox : ∀ j ≤ T, ∀ u,
+      |fullDrift r (prescribedField ins ξ) removedRows removedLabels
+          (j * (Fintype.card R * g)) u - d j| ≤
+        2 * trackingError r (prescribedField ins ξ) removedRows removedLabels target j)
+    (hnoise : ∀ (t : Fin (T + 1)) u,
+      |massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ| ≤ ε) :
+    ∀ t : Fin (T + 1), ∀ u : Endpoint R g,
+      |endpointMass r (prescribedField ins ξ) removedRows removedLabels
+          (t.val * (Fintype.card R * g)) u - target t.val u| ≤
+        2 * (initial + ε + (prescribedCount ins : ℝ) * atom +
+          (T : ℝ) * δ * ((prescribedCount ins : ℝ) * atom ^ 2 + 2 * δ)) *
+          Real.exp (3 * δ * (T : ℝ)) := by
+  let E := trackingError r (prescribedField ins ξ) removedRows removedLabels target
+  let b := initial + ε + (prescribedCount ins : ℝ) * atom +
+    (T : ℝ) * δ * ((prescribedCount ins : ℝ) * atom ^ 2 + 2 * δ)
+  have hb : 0 ≤ b := by dsimp [b]; positivity
+  have hrec := tracking_error_recurrence r hr atom hAtom hrAtom δ hδ ins ξ
+    removedRows removedLabels target d initial ε hinitial hε htarget hdstep hinit happrox hnoise
+  have hbound := cumulative_gronwall_implicit E b δ hb hδ hδsmall hrec T (le_refl T)
+  intro t u
+  exact (trackingError_ge r (prescribedField ins ξ) removedRows removedLabels target t u
+    (Nat.le_of_lt_succ t.isLt)).trans hbound
+
 /-- A weighted drift differs from its deterministic comparison by at most
 the mass error plus the uniform error in the neighboring masses. -/
 theorem weighted_drift_error {ι : Type*} [Fintype ι]
@@ -1632,5 +1988,253 @@ theorem weighted_drift_error {ι : Type*} [Fintype ι]
       exact (mul_le_mul_of_nonneg_left hq (abs_nonneg z)).trans
         (by simpa using mul_le_mul_of_nonneg_right hz hε)
     _ = 2 * ε := by ring
+
+theorem fullDrift_error {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (hr : ∀ a y, 0 ≤ r a y)
+    (θ : ℝ) (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1)
+    (hrow : ∀ a, ∑ y, r a y = 1) (hcol : ∀ y, ∑ a, r a y = θ)
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g))
+    (k : ℕ) (Q Z E : ℝ) (hQ0 : 0 ≤ Q) (hQ1 : Q ≤ 1)
+    (hZ0 : 0 ≤ Z) (hZ1 : Z ≤ 1) (hE : 0 ≤ E)
+    (hrowErr : ∀ a, |endpointMass r ξ removedRows removedLabels k (.inl a) - Q| ≤ E)
+    (hlabelErr : ∀ y, |endpointMass r ξ removedRows removedLabels k (.inr y) - θ * Z| ≤ E) :
+    ∀ u : Endpoint R g, |fullDrift r ξ removedRows removedLabels k u - θ * Z * Q| ≤ 2 * E := by
+  classical
+  have hθZ0 : 0 ≤ θ * Z := mul_nonneg hθ0 hZ0
+  have hθZ1 : θ * Z ≤ 1 := mul_le_one₀ hθ1 hZ0 hZ1
+  intro u
+  rcases u with a | y
+  · rw [fullDrift_row]
+    apply weighted_drift_error
+      (fun y => if y ∉ removedLabels ∧ ¬ labelUsed (keyMatching ξ removedRows removedLabels k) y
+        then r a y else 0)
+      (fun y => labelMass r (keyMatching ξ removedRows removedLabels k) removedRows y)
+      (rowMass r (keyMatching ξ removedRows removedLabels k) removedLabels a)
+      Q (θ * Z) E
+    · intro y; split_ifs <;> simp [hr a y]
+    · rfl
+    · calc
+        _ ≤ ∑ y, r a y := by
+          apply Finset.sum_le_sum
+          intro y _
+          split_ifs <;> simp [hr a y]
+        _ = 1 := hrow a
+    · simpa [abs_of_nonneg hθZ0] using hθZ1
+    · exact hE
+    · exact hlabelErr
+    · exact hrowErr a
+  · have hm1 : labelMass r (keyMatching ξ removedRows removedLabels k) removedRows y ≤ 1 := by
+      calc
+        _ ≤ ∑ a, r a y := by
+          apply Finset.sum_le_sum
+          intro a _
+          split_ifs <;> simp [hr a y]
+        _ = θ := hcol y
+        _ ≤ 1 := hθ1
+    have h := weighted_drift_error
+      (fun a => if a ∉ removedRows ∧ (keyMatching ξ removedRows removedLabels k).assignment a = none
+        then r a y else 0)
+      (fun a => rowMass r (keyMatching ξ removedRows removedLabels k) removedLabels a)
+      (labelMass r (keyMatching ξ removedRows removedLabels k) removedRows y)
+      (θ * Z) Q E
+      (by intro a; split_ifs <;> simp [hr a y]) rfl hm1
+      (by simpa [abs_of_nonneg hQ0] using hQ1) hE hrowErr (hlabelErr y)
+    rw [fullDrift_label]
+    simpa only [mul_assoc, mul_left_comm, mul_comm] using h
+
+theorem removed_mass_bound {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (w : ι → ℝ) (s : Finset ι) (atom : ℝ) (hw0 : ∀ i, 0 ≤ w i)
+    (hwAtom : ∀ i, w i ≤ atom) :
+    |(∑ i, if i ∉ s then w i else 0) - ∑ i, w i| ≤ (s.card : ℝ) * atom := by
+  classical
+  have hsplit : (∑ i, if i ∉ s then w i else 0) + (∑ i ∈ s, w i) = ∑ i, w i := by
+    have hmem : (∑ i ∈ s, w i) = ∑ i, if i ∈ s then w i else 0 := by simp
+    rw [hmem, ← Finset.sum_add_distrib]
+    apply Finset.sum_congr rfl
+    intro i _
+    by_cases hi : i ∈ s <;> simp [hi]
+  have h0 : 0 ≤ ∑ i ∈ s, w i := Finset.sum_nonneg fun i _ => hw0 i
+  have heq : (∑ i, if i ∉ s then w i else 0) - ∑ i, w i = -(∑ i ∈ s, w i) := by linarith
+  rw [heq, abs_neg, abs_of_nonneg h0]
+  calc
+    _ ≤ ∑ i ∈ s, atom := Finset.sum_le_sum fun i _ => hwAtom i
+    _ = _ := by simp
+
+theorem keyMatching_zero {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g)) :
+    keyMatching ξ removedRows removedLabels 0 = emptyGreedyState := by
+  simp [keyMatching, keyEvents, runGreedy]
+
+theorem endpointMass_initial_error {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (hr : ∀ a y, 0 ≤ r a y)
+    (atom : ℝ) (hAtom : 0 ≤ atom) (hrAtom : ∀ a y, r a y ≤ atom)
+    (θ : ℝ) (hrow : ∀ a, ∑ y, r a y = 1) (hcol : ∀ y, ∑ a, r a y = θ)
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g)) :
+    ∀ u : Endpoint R g,
+      |endpointMass r ξ removedRows removedLabels 0 u -
+        (match u with | .inl _ => 1 | .inr _ => θ)| ≤
+        ((removedRows.card + removedLabels.card : ℕ) : ℝ) * atom := by
+  classical
+  intro u
+  rcases u with a | y
+  · have h := removed_mass_bound (r a) removedLabels atom (hr a) (hrAtom a)
+    simp only [hrow] at h
+    have hm : endpointMass r ξ removedRows removedLabels 0 (.inl a) =
+        ∑ y, if y ∉ removedLabels then r a y else 0 := by
+      simp [endpointMass, rowMass, keyMatching_zero, labelUsed, emptyGreedyState]
+    rw [hm]
+    have hc : (removedLabels.card : ℝ) ≤ ((removedRows.card + removedLabels.card : ℕ) : ℝ) := by
+      norm_cast; omega
+    exact h.trans (mul_le_mul_of_nonneg_right hc hAtom)
+
+  · have h := removed_mass_bound (fun a => r a y) removedRows atom (fun a => hr a y) (fun a => hrAtom a y)
+    simp only [hcol] at h
+    have hm : endpointMass r ξ removedRows removedLabels 0 (.inr y) =
+        ∑ a, if a ∉ removedRows then r a y else 0 := by
+      simp [endpointMass, labelMass, keyMatching_zero, emptyGreedyState]
+    rw [hm]
+    have hc : (removedRows.card : ℝ) ≤ ((removedRows.card + removedLabels.card : ℕ) : ℝ) := by
+      norm_cast; omega
+    exact h.trans (mul_le_mul_of_nonneg_right hc hAtom)
+
+
+theorem eventPriority_horizon {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} (e : ClockCandidate T R g Ω) (t : ℕ) :
+    eventPriority e < t * (Fintype.card R * g) ↔ e.2.2.1.val < t := by
+  have hb := edgeKey_bounds (e.1, e.2.1) e.2.2.1.val
+  have hkey : eventPriority e = edgeKey (e.1, e.2.1) e.2.2.1.val := by
+    simp [eventPriority, edgeKey, edgeRank, Nat.add_assoc]
+  rw [hkey]
+  constructor
+  · intro h
+    by_contra ht
+    have hmul := Nat.mul_le_mul_right (Fintype.card R * g) (Nat.le_of_not_gt ht)
+    omega
+  · intro ht
+    exact lt_of_lt_of_le hb.2 (Nat.mul_le_mul_right _ (Nat.succ_le_of_lt ht))
+
+theorem euler_unit_square (q z : ℕ → ℝ) (δ θ : ℝ)
+    (hδ0 : 0 ≤ δ) (hδ1 : δ ≤ 1) (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1)
+    (hq0 : q 0 = 1) (hz0 : z 0 = 1)
+    (hqstep : ∀ k, q (k + 1) = q k - δ * θ * z k * q k)
+    (hzstep : ∀ k, z (k + 1) = z k - δ * q k * z k) :
+    ∀ k, 0 ≤ q k ∧ q k ≤ 1 ∧ 0 ≤ z k ∧ z k ≤ 1 := by
+  intro k
+  induction k with
+  | zero => simp [hq0, hz0]
+  | succ k ih =>
+      rcases ih with ⟨hqlo, hqhi, hzlo, hzhi⟩
+      have hdθ0 : 0 ≤ δ * θ := mul_nonneg hδ0 hθ0
+      have hdθ1 : δ * θ ≤ 1 := mul_le_one₀ hδ1 hθ0 hθ1
+      have hdθz0 : 0 ≤ δ * θ * z k := mul_nonneg hdθ0 hzlo
+      have hdθz1 : δ * θ * z k ≤ 1 := mul_le_one₀ hdθ1 hzlo hzhi
+      have hdq0 : 0 ≤ δ * q k := mul_nonneg hδ0 hqlo
+      have hdq1 : δ * q k ≤ 1 := mul_le_one₀ hδ1 hqlo hqhi
+      have hqnext : q (k + 1) = q k * (1 - δ * θ * z k) := by rw [hqstep]; ring
+      have hznext : z (k + 1) = z k * (1 - δ * q k) := by rw [hzstep]; ring
+      rw [hqnext, hznext]
+      refine ⟨mul_nonneg hqlo (by linarith), ?_, mul_nonneg hzlo (by linarith), ?_⟩
+      · exact (mul_le_mul_of_nonneg_left (by linarith : 1 - δ * θ * z k ≤ 1) hqlo).trans
+          (by simpa using hqhi)
+      · exact (mul_le_mul_of_nonneg_left (by linarith : 1 - δ * q k ≤ 1) hzlo).trans
+          (by simpa using hzhi)
+
+theorem bounded_product_change (q z q' z' θ δ : ℝ)
+    (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hz'0 : 0 ≤ z') (hz'1 : z' ≤ 1)
+    (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1) (hδ : 0 ≤ δ)
+    (hq : |q' - q| ≤ δ) (hz : |z' - z| ≤ δ) :
+    |θ * z' * q' - θ * z * q| ≤ 2 * δ := by
+  have hid : θ * z' * q' - θ * z * q = θ * ((q' - q) * z' + q * (z' - z)) := by ring
+  rw [hid, abs_mul, abs_of_nonneg hθ0]
+  have hinner : |(q' - q) * z' + q * (z' - z)| ≤ 2 * δ := by
+    calc
+      _ ≤ |(q' - q) * z'| + |q * (z' - z)| := abs_add_le _ _
+      _ = |q' - q| * z' + q * |z' - z| := by
+        rw [abs_mul, abs_mul, abs_of_nonneg hq0, abs_of_nonneg hz'0]
+      _ ≤ δ * z' + q * δ := add_le_add
+        (mul_le_mul_of_nonneg_right hq hz'0) (mul_le_mul_of_nonneg_left hz hq0)
+      _ ≤ 2 * δ := by
+        have h1 := mul_le_mul_of_nonneg_left hz'1 hδ
+        have h2 := mul_le_mul_of_nonneg_right hq1 hδ
+        nlinarith
+  exact (mul_le_mul_of_nonneg_left hinner hθ0).trans
+    (by simpa using mul_le_mul_of_nonneg_right hθ1 (mul_nonneg (by norm_num) hδ))
+
+theorem euler_tracking_bound {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R]
+    {g : ℕ} {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (r : R → Fin g → ℝ) (hr : ∀ a y, 0 ≤ r a y)
+    (atom : ℝ) (hAtom : 0 ≤ atom) (hrAtom : ∀ a y, r a y ≤ atom)
+    (δ θ : ℝ) (hδ : 0 ≤ δ) (hδsmall : δ ≤ 1 / 6) (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1)
+    (hrow : ∀ a, ∑ y, r a y = 1) (hcol : ∀ y, ∑ a, r a y = θ)
+    (q z : ℕ → ℝ) (hq0 : q 0 = 1) (hz0 : z 0 = 1)
+    (hqstep : ∀ k, q (k + 1) = q k - δ * θ * z k * q k)
+    (hzstep : ∀ k, z (k + 1) = z k - δ * q k * z k)
+    (ins : ∀ e : RowLabel R g, Option (MeshClockValue T (Ω e.1)))
+    (ξ : ClockField T R g Ω) (removedRows : Finset R) (removedLabels : Finset (Fin g))
+    (ε : ℝ) (hε : 0 ≤ ε)
+    (hnoise : ∀ (t : Fin (T + 1)) u,
+      |massNoise δ (fun e => r e.1 e.2) ins removedRows removedLabels (endpointWeight r u) t ξ| ≤ ε) :
+    ∀ t : Fin (T + 1), ∀ u : Endpoint R g,
+      |endpointMass r (prescribedField ins ξ) removedRows removedLabels
+          (t.val * (Fintype.card R * g)) u -
+        (match u with | .inl _ => q t.val | .inr _ => θ * z t.val)| ≤
+        2 * (((removedRows.card + removedLabels.card : ℕ) : ℝ) * atom + ε +
+          (prescribedCount ins : ℝ) * atom +
+          (T : ℝ) * δ * ((prescribedCount ins : ℝ) * atom ^ 2 + 2 * δ)) *
+          Real.exp (3 * δ * (T : ℝ)) := by
+  classical
+  let target : ℕ → Endpoint R g → ℝ := fun k u =>
+    match u with | .inl _ => q k | .inr _ => θ * z k
+  let d := fun k => θ * z k * q k
+  have hbounds := euler_unit_square q z δ θ hδ (by linarith) hθ0 hθ1 hq0 hz0 hqstep hzstep
+  have htstep : ∀ k < T, ∀ u, target (k + 1) u = target k u - δ * d k := by
+    intro k _ u
+    rcases u with a | y
+    · dsimp [target, d]; rw [hqstep]; ring
+    · dsimp [target, d]; rw [hzstep]; ring
+  have hdstep : ∀ k < T, |d (k + 1) - d k| ≤ 2 * δ := by
+    intro k _
+    have hb := hbounds k
+    have hb' := hbounds (k + 1)
+    have hzq0 : 0 ≤ θ * z k * q k := mul_nonneg (mul_nonneg hθ0 hb.2.2.1) hb.1
+    have hzq1 : θ * z k * q k ≤ 1 :=
+      mul_le_one₀ (mul_le_one₀ hθ1 hb.2.2.1 hb.2.2.2) hb.1 hb.2.1
+    have hqz0 : 0 ≤ q k * z k := mul_nonneg hb.1 hb.2.2.1
+    have hqz1 : q k * z k ≤ 1 := mul_le_one₀ hb.2.1 hb.2.2.1 hb.2.2.2
+    have hqdiff : q (k + 1) - q k = -(δ * (θ * z k * q k)) := by rw [hqstep]; ring
+    have hzdiff : z (k + 1) - z k = -(δ * (q k * z k)) := by rw [hzstep]; ring
+    have hq : |q (k + 1) - q k| ≤ δ := by
+      rw [hqdiff, abs_neg, abs_of_nonneg (mul_nonneg hδ hzq0)]
+      simpa using mul_le_mul_of_nonneg_left hzq1 hδ
+    have hz : |z (k + 1) - z k| ≤ δ := by
+      rw [hzdiff, abs_neg, abs_of_nonneg (mul_nonneg hδ hqz0)]
+      simpa using mul_le_mul_of_nonneg_left hqz1 hδ
+    exact bounded_product_change (q k) (z k) (q (k + 1)) (z (k + 1)) θ δ
+      hb.1 hb.2.1 hb'.2.2.1 hb'.2.2.2 hθ0 hθ1 hδ hq hz
+  have hinit : ∀ u, |endpointMass r (prescribedField ins ξ) removedRows removedLabels 0 u - target 0 u| ≤
+      ((removedRows.card + removedLabels.card : ℕ) : ℝ) * atom := by
+    simpa [target, hq0, hz0] using endpointMass_initial_error r hr atom hAtom hrAtom θ hrow hcol
+      (prescribedField ins ξ) removedRows removedLabels
+  have happrox : ∀ k ≤ T, ∀ u,
+      |fullDrift r (prescribedField ins ξ) removedRows removedLabels (k * (Fintype.card R * g)) u - d k| ≤
+        2 * trackingError r (prescribedField ins ξ) removedRows removedLabels target k := by
+    intro k hk u
+    have hb := hbounds k
+    apply fullDrift_error r hr θ hθ0 hθ1 hrow hcol (prescribedField ins ξ) removedRows removedLabels
+      (k * (Fintype.card R * g)) (q k) (z k)
+      (trackingError r (prescribedField ins ξ) removedRows removedLabels target k)
+      hb.1 hb.2.1 hb.2.2.1 hb.2.2.2 (trackingError_nonneg _ _ _ _ _ _) ?_ ?_ u
+    · intro a
+      exact trackingError_ge r (prescribedField ins ξ) removedRows removedLabels target
+        ⟨k, Nat.lt_succ_of_le hk⟩ (.inl a) (le_refl k)
+    · intro y
+      exact trackingError_ge r (prescribedField ins ξ) removedRows removedLabels target
+        ⟨k, Nat.lt_succ_of_le hk⟩ (.inr y) (le_refl k)
+  exact finite_tracking_bound r hr atom hAtom hrAtom δ hδ hδsmall ins ξ removedRows removedLabels
+    target d (((removedRows.card + removedLabels.card : ℕ) : ℝ) * atom) ε
+    (by positivity) hε htstep hdstep hinit happrox hnoise
 
 end HypercubeRamsey.Lane_sol_clock_s6

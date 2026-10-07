@@ -87,13 +87,19 @@ import HypercubeRamsey.S06.Reduction
 import HypercubeRamsey.S06.Selection
 import HypercubeRamsey.S07
 import HypercubeRamsey.S07.Acceptance
+import HypercubeRamsey.S07.AnchorStage
 import HypercubeRamsey.S07.CellFilters
+import HypercubeRamsey.S07.EvenStage
+import HypercubeRamsey.S07.Experiment
+import HypercubeRamsey.S07.FilterNodes
+import HypercubeRamsey.S07.GeometryNodes
 import HypercubeRamsey.S07.GridGeometry
-import HypercubeRamsey.S07.GridNodes
 import HypercubeRamsey.S07.InitialDiscrepancy
 import HypercubeRamsey.S07.Needs
+import HypercubeRamsey.S07.Profiles
 import HypercubeRamsey.S07.SmallGridPurity
 import HypercubeRamsey.S07.Support
+import HypercubeRamsey.S07.TagStage
 import HypercubeRamsey.S08.L81.Definitions
 import HypercubeRamsey.S08.L81.Nodes
 import HypercubeRamsey.S03.Height.Selection_p_height_small
@@ -116,4 +122,3 @@ import HypercubeRamsey.PartC.SliceSolver
 import HypercubeRamsey.PartC.Tiling
 import HypercubeRamsey.S04.PlateauProof
 import HypercubeRamsey.S04.StageProof
-import HypercubeRamsey.S07.GridNodes_p_s07_c

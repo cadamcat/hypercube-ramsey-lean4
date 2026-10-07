@@ -401,6 +401,45 @@ theorem truncatedExploration_inspected_touches {T : ℕ} {R : Type*} [Fintype R]
       have hcontra : pendingKey s u < pendingKey s v := lt_of_lt_of_le hkeyU (le_trans hmul hkeyV)
       exact (not_lt_of_ge hkey) hcontra
     · simp [nextPending, hp] at hn
+  have hnextMaxReq (s : ExploreState R g) (u : Endpoint R g)
+      (hn : nextPending s = some u) :
+      ∀ v ∈ pendingEndpoints s, (s.request v).getD 0 ≤ (s.request u).getD 0 := by
+    classical
+    by_cases hp : (pendingEndpoints s).Nonempty
+    · have hmax := (pendingEndpoints s).exists_max_image (pendingKey s) hp
+      have heq : ((pendingEndpoints s).exists_max_image (pendingKey s) hp).choose = u := by
+        simpa [nextPending, hp] using hn
+      intro v hv
+      have hkey : pendingKey s v ≤ pendingKey s u := by
+        have h := hmax.choose_spec.2 v hv
+        calc
+          pendingKey s v ≤ pendingKey s ((pendingEndpoints s).exists_max_image (pendingKey s) hp).choose := h
+          _ = pendingKey s u := by rw [heq]
+      let N := Fintype.card (Endpoint R g)
+      let qv := (s.request v).getD 0
+      let qu := (s.request u).getD 0
+      by_contra hnot
+      have hlt : qu < qv := Nat.lt_of_not_ge hnot
+      have hN : 0 < N := Fintype.card_pos_iff.mpr ⟨u⟩
+      have hRankV : (Fintype.equivFin (Endpoint R g) v).val < N := (Fintype.equivFin (Endpoint R g) v).isLt
+      have hRankU : (Fintype.equivFin (Endpoint R g) u).val < N := (Fintype.equivFin (Endpoint R g) u).isLt
+      have hkeyU : pendingKey s u < (qu + 1) * N := by
+        dsimp [pendingKey, N, qu]
+        calc
+          (s.request u).getD 0 * Fintype.card (Endpoint R g) +
+              (Fintype.equivFin (Endpoint R g) u).val <
+              (s.request u).getD 0 * Fintype.card (Endpoint R g) + Fintype.card (Endpoint R g) :=
+            Nat.add_lt_add_left hRankU _
+          _ = ((s.request u).getD 0 + 1) * Fintype.card (Endpoint R g) := by
+            rw [Nat.add_mul, Nat.one_mul]
+      have hmul : (qu + 1) * N ≤ qv * N :=
+        Nat.mul_le_mul_right N (Nat.succ_le_of_lt hlt)
+      have hkeyV : qv * N ≤ pendingKey s v := by
+        dsimp [pendingKey, N, qv]
+        omega
+      have hcontra : pendingKey s u < pendingKey s v := lt_of_lt_of_le hkeyU (le_trans hmul hkeyV)
+      exact (not_lt_of_ge hkey) hcontra
+    · simp [nextPending, hp] at hn
   have hrun : ∀ f (s : ExploreState R g), Inv s → Inv (exploreRun ξ L f s) := by
     intro f
     induction f with

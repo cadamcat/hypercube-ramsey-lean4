@@ -45,27 +45,41 @@ noncomputable def bind {α β : Type*} [Fintype α] [Fintype β] (P : FinProb α
     FinProb (α × β) where
   w ab := P.w ab.1 * (K ab.1).w ab.2
   nonneg ab := mul_nonneg (P.nonneg _) ((K _).nonneg _)
-  sum_eq_one := sorry
+  sum_eq_one := by
+    rw [Fintype.sum_prod_type]
+    simp_rw [← Finset.mul_sum]
+    simp_rw [(K _).sum_eq_one]
+    simpa using P.sum_eq_one
 
 /-- Image law. -/
 noncomputable def map {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β] (P : FinProb α) (f : α → β) :
     FinProb β where
   w b := ∑ a, if f a = b then P.w a else 0
   nonneg b := Finset.sum_nonneg fun a _ => by split_ifs <;> simp [P.nonneg a]
-  sum_eq_one := sorry
+  sum_eq_one := by
+    classical
+    rw [Finset.sum_comm]
+    simp [P.sum_eq_one]
 
 open Classical in
 /-- Conditioning on an event of positive probability. -/
 noncomputable def cond (P : FinProb Ω) (A : Ω → Prop) (h : 0 < P.pr A) : FinProb Ω where
   w ω := (if A ω then P.w ω else 0) / P.pr A
   nonneg ω := div_nonneg (by split_ifs <;> simp [P.nonneg ω]) h.le
-  sum_eq_one := sorry
+  sum_eq_one := by
+    classical
+    rw [← Finset.sum_div (s := Finset.univ)]
+    change P.pr A / P.pr A = 1
+    exact div_self (ne_of_gt h)
 
 /-- Uniform law on a nonempty finite set. -/
 noncomputable def uniform [DecidableEq Ω] (s : Finset Ω) (h : s.Nonempty) : FinProb Ω where
   w ω := if ω ∈ s then (s.card : ℝ)⁻¹ else 0
   nonneg ω := by split_ifs <;> simp
-  sum_eq_one := sorry
+  sum_eq_one := by
+    have hcard : (0 : ℝ) < (s.card : ℝ) := by
+      exact_mod_cast Finset.card_pos.mpr h
+    simp [hcard.ne']
 
 /-- `f` depends only on the coordinates in `s`. -/
 def DependsOn {ι : Type*} {Ω : ι → Type*} {β : Sort*} (f : (∀ i, Ω i) → β) (s : Finset ι) : Prop :=

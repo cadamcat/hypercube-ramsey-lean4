@@ -3,6 +3,11 @@ import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.Framework.FinProbLemmas
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_analysis
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_cross
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_survival
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_integral
 
 /-!
 # Lemma 3.10, Steps 2–8
@@ -698,6 +703,35 @@ theorem step7_target_product_bound (B A C_g K₀ : ℝ) (hB : 1 ≤ B) (hK₀ : 
   refine ⟨2, ?_⟩
   intro n hn mesh hδ hδ1 R _ _ g Ω _ _ p lab θ hlogg hcolumns hθ hsmall ins hins S o hInj hS
   let law := clockFieldLaw (samplingEdgeClockLaw (T := mesh.ticks) mesh.δ hδ hδ1 p lab)
+  by_cases hSempty : S = ∅
+  · subst S
+    have hprob : law.pr (fun _ : ClockField mesh.ticks R g Ω => True) = 1 := by
+      simpa [FinProb.pr] using law.sum_eq_one
+    have hInv : 0 ≤ (n : ℝ)⁻¹ := inv_nonneg.mpr (by positivity)
+    have hgoal : law.pr (fun _ : ClockField mesh.ticks R g Ω => True) ≤
+        1 + (n : ℝ)⁻¹ := by
+      rw [hprob]
+      linarith
+    simpa [matchesTargetsOrdinarily] using hgoal
+  by_cases hzero : ∃ a ∈ S, (p a).w (o a) = 0
+  · obtain ⟨a, ha, hpa⟩ := hzero
+    have hprod : (∏ b ∈ S, (p b).w (o b)) = 0 := Finset.prod_eq_zero ha hpa
+    have hprob : law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro ξ _
+      by_cases hmatch : matchesTargetsOrdinarily ins ξ S o
+      · rw [if_pos hmatch]
+        obtain ⟨y, hassign, hinsay⟩ := hmatch a ha
+        obtain ⟨t, ht⟩ := greedyMatching_assignment_source (insertArrivals ins ξ) a y (o a) hassign
+        have ht' : ξ (a, y) = .tick t (o a) := by
+          simpa [insertArrivals, hinsay] using ht
+        exact Lane_sol_clock_s7.clock_weight_zero_of_zero_mark
+          mesh.δ hδ hδ1 p lab ξ a y t (o a) ht' hpa
+      · simp [hmatch]
+    change law.pr _ ≤ _
+    rw [hprob, hprod]
+    simp
   by_cases hg0 : g = 0
   · subst g
     have hSempty : S = ∅ := by

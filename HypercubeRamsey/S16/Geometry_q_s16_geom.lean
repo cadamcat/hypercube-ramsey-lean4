@@ -388,4 +388,22 @@ theorem rpow_ac_eq_pow_200 {κ : CConsts} (hκ : κ.Admissible) (n : ℕ) :
   rw [hκ.Ac_eq]
   simpa [Real.rpow_natCast]
 
+theorem exists_paired_group_dimension {n : ℕ} (hn : 4 ≤ n) :
+    ∃ h : ℕ, n ≤ 2 ^ h ∧ 2 ^ h < 2 * n := by
+  let h := Nat.clog 2 n
+  have hbase : 1 < 2 := by norm_num
+  have hnlarge : 1 < n := by omega
+  have hpos : 0 < h := by exact Nat.clog_pos hbase hnlarge
+  have hpred : 2 ^ h.pred < n := Nat.pow_pred_clog_lt_self hbase hnlarge
+  have hpow : 2 ^ h = 2 * 2 ^ h.pred := by
+    have hpredSucc : Nat.succ h.pred = h := Nat.succ_pred_eq_of_pos hpos
+    calc
+      2 ^ h = 2 ^ Nat.succ h.pred := by rw [hpredSucc]
+      _ = 2 ^ h.pred * 2 := by rw [Nat.pow_succ]
+      _ = 2 * 2 ^ h.pred := Nat.mul_comm _ _
+  refine ⟨h, ?_, ?_⟩
+  · exact Nat.le_pow_clog hbase n
+  · rw [hpow]
+    exact Nat.mul_lt_mul_of_pos_left hpred (by norm_num)
+
 end HypercubeRamsey.Lane_q_s16_geom

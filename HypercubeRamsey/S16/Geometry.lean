@@ -801,6 +801,17 @@ theorem syndrome_data_exists {κ : CConsts} {T : Stage} {k : ℕ}
     {K16 : ℝ} (Q : LowModeQuantFacts hκ (PT := PT) K16)
     (hScale : LowModeScaleFacts hκ Q) :
     ∃ S : SyndromeData PT, SyndromeFacts S := by
+  classical
+  let n := T.S.n k
+  obtain ⟨Hdim, hGroupLower, hGroupUpper⟩ :=
+    Lane_q_s16_geom.exists_paired_group_dimension hScale.n_four
+  have hGroupCard : Fintype.card (Fin Hdim → ZMod 2) = 2 ^ Hdim := by
+    simp [Fintype.card_fun]
+  have hEmbedCard : Fintype.card (Fin n) ≤ Fintype.card (Fin Hdim → ZMod 2) := by
+    simpa [hGroupCard] using hGroupLower
+  let idsBase : Fin n ↪ (Fin Hdim → ZMod 2) :=
+    Lane_q_s16_geom.finiteEmbeddingOfCardLE hEmbedCard
+  have hidsBase : Function.Injective idsBase := idsBase.injective
   sorry
 
 /-- L16.1b (16:90–96): separated cells made from whole slices. -/

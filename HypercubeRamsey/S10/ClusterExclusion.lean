@@ -1,5 +1,6 @@
 import HypercubeRamsey.S10.LocalNodes
-import HypercubeRamsey.Interface
+import HypercubeRamsey.Framework.PartC
+import HypercubeRamsey.Assembly
 
 /-!
 # Section 10: cluster exclusion

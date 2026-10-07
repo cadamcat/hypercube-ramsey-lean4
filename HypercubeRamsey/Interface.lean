@@ -1,5 +1,8 @@
 import HypercubeRamsey.Framework.PartC
 import HypercubeRamsey.Assembly
+import HypercubeRamsey.S07.InitialDiscrepancy
+import HypercubeRamsey.S10.ClusterExclusion
+import HypercubeRamsey.S11.Exports
 
 /-!
 # The top-level chain
@@ -14,19 +17,22 @@ open Filter OAI.HypercubeRamsey
 
 /-- Corollary 7.2 (initial discrepancy, eq:source-2); `η₀` is universal. -/
 theorem initial_discrepancy : ∃ η₀ > (0 : ℝ), ∀ T : Stage, StabilizedOn T FamB →
-    DiscAt T (pw η₀) (pw η₀) (fun n => n ^ (-η₀)) := sorry
+    DiscAt T (pw η₀) (pw η₀) (fun n => n ^ (-η₀)) :=
+  S07.initial_discrepancy_proof
 
 /-- Corollary 11.4 (the remaining deep regime), both orientations. -/
 theorem remaining_deep_regime (T : Stage) (hT : StabilizedOn T FamB) :
     ∀ ε : ℝ, 0 < ε → ∃ x α : ℚ, 0 < x ∧ 0 < α ∧
       DiscAt T (pw x) (lw α) (fun n => n ^ (-1 + ε)) ∧
-      DiscAt T.swap (pw x) (lw α) (fun n => n ^ (-1 + ε)) := sorry
+      DiscAt T.swap (pw x) (lw α) (fun n => n ^ (-1 + ε)) :=
+  S11.remaining_deep_regime_proof T hT
 
 /-- Corollary 10.2 (eventual absence of cluster witnesses). -/
 theorem eventual_cluster_absence (η₀ : ℝ) (hη₀ : 0 < η₀) (T : Stage) (hT : StabilizedOn T FamB)
     (h2 : DiscAt T (pw η₀) (pw η₀) (fun n => n ^ (-η₀))) :
     ∀ (G : Colour) (ζ δ : ℚ), 0 < ζ → 0 < δ → (δ : ℝ) < min (min η₀ ζ) 1 / 2000 →
-      EventuallyAbsent T (PCluster G ζ δ) ∧ EventuallyAbsent T.swap (PCluster G ζ δ) := sorry
+      EventuallyAbsent T (PCluster G ζ δ) ∧ EventuallyAbsent T.swap (PCluster G ζ δ) :=
+  S10.eventual_cluster_absence_proof η₀ hη₀ T hT h2
 
 /-- Part C's main theorem (node C18.F). -/
 theorem partC_main (T : Stage) (η0 : ℝ) (hη0 : 0 < η0) (hInit : InitDisc T η0)

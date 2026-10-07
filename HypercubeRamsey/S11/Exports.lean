@@ -1,3 +1,5 @@
+import HypercubeRamsey.S10.ClusterExclusion
+import HypercubeRamsey.S07.InitialDiscrepancy
 import HypercubeRamsey.S11.Nodes
 
 /-!
@@ -27,7 +29,7 @@ private theorem eventually_error_mono (h₀ : ℚ) (ε : ℝ) (h : (h₀ : ℝ) 
 /-- P11.1 (11:4–6): exclude the linear-budget jump. -/
 theorem not_linear_jump (T : Stage) (hT : StabilizedOn T FamB)
     (hNoHdag : ¬ HdagLtOne T.swap) (hZero : HLdagZero T) : False := by
-  obtain ⟨η₀, hη₀, hInit⟩ := HypercubeRamsey.initial_discrepancy
+  obtain ⟨η₀, hη₀, hInit⟩ := HypercubeRamsey.S07.initial_discrepancy_proof
   let ζ : ℚ := 1 / 100
   let ζR : ℝ := (ζ : ℝ)
   let cap : ℝ := min η₀ ζR / 2000
@@ -59,7 +61,7 @@ theorem not_linear_jump (T : Stage) (hT : StabilizedOn T FamB)
       EventuallyAbsent T (PCluster G ζR (δ : ℝ)) ∧
       EventuallyAbsent T.swap (PCluster G ζR (δ : ℝ)) := by
     intro G
-    exact HypercubeRamsey.eventual_cluster_absence η₀ hη₀ T hT hDinit G ζ δ
+    exact HypercubeRamsey.S10.eventual_cluster_absence_proof η₀ hη₀ T hT hDinit G ζ δ
       hζpos hδpos hδcluster
   obtain ⟨x₀, hx₀, hx₀1, hDisc, hAvail⟩ :=
     linear_jump_selection T hT hNoHdag hZero δ hδpos hδOne
@@ -146,7 +148,7 @@ private theorem swap_swap_eq (T : Stage) : T.swap.swap = T := by
   rfl
 
 /-- C11.4 (11:397–403): the remaining deep regime, in both orientations. This has exactly the type of
-`HypercubeRamsey.remaining_deep_regime` in `Interface.lean`.
+`HypercubeRamsey.S11.remaining_deep_regime_proof` in `Interface.lean`.
 -/
 theorem remaining_deep_regime_proof (T : Stage) (hT : StabilizedOn T FamB) :
     ∀ ε : ℝ, 0 < ε → ∃ x α : ℚ, 0 < x ∧ 0 < α ∧

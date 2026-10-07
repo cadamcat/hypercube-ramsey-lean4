@@ -523,6 +523,344 @@ theorem regularity_core_exception9 {P : Params9} {n N : ℕ} {M : TagMix N}
     _ ≤ P.tail c₀ n / t := div_le_div_of_nonneg_right hregular ht.le
     _ = P.tail (c₀ / 2) n := hquot
 
+private theorem expect_indicator9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    P.expect (fun ω => if A ω then 1 else 0) = P.pr A := by
+  classical
+  unfold FinProb.expect FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω _
+  by_cases h : A ω <;> simp [h]
+
+private theorem expect_const9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (c : ℝ) :
+    P.expect (fun _ => c) = c := by
+  unfold FinProb.expect
+  calc
+    (∑ ω, P.w ω * c) = (∑ ω, P.w ω) * c := by rw [← Finset.sum_mul]
+    _ = c := by rw [P.sum_eq_one]; ring
+
+private theorem expect_mono9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (f g : Ω → ℝ)
+    (h : ∀ ω, f ω ≤ g ω) : P.expect f ≤ P.expect g := by
+  unfold FinProb.expect
+  apply Finset.sum_le_sum
+  intro ω _
+  exact mul_le_mul_of_nonneg_left (h ω) (P.nonneg ω)
+
+private theorem expect_bad_const9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (A : Ω → Prop) (c : ℝ) :
+    P.expect (fun ω => if A ω then c else 0) = c * P.pr A := by
+  classical
+  calc
+    P.expect (fun ω => if A ω then c else 0) =
+        P.expect (fun ω => c * (if A ω then 1 else 0)) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro ω _
+          by_cases h : A ω <;> simp [h]
+    _ = c * P.expect (fun ω => if A ω then 1 else 0) := by
+          unfold FinProb.expect
+          calc
+            (∑ ω, P.w ω * (c * (if A ω then 1 else 0))) =
+                ∑ ω, c * (P.w ω * (if A ω then 1 else 0)) := by
+                  apply Finset.sum_congr rfl
+                  intro ω _
+                  ring
+            _ = c * ∑ ω, P.w ω * (if A ω then 1 else 0) := by
+                  rw [← Finset.mul_sum]
+    _ = c * P.pr A := by rw [expect_indicator9]
+
+private theorem pr_complement9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A + P.pr (fun ω => ¬ A ω) = 1 := by
+  classical
+  unfold FinProb.pr
+  calc
+    (∑ ω, (@ite ℝ (A ω) (Classical.propDecidable (A ω)) (P.w ω) 0)) +
+        ∑ ω, (@ite ℝ (¬ A ω) (Classical.propDecidable (¬ A ω)) (P.w ω) 0) =
+        ∑ ω, ((@ite ℝ (A ω) (Classical.propDecidable (A ω)) (P.w ω) 0) +
+          (@ite ℝ (¬ A ω) (Classical.propDecidable (¬ A ω)) (P.w ω) 0)) := by
+          rw [← Finset.sum_add_distrib]
+    _ = ∑ ω, P.w ω := by
+          apply Finset.sum_congr rfl
+          intro ω _
+          by_cases h : A ω <;> simp [h]
+    _ = 1 := P.sum_eq_one
+
+private theorem expect_add9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (f g : Ω → ℝ) :
+    P.expect (fun ω => f ω + g ω) = P.expect f + P.expect g := by
+  unfold FinProb.expect
+  calc
+    (∑ ω, P.w ω * (f ω + g ω)) =
+        ∑ ω, (P.w ω * f ω + P.w ω * g ω) := by
+          apply Finset.sum_congr rfl
+          intro ω _
+          ring
+    _ = (∑ ω, P.w ω * f ω) + ∑ ω, P.w ω * g ω := by
+          rw [Finset.sum_add_distrib]
+
+private theorem expect_complement_const9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (good : Ω → Prop) (c : ℝ) :
+    P.expect (fun ω => if good ω then 0 else c) = c * P.pr (fun ω => ¬ good ω) := by
+  classical
+  calc
+    P.expect (fun ω => if good ω then 0 else c) =
+        P.expect (fun ω => @ite ℝ (¬ good ω) (Classical.propDecidable (¬ good ω)) c 0) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro ω _
+          by_cases h : good ω <;> simp [h]
+    _ = c * P.pr (fun ω => ¬ good ω) := by
+      simpa only [FinProb.pr] using
+        (expect_bad_const9 P (fun ω => ¬ good ω) c)
+
+private theorem expect_const_plus_complement9 {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (good : Ω → Prop) (a b : ℝ) :
+    P.expect (fun ω => a + (if good ω then 0 else b)) =
+      a + b * P.pr (fun ω => ¬ good ω) := by
+  rw [expect_add9, expect_const9, expect_complement_const9]
+
+private theorem expect_sub_const9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (f : Ω → ℝ) (c : ℝ) :
+    P.expect (fun ω => f ω - c) = P.expect f - c := by
+  unfold FinProb.expect
+  calc
+    (∑ ω, P.w ω * (f ω - c)) =
+        ∑ ω, (P.w ω * f ω - P.w ω * c) := by
+          apply Finset.sum_congr rfl
+          intro ω _
+          ring
+    _ = (∑ ω, P.w ω * f ω) - ∑ ω, P.w ω * c := by
+          rw [Finset.sum_sub_distrib]
+    _ = (∑ ω, P.w ω * f ω) - c := by
+          rw [← Finset.sum_mul, P.sum_eq_one]
+          ring
+
+private theorem weighted_expectation_close9 {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (good : Ω → Prop) (z q : Ω → ℝ)
+    (z₀ β δ ε : ℝ)
+    (hz : ∀ ω, 0 ≤ z ω ∧ z ω ≤ 1) (hq : ∀ ω, 0 ≤ q ω ∧ q ω ≤ 1)
+    (hz₀ : 0 < z₀) (hz₀le : z₀ ≤ 1)
+    (hβ : 0 ≤ β) (hβle : β ≤ 1 / 2)
+    (hδ : 0 ≤ δ) (hδle : δ ≤ 1 / 2)
+    (hε : 0 ≤ ε) (hεle : ε ≤ 1 / 2)
+    (hbad : P.pr (fun ω => ¬ good ω) ≤ ε)
+    (hzgood : ∀ ω, good ω → |z ω - z₀| ≤ δ * z₀)
+    (hqclose : ∀ ω, |q ω - 1 / 2| ≤ β) :
+    |P.expect q - P.expect (fun ω => z ω * q ω) / P.expect z| ≤
+      8 * δ * β + 8 * ε / z₀ := by
+  classical
+  let ez : ℝ := P.expect z
+  let eq : ℝ := P.expect q
+  let ezq : ℝ := P.expect (fun ω => z ω * q ω)
+  have hbadNonneg : 0 ≤ P.pr (fun ω => ¬ good ω) := by
+    unfold FinProb.pr
+    apply Finset.sum_nonneg
+    intro ω _
+    split_ifs <;> positivity [P.nonneg ω]
+  have hbadLeOne : P.pr (fun ω => ¬ good ω) ≤ 1 := by
+    have hsplit := pr_complement9 P good
+    have hgood : 0 ≤ P.pr good := by
+      unfold FinProb.pr
+      apply Finset.sum_nonneg
+      intro ω _
+      split_ifs <;> positivity [P.nonneg ω]
+    linarith
+  have hz0bound (ω : Ω) : |z ω - z₀| ≤ 1 := by
+    have hzw := hz ω
+    rw [abs_le]
+    constructor <;> linarith [hz₀, hz₀le]
+  have hpointZ (ω : Ω) : |z ω - z₀| ≤ δ * z₀ + (if good ω then 0 else 1) := by
+    by_cases hg : good ω
+    · simpa [hg] using hzgood ω hg
+    · rw [if_neg hg]
+      have := hz0bound ω
+      have hδz₀ : 0 ≤ δ * z₀ := mul_nonneg hδ hz₀.le
+      linarith
+  have hexpZ : P.expect (fun ω => |z ω - z₀|) ≤ δ * z₀ + ε := by
+    have hmono := expect_mono9 P (fun ω => |z ω - z₀|)
+      (fun ω => δ * z₀ + (if good ω then 0 else 1)) hpointZ
+    have hbound : P.expect (fun ω => δ * z₀ + (if good ω then 0 else 1)) =
+        δ * z₀ + P.pr (fun ω => ¬ good ω) := by
+      simpa using expect_const_plus_complement9 P good (δ * z₀) 1
+    rw [hbound] at hmono
+    linarith [hbad]
+  have hpointC (ω : Ω) :
+      |(z ω - z₀) * (q ω - 1 / 2)| ≤ δ * z₀ * β + (if good ω then 0 else β) := by
+    by_cases hg : good ω
+    · rw [if_pos hg]
+      rw [abs_mul]
+      simpa using mul_le_mul (hzgood ω hg) (hqclose ω) (abs_nonneg _) (by positivity)
+    · rw [if_neg hg]
+      rw [abs_mul]
+      have hq' : |q ω - 1 / 2| ≤ β := hqclose ω
+      have hprod : |z ω - z₀| * |q ω - 1 / 2| ≤ β := by
+        calc
+          |z ω - z₀| * |q ω - 1 / 2| ≤ 1 * β :=
+            mul_le_mul (hz0bound ω) hq' (abs_nonneg _) (by norm_num)
+          _ = β := by ring
+      linarith [mul_nonneg (mul_nonneg hδ hz₀.le) hβ]
+  have hcentProd :
+      P.expect (fun ω => |(z ω - z₀) * (q ω - 1 / 2)|) ≤ δ * z₀ * β + ε * β := by
+    have hmono := expect_mono9 P
+      (fun ω => |(z ω - z₀) * (q ω - 1 / 2)|)
+      (fun ω => δ * z₀ * β + (if good ω then 0 else β)) hpointC
+    have hbound : P.expect (fun ω => δ * z₀ * β + (if good ω then 0 else β)) =
+        δ * z₀ * β + β * P.pr (fun ω => ¬ good ω) := by
+      exact expect_const_plus_complement9 P good (δ * z₀ * β) β
+    rw [hbound] at hmono
+    calc
+      P.expect (fun ω => |(z ω - z₀) * (q ω - 1 / 2)|) ≤
+          δ * z₀ * β + β * P.pr (fun ω => ¬ good ω) := hmono
+      _ ≤ δ * z₀ * β + ε * β := by
+            calc
+              δ * z₀ * β + β * P.pr (fun ω => ¬ good ω) =
+                  β * P.pr (fun ω => ¬ good ω) + δ * z₀ * β := by ring
+              _ ≤ β * ε + δ * z₀ * β := add_le_add_left
+                    (mul_le_mul_of_nonneg_left hbad hβ) _
+              _ = δ * z₀ * β + ε * β := by ring
+  have hdenPoint (ω : Ω) : z₀ / 2 * (if good ω then 1 else 0) ≤ z ω := by
+    by_cases hg : good ω
+    · rw [if_pos hg]
+      have h := hzgood ω hg
+      have hzlower : z₀ - δ * z₀ ≤ z ω := by
+        have := (abs_le.mp h).1
+        linarith
+      nlinarith [hδle, hzlower]
+    · rw [if_neg hg]
+      simpa using (hz ω).1
+  have hden : z₀ / 4 ≤ ez := by
+    have hmono := expect_mono9 P (fun ω => z₀ / 2 * (if good ω then 1 else 0)) z hdenPoint
+    have hbase : P.expect (fun ω => z₀ / 2 * (if good ω then 1 else 0)) =
+        z₀ / 2 * P.pr good := by
+      calc
+        P.expect (fun ω => z₀ / 2 * (if good ω then 1 else 0)) =
+            z₀ / 2 * P.expect (fun ω => if good ω then 1 else 0) := by
+              unfold FinProb.expect
+              calc
+                (∑ ω, P.w ω * (z₀ / 2 * (if good ω then 1 else 0))) =
+                    ∑ ω, z₀ / 2 * (P.w ω * (if good ω then 1 else 0)) := by
+                      apply Finset.sum_congr rfl
+                      intro ω _
+                      ring
+                _ = z₀ / 2 * ∑ ω, P.w ω * (if good ω then 1 else 0) := by
+                      rw [← Finset.mul_sum]
+        _ = z₀ / 2 * P.pr good := by rw [expect_indicator9]
+    have hprob : 1 / 2 ≤ P.pr good := by
+      have hsplit := pr_complement9 P good
+      linarith [hbad, hεle]
+    rw [hbase] at hmono
+    dsimp [ez]
+    nlinarith [hmono, hprob, hz₀]
+  have hdenpos : 0 < ez := lt_of_lt_of_le (by positivity) hden
+  have hEZcenter : P.expect (fun ω => z ω - z₀) = ez - z₀ := by
+    dsimp [ez]
+    exact expect_sub_const9 P z z₀
+  have hEQcenter : P.expect (fun ω => q ω - 1 / 2) = eq - 1 / 2 := by
+    dsimp [eq]
+    exact expect_sub_const9 P q (1 / 2)
+  have hEcenterProd :
+      P.expect (fun ω => (z ω - z₀) * (q ω - 1 / 2)) =
+        ezq - z₀ * eq - (1 / 2) * ez + z₀ / 2 := by
+    dsimp [ezq, eq, ez]
+    unfold FinProb.expect
+    calc
+      (∑ ω, P.w ω * ((z ω - z₀) * (q ω - 1 / 2))) =
+          ∑ ω, (P.w ω * (z ω * q ω) - z₀ * (P.w ω * q ω) -
+            (1 / 2) * (P.w ω * z ω) + (z₀ / 2) * P.w ω) := by
+              apply Finset.sum_congr rfl
+              intro ω _
+              ring
+      _ = (∑ ω, P.w ω * (z ω * q ω)) - z₀ * (∑ ω, P.w ω * q ω) -
+            (1 / 2) * (∑ ω, P.w ω * z ω) + (z₀ / 2) * (∑ ω, P.w ω) := by
+              simp_rw [Finset.sum_add_distrib, Finset.sum_sub_distrib]
+              rw [← Finset.mul_sum, ← Finset.mul_sum, ← Finset.mul_sum]
+      _ = P.expect (fun ω => z ω * q ω) - z₀ * P.expect q -
+            (1 / 2) * P.expect z + z₀ / 2 := by
+              rw [P.sum_eq_one]
+              simp only [FinProb.expect]
+              ring
+  have hcov : ezq - ez * eq =
+      P.expect (fun ω => (z ω - z₀) * (q ω - 1 / 2)) -
+        P.expect (fun ω => z ω - z₀) * P.expect (fun ω => q ω - 1 / 2) := by
+    rw [hEcenterProd, hEZcenter, hEQcenter]
+    ring
+  have hcovBound : |ezq - ez * eq| ≤ 2 * δ * z₀ * β + 2 * ε := by
+    rw [hcov]
+    calc
+      |P.expect (fun ω => (z ω - z₀) * (q ω - 1 / 2)) -
+          P.expect (fun ω => z ω - z₀) * P.expect (fun ω => q ω - 1 / 2)| ≤
+          |P.expect (fun ω => (z ω - z₀) * (q ω - 1 / 2))| +
+            |P.expect (fun ω => z ω - z₀) * P.expect (fun ω => q ω - 1 / 2)| := abs_sub _ _
+      _ ≤ (δ * z₀ * β + ε * β) + (δ * z₀ + ε) * β := by
+          have hA : |P.expect (fun ω => (z ω - z₀) * (q ω - 1 / 2))| ≤
+              P.expect (fun ω => |(z ω - z₀) * (q ω - 1 / 2)|) := by
+                calc
+                  |P.expect (fun ω => (z ω - z₀) * (q ω - 1 / 2))| ≤
+                      ∑ ω, |P.w ω * ((z ω - z₀) * (q ω - 1 / 2))| := by
+                        simpa [FinProb.expect] using Finset.abs_sum_le_sum_abs
+                          (fun ω => P.w ω * ((z ω - z₀) * (q ω - 1 / 2))) Finset.univ
+                  _ = P.expect (fun ω => |(z ω - z₀) * (q ω - 1 / 2)|) := by
+                        unfold FinProb.expect
+                        apply Finset.sum_congr rfl
+                        intro ω _
+                        rw [abs_mul, abs_of_nonneg (P.nonneg ω)]
+          have hB : |P.expect (fun ω => z ω - z₀)| ≤ δ * z₀ + ε := by
+            calc
+              |P.expect (fun ω => z ω - z₀)| ≤
+                  P.expect (fun ω => |z ω - z₀|) := by
+                    calc
+                      |P.expect (fun ω => z ω - z₀)| ≤
+                          ∑ ω, |P.w ω * (z ω - z₀)| := by
+                            simpa [FinProb.expect] using Finset.abs_sum_le_sum_abs
+                              (fun ω => P.w ω * (z ω - z₀)) Finset.univ
+                      _ = P.expect (fun ω => |z ω - z₀|) := by
+                            unfold FinProb.expect
+                            apply Finset.sum_congr rfl
+                            intro ω _
+                            rw [abs_mul, abs_of_nonneg (P.nonneg ω)]
+              _ ≤ δ * z₀ + ε := hexpZ
+          have hC : |P.expect (fun ω => q ω - 1 / 2)| ≤ β := by
+            calc
+              |P.expect (fun ω => q ω - 1 / 2)| ≤
+                  P.expect (fun ω => |q ω - 1 / 2|) := by
+                    calc
+                      |P.expect (fun ω => q ω - 1 / 2)| ≤
+                          ∑ ω, |P.w ω * (q ω - 1 / 2)| := by
+                            simpa [FinProb.expect] using Finset.abs_sum_le_sum_abs
+                              (fun ω => P.w ω * (q ω - 1 / 2)) Finset.univ
+                      _ = P.expect (fun ω => |q ω - 1 / 2|) := by
+                            unfold FinProb.expect
+                            apply Finset.sum_congr rfl
+                            intro ω _
+                            rw [abs_mul, abs_of_nonneg (P.nonneg ω)]
+              _ ≤ P.expect (fun _ => β) := expect_mono9 P _ _ hqclose
+              _ = β := expect_const9 P β
+          rw [abs_mul]
+          refine add_le_add (hA.trans hcentProd) ?_
+          exact mul_le_mul hB hC (abs_nonneg _) (by positivity)
+      _ ≤ 2 * δ * z₀ * β + 2 * ε := by
+          have hεβ : ε * β ≤ ε := by nlinarith [hε, hβ, hβle]
+          nlinarith [hcentProd, hεβ, hδ, hz₀, hβ]
+  have hratio : |eq - ezq / ez| = |ezq - ez * eq| / ez := by
+    have hnum : eq - ezq / ez = (ez * eq - ezq) / ez := by
+      field_simp [ne_of_gt hdenpos]
+      
+    rw [hnum, abs_div, abs_of_pos hdenpos]
+    rw [show ez * eq - ezq = -(ezq - ez * eq) by ring, abs_neg]
+  calc
+    |P.expect q - P.expect (fun ω => z ω * q ω) / P.expect z| = |eq - ezq / ez| := by
+      simp [eq, ezq, ez]
+    _ = |ezq - ez * eq| / ez := hratio
+    _ ≤ (2 * δ * z₀ * β + 2 * ε) / ez :=
+      div_le_div_of_nonneg_right hcovBound hdenpos.le
+    _ ≤ (2 * δ * z₀ * β + 2 * ε) / (z₀ / 4) := by
+      apply (div_le_div_iff₀ hdenpos (by positivity : 0 < z₀ / 4)).2
+      exact mul_le_mul_of_nonneg_left hden (by positivity)
+    _ ≤ 8 * δ * β + 8 * ε / z₀ := by
+      have hcalc : (2 * δ * z₀ * β + 2 * ε) / (z₀ / 4) =
+          8 * δ * β + 8 * ε / z₀ := by
+        field_simp [ne_of_gt hz₀]
+        ring
+      rw [hcalc]
+
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)
     (t : Fin 3) : List I.ID :=

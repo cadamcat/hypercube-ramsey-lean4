@@ -1,7 +1,7 @@
 import HypercubeRamsey.S09.Defs
 import HypercubeRamsey.S09.Regime
 import HypercubeRamsey.S08.Needs
-import HypercubeRamsey.Interface
+import HypercubeRamsey.S07.InitialDiscrepancy
 import HypercubeRamsey.S08.AsymmetricDiscrepancy
 
 /-!
@@ -564,7 +564,7 @@ theorem p92_select_sublinear_impl (T : Stage) (hT : StabilizedOn T FamB)
   have hh0A : h0 ≤ hA := by
     have hmax : max h0 0 ≤ hA := by dsimp [hA]; linarith [hmaxlt]
     exact le_trans (le_max_left _ _) hmax
-  obtain ⟨η, hη, hInit⟩ := initial_discrepancy
+  obtain ⟨η, hη, hInit⟩ := HypercubeRamsey.S07.initial_discrepancy_proof
   have hD0 := hInit T hT
   have hτ : 0 < tau8 η := by unfold tau8; positivity
   have hAltR : (hA : ℝ) < 1 := by exact_mod_cast hAlt

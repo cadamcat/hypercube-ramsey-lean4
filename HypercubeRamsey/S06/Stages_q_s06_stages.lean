@@ -1,10 +1,138 @@
 import HypercubeRamsey.S06.Defs
 import HypercubeRamsey.S03.ConditionalAvoidance
+import HypercubeRamsey.Framework.FinProbLemmas
 
 namespace HypercubeRamsey.Lane_q_s06_stages
 
 open Classical
 open HypercubeRamsey.S06
+
+theorem finprob_pr_eq_expect_indicator {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A = P.expect (fun ω => if A ω then 1 else 0) := by
+  classical
+  letI : DecidablePred A := fun ω => Classical.propDecidable (A ω)
+  unfold FinProb.pr FinProb.expect
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases hA : A ω <;> simp [hA]
+
+theorem pi_pr_and_of_disjoint_depends
+    {ι : Type*} [Fintype ι] [DecidableEq ι] {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (A B : (∀ i, Ω i) → Prop) (s t : Finset ι)
+    (hA : FinProb.DependsOn A s) (hB : FinProb.DependsOn B t)
+    (hst : Disjoint s t) :
+    (FinProb.pi P).pr (fun ω => A ω ∧ B ω) =
+      (FinProb.pi P).pr A * (FinProb.pi P).pr B := by
+  classical
+  letI : DecidablePred A := fun ω => Classical.propDecidable (A ω)
+  letI : DecidablePred B := fun ω => Classical.propDecidable (B ω)
+  letI : DecidablePred (fun ω => A ω ∧ B ω) :=
+    fun ω => Classical.propDecidable (A ω ∧ B ω)
+  let f : (∀ i, Ω i) → ℝ := fun ω => if A ω then 1 else 0
+  let g : (∀ i, Ω i) → ℝ := fun ω => if B ω then 1 else 0
+  have hf : FinProb.DependsOn f s := by
+    intro ω ω' hω
+    have hprop := hA ω ω' hω
+    simpa [f] using congrArg (fun p : Prop => if p then (1 : ℝ) else 0) hprop
+  have hg : FinProb.DependsOn g t := by
+    intro ω ω' hω
+    have hprop := hB ω ω' hω
+    simpa [g] using congrArg (fun p : Prop => if p then (1 : ℝ) else 0) hprop
+  have hAB : ∀ ω, (if A ω ∧ B ω then 1 else 0) = f ω * g ω := by
+    intro ω
+    by_cases hAω : A ω <;> by_cases hBω : B ω <;> simp [f, g, hAω, hBω]
+  calc
+    (FinProb.pi P).pr (fun ω => A ω ∧ B ω) =
+        (FinProb.pi P).expect (fun ω => f ω * g ω) := by
+          rw [finprob_pr_eq_expect_indicator]
+          apply congrArg
+          funext ω
+          exact hAB ω
+    _ = (FinProb.pi P).expect f * (FinProb.pi P).expect g :=
+      FinProb.pi_expect_mul_of_disjoint P f g s t hf hg hst
+    _ = (FinProb.pi P).pr A * (FinProb.pi P).pr B := by
+      rw [← finprob_pr_eq_expect_indicator (FinProb.pi P) A,
+        ← finprob_pr_eq_expect_indicator (FinProb.pi P) B]
+
+theorem finprob_pr_finset_mass {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    (P : FinProb Ω) (A : Finset Ω) :
+    LocalLemma.mass P.w A = P.pr (fun ω => ω ∈ A) := by
+  classical
+  unfold LocalLemma.mass FinProb.pr
+  have hfilter : Finset.univ.filter (fun ω : Ω => ω ∈ A) = A := by
+    ext ω
+    simp
+  rw [← hfilter, Finset.sum_filter]
+  simp [hfilter]
+
+private theorem finprob_pr_congr_local {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    {A B : Ω → Prop} (hAB : ∀ ω, A ω ↔ B ω) : P.pr A = P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases hA : A ω
+  · simp [hA, (hAB ω).mp hA]
+  · have hB : ¬ B ω := fun h => hA ((hAB ω).mpr h)
+    simp [hA, hB]
+
+theorem pi_local_mass_factor
+    {ι : Type*} [Fintype ι] [DecidableEq ι] {Ω : ι → Type*}
+    [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (I : Type*) [Fintype I] [DecidableEq I]
+    (scope : I → Finset ι) (E : I → Finset (∀ i, Ω i)) (i : I) (S : Finset I)
+    (hdep : ∀ j, FinProb.DependsOn (fun ω => ω ∈ E j) (scope j))
+    (hremote : ∀ j ∈ S, Disjoint (scope i) (scope j)) :
+    LocalLemma.mass (FinProb.pi P).w (E i ∩ LocalLemma.avoid E S) =
+      (FinProb.pi P).pr (fun ω => ω ∈ E i) *
+        LocalLemma.mass (FinProb.pi P).w (LocalLemma.avoid E S) := by
+  classical
+  let U : Finset ι := S.biUnion scope
+  have hscopeDisj : Disjoint (scope i) U := by
+    apply Finset.disjoint_left.mpr
+    intro a hai haU
+    rcases Finset.mem_biUnion.mp haU with ⟨j, hjS, haj⟩
+    exact (Finset.disjoint_left.mp (hremote j hjS)) hai haj
+  have havoidDep : FinProb.DependsOn
+      (fun ω : ∀ i, Ω i => ∀ j ∈ S, ω ∉ E j) U := by
+    intro ω ω' hω
+    apply propext
+    constructor <;> intro h j hjS
+    · intro hmem
+      have hEq : (ω ∈ E j) = (ω' ∈ E j) := hdep j ω ω' (by
+        intro k hk
+        exact hω k (Finset.mem_biUnion.mpr ⟨j, hjS, hk⟩))
+      exact h j hjS (hEq.symm ▸ hmem)
+    · intro hmem
+      have hEq : (ω' ∈ E j) = (ω ∈ E j) := hdep j ω' ω (by
+        intro k hk
+        exact (hω k (Finset.mem_biUnion.mpr ⟨j, hjS, hk⟩)).symm)
+      exact h j hjS (hEq ▸ hmem)
+  have hmassAB : LocalLemma.mass (FinProb.pi P).w (E i ∩ LocalLemma.avoid E S) =
+      (FinProb.pi P).pr (fun ω => ω ∈ E i ∧ ω ∈ LocalLemma.avoid E S) := by
+    rw [finprob_pr_finset_mass]
+    apply finprob_pr_congr_local
+    intro ω
+    simp
+  have hmassAvoid : LocalLemma.mass (FinProb.pi P).w (LocalLemma.avoid E S) =
+      (FinProb.pi P).pr (fun ω => ω ∈ LocalLemma.avoid E S) :=
+    finprob_pr_finset_mass (FinProb.pi P) _
+  rw [hmassAB, hmassAvoid]
+  calc
+    (FinProb.pi P).pr (fun ω => ω ∈ E i ∧ ω ∈ LocalLemma.avoid E S) =
+        (FinProb.pi P).pr (fun ω => ω ∈ E i) *
+          (FinProb.pi P).pr (fun ω => ∀ j ∈ S, ω ∉ E j) := by
+            have hpi := pi_pr_and_of_disjoint_depends P
+              (fun ω => ω ∈ E i) (fun ω => ∀ j ∈ S, ω ∉ E j) (scope i) U
+              (hdep i) havoidDep hscopeDisj
+            simpa [LocalLemma.avoid] using hpi
+    _ = (FinProb.pi P).pr (fun ω => ω ∈ E i) *
+          (FinProb.pi P).pr (fun ω => ω ∈ LocalLemma.avoid E S) := by
+        congr 1
+        apply finprob_pr_congr_local
+        intro ω
+        simp [LocalLemma.avoid]
 
 theorem restrictOr6_weight_of_pos {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (A : Ω → Prop) (ω₀ ω : Ω) (hA : 0 < P.pr A) :

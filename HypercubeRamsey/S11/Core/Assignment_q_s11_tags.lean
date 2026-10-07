@@ -197,6 +197,23 @@ theorem pi_expect_prod_on_injective_coords {ι κ : Type*} [Fintype ι] [Decidab
             rw [Finset.prod_insert ha]
             ring
 
+private theorem pi_expect_glue_sum {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (U : Finset ι) (f : (∀ i, Ω i) → ℝ) (ω₀ : ∀ i, Ω i)
+    (hf : FinProb.DependsOn f U) :
+    (FinProb.pi P).expect f =
+      ∑ a : (∀ i : U, Ω i.1), (∏ i : U, (P i.1).w (a i)) *
+        f (S07.glue U ω₀ a) := by
+  classical
+  rw [FinProb.pi_expect_depends P U f ω₀ hf]
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro a ha
+  congr 1
+  apply hf _ _
+  intro i hi
+  simp [S07.glue, hi]
+
 private theorem expect_boosted_indicator {α : Type*} [Fintype α]
     (P : FinProb α) (A : α → Prop) :
     P.expect (fun a => if A a then (256 : ℝ) else 1) =
@@ -1080,6 +1097,57 @@ private theorem raw_compB_mean_le {n N : ℕ} {E : Fin N → Fin N → Prop}
           p.expect (fun i => deg E M.G (piRow M y₀ i) x / D) ≤
       ((N : ℝ) * alphaBar M y₀ p x) * 1 := mul_le_mul_of_nonneg_left hprodle hC
     _ = (N : ℝ) * alphaBar M y₀ p x := by ring
+
+private theorem wordDist_symm {n : ℕ} (s t : OuterWord n) : wordDist s t = wordDist t s := by
+  unfold wordDist
+  congr 1
+  ext j
+  simp [ne_comm]
+
+private theorem wordDist_triangle {n : ℕ} (s t u : OuterWord n) :
+    wordDist s u ≤ wordDist s t + wordDist t u := by
+  let A := Finset.univ.filter fun j : OuterCoord n => s j ≠ u j
+  let B := Finset.univ.filter fun j : OuterCoord n => s j ≠ t j
+  let C := Finset.univ.filter fun j : OuterCoord n => t j ≠ u j
+  have hsub : A ⊆ B ∪ C := by
+    intro j hj
+    have hsu : s j ≠ u j := (Finset.mem_filter.mp hj).2
+    by_cases hst : s j ≠ t j
+    · exact Finset.mem_union.mpr (Or.inl (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hst⟩))
+    · have htu : t j ≠ u j := by
+        intro h
+        have hstEq : s j = t j := by simpa using hst
+        exact hsu (hstEq.trans h)
+      exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨Finset.mem_univ _, htu⟩))
+  unfold wordDist
+  change A.card ≤ B.card + C.card
+  exact (Finset.card_le_card hsub).trans (Finset.card_union_le B C)
+
+private theorem wordDist_compBCoord_le_one {n : ℕ} (s : OuterWord n) (o : Option (OuterCoord n)) :
+    wordDist s (compBCoord s o) ≤ 1 := by
+  cases o with
+  | none => simp [compBCoord, wordDist]
+  | some j => rw [compBCoord, wordDist_flipOuter]
+
+private theorem compBCoord_injective_separated {n m : ℕ} (s : Fin m → OuterWord n)
+    (hsep : ∀ i j, i ≠ j → 3 ≤ wordDist (s i) (s j)) :
+    Function.Injective (fun q : Fin m × Option (OuterCoord n) => compBCoord (s q.1) q.2) := by
+  intro q r hqr
+  by_contra hne
+  by_cases hij : q.1 = r.1
+  · apply hne
+    apply Prod.ext hij
+    exact compBCoord_injective (s q.1) (by simpa [hij] using hqr)
+  · have hdist := hsep q.1 r.1 hij
+    have hleft := wordDist_compBCoord_le_one (s q.1) q.2
+    have hright := wordDist_compBCoord_le_one (s r.1) r.2
+    have hright' : wordDist (compBCoord (s r.1) r.2) (s r.1) ≤ 1 := by
+      rw [wordDist_symm]
+      exact hright
+    change compBCoord (s q.1) q.2 = compBCoord (s r.1) r.2 at hqr
+    rw [← hqr] at hright'
+    have htri := wordDist_triangle (s q.1) (compBCoord (s q.1) q.2) (s r.1)
+    omega
 
 private theorem MassFail_dependsOn_oddNbrs {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)

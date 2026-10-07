@@ -220,6 +220,36 @@ theorem pi_pr_le_fixed_image {ι κ α : Type*} [Fintype ι] [DecidableEq ι]
         simp [F, hmem, val, i, hiSource]
   exact hprob.trans_eq hprod
 
+private theorem cross_key_ne {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (g : D.KeyT) (u : D.CrossSub g) : u.1 ≠ g := by
+  intro heq
+  have hone : keyDist g u.1 = 1 := (Finset.mem_filter.mp u.2).2
+  have hself : keyDist g g = 0 := by simp [keyDist]
+  rw [heq] at hone
+  rw [hself] at hone
+  norm_num at hone
+
+def observedInternalTagCoords {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (π : D.Pres c.1) : Finset (D.KeyT × D.Loc) :=
+  ((Finset.univ.filter fun ℓ : D.Loc => (π.1 ℓ).isSome).image fun ℓ => (c.1, ℓ))
+
+def observedCrossTagCoords {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (π : D.Pres c.1) : Finset (D.KeyT × D.Loc) :=
+  (Finset.univ : Finset (D.CrossSub c.1)).image fun u => (u.1, (π.2 u).1)
+
+def observedTagCoords {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (π : D.Pres c.1) : Finset (D.KeyT × D.Loc) :=
+  observedInternalTagCoords D c π ∪ observedCrossTagCoords D c π
+
+noncomputable def observedTagValue {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) (π : D.Pres c.1)
+    (default : D.M.ι) (x : D.KeyT × D.Loc) : D.M.ι :=
+  if hg : x.1 = c.1 then (π.1 x.2).getD default else
+    if hu : x.1 ∈ crossKeys c.1 then
+      let u : D.CrossSub c.1 := ⟨x.1, hu⟩
+      if hℓ : x.2 = (π.2 u).1 then (π.2 u).2.1 else default
+    else default
+
 theorem positive_tilt_gate {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
     (hbase : D.BaseGates Θ g) (hpos : 0 < (D.tilt Θ g).w i) :

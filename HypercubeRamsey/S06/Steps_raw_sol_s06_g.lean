@@ -461,5 +461,46 @@ theorem hidden_post_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
   simpa only [Ctx6.s3Weight, hm] using high_weight_local_eq X b D H H' h o drop ξ
 
 
+ theorem withParH_actual (H : X.Hist) (nm : ParentName6 X.Bin) :
+    X.withParH H nm ((X.parOf H.1).val nm) = H := by
+  cases nm with
+  | initial => rfl
+  | candidate u =>
+    apply Prod.ext
+    · apply Prod.ext
+      · rfl
+      · apply Prod.ext
+        · funext v
+          by_cases h : v = u
+          · subst v
+            simp [Ctx6.withParH, Ctx6.withPar, Ctx6.parOf, Par6.set, Par6.val]
+          · simp [Ctx6.withParH, Ctx6.withPar, Ctx6.parOf, Par6.set, Par6.val, h]
+        · rfl
+    · rfl
+
+ theorem tuple_law_candidate_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (ξ : Fin N) (e : Id × X.Ty) (he : e ∈ D) :
+    X.tupleLaw (X.withParH H nm ξ) e.2 = X.tupleLaw (X.withParH H' nm ξ) e.2 := by
+  have ht := tag_post_local_eq X nm D H H' h ξ e he
+  have hl (i : X.ι) := label_law_values_eq X (X.withParH H nm ξ) (X.withParH H' nm ξ) (reqNames6 e.2) i
+    (fun v hv => required_values_local_eq X nm D H H' h ξ e he v hv)
+  unfold Ctx6.tupleLaw Ctx6.tupleLawOn
+  rw [ht]
+  congr 1
+  funext i
+  congr 1
+  funext r
+  exact hl i
+
+ theorem tuple_law_actual_local_eq {Id : Type} [Fintype Id] [DecidableEq Id]
+    (nm : ParentName6 X.Bin) (D : Finset (Id × X.Ty)) (H H' : X.Hist)
+    (h : LocalAgree X nm D H H') (hval : (X.parOf H.1).val nm = (X.parOf H'.1).val nm)
+    (e : Id × X.Ty) (he : e ∈ D) : X.tupleLaw H e.2 = X.tupleLaw H' e.2 := by
+  have ht := tuple_law_candidate_local_eq X nm D H H' h ((X.parOf H.1).val nm) e he
+  rw [withParH_actual X H nm, hval, withParH_actual X H' nm] at ht
+  exact ht
+
+
 end
 end HypercubeRamsey.S06.Lane_sol_s06_g

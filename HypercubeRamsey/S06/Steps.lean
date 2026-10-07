@@ -5,6 +5,7 @@ import HypercubeRamsey.S06.Steps_window_sol_s06_steps1
 import HypercubeRamsey.S06.Steps_cap_sol_s06_steps1
 import HypercubeRamsey.S06.Steps_q_s06_steps2
 import HypercubeRamsey.S06.Steps_sol_s06_g
+import HypercubeRamsey.S06.Steps_joint_sol_s06_g
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -3600,6 +3601,175 @@ private theorem highTuple_subdensity_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
             safeRatio6 ((X.labelLaw Hξ (reqNames6 β) o.1).w (o.2 r)) ((X.labelLaw H S o.1).w (o.2 r))) := by ring
       _ = _ := by rw [htagEq, hlabelEq]
   exact le_of_eq heq.symm
+
+private theorem substituted_initial_of_noninitial_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (nm : ParentName6 X.Bin) (ξ : Fin N)
+    (hne : nm ≠ .initial) : (X.withParH H nm ξ).1.1 = H.1.1 := by
+  cases nm with
+  | initial => exact False.elim (hne rfl)
+  | candidate u => rfl
+
+set_option maxHeartbeats 400000 in
+private theorem localPositiveKeysSupp_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (v : Fin N) (b : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (l : Lane_sol_s06_g.LocalObs X (X.tgtName b) D)
+    (hroot : X.tgtName b ≠ .initial → 0 < X.initLaw.w v)
+    (hprior : 0 < (Lane_sol_s06_g.localPrior X v b).w ξ)
+    (hp : 0 < (Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).w l) :
+    X.KeysSupp (X.withParH (Lane_sol_s06_g.assembleLocal X v (X.tgtName b) D l) (X.tgtName b) ξ).1
+      (X.locKeys D) := by
+  let nm := X.tgtName b
+  let H := Lane_sol_s06_g.assembleLocal X v nm D l
+  let B := (X.withParH H nm ξ).1
+  have hπ : 0 < (X.priorOf H nm).w ξ := by
+    simpa only [H, nm, Lane_sol_s06_g.assemble_prior] using hprior
+  have hfac := Lane_sol_s06_g.localLaw_positive_factors X v nm D ξ l hp
+  change X.KeysSupp B (X.locKeys D)
+  refine ⟨?_, ?_, ?_⟩
+  · by_cases hi : nm = .initial
+    · have hx : 0 < X.initLaw.w ξ := by simpa only [Ctx6.priorOf, hi] using hπ
+      simpa only [B, Ctx6.withParH, Ctx6.withPar, Ctx6.parOf, hi, Par6.set] using hx
+    · have hInit : 0 < X.initLaw.w H.1.1 := hroot hi
+      have heq := substituted_initial_of_noninitial_sol_s06_g X H nm ξ hi
+      change 0 < X.initLaw.w (X.withParH H nm ξ).1.1
+      rw [heq]
+      exact hInit
+  · intro u hu
+    by_cases heq : ParentName6.candidate u = nm
+    · have hne : nm ≠ .initial := by rw [← heq]; simp
+      have hinit := substituted_initial_of_noninitial_sol_s06_g X H nm ξ hne
+      have hval : B.2.1 u = ξ := by
+        have hv := withParH_value_sol_s06_g X H nm ξ
+        simpa only [Ctx6.varVal, Ctx6.parOf, ← heq, Par6.val, B] using hv
+      have hpc : 0 < (X.candLaw H.1.1).w ξ := by simpa only [Ctx6.priorOf, ← heq] using hπ
+      rw [show B.1 = H.1.1 from hinit, hval]
+      exact hpc
+    · have hu' : u ∈ X.locBins D nm := Finset.mem_filter.mpr ⟨hu, heq⟩
+      have hne : (.par (ParentName6.candidate u) : X.Name) ≠ .par nm := by
+        intro hx
+        exact heq (VarName6.par.inj hx)
+      have hval : B.2.1 u = H.1.2.1 u := by
+        simpa only [Ctx6.varVal, Ctx6.parOf, Par6.val, B] using
+          withParH_other_value_sol_s06_g X H nm ξ (.par (.candidate u)) hne
+      rw [hval, Lane_sol_s06_g.assemble_candidate X v nm D l u hu']
+      exact hfac.1 ⟨u, hu'⟩
+  · intro s hs
+    have ht := hfac.2.1 ⟨s, hs⟩
+    have hval : B.2.2 s = l.2.1 ⟨s, hs⟩ := Lane_sol_s06_g.assemble_tag X v nm D l s hs
+    rw [hval]
+    exact ht
+
+private theorem keysSupp_mono_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) (B : X.Base) (S T : Finset X.Key)
+    (h : X.KeysSupp B T) (hsub : S ⊆ T) : X.KeysSupp B S := by
+  refine ⟨h.1, ?_, fun s hs => h.2.2 s (hsub hs)⟩
+  intro u hu
+  rcases Finset.mem_image.mp hu with ⟨s, hs, rfl⟩
+  exact h.2.1 s.1 (Finset.mem_image.mpr ⟨s, hsub hs, rfl⟩)
+
+private theorem typeKeys_subset_local_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (D : Finset (Id × X.Ty)) (e : Id × X.Ty) (he : e ∈ D) : X.typeKeys e.2 ⊆ X.locKeys D := by
+  intro s hs
+  rcases Finset.mem_insert.mp hs with hs | hs
+  · exact Finset.mem_union_right _ (Finset.mem_image.mpr ⟨e, he, hs.symm⟩)
+  · rcases Finset.mem_biUnion.mp hs with ⟨ℓ, hℓ, hs⟩
+    exact Finset.mem_union_left _ (Finset.mem_biUnion.mpr
+      ⟨ℓ, Finset.mem_biUnion.mpr ⟨e, he, hℓ⟩, hs⟩)
+
+private theorem localPositiveLambda_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (v : Fin N) (b : X.State) (D : Finset (Id × X.Ty)) (ξ : Fin N)
+    (l : Lane_sol_s06_g.LocalObs X (X.tgtName b) D) (hTag : X.TagDom)
+    (hK : X.KeysSupp (X.withParH (Lane_sol_s06_g.assembleLocal X v (X.tgtName b) D l) (X.tgtName b) ξ).1 (X.locKeys D))
+    (hp : 0 < (Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).w l) :
+    ∀ s : {s : X.Key // s ∈ X.locKeys D}, 0 < M.Λ (l.2.1 s) := by
+  intro s
+  let B := (X.withParH (Lane_sol_s06_g.assembleLocal X v (X.tgtName b) D l) (X.tgtName b) ξ).1
+  have hparents := Lane_q_s06_steps1.parent_heavy_related_of_local_support X s.1 B hK.1
+    (hK.2.1 s.1.1 (Finset.mem_image.mpr ⟨s.1, s.2, rfl⟩))
+  have hd := hTag (X.parOf B) s.1 hparents.1 hparents.2 (l.2.1 s)
+  have hpos := (Lane_sol_s06_g.localLaw_positive_factors X v (X.tgtName b) D ξ l hp).2.1 s
+  by_contra hn
+  have hz : M.Λ (l.2.1 s) = 0 := le_antisymm (le_of_not_gt hn) (M.Λ_nonneg _)
+  rw [hz, mul_zero] at hd
+  exact (not_lt_of_ge hd) hpos
+
+set_option maxHeartbeats 400000 in
+private theorem jointGatedDom_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    (X : Ctx6 γ p₀ K n N E G M) {Id : Type} [Fintype Id] [DecidableEq Id]
+    (v : Fin N) (b : X.State) (D : Finset (Id × X.Ty))
+    (hTag : X.TagDom) (hDom : X.Step2Dom) (hSupp : X.Step2Supp)
+    (hroot : X.tgtName b ≠ .initial → 0 < X.initLaw.w v)
+    (hTypes : ∀ e ∈ D, e.2 ∈ X.occTypes) :
+    ∀ ξ ω, Lane_sol_s06_g.jointGate X v b D ξ ω →
+      (Lane_sol_s06_g.jointActual X v b D ξ).w ω ≤
+        (Lane_sol_s06_g.jointReference X v b D).w ω * Lane_sol_s06_g.jointLikelihood X v b D none ξ ω := by
+  intro ξ ω hg
+  let H := Lane_sol_s06_g.assembleLocal X v (X.tgtName b) D ω.1
+  let B := (X.withParH H (X.tgtName b) ξ).1
+  have hπ : 0 < (Lane_sol_s06_g.localPrior X v b).w ξ := by
+    simpa only [Lane_sol_s06_g.assemble_prior] using hg.1
+  have hAct : (Lane_sol_s06_g.jointActual X v b D ξ).w ω =
+      (Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).w ω.1 *
+        ∏ e : {e : Id × X.Ty // e ∈ D}, (X.tupleLaw (X.withParH H (X.tgtName b) ξ) e.1.2).w (ω.2 e) := rfl
+  by_cases hz : (Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).w ω.1 = 0
+  · rw [hAct, hz, zero_mul]
+    exact mul_nonneg ((Lane_sol_s06_g.jointReference X v b D).nonneg ω)
+      (Lane_sol_s06_g.jointLikelihood_nonneg X v b D none ξ ω)
+  have hp : 0 < (Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).w ω.1 :=
+    lt_of_le_of_ne ((Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).nonneg _) (Ne.symm hz)
+  have hK := localPositiveKeysSupp_sol_s06_g X v b D ξ ω.1 hroot hπ hp
+  have hΛ := localPositiveLambda_sol_s06_g X v b D ξ ω.1 hTag hK hp
+  have hPrimitive := Lane_sol_s06_g.primitive_density_eq X v (X.tgtName b) D ξ ω.1 (fun s => (hΛ s).ne')
+  have hcoord (e : {e : Id × X.Ty // e ∈ D}) :
+      (X.tupleLaw (X.withParH H (X.tgtName b) ξ) e.1.2).w (ω.2 e) ≤
+        (X.highRef H b e.1.2).w (ω.2 e) * X.highLik H b ξ e.1.2 (ω.2 e) := by
+    have hKT := keysSupp_mono_sol_s06_g X B (X.typeKeys e.1.2) (X.locKeys D) hK
+      (typeKeys_subset_local_sol_s06_g X D e.1 e.2)
+    have hkey : {e.1.2.key} ⊆ X.locKeys D := by
+      intro s hs
+      have heq := Finset.mem_singleton.mp hs
+      exact Finset.mem_union_right _ (Finset.mem_image.mpr ⟨e.1, e.2, heq.symm⟩)
+    have hKS := keysSupp_mono_sol_s06_g X B {e.1.2.key} (X.locKeys D) hK hkey
+    have hstep := hg.2.2 e.1 e.2
+    have htag : ∀ i, 0 < (X.Tβ (X.withParH H (X.tgtName b) ξ) e.1.2).w i → 0 < M.Λ i := by
+      intro i hi
+      have hd := (hDom (X.withParH H (X.tgtName b) ξ) e.1.2 (hTypes e.1 e.2) hKS hstep).1 i
+      by_contra hn
+      have heq : M.Λ i = 0 := le_antisymm (le_of_not_gt hn) (M.Λ_nonneg i)
+      rw [heq, mul_zero] at hd
+      exact (not_lt_of_ge hd) hi
+    have hmass : ∀ i, 0 < (X.Tβ (X.withParH H (X.tgtName b) ξ) e.1.2).w i →
+        0 < ∑ y ∈ X.reqNbhd (X.withParH H (X.tgtName b) ξ) (reqNames6 e.1.2), (M.μ i).w y := by
+      intro i hi
+      have hs := hSupp (X.withParH H (X.tgtName b) ξ) e.1.2 (hTypes e.1 e.2) hKT hstep i hi
+      exact lt_of_lt_of_le (by norm_num [c₁, c₀]) hs.1
+    exact highTuple_subdensity_sol_s06_g X H b e.1.2 ξ htag hmass (ω.2 e)
+  have hprod : (∏ e : {e : Id × X.Ty // e ∈ D}, (X.tupleLaw (X.withParH H (X.tgtName b) ξ) e.1.2).w (ω.2 e)) ≤
+      ∏ e : {e : Id × X.Ty // e ∈ D}, (X.highRef H b e.1.2).w (ω.2 e) * X.highLik H b ξ e.1.2 (ω.2 e) := Finset.prod_le_prod₀
+    (fun (e : {e : Id × X.Ty // e ∈ D}) he => (X.tupleLaw (X.withParH H (X.tgtName b) ξ) e.1.2).nonneg (ω.2 e))
+    (fun e he => hcoord e)
+  rw [Finset.prod_mul_distrib] at hprod
+  have hRef : (Lane_sol_s06_g.jointReference X v b D).w ω =
+      (Lane_sol_s06_g.localReference X (X.tgtName b) D).w ω.1 *
+        ∏ e : {e : Id × X.Ty // e ∈ D}, (X.highRef H b e.1.2).w (ω.2 e) := rfl
+  rw [hAct, hRef]
+  unfold Lane_sol_s06_g.jointLikelihood
+  simp only [reduceCtorEq, if_false]
+  calc
+    _ ≤ (Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).w ω.1 *
+        ((∏ e : {e : Id × X.Ty // e ∈ D}, (X.highRef H b e.1.2).w (ω.2 e)) *
+          ∏ e : {e : Id × X.Ty // e ∈ D}, X.highLik H b ξ e.1.2 (ω.2 e)) :=
+      mul_le_mul_of_nonneg_left hprod ((Lane_sol_s06_g.localLaw X v (X.tgtName b) D ξ).nonneg _)
+    _ = _ := by rw [← hPrimitive]; ring
 
 /-- L6.1g (tests, 06:411–426): the local list is closed under kernel inputs, so its marginal is the product of
 its kernels; the deleted density integrates to at most one. -/

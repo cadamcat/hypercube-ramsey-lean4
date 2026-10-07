@@ -1,0 +1,93 @@
+[
+  {
+    "source": "HypercubeRamsey/S05/History.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05/History.olean",
+      "HypercubeRamsey/S05/History.lean"
+    ],
+    "exit": 0
+  },
+  {
+    "source": "HypercubeRamsey/S05/Centres.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05/Centres.olean",
+      "HypercubeRamsey/S05/Centres.lean"
+    ],
+    "exit": 0
+  },
+  {
+    "source": "HypercubeRamsey/S05/Clock_q_s05_even.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05/Clock_q_s05_even.olean",
+      "HypercubeRamsey/S05/Clock_q_s05_even.lean"
+    ],
+    "exit": 0
+  },
+  {
+    "source": "HypercubeRamsey/S05/Clock.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05/Clock.olean",
+      "HypercubeRamsey/S05/Clock.lean"
+    ],
+    "exit": 0
+  },
+  {
+    "source": "HypercubeRamsey/S05/Even.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05/Even.olean",
+      "HypercubeRamsey/S05/Even.lean"
+    ],
+    "exit": 0
+  },
+  {
+    "source": "HypercubeRamsey/S05/Assembly.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05/Assembly.olean",
+      "HypercubeRamsey/S05/Assembly.lean"
+    ],
+    "exit": 0
+  },
+  {
+    "source": "HypercubeRamsey/S05.lean",
+    "command": [
+      "lake",
+      "env",
+      "lean",
+      "-DautoImplicit=false",
+      "-o",
+      ".lake/build/lib/lean/HypercubeRamsey/S05.olean",
+      "HypercubeRamsey/S05.lean"
+    ],
+    "exit": 0
+  }
+]

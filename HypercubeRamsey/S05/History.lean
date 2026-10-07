@@ -274,7 +274,7 @@ def HighOnly (K : X.Ty) : Prop := ∀ ℓ ∈ K.2.1, ∃ i, ℓ = .inr i
 
 /-- The Stage 3 conclusions retain the supported Step 1 base: high-only Step 2 tests pass; the other tests, averaged over the
 raw low keys, fail with probability at most `e^{-δL/8}`; every high Step 3 failure, averaged over the low keys
-and fresh arrays, is at most `e^{-c_{H0} s/2}`. -/
+and fresh arrays, is at most `e^{-c_{H0} s/2}`. Restricting the raw high-key law retains coordinate support. -/
 def Stage3Law (b : X.Base) (ν : FinProb X.HighHid) (cH : ℝ) : Prop :=
   (∀ hi, ν.w hi ≠ 0 → ∀ K, X.TypeOccurs K → X.HighOnly K → ∀ lo, ¬ X.step2Fail (b, X.joinHidden hi lo) K) ∧
   (∀ hi, ν.w hi ≠ 0 → ∀ K, X.TypeOccurs K → ¬ X.HighOnly K →
@@ -286,7 +286,8 @@ def Stage3Law (b : X.Base) (ν : FinProb X.HighHid) (cH : ℝ) : Prop :=
   (∀ hi, ν.w hi ≠ 0 → ∀ r : X.AbsRecord, X.RecOccurs r → (∃ i, r.1 = .inr i) →
     (X.lowLaw b).expect (fun lo => X.step3Rate (b, X.joinHidden hi lo) r) ≤
       Real.exp (-(cH * X.p.s n) / 2)) ∧
-  X.baseLaw.w b ≠ 0 ∧ X.Step1Pass b
+  X.baseLaw.w b ≠ 0 ∧ X.Step1Pass b ∧
+    ∀ hi, ν.w hi ≠ 0 → ∀ i h, (X.prior b (.inr i)).w (hi i h) ≠ 0
 
 /-- L5.1h3 (05:681–702): given a Stage 2 base, restrict the high keys: Markov from Stage 2 and from the high
 Step 3 one-target bound, abstract count `exp(O(T log T + J log m))` beaten by `e^{-c_{H0}s/2}` once `K_s` is large,
@@ -330,15 +331,17 @@ def resampleLow (tr : X.LowIdx → Law N) (Λ : Finset X.LowIdx) (lo : X.LowHid)
 
 /-- The Stage 5 conclusions: every Step 2 test passes; Step 3 conditional array-failure bounds
 `e^{-c_{L0} k'_j / 4}` (low) and `e^{-c_{H0} s / 6}` (high); and dropping the constraints touching a set `Λ` of
-low keys costs a factor `2` per key against resampling them from the trimmed laws (05:1031–1035). -/
+low keys costs a factor `2` per key against resampling them from the trimmed laws (05:1031–1035).
+The realized low columns remain in their raw prior support (05:704–741). -/
 def Stage5Law (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N) (ν : FinProb X.LowHid)
     (cL cH : ℝ) : Prop :=
   (∀ lo, ν.w lo ≠ 0 → X.Step2Pass (b, X.joinHidden hi lo)) ∧
   (∀ lo, ν.w lo ≠ 0 → ∀ r : X.AbsRecord, X.RecOccurs r →
     X.step3Rate (b, X.joinHidden hi lo) r ≤
       X.step3Scale (match r.1 with | .inl _ => cL / 4 | .inr _ => cH / 6) r.1) ∧
-  ∀ (Λ : Finset X.LowIdx) (W : X.LowHid → ℝ) (M : ℝ), (∀ lo, 0 ≤ W lo) →
-    (∀ lo, (X.resampleLow tr Λ lo).expect W ≤ M) → ν.expect W ≤ 2 ^ Λ.card * M
+  (∀ (Λ : Finset X.LowIdx) (W : X.LowHid → ℝ) (M : ℝ), (∀ lo, 0 ≤ W lo) →
+    (∀ lo, (X.resampleLow tr Λ lo).expect W ≤ M) → ν.expect W ≤ 2 ^ Λ.card * M) ∧
+  ∀ lo, ν.w lo ≠ 0 → ∀ k h, (X.prior b (.inl k)).w (lo k h) ≠ 0
 
 /-- L5.1h5 (05:723–744): from the product of the trimmed laws exclude the remaining Step 2 failures and the
 Step 3 alarms (Markov from the one-target bound and Stage 3); grouping by central sign, bin and severity gives
@@ -363,12 +366,13 @@ def lowIdxOf (ℓ : X.Key) : X.LowIdx :=
 /-- The data a proxy-mean functional must provide at a fixed base and high history (05:1030–1037, 05:988–1001):
 nonnegative, zero at high roles, capped by `e^{D_L}`; reading low keys only within sign distance
 `C_loc √m` of the target; and with the one-target proxy bound `2 N π_ℓ(y)` at every fixing of the other low
-keys. -/
-structure ProxyMeanData5 (b : X.Base) (hi : X.HighHid) (Z : X.LowHid → OddRole5 n → Fin N → ℝ) : Prop where
+keys. `Cloc` is an input, fixed before the eventual threshold in L5.1l(2). -/
+structure ProxyMeanData5 (Cloc : ℕ) (b : X.Base) (hi : X.HighHid)
+    (Z : X.LowHid → OddRole5 n → Fin N → ℝ) : Prop where
   nonneg : ∀ lo r y, 0 ≤ Z lo r y
   high_zero : ∀ lo r y, ¬ X.g.low (X.p.J n) r.1 → Z lo r y = 0
   cap : ∀ lo r y, Z lo r y ≤ Real.exp (X.p.DL n)
-  locality : ∃ Cloc : ℕ, ∀ r, FinProb.DependsOn (fun lo => Z lo r)
+  locality : ∀ r, FinProb.DependsOn (fun lo => Z lo r)
     (Finset.univ.filter fun k : X.LowIdx =>
       hammingDist k.2.1 (X.g.sign r.1) ≤ Cloc * Nat.sqrt (X.p.m n))
   one_target : ∀ lo r y, X.g.low (X.p.J n) r.1 →
@@ -379,20 +383,22 @@ structure ProxyMeanData5 (b : X.Base) (hi : X.HighHid) (Z : X.LowHid → OddRole
 /-- L5.1l(2) (05:1027–1041): under the Stage 5 law, the odd-role averages of a proxy-mean functional are bounded
 at every label with probability `1 - o(1)`: near rows (sign distance `O(√m)`) are a `2^{-m+o(m)}` fraction, the
 comparison costs `2^n`, separated targets are resampled independently from the trimmed laws with the
-one-target bound, and the averages of `N π_ℓ` are bounded by the first part. -/
-theorem L5_1l2 : ∀ C₁ : ℝ, 0 < C₁ → ∃ C₂ : ℝ, 0 < C₂ ∧ ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
+one-target bound, and the averages of `N π_ℓ` are bounded by the first part. The threshold is allowed to depend
+on the fixed locality constant; the functional cannot choose that constant after seeing `n`. -/
+theorem L5_1l2 : ∀ (Cloc : ℕ) (C₁ : ℝ), 0 < C₁ →
+    ∃ C₂ : ℝ, 0 < C₂ ∧ ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G),
       X.p = p → ChunkEstimates5 X.g → N ≤ n * 2 ^ n →
         ∀ b hi tr (ν : FinProb X.LowHid) (cL cH : ℝ), X.Stage5Law b hi tr ν cL cH → X.Stage4Laws b hi tr →
           (∀ y, X.avgLowPrior b y ≤ C₁) →
-          ∀ Z, X.ProxyMeanData5 b hi Z →
+          ∀ Z, X.ProxyMeanData5 Cloc b hi Z →
             ν.pr (fun lo => ∃ y, C₂ < (Fintype.card (OddRole5 n) : ℝ)⁻¹ * ∑ r, Z lo r y) ≤ 1 / 100 := by
   sorry
 
 /-! ### The successful key history (05:742–744) -/
 
-/-- A good key history (05:742–744): base in raw support, parent in the support, Steps 1 and 2 pass, and every occurring abstract
-record has its conditional Step 3 failure bound over fresh arrays. -/
+/-- A good key history (05:742–744): base and realized columns in raw support, parent in the support,
+Steps 1 and 2 pass, and every occurring abstract record has its conditional Step 3 failure bound over fresh arrays. -/
 structure KeyGood5 (H : X.KeyHist) (cL cH : ℝ) : Prop where
   parent_mem : H.1.1 ∈ X.P.lab0
   step1 : X.Step1Pass H.1
@@ -400,6 +406,7 @@ structure KeyGood5 (H : X.KeyHist) (cL cH : ℝ) : Prop where
   step3 : ∀ r : X.AbsRecord, X.RecOccurs r →
     X.step3Rate H r ≤ X.step3Scale (match r.1 with | .inl _ => cL / 4 | .inr _ => cH / 6) r.1
   base_support : X.baseLaw.w H.1 ≠ 0
+  key_support : ∀ ℓ h, (X.prior H.1 ℓ).w (H.2 ℓ h) ≠ 0
 
 /-- A successful key history: good, and the two history odd-load averages are bounded (the second for a given
 proxy-mean functional) (05:1007–1041). -/

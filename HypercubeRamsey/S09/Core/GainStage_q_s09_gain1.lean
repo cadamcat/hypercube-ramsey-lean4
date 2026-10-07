@@ -753,6 +753,27 @@ private theorem law_restrict_supported9 {N : ℕ} {Y A : Finset (Fin N)} {μ : L
   · simp [Law.restrict, hA, hμ y hy]
   · simp [Law.restrict, hA]
 
+private theorem rowDeg_lipschitz_l1_9 {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (x : Fin N) (μ ν : Law N) :
+    |rowDeg E G x μ - rowDeg E G x ν| ≤ ∑ y, |μ.w y - ν.w y| := by
+  classical
+  have hsum : rowDeg E G x μ - rowDeg E G x ν =
+      ∑ y, (μ.w y - ν.w y) * (if Hits E G x y then 1 else 0) := by
+    rw [rowDeg, rowDeg, ← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro y hy
+    ring
+  rw [hsum]
+  calc
+    |∑ y, (μ.w y - ν.w y) * (if Hits E G x y then 1 else 0)| ≤
+        ∑ y, |(μ.w y - ν.w y) * (if Hits E G x y then 1 else 0)| := by
+          simpa using Finset.abs_sum_le_sum_abs
+            (fun y => (μ.w y - ν.w y) * (if Hits E G x y then 1 else 0)) Finset.univ
+    _ ≤ ∑ y, |μ.w y - ν.w y| := by
+      apply Finset.sum_le_sum
+      intro y hy
+      by_cases h : Hits E G x y <;> simp [h]
+
 private theorem boundedRegularityTest_probability_le9 {P : Params9} (hP : P.Valid)
     {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
     {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n)

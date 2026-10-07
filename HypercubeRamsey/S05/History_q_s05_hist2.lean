@@ -420,6 +420,48 @@ end ChunkGeometry5
 
 namespace Setup5
 
+theorem step1Fail_irrel_sign5 {γ K' χ : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} (X : Setup5 γ K' χ n N E G) (b : X.Base) (ℓ ℓ' : X.Key)
+    (w : BinVector5 n) (k : ℕ) (hcoarse : ℓ.coarse = ℓ'.coarse) (hlevel : ℓ.level = ℓ'.level) :
+    X.step1Fail b ℓ w k ↔ X.step1Fail b ℓ' w k := by
+  have hweight : ∀ y, X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+      X.colWeight b ℓ' b.2.2 (fun _ _ => True) y := by
+    intro y
+    simp [Setup5.colWeight, hcoarse, hlevel]
+  have hweightDel : ∀ y, X.colWeight b ℓ b.2.2
+      (fun w' s => ¬ (w' = w ∧ (s : ℕ) < k)) y =
+        X.colWeight b ℓ' b.2.2 (fun w' s => ¬ (w' = w ∧ (s : ℕ) < k)) y := by
+    intro y
+    simp [Setup5.colWeight, hcoarse, hlevel]
+  have hprior : ∀ y, (X.prior b ℓ).w y = (X.prior b ℓ').w y := by
+    intro y
+    have hLaw : X.prior b ℓ = X.prior b ℓ' := by
+      simpa only [Setup5.prior] using congrArg (fun f => normalize5 f X.y₀) (funext hweight)
+    exact congrArg (fun L : Law N => L.w y) hLaw
+  have hpriorDel : ∀ y, (X.priorDel b ℓ w k).w y = (X.priorDel b ℓ' w k).w y := by
+    intro y
+    have hLaw : X.priorDel b ℓ w k = X.priorDel b ℓ' w k := by
+      simpa only [Setup5.priorDel] using congrArg (fun f => normalize5 f X.y₀) (funext hweightDel)
+    exact congrArg (fun L : Law N => L.w y) hLaw
+  simp only [Setup5.step1Fail]
+  simp_rw [hprior, hpriorDel]
+
+theorem capFail_irrel_sign5 {γ K' χ : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {G : Colour} (X : Setup5 γ K' χ n N E G) (b : X.Base) (ℓ ℓ' : X.Key)
+    (hcoarse : ℓ.coarse = ℓ'.coarse) (hlevel : ℓ.level = ℓ'.level) :
+    X.capFail b ℓ ↔ X.capFail b ℓ' := by
+  have hweight : ∀ y, X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+      X.colWeight b ℓ' b.2.2 (fun _ _ => True) y := by
+    intro y
+    simp [Setup5.colWeight, hcoarse, hlevel]
+  have hprior : ∀ y, (X.prior b ℓ).w y = (X.prior b ℓ').w y := by
+    intro y
+    have hLaw : X.prior b ℓ = X.prior b ℓ' := by
+      simpa only [Setup5.prior] using congrArg (fun f => normalize5 f X.y₀) (funext hweight)
+    exact congrArg (fun L : Law N => L.w y) hLaw
+  simp only [Setup5.capFail, hlevel]
+  simp_rw [hprior]
+
 theorem blockMass_ext5 {γ K' χ : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} (X : Setup5 γ K' χ n N E G) (H H' : X.KeyHist) (K : X.Ty)
     (S : Finset X.Key) (hbase : H.1 = H'.1)

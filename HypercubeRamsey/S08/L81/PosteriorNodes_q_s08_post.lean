@@ -2805,6 +2805,165 @@ theorem avgMarg_mul_normOr {N k : ℕ} (f : (Fin k → Fin N) → ℝ)
           intro j hj
           exact hcoord j
 
+theorem avgMarg_weighted_indicator {N k : ℕ}
+    (Q : FinProb (Fin k → Fin N)) (y : Fin N) :
+    averageCoordinateMarginal Q y =
+      (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+        Q.w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+  classical
+  unfold averageCoordinateMarginal
+  congr 1
+  apply Finset.sum_congr rfl
+  intro j hj
+  rw [Lane_q_s08_post.pr_eq_weighted_indicator]
+
+theorem sum_weighted_avgMarg {κ : Type*} [Fintype κ] {N k : ℕ}
+    (a : κ → ℝ) (Q : κ → FinProb (Fin k → Fin N)) (y : Fin N) :
+    ∑ i, a i * averageCoordinateMarginal (Q i) y =
+      (k : ℝ)⁻¹ * ∑ j : Fin k, ∑ ξ,
+        (∑ i, a i * (Q i).w ξ) *
+          (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+  classical
+  let I : ℝ := (k : ℝ)⁻¹
+  have hrow (i : κ) :
+      a i * averageCoordinateMarginal (Q i) y =
+        I * ∑ j : Fin k, ∑ ξ,
+          a i * (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+    rw [avgMarg_weighted_indicator]
+    dsimp [I]
+    calc
+      _ = I * (a i * ∑ j : Fin k, ∑ ξ,
+          (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0)) := by ring
+      _ = I * ∑ j : Fin k, a i * ∑ ξ,
+          (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+            congr 1
+            rw [Finset.mul_sum]
+      _ = I * ∑ j : Fin k, ∑ ξ,
+          a i * (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+            congr 1
+            apply Finset.sum_congr rfl
+            intro j hj
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            ring
+  calc
+    ∑ i, a i * averageCoordinateMarginal (Q i) y =
+        ∑ i, I * ∑ j : Fin k, ∑ ξ,
+          a i * (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            exact hrow i
+    _ = I * ∑ i, ∑ j : Fin k, ∑ ξ,
+          a i * (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+            rw [Finset.mul_sum]
+    _ = I * ∑ j : Fin k, ∑ ξ, ∑ i,
+          a i * (Q i).w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+            congr 1
+            rw [Finset.sum_comm]
+            apply Finset.sum_congr rfl
+            intro j hj
+            rw [Finset.sum_comm]
+    _ = I * ∑ j : Fin k, ∑ ξ,
+          (∑ i, a i * (Q i).w ξ) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+            congr 1
+            apply Finset.sum_congr rfl
+            intro j hj
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            symm
+            rw [Finset.sum_mul]
+    _ = _ := rfl
+
+set_option maxHeartbeats 2000000 in
+theorem selected_marginal_cancellation {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (c : D.CellT)
+    (y : Fin D.N) (S : Finset (D.Pres c.1))
+    (hSelected : ∀ π : S,
+      D.eps0 * D.Mden Θ c.1 (D.obsOf π.1) ≤ D.Mad Θ P c π.1)
+    (hDom : ∀ ξ, ∑ π : S,
+      D.Qref Θ c.1 (D.obsOf π.1) * D.Gsel Θ P c ξ π.1 ≤ 1) :
+    ∑ π : S, D.Qref Θ c.1 (D.obsOf π.1) * D.Mad Θ P c π.1 *
+        averageCoordinateMarginal (D.selPost Θ P c π.1) y ≤
+      averageCoordinateMarginal D.R' y := by
+  classical
+  let coeff : S → ℝ := fun π =>
+    D.Qref Θ c.1 (D.obsOf π.1) * D.Mad Θ P c π.1
+  let post : S → FinProb D.Tup := fun π => D.selPost Θ P c π.1
+  let density : S → D.Tup → ℝ := fun π ξ => D.R'.w ξ * D.Gsel Θ P c ξ π.1
+  have hMadNonneg (π : S) : 0 ≤ D.Mad Θ P c π.1 := by
+    unfold Ctx.Mad
+    apply Finset.sum_nonneg
+    intro ξ hξ
+    exact mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ P c ξ π.1)
+  have hDenNonneg (π : S) :
+      0 ≤ D.Qref Θ c.1 (D.obsOf π.1) * D.Mad Θ P c π.1 :=
+    mul_nonneg (D.Qref_nonneg Θ c.1 (D.obsOf π.1)) (hMadNonneg π)
+  have hPostSelected (π : S) :
+      post π = normOr (density π)
+        (fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ P c ξ π.1))
+        (D.basePost Θ c.1 (D.obsOf π.1)) := by
+    simp [post, density, Ctx.selPost, hSelected π]
+  have hScaled (π : S) (ξ : D.Tup) :
+      D.Mad Θ P c π.1 * (post π).w ξ = density π ξ := by
+    have hsum : (∑ ξ', density π ξ') = D.Mad Θ P c π.1 := rfl
+    have hnonneg (ξ' : D.Tup) : 0 ≤ density π ξ' :=
+      mul_nonneg (D.R'.nonneg ξ') (D.Gsel_nonneg Θ P c ξ' π.1)
+    rw [hPostSelected π]
+    by_cases hM : D.Mad Θ P c π.1 = 0
+    · have hsumzero : (∑ ξ', density π ξ') = 0 := by rw [hsum, hM]
+      have hterm : density π ξ = 0 := by
+        have hle := Finset.single_le_sum (fun ξ' hξ' => hnonneg ξ') (Finset.mem_univ ξ)
+        rw [hsumzero] at hle
+        exact le_antisymm hle (hnonneg ξ)
+      simp [normOr, hsumzero, hM, hterm]
+    · have hsumne : (∑ ξ', density π ξ') ≠ 0 := by rw [hsum]; exact hM
+      simp only [normOr, hsumne]
+      rw [hsum]
+      simp only [if_false]
+      field_simp [hM]
+  have hpoint (ξ : D.Tup) :
+      ∑ π : S, coeff π * (post π).w ξ ≤ D.R'.w ξ := by
+    calc
+      ∑ π : S, coeff π * (post π).w ξ =
+          ∑ π : S, D.R'.w ξ *
+            (D.Qref Θ c.1 (D.obsOf π.1) * D.Gsel Θ P c ξ π.1) := by
+              apply Finset.sum_congr rfl
+              intro π hπ
+              calc
+                coeff π * (post π).w ξ =
+                    D.Qref Θ c.1 (D.obsOf π.1) *
+                      (D.Mad Θ P c π.1 * (post π).w ξ) := by dsimp [coeff]; ring
+                _ = D.Qref Θ c.1 (D.obsOf π.1) * density π ξ := by rw [hScaled]
+                _ = D.R'.w ξ *
+                      (D.Qref Θ c.1 (D.obsOf π.1) * D.Gsel Θ P c ξ π.1) := by
+                        dsimp [density]
+                        ring
+      _ = D.R'.w ξ * ∑ π : S,
+            D.Qref Θ c.1 (D.obsOf π.1) * D.Gsel Θ P c ξ π.1 := by
+              rw [Finset.mul_sum]
+      _ ≤ D.R'.w ξ * 1 :=
+          mul_le_mul_of_nonneg_left (hDom ξ) (D.R'.nonneg ξ)
+      _ = D.R'.w ξ := by ring
+  rw [sum_weighted_avgMarg coeff post y]
+  calc
+    (h : ℝ)⁻¹ *
+        ∑ j : Fin h, ∑ ξ,
+          (∑ π : S, coeff π * (post π).w ξ) *
+            (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) ≤
+      (h : ℝ)⁻¹ * ∑ j : Fin h, ∑ ξ,
+          D.R'.w ξ * (@ite ℝ (ξ j = y) (Classical.propDecidable _) (1 : ℝ) 0) := by
+        apply mul_le_mul_of_nonneg_left _ (inv_nonneg.mpr (Nat.cast_nonneg _))
+        apply Finset.sum_le_sum
+        intro j hj
+        apply Finset.sum_le_sum
+        intro ξ hξ
+        exact mul_le_mul_of_nonneg_right (hpoint ξ) (by split_ifs <;> norm_num)
+    _ = averageCoordinateMarginal D.R' y := by
+      symm
+      exact avgMarg_weighted_indicator D.R' y
+
 theorem avgMarg_ne_zero_support {N k : ℕ} (Q : FinProb (Fin k → Fin N)) (y : Fin N)
     (hQ : averageCoordinateMarginal Q y ≠ 0) :
     ∃ ξ j, Q.w ξ ≠ 0 ∧ ξ j = y := by

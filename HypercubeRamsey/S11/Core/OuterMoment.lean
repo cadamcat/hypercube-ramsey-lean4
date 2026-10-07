@@ -2,6 +2,7 @@ import HypercubeRamsey.S11.Core.Definitions
 import HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer
 import HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer_moments
 import HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer_sampling
+import HypercubeRamsey.S11.Core.OuterMoment_sol_s11_outer
 import HypercubeRamsey.S11.Core.OuterMoment_sol_s11_range
 import HypercubeRamsey.Tools.SignedTest
 import HypercubeRamsey.Tools.Ramsey
@@ -727,9 +728,8 @@ theorem one_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
 set_option maxHeartbeats 800000 in
 /-- L11.3b (11:207–252).  `t = ⌈n^.25⌉` conditioned samples from `σ|_{E_x}`, `‖E_{ρ_x} a_z‖_{L²(π)} = O(b_*)` by
 (11.1), `E‖S‖² = O_u(t)`, Fubini to a fixed norm-good tuple whose simultaneous violation set has `x`-mass
-`e^{-O(t n^.4)}` (width `O(n^.65)`), the projection identity and the equal-normalizer pair `π_±`
-(F-SignedTest): `O_u(b_* √t) = O_u(n^{-.825})` against `t n^{-1.03} = n^{-.78+o(1)}`.  Diagonal pairs have
-probability `≤ max σ ≤ e^{h}/N`. -/
+`e^{-O(t n^.4)}` (width `O(n^.65)`), the projection identity and positive/negative tilts whose normalizers are controlled by the L¹ norm:
+`O_u(b_* √t) = O_u(n^{-.825})` against `t n^{-1.03} = n^{-.78+o(1)}`. -/
 theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀ : 0 < x₀) (hx₀' : x₀ < 1)
     (hK : 0 < K) : TwoFreeEv δ x₀ K := by
   classical
@@ -745,7 +745,7 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
   have hgapFiber := OuterMoment_q_s11_outer.eventually_pow_gap
     ((2 : ℝ) / 5) a (8 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
   have hgapTuple := OuterMoment_q_s11_outer.eventually_pow_gap
-    ((13 : ℝ) / 20) a (16 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
+    ((13 : ℝ) / 20) a (64 : ℝ) (by dsimp [a]; nlinarith) (by norm_num)
   have hgapTail := OuterMoment_q_s11_outer.eventually_pow_gap
     (x₀ / 4) x₀ (32 / x₀) (by nlinarith [hx₀]) (by positivity)
   have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
@@ -765,18 +765,25 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
     exact hn.le
   have hnLarge : ∀ᶠ n : ℕ in atTop, 64 ≤ n :=
     eventually_atTop.mpr ⟨64, fun _ hn => hn⟩
-  have hKHalf : ∀ᶠ n : ℕ in atTop, Real.log K ≤ (n : ℝ) ^ x₀ / 2 := by
-    filter_upwards [hPiTend.eventually_gt_atTop (2 * Real.log K)] with n hn
+  have hKHalf : ∀ᶠ n : ℕ in atTop, Real.log K + Real.log (5 * Hbound + 1) ≤ (n : ℝ) ^ x₀ / 2 := by
+    filter_upwards [hPiTend.eventually_gt_atTop (2 * (Real.log K + Real.log (5 * Hbound + 1)))] with n hn
     linarith
+  have hsampleB := OuterMoment_q_s11_outer.eventually_pow_gap
+    (-(33 : ℝ) / 20) 0 (2 : ℝ) (by norm_num) (by norm_num)
+  have hsampleContr := OuterMoment_q_s11_outer.eventually_pow_gap
+    (-(33 : ℝ) / 40) (-(39 : ℝ) / 50) (1536 * Hbound) (by norm_num) (by positivity)
   have hScale : ∀ᶠ n : ℕ in atTop,
       64 ≤ n ∧ bS n ≤ 1 / 8 ∧ tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 ∧
         Real.log K + Real.log (2 * B + 2) ≤ (n : ℝ) ^ x₀ ∧
         8 * (n : ℝ) ^ ((2 : ℝ) / 5) < (n : ℝ) ^ a ∧
-        16 * (n : ℝ) ^ ((13 : ℝ) / 20) < (n : ℝ) ^ a ∧
-        Real.log K ≤ (n : ℝ) ^ x₀ / 2 ∧
-        (32 / x₀) * (n : ℝ) ^ (x₀ / 4) < (n : ℝ) ^ x₀ := by
-    filter_upwards [hnLarge, hbSmall, hgap, hPiWidth, hgapFiber, hgapTuple, hKHalf, hgapTail]
-      with n hn hb hg hp hgf hgt hk ht
+        64 * (n : ℝ) ^ ((13 : ℝ) / 20) < (n : ℝ) ^ a ∧
+        Real.log K + Real.log (5 * Hbound + 1) ≤ (n : ℝ) ^ x₀ / 2 ∧
+        (32 / x₀) * (n : ℝ) ^ (x₀ / 4) < (n : ℝ) ^ x₀ ∧
+        2 * (n : ℝ) ^ (-(33 : ℝ) / 20) < 1 ∧
+        1536 * Hbound * (n : ℝ) ^ (-(33 : ℝ) / 40) <
+          (n : ℝ) ^ (-(39 : ℝ) / 50) := by
+    filter_upwards [hnLarge, hbSmall, hgap, hPiWidth, hgapFiber, hgapTuple, hKHalf, hgapTail, hsampleB, hsampleContr]
+      with n hn hb hg hp hgf hgt hk ht hsb hsc
     have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
     have hpow : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
       exact Real.one_le_rpow hn1 (by norm_num)
@@ -803,18 +810,24 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
       linarith
     have hwidth : tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
       nlinarith [htσ, hlog3, hpow, hg]
-    exact ⟨hn, hb, hwidth, hp, hgf, hgt, hk, ht⟩
+    exact ⟨hn, hb, hwidth, hp, hgf, hgt, hk, ht, by simpa using hsb, hsc⟩
   obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScale
   refine ⟨n₀, ?_⟩
   intro n hn N E X Y G π σ S hO
   intro J j j' hj hj' hjj base hbase
   have hpars := hn₀ n hn
   rcases hpars with ⟨hn64, hbSmallN, hwidthN, hpiWidthN, hfiberGap, htupleGap,
-    hKHalfN, htailGap⟩
+    hKAugN, htailGap, hsampleBN, hsampleContrN⟩
   have hNpos : 0 < (N : ℝ) := by
     have hNnat : 0 < N := lt_of_lt_of_le (by positivity) hO.host
     exact_mod_cast hNnat
   have hnreal : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hKHalfN : Real.log K ≤ (n : ℝ)^x₀/2 := by
+    have hh : 0 ≤ Real.log (5*Hbound+1) := by
+      apply Real.log_nonneg
+      have hH : 0 ≤ Hbound := by positivity
+      linarith only [hH]
+    linarith only [hKAugN, hh]
   let πlaw : Law N := ⟨π, hO.pi_nonneg, hO.pi_sum⟩
   let σlaw : Law N := ⟨σ, hO.sigma_nonneg, hO.sigma_sum⟩
   have hπWidth : πlaw.WidthLE (Real.log K) := by
@@ -1770,9 +1783,264 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
                       mul_le_mul_of_nonneg_left hτLeBsq (by norm_num : (0 : ℝ) ≤ 50)
                     exact add_le_add (le_refl (256 * (bS n) ^ 2)) h50
               _ = 306 * (bS n) ^ 2 := by ring
-  -- The conditioned fibers have mass above `ρ`; the remaining proof bounds their
-  -- centered direction in L², samples a norm-good tuple, and applies the equal-normalizer signed test.
-  sorry
+  let t : ℕ := ⌈(n : ℝ)^((1 : ℝ)/4)⌉₊
+  have htp : 1 ≤ (n : ℝ)^((1 : ℝ)/4) := Real.one_le_rpow hn1R (by norm_num)
+  have htLower : (n : ℝ)^((1 : ℝ)/4) ≤ (t : ℝ) := Nat.le_ceil _
+  have htUpper : (t : ℝ) ≤ 2*(n : ℝ)^((1 : ℝ)/4) := by
+    have h := Nat.ceil_lt_add_one (Real.rpow_nonneg hnreal.le ((1 : ℝ)/4))
+    change (t : ℝ) < (n : ℝ)^((1 : ℝ)/4)+1 at h
+    linarith
+  have ht1 : 1 ≤ (t : ℝ) := htp.trans htLower
+  have htpos : 0 < (t : ℝ) := by linarith
+  have htB : (t : ℝ)*(bS n)^2 ≤ 1 := by
+    calc
+      _ ≤ 2*(n : ℝ)^((1 : ℝ)/4) * (bS n)^2 :=
+        mul_le_mul_of_nonneg_right htUpper (sq_nonneg _)
+      _ = 2*(n : ℝ)^(-(33 : ℝ)/20) := by
+        rw [hBsq, mul_assoc, ← Real.rpow_add hnreal]
+        congr 2
+        norm_num
+      _ ≤ 1 := hsampleBN.le
+  let H0 (y : Fin N) : ℝ := ∏ l ∈ (J.erase j).erase j', aF E G π (base l) y
+  have hH0 (y : Fin N) : |H0 y| ≤ Hbound := by
+    dsimp [H0]
+    rw [Finset.abs_prod]
+    calc
+      _ ≤ ∏ l ∈ (J.erase j).erase j', (5 : ℝ) :=
+        Finset.prod_le_prod₀ (fun _ _ => abs_nonneg _)
+          (fun l _ => haBound (base l) (hbase l) y)
+      _ = (5 : ℝ)^((J.erase j).erase j').card := by simp
+      _ ≤ Hbound := by
+        apply pow_le_pow_right₀ (by norm_num)
+        simpa using Finset.card_le_univ ((J.erase j).erase j')
+  have hHpos : 0 < Hbound := by positivity
+  have hH1 : 1 ≤ Hbound := one_le_pow₀ (by norm_num)
+  let SS (z : Fin t → Fin N) (y : Fin N) : ℝ := H0 y * ∑ i, aF E G π (z i) y
+  let v (z : Fin t → Fin N) : ℝ := ∑ y, π y * (SS z y)^2
+  let L : ℝ := 32*Hbound*Real.sqrt (t : ℝ)
+  have hL1 : 1 ≤ L := by
+    have hsqrt : 1 ≤ Real.sqrt (t : ℝ) := by
+      simpa using Real.sqrt_le_sqrt ht1
+    dsimp [L]
+    nlinarith only [hH1, hsqrt, mul_le_mul_of_nonneg_left hsqrt hHpos.le]
+  have hLpos : 0 < L := by linarith
+  have hLsq : L^2 = 1024*Hbound^2*(t : ℝ) := by
+    dsimp [L]
+    rw [mul_pow, mul_pow, Real.sq_sqrt htpos.le]
+    ring
+  have hv (z : Fin t → Fin N) : 0 ≤ v z :=
+    Finset.sum_nonneg (fun y _ => mul_nonneg (hO.pi_nonneg y) (sq_nonneg _))
+  have hSampleMean (x : Fin N) (hx : x ∈ A) :
+      (∑ z : Fin t → Fin N, (∏ i, (q x hx).w (z i))*v z) ≤ L^2/2 := by
+    have hdiag : (∑ y, πlaw.w y * ∑ z, (q x hx).w z * (aF E G π z y)^2) ≤ 25 := by
+      calc
+        _ ≤ ∑ y, πlaw.w y * ∑ z, (q x hx).w z * 25 := by
+          apply Finset.sum_le_sum
+          intro y hy
+          apply mul_le_mul_of_nonneg_left _ (hO.pi_nonneg y)
+          apply Finset.sum_le_sum
+          intro z hz
+          by_cases hzS : z ∈ S
+          · have hs : (aF E G π z y)^2 ≤ 25 := by
+              have hh := haBound z hzS y
+              calc
+                _ ≤ (5 : ℝ)^2 := sq_le_sq' (abs_le.mp hh).1 (abs_le.mp hh).2
+                _ = 25 := by norm_num
+            exact mul_le_mul_of_nonneg_left hs ((q x hx).nonneg z)
+          · simp [hqSupportedInS x hx z hzS]
+        _ = 25 := by
+          simp_rw [← Finset.sum_mul, (q x hx).sum_eq_one, one_mul]
+          change (∑ y, π y)*25=25
+          rw [hO.pi_sum]
+          ring
+    have hmean : (∑ y, πlaw.w y * (∑ z, (q x hx).w z * aF E G π z y)^2) ≤
+        306*(bS n)^2 := hdirL2 x hx
+    have hiid := sol_s11_outer.iid_second_moment_le (t := t) (q x hx) πlaw
+      (fun z y => aF E G π z y) 25 (306*(bS n)^2) hdiag hmean
+    calc
+      _ ≤ Hbound^2 * (∑ z : Fin t → Fin N, (∏ i, (q x hx).w (z i))*
+          ∑ y, π y * (∑ i, aF E G π (z i) y)^2) := by
+        rw [Finset.mul_sum]
+        apply Finset.sum_le_sum
+        intro z hz
+        have hw : 0 ≤ ∏ i, (q x hx).w (z i) := Finset.prod_nonneg (fun i _ => (q x hx).nonneg _)
+        have hh : v z ≤ Hbound^2 * ∑ y, π y * (∑ i, aF E G π (z i) y)^2 := by
+          rw [Finset.mul_sum]
+          apply Finset.sum_le_sum
+          intro y hy
+          dsimp [SS]
+          rw [mul_pow]
+          have hs : (H0 y)^2 ≤ Hbound^2 := (sq_le_sq).2 (by simpa [abs_of_pos hHpos] using hH0 y)
+          nlinarith only [mul_le_mul_of_nonneg_right hs (sq_nonneg (∑ i, aF E G π (z i) y)), hO.pi_nonneg y,
+            mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right hs (sq_nonneg (∑ i, aF E G π (z i) y))) (hO.pi_nonneg y)]
+        nlinarith only [mul_le_mul_of_nonneg_left hh hw]
+      _ ≤ Hbound^2*((t : ℝ)*25 + (t : ℝ)^2*(306*(bS n)^2)) :=
+        mul_le_mul_of_nonneg_left hiid (sq_nonneg _)
+      _ ≤ 331*Hbound^2*(t : ℝ) := by
+        have hbt : (t : ℝ)^2*(bS n)^2 ≤ (t : ℝ) := by
+          nlinarith only [mul_le_mul_of_nonneg_left htB htpos.le]
+        nlinarith only [mul_le_mul_of_nonneg_left hbt (sq_nonneg Hbound)]
+      _ ≤ L^2/2 := by rw [hLsq]; nlinarith only [mul_nonneg (sq_nonneg Hbound) htpos.le]
+  let good (z : Fin t → Fin N) : Prop := v z ≤ L^2
+  have hGoodProb (x : Fin N) (hx : x ∈ A) :
+      (1/2 : ℝ) ≤ ∑ z : Fin t → Fin N, (∏ i, (q x hx).w (z i)) *
+        (if good z then 1 else 0) := by
+    exact sol_s11_outer.half_mass_good (FinProb.pi (fun _ : Fin t => q x hx)) v (L^2)
+      (sq_pos_of_pos hLpos) hv (hSampleMean x hx)
+  obtain ⟨z0, hzGood, hzWt, hzMass⟩ := sol_s11_outer.common_fiber_tuple σlaw A fiber ρ hρpos
+    hAmass.le (fun x hx => by rw [← hFiberMassAsSum]; exact (hApositive x hx).le)
+    good hGoodProb
+  have hzS (i : Fin t) : z0 i ∈ S := by
+    apply hO.sigma_supp
+    exact (Finset.prod_ne_zero_iff.mp hzWt) i (Finset.mem_univ i)
+  let D : Finset (Fin N) := A.filter (fun x => ∀ i, z0 i ∈ fiber x)
+  let mD : ℝ := ∑ x ∈ D, σ x
+  have hmD : 0 < mD := by
+    have hp : 0 < ρ^(t+1)/4 := by positivity
+    exact lt_trans hp hzMass
+  let Q : Law N := Law.restrict σlaw D hmD
+  have hQS : Q.SupportedIn S := by
+    intro x hx
+    simp [Q, Law.restrict, hσSupport x hx]
+  have hρlog : Real.log ρ = -((n : ℝ)^((2 : ℝ)/5)) - Real.log 4 := by
+    dsimp [ρ, ε]
+    rw [Real.log_div (ne_of_gt (Real.exp_pos _)) (by norm_num : (4 : ℝ) ≠ 0), Real.log_exp]
+  have hlogD : -((t : ℝ)+1)*((n : ℝ)^((2 : ℝ)/5)+Real.log 4)-Real.log 4 < Real.log mD := by
+    have hh := Real.log_lt_log (by positivity : 0 < ρ^(t+1)/4) hzMass
+    rw [Real.log_div (by positivity) (by norm_num : (4 : ℝ) ≠ 0), Real.log_pow, hρlog] at hh
+    push_cast at hh
+    convert hh using 1 <;> ring
+  have htAdd : (t : ℝ)+1 ≤ 3*(n : ℝ)^((1 : ℝ)/4) := by linarith
+  have hn65 : 1 ≤ (n : ℝ)^((13 : ℝ)/20) := Real.one_le_rpow hn1R (by norm_num)
+  have hmul65 : (n : ℝ)^((1 : ℝ)/4)*(n : ℝ)^((2 : ℝ)/5) =
+      (n : ℝ)^((13 : ℝ)/20) := by rw [← Real.rpow_add hnreal]; norm_num
+  have hpenalty : ((t : ℝ)+1)*((n : ℝ)^((2 : ℝ)/5)+Real.log 4)+Real.log 4 ≤
+      15*(n : ℝ)^((13 : ℝ)/20) := by
+    have hf : (n : ℝ)^((2 : ℝ)/5)+Real.log 4 ≤ 4*(n : ℝ)^((2 : ℝ)/5) := by
+      linarith [hlog4, hnPowFiber]
+    have hh := mul_le_mul htAdd hf (by positivity : 0 ≤ (n : ℝ)^((2 : ℝ)/5)+Real.log 4)
+      (by positivity : 0 ≤ 3*(n : ℝ)^((1 : ℝ)/4))
+    have heq : 3*(n : ℝ)^((1 : ℝ)/4)*(4*(n : ℝ)^((2 : ℝ)/5)) =
+        12*(n : ℝ)^((13 : ℝ)/20) := by nlinarith only [hmul65]
+    rw [heq] at hh
+    linarith [hlog4, hn65]
+  have hQW : Q.WidthLE ((n : ℝ)^a-Real.log 3) := by
+    apply Law.WidthLE.mono (Law.WidthLE.restrict hσWidth hmD)
+    change tσ n - Real.log mD ≤ (n : ℝ)^a - Real.log 3
+    linarith [hlogD, hpenalty, htupleGap, hwidthN]
+  let BS : ℝ := 5*Hbound*(t : ℝ)
+  have hBS : 0 ≤ BS := by positivity
+  have htN2 : (t : ℝ)+1 ≤ (n : ℝ)^2 := by
+    have hp : (n : ℝ)^((1 : ℝ)/4) ≤ (n : ℝ) := by
+      simpa using Real.rpow_le_rpow_of_exponent_le hn1R (by norm_num : (1 : ℝ)/4 ≤ 1)
+    have hn64R : 64 ≤ (n : ℝ) := by exact_mod_cast hn64
+    nlinarith only [htAdd, hp, hn64R]
+  have hBScap : BS+1 ≤ (5*Hbound+1)*(n : ℝ)^2 := by
+    dsimp [BS]
+    nlinarith only [hHpos, htpos, mul_le_mul_of_nonneg_left htN2 (by positivity : 0 ≤ 5*Hbound+1)]
+  have hπSW : πlaw.WidthLE ((n : ℝ)^x₀ - Real.log (BS+1)) := by
+    apply Law.WidthLE.mono hπWidth
+    have hl := Real.log_le_log (by positivity : 0 < BS+1) hBScap
+    rw [Real.log_mul (by positivity : (5*Hbound+1) ≠ 0) (by positivity : (n : ℝ)^2 ≠ 0), Real.log_pow] at hl
+    norm_num at hl
+    have hpow : 0 ≤ (n : ℝ)^x₀ := by positivity
+    linarith only [hl, hKAugN, hLogTail, hpow]
+  have hSSbound (y : Fin N) : |SS z0 y| ≤ BS := by
+    dsimp [SS, BS]
+    rw [abs_mul]
+    calc
+      _ ≤ Hbound * (∑ i : Fin t, |aF E G π (z0 i) y|) :=
+        mul_le_mul (hH0 y) (Finset.abs_sum_le_sum_abs _ _) (abs_nonneg _) hHpos.le
+      _ ≤ Hbound * (∑ i : Fin t, (5 : ℝ)) :=
+        mul_le_mul_of_nonneg_left (Finset.sum_le_sum (fun i _ => haBound (z0 i) (hzS i) y)) hHpos.le
+      _ = _ := by simp; ring
+  have hSSl1 : (∑ y, πlaw.w y * |SS z0 y|) ≤ L :=
+    sol_s11_outer.weighted_abs_le_of_second_moment πlaw (SS z0) L hLpos.le hzGood
+  have hrf (x : Fin N) (hx : x ∈ S) (y : Fin N) :
+      aF E G π x y = r x * (fv E G x y - sMean E G π x) := by
+    rw [haFid x hx y]
+    simp [r, hx, div_eq_mul_inv, mul_comm]
+  have hUpper := sol_s11_outer.inverse_degree_test G hO.disc Q πlaw hO.S_sub hQS hπSupport
+    hQW hπSW hBS hNpos (by positivity) r hrBounds hrf (SS z0) hSSbound hL1 hSSl1
+  have hpairID (x z : Fin N) : inter E G π J
+      (Function.update (Function.update base j x) j' z) =
+      ∑ y, π y * aF E G π x y * (H0 y * aF E G π z y) := by
+    unfold inter
+    apply Finset.sum_congr rfl
+    intro y hy
+    have hjE : j' ∈ J.erase j := Finset.mem_erase.mpr ⟨hjj.symm, hj'⟩
+    have he : (∏ l ∈ (J.erase j).erase j',
+        aF E G π (Function.update (Function.update base j x) j' z l) y) = H0 y := by
+      apply Finset.prod_congr rfl
+      intro l hl
+      have hl1 := Finset.mem_erase.mp hl
+      have hl2 := Finset.mem_erase.mp hl1.2
+      rw [Function.update_of_ne hl1.1, Function.update_of_ne hl2.1]
+    rw [← Finset.prod_erase_mul J _ hj, ← Finset.prod_erase_mul (J.erase j) _ hjE, he]
+    rw [Function.update_self, Function.update_of_ne hjj, Function.update_self]
+    ring
+  have hprojSum (x : Fin N) : (∑ y, π y * aF E G π x y * SS z0 y) =
+      ∑ i : Fin t, inter E G π J (Function.update (Function.update base j x) j' (z0 i)) := by
+    simp_rw [hpairID]
+    dsimp [SS]
+    calc
+      _ = ∑ y, ∑ i : Fin t, π y * aF E G π x y * (H0 y * aF E G π (z0 i) y) := by
+        simp_rw [Finset.mul_sum]
+      _ = _ := Finset.sum_comm
+  have hLower : (t : ℝ)*threshold ≤
+      sgn * (∑ x, Q.w x * ∑ y, π y * aF E G π x y * SS z0 y) := by
+    rw [Finset.mul_sum]
+    calc
+      (t : ℝ)*threshold = ∑ x, Q.w x * ((t : ℝ)*threshold) := by
+        rw [← Finset.sum_mul, Q.sum_eq_one]; ring
+      _ ≤ _ := by
+        apply Finset.sum_le_sum
+        intro x hx
+        by_cases hxD : x ∈ D
+        · have hf := (Finset.mem_filter.mp hxD).2
+          have hi (i : Fin t) : threshold ≤ sgn * inter E G π J
+              (Function.update (Function.update base j x) j' (z0 i)) := by
+            exact ((Finset.mem_filter.mp (hf i)).2).le
+          have hh : (t : ℝ)*threshold ≤ sgn * ∑ i : Fin t, inter E G π J
+              (Function.update (Function.update base j x) j' (z0 i)) := by
+            rw [Finset.mul_sum]
+            simpa using Finset.sum_le_sum (fun i (_ : i ∈ Finset.univ) => hi i)
+          rw [← hprojSum] at hh
+          nlinarith only [mul_le_mul_of_nonneg_left hh (Q.nonneg x)]
+        · simp [Q, Law.restrict, hxD]
+  have habsUpper : sgn * (∑ x, Q.w x * ∑ y, π y * aF E G π x y * SS z0 y) ≤
+      24*L*bS n := by
+    calc
+      _ ≤ |sgn * (∑ x, Q.w x * ∑ y, π y * aF E G π x y * SS z0 y)| := le_abs_self _
+      _ = |∑ x, Q.w x * ∑ y, π y * aF E G π x y * SS z0 y| := by rw [abs_mul, hsgn, one_mul]
+      _ ≤ _ := hUpper
+  have hRootSq : ((n : ℝ)^((1 : ℝ)/8))^2 = (n : ℝ)^((1 : ℝ)/4) := by
+    calc
+      _ = (n : ℝ)^(((1 : ℝ)/8)*2) :=
+        (Real.rpow_mul_natCast hnreal.le ((1 : ℝ)/8) 2).symm
+      _ = _ := by norm_num
+  have hSqrtUpper : Real.sqrt (t : ℝ) ≤ 2*(n : ℝ)^((1 : ℝ)/8) := by
+    have hp : 0 ≤ (n : ℝ)^((1 : ℝ)/8) := by positivity
+    have hs := Real.sq_sqrt htpos.le
+    nlinarith only [hRootSq, htp, htUpper, Real.sqrt_nonneg (t : ℝ), hs, hp]
+  have hFinalUpper : 24*L*bS n ≤ 1536*Hbound*(n : ℝ)^(-(33 : ℝ)/40) := by
+    calc
+      _ ≤ 24*(32*Hbound*(2*(n : ℝ)^((1 : ℝ)/8)))*bS n := by
+        dsimp [L]
+        nlinarith only [mul_le_mul_of_nonneg_left hSqrtUpper (by positivity : 0 ≤ 768*Hbound*bS n)]
+      _ = _ := by
+        dsimp [bS]
+        have hp : (n : ℝ)^((1 : ℝ)/8)*(n : ℝ)^(-(19 : ℝ)/20) =
+            (n : ℝ)^(-(33 : ℝ)/40) := by rw [← Real.rpow_add hnreal]; norm_num
+        calc
+          _ = 1536*Hbound*((n : ℝ)^((1 : ℝ)/8)*(n : ℝ)^(-(19 : ℝ)/20)) := by ring
+          _ = _ := by rw [hp]
+  have hFinalLower : (n : ℝ)^(-(39 : ℝ)/50) ≤ (t : ℝ)*threshold := by
+    calc
+      _ = (n : ℝ)^((1 : ℝ)/4)*(n : ℝ)^(-(103 : ℝ)/100) := by
+        rw [← Real.rpow_add hnreal]; norm_num
+      _ ≤ _ := mul_le_mul_of_nonneg_right htLower hthreshold_pos.le
+  linarith only [hLower, habsUpper, hFinalUpper, hFinalLower, hsampleContrN]
 
 set_option maxHeartbeats 800000 in
 /-- L11.3c (11:254–268).  `E M_J² = E_{y,y'∼π} (∫ a_x(y) a_x(y') dσ)^{|J|}`; the kernel is `O(b_*)` off a

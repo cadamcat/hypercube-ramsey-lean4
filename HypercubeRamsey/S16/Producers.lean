@@ -3452,6 +3452,12 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
     have hGroupScopeRawCard : groupScopeRaw.card = groupScope.card := by
       dsimp [groupScopeRaw]
       exact Finset.card_image_of_injective groupScope (hLink.groups C).injective
+    have hRoleScopeCard : roleScope.card ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by
+      calc
+        roleScope.card = (Finset.univ.image starRole).card := rfl
+        _ ≤ Finset.univ.card := Finset.card_image_le
+        _ = Fintype.card (Fin (PT.tiling.P (H.geom.cellPatch C)).h) := by simp
+        _ = (PT.tiling.P (H.geom.cellPatch C)).h := Fintype.card_fin _
     let encPipe : (Cal.Hist C × Unit) ×
         ((Cal.Group C → Bin PT.tiling (H.geom.cellPatch C)) ×
         (OddCellRole H.geom C → Fin (T.S.N k))) → F.State C := fun z =>
@@ -3782,7 +3788,86 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         sorry
       label_joint := by
         intro pool W a ys ht hW ha
-        sorry
+        have hWCal : (Cal.gatedHistory C pool).w W.1 ≠ 0 := by
+          rw [← hGatedWeight pool W.1]
+          exact hW
+        obtain ⟨hGateCal, hCalHist⟩ := hCalGatedSupport pool ht W.1 hWCal
+        let Wraw := hLink.histories C W.1
+        have hRawHist := hRawHistSupport W.1 hCalHist
+        have hRawGate := hRawGateSupport pool W.1 hGateCal
+        have hStyp : S.typical C pool := (hLink.typical_eq C pool).mp ht
+        have hBinFeas := S.bin_feasible C pool Wraw hStyp hRawGate hRawHist hClusterMode
+        let aRaw : R.Group C → Bin PT.tiling (H.geom.cellPatch C) :=
+          fun rg => a ((hLink.groups C).symm rg)
+        have hMapPos : (FinLaw.map (S.binLaw C pool Wraw)
+            (fun x gc => x (hLink.groups C gc))).w a ≠ 0 := by
+          rw [← hLink.bin_eq C pool W.1]
+          exact ha
+        obtain ⟨a0, haMap, ha0⟩ := Lane_q_s16_prod2.finLaw_map_nonzero_preimage
+          (S.binLaw C pool Wraw) (fun x gc => x (hLink.groups C gc)) a hMapPos
+        have haRawEq : aRaw = a0 := by
+          funext rg
+          have h := congrFun haMap ((hLink.groups C).symm rg)
+          simpa [aRaw] using h.symm
+        have hSourceA : (fun rg => a ((hLink.groups C).symm rg)) = a0 := by
+          funext rg
+          have h := congrFun haMap ((hLink.groups C).symm rg)
+          simpa using h.symm
+        have hLabelSource :
+            Cal.labelSampler C pool W.1 a = S.labelLaw C pool Wraw a0 := by
+          calc
+            Cal.labelSampler C pool W.1 a =
+                S.labelLaw C pool Wraw (fun rg => a ((hLink.groups C).symm rg)) :=
+              hLink.label_eq C pool W.1 a
+            _ = S.labelLaw C pool Wraw a0 := by rw [hSourceA]
+        obtain ⟨L, hL⟩ := S.cluster_label_feasible C pool Wraw a0 hStyp hRawGate
+          hRawHist ha0 hClusterMode
+        have hRegime : L.problem.regime = .cluster := by
+          rw [L.regime_eq]
+          simp [hClusterMode]
+        have hRoleQueries : L.problem.queries roleScope := by
+          rw [RoleLabelProblem.queries, hRegime]
+          intro b
+          calc
+            (roleScope.filter fun r => L.problem.blockOf r = b).card ≤ roleScope.card :=
+              Finset.card_filter_le _ _
+            _ ≤ (PT.tiling.P (H.geom.cellPatch C)).h := hRoleScopeCard
+            _ = L.problem.h := L.height_eq.symm
+        have hLabelBound := hL.2 roleScope ys hRoleQueries
+        have hRate : L.problem.rate =
+            Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.01 : ℝ) := by
+          simp [RoleLabelProblem.rate, hRegime, L.scale_eq, hClusterMode]
+        have hTarget (r : OddCellRole H.geom C) :
+            (L.problem.target r).w (ys r) =
+              (R.U C Wraw (hLink.groups C (Cal.groupOf C r))
+                (a (Cal.groupOf C r))).w (ys r) := by
+          have h := L.targets_eq r (ys r)
+          simpa [hClusterMode, aRaw, ← haRawEq, ← hLink.group_eq C r] using h
+        have hTargetProd :
+            ∏ r ∈ roleScope, (L.problem.target r).w (ys r) =
+              ∏ r ∈ roleScope,
+                (R.U C Wraw (hLink.groups C (Cal.groupOf C r))
+                  (a (Cal.groupOf C r))).w (ys r) := by
+          apply Finset.prod_congr rfl
+          intro r hr
+          exact hTarget r
+        calc
+          (Cal.labelSampler C pool W.1 a).pr
+              (fun ys' => ∀ r ∈ roleScope, ys' r = ys r) =
+              (S.labelLaw C pool Wraw a0).pr
+                (fun ys' => ∀ r ∈ roleScope, ys' r = ys r) := by rw [hLabelSource]
+          _ ≤ Real.exp (Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ)
+                (-0.01) * roleScope.card) *
+              ∏ r ∈ roleScope,
+                (R.U C Wraw (hLink.groups C (Cal.groupOf C r))
+                  (a (Cal.groupOf C r))).w (ys r) := by
+            rw [← hRate, ← hTargetProd]
+            exact hLabelBound
+          _ = Real.exp (Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.01) *
+                roleScope.card) *
+              ∏ r ∈ roleScope,
+                (R.U C Wraw (hLink.groups C (Cal.groupOf C r))
+                  (a (Cal.groupOf C r))).w (ys r) := by rfl
       encode := encPipe
       fresh_eq := by
         intro pool ht

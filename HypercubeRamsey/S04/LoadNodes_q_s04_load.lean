@@ -1,6 +1,7 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.S03.NearProductInjection
 import HypercubeRamsey.Tools.ScatteredUnion
+import HypercubeRamsey.Tools.CubeGeometry
 
 namespace HypercubeRamsey.Lane_q_s04_load
 
@@ -706,5 +707,629 @@ private theorem topScale_small (σ ζ : ℝ) (hσ : 0 < σ) (hζ : 0 < ζ)
         _ = (n : ℝ) ^ (δ + (1 - ζ + σ)) := by rw [← Real.rpow_add hnpos]
         _ = (n : ℝ) ^ α := by congr 1 <;> dsimp [δ, α] <;> ring
     exact htop.trans htopSmall
+
+private theorem binEntropy_upper_rpow {x δ : ℝ} (hx : 0 ≤ x) (hx1 : x ≤ 1)
+    (hδ : 0 < δ) (hδ' : δ ≤ 1 / 2) :
+    Real.binEntropy x ≤ (δ⁻¹ + 1) * x ^ (1 - δ) := by
+  by_cases hx0 : x = 0
+  · have hexp : 0 < 1 - δ := by linarith
+    simp [hx0, Real.binEntropy_zero, Real.zero_rpow (ne_of_gt hexp)]
+  by_cases hxOne : x = 1
+  · simp [hxOne, Real.binEntropy_one]
+    positivity
+  have hxpos : 0 < x := lt_of_le_of_ne hx (Ne.symm hx0)
+  have hypos : 0 < 1 - x := by rcases lt_or_eq_of_le hx1 with h | h <;> simp_all
+  have hlog := Real.log_le_rpow_div (inv_nonneg.mpr hxpos.le) hδ
+  have hinvPow : x⁻¹ ^ δ = x ^ (-δ) := (Real.rpow_neg_eq_inv_rpow x δ).symm
+  have hfirst : x * Real.log x⁻¹ ≤ δ⁻¹ * x ^ (1 - δ) := by
+    calc
+      x * Real.log x⁻¹ ≤ x * ((x⁻¹) ^ δ / δ) :=
+        mul_le_mul_of_nonneg_left hlog hx
+      _ = δ⁻¹ * x ^ (1 - δ) := by
+        rw [div_eq_mul_inv, hinvPow]
+        have heq : x * x ^ (-δ) = x ^ (1 - δ) := by
+          calc
+            x * x ^ (-δ) = x ^ (1 : ℝ) * x ^ (-δ) := by rw [Real.rpow_one]
+            _ = x ^ (1 + (-δ)) := (Real.rpow_add hxpos 1 (-δ)).symm
+            _ = x ^ (1 - δ) := by congr 1 <;> ring
+        calc
+          x * (x ^ (-δ) * δ⁻¹) = δ⁻¹ * (x * x ^ (-δ)) := by ring
+          _ = δ⁻¹ * x ^ (1 - δ) := by rw [heq]
+  have hlog' := Real.log_le_sub_one_of_pos (inv_pos.mpr hypos)
+  have hsecond : (1 - x) * Real.log (1 - x)⁻¹ ≤ x := by
+    calc
+      (1 - x) * Real.log (1 - x)⁻¹ ≤ (1 - x) * ((1 - x)⁻¹ - 1) :=
+        mul_le_mul_of_nonneg_left hlog' (by linarith)
+      _ = x := by field_simp [ne_of_gt hypos] <;> ring
+  have hpow : x ≤ x ^ (1 - δ) := by
+    simpa only [Real.rpow_one] using
+      (Real.rpow_le_rpow_of_exponent_ge hxpos hx1 (by linarith : 1 - δ ≤ 1))
+  unfold Real.binEntropy
+  calc
+    x * Real.log x⁻¹ + (1 - x) * Real.log (1 - x)⁻¹ ≤
+        δ⁻¹ * x ^ (1 - δ) + x := add_le_add hfirst hsecond
+    _ ≤ δ⁻¹ * x ^ (1 - δ) + x ^ (1 - δ) := by
+      have hcoeff : 0 ≤ δ⁻¹ := inv_nonneg.mpr hδ.le
+      have hscaled := mul_le_mul_of_nonneg_left hpow hcoeff
+      linarith
+    _ = (δ⁻¹ + 1) * x ^ (1 - δ) := by ring
+
+private theorem locR_near_radius_small (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
+    (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (2 * HypercubeRamsey.S04.locR β γ n : ℝ) ≤
+        (n : ℝ) ^ (1 - HypercubeRamsey.S04.zetaH β γ / 4) := by
+  have hω := HypercubeRamsey.S04.omega4_pos hβ hγ
+  have hω' := HypercubeRamsey.S04.omega4_lt hβ hβγ
+  let ζ := HypercubeRamsey.S04.zetaH β γ
+  let σ := HypercubeRamsey.S04.sigmaH β γ
+  have hζ : 0 < ζ := by dsimp [ζ, HypercubeRamsey.S04.zetaH,
+      HypercubeRamsey.S04.b0H, HypercubeRamsey.S04.bH]; positivity
+  have hζ1 : ζ < 1 := by
+    dsimp [ζ, HypercubeRamsey.S04.zetaH, HypercubeRamsey.S04.b0H,
+      HypercubeRamsey.S04.bH]
+    linarith
+  have hσ : 0 < σ := by dsimp [σ, HypercubeRamsey.S04.sigmaH]; positivity
+  have hσζ : σ < ζ / 2 := by dsimp [σ, ζ, HypercubeRamsey.S04.sigmaH]; linarith
+  have hρ : HypercubeRamsey.S04.rhoH β γ = 2 * ζ := by
+    dsimp [ζ, HypercubeRamsey.S04.rhoH, HypercubeRamsey.S04.zetaH,
+      HypercubeRamsey.S04.b0H, HypercubeRamsey.S04.bH]
+    ring
+  obtain ⟨ntop, htop⟩ := topScale_small σ ζ hσ hζ hσζ hζ1
+  obtain ⟨nabs, habs⟩ := eventually_rpow_gt_const (ζ / 4) 18 (by positivity)
+  refine ⟨max (max ntop nabs) 1, ?_⟩
+  intro n hn
+  have hnTop : ntop ≤ n := by omega
+  have hnAbs : nabs ≤ n := by omega
+  have hn1 : 1 ≤ n := by omega
+  have hnpos : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnOne : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn1
+  have hbase : 0 ≤ 1 - ζ / 2 := by linarith
+  have htop' : (HypercubeRamsey.topScale n σ ζ : ℝ) ≤ (n : ℝ) ^ (1 - ζ / 2) :=
+    htop n hnTop
+  have hrad : (HypercubeRamsey.S04.radius β γ n : ℝ) ≤ (n : ℝ) ^ (1 - ζ / 2) := by
+    have hfloor : (HypercubeRamsey.S04.radius β γ n : ℝ) ≤
+        (n : ℝ) ^ (1 - HypercubeRamsey.S04.rhoH β γ) := by
+      exact Nat.floor_le (by positivity)
+    rw [hρ] at hfloor
+    exact hfloor.trans (Real.rpow_le_rpow_of_exponent_le hnOne (by linarith))
+  have hpowOne : 1 ≤ (n : ℝ) ^ (1 - ζ / 2) := by
+    calc
+      1 = (n : ℝ) ^ (0 : ℝ) := by simp
+      _ ≤ (n : ℝ) ^ (1 - ζ / 2) :=
+        Real.rpow_le_rpow_of_exponent_le hnOne (by linarith)
+  have hRlong : (HypercubeRamsey.S04.hd β γ n).Rlong =
+      4 * HypercubeRamsey.S04.topH β γ n := by
+    simp [HypercubeRamsey.S04.hd, HypercubeRamsey.HDParams.Rlong]
+  have hloc : (HypercubeRamsey.S04.locR β γ n : ℝ) ≤
+      5 * (n : ℝ) ^ (1 - ζ / 2) + 4 := by
+    rw [show HypercubeRamsey.S04.locR β γ n =
+        4 * HypercubeRamsey.S04.topH β γ n + HypercubeRamsey.S04.radius β γ n + 4 by
+          simp [HypercubeRamsey.S04.locR, hRlong]]
+    push_cast
+    have htopH : (HypercubeRamsey.S04.topH β γ n : ℝ) ≤
+        (n : ℝ) ^ (1 - ζ / 2) := by simpa [σ, ζ, HypercubeRamsey.S04.topH] using htop'
+    nlinarith [htopH, hrad]
+  have hnear18 : (2 * HypercubeRamsey.S04.locR β γ n : ℝ) ≤
+      18 * (n : ℝ) ^ (1 - ζ / 2) := by nlinarith [hloc, hpowOne]
+  have hlarge := habs n hnAbs
+  have hlarge' : 18 ≤ (n : ℝ) ^ (ζ / 4) := le_of_lt hlarge
+  calc
+    (2 * HypercubeRamsey.S04.locR β γ n : ℝ) ≤
+        18 * (n : ℝ) ^ (1 - ζ / 2) := hnear18
+    _ ≤ (n : ℝ) ^ (ζ / 4) * (n : ℝ) ^ (1 - ζ / 2) :=
+      mul_le_mul_of_nonneg_right hlarge' (Real.rpow_nonneg hnpos.le _)
+    _ = (n : ℝ) ^ (1 - ζ / 4) := by
+      rw [← Real.rpow_add hnpos]
+      congr 1 <;> ring
+
+private theorem evenRole_card_eq {n : ℕ} (hn : 0 < n) :
+    Fintype.card (HypercubeRamsey.S04.EvenRole n) = 2 ^ (n - 1) := by
+  classical
+  have hcard : Fintype.card (HypercubeRamsey.S04.EvenRole n) =
+      (HypercubeRamsey.evenRoleSet n).card := by
+    simpa [HypercubeRamsey.S04.EvenRole, HypercubeRamsey.evenRoleSet] using
+      (Fintype.card_subtype (fun v : OAI.HypercubeRamsey.CubeVertex n =>
+        HypercubeRamsey.IsEvenRole v))
+  rw [hcard]
+  exact (HypercubeRamsey.parity_class_card hn).1
+
+private theorem oddRole_card_eq {n : ℕ} (hn : 0 < n) :
+    Fintype.card (HypercubeRamsey.S04.OddRole n) = 2 ^ (n - 1) := by
+  classical
+  have hsub : Fintype.card (HypercubeRamsey.S04.OddRole n) =
+      (Finset.univ.filter fun v : OAI.HypercubeRamsey.CubeVertex n =>
+        ¬ HypercubeRamsey.IsEvenRole v).card := by
+    simpa [HypercubeRamsey.S04.OddRole] using
+      (Fintype.card_subtype (fun v : OAI.HypercubeRamsey.CubeVertex n =>
+        ¬ HypercubeRamsey.IsEvenRole v))
+  have hset : (Finset.univ.filter fun v : OAI.HypercubeRamsey.CubeVertex n =>
+        ¬ HypercubeRamsey.IsEvenRole v) =
+      Finset.univ \ HypercubeRamsey.evenRoleSet n := by
+    ext v
+    simp [HypercubeRamsey.evenRoleSet]
+  rw [hsub, hset]
+  exact (HypercubeRamsey.parity_class_card hn).2
+
+private theorem ballV_eq_hammingBall {n : ℕ} (v : OAI.HypercubeRamsey.CubeVertex n) (R : ℕ) :
+    HypercubeRamsey.S04.ballV v R = HypercubeRamsey.hammingBall v R := by
+  ext w
+  simp [HypercubeRamsey.S04.ballV, HypercubeRamsey.hammingBall,
+    HypercubeRamsey.hammingDist, _root_.hammingDist]
+
+private theorem ballV_volume_bound {n R : ℕ} (hn : 0 < n) (hR : R ≤ n / 2)
+    (v : OAI.HypercubeRamsey.CubeVertex n) :
+    (HypercubeRamsey.S04.ballV v R).card ≤
+      Real.exp (Real.binEntropy ((R : ℝ) / n) * n) := by
+  rw [ballV_eq_hammingBall]
+  exact HypercubeRamsey.hammingBall_volume_bound hn hR v
+
+private noncomputable def oddNearSet {n : ℕ} (R : ℕ) (u : HypercubeRamsey.S04.OddRole n) :
+    Finset (HypercubeRamsey.S04.OddRole n) :=
+  Finset.univ.filter fun v => v.1 ∈ HypercubeRamsey.S04.ballV u.1 R
+
+private noncomputable def evenNearSet {n : ℕ} (R : ℕ) (a : HypercubeRamsey.S04.EvenRole n) :
+    Finset (HypercubeRamsey.S04.EvenRole n) :=
+  Finset.univ.filter fun b => b.1 ∈ HypercubeRamsey.S04.ballV a.1 R
+
+private theorem oddNearSet_card_le {n R : ℕ} (u : HypercubeRamsey.S04.OddRole n) :
+    (oddNearSet R u).card ≤ (HypercubeRamsey.S04.ballV u.1 R).card := by
+  classical
+  have hsub : (oddNearSet R u).image Subtype.val ⊆ HypercubeRamsey.S04.ballV u.1 R := by
+    intro v hv
+    rcases Finset.mem_image.mp hv with ⟨w, hw, rfl⟩
+    exact (Finset.mem_filter.mp hw).2
+  calc
+    (oddNearSet R u).card = ((oddNearSet R u).image Subtype.val).card := by
+      symm
+      exact Finset.card_image_of_injective _ Subtype.val_injective
+    _ ≤ (HypercubeRamsey.S04.ballV u.1 R).card := Finset.card_le_card hsub
+
+private theorem oddNearSet_mem_iff {n R : ℕ} (u v : HypercubeRamsey.S04.OddRole n) :
+    v ∈ oddNearSet R u ↔ _root_.hammingDist u.1 v.1 ≤ R := by
+  simp [oddNearSet, HypercubeRamsey.S04.ballV]
+
+private theorem oddRow_nonneg
+    {β γ : ℝ} {G : HypercubeRamsey.Colour} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+    (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+    (ω : HypercubeRamsey.S04.Prep M tag) (u : HypercubeRamsey.S04.OddRole n) (y : Fin N) :
+    0 ≤ HypercubeRamsey.S04.oddRow M tag ω u y := by
+  unfold HypercubeRamsey.S04.oddRow
+  split_ifs
+  · exact (HypercubeRamsey.S04.oddDraw M tag ω u).nonneg y
+  · exact le_rfl
+
+private theorem evenNearSet_card_le {n R : ℕ} (a : HypercubeRamsey.S04.EvenRole n) :
+    (evenNearSet R a).card ≤ (HypercubeRamsey.S04.ballV a.1 R).card := by
+  classical
+  have hsub : (evenNearSet R a).image Subtype.val ⊆ HypercubeRamsey.S04.ballV a.1 R := by
+    intro v hv
+    rcases Finset.mem_image.mp hv with ⟨w, hw, rfl⟩
+    exact (Finset.mem_filter.mp hw).2
+  calc
+    (evenNearSet R a).card = ((evenNearSet R a).image Subtype.val).card := by
+      symm
+      exact Finset.card_image_of_injective _ Subtype.val_injective
+    _ ≤ (HypercubeRamsey.S04.ballV a.1 R).card := Finset.card_le_card hsub
+
+private theorem locR_ratio_tendsto_zero (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
+    (hγ : γ < 1) :
+    Tendsto (fun n : ℕ => (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) atTop (nhds 0) := by
+  obtain ⟨n₀, hR⟩ := locR_near_radius_small β γ hβ hβγ hγ
+  let δ := HypercubeRamsey.S04.zetaH β γ / 4
+  have hω := HypercubeRamsey.S04.omega4_pos hβ hγ
+  have hδ : 0 < δ := by dsimp [δ, HypercubeRamsey.S04.zetaH,
+    HypercubeRamsey.S04.b0H, HypercubeRamsey.S04.bH]; positivity
+  have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ (-δ)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_neg_atTop hδ).comp tendsto_natCast_atTop_atTop
+    have heq : (fun n : ℕ => (n : ℝ) ^ (-δ)) =ᶠ[atTop]
+        ((fun x : ℝ => x ^ (-δ)) ∘ Nat.cast) := by
+      filter_upwards [] with n
+      rfl
+    exact Tendsto.congr' heq h
+  have hle : ∀ᶠ n : ℕ in atTop,
+      (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n ≤ (n : ℝ) ^ (-δ) := by
+    filter_upwards [Filter.eventually_atTop.2 ⟨n₀, hR⟩,
+      Filter.eventually_gt_atTop (0 : ℕ)] with n hn hnn
+    have hnpos : 0 < (n : ℝ) := by exact_mod_cast hnn
+    have hbound : (2 * HypercubeRamsey.S04.locR β γ n : ℝ) ≤ (n : ℝ) ^ (1 - δ) := by
+      simpa [δ] using hn
+    have hinv : (n : ℝ)⁻¹ = (n : ℝ) ^ (-1 : ℝ) := by
+      rw [Real.rpow_neg hnpos.le 1, Real.rpow_one]
+    have hdiv : (n : ℝ) ^ (1 - δ) / (n : ℝ) = (n : ℝ) ^ (-δ) := by
+      rw [div_eq_mul_inv, hinv, ← Real.rpow_add hnpos]
+      congr 1 <;> ring
+    calc
+      (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n ≤
+          (n : ℝ) ^ (1 - δ) / (n : ℝ) := div_le_div_of_nonneg_right hbound (by positivity)
+      _ = (n : ℝ) ^ (-δ) := hdiv
+  have hnonneg : ∀ᶠ n : ℕ in atTop,
+      (0 : ℝ) ≤ (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n := by
+    filter_upwards [] with n
+    positivity
+  exact tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hpow hnonneg hle
+
+private theorem eventually_union_tail_small :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n ≤ 1 / 10 := by
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  obtain ⟨n₀, hpoly⟩ := eventually_small_poly_exp (Real.log 2 / 2)
+    (by positivity) (1 / 10) (by norm_num)
+  refine ⟨max n₀ 1, ?_⟩
+  intro n hn
+  have hn0 : 0 < n := by omega
+  have hn1 : 1 ≤ n := by omega
+  have hsmall := hpoly n (by omega)
+  have hpow : (2 : ℝ) ^ n * (1 / 4 : ℝ) ^ n = (1 / 2 : ℝ) ^ n := by
+    rw [← mul_pow]
+    norm_num
+  have hhalf : (1 / 2 : ℝ) ^ n = Real.exp (-(n : ℝ) * Real.log 2) := by
+    calc
+      (1 / 2 : ℝ) ^ n = Real.exp (Real.log ((1 / 2 : ℝ) ^ n)) :=
+        (Real.exp_log (by positivity)).symm
+      _ = Real.exp ((n : ℝ) * Real.log (1 / 2 : ℝ)) := by rw [Real.log_pow]
+      _ = Real.exp (-(n : ℝ) * Real.log 2) := by
+        congr 1
+        rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv]
+        ring
+  have hexp : Real.exp (-(n : ℝ) * Real.log 2) ≤
+      Real.exp (-(Real.log 2 / 2) * n) := by
+    apply Real.exp_le_exp.mpr
+    have hn1R : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+    nlinarith [hlog2, hn1R]
+  have hnSq : (n : ℝ) ≤ (n : ℝ) ^ (2 : ℝ) := by
+    simpa [Real.rpow_one] using
+      (Real.rpow_le_rpow_of_exponent_le (show (1 : ℝ) ≤ n by exact_mod_cast hn1)
+        (by norm_num : (1 : ℝ) ≤ 2))
+  exact (calc
+    (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n = (n : ℝ) * (1 / 2 : ℝ) ^ n := by
+      rw [mul_assoc, hpow]
+    _ = (n : ℝ) * Real.exp (-(n : ℝ) * Real.log 2) := by rw [hhalf]
+    _ ≤ (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2 / 2) * n) := by
+      gcongr
+    _ < 1 / 10 := hsmall
+  ).le
+
+private theorem odd_near_small (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
+    (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      2 * HypercubeRamsey.S04.locR β γ n ≤ n / 2 ∧
+      (n : ℝ) * Real.exp
+          (Real.binEntropy (((2 * HypercubeRamsey.S04.locR β γ n : ℕ) : ℝ) / n) * n) /
+          (2 : ℝ) ^ (n - 1) * Real.exp (2 * (n : ℝ) ^ γ) ≤ 1 := by
+  have hxlim := locR_ratio_tendsto_zero β γ hβ hβγ hγ
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hentlim : Tendsto
+      (fun n : ℕ => Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n))
+      atTop (nhds 0) := by
+    change Tendsto (Real.binEntropy ∘
+      (fun n : ℕ => (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n)) atTop (nhds 0)
+    simpa [Real.binEntropy_zero] using
+      Real.binEntropy_continuous.continuousAt.tendsto.comp hxlim
+  have hradEv : ∀ᶠ n : ℕ in atTop,
+      (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n < 1 / 2 :=
+    hxlim.eventually (Iio_mem_nhds (by norm_num : 0 < (1 / 2 : ℝ)))
+  have hentEv : ∀ᶠ n : ℕ in atTop,
+      Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) < Real.log 2 / 4 :=
+    hentlim.eventually (Iio_mem_nhds (by positivity : 0 < Real.log 2 / 4))
+  have hgammaLim : Tendsto (fun n : ℕ => (n : ℝ) ^ (γ - 1)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_neg_atTop (sub_pos.mpr hγ)).comp tendsto_natCast_atTop_atTop
+    have h' : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(1 - γ))) atTop (nhds 0) := by
+      change Tendsto ((fun x : ℝ => x ^ (-(1 - γ))) ∘ Nat.cast) atTop (nhds 0)
+      exact h
+    simpa only [show γ - 1 = -(1 - γ) by ring] using h'
+  have hgammaEv : ∀ᶠ n : ℕ in atTop,
+      (n : ℝ) ^ (γ - 1) < Real.log 2 / 16 :=
+    hgammaLim.eventually (Iio_mem_nhds (by positivity : 0 < Real.log 2 / 16))
+  obtain ⟨nPoly, hpoly⟩ := eventually_small_poly_exp (Real.log 2 / 2)
+    (by positivity) (1 / 2) (by norm_num)
+  have hradN := Filter.eventually_atTop.1 hradEv
+  have hentN := Filter.eventually_atTop.1 hentEv
+  have hgammaN := Filter.eventually_atTop.1 hgammaEv
+  refine ⟨max (max (max hradN.choose hentN.choose) hgammaN.choose) (max nPoly 1), ?_⟩
+  intro n hn
+  have hn0 : 0 < n := by omega
+  have hn1 : 1 ≤ n := by omega
+  have hnpos : 0 < (n : ℝ) := by exact_mod_cast hn0
+  have hradLt : (2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n < 1 / 2 :=
+    hradN.choose_spec n (by omega)
+  have hRnat : 2 * HypercubeRamsey.S04.locR β γ n ≤ n / 2 := by
+    have hRreal : 2 * (2 * HypercubeRamsey.S04.locR β γ n : ℝ) ≤ (n : ℝ) := by
+      rw [div_lt_iff₀ hnpos] at hradLt
+      linarith
+    have hRnat' : 2 * (2 * HypercubeRamsey.S04.locR β γ n) ≤ n := by exact_mod_cast hRreal
+    omega
+  have hEnt : Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) <
+      Real.log 2 / 4 := hentN.choose_spec n (by omega)
+  have hgam : (n : ℝ) ^ (γ - 1) < Real.log 2 / 16 := hgammaN.choose_spec n (by omega)
+  have hpowRel : (n : ℝ) ^ γ = (n : ℝ) ^ (γ - 1) * n := by
+    rw [show γ = (γ - 1) + 1 by ring]
+    simpa [Real.rpow_one] using (Real.rpow_add hnpos (γ - 1) 1)
+  have hgamCap : 2 * (n : ℝ) ^ γ < Real.log 2 / 8 * n := by
+    rw [hpowRel]
+    nlinarith [hgam, hnpos]
+  have hpoly' : (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2 / 2) * n) < 1 / 2 :=
+    hpoly n (by omega)
+  have hnSq : (n : ℝ) ≤ (n : ℝ) ^ (2 : ℝ) := by
+    simpa [Real.rpow_one] using
+      (Real.rpow_le_rpow_of_exponent_le (show (1 : ℝ) ≤ n by exact_mod_cast hn1)
+        (by norm_num : (1 : ℝ) ≤ 2))
+  have hcardNat : Fintype.card (HypercubeRamsey.S04.OddRole n) = 2 ^ (n - 1) :=
+    oddRole_card_eq hn0
+  have hcard : (Fintype.card (HypercubeRamsey.S04.OddRole n) : ℝ) =
+      (2 : ℝ) ^ (n - 1) := by exact_mod_cast hcardNat
+  have hden : (2 : ℝ) ^ (n - 1) = Real.exp (((n - 1 : ℕ) : ℝ) * Real.log 2) := by
+    rw [← Real.log_pow, Real.exp_log (by positivity)]
+  have hcastSub : ((n - 1 : ℕ) : ℝ) = (n : ℝ) - 1 := by
+    have h := congrArg (fun k : ℕ => (k : ℝ)) (Nat.sub_add_cancel hn1)
+    push_cast at h
+    linarith
+  have hExpId :
+      (Real.exp (Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n) /
+          (2 : ℝ) ^ (n - 1)) * Real.exp (2 * (n : ℝ) ^ γ) =
+        2 * Real.exp (Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n +
+          2 * (n : ℝ) ^ γ - (n : ℝ) * Real.log 2) := by
+    rw [hden, ← Real.exp_sub, ← Real.exp_add]
+    have hshift :
+        Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n -
+            ((n - 1 : ℕ) : ℝ) * Real.log 2 + 2 * (n : ℝ) ^ γ =
+          Real.log 2 +
+            (Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n +
+              2 * (n : ℝ) ^ γ - (n : ℝ) * Real.log 2) := by rw [hcastSub]; ring
+    rw [hshift, Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+  have hExpSmall :
+      Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n +
+          2 * (n : ℝ) ^ γ - (n : ℝ) * Real.log 2 ≤
+        -(Real.log 2 / 2) * n := by
+    nlinarith [hEnt, hgamCap, hlog2, hnpos]
+  refine ⟨hRnat, ?_⟩
+  have hfinal := (calc
+    (n : ℝ) *
+          (Real.exp (Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n) /
+            (Fintype.card (HypercubeRamsey.S04.OddRole n) : ℝ)) *
+          Real.exp (2 * (n : ℝ) ^ γ) =
+        2 * (n : ℝ) * Real.exp
+          (Real.binEntropy ((2 * HypercubeRamsey.S04.locR β γ n : ℝ) / n) * n +
+            2 * (n : ℝ) ^ γ - (n : ℝ) * Real.log 2) := by
+          rw [hcard, mul_assoc, hExpId]
+          ring
+    _ ≤ 2 * (n : ℝ) * Real.exp (-(Real.log 2 / 2) * n) := by
+      gcongr
+    _ ≤ 2 * (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2 / 2) * n) := by
+      gcongr
+    _ < 1 := by nlinarith [hpoly']
+  ).le
+  rw [hcard] at hfinal
+  convert hfinal using 1 <;> norm_num [Nat.cast_mul] <;> ring
+
+set_option maxHeartbeats 1000000 in
+theorem odd_load_prob_proof (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
+    (hγ : γ < 1) (hK : 0 < K) :
+    ∃ n₀ : ℕ, ∃ C₀ : ℝ, ∀ n ≥ n₀, ∀ N : ℕ,
+      HypercubeRamsey.LargeHost C₀ n N →
+      ∀ {E : Fin N → Fin N → Prop} {G : HypercubeRamsey.Colour}
+        {X Y : Finset (Fin N)}
+        (M : HypercubeRamsey.S04.Menu4 β γ G n N E X Y)
+        (tag : HypercubeRamsey.S04.Key β γ n → M.ι)
+        (q : HypercubeRamsey.S04.XProf M tag) (q' : HypercubeRamsey.S04.YProf M tag),
+        HypercubeRamsey.S04.TagBal M tag (2 * K) →
+        HypercubeRamsey.S04.ProfOK M tag q q' →
+        HypercubeRamsey.S04.OddFactor M tag q q' →
+        HypercubeRamsey.S04.OddCap M tag →
+        (HypercubeRamsey.S04.prepLaw M tag q q').pr
+          (fun ω => ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) ≤ 1 / 10 := by
+  classical
+  obtain ⟨nLoad, hLoad⟩ := odd_near_small β γ hβ hβγ hγ
+  obtain ⟨nTail, hTail⟩ := eventually_union_tail_small
+  let C₀ : ℝ := 20 * (4 * K + 1)
+  refine ⟨max (max nLoad nTail) 1, C₀, ?_⟩
+  intro n hn N hHost E G X Y M tag q q' hTag hProf hFactor hCap
+  have hnMax : max nLoad nTail ≤ n :=
+    le_trans (le_max_left (max nLoad nTail) 1) hn
+  have hnLoad : nLoad ≤ n := le_trans (le_max_left _ _) hnMax
+  have hnTail : nTail ≤ n := le_trans (le_max_right _ _) hnMax
+  have hn1 : 1 ≤ n := le_trans (le_max_right (max nLoad nTail) 1) hn
+  have hn0 : 0 < n := by omega
+  letI : Nonempty (HypercubeRamsey.S04.OddRole n) := by
+    let e : HypercubeRamsey.S04.EvenRole n :=
+      ⟨fun _ => false, by simp [HypercubeRamsey.IsEvenRole]⟩
+    exact ⟨HypercubeRamsey.S04.oddNbr e ⟨0, by omega⟩⟩
+  let P : HypercubeRamsey.FinProb (HypercubeRamsey.S04.Prep M tag) :=
+    HypercubeRamsey.S04.prepLaw M tag q q'
+  have hPne : Nonempty (HypercubeRamsey.S04.Prep M tag) := by
+    by_contra hne
+    haveI : IsEmpty (HypercubeRamsey.S04.Prep M tag) := ⟨fun ω => hne ⟨ω⟩⟩
+    have hzero : (∑ ω : HypercubeRamsey.S04.Prep M tag, P.w ω) = 0 := by simp
+    rw [P.sum_eq_one] at hzero
+    norm_num at hzero
+  letI := hPne
+  let U := HypercubeRamsey.S04.OddRole n
+  let Z : U → Fin N → HypercubeRamsey.S04.Prep M tag → ℝ :=
+    fun u y ω => (N : ℝ) * HypercubeRamsey.S04.oddRow M tag ω u y
+  let L : ℝ := Real.exp (2 * (n : ℝ) ^ γ)
+  let R : ℕ := 2 * HypercubeRamsey.S04.locR β γ n
+  let near : U → Finset U := oddNearSet R
+  let H : ℝ := Real.binEntropy ((R : ℝ) / n)
+  let f : ℝ := Real.exp (H * n) / (Fintype.card U : ℝ)
+  let d : U → Fin N → ℝ :=
+    fun u y => (N : ℝ) * HypercubeRamsey.S04.rawOdd M tag q q' u y
+  let average : Fin N → HypercubeRamsey.S04.Prep M tag → ℝ :=
+    fun y ω => (Fintype.card U : ℝ)⁻¹ * ∑ u, Z u y ω
+  have hU : (Fintype.card U : ℝ) = (2 : ℝ) ^ (n - 1) := by
+    exact_mod_cast oddRole_card_eq hn0
+  have hUpos : 0 < (Fintype.card U : ℝ) := by rw [hU]; positivity
+  have hsmall0 := hLoad n hnLoad
+  have hRadius : R ≤ n / 2 := by simpa [R] using hsmall0.1
+  have hf : 0 ≤ f := by dsimp [f]; positivity
+  have hL : 0 ≤ L := by dsimp [L]; positivity
+  have hself : ∀ u : U, u ∈ near u := by
+    intro u
+    simp [near, oddNearSet, HypercubeRamsey.S04.ballV, _root_.hammingDist]
+  have hnear : ∀ u : U, ((near u).card : ℝ) ≤ f * Fintype.card U := by
+    intro u
+    have hnat := oddNearSet_card_le (R := R) u
+    have hball := ballV_volume_bound hn0 hRadius u.1
+    have hcast : ((near u).card : ℝ) ≤ Real.exp (H * n) := by
+      calc
+        ((near u).card : ℝ) ≤ (HypercubeRamsey.S04.ballV u.1 R).card := by
+          exact_mod_cast hnat
+        _ ≤ Real.exp (H * n) := by simpa [H] using hball
+    calc
+      ((near u).card : ℝ) ≤ Real.exp (H * n) := hcast
+      _ = f * (Fintype.card U : ℝ) := by
+        dsimp [f]
+        field_simp [ne_of_gt hUpos]
+  have hZ0 : ∀ u y ω, 0 ≤ Z u y ω := by
+    intro u y ω
+    dsimp [Z]
+    exact mul_nonneg (by positivity) (oddRow_nonneg M tag ω u y)
+  have hZL : ∀ u y ω, ω ∈ Finset.univ → Z u y ω ≤ L := by
+    intro u y ω _
+    dsimp [Z, L]
+    exact hCap ω u y
+  have hd : ∀ u y, 0 ≤ d u y := by
+    intro u y
+    dsimp [d]
+    apply mul_nonneg (by positivity)
+    unfold HypercubeRamsey.S04.rawOdd HypercubeRamsey.FinProb.expect
+    apply Finset.sum_nonneg
+    intro ω hω
+    exact mul_nonneg (P.nonneg ω) (oddRow_nonneg M tag ω u y)
+  have hmean : ∀ y, (Fintype.card U : ℝ)⁻¹ * ∑ u, d u y ≤ 4 * K := by
+    intro y
+    have hterm (u : U) : d u y ≤ 2 * (N : ℝ) *
+        (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y := by
+      dsimp [d]
+      have hp := hProf.odd u y
+      have hmul := mul_le_mul_of_nonneg_left hp (by positivity : (0 : ℝ) ≤ (N : ℝ))
+      nlinarith
+    have hsum : ∑ u : U, d u y ≤
+        2 * ∑ u : U, (N : ℝ) * (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y := by
+      calc
+        ∑ u : U, d u y ≤
+            ∑ u : U, 2 * (N : ℝ) * (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y :=
+          Finset.sum_le_sum fun u _ => hterm u
+        _ = 2 * ∑ u : U, (N : ℝ) *
+              (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y := by
+          calc
+            _ = ∑ u : U, 2 * ((N : ℝ) *
+                  (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y) := by
+              apply Finset.sum_congr rfl
+              intro u hu
+              ring
+            _ = _ := by rw [Finset.mul_sum]
+    calc
+      (Fintype.card U : ℝ)⁻¹ * ∑ u : U, d u y ≤
+          (Fintype.card U : ℝ)⁻¹ *
+            (2 * ∑ u : U, (N : ℝ) *
+              (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y) :=
+        mul_le_mul_of_nonneg_left hsum (inv_nonneg.mpr hUpos.le)
+      _ = 2 * ((Fintype.card U : ℝ)⁻¹ *
+            ∑ u : U, (N : ℝ) *
+              (M.ν (tag (HypercubeRamsey.S04.key β γ n u.1))).w y) := by ring
+      _ ≤ 2 * (2 * K) := mul_le_mul_of_nonneg_left (hTag.2 y) (by norm_num)
+      _ = 4 * K := by ring
+  have hjoint : ∀ y (m : ℕ), m ≤ n → ∀ s : Fin m → U,
+      (∀ i j : Fin m, j < i → s i ∉ near (s j)) →
+        ∑ ω ∈ Finset.univ, P.w ω * ∏ i, Z (s i) y ω ≤
+          (1 : ℝ) ^ m * ∏ i, d (s i) y := by
+    intro y m hm s hsepNear
+    have hsep : HypercubeRamsey.S04.Sep β γ (fun i => (s i).1) := by
+      intro i j hij
+      rcases lt_or_gt_of_ne hij with hij' | hji'
+      · have hnot := hsepNear j i hij'
+        have hlarge : R < _root_.hammingDist (s i).1 (s j).1 := by
+          by_contra hle
+          have hle' : _root_.hammingDist (s i).1 (s j).1 ≤ R := le_of_not_gt hle
+          exact hnot ((oddNearSet_mem_iff (R := R) (s i) (s j)).2 hle')
+        simpa only [R] using hlarge
+      · have hnot := hsepNear i j hji'
+        have hlarge : R < _root_.hammingDist (s i).1 (s j).1 := by
+          by_contra hle
+          have hle' : _root_.hammingDist (s i).1 (s j).1 ≤ R := le_of_not_gt hle
+          have hle'' : _root_.hammingDist (s j).1 (s i).1 ≤ R := by
+            rwa [_root_.hammingDist_comm]
+          exact hnot ((oddNearSet_mem_iff (R := R) (s j) (s i)).2 hle'')
+        simpa only [R] using hlarge
+    have hfactor := hFactor y m s hsep
+    change (HypercubeRamsey.S04.prepLaw M tag q q').expect
+        (fun ω => ∏ i, (N : ℝ) * HypercubeRamsey.S04.oddRow M tag ω (s i) y) ≤
+      (1 : ℝ) ^ m * ∏ i, (N : ℝ) *
+        HypercubeRamsey.S04.rawOdd M tag q q' (s i) y
+    simpa only [one_pow, one_mul] using hfactor
+  have hsmall : (n : ℝ) * f * L ≤ 1 := by
+    have h := hsmall0.2
+    dsimp [f, L, H, R] at h ⊢
+    rw [hU]
+    convert h using 1 <;> norm_num [Nat.cast_mul] <;> ring
+  have hlabels : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := by
+    rw [Fintype.card_fin]
+    exact_mod_cast hHost.2
+  have hD0 : (0 : ℝ) ≤ 4 * K := mul_nonneg (by norm_num) hK.le
+  have hscatRaw := HypercubeRamsey.scatteredMoments_union_labels
+    (Ω := HypercubeRamsey.S04.Prep M tag)
+    (U := HypercubeRamsey.S04.OddRole n) (Label := Fin N)
+    (P := P) (succ := Finset.univ) (Z := Z) hZ0
+    (L := L) hL hZL (near := near) hself (f := f) hf hnear
+    (n := n) hn0 (K := 1) (D₀ := 4 * K) (by norm_num) hD0
+    (d := d) hd hmean hjoint hsmall hlabels
+  have hscat : (∑ ω, if ω ∈ Finset.univ ∧ ∃ y, 4 * (4 * K + 1) < average y ω
+      then P.w ω else 0) ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    simpa only [average, mul_one] using hscatRaw
+  have hratio : 2 * C₀ ≤ (N : ℝ) / (Fintype.card U : ℝ) := by
+    have hpowNat : 2 ^ n = 2 * 2 ^ (n - 1) := by
+      calc
+        2 ^ n = 2 ^ (n - 1 + 1) := by rw [Nat.sub_add_cancel hn1]
+        _ = 2 ^ (n - 1) * 2 := by rw [pow_succ]
+        _ = 2 * 2 ^ (n - 1) := by omega
+    have hpow : (2 : ℝ) ^ n = 2 * (2 : ℝ) ^ (n - 1) := by exact_mod_cast hpowNat
+    apply (le_div_iff₀ hUpos).2
+    rw [hU]
+    calc
+      2 * C₀ * (2 : ℝ) ^ (n - 1) = C₀ * (2 : ℝ) ^ n := by rw [hpow]; ring
+      _ ≤ (N : ℝ) := hHost.1
+  have havg (ω : HypercubeRamsey.S04.Prep M tag) (y : Fin N) :
+      average y ω = ((N : ℝ) / (Fintype.card U : ℝ)) *
+        HypercubeRamsey.S04.oddCol M tag ω y := by
+    have hsum : ∑ u : U, Z u y ω = (N : ℝ) *
+        HypercubeRamsey.S04.oddCol M tag ω y := by
+      dsimp [Z]
+      rw [HypercubeRamsey.S04.oddCol, ← Finset.mul_sum]
+    dsimp [average]
+    rw [hsum, div_eq_mul_inv]
+    ring
+  have hbadTo (ω : HypercubeRamsey.S04.Prep M tag)
+      (hbad : ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) :
+      ∃ y, 4 * (4 * K + 1) < average y ω := by
+    obtain ⟨y, hy⟩ := hbad
+    have hratioPos : 0 < (N : ℝ) / (Fintype.card U : ℝ) :=
+      lt_of_lt_of_le (by dsimp [C₀]; positivity) hratio
+    have hbase : 4 * (4 * K + 1) ≤
+        ((N : ℝ) / (Fintype.card U : ℝ)) * (1 / 10 : ℝ) := by
+      dsimp [C₀] at hratio
+      nlinarith
+    have hlt := mul_lt_mul_of_pos_left hy hratioPos
+    refine ⟨y, ?_⟩
+    rw [havg ω y]
+    exact hbase.trans_lt hlt
+  let event : HypercubeRamsey.S04.Prep M tag → Prop :=
+    fun ω => ∃ y, 4 * (4 * K + 1) < average y ω
+  have htailP : P.pr event ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    classical
+    have hEq : P.pr event =
+        ∑ ω, if ω ∈ Finset.univ ∧ event ω then P.w ω else 0 := by
+      unfold HypercubeRamsey.FinProb.pr
+      apply Finset.sum_congr rfl
+      intro ω hω
+      by_cases he : event ω <;> simp [he]
+    rw [hEq]
+    exact hscat
+  have hmono : P.pr (fun ω => ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) ≤
+      P.pr event := HypercubeRamsey.S04.pr_mono P (fun ω hbad => hbadTo ω hbad)
+  have hprob := hmono.trans htailP
+  change P.pr (fun ω => ∃ y, 1 / 10 < HypercubeRamsey.S04.oddCol M tag ω y) ≤ 1 / 10
+  exact hprob.trans (hTail n hnTail)
 
 end HypercubeRamsey.Lane_q_s04_load

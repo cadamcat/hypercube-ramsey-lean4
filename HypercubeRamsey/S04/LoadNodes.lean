@@ -25,7 +25,7 @@ theorem odd_load_prob (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : 
         (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag),
         TagBal M tag (2 * K) → ProfOK M tag q q' → OddFactor M tag q q' → OddCap M tag →
         (prepLaw M tag q q').pr (fun ω => ∃ y, 1 / 10 < oddCol M tag ω y) ≤ 1 / 10 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.odd_load_prob_proof β γ K hβ hβγ hγ hK
 
 /-- L4.1i, injection (04:512–526): on `S_pre` all odd rows are probabilities (`GeoCons`) with atoms
 `≤ exp(2n^γ)/N ≤ N^{-0.95}` (`OddCap`, `N ≥ 2^n`) and column sums `≤ 1/10 ≤ 0.4`; Lemma 3.9

@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.ChunkGeometry
+import HypercubeRamsey.S06.StateCode_q_s06_front
 import HypercubeRamsey.S05.Geometry
 import HypercubeRamsey.Tools.CubeGeometry
 
@@ -1520,7 +1521,43 @@ theorem L6_1e_facts (α : ℝ) :
 neighbours of one odd state within distance `10` and residual distance preserved (06:233–258). -/
 theorem L6_1e_code (α : ℝ) (hα : 0 < α) (hα' : α ≤ 1 / 100) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ g : ChunkGeometry6 n α, Nonempty (StateCode6 g.L) := by
-  sorry
+  refine ⟨400000, ?_⟩
+  intro n hn g
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hnR4 : 4 ≤ (n : ℝ) := by exact_mod_cast (by omega : 4 ≤ n)
+  have hpowα : (n : ℝ) ^ α ≤ (n : ℝ) ^ (1 / 100 : ℝ) :=
+    Real.rpow_le_rpow_of_exponent_le hnR hα'
+  have hpowOne : 1 ≤ (n : ℝ) ^ (1 / 100 : ℝ) :=
+    Real.one_le_rpow hnR (by norm_num)
+  have hceil : (g.L.m : ℝ) < (n : ℝ) ^ α + 1 := by
+    rw [g.m_eq]
+    exact Nat.ceil_lt_add_one (by positivity)
+  have hm : (g.L.m : ℝ) ≤ 2 * (n : ℝ) ^ (1 / 100 : ℝ) := by
+    linarith
+  have hRoot : 2 * Real.sqrt (n : ℝ) ≤ n := by
+    nlinarith [hnR4, Real.sqrt_nonneg (n : ℝ),
+      Real.sq_sqrt (show (0 : ℝ) ≤ n by exact_mod_cast (by omega : 0 ≤ n))]
+  have hpowFine : (n : ℝ) ^ (3 / 10 : ℝ) ≤ Real.sqrt (n : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR (by norm_num : (3 / 10 : ℝ) ≤ 1 / 2)
+    simpa [Real.sqrt_eq_rpow] using h
+  have hLenReal : (g.L.fineLength : ℝ) ≤ (n : ℝ) := by
+    calc
+      (g.L.fineLength : ℝ) ≤ 2 * (n : ℝ) ^ (3 / 10 : ℝ) := g.L.fine_length_upper
+      _ ≤ 2 * Real.sqrt (n : ℝ) := by gcongr
+      _ ≤ n := hRoot
+  have hLen : g.L.fineLength ≤ n := by exact_mod_cast hLenReal
+  obtain ⟨hLower, hUpper⟩ :=
+    HypercubeRamsey.Lane_q_s06_front.coordCard_bounds6 g.L hn hm g.L.fine_length_upper
+  let C := HypercubeRamsey.Lane_q_s06_front.buildStateCodeAux6
+    g.L g.flips hLen hLower hUpper
+  refine ⟨{
+    d := C.d
+    enc := C.enc
+    enc_injective := C.enc_injective
+    nbr_dist := C.nbr_dist
+    residual_dist := C.residual_dist
+    d_lower := C.d_lower
+    d_upper := C.d_upper }⟩
 
 end
 

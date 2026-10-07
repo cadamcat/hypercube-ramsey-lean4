@@ -351,6 +351,71 @@ theorem p92_masks {P : Params9} {n N : ℕ} {M : TagMix N} (E : Fin N → Fin N 
     (I : IDMap9 P n) (tag : CubeVertex (P.m n) → M.ι) (hN : 0 < N) :
     ∃ maskLaw : OddSites9 n → FinProb (Finset (Fin N)),
       MasksOK9 (⟨tag, maskLaw⟩ : Setup9 P n N M) I E G := by
-  sorry
+  classical
+  haveI : Nonempty (Fin N) := ⟨⟨0, hN⟩⟩
+  have hu : 0 ≤ (n : ℝ) ^ P.u := by positivity
+  let δ : ℝ := Real.exp (-(n : ℝ) ^ P.u)
+  have hδpos : 0 < δ := by positivity
+  have hδle : δ ≤ 1 := by
+    dsimp [δ]
+    rw [Real.exp_le_one_iff]
+    linarith
+  let defaultMask : FinProb (Finset (Fin N)) := FinProb.uniform {∅} (by simp)
+  let Sbase : Setup9 P n N M := ⟨tag, fun _ => defaultMask⟩
+  let R : OddSites9 n → Finset (Fin N) → Law N := fun b A =>
+    Law.mix (rawLaw9 Sbase I) (fun ω =>
+      rowLaw9 Sbase E G (Function.update ω (Sum.inr b) A) b)
+  have hR (b : OddSites9 n) (A : Finset (Fin N))
+      (hA : 0 < Lane_q_s09_tag.maskMass (siteSecond9 Sbase b.1) A) (y : Fin N) (hy : y ∉ A) :
+      (R b A).w y = 0 := by
+    dsimp [R, Law.mix]
+    apply Finset.sum_eq_zero
+    intro ω _
+    have hmask : msk9 (Function.update ω (Sum.inr b) A) b = A := by
+      simp [msk9, Function.update]
+    have hmasked :
+        (maskedLaw9 Sbase (Function.update ω (Sum.inr b) A) b).w y = 0 := by
+      change (restrictOr9 (siteSecond9 Sbase b.1)
+        (msk9 (Function.update ω (Sum.inr b) A) b)).w y = 0
+      rw [hmask]
+      apply Lane_q_s09_tag.restrictOr9_outside
+      · exact hA
+      · exact hy
+    have hrow :
+        (rowLaw9 Sbase E G (Function.update ω (Sum.inr b) A) b).w y = 0 :=
+      Lane_q_s09_tag.restrictOr9_zero
+        (maskedLaw9 Sbase (Function.update ω (Sum.inr b) A) b)
+        (hitSet9 E G (Function.update ω (Sum.inr b) A) (I.seen b.1)) y hmasked
+    simp [hrow]
+  let pick (b : OddSites9 n) :=
+    Classical.choose
+      (Lane_q_s09_tag.finite_mask_minimax (siteSecond9 Sbase b.1) δ hδpos hδle (R b) (hR b))
+  have hpick (b : OddSites9 n) (y : Fin N) :
+      ∑ A, (pick b).w A * (R b A.1).w y ≤
+        (1 + δ) * (siteSecond9 Sbase b.1).w y :=
+    Classical.choose_spec
+      (Lane_q_s09_tag.finite_mask_minimax (siteSecond9 Sbase b.1) δ hδpos hδle (R b) (hR b)) y
+  let maskLaw : OddSites9 n → FinProb (Finset (Fin N)) :=
+    fun b => FinProb.map (pick b) Subtype.val
+  refine ⟨maskLaw, ?_⟩
+  unfold MasksOK9
+  constructor
+  · intro b A hweight
+    by_contra hnot
+    have hno : ∀ a : {A : Finset (Fin N) // δ / 2 ≤
+        Lane_q_s09_tag.maskMass (siteSecond9 Sbase b.1) A}, a.1 ≠ A := by
+      intro a ha
+      subst A
+      exact hnot (by
+        simpa [siteSecond9, δ, Lane_q_s09_tag.maskMass, div_eq_mul_inv, mul_comm] using a.property)
+    have hzero : (FinProb.map (pick b) Subtype.val).w A = 0 := by
+      simp only [FinProb.map]
+      apply Finset.sum_eq_zero
+      intro a _
+      simp [hno a]
+    exact hweight (by simpa [maskLaw] using hzero)
+  · intro b y
+    -- The pointwise mean is the action mixture selected by `finite_mask_minimax`.
+    sorry
 
 end HypercubeRamsey

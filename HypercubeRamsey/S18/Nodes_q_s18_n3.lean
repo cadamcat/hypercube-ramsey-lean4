@@ -2382,6 +2382,110 @@ private theorem critical_cell_survival_lower {κ : CConsts} {T : Stage} {k : ℕ
         fresh_label_hit_lower_pair hD (flipPos X.target a) hodd hclass x y
           hdegxLabel hdegzLabel hcorr hdelta
 
+private theorem critical_cell_survival_upper {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} {D : LateData hPT}
+    {X : CriticalTransferData D} (hD : D.Spec) {a : Fin (T.S.n k)}
+    (ha : a ∈ X.criticalCoords) (x : Fin (T.S.N k))
+    (z : Option (Fin (T.S.N k))) :
+    (D.typicalFresh (D.geom.cellOf (flipPos X.target a))).pr (fun Ps =>
+      Hits (T.S.E k) PT.tiling.c x
+        (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a)) ∧
+      ∀ y, z = some y → Hits (T.S.E k) PT.tiling.c y
+        (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a))) ≤
+      match z with
+      | none =>
+          (1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) *
+            deg (T.S.E k) PT.tiling.c
+              (PT.π (D.geom.patchOf (flipPos X.target a))).w x
+      | some y =>
+          (1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) *
+            ((deg (T.S.E k) PT.tiling.c
+                (PT.π (D.geom.patchOf (flipPos X.target a))).w x +
+              deg (T.S.E k) PT.tiling.c
+                (PT.π (D.geom.patchOf (flipPos X.target a))).w y) / 2 - 1 / 4 +
+              corr (T.S.E k) PT.tiling.c
+                (PT.π (D.geom.patchOf (flipPos X.target a))).w x y / 4) := by
+  obtain ⟨hodd, _, hclass⟩ := critical_label_geometry X ha
+  cases z with
+  | none =>
+      simpa using fresh_label_hit_upper_single hD (flipPos X.target a) hodd hclass x
+  | some y =>
+      simpa [Option.some.injEq] using
+        fresh_label_hit_upper_pair hD (flipPos X.target a) hodd hclass x y
+
+theorem critical_raw_single_survival_upper {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} {D : LateData hPT}
+    {X : CriticalTransferData D} (hD : D.Spec) (hgeom : TransferGeometry X)
+    (x : Fin (T.S.N k)) :
+    X.rawLaw.pr (fun s => X.survives s x none) ≤
+      ((1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) *
+        deg (T.S.E k) PT.tiling.c (PT.π (D.geom.patchOf X.target)).w x) ^
+          X.criticalCoords.card := by
+  let i := D.geom.patchOf X.target
+  let u := (1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) *
+    deg (T.S.E k) PT.tiling.c (PT.π i).w x
+  have hKB : 0 ≤ κ.KB := le_trans
+    (mul_nonneg (by norm_num : (0 : ℝ) ≤ 10 ^ 6) (by positivity)) D.constants.KB_big
+  have hc : 0 ≤ 1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3) := by
+    have hr : 0 ≤ Real.rpow (T.S.n k : ℝ) (-3) := Real.rpow_nonneg (by positivity) _
+    exact add_nonneg (by norm_num) (mul_nonneg hKB hr)
+  have hdeg : 0 ≤ deg (T.S.E k) PT.tiling.c (PT.π i).w x := by
+    unfold deg hit
+    apply Finset.sum_nonneg
+    intro y _
+    exact mul_nonneg ((PT.π i).nonneg y) (by split_ifs <;> norm_num)
+  have hu : 0 ≤ u := by dsimp [u]; positivity
+  have hcell : ∀ a ∈ X.criticalCoords,
+      (D.typicalFresh (D.geom.cellOf (flipPos X.target a))).pr (fun Ps =>
+        Hits (T.S.E k) PT.tiling.c x
+          (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a)) ∧
+        ∀ y, none = some y → Hits (T.S.E k) PT.tiling.c y
+          (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a))) ≤ u := by
+    intro a ha
+    obtain ⟨_, hpatch, _⟩ := critical_label_geometry X ha
+    have h := critical_cell_survival_upper hD ha x none
+    simpa [u, i, hpatch] using h
+  simpa [u, i] using critical_survival_probability_le hgeom x none u hu hcell
+
+theorem critical_raw_pair_survival_upper {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} {D : LateData hPT}
+    {X : CriticalTransferData D} (hD : D.Spec) (hgeom : TransferGeometry X)
+    (x y : Fin (T.S.N k)) :
+    X.rawLaw.pr (fun s => X.survives s x (some y)) ≤
+      ((1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) *
+        ((deg (T.S.E k) PT.tiling.c (PT.π (D.geom.patchOf X.target)).w x +
+          deg (T.S.E k) PT.tiling.c (PT.π (D.geom.patchOf X.target)).w y) / 2 - 1 / 4 +
+          corr (T.S.E k) PT.tiling.c (PT.π (D.geom.patchOf X.target)).w x y / 4)) ^
+          X.criticalCoords.card := by
+  let i := D.geom.patchOf X.target
+  let base := (deg (T.S.E k) PT.tiling.c (PT.π i).w x +
+    deg (T.S.E k) PT.tiling.c (PT.π i).w y) / 2 - 1 / 4 +
+    corr (T.S.E k) PT.tiling.c (PT.π i).w x y / 4
+  let u := (1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) * base
+  have hKB : 0 ≤ κ.KB := le_trans
+    (mul_nonneg (by norm_num : (0 : ℝ) ≤ 10 ^ 6) (by positivity)) D.constants.KB_big
+  have hc : 0 ≤ 1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3) := by
+    have hr : 0 ≤ Real.rpow (T.S.n k : ℝ) (-3) := Real.rpow_nonneg (by positivity) _
+    exact add_nonneg (by norm_num) (mul_nonneg hKB hr)
+  have hbase : 0 ≤ base := by
+    dsimp [base]
+    rw [← pairHitMass_identity (T.S.E k) PT.tiling.c (PT.π i) x y]
+    apply Finset.sum_nonneg
+    intro z _
+    exact mul_nonneg ((PT.π i).nonneg z) (by split_ifs <;> norm_num)
+  have hu : 0 ≤ u := by dsimp [u]; positivity
+  have hcell : ∀ a ∈ X.criticalCoords,
+      (D.typicalFresh (D.geom.cellOf (flipPos X.target a))).pr (fun Ps =>
+        Hits (T.S.E k) PT.tiling.c x
+          (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a)) ∧
+        ∀ z, some y = some z → Hits (T.S.E k) PT.tiling.c z
+          (D.fresh.label (D.geom.cellOf (flipPos X.target a)) Ps.2 (flipPos X.target a))) ≤ u := by
+    intro a ha
+    obtain ⟨_, hpatch, _⟩ := critical_label_geometry X ha
+    have h := critical_cell_survival_upper hD ha x (some y)
+    simpa [u, base, i, hpatch] using h
+  simpa [u, base, i] using critical_survival_probability_le hgeom x (some y) u hu hcell
+
 theorem critical_cell_hit_bound_eventually {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in (Filter.atTop : Filter ℕ), ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,

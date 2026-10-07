@@ -2621,6 +2621,53 @@ private theorem rankValue_succ_eq_mergeSortAt {β γ : ℝ} {n : ℕ}
   simp [HypercubeRamsey.S04.rankValue, hpos, hne,
     HypercubeRamsey.S04.sortedCounts, mergeSortAt]
 
+private theorem rankValue_eq_of_at_eq_except {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v w : CubeVertex n)
+    (r : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (hprofile : ∀ j, j ≠ r →
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) j =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w) j)
+    (t : ℕ) (ht : t ≠ r.val + 1) :
+    HypercubeRamsey.S04.rankValue β γ n g v t =
+      HypercubeRamsey.S04.rankValue β γ n g w t := by
+  classical
+  by_cases ht0 : t = 0
+  · simp [HypercubeRamsey.S04.rankValue, ht0]
+  · by_cases htS : t = HypercubeRamsey.S04.gadgetPower β γ n
+    · simp [HypercubeRamsey.S04.rankValue, ht0, htS]
+    · have hchunk : HypercubeRamsey.S04.chunkNum β γ n + 1 =
+          HypercubeRamsey.S04.gadgetPower β γ n := by
+        unfold HypercubeRamsey.S04.chunkNum
+        have hpos := HypercubeRamsey.S04.gadgetPower_pos β γ n
+        omega
+      by_cases hlt : t < HypercubeRamsey.S04.gadgetPower β γ n
+      · let j : Fin (HypercubeRamsey.S04.chunkNum β γ n) :=
+          ⟨t - 1, by omega⟩
+        have hjval : j.val + 1 = t := by dsimp [j]; omega
+        have hjne : j ≠ r := by
+          intro hEq
+          have hval := congrArg Fin.val hEq
+          omega
+        have hv := rankValue_succ_eq_mergeSortAt g v j
+        have hw := rankValue_succ_eq_mergeSortAt g w j
+        rw [hjval] at hv hw
+        rw [hv, hw, hprofile j hjne]
+      · have hgt : HypercubeRamsey.S04.gadgetPower β γ n < t := by omega
+        have hlenV : (HypercubeRamsey.S04.sortedCounts β γ n g v).length =
+            HypercubeRamsey.S04.chunkNum β γ n := by
+          simp [HypercubeRamsey.S04.sortedCounts]
+        have hlenW : (HypercubeRamsey.S04.sortedCounts β γ n g w).length =
+            HypercubeRamsey.S04.chunkNum β γ n := by
+          simp [HypercubeRamsey.S04.sortedCounts]
+        have hidxV : (HypercubeRamsey.S04.sortedCounts β γ n g v).length ≤ t - 1 := by
+          rw [hlenV]
+          omega
+        have hidxW : (HypercubeRamsey.S04.sortedCounts β γ n g w).length ≤ t - 1 := by
+          rw [hlenW]
+          omega
+        simp only [HypercubeRamsey.S04.rankValue, if_neg ht0, if_neg htS]
+        rw [List.getD_eq_default _ _ hidxV, List.getD_eq_default _ _ hidxW]
+
 private theorem mergeSort_one_change {n : ℕ} (f g : Fin n → ℕ)
     (hfg : ∀ i, f i ≤ g i) (hgf : ∀ i, g i ≤ f i + 1)
     (hsum : (∑ i : Fin n, f i) + 1 = ∑ i : Fin n, g i) :
@@ -2902,6 +2949,55 @@ private theorem binarySearchRun_eq_of_eq_on_path (S : ℕ) (R R' : ℕ → ℕ)
     simp only [binarySearchStepR]
     rw [← hmid]
     simp [hvalue]
+
+private theorem binarySearchRun_eq_of_same_path_decisions (S : ℕ) (R R' : ℕ → ℕ)
+    (e : ℕ) (ab : ℕ × ℕ)
+    (h : ∀ t ∈ binarySearchPath S R e ab,
+      (t * S ≤ R t) ↔ (t * S ≤ R' t)) :
+    binarySearchRun S R e ab = binarySearchRun S R' e ab := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih =>
+    have hprefix : ∀ t ∈ binarySearchPath S R e ab,
+        (t * S ≤ R t) ↔ (t * S ≤ R' t) := by
+      intro t ht
+      apply h t
+      change t ∈ binarySearchPath S R e ab ++ _
+      exact List.mem_append_left _ ht
+    have hrun := ih ab hprefix
+    have hmid : binarySearchMid (binarySearchRun S R e ab) =
+        binarySearchMid (binarySearchRun S R' e ab) := by rw [hrun]
+    have hlastmem : binarySearchMid (binarySearchRun S R e ab) ∈
+        binarySearchPath S R (e + 1) ab := by simp [binarySearchPath]
+    have hdecision := h _ hlastmem
+    rw [hmid] at hdecision
+    simp only [binarySearchRun]
+    rw [hrun]
+    simp only [binarySearchStepR]
+    let P := binarySearchMid (binarySearchRun S R' e ab) * S ≤
+      R (binarySearchMid (binarySearchRun S R' e ab))
+    let Q := binarySearchMid (binarySearchRun S R' e ab) * S ≤
+      R' (binarySearchMid (binarySearchRun S R' e ab))
+    have hdec : P ↔ Q := by simpa [P, Q] using hdecision
+    by_cases hp : P
+    · have hq := hdec.mp hp
+      simp [P, Q, hp, hq]
+    · have hq : ¬ Q := by intro hq; exact hp (hdec.mpr hq)
+      simp [P, Q, hp, hq]
+
+private theorem gadgetSearchLeaf_eq_run {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    HypercubeRamsey.S04.searchLeaf β γ n g v =
+      binarySearchRun (HypercubeRamsey.S04.gadgetPower β γ n)
+        (HypercubeRamsey.S04.rankValue β γ n g v)
+        (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+        (0, HypercubeRamsey.S04.gadgetPower β γ n) := by
+  unfold HypercubeRamsey.S04.searchLeaf
+  change (List.range (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))).foldl
+      (fun st _ => binarySearchStepR (HypercubeRamsey.S04.gadgetPower β γ n)
+        (HypercubeRamsey.S04.rankValue β γ n g v) st)
+      (0, HypercubeRamsey.S04.gadgetPower β γ n) = _
+  exact foldl_range_binarySearchRun _ _ _ _
 
 private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
     (hS : S = 2 ^ e) (hzero : R 0 = 0) (hfinal : R S = S * S) :

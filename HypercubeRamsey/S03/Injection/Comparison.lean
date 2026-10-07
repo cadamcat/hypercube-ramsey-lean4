@@ -1579,6 +1579,116 @@ theorem likelihood_log_transfer (K₁ K₂ : ℝ) (hK₁ : 1 ≤ K₁) (hK₂ : 
         rw [relativeError]
         ring_nf
 
+open Classical in
+private theorem lane_q_inj_comp_ordinary_drift_reserved_formula
+    {d t : ℕ} (q : Fin t → Fin d → ℝ) (x : Path t d)
+    (j a : Fin t) (B : Finset (Fin d))
+    (hv : PrefixValid x j.val) (he : trackingError q x j.val ≤ 1 / 20)
+    (hm : 0 < availableMass q x j B) :
+    ∑ z : Option (Fin d), ordinaryWeight q x j B z * z.elim 0 (q a) =
+      (∑ y, if Free x j.val y ∧ y ∉ B then q j y * q a y else 0) /
+        availableMass q x j B := by
+  classical
+  have hactive : PrefixValid x j.val ∧ trackingError q x j.val ≤ 1 / 20 ∧
+      0 < availableMass q x j B := ⟨hv, he, hm⟩
+  calc
+    (∑ z : Option (Fin d), ordinaryWeight q x j B z * z.elim 0 (q a)) =
+        ∑ y, if Free x j.val y ∧ y ∉ B then
+          (q j y * q a y) / availableMass q x j B else 0 := by
+            simp only [ordinaryWeight, if_pos hactive, Fintype.sum_option,
+              Option.elim, mul_zero, zero_mul, ite_mul, zero_mul]
+            simp only [zero_add]
+            apply Finset.sum_congr rfl
+            intro y hy
+            by_cases hfree : Free x j.val y ∧ y ∉ B <;> simp [hfree, div_eq_mul_inv,
+              mul_assoc, mul_left_comm, mul_comm]
+    _ = (∑ y, if Free x j.val y ∧ y ∉ B then q j y * q a y else 0) /
+          availableMass q x j B := by
+            rw [Finset.sum_div]
+            apply Finset.sum_congr rfl
+            intro y hy
+            by_cases hfree : Free x j.val y ∧ y ∉ B <;> simp [hfree]
+
+open Classical in
+private theorem lane_q_inj_comp_available_mass_singleton
+    {d t : ℕ} (q : Fin t → Fin d → ℝ) (x : Path t d)
+    (j : Fin t) (z : Fin d) (hz : Free x j.val z) :
+    availableMass q x j {z} = availableMass q x j ∅ - q j z := by
+  classical
+  unfold availableMass
+  have hterm (w : Fin d) :
+      (if Free x j.val w ∧ w ∉ ({z} : Finset (Fin d)) then q j w else 0) =
+        (if Free x j.val w then q j w else 0) -
+          (if w = z then q j w else 0) := by
+    by_cases hw : Free x j.val w
+    · by_cases hwz : w = z
+      · subst w
+        simp [hz]
+      · simp [hw, hwz]
+    · by_cases hwz : w = z
+      · subst w
+        exact (hw hz).elim
+      · simp [hw, hwz]
+  calc
+    (∑ w, if Free x j.val w ∧ w ∉ ({z} : Finset (Fin d)) then q j w else 0) =
+        ∑ w, ((if Free x j.val w then q j w else 0) -
+          (if w = z then q j w else 0)) := by
+            apply Finset.sum_congr rfl
+            intro w hw
+            exact hterm w
+    _ = (∑ w, if Free x j.val w then q j w else 0) -
+          ∑ w, if w = z then q j w else 0 := by rw [Finset.sum_sub_distrib]
+    _ = availableMass q x j ∅ - q j z := by simp [availableMass]
+
+open Classical in
+private theorem lane_q_inj_comp_available_mass_singleton_no_effect
+    {d t : ℕ} (q : Fin t → Fin d → ℝ) (x : Path t d)
+    (j : Fin t) (z : Fin d) (hz : ¬ Free x j.val z) :
+    availableMass q x j {z} = availableMass q x j ∅ := by
+  unfold availableMass
+  apply Finset.sum_congr rfl
+  intro w hw
+  by_cases hfree : Free x j.val w
+  · have hwz : w ≠ z := by
+      intro heq
+      apply hz
+      simpa [heq] using hfree
+    simp [hfree, hwz]
+  · simp [hfree]
+
+open Classical in
+private theorem lane_q_inj_comp_weighted_mass_singleton
+    {d t : ℕ} (q : Fin t → Fin d → ℝ) (x : Path t d)
+    (j a : Fin t) (z : Fin d) (hz : Free x j.val z) :
+    (∑ w, if Free x j.val w ∧ w ≠ z then q j w * q a w else 0) =
+      (∑ w, if Free x j.val w then q j w * q a w else 0) -
+        q j z * q a z := by
+  classical
+  have hterm (w : Fin d) :
+      (if Free x j.val w ∧ w ≠ z then q j w * q a w else 0) =
+        (if Free x j.val w then q j w * q a w else 0) -
+          (if w = z then q j w * q a w else 0) := by
+    by_cases hfree : Free x j.val w
+    · by_cases hwz : w = z
+      · subst w
+        simp [hz]
+      · simp [hfree, hwz]
+    · by_cases hwz : w = z
+      · subst w
+        exact (hfree hz).elim
+      · simp [hfree, hwz]
+  calc
+    (∑ w, if Free x j.val w ∧ w ≠ z then q j w * q a w else 0) =
+        ∑ w, ((if Free x j.val w then q j w * q a w else 0) -
+          (if w = z then q j w * q a w else 0)) := by
+            apply Finset.sum_congr rfl
+            intro w hw
+            exact hterm w
+    _ = (∑ w, if Free x j.val w then q j w * q a w else 0) -
+          ∑ w, if w = z then q j w * q a w else 0 := by
+            rw [Finset.sum_sub_distrib]
+    _ = _ := by simp
+
 /-- TeX 03:727–732: one reservation and one forced draw have only atom-scale cumulative drift cost. -/
 theorem singleton_forcing_drift_stability :
     ∀ᶠ d : ℕ in atTop, ∀ t (q : Fin t → Fin d → ℝ), OrderedInput d t q →
@@ -1586,7 +1696,404 @@ theorem singleton_forcing_drift_stability :
       |∑ j : Fin t, if j.val < b.val then
         forcedStepDrift q {i} y x a j - stepDrift q x a j else 0| ≤
         1000 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
-  sorry
+  have hdecay95 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.95 : ℝ)))
+      atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.95 : ℝ))) ∘ fun n : ℕ => (n : ℝ))
+      atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : (0.95 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hdecay125 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(1 / 8 : ℝ)))
+      atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(1 / 8 : ℝ))) ∘ fun n : ℕ => (n : ℝ))
+      atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : (1 / 8 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  filter_upwards [
+    hdecay95.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 100)),
+    hdecay125.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8)),
+    eventually_ge_atTop 100] with d h95 h125 hd100
+  intro t q h i y htarget x a b hrun
+  classical
+  let M : ℝ := 10 * (d : ℝ) ^ (-(0.95 : ℝ))
+  let A : Fin t → ℝ := fun j => availableMass q x j ∅
+  let N : Fin t → ℝ := fun j =>
+    ∑ z, if Free x j.val z then q a z * q j z else 0
+  have hdNat : 0 < d := lt_of_lt_of_le (by decide : 0 < 100) h.dimension
+  have hd : 0 < (d : ℝ) := by exact_mod_cast hdNat
+  have hMnonneg : 0 ≤ M := by dsimp [M]; positivity
+  have hMsmall : M ≤ 1 / 10 := by
+    dsimp [M]
+    nlinarith [h95]
+  have hcolerr : 10 * (d : ℝ) ^ (-(1 / 8 : ℝ)) ≤ 5 / 4 := by
+    nlinarith [h125]
+  rcases hrun.1 with ⟨hvalidAll, hinjAll⟩
+  have hvalid (j : Fin t) (hjb : j.val < b.val) : PrefixValid x j.val := by
+    refine ⟨?_, ?_⟩
+    · intro k hk
+      exact hvalidAll k (lt_trans hk hjb)
+    · intro k l hk hl hkl
+      exact hinjAll k l (lt_trans hk hjb) (lt_trans hl hjb) hkl
+  have hstop (j : Fin t) (hjb : j.val < b.val) :
+      trackingError q x j.val ≤ 1 / 20 := hrun.2 j hjb
+  have hfreeMass (j : Fin t) (hjb : j.val < b.val) :
+      availableMass q x j ∅ = 1 - usedMass q x j j.val ∧
+        1 / 5 ≤ availableMass q x j ∅ :=
+    free_mass_before_stop q h x j (hvalid j hjb) (hstop j hjb)
+  have hprefixMass :
+      (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) ≤ 2 := by
+    let ib : Fin (t + 1) := ⟨i.val, by omega⟩
+    have hcol := h.column_prefix ib (y i)
+    have hratio : (i.val : ℝ) / d ≤ 3 / 4 := by
+      apply (div_le_iff₀ hd).2
+      have hi : (i.val : ℝ) ≤ (t : ℝ) := by exact_mod_cast (Nat.le_of_lt i.isLt)
+      nlinarith [h.horizon]
+    have hsum :
+        (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) ≤
+          (i.val : ℝ) / d + 10 * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+      have h := (abs_le.mp hcol).2
+      calc
+        (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) ≤
+            10 * (d : ℝ) ^ (-(1 / 8 : ℝ)) + (i.val : ℝ) / d := by
+              simpa [ib] using h
+        _ = (i.val : ℝ) / d + 10 * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by ring
+    calc
+      (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) ≤
+          (i.val : ℝ) / d + 10 * (d : ℝ) ^ (-(1 / 8 : ℝ)) := hsum
+      _ ≤ 3 / 4 + 5 / 4 := add_le_add hratio hcolerr
+      _ = 2 := by norm_num
+  have hNnonneg (j : Fin t) : 0 ≤ N j := by
+    dsimp [N]
+    apply Finset.sum_nonneg
+    intro z hz
+    split_ifs with hfree
+    · exact mul_nonneg (h.nonneg a z) (h.nonneg j z)
+    · exact le_rfl
+  have hNupper (j : Fin t) :
+      N j ≤ M * availableMass q x j ∅ := by
+    calc
+      N j ≤ ∑ z, if Free x j.val z then M * q j z else 0 := by
+        dsimp [N]
+        apply Finset.sum_le_sum
+        intro z hz
+        by_cases hf : Free x j.val z
+        · simp [hf]
+          exact mul_le_mul_of_nonneg_right (h.atom a z) (h.nonneg j z)
+        · simp [hf]
+      _ = M * (∑ z, if Free x j.val z then q j z else 0) := by
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro z hz
+        by_cases hf : Free x j.val z <;> simp [hf, mul_assoc]
+      _ = M * availableMass q x j ∅ := by simp [availableMass]
+  have hordinaryFormula (j : Fin t) (hjb : j.val < b.val) :
+      stepDrift q x a j = N j / availableMass q x j ∅ := by
+    have hseq := sequential_drift_increment q h x a j
+      (hvalid j hjb) (hstop j hjb)
+    rw [← (hfreeMass j hjb).1] at hseq
+    simpa [N, mul_comm] using hseq.1
+  have hordinaryRange (j : Fin t) (hjb : j.val < b.val) :
+      0 ≤ stepDrift q x a j ∧ stepDrift q x a j ≤ M := by
+    rw [hordinaryFormula j hjb]
+    constructor
+    · exact div_nonneg (hNnonneg j) (le_of_lt
+        (lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 5) (hfreeMass j hjb).2))
+    · apply (div_le_iff₀ (lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 5)
+        (hfreeMass j hjb).2)).2
+      calc
+        N j ≤ M * availableMass q x j ∅ := hNupper j
+        _ = M * availableMass q x j ∅ := rfl
+  have hforceAt (hbi : i.val < b.val) :
+      forcedStepDrift q {i} y x a i =
+        if Free x i.val (y i) then q a (y i) else 0 := by
+    have hv := hvalid i hbi
+    have he := hstop i hbi
+    have he' : trackingError q x i.val ≤ (20 : ℝ)⁻¹ := by
+      nlinarith [he]
+    have hiS : i ∈ ({i} : Finset (Fin t)) := by simp
+    classical
+    unfold forcedStepDrift
+    simp [forcingStepWeight, hiS, hv, he', Fintype.sum_option, Option.elim]
+  have hstepBound (j : Fin t) (hjb : j.val < b.val) :
+      |forcedStepDrift q {i} y x a j - stepDrift q x a j| ≤
+        if j.val < i.val then 100 * (d : ℝ) ^ (-(0.95 : ℝ)) * q j (y i)
+        else if j = i then M else 0 := by
+    by_cases hji : j.val < i.val
+    · by_cases hfree : Free x j.val (y i)
+      · have hmassRes := lane_q_inj_comp_available_mass_singleton
+          q x j (y i) hfree
+        have hr : 0 ≤ q j (y i) := h.nonneg j (y i)
+        have hrle : q j (y i) ≤ M := h.atom j (y i)
+        have hresLower :
+            1 / 10 ≤ availableMass q x j {y i} := by
+          rw [hmassRes]
+          have hbase := (hfreeMass j hjb).2
+          dsimp [M] at hMsmall hrle ⊢
+          nlinarith [hrle]
+        have hresPos : 0 < availableMass q x j {y i} :=
+          lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 10) hresLower
+        have hOrd := hordinaryFormula j hjb
+        have hforced :
+            forcedStepDrift q {i} y x a j =
+              (∑ z, if Free x j.val z ∧ z ∉ ({y i} : Finset (Fin d)) then
+                q j z * q a z else 0) / availableMass q x j {y i} := by
+          have hjS : j ∉ ({i} : Finset (Fin t)) := by
+            simp
+            exact ne_of_lt hji
+          have hpending : pendingLabels {i} y j = {y i} := by
+            unfold pendingLabels
+            have hfilter :
+                ({i} : Finset (Fin t)).filter (fun k => j.val < k.val) = {i} := by
+              ext k
+              simp only [Finset.mem_filter, Finset.mem_singleton]
+              constructor
+              · rintro ⟨hk, _⟩
+                exact hk
+              · intro hk
+                subst k
+                exact ⟨rfl, hji⟩
+            rw [hfilter]
+            exact Finset.image_singleton y i
+          unfold forcedStepDrift
+          simp only [forcingStepWeight, if_neg hjS]
+          rw [hpending]
+          exact lane_q_inj_comp_ordinary_drift_reserved_formula
+            q x j a {y i} (hvalid j hjb) (hstop j hjb) hresPos
+        have hnum :
+            (∑ z, if Free x j.val z ∧ z ∉ ({y i} : Finset (Fin d)) then
+              q j z * q a z else 0) = N j - q j (y i) * q a (y i) := by
+          simpa [N, mul_comm, mul_left_comm, mul_assoc] using
+            lane_q_inj_comp_weighted_mass_singleton q x j a (y i) hfree
+        rw [hnum, hmassRes] at hforced
+        have hApos : 0 < availableMass q x j ∅ :=
+          lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 5) (hfreeMass j hjb).2
+        have hdenPos : 0 < availableMass q x j ∅ - q j (y i) := by
+          rw [← hmassRes]
+          exact hresPos
+        have hdiff :
+            forcedStepDrift q {i} y x a j - stepDrift q x a j =
+              q j (y i) * (stepDrift q x a j - q a (y i)) /
+                (availableMass q x j ∅ - q j (y i)) := by
+          rw [hforced, hOrd]
+          field_simp [hApos.ne', hdenPos.ne'] <;> ring
+        have hqa0 : 0 ≤ q a (y i) := h.nonneg a (y i)
+        have hqaM : q a (y i) ≤ M := h.atom a (y i)
+        have hdiffRange :
+            |stepDrift q x a j - q a (y i)| ≤ M := by
+          apply abs_le.mpr
+          constructor <;> linarith [(hordinaryRange j hjb).1,
+            (hordinaryRange j hjb).2, hqa0, hqaM]
+        have hfactor : 1 ≤
+            10 * (availableMass q x j ∅ - q j (y i)) := by
+          rw [← hmassRes]
+          linarith [hresLower]
+        rw [hdiff, abs_div, abs_mul, abs_of_nonneg hr, abs_of_pos hdenPos]
+        simp only [if_pos hji]
+        have hbase :
+            q j (y i) * |stepDrift q x a j - q a (y i)| ≤
+              q j (y i) * M :=
+          mul_le_mul_of_nonneg_left hdiffRange hr
+        have hscale :
+            q j (y i) * M ≤
+              10 * q j (y i) * M *
+                (availableMass q x j ∅ - q j (y i)) := by
+          have hnonneg : 0 ≤ q j (y i) * M := mul_nonneg hr hMnonneg
+          calc
+            q j (y i) * M = 1 * (q j (y i) * M) := by ring
+            _ ≤ (10 * (availableMass q x j ∅ - q j (y i))) *
+                (q j (y i) * M) :=
+              mul_le_mul_of_nonneg_right hfactor hnonneg
+            _ = 10 * q j (y i) * M *
+                (availableMass q x j ∅ - q j (y i)) := by ring
+        have hquot :
+            q j (y i) * |stepDrift q x a j - q a (y i)| /
+                (availableMass q x j ∅ - q j (y i)) ≤ 10 * q j (y i) * M :=
+          (div_le_iff₀ hdenPos).2 (hbase.trans hscale)
+        have hcoeff :
+            10 * q j (y i) * M =
+              100 * (d : ℝ) ^ (-(0.95 : ℝ)) * q j (y i) := by
+          dsimp [M]
+          ring
+        simpa [hcoeff] using hquot
+      · have hmassSame := lane_q_inj_comp_available_mass_singleton_no_effect
+          q x j (y i) hfree
+        have hOrd := hordinaryFormula j hjb
+        have hforced :
+            forcedStepDrift q {i} y x a j =
+              (∑ z, if Free x j.val z ∧ z ∉ ({y i} : Finset (Fin d)) then
+                q j z * q a z else 0) / availableMass q x j {y i} := by
+          have hjS : j ∉ ({i} : Finset (Fin t)) := by
+            simp
+            exact ne_of_lt hji
+          have hpending : pendingLabels {i} y j = {y i} := by
+            unfold pendingLabels
+            have hfilter :
+                ({i} : Finset (Fin t)).filter (fun k => j.val < k.val) = {i} := by
+              ext k
+              simp only [Finset.mem_filter, Finset.mem_singleton]
+              constructor
+              · rintro ⟨hk, _⟩
+                exact hk
+              · intro hk
+                subst k
+                exact ⟨rfl, hji⟩
+            rw [hfilter]
+            exact Finset.image_singleton y i
+          unfold forcedStepDrift
+          simp only [forcingStepWeight, if_neg hjS]
+          rw [hpending]
+          exact lane_q_inj_comp_ordinary_drift_reserved_formula
+            q x j a {y i} (hvalid j hjb) (hstop j hjb)
+            (by
+              rw [hmassSame]
+              exact (lt_of_lt_of_le
+                (by norm_num : (0 : ℝ) < 1 / 5) ((hfreeMass j hjb).2)))
+        have hnum :
+            (∑ z, if Free x j.val z ∧ z ∉ ({y i} : Finset (Fin d)) then
+              q j z * q a z else 0) = N j := by
+          dsimp [N]
+          apply Finset.sum_congr rfl
+          intro z hz
+          by_cases hzfree : Free x j.val z
+          · have hzneq : z ≠ y i := by
+              intro hEq
+              apply hfree
+              simpa [hEq] using hzfree
+            simp [hzfree, hzneq]
+            ring
+          · simp [hzfree]
+        rw [hnum, hmassSame] at hforced
+        rw [hforced, hOrd]
+        have hcoeff : 0 ≤ 100 * (d : ℝ) ^ (-(0.95 : ℝ)) := by positivity
+        simp only [sub_self, abs_zero, if_pos hji]
+        exact mul_nonneg hcoeff (h.nonneg j (y i))
+    · by_cases hEq : j = i
+      · subst j
+        have hforced := hforceAt hjb
+        have hqa0 : 0 ≤ q a (y i) := h.nonneg a (y i)
+        have hqaM : q a (y i) ≤ M := h.atom a (y i)
+        have hforcedRange :
+            0 ≤ forcedStepDrift q {i} y x a i ∧
+              forcedStepDrift q {i} y x a i ≤ M := by
+          rw [hforced]
+          by_cases hf : Free x i.val (y i) <;> simp [hf, hqa0, hqaM, hMnonneg]
+        have hordinary := hordinaryRange i hjb
+        have habs :
+            |forcedStepDrift q {i} y x a i - stepDrift q x a i| ≤ M :=
+          abs_le.mpr ⟨by linarith [hforcedRange.1, hordinary.2],
+            by linarith [hforcedRange.2, hordinary.1]⟩
+        simpa [hji] using habs
+      · have hgt : i.val < j.val := by omega
+        have hjS : j ∉ ({i} : Finset (Fin t)) := by
+          simp
+          exact hEq
+        have hpending : pendingLabels {i} y j = ∅ := by
+          unfold pendingLabels
+          have hfilter :
+              ({i} : Finset (Fin t)).filter (fun k => j.val < k.val) = ∅ := by
+            ext k
+            simp [Finset.mem_filter, hji]
+            omega
+          rw [hfilter]
+          simp
+        have hforceEq :
+            forcedStepDrift q {i} y x a j = stepDrift q x a j := by
+          unfold forcedStepDrift stepDrift
+          apply Finset.sum_congr rfl
+          intro z hz
+          simp [forcingStepWeight, hjS, hpending]
+        simp only [if_neg hji, if_neg hEq]
+        rw [hforceEq]
+        simp
+  have hsumBound :
+      (∑ j : Fin t, if j.val < b.val then
+        if j.val < i.val then
+          100 * (d : ℝ) ^ (-(0.95 : ℝ)) * q j (y i)
+        else if j = i then M else 0 else 0) ≤
+        100 * (d : ℝ) ^ (-(0.95 : ℝ)) *
+            (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) + M := by
+    calc
+      _ ≤ ∑ j : Fin t,
+          ((if j.val < i.val then
+              100 * (d : ℝ) ^ (-(0.95 : ℝ)) * q j (y i) else 0) +
+            (if j = i then M else 0)) := by
+              apply Finset.sum_le_sum
+              intro j hj
+              by_cases hjb : j.val < b.val
+              · simp only [if_pos hjb]
+                by_cases hji : j.val < i.val
+                · have hne : j ≠ i := by
+                    intro heq
+                    subst j
+                    omega
+                  simp [hji, hne]
+                · by_cases hEq : j = i <;> simp [hji, hEq]
+              · simp only [if_neg hjb]
+                by_cases hji : j.val < i.val
+                · have hq0 := h.nonneg j (y i)
+                  have hc0 : 0 ≤ 100 * (d : ℝ) ^ (-(0.95 : ℝ)) := by positivity
+                  simp [hji]
+                  exact add_nonneg (mul_nonneg hc0 hq0) (by positivity)
+                · by_cases hEq : j = i
+                  · simp [hji, hEq]
+                    exact hMnonneg
+                  · simp [hji, hEq]
+      _ = (∑ j : Fin t,
+            if j.val < i.val then
+              100 * (d : ℝ) ^ (-(0.95 : ℝ)) * q j (y i) else 0) +
+            ∑ j : Fin t, if j = i then M else 0 := by
+              rw [Finset.sum_add_distrib]
+      _ = 100 * (d : ℝ) ^ (-(0.95 : ℝ)) *
+            (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) + M := by
+              calc
+                _ = (∑ j : Fin t,
+                      100 * (d : ℝ) ^ (-(0.95 : ℝ)) *
+                        (if j.val < i.val then q j (y i) else 0)) +
+                      ∑ j : Fin t, if j = i then M else 0 := by
+                        congr 1
+                        · apply Finset.sum_congr rfl
+                          intro j hj
+                          by_cases hji : j.val < i.val <;> simp [hji]
+                _ = 100 * (d : ℝ) ^ (-(0.95 : ℝ)) *
+                      (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) + M := by
+                        rw [Finset.mul_sum]
+                        simp
+  have hsumAbs :
+      |∑ j : Fin t, if j.val < b.val then
+        forcedStepDrift q {i} y x a j - stepDrift q x a j else 0| ≤
+        ∑ j : Fin t, if j.val < b.val then
+          |forcedStepDrift q {i} y x a j - stepDrift q x a j| else 0 := by
+    calc
+      _ ≤ ∑ j : Fin t,
+          |if j.val < b.val then
+            forcedStepDrift q {i} y x a j - stepDrift q x a j else 0| :=
+        Finset.abs_sum_le_sum_abs _ _
+      _ = _ := by
+        apply Finset.sum_congr rfl
+        intro j hj
+        by_cases hjb : j.val < b.val <;> simp [hjb]
+  calc
+    |∑ j : Fin t, if j.val < b.val then
+        forcedStepDrift q {i} y x a j - stepDrift q x a j else 0| ≤
+        ∑ j : Fin t, if j.val < b.val then
+          |forcedStepDrift q {i} y x a j - stepDrift q x a j| else 0 := hsumAbs
+    _ ≤ ∑ j : Fin t, if j.val < b.val then
+          if j.val < i.val then
+            100 * (d : ℝ) ^ (-(0.95 : ℝ)) * q j (y i)
+          else if j = i then M else 0 else 0 := by
+            apply Finset.sum_le_sum
+            intro j hj
+            by_cases hjb : j.val < b.val
+            · simp only [if_pos hjb]
+              exact hstepBound j hjb
+            · simp [hjb]
+    _ ≤ 100 * (d : ℝ) ^ (-(0.95 : ℝ)) *
+          (∑ j : Fin t, if j.val < i.val then q j (y i) else 0) + M := hsumBound
+    _ ≤ 100 * (d : ℝ) ^ (-(0.95 : ℝ)) * 2 + M := by
+          have hcoef : 0 ≤ 100 * (d : ℝ) ^ (-(0.95 : ℝ)) := by positivity
+          exact add_le_add (mul_le_mul_of_nonneg_left hprefixMass hcoef) le_rfl
+    _ ≤ 1000 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+          dsimp [M]
+          nlinarith [Real.rpow_nonneg hd.le (-(0.95 : ℝ))]
 
 /-- Concentration is under the forcing law, independent of the target's atom size. -/
 theorem forced_martingale_concentration :

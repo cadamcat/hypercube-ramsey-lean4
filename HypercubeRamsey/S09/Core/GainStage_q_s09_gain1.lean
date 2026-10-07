@@ -508,18 +508,89 @@ private theorem coreHit_mass_lower_regular9 {P : Params9} {n N : ℕ} {M : TagMi
     exact prefixMass_lower9 S I E G ω (siteSecond9 S b.1.1) ord ord.length le_rfl (hdegrees ord.length le_rfl)
   have hpow : (49 / 100 : ℝ) ^ coreCount9 I v b.1 ≤ (49 / 100 : ℝ) ^ ord.length :=
     pow_le_pow_of_le_one (by norm_num) (by norm_num) hlen
+  have hset : (ord.take ord.length).toFinset = coreIDs9 I v b.1 := by
+    have htake : (coreIDs9 I v b.1).toList.take (coreIDs9 I v b.1).card =
+        (coreIDs9 I v b.1).toList := by
+      simpa using List.take_length (coreIDs9 I v b.1).toList
+    simpa [ord, coreOrder9] using congrArg List.toFinset htake
   have hmassEq : prefixMass9 E G ω (siteSecond9 S b.1.1) ord ord.length =
       ∑ y ∈ coreHitSet9 E G ω v b.1, (siteSecond9 S b.1.1).w y := by
     unfold prefixMass9
-    change (∑ y ∈ hitSet9 E G ω
-        ((coreIDs9 I v b.1).toList.take ((coreIDs9 I v b.1).toList.length)).toFinset,
-          (siteSecond9 S b.1.1).w y) = _
-    rw [List.take_length]
-    simp [coreHitSet9]
+    rw [hset]
+    rfl
   calc
     (49 / 100 : ℝ) ^ coreCount9 I v b.1 ≤ (49 / 100 : ℝ) ^ ord.length := hpow
     _ ≤ prefixMass9 E G ω (siteSecond9 S b.1.1) ord ord.length := hmassLen
     _ = ∑ y ∈ coreHitSet9 E G ω v b.1, (siteSecond9 S b.1.1).w y := hmassEq
+
+private theorem orderRegular_update_anchor9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} {E : Fin N → Fin N → Prop} {G : Colour}
+    (ω : Outcome9 I N) (c : I.ID) (x : Fin N) (base : Law N) (ord : List I.ID)
+    (hnot : c ∉ ord.toFinset) :
+    orderRegular9 E G (Function.update ω (Sum.inl c) x) base ord ↔
+      orderRegular9 E G ω base ord := by
+  classical
+  have hnotTake (j : ℕ) (hj : j ≤ ord.length) : c ∉ (ord.take j).toFinset := by
+    intro hc
+    have hmem : c ∈ ord.take j := List.mem_toFinset.mp hc
+    rcases List.mem_take_iff_getElem.mp hmem with ⟨i, hi, hget⟩
+    have hmemOrd : c ∈ ord := by
+      exact List.mem_iff_getElem.mpr ⟨i, lt_of_lt_of_le hi (Nat.min_le_right _ _), hget⟩
+    exact hnot (List.mem_toFinset.mpr hmemOrd)
+  have hanchor (d : I.ID) (hd : d ∈ ord) :
+      anc9 (Function.update ω (Sum.inl c) x) d = anc9 ω d := by
+    have hne : d ≠ c := by
+      intro heq
+      subst d
+      exact hnot (List.mem_toFinset.mpr hd)
+    simp [anc9, Function.update, Sum.inl.injEq, hne]
+    rfl
+  constructor
+  · intro h k d hget hprev
+    have hklt : k < ord.length := (List.getElem?_eq_some_iff.mp hget).choose
+    have hdmem : d ∈ ord := by
+      rcases List.getElem?_eq_some_iff.mp hget with ⟨hk, heq⟩
+      exact List.mem_iff_getElem.mpr ⟨k, hk, heq⟩
+    have hprev' : ∀ j d', j < k → ord[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 (Function.update ω (Sum.inl c) x) d')
+          (prefixLaw9 E G (Function.update ω (Sum.inl c) x) base ord j) := by
+      intro j d' hj hget'
+      have hd'mem : d' ∈ ord := by
+        rcases List.getElem?_eq_some_iff.mp hget' with ⟨hj', heq⟩
+        exact List.mem_iff_getElem.mpr ⟨j, hj', heq⟩
+      have hAnc := hanchor d' hd'mem
+      have hLaw := @prefixLaw_update_anchor9 P n N M I E G ω c x base ord j
+        (hnotTake j (by omega))
+      rw [hAnc, hLaw]
+      exact hprev j d' hj hget'
+    have hAnc := hanchor d hdmem
+    have hLaw := @prefixLaw_update_anchor9 P n N M I E G ω c x base ord k
+      (hnotTake k (Nat.le_of_lt hklt))
+    have h := h k d hget hprev'
+    rw [hAnc, hLaw] at h
+    exact h
+  · intro h k d hget hprev
+    have hklt : k < ord.length := (List.getElem?_eq_some_iff.mp hget).choose
+    have hdmem : d ∈ ord := by
+      rcases List.getElem?_eq_some_iff.mp hget with ⟨hk, heq⟩
+      exact List.mem_iff_getElem.mpr ⟨k, hk, heq⟩
+    have hprev' : ∀ j d', j < k → ord[j]? = some d' →
+        (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω d') (prefixLaw9 E G ω base ord j) := by
+      intro j d' hj hget'
+      have hd'mem : d' ∈ ord := by
+        rcases List.getElem?_eq_some_iff.mp hget' with ⟨hj', heq⟩
+        exact List.mem_iff_getElem.mpr ⟨j, hj', heq⟩
+      have hAnc := hanchor d' hd'mem
+      have hLaw := @prefixLaw_update_anchor9 P n N M I E G ω c x base ord j
+        (hnotTake j (by omega))
+      rw [← hAnc, ← hLaw]
+      exact hprev j d' hj hget'
+    have hAnc := hanchor d hdmem
+    have hLaw := @prefixLaw_update_anchor9 P n N M I E G ω c x base ord k
+      (hnotTake k (Nat.le_of_lt hklt))
+    have h := h k d hget hprev'
+    rw [← hAnc, ← hLaw] at h
+    exact h
 
 private theorem exists_badPrefix_of_not_orderRegular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)

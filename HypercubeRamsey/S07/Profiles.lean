@@ -1,5 +1,6 @@
 import HypercubeRamsey.S07.FilterNodes
 import HypercubeRamsey.S03.Mixtures
+import HypercubeRamsey.S07.Profiles_q_s07_prof
 
 /-!
 # L7.1, Step 1: the finite menu and the tag profiles
@@ -17,13 +18,13 @@ index the menu by the support pairs carrying a witness inside `(X, Y)` and choos
 theorem menu7_of_available {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
     {d p κ : ℝ} (hκ : 0 ≤ κ) (h : AvailableAt κ (PGridPure G d p).toPatch n N E X Y) :
     Nonempty (Menu7 n N E G X Y d p κ) := by
-  sorry
+  exact menu7_of_available_q_s07_prof hκ h
 
 /-- Lemma 3.3, first assertion, with subprobability second outputs (TeX 03, Lemma 3.3; used at 07:126–132): the
 separation argument of `balanced_mixture`, where each second output is a subprobability vanishing on the
 removed labels. -/
 theorem balanced_mixture_sub : BalancedSub := by
-  sorry
+  exact balanced_mixture_sub_q_s07_prof
 
 /-- L7.1c (07:116–134): tag profiles with constant `K' = 4/κ`.  One player per grid key in Lemma 3.3's
 simultaneous-profile part; player `g`'s outputs are `μ_{i_g}` and the raw mean of its odd rows averaged over the
@@ -34,6 +35,6 @@ theorem grid_profiles (hBS : BalancedSub) {d : ℝ} {n s ℓ q N : ℕ} {E : Fin
     {G : Colour} {X Y : Finset (Fin N)} {p κ : ℝ} (Γ : GridGeom d n s ℓ q)
     (M : Menu7 n N E G X Y d p κ) (hκ : 0 < κ) (hN : 0 < N) (hrow : RowLaw Γ M) :
     Nonempty (Profiles7 Γ M (4 / κ)) := by
-  sorry
+  exact grid_profiles_q_s07_prof hBS Γ M hκ hN hrow
 
 end HypercubeRamsey.S07

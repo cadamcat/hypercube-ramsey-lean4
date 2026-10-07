@@ -2,6 +2,7 @@ import HypercubeRamsey.S09.Map.Device
 import HypercubeRamsey.S03.Height.Selection
 import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 import HypercubeRamsey.Framework.FinProbLemmas
+import Mathlib.Data.Nat.Choose.Bounds
 
 /-!
 Private support for lane `q-s09-map`.  This file contains translations from the
@@ -11,6 +12,7 @@ slice-indexed Section 9 experiment to the generic Section 3 height estimates.
 namespace HypercubeRamsey.Lane_q_s09_map
 
 open OAI.HypercubeRamsey Classical
+open Filter
 open scoped BigOperators
 
 set_option maxHeartbeats 600000
@@ -389,6 +391,197 @@ theorem height_counts9_of_bounds (P : Params9) (hc : HeightChoice9 P) (n : ℕ)
   · simpa [heightParams9] using hr
   · simpa [heightParams9, HDParams.V, residualBall9, Real.rpow_natCast] using hprob
   · simpa only [heightParams9, Real.rpow_natCast] using htail
+
+private theorem eventually_nat_rpow_le_quarter {a : ℝ} (ha : a < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, (n : ℝ) ^ a ≤ (n : ℝ) / 4 := by
+  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ (a - 1)) atTop (nhds 0) := by
+    have h := (tendsto_rpow_neg_atTop (sub_pos.mpr ha)).comp tendsto_natCast_atTop_atTop
+    simpa [Function.comp_def, neg_sub] using h
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (hT.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 4)))
+  refine ⟨max 2 n₀, ?_⟩
+  intro n hn
+  have hn2 : 2 ≤ n := le_trans (le_max_left 2 n₀) hn
+  have hn₀' : n₀ ≤ n := le_trans (le_max_right 2 n₀) hn
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hsmall : (n : ℝ) ^ (a - 1) < 1 / 4 := hn₀ n hn₀'
+  have hmul := mul_lt_mul_of_pos_right hsmall hnreal
+  have hpow : (n : ℝ) ^ (a - 1) * (n : ℝ) = (n : ℝ) ^ a := by
+    calc
+      (n : ℝ) ^ (a - 1) * (n : ℝ) =
+          (n : ℝ) ^ (a - 1) * (n : ℝ) ^ 1 := by rw [Real.rpow_one]
+      _ = (n : ℝ) ^ ((a - 1) + 1) := (Real.rpow_add hnreal _ _).symm
+      _ = (n : ℝ) ^ a := by congr 1 <;> ring
+  rw [hpow] at hmul
+  nlinarith
+
+private theorem eventually_floor_rpow_ge_eleven {a : ℝ} (ha : 0 < a) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, 11 ≤ ⌊(n : ℝ) ^ a⌋₊ := by
+  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ a) atTop atTop :=
+    (tendsto_rpow_atTop ha).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (Filter.tendsto_atTop.1 hT 11)
+  refine ⟨max 1 n₀, ?_⟩
+  intro n hn
+  have hn₀' : n₀ ≤ n := le_trans (le_max_right 1 n₀) hn
+  have hlarge : (11 : ℝ) ≤ (n : ℝ) ^ a := hn₀ n hn₀'
+  exact Nat.le_floor hlarge
+
+private theorem params9_small_internal_scales (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (P.m n : ℝ) ≤ (n : ℝ) / 4 ∧
+      (P.radius n : ℝ) ≤ (n : ℝ) / 4 ∧ 11 ≤ P.radius n := by
+  rcases hP with ⟨hcommon, hminus, hx, hσ, hχ, hgap, hcaseValid⟩
+  rcases hσ with ⟨hσpos, hσsmall⟩
+  have hσposR : 0 < (P.σ : ℝ) := by exact_mod_cast hσpos
+  have hσlt1q : P.σ < 1 := by
+    have hxS : P.xS < 1 := lt_trans hcommon.2.1 (lt_trans hcommon.2.2 (by norm_num))
+    linarith
+  have hσlt1 : (P.σ : ℝ) < 1 := by exact_mod_cast hσlt1q
+  obtain ⟨nσhi, hσhi⟩ := eventually_nat_rpow_le_quarter hσlt1
+  obtain ⟨nσlo, hσlo⟩ := eventually_floor_rpow_ge_eleven hσposR
+  have hm : ∃ nₘ : ℕ, ∀ n ≥ nₘ, (P.m n : ℝ) ≤ (n : ℝ) / 4 := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        have hv : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧
+            1 - P.σ < yD ∧ yD < 1 ∧ P.χ < P.σ / 10 := by
+          simpa [hbranch] using hcaseValid
+        have hyMq : yM < 1 := by linarith [hv.2.2.1, hσpos]
+        have hyM : (yM : ℝ) < 1 := by exact_mod_cast hyMq
+        obtain ⟨nₘ, hsmall⟩ := eventually_nat_rpow_le_quarter hyM
+        refine ⟨max 2 nₘ, ?_⟩
+        intro n hn
+        have hnₘ : nₘ ≤ n := le_trans (le_max_right 2 nₘ) hn
+        have hfloor : (P.m n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) := by
+          rw [Params9.m, hbranch]
+          exact Nat.floor_le (show 0 ≤ (n : ℝ) ^ (yM : ℝ) by positivity)
+        exact hfloor.trans (hsmall n hnₘ)
+    | lin αS αD hB yB =>
+        have hv : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+            P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+          simpa [hbranch] using hcaseValid
+        have h100pos : 0 < (100 : ℚ) * αS := hv.1
+        have hαDposq : 0 < αD := lt_trans h100pos hv.2.1
+        have hαDpos : (0 : ℝ) < (αD : ℝ) := by exact_mod_cast hαDposq
+        have hαDq : αD < (1 : ℚ) / 100 := hv.2.2.1
+        have hαD : (αD : ℝ) < (1 : ℝ) / 100 := by
+          have hcast : (αD : ℝ) < (((1 : ℚ) / 100 : ℚ) : ℝ) :=
+            Rat.cast_lt.mpr hαDq
+          simpa using hcast
+        refine ⟨2, ?_⟩
+        intro n hn
+        have hnreal : 0 ≤ (n : ℝ) := by positivity
+        have hlin : (P.m n : ℝ) ≤ (αD : ℝ) * (n : ℝ) / 10 := by
+          rw [Params9.m, hbranch]
+          exact Nat.floor_le (show 0 ≤ (αD : ℝ) * (n : ℝ) / 10 by positivity)
+        have hnquarter : (αD : ℝ) * (n : ℝ) / 10 ≤ (n : ℝ) / 4 := by
+          nlinarith
+        exact hlin.trans hnquarter
+  obtain ⟨nₘ, hm⟩ := hm
+  refine ⟨max 2 (max nσhi (max nσlo nₘ)), ?_⟩
+  intro n hn
+  have hn2 : 2 ≤ n := le_trans (le_max_left 2 _) hn
+  have houter : max nσhi (max nσlo nₘ) ≤ n := le_trans (le_max_right 2 _) hn
+  have hrest : max nσlo nₘ ≤ n := le_trans (le_max_right nσhi _) houter
+  have hnσhi : nσhi ≤ n := le_trans (le_max_left nσhi _) houter
+  have hnσlo : nσlo ≤ n := le_trans (le_max_left nσlo nₘ) hrest
+  have hnₘ : nₘ ≤ n := le_trans (le_max_right nσlo nₘ) hrest
+  have hm' := hm n hnₘ
+  have hσhi' := hσhi n hnσhi
+  have hσlo' := hσlo n hnσlo
+  have hradius : (P.radius n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) := by
+    exact Nat.floor_le (by positivity)
+  exact ⟨hm', hradius.trans hσhi', hσlo'⟩
+
+theorem height_counts9_volume_bounds (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      0 < residualBall9 P n ∧ P.radius n ≤ n - P.m n ∧
+      (n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ) ≤ 1 := by
+  obtain ⟨nGeom, hGeom⟩ := params9_small_internal_scales P hP
+  let C : ℕ := 2 ^ 11 * Nat.factorial 11
+  refine ⟨max nGeom C, ?_⟩
+  intro n hn
+  have hnGeom : nGeom ≤ n := le_trans (le_max_left nGeom C) hn
+  have hnC : C ≤ n := le_trans (le_max_right nGeom C) hn
+  have hsmall := hGeom n hnGeom
+  have hn100 : 100 ≤ n := by
+    have hC : 100 ≤ C := by norm_num [C]
+    omega
+  have hmreal : (P.m n : ℝ) ≤ (n : ℝ) / 4 := hsmall.1
+  have hrreal : (P.radius n : ℝ) ≤ (n : ℝ) / 4 := hsmall.2.1
+  have hmnreal : (P.m n : ℝ) ≤ (n : ℝ) := by linarith
+  have hmn : P.m n ≤ n := by exact_mod_cast hmnreal
+  have hdcast : ((n - P.m n : ℕ) : ℝ) = (n : ℝ) - (P.m n : ℝ) := by
+    exact Nat.cast_sub hmn
+  let d : ℕ := n - P.m n
+  have hdthree : 3 * (n : ℝ) / 4 ≤ (d : ℝ) := by
+    dsimp [d]
+    rw [hdcast]
+    nlinarith
+  have hdlarge : 75 ≤ d := by
+    have hn100R : (100 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn100
+    have hreal : (75 : ℝ) ≤ (d : ℝ) := by nlinarith
+    exact_mod_cast hreal
+  have hradiusDreal : (P.radius n : ℝ) ≤ (d : ℝ) := by
+    have hdc : (d : ℝ) = (n : ℝ) - (P.m n : ℝ) := by
+      dsimp [d]
+      exact hdcast
+    rw [hdc]
+    nlinarith
+  have hradiusD : P.radius n ≤ d := by exact_mod_cast hradiusDreal
+  have hchoose :
+      ((d + 1 - 11 : ℕ) : ℝ) ^ 11 / (Nat.factorial 11 : ℝ) ≤
+        (Nat.choose d 11 : ℝ) := by
+    exact Nat.pow_le_choose 11 d
+  have hsubcast : ((d + 1 - 11 : ℕ) : ℝ) = (d : ℝ) + 1 - 11 := by
+    rw [Nat.cast_sub (by omega : 11 ≤ d + 1)]
+    norm_num
+  have hn100R : (100 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn100
+  have hshift : (n : ℝ) / 2 ≤ ((d + 1 - 11 : ℕ) : ℝ) := by
+    rw [hsubcast]
+    nlinarith [hdthree, hn100R]
+  have hpow : ((n : ℝ) / 2) ^ 11 ≤ ((d + 1 - 11 : ℕ) : ℝ) ^ 11 := by
+    gcongr
+  have hchooseLower :
+      (n : ℝ) ^ 11 / ((2 : ℝ) ^ 11 * (Nat.factorial 11 : ℝ)) ≤
+        (Nat.choose d 11 : ℝ) := by
+    have heq : (n : ℝ) ^ 11 / ((2 : ℝ) ^ 11 * (Nat.factorial 11 : ℝ)) =
+        ((n : ℝ) / 2) ^ 11 / (Nat.factorial 11 : ℝ) := by
+      field_simp
+      <;> ring
+    rw [heq]
+    exact (div_le_div_of_nonneg_right hpow (by positivity)).trans hchoose
+  have hball : Nat.choose d 11 ≤ residualBall9 P n := by
+    unfold residualBall9
+    apply Finset.single_le_sum
+    · intro i hi
+      exact Nat.zero_le _
+    · exact Finset.mem_range.mpr (by have := hsmall.2.2; dsimp [Params9.radius] at this; omega)
+  have hballReal : (Nat.choose d 11 : ℝ) ≤ (residualBall9 P n : ℝ) := by exact_mod_cast hball
+  have hCcast : (C : ℝ) = (2 : ℝ) ^ 11 * (Nat.factorial 11 : ℝ) := by norm_num [C]
+  have hCpos : 0 < (C : ℝ) := by positivity
+  have hnCReal : (C : ℝ) ≤ (n : ℝ) := by exact_mod_cast hnC
+  have hratio : (n : ℝ) ^ 10 ≤
+      (n : ℝ) ^ 11 / ((2 : ℝ) ^ 11 * (Nat.factorial 11 : ℝ)) := by
+    rw [← hCcast]
+    apply (le_div_iff₀ hCpos).2
+    have hmul := mul_le_mul_of_nonneg_left hnCReal (by positivity : 0 ≤ (n : ℝ) ^ 10)
+    rw [pow_succ]
+    nlinarith [hmul]
+  have hvolumeNat : (n : ℝ) ^ (10 : ℕ) ≤ (residualBall9 P n : ℝ) :=
+    hratio.trans hchooseLower |>.trans hballReal
+  have hvolume : (n : ℝ) ^ (10 : ℝ) ≤ (residualBall9 P n : ℝ) := by
+    rw [show (10 : ℝ) = ((10 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+    exact hvolumeNat
+  have hVposNat : 0 < residualBall9 P n := by
+    have hnpositive : 0 < (n : ℝ) ^ (10 : ℝ) := by positivity
+    have : 0 < (residualBall9 P n : ℝ) := lt_of_lt_of_le hnpositive hvolume
+    exact_mod_cast this
+  have hVpos : (0 : ℝ) < (residualBall9 P n : ℝ) := by exact_mod_cast hVposNat
+  have hprob : (n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ) ≤ 1 := by
+    rw [div_le_one₀ hVpos]
+    exact hvolume
+  exact ⟨hVposNat, hradiusD, hprob⟩
 
 private theorem active_center_of_good_heights
     (Pp A : Pos9 P hc n → Bool) (hg : GoodHeights9 Pp A) (v : CubeVertex n) :

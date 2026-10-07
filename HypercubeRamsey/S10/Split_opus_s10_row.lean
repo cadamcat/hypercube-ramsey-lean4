@@ -1,6 +1,7 @@
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
 import HypercubeRamsey.S10.LocalNodes
 import HypercubeRamsey.Framework.Props
+import HypercubeRamsey.S10.Split_opus_s10_tagged
 
 /-!
 # Section 10: split of the even-row construction (TeX 10:23–294)
@@ -783,6 +784,7 @@ theorem patchMenu_of_available {n N : ℕ} {E : Fin N → Fin N → Prop}
         intro j _
         rw [hD i j y (fun hyB => (Finset.mem_sdiff.mp (hB i hyB)).2 hy), mul_zero] }⟩
 
+set_option maxHeartbeats 4000000 in
 /-- **Sub-lemma (d)**, TeX 10:23–262: the construction. For every clock
 exponent `A`, in the large regime, the menu and the initial discrepancy give a
 `TaggedSystem`. This carries P10.1b (definitions and randomization order),
@@ -800,7 +802,205 @@ theorem tagged_of_menu (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ
       DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
       PatchMenu n N E X Y G ζ δ κ →
       Nonempty (TaggedSystem n N E G A) := by
-  sorry
+  classical
+  have hδ1 : δ < 1 / 2000 := by
+    have : min (min η₀ ζ) 1 ≤ 1 := min_le_right _ _
+    linarith
+  obtain ⟨n2, h2⟩ := Lane_opus_s10_tagged.d2_valid_whp η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n3, h3⟩ := Lane_opus_s10_tagged.d3_tilt_caps η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n4, h4⟩ := Lane_opus_s10_tagged.d4_mask_strategy η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n5, h5⟩ := Lane_opus_s10_tagged.d5_odd_mean_cap η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n7a, h7a⟩ := Lane_opus_s10_tagged.d7a_predictive_failure η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n7b, h7b⟩ := Lane_opus_s10_tagged.d7b_even_row_cap η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n7c, h7c⟩ := Lane_opus_s10_tagged.d7c_even_mean_cap η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n8, h8⟩ := Lane_opus_s10_tagged.d8d_near_fractions δ hδ hδ1
+  obtain ⟨n9, h9⟩ := Lane_opus_s10_tagged.d9_balanced_response η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n10, C10, h10⟩ := Lane_opus_s10_tagged.d10_budget η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ A
+  refine ⟨max n10 (max n2 (max n3 (max n4 (max n5 (max n7a (max n7b (max n7c
+    (max n8 n9)))))))), C10, ?_⟩
+  intro n N E X Y G hlarge hdisc menu
+  have hn0 := hlarge.1
+  have hn10 : n10 ≤ n := by omega
+  have hn2 : n2 ≤ n := by omega
+  have hn3 : n3 ≤ n := by omega
+  have hn4 : n4 ≤ n := by omega
+  have hn5 : n5 ≤ n := by omega
+  have hn7a : n7a ≤ n := by omega
+  have hn7b : n7b ≤ n := by omega
+  have hn7c : n7c ≤ n := by omega
+  have hn8 : n8 ≤ n := by omega
+  have hn9 : n9 ≤ n := by omega
+  obtain ⟨⟨hnpos, h2n, hatom⟩, hbudget⟩ := h10 n N ⟨hn10, hlarge.2.1, hlarge.2.2⟩
+  have hNle : N ≤ n * 2 ^ n := hlarge.2.2
+  let M : Lane_opus_s10_tagged.MenuData n N E X Y G ζ δ κ :=
+    { I := menu.I, μ := menu.μ, K := menu.K, lam := menu.lam, D := menu.D,
+      μ_support := menu.μ_support, D_support := menu.D_support,
+      lam_nonneg := menu.lam_nonneg, lam_sum := menu.lam_sum, μ_width := menu.μ_width,
+      ν_width := menu.ν_width, D_atom := menu.D_atom, codegree := menu.codegree,
+      avoid := menu.avoid }
+  obtain ⟨σ, hσ⟩ := h4 n hn4 N E X Y G M h2n
+  have hf := fun t => Lane_opus_s10_tagged.d1f_facts M σ t
+  have h3' := fun t => h3 n hn3 N E X Y G M t h2n
+  obtain ⟨hoddF, hevenF, htagF⟩ := h8 n hn8
+  have hexp_le : Real.exp (-(n : ℝ) ^ ζ) ≤ Real.exp (-(n : ℝ) ^ ζ / 2) := by
+    apply Real.exp_le_exp.mpr
+    have := Real.rpow_nonneg (Nat.cast_nonneg n) ζ
+    linarith
+  have hcapOdd : ∀ t, Lane_opus_s10_tagged.oddCapOf M t ≤
+      8 * Real.exp (2 * Lane_opus_s10_tagged.kT n δ *
+        (Lane_opus_s10_tagged.TT n δ + Lane_opus_s10_tagged.mS n δ) + (n : ℝ) ^ δ) :=
+    fun t => Real.iSup_le (fun p => (h3' t).1 p.1 p.2.1 p.2.2) (by positivity)
+  have hcapOdd0 : ∀ t, 0 ≤ Lane_opus_s10_tagged.oddCapOf M t := fun t =>
+    Real.iSup_nonneg fun p => mul_nonneg (Nat.cast_nonneg _) ((hf t).1 _ _ _)
+  have hcapGroup : ∀ t, Lane_opus_s10_tagged.groupCapOf M t ≤
+      Real.exp (-(n : ℝ) ^ ζ / 2) := fun t =>
+    max_le (Real.iSup_le (fun p => (h3' t).2.2 p.1 p.2.1 p.2.2.1 p.2.2.2) (Real.exp_pos _).le)
+      hexp_le
+  have hcapGroup0 : ∀ t, 0 < Lane_opus_s10_tagged.groupCapOf M t := fun t =>
+    lt_max_of_lt_right (Real.exp_pos _)
+  have href : ∀ t, Lane_opus_s10_tagged.εRefOf M t σ ≤
+      Real.exp (-(1 / 200 : ℝ) * Lane_opus_s10_tagged.aG n δ * Lane_opus_s10_tagged.kT n δ * n) :=
+    fun t => Real.iSup_le (fun a => h7a n hn7a N E X Y G M σ h2n hNle t a) (Real.exp_pos _).le
+  have href0 : ∀ t, 0 ≤ Lane_opus_s10_tagged.εRefOf M t σ := fun t =>
+    Real.iSup_nonneg fun a => Lane_opus_s10_tagged.refFail_nonneg M t σ a
+  have hrow : ∀ t, Lane_opus_s10_tagged.rowCapOf M t ≤
+      Real.exp ((Real.log 2 - (1 / 100 : ℝ) * Lane_opus_s10_tagged.aG n δ) * n) := fun t =>
+    Real.iSup_le (fun p => h7b n hn7b N E X Y G M t h2n p.1 p.2.1 p.2.2.1 p.2.2.2)
+      (Real.exp_pos _).le
+  have hrow0 : ∀ t, 0 ≤ Lane_opus_s10_tagged.rowCapOf M t := fun t =>
+    Real.iSup_nonneg fun p => mul_nonneg (Nat.cast_nonneg _) ((hf t).2.2.1 _ _ _ _)
+  have hoddF0 : 0 ≤ Lane_opus_s10_tagged.oddFracOf n δ :=
+    Real.iSup_nonneg fun b => div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+  have hevenF0 : 0 ≤ Lane_opus_s10_tagged.evenFracOf n δ :=
+    Real.iSup_nonneg fun a => div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+  have htagF0 : 0 ≤ Lane_opus_s10_tagged.tagFracOf n δ :=
+    le_max_of_le_left (Real.iSup_nonneg fun b => div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+  have hmean0 : 0 ≤ Lane_opus_s10_tagged.meanCapOf M σ := le_max_left _ _
+  have hmean : Lane_opus_s10_tagged.meanCapOf M σ ≤
+      Real.exp ((Lane_opus_s10_tagged.mS n δ : ℝ) / 10) :=
+    max_le (Real.exp_pos _).le (max_le
+      (Real.iSup_le (fun p => h5 n hn5 N E X Y G M σ h2n hσ p.1 p.2.1 p.2.2) (Real.exp_pos _).le)
+      (Real.iSup_le (fun p => h7c n hn7c N E X Y G M σ h2n hσ p.1 p.2.1 p.2.2)
+        (Real.exp_pos _).le))
+  have hB := fun t => hbudget
+    ((Lane_opus_s10_tagged.historyLaw M σ t).pr (fun h => ¬ Lane_opus_s10_tagged.valid M t h))
+    (Lane_opus_s10_tagged.oddCapOf M t) (Lane_opus_s10_tagged.groupCapOf M t)
+    (Lane_opus_s10_tagged.εRefOf M t σ) (Lane_opus_s10_tagged.rowCapOf M t)
+    (Lane_opus_s10_tagged.oddFracOf n δ) (Lane_opus_s10_tagged.evenFracOf n δ)
+    (Lane_opus_s10_tagged.meanCapOf M σ) (Lane_opus_s10_tagged.tagFracOf n δ)
+    (Lane_opus_s10_tagged.pr_nonneg' _ _) (h2 n hn2 N E X Y G M σ h2n hNle hdisc hσ t)
+    (hcapOdd0 t) (hcapOdd t) (hcapGroup0 t) (hcapGroup t) (href0 t) (href t) (hrow0 t) (hrow t)
+    hoddF0 hoddF hevenF0 hevenF hmean0 hmean htagF0 htagF
+  let t₀ : Lane_opus_s10_tagged.Slice n δ → M.I := fun _ => Classical.arbitrary _
+  refine ⟨{
+    Slice := Lane_opus_s10_tagged.Slice n δ
+    Tag := M.I
+    core := fun t =>
+      { H := Lane_opus_s10_tagged.History n N δ
+        PH := Lane_opus_s10_tagged.historyLaw M σ t
+        valid := Lane_opus_s10_tagged.valid M t
+        ε_valid := (Lane_opus_s10_tagged.historyLaw M σ t).pr
+          (fun h => ¬ Lane_opus_s10_tagged.valid M t h)
+        valid_failure := le_rfl
+        Grp := Lane_opus_s10_tagged.Site n δ
+        grp := Lane_opus_s10_tagged.groupOf δ
+        Cl := Lane_opus_s10_tagged.ClIdx M
+        Kg := Lane_opus_s10_tagged.clusterLaw M t
+        lab := Lane_opus_s10_tagged.labLaw M t
+        oddRow := Lane_opus_s10_tagged.oddRow M t
+        oddRow_nonneg := (hf t).1
+        cluster_mean := (hf t).2.1
+        groupCap := Lane_opus_s10_tagged.groupCapOf M t
+        groupCap_pos := hcapGroup0 t
+        group_cap := fun h _ g c y => le_max_of_le_left
+          (Lane_opus_s10_tagged.le_iSup_fin
+            (fun p : Lane_opus_s10_tagged.History n N δ × Lane_opus_s10_tagged.Site n δ ×
+                Lane_opus_s10_tagged.ClIdx M × Fin N =>
+              ∑ b ∈ Finset.univ.filter (fun b => Lane_opus_s10_tagged.groupOf δ b = p.2.1),
+                (Lane_opus_s10_tagged.labLaw M t p.1 b p.2.2.1).w p.2.2.2) (h, g, c, y))
+        atom_small := fun h _ b c y => ((h3' t).2.1 h b c y).trans hatom
+        oddCap := Lane_opus_s10_tagged.oddCapOf M t
+        oddCap_nonneg := hcapOdd0 t
+        odd_cap := fun h _ b y => Lane_opus_s10_tagged.le_iSup_fin
+          (fun p : Lane_opus_s10_tagged.History n N δ × _ × Fin N =>
+            (N : ℝ) * Lane_opus_s10_tagged.oddRow M t p.1 p.2.1 p.2.2) (h, b, y)
+        oddNear := Lane_opus_s10_tagged.oddNear δ
+        oddNear_self := fun b => by simp [Lane_opus_s10_tagged.oddNear]
+        oddFrac := Lane_opus_s10_tagged.oddFracOf n δ
+        oddNear_card := fun b => Lane_opus_s10_tagged.card_le_ratio_mul _ _
+          (Fintype.card_pos_iff.mpr ⟨b⟩)
+          (Lane_opus_s10_tagged.le_iSup_fin
+            (fun b => ((Lane_opus_s10_tagged.oddNear δ b).card : ℝ) /
+              Fintype.card (Lane_opus_s10_tagged.OddRole n)) b)
+        oddMean := Lane_opus_s10_tagged.oddMean M t σ
+        oddMean_nonneg := (hf t).2.2.2.2.2.2.2.1
+        odd_joint := Lane_opus_s10_tagged.d8a_odd_separated M σ hσ t
+        predictive := Lane_opus_s10_tagged.predictive M t
+        row := Lane_opus_s10_tagged.evenRow M t
+        row_nonneg := (hf t).2.2.1
+        row_sum := (hf t).2.2.2.1
+        common_neighbor := (hf t).2.2.2.2.1
+        predictive_local := fun a h ω ω' hω => (hf t).2.2.2.2.2.1 a h ω ω'
+          (fun b hb => hω b (by simpa [star, Lane_opus_s10_tagged.starOf] using hb))
+        row_local := fun a h x ω ω' hω => (hf t).2.2.2.2.2.2.1 a h x ω ω'
+          (fun b hb => hω b (by simpa [star, Lane_opus_s10_tagged.starOf] using hb))
+        rowCap := Lane_opus_s10_tagged.rowCapOf M t
+        rowCap_nonneg := hrow0 t
+        row_cap := fun h ω a x _ => Lane_opus_s10_tagged.le_iSup_fin
+          (fun p : Lane_opus_s10_tagged.History n N δ × (_ → Fin N) × _ × Fin N =>
+            (N : ℝ) * Lane_opus_s10_tagged.evenRow M t p.1 p.2.1 p.2.2.1 p.2.2.2) (h, ω, a, x)
+        near := Lane_opus_s10_tagged.evenNear δ
+        near_self := fun a => by simp [Lane_opus_s10_tagged.evenNear]
+        nearFrac := Lane_opus_s10_tagged.evenFracOf n δ
+        near_card := fun a => Lane_opus_s10_tagged.card_le_ratio_mul _ _
+          (Fintype.card_pos_iff.mpr ⟨a⟩)
+          (Lane_opus_s10_tagged.le_iSup_fin
+            (fun a => ((Lane_opus_s10_tagged.evenNear δ a).card : ℝ) /
+              Fintype.card (Lane_opus_s10_tagged.EvenRole n)) a)
+        jointConst := 1
+        jointConst_ge := le_rfl
+        mean := Lane_opus_s10_tagged.evenMean M t σ
+        mean_nonneg := (hf t).2.2.2.2.2.2.2.2
+        ref_joint := Lane_opus_s10_tagged.d8b_even_separated M σ hσ t
+        ε_ref := Lane_opus_s10_tagged.εRefOf M t σ
+        ref_predictive := fun a =>
+          Lane_opus_s10_tagged.le_iSup_fin (Lane_opus_s10_tagged.refFail M t σ) a
+        n_pos := hnpos
+        N_pos := lt_of_lt_of_le (Nat.two_pow_pos n) h2n }
+    oddSlice := fun b => (Lane_opus_s10_tagged.groupOf δ b).1
+    evenSlice := fun a => (Lane_opus_s10_tagged.evenSite δ a).1
+    tagNbhd := Lane_opus_s10_tagged.tagNbhd δ
+    tagNbhd_self := fun j => by simp [Lane_opus_s10_tagged.tagNbhd]
+    odd_local := (Lane_opus_s10_tagged.d8c_tag_locality M σ hσ).1
+    even_local := (Lane_opus_s10_tagged.d8c_tag_locality M σ hσ).2
+    meanCap := Lane_opus_s10_tagged.meanCapOf M σ
+    meanCap_nonneg := hmean0
+    odd_mean_cap := fun t y b => le_max_of_le_right (le_max_of_le_left
+      (Lane_opus_s10_tagged.le_iSup_fin
+        (fun p : (Lane_opus_s10_tagged.Slice n δ → M.I) × Fin N × _ =>
+          Lane_opus_s10_tagged.oddMean M p.1 σ p.2.1 p.2.2) (t, y, b)))
+    even_mean_cap := fun t x a => le_max_of_le_right (le_max_of_le_right
+      (Lane_opus_s10_tagged.le_iSup_fin
+        (fun p : (Lane_opus_s10_tagged.Slice n δ → M.I) × Fin N × _ =>
+          Lane_opus_s10_tagged.evenMean M p.1 σ p.2.1 p.2.2) (t, x, a)))
+    tagFrac := Lane_opus_s10_tagged.tagFracOf n δ
+    odd_tag_near := fun b => Lane_opus_s10_tagged.card_le_ratio_mul _ _
+      (Fintype.card_pos_iff.mpr ⟨b⟩) (le_max_of_le_left
+        (Lane_opus_s10_tagged.le_iSup_fin
+          (fun b => ((Lane_opus_s10_tagged.oddTagNear δ b).card : ℝ) /
+            Fintype.card (Lane_opus_s10_tagged.OddRole n)) b))
+    even_tag_near := fun a => Lane_opus_s10_tagged.card_le_ratio_mul _ _
+      (Fintype.card_pos_iff.mpr ⟨a⟩) (le_max_of_le_right
+        (Lane_opus_s10_tagged.le_iSup_fin
+          (fun a => ((Lane_opus_s10_tagged.evenTagNear δ a).card : ℝ) /
+            Fintype.card (Lane_opus_s10_tagged.EvenRole n)) a))
+    balConst := 4 / κ
+    response := h9 n hn9 N E X Y G M σ h2n hσ
+    typThr := 8 * (4 / κ + 1)
+    typThr_pos := by positivity
+    tag_budget := (hB t₀).1
+    oddThr := 1 / 10 ^ 9
+    core_budget := fun t => ⟨by norm_num, (hB t).2⟩ }⟩
 
 /-! ## Assembly -/
 

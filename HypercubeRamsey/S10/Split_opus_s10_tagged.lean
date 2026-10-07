@@ -184,6 +184,16 @@ abbrev History (n N : ℕ) (δ : ℝ) :=
   ((((ID n δ → Bool) × (ID n δ → Fin (kT n δ) → Fin N)) × (Site n δ → Finset (Fin N))) ×
     (ID n δ → Bool)) × (ID n δ → (hp n δ).TiePerm)
 
+/-- The history type is finite (named so that importers need not re-synthesize it). -/
+noncomputable instance historyFintype (n N : ℕ) (δ : ℝ) : Fintype (History n N δ) := by
+  unfold History; infer_instance
+
+/-- Cluster configurations over all sites form a finite type. -/
+noncomputable instance clusterConfigFintype {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {G : Colour} {ζ δ κ : ℝ} (M : MenuData n N E X Y G ζ δ κ) :
+    Fintype (Site n δ → (Σ i : M.I, Fin (M.K i))) := by
+  infer_instance
+
 namespace History
 variable {n N : ℕ} {δ : ℝ} (h : History n N δ)
 def pos : ID n δ → Bool := h.1.1.1.1
@@ -472,5 +482,376 @@ noncomputable def evenNear {n : ℕ} (δ : ℝ) (a : EvenRole n) : Finset (EvenR
 (10:119–121, 10:263). -/
 noncomputable def tagNbhd {n : ℕ} (δ : ℝ) (z : Slice n δ) : Finset (Slice n δ) :=
   Finset.univ.filter fun z' => hammingDist z z' ≤ 4
+
+
+/-! ## Caps, fractions and failure levels as finite suprema
+
+The budget fields of `TypicalCore`/`TaggedSystem` are filled with the actual
+finite suprema below; d3, d5, d7 and d8d bound them. -/
+
+section Caps
+
+variable {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {G : Colour}
+  {ζ δ κ : ℝ} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I) (σ : MaskStrategy M)
+
+/-- Odd row cap `sup N p_b^W(y)`. -/
+noncomputable def oddCapOf : ℝ :=
+  ⨆ p : History n N δ × OddRole n × Fin N, (N : ℝ) * oddRow M t p.1 p.2.1 p.2.2
+
+/-- Even row cap `sup N p_v^X(x)`. -/
+noncomputable def rowCapOf : ℝ :=
+  ⨆ p : History n N δ × (OddRole n → Fin N) × EvenRole n × Fin N,
+    (N : ℝ) * evenRow M t p.1 p.2.1 p.2.2.1 p.2.2.2
+
+/-- Group column contribution cap, floored at `e^{-n^ζ}` (10:279). -/
+noncomputable def groupCapOf : ℝ :=
+  max (⨆ p : History n N δ × Site n δ × ClIdx M × Fin N,
+      ∑ b ∈ Finset.univ.filter (fun b => groupOf δ b = p.2.1), (labLaw M t p.1 b p.2.2.1).w p.2.2.2)
+    (Real.exp (-(n : ℝ) ^ ζ))
+
+/-- Reference-law predictive failure at an even role, with the validity gate (10:286). -/
+noncomputable def refFail (a : EvenRole n) : ℝ :=
+  ∑ h, (historyLaw M σ t).w h * (if valid M t h then ∑ c : Site n δ → ClIdx M,
+      (FinProb.pi (clusterLaw M t h)).w c *
+        (FinProb.pi (fun b => labLaw M t h b (c (groupOf δ b)))).pr
+          (fun ω => ¬ predictive M t a h ω)
+      else 0)
+
+/-- Worst predictive failure level. -/
+noncomputable def εRefOf : ℝ := ⨆ a : EvenRole n, refFail M t σ a
+
+end Caps
+
+/-- Near fractions of the odd and even residual-near relations (10:271). -/
+noncomputable def oddFracOf (n : ℕ) (δ : ℝ) : ℝ :=
+  ⨆ b : OddRole n, ((oddNear δ b).card : ℝ) / Fintype.card (OddRole n)
+
+noncomputable def evenFracOf (n : ℕ) (δ : ℝ) : ℝ :=
+  ⨆ a : EvenRole n, ((evenNear δ a).card : ℝ) / Fintype.card (EvenRole n)
+
+/-- Tag-near sets: roles whose tag neighbourhoods meet (10:267). -/
+noncomputable def oddTagNear {n : ℕ} (δ : ℝ) (b : OddRole n) : Finset (OddRole n) :=
+  Finset.univ.filter fun b' =>
+    ¬ Disjoint (tagNbhd δ (groupOf δ b).1) (tagNbhd δ (groupOf δ b').1)
+
+noncomputable def evenTagNear {n : ℕ} (δ : ℝ) (a : EvenRole n) : Finset (EvenRole n) :=
+  Finset.univ.filter fun a' =>
+    ¬ Disjoint (tagNbhd δ (evenSite δ a).1) (tagNbhd δ (evenSite δ a').1)
+
+/-- The tag near fraction. -/
+noncomputable def tagFracOf (n : ℕ) (δ : ℝ) : ℝ :=
+  max (⨆ b : OddRole n, ((oddTagNear δ b).card : ℝ) / Fintype.card (OddRole n))
+    (⨆ a : EvenRole n, ((evenTagNear δ a).card : ℝ) / Fintype.card (EvenRole n))
+
+/-- The comparison-mean cap over all tag assignments. -/
+noncomputable def meanCapOf {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    {G : Colour} {ζ δ κ : ℝ} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M) : ℝ :=
+  max 0 (max (⨆ p : (Slice n δ → M.I) × Fin N × OddRole n, oddMean M p.1 σ p.2.1 p.2.2)
+    (⨆ p : (Slice n δ → M.I) × Fin N × EvenRole n, evenMean M p.1 σ p.2.1 p.2.2))
+
+/-! ## Mask strategies (P10.1f, 10:150–153) -/
+
+section Strategy
+
+variable {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {G : Colour}
+  {ζ δ κ : ℝ} (M : MenuData n N E X Y G ζ δ κ)
+
+/-- The list row `p_𝒟` of a hypothetical list of `r` blocks with tuples `W`
+(10:144): the restricted squared tilt of the masked mixture, then `D|_F`; zero when
+(10.1) fails or nothing is retained. `own b` marks own-slice blocks. -/
+noncomputable def hypListRow (i : M.I) (S : Finset (Fin N)) {r k : ℕ} (μs : Fin r → Law N)
+    (own : Fin r → Prop) (W : Fin r → Fin k → Fin N) (y : Fin N) : ℝ :=
+  let ρ := maskedPrior M i S
+  let D := maskedCluster M i S
+  let F := fixedListHitSet E G W
+  let kept : Fin (M.K i) → Prop := fun j =>
+    Real.exp (-(3 / 2 : ℝ) * k * r) ≤ lawMassOn (D j) F ∧
+    ∀ b, (if own b then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * k)
+        else Real.exp (-(6 / 5 : ℝ) * k)) * lawMassOn (D j) (fixedListHitSetWithout E G W b) ≤
+      lawMassOn (D j) F
+  let wt : Fin (M.K i) → ℝ := fun j => if kept j then ρ.w j * (lawMassOn (D j) F) ^ 2 else 0
+  if fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0 then 0
+  else ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y
+
+/-- The slice adjacent to `z` across special coordinate `e`. -/
+noncomputable def flipSlice {n : ℕ} {δ : ℝ} (z : Slice n δ) (e : Fin (mS n δ)) : Slice n δ :=
+  Function.update z e (!z e)
+
+/-- Hypothetical mean of `p_𝒟` at group `q` with mask `S` and `s` own IDs
+(10:153): `s` own blocks with law `μ_{t z}` and one external block per adjacent
+slice with that slice's law, all with independent tuples. -/
+noncomputable def hypMean (t : Slice n δ → M.I) (q : Site n δ) (S : Finset (Fin N)) (s : ℕ)
+    (y : Fin N) : ℝ :=
+  let μs : Fin (s + mS n δ) → Law N := fun b =>
+    Fin.addCases (fun _ => M.μ (t q.1)) (fun e => M.μ (t (flipSlice q.1 e))) b
+  let own : Fin (s + mS n δ) → Prop := fun b => (b : ℕ) < s
+  (p10_1kTupleArrayLaw (k := kT n δ) μs).expect fun W => hypListRow M (t q.1) S μs own W y
+
+/-- A good mask strategy (10:50, 10:153): local in the tags of the group's
+slice and its adjacent slices, supported on permitted or trivial masks, with
+every hypothetical mean at most `100 (T+1) ν` pointwise. -/
+structure GoodStrategy (σ : MaskStrategy M) : Prop where
+  local_tags : ∀ q : Site n δ, FinProb.DependsOn (fun t : Slice n δ → M.I => σ t q)
+    (Finset.univ.filter fun z => hammingDist z q.1 ≤ 1)
+  permitted : ∀ t q S, (σ t q).w S ≠ 0 → Permitted M (t q.1) S ∨ S = Finset.univ
+  balanced : ∀ t q (s : ℕ), s ≤ TT n δ → ∀ y,
+    ∑ S, (σ t q).w S * hypMean M t q S s y ≤
+      100 * (TT n δ + 1) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+
+end Strategy
+
+/-! ## Bookkeeping lemmas for the assembly -/
+
+theorem le_iSup_fin {ι : Type*} [Finite ι] (f : ι → ℝ) (i : ι) : f i ≤ ⨆ j, f j :=
+  le_ciSup (Set.finite_range f).bddAbove i
+
+theorem card_le_ratio_mul {β : Type*} [Fintype β] (F : ℝ) (k : ℕ) (hβ : 0 < Fintype.card β)
+    (hk : (k : ℝ) / Fintype.card β ≤ F) : (k : ℝ) ≤ F * Fintype.card β := by
+  have hpos : (0 : ℝ) < Fintype.card β := by exact_mod_cast hβ
+  rwa [div_le_iff₀ hpos] at hk
+
+theorem pr_nonneg' {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) : 0 ≤ P.pr A := by
+  unfold FinProb.pr
+  exact Finset.sum_nonneg fun ω _ => by split_ifs <;> simp [P.nonneg ω]
+
+theorem refFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    {G : Colour} {ζ δ κ : ℝ} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+    (σ : MaskStrategy M) (a : EvenRole n) : 0 ≤ refFail M t σ a := by
+  unfold refFail
+  apply Finset.sum_nonneg; intro h _
+  apply mul_nonneg ((historyLaw M σ t).nonneg h)
+  split_ifs
+  · exact Finset.sum_nonneg fun c _ => mul_nonneg ((FinProb.pi _).nonneg c) (pr_nonneg' _ _)
+  · exact le_rfl
+
+/-! ## Sub-lemmas d1f–d10 -/
+
+section SubLemmas
+
+variable {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {G : Colour}
+  {ζ δ κ : ℝ}
+
+/-- **d1f** (deterministic consequences of the definitions; lemma-level, ~300
+lines). Nonnegativity, the cluster average of the labels on validity, the even row
+normalization and common-neighbour support on predictive success (the posterior is
+supported on tuples hitting every star label, 10:228), and the star locality of the
+predictive event and row. Inputs: d1 definitions,
+`p10_1k_evenSite_mem_oddGroupEnvelope_of_adjacent`. -/
+theorem d1f_facts (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+    (t : Slice n δ → M.I) :
+    (∀ h b y, 0 ≤ oddRow M t h b y) ∧
+    (∀ h, valid M t h → ∀ b y,
+      (clusterLaw M t h (groupOf δ b)).expect (fun c => (labLaw M t h b c).w y) ≤
+        oddRow M t h b y) ∧
+    (∀ h ω a x, 0 ≤ evenRow M t h ω a x) ∧
+    (∀ h ω a, valid M t h → predictive M t a h ω → ∑ x, evenRow M t h ω a x = 1) ∧
+    (∀ h ω a, valid M t h → predictive M t a h ω → ∀ x, evenRow M t h ω a x ≠ 0 →
+      ∀ b : OddRole n, (cube n).Adj a.1 b.1 → Hits E G x (ω b)) ∧
+    (∀ a h, FinProb.DependsOn (fun ω => predictive M t a h ω) (starOf a)) ∧
+    (∀ a h x, FinProb.DependsOn (fun ω => evenRow M t h ω a x) (starOf a)) ∧
+    (∀ y b, 0 ≤ oddMean M t σ y b) ∧
+    (∀ x a, 0 ≤ evenMean M t σ x a) := by
+  sorry
+
+/-- **d2** = P10.1d (10:101–117; ~500 lines; new probabilistic argument over
+the global experiment). All groups are valid with probability at least `0.99`:
+position counts (Chernoff, 10:104), at most `L_n` lists and fewer than `n`
+disjoint failures per group (`S10.p10_1c_fixed_list_squared_mass_test`,
+`S10.p10_1d_disjoint_failure_union_bound`, independence of disjoint tuple
+entries), eligibility at least `.99λ`, height success
+(`height_selection_global`), own fan at most `T`
+(`p10_1kOddGroupOwnTupleIds_card_le_heightCount`). -/
+theorem d2_valid_whp (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
+      2 ^ n ≤ N → N ≤ n * 2 ^ n →
+      DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
+      GoodStrategy M σ → ∀ t : Slice n δ → M.I,
+      (historyLaw M σ t).pr (fun h => ¬ valid M t h) ≤ 1 / 100 := by
+  sorry
+
+/-- **d3** = P10.1e (10:128–149; ~300 lines; lemma-level from the helper's
+squared-tilt kernels). Pointwise caps: `N p_b^W ≤ 8 e^{2k(T+m)+n^δ}`, every label
+law has atoms at most `e^{-n^ζ/2}`, and so has each group column contribution
+(group size `n^{O(log n)}`, `p10_1k_oddGroup_card_le`). -/
+theorem d3_tilt_caps (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I),
+      2 ^ n ≤ N →
+      (∀ h b y, (N : ℝ) * oddRow M t h b y ≤
+        8 * Real.exp (2 * kT n δ * (TT n δ + mS n δ) + (n : ℝ) ^ δ)) ∧
+      (∀ h b c y, (labLaw M t h b c).w y ≤ Real.exp (-(n : ℝ) ^ ζ / 2)) ∧
+      (∀ h q c y, ∑ b ∈ Finset.univ.filter (fun b => groupOf δ b = q),
+        (labLaw M t h b c).w y ≤ Real.exp (-(n : ℝ) ^ ζ / 2)) := by
+  sorry
+
+/-- **d4** = P10.1f (10:150–153; ~300 lines; lemma-level). A good mask strategy
+exists: cheap-label masks from the prices `c_s(y)` (`p10_1f_mask_price_separation`,
+`p10_1k_mask_price_response`), chosen per group from the tags at its slice and the
+adjacent slices. -/
+theorem d4_mask_strategy (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ),
+      2 ^ n ≤ N → ∃ σ : MaskStrategy M, GoodStrategy M σ := by
+  sorry
+
+/-- **d5** = P10.1g (10:155–186; ~500 lines; new argument: the position-only
+enumeration of own lists, the eligibility-free selection bounds `w_{ℓ,c}` from
+Lemma 3.8, independence across slices given positions). The odd comparison means
+satisfy `N p̂_b ≤ e^{.1m}`. -/
+theorem d5_odd_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
+      2 ^ n ≤ N → GoodStrategy M σ → ∀ (t : Slice n δ → M.I) y b,
+      oddMean M t σ y b ≤ Real.exp ((mS n δ : ℝ) / 10) := by
+  sorry
+
+/-- **d6** = P10.1h, the comparison (10.2) (10:191–222; ~500 lines; new
+argument per group: ratio `2 A(F_{-c})/A(F) (D(F)/D(F_{-c}))^{2-j}`, singleton groups,
+uniform averaging over lists containing `c`; product by
+`p10_1h_product_likelihood_comparison`). -/
+theorem d6_likelihood_comparison (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I),
+      2 ^ n ≤ N → ∀ h a c w ω,
+      subLik M t h a c w ω ≤
+        Real.exp ((Real.log 2 - (6 / 100 : ℝ) * aG n δ) * kT n δ * n) * refQ M t h a c ω := by
+  sorry
+
+/-- **d7a** = P10.1i(i) with 10:286 (~300 lines; lemma-level from d6 and
+`p10_1i_predictive_test`). Reference-law predictive failure at one even role,
+summed over its polynomially many candidates, including the light-part bound
+(the posterior cap `e^{(log 2-.04a)kn}` and the heavy-set union, 10:228–244). -/
+theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
+      2 ^ n ≤ N → N ≤ n * 2 ^ n → ∀ (t : Slice n δ → M.I) a,
+      refFail M t σ a ≤ Real.exp (-(1 / 200 : ℝ) * aG n δ * kT n δ * n) := by
+  sorry
+
+/-- **d7b** = P10.1i(iii) (10:246–250; ~150 lines; lemma-level): the even row
+cap `N p_v^X ≤ e^{(log 2 - .01a)n}` (light part and its mass `c₆a`). -/
+theorem d7b_even_row_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I),
+      2 ^ n ≤ N → ∀ h ω a x,
+      (N : ℝ) * evenRow M t h ω a x ≤ Real.exp ((Real.log 2 - (1 / 100 : ℝ) * aG n δ) * n) := by
+  sorry
+
+/-- **d7c** = P10.1i(iv) (10:252–261; ~400 lines; new argument: the integration
+identity of `p10_1i_predictive_test` turns the posterior back into the tuple prior,
+then the gate probability and polynomially many candidates). Even comparison means
+satisfy `N p̂_v^X ≤ e^{.1m}`. -/
+theorem d7c_even_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
+      2 ^ n ≤ N → GoodStrategy M σ → ∀ (t : Slice n δ → M.I) x a,
+      evenMean M t σ x a ≤ Real.exp ((mS n δ : ℝ) / 10) := by
+  sorry
+
+/-- **d8a** (10:119–126, 10:271–275; ~500 lines; new formal argument: the input
+domain of a group calculation, the product structure of `historyLaw`, and
+factorization over disjoint domains). At separated odd roles the gated product of
+normalized rows has expectation at most the product of comparison means. -/
+theorem d8a_odd_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+    (hσ : GoodStrategy M σ) (t : Slice n δ → M.I) :
+    ∀ y (m : ℕ), m ≤ n → ∀ s : Fin m → OddRole n,
+      (∀ i j : Fin m, j < i → s i ∉ oddNear δ (s j)) →
+        ∑ h, (historyLaw M σ t).w h *
+            (if valid M t h then ∏ i, (N : ℝ) * oddRow M t h (s i) y else 0) ≤
+          ∏ i, oddMean M t σ y (s i) := by
+  sorry
+
+/-- **d8b** (10:288–292; ~500 lines; new formal argument, shares the domain
+bookkeeping of d8a): at separated even roles, integrating prehistory, group
+clusters and reference labels factorizes into the even comparison means. -/
+theorem d8b_even_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+    (hσ : GoodStrategy M σ) (t : Slice n δ → M.I) :
+    ∀ x (m : ℕ), m ≤ n → ∀ s : Fin m → EvenRole n,
+      (∀ i j : Fin m, j < i → s i ∉ evenNear δ (s j)) →
+        ∑ h, (historyLaw M σ t).w h * (if valid M t h then ∑ c : Site n δ → ClIdx M,
+            (FinProb.pi (clusterLaw M t h)).w c *
+              (FinProb.pi (fun b => labLaw M t h b (c (groupOf δ b)))).expect
+                (fun ω => ∏ i, (N : ℝ) * evenRow M t h ω (s i) x) else 0) ≤
+          1 ^ m * ∏ i, evenMean M t σ x (s i) := by
+  sorry
+
+/-- **d8c** (10:119–121, 10:263; ~300 lines; new formal argument, the tag part
+of the input domain): comparison means read only tags within special distance 4. -/
+theorem d8c_tag_locality (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+    (hσ : GoodStrategy M σ) :
+    (∀ y b, FinProb.DependsOn (fun t : Slice n δ → M.I => oddMean M t σ y b)
+      (tagNbhd δ (groupOf δ b).1)) ∧
+    (∀ x a, FinProb.DependsOn (fun t : Slice n δ → M.I => evenMean M t σ x a)
+      (tagNbhd δ (evenSite δ a).1)) := by
+  sorry
+
+/-- **d8d** (10:39, 10:267, 10:271; ~300 lines; lemma-level counting): the near
+fractions. Residual: special ball of radius 8 times a residual ball of radius
+`2R_loc + 16` times projection fibres, at most `e^{n^{1-2δ}} 2^{-n}`; tags: at most
+`(m+1)^9 2^{-m}`. -/
+theorem d8d_near_fractions (δ : ℝ) (hδ : 0 < δ) (hδsmall : δ < 1 / 2000) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      oddFracOf n δ ≤ Real.exp ((n : ℝ) ^ (1 - 2 * δ)) / 2 ^ n ∧
+      evenFracOf n δ ≤ Real.exp ((n : ℝ) ^ (1 - 2 * δ)) / 2 ^ n ∧
+      tagFracOf n δ ≤ ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
+  sorry
+
+/-- **d9** (10:265; ~300 lines; lemma-level: `balanced_mixture`-type separation on
+the expected slice terms, which are sub-probability vectors supported on the tag's
+own patch). The one-slice balanced response with constant `4/κ`. -/
+theorem d9_balanced_response (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N))
+      (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
+      2 ^ n ≤ N → GoodStrategy M σ →
+      ∀ j (q : Slice n δ → M.I → ℝ), (∀ i a, 0 ≤ q i a) → (∀ i, ∑ a, q i a = 1) →
+        ∃ qj : M.I → ℝ, (∀ a, 0 ≤ qj a) ∧ ∑ a, qj a = 1 ∧
+          (∀ y, ∑ τ : Slice n δ → M.I, (∏ i, Function.update q j qj i (τ i)) *
+              ((Fintype.card (Slice n δ) : ℝ) / Fintype.card (OddRole n) *
+                ∑ b ∈ Finset.univ.filter (fun b => (groupOf δ b).1 = j), oddMean M τ σ y b)
+            ≤ 4 / κ) ∧
+          (∀ x, ∑ τ : Slice n δ → M.I, (∏ i, Function.update q j qj i (τ i)) *
+              ((Fintype.card (Slice n δ) : ℝ) / Fintype.card (EvenRole n) *
+                ∑ a ∈ Finset.univ.filter (fun a => (evenSite δ a).1 = j), evenMean M τ σ x a)
+            ≤ 4 / κ) := by
+  sorry
+
+/-- **d10** (budget arithmetic, 10:13–28, 10:83, 10:109, 10:268–292; ~300 lines;
+lemma-level real analysis with `p10_1b_scale_separation`). With `typThr = 8(4/κ+1)`
+and `oddThr = 10⁻⁹`, the stated bounds on the failure levels, caps and fractions
+give the clock atom condition, the tag budget and the fixed-tag budget. -/
+theorem d10_budget (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) (A : ℝ) :
+    ∃ n₀ : ℕ, ∃ C₀ : ℝ, ∀ n N, LargeAt n₀ C₀ n N →
+      (0 < n ∧ 2 ^ n ≤ N ∧ Real.exp (-(n : ℝ) ^ ζ / 2) ≤ (n : ℝ) ^ (-A)) ∧
+      ∀ εv oddCap groupCap εref rowCap oddFrac evenFrac meanCap tagFrac : ℝ,
+      0 ≤ εv → εv ≤ 1 / 100 →
+      0 ≤ oddCap → oddCap ≤ 8 * Real.exp (2 * kT n δ * (TT n δ + mS n δ) + (n : ℝ) ^ δ) →
+      0 < groupCap → groupCap ≤ Real.exp (-(n : ℝ) ^ ζ / 2) →
+      0 ≤ εref → εref ≤ Real.exp (-(1 / 200 : ℝ) * aG n δ * kT n δ * n) →
+      0 ≤ rowCap → rowCap ≤ Real.exp ((Real.log 2 - (1 / 100 : ℝ) * aG n δ) * n) →
+      0 ≤ oddFrac → oddFrac ≤ Real.exp ((n : ℝ) ^ (1 - 2 * δ)) / 2 ^ n →
+      0 ≤ evenFrac → evenFrac ≤ Real.exp ((n : ℝ) ^ (1 - 2 * δ)) / 2 ^ n →
+      0 ≤ meanCap → meanCap ≤ Real.exp ((mS n δ : ℝ) / 10) →
+      0 ≤ tagFrac → tagFrac ≤ ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) →
+      2 * N * ((4 / κ + n * tagFrac * meanCap) / (8 * (4 / κ + 1))) ^ n < 1 ∧
+      εv + N * ((Fintype.card (OddRole n) : ℝ) * (8 * (4 / κ + 1) + n * oddFrac * oddCap) /
+            (N * (1 / 10 ^ 9))) ^ n
+        + N * Real.exp (((Real.exp 1 - 1) * (1 / 10 ^ 9) - 1e-8) / groupCap)
+        + Fintype.card (EvenRole n) * (2 * εref)
+        + N * (((Fintype.card (EvenRole n) : ℝ) / N) * (2 * 1) *
+            (8 * (4 / κ + 1) + n * evenFrac * rowCap)) ^ n < 1 := by
+  sorry
+
+end SubLemmas
 
 end HypercubeRamsey.Lane_opus_s10_tagged

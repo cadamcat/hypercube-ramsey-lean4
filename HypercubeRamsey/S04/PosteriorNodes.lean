@@ -1457,7 +1457,7 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
       exact (refRow M tag ω (oddNbr a j) c (key β γ n a.1)).nonneg (y j)
     simp [lik, ω', hEv]
     exact mul_nonneg (Real.exp_nonneg _) hrefProdNonneg
-set_option maxHeartbeats 200000
+set_option maxHeartbeats 1000000
 
 /-- L4.1g(3) (04:409–427): by `LikBound` and Lemma 3.7(2) (`gated_posterior`) the posterior `π(z) F_z(y)/M_c(y)`
 is at most `exp((log 2 - c₂ a_*)kn) ε₄⁻¹ π(z)`, and `π(z) ≤ (2e^{sX}/N)^k`; it is supported on `S^k` (a positive
@@ -1467,7 +1467,380 @@ c₂ a_* n/4` for large `n`. -/
 theorem comm_large (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι), LikBound M tag → CommLarge M tag := by
-  sorry
+  classical
+  have hc₂ : 0 < c2 := by dsimp [c2, c1]; norm_num
+  have hgap : 0 < 1 - β - h4 β γ := by
+    have hmin : min β (1 - γ) ≤ 1 - γ := min_le_right _ _
+    have hω : omega4 β γ ≤ (1 - γ) / 1000 := by
+      dsimp [omega4]
+      exact div_le_div_of_nonneg_right hmin (by norm_num)
+    have hh : h4 β γ ≤ (1 - γ) / 1000000000 := by
+      dsimp [h4]
+      dsimp [omega4] at hω ⊢
+      norm_num at hω ⊢
+      nlinarith
+    have hγgap : 0 < 1 - γ := by linarith
+    dsimp [h4]
+    nlinarith [hh]
+  have htgap : Filter.Tendsto (fun m : ℕ => (m : ℝ) ^ (1 - β - h4 β γ))
+      Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop hgap).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (htgap.eventually_ge_atTop (20 / c2))
+  refine ⟨max 2 n₀, ?_⟩
+  intro n hn N E G X Y M tag hLB ω a c y hp
+  have hnlarge : 2 ≤ n := le_trans (le_max_left 2 n₀) hn
+  have hn₀' : n₀ ≤ n := (le_max_right 2 n₀).trans hn
+  have hnreal : (1 : ℝ) ≤ (n : ℝ) := by
+    exact_mod_cast (le_trans (by norm_num : 1 ≤ 2) hnlarge)
+  have hnpos : (0 : ℝ) < (n : ℝ) := by linarith
+  have hgapPow : 20 / c2 ≤ (n : ℝ) ^ (1 - β - h4 β γ) := hn₀ n hn₀'
+  have hsmall : Real.log 2 + M.sX (tag (key β γ n a.1)) ≤
+      c2 * aStar β γ n * (n : ℝ) / 8 := by
+    have hpowβ : 1 ≤ (n : ℝ) ^ β := Real.one_le_rpow hnreal hβ.le
+    have hlog2 : Real.log 2 ≤ 1 := by nlinarith [Real.log_two_lt_d9]
+    have hsX := (M.prep (tag (key β γ n a.1))).2.1
+    have htop : Real.log 2 + M.sX (tag (key β γ n a.1)) ≤ (5 / 2 : ℝ) * (n : ℝ) ^ β := by
+      nlinarith [hsX, hpowβ, hlog2]
+    have hpower : (n : ℝ) ^ β * (n : ℝ) ^ (1 - β - h4 β γ) =
+        (n : ℝ) ^ (1 - h4 β γ) := by
+      rw [← Real.rpow_add hnpos]
+      congr 1
+      ring
+    have hAstarpower : aStar β γ n * (n : ℝ) = (n : ℝ) ^ (1 - h4 β γ) := by
+      dsimp [aStar]
+      calc
+        (n : ℝ) ^ (-h4 β γ) * (n : ℝ) =
+            (n : ℝ) ^ (-h4 β γ) * (n : ℝ) ^ (1 : ℝ) := by rw [Real.rpow_one]
+        _ = (n : ℝ) ^ (1 - h4 β γ) := by
+          rw [← Real.rpow_add hnpos]
+          congr 1
+          ring
+    have hscaled := mul_le_mul_of_nonneg_left hgapPow
+      (mul_nonneg (by positivity : (0 : ℝ) ≤ c2 / 8)
+        (Real.rpow_nonneg hnpos.le β))
+    have hscaled' : (5 / 2 : ℝ) * (n : ℝ) ^ β ≤
+        (c2 / 8) * ((n : ℝ) ^ β * (n : ℝ) ^ (1 - β - h4 β γ)) := by
+      dsimp [c2, c1] at hscaled ⊢
+      nlinarith [hscaled]
+    calc
+      Real.log 2 + M.sX (tag (key β γ n a.1)) ≤ (5 / 2 : ℝ) * (n : ℝ) ^ β := htop
+      _ ≤ (c2 / 8) * ((n : ℝ) ^ β * (n : ℝ) ^ (1 - β - h4 β γ)) := hscaled'
+      _ = c2 * aStar β γ n * (n : ℝ) / 8 := by
+        rw [hpower, ← hAstarpower]
+        ring_nf
+  have hN : 0 < N := by
+    by_contra hN
+    have hzero : N = 0 := Nat.eq_zero_of_not_pos hN
+    subst N
+    have hsum := (M.μ (tag (key β γ n a.1))).sum_eq_one
+    simp at hsum
+  let κ : Key β γ n := key β γ n a.1
+  let k : ℕ := tupLen β γ n
+  let S : Finset (Fin N) := (comm M tag ω a c y)
+  let Smask : Mask (M.μ (tag κ)) := axm (paux ω) (c, κ)
+  let Q : Finset (Fin k → Fin N) := Finset.univ.filter fun z => ∀ t, z t ∈ S
+  let A : ℝ := Real.log 2 - c2 * aStar β γ n
+  let capX : ℝ := 2 * Real.exp (M.sX (tag κ)) / (N : ℝ)
+  let L : ℝ := Real.exp (A * (k : ℝ) * (n : ℝ))
+  have hμwidth : (M.μ (tag κ)).WidthLE (M.sX (tag κ)) :=
+    (M.prep (tag κ)).2.2.2.2.1
+  have hmaskCap (x : Fin N) : (maskLaw Smask).w x ≤ 2 * (M.μ (tag κ)).w x := by
+    by_cases hx : x ∈ Smask.1
+    · rw [maskLaw, Law.restrict]
+      simp only [if_pos hx]
+      apply (div_le_iff₀ (mask_mass_pos Smask)).2
+      have hmul : (2 * (M.μ (tag κ)).w x) * (1 / 2) ≤
+          (2 * (M.μ (tag κ)).w x) * (∑ x ∈ Smask.1, (M.μ (tag κ)).w x) :=
+        mul_le_mul_of_nonneg_left Smask.2.2
+          (mul_nonneg (by norm_num) ((M.μ (tag κ)).nonneg x))
+      nlinarith [hmul]
+    · rw [maskLaw, Law.restrict]
+      simp only [if_neg hx]
+      exact mul_nonneg (by norm_num) ((M.μ (tag κ)).nonneg x)
+  have hcapXnonneg : 0 ≤ capX := by dsimp [capX]; positivity
+  have hcoordCap (x : Fin N) : (maskLaw Smask).w x ≤ capX := by
+    calc
+      (maskLaw Smask).w x ≤ 2 * (M.μ (tag κ)).w x := hmaskCap x
+      _ ≤ 2 * (Real.exp (M.sX (tag κ)) / (N : ℝ)) :=
+        mul_le_mul_of_nonneg_left (hμwidth x) (by norm_num)
+      _ = capX := by dsimp [capX]; ring
+  have hpriorCap (z : Fin k → Fin N) : (prior M tag ω c κ).w z ≤ capX ^ k := by
+    simp only [prior, FinProb.pi]
+    calc
+      (∏ t : Fin k, (maskLaw Smask).w (z t)) ≤ ∏ _ : Fin k, capX := by
+        apply Finset.prod_le_prod₀
+        · intro t ht
+          exact (maskLaw Smask).nonneg (z t)
+        · intro t ht
+          exact hcoordCap (z t)
+      _ = capX ^ k := by simp
+  have hQcard : Q.card = S.card ^ k := by
+    let predSet : {z : Fin k → Fin N // z ∈ Q} ≃
+        {z : Fin k → Fin N // ∀ t, z t ∈ S} :=
+      { toFun := fun z => ⟨z.1, (Finset.mem_filter.mp z.2).2⟩
+        invFun := fun z => ⟨z.1, Finset.mem_filter.mpr ⟨Finset.mem_univ _, z.2⟩⟩
+        left_inv := by intro z; apply Subtype.ext; rfl
+        right_inv := by intro z; apply Subtype.ext; rfl }
+    let tupleEquiv : {z : Fin k → Fin N // ∀ t, z t ∈ S} ≃
+        (Fin k → {x : Fin N // x ∈ S}) :=
+      { toFun := fun z t => ⟨z.1 t, z.2 t⟩
+        invFun := fun f => ⟨fun t => (f t).1, fun t => (f t).2⟩
+        left_inv := by intro z; apply Subtype.ext; rfl
+        right_inv := by intro f; funext t; apply Subtype.ext; rfl }
+    calc
+      Q.card = Fintype.card {z : Fin k → Fin N // z ∈ Q} := (Fintype.card_coe Q).symm
+      _ = Fintype.card {z : Fin k → Fin N // ∀ t, z t ∈ S} := Fintype.card_congr predSet
+      _ = Fintype.card (Fin k → {x : Fin N // x ∈ S}) := Fintype.card_congr tupleEquiv
+      _ = S.card ^ k := by simp [Fintype.card_fun]
+  have hrowNonneg (ω₀ : Prep M tag) (u : OddRole n) (v : Fin N) :
+      0 ≤ oddRow M tag ω₀ u v := by
+    unfold oddRow
+    split_ifs
+    · exact (oddDraw M tag ω₀ u).nonneg v
+    · exact le_rfl
+  have hlikNonneg (z : Fin k → Fin N) : 0 ≤ lik M tag ω a c z y := by
+    unfold lik
+    by_cases he : EvLocal M tag (updW ω (c, κ) z) a c
+    · have he' : EvLocal M tag (updW ω (c, key β γ n a.1) z) a c := by
+        simpa [κ] using he
+      simp only [if_pos he', one_mul]
+      apply Finset.prod_nonneg
+      intro j hj
+      exact hrowNonneg _ _ _
+    · have he' : ¬ EvLocal M tag (updW ω (c, key β γ n a.1) z) a c := by
+        simpa [κ] using he
+      simp [he']
+  have hrefProdNonneg : 0 ≤ refProd M tag ω a c y := by
+    unfold refProd
+    apply Finset.prod_nonneg
+    intro j hj
+    exact (refRow M tag ω (oddNbr a j) c κ).nonneg (y j)
+  have hlikSupport (z : Fin k → Fin N) (hpriorPos : 0 < (prior M tag ω c κ).w z)
+      (hlikPos : 0 < lik M tag ω a c z y) : z ∈ Q := by
+    let ω' := updW ω (c, κ) z
+    have hev : EvLocal M tag ω' a c := by
+      by_contra h
+      simp [lik, ω', κ, h] at hlikPos
+    have hprod : 0 < ∏ j : Fin n, oddRow M tag ω' (oddNbr a j) (y j) := by
+      simpa [lik, ω', κ, hev] using hlikPos
+    have hpriorProd : 0 < ∏ t : Fin k, (maskLaw Smask).w (z t) := by
+      simpa [prior, FinProb.pi] using hpriorPos
+    have haOdd (j : Fin n) : a.1 ∈ oddAdj (oddNbr a j) := by
+      unfold oddAdj
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      change (cube n).Adj (cubeFlip a.1 j) a.1
+      exact (cubeFlip_adj a.1 j).symm
+    have hselD (j : Fin n) : c ∈ selSet M tag ω' (oddNbr a j) := by
+      unfold selSet
+      apply Finset.mem_biUnion.mpr
+      refine ⟨a.1, haOdd j, ?_⟩
+      simp [hev.sel_eq]
+    have hkeyZ (j : Fin n) : κ ∈ Zset β γ (oddNbr a j) := by
+      unfold Zset
+      exact Finset.mem_image.mpr ⟨a.1, haOdd j, rfl⟩
+    have hrowPos (j : Fin n) : 0 < oddRow M tag ω' (oddNbr a j) (y j) := by
+      have hne : oddRow M tag ω' (oddNbr a j) (y j) ≠ 0 := by
+        intro hz
+        have hzero := Finset.prod_eq_zero (s := Finset.univ)
+          (f := fun j : Fin n => oddRow M tag ω' (oddNbr a j) (y j)) (by simp) hz
+        rw [hzero] at hprod
+        exact (lt_irrefl 0) hprod
+      exact lt_of_le_of_ne (hrowNonneg ω' (oddNbr a j) (y j)) (Ne.symm hne)
+    have htupleMem (t : Fin k) : z t ∈ S := by
+      have hcoordPos : 0 < (maskLaw Smask).w (z t) := by
+        have hne : (maskLaw Smask).w (z t) ≠ 0 := by
+          intro hz
+          have hzero := Finset.prod_eq_zero (s := Finset.univ)
+            (f := fun t : Fin k => (maskLaw Smask).w (z t)) (by simp) hz
+          rw [hzero] at hpriorProd
+          exact (lt_irrefl 0) hpriorProd
+        exact lt_of_le_of_ne ((maskLaw Smask).nonneg (z t)) (Ne.symm hne)
+      have hmask : z t ∈ Smask.1 := by
+        by_contra hx
+        have hz : (maskLaw Smask).w (z t) = 0 := by
+          simp [maskLaw, Law.restrict, hx]
+        exact hcoordPos.ne' hz
+      change z t ∈ (axm (paux ω) (c, κ)).1.filter
+        (fun x => ∀ j, Hits E G x (y j))
+      rw [Finset.mem_filter]
+      refine ⟨hmask, ?_⟩
+      intro j
+      have hoddOK : OddOK M tag ω' (oddNbr a j) := by
+        by_contra h
+        have hz : oddRow M tag ω' (oddNbr a j) (y j) = 0 := by simp [oddRow, h]
+        linarith [hrowPos j]
+      have hdrawPos : 0 < (oddDraw M tag ω' (oddNbr a j)).w (y j) := by
+        simpa [oddRow, hoddOK] using hrowPos j
+      have hhit : HitsAll E G (aW (paux ω')) (selSet M tag ω' (oddNbr a j))
+          (Zset β γ (oddNbr a j)) (y j) := by
+        by_contra h
+        simp [oddDraw, hoddOK, FinProb.cond, h] at hdrawPos
+      have h := hhit c (hselD j) κ (hkeyZ j) t
+      simpa [ω', updW, paux, aW] using h
+    simpa [Q] using htupleMem
+  have hsumPos : 0 < marg M tag ω a c y := hp.1
+  have htermPos : ∃ z, 0 < (prior M tag ω c κ).w z * lik M tag ω a c z y := by
+    have hsum : 0 < ∑ z, (prior M tag ω c κ).w z * lik M tag ω a c z y := by
+      simpa [marg] using hsumPos
+    obtain ⟨z, hz, hzpos⟩ := (Finset.sum_pos_iff_of_nonneg fun z hz =>
+      mul_nonneg ((prior M tag ω c κ).nonneg z) (hlikNonneg z)).mp hsum
+    exact ⟨z, hzpos⟩
+  obtain ⟨z₀, hz₀⟩ := htermPos
+  have hpriorPos₀ : 0 < (prior M tag ω c κ).w z₀ := by
+    by_contra h
+    have hz : (prior M tag ω c κ).w z₀ = 0 := le_antisymm (le_of_not_gt h)
+      ((prior M tag ω c κ).nonneg z₀)
+    rw [hz, zero_mul] at hz₀
+    exact (lt_irrefl 0) hz₀
+  have hlikPos₀ : 0 < lik M tag ω a c z₀ y := by
+    by_contra h
+    have hz : lik M tag ω a c z₀ y = 0 := le_antisymm (le_of_not_gt h) (hlikNonneg z₀)
+    rw [hz, mul_zero] at hz₀
+    exact (lt_irrefl 0) hz₀
+  have hQnonempty : Q.Nonempty := ⟨z₀, hlikSupport z₀ hpriorPos₀ hlikPos₀⟩
+  have hrefProdPos : 0 < refProd M tag ω a c y := by
+    by_contra h
+    have hz : refProd M tag ω a c y = 0 := le_antisymm (le_of_not_gt h) hrefProdNonneg
+    have hbound := hLB ω a c z₀ y
+    rw [hz, mul_zero] at hbound
+    linarith [hbound]
+  have htermBound (z : Fin k → Fin N) :
+      (prior M tag ω c κ).w z * lik M tag ω a c z y ≤
+        if z ∈ Q then capX ^ k * L * refProd M tag ω a c y else 0 := by
+    by_cases hzQ : z ∈ Q
+    · have hLBz := hLB ω a c z y
+      have hbound : (prior M tag ω c κ).w z * lik M tag ω a c z y ≤
+          capX ^ k * L * refProd M tag ω a c y := by
+        calc
+          _ ≤ capX ^ k * lik M tag ω a c z y :=
+            mul_le_mul_of_nonneg_right (hpriorCap z) (hlikNonneg z)
+          _ ≤ capX ^ k * (L * refProd M tag ω a c y) :=
+            mul_le_mul_of_nonneg_left (by simpa [L] using hLBz) (by positivity)
+          _ = capX ^ k * L * refProd M tag ω a c y := by ring
+      simpa [hzQ] using hbound
+    · have htermNonneg : 0 ≤ (prior M tag ω c κ).w z * lik M tag ω a c z y :=
+        mul_nonneg ((prior M tag ω c κ).nonneg z) (hlikNonneg z)
+      have hzero : (prior M tag ω c κ).w z * lik M tag ω a c z y = 0 := by
+        by_contra hne
+        have hpos : 0 < (prior M tag ω c κ).w z * lik M tag ω a c z y :=
+          lt_of_le_of_ne htermNonneg (Ne.symm hne)
+        have hpz : 0 < (prior M tag ω c κ).w z := by
+          by_contra hh
+          have heq : (prior M tag ω c κ).w z = 0 := le_antisymm (le_of_not_gt hh)
+            ((prior M tag ω c κ).nonneg z)
+          rw [heq, zero_mul] at hpos
+          exact (lt_irrefl 0) hpos
+        have hlz : 0 < lik M tag ω a c z y := by
+          by_contra hh
+          have heq : lik M tag ω a c z y = 0 := le_antisymm (le_of_not_gt hh) (hlikNonneg z)
+          rw [heq, mul_zero] at hpos
+          exact (lt_irrefl 0) hpos
+        exact hzQ (hlikSupport z hpz hlz)
+      simp [hzQ, hzero]
+  have hMargUpper : marg M tag ω a c y ≤
+      (Q.card : ℝ) * (capX ^ k * L * refProd M tag ω a c y) := by
+    calc
+      marg M tag ω a c y = ∑ z, (prior M tag ω c κ).w z * lik M tag ω a c z y := by rfl
+      _ ≤ ∑ z, if z ∈ Q then capX ^ k * L * refProd M tag ω a c y else 0 :=
+        Finset.sum_le_sum fun z hz => htermBound z
+      _ = (Q.card : ℝ) * (capX ^ k * L * refProd M tag ω a c y) := by
+        simpa [Finset.sum_const, nsmul_eq_mul] using
+          (Finset.sum_ite_mem_eq (s := Q) (f := fun _ : Fin k → Fin N =>
+            capX ^ k * L * refProd M tag ω a c y))
+  have hscaleMul : eps4 β γ n * refProd M tag ω a c y ≤
+      ((Q.card : ℝ) * capX ^ k * L) * refProd M tag ω a c y := by
+    calc
+      eps4 β γ n * refProd M tag ω a c y ≤ marg M tag ω a c y := hp.2
+      _ ≤ (Q.card : ℝ) * (capX ^ k * L * refProd M tag ω a c y) := hMargUpper
+      _ = ((Q.card : ℝ) * capX ^ k * L) * refProd M tag ω a c y := by ring
+  have hscale : eps4 β γ n ≤ (Q.card : ℝ) * capX ^ k * L :=
+    le_of_mul_le_mul_right hscaleMul hrefProdPos
+  have hcost : eps4 β γ n ≤ (S.card : ℝ) ^ k * capX ^ k *
+      Real.exp ((Real.log 2 - c2 * aStar β γ n) * (k : ℝ) * (n : ℝ)) := by
+    simpa [L, hQcard] using hscale
+  have hcomm : (N : ℝ) * Real.exp
+      (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ))) ≤ (S.card : ℝ) := by
+    by_contra hnot
+    have hSle : (S.card : ℝ) ≤ (N : ℝ) *
+        Real.exp (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ))) :=
+      (lt_of_not_ge hnot).le
+    have hNnonzero : (N : ℝ) ≠ 0 := by exact_mod_cast (ne_of_gt hN)
+    have hTwoExp : 2 * Real.exp (M.sX (tag κ)) =
+        Real.exp (Real.log 2 + M.sX (tag κ)) := by
+      calc
+        2 * Real.exp (M.sX (tag κ)) =
+            Real.exp (Real.log 2) * Real.exp (M.sX (tag κ)) := by
+              rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+        _ = Real.exp (Real.log 2 + M.sX (tag κ)) := by rw [← Real.exp_add]
+    have hcapExact : (N : ℝ) * Real.exp
+        (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ))) * capX *
+        Real.exp ((Real.log 2 - c2 * aStar β γ n) * (n : ℝ)) =
+        Real.exp (Real.log 2 + M.sX (tag κ) - c2 * aStar β γ n * (n : ℝ) / 2) := by
+      calc
+        _ = Real.exp (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ))) *
+              (2 * Real.exp (M.sX (tag κ))) *
+                Real.exp ((Real.log 2 - c2 * aStar β γ n) * (n : ℝ)) := by
+          dsimp [capX]
+          field_simp [hNnonzero]
+        _ = Real.exp (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ))) *
+              Real.exp (Real.log 2 + M.sX (tag κ)) *
+                Real.exp ((Real.log 2 - c2 * aStar β γ n) * (n : ℝ)) := by rw [hTwoExp]
+        _ = Real.exp (Real.log 2 + M.sX (tag κ) -
+              c2 * aStar β γ n * (n : ℝ) / 2) := by
+          rw [← Real.exp_add, ← Real.exp_add]
+          congr 1
+          ring_nf
+    have hAstarnonneg : 0 ≤ aStar β γ n := by
+      unfold aStar
+      exact Real.rpow_nonneg hnpos.le _
+    have hDpos : 0 < c2 * aStar β γ n * (n : ℝ) := by
+      have ha : 0 < aStar β γ n := by
+        unfold aStar
+        exact Real.rpow_pos_of_pos hnpos _
+      positivity
+    have hbase : Real.exp (Real.log 2 + M.sX (tag κ) -
+        c2 * aStar β γ n * (n : ℝ) / 2) <
+        Real.exp (-(c2 * aStar β γ n * (n : ℝ)) / 4) := by
+      apply Real.exp_lt_exp.mpr
+      nlinarith [hsmall, hAstarnonneg, hDpos]
+    have hcostUpper : (S.card : ℝ) ^ k * capX ^ k *
+        Real.exp ((Real.log 2 - c2 * aStar β γ n) * (k : ℝ) * (n : ℝ)) <
+        Real.exp (-(c2 * aStar β γ n * (n : ℝ)) / 4) ^ k := by
+      have hpowExp : Real.exp ((Real.log 2 - c2 * aStar β γ n) * (k : ℝ) * (n : ℝ)) =
+          Real.exp ((Real.log 2 - c2 * aStar β γ n) * (n : ℝ)) ^ k := by
+        rw [← Real.exp_nat_mul]
+        congr 1
+        ring
+      calc
+        _ ≤ ((N : ℝ) * Real.exp
+              (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ)))) ^ k * capX ^ k *
+              Real.exp ((Real.log 2 - c2 * aStar β γ n) * (k : ℝ) * (n : ℝ)) := by
+          gcongr
+        _ = ((N : ℝ) * Real.exp
+              (-((Real.log 2 - c2 * aStar β γ n / 2) * (n : ℝ))) * capX *
+                Real.exp ((Real.log 2 - c2 * aStar β γ n) * (n : ℝ))) ^ k := by
+          rw [hpowExp, ← mul_pow, ← mul_pow]
+        _ = Real.exp (Real.log 2 + M.sX (tag κ) -
+              c2 * aStar β γ n * (n : ℝ) / 2) ^ k := by
+          rw [hcapExact]
+        _ < Real.exp (-(c2 * aStar β γ n * (n : ℝ)) / 4) ^ k :=
+          pow_lt_pow_left₀ hbase (Real.exp_nonneg _) (by
+            have hkpos : 0 < k := by
+              dsimp [k, tupLen]
+              exact Nat.ceil_pos.mpr (Real.rpow_pos_of_pos hnpos (omega4 β γ / 3))
+            exact hkpos.ne')
+    have hepsPow : Real.exp (-(c2 * aStar β γ n * (n : ℝ)) / 4) ^ k = eps4 β γ n := by
+      dsimp [eps4]
+      rw [← Real.exp_nat_mul]
+      congr 1
+      ring
+    have hcostStrict : (S.card : ℝ) ^ k * capX ^ k *
+        Real.exp ((Real.log 2 - c2 * aStar β γ n) * (k : ℝ) * (n : ℝ)) < eps4 β γ n := by
+      simpa [hepsPow] using hcostUpper
+    exact (not_lt_of_ge hcost) hcostStrict
+  exact hcomm
 
 /-- L4.1g (04:428–432): by definition an even row is zero or uniform on `S_{a,c}(y)` inside the mask of the
 selected reference, on `E` and the predictive requirement; by `CommLarge` the set is nonempty there and

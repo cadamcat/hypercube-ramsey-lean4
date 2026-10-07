@@ -1729,6 +1729,170 @@ private theorem rootScaleFailure9_dependsOn_rootSupport {P : Params9} {hc : Heig
       t s η R Pp Pp' A A' start (scaleSupport9_subset_rootSupport9 hmn root start R hstart)
       hagree).mpr hfail
 
+private def rootCountFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (root : CubeVertex n) (Pp : Pos9 P hc n → Bool) : Prop :=
+  ∃ x : HeightState9 P hc n,
+    _root_.hammingDist x.1 root ≤ 16 * hc.levels n ∧
+      (eligCount9 Finset.univ Pp x.1 x.2 : ℝ) < (n : ℝ) ^ (10 : ℝ) / 2
+
+private def rootBadPair9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (t s η : ℝ) (root : CubeVertex n)
+    (ω : Pos9 P hc n → Bool × Bool) : Prop :=
+  let fields := (heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω
+  rootScaleFailure9 Finset.univ t s η (hc.levels n) fields.1 fields.2 root ∨
+    rootCountFailure9 root fields.1
+
+private theorem rootCountFailure9_dependsOn_rootSupport {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} (hmn : P.m n ≤ n) (root : CubeVertex n)
+    (Pp Pp' : Pos9 P hc n → Bool)
+    (hagree : ∀ c ∈ scaleRootSupport9 root (hc.levels n), Pp c = Pp' c) :
+    rootCountFailure9 root Pp ↔ rootCountFailure9 root Pp' := by
+  let start : HeightState9 P hc n := (root, ⟨0, by omega⟩)
+  have hsubset : scaleSupport9 start (hc.levels n) ⊆
+      scaleRootSupport9 root (hc.levels n) := by
+    exact scaleSupport9_subset_rootSupport9 hmn root start (hc.levels n) (by simp [start])
+  have hcountEq {x : HeightState9 P hc n}
+      (hx : _root_.hammingDist x.1 root ≤ 16 * hc.levels n) :
+      eligCount9 Finset.univ Pp x.1 x.2 = eligCount9 Finset.univ Pp' x.1 x.2 := by
+    have hxlevel : Nat.dist x.2.val start.2.val ≤ 8 * hc.levels n + 2 := by
+      have hxlt := x.2.isLt
+      simp [start, Nat.dist_zero_right]
+      omega
+    have hleft := eligCount9_restrictLocal hmn Finset.univ Pp start x
+      (hc.levels n) hx hxlevel
+    have hright := eligCount9_restrictLocal hmn Finset.univ Pp' start x
+      (hc.levels n) hx hxlevel
+    have hP : ∀ c ∈ Finset.univ ∩ scaleSupport9 start (hc.levels n),
+        Pp c = Pp' c := by
+      intro c hc'
+      exact hagree c (hsubset (Finset.mem_inter.mp hc').2)
+    calc
+      eligCount9 Finset.univ Pp x.1 x.2 =
+          eligCount9 (Finset.univ ∩ scaleSupport9 start (hc.levels n)) Pp x.1 x.2 := hleft
+      _ = eligCount9 (Finset.univ ∩ scaleSupport9 start (hc.levels n)) Pp' x.1 x.2 :=
+        eligCount9_congr_on_C _ Pp Pp' hP x.1 x.2
+      _ = eligCount9 Finset.univ Pp' x.1 x.2 := hright.symm
+  constructor
+  · rintro ⟨x, hx, hlow⟩
+    exact ⟨x, hx, by rw [← hcountEq hx]; exact hlow⟩
+  · rintro ⟨x, hx, hlow⟩
+    exact ⟨x, hx, by rw [hcountEq hx]; exact hlow⟩
+
+private theorem rootBadPair9_dependsOn_rootSupport {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} {t s η : ℝ} (hmn : P.m n ≤ n) (root : CubeVertex n)
+    (ω ω' : Pos9 P hc n → Bool × Bool)
+    (hagree : ∀ c ∈ scaleRootSupport9 root (hc.levels n), ω c = ω' c) :
+    rootBadPair9 t s η root ω = rootBadPair9 t s η root ω' := by
+  let fields := (heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω
+  let fields' := (heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω'
+  have hfields : ∀ c ∈ scaleRootSupport9 root (hc.levels n),
+      fields.1 c = fields'.1 c ∧ fields.2 c = fields'.2 c := by
+    intro c hc'
+    have heq := hagree c hc'
+    constructor
+    · simpa [fields, fields', heightFieldsEquiv9] using congrArg Prod.fst heq
+    · simpa [fields, fields', heightFieldsEquiv9] using congrArg Prod.snd heq
+  have hscale := rootScaleFailure9_dependsOn_rootSupport hmn t s η
+    (hc.levels n) fields.1 fields'.1 fields.2 fields'.2 root hfields
+  have hcount := rootCountFailure9_dependsOn_rootSupport hmn root fields.1 fields'.1
+    (fun c hc' => (hfields c hc').1)
+  unfold rootBadPair9
+  dsimp only
+  rw [hscale, hcount]
+
+private theorem rootCountFailure9_probability {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (hcounts : HeightCounts9 P hc n) (root : CubeVertex n) :
+    (heightLaw9 P hc n).pr (fun ω => rootCountFailure9 root ω.1) ≤ Real.exp (-(n : ℝ)) := by
+  let global (Pp : Pos9 P hc n → Bool) : Prop :=
+    ∃ v : CubeVertex n, ∃ j : Fin (hc.levels n + 1),
+      (eligCount9 Finset.univ Pp v j : ℝ) < (n : ℝ) ^ (10 : ℝ) / 2
+  calc
+    (heightLaw9 P hc n).pr (fun ω => rootCountFailure9 root ω.1) ≤
+        (heightLaw9 P hc n).pr (fun ω => global ω.1) := by
+          apply finProb_pr_mono (heightLaw9 P hc n)
+          intro ω hω
+          obtain ⟨x, hx, hlow⟩ := hω
+          exact ⟨x.1, x.2, hlow⟩
+    _ = (heightPosLaw9 P hc n).pr global := by
+      simpa [heightLaw9] using
+        (prod_pr_fst (heightPosLaw9 P hc n) (heightActLaw9 P hc n) global)
+    _ ≤ Real.exp (-(n : ℝ)) := by
+      simpa [global, HeightCounts9] using hcounts
+
+private theorem rootBadPair9_scope {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s η : ℝ} (hmn : P.m n ≤ n) (root : CubeVertex n) :
+    FinProb.DependsOn (rootBadPair9 (P := P) (hc := hc) (n := n) t s η root)
+      (scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n)) := by
+  intro ω ω' hagree
+  exact rootBadPair9_dependsOn_rootSupport (P := P) (hc := hc) (n := n)
+    hmn root ω ω' hagree
+
+private theorem rootBadPair9_probability {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s η : ℝ} (hcounts : HeightCounts9 P hc n) (root : CubeVertex n)
+    (ε : ℝ)
+    (hscale : (heightLaw9 P hc n).pr
+      (fun ω => rootScaleFailure9 Finset.univ t s η (hc.levels n) ω.1 ω.2 root) ≤ ε) :
+    (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr (rootBadPair9 t s η root) ≤
+      ε + Real.exp (-(n : ℝ)) := by
+  let E : ((Pos9 P hc n → Bool) × (Pos9 P hc n → Bool)) → Prop :=
+    fun fields => rootScaleFailure9 Finset.univ t s η (hc.levels n)
+        fields.1 fields.2 root ∨ rootCountFailure9 root fields.1
+  have htrans : (heightLaw9 P hc n).pr E =
+      (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr (rootBadPair9 t s η root) := by
+    calc
+      (heightLaw9 P hc n).pr E =
+          (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr
+            (fun ω => E ((heightFieldsEquiv9 (P := P) (hc := hc) (n := n)).symm ω)) :=
+        heightLaw9_pr_eq_heightPairLaw9 E
+      _ = (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr (rootBadPair9 t s η root) := by
+        apply congrArg (FinProb.pr (heightPairLaw9 (P := P) (hc := hc) (n := n)))
+        funext ω
+        simp [E, rootBadPair9, heightFieldsEquiv9]
+  have hE : (heightLaw9 P hc n).pr E ≤
+      (heightLaw9 P hc n).pr
+          (fun ω => rootScaleFailure9 Finset.univ t s η (hc.levels n) ω.1 ω.2 root) +
+        (heightLaw9 P hc n).pr (fun ω => rootCountFailure9 root ω.1) := by
+    simpa [E] using finProb_pr_union (heightLaw9 P hc n)
+      (fun ω => rootScaleFailure9 Finset.univ t s η (hc.levels n) ω.1 ω.2 root)
+      (fun ω => rootCountFailure9 root ω.1)
+  calc
+    (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr (rootBadPair9 t s η root) =
+        (heightLaw9 P hc n).pr E := htrans.symm
+    _ ≤ (heightLaw9 P hc n).pr
+          (fun ω => rootScaleFailure9 Finset.univ t s η (hc.levels n) ω.1 ω.2 root) +
+        (heightLaw9 P hc n).pr (fun ω => rootCountFailure9 root ω.1) := hE
+    _ ≤ ε + Real.exp (-(n : ℝ)) :=
+      add_le_add hscale (rootCountFailure9_probability hcounts root)
+
+private theorem heightRootLLLInput9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {t s η ε x : ℝ} {Δ : ℕ}
+    (hmn : P.m n ≤ n) (hcounts : HeightCounts9 P hc n)
+    (hx0 : 0 ≤ x) (hx1 : x < 1)
+    (hdegree : ∀ root : CubeVertex n,
+      (Finset.univ.filter
+        (fun root' => root' ≠ root ∧ ¬ Disjoint
+          (scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n))
+          (scaleRootSupport9 (P := P) (hc := hc) (n := n) root' (hc.levels n)))).card ≤ Δ)
+    (hscale : ∀ root : CubeVertex n,
+      (heightLaw9 P hc n).pr (fun ω =>
+        rootScaleFailure9 Finset.univ t s η (hc.levels n) ω.1 ω.2 root) ≤ ε)
+    (hcharge : ε + Real.exp (-(n : ℝ)) ≤ x * (1 - x) ^ Δ) :
+    S07.LLLInput
+      (fun _ : Pos9 P hc n => FinProb.prod
+        (FinProb.bernoulli ((n : ℝ) ^ (10 : ℝ) / (residualBall9 P n : ℝ)))
+        (FinProb.bernoulli ((n : ℝ) ^ (hc.b₀ - 10))))
+      (fun root ω => rootBadPair9 (P := P) (hc := hc) (n := n) t s η root ω)
+      (fun root => scaleRootSupport9 (P := P) (hc := hc) (n := n) root (hc.levels n)) x Δ := by
+  refine ⟨hx0, hx1, ?_, ?_, ?_⟩
+  · intro root
+    exact rootBadPair9_scope (P := P) (hc := hc) (n := n) hmn root
+  · intro root
+    simpa using hdegree root
+  · intro root
+    change (heightPairLaw9 (P := P) (hc := hc) (n := n)).pr
+        (rootBadPair9 (P := P) (hc := hc) (n := n) t s η root) ≤ x * (1 - x) ^ Δ
+    exact (rootBadPair9_probability hcounts root ε (hscale root)).trans hcharge
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

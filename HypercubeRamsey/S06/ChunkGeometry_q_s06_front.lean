@@ -110,10 +110,10 @@ theorem cubeCountOn_card {n : ℕ} (A : Finset (Fin n)) (q : ℕ) :
     _ = Nat.choose A.card q * 2 ^ (n - A.card) := by
       rw [boolWeightLayerCard, Fintype.card_fun, Fintype.card_bool, hIcard, hOcard]
 
-private def binTransitionSet {k : ℕ} (ell : ℕ) (bin : ℕ → Fin k) : Finset ℕ :=
+def binTransitionSet {k : ℕ} (ell : ℕ) (bin : ℕ → Fin k) : Finset ℕ :=
   (Finset.range ell).filter fun q => bin (q + 1) ≠ bin q
 
-private def binTransitionEndpoints {k : ℕ} (ell : ℕ) (bin : ℕ → Fin k) : Finset ℕ :=
+def binTransitionEndpoints {k : ℕ} (ell : ℕ) (bin : ℕ → Fin k) : Finset ℕ :=
   binTransitionSet ell bin ∪ (binTransitionSet ell bin).image Nat.succ
 
 /-- A monotone bin sequence has at most one transition into each value. -/

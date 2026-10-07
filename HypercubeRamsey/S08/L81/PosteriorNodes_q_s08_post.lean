@@ -1,4 +1,5 @@
 import HypercubeRamsey.S08.L81.SelectionNodes
+import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 
 noncomputable section
 
@@ -65,6 +66,170 @@ theorem pi_pr_le_fixed {ι : Type*} [Fintype ι] [DecidableEq ι]
           norm_num
     _ = ∏ i : {i // i ∈ S}, (P i.1).w (a i) :=
       pi_pr_cylinder P S a
+
+theorem positive_tilt_gate {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
+    (hbase : D.BaseGates Θ g) (hpos : 0 < (D.tilt Θ g).w i) :
+    D.GateOpen Θ g i := by
+  have hAG : 0 < D.AG g := by
+    unfold Ctx.AG
+    exact inv_pos.mpr (pow_pos (by norm_num : (0 : ℝ) < 2) _)
+  have hZ : 0 < D.ZG Θ g := by
+    have hgate := hbase.2.1.1
+    exact lt_of_lt_of_le (mul_pos (by norm_num : (0 : ℝ) < 8 / 10) hAG) hgate
+  have hnum : 0 < D.tiltW Θ g i := by
+    unfold Ctx.tilt normOr at hpos
+    change 0 < (if (∑ i', D.tiltW Θ g i') = 0 then D.tagLaw.w i else
+      D.tiltW Θ g i / ∑ i', D.tiltW Θ g i') at hpos
+    have hsumpos : 0 < ∑ i', D.tiltW Θ g i' := by
+      simpa [Ctx.ZG] using hZ
+    rw [if_neg (ne_of_gt hsumpos)] at hpos
+    by_contra hn
+    have hle : D.tiltW Θ g i ≤ 0 := le_of_not_gt hn
+    have hquot : D.tiltW Θ g i / D.ZG Θ g ≤ 0 :=
+      div_nonpos_of_nonpos_of_nonneg hle hZ.le
+    exact (not_le_of_gt hpos) (by simpa [Ctx.ZG] using hquot)
+  by_contra hgate
+  unfold Ctx.tiltW at hnum
+  simp [hgate] at hnum
+
+theorem anchor_miss_le {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
+    (hn : 1 ≤ D.n) (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
+    (ξ : D.Tup) (j : Fin h)
+    (htrue : D.GateOpen Θ g i)
+    (hcand : D.GateOpen (Function.update Θ g ξ) g i) :
+    (D.anchorU Θ g i).pr (fun x => ¬ Hits D.E D.G x (ξ j)) ≤ D.Δ / (1 - D.Δ) := by
+  classical
+  have hnR : 0 < (D.n : ℝ) := by
+    exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 1) hn)
+  have hpow : 0 < (D.n : ℝ) ^ (p / 2) := Real.rpow_pos_of_pos hnR _
+  have hΔpos : 0 < D.Δ := Real.exp_pos _
+  have hΔlt : D.Δ < 1 := by
+    unfold Ctx.Δ
+    have hlt : Real.exp (-((D.n : ℝ) ^ (p / 2))) < Real.exp 0 :=
+      Real.exp_lt_exp.mpr (neg_neg_of_pos hpow)
+    simpa using hlt
+  have hfactor : 0 < 1 - D.Δ := sub_pos.mpr hΔlt
+  have hcut : 0 < D.cut := Real.exp_pos _
+  have hdmpos : 0 < D.dMinus Θ g i := lt_of_lt_of_le hcut htrue.1
+  have hdptrue : 0 < D.dPlus Θ g i := by
+    have hineq := htrue.2
+    have hprod : 0 < (1 - D.Δ) * D.dMinus Θ g i := mul_pos hfactor hdmpos
+    exact lt_of_lt_of_le hprod hineq
+  have hcross_update (x : Fin D.N) :
+      D.crossHit (Function.update Θ g ξ) g x ↔ D.crossHit Θ g x := by
+    constructor
+    · intro hx u hu
+      have hne : u ≠ g := by
+        intro heq
+        subst u
+        have hdist : keyDist g g = 0 := by simp [keyDist]
+        have hu' : keyDist g g = 1 := by simpa [crossKeys] using hu
+        rw [hdist] at hu'
+        norm_num at hu'
+      have hval : (Function.update Θ g ξ) u = Θ u := Function.update_of_ne hne ξ Θ
+      simpa [hval] using hx u hu
+    · intro hx u hu
+      have hne : u ≠ g := by
+        intro heq
+        subst u
+        have hdist : keyDist g g = 0 := by simp [keyDist]
+        have hu' : keyDist g g = 1 := by simpa [crossKeys] using hu
+        rw [hdist] at hu'
+        norm_num at hu'
+      have hval : (Function.update Θ g ξ) u = Θ u := Function.update_of_ne hne ξ Θ
+      simpa [hval] using hx u hu
+  have hown_update (x : Fin D.N) :
+      D.ownHit (Function.update Θ g ξ) g x ↔ D.crossHit Θ g x ∧ D.hitsAll x ξ := by
+    simp [Ctx.ownHit, Ctx.hitsAll, hcross_update, Function.update]
+  have hdmEq : D.dMinus (Function.update Θ g ξ) g i = D.dMinus Θ g i := by
+    unfold Ctx.dMinus
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp only [hcross_update]
+  have hdpCand : (1 - D.Δ) * D.dMinus Θ g i ≤
+      D.dPlus (Function.update Θ g ξ) g i := by
+    simpa [hdmEq] using hcand.2
+  have hmass_miss_le :
+      (∑ x, (D.M.μ i).w x *
+        if D.crossHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0) ≤
+        D.dMinus Θ g i - D.dPlus (Function.update Θ g ξ) g i := by
+    unfold Ctx.dMinus Ctx.dPlus
+    rw [← Finset.sum_sub_distrib]
+    apply Finset.sum_le_sum
+    intro x hx
+    by_cases hcross : D.crossHit Θ g x
+    · by_cases hall : D.hitsAll x ξ
+      · have hj : Hits D.E D.G x (ξ j) := hall j
+        simp [hcross, hall, hj, hown_update]
+      · have hnotown : ¬ D.ownHit (Function.update Θ g ξ) g x := by
+          rw [hown_update]
+          simp [hcross, hall]
+        by_cases hmiss : ¬ Hits D.E D.G x (ξ j)
+        · simp [hcross, hmiss, hnotown, (D.M.μ i).nonneg x]
+        · simp [hcross, hmiss, hnotown]
+          exact (D.M.μ i).nonneg x
+    · have hnotown : ¬ D.ownHit (Function.update Θ g ξ) g x := by
+        rw [hown_update]
+        simp [hcross]
+      simp [hcross, hnotown]
+  have hmissmass :
+      (∑ x, (D.M.μ i).w x *
+        if D.ownHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0) ≤
+        (∑ x, (D.M.μ i).w x *
+          if D.crossHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0) := by
+    apply Finset.sum_le_sum
+    intro x hx
+    have hown : D.ownHit Θ g x → D.crossHit Θ g x := fun ho => ho.1
+    by_cases hbad : D.ownHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j)
+    · have hbad' : D.crossHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) := ⟨hown hbad.1, hbad.2⟩
+      simp [hbad, hbad']
+    · by_cases hcross : D.crossHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j)
+      · have hnotown : ¬ D.ownHit Θ g x := by
+          intro ho
+          exact hbad ⟨ho, hcross.2⟩
+        simp [hbad, hcross, hnotown]
+        exact (D.M.μ i).nonneg x
+      · simp [hbad, hcross]
+  have hnumBound :
+      (∑ x, (D.M.μ i).w x *
+        if D.ownHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0) ≤
+        D.Δ * D.dMinus Θ g i := by
+    calc
+      _ ≤ ∑ x, (D.M.μ i).w x *
+            if D.crossHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0 := hmissmass
+      _ ≤ D.dMinus Θ g i - D.dPlus (Function.update Θ g ξ) g i := hmass_miss_le
+      _ ≤ D.dMinus Θ g i - (1 - D.Δ) * D.dMinus Θ g i := by linarith [hdpCand]
+      _ = D.Δ * D.dMinus Θ g i := by ring
+  have hprob : (D.anchorU Θ g i).pr (fun x => ¬ Hits D.E D.G x (ξ j)) =
+      (∑ x, (D.M.μ i).w x *
+        if D.ownHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0) /
+        D.dPlus Θ g i := by
+    have hden : (∑ x, (D.M.μ i).w x * if D.ownHit Θ g x then 1 else 0) =
+        D.dPlus Θ g i := rfl
+    have hdenpos : 0 < ∑ x, (D.M.μ i).w x * if D.ownHit Θ g x then 1 else 0 := by
+      simpa [Ctx.dPlus] using hdptrue
+    simp only [FinProb.pr, Ctx.anchorU, normOr]
+    simp only [if_neg (ne_of_gt hdenpos)]
+    simp_rw [hden]
+    rw [Finset.sum_div]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hm : ¬ Hits D.E D.G x (ξ j) <;>
+      by_cases ho : D.ownHit Θ g x <;> simp [hm, ho] <;> ring
+  rw [hprob]
+  apply (div_le_iff₀ hdptrue).2
+  calc
+    (∑ x, (D.M.μ i).w x *
+      if D.ownHit Θ g x ∧ ¬ Hits D.E D.G x (ξ j) then 1 else 0) ≤
+        D.Δ * D.dMinus Θ g i := hnumBound
+    _ ≤ (D.Δ / (1 - D.Δ)) * D.dPlus Θ g i := by
+      calc
+        D.Δ * D.dMinus Θ g i =
+            (D.Δ / (1 - D.Δ)) * ((1 - D.Δ) * D.dMinus Θ g i) := by
+          field_simp [ne_of_gt hfactor]
+        _ ≤ (D.Δ / (1 - D.Δ)) * D.dPlus Θ g i :=
+          mul_le_mul_of_nonneg_left htrue.2 (div_nonneg hΔpos.le hfactor.le)
 
 end Lane_q_s08_post
 

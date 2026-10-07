@@ -226,8 +226,8 @@ exactly one ID from each adjacent slice (10:57). -/
 noncomputable def lists (h : History n N δ) (q : Site n δ) : Finset (Finset (ID n δ)) :=
   (candidates h q).powerset.filter fun L =>
     (L.filter fun c => c.1 = q.1).card ≤ TT n δ ∧
-    (∀ c ∈ L, c.1 = q.1 ∨ hammingDist c.1 q.1 = 1) ∧
-    ∀ z' : Slice n δ, hammingDist z' q.1 = 1 → (L.filter fun c => c.1 = z').card = 1
+    (∀ c ∈ L, c.1 = q.1 ∨ _root_.hammingDist c.1 q.1 = 1) ∧
+    ∀ z' : Slice n δ, _root_.hammingDist z' q.1 = 1 → (L.filter fun c => c.1 = z').card = 1
 
 /-- The fixed-list test (10.1) for list `L` at group `q`, under the masked
 cluster mixture of `q`'s tag and mask (10:56–68). -/
@@ -471,19 +471,19 @@ end Experiment
 distance at most `2 R_loc + 16` (10:271). -/
 noncomputable def oddNear {n : ℕ} (δ : ℝ) (b : OddRole n) : Finset (OddRole n) :=
   Finset.univ.filter fun b' =>
-    hammingDist (groupOf δ b).1 (groupOf δ b').1 ≤ 8 ∧
-      hammingDist (groupOf δ b).2 (groupOf δ b').2 ≤ 2 * Rloc n δ + 16
+    _root_.hammingDist (groupOf δ b).1 (groupOf δ b').1 ≤ 8 ∧
+      _root_.hammingDist (groupOf δ b).2 (groupOf δ b').2 ≤ 2 * Rloc n δ + 16
 
 /-- Residual-near even roles (10:288). -/
 noncomputable def evenNear {n : ℕ} (δ : ℝ) (a : EvenRole n) : Finset (EvenRole n) :=
   Finset.univ.filter fun a' =>
-    hammingDist (evenSite δ a).1 (evenSite δ a').1 ≤ 8 ∧
-      hammingDist (evenSite δ a).2 (evenSite δ a').2 ≤ 2 * Rloc n δ + 16
+    _root_.hammingDist (evenSite δ a).1 (evenSite δ a').1 ≤ 8 ∧
+      _root_.hammingDist (evenSite δ a).2 (evenSite δ a').2 ≤ 2 * Rloc n δ + 16
 
 /-- Tag-dependence neighbourhood of a slice: special distance at most 4
 (10:119–121, 10:263). -/
 noncomputable def tagNbhd {n : ℕ} (δ : ℝ) (z : Slice n δ) : Finset (Slice n δ) :=
-  Finset.univ.filter fun z' => hammingDist z z' ≤ 4
+  Finset.univ.filter fun z' => _root_.hammingDist z z' ≤ 4
 
 
 /-! ## Caps, fractions and failure levels as finite suprema
@@ -595,7 +595,7 @@ every hypothetical mean at most `e^{m/100} ν` pointwise (the paper gives
 `O(T+1) ν`, which is smaller for large `n`; d5 needs only this). -/
 structure GoodStrategy (σ : MaskStrategy M) : Prop where
   local_tags : ∀ q : Site n δ, FinProb.DependsOn (fun t : Slice n δ → M.I => σ t q)
-    (Finset.univ.filter fun z => hammingDist z q.1 ≤ 1)
+    (Finset.univ.filter fun z => _root_.hammingDist z q.1 ≤ 1)
   permitted : ∀ t q S, (σ t q).w S ≠ 0 → Permitted M (t q.1) S ∨ S = Finset.univ
   balanced : ∀ t q (s : ℕ), s ≤ TT n δ → ∀ y,
     ∑ S, (σ t q).w S * hypMean M t q S s y ≤

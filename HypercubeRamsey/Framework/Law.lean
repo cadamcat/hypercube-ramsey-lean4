@@ -30,6 +30,19 @@ open Classical in
 noncomputable def codeg (E : Fin N → Fin N → Prop) (c : Colour) (μ : Law N) (y y' : Fin N) : ℝ :=
   ∑ x, μ.w x * (if Hits E c x y ∧ Hits E c x y' then 1 else 0)
 
+open Classical in
+/-- `d_G(μ, y)`: degree of a second-side label `y` into a first-side law `μ`. -/
+noncomputable def colDeg (E : Fin N → Fin N → Prop) (c : Colour) (μ : Law N) (y : Fin N) : ℝ :=
+  ∑ x, μ.w x * (if Hits E c x y then 1 else 0)
+
+open Classical in
+/-- `d_G(x, ν)`: degree of a first-side label `x` into a second-side law `ν`. -/
+noncomputable def rowDeg (E : Fin N → Fin N → Prop) (c : Colour) (x : Fin N) (ν : Law N) : ℝ :=
+  ∑ y, ν.w y * (if Hits E c x y then 1 else 0)
+
+/-- Normalized atom cap `N · max μ ≤ M` (so `WidthLE μ t ↔ CapLE μ (exp t)` for `N > 0`). -/
+def Law.CapLE (μ : Law N) (M : ℝ) : Prop := ∀ x, (N : ℝ) * μ.w x ≤ M
+
 /-- Point mass; degrees are `dens E c μ (Law.dirac y)`. -/
 noncomputable def Law.dirac (y : Fin N) : Law N where
   w x := if x = y then 1 else 0

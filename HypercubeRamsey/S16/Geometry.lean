@@ -1,5 +1,6 @@
 import HypercubeRamsey.PartC.Resampling
 import HypercubeRamsey.S16.Geometry_q_s16_geom
+import HypercubeRamsey.S16.Geometry_sol_s16_syn
 
 /-!
 # Section 16 low-mode geometry and shared quantitative assumptions
@@ -1027,22 +1028,180 @@ theorem syndrome_data_exists {κ : CConsts} {T : Stage} {k : ℕ}
     ∃ S : SyndromeData PT, SyndromeFacts S := by
   classical
   let n := T.S.n k
+  let A : Finset (Fin n) := Finset.univ.biUnion fun i : Fin PT.tiling.m => PT.tiling.Icoord i
   obtain ⟨Hdim, hGroupLower, hGroupUpper⟩ :=
     Lane_q_s16_geom.exists_paired_group_dimension hScale.n_four
   let a := κ.A0 * Real.log (n : ℝ)
   obtain ⟨rDim, hrLower, hrUpper⟩ := Lane_q_s16_geom.exists_power_two_between hScale.class_scale
-  let rCandidate : ℕ := 2 ^ rDim
-  have hCandidateRLower : a ≤ (rCandidate : ℝ) := by simpa [a, rCandidate] using hrLower
-  have hCandidateRUpper : (rCandidate : ℝ) < 2 * a := by
-    simpa [a, rCandidate] using hrUpper
-  have hGroupCard : Fintype.card (Fin Hdim → ZMod 2) = 2 ^ Hdim := by
-    simp [Fintype.card_fun]
-  have hEmbedCard : Fintype.card (Fin n) ≤ Fintype.card (Fin Hdim → ZMod 2) := by
-    simpa [hGroupCard] using hGroupLower
-  let idsBase : Fin n ↪ (Fin Hdim → ZMod 2) :=
-    Lane_q_s16_geom.finiteEmbeddingOfCardLE hEmbedCard
-  have hidsBase : Function.Injective idsBase := idsBase.injective
-  sorry
+  let r : ℕ := 2 ^ rDim
+  have hrLower' : a ≤ (r : ℝ) := by simpa [a,r] using hrLower
+  have hrUpper' : (r : ℝ) < 2 * a := by simpa [a,r] using hrUpper
+  have ha : 2 ≤ a := hScale.class_scale
+  have hrpos : 0 < r := by dsimp [r]; positivity
+  have hdpos : 0 < rDim := by
+    by_contra hh
+    have hd : rDim = 0 := by omega
+    simp [r,hd] at hrLower'
+    linarith
+  have hmnonneg : 0 ≤ (A.card : ℝ) := by positivity
+  have hmax : 1 ≤ max 1 (A.card : ℝ) := le_max_left _ _
+  have hAlarge : 4 * a * max 1 (A.card : ℝ) ≤ (n : ℝ) := by
+    simpa only [a, A, n, mul_assoc] using hScale.coset_room
+  have hrmax : 2 * (r : ℝ) * max 1 (A.card : ℝ) ≤ (n : ℝ) := by
+    have hh := mul_le_mul_of_nonneg_right (le_of_lt hrUpper')
+      (le_trans (by norm_num : (0 : ℝ) ≤ 1) hmax)
+    nlinarith
+  have h2r : 2 * r ≤ n := by
+    have hh : (2 : ℝ) * r ≤ n := by nlinarith
+    exact_mod_cast hh
+  have hmprod : A.card * r ≤ n := by
+    have hmle := le_max_right (1 : ℝ) (A.card : ℝ)
+    have hh : (A.card : ℝ) * r ≤ n := by nlinarith
+    exact_mod_cast hh
+  have hdim : rDim + 1 ≤ Hdim := by
+    apply (pow_le_pow_iff_right₀ (by norm_num : (1 : ℕ) < 2)).mp
+    simpa [pow_succ, r, Nat.mul_comm] using h2r.trans hGroupLower
+  have hHpos : 0 < Hdim := by omega
+  let j0 : Fin Hdim := ⟨0, hHpos⟩
+  let I := Lane_sol_s16_syn.initialCoordinates Hdim rDim
+  have hIcard : I.card = rDim := Lane_sol_s16_syn.initialCoordinates_card (by omega)
+  have hj0 : j0 ∈ I := by simp [I, Lane_sol_s16_syn.initialCoordinates,j0,hdpos]
+  let H0 := Lane_sol_s16_syn.coordinateSubspace (Finset.univ.erase j0)
+  let L := Lane_sol_s16_syn.coordinateSubspace I
+  let Rep := Lane_sol_s16_syn.coordinateSubspace (Finset.univ \ I)
+  have hRepCard : Fintype.card Rep = 2 ^ (Hdim - rDim) := by
+    rw [Lane_sol_s16_syn.coordinate_card]
+    simp [Finset.card_sdiff, hIcard]
+  have hprod : Fintype.card Rep * r = 2 ^ Hdim := by
+    rw [hRepCard]
+    dsimp [r]
+    rw [← pow_add]
+    congr 1
+    omega
+  have hmRep : Fintype.card A ≤ Fintype.card Rep := by
+    have hh : A.card * r ≤ Fintype.card Rep * r := by
+      rw [hprod]
+      exact hmprod.trans hGroupLower
+    simpa using Nat.le_of_mul_le_mul_right hh hrpos
+  let reps : A ↪ Rep := Lane_q_s16_geom.finiteEmbeddingOfCardLE hmRep
+  let f : A ↪ Lane_sol_s16_syn.Bits Hdim :=
+    reps.trans (Function.Embedding.subtype (· ∈ Rep))
+  let H : Finset (Lane_sol_s16_syn.Bits Hdim) := Finset.univ.filter fun w => w j0 = 0
+  have hHmem : ∀ w, w ∈ H ↔ w ∈ H0 := by
+    intro w
+    simp only [H, Finset.mem_filter, Finset.mem_univ, true_and,
+      H0, Lane_sol_s16_syn.mem_coordinateSubspace]
+    constructor
+    · intro hw l hl
+      have he : l = j0 := by simpa using hl
+      simpa [he] using hw
+    · intro hw
+      exact hw j0 (by simp)
+  have hHcard : H.card = 2 ^ (Hdim - 1) := by
+    have hh : Fintype.card H = Fintype.card H0 :=
+      Fintype.card_congr (Equiv.subtypeEquivRight (fun w => hHmem w))
+    calc
+      H.card = Fintype.card H0 := by simpa only [Fintype.card_coe] using hh
+      _ = _ := Lane_sol_s16_syn.hyperplane_card j0
+  have hHlt : H.card < n := by
+    have hp : 2 ^ Hdim = 2 ^ (Hdim - 1) * 2 := by
+      have hh : Hdim - 1 + 1 = Hdim := by omega
+      calc
+        2 ^ Hdim = 2 ^ (Hdim - 1 + 1) := by rw [hh]
+        _ = _ := by rw [pow_succ]
+    rw [hp] at hGroupUpper
+    rw [hHcard]
+    omega
+  have hfH : ∀ i : A, f i ∈ H := by
+    intro i
+    apply (hHmem _).mpr
+    intro j hj
+    have he : j = j0 := by simpa using hj
+    subst j
+    exact (reps i).2 j0 (by simp [hj0])
+  obtain ⟨ids, hcoverSet, hidA⟩ := Lane_sol_s16_syn.allocate_ids A H f hfH
+    (Nat.le_of_lt hHlt) (by simpa using hGroupLower)
+  have hcover : ∀ w : H0, ∃ i, ids i = w.1 := by
+    intro w
+    exact hcoverSet w.1 ((hHmem w.1).mpr w.2)
+  have hout : ∃ i, ids i j0 ≠ 0 := by
+    by_contra hh
+    push_neg at hh
+    let g : Fin n ↪ H := {
+      toFun := fun i => ⟨ids i, by simp [H,hh i]⟩
+      inj' := fun i j he => ids.injective (congrArg Subtype.val he) }
+    have hcard := Fintype.card_le_of_injective g g.injective
+    have hh' : n ≤ H.card := by simpa using hcard
+    omega
+  have hsizeEq : 2 ^ (I.card - 1) * 2 = r := by
+    rw [hIcard]
+    dsimp [r]
+    rw [← pow_succ]
+    congr 1
+    omega
+  let E : Fin r ≃ L :=
+    (finCongr hsizeEq.symm).trans (Lane_sol_s16_syn.balancedEnum I j0 hj0)
+  have hE : ∀ t : Fin r, (E t).1 j0 = (t.val % 2 : ℕ) := by
+    intro t
+    exact Lane_sol_s16_syn.balancedEnum_coordinate I j0 hj0 _
+  have hLnot : ¬ L ≤ H0 := by
+    intro hh
+    let w : Lane_sol_s16_syn.Bits Hdim := Pi.single j0 1
+    have hw : w ∈ L := by
+      intro j hj
+      have hne : j ≠ j0 := by intro he; subst j; exact hj hj0
+      simp [w,Pi.single_apply,hne]
+    have hh0 := hh hw j0 (by simp)
+    simpa [w] using hh0
+  have hCosets : ∀ i ∈ A, ∀ j ∈ A, i ≠ j → ids i - ids j ∉ L := by
+    intro i hi j hj hne hab
+    have hidI := hidA ⟨i,hi⟩
+    have hidJ := hidA ⟨j,hj⟩
+    rw [hidI,hidJ] at hab
+    have he := Lane_sol_s16_syn.coordinate_disjoint_difference I (reps ⟨i,hi⟩)
+      (reps ⟨j,hj⟩) hab
+    exact hne (congrArg Subtype.val (reps.injective he))
+  let S : SyndromeData PT := {
+    Hdim := Hdim, ids := ids, H0 := H0, Lsub := L, r := r, classEnum := E }
+  have hsurj := Lane_sol_s16_syn.jointSyndrome_surjective ids j0 hcover hout
+  refine ⟨S, ?_⟩
+  refine {
+    group_size := ⟨hGroupLower,hGroupUpper⟩
+    hyperplane_card := Lane_sol_s16_syn.hyperplane_card j0
+    ids_injective := ids.injective
+    hyperplane_in_ids := hcover
+    subspace_size := ⟨hrLower', by simpa only [a, mul_assoc] using hrUpper'⟩
+    class_enum_card := by simpa using (Fintype.card_congr E).symm
+    late_subspace_not_hyperplane := hLnot
+    internal_cosets_distinct := hCosets
+    class_size := ?_
+    one_neighbour_per_class := ?_
+    suffix_neighbour_bounds := ?_
+    total_late_neighbour_bounds := ?_
+    at_most_one_internal_late_neighbour := ?_
+    coset_criterion := ?_ }
+  · intro t
+    exact Lane_sol_s16_syn.binaryClass_fiber_card (by dsimp [n]; omega) ids hsurj (E t).1
+  · intro v hv t
+    exact Lane_sol_s16_syn.one_neighbour_per_class ids ids.injective L E v hv t
+  · intro v hv j hj
+    exact ⟨Lane_sol_s16_syn.suffixNeighbour_lower ids L E j0 hcover hE v hv hj,
+      Lane_sol_s16_syn.suffixNeighbour_upper ids ids.injective L E v hv hj⟩
+  · intro v hv
+    have hN : S.lateNeighbours v = S.suffixNeighbours v r := by
+      ext i
+      simp only [SyndromeData.lateNeighbours,SyndromeData.suffixNeighbours,
+        SyndromeData.suffix,Finset.mem_filter,Finset.mem_univ,true_and]
+      simp only [show S.r = r from rfl, Nat.sub_self, Nat.zero_le, and_true]
+      simpa only [true_and] using
+        (Option.isSome_iff_exists (x := S.classOf (flipPos v i)))
+    rw [hN]
+    exact ⟨Lane_sol_s16_syn.suffixNeighbour_lower ids L E j0 hcover hE v hv (le_refl r),
+      Lane_sol_s16_syn.suffixNeighbour_upper ids ids.injective L E v hv (le_refl r)⟩
+  · intro v hv
+    exact Lane_sol_s16_syn.one_internal_late_neighbour ids L E A hCosets v hv
+  · intro v hv i
+    exact Lane_sol_s16_syn.binaryClass_flip_isSome ids L E v hv i
 
 /-- L16.1b (16:90–96): separated cells made from whole slices. -/
 theorem cell_data_exists {κ : CConsts} {T : Stage} {k : ℕ}

@@ -1102,6 +1102,38 @@ private theorem heightPath9_radialFamily9 {P : Params9} {hc : HeightChoice9 P} {
   choose f hf using hstates
   exact ⟨f, hf⟩
 
+private theorem heightPath9_nextRadialState9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (hp : HeightPath9 (heightStep9 bad) l start)
+    {endpoint : HeightState9 P hc n} (hhead : l.head? = some endpoint)
+    (root : HeightState9 P hc n) (r gap : ℕ)
+    (hstart : heightMetric9 start root = r)
+    (hgap : r + gap ≤ heightMetric9 endpoint root) :
+    ∃ next suffix, next ∈ l ∧ heightMetric9 next root = r + gap ∧
+      HeightPath9 (heightStep9 bad) (endpoint :: suffix) next ∧
+      (∀ z ∈ endpoint :: suffix, z ∈ l) := by
+  have hstepRadial : ∀ x y, heightStep9 bad x y →
+      Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ 1 := by
+    intro x y hxy
+    exact (heightMetric9_radialVariation_le root x y).trans (heightStep9_metric_le_one hxy)
+  obtain ⟨head, hhead', hrange⟩ :=
+    heightPath9_has_intermediate_value9 (fun x => heightMetric9 x root) hstepRadial hp
+  have hheadEq : head = endpoint := by simpa using hhead'.symm.trans hhead
+  subst head
+  have hlow : min (heightMetric9 start root) (heightMetric9 endpoint root) ≤ r + gap := by
+    rw [hstart]
+    omega
+  have hhigh : r + gap ≤ max (heightMetric9 start root) (heightMetric9 endpoint root) := by
+    rw [hstart]
+    omega
+  obtain ⟨next, hnext, hnextRadial⟩ := hrange (r + gap) hlow hhigh
+  obtain ⟨segmentHead, suffix, hsegmentHead, hsegment, hsegmentSub⟩ :=
+    heightPath9_segmentFromMember hp hnext
+  have hsegmentHead' : segmentHead = endpoint := by simpa using hsegmentHead.symm.trans hhead
+  subst segmentHead
+  refine ⟨next, suffix, hnext, hnextRadial, hsegment, ?_⟩
+  exact hsegmentSub
+
 private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}
     {l : List (HeightState9 P hc n)}
     {start : HeightState9 P hc n} (f : Fin (R + 1) → HeightState9 P hc n)

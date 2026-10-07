@@ -1,4 +1,5 @@
 import HypercubeRamsey.S17.Needs
+import HypercubeRamsey.S17.Nodes_q_s17_res1
 
 /-!
 # Section 17 estimate and finite-resampling nodes
@@ -605,7 +606,7 @@ theorem resampleLocality
     (tapes : ∀ C : D.G.Cell, ℕ → TapeEntry D.F C) :
     LE.CellLocalitySpec Ts order pools tapes ∧
       LE.EventTruthLocalitySpec Ts order pools tapes := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s17_res1.resampleLocality LE Ts order pools tapes
 
 /-- P17.4a: extract the executions and only untouched extra sites from the
 ever-true component; the root is not required to be an untouched test. -/

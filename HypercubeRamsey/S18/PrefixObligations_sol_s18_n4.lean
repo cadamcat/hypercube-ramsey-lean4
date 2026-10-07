@@ -19,9 +19,22 @@ private theorem validPrefixClosureTail {κ : CConsts} (hκ : κ.Admissible) (T :
   filter_upwards [restrictedLateClosureTapeBound hκ T] with k hrestricted
   intro PT hPT D hD F hvalid pin
   have htape := hrestricted D hD F hvalid (pin.map (fun p => p.1))
-  -- Missing: equality of the full and restricted backward execution closures.
-  -- Its proof must keep the class/round radius together along each predecessor path.
-  sorry
+  let X : S18.CriticalTransferData D :=
+    ⟨F.2, hvalid, pin.map (fun p => p.1), fun C => D.fresh.fallback C⟩
+  have hbound := initialPinnedPoolTapeBound D (D.lateRegion F)
+    (fun pools tapes => D.encoding.Ts <
+      (backwardClosure (D := Lane_q_s18_n4.lateListContext D)
+        D.encoding.events D.encoding.order (lateRestrictedEvents D F)
+        pools tapes (replayTargets D X.criticalCells)).card)
+    (Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)))
+    (Real.rpow_nonneg (Nat.cast_nonneg _) _) htape pin
+  convert hbound using 1
+  congr 1
+  funext x
+  apply propext
+  change (poolGateFor D (D.lateRegion F) x.1 ∧
+    D.encoding.Ts < (replayBackwardClosure D X.criticalCells x).card) ↔ _
+  rw [replayBackwardClosure_eq_restricted D F hvalid (pin.map (fun p => p.1)) X.fixed x]
 
 /-- Compare the actual consulted permutation slots, with a globally pinned
 cell omitted from the critical set, to the iid pool/tape fresh experiment. -/

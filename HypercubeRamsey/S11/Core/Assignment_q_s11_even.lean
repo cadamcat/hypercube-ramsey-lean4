@@ -1,4 +1,6 @@
 import HypercubeRamsey.S11.Core.Experiment
+import HypercubeRamsey.Tools.ScatteredUnion
+import HypercubeRamsey.Tools.ScatteredUnion
 
 namespace HypercubeRamsey.Lane_q_s11_even
 
@@ -1223,6 +1225,30 @@ private theorem tupleStarFactor_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop
     intro b hb
     exact (hS.rows (t (sliceOf b.1))).row_nonneg (starOf W b) (f b)
   · exact mul_nonneg (Nat.cast_nonneg _) (hrow f)
+
+private theorem even_load_scattered_union_core {n N : ℕ} {Ω Label : Type*}
+    [Fintype Ω] [DecidableEq Ω] [Fintype Label] [DecidableEq Label]
+    [Nonempty (EvenRole n)]
+    (P : FinProb Ω) (succ : Finset Ω)
+    (Z : EvenRole n → Label → Ω → ℝ) (hZ0 : ∀ v y ω, 0 ≤ Z v y ω)
+    (L : ℝ) (hL : 0 ≤ L) (hZL : ∀ v y ω, ω ∈ succ → Z v y ω ≤ L)
+    (near : EvenRole n → Finset (EvenRole n)) (hself : ∀ v, v ∈ near v)
+    (f : ℝ) (hf : 0 ≤ f) (hnear : ∀ v, ((near v).card : ℝ) ≤ f * Fintype.card (EvenRole n))
+    (hn : 0 < n) (D₀ : ℝ) (hD₀ : 0 ≤ D₀)
+    (d : EvenRole n → Label → ℝ) (hd : ∀ v y, 0 ≤ d v y)
+    (hmean : ∀ y, (Fintype.card (EvenRole n) : ℝ)⁻¹ * ∑ v, d v y ≤ D₀)
+    (hjoint : ∀ (y : Label) (m : ℕ), m ≤ n → ∀ s : Fin m → EvenRole n,
+      (∀ i j : Fin m, j < i → s i ∉ near (s j)) →
+        ∑ ω ∈ succ, P.w ω * ∏ i, Z (s i) y ω ≤ 4 ^ m * ∏ i, d (s i) y)
+    (hsmall : (n : ℝ) * f * L ≤ 1)
+    (hlabels : (Fintype.card Label : ℝ) ≤ (n : ℝ) * 2 ^ n) :
+    (∑ ω, if ω ∈ succ ∧ ∃ y,
+      16 * (D₀ + 1) < (Fintype.card (EvenRole n) : ℝ)⁻¹ * ∑ v, Z v y ω then P.w ω else 0) ≤
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+  have h := scatteredMoments_union_labels P succ Z hZ0 L hL hZL near hself f hf hnear
+    n hn 4 D₀ (by norm_num) hD₀ d hd hmean hjoint hsmall hlabels
+  have hthreshold : 4 * (4 : ℝ) * (D₀ + 1) = 16 * (D₀ + 1) := by ring
+  simpa only [hthreshold] using h
 
 private theorem odd_output_product {n N m : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)

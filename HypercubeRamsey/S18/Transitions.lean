@@ -127,11 +127,18 @@ def CurrentListCapFacts (D : LateData hPT) : Prop :=
       Real.exp (-199 * PT.tiling.gain (D.geom.patchOf (flipPos b a))) *
         Real.rpow 2 (-(D.remainingNeighbors (flipPos b a) j : ℝ))
 
-/-- eq. (27) is carried explicitly as well as broadness and deletion. -/
+/-- The sketch labels of a side output lie in the initial-prior support. The paper samples sketches from the
+current prior (18:89–108), which on the gate lies in the initial support; R2's moments apply only there (18:195–204). -/
+def InitialSketchSupport (D : LateData hPT) (j : Fin D.geom.r) {b : Pos T k}
+    (h : D.encoding.base.History j.castSucc) (side : D.encoding.base.RowOut b) : Prop :=
+  ∀ a t, (D.initialPrior (flipPos b a) h.1).w (side.2.1 a t) ≠ 0
+
+/-- eq. (27) is carried explicitly as well as broadness and deletion, for side outputs whose sketches are supported
+(`InitialSketchSupport`; without it the variance step fails, see lane sol-s18-1b). -/
 def BroadDeletionFacts (D : LateData hPT) (K27 : ℝ) : Prop :=
   ∀ (j : Fin D.geom.r) (b : Pos T k) (h : D.encoding.base.History j.castSucc)
     (side : D.encoding.base.RowOut b), b ∈ D.encoding.base.classes j → D.gate j b h →
-    D.R1 j side → D.R2 j h side →
+    InitialSketchSupport D j h side → D.R1 j side → D.R2 j h side →
     (∀ order ∈ D.testOrders b, ∀ q, q ≤ order.length →
       Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤ D.retainedMass j side (D.prefixTests order q)) ∧
     D.deletionConclusion j side ∧

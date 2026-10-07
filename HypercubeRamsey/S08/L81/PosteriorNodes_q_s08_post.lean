@@ -2101,6 +2101,67 @@ def rawPresEvent {η₀ β p : ℝ} {h : ℕ}
     (π : D.Pres c.1) (z : D.TAT × D.Anch) : Prop :=
   D.PresValid ((H, P), z.1) z.2 c ∧ D.presOf ((H, P), z.1) z.2 c = π
 
+theorem rawPresEvent_false_of_qref_zero {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (c : D.CellT)
+    (π : D.Pres c.1)
+    (hQ : D.Qref Θ c.1 (D.obsOf π) = 0) :
+    ∀ z, ¬ rawPresEvent D Θ P c π z := by
+  classical
+  intro z hE
+  have hObs : D.obsOf (D.presOf ((Θ, P), z.1) z.2 c) = D.obsOf π :=
+    congrArg D.obsOf hE.2
+  have hDen : D.eps0 ≤ D.Mden Θ c.1 (D.obsOf π) := by
+    have hv := hE.1
+    unfold Ctx.PresValid at hv
+    have hd := hv.2.2.2.2.2
+    rw [hObs] at hd
+    exact hd
+  have hMzero : D.Mden Θ c.1 (D.obsOf π) = 0 := by
+    unfold Ctx.Mden
+    apply Finset.sum_eq_zero
+    intro ζ hζ
+    rw [Lane_q_s08_post.fcand_zero_of_qref_zero
+      D Θ c.1 ζ (D.obsOf π) hQ]
+    simp
+  have heps : 0 < D.eps0 := Real.exp_pos _
+  have : D.eps0 ≤ 0 := by simpa [hMzero] using hDen
+  exact (not_le_of_gt heps) this
+
+theorem rawPresEvent_pr_eq_qref_mul_gsel {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (c : D.CellT)
+    (ξ : D.Tup) (π : D.Pres c.1) :
+    (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+      (rawPresEvent D (Function.update Θ c.1 ξ) P c π) =
+      D.Qref Θ c.1 (D.obsOf π) * D.Gsel Θ P c ξ π := by
+  classical
+  by_cases hQ : D.Qref Θ c.1 (D.obsOf π) = 0
+  · have hNo := rawPresEvent_false_of_qref_zero D (Function.update Θ c.1 ξ)
+      P c π (by
+        calc
+          D.Qref (Function.update Θ c.1 ξ) c.1 (D.obsOf π) =
+              D.Qref Θ c.1 (D.obsOf π) :=
+                Lane_q_s08_post.qref_congr_off_target D
+                  (Function.update Θ c.1 ξ) Θ c.1 (D.obsOf π)
+                  (by intro v hv; simp [Function.update_of_ne hv])
+          _ = 0 := hQ)
+    have hnum : (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+        (rawPresEvent D (Function.update Θ c.1 ξ) P c π) = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro z hz
+      simp [hNo z]
+    simp [Ctx.Gsel, hQ, hnum]
+  · have hQnonneg := D.Qref_nonneg Θ c.1 (D.obsOf π)
+    have hQpos : 0 < D.Qref Θ c.1 (D.obsOf π) := lt_of_le_of_ne hQnonneg (Ne.symm hQ)
+    unfold Ctx.Gsel
+    change (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+        (rawPresEvent D (Function.update Θ c.1 ξ) P c π) =
+      D.Qref Θ c.1 (D.obsOf π) *
+        ((D.rawLaw (Function.update Θ c.1 ξ) P).pr
+          (rawPresEvent D (Function.update Θ c.1 ξ) P c π) /
+            D.Qref Θ c.1 (D.obsOf π))
+    field_simp [ne_of_gt hQpos]
+
 def localPresEvent {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
     (π : D.Pres c.1) (baseT : D.TAT) (baseW : D.Anch)
@@ -2282,6 +2343,90 @@ theorem rawLaw_pr_congr_local {η₀ β p : ℝ} {h : ℕ}
   exact congrArg
     (fun x : ℝ => (FinProb.map (D.rawTAT H') (localTATProj D c)).w t * x)
     (hAt t)
+
+theorem raw_p0_expect_grouped {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (H : D.Hist) (P : D.Pos) (c : D.CellT)
+    (y : Fin D.N) :
+    (D.rawLaw H P).expect (fun z => D.p0 ((H, P), z.1) z.2 c y) =
+      ∑ π : D.Pres c.1, D.p0w H P c π y *
+        (D.rawLaw H P).pr (rawPresEvent D H P c π) := by
+  classical
+  change (D.rawLaw H P).expect
+      (fun z => if D.PresValid ((H, P), z.1) z.2 c then
+        D.p0w H P c (D.presOf ((H, P), z.1) z.2 c) y else 0) =
+    ∑ π : D.Pres c.1, D.p0w H P c π y *
+      (D.rawLaw H P).pr (fun z =>
+        D.PresValid ((H, P), z.1) z.2 c ∧ D.presOf ((H, P), z.1) z.2 c = π)
+  exact Lane_q_s08_post.expect_group_by_fiber (D.rawLaw H P)
+    (fun z => D.presOf ((H, P), z.1) z.2 c)
+    (fun z => D.PresValid ((H, P), z.1) z.2 c)
+    (fun π => D.p0w H P c π y)
+
+set_option maxHeartbeats 2000000 in
+theorem raw_p0_mean_as_mad {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (c : D.CellT)
+    (y : Fin D.N) :
+    ∑ ξ, D.R'.w ξ * (D.rawLaw (Function.update Θ c.1 ξ) P).expect
+      (fun z => D.p0 ((Function.update Θ c.1 ξ, P), z.1) z.2 c y) =
+      ∑ π : D.Pres c.1,
+        D.p0w Θ P c π y * D.Qref Θ c.1 (D.obsOf π) * D.Mad Θ P c π := by
+  classical
+  calc
+    _ = ∑ ξ, D.R'.w ξ *
+          ∑ π : D.Pres c.1,
+            D.p0w (Function.update Θ c.1 ξ) P c π y *
+              (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+                (rawPresEvent D (Function.update Θ c.1 ξ) P c π) := by
+      apply Finset.sum_congr rfl
+      intro ξ hξ
+      rw [raw_p0_expect_grouped D (Function.update Θ c.1 ξ) P c y]
+    _ = ∑ ξ, ∑ π : D.Pres c.1,
+          D.R'.w ξ * D.p0w (Function.update Θ c.1 ξ) P c π y *
+            (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+              (rawPresEvent D (Function.update Θ c.1 ξ) P c π) := by
+      apply Finset.sum_congr rfl
+      intro ξ hξ
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro π hπ
+      ring
+    _ = ∑ π : D.Pres c.1,
+          ∑ ξ, D.R'.w ξ *
+            D.p0w (Function.update Θ c.1 ξ) P c π y *
+              (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+                (rawPresEvent D (Function.update Θ c.1 ξ) P c π) := by
+      rw [Finset.sum_comm]
+    _ = ∑ π : D.Pres c.1,
+          D.p0w Θ P c π y * D.Qref Θ c.1 (D.obsOf π) *
+            ∑ ξ, D.R'.w ξ * D.Gsel Θ P c ξ π := by
+      apply Finset.sum_congr rfl
+      intro π hπ
+      have hrow (ξ : D.Tup) :
+          D.p0w (Function.update Θ c.1 ξ) P c π y = D.p0w Θ P c π y :=
+        (Lane_q_s08_post.p0w_congr_target_update D Θ P c ξ π y).symm
+      have hterm (ξ : D.Tup) :
+          D.R'.w ξ * D.p0w (Function.update Θ c.1 ξ) P c π y *
+              (D.rawLaw (Function.update Θ c.1 ξ) P).pr
+                (rawPresEvent D (Function.update Θ c.1 ξ) P c π) =
+            (D.p0w Θ P c π y * D.Qref Θ c.1 (D.obsOf π)) *
+              (D.R'.w ξ * D.Gsel Θ P c ξ π) := by
+        rw [hrow, rawPresEvent_pr_eq_qref_mul_gsel]
+        ring
+      calc
+        _ = ∑ ξ,
+              (D.p0w Θ P c π y * D.Qref Θ c.1 (D.obsOf π)) *
+                (D.R'.w ξ * D.Gsel Θ P c ξ π) := by
+              apply Finset.sum_congr rfl
+              intro ξ hξ
+              exact hterm ξ
+        _ = D.p0w Θ P c π y * D.Qref Θ c.1 (D.obsOf π) *
+              ∑ ξ, D.R'.w ξ * D.Gsel Θ P c ξ π := by
+              rw [Finset.mul_sum]
+        _ = _ := by rfl
+    _ = _ := by
+      apply Finset.sum_congr rfl
+      intro π hπ
+      rfl
 
 set_option maxHeartbeats 1000000 in
 theorem gsel_congr_local {η₀ β p : ℝ} {h : ℕ}

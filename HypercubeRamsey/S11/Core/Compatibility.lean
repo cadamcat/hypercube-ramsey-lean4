@@ -1623,9 +1623,267 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       (productRow i r).expect (fun z => f (z j)) = (rho i).expect f := by
     classical
     let S : Finset (Fin r) := {j}
-    let g : (∀ k : {k // k ∈ S}, Fin N) → ℝ := fun q => f (q ⟨j, by simp [S]⟩)
+    let j₀ : {k // k ∈ S} := ⟨j, by simp [S]⟩
+    have hdefault : (default : {k // k ∈ S}) = j₀ := by
+      apply Subtype.ext
+      simp [S, j₀]
+    let g : (∀ k : {k // k ∈ S}, Fin N) → ℝ := fun q => f (q j₀)
+    let e : (∀ k : {k // k ∈ S}, Fin N) ≃ Fin N := {
+      toFun := fun q => q j₀
+      invFun := fun y _ => y
+      left_inv := by
+        intro q
+        funext k
+        have hkMem : k.1 ∈ ({j} : Finset (Fin r)) := k.2
+        have hk : k = j₀ := Subtype.ext (Finset.mem_singleton.mp hkMem)
+        exact congrArg q hk.symm
+      right_inv := by intro y; rfl
+    }
     have h := FinProb.pi_marginal_expect (fun _ : Fin r => rho i) S g
-    simpa [productRow, S, g, FinProb.pi, FinProb.expect] using h
+    calc
+      (productRow i r).expect (fun z => f (z j)) =
+          (FinProb.pi (fun _ : {k // k ∈ S} => rho i)).expect g := by
+            simpa [productRow, S, g, j₀] using h
+      _ = (rho i).expect f := by
+            unfold FinProb.expect
+            exact Fintype.sum_equiv e _ _ (by
+              intro q
+              have hq : q default = q j₀ := congrArg q hdefault
+              simpa [FinProb.pi, g, e, hq])
+  have hpairCollision (i : HighTags) (r : ℕ) (j k : Fin r) (hjk : j ≠ k) :
+      (productRow i r).pr (fun z => z j = z k) ≤
+        (1000 / etaC) * Real.exp ((n : ℝ) / 50) / N := by
+    classical
+    let Q := productRow i r
+    have hPrIndicator {Ω : Type} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+        P.pr A = P.expect (fun x => if A x then (1 : ℝ) else 0) := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases h : A x <;> simp [h]
+    have hsingleLaw (P : Law N) (y : Fin N) :
+        P.expect (fun x => if x = y then (1 : ℝ) else 0) = P.w y := by
+      unfold FinProb.expect
+      rw [Fintype.sum_eq_single y]
+      · simp
+      · intro x hxy
+        simp [hxy]
+    let f (y : Fin N) (z : Fin r → Fin N) : ℝ := if z j = y then 1 else 0
+    let g (y : Fin N) (z : Fin r → Fin N) : ℝ := if z k = y then 1 else 0
+    let collision : (Fin r → Fin N) → Prop := fun z => z j = z k
+    letI : DecidablePred collision := fun z => Classical.propDecidable (collision z)
+    have hdecomp (z : Fin r → Fin N) :
+        (if collision z then (1 : ℝ) else 0) = ∑ y, f y z * g y z := by
+      by_cases h : z j = z k
+      · have hsum : (∑ y, f y z * g y z) = 1 := by
+          calc
+            (∑ y, f y z * g y z) = ∑ y, if z j = y then (1 : ℝ) else 0 := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              simp [f, g, h]
+            _ = 1 := by simp
+        have hc : collision z := h
+        rw [if_pos hc]
+        exact hsum.symm
+      · have hsum : (∑ y, f y z * g y z) = 0 := by
+          apply Finset.sum_eq_zero
+          intro y hy
+          by_cases h₁ : z j = y
+          · have h₂ : z k ≠ y := by
+              intro h₂
+              exact h (h₁.trans h₂.symm)
+            simp [f, g, h₁, h₂]
+          · simp [f, g, h₁]
+        have hc : ¬ collision z := h
+        rw [if_neg hc]
+        exact hsum.symm
+    have hfactor (y : Fin N) :
+        Q.expect (fun z => f y z * g y z) = (rho i).w y ^ 2 := by
+      have hfdep : FinProb.DependsOn (f y) {j} := by
+        intro z z' hz
+        have hzj := hz j (by simp)
+        simp [f, hzj]
+      have hgdep : FinProb.DependsOn (g y) {k} := by
+        intro z z' hz
+        have hzk := hz k (by simp)
+        simp [g, hzk]
+      have hdisj : Disjoint ({j} : Finset (Fin r)) {k} := by
+        apply Finset.disjoint_left.mpr
+        intro x hx hx'
+        simp at hx hx'
+        exact hjk (hx.symm.trans hx')
+      have h := FinProb.pi_expect_mul_of_disjoint (fun _ : Fin r => rho i)
+        (f y) (g y) {j} {k} hfdep hgdep hdisj
+      have hf : Q.expect (f y) = (rho i).w y := by
+        calc
+          Q.expect (f y) =
+              (rho i).expect (fun x => if x = y then (1 : ℝ) else 0) := by
+                simpa [f] using hcoordinateExpect i r j (fun x => if x = y then (1 : ℝ) else 0)
+          _ = (rho i).w y := hsingleLaw (rho i) y
+      have hg : Q.expect (g y) = (rho i).w y := by
+        calc
+          Q.expect (g y) =
+              (rho i).expect (fun x => if x = y then (1 : ℝ) else 0) := by
+                simpa [g] using hcoordinateExpect i r k (fun x => if x = y then (1 : ℝ) else 0)
+          _ = (rho i).w y := hsingleLaw (rho i) y
+      have hfactored : Q.expect (fun z => f y z * g y z) =
+          Q.expect (f y) * Q.expect (g y) := by simpa [Q] using h
+      rw [hfactored, hf, hg]
+      ring
+    have heq : Q.pr collision =
+        ∑ y, Q.expect (fun z => f y z * g y z) := by
+      rw [hPrIndicator]
+      calc
+        Q.expect (fun z => if collision z then (1 : ℝ) else 0) =
+            Q.expect (fun z => ∑ y, f y z * g y z) := by
+              have hfun : (fun z => if collision z then (1 : ℝ) else 0) =
+                  (fun z => ∑ y, f y z * g y z) := by
+                funext z
+                simpa only [hdecomp z]
+              rw [hfun]
+        _ = ∑ y, Q.expect (fun z => f y z * g y z) := by
+              unfold FinProb.expect
+              rw [Finset.sum_comm]
+              apply Finset.sum_congr rfl
+              intro y hy
+              rw [Finset.mul_sum]
+    rw [heq]
+    calc
+      (∑ y, Q.expect (fun z => f y z * g y z)) = ∑ y, (rho i).w y ^ 2 := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        exact hfactor y
+      _ ≤ ∑ y, (rho i).w y * ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) := by
+        apply Finset.sum_le_sum
+        intro y hy
+        have hAtom : (rho i).w y ≤
+            (1000 / etaC) * Real.exp ((n : ℝ) / 50) / N := by
+          apply (le_div_iff₀ hNr).2
+          simpa [mul_comm] using hrhoCap i y
+        calc
+          (rho i).w y ^ 2 = (rho i).w y * (rho i).w y := by ring
+          _ ≤ (rho i).w y * ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) :=
+            mul_le_mul_of_nonneg_left hAtom ((rho i).nonneg y)
+      _ = (1000 / etaC) * Real.exp ((n : ℝ) / 50) / N := by
+        rw [← Finset.sum_mul, (rho i).sum_eq_one]
+        ring
+  have hrowUnique (i : HighTags) (r : ℕ)
+      (hbudget : (r : ℝ) ^ 2 * ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) ≤ 1 / 2) :
+      1 / 2 ≤ (productRow i r).pr (fun z => Function.Injective z) := by
+    classical
+    let Q := productRow i r
+    let Pairs : Finset (Fin r × Fin r) := Finset.univ.filter fun q => q.1 ≠ q.2
+    let collisionCount (z : Fin r → Fin N) : ℝ :=
+      ∑ q ∈ Pairs, if z q.1 = z q.2 then (1 : ℝ) else 0
+    have hPrIndicator {Ω : Type} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+        P.pr A = P.expect (fun x => if A x then (1 : ℝ) else 0) := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro x hx
+      by_cases h : A x <;> simp [h]
+    have hcollisionExists (z : Fin r → Fin N) (hnon : ¬ Function.Injective z) :
+        ∃ q ∈ Pairs, z q.1 = z q.2 := by
+      by_contra hnone
+      apply hnon
+      intro j k hEq
+      by_contra hjk
+      exact hnone ⟨(j, k), Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjk⟩, hEq⟩
+    have hcountZero (z : Fin r → Fin N) (hinj : Function.Injective z) :
+        collisionCount z = 0 := by
+      apply Finset.sum_eq_zero
+      intro q hq
+      have hneq : z q.1 ≠ z q.2 := by
+        intro hEq
+        exact (Finset.mem_filter.mp hq).2 (hinj hEq)
+      simp [collisionCount, hneq]
+    have hcountLower (z : Fin r → Fin N) (hnon : ¬ Function.Injective z) :
+        1 ≤ collisionCount z := by
+      obtain ⟨q, hq, hEq⟩ := hcollisionExists z hnon
+      have hsingleton :
+          (∑ q' ∈ ({q} : Finset (Fin r × Fin r)),
+            if z q'.1 = z q'.2 then (1 : ℝ) else 0) = 1 := by
+        rw [Finset.sum_singleton]
+        simp [hEq]
+      have hle :
+          (∑ q' ∈ ({q} : Finset (Fin r × Fin r)),
+            if z q'.1 = z q'.2 then (1 : ℝ) else 0) ≤
+          ∑ q' ∈ Pairs, if z q'.1 = z q'.2 then (1 : ℝ) else 0 :=
+            Finset.sum_le_sum_of_subset_of_nonneg (Finset.singleton_subset_iff.mpr hq) (by
+              intro q' hq' hnot
+              split_ifs <;> positivity)
+      simpa [collisionCount, hsingleton] using hle
+    have hpoint (z : Fin r → Fin N) :
+        1 ≤ (if Function.Injective z then (1 : ℝ) else 0) + collisionCount z := by
+      by_cases hinj : Function.Injective z
+      · simp [hinj, hcountZero z hinj]
+      · simp [hinj]
+        linarith [hcountLower z hinj]
+    have hpairCount : (Pairs.card : ℝ) ≤ (r : ℝ) ^ 2 := by
+      have hnat : Pairs.card ≤ (Finset.univ : Finset (Fin r × Fin r)).card :=
+        Finset.card_le_card (Finset.filter_subset _ _)
+      have hreal : (Pairs.card : ℝ) ≤ (r * r : ℕ) := by
+        exact_mod_cast (by simpa using hnat : Pairs.card ≤ r * r)
+      calc
+        (Pairs.card : ℝ) ≤ (r * r : ℕ) := hreal
+        _ = (r : ℝ) ^ 2 := by simp [pow_two]
+    have hcollisionExpect :
+        Q.expect collisionCount =
+          ∑ q ∈ Pairs, Q.pr (fun z => z q.1 = z q.2) := by
+      unfold FinProb.expect collisionCount
+      calc
+        (∑ z, Q.w z * ∑ q ∈ Pairs, if z q.1 = z q.2 then (1 : ℝ) else 0) =
+            ∑ q ∈ Pairs, ∑ z, Q.w z * (if z q.1 = z q.2 then (1 : ℝ) else 0) := by
+              calc
+                _ = ∑ z, ∑ q ∈ Pairs, Q.w z * (if z q.1 = z q.2 then (1 : ℝ) else 0) := by
+                      apply Finset.sum_congr rfl
+                      intro z hz
+                      rw [Finset.mul_sum]
+                _ = ∑ q ∈ Pairs, ∑ z, Q.w z *
+                      (if z q.1 = z q.2 then (1 : ℝ) else 0) := by rw [Finset.sum_comm]
+        _ = ∑ q ∈ Pairs, Q.pr (fun z => z q.1 = z q.2) := by
+              apply Finset.sum_congr rfl
+              intro q hq
+              simpa [FinProb.expect] using
+                (hPrIndicator Q (fun z => z q.1 = z q.2)).symm
+    have hcollisionBound : Q.expect collisionCount ≤ 1 / 2 := by
+      calc
+        Q.expect collisionCount =
+            ∑ q ∈ Pairs, Q.pr (fun z => z q.1 = z q.2) := hcollisionExpect
+        _ ≤ ∑ q ∈ Pairs,
+              ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) := by
+                apply Finset.sum_le_sum
+                intro q hq
+                exact hpairCollision i r q.1 q.2 (Finset.mem_filter.mp hq).2
+        _ = (Pairs.card : ℝ) *
+              ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) := by simp
+        _ ≤ (r : ℝ) ^ 2 *
+              ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) :=
+                mul_le_mul_of_nonneg_right hpairCount (by positivity)
+        _ ≤ 1 / 2 := hbudget
+    have htotal := FinProb.expect_mono Q hpoint
+    have htotal'' : 1 ≤ Q.expect
+        (fun z => if Function.Injective z then (1 : ℝ) else 0) +
+        Q.expect collisionCount := by
+      calc
+        1 = Q.expect (fun _ => (1 : ℝ)) := by simp [FinProb.expect_const]
+        _ ≤ Q.expect (fun z =>
+              (if Function.Injective z then (1 : ℝ) else 0) + collisionCount z) := htotal
+        _ = Q.expect (fun z => if Function.Injective z then (1 : ℝ) else 0) +
+              Q.expect collisionCount := FinProb.expect_add Q _ _
+    have hI' : Q.expect (fun z => if Function.Injective z then (1 : ℝ) else 0) =
+        Q.pr (fun z => Function.Injective z) := by
+      unfold FinProb.expect FinProb.pr
+      apply Finset.sum_congr rfl
+      intro z hz
+      by_cases h : Function.Injective z <;> simp [h]
+    have htotal' : 1 ≤ Q.pr (fun z => Function.Injective z) +
+        Q.expect collisionCount := by
+      calc
+        1 ≤ Q.expect (fun z => if Function.Injective z then (1 : ℝ) else 0) +
+            Q.expect collisionCount := htotal''
+        _ = Q.pr (fun z => Function.Injective z) + Q.expect collisionCount :=
+            congrArg (fun x : ℝ => x + Q.expect collisionCount) hI'
+    linarith [htotal', hcollisionBound]
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

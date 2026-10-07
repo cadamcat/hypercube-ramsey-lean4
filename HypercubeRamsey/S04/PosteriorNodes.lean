@@ -846,7 +846,8 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
     have := min_le_right β (1 - γ)
     nlinarith
   have heta : 0 < omega4 β γ / 10 := by positivity
-  have heps : 0 < (c1 - c2) / 4 := by norm_num [c1, c2]
+  let ε : ℝ := (c1 - c2) / 4
+  have hε : 0 < ε := by dsimp [ε, c1, c2]; norm_num
   have hδcross : 0 < 1 - γ - 14 * omega4 β γ - 2 * h4 β γ := by
     dsimp [h4]
     nlinarith [hωsmall]
@@ -912,7 +913,7 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
             A₀ * (n : ℝ) ^ 5 + 1 = 1 + A₀ * (n : ℝ) ^ 5 := by ring
             _ ≤ (n : ℝ) ^ 5 + A₀ * (n : ℝ) ^ 5 :=
               add_le_add_left hn5Nat (A₀ * (n : ℝ) ^ 5)
-            _ = A₀ * (n : ℝ) ^ 5 + (n : ℝ) ^ 5 := by ring
+            _ = A₀ * (n : ℝ) ^ 5 + (n : ℝ) ^ 5 := by ac_rfl
         _ = (A₀ + 1) * (n : ℝ) ^ 5 := by ring_nf
     have hpow16 : (n : ℝ) * (n : ℝ) ^ 5 * (n : ℝ) ^ 10 = (n : ℝ) ^ 16 := by
       calc
@@ -1018,6 +1019,123 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
             _ = 8 * (K₀ + 16 / η) * ((n : ℝ) ^ bH β γ * (n : ℝ) ^ η) := by ring
             _ = 8 * (K₀ + 16 / η) * (n : ℝ) ^ (bH β γ + η) := by rw [hpowprod]
     exact hlogM
+  have hδcross_tendsto :
+      Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (1 - γ - 14 * omega4 β γ - 2 * h4 β γ))
+        Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop hδcross).comp tendsto_natCast_atTop_atTop
+  have hδmix_tendsto :
+      Filter.Tendsto
+        (fun n : ℕ => (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ - bH β γ - η))
+        Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop hδmix).comp tendsto_natCast_atTop_atTop
+  obtain ⟨nCross, hnCross⟩ :=
+    Filter.eventually_atTop.1 (hδcross_tendsto.eventually_ge_atTop (ε⁻¹))
+  obtain ⟨nMix, hnMix⟩ :=
+    Filter.eventually_atTop.1
+      (hδmix_tendsto.eventually_ge_atTop (Cmix / ε))
+  have errorBounds {n : ℕ} (hn : max 2 (max nCross nMix) ≤ n) :
+      (n : ℝ) ^ (γ + 14 * omega4 β γ) * capL β γ n ≤
+          ε * aStar β γ n * (n : ℝ) ∧
+        Real.log (((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ^
+          (2 * setBd β γ n)) ≤
+            ε * aStar β γ n * (tupLen β γ n : ℝ) := by
+    have hn2 : 2 ≤ n := le_trans (le_max_left 2 (max nCross nMix)) hn
+    have hnreal : (1 : ℝ) ≤ n := by exact_mod_cast (by omega : 1 ≤ n)
+    have hnpos : (0 : ℝ) < n := by linarith
+    have hmax : max nCross nMix ≤ n := (le_max_right 2 (max nCross nMix)).trans hn
+    have hCrossNat : nCross ≤ n := (le_max_left nCross nMix).trans hmax
+    have hMixNat : nMix ≤ n := (le_max_right nCross nMix).trans hmax
+    have hCrossPow : ε⁻¹ ≤ (n : ℝ) ^ (1 - γ - 14 * omega4 β γ - 2 * h4 β γ) :=
+      hnCross n hCrossNat
+    have hCrossExp :
+        γ + 14 * omega4 β γ + h4 β γ +
+          (1 - γ - 14 * omega4 β γ - 2 * h4 β γ) = 1 - h4 β γ := by ring
+    have hAstarn : aStar β γ n * (n : ℝ) = (n : ℝ) ^ (1 - h4 β γ) := by
+      calc
+        aStar β γ n * (n : ℝ) = (n : ℝ) ^ (-h4 β γ) * (n : ℝ) ^ (1 : ℝ) := by
+          simp [aStar, Real.rpow_one]
+        _ = (n : ℝ) ^ (1 - h4 β γ) := by
+          rw [← Real.rpow_add hnpos]
+          congr 1
+          ring
+    have hCrossLow :
+        (n : ℝ) ^ (γ + 14 * omega4 β γ) * capL β γ n ≤
+          ε * (n : ℝ) ^ (1 - h4 β γ) := by
+      have hpow : (n : ℝ) ^ (γ + 14 * omega4 β γ + h4 β γ) ≤
+          (n : ℝ) ^ (1 - h4 β γ - (1 - γ - 14 * omega4 β γ - 2 * h4 β γ)) := by
+        apply Real.rpow_le_rpow_of_exponent_le hnreal
+        rw [show 1 - h4 β γ - (1 - γ - 14 * omega4 β γ - 2 * h4 β γ) =
+          γ + 14 * omega4 β γ + h4 β γ by ring]
+      have hdiv :
+          (n : ℝ) ^ (1 - h4 β γ - (1 - γ - 14 * omega4 β γ - 2 * h4 β γ)) / ε ≤
+            (n : ℝ) ^ (1 - h4 β γ) := by
+        calc
+          _ = ε⁻¹ * (n : ℝ) ^
+              (1 - h4 β γ - (1 - γ - 14 * omega4 β γ - 2 * h4 β γ)) := by ring
+          _ ≤ (n : ℝ) ^ (1 - γ - 14 * omega4 β γ - 2 * h4 β γ) *
+                (n : ℝ) ^
+                  (1 - h4 β γ - (1 - γ - 14 * omega4 β γ - 2 * h4 β γ)) :=
+              mul_le_mul_of_nonneg_right hCrossPow (Real.rpow_nonneg hnpos.le _)
+          _ = (n : ℝ) ^ (1 - h4 β γ) := by
+              rw [← Real.rpow_add hnpos]
+              congr 1
+              ring
+      have hmul := (div_le_iff₀ hε).1 hdiv
+      have hmul' : (n : ℝ) ^ (γ + 14 * omega4 β γ + h4 β γ) ≤
+          ε * (n : ℝ) ^ (1 - h4 β γ) := by
+        calc
+          _ ≤ (n : ℝ) ^ (1 - h4 β γ - (1 - γ - 14 * omega4 β γ - 2 * h4 β γ)) := hpow
+          _ ≤ ε * (n : ℝ) ^ (1 - h4 β γ) := by nlinarith [hmul]
+      calc
+        (n : ℝ) ^ (γ + 14 * omega4 β γ) * capL β γ n =
+            (n : ℝ) ^ (γ + 14 * omega4 β γ + h4 β γ) := by
+          rw [capL]
+          rw [← Real.rpow_add hnpos]
+        _ ≤ ε * (n : ℝ) ^ (1 - h4 β γ) := hmul'
+    have hMixPow : Cmix / ε ≤ (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ - bH β γ - η) :=
+      hnMix n hMixNat
+    have htup : (n : ℝ) ^ (omega4 β γ / 3) ≤ (tupLen β γ n : ℝ) := by
+      dsimp [tupLen]
+      exact Nat.le_ceil _
+    have hAstark : (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ) ≤
+        aStar β γ n * (tupLen β γ n : ℝ) := by
+      calc
+        (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ) =
+            (n : ℝ) ^ (-h4 β γ) * (n : ℝ) ^ (omega4 β γ / 3) := by
+          rw [← Real.rpow_add hnpos]
+          congr 1
+          ring
+        _ ≤ aStar β γ n * (tupLen β γ n : ℝ) :=
+          mul_le_mul_of_nonneg_left htup (Real.rpow_nonneg hnpos.le _)
+    have hMixDiv :
+        Cmix * (n : ℝ) ^ (bH β γ + η) / ε ≤
+          (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ) := by
+      calc
+        _ = (Cmix / ε) * (n : ℝ) ^ (bH β γ + η) := by ring
+        _ ≤ (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ - bH β γ - η) *
+              (n : ℝ) ^ (bH β γ + η) :=
+            mul_le_mul_of_nonneg_right hMixPow (Real.rpow_nonneg hnpos.le _)
+        _ = (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ) := by
+          rw [← Real.rpow_add hnpos]
+          congr 1
+          ring
+    have hMixSmall :
+        Cmix * (n : ℝ) ^ (bH β γ + η) ≤
+          ε * aStar β γ n * (tupLen β γ n : ℝ) := by
+      have hmul := (div_le_iff₀ hε).1 hMixDiv
+      calc
+        Cmix * (n : ℝ) ^ (bH β γ + η) ≤ ε * (n : ℝ) ^ (omega4 β γ / 3 - h4 β γ) := by
+          nlinarith [hmul]
+        _ ≤ ε * (aStar β γ n * (tupLen β γ n : ℝ)) :=
+          mul_le_mul_of_nonneg_left hAstark hε.le
+        _ = ε * aStar β γ n * (tupLen β γ n : ℝ) := by ring
+    refine ⟨?_, ?_⟩
+    · rw [← hAstarn] at hCrossLow
+      simpa [mul_assoc] using hCrossLow
+    · calc
+        Real.log (((n : ℝ) * ((topH β γ n + 1 : ℕ) : ℝ) * (2 * lamH n) + 1) ^
+            (2 * setBd β γ n)) ≤ Cmix * (n : ℝ) ^ (bH β γ + η) := poolLogBound n hn2
+        _ ≤ ε * aStar β γ n * (tupLen β γ n : ℝ) := hMixSmall
   sorry
 set_option maxHeartbeats 200000
 

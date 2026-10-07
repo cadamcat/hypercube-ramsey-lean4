@@ -344,6 +344,156 @@ private theorem fullStarScope_disjoint_of_separated {n : ℕ} {v w : EvenRole n}
       _ = 4 := by norm_num
   omega
 
+private theorem sigmaW_cap11 {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    {κ : ℝ} (M : Menu11 n N E X Y κ) (i : M.ι) (z : InnerCoord n → Fin N)
+    (x : Fin N) (hN : 0 < N) :
+    (N : ℝ) * sigmaW E M.G (gS n) (M.μ i) z x ≤
+      Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)) := by
+  classical
+  let A : ℝ := (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)
+  have hNpos : (0 : ℝ) < N := Nat.cast_pos.mpr hN
+  unfold sigmaW
+  split_ifs with hc
+  · have hgate : (N : ℝ) * Real.exp (-A) ≤ ((commonSet E M.G (M.μ i) z).card : ℝ) := by
+      simpa [A] using hc.2
+    have hleft : 0 < (N : ℝ) * Real.exp (-A) := mul_pos hNpos (Real.exp_pos _)
+    have hcard : 0 < ((commonSet E M.G (M.μ i) z).card : ℝ) := lt_of_lt_of_le hleft hgate
+    have hinv : ((commonSet E M.G (M.μ i) z).card : ℝ)⁻¹ ≤ ((N : ℝ) * Real.exp (-A))⁻¹ :=
+      (inv_le_inv₀ hcard hleft).2 hgate
+    have hinvEq : ((N : ℝ) * Real.exp (-A))⁻¹ = Real.exp A / N := by
+      rw [mul_inv, Real.exp_neg, inv_inv]
+      rw [div_eq_mul_inv]
+      ring
+    calc
+      (N : ℝ) * ((commonSet E M.G (M.μ i) z).card : ℝ)⁻¹ ≤
+          (N : ℝ) * ((N : ℝ) * Real.exp (-A))⁻¹ :=
+        mul_le_mul_of_nonneg_left hinv (Nat.cast_nonneg _)
+      _ = Real.exp A := by rw [hinvEq]; field_simp [ne_of_gt hNpos]
+  · simpa [A] using (Real.exp_pos A).le
+
+private theorem evenRow_cap11 {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ}
+    (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
+    (t : OuterWord n → M.ι) (f : OddRole n → Fin N) (v : EvenRole n) (x : Fin N)
+    (hN : 0 < N) (hD : 0 < deg E M.G (piBar M y₀ p) x) :
+    (N : ℝ) * evenRowF M y₀ p t f v x ≤
+      Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)) *
+        (deg E M.G (piBar M y₀ p) x)⁻¹ ^ Fintype.card (OuterCoord n) := by
+  classical
+  let D := deg E M.G (piBar M y₀ p) x
+  have hhit0 (y : Fin N) : 0 ≤ hit E M.G x y := by
+    unfold hit
+    split_ifs <;> norm_num
+  have hhit1 (y : Fin N) : hit E M.G x y ≤ 1 := by
+    unfold hit
+    split_ifs <;> norm_num
+  have hratio0 (j : OuterCoord n) :
+      0 ≤ hit E M.G x (f (oddNbr v j.1)) / D := div_nonneg (hhit0 _) hD.le
+  have hratio1 (j : OuterCoord n) :
+      hit E M.G x (f (oddNbr v j.1)) / D ≤ D⁻¹ := by
+    apply (div_le_iff₀ hD).2
+    simpa [D, hD.ne'] using hhit1 (f (oddNbr v j.1))
+  have hprod0 : 0 ≤ ∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) / D :=
+    Finset.prod_nonneg fun j hj => hratio0 j
+  have hprod1 :
+      (∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) / D) ≤
+        (D⁻¹) ^ Fintype.card (OuterCoord n) := by
+    calc
+      (∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) / D) ≤
+          ∏ _j : OuterCoord n, D⁻¹ := by
+            apply Finset.prod_le_prod₀
+            · intro j hj
+              exact hratio0 j
+            · intro j hj
+              exact hratio1 j
+      _ = (D⁻¹) ^ Fintype.card (OuterCoord n) := by simp
+  have hsigma := sigmaW_cap11 M (t (sliceOf v.1)) (innerOut f v) x hN
+  unfold evenRowF
+  calc
+    (N : ℝ) *
+        (sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x *
+          ∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) / D) =
+      ((N : ℝ) * sigmaW E M.G (gS n)
+        (M.μ (t (sliceOf v.1))) (innerOut f v) x) *
+          ∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) / D := by ring
+    _ ≤ Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)) *
+        ∏ j : OuterCoord n, hit E M.G x (f (oddNbr v j.1)) / D := by
+          apply mul_le_mul_of_nonneg_right ?_ hprod0
+          exact hsigma
+    _ ≤ _ := by
+          apply mul_le_mul_of_nonneg_left hprod1 (Real.exp_pos _).le
+
+private theorem tuple_cond_cost_le {n m : ℕ} {P x : ℝ} {K : ℕ}
+    (hP : 10 ≤ P) (hn : 32 ≤ n) (hm : m ≤ n) (hx1 : x < 1)
+    (hxeq : x = xTup n P) (hK : K ≤ 34 * m * n ^ 6) :
+    ((1 - x) ^ K)⁻¹ ≤ (2 : ℝ) ^ m := by
+  classical
+  have hnR : (32 : ℝ) ≤ n := by exact_mod_cast hn
+  have hn1 : (1 : ℝ) ≤ n := by linarith
+  have hpowP : (n : ℝ) ^ (-P) ≤ (n : ℝ) ^ (-(10 : ℝ)) :=
+    Real.rpow_le_rpow_of_exponent_le hn1 (by linarith)
+  have hKReal : (K : ℝ) ≤ 34 * (n : ℝ) ^ 7 := by
+    calc
+      (K : ℝ) ≤ 34 * m * n ^ 6 := by exact_mod_cast hK
+      _ ≤ 34 * n * n ^ 6 := by gcongr
+      _ = 34 * n ^ 7 := by ring
+  have hKx : (K : ℝ) * xTup n P ≤ 1 / 2 := by
+    have hKfac : (K : ℝ) * (2 * (n : ℝ) ^ (-P)) ≤
+        34 * (n : ℝ) ^ 7 * (2 * (n : ℝ) ^ (-(10 : ℝ))) := by
+      calc
+        (K : ℝ) * (2 * (n : ℝ) ^ (-P)) ≤
+            34 * (n : ℝ) ^ 7 * (2 * (n : ℝ) ^ (-P)) :=
+          mul_le_mul_of_nonneg_right hKReal (by positivity)
+        _ ≤ 34 * (n : ℝ) ^ 7 * (2 * (n : ℝ) ^ (-(10 : ℝ))) := by
+          apply mul_le_mul_of_nonneg_left
+          · exact mul_le_mul_of_nonneg_left hpowP (by norm_num)
+          · positivity
+    have hpowProd : (n : ℝ) ^ 7 * (n : ℝ) ^ (-(10 : ℝ)) = (n : ℝ) ^ (-(3 : ℝ)) := by
+      rw [← Real.rpow_natCast (n : ℝ) 7, ← Real.rpow_add (by positivity)]
+      norm_num
+    have hneg : (n : ℝ) ^ (-(3 : ℝ)) = ((n : ℝ) ^ 3)⁻¹ := by
+      rw [Real.rpow_neg (by positivity)]
+      exact congrArg (fun y : ℝ => y⁻¹) (Real.rpow_natCast (n : ℝ) 3)
+    have hnCube : (32768 : ℝ) ≤ (n : ℝ) ^ 3 := by
+      have hp := pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 32) hnR 3
+      norm_num at hp
+      exact hp
+    have hinvCube : ((n : ℝ) ^ 3)⁻¹ ≤ (32768 : ℝ)⁻¹ :=
+      (inv_le_inv₀ (by positivity) (by norm_num)).2 hnCube
+    rw [xTup]
+    calc
+      (K : ℝ) * (2 * (n : ℝ) ^ (-P)) ≤
+          34 * (n : ℝ) ^ 7 * (2 * (n : ℝ) ^ (-(10 : ℝ))) := hKfac
+      _ = 68 * ((n : ℝ) ^ 7 * (n : ℝ) ^ (-(10 : ℝ)) ) := by ring
+      _ = 68 * ((n : ℝ) ^ (-(3 : ℝ))) := by rw [hpowProd]
+      _ = 68 * ((n : ℝ) ^ 3)⁻¹ := by rw [hneg]
+      _ ≤ 68 * (32768 : ℝ)⁻¹ := mul_le_mul_of_nonneg_left hinvCube (by norm_num)
+      _ ≤ 1 / 2 := by norm_num
+  have hBern : 1 - (K : ℝ) * x ≤ (1 - x) ^ K := by
+    have hbase : (-2 : ℝ) ≤ -x := by linarith
+    have h := one_add_mul_le_pow (a := -x) hbase K
+    calc
+      1 - (K : ℝ) * x = 1 + (K : ℝ) * (-x) := by ring
+      _ ≤ (1 + (-x)) ^ K := h
+      _ = (1 - x) ^ K := by congr 1 <;> ring
+  have hKx' : (K : ℝ) * x ≤ 1 / 2 := by simpa [hxeq] using hKx
+  have hpowHalf : (1 / 2 : ℝ) ≤ (1 - x) ^ K := by linarith
+  have hpowPos : 0 < (1 - x) ^ K := lt_of_lt_of_le (by norm_num) hpowHalf
+  have hinv : ((1 - x) ^ K)⁻¹ ≤ 2 := by
+    calc
+      ((1 - x) ^ K)⁻¹ ≤ (1 / 2 : ℝ)⁻¹ :=
+        (inv_le_inv₀ hpowPos (by norm_num : (0 : ℝ) < 1 / 2)).2 hpowHalf
+      _ = 2 := by norm_num
+  by_cases hm : m = 0
+  · subst m
+    have hKzero : K = 0 := by simpa using hK
+    simp [hKzero]
+  · have hm1 : 1 ≤ m := Nat.one_le_iff_ne_zero.mpr hm
+    calc
+      ((1 - x) ^ K)⁻¹ ≤ 2 := hinv
+      _ ≤ (2 : ℝ) ^ m := by
+        exact_mod_cast (pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 2) hm1)
+
 private theorem fullStarScope_card_le {n : ℕ} (v : EvenRole n) :
     (fullStarScope v).card ≤ 1 + n * Fintype.card (InnerCoord n) := by
   classical

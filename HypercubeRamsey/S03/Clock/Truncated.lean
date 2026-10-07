@@ -362,6 +362,45 @@ theorem truncatedExploration_inspected_touches {T : ℕ} {R : Type*} [Fintype R]
       rw [← heq]
       exact hmax.choose_spec.1
     · simp [nextPending, hp] at hn
+  have hnextMaxReq (s : ExploreState R g) (u : Endpoint R g)
+      (hn : nextPending s = some u) :
+      ∀ v ∈ pendingEndpoints s, (s.request v).getD 0 ≤ (s.request u).getD 0 := by
+    classical
+    by_cases hp : (pendingEndpoints s).Nonempty
+    · have hmax := (pendingEndpoints s).exists_max_image (pendingKey s) hp
+      have heq : ((pendingEndpoints s).exists_max_image (pendingKey s) hp).choose = u := by
+        simpa [nextPending, hp] using hn
+      intro v hv
+      have hkey : pendingKey s v ≤ pendingKey s u := by
+        have h := hmax.choose_spec.2 v hv
+        calc
+          pendingKey s v ≤ pendingKey s ((pendingEndpoints s).exists_max_image (pendingKey s) hp).choose := h
+          _ = pendingKey s u := by rw [heq]
+      let N := Fintype.card (Endpoint R g)
+      let qv := (s.request v).getD 0
+      let qu := (s.request u).getD 0
+      by_contra hnot
+      have hlt : qu < qv := Nat.lt_of_not_ge hnot
+      have hN : 0 < N := Fintype.card_pos_iff.mpr ⟨u⟩
+      have hRankV : (Fintype.equivFin (Endpoint R g) v).val < N := (Fintype.equivFin (Endpoint R g) v).isLt
+      have hRankU : (Fintype.equivFin (Endpoint R g) u).val < N := (Fintype.equivFin (Endpoint R g) u).isLt
+      have hkeyU : pendingKey s u < (qu + 1) * N := by
+        dsimp [pendingKey, N, qu]
+        calc
+          (s.request u).getD 0 * Fintype.card (Endpoint R g) +
+              (Fintype.equivFin (Endpoint R g) u).val <
+              (s.request u).getD 0 * Fintype.card (Endpoint R g) + Fintype.card (Endpoint R g) :=
+            Nat.add_lt_add_left hRankU _
+          _ = ((s.request u).getD 0 + 1) * Fintype.card (Endpoint R g) := by
+            rw [Nat.add_mul, Nat.one_mul]
+      have hmul : (qu + 1) * N ≤ qv * N :=
+        Nat.mul_le_mul_right N (Nat.succ_le_of_lt hlt)
+      have hkeyV : qv * N ≤ pendingKey s v := by
+        dsimp [pendingKey, N, qv]
+        omega
+      have hcontra : pendingKey s u < pendingKey s v := lt_of_lt_of_le hkeyU (le_trans hmul hkeyV)
+      exact (not_lt_of_ge hkey) hcontra
+    · simp [nextPending, hp] at hn
   have hrun : ∀ f (s : ExploreState R g), Inv s → Inv (exploreRun ξ L f s) := by
     intro f
     induction f with
@@ -990,6 +1029,110 @@ theorem truncatedExploration_complete {T : ℕ} {R : Type*} [Fintype R] [Decidab
     (hng : (truncatedExploration ξ roots L).giant = false) :
     ∀ u h, inClosureFrom ξ roots (u, h) → u ∈ (truncatedExploration ξ roots L).processed ∧
       ∀ e, EdgeIncident u e → ∃ H, (truncatedExploration ξ roots L).inspectedAt e = some H ∧ h ≤ H := by
+  classical
+  have hprocessedInspect (u : Endpoint R g) (h : ℕ) (s : ExploreState R g)
+      (e : RowLabel R g) : (inspectEdge ξ L u h s e).processed = s.processed := by
+    by_cases hg : s.giant
+    · simp [inspectEdge, hg]
+    · cases hk : edgeArrivalKey ξ e with
+      | none => simp [inspectEdge, hg, hk]
+      | some k =>
+          by_cases hkh : k < h
+          · by_cases hproc : edgeOther u e ∈ s.processed
+            · simp [inspectEdge, hg, hk, hkh, hproc]
+            · simp [inspectEdge, hg, hk, hkh, hproc] <;> split_ifs <;> rfl
+          · simp [inspectEdge, hg, hk, hkh]
+  have hprocessedFold : ∀ (u : Endpoint R g) (h : ℕ) (es : List (RowLabel R g))
+      (s : ExploreState R g), (es.foldl (inspectEdge ξ L u h) s).processed = s.processed := by
+    intro u h es
+    induction es with
+    | nil => intro s; rfl
+    | cons e es ih =>
+        intro s
+        rw [List.foldl_cons, ih]
+        exact hprocessedInspect u h s e
+  have hprocessedEndpoint (u : Endpoint R g) (s : ExploreState R g) :
+      (processEndpoint ξ L u s).processed = insert u s.processed := by
+    unfold processEndpoint
+    rw [hprocessedFold]
+  have hnextMem (s : ExploreState R g) (u : Endpoint R g)
+      (hn : nextPending s = some u) : u ∈ pendingEndpoints s := by
+    by_cases hp : (pendingEndpoints s).Nonempty
+    · have hmax := (pendingEndpoints s).exists_max_image (pendingKey s) hp
+      have heq : ((pendingEndpoints s).exists_max_image (pendingKey s) hp).choose = u := by
+        simpa [nextPending, hp] using hn
+      rw [← heq]
+      exact hmax.choose_spec.1
+    · simp [nextPending, hp] at hn
+  have hrunNoPending : ∀ f (s : ExploreState R g),
+      Fintype.card (Endpoint R g) ≤ s.processed.card + f →
+      (exploreRun ξ L f s).giant = false →
+      pendingEndpoints (exploreRun ξ L f s) = ∅ := by
+    intro f
+    induction f with
+    | zero =>
+        intro s hcard hng
+        by_contra hne
+        have hnon : (pendingEndpoints s).Nonempty := Finset.nonempty_iff_ne_empty.mpr hne
+        rcases hnon with ⟨u, hu⟩
+        have huNot : u ∉ s.processed := by
+          have hu' : (s.request u).isSome ∧ u ∉ s.processed := by
+            simpa [pendingEndpoints] using hu
+          exact hu'.2
+        have hsub : insert u s.processed ⊆ (Finset.univ : Finset (Endpoint R g)) := Finset.subset_univ _
+        have hcardIns : (insert u s.processed).card = s.processed.card + 1 :=
+          Finset.card_insert_of_notMem huNot
+        have hcardAll := Finset.card_le_card hsub
+        rw [Finset.card_univ, hcardIns] at hcardAll
+        have hcard' : Fintype.card (Endpoint R g) ≤ s.processed.card := by
+          simpa [exploreRun] using hcard
+        omega
+    | succ f ih =>
+        intro s hcard hng
+        by_cases hg : s.giant = true
+        · simp [exploreRun, hg] at hng
+        · have hfalse : s.giant = false := by cases hb : s.giant <;> simp_all
+          cases hp : nextPending s with
+          | none =>
+              have hEmpty : pendingEndpoints s = ∅ := by
+                by_contra hne
+                have hnon : (pendingEndpoints s).Nonempty := Finset.nonempty_iff_ne_empty.mpr hne
+                have hnext : nextPending s ≠ none := by simp [nextPending, hnon]
+                exact hnext hp
+              simpa [exploreRun, hfalse, hp] using hEmpty
+          | some u =>
+              have hmem := hnextMem s u hp
+              have hmem' : (s.request u).isSome ∧ u ∉ s.processed := by
+                simpa [pendingEndpoints] using hmem
+              have hproc : u ∉ s.processed := hmem'.2
+              have hcardStep :
+                  (processEndpoint ξ L u s).processed.card = s.processed.card + 1 := by
+                rw [hprocessedEndpoint]
+                exact Finset.card_insert_of_notMem hproc
+              have hcard' : Fintype.card (Endpoint R g) ≤
+                  (processEndpoint ξ L u s).processed.card + f := by
+                rw [hcardStep]
+                omega
+              have hng' : (exploreRun ξ L f (processEndpoint ξ L u s)).giant = false := by
+                simpa [exploreRun, hfalse, hp] using hng
+              have hEmpty := ih (processEndpoint ξ L u s) hcard' hng'
+              simpa [exploreRun, hfalse, hp] using hEmpty
+  have hNoPending : pendingEndpoints (truncatedExploration ξ roots L) = ∅ := by
+    have hcard : Fintype.card (Endpoint R g) ≤
+        (initExploreState T roots L).processed.card + Fintype.card (Endpoint R g) := by simp
+    simpa [truncatedExploration] using hrunNoPending (Fintype.card (Endpoint R g))
+      (initExploreState T roots L) hcard hng
+  have hactiveProcessed :
+      (truncatedExploration ξ roots L).active ⊆ (truncatedExploration ξ roots L).processed := by
+    intro u hu
+    by_contra hnot
+    have hPending : u ∈ pendingEndpoints (truncatedExploration ξ roots L) := by
+      have hmem : (truncatedExploration ξ roots L).request u |>.isSome ∧
+          u ∉ (truncatedExploration ξ roots L).processed := by
+        exact ⟨by simpa [ExploreState.active] using hu, hnot⟩
+      simpa [pendingEndpoints] using hmem
+    rw [hNoPending] at hPending
+    simp at hPending
   sorry
 
 /-- L3.10b-card (03:872–874): a giant run has at least `L` active endpoints, a non-giant run fewer than `L`, and

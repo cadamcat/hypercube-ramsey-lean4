@@ -2278,4 +2278,253 @@ theorem height_base_volume_ratio_bounds9 (P : Params9) (hP : P.Valid) :
       _ ≤ 2 * (n : ℝ) ^ (1 - (P.σ : ℝ)) := by nlinarith [hpow1]
   exact ⟨hVpos, hratioPrev.trans hratioPrev2, hratioNextBound⟩
 
+theorem height_base_mean_slack9 (P : Params9) (hP : P.Valid)
+    (hc : HeightChoice9 P) (hadm : hc.Admissible) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      (n : ℝ) ^ hc.b₀ ≤ (n : ℝ) ^ ((P.χ : ℝ) / 2) / 18 ∧
+      (n : ℝ) ^ hc.b₀ * (P.m n : ℝ) *
+          heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+            (residualBall9 P n : ℝ) ≤ (n : ℝ) ^ ((P.χ : ℝ) / 2) / 18 ∧
+      (n : ℝ) ^ hc.b₀ *
+          heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+            (residualBall9 P n : ℝ) ≤
+        (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') / 18 := by
+  rcases hP with ⟨hcommon, hminus, hx, hσ, hχ, hgap, hvalidCase⟩
+  have hP' : P.Valid := ⟨hcommon, hminus, hx, hσ, hχ, hgap, hvalidCase⟩
+  rcases hadm with ⟨_, _, _, _, _, _, _, _, _, hbε, heps, hcaseAdm⟩
+  let α : ℝ := (P.χ : ℝ) / 2
+  let sameGap : ℝ := α - hc.b₀
+  let plusGap : ℝ := hc.eps' - hc.b₀
+  let adjExponent : ℝ := match P.case with
+    | .sub _ _ _ => hc.b₀
+    | .lin _ _ _ _ => hc.b₀ + (P.σ : ℝ)
+  let adjGap : ℝ := α - adjExponent
+  have hSameGap : 0 < sameGap := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        have hcase : hc.b₀ < α := by simpa [hbranch, α] using hcaseAdm
+        dsimp [sameGap]
+        linarith
+    | lin αS αD hB yB =>
+        have hcase : hc.b₀ + (P.σ : ℝ) < α := by simpa [hbranch, α] using hcaseAdm
+        have hσpos : 0 < (P.σ : ℝ) := by exact_mod_cast hσ.1
+        dsimp [sameGap]
+        linarith
+  have hPlusGap : 0 < plusGap := by dsimp [plusGap]; linarith
+  have hAdjGap : 0 < adjGap := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        have hcase : hc.b₀ < α := by simpa [hbranch, α] using hcaseAdm
+        simpa [adjGap, adjExponent, hbranch] using (sub_pos.mpr hcase)
+    | lin αS αD hB yB =>
+        have hcase : hc.b₀ + (P.σ : ℝ) < α := by simpa [hbranch, α] using hcaseAdm
+        simpa [adjGap, adjExponent, hbranch] using (sub_pos.mpr hcase)
+  obtain ⟨nGeom, hGeom⟩ := height_base_small_scales9 P hP'
+  obtain ⟨nRatio, hRatio⟩ := height_base_volume_ratio_bounds9 P hP'
+  obtain ⟨nSame, hSame⟩ := height_rpow_eventually_ge9 sameGap 18 hSameGap (by norm_num)
+  obtain ⟨nAdj, hAdj⟩ := height_rpow_eventually_ge9 adjGap 36 hAdjGap (by norm_num)
+  obtain ⟨nPlus, hPlus⟩ := height_rpow_eventually_ge9 plusGap 36 hPlusGap (by norm_num)
+  refine ⟨max nGeom (max nRatio (max nSame (max nAdj nPlus))), ?_⟩
+  intro n hn
+  have hnGeom : nGeom ≤ n := le_trans (le_max_left _ _) hn
+  have hnRest : max nRatio (max nSame (max nAdj nPlus)) ≤ n :=
+    le_trans (le_max_right _ _) hn
+  have hnRatio : nRatio ≤ n := le_trans (le_max_left _ _) hnRest
+  have hnRest2 : max nSame (max nAdj nPlus) ≤ n := le_trans (le_max_right _ _) hnRest
+  have hnSame : nSame ≤ n := le_trans (le_max_left _ _) hnRest2
+  have hnRest3 : max nAdj nPlus ≤ n := le_trans (le_max_right _ _) hnRest2
+  have hnAdj : nAdj ≤ n := le_trans (le_max_left _ _) hnRest3
+  have hnPlus : nPlus ≤ n := le_trans (le_max_right _ _) hnRest3
+  have hsmall := hGeom n hnGeom
+  have hratios := hRatio n hnRatio
+  have hradiusReal : (11 : ℝ) ≤ (P.radius n : ℝ) := by exact_mod_cast hsmall.2.2
+  have hn44Real : 44 ≤ (n : ℝ) := by nlinarith [hsmall.2.1, hradiusReal]
+  have hn44 : 44 ≤ n := by exact_mod_cast hn44Real
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hnreal1 : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hSameLarge := hSame n hnSame
+  have hAdjLarge := hAdj n hnAdj
+  have hPlusLarge := hPlus n hnPlus
+  have hpowSame : (n : ℝ) ^ α = (n : ℝ) ^ hc.b₀ * (n : ℝ) ^ sameGap := by
+    calc
+      _ = (n : ℝ) ^ (hc.b₀ + sameGap) := by congr 1; dsimp [sameGap]; ring
+      _ = _ := Real.rpow_add hnreal hc.b₀ sameGap
+  have hpowAdj : (n : ℝ) ^ α = (n : ℝ) ^ adjExponent * (n : ℝ) ^ adjGap := by
+    calc
+      _ = (n : ℝ) ^ (adjExponent + adjGap) := by congr 1; dsimp [adjGap]; ring
+      _ = _ := Real.rpow_add hnreal adjExponent adjGap
+  have hpowPlus :
+      (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') =
+        (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀) * (n : ℝ) ^ plusGap := by
+    calc
+      _ = (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀ + plusGap) := by
+        congr 1
+        dsimp [plusGap]
+        ring
+      _ = _ := Real.rpow_add hnreal _ plusGap
+  have hnbase : 0 ≤ (n : ℝ) ^ hc.b₀ := Real.rpow_nonneg hnreal.le _
+  have hSamePowBound : 18 * (n : ℝ) ^ hc.b₀ ≤ (n : ℝ) ^ α := by
+    rw [hpowSame]
+    have hmul := mul_le_mul_of_nonneg_left hSameLarge hnbase
+    nlinarith [hmul]
+  have hSameMean : (n : ℝ) ^ hc.b₀ ≤ (n : ℝ) ^ α / 18 := by
+    apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 18)).2
+    nlinarith [hSamePowBound]
+  have hAdjPowBound :
+      36 * (n : ℝ) ^ adjExponent ≤ (n : ℝ) ^ α := by
+    rw [hpowAdj]
+    have hmul := mul_le_mul_of_nonneg_left hAdjLarge
+      (Real.rpow_nonneg hnreal.le adjExponent)
+    nlinarith [hmul]
+  have hPlusPowBound :
+      36 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀) ≤
+        (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') := by
+    rw [hpowPlus]
+    have hmul := mul_le_mul_of_nonneg_left hPlusLarge
+      (Real.rpow_nonneg hnreal.le (1 - (P.σ : ℝ) + hc.b₀))
+    nlinarith [hmul]
+  have hAdjacentRatio :
+      (P.m n : ℝ) * heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+        (residualBall9 P n : ℝ) ≤
+        (match P.case with
+         | .sub _ _ _ => (2 : ℝ)
+         | .lin _ _ _ _ => (n : ℝ) ^ (P.σ : ℝ) / 2) := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        have hv : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧
+            1 - P.σ < yD ∧ yD < 1 ∧ P.χ < P.σ / 10 := by
+          simpa [hbranch] using hvalidCase
+        have hyq : yM + P.σ < 1 := by linarith [hv.2.2.1]
+        have hy : (yM : ℝ) + (P.σ : ℝ) < 1 := by exact_mod_cast hyq
+        have hmPow : (P.m n : ℝ) ≤ (n : ℝ) ^ (yM : ℝ) := by
+          rw [Params9.m, hbranch]
+          exact Nat.floor_le (by positivity)
+        have hrPow : (P.radius n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) :=
+          Nat.floor_le (by positivity)
+        have hdiv : 2 * (P.radius n : ℝ) / (n : ℝ) ≤
+            2 * (n : ℝ) ^ (P.σ : ℝ) / (n : ℝ) :=
+          div_le_div_of_nonneg_right
+            (mul_le_mul_of_nonneg_left hrPow (by norm_num)) hnreal.le
+        have hprod : (P.m n : ℝ) * (2 * (P.radius n : ℝ) / (n : ℝ)) ≤
+            (n : ℝ) ^ (yM : ℝ) * (2 * (n : ℝ) ^ (P.σ : ℝ) / (n : ℝ)) :=
+          mul_le_mul hmPow hdiv (by positivity) (by positivity)
+        have hbaseEq :
+            (n : ℝ) ^ (yM : ℝ) *
+                (2 * (n : ℝ) ^ (P.σ : ℝ) / (n : ℝ)) =
+              2 * (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ) - 1) := by
+          calc
+            _ = 2 * ((n : ℝ) ^ (yM : ℝ) * (n : ℝ) ^ (P.σ : ℝ)) / (n : ℝ) := by ring
+            _ = 2 * (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ)) / (n : ℝ) := by
+              rw [← (Real.rpow_add hnreal (yM : ℝ) (P.σ : ℝ))]
+            _ = 2 * (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ) - 1) := by
+              have hdivPow :
+                  (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ)) / (n : ℝ) =
+                    (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ) - 1) := by
+                calc
+                  _ = (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ)) / (n : ℝ) ^ (1 : ℝ) := by
+                    rw [Real.rpow_one]
+                  _ = _ :=
+                    (Real.rpow_sub hnreal ((yM : ℝ) + (P.σ : ℝ)) 1).symm
+              calc
+                _ = 2 * ((n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ)) / (n : ℝ)) := by ring
+                _ = _ := congrArg (fun z : ℝ => 2 * z) hdivPow
+        have hexpNonpos : (yM : ℝ) + (P.σ : ℝ) - 1 ≤ 0 := by linarith
+        have hsmallPow := Real.rpow_le_one_of_one_le_of_nonpos hnreal1 hexpNonpos
+        calc
+          _ = (P.m n : ℝ) *
+              (heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+                (residualBall9 P n : ℝ)) := by ring
+          _ ≤ (P.m n : ℝ) * (2 * (P.radius n : ℝ) / (n : ℝ)) :=
+            mul_le_mul_of_nonneg_left hratios.2.1 (Nat.cast_nonneg _)
+          _ ≤ (n : ℝ) ^ (yM : ℝ) *
+                (2 * (n : ℝ) ^ (P.σ : ℝ) / (n : ℝ)) := hprod
+          _ = 2 * (n : ℝ) ^ ((yM : ℝ) + (P.σ : ℝ) - 1) := hbaseEq
+          _ ≤ 2 := by nlinarith [hsmallPow]
+    | lin αS αD hB yB =>
+        have hprod : (P.m n : ℝ) * (2 * (P.radius n : ℝ) / (n : ℝ)) ≤
+            ((n : ℝ) / 4) * (2 * (P.radius n : ℝ) / (n : ℝ)) :=
+          mul_le_mul_of_nonneg_right hsmall.1 (by positivity)
+        have hprodEq : ((n : ℝ) / 4) * (2 * (P.radius n : ℝ) / (n : ℝ)) =
+            (P.radius n : ℝ) / 2 := by
+          field_simp [ne_of_gt hnreal]
+          <;> ring
+        calc
+          _ = (P.m n : ℝ) *
+              (heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+                (residualBall9 P n : ℝ)) := by ring
+          _ ≤ (P.m n : ℝ) * (2 * (P.radius n : ℝ) / (n : ℝ)) :=
+            mul_le_mul_of_nonneg_left hratios.2.1 (Nat.cast_nonneg _)
+          _ ≤ ((n : ℝ) / 4) * (2 * (P.radius n : ℝ) / (n : ℝ)) := hprod
+          _ = (P.radius n : ℝ) / 2 := hprodEq
+          _ ≤ (n : ℝ) ^ (P.σ : ℝ) / 2 := by
+            exact div_le_div_of_nonneg_right (Nat.floor_le (by positivity)) (by norm_num)
+  have hAdjacentMean :
+      (n : ℝ) ^ hc.b₀ * (P.m n : ℝ) *
+          heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+            (residualBall9 P n : ℝ) ≤ (n : ℝ) ^ α / 18 := by
+    cases hbranch : P.case with
+    | sub yS yD yM =>
+        have hratioSub :
+            (P.m n : ℝ) * heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+              (residualBall9 P n : ℝ) ≤ 2 := by
+          simpa [hbranch] using hAdjacentRatio
+        have hAdjBound : 36 * (n : ℝ) ^ hc.b₀ ≤ (n : ℝ) ^ α := by
+          simpa [adjExponent, hbranch] using hAdjPowBound
+        calc
+          _ = (n : ℝ) ^ hc.b₀ *
+              ((P.m n : ℝ) * heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+                (residualBall9 P n : ℝ)) := by ring
+          _ ≤ (n : ℝ) ^ hc.b₀ * 2 :=
+            mul_le_mul_of_nonneg_left hratioSub hnbase
+          _ ≤ (n : ℝ) ^ α / 18 := by nlinarith [hAdjBound]
+    | lin αS αD hB yB =>
+        have hratioLin :
+            (P.m n : ℝ) * heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+              (residualBall9 P n : ℝ) ≤ (n : ℝ) ^ (P.σ : ℝ) / 2 := by
+          simpa [hbranch] using hAdjacentRatio
+        have hAdjBound :
+            36 * (n : ℝ) ^ (hc.b₀ + (P.σ : ℝ)) ≤ (n : ℝ) ^ α := by
+          simpa [adjExponent, hbranch] using hAdjPowBound
+        have hpowSigma :
+            (n : ℝ) ^ hc.b₀ * (n : ℝ) ^ (P.σ : ℝ) =
+              (n : ℝ) ^ (hc.b₀ + (P.σ : ℝ)) :=
+          (Real.rpow_add hnreal hc.b₀ (P.σ : ℝ)).symm
+        calc
+          _ = (n : ℝ) ^ hc.b₀ *
+              ((P.m n : ℝ) * heightBallVolReal9 (n - P.m n) (P.radius n - 1) /
+                (residualBall9 P n : ℝ)) := by ring
+          _ ≤ (n : ℝ) ^ hc.b₀ * ((n : ℝ) ^ (P.σ : ℝ) / 2) :=
+            mul_le_mul_of_nonneg_left hratioLin hnbase
+          _ = ((n : ℝ) ^ hc.b₀ * (n : ℝ) ^ (P.σ : ℝ)) / 2 := by ring
+          _ = (n : ℝ) ^ (hc.b₀ + (P.σ : ℝ)) / 2 := by rw [hpowSigma]
+          _ ≤ (n : ℝ) ^ α / 18 := by nlinarith [hAdjBound]
+  have hPlusMean :
+      (n : ℝ) ^ hc.b₀ *
+          heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+            (residualBall9 P n : ℝ) ≤
+        (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') / 18 := by
+    have hbase :
+        (n : ℝ) ^ hc.b₀ *
+          heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+            (residualBall9 P n : ℝ) ≤
+          2 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀) := by
+      calc
+        _ = (n : ℝ) ^ hc.b₀ *
+            (heightBallVolReal9 (n - P.m n) (P.radius n + 1) /
+              (residualBall9 P n : ℝ)) := by ring
+        _ ≤ (n : ℝ) ^ hc.b₀ * (2 * (n : ℝ) ^ (1 - (P.σ : ℝ))) :=
+          mul_le_mul_of_nonneg_left hratios.2.2 hnbase
+        _ = 2 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀) := by
+          calc
+            _ = 2 * ((n : ℝ) ^ (1 - (P.σ : ℝ)) * (n : ℝ) ^ hc.b₀) := by ring
+            _ = 2 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀) := by
+              rw [← (Real.rpow_add hnreal (1 - (P.σ : ℝ)) hc.b₀)]
+    calc
+      _ ≤ 2 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.b₀) := hbase
+      _ ≤ (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') / 18 := by
+        apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 18)).2
+        have hpow := hPlusPowBound
+        nlinarith [hpow]
+  exact ⟨hSameMean, hAdjacentMean, hPlusMean⟩
+
 end HypercubeRamsey.Lane_q_s09_map

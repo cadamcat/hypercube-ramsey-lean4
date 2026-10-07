@@ -3291,6 +3291,164 @@ theorem conditioned_comparison_transfer :
             Real.exp (relativeError d * S.card) * ∏ i ∈ S, q i (y i)) ∧
         (∀ i y, |(conditionedLaw q h hG).pr (fun x => x i = y) - q i y| ≤
           relativeError d * q i y) := by
+  have huTop : Tendsto (fun n : ℕ => (n : ℝ) ^ (0.1 : ℝ)) atTop atTop := by
+    exact (tendsto_rpow_atTop (by norm_num : (0.1 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hfailTail : Tendsto
+      (fun n : ℕ => ((n : ℝ) ^ (0.1 : ℝ)) ^ (0.9 : ℝ) *
+        Real.exp (-((n : ℝ) ^ (0.1 : ℝ)))) atTop (nhds 0) := by
+    have h := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+      (0.9 : ℝ) (1 : ℝ) (by norm_num : (0 : ℝ) < 1)).comp huTop
+    simpa [Function.comp_def] using h
+  have hsmallFailEvent := hfailTail.eventually
+    (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8))
+  filter_upwards [hsmallFailEvent, eventually_ge_atTop 100] with d hsmallFail hd100
+  intro t q hq hseqGood hIdentity hLog hForcedGood
+  classical
+  have hdNat : 0 < d := lt_of_lt_of_le (by decide : 0 < 100) hq.dimension
+  have hd : 0 < (d : ℝ) := by exact_mod_cast hdNat
+  have hd100 : (1 : ℝ) ≤ (d : ℝ) := by exact_mod_cast (show 1 ≤ d by omega)
+  have hdeltaPos : 0 < relativeError d := by
+    unfold relativeError
+    exact Real.rpow_pos_of_pos hd _
+  have hdeltaLeOne : relativeError d ≤ 1 := by
+    unfold relativeError
+    exact Real.rpow_le_one_of_one_le_of_nonpos hd100 (by norm_num)
+  have hpow09 : (d : ℝ) ^ (0.09 : ℝ) =
+      ((d : ℝ) ^ (0.1 : ℝ)) ^ (0.9 : ℝ) := by
+    rw [← Real.rpow_mul hd.le]
+    norm_num
+  have hpowCancel : (d : ℝ) ^ (0.09 : ℝ) *
+      (d : ℝ) ^ (-(0.09 : ℝ)) = 1 := by
+    rw [← Real.rpow_add hd]
+    norm_num
+  have hfailScaled : failureBound d * (d : ℝ) ^ (0.09 : ℝ) ≤ 1 / 8 := by
+    unfold failureBound
+    rw [hpow09]
+    simpa [mul_comm] using hsmallFail.le
+  have hfailureSmall : failureBound d ≤ relativeError d / 8 := by
+    calc
+      failureBound d = failureBound d * 1 := by ring
+      _ = failureBound d *
+          ((d : ℝ) ^ (0.09 : ℝ) * (d : ℝ) ^ (-(0.09 : ℝ))) := by
+            rw [hpowCancel]
+      _ = (failureBound d * (d : ℝ) ^ (0.09 : ℝ)) *
+            (d : ℝ) ^ (-(0.09 : ℝ)) := by ring
+      _ ≤ (1 / 8 : ℝ) * (d : ℝ) ^ (-(0.09 : ℝ)) :=
+        mul_le_mul_of_nonneg_right hfailScaled (Real.rpow_nonneg hd.le _)
+      _ = relativeError d / 8 := by rw [relativeError]; ring
+  have hfailNonneg : 0 ≤ failureBound d := Real.exp_nonneg _
+  have hremainPos : 0 < 1 - failureBound d := by
+    have hδdiv : relativeError d / 8 ≤ 1 / 8 :=
+      div_le_div_of_nonneg_right hdeltaLeOne (by norm_num)
+    have hle : failureBound d ≤ 1 / 8 := hfailureSmall.trans hδdiv
+    linarith
+  let Pseq : FinProb (Path t d) := sequentialLaw q hq.nonneg hq.row_sum
+  let lab : Path t d → (Fin t → Fin d) := fun x =>
+    readLabels (by have := hq.dimension; omega) x
+  have hGpos : 0 < Pseq.pr (Good q) := lt_of_lt_of_le hremainPos hseqGood
+  have hseqGood' : 1 - failureBound d ≤ Pseq.pr (Good q) := by
+    simpa [Pseq] using hseqGood
+  let hG : 0 < Pseq.pr (Good q) := hGpos
+  let Pcond : FinProb (Path t d) := FinProb.cond Pseq (Good q) hG
+  let Q : FinProb (Fin t → Fin d) := FinProb.map Pcond lab
+  have hGupper : Pseq.pr (Good q) ≤ 1 := by
+    calc
+      Pseq.pr (Good q) ≤ Pseq.pr (fun _ => True) :=
+        FinProb.pr_mono Pseq _ _ (by intro x hx; trivial)
+      _ = 1 := by simp [FinProb.pr, Pseq.sum_eq_one]
+  have hdenInv : (Pseq.pr (Good q))⁻¹ ≤
+      Real.exp (relativeError d / 4) := by
+    have hfailHalf : failureBound d ≤ 1 / 2 := by
+      have hsmall := hfailureSmall
+      nlinarith [hdeltaLeOne]
+    have hrecip : (1 - failureBound d)⁻¹ ≤ 1 + 2 * failureBound d := by
+      have hdiv : 1 / (1 - failureBound d) ≤ 1 + 2 * failureBound d := by
+        apply (div_le_iff₀ hremainPos).2
+        have hprod : 0 ≤ failureBound d * (1 - 2 * failureBound d) :=
+          mul_nonneg hfailNonneg (by linarith [hfailHalf])
+        nlinarith [hprod]
+      simpa only [one_div] using hdiv
+    have hsumSmall : 1 + 2 * failureBound d ≤
+        1 + relativeError d / 4 := by
+      linarith [hfailureSmall]
+    calc
+      (Pseq.pr (Good q))⁻¹ ≤ (1 - failureBound d)⁻¹ := by
+        simpa only [one_div] using
+          (one_div_le_one_div_of_le hremainPos hseqGood')
+      _ ≤ 1 + 2 * failureBound d := hrecip
+      _ ≤ 1 + relativeError d / 4 := hsumSmall
+      _ ≤ Real.exp (relativeError d / 4) := by
+        simpa [add_comm] using Real.add_one_le_exp (relativeError d / 4)
+  have hcondPathPr (E : Path t d → Prop) :
+      Pcond.pr E = Pseq.pr (fun x => Good q x ∧ E x) / Pseq.pr (Good q) := by
+    classical
+    unfold Pcond
+    simp only [FinProb.pr, FinProb.cond]
+    rw [Finset.sum_div (s := Finset.univ)]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hg : Good q x <;> by_cases he : E x <;> simp [hg, he]
+  have hcondMapPr (E : (Fin t → Fin d) → Prop) :
+      Q.pr E = Pseq.pr (fun x => Good q x ∧ E (lab x)) / Pseq.pr (Good q) := by
+    classical
+    calc
+        Q.pr E = Q.expect (fun f => if E f then 1 else 0) := by
+          unfold FinProb.pr FinProb.expect
+          apply Finset.sum_congr rfl
+          intro f hf
+          by_cases he : E f <;> simp [he]
+        _ = Pcond.expect (fun x => if E (lab x) then 1 else 0) :=
+          FinProb.map_expect Pcond lab _
+        _ = Pcond.pr (fun x => E (lab x)) := by
+          unfold FinProb.pr FinProb.expect
+          apply Finset.sum_congr rfl
+          intro x hx
+          by_cases he : E (lab x) <;> simp [he]
+        _ = Pseq.pr (fun x => Good q x ∧ E (lab x)) /
+            Pseq.pr (Good q) := hcondPathPr (fun x => E (lab x))
+  have hreadTargets (S : Finset (Fin t)) (y₀ : Fin t → Fin d) (x : Path t d)
+      (hx : Good q x) :
+      (∀ i ∈ S, lab x i = y₀ i) ↔ Targets S y₀ x := by
+    constructor
+    · intro he i hi
+      rcases hx.1.1 i i.isLt with ⟨z, hz⟩
+      have hzy : z = y₀ i := by
+        simpa [lab, readLabels, hz] using he i hi
+      simpa [hzy] using hz
+    · intro ht i hi
+      rcases hx.1.1 i i.isLt with ⟨z, hz⟩
+      have hzy : z = y₀ i := Option.some.inj (hz.symm.trans (ht i hi))
+      simp [lab, readLabels, hz, hzy]
+  have hQInjective (f : Fin t → Fin d) (hw : Q.w f ≠ 0) : Function.Injective f := by
+    classical
+    have hex : ∃ x, lab x = f ∧ Pcond.w x ≠ 0 := by
+      by_contra hno
+      have hzero : (∑ x, if lab x = f then Pcond.w x else 0) = 0 := by
+        apply Finset.sum_eq_zero
+        intro x hx
+        by_cases heq : lab x = f
+        · have hz : Pcond.w x = 0 := by
+            by_contra hne
+            exact hno ⟨x, heq, hne⟩
+          simp [heq, hz]
+        · simp [heq]
+      apply hw
+      change (∑ x, if lab x = f then Pcond.w x else 0) = 0
+      exact hzero
+    rcases hex with ⟨x, hxf, hwx⟩
+    have hxGood : Good q x := by
+      by_contra hnot
+      have hz : Pcond.w x = 0 := by
+        simp [Pcond, FinProb.cond, hnot]
+      exact hwx hz
+    intro a b hab
+    have hsome (k : Fin t) : x k = some (lab x k) := by
+      rcases hxGood.1.1 k k.isLt with ⟨z, hz⟩
+      simp [lab, readLabels, hz]
+    have hEq : x a = x b := by
+      rw [hsome a, hsome b, hxf, hab]
+    exact hxGood.1.2 a b a.isLt b.isLt hEq
   sorry
 
 end HypercubeRamsey.Injection

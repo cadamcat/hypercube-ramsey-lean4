@@ -744,4 +744,96 @@ theorem pool_atom_cap {Bin : Type*} [Fintype Bin]
   · rw [if_neg hb, zero_div]
     positivity
 
+theorem calibration_pretrim_small (d h : ℕ) (ε : ℝ) (hd : 2 ≤ d)
+    (hε : 0 < ε ∧ ε ≤ 1)
+    (hroom : 16 * (d : ℝ) ^ 2 * (h + 1 : ℝ) ^ 2 * Real.rpow ε (1 / 16 : ℝ) ≤
+      Real.rpow (d : ℝ) (-20)) :
+    (h : ℝ) ^ 2 * Real.sqrt ε ≤ 1 / 2 := by
+  have hd' : (1 : ℝ) ≤ d := by exact_mod_cast (le_trans (by norm_num : (1 : ℕ) ≤ 2) hd)
+  have hsmall : Real.rpow (d : ℝ) (-20) ≤ 1 := by
+    simpa using Real.rpow_le_rpow_of_exponent_le hd' (by norm_num : (-20 : ℝ) ≤ 0)
+  have he : Real.sqrt ε ≤ Real.rpow ε (1 / 16 : ℝ) := by
+    rw [Real.sqrt_eq_rpow]
+    exact Real.rpow_le_rpow_of_exponent_ge hε.1 hε.2 (by norm_num)
+  have hheight : (h : ℝ) ^ 2 ≤ (h + 1 : ℝ) ^ 2 := by nlinarith [Nat.cast_nonneg (α := ℝ) h]
+  have hb : (h : ℝ) ^ 2 * Real.sqrt ε ≤ (h + 1 : ℝ) ^ 2 * Real.rpow ε (1 / 16 : ℝ) :=
+    mul_le_mul hheight he (Real.sqrt_nonneg _) (sq_nonneg _)
+  have hz : 0 ≤ (h + 1 : ℝ) ^ 2 * Real.rpow ε (1 / 16 : ℝ) :=
+    mul_nonneg (sq_nonneg _) (Real.rpow_nonneg hε.1.le _)
+  have hfactor : 16 ≤ 16 * (d : ℝ) ^ 2 := by nlinarith
+  have hmul := mul_le_mul_of_nonneg_right hfactor hz
+  nlinarith [hroom.trans hsmall]
+
+theorem calibration_exp_cap (d : ℕ) (t : ℝ) (hd : 1 ≤ d) (ht : 0 ≤ t)
+    (hroom : 4 * Real.exp (1.5 * t) ≤ Real.rpow (d : ℝ) 0.05) :
+    Real.exp (2 * t) ≤ d := by
+  have hd' : (1 : ℝ) ≤ d := by exact_mod_cast hd
+  have hp : (0 : ℝ) < d := by linarith
+  have he : Real.exp (1.5 * t) ≤ Real.rpow (d : ℝ) 0.05 := by
+    linarith [Real.exp_pos (1.5 * t)]
+  have hs := mul_self_le_mul_self (Real.exp_pos _).le he
+  have h3 : Real.exp (3 * t) ≤ Real.rpow (d : ℝ) 0.1 := by
+    calc
+      Real.exp (3 * t) = Real.exp (1.5 * t) * Real.exp (1.5 * t) := by
+        rw [← Real.exp_add]
+        congr 1
+        ring
+      _ ≤ Real.rpow (d : ℝ) 0.05 * Real.rpow (d : ℝ) 0.05 := hs
+      _ = _ := by
+        convert (Real.rpow_add hp (0.05 : ℝ) 0.05).symm using 1 <;> norm_num
+  calc
+    _ ≤ Real.exp (3 * t) := Real.exp_le_exp.mpr (by linarith)
+    _ ≤ Real.rpow (d : ℝ) 0.1 := h3
+    _ ≤ d := by simpa using Real.rpow_le_rpow_of_exponent_le hd' (by norm_num : (0.1 : ℝ) ≤ 1)
+
+theorem low_cluster_pretrim_small {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) (hm : PT.tiling.mode = .lowCluster)
+    (i : Fin PT.tiling.m) :
+    ((PT.tiling.P i).h : ℝ) ^ 2 * Real.sqrt (sliceEps κ (PT.tiling.P i).h) ≤ 1 / 2 := by
+  obtain ⟨hscale, hg, _, _, _, _, _, hLower, hUpper, _, _, _⟩ :=
+    Q.profiled_valid.tiling_valid.cluster_data (Or.inl hm) i
+  simp only [hm, if_true] at hLower hUpper
+  have hMlo : (0 : ℝ) < κ.Mlo := by
+    have hh := hκ.Mlo_big
+    have hb : (0 : ℝ) ≤ κ.Cb := by
+      have hc := hκ.Cb_big
+      have hp : 0 < 100 * κ.aC / κ.aB :=
+        div_pos (mul_pos (by norm_num) hκ.aC_rng.1) hκ.aB_rng.1
+      linarith
+    linarith
+  have hq1 : (1 : ℝ) ≤ (PT.tiling.P i).q := by
+    have hq : (PT.tiling.P i).q ≠ 0 := by
+      intro hz
+      have hzpow : Real.rpow (0 : ℝ) (κ.Mlo : ℝ) = 0 := by
+        simpa only [Real.rpow_eq_pow] using Real.zero_rpow hMlo.ne'
+      rw [hz, Nat.cast_zero, hzpow, mul_zero] at hUpper
+      exact not_lt_of_ge (Nat.cast_nonneg _) hUpper
+    exact_mod_cast Nat.one_le_iff_ne_zero.mpr hq
+  have hMhi : (κ.Mlo : ℝ) ≤ κ.Mhi := by
+    have hh := hκ.Mhi_big.1
+    have hp : (0 : ℝ) < 10 / κ.cq := div_pos (by norm_num) hκ.cq_rng.1
+    linarith
+  have hmax : max ((PT.tiling.P i).g : ℝ) (PT.tiling.P i).q ≤ κ.M1 * (PT.tiling.P i).q := by
+    apply max_le hg
+    have hh := hκ.M1_big.1
+    nlinarith
+  have hq0 : κ.Q0 ≤ (PT.tiling.P i).q := by
+    have hh : (κ.M1 : ℝ) * κ.Q0 ≤ κ.M1 * (PT.tiling.P i).q := by
+      exact hscale.trans (by exact_mod_cast hmax)
+    nlinarith [hκ.M1_big.1]
+  have hUpper' : ((PT.tiling.P i).h : ℝ) < 2 * Real.rpow ((PT.tiling.P i).q : ℝ) κ.Mhi :=
+    hUpper.trans_le (mul_le_mul_of_nonneg_left
+      (Real.rpow_le_rpow_of_exponent_le hq1 hMhi) (by norm_num))
+  obtain ⟨_, _, _, _, _, _, _, _, hall⟩ := hκ.Q0_large (PT.tiling.P i).q hq0
+  have hs := (hall (PT.tiling.P i).h hLower hUpper').2.2.2.2.2.1
+  have hh1 : (1 : ℝ) ≤ (PT.tiling.P i).h :=
+    (Real.one_le_rpow hq1 hMlo.le).trans hLower
+  have hpow := pow_le_pow_right₀ hh1 (by norm_num : (2 : ℕ) ≤ 6)
+  calc
+    _ ≤ ((PT.tiling.P i).h : ℝ) ^ 6 * Real.sqrt (sliceEps κ (PT.tiling.P i).h) :=
+      mul_le_mul_of_nonneg_right hpow (Real.sqrt_nonneg _)
+    _ ≤ Real.rpow 10 (-3) := hs
+    _ ≤ _ := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

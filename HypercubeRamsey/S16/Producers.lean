@@ -1242,12 +1242,79 @@ private theorem physical_group_star_degree {κ : CConsts}
   have hh := (hCalibration.room hCluster (G.cellPatch C)).2.2.2.1
   nlinarith [sq_nonneg ((PT.tiling.P (G.cellPatch C)).h : ℝ)]
 
+private theorem physical_bin_count {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) (i : Fin PT.tiling.m) :
+    (Fintype.card (Bin PT.tiling i) : ℝ) * (PT.tiling.P i).d = (PT.tiling.P i).M := by
+  have h := (PT.tiling.P i).bins.sum_card_parts
+  have he : ∑ b ∈ (PT.tiling.P i).bins.parts, b.card =
+      (PT.tiling.P i).bins.parts.card * (PT.tiling.P i).d := by
+    calc
+      _ = ∑ _b ∈ (PT.tiling.P i).bins.parts, (PT.tiling.P i).d :=
+        Finset.sum_congr rfl (fun b hb => Q.profiled_valid.tiling_valid.bins_card i b hb)
+      _ = _ := by simp
+  rw [he, (PT.tiling.P i).cardY] at h
+  have hn : Fintype.card (Bin PT.tiling i) * (PT.tiling.P i).d = (PT.tiling.P i).M := by
+    change Fintype.card {b // b ∈ (PT.tiling.P i).bins.parts} * (PT.tiling.P i).d = _
+    rw [Fintype.card_of_subtype (PT.tiling.P i).bins.parts (fun _ => Iff.rfl)]
+    exact h
+  exact_mod_cast hn
+
+private theorem cluster_incoming_cap {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) {G : LowGeom PT}
+    (R : CellRawData G) (hR : R.SourceValid) (hCal : CellCalibrationScale PT)
+    (hc : PT.tiling.mode.isCluster) (C : G.Cell) (W : R.Hist C)
+    (hW : (R.history C).w W ≠ 0) (g : R.Group C) (b : Bin PT.tiling (G.cellPatch C)) :
+    (R.qin C W g).w b ≤ 8 * (PT.tiling.P (G.cellPatch C)).d /
+      Fintype.card (Bin PT.tiling (G.cellPatch C)) := by
+  classical
+  have hd : 2 ≤ (PT.tiling.P (G.cellPatch C)).d :=
+    le_trans (by norm_num) (hCal.room hc (G.cellPatch C)).2.1
+  have hdpos : (0 : ℝ) < (PT.tiling.P (G.cellPatch C)).d := by exact_mod_cast (by omega : 0 < (PT.tiling.P (G.cellPatch C)).d)
+  have heps := slice_epsilon_range hκ (PT.tiling.P (G.cellPatch C)).h
+  have hsmall := Lane_sol_s16_prod1.calibration_pretrim_small _ _ _ hd heps
+    (hCal.room hc (G.cellPatch C)).2.2.2.2.2
+  have ht : 0 ≤ (sliceK κ (PT.tiling.P (G.cellPatch C)).h : ℝ) *
+      sliceT κ (PT.tiling.P (G.cellPatch C)).h := by positivity
+  have hexp := Lane_sol_s16_prod1.calibration_exp_cap _ _ (le_trans (by norm_num) hd) ht
+    (by simpa only [mul_assoc] using (hCal.room hc (G.cellPatch C)).2.2.1)
+  rcases hR with ⟨hMode, hUniform, hSource⟩ | ⟨hDirect, hSource⟩
+  · obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, hPrior⟩ := hSource C
+    obtain ⟨⟨ss, g'⟩, hsg⟩ := groups.surjective g
+    have hs := supported_history R C W hW ss
+    have hg : S.AllGood (records ss (W ss)) := (hPass ss (W ss)).mp hs.1
+    have hqin : (R.qin C W g).w b = S.qin (records ss (W ss)) g' b := by
+      rw [← hsg, R.qin_eq C W _ b (supported_history R C W hW), hTrim]
+      simp_rw [hQ]
+      unfold SliceSolver.qin
+      split_ifs <;> simp
+    rw [hqin]
+    have hcap := Lane_sol_s16_prod1.solver_qin_cap S (records ss (W ss)) hg g' b hsmall
+    have hM := physical_bin_count hκ Q (G.cellPatch C)
+    have hB : (0 : ℝ) < Fintype.card (Bin PT.tiling (G.cellPatch C)) := by
+      have hMpos : 0 < (PT.tiling.P (G.cellPatch C)).M := by
+        rw [← (PT.tiling.P (G.cellPatch C)).cardY]
+        exact Finset.card_pos.mpr (Q.profiled_valid.tiling_valid.patch_nonempty _).2
+      nlinarith [show (0 : ℝ) < (PT.tiling.P (G.cellPatch C)).M by exact_mod_cast hMpos]
+    have hMpos : (0 : ℝ) < (PT.tiling.P (G.cellPatch C)).M := by rw [← hM]; positivity
+    calc
+      _ ≤ 8 * Real.exp (2 * (PT.tiling.kScale (G.cellPatch C) : ℝ) * PT.tiling.tScale (G.cellPatch C)) *
+          (PT.tiling.P (G.cellPatch C)).d / (PT.tiling.P (G.cellPatch C)).M := hcap
+      _ = 8 * Real.exp (2 * (PT.tiling.kScale (G.cellPatch C) : ℝ) * PT.tiling.tScale (G.cellPatch C)) /
+          Fintype.card (Bin PT.tiling (G.cellPatch C)) := by rw [← hM]; field_simp
+      _ ≤ _ := by
+        apply div_le_div_of_nonneg_right _ hB.le
+        simpa only [Tiling.kScale, Tiling.tScale, mul_assoc] using
+          (mul_le_mul_of_nonneg_left hexp (by norm_num : (0 : ℝ) ≤ 8))
+  · exact (hDirect hc).elim
+
 private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
     ∃ n₀ : ℕ, ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
       (Q : LowModeQuantFacts hκ (PT := PT) K16) (H : LowGeometryCertificate hκ Q)
       (R : CellRawData H.geom) (Perm : CellPermissions R) (K : CellRestrictedKernels R Perm)
       (C : H.geom.Cell) (pool : CellPool H.geom C) (W : R.Hist C),
-      R.SourceValid → n₀ ≤ T.S.n k →
+      R.SourceValid → CellCalibrationScale PT → PT.tiling.mode.isCluster → n₀ ≤ T.S.n k →
       (∀ C W, (R.history C).w W ≠ 0 → PermissionLossHypotheses (Perm.table C) (R.qin C W)) →
       (R.history C).w W ≠ 0 →
       (∀ g, |(∑ b ∈ Finset.univ.image pool, (K.qbar C W g).w b) /
@@ -1255,8 +1322,94 @@ private theorem group_atom_estimate {κ : CConsts} (hκ : κ.Admissible) :
             Real.rpow (T.S.n k : ℝ) (-4)) →
       ∀ g b, (K.qtilde C pool W g).w b ≤
         Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.95) := by
-  -- The n^200 slot count absorbs the q_cap inflation and d^{.95}.
-  sorry
+  classical
+  refine ⟨max 2 ⌈Real.exp 1⌉₊, ?_⟩
+  intro T k PT K16 Q H R Perm K C pool W hR hCal hc hn hPerm hW hnorm g b
+  let d := (PT.tiling.P (H.geom.cellPatch C)).d
+  let B := Fintype.card (Bin PT.tiling (H.geom.cellPatch C))
+  let L := H.geom.nslot C
+  have hd : 2 ≤ d := le_trans (by norm_num) (hCal.room hc (H.geom.cellPatch C)).2.1
+  have hdpos : (0 : ℝ) < d := by exact_mod_cast (by omega : 0 < d)
+  have hd1 : (1 : ℝ) ≤ d := by exact_mod_cast (by omega : 1 ≤ d)
+  have hn2 : (2 : ℝ) ≤ T.S.n k := by exact_mod_cast Q.n_large
+  have hn1 : (1 : ℝ) ≤ T.S.n k := by linarith
+  have heN : Real.exp 1 ≤ (T.S.n k : ℝ) := by
+    exact (Nat.le_ceil _).trans (by exact_mod_cast (le_trans (Nat.le_max_right _ _) hn))
+  have hlog : 1 ≤ Real.log (T.S.n k : ℝ) := by
+    have hh := Real.log_le_log (Real.exp_pos 1) heN
+    simpa only [Real.log_exp] using hh
+  have hsqrt : Real.sqrt (Real.log (T.S.n k : ℝ)) ≤ Real.log (T.S.n k : ℝ) := by
+    nlinarith [Real.sq_sqrt (by linarith : 0 ≤ Real.log (T.S.n k : ℝ)),
+      sq_nonneg (Real.sqrt (Real.log (T.S.n k : ℝ)) - 1)]
+  have hdN : (d : ℝ) ≤ T.S.n k := by
+    calc
+      _ ≤ Real.exp (Real.sqrt (Real.log (T.S.n k : ℝ))) := Q.bin_count_bound _
+      _ ≤ Real.exp (Real.log (T.S.n k : ℝ)) := Real.exp_le_exp.mpr hsqrt
+      _ = _ := Real.exp_log (by linarith)
+  have hK : 1 ≤ κ.Kcell := by
+    apply le_trans _ hκ.Kcell_big
+    apply (le_div_iff₀ hκ.bucket.2.2.2.2).mpr
+    have hh := thetaStar_slack hκ
+    linarith
+  have h197 : (32 : ℝ) ≤ (T.S.n k : ℝ) ^ (197 : ℕ) := by
+    calc
+      32 = (2 : ℝ) ^ (5 : ℕ) := by norm_num
+      _ ≤ (T.S.n k : ℝ) ^ (5 : ℕ) := pow_le_pow_left₀ (by norm_num) hn2 _
+      _ ≤ _ := pow_le_pow_right₀ hn1 (by norm_num : (5 : ℕ) ≤ 197)
+  have hpower : 32 * (d : ℝ) ^ (3 : ℕ) ≤ (T.S.n k : ℝ) ^ (200 : ℕ) := by
+    calc
+      _ ≤ (T.S.n k : ℝ) ^ (197 : ℕ) * (T.S.n k : ℝ) ^ (3 : ℕ) :=
+        mul_le_mul h197 (pow_le_pow_left₀ hdpos.le hdN _) (by positivity) (by positivity)
+      _ = _ := by rw [← pow_add]
+  have hslot : 32 * (d : ℝ) ^ 2 ≤ (L : ℝ) := by
+    have hceil : κ.Kcell * Real.rpow (T.S.n k : ℝ) κ.Ac / d ≤ (L : ℝ) := by
+      change _ ≤ (H.data.cells.nslot C : ℝ)
+      rw [H.cell_partition.slot_count C]
+      exact Nat.le_ceil _
+    have hnum : (T.S.n k : ℝ) ^ (200 : ℕ) ≤ κ.Kcell * Real.rpow (T.S.n k : ℝ) κ.Ac := by
+      rw [hκ.Ac_eq]
+      have hp : Real.rpow (T.S.n k : ℝ) ((200 : ℕ) : ℝ) = (T.S.n k : ℝ) ^ (200 : ℕ) := by
+        simpa only [Real.rpow_eq_pow] using Real.rpow_natCast (T.S.n k : ℝ) 200
+      rw [hp]
+      nlinarith [show 0 ≤ (T.S.n k : ℝ) ^ (200 : ℕ) by positivity]
+    apply le_trans _ hceil
+    apply (le_div_iff₀ hdpos).mpr
+    have hp := hpower.trans hnum
+    nlinarith only [hp]
+  have hL : (0 : ℝ) < L := lt_of_lt_of_le (by positivity) hslot
+  have hB : (0 : ℝ) < B := by
+    letI := (hPerm C W hW).bins_nonempty
+    exact_mod_cast Fintype.card_pos
+  have hret := Lane_sol_s16_prod1.permission_retained_half _ _ (hPerm C W hW) g
+  have hbar : ∀ b, (K.qbar C W g).w b ≤ 16 * d / (B : ℝ) := by
+    intro b
+    rw [K.qbar_eq C W g b hW]
+    have hnum : (if b ∈ (Perm.table C).permitted g then (R.qin C W g).w b else 0) ≤
+        8 * d / (B : ℝ) := by
+      split_ifs
+      · exact cluster_incoming_cap hκ Q R hR hCal hc C W hW g b
+      · positivity
+    calc
+      _ ≤ (8 * d / (B : ℝ)) / (∑ b ∈ (Perm.table C).permitted g, (R.qin C W g).w b) :=
+        div_le_div_of_nonneg_right hnum (by linarith)
+      _ ≤ (8 * d / (B : ℝ)) / (1 / 2 : ℝ) :=
+        div_le_div_of_nonneg_left (by positivity) (by norm_num) hret
+      _ = _ := by ring
+  have hlower := Lane_sol_s16_prod1.typical_normalizer_lower (T.S.n k) Q.n_large
+    (∑ b ∈ Finset.univ.image pool, (K.qbar C W g).w b) L B hL hB (hnorm g)
+  have hm : (∑ b ∈ Finset.univ.image pool, (K.qbar C W g).w b) ≠ 0 :=
+    ne_of_gt (lt_of_lt_of_le (by positivity) hlower)
+  have hcap := Lane_sol_s16_prod1.pool_atom_cap (K.qbar C W g) (K.qtilde C pool W g)
+    (Finset.univ.image pool) L B (16 * d) hL hB (by positivity) hbar hlower
+    (fun b => K.qtilde_eq C pool W g b hW hm) b
+  calc
+    _ ≤ 32 * d / (L : ℝ) := by convert hcap using 1 <;> ring
+    _ ≤ 1 / (d : ℝ) := by
+      apply (div_le_div_iff₀ hL hdpos).mpr
+      nlinarith only [hslot]
+    _ ≤ Real.rpow (d : ℝ) (-0.95) := by
+      have hh := Real.rpow_le_rpow_of_exponent_le hd1 (by norm_num : (-1 : ℝ) ≤ -0.95)
+      simpa only [Real.rpow_neg_one, one_div, Real.rpow_eq_pow] using hh
 
 set_option maxHeartbeats 400000 in
 /-- S2 group producer at successful physical data. The capacity subset
@@ -1322,7 +1475,7 @@ theorem successful_group_bin_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
     refine ⟨group_contribution_nonneg K C pool W g b y, ?_⟩
     exact physical_group_contribution_cap hκ K hR hCalibration hCluster C pool W hW
       (typical_pool_mass_ne_zero hκ Q K C D L pool ht W hW) g b y
-  · apply hAtomCutoff Q H R Perm K C pool W hR hn hPerm hW
+  · apply hAtomCutoff Q H R Perm K C pool W hR hCalibration hCluster hn hPerm hW
     intro g
     have h := (D.checks_cover pool ht.2).1 (L.groupProbe g) W
     rw [L.normalizer_eq pool W g hW] at h

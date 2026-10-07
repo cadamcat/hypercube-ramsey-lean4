@@ -11,7 +11,7 @@ namespace HypercubeRamsey
 
 theorem scattered_moments {Ω : Type*} [Fintype Ω] (w : Ω → ℝ) (hw : ∀ ω, 0 ≤ w ω)
     {U : Type*} [Fintype U] [DecidableEq U] [Nonempty U]
-    (succ : Finset Ω) (Z : U → Ω → ℝ) (hZ0 : ∀ v ω, 0 ≤ Z v ω) (L : ℝ)
+    (succ : Finset Ω) (Z : U → Ω → ℝ) (hZ0 : ∀ v ω, 0 ≤ Z v ω) (L : ℝ) (hL : 0 ≤ L)
     (hZL : ∀ v, ∀ ω ∈ succ, Z v ω ≤ L)
     (near : U → Finset U) (hself : ∀ v, v ∈ near v) (f : ℝ)
     (hnear : ∀ v, ((near v).card : ℝ) ≤ f * Fintype.card U)

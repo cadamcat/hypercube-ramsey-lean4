@@ -120,7 +120,7 @@ theorem odd_loads (δ x₀ K P : ℝ) (hK : 0 ≤ K) :
         Fixed11 δ x₀ K n N E X Y κ M y₀ p → GatedTags M y₀ p P t → Typical11 M y₀ p (8 * (K + 1)) t →
         OddMoment11 M y₀ p P t →
         (tupleLaw M y₀ p P t).pr (fun W => ∃ y, (1e-8 : ℝ) < oddCol M t W y) ≤ 1 / 4 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_odd.odd_loads δ x₀ K P hK
 
 /-- P11.1d2, the odd injection (11:377–378).  Lemma 3.10 (`clock_sampling`, `B = 4`, `C_g = 2`) on the odd rows
 (probability laws by the slice facts, atoms `≤ e^{.02n}/N ≤ n^{-A}`, column sums `≤ θ₀` on a successful history),
@@ -132,7 +132,7 @@ theorem clock_rows :
         (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι)
         (W : EvenRole n → Fin (kTup n) → Fin N),
         SliceFacts M y₀ → GoodPre M y₀ p P t W → ∃ J, ClockOK M y₀ p t W J := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_odd.clock_rows
 
 /-! ## Even loads, normalization and Hall (11:380–394) -/
 

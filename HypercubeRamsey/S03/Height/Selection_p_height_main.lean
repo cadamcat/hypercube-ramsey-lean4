@@ -1702,7 +1702,7 @@ private def hdChildCenterDomain {p : HDParams} (start : HDState p) (R : ℕ) : F
     Nat.dist start.2 ℓ.2.val < R ∧
       _root_.hammingDist start.1 ℓ.1 ≤ p.r + p.D * R + p.D)
 
-private theorem hdScaleDistance_hamming_bound {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleDistance_hamming_bound {p : HDParams} (hD : 0 < p.D)
     {s t : HDState p} {R : ℕ} (h : hdScaleDistance p.D s t < R) :
     _root_.hammingDist s.1 t.1 ≤ p.D * R := by
   have hD1 : 1 ≤ p.D := by omega
@@ -3686,7 +3686,7 @@ private theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.
   have hdiv : (p.D - 1) / p.D = 0 := Nat.div_eq_of_lt (by omega)
   simp [hdiv]
 
-private theorem hdScaleDistance_triangle {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleDistance_triangle {p : HDParams} (hD : 0 < p.D)
     (x y z : HDState p) :
     hdScaleDistance p.D x z ≤ hdScaleDistance p.D x y + hdScaleDistance p.D y z := by
   have hD1 : 1 ≤ p.D := by omega

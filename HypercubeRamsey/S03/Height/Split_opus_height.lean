@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Height.Selection_p_height_main
+import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_act
 
 set_option maxHeartbeats 400000
 
@@ -676,7 +677,216 @@ theorem config_activation_bound (p : HDParams) (hD : 0 < p.D) (hlam : 0 ≤ p.la
     p.actLaw.pr (fun A => ∀ y ∈ Y, relFail p C Dom tP η P A E y R') ≤
       p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
         ∏ y ∈ Y, relSup p (privateDom p C Y y R') Dom sC tC η y R' P := by
-  sorry
+  classical
+  have hCsub (y : HDState p) : privateDom p C Y y R' ⊆ C := by
+    intro ℓ hℓ
+    exact (Finset.mem_inter.mp (Finset.mem_filter.mp hℓ).1).1
+  have hYball : Y ⊆ scaleBall p x (M * R') :=
+    Finset.mem_powerset.mp (Finset.mem_filter.mp hY).1
+  have hyDist (y : HDState p) (hy : y ∈ Y) : hdScaleDistance p.D x y < M * R' := by
+    obtain ⟨z, hz, hzy⟩ := Finset.mem_image.mp (hYball hy)
+    have hz' := (Finset.mem_filter.mp hz).2
+    simpa [hzy] using hz'
+  have hparent (y : HDState p) (hy : y ∈ Y) (v : CubeVertex p.d)
+      (j : Fin (p.H + 1)) (hd : hdScaleDistance p.D y (v, j.val) < 2 * R') :
+      hdScaleDistance p.D x (v, j.val) < 2 * (M * R') := by
+    have htri := hdScaleDistance_triangle hD x y (v, j.val)
+    have hm := Nat.mul_le_mul_right R' hM
+    have hxy := hyDist y hy
+    omega
+  have hchild (y : HDState p) (v : CubeVertex p.d) (j : Fin (p.H + 1))
+      (hd : hdScaleDistance p.D y (v, j.val) < 2 * R')
+      (ℓ : p.Loc) (hj : ℓ.2 = j) (hs : _root_.hammingDist ℓ.1 v ≤ p.r + p.D) :
+      ℓ ∈ childDom p y R' := by
+    have hlev : Nat.dist y.2 ℓ.2.val < 2 * R' := by
+      rw [hj]
+      exact lt_of_le_of_lt (Nat.le_max_left _ _) hd
+    have hspace := hdScaleDistance_hamming_bound hD hd
+    have hham : _root_.hammingDist y.1 ℓ.1 ≤ p.r + 2 * p.D * R' + p.D := by
+      calc
+        _ ≤ _root_.hammingDist y.1 v + _root_.hammingDist v ℓ.1 :=
+          _root_.hammingDist_triangle _ _ _
+        _ ≤ p.D * (2 * R') + (p.r + p.D) :=
+          Nat.add_le_add hspace (by simpa [_root_.hammingDist_comm] using hs)
+        _ = _ := by ring
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlev, hham⟩
+  have hposPair (y : HDState p) (hy : y ∈ Y) (z : HDState p) (hz : z ∈ Y)
+      (hne : y ≠ z) :
+      (((overlapDom p C y z R').filter (fun ℓ => P ℓ = true)).card : ℝ) ≤
+        ε * p.lam / Y.card := by
+    exact le_of_not_gt (fun h => hpos ⟨y, hy, z, hz, hne, h⟩)
+  have hlegChild (y : HDState p) (hy : y ∈ Y) :
+      relLegal p (privateDom p C Y y R') Dom sC P E y R' := by
+    intro v j hdom hd
+    obtain ⟨hEv, hEc⟩ := hlegal v j hdom (hparent y hy v j hd)
+    constructor
+    · intro ℓ hℓ hpriv
+      exact hEv ℓ hℓ (hCsub y hpriv)
+    · let F := (E v j).filter (fun ℓ => ℓ ∈ C)
+      have hF : ∀ ℓ ∈ F, ℓ ∈ C ∧ ℓ ∈ childDom p y R' ∧ P ℓ = true := by
+        intro ℓ hℓ
+        obtain ⟨hEℓ, hCℓ⟩ := Finset.mem_filter.mp hℓ
+        obtain ⟨hPℓ, hjℓ, hrℓ⟩ := hEv ℓ hEℓ hCℓ
+        exact ⟨hCℓ, hchild y v j hd ℓ hjℓ (by omega), hPℓ⟩
+      have hloss := Lane_sol_hs_act.private_loss C F (fun z => childDom p z R') Y y hy
+        (fun ℓ => P ℓ = true) (ε * p.lam) (mul_nonneg hε hlam) hF (hposPair y hy)
+      have hsub : F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R') ⊆
+          (E v j).filter (fun ℓ => ℓ ∈ privateDom p C Y y R') := by
+        intro ℓ hℓ
+        obtain ⟨hFℓ, hprivate⟩ := Finset.mem_filter.mp hℓ
+        obtain ⟨hCℓ, hchildℓ, hPℓ⟩ := hF ℓ hFℓ
+        exact Finset.mem_filter.mpr ⟨(Finset.mem_filter.mp hFℓ).1,
+          Finset.mem_filter.mpr ⟨Finset.mem_inter.mpr ⟨hCℓ, hchildℓ⟩, hprivate⟩⟩
+      have hcard : ((F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R')).card : ℝ) ≤
+          (((E v j).filter (fun ℓ => ℓ ∈ privateDom p C Y y R')).card : ℝ) := by
+        exact_mod_cast Finset.card_le_card hsub
+      have hgap := mul_le_mul_of_nonneg_right hs hlam
+      change sP * p.lam ≤ (F.card : ℝ) at hEc
+      nlinarith
+  have hcrowdIds (B : Finset p.Loc) (A : p.Loc → Bool) (v : CubeVertex p.d)
+      (j : Fin (p.H + 1)) :
+      relCrowd p B P A v j =
+        (B.filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧ A ℓ = true ∧
+          _root_.hammingDist ℓ.1 v ≤ p.r + p.D)).card := by
+    unfold relCrowd
+    apply Finset.card_bij (fun u _ => (u, j))
+    · intro u hu
+      obtain ⟨hB, hP, hA, hd⟩ := (Finset.mem_filter.mp hu).2
+      exact Finset.mem_filter.mpr ⟨hB, rfl, hP, hA, hd⟩
+    · intro u hu u' hu' heq
+      exact congrArg Prod.fst heq
+    · intro ℓ hℓ
+      obtain ⟨hB, hj, hP, hA, hd⟩ := Finset.mem_filter.mp hℓ
+      have heq : (ℓ.1, j) = ℓ := Prod.ext rfl hj.symm
+      refine ⟨ℓ.1, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, heq⟩
+      change (ℓ.1, j) ∈ B ∧ P (ℓ.1, j) = true ∧ A (ℓ.1, j) = true ∧
+        _root_.hammingDist ℓ.1 v ≤ p.r + p.D
+      rw [heq]
+      exact ⟨hB, hP, hA, hd⟩
+  have htransfer (A : p.Loc → Bool) (hact : ¬ actExc p C Y R' ε P A)
+      (y : HDState p) (hy : y ∈ Y) :
+      relFail p C Dom tP η P A E y R' →
+        relFail p (privateDom p C Y y R') Dom tC η P A E y R' := by
+    apply Lane_sol_hs_act.failure_mono
+    intro v k hd hbad
+    obtain ⟨hdom, hk, hb⟩ := hbad
+    let j : Fin (p.H + 1) := ⟨k, hk⟩
+    refine ⟨hdom, hk, ?_⟩
+    rcases hb with habs | hcrowd
+    · left
+      intro ℓ hℓ hpriv
+      exact habs ℓ hℓ (hCsub y hpriv)
+    · right
+      have hd2 : hdScaleDistance p.D y (v, j.val) < 2 * R' := by
+        dsimp [j]
+        omega
+      let F := C.filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧ A ℓ = true ∧
+        _root_.hammingDist ℓ.1 v ≤ p.r + p.D)
+      have hF : ∀ ℓ ∈ F, ℓ ∈ C ∧ ℓ ∈ childDom p y R' ∧ (P ℓ = true ∧ A ℓ = true) := by
+        intro ℓ hℓ
+        obtain ⟨hCℓ, hjℓ, hPℓ, hAℓ, hrℓ⟩ := Finset.mem_filter.mp hℓ
+        exact ⟨hCℓ, hchild y v j hd2 ℓ hjℓ hrℓ, hPℓ, hAℓ⟩
+      have hov (z : HDState p) (hz : z ∈ Y) (hne : y ≠ z) :
+          (((C ∩ childDom p y R' ∩ childDom p z R').filter
+            (fun ℓ => P ℓ = true ∧ A ℓ = true)).card : ℝ) ≤
+            ε * (p.n : ℝ) ^ p.b / Y.card :=
+        le_of_not_gt (fun h => hact ⟨y, hy, z, hz, hne, h⟩)
+      have hloss := Lane_sol_hs_act.private_loss C F (fun z => childDom p z R') Y y hy
+        (fun ℓ => P ℓ = true ∧ A ℓ = true) (ε * (p.n : ℝ) ^ p.b)
+        (mul_nonneg hε (Real.rpow_nonneg (Nat.cast_nonneg _) _)) hF hov
+      have hsub : F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R') ⊆
+          (privateDom p C Y y R').filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧
+            A ℓ = true ∧ _root_.hammingDist ℓ.1 v ≤ p.r + p.D) := by
+        intro ℓ hℓ
+        obtain ⟨hFℓ, hprivate⟩ := Finset.mem_filter.mp hℓ
+        obtain ⟨hCℓ, hchildℓ, hPAℓ⟩ := hF ℓ hFℓ
+        exact Finset.mem_filter.mpr
+          ⟨Finset.mem_filter.mpr ⟨Finset.mem_inter.mpr ⟨hCℓ, hchildℓ⟩, hprivate⟩,
+            (Finset.mem_filter.mp hFℓ).2⟩
+      have hcard : ((F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R')).card : ℝ) ≤
+          (relCrowd p (privateDom p C Y y R') P A v j : ℝ) := by
+        rw [hcrowdIds]
+        exact_mod_cast Finset.card_le_card hsub
+      have hgap := mul_le_mul_of_nonneg_right ht (Real.rpow_nonneg (Nat.cast_nonneg p.n) p.b)
+      change tP * (p.n : ℝ) ^ p.b < (relCrowd p C P A v j : ℝ) at hcrowd
+      rw [hcrowdIds] at hcrowd
+      change tP * (p.n : ℝ) ^ p.b < (F.card : ℝ) at hcrowd
+      change tC * (p.n : ℝ) ^ p.b < (relCrowd p (privateDom p C Y y R') P A v j : ℝ)
+      nlinarith
+  have hdisj : ∀ y ∈ Y, ∀ z ∈ Y, y ≠ z →
+      Disjoint (privateDom p C Y y R') (privateDom p C Y z R') := by
+    intro y hy z hz hne
+    apply Finset.disjoint_left.mpr
+    intro ℓ hℓy hℓz
+    exact (Finset.mem_filter.mp hℓy).2 z hz hne.symm
+      (Finset.mem_inter.mp (Finset.mem_filter.mp hℓz).1).2
+  have hscope (y : HDState p) : FinProb.DependsOn
+      (fun A => relFail p (privateDom p C Y y R') Dom tC η P A E y R')
+      (privateDom p C Y y R') := by
+    intro A A' hAA'
+    let B := privateDom p C Y y R'
+    have hc (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+        relCrowd p B P A v j = relCrowd p B P A' v j := by
+      unfold relCrowd
+      congr 1
+      apply Finset.filter_congr
+      intro u _
+      constructor
+      · rintro ⟨hB, hP, hA, hd⟩
+        exact ⟨hB, hP, by rw [← hAA' _ hB]; exact hA, hd⟩
+      · rintro ⟨hB, hP, hA, hd⟩
+        exact ⟨hB, hP, by rw [hAA' _ hB]; exact hA, hd⟩
+    have hb (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+        relBadAt p B tC P A E v j = relBadAt p B tC P A' E v j := by
+      apply propext
+      unfold relBadAt
+      rw [hc]
+      apply or_congr _ Iff.rfl
+      constructor
+      · intro h ℓ hE hB
+        rw [← hAA' ℓ hB]
+        exact h ℓ hE hB
+      · intro h ℓ hE hB
+        rw [hAA' ℓ hB]
+        exact h ℓ hE hB
+    have hb' : relBad p B Dom tC P A E = relBad p B Dom tC P A' E := by
+      funext v k
+      simp only [relBad, hb]
+    change relFail p B Dom tC η P A E y R' = relFail p B Dom tC η P A' E y R'
+    unfold relFail
+    rw [hb']
+  have hfactor : p.actLaw.pr (fun A => ∀ y ∈ Y,
+      relFail p (privateDom p C Y y R') Dom tC η P A E y R') =
+      ∏ y ∈ Y, p.actLaw.pr (fun A =>
+        relFail p (privateDom p C Y y R') Dom tC η P A E y R') :=
+    Lane_sol_hs_act.pr_all_disjoint
+      (fun _ : p.Loc => FinProb.bernoulli ((p.n : ℝ) ^ p.b₀ / p.lam)) Y
+      (fun y => privateDom p C Y y R')
+      (fun y A => relFail p (privateDom p C Y y R') Dom tC η P A E y R') hdisj
+      (fun y _ => hscope y)
+  calc
+    p.actLaw.pr (fun A => ∀ y ∈ Y, relFail p C Dom tP η P A E y R')
+        ≤ p.actLaw.pr (fun A => actExc p C Y R' ε P A ∨
+          ∀ y ∈ Y, relFail p (privateDom p C Y y R') Dom tC η P A E y R') := by
+          apply pr_mono
+          intro A hfail
+          by_cases hact : actExc p C Y R' ε P A
+          · exact Or.inl hact
+          · exact Or.inr (fun y hy => htransfer A hact y hy (hfail y hy))
+    _ ≤ p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
+          p.actLaw.pr (fun A => ∀ y ∈ Y,
+            relFail p (privateDom p C Y y R') Dom tC η P A E y R') := pr_or_le _ _ _
+    _ = p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
+          ∏ y ∈ Y, p.actLaw.pr (fun A =>
+            relFail p (privateDom p C Y y R') Dom tC η P A E y R') := by rw [hfactor]
+    _ ≤ p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
+          ∏ y ∈ Y, relSup p (privateDom p C Y y R') Dom sC tC η y R' P := by
+          apply add_le_add le_rfl
+          apply Finset.prod_le_prod₀
+          · intro y hy
+            exact pr_nonneg _ _
+          · intro y hy
+            exact le_relSup _ _ _ _ _ _ _ _ _ _ (hlegChild y hy)
 
 /-- Private suprema factor under the position law (TeX 03:508–512): proved from `xFinner`
 (`d = 1`), `relSup_dependsOn`, and disjointness of private domains. -/

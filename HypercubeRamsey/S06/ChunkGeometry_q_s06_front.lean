@@ -110,6 +110,70 @@ theorem cubeCountOn_card {n : ℕ} (A : Finset (Fin n)) (q : ℕ) :
     _ = Nat.choose A.card q * 2 ^ (n - A.card) := by
       rw [boolWeightLayerCard, Fintype.card_fun, Fintype.card_bool, hIcard, hOcard]
 
+private def binTransitionSet {k : ℕ} (ell : ℕ) (bin : ℕ → Fin k) : Finset ℕ :=
+  (Finset.range ell).filter fun q => bin (q + 1) ≠ bin q
+
+private def binTransitionEndpoints {k : ℕ} (ell : ℕ) (bin : ℕ → Fin k) : Finset ℕ :=
+  binTransitionSet ell bin ∪ (binTransitionSet ell bin).image Nat.succ
+
+/-- A monotone bin sequence has at most one transition into each value. -/
+theorem binTransitionEndpoints_card_le {k ell : ℕ} (bin : ℕ → Fin k)
+    (hmono : ∀ a b, a ≤ b → (bin a).val ≤ (bin b).val) :
+    (binTransitionEndpoints ell bin).card ≤
+      2 * ((Finset.range (ell + 1)).image bin).card := by
+  classical
+  let T := binTransitionSet ell bin
+  have hinj : Set.InjOn (fun q => bin (q + 1)) T := by
+    intro q hq r hr heq
+    by_contra hqr
+    rcases lt_or_gt_of_ne hqr with hqr | hrq
+    · have hleft := hmono (q + 1) r (by omega)
+      have hright := hmono r (r + 1) (Nat.le_succ _)
+      have htransition := (Finset.mem_filter.mp hr).2
+      have hval : (bin (q + 1)).val = (bin (r + 1)).val := Fin.ext_iff.mp heq
+      have hneq : (bin r).val ≠ (bin (r + 1)).val := by
+        intro h
+        exact htransition ((Fin.ext h).symm)
+      have hstrict : (bin r).val < (bin (r + 1)).val :=
+        Nat.lt_of_le_of_ne hright hneq
+      have hlt := lt_of_le_of_lt hleft hstrict
+      exact (Nat.ne_of_lt hlt) hval
+    · have hleft := hmono (r + 1) q (by omega)
+      have hright := hmono q (q + 1) (Nat.le_succ _)
+      have htransition := (Finset.mem_filter.mp hq).2
+      have hval : (bin (q + 1)).val = (bin (r + 1)).val := Fin.ext_iff.mp heq
+      have hneq : (bin q).val ≠ (bin (q + 1)).val := by
+        intro h
+        exact htransition ((Fin.ext h).symm)
+      have hstrict : (bin q).val < (bin (q + 1)).val :=
+        Nat.lt_of_le_of_ne hright hneq
+      have hlt := lt_of_le_of_lt hleft hstrict
+      exact (Nat.ne_of_lt hlt) hval.symm
+  have hImageSub :
+      T.image (fun q => bin (q + 1)) ⊆ (Finset.range (ell + 1)).image bin := by
+    intro v hv
+    rcases Finset.mem_image.mp hv with ⟨q, hq, rfl⟩
+    apply Finset.mem_image.mpr
+    refine ⟨q + 1, Finset.mem_range.mpr ?_, rfl⟩
+    have hq' := (Finset.mem_filter.mp hq).1
+    simp only [Finset.mem_range] at hq'
+    omega
+  have hTcard : T.card ≤ ((Finset.range (ell + 1)).image bin).card := by
+    calc
+      T.card = (T.image (fun q => bin (q + 1))).card :=
+        (Finset.card_image_of_injOn hinj).symm
+      _ ≤ ((Finset.range (ell + 1)).image bin).card := Finset.card_le_card hImageSub
+  have hEndpoints : (binTransitionEndpoints ell bin).card ≤ 2 * T.card := by
+    dsimp [binTransitionEndpoints, T]
+    calc
+      (binTransitionSet ell bin ∪ (binTransitionSet ell bin).image Nat.succ).card ≤
+          (binTransitionSet ell bin).card + ((binTransitionSet ell bin).image Nat.succ).card :=
+        Finset.card_union_le _ _
+      _ ≤ (binTransitionSet ell bin).card + (binTransitionSet ell bin).card := by
+        exact Nat.add_le_add_left Finset.card_image_le _
+      _ = 2 * (binTransitionSet ell bin).card := by omega
+  exact hEndpoints.trans (Nat.mul_le_mul_left 2 hTcard)
+
 private theorem prefixMass_succ (ell j : ℕ) :
     prefixMass ell (j + 1) = prefixMass ell j + halfMassNat ell j := by
   simp [prefixMass, Finset.sum_range_succ]

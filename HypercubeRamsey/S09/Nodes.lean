@@ -8,6 +8,7 @@ import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S03.ClockSampling
 import HypercubeRamsey.Framework.Hall
 import HypercubeRamsey.Framework.Minimax
+import HypercubeRamsey.S09.Nodes_p_s09_select
 
 /-!
 # Proposition 9.2 nodes
@@ -25,13 +26,13 @@ open Filter OAI.HypercubeRamsey Classical
 theorem p92_select_sublinear (T : Stage) (hT : StabilizedOn T FamB)
     (hH : HdagLtOne T) :
     ∃ P : Params9, P.Valid ∧ P.IsSublinear ∧ P.SubSelection T := by
-  sorry
+  exact p92_select_sublinear_impl T hT hH
 
 /-- P9.2-selL (09:51–59): select the shallow and deep linear budgets and broad test. -/
 theorem p92_select_linear (T : Stage) (hT : StabilizedOn T FamB)
     (hNoH : ¬ HdagLtOne T) (hHL : HLdagLtOne T) (hNotZero : ¬ HLdagZero T) :
     ∃ P : Params9, P.Valid ∧ P.IsLinear ∧ P.LinearSelection T := by
-  sorry
+  exact p92_select_linear_impl T hT hNoH hHL hNotZero
 
 /-- P9.2-prep (09:61): balanced tag mixture with a colour and surplus rows. -/
 theorem p92_patch_preparation {P : Params9} {κ : ℝ} {n N : ℕ}
@@ -46,7 +47,7 @@ theorem p92_patch_preparation {P : Params9} {κ : ℝ} {n N : ℕ}
         (M.ν i).WidthLE (P.Ss (n : ℝ)) ∧
         ∀ x, (M.μ i).w x ≠ 0 →
           1 / 2 + (n : ℝ) ^ (-(P.hPlus : ℝ)) / 2 ≤ rowDeg E G x (M.ν i)) := by
-  sorry
+  exact p92_patch_preparation_impl hP hκ hN hAvail
 
 /-- P9.2-map1 (09:63–102): good heights with distance-two regularity.  The
 `HeightGood9` predicate records active eligibility and all three crowd tests. -/

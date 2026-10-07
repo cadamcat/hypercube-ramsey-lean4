@@ -1050,6 +1050,55 @@ private theorem heightPath9_has_intermediate_value9 {P : Params9} {hc : HeightCh
         obtain ⟨x, hx, hfx⟩ := htailRange k hlow' hhigh'
         exact ⟨x, List.mem_cons_of_mem _ hx, hfx⟩
 
+private theorem heightPath9_firstExitValue9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : HeightState9 P hc n → ℕ)
+    (hstep : ∀ x y, heightStep9 bad x y → Nat.dist (f x) (f y) ≤ 1)
+    (hp : HeightPath9 (heightStep9 bad) l start) (R : ℕ)
+    (hstart : f start ≤ R) (hexit : ∃ x ∈ l, R ≤ f x) :
+    ∃ endpoint rest, HeightPath9 (heightStep9 bad) (endpoint :: rest) start ∧
+      (∀ z ∈ endpoint :: rest, z ∈ l) ∧
+      (∀ z ∈ rest, f z < R) ∧ f endpoint = R := by
+  induction hp generalizing R with
+  | singleton x =>
+      obtain ⟨z, hz, hzR⟩ := hexit
+      have hzx : z = x := by simpa using hz
+      subst z
+      have hxR : f x = R := by omega
+      exact ⟨x, [], HeightPath9.singleton x, by simp, by simp, hxR⟩
+  | @cons head next tail start hstep' htail ih =>
+      by_cases htailExit : ∃ z ∈ next :: tail, R ≤ f z
+      · obtain ⟨endpoint, rest, hpath, hsub, hclose, heq⟩ := ih R hstart htailExit
+        refine ⟨endpoint, rest, hpath, ?_, hclose, heq⟩
+        intro z hz
+        exact List.mem_cons_of_mem _ (hsub z hz)
+      · have htailLess : ∀ z ∈ next :: tail, f z < R := by
+          intro z hz
+          by_contra hnot
+          exact htailExit ⟨z, hz, Nat.le_of_not_gt hnot⟩
+        obtain ⟨z, hz, hzR⟩ := hexit
+        have hzHead : z = head := by
+          rcases List.mem_cons.mp hz with hzEq | hzTail
+          · exact hzEq
+          · exact False.elim (htailExit ⟨z, hzTail, hzR⟩)
+        subst z
+        have hstepDist : Nat.dist (f next) (f head) ≤ 1 := hstep next head hstep'
+        have hheadLe : f head ≤ f next + 1 := by
+          rcases le_total (f next) (f head) with h | h
+          · rw [Nat.dist_eq_sub_of_le h] at hstepDist
+            omega
+          · omega
+        have hnextLess : f next < R := htailLess next (by simp)
+        have hheadEq : f head = R := by omega
+        refine ⟨head, next :: tail, HeightPath9.cons hstep' htail, ?_, ?_, hheadEq⟩
+        · intro z hz
+          exact hz
+        · intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with rfl | hz
+          · exact hnextLess
+          · exact htailLess z (List.mem_cons_of_mem _ hz)
+
 private theorem heightMetric9_radialVariation_le {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (root x y : HeightState9 P hc n) :
     Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ heightMetric9 x y := by

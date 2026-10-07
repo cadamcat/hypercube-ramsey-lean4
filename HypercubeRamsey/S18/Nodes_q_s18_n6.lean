@@ -436,6 +436,21 @@ lemma singleton_overlap_exponent_zero {κ : CConsts} {T : Stage} {k : ℕ}
         Cprime * D.rank {v} = 0 := by
   simp [rank_singleton, nonisolates_singleton]
 
+lemma pairLaw_diagonal_zero_of_full {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (δ K : ℝ) (hPair : PairInitialFacts D δ K)
+    (input : D.encoding.InitInput)
+    (history : D.encoding.base.History (Fin.last D.geom.r))
+    (hfull : D.full δ input history) (v : Pos T k) (hv : IsEvenRole v)
+    (x : Fin (T.S.N k)) : (D.pairLaw history v).w (x, x) = 0 := by
+  have hnonneg := (D.pairLaw history v).nonneg (x, x)
+  by_contra hzero
+  have hpos : 0 < (D.pairLaw history v).w (x, x) :=
+    lt_of_le_of_ne hnonneg (Ne.symm hzero)
+  rcases hPair with ⟨_, _, _, _, hsupport⟩
+  have hpair := (hsupport input history hfull v hv).2 (x, x) hpos
+  exact hpair.1 rfl
+
 def rootedAdjacencyChain {V : Type*} [DecidableEq V] (G : SimpleGraph V)
     (A : Finset V) : List V → Prop
   | [] => True
@@ -569,6 +584,28 @@ theorem rootedSequenceCodeSet_card_le {V : Type*} [Fintype V] [DecidableEq V]
       omega
     _ = (U.powersetCard (p - j)).card * (p * Δ) ^ j := by simp
     _ = Nat.choose U.card (p - j) * (p * Δ) ^ j := by simp
+
+theorem sum_function_eq_rank_fibers {α : Type*} [DecidableEq α]
+    (s : Finset α) (rank : α → ℕ) (p : ℕ) (f : ℕ → ℝ)
+    (hrank : ∀ a ∈ s, rank a ≤ p) :
+    (∑ a ∈ s, f (rank a)) =
+      ∑ j ∈ Finset.range (p + 1), ∑ a ∈ s, if rank a = j then f j else 0 := by
+  classical
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro a ha
+  have hmem : rank a ∈ Finset.range (p + 1) := by
+    simp [Nat.lt_succ_iff.mpr (hrank a ha)]
+  rw [Finset.sum_ite_eq _ (rank a) (fun j => f j)]
+  simp [hmem]
+
+theorem sum_rank_fiber_constant {α : Type*} [DecidableEq α]
+    (s : Finset α) (rank : α → ℕ) (j : ℕ) (c : ℝ) :
+    (∑ a ∈ s, if rank a = j then c else 0) =
+      ((s.filter fun a => rank a = j).card : ℝ) * c := by
+  classical
+  rw [← Finset.sum_filter]
+  simp [Finset.sum_const, mul_comm]
 
 theorem exists_rootedAdjacencyChain {V : Type*} [Fintype V] [DecidableEq V]
     (G : SimpleGraph V) [DecidableRel G.Adj] (A todo : Finset V)
@@ -907,5 +944,104 @@ lemma choose_subset_ratio_le {N p j : ℕ} (hj : j ≤ p) (hp : p ≤ N) :
           (((N - p + 1 : ℕ) : ℝ) ^ j / j.factorial) := hmul.symm
     _ ≤ ((p : ℝ) / (N - p + 1)) ^ j * Nat.choose (N - p + j) j :=
       mul_le_mul_of_nonneg_left hden hX
+
+theorem overlapRank_exp_moment_le_two {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (U : Finset (Pos T k)) (p Δ : ℕ) (β : ℝ)
+    (hp : p ≤ U.card)
+    (hdeg : ∀ v, (Finset.univ.filter fun w => D.geometricAdj v w).card ≤ Δ)
+    (hrate : Real.exp β * (p : ℝ) ^ 2 * Δ /
+        ((U.card : ℝ) - p + 1) ≤ 1 / 2) :
+    (∑ S ∈ U.powersetCard p, Real.exp (β * D.rank S)) /
+        ((U.powersetCard p).card : ℝ) ≤ 2 := by
+  classical
+  let Uset := U.powersetCard p
+  have hrank_le : ∀ S ∈ Uset, D.rank S ≤ p := by
+    intro S hS
+    rw [← (Finset.mem_powersetCard.mp hS).2]
+    exact Nat.sub_le _ _
+  have htotal :
+      (∑ S ∈ Uset, Real.exp (β * D.rank S)) ≤
+        ∑ j ∈ Finset.range (p + 1),
+          (Nat.choose U.card (p - j) : ℝ) * (p * Δ : ℝ) ^ j * Real.exp (β * j) := by
+    rw [sum_function_eq_rank_fibers Uset D.rank p (fun j => Real.exp (β * j)) hrank_le]
+    apply Finset.sum_le_sum
+    intro j hj
+    rw [sum_rank_fiber_constant]
+    have hjle : j ≤ p := by simp only [Finset.mem_range] at hj; omega
+    have hcount := overlapRankSubset_card_bound D U p j Δ hjle hdeg
+    have hcountReal :
+        ((Uset.filter fun S => D.rank S = j).card : ℝ) ≤
+          (Nat.choose U.card (p - j) : ℝ) * (p * Δ : ℝ) ^ j := by
+      exact_mod_cast hcount
+    exact mul_le_mul_of_nonneg_right hcountReal (Real.exp_pos _).le
+  let ratio : ℝ := Real.exp β * (p : ℝ) ^ 2 * Δ / ((U.card : ℝ) - p + 1)
+  have hratio : ratio ≤ 1 / 2 := by simpa [ratio] using hrate
+  have hratioDenPos : 0 < (U.card : ℝ) - p + 1 := by
+    have hpCast : (p : ℝ) ≤ U.card := by exact_mod_cast hp
+    linarith
+  have hratioNonneg : 0 ≤ ratio := by
+    dsimp [ratio]
+    exact div_nonneg (by positivity) hratioDenPos.le
+  have hratioLt : ratio < 1 := by linarith
+  have hfactor (j : ℕ) (hj : j ∈ Finset.range (p + 1)) :
+      (Nat.choose U.card (p - j) : ℝ) * (p * Δ : ℝ) ^ j * Real.exp (β * j) /
+          Nat.choose U.card p ≤ ratio ^ j := by
+    have hjle : j ≤ p := by simp only [Finset.mem_range] at hj; omega
+    have hchoose := choose_subset_ratio_le hjle hp
+    have hexp : Real.exp (β * (j : ℝ)) = Real.exp β ^ j := by
+      rw [show β * (j : ℝ) = (j : ℝ) * β by ring, Real.exp_nat_mul]
+    have hB : 0 ≤ (p * Δ : ℝ) ^ j := by positivity
+    have hC : 0 ≤ Real.exp β ^ j := by positivity
+    calc
+      _ = ((Nat.choose U.card (p - j) : ℝ) / Nat.choose U.card p) *
+            (p * Δ : ℝ) ^ j * (Real.exp β) ^ j := by rw [hexp]; ring
+      _ ≤ ((p : ℝ) / (U.card - p + 1)) ^ j *
+            (p * Δ : ℝ) ^ j * (Real.exp β) ^ j := by
+          exact mul_le_mul_of_nonneg_right
+            (mul_le_mul_of_nonneg_right hchoose hB) hC
+      _ = ratio ^ j := by
+        rw [← mul_pow, ← mul_pow]
+        congr 1
+        dsimp [ratio]
+        push_cast
+        field_simp [ne_of_gt hratioDenPos] <;> ring
+  have hgeom : (∑ j ∈ Finset.range (p + 1), ratio ^ j) ≤ 2 := by
+    have hcompare :
+        (∑ j ∈ Finset.range (p + 1), ratio ^ j) ≤
+          ∑ j ∈ Finset.range (p + 1), (1 / 2 : ℝ) ^ j := by
+      apply Finset.sum_le_sum
+      intro j hj
+      exact pow_le_pow_left₀ hratioNonneg hratio j
+    have hhalf (n : ℕ) :
+        (∑ j ∈ Finset.range n, (1 / 2 : ℝ) ^ j) =
+          2 * (1 - (1 / 2 : ℝ) ^ n) := by
+      induction n with
+      | zero => simp
+      | succ n ih =>
+        rw [Finset.sum_range_succ, ih, pow_succ]
+        ring
+    calc
+      _ ≤ ∑ j ∈ Finset.range (p + 1), (1 / 2 : ℝ) ^ j := hcompare
+      _ = 2 * (1 - (1 / 2 : ℝ) ^ (p + 1)) := hhalf _
+      _ ≤ 2 := by
+        have hpow : 0 ≤ (1 / 2 : ℝ) ^ (p + 1) := pow_nonneg (by norm_num) _
+        nlinarith
+  have hcode :
+      (∑ j ∈ Finset.range (p + 1),
+        (Nat.choose U.card (p - j) : ℝ) * (p * Δ : ℝ) ^ j * Real.exp (β * j)) /
+          Nat.choose U.card p ≤ 2 := by
+    rw [Finset.sum_div]
+    calc
+      _ ≤ ∑ j ∈ Finset.range (p + 1), ratio ^ j := by
+        apply Finset.sum_le_sum
+        intro j hj
+        exact hfactor j hj
+      _ ≤ 2 := hgeom
+  have hdenNat : (Uset.card : ℝ) = Nat.choose U.card p := by simp [Uset]
+  have hdenPos : 0 < (Nat.choose U.card p : ℝ) := by
+    exact_mod_cast Nat.choose_pos hp
+  rw [hdenNat]
+  exact (div_le_div_of_nonneg_right htotal hdenPos.le).trans hcode
 
 end HypercubeRamsey.Lane_q_s18_n6

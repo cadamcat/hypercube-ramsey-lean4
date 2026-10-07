@@ -303,6 +303,34 @@ theorem touching_charge_cost (scope : I → Finset V) (x : I → ℝ)
   have hi := (inv_le_inv₀ (hp.trans_le hh) hp).2 hh
   simpa only [touch, inv_pow, inv_div, one_div, inv_inv, inv_one, mul_one] using hi
 
+/-- Sum the charges at each coordinate in a scope to bound all neighboring alarms. -/
+theorem neighbor_charge_le (scope : I → Finset V) (x : I → ℝ) (hx0 : ∀ i, 0 ≤ x i)
+    (ε : ℝ) (hvariable : ∀ v, ∑ j ∈ Finset.univ.filter (fun j => v ∈ scope j), x j ≤ ε)
+    (i : I) :
+    ∑ j ∈ Finset.univ.filter (fun j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)), x j ≤
+      (scope i).card * ε := by
+  calc
+    _ ≤ ∑ j : I, ∑ v ∈ scope i, if v ∈ scope j then x j else 0 := by
+      rw [Finset.sum_filter]
+      apply Finset.sum_le_sum
+      intro j hj
+      split_ifs with h
+      · have hov : ∃ v, v ∈ scope i ∧ v ∈ scope j := by
+          by_contra hn
+          push_neg at hn
+          exact h.2 (Finset.disjoint_left.mpr hn)
+        obtain ⟨v, hv, hvj⟩ := hov
+        have hle := Finset.single_le_sum
+          (s := scope i) (f := fun v => if v ∈ scope j then x j else 0)
+          (fun v _ => by split_ifs <;> simp [hx0]) hv
+        simpa only [if_pos hvj] using hle
+      · exact Finset.sum_nonneg fun v _ => by split_ifs <;> simp [hx0]
+    _ = ∑ v ∈ scope i, ∑ j ∈ Finset.univ.filter (fun j => v ∈ scope j), x j := by
+      rw [Finset.sum_comm]
+      simp only [Finset.sum_filter]
+    _ ≤ ∑ _v ∈ scope i, ε := Finset.sum_le_sum fun v _ => hvariable v
+    _ = _ := by simp
+
 theorem scoped_avoidance_of_charges (P : V → FinProb A) (Bad : I → (V → A) → Prop)
     (scope : I → Finset V) (hscope : ∀ i, FinProb.DependsOn (Bad i) (scope i))
     (x : I → ℝ) (hx0 : ∀ i, 0 ≤ x i) (hx1 : ∀ i, x i < 1)

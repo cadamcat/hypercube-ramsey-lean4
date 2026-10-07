@@ -715,6 +715,14 @@ theorem sum_subtype_const {α : Type*} [DecidableEq α] (s : Finset α) (r : ℝ
   classical
   simp [Finset.sum_const, nsmul_eq_mul]
 
+theorem prod_div_cancel {α : Type*} [Fintype α] [DecidableEq α]
+    (s : Finset α) (f g : α → ℝ) (hg : ∀ i ∈ s, g i ≠ 0) :
+    (∏ i ∈ s, f i / g i) * (∏ i ∈ s, g i) = ∏ i ∈ s, f i := by
+  classical
+  have hprod : (∏ i ∈ s, g i) ≠ 0 := Finset.prod_ne_zero_iff.mpr hg
+  rw [Finset.prod_div_distrib]
+  exact div_mul_cancel₀ _ hprod
+
 theorem pi_pr_not_forall_le_sum {ι : Type*} [Fintype ι] [DecidableEq ι]
     {α : Type*} [Fintype α] (P : ι → FinProb α) (A : ι → α → Prop) :
     (FinProb.pi P).pr (fun ω => ¬ ∀ i, A i (ω i)) ≤

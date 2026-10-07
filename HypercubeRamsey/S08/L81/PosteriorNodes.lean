@@ -17,13 +17,238 @@ section Nodes
 
 variable (η₀ γ β p K : ℝ) (h : ℕ)
 
+set_option maxHeartbeats 1000000
 /-- L8.1g(i) (08:230–234): in the raw experiment at candidate `ξ`, the listed centres (distinct IDs: internal ones in
 slice `g`, one per cross slice) first need the observed independent tags (laws `S_g`, `S_u`); selection and
 validity only reduce the probability; given the selections the cross anchors are independent with laws
 `U_{u,i}`; validity includes the candidate's gates.  Dividing by `Q` gives `F_ξ a_ξ ≤ F_ξ` (both sides vanish
 where a reference vanishes). -/
 theorem gsel_le_f (D : Ctx η₀ β p h) : D.GselLeF := by
-  sorry
+  classical
+  intro Θ P c ξ π
+  let Θc : D.Hist := Function.update Θ c.1 ξ
+  let qOf : D.TAT → D.Pre := fun z => ((Θc, P), z)
+  let Ev : D.TAT → D.Anch → Prop := fun z W =>
+    D.PresValid (qOf z) W c ∧ D.presOf (qOf z) W c = π
+  have hTagNe : Nonempty D.M.ι := by
+    by_contra hne
+    haveI : IsEmpty D.M.ι := ⟨fun i => hne ⟨i⟩⟩
+    have hsum : (∑ i, D.M.Λ i) = 0 := by simp
+    rw [D.M.Λ_sum] at hsum
+    norm_num at hsum
+  letI : Nonempty D.M.ι := hTagNe
+  let dflt : D.M.ι := Classical.choice hTagNe
+  let BTag' : D.Tags → Prop := fun t =>
+    ∀ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+      t x.1 x.2 = Lane_q_s08_post.observedTagValue D c π dflt x
+  by_cases hgate : ¬ D.CandGate Θc c.1
+  · have hnum0 : (D.rawLaw Θc P).pr (fun z => Ev z.1 z.2) = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro z hz
+      by_cases he : Ev z.1 z.2
+      · exfalso
+        exact hgate he.1.1
+      · simp [he]
+    unfold Ctx.Gsel Ctx.Fcand
+    simp [Θc, qOf, Ev, hnum0, hgate]
+  · have hFcandNonneg := D.Fcand_nonneg Θ c.1 ξ (D.obsOf π)
+    by_cases hQ0 : D.Qref Θ c.1 (D.obsOf π) = 0
+    · simp [Ctx.Gsel, hQ0]
+      exact hFcandNonneg
+    · have hQnonneg : 0 ≤ D.Qref Θ c.1 (D.obsOf π) := D.Qref_nonneg Θ c.1 (D.obsOf π)
+      have hQpos : 0 < D.Qref Θ c.1 (D.obsOf π) := lt_of_le_of_ne hQnonneg (Ne.symm hQ0)
+      have hCandGate : D.CandGate Θc c.1 := by
+        by_contra hfalse
+        exact hgate hfalse
+      let Iref : ℝ := ∏ j, (π.1 j).elim 1 (fun i => (D.refInt Θ c.1).w i)
+      let Cref : ℝ := ∏ u : D.CrossSub c.1,
+        (D.refCross Θ c.1 u.1).w ((π.2 u).2.1, (π.2 u).2.2)
+      have hQdecomp : D.Qref Θ c.1 (D.obsOf π) = Iref * Cref := rfl
+      have hQprodPos : 0 < Iref * Cref := by rw [← hQdecomp]; exact hQpos
+      have hCrefNonneg : 0 ≤ Cref := by
+        dsimp [Cref]
+        exact Finset.prod_nonneg fun u hu => (D.refCross Θ c.1 u.1).nonneg _
+      have hIrefPos : 0 < Iref := by
+        by_contra hnot
+        have hle : Iref ≤ 0 := le_of_not_gt hnot
+        have hmul : Iref * Cref ≤ 0 := mul_nonpos_of_nonpos_of_nonneg hle hCrefNonneg
+        exact (not_le_of_gt hQprodPos) hmul
+      have hIrefNonneg : 0 ≤ Iref := by
+        dsimp [Iref]
+        apply Finset.prod_nonneg
+        intro j hj
+        cases hopt : π.1 j with
+        | none => simp [hopt]
+        | some i => simp [hopt]; exact (D.refInt Θ c.1).nonneg i
+      have hCrefPos : 0 < Cref := by
+        by_contra hnot
+        have hle : Cref ≤ 0 := le_of_not_gt hnot
+        have hmul : Iref * Cref ≤ 0 := mul_nonpos_of_nonneg_of_nonpos hIrefNonneg hle
+        exact (not_le_of_gt hQprodPos) hmul
+      have hRefInt (j : D.Loc) (i : D.M.ι) (hSome : π.1 j = some i) :
+          (D.refInt Θ c.1).w i ≠ 0 := by
+        intro hz
+        have hzero : Iref = 0 := by
+          dsimp [Iref]
+          apply Finset.prod_eq_zero (Finset.mem_univ j)
+          simp [hSome, hz]
+        exact (ne_of_gt hIrefPos) hzero
+      have hRefCross (u : D.CrossSub c.1) :
+          (D.refCross Θ c.1 u.1).w ((π.2 u).2.1, (π.2 u).2.2) ≠ 0 := by
+        intro hz
+        have hzero : Cref = 0 := by
+          dsimp [Cref]
+          apply Finset.prod_eq_zero (Finset.mem_univ u)
+          simp [hz]
+        exact (ne_of_gt hCrefPos) hzero
+      let Iobs : ℝ := ∏ j, (π.1 j).elim 1 (fun i => (D.tilt Θc c.1).w i)
+      let Ctag : ℝ := ∏ u : D.CrossSub c.1,
+        (D.tilt Θc u.1).w ((π.2 u).2.1)
+      let Ptag : D.KeyT → D.Loc → FinProb D.M.ι := fun g _ => D.tilt Θc g
+      have hTagCylinder : (D.tagLawAll Θc).pr BTag' ≤
+          ∏ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+            (D.tilt Θc x.1).w (Lane_q_s08_post.observedTagValue D c π dflt x) := by
+        simpa [Ctx.tagLawAll] using
+          Lane_q_s08_post.pi_pi_pr_le_fixed Ptag
+            (Lane_q_s08_post.observedTagCoords D c π)
+            (Lane_q_s08_post.observedTagValue D c π dflt) BTag'
+            (fun t ht x hx => by
+              change ∀ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+                t x.1 x.2 = Lane_q_s08_post.observedTagValue D c π dflt x at ht
+              exact ht x hx)
+      have hTagRaw : (D.rawTAT Θc).pr (fun z => BTag' z.1.1) ≤
+          (D.tagLawAll Θc).pr BTag' :=
+        Lane_q_s08_post.rawTAT_pr_le_tags D Θc (fun z => BTag' z.1.1) BTag'
+          (fun z hz => hz)
+      have hTagProbIndicator :
+          (D.rawTAT Θc).pr (fun z => BTag' z.1.1) =
+            ∑ z, (D.rawTAT Θc).w z *
+              (@ite ℝ ((fun z => BTag' z.1.1) z)
+                (Classical.propDecidable _) (1 : ℝ) 0) :=
+        Lane_q_s08_post.pr_eq_weighted_indicator (D.rawTAT Θc)
+          (fun z => BTag' z.1.1)
+      have hEventTag (z : D.TAT) (W : D.Anch) (hE : Ev z W) : BTag' z.1.1 :=
+        by
+          change ∀ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+            z.1.1 x.1 x.2 = Lane_q_s08_post.observedTagValue D c π dflt x
+          exact Lane_q_s08_post.pres_tag_spec D (qOf z) W c π dflt hE.2
+      let Aprod : ℝ := ∏ u : D.CrossSub c.1,
+        (D.anchorU Θc u.1 (π.2 u).2.1).w (π.2 u).2.2
+      have hAprod : 0 ≤ Aprod := by
+        dsimp [Aprod]
+        exact Finset.prod_nonneg fun u hu => (D.anchorU Θc u.1 (π.2 u).2.1).nonneg _
+      have hAnchor (z : D.TAT) :
+          (D.rawAnchors (qOf z)).pr (fun W => Ev z W) ≤
+            (if BTag' z.1.1 then Aprod else 0) := by
+        by_cases htag : BTag' z.1.1
+        · have hbound := Lane_q_s08_post.raw_anchors_cross_presentation_le D (qOf z) c π
+            (fun W => Ev z W) (fun W hE => hE.2) (fun W hE => hE.1)
+          simpa [Aprod, htag] using hbound
+        · have hnone : ∀ W, ¬ Ev z W := by
+            intro W hE
+            exact htag (hEventTag z W hE)
+          have hzero : (D.rawAnchors (qOf z)).pr (fun W => Ev z W) = 0 := by
+            unfold FinProb.pr
+            apply Finset.sum_eq_zero
+            intro W hW
+            simp [hnone W]
+          simp [htag, hzero]
+      have hBind :
+          (D.rawLaw Θc P).pr (fun z => Ev z.1 z.2) =
+            ∑ z, (D.rawTAT Θc).w z * (D.rawAnchors (qOf z)).pr (fun W => Ev z W) := by
+        simpa [Ctx.rawLaw, qOf] using
+          Lane_q_s08_post.bind_pr_eq_sum (D.rawTAT Θc)
+            (fun z => D.rawAnchors ((Θc, P), z)) (fun zW => Ev zW.1 zW.2)
+      have hrawBound : (D.rawLaw Θc P).pr (fun z => Ev z.1 z.2) ≤
+          Aprod * (D.rawTAT Θc).pr (fun z => BTag' z.1.1) := by
+        calc
+          _ = ∑ z, (D.rawTAT Θc).w z * (D.rawAnchors (qOf z)).pr (fun W => Ev z W) := hBind
+          _ ≤ ∑ z, (D.rawTAT Θc).w z *
+                (if BTag' z.1.1 then Aprod else 0) := by
+                  apply Finset.sum_le_sum
+                  intro z hz
+                  exact mul_le_mul_of_nonneg_left (hAnchor z) ((D.rawTAT Θc).nonneg z)
+          _ = Aprod * (D.rawTAT Θc).pr (fun z => BTag' z.1.1) := by
+                calc
+                  _ = ∑ z, Aprod * ((D.rawTAT Θc).w z *
+                        (@ite ℝ ((fun z => BTag' z.1.1) z)
+                          (Classical.propDecidable _) (1 : ℝ) 0)) := by
+                        apply Finset.sum_congr rfl
+                        intro z hz
+                        by_cases hb : BTag' z.1.1 <;> simp [hb] <;> ring
+                  _ = Aprod * ∑ z, (D.rawTAT Θc).w z *
+                        (@ite ℝ ((fun z => BTag' z.1.1) z)
+                          (Classical.propDecidable _) (1 : ℝ) 0) := by
+                        rw [← Finset.mul_sum]
+                  _ = Aprod * (D.rawTAT Θc).pr (fun z => BTag' z.1.1) := by
+                        rw [← hTagProbIndicator]
+      have hrawBoundTag : (D.rawLaw Θc P).pr (fun z => Ev z.1 z.2) ≤
+          Aprod * ∏ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+            (D.tilt Θc x.1).w (Lane_q_s08_post.observedTagValue D c π dflt x) :=
+        hrawBound.trans (mul_le_mul_of_nonneg_left (hTagRaw.trans hTagCylinder) hAprod)
+      have hobsProd := Lane_q_s08_post.observed_tag_weight_product D Θc c π dflt
+      have hIntCancel :
+          (∏ j, D.intRatio Θ c.1 ξ (π.1 j)) * Iref = Iobs := by
+        dsimp [Iref, Iobs]
+        rw [← Finset.prod_mul_distrib]
+        apply Finset.prod_congr rfl
+        intro j hj
+        cases hSome : π.1 j with
+        | none => simp [Ctx.intRatio, hSome]
+        | some i =>
+            simpa [Ctx.intRatio, hSome] using
+              (div_mul_cancel₀ ((D.tilt Θc c.1).w i) (hRefInt j i hSome))
+      have hCrossCancel :
+          (∏ u : D.CrossSub c.1,
+            D.crossRatio Θ c.1 ξ u ((π.2 u).2.1, (π.2 u).2.2)) * Cref =
+            ∏ u : D.CrossSub c.1,
+              (D.tilt Θc u.1).w ((π.2 u).2.1) *
+                (D.anchorU Θc u.1 (π.2 u).2.1).w (π.2 u).2.2 := by
+        dsimp [Cref]
+        rw [← Finset.prod_mul_distrib]
+        apply Finset.prod_congr rfl
+        intro u hu
+        simpa [Ctx.crossRatio, Θc] using
+          (div_mul_cancel₀
+            ((D.tilt Θc u.1).w ((π.2 u).2.1) *
+              (D.anchorU Θc u.1 (π.2 u).2.1).w (π.2 u).2.2)
+            (hRefCross u))
+      have hCrossTagAnchor :
+          (∏ u : D.CrossSub c.1,
+            (D.tilt Θc u.1).w ((π.2 u).2.1) *
+              (D.anchorU Θc u.1 (π.2 u).2.1).w (π.2 u).2.2) = Ctag * Aprod := by
+        dsimp [Ctag, Aprod]
+        rw [Finset.prod_mul_distrib]
+      have hFcQ :
+          D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) = Aprod *
+            (∏ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+              (D.tilt Θc x.1).w (Lane_q_s08_post.observedTagValue D c π dflt x)) := by
+        unfold Ctx.Fcand Ctx.Qref
+        rw [if_pos hCandGate]
+        simp only [Ctx.obsOf]
+        calc
+          _ = ((∏ j, D.intRatio Θ c.1 ξ (π.1 j)) * Iref) *
+                ((∏ u : D.CrossSub c.1,
+                  D.crossRatio Θ c.1 ξ u ((π.2 u).2.1, (π.2 u).2.2)) * Cref) := by
+                  dsimp [Iref, Cref]
+                  ring
+          _ = Iobs * (Ctag * Aprod) := by rw [hIntCancel, hCrossCancel, hCrossTagAnchor]
+          _ = Aprod *
+                (∏ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+                  (D.tilt Θc x.1).w (Lane_q_s08_post.observedTagValue D c π dflt x)) := by
+                  rw [hobsProd]
+                  ring
+      have hnum : (D.rawLaw Θc P).pr (fun z => Ev z.1 z.2) ≤
+          D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) := by
+        calc
+          _ ≤ Aprod * ∏ x ∈ Lane_q_s08_post.observedTagCoords D c π,
+                (D.tilt Θc x.1).w (Lane_q_s08_post.observedTagValue D c π dflt x) := hrawBoundTag
+          _ = D.Fcand Θ c.1 ξ (D.obsOf π) * D.Qref Θ c.1 (D.obsOf π) := hFcQ.symm
+      unfold Ctx.Gsel
+      exact (div_le_iff₀ hQpos).2 hnum
+
+set_option maxHeartbeats 200000
 
 /-- L8.1g(ii) (08:245–254): on a valid presentation (`M ≥ ε₀`, at most `T` internal IDs), the base posterior has
 density at most `e^{1.5δhs log n}`; the selected posterior `F_ξ a_ξ dR'/M^a` with `M^a ≥ ε₀ M` is at most `ε₀^{-1}`

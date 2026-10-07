@@ -1,5 +1,6 @@
 import HypercubeRamsey.S11.Core.Definitions
 import HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer
+import HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer_moments
 import HypercubeRamsey.Tools.SignedTest
 import HypercubeRamsey.Tools.Ramsey
 
@@ -1771,6 +1772,7 @@ theorem two_free (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx₀
   -- centered direction in L², samples a norm-good tuple, and applies the equal-normalizer signed test.
   sorry
 
+set_option maxHeartbeats 800000 in
 /-- L11.3c (11:254–268).  `E M_J² = E_{y,y'∼π} (∫ a_x(y) a_x(y') dσ)^{|J|}`; the kernel is `O(b_*)` off a
 `π`-set of mass `e^{-Ω(n^{x₀})}` by (11.1), so `E M_J² ≤ (C_u b_*)^{|J|} + C_u e^{-Ω(n^{x₀})}`; Cauchy–Schwarz
 with `.95/2 > .4`.  Coinciding coordinates have probability `O_u(e^h/N)`. -/
@@ -1779,11 +1781,29 @@ theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx�
   classical
   unfold MeanInterEv
   intro u
+  let U : ℕ := max u 2
+  let tailC : ℝ := 4 * (25 : ℝ) ^ U
+  have hU : 2 ≤ U := by dsimp [U]; exact le_max_right u 2
+  have hUpos : 0 < (U : ℝ) := by exact_mod_cast (by omega : 0 < U)
+  have h25 : 1 ≤ (25 : ℝ) ^ U := by
+    calc
+      1 = (1 : ℝ) ^ U := by simp
+      _ ≤ (25 : ℝ) ^ U :=
+        pow_le_pow_left₀ (by norm_num : (0 : ℝ) ≤ 1)
+          (by norm_num : (1 : ℝ) ≤ 25) U
+  have htailArg : 1 < tailC := by dsimp [tailC]; nlinarith
+  have htailLogPos : 0 < Real.log tailC := Real.log_pos htailArg
   let a : ℝ := 1 - δ / 16
   let tσ : ℕ → ℝ := fun n => (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)
   have ha : 0 < a := by dsimp [a]; nlinarith
   have hgap := OuterMoment_q_s11_outer.eventually_pow_gap
-    ((1 : ℝ) / 10) a 8 (by dsimp [a]; nlinarith) (by norm_num)
+    ((1 : ℝ) / 10) a 24 (by dsimp [a]; nlinarith) (by norm_num)
+  have hgapPow := OuterMoment_q_s11_outer.eventually_pow_gap
+    0 ((3 : ℝ) / 20) 128 (by norm_num) (by norm_num)
+  have hgapTailConst := OuterMoment_q_s11_outer.eventually_pow_gap
+    0 x₀ (8 * Real.log tailC) (by linarith [hx₀]) (by positivity)
+  have hgapTailLog := OuterMoment_q_s11_outer.eventually_pow_gap
+    (x₀ / 2) x₀ (64 * (U : ℝ) / (5 * x₀)) (by linarith [hx₀]) (by positivity)
   have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
     simpa [bS, neg_div, Function.comp_def] using
       (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < (19 : ℝ) / 20)).comp
@@ -1794,12 +1814,24 @@ theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx�
     exact hn.le
   have hnLarge : ∀ᶠ n : ℕ in atTop, 64 ≤ n :=
     eventually_atTop.mpr ⟨64, fun _ hn => hn⟩
-  have hScale : ∀ᶠ n : ℕ in atTop, 64 ≤ n ∧ bS n ≤ 1 / 8 ∧
-      tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
-    filter_upwards [hnLarge, hbSmall, hgap] with n hn hb hg
+  have hPiTend : Tendsto (fun n : ℕ => (n : ℝ) ^ x₀) atTop atTop :=
+    (tendsto_rpow_atTop hx₀).comp tendsto_natCast_atTop_atTop
+  have hKHalf : ∀ᶠ n : ℕ in atTop, Real.log K ≤ (n : ℝ) ^ x₀ / 2 := by
+    filter_upwards [hPiTend.eventually_gt_atTop (2 * Real.log K)] with n hn
+    linarith
+  have hScale : ∀ᶠ n : ℕ in atTop,
+      64 ≤ n ∧ bS n ≤ 1 / 8 ∧ tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 ∧
+      24 * (n : ℝ) ^ ((1 : ℝ) / 10) < (n : ℝ) ^ a ∧
+      128 < (n : ℝ) ^ ((3 : ℝ) / 20) ∧
+      Real.log K ≤ (n : ℝ) ^ x₀ / 2 ∧
+      8 * Real.log tailC < (n : ℝ) ^ x₀ ∧
+      (64 * (U : ℝ) / (5 * x₀)) * (n : ℝ) ^ (x₀ / 2) < (n : ℝ) ^ x₀ := by
+    filter_upwards [hnLarge, hbSmall, hgap, hgapPow, hKHalf, hgapTailConst, hgapTailLog]
+      with n hn hb hg hgp hk hgc hgl
     have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
     have hpow : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) :=
       Real.one_le_rpow hn1 (by norm_num)
+    have hpowZero : (n : ℝ) ^ (0 : ℝ) = 1 := by simp
     have hcard : (Fintype.card (InnerCoord n) : ℝ) ≤ (hIn n : ℝ) := by
       exact_mod_cast OuterMoment_q_s11_outer.innerCoord_card_le n
     have hfloor := OuterMoment_q_s11_outer.hIn_real_le_pow n
@@ -1823,11 +1855,16 @@ theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx�
       linarith
     have hwidth : tσ n + Real.log 3 ≤ (n : ℝ) ^ a / 2 := by
       nlinarith [htσ, hlog3, hpow, hg]
-    exact ⟨hn, hb, hwidth⟩
+    have hgp' : 128 < (n : ℝ) ^ ((3 : ℝ) / 20) := by
+      simpa [hpowZero] using hgp
+    have hgc' : 8 * Real.log tailC < (n : ℝ) ^ x₀ := by
+      simpa [hpowZero] using hgc
+    exact ⟨hn, hb, hwidth, hg, hgp', hk, hgc', hgl⟩
   obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hScale
   refine ⟨n₀, ?_⟩
   intro n hn N E X Y G π σ S hO
-  have ⟨hn64, hbSmallN, hwidthN⟩ := hn₀ n hn
+  have ⟨hn64, hbSmallN, hwidthN, hwidthSlackN, hpowGapN, hKHalfN,
+    htailConstN, htailLogN⟩ := hn₀ n hn
   have hNpos : 0 < (N : ℝ) := by
     have hNnat : 0 < N := lt_of_lt_of_le (by positivity) hO.host
     exact_mod_cast hNnat
@@ -1867,6 +1904,10 @@ theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx�
       |sMean E G π x| ≤ 4 * bS n := hO.degree x hx
       _ ≤ 4 * (1 / 8) := mul_le_mul_of_nonneg_left hbSmallN (by norm_num)
       _ = 1 / 2 := by norm_num
+  have hDenBounds (x : Fin N) (hx : x ∈ S) :
+      1 / 2 ≤ 1 + sMean E G π x ∧ 1 + sMean E G π x ≤ 3 / 2 := by
+    have h := abs_le.mp (hMeanAbs x hx)
+    constructor <;> linarith
   have hDenLower (x : Fin N) (hx : x ∈ S) : 1 / 2 ≤ 1 + sMean E G π x := by
     have h := abs_le.mp (hMeanAbs x hx)
     linarith
@@ -1897,10 +1938,677 @@ theorem mean_inter (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx�
       |hit E G x y / deg E G π x - 1| ≤ |hit E G x y / deg E G π x| + 1 := by
         simpa using abs_sub (hit E G x y / deg E G π x) 1
       _ ≤ 5 := by linarith
+  have hσzero (x : Fin N) (hx : x ∉ S) : σ x = 0 := by
+    have h := hσSupport x hx
+    simpa [σlaw] using h
+  let r : Fin N → ℝ := fun x => if x ∈ S then (1 + sMean E G π x)⁻¹ else 0
+  have hrBounds (x : Fin N) (hx : x ∈ S) : 2 / 3 ≤ r x ∧ r x ≤ 2 := by
+    have hdenpos : 0 < 1 + sMean E G π x :=
+      lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 2) (hDenBounds x hx).1
+    have hr : r x = (1 + sMean E G π x)⁻¹ := by simp [r, hx]
+    rw [hr, inv_eq_one_div]
+    constructor
+    · apply (le_div_iff₀ hdenpos).2
+      nlinarith [(hDenBounds x hx).2]
+    · apply (div_le_iff₀ hdenpos).2
+      nlinarith [(hDenBounds x hx).1]
+  have hrNonneg (x : Fin N) : 0 ≤ r x := by
+    by_cases hx : x ∈ S
+    · exact le_trans (by norm_num : (0 : ℝ) ≤ 2 / 3) (hrBounds x hx).1
+    · simp [r, hx]
+  let c : ℝ := ∑ x, σ x * r x
+  have hcLower : 2 / 3 ≤ c := by
+    dsimp [c]
+    calc
+      (2 / 3 : ℝ) = (∑ x, σ x) * (2 / 3) := by rw [hO.sigma_sum]; ring
+      _ = ∑ x, σ x * (2 / 3) := by rw [Finset.sum_mul]
+      _ ≤ ∑ x, σ x * r x := by
+        apply Finset.sum_le_sum
+        intro x hx
+        by_cases hxS : x ∈ S
+        · exact mul_le_mul_of_nonneg_left (hrBounds x hxS).1 (hO.sigma_nonneg x)
+        · simp [hσzero x hxS]
+  have hcUpper : c ≤ 2 := by
+    dsimp [c]
+    calc
+      (∑ x, σ x * r x) ≤ ∑ x, σ x * 2 := by
+        apply Finset.sum_le_sum
+        intro x hx
+        by_cases hxS : x ∈ S
+        · exact mul_le_mul_of_nonneg_left (hrBounds x hxS).2 (hO.sigma_nonneg x)
+        · simp [hσzero x hxS]
+      _ = (∑ x, σ x) * 2 := by rw [Finset.sum_mul]
+      _ = 2 := by rw [hO.sigma_sum]; ring
+  have hcPos : 0 < c := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 2 / 3) hcLower
+  let μtilde : Law N := {
+    w := fun x => σ x * r x / c
+    nonneg := fun x => div_nonneg (mul_nonneg (hO.sigma_nonneg x) (hrNonneg x)) hcPos.le
+    sum_eq_one := by
+      calc
+        (∑ x, σ x * r x / c) = (∑ x, σ x * r x) / c := by rw [Finset.sum_div]
+        _ = c / c := rfl
+        _ = 1 := div_self hcPos.ne'
+  }
+  have hμtildeSupport : μtilde.SupportedIn X := by
+    intro x hxX
+    have hxS : x ∉ S := fun hx => hxX (hO.S_sub hx)
+    simp [μtilde, hσzero x hxS]
+  have hlog11 : Real.log 11 ≤ 10 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 11)
+    linarith
+  have hpowTenth : 1 ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+    exact Real.one_le_rpow (by exact_mod_cast (by omega : 1 ≤ n)) (by norm_num)
+  have hlog11Half : Real.log 11 ≤ (n : ℝ) ^ a / 2 := by
+    nlinarith [hwidthSlackN, hpowTenth, hlog11]
+  have hμtildeWidth : μtilde.WidthLE ((n : ℝ) ^ a - Real.log 11) := by
+    intro x
+    change σ x * r x / c ≤ Real.exp ((n : ℝ) ^ a - Real.log 11) / N
+    have hratio : r x / c ≤ 3 := by
+      by_cases hxS : x ∈ S
+      · apply (div_le_iff₀ hcPos).2
+        calc
+          r x ≤ 2 := (hrBounds x hxS).2
+          _ = 3 * (2 / 3 : ℝ) := by norm_num
+          _ ≤ 3 * c := mul_le_mul_of_nonneg_left hcLower (by norm_num)
+      · simp [r, hxS]
+    have hExponent : tσ n + Real.log 3 ≤ (n : ℝ) ^ a - Real.log 11 := by
+      linarith [hwidthN, hlog11Half]
+    calc
+      σ x * r x / c = σ x * (r x / c) := by ring
+      _ ≤ σ x * 3 := mul_le_mul_of_nonneg_left hratio (hO.sigma_nonneg x)
+      _ ≤ (Real.exp (tσ n) / N) * 3 :=
+        mul_le_mul_of_nonneg_right (hσWidth x) (by norm_num)
+      _ = Real.exp (tσ n + Real.log 3) / N := by
+        rw [Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 3)]
+        ring
+      _ ≤ Real.exp ((n : ℝ) ^ a - Real.log 11) / N :=
+        div_le_div_of_nonneg_right (Real.exp_le_exp.mpr hExponent) (by positivity)
+  have hπSupport : πlaw.SupportedIn Y := by
+    intro y hy
+    by_contra hπ
+    exact hy (hO.pi_supp y hπ)
+  have hpowNonneg : 0 ≤ (n : ℝ) ^ x₀ := Real.rpow_nonneg (Nat.cast_nonneg n) _
+  have hπWidthDisc : πlaw.WidthLE ((n : ℝ) ^ x₀) := by
+    apply Law.WidthLE.mono hπWidth
+    nlinarith [hKHalfN, hpowNonneg]
+  have hbpos : 0 < bS n := by
+    unfold bS
+    exact Real.rpow_pos_of_pos (by exact_mod_cast (by omega : 0 < n)) _
+  let kernel (y y' : Fin N) : ℝ :=
+    ∑ x, σ x * aF E G π x y * aF E G π x y'
+  have hKernelAbs (y y' : Fin N) : |kernel y y'| ≤ 25 := by
+    calc
+      |kernel y y'| ≤ ∑ x, |σ x * aF E G π x y * aF E G π x y'| :=
+        Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ x, σ x * 25 := by
+        apply Finset.sum_le_sum
+        intro x hx
+        by_cases hxS : x ∈ S
+        · rw [abs_mul, abs_mul, abs_of_nonneg (hO.sigma_nonneg x)]
+          calc
+            σ x * |aF E G π x y| * |aF E G π x y'| =
+                σ x * (|aF E G π x y| * |aF E G π x y'|) := by ring
+            _ ≤ σ x * (5 * 5) := mul_le_mul_of_nonneg_left
+              (mul_le_mul (haBound x hxS y) (haBound x hxS y')
+                (abs_nonneg _) (by norm_num)) (hO.sigma_nonneg x)
+            _ = σ x * 25 := by norm_num
+        · simp [hσzero x hxS]
+      _ = 25 := by rw [← Finset.sum_mul, hO.sigma_sum]; ring
+  let gtest (y x : Fin N) : ℝ := if x ∈ S then aF E G π x y else 0
+  have hgtest (y : Fin N) (x : Fin N) : |gtest y x| ≤ 5 := by
+    by_cases hxS : x ∈ S
+    · simpa [gtest, hxS] using haBound x hxS y
+    · simp [gtest, hxS]
+  have hcWeight (x : Fin N) : c * μtilde.w x = σ x * r x := by
+    change c * (σ x * r x / c) = _
+    field_simp [ne_of_gt hcPos]
+  have hAFMean (x : Fin N) (hxS : x ∈ S) (ν : Law N) :
+      (∑ y, ν.w y * aF E G π x y) =
+        r x * ((∑ y, ν.w y * fv E G x y) - sMean E G π x) := by
+    have hdenpos : 0 < 1 + sMean E G π x :=
+      lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 2) (hDenBounds x hxS).1
+    have hr : r x = (1 + sMean E G π x)⁻¹ := by simp [r, hxS]
+    calc
+      (∑ y, ν.w y * aF E G π x y) =
+          ∑ y, ν.w y * ((fv E G x y - sMean E G π x) /
+            (1 + sMean E G π x)) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              rw [haFid x hxS y]
+      _ = (1 + sMean E G π x)⁻¹ *
+          (∑ y, ν.w y * (fv E G x y - sMean E G π x)) := by
+            calc
+              _ = ∑ y, (1 + sMean E G π x)⁻¹ *
+                    (ν.w y * (fv E G x y - sMean E G π x)) := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      rw [div_eq_mul_inv]
+                      ring
+              _ = _ := by rw [Finset.mul_sum]
+      _ = r x * ((∑ y, ν.w y * fv E G x y) - sMean E G π x) := by
+            rw [hr]
+            congr 1
+            calc
+              (∑ y, ν.w y * (fv E G x y - sMean E G π x)) =
+                  ∑ y, (ν.w y * fv E G x y - ν.w y * sMean E G π x) := by
+                    apply Finset.sum_congr rfl
+                    intro y hy
+                    ring
+              _ = (∑ y, ν.w y * fv E G x y) -
+                    ∑ y, ν.w y * sMean E G π x := by rw [Finset.sum_sub_distrib]
+              _ = (∑ y, ν.w y * fv E G x y) - sMean E G π x := by
+                    rw [← Finset.sum_mul, ν.sum_eq_one]
+                    ring
+  have hKernelAvgIdentity (y : Fin N) (ν : Law N) :
+      (∑ y', ν.w y' * kernel y y') =
+        c * (∑ x, μtilde.w x * gtest y x *
+          ((∑ y', ν.w y' * fv E G x y') - (∑ y', πlaw.w y' * fv E G x y'))) := by
+    calc
+      (∑ y', ν.w y' * kernel y y') =
+          ∑ x, σ x * aF E G π x y * (∑ y', ν.w y' * aF E G π x y') := by
+            calc
+              (∑ y', ν.w y' * kernel y y') =
+                  ∑ y', ∑ x, ν.w y' *
+                    (σ x * aF E G π x y * aF E G π x y') := by
+                      apply Finset.sum_congr rfl
+                      intro y' hy'
+                      dsimp [kernel]
+                      rw [Finset.mul_sum]
+              _ = ∑ x, ∑ y', ν.w y' *
+                    (σ x * aF E G π x y * aF E G π x y') := by
+                      exact Finset.sum_comm
+              _ = ∑ x, σ x * aF E G π x y *
+                    (∑ y', ν.w y' * aF E G π x y') := by
+                      apply Finset.sum_congr rfl
+                      intro x hx
+                      calc
+                        (∑ y', ν.w y' *
+                            (σ x * aF E G π x y * aF E G π x y')) =
+                            ∑ y', (σ x * aF E G π x y) *
+                              (ν.w y' * aF E G π x y') := by
+                                apply Finset.sum_congr rfl
+                                intro y' hy'
+                                ring
+                        _ = σ x * aF E G π x y *
+                              (∑ y', ν.w y' * aF E G π x y') := by
+                                rw [Finset.mul_sum]
+      _ = ∑ x, c * μtilde.w x * gtest y x *
+          ((∑ y', ν.w y' * fv E G x y') - (∑ y', πlaw.w y' * fv E G x y')) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            by_cases hxS : x ∈ S
+            · have hpiMean : sMean E G π x = ∑ y', πlaw.w y' * fv E G x y' := by
+                rfl
+              rw [hAFMean x hxS ν, hcWeight x, hpiMean]
+              simp [gtest, hxS]
+              ring
+            · have hσx : σ x = 0 := hσzero x hxS
+              simp [gtest, hxS, μtilde, hσx]
+      _ = c * (∑ x, μtilde.w x * gtest y x *
+          ((∑ y', ν.w y' * fv E G x y') - (∑ y', πlaw.w y' * fv E G x y'))) := by
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro x hx
+            ring
+  have hKernelAverageBound (y : Fin N) (ν : Law N)
+      (hνY : ν.SupportedIn Y) (hνWidth : ν.WidthLE ((n : ℝ) ^ x₀)) :
+      |∑ y', ν.w y' * kernel y y'| ≤ 48 * bS n := by
+    rw [hKernelAvgIdentity]
+    have hweighted := OuterMoment_q_s11_outer.signed_fv_weight_difference
+      G hO.disc μtilde ν πlaw hμtildeSupport hνY hπSupport hNpos hμtildeWidth
+      hνWidth hπWidthDisc (gtest y) (hgtest y) (le_of_lt hbpos)
+    rw [abs_mul, abs_of_pos hcPos]
+    calc
+      c * |∑ x, μtilde.w x * gtest y x *
+          ((∑ y', ν.w y' * fv E G x y') - (∑ y', πlaw.w y' * fv E G x y'))| ≤
+        c * (24 * bS n) := mul_le_mul_of_nonneg_left hweighted hcPos.le
+      _ ≤ 48 * bS n := by
+        have h24b : 0 ≤ 24 * bS n := by positivity
+        calc
+          c * (24 * bS n) ≤ 2 * (24 * bS n) := mul_le_mul_of_nonneg_right hcUpper h24b
+          _ = 48 * bS n := by ring
+  let tau : ℝ := Real.exp (-((n : ℝ) ^ x₀ / 4))
+  have hTauPos : 0 < tau := by dsimp [tau]; exact Real.exp_pos _
+  have hNoKernelSide (y : Fin N) (T : Finset (Fin N)) (sgn : ℝ)
+      (hsign : |sgn| = 1)
+      (hEvent : ∀ y' ∈ T, 64 * bS n < sgn * kernel y y') :
+      (∑ y' ∈ T, π y') ≤ tau := by
+    by_contra hmassNot
+    have hmass : tau < ∑ y' ∈ T, π y' := lt_of_not_ge hmassNot
+    have hmassPos : 0 < ∑ y' ∈ T, π y' := lt_trans hTauPos hmass
+    let ν : Law N := Law.restrict πlaw T hmassPos
+    have hνSupportT : ν.SupportedIn T := by
+      intro y' hy'
+      simp [ν, Law.restrict, hy']
+    have hνSupportY : ν.SupportedIn Y := by
+      intro y' hy'
+      have hπzero : πlaw.w y' = 0 := hπSupport y' hy'
+      simp [ν, Law.restrict, hπzero]
+    have hmassLog : -((n : ℝ) ^ x₀ / 4) < Real.log (∑ y' ∈ T, π y') := by
+      have hlog := Real.log_lt_log hTauPos hmass
+      simpa [tau, Real.log_exp] using hlog
+    have hνWidth0 : ν.WidthLE (Real.log K - Real.log (∑ y' ∈ T, π y')) := by
+      simpa [ν] using Law.WidthLE.restrict hπWidth hmassPos
+    have hνWidth : ν.WidthLE ((n : ℝ) ^ x₀) := by
+      have hneglog : -Real.log (∑ y' ∈ T, π y') < (n : ℝ) ^ x₀ / 4 := by
+        linarith [hmassLog]
+      have hExponent : Real.log K - Real.log (∑ y' ∈ T, π y') ≤ (n : ℝ) ^ x₀ := by
+        nlinarith [hKHalfN, hneglog]
+      intro y'
+      change ν.w y' ≤ Real.exp ((n : ℝ) ^ x₀) / N
+      calc
+        ν.w y' ≤ Real.exp (Real.log K - Real.log (∑ y' ∈ T, π y')) / N := hνWidth0 y'
+        _ ≤ Real.exp ((n : ℝ) ^ x₀) / N :=
+          div_le_div_of_nonneg_right (Real.exp_le_exp.mpr hExponent) (by positivity)
+    have hAverage := hKernelAverageBound y ν hνSupportY hνWidth
+    have hAverageLower : 64 * bS n ≤
+        sgn * (∑ y', ν.w y' * kernel y y') := by
+      calc
+        64 * bS n = (∑ y', ν.w y') * (64 * bS n) := by rw [ν.sum_eq_one]; ring
+        _ = ∑ y', ν.w y' * (64 * bS n) := by rw [Finset.sum_mul]
+        _ ≤ ∑ y', ν.w y' * (sgn * kernel y y') := by
+          apply Finset.sum_le_sum
+          intro y' hy'
+          by_cases hy'T : y' ∈ T
+          · exact mul_le_mul_of_nonneg_left (le_of_lt (hEvent y' hy'T)) (ν.nonneg y')
+          · have hνzero : ν.w y' = 0 := hνSupportT y' hy'T
+            simp [hνzero]
+        _ = sgn * (∑ y', ν.w y' * kernel y y') := by
+          calc
+            (∑ y', ν.w y' * (sgn * kernel y y')) =
+                ∑ y', sgn * (ν.w y' * kernel y y') := by
+                  apply Finset.sum_congr rfl
+                  intro y' hy'
+                  ring
+            _ = _ := by rw [Finset.mul_sum]
+    have hSignedAbs : sgn * (∑ y', ν.w y' * kernel y y') ≤
+        |∑ y', ν.w y' * kernel y y'| := by
+      calc
+        sgn * (∑ y', ν.w y' * kernel y y') ≤
+            |sgn * (∑ y', ν.w y' * kernel y y')| := le_abs_self _
+        _ = |∑ y', ν.w y' * kernel y y'| := by rw [abs_mul, hsign, one_mul]
+    have hbad : 64 * bS n ≤ 48 * bS n :=
+      hAverageLower.trans (hSignedAbs.trans hAverage)
+    nlinarith [hbpos]
+  let kernelPos (y : Fin N) : Finset (Fin N) :=
+    Finset.univ.filter fun y' => 64 * bS n < kernel y y'
+  let kernelNeg (y : Fin N) : Finset (Fin N) :=
+    Finset.univ.filter fun y' => 64 * bS n < -kernel y y'
+  let kernelBad (y : Fin N) : Finset (Fin N) :=
+    Finset.univ.filter fun y' => 64 * bS n < |kernel y y'|
+  have hKernelPosMass (y : Fin N) : (∑ y' ∈ kernelPos y, π y') ≤ tau := by
+    apply hNoKernelSide y (kernelPos y) 1 (by norm_num)
+    intro y' hy'
+    simpa [kernelPos] using (Finset.mem_filter.mp hy').2
+  have hKernelNegMass (y : Fin N) : (∑ y' ∈ kernelNeg y, π y') ≤ tau := by
+    apply hNoKernelSide y (kernelNeg y) (-1) (by norm_num)
+    intro y' hy'
+    have h := (Finset.mem_filter.mp hy').2
+    simpa [kernelNeg] using h
+  have hKernelBadSplit (y y' : Fin N) (hy' : y' ∈ kernelBad y) :
+      y' ∈ kernelPos y ∨ y' ∈ kernelNeg y := by
+    have hlarge : 64 * bS n < |kernel y y'| := (Finset.mem_filter.mp hy').2
+    by_cases hnonneg : 0 ≤ kernel y y'
+    · left
+      simpa [kernelPos, abs_of_nonneg hnonneg] using hlarge
+    · right
+      have hneg : kernel y y' < 0 := lt_of_not_ge hnonneg
+      simpa [kernelNeg, abs_of_neg hneg] using hlarge
+  have hKernelIndicator (T : Finset (Fin N)) :
+      (∑ y', π y' * (if y' ∈ T then (1 : ℝ) else 0)) = ∑ y' ∈ T, π y' := by
+    calc
+      (∑ y', π y' * (if y' ∈ T then (1 : ℝ) else 0)) =
+          ∑ y', (if y' ∈ T then π y' else 0) := by
+            apply Finset.sum_congr rfl
+            intro y' hy'
+            by_cases hT : y' ∈ T <;> simp [hT] <;> ring
+      _ = ∑ y' ∈ T, π y' := Finset.sum_ite_mem_eq T π
+  have hKernelBadMass (y : Fin N) :
+      (∑ y' ∈ kernelBad y, π y') ≤ 2 * tau := by
+    have hdisj : Disjoint (kernelPos y) (kernelNeg y) := by
+      apply Finset.disjoint_left.mpr
+      intro y' hp hn
+      have hp' := (Finset.mem_filter.mp hp).2
+      have hn' := (Finset.mem_filter.mp hn).2
+      have hthreshold : 0 < 64 * bS n := mul_pos (by norm_num) hbpos
+      nlinarith
+    have hsub : kernelBad y ⊆ kernelPos y ∪ kernelNeg y := by
+      intro y' hy'
+      rcases hKernelBadSplit y y' hy' with hp | hn
+      · exact Finset.mem_union_left _ hp
+      · exact Finset.mem_union_right _ hn
+    calc
+      (∑ y' ∈ kernelBad y, π y') ≤ ∑ y' ∈ kernelPos y ∪ kernelNeg y, π y' := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg hsub
+        intro y' hy' hnot
+        exact hO.pi_nonneg y'
+      _ = (∑ y' ∈ kernelPos y, π y') + (∑ y' ∈ kernelNeg y, π y') :=
+        Finset.sum_union hdisj
+      _ ≤ tau + tau := add_le_add (hKernelPosMass y) (hKernelNegMass y)
+      _ = 2 * tau := by ring
   intro J hJ
-  -- The second-moment expansion reduces the target to a kernel estimate under π⊗π;
-  -- discrepancy controls that kernel outside an exponentially small set, then Cauchy--Schwarz applies.
-  sorry
+  let rJ : ℕ := J.card
+  have hrJ : 2 ≤ rJ := hJ
+  have hrJU : rJ ≤ U := by
+    dsimp [rJ]
+    calc
+      J.card ≤ Fintype.card (Fin u) := Finset.card_le_univ J
+      _ = u := Fintype.card_fin u
+      _ ≤ U := Nat.le_max_left u 2
+  have hnreal : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  let A : ℝ := 64 * bS n
+  have hsmallBase : 64 * bS n ≤ ((n : ℝ) ^ (-(4 : ℝ) / 5)) / 2 := by
+    have hnposR : 0 < (n : ℝ) := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1) hnreal
+    have hpow := mul_lt_mul_of_pos_right hpowGapN
+      (Real.rpow_pos_of_pos hnposR (-(19 : ℝ) / 20))
+    calc
+      64 * bS n = (128 * (n : ℝ) ^ (-(19 : ℝ) / 20)) / 2 := by
+        rw [bS]
+        ring
+      _ ≤ ((n : ℝ) ^ ((3 : ℝ) / 20) *
+          (n : ℝ) ^ (-(19 : ℝ) / 20)) / 2 := by
+            exact div_le_div_of_nonneg_right hpow.le (by norm_num)
+      _ = ((n : ℝ) ^ (-(4 : ℝ) / 5)) / 2 := by
+            rw [← Real.rpow_add hnposR]
+            congr 1
+            congr 1
+            ring
+  have hSmallPower : A ^ rJ ≤
+      ((n : ℝ) ^ ((-(4 : ℝ) / 5) * (rJ : ℝ))) / 2 := by
+    have hA_nonneg : 0 ≤ A := by dsimp [A]; positivity
+    have hbasePow : A ^ rJ ≤ (((n : ℝ) ^ (-(4 : ℝ) / 5)) / 2) ^ rJ :=
+      pow_le_pow_left₀ hA_nonneg hsmallBase rJ
+    have hpowExp : ((n : ℝ) ^ (-(4 : ℝ) / 5)) ^ rJ =
+        (n : ℝ) ^ ((-(4 : ℝ) / 5) * (rJ : ℝ)) :=
+      (Real.rpow_mul_natCast (Nat.cast_nonneg n) (-(4 : ℝ) / 5) rJ).symm
+    have hpowNumerator : 0 ≤ ((n : ℝ) ^ (-(4 : ℝ) / 5)) ^ rJ :=
+      pow_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) _) _
+    have hdenPos : 0 < (2 : ℝ) ^ rJ := by positivity
+    have hdenLE : (2 : ℝ) ≤ (2 : ℝ) ^ rJ := by
+      have hNat : 2 ≤ 2 ^ rJ := by
+        calc
+          2 = 2 ^ 1 := by norm_num
+          _ ≤ 2 ^ rJ := Nat.pow_le_pow_right (by norm_num : 1 ≤ 2) (by omega)
+      exact_mod_cast hNat
+    have hdiv :
+        (((n : ℝ) ^ (-(4 : ℝ) / 5)) ^ rJ) / (2 : ℝ) ^ rJ ≤
+          ((n : ℝ) ^ (-(4 : ℝ) / 5)) ^ rJ / 2 := by
+      rw [div_le_div_iff₀ hdenPos (by norm_num : (0 : ℝ) < 2)]
+      nlinarith [mul_nonneg hpowNumerator (sub_nonneg.mpr hdenLE)]
+    calc
+      A ^ rJ ≤ (((n : ℝ) ^ (-(4 : ℝ) / 5)) / 2) ^ rJ := hbasePow
+      _ = ((n : ℝ) ^ (-(4 : ℝ) / 5)) ^ rJ / (2 : ℝ) ^ rJ := by rw [div_pow]
+      _ = (n : ℝ) ^ ((-(4 : ℝ) / 5) * (rJ : ℝ)) / (2 : ℝ) ^ rJ := by rw [hpowExp]
+      _ ≤ (n : ℝ) ^ ((-(4 : ℝ) / 5) * (rJ : ℝ)) / 2 := by
+        simpa [hpowExp] using hdiv
+  have hlogN : Real.log (n : ℝ) ≤
+      (n : ℝ) ^ (x₀ / 2) / (x₀ / 2) := Real.log_natCast_le_rpow_div n (by positivity)
+  have htailConstSmall : Real.log tailC ≤ (n : ℝ) ^ x₀ / 8 := by
+    nlinarith [htailConstN]
+  have htailLogSmall :
+      ((4 : ℝ) / 5) * (U : ℝ) * Real.log (n : ℝ) ≤ (n : ℝ) ^ x₀ / 8 := by
+    have hcoef : 0 ≤ ((4 : ℝ) / 5) * (U : ℝ) := by positivity
+    have hmul := mul_le_mul_of_nonneg_left hlogN hcoef
+    have hrewrite :
+        (((4 : ℝ) / 5) * (U : ℝ)) *
+            ((n : ℝ) ^ (x₀ / 2) / (x₀ / 2)) =
+          (8 * (U : ℝ) / (5 * x₀)) * (n : ℝ) ^ (x₀ / 2) := by
+            field_simp [ne_of_gt hx₀]
+            ring
+    rw [hrewrite] at hmul
+    have hcoefEq : 64 * (U : ℝ) / (5 * x₀) = 8 * (8 * (U : ℝ) / (5 * x₀)) := by
+      field_simp [ne_of_gt hx₀]
+      ring
+    have hgapSmall :
+        (8 * (U : ℝ) / (5 * x₀)) * (n : ℝ) ^ (x₀ / 2) <
+          (n : ℝ) ^ x₀ / 8 := by
+      have hmul8 :
+          ((8 * (U : ℝ) / (5 * x₀)) * (n : ℝ) ^ (x₀ / 2)) * 8 <
+            (n : ℝ) ^ x₀ := by
+        calc
+          ((8 * (U : ℝ) / (5 * x₀)) * (n : ℝ) ^ (x₀ / 2)) * 8 =
+              (8 * (8 * (U : ℝ) / (5 * x₀))) * (n : ℝ) ^ (x₀ / 2) := by ring
+          _ = (64 * (U : ℝ) / (5 * x₀)) * (n : ℝ) ^ (x₀ / 2) := by
+                rw [hcoefEq]
+          _ < (n : ℝ) ^ x₀ := htailLogN
+      apply (lt_div_iff₀ (by norm_num : (0 : ℝ) < 8)).2
+      nlinarith [hmul8]
+    exact hmul.trans hgapSmall.le
+  have htailExponent :
+      Real.log tailC + ((4 : ℝ) / 5) * (U : ℝ) * Real.log (n : ℝ) ≤
+        (n : ℝ) ^ x₀ / 4 := by
+    linarith [htailConstSmall, htailLogSmall]
+  have hTailExp : 2 * (25 : ℝ) ^ U * tau ≤
+      (n : ℝ) ^ (-((4 : ℝ) / 5) * (U : ℝ)) / 2 := by
+    have hExpTail : tailC * Real.exp (-((n : ℝ) ^ x₀ / 4)) ≤
+        (n : ℝ) ^ (-((4 : ℝ) / 5) * (U : ℝ)) := by
+      calc
+        tailC * Real.exp (-((n : ℝ) ^ x₀ / 4)) =
+            Real.exp (Real.log tailC - (n : ℝ) ^ x₀ / 4) := by
+              calc
+                tailC * Real.exp (-((n : ℝ) ^ x₀ / 4)) =
+                    Real.exp (Real.log tailC) * Real.exp (-((n : ℝ) ^ x₀ / 4)) := by
+                  congr 1
+                  exact (Real.exp_log (by dsimp [tailC]; positivity)).symm
+                _ = Real.exp (Real.log tailC + -((n : ℝ) ^ x₀ / 4)) :=
+                      (Real.exp_add _ _).symm
+                _ = Real.exp (Real.log tailC - (n : ℝ) ^ x₀ / 4) := by
+                  congr 1
+        _ ≤ Real.exp (-(((4 : ℝ) / 5) * (U : ℝ) * Real.log (n : ℝ))) :=
+              Real.exp_le_exp.mpr (by linarith [htailExponent])
+        _ = (n : ℝ) ^ (-((4 : ℝ) / 5) * (U : ℝ)) := by
+              rw [Real.rpow_def_of_pos (by exact_mod_cast (by omega : 0 < n))]
+              congr 1
+              ring_nf
+    calc
+      2 * (25 : ℝ) ^ U * tau = (tailC * tau) / 2 := by
+        dsimp [tailC, tau]
+        ring
+      _ ≤ (n : ℝ) ^ (-((4 : ℝ) / 5) * (U : ℝ)) / 2 :=
+        div_le_div_of_nonneg_right hExpTail (by norm_num)
+  have hTailPowerJ : 2 * (25 : ℝ) ^ rJ * tau ≤
+      (n : ℝ) ^ (-((4 : ℝ) / 5) * (rJ : ℝ)) / 2 := by
+    have hpow25 : (25 : ℝ) ^ rJ ≤ (25 : ℝ) ^ U := by
+      have hnat : (25 : ℕ) ^ rJ ≤ (25 : ℕ) ^ U :=
+        Nat.pow_le_pow_right (by norm_num : 1 ≤ 25) hrJU
+      exact_mod_cast hnat
+    have hpowN : (n : ℝ) ^ (-((4 : ℝ) / 5) * (U : ℝ)) ≤
+        (n : ℝ) ^ (-((4 : ℝ) / 5) * (rJ : ℝ)) := by
+      apply Real.rpow_le_rpow_of_exponent_le hnreal
+      have hcard : (rJ : ℝ) ≤ (U : ℝ) := by exact_mod_cast hrJU
+      nlinarith
+    calc
+      2 * (25 : ℝ) ^ rJ * tau ≤ 2 * (25 : ℝ) ^ U * tau :=
+        mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hpow25 (by norm_num))
+          (le_of_lt hTauPos)
+      _ ≤ (n : ℝ) ^ (-((4 : ℝ) / 5) * (U : ℝ)) / 2 := hTailExp
+      _ ≤ (n : ℝ) ^ (-((4 : ℝ) / 5) * (rJ : ℝ)) / 2 :=
+        div_le_div_of_nonneg_right hpowN (by norm_num)
+  have hKernelPairBound (y y' : Fin N) :
+      kernel y y' ^ rJ ≤ A ^ rJ + (25 : ℝ) ^ rJ *
+        (if y' ∈ kernelBad y then (1 : ℝ) else 0) := by
+    have hpowAbs : kernel y y' ^ rJ ≤ |kernel y y'| ^ rJ := by
+      calc
+        kernel y y' ^ rJ ≤ |kernel y y' ^ rJ| := le_abs_self _
+        _ = |kernel y y'| ^ rJ := abs_pow _ _
+    by_cases hbad : y' ∈ kernelBad y
+    · have hpowKernel : |kernel y y'| ^ rJ ≤ (25 : ℝ) ^ rJ :=
+        pow_le_pow_left₀ (abs_nonneg _) (hKernelAbs y y') rJ
+      have hApow : 0 ≤ A ^ rJ := pow_nonneg (by dsimp [A]; positivity) _
+      simpa [hbad] using hpowAbs.trans (hpowKernel.trans (le_add_of_nonneg_left hApow))
+    · have hnear : |kernel y y'| ≤ A := by
+        apply le_of_not_gt
+        intro hlarge
+        exact hbad (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlarge⟩)
+      have hpowKernel : |kernel y y'| ^ rJ ≤ A ^ rJ :=
+        pow_le_pow_left₀ (abs_nonneg _) hnear rJ
+      simpa [hbad] using hpowAbs.trans hpowKernel
+  have hKernelInnerBound (y : Fin N) :
+      (∑ y', π y' * kernel y y' ^ rJ) ≤
+        A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) := by
+    calc
+      (∑ y', π y' * kernel y y' ^ rJ) ≤
+          ∑ y', π y' * (A ^ rJ + (25 : ℝ) ^ rJ *
+            (if y' ∈ kernelBad y then (1 : ℝ) else 0)) := by
+              apply Finset.sum_le_sum
+              intro y' hy'
+              exact mul_le_mul_of_nonneg_left (hKernelPairBound y y') (hO.pi_nonneg y')
+      _ = A ^ rJ + (25 : ℝ) ^ rJ *
+            (∑ y', π y' * (if y' ∈ kernelBad y then (1 : ℝ) else 0)) := by
+              have hbase : (∑ y', π y' * A ^ rJ) = A ^ rJ := by
+                rw [← Finset.sum_mul, hO.pi_sum]
+                ring
+              have hbad :
+                  (∑ y', π y' * ((25 : ℝ) ^ rJ *
+                    (if y' ∈ kernelBad y then (1 : ℝ) else 0))) =
+                    (25 : ℝ) ^ rJ *
+                      (∑ y', π y' * (if y' ∈ kernelBad y then (1 : ℝ) else 0)) := by
+                calc
+                  _ = ∑ y', (25 : ℝ) ^ rJ *
+                        (π y' * (if y' ∈ kernelBad y then (1 : ℝ) else 0)) := by
+                          apply Finset.sum_congr rfl
+                          intro y' hy'
+                          ring
+                  _ = _ := by rw [Finset.mul_sum]
+              calc
+                (∑ y', π y' *
+                    (A ^ rJ + (25 : ℝ) ^ rJ *
+                      (if y' ∈ kernelBad y then (1 : ℝ) else 0))) =
+                    (∑ y', π y' * A ^ rJ) +
+                      (∑ y', π y' * ((25 : ℝ) ^ rJ *
+                        (if y' ∈ kernelBad y then (1 : ℝ) else 0))) := by
+                          calc
+                            _ = ∑ y', (π y' * A ^ rJ + π y' * ((25 : ℝ) ^ rJ *
+                                  (if y' ∈ kernelBad y then (1 : ℝ) else 0))) := by
+                                    apply Finset.sum_congr rfl
+                                    intro y' hy'
+                                    rw [mul_add]
+                            _ = _ := Finset.sum_add_distrib
+                _ = A ^ rJ + (25 : ℝ) ^ rJ *
+                      (∑ y', π y' * (if y' ∈ kernelBad y then (1 : ℝ) else 0)) := by
+                        rw [hbase, hbad]
+      _ ≤ A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) := by
+            rw [hKernelIndicator (kernelBad y)]
+            have hmass := hKernelBadMass y
+            have hcoef : 0 ≤ (25 : ℝ) ^ rJ := pow_nonneg (by norm_num) _
+            have hmul := mul_le_mul_of_nonneg_left hmass hcoef
+            nlinarith [hmul]
+  have hKernelOverallBound :
+      (∑ y, ∑ y', π y * π y' * kernel y y' ^ rJ) ≤
+        A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) := by
+    calc
+      (∑ y, ∑ y', π y * π y' * kernel y y' ^ rJ) =
+          ∑ y, π y * (∑ y', π y' * kernel y y' ^ rJ) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            calc
+              (∑ y', π y * π y' * kernel y y' ^ rJ) =
+                  ∑ y', π y * (π y' * kernel y y' ^ rJ) := by
+                    apply Finset.sum_congr rfl
+                    intro y' hy'
+                    ring
+              _ = π y * (∑ y', π y' * kernel y y' ^ rJ) := by rw [Finset.mul_sum]
+      _ ≤ ∑ y, π y * (A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau)) := by
+            apply Finset.sum_le_sum
+            intro y hy
+            exact mul_le_mul_of_nonneg_left (hKernelInnerBound y) (hO.pi_nonneg y)
+      _ = A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) := by
+            rw [← Finset.sum_mul, hO.pi_sum]
+            ring
+  have hSecondMoment :
+      (∑ x : Fin u → Fin N, tupWt σ x * (inter E G π J x) ^ 2) ≤
+        A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) := by
+    rw [OuterMoment_q_s11_outer.tuple_interaction_second_moment E G σ π hO.sigma_sum J]
+    exact hKernelOverallBound
+  have hSecondTarget :
+      A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) ≤
+        (n : ℝ) ^ ((-(4 : ℝ) / 5) * (rJ : ℝ)) := by
+    have hsecondSmall := hSmallPower
+    have hsecondTail := hTailPowerJ
+    dsimp [A] at hsecondSmall
+    nlinarith
+  have hSecondTarget' :
+      A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) ≤
+        (n : ℝ) ^ (-(((4 : ℝ) / 5) * (rJ : ℝ))) := by
+    calc
+      A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) ≤
+          (n : ℝ) ^ ((-(4 : ℝ) / 5) * (rJ : ℝ)) := hSecondTarget
+      _ = (n : ℝ) ^ (-(((4 : ℝ) / 5) * (rJ : ℝ))) := by
+            congr 1
+            ring
+  let twt (x : Fin u → Fin N) : ℝ := tupWt σ x
+  have hwtNonneg (x : Fin u → Fin N) : 0 ≤ twt x := by
+    dsimp [twt, tupWt]
+    exact Finset.prod_nonneg fun i hi => hO.sigma_nonneg (x i)
+  have hwtSum : (∑ x : Fin u → Fin N, twt x) = 1 := by
+    dsimp [twt, tupWt]
+    calc
+      (∑ x : Fin u → Fin N, ∏ i, σ (x i)) = ∏ i : Fin u, ∑ z, σ z := by
+        symm
+        exact Fintype.prod_sum (fun (_ : Fin u) (z : Fin N) => σ z)
+      _ = 1 := by simp [hO.sigma_sum]
+  let f (x : Fin u → Fin N) : ℝ := Real.sqrt (twt x)
+  let g (x : Fin u → Fin N) : ℝ := Real.sqrt (twt x) * |inter E G π J x|
+  have hsumfg :
+      (∑ x : Fin u → Fin N, f x * g x) =
+        ∑ x, twt x * |inter E G π J x| := by
+    apply Finset.sum_congr rfl
+    intro x hx
+    dsimp [f, g]
+    calc
+      Real.sqrt (twt x) * (Real.sqrt (twt x) * |inter E G π J x|) =
+          (Real.sqrt (twt x)) ^ 2 * |inter E G π J x| := by ring
+      _ = twt x * |inter E G π J x| := by rw [Real.sq_sqrt (hwtNonneg x)]
+  have hsumff : (∑ x : Fin u → Fin N, f x ^ 2) = 1 := by
+    calc
+      (∑ x : Fin u → Fin N, f x ^ 2) = ∑ x, twt x := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        dsimp [f]
+        exact Real.sq_sqrt (hwtNonneg x)
+      _ = 1 := hwtSum
+  have hsumgg :
+      (∑ x : Fin u → Fin N, g x ^ 2) =
+        ∑ x, twt x * (inter E G π J x) ^ 2 := by
+    apply Finset.sum_congr rfl
+    intro x hx
+    dsimp [g]
+    calc
+      (Real.sqrt (twt x) * |inter E G π J x|) ^ 2 =
+          (Real.sqrt (twt x)) ^ 2 * (|inter E G π J x|) ^ 2 := by ring
+      _ = twt x * (inter E G π J x) ^ 2 := by
+        rw [Real.sq_sqrt (hwtNonneg x), sq_abs]
+  have hCS := Finset.sum_mul_sq_le_sq_mul_sq
+    (Finset.univ : Finset (Fin u → Fin N)) f g
+  rw [hsumfg, hsumff, hsumgg] at hCS
+  have hAverageNonneg :
+      0 ≤ ∑ x : Fin u → Fin N, twt x * |inter E G π J x| := by
+    exact Finset.sum_nonneg fun x hx => mul_nonneg (hwtNonneg x) (abs_nonneg _)
+  have hTargetNonneg :
+      0 ≤ (n : ℝ) ^ (-(((2 : ℝ) / 5) * (rJ : ℝ))) :=
+    Real.rpow_nonneg (by exact_mod_cast Nat.cast_nonneg n) _
+  have hTargetSq :
+      ((n : ℝ) ^ (-(((2 : ℝ) / 5) * (rJ : ℝ)))) ^ 2 =
+        (n : ℝ) ^ (-(((4 : ℝ) / 5) * (rJ : ℝ))) := by
+    calc
+      _ = (n : ℝ) ^ ((-(((2 : ℝ) / 5) * (rJ : ℝ))) * 2) :=
+        (Real.rpow_mul_natCast (Nat.cast_nonneg n)
+          (-(((2 : ℝ) / 5) * (rJ : ℝ))) 2).symm
+      _ = _ := by congr 1 <;> ring
+  have hFinal :
+      (∑ x : Fin u → Fin N, twt x * |inter E G π J x|) ≤
+        (n : ℝ) ^ (-((2 / 5 : ℝ) * (rJ : ℝ))) := by
+    have hmeanSq :
+        (∑ x : Fin u → Fin N, twt x * |inter E G π J x|) ^ 2 ≤
+          ((n : ℝ) ^ (-((2 : ℝ) / 5 * (rJ : ℝ)))) ^ 2 := by
+      calc
+        (∑ x : Fin u → Fin N, twt x * |inter E G π J x|) ^ 2 ≤
+            ∑ x, twt x * (inter E G π J x) ^ 2 := by simpa using hCS
+        _ ≤ A ^ rJ + (25 : ℝ) ^ rJ * (2 * tau) := hSecondMoment
+        _ ≤ (n : ℝ) ^ (-((4 : ℝ) / 5 * (rJ : ℝ))) := hSecondTarget'
+        _ = ((n : ℝ) ^ (-((2 : ℝ) / 5 * (rJ : ℝ)))) ^ 2 := hTargetSq.symm
+    exact (sq_le_sq₀ hAverageNonneg hTargetNonneg).mp hmeanSq
+  simpa [twt, rJ] using hFinal
 
 /-- L11.3d (11:270–280).  An extension with `|M_J| > n^{-υ}` has projection `≥ c_u n^{-υ}` of `f_x` on a fixed
 bounded direction; `t₀` candidates of one sign with mutual `K_π ≤ 8n^{-δ}` force `t₀ = O_u(n^{2υ})`; no

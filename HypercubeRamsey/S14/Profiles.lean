@@ -45,6 +45,10 @@ structure PretrimFacts {κ : CConsts} {T : Stage} {k : ℕ}
   good_probability : ∀ i p,
     ((F.solverAt i).solver.recLaw p).pr (F.solverAt i).solver.AllGood ≥
       1 - Real.exp (-Real.rpow ((𝒯.P i).h : ℝ) (1 + κ.c14))
+  good_positive : ∀ i p,
+    0 < ((F.solverAt i).solver.recLaw p).pr (F.solverAt i).solver.AllGood
+  retained_positive : ∀ i W g, (F.solverAt i).solver.AllGood W →
+    0 < ∑ D ∈ (F.solverAt i).solver.pretrimBins W g, (F.solverAt i).solver.q g W D
   retained_bins : ∀ i W g,
     (F.solverAt i).solver.AllGood W →
       1 - (𝒯.P i).h ^ 2 * Real.sqrt (sliceEps κ (𝒯.P i).h) ≤
@@ -63,20 +67,22 @@ structure OutputLawFacts {κ : CConsts} {T : Stage} {k : ℕ}
 /-- P14.2a: continuity of the conditioned, pretrimmed output law. -/
 theorem output_continuous {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {mesh : Mesh 𝒯} (F : SolverFamily 𝒯 mesh)
-    (hconst : HeightConstantContract κ) : OutputContinuous F := by
+    (hpre : PretrimFacts F) : OutputContinuous F := by
   sorry
 
 /-- P14.2b: conditioning and bin pretrim retain positive mass, uniformly in
 the parameter point. -/
 theorem pretrim_well_defined {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {mesh : Mesh 𝒯} (F : SolverFamily 𝒯 mesh)
-    (hconst : HeightConstantContract κ) : PretrimFacts F := by
+    (hκ : κ.Admissible) (hconst : HeightConstantContract κ)
+    (hscales : ∀ i, PatchScales 𝒯 i) : PretrimFacts F := by
   sorry
 
 /-- P14.2c: the S1 bounds place every output profile in the capped input
 domain, including the low-mode conditioning and pretrim factors. -/
 theorem output_in_capped_domain {κ : CConsts} {T : Stage} {k : ℕ}
     {𝒯 : Tiling κ T k} {mesh : Mesh 𝒯} (F : SolverFamily 𝒯 mesh)
+    (hκ : κ.Admissible) (hscales : ∀ i, PatchScales 𝒯 i)
     (hpre : PretrimFacts F) : OutputLawFacts F := by
   sorry
 
@@ -162,18 +168,21 @@ structure BalancedProfile {κ : CConsts} {T : Stage} {k : ℕ}
 /-- Proposition 14.2: balanced patch profiles for every mesh and solver
 family in a valid cluster tiling. -/
 theorem balanced_profiles (κ : CConsts) (hκ : κ.Admissible)
-    (hconst : HeightConstantContract κ) (T : Stage) :
+    (hconst : HeightConstantContract κ) (T : Stage) (hinit : InitDisc T κ.η0) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k), Tiling.Valid 𝒯 → 𝒯.mode.isCluster →
-      ∀ (mesh : Mesh 𝒯) (hclean : MeshCleaned mesh) (_domain : MeshProfileDomain mesh),
+      ∀ (mesh : Mesh 𝒯) (hclean : MeshCleaned mesh) (_domain : MeshProfileDomain mesh)
+        (ready : MeshReady mesh),
         Nonempty (BalancedProfile (𝒯 := 𝒯) (mesh := mesh) hclean) := by
-  have hsolver := internal_slice_solver κ hκ hconst T
-  filter_upwards [hsolver] with k hsolver
-  intro 𝒯 h𝒯 hcluster mesh hclean _domain
+  have hsolver := internal_slice_solver κ hκ hconst T hinit
+  have hscales := patch_scales κ hκ T
+  filter_upwards [hsolver, hscales] with k hsolver hscales
+  intro 𝒯 h𝒯 hcluster mesh hclean _domain ready
   classical
-  let F : SolverFamily 𝒯 mesh := ⟨fun i => Classical.choice (hsolver 𝒯 h𝒯 hcluster mesh hclean i)⟩
-  have hcont : OutputContinuous F := output_continuous F hconst
-  have hpre : PretrimFacts F := pretrim_well_defined F hconst
-  have hout : OutputLawFacts F := output_in_capped_domain F hpre
+  let F : SolverFamily 𝒯 mesh := ⟨fun i => Classical.choice (hsolver 𝒯 h𝒯 hcluster mesh hclean ready i)⟩
+  have hscale : ∀ i, PatchScales 𝒯 i := hscales 𝒯 h𝒯 hcluster
+  have hpre : PretrimFacts F := pretrim_well_defined F hκ hconst hscale
+  have hcont : OutputContinuous F := output_continuous F hpre
+  have hout : OutputLawFacts F := output_in_capped_domain F hκ hscale hpre
   obtain ⟨fixed⟩ := fixed_point _domain F hcont hpre hout
   have hcap := active_price_cap F hpre fixed
   have htv := low_mode_tv F hconst hpre fixed
@@ -206,21 +215,21 @@ theorem balanced_profiles (κ : CConsts) (hκ : κ.Admissible)
 
 /-- L14.3: finite low-mode primitive data at every parameter point. -/
 theorem finite_low_mode_data (κ : CConsts) (hκ : κ.Admissible)
-    (hconst : HeightConstantContract κ) (T : Stage) :
+    (hconst : HeightConstantContract κ) (T : Stage) (hinit : InitDisc T κ.η0) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k), Tiling.Valid 𝒯 →
-      𝒯.mode = .lowCluster → ∀ mesh : Mesh 𝒯, MeshCleaned mesh →
+      𝒯.mode = .lowCluster → ∀ mesh : Mesh 𝒯, MeshCleaned mesh → MeshReady mesh →
         ∀ i : Fin 𝒯.m, ∀ p : mesh.Param,
           ∃ S : SolverWitness (𝒯 := 𝒯) (i := i) (mesh := mesh),
             (((Finset.univ.filter fun W =>
               0 < (S.solver.recLaw p).w W).card : ℕ) : ℝ) ≤
               Real.exp ((T.S.n k : ℝ) ^ (1.01 : ℝ)) := by
-  have hsolver := internal_slice_solver κ hκ hconst T
+  have hsolver := internal_slice_solver κ hκ hconst T hinit
   filter_upwards [hsolver] with k hsolver
-  intro 𝒯 h𝒯 hlow mesh hclean i p
+  intro 𝒯 h𝒯 hlow mesh hclean ready i p
   have hcluster : 𝒯.mode.isCluster := by
     rw [hlow]
     simp [Mode.isCluster]
-  obtain ⟨S⟩ := hsolver 𝒯 h𝒯 hcluster mesh hclean i
+  obtain ⟨S⟩ := hsolver 𝒯 h𝒯 hcluster mesh hclean ready i
   refine ⟨S, ?_⟩
   exact S.solver.low_support hlow p
 

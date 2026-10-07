@@ -2211,6 +2211,68 @@ theorem clusterHighMode_degree_window {κ : CConsts} (hκ : CConsts.Admissible �
       _ ≤ 10 * (1 / 60) := by gcongr
       _ = 1 / 6 := by norm_num
 
+theorem clusterHighMode_normalizedHit_bounds {κ : CConsts}
+    (hκ : CConsts.Admissible κ) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      (PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) →
+      ∀ i x, x ∈ PT.envelope i → ∀ (b : OddPosition T k) y,
+        0 ≤ normalizedHit (T.S.E k) PT.tiling.c
+          (PT.π (patchAt PT hPT b.1)) x y ∧
+        normalizedHit (T.S.E k) PT.tiling.c
+          (PT.π (patchAt PT hPT b.1)) x y ≤ 3 := by
+  let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
+  have hn : Tendsto nR atTop atTop :=
+    (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
+  have hpow : Tendsto (fun k => nR k ^ (0.96 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num)).comp hn
+  have hbstarEq : ∀ k, bstar T k = (nR k ^ (0.96 : ℝ))⁻¹ := by
+    intro k
+    dsimp [bstar, nR]
+    rw [show (-1 + (0.04 : ℝ)) = -(0.96 : ℝ) by norm_num,
+      Real.rpow_neg (by positivity : (0 : ℝ) ≤ (T.S.n k : ℝ))]
+  have hbstarTendsto : Tendsto (fun k => bstar T k) atTop (nhds 0) :=
+    (tendsto_inv_atTop_zero.comp hpow).congr'
+      (Filter.Eventually.of_forall fun k => (hbstarEq k).symm)
+  have hbstar : ∀ᶠ k in atTop, bstar T k < 1 / 18 :=
+    hbstarTendsto.eventually (Iio_mem_nhds (by norm_num))
+  have hWindow := clusterHighMode_degree_window hκ T
+  filter_upwards [hWindow, hbstar] with k hWindow hbstar
+  intro PT hPT hm i x hx b y
+  let d := deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT b.1)).w x
+  have herror : |d - 1 / 2| ≤ 1 / 6 := by
+    by_cases hji : patchAt PT hPT b.1 = i
+    · have hwindow := hWindow PT hPT hm i
+      have h := hPT.envelope_degree i x hx
+      have hown : |d - 1 / 2| ≤
+          10 * Real.rpow ((PT.tiling.P i).q : ℝ) κ.Cb / (T.S.n k : ℝ) := by
+        rcases hm with hs | hl
+        · simpa [OwnDegOK, hs, hji, d] using h
+        · simpa [OwnDegOK, hl, hji, d] using h
+      exact hown.trans hwindow
+    · have h := hPT.envelope_other_degree i (patchAt PT hPT b.1) hji x hx
+      calc
+        _ ≤ 3 * bstar T k := by simpa [d] using h
+        _ ≤ 1 / 6 := by nlinarith [hbstar]
+  have hdegree : 1 / 3 ≤ d := by
+    have habs := abs_le.mp herror
+    linarith
+  have hden : 0 < d := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 3) hdegree
+  have hhit0 : 0 ≤ hit (T.S.E k) PT.tiling.c x y := by
+    unfold hit
+    split_ifs <;> norm_num
+  have hhit1 : hit (T.S.E k) PT.tiling.c x y ≤ 1 := by
+    unfold hit
+    split_ifs <;> norm_num
+  unfold normalizedHit
+  change 0 ≤ (if 0 < d then hit (T.S.E k) PT.tiling.c x y / d else 0) ∧
+    (if 0 < d then hit (T.S.E k) PT.tiling.c x y / d else 0) ≤ 3
+  rw [if_pos hden]
+  constructor
+  · exact div_nonneg hhit0 hden.le
+  · apply (div_le_iff₀ hden).2
+    have hthree : 1 ≤ 3 * d := by nlinarith
+    nlinarith
+
 private def crossingRoot {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
     (G : Finset (Fin (T.S.n k))) (r : Fin (T.S.n k)) : Prop :=
@@ -2347,6 +2409,216 @@ theorem clusterCrossingNonisolated_card_le_two_rank {κ : CConsts} {T : Stage} {
       have hrank : clusterCrossingRank PT vs G = nonroots.card :=
         hrankDef.trans hnonroot_card.symm
       rw [hrank]
+
+theorem patchAt_flip_prefix {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : Position T k)
+    (j : Fin (T.S.n k))
+    (hj : (PT.tiling.P (patchAt PT hPT a)).ℓ ≤ j.val) :
+    patchAt PT hPT (flipPos a j) = patchAt PT hPT a := by
+  classical
+  let i := patchAt PT hPT a
+  have hmem : a ∈ PT.tiling.leaf i := by
+    simpa [i, patchAt] using
+      (Classical.choose_spec (hPT.tiling_valid.prefix_complete a)).1
+  have hmem' : flipPos a j ∈ PT.tiling.leaf i := by
+    change ∀ t : Fin (T.S.n k), t.val < (PT.tiling.P i).ℓ →
+      flipPos a j t = PT.tiling.w i t
+    intro t ht
+    have hne : t ≠ j := by
+      intro heq
+      have hval := congrArg Fin.val heq
+      have hj' : (PT.tiling.P i).ℓ ≤ j.val := by simpa [i] using hj
+      omega
+    simpa [flipPos, hne] using hmem t ht
+  have huniq :=
+    (Classical.choose_spec (hPT.tiling_valid.prefix_complete (flipPos a j))).2 i hmem'
+  change Classical.choose (hPT.tiling_valid.prefix_complete (flipPos a j)) = i
+  exact huniq.symm
+
+private theorem clusterCrossingNeighbor_has_prefix_coord {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (a : EvenPosition T k) (ha : a ∈ evenPatchPositions PT.tiling i)
+    (b : OddPosition T k) (hb : b ∈ clusterCrossingNeighbours PT hPT a) :
+    ∃ j : Fin (T.S.n k), j.val < (PT.tiling.P i).ℓ ∧ b.1 = flipPos a.1 j := by
+  classical
+  have hb' : Adjacent a b ∧ patchAt PT hPT b.1 ≠ patchAt PT hPT a.1 := by
+    simpa [clusterCrossingNeighbours] using (Finset.mem_filter.mp hb).2
+  have hdiff : (Finset.univ.filter fun t : Fin (T.S.n k) => a.1 t ≠ b.1 t).card = 1 := hb'.1
+  obtain ⟨j, hj⟩ := Finset.card_eq_one.mp hdiff
+  have hjmem : j ∈ Finset.univ.filter fun t : Fin (T.S.n k) => a.1 t ≠ b.1 t := by
+    rw [hj]
+    simp
+  have hdiffj : a.1 j ≠ b.1 j := (Finset.mem_filter.mp hjmem).2
+  have hsame : ∀ t, t ≠ j → a.1 t = b.1 t := by
+    intro t ht
+    have hnot : t ∉ Finset.univ.filter fun t : Fin (T.S.n k) => a.1 t ≠ b.1 t := by
+      rw [hj]
+      simp [ht]
+    by_contra hne
+    exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+  have hflip : b.1 = flipPos a.1 j := by
+    funext t
+    by_cases ht : t = j
+    · subst t
+      cases ha : a.1 j <;> cases hbv : b.1 j <;> simp_all [flipPos]
+    · simp [flipPos, ht, hsame t ht]
+  have hi : patchAt PT hPT a.1 = i := by
+    have hleaf : a.1 ∈ PT.tiling.leaf i := (Finset.mem_filter.mp ha).2
+    have huniq := (Classical.choose_spec
+      (hPT.tiling_valid.prefix_complete a.1)).2 i hleaf
+    simpa [patchAt] using huniq.symm
+  have hjlt : j.val < (PT.tiling.P i).ℓ := by
+    by_contra hjn
+    have hjge : (PT.tiling.P i).ℓ ≤ j.val := Nat.le_of_not_gt hjn
+    have hsamePatch := patchAt_flip_prefix PT hPT a.1 j (by simpa [hi] using hjge)
+    have hEq : patchAt PT hPT b.1 = patchAt PT hPT a.1 := by
+      rw [hflip]
+      exact hsamePatch
+    exact hb'.2 hEq
+  exact ⟨j, hjlt, hflip⟩
+
+theorem clusterCrossingNeighbours_card_le_prefix {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (a : EvenPosition T k) (ha : a ∈ evenPatchPositions PT.tiling i) :
+    (clusterCrossingNeighbours PT hPT a).card ≤ (PT.tiling.P i).ℓ := by
+  classical
+  let S := clusterCrossingNeighbours PT hPT a
+  have hEll : (PT.tiling.P i).ℓ ≤ T.S.n k := by
+    have hlen := hPT.tiling_valid.prefix_internal_length
+    have hsup : (PT.tiling.P i).ℓ ≤
+        Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ :=
+      Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+        (Finset.mem_univ i)
+    omega
+  let choice : {b : OddPosition T k // b ∈ S} → Fin (T.S.n k) := fun b =>
+    Classical.choose (clusterCrossingNeighbor_has_prefix_coord PT hPT i a ha b.1
+      (by simpa [S] using b.2))
+  have choice_spec : ∀ b : {b : OddPosition T k // b ∈ S},
+      (choice b).val < (PT.tiling.P i).ℓ ∧ b.1.1 = flipPos a.1 (choice b) := by
+    intro b
+    exact Classical.choose_spec (clusterCrossingNeighbor_has_prefix_coord PT hPT i a ha
+      b.1 (by simpa [S] using b.2))
+  let coord : {b : OddPosition T k // b ∈ S} → Fin (PT.tiling.P i).ℓ := fun b =>
+    ⟨(choice b).val, choice_spec b |>.1⟩
+  have hcoord_spec : ∀ b : {b : OddPosition T k // b ∈ S},
+      b.1.1 = flipPos a.1 ⟨(coord b).val,
+        lt_of_lt_of_le (coord b).isLt hEll⟩ := by
+    intro b
+    have hj : choice b = ⟨(coord b).val, lt_of_lt_of_le (coord b).isLt hEll⟩ := by
+      apply Fin.ext
+      rfl
+    calc
+      b.1.1 = flipPos a.1 (choice b) := (choice_spec b).2
+      _ = flipPos a.1 ⟨(coord b).val, lt_of_lt_of_le (coord b).isLt hEll⟩ := by rw [hj]
+  have hcoord_inj : Function.Injective coord := by
+    intro b c hbc
+    apply Subtype.ext
+    apply Subtype.ext
+    calc
+      b.1.1 = flipPos a.1
+          ⟨(coord b).val, lt_of_lt_of_le (coord b).isLt hEll⟩ := hcoord_spec b
+      _ = flipPos a.1
+          ⟨(coord c).val, lt_of_lt_of_le (coord c).isLt hEll⟩ := by rw [hbc]
+      _ = c.1.1 := (hcoord_spec c).symm
+  calc
+    S.card = Fintype.card {b : OddPosition T k // b ∈ S} := by simp
+    _ ≤ Fintype.card (Fin (PT.tiling.P i).ℓ) := Fintype.card_le_of_injective coord hcoord_inj
+    _ = (PT.tiling.P i).ℓ := Fintype.card_fin _
+
+theorem clusterCrossingFactorDeletion_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (M : ClusterMask PT) (hGeom : ClusterMaskGeometry PT hPT i M)
+    (f : OddPosition T k → ℝ)
+    (hfactor : ∀ r ∈ clusterKeptRows M, ∀ b ∈
+      clusterCrossingNeighbours PT hPT (M.positions r), 0 ≤ f b ∧ f b ≤ 3) :
+    (∏ r ∈ clusterKeptRows M,
+      ∏ b ∈ clusterCrossingNeighbours PT hPT (M.positions r), f b) ≤
+      3 ^ (2 * clusterCrossingRank PT M.positions M.geometric * (PT.tiling.P i).ℓ) *
+        ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by
+  classical
+  let A := clusterKeptRows M
+  let NI := clusterCrossingNonisolated PT M.positions M.geometric
+  let S := A.filter (fun r => r ∉ NI)
+  let R := A.filter (fun r => r ∈ NI)
+  let F : Fin (T.S.n k) → Finset (OddPosition T k) :=
+    fun r => clusterCrossingNeighbours PT hPT (M.positions r)
+  let rowProd : Fin (T.S.n k) → ℝ := fun r => ∏ b ∈ F r, f b
+  have hsplit : (∏ r ∈ A, rowProd r) = (∏ r ∈ S, rowProd r) * (∏ r ∈ R, rowProd r) := by
+    simpa [A, S, R] using
+      (Finset.prod_filter_mul_prod_filter_not A (fun r => r ∉ NI) rowProd).symm
+  have hallowed : (∏ r ∈ S, rowProd r) = ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by
+    symm
+    apply Finset.prod_finset_product
+    intro q
+    simp [clusterAllowedCrossings, A, S, NI, F, rowProd, clusterKeptRows]
+    constructor
+    · rintro ⟨hrow, hni, hb⟩
+      exact ⟨⟨hrow, hni⟩, hb⟩
+    · rintro ⟨⟨hrow, hni⟩, hb⟩
+      exact ⟨hrow, hni, hb⟩
+  have hRsubset : R ⊆ NI := by
+    intro r hr
+    exact (Finset.mem_filter.mp hr).2
+  have hRcard : R.card ≤ 2 * clusterCrossingRank PT M.positions M.geometric := by
+    calc
+      R.card ≤ NI.card := Finset.card_le_card hRsubset
+      _ ≤ 2 * clusterCrossingRank PT M.positions M.geometric :=
+        clusterCrossingNonisolated_card_le_two_rank PT M.positions M.geometric
+  have hrow_nonneg : ∀ r ∈ R, 0 ≤ rowProd r := by
+    intro r hr
+    apply Finset.prod_nonneg
+    intro b hb
+    exact (hfactor r (Finset.mem_filter.mp hr).1 b hb).1
+  have hrow_le : ∀ r ∈ R, rowProd r ≤ (3 : ℝ) ^ (PT.tiling.P i).ℓ := by
+    intro r hr
+    have hcard := clusterCrossingNeighbours_card_le_prefix PT hPT i (M.positions r)
+      (hGeom.1 r)
+    calc
+      rowProd r ≤ ∏ b ∈ F r, (3 : ℝ) := by
+        apply Finset.prod_le_prod₀
+        · intro b hb
+          exact (hfactor r (Finset.mem_filter.mp hr).1 b hb).1
+        · intro b hb
+          exact (hfactor r (Finset.mem_filter.mp hr).1 b hb).2
+      _ = (3 : ℝ) ^ (F r).card := by simp [rowProd, F]
+      _ ≤ (3 : ℝ) ^ (PT.tiling.P i).ℓ := by
+        exact pow_le_pow_right₀ (by norm_num) hcard
+  have hRprod : (∏ r ∈ R, rowProd r) ≤
+      (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+        (PT.tiling.P i).ℓ) := by
+    calc
+      (∏ r ∈ R, rowProd r) ≤ ∏ r ∈ R, (3 : ℝ) ^ (PT.tiling.P i).ℓ := by
+        apply Finset.prod_le_prod₀ hrow_nonneg
+        exact hrow_le
+      _ = ((3 : ℝ) ^ (PT.tiling.P i).ℓ) ^ R.card := by simp
+      _ = (3 : ℝ) ^ ((PT.tiling.P i).ℓ * R.card) := by rw [← pow_mul]
+      _ ≤ (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+          (PT.tiling.P i).ℓ) := by
+        apply pow_le_pow_right₀ (by norm_num)
+        calc
+          (PT.tiling.P i).ℓ * R.card = R.card * (PT.tiling.P i).ℓ := Nat.mul_comm _ _
+          _ ≤ (2 * clusterCrossingRank PT M.positions M.geometric) *
+              (PT.tiling.P i).ℓ := Nat.mul_le_mul_right _ hRcard
+  have hSnonneg : 0 ≤ ∏ r ∈ S, rowProd r := by
+    apply Finset.prod_nonneg
+    intro r hr
+    apply Finset.prod_nonneg
+    intro b hb
+    have hrA : r ∈ A := (Finset.mem_filter.mp hr).1
+    exact (hfactor r hrA b hb).1
+  have hAllowedNonneg : 0 ≤ ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by
+    rw [← hallowed]
+    exact hSnonneg
+  calc
+    (∏ r ∈ A, rowProd r) = (∏ r ∈ S, rowProd r) * (∏ r ∈ R, rowProd r) := hsplit
+    _ ≤ (∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2) *
+        (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+          (PT.tiling.P i).ℓ) := by
+      rw [hallowed]
+      exact mul_le_mul_of_nonneg_left hRprod hAllowedNonneg
+    _ = (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+        (PT.tiling.P i).ℓ) *
+        ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by ring
 
 theorem two_exp_le_exp_two_pow {n : ℕ} (hn : 1 ≤ n) :
     2 * Real.exp (n : ℝ) ≤ (Real.exp 2) ^ n := by

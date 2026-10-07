@@ -329,14 +329,21 @@ theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
 /-- P15.4b: core removal counts, forest/rank sparsity and crossing-factor deletion. -/
 theorem high_cluster_geometry (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterGeometryClaim κ T := by
-  filter_upwards [Filter.Eventually.of_forall (fun _ : ℕ => True.intro)] with k _
+  have hNormEventually :=
+    HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_normalizedHit_bounds hκ T
+  filter_upwards [hNormEventually] with k hNorm
   intro PT hPT hm
   refine ⟨?_, ?_, ?_, ?_⟩
   · sorry
   · sorry
   · intro vs G
     exact HypercubeRamsey.Lane_q_s15_c2.clusterCrossingNonisolated_card_le_two_rank PT vs G
-  · sorry
+  · intro i x hx M hGeom ys
+    apply HypercubeRamsey.Lane_q_s15_c2.clusterCrossingFactorDeletion_le PT hPT i M hGeom
+      (fun b => normalizedHit (T.S.E k) PT.tiling.c
+        (PT.π (patchAt PT hPT b.1)) x (ys b))
+    intro r hr b hb
+    exact hNorm PT hPT hm i x hx b (ys b)
 
 set_option maxHeartbeats 1000000 in
 /-- P15.4c: the small-bin core repeat cost. -/

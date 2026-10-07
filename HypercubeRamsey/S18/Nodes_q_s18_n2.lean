@@ -2149,4 +2149,151 @@ theorem protocol_code_exponential_bound (P : TransferProtocol X)
             Real.exp_le_exp.mpr (le_trans hlogCode hcodeExp)
   simpa [M, alph, n, L] using hcodeBound
 
+/-- Pointwise comparison of normalized label kernels after removing a set of
+tests, provided both prefixes are broad and the removed tests lose at most the
+specified exponential factor. The side data remains fixed. -/
+theorem deletionWeight_le_exp
+    (D : LateData hPT) (j : Fin D.geom.r) {b : Pos T k}
+    (side : D.encoding.base.RowOut b) (omitted : Finset (Fin (T.S.n k)))
+    (hfull : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side Finset.univ)
+    (hleave : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side (Finset.univ \ omitted))
+    (hcompare : Real.exp (-D.error b j) *
+      D.retainedMass j side (Finset.univ \ omitted) ≤
+        D.retainedMass j side Finset.univ) :
+    ∀ y, D.labelWeight j side Finset.univ y ≤
+      Real.exp (D.error b j) *
+        D.labelWeight j side (Finset.univ \ omitted) y := by
+  classical
+  intro y
+  have hfullPos : 0 < D.retainedMass j side Finset.univ :=
+    lt_of_lt_of_le (Real.exp_pos _) hfull
+  have hleavePos : 0 < D.retainedMass j side (Finset.univ \ omitted) :=
+    lt_of_lt_of_le (Real.exp_pos _) hleave
+  have hcutfull : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side Finset.univ := hfull
+  have hcutleave : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side (Finset.univ \ omitted) := hleave
+  have hratio : D.retainedMass j side (Finset.univ \ omitted) /
+      D.retainedMass j side Finset.univ ≤ Real.exp (D.error b j) := by
+    apply (div_le_iff₀ hfullPos).2
+    have hexp : Real.exp (D.error b j) * Real.exp (-D.error b j) = 1 := by
+      rw [← Real.exp_add, add_neg_cancel, Real.exp_zero]
+    calc
+      D.retainedMass j side (Finset.univ \ omitted) =
+          (Real.exp (D.error b j) * Real.exp (-D.error b j)) *
+            D.retainedMass j side (Finset.univ \ omitted) := by rw [hexp, one_mul]
+      _ = Real.exp (D.error b j) *
+            (Real.exp (-D.error b j) * D.retainedMass j side (Finset.univ \ omitted)) := by ring
+      _ ≤ Real.exp (D.error b j) * D.retainedMass j side Finset.univ :=
+        mul_le_mul_of_nonneg_left hcompare (le_of_lt (Real.exp_pos _))
+  have hweight : 0 ≤ D.maskWeight side y := by
+    unfold LateData.maskWeight
+    split_ifs <;> positivity
+  by_cases hpass : D.passes j side Finset.univ y
+  · have hpassLeave : D.passes j side (Finset.univ \ omitted) y := by
+      intro a ha
+      exact hpass a (Finset.mem_univ a)
+    simp only [LateData.labelWeight, if_pos hcutfull, if_pos hcutleave,
+      if_pos hpass, if_pos hpassLeave]
+    have hquot : D.maskWeight side y /
+        D.retainedMass j side Finset.univ =
+          (D.maskWeight side y /
+            D.retainedMass j side (Finset.univ \ omitted)) *
+              (D.retainedMass j side (Finset.univ \ omitted) /
+                D.retainedMass j side Finset.univ) := by
+      field_simp
+    calc
+      D.maskWeight side y / D.retainedMass j side Finset.univ =
+          (D.maskWeight side y /
+            D.retainedMass j side (Finset.univ \ omitted)) *
+              (D.retainedMass j side (Finset.univ \ omitted) /
+                D.retainedMass j side Finset.univ) := hquot
+      _ ≤ (D.maskWeight side y /
+            D.retainedMass j side (Finset.univ \ omitted)) *
+              Real.exp (D.error b j) :=
+        mul_le_mul_of_nonneg_left hratio (div_nonneg hweight hleavePos.le)
+      _ = Real.exp (D.error b j) *
+            (D.maskWeight side y /
+              D.retainedMass j side (Finset.univ \ omitted)) := by ring
+  · simp only [LateData.labelWeight, if_pos hcutfull, if_pos hcutleave,
+      if_neg hpass]
+    by_cases hpassLeave : D.passes j side (Finset.univ \ omitted) y
+    · simp only [if_pos hpassLeave]
+      positivity
+    · simp only [if_neg hpassLeave]
+      positivity
+
+/-- Integrate a pointwise deletion comparison against a hit indicator. The
+leave-out moment is the normalized masked mass from `prefixMoments`. -/
+theorem hitWeight_sum_le_of_deletion
+    (D : LateData hPT) (j : Fin D.geom.r) {b : Pos T k}
+    (side : D.encoding.base.RowOut b) (omitted : Finset (Fin (T.S.n k)))
+    (x : Fin (T.S.N k)) (c : ℝ)
+    (hcut : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side (Finset.univ \ omitted))
+    (hmoment :
+      (∑ y, if D.passes j side (Finset.univ \ omitted) y ∧
+        Hits (T.S.E k) PT.tiling.c x y then D.maskWeight side y else 0) /
+        D.retainedMass j side (Finset.univ \ omitted) ≤ c)
+    (hpointwise : ∀ y, D.labelWeight j side Finset.univ y ≤
+      Real.exp (D.error b j) *
+        D.labelWeight j side (Finset.univ \ omitted) y) :
+    (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+      then D.labelWeight j side Finset.univ y else 0) ≤
+        Real.exp (D.error b j) * c := by
+  classical
+  have hleavePos : 0 < D.retainedMass j side (Finset.univ \ omitted) :=
+    lt_of_lt_of_le (Real.exp_pos _) hcut
+  have hleaveSum :
+      (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+        then D.labelWeight j side (Finset.univ \ omitted) y else 0) =
+      (∑ y, if D.passes j side (Finset.univ \ omitted) y ∧
+        Hits (T.S.E k) PT.tiling.c x y then D.maskWeight side y else 0) /
+          D.retainedMass j side (Finset.univ \ omitted) := by
+    unfold LateData.labelWeight
+    simp only [if_pos hcut]
+    rw [Finset.sum_div]
+    apply Finset.sum_congr rfl
+    intro y hy
+    by_cases hhit : Hits (T.S.E k) PT.tiling.c x y <;>
+      by_cases hpass : D.passes j side (Finset.univ \ omitted) y <;>
+      simp [hhit, hpass]
+  have hsum :
+      (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+        then D.labelWeight j side Finset.univ y else 0) ≤
+      Real.exp (D.error b j) *
+        (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+          then D.labelWeight j side (Finset.univ \ omitted) y else 0) := by
+    calc
+      (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+          then D.labelWeight j side Finset.univ y else 0) ≤
+        ∑ y, if Hits (T.S.E k) PT.tiling.c x y then
+          Real.exp (D.error b j) * D.labelWeight j side (Finset.univ \ omitted) y else 0 := by
+            apply Finset.sum_le_sum
+            intro y hy
+            by_cases hhit : Hits (T.S.E k) PT.tiling.c x y
+            · simpa [hhit] using hpointwise y
+            · simp [hhit]
+      _ = Real.exp (D.error b j) *
+          (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+            then D.labelWeight j side (Finset.univ \ omitted) y else 0) := by
+              rw [Finset.mul_sum]
+              apply Finset.sum_congr rfl
+              intro y hy
+              by_cases hhit : Hits (T.S.E k) PT.tiling.c x y <;> simp [hhit]
+  calc
+    (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+        then D.labelWeight j side Finset.univ y else 0) ≤
+      Real.exp (D.error b j) *
+        (∑ y, if Hits (T.S.E k) PT.tiling.c x y
+          then D.labelWeight j side (Finset.univ \ omitted) y else 0) := hsum
+    _ = Real.exp (D.error b j) *
+        ((∑ y, if D.passes j side (Finset.univ \ omitted) y ∧
+          Hits (T.S.E k) PT.tiling.c x y then D.maskWeight side y else 0) /
+            D.retainedMass j side (Finset.univ \ omitted)) := by rw [hleaveSum]
+    _ ≤ Real.exp (D.error b j) * c :=
+      mul_le_mul_of_nonneg_left hmoment (le_of_lt (Real.exp_pos _))
+
 end HypercubeRamsey.S18.Lane_q_s18_n2

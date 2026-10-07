@@ -9,6 +9,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5b
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
@@ -675,7 +676,41 @@ theorem P18_5b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
             endpointProbability D C H A assignment ≤
               Real.exp (Cs * D.geom.r + Cp * A.rows.card * D.rank A.rows) * KL ^ A.rows.card *
                 A.termTest C assignment := by
-  sorry
+  have hKL : 1 ≤ 32 * Real.exp (24 + K27) := by
+    have he : 1 ≤ Real.exp (24 + K27) := by
+      calc
+        (1 : ℝ) = Real.exp 0 := by simp
+        _ ≤ Real.exp (24 + K27) := Real.exp_le_exp.mpr (by linarith)
+    nlinarith
+  refine ⟨32 * Real.exp (24 + K27), 8, 1, hKL, by norm_num, by norm_num, ?_⟩
+  obtain ⟨Kpair, hKpair, hPairs⟩ := P18_5a hκ T δ hδ
+  obtain ⟨Kβ, hKβ, hSchedule, hsmall⟩ := L18_0a hκ T
+  have hscale : ∀ᶠ k in atTop, 8 * κ.KB < densityScale T k :=
+    T.S.ratio_tendsto.eventually_gt_atTop (8 * κ.KB)
+  filter_upwards [hPairs, hsmall (1 / 1000) (by norm_num), hscale,
+    Lane_sol_s18_5b.eventually_query_size T] with k hPair hSmall hScale hQuery
+  intro PT hPT D hD hTransition hLocal εterm εrun C H A assignment
+  have hs := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hs₁ : SmallErrors κ T k PT D.geom 1 :=
+    fun i => (hs i).trans (by norm_num)
+  have herr (v : Pos T k) (j : Fin D.geom.r) : D.error v j ≤ 1 / 1000 :=
+    Lane_sol_s18_n5.smallErrors_error_le D (1 / 1000) hs v j
+  have hPairFacts := hPair PT hPT D hD hTransition
+  have hm (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+      (hf : D.full δ x h) (v : Pos T k) (hv : v ∈ A.rows) :
+      0 < ∑ y, Lane_sol_s18_n5.finalWeight D h v y := by
+    have heven : IsEvenRole v := (Finset.mem_filter.mp (A.rows_subset hv)).2.1
+    exact Lane_sol_s18_n5.full_finalWeight_pos D δ x h hf v heven
+      (fun j hj => Lane_sol_s18_n5.currentCap_lt_one hκ D hLocal.1 hScale δ x h hf v j hj)
+      (fun j => lt_of_le_of_lt (herr v j) (by norm_num))
+  have hZ (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+      (hf : D.full δ x h) (v : Pos T k) (hv : v ∈ A.rows) :
+      (1 / 2 : ℝ) ≤ ∑ p : Fin (T.S.N k) × Fin (T.S.N k),
+        if D.nonconflict v p.1 p.2 then (D.finalPrior h v).w p.1 * (D.finalPrior h v).w p.2 else 0 :=
+    (hPairFacts.2.2.2.2 x h hf v (Finset.mem_filter.mp (A.rows_subset hv)).2.1).1
+  have hcard : (A.rows.card : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast A.small
+  simpa only [one_mul] using Lane_sol_s18_5b.endpoint_comparison D hTransition hK.le hLocal.2.1 hs₁ C H A assignment
+    (hcard.trans hQuery) (fun v hv j => (herr v j).trans (by norm_num)) hm hZ
 
 /-- P18.5c, 18:1027–1056. Terminal → fixed-pool resampling → iid pools;
 the stronger pool gate remains through the fixed-pool comparison. The last

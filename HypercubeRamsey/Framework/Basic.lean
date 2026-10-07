@@ -42,6 +42,26 @@ def BadSeq.comp (S : BadSeq) (φ : ℕ → ℕ) (hφ : StrictMono φ) : BadSeq w
 /-- If the hypercube Ramsey number is not linear, a bad sequence exists. -/
 theorem badSeq_of_not_linear
     (hnot : ¬ ∃ C : ℝ, 0 < C ∧ ∀ n : ℕ, (ramseyNumber (cube n) : ℝ) ≤ C * (2 : ℝ) ^ n) :
-    Nonempty BadSeq := sorry
+    Nonempty BadSeq := by
+  obtain ⟨d, N, E, hd, hratio, hpos, hbound, hno⟩ :=
+    counterexample_sequence_of_not_linear hnot
+  refine ⟨{
+    n := d
+    N := N
+    E := E
+    n_tendsto := hd
+    ratio_tendsto := hratio
+    N_pos := hpos
+    N_le := hbound
+    no_cube := ?_ }⟩
+  intro k c
+  cases c with
+  | false =>
+      change ¬ Nonempty ((cube (d k)).Copy
+        (crossGraph (fun x y => ¬ E k x y)))
+      exact (hno k).2
+  | true =>
+      change ¬ Nonempty ((cube (d k)).Copy (crossGraph (E k)))
+      exact (hno k).1
 
 end HypercubeRamsey

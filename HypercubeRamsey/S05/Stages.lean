@@ -1,5 +1,6 @@
 import HypercubeRamsey.S05.Assembly
 import HypercubeRamsey.S05.Needs
+import HypercubeRamsey.S05.Stages_p_s05_h
 
 /-!
 # L5.1f–j and L5.1l: posterior, avoidance, rarity, and load interfaces
@@ -77,27 +78,27 @@ structure AlarmStage5 (Ω : Type*) [Fintype Ω] where
 /-- L5.1h1: parent restriction removes the stage-1 alarms at the charged cost. -/
 theorem L5_1h1_parent {Ω : Type*} [Fintype Ω] (A : AlarmStage5 Ω)
     (hcharge : A.charge < 1) : ∃ Q : FinProb Ω, ∀ ω, Q.w ω ≠ 0 → ¬ A.alarm ω := by
-  sorry
+  exact FinProb.condition_away5 A.raw A.alarm (lt_of_le_of_lt A.alarm_mass hcharge)
 
 /-- L5.1h2: coarse-base restriction removes the stage-2 alarms at the charged cost. -/
 theorem L5_1h2_coarse_base {Ω : Type*} [Fintype Ω] (A : AlarmStage5 Ω)
     (hcharge : A.charge < 1) : ∃ Q : FinProb Ω, ∀ ω, Q.w ω ≠ 0 → ¬ A.alarm ω := by
-  sorry
+  exact FinProb.condition_away5 A.raw A.alarm (lt_of_le_of_lt A.alarm_mass hcharge)
 
 /-- L5.1h3: high-key restriction removes the stage-3 alarms at the charged cost. -/
 theorem L5_1h3_high_keys {Ω : Type*} [Fintype Ω] (A : AlarmStage5 Ω)
     (hcharge : A.charge < 1) : ∃ Q : FinProb Ω, ∀ ω, Q.w ω ≠ 0 → ¬ A.alarm ω := by
-  sorry
+  exact FinProb.condition_away5 A.raw A.alarm (lt_of_le_of_lt A.alarm_mass hcharge)
 
 /-- L5.1h4: separate optional-key pretrims retain the stage-4 good histories. -/
 theorem L5_1h4_optional_pretrims {Ω : Type*} [Fintype Ω] (A : AlarmStage5 Ω)
     (hcharge : A.charge < 1) : ∃ Q : FinProb Ω, ∀ ω, Q.w ω ≠ 0 → ¬ A.alarm ω := by
-  sorry
+  exact FinProb.condition_away5 A.raw A.alarm (lt_of_le_of_lt A.alarm_mass hcharge)
 
 /-- L5.1h5: low-key restriction removes the stage-5 alarms at the charged cost. -/
 theorem L5_1h5_low_keys {Ω : Type*} [Fintype Ω] (A : AlarmStage5 Ω)
     (hcharge : A.charge < 1) : ∃ Q : FinProb Ω, ∀ ω, Q.w ω ≠ 0 → ¬ A.alarm ω := by
-  sorry
+  exact FinProb.condition_away5 A.raw A.alarm (lt_of_le_of_lt A.alarm_mass hcharge)
 
 /-- A finite five-stage alarm family measured under one common raw law. The full Section 5 proof uses the
 more refined entering-history kernels; this is the finite union contract used by the final positivity step. -/
@@ -112,7 +113,24 @@ structure FiveStageAvoidance5 (Ω : Type*) [Fintype Ω] where
 /-- L5.1h: all five history tests can be imposed while retaining positive raw mass. -/
 theorem L5_1h_five_stage (Ω : Type*) [Fintype Ω] (A : FiveStageAvoidance5 Ω) :
     ∃ ω, (∀ t, ¬ A.alarm t ω) := by
-  sorry
+  classical
+  have hunion :
+      A.raw.pr (fun ω => ∃ t, A.alarm t ω) ≤ ∑ t, A.raw.pr (A.alarm t) :=
+    FinProb.pr_exists_le_sum5 A.raw A.alarm
+  have hlt : A.raw.pr (fun ω => ∃ t, A.alarm t ω) < 1 := by
+    calc
+      A.raw.pr (fun ω => ∃ t, A.alarm t ω) ≤ ∑ t, A.raw.pr (A.alarm t) := hunion
+      _ ≤ ∑ t, A.charge t := Finset.sum_le_sum fun t _ => A.entering_mass t
+      _ < 1 := A.total_charge
+  by_contra h
+  have hall : ∀ ω, ∃ t, A.alarm t ω := by
+    intro ω
+    by_contra hn
+    exact h ⟨ω, fun t ht => hn ⟨t, ht⟩⟩
+  have hmass : A.raw.pr (fun ω => ∃ t, A.alarm t ω) = 1 := by
+    unfold FinProb.pr
+    simp [hall, A.raw.sum_eq_one]
+  linarith
 
 /-- L5.1i: a tuple whose coordinate law is dominated by `M` times a product reference has few entries in a
 small label set. -/

@@ -20,6 +20,7 @@ import HypercubeRamsey.S18.Risk_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_3e
 import HypercubeRamsey.S18.Swap_sol_s18_n4
 import HypercubeRamsey.S18.Locality_sol_s18_n4
 import HypercubeRamsey.S18.Cost_sol_s18_n4
@@ -670,6 +671,14 @@ theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
         Nonempty (LeafCoupling D δ) := by
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+  intro PT hPT D hD hR hRisk
+  have hn : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+  suffices hinputs : Nonempty (Lane_sol_s18_3e.CanonicalLeafInputs D δ) by
+    obtain ⟨X⟩ := hinputs
+    exact ⟨Lane_sol_s18_3e.leafCouplingOfInputs D δ hRisk X
+      (Lane_sol_s18_3e.late_probability_local D hD hR) hn⟩
+  -- Supply the geometric counts and patch-wise pool swaps with local tape conditioning.
   sorry
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform

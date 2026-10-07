@@ -79,6 +79,6 @@ theorem even_load_prob (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ :
         ∑ ω, (prepLaw M tag q q').w ω *
             (if SPre M tag ω then (J ω).pr (fun f => ∃ x, 1 < evenCol M tag ω f x) else 0) ≤
           1 / 10 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.even_load_prob_proof β γ K hβ hβγ hγ hK
 
 end HypercubeRamsey.S04

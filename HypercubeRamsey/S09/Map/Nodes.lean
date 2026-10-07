@@ -179,12 +179,32 @@ hypergeometric estimates (`hypergeometric_intersection_tail`) bound the residual
 the overlap at one level is at most `V e^{-c₀ R'}`. -/
 theorem p92_height_overlap (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (hadm : hc.Admissible) :
     ∃ K > (0 : ℝ), ∃ c₀ > (0 : ℝ), ∃ n₀ : ℕ, ∀ n ≥ n₀, HeightOverlap9 P hc n K c₀ := by
-  obtain ⟨nGeom, hGeom⟩ := Lane_q_s09_map.height_counts9_special_le_n P hP
-  refine ⟨16, by norm_num, 1, by norm_num, max 2 nGeom, ?_⟩
+  obtain ⟨nSmall, hSmall⟩ := Lane_q_s09_map.height_base_small_scales9 P hP
+  obtain ⟨nVol, hVol⟩ := Lane_q_s09_map.height_counts9_volume_bounds P hP
+  refine ⟨256, by norm_num, 1, by norm_num, max nSmall nVol, ?_⟩
   intro n hn v v' R' j hR hsep
-  have hn2 : 2 ≤ n := le_trans (le_max_left 2 nGeom) hn
-  have hnGeom : nGeom ≤ n := le_trans (le_max_right 2 nGeom) hn
-  have hmle : P.m n ≤ n := hGeom n hnGeom
+  have hnSmall : nSmall ≤ n := le_trans (le_max_left _ _) hn
+  have hnVol : nVol ≤ n := le_trans (le_max_right _ _) hn
+  have hsmall := hSmall n hnSmall
+  have hvolume := hVol n hnVol
+  have hmle : P.m n ≤ n := by
+    have h : (P.m n : ℝ) ≤ (n : ℝ) := by linarith [hsmall.1]
+    exact_mod_cast h
+  have hrd : P.radius n ≤ n - P.m n := hvolume.2.1
+  let U : Finset (Pos9 P hc n) := consulted9 (P := P) v R' ∩ consulted9 v' R'
+  let T : Finset (Pos9 P hc n) := U.filter (fun c => c.level = j)
+  let sliceRadius : ℕ := 2 * R' + 1
+  let residualRadius : ℕ := P.radius n + 2 * R' + 1
+  let sliceBall : Finset (CubeVertex (P.m n)) :=
+    Finset.univ.filter (fun z =>
+      _root_.hammingDist z (specialWord9 (P.m n) v) ≤ sliceRadius ∧
+        _root_.hammingDist z (specialWord9 (P.m n) v') ≤ sliceRadius)
+  let residualIntersection : Finset (CubeVertex (n - P.m n)) :=
+    Finset.univ.filter (fun z =>
+      _root_.hammingDist z (residualWord9 (P.m n) v) ≤ residualRadius ∧
+        _root_.hammingDist z (residualWord9 (P.m n) v') ≤ residualRadius)
+  change (T.card : ℝ) ≤
+    (residualBall9 P n : ℝ) * Real.exp (-(1 * (R' : ℝ)))
   have hlocal : ∀ c : Pos9 P hc n,
       c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R' →
         _root_.hammingDist c.slice (specialWord9 (P.m n) v) ≤ 2 * R' + 1 ∧
@@ -193,14 +213,132 @@ theorem p92_height_overlap (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P) (
         _root_.hammingDist c.location (residualWord9 (P.m n) v') ≤ P.radius n + 2 * R' + 1 := by
     intro c hc
     exact Lane_q_s09_map.sharedConsulted_local_bounds v v' R' c hc
-  have _hresidualSeparation (c : Pos9 P hc n)
+  have hresidualSeparation (c : Pos9 P hc n)
       (hshared : c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R') :
-      12 * R' - 2 ≤
-        _root_.hammingDist (residualWord9 (P.m n) v) (residualWord9 (P.m n) v') :=
-    Lane_q_s09_map.sharedConsulted_residual_separation hmle v v' R' hsep c hshared
-  -- The remaining estimate is the shell/hypergeometric bound for the two residual balls,
-  -- combined with the count of consulted slices.
-  sorry
+      (252 : ℝ) * R' - 2 ≤
+        (_root_.hammingDist (residualWord9 (P.m n) v)
+          (residualWord9 (P.m n) v') : ℝ) := by
+    have hsepR := Lane_q_s09_map.sharedConsulted_residual_separation_general9
+      hmle v v' R' 256 hsep c hshared
+    norm_num at hsepR
+    linarith [hsepR]
+  by_cases hTempty : T = ∅
+  · rw [hTempty]
+    simp
+    positivity
+  · have hTne : T.Nonempty := Finset.nonempty_iff_ne_empty.mpr hTempty
+    obtain ⟨c, hcT⟩ := hTne
+    have hcU : c ∈ U := (Finset.mem_filter.mp hcT).1
+    have hsmallConsult : 100 * R' ≤ P.radius n := by
+      have hsepRes := hresidualSeparation c hcU
+      have hl := hlocal c hcU
+      have hupperNat :
+          _root_.hammingDist (residualWord9 (P.m n) v)
+              (residualWord9 (P.m n) v') ≤
+            2 * (P.radius n + 2 * R' + 1) := by
+        calc
+          _ ≤ _root_.hammingDist (residualWord9 (P.m n) v) c.location +
+              _root_.hammingDist c.location (residualWord9 (P.m n) v') :=
+                _root_.hammingDist_triangle _ _ _
+          _ ≤ (P.radius n + 2 * R' + 1) +
+              (P.radius n + 2 * R' + 1) := by
+                exact Nat.add_le_add
+                  (by simpa [_root_.hammingDist_comm] using hl.2.2.1) hl.2.2.2
+          _ = 2 * (P.radius n + 2 * R' + 1) := by omega
+      have hupperR :
+          (_root_.hammingDist (residualWord9 (P.m n) v)
+            (residualWord9 (P.m n) v') : ℝ) ≤
+            2 * ((P.radius n + 2 * R' + 1 : ℕ) : ℝ) := by exact_mod_cast hupperNat
+      have hRle : (100 : ℝ) * R' ≤ (P.radius n : ℝ) := by
+        have hRpos : (1 : ℝ) ≤ R' := by exact_mod_cast hR
+        have hlow : (252 : ℝ) * R' - 2 ≤
+            (_root_.hammingDist (residualWord9 (P.m n) v)
+              (residualWord9 (P.m n) v') : ℝ) := hsepRes
+        have hupr : (_root_.hammingDist (residualWord9 (P.m n) v)
+            (residualWord9 (P.m n) v') : ℝ) ≤
+              2 * ((P.radius n : ℝ) + 2 * R' + 1) := by
+          have hcast : ((P.radius n + 2 * R' + 1 : ℕ) : ℝ) =
+              (P.radius n : ℝ) + 2 * R' + 1 := by norm_num
+          rw [hcast] at hupperR
+          exact hupperR
+        nlinarith [hlow, hupr, hRpos]
+      exact_mod_cast hRle
+    have hconsultRadius : (P.radius n + 2 * R' + 1 : ℕ) ≤ n - P.m n := by
+      have hrr : (P.radius n : ℝ) ≤ (n : ℝ) / 4 := hsmall.2.1
+      have hm : (P.m n : ℝ) ≤ (n : ℝ) / 4 := hsmall.1
+      have hd : ((n - P.m n : ℕ) : ℝ) = (n : ℝ) - (P.m n : ℝ) :=
+        Nat.cast_sub hmle
+      have hReal : (P.radius n : ℝ) + 2 * R' + 1 ≤
+          ((n - P.m n : ℕ) : ℝ) := by
+        have hr11 : 11 ≤ (P.radius n : ℝ) := by exact_mod_cast hsmall.2.2
+        have hRcast : (100 : ℝ) * R' ≤ (P.radius n : ℝ) := by exact_mod_cast hsmallConsult
+        rw [hd]
+        nlinarith [hrr, hm, hr11, hRcast]
+      exact_mod_cast hReal
+    let sliceBallOne : Finset (CubeVertex (P.m n)) :=
+      Finset.univ.filter (fun z : CubeVertex (P.m n) =>
+        _root_.hammingDist z (specialWord9 (P.m n) v) ≤ sliceRadius)
+    have hsliceSub : sliceBall ⊆ sliceBallOne := by
+      intro z hz
+      simp only [sliceBall, Finset.mem_filter, Finset.mem_univ, true_and] at hz
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hz.1⟩
+    have hsliceCard : sliceBall.card ≤
+        ∑ i ∈ Finset.range (sliceRadius + 1), Nat.choose (P.m n) i := by
+      calc
+        sliceBall.card ≤ sliceBallOne.card := Finset.card_le_card hsliceSub
+        _ = _ := Lane_q_s09_map.height_hamming_ball_card9 (P.m n) sliceRadius
+          (specialWord9 (P.m n) v)
+    have hresidualCard : residualIntersection.card ≤
+        (Finset.univ.filter (fun z : CubeVertex (n - P.m n) =>
+          _root_.hammingDist z (residualWord9 (P.m n) v) ≤ residualRadius)).card := by
+      apply Finset.card_le_card
+      intro z hz
+      simp only [residualIntersection, Finset.mem_filter, Finset.mem_univ, true_and] at hz
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hz.1⟩
+    have hmap : ∀ z, z ∈ T → (z.slice, z.location) ∈ sliceBall ×ˢ residualIntersection := by
+      intro z hz
+      have hzU : z ∈ U := (Finset.mem_filter.mp hz).1
+      have hzLocal := hlocal z hzU
+      rw [Finset.mem_product]
+      constructor
+      · simp only [sliceBall, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hzLocal.1, hzLocal.2.1⟩
+      · simp only [residualIntersection, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hzLocal.2.2.1, hzLocal.2.2.2⟩
+    have hinj : Set.InjOn (fun z : Pos9 P hc n => (z.slice, z.location)) T := by
+      intro z hz z' hz' hpair
+      have hzlev := (Finset.mem_filter.mp hz).2
+      have hz'lev := (Finset.mem_filter.mp hz').2
+      have hslice : z.slice = z'.slice := congrArg Prod.fst hpair
+      have hloc : z.location = z'.location := congrArg Prod.snd hpair
+      cases z with
+      | mk sl lc lv =>
+        cases z' with
+        | mk sl' lc' lv' =>
+          simp_all
+    have himage : T.card = (T.image (fun z : Pos9 P hc n => (z.slice, z.location))).card :=
+      (Finset.card_image_of_injOn hinj).symm
+    have himageSub : T.image (fun z : Pos9 P hc n => (z.slice, z.location)) ⊆
+        sliceBall ×ˢ residualIntersection := by
+      intro p hp
+      rcases Finset.mem_image.mp hp with ⟨z, hz, rfl⟩
+      exact hmap z hz
+    have hcardReduction : T.card ≤ sliceBall.card * residualIntersection.card := by
+      calc
+        T.card = (T.image (fun z : Pos9 P hc n => (z.slice, z.location))).card := himage
+        _ ≤ (sliceBall ×ˢ residualIntersection).card := Finset.card_le_card himageSub
+        _ = sliceBall.card * residualIntersection.card := by rw [Finset.card_product]
+    have hsliceVolume : (sliceBall.card : ℝ) ≤
+        (∑ i ∈ Finset.range (sliceRadius + 1), (Nat.choose (P.m n) i : ℝ)) := by
+      exact_mod_cast hsliceCard
+    have hresidualVolume : (residualIntersection.card : ℝ) ≤
+        (∑ i ∈ Finset.range (residualRadius + 1),
+          (Nat.choose (n - P.m n) i : ℝ)) := by
+      have hcardBall := Lane_q_s09_map.height_hamming_ball_card9 (n - P.m n) residualRadius
+        (residualWord9 (P.m n) v)
+      exact_mod_cast hresidualCard.trans (by simpa using le_of_eq hcardBall)
+    -- The remaining step is the joint special/residual shell estimate.
+    sorry
 
 /-- P9.2-map1, scale induction (09:93–100): with degraded thresholds at successive scales for every crowd count
 and the eligible-set size, deletion of overlaps to private child regions (holes are preserved; the loss of a count

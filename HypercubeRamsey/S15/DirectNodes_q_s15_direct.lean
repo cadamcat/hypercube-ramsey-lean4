@@ -343,6 +343,49 @@ theorem weight_le_pr {α : Type*} [Fintype α] (P : FinProb α) (A : α → Prop
       Finset.single_le_sum (fun y hy => P.nonneg y) hx
     _ = ∑ y, if A y then P.w y else 0 := by rw [Finset.sum_filter]
 
+theorem row_mass_failure_subset {cross bulk row threshold : ℝ}
+    (hrow : row = cross * bulk) (hsmall : threshold ≤ 1 / 10)
+    (hbad : row < 1 / 2) :
+    |cross - 1| > threshold ∨ (9 / 10 ≤ cross ∧ bulk < 3 / 4) := by
+  by_cases hcrossBad : |cross - 1| > threshold
+  · exact Or.inl hcrossBad
+  · right
+    have hclose : |cross - 1| ≤ threshold := le_of_not_gt hcrossBad
+    have hcrossLower : 9 / 10 ≤ cross := by
+      rw [abs_le] at hclose
+      linarith
+    have hbulkLt : bulk < 5 / 9 := by
+      by_contra hnot
+      have hbulkLower : 5 / 9 ≤ bulk := le_of_not_gt hnot
+      have hprod : 1 / 2 ≤ cross * bulk := by
+        calc
+          (1 / 2 : ℝ) = (9 / 10) * (5 / 9) := by norm_num
+          _ ≤ (9 / 10) * bulk :=
+            mul_le_mul_of_nonneg_left hbulkLower (by norm_num)
+          _ ≤ cross * bulk :=
+            mul_le_mul_of_nonneg_right hcrossLower (le_trans (by norm_num) hbulkLower)
+      rw [hrow] at hbad
+      linarith
+    exact ⟨hcrossLower, lt_of_lt_of_le hbulkLt (by norm_num)⟩
+
+theorem finLaw_pr_union {α : Type*} [Fintype α] (P : FinLaw α) (A B : α → Prop) :
+    P.pr (fun x => A x ∨ B x) ≤ P.pr A + P.pr B := by
+  classical
+  let C : α → Prop := fun x => A x ∨ B x
+  letI : DecidablePred A := fun x => Classical.propDecidable (A x)
+  letI : DecidablePred B := fun x => Classical.propDecidable (B x)
+  letI : DecidablePred C := fun x => Classical.propDecidable (C x)
+  change P.pr C ≤ P.pr A + P.pr B
+  unfold FinLaw.pr
+  calc
+    (∑ x, if C x then P.w x else 0) ≤
+        ∑ x, ((if A x then P.w x else 0) + (if B x then P.w x else 0)) := by
+      apply Finset.sum_le_sum
+      intro x hx
+      by_cases hA : A x <;> by_cases hB : B x <;> simp [C, hA, hB, P.nonneg x]
+    _ = (∑ x, if A x then P.w x else 0) + ∑ x, if B x then P.w x else 0 := by
+      rw [Finset.sum_add_distrib]
+
 theorem prefix_ratio_le_exp {n ell N : ℕ} (hell : 2 * ell ≤ n)
     (hN : (2 : ℝ) ^ n ≤ N) :
     (2 : ℝ) ^ ell / N ≤ Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by

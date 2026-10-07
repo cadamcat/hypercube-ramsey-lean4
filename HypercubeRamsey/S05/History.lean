@@ -4,6 +4,8 @@ import HypercubeRamsey.S05.History_q_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
+import HypercubeRamsey.S05.History_sol_s05_h5l_lll
+import HypercubeRamsey.S05.History_sol_s05_h5l_local
 import HypercubeRamsey.S05.Parent_sol_s05_h1
 
 /-!
@@ -777,6 +779,228 @@ def Stage5Law (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N) (ν : FinP
   (∀ (Λ : Finset X.LowIdx) (W : X.LowHid → ℝ) (M : ℝ), (∀ lo, 0 ≤ W lo) →
     (∀ lo, (X.resampleLow tr Λ lo).expect W ≤ M) → ν.expect W ≤ 2 ^ Λ.card * M) ∧
   ∀ lo, ν.w lo ≠ 0 → ∀ k h, (X.prior b (.inl k)).w (lo k h) ≠ 0
+
+set_option maxHeartbeats 800000 in
+private theorem low_step3_pretrim_mean (b : X.Base) (hi : X.HighHid)
+    (tr : X.LowIdx → Law N) (cL cH : ℝ) (hraw : X.Step3Raw cL cH)
+    (hb : X.baseLaw.w b ≠ 0) (hpass : X.Step1Pass b) (htr : X.Stage4Laws b hi tr)
+    (k : X.LowIdx) (r : X.AbsRecord) (hr : X.RecOccurs r) (hkey : r.1 = .inl k) :
+    (X.lowLawOf tr).expect (fun lo => X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      2 * Real.exp (-(cL * X.p.kPrime n k.2.2.val)) := by
+  rcases r with ⟨ℓ, data⟩
+  change ℓ = .inl k at hkey
+  subst ℓ
+  let P : X.LowIdx → FinProb (Fin 1 → Fin N) := fun k => FinProb.pi fun _ => tr k
+  let Praw : FinProb (Fin 1 → Fin N) := FinProb.pi fun _ => X.prior b (.inl k)
+  let F : X.LowHid → ℝ := fun lo => X.step3Rate (b, X.joinHidden hi lo) (.inl k, data)
+  have hnonneg : ∀ lo, 0 ≤ F lo := by
+    intro lo
+    exact FinProb.pr_nonneg _ _
+  have hdom : ∀ θ, (P k).w θ ≤ 2 * Praw.w θ := by
+    intro θ
+    simpa only [P, Praw, FinProb.pi, Fintype.prod_unique] using htr.1 k (θ default)
+  have hupdate (lo : X.LowHid) (θ : Fin 1 → Fin N) :
+      X.withCol (b, X.joinHidden hi lo) (.inl k) θ =
+        (b, X.joinHidden hi (Function.update lo k θ)) := by
+    apply Prod.ext
+    · rfl
+    funext ℓ
+    cases ℓ with
+    | inl k' =>
+      by_cases he : k' = k
+      · subst k'
+        change Function.update (X.joinHidden hi lo) (.inl k) θ (.inl k) =
+          Function.update lo k θ k
+        exact (Function.update_self (.inl k) θ (X.joinHidden hi lo)).trans
+          (Function.update_self k θ lo).symm
+      · change Function.update (X.joinHidden hi lo) (.inl k) θ (.inl k') =
+          Function.update lo k θ k'
+        exact (Function.update_of_ne (Sum.inl_injective.ne he) θ (X.joinHidden hi lo)).trans
+          (Function.update_of_ne he θ lo).symm
+    | inr i =>
+      change Function.update (X.joinHidden hi lo) (.inl k) θ (.inr i) = hi i
+      exact Function.update_of_ne (show (Sum.inr i : X.Key) ≠ Sum.inl k by simp) θ (X.joinHidden hi lo)
+  change (FinProb.pi P).expect F ≤ _
+  apply Lane_sol_s05_h5l.pi_expect_update_bound P k F _ (fun _ _ => X.y₀)
+  intro lo
+  have hh : Praw.expect (fun θ => F (Function.update lo k θ)) ≤
+      Real.exp (-(cL * X.p.kPrime n k.2.2.val)) := by
+    have hh := hraw (b, X.joinHidden hi lo) hb hpass (.inl k, data) hr
+    change Praw.expect (fun θ => X.step3Rate
+      (X.withCol (b, X.joinHidden hi lo) (.inl k) θ) (.inl k, data)) ≤
+        Real.exp (-(cL * X.p.kPrime n k.2.2.val)) at hh
+    convert hh using 1
+    congr 1
+    funext θ
+    exact congrArg (fun H => X.step3Rate H (.inl k, data)) (hupdate lo θ).symm
+  exact Lane_sol_s05_h5l.trimmed_target_moment Praw (P k) hdom
+    (fun θ => F (Function.update lo k θ)) (fun θ => hnonneg _) _ hh
+
+private theorem low_step3_pretrim_alarm (b : X.Base) (hi : X.HighHid)
+    (tr : X.LowIdx → Law N) (cL cH : ℝ) (hraw : X.Step3Raw cL cH)
+    (hb : X.baseLaw.w b ≠ 0) (hpass : X.Step1Pass b) (htr : X.Stage4Laws b hi tr)
+    (k : X.LowIdx) (r : X.AbsRecord) (hr : X.RecOccurs r) (hkey : r.1 = .inl k) :
+    (X.lowLawOf tr).pr (fun lo =>
+      Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      2 * Real.exp (-(3 * cL / 4 * X.p.kPrime n k.2.2.val)) := by
+  let t := Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val))
+  have ht : 0 < t := Real.exp_pos _
+  have hm := low_step3_pretrim_mean X b hi tr cL cH hraw hb hpass htr k r hr hkey
+  have hmarkov := FinProb.markov (X.lowLawOf tr)
+    (fun lo => X.step3Rate (b, X.joinHidden hi lo) r) t
+    (fun lo => FinProb.pr_nonneg _ _) ht
+  have hmono := FinProb.pr_mono (X.lowLawOf tr)
+    (fun lo => t < X.step3Rate (b, X.joinHidden hi lo) r)
+    (fun lo => t ≤ X.step3Rate (b, X.joinHidden hi lo) r) (fun lo h => h.le)
+  have hh := hmono.trans (hmarkov.trans (div_le_div_of_nonneg_right hm ht.le))
+  have he : 2 * Real.exp (-(cL * X.p.kPrime n k.2.2.val)) / t =
+      2 * Real.exp (-(3 * cL / 4 * X.p.kPrime n k.2.2.val)) := by
+    dsimp [t]
+    rw [div_eq_mul_inv, ← Real.exp_neg]
+    calc
+      _ = 2 * (Real.exp (-(cL * X.p.kPrime n k.2.2.val)) *
+          Real.exp (-(-(cL / 4 * X.p.kPrime n k.2.2.val)))) := by ring
+      _ = _ := by rw [← Real.exp_add]; congr 2; ring
+  rw [he] at hh
+  exact hh
+
+private theorem high_step3_pretrim_alarm (b : X.Base) (hi : X.HighHid)
+    (tr : X.LowIdx → Law N) (cH : ℝ) (ν₃ : FinProb X.HighHid)
+    (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0) (htr : X.Stage4Laws b hi tr)
+    (r : X.AbsRecord) (hr : X.RecOccurs r) (hkey : ∃ i, r.1 = .inr i) :
+    (X.lowLawOf tr).pr (fun lo =>
+      Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      (2 : ℝ) ^ (Lane_sol_s05_h5l.recordLowScope X r).card * Real.exp (-(cH * X.p.s n) / 3) := by
+  let d : ℝ := (2 : ℝ) ^ (Lane_sol_s05_h5l.recordLowScope X r).card
+  let t := Real.exp (-(cH * X.p.s n) / 6)
+  have ht : 0 < t := Real.exp_pos _
+  have hd := Lane_sol_s05_h5l.step3_pretrim_mean X b hi tr htr.1 r
+  have hraw := hstage.2.2.2.1 hi hhi r hr hkey
+  have hm : (X.lowLawOf tr).expect (fun lo => X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      d * Real.exp (-(cH * X.p.s n) / 2) := by
+    exact hd.trans (mul_le_mul_of_nonneg_left hraw (by positivity))
+  have hmarkov := FinProb.markov (X.lowLawOf tr)
+    (fun lo => X.step3Rate (b, X.joinHidden hi lo) r) t
+    (fun lo => FinProb.pr_nonneg _ _) ht
+  have hmono := FinProb.pr_mono (X.lowLawOf tr)
+    (fun lo => t < X.step3Rate (b, X.joinHidden hi lo) r)
+    (fun lo => t ≤ X.step3Rate (b, X.joinHidden hi lo) r) (fun lo h => h.le)
+  have hh := hmono.trans (hmarkov.trans (div_le_div_of_nonneg_right hm ht.le))
+  have he : d * Real.exp (-(cH * X.p.s n) / 2) / t = d * Real.exp (-(cH * X.p.s n) / 3) := by
+    dsimp [t]
+    rw [div_eq_mul_inv, ← Real.exp_neg, mul_assoc, ← Real.exp_add]
+    congr 2
+    ring
+  rw [he] at hh
+  exact hh
+
+private theorem low_step3_group_alarm (b : X.Base) (hi : X.HighHid)
+    (tr : X.LowIdx → Law N) (cL cH C : ℝ) (hraw : X.Step3Raw cL cH)
+    (hb : X.baseLaw.w b ≠ 0) (hpass : X.Step1Pass b) (htr : X.Stage4Laws b hi tr)
+    (hcount : X.RecordCount C) (k : X.LowIdx) :
+    (X.lowLawOf tr).pr (fun lo => ∃ r : X.AbsRecord, X.RecOccurs r ∧ r.1 = .inl k ∧
+      Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      Real.exp (C * ((X.p.T n : ℝ) * Real.log (X.p.T n) +
+        ((k.2.2.val : ℝ) + 1) * Real.log (X.p.m n) +
+        (if k.2.2.val = X.p.J n then
+          (X.p.T n : ℝ) * (X.p.q0 * X.p.uStarSeg n * X.p.usedBlocks n : ℕ) else 0))) *
+        (2 * Real.exp (-(3 * cL / 4 * X.p.kPrime n k.2.2.val))) := by
+  let S := Finset.univ.filter fun r : X.AbsRecord => X.RecOccurs r ∧ r.1 = .inl k
+  let ε := 2 * Real.exp (-(3 * cL / 4 * X.p.kPrime n k.2.2.val))
+  have hsum : (X.lowLawOf tr).pr (fun lo => ∃ r : X.AbsRecord, X.RecOccurs r ∧ r.1 = .inl k ∧
+      Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r) ≤
+        (S.card : ℝ) * ε := by
+    calc
+      _ ≤ ∑ r ∈ S, (X.lowLawOf tr).pr (fun lo =>
+          Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r) := by
+        unfold FinProb.pr
+        rw [Finset.sum_comm]
+        apply Finset.sum_le_sum
+        intro lo hlo
+        dsimp only
+        by_cases hbad : ∃ r, X.RecOccurs r ∧ r.1 = .inl k ∧
+            Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) < X.step3Rate (b, X.joinHidden hi lo) r
+        · obtain ⟨r, hr, hk, halarm⟩ := hbad
+          rw [if_pos ⟨r, hr, hk, halarm⟩]
+          have hnonneg (r' : X.AbsRecord) (hr' : r' ∈ S) :
+              0 ≤ (if Real.exp (-(cL / 4 * X.p.kPrime n k.2.2.val)) <
+                X.step3Rate (b, X.joinHidden hi lo) r' then (X.lowLawOf tr).w lo else 0) := by
+            split_ifs <;> simp [(X.lowLawOf tr).nonneg]
+          have hsum' := Finset.single_le_sum hnonneg (show r ∈ S by simp [S, hr, hk])
+          simpa only [ite_eq_left halarm] using hsum'
+        · simp only [if_neg hbad]
+          exact Finset.sum_nonneg fun r hr => by split_ifs <;> simp [(X.lowLawOf tr).nonneg]
+      _ ≤ ∑ _r ∈ S, ε := by
+        apply Finset.sum_le_sum
+        intro r hr
+        have hh := (Finset.mem_filter.mp hr).2
+        exact low_step3_pretrim_alarm X b hi tr cL cH hraw hb hpass htr k r hh.1 hh.2
+      _ = _ := by simp
+  have hS : S = Finset.univ.filter (fun r : X.AbsRecord =>
+      X.RecOccursAt r k.2.1 k.2.2.val ∧ r.1 = .inl k) := by
+    ext r
+    simp only [S, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro hr
+      exact ⟨Lane_sol_s05_h5l.low_record_central X r hr.1 k hr.2, hr.2⟩
+    · intro hr
+      obtain ⟨y, μ, hy, ht, hj⟩ := hr.1
+      exact ⟨⟨y, μ, hy⟩, hr.2⟩
+  have hcard := hcount (.inl k) k.2.1 k.2.2.val
+  rw [← hS] at hcard
+  simp only [HiddenKey5.level, Sum.isLeft_inl, true_and] at hcard
+  exact hsum.trans (mul_le_mul_of_nonneg_right hcard (by dsimp [ε]; positivity))
+
+private def stage5Alarm (b : X.Base) (hi : X.HighHid) (cL cH : ℝ) :
+    X.Ty ⊕ X.AbsRecord → X.LowHid → Prop
+  | .inl K, lo => X.TypeOccurs K ∧ X.step2Fail (b, X.joinHidden hi lo) K
+  | .inr r, lo => X.RecOccurs r ∧
+      X.step3Scale (match r.1 with | .inl _ => cL / 4 | .inr _ => cH / 6) r.1 <
+        X.step3Rate (b, X.joinHidden hi lo) r
+
+/-- The remaining Stage 5 construction reduces to scoped alarm charges. -/
+private theorem stage5_of_charges (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N)
+    (cL cH : ℝ) (htr : X.Stage4Laws b hi tr)
+    (scope : X.Ty ⊕ X.AbsRecord → Finset X.LowIdx)
+    (hscope : ∀ i, FinProb.DependsOn (stage5Alarm X b hi cL cH i) (scope i))
+    (x : X.Ty ⊕ X.AbsRecord → ℝ) (hx0 : ∀ i, 0 ≤ x i) (hx1 : ∀ i, x i < 1)
+    (hbad : ∀ i, (X.lowLawOf tr).pr (stage5Alarm X b hi cL cH i) ≤ x i / 2)
+    (hneighbor : ∀ i, ∑ j ∈ Finset.univ.filter
+      (fun j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)), x j ≤ 1 / 2)
+    (hvariable : ∀ k, ∑ i ∈ Finset.univ.filter (fun i => k ∈ scope i), x i ≤ 1 / 2) :
+    ∃ ν : FinProb X.LowHid, X.Stage5Law b hi tr ν cL cH := by
+  let P : X.LowIdx → FinProb (Fin 1 → Fin N) := fun k => FinProb.pi fun _ => tr k
+  obtain ⟨ν, hsupport, hcompare⟩ := Lane_sol_s05_h5l.scoped_avoidance_of_charges
+    P (stage5Alarm X b hi cL cH) scope hscope x hx0 hx1 hbad hneighbor hvariable (fun _ _ => X.y₀)
+  have htrimSupport (lo : X.LowHid) (hlo : ν.w lo ≠ 0) (k : X.LowIdx) (h : Fin 1) :
+      (tr k).w (lo k h) ≠ 0 := by
+    have hprod := (hsupport lo hlo).1
+    have hcol : (P k).w (lo k) ≠ 0 :=
+      (Finset.prod_ne_zero_iff.mp hprod) k (Finset.mem_univ _)
+    change (∏ h, (tr k).w (lo k h)) ≠ 0 at hcol
+    exact (Finset.prod_ne_zero_iff.mp hcol) h (Finset.mem_univ _)
+  refine ⟨ν, ?_, ?_, ?_, ?_⟩
+  · intro lo hlo
+    constructor
+    · intro K hK hfail
+      exact (hsupport lo hlo).2 (.inl K) ⟨hK, hfail⟩
+    · intro K t hopt
+      let k : X.LowIdx := (K.1, t, ⟨X.p.J n, Nat.lt_succ_self _⟩)
+      let h₀ : Fin 1 := ⟨0, by omega⟩
+      apply htr.2 k (lo k h₀) (htrimSupport lo hlo k h₀) K t hopt rfl lo
+      funext h
+      rw [Subsingleton.elim h h₀]
+  · intro lo hlo r hr
+    exact le_of_not_gt (fun h => (hsupport lo hlo).2 (.inr r) ⟨hr, h⟩)
+  · intro Λ W M hW hM
+    apply hcompare Λ W M hW
+    intro lo
+    simpa only [Lane_sol_s05_h5l.resample, Setup5.resampleLow, P,
+      Lane_q_s05_h5l.pinDirac5, FinProb.dirac5] using hM lo
+  · intro lo hlo k h hz
+    have hh := htr.1 k (lo k h)
+    rw [hz, mul_zero] at hh
+    exact htrimSupport lo hlo k h (le_antisymm hh ((tr k).nonneg _))
 
 /-- L5.1h5 (05:723–744): from the product of the trimmed laws exclude the remaining Step 2 failures and the
 Step 3 alarms (Markov from the one-target bound and Stage 3); grouping by central sign, bin and severity gives

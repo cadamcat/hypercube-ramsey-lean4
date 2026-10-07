@@ -1,8 +1,9 @@
 import HypercubeRamsey.S08.L81.Experiment
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
-namespace HypercubeRamsey.S08
+namespace HypercubeRamsey.Lane_q_s08_sel
 
+open HypercubeRamsey.S08
 open Classical OAI.HypercubeRamsey
 variable {η₀ β p : ℝ} {h : ℕ}
 
@@ -898,4 +899,92 @@ theorem preLaw_expect_noTie (D : Ctx η₀ β p h)
       intro A
       ring
 
-end HypercubeRamsey.S08
+private theorem nonempty_of_finProb {α : Type*} [Fintype α] (P : FinProb α) : Nonempty α := by
+  classical
+  by_contra h
+  haveI : IsEmpty α := ⟨fun a => h ⟨a⟩⟩
+  have hsum : (∑ a, P.w a) = 0 := by simp
+  rw [P.sum_eq_one] at hsum
+  norm_num at hsum
+
+theorem pi_expect_coordinate {ι α : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype α] (P : FinProb α) (i₀ : ι) (f : α → ℝ) :
+    (FinProb.pi (fun _ : ι => P)).expect (fun ω => f (ω i₀)) = P.expect f := by
+  classical
+  let s : Finset ι := {i₀}
+  let F : (ι → α) → ℝ := fun ω => f (ω i₀)
+  let ω₀ : ι → α := fun _ => Classical.choice (nonempty_of_finProb P)
+  have hdep : FinProb.DependsOn F s := by
+    intro ω ω' hagree
+    dsimp [F]
+    rw [hagree i₀ (by simp [s])]
+  have hsplit := FinProb.pi_expect_depends (fun _ : ι => P) s F ω₀ hdep
+  let inst : Unique {i // i ∈ s} := {
+    default := ⟨i₀, by simp [s]⟩
+    uniq := by
+      intro j
+      apply Subtype.ext
+      exact Finset.mem_singleton.mp (by simpa [s] using j.2)
+  }
+  letI : Unique {i // i ∈ s} := inst
+  let e : (∀ _ : {i // i ∈ s}, α) ≃ α := Equiv.piUnique _
+  have hsingle :
+      (FinProb.pi (fun _ : {i // i ∈ s} => P)).expect (fun a => f (a default)) = P.expect f := by
+    unfold FinProb.expect
+    rw [← Equiv.sum_comp e.symm
+      (fun a => (FinProb.pi (fun _ : {i // i ∈ s} => P)).w a * f (a default))]
+    simp [FinProb.pi, e, inst]
+  have hproj : ∀ a : (∀ _ : {i // i ∈ s}, α),
+      F ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) (fun _ : ι => α)).symm
+        (a, fun i => ω₀ i.1)) = f (a default) := by
+    intro a
+    simp [F, s]
+    have hx : (⟨i₀, by simp [s]⟩ : {i // i ∈ s}) = default := Subsingleton.elim _ _
+    rw [hx]
+  calc
+    (FinProb.pi (fun _ : ι => P)).expect (fun ω => f (ω i₀)) =
+        (FinProb.pi (fun _ : {i // i ∈ s} => P)).expect
+          (fun a => F ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) (fun _ : ι => α)).symm
+            (a, fun i => ω₀ i.1))) := by
+              simpa [F] using hsplit
+    _ = (FinProb.pi (fun _ : {i // i ∈ s} => P)).expect
+          (fun a => f (a default)) := by
+            congr 1
+            funext a
+            exact hproj a
+    _ = P.expect f := hsingle
+
+private theorem expect_prod_left {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinProb A) (Q : FinProb B) (f : A → ℝ) :
+    (P.prod Q).expect (fun z => f z.1) = P.expect f := by
+  classical
+  unfold FinProb.expect FinProb.prod
+  rw [Fintype.sum_prod_type]
+  calc
+    (∑ a, ∑ b, P.w a * Q.w b * f a) =
+        ∑ a, (P.w a * f a) * ∑ b, Q.w b := by
+      apply Fintype.sum_congr
+      intro a
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr
+      intro b
+      ring
+    _ = ∑ a, P.w a * f a := by simp [Q.sum_eq_one]
+
+theorem preLaw_expect_pos (D : Ctx η₀ β p h) (f : D.Pos → ℝ) :
+    D.preLaw.expect (fun q => f q.1.2) = D.posLaw.expect f := by
+  classical
+  let auxLaw : FinProb (D.Hist × D.Tags) :=
+    FinProb.bind D.hiddenLaw (fun Θ => D.tagLawAll Θ)
+  let F : D.Pos → D.Hist → D.Tags → D.Acts → ℝ := fun P _ _ _ => f P
+  have hNoTie := preLaw_expect_noTie D F
+  calc
+    D.preLaw.expect (fun q => f q.1.2) =
+        ((D.posLaw.prod auxLaw).prod D.actLaw).expect
+          (fun z => f z.1.1.1) := by
+            simpa [auxLaw, F] using hNoTie
+    _ = (D.posLaw.prod auxLaw).expect (fun z => f z.1.1) :=
+      expect_prod_left (D.posLaw.prod auxLaw) D.actLaw (fun z => f z.1.1)
+    _ = D.posLaw.expect f := expect_prod_left D.posLaw auxLaw (fun z => f z.1)
+
+end HypercubeRamsey.Lane_q_s08_sel

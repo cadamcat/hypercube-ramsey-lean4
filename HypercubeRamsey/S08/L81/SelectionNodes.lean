@@ -11,6 +11,7 @@ noncomputable section
 
 namespace HypercubeRamsey.S08
 
+open HypercubeRamsey.Lane_q_s08_sel
 open Classical OAI.HypercubeRamsey
 open scoped BigOperators
 

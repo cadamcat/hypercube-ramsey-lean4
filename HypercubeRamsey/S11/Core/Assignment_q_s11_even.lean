@@ -180,6 +180,89 @@ private theorem innerStarOf {n k N : ℕ} {E : Fin N → Fin N → Prop}
     simp only [starOf, oddNbr, evenNbr, ballStar, localEvenRole, dif_neg hc]
     exact (congrArg W hpair').symm
 
+private noncomputable def oddStarScope {n : ℕ} (v : EvenRole n) : Option (OuterCoord n) → Finset (OddRole n)
+  | none => Finset.univ.image fun a : InnerCoord n => oddNbr v a.1
+  | some j => {oddNbr v j.1}
+
+private noncomputable def evenStarScope {n : ℕ} (v : EvenRole n) :
+    Option (OuterCoord n) → Finset (EvenRole n)
+  | none => Finset.univ.image (localEvenRole v)
+  | some j => Finset.univ.image fun a : InnerCoord n => evenNbr (oddNbr v j.1) a.1
+
+private theorem oddScope_none_some_disjoint {n : ℕ} (v : EvenRole n) (j : OuterCoord n) :
+    Disjoint (oddStarScope v none) (oddStarScope v (some j)) := by
+  apply Finset.disjoint_left.mpr
+  intro b hb₁ hb₂
+  obtain ⟨a, ha, hEq⟩ := Finset.mem_image.mp hb₁
+  have hSingle : b = oddNbr v j.1 := Finset.mem_singleton.mp hb₂
+  have hroles : oddNbr v a.1 = oddNbr v j.1 := hEq.trans hSingle
+  have hs := congrArg (fun b : OddRole n => sliceOf b.1) hroles
+  rw [oddNbr_inner_slice, oddNbr_outer_slice] at hs
+  exact (flipOuter_ne_self (sliceOf v.1) j) hs.symm
+
+private theorem oddScope_some_some_disjoint {n : ℕ} (v : EvenRole n) (j k : OuterCoord n)
+    (hjk : j ≠ k) : Disjoint (oddStarScope v (some j)) (oddStarScope v (some k)) := by
+  apply Finset.disjoint_left.mpr
+  intro b hb₁ hb₂
+  have hroles : oddNbr v j.1 = oddNbr v k.1 :=
+    (Finset.mem_singleton.mp hb₁).symm.trans (Finset.mem_singleton.mp hb₂)
+  have hs := congrArg (fun b : OddRole n => sliceOf b.1) hroles
+  rw [oddNbr_outer_slice, oddNbr_outer_slice] at hs
+  exact (flipOuter_ne_of_ne (sliceOf v.1) j k hjk) hs
+
+private theorem oddScope_disjoint {n : ℕ} (v : EvenRole n) {o o' : Option (OuterCoord n)}
+    (hoo' : o ≠ o') : Disjoint (oddStarScope v o) (oddStarScope v o') := by
+  cases o with
+  | none =>
+    cases o' with
+    | none => exact (hoo' rfl).elim
+    | some j => exact oddScope_none_some_disjoint v j
+  | some j =>
+    cases o' with
+    | none => exact disjoint_comm.mp (oddScope_none_some_disjoint v j)
+    | some k =>
+      have hjk : j ≠ k := by
+        intro h
+        exact hoo' (congrArg Option.some h)
+      exact oddScope_some_some_disjoint v j k hjk
+
+private theorem evenScope_none_some_disjoint {n : ℕ} (v : EvenRole n) (j : OuterCoord n) :
+    Disjoint (evenStarScope v none) (evenStarScope v (some j)) := by
+  apply Finset.disjoint_left.mpr
+  intro u hu₁ hu₂
+  obtain ⟨o, ho, hEq⟩ := Finset.mem_image.mp hu₁
+  obtain ⟨a, ha, hEq'⟩ := Finset.mem_image.mp hu₂
+  have huEq : localEvenRole v o = evenNbr (oddNbr v j.1) a.1 := hEq.trans hEq'.symm
+  have hs := congrArg (fun u : EvenRole n => sliceOf u.1) huEq
+  rw [localEvenRole_slice, evenNbr_inner_slice, oddNbr_outer_slice] at hs
+  exact (flipOuter_ne_self (sliceOf v.1) j) hs.symm
+
+private theorem evenScope_some_some_disjoint {n : ℕ} (v : EvenRole n) (j k : OuterCoord n)
+    (hjk : j ≠ k) : Disjoint (evenStarScope v (some j)) (evenStarScope v (some k)) := by
+  apply Finset.disjoint_left.mpr
+  intro u hu₁ hu₂
+  obtain ⟨a, ha, hEq⟩ := Finset.mem_image.mp hu₁
+  obtain ⟨b, hb, hEq'⟩ := Finset.mem_image.mp hu₂
+  have hs := congrArg (fun u : EvenRole n => sliceOf u.1) (hEq.trans hEq'.symm)
+  rw [evenNbr_inner_slice, oddNbr_outer_slice, evenNbr_inner_slice, oddNbr_outer_slice] at hs
+  exact (flipOuter_ne_of_ne (sliceOf v.1) j k hjk) hs
+
+private theorem evenScope_disjoint {n : ℕ} (v : EvenRole n) {o o' : Option (OuterCoord n)}
+    (hoo' : o ≠ o') : Disjoint (evenStarScope v o) (evenStarScope v o') := by
+  cases o with
+  | none =>
+    cases o' with
+    | none => exact (hoo' rfl).elim
+    | some j => exact evenScope_none_some_disjoint v j
+  | some j =>
+    cases o' with
+    | none => exact disjoint_comm.mp (evenScope_none_some_disjoint v j)
+    | some k =>
+      have hjk : j ≠ k := by
+        intro h
+        exact hoo' (congrArg Option.some h)
+      exact evenScope_some_some_disjoint v j k hjk
+
 private theorem pi_expect_prod_of_disjoint
     {ι I : Type*} [Fintype ι] [DecidableEq ι] [Fintype I] [DecidableEq I]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
@@ -657,6 +740,208 @@ theorem internal_star_raw {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Fins
             (y₀ (t (sliceOf v.1))) W)
           (fun W => ∑ z : InnerCoord n → Fin N,
             outW E M.G (gS n) (M.μ (t (sliceOf v.1))) (M.ν (t (sliceOf v.1))) W z *
-              sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) z x))
+          sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) z x))
+
+theorem star_mean_full {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
+    (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
+    (t : OuterWord n → M.ι) (hS : SliceFacts M y₀) : StarMean11 M y₀ p t := by
+  classical
+  intro v x
+  let den : ℝ := deg E M.G (piBar M y₀ p) x
+  let oddRowLaw (W : EvenRole n → Fin (kTup n) → Fin N) (b : OddRole n) : FinProb (Fin N) := {
+    w := oddRowF M t W b
+    nonneg := (hS.rows (t (sliceOf b.1))).row_nonneg (starOf W b)
+    sum_eq_one := (hS.rows (t (sliceOf b.1))).row_sum (starOf W b)
+  }
+  let oddFactor (W : EvenRole n → Fin (kTup n) → Fin N)
+      (o : Option (OuterCoord n)) (f : OddRole n → Fin N) : ℝ :=
+    match o with
+    | none => (N : ℝ) * sigmaW E M.G (gS n)
+        (M.μ (t (sliceOf v.1))) (innerOut f v) x
+    | some j => hit E M.G x (f (oddNbr v j.1)) / den
+  let innerFactor (W : EvenRole n → Fin (kTup n) → Fin N) : ℝ :=
+    ∑ f, oddProdW M t W f *
+      ((N : ℝ) * sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x)
+  let outerFactor (W : EvenRole n → Fin (kTup n) → Fin N) (j : OuterCoord n) : ℝ :=
+    ∑ y, oddRowF M t W (oddNbr v j.1) y * (hit E M.G x y / den)
+  let tupleFactor (W : EvenRole n → Fin (kTup n) → Fin N)
+      (o : Option (OuterCoord n)) : ℝ :=
+    match o with
+    | none => innerFactor W
+    | some j => outerFactor W j
+  let tupleLaw (u : EvenRole n) : FinProb (Fin (kTup n) → Fin N) :=
+    tupLaw E M.G (M.μ (t (sliceOf u.1))) (y₀ (t (sliceOf u.1))) (kTup n)
+  have hdepOdd (W : EvenRole n → Fin (kTup n) → Fin N) (o : Option (OuterCoord n)) :
+      FinProb.DependsOn (oddFactor W o) (oddStarScope v o) := by
+    cases o with
+    | none =>
+      intro f g hfg
+      apply congrArg (fun z : InnerCoord n → Fin N =>
+        (N : ℝ) * sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) z x)
+      funext a
+      apply hfg (oddNbr v a.1)
+      exact Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩
+    | some j =>
+      intro f g hfg
+      have hb : f (oddNbr v j.1) = g (oddNbr v j.1) :=
+        hfg (oddNbr v j.1) (by simp [oddStarScope])
+      simp [oddFactor, hb]
+  have hdisjOdd : ∀ o o', o ≠ o' →
+      Disjoint (oddStarScope v o) (oddStarScope v o') := fun o o' hoo => oddScope_disjoint v hoo
+  have hlabelProduct (W : EvenRole n → Fin (kTup n) → Fin N) (f : OddRole n → Fin N) :
+      (∏ o : Option (OuterCoord n), oddFactor W o f) =
+        (N : ℝ) * evenRowF M y₀ p t f v x := by
+    rw [Fintype.prod_option]
+    simp only [oddFactor]
+    unfold evenRowF
+    ring
+  have hinnerLabel (W : EvenRole n → Fin (kTup n) → Fin N) :
+      (FinProb.pi (oddRowLaw W)).expect (oddFactor W none) = innerFactor W := by
+    simp [FinProb.expect, FinProb.pi, oddFactor, innerFactor, oddProdW, oddRowLaw]
+  have houterLabel (W : EvenRole n → Fin (kTup n) → Fin N) (j : OuterCoord n) :
+      (FinProb.pi (oddRowLaw W)).expect (oddFactor W (some j)) = outerFactor W j := by
+    simpa [FinProb.pi, FinProb.expect, oddFactor, outerFactor, oddRowLaw, den] using
+      (pi_expect_coordinate (oddRowLaw W) (oddNbr v j.1)
+        (fun y => hit E M.G x y / den))
+  have hoddPoint (W : EvenRole n → Fin (kTup n) → Fin N) :
+      ∑ f, oddProdW M t W f * ((N : ℝ) * evenRowF M y₀ p t f v x) =
+        innerFactor W * ∏ j : OuterCoord n, outerFactor W j := by
+    let law : FinProb (OddRole n → Fin N) := FinProb.pi (oddRowLaw W)
+    have hprod := pi_expect_prod_of_disjoint (oddRowLaw W) (oddFactor W) (oddStarScope v)
+      (hdepOdd W) hdisjOdd
+    calc
+      ∑ f, oddProdW M t W f * ((N : ℝ) * evenRowF M y₀ p t f v x) =
+          law.expect (fun f => ∏ o : Option (OuterCoord n), oddFactor W o f) := by
+        simp [FinProb.expect, FinProb.pi, law, oddProdW, oddRowLaw, hlabelProduct]
+      _ = ∏ o : Option (OuterCoord n), law.expect (oddFactor W o) := hprod
+      _ = innerFactor W * ∏ j : OuterCoord n, outerFactor W j := by
+        rw [Fintype.prod_option, hinnerLabel]
+        congr 1
+        apply Finset.prod_congr rfl
+        intro j hj
+        exact houterLabel W j
+  have hdepTuple (o : Option (OuterCoord n)) :
+      FinProb.DependsOn (fun W => tupleFactor W o) (evenStarScope v o) := by
+    cases o with
+    | none =>
+      intro W W' hWW
+      change innerFactor W = innerFactor W'
+      unfold innerFactor
+      rw [inner_output_sum M y₀ t v W hS x, inner_output_sum M y₀ t v W' hS x]
+      apply Finset.sum_congr rfl
+      intro z hz
+      congr 1
+      apply Finset.prod_congr rfl
+      intro a ha
+      have hlocal : (fun o => W (localEvenRole v o)) = fun o => W' (localEvenRole v o) := by
+        funext o
+        exact hWW (localEvenRole v o)
+          (Finset.mem_image.mpr ⟨o, Finset.mem_univ _, rfl⟩)
+      have hstar : starOf W (oddNbr v a.1) = starOf W' (oddNbr v a.1) := by
+        rw [innerStarOf M v W a, innerStarOf M v W' a, hlocal]
+      simp [oddRowF, hstar]
+    | some j =>
+      intro W W' hWW
+      change outerFactor W j = outerFactor W' j
+      unfold outerFactor
+      apply Finset.sum_congr rfl
+      intro y hy
+      have hstar : starOf W (oddNbr v j.1) = starOf W' (oddNbr v j.1) := by
+        funext a
+        simp only [starOf]
+        exact hWW (evenNbr (oddNbr v j.1) a.1)
+          (Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩)
+      simp [oddRowF, hstar]
+  have hdisjTuple : ∀ o o', o ≠ o' →
+      Disjoint (evenStarScope v o) (evenStarScope v o') := fun o o' hoo => evenScope_disjoint v hoo
+  have htupleProduct := pi_expect_prod_of_disjoint tupleLaw (fun o W => tupleFactor W o)
+    (evenStarScope v) hdepTuple hdisjTuple
+  have hinnerMean : (rawTuples M y₀ t).expect innerFactor =
+      (N : ℝ) * alphaRow M y₀ (t (sliceOf v.1)) x := by
+    exact internal_star_raw M y₀ t v x hS
+  have houterMean (j : OuterCoord n) :
+      (rawTuples M y₀ t).expect (fun W => outerFactor W j) =
+        deg E M.G (piRow M y₀ (t (flipOuter (sliceOf v.1) j))) x / den := by
+    unfold FinProb.expect outerFactor
+    calc
+      ∑ W, (rawTuples M y₀ t).w W *
+          ∑ y, oddRowF M t W (oddNbr v j.1) y * (hit E M.G x y / den) =
+        ∑ y, (∑ W, (rawTuples M y₀ t).w W * oddRowF M t W (oddNbr v j.1) y) *
+          (hit E M.G x y / den) := by
+            change (∑ W ∈ (Finset.univ : Finset (EvenRole n → Fin (kTup n) → Fin N)),
+                (rawTuples M y₀ t).w W *
+                  ∑ y ∈ (Finset.univ : Finset (Fin N)),
+                    oddRowF M t W (oddNbr v j.1) y * (hit E M.G x y / den)) = _
+            simp_rw [Finset.mul_sum]
+            rw [Finset.sum_comm]
+            apply Finset.sum_congr rfl
+            intro y hy
+            calc
+              ∑ W ∈ (Finset.univ : Finset (EvenRole n → Fin (kTup n) → Fin N)),
+                  (rawTuples M y₀ t).w W *
+                    (oddRowF M t W (oddNbr v j.1) y * (hit E M.G x y / den)) =
+                (∑ W ∈ (Finset.univ : Finset (EvenRole n → Fin (kTup n) → Fin N)),
+                  (rawTuples M y₀ t).w W * oddRowF M t W (oddNbr v j.1) y) *
+                    (hit E M.G x y / den) := by
+                      calc
+                        ∑ W ∈ (Finset.univ : Finset (EvenRole n → Fin (kTup n) → Fin N)),
+                            (rawTuples M y₀ t).w W *
+                              (oddRowF M t W (oddNbr v j.1) y * (hit E M.G x y / den)) =
+                          ∑ W ∈ (Finset.univ : Finset (EvenRole n → Fin (kTup n) → Fin N)),
+                            ((rawTuples M y₀ t).w W * oddRowF M t W (oddNbr v j.1) y) *
+                              (hit E M.G x y / den) := by
+                                apply Finset.sum_congr rfl
+                                intro W hW
+                                ring
+                        _ = _ := by rw [← Finset.sum_mul]
+              _ = _ := rfl
+      _ = ∑ y, piRow M y₀ (t (flipOuter (sliceOf v.1) j)) y *
+            (hit E M.G x y / den) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        have hmean :
+            ∑ W, (rawTuples M y₀ t).w W * oddRowF M t W (oddNbr v j.1) y =
+              piRow M y₀ (t (sliceOf (oddNbr v j.1).1)) y := by
+          simpa [FinProb.expect] using meanOddRow_raw M y₀ t (oddNbr v j.1) hS y
+        rw [hmean]
+        rw [oddNbr_outer_slice]
+      _ = deg E M.G (piRow M y₀ (t (flipOuter (sliceOf v.1) j))) x / den := by
+        calc
+          ∑ y, piRow M y₀ (t (flipOuter (sliceOf v.1) j)) y *
+              (hit E M.G x y / den) =
+              (∑ y, piRow M y₀ (t (flipOuter (sliceOf v.1) j)) y * hit E M.G x y) / den := by
+                calc
+                  ∑ y, piRow M y₀ (t (flipOuter (sliceOf v.1) j)) y *
+                      (hit E M.G x y / den) =
+                    ∑ y, (piRow M y₀ (t (flipOuter (sliceOf v.1) j)) y * hit E M.G x y) / den := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      ring
+                  _ = _ := by rw [Finset.sum_div]
+          _ = _ := rfl
+  calc
+    (rawTuples M y₀ t).expect (fun W =>
+        ∑ f, oddProdW M t W f * ((N : ℝ) * evenRowF M y₀ p t f v x)) =
+      (rawTuples M y₀ t).expect (fun W => ∏ o : Option (OuterCoord n), tupleFactor W o) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro W hW
+          change (rawTuples M y₀ t).w W *
+              (∑ f, oddProdW M t W f * ((N : ℝ) * evenRowF M y₀ p t f v x)) =
+            (rawTuples M y₀ t).w W * (∏ o : Option (OuterCoord n), tupleFactor W o)
+          rw [hoddPoint W]
+          simp [Fintype.prod_option, tupleFactor]
+    _ = ∏ o : Option (OuterCoord n),
+          (rawTuples M y₀ t).expect (fun W => tupleFactor W o) := htupleProduct
+    _ = (N : ℝ) * alphaRow M y₀ (t (sliceOf v.1)) x *
+          ∏ j : OuterCoord n,
+            (deg E M.G (piRow M y₀ (t (flipOuter (sliceOf v.1) j))) x / den) := by
+          rw [Fintype.prod_option, hinnerMean]
+          congr 1
+          apply Finset.prod_congr rfl
+          intro j hj
+          exact houterMean j
+    _ ≤ compB M y₀ p t (sliceOf v.1) x := by
+          simp [compB, den]
 
 end HypercubeRamsey.Lane_q_s11_even

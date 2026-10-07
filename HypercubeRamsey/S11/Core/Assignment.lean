@@ -144,7 +144,7 @@ rows and tuples integrate to one. -/
 theorem star_mean {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
     (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι)
     (hS : SliceFacts M y₀) : StarMean11 M y₀ p t := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_even.star_mean_full M y₀ p t hS
 
 /-- P11.1d3, clock comparison (11:388).  The integrand reads the odd labels on the union of the separated stars'
 odd neighbourhoods (at most `n² ≤ n⁴` roles); the clock comparison bounds its law by twice the product of the

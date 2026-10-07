@@ -4,6 +4,7 @@ namespace HypercubeRamsey.S16.Lane_q_s16_gate1
 
 open Classical
 open scoped BigOperators
+open HypercubeRamsey.S16.Lane_sol_fix2_s16
 
 private theorem finLaw_ext {α : Type*} [Fintype α] {P Q : FinLaw α}
     (h : ∀ x, P.w x = Q.w x) : P = Q := by
@@ -148,5 +149,143 @@ theorem pi_cond_support_map {I : Type*} [Fintype I] [DecidableEq I]
       exact (condSupport_map (P i) (A i) (hA i)).symm
     _ = FinLaw.map (FinLaw.pi P') (fun z i => (z i).1) :=
       (finLaw_map_pi P' (fun i z => z.1)).symm
+
+private theorem history_support_iff {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
+    (C : G.Cell) (W : R.Hist C) :
+    (R.history C).w W ≠ 0 ↔
+      ∀ s, W s ∈ R.slicePass C s ∧ (R.sliceLaw C s).w (W s) ≠ 0 := by
+  classical
+  constructor
+  · intro hW s
+    exact Lane_sol_s16_prod1.cond_support _ _ _ _
+      (Lane_sol_s16_prod1.pi_support _ W hW s)
+  · intro hW
+    apply Finset.prod_ne_zero_iff.mpr
+    intro s _
+    simp only [FinLaw.cond, if_pos (hW s).1]
+    exact div_ne_zero (hW s).2 (R.slice_pos C s).ne'
+
+private theorem cluster_qin_row_local {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
+    (C : G.Cell) (S : SliceSolver κ PT.tiling (G.cellPatch C) PT.mesh)
+    (records : ∀ s, R.Value C s ≃ (∀ r, S.Val r))
+    (groups : (R.Slice C × HypercubeRamsey.Group PT.tiling (G.cellPatch C)) ≃ R.Group C)
+    (hQ : ∀ W s g b, (R.qraw C W (groups (s, g))).w b = S.q g (records s (W s)) b)
+    (hTrim : ∀ W s g, R.pretrim C W (groups (s, g)) = S.pretrimBins (records s (W s)) g)
+    (W W' : R.Hist C) (hW : (R.history C).w W ≠ 0) (hW' : (R.history C).w W' ≠ 0)
+    (s : R.Slice C) (g : HypercubeRamsey.Group PT.tiling (G.cellPatch C))
+    (heq : W s = W' s) (b : Bin PT.tiling (G.cellPatch C)) :
+    (R.qin C W (groups (s, g))).w b = (R.qin C W' (groups (s, g))).w b := by
+  rw [R.qin_eq C W _ b ((history_support_iff R C W).mp hW),
+    R.qin_eq C W' _ b ((history_support_iff R C W').mp hW')]
+  simp_rw [hTrim, hQ, heq]
+
+private theorem cluster_qbar_row_local {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
+    (Perm : CellPermissions R) (K : CellRestrictedKernels R Perm)
+    (C : G.Cell) (S : SliceSolver κ PT.tiling (G.cellPatch C) PT.mesh)
+    (records : ∀ s, R.Value C s ≃ (∀ r, S.Val r))
+    (groups : (R.Slice C × HypercubeRamsey.Group PT.tiling (G.cellPatch C)) ≃ R.Group C)
+    (hQ : ∀ W s g b, (R.qraw C W (groups (s, g))).w b = S.q g (records s (W s)) b)
+    (hTrim : ∀ W s g, R.pretrim C W (groups (s, g)) = S.pretrimBins (records s (W s)) g)
+    (W W' : R.Hist C) (hW : (R.history C).w W ≠ 0) (hW' : (R.history C).w W' ≠ 0)
+    (s : R.Slice C) (g : HypercubeRamsey.Group PT.tiling (G.cellPatch C))
+    (heq : W s = W' s) (b : Bin PT.tiling (G.cellPatch C)) :
+    (K.qbar C W (groups (s, g))).w b = (K.qbar C W' (groups (s, g))).w b := by
+  rw [K.qbar_eq C W _ b hW, K.qbar_eq C W' _ b hW']
+  simp_rw [cluster_qin_row_local R C S records groups hQ hTrim W W' hW hW' s g heq]
+
+/-- One odd role's restricted load summand is determined by its own slice value. -/
+theorem cluster_role_term_local {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {G : LowGeom PT} (R : CellRawData G)
+    (Perm : CellPermissions R) (K : CellRestrictedKernels R Perm)
+    (hFallback : ∀ C pool W g, (∑ D ∈ Finset.univ.image pool, (K.qbar C W g).w D) = 0 →
+      K.qtilde C pool W g = K.qbar C W g)
+    (hR : R.SourceValid) (hc : PT.tiling.mode.isCluster) (C : G.Cell) (pool : CellPool G C)
+    (W W' : R.Hist C) (hW : (R.history C).w W ≠ 0) (hW' : (R.history C).w W' ≠ 0)
+    (r : OddCellRole G C)
+    (heq : W ((R.cellWords C).symm ⟨r.1, r.2.1⟩).1 =
+      W' ((R.cellWords C).symm ⟨r.1, r.2.1⟩).1)
+    (y : Fin (T.S.N k)) :
+    ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y =
+      ∑ b, (K.qtilde C pool W' (R.groupOf C r)).w b * (R.U C W' (R.groupOf C r) b).w y := by
+  classical
+  rcases hR with ⟨_, _, hSource⟩ | ⟨hDirect, _⟩
+  · obtain ⟨S, hS, records, groups, hLaw, hPass, hGroup, hQ, hTrim, hU, hPrior⟩ := hSource C
+    let sz : R.Slice C × IWord PT.tiling (G.cellPatch C) :=
+      (R.cellWords C).symm ⟨r.1, r.2.1⟩
+    have hpos : (R.cellWords C sz).1 = r.1 := by
+      simpa [sz] using congrArg Subtype.val
+        ((R.cellWords C).apply_symm_apply ⟨r.1, r.2.1⟩)
+    have hodd : ¬ IsEvenRole (R.cellWords C sz).1 := by
+      intro hEven
+      exact r.2.2 (hpos ▸ hEven)
+    have hoddWord : ¬ IsEvenRole sz.2 := by
+      intro hEven
+      exact hodd ((R.word_parity hc C sz.1 sz.2).mpr hEven)
+    let r' : OddCellRole G C := ⟨(R.cellWords C sz).1, (R.cellWords C sz).2, hodd⟩
+    have hr' : r' = r := Subtype.ext hpos
+    have hgroup : R.groupOf C r = groups (sz.1, S.groupOf sz.2) := by
+      calc
+        R.groupOf C r = R.groupOf C r' := by rw [hr']
+        _ = groups (sz.1, S.groupOf sz.2) := hGroup sz.1 sz.2 hodd
+    change W sz.1 = W' sz.1 at heq
+    have hbar : ∀ b, (K.qbar C W (R.groupOf C r)).w b =
+        (K.qbar C W' (R.groupOf C r)).w b := by
+      intro b
+      rw [hgroup]
+      exact cluster_qbar_row_local R Perm K C S records groups hQ hTrim
+        W W' hW hW' sz.1 (S.groupOf sz.2) heq b
+    have hmass :
+        (∑ b ∈ Finset.univ.image pool, (K.qbar C W (R.groupOf C r)).w b) =
+          ∑ b ∈ Finset.univ.image pool, (K.qbar C W' (R.groupOf C r)).w b := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      exact hbar b
+    have hqtilde : ∀ b,
+        (K.qtilde C pool W (R.groupOf C r)).w b =
+          (K.qtilde C pool W' (R.groupOf C r)).w b := by
+      intro b
+      by_cases hm :
+          (∑ b ∈ Finset.univ.image pool, (K.qbar C W (R.groupOf C r)).w b) ≠ 0
+      · have hm' :
+            (∑ b ∈ Finset.univ.image pool, (K.qbar C W' (R.groupOf C r)).w b) ≠ 0 := by
+          rw [← hmass]
+          exact hm
+        rw [K.qtilde_eq C pool W (R.groupOf C r) b hW hm,
+          K.qtilde_eq C pool W' (R.groupOf C r) b hW' hm', hbar b, hmass]
+      · have hz :
+            (∑ b ∈ Finset.univ.image pool, (K.qbar C W (R.groupOf C r)).w b) = 0 :=
+          not_ne_iff.mp hm
+        have hz' :
+            (∑ b ∈ Finset.univ.image pool, (K.qbar C W' (R.groupOf C r)).w b) = 0 := by
+          rw [← hmass]
+          exact hz
+        rw [hFallback C pool W (R.groupOf C r) hz,
+          hFallback C pool W' (R.groupOf C r) hz', hbar b]
+    have hUrow : ∀ b,
+        (R.U C W (R.groupOf C r) b).w y =
+          (R.U C W' (R.groupOf C r) b).w y := by
+      intro b
+      rw [hgroup]
+      calc
+        (R.U C W (groups (sz.1, S.groupOf sz.2)) b).w y =
+            S.U (S.groupOf sz.2) (records sz.1 (W sz.1)) b y := hU W sz.1 (S.groupOf sz.2) b y
+        _ = S.U (S.groupOf sz.2) (records sz.1 (W' sz.1)) b y := by rw [heq]
+        _ = (R.U C W' (groups (sz.1, S.groupOf sz.2)) b).w y :=
+            (hU W' sz.1 (S.groupOf sz.2) b y).symm
+    calc
+      ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y =
+          ∑ b, (K.qtilde C pool W' (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y := by
+        apply Finset.sum_congr rfl
+        intro b hb
+        rw [hqtilde b]
+      _ = ∑ b, (K.qtilde C pool W' (R.groupOf C r)).w b *
+            (R.U C W' (R.groupOf C r) b).w y := by
+        apply Finset.sum_congr rfl
+        intro b hb
+        rw [hUrow b]
+  · exact (hDirect hc).elim
 
 end HypercubeRamsey.S16.Lane_q_s16_gate1

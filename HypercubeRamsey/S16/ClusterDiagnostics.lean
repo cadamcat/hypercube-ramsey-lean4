@@ -271,7 +271,8 @@ theorem cluster_role_term_local {κ : CConsts} {T : Stage} {k : ℕ}
     (y : Fin (T.S.N k)) :
     ∑ b, (K.qtilde C pool W (R.groupOf C r)).w b * (R.U C W (R.groupOf C r) b).w y =
       ∑ b, (K.qtilde C pool W' (R.groupOf C r)).w b * (R.U C W' (R.groupOf C r) b).w y := by
-  sorry
+  exact Lane_q_s16_gate1.cluster_role_term_local R Perm K hFallback hR hc C pool W W'
+    hW hW' r heq y
 
 /-- D3. Per-role cap at pools whose normalizers pass (typical pools).
 TeX 16:274–276; estimated proof: 150 lines. -/

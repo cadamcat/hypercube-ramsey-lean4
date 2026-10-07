@@ -8,8 +8,10 @@ open scoped BigOperators
 
 /-- D18.L, §§16–17 and 18:43–87. Construct actual initial data, not arbitrary
 lists. The selected discrepancy budgets are forwarded from C12.K. The input
-geometry now includes the prescribed cell slot count; the output calibration
-uses a 50ρh consultation-centre margin. The general calibration and upstream
+geometry includes the prescribed cell slot count and the same physical
+calibration/source links, positive typical mass and internal probability
+priors in `L16QuantitativeValidity.physical`. The output calibration uses a
+50ρh consultation-centre margin. The general calibration and upstream
 construction gaps recorded in `Needs` remain producer obligations. -/
 theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ) (T : Stage)
     (hInit : InitDisc T κ.η0)

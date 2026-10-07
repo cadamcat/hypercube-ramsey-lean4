@@ -41,6 +41,67 @@ theorem pr_exists_le_sum {Ω I : Type*} [Fintype Ω] [Fintype I]
         simpa [hbad] using hsum
     _ = ∑ i, ∑ ω, if Bad i ω then Q.w ω else 0 := by rw [Finset.sum_comm]
 
+private theorem hammingBall_card_le_sum_choose {d R : ℕ} (v : CubeVertex d) :
+    (hammingBall v R).card ≤ ∑ j ∈ Finset.range (R + 1), Nat.choose d j := by
+  classical
+  let support : CubeVertex d → Finset (Fin d) := fun u =>
+    Finset.univ.filter (fun i => u i ≠ v i)
+  let B := hammingBall v R
+  let Q := (Finset.univ : Finset (Fin d)).powerset.filter (fun s => s.card ≤ R)
+  have hsupportDist (u : CubeVertex d) : (support u).card = hammingDist v u := by
+    simp [support, hammingDist, ne_comm]
+  have hinj : Set.InjOn support (B : Set (CubeVertex d)) := by
+    intro x hx y hy hxy
+    funext i
+    have hiff : x i ≠ v i ↔ y i ≠ v i := by
+      have h := congrArg (fun s : Finset (Fin d) => i ∈ s) hxy
+      simpa [support] using h
+    cases hv : v i <;> cases hxv : x i <;> cases hyv : y i <;> simp_all
+  have hsubset : B.image support ⊆ Q := by
+    intro s hs
+    rcases Finset.mem_image.mp hs with ⟨u, hu, rfl⟩
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_powerset.mpr (Finset.subset_univ _), ?_⟩
+    have hu' : u ∈ hammingBall v R := by simpa [B] using hu
+    have hdistle : hammingDist v u ≤ R := (Finset.mem_filter.mp hu').2
+    rw [hsupportDist]
+    exact hdistle
+  have hcard : B.card ≤ Q.card := by
+    calc
+      B.card = (B.image support).card := (Finset.card_image_of_injOn hinj).symm
+      _ ≤ Q.card := Finset.card_le_card hsubset
+  have hQsum : Q.card =
+      ∑ k ∈ Finset.range (d + 1), if k ≤ R then Nat.choose d k else 0 := by
+    calc
+      Q.card = ∑ s ∈ (Finset.univ : Finset (Fin d)).powerset,
+          if s.card ≤ R then 1 else 0 := by
+        simpa [Q] using (Finset.natCast_card_filter
+          (p := fun s : Finset (Fin d) => s.card ≤ R)
+          (s := (Finset.univ : Finset (Fin d)).powerset))
+      _ = ∑ k ∈ Finset.range (d + 1),
+          Nat.choose d k * (if k ≤ R then 1 else 0) := by
+        simpa [Fintype.card_fin, nsmul_eq_mul] using
+          (Finset.sum_powerset_apply_card
+            (f := fun k : ℕ => if k ≤ R then (1 : ℕ) else 0)
+            (x := (Finset.univ : Finset (Fin d))))
+      _ = _ := by simp
+  let S := (Finset.range (d + 1)).filter (fun j => j ≤ R)
+  have hQtoS : Q.card = ∑ j ∈ S, Nat.choose d j := by
+    rw [hQsum]
+    simp [S, Finset.sum_filter]
+  have hSsub : S ⊆ Finset.range (R + 1) := by
+    intro j hj
+    have hj' := (Finset.mem_filter.mp hj).2
+    exact Finset.mem_range.mpr (Nat.lt_succ_of_le hj')
+  have hsum : (∑ j ∈ S, Nat.choose d j) ≤
+      ∑ j ∈ Finset.range (R + 1), Nat.choose d j :=
+    Finset.sum_le_sum_of_subset_of_nonneg hSsub (by intros; exact Nat.zero_le _)
+  calc
+    (hammingBall v R).card = B.card := rfl
+    _ ≤ Q.card := hcard
+    _ = ∑ j ∈ S, Nat.choose d j := hQtoS
+    _ ≤ ∑ j ∈ Finset.range (R + 1), Nat.choose d j := hsum
+
 private theorem keyDist_triangle {η₀ : ℝ} {n : ℕ} (a b c : Key η₀ n) :
     keyDist a c ≤ keyDist a b + keyDist b c := by
   unfold keyDist

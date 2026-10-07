@@ -203,11 +203,11 @@ theorem pi_pr_le_fixed_image {ι κ α : Type*} [Fintype ι] [DecidableEq ι]
   have hprod :
       (∏ i : T, (P i.1).w (val i)) = ∏ k ∈ S, (P (f k)).w (v k) := by
     calc
-      (∏ i : T, (P i.1).w (val i)) = ∏ i ∈ T, F i := by
-        rw [Finset.prod_coe_sort]
+      (∏ i : T, (P i.1).w (val i)) = ∏ i : T, F i := by
         apply Finset.prod_congr rfl
         intro i hi
         simp [F]
+      _ = ∏ i ∈ T, F i := Finset.prod_coe_sort T F
       _ = ∏ k ∈ S, F (f k) := Finset.prod_image hf
       _ = ∏ k ∈ S, (P (f k)).w (v k) := by
         apply Finset.prod_congr rfl
@@ -473,6 +473,38 @@ theorem prod_pr_le_left {α β : Type*} [Fintype α] [Fintype β]
       intro b hA
       exact hB (hAB (a, b) hA)
     simp [hB, hnoA]
+
+theorem bind_pr_eq_sum {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (K : α → FinProb β) (A : α × β → Prop) :
+    (FinProb.bind P K).pr A =
+      ∑ a, P.w a * (K a).pr (fun b => A (a, b)) := by
+  classical
+  unfold FinProb.pr FinProb.bind
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a ha
+  calc
+    (∑ b, if A (a, b) then P.w a * (K a).w b else 0) =
+        ∑ b, P.w a * (if A (a, b) then (K a).w b else 0) := by
+          apply Finset.sum_congr rfl
+          intro b hb
+          by_cases h : A (a, b) <;> simp [h]
+    _ = P.w a * ∑ b, if A (a, b) then (K a).w b else 0 := by
+          rw [Finset.mul_sum]
+    _ = P.w a * (K a).pr (fun b => A (a, b)) := by rfl
+
+theorem rawTAT_pr_le_tags {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist)
+    (A : D.TAT → Prop) (B : D.Tags → Prop)
+    (hAB : ∀ z, A z → B z.1.1) :
+    (D.rawTAT Θ).pr A ≤ (D.tagLawAll Θ).pr B := by
+  calc
+    (D.rawTAT Θ).pr A ≤ ((D.tagLawAll Θ).prod D.actLaw).pr (fun x => B x.1) := by
+      unfold Ctx.rawTAT
+      exact prod_pr_le_left ((D.tagLawAll Θ).prod D.actLaw) D.tieLaw A
+        (fun x => B x.1) (fun z hz => hAB z hz)
+    _ ≤ (D.tagLawAll Θ).pr B :=
+      prod_pr_le_left (D.tagLawAll Θ) D.actLaw (fun x => B x.1) B (fun x hx => hx)
 
 theorem sum_subtype_const {α : Type*} [DecidableEq α] (s : Finset α) (r : ℝ) :
     (∑ x : s, r) = (Fintype.card s : ℝ) * r := by

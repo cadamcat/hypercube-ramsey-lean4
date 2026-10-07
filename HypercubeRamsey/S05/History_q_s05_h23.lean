@@ -1220,6 +1220,49 @@ def highTypeFromData5 (X : Setup5 γ K' χ n N E G) (q : CoarseKey5 n)
 def highTypeCandidates5 (X : Setup5 γ K' χ n N E G) (q : CoarseKey5 n) : Finset X.Ty :=
   (nearCoarseKeys5 q.1).powerset.image (highTypeFromData5 X q)
 
+theorem coarseKey_mem_nearKeys5 {n : ℕ} (q : CoarseKey5 n) :
+    q ∈ nearCoarseKeys5 q.1 := by
+  apply Finset.mem_product.mpr
+  exact ⟨binVector_self_mem_near5 q.1, Finset.mem_univ q.2⟩
+
+theorem keyAt5_coarse {n m J : ℕ} (q : CoarseKey5 n) (t : CubeVertex m) (k : ℕ) :
+    (keyAt5 J q t k).coarse = q := by
+  by_cases hk : k ≤ J <;> simp [keyAt5, hk, HiddenKey5.coarse]
+
+theorem lowTypeCandidates_keys_coarse5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (t : CubeVertex (X.p.m n)) (j : Fin (X.p.J n + 1))
+    (K : X.Ty) (hK : K ∈ lowTypeCandidates5 X q t j) :
+    ∀ ℓ ∈ K.2.1, ℓ.coarse ∈ nearCoarseKeys5 q.1 := by
+  classical
+  obtain ⟨d, hd, hEq⟩ := Finset.mem_image.mp hK
+  rcases Finset.mem_product.mp hd with ⟨hC, hF⟩
+  have hCsubset : d.1 ⊆ nearCoarseKeys5 q.1 := Finset.mem_powerset.mp hC
+  intro ℓ hℓ
+  rw [← hEq] at hℓ
+  dsimp [lowTypeFromData5] at hℓ
+  rcases Finset.mem_union.mp hℓ with hAB | hD
+  · rcases Finset.mem_union.mp hAB with hA | hB
+    · obtain ⟨i, hi, rfl⟩ := Finset.mem_image.mp hA
+      simpa [keyAt5_coarse] using hCsubset hi
+    · obtain ⟨h, hh, rfl⟩ := Finset.mem_image.mp hB
+      rw [keyAt5_coarse]
+      exact coarseKey_mem_nearKeys5 q
+  · obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hD
+    rw [keyAt5_coarse]
+    exact coarseKey_mem_nearKeys5 q
+
+theorem highTypeCandidates_keys_coarse5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (K : X.Ty) (hK : K ∈ highTypeCandidates5 X q) :
+    ∀ ℓ ∈ K.2.1, ℓ.coarse ∈ nearCoarseKeys5 q.1 := by
+  classical
+  obtain ⟨C, hC, hEq⟩ := Finset.mem_image.mp hK
+  have hCsubset : C ⊆ nearCoarseKeys5 q.1 := Finset.mem_powerset.mp hC
+  intro ℓ hℓ
+  rw [← hEq] at hℓ
+  dsimp [highTypeFromData5] at hℓ
+  obtain ⟨i, hi, rfl⟩ := Finset.mem_image.mp hℓ
+  exact hCsubset hi
+
 theorem highTypeCandidates_card5 (X : Setup5 γ K' χ n N E G) (q : CoarseKey5 n)
     (D : ℕ) (hD : (nearCoarseKeys5 q.1).card ≤ D) :
     (highTypeCandidates5 X q).card ≤ 2 ^ D := by
@@ -1269,6 +1312,61 @@ noncomputable instance stage2HighPatternFintype5 (X : Setup5 γ K' χ n N E G) :
     Fintype (Stage2HighPattern5 X) := by
   classical
   infer_instance
+
+abbrev Stage2LowPatternAt5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (j : Fin (X.p.J n + 1)) :=
+  {K : X.Ty // K ∈ lowTypeCandidates5 X q default j ∧ K.1 = q ∧ K.2.2 = some j ∧
+    ∃ x : CubeVertex n, IsEvenRole x ∧
+      K = signShiftType5 X (X.g.sign x) (X.g.evenType (X.p.J n) x)}
+
+noncomputable instance stage2LowPatternAtFintype5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (j : Fin (X.p.J n + 1)) :
+    Fintype (Stage2LowPatternAt5 X q j) := by
+  classical
+  infer_instance
+
+abbrev Stage2HighPatternAt5 (X : Setup5 γ K' χ n N E G) (q : CoarseKey5 n) :=
+  {K : X.Ty // K ∈ highTypeCandidates5 X q ∧ K.1 = q ∧ K.2.2 = none ∧
+    ∃ x : CubeVertex n, IsEvenRole x ∧ K = X.g.evenType (X.p.J n) x}
+
+noncomputable instance stage2HighPatternAtFintype5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) : Fintype (Stage2HighPatternAt5 X q) := by
+  classical
+  infer_instance
+
+theorem stage2LowPatternAt_card_le5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (j : Fin (X.p.J n + 1)) :
+    Fintype.card (Stage2LowPatternAt5 X q j) ≤ (lowTypeCandidates5 X q default j).card := by
+  classical
+  let f : Stage2LowPatternAt5 X q j → {K : X.Ty // K ∈ lowTypeCandidates5 X q default j} :=
+    fun K => ⟨K.1, K.2.1⟩
+  have hf : Function.Injective f := by
+    intro a b hab
+    apply Subtype.ext
+    change a.1 = b.1
+    exact congrArg (fun z : {K : X.Ty // K ∈ lowTypeCandidates5 X q default j} => z.1) hab
+  calc
+    Fintype.card (Stage2LowPatternAt5 X q j) ≤
+        Fintype.card {K : X.Ty // K ∈ lowTypeCandidates5 X q default j} :=
+      Fintype.card_le_of_injective f hf
+    _ = (lowTypeCandidates5 X q default j).card := by rw [Fintype.card_coe]
+
+theorem stage2HighPatternAt_card_le5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) :
+    Fintype.card (Stage2HighPatternAt5 X q) ≤ (highTypeCandidates5 X q).card := by
+  classical
+  let f : Stage2HighPatternAt5 X q → {K : X.Ty // K ∈ highTypeCandidates5 X q} :=
+    fun K => ⟨K.1, K.2.1⟩
+  have hf : Function.Injective f := by
+    intro a b hab
+    apply Subtype.ext
+    change a.1 = b.1
+    exact congrArg (fun z : {K : X.Ty // K ∈ highTypeCandidates5 X q} => z.1) hab
+  calc
+    Fintype.card (Stage2HighPatternAt5 X q) ≤
+        Fintype.card {K : X.Ty // K ∈ highTypeCandidates5 X q} :=
+      Fintype.card_le_of_injective f hf
+    _ = (highTypeCandidates5 X q).card := by rw [Fintype.card_coe]
 
 theorem stage2LowPattern_exists5 (X : Setup5 γ K' χ n N E G)
     (x : CubeVertex n) (heven : IsEvenRole x) (hlow : X.g.severity x ≤ X.p.J n) :
@@ -2154,6 +2252,40 @@ noncomputable def stage2AlarmScope5 (X : Setup5 γ K' χ n N E G)
   | Sum.inr (Sum.inr (Sum.inl a)) => blockLocalBins5 X a.1 a.1.2.1
   | Sum.inr (Sum.inr (Sum.inr a)) =>
       blockLocalBins5 X a.1.1 (insert (X.optKeyOf a.1.1 a.1.2) a.1.1.2.1)
+
+def stage2GroupScope5 (X : Setup5 γ K' χ n N E G) (q : CoarseKey5 n) :
+    Finset (BinVector5 n) :=
+  insert q.1 ((nearCoarseKeys5 q.1).biUnion fun i => binList5 i)
+
+theorem binList_subset_stage2GroupScope5 (X : Setup5 γ K' χ n N E G)
+    (q i : CoarseKey5 n) (hi : i ∈ nearCoarseKeys5 q.1) :
+    binList5 i ⊆ stage2GroupScope5 X q := by
+  intro w hw
+  apply Finset.mem_insert_of_mem
+  exact Finset.mem_biUnion.mpr ⟨i, hi, hw⟩
+
+theorem blockLocalBins_subset_stage2GroupScope5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (K : X.Ty) (hcenter : K.1 = q)
+    (hkeys : ∀ ℓ ∈ K.2.1 ∪ X.gateKeys K, ℓ.coarse ∈ nearCoarseKeys5 q.1) :
+    blockLocalBins5 X K K.2.1 ⊆ stage2GroupScope5 X q := by
+  intro w hw
+  simp only [blockLocalBins5, stage2GroupScope5, Finset.mem_insert,
+    Finset.mem_biUnion, Finset.mem_union] at hw ⊢
+  rcases hw with hw | ⟨ℓ, hℓ, hw⟩
+  · exact Or.inl (by simpa [hcenter] using hw)
+  · exact Or.inr ⟨ℓ.coarse, hkeys ℓ (Finset.mem_union.mpr hℓ), hw⟩
+
+theorem blockLocalBinsInsert_subset_stage2GroupScope5 (X : Setup5 γ K' χ n N E G)
+    (q : CoarseKey5 n) (K : X.Ty) (hcenter : K.1 = q)
+    (S : Finset X.Key)
+    (hkeys : ∀ ℓ ∈ S ∪ X.gateKeys K, ℓ.coarse ∈ nearCoarseKeys5 q.1) :
+    blockLocalBins5 X K S ⊆ stage2GroupScope5 X q := by
+  intro w hw
+  simp only [blockLocalBins5, stage2GroupScope5, Finset.mem_insert,
+    Finset.mem_biUnion, Finset.mem_union] at hw ⊢
+  rcases hw with hw | ⟨ℓ, hℓ, hw⟩
+  · exact Or.inl (by simpa [hcenter] using hw)
+  · exact Or.inr ⟨ℓ.coarse, hkeys ℓ (Finset.mem_union.mpr hℓ), hw⟩
 
 structure Stage2RawBounds5 (X : Setup5 γ K' χ n N E G) (v : Fin N) : Prop where
   step1 : ∀ K, X.TypeOccurs K → ∀ ℓ, ℓ ∈ X.gateKeys K →

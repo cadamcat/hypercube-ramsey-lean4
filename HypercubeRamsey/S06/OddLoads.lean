@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadA
+import HypercubeRamsey.S06.OddLoads_sol_s06_loadD
 
 /-!
 # Odd loads through the three histories, and the additional even history mean
@@ -1222,9 +1223,13 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ((stepFacts6 γ p₀ K hadm).and (stageFacts6 γ p₀ K hadm)).mono
       (fun _ _ _ _ _ _ h => h.2 h.1)
   obtain ⟨n₀, C₀, hStages⟩ := hStages
-  refine ⟨n₀, C₀, ?_⟩
+  obtain ⟨nRare, hRare⟩ := Filter.eventually_atTop.1
+    (Lane_sol_s06_loadD.outside_interiorZero_eventually_small K)
+  refine ⟨max n₀ nRare, C₀, ?_⟩
   intro n N E G M X hLarge hTag hDom hCoarse v hv hGood
-  have hStage := hStages n N E G M X hLarge
+  have hStage := hStages n N E G M X
+    ⟨le_trans (Nat.le_max_left _ _) hLarge.1, hLarge.2⟩
+  have hNumerical := hRare n (le_trans (Nat.le_max_right _ _) hLarge.1)
   have hGoodMass : 0 < X.initLaw.pr X.V0Good :=
     lt_of_lt_of_le (by norm_num) hStage.1
   have hvRaw : X.initLaw.w v ≠ 0 :=
@@ -1239,7 +1244,24 @@ theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       X.phiEven b x a ≤ (n : ℝ) ^ (d₂ * (X.evenType x).u) * K := by
     apply Lane_sol_s06_loadA.gatedTagMixture_hiddenMean_cap X hDom b (X.evenType x) _ hSupp a
     exact Finset.mem_image.mpr ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hx⟩, rfl⟩
-  -- Remaining: rarity bounds outside interior severity zero, and coarse-stage product moments.
+  have hOutside (c : X.Coarse) (hc : (X.stage2Law v).w c ≠ 0) (a : Fin N) :
+      (X.evenRoles.card : ℝ)⁻¹ * ∑ x ∈ X.evenRoles,
+        (if Lane_sol_s06_loadD.InteriorZero X x then 0 else X.phiEven (v, c) x a) ≤ 2 := by
+    have hStage3Supp : ∃ z, (X.stage3Law (v, c)).w z ≠ 0 := by
+      by_contra h
+      push_neg at h
+      have hsum : (∑ z, (X.stage3Law (v, c)).w z) = 0 :=
+        Finset.sum_eq_zero fun z _ => h z
+      rw [(X.stage3Law (v, c)).sum_eq_one] at hsum
+      norm_num at hsum
+    obtain ⟨z, hz⟩ := hStage3Supp
+    have hHistWeight : X.histLaw.w ((v, c), z) ≠ 0 := by
+      change (X.stage1Law.w v * (X.stage2Law v).w c) * (X.stage3Law (v, c)).w z ≠ 0
+      exact mul_ne_zero (mul_ne_zero hv hc) hz
+    have hBaseSupp := (hStage.2.2.2 ((v, c), z) hHistWeight).1
+    exact Lane_sol_s06_loadD.outside_evenMean_average_le_two X hDom (v, c) hBaseSupp
+      hNumerical.1 hNumerical.2.1 hNumerical.2.2 a
+  -- Remaining: coarse-stage separated products, scattered moments, and the label union.
   sorry
 
 /-- L6.1l (hidden, 06:751–757): scattered moments of the `f_x` under stage 3; removing the constraints touching

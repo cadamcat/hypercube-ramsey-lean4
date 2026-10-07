@@ -117,6 +117,110 @@ theorem patchAssignment_count_le {κ : CConsts} {T : Stage} {k : ℕ}
       have hlen : (PT.tiling.P i).ℓ ≤ T.S.n k := by omega
       exact prefixLeaf_card_le (PT.tiling.w i) hlen
 
+theorem evenPatchPositions_card_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    (S15.evenPatchPositions PT.tiling i).card ≤
+      2 ^ (T.S.n k - (PT.tiling.P i).ℓ) := by
+  classical
+  let S := S15.evenPatchPositions PT.tiling i
+  have himage : S.card = (S.image Subtype.val).card :=
+    (Finset.card_image_of_injective S Subtype.val_injective).symm
+  have hsub : S.image Subtype.val ⊆
+      Finset.univ.filter fun v : CubeVertex (T.S.n k) => v ∈ PT.tiling.leaf i := by
+    intro v hv
+    rcases Finset.mem_image.mp hv with ⟨a, ha, rfl⟩
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp ha).2⟩
+  have hh := hPT.tiling_valid.prefix_internal_length
+  have hℓ : (PT.tiling.P i).ℓ ≤ Finset.univ.sup
+      (fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) :=
+    Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+      (Finset.mem_univ i)
+  have hlen : (PT.tiling.P i).ℓ ≤ T.S.n k := by omega
+  calc
+    S.card = (S.image Subtype.val).card := himage
+    _ ≤ (Finset.univ.filter fun v : CubeVertex (T.S.n k) => v ∈ PT.tiling.leaf i).card :=
+      Finset.card_le_card hsub
+    _ ≤ 2 ^ (T.S.n k - (PT.tiling.P i).ℓ) := by
+      exact prefixLeaf_card_le (PT.tiling.w i) hlen
+
+theorem evenPatchPositions_ratio_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    ((S15.evenPatchPositions PT.tiling i).card : ℝ) / ((PT.tiling.P i).M : ℝ) ≤
+      800 * (2 : ℝ) ^ (T.S.n k) / T.S.N k := by
+  classical
+  have hcountNat := evenPatchPositions_card_le PT hPT i
+  have hcount : ((S15.evenPatchPositions PT.tiling i).card : ℝ) ≤
+      (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ) := by exact_mod_cast hcountNat
+  have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hSpos : (0 : ℝ) < PT.tiling.S := by
+    have h := hPT.tiling_valid.S_lower
+    nlinarith
+  have hMpos : (0 : ℝ) < (PT.tiling.P i).M := by
+    have hcard : 0 < ((PT.tiling.P i).X.card : ℝ) :=
+      Nat.cast_pos.mpr (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1)
+    rw [(PT.tiling.P i).cardX] at hcard
+    exact hcard
+  have hh := hPT.tiling_valid.prefix_internal_length
+  have hℓ : (PT.tiling.P i).ℓ ≤ Finset.univ.sup
+      (fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) :=
+    Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+      (Finset.mem_univ i)
+  have hℓn : (PT.tiling.P i).ℓ ≤ T.S.n k := by omega
+  have hpow : (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ) *
+      (2 : ℝ) ^ (PT.tiling.P i).ℓ = (2 : ℝ) ^ (T.S.n k) := by
+    rw [← pow_add]
+    congr 1
+    omega
+  have hpowℓ : (0 : ℝ) < (2 : ℝ) ^ (PT.tiling.P i).ℓ := by positivity
+  have hdyad := hPT.tiling_valid.dyadic_mass_upper i
+  have hinv : (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) =
+      1 / (2 : ℝ) ^ (PT.tiling.P i).ℓ := by simp [zpow_neg]
+  rw [hinv] at hdyad
+  have hdyad' : (PT.tiling.S : ℝ) < 2 * (PT.tiling.P i).M *
+      (2 : ℝ) ^ (PT.tiling.P i).ℓ := by
+    have hmul := mul_lt_mul_of_pos_right hdyad hSpos
+    have hdiv : (PT.tiling.S : ℝ) / (2 : ℝ) ^ (PT.tiling.P i).ℓ <
+        2 * (PT.tiling.P i).M := by
+      calc
+        _ = (1 / (2 : ℝ) ^ (PT.tiling.P i).ℓ) * PT.tiling.S := by ring
+        _ < (2 * (PT.tiling.P i).M / PT.tiling.S) * PT.tiling.S := hmul
+        _ = 2 * (PT.tiling.P i).M := by field_simp [ne_of_gt hSpos]
+    exact (div_lt_iff₀ hpowℓ).mp hdiv
+  have hrecip : 1 / (PT.tiling.P i).M <
+      2 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S := by
+    apply (div_lt_div_iff₀ hMpos hSpos).2
+    nlinarith [hdyad']
+  have hscaled :
+      ((S15.evenPatchPositions PT.tiling i).card : ℝ) / ((PT.tiling.P i).M : ℝ) ≤
+        2 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S := by
+    calc
+      ((S15.evenPatchPositions PT.tiling i).card : ℝ) / ((PT.tiling.P i).M : ℝ) =
+          (S15.evenPatchPositions PT.tiling i).card * (1 / (PT.tiling.P i).M) := by ring
+      _ ≤ (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ) *
+            (1 / (PT.tiling.P i).M) :=
+        mul_le_mul_of_nonneg_right hcount (by positivity)
+      _ ≤ (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ) *
+            (2 * (2 : ℝ) ^ (PT.tiling.P i).ℓ / PT.tiling.S) :=
+        mul_le_mul_of_nonneg_left hrecip.le (by positivity)
+      _ = 2 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S := by
+        calc
+          _ = 2 * ((2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ) *
+                (2 : ℝ) ^ (PT.tiling.P i).ℓ) / PT.tiling.S := by ring
+          _ = 2 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S := by rw [hpow]
+  have hSlower : (1 / 400 : ℝ) * T.S.N k ≤ PT.tiling.S :=
+    hPT.tiling_valid.S_lower
+  have hSratio : (1 : ℝ) / PT.tiling.S ≤ 400 / (T.S.N k : ℝ) := by
+    apply (div_le_div_iff₀ hSpos hNpos).2
+    nlinarith [hSlower]
+  have hfinal : 2 * (2 : ℝ) ^ (T.S.n k) / PT.tiling.S ≤
+      800 * (2 : ℝ) ^ (T.S.n k) / (T.S.N k : ℝ) := by
+    calc
+      _ = (2 * (2 : ℝ) ^ (T.S.n k)) * (1 / PT.tiling.S) := by ring
+      _ ≤ (2 * (2 : ℝ) ^ (T.S.n k)) * (400 / (T.S.N k : ℝ)) :=
+        mul_le_mul_of_nonneg_left hSratio (by positivity)
+      _ = 800 * (2 : ℝ) ^ (T.S.n k) / (T.S.N k : ℝ) := by ring
+  exact hscaled.trans hfinal
+
 theorem direct_marginal_column_bound {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (y : Fin (T.S.N k)) :
     (∑ b : S15.OddPosition T k, (S15.lawAtOdd PT hPT b).w y) ≤
@@ -655,6 +759,146 @@ theorem directRowMass_dependsOn {κ : CConsts} {T : Stage} {k : ℕ}
     intro b hb
     exact hfactor b (hbulkSubset hb) x
   simp [S15.directRowMass, hcross, hbulk]
+
+theorem directFactor_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
+    (ys : S15.OddAssignment T k) (b : S15.OddPosition T k)
+    (x : Fin (T.S.N k)) : 0 ≤ S15.directFactor PT hPT a ys b x := by
+  unfold S15.directFactor S15.normalizedHit
+  by_cases hd : 0 < deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x
+  · simp [hd, hit]
+    positivity
+  · simp [hd]
+
+theorem directBaseWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : S15.EvenPosition T k)
+    (x : Fin (T.S.N k)) : 0 ≤ S15.directBaseWeight PT hPT a x := by
+  dsimp [S15.directBaseWeight]
+  split_ifs <;> positivity
+
+theorem directCrossingMass_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) : 0 ≤ S15.directCrossingMass PT hPT ys a := by
+  classical
+  unfold S15.directCrossingMass
+  apply Finset.sum_nonneg
+  intro x hx
+  apply mul_nonneg
+  · exact directBaseWeight_nonneg PT hPT a x
+  · apply Finset.prod_nonneg
+    intro b hb
+    exact directFactor_nonneg PT hPT a ys b x
+
+theorem directPostCrossingWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k)) :
+    0 ≤ S15.directPostCrossingWeight PT hPT ys a x := by
+  dsimp [S15.directPostCrossingWeight]
+  split_ifs with hm
+  · apply div_nonneg
+    · apply mul_nonneg
+      · exact directBaseWeight_nonneg PT hPT a x
+      · apply Finset.prod_nonneg
+        intro b hb
+        exact directFactor_nonneg PT hPT a ys b x
+    · exact hm.le
+  · exact le_rfl
+
+theorem directBulkMass_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) : 0 ≤ S15.directBulkMass PT hPT ys a := by
+  classical
+  unfold S15.directBulkMass
+  apply Finset.sum_nonneg
+  intro x hx
+  apply mul_nonneg
+  · exact directPostCrossingWeight_nonneg PT hPT ys a x
+  · apply Finset.prod_nonneg
+    intro b hb
+    exact directFactor_nonneg PT hPT a ys b x
+
+theorem directRowWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k)) :
+    0 ≤ S15.directRowWeight PT hPT ys a x := by
+  unfold S15.directRowWeight
+  apply mul_nonneg
+  · apply mul_nonneg
+    · exact directCrossingMass_nonneg PT hPT ys a
+    · exact directPostCrossingWeight_nonneg PT hPT ys a x
+  · apply Finset.prod_nonneg
+    intro b hb
+    exact directFactor_nonneg PT hPT a ys b x
+
+theorem directRowWeight_sum {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) :
+    (∑ x, S15.directRowWeight PT hPT ys a x) = S15.directRowMass PT hPT ys a := by
+  classical
+  unfold S15.directRowWeight S15.directRowMass S15.directBulkMass
+  calc
+    (∑ x, S15.directCrossingMass PT hPT ys a *
+        S15.directPostCrossingWeight PT hPT ys a x *
+          ∏ b ∈ S15.bulkNeighbours PT hPT a, S15.directFactor PT hPT a ys b x) =
+      ∑ x, S15.directCrossingMass PT hPT ys a *
+        (S15.directPostCrossingWeight PT hPT ys a x *
+          ∏ b ∈ S15.bulkNeighbours PT hPT a, S15.directFactor PT hPT a ys b x) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      ring
+    _ = S15.directCrossingMass PT hPT ys a *
+        ∑ x, S15.directPostCrossingWeight PT hPT ys a x *
+          ∏ b ∈ S15.bulkNeighbours PT hPT a, S15.directFactor PT hPT a ys b x := by
+      rw [← Finset.mul_sum]
+
+theorem directNormalizedRow_sum {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (hpos : 0 < S15.directRowMass PT hPT ys a) :
+    (∑ x, S15.directNormalizedRow PT hPT ys a x) = 1 := by
+  classical
+  unfold S15.directNormalizedRow
+  simp [hpos]
+  calc
+    (∑ x, S15.directRowWeight PT hPT ys a x / S15.directRowMass PT hPT ys a) =
+        (∑ x, S15.directRowWeight PT hPT ys a x) / S15.directRowMass PT hPT ys a := by
+      rw [Finset.sum_div]
+    _ = 1 := by rw [directRowWeight_sum]; exact div_self (ne_of_gt hpos)
+
+theorem directNormalizedRow_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k)) :
+    0 ≤ S15.directNormalizedRow PT hPT ys a x := by
+  dsimp [S15.directNormalizedRow]
+  split_ifs with hmass
+  · exact div_nonneg (directRowWeight_nonneg PT hPT ys a x) hmass.le
+  · exact le_rfl
+
+theorem directNormalizedRow_supported {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (ys : S15.OddAssignment T k)
+    (a : S15.EvenPosition T k) (x : Fin (T.S.N k))
+    (hrow : S15.directNormalizedRow PT hPT ys a x ≠ 0) : x ∈ T.X k := by
+  classical
+  have hmass : 0 < S15.directRowMass PT hPT ys a := by
+    by_contra hnot
+    have hnonpos : ¬0 < S15.directRowMass PT hPT ys a := hnot
+    simp [S15.directNormalizedRow, hnonpos] at hrow
+  have hweight : S15.directRowWeight PT hPT ys a x ≠ 0 := by
+    intro hz
+    apply hrow
+    simp [S15.directNormalizedRow, hmass, hz]
+  have hbase : S15.directBaseWeight PT hPT a x ≠ 0 := by
+    intro hz
+    apply hweight
+    simp [S15.directRowWeight, S15.directPostCrossingWeight, hz]
+  have henv : x ∈ PT.envelope (S15.patchAt PT hPT a.1) := by
+    by_contra hnot
+    apply hbase
+    simp [S15.directBaseWeight, hnot]
+  have hpatch := hPT.tiling_valid.patch_supports (S15.patchAt PT hPT a.1)
+  have hxres : x ∈ T.X k \ PT.tiling.reserveX :=
+    hpatch.2.1 (hpatch.1 (hPT.envelope_subset _ henv))
+  simp only [Finset.mem_sdiff] at hxres
+  exact hxres.1
 
 theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]

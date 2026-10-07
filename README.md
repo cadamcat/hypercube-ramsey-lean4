@@ -5,7 +5,7 @@
 This repository formalizes the theorem that an absolute constant `C > 0` bounds the diagonal Ramsey number of every `n`-dimensional hypercube by `C · 2^n`, for every natural `n` including zero. It is the result of OpenAI's paper *The hypercube Ramsey number has linear order*, which resolves the Burr–Erdős hypercube Ramsey conjecture. This repository formalizes that result and claims no new mathematics.
 
 - **Author:** Yao Xu ([@cadamcat](https://github.com/cadamcat)); see [AUTHORS.md](AUTHORS.md).
-- **AI assistance:** Claude Opus 5.5 in Claude Code and GPT-6 Luna and GPT-6.1 Sol in Codex contributed; the Lean 4 kernel checks the proofs.
+- Developed with AI assistance (Claude Code and Codex); all proofs are verified by the Lean 4 kernel.
 
 ## Formal statement
 

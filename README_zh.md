@@ -5,7 +5,7 @@
 本仓库形式化了如下定理：存在与 `n` 无关的常数 `C > 0`，使每个 `n` 维超立方体的对角 Ramsey 数不超过 `C · 2^n`，其中 `n` 遍历自然数并包括零。这是 OpenAI 论文 *The hypercube Ramsey number has linear order* 的结果，解决了 Burr–Erdős 超立方体 Ramsey 猜想。本仓库形式化该结果，不主张新的数学成果。
 
 - **作者：** Yao Xu ([@cadamcat](https://github.com/cadamcat))；作者与署名说明见 [AUTHORS.md](AUTHORS.md)。
-- **AI 协助：** Claude Code 中的 Claude Opus 5.5，以及 Codex 中的 GPT-6 Luna 和 GPT-6.1 Sol 参与了工作；所有证明均由 Lean 4 内核检查。
+- 借助 AI 辅助开发（Claude Code 和 Codex）；所有证明均经 Lean 4 内核验证。
 
 ## 形式化陈述
 

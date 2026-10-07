@@ -1,6 +1,6 @@
 # Authors and attribution
 
-Yao Xu ([@cadamcat](https://github.com/cadamcat)) is the author. He planned the formalization, set its acceptance criteria, and made the publication decision.
+Yao Xu ([@cadamcat](https://github.com/cadamcat)) is the author and maintainer of this formalization project. The author planned, dispatched and reviewed the work, set its acceptance criteria (only the standard axioms, fidelity of every frozen statement, checking by the Lean kernel) and decided on its publication.
 
 The mathematical result is OpenAI's [*The hypercube Ramsey number has linear order*](https://github.com/openai/math/blob/adc7f1241b42e322a6451854ab7e4b4c146bf78a/preprints/The-hypercube-Ramsey-number-has-linear-order-September-23-2026/paper.pdf), which resolves the Burr–Erdős hypercube Ramsey conjecture. This repository formalizes that result and claims no new mathematics.
 

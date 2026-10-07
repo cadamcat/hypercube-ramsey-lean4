@@ -3,6 +3,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_q_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n1
+import HypercubeRamsey.S18.Nodes_sol_s18_n5
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -563,7 +564,12 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     nlinarith
   refine ⟨κ.KB, hK, ?_⟩
   have hn : ∀ᶠ k in atTop, 2 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 2
-  filter_upwards [hn] with k hk
+  obtain ⟨Kβ, hKβ, hSchedule, hsmall⟩ := L18_0a hκ T
+  have hlog : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  have hscale : ∀ᶠ k in atTop, 8 * κ.KB < densityScale T k :=
+    T.S.ratio_tendsto.eventually_gt_atTop (8 * κ.KB)
+  filter_upwards [hn, hsmall (Real.log 2 / 1000) hlog,
+    hsmall (1 / 1000) (by norm_num), L18_0b hκ T, hscale] with k hk hsmall₀ hsmall₁ hcap hkScale
   intro PT hPT D hD hTransition
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro p
@@ -578,7 +584,19 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
   · intro S
     exact Lane_q_s18_n5.nonisolates_le_twice_rank D S
   · intro x h hfull v heven
-    sorry
+    have hC := hcap PT hPT D hD hTransition
+      (hsmall₀ PT hPT D.low_mode D.geom D.fresh D.l16_valid)
+    have hmass : 0 < ∑ y, Lane_sol_s18_n5.finalWeight D h v y :=
+      Lane_sol_s18_n5.full_finalWeight_pos D δ x h hfull v heven
+        (fun j hj => Lane_sol_s18_n5.currentCap_lt_one hκ D hC hkScale δ x h hfull v j hj)
+        (fun j => lt_of_le_of_lt (Lane_sol_s18_n5.smallErrors_error_le D (1 / 1000)
+          (hsmall₁ PT hPT D.low_mode D.geom D.fresh D.l16_valid) v j) (by norm_num))
+    have hZ : (1 / 2 : ℝ) ≤ ∑ p : Fin (T.S.N k) × Fin (T.S.N k),
+          if D.nonconflict v p.1 p.2 then
+            (D.finalPrior h v).w p.1 * (D.finalPrior h v).w p.2 else 0 := by
+      sorry
+    exact ⟨hZ, Lane_sol_s18_n5.pairLaw_support hκ D h v
+      (hfull.2.2.2.2.1 v heven) hmass hZ⟩
 
 /-- P18.5b, 18:993–1025. A nonnegative integral comparison retaining the
 reach and side-data gates, with uniform constants before all stage indices. -/
@@ -605,6 +623,11 @@ theorem P18_5c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
           A.termTest C assignment ≤ (1 + εterm) * A.permTest assignment ∧
           A.permTest assignment ≤ 2 * A.permFreshTest assignment ∧
           A.permFreshTest assignment ≤ 2 * A.iidFreshTest assignment := by
+  filter_upwards [Lane_sol_s18_n5.eventually_scope_size T,
+    Lane_sol_s18_n5.perm_resampling_comparison hκ T] with k hscope hresampling
+  intro PT hPT D hD δ εterm C A assignment
+  refine ⟨Lane_sol_s18_n5.terminal_comparison D hD A C assignment (hscope D A),
+    hresampling PT hPT D hD A assignment, ?_⟩
   sorry
 
 /-- P18.5d, 18:1058–1090. Bounds the explicitly defined isolate kernel. -/

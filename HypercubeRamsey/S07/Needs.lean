@@ -1,4 +1,6 @@
 import HypercubeRamsey.Framework.Props
+import HypercubeRamsey.S04.Lemma41
+import HypercubeRamsey.S06.Assembly
 
 /-!
 Local copies of the consumed Section 4 and Section 6 statements. The shared
@@ -31,7 +33,7 @@ theorem L4_1_consumed :
       ∃ h : ℝ, 0 < h ∧
         ∀ h' : ℝ, 0 < h' → h' ≤ h → ∀ T : Stage,
           Available T (PBias (pw β) (pw γ) h').toPatch →
-          EventuallyAbsent T (PPure β γ h').toPatch → False := by
-  sorry
+          EventuallyAbsent T (PPure β γ h').toPatch → False :=
+  fun β γ hβ hβγ hγ => HypercubeRamsey.L4_1 β γ hβ hβγ hγ
 
 end HypercubeRamsey.S07.Needs

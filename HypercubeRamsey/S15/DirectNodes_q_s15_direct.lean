@@ -502,6 +502,56 @@ theorem finLaw_pr_mono {α : Type*} [Fintype α] (P : FinLaw α)
     simp [hA, hB]
   · by_cases hB : B x <;> simp [hA, hB, P.nonneg x]
 
+theorem finProb_expect_sum {α ι : Type*} [Fintype α] [Fintype ι]
+    (P : FinProb α) (f : α → ι → ℝ) :
+    P.expect (fun x => ∑ i, f x i) = ∑ i, P.expect (fun x => f x i) := by
+  classical
+  unfold FinProb.expect
+  change (∑ x, P.w x * ∑ i, f x i) = ∑ i, ∑ x, P.w x * f x i
+  calc
+    (∑ x, P.w x * ∑ i, f x i) = ∑ x, ∑ i, P.w x * f x i := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [Finset.mul_sum]
+    _ = ∑ i, ∑ x, P.w x * f x i := Finset.sum_comm
+
+theorem exists_support_outside {α : Type*} [Fintype α]
+    (P : FinProb α) (A : α → Prop) (hpr : P.pr A < 1) :
+    ∃ x, P.w x ≠ 0 ∧ ¬A x := by
+  classical
+  by_contra h
+  have hzero : ∀ x, ¬A x → P.w x = 0 := by
+    intro x hx
+    by_contra hne
+    exact h ⟨x, hne, hx⟩
+  have hprEq : P.pr A = 1 := by
+    unfold FinProb.pr
+    calc
+      (∑ x, if A x then P.w x else 0) = ∑ x, P.w x := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        by_cases hA : A x
+        · simp [hA]
+        · simp [hA, hzero x hA]
+      _ = 1 := P.sum_eq_one
+  linarith
+
+theorem tiling_patch_count_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) : PT.tiling.m ≤ T.S.N k := by
+  classical
+  let f : Fin PT.tiling.m → Fin (T.S.N k) := fun i =>
+    Classical.choose (hPT.tiling_valid.patch_nonempty i).1
+  have hf : Function.Injective f := by
+    intro i j hij
+    by_contra hne
+    have hdisj := hPT.tiling_valid.patch_X_disjoint i j hne
+    have hi := Classical.choose_spec (hPT.tiling_valid.patch_nonempty i).1
+    have hj := Classical.choose_spec (hPT.tiling_valid.patch_nonempty j).1
+    have hji : f i ∈ (PT.tiling.P j).X := by simpa [hij] using hj
+    exact (Finset.disjoint_left.mp hdisj) hi hji
+  have hcard := Fintype.card_le_of_injective f hf
+  simpa using hcard
+
 theorem row_failure_probability_le {α : Type*} [Fintype α]
     (P : FinLaw α) (cross bulk row threshold : α → ℝ) (δcross δbulk : ℝ)
     (hrow : ∀ x, row x = cross x * bulk x)

@@ -1,4 +1,5 @@
 import HypercubeRamsey.S03.Height.Scale
+import HypercubeRamsey.S03.Height.Selection_p_height_small
 import OAI.Combinatorics.Ramsey.Hypercube
 
 /-!
@@ -76,7 +77,7 @@ theorem height_selection_tie (p : HDParams) (hlam : 0 < p.lam) (P : p.Loc → Bo
     (p.actLaw.prod p.tieLaw).pr (fun ω =>
       p.height Sites P ω.1 E p.Rlong v = 0 ∧
         p.selection Sites P ω.1 E ω.2 v = some ℓ₀) ≤ 3 / p.lam := by
-  sorry
+  exact height_selection_tie_p_height_small p hlam P E Sites v ℓ₀ hlegal hℓ
 
 /--
 L3.8j: uniform position-count concentration for all queried balls and levels. The geometric size assumptions
@@ -90,7 +91,7 @@ theorem height_position_counts (p : HDParams) (Sites : p.Sites)
         P (u, j) = true ∧ hammingDist u v ≤ p.r)).card
       ((count : ℝ) < p.lam / 2 ∨ 2 * p.lam < (count : ℝ))) ≤
         2 * (Sites.card : ℝ) * ((p.H + 1 : ℕ) : ℝ) * Real.exp (-p.lam / 12) := by
-  sorry
+  exact height_position_counts_p_height_small p Sites hlam hV hr hprob
 
 /--
 L3.8 (parts 1–4). This abstract-parameter form is the consumer-facing result: every probabilistic claim is

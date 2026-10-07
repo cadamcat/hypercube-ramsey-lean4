@@ -708,7 +708,285 @@ theorem cell_data_exists {κ : CConsts} {T : Stage} {k : ℕ}
       ((C.cellsInPatch i).card : ℝ) ≤
         3 * Real.rpow (2 : ℝ) ((n - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
           Real.rpow (n : ℝ) κ.Ac + Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
-    sorry
+    intro i
+    classical
+    let cells := C.cellsInPatch i
+    let q := batchSize i
+    have hq : 0 < q := batchSize_pos i
+    let validSlices : Finset (CubePos n) := Finset.univ.filter (SliceValid i)
+    have hClassEq (col : Fin (D + 1)) :
+        SliceClass i col = validSlices.filter (fun s => colors s = col) := by
+      ext s
+      simp [SliceClass, validSlices, and_assoc]
+    have hsumClasses :
+        (∑ col : Fin (D + 1), (SliceClass i col).card) = validSlices.card := by
+      simpa [hClassEq] using
+        (Finset.sum_card_fiberwise_eq_card_filter
+          (s := validSlices) (t := (Finset.univ : Finset (Fin (D + 1))))
+          (g := colors))
+    have hEllH' : (PT.tiling.P i).ℓ + (PT.tiling.P i).h ≤ n := hEllH i
+    have hValidCard : validSlices.card ≤
+        2 ^ (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) := by
+      let freeAt : Fin (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) → Fin n :=
+        fun j => ⟨(PT.tiling.P i).ℓ + j.val, by
+          have hj := j.isLt
+          omega⟩
+      let encode : {s : CubePos n // SliceValid i s} →
+          CubePos (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) :=
+        fun s j => s.1 (freeAt j)
+      have hEncode : Function.Injective encode := by
+        intro x y hxy
+        apply Subtype.ext
+        funext a
+        by_cases hprefix : a.val < (PT.tiling.P i).ℓ
+        · let p : Fin (PT.tiling.P i).ℓ := ⟨a.val, hprefix⟩
+          have hidx :
+              (⟨p.val, by have hp := p.isLt; omega⟩ : Fin n) = a := by
+            apply Fin.ext
+            rfl
+          rw [← hidx]
+          rw [x.2.1 p, y.2.1 p]
+        · by_cases htop : n - (PT.tiling.P i).h ≤ a.val
+          · have hmem : a ∈ PT.tiling.Icoord i := by
+              simpa [Tiling.Icoord, topCoordinates] using htop
+            rw [x.2.2 a hmem, y.2.2 a hmem]
+          · let j : Fin (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) :=
+              ⟨a.val - (PT.tiling.P i).ℓ, by omega⟩
+            have hfree : freeAt j = a := by
+              apply Fin.ext
+              simp [freeAt, j]
+              omega
+            have h := congrFun hxy j
+            change x.1 (freeAt j) = y.1 (freeAt j) at h
+            simpa [hfree] using h
+      have hsub : Fintype.card {s : CubePos n // SliceValid i s} ≤
+          Fintype.card (CubePos (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h)) :=
+        Fintype.card_le_of_injective encode hEncode
+      have hcard : validSlices.card =
+          Fintype.card {s : CubePos n // SliceValid i s} := by
+        rw [Fintype.card_subtype]
+      rw [hcard]
+      calc
+        Fintype.card {s : CubePos n // SliceValid i s} ≤
+            Fintype.card (CubePos (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h)) := hsub
+        _ = 2 ^ (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) := by
+          simp [CubePos, Fintype.card_fun]
+    let Starts : Fin (D + 1) → Type := fun col =>
+      {r : Fin (SliceClass i col).card // r.val % q = 0}
+    have hstartBound (col : Fin (D + 1)) :
+        Fintype.card (Starts col) ≤ (SliceClass i col).card / q + 1 := by
+      exact Lane_q_s16_geom.card_rank_starts_le (SliceClass i col).card q
+    let toStarts : {c : Cell // c ∈ cells} → Σ col, Starts col := fun x => by
+      let c := x.1
+      let b : Pos T k := Classical.choose (hCells_nonempty c)
+      have hb : b ∈ C.positions c := Classical.choose_spec (hCells_nonempty c)
+      have hcell : C.cellOf b = c := (Finset.mem_filter.mp hb).2
+      have hkey : keyOf b = c.1 := by
+        change cellOf b = c at hcell
+        exact congrArg Subtype.val hcell
+      have hpatchC : c.1.1 = i := by
+        change C.cellPatch c = i
+        exact (Finset.mem_filter.mp x.2).2
+      have hpatch : patchOf b = i := by
+        calc
+          patchOf b = C.cellPatch (C.cellOf b) := (C.cellOf_patch b).symm
+          _ = C.cellPatch c := congrArg C.cellPatch hcell
+          _ = i := hpatchC
+      have hvalid : SliceValid i (sliceOf b) := by
+        simpa [sliceOf, hpatch] using
+          sliceAt_valid (patchOf b) b (patchOf_leaf b)
+      have hkcolor : (keyOf b).2.1 = colors (sliceOf b) := by
+        dsimp [keyOf, keyOfAt]
+        split_ifs <;> rfl
+      have hcolor : colors (sliceOf b) = c.1.2.1 := by
+        exact hkcolor.symm.trans (congrArg (fun z : Key => z.2.1) hkey)
+      have hmem : sliceOf b ∈ SliceClass i c.1.2.1 := by
+        simp [SliceClass, hvalid, hcolor]
+      let r := (SliceClass i c.1.2.1).equivFin ⟨sliceOf b, hmem⟩
+      have hstart : c.1.2.2 = Lane_q_s16_geom.batchStart r.val q := by
+        calc
+          c.1.2.2 = (keyOf b).2.2 := (congrArg (fun z : Key => z.2.2) hkey).symm
+          _ = Lane_q_s16_geom.batchStart r.val q := by
+            dsimp [keyOf, keyOfAt]
+            rw [hpatch]
+            rw [hcolor]
+            simp [r, hmem, q]
+      have hlt : c.1.2.2 < (SliceClass i c.1.2.1).card := by
+        rw [hstart]
+        exact (Lane_q_s16_geom.batchStart_le_rank r.val q).trans_lt r.isLt
+      have hmod : c.1.2.2 % q = 0 := by
+        rw [hstart]
+        exact Lane_q_s16_geom.batchStart_mod r.val q
+      exact ⟨c.1.2.1, ⟨⟨c.1.2.2, hlt⟩, hmod⟩⟩
+    have hInjective : Function.Injective toStarts := by
+      intro x y hxy
+      have hpatchX : x.1.1.1 = i := by
+        change C.cellPatch x.1 = i
+        exact (Finset.mem_filter.mp x.2).2
+      have hpatchY : y.1.1.1 = i := by
+        change C.cellPatch y.1 = i
+        exact (Finset.mem_filter.mp y.2).2
+      have hcolor : x.1.1.2.1 = y.1.1.2.1 := congrArg Sigma.fst hxy
+      have hstart : x.1.1.2.2 = y.1.1.2.2 :=
+        congrArg (fun z : Σ col, Starts col => z.2.1.val) hxy
+      apply Subtype.ext
+      apply Subtype.ext
+      apply Sigma.ext
+      · exact hpatchX.trans hpatchY.symm
+      · exact heq_of_eq (Prod.ext hcolor hstart)
+    have hcardCells : cells.card ≤
+        ∑ col : Fin (D + 1), Fintype.card (Starts col) := by
+      have hsubcard : Fintype.card {c : Cell // c ∈ cells} = cells.card := by
+        rw [Fintype.card_subtype]
+        simp
+      calc
+        cells.card = Fintype.card {c : Cell // c ∈ cells} := hsubcard.symm
+        _ ≤ Fintype.card (Σ col, Starts col) := Fintype.card_le_of_injective toStarts hInjective
+        _ = ∑ col : Fin (D + 1), Fintype.card (Starts col) := by
+          simp [Fintype.card_sigma]
+    have hcountNat : cells.card ≤
+        ∑ col : Fin (D + 1), ((SliceClass i col).card / q + 1) := by
+      calc
+        cells.card ≤ ∑ col : Fin (D + 1), Fintype.card (Starts col) := hcardCells
+        _ ≤ ∑ col : Fin (D + 1), ((SliceClass i col).card / q + 1) := by
+          apply Finset.sum_le_sum
+          intro col hcol
+          exact hstartBound col
+    have hsumDiv :
+        (∑ col : Fin (D + 1), (((SliceClass i col).card / q : ℕ) : ℝ)) ≤
+          (validSlices.card : ℝ) / (q : ℝ) := by
+      have hqR : (0 : ℝ) < (q : ℝ) := by exact_mod_cast hq
+      calc
+        (∑ col : Fin (D + 1), (((SliceClass i col).card / q : ℕ) : ℝ)) ≤
+            ∑ col : Fin (D + 1),
+              ((SliceClass i col).card : ℝ) / (q : ℝ) := by
+          apply Finset.sum_le_sum
+          intro col hcol
+          apply (le_div_iff₀ hqR).2
+          exact_mod_cast (Nat.div_mul_le_self (SliceClass i col).card q)
+        _ = (∑ col : Fin (D + 1), (SliceClass i col).card : ℝ) / (q : ℝ) := by
+          rw [Finset.sum_div]
+        _ = ((∑ col : Fin (D + 1), (SliceClass i col).card : ℕ) : ℝ) / (q : ℝ) := by
+          rw [Nat.cast_sum]
+        _ = (validSlices.card : ℝ) / (q : ℝ) := by rw [hsumClasses]
+    have hcountReal : (cells.card : ℝ) ≤
+        (validSlices.card : ℝ) / (q : ℝ) + (D + 1 : ℝ) := by
+      have hcast : (cells.card : ℝ) ≤
+          ((∑ col : Fin (D + 1), ((SliceClass i col).card / q + 1 : ℕ)) : ℝ) := by
+        exact_mod_cast hcountNat
+      simp only [Nat.cast_add, Nat.cast_one] at hcast
+      calc
+        (cells.card : ℝ) ≤
+            ∑ col : Fin (D + 1),
+              (((SliceClass i col).card / q : ℕ) : ℝ) + (D + 1 : ℝ) := by
+                simpa [Finset.sum_add_distrib] using hcast
+        _ ≤ (validSlices.card : ℝ) / (q : ℝ) + (D + 1 : ℝ) := by
+          gcongr
+    have hn : (0 : ℝ) < (n : ℝ) := by
+      have : 0 < n := by
+        dsimp [n]
+        exact lt_of_lt_of_le (by norm_num) hScale.n_four
+      exact_mod_cast this
+    have hpow : 0 < Real.rpow (n : ℝ) κ.Ac := Real.rpow_pos_of_pos hn _
+    let F : ℕ := ⌊Real.rpow (n : ℝ) κ.Ac⌋₊
+    let d : ℕ := 2 ^ (PT.tiling.P i).h
+    have hd : 0 < d := by dsimp [d]; exact Nat.pow_pos (by decide)
+    have hF : 2 * d ≤ F := by
+      dsimp [F, d, n]
+      simpa using hScale.slice_room i
+    have hqEq : q = F / d := by rfl
+    have hqTwo : 2 ≤ q := by
+      rw [hqEq]
+      exact (Nat.le_div_iff_mul_le hd).2 (by nlinarith)
+    have hrem : F % d < d := Nat.mod_lt _ hd
+    have hdecomp : F = F % d + d * (F / d) := (Nat.mod_add_div F d).symm
+    have hFlt : F < 2 * (q * d) := by
+      rw [hqEq]
+      nlinarith [hdecomp, hrem, hqTwo]
+    have hRealX : Real.rpow (n : ℝ) κ.Ac ≤ 3 * (q : ℝ) * (d : ℝ) := by
+      have hfloor : Real.rpow (n : ℝ) κ.Ac < (F : ℝ) + 1 := by
+        dsimp [F]
+        exact Nat.lt_floor_add_one (Real.rpow (n : ℝ) κ.Ac)
+      have hFcast : (F : ℝ) < 2 * (q : ℝ) * (d : ℝ) := by
+        have hFltCast : (F : ℝ) < 2 * ((q : ℝ) * (d : ℝ)) := by
+          exact_mod_cast hFlt
+        simpa [mul_assoc] using hFltCast
+      have hqR : (0 : ℝ) < (q : ℝ) := by exact_mod_cast hq
+      have hdR : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hd
+      have hqR2 : (2 : ℝ) ≤ (q : ℝ) := by exact_mod_cast hqTwo
+      have hdR1 : (1 : ℝ) ≤ (d : ℝ) := by
+        exact_mod_cast (Nat.one_le_iff_ne_zero.mpr (Nat.ne_of_gt hd))
+      have hqd : (1 : ℝ) ≤ (q : ℝ) * (d : ℝ) := by nlinarith
+      nlinarith
+    have hDivBound :
+        (validSlices.card : ℝ) / (q : ℝ) ≤
+          3 * Real.rpow (2 : ℝ) ((n - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+            Real.rpow (n : ℝ) κ.Ac := by
+      have hqR : (0 : ℝ) < (q : ℝ) := by exact_mod_cast hq
+      have hvalidR : (validSlices.card : ℝ) ≤
+          Real.rpow (2 : ℝ)
+            ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h : ℕ) : ℝ) := by
+        have hpowNat (m : ℕ) : Real.rpow (2 : ℝ) (m : ℝ) = (2 : ℝ) ^ m :=
+          Real.rpow_natCast (2 : ℝ) m
+        rw [hpowNat]
+        exact_mod_cast hValidCard
+      have hexp : (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) +
+          (PT.tiling.P i).h = n - (PT.tiling.P i).ℓ := by omega
+      have hpow2 :
+          Real.rpow (2 : ℝ)
+              ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h : ℕ) : ℝ) *
+              (2 : ℝ) ^ (PT.tiling.P i).h =
+            Real.rpow (2 : ℝ) ((n - (PT.tiling.P i).ℓ : ℕ) : ℝ) := by
+        have hpowNat (m : ℕ) : Real.rpow (2 : ℝ) (m : ℝ) = (2 : ℝ) ^ m :=
+          Real.rpow_natCast (2 : ℝ) m
+        rw [hpowNat, hpowNat]
+        calc
+          (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) *
+              (2 : ℝ) ^ (PT.tiling.P i).h =
+              (2 : ℝ) ^ ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h) +
+                (PT.tiling.P i).h) := by rw [← pow_add]
+          _ = (2 : ℝ) ^ (n - (PT.tiling.P i).ℓ) := by rw [hexp]
+      have hrecip : (1 : ℝ) / (q : ℝ) ≤
+          3 * (2 : ℝ) ^ (PT.tiling.P i).h / Real.rpow (n : ℝ) κ.Ac := by
+        have hmul : Real.rpow (n : ℝ) κ.Ac ≤
+            3 * (q : ℝ) * (2 : ℝ) ^ (PT.tiling.P i).h := by
+          simpa [d] using hRealX
+        rw [div_le_div_iff₀ hqR hpow]
+        simpa [mul_assoc, mul_comm, mul_left_comm] using hmul
+      calc
+        (validSlices.card : ℝ) / (q : ℝ) ≤
+            Real.rpow (2 : ℝ)
+              ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h : ℕ) : ℝ) / (q : ℝ) :=
+                (div_le_div_of_nonneg_right hvalidR hqR.le)
+        _ = Real.rpow (2 : ℝ)
+              ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h : ℕ) : ℝ) * (1 / (q : ℝ)) := by ring
+        _ ≤ Real.rpow (2 : ℝ)
+              ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h : ℕ) : ℝ) *
+              (3 * (2 : ℝ) ^ (PT.tiling.P i).h / Real.rpow (n : ℝ) κ.Ac) := by
+                exact mul_le_mul_of_nonneg_left hrecip
+                  (Real.rpow_nonneg (by norm_num : (0 : ℝ) ≤ 2) _)
+        _ = 3 * Real.rpow (2 : ℝ) ((n - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+              Real.rpow (n : ℝ) κ.Ac := by
+                calc
+                  _ = 3 *
+                      (Real.rpow (2 : ℝ)
+                        ((n - (PT.tiling.P i).ℓ - (PT.tiling.P i).h : ℕ) : ℝ) *
+                        (2 : ℝ) ^ (PT.tiling.P i).h) /
+                        Real.rpow (n : ℝ) κ.Ac := by ring
+                  _ = _ := by rw [hpow2]
+    have hColorCast : (D + 1 : ℝ) ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
+      calc
+        (D + 1 : ℝ) = 1 +
+            ∑ j ∈ Finset.range (R + 1), (Nat.choose n j : ℝ) := by
+              simp [D, Nat.cast_sum, add_comm]
+        _ ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
+              simpa [R, n] using hScale.coloring_room
+    calc
+      ((C.cellsInPatch i).card : ℝ) = (cells.card : ℝ) := rfl
+      _ ≤ (validSlices.card : ℝ) / (q : ℝ) + (D + 1 : ℝ) := hcountReal
+      _ ≤ 3 * Real.rpow (2 : ℝ) ((n - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
+            Real.rpow (n : ℝ) κ.Ac + Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
+              exact add_le_add hDivBound hColorCast
   have hSlotsFit : ∀ i : Fin PT.tiling.m,
       (∑ c ∈ C.cellsInPatch i, C.nslot c) ≤ Fintype.card (Bin PT.tiling i) := by
     intro i

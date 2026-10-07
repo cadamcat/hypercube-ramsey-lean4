@@ -169,13 +169,15 @@ def EvenTest : Prop :=
     ∃ v : CubeVertex n, IsEvenRole v ∧ ¬ (0 < X.mc ω.1 ω.2.1 v ω.2.2 ∧
       Real.exp (-(2 / 100) * X.k * n) * X.Qref ω.1 ω.2.1 v ω.2.2 ≤ X.mc ω.1 ω.2.1 v ω.2.2)) ≤ 1 / 100
 
-/-- Valid even rows are probability rows on common neighbours of the odd labels, with cap `10 e^{.55n}`
-(06:826–836). -/
+/-- Valid even rows are probability rows on common neighbours of the odd labels, with cap `10 e^{.55n}`, and the
+light part of the marginal keeps mass at least `.19` (heavy mass `≤ .8 + o(1)`, 06:826–836). -/
 def EvenDensity : Prop :=
   ∀ H C (v : CubeVertex n) y, X.histLaw.w H ≠ 0 → IsEvenRole v → X.EvenValid H C v y →
     (∀ a, 0 ≤ X.evenRow H C v y a) ∧ (∑ a, X.evenRow H C v y a = 1) ∧
     (∀ a, X.evenRow H C v y a ≠ 0 → ∀ u ∈ X.oddNbrs v, Hits E G a (y u)) ∧
-    ∀ a, (N : ℝ) * X.evenRow H C v y a ≤ 10 * Real.exp ((55 / 100) * n)
+    (∀ a, (N : ℝ) * X.evenRow H C v y a ≤ 10 * Real.exp ((55 / 100) * n)) ∧
+    (19 / 100 : ℝ) ≤
+      ∑ a' ∈ Finset.univ.filter (fun a' => a' ∉ X.heavyLab H C v y), X.evenMarg H C v y a'
 
 /-- With one centre forced present and its tuple fixed, the selection probabilities of the IDs at an even role sum
 to at most `4`: `O(1/λ)` at level `0` (tie bound) against presence mass `λ`, `exp(−n^{Ω(1)})` above (06:849–853). -/

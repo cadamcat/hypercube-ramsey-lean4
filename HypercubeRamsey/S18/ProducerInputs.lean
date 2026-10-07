@@ -99,7 +99,9 @@ theorem producer_constants_widening (κ₀ : CConsts) (hκ₀ : κ₀.Admissible
   have hMQ : κ₀.M1 * Q0 < (Qbd : ℝ) :=
     ((le_max_right _ _).trans_lt hN).trans_le hNQR
   let Kbd := max κ₀.Kbd (Real.exp (Cstar κ₀.u κ₀.ξ * Qbd))
-  let KB := max κ₀.KB (Real.exp (100 * Kbd) + 100 * rowMeanConstant κ₀ + κ₀.A0)
+  let KB := max κ₀.KB
+    (max (Real.exp (100 * Kbd) + 100 * rowMeanConstant κ₀ + κ₀.A0)
+      ((100 * κ₀.Kcell * (κ₀.Kp : ℝ)) * max (rowMeanConstant κ₀) 2))
   have hKb : κ₀.Kbd ≤ Kbd := le_max_left _ _
   have hKB : κ₀.KB ≤ KB := le_max_left _ _
   have hKB0 : 0 ≤ KB := (le_trans (by positivity) hκ₀.KB_big).trans hKB
@@ -141,7 +143,8 @@ theorem producer_constants_widening (κ₀ : CConsts) (hκ₀ : κ₀.Admissible
     Lane_sol_s18_widen.transfer_height (κ := {κ₀ with c14 := c, h0 := h0}) (κ' := κ)
       rfl rfl rfl rfl rfl rfl hheight
   have hlate' : LateThresholds κ := by
-    refine ⟨le_max_right _ _, ?_⟩
+    refine ⟨(le_max_left _ _).trans (le_max_right _ _),
+      (le_max_right _ _).trans (le_max_right _ _), ?_⟩
     intro h hh
     have hscale := hlate Q0 hQlate
     have hbase : Q0 ≤ κ₀.M1 * Q0 := by

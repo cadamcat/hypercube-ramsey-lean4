@@ -497,6 +497,146 @@ theorem pi_expect_glue {ι : Type*} [Fintype ι] [DecidableEq ι]
     _ = (FinProb.pi P).expect f :=
       (FinProb.pi_expect_depends P U f ω₀ hf).symm
 
+private noncomputable def finset_image_equiv_q_s09_tag {ι : Type*} [DecidableEq ι]
+    {k : ℕ} (s : Fin k → ι) (hs : Function.Injective s) :
+    Fin k ≃ {i // i ∈ Finset.univ.image s} where
+  toFun i := ⟨s i, Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩⟩
+  invFun j := Classical.choose (Finset.mem_image.mp j.2)
+  left_inv i := by
+    have hmem : s i ∈ Finset.univ.image s :=
+      Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩
+    have hEq := (Classical.choose_spec (Finset.mem_image.mp hmem)).2
+    exact hs hEq
+  right_inv j := by
+    apply Subtype.ext
+    exact (Classical.choose_spec (Finset.mem_image.mp j.2)).2
+
+theorem pi_expect_prod_injective_q_s09_tag {ι Ω : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype Ω] {k : ℕ} (P : ι → FinProb Ω) (s : Fin k → ι)
+    (hs : Function.Injective s) (f : Fin k → Ω → ℝ) :
+    (FinProb.pi P).expect (fun ω => ∏ i, f i (ω (s i))) =
+      ∏ i, (P (s i)).expect (f i) := by
+  classical
+  let U : Finset ι := Finset.univ.image s
+  let e : Fin k ≃ {i // i ∈ U} := finset_image_equiv_q_s09_tag s hs
+  let PU : ∀ v : {i // i ∈ U}, FinProb Ω := fun v => P v.1
+  let g : ∀ v : {i // i ∈ U}, Ω → ℝ := fun v => f (e.symm v)
+  let F : (ι → Ω) → ℝ := fun ω => ∏ i, f i (ω (s i))
+  let ω₀ : ι → Ω := Classical.choice (finProb_nonempty_q_s09_tag (FinProb.pi P))
+  have hdep : FinProb.DependsOn F U := by
+    intro ω ω' hagree
+    unfold F
+    apply Finset.prod_congr rfl
+    intro i hi
+    congr 1
+    exact hagree (s i) (Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩)
+  have hglue := pi_expect_glue P U F ω₀ hdep
+  have hglueValue (a : ∀ v : {i // i ∈ U}, Ω) :
+      F (S07.glue U ω₀ a) = ∏ v : {i // i ∈ U}, g v (a v) := by
+    unfold F g
+    calc
+      (∏ i, f i ((S07.glue U ω₀ a) (s i))) =
+          ∏ i, f i (a ⟨s i, Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩⟩) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        have hmem : s i ∈ U := Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩
+        simp [S07.glue, U, hmem]
+      _ = ∏ v : {i // i ∈ U}, f (e.symm v) (a v) := by
+        exact Fintype.prod_equiv e _ _ (by
+          intro i
+          rw [e.symm_apply_apply]
+          have hi : (⟨s i, Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩⟩ : {j // j ∈ U}) = e i := by
+            apply Subtype.ext
+            rfl
+          exact congrArg (f i) (congrArg a hi))
+  have hrestricted :
+      (FinProb.pi PU).expect (fun a => ∏ v : {i // i ∈ U}, g v (a v)) =
+        (FinProb.pi P).expect F := by
+    calc
+      (FinProb.pi PU).expect (fun a => ∏ v : {i // i ∈ U}, g v (a v)) =
+          ∑ a : (∀ v : {i // i ∈ U}, Ω),
+            (∏ v : {i // i ∈ U}, (P v.1).w (a v)) *
+              F (S07.glue U ω₀ a) := by
+        simp only [FinProb.expect, FinProb.pi, PU]
+        apply Finset.sum_congr rfl
+        intro a ha
+        rw [hglueValue]
+      _ = (FinProb.pi P).expect F := hglue
+  calc
+    (FinProb.pi P).expect F =
+        (FinProb.pi PU).expect (fun a => ∏ v : {i // i ∈ U}, g v (a v)) := hrestricted.symm
+    _ = ∏ v : {i // i ∈ U}, (P v.1).expect (g v) := by
+      simpa [PU] using pi_expect_prod PU g
+    _ = ∏ i : Fin k, (P (s i)).expect (f i) := by
+      symm
+      exact Fintype.prod_equiv e _ _ (by
+        intro i
+        dsimp [g]
+        rw [e.symm_apply_apply]
+        rfl)
+
+theorem cond_product_tuple_expect_q_s09_tag {V Ω I : Type} [Fintype V] [DecidableEq V]
+    [Fintype Ω] [DecidableEq Ω] [Fintype I] [DecidableEq I]
+    (hCP : S07.CondProductBound) (P : V → FinProb Ω) (Bad : I → (V → Ω) → Prop)
+    (scope : I → Finset V) (x : ℝ) (Δ : ℕ)
+    (hLLL : S07.LLLInput P Bad scope x Δ) {k : ℕ} (s : Fin k → V)
+    (hs : Function.Injective s) (f : Fin k → Ω → ℝ)
+    (hf0 : ∀ ω : V → Ω, 0 ≤ ∏ i, f i (ω (s i))) :
+    (S07.condOr (FinProb.pi P) (fun ω => ∀ i, ¬ Bad i ω)).expect
+        (fun ω => ∏ i, f i (ω (s i))) ≤
+      ((1 - x) ^ (Finset.univ.filter fun i => ¬ Disjoint (scope i) (Finset.univ.image s)).card)⁻¹ *
+        ∏ i, (P (s i)).expect (f i) := by
+  classical
+  let U : Finset V := Finset.univ.image s
+  let F : (V → Ω) → ℝ := fun ω => ∏ i, f i (ω (s i))
+  unfold S07.CondProductBound at hCP
+  have hdep : FinProb.DependsOn F U := by
+    intro ω ω' hagree
+    unfold F
+    apply Finset.prod_congr rfl
+    intro i hi
+    congr 1
+    exact hagree (s i) (Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩)
+  have hlocal (ω₀ : V → Ω) :
+      ∑ a : (∀ v : U, Ω),
+        (∏ v : U, (P v.1).w (a v)) * F (S07.glue U ω₀ a) ≤
+          ∏ i, (P (s i)).expect (f i) := by
+    calc
+      _ = (FinProb.pi P).expect F := pi_expect_glue P U F ω₀ hdep
+      _ = ∏ i, (P (s i)).expect (f i) :=
+        pi_expect_prod_injective_q_s09_tag P s hs f
+      _ ≤ ∏ i, (P (s i)).expect (f i) := le_rfl
+  exact (hCP P Bad scope x Δ hLLL).2 U F hf0 _ hlocal
+
+theorem tagScope_touch_card_q_s09_tag (P : Params9) (n : ℕ)
+    (U : Finset (CubeVertex (P.m n))) :
+    (Finset.univ.filter fun z : CubeVertex (P.m n) => ¬ Disjoint (tagScope9 (P := P) z) U).card ≤
+      U.card * (P.m n + 1) := by
+  classical
+  let T := Finset.univ.filter fun z : CubeVertex (P.m n) =>
+    ¬ Disjoint (tagScope9 (P := P) z) U
+  let fiber := fun a : CubeVertex (P.m n) =>
+    Finset.univ.filter fun z : CubeVertex (P.m n) => a ∈ tagScope9 (P := P) z
+  have hsub : T ⊆ U.biUnion fiber := by
+    intro z hz
+    have hnot : ¬ Disjoint (tagScope9 (P := P) z) U := (Finset.mem_filter.mp hz).2
+    have hcommon : ∃ a, a ∈ U ∧ a ∈ tagScope9 (P := P) z := by
+      by_contra hnone
+      apply hnot
+      apply Finset.disjoint_left.mpr
+      intro a haScope haU
+      exact hnone ⟨a, haU, haScope⟩
+    obtain ⟨a, haU, haScope⟩ := hcommon
+    exact Finset.mem_biUnion.mpr ⟨a, haU, Finset.mem_filter.mpr ⟨Finset.mem_univ _, haScope⟩⟩
+  calc
+    T.card ≤ (U.biUnion fiber).card := Finset.card_le_card hsub
+    _ ≤ ∑ a ∈ U, (fiber a).card := Finset.card_biUnion_le
+    _ ≤ ∑ _a ∈ U, (P.m n + 1) := by
+      apply Finset.sum_le_sum
+      intro a ha
+      exact Lane_q_s09_tag.tagScope_fiber_card_le P n a
+    _ = U.card * (P.m n + 1) := by simp
+
 theorem tagLaw_pos_coord (P : Params9) (n N : ℕ) (M : TagMix N)
     (E : Fin N → Fin N → Prop) (G : Colour) (c : ℝ)
     (havoid : 0 < (FinProb.pi (fun _ : CubeVertex (P.m n) => tagMixLaw9 M)).pr

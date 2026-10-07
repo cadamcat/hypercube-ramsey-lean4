@@ -216,8 +216,344 @@ theorem p92_tag_loads (P : Params9) (hP : P.Valid) (hA : P.CoreAdmissible) (κ :
       (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 +
         Real.log (n : ℝ) ≤ (P.m n : ℝ) * Real.log 2 := hWidth n hnWidth
   have hsmall : (n : ℝ) ^ 2 * P.tail c' n < 1 / 8 := hTail n hnTail
-  -- The remaining estimate is the two `scatteredMoments_union_labels` applications.
-  sorry
+  have hn1 : 1 ≤ n := hscale.1
+  have hm : P.m n ≤ n := hscale.2.1
+  have hNreal : 0 < (N : ℝ) := by exact_mod_cast hN
+  let TagΩ := CubeVertex (P.m n) → M.ι
+  let raw : FinProb TagΩ := FinProb.pi (fun _ : CubeVertex (P.m n) => tagMixLaw9 M)
+  let good : TagΩ → Prop := fun tag => ∀ z, ¬ tagBad9 (P := P) E G c tag z
+  have hAvoid := hCond _ _ _ _ _ hLLL
+  have havoid : 0 < raw.pr good := by simpa [raw, good, TagLLL9] using hAvoid.1
+  let Ptag : FinProb TagΩ := tagLaw9 P n M E G c
+  have htaglaw : Ptag = raw.cond good havoid := by
+    change S07.condOr raw good = raw.cond good havoid
+    unfold S07.condOr
+    rw [dif_pos havoid]
+  let succ : Finset TagΩ := Finset.univ.filter fun tag => ∀ z, 0 < M.Λ (tag z)
+  have hsupport (tag : TagΩ) (ht : Ptag.w tag ≠ 0) : tag ∈ succ := by
+    have htpos : 0 < Ptag.w tag := lt_of_le_of_ne (Ptag.nonneg tag) (Ne.symm ht)
+    refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩
+    intro z
+    exact Lane_q_s09_tag.tagLaw_pos_coord P n N M E G c havoid tag htpos z
+  have hzeroOutside (tag : TagΩ) (ht : tag ∉ succ) : Ptag.w tag = 0 := by
+    by_contra hne
+    exact ht (hsupport tag hne)
+  let U := CubeVertex (P.m n)
+  haveI : Nonempty U := ⟨fun _ => false⟩
+  have hcardPow : (Fintype.card U : ℝ) = (2 : ℝ) ^ (P.m n) := by
+    simp [U, CubeVertex]
+  have hcardPos : 0 < (Fintype.card U : ℝ) := by positivity
+  let Wμ : ℝ := (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1
+  let Wν : ℝ := P.Ss (n : ℝ)
+  let W : ℝ := max Wμ Wν
+  let L : ℝ := Real.exp W
+  let D₀ : ℝ := 8 / κ
+  have hthreshold : tagLoadConst9 κ = 4 * (2 : ℝ) * (D₀ + 1) := by
+    dsimp [tagLoadConst9, D₀]
+    ring
+  have hWbudget : W + Real.log (n : ℝ) ≤ (P.m n : ℝ) * Real.log 2 := by
+    have hμ : Wμ ≤ (P.m n : ℝ) * Real.log 2 - Real.log (n : ℝ) := by
+      dsimp [Wμ]
+      linarith
+    have hν : Wν ≤ (P.m n : ℝ) * Real.log 2 - Real.log (n : ℝ) := by
+      dsimp [Wν]
+      linarith [hscale.2.2.2.1]
+    have hmax : max Wμ Wν ≤ (P.m n : ℝ) * Real.log 2 - Real.log (n : ℝ) :=
+      max_le_iff.mpr ⟨hμ, hν⟩
+    dsimp [W]
+    linarith
+  have hexpPow : Real.exp ((P.m n : ℝ) * Real.log 2) = (2 : ℝ) ^ (P.m n) := by
+    calc
+      Real.exp ((P.m n : ℝ) * Real.log 2) = (2 : ℝ) ^ (P.m n : ℝ) := by
+        simpa only [mul_comm] using
+          (Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2) (P.m n : ℝ)).symm
+      _ = (2 : ℝ) ^ (P.m n) := Real.rpow_natCast 2 (P.m n)
+  have hExpBudget : (n : ℝ) * L ≤ (Fintype.card U : ℝ) := by
+    have hnR : 0 < (n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 1) hn1)
+    have hExp : Real.exp (W + Real.log (n : ℝ)) ≤ Real.exp ((P.m n : ℝ) * Real.log 2) :=
+      Real.exp_le_exp.mpr hWbudget
+    have hprod : Real.exp (W + Real.log (n : ℝ)) = (n : ℝ) * L := by
+      rw [Real.exp_add, Real.exp_log hnR]
+      dsimp [L]
+      ring
+    rw [hprod, hexpPow, ← hcardPow] at hExp
+    exact hExp
+  let frac : ℝ := (Fintype.card U : ℝ)⁻¹
+  have hsmallLoad : (n : ℝ) * frac * L ≤ 1 := by
+    have h := mul_le_mul_of_nonneg_left hExpBudget (inv_nonneg.mpr hcardPos.le)
+    calc
+      (n : ℝ) * frac * L = frac * ((n : ℝ) * L) := by ring
+      _ ≤ frac * (Fintype.card U : ℝ) := h
+      _ = 1 := by dsimp [frac]; field_simp [ne_of_gt hcardPos]
+  have hlabels : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := by
+    simpa using (show (N : ℝ) ≤ (n : ℝ) * 2 ^ n by exact_mod_cast hNle)
+  have hnpos : 0 < n := by omega
+  have hxpos : 0 < P.tail c' n := by
+    dsimp [Params9.tail]
+    exact Real.exp_pos _
+  have hxnonneg : 0 ≤ P.tail c' n := le_of_lt hxpos
+  have hxle : P.tail c' n ≤ 1 := by
+    rw [Params9.tail, Real.exp_le_one_iff]
+    exact neg_nonpos.mpr (mul_nonneg hc'.le (Real.rpow_nonneg (Nat.cast_nonneg n) _))
+  have hnSq : (1 : ℝ) ≤ (n : ℝ) ^ 2 := by exact_mod_cast (Nat.one_le_pow 2 n hn1)
+  have hxsmall : P.tail c' n < 1 / 8 := by nlinarith [hsmall]
+  let near : U → Finset U := fun v => {v}
+  have hself (v : U) : v ∈ near v := by simp [near]
+  have hfracNonneg : 0 ≤ frac := inv_nonneg.mpr hcardPos.le
+  have hnear (v : U) : ((near v).card : ℝ) ≤ frac * (Fintype.card U : ℝ) := by
+    simp [near, frac]
+  have hbalMu : ∀ y, (N : ℝ) * ∑ i, M.Λ i * (M.μ i).w y ≤ D₀ := by
+    simpa [D₀] using hprep.1.1
+  have hbalNu : ∀ y, (N : ℝ) * ∑ i, M.Λ i * (M.ν i).w y ≤ D₀ := by
+    simpa [D₀] using hprep.1.2
+  have componentTail (lawOf : M.ι → Law N)
+      (hlawWidth : ∀ i, 0 < M.Λ i → (lawOf i).WidthLE W)
+      (hbal : ∀ y, (N : ℝ) * ∑ i, M.Λ i * (lawOf i).w y ≤ D₀) :
+      Ptag.pr (fun tag => ∃ y, 4 * (2 : ℝ) * (D₀ + 1) <
+        frac * ∑ v : U, (N : ℝ) * (lawOf (tag v)).w y) ≤
+        (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    let Z : U → Fin N → TagΩ → ℝ := fun v y tag => (N : ℝ) * (lawOf (tag v)).w y
+    let mean : Fin N → ℝ := fun y =>
+      (tagMixLaw9 M).expect (fun i => (N : ℝ) * (lawOf i).w y)
+    let d : U → Fin N → ℝ := fun _ y => mean y
+    have hZ0 : ∀ v y tag, 0 ≤ Z v y tag := by
+      intro v y tag
+      exact mul_nonneg (Nat.cast_nonneg N) ((lawOf (tag v)).nonneg y)
+    have hLnonneg : 0 ≤ L := le_of_lt (Real.exp_pos W)
+    have hZL : ∀ v y tag, tag ∈ succ → Z v y tag ≤ L := by
+      intro v y tag htag
+      have hΛ : 0 < M.Λ (tag v) := (Finset.mem_filter.mp htag).2 v
+      have hwidthLaw := hlawWidth (tag v) hΛ y
+      dsimp [Z, L]
+      calc
+        (N : ℝ) * (lawOf (tag v)).w y ≤
+            (N : ℝ) * (Real.exp W / N) :=
+          mul_le_mul_of_nonneg_left hwidthLaw (Nat.cast_nonneg N)
+        _ = Real.exp W := by field_simp [ne_of_gt hNreal]
+    have hd : ∀ v y, 0 ≤ d v y := by
+      intro v y
+      dsimp [d, mean, FinProb.expect]
+      apply Finset.sum_nonneg
+      intro i hi
+      exact mul_nonneg ((tagMixLaw9 M).nonneg i)
+        (mul_nonneg (Nat.cast_nonneg N) ((lawOf i).nonneg y))
+    have hmeanBound (y : Fin N) :
+        (Fintype.card U : ℝ)⁻¹ * ∑ v : U, d v y ≤ D₀ := by
+      have hmeanEq : mean y =
+          (N : ℝ) * ∑ i, M.Λ i * (lawOf i).w y := by
+        dsimp [mean, FinProb.expect, tagMixLaw9]
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro i hi
+        ring
+      have hmeanSum : ∑ v : U, d v y = (Fintype.card U : ℝ) * mean y := by
+        simp [d, Finset.sum_const]
+      rw [hmeanSum, hmeanEq]
+      have hcancel : (Fintype.card U : ℝ)⁻¹ * (Fintype.card U : ℝ) = 1 :=
+        inv_mul_cancel₀ (ne_of_gt hcardPos)
+      calc
+        (Fintype.card U : ℝ)⁻¹ * ((Fintype.card U : ℝ) *
+            ((N : ℝ) * ∑ i, M.Λ i * (lawOf i).w y)) =
+            (N : ℝ) * ∑ i, M.Λ i * (lawOf i).w y := by rw [← mul_assoc, hcancel, one_mul]
+        _ ≤ D₀ := hbal y
+    have hjoint : ∀ y (k : ℕ), k ≤ n → ∀ s : Fin k → U,
+        (∀ i j : Fin k, j < i → s i ∉ near (s j)) →
+          ∑ tag ∈ succ, Ptag.w tag * ∏ i, Z (s i) y tag ≤
+            (2 : ℝ) ^ k * ∏ i, d (s i) y := by
+      intro y k hk s hsep
+      have hsInjective : Function.Injective s := by
+        intro i j hij
+        by_contra hne
+        rcases lt_or_gt_of_ne hne with hlt | hgt
+        · have h := hsep j i hlt
+          have hmem : s j ∈ near (s i) := by simpa [near, hij]
+          exact h hmem
+        · have h := hsep i j hgt
+          have hmem : s i ∈ near (s j) := by simpa [near, hij]
+          exact h hmem
+      let selected : Finset U := Finset.univ.image s
+      let touching : Finset (CubeVertex (P.m n)) :=
+        Finset.univ.filter fun z => ¬ Disjoint (tagScope9 (P := P) z) selected
+      have hselectedCard : selected.card ≤ k := by
+        dsimp [selected]
+        exact (Finset.card_image_le).trans_eq (by simp)
+      have htouch := Lane_q_s09_tag.tagScope_touch_card_q_s09_tag P n selected
+      have htouchNat : touching.card ≤ n * (n + 1) := by
+        calc
+          touching.card ≤ selected.card * (P.m n + 1) := by exact htouch
+          _ ≤ k * (P.m n + 1) := Nat.mul_le_mul_right _ hselectedCard
+          _ ≤ n * (n + 1) := Nat.mul_le_mul hk (Nat.succ_le_succ hm)
+      have htouchReal : (touching.card : ℝ) ≤ (n : ℝ) * ((n + 1 : ℕ) : ℝ) := by
+        exact_mod_cast htouchNat
+      have hnplus : ((n + 1 : ℕ) : ℝ) ≤ 2 * (n : ℝ) := by
+        have hnNat : n + 1 ≤ 2 * n := by omega
+        exact_mod_cast hnNat
+      have htouchx : (touching.card : ℝ) * P.tail c' n < 1 / 4 := by
+        calc
+          (touching.card : ℝ) * P.tail c' n ≤
+              (n : ℝ) * ((n + 1 : ℕ) : ℝ) * P.tail c' n :=
+            mul_le_mul_of_nonneg_right htouchReal hxnonneg
+          _ ≤ 2 * (n : ℝ) ^ 2 * P.tail c' n := by
+            have hmult := mul_le_mul_of_nonneg_left hnplus (Nat.cast_nonneg n)
+            nlinarith [mul_le_mul_of_nonneg_right hmult hxnonneg]
+          _ < 1 / 4 := by nlinarith [hsmall, hnSq, hn1]
+      have hbern := Lane_q_s09_tag.one_sub_mul_le_pow hxnonneg hxle touching.card
+      have hfactorLower : (1 / 2 : ℝ) ≤ (1 - P.tail c' n) ^ touching.card := by
+        have hprod : 1 - (touching.card : ℝ) * P.tail c' n ≤
+            (1 - P.tail c' n) ^ touching.card := hbern
+        nlinarith
+      have hinvFactor : ((1 - P.tail c' n) ^ touching.card)⁻¹ ≤ 2 := by
+        have h := one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 1 / 2) hfactorLower
+        calc
+          ((1 - P.tail c' n) ^ touching.card)⁻¹ ≤ (1 / 2 : ℝ)⁻¹ := by
+            simpa only [one_div] using h
+          _ = 2 := by norm_num
+      have hinvPow : ((1 - P.tail c' n) ^ touching.card)⁻¹ ≤ (2 : ℝ) ^ k := by
+        by_cases hk0 : k = 0
+        · subst k
+          have hselected0 : selected.card = 0 := by
+            have hle := hselectedCard
+            simp at hle
+            omega
+          have htouch0 : touching.card = 0 := by
+            have hle : touching.card ≤ 0 := by
+              rw [hselected0] at htouch
+              simpa only [Nat.zero_mul] using htouch
+            exact Nat.eq_zero_of_le_zero hle
+          simp [htouch0]
+        · have hk1 : 1 ≤ k := Nat.one_le_iff_ne_zero.mpr hk0
+          have h2pow : (2 : ℝ) ≤ (2 : ℝ) ^ k := by
+            calc
+              (2 : ℝ) = (2 : ℝ) ^ 1 := by norm_num
+              _ ≤ (2 : ℝ) ^ k := pow_le_pow_right₀ (by norm_num) hk1
+          exact hinvFactor.trans h2pow
+      have hprodNonneg : 0 ≤ ∏ i : Fin k, d (s i) y :=
+        Finset.prod_nonneg fun i hi => hd (s i) y
+      have hcond := Lane_q_s09_tag.cond_product_tuple_expect_q_s09_tag
+        hCond (fun _ : U => tagMixLaw9 M)
+        (fun z tag => tagBad9 (P := P) E G c tag z) tagScope9 (P.tail c' n)
+        ((P.m n + 1) ^ 2) hLLL s hsInjective (fun i tag => (N : ℝ) * (lawOf tag).w y) (by
+          intro ω
+          exact Finset.prod_nonneg fun i hi =>
+            mul_nonneg (Nat.cast_nonneg N) ((lawOf (ω (s i))).nonneg y))
+      have hcondP : Ptag.expect (fun tag => ∏ i, Z (s i) y tag) ≤
+          ((1 - P.tail c' n) ^ touching.card)⁻¹ * ∏ i, d (s i) y := by
+        simpa [Ptag, tagLaw9, raw, good, Z, d, mean] using hcond
+      have hsumLe :
+          ∑ tag ∈ succ, Ptag.w tag * ∏ i, Z (s i) y tag ≤
+            Ptag.expect (fun tag => ∏ i, Z (s i) y tag) := by
+        unfold FinProb.expect
+        exact Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ succ) (by
+          intro tag htag hnot
+          exact mul_nonneg (Ptag.nonneg tag)
+            (Finset.prod_nonneg fun i hi => hZ0 (s i) y tag))
+      calc
+        ∑ tag ∈ succ, Ptag.w tag * ∏ i, Z (s i) y tag ≤
+            ((1 - P.tail c' n) ^ touching.card)⁻¹ * ∏ i, d (s i) y := hsumLe.trans hcondP
+        _ ≤ (2 : ℝ) ^ k * ∏ i, d (s i) y :=
+          mul_le_mul_of_nonneg_right hinvPow hprodNonneg
+    have htail := scatteredMoments_union_labels Ptag succ Z hZ0 L hLnonneg hZL
+      near hself frac hfracNonneg hnear n (by exact_mod_cast hnpos) 2 D₀
+      (by norm_num) (by positivity) d hd hmeanBound hjoint hsmallLoad hlabels
+    have hthreshold : tagLoadConst9 κ = 4 * (2 : ℝ) * (D₀ + 1) := by
+      dsimp [tagLoadConst9, D₀]
+      ring
+    have hfail :
+        Ptag.pr (fun tag => ∃ y, tagLoadConst9 κ < frac *
+          ∑ v : U, (N : ℝ) * (lawOf (tag v)).w y) =
+        ∑ tag, if tag ∈ succ ∧ ∃ y, 4 * (2 : ℝ) * (D₀ + 1) <
+          frac * ∑ v : U, (N : ℝ) * (lawOf (tag v)).w y then Ptag.w tag else 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro tag htag
+      by_cases hs : tag ∈ succ
+      · simp [hs, hthreshold]
+      · simp [hs, hzeroOutside tag hs]
+    rw [← hthreshold, hfail]
+    simpa [frac, Z] using htail
+  have hμwidth : ∀ i, 0 < M.Λ i → (M.μ i).WidthLE W := by
+    intro i hi
+    rcases hprep.2 i hi with ⟨_, _, hμ, _, _⟩
+    intro y
+    exact le_trans (hμ y)
+      (div_le_div_of_nonneg_right
+        (Real.exp_le_exp.mpr (le_max_left Wμ Wν)) (Nat.cast_nonneg N))
+  have hνwidth : ∀ i, 0 < M.Λ i → (M.ν i).WidthLE W := by
+    intro i hi
+    rcases hprep.2 i hi with ⟨_, _, _, hν, _⟩
+    intro y
+    exact le_trans (hν y)
+      (div_le_div_of_nonneg_right
+        (Real.exp_le_exp.mpr (le_max_right Wμ Wν)) (Nat.cast_nonneg N))
+  have hμtail := componentTail M.μ hμwidth hbalMu
+  have hνtail := componentTail M.ν hνwidth hbalNu
+  let failMu : TagΩ → Prop := fun tag => ∃ y,
+    tagLoadConst9 κ < frac * ∑ v : U, (N : ℝ) * (M.μ (tag v)).w y
+  let failNu : TagΩ → Prop := fun tag => ∃ y,
+    tagLoadConst9 κ < frac * ∑ v : U, (N : ℝ) * (M.ν (tag v)).w y
+  have havgMu (tag : TagΩ) (y : Fin N) :
+        ((2 : ℝ) ^ (P.m n))⁻¹ * ∑ z, (N : ℝ) * (M.μ (tag z)).w y =
+        frac * ∑ v : U, (N : ℝ) * (M.μ (tag v)).w y := by
+    dsimp [frac]
+    rw [hcardPow]
+  have havgNu (tag : TagΩ) (y : Fin N) :
+        ((2 : ℝ) ^ (P.m n))⁻¹ * ∑ z, (N : ℝ) * (M.ν (tag z)).w y =
+        frac * ∑ v : U, (N : ℝ) * (M.ν (tag v)).w y := by
+    dsimp [frac]
+    rw [hcardPow]
+  have hbadEq (tag : TagΩ) :
+      (¬ tagLoadOK9 M tag (tagLoadConst9 κ)) ↔ (failMu tag ∨ failNu tag) := by
+    change (¬ ((∀ x, ((2 : ℝ) ^ (P.m n))⁻¹ *
+        ∑ z, (N : ℝ) * (M.μ (tag z)).w x ≤ tagLoadConst9 κ) ∧
+      (∀ y, ((2 : ℝ) ^ (P.m n))⁻¹ *
+        ∑ z, (N : ℝ) * (M.ν (tag z)).w y ≤ tagLoadConst9 κ))) ↔ _
+    constructor
+    · intro hbad
+      rcases not_and_or.mp hbad with hμ | hν
+      · left
+        push_neg at hμ
+        obtain ⟨y, hy⟩ := hμ
+        have hy' := hy
+        rw [havgMu tag y] at hy'
+        exact ⟨y, hy'⟩
+      · right
+        push_neg at hν
+        obtain ⟨y, hy⟩ := hν
+        have hy' := hy
+        rw [havgNu tag y] at hy'
+        exact ⟨y, hy'⟩
+    · rintro (⟨y, hy⟩ | ⟨y, hy⟩) hgood
+      · have hμ := hgood.1 y
+        rw [havgMu] at hμ
+        exact (not_le_of_gt hy) hμ
+      · have hν := hgood.2 y
+        rw [havgNu] at hν
+        exact (not_le_of_gt hy) hν
+  have hprobEq :
+      Ptag.pr (fun tag => ¬ tagLoadOK9 M tag (tagLoadConst9 κ)) =
+        Ptag.pr (fun tag => failMu tag ∨ failNu tag) := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro tag htag
+    by_cases h : failMu tag ∨ failNu tag
+    · have hn : ¬ tagLoadOK9 M tag (tagLoadConst9 κ) := (hbadEq tag).2 h
+      simp [h, hn]
+    · have hg : tagLoadOK9 M tag (tagLoadConst9 κ) := by
+        by_contra hb
+        exact h ((hbadEq tag).1 hb)
+      simp [h, hg]
+  have hμtail' : Ptag.pr failMu ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    simpa [failMu, hthreshold] using hμtail
+  have hνtail' : Ptag.pr failNu ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    simpa [failNu, hthreshold] using hνtail
+  calc
+    (tagLaw9 P n M E G c).pr (fun tag => ¬ tagLoadOK9 M tag (tagLoadConst9 κ)) =
+        Ptag.pr (fun tag => ¬ tagLoadOK9 M tag (tagLoadConst9 κ)) := by rfl
+    _ = Ptag.pr (fun tag => failMu tag ∨ failNu tag) := hprobEq
+    _ ≤ Ptag.pr failMu + Ptag.pr failNu := FinProb.pr_union Ptag failMu failNu
+    _ ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n +
+        (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := add_le_add hμtail' hνtail'
+    _ = 2 * ((n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) := by ring
 
 /-- P9.2-tags (09:137–138), choice of the fixed tags: if the avoidance event of the tag events has positive raw
 mass and the tag loads fail under the tag law with probability at most `2 n 2^n 4^{-n} < 1`, some tag function in

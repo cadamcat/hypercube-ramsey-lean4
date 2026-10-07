@@ -1,5 +1,6 @@
 import HypercubeRamsey.S13.Allocation
 import HypercubeRamsey.PartC.Cleaning
+import HypercubeRamsey.S13.Needs
 
 /-!
 # Section 13.4: stable cleaning of extracted first supports
@@ -15,12 +16,15 @@ open scoped BigOperators
 preserves every finite family of degree and correlation tests to `n⁻²`. -/
 def UniformApproximantStatement : Prop :=
   ∀ (N J n : ℕ) (π : Law N) (B W : ℝ),
+    1 ≤ n →
     B ≤ (n : ℝ) ^ (1 / 2 : ℝ) → W ≤ (n : ℝ) ^ (1 / 2 : ℝ) →
     W + 2 ≤ B → π.WidthLE W →
+    (n : ℝ) ^ 12 ≤ (N : ℝ) * Real.exp (-(B + W) / 2) →
     (tests : Fin J → (Fin N → ℝ)) →
     (∀ j y, 0 ≤ tests j y ∧ tests j y ≤ 1) →
-    J ≤ Nat.ceil (Real.exp (n : ℝ)) * n ^ 4 →
+    J ≤ Nat.ceil (Real.exp (2 * (n : ℝ))) * n ^ 4 →
     ∃ V : Finset (Fin N), V.Nonempty ∧
+      (∀ y ∈ V, 0 < π.w y) ∧
       (N : ℝ) * Real.exp (-B) ≤ V.card ∧
       ∀ j, |(∑ y ∈ V, tests j y) / V.card - π.expect (tests j)| ≤
         (n : ℝ) ^ (-2 : ℝ)
@@ -35,7 +39,10 @@ structure OwnDegreeData {κ : CConsts} {T : Stage} {k : ℕ}
     (π : Fin 𝒯.m → Law (T.S.N k)) where
   C : Finset (Fin (T.S.N k))
   sub : C ⊆ (𝒯.P i).X
-  own : ∀ π', NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
+  loss : (((𝒯.P i).X \ C).card : ℝ) < (κ.a / 4) * (𝒯.P i).M
+  own : ∀ x ∈ C, OwnDegOK 𝒯 i (π i) x
+  own_near : 𝒯.mode.isCluster → ∀ π',
+    NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
     ∀ x ∈ C, OwnDegOK 𝒯 i (π' i) x
 
 /-- L13.4c (sections/13, lines 259–265): clique-trimming output retaining degree data. -/
@@ -44,6 +51,7 @@ structure OwnCliqueData {κ : CConsts} {T : Stage} {k : ℕ}
     {π : Fin 𝒯.m → Law (T.S.N k)} (D : OwnDegreeData 𝒯 i π) where
   C : Finset (Fin (T.S.N k))
   sub : C ⊆ D.C
+  loss : ((D.C \ C).card : ℝ) < (κ.a / 4) * (𝒯.P i).M
   noClique : ∀ π', NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) →
     NoClique (T.S.E k) 𝒯.c C (π' i).w κ.θ (𝒯.Q i)
 
@@ -97,7 +105,7 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
       simp
     refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
-      exact D.own π hself x (O.subset.trans C.sub hx)
+      exact D.own x (O.subset.trans C.sub hx)
     · intro hClique
       apply C.noClique π hself
       rcases hClique with ⟨K, hK, hcard, hpair⟩
@@ -109,7 +117,7 @@ theorem assemble_clean_props {κ : CConsts} {T : Stage} {k : ℕ}
   · intro hCluster π' hNear
     refine ⟨(O.subset.trans C.sub).trans D.sub, O.nonempty, ?_, ?_, ?_, ?_, ?_⟩
     · intro x hx
-      exact D.own π' hNear x (O.subset.trans C.sub hx)
+      exact D.own_near hCluster π' hNear x (O.subset.trans C.sub hx)
     · intro hClique
       apply C.noClique π' hNear
       rcases hClique with ⟨K, hK, hcard, hpair⟩
@@ -142,29 +150,49 @@ theorem own_patch_clique_trim (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
 /-- L13.4d (sections/13, lines 267–276): clean other-patch outliers and enforce relaxed row
 tails on the fixed original first support. -/
 theorem other_patch_degrees_and_tails (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
+    (hInit : InitDisc T κ.η0) (hDeep : OtherPatchDiscrepancyInput κ T) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
       ∀ i (π : Fin 𝒯.m → Law (T.S.N k)), InputOK 𝒯 h𝒯 π →
         ∀ D : OwnDegreeData 𝒯 i π, ∀ C : OwnCliqueData D,
           Nonempty (OtherPatchData D C) := by
   sorry
 
-/-- L13.4 (sections/13, lines 218–281): stable cleaning at every valid tiling and allowed input profile. -/
-theorem stable_cleaning (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
+/-- L13.4 (sections/13, line 240): conflict and own-degree budgets carried
+alongside the cleaned-support properties. -/
+def CleaningScaleFacts {κ : CConsts} {T : Stage} {k : ℕ}
+    (𝒯 : Tiling κ T k) : Prop :=
+  (∀ i, if 𝒯.mode = .bounded then
+    Real.exp (Cstar κ.u κ.ξ * 𝒯.Q i) ≤ κ.Kbd
+  else Real.exp (Cstar κ.u κ.ξ * 𝒯.Q i) ≤ Real.exp (𝒯.gain i)) ∧
+  (𝒯.mode.isCluster → ∀ i,
+    10 * Real.rpow ((𝒯.P i).q : ℝ) κ.Cb < 𝒯.gain i / (100 * κ.u))
+
+/-- L13.4 (sections/13, lines 240, 252–265): the fixed scale choices pay for
+clique exclusion and the cluster degree window. -/
+theorem cleaning_scale_bounds (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ 𝒯 : Tiling κ T k, Tiling.Valid 𝒯 → CleaningScaleFacts 𝒯 := by
+  sorry
+
+/-- L13.4 (sections/13, lines 218–281): stable cleaning with its conflict
+and degree budgets, at every valid tiling and allowed input profile. -/
+theorem stable_cleaning_with_facts (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2))
+    (hDeepOther : OtherPatchDiscrepancyInput κ T) :
     ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
       ∀ i (π : Fin 𝒯.m → Law (T.S.N k)), InputOK 𝒯 h𝒯 π →
         ∃ C : Finset (Fin (T.S.N k)),
           ((𝒯.P i).X \ C).card < κ.a * (𝒯.P i).M ∧
           CleanProps 𝒯 i π C ∧
           (𝒯.mode.isCluster → ∀ π',
-            NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) → CleanProps 𝒯 i π' C) := by
+            NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) → CleanProps 𝒯 i π' C) ∧
+          CleaningScaleFacts 𝒯 := by
   have hD := own_patch_degree_trim κ hκ T hInit hDeep
     (uniform_approximant random_subset_lemma.2) d13_1_residual_scale_specification
   have hC := own_patch_clique_trim κ hκ T hDeep
     (uniform_approximant random_subset_lemma.2) d13_1_residual_scale_specification
-  have hO := other_patch_degrees_and_tails κ hκ T hInit hDeep
-  filter_upwards [hD, hC, hO] with k hkD hkC hkO
+  have hO := other_patch_degrees_and_tails κ hκ T hInit hDeepOther
+  have hScale := cleaning_scale_bounds κ hκ T
+  filter_upwards [hD, hC, hO, hScale] with k hkD hkC hkO hkScale
   intro 𝒯 h𝒯 i π hInput
   obtain ⟨D⟩ := hkD 𝒯 h𝒯 i π hInput
   obtain ⟨C⟩ := hkC 𝒯 h𝒯 i π hInput D
@@ -173,6 +201,24 @@ theorem stable_cleaning (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
   have hCsub : Cfinal ⊆ (𝒯.P i).X := (O.subset.trans C.sub).trans D.sub
   have hCodegree := cleaned_codegree_bound h𝒯 i Cfinal hCsub O.loss
   obtain ⟨hClean, hStable⟩ := assemble_clean_props i π D C O hCodegree
-  exact ⟨Cfinal, O.loss, hClean, hStable⟩
+  exact ⟨Cfinal, O.loss, hClean, hStable, hkScale 𝒯 h𝒯⟩
+
+/-- L13.4: cleaned-support export. The additional discrepancy input is the
+shared contract in `Needs.lean`, required by the other-patch node. -/
+theorem stable_cleaning (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hInit : InitDisc T κ.η0) (hDeep : DeepDisc T κ.xι κ.αι (κ.ι / 2))
+    (hDeepOther : OtherPatchDiscrepancyInput κ T) :
+    ∀ᶠ k in atTop, ∀ (𝒯 : Tiling κ T k) (h𝒯 : Tiling.Valid 𝒯),
+      ∀ i (π : Fin 𝒯.m → Law (T.S.N k)), InputOK 𝒯 h𝒯 π →
+        ∃ C : Finset (Fin (T.S.N k)),
+          ((𝒯.P i).X \ C).card < κ.a * (𝒯.P i).M ∧
+          CleanProps 𝒯 i π C ∧
+          (𝒯.mode.isCluster → ∀ π',
+            NearInput π π' ((T.S.n k : ℝ) ^ (-3 : ℝ)) → CleanProps 𝒯 i π' C) := by
+  filter_upwards [stable_cleaning_with_facts κ hκ T hInit hDeep hDeepOther]
+    with k hk
+  intro 𝒯 h𝒯 i π hInput
+  obtain ⟨C, hLoss, hClean, hStable, hScale⟩ := hk 𝒯 h𝒯 i π hInput
+  exact ⟨C, hLoss, hClean, hStable⟩
 
 end HypercubeRamsey.S13

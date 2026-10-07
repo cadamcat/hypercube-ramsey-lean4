@@ -38,7 +38,7 @@ private def splitCube {n : ℕ} (A : Finset (Fin n)) :
 def cubeCountOn {n : ℕ} (A : Finset (Fin n)) (x : CubeVertex n) : ℕ :=
   (A.attach.filter fun i => x i.1 = true).card
 
-private def boolWeight {ι : Type*} [Fintype ι] (f : ι → Bool) : ℕ :=
+def boolWeight {ι : Type*} [Fintype ι] (f : ι → Bool) : ℕ :=
   (Finset.univ.filter fun i => f i = true).card
 
 private def boolSupportEquiv (ι : Type*) [Fintype ι] [DecidableEq ι] :
@@ -52,7 +52,7 @@ private def boolSupportEquiv (ι : Type*) [Fintype ι] [DecidableEq ι] :
     ext i
     simp
 
-private theorem boolWeightLayerCard (ι : Type*) [Fintype ι] [DecidableEq ι] (q : ℕ) :
+theorem boolWeightLayerCard (ι : Type*) [Fintype ι] [DecidableEq ι] (q : ℕ) :
     Fintype.card {f : ι → Bool // boolWeight f = q} = Nat.choose (Fintype.card ι) q := by
   classical
   let eSupport := boolSupportEquiv ι
@@ -186,7 +186,9 @@ theorem finDistFilterCard_le {N r : ℕ} (c : Fin (N + 1)) :
     have hdist := (Finset.mem_filter.mp hx).2
     simp only [Finset.mem_Icc]
     unfold Nat.dist at hdist
-    omega
+    have hx₁ : x.val - c.val ≤ r := by omega
+    have hx₂ : c.val - x.val ≤ r := by omega
+    constructor <;> omega
   calc
     S.card = (S.image Fin.val).card :=
       (Finset.card_image_of_injective _ Fin.val_injective).symm
@@ -194,8 +196,147 @@ theorem finDistFilterCard_le {N r : ℕ} (c : Fin (N + 1)) :
     _ = c.val + r - (c.val - r) + 1 := by
       simp
       omega
-    _ ≤ 2 * r + 1 := by omega
+    _ ≤ 2 * r + 1 := by
+      by_cases hrc : r ≤ c.val
+      · omega
+      · have hcr : c.val - r = 0 := Nat.sub_eq_zero_of_le (Nat.le_of_lt (lt_of_not_ge hrc))
+        rw [hcr]
+        omega
 
+/-- A product bound for events on disjoint coordinate blocks of a Boolean cube. -/
+theorem cubeBlockEventFraction_le {n m : ℕ}
+    (chunks : Fin m → Finset (Fin n))
+    (hdisj : ∀ i j, i ≠ j → Disjoint (chunks i) (chunks j))
+    (S : Finset (Fin m))
+    (events : ∀ i, Finset ({a : Fin n // a ∈ chunks i} → Bool))
+    (b : ℝ) (hb : 0 ≤ b)
+    (hlocal : ∀ i ∈ S,
+      ((events i).card : ℝ) ≤ b * (2 : ℝ) ^ (chunks i).card) :
+    ((Finset.univ.filter fun x : CubeVertex n =>
+      ∀ i ∈ S, (fun a : {a : Fin n // a ∈ chunks i} => x a.1) ∈ events i).card : ℝ) /
+        (2 : ℝ) ^ n ≤ b ^ S.card := by
+  classical
+  let U : Finset (Fin n) := Finset.univ.biUnion chunks
+  let Outside := {a : Fin n // a ∉ U}
+  let BlockCoord (i : Fin m) := {a : Fin n // a ∈ chunks i}
+  let Pattern (i : Fin m) :=
+    {f : BlockCoord i → Bool // if i ∈ S then f ∈ events i else True}
+  let Config := ((i : Fin m) → Pattern i) × (Outside → Bool)
+  let Good (x : CubeVertex n) :=
+    ∀ i ∈ S, (fun a : BlockCoord i => x a.1) ∈ events i
+  let encode (x : {x : CubeVertex n // Good x}) : Config :=
+    ((fun i => ⟨fun a => x.1 a.1, by
+      by_cases hi : i ∈ S
+      · simpa [hi] using x.2 i hi
+      · simp [hi]⟩),
+      fun a => x.1 a.1)
+  have hPair : ((Finset.univ : Finset (Fin m)) : Set (Fin m)).PairwiseDisjoint chunks := by
+    intro i hi j hj hij
+    exact hdisj i j hij
+  have hUcard : U.card = ∑ i : Fin m, (chunks i).card := by
+    exact Finset.card_biUnion hPair
+  have hUle : U.card ≤ n := by
+    simpa [U, Fintype.card_fin] using Finset.card_le_univ U
+  have hOutsideCard : Fintype.card Outside = n - U.card := by
+    have hcompl := Fintype.card_subtype_compl (fun a : Fin n => a ∈ U)
+    have hUtype : Fintype.card {a : Fin n // a ∈ U} = U.card := by simp [Fintype.card_coe]
+    calc
+      Fintype.card Outside = n - Fintype.card {a : Fin n // a ∈ U} := by
+        simpa [Outside] using hcompl
+      _ = n - U.card := by rw [hUtype]
+  have hPatternCard (i : Fin m) :
+      Fintype.card (Pattern i) =
+        if i ∈ S then (events i).card else 2 ^ (chunks i).card := by
+    by_cases hi : i ∈ S
+    · simp [Pattern, hi, Fintype.card_coe]
+    · simp [Pattern, hi, BlockCoord, Fintype.card_fun, Fintype.card_bool,
+        Fintype.card_coe]
+  have hEncodeInjective : Function.Injective encode := by
+    intro x y hxy
+    apply Subtype.ext
+    funext a
+    by_cases ha : a ∈ U
+    · obtain ⟨i, hi, hai⟩ := Finset.mem_biUnion.mp ha
+      have hblock : (fun z : BlockCoord i => x.1 z.1) =
+          (fun z : BlockCoord i => y.1 z.1) := by
+        have hpi : (encode x).1 i = (encode y).1 i :=
+          congrFun (congrArg Prod.fst hxy) i
+        exact congrArg Subtype.val hpi
+      exact congrFun hblock ⟨a, hai⟩
+    · have hout : (encode x).2 ⟨a, ha⟩ = (encode y).2 ⟨a, ha⟩ :=
+        congrFun (congrArg Prod.snd hxy) ⟨a, ha⟩
+      exact hout
+  have hGoodCard :
+      (Finset.univ.filter fun x : CubeVertex n => Good x).card ≤ Fintype.card Config := by
+    calc
+      (Finset.univ.filter fun x : CubeVertex n => Good x).card =
+          Fintype.card {x : CubeVertex n // Good x} := by
+            symm
+            simpa using (Fintype.card_subtype Good)
+      _ ≤ Fintype.card Config := Fintype.card_le_of_injective encode hEncodeInjective
+  have hPatternFactor (i : Fin m) :
+      (Fintype.card (Pattern i) : ℝ) ≤
+        (if i ∈ S then b else 1) * (2 : ℝ) ^ (chunks i).card := by
+    by_cases hi : i ∈ S
+    · rw [hPatternCard, if_pos hi]
+      simpa [hi] using hlocal i hi
+    · rw [hPatternCard, if_neg hi]
+      simp [hi]
+  have hSprod : (∏ i : Fin m, (if i ∈ S then b else 1)) = b ^ S.card := by
+    rw [Finset.prod_ite_mem]
+    simp
+  have hBlockPow :
+      (∏ i : Fin m, (2 : ℝ) ^ (chunks i).card) = (2 : ℝ) ^ U.card := by
+    calc
+      (∏ i : Fin m, (2 : ℝ) ^ (chunks i).card) =
+          (2 : ℝ) ^ (∑ i : Fin m, (chunks i).card) := by
+            simpa using
+              (Finset.prod_pow_eq_pow_sum (s := Finset.univ)
+                (f := fun i : Fin m => (chunks i).card) (a := (2 : ℝ)))
+      _ = (2 : ℝ) ^ U.card := by rw [← hUcard]
+  have hPatternProd :
+      (∏ i : Fin m, (Fintype.card (Pattern i) : ℝ)) ≤
+        b ^ S.card * (2 : ℝ) ^ U.card := by
+    calc
+      (∏ i : Fin m, (Fintype.card (Pattern i) : ℝ)) ≤
+          ∏ i : Fin m, ((if i ∈ S then b else 1) * (2 : ℝ) ^ (chunks i).card) :=
+          Finset.prod_le_prod₀ (by intro i hi; positivity)
+            (by intro i hi; exact hPatternFactor i)
+      _ = (∏ i : Fin m, (if i ∈ S then b else 1)) *
+            (∏ i : Fin m, (2 : ℝ) ^ (chunks i).card) := Finset.prod_mul_distrib
+      _ = b ^ S.card * (2 : ℝ) ^ U.card := by rw [hSprod, hBlockPow]
+  have hConfigCard :
+      (Fintype.card Config : ℝ) =
+        (∏ i : Fin m, (Fintype.card (Pattern i) : ℝ)) *
+          (2 : ℝ) ^ (n - U.card) := by
+    have hNat : Fintype.card Config =
+        (∏ i : Fin m, Fintype.card (Pattern i)) * 2 ^ (n - U.card) := by
+      dsimp [Config]
+      rw [Fintype.card_prod, Fintype.card_pi, Fintype.card_fun, Fintype.card_bool,
+        hOutsideCard]
+    rw [hNat]
+    simp only [Nat.cast_mul, Nat.cast_prod, Nat.cast_pow, Nat.cast_ofNat]
+  have hConfigBound : (Fintype.card Config : ℝ) ≤ b ^ S.card * (2 : ℝ) ^ n := by
+    rw [hConfigCard]
+    calc
+      (∏ i : Fin m, (Fintype.card (Pattern i) : ℝ)) *
+          (2 : ℝ) ^ (n - U.card) ≤
+        (b ^ S.card * (2 : ℝ) ^ U.card) * (2 : ℝ) ^ (n - U.card) :=
+          mul_le_mul_of_nonneg_right hPatternProd (by positivity)
+      _ = b ^ S.card * (2 : ℝ) ^ n := by
+        rw [mul_assoc, ← pow_add, Nat.add_sub_of_le hUle]
+  have hGoodReal :
+      ((Finset.univ.filter fun x : CubeVertex n => Good x).card : ℝ) ≤
+        (Fintype.card Config : ℝ) := by exact_mod_cast hGoodCard
+  have hTarget :
+      (Fintype.card Config : ℝ) / (2 : ℝ) ^ n ≤ b ^ S.card := by
+    apply (div_le_iff₀ (by positivity : 0 < (2 : ℝ) ^ n)).2
+    exact hConfigBound
+  calc
+    ((Finset.univ.filter fun x : CubeVertex n => Good x).card : ℝ) /
+        (2 : ℝ) ^ n ≤ (Fintype.card Config : ℝ) / (2 : ℝ) ^ n :=
+      div_le_div_of_nonneg_right hGoodReal (by positivity)
+    _ ≤ b ^ S.card := hTarget
 private theorem prefixMass_succ (ell j : ℕ) :
     prefixMass ell (j + 1) = prefixMass ell j + halfMassNat ell j := by
   simp [prefixMass, Finset.sum_range_succ]

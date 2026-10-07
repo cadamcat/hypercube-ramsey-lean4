@@ -576,7 +576,324 @@ theorem L6_1b_tail (α : ℝ) (hα : 0 < α) (hα' : α ≤ 1 / 100) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ L : ChunkLayout6 n, L.m = ⌈(n : ℝ) ^ α⌉₊ → ∀ q, 1 ≤ q → q ≤ L.m →
       ((Finset.univ.filter fun x : CubeVertex n => q ≤ L.severity x).card : ℝ) / (2 : ℝ) ^ n ≤
         (n : ℝ) ^ (-(13 / 100 : ℝ) * q) := by
-  sorry
+  have hevent : ∀ᶠ n : ℕ in Filter.atTop, 92 < (n : ℝ) ^ (1 / 100 : ℝ) := by
+    have htend := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 100)).comp
+      tendsto_natCast_atTop_atTop
+    exact htend.eventually (Filter.eventually_gt_atTop 92)
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    ((Filter.eventually_ge_atTop 2).and hevent)
+  refine ⟨n₀, ?_⟩
+  intro n hn L hL q hq1 hqm
+  have hlarge := hn₀ n hn
+  have hn2 : 2 ≤ n := hlarge.1
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hnRpos : 0 < (n : ℝ) := by positivity
+  have hnPow : 92 < (n : ℝ) ^ (1 / 100 : ℝ) := hlarge.2
+  let ell : ℕ := L.fineLength
+  have hellR : (n : ℝ) ^ (3 / 10 : ℝ) ≤ (ell : ℝ) := by
+    simpa [ell] using L.fine_length_lower
+  have hellPos : 0 < ell := by
+    have hpow : 1 ≤ (n : ℝ) ^ (3 / 10 : ℝ) := Real.one_le_rpow hnR (by norm_num)
+    have hreal : (1 : ℝ) ≤ (ell : ℝ) := hpow.trans hellR
+    exact_mod_cast (show (0 : ℝ) < (ell : ℝ) by linarith)
+  let Coord (i : Fin L.m) := {a : Fin n // a ∈ L.fineChunks i}
+  let weight (i : Fin L.m) (f : Coord i → Bool) :=
+    HypercubeRamsey.Lane_q_s06_front.boolWeight f
+  let severePatterns (i : Fin L.m) : Finset (Coord i → Bool) :=
+    Finset.univ.filter fun f => Nat.dist (2 * weight i f) ell ≤ 11
+  have hCoordCard (i : Fin L.m) : Fintype.card (Coord i) = ell := by
+    simp [Coord, ell, Fintype.card_coe, L.fine_chunk_length i]
+  have hWeightBound (i : Fin L.m) (f : Coord i → Bool) : weight i f ≤ ell := by
+    calc
+      weight i f ≤ Fintype.card (Coord i) := by
+        exact Finset.card_filter_le _ _
+      _ = ell := hCoordCard i
+  have hLevelsCard (levels : Finset ℕ)
+      (hle : levels ⊆ Finset.range (ell + 1))
+      (hdist : ∀ q ∈ levels, Nat.dist (2 * q) ell ≤ 11) : levels.card ≤ 23 := by
+    let R : Finset (Fin (ell + 12)) :=
+      Finset.univ.filter fun r => Nat.dist r.val ell ≤ 11
+    have hRcard : R.card ≤ 23 := by
+      simpa [R, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+        (HypercubeRamsey.Lane_q_s06_front.finDistFilterCard_le
+          (N := ell + 11) (r := 11) ⟨ell, by omega⟩)
+    let f (q : ℕ) (hq : q ∈ levels) : Fin (ell + 12) :=
+      ⟨2 * q, by
+        have hqle : q ≤ ell := by
+          have := Finset.mem_range.mp (hle hq)
+          omega
+        have h := hdist q hq
+        unfold Nat.dist at h
+        omega⟩
+    have hImage :
+        levels.attach.image (fun q => f q.1 q.2) ⊆ R := by
+      intro r hr
+      rcases Finset.mem_image.mp hr with ⟨q, hq, rfl⟩
+      have h := hdist q.1 q.2
+      simp [R, f, h]
+    have hfInj : Function.Injective (fun q : {q : ℕ // q ∈ levels} => f q.1 q.2) := by
+      intro a b hab
+      apply Subtype.ext
+      have hval := congrArg Fin.val hab
+      dsimp [f] at hval
+      omega
+    have hImageCard : (levels.attach.image (fun q => f q.1 q.2)).card = levels.card := by
+      calc
+        (levels.attach.image (fun q => f q.1 q.2)).card = levels.attach.card :=
+          Finset.card_image_of_injective _ hfInj
+        _ = levels.card := by simp
+    calc
+      levels.card = (levels.attach.image (fun q => f q.1 q.2)).card := hImageCard.symm
+      _ ≤ R.card := Finset.card_le_card hImage
+      _ ≤ 23 := hRcard
+  have hLayer (i : Fin L.m) (q : ℕ) :
+      (Finset.univ.filter fun f : Coord i → Bool => weight i f = q).card =
+        Nat.choose ell q := by
+    calc
+      (Finset.univ.filter fun f : Coord i → Bool => weight i f = q).card =
+          Fintype.card {f : Coord i → Bool // weight i f = q} := by
+            symm
+            simpa using (Fintype.card_subtype fun f : Coord i → Bool => weight i f = q)
+      _ = Nat.choose (Fintype.card (Coord i)) q := by
+            simpa [weight] using
+              (HypercubeRamsey.Lane_q_s06_front.boolWeightLayerCard (Coord i) q)
+      _ = Nat.choose ell q := by rw [hCoordCard]
+  have hSevereCard (i : Fin L.m) :
+      ((severePatterns i).card : ℝ) ≤ 46 * (2 : ℝ) ^ ell / Real.sqrt ell := by
+    let levels : Finset ℕ := (Finset.range (ell + 1)).filter fun q =>
+      Nat.dist (2 * q) ell ≤ 11
+    let layer (q : ℕ) : Finset (Coord i → Bool) :=
+      Finset.univ.filter fun f => weight i f = q
+    have hlevels : levels.card ≤ 23 := by
+      exact hLevelsCard levels (Finset.filter_subset _ _) (by
+        intro q hq
+        exact (Finset.mem_filter.mp hq).2)
+    have hUnion : severePatterns i = levels.biUnion layer := by
+      ext f
+      simp only [severePatterns, Finset.mem_filter, Finset.mem_biUnion,
+        Finset.mem_univ, true_and, levels, layer]
+      constructor
+      · intro hf
+        refine ⟨weight i f, ?_, ?_⟩
+        · simp only [Finset.mem_filter, Finset.mem_range]
+          exact ⟨Nat.lt_succ_of_le (hWeightBound i f), hf⟩
+        · rfl
+      · rintro ⟨q, hq, rfl⟩
+        exact hq.2
+    have hcardNat :
+        (severePatterns i).card ≤ ∑ q ∈ levels, (layer q).card := by
+      rw [hUnion]
+      exact Finset.card_biUnion_le
+    have hcardReal :
+        ((severePatterns i).card : ℝ) ≤ ∑ q ∈ levels, ((layer q).card : ℝ) := by
+      exact_mod_cast hcardNat
+    have hsumBound :
+        (∑ q ∈ levels, ((layer q).card : ℝ)) ≤
+          (levels.card : ℝ) * ((2 / Real.sqrt ell) * (2 : ℝ) ^ ell) := by
+      calc
+        (∑ q ∈ levels, ((layer q).card : ℝ)) ≤
+            ∑ q ∈ levels, ((2 / Real.sqrt ell) * (2 : ℝ) ^ ell) :=
+          Finset.sum_le_sum (fun q hq => by
+            have hqle : q ≤ ell := by
+              have hq' := (Finset.mem_filter.mp hq).1
+              simp only [Finset.mem_range] at hq'
+              omega
+            have hcentral := centralBinomialUpper ell hellPos q hqle
+            have hmul := (div_le_iff₀ (by positivity : 0 < (2 : ℝ) ^ ell)).1 hcentral
+            rw [hLayer i q]
+            push_cast at hmul ⊢
+            nlinarith [hmul])
+        _ = (levels.card : ℝ) * ((2 / Real.sqrt ell) * (2 : ℝ) ^ ell) := by
+          simp [Finset.sum_const, nsmul_eq_mul]
+    have hlevelBound :
+        (levels.card : ℝ) * ((2 / Real.sqrt ell) * (2 : ℝ) ^ ell) ≤
+          23 * ((2 / Real.sqrt ell) * (2 : ℝ) ^ ell) :=
+      mul_le_mul_of_nonneg_right (by exact_mod_cast hlevels) (by positivity)
+    calc
+      ((severePatterns i).card : ℝ) ≤
+          23 * ((2 / Real.sqrt ell) * (2 : ℝ) ^ ell) :=
+        hcardReal.trans (hsumBound.trans hlevelBound)
+      _ = 46 * (2 : ℝ) ^ ell / Real.sqrt ell := by ring
+  let events (i : Fin L.m) := severePatterns i
+  let localRate : ℝ := 46 / Real.sqrt ell
+  have hlocalRate : 0 ≤ localRate := by dsimp [localRate]; positivity
+  have hLocal (i : Fin L.m) (hi : i ∈ Finset.univ) :
+      ((events i).card : ℝ) ≤ localRate * (2 : ℝ) ^ (L.fineChunks i).card := by
+    change ((severePatterns i).card : ℝ) ≤ localRate * (2 : ℝ) ^ (L.fineChunks i).card
+    rw [L.fine_chunk_length i]
+    calc
+      ((severePatterns i).card : ℝ) ≤ 46 * (2 : ℝ) ^ ell / Real.sqrt ell := hSevereCard i
+      _ = localRate * (2 : ℝ) ^ ell := by dsimp [localRate]; ring
+  have hFineDisjoint : ∀ i j, i ≠ j → Disjoint (L.fineChunks i) (L.fineChunks j) :=
+    L.chunks_disjoint.2.2.1
+  let selectedEvent (S : Finset (Fin L.m)) :=
+    Finset.univ.filter fun x : CubeVertex n =>
+      ∀ i ∈ S, (fun a : Coord i => x a.1) ∈ events i
+  have hweightEq (i : Fin L.m) (x : CubeVertex n) :
+      weight i (fun a : Coord i => x a.1) = L.fineCount x i := by
+    have hcardAttach (S : Finset (Fin n)) (z : CubeVertex n) :
+        (S.filter fun b => z b = true).card =
+          (S.attach.filter fun b => z b.1 = true).card := by
+      apply Finset.card_bij (fun b hb => ⟨b, (Finset.mem_filter.mp hb).1⟩)
+      · intro b hb
+        rcases Finset.mem_filter.mp hb with ⟨hbS, hzb⟩
+        exact Finset.mem_filter.mpr ⟨by simp, hzb⟩
+      · intro b hb c hc hbc
+        exact congrArg Subtype.val hbc
+      · intro c hc
+        rcases Finset.mem_filter.mp hc with ⟨hcS, hzc⟩
+        exact ⟨c.1, Finset.mem_filter.mpr ⟨c.2, hzc⟩, by apply Subtype.ext; rfl⟩
+    unfold weight HypercubeRamsey.Lane_q_s06_front.boolWeight ChunkLayout6.fineCount
+    change (Finset.univ.filter fun a : Coord i => x a.1 = true).card = _
+    rw [show (Finset.univ : Finset (Coord i)) = (L.fineChunks i).attach by simp [Coord]]
+    exact (hcardAttach (L.fineChunks i) x).symm
+  have hselected (S : Finset (Fin L.m)) :
+      ((selectedEvent S).card : ℝ) / (2 : ℝ) ^ n ≤ localRate ^ S.card := by
+    simpa [selectedEvent, events] using
+      (HypercubeRamsey.Lane_q_s06_front.cubeBlockEventFraction_le
+        (n := n) (m := L.m) L.fineChunks hFineDisjoint S events localRate
+        hlocalRate (fun i hi => hLocal i (Finset.mem_univ i)))
+  let active (x : CubeVertex n) :=
+    Finset.univ.filter fun i : Fin L.m => Nat.dist (2 * L.fineCount x i) ell ≤ 11
+  let badVertices := Finset.univ.filter fun x : CubeVertex n => q ≤ L.severity x
+  let qsets : Finset (Finset (Fin L.m)) := Finset.univ.powersetCard q
+  let qEventUnion := qsets.biUnion selectedEvent
+  have hbadSubset : badVertices ⊆ qEventUnion := by
+    intro x hx
+    have hqActive : q ≤ (active x).card := by
+      simpa [active, ChunkLayout6.severity, ell] using (Finset.mem_filter.mp hx).2
+    obtain ⟨T, hTsub, hTcard⟩ := Finset.exists_subset_card_eq hqActive
+    have hTmem : T ∈ qsets := by
+      simp [qsets, hTsub, hTcard]
+    have hxT : x ∈ selectedEvent T := by
+      simp only [selectedEvent, Finset.mem_filter, Finset.mem_univ, true_and]
+      intro i hi
+      have hactive := (Finset.mem_filter.mp (hTsub hi)).2
+      change (fun a : Coord i => x a.1) ∈ Finset.univ.filter
+        (fun f : Coord i → Bool => Nat.dist (2 * weight i f) ell ≤ 11)
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      rw [hweightEq i x]
+      exact hactive
+    exact Finset.mem_biUnion.mpr ⟨T, hTmem, hxT⟩
+  have hbadCard : badVertices.card ≤ ∑ S ∈ qsets, (selectedEvent S).card := by
+    calc
+      badVertices.card ≤ qEventUnion.card := Finset.card_le_card hbadSubset
+      _ ≤ ∑ S ∈ qsets, (selectedEvent S).card := by
+        simpa [qEventUnion] using (Finset.card_biUnion_le (s := qsets) (t := selectedEvent))
+  have hqsetsCard : qsets.card = Nat.choose L.m q := by
+    simp [qsets, Finset.card_powersetCard]
+  have hqsetsMemCard (S : Finset (Fin L.m)) (hS : S ∈ qsets) : S.card = q := by
+    simpa [qsets] using (Finset.mem_powersetCard.mp hS).2
+  have hchoose : qsets.card ≤ L.m ^ q := by
+    rw [hqsetsCard]
+    exact Nat.choose_le_pow L.m q
+  have hbadProbability :
+      ((badVertices.card : ℝ) / (2 : ℝ) ^ n) ≤ (L.m : ℝ) ^ q * localRate ^ q := by
+    have hbadCast : (badVertices.card : ℝ) ≤
+        ∑ S ∈ qsets, ((selectedEvent S).card : ℝ) := by exact_mod_cast hbadCard
+    calc
+      (badVertices.card : ℝ) / (2 : ℝ) ^ n ≤
+          (∑ S ∈ qsets, ((selectedEvent S).card : ℝ)) / (2 : ℝ) ^ n :=
+            div_le_div_of_nonneg_right hbadCast (by positivity)
+      _ = ∑ S ∈ qsets, ((selectedEvent S).card : ℝ) / (2 : ℝ) ^ n := by
+            rw [Finset.sum_div]
+      _ ≤ ∑ S ∈ qsets, localRate ^ S.card := by
+            apply Finset.sum_le_sum
+            intro S hS
+            have hScard : S.card = q := hqsetsMemCard S hS
+            simpa [hScard] using hselected S
+      _ = ∑ S ∈ qsets, localRate ^ q := by
+            apply Finset.sum_congr rfl
+            intro S hS
+            rw [hqsetsMemCard S hS]
+      _ = (qsets.card : ℝ) * localRate ^ q := by
+            simp [Finset.sum_const, nsmul_eq_mul]
+      _ ≤ (L.m : ℝ) ^ q * localRate ^ q := by
+            exact mul_le_mul_of_nonneg_right (by exact_mod_cast hchoose) (by positivity)
+  have hmBound : (L.m : ℝ) ≤ 2 * (n : ℝ) ^ (1 / 100 : ℝ) := by
+    have hceil : (L.m : ℝ) < (n : ℝ) ^ α + 1 := by
+      rw [hL]
+      exact Nat.ceil_lt_add_one (by positivity)
+    have hαpow : (n : ℝ) ^ α ≤ (n : ℝ) ^ (1 / 100 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le hnR hα'
+    have hpowOne : 1 ≤ (n : ℝ) ^ (1 / 100 : ℝ) := Real.one_le_rpow hnR (by norm_num)
+    linarith
+  have hrootSquare : ((n : ℝ) ^ (3 / 20 : ℝ)) ^ 2 = (n : ℝ) ^ (3 / 10 : ℝ) := by
+    calc
+      ((n : ℝ) ^ (3 / 20 : ℝ)) ^ 2 =
+          (n : ℝ) ^ (3 / 20 : ℝ) * (n : ℝ) ^ (3 / 20 : ℝ) := by ring
+      _ = (n : ℝ) ^ ((3 / 20 : ℝ) + (3 / 20 : ℝ)) :=
+          (Real.rpow_add hnRpos _ _).symm
+      _ = (n : ℝ) ^ (3 / 10 : ℝ) := by congr 1 <;> norm_num
+  have hroot : (n : ℝ) ^ (3 / 20 : ℝ) ≤ Real.sqrt (ell : ℝ) := by
+    apply le_of_sq_le_sq
+    · rw [hrootSquare, Real.sq_sqrt (by positivity : 0 ≤ (ell : ℝ))]
+      exact hellR
+    · positivity
+  have hinv : 1 / Real.sqrt (ell : ℝ) ≤ (n : ℝ) ^ (-(3 / 20 : ℝ)) := by
+    have hpositive : 0 < (n : ℝ) ^ (3 / 20 : ℝ) := by positivity
+    have hrecip := one_div_le_one_div_of_le hpositive hroot
+    have hneg : (n : ℝ) ^ (-(3 / 20 : ℝ)) =
+        1 / (n : ℝ) ^ (3 / 20 : ℝ) := by
+      rw [Real.rpow_neg (le_of_lt hnRpos)]
+      simp [one_div]
+    simpa [hneg] using hrecip
+  have hRateBound : (L.m : ℝ) * localRate ≤ (n : ℝ) ^ (-(13 / 100 : ℝ)) := by
+    have hlocal : localRate ≤ 46 * (n : ℝ) ^ (-(3 / 20 : ℝ)) := by
+      dsimp [localRate]
+      calc
+        46 / Real.sqrt (ell : ℝ) = 46 * (1 / Real.sqrt (ell : ℝ)) := by ring
+        _ ≤ 46 * (n : ℝ) ^ (-(3 / 20 : ℝ)) :=
+          mul_le_mul_of_nonneg_left hinv (by norm_num)
+    have hprod : 92 * (n : ℝ) ^ (-(7 / 50 : ℝ)) ≤
+        (n : ℝ) ^ (-(13 / 100 : ℝ)) := by
+      have hexp : (n : ℝ) ^ (-(7 / 50 : ℝ)) * (n : ℝ) ^ (1 / 100 : ℝ) =
+          (n : ℝ) ^ (-(13 / 100 : ℝ)) := by
+        rw [← Real.rpow_add hnRpos]
+        congr 1 <;> norm_num
+      calc
+        92 * (n : ℝ) ^ (-(7 / 50 : ℝ)) ≤
+            (n : ℝ) ^ (1 / 100 : ℝ) * (n : ℝ) ^ (-(7 / 50 : ℝ)) :=
+          mul_le_mul_of_nonneg_right (le_of_lt hnPow) (by positivity)
+        _ = (n : ℝ) ^ (-(13 / 100 : ℝ)) := by rw [mul_comm, hexp]
+    calc
+      (L.m : ℝ) * localRate ≤
+          (2 * (n : ℝ) ^ (1 / 100 : ℝ)) *
+            (46 * (n : ℝ) ^ (-(3 / 20 : ℝ))) :=
+        mul_le_mul hmBound hlocal (by positivity) (by positivity)
+      _ = 92 * (n : ℝ) ^ (-(7 / 50 : ℝ)) := by
+        calc
+          (2 * (n : ℝ) ^ (1 / 100 : ℝ)) *
+              (46 * (n : ℝ) ^ (-(3 / 20 : ℝ))) =
+              92 * ((n : ℝ) ^ (1 / 100 : ℝ) * (n : ℝ) ^ (-(3 / 20 : ℝ))) := by ring
+          _ = 92 * (n : ℝ) ^ (-(7 / 50 : ℝ)) := by
+            rw [← Real.rpow_add hnRpos]
+            congr 1 <;> norm_num
+      _ ≤ (n : ℝ) ^ (-(13 / 100 : ℝ)) := hprod
+  have hpowQ :
+      ((n : ℝ) ^ (-(13 / 100 : ℝ))) ^ q =
+        (n : ℝ) ^ (-(13 / 100 : ℝ) * (q : ℝ)) := by
+    calc
+      ((n : ℝ) ^ (-(13 / 100 : ℝ))) ^ q =
+          ((n : ℝ) ^ (-(13 / 100 : ℝ))) ^ (q : ℝ) :=
+            (Real.rpow_natCast _ _).symm
+      _ = (n : ℝ) ^ (-(13 / 100 : ℝ) * (q : ℝ)) :=
+            (Real.rpow_mul (by positivity : 0 ≤ (n : ℝ)) _ _).symm
+  have hratePow : ((L.m : ℝ) * localRate) ^ q ≤
+      ((n : ℝ) ^ (-(13 / 100 : ℝ))) ^ q :=
+    pow_le_pow_left₀ (by positivity) hRateBound q
+  have hbadProbabilityCombined :
+      ((badVertices.card : ℝ) / (2 : ℝ) ^ n) ≤ ((L.m : ℝ) * localRate) ^ q := by
+    calc
+      ((badVertices.card : ℝ) / (2 : ℝ) ^ n) ≤
+          (L.m : ℝ) ^ q * localRate ^ q := hbadProbability
+      _ = ((L.m : ℝ) * localRate) ^ q := (mul_pow (L.m : ℝ) localRate q).symm
+  calc
+    ((badVertices.card : ℝ) / (2 : ℝ) ^ n) ≤
+        ((L.m : ℝ) * localRate) ^ q := hbadProbabilityCombined
+    _ ≤ (n : ℝ) ^ (-(13 / 100 : ℝ) * (q : ℝ)) := by
+      rw [← hpowQ]
+      exact hratePow
 
 /-- L6.1b (boundary): the coarse boundary fraction is at most `n^{-.05}` (06:75–76; at most `n^{.04}+1` bins
 per chunk, atoms `≤ 2/√⌊n^{1/5}⌋`, union over `300` chunks). -/

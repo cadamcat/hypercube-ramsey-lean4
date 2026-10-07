@@ -157,7 +157,7 @@ theorem p92_clock_factor {P : Params9} {n N : ℕ} {M : TagMix N} (S : Setup9 P 
     (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (J : Outcome9 I N → FinProb (OddSites9 n → Fin N))
     (hJ : ∀ ω, GoodPre9 S E G ω → ClockOK9 S E G ω (J ω)) : ClockFactor9 S I E G J := by
-  sorry
+  exact Lane_q_s09_assign2.p92_clock_factor_core S E G J hJ
 
 /-- P9.2-assignC, anchor integral (09:341–347): remove the star events touching the separated target IDs (at
 most `(n+1)^{2r+8}` each, factor `2` per site for large `n`); the remaining events do not read the targets, each

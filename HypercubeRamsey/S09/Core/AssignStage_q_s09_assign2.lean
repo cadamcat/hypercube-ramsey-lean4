@@ -791,7 +791,7 @@ private theorem targetFrac9_product_inverse_bound {P : Params9} {n N : ℕ} {M :
     _ ≤ Real.exp ((n : ℝ) * Real.log 2 - gainConst9 * (n : ℝ) * P.aStar n) := hexp
     _ = (2 : ℝ) ^ n * Real.exp (-(gainConst9 * (n : ℝ) * P.aStar n)) := hexpEq
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 10000000 in
 theorem p92_star_lik_bound_core (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
       {κ : ℝ} {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
@@ -1285,6 +1285,528 @@ theorem p92_even_row_cap_core (P : Params9) (hP : P.Valid) :
         congrArg (fun z : ℝ => (2 : ℝ) ^ n * Real.exp z)
           (show -(gainConst9 * (n : ℝ) * P.aStar n) / 2 =
             -(gainConst9 * (n : ℝ) * P.aStar n / 2) by ring)
+
+private def flipStar9 {n : ℕ} (v : EvenSites9 n) (i : Fin n) : StarOdd9 v :=
+  ⟨⟨cubeFlip v.1 i, by
+      intro he
+      have hnot : ¬ IsEvenRole v.1 := (cubeFlip_parity v.1 i).mp he
+      exact hnot v.2⟩,
+    cubeFlip_adj v.1 i⟩
+
+private theorem exists_flipStar9 {n : ℕ} {v : EvenSites9 n} (b : StarOdd9 v) :
+    ∃ i : Fin n, cubeFlip v.1 i = b.1.1 := by
+  classical
+  let D : Finset (Fin n) := Finset.univ.filter (fun i => v.1 i ≠ b.1.1 i)
+  have hcard : D.card = 1 := by
+    have hb := b.2
+    change _root_.hammingDist v.1 b.1.1 = 1 at hb
+    simpa [D, _root_.hammingDist] using hb
+  obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hcard
+  refine ⟨i, ?_⟩
+  funext j
+  by_cases hji : j = i
+  · subst j
+    have hmem : i ∈ D := by simp [hi]
+    have hneq : v.1 i ≠ b.1.1 i := (Finset.mem_filter.mp hmem).2
+    cases hv : v.1 i <;> cases hb : b.1.1 i <;> simp_all [cubeFlip]
+  · have hnot : j ∉ D := by simp [hi, hji]
+    have heq : v.1 j = b.1.1 j := by
+      by_contra hne
+      have hj : j ∈ D := by simp [D, hne]
+      exact hnot hj
+    simp [cubeFlip, hji, heq]
+
+private noncomputable def starCoord9 {n : ℕ} {v : EvenSites9 n} (b : StarOdd9 v) : Fin n :=
+  Classical.choose (exists_flipStar9 b)
+
+private theorem starCoord9_spec {n : ℕ} {v : EvenSites9 n} (b : StarOdd9 v) :
+    cubeFlip v.1 (starCoord9 b) = b.1.1 :=
+  Classical.choose_spec (exists_flipStar9 b)
+
+private theorem starCoord9_injective {n : ℕ} {v : EvenSites9 n} :
+    Function.Injective (starCoord9 (v := v)) := by
+  intro b b' h
+  apply Subtype.ext
+  apply Subtype.ext
+  calc
+    b.1.1 = cubeFlip v.1 (starCoord9 b) := (starCoord9_spec b).symm
+    _ = cubeFlip v.1 (starCoord9 b') := by rw [h]
+    _ = b'.1.1 := starCoord9_spec b'
+
+private theorem starOdd_card_le9 {n : ℕ} (v : EvenSites9 n) :
+    Fintype.card (StarOdd9 v) ≤ n := by
+  simpa using Fintype.card_le_of_injective (starCoord9 (v := v)) starCoord9_injective
+
+private theorem special_hamming_le_full9 {m n : ℕ} (u v : CubeVertex n) :
+    _root_.hammingDist (specialWord9 m u) (specialWord9 m v) ≤ _root_.hammingDist u v := by
+  classical
+  let A : Finset (Fin m) := Finset.univ.filter
+    (fun i => specialWord9 m u i ≠ specialWord9 m v i)
+  let B : Finset (Fin n) := Finset.univ.filter (fun i => u i ≠ v i)
+  have hsmall (i : Fin m) (hi : i ∈ A) : (i : ℕ) < n := by
+    by_contra hn
+    have hu : specialWord9 m u i = false := by simp [specialWord9, not_lt.mp hn]
+    have hv : specialWord9 m v i = false := by simp [specialWord9, not_lt.mp hn]
+    exact (Finset.mem_filter.mp hi).2 (hu.trans hv.symm)
+  let e : A → Fin n := fun i => ⟨i.1.val, hsmall i.1 i.2⟩
+  have hinj : Function.Injective e := by
+    intro i j h
+    apply Subtype.ext
+    apply Fin.ext
+    simpa [e] using congrArg Fin.val h
+  have hsubset : A.attach.image e ⊆ B := by
+    intro j hj
+    rcases Finset.mem_image.mp hj with ⟨i, hi, rfl⟩
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    have hu : specialWord9 m u i.1 = u (e i) := by
+      simp [specialWord9, e, hsmall i.1 i.2]
+    have hv : specialWord9 m v i.1 = v (e i) := by
+      simp [specialWord9, e, hsmall i.1 i.2]
+    have hdiff := (Finset.mem_filter.mp i.2).2
+    rw [← hu, ← hv]
+    exact hdiff
+  have hA : _root_.hammingDist (specialWord9 m u) (specialWord9 m v) = A.card := by
+    simp [A, _root_.hammingDist]
+  have hB : _root_.hammingDist u v = B.card := by
+    simp [B, _root_.hammingDist]
+  calc
+    _ = A.card := hA
+    _ = A.attach.card := by simp
+    _ = (A.attach.image e).card := (Finset.card_image_of_injective A.attach hinj).symm
+    _ ≤ B.card := Finset.card_le_card hsubset
+    _ = _ := hB.symm
+
+private theorem residual_hamming_le_full9 {m n : ℕ} (u v : CubeVertex n) :
+    _root_.hammingDist (residualWord9 m u) (residualWord9 m v) ≤ _root_.hammingDist u v := by
+  classical
+  by_cases hm : m ≤ n
+  · let A : Finset (Fin (n - m)) := Finset.univ.filter
+      (fun i => residualWord9 m u i ≠ residualWord9 m v i)
+    let B : Finset (Fin n) := Finset.univ.filter (fun i => u i ≠ v i)
+    let e : A → Fin n := fun i => ⟨m + i.1.val, by omega⟩
+    have hinj : Function.Injective e := by
+      intro i j h
+      apply Subtype.ext
+      apply Fin.ext
+      have hv := congrArg Fin.val h
+      dsimp [e] at hv
+      omega
+    have hsubset : A.attach.image e ⊆ B := by
+      intro j hj
+      rcases Finset.mem_image.mp hj with ⟨i, hi, rfl⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      have hu : residualWord9 m u i.1 = u (e i) := by
+        simp [residualWord9, e]
+      have hv : residualWord9 m v i.1 = v (e i) := by
+        simp [residualWord9, e]
+      have hdiff := (Finset.mem_filter.mp i.2).2
+      rw [← hu, ← hv]
+      exact hdiff
+    have hA : _root_.hammingDist (residualWord9 m u) (residualWord9 m v) = A.card := by
+      simp [A, _root_.hammingDist]
+    have hB : _root_.hammingDist u v = B.card := by
+      simp [B, _root_.hammingDist]
+    calc
+      _ = A.card := hA
+      _ = A.attach.card := by simp
+      _ = (A.attach.image e).card := (Finset.card_image_of_injective A.attach hinj).symm
+      _ ≤ B.card := Finset.card_le_card hsubset
+      _ = _ := hB.symm
+  · have hdim : n - m = 0 := by omega
+    simp [_root_.hammingDist, hdim]
+
+private theorem siteNear9_of_common_neighbor {P : Params9} {n : ℕ}
+    (u v : EvenSites9 n) (b : OddSites9 n)
+    (hu : (cube n).Adj u.1 b.1) (hv : (cube n).Adj v.1 b.1) :
+    siteNear9 P n u.1 v.1 := by
+  have hu' : _root_.hammingDist u.1 b.1 = 1 := by change _; exact hu
+  have hv' : _root_.hammingDist v.1 b.1 = 1 := by change _; exact hv
+  have hb' : _root_.hammingDist b.1 v.1 = 1 := by
+    rw [_root_.hammingDist_comm]
+    exact hv'
+  have huv : _root_.hammingDist u.1 v.1 ≤ 2 := by
+    calc
+      _ ≤ _root_.hammingDist u.1 b.1 + _root_.hammingDist b.1 v.1 :=
+        _root_.hammingDist_triangle _ _ _
+      _ = 2 := by rw [hu', hb']
+  constructor
+  · exact (special_hamming_le_full9 (m := P.m n) u.1 v.1).trans (by omega)
+  · have h := (residual_hamming_le_full9 (m := P.m n) u.1 v.1).trans (by omega)
+    exact h.trans (by omega)
+
+private noncomputable def starNbrSet9 {n : ℕ} (v : EvenSites9 n) : Finset (OddSites9 n) :=
+  Finset.univ.filter (fun b => (cube n).Adj v.1 b.1)
+
+private def starNbrEquiv9 {n : ℕ} (v : EvenSites9 n) :
+    StarOdd9 v ≃ {b : OddSites9 n // b ∈ starNbrSet9 v} where
+  toFun b := ⟨b.1, by simp [starNbrSet9, b.2]⟩
+  invFun b := ⟨b.1, by simpa [starNbrSet9] using (Finset.mem_filter.mp b.2).2⟩
+  left_inv b := by apply Subtype.ext; rfl
+  right_inv b := by apply Subtype.ext; rfl
+
+private theorem starNbrSet9_card_le {n : ℕ} (v : EvenSites9 n) :
+    (starNbrSet9 v).card ≤ n := by
+  calc
+    (starNbrSet9 v).card = Fintype.card {b : OddSites9 n // b ∈ starNbrSet9 v} :=
+      (Fintype.card_coe (starNbrSet9 v)).symm
+    _ = Fintype.card (StarOdd9 v) := Fintype.card_congr (starNbrEquiv9 v).symm
+    _ ≤ n := starOdd_card_le9 v
+
+private theorem starNbrUnion9_card_le {k n : ℕ} (a : Fin k → EvenSites9 n) :
+    (Finset.univ.biUnion (fun i : Fin k => starNbrSet9 (a i))).card ≤ k * n := by
+  classical
+  calc
+    (Finset.univ.biUnion (fun i : Fin k => starNbrSet9 (a i))).card ≤
+        ∑ i : Fin k, (starNbrSet9 (a i)).card := by
+          simpa using (Finset.card_biUnion_le (s := Finset.univ)
+            (t := fun i : Fin k => starNbrSet9 (a i)))
+    _ ≤ ∑ i : Fin k, n := Finset.sum_le_sum fun i hi => starNbrSet9_card_le (a i)
+    _ = k * n := by simp
+
+private theorem starNbrUnion9_pairwise_disjoint {P : Params9} {n k : ℕ}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    Pairwise fun i j : Fin k => Disjoint (starNbrSet9 (a i)) (starNbrSet9 (a j)) := by
+  classical
+  intro i j hij
+  apply Finset.disjoint_left.mpr
+  intro b hbi hbj
+  have hnear := siteNear9_of_common_neighbor (P := P) (a i) (a j) b
+    (Finset.mem_filter.mp hbi).2 (Finset.mem_filter.mp hbj).2
+  by_cases hji : j < i
+  · exact hsep i j hji hnear
+  · have hij' : i < j := by omega
+    exact hsep j i hij' (siteNear9_symm (P := P) (n := n) (a i).1 (a j).1 hnear)
+
+private theorem sigmaStarSite_injective9 {P : Params9} {n k : ℕ}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    Function.Injective (fun p : Σ i : Fin k, StarOdd9 (a i) => p.2.1) := by
+  classical
+  intro p q hpq
+  rcases p with ⟨i, b⟩
+  rcases q with ⟨j, c⟩
+  change b.1 = c.1 at hpq
+  by_cases hij : i = j
+  · subst j
+    have hbc : b = c := Subtype.ext hpq
+    subst c
+    rfl
+  · have hadj : (cube n).Adj (a j).1 b.1.1 := by simpa [hpq] using c.2
+    have hnear := siteNear9_of_common_neighbor (P := P) (a i) (a j) b.1 b.2 hadj
+    rcases lt_trichotomy i j with hlt | heq | hgt
+    · exact (hsep j i hlt (siteNear9_symm (P := P) (n := n) (a i).1 (a j).1 hnear)).elim
+    · exact (hij heq).elim
+    · exact (hsep i j hgt hnear).elim
+
+private abbrev StarIndex9 {n k : ℕ} (a : Fin k → EvenSites9 n) :=
+  Σ i : Fin k, StarOdd9 (a i)
+
+private def starSite9 {n k : ℕ} (a : Fin k → EvenSites9 n) (p : StarIndex9 a) :
+    OddSites9 n := p.2.1
+
+private noncomputable def starNbrUnionSet9 {n k : ℕ} (a : Fin k → EvenSites9 n) :
+    Finset (OddSites9 n) := Finset.univ.biUnion (fun i : Fin k => starNbrSet9 (a i))
+
+private noncomputable def starDataEquiv9 {P : Params9} {n k : ℕ}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1) :
+    StarIndex9 a ≃ {b : OddSites9 n // b ∈ starNbrUnionSet9 a} := by
+  classical
+  let f : StarIndex9 a → {b : OddSites9 n // b ∈ starNbrUnionSet9 a} := fun p =>
+    ⟨starSite9 a p, Finset.mem_biUnion.mpr
+      ⟨p.1, Finset.mem_univ _, Finset.mem_filter.mpr ⟨Finset.mem_univ _, p.2.2⟩⟩⟩
+  apply Equiv.ofBijective f
+  constructor
+  · intro p q hpq
+    apply sigmaStarSite_injective9 a hsep
+    exact congrArg Subtype.val hpq
+  · intro b
+    rcases Finset.mem_biUnion.mp b.2 with ⟨i, hi, hmem⟩
+    have hadj := (Finset.mem_filter.mp hmem).2
+    refine ⟨⟨i, ⟨b.1, hadj⟩⟩, ?_⟩
+    apply Subtype.ext
+    rfl
+
+private theorem starDataEquiv9_val {P : Params9} {n k : ℕ}
+    (a : Fin k → EvenSites9 n)
+    (hsep : ∀ i j : Fin k, j < i → ¬ siteNear9 P n (a i).1 (a j).1)
+    (p : StarIndex9 a) : (starDataEquiv9 a hsep p).1 = starSite9 a p := rfl
+
+private theorem starNbrUnion9_card_cube {n k : ℕ} (a : Fin k → EvenSites9 n)
+    (hk : k ≤ n) (hn : 1 ≤ n) :
+    (starNbrUnionSet9 a).card ≤ n ^ 3 := by
+  have hcard : (starNbrUnionSet9 a).card ≤ k * n := by
+    simpa [starNbrUnionSet9] using starNbrUnion9_card_le a
+  calc
+    (starNbrUnionSet9 a).card ≤ k * n := hcard
+    _ ≤ n * n := Nat.mul_le_mul_right n hk
+    _ ≤ n * n * n := by
+      calc
+        n * n = (n * n) * 1 := by simp
+        _ ≤ (n * n) * n := Nat.mul_le_mul_left (n * n) hn
+    _ = n ^ 3 := by simp [pow_succ, Nat.mul_assoc]
+
+private theorem map_expect_le_of_weight_bound9 {Ω Γ : Type*} [Fintype Ω] [Fintype Γ]
+    [DecidableEq Γ] (P : FinProb Ω) (proj : Ω → Γ) (W g : Γ → ℝ)
+    (hW : ∀ γ, (FinProb.map P proj).w γ ≤ W γ) (hg : ∀ γ, 0 ≤ g γ) :
+    P.expect (fun ω => g (proj ω)) ≤ ∑ γ, W γ * g γ := by
+  classical
+  calc
+    P.expect (fun ω => g (proj ω)) = (FinProb.map P proj).expect g :=
+      (FinProb.map_expect P proj g).symm
+    _ = ∑ γ, (FinProb.map P proj).w γ * g γ := rfl
+    _ ≤ ∑ γ, W γ * g γ :=
+      Finset.sum_le_sum fun γ hγ => mul_le_mul_of_nonneg_right (hW γ) (hg γ)
+
+private theorem map_weight_eq_pr9 {Ω Γ : Type*} [Fintype Ω] [Fintype Γ] [DecidableEq Γ]
+    (P : FinProb Ω) (proj : Ω → Γ) (γ : Γ) :
+    (FinProb.map P proj).w γ = P.pr (fun ω => proj ω = γ) := by
+  classical
+  simp [FinProb.map, FinProb.pr, eq_comm]
+
+private theorem updAnc9_self9 {P : Params9} {n N : ℕ} {I : IDMap9 P n}
+    (ω : Outcome9 I N) (c : I.ID) :
+    updAnc9 ω c (anc9 ω c) = ω := by
+  funext z
+  by_cases hz : z = Sum.inl c
+  · subst z
+    simp [updAnc9, anc9]
+  · change Function.update ω (Sum.inl c) (anc9 ω c) z = ω z
+    exact Function.update_of_ne (v := anc9 ω c) (f := ω) hz
+
+private theorem goodPre_starValid9 {P : Params9} {n N : ℕ} {M : TagMix N} {I : IDMap9 P n}
+    (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    {ω : Outcome9 I N} (hg : GoodPre9 S E G ω) (v : EvenSites9 n) :
+    starValid9 S E G ω v := by
+  have hnot := hg.2.1 v
+  have hh : starValid9 S E G ω v ∧
+      alarm9 S E G ω v ≤ Real.exp (-(gainConst9 * n * P.aStar n / 8)) := by
+    simpa [StarBad9] using hnot
+  exact hh.1
+
+private theorem sum_prod_stars9 {n N k : ℕ} (a : Fin k → EvenSites9 n)
+    (F : ∀ i : Fin k, (StarOdd9 (a i) → Fin N) → ℝ) :
+    (∑ y : ∀ i : Fin k, StarOdd9 (a i) → Fin N, ∏ i, F i (y i)) =
+      ∏ i, ∑ y : StarOdd9 (a i) → Fin N, F i y := by
+  classical
+  rw [← Fintype.prod_sum]
+
+private theorem starLik9_actual_eq_rows9 {P : Params9} {n N : ℕ} {M : TagMix N} {I : IDMap9 P n}
+    (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (ys : StarOdd9 v → Fin N)
+    (hvalid : starValid9 S E G ω v) :
+    starLik9 S E G ω v (anc9 ω (I.center v.1)) ys =
+      ∏ b : StarOdd9 v, (rowLaw9 S E G ω b.1).w (ys b) := by
+  have hu := updAnc9_self9 ω (I.center v.1)
+  simp [starLik9, hu, hvalid]
+
+set_option maxHeartbeats 10000000 in
+theorem p92_clock_factor_core {P : Params9} {n N : ℕ} {M : TagMix N} {I : IDMap9 P n}
+    (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (J : Outcome9 I N → FinProb (OddSites9 n → Fin N))
+    (hJ : ∀ ω, GoodPre9 S E G ω → ClockOK9 S E G ω (J ω)) :
+    ClockFactor9 S I E G J := by
+  classical
+  intro ω hg x k hk a hsep
+  by_cases hk0 : k = 0
+  · subst k
+    calc
+      (∑ f, (J ω).w f * ∏ i : Fin 0, (N : ℝ) * evenRow9 S E G ω f (a i) x) = 1 := by
+        simp [(J ω).sum_eq_one]
+      _ ≤ 2 * ∏ i : Fin 0, evenStar9 S E G ω (a i) x := by norm_num
+  · have hkpos : 0 < k := Nat.pos_of_ne_zero hk0
+    have hn0 : n ≠ 0 := by
+      intro hn0
+      subst n
+      have hkz : k = 0 := Nat.eq_zero_of_le_zero hk
+      exact hk0 hkz
+    have hn : 1 ≤ n := Nat.one_le_iff_ne_zero.mpr hn0
+    let T : Finset (OddSites9 n) := starNbrUnionSet9 a
+    let Γ := {b : OddSites9 n // b ∈ T}
+    let e : StarIndex9 a ≃ Γ := starDataEquiv9 a hsep
+    have hTcardNat : T.card ≤ n ^ 3 := by
+      exact starNbrUnion9_card_cube a hk hn
+    have hTcard : (T.card : ℝ) ≤ (n : ℝ) ^ 3 := by
+      exact_mod_cast hTcardNat
+    let proj : (OddSites9 n → Fin N) → Γ → Fin N := fun f b => f b.1
+    let ys : (Γ → Fin N) → (i : Fin k) → StarOdd9 (a i) → Fin N :=
+      fun γ i b => γ (e ⟨i, b⟩)
+    let W : (Γ → Fin N) → ℝ := fun γ =>
+      2 * ∏ b : Γ, (rowLaw9 S E G ω b.1).w (γ b)
+    let g : (Γ → Fin N) → ℝ := fun γ =>
+      ∏ i : Fin k,
+        (if predFail9 S E G ω (a i) (ys γ i) then 0 else 1) *
+          ((N : ℝ) * evenRowAt9 S E G ω (a i) (ys γ i) x)
+    have hgNonneg (γ : Γ → Fin N) : 0 ≤ g γ := by
+      apply Finset.prod_nonneg
+      intro i hi
+      by_cases hfail : predFail9 S E G ω (a i) (ys γ i)
+      · simp [g, hfail]
+      · simp only [g, if_neg hfail]
+        exact mul_nonneg (by positivity)
+          (mul_nonneg (by positivity) (evenRowAt9_nonneg S E G ω (a i) (ys γ i) x))
+    have hclock := hJ ω hg
+    have hweight (γ : Γ → Fin N) : (FinProb.map (J ω) proj).w γ ≤ W γ := by
+      rw [map_weight_eq_pr9]
+      let base : Fin N := anc9 ω (I.center (a ⟨0, hkpos⟩).1)
+      let o : OddSites9 n → Fin N := fun b =>
+        if hb : b ∈ T then γ ⟨b, hb⟩ else base
+      have hrows :
+          (∏ b : Γ, (rowLaw9 S E G ω b.1).w (γ b)) =
+            ∏ b ∈ T, (rowLaw9 S E G ω b).w (o b) := by
+        simpa [Γ, o, Finset.univ_eq_attach] using
+          (Finset.prod_attach T (fun b : OddSites9 n => (rowLaw9 S E G ω b).w (o b)))
+      have hfiber (f : OddSites9 n → Fin N) :
+          (proj f = γ) ↔ ∀ b ∈ T, f b = o b := by
+        constructor
+        · intro hp b hb
+          have hval := congrFun hp ⟨b, hb⟩
+          simpa [proj, o, hb] using hval
+        · intro hp
+          funext b
+          change f b.1 = γ b
+          calc
+            f b.1 = o b.1 := hp b.1 b.2
+            _ = γ b := by simp [o, b.2]
+      have hfiberFun : (fun f : OddSites9 n → Fin N => proj f = γ) =
+          (fun f => ∀ b ∈ T, f b = o b) := by
+        funext f
+        exact propext (hfiber f)
+      rw [hfiberFun]
+      calc
+        (J ω).pr (fun f => ∀ b ∈ T, f b = o b) ≤
+            2 * ∏ b ∈ T, (rowLaw9 S E G ω b).w (o b) := hclock.2 T o hTcard
+        _ = W γ := by rw [← hrows]
+    have hleft :
+        (∑ f, (J ω).w f * ∏ i : Fin k,
+          (N : ℝ) * evenRow9 S E G ω f (a i) x) =
+        (J ω).expect (fun f => g (proj f)) := by
+      unfold FinProb.expect
+      apply Finset.sum_congr rfl
+      intro f hf
+      by_cases hw : (J ω).w f = 0
+      · simp [g, hw]
+      ·
+        have hfail (i : Fin k) :
+            ¬ predFail9 S E G ω (a i) (nbrLabels9 (v := a i) f) :=
+          (hclock.1 f hw).2 (a i)
+        have hys (i : Fin k) : ys (proj f) i = nbrLabels9 (v := a i) f := by
+          funext b
+          change f (starDataEquiv9 a hsep ⟨i, b⟩).1 = f b.1
+          rw [starDataEquiv9_val a hsep ⟨i, b⟩]
+          simp [starSite9]
+        simp [g, hys, evenRow9, hfail]
+    let Efun : (Γ → Fin N) ≃ (∀ i : Fin k, StarOdd9 (a i) → Fin N) := {
+      toFun := fun γ i b => γ (e ⟨i, b⟩)
+      invFun := fun z b => z (e.symm b).1 (e.symm b).2
+      left_inv := by
+        intro γ
+        funext b
+        change γ (e (e.symm b)) = γ b
+        rw [Equiv.apply_symm_apply e b]
+      right_inv := by
+        intro z
+        funext i b
+        change z (e.symm (e ⟨i, b⟩)).1 (e.symm (e ⟨i, b⟩)).2 = z i b
+        rw [Equiv.symm_apply_apply e ⟨i, b⟩]
+    }
+    let localF : ∀ i : Fin k, (StarOdd9 (a i) → Fin N) → ℝ := fun i z =>
+      (∏ b : StarOdd9 (a i), (rowLaw9 S E G ω b.1).w (z b)) *
+        (if predFail9 S E G ω (a i) z then 0 else 1) *
+          ((N : ℝ) * evenRowAt9 S E G ω (a i) z x)
+    have hlocal (i : Fin k) :
+        (∑ z : StarOdd9 (a i) → Fin N, localF i z) = evenStar9 S E G ω (a i) x := by
+      have hstar (z : StarOdd9 (a i) → Fin N) :=
+        starLik9_actual_eq_rows9 S E G ω (a i) z
+          (goodPre_starValid9 S E G hg (a i))
+      unfold localF evenStar9
+      simp_rw [← hstar]
+      apply Finset.sum_congr rfl
+      intro z hz
+      ring
+    let H : (Γ → Fin N) → ℝ := fun γ =>
+      (∏ b : Γ, (rowLaw9 S E G ω b.1).w (γ b)) *
+        (∏ i : Fin k,
+          (if predFail9 S E G ω (a i) (ys γ i) then 0 else 1) *
+            ((N : ℝ) * evenRowAt9 S E G ω (a i) (ys γ i) x))
+    have hrow (z : ∀ i : Fin k, StarOdd9 (a i) → Fin N) :
+        (∏ b : Γ, (rowLaw9 S E G ω b.1).w ((Efun.symm z) b)) =
+          ∏ i : Fin k, ∏ b : StarOdd9 (a i),
+            (rowLaw9 S E G ω b.1).w (z i b) := by
+      calc
+        _ = ∏ p : StarIndex9 a,
+            (rowLaw9 S E G ω (e p).1).w ((Efun.symm z) (e p)) := by
+              symm
+              exact Fintype.prod_equiv e _ _ (by intro p; rfl)
+        _ = ∏ p : StarIndex9 a, (rowLaw9 S E G ω (e p).1).w (z p.1 p.2) := by
+              apply Finset.prod_congr rfl
+              intro p hp
+              change (rowLaw9 S E G ω (e p).1).w
+                (z (e.symm (e p)).1 (e.symm (e p)).2) = _
+              rw [Equiv.symm_apply_apply e p]
+        _ = ∏ i : Fin k, ∏ b : StarOdd9 (a i),
+              (rowLaw9 S E G ω b.1).w (z i b) := by
+              rw [Fintype.prod_sigma]
+              apply Finset.prod_congr rfl
+              intro i hi
+              apply Finset.prod_congr rfl
+              intro b hb
+              rw [starDataEquiv9_val a hsep ⟨i, b⟩]
+              simp [starSite9]
+    have hH (z : ∀ i : Fin k, StarOdd9 (a i) → Fin N) :
+        H (Efun.symm z) = ∏ i : Fin k, localF i (z i) := by
+      dsimp [H]
+      have hy (i : Fin k) : ys (Efun.symm z) i = z i := by
+        funext b
+        change z (e.symm (e ⟨i, b⟩)).1 (e.symm (e ⟨i, b⟩)).2 = z i b
+        rw [Equiv.symm_apply_apply e ⟨i, b⟩]
+      rw [hrow z]
+      simp_rw [hy]
+      rw [← Finset.prod_mul_distrib]
+      apply Finset.prod_congr rfl
+      intro i hi
+      dsimp [localF]
+      ring
+    have hfactor :
+        (∑ γ : Γ → Fin N, W γ * g γ) =
+          2 * ∏ i : Fin k, evenStar9 S E G ω (a i) x := by
+      calc
+        _ = ∑ γ : Γ → Fin N, 2 * H γ := by
+              apply Finset.sum_congr rfl
+              intro γ hγ
+              simp [W, g, H]
+              ring
+        _ = 2 * ∑ γ : Γ → Fin N, H γ := by rw [← Finset.mul_sum]
+        _ = 2 * ∑ z : ∀ i : Fin k, StarOdd9 (a i) → Fin N,
+              ∏ i : Fin k, localF i (z i) := by
+              congr 1
+              calc
+                (∑ γ : Γ → Fin N, H γ) =
+                    ∑ z : ∀ i : Fin k, StarOdd9 (a i) → Fin N, H (Efun.symm z) :=
+                      (Equiv.sum_comp Efun.symm H).symm
+                _ = ∑ z : ∀ i : Fin k, StarOdd9 (a i) → Fin N,
+                      ∏ i : Fin k, localF i (z i) := by
+                      apply Finset.sum_congr rfl
+                      intro z hz
+                      exact hH z
+        _ = 2 * ∏ i : Fin k, evenStar9 S E G ω (a i) x := by
+              congr 1
+              calc
+                (∑ z : ∀ i : Fin k, StarOdd9 (a i) → Fin N,
+                    ∏ i : Fin k, localF i (z i)) =
+                      ∏ i : Fin k, ∑ z : StarOdd9 (a i) → Fin N, localF i z :=
+                        sum_prod_stars9 a localF
+                _ = ∏ i : Fin k, evenStar9 S E G ω (a i) x := by
+                      apply Finset.prod_congr rfl
+                      intro i hi
+                      exact hlocal i
+    calc
+      _ = (J ω).expect (fun f => g (proj f)) := hleft
+      _ ≤ ∑ γ, W γ * g γ := map_expect_le_of_weight_bound9 (J ω) proj W g hweight hgNonneg
+      _ = 2 * ∏ i : Fin k, evenStar9 S E G ω (a i) x := hfactor
 
 theorem evenStar9_nonneg {P : Params9} {n N : ℕ} {M : TagMix N} {I : IDMap9 P n}
     (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)

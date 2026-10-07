@@ -56,6 +56,9 @@ structure TrimCertificate {n g : ℕ} {R K : Type*}
   keep : ∀ a, Finset (Ω a)
   trimmed : ∀ a, FinProb (Ω a)
   trimmed_supported : ∀ a o, o ∉ keep a → (trimmed a).w o = 0
+  /-- The trimmed law is the original law restricted to `keep a` and renormalized (TeX 03:825). -/
+  trimmed_eq : ∀ a o, (trimmed a).w o =
+    if o ∈ keep a then (I.p a).w o / (I.p a).pr (fun o' => o' ∈ keep a) else 0
   discarded_mass : ∀ a, (I.p a).pr (fun o => o ∉ keep a) ≤ (n : ℝ) ^ (B - P / 2)
   trimmed_atom : ∀ a y, labMarg (trimmed a) (I.lab a) y ≤ 2 * (n : ℝ) ^ (-A)
   trimmed_failure : ∀ k, (FinProb.pi trimmed).pr (I.failure k) ≤ (n : ℝ) ^ (-P / 3)
@@ -74,13 +77,27 @@ structure TrimCertificate {n g : ℕ} {R K : Type*}
   dummy_atom : ∀ i y, dummyLaw i y ≤ 2 / (g : ℝ)
 
 /-- L3.10a (03:817–842): discard rare outputs, control the renormalization loss, and complete every label
-column to the common rate `θ`. -/
+column to the common rate `θ`. `P` is large in terms of `B` (03:806–807): with `n ≥ 2`, `4B + 4 ≤ P` makes the
+per-row loss `n^{B-P/2} ≤ n^{-B-2} ≤ 1/4` and the loss over a scope or query `n^{2B-P/2} ≤ n^{-2} ≤ 1/4`. -/
 theorem step1_trim_and_complete {n g : ℕ} {R K : Type*}
     [Fintype R] [DecidableEq R] [Fintype K]
     {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (I : SamplingInstance n g R K Ω) (B A P : ℝ)
-    (hn : 2 ≤ n) (hg : 0 < g) (hBP : B < P / 2)
+    (hn : 2 ≤ n) (hB : 0 ≤ B) (hBP : 4 * B + 4 ≤ P)
     (hI : I.Admissible B A P) : Nonempty (TrimCertificate I B A P) := by
+  sorry
+
+/-- The renormalization cost of Step 1 on a query of at most `n^B` rows (TeX 03:826–827, 03:1128–1131):
+`(1 - n^{B-P/2})^{-n^B} ≤ 1 + 2 n^{2B-P/2}`. -/
+theorem untrim_product_bound {n g : ℕ} {R K : Type*}
+    [Fintype R] [DecidableEq R] [Fintype K]
+    {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (I : SamplingInstance n g R K Ω) (B A P : ℝ)
+    (hn : 2 ≤ n) (hB : 0 ≤ B) (hBP : 4 * B + 4 ≤ P)
+    (C : TrimCertificate I B A P) (S : Finset R) (o : ∀ a, Ω a)
+    (hS : (S.card : ℝ) ≤ (n : ℝ) ^ B) :
+    ∏ a ∈ S, (C.trimmed a).w (o a) ≤
+      (1 + 2 * (n : ℝ) ^ (2 * B - P / 2)) * ∏ a ∈ S, (I.p a).w (o a) := by
   sorry
 
 end HypercubeRamsey.Clock

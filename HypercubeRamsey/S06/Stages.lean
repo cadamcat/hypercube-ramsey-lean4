@@ -1,8 +1,10 @@
 import HypercubeRamsey.S06.Steps
 import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.S06.Stages_q_s06_stages
+import HypercubeRamsey.S06.Stages_sol_s06_hidden
 
 open HypercubeRamsey.Lane_q_s06_stages
+open HypercubeRamsey.Lane_sol_s06_hidden
 
 /-!
 # Conditioning stages: global parent, coarse base, hidden scalars
@@ -1361,30 +1363,132 @@ probabilities have the same sign symmetry given the base, so a bin's union runs 
 degree. -/
 theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.CoarseCert := by
-  refine ⟨2, 0, ?_⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (eventually_coarse_degree_charge_budget.and (Filter.eventually_ge_atTop 2))
+  refine ⟨n₀, 0, ?_⟩
   intro n N E G M X hLarge hDesc hRate
   intro v hV0
   let charge : ℝ := (n : ℝ) ^ (-(δ₁ / 8))
+  let scope : X.Bin → Finset X.Bin := coarseBinScope X
+  let adj : X.Bin → X.Bin → Prop := fun i j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)
+  have hbudget := hn₀ n hLarge.1
+  have hn1 : 1 < (n : ℝ) := by exact_mod_cast (by omega : 1 < n)
+  have hcharge0 : 0 ≤ charge := by dsimp [charge]; positivity
+  have hcharge1 : charge < 1 := by
+    apply Real.rpow_lt_one_of_one_lt_of_neg hn1
+    norm_num [δ₁]
+  have hwork :
+      (∀ i, FinProb.DependsOn
+        (fun z => (coarseBinEquiv X).symm z ∈ X.bad2Set v i) (scope i)) ∧
+      (∀ i, (X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i) ≤ charge / 2) := by
+    sorry
   refine ⟨{
-    adj := fun i j => i ≠ j
-    adj_symm := by intro i j hij; exact Ne.symm hij
-    adj_irrefl := by intro i hij; exact hij rfl
+    adj := adj
+    adj_symm := by intro i j hij; exact ⟨Ne.symm hij.1, fun h => hij.2 (Disjoint.symm h)⟩
+    adj_irrefl := by intro i hij; exact hij.1 rfl
     x := fun _ => charge
     x_nonneg := by intro i; dsimp [charge]; positivity
     x_le := by intro i; rfl
     local_bound := by
       intro i S hiS hdisjoint
-      sorry
+      have hremote : ∀ j ∈ S, Disjoint (scope i) (scope j) := by
+        intro j hj
+        have hne : i ≠ j := by intro hij; exact hiS (hij ▸ hj)
+        by_contra hnot
+        exact hdisjoint j hj ⟨hne, hnot⟩
+      have hfactor := coarseLaw_local_mass_factor X v scope (X.bad2Set v) hwork.1 i S hremote
+      letI : DecidablePred (adj i) := fun j => Classical.propDecidable (adj i j)
+      have hdegree : ((Finset.univ.filter (adj i)).card : ℝ) * charge ≤ 1 / 2 := by
+        have hcard : ((Finset.univ.filter (adj i)).card : ℝ) ≤ (602 ^ 6 : ℝ) := by
+          exact_mod_cast coarse_overlap_degree_le X i
+        exact (mul_le_mul_of_nonneg_right hcard hcharge0).trans hbudget.1
+      have hprob := probability_le_charge_product (Finset.univ.filter (adj i))
+        ((X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i)) charge hcharge0 hcharge1.le
+        (hwork.2 i) hdegree
+      have hmass : 0 ≤ LocalLemma.mass (X.coarseLaw v).w
+          (LocalLemma.avoid (X.bad2Set v) S) := by
+        rw [finprob_pr_finset_mass]
+        exact pr_nonneg _ _
+      rw [hfactor]
+      exact mul_le_mul_of_nonneg_right hprob hmass
   }⟩
 
 /-- L6.1h (hidden scalars, 06:498–516): group probabilities `≤ n^{−c₃}` after the pattern unions, dependency
 `m^C = n^{Cα + o(1)}`, `Cα < c₃/4`, charges `n^{−c₃/2}`. -/
 theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.HiddenCert := by
-  refine ⟨2, 0, ?_⟩
+  obtain ⟨nC, CC, hC⟩ := L6_1h_coarse γ p₀ K hadm
+  obtain ⟨nB, hB⟩ := Filter.eventually_atTop.1
+    ((eventually_step2_group_charge_budget p₀ hadm.2.2.1).and
+      ((eventually_hidden_degree_charge_budget p₀ hadm.2.2.1).and (Filter.eventually_ge_atTop 2)))
+  refine ⟨max nC nB, max CC 0, ?_⟩
   intro n N E G M X hLarge hDesc hRate
   intro v c hV0 hSupport
+  have hlargeC := (LargeAt.mono_max hLarge).1
+  have hnB : nB ≤ n := le_trans (le_max_right _ _) hLarge.1
+  have hbudget := hB n hnB
+  have hn2 : 2 ≤ n := hbudget.2.2
+  have hn1 : 1 < (n : ℝ) := by exact_mod_cast (by omega : 1 < n)
+  have hn0 : 0 < (n : ℝ) := by linarith
   let charge : ℝ := (n : ℝ) ^ (-(δ₂ / 128))
+  have hcharge0 : 0 ≤ charge := by dsimp [charge]; positivity
+  have hcharge1 : charge < 1 := by
+    apply Real.rpow_lt_one_of_one_lt_of_neg hn1
+    norm_num [δ₂]
+  have hpowCoarse : (n : ℝ) ^ (-(δ₁ / 8)) < 1 := by
+    apply Real.rpow_lt_one_of_one_lt_of_neg hn1
+    norm_num [δ₁]
+  obtain ⟨cert⟩ := hC n N E G M X hlargeC hDesc hRate v hV0
+  letI : DecidableRel cert.adj := Classical.decRel _
+  have hca := LocalLemma.conditional_avoidance
+    (X.coarseLaw v).w (X.coarseLaw v).nonneg (X.coarseLaw v).sum_eq_one
+    (X.bad2Set v) cert.adj cert.adj_symm cert.adj_irrefl
+    (fun i => cert.x i * ∏ j ∈ Finset.univ.filter (cert.adj i), (1 - cert.x j)) cert.x
+    (by intro i S hi hS; exact cert.local_bound i S hi hS)
+    cert.x_nonneg (fun i => (cert.x_le i).trans_lt hpowCoarse) (by intro i; rfl)
+  have hStage2Pr : 0 < (X.coarseLaw v).pr (fun c => ∀ w, ¬ X.Bad2 v w c) := by
+    have hp : 0 < (X.coarseLaw v).pr
+        (fun c => ∀ w ∈ (Finset.univ : Finset X.Bin), c ∉ X.bad2Set v w) := by
+      rw [← avoid_mass_eq_pr (X.coarseLaw v) (X.bad2Set v)]
+      exact hca.1
+    have heq : (X.coarseLaw v).pr (fun c => ∀ w, ¬ X.Bad2 v w c) =
+        (X.coarseLaw v).pr (fun c => ∀ w ∈ (Finset.univ : Finset X.Bin), c ∉ X.bad2Set v w) := by
+      apply pr_congr
+      intro c
+      simp [Ctx6.bad2Set]
+    rw [heq]
+    exact hp
+  have hNoBad2 : ∀ w, ¬ X.Bad2 v w c := by
+    have hs := restrictOr6_support_of_pos (X.coarseLaw v)
+      (fun c => ∀ w, ¬ X.Bad2 v w c) X.fallbackCoarse c hStage2Pr
+      (by simpa [Ctx6.stage2Law] using hSupport)
+    exact hs.1
+  let q : ℝ := (n : ℝ) ^ (-(δ₂ / 8))
+  have hXm : X.m = m₆ p₀ n := X.g.m_eq
+  have hquarter : 8 * ((X.m : ℝ) + 1) * q ≤ charge / 4 := by
+    simpa only [hXm] using hbudget.1
+  have hq0 : 0 ≤ q := by dsimp [q]; positivity
+  have hq1 : ((X.m : ℝ) + 1) * q ≤ 1 / 2 := by linarith
+  have hStep2 : ∀ gr : X.Bin × CubeVertex X.m,
+      (X.hidLaw (v, c)).pr (fun Z => ∃ x : CubeVertex n, IsEvenRole x ∧
+        (X.g.L.key x).1 = gr.1 ∧ X.g.L.sign x = gr.2 ∧
+        X.Step2Fail ((v, c), Z) (X.evenType x)) ≤ charge / 4 := by
+    intro gr
+    apply (step2_group_failure_probability X (v, c) gr q hq0 hq1 ?_).trans hquarter
+    intro x hx hbin hsign
+    have hfuture : X.rate2Base (v, c) (X.evenType x) ≤
+        (n : ℝ) ^ (-(δ₂ * (X.evenType x).u / 8)) := by
+      apply le_of_not_gt
+      intro hh
+      exact hNoBad2 gr.1 (Or.inr (Or.inl ⟨x, hx, hbin, hh⟩))
+    have hqpow : q ^ (X.evenType x).u =
+        (n : ℝ) ^ (-(δ₂ * (X.evenType x).u / 8)) := by
+      dsimp [q]
+      rw [← Real.rpow_natCast, ← Real.rpow_mul hn0.le]
+      congr 1
+      ring
+    rw [hqpow]
+    exact hfuture
   let scope : X.Bin × CubeVertex X.m → Finset X.HKey := bad3HiddenScope X
   let adj : X.Bin × CubeVertex X.m → X.Bin × CubeVertex X.m → Prop :=
     fun i j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)
@@ -1477,9 +1581,31 @@ theorem L6_1h_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
           pi_local_mass_factor (fun ℓ : X.HKey => X.hidPost (v, c) ℓ.1)
             (X.Bin × CubeVertex X.m) scope (X.bad3Set (v, c)) i S hdep hremote
       letI : DecidablePred (adj i) := fun j => Classical.propDecidable (adj i j)
+      have hdegree : ((Finset.univ.filter (adj i)).card : ℝ) * charge ≤ 1 / 2 := by
+        have hcard : ((Finset.univ.filter (adj i)).card : ℝ) ≤
+            2 * 602 ^ 4 * ((X.m : ℝ) + 1) ^ 4 := by
+          exact_mod_cast hidden_overlap_degree_le X i
+        apply (mul_le_mul_of_nonneg_right hcard hcharge0).trans
+        simpa only [hXm] using hbudget.2.1
       have hprob : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) ≤
           charge * ∏ j ∈ Finset.univ.filter (adj i), (1 - charge) := by
-        sorry
+        have hremaining :
+            (X.hidLaw (v, c)).pr (fun Z => ∃ b ∈ X.g.L.oddStates,
+              (X.g.L.stKey b).1 = i.1 ∧ X.g.L.stSign b = i.2 ∧
+                ∃ D ∈ X.absDescs b, Real.exp (-c₂ * X.k) < X.rate3 ((v, c), Z) b D) ≤ charge / 4 := by
+          sorry
+        have hhalf : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) ≤ charge / 2 := by
+          have heq : (X.hidLaw (v, c)).pr (fun Z => Z ∈ X.bad3Set (v, c) i) =
+              (X.hidLaw (v, c)).pr (X.Bad3 (v, c) i) := by
+            apply pr_congr
+            intro Z
+            simp only [Ctx6.bad3Set, Finset.mem_filter, Finset.mem_univ, true_and]
+          rw [heq]
+          exact (FinProb.pr_union _ _ _).trans (by
+            have hh := add_le_add (hStep2 i) hremaining
+            linarith)
+        exact probability_le_charge_product (Finset.univ.filter (adj i)) _ charge
+          hcharge0 hcharge1.le hhalf hdegree
       have hmassNonneg : 0 ≤ LocalLemma.mass (X.hidLaw (v, c)).w
           (LocalLemma.avoid (X.bad3Set (v, c)) S) := by
         rw [finprob_pr_finset_mass]

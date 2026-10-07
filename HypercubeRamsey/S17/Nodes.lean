@@ -126,7 +126,7 @@ theorem independentPinnedSupportFailure
   have hY' : Cbulk + 3 + 2 * K + 2 * (κ.R : ℝ) ≤ y := by
     simpa [Y0, Cbulk, pinB, y] using hY
   rcases hInput with ⟨_, _, _, hpinCard, _⟩
-  obtain ⟨B0, hB0ext, hB0patch, hB0lower, hB0upper⟩ :=
+  obtain ⟨B0, hB0ext, hB0patch, hB0lower, hB0upper, _hB0cross⟩ :=
     Lane_q_s17_pool.lowGeom_bulk_early_candidates D D.tiling_valid
       hQuant.geometry.ids_injective v
   have hExtCard := Lane_q_s17_pool.externalEarly_card_le D v

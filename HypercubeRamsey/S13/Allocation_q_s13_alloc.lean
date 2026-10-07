@@ -175,4 +175,79 @@ theorem allocation_exists_prefix_cross {α : Type*} (w : α → ℝ) (t : ℝ) (
         · simp only [List.map_cons, List.sum_cons]
           linarith
 
+/-- Rounding `log₂ r` down gives the two adjacent dyadic bounds for `1/r`. -/
+noncomputable def allocation_roundLength (r : ℝ) : ℕ :=
+  ⌊Real.log r / Real.log 2⌋₊
+
+theorem allocation_dyadicRoundLength_bounds (r : ℝ) (hr : 1 ≤ r) :
+    r⁻¹ ≤ (2 : ℝ) ^ (-(allocation_roundLength r : ℤ)) ∧
+      (2 : ℝ) ^ (-(allocation_roundLength r : ℤ)) < 2 * r⁻¹ := by
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlogr : 0 ≤ Real.log r := Real.log_nonneg hr
+  let z : ℝ := Real.log r / Real.log 2
+  have hz : 0 ≤ z := div_nonneg hlogr hlog2.le
+  have hfloorLo : (allocation_roundLength r : ℝ) ≤ z := by
+    exact Nat.floor_le hz
+  have hfloorHi : z < (allocation_roundLength r : ℝ) + 1 := by
+    simpa [allocation_roundLength] using (Nat.lt_succ_floor z)
+  have hlogLo : (allocation_roundLength r : ℝ) * Real.log 2 ≤ Real.log r := by
+    have h := (le_div_iff₀ hlog2).mp hfloorLo
+    simpa [z, mul_comm] using h
+  have hlogHi : Real.log r <
+      ((allocation_roundLength r : ℝ) + 1) * Real.log 2 := by
+    have h := (div_lt_iff₀ hlog2).mp hfloorHi
+    simpa [z, mul_comm] using h
+  have hExpPow (n : ℕ) : Real.exp ((n : ℝ) * Real.log 2) = (2 : ℝ) ^ n := by
+    rw [Real.exp_nat_mul]
+    simp [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+  have hratioLo : (2 : ℝ) ^ allocation_roundLength r ≤ r := by
+    calc
+      _ = Real.exp ((allocation_roundLength r : ℝ) * Real.log 2) := (hExpPow _).symm
+      _ ≤ Real.exp (Real.log r) := Real.exp_le_exp.mpr hlogLo
+      _ = r := Real.exp_log (by positivity)
+  have hratioHi : r < (2 : ℝ) ^ (allocation_roundLength r + 1) := by
+    calc
+      r = Real.exp (Real.log r) := (Real.exp_log (by positivity)).symm
+      _ < Real.exp (((allocation_roundLength r : ℝ) + 1) * Real.log 2) :=
+        Real.exp_lt_exp.mpr hlogHi
+      _ = (2 : ℝ) ^ (allocation_roundLength r + 1) := by
+        rw [show (allocation_roundLength r : ℝ) + 1 =
+          ((allocation_roundLength r + 1 : ℕ) : ℝ) by norm_num]
+        exact hExpPow (allocation_roundLength r + 1)
+  have hposPow (n : ℕ) : 0 < (2 : ℝ) ^ n := by positivity
+  have hnegPow (n : ℕ) : (2 : ℝ) ^ (-(n : ℤ)) = ((2 : ℝ) ^ n)⁻¹ := by
+    simp [zpow_neg, zpow_natCast]
+  have hrecipLo : r⁻¹ ≤ ((2 : ℝ) ^ allocation_roundLength r)⁻¹ := by
+    simpa only [one_div] using one_div_le_one_div_of_le (hposPow _) hratioLo
+  have hpowSucc : (2 : ℝ) ^ (allocation_roundLength r + 1) =
+      2 * (2 : ℝ) ^ allocation_roundLength r := by
+    rw [pow_succ]
+    ring
+  have hrecipHi : ((2 : ℝ) ^ (allocation_roundLength r + 1))⁻¹ < r⁻¹ := by
+    simpa only [one_div] using one_div_lt_one_div_of_lt (by positivity) hratioHi
+  have hscaleRecip : ((2 : ℝ) ^ allocation_roundLength r)⁻¹ =
+      2 * ((2 : ℝ) ^ (allocation_roundLength r + 1))⁻¹ := by
+    rw [hpowSucc]
+    field_simp
+  constructor
+  · simpa [hnegPow] using hrecipLo
+  · rw [hnegPow, hscaleRecip]
+    exact mul_lt_mul_of_pos_left hrecipHi (by norm_num)
+
+theorem allocation_list_sum_toFinset {α : Type*} [DecidableEq α] {β : Type*}
+    [AddCommMonoid β] (f : α → β) (l : List α) (hl : l.Nodup) :
+    ∑ x ∈ l.toFinset, f x = (l.map f).sum := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+      rcases List.nodup_cons.mp hl with ⟨haNot, hl⟩
+      have h := congrArg (fun z : β => f a + z) (ih hl)
+      simpa [List.toFinset_cons, haNot, List.map_cons, List.sum_cons] using h
+
+theorem allocation_list_natCast_sum {α : Type*} (f : α → ℕ) (l : List α) :
+    ((l.map f).sum : ℝ) = (l.map fun x => (f x : ℝ)).sum := by
+  induction l with
+  | nil => simp
+  | cons a l ih => simp [List.map_cons, List.sum_cons, ih]
+
 end HypercubeRamsey.S13

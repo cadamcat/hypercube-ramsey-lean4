@@ -3138,6 +3138,7 @@ theorem type_selection (κ : CConsts) (T : Stage) (k : ℕ)
     exact (not_lt_of_ge hmassR) hsumSmall
     
 
+set_option maxHeartbeats 5000000 in
 /-- P13.3f (sections/13, lines 170–182): round dyadic masses upward and retain the first complete segment. -/
 theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)
     (f : PassFamily κ T k)
@@ -3145,6 +3146,319 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
     (hSelected : (f.tiling.mode = .bounded ∧ (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S) ∨
        (f.tiling.mode ≠ .bounded ∧ (1 / 200 : ℝ) * T.S.N k ≤ f.tiling.S)) :
     ∃ R : RoundedFamily κ T k, Nonempty (RoundingProvenance f R) := by
+  classical
+  have hNpos : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+  have hSpos : 0 < (f.tiling.S : ℝ) := by
+    rcases hSelected with ⟨_, hsize⟩ | ⟨_, hsize⟩
+    · exact lt_of_lt_of_le (mul_pos (by norm_num) hNpos) hsize
+    · exact lt_of_lt_of_le (mul_pos (by norm_num) hNpos) hsize
+  have hMassSum : ∑ i, (f.tiling.P i).M = f.tiling.S := f.mass_sum
+  have hMiPos (i : Fin f.tiling.m) : 0 < (f.tiling.P i).M := by
+    have hnon := hExtracted.patch_nonempty i
+    rw [← (f.tiling.P i).cardX]
+    exact Finset.card_pos.mpr hnon.1
+  have hMiCastPos (i : Fin f.tiling.m) : 0 < ((f.tiling.P i).M : ℝ) := by
+    exact_mod_cast hMiPos i
+  have hMiLeS (i : Fin f.tiling.m) : (f.tiling.P i).M ≤ f.tiling.S := by
+    calc
+      _ ≤ ∑ j, (f.tiling.P j).M :=
+        Finset.single_le_sum (fun j hj => Nat.zero_le _) (Finset.mem_univ i)
+      _ = f.tiling.S := hMassSum
+  let ratio : Fin f.tiling.m → ℝ := fun i =>
+    (f.tiling.S : ℝ) / (f.tiling.P i).M
+  let ell : Fin f.tiling.m → ℕ := fun i => allocation_roundLength (ratio i)
+  let weights : Fin f.tiling.m → ℝ := fun i =>
+    (2 : ℝ) ^ (-((ell i : ℕ) : ℤ))
+  have hRoundBounds (i : Fin f.tiling.m) :
+      (f.tiling.P i).M / f.tiling.S ≤ weights i ∧
+        weights i < 2 * (f.tiling.P i).M / f.tiling.S := by
+    have hratioPos : 0 < ratio i := div_pos hSpos (hMiCastPos i)
+    have hratioOne : 1 ≤ ratio i := by
+      apply (le_div_iff₀ (hMiCastPos i)).2
+      have hMiLeSReal : ((f.tiling.P i).M : ℝ) ≤ (f.tiling.S : ℝ) := by
+        exact_mod_cast hMiLeS i
+      nlinarith [hMiLeSReal]
+    have h := allocation_dyadicRoundLength_bounds (ratio i) hratioOne
+    have hinv : (ratio i)⁻¹ = (f.tiling.P i).M / f.tiling.S := by
+      dsimp [ratio]
+      field_simp [ne_of_gt hSpos, ne_of_gt (hMiCastPos i)]
+    constructor
+    · simpa [weights, ell, hinv] using h.1
+    · have h' : weights i < 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) := by
+        simpa [weights, ell, hinv] using h.2
+      have hAlg : 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) =
+          2 * (f.tiling.P i).M / (f.tiling.S : ℝ) := by ring
+      rw [← hAlg]
+      exact h'
+  have hMassSumReal : ∑ i, ((f.tiling.P i).M : ℝ) = (f.tiling.S : ℝ) := by
+    exact_mod_cast hMassSum
+  have hNormalizedMass : ∑ i, (f.tiling.P i).M / (f.tiling.S : ℝ) = 1 := by
+    change (∑ i, ((f.tiling.P i).M : ℝ) / (f.tiling.S : ℝ)) = 1
+    rw [← Finset.sum_div, hMassSumReal, div_self hSpos.ne']
+  have hKraftLower : 1 ≤ ∑ i, weights i := by
+    calc
+      _ = ∑ i, (f.tiling.P i).M / (f.tiling.S : ℝ) := hNormalizedMass.symm
+      _ ≤ ∑ i, weights i := Finset.sum_le_sum fun i hi => (hRoundBounds i).1
+  let rel : Fin f.tiling.m → Fin f.tiling.m → Prop := fun i j => ell i ≤ ell j
+  let order := List.insertionSort rel (List.finRange f.tiling.m)
+  have hSorted : order.Pairwise rel := List.pairwise_insertionSort rel _
+  have hPerm : order.Perm (List.finRange f.tiling.m) :=
+    List.perm_insertionSort rel _
+  have hOrderSum : (order.map weights).sum = ∑ i, weights i := by
+    calc
+      _ = ((List.finRange f.tiling.m).map weights).sum := (hPerm.map weights).sum_eq
+      _ = ∑ i, weights i := (Fin.sum_univ_def weights).symm
+  obtain ⟨pre, a, tail, hOrderDecomp, hPreLt, hCross⟩ :=
+    allocation_exists_prefix_cross weights 1 (by norm_num) order (by
+      rw [hOrderSum]
+      exact hKraftLower)
+  have hSortedPrefix : (pre ++ a :: tail).Pairwise rel := by
+    simpa [hOrderDecomp] using hSorted
+  have hCrossRel := (List.pairwise_append.mp hSortedPrefix).2.2
+  have hEllLe (i : Fin f.tiling.m) (hi : i ∈ pre) : ell i ≤ ell a :=
+    hCrossRel i hi a (by simp)
+  let coeff : Fin f.tiling.m → ℕ := fun i => 2 ^ (ell a - ell i)
+  have hWeightFactor (i : Fin f.tiling.m) (hi : i ∈ pre) :
+      weights i = (coeff i : ℝ) * weights a := by
+    have hlen : ell i ≤ ell a := hEllLe i hi
+    have hexp : -(ell i : ℤ) = (↑(ell a - ell i : ℕ) : ℤ) + -(ell a : ℤ) := by
+      rw [Nat.cast_sub hlen]
+      omega
+    calc
+      _ = (2 : ℝ) ^ (-(ell i : ℤ)) := rfl
+      _ = (2 : ℝ) ^ ((↑(ell a - ell i : ℕ) : ℤ) + -(ell a : ℤ)) := by rw [hexp]
+      _ = (2 : ℝ) ^ (↑(ell a - ell i : ℕ) : ℤ) *
+          (2 : ℝ) ^ (-(ell a : ℤ)) := by
+        rw [← zpow_add₀ (by norm_num : (2 : ℝ) ≠ 0)]
+      _ = (coeff i : ℝ) * weights a := by
+        simp [coeff, weights, zpow_natCast]
+  have hPreMultiple : (pre.map weights).sum =
+      ((pre.map fun i => (coeff i : ℝ)).sum) * weights a := by
+    have hFactors (l : List (Fin f.tiling.m))
+        (hfactor : ∀ i ∈ l, weights i = (coeff i : ℝ) * weights a) :
+        (l.map weights).sum = ((l.map fun i => (coeff i : ℝ)).sum) * weights a := by
+      induction l with
+      | nil => simp
+      | cons i l ih =>
+          have hi := hfactor i (by simp)
+          have htail : ∀ j ∈ l, weights j = (coeff j : ℝ) * weights a := by
+            intro j hj
+            exact hfactor j (by simp [hj])
+          simp only [List.map_cons, List.sum_cons]
+          rw [hi, ih htail]
+          ring
+    exact hFactors pre (fun i hi => hWeightFactor i hi)
+  have hNegWeight : weights a = ((2 : ℝ) ^ ell a)⁻¹ := by
+    simp [weights, zpow_neg, zpow_natCast]
+  have hTargetMultiple : (1 : ℝ) = (2 : ℝ) ^ ell a * weights a := by
+    rw [hNegWeight]
+    exact (mul_inv_cancel₀ (by positivity : (2 : ℝ) ^ ell a ≠ 0)).symm
+  have hWeightPos : 0 < weights a := by
+    dsimp [weights]
+    positivity
+  have hCoeffCastSum := allocation_list_natCast_sum coeff pre
+  have hCoeffLt : (pre.map fun i => coeff i).sum < 2 ^ ell a := by
+    have h := hPreLt
+    rw [hPreMultiple, hTargetMultiple] at h
+    have hReal := (mul_lt_mul_iff_of_pos_right hWeightPos).mp h
+    have hCast : ((pre.map fun i => coeff i).sum : ℝ) <
+        ((2 ^ ell a : ℕ) : ℝ) := by
+      simpa [hCoeffCastSum] using hReal
+    exact_mod_cast hCast
+  have hCoeffLe : 2 ^ ell a ≤ (pre.map fun i => coeff i).sum + 1 := by
+    have h := hCross
+    rw [hPreMultiple, hTargetMultiple] at h
+    have hmul : (2 : ℝ) ^ ell a * weights a ≤
+        ((pre.map fun i => (coeff i : ℝ)).sum + 1) * weights a := by
+      calc
+        _ ≤ ((pre.map fun i => (coeff i : ℝ)).sum) * weights a + weights a := h
+        _ = _ := by ring
+    have hReal := (mul_le_mul_iff_of_pos_right hWeightPos).mp hmul
+    have hCast : ((2 ^ ell a : ℕ) : ℝ) ≤
+        (((pre.map fun i => coeff i).sum + 1 : ℕ) : ℝ) := by
+      simpa [hCoeffCastSum] using hReal
+    exact_mod_cast hCast
+  have hCoeffEq : (pre.map fun i => coeff i).sum + 1 = 2 ^ ell a := by omega
+  have hPrefixExact : (pre.map weights).sum + weights a = 1 := by
+    calc
+      _ = ((pre.map fun i => (coeff i : ℝ)).sum + 1) * weights a := by
+        rw [hPreMultiple]
+        push_cast
+        ring
+      _ = (2 : ℝ) ^ ell a * weights a := by
+        have hCoeffEqReal :
+            ((pre.map fun i => (coeff i : ℝ)).sum + 1) = (2 : ℝ) ^ ell a := by
+          have hCoeffEqCast :
+              (((pre.map fun i => coeff i).sum + 1 : ℕ) : ℝ) =
+                ((2 ^ ell a : ℕ) : ℝ) := by exact_mod_cast hCoeffEq
+          simpa [hCoeffCastSum] using hCoeffEqCast
+        rw [hCoeffEqReal]
+      _ = 1 := hTargetMultiple.symm
+  have hOrderPerm : order.Perm (List.finRange f.tiling.m) := hPerm
+  have hOrderNodup : order.Nodup := hOrderPerm.nodup_iff.mpr (List.nodup_finRange _)
+  have hPrefixSublist : List.Sublist (pre ++ [a]) order := by
+    rw [hOrderDecomp]
+    exact List.Sublist.append (List.Sublist.refl pre)
+      (List.singleton_sublist.2 (by simp))
+  have hPrefixNodup : (pre ++ [a]).Nodup := hOrderNodup.sublist hPrefixSublist
+  let A : Finset (Fin f.tiling.m) := (pre ++ [a]).toFinset
+  have hAweights : ∑ i ∈ A, weights i = 1 := by
+    calc
+      _ = ((pre ++ [a]).map weights).sum := by
+        simpa [A] using allocation_list_sum_toFinset weights (pre ++ [a]) hPrefixNodup
+      _ = (pre.map weights).sum + weights a := by simp [List.map_append, List.sum_append]
+      _ = 1 := hPrefixExact
+  have hAmem : a ∈ A := by simp [A]
+  have hAnonempty : A.Nonempty := ⟨a, hAmem⟩
+  have hSelectedMass : (f.tiling.S : ℝ) / 2 < ∑ i ∈ A, (f.tiling.P i).M := by
+    have hRoundTerm (i : Fin f.tiling.m) :
+        weights i < 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) := by
+      calc
+        _ < 2 * (f.tiling.P i).M / (f.tiling.S : ℝ) := (hRoundBounds i).2
+        _ = 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) := by ring
+    have hRoundTerms : (∑ i ∈ A, weights i) <
+        ∑ i ∈ A, 2 * ((f.tiling.P i).M / (f.tiling.S : ℝ)) :=
+      Finset.sum_lt_sum_of_nonempty hAnonempty (fun i hi => hRoundTerm i)
+    have hRoundSum : (∑ i ∈ A, weights i) <
+        2 * (∑ i ∈ A, (f.tiling.P i).M / (f.tiling.S : ℝ)) := by
+      rw [Finset.mul_sum]
+      exact hRoundTerms
+    rw [hAweights] at hRoundSum
+    have hSumDiv : (∑ i ∈ A, (f.tiling.P i).M / (f.tiling.S : ℝ)) =
+        (∑ i ∈ A, ((f.tiling.P i).M : ℝ)) / (f.tiling.S : ℝ) := by
+      rw [Finset.sum_div]
+    rw [hSumDiv] at hRoundSum
+    have htotal : (f.tiling.S : ℝ) < 2 * (∑ i ∈ A, ((f.tiling.P i).M : ℝ)) := by
+      have hratio : (1 : ℝ) <
+          (2 * (∑ i ∈ A, ((f.tiling.P i).M : ℝ))) / (f.tiling.S : ℝ) := by
+        convert hRoundSum using 1 <;> ring
+      simpa using (lt_div_iff₀ hSpos).mp hratio
+    have hsumCastA :
+        ((∑ i ∈ A, (f.tiling.P i).M : ℕ) : ℝ) =
+          ∑ i ∈ A, ((f.tiling.P i).M : ℝ) := by simp
+    have htotalNat : (f.tiling.S : ℝ) <
+        2 * ((∑ i ∈ A, (f.tiling.P i).M : ℕ) : ℝ) := by
+      rw [hsumCastA]
+      exact htotal
+    exact (div_lt_iff₀ (by norm_num : (0 : ℝ) < 2)).2
+      (by simpa [mul_comm] using htotalNat)
+  let eA : {i : Fin f.tiling.m // i ∈ A} ≃ Fin A.card :=
+    Fintype.equivFinOfCardEq (by simp)
+  let idx : Fin A.card → Fin f.tiling.m := fun i => (eA.symm i).val
+  have hIdxInj : Function.Injective idx := by
+    intro i j hij
+    apply eA.symm.injective
+    exact Subtype.ext hij
+  have hIdxNe (i j : Fin A.card) (hij : i ≠ j) : idx i ≠ idx j := by
+    intro h
+    exact hij (hIdxInj h)
+  let Pnew : Fin A.card → Patch (T.orient f.orientation) k := fun i =>
+    {f.tiling.P (idx i) with ℓ := ell (idx i)}
+  let Tnew : Tiling κ (T.orient f.orientation) k :=
+    {f.tiling with
+      m := A.card
+      P := Pnew
+      w := fun i => f.tiling.w (idx i)
+      Q := fun i => f.tiling.Q (idx i)}
+  have hExtractedNew : ExtractionData Tnew := by
+    refine {
+      reserveX_card := hExtracted.reserveX_card
+      reserveY_card := hExtracted.reserveY_card
+      reserveX_subset := hExtracted.reserveX_subset
+      reserveY_subset := hExtracted.reserveY_subset
+      patch_supports := ?_
+      patch_nonempty := ?_
+      bins_card := ?_
+      patch_X_disjoint := ?_
+      patch_Y_disjoint := ?_
+      S_upper := hExtracted.S_upper
+      measured_scales := ?_
+      bounded_scale_cutoff := ?_
+      bounded_data := ?_
+      direct_scale_bound := ?_
+      direct_data := ?_
+      cluster_data := ?_
+      clique_scales := ?_ }
+    · intro i
+      simpa [Tnew, Pnew] using hExtracted.patch_supports (idx i)
+    · intro i
+      simpa [Tnew, Pnew] using hExtracted.patch_nonempty (idx i)
+    · intro i B hB
+      simpa [Tnew, Pnew] using hExtracted.bins_card (idx i) B hB
+    · intro i j hij
+      have hidxne := hIdxNe i j hij
+      simpa [Tnew, Pnew] using hExtracted.patch_X_disjoint (idx i) (idx j) hidxne
+    · intro i j hij
+      have hidxne := hIdxNe i j hij
+      simpa [Tnew, Pnew] using hExtracted.patch_Y_disjoint (idx i) (idx j) hidxne
+    · intro i
+      simpa [Tnew, Pnew, idx] using hExtracted.measured_scales (idx i)
+    · intro hmode i
+      simpa [Tnew, Pnew] using hExtracted.bounded_scale_cutoff hmode (idx i)
+    · intro hmode
+      rcases hExtracted.bounded_data hmode with ⟨hm, hbd⟩
+      have hAcardLe : A.card ≤ 1 := by simpa [hm] using (Finset.card_le_univ A)
+      have hAcardPos : 0 < A.card := Finset.card_pos.mpr hAnonempty
+      have hAcardOne : A.card = 1 := by omega
+      refine ⟨hAcardOne, ?_⟩
+      intro i
+      rcases hbd (idx i) with ⟨hℓ, hh, hdPatch, hM, hQ⟩
+      have hidx0 : idx i = 0 := by
+        apply Fin.ext
+        have hiLt : (idx i).val < 1 := by simpa [hm] using (idx i).isLt
+        omega
+      have hMassOne : (f.tiling.P 0).M = f.tiling.S := by
+        simpa [hm] using hMassSum
+      have hMassIdx : (f.tiling.P (idx i)).M = f.tiling.S := by rw [hidx0]; exact hMassOne
+      have hRatioOne : ratio (idx i) = 1 := by
+        dsimp [ratio]
+        rw [hMassIdx]
+        exact div_self hSpos.ne'
+      have hLenZero : ell (idx i) = 0 := by
+        simp [ell, allocation_roundLength, hRatioOne, Real.log_one]
+      simpa [Tnew, Pnew, hLenZero] using ⟨hLenZero, hh, hdPatch, hM, hQ⟩
+    · intro hmode i
+      simpa [Tnew, Pnew, idx] using hExtracted.direct_scale_bound hmode (idx i)
+    · intro hmode i
+      simpa [Tnew, Pnew, idx] using hExtracted.direct_data hmode (idx i)
+    · intro hmode i
+      simpa [Tnew, Pnew, idx] using hExtracted.cluster_data hmode (idx i)
+    · intro i
+      simpa [Tnew, Pnew, idx] using hExtracted.clique_scales (idx i)
+  have hSLower : (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S := by
+    rcases hSelected with ⟨_, hsize⟩ | ⟨_, hsize⟩
+    · exact hsize
+    · calc
+        _ ≤ (1 / 200 : ℝ) * T.S.N k := by positivity
+        _ ≤ f.tiling.S := hsize
+  let R : RoundedFamily κ T k := {
+    orientation := f.orientation
+    tiling := Tnew
+    extracted := hExtractedNew
+    S_lower := hSLower
+    S_upper := hExtracted.S_upper
+    selected_mass := hSelectedMass
+    dyadic_mass_lower := by
+      intro i
+      simpa [Tnew, Pnew, weights] using (hRoundBounds (idx i)).1
+    dyadic_mass_upper := by
+      intro i
+      simpa [Tnew, Pnew, weights] using (hRoundBounds (idx i)).2
+    dyadic_sum := by
+      calc
+        _ = ∑ z : {i : Fin f.tiling.m // i ∈ A}, weights z.val := by
+          exact Fintype.sum_equiv eA.symm _ _ (fun i => rfl)
+        _ = ∑ i ∈ A, weights i := by simp
+        _ = 1 := hAweights }
+  refine ⟨R, { orientation := rfl, mode := rfl, colour := rfl, mass := rfl,
+    reserveX := HEq.rfl, reserveY := HEq.rfl, index := idx, injective := hIdxInj,
+    patches := ?_, clique_scales := ?_ }⟩
+  · intro i
+    dsimp [R, Tnew, Pnew]
+    cases f.tiling.P (idx i)
+    rfl
+  · intro i
+    rfl
   sorry
 
 /-- P13.3g (sections/13, lines 170–182): Kraft's equality gives a complete prefix code. -/

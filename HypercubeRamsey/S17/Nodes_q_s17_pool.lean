@@ -102,6 +102,27 @@ theorem law_hitRatio_expectation {N : ℕ} (μ : Law N)
           rw [show (∑ y, μ.w y * hit E c x y) = deg E c μ.w x by rfl]
           exact div_self (ne_of_gt hdeg)
 
+noncomputable def reweightLaw {N : ℕ} (μ : Law N) (f : Fin N → ℝ)
+    (hf : ∀ x, 0 ≤ f x) (Z : ℝ) (hZ : 0 < Z)
+    (hZeq : ∑ x, μ.w x * f x = Z) : Law N where
+  w x := μ.w x * f x / Z
+  nonneg x := div_nonneg (mul_nonneg (μ.nonneg x) (hf x)) hZ.le
+  sum_eq_one := by
+    rw [← Finset.sum_div, hZeq, div_self hZ.ne']
+
+theorem reweightLaw_atom_bound {N : ℕ} (μ : Law N) (f : Fin N → ℝ)
+    (hf : ∀ x, 0 ≤ f x) (Z : ℝ) (hZ : 0 < Z)
+    (hZeq : ∑ x, μ.w x * f x = Z)
+    (w C : ℝ) (hμw : μ.WidthLE w)
+    (hfC : ∀ x, f x ≤ C) (x : Fin N) :
+    (reweightLaw μ f hf Z hZ hZeq).w x ≤ (C / Z) * Real.exp w / N := by
+  have hprod : μ.w x * f x ≤ (Real.exp w / N) * C :=
+    mul_le_mul (hμw x) (hfC x) (hf x) (by positivity)
+  calc
+    (reweightLaw μ f hf Z hZ hZeq).w x = μ.w x * f x / Z := rfl
+    _ ≤ ((Real.exp w / N) * C) / Z := div_le_div_of_nonneg_right hprod hZ.le
+    _ = (C / Z) * Real.exp w / N := by ring
+
 theorem pinned_product_row_expectation_simplified {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
     (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)

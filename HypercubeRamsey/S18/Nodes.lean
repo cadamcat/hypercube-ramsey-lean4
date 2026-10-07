@@ -191,7 +191,29 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
-  sorry
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+  intro PT hPT D hD hTransition hLocal hTransfer hReplay
+  intro pin f
+  cases f with
+  | inl pair =>
+      cases pair with
+      | inl C =>
+          have hevent : terminalFailure D δ (.inl (.inl C)) = D.upstreamBad (.inl C) := by
+            funext x
+            rfl
+          rw [hevent]
+          exact Lane_q_s18_n4.upstreamBadPinnedBound D hD pin (.inl C) hk
+      | inr v =>
+          have hevent : terminalFailure D δ (.inl (.inr v)) = D.upstreamBad (.inr v) := by
+            funext x
+            simp [terminalFailure, LateData.poolListOK, LateData.freshConfigLaw,
+              LateData.upstreamBad]
+          rw [hevent]
+          exact Lane_q_s18_n4.upstreamBadPinnedBound D hD pin (.inr v) hk
+  | inr pair =>
+      cases pair with
+      | inl v => sorry
+      | inr F => sorry
 
 /-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
 theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}

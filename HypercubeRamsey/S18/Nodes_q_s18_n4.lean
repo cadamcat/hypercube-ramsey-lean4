@@ -5,6 +5,121 @@ namespace HypercubeRamsey.Lane_q_s18_n4
 open Classical
 open scoped BigOperators
 
+theorem upstreamBadPinnedBound
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (hD : D.Spec)
+    (pin : Option (S18.SlotPin D)) (f : D.geom.Cell ⊕ Pos T k)
+    (hn : 1 ≤ T.S.n k) :
+    S18.initialProbability D pin (D.upstreamBad f) ≤
+      Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 3)) := by
+  have hn' : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast hn
+  have hP : 0 ≤ (κ.P : ℝ) := by positivity
+  have hTs : 0 ≤ (D.encoding.Ts : ℝ) := by positivity
+  have hexp : -((κ.P : ℝ) * D.encoding.Ts / 2) ≤
+      -((κ.P : ℝ) * D.encoding.Ts / 3) := by
+    have hmul : 0 ≤ (κ.P : ℝ) * D.encoding.Ts := mul_nonneg hP hTs
+    nlinarith
+  have hpow := Real.rpow_le_rpow_of_exponent_le hn' hexp
+  cases pin with
+  | none =>
+      simpa [S18.initialProbability] using (le_trans (hD.upstream_bad f) hpow)
+  | some p =>
+      rcases p with ⟨C, slot, bin⟩
+      change (D.encoding.permLaw.pr
+          (fun x => x.1 C slot = bin ∧ D.upstreamBad f x) /
+          D.encoding.permLaw.pr (fun x => x.1 C slot = bin)) ≤ _
+      exact le_trans (hD.upstream_bad_pinned C slot bin f) hpow
+
+theorem terminalSet_properties
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
+    (x : D.encoding.InitInput) (hx : x ∈ S18.terminalSet D δ) :
+    D.poolGood x ∧
+      (∀ v, ¬ D.encoding.events.S v (D.encoding.initialState x)) ∧
+      (∀ f, D.pLate f x ≤ Real.exp (-Real.rpow (T.S.n k : ℝ) δ)) := by
+  classical
+  have hAvoid : ∀ f, ¬ S18.terminalFailure D δ f x := by
+    simpa [S18.terminalSet] using hx
+  have hTypical : ∀ C, D.fresh.typical C (x.1 C) := by
+    intro C
+    by_contra hbad
+    exact hAvoid (.inl (.inl C)) (by simpa [S18.terminalFailure] using hbad)
+  have hList : ∀ v, D.poolListOK x.1 v := by
+    intro v
+    by_contra hbad
+    exact hAvoid (.inl (.inr v)) (by simpa [S18.terminalFailure] using hbad)
+  have hInitialGate : ∀ v, D.poolGate (D.initialRegion v) x := by
+    intro v
+    constructor
+    · exact fun C hC => hTypical C
+    · intro w hscope
+      exact hList w
+  have hInitial : ∀ v, ¬ D.encoding.events.S v (D.encoding.initialState x) := by
+    intro v hS
+    have h := hAvoid (.inr (.inl v))
+    exact h (by simpa [S18.terminalFailure] using ⟨hInitialGate v, hS⟩)
+  have hLate : ∀ f, D.pLate f x ≤ Real.exp (-Real.rpow (T.S.n k : ℝ) δ) := by
+    intro f
+    by_contra hlarge
+    have hthreshold : Real.exp (-Real.rpow (T.S.n k : ℝ) δ) < D.pLate f x :=
+      lt_of_not_ge hlarge
+    have hLateGate : D.poolGate (D.lateRegion f) x := by
+      constructor
+      · exact fun C hC => hTypical C
+      · intro v hscope
+        exact hList v
+    have h := hAvoid (.inr (.inr f))
+    exact h (by simpa [S18.terminalFailure] using
+      ⟨hLateGate, hthreshold⟩)
+  exact ⟨⟨hTypical, hList⟩, hInitial, hLate⟩
+
+theorem terminalCertificateOfBounds
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ ε : ℝ)
+    (hpos : 0 < ∑ x ∈ S18.terminalSet D δ, D.encoding.permLaw.w x)
+    (hcomparison : ∀ seed : Finset D.geom.Cell,
+      (seed.card : ℝ) ≤ Real.exp (Real.log (T.S.n k) ^ 3) →
+      ∀ Ψ : D.encoding.InitInput → ℝ, (∀ x, 0 ≤ Ψ x) →
+      (∀ x x', (∀ C ∈ D.expandCells seed,
+        x.1 C = x'.1 C ∧ x.2 C = x'.2 C) → Ψ x = Ψ x') →
+      (D.encoding.terminalLaw (S18.terminalSet D δ) hpos).E Ψ ≤
+        (1 + ε) * D.encoding.permLaw.E Ψ) :
+    S18.TerminalCertificate D δ ε := by
+  classical
+  refine ⟨hpos, ?_, ?_, ?_, hcomparison⟩
+  · intro x hx
+    exact (terminalSet_properties D δ x hx).1
+  · intro x hx
+    exact (terminalSet_properties D δ x hx).2.1
+  · intro x hx
+    exact (terminalSet_properties D δ x hx).2.2
+
+theorem leafProbabilityBound
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
+    (hRisk : S18.TerminalRiskBound D δ) (L : S18.LeafCoupling D δ)
+    (leaf : L.Leaf) :
+    D.encoding.permLaw.pr (fun x => x ∈ L.leaf leaf) ≤
+      Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 3)) := by
+  classical
+  have hsubset : ∀ x, x ∈ L.leaf leaf →
+      S18.terminalFailure D δ (L.requirement leaf) x := by
+    intro x hx
+    exact (L.covers (L.requirement leaf) x).2 ⟨leaf, rfl, hx⟩
+  have hmono : D.encoding.permLaw.pr (fun x => x ∈ L.leaf leaf) ≤
+      D.encoding.permLaw.pr (S18.terminalFailure D δ (L.requirement leaf)) := by
+    unfold FinLaw.pr
+    apply Finset.sum_le_sum
+    intro x hx
+    by_cases hleaf : x ∈ L.leaf leaf
+    · simp [hleaf, hsubset x hleaf]
+    · by_cases hfail : S18.terminalFailure D δ (L.requirement leaf) x
+      · simp only [if_neg hleaf, if_pos hfail]
+        exact D.encoding.permLaw.nonneg x
+      · simp [hleaf, hfail]
+  have h := hRisk none (L.requirement leaf)
+  simpa [S18.initialProbability] using le_trans hmono h
+
 private theorem runRounds_succ {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {G : LowGeom PT} {F : FreshCell G}
     (E : ListEvent F) (Ts : ℕ) (order : Pos T k → ℕ) (events : Finset (Pos T k))

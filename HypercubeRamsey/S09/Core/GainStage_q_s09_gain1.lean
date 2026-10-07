@@ -523,6 +523,46 @@ theorem regularity_core_exception9 {P : Params9} {n N : ℕ} {M : TagMix N}
     _ ≤ P.tail c₀ n / t := div_le_div_of_nonneg_right hregular ht.le
     _ = P.tail (c₀ / 2) n := hquot
 
+private noncomputable def coreOutsideLaw9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) :=
+  FinProb.pi (fun j : {j // j ∉ (I.core v.1).image Sum.inl} => inputLaw9 S I j.1)
+
+private noncomputable def coreHistoryLift9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
+    (ξ : ∀ j : {j // j ∉ (I.core v.1).image Sum.inl}, Val9 I N j.1) : Outcome9 I N :=
+  (Equiv.piEquivPiSubtypeProd (fun j => j ∈ (I.core v.1).image Sum.inl)
+    (fun j : I.ID ⊕ OddSites9 n => Val9 I N j)).symm
+      ((fun j : {j // j ∈ (I.core v.1).image Sum.inl} => ω₀ j.1), ξ)
+
+private theorem condCoreExpect_fiber_formula9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (ω₀ : Outcome9 I N)
+    (f : Outcome9 I N → ℝ)
+    (hpos : 0 < (rawLaw9 S I).pr (sameCore9 I v ω₀)) :
+    (rawLaw9 S I).condExp f (sameCore9 I v ω₀) =
+      (coreOutsideLaw9 S I v).expect
+        (fun ξ => f (coreHistoryLift9 (M := M) I v ω₀ ξ)) := by
+  classical
+  let s : Finset (I.ID ⊕ OddSites9 n) := (I.core v.1).image Sum.inl
+  have hA (ω : Outcome9 I N) :
+      sameCore9 I v ω₀ ω ↔ ∀ j : {j // j ∈ s}, ω j.1 = ω₀ j.1 := by
+    constructor
+    · intro h j
+      rcases Finset.mem_image.mp j.2 with ⟨c, hc, hcoord⟩
+      have j' : j = ⟨Sum.inl c, Finset.mem_image.mpr ⟨c, hc, rfl⟩⟩ :=
+        Subtype.ext hcoord.symm
+      rw [j']
+      change ω (Sum.inl c) = ω₀ (Sum.inl c)
+      exact h c hc
+    · intro h c hc
+      have hj : (Sum.inl c : I.ID ⊕ OddSites9 n) ∈ s :=
+        Finset.mem_image.mpr ⟨c, hc, rfl⟩
+      have := h ⟨Sum.inl c, hj⟩
+      change anc9 ω c = anc9 ω₀ c at this
+      exact this
+  have hformula := pi_condExp_fiber_set9 (inputLaw9 S I) s ω₀ f
+    (sameCore9 I v ω₀) hA hpos
+  simpa [rawLaw9, coreOutsideLaw9, coreHistoryLift9, FinProb.expect, s] using hformula
+
 private theorem expect_indicator9 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
     P.expect (fun ω => if A ω then 1 else 0) = P.pr A := by
   classical
@@ -1023,6 +1063,54 @@ private theorem pi_expect_core_factor9 {ι : Type*} [Fintype ι] [DecidableEq ι
           rw [hprod]
           ring
 
+private theorem pi_expect_complement_fiber9 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (s : Finset ι) (f : (∀ i, Ω i) → ℝ)
+    (a₀ : ∀ i : {i // i ∈ s}, Ω i.1)
+    (hdep : FinProb.DependsOn f (Finset.univ \ s)) :
+    (FinProb.pi P).expect f =
+      (FinProb.pi (fun i : {i // i ∉ s} => P i.1)).expect
+        (fun b => f ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω).symm (a₀, b))) := by
+  classical
+  let e := Equiv.piEquivPiSubtypeProd (fun i => i ∈ s) Ω
+  let Ps := FinProb.pi (fun i : {i // i ∈ s} => P i.1)
+  let Pc := FinProb.pi (fun i : {i // i ∉ s} => P i.1)
+  have hfixed (a : ∀ i : {i // i ∈ s}, Ω i.1)
+      (b : ∀ i : {i // i ∉ s}, Ω i.1) : f (e.symm (a, b)) = f (e.symm (a₀, b)) := by
+    apply hdep
+    intro i hi
+    have his : i ∉ s := by
+      intro his
+      exact (Finset.mem_sdiff.mp hi).2 his
+    simp only [e, Equiv.piEquivPiSubtypeProd_symm_apply, dif_neg his]
+  have hinner (b : ∀ i : {i // i ∉ s}, Ω i.1) :
+      (∑ a : ∀ i : {i // i ∈ s}, Ω i.1,
+        Ps.w a * Pc.w b * f (e.symm (a, b))) = Pc.w b * f (e.symm (a₀, b)) := by
+    calc
+      _ = ∑ a, Ps.w a * (Pc.w b * f (e.symm (a₀, b))) := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        rw [hfixed a b]
+        ring
+      _ = (∑ a, Ps.w a) * (Pc.w b * f (e.symm (a₀, b))) := by
+        rw [← Finset.sum_mul]
+      _ = Pc.w b * f (e.symm (a₀, b)) := by rw [Ps.sum_eq_one, one_mul]
+  calc
+    (FinProb.pi P).expect f =
+        ∑ a : ∀ i : {i // i ∈ s}, Ω i.1,
+          ∑ b : ∀ i : {i // i ∉ s}, Ω i.1,
+            Ps.w a * Pc.w b * f (e.symm (a, b)) := by
+              simpa [e, Ps, Pc] using Clock.pi_expect_split_p_clock_r4 P s f
+    _ = ∑ b : ∀ i : {i // i ∉ s}, Ω i.1,
+          ∑ a : ∀ i : {i // i ∈ s}, Ω i.1,
+            Ps.w a * Pc.w b * f (e.symm (a, b)) := by rw [Finset.sum_comm]
+    _ = ∑ b : ∀ i : {i // i ∉ s}, Ω i.1, Pc.w b * f (e.symm (a₀, b)) := by
+          apply Finset.sum_congr rfl
+          intro b hb
+          exact hinner b
+    _ = (FinProb.pi (fun i : {i // i ∉ s} => P i.1)).expect
+          (fun b => f (e.symm (a₀, b))) := by rfl
+
 private theorem outer_filter_core_hit_factor9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (v : EvenSites9 n) (b : OddSites9 n) (y : Fin N) :
@@ -1108,6 +1196,97 @@ private theorem outer_filter_core_hit_factor9 {P : Params9} {n N : ℕ} {M : Tag
       _ = (outerMean9 S I E G v b).w y *
             ∏ i : {i // i ∈ s}, (inputLaw9 S I i.1).expect (f i) := by
               rfl
+
+private theorem outerFilter_depends_off_core9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) :
+    FinProb.DependsOn (fun ω => outerFilter9 S E G ω v b)
+      (Finset.univ \ (I.core v.1).image Sum.inl) := by
+  classical
+  let s : Finset (I.ID ⊕ OddSites9 n) := (I.core v.1).image Sum.inl
+  intro ω ω' heq
+  have heq' (i : I.ID ⊕ OddSites9 n) (hi : i ∉ s) : ω i = ω' i := by
+    exact heq i (Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, hi⟩)
+  have hmaskNot : Sum.inr b ∉ s := by
+    intro hs
+    rcases Finset.mem_image.mp hs with ⟨c, hc, hEq⟩
+    cases hEq
+  have houterNot (c : I.ID) (hc : c ∈ outerIDs9 I v b) : Sum.inl c ∉ s := by
+    intro hs
+    rcases Finset.mem_image.mp hs with ⟨d, hd, hEq⟩
+    have hcd : d = c := by injection hEq
+    subst d
+    have hcCore : c ∈ I.core v.1 := hd
+    have hcNotCore : c ∉ I.core v.1 := (Finset.mem_sdiff.mp hc).2
+    exact hcNotCore hcCore
+  have hmask : msk9 ω b = msk9 ω' b := heq' (Sum.inr b) hmaskNot
+  have hanc (c : I.ID) (hc : c ∈ outerIDs9 I v b) : anc9 ω c = anc9 ω' c :=
+    heq' (Sum.inl c) (houterNot c hc)
+  have hset : hitSet9 E G ω (outerIDs9 I v b) =
+      hitSet9 E G ω' (outerIDs9 I v b) := by
+    ext y
+    simp only [hitSet9, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro hy c hc
+      rw [← hanc c hc]
+      exact hy c hc
+    · intro hy c hc
+      rw [hanc c hc]
+      exact hy c hc
+  have hmasked : maskedLaw9 S ω b = maskedLaw9 S ω' b := by
+    unfold maskedLaw9
+    rw [hmask]
+  unfold outerFilter9
+  simp only [hmasked, hset]
+
+private theorem outerFilter_complement_expect9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (ω₀ : Outcome9 I N) (y : Fin N) :
+    (coreOutsideLaw9 S I v).expect
+        (fun ξ => (outerFilter9 S E G (coreHistoryLift9 (M := M) I v ω₀ ξ) v b).w y) =
+      (outerMean9 S I E G v b).w y := by
+  classical
+  let s : Finset (I.ID ⊕ OddSites9 n) := (I.core v.1).image Sum.inl
+  let f : Outcome9 I N → ℝ := fun ω => (outerFilter9 S E G ω v b).w y
+  have hdep : FinProb.DependsOn f (Finset.univ \ s) := by
+    intro ω ω' heq
+    exact congrArg (fun μ : Law N => μ.w y)
+      (outerFilter_depends_off_core9 S I E G v b ω ω' heq)
+  have hfactor := pi_expect_complement_fiber9 (inputLaw9 S I) s f
+    (fun j : {j // j ∈ s} => ω₀ j.1) hdep
+  calc
+    (coreOutsideLaw9 S I v).expect
+        (fun ξ => (outerFilter9 S E G (coreHistoryLift9 (M := M) I v ω₀ ξ) v b).w y) =
+        (rawLaw9 S I).expect f := by
+          simpa [rawLaw9, coreOutsideLaw9, coreHistoryLift9, FinProb.expect, f, s] using hfactor.symm
+    _ = (outerMean9 S I E G v b).w y := by rfl
+
+private theorem outerFilter_complement_mass9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (ω₀ : Outcome9 I N) (A : Finset (Fin N)) :
+    (coreOutsideLaw9 S I v).expect
+        (fun ξ => ∑ y ∈ A,
+          (outerFilter9 S E G (coreHistoryLift9 (M := M) I v ω₀ ξ) v b).w y) =
+      ∑ y ∈ A, (outerMean9 S I E G v b).w y := by
+  classical
+  change ∑ ξ, (coreOutsideLaw9 S I v).w ξ *
+      (∑ y ∈ A,
+        (outerFilter9 S E G (coreHistoryLift9 (M := M) I v ω₀ ξ) v b).w y) = _
+  calc
+    _ = ∑ ξ, ∑ y ∈ A,
+          (coreOutsideLaw9 S I v).w ξ *
+            (outerFilter9 S E G (coreHistoryLift9 (M := M) I v ω₀ ξ) v b).w y := by
+          apply Finset.sum_congr rfl
+          intro ξ hξ
+          rw [Finset.mul_sum]
+    _ = ∑ y ∈ A, ∑ ξ,
+          (coreOutsideLaw9 S I v).w ξ *
+            (outerFilter9 S E G (coreHistoryLift9 (M := M) I v ω₀ ξ) v b).w y := by
+          rw [Finset.sum_comm]
+    _ = ∑ y ∈ A, (outerMean9 S I E G v b).w y := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          simpa [FinProb.expect] using outerFilter_complement_expect9 S I E G v b ω₀ y
 
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)

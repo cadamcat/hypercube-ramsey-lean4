@@ -698,36 +698,12 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
           Nonempty (TerminalCertificate D δ (ε k)) := by
   refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
     (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
-  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
-    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ,
-    Lane_sol_s18_3f.testTokensEventually hκ T] with k hpositive hcost htokens
+  filter_upwards [Lane_sol_s18_3f.terminalCertificateEventually_of_nonneighbor hκ T δ]
+    with k hcertificate
   intro PT hPT D hD hRisk leaves
-  have hpos := hpositive D hRisk leaves
-  obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk leaves
-  refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
-  intro seed hseed Ψ hΨ hlocal
-  have hviewcost : ∀ a : Lane_sol_s18_3f.TestView D (D.expandCells seed),
-      (∏ i ∈ Finset.univ.filter
-          (Lane_sol_s18_3f.testTouches D δ leaves (D.expandCells seed) a),
-        (1 - 2 * D.encoding.permLaw.pr (fun x => x ∈ leaves.leaf i))⁻¹) ≤
-          1 + (T.S.n k : ℝ)⁻¹ := by
-    intro a
-    have hfilter : Finset.univ.filter
-        (Lane_sol_s18_3f.testTouches D δ leaves (D.expandCells seed) a) =
-        Finset.univ.filter (fun i =>
-          ¬ Disjoint (leaves.domains i) (Lane_sol_s18_3f.testDomains D (D.expandCells seed)) ∨
-          ¬ Disjoint (leaves.images i) (Lane_sol_s18_3f.testImages D (D.expandCells seed)
-            (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a)) ∨
-          ¬ Disjoint (leaves.tapes i) (D.expandCells seed)) := by
-      ext i
-      simp only [Finset.mem_filter, Lane_sol_s18_3f.testTouches]
-    rw [hfilter]
-    exact hproduct (Lane_sol_s18_3f.testDomains D (D.expandCells seed))
-      (Lane_sol_s18_3f.testImages D (D.expandCells seed)
-        (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a)) (D.expandCells seed)
-      (htokens D hD seed hseed (Lane_sol_s18_3f.viewPools D (D.expandCells seed) a))
-  -- Coordinate fibers, their deterministic scopes and reciprocal costs are now fixed.
-  -- A test nonneighbor bound is still needed; TestFiberForcing would supply it.
+  apply hcertificate PT hPT D hD hRisk leaves
+  intro seed hseed
+  -- The remaining obligation is the coordinate-fiber nonneighbor inequality.
   sorry
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)

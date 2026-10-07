@@ -14,7 +14,7 @@ namespace HypercubeRamsey.S08
 open HypercubeRamsey.Lane_q_s08_sel
 open Classical OAI.HypercubeRamsey
 open scoped BigOperators
-set_option maxHeartbeats 1000000
+set_option maxHeartbeats 5000000
 
 section Nodes
 
@@ -469,16 +469,207 @@ private theorem sel_witness_of_good_heights (D : Ctx η₀ β p h) (q : D.Pre)
 
 theorem sel_conseq (hη₀ : 0 < η₀) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.LegalOfCounts → D.SelConseq := by
-  refine ⟨0, ?_⟩
-  intro D _hn _hGF hLegal q hSelOK
+  classical
+  obtain ⟨nScale, hScale⟩ := gridScaleBounds η₀ hη₀
+  let b := bH η₀
+  have hbpos : 0 < b := by
+    dsimp [b]
+    exact div_pos (tau8_pos hη₀) (by norm_num)
+  have hpowT : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ b)
+      Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop hbpos).comp tendsto_natCast_atTop_atTop
+  have hlarge : ∀ᶠ n : ℕ in Filter.atTop, (6 : ℝ) ≤ (n : ℝ) ^ b :=
+    hpowT.eventually (Filter.eventually_ge_atTop 6)
+  obtain ⟨nFan, hFan⟩ := Filter.eventually_atTop.1 hlarge
+  let n₀ := max nScale nFan
+  refine ⟨n₀, ?_⟩
+  intro D hn hGF hLegal q hSelOK
   rcases hSelOK with ⟨hPos, hFew, hGood⟩
+  have hnScale : nScale ≤ D.n := le_trans (Nat.le_max_left _ _) hn
+  have hnFan : nFan ≤ D.n := le_trans (Nat.le_max_right _ _) hn
+  have hscale := hScale D.n hnScale
+  obtain ⟨hs, hT, hH⟩ := hscale
+  have hlargeD : (6 : ℝ) ≤ (D.n : ℝ) ^ b := hFan D.n hnFan
+  have hselWitness (e : D.CellT) := sel_witness_of_good_heights η₀ β p h D q hGood e
+  have hIntSel (c : D.CellT) {ℓ : D.Loc} (hℓ : ℓ ∈ D.intIds q c) :
+      ∃ v, v ∈ ordNbrs c.2 ∧ D.sel q (c.1, v) = some ℓ := by
+    unfold Ctx.intIds at hℓ
+    rcases Finset.mem_biUnion.mp hℓ with ⟨v, hv, hmem⟩
+    cases hsel : D.sel q (c.1, v) with
+    | none => simp [hsel] at hmem
+    | some x =>
+        have hx : ℓ = x := by simpa [hsel] using hmem
+        subst x
+        exact ⟨v, hv, hsel⟩
+  have hSelData (e : D.CellT) {ℓ : D.Loc} (hsel : D.sel q e = some ℓ) :
+      q.1.2 e.1 ℓ = true ∧
+        ℓ.2.val = (hdP η₀ D.n).height Finset.univ (q.1.2 e.1) (q.2.1.2 e.1)
+          (D.elig q.1.1 q.1.2 q.2.1.1 e.1) (hdP η₀ D.n).Rlong e.2 ∧
+        _root_.hammingDist ℓ.1 e.2 ≤ rH D.n ∧ q.2.1.2 e.1 ℓ = true := by
+    obtain ⟨ℓ', hsel', hEligible, hActive⟩ := hselWitness e
+    have hEq : ℓ' = ℓ := Option.some.inj (hsel'.symm.trans hsel)
+    let j : Fin (HH η₀ D.n + 1) := ⟨
+      (hdP η₀ D.n).height Finset.univ (q.1.2 e.1) (q.2.1.2 e.1)
+        (D.elig q.1.1 q.1.2 q.2.1.1 e.1) (hdP η₀ D.n).Rlong e.2,
+      by
+        have hh := ((hGood e.1) e.2 (Finset.mem_univ _)).1
+        exact Nat.lt_succ_of_lt hh⟩
+    have hEligible' : ℓ ∈ D.elig q.1.1 q.1.2 q.2.1.1 e.1 e.2 j := by
+      simpa [j, hEq] using hEligible
+    simp only [Ctx.elig, Finset.mem_filter, Finset.mem_univ, true_and] at hEligible'
+    refine ⟨hEligible'.1, ?_, hEligible'.2.2.1, ?_⟩
+    · exact congrArg Fin.val hEligible'.2.1
+    · simpa [hEq] using hActive
   refine ⟨?_, ?_⟩
   · intro e
     obtain ⟨ℓ, hsel, _, _⟩ := sel_witness_of_good_heights η₀ β p h D q hGood e
     simp [hsel]
   · intro c
     refine ⟨?_, ?_, ?_, ?_⟩
-    · sorry
+    · let ids : Finset D.Loc := D.intIds q c
+      let levels : Finset (Fin (HH η₀ D.n + 1)) := ids.image Prod.snd
+      let centerHeight := (hdP η₀ D.n).height Finset.univ (q.1.2 c.1) (q.2.1.2 c.1)
+        (D.elig q.1.1 q.1.2 q.2.1.1 c.1) (hdP η₀ D.n).Rlong c.2
+      let allowed : Finset ℕ := insert (centerHeight - 1)
+        (insert centerHeight ({centerHeight + 1} : Finset ℕ))
+      have hCenterGH := (hGood c.1) c.2 (Finset.mem_univ _)
+      have hLevelsSubset : ∀ j ∈ levels, j.val ∈ allowed := by
+        intro j hj
+        rcases Finset.mem_image.mp hj with ⟨ℓ, hℓ, rfl⟩
+        obtain ⟨v, hv, hsel⟩ := hIntSel c hℓ
+        have hdata := hSelData (c.1, v) hsel
+        have hvDist : _root_.hammingDist c.2 v ≤ 2 := by
+          have hvDist1 : _root_.hammingDist c.2 v ≤ 1 := by simpa [ordNbrs] using hv
+          omega
+        have hLip := hCenterGH.2.2 v (Finset.mem_univ _) hvDist
+        have hLipLo := (abs_le.mp hLip).1
+        have hLipHi := (abs_le.mp hLip).2
+        have hvalEq : ℓ.2.val = (hdP η₀ D.n).height Finset.univ (q.1.2 c.1)
+            (q.2.1.2 c.1) (D.elig q.1.1 q.1.2 q.2.1.1 c.1)
+            (hdP η₀ D.n).Rlong v := hdata.2.1
+        simp only [allowed, Finset.mem_insert, Finset.mem_singleton]
+        omega
+      have hAllowedCard : allowed.card ≤ 3 := by
+        dsimp [allowed]
+        calc
+          (insert (centerHeight - 1) (insert centerHeight ({centerHeight + 1} : Finset ℕ))).card ≤
+              (insert centerHeight ({centerHeight + 1} : Finset ℕ)).card + 1 := Finset.card_insert_le _ _
+          _ ≤ ({centerHeight + 1} : Finset ℕ).card + 1 + 1 := by
+            exact Nat.add_le_add_right (Finset.card_insert_le _ _) 1
+          _ = 3 := by simp
+      let levelVals := levels.image Fin.val
+      have hLevelsCard : levels.card ≤ 3 := by
+        calc
+          levels.card = levelVals.card := by
+            dsimp [levelVals]
+            symm
+            exact Finset.card_image_of_injective levels Fin.val_injective
+          _ ≤ allowed.card := by
+            apply Finset.card_le_card
+            intro j hj
+            rcases Finset.mem_image.mp hj with ⟨k, hk, rfl⟩
+            exact hLevelsSubset k hk
+          _ ≤ 3 := hAllowedCard
+      have hIntEq : ids = levels.biUnion fun j => ids.filter fun ℓ => ℓ.2 = j := by
+        ext ℓ
+        constructor
+        · intro hℓ
+          apply Finset.mem_biUnion.mpr
+          refine ⟨ℓ.2, Finset.mem_image.mpr ⟨ℓ, hℓ, rfl⟩, ?_⟩
+          exact Finset.mem_filter.mpr ⟨hℓ, rfl⟩
+        · intro hℓ
+          rcases Finset.mem_biUnion.mp hℓ with ⟨j, _, hfilter⟩
+          exact (Finset.mem_filter.mp hfilter).1
+      have hLevelCount (j : Fin (HH η₀ D.n + 1)) (hj : j ∈ levels) :
+          (ids.filter fun ℓ => ℓ.2 = j).card ≤ ⌈(D.n : ℝ) ^ b⌉₊ := by
+        rcases Finset.mem_image.mp hj with ⟨ℓ₀, hℓ₀, hℓ₀j⟩
+        obtain ⟨v₀, hv₀, hsel₀⟩ := hIntSel c hℓ₀
+        have hdata₀ := hSelData (c.1, v₀) hsel₀
+        have hval₀ : (hdP η₀ D.n).height Finset.univ (q.1.2 c.1) (q.2.1.2 c.1)
+            (D.elig q.1.1 q.1.2 q.2.1.1 c.1) (hdP η₀ D.n).Rlong v₀ = j.val := by
+          calc
+            _ = ℓ₀.2.val := hdata₀.2.1.symm
+            _ = j.val := congrArg Fin.val hℓ₀j
+        have hGood₀ := (hGood c.1) v₀ (Finset.mem_univ _)
+        have hNotBad₀ : ¬ (hdP η₀ D.n).Bad (q.1.2 c.1) (q.2.1.2 c.1)
+            (D.elig q.1.1 q.1.2 q.2.1.1 c.1) v₀ j := by
+          intro hb
+          apply hGood₀.2.1
+          refine ⟨Nat.lt_succ_of_lt hGood₀.1, ?_⟩
+          simpa [hval₀] using hb
+        let crowd := Finset.univ.filter fun u : D.ResT =>
+          q.1.2 c.1 (u, j) = true ∧ q.2.1.2 c.1 (u, j) = true ∧
+            _root_.hammingDist u v₀ ≤ rH D.n + 2
+        have hCrowd : (crowd.card : ℝ) ≤ (D.n : ℝ) ^ b := by
+          have hnot : ¬ (D.n : ℝ) ^ b < (crowd.card : ℝ) := by
+            intro hlarge'
+            apply hNotBad₀
+            right
+            simpa [crowd, HDParams.Bad, hdP, b] using hlarge'
+          exact le_of_not_gt hnot
+        have hsubset : (ids.filter fun ℓ => ℓ.2 = j).image Prod.fst ⊆ crowd := by
+          intro u hu
+          rcases Finset.mem_image.mp hu with ⟨ℓ, hℓ, rfl⟩
+          have hIℓ := Finset.mem_filter.mp hℓ
+          obtain ⟨v, hv, hsel⟩ := hIntSel c hIℓ.1
+          have hdata := hSelData (c.1, v) hsel
+          have hcb : _root_.hammingDist c.2 v ≤ 1 := by simpa [ordNbrs] using hv
+          have hcb₀ : _root_.hammingDist c.2 v₀ ≤ 1 := by simpa [ordNbrs] using hv₀
+          have hvv₀ : _root_.hammingDist v v₀ ≤ 2 := by
+            have hvc : _root_.hammingDist v c.2 ≤ 1 := by
+              rw [_root_.hammingDist_comm]
+              exact hcb
+            exact (_root_.hammingDist_triangle v c.2 v₀).trans (by omega)
+          have hpair : (ℓ.1, j) = ℓ := Prod.ext rfl hIℓ.2.symm
+          have hP : q.1.2 c.1 (ℓ.1, j) = true := by rw [hpair]; exact hdata.1
+          have hA : q.2.1.2 c.1 (ℓ.1, j) = true := by rw [hpair]; exact hdata.2.2.2
+          have hdist : _root_.hammingDist ℓ.1 v₀ ≤ rH D.n + 2 := by
+            exact (_root_.hammingDist_triangle ℓ.1 v v₀).trans (Nat.add_le_add hdata.2.2.1 hvv₀)
+          simp only [crowd, Finset.mem_filter, Finset.mem_univ, true_and]
+          exact ⟨hP, hA, hdist⟩
+        have hinj : Set.InjOn Prod.fst (↑(ids.filter fun ℓ => ℓ.2 = j) : Set D.Loc) := by
+          intro ℓ hℓ ℓ' hℓ' hfst
+          apply Prod.ext hfst
+          exact (Finset.mem_filter.mp hℓ).2.trans (Finset.mem_filter.mp hℓ').2.symm
+        have hCardImage : ((ids.filter fun ℓ => ℓ.2 = j).image Prod.fst).card =
+            (ids.filter fun ℓ => ℓ.2 = j).card := Finset.card_image_of_injOn hinj
+        have hIreal : ((ids.filter fun ℓ => ℓ.2 = j).card : ℝ) ≤ (D.n : ℝ) ^ b := by
+          calc
+            _ = (((ids.filter fun ℓ => ℓ.2 = j).image Prod.fst).card : ℝ) := by exact_mod_cast hCardImage.symm
+            _ ≤ (crowd.card : ℝ) := by exact_mod_cast (Finset.card_le_card hsubset)
+            _ ≤ (D.n : ℝ) ^ b := hCrowd
+        exact_mod_cast hIreal.trans (Nat.le_ceil ((D.n : ℝ) ^ b))
+      have hIntCard : ids.card ≤ 3 * ⌈(D.n : ℝ) ^ b⌉₊ := by
+        calc
+          ids.card = (levels.biUnion fun j => ids.filter fun ℓ => ℓ.2 = j).card := by
+            exact congrArg Finset.card hIntEq
+          _ ≤ ∑ j ∈ levels, (ids.filter fun ℓ => ℓ.2 = j).card :=
+            Finset.card_biUnion_le (s := levels)
+              (t := fun j => ids.filter fun ℓ => ℓ.2 = j)
+          _ ≤ ∑ j ∈ levels, ⌈(D.n : ℝ) ^ b⌉₊ := by
+            apply Finset.sum_le_sum
+            intro j hj
+            exact hLevelCount j hj
+          _ = levels.card * ⌈(D.n : ℝ) ^ b⌉₊ := by simp [Finset.sum_const]
+          _ ≤ 3 * ⌈(D.n : ℝ) ^ b⌉₊ := Nat.mul_le_mul_right _ hLevelsCard
+      have hceil : (⌈(D.n : ℝ) ^ b⌉₊ : ℝ) ≤ 2 * (D.n : ℝ) ^ b := by
+        have hceil' : (⌈(D.n : ℝ) ^ b⌉₊ : ℝ) < (D.n : ℝ) ^ b + 1 :=
+          Nat.ceil_lt_add_one (Real.rpow_nonneg (by positivity) _)
+        linarith [hlargeD]
+      have hpowEq : ((D.n : ℝ) ^ b) ^ 2 = (D.n : ℝ) ^ (tau8 η₀ / 8) := by
+        rw [← Real.rpow_natCast]
+        calc
+          ((D.n : ℝ) ^ b) ^ (2 : ℝ) = (D.n : ℝ) ^ (b * 2) :=
+            (Real.rpow_mul (by positivity : (0 : ℝ) ≤ (D.n : ℝ)) b 2).symm
+          _ = (D.n : ℝ) ^ (tau8 η₀ / 8) := by congr 1 <;> dsimp [b, bH] <;> ring
+      have hfanReal : (3 * ⌈(D.n : ℝ) ^ b⌉₊ : ℝ) ≤ (D.n : ℝ) ^ (tau8 η₀ / 8) := by
+        calc
+          (3 * ⌈(D.n : ℝ) ^ b⌉₊ : ℝ) ≤ 6 * (D.n : ℝ) ^ b := by nlinarith [hceil]
+          _ ≤ ((D.n : ℝ) ^ b) ^ 2 := by nlinarith [hlargeD]
+          _ = (D.n : ℝ) ^ (tau8 η₀ / 8) := hpowEq
+      have hTC : 3 * ⌈(D.n : ℝ) ^ b⌉₊ ≤ TC η₀ D.n := by
+        exact_mod_cast (hfanReal.trans (Nat.le_ceil ((D.n : ℝ) ^ (tau8 η₀ / 8))))
+      exact hIntCard.trans hTC
     · intro e he j
       exact (hPos e.1 e.2 j).2
     · sorry

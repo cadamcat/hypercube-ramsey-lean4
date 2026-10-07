@@ -128,11 +128,12 @@ structure PairQueries (D : LateData hPT) (A : InitialPairData D) where
   bulk : ∀ q, coordinate q ∈ PT.tiling.bulkCoords (D.geom.patchOf (row q))
   count_bound : count ≤ (D.nonisolates A.rows).card * T.S.n k
   distinct_roles : Function.Injective (fun q => flipPos (row q) (coordinate q))
-  /-- Same-cell same-slice queries have separated raw consultation groups. -/
+  /-- The word margin also separates primitive centres, each one flip away,
+  before consulting radius-10ρh groups (18:1116–1123). -/
   separated : ∀ q q', q ≠ q' →
     D.geom.cellOf (flipPos (row q) (coordinate q)) = D.geom.cellOf (flipPos (row q') (coordinate q')) →
     hammingDist (flipPos (row q) (coordinate q)) (flipPos (row q') (coordinate q')) >
-      20 * κ.ρ * (PT.tiling.P A.paletteIndex.1).h
+      50 * κ.ρ * (PT.tiling.P A.paletteIndex.1).h
 
 namespace PairQueries
 variable {D : LateData hPT} {A : InitialPairData D} (Q : PairQueries D A)

@@ -28,17 +28,17 @@ theorem partC_main_proof (T : Stage) (η0 : ℝ) (hη0 : 0 < η0)
     intro ζ δ hζ hδ hδ' c o
     apply hClu ζ δ hζ hδ
     simpa [hκη] using hδ'
-  have hProfiles := profiled_tiling_exists hκ T hInitκ hDeep hCluκ
+  have hProfiles := profiled_tiling_exists hκ T hInitκ hDeep hDeepκ₁ hDeepκ₂ hCluκ
   have hLow := C18_Flow hκ hThresholds T hInitκ hDeep hDeepκ₁ hDeepκ₂
   have hLowSwap := C18_Flow hκ hThresholds T.swap
     (orient_init hInitκ true) (orient_deep hDeep true)
     (orient_deep_budget hDeepκ₁ true) (orient_deep_budget hDeepκ₂ true)
-  have hDirect := high_direct_cube hκ T hInitκ hDeep
+  have hDirect := high_direct_cube hκ T hDeepκ₁
   have hDirectSwap := high_direct_cube hκ T.swap
-    (orient_init hInitκ true) (orient_deep hDeep true)
-  have hCluster := high_cluster_cube hκ T hInitκ hDeep
+    (orient_deep_budget hDeepκ₁ true)
+  have hCluster := high_cluster_cube hκ T hDeepκ₁
   have hClusterSwap := high_cluster_cube hκ T.swap
-    (orient_init hInitκ true) (orient_deep hDeep true)
+    (orient_deep_budget hDeepκ₁ true)
   have hContradiction : ∀ᶠ k : ℕ in atTop, False := by
     filter_upwards [hProfiles, hLow, hLowSwap, hDirect, hDirectSwap,
         hCluster, hClusterSwap] with k hProfile hLow0 hLow1 hDirect0 hDirect1 hCluster0 hCluster1

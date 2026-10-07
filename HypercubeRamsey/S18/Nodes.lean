@@ -7,7 +7,10 @@ open Classical Filter
 open scoped BigOperators
 
 /-- D18.L, §§16–17 and 18:43–87. Construct actual initial data, not arbitrary
-lists. The selected discrepancy budgets are forwarded from C12.K. -/
+lists. The selected discrepancy budgets are forwarded from C12.K. The input
+geometry now includes the prescribed cell slot count; the output calibration
+uses a 50ρh consultation-centre margin. The general calibration and upstream
+construction gaps recorded in `Needs` remain producer obligations. -/
 theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ) (T : Stage)
     (hInit : InitDisc T κ.η0)
     (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε)
@@ -179,7 +182,8 @@ theorem L18_2 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   exact hfinish PT hPT D hD hsmall X geom surv P tilt
 
 /-- P18.3a–d, 18:678–751. Per-requirement bounds under every global slot
-pin; replay is a total function with explicit agreement. -/
+pin; replay is a total function with explicit agreement. `D.l16_valid.slot_eq`
+controls the slot inputs read by each touched cell, including under the pin. -/
 theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
     (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1) :
@@ -194,14 +198,16 @@ theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
   sorry
 
 /-- P18.3e, 18:752–788. Leaves of the actual bad requirements, exact
-slot/image/tape dependency, conditional pushforward and touching charges. -/
+slot/image/tape dependency, conditional pushforward and touching charges.
+The prescribed `D.l16_valid.slot_eq` bounds leaf slot domains as well as cells. -/
 theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → Nonempty (LeafCoupling D δ) := by
   sorry
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
-vanishing cost for every stated local nonnegative test. -/
+vanishing cost for every stated local nonnegative test. The slot-count
+contract in `D.l16_valid` is retained for the local pool comparison. -/
 theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
     ∃ ε : ℕ → ℝ, (∀ k, 0 ≤ ε k) ∧ Tendsto ε atTop (nhds 0) ∧
       ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
@@ -236,7 +242,8 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   sorry
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish
-all actual completion conclusions; no existential full=True shortcut. -/
+all actual completion conclusions; no existential full=True shortcut.
+The reached-column moment comparison retains `D.l16_valid.slot_eq`. -/
 theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
     (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1)
@@ -292,7 +299,9 @@ theorem P18_5b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
   sorry
 
 /-- P18.5c, 18:1027–1056. Terminal → fixed-pool resampling → iid pools;
-the stronger pool gate remains through the fixed-pool comparison. -/
+the stronger pool gate remains through the fixed-pool comparison. The last
+comparison uses the prescribed `D.l16_valid.slot_eq` and the consulted tuple
+scope; it is not an unrestricted comparison on arbitrary numbers of slots. -/
 theorem P18_5c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ δ εterm, ∀ C : TerminalCertificate D δ εterm,
@@ -506,7 +515,7 @@ theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresho
   have hTermSmall : ∀ᶠ k in atTop, εterm k ≤ 1 := htermlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1))
   have hRunSmall : ∀ᶠ k in atTop, εrun k ≤ 1 / 4 := hrunlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1 / 4))
   have hSmall := hsmall (Real.log 2 / 1000) (div_pos (Real.log_pos (by norm_num)) (by norm_num))
-  filter_upwards [l16_quantitative_validity hκ T hInit hDeep, D18_L hκ hThresholds T hInit hDeep hDisc hDiscι,
+  filter_upwards [l16_quantitative_validity hκ T hInit hDeep hDisc, D18_L hκ hThresholds T hInit hDeep hDisc hDiscι,
     hsched, hSmall, hlocal, htransfer, hterminal, hcompletion, hendpoint, eventually_largeIndex κ T,
     L18_6 hκ T K Cp Cs hK hCp hCs, hTermSmall, hRunSmall] with
     k h16 hdata _hsched hSmall hLocal hTransfer hTerminal hCompletion hEndpoint hLarge hHall hTermSmall hRunSmall

@@ -564,6 +564,59 @@ theorem finLaw_pi_pr_cylinder {I : Type*} [Fintype I] [DecidableEq I]
       rw [← Finset.prod_filter]
       simp
 
+/-- Projecting a product law onto a finite coordinate subtype gives the
+product law of precisely those factors. -/
+theorem finLaw_pi_project {I : Type*} [Fintype I] [DecidableEq I]
+    {Ω : I → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (law : ∀ i, FinLaw (Ω i)) (S : Finset I)
+    [Fintype {i : I // i ∈ S}] :
+    FinLaw.map (FinLaw.pi law) (fun ω => fun i : {j : I // j ∈ S} => ω i.1) =
+      FinLaw.pi (fun i : {j : I // j ∈ S} => law i.1) := by
+  classical
+  let default : ∀ i, Ω i := fun i => by
+    have htrue : 0 < (law i).pr (fun _ => True) := by
+      rw [finLaw_pr_const]
+      norm_num
+    exact Classical.choose
+      (finLaw_pr_pos_has_nonzero_atom (law i) (fun _ => True) htrue)
+  apply finLaw_ext
+  intro a
+  let extA : ∀ i, Ω i := fun i => if hi : i ∈ S then a ⟨i, hi⟩ else default i
+  have hproject (ω : ∀ i, Ω i) :
+      ((fun i : {j : I // j ∈ S} => ω i.1) = a) ↔
+        ∀ i ∈ S, ω i = extA i := by
+    constructor
+    · intro heq i hi
+      have h := congrFun heq ⟨i, hi⟩
+      simpa [extA, hi] using h
+    · intro heq
+      funext i
+      have h := heq i.1 i.2
+      simpa [extA, i.2] using h
+  have hmass :
+      (∑ ω : (∀ i : I, Ω i),
+        if (fun i : {j : I // j ∈ S} => ω i.1) = a then
+          ∏ i : I, (law i).w (ω i) else 0) =
+        ∏ i : {j : I // j ∈ S}, (law i.1).w (a i) := by
+    calc
+      _ = (FinLaw.pi law).pr (fun ω => ∀ i ∈ S, ω i = extA i) := by
+        unfold FinLaw.pr FinLaw.pi
+        apply Finset.sum_congr rfl
+        intro ω hω
+        simp [hproject]
+      _ = ∏ i ∈ S, (law i).w (extA i) := finLaw_pi_pr_cylinder law S extA
+      _ = ∏ i : {j : I // j ∈ S}, (law i.1).w (a i) := by
+        rw [Finset.prod_subtype (p := fun i : I => i ∈ S) (s := S)
+          (h := by intro i; simp)]
+        apply Finset.prod_congr rfl
+        intro i hi
+        simp [extA, hi]
+  change (∑ ω : (∀ i : I, Ω i),
+      if (fun i : {j : I // j ∈ S} => ω i.1) = a then
+        ∏ i, (law i).w (ω i) else 0) =
+    ∏ i : {j : I // j ∈ S}, (law i.1).w (a i)
+  exact hmass
+
 /-- An eventual index property becomes a dimension cutoff along any sequence
 whose finitely many early dimensions are bounded. -/
 theorem badSeq_dimension_cutoff (S : BadSeq) {P : ℕ → Prop}

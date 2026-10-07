@@ -74,7 +74,140 @@ end Ctx6
 /-- L6.1m (atoms, 06:763): `e^{m^{.15}}/N` and `n^{.05J}/N` are at most `N^{−.95}` once `N ≥ 2^n` and `n` is large. -/
 theorem L6_1m_atoms (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.OddRowBounds → X.RowAtoms := by
-  sorry
+  refine ⟨10000000000, 1, ?_⟩
+  intro n N E G M X hL hRows H C u y hH hGood hu
+  have hnBig : 10000000000 ≤ n := hL.1
+  have hnOne : 1 ≤ n := by omega
+  have hnTenK : 10000 ≤ n := by omega
+  have hnPos : 0 < (n : ℝ) := by exact_mod_cast (Nat.zero_lt_of_lt hnOne)
+  have hnreal : (1 : ℝ) ≤ n := by exact_mod_cast hnOne
+  have hNlower : (2 : ℝ) ^ n ≤ (N : ℝ) := by simpa using hL.2.1
+  have hNpos : 0 < (N : ℝ) := lt_of_lt_of_le (by positivity : (0 : ℝ) < 2 ^ n) hNlower
+  have hAlpha : α₆ p₀ ≤ 1 :=
+    (height_exponents6_admissible p₀ hadm.2.2.1).2.2.1.trans (by norm_num)
+  have hpowAlpha : (n : ℝ) ^ α₆ p₀ ≤ n :=
+    by simpa only [Real.rpow_one] using Real.rpow_le_rpow_of_exponent_le hnreal hAlpha
+  have hmle : X.m ≤ n := by
+    change X.g.L.m ≤ n
+    rw [X.g.m_eq]
+    exact Nat.ceil_le.mpr hpowAlpha
+  have hmcast : (X.m : ℝ) ≤ n := by exact_mod_cast hmle
+  have hJpow : (X.J : ℝ) ≤ (n : ℝ) ^ (1 / 25 : ℝ) := by
+    change (Nat.floor ((X.m : ℝ) ^ (1 / 25 : ℝ)) : ℝ) ≤ _
+    calc
+      (Nat.floor ((X.m : ℝ) ^ (1 / 25 : ℝ)) : ℝ) ≤ (X.m : ℝ) ^ (1 / 25 : ℝ) :=
+        Nat.floor_le (by positivity)
+      _ ≤ (n : ℝ) ^ (1 / 25 : ℝ) := by
+        apply Real.rpow_le_rpow (by positivity) hmcast
+        norm_num
+  have hlog10 : 10 * Real.log 10 ≤ Real.log (n : ℝ) := by
+    have hpow : (10 : ℝ) ^ 10 ≤ n := by exact_mod_cast hnBig
+    calc
+      10 * Real.log 10 = Real.log ((10 : ℝ) ^ 10) := by rw [Real.log_pow]; norm_num
+      _ ≤ Real.log (n : ℝ) := Real.log_le_log (by positivity) hpow
+  have hlog10' : Real.log 10 ≤ (1 / 10 : ℝ) * Real.log (n : ℝ) := by nlinarith
+  have hten : (10 : ℝ) ≤ (n : ℝ) ^ (1 / 10 : ℝ) := by
+    rw [Real.le_rpow_iff_log_le (by norm_num) hnPos]
+    exact hlog10'
+  have hpow23 : (10 : ℝ) ≤ (n : ℝ) ^ (23 / 50 : ℝ) :=
+    hten.trans (Real.rpow_le_rpow_of_exponent_le hnreal (by norm_num))
+  have hsqrt : Real.sqrt (n : ℝ) ≤ (n : ℝ) / 100 := by
+    rw [Real.sqrt_le_iff]
+    refine ⟨by positivity, ?_⟩
+    have hnrealTen : (10000 : ℝ) ≤ n := by exact_mod_cast hnTenK
+    have hprod : 0 ≤ ((n : ℝ) - 10000) * n :=
+      mul_nonneg (by linarith) (by positivity)
+    nlinarith
+  have hlowLog : (X.m : ℝ) ^ (15 / 100 : ℝ) ≤ (1 / 100 : ℝ) * n := by
+    have hmpow : (X.m : ℝ) ^ (15 / 100 : ℝ) ≤ (n : ℝ) ^ (15 / 100 : ℝ) :=
+      Real.rpow_le_rpow (by positivity) hmcast (by norm_num)
+    have hnPow : (n : ℝ) ^ (15 / 100 : ℝ) ≤ (n : ℝ) ^ (1 / 2 : ℝ) :=
+      Real.rpow_le_rpow_of_exponent_le hnreal (by norm_num)
+    have hsqrt' : (n : ℝ) ^ (1 / 2 : ℝ) = Real.sqrt (n : ℝ) := by
+      rw [Real.sqrt_eq_rpow]
+    calc
+      (X.m : ℝ) ^ (15 / 100 : ℝ) ≤ (n : ℝ) ^ (15 / 100 : ℝ) := hmpow
+      _ ≤ (n : ℝ) ^ (1 / 2 : ℝ) := hnPow
+      _ = Real.sqrt (n : ℝ) := hsqrt'
+      _ ≤ (1 / 100 : ℝ) * n := by linarith [hsqrt]
+  have hlog : Real.log (n : ℝ) ≤ 2 * Real.sqrt (n : ℝ) := by
+    have h := Real.log_le_rpow_div (x := (n : ℝ)) (by positivity)
+      (by norm_num : (0 : ℝ) < 1 / 2)
+    simpa [Real.sqrt_eq_rpow, mul_comm] using h
+  have hprodPow : (n : ℝ) ^ (27 / 50 : ℝ) * (n : ℝ) ^ (23 / 50 : ℝ) = n := by
+    rw [← Real.rpow_add hnPos]
+    norm_num
+  have hpow54 : 10 * (n : ℝ) ^ (27 / 50 : ℝ) ≤ n := by
+    have hmul := mul_le_mul_of_nonneg_left hpow23
+      (Real.rpow_nonneg (show (0 : ℝ) ≤ (n : ℝ) by positivity) (27 / 50 : ℝ))
+    nlinarith [hprodPow]
+  have hterm : (1 / 20 : ℝ) * (X.J : ℝ) * Real.log (n : ℝ) ≤ (1 / 100 : ℝ) * n := by
+    calc
+      (1 / 20 : ℝ) * (X.J : ℝ) * Real.log (n : ℝ) ≤
+          (1 / 20 : ℝ) * (n : ℝ) ^ (1 / 25 : ℝ) * Real.log (n : ℝ) := by
+        apply mul_le_mul_of_nonneg_right
+        · exact mul_le_mul_of_nonneg_left hJpow (by norm_num)
+        · exact Real.log_nonneg (by exact_mod_cast hnOne)
+      _ ≤ (1 / 20 : ℝ) * (n : ℝ) ^ (1 / 25 : ℝ) * (2 * Real.sqrt (n : ℝ)) :=
+        mul_le_mul_of_nonneg_left hlog (by positivity)
+      _ = (1 / 10 : ℝ) * ((n : ℝ) ^ (1 / 25 : ℝ) * (n : ℝ) ^ (1 / 2 : ℝ)) := by
+        rw [Real.sqrt_eq_rpow]
+        ring
+      _ = (1 / 10 : ℝ) * (n : ℝ) ^ ((1 / 25 : ℝ) + (1 / 2 : ℝ)) := by
+        rw [← Real.rpow_add hnPos]
+      _ = (1 / 10 : ℝ) * (n : ℝ) ^ (27 / 50 : ℝ) := by
+        congr 2
+        norm_num
+      _ ≤ (1 / 100 : ℝ) * n := by nlinarith [hpow54]
+  have hlowExp : Real.exp ((X.m : ℝ) ^ (15 / 100 : ℝ)) ≤ Real.exp ((1 / 100 : ℝ) * n) :=
+    Real.exp_le_exp.mpr hlowLog
+  have hhighExp : (n : ℝ) ^ ((5 / 100 : ℝ) * (X.J : ℝ)) ≤ Real.exp ((1 / 100 : ℝ) * n) := by
+    rw [Real.rpow_def_of_pos hnPos]
+    apply Real.exp_le_exp.mpr
+    nlinarith [hterm]
+  have hbaseExp : Real.exp (1 / 40 : ℝ) ≤ (2 : ℝ) ^ (5 / 100 : ℝ) := by
+    rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2)]
+    apply Real.exp_le_exp.mpr
+    nlinarith [Real.log_two_gt_d9]
+  have hExpGrow : Real.exp ((1 / 100 : ℝ) * n) ≤ Real.exp (1 / 40 : ℝ) ^ n := by
+    calc
+      Real.exp ((1 / 100 : ℝ) * n) ≤ Real.exp ((1 / 40 : ℝ) * n) :=
+        Real.exp_le_exp.mpr (by nlinarith)
+      _ = Real.exp (1 / 40 : ℝ) ^ n := by
+        simpa [mul_comm] using (Real.exp_nat_mul (1 / 40 : ℝ) n)
+  have hpowGrow : Real.exp (1 / 40 : ℝ) ^ n ≤ ((2 : ℝ) ^ (5 / 100 : ℝ)) ^ n :=
+    pow_le_pow_left₀ (le_of_lt (Real.exp_pos _)) hbaseExp n
+  have hNpow : ((2 : ℝ) ^ n) ^ (5 / 100 : ℝ) ≤ (N : ℝ) ^ (5 / 100 : ℝ) :=
+    Real.rpow_le_rpow (by positivity) hNlower (by norm_num)
+  have hNexp : Real.exp ((1 / 100 : ℝ) * n) ≤ (N : ℝ) ^ (5 / 100 : ℝ) := by
+    calc
+      Real.exp ((1 / 100 : ℝ) * n) ≤ Real.exp (1 / 40 : ℝ) ^ n := hExpGrow
+      _ ≤ ((2 : ℝ) ^ (5 / 100 : ℝ)) ^ n := hpowGrow
+      _ = ((2 : ℝ) ^ n) ^ (5 / 100 : ℝ) := Real.rpow_pow_comm (by norm_num) _ _
+      _ ≤ (N : ℝ) ^ (5 / 100 : ℝ) := hNpow
+  have hvalid : X.OddValid H C X.Rlong (X.g.L.stateOf u) := hGood.2.1 u hu
+  obtain ⟨_, _, hcap, _, _⟩ := hRows H C u hH hu hvalid
+  have hcapY := hcap y
+  have hcapFinal : (N : ℝ) * X.oddRow H C u y ≤ (N : ℝ) ^ (5 / 100 : ℝ) := by
+    by_cases hmode : X.stMode (X.g.L.stateOf u) = .low
+    · rw [if_pos hmode] at hcapY
+      exact hcapY.trans (hlowExp.trans hNexp)
+    · rw [if_neg hmode] at hcapY
+      exact hcapY.trans (hhighExp.trans hNexp)
+  have hrowRpow : (N : ℝ) ^ (5 / 100 : ℝ) =
+      (N : ℝ) ^ (-(0.95 : ℝ)) * (N : ℝ) := by
+    calc
+      (N : ℝ) ^ (5 / 100 : ℝ) = (N : ℝ) ^ (-(0.95 : ℝ) + 1) := by congr 1 <;> norm_num
+      _ = (N : ℝ) ^ (-(0.95 : ℝ)) * (N : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_add hNpos _ _
+      _ = (N : ℝ) ^ (-(0.95 : ℝ)) * (N : ℝ) := by rw [Real.rpow_one]
+  have hcancel : (N : ℝ) * X.oddRow H C u y ≤
+      (N : ℝ) * (N : ℝ) ^ (-(0.95 : ℝ)) := by
+    calc
+      (N : ℝ) * X.oddRow H C u y ≤ (N : ℝ) ^ (-(0.95 : ℝ)) * (N : ℝ) := by
+        simpa only [hrowRpow] using hcapFinal
+      _ = (N : ℝ) * (N : ℝ) ^ (-(0.95 : ℝ)) := by ring
+  exact le_of_mul_le_mul_left hcancel hNpos
 
 /-- Lemma 3.9 supplies the odd injection laws at every good entering outcome (06:761–766). -/
 theorem injection_family6 (γ p₀ K : ℝ) :

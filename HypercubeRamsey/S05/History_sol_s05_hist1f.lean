@@ -304,5 +304,249 @@ theorem step3_lower_tail (H : X.KeyHist) (r : X.AbsRecord) (hr : X.RecOccurs r)
   rw [heq]
   simpa only [true_and] using hbound
 
+theorem product_likelihood_skip_integral {I : Type*} [Fintype I] [DecidableEq I]
+    {Ω : I → Type*} [∀ i, Fintype (Ω i)] (P Q : ∀ i, FinProb (Ω i)) (skip : I → Prop) :
+    (FinProb.pi Q).expect (fun a => ∏ i,
+      if skip i then 1 else ratio5 ((P i).w (a i)) ((Q i).w (a i))) ≤ 1 := by
+  classical
+  let L (i : I) (a : Ω i) := if skip i then (1 : ℝ) else ratio5 ((P i).w a) ((Q i).w a)
+  have hnonneg (i : I) (a : Ω i) : 0 ≤ L i a := by
+    dsimp [L]
+    split_ifs
+    · norm_num
+    · exact Lane_q_s05_hist1b.ratio5_nonneg ((P i).nonneg a) ((Q i).nonneg a)
+  have hsingle (i : I) : (Q i).expect (L i) ≤ 1 := by
+    by_cases hs : skip i
+    · simp [L, hs, FinProb.expect_const]
+    · unfold FinProb.expect
+      calc
+        _ ≤ ∑ a, (P i).w a := by
+          apply Finset.sum_le_sum
+          intro a _
+          dsimp [L]
+          rw [if_neg hs]
+          by_cases hq : (Q i).w a = 0
+          · simp [hq, (P i).nonneg a]
+          · simp only [ratio5, if_neg hq]
+            field_simp [hq]
+            exact le_rfl
+        _ = 1 := (P i).sum_eq_one
+  have hsingle_nonneg (i : I) : 0 ≤ (Q i).expect (L i) :=
+    Finset.sum_nonneg fun a _ => mul_nonneg ((Q i).nonneg a) (hnonneg i a)
+  calc
+    _ = ∏ i, (Q i).expect (L i) := by
+      unfold FinProb.expect FinProb.pi
+      simp_rw [← Finset.prod_mul_distrib]
+      simpa only [L] using (Fintype.prod_sum (fun i a => (Q i).w a * L i a)).symm
+    _ ≤ ∏ _i : I, (1 : ℝ) :=
+      Finset.prod_le_prod₀ (fun i _ => hsingle_nonneg i) (fun i _ => hsingle i)
+    _ = 1 := by simp
+
+theorem obsLikOn_nonneg {Id : Type} (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn Id)
+    (θ : Fin (colLen5 (X.p.s n) r.1) → Fin N)
+    (excl : Option (Id × X.Ty × Finset (Fin X.blockBound))) : 0 ≤ X.obsLikOn H r a θ excl := by
+  unfold Setup5.obsLikOn
+  apply Finset.prod_nonneg
+  intro c _
+  apply Finset.prod_nonneg
+  intro i _
+  split_ifs
+  · norm_num
+  · exact Lane_q_s05_hist1b.ratio5_nonneg
+      ((X.blockLaw (X.withCol H r.1 θ) c.2).nonneg _) ((X.blockLawDel H c.2 r.1).nonneg _)
+
+theorem step3MassOn_nonneg {Id : Type} (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn Id)
+    (excl : Option (Id × X.Ty × Finset (Fin X.blockBound))) : 0 ≤ X.step3MassOn H r a excl := by
+  unfold Setup5.step3MassOn
+  apply Finset.sum_nonneg
+  intro θ _
+  apply mul_nonneg
+  · apply mul_nonneg (Finset.prod_nonneg fun h _ => (X.prior H.1 r.1).nonneg _)
+    split_ifs <;> norm_num
+  · exact obsLikOn_nonneg X H r a θ excl
+
+theorem step3_reference_likelihood_integral (H : X.KeyHist) (r : X.AbsRecord)
+    (θ : Fin (colLen5 (X.p.s n) r.1) → Fin N)
+    (excl : Option (Fin (X.p.T n) × X.Ty × Finset (Fin X.blockBound))) :
+    (step3Reference X H r).expect (fun a => X.obsLikOn H r a θ excl) ≤ 1 := by
+  let L (c : Fin (X.p.T n) × X.Ty) (a : X.Array c.2) :=
+    if c ∈ r.2.1 ∧ r.1 ∈ c.2.2.1 then ∏ i,
+      if X.InRef excl c i then 1 else ratio5
+        ((X.blockLaw (X.withCol H r.1 θ) c.2).w (a i)) ((X.blockLawDel H c.2 r.1).w (a i)) else 1
+  let Q (c : Fin (X.p.T n) × X.Ty) := FinProb.pi fun _ : Fin (X.p.typeBlocks n c.2) =>
+    if r.1 ∈ c.2.2.1 then X.blockLawDel H c.2 r.1 else X.blockLaw H c.2
+  have hlik (a : X.ArraysOn (Fin (X.p.T n))) :
+      X.obsLikOn H r a θ excl = ∏ c, L c (a c) := by
+    unfold Setup5.obsLikOn
+    rw [Finset.prod_filter]
+    have hfilter : (Finset.univ.filter fun c : Fin (X.p.T n) × X.Ty => c ∈ r.2.1) = r.2.1 := by
+      ext c
+      simp
+    calc
+      _ = ∏ c : Fin (X.p.T n) × X.Ty,
+          if c ∈ r.2.1 then
+            (if r.1 ∈ c.2.2.1 then ∏ i,
+              if X.InRef excl c i then 1 else ratio5
+                ((X.blockLaw (X.withCol H r.1 θ) c.2).w (a c i))
+                ((X.blockLawDel H c.2 r.1).w (a c i)) else 1) else 1 := by
+        conv_rhs => rw [← Finset.prod_filter, hfilter]
+      _ = _ := by
+        apply Finset.prod_congr rfl
+        intro c _
+        by_cases ho : c ∈ r.2.1 <;> by_cases ht : r.1 ∈ c.2.2.1 <;> simp [L, ho, ht]
+  have hsingle (c : Fin (X.p.T n) × X.Ty) : (Q c).expect (L c) ≤ 1 := by
+    by_cases hc : c ∈ r.2.1 ∧ r.1 ∈ c.2.2.1
+    · simpa only [Q, L, hc.1, hc.2, and_self, ite_true] using product_likelihood_skip_integral
+        (fun _ : Fin (X.p.typeBlocks n c.2) => X.blockLaw (X.withCol H r.1 θ) c.2)
+        (fun _ : Fin (X.p.typeBlocks n c.2) => X.blockLawDel H c.2 r.1)
+        (fun i => X.InRef excl c i)
+    · simp [L, hc, FinProb.expect_const]
+  have hsingle_nonneg (c : Fin (X.p.T n) × X.Ty) : 0 ≤ (Q c).expect (L c) := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro a _
+    apply mul_nonneg ((Q c).nonneg a)
+    dsimp [L]
+    split_ifs
+    · apply Finset.prod_nonneg
+      intro i _
+      split_ifs
+      · norm_num
+      · exact Lane_q_s05_hist1b.ratio5_nonneg
+          ((X.blockLaw (X.withCol H r.1 θ) c.2).nonneg _) ((X.blockLawDel H c.2 r.1).nonneg _)
+    · norm_num
+  calc
+    _ = (FinProb.pi Q).expect (fun a => ∏ c, L c (a c)) := by simp only [hlik]; rfl
+    _ = ∏ c, (Q c).expect (L c) := by
+      unfold FinProb.expect FinProb.pi
+      simp_rw [← Finset.prod_mul_distrib]
+      exact (Fintype.prod_sum (fun c a => (Q c).w a * L c a)).symm
+    _ ≤ ∏ _c : Fin (X.p.T n) × X.Ty, (1 : ℝ) :=
+      Finset.prod_le_prod₀ (fun c _ => hsingle_nonneg c) (fun c _ => hsingle c)
+    _ = 1 := by simp
+
+/-- Every fixed deletion integrand has reference expectation at most one. -/
+theorem step3_reference_mass_integral (H : X.KeyHist) (r : X.AbsRecord)
+    (excl : Option (Fin (X.p.T n) × X.Ty × Finset (Fin X.blockBound))) :
+    (step3Reference X H r).expect (fun a => X.step3MassOn H r a excl) ≤ 1 := by
+  let P := FinProb.pi fun _ : Fin (colLen5 (X.p.s n) r.1) => X.prior H.1 r.1
+  unfold FinProb.expect Setup5.step3MassOn
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  calc
+    _ ≤ ∑ θ, P.w θ * (step3Reference X H r).expect (fun a => X.obsLikOn H r a θ excl) := by
+      apply Finset.sum_le_sum
+      intro θ _
+      unfold FinProb.expect
+      rw [Finset.mul_sum]
+      apply Finset.sum_le_sum
+      intro a _
+      by_cases hg : X.candGateOn H r a θ
+      · simp only [if_pos hg, mul_one, P, FinProb.pi]
+        ring_nf
+        exact le_rfl
+      · simp only [if_neg hg, mul_zero, zero_mul]
+        exact mul_nonneg (P.nonneg θ) (mul_nonneg ((step3Reference X H r).nonneg a)
+          (obsLikOn_nonneg X H r a θ excl))
+    _ ≤ ∑ θ, P.w θ := by
+      apply Finset.sum_le_sum
+      intro θ _
+      exact mul_le_of_le_one_right (P.nonneg θ) (step3_reference_likelihood_integral X H r θ excl)
+    _ = 1 := P.sum_eq_one
+
+/-- A ratio exception for one fixed reference also costs its threshold. This permits
+strict pool subsets and integrates the low-mask gate. -/
+theorem step3_fixed_ratio_tail (H : X.KeyHist) (r : X.AbsRecord) (hr : X.RecOccurs r)
+    (c : Fin (X.p.T n) × X.Ty × Finset (Fin X.blockBound)) (ε : ℝ) (hε : 0 ≤ ε) :
+    (∑ θ : Fin (colLen5 (X.p.s n) r.1) → Fin N,
+      (∏ h, (X.prior H.1 r.1).w (θ h)) *
+        (X.recArrayLaw (X.withCol H r.1 θ)).pr (fun a =>
+          X.candGateOn (X.withCol H r.1 θ) r a θ ∧
+            X.step3MassOn (X.withCol H r.1 θ) r a none <
+              ε * X.step3MassOn (X.withCol H r.1 θ) r a (some c))) ≤ ε := by
+  obtain ⟨y, μ, hrecord⟩ := hr
+  have hmask := record_mask_mem X r y μ hrecord
+  let P := FinProb.pi fun _ : Fin (colLen5 (X.p.s n) r.1) => X.prior H.1 r.1
+  let Q := step3Reference X H r
+  let L := fun θ a => if X.candGateOn H r a θ then X.obsLikOn H r a θ none else 0
+  have hmass (a : X.ArraysOn (Fin (X.p.T n))) :
+      X.step3MassOn H r a none = ∑ θ, P.w θ * L θ a := by
+    unfold Setup5.step3MassOn
+    apply Finset.sum_congr rfl
+    intro θ _
+    dsimp [P, L, FinProb.pi]
+    by_cases hg : X.candGateOn H r a θ <;> simp [hg]
+  have hbound := Lane_q_s05_hist1b.finite_subdensity_ratio_bad5 P Q L (fun _ => True)
+    (fun a => X.step3MassOn H r a none) (fun a => X.step3MassOn H r a (some c)) ε
+    (fun a => by simpa only [ite_true] using hmass a)
+    (fun a => step3MassOn_nonneg X H r a (some c))
+    (step3_reference_mass_integral X H r (some c)) hε
+  have hdep : FinProb.DependsOn
+      (fun a => if X.step3MassOn H r a none < ε * X.step3MassOn H r a (some c)
+        then (1 : ℝ) else 0) r.2.1 := by
+    intro a b hab
+    dsimp only
+    rw [step3MassOn_arrays_congr X H r a b hmask hab none,
+      step3MassOn_arrays_congr X H r a b hmask hab (some c)]
+  have heq : (∑ θ : Fin (colLen5 (X.p.s n) r.1) → Fin N,
+      (∏ h, (X.prior H.1 r.1).w (θ h)) *
+        (X.recArrayLaw (X.withCol H r.1 θ)).pr (fun a =>
+          X.candGateOn (X.withCol H r.1 θ) r a θ ∧
+            X.step3MassOn (X.withCol H r.1 θ) r a none <
+              ε * X.step3MassOn (X.withCol H r.1 θ) r a (some c))) =
+      ∑ θ, ∑ a, if X.step3MassOn H r a none < ε * X.step3MassOn H r a (some c)
+        then P.w θ * Q.w a * L θ a else 0 := by
+    apply Finset.sum_congr rfl
+    intro θ _
+    simp only [candGateOn_withCol, step3MassOn_withCol]
+    rw [gated_array_pr X H r θ hmask
+      (fun a => X.step3MassOn H r a none < ε * X.step3MassOn H r a (some c)) hdep]
+    unfold FinProb.expect
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro a _
+    dsimp [P, Q, L, FinProb.pi]
+    by_cases hg : X.candGateOn H r a θ <;>
+      by_cases hm : X.step3MassOn H r a none < ε * X.step3MassOn H r a (some c) <;>
+        simp [hg, hm] <;> ring
+  rw [heq]
+  simpa only [true_and] using hbound
+
+/-- Restricting a law to density-good atoms of mass at least one half produces
+the factor-two cap used for high rows, with the original support. -/
+theorem finite_capped_support {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    (P : FinProb Ω) (ω₀ : Ω) (B : ℝ) (hB : 0 ≤ B)
+    (hgood : 1 / 2 ≤ P.pr (fun ω => P.w ω ≤ B)) :
+    ∃ R : FinProb Ω, (∀ ω, R.w ω ≤ 2 * B) ∧ (∀ ω, R.w ω ≠ 0 → P.w ω ≠ 0) := by
+  classical
+  let f := fun ω => if P.w ω ≤ B then P.w ω else 0
+  let m := ∑ ω, f ω
+  have hf (ω : Ω) : 0 ≤ f ω := by dsimp [f]; split_ifs; exact P.nonneg ω; exact le_rfl
+  have hmeq : m = P.pr (fun ω => P.w ω ≤ B) := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ω _
+    by_cases h : P.w ω ≤ B <;> simp [f, h]
+  have hm : 1 / 2 ≤ m := by rw [hmeq]; exact hgood
+  have hmpos : 0 < m := by linarith
+  let R := normalize5 f ω₀
+  have hw (ω : Ω) : R.w ω = f ω / m :=
+    Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg f ω₀ ω hf hmpos
+  refine ⟨R, ?_, ?_⟩
+  · intro ω
+    rw [hw]
+    apply (div_le_iff₀ hmpos).mpr
+    by_cases hg : P.w ω ≤ B
+    · dsimp [f]
+      rw [if_pos hg]
+      nlinarith
+    · dsimp [f]
+      rw [if_neg hg]
+      positivity
+  · intro ω hω hp
+    apply hω
+    rw [hw]
+    simp [f, hp, hB]
+
 end
 end HypercubeRamsey.Lane_sol_s05_hist1b

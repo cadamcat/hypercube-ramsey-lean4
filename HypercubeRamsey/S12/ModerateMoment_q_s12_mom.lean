@@ -1474,6 +1474,37 @@ lemma low_selection_count_bound {d u L n : ℕ} (hd : d ≤ n) (hn : 1 ≤ n) :
         _ ≤ (L + 1) * (n ^ L * (2 ^ u) ^ L) := Nat.mul_le_mul_right _ hfilterCount
         _ = _ := by ring
 
+lemma low_selection_count_bound_real {d u L n : ℕ} (hd : d ≤ n) (hn : 1 ≤ n) :
+    (∑ K : Finset (Fin d),
+      if K.card ≤ L then ((2 : ℝ) ^ u) ^ K.card else 0) ≤
+        ((L + 1 : ℕ) : ℝ) * (n : ℝ) ^ L * ((2 : ℝ) ^ u) ^ L := by
+  classical
+  have hnat := low_selection_count_bound (d := d) (u := u) (L := L) (n := n) hd hn
+  have hsumCast :
+      (∑ K : Finset (Fin d),
+        if K.card ≤ L then ((2 : ℝ) ^ u) ^ K.card else 0) =
+      ∑ K : Finset (Fin d),
+        ((if K.card ≤ L then (2 ^ u) ^ K.card else 0 : ℕ) : ℝ) := by
+    apply Finset.sum_congr rfl
+    intro K hK
+    by_cases hKl : K.card ≤ L <;> simp [hKl, Nat.cast_pow]
+  rw [hsumCast]
+  have hcast :
+      (∑ K : Finset (Fin d),
+        ((if K.card ≤ L then (2 ^ u) ^ K.card else 0 : ℕ) : ℝ)) ≤
+        (((L + 1) * n ^ L * (2 ^ u) ^ L : ℕ) : ℝ) := by
+    exact_mod_cast hnat
+  have hRhs :
+      (((L + 1) * n ^ L * (2 ^ u) ^ L : ℕ) : ℝ) =
+        ((L + 1 : ℕ) : ℝ) * (n : ℝ) ^ L * ((2 : ℝ) ^ u) ^ L := by
+    simp [Nat.cast_mul, Nat.cast_pow]
+  rw [← hRhs]
+  exact hcast
+
+lemma selector_function_card {d u : ℕ} (K : Finset (Fin d)) :
+    Fintype.card (∀ l : {l // l ∈ K}, Finset (Fin u)) = (2 ^ u) ^ K.card := by
+  simp [Fintype.card_fun, Fintype.card_finset, Fintype.card_fin]
+
 lemma sum_finset_sigma_card {d : ℕ} (F : Finset (Fin d) → ℝ) :
     (∑ K : Finset (Fin d), F K) =
       ∑ z ∈ Finset.sigma (Finset.range (d + 1))
@@ -1636,5 +1667,25 @@ lemma selected_interaction_product_abs_le {N d u : ℕ}
         ∏ l : {l // l ∈ K}, g l := by simp [g, Finset.abs_prod]
     _ ≤ ∏ l : {l // l ∈ K}, if l = l₀ then g l else 1 := hprod
     _ = |inter E c (π l₀.1) (f l₀) xs| := by simpa [g] using hR
+
+lemma selected_interaction_product_abs_le_pow {N d u : ℕ}
+    (E : Fin N → Fin N → Prop) (c : Colour)
+    (π : Fin d → Fin N → ℝ) (xs : Fin u → Fin N)
+    (K : Finset (Fin d))
+    (f : ∀ l : {l // l ∈ K}, Finset (Fin u)) (t : ℝ)
+    (ht : 0 ≤ t) (hsize : ∀ l, 2 ≤ (f l).card)
+    (hmoderate : Moderate E c π t xs) :
+    |∏ l : {l // l ∈ K}, inter E c (π l.1) (f l) xs| ≤ t ^ K.card := by
+  classical
+  rw [Finset.abs_prod]
+  calc
+    ∏ l : {l // l ∈ K}, |inter E c (π l.1) (f l) xs| ≤
+        ∏ l : {l // l ∈ K}, t := by
+          apply Finset.prod_le_prod₀
+          · intro l hl
+            exact abs_nonneg _
+          · intro l hl
+            exact hmoderate l.1 (f l) (hsize l)
+    _ = t ^ K.card := by simp
 
 end HypercubeRamsey.S12.Lane_q_s12_mom

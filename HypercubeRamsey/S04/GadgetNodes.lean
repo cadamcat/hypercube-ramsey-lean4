@@ -1,4 +1,5 @@
 import HypercubeRamsey.S04.CoreLemmas
+import HypercubeRamsey.S04.GadgetNodes_q_s04_gadget
 
 /-!
 # L4.1c, L4.1d: the key gadget and the patch tags
@@ -23,7 +24,10 @@ theorem key_nbr_card (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ 
 coordinates, so at most `n^{γ+14ω}` coordinate flips of a vertex change its key (for large `n`). -/
 theorem key_local (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, KeyLocal β γ n := by
-  sorry
+  obtain ⟨n₀, hn₀⟩ := HypercubeRamsey.Lane_q_s04_gadget.specialNum_eventually_bound hβ hβγ hγ
+  refine ⟨n₀, ?_⟩
+  intro n hn v
+  exact (HypercubeRamsey.Lane_q_s04_gadget.keyLocal_le_specialNum n v).trans (hn₀ n hn)
 
 /-- L4.1c(2) (04:128–143): for a fixed output each chunk lies on a prescribed side of a fixed midpoint, which has
 probability at most `2/3` (each clipped endpoint has probability at least `1/3`: the counts are symmetric and the
@@ -44,6 +48,6 @@ theorem tag_exists (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ 
       ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
         (M : Menu4 β γ G n N E X Y) (ρ : FinProb M.ι), N ≤ n * 2 ^ n →
         Balanced ρ M.μ M.ν K → ∃ tag : Key β γ n → M.ι, TagBal M tag (2 * K) := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_gadget.tag_exists_bound β γ K hβ hβγ hγ hK
 
 end HypercubeRamsey.S04

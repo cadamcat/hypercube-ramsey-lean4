@@ -499,6 +499,30 @@ theorem core_history_markov9 {P : Params9} {n N : ℕ} {M : TagMix N}
               exact congrArg (fun z => t < z) (hcond ω₀)
     _ ≤ (rawLaw9 S I).pr A / t := hmarkov
 
+theorem regularity_core_exception9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (c₀ : ℝ) (hc₀ : 0 < c₀)
+    (hreg : RegularityCert9 S I E G c₀) :
+    (rawLaw9 S I).pr (fun ω₀ => P.tail (c₀ / 2) n <
+      condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) ≤ P.tail (c₀ / 2) n := by
+  let t : ℝ := P.tail (c₀ / 2) n
+  have ht : 0 < t := by
+    simp [t, Params9.tail]
+    exact Real.exp_pos _
+  have hmk := core_history_markov9 S I v (fun ω => ¬ starRegular9 S E G ω v) t ht
+  have hregular := hreg v
+  have hquot : P.tail c₀ n / t = P.tail (c₀ / 2) n := by
+    dsimp [t, Params9.tail]
+    rw [← Real.exp_sub]
+    congr 1
+    ring
+  calc
+    (rawLaw9 S I).pr (fun ω₀ => t <
+        condCorePr9 S I v ω₀ (fun ω => ¬ starRegular9 S E G ω v)) ≤
+        (rawLaw9 S I).pr (fun ω => ¬ starRegular9 S E G ω v) / t := hmk
+    _ ≤ P.tail c₀ n / t := div_le_div_of_nonneg_right hregular ht.le
+    _ = P.tail (c₀ / 2) n := hquot
+
 private noncomputable def regularityOrder9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (v : EvenSites9 n) (b : OddSites9 n)
     (t : Fin 3) : List I.ID :=

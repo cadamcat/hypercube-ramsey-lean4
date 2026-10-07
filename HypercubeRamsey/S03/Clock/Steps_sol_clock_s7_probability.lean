@@ -220,4 +220,42 @@ theorem ordinary_target_probability_from_survival {T : ℕ} [Nonempty (Fin T)] {
       ring
     _ ≤ _ := mul_le_mul_of_nonneg_left hInt hp
 
+/-- A background event has the same probability under the full clock law and its outside marginal. -/
+theorem clock_background_probability {T : ℕ} {R : Type*}
+    [Fintype R] [DecidableEq R] {g : ℕ} {Ω : R → Type*}
+    [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
+    (δ : ℝ) (hδ0 : 0 ≤ δ) (hδ1 : δ ≤ 1)
+    (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g)
+    (D : Finset (RowLabel R g)) (G : ClockField T R g Ω → Prop)
+    (hG : FinProb.DependsOn G D) :
+    (clockFieldLaw (edgeLaw δ hδ0 hδ1 p lab)).pr G =
+      (FinProb.pi (fun e : {e // e ∈ D} => edgeLaw δ hδ0 hδ1 p lab e.1)).pr
+        (fun bg => G (fillBackground D bg)) := by
+  classical
+  let f : ClockField T R g Ω → ℝ := fun ξ => if G ξ then 1 else 0
+  have hf : FinProb.DependsOn f D := by
+    intro ξ ξ' hξ
+    simp only [f, hG ξ ξ' hξ]
+  have hfill (bg : ∀ e : {e // e ∈ D}, MeshClockValue T (Ω e.1.1)) :
+      (Equiv.piEquivPiSubtypeProd (fun e : RowLabel R g => e ∈ D)
+        (fun e => MeshClockValue T (Ω e.1))).symm (bg, fun _ => .noArrival) = fillBackground D bg := by
+    funext e
+    by_cases he : e ∈ D <;> simp [Equiv.piEquivPiSubtypeProd, fillBackground, he]
+  have hm := FinProb.pi_expect_depends (edgeLaw δ hδ0 hδ1 p lab) D f
+    (fun _ => MeshClockValue.noArrival) hf
+  calc
+    _ = (clockFieldLaw (edgeLaw δ hδ0 hδ1 p lab)).expect f := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro ξ _
+      by_cases h : G ξ <;> simp [f, h]
+    _ = (FinProb.pi (fun e : {e // e ∈ D} => edgeLaw δ hδ0 hδ1 p lab e.1)).expect
+        (fun bg => f (fillBackground D bg)) := by
+      simpa only [clockFieldLaw, hfill] using hm
+    _ = _ := by
+      unfold FinProb.pr FinProb.expect
+      apply Finset.sum_congr rfl
+      intro bg _
+      by_cases h : G (fillBackground D bg) <;> simp [f, h]
+
 end HypercubeRamsey.Lane_sol_clock_s7

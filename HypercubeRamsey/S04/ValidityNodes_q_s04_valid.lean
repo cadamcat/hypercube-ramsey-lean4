@@ -1,5 +1,6 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.Framework.LawLemmas
+import HypercubeRamsey.Tools.Concentration
 
 namespace HypercubeRamsey.Lane_q_s04_valid
 
@@ -1971,6 +1972,32 @@ private theorem own_product_bound_of_dips {k : ℕ} (a L : ℝ) (q : Fin k → �
         Real.exp (Real.log (∏ j : Fin k, q j)) :=
       Real.exp_le_exp.mpr (by rw [hlogProd]; exact htarget.trans hsum)
     _ = ∏ j : Fin k, q j := Real.exp_log hprodPos
+
+private theorem stopped_own_azuma_bound {Ω : Type*} [Fintype Ω] {k : ℕ}
+    (H : Fin (k + 1) → Type*) [∀ t, Fintype (H t)] [∀ t, DecidableEq (H t)]
+    (P : FinProb Ω) (history : ∀ t, Ω → H t)
+    (project : ∀ i : Fin k, H i.succ → H i.castSucc)
+    (hfiltration : ∀ i ω, history i.castSucc ω = project i (history i.succ ω))
+    (Δ : Fin k → Ω → ℝ)
+    (hadapted : ∀ (m : ℕ) (hm : m ≤ k) (i : Fin k), i.val < m →
+      ∀ ω ω', history ⟨m, Nat.lt_succ_of_le hm⟩ ω = history ⟨m, Nat.lt_succ_of_le hm⟩ ω' →
+        Δ i ω = Δ i ω')
+    (θ t : ℝ)
+    (hbound : ∀ i ω, 0 ≤ Δ i ω ∧ Δ i ω ≤ 1)
+    (hmean : ∀ i (h : H i.castSucc),
+      P.pr (fun ω => history i.castSucc ω = h) = 0 ∨
+        (1 - θ) * P.pr (fun ω => history i.castSucc ω = h) ≤
+          (∑ ω, if history i.castSucc ω = h then P.w ω * Δ i ω else 0))
+    (hk : 0 < k) (ht : 0 < t) :
+    P.pr (fun ω => ∑ i, Δ i ω < (k : ℝ) * (1 - θ) - t) ≤
+      Real.exp (-2 * t ^ 2 / (k : ℝ)) := by
+  have hwidth : 0 < ∑ i : Fin k, ((1 : ℝ) - 0) ^ 2 := by
+    simp
+    exact_mod_cast hk
+  have h := xAzuma H P history project hfiltration Δ hadapted (fun _ => 1 - θ)
+    (fun _ => 0) (fun _ => 1) hbound hmean hwidth t ht
+  rw [show (k : ℝ) * (1 - θ) = (k : ℝ) - (k : ℝ) * θ by ring]
+  simpa [Finset.sum_const, nsmul_eq_mul] using h
 
 private theorem eventual_exposure_factor (β γ : ℝ) (hβ : 0 < β)
     (hγ : γ < 1) :

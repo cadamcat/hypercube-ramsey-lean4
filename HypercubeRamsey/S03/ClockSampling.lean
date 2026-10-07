@@ -1,4 +1,4 @@
-import HypercubeRamsey.S03.NearProductInjection
+import HypercubeRamsey.S03.Clock.Steps
 
 /-!
 # Lemma 3.10: clock sampling
@@ -27,6 +27,7 @@ theorem clock_sampling (B C_g : ℝ) (hB : 1 ≤ B) : ∃ A P : ℝ, ∃ n₀ : 
       ∃ J : FinProb (∀ a, Ω a),
         (∀ ω, J.w ω ≠ 0 → Function.Injective (fun a => lab a (ω a)) ∧ ∀ k, ¬ F k ω) ∧
         (∀ (S : Finset R) (o : ∀ a, Ω a), ((S.card : ℝ) ≤ (n : ℝ) ^ B) →
-          J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤ (1 + ε n) * ∏ a ∈ S, (p a).w (o a)) := sorry
+          J.pr (fun ω => ∀ a ∈ S, ω a = o a) ≤ (1 + ε n) * ∏ a ∈ S, (p a).w (o a)) := by
+  exact Clock.step8_bad_leaf_avoidance B C_g hB
 
 end HypercubeRamsey

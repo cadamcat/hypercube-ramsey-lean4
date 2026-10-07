@@ -153,7 +153,30 @@ def evenRow (H : X.Hist) (C : X.Centre) (v : CubeVertex n) (y : OddRole6 n → F
       ∑ a' ∈ Finset.univ.filter (fun a' => a' ∉ X.heavyLab H C v y), X.evenMarg H C v y a'
   else 0
 
-/-- Auxiliary product odd sampling (06:836–838). -/
+/-- Auxiliary odd sampling uses a probability filler on an invalid row. -/
+def oddLaw (H : X.Hist) (C : X.Centre) (u : CubeVertex n) : Law N :=
+  if X.OddValid H C X.Rlong (X.g.L.stateOf u) then
+    match X.stMode (X.g.L.stateOf u) with
+    | .low => X.lowRow H (X.pos C) (X.g.L.stateOf u)
+        (X.actDesc H C X.Rlong (X.g.L.stateOf u)) (X.tup C)
+    | .high => X.s3Post H (X.g.L.stateOf u)
+        (X.actDesc H C X.Rlong (X.g.L.stateOf u)) (X.tup C)
+  else X.unifLaw
+
+theorem oddLaw_eq_row (H : X.Hist) (C : X.Centre) (u : CubeVertex n)
+    (hu : X.OddValid H C X.Rlong (X.g.L.stateOf u)) (a : Fin N) :
+    (X.oddLaw H C u).w a = X.oddRow H C u a := by
+  unfold oddLaw Ctx6.oddRow Ctx6.oddRowAt
+  rw [if_pos hu, if_pos hu]
+  cases X.stMode (X.g.L.stateOf u) <;> rfl
+
+/-- The normalized local even-row mean under auxiliary product odd sampling with probability fillers
+on invalid rows (06:836–838). The even row retains its own local gate. -/
+def localEvenMean (H : X.Hist) (C : X.Centre) (v : CubeVertex n) (a : Fin N) : ℝ :=
+  (FinProb.pi (fun u : OddRole6 n => X.oddLaw H C u.1)).expect
+    (fun y => (N : ℝ) * X.evenRow H C v y a)
+
+/-- Product of the zero-extended odd rows; globally gated by `AllOddValid`. -/
 def prodOdd (H : X.Hist) (C : X.Centre) (y : OddRole6 n → Fin N) : ℝ :=
   ∏ u : OddRole6 n, X.oddRow H C u.1 (y u)
 
@@ -194,7 +217,7 @@ def SelectBound : Prop :=
 /-- Comparison mean of the even rows under product odd sampling and raw centres (06:836–853). -/
 def EvenMean : Prop :=
   ∀ H, X.histLaw.w H ≠ 0 → ∀ (v : CubeVertex n) (a : Fin N), IsEvenRole v →
-    (X.centreLaw H).expect (fun C => ∑ y, X.prodOdd H C y * ((N : ℝ) * X.evenRow H C v y a)) ≤
+    (X.centreLaw H).expect (fun C => X.localEvenMean H C v a) ≤
       Cm6 * ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a)
 
 /-- The near radius of even rows: twice the locality radius `r + O(R_long)` of a long computation (06:784–785,
@@ -666,46 +689,150 @@ theorem L6_1m_select (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     exact hsum.trans (by linarith)
   simpa only [Lane_sol_s06_ev_b.expect_indicator] using hsum'
 
-/-- L6.1m (comparison mean, 06:836–853): cancellation of the posterior denominator against the data subdensity
+namespace Lane_sol_fix_s06mean
+
+theorem oddRow_nonneg (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
+    (u : CubeVertex n) (a : Fin N) : 0 ≤ X.oddRow H C u a := by
+  by_cases hu : X.OddValid H C X.Rlong (X.g.L.stateOf u)
+  · rw [← X.oddLaw_eq_row H C u hu a]
+    exact (X.oddLaw H C u).nonneg a
+  · simp [Ctx6.oddRow, Ctx6.oddRowAt, hu]
+
+theorem Fz_nonneg (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
+    (v : CubeVertex n) (c : X.Loc) (z : X.Tuple) (y : OddRole6 n → Fin N) :
+    0 ≤ X.Fz H C v c z y := by
+  unfold Ctx6.Fz
+  apply mul_nonneg
+  · split_ifs <;> norm_num
+  · exact Finset.prod_nonneg fun u _ => oddRow_nonneg X H _ u.1 (y u)
+
+theorem evenMarg_nonneg (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
+    (v : CubeVertex n) (y : OddRole6 n → Fin N) (a : Fin N) :
+    0 ≤ X.evenMarg H C v y a := by
+  have hmc : 0 ≤ X.mc H C v y :=
+    Finset.sum_nonneg fun z _ => mul_nonneg ((X.tupleLaw H (X.evenTy v)).nonneg z)
+      (Fz_nonneg X H C v (X.selC H C v) z y)
+  unfold Ctx6.evenMarg
+  apply Finset.sum_nonneg
+  intro z _
+  apply mul_nonneg
+  · exact div_nonneg (mul_nonneg ((X.tupleLaw H (X.evenTy v)).nonneg z)
+      (Fz_nonneg X H C v (X.selC H C v) z y)) hmc
+  · positivity
+
+/-- Before light-part normalization, retain just the local validity gate. -/
+def posteriorMean (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
+    (v : CubeVertex n) (a : Fin N) : ℝ :=
+  (FinProb.pi (fun u : OddRole6 n => X.oddLaw H C u.1)).expect
+    (fun y => if X.EvenValid H C v y then (N : ℝ) * X.evenMarg H C v y a else 0)
+
+/-- The density node's retained light mass bounds the cost of normalization by `100/19`. -/
+theorem localEvenMean_le_posteriorMean (X : Ctx6 γ p₀ K n N E G M)
+    (hDensity : X.EvenDensity) (H : X.Hist) (hH : X.histLaw.w H ≠ 0)
+    (C : X.Centre) (v : CubeVertex n) (hv : IsEvenRole v) (a : Fin N) :
+    X.localEvenMean H C v a ≤ (100 / 19 : ℝ) * posteriorMean X H C v a := by
+  unfold Ctx6.localEvenMean posteriorMean FinProb.expect
+  rw [Finset.mul_sum]
+  apply Finset.sum_le_sum
+  intro y _
+  have hRow : (N : ℝ) * X.evenRow H C v y a ≤
+      (100 / 19 : ℝ) * (if X.EvenValid H C v y then
+        (N : ℝ) * X.evenMarg H C v y a else 0) := by
+    by_cases hvalid : X.EvenValid H C v y
+    · have hmass := (hDensity H C v y hH hv hvalid).2.2.2.2
+      have hmarg := evenMarg_nonneg X H C v y a
+      have hnum : (if a ∈ X.heavyLab H C v y then 0 else X.evenMarg H C v y a) ≤
+          X.evenMarg H C v y a := by
+        split_ifs <;> [exact hmarg; exact le_rfl]
+      have hrow : X.evenRow H C v y a ≤ (100 / 19 : ℝ) * X.evenMarg H C v y a := by
+        rw [Ctx6.evenRow, if_pos hvalid]
+        calc
+          _ ≤ X.evenMarg H C v y a / (19 / 100 : ℝ) :=
+            div_le_div₀ hmarg hnum (by norm_num) hmass
+          _ = _ := by ring
+      simpa only [if_pos hvalid, mul_assoc, mul_left_comm] using
+        mul_le_mul_of_nonneg_left hrow (Nat.cast_nonneg N)
+    · simp [Ctx6.evenRow, hvalid]
+  simpa only [mul_assoc, mul_left_comm] using
+    mul_le_mul_of_nonneg_left hRow
+      ((FinProb.pi (fun u : OddRole6 n => X.oddLaw H C u.1)).nonneg y)
+
+theorem localEvenMean_nonneg (X : Ctx6 γ p₀ K n N E G M)
+    (hDensity : X.EvenDensity) (H : X.Hist) (hH : X.histLaw.w H ≠ 0)
+    (C : X.Centre) (v : CubeVertex n) (hv : IsEvenRole v) (a : Fin N) :
+    0 ≤ X.localEvenMean H C v a := by
+  unfold Ctx6.localEvenMean FinProb.expect
+  apply Finset.sum_nonneg
+  intro y _
+  apply mul_nonneg ((FinProb.pi (fun u : OddRole6 n => X.oddLaw H C u.1)).nonneg y)
+  apply mul_nonneg (Nat.cast_nonneg N)
+  by_cases hvalid : X.EvenValid H C v y
+  · exact (hDensity H C v y hH hv hvalid).1 a
+  · simp [Ctx6.evenRow, hvalid]
+
+end Lane_sol_fix_s06mean
+
+/-- L6.1m (comparison mean, 06:836–853): auxiliary product odd sampling uses probability fillers;
+cancellation of the posterior denominator against the data subdensity
 (`∫ m_c (F_z dP_c / m_c) dy = dP_c ∫ F_z dy`), rows summing to one bound `∫ F_z dy` by the gate, the selection
 bound summed over IDs, and the tuple marginal costs `2/c₁` times the tag mixture; light mass `≥ .19`. -/
 theorem L6_1m_mean (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X =>
       X.HistSupport → X.Step2Supp → X.EvenDensity → X.SelectBound → X.EvenMean := by
-  sorry
+  refine ⟨2, 0, ?_⟩
+  intro n N E G M X _hLarge hHist hSupp hDensity hSelect H hH v a hv
+  have hPosterior :
+      (X.centreLaw H).expect (fun C => Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
+        (19 / 100 : ℝ) * Cm6 *
+          ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a) := by
+    -- Remaining: disintegrate at each selected tuple, cancel m_c, sum the forced-centre
+    -- selection bounds, and bound the tuple marginal using HistSupport and Step2Supp.
+    sorry
+  have hTruncation :
+      (X.centreLaw H).expect (fun C => X.localEvenMean H C v a) ≤
+        (100 / 19 : ℝ) *
+          (X.centreLaw H).expect (fun C => Lane_sol_fix_s06mean.posteriorMean X H C v a) := by
+    unfold FinProb.expect
+    rw [Finset.mul_sum]
+    apply Finset.sum_le_sum
+    intro C _
+    simpa only [mul_assoc, mul_left_comm] using mul_le_mul_of_nonneg_left
+      (Lane_sol_fix_s06mean.localEvenMean_le_posteriorMean X hDensity H hH C v hv a)
+      ((X.centreLaw H).nonneg C)
+  calc
+    _ ≤ _ := hTruncation
+    _ ≤ (100 / 19 : ℝ) * ((19 / 100 : ℝ) * Cm6 *
+        ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a)) :=
+      mul_le_mul_of_nonneg_left hPosterior (by norm_num)
+    _ = _ := by ring
 
 namespace Lane_sol_s06_ev_d
-
-/-- The local row mean under auxiliary odd sampling with probability fillers. -/
-def localEvenMean (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
-    (v : CubeVertex n) (a : Fin N) : ℝ :=
-  (FinProb.pi (fun u : OddRole6 n => oddLaw X H C u.1)).expect
-    (fun y => (N : ℝ) * X.evenRow H C v y a)
 
 /-- The raw centre moment estimate needed after nonlocal success gates are removed. -/
 def RawCentreComparison (X : Ctx6 γ p₀ K n N E G M) : Prop :=
   ∀ H, X.histLaw.w H ≠ 0 → ∀ (U : Finset (CubeVertex n)) (a : Fin N),
     U ⊆ X.evenRoles → U.card ≤ n →
     (∀ v ∈ U, ∀ v' ∈ U, v ≠ v' → X.nearR < X.g.L.residualDist v v') →
-      (X.centreLaw H).expect (fun C => ∏ v ∈ U, localEvenMean X H C v a) ≤
+      (X.centreLaw H).expect (fun C => ∏ v ∈ U, X.localEvenMean H C v a) ≤
         ∏ v ∈ U, (Cm6 * ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a))
 
-/-- `EvenMean` is the filler mean multiplied by the global all-valid indicator. -/
+/-- The original zero-extended product integrand is the filler mean multiplied by the global
+all-valid indicator. The repaired `EvenMean` uses the unrestricted filler mean. -/
 theorem gatedMean_eq (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
     (v : CubeVertex n) (a : Fin N) :
     (∑ y, X.prodOdd H C y * ((N : ℝ) * X.evenRow H C v y a)) =
-      if X.AllOddValid H C then localEvenMean X H C v a else 0 := by
+      if X.AllOddValid H C then X.localEvenMean H C v a else 0 := by
   by_cases hAll : X.AllOddValid H C
   · rw [if_pos hAll]
-    unfold localEvenMean FinProb.expect
+    unfold Ctx6.localEvenMean FinProb.expect
     apply Finset.sum_congr rfl
     intro y hy
     have hpRow (u : OddRole6 n) :
-        (oddLaw X H C u.1).w (y u) = X.oddRow H C u.1 (y u) :=
-      oddLaw_eq_row X H C u.1 (hAll u.1 u.2) (y u)
+        (X.oddLaw H C u.1).w (y u) = X.oddRow H C u.1 (y u) :=
+      X.oddLaw_eq_row H C u.1 (hAll u.1 u.2) (y u)
     change (∏ u : OddRole6 n, X.oddRow H C u.1 (y u)) *
       ((N : ℝ) * X.evenRow H C v y a) =
-      (∏ u : OddRole6 n, (oddLaw X H C u.1).w (y u)) * ((N : ℝ) * X.evenRow H C v y a)
+      (∏ u : OddRole6 n, (X.oddLaw H C u.1).w (y u)) * ((N : ℝ) * X.evenRow H C v y a)
     simp_rw [hpRow]
   · rw [if_neg hAll]
     have hnot : ¬ ∀ u : OddRole6 n,
@@ -721,7 +848,7 @@ theorem gatedMean_eq (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (C : X.Centre)
       Finset.prod_eq_zero (Finset.mem_univ u) hz
     rw [hprod, zero_mul]
 
-/-- A fully proved reduction from raw centre moments to the frozen joint conclusion. -/
+/-- A fully proved reduction from raw centre moments to the joint conclusion. -/
 theorem joint_of_rawCentreComparison (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → RawCentreComparison X → X.EvenJoint := by
   have hp₀ : 0 < p₀ := hadm.2.2.1
@@ -1001,7 +1128,7 @@ theorem joint_of_rawCentreComparison (γ p₀ K : ℝ) (hadm : Admissible6 γ p�
       rw [← hLocal y]
     exact (le_of_eq hExpectLocal).trans hProjected
   let p : X.Centre → OddRole6 n → Law N := fun C u =>
-    Lane_sol_s06_ev_d.oddLaw X H C u.1
+    X.oddLaw H C u.1
   let localMean : X.Centre → CubeVertex n → ℝ := fun C v =>
     (FinProb.pi (p C)).expect (fun y => (N : ℝ) * X.evenRow H C v y a)
   have hProductNonneg (C : X.Centre) :
@@ -1018,7 +1145,7 @@ theorem joint_of_rawCentreComparison (γ p₀ K : ℝ) (hadm : Admissible6 γ p�
     let t := Real.exp ((N : ℝ) ^ (-(0.04 : ℝ)) * S.card)
     have hpRow (u : OddRole6 n) (b : Fin N) :
         (p C u).w b = X.oddRow H C u.1 b :=
-      Lane_sol_s06_ev_d.oddLaw_eq_row X H C u.1 (hGood.2.1 u.1 u.2) b
+      X.oddLaw_eq_row H C u.1 (hGood.2.1 u.1 u.2) b
     have hWeight (o : α) :
         q C o = t * (FinProb.pi (fun u : {u : OddRole6 n // u ∈ S} => p C u.1)).w o := by
       change t * (∏ u ∈ S, X.oddRow H C u.1 (extend o u)) =
@@ -1107,6 +1234,32 @@ theorem joint_of_rawCentreComparison (γ p₀ K : ℝ) (hadm : Admissible6 γ p�
 
 end Lane_sol_s06_ev_d
 
+namespace Lane_sol_fix_s06mean
+
+/-- The geometric independence step after the global success gate is removed (06:864–865). -/
+def CentreMeanFactorization (X : Ctx6 γ p₀ K n N E G M) : Prop :=
+  ∀ H, X.histLaw.w H ≠ 0 → ∀ (U : Finset (CubeVertex n)) (a : Fin N),
+    U ⊆ X.evenRoles → U.card ≤ n →
+    (∀ v ∈ U, ∀ v' ∈ U, v ≠ v' → X.nearR < X.g.L.residualDist v v') →
+      (X.centreLaw H).expect (fun C => ∏ v ∈ U, X.localEvenMean H C v a) =
+        ∏ v ∈ U, (X.centreLaw H).expect (fun C => X.localEvenMean H C v a)
+
+/-- The repaired first means give precisely the raw moment bound once centre locality is proved. -/
+theorem rawCentreComparison_of_mean (X : Ctx6 γ p₀ K n N E G M)
+    (hDensity : X.EvenDensity) (hMean : X.EvenMean)
+    (hFactor : CentreMeanFactorization X) : Lane_sol_s06_ev_d.RawCentreComparison X := by
+  intro H hH U a hU hUcard hsep
+  rw [hFactor H hH U a hU hUcard hsep]
+  apply Finset.prod_le_prod₀
+  · intro v hv
+    unfold FinProb.expect
+    exact Finset.sum_nonneg fun C _ => mul_nonneg ((X.centreLaw H).nonneg C)
+      (localEvenMean_nonneg X hDensity H hH C v (Finset.mem_filter.mp (hU hv)).2 a)
+  · intro v hv
+    exact hMean H hH v a (Finset.mem_filter.mp (hU hv)).2
+
+end Lane_sol_fix_s06mean
+
 /-- L6.1n (joint comparison, 06:857–868): actual odd-neighbour sets of separated rows are disjoint; the
 near-product bound of `JfOK` on at most `n²` outputs; long computations at residual distance `> nearR` read
 disjoint centre randomness, so the raw centre integrals factor into the comparison means. -/
@@ -1115,8 +1268,10 @@ theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   apply (Lane_sol_s06_ev_d.joint_of_rawCentreComparison γ p₀ K hadm).mono
   intro n N E G M X hJoint hDensity hMean
   apply hJoint hDensity
-  -- The supplied mean has the global AllOddValid gate (gatedMean_eq).
-  -- The raw centre moment estimate needs unrestricted local means.
+  apply Lane_sol_fix_s06mean.rawCentreComparison_of_mean X hDensity hMean
+  intro H hH U a hU hUcard hsep
+  -- Remaining: show that separated long computations read disjoint primitive centre inputs,
+  -- including the position dependence of the low-row adjustment table.
   sorry
 
 set_option maxHeartbeats 1000000

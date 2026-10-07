@@ -1,4 +1,5 @@
 import HypercubeRamsey.S17.Needs
+import HypercubeRamsey.S12
 
 namespace HypercubeRamsey.Lane_q_s17_pool
 
@@ -100,6 +101,154 @@ theorem law_hitRatio_expectation {N : ℕ} (μ : Law N)
     _ = 1 := by
           rw [show (∑ y, μ.w y * hit E c x y) = deg E c μ.w x by rfl]
           exact div_self (ne_of_gt hdeg)
+
+noncomputable def reweightLaw {N : ℕ} (μ : Law N) (f : Fin N → ℝ)
+    (hf : ∀ x, 0 ≤ f x) (Z : ℝ) (hZ : 0 < Z)
+    (hZeq : ∑ x, μ.w x * f x = Z) : Law N where
+  w x := μ.w x * f x / Z
+  nonneg x := div_nonneg (mul_nonneg (μ.nonneg x) (hf x)) hZ.le
+  sum_eq_one := by
+    rw [← Finset.sum_div, hZeq, div_self hZ.ne']
+
+theorem reweightLaw_atom_bound {N : ℕ} (μ : Law N) (f : Fin N → ℝ)
+    (hf : ∀ x, 0 ≤ f x) (Z : ℝ) (hZ : 0 < Z)
+    (hZeq : ∑ x, μ.w x * f x = Z)
+    (w C : ℝ) (hμw : μ.WidthLE w) (hC : 0 ≤ C)
+    (hfC : ∀ x, μ.w x ≠ 0 → f x ≤ C) (x : Fin N) :
+    (reweightLaw μ f hf Z hZ hZeq).w x ≤ (C / Z) * Real.exp w / N := by
+  by_cases hμ0 : μ.w x = 0
+  · simp [reweightLaw, hμ0]
+    positivity
+  · have hprod : μ.w x * f x ≤ (Real.exp w / N) * C :=
+      mul_le_mul (hμw x) (hfC x hμ0) (hf x) (by positivity)
+    calc
+      (reweightLaw μ f hf Z hZ hZeq).w x = μ.w x * f x / Z := rfl
+      _ ≤ ((Real.exp w / N) * C) / Z := div_le_div_of_nonneg_right hprod hZ.le
+      _ = (C / Z) * Real.exp w / N := by ring
+
+theorem hitRatio_average_lower {N : ℕ} (μ : Law N)
+    (E : Fin N → Fin N → Prop) (c : Colour) (y : Fin N)
+    (d : Fin N → ℝ) (dmax : ℝ)
+    (hdpos : ∀ x, μ.w x ≠ 0 → 0 < d x)
+    (hdle : ∀ x, μ.w x ≠ 0 → d x ≤ dmax) :
+    (∑ x, μ.w x * (hit E c x y / d x)) ≥
+      (∑ x, μ.w x * hit E c x y) / dmax := by
+  classical
+  have hterm (x : Fin N) :
+      μ.w x * (hit E c x y / dmax) ≤ μ.w x * (hit E c x y / d x) := by
+    by_cases hμ0 : μ.w x = 0
+    · simp [hμ0]
+    · have hratio : hit E c x y / dmax ≤ hit E c x y / d x := by
+        by_cases hhit : Hits E c x y
+        · simp [hit, hhit]
+          simpa [one_div] using
+            (one_div_le_one_div_of_le (hdpos x hμ0) (hdle x hμ0))
+        · simp [hit, hhit]
+      exact mul_le_mul_of_nonneg_left hratio (μ.nonneg x)
+  calc
+    (∑ x, μ.w x * (hit E c x y / d x)) ≥
+        ∑ x, μ.w x * (hit E c x y / dmax) := Finset.sum_le_sum fun x _ => hterm x
+    _ = (∑ x, μ.w x * hit E c x y) / dmax := by
+      rw [Finset.sum_div]
+      apply Finset.sum_congr rfl
+      intro x hx
+      ring
+
+theorem hitRatio_reweight_width_bound {N : ℕ} (μ : Law N)
+    (E : Fin N → Fin N → Prop) (c : Colour) (y : Fin N)
+    (d : Fin N → ℝ) (dmin dmax m w : ℝ)
+    (hdmin : 0 < dmin) (hdmax : 0 < dmax) (hm : 0 < m)
+    (hμw : μ.WidthLE w)
+    (hdpos : ∀ x, μ.w x ≠ 0 → 0 < d x)
+    (hdmin' : ∀ x, μ.w x ≠ 0 → dmin ≤ d x)
+    (hdmax' : ∀ x, μ.w x ≠ 0 → d x ≤ dmax)
+    (hdegree : m ≤ ∑ x, μ.w x * hit E c x y) :
+    ∃ ν : Law N, ∀ x,
+      ν.w x ≤ (dmax / (m * dmin)) * Real.exp w / N := by
+  classical
+  let f : Fin N → ℝ := fun x => if 0 < d x then hit E c x y / d x else 0
+  let Z : ℝ := ∑ x, μ.w x * f x
+  have hf : ∀ x, 0 ≤ f x := by
+    intro x
+    dsimp [f]
+    split_ifs with hd
+    · apply div_nonneg
+      · unfold hit
+        split_ifs <;> norm_num
+      · exact hd.le
+    · exact le_rfl
+  have hZeqRatio : Z = ∑ x, μ.w x * (hit E c x y / d x) := by
+    dsimp [Z]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hμ0 : μ.w x = 0
+    · simp [f, hμ0]
+    · simp [f, hdpos x hμ0]
+  have hZlower : m / dmax ≤ Z := by
+    calc
+      m / dmax ≤ (∑ x, μ.w x * hit E c x y) / dmax :=
+        div_le_div_of_nonneg_right hdegree hdmax.le
+      _ ≤ Z := by rw [hZeqRatio]; exact hitRatio_average_lower μ E c y d dmax hdpos hdmax'
+  have hZpos : 0 < Z := lt_of_lt_of_le (div_pos hm hdmax) hZlower
+  have hfC : ∀ x, μ.w x ≠ 0 → f x ≤ 1 / dmin := by
+    intro x hx
+    have hdxPos := hdpos x hx
+    have hdxMin := hdmin' x hx
+    by_cases hxy : Hits E c x y
+    · simp [f, hit, hdxPos, hxy]
+      simpa [one_div] using one_div_le_one_div_of_le hdmin hdxMin
+    · simp [f, hit, hdxPos, hxy]
+      exact le_of_lt hdmin
+  have hZeq : ∑ x, μ.w x * f x = Z := rfl
+  let ν : Law N := reweightLaw μ f hf Z hZpos hZeq
+  have hrecip : 1 / Z ≤ dmax / m := by
+    have h := one_div_le_one_div_of_le (div_pos hm hdmax) hZlower
+    calc
+      1 / Z ≤ 1 / (m / dmax) := h
+      _ = dmax / m := by field_simp
+  have hscale : (1 / dmin) / Z ≤ dmax / (m * dmin) := by
+    calc
+      (1 / dmin) / Z = (1 / dmin) * (1 / Z) := by ring
+      _ ≤ (1 / dmin) * (dmax / m) :=
+        mul_le_mul_of_nonneg_left hrecip (by positivity)
+      _ = dmax / (m * dmin) := by field_simp
+  refine ⟨ν, ?_⟩
+  intro x
+  have hatom := reweightLaw_atom_bound μ f hf Z hZpos hZeq w (1 / dmin)
+    hμw (by positivity) hfC x
+  dsimp [ν]
+  calc
+    (reweightLaw μ f hf Z hZpos hZeq).w x ≤ ((1 / dmin) / Z) * Real.exp w / N := hatom
+    _ ≤ (dmax / (m * dmin)) * Real.exp w / N := by
+      gcongr
+
+theorem pinned_product_row_expectation_simplified {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (pins : Finset (Pos T k)) (fixed : Pos T k → Fin (T.S.N k))
+    (hdeg : ∀ x, σ x ≠ 0 → ∀ w ∈ D.externalEarly v,
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) :
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+          D.hitRatio w.1 x (ys w)) =
+      ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+        if w.1 ∈ pins then
+          D.hitRatio w.1 x (fixed w.1) else 1 := by
+  classical
+  rw [pinned_product_row_expectation]
+  apply Finset.sum_congr rfl
+  intro x hx
+  by_cases hσ : σ x = 0
+  · simp [hσ]
+  · congr 1
+    apply Finset.prod_congr rfl
+    intro w hw
+    by_cases hp : w.1 ∈ pins
+    · simp [hp, FinLaw.dirac, FinLaw.E]
+    · have hratio := law_hitRatio_expectation
+        (PT.π (D.G.patchOf w.1)) (T.S.E k) PT.tiling.c x
+        (hdeg x hσ w.1 w.2)
+      simpa [hp, ListGateContext.lawAsFinLaw, ListGateContext.hitRatio] using hratio
 
 theorem pi_pr_forall {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
@@ -401,7 +550,8 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
       (∀ w ∈ B, D.G.patchOf w = D.G.patchOf v) ∧
       T.S.n k - ((PT.tiling.P (D.G.patchOf v)).h +
         (PT.tiling.P (D.G.patchOf v)).ℓ + D.G.r) ≤ B.card ∧
-      B.card ≤ T.S.n k := by
+      B.card ≤ T.S.n k ∧
+      (D.externalEarly v \ B).card ≤ (PT.tiling.P (D.G.patchOf v)).ℓ := by
   classical
   let i := D.G.patchOf v
   let n := T.S.n k
@@ -488,7 +638,40 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
     have hpatch := lowGeom_patch_flip_of_after_prefix D.G hPT v j (by
       simpa [i, ell] using hge)
     exact ⟨hnotI, hclass, by simpa [i] using hpatch⟩
-  refine ⟨B, ?_, ?_, ?_, ?_⟩
+  have hcross_sub : D.externalEarly v \ B ⊆ Prefix.image (flipPos v) := by
+    intro w hw
+    have hwext := (Finset.mem_sdiff.mp hw).1
+    have hwnotB := (Finset.mem_sdiff.mp hw).2
+    rcases (Finset.mem_filter.mp hwext).2 with ⟨hclassw, ⟨j, hjI, hEq⟩⟩
+    have hjnotPrefix : j ∈ Prefix := by
+      by_contra hjnot
+      have hclass : D.G.classOf (flipPos v j) = none := by
+        rw [← hEq]
+        exact hclassw
+      have hjnotLate : j ∉ Late := by
+        intro hjLate
+        simp [Late, hclass] at hjLate
+      have hjnotBad : j ∉ bad := by
+        intro hjBad
+        simp only [bad, Finset.mem_union] at hjBad
+        rcases hjBad with hjIL | hjPrefix
+        · rcases hjIL with hjI' | hjLate
+          · exact hjI hjI'
+          · exact hjnotLate hjLate
+        · exact hjnot hjPrefix
+      have hjgood : j ∈ C := by
+        simp [C, hjnotBad]
+      have hwB : flipPos v j ∈ B := Finset.mem_image.mpr ⟨j, hjgood, rfl⟩
+      have hwnotB' : flipPos v j ∉ B := by simpa [hEq] using hwnotB
+      exact hwnotB' hwB
+    exact Finset.mem_image.mpr ⟨j, hjnotPrefix, hEq.symm⟩
+  have hcross_card : (D.externalEarly v \ B).card ≤ ell := by
+    calc
+      (D.externalEarly v \ B).card ≤ (Prefix.image (flipPos v)).card :=
+        Finset.card_le_card hcross_sub
+      _ = Prefix.card := Finset.card_image_of_injective _ hflip
+      _ = ell := hPrefixcard
+  refine ⟨B, ?_, ?_, ?_, ?_, ?_⟩
   · intro w hw
     rcases Finset.mem_image.mp hw with ⟨j, hj, rfl⟩
     have hg := hgood j hj
@@ -505,6 +688,310 @@ theorem lowGeom_bulk_early_candidates {κ : CConsts} {T : Stage} {k : ℕ}
       _ = B.card := hBcard.symm
   · rw [hBcard]
     simpa [n] using Finset.card_le_univ C
+  · simpa [ell] using hcross_card
+
+theorem profiled_law_width_of_mass_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (K : ℝ)
+    (hMass : Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M) ≤
+      K * Real.sqrt (Real.log (T.S.n k : ℝ))) :
+    (PT.π i).WidthLE
+      (K * Real.sqrt (Real.log (T.S.n k : ℝ)) + Real.log 11) := by
+  classical
+  intro y
+  have hN : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+  have hMnat : 0 < (PT.tiling.P i).M := by
+    rw [← (PT.tiling.P i).cardX]
+    exact_mod_cast (Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1)
+  have hM : 0 < ((PT.tiling.P i).M : ℝ) := by exact_mod_cast hMnat
+  have hratio : 0 < (T.S.N k : ℝ) / (PT.tiling.P i).M := div_pos hN hM
+  have hidentity : (11 : ℝ) / (PT.tiling.P i).M =
+      Real.exp (Real.log 11 + Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M)) /
+        (T.S.N k : ℝ) := by
+    rw [Real.exp_add, Real.exp_log (by norm_num), Real.exp_log hratio]
+    field_simp
+  calc
+    (PT.π i).w y ≤ 11 / (PT.tiling.P i).M := hPT.law_cap i y
+    _ = Real.exp (Real.log 11 + Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M)) /
+        (T.S.N k : ℝ) := hidentity
+    _ ≤ Real.exp (Real.log 11 + K * Real.sqrt (Real.log (T.S.n k : ℝ))) /
+        (T.S.N k : ℝ) := by
+      apply div_le_div_of_nonneg_right ?_ hN.le
+      exact Real.exp_le_exp.mpr (by nlinarith [hMass])
+    _ = Real.exp (K * Real.sqrt (Real.log (T.S.n k : ℝ)) + Real.log 11) /
+        (T.S.N k : ℝ) := by rw [add_comm]
+
+theorem profiled_degree_tail {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {wS wL err : ℝ}
+    (hDisc : TwoBudgetDisc T k wS wL err)
+    (hPT : PT.Valid) (i j : Fin PT.tiling.m) (τ : Law (T.S.N k))
+    (hτ : τ.SupportedIn (T.X k)) (hτw : τ.WidthLE wS)
+    (W : ℝ) (hπw : (PT.π j).WidthLE W)
+    : ∑ y ∈ Finset.univ.filter (fun y => err <
+      |(∑ x, τ.w x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2|),
+      (PT.π j).w y ≤ 2 * Real.exp (W - wL) := by
+  have hYS : (PT.tiling.P j).Y ⊆ T.Y k := by
+    intro y hy
+    exact (Finset.mem_sdiff.mp
+      ((hPT.tiling_valid.patch_supports j).2.2.2
+        ((hPT.tiling_valid.patch_supports j).2.2.1 hy))).1
+  have hπY : (PT.π j).SupportedIn (T.Y k) := by
+    intro y hy
+    exact hPT.law_supported j y (fun hmem => hy (hYS hmem))
+  have hpair : (wS ≤ wS ∧ wL ≤ wL) ∨ (wS ≤ wL ∧ wL ≤ wS) :=
+    Or.inl ⟨le_rfl, le_rfl⟩
+  exact S12.exceptional_second (hD := hDisc) (c := PT.tiling.c)
+    (w₁ := wS) (W₂ := wL) (w := W) hpair τ hτ hτw
+    (PT.π j) hπY hπw
+
+theorem product_filter_pins_eq {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (pins : Finset (Pos T k))
+    (hPins : pins ⊆ D.externalEarly v) (f : Pos T k → ℝ) :
+    (∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+      if w.1 ∈ pins then f w.1 else 1) = ∏ w ∈ pins, f w := by
+  classical
+  let Ext := {w : Pos T k // w ∈ D.externalEarly v}
+  let PinExt := {w : Ext // w.1 ∈ pins}
+  let Pin := {w : Pos T k // w ∈ pins}
+  let e : PinExt ≃ Pin := {
+    toFun := fun w => ⟨w.1.1, w.2⟩
+    invFun := fun w => ⟨⟨w.1, hPins w.2⟩, w.2⟩
+    left_inv := by intro w; apply Subtype.ext; apply Subtype.ext; rfl
+    right_inv := by intro w; apply Subtype.ext; rfl }
+  let p : Ext → Prop := fun w => w.1 ∈ pins
+  let g : Ext → ℝ := fun w => if p w then f w.1 else 1
+  have hPinG : (∏ w : PinExt, g w.1) = ∏ w : PinExt, f w.1.1 := by
+    apply Fintype.prod_congr
+    intro w
+    simp [g, p, w.2]
+  have hUnpinG : (∏ w : {w : Ext // ¬ p w}, g w.1) = 1 := by
+    calc
+      (∏ w : {w : Ext // ¬ p w}, g w.1) =
+          ∏ w : {w : Ext // ¬ p w}, (1 : ℝ) := by
+        apply Fintype.prod_congr
+        intro w
+        simp [g, p, w.2]
+      _ = 1 := by simp
+  have hpart := Fintype.prod_subtype_mul_prod_subtype p g
+  rw [hUnpinG, mul_one] at hpart
+  calc
+    (∏ w : Ext, if w.1 ∈ pins then f w.1 else 1) =
+        ∏ w : Ext, g w := by simp [g, p]
+    _ = ∏ w : PinExt, f w.1.1 := hpart.symm.trans hPinG
+    _ = ∏ w : Pin, f w.1 := Fintype.prod_equiv e _ _ (by intro w; rfl)
+    _ = ∏ w ∈ pins, f w := Finset.prod_attach pins f
+
+theorem pinnedPriorMass_eq_hits {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT) (hPT : PT.Valid)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (hσ : D.CleanInitialPrior v σ) (pins : Finset (Pos T k))
+    (fixed : Pos T k → Fin (T.S.N k)) :
+    D.pinnedPriorMass v σ pins fixed =
+      ∑ x, σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) := by
+  classical
+  rcases hσ.2.2 with ⟨a, ha, hsupport, _, _⟩
+  unfold ListGateContext.pinnedPriorMass
+  apply Finset.sum_congr rfl
+  intro x hx
+  by_cases hzero : σ x = 0
+  · simp [hzero]
+  · have hxclean : x ∈ PT.mesh.corner a (D.G.patchOf v) := hsupport x hzero
+    have hxX : x ∈ (PT.tiling.P (D.G.patchOf v)).X :=
+      (hPT.corner_clean (D.G.patchOf v) a ha).sub hxclean
+    simp [hxX]
+
+theorem cleanSupport_subset_envelope {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (hσ : D.CleanInitialPrior v σ) (x : Fin (T.S.N k)) (hxσ : σ x ≠ 0) :
+    x ∈ PT.envelope (D.G.patchOf v) := by
+  classical
+  rcases hσ.2.2 with ⟨a, ha, hsupport, _, _⟩
+  rw [hPT.envelope_eq]
+  exact Finset.mem_biUnion.mpr ⟨a, ha, hsupport x hxσ⟩
+
+theorem cleanSupport_external_degree_drift {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (K : ℝ) (hGeom : D.S17GeometryValidity K)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) (hσ : D.CleanInitialPrior v σ)
+    (hN : 0 < (T.S.n k : ℝ))
+    (x : Fin (T.S.N k)) (hxσ : σ x ≠ 0) (w : Pos T k)
+    (hw : w ∈ D.externalEarly v) :
+    |deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x - 1 / 2| ≤
+      max (K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) (3 * bstar T k) := by
+  let i := D.G.patchOf v
+  let j := D.G.patchOf w
+  have hxenv : x ∈ PT.envelope i := by
+    simpa [i] using cleanSupport_subset_envelope D hPT v σ hσ x hxσ
+  by_cases hji : j = i
+  · have hpatch : D.G.patchOf w = D.G.patchOf v := by simpa [j, i] using hji
+    have h := hGeom.degree_drift i x hxenv
+    have hdiv : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+        K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ) :=
+      (le_div_iff₀ hN).2 (by nlinarith [h])
+    simpa [hpatch] using le_trans hdiv (le_max_left _ _)
+  · have h := hPT.envelope_other_degree i j hji x hxenv
+    simpa [j] using le_trans h (le_max_right _ _)
+
+theorem cleanSupport_external_degree_bounds {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (K : ℝ) (hGeom : D.S17GeometryValidity K)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) (hσ : D.CleanInitialPrior v σ)
+    (hN : 0 < (T.S.n k : ℝ)) (hδ :
+      max (K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) (3 * bstar T k) < 1 / 2)
+    (x : Fin (T.S.N k)) (hxσ : σ x ≠ 0) (w : Pos T k)
+    (hw : w ∈ D.externalEarly v) :
+    0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ∧
+    deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ≤
+      1 / 2 + max (K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) (3 * bstar T k) := by
+  have h := cleanSupport_external_degree_drift D hPT K hGeom v σ hσ hN x hxσ w hw
+  have hbound := abs_le.mp h
+  constructor <;> linarith
+
+theorem not_compatiblePool_iff {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (pools : D.PoolAssignment) :
+    ¬ D.compatiblePool v pools ↔
+      ∃ pins : Finset (Pos T k), pins ⊆ D.externalEarly v ∧
+        pins.card ≤ ListGateContext.pinBudget κ ∧
+        ∃ fixed : Pos T k → Fin (T.S.N k),
+          (∀ w ∈ pins, fixed w ∈ D.permittedLabels (D.G.cellOf w) (pools (D.G.cellOf w)) w) ∧
+          Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) <
+            (D.F.fresh (D.G.cellOf v) (pools (D.G.cellOf v))).pr
+              (fun s => D.pinnedStatePriorMass v s pins fixed <
+                (9 / 10 : ℝ) * Real.rpow 2 (-(pins.card : ℝ))) := by
+  classical
+  unfold ListGateContext.compatiblePool
+  push_neg
+  rfl
+
+theorem rowMass_subtype_product {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (hN : 0 < T.S.N k) (σ : Fin (T.S.N k) → ℝ)
+    (ys : {w : Pos T k // w ∈ D.externalEarly v} → Fin (T.S.N k)) :
+    D.rowMass v σ (D.labelsOfPinnedSample v hN ys) =
+      ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+        D.hitRatio w.1 x (ys w) := by
+  classical
+  unfold ListGateContext.rowMass ListGateContext.row
+  apply Finset.sum_congr rfl
+  intro x hx
+  congr 1
+  rw [← Finset.prod_attach, ← Finset.univ_eq_attach]
+  apply Fintype.prod_congr
+  intro w
+  simp [ListGateContext.labelsOfPinnedSample]
+
+theorem pinned_row_expectation_lower {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (hσ : D.CleanInitialPrior v σ) (pins : Finset (Pos T k))
+    (hPins : pins ⊆ D.externalEarly v) (fixed : Pos T k → Fin (T.S.N k))
+    (dmax : ℝ) (hdmax : 0 < dmax)
+    (hdeg : ∀ x, σ x ≠ 0 → ∀ w ∈ D.externalEarly v,
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ∧
+      deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ≤ dmax) :
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) ≥
+      D.pinnedPriorMass v σ pins fixed / dmax ^ pins.card := by
+  classical
+  have hdegreePositive : ∀ x, σ x ≠ 0 → ∀ w ∈ D.externalEarly v,
+      0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+    intro x hx w hw
+    exact (hdeg x hx w hw).1
+  have hExpectation :
+      (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) =
+      ∑ x, σ x * ∏ w ∈ pins,
+        hit (T.S.E k) PT.tiling.c x (fixed w) /
+          deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+    calc
+      (D.pinnedLabelLaw v pins fixed).E
+          (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) =
+          (D.pinnedLabelLaw v pins fixed).E (fun ys =>
+            ∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+              D.hitRatio w.1 x (ys w)) := by
+          unfold FinLaw.E
+          apply Finset.sum_congr rfl
+          intro ys hys
+          change (D.pinnedLabelLaw v pins fixed).w ys *
+              D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys) =
+            (D.pinnedLabelLaw v pins fixed).w ys *
+              (∑ x, σ x * ∏ w : {w : Pos T k // w ∈ D.externalEarly v},
+                D.hitRatio w.1 x (ys w))
+          congr 1
+          exact rowMass_subtype_product D v (T.S.N_pos k) σ ys
+      _ = ∑ x, σ x * ∏ w ∈ pins,
+            hit (T.S.E k) PT.tiling.c x (fixed w) /
+              deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+        rw [pinned_product_row_expectation_simplified D v σ pins fixed hdegreePositive]
+        apply Finset.sum_congr rfl
+        intro x hx
+        congr 1
+        rw [product_filter_pins_eq D v pins hPins
+          (fun w => D.hitRatio w x (fixed w))]
+        simp [ListGateContext.hitRatio]
+  have hsum :
+      (∑ x, σ x * ∏ w ∈ pins,
+        hit (T.S.E k) PT.tiling.c x (fixed w) /
+          deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) ≥
+      (∑ x, σ x * ∏ w ∈ pins,
+        hit (T.S.E k) PT.tiling.c x (fixed w)) / dmax ^ pins.card := by
+    have hterm (x : Fin (T.S.N k)) :
+        (σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+          dmax ^ pins.card ≤ σ x * (∏ w ∈ pins,
+          hit (T.S.E k) PT.tiling.c x (fixed w) /
+            deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) := by
+      by_cases hzero : σ x = 0
+      · simp [hzero]
+      · have hprod :
+            (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) / dmax) ≤
+            ∏ w ∈ pins,
+              hit (T.S.E k) PT.tiling.c x (fixed w) /
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+          apply Finset.prod_le_prod₀
+          · intro w hw
+            unfold hit
+            split_ifs <;> positivity
+          · intro w hw
+            have hden := hdeg x hzero w (hPins hw)
+            by_cases hh : Hits (T.S.E k) PT.tiling.c x (fixed w)
+            · simp [hit, hh]
+              simpa [one_div] using one_div_le_one_div_of_le hden.1 hden.2
+            · simp [hit, hh]
+        have hproddiv :
+            (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) / dmax) =
+              (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+                dmax ^ pins.card := by
+          rw [Finset.prod_div_distrib]
+          simp
+        calc
+          (σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+              dmax ^ pins.card =
+              σ x * (∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w) / dmax) := by
+                rw [hproddiv]
+                ring
+          _ ≤ σ x * (∏ w ∈ pins,
+              hit (T.S.E k) PT.tiling.c x (fixed w) /
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) :=
+            mul_le_mul_of_nonneg_left hprod (hσ.1 x)
+    calc
+      (∑ x, σ x * ∏ w ∈ pins,
+          hit (T.S.E k) PT.tiling.c x (fixed w) /
+            deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x) ≥
+          ∑ x, (σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+            dmax ^ pins.card := Finset.sum_le_sum fun x _ => hterm x
+      _ = (∑ x, σ x * ∏ w ∈ pins, hit (T.S.E k) PT.tiling.c x (fixed w)) /
+            dmax ^ pins.card := by rw [Finset.sum_div]
+  calc
+    (D.pinnedLabelLaw v pins fixed).E
+        (fun ys => D.rowMass v σ (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) =
+        ∑ x, σ x * ∏ w ∈ pins,
+          hit (T.S.E k) PT.tiling.c x (fixed w) /
+            deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := hExpectation
+    _ ≥ D.pinnedPriorMass v σ pins fixed / dmax ^ pins.card := by
+      simpa only [pinnedPriorMass_eq_hits D hPT v σ hσ pins fixed] using hsum
 
 theorem externalEarly_card_le {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)

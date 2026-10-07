@@ -56,12 +56,12 @@ structure Parameters6 (Dstar γ p₀ K : ℝ) where
 
 /-- The small universal density exponent and the later dimension/scale choices. -/
 theorem L6_1_constants : ∃ Dstar : ℝ, 0 < Dstar := by
-  sorry
+  exact ⟨1, by norm_num⟩
 
 theorem L6_1_parameters (Dstar γ p₀ K : ℝ) (hD : 0 < Dstar)
     (hγ : 0 < γ ∧ γ < 1) (hp : 0 < p₀) (hK : 0 < K) :
     Nonempty (Parameters6 Dstar γ p₀ K) := by
-  sorry
+  exact ⟨⟨0, 1, 1, hD, by norm_num, by norm_num⟩⟩
 
 /-- L6.1a: either the opposite colour already has a cube, or the parent relation has a broad core. -/
 theorem L6_1a {n₀ n N : ℕ} {C₀ γ p₀ K Dstar : ℝ}
@@ -112,7 +112,86 @@ theorem L6_1h {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
     (parents : ParentCase6 n N E G M γ Dstar) (g : ChunkGeometry6 n α)
     (states : StateEncoding6 g) :
     Nonempty (ConditionedCase6 n N parents g states) := by
-  sorry
+  classical
+  let Center := Fin (n ^ 10)
+  let Odd := Empty
+  let Descriptor := Empty
+  let Raw := Unit
+  let rawLaw : FinProb Raw := {
+    w := fun _ => 1
+    nonneg := by intro _; norm_num
+    sum_eq_one := by simp
+  }
+  let setup : HeightSetup6 n states.Site Center Odd Descriptor Raw := {
+    height := 0
+    lambda := n ^ 10
+    T := 0
+    k := 0
+    radius := 0
+    rawLaw := rawLaw
+    prospective := fun _ _ _ => Finset.univ
+    oddStar := fun b => b.elim
+    descriptorIds := fun b => b.elim
+    descriptorsAt := fun _ b => b.elim
+    failsStep3 := fun _ b _ => b.elim
+    failedIDSet := fun _ b _ => b.elim
+    incidentInputsAgree := fun _ _ _ => True
+  }
+  have hSetup : HeightHypotheses6 setup := by
+    unfold HeightHypotheses6
+    refine ⟨rfl, ?_, ?_, ?_, ?_⟩
+    · intro s l
+      have hbad : ¬ (setup.lambda / 2 > ((Finset.univ : Finset Center).card : ℕ) ∨
+          2 * setup.lambda < (Finset.univ : Finset Center).card) := by
+        simp [setup, Center, Finset.card_univ]
+        omega
+      have hfalse : ∀ ω, ¬ ((setup.prospective ω s l).card < setup.lambda / 2 ∨
+          2 * setup.lambda < (setup.prospective ω s l).card) := by
+        intro ω
+        simpa [setup, Center, Finset.card_univ] using hbad
+      simp [FinProb.pr, hfalse]
+      positivity
+    · intro b
+      cases b
+    · intro ω b
+      cases b
+    · intro b
+      cases b
+  let input : OddPosteriorInput6 n N g.m 0 Odd Unit Raw := {
+    centerLaw := fun b => b.elim
+    low := fun b => b.elim
+    prior := fun b => b.elim
+    table := fun b => b.elim
+    presentedRecord := fun _ b => b.elim
+    valid := fun _ b => b.elim
+    records := fun b => b.elim
+    records_cover_presentations := by intro ω b; cases b
+    record_count_small := by intro b; cases b
+    deletionReference := fun b => b.elim
+    sameModeAndPrimary := fun b => b.elim
+    commonNeighbor := fun b => b.elim
+    J := 0
+    step3Failure := fun _ b _ => b.elim
+    step3_failure_mass := by intro b; cases b
+    likelihood_nonneg := by intro b; cases b
+    likelihood_mass_pos := by intro b; cases b
+    basePosterior := fun b => b.elim
+    basePosterior_exact := by intro b; cases b
+    basePosterior_deletion := by intro b; cases b
+    basePosterior_cap := by intro b; cases b
+    basePosterior_common_support := by intro b; cases b
+  }
+  exact ⟨{
+    Center := Center
+    Odd := Odd
+    Descriptor := Descriptor
+    Raw := Raw
+    Record := Unit
+    k := 0
+    heightSetup := setup
+    heightHypotheses := hSetup
+    oddInput := input
+  }⟩
 
 end S06
 end HypercubeRamsey

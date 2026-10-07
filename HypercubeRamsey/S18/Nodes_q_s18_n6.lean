@@ -788,4 +788,124 @@ theorem exists_overlapWitnessCode {κ : CConsts} {T : Stage} {k : ℕ}
   rw [hlistSet]
   exact Finset.union_sdiff_of_subset hrootsSub
 
+theorem overlapRankSubset_card_le_codes {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (U : Finset (Pos T k)) (p j : ℕ) :
+    ((U.powersetCard p).filter fun S => D.rank S = j).card ≤
+      (rootedSequenceCodeSet (overlapAmbientGraph D) U p j).card := by
+  classical
+  let rankSets := (U.powersetCard p).filter fun S => D.rank S = j
+  let codes := rootedSequenceCodeSet (overlapAmbientGraph D) U p j
+  let witness (s : {S : Finset (Pos T k) // S ∈ rankSets}) :=
+    exists_overlapWitnessCode D ((Finset.mem_powersetCard.mp
+      (Finset.mem_filter.mp s.property).1).1)
+  let rootsFn (s : {S : Finset (Pos T k) // S ∈ rankSets}) := Classical.choose (witness s)
+  let listFn (s : {S : Finset (Pos T k) // S ∈ rankSets}) :=
+    Classical.choose (Classical.choose_spec (witness s)).2
+  let codeFn (s : {S : Finset (Pos T k) // S ∈ rankSets}) := (rootsFn s, listFn s)
+  have hsize (s : {S : Finset (Pos T k) // S ∈ rankSets}) : s.1.card = p :=
+    (Finset.mem_powersetCard.mp (Finset.mem_filter.mp s.property).1).2
+  have hrank (s : {S : Finset (Pos T k) // S ∈ rankSets}) : D.rank s.1 = j :=
+    (Finset.mem_filter.mp s.property).2
+  have hrootsMem (s : {S : Finset (Pos T k) // S ∈ rankSets}) :
+      rootsFn s ∈ U.powersetCard (p - j) := by
+    have h := (Classical.choose_spec (witness s)).1
+    simpa [rootsFn, witness, hsize s, hrank s] using h
+  have hlistMem (s : {S : Finset (Pos T k) // S ∈ rankSets}) :
+      listFn s ∈ adjacencySequences (overlapAmbientGraph D) j (rootsFn s) := by
+    have h := (Classical.choose_spec (Classical.choose_spec (witness s)).2).1
+    simpa [listFn, rootsFn, witness, hrank s] using h
+  have hrecover (s : {S : Finset (Pos T k) // S ∈ rankSets}) :
+      rootsFn s ∪ (listFn s).toFinset = s.1 :=
+    (Classical.choose_spec (Classical.choose_spec (witness s)).2).2
+  have hcodeMem (s : {S : Finset (Pos T k) // S ∈ rankSets}) : codeFn s ∈ codes := by
+    dsimp [codeFn, codes, rootedSequenceCodeSet]
+    exact Finset.mem_biUnion.mpr ⟨rootsFn s, hrootsMem s,
+      Finset.mem_image.mpr ⟨listFn s, hlistMem s, rfl⟩⟩
+  have hcodeInj : Function.Injective (fun s : {S : Finset (Pos T k) // S ∈ rankSets} =>
+      (⟨codeFn s, hcodeMem s⟩ : {c // c ∈ codes})) := by
+    intro s t h
+    apply Subtype.ext
+    have hp : codeFn s = codeFn t := congrArg Subtype.val h
+    have hroot : rootsFn s = rootsFn t := congrArg Prod.fst hp
+    have hlist : listFn s = listFn t := congrArg Prod.snd hp
+    have hs := hrecover s
+    have ht := hrecover t
+    rw [hroot, hlist] at hs
+    exact hs.symm.trans ht
+  calc
+    rankSets.card = Fintype.card {S : Finset (Pos T k) // S ∈ rankSets} := by simp
+    _ ≤ Fintype.card {c // c ∈ codes} := Fintype.card_le_of_injective _ hcodeInj
+    _ = codes.card := by simp
+
+theorem overlapRankSubset_card_bound {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (U : Finset (Pos T k)) (p j Δ : ℕ) (hj : j ≤ p)
+    (hdeg : ∀ v, (Finset.univ.filter fun w => D.geometricAdj v w).card ≤ Δ) :
+    ((U.powersetCard p).filter fun S => D.rank S = j).card ≤
+      Nat.choose U.card (p - j) * (p * Δ) ^ j := by
+  calc
+    ((U.powersetCard p).filter fun S => D.rank S = j).card ≤
+        (rootedSequenceCodeSet (overlapAmbientGraph D) U p j).card :=
+      overlapRankSubset_card_le_codes D U p j
+    _ ≤ Nat.choose U.card (p - j) * (p * Δ) ^ j :=
+      rootedSequenceCodeSet_card_le (overlapAmbientGraph D) U p j Δ hj (by
+        intro v
+        exact hdeg v)
+
+lemma choose_subset_ratio_le {N p j : ℕ} (hj : j ≤ p) (hp : p ≤ N) :
+    (Nat.choose N (p - j) : ℝ) / Nat.choose N p ≤
+      ((p : ℝ) / (N - p + 1)) ^ j := by
+  have hsub : p - (p - j) = j := by omega
+  have htop : N - (p - j) = N - p + j := by omega
+  have hchoose := Nat.choose_mul (n := N) (k := p) (s := p - j) (Nat.sub_le _ _)
+  rw [hsub, htop, Nat.choose_symm hj] at hchoose
+  have hchooseR :
+      (Nat.choose N p : ℝ) * Nat.choose p j =
+        Nat.choose N (p - j) * Nat.choose (N - p + j) j := by exact_mod_cast hchoose
+  have hpPos : 0 < (Nat.choose N p : ℝ) := by
+    exact_mod_cast (Nat.choose_pos hp)
+  have hdenPos : 0 < (Nat.choose (N - p + j) j : ℝ) := by
+    exact_mod_cast (Nat.choose_pos (by omega : j ≤ N - p + j))
+  have hratioEq :
+      (Nat.choose N (p - j) : ℝ) / Nat.choose N p =
+        (Nat.choose p j : ℝ) / Nat.choose (N - p + j) j := by
+    field_simp [ne_of_gt hpPos, ne_of_gt hdenPos]
+    nlinarith [hchooseR]
+  rw [hratioEq]
+  have hnum : (Nat.choose p j : ℝ) ≤ (p : ℝ) ^ j / j.factorial := by
+    exact_mod_cast Nat.choose_le_pow_div j p
+  have hden : ((N - p + 1 : ℕ) : ℝ) ^ j / j.factorial ≤
+      (Nat.choose (N - p + j) j : ℝ) := by
+    have h :
+        ((N - p + j + 1 - j : ℕ) : ℝ) ^ j / j.factorial ≤
+          (Nat.choose (N - p + j) j : ℝ) := Nat.pow_le_choose j (N - p + j)
+    have hbase : N - p + j + 1 - j = N - p + 1 := by omega
+    rw [hbase] at h
+    exact h
+  have hdPos : 0 < ((N - p + 1 : ℕ) : ℝ) := by positivity
+  have hfPos : 0 < (j.factorial : ℝ) := by positivity
+  have hdEq : (N : ℝ) - p + 1 = ((N - p + 1 : ℕ) : ℝ) := by
+    have hcast : ((N - p : ℕ) : ℝ) = (N : ℝ) - p := by rw [Nat.cast_sub hp]
+    calc
+      (N : ℝ) - p + 1 = ((N - p : ℕ) : ℝ) + 1 := by rw [hcast]
+      _ = ((N - p + 1 : ℕ) : ℝ) := by norm_num
+  have hX : 0 ≤ ((p : ℝ) / (N - p + 1)) ^ j := by
+    rw [hdEq]
+    exact pow_nonneg (div_nonneg (by positivity) hdPos.le) _
+  have hmul :
+      ((p : ℝ) / (N - p + 1)) ^ j *
+        (((N - p + 1 : ℕ) : ℝ) ^ j / j.factorial) =
+      (p : ℝ) ^ j / j.factorial := by
+    rw [hdEq]
+    rw [div_pow]
+    field_simp [ne_of_gt hdPos]
+  apply (div_le_iff₀ hdenPos).2
+  calc
+    (Nat.choose p j : ℝ) ≤ (p : ℝ) ^ j / j.factorial := hnum
+    _ = ((p : ℝ) / (N - p + 1)) ^ j *
+          (((N - p + 1 : ℕ) : ℝ) ^ j / j.factorial) := hmul.symm
+    _ ≤ ((p : ℝ) / (N - p + 1)) ^ j * Nat.choose (N - p + j) j :=
+      mul_le_mul_of_nonneg_left hden hX
+
 end HypercubeRamsey.Lane_q_s18_n6

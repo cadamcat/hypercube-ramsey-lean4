@@ -3057,4 +3057,36 @@ theorem height_base_probability_bound9 (P : Params9) (hP : P.Valid)
   intro C t s ht htu hs v j
   simpa [μ] using hcrowd C t s ht hs v j
 
+theorem sharedConsulted_residual_separation_general9
+    (hm : P.m n ≤ n) (v v' : CubeVertex n) (R' : ℕ) (K : ℝ)
+    (hsep : K * (R' : ℝ) ≤ (_root_.hammingDist v v' : ℝ))
+    (c : Pos9 P hc n)
+    (hshared : c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩
+      consulted9 v' R') :
+    (K - 4) * (R' : ℝ) - 2 ≤
+      (_root_.hammingDist (residualWord9 (P.m n) v)
+        (residualWord9 (P.m n) v') : ℝ) := by
+  have hlocal := sharedConsulted_local_bounds v v' R' c hshared
+  have hspecial :
+      (_root_.hammingDist (specialWord9 (P.m n) v)
+        (specialWord9 (P.m n) v') : ℝ) ≤ 4 * (R' : ℝ) + 2 := by
+    have hnat : _root_.hammingDist (specialWord9 (P.m n) v)
+        (specialWord9 (P.m n) v') ≤ 4 * R' + 2 := by
+      calc
+        _ ≤ _root_.hammingDist (specialWord9 (P.m n) v) c.slice +
+            _root_.hammingDist c.slice (specialWord9 (P.m n) v') :=
+          _root_.hammingDist_triangle _ _ _
+        _ ≤ (2 * R' + 1) + (2 * R' + 1) := by
+          exact Nat.add_le_add (by simpa [_root_.hammingDist_comm] using hlocal.1)
+            hlocal.2.1
+        _ = 4 * R' + 2 := by omega
+    exact_mod_cast hnat
+  have hproj := splitProjectionDist_ge hm v v'
+  have hprojR : (_root_.hammingDist v v' : ℝ) ≤
+      (_root_.hammingDist (specialWord9 (P.m n) v)
+        (specialWord9 (P.m n) v') : ℝ) +
+      (_root_.hammingDist (residualWord9 (P.m n) v)
+        (residualWord9 (P.m n) v') : ℝ) := by exact_mod_cast hproj
+  linarith
+
 end HypercubeRamsey.Lane_q_s09_map

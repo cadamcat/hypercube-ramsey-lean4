@@ -1378,6 +1378,85 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       linarith [hpowSmall]
     have hminv : 1 / m = 1 / (t₀ : ℝ) := by rw [hmEq]
     nlinarith [hratio, hprojectionGap, hC, hminv]
+  let HighTags := {i : ι // i ∈ NormGood}
+  have hnormGoodMassPos : 0 < normGoodMass :=
+    lt_trans (by positivity : (0 : ℝ) < etaC / 100) hnormGoodMass
+  let tagPrior : FinProb HighTags := {
+    w := fun i => p.w i.1 / normGoodMass
+    nonneg := by
+      intro i
+      exact div_nonneg (p.nonneg i.1) hnormGoodMassPos.le
+    sum_eq_one := by
+      have hUnivSubtype :
+          (Finset.univ : Finset HighTags) =
+            Finset.subtype (fun i : ι => i ∈ NormGood) (Finset.univ : Finset ι) := by
+        ext i
+        simp [HighTags]
+      have hsubtype : (∑ i : HighTags, p.w i.1) = normGoodMass := by
+        change (∑ i ∈ (Finset.univ : Finset HighTags), p.w i.1) = normGoodMass
+        rw [hUnivSubtype, Finset.sum_subtype_eq_sum_filter]
+        simp [normGoodMass, NormGood]
+      calc
+        (∑ i : HighTags, p.w i.1 / normGoodMass) =
+            ∑ i : HighTags, p.w i.1 * normGoodMass⁻¹ := by
+              apply Finset.sum_congr rfl
+              intro i hi
+              ring
+        _ = (∑ i : HighTags, p.w i.1) * normGoodMass⁻¹ := by rw [← Finset.sum_mul]
+        _ = 1 := by
+              rw [hsubtype]
+              field_simp [ne_of_gt hnormGoodMassPos]
+  }
+  let πlaw (i : ι) : Law N := ⟨π i, hπnonneg i, hπsum i⟩
+  have hselectedPositive (i : HighTags) :
+      0 < ∑ y ∈ selected i.1, (πlaw i.1).w y := by
+    change 0 < selectedMass i.1
+    exact lt_trans (by positivity : (0 : ℝ) < etaC / 1000)
+      (hselectedMass i.1 i.2)
+  let rho (i : HighTags) : Law N :=
+    Law.restrict (πlaw i.1) (selected i.1) (hselectedPositive i)
+  have hrhoSupport (i : HighTags) : (rho i).SupportedIn (selected i.1) := by
+    intro y hy
+    simp [rho, Law.restrict, hy]
+  have hrhoY (i : HighTags) : (rho i).SupportedIn Y := by
+    intro y hy
+    by_contra hρzero
+    have hsel : y ∈ selected i.1 := by
+      by_contra hnot
+      exact hρzero (hrhoSupport i y hnot)
+    have hπne : (πlaw i.1).w y ≠ 0 := by
+      intro hzero
+      exact hρzero (by simp [rho, Law.restrict, hsel, hzero])
+    exact hy (hπsupp i.1 y (by simpa [πlaw] using hπne))
+  have hrhoCap (i : HighTags) (y : Fin N) :
+      (N : ℝ) * (rho i).w y ≤ (1000 / etaC) * Real.exp ((n : ℝ) / 50) := by
+    by_cases hy : y ∈ selected i.1
+    · have hmass := hselectedMass i.1 i.2
+      have hq : 0 < selectedMass i.1 := lt_trans (by positivity) hmass
+      have hrecip0 : 1 / selectedMass i.1 ≤ 1 / (etaC / 1000) :=
+        one_div_le_one_div_of_le (by positivity) (le_of_lt hmass)
+      have hrecip : 1 / selectedMass i.1 ≤ 1000 / etaC := by
+        calc
+          1 / selectedMass i.1 ≤ 1 / (etaC / 1000) := hrecip0
+          _ = 1000 / etaC := by field_simp [ne_of_gt heta]
+      have hcap := hπcap i.1 y
+      have hrhow : (rho i).w y = π i.1 y / selectedMass i.1 := by
+        simp [rho, Law.restrict, πlaw, hy, selectedMass]
+      rw [hrhow]
+      calc
+        (N : ℝ) * (π i.1 y / selectedMass i.1) =
+            ((N : ℝ) * π i.1 y) / selectedMass i.1 := by ring
+        _ ≤ Real.exp ((n : ℝ) / 50) / selectedMass i.1 :=
+              div_le_div_of_nonneg_right hcap hq.le
+        _ = Real.exp ((n : ℝ) / 50) * (1 / selectedMass i.1) := by ring
+        _ ≤ Real.exp ((n : ℝ) / 50) * (1000 / etaC) :=
+              mul_le_mul_of_nonneg_left hrecip (Real.exp_pos _).le
+        _ = (1000 / etaC) * Real.exp ((n : ℝ) / 50) := by ring
+    · have hzero : (rho i).w y = 0 := by simp [rho, Law.restrict, hy]
+      rw [hzero]
+      have hRpos : 0 < (1000 / etaC) * Real.exp ((n : ℝ) / 50) :=
+        mul_pos (by positivity) (Real.exp_pos _)
+      simpa using hRpos.le
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

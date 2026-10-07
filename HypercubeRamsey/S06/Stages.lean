@@ -567,7 +567,13 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
             Real.log 40000 ≤ Real.log ((n : ℝ) ^ (1 / 10 ^ 8 : ℝ)) :=
               Real.log_le_log (by norm_num) (le_of_lt (hLogConst n hnLog))
             _ = (1 / 10 ^ 8) * Real.log (n : ℝ) := by rw [Real.log_rpow hnR]
-        linarith [hlogConst]
+        calc
+          _ = 2 * α₆ p₀ * Real.log (n : ℝ) + Real.log 40000 := by ring
+          _ ≤ 2 * α₆ p₀ * Real.log (n : ℝ) +
+              (1 / 10 ^ 8) * Real.log (n : ℝ) :=
+            add_le_add_right hlogConst (2 * α₆ p₀ * Real.log (n : ℝ))
+          _ = (1 / 10 ^ 8) * Real.log (n : ℝ) +
+              2 * α₆ p₀ * Real.log (n : ℝ) := by ring
       _ = (1 / 10 ^ 8 + 2 * α₆ p₀) * Real.log (n : ℝ) := by ring
   have hshapeBase :
       (X.T : ℝ) * Real.log ((X.T : ℝ) + 2) +
@@ -1297,17 +1303,27 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
       _ < 1 / 2 := by linarith [hStep1AlarmSmall, hStep2Budget, hStep3Budget]
   have hcomplement : X.initLaw.pr X.V0Good + X.initLaw.pr (fun v => ¬ X.V0Good v) = 1 := by
     classical
-    letI : DecidablePred (fun v : Fin N => X.V0Good v) := fun v => Classical.propDecidable _
-    letI : DecidablePred (fun v : Fin N => ¬ X.V0Good v) := fun v => Classical.propDecidable _
-    unfold FinProb.pr
-    rw [← Finset.sum_add_distrib]
+    let f : Fin N → ℝ := fun v => if X.V0Good v then X.initLaw.w v else 0
+    let g : Fin N → ℝ := fun v => if ¬ X.V0Good v then X.initLaw.w v else 0
+    have hGoodEq : X.initLaw.pr X.V0Good = ∑ v, f v := by
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro v hv
+      by_cases hgood : X.V0Good v <;> simp [f, hgood]
+    have hBadEq : X.initLaw.pr (fun v => ¬ X.V0Good v) = ∑ v, g v := by
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro v hv
+      by_cases hgood : X.V0Good v <;> simp [g, hgood]
     calc
-      ∑ v, ((if X.V0Good v then X.initLaw.w v else 0) +
-        (if ¬ X.V0Good v then X.initLaw.w v else 0)) = ∑ v, X.initLaw.w v := by
+      X.initLaw.pr X.V0Good + X.initLaw.pr (fun v => ¬ X.V0Good v) =
+          (∑ v, f v) + (∑ v, g v) := by rw [hGoodEq, hBadEq]
+      _ = ∑ v, (f v + g v) := Finset.sum_add_distrib.symm
+      _ = ∑ v, X.initLaw.w v := by
         apply Finset.sum_congr rfl
         intro v hv
-        by_cases hgood : X.V0Good v <;> simp [hgood]
-    _ = 1 := X.initLaw.sum_eq_one
+        by_cases hgood : X.V0Good v <;> simp [f, g, hgood]
+      _ = 1 := X.initLaw.sum_eq_one
   have hgoodMass : (1 / 2 : ℝ) ≤ X.initLaw.pr X.V0Good := by
     linarith [hcomplement, hbadSmall]
   exact hgoodMass

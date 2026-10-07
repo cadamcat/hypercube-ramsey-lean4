@@ -655,6 +655,27 @@ private theorem oddRowW_nonneg {N : ℕ} {I : Type} [Fintype I] {k : ℕ}
   · exact div_nonneg (mul_nonneg (ν.nonneg y) (lik_nonneg E G μ ws y)) hPass.1.le
   · exact ν.nonneg y
 
+private theorem oddRowW_sum_one {N : ℕ} {I : Type} [Fintype I] [DecidableEq I] {k : ℕ}
+    (E : Fin N → Fin N → Prop) (G : Colour) (g : ℝ) (μ ν : Law N)
+    (ws : I → Fin k → Fin N) : ∑ y, oddRowW E G g μ ν ws y = 1 := by
+  classical
+  unfold oddRowW
+  split_ifs with hPass
+  · calc
+      (∑ y, ν.w y * lik E G μ ws y / normZ E G μ ν ws) =
+          (∑ y, ν.w y * lik E G μ ws y) / normZ E G μ ν ws := by rw [Finset.sum_div]
+      _ = normZ E G μ ν ws / normZ E G μ ν ws := rfl
+      _ = 1 := div_self hPass.1.ne'
+  · exact ν.sum_eq_one
+
+private theorem oddRowF_sum_one {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (t : OuterWord n → M.ι)
+    (W : EvenRole n → Fin (kTup n) → Fin N) (b : OddRole n) :
+    ∑ y, oddRowF M t W b y = 1 := by
+  unfold oddRowF
+  exact oddRowW_sum_one E M.G (gS n) (M.μ (t (sliceOf b.1)))
+    (M.ν (t (sliceOf b.1))) (starOf W b)
+
 theorem rawFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
     (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :

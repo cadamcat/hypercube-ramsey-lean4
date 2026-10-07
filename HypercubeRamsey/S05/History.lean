@@ -3,6 +3,8 @@ import HypercubeRamsey.S05.History_q_s05_hist2
 import HypercubeRamsey.S05.History_q_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1c_apply
+import HypercubeRamsey.S05.History_sol_s05_hist1f_low
+import HypercubeRamsey.S05.History_sol_s05_hist1f_paths
 import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.Parent_sol_s05_h1

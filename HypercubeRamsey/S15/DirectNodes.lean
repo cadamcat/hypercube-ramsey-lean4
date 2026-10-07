@@ -525,7 +525,9 @@ theorem high_direct_column_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stag
       dsimp [stats, M, U]
       change (∑ a ∈ (Finset.univ : Finset {a : EvenPosition T k // a ∈ E}),
         (PT.tiling.P i).M * directRowWeight PT hPT ys a.1 x) = _
-      rw [Finset.univ_eq_attach]
+      have hattach : (Finset.univ : Finset {a : EvenPosition T k // a ∈ E}) = E.attach :=
+        Finset.univ_eq_attach E
+      rw [hattach]
       exact Finset.sum_attach E
         (fun a : EvenPosition T k => (PT.tiling.P i).M * directRowWeight PT hPT ys a x)
     unfold patchColumnAverage

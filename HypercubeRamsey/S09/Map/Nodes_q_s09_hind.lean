@@ -1135,12 +1135,13 @@ private theorem heightPath9_nextRadialState9 {P : Params9} {hc : HeightChoice9 P
   exact hsegmentSub
 
 private inductive HeightRadialChain9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
-    (root : HeightState9 P hc n) (gap : ℕ) :
+    (bad : HeightState9 P hc n → Prop) (root : HeightState9 P hc n) (gap : ℕ) :
     HeightState9 P hc n → HeightState9 P hc n → Prop
-  | nil (x : HeightState9 P hc n) : HeightRadialChain9 root gap x x
+  | nil (x : HeightState9 P hc n) : HeightRadialChain9 bad root gap x x
   | cons {x y z : HeightState9 P hc n}
       (hxy : heightMetric9 y root = heightMetric9 x root + gap)
-      (hyz : HeightRadialChain9 root gap y z) : HeightRadialChain9 root gap x z
+      (hsegment : ∃ suffix, HeightPath9 (heightStep9 bad) (y :: suffix) x)
+      (hyz : HeightRadialChain9 bad root gap y z) : HeightRadialChain9 bad root gap x z
 
 private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
@@ -1150,7 +1151,7 @@ private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice
     (hstart : heightMetric9 start root = r)
     (hreach : r + q * gap ≤ heightMetric9 endpoint root) :
     ∃ z suffix,
-      HeightRadialChain9 root gap start z ∧
+      HeightRadialChain9 bad root gap start z ∧
       HeightPath9 (heightStep9 bad) (endpoint :: suffix) z ∧
       (∀ x ∈ endpoint :: suffix, x ∈ endpoint :: l) ∧
       heightMetric9 z root = r + q * gap := by
@@ -1176,10 +1177,12 @@ private theorem heightPath9_radialChain_exists9 {P : Params9} {hc : HeightChoice
       have hnextRadius' : heightMetric9 next root = heightMetric9 start root + gap := by
         rw [hstart]
         exact hnextRadius
+      obtain ⟨blockRest, hblock, _hblockSub⟩ := heightPath9_suffix hp hnext
       have hsub : ∀ x ∈ endpoint :: suffix₂, x ∈ endpoint :: l := by
         intro x hx
         exact hsub₁ x (hsub₂ x hx)
-      refine ⟨z, suffix₂, HeightRadialChain9.cons hnextRadius' hchain, hpath₂, hsub, ?_⟩
+      refine ⟨z, suffix₂, HeightRadialChain9.cons hnextRadius'
+        ⟨blockRest, hblock⟩ hchain, hpath₂, hsub, ?_⟩
       omega
 
 private theorem heightPath9_radialFamily_separated9 {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}

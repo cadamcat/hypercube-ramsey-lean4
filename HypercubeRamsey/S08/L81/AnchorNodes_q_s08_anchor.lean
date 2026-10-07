@@ -1268,6 +1268,18 @@ theorem pi_pr_le_of_update_coordinate_bound {ι Ω : Type*} [Fintype ι] [Decida
               rw [← Finset.sum_mul]
             _ = B := by rw [PB.sum_eq_one, one_mul]
 
+private theorem sqrt_exp_half (x : ℝ) : Real.sqrt (Real.exp x) = Real.exp (x / 2) := by
+  rw [Real.sqrt_eq_rpow, ← Real.exp_mul]
+  congr 1
+  ring
+
+theorem sqrt_sqrt_exp_neg (x : ℝ) :
+    Real.sqrt (Real.sqrt (Real.exp (-x))) = Real.exp (-x / 4) := by
+  calc
+    Real.sqrt (Real.sqrt (Real.exp (-x))) = Real.sqrt (Real.exp (-x / 2)) := by
+      rw [sqrt_exp_half]
+    _ = Real.exp (-x / 4) := by rw [sqrt_exp_half]; congr 1 <;> ring
+
 end Lane_q_s08_anchor
 
 end HypercubeRamsey.S08

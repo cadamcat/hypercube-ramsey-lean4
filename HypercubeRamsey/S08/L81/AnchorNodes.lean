@@ -11,8 +11,8 @@ noncomputable section
 
 namespace HypercubeRamsey.S08
 
-open Classical OAI.HypercubeRamsey
-open scoped BigOperators
+open Classical Filter OAI.HypercubeRamsey
+open scoped BigOperators Topology
 
 section Nodes
 
@@ -650,6 +650,7 @@ theorem cellBad_scope (D : Ctx η₀ β p h) (hG : GridFacts η₀ D.n) : D.Cell
   intro q c W W' hW
   exact D.cellBad_eq_of_ball2 hG q W W' c hW
 
+set_option maxHeartbeats 1000000 in
 /-- L8.1j(viii) (08:387–393): on a successful history the grouped cell events have raw probability at most
 `q_A ≤ ε₀^{1/4} + 50(n+1)Δ/(1-Δ) + (n+1)^{2s+1}e^{-.02n} ≤ e^{-n^{c_A}}`, scopes the radius-two cell balls, and
 dependency degree at most `(2s + (n-m) + 1)^4`; `x_A = 2q_A` meets the local-lemma condition. -/

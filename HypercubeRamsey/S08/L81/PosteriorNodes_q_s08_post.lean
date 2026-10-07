@@ -67,6 +67,159 @@ theorem pi_pr_le_fixed {ι : Type*} [Fintype ι] [DecidableEq ι]
     _ = ∏ i : {i // i ∈ S}, (P i.1).w (a i) :=
       pi_pr_cylinder P S a
 
+private theorem pr_mono_early {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A B : Ω → Prop)
+    (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro ω hω
+  by_cases hA : A ω
+  · have hB := hAB ω hA
+    simp [hA, hB]
+  · by_cases hB : B ω
+    · simp [hA, hB, P.nonneg ω]
+    · simp [hA, hB]
+
+theorem pi_pi_pr_le_fixed {G L I : Type*} [Fintype G] [DecidableEq G]
+    [Fintype L] [DecidableEq L] [Fintype I]
+    (P : G → L → FinProb I) (S : Finset (G × L)) (v : G × L → I)
+    (A : (G → L → I) → Prop)
+    (hA : ∀ t, A t → ∀ s ∈ S, t s.1 s.2 = v s) :
+    (FinProb.pi (fun g => FinProb.pi (P g))).pr A ≤
+      ∏ s ∈ S, (P s.1 s.2).w (v s) := by
+  classical
+  let fiber (g : G) : Finset L := (S.filter fun x => x.1 = g).image Prod.snd
+  let Row (g : G) (t : L → I) : Prop := ∀ l : fiber g, t l.1 = v (g, l.1)
+  let Rows (t : G → L → I) : Prop := ∀ g, Row g (t g)
+  let Prow : G → FinProb (L → I) := fun g => FinProb.pi (P g)
+  have mem_fiber (g : G) (l : L) (hl : l ∈ fiber g) : (g, l) ∈ S := by
+    rcases Finset.mem_image.mp hl with ⟨x, hx, hxl⟩
+    have hx' := Finset.mem_filter.mp hx
+    have hpair : (g, l) = x := by
+      apply Prod.ext
+      · exact hx'.2.symm
+      · exact hxl.symm
+    simpa [hpair] using hx'.1
+  have hsub : ∀ t, A t → Rows t := by
+    intro t ht g l
+    rcases Finset.mem_image.mp l.2 with ⟨x, hx, hxl⟩
+    have hx' := Finset.mem_filter.mp hx
+    have hpair : (g, l.1) = x := by
+      apply Prod.ext
+      · exact hx'.2.symm
+      · exact hxl.symm
+    have hv := hA t ht (g, l.1) (by simpa [hpair] using hx'.1)
+    simpa [hpair] using hv
+  have hOuter :
+      (FinProb.pi Prow).pr A ≤ (FinProb.pi Prow).pr (fun t => Rows t) := by
+    exact pr_mono_early (FinProb.pi Prow) A Rows hsub
+  have hfactor :
+      (FinProb.pi Prow).pr (fun t => Rows t) = ∏ g, (Prow g).pr (Row g) :=
+    FinProb.pi_pr_forall Prow Row
+  let Fiber := Σ g : G, fiber g
+  let toS : Fiber → {x : G × L // x ∈ S} := fun z =>
+    ⟨(z.1, z.2.1), mem_fiber z.1 z.2.1 z.2.2⟩
+  have hinj : Function.Injective toS := by
+    intro z z' hzz
+    have hval : (z.1, z.2.1) = (z'.1, z'.2.1) := by
+      have hv := congrArg Subtype.val hzz
+      change (z.1, z.2.1) = (z'.1, z'.2.1) at hv
+      exact hv
+    have hg : z.1 = z'.1 := congrArg Prod.fst hval
+    have hl : z.2.1 = z'.2.1 := congrArg Prod.snd hval
+    cases z with
+    | mk g l =>
+      cases z' with
+      | mk g' l' =>
+        dsimp at hg hl
+        subst g'
+        have heq : l = l' := by
+          apply Subtype.ext
+          exact hl
+        subst l'
+        rfl
+  have hsurj : Function.Surjective toS := by
+    intro x
+    let g := x.1.1
+    let l := x.1.2
+    have hl : l ∈ fiber g := by
+      apply Finset.mem_image.mpr
+      refine ⟨x.1, ?_, rfl⟩
+      exact Finset.mem_filter.mpr ⟨x.2, rfl⟩
+    refine ⟨⟨g, ⟨l, hl⟩⟩, ?_⟩
+    apply Subtype.ext
+    simp [toS, g, l]
+  let e : Fiber ≃ {x : G × L // x ∈ S} := Equiv.ofBijective toS ⟨hinj, hsurj⟩
+  have hprod :
+      (∏ g, ∏ l : fiber g, (P g l.1).w (v (g, l.1))) =
+        ∏ s ∈ S, (P s.1 s.2).w (v s) := by
+    rw [← Fintype.prod_sigma']
+    calc
+      (∏ z : Fiber, (P z.1 z.2.1).w (v (z.1, z.2.1))) =
+          ∏ s : {x : G × L // x ∈ S}, (P s.1.1 s.1.2).w (v s.1) := by
+            exact Fintype.prod_equiv e
+              (fun z => (P z.1 z.2.1).w (v (z.1, z.2.1)))
+              (fun s => (P s.1.1 s.1.2).w (v s.1))
+              (fun z => by simp [e, Equiv.ofBijective, toS])
+      _ = ∏ s ∈ S, (P s.1 s.2).w (v s) := by
+            change (∏ s : S, (P s.1.1 s.1.2).w (v s.1)) = _
+            exact Finset.prod_coe_sort S
+              (fun x : G × L => (P x.1 x.2).w (v x))
+  have hrows : ∀ g, (Prow g).pr (Row g) ≤
+      ∏ l : fiber g, (P g l.1).w (v (g, l.1)) := by
+    intro g
+    exact Lane_q_s08_post.pi_pr_le_fixed (P g) (fiber g)
+      (fun l => v (g, l.1)) (Row g) (fun t ht l => ht l)
+  calc
+    _ ≤ (FinProb.pi Prow).pr (fun t => Rows t) := hOuter
+    _ = ∏ g, (Prow g).pr (Row g) := hfactor
+    _ ≤ ∏ g, ∏ l : fiber g, (P g l.1).w (v (g, l.1)) := by
+          apply Finset.prod_le_prod₀
+          · intro g hg
+            exact pr_nonneg (Prow g) (Row g)
+          · intro g hg
+            exact hrows g
+    _ = ∏ s ∈ S, (P s.1 s.2).w (v s) := hprod
+
+theorem pi_pr_le_fixed_image {ι κ α : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype κ] [DecidableEq κ] [Fintype α]
+    (P : ι → FinProb α) (S : Finset κ) (f : κ → ι)
+    (hf : Set.InjOn f S) (v : κ → α) (A : (ι → α) → Prop)
+    (hA : ∀ x, A x → ∀ k ∈ S, x (f k) = v k) :
+    (FinProb.pi P).pr A ≤ ∏ k ∈ S, (P (f k)).w (v k) := by
+  classical
+  let T : Finset ι := S.image f
+  let source (i : T) : κ := Classical.choose (Finset.mem_image.mp i.2)
+  have hsource (i : T) : source i ∈ S ∧ f (source i) = i.1 :=
+    Classical.choose_spec (Finset.mem_image.mp i.2)
+  let val (i : T) : α := v (source i)
+  have hfixed : ∀ x, A x → ∀ i : T, x i.1 = val i := by
+    intro x hx i
+    have h := hA x hx (source i) (hsource i).1
+    rw [(hsource i).2] at h
+    exact h
+  have hprob := pi_pr_le_fixed P T val A hfixed
+  let F : ι → ℝ := fun i => if hi : i ∈ T then (P i).w (val ⟨i, hi⟩) else 1
+  have hprod :
+      (∏ i : T, (P i.1).w (val i)) = ∏ k ∈ S, (P (f k)).w (v k) := by
+    calc
+      (∏ i : T, (P i.1).w (val i)) = ∏ i ∈ T, F i := by
+        rw [Finset.prod_coe_sort]
+        apply Finset.prod_congr rfl
+        intro i hi
+        simp [F]
+      _ = ∏ k ∈ S, F (f k) := Finset.prod_image hf
+      _ = ∏ k ∈ S, (P (f k)).w (v k) := by
+        apply Finset.prod_congr rfl
+        intro k hk
+        have hmem : f k ∈ T := Finset.mem_image.mpr ⟨k, hk, rfl⟩
+        let i : T := ⟨f k, hmem⟩
+        have hiSource : source i = k := by
+          apply hf (hsource i).1 hk
+          exact (hsource i).2
+        simp [F, hmem, val, i, hiSource]
+  exact hprob.trans_eq hprod
+
 theorem positive_tilt_gate {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
     (hbase : D.BaseGates Θ g) (hpos : 0 < (D.tilt Θ g).w i) :
@@ -294,6 +447,32 @@ theorem pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A B : Ω → Prop)
   · by_cases hB : B ω
     · simp [hA, hB, P.nonneg ω]
     · simp [hA, hB]
+
+theorem prod_pr_le_left {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (A : α × β → Prop) (B : α → Prop)
+    (hAB : ∀ x, A x → B x.1) : (P.prod Q).pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr FinProb.prod
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_le_sum
+  intro a ha
+  by_cases hB : B a
+  · calc
+      (∑ b, if A (a, b) then P.w a * Q.w b else 0) ≤
+          ∑ b, P.w a * Q.w b := by
+            apply Finset.sum_le_sum
+            intro b hb
+            by_cases hA : A (a, b)
+            · simp [hA]
+            · simp only [if_neg hA]
+              exact mul_nonneg (P.nonneg a) (Q.nonneg b)
+      _ = P.w a := by
+            rw [← Finset.mul_sum, Q.sum_eq_one, mul_one]
+      _ = if B a then P.w a else 0 := by simp [hB]
+  · have hnoA : ∀ b, ¬ A (a, b) := by
+      intro b hA
+      exact hB (hAB (a, b) hA)
+    simp [hB, hnoA]
 
 theorem sum_subtype_const {α : Type*} [DecidableEq α] (s : Finset α) (r : ℝ) :
     (∑ x : s, r) = (Fintype.card s : ℝ) * r := by

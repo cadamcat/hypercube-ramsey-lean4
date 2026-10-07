@@ -213,8 +213,10 @@ noncomputable def binProblem (K : CellRestrictedKernels R Perm) (C : G.Cell)
   target := K.qtilde C pool W
   participants := fun v => (K.participants C v).image (R.groupOf C)
   failureMass := K.failure C W
-  contribution := fun g D y => ∑ r : OddCellRole G C,
-    if R.groupOf C r = g then (R.U C W g D).w y else 0
+  -- zero on null-target bins: the producers bound atoms only where the target is positive (sol-s16-prod1)
+  contribution := fun g D y =>
+    if (K.qtilde C pool W g).w D = 0 then 0 else
+      ∑ r : OddCellRole G C, if R.groupOf C r = g then (R.U C W g D).w y else 0
   d := (PT.tiling.P (G.cellPatch C)).d
   ε := sliceEps κ (PT.tiling.P (G.cellPatch C)).h
 end CellRestrictedKernels

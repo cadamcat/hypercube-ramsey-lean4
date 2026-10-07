@@ -2303,6 +2303,16 @@ private theorem positive_summand {Ω : Type*} [Fintype Ω] (f : Ω → ℝ)
 
 end OddKernelProof
 
+/-- L14 (14:75): on a positive bin the conditional law is uniform on a subset — the masked within-bin law is
+uniform (`MaskFacts.within_uniform`) and the restriction to the realized list hits renormalizes it. Supplies
+`OddKernels.U_uniform` (consumed by Section 16 for a lower atom bound under a pin). -/
+theorem oddU_uniform {κ : CConsts} {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (Geom : ProjectionGeometry κ 𝒯 i) (H : PrimitiveHistory κ 𝒯 i mesh) (mask : Masks H) :
+    ∀ g W D, 0 < oddQ Geom H mask g W D →
+      ∃ support : Finset (Fin (T.S.N k)), ∃ hs : support.Nonempty,
+        ∀ y, oddU Geom H mask g W D y = (FinLaw.uniform support hs).w y := by
+  sorry
+
 theorem odd_bin_laws (κ : CConsts) (hκ : κ.Admissible)
     (hconst : HeightConstantContract κ)
     {T : Stage} {k : ℕ} {𝒯 : Tiling κ T k} (h𝒯 : Tiling.Valid 𝒯)
@@ -2325,6 +2335,7 @@ theorem odd_bin_laws (κ : CConsts) (hκ : κ.Admissible)
     marginal_cap := ?_
     U_support_size := oddU_support_bound hconst scales h𝒯 Geom H mask
     U_atom_cap := fun g W D y hq => oddU_atom_bound hconst scales h𝒯 Geom H mask g W D y hq
+    U_uniform := oddU_uniform Geom H mask
     cheap_mean_support := ?_ }⟩
   · intro g W D
     calc

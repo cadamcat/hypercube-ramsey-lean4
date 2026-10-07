@@ -235,4 +235,36 @@ theorem pr_exists_shape_sum {Ω I Sh : Type*} [Fintype Ω] [Fintype I] [Decidabl
       pr_exists_finset_le P (S.image shape)
         (fun s ω => t ≤ F ω (chooseImageRep S shape s))
 
+open Filter
+
+theorem eventually_const_mul_nat_rpow_neg_lt {a c b : ℝ} (ha : 0 < a) (hb : 0 < b) :
+    ∀ᶠ n : ℕ in Filter.atTop, c * (n : ℝ) ^ (-a) < b := by
+  have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ (-a)) Filter.atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop ha).comp tendsto_natCast_atTop_atTop
+  have hconst : Tendsto (fun _ : ℕ => c) Filter.atTop (nhds c) := tendsto_const_nhds
+  have hlim : Tendsto (fun n : ℕ => c * (n : ℝ) ^ (-a)) Filter.atTop (nhds 0) :=
+    by simpa using hconst.mul hpow
+  filter_upwards [Metric.tendsto_nhds.1 hlim b hb] with n hn
+  have habs : |c * (n : ℝ) ^ (-a)| < b := by simpa [Real.dist_eq] using hn
+  exact (abs_lt.mp habs).2
+
+theorem eventually_nat_ceil_rpow_add_two_le_double {a : ℝ} (ha : 0 < a) :
+    ∀ᶠ n : ℕ in Filter.atTop,
+      ((⌈(n : ℝ) ^ a⌉₊ : ℝ) + 2) ≤ (n : ℝ) ^ (2 * a) := by
+  have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ a) Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop ha).comp tendsto_natCast_atTop_atTop
+  have hlarge : ∀ᶠ n : ℕ in Filter.atTop, 4 ≤ (n : ℝ) ^ a :=
+    hpow.eventually_ge_atTop 4
+  filter_upwards [hlarge] with n hn
+  have hn0 : 0 ≤ (n : ℝ) := Nat.cast_nonneg n
+  have hceil := (Nat.ceil_lt_add_one (Real.rpow_nonneg hn0 a)).le
+  have hquad : (n : ℝ) ^ a + 3 ≤ ((n : ℝ) ^ a) ^ 2 := by nlinarith
+  have hpowEq : (n : ℝ) ^ (2 * a) = ((n : ℝ) ^ a) ^ 2 := by
+    rw [show 2 * a = a * 2 by ring, Real.rpow_mul hn0 a 2]
+    exact Real.rpow_natCast ((n : ℝ) ^ a) 2
+  calc
+    ((⌈(n : ℝ) ^ a⌉₊ : ℝ) + 2) ≤ (n : ℝ) ^ a + 3 := by linarith
+    _ ≤ ((n : ℝ) ^ a) ^ 2 := hquad
+    _ = (n : ℝ) ^ (2 * a) := hpowEq.symm
+
 end HypercubeRamsey.Lane_q_s06_stages

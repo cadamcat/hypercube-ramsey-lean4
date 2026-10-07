@@ -1,5 +1,6 @@
 import HypercubeRamsey.S16.Comparisons
 import HypercubeRamsey.S16.Producers_q_s16_prod1
+import HypercubeRamsey.S16.WordOrder
 import HypercubeRamsey.S16.Producers_sol_s16_prod1
 import HypercubeRamsey.S16.Producers_sol_s16_group
 import HypercubeRamsey.S16.Producers_q_s16_prod2
@@ -70,6 +71,19 @@ structure CellRawData {κ : CConsts} {T : Stage} {k : ℕ}
     (cellWords C (s, flipPos z j)).1 = flipPos (cellWords C (s, z)).1 (axis C j)
   word_outer : ∀ C s z z' j, j ∉ PT.tiling.Icoord (G.cellPatch C) →
     (cellWords C (s, z)).1 j = (cellWords C (s, z')).1 j
+  /-- T16:7–13,167–177 and T17:260–267: solver words use the ordered top coordinates
+  with coordinate zero flipped for odd outer parity (T14:35,95).
+  Vacuous outside cluster mode. -/
+  word_order : PT.tiling.mode.isCluster → ∀ C s z
+    (hle : (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k)
+    (j : Fin (PT.tiling.P (G.cellPatch C)).h),
+    z j = if ¬ IsEvenRole (fun l : Fin (T.S.n k) =>
+      if l ∈ PT.tiling.Icoord (G.cellPatch C) then false else
+        (cellWords C (s, z)).1 l) ∧ j.val = 0
+      then !((cellWords C (s, z)).1
+        (Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j))
+      else (cellWords C (s, z)).1
+        (Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j)
   qraw : ∀ C, (∀ s, Value C s) → Group C → FinLaw (Bin PT.tiling (G.cellPatch C))
   pretrim : ∀ C, (∀ s, Value C s) → Group C → Finset (Bin PT.tiling (G.cellPatch C))
   qin : ∀ C, (∀ s, Value C s) → Group C → FinLaw (Bin PT.tiling (G.cellPatch C))
@@ -250,6 +264,10 @@ theorem cell_raw_data_exists {κ : CConsts} (hκ : κ.Admissible) :
           intro C s z z' j hj
           simp [words, Lane_q_s16_prod1.clusterCellWords,
             Lane_q_s16_prod1.clusterCombine, hj]
+        word_order := by
+          intro _ C s z hle j
+          exact WordOrder.cluster_cell_words_order C
+            (H.cell_partition.whole_slices C) hle (hp (H.geom.cellPatch C)) s z j
         qraw := q
         pretrim := trim
         qin := fun C W g =>
@@ -406,6 +424,9 @@ theorem cell_raw_data_exists {κ : CConsts} (hκ : κ.Admissible) :
         word_outer := by
           intro C s z z' j hj
           rfl
+        word_order := by
+          intro h
+          exact (hCluster h).elim
         qraw := fun C _ _ => FinLaw.uniform Finset.univ (hBinUniv (H.geom.cellPatch C))
         pretrim := fun _ _ _ => Finset.univ
         qin := fun C _ _ => FinLaw.uniform Finset.univ (hBinUniv (H.geom.cellPatch C))

@@ -576,6 +576,10 @@ private theorem heightStep9_metric_le_one {P : Params9} {hc : HeightChoice9 P} {
     have hham : (_root_.hammingDist x.1 y.1 + 1) / 2 ≤ 1 := by omega
     simp [heightMetric9, hdist, hham]
 
+private theorem heightMetric9_comm {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (x y : HeightState9 P hc n) : heightMetric9 x y = heightMetric9 y x := by
+  simp [heightMetric9, Nat.dist_comm, _root_.hammingDist_comm]
+
 private inductive HeightPath9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (step : HeightState9 P hc n → HeightState9 P hc n → Prop) :
     List (HeightState9 P hc n) → HeightState9 P hc n → Prop
@@ -583,6 +587,58 @@ private inductive HeightPath9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
   | cons {x y : HeightState9 P hc n} {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
       (hxy : step y x) (hp : HeightPath9 step (y :: l) start) :
       HeightPath9 step (x :: y :: l) start
+
+private theorem heightPath9_firstExit9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}
+    (hp : HeightPath9 bad l start)
+    (hstepUnit : ∀ x y, bad x y → heightMetric9 x y ≤ 1)
+    (R : ℕ) (hR : 0 < R)
+    (hexit : ∃ x ∈ l, R ≤ heightMetric9 x start) :
+    ∃ endpoint rest, HeightPath9 bad (endpoint :: rest) start ∧
+      (∀ z ∈ endpoint :: rest, z ∈ l) ∧
+      (∀ z ∈ rest, heightMetric9 z start < R) ∧
+      R ≤ heightMetric9 endpoint start ∧ heightMetric9 endpoint start ≤ R := by
+  induction hp generalizing R with
+  | singleton x =>
+      obtain ⟨z, hz, hge⟩ := hexit
+      have hzx : z = x := by simpa using hz
+      subst z
+      have hzero : heightMetric9 x x = 0 := by simp [heightMetric9]
+      omega
+  | @cons head next tail start hstep htail ih =>
+      by_cases htailExit : ∃ z ∈ next :: tail, R ≤ heightMetric9 z start
+      · obtain ⟨endpoint, rest, hpath, hsub, hclose, hge, hle⟩ := ih R hR htailExit
+        refine ⟨endpoint, rest, hpath, ?_, hclose, hge, hle⟩
+        intro z hz
+        exact List.mem_cons_of_mem _ (hsub z hz)
+      · have hcloseTail : ∀ z ∈ next :: tail, heightMetric9 z start < R := by
+          intro z hz
+          by_contra hnot
+          exact htailExit ⟨z, hz, Nat.le_of_not_gt hnot⟩
+        obtain ⟨z, hz, hge⟩ := hexit
+        have hheadExit : R ≤ heightMetric9 head start := by
+          rcases List.mem_cons.mp hz with hEq | hzTail
+          · simpa [hEq] using hge
+          · exact False.elim (htailExit ⟨z, hzTail, hge⟩)
+        have hstep' : heightMetric9 head next ≤ 1 := by
+          simpa [heightMetric9_comm] using hstepUnit next head hstep
+        have hnext : heightMetric9 next start < R := hcloseTail next (by simp)
+        have hnextle : heightMetric9 next start ≤ R - 1 := by omega
+        have htriangle := heightMetric9_triangle head next start
+        have hupper : heightMetric9 head start ≤ R := by
+          calc
+            heightMetric9 head start ≤ heightMetric9 head next + heightMetric9 next start := htriangle
+            _ ≤ 1 + (R - 1) := Nat.add_le_add hstep' hnextle
+            _ ≤ R := by omega
+        refine ⟨head, next :: tail, HeightPath9.cons hstep htail, ?_, ?_, hheadExit, hupper⟩
+        · intro z hz
+          exact hz
+        · intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with rfl | hz
+          · exact hnext
+          · exact hcloseTail z (List.mem_cons_of_mem _ hz)
 
 private def scaleBad9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (C : Finset (Pos9 P hc n)) (t s : ℝ) (Pp A : Pos9 P hc n → Bool)
@@ -833,6 +889,30 @@ private theorem heightPath9_suffix {P : Params9} {hc : HeightChoice9 P} {n : ℕ
         refine ⟨suffix, hsuffix, ?_⟩
         intro z hz
         exact List.mem_cons_of_mem _ (hsub z hz)
+
+private theorem heightPath9_segmentFromMember {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → HeightState9 P hc n → Prop}
+    {l : List (HeightState9 P hc n)} {root : HeightState9 P hc n}
+    (hp : HeightPath9 bad l root) {y : HeightState9 P hc n} (hy : y ∈ l) :
+    ∃ head suffix, l.head? = some head ∧ HeightPath9 bad (head :: suffix) y ∧
+      ∀ z ∈ head :: suffix, z ∈ l := by
+  induction hp generalizing y with
+  | singleton x =>
+      have hyx : y = x := by simpa using hy
+      subst y
+      exact ⟨x, [], by simp, HeightPath9.singleton x, by simp⟩
+  | @cons head next rest root hstep htail ih =>
+      rcases List.mem_cons.mp hy with hyHead | hyTail
+      · subst y
+        exact ⟨head, [], by simp, HeightPath9.singleton head, by simp⟩
+      · obtain ⟨segmentHead, suffix, hhead, hpath, hsub⟩ := ih hyTail
+        have hhead' : segmentHead = next := by simpa using hhead.symm
+        subst segmentHead
+        refine ⟨head, next :: suffix, by simp, HeightPath9.cons hstep hpath, ?_⟩
+        intro z hz
+        rcases List.mem_cons.mp hz with rfl | hz
+        · simp
+        · exact List.mem_cons_of_mem _ (hsub z hz)
 
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)

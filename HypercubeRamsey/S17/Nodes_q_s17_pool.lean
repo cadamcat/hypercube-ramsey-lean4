@@ -834,6 +834,23 @@ theorem cleanSupport_external_degree_drift {κ : CConsts} {T : Stage} {k : ℕ}
   · have h := hPT.envelope_other_degree i j hji x hxenv
     simpa [j] using le_trans h (le_max_right _ _)
 
+theorem not_compatiblePool_iff {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (v : Pos T k) (pools : D.PoolAssignment) :
+    ¬ D.compatiblePool v pools ↔
+      ∃ pins : Finset (Pos T k), pins ⊆ D.externalEarly v ∧
+        pins.card ≤ ListGateContext.pinBudget κ ∧
+        ∃ fixed : Pos T k → Fin (T.S.N k),
+          (∀ w ∈ pins, fixed w ∈ D.permittedLabels (D.G.cellOf w) (pools (D.G.cellOf w)) w) ∧
+          Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) <
+            (D.F.fresh (D.G.cellOf v) (pools (D.G.cellOf v))).pr
+              (fun s => D.pinnedStatePriorMass v s pins fixed <
+                (9 / 10 : ℝ) * Real.rpow 2 (-(pins.card : ℝ))) := by
+  classical
+  unfold ListGateContext.compatiblePool
+  push_neg
+  rfl
+
 theorem rowMass_subtype_product {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
     (v : Pos T k) (hN : 0 < T.S.N k) (σ : Fin (T.S.N k) → ℝ)

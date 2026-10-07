@@ -195,7 +195,159 @@ theorem L81c_hidden_gates (grid : L81GridFacts n η₀)
 theorem L81d_centres_tags_anchors (grid : L81GridFacts n η₀)
     (T : L81TrimmedMix I h) (hgate : L81GateEstimate T) :
     Nonempty (L81Experiment T) := by
-  sorry
+  classical
+  have hn : 0 < n := by
+    by_contra hnot
+    have hn0 : n = 0 := by omega
+    subst n
+    have hlen : L81ChunkLength 0 = 0 := by simp [L81ChunkLength]
+    let b0 : Fin (L81ChunkLength 0 + 1) := ⟨0, by simp [hlen]⟩
+    have hbin := grid.bin_mass b0
+    have hweight (v : CubeVertex (L81ChunkLength 0)) : L81WordWeight v = 0 := by
+      unfold L81WordWeight
+      simp [hlen]
+    have hset : Finset.univ.filter (fun v : CubeVertex (L81ChunkLength 0) =>
+        L81WordWeight v = b0.val) = Finset.univ := by
+      ext v
+      simp [b0, hweight, hlen]
+    have hmass : L81ChunkBinMass 0 b0 = 1 := by
+      unfold L81ChunkBinMass
+      rw [hset]
+      simp [hlen]
+    rw [hmass] at hbin
+    have hpow : (0 : ℝ) ^ (-(0.04 : ℝ)) = 0 :=
+      Real.zero_rpow (by norm_num)
+    have hpow' : (↑(0 : ℕ) : ℝ) ^ (-(0.04 : ℝ)) = 0 := by simpa using hpow
+    rw [hpow'] at hbin
+    norm_num at hbin
+  have hn10 : 0 < n ^ 10 := Nat.pow_pos hn
+  let id0 : Fin (n ^ 10) := ⟨0, hn10⟩
+  let centreAssignment : L81Centres n η₀ := fun _ => (fun _ => false, id0)
+  have hfanLimit : 1 ≤ Nat.ceil ((n : ℝ) ^ (tau8 η₀ / 8)) := by
+    have hnR : 0 < (n : ℝ) := by exact_mod_cast hn
+    have hp : 0 < (n : ℝ) ^ (tau8 η₀ / 8) := Real.rpow_pos_of_pos hnR _
+    have hc : 0 < Nat.ceil ((n : ℝ) ^ (tau8 η₀ / 8)) := Nat.ceil_pos.mpr hp
+    omega
+  let centreKernel : L81HiddenHistory n η₀ h N → FinProb (L81Centres n η₀) := fun _ =>
+    { w := fun C => if C = centreAssignment then 1 else 0
+      nonneg := by intro C; split_ifs <;> norm_num
+      sum_eq_one := by simp }
+  have post_nonneg (θ : L81HiddenTuple h N) (i : M.ι) :
+      0 ≤ L81PosteriorWeight T θ i := by
+    unfold L81PosteriorWeight
+    have hden : 0 ≤ (L81TupleLaw T).w θ := (L81TupleLaw T).nonneg _
+    have hprod : 0 ≤ ∏ j, (T.ν i).w (θ j) :=
+      Finset.prod_nonneg fun j _ => (T.ν i).nonneg _
+    split_ifs with hz
+    · exact le_rfl
+    · apply div_nonneg
+      · exact mul_nonneg (T.weight_nonneg i) hprod
+      · exact le_of_lt (lt_of_le_of_ne hden (Ne.symm hz))
+  have dminus_nonneg (Θ : L81HiddenHistory n η₀ h N) (g : L81GridKey n η₀)
+      (i : M.ι) : 0 ≤ L81DMinus T Θ g i := by
+    unfold L81DMinus
+    apply Finset.sum_nonneg
+    intro x hx
+    apply mul_nonneg
+    · exact (T.μ i).nonneg x
+    · split_ifs <;> norm_num
+  have dplus_nonneg (Θ : L81HiddenHistory n η₀ h N) (g : L81GridKey n η₀)
+      (i : M.ι) : 0 ≤ L81DPlus T Θ g i := by
+    unfold L81DPlus
+    apply Finset.sum_nonneg
+    intro x hx
+    apply mul_nonneg
+    · exact (T.μ i).nonneg x
+    · split_ifs <;> norm_num
+  have gateZ_nonneg (Θ : L81HiddenHistory n η₀ h N) (g : L81GridKey n η₀) :
+      0 ≤ L81GateZ T Θ g := by
+    unfold L81GateZ
+    apply Finset.sum_nonneg
+    intro i hi
+    apply mul_nonneg
+    · exact mul_nonneg (post_nonneg (Θ g) i) (dminus_nonneg Θ g i)
+    · split_ifs <;> norm_num
+  let tagKernel : (Θ : L81HiddenHistory n η₀ h N) → L81Centres n η₀ →
+      FinProb (L81Tags M n η₀) := fun Θ _ => FinProb.pi (fun c => {
+        w := fun i => L81TiltedTagWeight T Θ c.1 i
+        nonneg := by
+          intro i
+          have hnum : 0 ≤ L81PosteriorWeight T (Θ c.1) i *
+              L81DMinus T Θ c.1 i * (if L81GateOpen T Θ c.1 i then 1 else 0) := by
+            apply mul_nonneg
+            · exact mul_nonneg (post_nonneg (Θ c.1) i) (dminus_nonneg Θ c.1 i)
+            · split_ifs <;> norm_num
+          by_cases hz : L81GateZ T Θ c.1 = 0
+          · simp [L81TiltedTagWeight, hz, T.weight_nonneg]
+          · simp only [L81TiltedTagWeight, if_neg hz]
+            exact div_nonneg hnum
+              (le_of_lt (lt_of_le_of_ne (gateZ_nonneg Θ c.1) (Ne.symm hz)))
+        sum_eq_one := by
+          classical
+          by_cases hz : L81GateZ T Θ c.1 = 0
+          · simp [L81TiltedTagWeight, hz, T.weight_sum]
+          · simp only [L81TiltedTagWeight, if_neg hz]
+            rw [← Finset.sum_div]
+            change L81GateZ T Θ c.1 / L81GateZ T Θ c.1 = 1
+            exact div_self hz })
+  let anchorKernel : (Θ : L81HiddenHistory n η₀ h N) → L81Centres n η₀ →
+      L81Tags M n η₀ → FinProb (L81Anchors N n η₀) := fun Θ _ t => FinProb.pi (fun c => {
+        w := fun x => L81AnchorWeight T Θ c.1 (t c) x
+        nonneg := by
+          intro x
+          have hnum : 0 ≤ (T.μ (t c)).w x *
+              (if (∀ u ∈ L81CrossKeys c.1, L81HitsTuple E G x (Θ u)) ∧
+                L81HitsTuple E G x (Θ c.1) then 1 else 0) := by
+            apply mul_nonneg
+            · exact (T.μ (t c)).nonneg x
+            · split_ifs <;> norm_num
+          by_cases hd : L81DPlus T Θ c.1 (t c) = 0
+          · simp [L81AnchorWeight, hd, (T.μ (t c)).nonneg]
+          · simp only [L81AnchorWeight, if_neg hd]
+            exact div_nonneg hnum
+              (le_of_lt (lt_of_le_of_ne (dplus_nonneg Θ c.1 (t c)) (Ne.symm hd)))
+        sum_eq_one := by
+          classical
+          by_cases hd : L81DPlus T Θ c.1 (t c) = 0
+          · simp [L81AnchorWeight, hd, (T.μ (t c)).sum_eq_one]
+          · simp only [L81AnchorWeight, if_neg hd]
+            rw [← Finset.sum_div]
+            change L81DPlus T Θ c.1 (t c) / L81DPlus T Θ c.1 (t c) = 1
+            exact div_self hd })
+  refine ⟨{
+    centreKernel := centreKernel
+    centreFan := ?_
+    tagKernel := tagKernel
+    tagProduct := by intro Θ C t; rfl
+    anchorKernel := anchorKernel
+    anchorProduct := by intro Θ C t w; rfl }⟩
+  intro Θ C hC c
+  have hCeq : C = centreAssignment := by
+    by_contra hne
+    simp [centreKernel, hne] at hC
+  subst C
+  constructor
+  · unfold L81OrdinaryFanSize
+    let ns := Finset.univ.filter fun d : L81Cell n η₀ =>
+      c.1 = d.1 ∧ L81ResidualDistance c.2 d.2 ≤ 1
+    calc
+      (ns.image fun d => (centreAssignment d).2).card ≤ ({id0} : Finset (Fin (n ^ 10))).card :=
+        Finset.card_le_card (by
+          intro x hx
+          rcases Finset.mem_image.mp hx with ⟨d, hd, rfl⟩
+          simp [centreAssignment])
+      _ = 1 := by simp
+      _ ≤ Nat.ceil ((n : ℝ) ^ (tau8 η₀ / 8)) := hfanLimit
+  · unfold L81OrdinaryLevelCount
+    let ns := Finset.univ.filter fun d : L81Cell n η₀ =>
+      c.1 = d.1 ∧ L81ResidualDistance c.2 d.2 ≤ 1
+    calc
+      (ns.image fun d => L81WordWeight (centreAssignment d).1).card ≤ ({0} : Finset ℕ).card :=
+        Finset.card_le_card (by
+          intro k hk
+          rcases Finset.mem_image.mp hk with ⟨d, hd, rfl⟩
+          simp [centreAssignment, L81WordWeight])
+      _ ≤ 2 := by simp
 
 /-- L8.1e (08:139–176): fixed-presentation internal/cross reference laws and candidate likelihood bounds. -/
 theorem L81e_fixed_presentation (T : L81TrimmedMix I h) (ex : L81Experiment T) :

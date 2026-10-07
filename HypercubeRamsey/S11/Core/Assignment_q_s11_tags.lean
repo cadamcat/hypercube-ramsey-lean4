@@ -904,6 +904,33 @@ theorem T2_dependsOn_wordBall {n N : ℕ} {E : Fin N → Fin N → Prop}
   unfold T2
   simp_rw [hcenter, hcount]
 
+private theorem MassFail_dependsOn_oddNbrs {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
+    (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :
+    FinProb.DependsOn (fun f => MassFail M y₀ p t f v)
+      (Finset.univ.image (oddNbr v)) := by
+  intro f f' hagree
+  apply propext
+  have hinner : innerOut f v = innerOut f' v := by
+    funext a
+    exact hagree (oddNbr v a.1) (Finset.mem_image.mpr ⟨a.1, Finset.mem_univ _, rfl⟩)
+  have houter (j : OuterCoord n) : f (oddNbr v j.1) = f' (oddNbr v j.1) :=
+    hagree (oddNbr v j.1) (Finset.mem_image.mpr ⟨j.1, Finset.mem_univ _, rfl⟩)
+  have hrow (x : Fin N) : evenRowF M y₀ p t f v x = evenRowF M y₀ p t f' v x := by
+    unfold evenRowF
+    rw [hinner]
+    congr 1
+    apply Finset.prod_congr rfl
+    intro j hj
+    rw [houter j]
+  unfold MassFail
+  have hsum : (∑ x, evenRowF M y₀ p t f v x) =
+      ∑ x, evenRowF M y₀ p t f' v x := by
+    apply Finset.sum_congr rfl
+    intro x hx
+    exact hrow x
+  exact Iff.of_eq (congrArg (fun q : ℝ => q < 1 / 2) hsum)
+
 /-- The high-degree tail among a slice's outer neighboring tags under one compatible tag. -/
 theorem t2_neighbor_tail {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     {κ δ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)

@@ -3,6 +3,7 @@ import HypercubeRamsey.Assembly
 import HypercubeRamsey.S07.InitialDiscrepancy
 import HypercubeRamsey.S10.ClusterExclusion
 import HypercubeRamsey.S11.Exports
+import HypercubeRamsey.S18.Exports
 
 /-!
 # The top-level chain
@@ -39,7 +40,7 @@ theorem partC_main (T : Stage) (η0 : ℝ) (hη0 : 0 < η0) (hInit : InitDisc T 
     (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε)
     (hClu : ∀ (ζ δ : ℚ), 0 < ζ → 0 < δ → (δ : ℝ) < min η0 (min (ζ : ℝ) 1) / 2000 →
       ∀ (c : Colour) (o : Bool), ∀ᶠ k in atTop, ¬ ClusterWitnessAt (T.orient o) k c ζ δ) :
-    False := sorry
+    False := S18.partC_main_proof T η0 hη0 hInit hDeep hClu
 
 /-- Conversion: equal power budgets give part C's `InitDisc`. -/
 theorem initDisc_of_discAt {T : Stage} {η₀ : ℝ} (h : DiscAt T (pw η₀) (pw η₀) (fun n => n ^ (-η₀))) :

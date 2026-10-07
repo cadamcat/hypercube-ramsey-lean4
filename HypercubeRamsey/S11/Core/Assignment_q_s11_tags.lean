@@ -848,6 +848,243 @@ theorem alphaRow_cap {n N : ℕ} {E : Fin N → Fin N → Prop}
           rw [← Finset.sum_mul, ballW_sum_one M.G (M.μ i) (y₀ i)]
           ring
 
+theorem compB_cap_of_gated {δ x₀ K P : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (p : FinProb M.ι)
+    (hF : Fixed11 δ x₀ K n N E X Y κ M y₀ p)
+    (t : OuterWord n → M.ι) (hgate : GatedTags M y₀ p P t)
+    (s : OuterWord n) (x : Fin N) (hb : bS n ≤ 1 / 200) :
+    compB M y₀ p t s x ≤
+      (2 : ℝ) ^ Fintype.card (InnerCoord n) * (19 / 10 : ℝ) ^ Fintype.card (OuterCoord n) := by
+  classical
+  let d : ℕ := Fintype.card (OuterCoord n)
+  let D : ℝ := deg E M.G (piBar M y₀ p) x
+  let degAt (j : OuterCoord n) : ℝ :=
+    deg E M.G (piRow M y₀ (t (flipOuter s j))) x
+  let high : OuterCoord n → Prop := fun j => (4 / 5 : ℝ) < degAt j
+  let High : Finset (OuterCoord n) := Finset.univ.filter high
+  let Low : Finset (OuterCoord n) := Finset.univ.filter fun j => ¬ high j
+  let lowFactor : ℝ := 80 / 49
+  let highFactor : ℝ := 100 / 49
+  have hN : 0 < N := by
+    have hpow : 0 < (2 ^ n : ℕ) := Nat.pow_pos (by decide)
+    exact lt_of_lt_of_le hpow hF.host
+  have hαnonneg : 0 ≤ alphaRow M y₀ (t s) x := (hF.slice.alpha (t s)).nonneg x
+  by_cases hαzero : alphaRow M y₀ (t s) x = 0
+  · have hrhs : 0 ≤ (2 : ℝ) ^ Fintype.card (InnerCoord n) *
+        (19 / 10 : ℝ) ^ Fintype.card (OuterCoord n) := by positivity
+    simpa [compB, hαzero] using hrhs
+  · have hx : (M.μ (t s)).w x ≠ 0 := (hF.slice.alpha (t s)).supp x hαzero
+    have hi : p.w (t s) ≠ 0 := hgate.1 s
+    have hcompat := hF.compat (t s) hi
+    have hnotT2 : ¬ T2 M y₀ t s := by
+      intro hbad
+      exact hgate.2 s (Or.inr hbad)
+    have hcount : (d : ℝ) / 2 ≥ highCount M y₀ t s x := by
+      by_contra hnot
+      apply hnotT2
+      exact ⟨x, hx, lt_of_not_ge hnot⟩
+    have hhighCard : (High.card : ℝ) ≤ (d : ℝ) / 2 := by
+      simpa [High, high, degAt, d, highCount, Finset.sum_filter] using hcount
+    have hparts : High.card + Low.card = d := by
+      dsimp [High, Low, high]
+      simpa [d] using
+        (Finset.card_filter_add_card_filter_not (s := Finset.univ)
+          (p := fun j : OuterCoord n => (4 / 5 : ℝ) <
+            deg E M.G (piRow M y₀ (t (flipOuter s j))) x))
+    have hhighNat : 2 * High.card ≤ d := by
+      have hR : 2 * (High.card : ℝ) ≤ (d : ℝ) := by nlinarith [hhighCard]
+      exact_mod_cast hR
+    have hHighLow : High.card ≤ Low.card := by omega
+    have hDsum : ∑ y, piBar M y₀ p y = 1 := by
+      have hrow : ∀ i : M.ι, ∑ y, piRow M y₀ i y = 1 := fun i => (hF.slice.rows i).pi_sum
+      unfold piBar mixW
+      calc
+        (∑ y, ∑ i, p.w i * piRow M y₀ i y) =
+            ∑ i, ∑ y, p.w i * piRow M y₀ i y := by rw [Finset.sum_comm]
+        _ = ∑ i, p.w i * ∑ y, piRow M y₀ i y := by
+              apply Finset.sum_congr rfl
+              intro i hi
+              rw [Finset.mul_sum]
+        _ = ∑ i, p.w i := by simp [hrow]
+        _ = 1 := p.sum_eq_one
+    have hsMean : sMean E M.G (piBar M y₀ p) x =
+        2 * deg E M.G (piBar M y₀ p) x - 1 := by
+      unfold sMean deg fv
+      calc
+        (∑ y, piBar M y₀ p y * (2 * hit E M.G x y - 1)) =
+            ∑ y, (2 * (piBar M y₀ p y * hit E M.G x y) - piBar M y₀ p y) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = 2 * (∑ y, piBar M y₀ p y * hit E M.G x y) - ∑ y, piBar M y₀ p y := by
+              rw [Finset.sum_sub_distrib, Finset.mul_sum]
+        _ = 2 * (∑ y, piBar M y₀ p y * hit E M.G x y) - 1 := by rw [hDsum]
+    have hdegIdentity :
+        2 * deg E M.G (piBar M y₀ p) x = 1 + sMean E M.G (piBar M y₀ p) x := by
+      linarith [hsMean]
+    have hsm : |sMean E M.G (piBar M y₀ p) x| ≤ 4 * bS n :=
+      hcompat.1 x hx
+    have hDlower : (49 : ℝ) / 100 ≤ D := by
+      have hlow : -(4 * bS n) ≤ sMean E M.G (piBar M y₀ p) x :=
+        (abs_le.mp hsm).1
+      dsimp [D]
+      nlinarith [hdegIdentity, hlow, hb]
+    have hDpos : 0 < D := lt_of_lt_of_le (by norm_num) hDlower
+    have hDinv : D⁻¹ ≤ highFactor := by
+      dsimp [highFactor]
+      calc
+        D⁻¹ ≤ ((49 : ℝ) / 100)⁻¹ :=
+          (inv_le_inv₀ hDpos (by norm_num : 0 < (49 : ℝ) / 100)).2 hDlower
+        _ = 100 / 49 := by norm_num
+    have hpiRowSum (a : M.ι) : ∑ y, piRow M y₀ a y = 1 := (hF.slice.rows a).pi_sum
+    have hdegreeNonneg (j : OuterCoord n) : 0 ≤ degAt j := by
+      unfold degAt deg
+      apply Finset.sum_nonneg
+      intro y hy
+      exact mul_nonneg ((hF.slice.rows (t (flipOuter s j))).pi_nonneg y)
+        (by unfold hit; split_ifs <;> norm_num)
+    have hdegreeLeOne (j : OuterCoord n) : degAt j ≤ 1 := by
+      unfold degAt deg
+      calc
+        (∑ y, piRow M y₀ (t (flipOuter s j)) y * hit E M.G x y) ≤
+            ∑ y, piRow M y₀ (t (flipOuter s j)) y * 1 := by
+              apply Finset.sum_le_sum
+              intro y hy
+              exact mul_le_mul_of_nonneg_left (by unfold hit; split_ifs <;> norm_num)
+                ((hF.slice.rows (t (flipOuter s j))).pi_nonneg y)
+        _ = 1 := by
+          calc
+            ∑ y, piRow M y₀ (t (flipOuter s j)) y * 1 =
+                ∑ y, piRow M y₀ (t (flipOuter s j)) y := by
+                  apply Finset.sum_congr rfl
+                  intro y hy
+                  ring
+            _ = 1 := hpiRowSum (t (flipOuter s j))
+    have hdegreeLow (j : OuterCoord n) (hj : j ∈ Low) : degAt j ≤ 4 / 5 := by
+      have hnothigh : ¬ high j := (Finset.mem_filter.mp hj).2
+      exact le_of_not_gt hnothigh
+    have hdegreeHigh (j : OuterCoord n) (hj : j ∈ High) : 0 ≤ degAt j :=
+      hdegreeNonneg j
+    have hratioNonneg (j : OuterCoord n) : 0 ≤ degAt j / D := div_nonneg (hdegreeNonneg j) hDpos.le
+    have hratioLow (j : OuterCoord n) (hj : j ∈ Low) :
+        degAt j / D ≤ lowFactor := by
+      dsimp [lowFactor]
+      rw [div_eq_mul_inv]
+      calc
+        degAt j * D⁻¹ ≤ (4 / 5 : ℝ) * D⁻¹ :=
+          mul_le_mul_of_nonneg_right (hdegreeLow j hj) (inv_nonneg.mpr hDpos.le)
+        _ ≤ (4 / 5 : ℝ) * (100 / 49) :=
+          mul_le_mul_of_nonneg_left hDinv (by norm_num)
+        _ = 80 / 49 := by norm_num
+    have hratioHigh (j : OuterCoord n) (hj : j ∈ High) :
+        degAt j / D ≤ highFactor := by
+      dsimp [highFactor]
+      rw [div_eq_mul_inv]
+      calc
+        degAt j * D⁻¹ ≤ 1 * D⁻¹ := mul_le_mul_of_nonneg_right (hdegreeLeOne j) (inv_nonneg.mpr hDpos.le)
+        _ ≤ (100 / 49) := by simpa using hDinv
+    have hratioSplit :
+        (∏ j : OuterCoord n, degAt j / D) =
+          (∏ j ∈ Low, degAt j / D) * (∏ j ∈ High, degAt j / D) := by
+      have hsplit :=
+        (Finset.prod_filter_mul_prod_filter_not (s := Finset.univ)
+          (p := fun j : OuterCoord n => degAt j ≤ 4 / 5) (f := fun j => degAt j / D)).symm
+      simpa [Low, High, high, not_le] using hsplit
+    have hlowProd : (∏ j ∈ Low, degAt j / D) ≤ lowFactor ^ Low.card := by
+      calc
+        (∏ j ∈ Low, degAt j / D) ≤ ∏ _j ∈ Low, lowFactor := by
+          apply Finset.prod_le_prod₀
+          · intro j hj
+            exact hratioNonneg j
+          · intro j hj
+            exact hratioLow j hj
+        _ = lowFactor ^ Low.card := by rw [Finset.prod_const]
+    have hhighProd : (∏ j ∈ High, degAt j / D) ≤ highFactor ^ High.card := by
+      calc
+        (∏ j ∈ High, degAt j / D) ≤ ∏ _j ∈ High, highFactor := by
+          apply Finset.prod_le_prod₀
+          · intro j hj
+            exact hratioNonneg j
+          · intro j hj
+            exact hratioHigh j hj
+        _ = highFactor ^ High.card := by rw [Finset.prod_const]
+    have hlowProd0 : 0 ≤ lowFactor ^ Low.card := by positivity
+    have hhighProd0 : 0 ≤ ∏ j ∈ High, degAt j / D :=
+      Finset.prod_nonneg fun j hj => hratioNonneg j
+    have hratioBound :
+        (∏ j : OuterCoord n, degAt j / D) ≤
+          lowFactor ^ Low.card * highFactor ^ High.card := by
+      rw [hratioSplit]
+      exact mul_le_mul hlowProd hhighProd hhighProd0 hlowProd0
+    have hpairBase : lowFactor * highFactor ≤ (19 / 10 : ℝ) ^ 2 := by
+      norm_num [lowFactor, highFactor]
+    have hlowBase : lowFactor ≤ 19 / 10 := by norm_num [lowFactor]
+    let e : ℕ := Low.card - High.card
+    have hLdecomp : Low.card = High.card + e := by dsimp [e]; omega
+    have hbaseCount : 2 * High.card + e = d := by
+      calc
+        2 * High.card + e = High.card + (High.card + e) := by omega
+        _ = High.card + Low.card := by rw [← hLdecomp]
+        _ = d := hparts
+    have hratioToBase : lowFactor ^ Low.card * highFactor ^ High.card ≤
+        (19 / 10 : ℝ) ^ d := by
+      rw [hLdecomp, pow_add]
+      calc
+        lowFactor ^ High.card * lowFactor ^ e * highFactor ^ High.card =
+            (lowFactor * highFactor) ^ High.card * lowFactor ^ e := by
+              rw [mul_pow]
+              ring
+        _ ≤ ((19 / 10 : ℝ) ^ 2) ^ High.card * (19 / 10 : ℝ) ^ e := by
+              apply mul_le_mul
+              · exact pow_le_pow_left₀ (by positivity) hpairBase _
+              · exact pow_le_pow_left₀ (by positivity) hlowBase _
+              · positivity
+              · positivity
+        _ = (19 / 10 : ℝ) ^ (2 * High.card + e) := by
+              rw [← pow_mul, ← pow_add]
+        _ = (19 / 10 : ℝ) ^ d := by
+              rw [hbaseCount]
+    have hratioFinal : (∏ j : OuterCoord n, degAt j / D) ≤ (19 / 10 : ℝ) ^ d :=
+      hratioBound.trans hratioToBase
+    have hαcap : (N : ℝ) * alphaRow M y₀ (t s) x ≤
+        (2 : ℝ) ^ Fintype.card (InnerCoord n) := by
+      have hNpos : 0 < N := hN
+      have hcap := alphaRow_cap M y₀ (t s) x hNpos
+      have hlog : (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n) ≤
+          Real.log 2 * Fintype.card (InnerCoord n) := by
+        have hg : 0 ≤ gS n := Real.rpow_nonneg (by positivity) _
+        have hh : 0 ≤ (Fintype.card (InnerCoord n) : ℝ) := by positivity
+        nlinarith
+      calc
+        (N : ℝ) * alphaRow M y₀ (t s) x ≤
+            Real.exp ((Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)) := hcap
+        _ ≤ Real.exp (Real.log 2 * Fintype.card (InnerCoord n)) := Real.exp_le_exp.mpr hlog
+        _ = (2 : ℝ) ^ Fintype.card (InnerCoord n) := by
+              calc
+                Real.exp (Real.log 2 * Fintype.card (InnerCoord n)) =
+                    Real.exp ((Fintype.card (InnerCoord n) : ℝ) * Real.log 2) := by congr 1 <;> ring
+                _ = Real.exp (Real.log 2) ^ Fintype.card (InnerCoord n) := Real.exp_nat_mul _ _
+                _ = (2 : ℝ) ^ Fintype.card (InnerCoord n) := by rw [Real.exp_log (by norm_num)]
+    unfold compB
+    calc
+      (N : ℝ) * alphaRow M y₀ (t s) x *
+          ∏ j : OuterCoord n,
+            deg E M.G (piRow M y₀ (t (flipOuter s j))) x / D =
+        (N : ℝ) * alphaRow M y₀ (t s) x *
+          ∏ j : OuterCoord n, degAt j / D := by
+            simp [degAt, D]
+      _ ≤ (2 : ℝ) ^ Fintype.card (InnerCoord n) * (19 / 10 : ℝ) ^ d :=
+        calc
+          (N : ℝ) * alphaRow M y₀ (t s) x *
+              ∏ j : OuterCoord n, degAt j / D ≤
+            (2 : ℝ) ^ Fintype.card (InnerCoord n) *
+              ∏ j : OuterCoord n, degAt j / D :=
+                mul_le_mul_of_nonneg_right hαcap
+                  (Finset.prod_nonneg fun j hj => hratioNonneg j)
+          _ ≤ (2 : ℝ) ^ Fintype.card (InnerCoord n) * (19 / 10 : ℝ) ^ d :=
+                mul_le_mul_of_nonneg_left hratioFinal (by positivity)
+
 theorem rawFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N)
     (p : FinProb M.ι) (t : OuterWord n → M.ι) (v : EvenRole n) :

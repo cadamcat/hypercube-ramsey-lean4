@@ -548,6 +548,34 @@ private def heightStep9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
   (x.1 = y.1 ∧ y.2.val = x.2.val + 1 ∧ bad x) ∨
     (x.2.val = y.2.val + 1 ∧ _root_.hammingDist x.1 y.1 ≤ 2)
 
+private def heightMetric9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (x y : HeightState9 P hc n) : ℕ :=
+  max (Nat.dist x.2.val y.2.val) ((_root_.hammingDist x.1 y.1 + 1) / 2)
+
+private theorem heightMetric9_triangle {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (x y z : HeightState9 P hc n) :
+    heightMetric9 x z ≤ heightMetric9 x y + heightMetric9 y z := by
+  have hlevel := Nat.dist.triangle_inequality x.2.val y.2.val z.2.val
+  have hsite := _root_.hammingDist_triangle x.1 y.1 z.1
+  have hsite' : (_root_.hammingDist x.1 z.1 + 1) / 2 ≤
+      (_root_.hammingDist x.1 y.1 + 1) / 2 +
+        (_root_.hammingDist y.1 z.1 + 1) / 2 := by omega
+  unfold heightMetric9
+  apply max_le
+  · exact hlevel.trans (Nat.add_le_add (le_max_left _ _) (le_max_left _ _))
+  · exact hsite'.trans (Nat.add_le_add (le_max_right _ _) (le_max_right _ _))
+
+private theorem heightStep9_metric_le_one {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {x y : HeightState9 P hc n}
+    (h : heightStep9 bad x y) : heightMetric9 x y ≤ 1 := by
+  rcases h with ⟨hsite, hlevel, _⟩ | ⟨hlevel, hsite⟩
+  · have hdist : Nat.dist x.2.val y.2.val = 1 := by rw [hlevel]; simp [Nat.dist]
+    have hham : _root_.hammingDist x.1 y.1 = 0 := by rw [hsite]; simp
+    simp [heightMetric9, hdist, hham]
+  · have hdist : Nat.dist x.2.val y.2.val = 1 := by rw [hlevel]; simp [Nat.dist]
+    have hham : (_root_.hammingDist x.1 y.1 + 1) / 2 ≤ 1 := by omega
+    simp [heightMetric9, hdist, hham]
+
 private inductive HeightPath9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (step : HeightState9 P hc n → HeightState9 P hc n → Prop) :
     List (HeightState9 P hc n) → HeightState9 P hc n → Prop

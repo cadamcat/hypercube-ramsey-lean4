@@ -1105,4 +1105,139 @@ theorem topScale_le_mul_target (n : ℕ) (σ ζ : ℝ)
   exact findScale_le_mul_target M R₀ target
     (scaleIndex_exists_grid M R₀ target hM hR) hM hR (by simpa [R₀, target] using hR0)
 
+theorem gridScaleBounds (η₀ : ℝ) (hη₀ : 0 < η₀) :
+    ∃ n₀, ∀ n ≥ n₀, sC η₀ n ≤ n ∧ TC η₀ n ≤ n ∧ HH η₀ n ≤ n := by
+  obtain ⟨hσpos, hσζ, hζ1, _, _⟩ := (hd_admissible η₀ hη₀).hsz
+  have hζpos : 0 < zetaH η₀ := lt_trans hσpos hσζ
+  have hσ1 : sigmaH η₀ < 1 := lt_trans hσζ hζ1
+  have hη8pos : 0 < eta8 η₀ := by
+    change 0 < min (η₀ / 2) (4 / 100 : ℝ)
+    exact lt_min (by linarith) (by norm_num)
+  have hτpos : 0 < tau8 η₀ := by
+    rw [tau8_eq]
+    exact div_pos hη8pos (by norm_num)
+  have hτ1 : tau8 η₀ < 1 := by
+    rw [tau8_eq]
+    have hη8 : eta8 η₀ ≤ 4 / 100 := min_le_right _ _
+    linarith
+  let a : ℝ := 1 - zetaH η₀
+  have ha : 0 < a := by dsimp [a]; linarith
+  let δ : ℝ := zetaH η₀ - sigmaH η₀
+  have hδ : 0 < δ := by dsimp [δ]; linarith
+  let cLog : ℝ := (4 / a) ^ 2
+  have hLogT : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (a / 2))
+      Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop (by linarith : (0 : ℝ) < a / 2)).comp
+      tendsto_natCast_atTop_atTop
+  have hLogEventually : ∀ᶠ n : ℕ in Filter.atTop, cLog ≤ (n : ℝ) ^ (a / 2) :=
+    hLogT.eventually (Filter.eventually_ge_atTop cLog)
+  obtain ⟨nLog, hLog⟩ := Filter.eventually_atTop.1 hLogEventually
+  have hGapT : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ δ) Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop hδ).comp tendsto_natCast_atTop_atTop
+  have hGapEventually : ∀ᶠ n : ℕ in Filter.atTop, (4 : ℝ) ≤ (n : ℝ) ^ δ :=
+    hGapT.eventually (Filter.eventually_ge_atTop 4)
+  obtain ⟨nGap, hGap⟩ := Filter.eventually_atTop.1 hGapEventually
+  refine ⟨max 2 (max nLog nGap), ?_⟩
+  intro n hn
+  have hn2 : 2 ≤ n := by omega
+  have hnLog : nLog ≤ n := by omega
+  have hnGap : nGap ≤ n := by omega
+  have hnR : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hpowLog : cLog ≤ (n : ℝ) ^ (a / 2) := hLog n hnLog
+  have hlogNonneg : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hnR
+  have hlogBound : Real.log (n : ℝ) ≤ ((n : ℝ) ^ (a / 4)) / (a / 4) :=
+    Real.log_natCast_le_rpow_div n (by linarith)
+  have hlogSq : (Real.log (n : ℝ)) ^ 2 ≤ (n : ℝ) ^ a := by
+    have hsq : (Real.log (n : ℝ)) ^ 2 ≤ (((n : ℝ) ^ (a / 4)) / (a / 4)) ^ 2 :=
+      (sq_le_sq₀ hlogNonneg (by positivity)).2 hlogBound
+    calc
+      (Real.log (n : ℝ)) ^ 2 ≤ (((n : ℝ) ^ (a / 4)) / (a / 4)) ^ 2 := hsq
+      _ = cLog * (n : ℝ) ^ (a / 2) := by
+        dsimp [cLog]
+        rw [div_pow]
+        have hpow : ((n : ℝ) ^ (a / 4)) ^ 2 = (n : ℝ) ^ (a / 2) := by
+          calc
+            ((n : ℝ) ^ (a / 4)) ^ 2 = ((n : ℝ) ^ (a / 4)) ^ (2 : ℝ) :=
+              (Real.rpow_natCast ((n : ℝ) ^ (a / 4)) 2).symm
+            _ = (n : ℝ) ^ ((a / 4) * 2) :=
+              (Real.rpow_mul (x := (n : ℝ)) (by positivity) (a / 4) 2).symm
+            _ = (n : ℝ) ^ (a / 2) := by congr 1 <;> ring
+        rw [hpow]
+        have heps : (a / 4) ≠ 0 := ne_of_gt (by linarith)
+        field_simp [heps]
+      _ ≤ (n : ℝ) ^ (a / 2) * (n : ℝ) ^ (a / 2) :=
+        mul_le_mul_of_nonneg_right hpowLog (Real.rpow_nonneg (by positivity) _)
+      _ = (n : ℝ) ^ a := by
+        rw [← Real.rpow_add (by positivity : (0 : ℝ) < (n : ℝ))]
+        congr 1 <;> ring
+  have hR0 : max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊ ≤ ⌈(n : ℝ) ^ a⌉₊ := by
+    have hceilLog : ⌈Real.log (n : ℝ) ^ 2⌉₊ ≤ ⌈(n : ℝ) ^ a⌉₊ :=
+      Nat.ceil_le.mpr (hlogSq.trans (Nat.le_ceil ((n : ℝ) ^ a)))
+    have hpowOne : (1 : ℝ) ≤ (n : ℝ) ^ a := Real.one_le_rpow hnR (by linarith)
+    have hceilOne : 1 ≤ ⌈(n : ℝ) ^ a⌉₊ := by
+      exact_mod_cast (le_trans hpowOne (Nat.le_ceil ((n : ℝ) ^ a)))
+    exact max_le hceilOne hceilLog
+  have hTop := topScale_le_mul_target n (sigmaH η₀) (zetaH η₀) hR0
+  have hpowσ : (n : ℝ) ^ sigmaH η₀ ≤ (n : ℝ) ^ (1 : ℝ) :=
+    Real.rpow_le_rpow_of_exponent_le hnR hσ1.le
+  have hpowA : (n : ℝ) ^ a ≤ (n : ℝ) ^ (1 : ℝ) :=
+    Real.rpow_le_rpow_of_exponent_le hnR (by dsimp [a]; linarith [hζpos])
+  have hceilσ : ⌈(n : ℝ) ^ sigmaH η₀⌉₊ ≤ n := Nat.ceil_le.mpr (by simpa using hpowσ)
+  have hceilA : ⌈(n : ℝ) ^ a⌉₊ ≤ n := Nat.ceil_le.mpr (by simpa using hpowA)
+  have hs : sC η₀ n ≤ n := by
+    unfold sC
+    exact Nat.ceil_le.mpr (by
+      simpa using Real.rpow_le_rpow_of_exponent_le hnR hτ1.le)
+  have hT : TC η₀ n ≤ n := by
+    unfold TC
+    have hTexp : tau8 η₀ / 8 ≤ 1 := by linarith [hτ1]
+    exact Nat.ceil_le.mpr (by
+      simpa using Real.rpow_le_rpow_of_exponent_le hnR hTexp)
+  have hMfactor : (max 2 ⌈(n : ℝ) ^ sigmaH η₀⌉₊ : ℝ) ≤ 2 * (n : ℝ) ^ sigmaH η₀ := by
+    change max (2 : ℝ) (⌈(n : ℝ) ^ sigmaH η₀⌉₊ : ℝ) ≤ 2 * (n : ℝ) ^ sigmaH η₀
+    have hσbase : (1 : ℝ) ≤ (n : ℝ) ^ sigmaH η₀ := Real.one_le_rpow hnR hσpos.le
+    apply max_le
+    · nlinarith [hσbase]
+    · have hceil : (⌈(n : ℝ) ^ sigmaH η₀⌉₊ : ℝ) < (n : ℝ) ^ sigmaH η₀ + 1 :=
+        Nat.ceil_lt_add_one (Real.rpow_nonneg (by positivity) _)
+      linarith [hσbase]
+  have hTargetFactor : (⌈(n : ℝ) ^ a⌉₊ : ℝ) ≤ 2 * (n : ℝ) ^ a := by
+    have hceil : (⌈(n : ℝ) ^ a⌉₊ : ℝ) < (n : ℝ) ^ a + 1 :=
+      Nat.ceil_lt_add_one (Real.rpow_nonneg (by positivity) _)
+    have habase : (1 : ℝ) ≤ (n : ℝ) ^ a := Real.one_le_rpow hnR ha.le
+    linarith [habase]
+  have hHHreal : (HH η₀ n : ℝ) ≤ 4 * (n : ℝ) ^ (sigmaH η₀ + a) := by
+    have hTopCast : (HH η₀ n : ℝ) ≤
+        (max 2 ⌈(n : ℝ) ^ sigmaH η₀⌉₊ : ℝ) * (⌈(n : ℝ) ^ a⌉₊ : ℝ) := by
+      have hTopNat : HH η₀ n ≤
+          max 2 ⌈(n : ℝ) ^ sigmaH η₀⌉₊ * ⌈(n : ℝ) ^ a⌉₊ := by
+        simpa [HH, a] using hTop
+      exact_mod_cast hTopNat
+    have hmul : ((max 2 ⌈(n : ℝ) ^ sigmaH η₀⌉₊ : ℝ) *
+        (⌈(n : ℝ) ^ a⌉₊ : ℝ)) ≤ 4 * (n : ℝ) ^ (sigmaH η₀ + a) := by
+      calc
+        _ ≤ (2 * (n : ℝ) ^ sigmaH η₀) * (2 * (n : ℝ) ^ a) :=
+          mul_le_mul hMfactor hTargetFactor (by positivity) (by positivity)
+        _ = 4 * ((n : ℝ) ^ sigmaH η₀ * (n : ℝ) ^ a) := by ring
+        _ = 4 * (n : ℝ) ^ (sigmaH η₀ + a) := by
+          rw [← Real.rpow_add (by positivity : (0 : ℝ) < (n : ℝ))]
+    exact hTopCast.trans hmul
+  have hGapPow : (n : ℝ) ^ (1 - δ) * (n : ℝ) ^ δ = (n : ℝ) := by
+    calc
+      (n : ℝ) ^ (1 - δ) * (n : ℝ) ^ δ = (n : ℝ) ^ ((1 - δ) + δ) := by
+        rw [← Real.rpow_add (by positivity : (0 : ℝ) < (n : ℝ))]
+      _ = (n : ℝ) ^ (1 : ℝ) := by congr 1 <;> ring
+      _ = (n : ℝ) := Real.rpow_one _
+  have hHNat : HH η₀ n ≤ n := by
+    have hExpEq : sigmaH η₀ + a = 1 - δ := by dsimp [a, δ]; ring
+    have hHreal : (HH η₀ n : ℝ) ≤ (n : ℝ) := by
+      calc
+        (HH η₀ n : ℝ) ≤ 4 * (n : ℝ) ^ (sigmaH η₀ + a) := hHHreal
+        _ = 4 * (n : ℝ) ^ (1 - δ) := by rw [hExpEq]
+        _ ≤ (n : ℝ) ^ δ * (n : ℝ) ^ (1 - δ) :=
+          mul_le_mul_of_nonneg_right (hGap n hnGap) (Real.rpow_nonneg (by positivity) _)
+        _ = (n : ℝ) := by rw [mul_comm, hGapPow]
+    exact_mod_cast hHreal
+  exact ⟨hs, hT, hHNat⟩
+
 end HypercubeRamsey.Lane_q_s08_sel

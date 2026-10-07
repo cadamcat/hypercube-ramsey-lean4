@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Defs
 import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
+import HypercubeRamsey.S18.Nodes_sol_split_d18l
 import HypercubeRamsey.S18.Nodes_q_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n1
@@ -27,7 +28,41 @@ theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, PT.tiling.mode.isLow → ProfileCornerMass PT → LargeIndex κ T k →
       (∃ G : LowGeom PT, ∃ F : FreshCell G, L16QuantitativeValidity G F) →
       Nonempty {D : LateData hPT // D.Spec} := by
-  sorry
+  have hSources : Lane_sol_split_d18l.Sources κ T := ⟨hInit, hDeep, hDisc, hDiscι⟩
+  filter_upwards [
+    Lane_sol_split_d18l.D18_L_inputs hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_fresh_internal hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_prior_mean hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_cell_query_calibration hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_upstream_bad hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_upstream_bad_pinned hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_fresh_singleton hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_palette_counts hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_initial_cap hκ hThresholds T hSources,
+    Lane_sol_split_d18l.D18_L_initial_success hκ hThresholds T hSources]
+    with k hInputs hInternal hMean hCalibration hBad hPinned hSingleton hCounts hCap hSuccess
+  intro PT hPT hLow hMass hLarge hOld
+  obtain ⟨X⟩ := hInputs PT hPT hLow hMass hLarge hOld
+  let D := Lane_sol_split_d18l.rawData hκ X
+  refine ⟨⟨D, {
+    corner_mass := hMass
+    fresh_internal := hInternal PT hPT X hMass hLarge
+    thresholds := hThresholds
+    calibration := ⟨hMean PT hPT X hMass hLarge,
+      Lane_sol_split_d18l.D18_L_separated_calibration D
+        (hCalibration PT hPT X hMass hLarge)
+        (Lane_sol_split_d18l.D18_L_query_factorization hκ X)⟩
+    upstream_bad := hBad PT hPT X hMass hLarge
+    upstream_bad_pinned := hPinned PT hPT X hMass hLarge
+    typical_positive := Lane_sol_split_d18l.D18_L_typical_positive hκ X
+    fresh_singleton := hSingleton PT hPT X hMass hLarge
+    scope_eq := Lane_sol_split_d18l.D18_L_scope_eq hκ X
+    palette_counts := hCounts PT hPT X hMass hLarge
+    palette_separation := Lane_sol_split_d18l.D18_L_palette_separation hκ X
+    events_eq := Lane_sol_split_d18l.D18_L_events_eq hκ X
+    initial_cap := hCap PT hPT X hMass hLarge
+    initial_success := hSuccess PT hPT X hMass hLarge
+    prior_local := Lane_sol_split_d18l.D18_L_prior_local D }⟩⟩
 
 /-- L18.0a, 18:78–87. Constants precede all stages; epsilon precedes its
 own eventual quantifier. Only L16-valid geometries are quantified. -/

@@ -154,6 +154,74 @@ theorem hitRatio_average_lower {N : ℕ} (μ : Law N)
       intro x hx
       ring
 
+theorem hitRatio_reweight_width_bound {N : ℕ} (μ : Law N)
+    (E : Fin N → Fin N → Prop) (c : Colour) (y : Fin N)
+    (d : Fin N → ℝ) (dmin dmax m w : ℝ)
+    (hdmin : 0 < dmin) (hdmax : 0 < dmax) (hm : 0 < m)
+    (hμw : μ.WidthLE w)
+    (hdpos : ∀ x, μ.w x ≠ 0 → 0 < d x)
+    (hdmin' : ∀ x, μ.w x ≠ 0 → dmin ≤ d x)
+    (hdmax' : ∀ x, μ.w x ≠ 0 → d x ≤ dmax)
+    (hdegree : m ≤ ∑ x, μ.w x * hit E c x y) :
+    ∃ ν : Law N, ∀ x,
+      ν.w x ≤ (dmax / (m * dmin)) * Real.exp w / N := by
+  classical
+  let f : Fin N → ℝ := fun x => if 0 < d x then hit E c x y / d x else 0
+  let Z : ℝ := ∑ x, μ.w x * f x
+  have hf : ∀ x, 0 ≤ f x := by
+    intro x
+    dsimp [f]
+    split_ifs with hd
+    · apply div_nonneg
+      · unfold hit
+        split_ifs <;> norm_num
+      · exact hd.le
+    · exact le_rfl
+  have hZeqRatio : Z = ∑ x, μ.w x * (hit E c x y / d x) := by
+    dsimp [Z]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hμ0 : μ.w x = 0
+    · simp [f, hμ0]
+    · simp [f, hdpos x hμ0]
+  have hZlower : m / dmax ≤ Z := by
+    calc
+      m / dmax ≤ (∑ x, μ.w x * hit E c x y) / dmax :=
+        div_le_div_of_nonneg_right hdegree hdmax.le
+      _ ≤ Z := by rw [hZeqRatio]; exact hitRatio_average_lower μ E c y d dmax hdpos hdmax'
+  have hZpos : 0 < Z := lt_of_lt_of_le (div_pos hm hdmax) hZlower
+  have hfC : ∀ x, μ.w x ≠ 0 → f x ≤ 1 / dmin := by
+    intro x hx
+    have hdxPos := hdpos x hx
+    have hdxMin := hdmin' x hx
+    by_cases hxy : Hits E c x y
+    · simp [f, hit, hdxPos, hxy]
+      simpa [one_div] using one_div_le_one_div_of_le hdmin hdxMin
+    · simp [f, hit, hdxPos, hxy]
+      exact le_of_lt hdmin
+  have hZeq : ∑ x, μ.w x * f x = Z := rfl
+  let ν : Law N := reweightLaw μ f hf Z hZpos hZeq
+  have hrecip : 1 / Z ≤ dmax / m := by
+    have h := one_div_le_one_div_of_le (div_pos hm hdmax) hZlower
+    calc
+      1 / Z ≤ 1 / (m / dmax) := h
+      _ = dmax / m := by field_simp
+  have hscale : (1 / dmin) / Z ≤ dmax / (m * dmin) := by
+    calc
+      (1 / dmin) / Z = (1 / dmin) * (1 / Z) := by ring
+      _ ≤ (1 / dmin) * (dmax / m) :=
+        mul_le_mul_of_nonneg_left hrecip (by positivity)
+      _ = dmax / (m * dmin) := by field_simp
+  refine ⟨ν, ?_⟩
+  intro x
+  have hatom := reweightLaw_atom_bound μ f hf Z hZpos hZeq w (1 / dmin)
+    hμw (by positivity) hfC x
+  dsimp [ν]
+  calc
+    (reweightLaw μ f hf Z hZpos hZeq).w x ≤ ((1 / dmin) / Z) * Real.exp w / N := hatom
+    _ ≤ (dmax / (m * dmin)) * Real.exp w / N := by
+      gcongr
+
 theorem pinned_product_row_expectation_simplified {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
     (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)

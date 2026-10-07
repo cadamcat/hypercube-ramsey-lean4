@@ -3293,4 +3293,25 @@ private theorem condPenalty9 {x : ℝ} {d k t : ℕ}
     _ ≤ Real.exp ((k : ℝ) * Real.log 2) := Real.exp_le_exp.mpr hExp
     _ = (2 : ℝ) ^ k := hpow
 
+private theorem independentTargetStars9 {P : Params9} {n k N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} (S : Setup9 P n N M) (E : Fin N → Fin N → Prop) (G : Colour)
+    (a : Fin k → EvenSites9 n) (x : Fin N) (ω : Outcome9 I N)
+    (hcancel : StarCancel9 S I E G) :
+    ∑ f : Fin k → Fin N, ∏ i : Fin k,
+      (siteFirst9 S (a i).1).w (f i) *
+        evenStar9 S E G (updAnc9 ω (I.center (a i).1) (f i)) (a i) x ≤
+    ∏ i : Fin k, (N : ℝ) * (siteFirst9 S (a i).1).w x := by
+  classical
+  rw [← Fintype.prod_sum (κ := fun _ : Fin k => Fin N)
+    (f := fun i y => (siteFirst9 S (a i).1).w y *
+      evenStar9 S E G (updAnc9 ω (I.center (a i).1) y) (a i) x)]
+  apply Finset.prod_le_prod₀
+  · intro i hi
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg ((siteFirst9 S (a i).1).nonneg y) (evenStar9_nonneg S E G
+      (updAnc9 ω (I.center (a i).1) y) (a i) x)
+  · intro i hi
+    exact hcancel ω (a i) x
+
 end HypercubeRamsey.Lane_q_s09_assign2

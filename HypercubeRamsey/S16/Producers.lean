@@ -1109,15 +1109,9 @@ private theorem restricted_kernels_exists {κ : CConsts} (hκ : κ.Admissible)
   let mass := fun C W g => ∑ D ∈ (Perm.table C).permitted g, (R.qin C W g).w D
   have hmass : ∀ C W g, (R.history C).w W ≠ 0 → 0 < mass C W g := by
     intro C W g hW
-    obtain ⟨c, hc, _hcount, hretained⟩ := permission_loss hκ (Perm.table C) (R.qin C W)
-      (hPerm C W hW)
-    have hexp : Real.exp (-c * (Perm.table C).n) < 1 := by
-      apply Real.exp_lt_one_iff.mpr
-      have hn : (0 : ℝ) < (Perm.table C).n := by exact_mod_cast (Perm.table C).n_pos
-      nlinarith
-    have h := hretained g
-    dsimp [mass]
-    linarith
+    exact lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 2)
+      (Lane_sol_s16_prod1.permission_retained_half (Perm.table C) (R.qin C W)
+        (hPerm C W hW) g)
   let qbar : ∀ C, R.Hist C → R.Group C → FinLaw (Bin PT.tiling (G.cellPatch C)) :=
     fun C W g => if hm : 0 < mass C W g then
       FinLaw.cond (R.qin C W g) ((Perm.table C).permitted g) hm else R.qin C W g

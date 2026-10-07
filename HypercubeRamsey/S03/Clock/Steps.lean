@@ -74,7 +74,126 @@ theorem step4_path_insertion_bound {R : Type*} [Fintype R] {g : ℕ}
     (hcol : ∀ y, ∑ a, r a y = θ)
     (hθ0 : 0 ≤ θ) (hθ1 : θ ≤ 1) :
     ∀ (m : ℕ) (u : Endpoint R g), rootedWalkMass (m := m) r u ≤ θ ^ (m / 2) := by
-  sorry
+  classical
+  intro m u
+  let seqEquiv (n : ℕ) :
+      (Endpoint R g × (Fin n → Endpoint R g)) ≃ (Fin (n + 1) → Endpoint R g) := {
+    toFun p := Fin.cons (α := fun _ : Fin (n + 1) => Endpoint R g) p.1 p.2
+    invFun w := (w 0, fun i => w i.succ)
+    left_inv := by rintro ⟨x, f⟩; simp
+    right_inv := by
+      intro w
+      funext i
+      exact Fin.cases (by simp) (fun j => by simp) i
+  }
+  have hwalkCons {k : ℕ} (x : Endpoint R g)
+      (w : Fin (k + 1) → Endpoint R g) :
+      walkRate (m := k + 1) r
+          (Fin.cons (α := fun _ : Fin (k + 2) => Endpoint R g) x w) =
+        transitionRate r x (w 0) * walkRate (m := k) r w := by
+    simp [walkRate, Fin.prod_univ_succ, Fin.cons]
+  have hmassTail {k : ℕ} (x : Endpoint R g) :
+      rootedWalkMass (m := k) r x =
+        ∑ tail : Fin k → Endpoint R g,
+          walkRate (m := k) r
+            (Fin.cons (α := fun _ : Fin (k + 1) => Endpoint R g) x tail) := by
+    unfold rootedWalkMass
+    calc
+      (∑ w : Fin (k + 1) → Endpoint R g,
+          if w 0 = x then walkRate (m := k) r w else 0) =
+          ∑ p : Endpoint R g × (Fin k → Endpoint R g),
+            if (Fin.cons (α := fun _ : Fin (k + 1) => Endpoint R g) p.1 p.2) 0 = x then
+              walkRate (m := k) r
+                (Fin.cons (α := fun _ : Fin (k + 1) => Endpoint R g) p.1 p.2) else 0 := by
+        symm
+        exact Fintype.sum_equiv (seqEquiv k) _ _ (by intro p; simp [seqEquiv])
+      _ = ∑ tail : Fin k → Endpoint R g,
+            walkRate (m := k) r
+              (Fin.cons (α := fun _ : Fin (k + 1) => Endpoint R g) x tail) := by
+        rw [Fintype.sum_prod_type]
+        rw [Finset.sum_comm]
+        simp [Fin.cons, eq_comm]
+  have hrec {k : ℕ} (x : Endpoint R g) :
+      rootedWalkMass (m := k + 1) r x =
+        ∑ v : Endpoint R g,
+          transitionRate r x v * rootedWalkMass (m := k) r v := by
+    calc
+      rootedWalkMass (m := k + 1) r x =
+          ∑ tail : Fin (k + 1) → Endpoint R g,
+            transitionRate r x (tail 0) * walkRate (m := k) r tail := by
+        rw [hmassTail]
+        simp_rw [hwalkCons]
+      _ = ∑ v : Endpoint R g,
+            transitionRate r x v * rootedWalkMass (m := k) r v := by
+        symm
+        unfold rootedWalkMass
+        simp_rw [show ∀ v : Endpoint R g,
+          transitionRate r x v *
+              (∑ w : Fin (k + 1) → Endpoint R g,
+                if w 0 = v then walkRate (m := k) r w else 0) =
+            ∑ w : Fin (k + 1) → Endpoint R g,
+              transitionRate r x v *
+                (if w 0 = v then walkRate (m := k) r w else 0) from
+          fun v => Finset.mul_sum Finset.univ _ _]
+        simp_rw [mul_ite, mul_zero]
+        rw [Finset.sum_comm]
+        simp [eq_comm]
+  have hrecRow {k : ℕ} (a : R) :
+      rootedWalkMass (m := k + 1) r (Sum.inl a) =
+        ∑ y : Fin g, r a y * rootedWalkMass (m := k) r (Sum.inr y) := by
+    rw [hrec]
+    simp [transitionRate, Fintype.sum_sum_type]
+  have hrecLabel {k : ℕ} (y : Fin g) :
+      rootedWalkMass (m := k + 1) r (Sum.inr y) =
+        ∑ a : R, r a y * rootedWalkMass (m := k) r (Sum.inl a) := by
+    rw [hrec]
+    simp [transitionRate, Fintype.sum_sum_type]
+  have hzero (x : Endpoint R g) : rootedWalkMass (m := 0) r x = 1 := by
+    rw [hmassTail]
+    simp [walkRate]
+  have hbounds (k : ℕ) :
+      (∀ a : R, rootedWalkMass (m := k) r (Sum.inl a) ≤ θ ^ (k / 2)) ∧
+      (∀ y : Fin g, rootedWalkMass (m := k) r (Sum.inr y) ≤ θ ^ ((k + 1) / 2)) := by
+    induction k with
+    | zero =>
+        constructor
+        · intro a
+          rw [hzero]
+          simp
+        · intro y
+          rw [hzero]
+          simp
+    | succ k ih =>
+        constructor
+        · intro a
+          rw [hrecRow]
+          calc
+            (∑ y : Fin g,
+                r a y * rootedWalkMass (m := k) r (Sum.inr y)) ≤
+                ∑ y : Fin g, r a y * θ ^ ((k + 1) / 2) := by
+              apply Finset.sum_le_sum
+              intro y _
+              exact mul_le_mul_of_nonneg_left (ih.2 y) (hr0 a y)
+            _ = (∑ y : Fin g, r a y) * θ ^ ((k + 1) / 2) := by
+              rw [Finset.sum_mul]
+            _ = θ ^ ((k + 1) / 2) := by rw [hrow a]; simp
+        · intro y
+          rw [hrecLabel]
+          calc
+            (∑ a : R, r a y * rootedWalkMass (m := k) r (Sum.inl a)) ≤
+                ∑ a : R, r a y * θ ^ (k / 2) := by
+              apply Finset.sum_le_sum
+              intro a _
+              exact mul_le_mul_of_nonneg_left (ih.1 a) (hr0 a y)
+            _ = (∑ a : R, r a y) * θ ^ (k / 2) := by
+              rw [Finset.sum_mul]
+            _ = θ * θ ^ (k / 2) := by rw [hcol y]
+            _ = θ ^ (k / 2 + 1) := by rw [pow_succ]; ring
+            _ = θ ^ ((k + 2) / 2) := by congr 1 <;> omega
+  rcases u with a | y
+  · exact (hbounds m).1 a
+  · exact le_trans ((hbounds m).2 y)
+      (pow_le_pow_of_le_one hθ0 hθ1 (by omega))
 
 /-- L3.10e (03:946–989): the exponential-moment estimate for a two-type branching forest gives a giant-tail
 bound at the active-endpoint cutoff. -/

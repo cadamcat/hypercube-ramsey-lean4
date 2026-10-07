@@ -660,6 +660,17 @@ private theorem gadgetFirstBlock_constraint_count {G s ℓ n : ℕ}
       simpa [R, Eblock, blockAssignmentsEquiv] using
         block_constraint_count (gadgetChunkEquiv G s ℓ) A
 
+private theorem gadgetFirstBlocks_apply {G s ℓ n : ℕ} (hmn : G * s * ℓ ≤ n)
+    (v : CubeVertex n) (g : Fin G) (j : Fin s) (r : Fin ℓ) :
+    (gadgetFirstBlocksEquiv hmn (fun i => v i.1) (g, j)) r =
+      v (Fin.castLE hmn (gadgetChunkEquiv G s ℓ ((g, j), r))) := by
+  calc
+    (gadgetFirstBlocksEquiv hmn (fun i => v i.1) (g, j)) r =
+        v ((firstCoordinatesEquiv hmn (gadgetChunkEquiv G s ℓ ((g, j), r))).1) := by
+          simp [gadgetFirstBlocksEquiv, firstAssignmentEquiv, blockAssignmentsEquiv]
+    _ = v (Fin.castLE hmn (gadgetChunkEquiv G s ℓ ((g, j), r))) := by
+      congr 1
+
 private def boolComplementEquiv (ℓ : ℕ) : (Fin ℓ → Bool) ≃ (Fin ℓ → Bool) where
   toFun f := fun i => !f i
   invFun f := fun i => !f i
@@ -1536,6 +1547,59 @@ private theorem gadgetPower_le_four {β γ : ℝ} (n : ℕ) (hn : 2 ≤ n)
     (HypercubeRamsey.S04.gadgetPower β γ n : ℝ) = Real.rpow 2 (max 1 q : ℝ) := hcast
     _ ≤ Real.rpow 2 (Real.log x / Real.log 2 + 2) := hpow
     _ = 4 * x := heval
+
+private theorem gadgetPower_ge_scale {β γ : ℝ} (n : ℕ)
+    (hω : 0 < HypercubeRamsey.omega4 β γ) (hn : 1 ≤ n) :
+    (n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ) ≤
+      (HypercubeRamsey.S04.gadgetPower β γ n : ℝ) := by
+  let x : ℝ := (n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)
+  let t : ℝ := Real.log x / Real.log 2
+  let q : ℕ := ⌈t⌉₊
+  have hnreal : 1 ≤ (n : ℝ) := by exact_mod_cast hn
+  have hxpos : 0 < x := by
+    dsimp [x]
+    exact Real.rpow_pos_of_pos (by positivity) _
+  have hxone : 1 ≤ x := by
+    dsimp [x]
+    exact Real.one_le_rpow hnreal (by linarith)
+  have hlogx : 0 ≤ Real.log x := Real.log_nonneg hxone
+  have hlog2 : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hratio : 0 ≤ t := by dsimp [t]; exact div_nonneg hlogx hlog2.le
+  have htceil : t ≤ (q : ℝ) := Nat.le_ceil t
+  have hqmax : (q : ℝ) ≤ (max 1 q : ℝ) := by
+    exact_mod_cast (Nat.le_max_right 1 q)
+  have htmax : t ≤ (max 1 q : ℝ) := htceil.trans hqmax
+  have hcast : (HypercubeRamsey.S04.gadgetPower β γ n : ℝ) =
+      Real.rpow 2 (max 1 q : ℝ) := by
+    unfold HypercubeRamsey.S04.gadgetPower
+    rw [Nat.cast_pow, ← Real.rpow_natCast]
+    congr 1
+    simp [Nat.cast_max, q, t, x]
+  have hxeq : x = Real.rpow 2 t := by
+    calc
+      x = Real.exp (Real.log x) := (Real.exp_log hxpos).symm
+      _ = Real.exp (Real.log 2 * t) := by
+        congr 1
+        dsimp [t]
+        field_simp [ne_of_gt hlog2]
+      _ = Real.rpow 2 t := (Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2) t).symm
+  have hpow := Real.rpow_le_rpow_of_exponent_le
+    (by norm_num : (1 : ℝ) ≤ 2) htmax
+  calc
+    (n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ) = x := by rfl
+    _ = Real.rpow 2 t := hxeq
+    _ ≤ Real.rpow 2 (max 1 q : ℝ) := hpow
+    _ = (HypercubeRamsey.S04.gadgetPower β γ n : ℝ) := hcast.symm
+
+private theorem gadgetPower_even {β γ : ℝ} (n : ℕ) :
+    Even (HypercubeRamsey.S04.gadgetPower β γ n) := by
+  unfold HypercubeRamsey.S04.gadgetPower
+  apply (Nat.even_pow).2
+  constructor
+  · norm_num
+  · have h := Nat.le_max_left 1
+      (⌈Real.log ((n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)) / Real.log 2⌉₊)
+    omega
 
 private theorem specialNum_le_const {β γ : ℝ} (n : ℕ) (hn : 2 ≤ n)
     (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :

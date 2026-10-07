@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_pal
 import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
+import HypercubeRamsey.S18.PaletteRows
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
 
@@ -225,6 +226,31 @@ noncomputable def rawData (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT
     class_before := X.class_before
     early_injective := Lane_sol_s18_dl.initial_odd_labels_injective hPT physical E
     early_support := Lane_sol_s18_dl.initial_odd_label_support physical E }
+
+/-- D18.L palette-row bridge (TeX 17:278–279,303–333; 18:1079–1083).
+Apply S17's `lowModePalettePairRow` to the physical list context and the
+stored code/retention witnesses, then transport its palette and chi through
+`colourEquiv`, reindex external roles by flip coordinates, and identify the
+colour-independent nonconflict cutoff. The transport must certify S17's
+`ValidInitialPrior` for the supported typical own-cell readouts; no external
+readout is needed for this sum.
+The remaining transport is estimated at 300–600 proof lines once the S17
+producer's quantitative/prior-shape interface is aligned with S18's M/2
+corner input. The legacy (1-a)M certificate is not inferred here. -/
+theorem D18_L_palette_row (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
+    (T : Stage) (hSources : Sources κ T) :
+    ∃ Krow : ℝ, 0 < Krow ∧ ∀ᶠ k in atTop,
+      ∀ (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (X : Inputs hPT),
+        ProfileCornerMass PT → LargeIndex κ T k → PaletteRowInput (rawData hκ X) Krow := by
+  have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
+  -- A fixed upstream scale, before the index and all construction choices.
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10)
+  have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  obtain ⟨Krow, hKrow, hRows⟩ := lowModePalettePairRow κ hκ T hSource K17 hK17
+  refine ⟨Krow, hKrow, ?_⟩
+  filter_upwards [hRows] with k hRows
+  intro PT hPT X hMass hLarge
+  sorry
 
 /-- Full internal validity, adding cap and single-corner shape to the
 already proved normalization/internal-hit facts. TeX 18:43–49; 16:196–201,457–459.

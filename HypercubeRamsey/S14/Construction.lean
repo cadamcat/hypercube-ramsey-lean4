@@ -1478,6 +1478,53 @@ theorem posterior_even_rows (κ : CConsts) (hκ : κ.Admissible)
         κ.a / 200 ≤ ∑ x ∈ retainedLabels Geom H mask O v c W ys,
           posteriorMean Geom H mask O v c W ys x := by
     intro v c W ys hg
+    rcases hg with ⟨_, _, _, hpred, _⟩
+    have hpatch : 0 < (𝒯.P i).h := lt_of_lt_of_le hκ.h0_pos scales.h_large
+    have hk : 0 < 𝒯.kScale i := by
+      change 0 < sliceK κ (𝒯.P i).h
+      unfold sliceK
+      apply Nat.ceil_pos.mpr
+      exact Real.rpow_pos_of_pos (by exact_mod_cast hpatch) _
+    have hcoordinate_count (w : H.Tuple) :
+        (∑ x, ∑ r, if w r = x then (1 : ℝ) else 0) = (𝒯.kScale i : ℝ) := by
+      rw [Finset.sum_comm]
+      simp [Finset.sum_ite_eq', eq_comm]
+    have hscore (w : H.Tuple) :
+        (∑ x, (∑ r, if w r = x then (1 : ℝ) else 0) /
+          (𝒯.kScale i : ℝ)) = 1 := by
+      rw [← Finset.sum_div, hcoordinate_count]
+      exact div_self (by exact_mod_cast hk.ne')
+    have htotalMean :
+        ∑ x, posteriorMean Geom H mask O v c W ys x = 1 := by
+      unfold posteriorMean
+      calc
+        _ = ∑ w, ((H.tuplePrior (H.cornerOf W c)).w w *
+              subLikelihood Geom H mask O v c W w ys /
+                predictiveMass Geom H mask O v c W ys) *
+              (∑ x, (∑ r, if w r = x then (1 : ℝ) else 0) /
+                (𝒯.kScale i : ℝ)) := by
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro w hw
+          rw [← Finset.mul_sum]
+        _ = ∑ w, ((H.tuplePrior (H.cornerOf W c)).w w *
+              subLikelihood Geom H mask O v c W w ys /
+                predictiveMass Geom H mask O v c W ys) * 1 := by
+          apply Finset.sum_congr rfl
+          intro w hw
+          rw [hscore]
+        _ = ∑ w, (H.tuplePrior (H.cornerOf W c)).w w *
+              subLikelihood Geom H mask O v c W w ys /
+                predictiveMass Geom H mask O v c W ys := by
+          simp
+        _ = (∑ w, (H.tuplePrior (H.cornerOf W c)).w w *
+              subLikelihood Geom H mask O v c W w ys) /
+                predictiveMass Geom H mask O v c W ys := by
+          rw [← Finset.sum_div]
+        _ = predictiveMass Geom H mask O v c W ys /
+              predictiveMass Geom H mask O v c W ys := rfl
+        _ = 1 := div_self hpred.ne'
+    have _ := htotalMean
     sorry
   refine ⟨{
     σ := posteriorRow Geom H mask O L

@@ -604,6 +604,319 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
       _ = (FinProb.pi (fun u : D.CrossSub g => D.R')).expect F := hMarg
       _ = q ^ Fintype.card (D.CrossSub g) := hP
       _ = (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by rfl
+  have piFactor (D : Ctx η₀ β p h) (F : D.KeyT → D.Tup → ℝ) :
+      D.rawHidden.expect (fun Θ => ∏ k : D.KeyT, F k (Θ k)) =
+        ∏ k : D.KeyT, D.R'.expect (F k) := by
+    classical
+    change (∑ Θ : D.Hist, (∏ k : D.KeyT, D.R'.w (Θ k)) *
+        (∏ k : D.KeyT, F k (Θ k))) =
+      ∏ k : D.KeyT, ∑ ξ : D.Tup, D.R'.w ξ * F k ξ
+    calc
+      _ = ∑ Θ : D.Hist, ∏ k : D.KeyT, D.R'.w (Θ k) * F k (Θ k) := by
+        apply Finset.sum_congr rfl
+        intro Θ _
+        rw [← Finset.prod_mul_distrib]
+      _ = ∏ k : D.KeyT, ∑ ξ : D.Tup, D.R'.w ξ * F k ξ := by
+        rw [Fintype.prod_sum]
+  have ownCrossFactor (D : Ctx η₀ β p h) (g : D.KeyT) (x : Fin D.N) (i : D.M.ι) :
+      D.rawHidden.expect (fun Θ =>
+        D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+          ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) =
+        D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) *
+          (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+    classical
+    have hNoSelf : g ∉ crossKeys g := by
+      intro hg
+      have hd : keyDist g g = 1 := (Finset.mem_filter.mp hg).2
+      simp [keyDist] at hd
+    let F : D.KeyT → D.Tup → ℝ := fun k ξ =>
+      if k = g then D.postW ξ i * (if ¬ D.hitsAll x ξ then 1 else 0)
+      else if k ∈ crossKeys g then if D.hitsAll x ξ then 1 else 0 else 1
+    have hFactor (Θ : D.Hist) :
+        (∏ k : D.KeyT, F k (Θ k)) =
+          D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0) *
+            ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+      have hsplit := (Finset.prod_filter_mul_prod_filter_not Finset.univ
+        (fun k : D.KeyT => k = g) (fun k => F k (Θ k))).symm
+      have hcrossNe (k : D.KeyT) (hk : k ∈ crossKeys g) : k ≠ g := by
+        intro heq
+        exact hNoSelf (heq ▸ hk)
+      have hsingleton : Finset.univ.filter (fun k : D.KeyT => k = g) = {g} := by
+        ext k
+        simp
+      calc
+        _ = (∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k = g), F k (Θ k)) *
+              ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g), F k (Θ k) := by
+          simpa only [ne_eq] using hsplit
+        _ = (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0)) *
+              ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g),
+                (if k ∈ crossKeys g then (if D.hitsAll x (Θ k) then (1 : ℝ) else 0) else 1) := by
+          congr 1
+          · rw [hsingleton]
+            simp [F]
+          · apply Finset.prod_congr rfl
+            intro k hk
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+            simp [F, hk]
+        _ = (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0)) *
+              ∏ k ∈ crossKeys g, if D.hitsAll x (Θ k) then (1 : ℝ) else 0 := by
+          congr 1
+          rw [← Finset.prod_filter]
+          have hfilt :
+              (Finset.univ.filter (fun k : D.KeyT => k ≠ g)).filter
+                  (fun k => k ∈ crossKeys g) = crossKeys g := by
+            ext k
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+            constructor
+            · rintro ⟨hkneq, hk⟩
+              exact hk
+            · intro hk
+              exact ⟨hcrossNe k hk, hk⟩
+          rw [hfilt]
+        _ = D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then 1 else 0) *
+              ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+          congr 1
+          simp only [Ctx.CrossSub]
+          rw [Finset.univ_eq_attach]
+          exact (Finset.prod_attach (crossKeys g)
+            (fun k => if D.hitsAll x (Θ k) then (1 : ℝ) else 0)).symm
+    let own : D.Tup → ℝ := fun ξ => D.postW ξ i *
+      (if ¬ D.hitsAll x ξ then (1 : ℝ) else 0)
+    let hit : D.Tup → ℝ := fun ξ => if D.hitsAll x ξ then (1 : ℝ) else 0
+    let a : ℝ := D.R'.expect own
+    let b : ℝ := D.R'.pr (fun ξ => D.hitsAll x ξ)
+    have hProdEval :
+        (∏ k : D.KeyT, if k = g then a else if k ∈ crossKeys g then b else 1) =
+          a * b ^ Fintype.card (D.CrossSub g) := by
+      have hsplit := (Finset.prod_filter_mul_prod_filter_not Finset.univ
+        (fun k : D.KeyT => k = g)
+        (fun k => if k = g then a else if k ∈ crossKeys g then b else 1)).symm
+      have hcrossNe (k : D.KeyT) (hk : k ∈ crossKeys g) : k ≠ g := by
+        intro heq
+        exact hNoSelf (heq ▸ hk)
+      have hsingleton : Finset.univ.filter (fun k : D.KeyT => k = g) = {g} := by
+        ext k
+        simp
+      calc
+        _ = (∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k = g),
+              if k = g then a else if k ∈ crossKeys g then b else 1) *
+              ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g),
+                (if k = g then a else if k ∈ crossKeys g then b else 1) := by
+          simpa only [ne_eq] using hsplit
+        _ = a * ∏ k ∈ Finset.univ.filter (fun k : D.KeyT => k ≠ g),
+              (if k ∈ crossKeys g then b else 1) := by
+          congr 1
+          · rw [hsingleton]
+            simp
+          · apply Finset.prod_congr rfl
+            intro k hk
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hk
+            simp [hk]
+        _ = a * ∏ k ∈ crossKeys g, b := by
+          congr 1
+          rw [← Finset.prod_filter]
+          have hfilt :
+              (Finset.univ.filter (fun k : D.KeyT => k ≠ g)).filter
+                  (fun k => k ∈ crossKeys g) = crossKeys g := by
+            ext k
+            simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+            constructor
+            · rintro ⟨hkneq, hk⟩
+              exact hk
+            · intro hk
+              exact ⟨hcrossNe k hk, hk⟩
+          rw [hfilt]
+        _ = a * b ^ Fintype.card (D.CrossSub g) := by
+          congr 1
+          simp [Ctx.CrossSub, Finset.prod_const]
+    have hEvalEach (k : D.KeyT) : D.R'.expect (F k) =
+        if k = g then a else if k ∈ crossKeys g then b else 1 := by
+      by_cases hkg : k = g
+      · simp [F, hkg, a, own]
+      · by_cases hkc : k ∈ crossKeys g
+        · simp [F, hkg, hkc, b, hit, FinProb.expect, FinProb.pr]
+        · simp [F, hkg, hkc, FinProb.expect, D.R'.sum_eq_one]
+    calc
+      _ = D.rawHidden.expect (fun Θ => ∏ k : D.KeyT, F k (Θ k)) := by
+        unfold FinProb.expect
+        apply Finset.sum_congr rfl
+        intro Θ _
+        exact congrArg (fun z => D.rawHidden.w Θ * z) (hFactor Θ).symm
+      _ = ∏ k : D.KeyT, D.R'.expect (F k) := piFactor D F
+      _ = ∏ k : D.KeyT, if k = g then a else if k ∈ crossKeys g then b else 1 := by
+        apply Finset.prod_congr rfl
+        intro k _
+        exact hEvalEach k
+      _ = a * b ^ Fintype.card (D.CrossSub g) := hProdEval
+      _ = D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) *
+          (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+        have ha : a = D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
+          dsimp [a, own]
+          exact posteriorOwnMiss D x i
+        rw [ha]
+  have crossIndicator (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N) :
+      (if D.crossHit Θ g x then (1 : ℝ) else 0) =
+    ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+    classical
+    by_cases hc : D.crossHit Θ g x
+    · have hc' : ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+        simpa [Ctx.crossHit] using hc
+      have hprod :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 1 := by
+        apply Finset.prod_eq_one
+        intro u _
+        simp [hc' u.1 u.2]
+      simp [hc, hprod]
+    · have hc' : ¬ ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+        simpa [Ctx.crossHit] using hc
+      push_neg at hc'
+      obtain ⟨u, hu, hnot⟩ := hc'
+      have hzero :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_attach _ ⟨u, hu⟩) (by simp [hnot])
+      simp [hc, hzero]
+  have hitDiffIndicator (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) (x : Fin D.N) :
+      (if D.crossHit Θ g x then (1 : ℝ) else 0) -
+          (if D.ownHit Θ g x then (1 : ℝ) else 0) =
+        (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+          ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0 := by
+    by_cases hc : D.crossHit Θ g x
+    · have hprod :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 1 := by
+        have hc' : ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+          simpa [Ctx.crossHit] using hc
+        apply Finset.prod_eq_one
+        intro u _
+        simp [hc' u.1 u.2]
+      have hown : D.ownHit Θ g x ↔ D.hitsAll x (Θ g) := by
+        change (D.crossHit Θ g x ∧ D.hitsAll x (Θ g)) ↔ D.hitsAll x (Θ g)
+        constructor
+        · intro hh
+          exact hh.2
+        · intro hh
+          exact ⟨hc, hh⟩
+      by_cases ho : D.hitsAll x (Θ g) <;> simp [hc, ho, hown, hprod]
+    · have hprod :
+          (∏ u ∈ (crossKeys g).attach,
+            if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) = 0 := by
+        have hc' : ¬ ∀ u ∈ crossKeys g, D.hitsAll x (Θ u) := by
+          simpa [Ctx.crossHit] using hc
+        push_neg at hc'
+        obtain ⟨u, hu, hnot⟩ := hc'
+        exact Finset.prod_eq_zero (Finset.mem_attach _ ⟨u, hu⟩) (by simp [hnot])
+      have hown : ¬ D.ownHit Θ g x := by
+        intro hh
+        exact hc hh.1
+      by_cases ho : D.hitsAll x (Θ g) <;> simp [hc, hown, ho, hprod]
+  have lossForm (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT) :
+      ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) =
+        ∑ i, ∑ x, (D.M.μ i).w x *
+          (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+            ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) := by
+    classical
+    calc
+      _ = ∑ i, D.postW (Θ g) i *
+            ((∑ x, (D.M.μ i).w x * if D.crossHit Θ g x then (1 : ℝ) else 0) -
+              ∑ x, (D.M.μ i).w x * if D.ownHit Θ g x then (1 : ℝ) else 0) := by
+        simp [Ctx.dMinus, Ctx.dPlus]
+      _ = ∑ i, D.postW (Θ g) i *
+            ∑ x, ((D.M.μ i).w x * (if D.crossHit Θ g x then (1 : ℝ) else 0) -
+              (D.M.μ i).w x * (if D.ownHit Θ g x then (1 : ℝ) else 0)) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [← Finset.sum_sub_distrib]
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            (D.postW (Θ g) i *
+              ((if D.crossHit Θ g x then (1 : ℝ) else 0) -
+                (if D.ownHit Θ g x then (1 : ℝ) else 0))) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro x _
+        ring
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            (D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+              ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        apply Finset.sum_congr rfl
+        intro x _
+        rw [hitDiffIndicator]
+        ring
+  have rawLossMean (D : Ctx η₀ β p h) (g : D.KeyT) :
+      D.rawHidden.expect (fun Θ =>
+        ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) =
+        ∑ i, ∑ x, (D.M.μ i).w x *
+          (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+    classical
+    let H : D.Hist → D.M.ι → Fin D.N → ℝ := fun Θ i x =>
+      D.postW (Θ g) i * (if ¬ D.hitsAll x (Θ g) then (1 : ℝ) else 0) *
+        ∏ u : D.CrossSub g, if D.hitsAll x (Θ u.1) then (1 : ℝ) else 0
+    have hswap₁ :
+        (∑ Θ : D.Hist, ∑ i, ∑ x, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x)) =
+          ∑ i, ∑ Θ : D.Hist, ∑ x, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+      rw [Finset.sum_comm]
+    have hswap₂ (i : D.M.ι) :
+        (∑ Θ : D.Hist, ∑ x, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x)) =
+          ∑ x, ∑ Θ : D.Hist, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+      rw [Finset.sum_comm]
+    calc
+      _ = ∑ Θ : D.Hist, D.rawHidden.w Θ *
+            (∑ i, ∑ x, (D.M.μ i).w x * H Θ i x) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro Θ _
+          have hpoint :
+              (∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) =
+                ∑ i, ∑ x, (D.M.μ i).w x * H Θ i x := by
+            simpa [H] using (lossForm D Θ g)
+          exact congrArg (fun z => D.rawHidden.w Θ * z) hpoint
+      _ = ∑ Θ : D.Hist, ∑ i, ∑ x,
+            D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+          apply Finset.sum_congr rfl
+          intro Θ _
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro i _
+          rw [Finset.mul_sum]
+      _ = ∑ i, ∑ x, ∑ Θ : D.Hist,
+            D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x) := by
+          rw [hswap₁]
+          apply Finset.sum_congr rfl
+          intro i _
+          rw [hswap₂]
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            D.rawHidden.expect (fun Θ => H Θ i x) := by
+          apply Finset.sum_congr rfl
+          intro i _
+          apply Finset.sum_congr rfl
+          intro x _
+          calc
+            (∑ Θ : D.Hist, D.rawHidden.w Θ * ((D.M.μ i).w x * H Θ i x)) =
+                ∑ Θ, (D.M.μ i).w x * (D.rawHidden.w Θ * H Θ i x) := by
+              apply Finset.sum_congr rfl
+              intro Θ _
+              ring
+            _ = (D.M.μ i).w x * ∑ Θ : D.Hist, D.rawHidden.w Θ * H Θ i x := by
+              rw [Finset.mul_sum]
+            _ = (D.M.μ i).w x * D.rawHidden.expect (fun Θ => H Θ i x) := rfl
+      _ = ∑ i, ∑ x, (D.M.μ i).w x *
+            (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+              (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) := by
+          apply Finset.sum_congr rfl
+          intro i _
+          apply Finset.sum_congr rfl
+          intro x _
+          rw [show D.rawHidden.expect (fun Θ => H Θ i x) =
+            D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) *
+              (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) by
+                exact ownCrossFactor D g x i]
+          ring
   have rPrimeHit (D : Ctx η₀ β p h) (x : Fin D.N) :
       D.R'.pr (fun ξ => D.hitsAll x ξ) =
         ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by

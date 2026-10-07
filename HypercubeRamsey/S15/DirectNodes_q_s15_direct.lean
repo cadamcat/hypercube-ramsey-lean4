@@ -1991,6 +1991,17 @@ theorem highDirect_crossingNeighbours_card_le_prefix {κ : CConsts} {T : Stage} 
       (Fintype.card_coe C).symm
     _ ≤ ell := hcardSub
 
+theorem directBulkNeighbours_card_lower {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (a : S15.EvenPosition T k) (i : Fin PT.tiling.m)
+    (hi : S15.patchAt PT hPT a.1 = i) :
+    T.S.n k - (PT.tiling.P i).ℓ ≤ (S15.bulkNeighbours PT hPT a).card := by
+  have hcardUnion := Finset.card_union_of_disjoint
+    (direct_neighbor_sets_disjoint PT hPT a)
+  rw [direct_neighbor_union PT hPT a, star_card_eq_dimension] at hcardUnion
+  have hcross := highDirect_crossingNeighbours_card_le_prefix PT hPT a i hi
+  omega
+
 theorem evenPatchPositions_card_eq {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (i : Fin PT.tiling.m)
     (hle : (PT.tiling.P i).ℓ < T.S.n k) :

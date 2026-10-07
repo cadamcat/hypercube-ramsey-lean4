@@ -6,8 +6,9 @@ import HypercubeRamsey.Framework.OneShot
 
 This form allows each block to have its own first-side law and own/external status.
 It therefore also covers the Part C use where every ID is treated as own but corner
-laws may differ. The explicit growth hypotheses record the asymptotic estimates used
-by the test instead of hiding them in informal `O` notation.
+laws may differ. The explicit hypotheses record the quantitative estimates used by the
+test, in terms of the actual number `r` of blocks, instead of hiding them in informal
+`O` notation.
 -/
 
 namespace HypercubeRamsey.S10
@@ -75,37 +76,45 @@ noncomputable def fixedListFailureWeight {N r k q : ℕ} (E : Fin N → Fin N �
     if fixedListFailure E G ρ D μ a W then tupleArrayWeight μ W else 0
 
 /-- P10.1c (10:56–99): for a fixed list, the absolute squared mass and every own or
-external deletion ratio pass except with probability `exp(-c₅ a² k)`. The hypotheses
-are stated for arbitrary block laws, so a caller may mark every block own while still
-using a different first-side law for each block. -/
-def P10_1cFixedListTest (η₀ δ : ℝ) (hη₀ : 0 < η₀) (hδ : 0 < δ)
-    (hδsmall : δ < η₀ / 2000) : Prop :=
+external deletion ratio pass except with probability `exp(-c₅ a² k)`, for an absolute
+`c₅ > 0`. The hypotheses are stated for arbitrary block laws, so a caller may mark every
+block own while still using a different first-side law for each block.
+
+The statement is generic in the discrepancy width `w` and error `ε`, the codegree gain
+`a`, the block-law width `wμ` and the aggregate width `wν`. Section 10 uses
+`w = n^η₀`, `ε = n^(-η₀)`, `a = n^(-δ)`, `wμ = wν = n^δ` (10:15–16, 10:85); Part C uses
+the same `w, ε` with `a = θ/100` and `wμ = n^η₀ / 2`. The explicit hypotheses are the
+quantitative facts the argument uses:
+* `wν + log 4 + 2kr ≤ w`: the tilted prefix aggregate `D̄_J ≤ 4ν / A(J)` (10:75–79)
+  keeps width at most `w` while all of the fewer than `kr` preceding ratios are at
+  least `.24` (10:80–83);
+* `(r+1) k r exp(wμ - w) ≤ exp(-a²k/50)`: a block law conditioned on an exceptional set
+  of mass above `exp(wμ - w)` would fit the discrepancy width (10:85–87); `k r` counts
+  the exposures and `r + 1` the orders (10:68, 10:99);
+* `log (r+1) ≤ a²k/100`: the union over orders against the Azuma bound (10:99);
+* `0 ≤ ε`, `100 ε ≤ a ≤ 1/10`: the discrepancy error is negligible against the gain
+  (10:86–97). -/
+def P10_1cFixedListTest : Prop :=
     ∃ c₅ : ℝ, 0 < c₅ ∧
-      ∀ (n N r k m T q : ℕ) (E : Fin N → Fin N → Prop)
+      ∀ (N r k q : ℕ) (E : Fin N → Fin N → Prop)
         (X Y : Finset (Fin N)) (G : Colour)
         (ρ : FinProb (Fin q)) (D : Fin q → Law N) (ν : Law N)
-        (μ : Fin r → Law N),
-        0 < n → 0 < N → 0 < k →
-        (r : ℝ) ≤ (T + m + 1 : ℕ) →
-        (∀ b, (μ b).SupportedIn X ∧ (μ b).WidthLE ((n : ℝ) ^ η₀)) →
-        ν.SupportedIn Y → ν.WidthLE ((n : ℝ) ^ δ) →
+        (μ : Fin r → Law N) (w ε a wμ wν : ℝ),
+        (∀ b, (μ b).SupportedIn X ∧ (μ b).WidthLE wμ) →
+        ν.WidthLE wν →
         (∀ j, (D j).SupportedIn Y) →
         (∀ y, (∑ j, ρ.w j * (D j).w y) ≤ 4 * ν.w y) →
-        DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
-        (n : ℝ) ^ (-δ) ≤ 1 / 10 →
-        4 * Real.exp ((n : ℝ) ^ δ + 2 * (k : ℝ) * (T + m : ℕ)) ≤
-          Real.exp ((n : ℝ) ^ η₀) →
-        Real.log ((r : ℝ) + 1) ≤ ((n : ℝ) ^ (-2 * δ) * k) / 100 →
-        ((r : ℝ) + 1) * Real.exp (-((n : ℝ) ^ η₀) / 2) ≤
-          Real.exp (-((n : ℝ) ^ (-2 * δ) * k) / 100) →
-        fixedListFailureWeight (N := N) (r := r) (k := k) (q := q)
-          E G ρ D μ ((n : ℝ) ^ (-δ)) ≤
-          Real.exp (-c₅ * (n : ℝ) ^ (-2 * δ) * k)
+        DiscOne E X Y w w ε →
+        0 ≤ ε → 100 * ε ≤ a → a ≤ 1 / 10 →
+        wν + Real.log 4 + 2 * (k : ℝ) * (r : ℝ) ≤ w →
+        Real.log ((r : ℝ) + 1) ≤ a ^ 2 * (k : ℝ) / 100 →
+        ((r : ℝ) + 1) * (k : ℝ) * (r : ℝ) * Real.exp (wμ - w) ≤
+          Real.exp (-(a ^ 2 * (k : ℝ)) / 50) →
+        fixedListFailureWeight (N := N) (r := r) (k := k) (q := q) E G ρ D μ a ≤
+          Real.exp (-c₅ * a ^ 2 * (k : ℝ))
 
 /-- P10.1c (10:56–99), as a reusable generic fixed-list result. -/
-theorem p10_1c_fixed_list_squared_mass_test
-    (η₀ δ : ℝ) (hη₀ : 0 < η₀) (hδ : 0 < δ)
-    (hδsmall : δ < η₀ / 2000) : P10_1cFixedListTest η₀ δ hη₀ hδ hδsmall := by
+theorem p10_1c_fixed_list_squared_mass_test : P10_1cFixedListTest := by
   sorry
 
 end HypercubeRamsey.S10

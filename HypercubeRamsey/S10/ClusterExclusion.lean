@@ -43,13 +43,7 @@ theorem p10_1j_tag_profiles_and_odd_injection
       ((n : ℝ) ^ (200 * δ) + (n : ℝ) ^ (141 * δ)) * Real.log n <
         (n : ℝ) ^ (298 * δ))
     (hprojection : P10_1aProjectionStatement)
-    (hfixed : P10_1cFixedListTest η₀ δ hη₀ hδ
-      (by
-        have hmin : min (min η₀ ζ) 1 ≤ η₀ :=
-          le_trans (min_le_left _ _) (min_le_left _ _)
-        calc
-          δ < min (min η₀ ζ) 1 / 2000 := hδsmall
-          _ ≤ η₀ / 2000 := div_le_div_of_nonneg_right hmin (by norm_num))) :
+    (hfixed : P10_1cFixedListTest) :
     ∃ n₀ C₀, ∀ n N (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (G : Colour),
       LargeAt n₀ C₀ n N →
       DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
@@ -74,15 +68,25 @@ theorem p10_1j_tag_profiles_and_odd_injection
   exact ⟨e, e.injective⟩
 
 /-- P10.1k (10:283–294): transfer the successful odd construction to fractional
-even rows. -/
+even rows. The node carries Proposition 10.1's parameter range (10:13) and its own
+large regime: the paper's estimates (10:286, 10:290–292) hold only for large `n` and
+`N / 2^n`. Because `OddEmbeddingData` records only an injection, this node also carries
+the probabilistic construction of 10:263–281 that produces the odd labels. -/
 theorem p10_1k_transfer_to_even_rows
-    (η₀ ζ δ κ : ℝ) {n₀ n N : ℕ} {C₀ : ℝ}
-    {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {G : Colour}
-    (hlarge : LargeAt n₀ C₀ n N)
-    (hdisc : DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)))
-    (havail : AvailableAt κ (PCluster G ζ δ) n N E X Y)
-    (odd : OddEmbeddingData n N E G) : Nonempty (HallRows n N E G) := by
+    (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) (hδ : 0 < δ)
+    (hδsmall : δ < min (min η₀ ζ) 1 / 2000) (hκ : 0 < κ) :
+    ∃ n₀ C₀, ∀ n N (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (G : Colour),
+      LargeAt n₀ C₀ n N →
+      DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
+      AvailableAt κ (PCluster G ζ δ) n N E X Y →
+      OddEmbeddingData n N E G → Nonempty (HallRows n N E G) := by
   sorry
+
+/-- `LargeAt` is antitone in its thresholds. -/
+private theorem largeAt_of_le {n₀ n₁ n N : ℕ} {C₀ C₁ : ℝ}
+    (hn : n₀ ≤ n₁) (hC : C₀ ≤ C₁) (h : LargeAt n₁ C₁ n N) : LargeAt n₀ C₀ n N :=
+  ⟨le_trans hn h.1,
+    le_trans (mul_le_mul_of_nonneg_right hC (pow_nonneg (by norm_num) n)) h.2.1, h.2.2⟩
 
 /-- P10.1k / F-HallEmbed: turn the odd injection and even rows into a cube. -/
 theorem p10_1k_hall_embed {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
@@ -99,19 +103,19 @@ theorem cluster_exclusion_oneShot
       LargeAt n₀ C₀ n N →
       DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
       AvailableAt κ (PCluster G ζ δ) n N E X Y → CubeAt n N E := by
-  have hδeta : δ < η₀ / 2000 := by
-    have hmin : min (min η₀ ζ) 1 ≤ η₀ :=
-      le_trans (min_le_left _ _) (min_le_left _ _)
-    exact lt_of_lt_of_le hδsmall (div_le_div_of_nonneg_right hmin (by norm_num))
   obtain ⟨n₀, C₀, hconstruct⟩ :=
     p10_1j_tag_profiles_and_odd_injection η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
       (p10_1b_scale_separation η₀ ζ δ hη₀ hζ hδ hδsmall)
       p10_1a_hamming_projection
-      (p10_1c_fixed_list_squared_mass_test η₀ δ hη₀ hδ hδeta)
-  refine ⟨n₀, C₀, ?_⟩
+      p10_1c_fixed_list_squared_mass_test
+  obtain ⟨n₁, C₁, htransfer⟩ :=
+    p10_1k_transfer_to_even_rows η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  refine ⟨max n₀ n₁, max C₀ C₁, ?_⟩
   intro n N E X Y G hlarge hdisc havail
-  obtain ⟨odd⟩ := hconstruct n N E X Y G hlarge hdisc havail
-  obtain ⟨rows⟩ := p10_1k_transfer_to_even_rows η₀ ζ δ κ hlarge hdisc havail odd
+  obtain ⟨odd⟩ := hconstruct n N E X Y G
+    (largeAt_of_le (le_max_left _ _) (le_max_left _ _) hlarge) hdisc havail
+  obtain ⟨rows⟩ := htransfer n N E X Y G
+    (largeAt_of_le (le_max_right _ _) (le_max_right _ _) hlarge) hdisc havail odd
   exact p10_1k_hall_embed rows
 
 private theorem cluster_absence_of_stabilized

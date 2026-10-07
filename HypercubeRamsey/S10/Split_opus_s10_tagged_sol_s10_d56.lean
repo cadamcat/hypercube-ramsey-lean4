@@ -91,4 +91,63 @@ theorem local_legal_positive_height_pr_one (p : HDParams) (hH : 2 ≤ p.H)
     simp only [FinProb.pr, if_pos (hpos _)]
     exact p.actLaw.sum_eq_one
 
+/-- Five coordinates in the nonzero coset cannot have syndrome in the kernel. -/
+theorem five_coset_sum_not_subset {G : Type*} [AddCommGroup G] [DecidableEq G]
+    (f : G →+ ZMod 2) (σ : G) (C U : Finset G)
+    (hσ : f σ = 0) (hC : ∀ x ∈ C, f x = 1)
+    (hU : U.card = 5) (hsum : ∑ x ∈ U, x = σ) : ¬ U ⊆ C := by
+  intro hsub
+  have hones : (∑ x ∈ U, f x) = (1 : ZMod 2) := by
+    calc
+      (∑ x ∈ U, f x) = ∑ _x ∈ U, (1 : ZMod 2) := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        exact hC x (hsub hx)
+      _ = (5 : ZMod 2) := by simp [hU]
+      _ = 1 := by decide
+  have hzero : (∑ x ∈ U, f x) = 0 := by
+    rw [← map_sum, hsum, hσ]
+  have hbad : (1 : ZMod 2) = 0 := hones.symm.trans hzero
+  norm_num at hbad
+
+/-- A support of size `r+5` in the nonzero coset is farther than `r` from
+any gated odd support of size at most five with kernel syndrome. The two
+set differences count the differing bits after cancelling the base word. -/
+theorem ghost_support_distance {G : Type*} [AddCommGroup G] [DecidableEq G]
+    (f : G →+ ZMod 2) (σ : G) (C U : Finset G) (r : ℕ)
+    (hσ : f σ = 0) (hC : ∀ x ∈ C, f x = 1)
+    (hCcard : C.card = r + 5) (hUodd : Odd U.card) (hUbound : U.card ≤ 5)
+    (hsum : ∑ x ∈ U, x = σ) :
+    r + 2 ≤ (C \ U).card + (U \ C).card := by
+  have hcard₁ := Finset.card_sdiff_add_card_inter C U
+  have hcard₂ := Finset.card_sdiff_add_card_inter U C
+  rw [Finset.inter_comm U C] at hcard₂
+  have hinter_le : (C ∩ U).card ≤ U.card :=
+    Finset.card_le_card Finset.inter_subset_right
+  by_cases hsmall : U.card ≤ 3
+  · omega
+  · have hfive : U.card = 5 := by
+      rcases hUodd with ⟨k, hk⟩
+      omega
+    have hnot : ¬ U ⊆ C := five_coset_sum_not_subset f σ C U hσ hC hfive hsum
+    have hne : C ∩ U ≠ U := by
+      intro heq
+      apply hnot
+      intro x hx
+      exact (Finset.mem_inter.mp (heq.symm ▸ hx)).1
+    have hlt : (C ∩ U).card < U.card :=
+      Finset.card_lt_card (Finset.ssubset_iff_subset_ne.mpr
+        ⟨Finset.inter_subset_right, hne⟩)
+    omega
+
+/-- The same ghost support is at distance exactly `r` from an ungated
+five-bit envelope word whose support is contained in it. -/
+theorem ghost_envelope_distance {α : Type*} [DecidableEq α]
+    (C S : Finset α) (r : ℕ) (hsub : S ⊆ C)
+    (hC : C.card = r + 5) (hS : S.card = 5) :
+    (C \ S).card + (S \ C).card = r := by
+  rw [Finset.sdiff_eq_empty_iff_subset.mpr hsub, Finset.card_empty, add_zero,
+    Finset.card_sdiff_of_subset hsub, hC, hS]
+  omega
+
 end HypercubeRamsey.Lane_sol_s10_d56

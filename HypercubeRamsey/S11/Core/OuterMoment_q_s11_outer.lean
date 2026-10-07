@@ -250,4 +250,252 @@ theorem weighted_gram_clique_impossible {V : Type*} [Fintype V] [DecidableEq V]
   have hgap' : τ ^ 2 ≤ 1 / (t : ℝ) + ε := hτV.trans hnormV
   linarith [hgap, hgap']
 
+/-! ### Product-law conditioning
+
+These finite reindexing lemmas let the one- and two-free estimates be integrated over the remaining coordinates of
+an independent tuple. -/
+
+private abbrev pairRest (u : ℕ) (j j' : Fin u) : Type :=
+  {i : Fin u // i ∈ ((Finset.univ : Finset (Fin u)).erase j).erase j'}
+
+private def pairTuple {u N : ℕ} (j j' : Fin u) (hjj : j ≠ j')
+    (q : (Fin N × Fin N) × (pairRest u j j' → Fin N)) : Fin u → Fin N :=
+  fun i => if h : i = j then q.1.1 else if h' : i = j' then q.1.2 else
+    q.2 ⟨i, Finset.mem_erase.mpr ⟨h',
+      Finset.mem_erase.mpr ⟨h, Finset.mem_univ _⟩⟩⟩
+
+private def pairBase {u N : ℕ} (j j' : Fin u) (hjj : j ≠ j')
+    (x₀ : Fin N) (r : pairRest u j j' → Fin N) : Fin u → Fin N :=
+  fun i => if h : i = j then x₀ else if h' : i = j' then x₀ else
+    r ⟨i, Finset.mem_erase.mpr ⟨h',
+      Finset.mem_erase.mpr ⟨h, Finset.mem_univ _⟩⟩⟩
+
+private def pairTupleEquiv {u N : ℕ} (j j' : Fin u) (hjj : j ≠ j') :
+    (Fin N × Fin N) × (pairRest u j j' → Fin N) ≃ (Fin u → Fin N) where
+  toFun := pairTuple j j' hjj
+  invFun f := ((f j, f j'), fun i => f i.1)
+  left_inv q := by
+    rcases q with ⟨⟨x, z⟩, r⟩
+    apply Prod.ext
+    · apply Prod.ext
+      · simp [pairTuple]
+      · have hj' : j' ≠ j := Ne.symm hjj
+        simp [pairTuple, hj']
+    · funext i
+      have h₁ : i.1 ≠ j' := (Finset.mem_erase.mp i.2).1
+      have h₂ : i.1 ≠ j := (Finset.mem_erase.mp ((Finset.mem_erase.mp i.2).2)).1
+      simp only [pairTuple, h₂, h₁]
+      congr 1
+  right_inv f := by
+    funext i
+    by_cases h : i = j
+    · subst i
+      simp [pairTuple]
+    · by_cases h' : i = j'
+      · subst i
+        simp [pairTuple, h, hjj]
+      · simp [pairTuple, h, h']
+
+private def pairRestWeight {u N : ℕ} (σ : Fin N → ℝ) (j j' : Fin u)
+    (r : pairRest u j j' → Fin N) : ℝ := ∏ i, σ (r i)
+
+private theorem tupWt_pairTuple {u N : ℕ} (σ : Fin N → ℝ) (j j' : Fin u) (hjj : j ≠ j')
+    (q : (Fin N × Fin N) × (pairRest u j j' → Fin N)) :
+    tupWt σ (pairTuple j j' hjj q) = σ q.1.1 * σ q.1.2 * pairRestWeight σ j j' q.2 := by
+  classical
+  letI : Fintype (pairRest u j j') := inferInstance
+  let f : Fin u → Fin N := pairTuple j j' hjj q
+  have hj : j ∈ (Finset.univ : Finset (Fin u)) := Finset.mem_univ _
+  have hj' : j' ∈ (Finset.univ : Finset (Fin u)).erase j := Finset.mem_erase.mpr ⟨hjj.symm, Finset.mem_univ _⟩
+  have hrest : (∏ i : pairRest u j j', σ (f i.1)) =
+      ∏ i ∈ ((Finset.univ : Finset (Fin u)).erase j).erase j', σ (f i) := by
+    simpa [pairRest] using
+      (Finset.prod_coe_sort (((Finset.univ : Finset (Fin u)).erase j).erase j')
+        (fun i : Fin u => σ (f i)))
+  have hprod : (∏ i : Fin u, σ (f i)) =
+      σ (f j) * σ (f j') * (∏ i : pairRest u j j', σ (f i.1)) := by
+    rw [← Finset.prod_erase_mul (Finset.univ : Finset (Fin u)) (fun i => σ (f i)) hj]
+    rw [← Finset.prod_erase_mul ((Finset.univ : Finset (Fin u)).erase j)
+      (fun i => σ (f i)) hj']
+    rw [← hrest]
+    ring
+  have hprodRest : (∏ i : pairRest u j j', σ (f i.1)) =
+      ∏ i : pairRest u j j', σ (q.2 i) := by
+    apply Finset.prod_congr rfl
+    intro i hi
+    have h₁ : i.1 ≠ j' := (Finset.mem_erase.mp i.2).1
+    have h₂ : i.1 ≠ j := (Finset.mem_erase.mp ((Finset.mem_erase.mp i.2).2)).1
+    simp [f, pairTuple, h₁, h₂]
+  unfold tupWt
+  rw [hprod]
+  rw [hprodRest]
+  simp [f, pairTuple, pairRestWeight, hjj.symm]
+
+theorem tuple_event_mass_le_of_two_free {u N : ℕ} (σ : Fin N → ℝ) (S : Finset (Fin N))
+    (hσ : ∀ x, 0 ≤ σ x) (hσsum : ∑ x, σ x = 1)
+    (hσsupp : ∀ x, σ x ≠ 0 → x ∈ S) (j j' : Fin u) (hjj : j ≠ j')
+    (x₀ : Fin N) (hx₀ : x₀ ∈ S) (P : (Fin u → Fin N) → Prop) [DecidablePred P]
+    (ε : ℝ) (hε : 0 ≤ ε)
+    (hbound : ∀ base : Fin u → Fin N, (∀ i, base i ∈ S) →
+      (∑ x, ∑ z, σ x * σ z *
+        (if P (Function.update (Function.update base j x) j' z) then 1 else 0)) ≤ ε) :
+    (∑ f : Fin u → Fin N, tupWt σ f * (if P f then 1 else 0)) ≤ ε := by
+  classical
+  let R := pairRest u j j'
+  letI : Fintype R := inferInstance
+  let e := pairTupleEquiv (u := u) (N := N) j j' hjj
+  let rw (r : R → Fin N) : ℝ := pairRestWeight σ j j' r
+  have hsumRest : (∑ r : R → Fin N, rw r) = 1 := by
+    dsimp [rw, pairRestWeight]
+    calc
+      (∑ r : R → Fin N, ∏ i, σ (r i)) = ∏ i : R, ∑ x, σ x := by
+        symm
+        exact Fintype.prod_sum (fun (_ : R) (x : Fin N) => σ x)
+      _ = 1 := by simp [hσsum]
+  have hrest_nonneg (r : R → Fin N) : 0 ≤ rw r := by
+    dsimp [rw, pairRestWeight]
+    exact Finset.prod_nonneg fun i hi => hσ (r i)
+  have hrest_support (r : R → Fin N) (hr : rw r ≠ 0) (i : R) : r i ∈ S := by
+    have hprod := hr
+    change (∏ k : R, σ (r k)) ≠ 0 at hprod
+    have hfactor := (Finset.prod_ne_zero_iff.mp hprod) i (Finset.mem_univ i)
+    exact hσsupp (r i) hfactor
+  have hbase (r : R → Fin N) (hr : rw r ≠ 0) :
+      ∀ i, pairBase j j' hjj x₀ r i ∈ S := by
+    intro i
+    by_cases h : i = j
+    · simp [pairBase, h, hx₀]
+    · by_cases h' : i = j'
+      · simp [pairBase, h, h', hx₀]
+      · have hrmem := hrest_support r hr ⟨i, Finset.mem_erase.mpr ⟨h',
+          Finset.mem_erase.mpr ⟨h, Finset.mem_univ _⟩⟩⟩
+        simpa [pairBase, h, h'] using hrmem
+  have hReindex :
+      (∑ f : Fin u → Fin N, tupWt σ f * (if P f then 1 else 0)) =
+        ∑ q : (Fin N × Fin N) × (R → Fin N),
+          tupWt σ (e q) * (if P (e q) then 1 else 0) := by
+    symm
+    exact Fintype.sum_equiv e
+      (fun q => tupWt σ (e q) * (if P (e q) then 1 else 0))
+      (fun f => tupWt σ f * (if P f then 1 else 0)) (by intro q; rfl)
+  rw [hReindex]
+  have hfactor :
+      (∑ q : (Fin N × Fin N) × (R → Fin N),
+        tupWt σ (e q) * (if P (e q) then 1 else 0)) =
+        ∑ r : R → Fin N, rw r *
+          (∑ x, ∑ z, σ x * σ z * (if P (e ((x, z), r)) then 1 else 0)) := by
+    rw [Fintype.sum_prod_type]
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro r hr
+    rw [Fintype.sum_prod_type]
+    have hweight (x z : Fin N) : tupWt σ (e ((x, z), r)) = σ x * σ z * rw r := by
+      change tupWt σ (pairTuple j j' hjj ((x, z), r)) = _
+      rw [tupWt_pairTuple]
+    simp_rw [hweight]
+    calc
+      (∑ x, ∑ z, σ x * σ z * rw r * (if P (e ((x, z), r)) then 1 else 0)) =
+          rw r * (∑ x, ∑ z, σ x * σ z * (if P (e ((x, z), r)) then 1 else 0)) := by
+        calc
+          (∑ x, ∑ z, σ x * σ z * rw r * (if P (e ((x, z), r)) then 1 else 0)) =
+              ∑ x, rw r * ∑ z, σ x * σ z * (if P (e ((x, z), r)) then 1 else 0) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            calc
+              (∑ z, σ x * σ z * rw r * (if P (e ((x, z), r)) then 1 else 0)) =
+                  ∑ z, rw r * (σ x * σ z * (if P (e ((x, z), r)) then 1 else 0)) := by
+                apply Finset.sum_congr rfl
+                intro z hz
+                ring
+              _ = rw r * (∑ z, σ x * σ z * (if P (e ((x, z), r)) then 1 else 0)) := by
+                rw [← Finset.mul_sum]
+          _ = rw r * (∑ x, ∑ z, σ x * σ z * (if P (e ((x, z), r)) then 1 else 0)) := by
+            rw [← Finset.mul_sum]
+      _ = _ := rfl
+  rw [hfactor]
+  calc
+    (∑ r : R → Fin N, rw r *
+      (∑ x, ∑ z, σ x * σ z * (if P (e ((x, z), r)) then 1 else 0))) ≤
+      ∑ r : R → Fin N, rw r * ε := by
+        apply Finset.sum_le_sum
+        intro r hr
+        by_cases hr0 : rw r = 0
+        · simp [hr0]
+        · have hsupp := hbase r hr0
+          have hUpdate : ∀ x z,
+              e ((x, z), r) = Function.update (Function.update (pairBase j j' hjj x₀ r) j x) j' z := by
+              intro x z
+              funext i
+              by_cases h : i = j
+              · subst i
+                simp [e, pairTupleEquiv, pairTuple, pairBase, Function.update, hjj, hjj.symm]
+              · by_cases h' : i = j'
+                · subst i
+                  simp [e, pairTupleEquiv, pairTuple, pairBase, h, hjj.symm, Function.update]
+                · simp [e, pairTupleEquiv, pairTuple, pairBase, h, h', Function.update]
+          have hsmall := hbound (pairBase j j' hjj x₀ r) hsupp
+          have hsmall' :
+              (∑ x, ∑ z, σ x * σ z *
+                (if P (e ((x, z), r)) then 1 else 0)) ≤ ε := by
+            simpa [hUpdate] using hsmall
+          exact mul_le_mul_of_nonneg_left hsmall' (hrest_nonneg r)
+    _ = ε := by
+      rw [← Finset.sum_mul, hsumRest]
+      ring
+
+theorem tuple_event_mass_le_of_one_free {u N : ℕ} (σ : Fin N → ℝ) (S : Finset (Fin N))
+    (hσ : ∀ x, 0 ≤ σ x) (hσsum : ∑ x, σ x = 1)
+    (hσsupp : ∀ x, σ x ≠ 0 → x ∈ S) (j j' : Fin u) (hjj : j ≠ j')
+    (x₀ : Fin N) (hx₀ : x₀ ∈ S) (P : (Fin u → Fin N) → Prop) [DecidablePred P]
+    (ε : ℝ) (hε : 0 ≤ ε)
+    (hbound : ∀ base : Fin u → Fin N, (∀ i, base i ∈ S) →
+      (∑ x, σ x * (if P (Function.update base j x) then 1 else 0)) ≤ ε) :
+    (∑ f : Fin u → Fin N, tupWt σ f * (if P f then 1 else 0)) ≤ ε := by
+  classical
+  apply tuple_event_mass_le_of_two_free σ S hσ hσsum hσsupp j j' hjj x₀ hx₀ P ε hε
+  intro base hbase
+  have hcomm (x z : Fin N) :
+      Function.update (Function.update base j x) j' z =
+        Function.update (Function.update base j' z) j x :=
+    Function.update_comm hjj x z base
+  calc
+    (∑ x, ∑ z, σ x * σ z *
+      (if P (Function.update (Function.update base j x) j' z) then 1 else 0)) =
+      ∑ z, σ z * ∑ x, σ x *
+        (if P (Function.update (Function.update base j' z) j x) then 1 else 0) := by
+          rw [Finset.sum_comm]
+          apply Finset.sum_congr rfl
+          intro z hz
+          calc
+            (∑ x, σ x * σ z *
+              (if P (Function.update (Function.update base j x) j' z) then 1 else 0)) =
+                ∑ x, σ z * (σ x *
+                  (if P (Function.update (Function.update base j' z) j x) then 1 else 0)) := by
+                    apply Finset.sum_congr rfl
+                    intro x hx
+                    rw [hcomm]
+                    ring
+            _ = σ z * (∑ x, σ x *
+                (if P (Function.update (Function.update base j' z) j x) then 1 else 0)) := by
+                  rw [Finset.mul_sum]
+    _ ≤ ∑ z, σ z * ε := by
+          apply Finset.sum_le_sum
+          intro z hz
+          by_cases hz0 : σ z = 0
+          · simp [hz0]
+          · have hzS : z ∈ S := hσsupp z hz0
+            apply mul_le_mul_of_nonneg_left _ (hσ z)
+            apply hbound (Function.update base j' z)
+            intro i
+            by_cases hi : i = j'
+            · subst i
+              simpa using hzS
+            · simpa [hi] using hbase i
+    _ = ε := by
+          rw [← Finset.sum_mul, hσsum]
+          ring
+
+theorem sub_le_neg_of_add_le {x y z : ℝ} (h : x + y ≤ z) : x - z ≤ -y := by
+  linarith
+
 end HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer

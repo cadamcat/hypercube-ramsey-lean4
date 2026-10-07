@@ -202,7 +202,9 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
   obtain ⟨ν₂, hν₂⟩ := h2' n (by omega) N E G X rfl v hv1
   obtain ⟨c, hcw, hcbad⟩ := FinProb.exists_support_of_pr_lt5 _ _
     (lt_of_le_of_lt (hl1' n (by omega) N E G X rfl hgE hN2 v ν₂ hν₂) (by norm_num))
-  obtain ⟨ν₃, hν₃⟩ := h3' n (by omega) N E G X rfl hRC hS3 v c (hν₂.1 c hcw) (hν₂.2.1 c hcw)
+  have hbase : X.baseLaw.w (v, c) ≠ 0 :=
+    mul_ne_zero hvw (hν₂.2.2.2.2 c hcw)
+  obtain ⟨ν₃, hν₃⟩ := h3' n (by omega) N E G X rfl hRC hS3 v c hbase (hν₂.1 c hcw) (hν₂.2.1 c hcw)
     (hν₂.2.2.1 c hcw)
   obtain ⟨hi, hiw, -⟩ := FinProb.exists_support_of_pos5 ν₃ (fun _ => True) (FinProb.pos_pr_true5 ν₃)
   obtain ⟨tr, htr⟩ := h4' n (by omega) N E G X rfl (v, c) hi (hν₃.2.2.1 hi hiw)
@@ -249,12 +251,12 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
   -- the successful key history
   let H : X.KeyHist := ((v, c), X.joinHidden hi lo)
   have hgoodH : X.KeyGood5 H (cL p.pre1) (cH p.pre1) :=
-    ⟨hvlab, hν₂.1 c hcw, hν₅.1 lo hlow, hν₅.2.1 lo hlow⟩
+    ⟨hvlab, hν₂.1 c hcw, hν₅.1 lo hlow, hν₅.2.1 lo hlow, hbase⟩
   have hsuccH : X.KeySuccess5 H (cL p.pre1) (cH p.pre1) (max C₁ C₂) LR.proxy :=
     ⟨hgoodH, fun y => (hload1 y).trans (le_max_left _ _),
       fun y => (not_lt.mp fun h => hlobad ⟨y, h⟩).trans (le_max_right _ _)⟩
   have hS2B : ∀ K, X.TypeOccurs K → X.Step2Bounds H K := fun K hK =>
-    Setup5.L5_1d_bounds n N E G X hcov.2 H hvlab hgoodH.step1 K hK (hgoodH.step2.1 K hK)
+    Setup5.L5_1d_bounds n N E G X hcov.2 H hgoodH.base_support hgoodH.step1 K hK (hgoodH.step2.1 K hK)
   -- the center stage at `H`
   have hPs := hLsucc H hgoodH
   have hPodd := hl3' n (by omega) N E G X rfl hgE hC₀a hN2 L _ _ LR HR H hsuccH

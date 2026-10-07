@@ -113,14 +113,14 @@ def Step2Bounds (H : X.KeyHist) (K : X.Ty) : Prop :=
   (∀ z, (X.blockLaw H K).w z ≤ X.blockConst K ^ (X.p.q0 * X.p.typeSegs n K) * X.refBlock K z) ∧
   (∀ z, (X.blockLaw H K).w z ≠ 0 → ∀ ℓ ∈ K.2.1, ∀ h, X.BlockHits K z (H.2 ℓ h))
 
-/-- L5.1d, deterministic part (05:260–270, 05:271–286): at a history with `V₀` in the parent support,
+/-- L5.1d, deterministic part (05:260–270, 05:271–286): at a history with base data in the raw support,
 passing Step 1, and passing the Step 2 tests of an occurring type, the block law is within `e^{a₂ u s_ℓ}` of each
 deleted law (also at replaced values passing their ratio test), within `A_K^u` of `R[u]`, and supported on
 blocks that hit every listed column.  The coverage of L5.1e (every listed key reads the type's bin) is an
 input. -/
 theorem L5_1d_bounds : ∀ (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G),
     (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
-    ∀ H : X.KeyHist, H.1.1 ∈ X.P.lab0 → X.Step1Pass H.1 →
+    ∀ H : X.KeyHist, X.baseLaw.w H.1 ≠ 0 → X.Step1Pass H.1 →
       ∀ K, X.TypeOccurs K → ¬ X.step2Fail H K → X.Step2Bounds H K := by
   sorry
 
@@ -130,11 +130,12 @@ def step3Scale (c : ℝ) (ℓ : X.Key) : ℝ :=
   | .inl k => Real.exp (-(c * X.p.kPrime n k.2.2.val))
   | .inr _ => Real.exp (-(c * X.p.s n))
 
-/-- The conclusion of the Step 3 one-target calculation (05:445–453): integrating the target over its prior
-and the fresh arrays at the replaced value, each Step 3 failure costs at most its threshold, at every fixing
-of the other keys. -/
+/-- The Step 3 one-target calculation (05:440–448, 05:621–627): at a supported base passing Step 1,
+integrate the target over its prior and fresh arrays at the replaced value. Other keys remain arbitrary;
+the candidate gate retains the required positive denominators. -/
 def Step3Raw (cL cH : ℝ) : Prop :=
-  ∀ H : X.KeyHist, ∀ r : X.AbsRecord, X.RecOccurs r →
+  ∀ H : X.KeyHist, X.baseLaw.w H.1 ≠ 0 → X.Step1Pass H.1 →
+    ∀ r : X.AbsRecord, X.RecOccurs r →
     ∑ θ : Fin (colLen5 (X.p.s n) r.1) → Fin N,
       (∏ h, (X.prior H.1 r.1).w (θ h)) * X.step3Rate (X.withCol H r.1 θ) r ≤
         X.step3Scale (match r.1 with | .inl _ => cL | .inr _ => cH) r.1
@@ -152,16 +153,19 @@ theorem L5_1f : ∃ cL cH : Pre15 → ℝ, (∀ x, 0 < cL x ∧ 0 < cH x) ∧
 
 /-! ### Record counts (05:331–398) -/
 
-/-- The count of abstract records with a given target: logarithm `O(T log T + (j + 1) log m + T k_*)` (the last
-term counts the reference subsets of the at most `T` pools and the mask, 05:368–371, 05:451–452). -/
+/-- Abstract record counts within a fixed target, central sign and severity (05:382–398). Only low
+interface records enumerate a mask. The extra factor `T` in that mask budget absorbs any fixed `K_h`
+after increasing `n₀`; high subsets are computed and add no record-count term. -/
 def RecordCount (C : ℝ) : Prop :=
-  ∀ ℓ : X.Key, ((Finset.univ.filter fun r : X.AbsRecord => X.RecOccurs r ∧ r.1 = ℓ).card : ℝ) ≤
+  ∀ (ℓ : X.Key) (t : CubeVertex (X.p.m n)) (j : ℕ),
+    ((Finset.univ.filter fun r : X.AbsRecord => X.RecOccursAt r t j ∧ r.1 = ℓ).card : ℝ) ≤
     Real.exp (C * ((X.p.T n : ℝ) * Real.log (X.p.T n) + ((ℓ.level : ℝ) + 1) * Real.log (X.p.m n) +
-      (X.p.T n : ℝ) * (X.p.q0 * X.p.uStarSeg n * X.p.usedBlocks n : ℕ)))
+      (if ℓ.isLeft ∧ ℓ.level = X.p.J n then
+        (X.p.T n : ℝ) * (X.p.q0 * X.p.uStarSeg n * X.p.usedBlocks n : ℕ) else 0)))
 
-/-- L5.1e, count part (05:344–398): `O(T + j)` low tuples around a low state and `O(T + J)` high references
-around a high state, generic variants sharing the ID list, the mask and reference subsets costing `O(k_*)`,
-give the abstract record counts. -/
+/-- L5.1e, count part (05:344–398): `O(T + j)` low tuples around a low state and `O(T + J)` high reference
+designations around a high state give the grouped abstract counts. A low interface mask costs `O(k_*)`
+with a constant fixed before `K₁`; high subsets are computed from pools and optional columns. -/
 theorem L5_1e_count : ∃ C : ℝ, 0 < C ∧ ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       X.RecordCount C := by
@@ -195,7 +199,8 @@ theorem L5_1h1 : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ 
 def DependsOnBins (f : X.Coarse → ℝ) (B : Finset (BinVector5 n)) : Prop :=
   ∀ c c' : X.Coarse, (∀ w ∈ B, c.1 w = c'.1 w ∧ c.2 w = c'.2 w) → f c = f c'
 
-/-- The Stage 2 conclusions at a selected parent `v`: the coarse-base law passes Step 1, bounds every averaged
+/-- The Stage 2 conclusions at a selected parent `v`: the coarse-base law stays in raw support, passes Step 1,
+bounds every averaged
 Step 2 failure by `e^{-δL/4}`, and costs at most a factor `2` per bin against the raw bin law for functions of
 boundedly many bins (the local-lemma comparison used in 05:1016–1023). -/
 def Stage2Law (v : Fin N) (ν : FinProb X.Coarse) : Prop :=
@@ -206,8 +211,9 @@ def Stage2Law (v : Fin N) (ν : FinProb X.Coarse) : Prop :=
   (∀ c, ν.w c ≠ 0 → ∀ K t, X.OptOccurs K t →
     (X.hiddenLaw (v, c)).pr (fun U => X.optFail ((v, c), U) K t) ≤
       Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4)) ∧
-  ∀ (B : Finset (BinVector5 n)) (f : X.Coarse → ℝ), (∀ c, 0 ≤ f c) → X.DependsOnBins f B →
-    ν.expect f ≤ 2 ^ B.card * (X.coarseLaw v).expect f
+  (∀ (B : Finset (BinVector5 n)) (f : X.Coarse → ℝ), (∀ c, 0 ≤ f c) → X.DependsOnBins f B →
+    ν.expect f ≤ 2 ^ B.card * (X.coarseLaw v).expect f) ∧
+  ∀ c, ν.w c ≠ 0 → (X.coarseLaw v).w c ≠ 0
 
 /-- L5.1h2 (05:666–679): given a Stage 1 parent, exclude Step 1 failures and the Step 2 alarms (Markov from
 Stage 1); bounded-degree grouping by bin and the conditional avoidance lemma with charges `o(1)`. -/
@@ -266,7 +272,7 @@ def lowLaw (b : X.Base) : FinProb X.LowHid := X.lowLawOf fun k => X.prior b (.in
 /-- A type whose list has only high keys (05:691). -/
 def HighOnly (K : X.Ty) : Prop := ∀ ℓ ∈ K.2.1, ∃ i, ℓ = .inr i
 
-/-- The Stage 3 conclusions at a base: high-only Step 2 tests pass; the other Step 2 tests, averaged over the
+/-- The Stage 3 conclusions retain the supported Step 1 base: high-only Step 2 tests pass; the other tests, averaged over the
 raw low keys, fail with probability at most `e^{-δL/8}`; every high Step 3 failure, averaged over the low keys
 and fresh arrays, is at most `e^{-c_{H0} s/2}`. -/
 def Stage3Law (b : X.Base) (ν : FinProb X.HighHid) (cH : ℝ) : Prop :=
@@ -277,9 +283,10 @@ def Stage3Law (b : X.Base) (ν : FinProb X.HighHid) (cH : ℝ) : Prop :=
   (∀ hi, ν.w hi ≠ 0 → ∀ K t, X.OptOccurs K t →
     (X.lowLaw b).pr (fun lo => X.optFail (b, X.joinHidden hi lo) K t) ≤
       Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8)) ∧
-  ∀ hi, ν.w hi ≠ 0 → ∀ r : X.AbsRecord, X.RecOccurs r → (∃ i, r.1 = .inr i) →
+  (∀ hi, ν.w hi ≠ 0 → ∀ r : X.AbsRecord, X.RecOccurs r → (∃ i, r.1 = .inr i) →
     (X.lowLaw b).expect (fun lo => X.step3Rate (b, X.joinHidden hi lo) r) ≤
-      Real.exp (-(cH * X.p.s n) / 2)
+      Real.exp (-(cH * X.p.s n) / 2)) ∧
+  X.baseLaw.w b ≠ 0 ∧ X.Step1Pass b
 
 /-- L5.1h3 (05:681–702): given a Stage 2 base, restrict the high keys: Markov from Stage 2 and from the high
 Step 3 one-target bound, abstract count `exp(O(T log T + J log m))` beaten by `e^{-c_{H0}s/2}` once `K_s` is large,
@@ -288,7 +295,7 @@ theorem L5_1h3 : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 <
     ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
       ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
         X.RecordCount C → X.Step3Raw (cL p.pre1) (cH p.pre1) →
-        ∀ v c, X.Step1Pass (v, c) →
+        ∀ v c, X.baseLaw.w (v, c) ≠ 0 → X.Step1Pass (v, c) →
           (∀ K, X.TypeOccurs K → (X.hiddenLaw (v, c)).pr (fun U => X.step2Fail ((v, c), U) K) ≤
             ((K.2.1.card : ℝ) + 1) * Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 4)) →
           (∀ K t, X.OptOccurs K t → (X.hiddenLaw (v, c)).pr (fun U => X.optFail ((v, c), U) K t) ≤
@@ -384,7 +391,7 @@ theorem L5_1l2 : ∀ C₁ : ℝ, 0 < C₁ → ∃ C₂ : ℝ, 0 < C₂ ∧ ∃ R
 
 /-! ### The successful key history (05:742–744) -/
 
-/-- A good key history (05:742–744): parent in the support, Steps 1 and 2 pass, and every occurring abstract
+/-- A good key history (05:742–744): base in raw support, parent in the support, Steps 1 and 2 pass, and every occurring abstract
 record has its conditional Step 3 failure bound over fresh arrays. -/
 structure KeyGood5 (H : X.KeyHist) (cL cH : ℝ) : Prop where
   parent_mem : H.1.1 ∈ X.P.lab0
@@ -392,6 +399,7 @@ structure KeyGood5 (H : X.KeyHist) (cL cH : ℝ) : Prop where
   step2 : X.Step2Pass H
   step3 : ∀ r : X.AbsRecord, X.RecOccurs r →
     X.step3Rate H r ≤ X.step3Scale (match r.1 with | .inl _ => cL / 4 | .inr _ => cH / 6) r.1
+  base_support : X.baseLaw.w H.1 ≠ 0
 
 /-- A successful key history: good, and the two history odd-load averages are bounded (the second for a given
 proxy-mean functional) (05:1007–1041). -/

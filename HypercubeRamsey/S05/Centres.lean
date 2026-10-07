@@ -113,15 +113,7 @@ def selShort (elig : X.CΩ h → h.hp.EligMap) (ω : X.CΩ h) (v : EvenRole5 n) 
 high type the first `k_*/u_*` pool blocks hitting the optional column if there are enough, otherwise the first
 blocks. -/
 def refSubset (H : X.KeyHist) (ω : X.CΩ h) (v : EvenRole5 n) (l : h.hp.Loc) : Finset (Fin X.blockBound) :=
-  let K := X.g.evenType (X.p.J n) v.1
-  match K.2.2 with
-  | some _ => Finset.univ.filter fun i => (i : ℕ) < X.p.typeBlocks n K
-  | none =>
-    let hits : Finset (Fin X.blockBound) :=
-      match X.g.optionalKey (X.p.J n) v.1 with
-      | some (.inl k) => X.hitSet (arraysOf ω) (l, K) (X.lowCol H.2 k)
-      | _ => X.poolIdx
-    X.firstK (if X.p.usedBlocks n ≤ hits.card then hits else X.poolIdx) (X.p.usedBlocks n)
+  X.refSubsetOn H (arraysOf ω) (l, X.g.evenType (X.p.J n) v.1) (X.g.optionalKey (X.p.J n) v.1)
 
 /-- A center reference: location and block subset. -/
 abbrev CRef (h : X.HeightChoice5) := h.hp.Loc × Finset (Fin X.blockBound)
@@ -140,12 +132,12 @@ def actualRecord (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h
     match X.selLong elig ω a with
     | some l => {(l, X.g.evenType (X.p.J n) a.1)}
     | none => ∅
-  let refs : Finset (h.hp.Loc × X.Ty × Finset (Fin X.blockBound)) := (evenNbrs y).biUnion fun a =>
+  let refs : Finset (h.hp.Loc × X.Ty × Option X.Key) := (evenNbrs y).biUnion fun a =>
     match X.selLong elig ω a with
     | some l =>
       if ℓ ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
           ℓ.isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
-        {(l, X.g.evenType (X.p.J n) a.1, X.refSubset H ω a l)} else ∅
+        {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
     | none => ∅
   let mask : Option (h.hp.Loc × X.Ty × Finset (Fin X.blockBound)) :=
     match ℓ with
@@ -244,7 +236,7 @@ theorem L5_1j : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < 
 the smoothed deletion conditionals, lengths `k_c`, cap `D_H` and cost bound `a₄`. -/
 def highModel {Id : Type} [DecidableEq Id] (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn Id)
     (hc : X.HighCapped H r a) (hpf : X.HighPriceFeasible H r a) :
-    HighRowModel5 Unit {c // c ∈ r.2.2.1} (colLen5 (X.p.s n) r.1) N where
+    HighRowModel5 Unit {c // c ∈ X.refsOn H r a} (colLen5 (X.p.s n) r.1) N where
   raw := FinProb.dirac5 ()
   good := fun _ => True
   errorExponent := 0
@@ -266,7 +258,7 @@ structure HighChoice5 (Id : Type) [DecidableEq Id] where
   cap : ∀ H r a hc hpf h y, (law H r a hc hpf).w (h, y) ≤
     2 * Real.exp (X.p.DH n) / ((colLen5 (X.p.s n) r.1 : ℝ) * N)
   support : ∀ H r a hc hpf h y, (law H r a hc hpf).w (h, y) ≠ 0 → (X.highSource H r a h).w y ≠ 0
-  cost : ∀ H r a hc hpf, ∀ c ∈ r.2.2.1, ∑ h, ∑ y, (law H r a hc hpf).w (h, y) *
+  cost : ∀ H r a hc hpf, ∀ c ∈ X.refsOn H r a, ∑ h, ∑ y, (law H r a hc hpf).w (h, y) *
     highDeletionCost5 (law H r a hc hpf) (fun c' h' => X.highDeleted H r a c' h') c h y ≤
       X.p.a 4 * (X.refLen c.2.1 c.2.2 : ℝ)
 
@@ -299,7 +291,7 @@ structure HighRows5 (L : X.CentreLayer5) where
   row_support : ∀ H ω y o, row H ω y o ≠ 0 → ∀ a ∈ evenNbrs y, ∀ c,
     X.evenRefOf (L.elig H) H ω a = some c → ∀ z ∈ X.refBlocks ω a c, X.BlockHits _ z o.2
   row_cost : ∀ H ω y, L.valid H ω y → ¬ X.g.low (X.p.J n) y.1 →
-    ∀ c ∈ (X.actualRecord (L.elig H) H ω y).2.2.1,
+    ∀ c ∈ X.refsOn H (X.actualRecord (L.elig H) H ω y) (arraysOf ω),
       ∑ o, row H ω y o * X.highCost H (X.actualRecord (L.elig H) H ω y) (arraysOf ω) c (row H ω y) o ≤
         X.p.a 4 * (X.refLen c.2.1 c.2.2 : ℝ)
   row_local : ∀ H y, FinProb.DependsOn (fun ω => row H ω y) (X.scopeBall (h := L.ht) y.1 (L.ht.hp.r + L.slack))
@@ -330,7 +322,7 @@ structure LowRows5 (L : X.CentreLayer5) (cL cH : ℝ) where
   row_support : ∀ H ω y o, row H ω y o ≠ 0 → ∀ a ∈ evenNbrs y, ∀ c,
     X.evenRefOf (L.elig H) H ω a = some c → ∀ z ∈ X.refBlocks ω a c, X.BlockHits _ z o.2
   row_deletion : ∀ H ω y, L.valid H ω y → X.g.low (X.p.J n) y.1 →
-    ∀ c ∈ (X.actualRecord (L.elig H) H ω y).2.2.1, ∀ o,
+    ∀ c ∈ X.refsOn H (X.actualRecord (L.elig H) H ω y) (arraysOf ω), ∀ o,
       row H ω y o ≤ Real.exp (X.p.a 4 * X.refLen c.2.1 c.2.2) *
         X.step3PostOn H (X.actualRecord (L.elig H) H ω y) (arraysOf ω) (some c) (fun _ => o.2)
   row_local : ∀ H y, FinProb.DependsOn (fun ω => row H ω y) (X.scopeBall (h := L.ht) y.1 (L.ht.hp.r + L.slack))

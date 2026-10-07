@@ -1617,6 +1617,15 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     refine ⟨P, V, ?_, hP.2, rfl, hLeftLess⟩
     intro C hC
     exact (Finset.mem_filter.mp (hP.1 C hC)).2
+  let productRow (i : HighTags) (r : ℕ) : FinProb (Fin r → Fin N) :=
+    FinProb.pi (fun _ : Fin r => rho i)
+  have hcoordinateExpect (i : HighTags) (r : ℕ) (j : Fin r) (f : Fin N → ℝ) :
+      (productRow i r).expect (fun z => f (z j)) = (rho i).expect f := by
+    classical
+    let S : Finset (Fin r) := {j}
+    let g : (∀ k : {k // k ∈ S}, Fin N) → ℝ := fun q => f (q ⟨j, by simp [S]⟩)
+    have h := FinProb.pi_marginal_expect (fun _ : Fin r => rho i) S g
+    simpa [productRow, S, g, FinProb.pi, FinProb.expect] using h
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

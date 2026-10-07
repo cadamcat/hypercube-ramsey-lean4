@@ -1,0 +1,128 @@
+import HypercubeRamsey.S04.CoreLemmas
+
+/-!
+# L4.1f: marking, eligibility and geometric success
+
+Source: `sections/04-…tex`, lines 300–338; blueprint L4.1f.  The three deterministic nodes give the consequences
+of geometric success (`geo_cons`, proved); the three probabilistic nodes bound its failure (`geo_prob`, proved).
+-/
+
+namespace HypercubeRamsey.S04
+
+open Classical OAI.HypercubeRamsey
+open scoped BigOperators
+
+/-- L4.1f, eligibility (04:325–328): with at least `λ/2` present IDs in every site-level ball and marked families of
+fewer than `n` sets of at most `T` IDs, at most `2n²T = o(λ)` IDs are forbidden in any level ball of an even site,
+leaving at least `λ/3` eligible IDs; eligible IDs are present, at their level and in the radius-`r` ball by
+definition.  So eligibility is legal on the even sites (for large `n`). -/
+theorem geo_legal (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
+      (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι), LegalOf M tag := by
+  sorry
+
+/-- L4.1f, selection (04:329–331): on good heights every even site has height below `H` and a site-level that is
+not bad, so its eligible set has an active ID and the long rule selects one. -/
+theorem geo_select {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) : SelectOf M tag := by
+  sorry
+
+/-- L4.1f, marking (04:306–309, 332–338): around an odd role `u` the heights of its even neighbours (pairwise at
+distance two) occupy two consecutive levels `j, j+1` with `j < H`; at an occupied level, a neighbour `v₀` at that
+height has a non-bad site-level, and its `(r+2)`-crowd ball contains every ID selected at that level, so at most
+`n^b` of them; hence `1 ≤ |D_u| ≤ 2n^b ≤ T` and `D_u` is a candidate at `(u, j)`.  If it were invalid it would meet
+the greedy maximal marked family (`greedy_spec`), and the common ID would be forbidden for the neighbour that
+selected it, contradicting its eligibility. -/
+theorem geo_oddOK {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_hsel : SelectOf M tag) : OddOKOf M tag := by
+  sorry
+
+/-- L4.1f: geometric success gives, at every even role, a selected reference meeting the local event `E`, and
+valid kernels at all odd roles (04:337–338, 361–362). -/
+theorem geo_cons {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+    (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (hLeg : LegalOf M tag)
+    (hSel : SelectOf M tag) (hOdd : OddOKOf M tag) : GeoCons M tag := by
+  intro ω hG
+  have hlegal := hLeg ω (fun v l => (hG.counts v l).1) hG.families
+  refine ⟨fun a => ?_, hOdd ω hG.heights⟩
+  obtain ⟨c, hc⟩ := Option.ne_none_iff_exists'.mp (hSel ω hG.heights a)
+  refine ⟨c, ⟨hc, ?_, fun j => hOdd ω hG.heights _, fun j v _ l => (hG.counts v l).2⟩⟩
+  intro v hv l
+  exact hlegal v (Finset.mem_filter.mp hv).1 l
+
+/-- L4.1f, counts (04:311–313; L3.8j on all `2^n` sites): some site-level ball has fewer than `λ/2` or more than
+`2λ` present IDs with probability at most `2^{n+1}(H+1) e^{-λ/12} ≤ 1/30`. -/
+theorem count_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
+      (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag),
+      (prepLaw M tag q q').pr (fun ω => ¬ ∀ v l,
+        lamH n / 2 ≤ (countAt (ppos ω) v l : ℝ) ∧ (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n) ≤ 1 / 30 := by
+  sorry
+
+/-- L4.1f, families (04:313–323): fix positions and masks with at most `2λ` present IDs per ball; a candidate has
+`exp(O(T log n))` choices, invalidity events of disjoint candidates depend on disjoint tuples and are independent,
+each of probability at most `exp(-n^{ω/5})` (`ValidProb`), so a marked family of `n` (pairwise disjoint, invalid,
+by `greedy_spec`) sets has probability at most `exp(n[O(T log n) - n^{ω/5}])`; a union over odd roles and level
+pairs is at most `1/30`. -/
+theorem family_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
+      (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι), ValidProb M tag →
+      ∀ (q : XProf M tag) (q' : YProf M tag),
+        (prepLaw M tag q q').pr (fun ω => (∀ v l, (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n) ∧
+          ∃ (u : OddRole n) (j : Fin (topH β γ n)), n ≤ (marked M tag (ppos ω) (paux ω) u j).card) ≤ 1 / 30 := by
+  sorry
+
+/-- L4.1f, heights (04:329–331; L3.8f with `Aux` = masks × tuples and `hd_admissible`, `hdRegime`): eligibility
+is defined from positions, masks and tuples before activation, so legal eligibility with bad heights has
+probability at most `exp(-n^{1+c}) ≤ 1/30`. -/
+theorem height_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
+      (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag),
+      (prepLaw M tag q q').pr (fun ω =>
+        (hd β γ n).Legal (ppos ω) (elig M tag (ppos ω) (paux ω)) (evenSites n) ∧
+          ¬ (hd β γ n).GoodHeights (evenSites n) (ppos ω) (pact ω) (elig M tag (ppos ω) (paux ω))) ≤
+        1 / 30 := by
+  sorry
+
+/-- L4.1f (04:311–338): geometric success fails with probability at most `1/10`. -/
+theorem geo_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
+      (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι), ValidProb M tag → LegalOf M tag →
+      ∀ (q : XProf M tag) (q' : YProf M tag),
+        (prepLaw M tag q q').pr (fun ω => ¬ GeoSucc M tag ω) ≤ 1 / 10 := by
+  obtain ⟨n1, h1⟩ := count_prob β γ hβ hβγ hγ
+  obtain ⟨n2, h2⟩ := family_prob β γ hβ hβγ hγ
+  obtain ⟨n3, h3⟩ := height_prob β γ hβ hβγ hγ
+  refine ⟨max n1 (max n2 n3), ?_⟩
+  intro n hn N E G X Y M tag hV hL q q'
+  have hA := h1 n (le_trans (le_max_left _ _) hn) M tag q q'
+  have hB := h2 n (le_trans (le_trans (le_max_left _ _) (le_max_right _ _)) hn) M tag hV q q'
+  have hC := h3 n (le_trans (le_trans (le_max_right _ _) (le_max_right _ _)) hn) M tag q q'
+  set P := prepLaw M tag q q'
+  set A : Prep M tag → Prop := fun ω => ¬ ∀ v l,
+    lamH n / 2 ≤ (countAt (ppos ω) v l : ℝ) ∧ (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n with hAdef
+  set B : Prep M tag → Prop := fun ω => (∀ v l, (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n) ∧
+    ∃ (u : OddRole n) (j : Fin (topH β γ n)), n ≤ (marked M tag (ppos ω) (paux ω) u j).card with hBdef
+  set C : Prep M tag → Prop := fun ω =>
+    (hd β γ n).Legal (ppos ω) (elig M tag (ppos ω) (paux ω)) (evenSites n) ∧
+      ¬ (hd β γ n).GoodHeights (evenSites n) (ppos ω) (pact ω) (elig M tag (ppos ω) (paux ω))
+    with hCdef
+  have hsub : ∀ ω, ¬ GeoSucc M tag ω → (A ω ∨ B ω) ∨ C ω := by
+    intro ω hω
+    by_cases hc : ∀ v l,
+        lamH n / 2 ≤ (countAt (ppos ω) v l : ℝ) ∧ (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n
+    · by_cases hf : ∀ (u : OddRole n) j, (marked M tag (ppos ω) (paux ω) u j).card < n
+      · refine Or.inr ⟨hL ω (fun v l => (hc v l).1) hf, fun hgh => hω ⟨hc, hf, hgh⟩⟩
+      · refine Or.inl (Or.inr ⟨fun v l => (hc v l).2, ?_⟩)
+        by_contra hno
+        apply hf
+        intro u j
+        by_contra hge
+        exact hno ⟨u, j, Nat.le_of_not_lt hge⟩
+    · exact Or.inl (Or.inl hc)
+  calc P.pr (fun ω => ¬ GeoSucc M tag ω) ≤ P.pr (fun ω => (A ω ∨ B ω) ∨ C ω) := pr_mono P hsub
+    _ ≤ P.pr (fun ω => A ω ∨ B ω) + P.pr C := FinProb.pr_union P _ _
+    _ ≤ (P.pr A + P.pr B) + P.pr C := by linarith [FinProb.pr_union P A B]
+    _ ≤ 1 / 10 := by linarith
+
+end HypercubeRamsey.S04

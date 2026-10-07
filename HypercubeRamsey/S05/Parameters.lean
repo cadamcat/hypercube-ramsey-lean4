@@ -17,7 +17,10 @@ variable {γ : ℝ} {K' : ℝ} {χ : ℝ}
 def binaryEntropy5 (x : ℝ) : ℝ := -x * Real.log x - (1 - x) * Real.log (1 - x)
 
 /-- The fixed constants and order of choices in D5.1 (05:57–61, 05:762–783).  `Kcap` is the Step 1 prior-cap
-constant `K'` (05:207–211) and `Kpp` the block-density constant `K''` of `A_K` (05:263–268). -/
+constant `K'` (05:207–211) and `Kpp` the block-density constant `K''` of `A_K` (05:263–268).
+`hdelta_a` reserves slack at every exponent gap; `hKpp_budget` pays for the Step 2 density losses.
+`hK1_eta` ensures high blocks fit inside every observed key prefix. These constraints respect the
+choice order: first shrink `δ`, then enlarge `K''`, then choose `K₁` above `η` and its requested threshold. -/
 structure Params5 (γ K' χ : ℝ) where
   a : Fin 9 → ℝ
   tau0 : ℝ
@@ -44,11 +47,13 @@ structure Params5 (γ K' χ : ℝ) where
   ha_order : ∀ i j : Fin 9, i.val < j.val → a i < a j
   hgap : a 8 < tau0 ∧ tau0 < tau1 ∧ tau1 < Real.log 2
   hdelta : 0 < delta ∧ delta < min (tau0 - a 8) (tau1 - tau0) / 100
+  hdelta_a : ∀ i j : Fin 9, i.val < j.val → delta < (a j - a i) / 100
   hq0 : 0 < q0 ∧
     (2 / χ ^ 2) * (10 / 9 : ℝ) ^ q0 ≤ Real.exp (a 0 * q0)
   hKh : 0 < Kh
   heta : 0 < eta ∧ Kh * eta + 1 / 200 < 3 / 100
   hK1 : 0 < K1
+  hK1_eta : eta ≤ K1
   hK2 : 0 < K2
   hKD : 0 < KD
   hKs : 0 < Ks
@@ -60,6 +65,7 @@ structure Params5 (γ K' χ : ℝ) where
   hEntropy : binaryEntropy5 (2 * rho) < Real.log 2 - tau1
   hKcap : 0 < Kcap
   hKpp : 0 < Kpp
+  hKpp_budget : max (a 0) (a 1 + delta) ≤ Kpp
 
 /-- Number of fine sign chunks, `m = ⌈n^α⌉`. -/
 def Params5.m (p : Params5 γ K' χ) (n : ℕ) : ℕ :=

@@ -402,7 +402,569 @@ theorem p92_gain_means (P : Params9) (hP : P.Valid) (cT c₁ : ℝ) (hcT : 0 < c
       (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → TagsOK9 κ E G cT S.tag → MeanCert9 S I E G c₁ →
         GainMeanCert9 S I E G c := by
-  sorry
+  obtain ⟨cReg, hcReg, nReg, hregCert⟩ := p92_regularity P hP
+  have hu : 0 < P.u := by
+    have hxs : 0 < (P.xS : ℝ) := by exact_mod_cast hP.1.1
+    dsimp [Params9.u]
+    linarith
+  have hcHalf : 0 < c₁ / 2 := by linarith
+  let cSpec : ℝ := min cT (1 / 2)
+  have hcSpec : 0 < cSpec := by
+    dsimp [cSpec]
+    exact lt_min hcT (by norm_num)
+  let c : ℝ := min cReg (min (c₁ / 2) cSpec) / 2
+  have hc : 0 < c := by
+    dsimp [c]
+    exact div_pos (lt_min hcReg (lt_min hcHalf hcSpec)) (by norm_num)
+  obtain ⟨nPoly, hPoly⟩ := Lane_q_s09_gain2.eventual_poly_tail
+    (u := P.u) (c := c₁) (A := 1) (s := 1) hu hc₁
+  obtain ⟨nDeep, hDeepPoly⟩ := Lane_q_s09_gain2.eventual_poly_tail
+    (u := P.u) (c := 1) (A := 2) (s := 1) hu (by norm_num)
+  obtain ⟨nTail, hTail⟩ := Lane_q_s09_gain2.eventual_tail_sum3
+    (u := P.u) (c₁ := cReg) (c₂ := c₁ / 2) (c₃ := cSpec) hu hcReg hcHalf hcSpec
+  refine ⟨c, hc, max nReg (max nDeep (max nPoly nTail)), ?_⟩
+  intro n hn N E X Y κ G M S I hin hTagsOK hMean
+  have hnReg : nReg ≤ n := le_trans (le_max_left nReg (max nDeep (max nPoly nTail))) hn
+  have hnRest : max nDeep (max nPoly nTail) ≤ n :=
+    le_trans (le_max_right nReg _) hn
+  have hnDeep : nDeep ≤ n := le_trans (le_max_left nDeep (max nPoly nTail)) hnRest
+  have hnPair : max nPoly nTail ≤ n := le_trans (le_max_right nDeep _) hnRest
+  have hnPoly : nPoly ≤ n := le_trans (le_max_left nPoly nTail) hnPair
+  have hnTail : nTail ≤ n := le_trans (le_max_right nPoly nTail) hnPair
+  have hpolyN := hPoly n hnPoly
+  have hDeepPolyN := hDeepPoly n hnDeep
+  have htailN := hTail n hnTail
+  have hinCopy := hin
+  rcases hin with ⟨hN, hprep, hdeep, htags, hmasks, htools, hexps, hscales⟩
+  rcases hscales with ⟨hnDim, hm, hr, hwidth, hfilter, hfirstWidth, hbsmall, hgain⟩
+  have hregAt : RegularityCert9 S I E G cReg := hregCert n hnReg S I hinCopy
+  intro v
+  classical
+  let z : CubeVertex (P.m n) := specialWord9 (P.m n) v.1
+  let μv : Law N := M.μ (S.tag z)
+  have hCoordinate (w : Fin N) :
+      (rawLaw9 S I).pr (fun ω => anc9 ω (I.center v.1) = w) = μv.w w := by
+    change (FinProb.pi (inputLaw9 S I)).pr
+      (fun ω => ω (Sum.inl (I.center v.1)) = w) = μv.w w
+    rw [Lane_q_s09_gain2.pi_pr_coordinate (inputLaw9 S I)
+      (Sum.inl (I.center v.1)) w]
+    simp [inputLaw9, z, μv, I.center_slice]
+  have hcoordSet (A : Finset (Fin N)) :
+      (rawLaw9 S I).pr (fun ω => anc9 ω (I.center v.1) ∈ A) ≤
+        ∑ w ∈ A, μv.w w := by
+    calc
+      (rawLaw9 S I).pr (fun ω => anc9 ω (I.center v.1) ∈ A) ≤
+          ∑ w ∈ A, (rawLaw9 S I).pr (fun ω => anc9 ω (I.center v.1) = w) := by
+        simpa using Lane_q_s09_gain2.pr_exists_finset_le_sum
+          (rawLaw9 S I) A (fun w ω => anc9 ω (I.center v.1) = w)
+      _ = ∑ w ∈ A, μv.w w := by
+        apply Finset.sum_congr rfl
+        intro w hw
+        exact hCoordinate w
+  let xBad : Outcome9 I N → Prop := fun ω =>
+    ∃ b : StarOdd9 v, P.aStar n / 100 <
+      |condCoreMean9 S I E G v b.1 ω -
+        rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)|
+  let regBad : Outcome9 I N → Prop := fun ω => ¬ starRegular9 S E G ω v
+  let tagBad : Outcome9 I N → Prop := fun ω =>
+    match P.case with
+    | .sub _ _ _ => False
+    | .lin _ _ _ _ => anc9 ω (I.center v.1) ∈ tagFail9 E G S.tag z
+  let deepBad : Outcome9 I N → Prop := fun ω =>
+    match P.case with
+    | .sub _ _ _ =>
+        ∃ j : Fin (P.m n), 2 * P.bStar n <
+          |rowDeg E G (anc9 ω (I.center v.1))
+            (M.ν (S.tag (flipWord9 z j))) - 1 / 2|
+    | .lin _ _ _ _ => False
+  let specBad : Outcome9 I N → Prop := fun ω => tagBad ω ∨ deepBad ω
+  let supportBad : Outcome9 I N → Prop := fun ω => (rawLaw9 S I).w ω = 0
+  let targetBad : Outcome9 I N → Prop := fun ω =>
+    ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω <
+      (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n
+  have hCardStar : (Fintype.card (StarOdd9 v) : ℝ) = n := by
+    have h := Fintype.card_congr (Lane_q_s09_gain2.starCoordEquiv9 v)
+    simpa using congrArg (fun k : ℕ => (k : ℝ)) h.symm
+  have hMeanProb : (rawLaw9 S I).pr xBad ≤ n * P.tail c₁ n := by
+    calc
+      (rawLaw9 S I).pr xBad ≤
+          ∑ b ∈ (Finset.univ : Finset (StarOdd9 v)), (rawLaw9 S I).pr (fun ω =>
+            P.aStar n / 100 <
+              |condCoreMean9 S I E G v b.1 ω -
+                rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)|) := by
+        simpa [xBad] using Lane_q_s09_gain2.pr_exists_finset_le_sum
+          (rawLaw9 S I) (Finset.univ : Finset (StarOdd9 v))
+          (fun b ω => P.aStar n / 100 <
+            |condCoreMean9 S I E G v b.1 ω -
+              rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)|)
+      _ ≤ ∑ b ∈ (Finset.univ : Finset (StarOdd9 v)), P.tail c₁ n := by
+        apply Finset.sum_le_sum
+        intro b hb
+        exact hMean v b.1 b.2
+      _ = ((Finset.univ : Finset (StarOdd9 v)).card : ℝ) * P.tail c₁ n := by simp
+      _ = n * P.tail c₁ n := by
+        have hcard :
+            ((Finset.univ : Finset (StarOdd9 v)).card : ℝ) = n := by
+          simpa using hCardStar
+        rw [hcard]
+  have hMeanTail : (rawLaw9 S I).pr xBad ≤
+      Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) := by
+    calc
+      (rawLaw9 S I).pr xBad ≤ n * P.tail c₁ n := hMeanProb
+      _ ≤ Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) := by
+        simpa [Params9.tail] using hpolyN
+  have hSsFilter : P.Ss (n : ℝ) ≤ P.filterBudget n := by
+    have hlog2 : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num)
+    have hlogRatio : 0 ≤ Real.log (100 / 49 : ℝ) := Real.log_nonneg (by norm_num)
+    have hID : 0 ≤ P.idBudget n := by
+      dsimp [Params9.idBudget]
+      positivity
+    have hm0 : 0 ≤ (P.m n : ℝ) := by positivity
+    have hu0 : 0 ≤ (n : ℝ) ^ P.u := by positivity
+    have hExtra : 0 ≤ (n : ℝ) ^ P.u + Real.log 2 +
+        Real.log (100 / 49 : ℝ) * (P.idBudget n + (P.m n : ℝ)) := by
+      positivity
+    dsimp [Params9.filterBudget]
+    linarith
+  have hFilterLeD : P.filterBudget n ≤ P.Sd (n : ℝ) := by
+    have hu0 : 0 ≤ (n : ℝ) ^ P.u := by positivity
+    linarith [hfilter]
+  have hSsLeD : P.Ss (n : ℝ) ≤ P.Sd (n : ℝ) := le_trans hSsFilter hFilterLeD
+  have hTagProb : (rawLaw9 S I).pr tagBad ≤ P.tail cT n := by
+    cases hcase : P.case with
+    | sub yS yD yM =>
+        simp [FinProb.pr, tagBad, hcase, Params9.tail] <;> positivity
+    | lin αS αD hB yB =>
+        have htagMass :
+            ∑ w ∈ tagFail9 E G S.tag z, μv.w w ≤ P.tail cT n := by
+          have hnot := hTagsOK.2.2 z
+          have hnot' : ¬ P.tail cT n <
+              ∑ w ∈ tagFail9 E G S.tag z, (M.μ (S.tag z)).w w := by
+            simpa [tagBad9, hcase] using hnot
+          exact le_of_not_gt hnot'
+        calc
+          (rawLaw9 S I).pr tagBad ≤
+              ∑ w ∈ tagFail9 E G S.tag z, μv.w w := by
+            simpa [tagBad, hcase] using hcoordSet (tagFail9 E G S.tag z)
+          _ ≤ P.tail cT n := htagMass
+  have hDeepProb : (rawLaw9 S I).pr deepBad ≤
+      Real.exp (-((1 / 2 : ℝ) * (n : ℝ) ^ P.u)) := by
+    cases hcase : P.case with
+    | lin αS αD hB yB =>
+        simp [FinProb.pr, deepBad, hcase, Params9.tail] <;> positivity
+    | sub yS yD yM =>
+        let badJ : Fin (P.m n) → Outcome9 I N → Prop := fun j ω =>
+          2 * P.bStar n <
+            |rowDeg E G (anc9 ω (I.center v.1))
+              (M.ν (S.tag (flipWord9 z j))) - 1 / 2|
+        have hchiPos : 0 < (P.χ : ℝ) := by
+          exact_mod_cast hP.2.2.2.2.1.1
+        have hnReal : 1 ≤ (n : ℝ) := by exact_mod_cast hnDim
+        have hpow : (n : ℝ) ^ P.u ≤ (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) :=
+          Real.rpow_le_rpow_of_exponent_le hnReal (by nlinarith)
+        have hSingle : ∀ j : Fin (P.m n),
+            (rawLaw9 S I).pr (badJ j) ≤ 2 * Real.exp (-(n : ℝ) ^ P.u) := by
+          intro j
+          let νj : Law N := M.ν (S.tag (flipWord9 z j))
+          rcases hprep.2 (S.tag z) (htags z) with
+            ⟨hμX, hμY, hμWidth, hνWidth, hdegree⟩
+          rcases hprep.2 (S.tag (flipWord9 z j)) (htags (flipWord9 z j)) with
+            ⟨hμjX, hνjY, hμjWidth, hνjWidth, hdegreej⟩
+          let w₀ : ℝ := (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1
+          have hμWidth' : μv.WidthLE w₀ := by simpa [μv, w₀] using hμWidth
+          have hνWidthD : νj.WidthLE (P.Sd (n : ℝ)) := by
+            intro y
+            dsimp [νj]
+            exact le_trans (hνjWidth y)
+              (div_le_div_of_nonneg_right (Real.exp_le_exp.mpr hSsLeD) (by positivity))
+          have hfit : w₀ + (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) ≤
+              (n : ℝ) ^ (P.xD : ℝ) := by simpa [w₀] using hfirstWidth
+          have hwidthD : w₀ ≤ (n : ℝ) ^ (P.xD : ℝ) := by
+            have hpowerNonneg : 0 ≤ (n : ℝ) ^ (P.u + 8 * (P.χ : ℝ)) := by positivity
+            linarith
+          have hforward := htools.1 G νj hνjY hνWidthD μv hμX w₀ hμWidth' hwidthD
+          let A : Finset (Fin N) := Finset.univ.filter (fun y =>
+            2 * P.bStar n < |rowDeg E G y νj - 1 / 2|)
+          have hset : badJ j = fun ω => anc9 ω (I.center v.1) ∈ A := by
+            funext ω
+            simp [badJ, A, νj, Finset.mem_filter]
+          have harg : w₀ - (n : ℝ) ^ (P.xD : ℝ) ≤ -(n : ℝ) ^ P.u := by
+            linarith [hfit, hpow]
+          have hmassBad : ∑ y ∈ A, μv.w y ≤
+              2 * Real.exp (w₀ - (n : ℝ) ^ (P.xD : ℝ)) := by
+            simpa [A, νj] using hforward
+          calc
+            (rawLaw9 S I).pr (badJ j) =
+                (rawLaw9 S I).pr (fun ω => anc9 ω (I.center v.1) ∈ A) := by rw [hset]
+            _ ≤ ∑ y ∈ A, μv.w y := hcoordSet A
+            _ ≤ 2 * Real.exp (w₀ - (n : ℝ) ^ (P.xD : ℝ)) := hmassBad
+            _ ≤ 2 * Real.exp (-(n : ℝ) ^ P.u) := by
+              exact mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr harg) (by norm_num)
+        have hUnion : (rawLaw9 S I).pr (deepBad) ≤
+            (P.m n : ℝ) * (2 * Real.exp (-(n : ℝ) ^ P.u)) := by
+          calc
+            (rawLaw9 S I).pr deepBad ≤
+                ∑ j ∈ (Finset.univ : Finset (Fin (P.m n))),
+                  (rawLaw9 S I).pr (badJ j) := by
+              simpa [deepBad, hcase, badJ] using Lane_q_s09_gain2.pr_exists_finset_le_sum
+                (rawLaw9 S I) (Finset.univ : Finset (Fin (P.m n))) badJ
+            _ ≤ ∑ j ∈ (Finset.univ : Finset (Fin (P.m n))),
+                  2 * Real.exp (-(n : ℝ) ^ P.u) := by
+              apply Finset.sum_le_sum
+              intro j hj
+              exact hSingle j
+            _ = (P.m n : ℝ) * (2 * Real.exp (-(n : ℝ) ^ P.u)) := by simp
+        have hmR : (P.m n : ℝ) ≤ (n : ℝ) := by exact_mod_cast hm
+        calc
+          (rawLaw9 S I).pr deepBad ≤ (P.m n : ℝ) *
+              (2 * Real.exp (-(n : ℝ) ^ P.u)) := hUnion
+          _ ≤ (n : ℝ) * (2 * Real.exp (-(n : ℝ) ^ P.u)) :=
+              mul_le_mul_of_nonneg_right hmR (by positivity)
+          _ = 2 * (n : ℝ) * Real.exp (-(1 : ℝ) * (n : ℝ) ^ P.u) := by ring
+          _ ≤ Real.exp (-((1 / 2 : ℝ) * (n : ℝ) ^ P.u)) := by
+              simpa [Params9.tail, mul_assoc] using hDeepPolyN
+  have hSpecProb : (rawLaw9 S I).pr specBad ≤ P.tail cSpec n := by
+    cases hcase : P.case with
+    | sub yS yD yM =>
+        have htailOrder : Real.exp (-((1 / 2 : ℝ) * (n : ℝ) ^ P.u)) ≤ P.tail cSpec n := by
+          dsimp [Params9.tail]
+          apply Real.exp_le_exp.mpr
+          have hpow0 : 0 ≤ (n : ℝ) ^ P.u := by positivity
+          have hmin : cSpec ≤ (1 / 2 : ℝ) := by dsimp [cSpec]; exact min_le_right _ _
+          nlinarith [mul_nonneg (sub_nonneg.mpr hmin) hpow0]
+        simpa [specBad, tagBad, deepBad, hcase] using hDeepProb.trans htailOrder
+    | lin αS αD hB yB =>
+        have htailOrder : P.tail cT n ≤ P.tail cSpec n := by
+          dsimp [Params9.tail]
+          apply Real.exp_le_exp.mpr
+          have hpow0 : 0 ≤ (n : ℝ) ^ P.u := by positivity
+          have hmin : cSpec ≤ cT := by dsimp [cSpec]; exact min_le_left _ _
+          nlinarith [mul_nonneg (sub_nonneg.mpr hmin) hpow0]
+        have htag := hTagProb
+        simpa [specBad, deepBad, hcase] using htag.trans htailOrder
+  have hSupportProb : (rawLaw9 S I).pr supportBad = 0 := by
+    unfold FinProb.pr
+    apply Finset.sum_eq_zero
+    intro ω hω
+    by_cases hz : (rawLaw9 S I).w ω = 0 <;> simp [supportBad, hz]
+  have hBadUnion : (rawLaw9 S I).pr
+      (fun ω => regBad ω ∨ xBad ω ∨ specBad ω ∨ supportBad ω) ≤
+        P.tail cReg n + Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) + P.tail cSpec n := by
+    calc
+      (rawLaw9 S I).pr (fun ω => regBad ω ∨ xBad ω ∨ specBad ω ∨ supportBad ω) ≤
+          (rawLaw9 S I).pr (fun ω => regBad ω ∨ xBad ω ∨ specBad ω) +
+            (rawLaw9 S I).pr supportBad :=
+              by
+                simpa only [or_assoc] using
+                  (Lane_q_s09_gain2.pr_or_le (rawLaw9 S I)
+                    (fun ω => regBad ω ∨ xBad ω ∨ specBad ω) supportBad)
+      _ ≤ (rawLaw9 S I).pr regBad + (rawLaw9 S I).pr xBad +
+            (rawLaw9 S I).pr specBad := by
+        have h := Lane_q_s09_gain2.pr_or3_le (rawLaw9 S I) regBad xBad specBad
+        rw [hSupportProb]
+        linarith
+      _ ≤ P.tail cReg n + Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) + P.tail cSpec n := by
+        exact add_le_add (add_le_add (hregAt v) hMeanTail) hSpecProb
+  have htailCombined :
+      P.tail cReg n + Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) + P.tail cSpec n ≤ P.tail c n := by
+    simpa [c, Params9.tail, add_assoc] using htailN
+  have hIncl : ∀ ω, targetBad ω →
+      regBad ω ∨ xBad ω ∨ specBad ω ∨ supportBad ω := by
+    intro ω hbad
+    by_contra hnot
+    have hregω : starRegular9 S E G ω v := by
+      by_contra h
+      exact hnot (Or.inl h)
+    have hmeanω : ¬ xBad ω := by
+      intro h
+      exact hnot (Or.inr (Or.inl h))
+    have hspecω : ¬ specBad ω := by
+      intro h
+      exact hnot (Or.inr (Or.inr (Or.inl h)))
+    have hsupportω : (rawLaw9 S I).w ω ≠ 0 := by
+      intro h
+      exact hnot (Or.inr (Or.inr (Or.inr h)))
+    have hdet : ¬ targetBad ω := by
+      let x := anc9 ω (I.center v.1)
+      have hmeanBound (b : StarOdd9 v) :
+          |condCoreMean9 S I E G v b.1 ω -
+            rowDeg E G (anc9 ω (I.center v.1)) (siteSecond9 S b.1)| ≤
+              P.aStar n / 100 := by
+        by_contra hlarge
+        apply hmeanω
+        exact ⟨b, lt_of_not_ge hlarge⟩
+      have hrawPos : 0 < (rawLaw9 S I).w ω :=
+        lt_of_le_of_ne ((rawLaw9 S I).nonneg ω) hsupportω.symm
+      have hAtom : (rawLaw9 S I).w ω ≤
+          (rawLaw9 S I).pr (fun ω' => anc9 ω' (I.center v.1) = x) := by
+        have hsingle := Finset.single_le_sum
+          (s := (Finset.univ : Finset (Outcome9 I N)))
+          (f := fun ω' => @ite ℝ (anc9 ω' (I.center v.1) = x)
+            (Classical.propDecidable _) ((rawLaw9 S I).w ω') 0)
+          (fun ω' hω' => by
+            split_ifs
+            · exact (rawLaw9 S I).nonneg ω'
+            · norm_num)
+          (Finset.mem_univ ω)
+        simpa [x, FinProb.pr] using hsingle
+      have hcoordPos : 0 < μv.w x := by
+        have h := lt_of_lt_of_le hrawPos hAtom
+        rw [hCoordinate x] at h
+        exact h
+      have hxNZ : μv.w x ≠ 0 := ne_of_gt hcoordPos
+      have hOrdinary : ∀ j : Fin n, P.m n ≤ j.val →
+          1 / 2 + P.aStar n ≤
+            rowDeg E G x (siteSecond9 S (Lane_q_s09_gain2.starCoord9 v j).1) := by
+        intro j hj
+        have hsite : siteSecond9 S (Lane_q_s09_gain2.starCoord9 v j).1 =
+            M.ν (S.tag z) := by
+          dsimp [siteSecond9, Lane_q_s09_gain2.starCoord9, z]
+          rw [Lane_q_s09_gain2.specialWord9_starCoord_residual v j hm hj]
+        rcases hprep.2 (S.tag z) (htags z) with ⟨_, _, _, _, hdegree⟩
+        rw [hsite]
+        exact hdegree x hxNZ
+      let d : Fin n → ℝ := fun j =>
+        rowDeg E G x (siteSecond9 S (Lane_q_s09_gain2.starCoord9 v j).1)
+      let Jsp : Finset (Fin n) := Finset.univ.filter (fun j => j.val < P.m n)
+      let Jres : Finset (Fin n) := Finset.univ.filter (fun j => P.m n ≤ j.val)
+      have hsumBase :
+          (∑ b : StarOdd9 v, rowDeg E G x (siteSecond9 S b.1)) = ∑ j : Fin n, d j := by
+        symm
+        exact Fintype.sum_equiv (Lane_q_s09_gain2.starCoordEquiv9 v)
+          (fun j => d j)
+          (fun b => rowDeg E G x (siteSecond9 S b.1))
+          (by intro j; rfl)
+      have hsumSurplus :
+          (∑ b : StarOdd9 v, (rowDeg E G x (siteSecond9 S b.1) - 1 / 2)) =
+            ∑ j : Fin n, (d j - 1 / 2) := by
+        symm
+        exact Fintype.sum_equiv (Lane_q_s09_gain2.starCoordEquiv9 v)
+          (fun j => d j - 1 / 2)
+          (fun b => rowDeg E G x (siteSecond9 S b.1) - 1 / 2)
+          (by intro j; rfl)
+      have hsplit :
+          (∑ j : Fin n, (d j - 1 / 2)) =
+            (∑ j ∈ Jsp, (d j - 1 / 2)) + (∑ j ∈ Jres, (d j - 1 / 2)) := by
+        simpa [Jsp, Jres, not_lt] using
+          (Finset.sum_filter_add_sum_filter_not (Finset.univ : Finset (Fin n))
+            (fun j : Fin n => j.val < P.m n) (fun j => d j - 1 / 2)).symm
+      have hcardSpecial : Jsp.card = P.m n := by
+        have hcardSub : Fintype.card {j : Fin n // j.val < P.m n} = P.m n := by
+          have h := Fintype.card_congr (Lane_q_s09_gain2.specialCoordEquiv9 hm)
+          simpa using h.symm
+        have hcardSubtype : Fintype.card {j : Fin n // j.val < P.m n} = Jsp.card :=
+          Fintype.card_of_subtype Jsp (by intro j; simp [Jsp])
+        exact hcardSubtype.symm.trans hcardSub
+      have hcardSplit : Jsp.card + Jres.card = n := by
+        have h := Finset.card_filter_add_card_filter_not
+          (s := (Finset.univ : Finset (Fin n))) (fun j : Fin n => j.val < P.m n)
+        simpa [Jsp, Jres, not_lt] using h
+      have hcardResidual : Jres.card = n - P.m n := by omega
+      have hcardResidualR : (Jres.card : ℝ) = (n : ℝ) - (P.m n : ℝ) := by
+        have h := congrArg (fun k : ℕ => (k : ℝ)) hcardResidual
+        simpa [Nat.cast_sub hm] using h
+      have hresidualLower : ((n : ℝ) - (P.m n : ℝ)) * P.aStar n ≤
+          ∑ j ∈ Jres, (d j - 1 / 2) := by
+        have hlower : (Jres.card : ℝ) * P.aStar n ≤
+            ∑ j ∈ Jres, (d j - 1 / 2) := by
+          calc
+            (Jres.card : ℝ) * P.aStar n = ∑ j ∈ Jres, P.aStar n := by simp
+            _ ≤ ∑ j ∈ Jres, (d j - 1 / 2) := by
+              apply Finset.sum_le_sum
+              intro j hj
+              have hjres : P.m n ≤ j.val := (Finset.mem_filter.mp hj).2
+              have hdegree := hOrdinary j hjres
+              linarith
+        rw [hcardResidualR] at hlower
+        exact hlower
+      let eSpecial := Lane_q_s09_gain2.specialCoordEquiv9 hm
+      have hspecialWord (j : Fin (P.m n)) :
+          specialWord9 (P.m n) (cubeFlip v.1 (eSpecial j).1) = flipWord9 z j := by
+        have h := Lane_q_s09_gain2.specialWord9_starCoord v (eSpecial j).1 hm (eSpecial j).2
+        have hidx : (eSpecial j).1.val = j.val := by
+          change (Fin.castLE hm j).val = j.val
+          rfl
+        have hcast : (⟨(eSpecial j).1.val, (eSpecial j).2⟩ : Fin (P.m n)) = j :=
+          Fin.ext hidx
+        calc
+          specialWord9 (P.m n) (cubeFlip v.1 (eSpecial j).1) =
+              flipWord9 (specialWord9 (P.m n) v.1)
+                ⟨(eSpecial j).1.val, (eSpecial j).2⟩ := h
+          _ = flipWord9 z j := by
+            change flipWord9 (specialWord9 (P.m n) v.1)
+                ⟨(eSpecial j).1.val, (eSpecial j).2⟩ =
+              flipWord9 (specialWord9 (P.m n) v.1) j
+            exact congrArg (flipWord9 (specialWord9 (P.m n) v.1)) hcast
+      have hsiteSpecial (j : Fin (P.m n)) :
+          d (eSpecial j).1 =
+            rowDeg E G x (M.ν (S.tag (flipWord9 z j))) := by
+        change rowDeg E G x (M.ν (S.tag
+          (specialWord9 (P.m n) (cubeFlip v.1 (eSpecial j).1)))) = _
+        rw [hspecialWord j]
+      have hsumSubtype :
+          (∑ j : Fin (P.m n),
+            (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2)) =
+          ∑ q : {j : Fin n // j.val < P.m n}, (d q.1 - 1 / 2) := by
+        exact Fintype.sum_equiv eSpecial
+          (fun j => rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2)
+          (fun q => d q.1 - 1 / 2)
+          (by intro j; rw [hsiteSpecial j])
+      have hsumSpecial :
+          (∑ j : Fin (P.m n),
+            (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2)) =
+          ∑ j ∈ Jsp, (d j - 1 / 2) := by
+        have hcardSubtype :
+            Fintype.card {j : Fin n // j.val < P.m n} = Jsp.card :=
+          Fintype.card_of_subtype Jsp (by intro j; simp [Jsp])
+        have hsumD :
+            (∑ q : {j : Fin n // j.val < P.m n}, d q.1) = ∑ j ∈ Jsp, d j := by
+          simpa [Jsp] using
+            (Finset.sum_subtype_eq_sum_filter
+              (s := (Finset.univ : Finset (Fin n)))
+              (p := fun j : Fin n => j.val < P.m n) (f := d))
+        calc
+          (∑ j : Fin (P.m n),
+              (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2)) =
+              ∑ q : {j : Fin n // j.val < P.m n}, (d q.1 - 1 / 2) := hsumSubtype
+          _ = (∑ q : {j : Fin n // j.val < P.m n}, d q.1) -
+                (Fintype.card {j : Fin n // j.val < P.m n} : ℝ) * (1 / 2) := by simp
+          _ = (∑ j ∈ Jsp, d j) - (Jsp.card : ℝ) * (1 / 2) := by rw [hsumD, hcardSubtype]
+          _ = ∑ j ∈ Jsp, (d j - 1 / 2) := by rw [Finset.sum_sub_distrib]; simp
+      let specialLoss : ℝ := match P.case with
+        | .sub _ _ _ => -(P.m n : ℝ) * (2 * P.bStar n)
+        | .lin _ _ _ _ => -((1 / 20 : ℝ) * P.aStar n * n)
+      have hspecialLower : specialLoss ≤ ∑ j ∈ Jsp, (d j - 1 / 2) := by
+        cases hcase : P.case with
+        | lin αS αD hB yB =>
+          simp only [specialLoss, hcase]
+          have hnotTag : ¬ tagBad ω := by
+            intro h
+            exact hspecω (Or.inl h)
+          have hnotMem : x ∉ tagFail9 E G S.tag z := by
+            simpa [tagBad, hcase, x] using hnotTag
+          have hnotSurplus : ¬ tagSurplus9 E G S.tag z x <
+              -((1 / 20 : ℝ) * P.aStar n * n) := by
+            intro hlt
+            apply hnotMem
+            exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlt⟩
+          have htagLower : -((1 / 20 : ℝ) * P.aStar n * n) ≤
+              tagSurplus9 E G S.tag z x := le_of_not_gt hnotSurplus
+          have hsumTag : tagSurplus9 E G S.tag z x =
+              ∑ j : Fin (P.m n),
+                (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2) := rfl
+          calc
+            -((1 / 20 : ℝ) * P.aStar n * n) ≤ tagSurplus9 E G S.tag z x := htagLower
+            _ = ∑ j : Fin (P.m n),
+                (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2) := hsumTag
+            _ = ∑ j ∈ Jsp, (d j - 1 / 2) := hsumSpecial
+        | sub yS yD yM =>
+          simp only [specialLoss, hcase]
+          have hdeepGood : ∀ j : Fin (P.m n),
+              |rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2| ≤
+                2 * P.bStar n := by
+            intro j
+            by_contra hlarge
+            have hlt : 2 * P.bStar n <
+                |rowDeg E G (anc9 ω (I.center v.1))
+                  (M.ν (S.tag (flipWord9 z j))) - (2 : ℝ)⁻¹| := by
+              simpa [x, one_div] using lt_of_not_ge hlarge
+            have hbad : deepBad ω := by
+              simpa [deepBad, hcase, one_div] using ⟨j, hlt⟩
+            exact hspecω (Or.inr hbad)
+          have hlow : -(P.m n : ℝ) * (2 * P.bStar n) ≤
+              ∑ j : Fin (P.m n),
+                (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2) := by
+            calc
+              -(P.m n : ℝ) * (2 * P.bStar n) =
+                  ∑ j : Fin (P.m n), -(2 * P.bStar n) := by simp
+              _ ≤ ∑ j : Fin (P.m n),
+                  (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2) := by
+                apply Finset.sum_le_sum
+                intro j hj
+                have habs := abs_le.mp (hdeepGood j)
+                linarith
+          calc
+            -(P.m n : ℝ) * (2 * P.bStar n) ≤
+                ∑ j : Fin (P.m n),
+                  (rowDeg E G x (M.ν (S.tag (flipWord9 z j))) - 1 / 2) := hlow
+            _ = ∑ j ∈ Jsp, (d j - 1 / 2) := hsumSpecial
+      let baseDegree : StarOdd9 v → ℝ := fun b =>
+        rowDeg E G x (siteSecond9 S b.1)
+      have hconstStar : (∑ b : StarOdd9 v, (1 / 2 : ℝ)) = (n : ℝ) / 2 := by
+        calc
+          (∑ b : StarOdd9 v, (1 / 2 : ℝ)) =
+              (Fintype.card (StarOdd9 v) : ℝ) * (1 / 2) := by simp
+          _ = (n : ℝ) / 2 := by rw [hCardStar]; ring
+      have hbaseEq :
+          (∑ b : StarOdd9 v, baseDegree b) =
+            (n : ℝ) / 2 + (∑ j ∈ Jsp, (d j - 1 / 2)) +
+              ∑ j ∈ Jres, (d j - 1 / 2) := by
+        calc
+          (∑ b : StarOdd9 v, baseDegree b) =
+              ∑ b : StarOdd9 v, ((baseDegree b - 1 / 2) + 1 / 2) := by
+                apply Finset.sum_congr rfl
+                intro b hb
+                ring
+          _ = (∑ b : StarOdd9 v, (baseDegree b - 1 / 2)) +
+                ∑ b : StarOdd9 v, (1 / 2 : ℝ) := by rw [Finset.sum_add_distrib]
+          _ = (∑ j : Fin n, (d j - 1 / 2)) + (n : ℝ) / 2 := by
+                rw [hsumSurplus, hconstStar]
+          _ = (n : ℝ) / 2 + (∑ j ∈ Jsp, (d j - 1 / 2)) +
+                ∑ j ∈ Jres, (d j - 1 / 2) := by rw [hsplit]; ring
+      have hbaseLower :
+          (n : ℝ) / 2 + ((n : ℝ) - (P.m n : ℝ)) * P.aStar n + specialLoss ≤
+            ∑ b : StarOdd9 v, baseDegree b := by
+        rw [hbaseEq]
+        linarith [hresidualLower, hspecialLower]
+      have hmeanPoint (b : StarOdd9 v) :
+          baseDegree b - P.aStar n / 100 ≤ condCoreMean9 S I E G v b.1 ω := by
+        have habs := abs_le.mp (hmeanBound b)
+        linarith
+      have hmeanSum :
+          (∑ b : StarOdd9 v, baseDegree b) - (n : ℝ) * P.aStar n / 100 ≤
+            ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω := by
+        have hsumPoint :
+            (∑ b : StarOdd9 v, (baseDegree b - P.aStar n / 100)) ≤
+              ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω := by
+          apply Finset.sum_le_sum
+          intro b hb
+          exact hmeanPoint b
+        have hconst :
+            (∑ b : StarOdd9 v, (P.aStar n / 100)) =
+              (n : ℝ) * P.aStar n / 100 := by
+          calc
+            (∑ b : StarOdd9 v, (P.aStar n / 100)) =
+                (Fintype.card (StarOdd9 v) : ℝ) * (P.aStar n / 100) := by simp
+            _ = (n : ℝ) * P.aStar n / 100 := by rw [hCardStar]; ring
+        calc
+          (∑ b : StarOdd9 v, baseDegree b) - (n : ℝ) * P.aStar n / 100 =
+              ∑ b : StarOdd9 v, (baseDegree b - P.aStar n / 100) := by
+                rw [Finset.sum_sub_distrib, hconst]
+          _ ≤ ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω := hsumPoint
+      have hmeanSumLower :
+          (n : ℝ) / 2 + ((n : ℝ) - (P.m n : ℝ)) * P.aStar n + specialLoss -
+              (n : ℝ) * P.aStar n / 100 ≤
+            ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω := by
+        linarith [hbaseLower, hmeanSum]
+      have hmargin :
+          (n : ℝ) / 2 + ((n : ℝ) - (P.m n : ℝ)) * P.aStar n + specialLoss -
+              (n : ℝ) * P.aStar n / 100 ≥
+            (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n := by
+        sorry
+      have hfinal :
+          (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n ≤
+            ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω :=
+        le_trans hmargin hmeanSumLower
+      intro htarget
+      exact (not_lt_of_ge hfinal) htarget
+    exact hdet hbad
+  have hmono := FinProb.pr_mono (rawLaw9 S I) targetBad
+    (fun ω => regBad ω ∨ xBad ω ∨ specBad ω ∨ supportBad ω) hIncl
+  calc
+    (rawLaw9 S I).pr targetBad ≤
+        (rawLaw9 S I).pr (fun ω => regBad ω ∨ xBad ω ∨ specBad ω ∨ supportBad ω) := hmono
+    _ ≤ P.tail cReg n + Real.exp (-((c₁ / 2) * (n : ℝ) ^ P.u)) + P.tail cSpec n := hBadUnion
+    _ ≤ P.tail c n := htailCombined
 
 /-- The concentration bound with the core fixed (09:276–290): conditionally on the core history of `ω₀`, a
 downward deviation of `.1 n a_*` of the clipped fractions below their conditional means has probability at most

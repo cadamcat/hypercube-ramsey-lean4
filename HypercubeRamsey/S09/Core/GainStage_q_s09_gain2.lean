@@ -22,6 +22,40 @@ private theorem finprob_ext {α : Type*} [Fintype α] {P Q : FinProb α}
       subst qw
       rfl
 
+theorem pi_pr_coordinate {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (i : ι) (o : Ω i) :
+    (FinProb.pi P).pr (fun ω => ω i = o) = (P i).w o := by
+  classical
+  let S : Finset ι := {i}
+  let J := {j // j ∈ S}
+  letI : Unique J := ⟨⟨i, by simp [S]⟩, fun j => by
+    apply Subtype.ext
+    exact Finset.mem_singleton.mp j.2⟩
+  let j₀ : J := default
+  let f : (∀ j : {j // j ∈ S}, Ω j.1) → ℝ := fun x => if x j₀ = o then 1 else 0
+  have hm := FinProb.pi_marginal_expect P S f
+  have hleft : (FinProb.pi P).expect (fun ω => if ω i = o then 1 else 0) =
+      (FinProb.pi P).pr (fun ω => ω i = o) := by
+    simp [FinProb.expect, FinProb.pr, FinProb.pi]
+  have hmid : (FinProb.pi P).expect (fun ω => if ω i = o then 1 else 0) =
+      (FinProb.pi P).expect (fun ω => f (fun j => ω j.1)) := by
+    simpa [f, j₀, S, J] using hm
+  have hright :
+      (FinProb.pi (fun j : {j // j ∈ S} => P j.1)).expect f = (P i).w o := by
+    let e : (∀ j : J, Ω j.1) ≃ Ω i := Equiv.piUnique (fun j : J => Ω j.1)
+    change (∑ x : (∀ j : J, Ω j.1),
+      (∏ j : J, (P j.1).w (x j)) * f x) = (P i).w o
+    rw [← Equiv.sum_comp e.symm]
+    simp only [e, Equiv.piUnique_apply, f, j₀, S, J, mul_ite, mul_one, mul_zero]
+    simpa using (Finset.sum_ite_eq' Finset.univ o (fun x => (P i).w x))
+  calc
+    (FinProb.pi P).pr (fun ω => ω i = o) =
+        (FinProb.pi P).expect (fun ω => if ω i = o then 1 else 0) := hleft.symm
+    _ = (FinProb.pi P).expect (fun ω => f (fun j => ω j.1)) := hmid
+    _ = (FinProb.pi (fun j : {j // j ∈ S} => P j.1)).expect f := hm
+    _ = (P i).w o := hright
+
 theorem tendsto_nat_rpow_exp_neg_rpow {s u c : ℝ} (hu : 0 < u) (hc : 0 < c) :
     Tendsto (fun n : ℕ => (n : ℝ) ^ s * Real.exp (-c * (n : ℝ) ^ u)) atTop (𝓝 0) := by
   have hn : Tendsto (fun n : ℕ => (n : ℝ) ^ u) atTop atTop :=
@@ -148,6 +182,116 @@ theorem hitSet9_single {P : Params9} {n N : ℕ} {M : TagMix N}
     (c : I.ID) (y : Fin N) :
     y ∈ hitSet9 E G ω {c} ↔ Hits E G (anc9 ω c) y := by
   simp [hitSet9]
+
+def starCoord9 {n : ℕ} (v : EvenSites9 n) (j : Fin n) : StarOdd9 v :=
+  ⟨⟨cubeFlip v.1 j, fun h => ((cubeFlip_parity v.1 j).mp h) v.2⟩,
+    cubeFlip_adj v.1 j⟩
+
+noncomputable def starCoordEquiv9 {n : ℕ} (v : EvenSites9 n) :
+    Fin n ≃ StarOdd9 v :=
+  Equiv.ofBijective (starCoord9 v) (by
+    constructor
+    · intro i j hij
+      by_contra hne
+      have hodd : (starCoord9 v i).1 = (starCoord9 v j).1 :=
+        congrArg (fun b : StarOdd9 v => b.1) hij
+      have hvalue : cubeFlip v.1 i = cubeFlip v.1 j :=
+        congrArg (fun b : OddSites9 n => b.1) hodd
+      have hAt := congrFun hvalue i
+      have hji : i ≠ j := hne
+      cases hv : v.1 i <;> simp [cubeFlip, hji, hv] at hAt
+    · intro b
+      have hcard :
+          (Finset.univ.filter (fun i : Fin n => v.1 i ≠ b.1.1 i)).card = 1 := by
+        have hb := b.2
+        change (Finset.univ.filter (fun i : Fin n => v.1 i ≠ b.1.1 i)).card = 1 at hb
+        exact hb
+      obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hcard
+      refine ⟨i, ?_⟩
+      apply Subtype.ext
+      apply Subtype.ext
+      funext j
+      by_cases hji : j = i
+      · subst j
+        have himem : i ∈ Finset.univ.filter (fun k : Fin n => v.1 k ≠ b.1.1 k) := by
+          rw [hi]
+          simp
+        have hdiff := (Finset.mem_filter.mp himem).2
+        cases hv : v.1 i <;> cases hb : b.1.1 i <;>
+          simp_all [starCoord9, cubeFlip, hv, hb]
+      · have hsame : v.1 j = b.1.1 j := by
+          by_contra hne
+          have hjmem : j ∈ Finset.univ.filter (fun k : Fin n => v.1 k ≠ b.1.1 k) :=
+            Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+          rw [hi] at hjmem
+          exact hji (Finset.mem_singleton.mp hjmem)
+        simp [starCoord9, cubeFlip, hji, hsame])
+
+noncomputable def specialCoordEquiv9 {m n : ℕ} (hm : m ≤ n) :
+    Fin m ≃ {j : Fin n // j.val < m} :=
+  Equiv.ofBijective (fun i : Fin m =>
+    (⟨Fin.castLE hm i, by simpa using i.isLt⟩ : {j : Fin n // j.val < m})) (by
+      constructor
+      · intro i j hij
+        apply Fin.ext
+        have hval := congrArg (fun q : {j : Fin n // j.val < m} => q.1.val) hij
+        simpa using hval
+      · intro j
+        refine ⟨⟨j.1.val, j.2⟩, ?_⟩
+        apply Subtype.ext
+        apply Fin.ext
+        rfl)
+
+theorem orderRegular_degree_lower {P : Params9} {n N : ℕ} {M : TagMix N}
+    {I : IDMap9 P n} {E : Fin N → Fin N → Prop} {G : Colour}
+    (ω : Outcome9 I N) (base : Law N) (order : List I.ID)
+    (hregular : orderRegular9 E G ω base order) (hsmall : P.bStar n ≤ 1 / 200) :
+    ∀ k c, order[k]? = some c →
+      (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c) (prefixLaw9 E G ω base order k) := by
+  intro k
+  induction k using Nat.strong_induction_on with
+  | h k ih =>
+      intro c hget
+      have hstep := hregular k c hget (by
+        intro j c' hj hjget
+        exact ih j hj c' hjget)
+      have habs := abs_le.mp hstep
+      have hsmall' : 2 * P.bStar n ≤ (1 / 100 : ℝ) := by linarith
+      linarith
+
+theorem specialWord9_starCoord {P : Params9} {n : ℕ} (v : EvenSites9 n) (j : Fin n)
+    (hm : P.m n ≤ n) (hj : j.val < P.m n) :
+    specialWord9 (P.m n) (cubeFlip v.1 j) =
+      flipWord9 (specialWord9 (P.m n) v.1) ⟨j.val, hj⟩ := by
+  classical
+  funext k
+  have hk : k.val < n := lt_of_lt_of_le k.isLt hm
+  by_cases hkj : k.val = j.val
+  · have hidx : (⟨k.val, hk⟩ : Fin n) = j := Fin.ext hkj
+    have hkm : k = (⟨j.val, hj⟩ : Fin (P.m n)) := Fin.ext hkj
+    subst k
+    simp [specialWord9, cubeFlip, flipWord9, hidx]
+  · have hidx : (⟨k.val, hk⟩ : Fin n) ≠ j := by
+      intro heq
+      have hval : k.val = j.val := by simpa using congrArg Fin.val heq
+      exact hkj hval
+    have hkm : k ≠ (⟨j.val, hj⟩ : Fin (P.m n)) := by
+      intro heq
+      have hval : k.val = j.val := by simpa using congrArg Fin.val heq
+      exact hkj hval
+    simp [specialWord9, cubeFlip, flipWord9, hidx, hkm]
+
+theorem specialWord9_starCoord_residual {P : Params9} {n : ℕ} (v : EvenSites9 n)
+    (j : Fin n) (hm : P.m n ≤ n) (hj : P.m n ≤ j.val) :
+    specialWord9 (P.m n) (cubeFlip v.1 j) = specialWord9 (P.m n) v.1 := by
+  classical
+  funext k
+  have hk : k.val < n := lt_of_lt_of_le k.isLt hm
+  have hidx : (⟨k.val, hk⟩ : Fin n) ≠ j := by
+    intro heq
+    have hval : k.val = j.val := by simpa using congrArg Fin.val heq
+    exact (ne_of_lt (lt_of_lt_of_le k.isLt hj)) hval
+  simp [specialWord9, cubeFlip, hm, hk, hidx]
 
 private theorem hitSet9_union_single {P : Params9} {n N : ℕ} {M : TagMix N}
     {I : IDMap9 P n} (E : Fin N → Fin N → Prop) (G : Colour) (ω : Outcome9 I N)
@@ -300,6 +444,16 @@ theorem abs_sub_seq_le {f : ℕ → ℝ} {K : ℝ} (hK : 0 ≤ K) :
         _ ≤ |f (m + 1) - f m| + |f m - f 0| := abs_add_le _ _
         _ ≤ K + m * K := add_le_add hstep hprev
         _ = ((m : ℝ) + 1) * K := by ring
+
+theorem eventual_const_mul_rpow_neg_lt {d A ε : ℝ} (hd : 0 < d) (hε : 0 < ε) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, A * (n : ℝ) ^ (-d) < ε := by
+  have hlim : Tendsto (fun n : ℕ => A * (n : ℝ) ^ (-d)) atTop (𝓝 0) := by
+    simpa [mul_assoc] using Tendsto.const_mul A
+      ((tendsto_rpow_neg_atTop hd).comp tendsto_natCast_atTop_atTop)
+  have hsmall : ∀ᶠ n : ℕ in atTop, A * (n : ℝ) ^ (-d) < ε :=
+    hlim.eventually (Iio_mem_nhds hε)
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 hsmall
+  exact ⟨n₀, fun n hn => hn₀ n hn⟩
 
 theorem core_order_hit_shift_bound {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)

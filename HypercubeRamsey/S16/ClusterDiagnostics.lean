@@ -169,7 +169,78 @@ theorem pinLaw_E_close {Slot Bin Hist Check : Type*}
     (s : Slot) (b : Bin) (δ : ℝ)
     (hΦ : ∀ x y, (∀ t, t ≠ s → x t = y t) → |Φ x - Φ y| ≤ δ) :
     |(D.pinLaw s b).E Φ - D.poolLaw.E Φ| ≤ δ := by
-  sorry
+  classical
+  letI : Nonempty Bin := D.bins_nonempty
+  let Ppin : Slot → FinLaw Bin := fun t =>
+    if t = s then FinLaw.dirac b else D.iidSlotLaw t
+  let Ψ : (Slot → Bin) → ℝ := fun x => Φ (Function.update x s b)
+  have hreplace : (FinLaw.pi Ppin).E Φ = (FinLaw.pi Ppin).E Ψ := by
+    unfold FinLaw.E
+    apply Finset.sum_congr rfl
+    intro x hx
+    change (∏ t, (Ppin t).w (x t)) * Φ x =
+      (∏ t, (Ppin t).w (x t)) * Φ (Function.update x s b)
+    have hprod : (∏ t, (Ppin t).w (x t)) =
+        (Ppin s).w (x s) * ∏ t ∈ Finset.univ.erase s, (Ppin t).w (x t) := by
+      rw [← Finset.mul_prod_erase _ _ (Finset.mem_univ s)]
+    rw [hprod]
+    by_cases hxs : x s = b
+    · have hupdate : Function.update x s b = x := by
+        funext t
+        by_cases ht : t = s <;> simp [ht, hxs]
+      simp [hupdate]
+    · have hzero : (Ppin s).w (x s) = 0 := by
+        simp [Ppin, hxs, FinLaw.dirac]
+      simp [hzero]
+  have hlocal : ∀ x y, (∀ t, t ∈ Finset.univ.erase s → x t = y t) → Ψ x = Ψ y := by
+    intro x y hxy
+    change Φ (Function.update x s b) = Φ (Function.update y s b)
+    congr 1
+    funext t
+    by_cases hts : t = s
+    · subst t
+      simp
+    · have ht : t ∈ Finset.univ.erase s :=
+        Finset.mem_erase.mpr ⟨hts, Finset.mem_univ t⟩
+      have h := hxy t ht
+      simp [Function.update, hts, h]
+  have hsame : ∀ t, t ∈ Finset.univ.erase s → Ppin t = D.iidSlotLaw t := by
+    intro t ht
+    have hts : t ≠ s := (Finset.mem_erase.mp ht).1
+    simp [Ppin, hts]
+  have hpin : (FinLaw.pi Ppin).E Ψ = (FinLaw.pi D.iidSlotLaw).E Ψ :=
+    Lane_sol_s16_prod1.pi_E_local Ppin D.iidSlotLaw (Finset.univ.erase s) Ψ hlocal hsame
+  have hdiff : (FinLaw.pi D.iidSlotLaw).E Ψ - (FinLaw.pi D.iidSlotLaw).E Φ =
+      (FinLaw.pi D.iidSlotLaw).E (fun x => Ψ x - Φ x) := by
+    unfold FinLaw.E
+    rw [← Finset.sum_sub_distrib]
+    apply Finset.sum_congr rfl
+    intro x hx
+    ring
+  change |(FinLaw.pi Ppin).E Φ - (FinLaw.pi D.iidSlotLaw).E Φ| ≤ δ
+  rw [hreplace, hpin, hdiff]
+  have hδ : 0 ≤ δ := by
+    let x : Slot → Bin := fun _ => Classical.choice D.bins_nonempty
+    have h := hΦ x x (by intro t ht; rfl)
+    simpa using h
+  have hpoint : ∀ x, |Ψ x - Φ x| ≤ δ := by
+    intro x
+    exact hΦ (Function.update x s b) x (by
+      intro t ht
+      simp [Function.update, ht])
+  unfold FinLaw.E
+  calc
+    |∑ x, (FinLaw.pi D.iidSlotLaw).w x * (Ψ x - Φ x)| ≤
+        ∑ x, |(FinLaw.pi D.iidSlotLaw).w x * (Ψ x - Φ x)| :=
+      Finset.abs_sum_le_sum_abs _ _
+    _ = ∑ x, (FinLaw.pi D.iidSlotLaw).w x * |Ψ x - Φ x| := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [abs_mul, abs_of_nonneg ((FinLaw.pi D.iidSlotLaw).nonneg x)]
+    _ ≤ ∑ x, (FinLaw.pi D.iidSlotLaw).w x * δ :=
+      Finset.sum_le_sum fun x hx =>
+        mul_le_mul_of_nonneg_left (hpoint x) ((FinLaw.pi D.iidSlotLaw).nonneg x)
+    _ = δ := by rw [← Finset.sum_mul, (FinLaw.pi D.iidSlotLaw).sum_one, one_mul]
 
 /-- C6. Per-check facts assemble the concentration record (mixed families).
 TeX 16:247–257; estimated proof: 80 lines. -/
@@ -188,7 +259,43 @@ theorem pool_concentration_of_checks {Slot Bin Hist Check : Type*}
     (hcollision : (Fintype.card Slot : ℝ) ^ 2 / Fintype.card Bin ≤
       Real.exp (-(n : ℝ) ^ c0) / 4) :
     Nonempty (PoolConcentrationHypotheses D) := by
-  sorry
+  classical
+  have hslotsReal : 0 < (Fintype.card Slot : ℝ) := by exact_mod_cast hslots
+  refine ⟨{
+    n_large := hn
+    exponent_pos := hc0
+    slots_pos := hslots
+    epsilon_pos := heps
+    tolerance_pos := htol
+    sensitivity := fun c _ => sens c
+    sensitivity_nonneg := fun c _ => (hsens c).le
+    mean_close := ?_
+    pinned_mean_close := ?_
+    one_slot_change := ?_
+    variance_budget := ?_
+    collision_budget := hcollision }⟩
+  · intro c
+    have h := hmean c
+    have hs : 0 ≤ sens c := (hsens c).le
+    linarith
+  · intro s b c
+    have hpin := pinLaw_E_close D (D.normalizer · c) s b (sens c) (hone c s)
+    have h := hmean c
+    have hsum : sens c + |D.poolLaw.E (D.normalizer · c) - D.center c| ≤
+        D.tolerance c / 2 := by linarith
+    calc
+      |(D.pinLaw s b).E (D.normalizer · c) - D.center c| ≤
+          |(D.pinLaw s b).E (D.normalizer · c) - D.poolLaw.E (D.normalizer · c)| +
+            |D.poolLaw.E (D.normalizer · c) - D.center c| :=
+        abs_sub_le _ _ _
+      _ ≤ D.tolerance c / 2 := by
+        exact (add_le_add hpin (le_refl _)).trans hsum
+  · exact hone
+  · intro c
+    have hsum : (∑ s : Slot, (fun _ : Slot => sens c) s ^ 2) =
+        (Fintype.card Slot : ℝ) * sens c ^ 2 := by simp
+    rw [hsum]
+    exact Or.inr ⟨mul_pos hslotsReal (sq_pos_of_pos (hsens c)), hvar c⟩
 
 /-- C7. Numerical room for star/pin checks: sensitivity, variance budget, cover.
 TeX 16:247–257; estimated proof: 150 lines. -/

@@ -338,7 +338,6 @@ theorem D18_L_palette_counts (hκ : κ.Admissible) (hThresholds : LateThresholds
           (D.geom.patchOf v = i ∧ D.palette v = D.palettes i a)
         (rows.card : ℝ) ≤ κ.KB * ((PT.tiling.P i).M : ℝ) / D.chi i / densityScale T k ∧
           (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) ≤ rows.card := by
-  obtain ⟨K16, hQuant⟩ := low_mode_quantitative_inputs hκ T
   have hKB : (800 : ℝ) ≤ κ.KB := by
     have hP := hκ.P_big.2
     have hR := hκ.R_eq
@@ -349,12 +348,12 @@ theorem D18_L_palette_counts (hκ : κ.Admissible) (hThresholds : LateThresholds
         exact Nat.one_le_iff_ne_zero.mpr (pow_ne_zero 2 (ne_of_gt hPpos))
       exact_mod_cast this
     linarith [hκ.KB_big]
-  filter_upwards [hQuant, Lane_sol_d18l_pal.small_prefix_height T] with k hQk hSmall
+  filter_upwards [Lane_sol_d18l_pal.small_prefix_height T] with k hSmall
   intro PT hPT X hMass hLarge
   let D := rawData hκ X
   dsimp only
   intro i a
-  obtain ⟨Q, hGain⟩ := hQk PT hPT X.low
+  let Q := (Classical.choice X.l16.physical).quantitative
   obtain ⟨hLoss, hell⟩ := hSmall (PT.tiling.P i).ℓ (PT.tiling.P i).h
     (Q.prefix_bound i) (Q.height_bound i)
   let ψ := X.palette.code i

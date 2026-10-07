@@ -1,3 +1,4 @@
+import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Lists
 
@@ -301,5 +302,189 @@ theorem external_crossing_count {hPT : PT.Valid} (D : LateData hPT) (v : Pos T k
       D.geom hPT v a (Nat.le_of_not_gt hn))
   exact (Finset.card_le_card hsub).trans_eq
     (HypercubeRamsey.Lane_q_s17_pool.fin_prefix_coord_card hell)
+
+theorem raw_row_bound {hPT : PT.Valid} (D : LateData hPT) (v : Pos T k)
+    (s : Config D.fresh) (hvalid : D.initialValid v s) (x : Fin (T.S.N k))
+    (B : ℝ) (hPrior : D.sigma v s x ≤ B) (e : Fin (T.S.n k) → ℝ)
+    (hdegree : ∀ a ∈ D.externalEarly v,
+      0 < rowDeg (T.S.E k) PT.tiling.c x (PT.π (D.geom.patchOf (flipPos v a))) ∧
+      1 / rowDeg (T.S.E k) PT.tiling.c x (PT.π (D.geom.patchOf (flipPos v a))) ≤ 2 * Real.exp (e a)) :
+    D.initialWeight v s x ≤ B * (2 : ℝ) ^ (D.externalEarly v).card *
+      Real.exp (∑ a ∈ D.externalEarly v, e a) := by
+  have hprod : (∏ a ∈ D.externalEarly v,
+      (if Hits (T.S.E k) PT.tiling.c x (D.earlyLabel s (flipPos v a)) then (1 : ℝ) else 0) /
+        rowDeg (T.S.E k) PT.tiling.c x (PT.π (D.geom.patchOf (flipPos v a)))) ≤
+      (2 : ℝ) ^ (D.externalEarly v).card * Real.exp (∑ a ∈ D.externalEarly v, e a) := by
+    calc
+      _ ≤ ∏ a ∈ D.externalEarly v, 2 * Real.exp (e a) := by
+        apply Finset.prod_le_prod₀
+        · intro a ha
+          apply div_nonneg
+          · split_ifs <;> norm_num
+          · exact (hdegree a ha).1.le
+        · intro a ha
+          split_ifs
+          · exact (hdegree a ha).2
+          · simp [Real.exp_nonneg]
+      _ = _ := by rw [Finset.prod_mul_distrib, Finset.prod_const, ← Real.exp_sum]
+  unfold LateData.initialWeight
+  calc
+    _ ≤ D.sigma v s x * ((2 : ℝ) ^ (D.externalEarly v).card *
+        Real.exp (∑ a ∈ D.externalEarly v, e a)) :=
+      mul_le_mul_of_nonneg_left hprod (hvalid.1.1 x)
+    _ ≤ B * ((2 : ℝ) ^ (D.externalEarly v).card *
+        Real.exp (∑ a ∈ D.externalEarly v, e a)) := mul_le_mul_of_nonneg_right hPrior (by positivity)
+    _ = _ := by ring
+
+theorem own_prior_supported {hPT : PT.Valid} (D : LateData hPT) (v : Pos T k)
+    (s : Config D.fresh) (hvalid : D.initialValid v s) (x : Fin (T.S.N k))
+    (hx : D.sigma v s x ≠ 0) : x ∈ PT.envelope (D.geom.patchOf v) := by
+  obtain ⟨q, hq, hSupport⟩ := hvalid.1.2.2.2.1
+  have hxq : x ∈ PT.mesh.corner q (D.geom.patchOf v) := by
+    by_contra hnot
+    exact hx (hSupport x hnot)
+  rw [hPT.envelope_eq]
+  exact Finset.mem_biUnion.mpr ⟨q, hq, hxq⟩
+
+theorem row_degree_eq (i : Fin PT.tiling.m) (x : Fin (T.S.N k)) :
+    rowDeg (T.S.E k) PT.tiling.c x (PT.π i) = deg (T.S.E k) PT.tiling.c (PT.π i).w x := rfl
+
+theorem late_numeric_cutoff (T : Stage) (K A : ℝ) (hK : 0 ≤ K) (hA : 0 ≤ A) :
+    ∀ᶠ k in Filter.atTop,
+      1 ≤ Real.log (T.S.n k : ℝ) ∧
+      1000 * (K + 2 * A / Real.log 2 + 1) * Real.log (T.S.n k : ℝ) ≤ T.S.n k ∧
+      12 * bstar T k * Real.sqrt (Real.log (T.S.n k : ℝ)) ≤ 1 := by
+  have hn : Filter.Tendsto (fun k => (T.S.n k : ℝ)) Filter.atTop Filter.atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  let C := K + 2 * A / Real.log 2 + 1
+  have hC : 0 < C := by
+    have hterm : 0 ≤ 2 * A / Real.log 2 := by positivity
+    dsimp [C]
+    linarith
+  have hb := hn.eventually (Real.isLittleO_log_id_atTop.def
+    (show (0 : ℝ) < 1 / (1000 * C) by positivity))
+  have hp : Filter.Tendsto (fun k => (T.S.n k : ℝ) ^ (-(0.46 : ℝ))) Filter.atTop (nhds 0) :=
+    (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 0.46)).comp hn
+  have hp' := hp.eventually (eventually_le_nhds (show (0 : ℝ) < 1 / 12 by norm_num))
+  have hlogsmall := hn.eventually (Real.isLittleO_log_id_atTop.def (show (0 : ℝ) < 1 by norm_num))
+  filter_upwards [(Real.tendsto_log_atTop.comp hn).eventually_ge_atTop 1,
+    hb, hp', hlogsmall] with k hlog hb hp hl
+  change 1 ≤ Real.log (T.S.n k : ℝ) at hlog
+  have hn0 : 0 ≤ (T.S.n k : ℝ) := by positivity
+  have hlog0 : 0 ≤ Real.log (T.S.n k : ℝ) := by linarith
+  simp only [Real.norm_eq_abs, id_eq, abs_of_nonneg hn0, abs_of_nonneg hlog0] at hb hl
+  refine ⟨hlog, ?_, ?_⟩
+  · have hb' : Real.log (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) / (1000 * C) := by
+      simpa only [div_eq_mul_inv, one_mul, mul_comm] using hb
+    have := (le_div_iff₀ (show (0 : ℝ) < 1000 * C by positivity)).mp hb'
+    dsimp [C] at this
+    nlinarith
+  · have hs : Real.sqrt (Real.log (T.S.n k : ℝ)) ≤ Real.sqrt (T.S.n k : ℝ) :=
+      Real.sqrt_le_sqrt (by simpa using hl)
+    have hmul := mul_le_mul_of_nonneg_left hs (show 0 ≤ 12 * bstar T k by unfold bstar; positivity)
+    have hnpos : 0 < (T.S.n k : ℝ) := by
+      by_contra hn
+      have hzero := le_antisymm (not_lt.mp hn) hn0
+      rw [hzero] at hlog
+      norm_num at hlog
+    have hex : 12 * bstar T k * Real.sqrt (T.S.n k : ℝ) =
+        12 * (T.S.n k : ℝ) ^ (-(0.46 : ℝ)) := by
+      unfold bstar
+      rw [Real.sqrt_eq_rpow, mul_assoc, ← Real.rpow_add hnpos]
+      norm_num
+    rw [hex] at hmul
+    exact hmul.trans (by linarith)
+
+theorem cap_constant (hκ : κ.Admissible) (ht : LateThresholds κ) :
+    1600 * Real.exp (8 * κ.Kbd) ≤ κ.KB := by
+  have hbd : 1 ≤ κ.Kbd := hκ.bounded.2.2.2.1
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  have hmean : 0 ≤ rowMeanConstant κ := by unfold rowMeanConstant; positivity
+  have hA : 0 ≤ κ.A0 := by nlinarith [hκ.A0_big]
+  have hKB : Real.exp (100 * κ.Kbd) ≤ κ.KB := by linarith [ht.1]
+  have h1600 : (1600 : ℝ) ≤ Real.exp 32 := by
+    calc
+      _ ≤ (9 : ℝ) ^ 4 := by norm_num
+      _ ≤ (Real.exp 8) ^ 4 := by gcongr; linarith [Real.add_one_le_exp 8]
+      _ = Real.exp 32 := by rw [← Real.exp_nat_mul]; norm_num
+  calc
+    _ ≤ Real.exp (92 * κ.Kbd) * Real.exp (8 * κ.Kbd) := by
+      gcongr
+      exact h1600.trans (Real.exp_le_exp.mpr (by linarith))
+    _ = Real.exp (100 * κ.Kbd) := by rw [← Real.exp_add]; congr 1; ring
+    _ ≤ κ.KB := hKB
+
+theorem external_correction_sum {hPT : PT.Valid} (D : LateData hPT)
+    (v : Pos T k) (c d : ℝ) :
+    (∑ a ∈ D.externalEarly v, if D.geom.patchOf (flipPos v a) = D.geom.patchOf v then c else d) =
+      c * (((D.externalEarly v).filter fun a => D.geom.patchOf (flipPos v a) = D.geom.patchOf v).card : ℝ) +
+      d * (((D.externalEarly v).filter fun a => D.geom.patchOf (flipPos v a) ≠ D.geom.patchOf v).card : ℝ) := by
+  rw [Finset.sum_ite]
+  simp [mul_comm]
+
+theorem uniform_prior_cap {hPT : PT.Valid} (D : LateData hPT) (v : Pos T k)
+    (s : Config D.fresh) (hvalid : D.initialValid v s) (hcluster : ¬ PT.tiling.mode.isCluster)
+    (R : ℝ) (hR : 0 ≤ R) (hMass : (T.S.N k : ℝ) ≤ R * (PT.tiling.P (D.geom.patchOf v)).M) :
+    ∀ x, D.sigma v s x ≤ 2 * R / T.S.N k := by
+  have hshape := hvalid.1.2.2.1
+  rw [if_neg hcluster] at hshape
+  obtain ⟨q, hq, hσ⟩ := hshape
+  have hcorner := hPT.corner_clean (D.geom.patchOf v) q hq
+  have hcpos : (0 : ℝ) < (PT.mesh.corner q (D.geom.patchOf v)).card := by
+    exact_mod_cast Finset.card_pos.mpr hcorner.nonempty
+  have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hcMass : (T.S.N k : ℝ) ≤ 2 * R * (PT.mesh.corner q (D.geom.patchOf v)).card := by
+    have hmul := mul_le_mul_of_nonneg_left hcorner.card_lower hR
+    nlinarith
+  intro x
+  rw [hσ x]
+  split_ifs
+  · apply (div_le_div_iff₀ hcpos hNpos).mpr
+    simpa using hcMass
+  · positivity
+
+theorem row_scale_factor (n h a p : ℕ) (hc : h + a + p ≤ n + 1) :
+    (2 : ℝ) ^ h * (2 : ℝ) ^ a ≤
+      2 * (2 : ℝ) ^ n * Real.rpow 2 (-(p : ℝ)) := by
+  simp only [Real.rpow_eq_pow]
+  rw [Real.rpow_neg (by norm_num : (0 : ℝ) ≤ 2) (p : ℝ), Real.rpow_natCast,
+    ← div_eq_mul_inv]
+  apply (le_div_iff₀ (by positivity : (0 : ℝ) < (2 : ℝ) ^ p)).mpr
+  calc
+    _ = (2 : ℝ) ^ (h + a + p) := by rw [pow_add, pow_add]
+    _ ≤ (2 : ℝ) ^ (n + 1) := by gcongr <;> norm_num
+    _ = _ := by rw [pow_succ]; ring
+
+theorem raw_atom_scalar {hPT : PT.Valid} (D : LateData hPT) (v : Pos T k)
+    (s : Config D.fresh) (hvalid : D.initialValid v s) (x : Fin (T.S.N k))
+    (B E : ℝ) (hB : 0 ≤ B) (e : Fin (T.S.n k) → ℝ)
+    (hPrior : D.sigma v s x ≤ (2 : ℝ) ^ (PT.tiling.P (D.geom.patchOf v)).h / T.S.N k * B)
+    (hdegree : ∀ a ∈ D.externalEarly v,
+      0 < rowDeg (T.S.E k) PT.tiling.c x (PT.π (D.geom.patchOf (flipPos v a))) ∧
+      1 / rowDeg (T.S.E k) PT.tiling.c x (PT.π (D.geom.patchOf (flipPos v a))) ≤ 2 * Real.exp (e a))
+    (he : (∑ a ∈ D.externalEarly v, e a) ≤ E)
+    (hcount : (PT.tiling.P (D.geom.patchOf v)).h + (D.externalEarly v).card +
+      D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ ≤ T.S.n k + 1) :
+    D.initialWeight v s x ≤ 2 * B / densityScale T k * Real.exp E *
+      Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ)) := by
+  have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hp := row_scale_factor _ _ _ _ hcount
+  have hexp := Real.exp_le_exp.mpr he
+  have hraw := raw_row_bound D v s hvalid x _ hPrior e hdegree
+  apply hraw.trans
+  calc
+    _ = B / T.S.N k * ((2 : ℝ) ^ (PT.tiling.P (D.geom.patchOf v)).h *
+        (2 : ℝ) ^ (D.externalEarly v).card) * Real.exp (∑ a ∈ D.externalEarly v, e a) := by ring
+    _ ≤ B / T.S.N k * (2 * (2 : ℝ) ^ T.S.n k *
+        Real.rpow 2 (-(D.remainingNeighbors v ⟨0, D.l16_valid.r_pos⟩ : ℝ))) * Real.exp E := by
+      apply mul_le_mul
+      · exact mul_le_mul_of_nonneg_left hp (div_nonneg hB hNpos.le)
+      · exact hexp
+      · exact Real.exp_nonneg _
+      · exact mul_nonneg (div_nonneg hB hNpos.le)
+          (mul_nonneg (by positivity) (Real.rpow_nonneg (by norm_num) _))
+    _ = _ := by
+      unfold densityScale
+      field_simp <;> ring
 
 end HypercubeRamsey.S18.Lane_sol_d18l_pal

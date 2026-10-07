@@ -305,7 +305,268 @@ theorem background_trajectory_stability {T : ℕ} {Ω : Type*} [Fintype Ω]
           η * (T : ℝ) * (1 + δ) ^ T ∧
       |X.labelMass t ω - (backgroundTrajectory δ θ t.val).2| ≤
           η * (T : ℝ) * (1 + δ) ^ T) = 1 := by
-  sorry
+  classical
+  have htraj : ∀ k, 0 ≤ (backgroundTrajectory δ θ k).1 ∧
+      (backgroundTrajectory δ θ k).1 ≤ 1 ∧
+      0 ≤ (backgroundTrajectory δ θ k).2 ∧
+      (backgroundTrajectory δ θ k).2 ≤ 1 := by
+    intro k
+    induction k with
+    | zero => simp [backgroundTrajectory]
+    | succ k ih =>
+        rcases ih with ⟨hq0, hq1, hz0, hz1⟩
+        have hδθ0 : 0 ≤ δ * θ := mul_nonneg hδ0 hθ0
+        have hδθ1 : δ * θ ≤ 1 := mul_le_one₀ hδ1 hθ0 hθ1
+        have hqfactor0 : 0 ≤ 1 - δ * θ * (backgroundTrajectory δ θ k).2 := by
+          have hp0 := mul_nonneg hδθ0 hz0
+          have hp1 := mul_le_one₀ hδθ1 hz0 hz1
+          linarith
+        have hqfactor1 : 1 - δ * θ * (backgroundTrajectory δ θ k).2 ≤ 1 :=
+          sub_le_self _ (mul_nonneg hδθ0 hz0)
+        have hzfactor0 : 0 ≤ 1 - δ * (backgroundTrajectory δ θ k).1 := by
+          have hp0 := mul_nonneg hδ0 hq0
+          have hp1 := mul_le_one₀ hδ1 hq0 hq1
+          linarith
+        have hzfactor1 : 1 - δ * (backgroundTrajectory δ θ k).1 ≤ 1 :=
+          sub_le_self _ (mul_nonneg hδ0 hq0)
+        constructor
+        · change 0 ≤ (backgroundTrajectory δ θ k).1 -
+            δ * θ * (backgroundTrajectory δ θ k).2 * (backgroundTrajectory δ θ k).1
+          calc
+            0 ≤ (backgroundTrajectory δ θ k).1 *
+                (1 - δ * θ * (backgroundTrajectory δ θ k).2) :=
+                  mul_nonneg hq0 hqfactor0
+            _ = _ := by ring
+        constructor
+        · change (backgroundTrajectory δ θ k).1 -
+            δ * θ * (backgroundTrajectory δ θ k).2 * (backgroundTrajectory δ θ k).1 ≤ 1
+          calc
+            (backgroundTrajectory δ θ k).1 -
+                δ * θ * (backgroundTrajectory δ θ k).2 * (backgroundTrajectory δ θ k).1 =
+            (backgroundTrajectory δ θ k).1 *
+                  (1 - δ * θ * (backgroundTrajectory δ θ k).2) := by ring
+            _ ≤ (backgroundTrajectory δ θ k).1 * 1 :=
+              mul_le_mul_of_nonneg_left hqfactor1 hq0
+            _ ≤ 1 := by simpa using hq1
+        constructor
+        · change 0 ≤ (backgroundTrajectory δ θ k).2 -
+            δ * (backgroundTrajectory δ θ k).1 * (backgroundTrajectory δ θ k).2
+          calc
+            0 ≤ (backgroundTrajectory δ θ k).2 *
+                (1 - δ * (backgroundTrajectory δ θ k).1) :=
+                  mul_nonneg hz0 hzfactor0
+            _ = _ := by ring
+        · change (backgroundTrajectory δ θ k).2 -
+            δ * (backgroundTrajectory δ θ k).1 * (backgroundTrajectory δ θ k).2 ≤ 1
+          calc
+            (backgroundTrajectory δ θ k).2 -
+                δ * (backgroundTrajectory δ θ k).1 * (backgroundTrajectory δ θ k).2 =
+            (backgroundTrajectory δ θ k).2 *
+                  (1 - δ * (backgroundTrajectory δ θ k).1) := by ring
+            _ ≤ (backgroundTrajectory δ θ k).2 * 1 :=
+              mul_le_mul_of_nonneg_left hzfactor1 hz0
+            _ ≤ 1 := by simpa using hz1
+  have htriangle (a b c : ℝ) : |a - c| ≤ |a - b| + |b - c| := by
+    calc
+      |a - c| = |(a - b) + (b - c)| := by congr 1 <;> ring
+      _ ≤ |a - b| + |b - c| := abs_add_le _ _
+  let b : ℝ := 1 + δ
+  have hb1 : 1 ≤ b := by dsimp [b]; linarith
+  have hpoint : ∀ t : Fin (T + 1), ∀ ω,
+      |X.rowMass t ω - (backgroundTrajectory δ θ t.val).1| ≤
+        η * (t.val : ℝ) * b ^ t.val ∧
+      |X.labelMass t ω - (backgroundTrajectory δ θ t.val).2| ≤
+        η * (t.val : ℝ) * b ^ t.val := by
+    intro t
+    induction t using Fin.induction with
+    | zero =>
+        intro ω
+        constructor <;> simp [backgroundTrajectory, hrow0, hlabel0]
+    | succ i ih =>
+        intro ω
+        let q := X.rowMass i.castSucc ω
+        let z := X.labelMass i.castSucc ω
+        let q₀ := (backgroundTrajectory δ θ i.val).1
+        let z₀ := (backgroundTrajectory δ θ i.val).2
+        let r := η * (i.val : ℝ) * b ^ i.val
+        have hs := hstate i.castSucc ω
+        rcases hs with ⟨hx0, hx1, hz0, hz1⟩
+        have hbg := htraj i.val
+        rcases hbg with ⟨hq0, hq1, hz₀, hz₁⟩
+        have hprev := ih ω
+        have hprevq : |q - q₀| ≤ r := by
+          simpa [q, q₀, r] using hprev.1
+        have hprevz : |z - z₀| ≤ r := by
+          simpa [z, z₀, r] using hprev.2
+        have hδθ0 : 0 ≤ δ * θ := mul_nonneg hδ0 hθ0
+        have hδθ1 : δ * θ ≤ 1 := mul_le_one₀ hδ1 hθ0 hθ1
+        have hdz0 : 0 ≤ δ * θ * z := mul_nonneg hδθ0 hz0
+        have hdz1 : δ * θ * z ≤ 1 := mul_le_one₀ hδθ1 hz0 hz1
+        have hqfac : |1 - δ * θ * z| ≤ 1 := by
+          apply abs_le.mpr
+          constructor
+          · linarith
+          · exact sub_le_self _ hdz0
+        have hθq₀ : θ * q₀ ≤ 1 := mul_le_one₀ hθ1 hq0 hq1
+        have hcoefq0 : 0 ≤ δ * θ * q₀ := by positivity
+        have hcoefq1 : δ * θ * q₀ ≤ δ := by
+          calc
+            δ * θ * q₀ = δ * (θ * q₀) := by ring
+            _ ≤ δ * 1 := mul_le_mul_of_nonneg_left hθq₀ hδ0
+            _ = δ := by ring
+        have hcoefz0 : 0 ≤ δ * z₀ := mul_nonneg hδ0 hz₀
+        have hcoefz1 : δ * z₀ ≤ δ :=
+          calc
+            δ * z₀ ≤ δ * 1 := mul_le_mul_of_nonneg_left hz₁ hδ0
+            _ = δ := by ring
+        have halgq : (q - δ * θ * z * q) - (q₀ - δ * θ * z₀ * q₀) =
+            (1 - δ * θ * z) * (q - q₀) - (δ * θ * q₀) * (z - z₀) := by ring
+        have halgz : (z - δ * q * z) - (z₀ - δ * q₀ * z₀) =
+            (1 - δ * q) * (z - z₀) - (δ * z₀) * (q - q₀) := by ring
+        have hdetq : |(q - δ * θ * z * q) - (q₀ - δ * θ * z₀ * q₀)| ≤
+            (1 + δ) * r := by
+          rw [halgq]
+          calc
+                |(1 - δ * θ * z) * (q - q₀) - (δ * θ * q₀) * (z - z₀)| ≤
+                |(1 - δ * θ * z) * (q - q₀)| + |(δ * θ * q₀) * (z - z₀)| := by
+                  simpa [abs_mul] using htriangle
+                    ((1 - δ * θ * z) * (q - q₀)) 0 ((δ * θ * q₀) * (z - z₀))
+            _ ≤ r + δ * r := by
+                apply add_le_add
+                · calc
+                    |(1 - δ * θ * z) * (q - q₀)| =
+                        |1 - δ * θ * z| * |q - q₀| := abs_mul _ _
+                    _ ≤ 1 * |q - q₀| :=
+                      mul_le_mul_of_nonneg_right hqfac (abs_nonneg _)
+                    _ ≤ r := by simpa using hprevq
+                · calc
+                    |(δ * θ * q₀) * (z - z₀)| =
+                        |δ * θ * q₀| * |z - z₀| := abs_mul _ _
+                    _ ≤ δ * |z - z₀| := by
+                      rw [abs_of_nonneg hcoefq0]
+                      exact mul_le_mul_of_nonneg_right hcoefq1 (abs_nonneg _)
+                    _ ≤ δ * r := mul_le_mul_of_nonneg_left hprevz hδ0
+            _ = (1 + δ) * r := by ring
+        have hdetz : |(z - δ * q * z) - (z₀ - δ * q₀ * z₀)| ≤
+            (1 + δ) * r := by
+          have hδq0 : 0 ≤ δ * q := mul_nonneg hδ0 hx0
+          have hδq1 : δ * q ≤ 1 := mul_le_one₀ hδ1 hx0 hx1
+          have hzfac : |1 - δ * q| ≤ 1 := by
+            apply abs_le.mpr
+            constructor
+            · linarith
+            · exact sub_le_self _ hδq0
+          rw [halgz]
+          calc
+                |(1 - δ * q) * (z - z₀) - (δ * z₀) * (q - q₀)| ≤
+                |(1 - δ * q) * (z - z₀)| + |(δ * z₀) * (q - q₀)| := by
+                  simpa [abs_mul] using htriangle
+                    ((1 - δ * q) * (z - z₀)) 0 ((δ * z₀) * (q - q₀))
+            _ ≤ r + δ * r := by
+                apply add_le_add
+                · calc
+                    |(1 - δ * q) * (z - z₀)| =
+                        |1 - δ * q| * |z - z₀| := abs_mul _ _
+                    _ ≤ 1 * |z - z₀| :=
+                      mul_le_mul_of_nonneg_right hzfac (abs_nonneg _)
+                    _ ≤ r := by simpa using hprevz
+                · calc
+                    |(δ * z₀) * (q - q₀)| = |δ * z₀| * |q - q₀| := abs_mul _ _
+                    _ ≤ δ * |q - q₀| := by
+                      rw [abs_of_nonneg hcoefz0]
+                      exact mul_le_mul_of_nonneg_right hcoefz1 (abs_nonneg _)
+                    _ ≤ δ * r := mul_le_mul_of_nonneg_left hprevq hδ0
+            _ = (1 + δ) * r := by ring
+        have hdrift := hdrift i ω
+        have hstepq : |X.rowMass i.succ ω - (q - δ * θ * z * q)| ≤ η := by
+          simpa [q, z, backgroundStep] using hdrift.1
+        have hstepz : |X.labelMass i.succ ω - (z - δ * q * z)| ≤ η := by
+          simpa [q, z, backgroundStep] using hdrift.2
+        have hnext : backgroundTrajectory δ θ (i.val + 1) =
+            backgroundStep δ θ (backgroundTrajectory δ θ i.val) := by
+          simp [Nat.add_one, backgroundTrajectory]
+        have hrowerr : |X.rowMass i.succ ω -
+            (backgroundTrajectory δ θ (i.val + 1)).1| ≤ η + (1 + δ) * r := by
+          rw [hnext]
+          calc
+            |X.rowMass i.succ ω - (backgroundStep δ θ (backgroundTrajectory δ θ i.val)).1| ≤
+                |X.rowMass i.succ ω - (q - δ * θ * z * q)| +
+                  |(q - δ * θ * z * q) - (q₀ - δ * θ * z₀ * q₀)| := htriangle _ _ _
+            _ ≤ η + (1 + δ) * r := add_le_add hstepq hdetq
+        have hlabelerr : |X.labelMass i.succ ω -
+            (backgroundTrajectory δ θ (i.val + 1)).2| ≤ η + (1 + δ) * r := by
+          rw [hnext]
+          calc
+            |X.labelMass i.succ ω - (backgroundStep δ θ (backgroundTrajectory δ θ i.val)).2| ≤
+                |X.labelMass i.succ ω - (z - δ * q * z)| +
+                  |(z - δ * q * z) - (z₀ - δ * q₀ * z₀)| := htriangle _ _ _
+            _ ≤ η + (1 + δ) * r := add_le_add hstepz hdetz
+        have hpow : 1 ≤ b ^ i.val := one_le_pow₀ hb1
+        have heta : η ≤ η * b ^ i.val := by
+          calc
+            η = η * 1 := by ring
+            _ ≤ η * b ^ i.val := mul_le_mul_of_nonneg_left hpow hη
+        have hscalar : η + (1 + δ) * r ≤
+            η * ((i.val + 1 : ℕ) : ℝ) * b ^ (i.val + 1) := by
+          dsimp [r, b]
+          calc
+            η + (1 + δ) * (η * (i.val : ℝ) * (1 + δ) ^ i.val) ≤
+                η * (1 + δ) ^ i.val +
+                  (1 + δ) * (η * (i.val : ℝ) * (1 + δ) ^ i.val) :=
+                    add_le_add_left heta _
+            _ = η * (1 + δ) ^ i.val *
+                  (1 + (1 + δ) * (i.val : ℝ)) := by ring
+            _ ≤ η * (1 + δ) ^ i.val *
+                  ((1 + δ) * ((i.val : ℝ) + 1)) := by
+                    apply mul_le_mul_of_nonneg_left _
+                      (mul_nonneg hη (pow_nonneg (by linarith) _))
+                    nlinarith [hδ0, (show 0 ≤ (i.val : ℝ) by positivity)]
+            _ = η * ((i.val + 1 : ℕ) : ℝ) * (1 + δ) ^ (i.val + 1) := by
+                  rw [pow_succ]
+                  push_cast
+                  ring
+        constructor
+        · calc
+            |X.rowMass i.succ ω - (backgroundTrajectory δ θ i.succ.val).1| ≤
+                η + (1 + δ) * r := by simpa [Fin.val_succ] using hrowerr
+            _ ≤ η * ((i.val + 1 : ℕ) : ℝ) * b ^ (i.val + 1) := hscalar
+        · calc
+            |X.labelMass i.succ ω - (backgroundTrajectory δ θ i.succ.val).2| ≤
+                η + (1 + δ) * r := by simpa [Fin.val_succ] using hlabelerr
+            _ ≤ η * ((i.val + 1 : ℕ) : ℝ) * b ^ (i.val + 1) := hscalar
+  have hgood (ω : Ω) : ∀ t : Fin (T + 1),
+      |X.rowMass t ω - (backgroundTrajectory δ θ t.val).1| ≤
+          η * (T : ℝ) * (1 + δ) ^ T ∧
+      |X.labelMass t ω - (backgroundTrajectory δ θ t.val).2| ≤
+          η * (T : ℝ) * (1 + δ) ^ T := by
+    intro t
+    rcases hpoint t ω with ⟨hr, hl⟩
+    have ht : t.val ≤ T := Nat.le_of_lt_succ t.isLt
+    have hcast : (t.val : ℝ) ≤ (T : ℝ) := by exact_mod_cast ht
+    have hpowle : b ^ t.val ≤ b ^ T := pow_le_pow_right₀ hb1 ht
+    have hfirst : η * (t.val : ℝ) * b ^ t.val ≤
+        η * (T : ℝ) * b ^ t.val := by
+      exact mul_le_mul_of_nonneg_right
+        (mul_le_mul_of_nonneg_left hcast hη) (pow_nonneg (by linarith) _)
+    have hsecond : η * (T : ℝ) * b ^ t.val ≤ η * (T : ℝ) * b ^ T :=
+      mul_le_mul_of_nonneg_left hpowle (mul_nonneg hη (by exact_mod_cast (Nat.zero_le T)))
+    constructor
+    · exact le_trans hr (le_trans hfirst hsecond)
+    · exact le_trans hl (le_trans hfirst hsecond)
+  have hevent : (fun ω => ∀ t : Fin (T + 1),
+      |X.rowMass t ω - (backgroundTrajectory δ θ t.val).1| ≤
+          η * (T : ℝ) * (1 + δ) ^ T ∧
+      |X.labelMass t ω - (backgroundTrajectory δ θ t.val).2| ≤
+          η * (T : ℝ) * (1 + δ) ^ T) = fun _ : Ω => True := by
+    funext ω
+    apply propext
+    constructor
+    · intro _
+      trivial
+    · intro _
+      exact hgood ω
+  rw [hevent]
+  simp [FinProb.pr, P.sum_eq_one]
 
 /-- The background greedy matching through a mesh horizon (TeX 03:992–994): the arrivals with tick strictly
 before `horizon` on the edges whose row is not in `removedRows` and whose label is not in `removedLabels`,

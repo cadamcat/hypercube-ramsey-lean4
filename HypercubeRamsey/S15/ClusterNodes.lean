@@ -11,6 +11,7 @@ import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
 import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_c2
+import HypercubeRamsey.S15.ClusterGeometry_sol_s15_c2
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -925,11 +926,13 @@ theorem high_cluster_geometry (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
   have hNormEventually :=
     HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_normalizedHit_bounds hκ T
   have hCoreEventually := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_core_near_fraction hκ T
-  filter_upwards [hNormEventually, hCoreEventually] with k hNorm hCore
+  have hCrossEventually := HypercubeRamsey.Lane_sol_s15_c2.crossing_fraction_parameters κ hκ T
+  filter_upwards [hNormEventually, hCoreEventually, hCrossEventually] with k hNorm hCore hCross
   intro PT hPT hm
   refine ⟨?_, ?_, ?_, ?_⟩
   · exact hCore PT hPT hm
-  · sorry
+  · intro i G j hj
+    exact HypercubeRamsey.Lane_sol_s15_c2.crossing_rank_tail_bound hκ hCross.1 hCross.2 PT hPT i G j
   · intro vs G
     exact HypercubeRamsey.Lane_q_s15_c2.clusterCrossingNonisolated_card_le_two_rank PT vs G
   · intro i x hx M hGeom ys

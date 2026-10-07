@@ -1040,6 +1040,82 @@ theorem map_prod {α β γ δ : Type*} [Fintype α] [Fintype β]
         ∑ b, if g b = z.2 then Q.w b else 0 := by
       rw [Fintype.sum_mul_sum]
 
+theorem map_pi_restrict {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (S : Finset ι) :
+    FinProb.map (FinProb.pi P) (fun ω (i : {i // i ∈ S}) => ω i.1) =
+      FinProb.pi (fun i : {i // i ∈ S} => P i.1) := by
+  classical
+  apply FinProb.ext
+  intro a
+  exact FinProb.pi_marginal P S a
+
+abbrev LocalTagSample {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) :=
+      {g : D.KeyT // g ∈ keyBall c.1 3} → D.Loc → D.M.ι
+
+abbrev LocalActSample {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) :=
+      {g : D.KeyT // g ∈ keyBall c.1 1} → D.Loc → Bool
+
+abbrev LocalTieSample {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) :=
+      {g : D.KeyT // g ∈ keyBall c.1 1} → (hdP η₀ D.n).Ties
+
+abbrev LocalTATSample {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) :=
+      ((LocalTagSample D c × LocalActSample D c) × LocalTieSample D c)
+
+instance localTagSampleFintype {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : Fintype (LocalTagSample D c) := inferInstance
+
+instance localActSampleFintype {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : Fintype (LocalActSample D c) := inferInstance
+
+instance localTieSampleFintype {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : Fintype (LocalTieSample D c) := inferInstance
+
+instance localTATSampleFintype {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : Fintype (LocalTATSample D c) := inferInstance
+
+noncomputable instance localTagSampleDecidableEq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : DecidableEq (LocalTagSample D c) := by
+  dsimp [LocalTagSample]
+  letI : DecidableEq (D.Loc → D.M.ι) := Fintype.decidablePiFintype
+  exact Fintype.decidablePiFintype
+
+noncomputable instance localActSampleDecidableEq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : DecidableEq (LocalActSample D c) := by
+  dsimp [LocalActSample]
+  letI : DecidableEq (D.Loc → Bool) := Fintype.decidablePiFintype
+  exact Fintype.decidablePiFintype
+
+noncomputable instance localTieSampleDecidableEq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : DecidableEq (LocalTieSample D c) := by
+  dsimp [LocalTieSample]
+  exact Fintype.decidablePiFintype
+
+noncomputable instance localTATSampleDecidableEq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : DecidableEq (LocalTATSample D c) := by
+  dsimp [LocalTATSample]
+  exact instDecidableEqProd
+
+def localTagsProj {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : D.Tags → LocalTagSample D c :=
+  fun t g => t g.1
+
+def localActsProj {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : D.Acts → LocalActSample D c :=
+  fun a g => a g.1
+
+def localTiesProj {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : D.TieAll → LocalTieSample D c :=
+  fun τ g => τ g.1
+
+def localTATProj {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : D.TAT → LocalTATSample D c :=
+  fun z => ((localTagsProj D c z.1.1, localActsProj D c z.1.2), localTiesProj D c z.2)
+
 theorem rprime_pr_coordinate {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (j : Fin h) (y : Fin D.N) :
     D.R'.pr (fun ξ => ξ j = y) = ∑ i, D.M.Λ i * (D.M.ν i).w y := by
@@ -1244,6 +1320,93 @@ theorem refCross_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
   intro q
   simp only [Ctx.refCross, normOr]
   rw [hZ, hweight q]
+
+set_option maxHeartbeats 1000000 in
+theorem rawTAT_local_projection_congr {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (c : D.CellT)
+    (hΘ : ∀ v, keyDist c.1 v ≤ 4 → Θ v = Θ' v) :
+    FinProb.map (D.rawTAT Θ) (localTATProj D c) =
+      FinProb.map (D.rawTAT Θ') (localTATProj D c) := by
+  classical
+  letI : Fintype (LocalTagSample D c) := inferInstance
+  letI : Fintype (LocalActSample D c) := inferInstance
+  letI : Fintype (LocalTieSample D c) := inferInstance
+  letI : Fintype (LocalTATSample D c) := inferInstance
+  have htag : FinProb.map (D.tagLawAll Θ) (localTagsProj D c) =
+      FinProb.map (D.tagLawAll Θ') (localTagsProj D c) := by
+    have hslice (g : {g : D.KeyT // g ∈ keyBall c.1 3}) :
+        FinProb.pi (fun _ : D.Loc => D.tilt Θ g.1) =
+          FinProb.pi (fun _ : D.Loc => D.tilt Θ' g.1) := by
+      have hgDist : keyDist c.1 g.1 ≤ 3 := (Finset.mem_filter.mp g.2).2
+      have hg4 : keyDist c.1 g.1 ≤ 4 := by omega
+      have hg0 : Θ g.1 = Θ' g.1 := hΘ g.1 hg4
+      have hcross : ∀ u ∈ crossKeys g.1, Θ u = Θ' u := by
+        intro u hu
+        have htri := keyDist_triangle_aux c.1 g.1 u
+        have hgu : keyDist g.1 u = 1 := (Finset.mem_filter.mp hu).2
+        have hcu : keyDist c.1 u ≤ 4 := by omega
+        exact hΘ u hcu
+      have hlaw := Lane_q_s08_post.tilt_congr_of_local D Θ Θ' g.1 hg0 hcross
+      apply FinProb.ext
+      intro t
+      simp only [FinProb.pi]
+      apply Finset.prod_congr rfl
+      intro ℓ hℓ
+      exact congrArg (fun Q : FinProb D.M.ι => Q.w (t ℓ)) hlaw
+    have hleft := Lane_q_s08_post.map_pi_restrict
+      (fun g : D.KeyT => FinProb.pi (fun _ : D.Loc => D.tilt Θ g))
+      (keyBall c.1 3)
+    have hright := Lane_q_s08_post.map_pi_restrict
+      (fun g : D.KeyT => FinProb.pi (fun _ : D.Loc => D.tilt Θ' g))
+      (keyBall c.1 3)
+    calc
+      FinProb.map (D.tagLawAll Θ) (localTagsProj D c) =
+          FinProb.pi (fun g : {g : D.KeyT // g ∈ keyBall c.1 3} =>
+            FinProb.pi (fun _ : D.Loc => D.tilt Θ g.1)) := by
+        change FinProb.map (FinProb.pi (fun g : D.KeyT =>
+            FinProb.pi (fun _ : D.Loc => D.tilt Θ g)))
+          (fun t (g : {g : D.KeyT // g ∈ keyBall c.1 3}) => t g.1) = _
+        exact hleft
+      _ = FinProb.pi (fun g : {g : D.KeyT // g ∈ keyBall c.1 3} =>
+            FinProb.pi (fun _ : D.Loc => D.tilt Θ' g.1)) := by
+        apply FinProb.ext
+        intro t
+        simp only [FinProb.pi]
+        apply Finset.prod_congr rfl
+        intro g hg
+        exact congrArg (fun Q : FinProb (D.Loc → D.M.ι) => Q.w (t g)) (hslice g)
+      _ = FinProb.map (D.tagLawAll Θ') (localTagsProj D c) := by
+        change _ = FinProb.map (FinProb.pi (fun g : D.KeyT =>
+            FinProb.pi (fun _ : D.Loc => D.tilt Θ' g)))
+          (fun t (g : {g : D.KeyT // g ∈ keyBall c.1 3}) => t g.1)
+        exact hright.symm
+  have hta :
+      FinProb.map ((D.tagLawAll Θ).prod D.actLaw)
+          (fun x => (localTagsProj D c x.1, localActsProj D c x.2)) =
+        FinProb.map ((D.tagLawAll Θ').prod D.actLaw)
+          (fun x => (localTagsProj D c x.1, localActsProj D c x.2)) := by
+    rw [Lane_q_s08_post.map_prod, Lane_q_s08_post.map_prod, htag]
+  unfold Ctx.rawTAT
+  calc
+    FinProb.map (((D.tagLawAll Θ).prod D.actLaw).prod D.tieLaw) (localTATProj D c) =
+        (FinProb.map ((D.tagLawAll Θ).prod D.actLaw)
+          (fun x => (localTagsProj D c x.1, localActsProj D c x.2))).prod
+        (FinProb.map D.tieLaw (localTiesProj D c)) := by
+              exact Lane_q_s08_post.map_prod
+                ((D.tagLawAll Θ).prod D.actLaw) D.tieLaw
+                (fun x => (localTagsProj D c x.1, localActsProj D c x.2))
+                (localTiesProj D c)
+    _ =
+        (FinProb.map ((D.tagLawAll Θ').prod D.actLaw)
+          (fun x => (localTagsProj D c x.1, localActsProj D c x.2))).prod
+            (FinProb.map D.tieLaw (localTiesProj D c)) := by rw [hta]
+    _ = FinProb.map (((D.tagLawAll Θ').prod D.actLaw).prod D.tieLaw)
+          (localTATProj D c) := by
+            symm
+            exact Lane_q_s08_post.map_prod
+              ((D.tagLawAll Θ').prod D.actLaw) D.tieLaw
+              (fun x => (localTagsProj D c x.1, localActsProj D c x.2))
+              (localTiesProj D c)
 
 theorem fcand_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (ξ : D.Tup)

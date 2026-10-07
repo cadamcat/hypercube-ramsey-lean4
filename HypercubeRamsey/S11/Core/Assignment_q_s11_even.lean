@@ -344,6 +344,63 @@ private theorem fullStarScope_disjoint_of_separated {n : ℕ} {v w : EvenRole n}
       _ = 4 := by norm_num
   omega
 
+private theorem fullStarScope_card_le {n : ℕ} (v : EvenRole n) :
+    (fullStarScope v).card ≤ 1 + n * Fintype.card (InnerCoord n) := by
+  classical
+  unfold fullStarScope
+  calc
+    (insert v (Finset.univ.biUnion fun j : Fin n =>
+      Finset.univ.image fun a : InnerCoord n => evenNbr (oddNbr v j) a.1)).card ≤
+        (Finset.univ.biUnion fun j : Fin n =>
+          Finset.univ.image fun a : InnerCoord n => evenNbr (oddNbr v j) a.1).card + 1 := by
+            exact Finset.card_insert_le v _
+    _ ≤ (∑ j : Fin n,
+          (Finset.univ.image fun a : InnerCoord n => evenNbr (oddNbr v j) a.1).card) + 1 := by
+          exact Nat.add_le_add_right (Finset.card_biUnion_le (s := Finset.univ)
+            (t := fun j : Fin n =>
+              Finset.univ.image fun a : InnerCoord n => evenNbr (oddNbr v j) a.1)) 1
+    _ ≤ (∑ _j : Fin n, Fintype.card (InnerCoord n)) + 1 := by
+          gcongr with j hj
+          exact Finset.card_image_le
+    _ = n * Fintype.card (InnerCoord n) + 1 := by simp
+    _ = 1 + n * Fintype.card (InnerCoord n) := by omega
+
+private def oddNeighborScope {n : ℕ} (v : EvenRole n) : Finset (OddRole n) :=
+  Finset.univ.image fun j : Fin n => oddNbr v j
+
+private theorem hammingDist_symm {n : ℕ} (u w : CubeVertex n) :
+    hammingDist u w = hammingDist w u := by
+  unfold hammingDist
+  congr 1
+  ext j
+  simp [ne_comm]
+
+private theorem cubeFlip_dist_one {n : ℕ} (u : CubeVertex n) (j : Fin n) :
+    hammingDist u (cubeFlip u j) = 1 := by
+  have hadj := cubeFlip_adj u j
+  change hammingDist u (cubeFlip u j) = 1 at hadj
+  exact hadj
+
+private theorem oddNeighborScope_disjoint {n : ℕ} {v w : EvenRole n}
+    (hsep : 5 ≤ hammingDist v.1 w.1) : Disjoint (oddNeighborScope v) (oddNeighborScope w) := by
+  apply Finset.disjoint_left.mpr
+  intro b hbv hbw
+  obtain ⟨j, hj, hEq⟩ := Finset.mem_image.mp hbv
+  obtain ⟨k, hk, hEq'⟩ := Finset.mem_image.mp hbw
+  have hroles : oddNbr v j = oddNbr w k := hEq.trans hEq'.symm
+  have hvb : hammingDist v.1 b.1 = 1 := by
+    rw [← hEq]
+    exact cubeFlip_dist_one v.1 j
+  have hwb : hammingDist w.1 b.1 = 1 := by
+    rw [← hEq']
+    exact cubeFlip_dist_one w.1 k
+  have hbound : hammingDist v.1 w.1 ≤ 2 := by
+    calc
+      hammingDist v.1 w.1 ≤ hammingDist v.1 b.1 + hammingDist b.1 w.1 :=
+        hammingDist_triangle v.1 b.1 w.1
+      _ = 2 := by rw [hvb, hammingDist_symm b.1 w.1, hwb]
+  omega
+
 private noncomputable def tupleStarFactor {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     {κ : ℝ} (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
     (t : OuterWord n → M.ι) (W : EvenRole n → Fin (kTup n) → Fin N)
@@ -950,6 +1007,56 @@ private theorem tupleStarFactor_depends {n N : ℕ} {E : Fin N → Fin N → Pro
     exact hWW (evenNbr (oddNbr v j) a.1) (fullStarScope_mem v j a)
   simp [oddRowF, hstar]
 
+private theorem odd_output_product {n N m : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (p : FinProb M.ι) (t : OuterWord n → M.ι)
+    (W : EvenRole n → Fin (kTup n) → Fin N) (x : Fin N) (hS : SliceFacts M y₀)
+    (a : Fin m → EvenRole n)
+    (hsep : ∀ i j, i ≠ j → 5 ≤ hammingDist (a i).1 (a j).1) :
+    ∑ f, oddProdW M t W f *
+        ∏ i : Fin m, ((N : ℝ) * evenRowF M y₀ p t f (a i) x) =
+      ∏ i : Fin m, tupleStarFactor M y₀ p t W (a i) x := by
+  classical
+  let rowLaw (b : OddRole n) : FinProb (Fin N) := {
+    w := oddRowF M t W b
+    nonneg := (hS.rows (t (sliceOf b.1))).row_nonneg (starOf W b)
+    sum_eq_one := (hS.rows (t (sliceOf b.1))).row_sum (starOf W b)
+  }
+  let labelFactor (i : Fin m) (f : OddRole n → Fin N) : ℝ :=
+    (N : ℝ) * evenRowF M y₀ p t f (a i) x
+  let scope (i : Fin m) : Finset (OddRole n) := oddNeighborScope (a i)
+  have hdep (i : Fin m) : FinProb.DependsOn (labelFactor i) (scope i) := by
+    intro f g hfg
+    have hin : innerOut f (a i) = innerOut g (a i) := by
+      funext j
+      exact hfg (oddNbr (a i) j.1)
+        (Finset.mem_image.mpr ⟨j.1, Finset.mem_univ _, rfl⟩)
+    unfold labelFactor evenRowF
+    rw [hin]
+    apply congrArg (fun q : ℝ =>
+      (N : ℝ) * (sigmaW E M.G (gS n) (M.μ (t (sliceOf (a i).1)))
+        (innerOut g (a i)) x * q))
+    apply Finset.prod_congr rfl
+    intro j hj
+    rw [hfg (oddNbr (a i) j.1)
+      (Finset.mem_image.mpr ⟨j.1, Finset.mem_univ _, rfl⟩)]
+  have hdisj : ∀ i j, i ≠ j → Disjoint (scope i) (scope j) := by
+    intro i j hij
+    exact oddNeighborScope_disjoint (hsep i j hij)
+  have hmeans (i : Fin m) :
+      (FinProb.pi rowLaw).expect (labelFactor i) = tupleStarFactor M y₀ p t W (a i) x := by
+    simp [FinProb.expect, FinProb.pi, labelFactor, tupleStarFactor, oddProdW, rowLaw]
+  have hprod := pi_expect_prod_of_disjoint rowLaw labelFactor scope hdep hdisj
+  calc
+    ∑ f, oddProdW M t W f * ∏ i : Fin m, ((N : ℝ) * evenRowF M y₀ p t f (a i) x) =
+        (FinProb.pi rowLaw).expect (fun f => ∏ i, labelFactor i f) := by
+          simp [FinProb.expect, FinProb.pi, oddProdW, rowLaw, labelFactor]
+    _ = ∏ i, (FinProb.pi rowLaw).expect (labelFactor i) := hprod
+    _ = ∏ i, tupleStarFactor M y₀ p t W (a i) x := by
+      apply Finset.prod_congr rfl
+      intro i hi
+      exact hmeans i
+
 theorem raw_tuple_star_product {n N m : ℕ} {E : Fin N → Fin N → Prop}
     {X Y : Finset (Fin N)} {κ : ℝ}
     (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
@@ -972,6 +1079,102 @@ theorem raw_tuple_star_product {n N m : ℕ} {E : Fin N → Fin N → Prop}
   change (FinProb.pi Q).expect (fun W => ∏ i, F i W) =
     ∏ i, (FinProb.pi Q).expect (F i)
   exact pi_expect_prod_of_disjoint Q F (fun i => fullStarScope (a i)) hdep hdisj
+
+theorem raw_separated_star_product_bound {n N m : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ : ℝ}
+    (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)
+    (t : OuterWord n → M.ι) (hS : SliceFacts M y₀) (hStar : StarMean11 M y₀ p t)
+    (x : Fin N) (a : Fin m → EvenRole n)
+    (hsep : ∀ i j, i ≠ j → 5 ≤ hammingDist (a i).1 (a j).1) :
+    (rawTuples M y₀ t).expect (fun W =>
+      ∑ f, oddProdW M t W f * ∏ i : Fin m,
+        ((N : ℝ) * evenRowF M y₀ p t f (a i) x)) ≤
+      ∏ i : Fin m, compB M y₀ p t (sliceOf (a i).1) x := by
+  classical
+  have hpi : ∀ y, 0 ≤ piBar M y₀ p y := by
+    intro y
+    unfold piBar mixW
+    apply Finset.sum_nonneg
+    intro i hi
+    exact mul_nonneg (p.nonneg i) ((hS.rows i).pi_nonneg y)
+  have hdegBar : ∀ y, 0 ≤ deg E M.G (piBar M y₀ p) y := by
+    intro y
+    unfold deg
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg (hpi z) (by unfold hit; split_ifs <;> norm_num)
+  have hdegRow : ∀ i y, 0 ≤ deg E M.G (piRow M y₀ i) y := by
+    intro i y
+    unfold deg
+    apply Finset.sum_nonneg
+    intro z hz
+    exact mul_nonneg ((hS.rows i).pi_nonneg z) (by unfold hit; split_ifs <;> norm_num)
+  have hsigma (v : EvenRole n) (f : OddRole n → Fin N) :
+      0 ≤ sigmaW E M.G (gS n) (M.μ (t (sliceOf v.1))) (innerOut f v) x := by
+    unfold sigmaW
+    split_ifs <;> positivity
+  have hrow (f : OddRole n → Fin N) (v : EvenRole n) :
+      0 ≤ evenRowF M y₀ p t f v x := by
+    unfold evenRowF
+    apply mul_nonneg (hsigma v f) ?_
+    apply Finset.prod_nonneg
+    intro j hj
+    exact div_nonneg (by unfold hit; split_ifs <;> norm_num) (hdegBar x)
+  have hrowProd (f : OddRole n → Fin N) (W : EvenRole n → Fin (kTup n) → Fin N)
+      (i : Fin m) : 0 ≤ (N : ℝ) * evenRowF M y₀ p t f (a i) x :=
+    mul_nonneg (Nat.cast_nonneg _) (hrow f (a i))
+  have hstarNonneg (i : Fin m) :
+      0 ≤ (rawTuples M y₀ t).expect (fun W => tupleStarFactor M y₀ p t W (a i) x) := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro W hW
+    apply mul_nonneg ((rawTuples M y₀ t).nonneg W)
+    unfold tupleStarFactor
+    apply Finset.sum_nonneg
+    intro f hf
+    apply mul_nonneg
+    · unfold oddProdW
+      apply Finset.prod_nonneg
+      intro b hb
+      exact (hS.rows (t (sliceOf b.1))).row_nonneg (starOf W b) (f b)
+    · exact hrowProd f W i
+  have hcompNonneg (i : Fin m) : 0 ≤ compB M y₀ p t (sliceOf (a i).1) x := by
+    unfold compB
+    apply mul_nonneg
+    · exact mul_nonneg (Nat.cast_nonneg _) ((hS.alpha (t (sliceOf (a i).1))).nonneg x)
+    · apply Finset.prod_nonneg
+      intro j hj
+      exact div_nonneg
+        (hdegRow (t (flipOuter (sliceOf (a i).1) j)) x) (hdegBar x)
+  have hpoint (W : EvenRole n → Fin (kTup n) → Fin N) :
+      (∑ f, oddProdW M t W f * ∏ i : Fin m,
+        ((N : ℝ) * evenRowF M y₀ p t f (a i) x)) =
+        ∏ i : Fin m, tupleStarFactor M y₀ p t W (a i) x := by
+    exact odd_output_product M y₀ p t W x hS a hsep
+  calc
+    (rawTuples M y₀ t).expect (fun W =>
+        ∑ f, oddProdW M t W f * ∏ i : Fin m,
+          ((N : ℝ) * evenRowF M y₀ p t f (a i) x)) =
+      (rawTuples M y₀ t).expect (fun W =>
+        ∏ i : Fin m, tupleStarFactor M y₀ p t W (a i) x) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro W hW
+          change (rawTuples M y₀ t).w W *
+              (∑ f, oddProdW M t W f * ∏ i : Fin m,
+                ((N : ℝ) * evenRowF M y₀ p t f (a i) x)) =
+            (rawTuples M y₀ t).w W *
+              (∏ i : Fin m, tupleStarFactor M y₀ p t W (a i) x)
+          rw [hpoint W]
+    _ = ∏ i : Fin m,
+          (rawTuples M y₀ t).expect (fun W => tupleStarFactor M y₀ p t W (a i) x) :=
+        raw_tuple_star_product M y₀ p t x hS a hsep
+    _ ≤ ∏ i : Fin m, compB M y₀ p t (sliceOf (a i).1) x := by
+          apply Finset.prod_le_prod₀
+          · intro i hi
+            exact hstarNonneg i
+          · intro i hi
+            simpa [StarMean11, tupleStarFactor] using hStar (a i) x
 
 theorem star_mean_full {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
     (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι)

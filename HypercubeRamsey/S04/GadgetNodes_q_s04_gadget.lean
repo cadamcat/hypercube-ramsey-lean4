@@ -2694,6 +2694,121 @@ private theorem mergeSort_one_change_at {n : ℕ} (f g : Fin n → ℕ) (j : Fin
   have hvalue : mergeSortAt f r = f j := by omega
   exact ⟨r, hvalue, by rw [hrank, hvalue, hcoord], hrest⟩
 
+private def binarySearchMid (ab : ℕ × ℕ) : ℕ := (ab.1 + ab.2) / 2
+
+private def binarySearchStepR (S : ℕ) (R : ℕ → ℕ) (ab : ℕ × ℕ) : ℕ × ℕ :=
+  if binarySearchMid ab * S ≤ R (binarySearchMid ab) then
+    (ab.1, binarySearchMid ab) else (binarySearchMid ab, ab.2)
+
+private def binarySearchRun (S : ℕ) (R : ℕ → ℕ) : ℕ → ℕ × ℕ → ℕ × ℕ
+  | 0, ab => ab
+  | k + 1, ab => binarySearchStepR S R (binarySearchRun S R k ab)
+
+private def binarySearchPath (S : ℕ) (R : ℕ → ℕ) : ℕ → ℕ × ℕ → List ℕ
+  | 0, _ => []
+  | k + 1, ab => binarySearchPath S R k ab ++
+      [binarySearchMid (binarySearchRun S R k ab)]
+
+private theorem foldl_range_binarySearchRun (S : ℕ) (R : ℕ → ℕ) (e : ℕ)
+    (ab : ℕ × ℕ) :
+    (List.range e).foldl (fun st _ => binarySearchStepR S R st) ab =
+      binarySearchRun S R e ab := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih =>
+    rw [List.range_succ, List.foldl_append]
+    simp [List.foldl_cons, List.foldl_nil, ih, binarySearchRun]
+
+private theorem binarySearchRun_eq_of_eq_on_path (S : ℕ) (R R' : ℕ → ℕ)
+    (e : ℕ) (ab : ℕ × ℕ)
+    (h : ∀ t ∈ binarySearchPath S R e ab, R t = R' t) :
+    binarySearchRun S R e ab = binarySearchRun S R' e ab := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih =>
+    have hprefix : ∀ t ∈ binarySearchPath S R e ab, R t = R' t := by
+      intro t ht
+      apply h t
+      change t ∈ binarySearchPath S R e ab ++ _
+      exact List.mem_append_left _ ht
+    have hrun := ih ab hprefix
+    have hmid : binarySearchMid (binarySearchRun S R e ab) =
+        binarySearchMid (binarySearchRun S R' e ab) := by rw [hrun]
+    have hlastmem : binarySearchMid (binarySearchRun S R e ab) ∈
+        binarySearchPath S R (e + 1) ab := by simp [binarySearchPath]
+    have hvalue := h _ hlastmem
+    simp only [binarySearchRun]
+    rw [hrun]
+    simp only [binarySearchStepR]
+    rw [← hmid]
+    simp [hvalue]
+
+private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
+    (hS : S = 2 ^ e) (hzero : R 0 = 0) (hfinal : R S = S * S) :
+    ∀ k ≤ e,
+      (binarySearchRun S R k (0, S)).1 ≤ (binarySearchRun S R k (0, S)).2 ∧
+      (binarySearchRun S R k (0, S)).2 =
+        (binarySearchRun S R k (0, S)).1 + 2 ^ (e - k) ∧
+      R (binarySearchRun S R k (0, S)).1 ≤
+        (binarySearchRun S R k (0, S)).1 * S ∧
+      (binarySearchRun S R k (0, S)).2 * S ≤
+        R (binarySearchRun S R k (0, S)).2 := by
+  intro k
+  induction k with
+  | zero =>
+    intro hk
+    simp only [binarySearchRun]
+    refine ⟨by omega, ?_, ?_, ?_⟩
+    · simpa using hS
+    · simpa using hzero
+    · exact le_of_eq hfinal.symm
+  | succ k ih =>
+    intro hk
+    have hprev := ih (by omega)
+    let ab := binarySearchRun S R k (0, S)
+    have hab : ab.1 ≤ ab.2 := by simpa [ab] using hprev.1
+    have hwidthPrev : ab.2 = ab.1 + 2 ^ (e - k) := by
+      simpa [ab] using hprev.2.1
+    have hlo : R ab.1 ≤ ab.1 * S := by simpa [ab] using hprev.2.2.1
+    have hhi : ab.2 * S ≤ R ab.2 := by simpa [ab] using hprev.2.2.2
+    have hlen : e - k = (e - (k + 1)) + 1 := by omega
+    let half := 2 ^ (e - (k + 1))
+    have hpow : 2 ^ (e - k) = 2 * half := by
+      rw [hlen, pow_succ]
+      dsimp [half]
+      omega
+    have hwidth : ab.2 = ab.1 + 2 * half := by
+      rw [hwidthPrev, hpow]
+    have hhalf : 0 < half := by positivity
+    let m := binarySearchMid ab
+    have hmid : m = ab.1 + half := by
+      dsimp [m, binarySearchMid]
+      omega
+    by_cases hc : m * S ≤ R m
+    · have hrun : binarySearchRun S R (k + 1) (0, S) = (ab.1, m) := by
+        simp only [binarySearchRun]
+        change binarySearchStepR S R ab = (ab.1, m)
+        unfold binarySearchStepR
+        simp [m, hc]
+      rw [hrun]
+      simp only [Prod.fst, Prod.snd]
+      refine ⟨?_, ?_, hlo, hc⟩
+      · omega
+      · simpa [half] using hmid
+    · have hc' : R m ≤ m * S := Nat.le_of_lt (lt_of_not_ge hc)
+      have hrun : binarySearchRun S R (k + 1) (0, S) = (m, ab.2) := by
+        simp only [binarySearchRun]
+        change binarySearchStepR S R ab = (m, ab.2)
+        unfold binarySearchStepR
+        simp [m, hc]
+      rw [hrun]
+      simp only [Prod.fst, Prod.snd]
+      refine ⟨?_, ?_, hc', hhi⟩
+      · omega
+      · rw [hwidth, hmid]
+        simp [half]
+        omega
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by

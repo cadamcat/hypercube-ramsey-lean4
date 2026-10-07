@@ -308,6 +308,62 @@ theorem observed_tag_weight_product {η₀ β p : ℝ} {h : ℕ}
   rw [Finset.prod_union hdisj, hInternal, hCross]
   rw [← hIntFull]
 
+theorem pres_cross_id_tag {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT)
+    (π : D.Pres c.1) (hpres : D.presOf q W c = π) (u : D.CrossSub c.1) :
+    D.crossId q c u = (π.2 u).1 ∧
+      q.2.1.1 u.1 (D.crossId q c u) = (π.2 u).2.1 := by
+  have hu := congrFun (congrArg Prod.snd hpres) u
+  constructor
+  · exact congrArg Prod.fst hu
+  · have htag := congrArg Prod.fst (congrArg Prod.snd hu)
+    simpa [Ctx.presOf] using htag
+
+theorem pres_cross_anchor {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT)
+    (π : D.Pres c.1) (hpres : D.presOf q W c = π) (u : D.CrossSub c.1) :
+    W (u.1, c.2) = (π.2 u).2.2 := by
+  have hu := congrFun (congrArg Prod.snd hpres) u
+  have ha := congrArg Prod.snd (congrArg Prod.snd hu)
+  simpa [Ctx.presOf] using ha
+
+theorem pres_tag_spec {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (q : D.Pre) (W : D.Anch) (c : D.CellT)
+    (π : D.Pres c.1) (default : D.M.ι) (hpres : D.presOf q W c = π) :
+    ∀ x ∈ observedTagCoords D c π,
+      q.2.1.1 x.1 x.2 = observedTagValue D c π default x := by
+  classical
+  intro x hx
+  rcases Finset.mem_union.mp hx with hInt | hCross
+  · rcases Finset.mem_image.mp hInt with ⟨ℓ, hℓ, rfl⟩
+    have hSome : (π.1 ℓ).isSome := (Finset.mem_filter.mp hℓ).2
+    have hfirst := congrFun (congrArg Prod.fst hpres) ℓ
+    have hIn : ℓ ∈ D.intIds q c := by
+      by_contra hnot
+      have hnone : π.1 ℓ = none := by
+        simpa [Ctx.presOf, hnot] using hfirst.symm
+      simp [hnone] at hSome
+    have htag : q.2.1.1 c.1 ℓ = (π.1 ℓ).getD default := by
+      have heq : some (q.2.1.1 c.1 ℓ) = π.1 ℓ := by
+        simpa [Ctx.presOf, hIn] using hfirst
+      cases hopt : π.1 ℓ with
+      | none => simp [hopt] at hSome
+      | some i =>
+          have hi : q.2.1.1 c.1 ℓ = i := by simpa [hopt] using heq
+          simp [hopt, hi]
+    simp [observedTagValue, htag]
+  · rcases Finset.mem_image.mp hCross with ⟨u, hu, hEq⟩
+    have hId := (pres_cross_id_tag D q W c π hpres u).1
+    have htag := (pres_cross_id_tag D q W c π hpres u).2
+    rw [hId] at htag
+    have hkeyne : u.1 ≠ c.1 := cross_key_ne D c.1 u
+    have hpair : x = (u.1, (π.2 u).1) := hEq.symm
+    rw [hpair]
+    have hval : observedTagValue D c π default (u.1, (π.2 u).1) = (π.2 u).2.1 := by
+      simp [observedTagValue, hkeyne]
+    rw [hval]
+    exact htag
+
 theorem positive_tilt_gate {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
     (Θ : D.Hist) (g : D.KeyT) (i : D.M.ι)
     (hbase : D.BaseGates Θ g) (hpos : 0 < (D.tilt Θ g).w i) :

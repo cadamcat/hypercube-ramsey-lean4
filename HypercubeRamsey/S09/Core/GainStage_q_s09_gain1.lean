@@ -861,6 +861,114 @@ private theorem weighted_expectation_close9 {Ω : Type*} [Fintype Ω]
         ring
       rw [hcalc]
 
+private theorem one_sub_pow_lower9 {δ : ℝ} (hδ : 0 ≤ δ) (hδle : δ ≤ 1)
+    (k : ℕ) : 1 - (k : ℝ) * δ ≤ (1 - δ) ^ k := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+      rw [pow_succ]
+      have hfac : 0 ≤ 1 - δ := by linarith
+      calc
+        1 - ((k + 1 : ℕ) : ℝ) * δ ≤ (1 - (k : ℝ) * δ) * (1 - δ) := by
+          push_cast
+          nlinarith [sq_nonneg δ]
+        _ ≤ (1 - δ) ^ k * (1 - δ) :=
+          mul_le_mul_of_nonneg_right ih hfac
+
+private theorem one_add_pow_upper_inv9 {δ : ℝ} (hδ : 0 ≤ δ) (k : ℕ)
+    (hk : (k : ℝ) * δ < 1) :
+    (1 + δ) ^ k ≤ (1 - (k : ℝ) * δ)⁻¹ := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+      have hk' : (k : ℝ) * δ < 1 := by
+        have hkcast : ((k + 1 : ℕ) : ℝ) = (k : ℝ) + 1 := by norm_cast
+        rw [hkcast] at hk
+        nlinarith [hδ]
+      have hden : 0 < 1 - (k : ℝ) * δ := sub_pos.mpr hk'
+      have hden' : 0 < 1 - ((k + 1 : ℕ) : ℝ) * δ := sub_pos.mpr hk
+      have ih' := ih hk'
+      rw [pow_succ]
+      calc
+        (1 + δ) ^ k * (1 + δ) ≤ (1 - (k : ℝ) * δ)⁻¹ * (1 + δ) :=
+          mul_le_mul_of_nonneg_right ih' (by positivity)
+        _ = (1 + δ) / (1 - (k : ℝ) * δ) := by
+          rw [div_eq_mul_inv]
+          ring
+        _ ≤ 1 / (1 - ((k + 1 : ℕ) : ℝ) * δ) := by
+          apply (div_le_div_iff₀ hden hden').2
+          have hkcast : ((k + 1 : ℕ) : ℝ) = (k : ℝ) + 1 := by norm_cast
+          rw [hkcast]
+          nlinarith [sq_nonneg δ]
+        _ = (1 - ((k + 1 : ℕ) : ℝ) * δ)⁻¹ := by simp [one_div]
+
+private theorem one_add_pow_upper9 {δ : ℝ} (hδ : 0 ≤ δ) (hδle : δ ≤ 1 / 2)
+    (k : ℕ) (hk : (k : ℝ) * δ ≤ 1 / 2) :
+    (1 + δ) ^ k ≤ 1 + 2 * (k : ℝ) * δ := by
+  have hklt : (k : ℝ) * δ < 1 := lt_of_le_of_lt hk (by norm_num)
+  have hpow := one_add_pow_upper_inv9 hδ k hklt
+  have hden : 0 < 1 - (k : ℝ) * δ := sub_pos.mpr (lt_of_le_of_lt hk (by norm_num))
+  have hkd : 0 ≤ (k : ℝ) * δ := mul_nonneg (Nat.cast_nonneg _) hδ
+  have hlin : (1 - (k : ℝ) * δ)⁻¹ ≤ 1 + 2 * (k : ℝ) * δ := by
+    rw [inv_eq_one_div, div_le_iff₀ hden]
+    nlinarith [mul_nonneg hkd (sub_nonneg.mpr hk)]
+  exact hpow.trans hlin
+
+private theorem prod_near_one9 {ι : Type*} [Fintype ι] (s : Finset ι)
+    (r : ι → ℝ) (δ : ℝ) (hδ : 0 ≤ δ) (hδle : δ ≤ 1 / 2)
+    (hr : ∀ i ∈ s, |r i - 1| ≤ δ)
+    (hsize : (s.card : ℝ) * δ ≤ 1 / 2) :
+    |∏ i ∈ s, r i - 1| ≤ 2 * (s.card : ℝ) * δ := by
+  classical
+  have hlo : (1 - δ) ^ s.card ≤ ∏ i ∈ s, r i := by
+    have hlo' : ∏ i ∈ s, (1 - δ) ≤ ∏ i ∈ s, r i := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        linarith
+      · intro i hi
+        have habs := abs_le.mp (hr i hi)
+        linarith
+    simpa using hlo'
+  have hhi : ∏ i ∈ s, r i ≤ (1 + δ) ^ s.card := by
+    have hhi' : ∏ i ∈ s, r i ≤ ∏ i ∈ s, (1 + δ) := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        have habs := abs_le.mp (hr i hi)
+        linarith
+      · intro i hi
+        have habs := abs_le.mp (hr i hi)
+        linarith
+    simpa using hhi'
+  have hpowLo := one_sub_pow_lower9 hδ (by norm_num; linarith) s.card
+  have hpowHi := one_add_pow_upper9 hδ hδle s.card hsize
+  have hcardδ : 0 ≤ (s.card : ℝ) * δ := mul_nonneg (Nat.cast_nonneg _) hδ
+  rw [abs_le]
+  constructor
+  · have hlow : 1 - 2 * (s.card : ℝ) * δ ≤ ∏ i ∈ s, r i := by
+      calc
+        1 - 2 * (s.card : ℝ) * δ ≤ 1 - (s.card : ℝ) * δ := by nlinarith [hcardδ]
+        _ ≤ (1 - δ) ^ s.card := hpowLo
+        _ ≤ ∏ i ∈ s, r i := hlo
+    linarith
+  · have hhigh : ∏ i ∈ s, r i ≤ 1 + 2 * (s.card : ℝ) * δ := hhi.trans hpowHi
+    linarith
+
+private theorem doubled_degree_product_close9 {ι : Type*} [Fintype ι] (s : Finset ι)
+    (d : ι → ℝ) (b : ℝ) (hb : 0 ≤ b) (hsmall : 4 * b ≤ 1 / 2)
+    (hsize : (s.card : ℝ) * (4 * b) ≤ 1 / 2)
+    (hdegree : ∀ i ∈ s, |d i - 1 / 2| ≤ 2 * b) :
+    |∏ i ∈ s, (2 * d i) - 1| ≤ 8 * (s.card : ℝ) * b := by
+  have hprod := prod_near_one9 s (fun i => 2 * d i) (4 * b)
+    (mul_nonneg (by norm_num) hb) hsmall (by
+      intro i hi
+      have h := hdegree i hi
+      rw [show 2 * d i - 1 = 2 * (d i - 1 / 2) by ring, abs_mul,
+        abs_of_nonneg (by norm_num : (0 : ℝ) ≤ 2)]
+      nlinarith) hsize
+  calc
+    |∏ i ∈ s, (2 * d i) - 1| ≤ 2 * (s.card : ℝ) * (4 * b) := hprod
+    _ = 8 * (s.card : ℝ) * b := by ring
+
 private theorem pi_expect_prod9 {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
     (f : ∀ i, Ω i → ℝ) :
@@ -1749,6 +1857,119 @@ private theorem prefix_log_bound9 {k : ℕ} {m : ℝ}
     rw [hinv, Real.log_inv]
   rw [Real.log_pow, hratio] at hlog
   linarith
+
+private theorem width_mix_on_support9 {N : ℕ} {ι : Type*} [Fintype ι]
+    (ρ : FinProb ι) (μ : ι → Law N) (t : ℝ)
+    (hμ : ∀ i, ρ.w i ≠ 0 → (μ i).WidthLE t) :
+    (Law.mix ρ μ).WidthLE t := by
+  intro x
+  change (∑ i, ρ.w i * (μ i).w x) ≤ Real.exp t / N
+  calc
+    (∑ i, ρ.w i * (μ i).w x) ≤ ∑ i, ρ.w i * (Real.exp t / N) := by
+      apply Finset.sum_le_sum
+      intro i hi
+      by_cases hzero : ρ.w i = 0
+      · simp [hzero]
+      · exact mul_le_mul_of_nonneg_left (hμ i hzero x) (ρ.nonneg i)
+    _ = Real.exp t / N := by
+      rw [← Finset.sum_mul, ρ.sum_eq_one]
+      ring
+
+private theorem maskedLaw_width_from_mask9 {N : ℕ} (ν : Law N) (A : Finset (Fin N))
+    (ss a : ℝ) (hν : ν.WidthLE ss) (ha : 0 ≤ a)
+    (hmass : (1 / 2 : ℝ) * Real.exp (-a) ≤ ∑ y ∈ A, ν.w y) :
+    (restrictOr9 ν A).WidthLE (ss + a + Real.log 2) := by
+  classical
+  by_cases hm : 0 < ∑ y ∈ A, ν.w y
+  · have hlog := mask_log_bound9 hmass
+    unfold restrictOr9
+    rw [dif_pos hm]
+    apply Law.WidthLE.mono (Law.WidthLE.restrict hν hm)
+    linarith
+  · unfold restrictOr9
+    rw [dif_neg hm]
+    apply Law.WidthLE.mono hν
+    have hlog2 : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num)
+    linarith
+
+private theorem outerFilter_width_from_base9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n) (B : ℝ)
+    (hbase : (maskedLaw9 S ω b).WidthLE B) :
+    (outerFilter9 S E G ω v b).WidthLE
+      (B + ((outerIDs9 I v b).card : ℝ) * Real.log (100 / 49)) := by
+  classical
+  let O := outerIDs9 I v b
+  let A := hitSet9 E G ω O
+  let m : ℝ := ∑ y ∈ A, (maskedLaw9 S ω b).w y
+  by_cases hcut : (49 / 100 : ℝ) ^ O.card ≤ m
+  · have hm : 0 < m := lt_of_lt_of_le (by positivity) hcut
+    have hlog : -Real.log m ≤ (O.card : ℝ) * Real.log (100 / 49) := by
+      simpa [m, O] using prefix_log_bound9 hcut
+    have hrestrict : outerFilter9 S E G ω v b =
+        (maskedLaw9 S ω b).restrict A hm := by
+      simp [outerFilter9, O, A, m, hcut, restrictOr9, hm]
+    rw [hrestrict]
+    apply Law.WidthLE.mono (Law.WidthLE.restrict hbase hm)
+    linarith
+  · have hfallback : outerFilter9 S E G ω v b = maskedLaw9 S ω b := by
+      simp [outerFilter9, O, A, m, hcut]
+    rw [hfallback]
+    apply Law.WidthLE.mono hbase
+    have hlog : 0 ≤ Real.log (100 / 49) := Real.log_nonneg (by norm_num)
+    exact le_add_of_nonneg_right (mul_nonneg (Nat.cast_nonneg _) hlog)
+
+private theorem raw_coordinate_support9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (ω : Outcome9 I N)
+    (hω : (rawLaw9 S I).w ω ≠ 0) (i : I.ID ⊕ OddSites9 n) :
+    (inputLaw9 S I i).w (ω i) ≠ 0 := by
+  have hprod : ∏ j, (inputLaw9 S I j).w (ω j) ≠ 0 := by
+    simpa [rawLaw9, FinProb.pi] using hω
+  exact (Finset.prod_ne_zero_iff.mp hprod) i (Finset.mem_univ _)
+
+private theorem outerMean_width9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    {X Y : Finset (Fin N)}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (v : EvenSites9 n) (b : OddSites9 n) (κ : ℝ)
+    (hCore : CoreInput9 P κ E X Y G M S I) :
+    (outerMean9 S I E G v b).WidthLE (P.filterBudget n) := by
+  classical
+  rcases hCore with ⟨_, hPrep, _, hTags, hMasks, _, _, hAt⟩
+  rcases hPrep with ⟨_, hPrepLaw⟩
+  rcases hAt with ⟨_, _, _, _, _, _, _, _⟩
+  have hνtag : 0 < M.Λ (S.tag (specialWord9 (P.m n) b.1)) := hTags _
+  obtain ⟨_, _, _, hνW, _⟩ := hPrepLaw (S.tag (specialWord9 (P.m n) b.1)) hνtag
+  let ν : Law N := siteSecond9 S b.1
+  have hνW' : ν.WidthLE (P.Ss (n : ℝ)) := by
+    simpa [ν, siteSecond9] using hνW
+  have hB : 0 ≤ (n : ℝ) ^ P.u := by positivity
+  have hL : 0 < Real.log (100 / 49) := Real.log_pos (by norm_num)
+  apply width_mix_on_support9 (rawLaw9 S I) (fun ω => outerFilter9 S E G ω v b)
+  intro ω hω
+  have hmaskW : (S.maskLaw b).w (msk9 ω b) ≠ 0 := by
+    have hcoord := raw_coordinate_support9 S I ω hω (Sum.inr b)
+    simpa [inputLaw9, msk9] using hcoord
+  have hmaskMass := hMasks.1 b (msk9 ω b) hmaskW
+  have hbaseW : (maskedLaw9 S ω b).WidthLE
+      (P.Ss (n : ℝ) + (n : ℝ) ^ P.u + Real.log 2) := by
+    simpa [maskedLaw9, ν] using maskedLaw_width_from_mask9 ν (msk9 ω b)
+      (P.Ss (n : ℝ)) ((n : ℝ) ^ P.u) hνW' hB hmaskMass
+  have houterW := outerFilter_width_from_base9 S I E G ω v b
+    (P.Ss (n : ℝ) + (n : ℝ) ^ P.u + Real.log 2) hbaseW
+  have hcard : (outerIDs9 I v b).card ≤ (I.seen b.1).card := by
+    apply Finset.card_le_card
+    exact Finset.sdiff_subset
+  have hseenR : ((I.seen b.1).card : ℝ) ≤ P.idBudget n + (P.m n : ℝ) := by
+    simpa [IDMap9.seen] using I.odd_ids b.1 b.2
+  have hcardR : ((outerIDs9 I v b).card : ℝ) ≤
+      P.idBudget n + (P.m n : ℝ) := by
+    exact le_trans (by exact_mod_cast hcard) hseenR
+  have hwidthBudget :
+    P.Ss (n : ℝ) + (n : ℝ) ^ P.u + Real.log 2 +
+        ((outerIDs9 I v b).card : ℝ) * Real.log (100 / 49) ≤ P.filterBudget n := by
+    dsimp [Params9.filterBudget]
+    nlinarith [mul_le_mul_of_nonneg_right hcardR hL.le]
+  exact Law.WidthLE.mono houterW hwidthBudget
 
 private theorem law_restrict_supported9 {N : ℕ} {Y A : Finset (Fin N)} {μ : Law N}
     (hμ : μ.SupportedIn Y) (hm : 0 < ∑ y ∈ A, μ.w y) :

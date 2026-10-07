@@ -97,28 +97,7 @@ theorem intermediate_core (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ)
     lt_of_lt_of_le (mul_pos hC₀pos (by positivity : 0 < (2 : ℝ) ^ n)) hNLower
   have hN : 0 < N := by exact_mod_cast hNreal
   obtain ⟨W⟩ := hHeight n hnHeight
-  obtain ⟨threshold, hThreshold, c, hMap⟩ := p92_map2 P hP W rfl
-  rcases hMap with ⟨hCenter, hOddSeen, hCore⟩
-  let core : EvenSites9 n → Finset (CenterID9 W.specialBits n W.levels) := fun v =>
-    Classical.choose (hCore v.1 v.2)
-  have hCoreSpec : ∀ v : EvenSites9 n,
-      c v.1 ∈ core v ∧ (↑(core v).card : ℝ) ≤ (n : ℝ) ^ (P.χ : ℝ) ∧
-        ∀ id, id ∉ core v →
-          (Finset.univ.filter fun b : CubeVertex n =>
-            ¬ IsEvenRole b ∧ (cube n).Adj v.1 b ∧ id ∈ seenIDs9 c b).card ≤ W.radius + 3 := by
-    intro v
-    exact Classical.choose_spec (hCore v.1 v.2)
-  let idMap : IDMap9 P n W := {
-    threshold := threshold
-    threshold_lower := hThreshold
-    center := c
-    center_spec := hCenter
-    odd_seen_card := hOddSeen
-    core := core
-    center_mem_core := fun v => (hCoreSpec v).1
-    core_card := fun v => (hCoreSpec v).2.1
-    read_bound := fun v id hid => (hCoreSpec v).2.2 id hid
-  }
+  obtain ⟨idMap⟩ := p92_bounded_idmap9 P hP n W
   obtain ⟨G, M, hBalanced, hMixRows⟩ :=
     p92_patch_preparation hP hκ hN hAvail
   have hMix : M.Balanced (8 / κ) ∧
@@ -129,10 +108,10 @@ theorem intermediate_core (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ)
         ∀ x, (M.μ i).w x ≠ 0 →
           1 / 2 + (n : ℝ) ^ (-(P.hPlus : ℝ)) / 2 ≤ rowDeg E G x (M.ν i) :=
     ⟨hBalanced, hMixRows⟩
-  obtain ⟨S, hTagSupport, hLinearTags⟩ :=
+  obtain ⟨S, hTagSupport, hTagSliceLoad, hLinearTags⟩ :=
     p92_tags (P := P) (κ := κ) hκ hP hn hN hDeep hBroad hAvail G M hMix W idMap
-  have hLoads := p92_tag_loads (P := P) (κ := κ) S hBalanced hTagSupport
-  have hRegular := p92_regularity (P := P) S hP hn hDeep hTagSupport
+  have hLoads := p92_tag_loads (P := P) (κ := κ) S hBalanced hTagSupport hTagSliceLoad
+  have hRegular := p92_regularity (P := P) S hP hLargeSmall hn hDeep hTagSupport
   have hMean := p92_conditional_mean S hRegular
   have hErase := p92_erase_core (κ := κ) S hRegular hMean hLoads
   have hCov := p92_covariance (P := P) S hP hn hDeep hRegular hMean hErase
@@ -141,9 +120,10 @@ theorem intermediate_core (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ)
   obtain ⟨hAvoid⟩ := p92_anchor_avoidance S hP hn hLinearTags hRegular hGain hPredictive
   obtain ⟨candidates⟩ := p92_odd_candidates (P := P) (κ := κ) (C₀ := C₀)
     S hC₀ hLargeSmall hTagSupport hLoads hAvoid
-  obtain ⟨odd⟩ := p92_odd_injection (P := P) (κ := κ) S hκ hP hn hDeep hBroad hAvail
+  obtain ⟨odd⟩ := p92_odd_injection (P := P) (κ := κ) S hκ hP hn C₀ hLargeSmall
+    hDeep hBroad hAvail
     hTagSupport hLinearTags hLoads hGain hAvoid candidates
-  obtain ⟨rows⟩ := p92_even_rows S X Y odd hP κ hκ hn hDeep hBroad hAvail
+  obtain ⟨rows⟩ := p92_even_rows S X Y odd hP κ hκ hn C₀ hLargeSmall hDeep hBroad hAvail
     hLinearTags hLoads hGain hAvoid
   exact p92_hall_embed X Y odd rows
 

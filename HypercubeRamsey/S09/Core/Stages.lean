@@ -53,6 +53,16 @@ noncomputable def linearTagCondition9 {P : Params9} {n N : ℕ}
           -((1 / 20 : ℝ) * aStar9 P n * n) ≤ specialSurplus9 S z x),
           (M.μ (S.tag z)).w x
 
+/-- L3.6c tag-load bound for the fixed first- and second-side laws. -/
+def TagSliceLoadCertificate9 {P : Params9} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour} {M : TagMix N}
+    {W : HeightWitness9 P n} {I : IDMap9 P n W}
+    (S : TagExperiment9 P n N E G M W I) (κ : ℝ) : Prop :=
+  (∀ x, (∑ z : CubeVertex W.specialBits, (M.μ (S.tag z)).w x) ≤
+    (8 / κ) * ((2 : ℝ) ^ W.specialBits / N)) ∧
+  (∀ y, (∑ z : CubeVertex W.specialBits, (M.ν (S.tag z)).w y) ≤
+    (8 / κ) * ((2 : ℝ) ^ W.specialBits / N))
+
 /-- P9.2-tags / L3.6c: expected filtered rows are dominated by their tagged
 second law, with bounded total odd load. -/
 def TagLoadCertificate9 {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
@@ -205,6 +215,12 @@ structure AnchorAvoidanceCertificate9 {P : Params9} {n N : ℕ}
     predictiveFailureProbability9 S gain ω v ≤
       Real.exp (-(gain.c₄ * n * aStar9 P n / 8))
 
+/-- P9.2-map2 (09:102–118), with the ceiling choice for T made explicit so
+later filter-width bounds can use both sides of the threshold. -/
+theorem p92_bounded_idmap9 (P : Params9) (hP : P.Valid) (n : ℕ)
+    (W : HeightWitness9 P n) : Nonempty (IDMap9 P n W) := by
+  sorry
+
 /-- P9.2-tags (09:120–144): choose the tags, anchors and masks, preserving
 the tag-load inputs from P9.2-prep and the linear special-neighbour condition. -/
 theorem p92_tags {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
@@ -222,7 +238,7 @@ theorem p92_tags {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
           1 / 2 + (n : ℝ) ^ (-(P.hPlus : ℝ)) / 2 ≤ rowDeg E G x (M.ν i))
     (W : HeightWitness9 P n) (I : IDMap9 P n W) :
     ∃ S : TagExperiment9 P n N E G M W I,
-      tagSupport9 S X Y ∧ linearTagCondition9 S := by
+      tagSupport9 S X Y ∧ TagSliceLoadCertificate9 S κ ∧ linearTagCondition9 S := by
   sorry
 
 /-- P9.2-tags / L3.6c: transfer balanced tags and price-selected masks to
@@ -230,7 +246,8 @@ pointwise control of raw row laws and their odd total load. -/
 theorem p92_tag_loads {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} {W : HeightWitness9 P n} {I : IDMap9 P n W}
     {X Y : Finset (Fin N)} (κ : ℝ) (S : TagExperiment9 P n N E G M W I)
-    (hBal : M.Balanced (8 / κ)) (hSupport : tagSupport9 S X Y) :
+    (hBal : M.Balanced (8 / κ)) (hSupport : tagSupport9 S X Y)
+    (hSliceLoad : TagSliceLoadCertificate9 S κ) :
     TagLoadCertificate9 S κ := by
   sorry
 
@@ -238,7 +255,9 @@ theorem p92_tag_loads {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
 using the deep discrepancy condition. -/
 theorem p92_regularity {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
     {G : Colour} {M : TagMix N} {W : HeightWitness9 P n} {I : IDMap9 P n W}
-    {X Y : Finset (Fin N)} (S : TagExperiment9 P n N E G M W I) (hP : P.Valid)
+    {X Y : Finset (Fin N)} {C₀ : ℝ}
+    (S : TagExperiment9 P n N E G M W I) (hP : P.Valid)
+    (hLarge : LargeAt 1 C₀ n N)
     (hn : 1 ≤ n) (hDeep : P.DeepAt n N E X Y)
     (hSupport : tagSupport9 S X Y) : RegularityCertificate9 S := by
   sorry
@@ -323,6 +342,7 @@ theorem p92_odd_injection {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Pro
     {G : Colour} {M : TagMix N} {W : HeightWitness9 P n} {I : IDMap9 P n W}
     {X Y : Finset (Fin N)} (S : TagExperiment9 P n N E G M W I)
     (κ : ℝ) (hκ : 0 < κ) (hP : P.Valid) (hn : 1 ≤ n)
+    (C₀ : ℝ) (hLarge : LargeAt 1 C₀ n N)
     (hDeep : P.DeepAt n N E X Y) (hBroad : P.BroadAt n N E X Y)
     (hAvail : AvailableAt κ P.BiasProperty n N E X Y)
     (hSupport : tagSupport9 S X Y) (hTags : linearTagCondition9 S)
@@ -339,6 +359,7 @@ theorem p92_even_rows {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop}
     (S : TagExperiment9 P n N E G M W I) (X Y : Finset (Fin N))
     (odd : OddInjection9 (n := n) (N := N) (E := E) (G := G) X Y) (hP : P.Valid)
     (κ : ℝ) (hκ : 0 < κ) (hn : 1 ≤ n)
+    (C₀ : ℝ) (hLarge : LargeAt 1 C₀ n N)
     (hDeep : P.DeepAt n N E X Y) (hBroad : P.BroadAt n N E X Y)
     (hAvail : AvailableAt κ P.BiasProperty n N E X Y)
     (hTags : linearTagCondition9 S) (hLoad : TagLoadCertificate9 S κ)

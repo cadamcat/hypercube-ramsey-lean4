@@ -37,6 +37,8 @@ noncomputable def cubeNeighbors9 {n : ℕ} (v : CubeVertex n) : Finset (CubeVert
 structure IDMap9 (P : Params9) (n : ℕ) (W : HeightWitness9 P n) where
   threshold : ℕ
   threshold_lower : (n : ℝ) ^ (1 - (P.σ : ℝ) + W.ε) ≤ threshold
+  threshold_upper : (threshold : ℝ) ≤
+    (n : ℝ) ^ (1 - (P.σ : ℝ) + W.ε) + 1
   center : CubeVertex n → CenterID9 W.specialBits n W.levels
   center_spec : ∀ v, (center v).slice = specialWord9 W.specialBits_le v ∧
     residualDistance9 W.specialBits (center v).location v ≤ W.radius ∧

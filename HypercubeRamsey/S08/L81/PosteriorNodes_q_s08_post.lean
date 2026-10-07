@@ -992,6 +992,39 @@ theorem pi_pr_coordinate {ι Ω : Type*} [Fintype ι] [DecidableEq ι] [Fintype 
       · intro x hx hxy
         simp [hxy]
 
+theorem rprime_pr_coordinate {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (j : Fin h) (y : Fin D.N) :
+    D.R'.pr (fun ξ => ξ j = y) = ∑ i, D.M.Λ i * (D.M.ν i).w y := by
+  classical
+  rw [Ctx.R', FinProb.map_pr]
+  calc
+    (FinProb.bind D.tagLaw (fun i => FinProb.pi fun _ : Fin h => D.M.ν i)).pr
+        (fun ix => ix.2 j = y) =
+        ∑ i, D.tagLaw.w i *
+          (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr (fun ξ => ξ j = y) :=
+      Lane_q_s08_post.bind_pr_eq_sum _ _ _
+    _ = ∑ i, D.M.Λ i * (D.M.ν i).w y := by
+      apply Finset.sum_congr rfl
+      intro i hi
+      rw [Lane_q_s08_post.pi_pr_coordinate]
+      rfl
+
+theorem avgMarg_rprime {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hh : 0 < h) (y : Fin D.N) :
+    averageCoordinateMarginal D.R' y = ∑ i, D.M.Λ i * (D.M.ν i).w y := by
+  classical
+  let m : ℝ := ∑ i, D.M.Λ i * (D.M.ν i).w y
+  have hcoord (j : Fin h) : D.R'.pr (fun ξ => ξ j = y) = m := by
+    rw [Lane_q_s08_post.rprime_pr_coordinate]
+  unfold averageCoordinateMarginal
+  simp_rw [hcoord]
+  have hsum : (∑ j : Fin h, m) = (h : ℝ) * m := by
+    simp [Finset.sum_const, nsmul_eq_mul]
+  rw [hsum]
+  dsimp [m]
+  have hhR : (0 : ℝ) < h := by exact_mod_cast hh
+  field_simp
+
 private theorem cube_ball_one_card (d : ℕ) (a : CubeVertex d) :
     (Finset.univ.filter fun u : CubeVertex d => _root_.hammingDist a u ≤ 1).card ≤ d + 1 := by
   classical

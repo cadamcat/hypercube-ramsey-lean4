@@ -125,4 +125,19 @@ theorem scattered_scaled_column_tail
     P.pr (fun ω => ω ∈ good ∧ thr < ∑ u, row u y ω) ≤ (b / t) ^ n := htail'
     _ ≤ (c * q / ((N : ℝ) * thr)) ^ n := hfinal
 
+/-- The independent-group tail estimate for every label at once. -/
+theorem independent_group_tail
+    {I Y : Type*} [Fintype I] [DecidableEq I]
+    {Ω : I → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (X : ∀ i, Y → Ω i → ℝ)
+    (L m θ : ℝ) (hL : 0 < L)
+    (hX : ∀ i y ω, 0 ≤ X i y ω ∧ X i y ω ≤ L)
+    (hmean : ∀ y, ∑ i, (P i).expect (fun ω => X i y ω) ≤ m) :
+    ∀ y, (FinProb.pi P).pr (fun ω => θ ≤ ∑ i, X i y (ω i)) ≤
+      Real.exp (((Real.exp 1 - 1) * m - θ) / L) := by
+  intro y
+  exact Lane_sol_s10_1k.independent_group_column_tail P
+    (fun i ω => X i y ω) L m θ hL
+    (by intro i ω; exact hX i y ω) (hmean y)
+
 end HypercubeRamsey.Lane_q_s10_b

@@ -229,6 +229,198 @@ private theorem cross_key_ne {η₀ β p : ℝ} {h : ℕ}
   rw [hself] at hone
   norm_num at hone
 
+private theorem keyDist_triangle_aux {η₀ : ℝ} {n : ℕ}
+    (a b c : Key η₀ n) : keyDist a c ≤ keyDist a b + keyDist b c := by
+  unfold keyDist
+  calc
+    (∑ r, Nat.dist (a r).val (c r).val) ≤
+        ∑ r, (Nat.dist (a r).val (b r).val + Nat.dist (b r).val (c r).val) := by
+          apply Finset.sum_le_sum
+          intro r hr
+          exact Nat.dist.triangle_inequality _ _ _
+    _ = (∑ r, Nat.dist (a r).val (b r).val) +
+          ∑ r, Nat.dist (b r).val (c r).val := Finset.sum_add_distrib
+
+theorem baseGates_congr {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    (h0 : Θ g = Θ' g)
+    (hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u) :
+    D.BaseGates Θ g = D.BaseGates Θ' g := by
+  classical
+  have hcrossHit (x : Fin D.N) : D.crossHit Θ g x = D.crossHit Θ' g x := by
+    apply propext
+    constructor
+    · intro hx u hu
+      rw [← hcross u hu]
+      exact hx u hu
+    · intro hx u hu
+      rw [hcross u hu]
+      exact hx u hu
+  have hownHit (x : Fin D.N) : D.ownHit Θ g x = D.ownHit Θ' g x := by
+    simp [Ctx.ownHit, Ctx.hitsAll, hcrossHit, h0]
+  have hdMinus (i : D.M.ι) : D.dMinus Θ g i = D.dMinus Θ' g i := by
+    unfold Ctx.dMinus
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp [hcrossHit]
+  have hdPlus (i : D.M.ι) : D.dPlus Θ g i = D.dPlus Θ' g i := by
+    unfold Ctx.dPlus
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp [hownHit]
+  have hdOmit (u₀ : D.KeyT) (i : D.M.ι) :
+      D.dOmit Θ g u₀ i = D.dOmit Θ' g u₀ i := by
+    unfold Ctx.dOmit
+    apply Finset.sum_congr rfl
+    intro x hx
+    simp only [Finset.mem_erase]
+    have hiff :
+        (∀ u, (u ≠ u₀ ∧ u ∈ crossKeys g) → D.hitsAll x (Θ u)) ↔
+          ∀ u, (u ≠ u₀ ∧ u ∈ crossKeys g) → D.hitsAll x (Θ' u) := by
+      constructor
+      · intro hmiss u hu
+        have h := hmiss u hu
+        rw [hcross u hu.2] at h
+        exact h
+      · intro hmiss u hu
+        have h := hmiss u hu
+        rw [← hcross u hu.2] at h
+        exact h
+    by_cases hΘ : ∀ u, (u ≠ u₀ ∧ u ∈ crossKeys g) → D.hitsAll x (Θ u)
+    · have hΘ' := hiff.mp hΘ
+      rw [if_pos hΘ, if_pos hΘ']
+    · have hΘ' : ¬ ∀ u, (u ≠ u₀ ∧ u ∈ crossKeys g) → D.hitsAll x (Θ' u) := by
+        intro hh
+        exact hΘ (hiff.mpr hh)
+      rw [if_neg hΘ, if_neg hΘ']
+  have hpostW (i : D.M.ι) : D.postW (Θ g) i = D.postW (Θ' g) i := by rw [h0]
+  have hgateOpen (i : D.M.ι) : D.GateOpen Θ g i = D.GateOpen Θ' g i := by
+    unfold Ctx.GateOpen
+    rw [hdMinus, hdPlus]
+  have htiltW (i : D.M.ι) : D.tiltW Θ g i = D.tiltW Θ' g i := by
+    unfold Ctx.tiltW
+    rw [hpostW, hdMinus, hgateOpen]
+  have hZG : D.ZG Θ g = D.ZG Θ' g := by
+    unfold Ctx.ZG
+    apply Finset.sum_congr rfl
+    intro i hi
+    exact htiltW i
+  have hsumPostMinus :
+      (∑ i, D.postW (Θ g) i * D.dMinus Θ g i) =
+        ∑ i, D.postW (Θ' g) i * D.dMinus Θ' g i := by
+    apply Finset.sum_congr rfl
+    intro i hi
+    rw [hpostW, hdMinus]
+  have hsumLambdaMinus :
+      (∑ i, D.M.Λ i * D.dMinus Θ g i) =
+        ∑ i, D.M.Λ i * D.dMinus Θ' g i := by
+    apply Finset.sum_congr rfl
+    intro i hi
+    rw [hdMinus]
+  have hsumPostOmit : ∀ u₀ ∈ crossKeys g,
+      (∑ i, D.postW (Θ g) i * D.dOmit Θ g u₀ i) =
+        ∑ i, D.postW (Θ' g) i * D.dOmit Θ' g u₀ i := by
+    intro u₀ hu₀
+    apply Finset.sum_congr rfl
+    intro i hi
+    rw [hpostW, hdOmit]
+  have hsumLambdaOmit : ∀ u₀ ∈ crossKeys g,
+      (∑ i, D.M.Λ i * D.dOmit Θ g u₀ i) =
+        ∑ i, D.M.Λ i * D.dOmit Θ' g u₀ i := by
+    intro u₀ hu₀
+    apply Finset.sum_congr rfl
+    intro i hi
+    rw [hdOmit]
+  have hgate1 : D.Gate1 Θ g = D.Gate1 Θ' g := by
+    apply propext
+    constructor <;> intro hh i <;> simpa [Ctx.Gate1, hpostW] using hh i
+  have hgate2 : D.Gate2 Θ g = D.Gate2 Θ' g := by
+    apply propext
+    constructor <;> intro hh <;> simpa [Ctx.Gate2, hZG] using hh
+  have hgate34 : D.Gate34 Θ g = D.Gate34 Θ' g := by
+    apply propext
+    unfold Ctx.Gate34
+    constructor
+    · intro hh
+      refine ⟨⟨?_, ?_⟩, ⟨⟨?_, ?_⟩, ?_⟩⟩
+      · rw [← hsumPostMinus]
+        exact hh.1.1
+      · rw [← hsumPostMinus]
+        exact hh.1.2
+      · rw [← hsumLambdaMinus]
+        exact hh.2.1.1
+      · rw [← hsumLambdaMinus]
+        exact hh.2.1.2
+      · intro u hu
+        have hO := hh.2.2 u hu
+        refine ⟨⟨?_, ?_⟩, ⟨?_, ?_⟩⟩
+        · rw [← hsumPostOmit u hu]
+          exact hO.1.1
+        · rw [← hsumPostOmit u hu]
+          exact hO.1.2
+        · rw [← hsumLambdaOmit u hu]
+          exact hO.2.1
+        · rw [← hsumLambdaOmit u hu]
+          exact hO.2.2
+    · intro hh
+      refine ⟨⟨?_, ?_⟩, ⟨⟨?_, ?_⟩, ?_⟩⟩
+      · rw [hsumPostMinus]
+        exact hh.1.1
+      · rw [hsumPostMinus]
+        exact hh.1.2
+      · rw [hsumLambdaMinus]
+        exact hh.2.1.1
+      · rw [hsumLambdaMinus]
+        exact hh.2.1.2
+      · intro u hu
+        have hO := hh.2.2 u hu
+        refine ⟨⟨?_, ?_⟩, ⟨?_, ?_⟩⟩
+        · rw [hsumPostOmit u hu]
+          exact hO.1.1
+        · rw [hsumPostOmit u hu]
+          exact hO.1.2
+        · rw [hsumLambdaOmit u hu]
+          exact hO.2.1
+        · rw [hsumLambdaOmit u hu]
+          exact hO.2.2
+  unfold Ctx.BaseGates
+  rw [hgate1, hgate2, hgate34]
+
+theorem candGate_congr_of_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    (hΘ : ∀ u ∈ keyBall g 2, Θ u = Θ' u) :
+    D.CandGate Θ g = D.CandGate Θ' g := by
+  classical
+  have hbase (v : D.KeyT) (hv : keyDist g v ≤ 1) :
+      D.BaseGates Θ v = D.BaseGates Θ' v := by
+    have hv0 : v ∈ keyBall g 2 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ _, hv.trans (by omega)⟩
+    have h0 := hΘ v hv0
+    have hcross : ∀ w ∈ crossKeys v, Θ w = Θ' w := by
+      intro w hw
+      have hvw : keyDist v w = 1 := (Finset.mem_filter.mp hw).2
+      have hgw : keyDist g w ≤ 2 := by
+        have htri := keyDist_triangle_aux g v w
+        omega
+      exact hΘ w (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hgw⟩)
+    exact baseGates_congr D Θ Θ' v h0 hcross
+  have hbaseG : D.BaseGates Θ g = D.BaseGates Θ' g := hbase g (by simp [keyDist])
+  have hbaseU (u : D.CrossSub g) : D.BaseGates Θ u.1 = D.BaseGates Θ' u.1 := by
+    apply hbase u.1
+    exact (Finset.mem_filter.mp u.2).2.le
+  apply propext
+  unfold Ctx.CandGate
+  constructor
+  · rintro ⟨hg, hU⟩
+    refine ⟨(Iff.of_eq hbaseG).mp hg, ?_⟩
+    intro u hu
+    exact (Iff.of_eq (hbaseU ⟨u, hu⟩)).mp (hU u hu)
+  · rintro ⟨hg, hU⟩
+    refine ⟨(Iff.of_eq hbaseG).mpr hg, ?_⟩
+    intro u hu
+    exact (Iff.of_eq (hbaseU ⟨u, hu⟩)).mpr (hU u hu)
+
 def observedInternalTagCoords {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (c : D.CellT) (π : D.Pres c.1) : Finset (D.KeyT × D.Loc) :=
   ((Finset.univ.filter fun ℓ : D.Loc => (π.1 ℓ).isSome).image fun ℓ => (c.1, ℓ))

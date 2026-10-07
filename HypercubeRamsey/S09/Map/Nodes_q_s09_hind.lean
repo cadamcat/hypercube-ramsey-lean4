@@ -1893,6 +1893,130 @@ private theorem heightRootLLLInput9 {P : Params9} {hc : HeightChoice9 P} {n : �
         (rootBadPair9 (P := P) (hc := hc) (n := n) t s η root) ≤ x * (1 - x) ^ Δ
     exact (rootBadPair9_probability hcounts root ε (hscale root)).trans hcharge
 
+private theorem rootSupport9_overlap_projection_bounds {P : Params9} {hc : HeightChoice9 P}
+    {n R : ℕ} (hmn : P.m n ≤ n) (root root' : CubeVertex n)
+    (hoverlap : ¬ Disjoint (scaleRootSupport9 (P := P) (hc := hc) (n := n) root R)
+      (scaleRootSupport9 (P := P) (hc := hc) (n := n) root' R)) :
+    _root_.hammingDist (specialWord9 (P.m n) root) (specialWord9 (P.m n) root') ≤ 40 * R + 10 ∧
+      _root_.hammingDist (residualWord9 (P.m n) root) (residualWord9 (P.m n) root') ≤
+        2 * P.radius n + 40 * R + 10 := by
+  obtain ⟨c, hcRoot, hcRoot'⟩ := Finset.not_disjoint_iff.mp hoverlap
+  simp only [scaleRootSupport9, consulted9, Finset.mem_filter, Finset.mem_univ,
+    true_and] at hcRoot hcRoot'
+  rcases hcRoot with ⟨hsp₁, hres₁⟩
+  rcases hcRoot' with ⟨hsp₂, hres₂⟩
+  have hspRootRaw : _root_.hammingDist (specialWord9 (P.m n) root) c.slice ≤
+      2 * (10 * R + 2) + 1 := by
+    simpa [_root_.hammingDist_comm] using hsp₁
+  have hspRoot : _root_.hammingDist (specialWord9 (P.m n) root) c.slice ≤ 20 * R + 5 := by
+    omega
+  have hspRoot' : _root_.hammingDist c.slice (specialWord9 (P.m n) root') ≤ 20 * R + 5 := by
+    omega
+  have hresRootRaw : _root_.hammingDist (residualWord9 (P.m n) root) c.location ≤
+      P.radius n + 2 * (10 * R + 2) + 1 := by
+    simpa [_root_.hammingDist_comm] using hres₁
+  have hresRoot : _root_.hammingDist (residualWord9 (P.m n) root) c.location ≤
+      P.radius n + 20 * R + 5 := by omega
+  have hresRoot' : _root_.hammingDist c.location (residualWord9 (P.m n) root') ≤
+      P.radius n + 20 * R + 5 := by omega
+  constructor
+  · calc
+      _root_.hammingDist (specialWord9 (P.m n) root) (specialWord9 (P.m n) root') ≤
+          _root_.hammingDist (specialWord9 (P.m n) root) c.slice +
+            _root_.hammingDist c.slice (specialWord9 (P.m n) root') :=
+        _root_.hammingDist_triangle _ _ _
+      _ ≤ 40 * R + 10 := by omega
+  · calc
+      _root_.hammingDist (residualWord9 (P.m n) root) (residualWord9 (P.m n) root') ≤
+          _root_.hammingDist (residualWord9 (P.m n) root) c.location +
+            _root_.hammingDist c.location (residualWord9 (P.m n) root') :=
+        _root_.hammingDist_triangle _ _ _
+      _ ≤ 2 * P.radius n + 40 * R + 10 := by omega
+
+private theorem splitVertexMap9_injective {m n : ℕ} (hmn : m ≤ n) :
+    Function.Injective (fun v : CubeVertex n => (specialWord9 m v, residualWord9 m v)) := by
+  intro v w h
+  funext i
+  by_cases hi : i.val < m
+  · have hsp := congrArg Prod.fst h
+    have hbit := congrFun hsp (⟨i.val, hi⟩ : Fin m)
+    have hn : i.val < n := lt_of_lt_of_le hi hmn
+    simpa [specialWord9, hn] using hbit
+  · let k : Fin (n - m) := ⟨i.val - m, by have := i.isLt; omega⟩
+    have hres := congrArg Prod.snd h
+    have hbit := congrFun hres k
+    change v ⟨m + k.val, by have := k.isLt; omega⟩ =
+      w ⟨m + k.val, by have := k.isLt; omega⟩ at hbit
+    have hidx : (⟨m + k.val, by have := k.isLt; omega⟩ : Fin n) = i := by
+      apply Fin.ext
+      dsimp [k]
+      omega
+    simpa [hidx] using hbit
+
+private theorem rootSupport9_degree_bound {P : Params9} {hc : HeightChoice9 P} {n R : ℕ}
+    (hmn : P.m n ≤ n) (root : CubeVertex n) :
+    (Finset.univ.filter (fun root' : CubeVertex n => root' ≠ root ∧
+      ¬ Disjoint (scaleRootSupport9 (P := P) (hc := hc) (n := n) root R)
+        (scaleRootSupport9 root' R))).card ≤
+      ((40 * R + 11) * (P.m n + 1) ^ (40 * R + 10)) *
+        ((2 * P.radius n + 40 * R + 11) *
+          (n - P.m n + 1) ^ (2 * P.radius n + 40 * R + 10)) := by
+  classical
+  let sr := 40 * R + 10
+  let rr := 2 * P.radius n + 40 * R + 10
+  let Bspecial : Finset (CubeVertex (P.m n)) :=
+    Finset.univ.filter (fun w =>
+      _root_.hammingDist w (specialWord9 (P.m n) root) ≤ sr)
+  let Bresidual : Finset (CubeVertex (n - P.m n)) :=
+    Finset.univ.filter (fun w =>
+      _root_.hammingDist w (residualWord9 (P.m n) root) ≤ rr)
+  let U : Finset (CubeVertex n) := Finset.univ.filter (fun root' =>
+    _root_.hammingDist (specialWord9 (P.m n) root') (specialWord9 (P.m n) root) ≤ sr ∧
+    _root_.hammingDist (residualWord9 (P.m n) root') (residualWord9 (P.m n) root) ≤ rr)
+  let split : CubeVertex n → CubeVertex (P.m n) × CubeVertex (n - P.m n) :=
+    fun v => (specialWord9 (P.m n) v, residualWord9 (P.m n) v)
+  have hmaps : ∀ v ∈ U, split v ∈ Bspecial ×ˢ Bresidual := by
+    intro v hv
+    simp only [U, Finset.mem_filter, Finset.mem_univ, true_and] at hv
+    simp only [Finset.mem_product, Bspecial, Bresidual, Finset.mem_filter,
+      Finset.mem_univ, true_and, split]
+    exact hv
+  have hinj : Set.InjOn split U := by
+    intro v hv w hw heq
+    exact splitVertexMap9_injective hmn heq
+  have hcardU : U.card ≤ Bspecial.card * Bresidual.card := by
+    calc
+      U.card ≤ (Bspecial ×ˢ Bresidual).card :=
+        Finset.card_le_card_of_injOn split hmaps hinj
+      _ = Bspecial.card * Bresidual.card := Finset.card_product Bspecial Bresidual
+  have hspecial := hammingBall9H_card_le (P.m n) sr (specialWord9 (P.m n) root)
+  have hresidual := hammingBall9H_card_le (n - P.m n) rr (residualWord9 (P.m n) root)
+  have hBspecial : Bspecial.card ≤ (sr + 1) * (P.m n + 1) ^ sr := by
+    simpa [Bspecial, sr] using hspecial
+  have hBresidual : Bresidual.card ≤ (rr + 1) * (n - P.m n + 1) ^ rr := by
+    simpa [Bresidual, rr] using hresidual
+  let Dset : Finset (CubeVertex n) := Finset.univ.filter (fun root' => root' ≠ root ∧
+    ¬ Disjoint (scaleRootSupport9 (P := P) (hc := hc) (n := n) root R)
+      (scaleRootSupport9 root' R))
+  have hDsub : Dset ⊆ U := by
+    intro root' hroot'
+    simp only [Dset, Finset.mem_filter, Finset.mem_univ, true_and] at hroot'
+    have hproj := rootSupport9_overlap_projection_bounds hmn root root' hroot'.2
+    simp only [U, Finset.mem_filter, Finset.mem_univ, true_and]
+    simpa [sr, rr, _root_.hammingDist_comm] using hproj
+  calc
+    (Finset.univ.filter (fun root' : CubeVertex n => root' ≠ root ∧
+        ¬ Disjoint (scaleRootSupport9 (P := P) (hc := hc) (n := n) root R)
+          (scaleRootSupport9 root' R))).card = Dset.card := by rfl
+    _ ≤ U.card := Finset.card_le_card hDsub
+    _ ≤ Bspecial.card * Bresidual.card := hcardU
+    _ ≤ ((sr + 1) * (P.m n + 1) ^ sr) *
+        ((rr + 1) * (n - P.m n + 1) ^ rr) := Nat.mul_le_mul hBspecial hBresidual
+    _ = ((40 * R + 11) * (P.m n + 1) ^ (40 * R + 10)) *
+        ((2 * P.radius n + 40 * R + 11) *
+          (n - P.m n + 1) ^ (2 * P.radius n + 40 * R + 10)) := by
+            simp [sr, rr]
+
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :
     (FinProb.pi (fun _ : ι => FinProb.bernoulli p)).pr

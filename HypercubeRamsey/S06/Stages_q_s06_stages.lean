@@ -267,4 +267,49 @@ theorem eventually_nat_ceil_rpow_add_two_le_double {a : ℝ} (ha : 0 < a) :
     _ ≤ ((n : ℝ) ^ a) ^ 2 := hquad
     _ = (n : ℝ) ^ (2 * a) := hpowEq.symm
 
+theorem eventually_T₆_le_J₆ :
+    ∀ᶠ m : ℕ in Filter.atTop, T₆ m ≤ J₆ m := by
+  have hpow : Tendsto (fun m : ℕ => (m : ℝ) ^ (1 / 1000 : ℝ))
+      Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 1000)).comp
+      tendsto_natCast_atTop_atTop
+  filter_upwards [hpow.eventually_ge_atTop 2] with m hm
+  have hm0 : 0 ≤ (m : ℝ) := Nat.cast_nonneg m
+  let x : ℝ := (m : ℝ) ^ (1 / 1000 : ℝ)
+  have hpow40 : (m : ℝ) ^ (1 / 25 : ℝ) = x ^ 40 := by
+    calc
+      (m : ℝ) ^ (1 / 25 : ℝ) = (m : ℝ) ^ ((1 / 1000 : ℝ) * 40) := by congr 1 <;> norm_num
+      _ = ((m : ℝ) ^ (1 / 1000 : ℝ)) ^ (40 : ℝ) :=
+        Real.rpow_mul hm0 (1 / 1000 : ℝ) 40
+      _ = x ^ 40 := by
+        simpa [x] using Real.rpow_natCast ((m : ℝ) ^ (1 / 1000 : ℝ)) 40
+  have hx2 : x + 1 ≤ x ^ 2 := by dsimp [x] at *; nlinarith
+  have hx40 : x ^ 2 ≤ x ^ 40 :=
+    pow_le_pow_right₀ (by linarith : (1 : ℝ) ≤ x) (by norm_num : 2 ≤ 40)
+  have hT : (T₆ m : ℝ) ≤ x + 1 := by
+    dsimp [T₆, x]
+    exact (Nat.ceil_lt_add_one (Real.rpow_nonneg hm0 _)).le
+  have hTy : (T₆ m : ℝ) ≤ (m : ℝ) ^ (1 / 25 : ℝ) := by
+    rw [hpow40]
+    exact hT.trans (hx2.trans hx40)
+  have hfloor : T₆ m ≤ ⌊(m : ℝ) ^ (1 / 25 : ℝ)⌋₊ :=
+    (Nat.le_floor_iff (Real.rpow_nonneg hm0 _)).2 hTy
+  simpa [J₆] using hfloor
+
+theorem m₆_tendsto_atTop (p₀ : ℝ) (hp₀ : 0 < p₀) :
+    Tendsto (fun n : ℕ => (m₆ p₀ n : ℝ)) Filter.atTop Filter.atTop := by
+  have hα : 0 < α₆ p₀ := lt_min (by norm_num) (by linarith)
+  have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ α₆ p₀) Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop hα).comp tendsto_natCast_atTop_atTop
+  have hceil : Tendsto (fun x : ℝ => Nat.ceil x) Filter.atTop Filter.atTop :=
+    (Nat.ceil_mono (R := ℝ)).tendsto_atTop_atTop
+      (fun b : ℕ => ⟨(b : ℝ), by simp⟩)
+  have hceilPow : Tendsto (fun n : ℕ => Nat.ceil ((n : ℝ) ^ α₆ p₀))
+      Filter.atTop Filter.atTop := hceil.comp hpow
+  have hcast : Tendsto (fun n : ℕ => ((Nat.ceil ((n : ℝ) ^ α₆ p₀) : ℕ) : ℝ))
+      Filter.atTop Filter.atTop :=
+    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) Filter.atTop Filter.atTop).comp
+      hceilPow
+  simpa [m₆] using hcast
+
 end HypercubeRamsey.Lane_q_s06_stages

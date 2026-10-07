@@ -20,6 +20,7 @@ import HypercubeRamsey.S18.Locality_sol_s18_n4
 import HypercubeRamsey.S18.Cost_sol_s18_n4
 import HypercubeRamsey.S18.Test_sol_s18_n4
 import HypercubeRamsey.S18.Current_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
@@ -583,14 +584,9 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ∀ ε, TerminalCertificate D δ ε →
           Nonempty (ClassSamplerData D δ) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hn
+  filter_upwards [Lane_sol_s18_4b.classSamplerEventually hκ T δ hδ] with k hsampler
   intro PT hPT D hD hTransition hLocal hTransfer ε C
-  apply Lane_sol_s18_n4.classSamplerOfEnteringLaws D δ hn
-  intro j h henter
-  have hcurrent := Lane_sol_s18_n4.classCurrentBadUniformBound D δ (by omega) j h henter
-  have halarm := Lane_sol_s18_n4.classFutureAlarmBound D δ j h henter
-  -- Instantiate the clock with the deterministic spatial scopes and incidences.
-  sorry
+  exact hsampler D hD hTransition
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish
 all actual completion conclusions; no existential full=True shortcut.

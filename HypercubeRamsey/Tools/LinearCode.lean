@@ -1,4 +1,5 @@
 import Mathlib
+import HypercubeRamsey.Tools.LinearCode_p_tools_cube_r
 
 /-!
 # Binary random-linear-code bound
@@ -21,6 +22,7 @@ theorem xVarshamov (h m w : ℕ) (hmh : m ≤ h) (wh : w ≤ h)
       Function.Surjective L ∧
       ∀ x, L x = 0 → x ≠ 0 → w < binaryWeight x := by
   classical
-  sorry
+  simpa [binaryWeight, LinearCodePToolsCubeR.weight, LinearCodePToolsCubeR.support] using
+    LinearCodePToolsCubeR.varshamovAux h m w hmh wh hvolume
 
 end HypercubeRamsey

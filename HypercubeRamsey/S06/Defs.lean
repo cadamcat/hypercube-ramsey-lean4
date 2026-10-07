@@ -1,24 +1,51 @@
-import HypercubeRamsey.Framework.OneShot
+import HypercubeRamsey.S06.Params
 
 /-!
-# Section 6 finite experiment and vocabulary
+# Section 6 vocabulary: keys, named parents, types, and the mixture laws
 
-L6.1-Defs (06:78–157).  The raw experiment keeps variable names separate from
-their realized labels.  In particular a primary is named by `ParentName6`,
-and the fresh tag and all entries of a centre tuple form one observation.
+L6.1-Defs, part 1 (06:31–40, 06:78–123).  Coarse keys `h = (w, int/bdy)`, the key relation `C(h)`, named
+primary variables (`P_(w,int) = A_w`, `P_(w,bdy) = V₀`), hidden keys `ℓ = (h, t)`, even-role types, and the
+second-side mixture `Π`, its tag posterior `η_y`, the first-side law `B_y`, and the restricted base-tag law.
+Zero-safe normalizations use a fixed fallback point (06:145–147).
 -/
 
 namespace HypercubeRamsey
 namespace S06
 
 open OAI.HypercubeRamsey
+open Classical
 open scoped BigOperators
 
-noncomputable def c₀ : ℝ := 1 / 100
-noncomputable def c₁ : ℝ := c₀ / 2
-noncomputable def κ₆ : ℝ := 1 / 10000
-def coarseChunkCount : ℕ := 300
-noncomputable def fineMargin : ℝ := 5.5
+noncomputable section
+
+/-! ### Finite normalization helpers -/
+
+/-- Normalize a weight function (negative parts clipped); the fixed point `ω₀` is used when the mass is zero
+(06:145–147: fixed local fallbacks on undefined branches). -/
+def normalize6 {Ω : Type*} [Fintype Ω] (f : Ω → ℝ) (ω₀ : Ω) : FinProb Ω :=
+  if h : 0 < ∑ ω, max 0 (f ω) then
+    { w := fun ω => max 0 (f ω) / ∑ ω', max 0 (f ω')
+      nonneg := fun ω => div_nonneg (le_max_left _ _) h.le
+      sum_eq_one := by rw [← Finset.sum_div]; exact div_self h.ne' }
+  else
+    { w := fun ω => if ω = ω₀ then 1 else 0
+      nonneg := fun ω => by split_ifs <;> norm_num
+      sum_eq_one := by simp }
+
+/-- A law restricted to a set, with the fallback point when the set has zero mass. -/
+def restrictOr6 {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) (ω₀ : Ω) : FinProb Ω :=
+  normalize6 (fun ω => if A ω then P.w ω else 0) ω₀
+
+/-- A zero-safe likelihood ratio; posterior ratios are only used on their reference support. -/
+def safeRatio6 (a b : ℝ) : ℝ := if b = 0 then 0 else a / b
+
+/-- Point mass on a finite type. -/
+def pointMass6 {Ω : Type*} [Fintype Ω] (a : Ω) : FinProb Ω where
+  w b := if b = a then 1 else 0
+  nonneg b := by split_ifs <;> norm_num
+  sum_eq_one := by simp
+
+/-! ### Coarse keys and the key relation (06:78–91) -/
 
 inductive KeyFlag6 where
   | interior
@@ -30,51 +57,59 @@ instance : Fintype KeyFlag6 := by
   intro x
   cases x <;> simp
 
+instance : Inhabited KeyFlag6 := ⟨KeyFlag6.interior⟩
+
 abbrev CoarseKey6 (W : Type*) := W × KeyFlag6
 
-/-- The coarse relation includes each key, both flags at one bin, and adjacent boundary bins. -/
-def keyAdjacent6 {W : Type*} (binAdjacent : W → W → Prop)
-    (a b : CoarseKey6 W) : Prop :=
-  a = b ∨ a.1 = b.1 ∨
-    (a.2 = .boundary ∧ b.2 = .boundary ∧ binAdjacent a.1 b.1)
+/-- The coarse relation connects each key to itself, the two keys at a bin, and boundary keys at adjacent
+bins (06:86–89). -/
+def keyAdjacent6 {W : Type*} (binAdjacent : W → W → Prop) (a b : CoarseKey6 W) : Prop :=
+  a = b ∨ a.1 = b.1 ∨ (a.2 = .boundary ∧ b.2 = .boundary ∧ binAdjacent a.1 b.1)
 
-noncomputable def keyNeighborhood6 {W : Type*} [Fintype W] [DecidableEq W]
-    (binAdjacent : W → W → Prop) [DecidableRel binAdjacent] (h : CoarseKey6 W) :
+/-- `C(h)`: all neighbours of `h` in the key relation, with `h` itself (06:88–89). -/
+def keyNeighborhood6 {W : Type*} [Fintype W] (binAdjacent : W → W → Prop) (h : CoarseKey6 W) :
     Finset (CoarseKey6 W) :=
-  by
-    classical
-    exact Finset.univ.filter (keyAdjacent6 binAdjacent h)
+  Finset.univ.filter (keyAdjacent6 binAdjacent h)
 
+/-! ### Named parent variables (06:78–86, 06:155–157) -/
+
+/-- The name of a parent variable: `V₀` or a candidate `A_w`.  Equal realized values never merge names. -/
 inductive ParentName6 (W : Type*) where
   | initial
   | candidate (w : W)
   deriving DecidableEq
 
-/-- Primaries are named random variables; equality of their values does not merge their names. -/
+/-- `P_h`: `A_w` at `(w,int)`, `V₀` at `(w,bdy)` (06:80–83). -/
 def primaryName6 {W : Type*} (h : CoarseKey6 W) : ParentName6 W :=
   match h.2 with
   | .interior => .candidate h.1
   | .boundary => .initial
 
+/-- `P*_h`: the other member of `{A_w, V₀}` (06:84). -/
 def otherPrimaryName6 {W : Type*} (h : CoarseKey6 W) : ParentName6 W :=
   match h.2 with
   | .interior => .initial
   | .boundary => .candidate h.1
 
-structure Parents6 (W : Type*) (N : ℕ) where
-  initial : Fin N
-  candidate : W → Fin N
+/-- Parent values `(V₀, A)`. -/
+abbrev Par6 (W : Type*) (N : ℕ) := Fin N × (W → Fin N)
 
-def Parents6.value {W : Type*} {N : ℕ} (p : Parents6 W N) : ParentName6 W → Fin N
-  | .initial => p.initial
-  | .candidate w => p.candidate w
+/-- The value of a named parent. -/
+def Par6.val {W : Type*} {N : ℕ} (pv : Par6 W N) : ParentName6 W → Fin N
+  | .initial => pv.1
+  | .candidate w => pv.2 w
 
-def primary6 {W : Type*} {N : ℕ} (p : Parents6 W N) (h : CoarseKey6 W) : Fin N :=
-  p.value (primaryName6 h)
+/-- Replace the value of one named parent; all formulas below are re-evaluated at the new value (06:184–187
+of Section 5, 06:395–396). -/
+def Par6.set {W : Type*} [DecidableEq W] {N : ℕ} (pv : Par6 W N) (nm : ParentName6 W) (y : Fin N) :
+    Par6 W N :=
+  match nm with
+  | .initial => (y, pv.2)
+  | .candidate w => (pv.1, Function.update pv.2 w y)
 
-def otherPrimary6 {W : Type*} {N : ℕ} (p : Parents6 W N) (h : CoarseKey6 W) : Fin N :=
-  p.value (otherPrimaryName6 h)
+/-! ### Hidden keys, modes and types (06:106–123) -/
 
+/-- A hidden key `ℓ = (h, t)` (06:107). -/
 abbrev HiddenKey6 (W : Type*) (m : ℕ) := CoarseKey6 W × CubeVertex m
 
 inductive Mode6 where
@@ -87,329 +122,85 @@ instance : Fintype Mode6 := by
   intro x
   cases x <;> simp
 
-/-- The observation type of an even role; `observations` is its explicit padded hidden-key list. -/
-structure Type6 (W : Type*) (m : ℕ) where
-  key : CoarseKey6 W
-  sign : CubeVertex m
-  mode : Mode6
-  severity : ℕ
-  observations : Finset (HiddenKey6 W m)
+/-- An even-role type: its key `h`, its mode, its severity `j` (retained for low types, `0` at high), and its
+observation list `S` (06:118–122).  A high type carries no sign beyond its list. -/
+abbrev Type6 (W : Type*) (m : ℕ) := CoarseKey6 W × Mode6 × Fin (m + 1) × Finset (HiddenKey6 W m)
 
-def Type6.uBeta {W : Type*} {m : ℕ} (β : Type6 W m) : ℕ :=
+namespace Type6
+
+variable {W : Type*} {m : ℕ}
+
+def key (β : Type6 W m) : CoarseKey6 W := β.1
+def mode (β : Type6 W m) : Mode6 := β.2.1
+def sev (β : Type6 W m) : ℕ := β.2.2.1.val
+def obs (β : Type6 W m) : Finset (HiddenKey6 W m) := β.2.2.2
+
+/-- `u_β = j + 1` at low, `1` at high (06:123). -/
+def u (β : Type6 W m) : ℕ :=
   match β.mode with
-  | .low => β.severity + 1
+  | .low => β.sev + 1
   | .high => 1
 
-/-- A tuple is observed as a single fresh tag together with all of its entries. -/
-abbrev TaggedTuple6 (ι : Type*) (k N : ℕ) := ι × (Fin k → Fin N)
+end Type6
 
-structure Fallback6 (ι : Type*) (k N : ℕ) where
-  tag : ι
-  retained : Finset (Fin N)
-  label : Fin N
-  label_mem : label ∈ retained
+/-- Severity as an element of `Fin (m+1)` (severities never exceed `m`). -/
+def sevFin6 (m j : ℕ) : Fin (m + 1) := ⟨min j m, Nat.lt_succ_of_le (min_le_right _ _)⟩
 
-def Fallback6.tuple {ι : Type*} {k N : ℕ} (f : Fallback6 ι k N) : TaggedTuple6 ι k N :=
-  (f.tag, fun _ => f.label)
+/-- Low observation list: `(s,t)` for `s ∈ C(h)`, and `(h, t^a)` for `a ∈ F` (06:120). -/
+def lowObservations6 {W : Type*} [Fintype W] {m : ℕ} (binAdjacent : W → W → Prop)
+    (h : CoarseKey6 W) (t : CubeVertex m) (F : Finset (Fin m)) : Finset (HiddenKey6 W m) :=
+  (keyNeighborhood6 binAdjacent h).image (fun s => (s, t)) ∪
+    F.image (fun a => (h, Function.update t a (!t a)))
 
-/-- Condition a finite law on a hit set; the fixed retained label is used off the support. -/
-noncomputable def hitRestrictedLaw6 {N : ℕ} (μ : Law N) (hits : Finset (Fin N))
-    (fallback : Fin N) : Law N := by
-  classical
-  let mass := ∑ x ∈ hits, μ.w x
-  exact if h : 0 < mass then μ.restrict hits h else Law.dirac fallback
+/-- High observation list: `(h,t)` when `j = J+1`, empty otherwise (06:121). -/
+def highObservations6 {W : Type*} {m : ℕ} (h : CoarseKey6 W) (t : CubeVertex m) (j J : ℕ) :
+    Finset (HiddenKey6 W m) :=
+  if j = J + 1 then {(h, t)} else ∅
 
-abbrev ParentHistory6 (W : Type*) (N : ℕ) := Fin N × (W → Fin N)
-abbrev BaseHistory6 (W : Type*) (N : ℕ) (ι : Type*) :=
-  ParentHistory6 W N × (CoarseKey6 W → ι)
-abbrev HiddenHistory6 (W : Type*) (m N : ℕ) (ι : Type*) :=
-  BaseHistory6 W N ι × (HiddenKey6 W m → Fin N)
-abbrev RawSample6 (W : Type*) (m N k : ℕ) (ι Center Ty : Type*) :=
-  HiddenHistory6 W m N ι × (Center × Ty → TaggedTuple6 ι k N)
+/-- The type of an even position with key `h`, sign `t`, flippable set `F`, severity `j` (06:118–123). -/
+def makeType6 {W : Type*} [Fintype W] {m : ℕ} (binAdjacent : W → W → Prop)
+    (h : CoarseKey6 W) (t : CubeVertex m) (F : Finset (Fin m)) (j J : ℕ) : Type6 W m :=
+  if j ≤ J then (h, .low, sevFin6 m j, lowObservations6 binAdjacent h t F)
+  else (h, .high, 0, highObservations6 h t j J)
 
-/-- Finite kernels for the four successive stages of the raw experiment. -/
-structure RawKernels6 (W : Type*) (m N k : ℕ) (ι Center Ty : Type*)
-    [Fintype W] [DecidableEq W] [Fintype ι] [DecidableEq ι]
-    [Fintype Center] [DecidableEq Center] [Fintype Ty] [DecidableEq Ty] where
-  initial : Law N
-  candidate : Fin N → W → Law N
-  baseTag : ParentHistory6 W N → CoarseKey6 W → FinProb ι
-  hidden : BaseHistory6 W N ι → HiddenKey6 W m → Law N
-  μ : ι → Law N
-  tupleTag : HiddenHistory6 W m N ι → Center × Ty → FinProb ι
-  tupleRequiredHits : HiddenHistory6 W m N ι → Center × Ty → ι → Finset (Fin N)
-  fallback : Fallback6 ι k N
+/-! ### Mixture and posterior vocabulary (06:31–40, 06:93–104) -/
 
-namespace RawKernels6
-
-variable {W : Type*} {m N k : ℕ} {ι Center Ty : Type*}
-  [Fintype W] [DecidableEq W] [Fintype ι] [DecidableEq ι]
-  [Fintype Center] [DecidableEq Center] [Fintype Ty] [DecidableEq Ty]
-
-noncomputable def candidateProduct (K : RawKernels6 W m N k ι Center Ty) (v₀ : Fin N) :
-    FinProb (W → Fin N) :=
-  FinProb.pi (fun w => K.candidate v₀ w)
-
-noncomputable def parents (K : RawKernels6 W m N k ι Center Ty) :
-    FinProb (ParentHistory6 W N) :=
-  FinProb.bind K.initial (fun v₀ => K.candidateProduct v₀)
-
-noncomputable def baseTags (K : RawKernels6 W m N k ι Center Ty)
-    (p : ParentHistory6 W N) : FinProb (CoarseKey6 W → ι) :=
-  FinProb.pi (K.baseTag p)
-
-noncomputable def base (K : RawKernels6 W m N k ι Center Ty) :
-    FinProb (BaseHistory6 W N ι) :=
-  FinProb.bind K.parents K.baseTags
-
-noncomputable def hiddenScalars (K : RawKernels6 W m N k ι Center Ty)
-    (b : BaseHistory6 W N ι) : FinProb (HiddenKey6 W m → Fin N) :=
-  FinProb.pi (K.hidden b)
-
-noncomputable def throughHidden (K : RawKernels6 W m N k ι Center Ty) :
-    FinProb (HiddenHistory6 W m N ι) :=
-  FinProb.bind K.base K.hiddenScalars
-
-noncomputable def centreTuples (K : RawKernels6 W m N k ι Center Ty)
-    (h : HiddenHistory6 W m N ι) : FinProb (Center × Ty → TaggedTuple6 ι k N) :=
-  FinProb.pi (fun c => FinProb.bind (K.tupleTag h c) fun i =>
-    FinProb.pi (fun _ : Fin k =>
-      hitRestrictedLaw6 (K.μ i) (K.tupleRequiredHits h c i) K.fallback.label))
-
-/-- The raw order is parents, independent base tags, independent hidden scalars, then tagged tuples. -/
-noncomputable def raw (K : RawKernels6 W m N k ι Center Ty) :
-    FinProb (RawSample6 W m N k ι Center Ty) :=
-  FinProb.bind K.throughHidden K.centreTuples
-
-end RawKernels6
-
-/-! ### Mixture and posterior vocabulary -/
-
-noncomputable def tagLaw6 {N : ℕ} (M : TagMix N) : FinProb M.ι where
+/-- The tag law `Λ` as a finite probability. -/
+def tagLaw6 {N : ℕ} (M : TagMix N) : FinProb M.ι where
   w := M.Λ
   nonneg := M.Λ_nonneg
   sum_eq_one := M.Λ_sum
 
-noncomputable def secondMixture6 {N : ℕ} (M : TagMix N) : Law N :=
+/-- The second-side mixture `Π = ∑ Λ(i) ν_i` (06:33). -/
+def secondMixture6 {N : ℕ} (M : TagMix N) : Law N :=
   Law.mix (tagLaw6 M) M.ν
 
-noncomputable def tagPosterior6 {N : ℕ} (M : TagMix N) (y : Fin N) : FinProb M.ι := by
-  classical
-  by_cases hy : 0 < (secondMixture6 M).w y
-  · refine ⟨fun i => M.Λ i * (M.ν i).w y / (secondMixture6 M).w y, ?_, ?_⟩
-    · intro i
-      exact div_nonneg (mul_nonneg (M.Λ_nonneg i) ((M.ν i).nonneg y))
-        (le_of_lt hy)
-    · have hsum : (∑ i, M.Λ i * (M.ν i).w y) = (secondMixture6 M).w y := by
-        rfl
-      calc
-        ∑ i, M.Λ i * (M.ν i).w y / (secondMixture6 M).w y =
-            (∑ i, M.Λ i * (M.ν i).w y) / (secondMixture6 M).w y := by
-              rw [Finset.sum_div]
-        _ = 1 := by rw [hsum]; exact div_self (ne_of_gt hy)
-  · exact tagLaw6 M
+/-- The tag posterior `η_y(i) = Λ(i)ν_i(y)/Π(y)`, with fallback `Λ` when `Π(y) = 0` (06:34). -/
+def tagPosterior6 {N : ℕ} (M : TagMix N) (y : Fin N) : FinProb M.ι :=
+  if hy : 0 < (secondMixture6 M).w y then
+    { w := fun i => M.Λ i * (M.ν i).w y / (secondMixture6 M).w y
+      nonneg := fun i => div_nonneg (mul_nonneg (M.Λ_nonneg i) ((M.ν i).nonneg y)) hy.le
+      sum_eq_one := by
+        rw [← Finset.sum_div]
+        exact div_self (ne_of_gt hy) }
+  else tagLaw6 M
 
-noncomputable def broadLaw6 {N : ℕ} (M : TagMix N) (y : Fin N) : Law N :=
+/-- `B_y = ∑ η_y(i) μ_i` (06:35). -/
+def broadLaw6 {N : ℕ} (M : TagMix N) (y : Fin N) : Law N :=
   Law.mix (tagPosterior6 M y) M.μ
 
-def tagSupported6 {N : ℕ} (M : TagMix N) (i : M.ι) : Prop :=
-  0 < M.Λ i
+/-- The base-tag law `T₀`: `η_{P}` restricted to tags whose first law sees the opposite primary with
+degree `≥ c₁`, fallback tag off the support (06:93–95). -/
+def baseTagLaw6 {N : ℕ} (M : TagMix N) (E : Fin N → Fin N → Prop) (G : Colour)
+    (parent opposite : Fin N) (fallback : M.ι) : FinProb M.ι :=
+  restrictOr6 (tagPosterior6 M parent) (fun i => c₁ ≤ colDeg E G (M.μ i) opposite) fallback
 
-noncomputable def pointMass6 {Ω : Type*} [Fintype Ω] [DecidableEq Ω] (a : Ω) : FinProb Ω where
-  w b := if b = a then 1 else 0
-  nonneg b := by split_ifs <;> positivity
-  sum_eq_one := by simp
+/-- `Π'` restricted to the relation partners of `y`, with a fixed fallback (06:61–63). -/
+def partnerLaw6 {N : ℕ} (piPrime : Law N) (related : Fin N → Fin N → Prop) (y fallback : Fin N) :
+    Law N :=
+  restrictOr6 piPrime (related y) fallback
 
-/-- Bayes tag posterior restricted to tags whose first law sees the opposite primary at density `c₁`.
-If the restriction is undefined off the supported parent history, use the fixed, ID-independent fallback. -/
-noncomputable def baseTagLaw6 {N : ℕ} (M : TagMix N) (E : Fin N → Fin N → Prop) (G : Colour)
-    (parent opposite : Fin N) (fallback : M.ι) : FinProb M.ι := by
-  classical
-  let η := tagPosterior6 M parent
-  let good : M.ι → Prop := fun i => c₁ ≤ colDeg E G (M.μ i) opposite
-  exact if h : 0 < η.pr good then η.cond good h else pointMass6 fallback
-
-/-- `Π'` conditioned on the relation-partner set, with a fixed fallback off the supported history. -/
-noncomputable def partnerLaw6 {N : ℕ} (piPrime : Law N)
-    (related : Fin N → Fin N → Prop) (y fallback : Fin N) : Law N := by
-  classical
-  let partners := Finset.univ.filter (related y)
-  let mass := ∑ z ∈ partners, piPrime.w z
-  exact if h : 0 < mass then piPrime.restrict partners h else Law.dirac fallback
-
-/-- A zero-safe likelihood ratio; posterior ratios are only used on their reference support. -/
-noncomputable def safeRatio6 (a b : ℝ) : ℝ := if b = 0 then 0 else a / b
-
-/-- Step 2's tagged posterior integrand for a type and its complete observation list. -/
-noncomputable def step2Weight6 {N : ℕ} {ι H : Type*} [Fintype ι] [DecidableEq ι] [Fintype H]
-    (T₀ : FinProb ι) (good : Finset ι) (S : Finset H) (z : H → Fin N)
-    (withTag : ι → H → Law N) (withoutTag : H → Law N) (i : ι) : ℝ := by
-  classical
-  exact if i ∈ good then
-    T₀.w i * ∏ ℓ ∈ S,
-      safeRatio6 ((withTag i ℓ).w (z ℓ)) ((withoutTag ℓ).w (z ℓ))
-    else 0
-
-noncomputable def step2Mass6 {N : ℕ} {ι H : Type*} [Fintype ι] [DecidableEq ι] [Fintype H]
-    (T₀ : FinProb ι) (good : Finset ι) (S : Finset H) (z : H → Fin N)
-    (withTag : ι → H → Law N) (withoutTag : H → Law N) : ℝ :=
-  ∑ i, step2Weight6 T₀ good S z withTag withoutTag i
-
-/-- The normalized Step 2 law `T_β`; the fallback applies only when the gated normalizer is zero. -/
-noncomputable def step2TagLaw6 {N : ℕ} {ι H : Type*} [Fintype ι] [DecidableEq ι] [Fintype H]
-    (T₀ : FinProb ι) (good : Finset ι) (S : Finset H) (z : H → Fin N)
-    (withTag : ι → H → Law N) (withoutTag : H → Law N) (fallback : ι) : FinProb ι := by
-  classical
-  let weight := step2Weight6 T₀ good S z withTag withoutTag
-  let mass := ∑ i, weight i
-  by_cases hm : 0 < mass
-  · refine ⟨fun i => weight i / mass, ?_, ?_⟩
-    · intro i
-      have hweight : 0 ≤ weight i := by
-        dsimp [weight, step2Weight6]
-        split_ifs with hi
-        · apply mul_nonneg (T₀.nonneg i)
-          apply Finset.prod_nonneg
-          intro ℓ hℓ
-          dsimp [safeRatio6]
-          split_ifs
-          · positivity
-          · exact div_nonneg ((withTag i ℓ).nonneg (z ℓ))
-              ((withoutTag ℓ).nonneg (z ℓ))
-        · exact le_rfl
-      exact div_nonneg hweight hm.le
-    · calc
-        ∑ i, weight i / mass = (∑ i, weight i) / mass := by rw [Finset.sum_div]
-        _ = 1 := by dsimp [mass]; exact div_self (ne_of_gt hm)
-  · exact pointMass6 fallback
-
-/-- Observation keys of a low role: its coarse neighborhood at the same sign, and the flippable fine signs. -/
-noncomputable def lowObservations6 {W : Type*} [Fintype W] [DecidableEq W] {m : ℕ}
-    (binAdjacent : W → W → Prop) (h : CoarseKey6 W) (t : CubeVertex m)
-    (F : Finset (Fin m)) : Finset (HiddenKey6 W m) := by
-  classical
-  let sameSign := (keyNeighborhood6 binAdjacent h).product {t}
-  let flipped := F.biUnion fun a => {(h, Function.update t a (!t a))}
-  exact sameSign ∪ flipped
-
-noncomputable def highObservations6 {W : Type*} {m : ℕ}
-    (h : CoarseKey6 W) (t : CubeVertex m) (j J : ℕ) : Finset (HiddenKey6 W m) := by
-  classical
-  exact if j = J + 1 then {(h, t)} else ∅
-
-/-- Full low/high type constructor used for even-role tuple sampling. -/
-noncomputable def makeType6 {W : Type*} [Fintype W] [DecidableEq W] {m : ℕ}
-    (binAdjacent : W → W → Prop) (h : CoarseKey6 W) (t : CubeVertex m)
-    (F : Finset (Fin m)) (j J : ℕ) : Type6 W m :=
-  if _hlow : j ≤ J then
-    ⟨h, t, .low, j, lowObservations6 binAdjacent h t F⟩
-  else
-    ⟨h, t, .high, j, highObservations6 h t j J⟩
-
-/-! ### L6.1-Defs: the named variables, posterior slots, and tuple observations -/
-
-/-- Posterior slots used in the definition of a hidden scalar. -/
-structure HiddenPosteriorSlots6 {W : Type*} {m N : ℕ} {ι : Type*}
-    (base : BaseHistory6 W N ι) (ℓ : HiddenKey6 W m) where
-  full : Law N
-  withoutTag : CoarseKey6 W → Law N
-  withReplacement : CoarseKey6 W → ι → Law N
-
-/-- The full type data used by the Step 2 tag posterior. -/
-structure TagPosteriorSlots6 {W : Type*} {m N : ℕ} {ι : Type*}
-    [Fintype ι] [DecidableEq ι]
-    (base : BaseHistory6 W N ι) (β : Type6 W m) where
-  goodTags : Finset ι
-  fullMass : ℝ
-  deletedMass : HiddenKey6 W m → ℝ
-  posterior : FinProb ι
-  deletedPosterior : HiddenKey6 W m → FinProb ι
-
-noncomputable def step1GoodTags6 {N : ℕ} {ι H : Type*} [Fintype ι] [DecidableEq ι]
-    (n : ℕ) (d₁ : ℝ) (S : Finset H) (fullWithoutTag : H → Law N)
-    (withReplacement : ι → H → Law N) : Finset ι := by
-  classical
-  exact Finset.univ.filter fun i => ∀ ℓ ∈ S, ∀ x,
-    (N : ℝ) * (withReplacement i ℓ).w x ≤ (n : ℝ) ^ d₁ ∧
-      (withReplacement i ℓ).w x ≤ (n : ℝ) ^ d₁ * (fullWithoutTag ℓ).w x
-
-/-- The realized hidden columns determine the named primary and its required hit list. -/
-noncomputable def requiredHits6 {W : Type*} {m N : ℕ} {ι : Type*}
-    (history : HiddenHistory6 W m N ι) (β : Type6 W m) : Finset (Fin N) := by
-  classical
-  let p : Parents6 W N := ⟨history.1.1.1, history.1.1.2⟩
-  let primary : Finset (Fin N) := {primary6 p β.key}
-  let hidden : Finset (Fin N) := β.observations.image history.2
-  let second : Finset (Fin N) :=
-    if β.mode = .high then {otherPrimary6 p β.key} else ∅
-  exact primary ∪ hidden ∪ second
-
-/--
-L6.1-Defs.  The parent and tag kernels are fixed by Bayes restriction, the
-hidden scalar is the named parent posterior, Step 2 is the normalized gated
-likelihood product, and each tuple is a fresh tag followed by iid labels
-conditioned to hit exactly its required named columns.  Undefined
-conditionals use the fixed fallback tag/retained label, independent of ID
-and sign; `raw` preserves the paper's four-stage order.
--/
-structure Definitions6 (n : ℕ) (W : Type*) (m N k : ℕ) (M : TagMix N)
-    (E : Fin N → Fin N → Prop) (G : Colour) (Center Ty : Type*)
-    [Fintype W] [DecidableEq W] [DecidableEq M.ι] [Fintype Center] [DecidableEq Center]
-    [Fintype Ty] [DecidableEq Ty] where
-  kernels : RawKernels6 W m N k M.ι Center Ty
-  π' : Law N
-  parentRelation : Fin N → Fin N → Prop
-  S₀ : Finset (Fin N)
-  S₀_mass_pos : 0 < ∑ y ∈ S₀, π'.w y
-  initial_exact : kernels.initial = π'.restrict S₀ S₀_mass_pos
-  candidate_exact : ∀ v₀ w,
-    kernels.candidate v₀ w = partnerLaw6 π' parentRelation v₀ kernels.fallback.label
-  baseTag_exact : ∀ p h,
-    kernels.baseTag p h = baseTagLaw6 M E G
-      (Parents6.value ⟨p.1, p.2⟩ (primaryName6 h))
-      (Parents6.value ⟨p.1, p.2⟩ (otherPrimaryName6 h)) kernels.fallback.tag
-  d₁ : ℝ
-  hiddenSlots : ∀ (b : BaseHistory6 W N M.ι) (ℓ : HiddenKey6 W m),
-    HiddenPosteriorSlots6 b ℓ
-  hidden_exact : ∀ b ℓ, kernels.hidden b ℓ = (hiddenSlots b ℓ).full
-  step2Good : BaseHistory6 W N M.ι → Type6 W m → Finset M.ι
-  step2Slots : ∀ (h : HiddenHistory6 W m N M.ι) (β : Type6 W m),
-    TagPosteriorSlots6 h.1 β
-  step2_good_exact : ∀ (h : HiddenHistory6 W m N M.ι) (β : Type6 W m),
-    step2Good h.1 β = step1GoodTags6 n d₁ β.observations
-    (fun ℓ => (hiddenSlots h.1 ℓ).withoutTag β.key)
-    (fun i ℓ => (hiddenSlots h.1 ℓ).withReplacement β.key i)
-  step2_full_mass_exact : ∀ (h : HiddenHistory6 W m N M.ι) (β : Type6 W m),
-    (step2Slots h β).fullMass = step2Mass6
-      (kernels.baseTag h.1.1 β.key) (step2Good h.1 β) β.observations h.2
-      (fun i ℓ => (hiddenSlots h.1 ℓ).withReplacement β.key i)
-      (fun ℓ => (hiddenSlots h.1 ℓ).withoutTag β.key)
-  step2_deleted_mass_exact : ∀ (h : HiddenHistory6 W m N M.ι) (β : Type6 W m) ℓ,
-    (step2Slots h β).deletedMass ℓ = step2Mass6
-      (kernels.baseTag h.1.1 β.key) (step2Good h.1 β) (β.observations.erase ℓ) h.2
-      (fun i ℓ' => (hiddenSlots h.1 ℓ').withReplacement β.key i)
-      (fun ℓ' => (hiddenSlots h.1 ℓ').withoutTag β.key)
-  step2_posterior_exact : ∀ (h : HiddenHistory6 W m N M.ι) (β : Type6 W m),
-    (step2Slots h β).posterior = step2TagLaw6
-      (kernels.baseTag h.1.1 β.key) (step2Good h.1 β) β.observations h.2
-      (fun i ℓ => (hiddenSlots h.1 ℓ).withReplacement β.key i)
-      (fun ℓ => (hiddenSlots h.1 ℓ).withoutTag β.key) kernels.fallback.tag
-  step2_deleted_posterior_exact : ∀ (h : HiddenHistory6 W m N M.ι) (β : Type6 W m) ℓ,
-    (step2Slots h β).deletedPosterior ℓ = step2TagLaw6
-      (kernels.baseTag h.1.1 β.key) (step2Good h.1 β) (β.observations.erase ℓ) h.2
-      (fun i ℓ' => (hiddenSlots h.1 ℓ').withReplacement β.key i)
-      (fun ℓ' => (hiddenSlots h.1 ℓ').withoutTag β.key) kernels.fallback.tag
-  typeOf : Ty → Type6 W m
-  tupleTag_exact : ∀ (h : HiddenHistory6 W m N M.ι) (c : Center × Ty),
-    kernels.tupleTag h c = (step2Slots h (typeOf c.2)).posterior
-  tupleRequiredHits_exact : ∀ (h : HiddenHistory6 W m N M.ι) (c : Center × Ty) i,
-    kernels.tupleRequiredHits h c i = requiredHits6 h (typeOf c.2)
-
-theorem fallback6_is_id_independent {ι Id : Type*} {k N : ℕ} (f : Fallback6 ι k N)
-    (_c _c' : Id) : f.tuple = f.tuple := rfl
-
-theorem fallback6_is_sign_independent {ι Sign : Type*} {k N : ℕ} (f : Fallback6 ι k N)
-    (_t _t' : Sign) : f.tuple = f.tuple := rfl
+end
 
 end S06
 end HypercubeRamsey

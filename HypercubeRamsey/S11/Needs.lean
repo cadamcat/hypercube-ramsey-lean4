@@ -1,4 +1,5 @@
-import HypercubeRamsey.Interface
+import HypercubeRamsey.Framework.PartC
+import HypercubeRamsey.Assembly
 import HypercubeRamsey.S11.Needs_p_s11_a
 
 /-!

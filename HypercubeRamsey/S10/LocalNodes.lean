@@ -392,10 +392,23 @@ theorem p10_1h_product_likelihood_comparison
     {A B : Type*} [Fintype A] [Fintype B] {m : ℕ}
     (L Q : Fin m → A → B → ℝ) (s : Fin m → ℝ)
     (hQ : ∀ i a b, 0 ≤ Q i a b)
+    (hL : ∀ i a b, 0 ≤ L i a b)
     (hcompare : ∀ i a b, L i a b ≤ Real.exp (s i) * Q i a b) :
     ∀ a b, (∏ i : Fin m, L i a b) ≤
       Real.exp (∑ i : Fin m, s i) * ∏ i : Fin m, Q i a b := by
-  sorry
+  intro a b
+  calc
+    (∏ i : Fin m, L i a b) ≤
+        ∏ i : Fin m, (Real.exp (s i) * Q i a b) := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact hL i a b
+      · intro i hi
+        exact hcompare i a b
+    _ = (∏ i : Fin m, Real.exp (s i)) * ∏ i : Fin m, Q i a b :=
+      Finset.prod_mul_distrib
+    _ = Real.exp (∑ i : Fin m, s i) * ∏ i : Fin m, Q i a b := by
+      rw [← Real.exp_sum]
 
 /-- P10.1i (10:224–262): predictive gated posterior bound, including the small-data
 exception, posterior domination and the exact integration identity. -/

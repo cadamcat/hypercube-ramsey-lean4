@@ -5,6 +5,7 @@ import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S18.PaletteRows
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_row
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -391,7 +392,20 @@ theorem D18_L_palette_row (hκ : κ.Admissible) (hThresholds : LateThresholds κ
   refine ⟨Krow, hKrow, ?_⟩
   filter_upwards [hRows] with k hRows
   intro PT hPT X hMass hLarge
-  sorry
+  let physical := Classical.choice X.l16.physical
+  let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+  have hQuant : ctx.L16QuantitativeValidity K17 := by
+    sorry
+  apply Lane_sol_d18l_row.palette_row_transport (rawData hκ X) physical
+    X.palette.hle X.palette.code X.palette.colours
+  · intro v
+    simp only [rawData, LateData.palette]
+    rw [X.palette.palettes_eq, X.palette.colour_eq]
+    simp only [Equiv.symm_apply_apply, s17Palette, ListGateContext.PaletteCode.palette]
+  · exact X.palette.chi_eq
+  · intro i
+    exact hRows PT ctx hQuant i (X.palette.hle i) (X.palette.code i)
+      (X.code_spec i) (X.palette.colours i) (X.retention i)
 
 /-- Full internal validity, adding cap and single-corner shape to the
 already proved normalization/internal-hit facts. TeX 18:43–49; 16:196–201,457–459.

@@ -451,6 +451,56 @@ lemma pairLaw_diagonal_zero_of_full {κ : CConsts} {T : Stage} {k : ℕ}
   have hpair := (hsupport input history hfull v hv).2 (x, x) hpos
   exact hpair.1 rfl
 
+noncomputable def pairQueriesOfCandidateFinset {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (A : InitialPairData D)
+    (candidates : Finset (Pos T k × Fin (T.S.n k)))
+    (hrow : ∀ q ∈ candidates, q.1 ∈ D.nonisolates A.rows)
+    (hearly : ∀ q ∈ candidates, q.2 ∈ D.externalEarly q.1)
+    (hbulk : ∀ q ∈ candidates, q.2 ∈ PT.tiling.bulkCoords (D.geom.patchOf q.1))
+    (hinj : Function.Injective (fun q : {q // q ∈ candidates} => flipPos q.1.1 q.1.2))
+    (hsep : ∀ q q' : {q // q ∈ candidates}, q ≠ q' →
+      D.geom.cellOf (flipPos q.1.1 q.1.2) = D.geom.cellOf (flipPos q'.1.1 q'.1.2) →
+      hammingDist (flipPos q.1.1 q.1.2) (flipPos q'.1.1 q'.1.2) >
+        50 * κ.ρ * (PT.tiling.P A.paletteIndex.1).h) : PairQueries D A := by
+  classical
+  let Q := {q // q ∈ candidates}
+  let e : Fin (Fintype.card Q) ≃ Q := (Fintype.equivFin Q).symm
+  refine {
+    count := Fintype.card Q
+    row := fun i => (e i).1.1
+    coordinate := fun i => (e i).1.2
+    row_mem := ?_
+    early := ?_
+    bulk := ?_
+    count_bound := ?_
+    distinct_roles := ?_
+    separated := ?_ }
+  · intro i
+    exact hrow (e i).1 (e i).2
+  · intro i
+    exact hearly (e i).1 (e i).2
+  · intro i
+    exact hbulk (e i).1 (e i).2
+  · let B : Finset (Pos T k × Fin (T.S.n k)) := D.nonisolates A.rows ×ˢ Finset.univ
+    have hQcard : Fintype.card Q = candidates.card := by simp [Q]
+    have hsub : candidates ⊆ B := by
+      intro q hq
+      exact Finset.mem_product.mpr ⟨hrow q hq, Finset.mem_univ _⟩
+    rw [hQcard]
+    calc
+      candidates.card ≤ B.card := Finset.card_le_card hsub
+      _ = (D.nonisolates A.rows).card * T.S.n k := by simp [B]
+  · intro i i' h
+    apply e.injective
+    apply hinj
+    exact h
+  · intro i i' hne hcell
+    apply hsep (e i) (e i')
+    · intro heq
+      exact hne (e.injective heq)
+    · exact hcell
+
 def rootedAdjacencyChain {V : Type*} [DecidableEq V] (G : SimpleGraph V)
     (A : Finset V) : List V → Prop
   | [] => True

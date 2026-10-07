@@ -217,9 +217,14 @@ noncomputable def historyLaw (σ : MaskStrategy M) (t : Slice n δ → M.I) :
 
 variable (t : Slice n δ → M.I)
 
-/-- Present IDs in the incident site balls of a group, at all levels (10:102). -/
+/-- Present IDs in the radius-`r` balls of a group's incident even sites, at all
+levels (10:102). Only gated sites are read, so on validity the number of
+candidates is controlled by the position counts in `groupValid`. -/
 noncomputable def candidates (h : History n N δ) (q : Site n δ) : Finset (ID n δ) :=
-  p10_1kGroupPositionCandidates δ q h.pos
+  (incidentSites δ q).biUnion fun s =>
+    (Finset.univ : Finset (Fin ((hp n δ).H + 1))).biUnion fun j =>
+      (p10_1kHeightEligibleIds (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j).image
+        (fun loc => (s.1, loc))
 
 /-- Hypothetical lists of the prescribed form: at most `T` own-slice IDs and
 exactly one ID from each adjacent slice (10:57). -/
@@ -294,16 +299,21 @@ theorem tiltWeight_nonneg (h : History n N δ) (q : Site n δ) (j : Fin (M.K (t 
   · exact le_rfl
 
 /-- The local validity event `𝒱_g` (10:117): position counts within relative
-error `.002`, eligibility sizes at least `.99λ`, selections at all incident sites,
-a passing realized list of the prescribed form (own fan at most `T`), and positive
-retained squared-tilt mass (`h_F > 0`, 10:142). -/
+error `.002`, eligibility sizes at least `.99λ` at the incident sites and legal
+eligibility (`HDParams.Legal`) on every site consulted by their height rules
+(`domBall … Rlong`), selections at all incident sites, a passing realized list of
+the prescribed form (own fan at most `T`), and positive retained squared-tilt mass
+(`h_F > 0`, 10:142). -/
 def groupValid (h : History n N δ) (q : Site n δ) : Prop :=
   (∀ s ∈ incidentSites δ q, ∀ j,
     (998 / 1000 : ℝ) * (hp n δ).lam ≤
         (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ∧
       (p10_1kHeightPositionCount (hp n δ) (fun loc => h.pos (s.1, loc)) s.2 j : ℝ) ≤
         (1002 / 1000 : ℝ) * (hp n δ).lam) ∧
-  (∀ s ∈ incidentSites δ q, ∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((elig M t h s.1 s.2 j).card : ℝ)) ∧
+  (∀ s ∈ incidentSites δ q,
+    (∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((elig M t h s.1 s.2 j).card : ℝ)) ∧
+    (hp n δ).Legal (fun loc => h.pos (s.1, loc)) (elig M t h s.1)
+      ((hp n δ).domBall (sliceSites δ s.1) s.2 (hp n δ).Rlong)) ∧
   (∀ s ∈ incidentSites δ q, (selected M t h s).isSome) ∧
   realizedList M t h q ∈ lists h q ∧
   ¬ listFails M t h q (realizedList M t h q) ∧

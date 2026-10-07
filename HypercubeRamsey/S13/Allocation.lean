@@ -26,6 +26,7 @@ of bounded averages. -/
 def UniformSubsampleStatement : Prop :=
   ∀ (N J m n : ℕ) (V : Finset (Fin N)) (f : Fin J → Fin N → ℝ),
     1 ≤ n → m ≤ V.card → n ^ 12 ≤ m →
+    J ≤ Nat.ceil (Real.exp (2 * (n : ℝ))) * n ^ 4 →
     (∀ j y, 0 ≤ f j y ∧ f j y ≤ 1) →
     ∃ V' : Finset (Fin N), V' ⊆ V ∧ V'.card = m ∧
       ∀ j, |(∑ y ∈ V', f j y) / m - (∑ y ∈ V, f j y) / V.card| ≤
@@ -35,29 +36,41 @@ def UniformSubsampleStatement : Prop :=
 finitely many bounded tests. -/
 def LawSubsampleStatement : Prop :=
   ∀ (N J n : ℕ) (π : Law N) (t : ℝ) (f : Fin J → Fin N → ℝ),
-    0 < t → (∀ y, t * π.w y ≤ 1) →
+    1 ≤ n → (n : ℝ) ^ 12 ≤ t → (∀ y, t * π.w y ≤ 1) →
+    J ≤ Nat.ceil (Real.exp (2 * (n : ℝ))) * n ^ 4 →
     (∀ j y, 0 ≤ f j y ∧ f j y ≤ 1) →
     ∃ V : Finset (Fin N), V.Nonempty ∧
+      (∀ y ∈ V, 0 < π.w y) ∧
       (V.card : ℝ) ≥ t / 2 ∧
       ∀ j, |(∑ y ∈ V, f j y) / V.card - π.expect (f j)| ≤ (n : ℝ) ^ (-2 : ℝ)
 
-/-- L13.0 (sections/13, lines 147–148, 244–249): the random-subset guarantees used in Sections 13.3 and 13.4. -/
-theorem random_subset_lemma : UniformSubsampleStatement ∧ LawSubsampleStatement := by
+/-- L13.0a (sections/13, lines 147–148): exact-size sampling with at most exponentially many tests. -/
+theorem uniform_subsample : UniformSubsampleStatement := by
   sorry
+
+/-- L13.0b (sections/13, lines 244–249): Bernoulli sampling from the positive support of a capped law. -/
+theorem law_subsample : LawSubsampleStatement := by
+  sorry
+
+/-- L13.0: assemble the two sampling contracts. -/
+theorem random_subset_lemma : UniformSubsampleStatement ∧ LawSubsampleStatement :=
+  ⟨uniform_subsample, law_subsample⟩
 
 /-- L13.3a (sections/13, lines 141–147): direct bias extraction from a witness and absence at twice its budget. -/
 theorem direct_patch_from_bias (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hSampling : UniformSubsampleStatement) :
-    ∀ (k : ℕ) (RX RY : Finset (Fin (T.S.N k))) (g : ℕ),
+    (hSampling : UniformSubsampleStatement)
+    (hBounds : ResidualScaleBoundFacts κ T) :
+    ∀ᶠ k in atTop, ∀ (RX RY : Finset (Fin (T.S.N k))) (g : ℕ),
       RX ⊆ T.X k → RY ⊆ T.Y k →
       (κ.M1 * κ.Q0 ≤ (g : ℝ)) → BiasWitness κ T k RX RY g →
       ¬ BiasWitness κ T k RX RY (2 * g) → DirectPatchData κ T k RX RY g := by
   sorry
 
-/-- P13.3b (sections/13, lines 148, 151–155): common cluster bins with a diagonal codegree margin. -/
+/-- P13.3b (sections/13, lines 95–99, 148): common bins of the prescribed size,
+with a diagonal codegree margin. -/
 def ClusterPatchData (κ : CConsts) (T : Stage) (k : ℕ)
-    (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool) : Prop :=
-  ∃ (X Y : Finset (Fin (T.S.N k))) (d m : ℕ)
+    (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool) (d : ℕ) : Prop :=
+  ∃ (X Y : Finset (Fin (T.S.N k))) (m : ℕ)
     (B : Fin m → Finset (Fin (T.S.N k))),
     X.Nonempty ∧ Y.Nonempty ∧ 0 < d ∧ X ⊆ (if o then RY else RX) ∧
     Y ⊆ (if o then RX else RY) ∧ X.card = Y.card ∧
@@ -71,14 +84,16 @@ def ClusterPatchData (κ : CConsts) (T : Stage) (k : ℕ)
 
 /-- P13.3b (sections/13, lines 148, 151–155): a cluster witness yields equal sides partitioned into bins. -/
 theorem cluster_patch_from_witness (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hInit : InitDisc T κ.η0) (hSampling : LawSubsampleStatement)
+    (hInit : InitDisc T κ.η0) (hSampling : UniformSubsampleStatement)
     (hClean : ∀ᶠ k in atTop, ∀ RX RY : Finset (Fin (T.S.N k)),
       RX ⊆ T.X k → RY ⊆ T.Y k → ∀ q o, IsDyadic q →
-        CluScaleWitness κ T k RX RY q o → CleanClusterBins κ T k RX RY q o) :
-    ∀ (k : ℕ) (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool),
+        CluScaleWitness κ T k RX RY q o → CleanClusterBins κ T k RX RY q o)
+    (hBounds : ResidualScaleBoundFacts κ T) :
+    ∀ᶠ k in atTop, ∀ (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool),
       RX ⊆ T.X k → RY ⊆ T.Y k →
-      κ.Q0 ≤ (q : ℝ) → CluScaleWitness κ T k RX RY q o →
-      ClusterPatchData κ T k RX RY q o := by
+      IsDyadic q → κ.Q0 ≤ (q : ℝ) → CluScaleWitness κ T k RX RY q o →
+      ∀ d : ℕ, 0 < d → (d : ℝ) ≤ Real.exp ((q : ℝ) / 2) →
+        ClusterPatchData κ T k RX RY q o d := by
   sorry
 
 /-- P13.3c (sections/13, line 140): truncate two large residual sides to a common size. -/
@@ -124,7 +139,6 @@ structure ExtractionData {κ : CConsts} {T : Stage} {k : ℕ}
   bins_card : ∀ i, ∀ B ∈ (𝒯.P i).bins.parts, B.card = (𝒯.P i).d
   patch_X_disjoint : ∀ i j, i ≠ j → Disjoint (𝒯.P i).X (𝒯.P j).X
   patch_Y_disjoint : ∀ i j, i ≠ j → Disjoint (𝒯.P i).Y (𝒯.P j).Y
-  S_lower : (1 / 400 : ℝ) * T.S.N k ≤ 𝒯.S
   S_upper : 𝒯.S ≤ T.S.N k
   measured_scales : ∀ i, (𝒯.P i).g = gScale κ T k (𝒯.P i).resX (𝒯.P i).resY ∧
     (𝒯.P i).q = qScale κ T k (𝒯.P i).resX (𝒯.P i).resY
@@ -216,6 +230,32 @@ structure RoundedFamily (κ : CConsts) (T : Stage) (k : ℕ) where
     (2 : ℝ) ^ (-((tiling.P i).ℓ : ℤ)) < 2 * (tiling.P i).M / tiling.S
   dyadic_sum : ∑ i, (2 : ℝ) ^ (-((tiling.P i).ℓ : ℤ)) = 1
 
+/-- P13.3f (sections/13, lines 170–182): rounding retains an injective
+subfamily, keeps the pre-restriction mass and reserves, and changes only
+prefix lengths. `HEq` transports patches across the equal orientations. -/
+structure RoundingProvenance {κ : CConsts} {T : Stage} {k : ℕ}
+    (f : PassFamily κ T k) (R : RoundedFamily κ T k) where
+  orientation : R.orientation = f.orientation
+  mode : R.tiling.mode = f.tiling.mode
+  colour : R.tiling.c = f.tiling.c
+  mass : R.tiling.S = f.tiling.S
+  reserveX : HEq R.tiling.reserveX f.tiling.reserveX
+  reserveY : HEq R.tiling.reserveY f.tiling.reserveY
+  index : Fin R.tiling.m → Fin f.tiling.m
+  injective : Function.Injective index
+  patches : ∀ i, HEq
+    {R.tiling.P i with ℓ := (f.tiling.P (index i)).ℓ} (f.tiling.P (index i))
+  clique_scales : ∀ i, R.tiling.Q i = f.tiling.Q (index i)
+
+/-- P13.3h (sections/13, lines 193, 210): all prefixes leave a free coordinate,
+and all internal tails lie beyond every prefix. -/
+structure PrefixDimensionFit {κ : CConsts} {T : Stage} {k : ℕ}
+    (R : RoundedFamily κ T k) : Prop where
+  free : ∀ i, (R.tiling.P i).ℓ < (T.orient R.orientation).S.n k
+  fit : (Finset.univ.sup fun i : Fin R.tiling.m => (R.tiling.P i).ℓ) +
+    (Finset.univ.sup fun i : Fin R.tiling.m => (R.tiling.P i).h) ≤
+      (T.orient R.orientation).S.n k
+
 /-- P13.3g (sections/13, lines 170–182): complete prefix-code property for assigned words. -/
 def PrefixCodeComplete {κ : CConsts} {T : Stage} {k : ℕ}
     (R : RoundedFamily κ T k)
@@ -261,49 +301,13 @@ structure PrefixGeometry {κ : CConsts} {T : Stage} {k : ℕ}
   coordinate_partition : ∀ i,
     Tiling.crossingCoords R.tiling i ∪
       (Tiling.bulkCoords R.tiling i ∪ Tiling.Icoord R.tiling i) = Finset.univ
-
-/-- A private projection bundle keeps every P13.3h component on the export
-proof frontier. -/
-private structure PrefixGeometryProjections {κ : CConsts} {T : Stage} {k : ℕ}
-    (R : RoundedFamily κ T k)
-    (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k)) : Prop where
-  leaf_card : ∀ i, Fintype.card {v : CubePos ((T.orient R.orientation).S.n k) //
-      v ∈ prefixLeaf (R.tiling.P i).ℓ (w i)} =
-        2 ^ ((T.orient R.orientation).S.n k - (R.tiling.P i).ℓ)
-  parity_leaf_card : ∀ i,
-    Fintype.card {v : CubePos ((T.orient R.orientation).S.n k) //
-      v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) ∧ IsEvenRole v} =
-        2 ^ ((T.orient R.orientation).S.n k - (R.tiling.P i).ℓ - 1)
-  odd_leaf_card : ∀ i,
-    Fintype.card {v : CubePos ((T.orient R.orientation).S.n k) //
-      v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) ∧ ¬ IsEvenRole v} =
-        2 ^ ((T.orient R.orientation).S.n k - (R.tiling.P i).ℓ - 1)
-  role_count_bounds : ∀ i,
-    (2 : ℝ) ^ ((T.orient R.orientation).S.n k - 1) *
-        (R.tiling.P i).M / (T.S.N k : ℝ) ≤
-          (Fintype.card {v : CubePos ((T.orient R.orientation).S.n k) //
-            v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) ∧ IsEvenRole v} : ℝ) ∧
-      (Fintype.card {v : CubePos ((T.orient R.orientation).S.n k) //
-          v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) ∧ IsEvenRole v} : ℝ) ≤
-        (2 : ℝ) ^ ((T.orient R.orientation).S.n k) *
-          (R.tiling.P i).M / ((1 / 400 : ℝ) * T.S.N k)
-  crossing_flips : ∀ i (v : CubePos ((T.orient R.orientation).S.n k)),
-    v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) →
-    ∃ f : {j : Fin ((T.orient R.orientation).S.n k) //
-      j.val < (R.tiling.P i).ℓ} → Fin R.tiling.m,
-      (∀ j, f j ≠ i ∧
-        Function.update v j.1 (!v j.1) ∈
-          prefixLeaf (R.tiling.P (f j)).ℓ (w (f j))) ∧ Function.Injective f
-  coordinate_partition : ∀ i,
-    Tiling.crossingCoords R.tiling i ∪
-      (Tiling.bulkCoords R.tiling i ∪ Tiling.Icoord R.tiling i) = Finset.univ
-
-private theorem project_prefix_geometry {κ : CConsts} {T : Stage} {k : ℕ}
-    (R : RoundedFamily κ T k)
-    (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k))
-    (h : PrefixGeometry R w) : PrefixGeometryProjections R w :=
-  ⟨h.leaf_card, h.parity_leaf_card, h.odd_leaf_card, h.role_count_bounds,
-    h.crossing_flips, h.coordinate_partition⟩
+  coordinate_disjoint : ∀ i,
+    Disjoint (Tiling.crossingCoords R.tiling i) (Tiling.bulkCoords R.tiling i) ∧
+    Disjoint (Tiling.crossingCoords R.tiling i) (Tiling.Icoord R.tiling i) ∧
+    Disjoint (Tiling.bulkCoords R.tiling i) (Tiling.Icoord R.tiling i)
+  internal_card : ∀ i, (Tiling.Icoord R.tiling i).card = (R.tiling.P i).h
+  internal_nested : ∀ i j, (R.tiling.P i).h ≤ (R.tiling.P j).h →
+    Tiling.Icoord R.tiling i ⊆ Tiling.Icoord R.tiling j
 
 /-- Attach the Kraft words to the extracted family. -/
 private def withPrefixWords {κ : CConsts} {T : Stage} {k : ℕ}
@@ -319,6 +323,23 @@ private def withPrefixWords {κ : CConsts} {T : Stage} {k : ℕ}
   dyadic_mass_lower := R.dyadic_mass_lower
   dyadic_mass_upper := R.dyadic_mass_upper
   dyadic_sum := R.dyadic_sum
+
+/-- Attaching words preserves the retained subfamily and all extraction data. -/
+private def roundingProvenance_withWords {κ : CConsts} {T : Stage} {k : ℕ}
+    {f : PassFamily κ T k} {R : RoundedFamily κ T k}
+    (h : RoundingProvenance f R)
+    (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k)) :
+    RoundingProvenance f (withPrefixWords R w) where
+  orientation := h.orientation
+  mode := h.mode
+  colour := h.colour
+  mass := h.mass
+  reserveX := h.reserveX
+  reserveY := h.reserveY
+  index := h.index
+  injective := h.injective
+  patches := h.patches
+  clique_scales := h.clique_scales
 
 /-- P13.3i (sections/13, lines 151–155, 205–215): scale and gain inequalities required by later sections. -/
 def AllocationBounds {κ : CConsts} {T : Stage} {k : ℕ}
@@ -348,15 +369,15 @@ theorem extraction_passes (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeepι : DeepDisc T κ.xι κ.αι (κ.ι / 2))
     (hClu : ClusterAbsenceInput κ T)
     (hSamplingU : UniformSubsampleStatement)
-    (hSamplingL : LawSubsampleStatement)
-    (hBiasNode : ∀ (k : ℕ) (RX RY : Finset (Fin (T.S.N k))) (g : ℕ),
+    (hBiasNode : ∀ᶠ k in atTop, ∀ (RX RY : Finset (Fin (T.S.N k))) (g : ℕ),
       RX ⊆ T.X k → RY ⊆ T.Y k →
       κ.M1 * κ.Q0 ≤ (g : ℝ) → BiasWitness κ T k RX RY g →
       ¬ BiasWitness κ T k RX RY (2 * g) → DirectPatchData κ T k RX RY g)
-    (hClusterNode : ∀ (k : ℕ) (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool),
+    (hClusterNode : ∀ᶠ k in atTop, ∀ (RX RY : Finset (Fin (T.S.N k))) (q : ℕ) (o : Bool),
       RX ⊆ T.X k → RY ⊆ T.Y k →
-      κ.Q0 ≤ (q : ℝ) → CluScaleWitness κ T k RX RY q o →
-      ClusterPatchData κ T k RX RY q o)
+      IsDyadic q → κ.Q0 ≤ (q : ℝ) → CluScaleWitness κ T k RX RY q o →
+      ∀ d : ℕ, 0 < d → (d : ℝ) ≤ Real.exp ((q : ℝ) / 2) →
+        ClusterPatchData κ T k RX RY q o d)
     (hBoundedNode : ∀ k RX RY,
       (T.S.N k : ℝ) / 2 ≤ RX.card → (T.S.N k : ℝ) / 2 ≤ RY.card →
       ∃ X Y : Finset (Fin (T.S.N k)), X.Nonempty ∧ Y.Nonempty ∧
@@ -389,14 +410,13 @@ theorem dyadic_rounding (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : �
     (hExtracted : ExtractionData f.tiling)
     (hSelected : (f.tiling.mode = .bounded ∧ (1 / 400 : ℝ) * T.S.N k ≤ f.tiling.S) ∨
        (f.tiling.mode ≠ .bounded ∧ (1 / 200 : ℝ) * T.S.N k ≤ f.tiling.S)) :
-    ∃ R : RoundedFamily κ T k,
-      R.orientation = f.orientation ∧ R.tiling.mode = f.tiling.mode ∧
-      R.tiling.c = f.tiling.c := by
+    ∃ R : RoundedFamily κ T k, Nonempty (RoundingProvenance f R) := by
   sorry
 
 /-- P13.3g (sections/13, lines 170–182): Kraft's equality gives a complete prefix code. -/
 theorem kraft_prefix_code (κ : CConsts) (T : Stage) (k : ℕ)
-    (R : RoundedFamily κ T k) :
+    (R : RoundedFamily κ T k)
+    (hLength : ∀ i, (R.tiling.P i).ℓ ≤ (T.orient R.orientation).S.n k) :
     ∃ w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k),
       PrefixCodeComplete R w := by
   sorry
@@ -405,14 +425,23 @@ theorem kraft_prefix_code (κ : CConsts) (T : Stage) (k : ℕ)
 theorem allocation_geometry (κ : CConsts) (T : Stage) (k : ℕ)
     (R : RoundedFamily κ T k)
     (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k))
-    (hCode : PrefixCodeComplete R w) : PrefixGeometry R w := by
+    (hCode : PrefixCodeComplete R w)
+    (hFit : PrefixDimensionFit R) : PrefixGeometry R w := by
   sorry
 
 /-- P13.3i (sections/13, lines 151–155, 205–215): fixed thresholds fit prefixes and internal dimensions
 inside the assigned gain budget. -/
-theorem scale_bookkeeping (κ : CConsts) (hκ : κ.Admissible) (T : Stage) (k : ℕ)
-    (R : RoundedFamily κ T k) :
-    AllocationBounds R.tiling ∧ ScaleRegimeFacts R.tiling := by
+theorem scale_bookkeeping (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hBounds : ResidualScaleBoundFacts κ T) :
+    ∀ᶠ k in atTop, ∀ R : RoundedFamily κ T k,
+      AllocationBounds R.tiling ∧ ScaleRegimeFacts R.tiling := by
+  sorry
+
+/-- P13.3i→h (sections/13, line 210): uniformly small dimensions fit, with a
+free parity coordinate, at all sufficiently large indices. -/
+theorem allocation_dimension_fit (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ R : RoundedFamily κ T k,
+      AllocationBounds R.tiling → PrefixDimensionFit R := by
   sorry
 
 private theorem tiling_valid_of_parts {κ : CConsts} {T : Stage} {k : ℕ}
@@ -420,8 +449,6 @@ private theorem tiling_valid_of_parts {κ : CConsts} {T : Stage} {k : ℕ}
     (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k))
     (hPrefix : PrefixCodeComplete R w)
     (hGeometry : PrefixGeometry R w)
-    (_hGeometryProjections : PrefixGeometryProjections R w)
-    (_hScaleRegime : ScaleRegimeFacts R.tiling)
     (hAlloc : AllocationBounds R.tiling) :
     Tiling.Valid (κ := κ) (withPrefixWords R w).tiling := by
   let Rw := withPrefixWords R w
@@ -465,35 +492,56 @@ private theorem tiling_valid_of_parts {κ : CConsts} {T : Stage} {k : ℕ}
   change ∃! i, v ∈ prefixLeaf (R.tiling.P i).ℓ (w i)
   exact hPrefix v
 
-/-- P13.3 (sections/13, lines 52–216): extraction and allocation in one selected mode, orientation, and colour. -/
+/-- P13.3 (sections/13, lines 52–216): allocation with the retained-subfamily
+provenance, all role/crossing/internal-coordinate facts, and scale regimes. -/
+theorem extraction_allocation_with_facts (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hInit : InitDisc T κ.η0)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04)
+    (hDeepι : DeepDisc T κ.xι κ.αι (κ.ι / 2))
+    (hClu : ClusterAbsenceInput κ T) :
+    ∀ᶠ k in atTop, ∃ R : RoundedFamily κ T k, ∃ f : PassFamily κ T k,
+      Nonempty (RoundingProvenance f R) ∧ Tiling.Valid R.tiling ∧
+        PrefixGeometry R R.tiling.w ∧ ScaleRegimeFacts R.tiling := by
+  have hSample := random_subset_lemma
+  have hScaleSpec := d13_1_residual_scale_specification
+  have hScaleBounds := residual_scale_bounds κ hκ T hInit hDeepι hClu
+  have hDirect := direct_patch_from_bias κ hκ T hSample.1 hScaleBounds
+  have hClusterTrim := clean_cluster_scale_witness κ hκ T hInit
+  have hCluster := cluster_patch_from_witness κ hκ T hInit hSample.1 hClusterTrim hScaleBounds
+  have hBounded := bounded_patch κ T
+  have hPass := extraction_passes κ hκ T hInit hDeep hDeepι hClu
+    hSample.1 hDirect hCluster hBounded hScaleSpec hScaleBounds
+  have hBook := scale_bookkeeping κ hκ T hScaleBounds
+  have hFit := allocation_dimension_fit κ hκ T
+  filter_upwards [hPass, hBook, hFit] with k hPool hkBook hkFit
+  obtain ⟨pool⟩ := hPool
+  obtain ⟨f, hf, hselected⟩ := type_selection κ T k pool.families
+    pool.families_mass pool.type_tags_nodup pool.mass_or_bounded
+  have hFamilyExtraction := f.extracted
+  obtain ⟨R, ⟨hKeep⟩⟩ :=
+    dyadic_rounding κ hκ T k f hFamilyExtraction hselected
+  have hScaleFacts := hkBook R
+  have hDimensions := hkFit R hScaleFacts.1
+  obtain ⟨w, hCode⟩ := kraft_prefix_code κ T k R (fun i => (hDimensions.free i).le)
+  have hGeom := allocation_geometry κ T k R w hCode hDimensions
+  refine ⟨withPrefixWords R w, f, ⟨roundingProvenance_withWords hKeep w⟩, ?_, ?_, ?_⟩
+  · exact tiling_valid_of_parts R w hCode hGeom hScaleFacts.1
+  · exact ⟨hGeom.prefix_internal_length, hGeom.leaf_card, hGeom.parity_leaf_card,
+      hGeom.odd_leaf_card, hGeom.role_count_bounds, hGeom.crossing_flips,
+      hGeom.coordinate_partition, hGeom.coordinate_disjoint, hGeom.internal_card,
+      hGeom.internal_nested⟩
+  · exact hScaleFacts.2
+
+/-- P13.3: the original tiling export, projected from the full allocation assembly. -/
 theorem extraction_allocation (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hInit : InitDisc T κ.η0)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hDeepι : DeepDisc T κ.xι κ.αι (κ.ι / 2))
     (hClu : ClusterAbsenceInput κ T) :
     ∀ᶠ k in atTop, ∃ o : Bool, ∃ 𝒯 : Tiling κ (T.orient o) k, Tiling.Valid 𝒯 := by
-  have hSample := random_subset_lemma
-  have hDirect := direct_patch_from_bias κ hκ T hSample.1
-  have hClusterTrim := clean_cluster_scale_witness κ hκ T hInit
-  have hCluster := cluster_patch_from_witness κ hκ T hInit hSample.2 hClusterTrim
-  have hBounded := bounded_patch κ T
-  have hScaleSpec := d13_1_residual_scale_specification
-  have hScaleBounds := residual_scale_bounds κ hκ T hInit hDeepι hClu
-  have hPass := extraction_passes κ hκ T hInit hDeep hDeepι hClu
-    hSample.1 hSample.2 hDirect hCluster hBounded hScaleSpec hScaleBounds
-  filter_upwards [hPass] with k hPool
-  obtain ⟨pool⟩ := hPool
-  obtain ⟨f, hf, hselected⟩ := type_selection κ T k pool.families
-    pool.families_mass pool.type_tags_nodup pool.mass_or_bounded
-  have hFamilyExtraction := f.extracted
-  obtain ⟨R, hOrient, hMode, hColour⟩ :=
-    dyadic_rounding κ hκ T k f hFamilyExtraction hselected
-  obtain ⟨w, hCode⟩ := kraft_prefix_code κ T k R
-  have hGeom := allocation_geometry κ T k R w hCode
-  have hGeomProjections := project_prefix_geometry R w hGeom
-  have hScaleFacts := scale_bookkeeping κ hκ T k R
-  refine ⟨R.orientation, (withPrefixWords R w).tiling, ?_⟩
-  exact tiling_valid_of_parts R w hCode hGeom hGeomProjections
-    hScaleFacts.2 hScaleFacts.1
+  filter_upwards [extraction_allocation_with_facts κ hκ T hInit hDeep hDeepι hClu]
+    with k hk
+  obtain ⟨R, f, hKeep, hValid, hGeometry, hRegime⟩ := hk
+  exact ⟨R.orientation, R.tiling, hValid⟩
 
 end HypercubeRamsey.S13

@@ -206,6 +206,7 @@ def CleanClusterBins (κ : CConsts) (T : Stage) (k : ℕ)
       κ.θ < pairCorr (T.S.E k) o (Law.unifCore U hU) y y') →
     ∃ B' : Fin m → Finset (Fin (T.S.N k)),
       (∀ j, B' j ⊆ B j) ∧ Set.PairwiseDisjoint Set.univ B' ∧
+      (∀ j, B' j = ∅ ∨ ((B j).card : ℝ) / 2 ≤ (B' j).card) ∧
       (T.S.N k : ℝ) * Real.exp (-(b : ℝ) ^ κ.aC) / 4 ≤
       (Finset.univ.biUnion B').card ∧
       ∀ j y, y ∈ B' j →

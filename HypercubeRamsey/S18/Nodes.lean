@@ -1,4 +1,5 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_n4
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -194,8 +195,8 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
 
 /-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
 theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
-    {hPT : PT.Valid} (D : LateData hPT) : ReplayFacts D := by
-  sorry
+    {hPT : PT.Valid} (D : LateData hPT) : ReplayFacts D :=
+  Lane_q_s18_n4.replay_facts D
 
 /-- P18.3e, 18:752–788. Leaves of the actual bad requirements, exact
 slot/image/tape dependency, conditional pushforward and touching charges.

@@ -433,7 +433,7 @@ theorem filter_step (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
     _ ≤ massPlus + massMinus := hbadmass
     _ ≤ 2 * small := by linarith [hplus, hminus]
 
-/-- L8.1c(G3–G4) (08:90–105): filter the aggregates `μ̄_η = ∫ μ_i dη_g` (on (G1), `N max μ̄_η ≤ 4K e^{hn^β
+/-- L8.1c(G3–G4) (08:90–105): filter the aggregates `μ̄_η = ∫ μ_i dη_g` (on (G1), `N max μ̄_η ≤ 4K e^{hn^β+
 n^{τ/2}}`) and `μ̄_Λ` (`N max ≤ 4K`) successively by the coordinates of the independent cross tuples.  Given a cross
 tuple's latent tag its coordinates are independent with law `ν_i`; after at most `2hs` regular hits the filtered
 aggregate still has width below `n^η`, so by `FilterStep` a next hit fraction outside `1/2 ± 2n^{-η}` has
@@ -1176,7 +1176,7 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     let L : ℝ := ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)
     have hremoved (i : D.M.ι) :
         D.postW (Θ g) i * D.dMinus Θ g i ≤
-          D.tiltW Θ g i + D.postW (Θ g) i * D.cut
+          D.tiltW Θ g i + D.postW (Θ g) i * D.cut+
             D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ := by
       by_cases hopen : D.GateOpen Θ g i
       · simp [Ctx.tiltW, hopen]
@@ -1219,12 +1219,12 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
     have hsumRemoved :
         (∑ i, D.postW (Θ g) i * D.dMinus Θ g i) ≤ D.ZG Θ g + D.cut + L / D.Δ := by
       calc
-        _ ≤ ∑ i, (D.tiltW Θ g i + D.postW (Θ g) i * D.cut
+        _ ≤ ∑ i, (D.tiltW Θ g i + D.postW (Θ g) i * D.cut+
             D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i) / D.Δ) := by
           apply Finset.sum_le_sum
           intro i _
           exact hremoved i
-        _ = D.ZG Θ g + D.cut * (∑ i, D.postW (Θ g) i)
+        _ = D.ZG Θ g + D.cut * (∑ i, D.postW (Θ g) i)+
             (∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) / D.Δ := by
           simp_rw [Finset.sum_add_distrib, ← Finset.sum_mul, Finset.sum_div]
           simp [Ctx.ZG]
@@ -1708,8 +1708,8 @@ theorem gate_tail_of (a b c : ℝ) (ha : 0 < a) (hb : 0 < b) (hc : 0 < c) :
       · exact Or.inr (Or.inl ⟨hG1, hG34⟩)
     · exact Or.inl hG1
   have hprob : D.rawHidden.pr (fun Θ => ¬ D.BaseGates Θ g) ≤
-      D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)
-        D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)
+      D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)+
+        D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)+
         D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) := by
     calc
       _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g ∨
@@ -1717,27 +1717,27 @@ theorem gate_tail_of (a b c : ℝ) (ha : 0 < a) (hb : 0 < b) (hc : 0 < c) :
             (D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g)) := by
         apply HypercubeRamsey.FinProb.pr_mono
         exact hbad
-      _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)
+      _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)+
           D.rawHidden.pr (fun Θ => (D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g) ∨
             (D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g)) :=
         HypercubeRamsey.FinProb.pr_union _ _ _
-      _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)
-          (D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)
+      _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)+
+          (D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)+
             D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g)) := by
         have hbcu := HypercubeRamsey.FinProb.pr_union D.rawHidden
           (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)
           (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g)
         linarith
-      _ = (D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)
-          D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g))
+      _ = (D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)+
+          D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g))+
             D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) := by ring
   have htail : D.rawHidden.pr (fun Θ => ¬ D.BaseGates Θ g) ≤
       3 * Real.exp (-((D.n : ℝ) ^ d)) := by
     calc
-      _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)
-          D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)
+      _ ≤ D.rawHidden.pr (fun Θ => ¬ D.Gate1 Θ g)+
+          D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ ¬ D.Gate34 Θ g)+
           D.rawHidden.pr (fun Θ => D.Gate1 Θ g ∧ D.Gate34 Θ g ∧ ¬ D.Gate2 Θ g) := hprob
-      _ ≤ Real.exp (-((D.n : ℝ) ^ a)) + Real.exp (-((D.n : ℝ) ^ b))
+      _ ≤ Real.exp (-((D.n : ℝ) ^ a)) + Real.exp (-((D.n : ℝ) ^ b))+
           Real.exp (-((D.n : ℝ) ^ c)) := by
         linarith [h1 g, h2 g, h3 g]
       _ ≤ 3 * Real.exp (-((D.n : ℝ) ^ d)) := by
@@ -2593,7 +2593,7 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
       (TC η₀ D.n : ℝ) * (D.n : ℝ) ^ (tau8 η₀ / 2) ≤
           ((D.n : ℝ) ^ (tau8 η₀ / 8) + 1) * (D.n : ℝ) ^ (tau8 η₀ / 2) :=
         mul_le_mul_of_nonneg_right (le_of_lt hTCceil) (Real.rpow_nonneg hnPos.le _)
-      _ = (D.n : ℝ) ^ (tau8 η₀ / 8 + tau8 η₀ / 2)
+      _ = (D.n : ℝ) ^ (tau8 η₀ / 8 + tau8 η₀ / 2)+
           (D.n : ℝ) ^ (tau8 η₀ / 2) := by
         rw [add_mul, ← Real.rpow_add hnPos]
         ring
@@ -2618,9 +2618,9 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
     have hh2 : 0 ≤ ((h + 2 : ℕ) : ℝ) := Nat.cast_nonneg _
     nlinarith [mul_le_mul_of_nonneg_right hSupper (mul_nonneg (by norm_num : (0 : ℝ) ≤ 2) hh2)]
   have hOverhead :
-      (h : ℝ) * (D.n : ℝ) ^ β
-        (TC η₀ D.n : ℝ) * ((h : ℝ) * (D.n : ℝ) ^ β
-          (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
+      (h : ℝ) * (D.n : ℝ) ^ β+
+        (TC η₀ D.n : ℝ) * ((h : ℝ) * (D.n : ℝ) ^ β+
+          (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)+
         (2 : ℝ) * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ) ≤
       (19 : ℝ) * (h : ℝ) * (D.n : ℝ) ^ tau8 η₀ := by
     calc
@@ -2653,17 +2653,17 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
           (mul_le_mul_of_nonneg_left hSlow (Nat.cast_nonneg h)) hcoef
       _ = (1 / 20000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ) := by ring
   have hExpBudget :
-      (h : ℝ) * (D.n : ℝ) ^ β
-        (TC η₀ D.n : ℝ) * ((h : ℝ) * (D.n : ℝ) ^ β
-          (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
-        (2 : ℝ) * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)
+      (h : ℝ) * (D.n : ℝ) ^ β+
+        (TC η₀ D.n : ℝ) * ((h : ℝ) * (D.n : ℝ) ^ β+
+          (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)+
+        (2 : ℝ) * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)+
         (1 / 10000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ) ≤
       (15 / 100000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ) := by
     calc
-      _ ≤ 19 * (h : ℝ) * (D.n : ℝ) ^ tau8 η₀
+      _ ≤ 19 * (h : ℝ) * (D.n : ℝ) ^ tau8 η₀+
           (1 / 10000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ) :=
         by nlinarith only [hOverhead]
-      _ ≤ (1 / 20000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ)
+      _ ≤ (1 / 20000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ)+
           (1 / 10000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ) :=
         by nlinarith only [hBudget]
       _ = (15 / 100000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ) := by ring
@@ -2728,7 +2728,7 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
     have hbeta : 0 ≤ (D.n : ℝ) ^ β := Real.rpow_nonneg hnPos.le _
     have hhNonneg : 0 ≤ (h : ℝ) := Nat.cast_nonneg _
     linarith only [mul_nonneg hhNonneg hbeta, hpow]
-  let Cint : ℝ := Real.exp ((h : ℝ) * (D.n : ℝ) ^ β
+  let Cint : ℝ := Real.exp ((h : ℝ) * (D.n : ℝ) ^ β+
     (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
   let Ccross : ℝ := (2 : ℝ) ^ (h + 2)
   have hCintOne : 1 ≤ Cint := by
@@ -2839,7 +2839,7 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
           simp
     have hFcand : D.Fcand Θ g ξ o ≤
         Real.exp ((TC η₀ D.n : ℝ) *
-            ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
+            ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)+
           2 * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)) := by
       by_cases hCand : D.CandGate (Function.update Θ g ξ) g
       · have hDens := hDensity Θ g ξ hCand
@@ -2884,10 +2884,10 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
       · simp [Ctx.Fcand, hCand]
         exact le_of_lt (Real.exp_pos _)
     have hbasePost : (D.N : ℝ) ^ h * (D.basePost Θ g o).w ξ ≤
-        Real.exp ((h : ℝ) * (D.n : ℝ) ^ β
-          (TC η₀ D.n : ℝ) * ((h : ℝ) * (D.n : ℝ) ^ β
-            (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
-          2 * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)
+        Real.exp ((h : ℝ) * (D.n : ℝ) ^ β+
+          (TC η₀ D.n : ℝ) * ((h : ℝ) * (D.n : ℝ) ^ β+
+            (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)+
+          2 * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)+
           (1 / 10000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ)) := by
       rw [hbase]
       have hRbound := hRscale ξ
@@ -2917,14 +2917,14 @@ theorem post_cap (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η₀
               exact hsecond
         _ ≤ Real.exp ((h : ℝ) * (D.n : ℝ) ^ β) *
               Real.exp ((TC η₀ D.n : ℝ) *
-                ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
+                ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)+
                 2 * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)) * D.eps0⁻¹ :=
             mul_le_mul_of_nonneg_right
               (mul_le_mul_of_nonneg_left hFcand (Real.exp_nonneg _)) (by positivity)
-        _ = Real.exp ((h : ℝ) * (D.n : ℝ) ^ β
+        _ = Real.exp ((h : ℝ) * (D.n : ℝ) ^ β+
               (TC η₀ D.n : ℝ) *
-                ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)
-              2 * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)
+                ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2) + 1)+
+              2 * (sC η₀ D.n : ℝ) * ((h + 2 : ℕ) : ℝ)+
               (1 / 10000 : ℝ) * (h : ℝ) * (sC η₀ D.n : ℝ) * Real.log (D.n : ℝ)) := by
           rw [hEpsInv]
           rw [← Real.exp_add]

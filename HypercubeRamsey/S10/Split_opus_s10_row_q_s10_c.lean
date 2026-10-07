@@ -1,6 +1,7 @@
 import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.S03.Mixtures
 import HypercubeRamsey.S03.ScatteredMoments
+import HypercubeRamsey.Tools.CubeGeometry
 
 /-!
 # Lane q-s10-c helpers for the Section 10 tagged-to-typical step
@@ -161,6 +162,67 @@ theorem simultaneous_profiles_role_average
   have hfinal := le_of_mul_le_mul_left hmul hcardJ
   simpa [Q, P] using hfinal
 
+/-- Convert slice profile bounds into a bound on the average expected role
+value, for a fixed profile shared by any number of label families. -/
+theorem role_average_of_profiles
+    {J A U X : Type*} [Fintype J] [DecidableEq J] [Nonempty J]
+    [Fintype A] [DecidableEq A] [Nonempty A] [Fintype U] [Nonempty U] [Fintype X]
+    (roleSlice : U → J) (Z : X → U → (J → A) → ℝ)
+    (scale bound : ℝ) (hscale : scale = (Fintype.card J : ℝ) / Fintype.card U)
+    (q : J → A → ℝ) (hq0 : ∀ j a, 0 ≤ q j a) (hq1 : ∀ j, ∑ a, q j a = 1)
+    (hprofile : ∀ j x,
+      (FinProb.pi (fun j => ⟨q j, hq0 j, hq1 j⟩ : J → FinProb A)).expect
+        (fun σ => scale * ∑ u ∈ Finset.univ.filter (fun u : U => roleSlice u = j),
+          Z x u σ) ≤ bound) :
+    ∀ x, (Fintype.card U : ℝ)⁻¹ * ∑ u,
+      (FinProb.pi (fun j => ⟨q j, hq0 j, hq1 j⟩ : J → FinProb A)).expect (Z x u) ≤ bound := by
+  classical
+  let P : J → FinProb A := fun j => ⟨q j, hq0 j, hq1 j⟩
+  let Q : FinProb (J → A) := FinProb.pi P
+  have hdouble (x : X) :
+      (∑ j, ∑ u ∈ Finset.univ.filter (fun u : U => roleSlice u = j),
+          Q.expect (Z x u)) = ∑ u, Q.expect (Z x u) := by
+    calc
+      _ = ∑ j, ∑ u, if roleSlice u = j then Q.expect (Z x u) else 0 := by
+        apply Finset.sum_congr rfl
+        intro j hj
+        rw [Finset.sum_filter]
+      _ = ∑ u, ∑ j, if roleSlice u = j then Q.expect (Z x u) else 0 := by
+        rw [Finset.sum_comm]
+      _ = _ := by
+        apply Finset.sum_congr rfl
+        intro u hu
+        simp
+  have htotal (x : X) :
+      scale * ∑ u, Q.expect (Z x u) ≤ (Fintype.card J : ℝ) * bound := by
+    calc
+      scale * ∑ u, Q.expect (Z x u) =
+          ∑ j, scale * ∑ u ∈ Finset.univ.filter (fun u : U => roleSlice u = j),
+            Q.expect (Z x u) := by
+              rw [← hdouble x, Finset.mul_sum]
+      _ ≤ ∑ j, bound := Finset.sum_le_sum fun j hj => by
+            have h := hprofile j x
+            simpa [Q, P, FinProb.expect_smul, expect_sum_finset] using h
+      _ = (Fintype.card J : ℝ) * bound := by simp
+  have hcardJ : 0 < (Fintype.card J : ℝ) := Nat.cast_pos.mpr Fintype.card_pos
+  have hcardU : 0 < (Fintype.card U : ℝ) := Nat.cast_pos.mpr Fintype.card_pos
+  intro x
+  have htotal' : (Fintype.card J : ℝ) / Fintype.card U *
+      ∑ u, Q.expect (Z x u) ≤ (Fintype.card J : ℝ) * bound := by
+    simpa [hscale] using htotal x
+  have hratio : (Fintype.card J : ℝ) / Fintype.card U *
+      ∑ u, Q.expect (Z x u) = (Fintype.card J : ℝ) *
+        ((Fintype.card U : ℝ)⁻¹ * ∑ u, Q.expect (Z x u)) := by
+    rw [div_eq_mul_inv]
+    ring
+  have hmul : (Fintype.card J : ℝ) *
+      ((Fintype.card U : ℝ)⁻¹ * ∑ u, Q.expect (Z x u)) ≤
+        (Fintype.card J : ℝ) * bound := by
+    rw [← hratio]
+    exact htotal'
+  have hfinal := le_of_mul_le_mul_left hmul hcardJ
+  simpa [Q, P] using hfinal
+
 private theorem pr_mono_finprob {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
     {A B : Ω → Prop} (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
   classical
@@ -173,6 +235,25 @@ private theorem pr_mono_finprob {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
   · by_cases hB : B ω
     · simp [hA, hB, P.nonneg ω]
     · simp [hA, hB]
+
+/-- A finite union has probability at most the sum of its member probabilities. -/
+theorem pr_exists_finset_le_sum {Ω ι : Type*} [Fintype Ω]
+    (P : FinProb Ω) (s : Finset ι) (A : ι → Ω → Prop) :
+    P.pr (fun ω => ∃ i ∈ s, A i ω) ≤ ∑ i ∈ s, P.pr (A i) := by
+  classical
+  induction s using Finset.induction_on with
+  | empty => simp [FinProb.pr]
+  | @insert i s his ih =>
+      have hevent : (fun ω => ∃ j ∈ insert i s, A j ω) =
+          (fun ω => A i ω ∨ ∃ j ∈ s, A j ω) := by
+        funext ω
+        simp [Finset.mem_insert]
+      rw [hevent]
+      calc
+        P.pr (fun ω => A i ω ∨ ∃ j ∈ s, A j ω) ≤
+            P.pr (A i) + P.pr (fun ω => ∃ j ∈ s, A j ω) := FinProb.pr_union P _ _
+        _ ≤ P.pr (A i) + ∑ j ∈ s, P.pr (A j) := by nlinarith [ih]
+        _ = ∑ j ∈ insert i s, P.pr (A j) := by rw [Finset.sum_insert his]
 
 /-- Scattered moments for functions local to tag neighborhoods give the
 single-label tail bound used after simultaneous profiles. -/

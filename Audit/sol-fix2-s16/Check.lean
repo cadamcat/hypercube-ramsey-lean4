@@ -1,0 +1,13 @@
+import HypercubeRamsey.S16.Producers
+
+#check HypercubeRamsey.S16.Lane_sol_fix2_s16.CellCalibrationScale
+
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.cell_raw_data_exists
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.cell_permission_hypotheses
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.cell_pool_diagnostics_exists
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.successful_group_bin_hypotheses
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.successful_role_label_hypotheses
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.cell_calibrated_stages_exists
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.fresh_label_calibration_exists
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.fresh_cell_spec_exists
+#print axioms HypercubeRamsey.S16.Lane_sol_fix2_s16.fresh_prior_pipeline_exists

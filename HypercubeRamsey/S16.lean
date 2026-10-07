@@ -1,6 +1,7 @@
 import HypercubeRamsey.S16.Geometry
 import HypercubeRamsey.S16.Calibrations
 import HypercubeRamsey.S16.Comparisons
+import HypercubeRamsey.S16.Producers
 
 /-!
 # Section 16 low-mode exports

@@ -1,0 +1,12 @@
+note: using toolchain 'race-4.34.1' from override set on 'runs/lanes/sol-fix2-s16/wt'
+note: to remove: elan override unset --path 'runs/lanes/sol-fix2-s16/wt' | to suppress: ELAN_NO_OVERRIDE_NOTICE=1
+heavy-slots: waiting for 1 slots and 0 GB (cap 14, set by HEAVY_SLOTS_CAP; heavy 14; heavy RSS 41.8 of 64 GB)
+HypercubeRamsey/S16/Producers.lean:144:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:170:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:248:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:264:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:309:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:384:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:425:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:455:8: warning: declaration uses `sorry`
+HypercubeRamsey/S16/Producers.lean:473:8: warning: declaration uses `sorry`

@@ -150,15 +150,14 @@ def binsContainingLabel {Group Bin Label Incidence : Type*}
   Finset.univ.filter fun D => y ∈ P.labels D
 
 /-- L16.2a inputs: nonnegative bad masses with the deep-discrepancy mean
-bound, few incidences per group, disjoint bin labels, and the D14.S atom cap. -/
+bound, few incidences per group, disjoint bin labels, and subexponential
+inflation of the internally pretrimmed solver atoms (T16:147–156). -/
 structure PermissionLossHypotheses {Group Bin Label Incidence : Type*}
     [Fintype Group] [DecidableEq Group] [Fintype Bin] [DecidableEq Bin]
     [Fintype Label] [DecidableEq Label] [Fintype Incidence] [DecidableEq Incidence]
     (P : PermissionTable Group Bin Label Incidence) (qin : Group → FinLaw Bin) : Prop where
-  groups_nonempty : Nonempty Group
   bins_nonempty : Nonempty Bin
   labels_nonempty : Nonempty Label
-  incidences_nonempty : Nonempty Incidence
   mean_bad_mass : ∀ inc y, 0 ≤ P.badMass inc y ∧ P.badMass inc y ≤ 1
   average_bad_mass : ∀ inc,
     (∑ y, P.badMass inc y) ≤ Real.exp (-3 * P.cperm * P.n) * Fintype.card Label
@@ -167,7 +166,8 @@ structure PermissionLossHypotheses {Group Bin Label Incidence : Type*}
         ((Fintype.card Label : ℝ) / Fintype.card Bin) ≤
       Real.exp (P.cperm * P.n)
   labels_disjoint : ∀ y, (binsContainingLabel P y).card ≤ 1
-  incoming_cap : ∀ g D, (qin g).w D ≤ 2 / Fintype.card Bin
+  incoming_cap : ∀ g D, (qin g).w D ≤
+    Real.exp (P.cperm * P.n / 2) / Fintype.card Bin
   threshold_large : P.n * P.cperm ≥ Real.log 4
 
 /-- L16.2a permission trim. The hypotheses bound bad-mass averages, the
@@ -332,7 +332,11 @@ structure FreshLabelCalibration {κ : CConsts} {T : Stage} {k : ℕ}
   fresh_eq : ∀ C P, F.typical C P → F.fresh C P =
     FinLaw.map (FinLaw.bind (gatedHistory C P) fun W =>
       FinLaw.bind (binSampler C P W) (labelSampler C P W)) (encode C)
-  label_eq : ∀ C W a ys r, F.label C (encode C (W, a, ys)) r.1 = ys r
+  /-- Invalid encodings may use the injective fallback state. Readout is
+  required only on inputs actually charged by the sampling stages. -/
+  label_eq : ∀ C P W a ys r, F.typical C P → (gatedHistory C P).w W ≠ 0 →
+    (binSampler C P W).w a ≠ 0 → (labelSampler C P W a).w ys ≠ 0 →
+    F.label C (encode C (W, a, ys)) r.1 = ys r
   raw_profile : ∀ C (r : OddCellRole G C) y,
     (history C).E (fun W => ∑ D, (qin C W (groupOf C r)).w D *
       (U C W (groupOf C r) D).w y) = (PT.π (G.cellPatch C)).w y
@@ -591,8 +595,12 @@ structure FreshPriorPipeline {κ : CConsts} {T : Stage} {k : ℕ}
     FinLaw.map (FinLaw.bind (gatedHistory pool) fun W =>
       FinLaw.bind (binSampler pool W) (labelSampler pool W)) encode
   /-- The raw posterior readout is retained exactly, through every stage. -/
-  prior_eq : ∀ W a ys, F.prior C (encode (W, a, ys)) v = rawPrior W.1 ys
-  label_eq : ∀ W a ys r, F.label C (encode (W, a, ys)) (rolePosition r) = ys r
+  prior_eq : ∀ pool W a ys, F.typical C pool → (gatedHistory pool).w W ≠ 0 →
+    (binSampler pool W).w a ≠ 0 → (labelSampler pool W a).w ys ≠ 0 →
+    F.prior C (encode (W, a, ys)) v = rawPrior W.1 ys
+  label_eq : ∀ pool W a ys r, F.typical C pool → (gatedHistory pool).w W ≠ 0 →
+    (binSampler pool W).w a ≠ 0 → (labelSampler pool W a).w ys ≠ 0 →
+    F.label C (encode (W, a, ys)) (rolePosition r) = ys r
   δgate : ℝ
   δpre : ℝ
   δperm : ℝ
@@ -687,8 +695,8 @@ def FreshPriorSourceValid {κ : CConsts} {T : Stage} {k : ℕ}
           (∀ W₀ ys₀,
             P.baseExperiment.law.pr (fun ω => records ω.1 = W₀ ∧
               (fun j => ω.2.2 (roleAt j)) = ys₀) =
-            (S.recLaw PT.parameter).E (fun W => if W = W₀ then
-              (S.refLaw W).pr (fun ω => nbrLabels w.1 ω.2 = ys₀) else 0))) ∨
+            (solverBasePriorExperiment S w).law.pr (fun ω =>
+              ω.1 = W₀ ∧ nbrLabels w.1 ω.2.2 = ys₀))) ∨
   (¬ PT.tiling.mode.isCluster ∧ ∃ h : (PT.envelope (G.cellPatch C)).Nonempty,
     ∀ W ys, P.rawPrior W ys = (Law.unifCore (PT.envelope (G.cellPatch C)) h).w)
 

@@ -107,11 +107,11 @@ structure AvoidanceHypotheses {I O V Ω : Type*} [Fintype I] [DecidableEq I]
     A.base.pr (fun ω => readout ω i = o ∧ ω ∈ A.bad e ∧ ω ∈ A.avoid S) ≤
       A.pinnedBound e i o *
         A.base.pr (fun ω => readout ω i = o ∧ ω ∈ A.avoid S)
-  pinned_outside : ∀ i o,
-    A.base.pr (fun ω => readout ω i = o ∧
-      ω ∈ A.avoid (Finset.univ \ A.touching {i})) =
-      (perturbed i).w o *
-        A.base.pr (fun ω => ω ∈ A.avoid (Finset.univ \ A.touching {i}))
+  /-- Product independence holds for every outside subfamily, including
+  the subfamilies used in the pinned local-lemma induction (T16:350–360). -/
+  pinned_outside : ∀ i o (R : Finset A.Event), Disjoint R (A.touching {i}) →
+    A.base.pr (fun ω => readout ω i = o ∧ ω ∈ A.avoid R) =
+      (perturbed i).w o * A.base.pr (fun ω => ω ∈ A.avoid R)
   pinned_bounds_nonneg : ∀ e i o, 0 ≤ A.pinnedBound e i o
   pinned_touch_budget : ∀ i o,
     (∑ e ∈ A.touching {i}, A.pinnedBound e i o *

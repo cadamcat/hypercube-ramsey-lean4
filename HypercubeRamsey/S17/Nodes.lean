@@ -415,7 +415,25 @@ theorem poolCompatibilityFailure
           D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ →
           μ.pr (D.compatibilityFailure v) ≤ Real.rpow (T.S.n k : ℝ)
             (-((κ.R : ℝ) * initialResamplingRounds T k)) := by
-  sorry
+  have hnT : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hbudgets := hnT.eventually
+    (Lane_sol_s17_compat.eventually_compatibility_budgets κ hκ K hK)
+  filter_upwards [hSource.2.1, hbudgets] with k hd hb
+  rcases hb with ⟨hn, hlog, heSmall, hErr, hRoom, hNumeric⟩
+  intro PT D hQuant v heven μ hμ
+  have herror : 0 ≤ bstar T k := by unfold bstar; positivity
+  have hdisc : TwoBudgetDisc T k (Real.rpow (T.S.n k : ℝ) κ.xs)
+      (κ.α * T.S.n k) (2 * bstar T k) := by
+    simp only [Real.rpow_eq_pow]
+    apply S12.TwoBudgetDisc.mono hd le_rfl le_rfl
+    change bstar T k ≤ 2 * bstar T k
+    linarith
+  apply Lane_sol_s17_compat.fixed_pool_compatibility D K hK hQuant hκ
+    (by exact_mod_cast hn) hlog hdisc
+    (by simpa only [bstar, Real.rpow_eq_pow] using heSmall)
+    (by simpa only [bstar, Real.rpow_eq_pow] using hErr) hRoom
+    (by simpa only [initialResamplingRounds, Real.rpow_eq_pow] using hNumeric) v heven μ hμ
 
 /-- The L17.2b trial moment at fixed pools. -/
 noncomputable def poolTrialMoment

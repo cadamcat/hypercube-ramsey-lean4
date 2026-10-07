@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.OddLoads
+import HypercubeRamsey.S06.EvenRows_sol_s06_joint
 import HypercubeRamsey.S06.Prob
 import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S06.EvenRows_q_s06_even
@@ -3307,19 +3308,247 @@ theorem rawCentreComparison_of_mean (X : Ctx6 γ p₀ K n N E G M)
 
 end Lane_sol_fix_s06mean
 
+set_option maxHeartbeats 1000000 in
 /-- L6.1n (joint comparison, 06:857–868): actual odd-neighbour sets of separated rows are disjoint; the
 near-product bound of `JfOK` on at most `n²` outputs; long computations at residual distance `> nearR` read
 disjoint centre randomness, so the raw centre integrals factor into the comparison means. -/
 theorem L6_1n_joint (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenDensity → X.EvenMean → X.EvenJoint := by
+  classical
   apply (Lane_sol_s06_ev_d.joint_of_rawCentreComparison γ p₀ K hadm).mono
   intro n N E G M X hJoint hDensity hMean
   apply hJoint hDensity
   apply Lane_sol_fix_s06mean.rawCentreComparison_of_mean X hDensity hMean
   intro H hH U a hU hUcard hsep
-  -- Remaining: show that separated long computations read disjoint primitive centre inputs,
-  -- including the position dependence of the low-row adjustment table.
-  sorry
+  let R := X.Rlong + X.hp.r + 2 * D₀₆
+  let q : CubeVertex n → CubeVertex X.hp.d := fun v => X.site (X.g.L.stateOf v)
+  have hs : X.Rshort ≤ X.Rlong := Lane_sol_s06_joint.short_le_long X
+  have hnbr (v : CubeVertex n) (hv : IsEvenRole v) (u : OddRole6 n) (hu : u ∈ X.oddNbrs v) :
+      X.g.L.stateOf v ∈ X.g.L.stNbr (X.g.L.stateOf u.1) := by
+    simp only [ChunkLayout6.stNbr, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨u.1, v, u.2, hv, rfl, rfl, (cube n).symm.symm v u.1 (Finset.mem_filter.mp hu).2⟩
+  have hnear (v : CubeVertex n) (hv : IsEvenRole v) (u : OddRole6 n) (hu : u ∈ X.oddNbrs v) :
+      ∀ b ∈ X.g.L.stNbr (X.g.L.stateOf u.1), _root_.hammingDist (ι := Fin X.hp.d) (X.site b) (q v) ≤ D₀₆ := by
+    intro b hb
+    exact X.code.nbr_dist _ b hb _ (hnbr v hv u hu)
+  have hgate (v : CubeVertex n) (hv : IsEvenRole v) (C C' : X.Centre)
+      (hc : Lane_sol_s06_joint.Agree X C C' (q v) R) (c : X.Loc) :
+      X.EvenGate H C v c ↔ X.EvenGate H C' v c := by
+    have hch : X.choice H C X.Rlong (X.g.L.stateOf v) =
+        X.choice H C' X.Rlong (X.g.L.stateOf v) :=
+      Lane_sol_s06_joint.choice_congr X H C C' _ _
+        (Lane_sol_s06_joint.Agree.recenter X hc (by have hz := Lane_sol_s06_joint.self_dist X (X.site (X.g.L.stateOf v)); dsimp only [q, R]; omega))
+    by_cases hsel : X.choice H C X.Rlong (X.g.L.stateOf v) = some c
+    · have hpos : X.pos C c = X.pos C' c :=
+        (hc c (by have := Lane_sol_s06_joint.choice_mem X H C _ _ c hsel; dsimp [q, R] at *; omega)).1
+      have hvalid : (∀ u ∈ X.oddNbrs v, X.OddValid H C X.Rlong (X.g.L.stateOf u.1)) ↔
+          (∀ u ∈ X.oddNbrs v, X.OddValid H C' X.Rlong (X.g.L.stateOf u.1)) := by
+        apply forall₂_congr
+        intro u hu
+        exact Lane_sol_s06_joint.oddValid_congr X H C C' _ X.Rlong D₀₆ (q v)
+          (hnear v hv u hu) (by simpa [R, two_mul, Nat.add_assoc] using hc)
+      have hlegal : X.hp.Legal (X.pos C) (X.elig H C) (X.hp.domBall X.sites (q v) X.hp.Rlong) ↔
+          X.hp.Legal (X.pos C') (X.elig H C') (X.hp.domBall X.sites (q v) X.hp.Rlong) := by
+        unfold HDParams.Legal
+        apply forall₂_congr
+        intro b hb
+        have hbR := (Finset.mem_filter.mp hb).2
+        have hbAgree : Lane_sol_s06_joint.Agree X C C' b (X.hp.r + D₀₆) :=
+          Lane_sol_s06_joint.Agree.recenter X hc (by dsimp [R]; change _root_.hammingDist (ι := Fin X.hp.d) b (q v) ≤ X.Rlong at hbR; omega)
+        apply forall_congr'
+        intro j
+        have he := Lane_sol_s06_joint.elig_congr X H C C' b hbAgree j
+        unfold HDParams.LegalAt
+        rw [← he]
+        apply and_congr
+        · apply forall₂_congr
+          intro ℓ hℓ
+          rw [(hbAgree ℓ (by have := Lane_sol_s06_joint.elig_mem X H C b j hℓ; omega)).1]
+        · rfl
+      have hcounts (l) : X.prosp (X.pos C) (q v) l = X.prosp (X.pos C') (q v) l :=
+        Lane_sol_s06_joint.prosp_congr X _ _ _ (fun c hd => (hc c (by dsimp [R]; omega)).1) l
+      constructor
+      · rintro ⟨h1, h2, h3, h4, h5⟩
+        exact ⟨hch ▸ h1, hpos ▸ h2, hvalid.mp h3, hlegal.mp h4,
+          fun l => hcounts l ▸ h5 l⟩
+      · rintro ⟨h1, h2, h3, h4, h5⟩
+        exact ⟨hch.symm ▸ h1, hpos.symm ▸ h2, hvalid.mpr h3, hlegal.mpr h4,
+          fun l => (hcounts l).symm ▸ h5 l⟩
+    · have hsel' : X.choice H C' X.Rlong (X.g.L.stateOf v) ≠ some c := by rw [← hch]; exact hsel
+      simp [Ctx6.EvenGate, hsel, hsel']
+  have hrow (v : CubeVertex n) (hv : IsEvenRole v) (C C' : X.Centre)
+      (hc : Lane_sol_s06_joint.Agree X C C' (q v) R) :
+      ∀ y b, X.evenRow H C v y b = X.evenRow H C' v y b := by
+    have hchoice := Lane_sol_s06_joint.choice_congr X H C C' (X.g.L.stateOf v) X.Rlong
+      (Lane_sol_s06_joint.Agree.recenter X hc (by have hz := Lane_sol_s06_joint.self_dist X (X.site (X.g.L.stateOf v)); dsimp only [q, R]; omega))
+    have hsel : X.selC H C v = X.selC H C' v := by unfold Ctx6.selC; rw [hchoice]
+    have hupdate (c : X.Loc × X.Ty) (z : X.Tuple) :
+        Lane_sol_s06_joint.Agree X (X.withTuple C c z) (X.withTuple C' c z) (q v) R := by
+      intro ℓ hℓ
+      have h := hc ℓ hℓ
+      refine ⟨h.1, ?_, h.2.2.1, h.2.2.2⟩
+      intro β
+      change Function.update (X.tup C) c z (ℓ, β) = Function.update (X.tup C') c z (ℓ, β)
+      by_cases he : (ℓ, β) = c
+      · simp [he]
+      · simp [he, h.2.1 β]
+    have hF (z : X.Tuple) (y) : X.Fz H C v (X.selC H C v) z y =
+        X.Fz H C' v (X.selC H C' v) z y := by
+      rw [← hsel]
+      unfold Ctx6.Fz
+      rw [hgate v hv _ _ (hupdate _ z)]
+      congr 1
+      apply Finset.prod_congr rfl
+      intro u hu
+      have hr := Lane_sol_s06_joint.oddRowAt_congr X H _ _ (X.g.L.stateOf u.1)
+        X.Rlong D₀₆ (q v) (hnear v hv u hu) hs
+        (by simpa [R, two_mul, Nat.add_assoc] using hupdate (X.selC H C v, X.evenTy v) z)
+      exact congrFun hr (y u)
+    have hmc (y) : X.mc H C v y = X.mc H C' v y := by
+      unfold Ctx6.mc
+      simp_rw [hF]
+    have hdescs (u : OddRole6 n) (hu : u ∈ X.oddNbrs v) :
+        X.descsWith H C (X.g.L.stateOf u.1) (X.selC H C v, X.evenTy v) =
+          X.descsWith H C' (X.g.L.stateOf u.1) (X.selC H C' v, X.evenTy v) := by
+      let b := X.g.L.stateOf u.1
+      rw [← hsel]
+      unfold Ctx6.descsWith
+      apply Finset.biUnion_congr rfl
+      intro j hj
+      have hp : X.permAt (X.pos C) b j = X.permAt (X.pos C') b j := by
+        funext b'
+        unfold Ctx6.permAt
+        apply Finset.biUnion_congr rfl
+        intro l hl
+        apply Lane_sol_s06_joint.prosp_congr X
+        intro ℓ hℓ
+        have ht := _root_.hammingDist_triangle (ι := Fin X.hp.d) ℓ.1 (X.site b'.1) (q v)
+        have hn := hnear v hv u hu b'.1 b'.2
+        exact (hc ℓ (by dsimp [R]; omega)).1
+      rw [hp]
+    have hqref (u : OddRole6 n) (hu : u ∈ X.oddNbrs v) :
+        X.qRef H C v u = X.qRef H C' v u := by
+      have hd := hdescs u hu
+      rw [← hsel] at hd
+      have hdata (D : Finset (X.Loc × X.Ty))
+          (hD : D ∈ X.descsWith H C (X.g.L.stateOf u.1) (X.selC H C v, X.evenTy v)) :
+          ∀ e ∈ D, X.tup C e = X.tup C' e := by
+        obtain ⟨j, hj, hD⟩ := Finset.mem_biUnion.mp hD
+        have hD := (Finset.mem_filter.mp hD).1
+        intro e he
+        obtain ⟨b, heb⟩ := Lane_sol_s06_joint.descsIn_mem X _ _ hD he
+        obtain ⟨l, hl, heb⟩ := Finset.mem_biUnion.mp heb
+        have heb := (Finset.mem_filter.mp heb).2.2.2
+        have hn := hnear v hv u hu b.1 b.2
+        have ht := _root_.hammingDist_triangle (ι := Fin X.hp.d) e.1.1 (X.site b.1) (q v)
+        exact (hc e.1 (by dsimp [R]; omega)).2.1 e.2
+      unfold Ctx6.qRef
+      dsimp only
+      rw [← hsel, ← hd]
+      split
+      · congr 1
+        funext y
+        apply Finset.sum_congr rfl
+        intro D hD
+        have hDel : X.s3Del H (X.g.L.stateOf u.1) D (X.tup C) (X.selC H C v, X.evenTy v) =
+            X.s3Del H (X.g.L.stateOf u.1) D (X.tup C') (X.selC H C v, X.evenTy v) := by
+          unfold Ctx6.s3Del
+          congr 1
+          funext ξ
+          exact Lane_sol_s06_joint.s3Weight_congr X H _ D _ _ (hdata D hD) _ ξ
+        rw [hDel]
+      · rfl
+    have hQ (y) : X.Qref H C v y = X.Qref H C' v y := by
+      unfold Ctx6.Qref
+      apply Finset.prod_congr rfl
+      intro u hu
+      rw [hqref u hu]
+    have hmarg (y b) : X.evenMarg H C v y b = X.evenMarg H C' v y b := by
+      unfold Ctx6.evenMarg
+      simp_rw [hF, hmc]
+    have hheavy (y) : X.heavyLab H C v y = X.heavyLab H C' v y := by
+      unfold Ctx6.heavyLab
+      simp_rw [hmarg]
+    intro y b
+    have hvalid : X.EvenValid H C v y = X.EvenValid H C' v y := by
+      apply propext
+      unfold Ctx6.EvenValid
+      rw [hsel, hgate v hv C C' hc, hmc, hQ]
+    unfold Ctx6.evenRow
+    rw [hvalid, hheavy y]
+    simp_rw [hmarg]
+
+  have houtput (v : CubeVertex n) (C : X.Centre) (b : Fin N) :
+      FinProb.DependsOn (fun y => (N : ℝ) * X.evenRow H C v y b) (X.oddNbrs v) := by
+    intro y y' hy
+    change (N : ℝ) * X.evenRow H C v y b = (N : ℝ) * X.evenRow H C v y' b
+    have hF (z) : X.Fz H C v (X.selC H C v) z y = X.Fz H C v (X.selC H C v) z y' := by
+      unfold Ctx6.Fz
+      congr 1
+      apply Finset.prod_congr rfl
+      intro u hu
+      rw [hy u hu]
+    have hmc : X.mc H C v y = X.mc H C v y' := by unfold Ctx6.mc; simp_rw [hF]
+    have hQ : X.Qref H C v y = X.Qref H C v y' := by
+      unfold Ctx6.Qref
+      apply Finset.prod_congr rfl
+      intro u hu
+      rw [hy u hu]
+    have hmarg (b) : X.evenMarg H C v y b = X.evenMarg H C v y' b := by
+      unfold Ctx6.evenMarg
+      simp_rw [hF, hmc]
+    have hheavy : X.heavyLab H C v y = X.heavyLab H C v y' := by unfold Ctx6.heavyLab; simp_rw [hmarg]
+    have hvalid : X.EvenValid H C v y = X.EvenValid H C v y' := by
+      apply propext
+      unfold Ctx6.EvenValid
+      rw [hmc, hQ]
+    unfold Ctx6.evenRow
+    rw [hvalid, hheavy]
+    simp_rw [hmarg]
+  have hmean (v : CubeVertex n) (hv : IsEvenRole v) (C C' : X.Centre)
+      (hc : Lane_sol_s06_joint.Agree X C C' (q v) R) :
+      X.localEvenMean H C v a = X.localEvenMean H C' v a := by
+    have hlaw (u : OddRole6 n) (hu : u ∈ X.oddNbrs v) : X.oddLaw H C u.1 = X.oddLaw H C' u.1 := by
+      have hvalid := Lane_sol_s06_joint.oddValid_congr X H C C' _ X.Rlong D₀₆ (q v)
+        (hnear v hv u hu) (by simpa [R, two_mul, Nat.add_assoc] using hc)
+      by_cases hV : X.OddValid H C X.Rlong (X.g.L.stateOf u.1)
+      · apply FinProb.ext
+        intro b
+        rw [Ctx6.oddLaw_eq_row X H C u.1 hV b,
+          Ctx6.oddLaw_eq_row X H C' u.1 (hvalid.mp hV) b]
+        exact congrFun (Lane_sol_s06_joint.oddRowAt_congr X H C C' _ X.Rlong D₀₆ (q v)
+          (hnear v hv u hu) hs (by simpa [R, two_mul, Nat.add_assoc] using hc)) b
+      · have hV' : ¬ X.OddValid H C' X.Rlong (X.g.L.stateOf u.1) := fun h => hV (hvalid.mpr h)
+        simp [Ctx6.oddLaw, hV, hV']
+    unfold Ctx6.localEvenMean
+    rw [FinProb.pi_expect_depends _ _ _ (fun _ => X.y₀) (houtput v C a),
+      FinProb.pi_expect_depends _ _ _ (fun _ => X.y₀) (houtput v C' a)]
+    have hp : (fun u : {u : OddRole6 n // u ∈ X.oddNbrs v} => X.oddLaw H C u.1.1) =
+        (fun u : {u : OddRole6 n // u ∈ X.oddNbrs v} => X.oddLaw H C' u.1.1) := by
+      funext u
+      exact hlaw u.1 u.2
+    rw [hp]
+    congr 1
+    funext y
+    rw [hrow v hv C C' hc]
+  rw [Lane_sol_s06_joint.centre_expect_eq X H]
+  have hdeps (v) (hv : v ∈ U) : FinProb.DependsOn
+      (fun ω => X.localEvenMean H (Lane_sol_s06_joint.fromField X ω) v a)
+      (Lane_sol_s06_joint.scope X (q v) R) := by
+    intro ω ω' hω
+    exact hmean v (Finset.mem_filter.mp (hU hv)).2 _ _
+      (Lane_sol_s06_joint.agree_of_field X ω ω' (q v) R hω)
+  rw [Lane_sol_s06_joint.pi_expect_prod_disjoint (Lane_sol_s06_joint.primitiveLaw X H)
+    U (fun v => Lane_sol_s06_joint.scope X (q v) R) _ hdeps]
+  · apply Finset.prod_congr rfl
+    intro v hv
+    exact (Lane_sol_s06_joint.centre_expect_eq X H (fun C => X.localEvenMean H C v a)).symm
+  · intro v hv v' hv' hne
+    apply Lane_sol_s06_joint.scope_disjoint
+    have hres := X.code.residual_dist v v'
+    have hsep := hsep v hv v' hv' hne
+    have hR : 2 * R ≤ X.nearR := by dsimp [R, Ctx6.nearR, Ctx6.Rlong]; norm_num [D₀₆]; omega
+    exact lt_of_le_of_lt hR (lt_of_lt_of_le hsep hres)
 
 set_option maxHeartbeats 1000000
 /-- L6.1n (even loads, 06:870–884): close repeats by `H_bin(2ρ) < log 2 − .55` and the cap `10e^{.55n}`; the joint

@@ -40,7 +40,22 @@ theorem L5_1m (γ K' χ : ℝ) (hγ : 0 < γ) (hγ' : γ < 1)
         (∀ i, 0 < Λ i → χ * N ≤
           ((Finset.univ.filter (fun y => (95 : ℝ) / 100 ≤ colDeg E G (μ i) y)).card : ℝ)) →
         Nonempty (OddAssignment5 (n := n) (N := N) E G) := by
-  sorry
+  classical
+  refine ⟨1, 1, by norm_num, ?_⟩
+  intro n N E G ι inst Λ μ hLarge hΛ hΛsum hwidth hbalance hgood
+  have hNat : 2 ^ n ≤ N := by
+    have hReal : ((2 ^ n : ℕ) : ℝ) ≤ (N : ℝ) := by
+      simpa using hLarge.2.1
+    exact_mod_cast hReal
+  have hcard : Fintype.card {v : CubeVertex n // ¬ IsEvenRole v} ≤ N := by
+    calc
+      Fintype.card {v : CubeVertex n // ¬ IsEvenRole v} ≤ Fintype.card (CubeVertex n) :=
+        Fintype.card_le_of_injective Subtype.val Subtype.val_injective
+      _ = 2 ^ n := OAI.HypercubeRamsey.card_cubeVertex n
+      _ ≤ N := hNat
+  let f : {v : CubeVertex n // ¬ IsEvenRole v} ↪ Fin N :=
+    (Function.Embedding.nonempty_of_card_le (by simpa using hcard)).some
+  exact ⟨⟨f, f.injective⟩⟩
 
 /-- L5.1n: after the odd assignment, deletion of primitive tuple blocks and the even load estimate give
 fractional rows on common neighborhoods. -/

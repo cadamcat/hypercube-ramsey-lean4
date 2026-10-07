@@ -1457,6 +1457,61 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       have hRpos : 0 < (1000 / etaC) * Real.exp ((n : ℝ) / 50) :=
         mul_pos (by positivity) (Real.exp_pos _)
       simpa using hRpos.le
+  have hcodegSymm (y z : Fin N) : codeg E G μ y z = codeg E G μ z y := by
+    rw [hcodegGram, hcodegGram]
+    apply Finset.sum_congr rfl
+    intro x hx
+    ring
+  have hsCpos : 0 < sC n := by
+    dsimp [sC]
+    exact Nat.ceil_pos.mpr (Real.exp_pos _)
+  have hsampleClique (i : HighTags) (r : ℕ) (z : Fin r → Fin N)
+      (hzInjective : Function.Injective z)
+      (hzSelected : ∀ j, z j ∈ selected i.1)
+      (hR : Nat.choose (sC n + t₀ - 2) (sC n - 1) ≤ r) :
+      ∃ C : Finset (Fin r), C.card = sC n ∧
+        ∀ j ∈ C, ∀ k ∈ C, j ≠ k →
+          1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k) := by
+    let H : SimpleGraph (Fin r) := {
+      Adj := fun j k => j ≠ k ∧
+        1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k)
+      symm := Std.Symm.mk (by
+        intro j k h
+        exact ⟨h.1.symm, by simpa [hcodegSymm] using h.2⟩)
+      loopless := Std.Irrefl.mk (by
+        intro j h
+        exact h.1 rfl)
+    }
+    have hs : 1 ≤ sC n := Nat.one_le_iff_ne_zero.mpr (Nat.ne_of_gt hsCpos)
+    have ht : 1 ≤ t₀ := Nat.one_le_iff_ne_zero.mpr (Nat.ne_of_gt ht₀pos)
+    rcases xRamseyBinom H (sC n) t₀ hs ht (by simpa using hR) with hclique | hindep
+    · rcases hclique with ⟨C, hCcard, hCedge⟩
+      refine ⟨C, hCcard, ?_⟩
+      intro j hj k hk hjk
+      exact (hCedge j hj k hk hjk).2
+    · rcases hindep with ⟨A, hAcard, hAnoAdj⟩
+      let labels : Finset (Fin N) := A.image z
+      have hlabelsCard : labels.card = t₀ := by
+        dsimp [labels]
+        rw [Finset.card_image_of_injective _ hzInjective, hAcard]
+      have hlabelsSub : labels ⊆ selected i.1 := by
+        intro y hy
+        obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp hy
+        exact hzSelected j
+      have hlabelsPair : ∀ y ∈ labels, ∀ w ∈ labels, y ≠ w →
+          codeg E G μ y w < 1 / 4 + (n : ℝ) ^ (-δ) := by
+        intro y hy w hw hyw
+        obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp hy
+        obtain ⟨k, hk, rfl⟩ := Finset.mem_image.mp hw
+        have hjk : j ≠ k := by
+          intro heq
+          exact hyw (congrArg z heq)
+        have hnot := hAnoAdj j hj k hk hjk
+        have hnotle : ¬ 1 / 4 + (n : ℝ) ^ (-δ) ≤ codeg E G μ (z j) (z k) := by
+          intro hedge
+          exact hnot ⟨hjk, hedge⟩
+        exact lt_of_not_ge hnotle
+      exact False.elim (hnoIndependent i.1 i.2 labels hlabelsSub hlabelsCard hlabelsPair)
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

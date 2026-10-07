@@ -141,4 +141,15 @@ theorem allocation_sample_growth (T : Stage) :
   have hresult := le_trans hexpLower hmul
   simpa using hresult
 
+/-- A uniform core law turns a finite expectation into a normalized finite sum. -/
+theorem allocation_unifCore_sum {N : ℕ} (A : Finset (Fin N)) (hA : A.Nonempty)
+    (f : Fin N → ℝ) :
+    ∑ x, (Law.unifCore A hA).w x * f x = (∑ x ∈ A, f x) / A.card := by
+  classical
+  change (∑ x, (if x ∈ A then (A.card : ℝ)⁻¹ else 0) * f x) = _
+  simp_rw [ite_mul, zero_mul]
+  rw [Finset.sum_ite_mem_eq, ← Finset.mul_sum]
+  rw [div_eq_mul_inv]
+  ring
+
 end HypercubeRamsey.S13

@@ -2135,8 +2135,18 @@ theorem cluster_patch_from_witness (κ : CConsts) (hκ : κ.Admissible) (T : Sta
   have hlarge := T.S.eventually_large 1 16
   have hsampleGrowth := allocation_sample_growth T
   have hnVeryLarge := T.S.n_tendsto.eventually_ge_atTop 1000
-  filter_upwards [hClean, hScaleEvent, hlarge, hsampleGrowth, hnVeryLarge]
-    with k hcleanK hscaleK hhost hsample hnlarge
+  have hnTendsto : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
+    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp
+      T.S.n_tendsto
+  have haPos : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  have hEtaTendsto := (tendsto_rpow_neg_atTop hκ.η0_pos).comp hnTendsto
+  have hErrTendsto := (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 2)).comp hnTendsto
+  have hEtaSmall : ∀ᶠ k in atTop, (T.S.n k : ℝ) ^ (-κ.η0) < κ.a :=
+    hEtaTendsto.eventually (Iio_mem_nhds haPos)
+  have hErrSmall : ∀ᶠ k in atTop, (T.S.n k : ℝ) ^ (-2 : ℝ) < κ.a :=
+    hErrTendsto.eventually (Iio_mem_nhds haPos)
+  filter_upwards [hClean, hScaleEvent, hlarge, hsampleGrowth, hnVeryLarge,
+    hEtaSmall, hErrSmall] with k hcleanK hscaleK hhost hsample hnlarge hηBound hErrBound
   intro RX RY q o hRX hRY hqDyadic hqQ0 hWitness d hd hde
   have hqPos : 0 < q := by
     rcases hqDyadic with ⟨j, rfl⟩
@@ -2517,7 +2527,201 @@ theorem cluster_patch_from_witness (κ : CConsts) (hκ : κ.Admissible) (T : Sta
     let z := (eJ.symm i).val
     have hy' : y ∈ B' z.1 := hlocalSub z.1 z.2 hyi
     exact hBside z.1 (hB'sub z.1 hy')
-  sorry
+  have hYcardN : Y.card ≤ T.S.N k := by simpa using (Finset.card_le_univ Y)
+  let Eo : Fin (T.S.N k) → Fin (T.S.N k) → Prop :=
+    if o then transposeRel (T.S.E k) else T.S.E k
+  let eY : {y : Fin (T.S.N k) // y ∈ Y} ≃ Fin Y.card :=
+    Fintype.equivFinOfCardEq (by simp)
+  let ePair : (Fin Y.card × Fin Y.card) ≃ Fin (Y.card ^ 2) :=
+    Fintype.equivFinOfCardEq (by simp [pow_two])
+  let tests : Fin (Y.card ^ 2) → Fin (T.S.N k) → ℝ := fun j x =>
+    let p := ePair.symm j
+    hit Eo true x (eY.symm p.1).val * hit Eo true x (eY.symm p.2).val
+  have hHitRange (x y : Fin (T.S.N k)) :
+      0 ≤ hit Eo true x y ∧ hit Eo true x y ≤ 1 := by
+    unfold hit
+    split_ifs <;> norm_num
+  have htests (j : Fin (Y.card ^ 2)) (x : Fin (T.S.N k)) :
+      0 ≤ tests j x ∧ tests j x ≤ 1 := by
+    dsimp [tests]
+    let p := ePair.symm j
+    rcases hHitRange x (eY.symm p.1).val with ⟨ha0, ha1⟩
+    rcases hHitRange x (eY.symm p.2).val with ⟨hb0, hb1⟩
+    constructor
+    · exact mul_nonneg ha0 hb0
+    · calc
+        _ ≤ 1 * hit Eo true x (eY.symm p.2).val :=
+          mul_le_mul_of_nonneg_right ha1 hb0
+        _ ≤ 1 * 1 := mul_le_mul_of_nonneg_left hb1 (by norm_num)
+        _ = 1 := by ring
+  have hExp2 : (4 : ℝ) ≤ Real.exp 2 := by
+    calc
+      _ = (2 : ℝ) ^ 2 := by norm_num
+      _ ≤ Real.exp 1 ^ 2 := by gcongr; exact Real.exp_one_gt_two.le
+      _ = Real.exp 2 := by rw [← Real.exp_nat_mul]; norm_num
+  have h4Ceil : (4 : ℕ) ^ T.S.n k ≤
+      Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) := by
+    have h4Exp : (4 : ℝ) ^ T.S.n k ≤ Real.exp (2 * (T.S.n k : ℝ)) := by
+      calc
+        _ ≤ Real.exp 2 ^ T.S.n k := by gcongr
+        _ = Real.exp (2 * (T.S.n k : ℝ)) := by
+          rw [show 2 * (T.S.n k : ℝ) = (T.S.n k : ℝ) * 2 by ring,
+            Real.exp_nat_mul]
+    have hceil : (4 : ℝ) ^ T.S.n k ≤
+        (Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) : ℝ) :=
+      h4Exp.trans (Nat.le_ceil _)
+    exact_mod_cast hceil
+  have hnPow2 : (T.S.n k) ^ 2 ≤ (T.S.n k) ^ 4 := by
+    calc
+      _ = (T.S.n k) ^ 2 * 1 := by simp
+      _ ≤ (T.S.n k) ^ 2 * (T.S.n k) ^ 2 :=
+        Nat.mul_le_mul_left _ (Nat.one_le_pow 2 _ (by omega))
+      _ = (T.S.n k) ^ 4 := by ring
+  have hJbound : Y.card ^ 2 ≤
+      Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) * (T.S.n k) ^ 4 := by
+    calc
+      _ ≤ (T.S.N k) ^ 2 := Nat.pow_le_pow_left hYcardN _
+      _ ≤ (T.S.n k * 2 ^ T.S.n k) ^ 2 := Nat.pow_le_pow_left hhost.2.2 _
+      _ = (T.S.n k) ^ 2 * (4 : ℕ) ^ T.S.n k := by
+        calc
+          _ = (T.S.n k) ^ 2 * ((2 : ℕ) ^ T.S.n k * 2 ^ T.S.n k) := by ring
+          _ = (T.S.n k) ^ 2 * (4 : ℕ) ^ T.S.n k := by
+            congr 1
+            rw [← Nat.mul_pow]
+      _ ≤ (T.S.n k) ^ 2 * Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) :=
+        Nat.mul_le_mul_left _ h4Ceil
+      _ ≤ (T.S.n k) ^ 4 * Nat.ceil (Real.exp (2 * (T.S.n k : ℝ))) :=
+        Nat.mul_le_mul_right _ hnPow2
+      _ = _ := Nat.mul_comm _ _
+  obtain ⟨X, hXsub, hXcard, hApprox⟩ :=
+    hSampling (T.S.N k) (Y.card ^ 2) M (T.S.n k) U tests (by omega)
+      hMleU hMSmall hJbound htests
+  have hXne : X.Nonempty := Finset.card_pos.mp (by rw [hXcard]; exact hMpos)
+  have hXsubSide : X ⊆ (if o then RY else RX) := hXsub.trans hUside
+  let μU := Law.unifCore U hU
+  let avgU : Fin (T.S.N k) → Fin (T.S.N k) → ℝ := fun y y' =>
+    (∑ x ∈ U, hit Eo true x y * hit Eo true x y') / U.card
+  let avgX : Fin (T.S.N k) → Fin (T.S.N k) → ℝ := fun y y' =>
+    (∑ x ∈ X, hit Eo true x y * hit Eo true x y') / M
+  have hUniformAvg (y y' : Fin (T.S.N k)) :
+      avgU y y' = ∑ x, μU.w x * hit Eo true x y * hit Eo true x y' := by
+    simpa [avgU, μU, mul_assoc] using
+      (allocation_unifCore_sum U hU (fun x => hit Eo true x y * hit Eo true x y')).symm
+  have hMeanIdentity (y y' : Fin (T.S.N k)) :
+      avgU y y' =
+        (1 + (2 * colDeg Eo true μU y - 1) +
+          (2 * colDeg Eo true μU y' - 1) + pairCorr Eo false μU y y') / 4 := by
+    calc
+      _ = ∑ x, μU.w x * hit Eo true x y * hit Eo true x y' := hUniformAvg y y'
+      _ = _ := by
+        simpa [Eo, mul_assoc] using
+          (codegree_identity (T.S.N k) Eo true μU y y')
+  have hdegClose (j : Fin m₀) (y : Fin (T.S.N k)) (hy : y ∈ B' j) :
+      |colDeg Eo true μU y - 1 / 2| ≤ (T.S.n k : ℝ) ^ (-κ.η0) := by
+    have h := hB'degree j y hy
+    cases o with
+    | false => simpa [Eo] using h
+    | true =>
+        simpa [Eo, colDeg, rowDeg, transposeRel, hit, Hits] using h
+  have hpairCorr (j : Fin m₀) (y y' : Fin (T.S.N k))
+      (hy : y ∈ B' j) (hy' : y' ∈ B' j) (hne : y ≠ y') :
+      κ.θ < pairCorr Eo false μU y y' := by
+    have h := hCorr j y (hB'sub j hy) y' (hB'sub j hy') hne
+    cases o <;> simpa [Eo, pairCorr_transpose] using h
+  have hHitSq (x y : Fin (T.S.N k)) :
+      hit Eo true x y * hit Eo true x y = hit Eo true x y := by
+    unfold hit
+    split_ifs <;> norm_num
+  have hxiPow : Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) < 1 := by
+    have hp := Real.one_lt_rpow (by norm_num : (1 : ℝ) < 2)
+      (by positivity : (0 : ℝ) < 10 * (κ.u : ℝ) + 100)
+    change (2 : ℝ) ^ (-(10 * (κ.u : ℝ) + 100)) < 1
+    rw [Real.rpow_neg (by norm_num : (0 : ℝ) ≤ 2)]
+    exact inv_lt_one_of_one_lt₀ hp
+  have hxiLtAlpha : κ.ξ < κ.α := by
+    have h := mul_lt_mul_of_pos_left hxiPow hκ.α_rng.1
+    exact hκ.ξ_rng.2.trans (by simpa using h)
+  have hxiLtOne : κ.ξ < 1 := hxiLtAlpha.trans (by linarith [hκ.α_rng.2])
+  have hpow4 : (1 : ℝ) ≤ (4 : ℝ) ^ (κ.u + 3) := one_le_pow₀ (by norm_num)
+  have hden4 : (3 : ℝ) ≤ 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith
+  have hthetaLt : κ.θ < κ.ξ ^ 2 / 3 := by
+    have hfrac : κ.ξ ^ 2 / (3 * (4 : ℝ) ^ (κ.u + 3)) ≤ κ.ξ ^ 2 / 3 :=
+      div_le_div_of_nonneg_left (sq_nonneg κ.ξ) (by norm_num) hden4
+    exact hκ.θ_rng.2.trans_le hfrac
+  have hthetaOne : κ.θ < 1 := by
+    have hxiSq : κ.ξ ^ 2 < 1 := by
+      nlinarith [sq_nonneg (1 - κ.ξ), hκ.ξ_rng.1, hxiLtOne]
+    nlinarith [hthetaLt, hxiSq]
+  have haSmall : κ.a < 1 / 8 := by rw [hκ.a_eq]; nlinarith [hthetaOne]
+  have hthetaEq : κ.θ = 100 * κ.a := by rw [hκ.a_eq]; field_simp
+  have hdegLower (j : Fin m₀) (y : Fin (T.S.N k)) (hy : y ∈ B' j) :
+      1 / 2 - κ.a ≤ colDeg Eo true μU y := by
+    have h := (abs_le.mp (hdegClose j y hy)).1
+    linarith [hηBound]
+  have hMeanLower (j : Fin m₀) (y y' : Fin (T.S.N k))
+      (hy : y ∈ B' j) (hy' : y' ∈ B' j) :
+      1 / 4 + 4 * κ.a ≤ avgU y y' := by
+    by_cases hEq : y = y'
+    · subst y'
+      have hdeg := hdegLower j y hy
+      have havg : avgU y y = colDeg Eo true μU y := by
+        calc
+          _ = ∑ x, μU.w x * hit Eo true x y * hit Eo true x y := hUniformAvg y y
+          _ = ∑ x, μU.w x * hit Eo true x y := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [mul_assoc, hHitSq]
+          _ = colDeg Eo true μU y := by
+            symm
+            simp [colDeg, hit, Hits]
+      rw [havg]
+      nlinarith [hdeg, haSmall]
+    · have hcorr := hpairCorr j y y' hy hy' hEq
+      have hdeg1 := hdegLower j y hy
+      have hdeg2 := hdegLower j y' hy'
+      rw [hMeanIdentity]
+      nlinarith [hcorr, hdeg1, hdeg2, hthetaEq]
+  have hApproxPair (y y' : Fin (T.S.N k)) (hy : y ∈ Y) (hy' : y' ∈ Y) :
+      |avgX y y' - avgU y y'| ≤ (T.S.n k : ℝ) ^ (-2 : ℝ) := by
+    let p : Fin Y.card × Fin Y.card := (eY ⟨y, hy⟩, eY ⟨y', hy'⟩)
+    have h := hApprox (ePair p)
+    simpa [tests, avgX, avgU, p] using h
+  have hAvgXLower (j : Fin m₀) (y y' : Fin (T.S.N k))
+      (hyB : y ∈ B' j) (hyB' : y' ∈ B' j) (hy : y ∈ Y) (hy' : y' ∈ Y) :
+      1 / 4 + 3 * κ.a ≤ avgX y y' := by
+    have happrox := (abs_le.mp (hApproxPair y y' hy hy')).1
+    have hmean := hMeanLower j y y' hyB hyB'
+    linarith [happrox, hmean, hErrBound]
+  have hOutSubY (i : Fin tSel) : outBins i ⊆ Y := by
+    intro y hy
+    exact Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hy⟩
+  have hYne : Y.Nonempty := Finset.card_pos.mp (by rw [hYcard]; exact hMpos)
+  have hOutSetDisj : Set.PairwiseDisjoint Set.univ outBins := by
+    intro i hi j hj hij
+    exact hOutDisj i j hij
+  have hCodegree (i : Fin tSel) (y y' : Fin (T.S.N k))
+      (hy : y ∈ outBins i) (hy' : y' ∈ outBins i) :
+      (1 / 4 : ℝ) + 3 * κ.a ≤
+        (∑ x ∈ X, hit Eo true x y * hit Eo true x y') / X.card := by
+    let z : ChunkIndex := (eJ.symm i).val
+    have hyB : y ∈ B' z.1 := hlocalSub z.1 z.2 hy
+    have hyB' : y' ∈ B' z.1 := hlocalSub z.1 z.2 hy'
+    have hyY : y ∈ Y := hOutSubY i hy
+    have hyY' : y' ∈ Y := hOutSubY i hy'
+    have hlower := hAvgXLower z.1 y y' hyB hyB' hyY hyY'
+    change (1 / 4 : ℝ) + 3 * κ.a ≤
+      (∑ x ∈ X, hit Eo true x y * hit Eo true x y') / M at hlower
+    rw [← hXcard] at hlower
+    simpa [Eo] using hlower
+  have hScaleFinal :
+      (1 / 400 : ℝ) * (T.S.N k : ℝ) * Real.exp (-(q : ℝ) ^ κ.aC) ≤ (X.card : ℝ) := by
+    rw [hXcard]
+    dsimp [L] at hMlower ⊢
+    nlinarith [hMlower]
+  refine ⟨X, Y, tSel, outBins, hXne, hYne, hd, hXsubSide, hYsubSide,
+    ?_, hScaleFinal, hOutSubY, hOutSetDisj, hOutCard, ?_, hCodegree⟩
+  · rw [hXcard, hYcard]
+  · rfl
 
 /-- P13.3c (sections/13, line 140): truncate two large residual sides to a common size. -/
 theorem bounded_patch (κ : CConsts) (T : Stage) (k : ℕ)

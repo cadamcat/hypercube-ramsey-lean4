@@ -1,0 +1,11 @@
+note: using toolchain 'race-4.34.1' from override set on 'runs/lanes/sol-fix2-s16/wt'
+note: to remove: elan override unset --path 'runs/lanes/sol-fix2-s16/wt' | to suppress: ELAN_NO_OVERRIDE_NOTICE=1
+'HypercubeRamsey.S16.late_classes_and_cell_inputs' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+'HypercubeRamsey.S16.calibrated_group_bins' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+'HypercubeRamsey.S16.calibrated_role_labels' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+'HypercubeRamsey.S16.typical_cell_pools' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+'HypercubeRamsey.S16.fresh_singleton_comparison' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+'HypercubeRamsey.S16.fresh_internal_prior_comparison' depends on axioms: [propext,
+ sorryAx,
+ Classical.choice,
+ Quot.sound]

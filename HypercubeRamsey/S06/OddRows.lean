@@ -1224,11 +1224,1153 @@ theorem L6_1j_rows (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         exact hCap y
   exact ⟨hOddRows, hProxyCap⟩
 
+set_option maxHeartbeats 50000000 in
 /-- L6.1j (proxy mean, 06:622–637): cancellation of the adjusted normalizer against the presentation density,
 disjoint presentation events; fallback `≤ e^{−.02k}(#descriptors) π_ℓ(y)`, `#descriptors < e^{.01k}` on the
 position-count gate. -/
 theorem L6_1j_proxy (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TableOK → X.DescCount → X.ProxyMean := by
+  refine ⟨1, 1, fun n N E G M X hL hTable hDescCount => ?_⟩
+  intro H P u hBase hOdd hMode y
+  classical
+  let b := X.g.L.stateOf u
+  let ℓ := X.tgt b
+  have hUpdateTwice (ξ η : Fin N) :
+      X.withHid (X.withHid H ℓ ξ) ℓ η = X.withHid H ℓ η := by
+    apply Prod.ext
+    · rfl
+    · funext q
+      by_cases hq : q = ℓ
+      · subst q
+        simp [Ctx6.withHid]
+      · simp [Ctx6.withHid, Function.update_of_ne hq]
+  let Hξ (ξ : Fin N) := X.withHid H ℓ ξ
+  have hTagDelWeightEq (ξ : Fin N) (β : X.Ty) (i : X.ι) :
+      X.tagWeight (Hξ ξ) β (β.obs.erase ℓ) i = X.tagWeight H β (β.obs.erase ℓ) i := by
+    have hfactor : ∀ q ∈ β.obs.erase ℓ,
+        safeRatio6 ((X.hidPostRep (Hξ ξ).1 q.1 β.key i).w ((Hξ ξ).2 q))
+            ((X.hidPostDel (Hξ ξ).1 q.1 β.key).w ((Hξ ξ).2 q)) =
+          safeRatio6 ((X.hidPostRep H.1 q.1 β.key i).w (H.2 q))
+            ((X.hidPostDel H.1 q.1 β.key).w (H.2 q)) := by
+      intro q hq
+      have hneq : q ≠ ℓ := (Finset.mem_erase.mp hq).1
+      have hval : (Hξ ξ).2 q = H.2 q := by
+        simp [Hξ, Ctx6.withHid, Function.update_of_ne hneq]
+      rw [hval]
+      rfl
+    unfold Ctx6.tagWeight
+    have hprod :
+        (∏ q ∈ β.obs.erase ℓ,
+          safeRatio6 ((X.hidPostRep (Hξ ξ).1 q.1 β.key i).w ((Hξ ξ).2 q))
+            ((X.hidPostDel (Hξ ξ).1 q.1 β.key).w ((Hξ ξ).2 q))) =
+        (∏ q ∈ β.obs.erase ℓ,
+          safeRatio6 ((X.hidPostRep H.1 q.1 β.key i).w (H.2 q))
+            ((X.hidPostDel H.1 q.1 β.key).w (H.2 q))) := by
+      apply Finset.prod_congr rfl
+      exact hfactor
+    change (X.tagLawAt (X.parOf (Hξ ξ).1) β.key).w i *
+        (if X.tagGate (Hξ ξ).1 β i then 1 else 0) *
+          (∏ q ∈ β.obs.erase ℓ,
+            safeRatio6 ((X.hidPostRep (Hξ ξ).1 q.1 β.key i).w ((Hξ ξ).2 q))
+              ((X.hidPostDel (Hξ ξ).1 q.1 β.key).w ((Hξ ξ).2 q))) =
+      (X.tagLawAt (X.parOf H.1) β.key).w i *
+        (if X.tagGate H.1 β i then 1 else 0) *
+          (∏ q ∈ β.obs.erase ℓ,
+            safeRatio6 ((X.hidPostRep H.1 q.1 β.key i).w (H.2 q))
+              ((X.hidPostDel H.1 q.1 β.key).w (H.2 q)))
+    rw [hprod]
+    by_cases hgate : X.tagGate H.1 β i <;> simp [Hξ, Ctx6.withHid, hgate]
+  have hTagDelPostEq (ξ : Fin N) (β : X.Ty) :
+      X.TβDel (Hξ ξ) β ℓ = X.TβDel H β ℓ := by
+    have hweights :
+        (fun i : X.ι => X.tagWeight (Hξ ξ) β (β.obs.erase ℓ) i) =
+          fun i => X.tagWeight H β (β.obs.erase ℓ) i := by
+      funext i
+      exact hTagDelWeightEq ξ β i
+    change normalize6 (fun i => X.tagWeight (Hξ ξ) β (β.obs.erase ℓ) i) X.i₀ =
+      normalize6 (fun i => X.tagWeight H β (β.obs.erase ℓ) i) X.i₀
+    exact congrArg (fun w : X.ι → ℝ => normalize6 w X.i₀) hweights
+  have hVarValEq (ξ : Fin N) (nm : X.Name) (hnm : nm ≠ .hid ℓ) :
+      X.varVal (Hξ ξ) nm = X.varVal H nm := by
+    cases nm with
+    | par p => rfl
+    | hid q =>
+      have hq : q ≠ ℓ := by
+        intro heq
+        apply hnm
+        simp [heq]
+      simp [Ctx6.varVal, Hξ, Ctx6.withHid, Function.update_of_ne hq]
+  have hReqNbhdEq (ξ : Fin N) (β : X.Ty) :
+      X.reqNbhd (Hξ ξ) ((reqNames6 β).erase (.hid ℓ)) =
+        X.reqNbhd H ((reqNames6 β).erase (.hid ℓ)) := by
+    ext z
+    unfold Ctx6.reqNbhd
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro hz nm hnm
+      have hh := hz nm hnm
+      rw [hVarValEq ξ nm (Finset.mem_erase.mp hnm).1] at hh
+      exact hh
+    · intro hz nm hnm
+      have hh := hz nm hnm
+      rw [← hVarValEq ξ nm (Finset.mem_erase.mp hnm).1] at hh
+      exact hh
+  have hLabelLawEq (ξ : Fin N) (β : X.Ty) (i : X.ι) :
+      X.labelLaw (Hξ ξ) ((reqNames6 β).erase (.hid ℓ)) i =
+        X.labelLaw H ((reqNames6 β).erase (.hid ℓ)) i := by
+    unfold Ctx6.labelLaw
+    rw [hReqNbhdEq ξ β]
+  have hTupleRefWeight (H₀ : X.Hist) (β : X.Ty) (refTag : FinProb X.ι)
+      (drop : X.Name) (z : X.Tuple) :
+      (X.tupleRef H₀ β refTag drop).w z =
+        refTag.w z.1 * ∏ r, (X.labelLaw H₀ ((reqNames6 β).erase drop) z.1).w (z.2 r) := by
+    simp [Ctx6.tupleRef, Ctx6.tupleLawOn, FinProb.bind, FinProb.pi]
+  have hLowRefWeightEq (ξ : Fin N) (β : X.Ty) (z : X.Tuple) :
+      (X.lowRef (Hξ ξ) b β).w z = (X.lowRef H b β).w z := by
+    change (X.tupleRef (Hξ ξ) β (X.TβDel (Hξ ξ) β ℓ) (.hid ℓ)).w z =
+      (X.tupleRef H β (X.TβDel H β ℓ) (.hid ℓ)).w z
+    rw [hTupleRefWeight (Hξ ξ) β (X.TβDel (Hξ ξ) β ℓ) (.hid ℓ) z,
+      hTupleRefWeight H β (X.TβDel H β ℓ) (.hid ℓ) z,
+      hTagDelPostEq ξ β, hLabelLawEq ξ β]
+  have hLowLikOuter (ξ η : Fin N) (β : X.Ty) (z : X.Tuple) :
+      X.lowLik (Hξ ξ) b η β z = X.lowLik H b η β z := by
+    unfold Ctx6.lowLik
+    rw [hUpdateTwice ξ η]
+    unfold Ctx6.tupleRatio
+    rw [hTagDelPostEq ξ β, hLabelLawEq ξ β]
+  have hLowGateOuter (ξ η : Fin N) (D : Finset (X.Loc × X.Ty)) :
+      X.LowGate (Hξ ξ) b D η = X.LowGate H b D η := by
+    unfold Ctx6.LowGate
+    rw [hUpdateTwice ξ η]
+    simp [Hξ, ℓ, Ctx6.withHid]
+  have hLowFOuter (ξ η : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.lowF (Hξ ξ) b D o η = X.lowF H b D o η := by
+    unfold Ctx6.lowF
+    rw [hLowGateOuter ξ η D]
+    congr 1
+    apply Finset.prod_congr rfl
+    intro e he
+    exact hLowLikOuter ξ η e.2 (o e)
+  have hLowQOuter (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.lowQ (Hξ ξ) b D o = X.lowQ H b D o := by
+    unfold Ctx6.lowQ
+    apply Finset.prod_congr rfl
+    intro e he
+    exact hLowRefWeightEq ξ e.2 (o e)
+  have hPresProbOuter (ξ η : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.presProb (Hξ ξ) P b D o η = X.presProb H P b D o η := by
+    unfold Ctx6.presProb
+    rw [hUpdateTwice ξ η]
+  have hTableOuter (ξ η : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.table (Hξ ξ) P b D o η = X.table H P b D o η := by
+    unfold Ctx6.table
+    rw [hPresProbOuter ξ η D o, hLowFOuter ξ η D o, hLowQOuter ξ D o]
+  have hAdjWeightOuter (ξ η : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.adjWeight (Hξ ξ) P b D o η = X.adjWeight H P b D o η := by
+    unfold Ctx6.adjWeight
+    rw [hLowFOuter ξ η D o, hTableOuter ξ η D o]
+    rfl
+  have hS3WeightOuter (ξ η : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.s3Weight (Hξ ξ) b D o none η = X.s3Weight H b D o none η := by
+    unfold Ctx6.s3Weight
+    rw [hMode]
+    unfold Ctx6.lowWeight
+    have hprod :
+        (∏ e ∈ D, if none = some e then 1 else X.lowLik (Hξ ξ) b η e.2 (o e)) =
+          ∏ e ∈ D, if none = some e then 1 else X.lowLik H b η e.2 (o e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      simp [hLowLikOuter ξ η e.2 (o e)]
+    rw [hprod, hLowGateOuter ξ η D]
+    rfl
+  have hS3PostOuter (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.s3Post (Hξ ξ) b D o = X.s3Post H b D o := by
+    have hweights :
+        (fun η => X.s3Weight (Hξ ξ) b D o none η) = fun η => X.s3Weight H b D o none η := by
+      funext η
+      exact hS3WeightOuter ξ η D o
+    unfold Ctx6.s3Post
+    exact congrArg (fun w : Fin N → ℝ => normalize6 w X.y₀) hweights
+  have hBaseMassOuter (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      (∑ η, (X.hidPost (Hξ ξ).1 (X.tgt b).1).w η * X.lowF (Hξ ξ) b D o η) =
+        ∑ η, (X.hidPost H.1 (X.tgt b).1).w η * X.lowF H b D o η := by
+    apply Finset.sum_congr rfl
+    intro η hη
+    rw [hLowFOuter ξ η D o]
+    rfl
+  have hAdjMassOuter (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      (∑ η, X.adjWeight (Hξ ξ) P b D o η) = ∑ η, X.adjWeight H P b D o η := by
+    apply Finset.sum_congr rfl
+    intro η hη
+    exact hAdjWeightOuter ξ η D o
+  have hAdjLawOuter (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      normalize6 (X.adjWeight (Hξ ξ) P b D o) X.y₀ =
+        normalize6 (X.adjWeight H P b D o) X.y₀ := by
+    have hweights :
+        (fun η => X.adjWeight (Hξ ξ) P b D o η) = fun η => X.adjWeight H P b D o η := by
+      funext η
+      exact hAdjWeightOuter ξ η D o
+    exact congrArg (fun w : Fin N → ℝ => normalize6 w X.y₀) hweights
+  have hLowRowOuter (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.lowRow (Hξ ξ) P b D o = X.lowRow H P b D o := by
+    unfold Ctx6.lowRow
+    rw [hBaseMassOuter ξ D o, hAdjMassOuter ξ D o,
+      hAdjLawOuter ξ D o, hS3PostOuter ξ D o]
+  have hLowFDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ξ : Fin N)
+      (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.lowF H₀ b D o ξ = X.lowF H₀ b D o' ξ := by
+    unfold Ctx6.lowF
+    have hp : (∏ e ∈ D, X.lowLik H₀ b ξ e.2 (o e)) =
+        ∏ e ∈ D, X.lowLik H₀ b ξ e.2 (o' e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      rw [ho e he]
+    rw [hp]
+  have hLowQDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.lowQ H₀ b D o = X.lowQ H₀ b D o' := by
+    unfold Ctx6.lowQ
+    apply Finset.prod_congr rfl
+    intro e he
+    rw [ho e he]
+  have hPresProbDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ξ : Fin N)
+      (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.presProb H₀ P b D o ξ = X.presProb H₀ P b D o' ξ := by
+    unfold Ctx6.presProb
+    apply congrArg
+    funext ω
+    apply propext
+    unfold Ctx6.Presents
+    constructor
+    · rintro ⟨hv, hd, hdata⟩
+      refine ⟨hv, hd, ?_⟩
+      intro e he
+      rw [← ho e he]
+      exact hdata e he
+    · rintro ⟨hv, hd, hdata⟩
+      refine ⟨hv, hd, ?_⟩
+      intro e he
+      rw [ho e he]
+      exact hdata e he
+  have hTableDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ξ : Fin N)
+      (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.table H₀ P b D o ξ = X.table H₀ P b D o' ξ := by
+    unfold Ctx6.table
+    rw [hPresProbDataExt H₀ D o o' ξ ho, hLowFDataExt H₀ D o o' ξ ho,
+      hLowQDataExt H₀ D o o' ho]
+  have hAdjWeightDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ξ : Fin N)
+      (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.adjWeight H₀ P b D o ξ = X.adjWeight H₀ P b D o' ξ := by
+    unfold Ctx6.adjWeight
+    rw [hLowFDataExt H₀ D o o' ξ ho, hTableDataExt H₀ D o o' ξ ho]
+  have hS3WeightDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ξ : Fin N)
+      (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.s3Weight H₀ b D o none ξ = X.s3Weight H₀ b D o' none ξ := by
+    unfold Ctx6.s3Weight
+    rw [hMode]
+    unfold Ctx6.lowWeight
+    have hp :
+        (∏ e ∈ D, if none = some e then 1 else X.lowLik H₀ b ξ e.2 (o e)) =
+          ∏ e ∈ D, if none = some e then 1 else X.lowLik H₀ b ξ e.2 (o' e) := by
+      apply Finset.prod_congr rfl
+      intro e he
+      simp [ho e he]
+    rw [hp]
+  have hS3PostDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.s3Post H₀ b D o = X.s3Post H₀ b D o' := by
+    have hweights : (fun ξ => X.s3Weight H₀ b D o none ξ) =
+        fun ξ => X.s3Weight H₀ b D o' none ξ := by
+      funext ξ
+      exact hS3WeightDataExt H₀ D o o' ξ ho
+    unfold Ctx6.s3Post
+    exact congrArg (fun w : Fin N → ℝ => normalize6 w X.y₀) hweights
+  have hBaseMassDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ho : ∀ e, e ∈ D → o e = o' e) :
+      (∑ ξ, (X.hidPost H₀.1 (X.tgt b).1).w ξ * X.lowF H₀ b D o ξ) =
+        ∑ ξ, (X.hidPost H₀.1 (X.tgt b).1).w ξ * X.lowF H₀ b D o' ξ := by
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    rw [hLowFDataExt H₀ D o o' ξ ho]
+  have hAdjMassDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ho : ∀ e, e ∈ D → o e = o' e) :
+      (∑ ξ, X.adjWeight H₀ P b D o ξ) = ∑ ξ, X.adjWeight H₀ P b D o' ξ := by
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    exact hAdjWeightDataExt H₀ D o o' ξ ho
+  have hAdjLawDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ho : ∀ e, e ∈ D → o e = o' e) :
+      normalize6 (X.adjWeight H₀ P b D o) X.y₀ =
+        normalize6 (X.adjWeight H₀ P b D o') X.y₀ := by
+    have hweights : (fun ξ => X.adjWeight H₀ P b D o ξ) =
+        fun ξ => X.adjWeight H₀ P b D o' ξ := by
+      funext ξ
+      exact hAdjWeightDataExt H₀ D o o' ξ ho
+    exact congrArg (fun w : Fin N → ℝ => normalize6 w X.y₀) hweights
+  have hLowRowDataExt (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o o' : X.Data X.Loc) (ho : ∀ e, e ∈ D → o e = o' e) :
+      X.lowRow H₀ P b D o = X.lowRow H₀ P b D o' := by
+    unfold Ctx6.lowRow
+    rw [hBaseMassDataExt H₀ D o o' ho, hAdjMassDataExt H₀ D o o' ho,
+      hAdjLawDataExt H₀ D o o' ho, hS3PostDataExt H₀ D o o' ho]
+  have hSomeProxy : ∃ ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties,
+      (X.proxyLaw (Hξ y)).w ω ≠ 0 := by
+    by_contra hn
+    have hw : ∀ ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties,
+        (X.proxyLaw (Hξ y)).w ω = 0 := by
+      intro ω
+      by_contra hω
+      exact hn ⟨ω, hω⟩
+    have hzero : ∑ ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties,
+        (X.proxyLaw (Hξ y)).w ω = 0 := by
+      simp [hw]
+    rw [(X.proxyLaw (Hξ y)).sum_eq_one] at hzero
+    norm_num at hzero
+  let oBase : X.Data X.Loc := (Classical.choose hSomeProxy).1.1
+  let PartData : Type := (X.Loc × X.Ty) → Option X.Tuple
+  let Key : Type := Finset (X.Loc × X.Ty) × PartData
+  let partialData (D : Finset (X.Loc × X.Ty)) (z : PartData) : X.Data X.Loc :=
+    fun e => (z e).getD (oBase e)
+  let obsKey (ξ : Fin N) (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties) : Key :=
+    let C := X.assemble P ω
+    let D := X.actDesc (Hξ ξ) C X.Rshort b
+    (D, fun e => if he : e ∈ D then some (X.tup C e) else none)
+  let PresentsKey (H₀ : X.Hist) (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties)
+      (k : Key) : Prop :=
+    X.OddValid H₀ (X.assemble P ω) X.Rshort b ∧
+      X.actDesc H₀ (X.assemble P ω) X.Rshort b = k.1 ∧
+        ∀ e, k.2 e = if e ∈ k.1 then some (X.tup (X.assemble P ω) e) else none
+  have hPresentsKeyIff (ξ : Fin N) (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties)
+      (k : Key) :
+      PresentsKey (Hξ ξ) ω k ↔ X.OddValid (Hξ ξ) (X.assemble P ω) X.Rshort b ∧ k = obsKey ξ ω := by
+    constructor
+    · rintro ⟨hv, hd, hz⟩
+      refine ⟨hv, ?_⟩
+      apply Prod.ext
+      · exact hd.symm
+      · funext e
+        rw [← hd] at hz
+        simpa [obsKey] using hz e
+    · rintro ⟨hv, hk⟩
+      subst k
+      refine ⟨hv, rfl, ?_⟩
+      intro e
+      simp [obsKey]
+  have hRowPartition (ξ : Fin N) (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties) :
+      X.proxyRow (Hξ ξ) (X.assemble P ω) u y =
+        ∑ k : Key, if PresentsKey (Hξ ξ) ω k then
+          (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0 := by
+    let C := X.assemble P ω
+    let k₀ := obsKey ξ ω
+    by_cases hv : X.OddValid (Hξ ξ) C X.Rshort b
+    · have hdata (e : X.Loc × X.Ty) (he : e ∈ k₀.1) :
+          (X.tup C) e = (partialData k₀.1 k₀.2) e := by
+        simp [partialData, obsKey, C, k₀, he]
+      have hrow : X.lowRow (Hξ ξ) P b k₀.1 (X.tup C) =
+          X.lowRow H P b k₀.1 (partialData k₀.1 k₀.2) := by
+        rw [hLowRowOuter ξ k₀.1 (X.tup C)]
+        exact hLowRowDataExt H k₀.1 (X.tup C) (partialData k₀.1 k₀.2) hdata
+      have hevent (k : Key) : PresentsKey (Hξ ξ) ω k ↔ k = k₀ := by
+        rw [hPresentsKeyIff ξ ω k]
+        simp [hv, C, k₀]
+      have hsum :
+          (∑ k : Key, if PresentsKey (Hξ ξ) ω k then
+            (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) =
+            (X.lowRow H P b k₀.1 (partialData k₀.1 k₀.2)).w y := by
+        calc
+          _ = ∑ k : Key, if k = k₀ then
+                (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0 := by
+              apply Finset.sum_congr rfl
+              intro k hk
+              simp [hevent k]
+          _ = _ := by
+            rw [Fintype.sum_eq_single k₀]
+            · simp
+            · intro k hk
+              simp [hk]
+      calc
+        X.proxyRow (Hξ ξ) C u y =
+            (X.lowRow (Hξ ξ) P b k₀.1 (X.tup C)).w y := by
+          have hv' : X.OddValid (Hξ ξ) C X.Rshort (X.g.L.stateOf u) := by
+            simpa [b] using hv
+          have hMode' : X.stMode (X.g.L.stateOf u) = Mode6.low := by
+            simpa [b] using hMode
+          unfold Ctx6.proxyRow Ctx6.oddRowAt
+          rw [if_pos hv', hMode']
+          rfl
+        _ = (X.lowRow H P b k₀.1 (partialData k₀.1 k₀.2)).w y := by
+          rw [hrow]
+        _ = ∑ k : Key, if PresentsKey (Hξ ξ) ω k then
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0 := hsum.symm
+    · have hnone (k : Key) : ¬ PresentsKey (Hξ ξ) ω k := by
+        intro hp
+        exact hv (hPresentsKeyIff ξ ω k |>.mp hp).1
+      have hsum0 :
+          (∑ k : Key, if PresentsKey (Hξ ξ) ω k then
+            (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) = 0 := by
+        apply Finset.sum_eq_zero
+        intro k hk
+        simp [hnone k]
+      calc
+        X.proxyRow (Hξ ξ) C u y = 0 := by
+          simp [Ctx6.proxyRow, Ctx6.oddRowAt, C, b, hv]
+        _ = ∑ k : Key, if PresentsKey (Hξ ξ) ω k then
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0 := hsum0.symm
+  let PartValid (D : Finset (X.Loc × X.Ty)) (z : PartData) : Prop :=
+    (∀ e ∈ D, ∃ t, z e = some t) ∧ ∀ e, e ∉ D → z e = none
+  have hPresentsKeyDataIff (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (z : PartData)
+      (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties) :
+      PresentsKey (Hξ ξ) ω (D, z) ↔
+        (X.Presents (Hξ ξ) (X.assemble P ω) b D (partialData D z) ∧ PartValid D z) := by
+    constructor
+    · rintro ⟨hv, hd, hz⟩
+      refine ⟨⟨hv, hd, ?_⟩, ⟨?_, ?_⟩⟩
+      · intro e he
+        have hze : z e = some (X.tup (X.assemble P ω) e) := by simpa [he] using hz e
+        have hdata : partialData D z e = X.tup (X.assemble P ω) e := by
+          simp [partialData, hze]
+        exact hdata.symm
+      · intro e he
+        have hze : z e = some (X.tup (X.assemble P ω) e) := by simpa [he] using hz e
+        exact ⟨X.tup (X.assemble P ω) e, hze⟩
+      · intro e he
+        simpa [he] using hz e
+    · rintro ⟨⟨hv, hd, hdata⟩, hvalid⟩
+      refine ⟨hv, hd, ?_⟩
+      intro e
+      by_cases he : e ∈ D
+      · obtain ⟨t, ht⟩ := hvalid.1 e he
+        have hpd : partialData D z e = t := by simp [partialData, ht]
+        have htuple : X.tup (X.assemble P ω) e = t := by rw [hdata e he, hpd]
+        simp [he, ht, htuple]
+      · simp [he, hvalid.2 e he]
+  have hKeyPr (ξ : Fin N) (D : Finset (X.Loc × X.Ty)) (z : PartData) :
+      (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω (D, z)) =
+        if PartValid D z then
+          X.presProb H P b D (partialData D z) ξ else 0 := by
+    by_cases hvalid : PartValid D z
+    · rw [if_pos hvalid]
+      have hpred :
+        (fun ω => PresentsKey (Hξ ξ) ω (D, z)) =
+          fun ω => X.Presents (Hξ ξ) (X.assemble P ω) b D (partialData D z) := by
+        funext ω
+        apply propext
+        have hi := hPresentsKeyDataIff ξ D z ω
+        rw [hi]
+        constructor
+        · intro hp
+          exact hp.1
+        · intro hp
+          exact ⟨hp, hvalid⟩
+      unfold Ctx6.presProb
+      rw [hpred]
+    · have hnone (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties) :
+        ¬ PresentsKey (Hξ ξ) ω (D, z) := by
+        intro hp
+        exact hvalid (hPresentsKeyDataIff ξ D z ω |>.mp hp).2
+      rw [if_neg hvalid]
+      rw [pr_zero_of_supp6 (X.proxyLaw (Hξ ξ)) (fun ω _ => hnone ω)]
+  have hFiberExpect (ξ : Fin N) :
+      (X.proxyLaw (Hξ ξ)).expect (fun ω => X.proxyRow (Hξ ξ) (X.assemble P ω) u y) =
+        ∑ k : Key, (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k) *
+          (X.lowRow H P b k.1 (partialData k.1 k.2)).w y := by
+    unfold FinProb.expect
+    calc
+      (∑ ω, (X.proxyLaw (Hξ ξ)).w ω *
+          X.proxyRow (Hξ ξ) (X.assemble P ω) u y) =
+        ∑ ω, (X.proxyLaw (Hξ ξ)).w ω *
+          (∑ k : Key, if PresentsKey (Hξ ξ) ω k then
+            (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) := by
+              apply Finset.sum_congr rfl
+              intro ω hω
+              rw [hRowPartition ξ ω]
+      _ = ∑ k : Key, ∑ ω,
+          (X.proxyLaw (Hξ ξ)).w ω *
+            (if PresentsKey (Hξ ξ) ω k then
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) := by
+              calc
+                _ = ∑ ω, ∑ k : Key, (X.proxyLaw (Hξ ξ)).w ω *
+                      (if PresentsKey (Hξ ξ) ω k then
+                        (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) := by
+                  apply Finset.sum_congr rfl
+                  intro ω hω
+                  change (X.proxyLaw (Hξ ξ)).w ω *
+                    (Finset.univ.sum fun k : Key => if PresentsKey (Hξ ξ) ω k then
+                      (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) = _
+                  rw [Finset.mul_sum]
+                _ = ∑ k : Key, ∑ ω,
+                      (X.proxyLaw (Hξ ξ)).w ω *
+                        (if PresentsKey (Hξ ξ) ω k then
+                          (X.lowRow H P b k.1 (partialData k.1 k.2)).w y else 0) :=
+                    Finset.sum_comm
+      _ = ∑ k : Key, (X.proxyLaw (Hξ ξ)).pr
+            (fun ω => PresentsKey (Hξ ξ) ω k) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y := by
+              apply Finset.sum_congr rfl
+              intro k hk
+              unfold FinProb.pr
+              rw [Finset.sum_mul]
+              apply Finset.sum_congr rfl
+              intro ω hω
+              by_cases hp : PresentsKey (Hξ ξ) ω k <;> simp [hp]
+  let prior (ξ : Fin N) : ℝ := (X.hidPost H.1 ℓ.1).w ξ
+  have hTotalFiber :
+      (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).expect
+        (fun ω => X.proxyRow (Hξ ξ) (X.assemble P ω) u y)) =
+        ∑ k : Key, (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr
+          (fun ω => PresentsKey (Hξ ξ) ω k)) *
+            (X.lowRow H P b k.1 (partialData k.1 k.2)).w y := by
+    calc
+      _ = ∑ ξ, prior ξ *
+          (∑ k : Key, (X.proxyLaw (Hξ ξ)).pr
+            (fun ω => PresentsKey (Hξ ξ) ω k) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y) := by
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            rw [hFiberExpect ξ]
+      _ = ∑ ξ, ∑ k : Key, prior ξ *
+            ((X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y) := by
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            change prior ξ * (Finset.univ.sum fun k : Key =>
+              (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k) *
+                (X.lowRow H P b k.1 (partialData k.1 k.2)).w y) = _
+            rw [Finset.mul_sum]
+      _ = ∑ k : Key, ∑ ξ, prior ξ *
+            ((X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y) := Finset.sum_comm
+      _ = ∑ k : Key, (∑ ξ, prior ξ *
+            (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k)) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y := by
+            apply Finset.sum_congr rfl
+            intro k hk
+            change (Finset.univ.sum fun ξ : Fin N => prior ξ *
+                ((X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k) *
+                  (X.lowRow H P b k.1 (partialData k.1 k.2)).w y)) = _
+            rw [Finset.sum_mul]
+            apply Finset.sum_congr rfl
+            intro ξ hξ
+            ring
+  have hSafeRatioNonneg {a c : ℝ} (ha : 0 ≤ a) (hc : 0 ≤ c) :
+      0 ≤ safeRatio6 a c := by
+    unfold safeRatio6
+    split_ifs <;> positivity
+  have hTupleRatioNonneg (H₁ H₀ : X.Hist) (β : X.Ty) (refTag : FinProb X.ι)
+      (drop : X.Name) (z : X.Tuple) :
+      0 ≤ X.tupleRatio H₁ H₀ β refTag drop z := by
+    unfold Ctx6.tupleRatio
+    apply mul_nonneg
+    · exact hSafeRatioNonneg ((X.Tβ H₁ β).nonneg z.1) (refTag.nonneg z.1)
+    · apply Finset.prod_nonneg
+      intro r hr
+      exact hSafeRatioNonneg
+        ((X.labelLaw H₁ (reqNames6 β) z.1).nonneg (z.2 r))
+        ((X.labelLaw H₀ ((reqNames6 β).erase drop) z.1).nonneg (z.2 r))
+  have hLowLikNonneg (H₀ : X.Hist) (ξ : Fin N) (β : X.Ty) (z : X.Tuple) :
+      0 ≤ X.lowLik H₀ b ξ β z := by
+    unfold Ctx6.lowLik
+    exact hTupleRatioNonneg (X.withHid H₀ (X.tgt b) ξ) H₀ β
+      (X.TβDel H₀ β (X.tgt b)) (.hid (X.tgt b)) z
+  have hLowFNonneg (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o : X.Data X.Loc) (ξ : Fin N) : 0 ≤ X.lowF H₀ b D o ξ := by
+    unfold Ctx6.lowF
+    apply mul_nonneg
+    · split_ifs <;> norm_num
+    · apply Finset.prod_nonneg
+      intro e he
+      exact hLowLikNonneg H₀ ξ e.2 (o e)
+  have hLowQNonneg (H₀ : X.Hist) (D : Finset (X.Loc × X.Ty))
+      (o : X.Data X.Loc) : 0 ≤ X.lowQ H₀ b D o := by
+    unfold Ctx6.lowQ
+    apply Finset.prod_nonneg
+    intro e he
+    exact (X.lowRef H₀ b e.2).nonneg (o e)
+  have hRatioDenIdentity (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) (ξ : Fin N) :
+      safeRatio6 (X.presProb H P b D o ξ)
+          (X.lowF H b D o ξ * X.lowQ H b D o) *
+        (X.lowF H b D o ξ * X.lowQ H b D o) = X.presProb H P b D o ξ := by
+    let p := X.presProb H P b D o ξ
+    let d := X.lowF H b D o ξ * X.lowQ H b D o
+    have hp : 0 ≤ p := by
+      dsimp [p]
+      unfold Ctx6.presProb
+      exact pr_nonneg6 _ _
+    have hpd : p ≤ d := by
+      dsimp [p, d]
+      exact hTable H P b D o ξ hBase hMode
+    have hd : 0 ≤ d := le_trans hp hpd
+    by_cases hd0 : d = 0
+    · have hp0 : p = 0 := by linarith
+      simp [p, d, safeRatio6, hd0, hp0]
+    · unfold safeRatio6
+      rw [if_neg hd0]
+      change p / d * d = p
+      exact div_mul_cancel₀ p hd0
+  have hAdjWeightTimesQ (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) (ξ : Fin N) :
+      X.adjWeight H P b D o ξ * X.lowQ H b D o =
+        prior ξ * X.presProb H P b D o ξ := by
+    unfold Ctx6.adjWeight Ctx6.table
+    calc
+      ((X.hidPost H.1 ℓ.1).w ξ * X.lowF H b D o ξ) *
+          safeRatio6 (X.presProb H P b D o ξ)
+            (X.lowF H b D o ξ * X.lowQ H b D o) * X.lowQ H b D o =
+        (X.hidPost H.1 ℓ.1).w ξ *
+          (safeRatio6 (X.presProb H P b D o ξ)
+            (X.lowF H b D o ξ * X.lowQ H b D o) *
+              (X.lowF H b D o ξ * X.lowQ H b D o)) := by ring
+      _ = prior ξ * X.presProb H P b D o ξ := by
+        rw [hRatioDenIdentity D o ξ]
+  have hAdjTotalTimesQ (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      (∑ ξ, X.adjWeight H P b D o ξ) * X.lowQ H b D o =
+        ∑ ξ, prior ξ * X.presProb H P b D o ξ := by
+    rw [Finset.sum_mul]
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    exact hAdjWeightTimesQ D o ξ
+  have hPriorNonneg (ξ : Fin N) : 0 ≤ prior ξ :=
+    (X.hidPost H.1 ℓ.1).nonneg ξ
+  have hBaseWeightNonneg (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) (ξ : Fin N) :
+      0 ≤ prior ξ * X.lowF H b D o ξ :=
+    mul_nonneg (hPriorNonneg ξ) (hLowFNonneg H D o ξ)
+  have hTableNonneg (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) (ξ : Fin N) :
+      0 ≤ X.table H P b D o ξ := by
+    unfold Ctx6.table
+    apply hSafeRatioNonneg
+    · unfold Ctx6.presProb
+      exact pr_nonneg6 _ _
+    · exact mul_nonneg (hLowFNonneg H D o ξ) (hLowQNonneg H D o)
+  have hAdjWeightNonneg (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) (ξ : Fin N) :
+      0 ≤ X.adjWeight H P b D o ξ := by
+    unfold Ctx6.adjWeight
+    exact mul_nonneg (mul_nonneg (hPriorNonneg ξ) (hLowFNonneg H D o ξ))
+      (hTableNonneg D o ξ)
+  have hNormalizeAt (f : Fin N → ℝ) (hf : ∀ ξ, 0 ≤ f ξ)
+      (hSum : 0 < ∑ ξ, f ξ) :
+      (normalize6 f X.y₀).w y = f y / ∑ ξ, f ξ := by
+    have hClip : (∑ ξ, max 0 (f ξ)) = ∑ ξ, f ξ := by
+      apply Finset.sum_congr rfl
+      intro ξ hξ
+      exact max_eq_right (hf ξ)
+    have hClipPos : 0 < ∑ ξ, max 0 (f ξ) := by rw [hClip]; exact hSum
+    unfold normalize6
+    rw [dif_pos hClipPos]
+    simp only [max_eq_right (hf y), hClip]
+  have hS3WeightBaseEq (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) (ξ : Fin N) :
+      X.s3Weight H b D o none ξ = prior ξ * X.lowF H b D o ξ := by
+    unfold Ctx6.s3Weight
+    rw [hMode]
+    unfold Ctx6.lowWeight Ctx6.lowF
+    by_cases hg : X.LowGate H b D ξ <;> simp [hg, prior, ℓ]
+  have hS3PostBaseWeight (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc)
+      (hSum : 0 < ∑ ξ, prior ξ * X.lowF H b D o ξ) :
+      (X.s3Post H b D o).w y =
+        (prior y * X.lowF H b D o y) / ∑ ξ, prior ξ * X.lowF H b D o ξ := by
+    have hClip :
+        (∑ ξ, max 0 (X.s3Weight H b D o none ξ)) =
+          ∑ ξ, prior ξ * X.lowF H b D o ξ := by
+      calc
+        (∑ ξ, max 0 (X.s3Weight H b D o none ξ)) =
+            ∑ ξ, max 0 (prior ξ * X.lowF H b D o ξ) := by
+              apply Finset.sum_congr rfl
+              intro ξ hξ
+              rw [hS3WeightBaseEq D o ξ]
+        _ = ∑ ξ, prior ξ * X.lowF H b D o ξ := by
+              apply Finset.sum_congr rfl
+              intro ξ hξ
+              exact max_eq_right (hBaseWeightNonneg D o ξ)
+    have hClipPos : 0 < ∑ ξ, max 0 (X.s3Weight H b D o none ξ) := by
+      rw [hClip]
+      exact hSum
+    unfold Ctx6.s3Post normalize6
+    rw [dif_pos hClipPos]
+    change max 0 (X.s3Weight H b D o none y) /
+        (∑ ξ, max 0 (X.s3Weight H b D o none ξ)) = _
+    have hNum : max 0 (X.s3Weight H b D o none y) = prior y * X.lowF H b D o y := by
+      rw [hS3WeightBaseEq D o y]
+      exact max_eq_right (hBaseWeightNonneg D o y)
+    rw [hNum, hClip]
+  have hRatioDenLeNum {a d : ℝ} (ha : 0 ≤ a) :
+      d * safeRatio6 a d ≤ a := by
+    by_cases hd : d = 0
+    · simp [safeRatio6, hd, ha]
+    · unfold safeRatio6
+      rw [if_neg hd]
+      have heq : d * (a / d) = a := by
+        calc
+          d * (a / d) = (a / d) * d := by ring
+          _ = a := div_mul_cancel₀ a hd
+      exact heq.le
+  have hRawTupleWeight (H₀ : X.Hist) (β : X.Ty) (z : X.Tuple) :
+      (X.tupleLaw H₀ β).w z =
+        (X.Tβ H₀ β).w z.1 *
+          ∏ r, (X.labelLaw H₀ (reqNames6 β) z.1).w (z.2 r) := by
+    simp [Ctx6.tupleLaw, Ctx6.tupleLawOn, FinProb.bind, FinProb.pi]
+  have hTupleSubdensity (β : X.Ty) (z : X.Tuple) :
+      (X.lowRef H b β).w z * X.lowLik H b y β z ≤
+        (X.tupleLaw (X.withHid H ℓ y) β).w z := by
+    let Hcand := X.withHid H ℓ y
+    let tagNum := (X.Tβ Hcand β).w z.1
+    let tagDen := (X.TβDel H β ℓ).w z.1
+    let labNum (r : Fin X.k) := (X.labelLaw Hcand (reqNames6 β) z.1).w (z.2 r)
+    let labDen (r : Fin X.k) :=
+      (X.labelLaw H ((reqNames6 β).erase (.hid ℓ)) z.1).w (z.2 r)
+    have hTagLe : tagDen * safeRatio6 tagNum tagDen ≤ tagNum :=
+      hRatioDenLeNum ((X.Tβ Hcand β).nonneg z.1)
+    have hLabLe (r : Fin X.k) :
+        labDen r * safeRatio6 (labNum r) (labDen r) ≤ labNum r :=
+      hRatioDenLeNum ((X.labelLaw Hcand (reqNames6 β) z.1).nonneg (z.2 r))
+    have hLabProdLe : (∏ r, labDen r * safeRatio6 (labNum r) (labDen r)) ≤
+        ∏ r, labNum r := by
+      apply Finset.prod_le_prod₀
+      · intro r hr
+        exact mul_nonneg
+          ((X.labelLaw H ((reqNames6 β).erase (.hid ℓ)) z.1).nonneg (z.2 r))
+          (hSafeRatioNonneg
+            ((X.labelLaw Hcand (reqNames6 β) z.1).nonneg (z.2 r))
+            ((X.labelLaw H ((reqNames6 β).erase (.hid ℓ)) z.1).nonneg (z.2 r)))
+      · intro r hr
+        exact hLabLe r
+    have hTagFactorNonneg : 0 ≤ tagDen * safeRatio6 tagNum tagDen :=
+      mul_nonneg ((X.TβDel H β ℓ).nonneg z.1)
+        (hSafeRatioNonneg ((X.Tβ Hcand β).nonneg z.1) ((X.TβDel H β ℓ).nonneg z.1))
+    have hLabNumProdNonneg : 0 ≤ ∏ r, labNum r := by
+      apply Finset.prod_nonneg
+      intro r hr
+      exact (X.labelLaw Hcand (reqNames6 β) z.1).nonneg (z.2 r)
+    have hFactor : (X.lowRef H b β).w z * X.lowLik H b y β z =
+        (tagDen * safeRatio6 tagNum tagDen) *
+          ∏ r, labDen r * safeRatio6 (labNum r) (labDen r) := by
+      unfold Ctx6.lowRef Ctx6.lowLik Ctx6.tupleRatio
+      rw [hTupleRefWeight H β (X.TβDel H β ℓ) (.hid ℓ) z]
+      dsimp [Hcand, tagNum, tagDen, labNum, labDen]
+      calc
+        _ = ((X.TβDel H β ℓ).w z.1 *
+              safeRatio6 ((X.Tβ (X.withHid H ℓ y) β).w z.1)
+                ((X.TβDel H β ℓ).w z.1)) *
+              ((∏ r, (X.labelLaw H ((reqNames6 β).erase (.hid ℓ)) z.1).w (z.2 r)) *
+                ∏ r, safeRatio6
+                  ((X.labelLaw (X.withHid H ℓ y) (reqNames6 β) z.1).w (z.2 r))
+                  ((X.labelLaw H ((reqNames6 β).erase (.hid ℓ)) z.1).w (z.2 r))) := by ring
+        _ = _ := by rw [← Finset.prod_mul_distrib]
+    have hCombined :
+        (tagDen * safeRatio6 tagNum tagDen) *
+            ∏ r, labDen r * safeRatio6 (labNum r) (labDen r) ≤
+          tagNum * ∏ r, labNum r := by
+      calc
+        (tagDen * safeRatio6 tagNum tagDen) *
+            ∏ r, labDen r * safeRatio6 (labNum r) (labDen r) ≤
+          (tagDen * safeRatio6 tagNum tagDen) * ∏ r, labNum r :=
+            mul_le_mul_of_nonneg_left hLabProdLe hTagFactorNonneg
+        _ ≤ tagNum * ∏ r, labNum r :=
+          mul_le_mul_of_nonneg_right hTagLe hLabNumProdNonneg
+    calc
+      (X.lowRef H b β).w z * X.lowLik H b y β z =
+          (tagDen * safeRatio6 tagNum tagDen) *
+            ∏ r, labDen r * safeRatio6 (labNum r) (labDen r) := hFactor
+      _ ≤ tagNum * ∏ r, labNum r := hCombined
+      _ = (X.tupleLaw Hcand β).w z := (hRawTupleWeight Hcand β z).symm
+  have hLowDataDom (D : Finset (X.Loc × X.Ty)) (o : X.Data X.Loc) :
+      X.lowQ H b D o * X.lowF H b D o y ≤
+        ∏ e ∈ D, (X.tupleLaw (X.withHid H ℓ y) e.2).w (o e) := by
+    unfold Ctx6.lowQ Ctx6.lowF
+    by_cases hg : X.LowGate H b D y
+    · simp only [hg, if_pos, one_mul]
+      calc
+        (∏ e ∈ D, (X.lowRef H b e.2).w (o e)) *
+            ∏ e ∈ D, X.lowLik H b y e.2 (o e) =
+          ∏ e ∈ D, (X.lowRef H b e.2).w (o e) * X.lowLik H b y e.2 (o e) := by
+            rw [← Finset.prod_mul_distrib]
+        _ ≤ ∏ e ∈ D, (X.tupleLaw (X.withHid H ℓ y) e.2).w (o e) := by
+            apply Finset.prod_le_prod₀
+            · intro e he
+              exact mul_nonneg ((X.lowRef H b e.2).nonneg (o e))
+                (hLowLikNonneg H y e.2 (o e))
+            · intro e he
+              exact hTupleSubdensity e.2 (o e)
+    · simp [hg]
+      apply Finset.prod_nonneg
+      intro e he
+      exact (X.tupleLaw (X.withHid H ℓ y) e.2).nonneg (o e)
+  have hKeyContributionBound (D : Finset (X.Loc × X.Ty)) (z : PartData) :
+      (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr
+        (fun ω => PresentsKey (Hξ ξ) ω (D, z))) *
+          (X.lowRow H P b D (partialData D z)).w y ≤
+        prior y * (X.proxyLaw (Hξ y)).pr
+          (fun ω => PresentsKey (Hξ y) ω (D, z)) +
+            (if PartValid D z ∧
+                (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr
+                  (fun ω => PresentsKey (Hξ ξ) ω (D, z))) ≠ 0 then
+              X.s3Thr * X.lowQ H b D (partialData D z) *
+              (prior y * X.lowF H b D (partialData D z) y) else 0) := by
+    let oObs : X.Data X.Loc := partialData D z
+    let pKey (ξ : Fin N) : ℝ :=
+      (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω (D, z))
+    let keyMass : ℝ := ∑ ξ, prior ξ * pKey ξ
+    let baseMass : ℝ := ∑ ξ, prior ξ * X.lowF H b D oObs ξ
+    let adjMass : ℝ := ∑ ξ, X.adjWeight H P b D oObs ξ
+    let refMass : ℝ := X.lowQ H b D oObs
+    change keyMass * (X.lowRow H P b D oObs).w y ≤
+      prior y * pKey y +
+        (if PartValid D z ∧ keyMass ≠ 0 then X.s3Thr * refMass *
+          (prior y * X.lowF H b D oObs y) else 0)
+    by_cases hvalid : PartValid D z
+    · 
+      have hpKey (ξ : Fin N) : pKey ξ = X.presProb H P b D oObs ξ := by
+        dsimp [pKey, oObs]
+        rw [hKeyPr ξ D z]
+        simp [hvalid]
+      have hKeyMassEq : keyMass = ∑ ξ, prior ξ * X.presProb H P b D oObs ξ := by
+        dsimp [keyMass]
+        apply Finset.sum_congr rfl
+        intro ξ hξ
+        rw [hpKey ξ]
+      have hKeyMassNonneg : 0 ≤ keyMass := by
+        dsimp [keyMass]
+        apply Finset.sum_nonneg
+        intro ξ hξ
+        exact mul_nonneg (hPriorNonneg ξ) (by dsimp [pKey]; exact pr_nonneg6 _ _)
+      have hBaseMassNonneg : 0 ≤ baseMass := by
+        dsimp [baseMass]
+        apply Finset.sum_nonneg
+        intro ξ hξ
+        exact hBaseWeightNonneg D oObs ξ
+      have hAdjMassNonneg : 0 ≤ adjMass := by
+        dsimp [adjMass]
+        apply Finset.sum_nonneg
+        intro ξ hξ
+        exact hAdjWeightNonneg D oObs ξ
+      have hRefMassNonneg : 0 ≤ refMass := by dsimp [refMass]; exact hLowQNonneg H D oObs
+      have hKeyMassLeBaseRef : keyMass ≤ baseMass * refMass := by
+        rw [hKeyMassEq]
+        calc
+          (∑ ξ, prior ξ * X.presProb H P b D oObs ξ) ≤
+              ∑ ξ, prior ξ * (X.lowF H b D oObs ξ * refMass) := by
+                apply Finset.sum_le_sum
+                intro ξ hξ
+                exact mul_le_mul_of_nonneg_left
+                  (hTable H P b D oObs ξ hBase hMode) (hPriorNonneg ξ)
+          _ = baseMass * refMass := by
+                dsimp [baseMass, refMass]
+                rw [Finset.sum_mul]
+                apply Finset.sum_congr rfl
+                intro ξ hξ
+                ring
+      have hAdjMassRefEq : adjMass * refMass = keyMass := by
+        calc
+          adjMass * refMass = ∑ ξ, prior ξ * X.presProb H P b D oObs ξ := by
+            dsimp [adjMass, refMass]
+            exact hAdjTotalTimesQ D oObs
+          _ = keyMass := hKeyMassEq.symm
+      by_cases hKeyZero : keyMass = 0
+      · have hcond : ¬ (PartValid D z ∧ keyMass ≠ 0) := by
+          rintro ⟨_, hne⟩
+          exact hne hKeyZero
+        rw [if_neg hcond]
+        have hTermNonneg : 0 ≤ prior y * pKey y :=
+          mul_nonneg (hPriorNonneg y) (by dsimp [pKey]; exact pr_nonneg6 _ _)
+        have hTermLeMass : prior y * pKey y ≤ keyMass := by
+          dsimp [keyMass]
+          exact Finset.single_le_sum
+            (fun ξ hξ => mul_nonneg (hPriorNonneg ξ)
+              (by dsimp [pKey]; exact pr_nonneg6 _ _))
+            (Finset.mem_univ y)
+        have hTermZero : prior y * pKey y = 0 := by
+          have hle : prior y * pKey y ≤ 0 := by
+            simpa [hKeyZero] using hTermLeMass
+          exact le_antisymm hle hTermNonneg
+        have hRightNonneg : 0 ≤ prior y * pKey y +
+            X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by
+          have hp : 0 ≤ pKey y := by dsimp [pKey]; exact pr_nonneg6 _ _
+          exact add_nonneg (mul_nonneg (hPriorNonneg y) hp)
+            (mul_nonneg (mul_nonneg (Real.exp_nonneg _) hRefMassNonneg)
+              (hBaseWeightNonneg D oObs y))
+        rw [hpKey y] at hRightNonneg
+        simpa [hKeyZero, hTermZero] using hRightNonneg
+      · have hKeyMassPos : 0 < keyMass :=
+          lt_of_le_of_ne hKeyMassNonneg (Ne.symm hKeyZero)
+        rw [if_pos ⟨hvalid, hKeyZero⟩]
+        have hRefMassPos : 0 < refMass := by
+          by_contra hnot
+          have hz : refMass = 0 := le_antisymm (le_of_not_gt hnot) hRefMassNonneg
+          rw [hz] at hKeyMassLeBaseRef
+          linarith
+        have hAdjMassPos : 0 < adjMass := by
+          by_contra hnot
+          have hz : adjMass = 0 := le_antisymm (le_of_not_gt hnot) hAdjMassNonneg
+          rw [hz] at hAdjMassRefEq
+          linarith
+        have hBaseMassPos : 0 < baseMass := by
+          by_contra hnot
+          have hz : baseMass = 0 := le_antisymm (le_of_not_gt hnot) hBaseMassNonneg
+          rw [hz] at hKeyMassLeBaseRef
+          linarith
+        by_cases hAdjust : X.s3Thr * baseMass ≤ adjMass
+        · have hRowAdj :
+              (X.lowRow H P b D oObs).w y =
+                (X.adjWeight H P b D oObs y) / adjMass := by
+            unfold Ctx6.lowRow
+            rw [if_pos (by simpa [baseMass, adjMass] using hAdjust)]
+            exact hNormalizeAt (fun ξ => X.adjWeight H P b D oObs ξ)
+              (hAdjWeightNonneg D oObs) (by simpa [adjMass] using hAdjMassPos)
+          have hSRow : keyMass * (X.lowRow H P b D oObs).w y =
+              X.adjWeight H P b D oObs y * refMass := by
+            rw [hRowAdj, ← hAdjMassRefEq]
+            field_simp [ne_of_gt hAdjMassPos] <;> ring
+          have hExact : keyMass * (X.lowRow H P b D oObs).w y =
+              prior y * X.presProb H P b D oObs y := by
+            rw [hSRow]
+            exact hAdjWeightTimesQ D oObs y
+          calc
+            keyMass * (X.lowRow H P b D oObs).w y =
+                prior y * X.presProb H P b D oObs y := hExact
+            _ ≤ prior y * X.presProb H P b D oObs y +
+                X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by
+                  exact le_add_of_nonneg_right
+                    (mul_nonneg (mul_nonneg (Real.exp_nonneg _) hRefMassNonneg)
+                      (hBaseWeightNonneg D oObs y))
+            _ = prior y * pKey y +
+                X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by
+                  exact congrArg (fun q => prior y * q +
+                    X.s3Thr * refMass * (prior y * X.lowF H b D oObs y)) (hpKey y).symm
+        · have hAdjUpper : adjMass ≤ X.s3Thr * baseMass :=
+            (lt_of_not_ge hAdjust).le
+          have hRowBase :
+              (X.lowRow H P b D oObs).w y =
+                (prior y * X.lowF H b D oObs y) / baseMass := by
+            unfold Ctx6.lowRow
+            rw [if_neg (by simpa [baseMass, adjMass] using hAdjust)]
+            exact hS3PostBaseWeight D oObs (by simpa [baseMass] using hBaseMassPos)
+          have hFallbackBound :
+              keyMass * (X.lowRow H P b D oObs).w y ≤
+                X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by
+            rw [hRowBase, ← hAdjMassRefEq]
+            calc
+              (adjMass * refMass) *
+                  ((prior y * X.lowF H b D oObs y) / baseMass) =
+                adjMass * (refMass *
+                  ((prior y * X.lowF H b D oObs y) / baseMass)) := by ring
+              _ ≤ (X.s3Thr * baseMass) *
+                  (refMass * ((prior y * X.lowF H b D oObs y) / baseMass)) :=
+                    mul_le_mul_of_nonneg_right hAdjUpper
+                      (mul_nonneg hRefMassNonneg
+                        (div_nonneg (hBaseWeightNonneg D oObs y) hBaseMassPos.le))
+              _ = X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by
+                    field_simp [ne_of_gt hBaseMassPos]
+          calc
+            keyMass * (X.lowRow H P b D oObs).w y ≤
+                X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := hFallbackBound
+            _ = X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) + 0 := by ring
+            _ ≤ prior y * pKey y +
+                X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by
+                  have hPrNonneg : 0 ≤ prior y * X.presProb H P b D oObs y := by
+                    exact mul_nonneg (hPriorNonneg y) (by
+                      unfold Ctx6.presProb
+                      exact pr_nonneg6 _ _)
+                  calc
+                    _ = 0 + X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) := by ring
+                    _ ≤ prior y * X.presProb H P b D oObs y +
+                        X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) :=
+                      by
+                        rw [zero_add]
+                        exact le_add_of_nonneg_left hPrNonneg
+                    _ = prior y * pKey y +
+                        X.s3Thr * refMass * (prior y * X.lowF H b D oObs y) :=
+                      congrArg (fun q => prior y * q +
+                        X.s3Thr * refMass * (prior y * X.lowF H b D oObs y)) (hpKey y).symm
+    · rw [if_neg (by intro hv; exact hvalid hv.1)]
+      have hkeyZero (ξ : Fin N) : pKey ξ = 0 := by
+        dsimp [pKey]
+        rw [hKeyPr ξ D z]
+        simp [hvalid]
+      have hmassZero : keyMass = 0 := by
+        dsimp [keyMass]
+        simp [hkeyZero]
+      rw [hmassZero]
+      simp [hkeyZero]
+  have hKeyFiberMassSum (ξ : Fin N)
+      (ω : (X.Data X.Loc × (X.Loc → Bool)) × X.hp.Ties) :
+      (∑ k : Key, if PresentsKey (Hξ ξ) ω k then (X.proxyLaw (Hξ ξ)).w ω else 0) =
+        if X.OddValid (Hξ ξ) (X.assemble P ω) X.Rshort b then
+          (X.proxyLaw (Hξ ξ)).w ω else 0 := by
+    by_cases hv : X.OddValid (Hξ ξ) (X.assemble P ω) X.Rshort b
+    · rw [if_pos hv]
+      let k₀ := obsKey ξ ω
+      have hevent (k : Key) : PresentsKey (Hξ ξ) ω k ↔ k = k₀ := by
+        rw [hPresentsKeyIff ξ ω k]
+        simp [hv, k₀]
+      calc
+        (∑ k : Key, if PresentsKey (Hξ ξ) ω k then (X.proxyLaw (Hξ ξ)).w ω else 0) =
+            ∑ k : Key, if k = k₀ then (X.proxyLaw (Hξ ξ)).w ω else 0 := by
+              apply Finset.sum_congr rfl
+              intro k hk
+              simp [hevent k]
+        _ = (X.proxyLaw (Hξ ξ)).w ω := by
+              rw [Fintype.sum_eq_single k₀]
+              · simp
+              · intro k hne
+                simp [hne]
+    · have hnone (k : Key) : ¬ PresentsKey (Hξ ξ) ω k := by
+        intro hp
+        exact hv (hPresentsKeyIff ξ ω k |>.mp hp).1
+      simp [hv, hnone]
+  have hKeyPrSum (ξ : Fin N) :
+      (∑ k : Key, (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω k)) =
+        (X.proxyLaw (Hξ ξ)).pr (fun ω => X.OddValid (Hξ ξ) (X.assemble P ω) X.Rshort b) := by
+    classical
+    unfold FinProb.pr
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases hv : X.OddValid (Hξ ξ) (X.assemble P ω) X.Rshort b
+    · rw [if_pos hv]
+      let k₀ := obsKey ξ ω
+      have hevent (k : Key) : PresentsKey (Hξ ξ) ω k ↔ k = k₀ := by
+        rw [hPresentsKeyIff ξ ω k]
+        simp [hv, k₀]
+      rw [Fintype.sum_eq_single k₀]
+      · simp [hevent k₀]
+      · intro k hne
+        have hnone : ¬ PresentsKey (Hξ ξ) ω k := by
+          intro hp
+          exact hne ((hevent k).mp hp)
+        simp [hnone]
+    · rw [if_neg hv]
+      have hnone (k : Key) : ¬ PresentsKey (Hξ ξ) ω k := by
+        intro hp
+        exact hv (hPresentsKeyIff ξ ω k |>.mp hp).1
+      apply Finset.sum_eq_zero
+      intro k hk
+      simp [hnone k]
+  let keyMassOf (D : Finset (X.Loc × X.Ty)) (z : PartData) : ℝ :=
+    ∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr (fun ω => PresentsKey (Hξ ξ) ω (D, z))
+  let Dgood : Finset (Finset (X.Loc × X.Ty)) :=
+    Finset.univ.filter fun D => ∃ z : PartData, PartValid D z ∧ keyMassOf D z ≠ 0
+  have hPartialDataIntegral (D : Finset (X.Loc × X.Ty)) :
+      (∑ z : PartData, if PartValid D z then
+        X.lowQ H b D (partialData D z) * X.lowF H b D (partialData D z) y else 0) ≤ 1 := by
+    classical
+    let cand := X.withHid H ℓ y
+    let liftSome (Q : FinProb X.Tuple) : FinProb (Option X.Tuple) := {
+      w := fun q => match q with | none => 0 | some t => Q.w t
+      nonneg := by
+        intro q
+        cases q with
+        | none => norm_num
+        | some t => exact Q.nonneg t
+      sum_eq_one := by
+        simp [Fintype.sum_option, Q.sum_eq_one]
+    }
+    let optLaw (e : X.Loc × X.Ty) : FinProb (Option X.Tuple) :=
+      if e ∈ D then liftSome (X.tupleLaw cand e.2) else pointMass6 none
+    let obsLaw : FinProb PartData := FinProb.pi optLaw
+    have hObsLawSum : (∑ z : PartData, obsLaw.w z) = 1 := obsLaw.sum_eq_one
+    have hObsLawWeight (z : PartData) (hz : PartValid D z) :
+        obsLaw.w z = ∏ e ∈ D,
+          (X.tupleLaw cand e.2).w (partialData D z e) := by
+      have hPi : obsLaw.w z = ∏ e : X.Loc × X.Ty, (optLaw e).w (z e) := by
+        simp [obsLaw, FinProb.pi]
+      have hIn : (∏ e ∈ D, (optLaw e).w (z e)) =
+          ∏ e ∈ D, (X.tupleLaw cand e.2).w (partialData D z e) := by
+        apply Finset.prod_congr rfl
+        intro e he
+        obtain ⟨t, ht⟩ := hz.1 e he
+        have hpd : partialData D z e = t := by simp [partialData, ht]
+        simp [optLaw, he, liftSome, ht, hpd]
+      have hOut : (∏ e ∈ Dᶜ, (optLaw e).w (z e)) = 1 := by
+        apply Finset.prod_eq_one
+        intro e he
+        have hnot : e ∉ D := Finset.mem_compl.mp he
+        have hnone := hz.2 e hnot
+        simp [optLaw, hnot, hnone, pointMass6]
+      calc
+        obsLaw.w z = ∏ e : X.Loc × X.Ty, (optLaw e).w (z e) := hPi
+        _ = (∏ e ∈ D, (optLaw e).w (z e)) *
+              (∏ e ∈ Dᶜ, (optLaw e).w (z e)) :=
+                (Finset.prod_mul_prod_compl D (fun e => (optLaw e).w (z e))).symm
+        _ = ∏ e ∈ D, (X.tupleLaw cand e.2).w (partialData D z e) := by
+              rw [hIn, hOut]
+              simp
+    calc
+      (∑ z : PartData, if PartValid D z then
+          X.lowQ H b D (partialData D z) * X.lowF H b D (partialData D z) y else 0) ≤
+          ∑ z : PartData, obsLaw.w z := by
+            apply Finset.sum_le_sum
+            intro z hz
+            by_cases hvalid : PartValid D z
+            · rw [if_pos hvalid, hObsLawWeight z hvalid]
+              exact hLowDataDom D (partialData D z)
+            · rw [if_neg hvalid]
+              exact obsLaw.nonneg z
+      _ = 1 := hObsLawSum
+  have hKeyProbLeOne :
+      (∑ k : Key, prior y * (X.proxyLaw (Hξ y)).pr
+        (fun ω => PresentsKey (Hξ y) ω k)) ≤ prior y := by
+    calc
+      (∑ k : Key, prior y * (X.proxyLaw (Hξ y)).pr
+          (fun ω => PresentsKey (Hξ y) ω k)) =
+        prior y * ∑ k : Key, (X.proxyLaw (Hξ y)).pr
+          (fun ω => PresentsKey (Hξ y) ω k) := by rw [← Finset.mul_sum]
+      _ ≤ prior y * 1 := by
+        apply mul_le_mul_of_nonneg_left _ (hPriorNonneg y)
+        calc
+          (∑ k : Key, (X.proxyLaw (Hξ y)).pr
+              (fun ω => PresentsKey (Hξ y) ω k)) =
+            (X.proxyLaw (Hξ y)).pr
+              (fun ω => X.OddValid (Hξ y) (X.assemble P ω) X.Rshort b) := hKeyPrSum y
+          _ ≤ 1 := pr_le_one6 _ _
+      _ = prior y := by ring
+  have hKeyRemainderBound :
+      (∑ k : Key,
+          (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr
+            (fun ω => PresentsKey (Hξ ξ) ω k)) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y) ≤
+        prior y + ∑ k : Key,
+          if PartValid k.1 k.2 ∧ keyMassOf k.1 k.2 ≠ 0 then
+            X.s3Thr * X.lowQ H b k.1 (partialData k.1 k.2) *
+              (prior y * X.lowF H b k.1 (partialData k.1 k.2) y) else 0 := by
+    calc
+      (∑ k : Key,
+          (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr
+            (fun ω => PresentsKey (Hξ ξ) ω k)) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y) ≤
+        ∑ k : Key,
+          (prior y * (X.proxyLaw (Hξ y)).pr (fun ω => PresentsKey (Hξ y) ω k) +
+            if PartValid k.1 k.2 ∧ keyMassOf k.1 k.2 ≠ 0 then
+              X.s3Thr * X.lowQ H b k.1 (partialData k.1 k.2) *
+                (prior y * X.lowF H b k.1 (partialData k.1 k.2) y) else 0) := by
+          apply Finset.sum_le_sum
+          intro k hk
+          exact hKeyContributionBound k.1 k.2
+      _ = (∑ k : Key, prior y * (X.proxyLaw (Hξ y)).pr
+            (fun ω => PresentsKey (Hξ y) ω k)) +
+          ∑ k : Key, if PartValid k.1 k.2 ∧ keyMassOf k.1 k.2 ≠ 0 then
+            X.s3Thr * X.lowQ H b k.1 (partialData k.1 k.2) *
+              (prior y * X.lowF H b k.1 (partialData k.1 k.2) y) else 0 := by
+            rw [Finset.sum_add_distrib]
+      _ ≤ prior y + ∑ k : Key,
+          if PartValid k.1 k.2 ∧ keyMassOf k.1 k.2 ≠ 0 then
+            X.s3Thr * X.lowQ H b k.1 (partialData k.1 k.2) *
+              (prior y * X.lowF H b k.1 (partialData k.1 k.2) y) else 0 :=
+            add_le_add_left hKeyProbLeOne _
+  have hTotalProxyBound :
+      (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).expect
+        (fun ω => X.proxyRow (Hξ ξ) (X.assemble P ω) u y)) ≤
+        prior y + ∑ k : Key,
+          if PartValid k.1 k.2 ∧ keyMassOf k.1 k.2 ≠ 0 then
+            X.s3Thr * X.lowQ H b k.1 (partialData k.1 k.2) *
+              (prior y * X.lowF H b k.1 (partialData k.1 k.2) y) else 0 := by
+    calc
+      _ = ∑ k : Key,
+          (∑ ξ, prior ξ * (X.proxyLaw (Hξ ξ)).pr
+            (fun ω => PresentsKey (Hξ ξ) ω k)) *
+              (X.lowRow H P b k.1 (partialData k.1 k.2)).w y := hTotalFiber
+      _ ≤ _ := hKeyRemainderBound
   sorry
 
 /-- L6.1j (long versus short, 06:639–657): couple both rules by positions, activations and ties; mismatch at one

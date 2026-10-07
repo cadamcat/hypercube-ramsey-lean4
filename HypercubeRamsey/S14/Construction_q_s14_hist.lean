@@ -1,5 +1,7 @@
 import HypercubeRamsey.PartC.Core
 import HypercubeRamsey.S03.Height.Device
+import HypercubeRamsey.S03.Height.Scale
+import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
 /-!
 Lane-local finite probability and Hamming-ball facts for the concrete S14
@@ -9,6 +11,7 @@ primitive record law.
 namespace HypercubeRamsey.Lane_q_s14_hist
 
 open Classical
+open Filter
 open OAI.HypercubeRamsey
 open scoped BigOperators
 
@@ -279,5 +282,188 @@ theorem pr_exists_le_sum {Ω ι : Type*} [Fintype Ω] [Fintype ι]
           simp [hfalse i]
         simp [hex, hsum]
     _ = ∑ i, ∑ ω, if A i ω then P.w ω else 0 := by rw [Finset.sum_comm]
+
+theorem positive_pi_support_card_le {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (P : ∀ i, FinLaw (Ω i)) :
+    (Finset.univ.filter fun ω : ∀ i, Ω i => 0 < ∏ i, (P i).w (ω i)).card ≤
+      ∏ i, Fintype.card {x : Ω i // 0 < (P i).w x} := by
+  classical
+  let s : Finset (∀ i, Ω i) :=
+    Finset.univ.filter fun ω => 0 < ∏ i, (P i).w (ω i)
+  have hcoord (ω : ∀ i, Ω i) (hω : ω ∈ s) (i : ι) :
+      0 < (P i).w (ω i) := by
+    have hprod : 0 < ∏ j, (P j).w (ω j) := by
+      simpa [s] using hω
+    have hne : (P i).w (ω i) ≠ 0 := by
+      intro hz
+      have hzprod : (∏ j, (P j).w (ω j)) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_univ i) hz
+      rw [hzprod] at hprod
+      norm_num at hprod
+    exact lt_of_le_of_ne ((P i).nonneg (ω i)) (Ne.symm hne)
+  let e : {ω : ∀ i, Ω i // ω ∈ s} → ∀ i, {x : Ω i // 0 < (P i).w x} :=
+    fun ω i => ⟨ω.1 i, hcoord ω.1 ω.2 i⟩
+  have he : Function.Injective e := by
+    intro a b hab
+    apply Subtype.ext
+    funext i
+    exact congrArg Subtype.val (congrFun hab i)
+  calc
+    s.card = Fintype.card {ω : ∀ i, Ω i // ω ∈ s} := by
+      symm
+      exact Fintype.card_coe s
+    _ ≤ Fintype.card (∀ i, {x : Ω i // 0 < (P i).w x}) :=
+      Fintype.card_le_of_injective e he
+    _ = ∏ i, Fintype.card {x : Ω i // 0 < (P i).w x} := by
+      simp [Fintype.card_pi]
+
+theorem small_finset_type_card_le_pow {α : Type*} [Fintype α] [DecidableEq α]
+    (t : ℕ) (hα : 0 < Fintype.card α) :
+    Fintype.card {s : Finset α // s.Nonempty ∧ s.card ≤ t} ≤
+      (Fintype.card α + 1) ^ (2 * t) := by
+  classical
+  let d := Fintype.card α
+  let e := Fintype.equivFin α
+  let fe := Equiv.finsetCongr e
+  have hcard_fe (s : Finset α) : (fe s).card = s.card := by
+    simp [fe, Equiv.finsetCongr]
+  have hcard_fe_symm (s : Finset (Fin d)) : (fe.symm s).card = s.card := by
+    simp [fe, Equiv.finsetCongr]
+  let finsetEquiv : {s : Finset α // s.card ≤ t} ≃
+      {s : Finset (Fin d) // s.card ≤ t} := {
+    toFun := fun s => ⟨fe s.1, by rw [hcard_fe]; exact s.2⟩
+    invFun := fun s => ⟨fe.symm s.1, by rw [hcard_fe_symm]; exact s.2⟩
+    left_inv := by intro s; apply Subtype.ext; exact fe.left_inv s.1
+    right_inv := by intro s; apply Subtype.ext; exact fe.right_inv s.1
+  }
+  have hsmall : Fintype.card {s : Finset α // s.Nonempty ∧ s.card ≤ t} ≤
+      Fintype.card {s : Finset α // s.card ≤ t} := by
+    apply Fintype.card_le_of_injective (fun s => (⟨s.1, s.2.2⟩ : {s : Finset α // s.card ≤ t}))
+    intro s s' h
+    apply Subtype.ext
+    exact congrArg (fun z : {s : Finset α // s.card ≤ t} => z.1) h
+  have hsum : Fintype.card {s : Finset α // s.card ≤ t} =
+      ∑ i ∈ Finset.range (t + 1), Nat.choose d i := by
+    calc
+      _ = Fintype.card {s : Finset (Fin d) // s.card ≤ t} := Fintype.card_congr finsetEquiv
+      _ = _ := card_small_subsets d t
+  have htwo : ∀ q : ℕ, q + 1 ≤ 2 ^ q := by
+    intro q
+    induction q with
+    | zero => norm_num
+    | succ t ih =>
+        calc
+          t + 1 + 1 ≤ 2 * (t + 1) := by omega
+          _ ≤ 2 * 2 ^ t := Nat.mul_le_mul_left 2 ih
+          _ = 2 ^ (t + 1) := by rw [pow_succ]; ring
+  have hbase : 2 ≤ d + 1 := by
+    dsimp [d]
+    omega
+  calc
+    Fintype.card {s : Finset α // s.Nonempty ∧ s.card ≤ t} ≤
+        Fintype.card {s : Finset α // s.card ≤ t} := hsmall
+    _ = ∑ i ∈ Finset.range (t + 1), Nat.choose d i := hsum
+    _ ≤
+        ∑ i ∈ Finset.range (t + 1), (d + 1) ^ t := by
+          apply Finset.sum_le_sum
+          intro i hi
+          have hit : i ≤ t := by
+            have := Finset.mem_range.mp hi
+            omega
+          calc
+            Nat.choose d i ≤ d ^ i := Nat.choose_le_pow d i
+            _ ≤ (d + 1) ^ t := by gcongr <;> omega
+    _ = (t + 1) * (d + 1) ^ t := by simp
+    _ ≤ 2 ^ t * (d + 1) ^ t := Nat.mul_le_mul_right _ (htwo t)
+    _ ≤ (d + 1) ^ t * (d + 1) ^ t :=
+      Nat.mul_le_mul_right _ (Nat.pow_le_pow_left hbase t)
+    _ = (d + 1) ^ (2 * t) := by rw [← pow_add]; congr 1 <;> omega
+
+theorem topScale_le_nat_bound (n : ℕ) (σ ζ : ℝ)
+    (hσ : 0 < σ) (hσζ : σ < ζ) (hζ : ζ < 1) :
+    topScale n σ ζ ≤ (n + 2) ^ (n + 1) * (n ^ 2 + 1) := by
+  classical
+  let R₀ : ℕ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M : ℕ := max 2 ⌈(n : ℝ) ^ σ⌉₊
+  let target : ℕ := ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+  have hR : 1 ≤ R₀ := by simp [R₀]
+  have hM : 2 ≤ M := by simp [M]
+  have hexp_pos : 0 < 1 - ζ := by linarith
+  have htarget_real : (n : ℝ) ^ (1 - ζ) ≤ (n : ℝ) := by
+    by_cases hn : n = 0
+    · simp [hn, Real.zero_rpow hexp_pos.ne']
+    · have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hn)
+      calc
+        (n : ℝ) ^ (1 - ζ) ≤ (n : ℝ) ^ 1 :=
+          Real.rpow_le_rpow_of_exponent_le hn1 (by linarith)
+        _ = n := by rw [Real.rpow_one]
+  have htarget : target ≤ n + 1 := by
+    dsimp [target]
+    apply Nat.ceil_le.mpr
+    have hnReal : (n : ℝ) ≤ (n + 1 : ℕ) := by exact_mod_cast Nat.le_succ n
+    exact htarget_real.trans hnReal
+  have hpow : target ≤ M ^ target * R₀ := by
+    calc
+      target ≤ 2 ^ target := (Nat.lt_pow_self (by norm_num : 1 < 2)).le
+      _ ≤ M ^ target := Nat.pow_le_pow_left hM target
+      _ ≤ M ^ target * R₀ := Nat.le_mul_of_pos_right _ (by omega)
+  have hexists : ∃ j, target ≤ M ^ j * R₀ := ⟨target, hpow⟩
+  have hfind : Nat.find hexists ≤ target := Nat.find_min' hexists hpow
+  have hMle : M ≤ n + 2 := by
+    dsimp [M]
+    apply max_le
+    · omega
+    · rw [Nat.ceil_le]
+      by_cases hn : n = 0
+      · simp [hn, Real.zero_rpow hσ.ne']
+      · have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hn)
+        have hp : (n : ℝ) ^ σ ≤ (n : ℝ) := by
+          calc
+            (n : ℝ) ^ σ ≤ (n : ℝ) ^ 1 :=
+              Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hσζ, hζ])
+            _ = n := by rw [Real.rpow_one]
+        have hnReal : (n : ℝ) ≤ (n + 2 : ℕ) := by exact_mod_cast Nat.le_add_right n 2
+        exact hp.trans hnReal
+  have hlog_nonneg : 0 ≤ Real.log (n : ℝ) := by
+    by_cases hn : n = 0
+    · simp [hn]
+    · exact Real.log_nonneg (by exact_mod_cast (Nat.one_le_iff_ne_zero.mpr hn))
+  have hlog_le : Real.log (n : ℝ) ≤ n := by
+    simpa [Real.rpow_one] using Real.log_natCast_le_rpow_div n (by norm_num : (0 : ℝ) < 1)
+  have hRle : R₀ ≤ n ^ 2 + 1 := by
+    dsimp [R₀]
+    apply max_le
+    · omega
+    · rw [Nat.ceil_le]
+      have hsq : (Real.log (n : ℝ)) ^ 2 ≤ (n : ℝ) ^ 2 := by nlinarith
+      exact_mod_cast hsq.trans (by norm_num : (n : ℝ) ^ 2 ≤ (n : ℝ) ^ 2 + 1)
+  unfold topScale
+  change M ^ Nat.find _ * R₀ ≤ _
+  calc
+    M ^ Nat.find _ * R₀ ≤ M ^ target * R₀ := by
+      gcongr
+    _ ≤ (n + 2) ^ (n + 1) * (n ^ 2 + 1) := by
+      gcongr <;> omega
+
+theorem eventually_const_mul_rpow_le_rpow {a b c : ℝ}
+    (hab : a < b) (hc : 0 < c) :
+    ∀ᶠ x in Filter.atTop, c * x ^ a ≤ x ^ b := by
+  have hdec : Tendsto (fun x : ℝ => x ^ (a - b)) Filter.atTop (nhds 0) := by
+    have hpos : 0 < b - a := sub_pos.mpr hab
+    convert tendsto_rpow_neg_atTop hpos using 1 <;> congr 1 <;> ring
+  have hratio : ∀ᶠ x : ℝ in Filter.atTop, x ^ (a - b) < c⁻¹ :=
+    hdec.eventually (Iio_mem_nhds (inv_pos.mpr hc))
+  filter_upwards [eventually_gt_atTop (0 : ℝ), hratio] with x hx hxratio
+  have hxpow : x ^ a = x ^ b * x ^ (a - b) := by
+    rw [← Real.rpow_add hx]
+    congr 1
+    ring
+  calc
+    c * x ^ a = (c * x ^ b) * x ^ (a - b) := by rw [hxpow]; ring
+    _ ≤ (c * x ^ b) * c⁻¹ := by
+      exact mul_le_mul_of_nonneg_left hxratio.le
+        (mul_nonneg hc.le (Real.rpow_nonneg (le_of_lt hx) _))
+    _ = x ^ b := by field_simp
 
 end HypercubeRamsey.Lane_q_s14_hist

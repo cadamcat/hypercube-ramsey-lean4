@@ -624,6 +624,32 @@ theorem height_counts9_budget_slack (P : Params9) (hc : HeightChoice9 P)
       ring
     _ = P.idBudget n := by simp [Params9.idBudget]
 
+theorem height_counts9_core_slack (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      6 * (n : ℝ) ^ ((P.χ : ℝ) / 2) ≤ (n : ℝ) ^ (P.χ : ℝ) := by
+  rcases hP with ⟨_, _, _, _, ⟨hχpos, _⟩, _, _⟩
+  have hχposR : 0 < (P.χ : ℝ) := by exact_mod_cast hχpos
+  have hexp : 0 < (P.χ : ℝ) / 2 := by positivity
+  have hT : Tendsto (fun n : ℕ => (n : ℝ) ^ ((P.χ : ℝ) / 2)) atTop atTop :=
+    (tendsto_rpow_atTop hexp).comp tendsto_natCast_atTop_atTop
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (Filter.tendsto_atTop.1 hT 6)
+  refine ⟨max 2 n₀, ?_⟩
+  intro n hn
+  have hn2 : 2 ≤ n := le_trans (le_max_left 2 n₀) hn
+  have hn₀' : n₀ ≤ n := le_trans (le_max_right 2 n₀) hn
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hlarge : 6 ≤ (n : ℝ) ^ ((P.χ : ℝ) / 2) := hn₀ n hn₀'
+  have hpow : (n : ℝ) ^ (P.χ : ℝ) =
+      (n : ℝ) ^ ((P.χ : ℝ) / 2) * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by
+    rw [← Real.rpow_add hnreal]
+    congr 1
+    ring
+  calc
+    6 * (n : ℝ) ^ ((P.χ : ℝ) / 2) ≤
+        (n : ℝ) ^ ((P.χ : ℝ) / 2) * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by nlinarith [hlarge]
+    _ = (n : ℝ) ^ (P.χ : ℝ) := hpow.symm
+
 private theorem topScale_coarse_bound (n : ℕ) (σ ζ : ℝ) (hn : 5 ≤ n)
     (hσ : σ < 1) (hζ : 0 < ζ) (hζ1 : ζ < 1) :
     topScale n σ ζ ≤ 2 ^ (n ^ 2 + 2 * n) := by
@@ -1137,5 +1163,27 @@ theorem special_neighbor_count_le {m n : ℕ} (hm : m ≤ n) (v : CubeVertex n) 
       rcases Finset.mem_image.mp hz with ⟨w, hw, rfl⟩
       exact hmap hw
     _ ≤ m := hT
+
+theorem level_window_card_le_three (H h : ℕ) :
+    (Finset.univ.filter (fun j : Fin (H + 1) => Nat.dist j.val h ≤ 1)).card ≤ 3 := by
+  classical
+  let J : Finset (Fin (H + 1)) :=
+    Finset.univ.filter (fun j => Nat.dist j.val h ≤ 1)
+  let values : Finset ℕ := {h - 1, h, h + 1}
+  have himage : J.image Fin.val ⊆ values := by
+    intro k hk
+    rcases Finset.mem_image.mp hk with ⟨j, hj, rfl⟩
+    have hdist := (Finset.mem_filter.mp hj).2
+    unfold Nat.dist at hdist
+    simp only [values, Finset.mem_insert, Finset.mem_singleton]
+    omega
+  have hvalues : values.card ≤ 3 := by
+    simpa [values] using
+      (Finset.card_le_three : ({h - 1, h, h + 1} : Finset ℕ).card ≤ 3)
+  calc
+    _ = J.card := by rfl
+    _ = (J.image Fin.val).card := (Finset.card_image_of_injective _ Fin.val_injective).symm
+    _ ≤ values.card := Finset.card_le_card himage
+    _ ≤ 3 := hvalues
 
 end HypercubeRamsey.Lane_q_s09_map

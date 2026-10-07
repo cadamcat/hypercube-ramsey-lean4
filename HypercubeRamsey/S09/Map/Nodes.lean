@@ -222,16 +222,20 @@ theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P)
   classical
   obtain ⟨nGeom, hGeom⟩ := Lane_q_s09_map.height_counts9_special_le_n P hP
   obtain ⟨nBudget, hBudget⟩ := Lane_q_s09_map.height_counts9_budget_slack P hc hadm
+  obtain ⟨nCore, hCoreSlack⟩ := Lane_q_s09_map.height_counts9_core_slack P hP
   rcases hP with ⟨_, _, _, _, ⟨hχpos, _⟩, _, _⟩
   have hχR : 0 < (P.χ : ℝ) := by exact_mod_cast hχpos
-  refine ⟨max 1 (max nGeom nBudget), ?_⟩
+  refine ⟨max 1 (max nGeom (max nBudget nCore)), ?_⟩
   intro n hn Pp A hgood
-  have houter : max nGeom nBudget ≤ n := le_trans (le_max_right 1 _) hn
-  have hnGeom : nGeom ≤ n := le_trans (le_max_left nGeom nBudget) houter
-  have hnBudget : nBudget ≤ n := le_trans (le_max_right nGeom nBudget) houter
+  have houter : max nGeom (max nBudget nCore) ≤ n := le_trans (le_max_right 1 _) hn
+  have hinner : max nBudget nCore ≤ n := le_trans (le_max_right nGeom _) houter
+  have hnGeom : nGeom ≤ n := le_trans (le_max_left nGeom _) houter
+  have hnBudget : nBudget ≤ n := le_trans (le_max_left nBudget nCore) hinner
+  have hnCore : nCore ≤ n := le_trans (le_max_right nBudget nCore) hinner
   have hmle : P.m n ≤ n := hGeom n hnGeom
   have hbudget : 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') ≤ P.idBudget n :=
     hBudget n hnBudget
+  have hcoreSlack := hCoreSlack n hnCore
   have hn1 : 1 ≤ n := le_trans (le_max_left 1 _) hn
   have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hn1
   have hχpow : 1 ≤ (n : ℝ) ^ (P.χ : ℝ) := Real.one_le_rpow hnR hχR.le
@@ -243,8 +247,18 @@ theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P)
     simpa [center] using
       (Lane_q_s09_map.chosenCenterOfGoodHeights_spec (P := P) (hc := hc) (n := n)
         Pp A hgood v)
+  let sameLayer : CubeVertex n → Fin (hc.levels n + 1) → Finset (Pos9 P hc n) :=
+    fun v j => Finset.univ.filter (fun c => activeAt9 Pp A c ∧
+      c.slice = specialWord9 (P.m n) v ∧
+      _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n ∧ c.level = j)
+  let adjLayer : CubeVertex n → Fin (hc.levels n + 1) → Finset (Pos9 P hc n) :=
+    fun v j => Finset.univ.filter (fun c => activeAt9 Pp A c ∧
+      _root_.hammingDist c.slice (specialWord9 (P.m n) v) = 1 ∧
+      _root_.hammingDist c.location (residualWord9 (P.m n) v) ≤ P.radius n - 1 ∧ c.level = j)
+  let levelWindow : CubeVertex n → Finset (Fin (hc.levels n + 1)) :=
+    fun v => Finset.univ.filter (fun j => Nat.dist j.val (height9 Pp A v) ≤ 1)
   let core : CubeVertex n → Finset (CenterID9 (P.m n) (n - P.m n) (hc.levels n)) :=
-    fun v => {center v}
+    fun v => (levelWindow v).biUnion (fun j => sameLayer v j ∪ adjLayer v j)
   refine ⟨⟨hc.levels n, center, ?_, ?_, ?_, core, ?_, ?_, ?_⟩⟩
   · intro v
     exact (hcenter v).1
@@ -397,9 +411,79 @@ theorem p92_idmap_of_heights (P : Params9) (hP : P.Valid) (hc : HeightChoice9 P)
       _ = 3 * (n : ℝ) ^ (1 - (P.σ : ℝ) + hc.eps') + (P.m n : ℝ) := by ring
       _ ≤ P.idBudget n + (P.m n : ℝ) := by nlinarith [hbudget]
   · intro v hvEven
-    simp [core]
+    let j : Fin (hc.levels n + 1) := (center v).level
+    have hlevel : j.val = height9 Pp A v := (hcenter v).2.2.1
+    have hj : j ∈ levelWindow v := by simp [levelWindow, j, hlevel]
+    have hsame : center v ∈ sameLayer v j := by
+      simp only [sameLayer, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact ⟨(hcenter v).2.2.2, (hcenter v).1, (hcenter v).2.1, rfl⟩
+    exact Finset.mem_biUnion.mpr ⟨j, hj, Finset.mem_union_left _ hsame⟩
   · intro v hvEven
-    simpa [core] using hχpow
+    classical
+    rcases hgood v with ⟨hbelow, hgoodNoBad, hregular⟩
+    let j₀ : Fin (hc.levels n + 1) := ⟨height9 Pp A v, by omega⟩
+    have hnotbad : ¬ badAt9 Pp A v j₀ := by simpa [j₀] using hgoodNoBad
+    let J := levelWindow v
+    have hJcard : J.card ≤ 3 := by
+      simpa [J, levelWindow] using
+        (Lane_q_s09_map.level_window_card_le_three (hc.levels n) (height9 Pp A v))
+    have hsameBound (j : Fin (hc.levels n + 1)) (hj : j ∈ J) :
+        ((sameLayer v j).card : ℝ) ≤ (n : ℝ) ^ ((P.χ : ℝ) / 2) := by
+      by_contra hlarge
+      have hstrict : (n : ℝ) ^ ((P.χ : ℝ) / 2) < ((sameLayer v j).card : ℝ) :=
+        lt_of_not_ge hlarge
+      have hstrict' : (n : ℝ) ^ ((P.χ : ℝ) / 2) <
+          (crowdSame9 Finset.univ Pp A v j (P.radius n) : ℝ) := by
+        simpa [sameLayer, crowdSame9] using hstrict
+      have hdist : Nat.dist j₀.val j.val ≤ 2 := by
+        have hwin := (Finset.mem_filter.mp hj).2
+        simpa [j₀, Nat.dist_comm] using (le_trans hwin (by omega : 1 ≤ 2))
+      have hbadIn : badIn9 Finset.univ 1 Pp A v j₀ :=
+        Or.inr ⟨j, hdist, Or.inl (by simpa [one_mul] using hstrict')⟩
+      exact hnotbad (by simpa [badAt9] using hbadIn)
+    have hadjBound (j : Fin (hc.levels n + 1)) (hj : j ∈ J) :
+        ((adjLayer v j).card : ℝ) ≤ (n : ℝ) ^ ((P.χ : ℝ) / 2) := by
+      by_contra hlarge
+      have hstrict : (n : ℝ) ^ ((P.χ : ℝ) / 2) < ((adjLayer v j).card : ℝ) :=
+        lt_of_not_ge hlarge
+      have hstrict' : (n : ℝ) ^ ((P.χ : ℝ) / 2) <
+          (crowdAdj9 Finset.univ Pp A v j : ℝ) := by
+        simpa [adjLayer, crowdAdj9] using hstrict
+      have hdist : Nat.dist j₀.val j.val ≤ 2 := by
+        have hwin := (Finset.mem_filter.mp hj).2
+        simpa [j₀, Nat.dist_comm] using (le_trans hwin (by omega : 1 ≤ 2))
+      have hbadIn : badIn9 Finset.univ 1 Pp A v j₀ :=
+        Or.inr ⟨j, hdist, Or.inr (Or.inl (by simpa [one_mul] using hstrict'))⟩
+      exact hnotbad (by simpa [badAt9] using hbadIn)
+    have hcoreNat : (core v).card ≤
+        ∑ j ∈ J, (sameLayer v j ∪ adjLayer v j).card := by
+      simpa [core, J] using (Finset.card_biUnion_le)
+    have hcoreNat' : (core v).card ≤
+        ∑ j ∈ J, ((sameLayer v j).card + (adjLayer v j).card) := by
+      calc
+        (core v).card ≤ ∑ j ∈ J, (sameLayer v j ∪ adjLayer v j).card := hcoreNat
+        _ ≤ ∑ j ∈ J, ((sameLayer v j).card + (adjLayer v j).card) := by
+          apply Finset.sum_le_sum
+          intro j hj
+          exact Finset.card_union_le _ _
+    have hcoreReal : ((core v).card : ℝ) ≤ 6 * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by
+      calc
+        ((core v).card : ℝ) ≤
+            ∑ j ∈ J, (((sameLayer v j).card : ℝ) + ((adjLayer v j).card : ℝ)) := by
+          exact_mod_cast hcoreNat'
+        _ ≤ ∑ _j ∈ J, 2 * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by
+          apply Finset.sum_le_sum
+          intro j hj
+          calc
+            ((sameLayer v j).card : ℝ) + ((adjLayer v j).card : ℝ) ≤
+                (n : ℝ) ^ ((P.χ : ℝ) / 2) + (n : ℝ) ^ ((P.χ : ℝ) / 2) :=
+              add_le_add (hsameBound j hj) (hadjBound j hj)
+            _ = 2 * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by ring
+        _ = (J.card : ℝ) * (2 * (n : ℝ) ^ ((P.χ : ℝ) / 2)) := by simp
+        _ ≤ 3 * (2 * (n : ℝ) ^ ((P.χ : ℝ) / 2)) := by
+          exact mul_le_mul_of_nonneg_right (by exact_mod_cast hJcard) (by positivity)
+        _ = 6 * (n : ℝ) ^ ((P.χ : ℝ) / 2) := by ring
+    exact hcoreReal.trans hcoreSlack
   · intro v hvEven id hid
     sorry
 

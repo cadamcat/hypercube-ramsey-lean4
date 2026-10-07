@@ -1704,42 +1704,16 @@ theorem fcand_congr_target_update {η₀ β p : ℝ} {h : ℕ}
     exact hCross u
   rw [hIprod, hCprod]
 
-theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+theorem mden_congr_target_update {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
     {J : Type} [Fintype J] (o : D.Obs J g)
-    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
+    (hAway : ∀ v, v ≠ g → Θ v = Θ' v) :
     D.Mden Θ g o = D.Mden Θ' g o := by
   classical
   unfold Ctx.Mden
   apply Finset.sum_congr rfl
   intro ξ hξ
-  rw [Lane_q_s08_post.fcand_congr_radius_two D Θ Θ' g ξ o hΘ]
-
-theorem qref_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
-    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
-    {J : Type} [Fintype J] (o : D.Obs J g)
-    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
-    D.Qref Θ g o = D.Qref Θ' g o := by
-  classical
-  have hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u := by
-    intro u hu
-    have huDist : keyDist g u ≤ 1 := (Finset.mem_filter.mp hu).2.le
-    exact hΘ u (huDist.trans (by omega))
-  have hInt := Lane_q_s08_post.refInt_congr_of_local D Θ Θ' g hcross
-  have hCross (u : D.CrossSub g) :
-      D.refCross Θ g u.1 = D.refCross Θ' g u.1 :=
-    Lane_q_s08_post.refCross_congr_radius_two D Θ Θ' g u
-      (fun v hv => hΘ v (Finset.mem_filter.mp hv).2)
-  unfold Ctx.Qref
-  congr 1
-  · apply Finset.prod_congr rfl
-    intro j hj
-    cases ho : o.1 j with
-    | none => rfl
-    | some i => exact congrArg (fun R : FinProb D.M.ι => R.w i) hInt
-  · apply Finset.prod_congr rfl
-    intro u hu
-    exact congrArg (fun R : FinProb (D.M.ι × Fin D.N) => R.w (o.2 u)) (hCross u)
+  rw [Lane_q_s08_post.fcand_congr_target_update D Θ Θ' g ξ o hAway]
 
 theorem qref_congr_off_target {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
@@ -1782,6 +1756,107 @@ theorem normOr_congr {α : Type*} [Fintype α]
       rw [hsum]
       exact hzero
     simp [normOr, hz, hz', hfg x, hsum]
+
+theorem gsel_congr_target_update {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (c : D.CellT)
+    (P : D.Pos) (ξ : D.Tup) (π : D.Pres c.1)
+    (hAway : ∀ v, v ≠ c.1 → Θ v = Θ' v) :
+    D.Gsel Θ P c ξ π = D.Gsel Θ' P c ξ π := by
+  have hUpd : Function.update Θ c.1 ξ = Function.update Θ' c.1 ξ := by
+    funext v
+    by_cases hvg : v = c.1
+    · subst v
+      simp
+    · simp [Function.update_of_ne hvg, hAway v hvg]
+  have hQ := Lane_q_s08_post.qref_congr_off_target D Θ Θ' c.1 (D.obsOf π) hAway
+  unfold Ctx.Gsel
+  rw [hUpd, hQ]
+
+set_option maxHeartbeats 1000000 in
+theorem selPost_congr_target_update {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (P : D.Pos) (c : D.CellT)
+    (π : D.Pres c.1) (hAway : ∀ v, v ≠ c.1 → Θ v = Θ' v) :
+    D.selPost Θ P c π = D.selPost Θ' P c π := by
+  classical
+  have hGsel (ξ : D.Tup) : D.Gsel Θ P c ξ π = D.Gsel Θ' P c ξ π :=
+    Lane_q_s08_post.gsel_congr_target_update D Θ Θ' c P ξ π hAway
+  have hMad : D.Mad Θ P c π = D.Mad Θ' P c π := by
+    unfold Ctx.Mad
+    apply Finset.sum_congr rfl
+    intro ξ hξ
+    exact congrArg (fun x : ℝ => D.R'.w ξ * x) (hGsel ξ)
+  have hDen := Lane_q_s08_post.mden_congr_target_update D Θ Θ' c.1
+    (D.obsOf π) hAway
+  have hFcand (ξ : D.Tup) :
+      D.Fcand Θ c.1 ξ (D.obsOf π) = D.Fcand Θ' c.1 ξ (D.obsOf π) :=
+    Lane_q_s08_post.fcand_congr_target_update D Θ Θ' c.1 ξ (D.obsOf π) hAway
+  have hBase : D.basePost Θ c.1 (D.obsOf π) = D.basePost Θ' c.1 (D.obsOf π) := by
+    unfold Ctx.basePost
+    exact Lane_q_s08_post.normOr_congr
+      (f := fun ξ => D.R'.w ξ * D.Fcand Θ c.1 ξ (D.obsOf π))
+      (g := fun ξ => D.R'.w ξ * D.Fcand Θ' c.1 ξ (D.obsOf π))
+      (hf := fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Fcand_nonneg Θ c.1 ξ (D.obsOf π)))
+      (hg := fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Fcand_nonneg Θ' c.1 ξ (D.obsOf π)))
+      (P := D.R') (Q := D.R') (hPQ := fun ξ => rfl)
+      (hfg := fun ξ => congrArg (fun x : ℝ => D.R'.w ξ * x) (hFcand ξ))
+  have hSelected :
+      normOr (fun ξ => D.R'.w ξ * D.Gsel Θ P c ξ π)
+          (fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ P c ξ π))
+          (D.basePost Θ' c.1 (D.obsOf π)) =
+        normOr (fun ξ => D.R'.w ξ * D.Gsel Θ' P c ξ π)
+          (fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ' P c ξ π))
+          (D.basePost Θ' c.1 (D.obsOf π)) := by
+    exact Lane_q_s08_post.normOr_congr
+      (f := fun ξ => D.R'.w ξ * D.Gsel Θ P c ξ π)
+      (g := fun ξ => D.R'.w ξ * D.Gsel Θ' P c ξ π)
+      (hf := fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ P c ξ π))
+      (hg := fun ξ => mul_nonneg (D.R'.nonneg ξ) (D.Gsel_nonneg Θ' P c ξ π))
+      (P := D.basePost Θ' c.1 (D.obsOf π)) (Q := D.basePost Θ' c.1 (D.obsOf π))
+      (hPQ := fun ξ => rfl)
+      (hfg := fun ξ => congrArg (fun x : ℝ => D.R'.w ξ * x) (hGsel ξ))
+  have hcond :
+      (D.eps0 * D.Mden Θ c.1 (D.obsOf π) ≤ D.Mad Θ P c π) =
+        (D.eps0 * D.Mden Θ' c.1 (D.obsOf π) ≤ D.Mad Θ' P c π) := by
+    rw [hDen, hMad]
+  unfold Ctx.selPost
+  simp only [hcond, hBase, hSelected]
+
+theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
+    D.Mden Θ g o = D.Mden Θ' g o := by
+  classical
+  unfold Ctx.Mden
+  apply Finset.sum_congr rfl
+  intro ξ hξ
+  rw [Lane_q_s08_post.fcand_congr_radius_two D Θ Θ' g ξ o hΘ]
+
+theorem qref_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    {J : Type} [Fintype J] (o : D.Obs J g)
+    (hΘ : ∀ v, keyDist g v ≤ 2 → Θ v = Θ' v) :
+    D.Qref Θ g o = D.Qref Θ' g o := by
+  classical
+  have hcross : ∀ u ∈ crossKeys g, Θ u = Θ' u := by
+    intro u hu
+    have huDist : keyDist g u ≤ 1 := (Finset.mem_filter.mp hu).2.le
+    exact hΘ u (huDist.trans (by omega))
+  have hInt := Lane_q_s08_post.refInt_congr_of_local D Θ Θ' g hcross
+  have hCross (u : D.CrossSub g) :
+      D.refCross Θ g u.1 = D.refCross Θ' g u.1 :=
+    Lane_q_s08_post.refCross_congr_radius_two D Θ Θ' g u
+      (fun v hv => hΘ v (Finset.mem_filter.mp hv).2)
+  unfold Ctx.Qref
+  congr 1
+  · apply Finset.prod_congr rfl
+    intro j hj
+    cases ho : o.1 j with
+    | none => rfl
+    | some i => exact congrArg (fun R : FinProb D.M.ι => R.w i) hInt
+  · apply Finset.prod_congr rfl
+    intro u hu
+    exact congrArg (fun R : FinProb (D.M.ι × Fin D.N) => R.w (o.2 u)) (hCross u)
 
 set_option maxHeartbeats 1000000 in
 theorem presentation_event_congr_local {η₀ β p : ℝ} {h : ℕ}

@@ -3,6 +3,7 @@ import HypercubeRamsey.S11.Core.Compatibility
 import HypercubeRamsey.S07.SmallGridPurity
 import HypercubeRamsey.S03.ClockSampling
 import HypercubeRamsey.S03.ScatteredMoments
+import HypercubeRamsey.S11.Core.Assignment_q_s11_even
 
 /-!
 # Proposition 11.1: taking the assignment, and the one-shot embedding

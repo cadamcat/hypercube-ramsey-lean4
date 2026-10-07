@@ -263,6 +263,14 @@ private theorem singletonSubtype_expect {α β : Type*} [DecidableEq α]
     simp [e, s, singletonPiEquiv, hidx, harg]
   rw [hprod]
 
+private abbrev PosOutside {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (g : D.KeyT) :=
+  ∀ k : {k : D.KeyT // k ∉ ({g} : Finset D.KeyT)}, D.Loc → Bool
+
+private noncomputable def reconstructPos {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (g : D.KeyT) (P : D.Loc → Bool) (O : PosOutside D g) : D.Pos :=
+  fun k => if hk : k = g then P else O ⟨k, by simp [hk]⟩
+
 private theorem rprime_hits_pr {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h) (x : Fin D.N) :
     D.R'.pr (fun θ => D.hitsAll x θ) =
       ∑ i, D.M.Λ i * rowDeg D.E D.G x (D.M.ν i) ^ h := by
@@ -1316,49 +1324,51 @@ private theorem bernoulli_forced_expect {α : Type*} [Fintype α] [DecidableEq �
     (FinProb.pi (fun _ : α => FinProb.bernoulli q)).expect
         (fun P => if P a then f P else 0) =
       (max 0 (min q 1)) *
-        (FinProb.pi (fun z : α => if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q)).expect f := by
+        (FinProb.pi (fun z : α => if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q)).expect f := by
   classical
   let q' : ℝ := max 0 (min q 1)
   have hrest (P : α → Bool) :
       (∏ z ∈ Finset.univ.erase a, (FinProb.bernoulli q).w (P z)) =
         ∏ z ∈ Finset.univ.erase a,
-          (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z) := by
+          (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z) := by
     apply Finset.prod_congr rfl
     intro z hz
     have hza : z ≠ a := (Finset.mem_erase.mp hz).1
-    simp [hza]
+    by_cases haz : a = z
+    · exact False.elim (hza haz.symm)
+    · simp [haz]
   have hweight (P : α → Bool) :
       (∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then (1 : ℝ) else 0) =
-        q' * ∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z) := by
+        q' * ∏ z, (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z) := by
     by_cases ha : P a
     · have hleft := Finset.mul_prod_erase (Finset.univ : Finset α)
         (fun z => (FinProb.bernoulli q).w (P z)) (Finset.mem_univ a)
       have hright := Finset.mul_prod_erase (Finset.univ : Finset α)
-        (fun z => (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z))
+        (fun z => (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z))
         (Finset.mem_univ a)
       rw [← hleft, ← hright, hrest P]
       simp [ha, q', FinProb.bernoulli]
     · have hleft := Finset.mul_prod_erase (Finset.univ : Finset α)
         (fun z => (FinProb.bernoulli q).w (P z)) (Finset.mem_univ a)
       have hright := Finset.mul_prod_erase (Finset.univ : Finset α)
-        (fun z => (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z))
+        (fun z => (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z))
         (Finset.mem_univ a)
       rw [← hleft, ← hright]
       simp [ha, FinProb.bernoulli]
   unfold FinProb.expect FinProb.pi
   calc
     (∑ P, (∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then f P else 0)) =
-        ∑ P, (q' * ∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
+        ∑ P, (q' * ∏ z, (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
           apply Finset.sum_congr rfl
           intro P _
           calc
             (∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then f P else 0) =
                 ((∏ z, (FinProb.bernoulli q).w (P z)) * (if P a then (1 : ℝ) else 0)) * f P := by
                   by_cases ha : P a <;> simp [ha] <;> ring
-            _ = (q' * ∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
+            _ = (q' * ∏ z, (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
                   rw [hweight P]
             _ = _ := by ring
-    _ = q' * ∑ P, (∏ z, (if z = a then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
+    _ = q' * ∑ P, (∏ z, (if a = z then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P z)) * f P := by
           rw [Finset.mul_sum]
           apply Finset.sum_congr rfl
           intro P _
@@ -1440,6 +1450,123 @@ private theorem lane_pi_expect_split {ι : Type*} [Fintype ι] [DecidableEq ι]
     simp only [e, Equiv.piEquivPiSubtypeProd_symm_apply, dif_neg i.2]
   simp_rw [hleft, hright]
   rfl
+
+private theorem posLaw_forced_split {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (g : D.KeyT) (ℓ : D.Loc) (f : D.Pos → ℝ) :
+    D.posLaw.expect (fun P => if P g ℓ then f P else 0) =
+      (max 0 (min ((hdP η₀ D.n).lam / ((hdP η₀ D.n).V : ℝ)) 1)) *
+        (FinProb.prod
+          (FinProb.pi (fun _ : {k : D.KeyT // k ∉ ({g} : Finset D.KeyT)} =>
+            (hdP η₀ D.n).posLaw))
+          ((hdP η₀ D.n).posLawForced (some ℓ))).expect
+            (fun z => f (reconstructPos D g z.2 z.1)) := by
+  classical
+  let p := hdP η₀ D.n
+  let s : Finset D.KeyT := {g}
+  let Q : D.KeyT → FinProb (D.Loc → Bool) := fun _ => p.posLaw
+  let OLaw : FinProb (PosOutside D g) := FinProb.pi fun _ => p.posLaw
+  let Eout := Equiv.piEquivPiSubtypeProd (fun k : D.KeyT => k ∈ s) (fun _ => D.Loc → Bool)
+  let inner : (∀ k : {k // k ∈ s}, D.Loc → Bool) ≃ (D.Loc → Bool) :=
+    singletonPiEquiv (β := D.Loc → Bool) g
+  let q : ℝ := max 0 (min (p.lam / (p.V : ℝ)) 1)
+  have hsplit := lane_pi_expect_split Q s (fun P => if P g ℓ then f P else 0)
+  have hsplit' : D.posLaw.expect (fun P => if P g ℓ then f P else 0) =
+      ∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+        ∑ b : PosOutside D g,
+          (FinProb.pi (fun k : {k // k ∈ s} => Q k.1)).w a *
+            (FinProb.pi (fun k : {k // k ∉ s} => Q k.1)).w b *
+              (if (Eout.symm (a, b) g) ℓ then f (Eout.symm (a, b)) else 0) := by
+    change (FinProb.pi Q).expect (fun P => if P g ℓ then f P else 0) = _
+    exact hsplit
+  have hrec (P : D.Loc → Bool) (O : PosOutside D g) :
+      reconstructPos D g P O g = P := by
+    unfold reconstructPos
+    change (if h : g = g then P else _) = P
+    simp
+  have hEqEval (a : ∀ k : {k // k ∈ s}, D.Loc → Bool) (b : PosOutside D g) :
+      Eout.symm (a, b) = reconstructPos D g (inner a) b := by
+    funext k
+    by_cases hk : k = g
+    · subst k
+      simp [Eout, reconstructPos, inner, s, singletonPiEquiv]
+    · simp [Eout, reconstructPos, inner, s, hk, singletonPiEquiv]
+  have hcentral (b : PosOutside D g) :
+      (∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+        (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a *
+          (if (inner a) ℓ then f (reconstructPos D g (inner a) b) else 0)) =
+        q * ((p.posLawForced (some ℓ)).expect
+          (fun P => f (reconstructPos D g P b))) := by
+    have hExpect :
+        (∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+          (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a *
+            (if (inner a) ℓ then f (reconstructPos D g (inner a) b) else 0)) =
+          (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).expect
+            (fun a => if (inner a) ℓ then f (reconstructPos D g (inner a) b) else 0) := by
+      rfl
+    rw [hExpect, singletonSubtype_expect]
+    have hBern := bernoulli_forced_expect (q := p.lam / (p.V : ℝ)) ℓ
+      (fun P => f (reconstructPos D g P b))
+    simp only [inner, Equiv.apply_symm_apply]
+    simpa [p, q, HDParams.posLaw, HDParams.posLawForced] using hBern
+  calc
+    D.posLaw.expect (fun P => if P g ℓ then f P else 0) =
+        ∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+          ∑ b : PosOutside D g,
+            (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a * OLaw.w b *
+              (if (Eout.symm (a, b) g) ℓ then f (Eout.symm (a, b)) else 0) := hsplit'
+    _ = ∑ b : PosOutside D g,
+          OLaw.w b * ∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+            (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a *
+              (if (inner a) ℓ then f (reconstructPos D g (inner a) b) else 0) := by
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro b _
+        calc
+          (∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+              (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a * OLaw.w b *
+                (if (Eout.symm (a, b) g) ℓ then f (Eout.symm (a, b)) else 0)) =
+              ∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+                OLaw.w b * ((FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a *
+                  (if (inner a) ℓ then f (reconstructPos D g (inner a) b) else 0)) := by
+            apply Finset.sum_congr rfl
+            intro a _
+            rw [hEqEval a b, hrec]
+            ring
+          _ = OLaw.w b * ∑ a : (∀ k : {k // k ∈ s}, D.Loc → Bool),
+                (FinProb.pi (fun k : {k // k ∈ s} => p.posLaw)).w a *
+                  (if (inner a) ℓ then f (reconstructPos D g (inner a) b) else 0) := by
+            symm
+            rw [Finset.mul_sum]
+    _ = ∑ b : PosOutside D g, OLaw.w b *
+          (q * ((p.posLawForced (some ℓ)).expect
+            (fun P => f (reconstructPos D g P b)))) := by
+        apply Finset.sum_congr rfl
+        intro b _
+        rw [hcentral b]
+    _ = q * (FinProb.prod OLaw (p.posLawForced (some ℓ))).expect
+          (fun z => f (reconstructPos D g z.2 z.1)) := by
+        have hprod := prod_expect OLaw (p.posLawForced (some ℓ))
+          (fun b P => f (reconstructPos D g P b))
+        calc
+          (∑ b : PosOutside D g, OLaw.w b *
+              (q * (p.posLawForced (some ℓ)).expect
+                (fun P => f (reconstructPos D g P b)))) =
+              q * ∑ b : PosOutside D g, OLaw.w b *
+                (p.posLawForced (some ℓ)).expect (fun P => f (reconstructPos D g P b)) := by
+            rw [Finset.mul_sum]
+            apply Finset.sum_congr rfl
+            intro b _
+            ring
+          _ = q * OLaw.expect (fun b => (p.posLawForced (some ℓ)).expect
+                (fun P => f (reconstructPos D g P b))) := by
+            have hE : OLaw.expect (fun b => (p.posLawForced (some ℓ)).expect
+                (fun P => f (reconstructPos D g P b))) =
+                ∑ b : PosOutside D g, OLaw.w b *
+                  (p.posLawForced (some ℓ)).expect
+                    (fun P => f (reconstructPos D g P b)) := rfl
+            rw [← hE]
+          _ = q * (FinProb.prod OLaw (p.posLawForced (some ℓ))).expect
+                (fun z => f (reconstructPos D g z.2 z.1)) := by rw [← hprod]
 
 private theorem rawTAT_expect_at_key {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ : D.Hist) (g : D.KeyT)

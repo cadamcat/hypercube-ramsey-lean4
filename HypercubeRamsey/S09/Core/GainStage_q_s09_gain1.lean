@@ -775,6 +775,94 @@ private theorem rowDeg_lipschitz_l1_9 {N : ℕ} (E : Fin N → Fin N → Prop) (
       intro y hy
       by_cases h : Hits E G x y <;> simp [h]
 
+private theorem law_restrict_l1_bound9 {N : ℕ} (μ ν : Law N) (A : Finset (Fin N))
+    (hμ : 0 < ∑ y ∈ A, μ.w y) (hν : 0 < ∑ y ∈ A, ν.w y)
+    (δ : ℝ) (hL1 : ∑ y, |μ.w y - ν.w y| ≤ δ) :
+    ∑ y, |(μ.restrict A hμ).w y - (ν.restrict A hν).w y| ≤
+      2 * δ / (∑ y ∈ A, μ.w y) := by
+  classical
+  let a : ℝ := ∑ y ∈ A, μ.w y
+  let b : ℝ := ∑ y ∈ A, ν.w y
+  have ha : 0 < a := hμ
+  have hb : 0 < b := hν
+  have hmassDiff : |a - b| ≤ δ := by
+    have hdiff : a - b = ∑ y ∈ A, (μ.w y - ν.w y) := by
+      dsimp [a, b]
+      rw [Finset.sum_sub_distrib]
+    calc
+      |a - b| = |∑ y ∈ A, (μ.w y - ν.w y)| := by rw [hdiff]
+      _ ≤ ∑ y ∈ A, |μ.w y - ν.w y| := Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ y, |μ.w y - ν.w y| := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+        intro y hy hnot
+        positivity
+      _ ≤ δ := hL1
+  have hpoint (y : Fin N) :
+      |(μ.restrict A hμ).w y - (ν.restrict A hν).w y| ≤
+        if y ∈ A then |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) else 0 := by
+    by_cases hy : y ∈ A
+    · simp [Law.restrict, hy, a, b]
+      have hfrac : μ.w y / a - ν.w y / b =
+          (μ.w y - ν.w y) / a + ν.w y * (b - a) / (a * b) := by
+        field_simp [ne_of_gt ha, ne_of_gt hb]
+        ring
+      rw [hfrac]
+      calc
+        |(μ.w y - ν.w y) / a + ν.w y * (b - a) / (a * b)| ≤
+            |(μ.w y - ν.w y) / a| + |ν.w y * (b - a) / (a * b)| := abs_add_le _ _
+        _ = |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) := by
+          simp [abs_div, abs_mul, abs_of_nonneg (ν.nonneg y), abs_of_pos ha,
+            abs_of_pos hb, abs_sub_comm]
+    · simp [Law.restrict, hy]
+  have hsum := Finset.sum_le_sum (s := Finset.univ) (fun y hy => hpoint y)
+  have hsumBound :
+      (∑ y, if y ∈ A then |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) else 0) ≤
+        δ / a + δ / a := by
+    have hfirstEq : (∑ y ∈ A, |μ.w y - ν.w y| / a) =
+        (∑ y ∈ A, |μ.w y - ν.w y|) / a := by rw [Finset.sum_div]
+    have hsecondEq : (∑ y ∈ A, ν.w y * |a - b| / (a * b)) =
+        (∑ y ∈ A, ν.w y) * |a - b| / (a * b) := by
+      calc
+        (∑ y ∈ A, ν.w y * |a - b| / (a * b)) =
+            ∑ y ∈ A, ν.w y * (|a - b| / (a * b)) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              ring
+        _ = (∑ y ∈ A, ν.w y) * (|a - b| / (a * b)) := by rw [← Finset.sum_mul]
+        _ = (∑ y ∈ A, ν.w y) * |a - b| / (a * b) := by ring
+    calc
+      (∑ y, if y ∈ A then |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) else 0) =
+          (∑ y ∈ A, |μ.w y - ν.w y| / a) +
+            (∑ y ∈ A, ν.w y * |a - b| / (a * b)) := by
+              simp only [Finset.sum_ite_mem]
+              rw [Finset.sum_add_distrib]
+              simp
+      _ = (∑ y ∈ A, |μ.w y - ν.w y|) / a +
+            (∑ y ∈ A, ν.w y) * |a - b| / (a * b) := by rw [hfirstEq, hsecondEq]
+      _ ≤ δ / a + δ / a := by
+        have hsumErr : (∑ y ∈ A, |μ.w y - ν.w y|) ≤ δ := by
+          calc
+            (∑ y ∈ A, |μ.w y - ν.w y|) ≤ ∑ y, |μ.w y - ν.w y| := by
+              apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ A)
+              intro y hy hnot
+              positivity
+            _ ≤ δ := hL1
+        have hfirst := div_le_div_of_nonneg_right hsumErr (le_of_lt ha)
+        have hsecond : b * |a - b| / (a * b) ≤ δ / a := by
+          have habs : |a - b| ≤ δ := hmassDiff
+          have hmul := mul_le_mul_of_nonneg_left habs (le_of_lt hb)
+          have hquot : b * |a - b| / (a * b) = |a - b| / a := by
+            field_simp [ne_of_gt ha, ne_of_gt hb]
+          rw [hquot]
+          exact div_le_div_of_nonneg_right habs (le_of_lt ha)
+        rw [show (∑ y ∈ A, ν.w y) = b by rfl]
+        exact add_le_add hfirst hsecond
+  calc
+    (∑ y, |(μ.restrict A hμ).w y - (ν.restrict A hν).w y|) ≤
+        ∑ y, if y ∈ A then |μ.w y - ν.w y| / a + ν.w y * |a - b| / (a * b) else 0 := hsum
+    _ ≤ δ / a + δ / a := hsumBound
+    _ = 2 * δ / (∑ y ∈ A, μ.w y) := by dsimp [a]; ring
+
 private theorem boundedRegularityTest_probability_le9 {P : Params9} (hP : P.Valid)
     {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)} {κ : ℝ}
     {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n)

@@ -1,4 +1,5 @@
 import HypercubeRamsey.S10.Transfer_sol_s10_1k
+import HypercubeRamsey.Tools.CubeGeometry
 
 namespace HypercubeRamsey.Lane_q_s10_b
 
@@ -139,5 +140,106 @@ theorem independent_group_tail
   exact Lane_sol_s10_1k.independent_group_column_tail P
     (fun i ω => X i y ω) L m θ hL
     (by intro i ω; exact hX i y ω) (hmean y)
+
+/-- Regroup a finite sum by the value of its group map. -/
+theorem grouped_sum_eq
+    {B I : Type*} [Fintype B] [Fintype I] [DecidableEq I]
+    (grp : B → I) (f : B → ℝ) :
+    (∑ i, ∑ b, (if grp b = i then f b else 0)) = ∑ b, f b := by
+  classical
+  calc
+    (∑ i, ∑ b, if grp b = i then f b else 0) =
+        ∑ b, ∑ i, if grp b = i then f b else 0 := Finset.sum_comm
+    _ = ∑ b, f b := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      rw [Finset.sum_eq_single (grp b)]
+      · simp
+      · intro i hi hne
+        simp [hne.symm]
+      · simp
+
+/-- Reindex the sum of expected group contributions by their roles. -/
+theorem grouped_expect_sum_eq
+    {B I C Y : Type*} [Fintype B] [Fintype I] [Fintype C] [Fintype Y] [DecidableEq I]
+    (grp : B → I) (P : I → FinProb C) (lab : B → C → FinProb Y) (y : Y) :
+    ∑ i, (P i).expect (fun c => ∑ b, if grp b = i then (lab b c).w y else 0) =
+      ∑ b, (P (grp b)).expect (fun c => (lab b c).w y) := by
+  classical
+  have hsingle (b : B) (c : C) :
+      ∑ i, (P i).w c * (if grp b = i then (lab b c).w y else 0) =
+        (P (grp b)).w c * (lab b c).w y := by
+    rw [Finset.sum_eq_single (grp b)]
+    · simp
+    · intro i hi hne
+      have hne' : grp b ≠ i := hne.symm
+      simp [hne']
+    · simp
+  unfold FinProb.expect
+  calc
+    (∑ i, ∑ c, (P i).w c * ∑ b, if grp b = i then (lab b c).w y else 0) =
+        ∑ i, ∑ c, ∑ b, (P i).w c * (if grp b = i then (lab b c).w y else 0) := by
+      apply Finset.sum_congr rfl
+      intro i hi
+      apply Finset.sum_congr rfl
+      intro c hc
+      rw [Finset.mul_sum]
+    _ = ∑ i, ∑ b, ∑ c, (P i).w c * (if grp b = i then (lab b c).w y else 0) := by
+      apply Finset.sum_congr rfl
+      intro i hi
+      exact Finset.sum_comm
+    _ = ∑ b, ∑ i, ∑ c, (P i).w c * (if grp b = i then (lab b c).w y else 0) :=
+      Finset.sum_comm
+    _ = ∑ b, ∑ c, ∑ i, (P i).w c * (if grp b = i then (lab b c).w y else 0) := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      exact Finset.sum_comm
+    _ = ∑ b, ∑ c, (P (grp b)).w c * (lab b c).w y := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      apply Finset.sum_congr rfl
+      intro c hc
+      exact hsingle b c
+    _ = ∑ b, (P (grp b)).expect (fun c => (lab b c).w y) := rfl
+
+/-- A finite union bound under a finite probability law. -/
+theorem pr_exists_le_sum {Ω I : Type*} [Fintype Ω] [Fintype I]
+    (P : FinProb Ω) (bad : I → Ω → Prop) :
+    P.pr (fun ω => ∃ i, bad i ω) ≤ ∑ i, P.pr (bad i) := by
+  classical
+  unfold FinProb.pr
+  rw [Finset.sum_comm]
+  apply Finset.sum_le_sum
+  intro ω _
+  by_cases hω : ∃ i, bad i ω
+  · rw [ite_eq_left hω]
+    obtain ⟨i, hi⟩ := hω
+    calc
+      P.w ω = (if bad i ω then P.w ω else 0) := by rw [if_pos hi]
+      _ ≤ ∑ j, if bad j ω then P.w ω else 0 :=
+        Finset.single_le_sum (f := fun j => if bad j ω then P.w ω else 0)
+          (fun j _ => by split_ifs <;> simp [P.nonneg ω]) (Finset.mem_univ i)
+  · rw [ite_eq_right hω]
+    exact Finset.sum_nonneg fun i _ => by split_ifs <;> simp [P.nonneg ω]
+
+/-- Event probabilities are monotone under inclusion. -/
+theorem pr_mono {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    {A B : Ω → Prop} (hAB : ∀ ω, A ω → B ω) : P.pr A ≤ P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_le_sum
+  intro ω _
+  by_cases hA : A ω
+  · have hB := hAB ω hA
+    simp [hA, hB]
+  · by_cases hB : B ω <;> simp [hA, hB, P.nonneg ω]
+
+/-- Nonnegativity of probabilities under a finite probability law. -/
+theorem pr_nonneg {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    0 ≤ P.pr A := by
+  classical
+  unfold FinProb.pr
+  exact Finset.sum_nonneg fun ω _ => by
+    split_ifs <;> simp [P.nonneg ω]
 
 end HypercubeRamsey.Lane_q_s10_b

@@ -2195,7 +2195,29 @@ theorem pool_comparison_exists {κ : CConsts} {T : Stage} {k : ℕ}
           _ ≤ (1 + ((insert s (∅ : Finset (CellSlot G))).card : ℝ) ^ 2 /
               Fintype.card (Bin PT.tiling i)) * c :=
             mul_le_mul_of_nonneg_right hcoef hcNonneg
-    · sorry
+    · let B := Fintype.card (Bin PT.tiling i)
+      have hBguardNat : 2 * (S.card + 1) ^ 2 ≤ B := by exact_mod_cast hBinGuard
+      have hscopeSquare : S.card ^ 2 ≤ (S.card + 1) ^ 2 :=
+        Nat.pow_le_pow_left (Nat.le_add_right _ _) 2
+      have hscopeGuard : 2 * S.card ^ 2 ≤ B :=
+        (Nat.mul_le_mul_left 2 hscopeSquare).trans hBguardNat
+      have hscopeRatio : (B : ℝ) ^ S.card / (B.descFactorial S.card : ℝ) ≤
+          1 + (S.card : ℝ) ^ 2 / B :=
+        Lane_q_s16_geom.descFactorial_ratio_bound hscopeGuard
+      constructor
+      · sorry
+      · intro s D hpinPatch hpermPin hiidPin
+        have hpinCard : (insert s S).card ≤ S.card + 1 := by
+          by_cases hs : s ∈ S <;> simp [hs]
+        have hpinSquare : (insert s S).card ^ 2 ≤ (S.card + 1) ^ 2 :=
+          Nat.pow_le_pow_left hpinCard 2
+        have hpinGuard : 2 * (insert s S).card ^ 2 ≤ B :=
+          (Nat.mul_le_mul_left 2 hpinSquare).trans hBguardNat
+        have hpinRatio : (B : ℝ) ^ (insert s S).card /
+            (B.descFactorial (insert s S).card : ℝ) ≤
+              1 + ((insert s S).card : ℝ) ^ 2 / B :=
+          Lane_q_s16_geom.descFactorial_ratio_bound hpinGuard
+        sorry
   exact ⟨hNonempty, hComparison⟩
 
 /-- L16.1: late classes, separated cells, persistent slot pools, and tapes. -/

@@ -511,6 +511,63 @@ theorem finLaw_expectation_const {α : Type*} [Fintype α] (μ : FinLaw α) (c :
     (∑ x, μ.w x * c) = (∑ x, μ.w x) * c := by rw [Finset.sum_mul]
     _ = c := by rw [μ.sum_one]; ring
 
+theorem descFactorial_ratio_bound {B q : ℕ} (hB : 2 * q ^ 2 ≤ B) :
+    (B : ℝ) ^ q / (B.descFactorial q : ℝ) ≤ 1 + (q : ℝ) ^ 2 / B := by
+  induction q with
+  | zero => simp
+  | succ q ih =>
+      have hqplus : q ≤ q + 1 := by omega
+      have hqpow : q ^ 2 ≤ (q + 1) ^ 2 := Nat.pow_le_pow_left hqplus 2
+      have hBprev : 2 * q ^ 2 ≤ B := (Nat.mul_le_mul_left 2 hqpow).trans hB
+      have hqplusPos : 1 ≤ q + 1 := by omega
+      have hqplusBound : q + 1 ≤ 2 * (q + 1) ^ 2 := by nlinarith [hqplusPos]
+      have hqleSucc : q + 1 ≤ B := hqplusBound.trans hB
+      have hqle : q ≤ B := hqplus.trans hqleSucc
+      have hqLt : q < B := Nat.lt_of_succ_le hqleSucc
+      have hBpos : (0 : ℝ) < (B : ℝ) := by exact_mod_cast (by omega : 0 < B)
+      have hden : (0 : ℝ) < (B : ℝ) - (q : ℝ) := by
+        exact_mod_cast Nat.sub_pos_of_lt hqLt
+      have hdescPos : (0 : ℝ) < (B.descFactorial q : ℝ) := by
+        exact_mod_cast (Nat.descFactorial_pos.mpr hqle)
+      have hdescSucc : (B.descFactorial (q + 1) : ℝ) =
+          ((B - q : ℕ) : ℝ) * (B.descFactorial q : ℝ) := by
+        rw [Nat.descFactorial_succ]
+        norm_cast
+      have hsub : ((B - q : ℕ) : ℝ) = (B : ℝ) - (q : ℝ) := by
+        exact Nat.cast_sub hqle
+      have hratioStep :
+          (B : ℝ) ^ (q + 1) / (B.descFactorial (q + 1) : ℝ) =
+            ((B : ℝ) ^ q / (B.descFactorial q : ℝ)) * ((B : ℝ) / ((B - q : ℕ) : ℝ)) := by
+        rw [pow_succ, hdescSucc, hsub]
+        field_simp [ne_of_gt hdescPos, ne_of_gt hden]
+        <;> ring
+      have hmono :
+          ((B : ℝ) ^ q / (B.descFactorial q : ℝ)) * ((B : ℝ) / ((B - q : ℕ) : ℝ)) ≤
+            (1 + (q : ℝ) ^ 2 / B) * ((B : ℝ) / ((B - q : ℕ) : ℝ)) :=
+        mul_le_mul_of_nonneg_right (ih hBprev)
+          (div_nonneg (Nat.cast_nonneg B) (by rw [hsub]; exact hden.le))
+      have hstepBound :
+          (1 + (q : ℝ) ^ 2 / B) * ((B : ℝ) / ((B - q : ℕ) : ℝ)) ≤
+            1 + ((q + 1 : ℕ) : ℝ) ^ 2 / B := by
+        have hBne : (B : ℝ) ≠ 0 := hBpos.ne'
+        have hBreal : 2 * ((q : ℝ) + 1) ^ 2 ≤ (B : ℝ) := by exact_mod_cast hB
+        have hqB : (q : ℝ) * ((q : ℝ) + 1) ≤ (B : ℝ) := by nlinarith [hBreal]
+        have hgap : 0 ≤ (B : ℝ) - (q : ℝ) * ((q : ℝ) + 1) := by linarith [hqB]
+        have hterm : 0 ≤ ((q : ℝ) + 1) * ((B : ℝ) - (q : ℝ) * ((q : ℝ) + 1)) :=
+          mul_nonneg (by positivity) hgap
+        rw [hsub, ← mul_div_assoc]
+        apply (div_le_iff₀ hden).2
+        field_simp [hBne]
+        have hdiff :
+            ((B : ℝ) + ((q + 1 : ℕ) : ℝ) ^ 2) * ((B : ℝ) - q) -
+              (B : ℝ) * ((B : ℝ) + (q : ℝ) ^ 2) =
+                ((q : ℝ) + 1) * ((B : ℝ) - (q : ℝ) * ((q : ℝ) + 1)) := by
+          simp only [Nat.cast_add, Nat.cast_one]
+          ring
+        linarith [hdiff, hterm]
+      rw [hratioStep]
+      exact hmono.trans hstepBound
+
 theorem capacity_product_bound {n ell : ℕ} {K E d : ℝ}
     (hn : 4 ≤ n) (hell : ell ≤ n) (hpowEll : (2 : ℝ) ^ ell ≤ (n : ℝ))
     (hd : d ≤ (n : ℝ)) (hK : 0 < K) (hE : 0 ≤ E)

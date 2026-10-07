@@ -1344,6 +1344,73 @@ private theorem heightMetric9_ge_radial_gap {P : Params9} {hc : HeightChoice9 P}
   rw [hx, hy] at hradial
   exact hgap.trans hradial
 
+private inductive HeightAnnularChain9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (bad : HeightState9 P hc n → Prop) (root : HeightState9 P hc n) (gap : ℕ)
+    (endpoint : HeightState9 P hc n) : ℕ → HeightState9 P hc n → Prop
+  | terminal {x : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
+      (hp : HeightPath9 (heightStep9 bad) (endpoint :: suffix) x) :
+      HeightAnnularChain9 bad root gap endpoint 0 x
+  | cons {m : ℕ} {x inner outer : HeightState9 P hc n}
+      {preRest blockRest : List (HeightState9 P hc n)}
+      (hinner : heightMetric9 inner root = heightMetric9 x root)
+      (houter : heightMetric9 outer root = heightMetric9 x root + gap)
+      (hpre : HeightPath9 (heightStep9 bad) (inner :: preRest) x)
+      (hblock : HeightPath9 (heightStep9 bad) (outer :: blockRest) inner)
+      (hannular : ∀ z ∈ outer :: blockRest,
+        heightMetric9 x root ≤ heightMetric9 z root ∧
+          heightMetric9 z root ≤ heightMetric9 x root + gap)
+      (htail : HeightAnnularChain9 bad root gap endpoint m outer) :
+      HeightAnnularChain9 bad root gap endpoint (m + 1) x
+
+private theorem heightPath9_annularChain_exists9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start endpoint : HeightState9 P hc n}
+    (hp : HeightPath9 (heightStep9 bad) (endpoint :: l) start)
+    (root : HeightState9 P hc n) (r gap q : ℕ)
+    (hstep : ∀ x y, heightStep9 bad x y →
+      Nat.dist (heightMetric9 x root) (heightMetric9 y root) ≤ 1)
+    (hgap : 0 < gap)
+    (hstart : heightMetric9 start root = r)
+    (hreach : r + q * gap ≤ heightMetric9 endpoint root) :
+    HeightAnnularChain9 bad root gap endpoint q start := by
+  induction q generalizing start l r hp hstart with
+  | zero => exact HeightAnnularChain9.terminal hp
+  | succ q ih =>
+      have hmul : (q + 1) * gap = q * gap + gap := by
+        rw [Nat.add_mul]
+        simp
+      have hreach' := hreach
+      rw [hmul] at hreach'
+      have houterReach : r + gap ≤ heightMetric9 endpoint root := by omega
+      obtain ⟨outerHit, innerHit, blockRest, houterEq, hinnerEq, hblock,
+        hannular, hblockSub⟩ :=
+        heightPath9_annularBlock9 (fun x => heightMetric9 x root) hstep hp
+          hstart (by omega) ⟨endpoint, by simp, houterReach⟩
+      have hinnerMem : innerHit ∈ endpoint :: l :=
+        hblockSub innerHit (heightPath9_start_mem hblock)
+      obtain ⟨preRest, hpre, _hpreSub⟩ := heightPath9_suffix hp hinnerMem
+      have houterMem : outerHit ∈ endpoint :: l := hblockSub outerHit (by simp)
+      obtain ⟨segHead, suffix, _tail, _hsplit, hhead, htail, _htailSub⟩ :=
+        heightPath9_segmentFromMember hp houterMem
+      have hheadEq : segHead = endpoint := by
+        simpa using hhead.symm.trans (by simp : (endpoint :: l).head? = some endpoint)
+      subst segHead
+      have hremaining : (r + gap) + q * gap ≤ heightMetric9 endpoint root := by omega
+      have houterStart : heightMetric9 outerHit root = r + gap := houterEq
+      have htailChain := ih htail (r + gap) houterStart hremaining
+      refine HeightAnnularChain9.cons ?_ ?_ hpre hblock ?_ htailChain
+      · calc
+          heightMetric9 innerHit root = r := hinnerEq
+          _ = heightMetric9 start root := hstart.symm
+      · calc
+          heightMetric9 outerHit root = r + gap := houterEq
+          _ = heightMetric9 start root + gap := by rw [hstart]
+      · intro z hz
+        have hzBounds := hannular z hz
+        constructor
+        · simpa [hstart] using hzBounds.1
+        · simpa [hstart] using hzBounds.2
+
 private theorem heightPath9_has_intermediate_radius9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
     {start : HeightState9 P hc n} (hp : HeightPath9 (heightStep9 bad) l start)

@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S17.Nodes
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -196,7 +197,27 @@ theorem D18_L_fresh_internal (hκ : κ.Admissible) (hThresholds : LateThresholds
         (∀ C, D.fresh.typical C (pools C)) →
         0 < (FinLaw.pi fun C => D.fresh.fresh C (pools C)).w s →
         ∀ v, IsEvenRole v → D.internalValid v s := by
-  sorry
+  filter_upwards [] with k
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro pools s ht hs v he
+  let physical := Classical.choice X.l16.physical
+  have hv := Lane_sol_s18_dl.product_fresh_valid physical pools s ht hs
+  have hp := Lane_sol_s18_dl.internal_probability_and_hits physical pools s hv v he
+  have hsupport := S16.Lane_sol_s16_prod1.pi_support
+    (fun C => X.fresh.fresh C (pools C)) s (ne_of_gt hs) (X.geom.cellOf v)
+  have hshape := Lane_sol_d18l_fresh.physical_prior_shape hPT physical
+    (X.geom.cellOf v) (pools (X.geom.cellOf v)) (ht _) (s (X.geom.cellOf v))
+    hsupport v rfl he hp.2.1
+  rw [X.geom.cellOf_patch v] at hshape
+  change (∀ x, 0 ≤ X.fresh.prior (X.geom.cellOf v) (s (X.geom.cellOf v)) v x) ∧ _
+  refine ⟨hp.1, hp.2.1, hshape.1, hshape.2, ?_⟩
+  intro a ha x hx
+  have hcell := Lane_sol_d18l_fresh.internal_neighbor_cell physical.raw v a ha
+  change Hits (T.S.E k) PT.tiling.c x
+    (X.fresh.label (X.geom.cellOf (flipPos v a)) (s (X.geom.cellOf (flipPos v a))) (flipPos v a))
+  rw [hcell]
+  exact (hp.2.2 x hx).2 a ha
 
 /-- Own-prior iid mean estimate. TeX 16:513–529; 18:1076–1089.
 This is the first component of FreshCalibration, before any queries. -/
@@ -211,6 +232,18 @@ theorem D18_L_prior_mean (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
             (D.fresh.fresh (D.geom.cellOf v) (pools (D.geom.cellOf v))).E
               (fun s => D.fresh.prior (D.geom.cellOf v) s v y) else 0) ≤
         κ.KB / ((PT.tiling.P (D.geom.patchOf v)).M : ℝ) := by
+  filter_upwards [Lane_sol_d18l_fresh.physical_prior_mean_bound hκ T] with k hk
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro v y he
+  have hMean := hk PT hPT X.geom X.fresh (Classical.choice X.l16.physical)
+    X.l16.pools_nonempty hMass v y he
+  apply hMean.trans
+  apply div_le_div_of_nonneg_right _ (Nat.cast_nonneg _)
+  -- The exported L16.7 comparison pays 100*Kcell*Kp. LateThresholds
+  -- controls 100*rowMeanConstant, but has no bound on Kcell*Kp.
+  -- mean_coefficient_not_controlled verifies that the numerical contracts
+  -- do not imply this sufficient coefficient bound.
   sorry
 
 /-- One-cell separated bounded-test estimate, with its actual iid marginal
@@ -315,7 +348,26 @@ theorem D18_L_fresh_singleton (hκ : κ.Admissible) (hThresholds : LateThreshold
         (D.typicalFresh (D.geom.cellOf b)).pr (fun Ps =>
           D.fresh.label (D.geom.cellOf b) Ps.2 b = y) ≤
         (1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) * (PT.π (D.geom.patchOf b)).w y := by
-  sorry
+  filter_upwards [Lane_sol_d18l_fresh.eventually_typical_failure T] with k hk
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro b hOdd hEarly y
+  let D := rawData hκ X
+  let physical := Classical.choice X.l16.physical
+  obtain ⟨hpos, hbound⟩ := Lane_sol_d18l_fresh.physical_singleton physical
+    X.l16.pools_nonempty hk b hOdd y
+  have hpos' : 0 < ∑ P ∈ D.typicalPools (D.geom.cellOf b),
+      (D.cellPoolLaw (D.geom.cellOf b)).w P := hpos
+  change (D.typicalFresh (D.geom.cellOf b)).pr _ ≤ _
+  rw [LateData.typicalFresh, dif_pos hpos']
+  apply hbound.trans
+  apply mul_le_mul_of_nonneg_right _ ((PT.π (X.geom.patchOf b)).nonneg y)
+  have hP : 0 < κ.P := by have := hκ.P_big.2; omega
+  have hR : (1 : ℕ) ≤ κ.R := by rw [hκ.R_eq]; exact Nat.one_le_iff_ne_zero.mpr (pow_ne_zero _ (Nat.ne_of_gt hP))
+  have hRreal : (1 : ℝ) ≤ κ.R := by exact_mod_cast hR
+  have hKB : 2 ≤ κ.KB := by nlinarith [hκ.KB_big]
+  simpa only [add_comm, Real.rpow_eq_pow] using add_le_add_left
+    (mul_le_mul_of_nonneg_right hKB (Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) (-3))) 1
 
 /-- Transport the exact S17 event scope from external positions to flip
 coordinates. TeX 17:12–29,364–369; 18:62–64,937–945. -/

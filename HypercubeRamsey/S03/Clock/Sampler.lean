@@ -64,12 +64,7 @@ theorem clock_constants (B : ℝ) (hB : 1 ≤ B) :
 
 /-! ### Small facts -/
 
-/-- A finite probability law lives on a nonempty type. -/
-theorem finProb_nonempty {α : Type*} [Fintype α] (P : FinProb α) : Nonempty α := by
-  by_contra h
-  rw [not_nonempty_iff] at h
-  have h1 := P.sum_eq_one
-  simp at h1
+-- `finProb_nonempty` comes from `Clock/Inputs_p_clock_r1.lean` (identical statement).
 
 theorem FiniteMeshPlan.δ_nonneg {n : ℕ} {K₀ : ℝ} (mesh : FiniteMeshPlan n K₀) : 0 ≤ mesh.δ := by
   rw [mesh.δ_eq]

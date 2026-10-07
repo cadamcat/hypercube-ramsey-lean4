@@ -50,7 +50,21 @@ private theorem hidden_charge_eventually (c' : ℝ) (hc' : 0 < c') :
 theorem hidden_lll (c' : ℝ) (hc' : 0 < c') (hη₀ : 0 < η₀) (hh : 1 ≤ h) :
     ∃ cH > (0 : ℝ), ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n →
       D.GateTail c' → D.DenTail → D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) := by
-  sorry
+  obtain ⟨cH, hcH, n₀, hcharge⟩ := hidden_charge_eventually c' hc'
+  refine ⟨cH, hcH, n₀, ?_⟩
+  intro D hn hGF hGT hDT
+  have hx := hcharge D.n hn
+  change LLLInput (fun _ : D.KeyT => D.R') (fun g Θ => D.HBad Θ g)
+    (fun g => keyBall g 2) (2 * Real.exp (-(D.n : ℝ) ^ cH))
+    ((2 * sC η₀ D.n + 1) ^ 4)
+  refine ⟨hx.1, hx.2, ?_, ?_, ?_⟩
+  · -- Show each hidden event reads only the radius-two key scope.
+    intro g Θ Θ' hθ
+    exact hiddenBad_eq_of_keyBall2 D Θ Θ' g hθ
+  · -- Bound the number of overlapping radius-two scopes by `(2s+1)^4`.
+    sorry
+  · -- Combine GateTail and DenTail, then absorb the local-lemma charge factor.
+    sorry
 
 /-- L8.1f(iii) (08:196–199): on incident ball counts at most `2λ`, the internal IDs of a candidate list are chosen
 from at most `(n+1)(H+1) 2λ ≤ n^{13}` IDs (`≤ T` of them) and each of the `≤ 2s` cross IDs from at most `(H+1)2λ`,

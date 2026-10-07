@@ -890,6 +890,98 @@ private theorem Mden_eq_of_hist_agree (D : Ctx η₀ β p h)
   intro ξ hξ
   rw [hFcand ξ]
 
+private theorem Mden_eq_of_hist_agree_general (D : Ctx η₀ β p h)
+    {J : Type} [Fintype J] (Θ Θ' : D.Hist) (g : D.KeyT) (o : D.Obs J g)
+    (h0 : Θ g = Θ' g)
+    (h1 : ∀ u ∈ crossKeys g, Θ u = Θ' u)
+    (h2 : ∀ u ∈ crossKeys g, ∀ v ∈ crossKeys u, Θ v = Θ' v) :
+    D.Mden Θ g o = D.Mden Θ' g o := by
+  classical
+  have hFcand (ξ : D.Tup) : D.Fcand Θ g ξ o = D.Fcand Θ' g ξ o := by
+    have hGateξ : D.CandGate (Function.update Θ g ξ) g =
+        D.CandGate (Function.update Θ' g ξ) g := by
+      have h0ξ : Function.update Θ g ξ g = Function.update Θ' g ξ g := by simp
+      have h1ξ : ∀ u ∈ crossKeys g, Function.update Θ g ξ u = Function.update Θ' g ξ u := by
+        intro u hu
+        exact update_hist_value_eq Θ Θ' g ξ u (h1 u hu)
+      have h2ξ : ∀ u ∈ crossKeys g, ∀ v ∈ crossKeys u,
+          Function.update Θ g ξ v = Function.update Θ' g ξ v := by
+        intro u hu v hv
+        by_cases hvg : v = g
+        · rw [hvg]
+          simp [Function.update]
+        · exact update_hist_value_eq Θ Θ' g ξ v (h2 u hu v hv)
+      exact candGate_eq_of_hist_agree D (Function.update Θ g ξ)
+        (Function.update Θ' g ξ) g h0ξ h1ξ h2ξ
+    have hintξ : ∀ z, D.intRatio Θ g ξ z = D.intRatio Θ' g ξ z :=
+      fun z => intRatio_eq_of_hist_agree D Θ Θ' g ξ h0 h1 z
+    have hcross : ∀ u : D.CrossSub g, ∀ q : D.M.ι × Fin D.N,
+        D.crossRatio Θ g ξ u q = D.crossRatio Θ' g ξ u q :=
+      fun u q => crossRatio_eq_of_hist_agree D Θ Θ' g ξ h1 h2 u q
+    unfold Ctx.Fcand
+    simp [hGateξ, hintξ, hcross]
+  unfold Ctx.Mden
+  apply Finset.sum_congr rfl
+  intro ξ hξ
+  rw [hFcand ξ]
+
+private theorem qgk_eq_of_hist_agree (D : Ctx η₀ β p h) (Θ Θ' : D.Hist)
+    (g : D.KeyT) (h0 : Θ g = Θ' g)
+    (h1 : ∀ u ∈ crossKeys g, Θ u = Θ' u)
+    (h2 : ∀ u ∈ crossKeys g, ∀ v ∈ crossKeys u, Θ v = Θ' v) (k : ℕ) :
+    D.qgk Θ g k = D.qgk Θ' g k := by
+  classical
+  have hGate := candGate_eq_of_hist_agree D Θ Θ' g h0 h1 h2
+  have hTrueW (t : Fin k → D.M.ι) (c : D.CrossSub g → D.M.ι × Fin D.N) :
+      D.trueW Θ g t c = D.trueW Θ' g t c := by
+    have hInternal (j : Fin k) :
+        (D.tilt Θ g).w (t j) = (D.tilt Θ' g).w (t j) :=
+      tilt_weight_eq_of_hist_agree D Θ Θ' g h0 h1 (t j)
+    have hCross (u : D.CrossSub g) :
+        (D.tilt Θ u.1).w (c u).1 * (D.anchorU Θ u.1 (c u).1).w (c u).2 =
+          (D.tilt Θ' u.1).w (c u).1 * (D.anchorU Θ' u.1 (c u).1).w (c u).2 := by
+      rw [tilt_weight_eq_of_hist_agree D Θ Θ' u.1 (h1 u.1 u.2) (h2 u.1 u.2) (c u).1]
+      rw [anchorU_weight_eq_of_hist_agree D Θ Θ' u.1 (h1 u.1 u.2)
+        (h2 u.1 u.2) (c u).1 (c u).2]
+    unfold Ctx.trueW
+    simp [hInternal, hCross]
+  unfold Ctx.qgk
+  apply Finset.sum_congr rfl
+  intro t ht
+  apply Finset.sum_congr rfl
+  intro c hc
+  have hM := Mden_eq_of_hist_agree_general D Θ Θ' g
+    ((fun j => some (t j)), c) h0 h1 h2
+  rw [hGate, hTrueW t c, hM]
+
+theorem hiddenBad_eq_of_keyBall2 (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
+    (hθ : ∀ u ∈ keyBall g 2, Θ u = Θ' u) : D.HBad Θ g = D.HBad Θ' g := by
+  have hself : keyDist g g = 0 := by
+    unfold keyDist
+    simp
+  have hg : g ∈ keyBall g 2 := by simp [keyBall, hself]
+  have h0 : Θ g = Θ' g := hθ g hg
+  have h1 : ∀ u ∈ crossKeys g, Θ u = Θ' u := by
+    intro u hu
+    apply hθ u
+    have hu' : keyDist g u = 1 := by simpa [crossKeys] using hu
+    simp [keyBall, hu']
+  have h2 : ∀ u ∈ crossKeys g, ∀ v ∈ crossKeys u, Θ v = Θ' v := by
+    intro u hu v hv
+    apply hθ v
+    have hu' : keyDist g u = 1 := by simpa [crossKeys] using hu
+    have hv' : keyDist u v = 1 := by simpa [crossKeys] using hv
+    have hdist : keyDist g v ≤ 2 := by
+      calc
+        keyDist g v ≤ keyDist g u + keyDist u v := keyDist_triangle g u v
+        _ ≤ 1 + 1 := Nat.add_le_add hu'.le hv'.le
+        _ = 2 := by norm_num
+    simp [keyBall, hdist]
+  have hBase := baseGates_eq_of_hist_agree D Θ Θ' g h0 h1
+  have hq (k : ℕ) := qgk_eq_of_hist_agree D Θ Θ' g h0 h1 h2 k
+  unfold Ctx.HBad
+  simp [hBase, hq]
+
 private theorem qL_eq_of_parts (D : Ctx η₀ β p h) (Θ Θ' : D.Hist)
     (g : D.KeyT) (oi oi' : D.Loc → Option D.M.ι)
     (ct ct' : D.CrossSub g → D.M.ι)

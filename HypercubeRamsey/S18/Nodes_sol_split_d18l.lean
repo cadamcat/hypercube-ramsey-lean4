@@ -1,7 +1,9 @@
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_pal
 import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
 import HypercubeRamsey.S17.Nodes
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -196,7 +198,27 @@ theorem D18_L_fresh_internal (hκ : κ.Admissible) (hThresholds : LateThresholds
         (∀ C, D.fresh.typical C (pools C)) →
         0 < (FinLaw.pi fun C => D.fresh.fresh C (pools C)).w s →
         ∀ v, IsEvenRole v → D.internalValid v s := by
-  sorry
+  filter_upwards [] with k
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro pools s ht hs v he
+  let physical := Classical.choice X.l16.physical
+  have hv := Lane_sol_s18_dl.product_fresh_valid physical pools s ht hs
+  have hp := Lane_sol_s18_dl.internal_probability_and_hits physical pools s hv v he
+  have hsupport := S16.Lane_sol_s16_prod1.pi_support
+    (fun C => X.fresh.fresh C (pools C)) s (ne_of_gt hs) (X.geom.cellOf v)
+  have hshape := Lane_sol_d18l_fresh.physical_prior_shape hPT physical
+    (X.geom.cellOf v) (pools (X.geom.cellOf v)) (ht _) (s (X.geom.cellOf v))
+    hsupport v rfl he hp.2.1
+  rw [X.geom.cellOf_patch v] at hshape
+  change (∀ x, 0 ≤ X.fresh.prior (X.geom.cellOf v) (s (X.geom.cellOf v)) v x) ∧ _
+  refine ⟨hp.1, hp.2.1, hshape.1, hshape.2, ?_⟩
+  intro a ha x hx
+  have hcell := Lane_sol_d18l_fresh.internal_neighbor_cell physical.raw v a ha
+  change Hits (T.S.E k) PT.tiling.c x
+    (X.fresh.label (X.geom.cellOf (flipPos v a)) (s (X.geom.cellOf (flipPos v a))) (flipPos v a))
+  rw [hcell]
+  exact (hp.2.2 x hx).2 a ha
 
 /-- Own-prior iid mean estimate. TeX 16:513–529; 18:1076–1089.
 This is the first component of FreshCalibration, before any queries. -/
@@ -211,6 +233,18 @@ theorem D18_L_prior_mean (hκ : κ.Admissible) (hThresholds : LateThresholds κ)
             (D.fresh.fresh (D.geom.cellOf v) (pools (D.geom.cellOf v))).E
               (fun s => D.fresh.prior (D.geom.cellOf v) s v y) else 0) ≤
         κ.KB / ((PT.tiling.P (D.geom.patchOf v)).M : ℝ) := by
+  filter_upwards [Lane_sol_d18l_fresh.physical_prior_mean_bound hκ T] with k hk
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro v y he
+  have hMean := hk PT hPT X.geom X.fresh (Classical.choice X.l16.physical)
+    X.l16.pools_nonempty hMass v y he
+  apply hMean.trans
+  apply div_le_div_of_nonneg_right _ (Nat.cast_nonneg _)
+  -- The exported L16.7 comparison pays 100*Kcell*Kp. LateThresholds
+  -- controls 100*rowMeanConstant, but has no bound on Kcell*Kp.
+  -- mean_coefficient_not_controlled verifies that the numerical contracts
+  -- do not imply this sufficient coefficient bound.
   sorry
 
 /-- One-cell separated bounded-test estimate, with its actual iid marginal
@@ -294,7 +328,42 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
         D.encoding.permLaw.pr (fun x => x.1 C slot = bin ∧ D.upstreamBad f x) /
           D.encoding.permLaw.pr (fun x => x.1 C slot = bin) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) := by
-  sorry
+  classical
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 0] with k hk
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro C slot bin f
+  let D := rawData hκ X
+  let pin : D.encoding.InitInput → Prop := fun x => x.1 C slot = bin
+  let bad : D.encoding.InitInput → Prop := D.upstreamBad f
+  change D.encoding.permLaw.pr (fun x => pin x ∧ bad x) /
+      D.encoding.permLaw.pr pin ≤ _
+  -- The zero-denominator pin retains Lean's zero quotient. The positive-pin
+  -- case needs the actual S17 pinned pool/list tail.
+  by_cases hden : D.encoding.permLaw.pr pin = 0
+  · have hnum_nonneg : 0 ≤ D.encoding.permLaw.pr (fun x => pin x ∧ bad x) := by
+      unfold FinLaw.pr
+      apply Finset.sum_nonneg
+      intro x hx
+      split_ifs
+      · exact D.encoding.permLaw.nonneg x
+      · exact le_rfl
+    have hnum_le : D.encoding.permLaw.pr (fun x => pin x ∧ bad x) ≤
+        D.encoding.permLaw.pr pin := by
+      unfold FinLaw.pr
+      apply Finset.sum_le_sum
+      intro x hx
+      by_cases hp : pin x
+      · by_cases hb : bad x
+        · simp [hp, hb]
+        · simpa [hp, hb] using D.encoding.permLaw.nonneg x
+      · simp [hp]
+    have hnum : D.encoding.permLaw.pr (fun x => pin x ∧ bad x) = 0 := by
+      linarith
+    have hpow : 0 ≤ Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) :=
+      Real.rpow_nonneg (by positivity) _
+    simpa [hden, hnum] using hpow
+  · sorry
 
 /-- Transfer diagnostic typical positivity to the actual iid marginal
 cell-pool law. TeX 16:260–296; 18:277–285. -/
@@ -315,7 +384,26 @@ theorem D18_L_fresh_singleton (hκ : κ.Admissible) (hThresholds : LateThreshold
         (D.typicalFresh (D.geom.cellOf b)).pr (fun Ps =>
           D.fresh.label (D.geom.cellOf b) Ps.2 b = y) ≤
         (1 + κ.KB * Real.rpow (T.S.n k : ℝ) (-3)) * (PT.π (D.geom.patchOf b)).w y := by
-  sorry
+  filter_upwards [Lane_sol_d18l_fresh.eventually_typical_failure T] with k hk
+  intro PT hPT X hMass hLarge
+  dsimp only
+  intro b hOdd hEarly y
+  let D := rawData hκ X
+  let physical := Classical.choice X.l16.physical
+  obtain ⟨hpos, hbound⟩ := Lane_sol_d18l_fresh.physical_singleton physical
+    X.l16.pools_nonempty hk b hOdd y
+  have hpos' : 0 < ∑ P ∈ D.typicalPools (D.geom.cellOf b),
+      (D.cellPoolLaw (D.geom.cellOf b)).w P := hpos
+  change (D.typicalFresh (D.geom.cellOf b)).pr _ ≤ _
+  rw [LateData.typicalFresh, dif_pos hpos']
+  apply hbound.trans
+  apply mul_le_mul_of_nonneg_right _ ((PT.π (X.geom.patchOf b)).nonneg y)
+  have hP : 0 < κ.P := by have := hκ.P_big.2; omega
+  have hR : (1 : ℕ) ≤ κ.R := by rw [hκ.R_eq]; exact Nat.one_le_iff_ne_zero.mpr (pow_ne_zero _ (Nat.ne_of_gt hP))
+  have hRreal : (1 : ℝ) ≤ κ.R := by exact_mod_cast hR
+  have hKB : 2 ≤ κ.KB := by nlinarith [hκ.KB_big]
+  simpa only [add_comm, Real.rpow_eq_pow] using add_le_add_left
+    (mul_le_mul_of_nonneg_right hKB (Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) (-3))) 1
 
 /-- Transport the exact S17 event scope from external positions to flip
 coordinates. TeX 17:12–29,364–369; 18:62–64,937–945. -/
@@ -337,7 +425,111 @@ theorem D18_L_palette_counts (hκ : κ.Admissible) (hThresholds : LateThresholds
           (D.geom.patchOf v = i ∧ D.palette v = D.palettes i a)
         (rows.card : ℝ) ≤ κ.KB * ((PT.tiling.P i).M : ℝ) / D.chi i / densityScale T k ∧
           (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) ≤ rows.card := by
-  sorry
+  have hKB : (800 : ℝ) ≤ κ.KB := by
+    have hP := hκ.P_big.2
+    have hR := hκ.R_eq
+    have hRpos : (1 : ℝ) ≤ κ.R := by
+      have : 1 ≤ κ.R := by
+        rw [hκ.R_eq]
+        have hPpos : 0 < κ.P := by omega
+        exact Nat.one_le_iff_ne_zero.mpr (pow_ne_zero 2 (ne_of_gt hPpos))
+      exact_mod_cast this
+    linarith [hκ.KB_big]
+  filter_upwards [Lane_sol_d18l_pal.small_prefix_height T] with k hSmall
+  intro PT hPT X hMass hLarge
+  let D := rawData hκ X
+  dsimp only
+  intro i a
+  let Q := (Classical.choice X.l16.physical).quantitative
+  obtain ⟨hLoss, hell⟩ := hSmall (PT.tiling.P i).ℓ (PT.tiling.P i).h
+    (Q.prefix_bound i) (Q.height_bound i)
+  let ψ := X.palette.code i
+  let c := (X.palette.colourEquiv i).symm a
+  let rows := Finset.univ.filter fun v : Pos T k => IsEvenRole v ∧
+    (D.geom.patchOf v = i ∧ D.palette v = D.palettes i a)
+  have hpalette (v : Pos T k) : D.palette v =
+      s17Palette (X.palette.code (X.geom.patchOf v)) (X.palette.colours (X.geom.patchOf v)) v := by
+    simp only [D, rawData, LateData.palette]
+    rw [X.palette.palettes_eq, X.palette.colour_eq]
+    simp only [Equiv.symm_apply_apply, s17Palette, ListGateContext.PaletteCode.palette]
+  have hrows : rows = Finset.univ.filter fun v : Pos T k =>
+      v ∈ PT.tiling.leaf i ∧ IsEvenRole v ∧ ψ.roleColour v = c := by
+    ext v
+    simp only [rows, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · rintro ⟨hv, hp, hpal⟩
+      have hp' : X.geom.patchOf v = i := hp
+      refine ⟨by simpa [← hp'] using X.geom.patchOf_leaf v, hv, ?_⟩
+      obtain ⟨x, hx⟩ := X.palette.nonempty i a
+      have hxv : x ∈ D.palette v := by rw [hpal]; exact hx
+      rw [hpalette, hp'] at hxv
+      rw [X.palette.palettes_eq i a] at hx
+      exact ((Finset.mem_filter.mp hxv).2.2).symm.trans (Finset.mem_filter.mp hx).2.2
+    · rintro ⟨hleaf, hv, hc⟩
+      have hp : X.geom.patchOf v = i :=
+        (hPT.tiling_valid.prefix_complete v).unique (X.geom.patchOf_leaf v) hleaf
+      refine ⟨hv, hp, ?_⟩
+      rw [hpalette, hp]
+      change s17Palette ψ (X.palette.colours i) v = X.palette.palettes i a
+      rw [X.palette.palettes_eq i a]
+      simp only [s17Palette, ListGateContext.PaletteCode.palette, hc, c]
+  have hcount : X.palette.chi i * rows.card = 2 ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) := by
+    rw [X.palette.chi_eq, hrows, Lane_sol_d18l_pal.code_fibre_count ψ (X.code_spec i),
+      Lane_sol_d18l_pal.even_leaf_card i hell]
+  have hcountR : (D.chi i : ℝ) * rows.card =
+      (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) := by
+    exact_mod_cast hcount
+  have hchi : (0 : ℝ) < D.chi i := by exact_mod_cast X.palette.chi_pos i
+  have hchiLe : (D.chi i : ℝ) ≤ (2 : ℝ) ^ (PT.tiling.P i).h := by
+    have := Lane_sol_d18l_pal.code_chi_le ψ (X.code_spec i)
+    rw [← X.palette.chi_eq] at this
+    exact_mod_cast this
+  have hN : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hM : (0 : ℝ) < (PT.tiling.P i).M := by
+    rw [← (PT.tiling.P i).cardX]
+    exact_mod_cast Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1
+  have hS : (0 : ℝ) < PT.tiling.S := by
+    linarith [hPT.tiling_valid.S_lower]
+  constructor
+  · apply (le_div_iff₀ (by unfold densityScale; exact div_pos hN (by positivity) : (0 : ℝ) < densityScale T k)).mpr
+    apply (le_div_iff₀ hchi).mpr
+    have hdyad := hPT.tiling_valid.dyadic_mass_upper i
+    have hscale : (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) * densityScale T k =
+        (T.S.N k : ℝ) / 2 * (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) := by
+      unfold densityScale
+      have hex : T.S.n k = (T.S.n k - (PT.tiling.P i).ℓ - 1) + (PT.tiling.P i).ℓ + 1 := by omega
+      have hpown : (2 : ℝ) ^ T.S.n k =
+          (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) * (2 : ℝ) ^ (PT.tiling.P i).ℓ * 2 := by
+        conv_lhs => rw [hex]
+        rw [pow_add, pow_add, pow_one]
+      rw [hpown, zpow_neg, zpow_natCast]
+      field_simp <;> ring
+    calc
+      (rows.card : ℝ) * densityScale T k * D.chi i =
+          ((D.chi i : ℝ) * rows.card) * densityScale T k := by ring
+      _ = (T.S.N k : ℝ) / 2 * (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) := by rw [hcountR, hscale]
+      _ ≤ 800 * (PT.tiling.P i).M := by
+        have hdyad' := (lt_div_iff₀ hS).mp hdyad
+        have hNS : (T.S.N k : ℝ) ≤ 400 * PT.tiling.S := by
+          linarith [hPT.tiling_valid.S_lower]
+        have hmul := mul_le_mul_of_nonneg_left hNS
+          (show (0 : ℝ) ≤ (2 : ℝ) ^ (-((PT.tiling.P i).ℓ : ℤ)) by positivity)
+        nlinarith
+      _ ≤ κ.KB * (PT.tiling.P i).M := mul_le_mul_of_nonneg_right hKB hM.le
+  · have hNat : ((T.S.n k - (PT.tiling.P i).ℓ - 1 : ℕ) : ℝ) =
+        (T.S.n k : ℝ) - (PT.tiling.P i).ℓ - 1 := by
+      rw [Nat.cast_sub (by omega), Nat.cast_sub (by omega)]
+      norm_num
+    have hpow : (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) *
+        (2 : ℝ) ^ (PT.tiling.P i).h ≤
+          (2 : ℝ) ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) := by
+      rw [← Real.rpow_natCast, ← Real.rpow_add (by norm_num), ← Real.rpow_natCast, hNat]
+      apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
+      linarith
+    have hbase : 0 ≤ (2 : ℝ) ^ ((T.S.n k : ℝ) - Real.sqrt (T.S.n k)) := by positivity
+    have h := mul_le_mul_of_nonneg_left hchiLe hbase
+    rw [← hcountR] at hpow
+    exact (mul_le_mul_iff_right₀ hchi).mp (by nlinarith)
 
 /-- Separation within an internal slice from the palette code's kernel
 word exclusion. TeX 17:233–272; 18:1118–1123. Only distinct even rows
@@ -347,7 +539,36 @@ theorem D18_L_palette_separation (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inp
     ∀ v w, IsEvenRole v → IsEvenRole w → v ≠ w → D.palette v = D.palette w →
       (∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf v) → v a = w a) →
         500 * κ.ρ * (PT.tiling.P (D.geom.patchOf v)).h < (hammingDist v w : ℝ) := by
-  sorry
+  let D := rawData hκ X
+  dsimp only
+  intro v w hv hw hne hpal houter
+  have hpatch : D.geom.patchOf v = D.geom.patchOf w := by
+    by_contra hneq
+    have hpq : (⟨D.geom.patchOf v, D.colourOf v⟩ : Σ i, Fin (D.chi i)) ≠
+        ⟨D.geom.patchOf w, D.colourOf w⟩ := by
+      intro heq
+      exact hneq (congrArg Sigma.fst heq)
+    have hdisj := D.palettes_global_disjoint _ _ hpq
+    obtain ⟨x, hx⟩ := D.palette_nonempty (D.geom.patchOf v) (D.colourOf v)
+    exact Finset.disjoint_left.mp hdisj hx (by
+      change x ∈ D.palette w
+      rw [← hpal]
+      exact hx)
+  have hcol : (X.palette.code (X.geom.patchOf v)).roleColour v =
+      (X.palette.code (X.geom.patchOf v)).roleColour w := by
+    obtain ⟨x, hx⟩ := D.palette_nonempty (D.geom.patchOf v) (D.colourOf v)
+    have hy : x ∈ D.palette w := by rw [← hpal]; exact hx
+    change x ∈ X.palette.palettes (X.geom.patchOf v) (X.palette.colourOf v) at hx
+    change x ∈ X.palette.palettes (X.geom.patchOf w) (X.palette.colourOf w) at hy
+    rw [X.palette.palettes_eq] at hx hy
+    have hcv := (Finset.mem_filter.mp hx).2.2
+    have hcw := (Finset.mem_filter.mp hy).2.2
+    rw [X.palette.colour_eq] at hcv hcw
+    simp only [Equiv.symm_apply_apply] at hcv hcw
+    have hp : X.geom.patchOf v = X.geom.patchOf w := hpatch
+    rw [← hp] at hcw
+    exact hcv.symm.trans hcw
+  exact Lane_sol_d18l_pal.code_separation _ (X.code_spec _) v w hne hcol houter
 
 /-- Exact S17-to-S18 list-event adapter: flip coordinates biject with
 external early positions, omitted-incidence cardinalities are unchanged,

@@ -774,7 +774,7 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     sorry
   filter_upwards [hstop] with k hk
   intro PT hPT D hD hT hBalance hLocal hTransfer C A
-  exact Lane_sol_s18_n5.fullRunProbability_of_first_stop D hD C A hLocal.2.1
+  exact Lane_sol_s18_n5.fullRunProbability_of_first_stop D hD hT C A hLocal.2.1
     (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
 
 theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)

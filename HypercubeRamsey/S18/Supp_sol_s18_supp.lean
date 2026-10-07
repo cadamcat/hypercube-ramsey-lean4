@@ -26,6 +26,18 @@ theorem reference_current_support (D : LateData hPT) (hT : TransitionData D)
   exact Finset.prod_ne_zero_iff.mp
     (Finset.prod_ne_zero_iff.mp hprod a (Finset.mem_univ a)) t (Finset.mem_univ t)
 
+/-- Actual class support gives current sketch support for each realized row. -/
+theorem actual_current_sketch_support (D : LateData hPT) (hT : TransitionData D)
+    {δ : ℝ} (A : ClassSamplerData D δ) (j : Fin D.geom.r)
+    (h : D.encoding.base.History j.castSucc) (out : D.encoding.base.ClassRows j)
+    (henter : D.enter δ j h) (hout : (A.act j h).w out ≠ 0)
+    (b : {v : Pos T k // v ∈ D.encoding.base.classes j}) :
+    ∀ a t, (D.currentPrior j (flipPos b.1 a) h).w ((out b).2.1 a t) ≠ 0 := by
+  have href := A.reference_support j h out henter hout
+  change (∏ c, (D.encoding.kernels.refK j c h).w (out c)) ≠ 0 at href
+  exact reference_current_support D hT j b h (out b)
+    (Finset.prod_ne_zero_iff.mp href b (Finset.mem_univ b))
+
 /-- Small errors exclude the posterior fallback on a gated row. -/
 theorem gated_current_support_in_initial (D : LateData hPT)
     (hsmall : SmallErrors κ T k PT D.geom (Real.log 2 / 1000))
@@ -206,5 +218,18 @@ theorem supported_replacement (D : LateData hPT) (j : Fin D.geom.r)
   · simpa only [LateData.R2, LateData.prefixMoments, hmass, hpass, hmask] using hR2
   · intro tests y
     simp only [LateData.labelWeight, hmass, hpass, hmask]
+
+/-- Replacement preserves the deletion conclusion through every label weight. -/
+theorem deletion_of_current_support (D : LateData hPT) {K27 : ℝ}
+    (hBroad : BroadDeletionFacts D K27) (j : Fin D.geom.r)
+    (b : {v : Pos T k // v ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) (side : D.encoding.base.RowOut b.1)
+    (hg : D.gate j b.1 h)
+    (hcurrent : ∀ a t, (D.currentPrior j (flipPos b.1 a) h).w (side.2.1 a t) ≠ 0)
+    (hR1 : D.R1 j side) (hR2 : D.R2 j h side) : D.deletionConclusion j side := by
+  obtain ⟨repaired, hSupp, hR1', hR2', hlabel⟩ :=
+    supported_replacement D j h side hcurrent hR1 hR2
+  have hd := (hBroad j b.1 h repaired b.2 hg hSupp hR1' hR2').2.1
+  simpa only [LateData.deletionConclusion, hlabel] using hd
 
 end HypercubeRamsey.S18.Lane_sol_s18_supp

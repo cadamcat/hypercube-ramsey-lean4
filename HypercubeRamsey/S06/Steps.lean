@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.Step3Defs
+import HypercubeRamsey.S06.Steps_q_s06_steps1
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -20,6 +21,7 @@ namespace S06
 
 open OAI.HypercubeRamsey
 open Classical
+open Filter
 open scoped BigOperators
 
 noncomputable section
@@ -65,7 +67,47 @@ end Ctx6
 /-- L6.1c (base tags, 06:93–104, 06:159–160). -/
 theorem L6_1c_tag (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom := by
-  sorry
+  have he : 0 < d₀ - 2 * Dstar₆ := by
+    have hf := constants6_facts
+    linarith
+  have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ (d₀ - 2 * Dstar₆)) atTop atTop :=
+    (tendsto_rpow_atTop he).comp tendsto_natCast_atTop_atTop
+  have hev : ∀ᶠ n : ℕ in atTop, 1 / c₁ ≤ (n : ℝ) ^ (d₀ - 2 * Dstar₆) :=
+    htend.eventually (eventually_ge_atTop (1 / c₁))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hev
+  let n₀' := max 1 n₀
+  refine ⟨n₀', 1, ?_⟩
+  intro n N E G M X hlarge
+  have hn1nat : 1 ≤ n := le_trans (le_max_left 1 n₀) hlarge.1
+  have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast hn1nat
+  have hnexp : (n : ℝ) ^ (d₀ - 2 * Dstar₆) ≥ 1 / c₁ :=
+    hn₀ n (le_trans (le_max_right 1 n₀) hlarge.1)
+  intro pv key hheavy hrelated i
+  let η := tagPosterior6 M (pv.val (primaryName6 key))
+  let f : M.ι → ℝ := fun j => colDeg E G (M.μ j) (pv.val (otherPrimaryName6 key))
+  have haverage : c₀ ≤ ∑ j, η.w j * f j := by
+    calc
+      c₀ ≤ colDeg E G (broadLaw6 M (pv.val (primaryName6 key))) (pv.val (otherPrimaryName6 key)) :=
+        hrelated.1
+      _ = ∑ j, η.w j * f j := by
+        simpa [η, f, broadLaw6] using
+          (colDeg_mix6 E G (tagPosterior6 M (pv.val (primaryName6 key))) M.μ
+            (pv.val (otherPrimaryName6 key)))
+  have hc : 0 ≤ c₁ := by norm_num [c₁, c₀]
+  have htwoc : 2 * c₁ = c₀ := by norm_num [c₁, c₀]
+  have hmassSum : c₁ ≤ ∑ j, if c₁ ≤ f j then η.w j else 0 := by
+    apply mass_ge_from_average6 η f c₁ hc _ (fun j => colDeg_nonneg6 E G (M.μ j) _)
+      (fun j => colDeg_le_one6 E G (M.μ j) _)
+    rw [htwoc]
+    exact haverage
+  have hmass : c₁ ≤ η.pr (fun j => c₁ ≤ f j) := by
+    simpa [FinProb.pr] using hmassSum
+  have hcap : ∀ j, η.w j ≤ (n : ℝ) ^ (2 * Dstar₆) * M.Λ j := by
+    intro j
+    exact X.par.eta_cap (pv.val (primaryName6 key)) hheavy j
+  simpa [Ctx6.tagLawAt, baseTagLaw6, η, f] using
+    (restricted_tag_bound6 M (pv.val (primaryName6 key)) i X.i₀
+      (fun j => c₁ ≤ f j) hmass hcap hn1 hnexp)
 
 /-- L6.1c (cap, 06:182–189): uniform references for the bounded candidate list and `Λ` for incoming tags; the
 predictive-denominator calculation (L3.7) with `d₀, δ₁ ≪ d₁`. -/
@@ -119,7 +161,390 @@ theorem L6_1d_fail (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 `≤ n^{d₁ + δ₂u}`, both below `n^{d₂u}`. -/
 theorem L6_1d_dom (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step2Dom := by
-  sorry
+  refine ⟨1, 1, ?_⟩
+  intro n N E G M X hlarge hTagDom
+  have hn1nat : 1 ≤ n := hlarge.1
+  have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast hn1nat
+  have hnpos : 0 < (n : ℝ) := lt_of_lt_of_le zero_lt_one hn1
+  intro H β hβ hKeys hTests
+  rcases hKeys with ⟨hinit, ⟨hcands, _htags⟩⟩
+  have hbin : β.key.1 ∈ X.binsOf {β.key} := by
+    simp [Ctx6.binsOf]
+  have hcand : 0 < (X.candLaw H.1.1).w (H.1.2.1 β.key.1) := hcands _ hbin
+  have hparent := parent_heavy_related_of_local_support X β.key H.1 hinit hcand
+  have hbaseTag : ∀ i, (X.tagLawAt (X.parOf H.1) β.key).w i ≤
+      (n : ℝ) ^ d₀ * M.Λ i := by
+    intro i
+    exact hTagDom (X.parOf H.1) β.key hparent.1 hparent.2 i
+  have hcardN := occType_obs_card_le X β hβ
+  have hcard : (β.obs.card : ℝ) ≤ 602 * (β.u : ℝ) := by exact_mod_cast hcardN
+  have huNat : 1 ≤ β.u := by
+    cases hm : β.mode <;> simp [Type6.u, hm] <;> omega
+  have hu : 1 ≤ (β.u : ℝ) := by exact_mod_cast huNat
+  have hd0 : 0 ≤ d₀ := by norm_num [d₀]
+  have hd1 : 0 ≤ d₁ := by norm_num [d₁]
+  have hd2 : 0 ≤ δ₂ := by norm_num [δ₂]
+  have hD : 602 * d₁ + δ₂ + d₀ < d₂ := by
+    rcases constants6_facts with ⟨_, _, _, hD, _, _, _, _⟩
+    exact hD
+  have hcoeff : d₀ + 602 * d₁ + δ₂ ≤ d₂ := by linarith
+  have hExp : d₀ + d₁ * (β.obs.card : ℝ) + δ₂ * (β.u : ℝ) ≤
+      d₂ * (β.u : ℝ) := by
+    have hcardMul := mul_le_mul_of_nonneg_left hcard hd1
+    have huMul := mul_le_mul_of_nonneg_left hu hd0
+    calc
+      d₀ + d₁ * (β.obs.card : ℝ) + δ₂ * (β.u : ℝ) ≤
+          d₀ * (β.u : ℝ) + (602 * d₁) * (β.u : ℝ) + δ₂ * (β.u : ℝ) := by nlinarith
+      _ = (d₀ + 602 * d₁ + δ₂) * (β.u : ℝ) := by ring
+      _ ≤ d₂ * (β.u : ℝ) := mul_le_mul_of_nonneg_right hcoeff (by positivity)
+  have hExpDel : d₁ + δ₂ * (β.u : ℝ) ≤ d₂ * (β.u : ℝ) := by
+    have hsmall : d₁ + δ₂ ≤ d₂ := by linarith [hD]
+    have hu0 : 0 ≤ (β.u : ℝ) := by linarith
+    have hmul := mul_le_mul_of_nonneg_right hsmall hu0
+    have hd1u : d₁ ≤ d₁ * (β.u : ℝ) := by nlinarith [hd1, hu]
+    calc
+      d₁ + δ₂ * (β.u : ℝ) ≤ d₁ * (β.u : ℝ) + δ₂ * (β.u : ℝ) := by linarith
+      _ = (d₁ + δ₂) * (β.u : ℝ) := by ring
+      _ ≤ d₂ * (β.u : ℝ) := hmul
+  have hpow : (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ) + δ₂ * (β.u : ℝ)) ≤
+      (n : ℝ) ^ (d₂ * (β.u : ℝ)) := Real.rpow_le_rpow_of_exponent_le hn1 hExp
+  have hpowDel : (n : ℝ) ^ (d₁ + δ₂ * (β.u : ℝ)) ≤
+      (n : ℝ) ^ (d₂ * (β.u : ℝ)) := Real.rpow_le_rpow_of_exponent_le hn1 hExpDel
+  have hweightNonneg : ∀ S : Finset X.HKey, ∀ i,
+      0 ≤ X.tagWeight H β S i := by
+    intro S i
+    unfold Ctx6.tagWeight
+    have hgate : 0 ≤ if X.tagGate H.1 β i then (1 : ℝ) else 0 := by split_ifs <;> norm_num
+    apply mul_nonneg
+    · exact mul_nonneg ((X.tagLawAt (X.parOf H.1) β.key).nonneg i) hgate
+    · apply Finset.prod_nonneg
+      intro ℓ hℓ
+      exact safeRatio6_nonneg
+        ((X.hidPostRep H.1 ℓ.1 β.key i).nonneg (H.2 ℓ))
+        ((X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ))
+  have hfullMassPos : 0 < X.tagMass H β β.obs := hTests.1
+  have hfullSumPos : 0 < ∑ i, X.tagWeight H β β.obs i := by
+    simpa [Ctx6.tagMass] using hfullMassPos
+  have hfullNorm (i : X.ι) : (X.Tβ H β).w i =
+      X.tagWeight H β β.obs i / X.tagMass H β β.obs := by
+    simpa [Ctx6.Tβ, Ctx6.tagPost, Ctx6.tagMass] using
+      (normalize6_weight_formula (fun j => X.tagWeight H β β.obs j) X.i₀ i
+        (fun j => hweightNonneg β.obs j) hfullSumPos)
+  have htagWeightBound : ∀ i, X.tagWeight H β β.obs i ≤
+      (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i := by
+    intro i
+    by_cases hgate : X.tagGate H.1 β i
+    · have hratio : ∀ ℓ ∈ β.obs,
+          0 ≤ safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+              ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) ∧
+            safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+              ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) ≤ (n : ℝ) ^ d₁ := by
+          intro ℓ hℓ
+          have hrep := (X.hidPostRep H.1 ℓ.1 β.key i).nonneg (H.2 ℓ)
+          have hdel := (X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ)
+          refine ⟨safeRatio6_nonneg hrep hdel, safeRatio6_le_of_le_mul hrep hdel
+            (Real.rpow_nonneg (Nat.cast_nonneg n) _) ?_⟩
+          exact hgate ℓ hℓ (H.2 ℓ)
+      have hprod : (∏ ℓ ∈ β.obs, safeRatio6
+            ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+            ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ))) ≤
+            (n : ℝ) ^ (d₁ * (β.obs.card : ℝ)) := by
+        rw [Real.rpow_mul_natCast (Nat.cast_nonneg n) d₁ β.obs.card]
+        exact prod_le_const_pow_card β.obs
+          (fun ℓ => safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+            ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)))
+          ((n : ℝ) ^ d₁) (Real.rpow_nonneg (Nat.cast_nonneg n) _) (fun ℓ hℓ => (hratio ℓ hℓ).1)
+          (fun ℓ hℓ => (hratio ℓ hℓ).2)
+      have htag0 : 0 ≤ (X.tagLawAt (X.parOf H.1) β.key).w i :=
+        (X.tagLawAt (X.parOf H.1) β.key).nonneg i
+      have htag := hbaseTag i
+      unfold Ctx6.tagWeight
+      simp only [if_pos hgate, mul_one]
+      calc
+        (X.tagLawAt (X.parOf H.1) β.key).w i *
+            (∏ ℓ ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+              ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ))) ≤
+            (X.tagLawAt (X.parOf H.1) β.key).w i * (n : ℝ) ^ (d₁ * (β.obs.card : ℝ)) :=
+          mul_le_mul_of_nonneg_left hprod htag0
+        _ ≤ (n : ℝ) ^ d₀ * M.Λ i * (n : ℝ) ^ (d₁ * (β.obs.card : ℝ)) :=
+          mul_le_mul_of_nonneg_right htag (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+        _ = (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i := by
+          calc
+            ((n : ℝ) ^ d₀ * M.Λ i) * (n : ℝ) ^ (d₁ * (β.obs.card : ℝ)) =
+                ((n : ℝ) ^ d₀ * (n : ℝ) ^ (d₁ * (β.obs.card : ℝ))) * M.Λ i := by ring
+            _ = (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i := by
+              rw [← Real.rpow_add hnpos]
+    · have hΛ : 0 ≤ M.Λ i := M.Λ_nonneg i
+      unfold Ctx6.tagWeight
+      simp only [if_neg hgate, mul_zero, zero_mul]
+      exact mul_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) _) hΛ
+  refine ⟨?_, ?_⟩
+  · intro i
+    have hupper : 0 ≤ (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i :=
+      mul_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) _) (M.Λ_nonneg i)
+    have hthreshold : (n : ℝ) ^ (-(δ₂ * β.u)) ≤ X.tagMass H β β.obs := by
+      simpa [Ctx6.step2Thr] using hTests.2.1
+    have hthresholdPos : 0 < (n : ℝ) ^ (-(δ₂ * β.u)) := Real.rpow_pos_of_pos hnpos _
+    calc
+      (X.Tβ H β).w i = X.tagWeight H β β.obs i / X.tagMass H β β.obs := hfullNorm i
+      _ ≤ ((n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i) /
+          X.tagMass H β β.obs := div_le_div_of_nonneg_right (htagWeightBound i) hfullMassPos.le
+      _ ≤ ((n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i) /
+          ((n : ℝ) ^ (-(δ₂ * β.u))) :=
+            div_le_div_of_nonneg_left hupper hthresholdPos hthreshold
+      _ = (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ) + δ₂ * (β.u : ℝ)) * M.Λ i := by
+            rw [div_eq_mul_inv, Real.rpow_neg hnpos.le, inv_inv]
+            calc
+              ((n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) * M.Λ i) *
+                  (n : ℝ) ^ (δ₂ * (β.u : ℝ)) =
+                  ((n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ)) *
+                    (n : ℝ) ^ (δ₂ * (β.u : ℝ))) * M.Λ i := by ring
+              _ = (n : ℝ) ^ (d₀ + d₁ * (β.obs.card : ℝ) + δ₂ * (β.u : ℝ)) * M.Λ i := by
+                rw [← Real.rpow_add hnpos]
+      _ ≤ (n : ℝ) ^ (d₂ * (β.u : ℝ)) * M.Λ i :=
+            mul_le_mul_of_nonneg_right hpow (M.Λ_nonneg i)
+  · intro ℓ hℓ i
+    have hdelMassPos : 0 < X.tagMass H β (β.obs.erase ℓ) := by
+      have hex : ∃ j, 0 < X.tagWeight H β β.obs j := by
+        by_contra hnone
+        push_neg at hnone
+        have hall : ∀ j, X.tagWeight H β β.obs j = 0 := by
+          intro j
+          exact le_antisymm (hnone j) (hweightNonneg β.obs j)
+        have hzero : (∑ j, X.tagWeight H β β.obs j) = 0 := by
+          rw [Finset.sum_eq_zero (fun j hj => hall j)]
+        rw [← Ctx6.tagMass] at hzero
+        linarith
+      obtain ⟨j, hj⟩ := hex
+      have hratio : 0 ≤ safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key j).w (H.2 ℓ))
+          ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) ∧
+        safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key j).w (H.2 ℓ))
+          ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) ≤ (n : ℝ) ^ d₁ := by
+        by_cases hg : X.tagGate H.1 β j
+        · have ha := (X.hidPostRep H.1 ℓ.1 β.key j).nonneg (H.2 ℓ)
+          have hb := (X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ)
+          exact ⟨safeRatio6_nonneg ha hb,
+            safeRatio6_le_of_le_mul ha hb (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+              (hg ℓ hℓ (H.2 ℓ))⟩
+        · have hw : X.tagWeight H β β.obs j = 0 := by
+            unfold Ctx6.tagWeight
+            simp [hg]
+          rw [hw] at hj
+          norm_num at hj
+      have hpoint : X.tagWeight H β β.obs j ≤ (n : ℝ) ^ d₁ *
+          X.tagWeight H β (β.obs.erase ℓ) j := by
+        by_cases hg : X.tagGate H.1 β j
+        · have hratio' : safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key j).w (H.2 ℓ))
+              ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) ≤ (n : ℝ) ^ d₁ := hratio.2
+          have hprodRel :
+              (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) ≤
+              (n : ℝ) ^ d₁ * (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+            have heq : (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) =
+                safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key j).w (H.2 ℓ))
+                  ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) *
+                  (∏ s ∈ β.obs.erase ℓ, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                    ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+              rw [← Finset.prod_erase_mul β.obs
+                (fun s => safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) hℓ]
+              ring
+            calc
+              (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) =
+                  safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key j).w (H.2 ℓ))
+                    ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) *
+                    (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                      ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                      ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := heq
+              _ ≤ (n : ℝ) ^ d₁ * (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                    ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                    ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) :=
+                    mul_le_mul_of_nonneg_right hratio'
+                      (Finset.prod_nonneg fun s hs =>
+                        safeRatio6_nonneg ((X.hidPostRep H.1 s.1 β.key j).nonneg (H.2 s))
+                          ((X.hidPostDel H.1 s.1 β.key).nonneg (H.2 s)))
+          have htag0 := (X.tagLawAt (X.parOf H.1) β.key).nonneg j
+          have hbase : (X.tagLawAt (X.parOf H.1) β.key).w j *
+              (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) ≤
+              (n : ℝ) ^ d₁ * (X.tagLawAt (X.parOf H.1) β.key).w j *
+                (∏ s ∈ β.obs.erase ℓ, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+            calc
+              _ ≤ (X.tagLawAt (X.parOf H.1) β.key).w j *
+                    ((n : ℝ) ^ d₁ * (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                      ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                      ((X.hidPostDel H.1 s.1 β.key).w (H.2 s)))) :=
+                    mul_le_mul_of_nonneg_left hprodRel htag0
+              _ = _ := by ring
+          calc
+            X.tagWeight H β β.obs j = (X.tagLawAt (X.parOf H.1) β.key).w j *
+                (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+                    simp [Ctx6.tagWeight, hg]
+            _ ≤ (n : ℝ) ^ d₁ * (X.tagLawAt (X.parOf H.1) β.key).w j *
+                  (∏ s ∈ β.obs.erase ℓ, safeRatio6 ((X.hidPostRep H.1 s.1 β.key j).w (H.2 s))
+                    ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := hbase
+            _ = (n : ℝ) ^ d₁ * X.tagWeight H β (β.obs.erase ℓ) j := by
+                  simp [Ctx6.tagWeight, hg]
+                  ring
+        · have hfullZero : X.tagWeight H β β.obs j = 0 := by
+            unfold Ctx6.tagWeight
+            simp [hg]
+          have hdelZero : X.tagWeight H β (β.obs.erase ℓ) j = 0 := by
+            unfold Ctx6.tagWeight
+            simp [hg]
+          rw [hfullZero, hdelZero]
+          simp
+      have hdelj : 0 < X.tagWeight H β (β.obs.erase ℓ) j := by
+        by_contra hnonpos
+        have hz : X.tagWeight H β (β.obs.erase ℓ) j = 0 :=
+          le_antisymm (le_of_not_gt hnonpos) (hweightNonneg (β.obs.erase ℓ) j)
+        rw [hz] at hpoint
+        simp at hpoint
+        linarith
+      have hlesum : X.tagWeight H β (β.obs.erase ℓ) j ≤
+          ∑ q, X.tagWeight H β (β.obs.erase ℓ) q :=
+        Finset.single_le_sum (fun q hq => hweightNonneg (β.obs.erase ℓ) q) (Finset.mem_univ j)
+      have hsumPos : 0 < ∑ q, X.tagWeight H β (β.obs.erase ℓ) q :=
+        lt_of_lt_of_le hdelj hlesum
+      simpa [Ctx6.tagMass] using hsumPos
+    have hdelSumPos : 0 < ∑ j, X.tagWeight H β (β.obs.erase ℓ) j := by
+      simpa [Ctx6.tagMass] using hdelMassPos
+    have hdelNorm (j : X.ι) : (X.TβDel H β ℓ).w j =
+        X.tagWeight H β (β.obs.erase ℓ) j / X.tagMass H β (β.obs.erase ℓ) := by
+      simpa [Ctx6.TβDel, Ctx6.tagPost, Ctx6.tagMass] using
+        (normalize6_weight_formula (fun q => X.tagWeight H β (β.obs.erase ℓ) q) X.i₀ j
+          (fun q => hweightNonneg (β.obs.erase ℓ) q) hdelSumPos)
+    have hratioWeight : X.tagWeight H β β.obs i ≤ (n : ℝ) ^ d₁ *
+        X.tagWeight H β (β.obs.erase ℓ) i := by
+      by_cases hg : X.tagGate H.1 β i
+      · have hratio' : safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+            ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) ≤ (n : ℝ) ^ d₁ := by
+          exact safeRatio6_le_of_le_mul
+            ((X.hidPostRep H.1 ℓ.1 β.key i).nonneg (H.2 ℓ))
+            ((X.hidPostDel H.1 ℓ.1 β.key).nonneg (H.2 ℓ))
+            (Real.rpow_nonneg (Nat.cast_nonneg n) _) (hg ℓ hℓ (H.2 ℓ))
+        have hprodRel :
+            (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+              ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) ≤
+            (n : ℝ) ^ d₁ * (∏ s ∈ β.obs.erase ℓ, safeRatio6
+              ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+              ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+          have heq : (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) =
+              safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+                ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) *
+                (∏ s ∈ β.obs.erase ℓ, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+            rw [← Finset.prod_erase_mul β.obs
+              (fun s => safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) hℓ]
+            ring
+          calc
+            (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) =
+                safeRatio6 ((X.hidPostRep H.1 ℓ.1 β.key i).w (H.2 ℓ))
+                  ((X.hidPostDel H.1 ℓ.1 β.key).w (H.2 ℓ)) *
+                  (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                    ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                    ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := heq
+            _ ≤ (n : ℝ) ^ d₁ * (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                  ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) :=
+                  mul_le_mul_of_nonneg_right hratio'
+                    (Finset.prod_nonneg fun s hs =>
+                      safeRatio6_nonneg ((X.hidPostRep H.1 s.1 β.key i).nonneg (H.2 s))
+                        ((X.hidPostDel H.1 s.1 β.key).nonneg (H.2 s)))
+        have htag0 := (X.tagLawAt (X.parOf H.1) β.key).nonneg i
+        have hbase : (X.tagLawAt (X.parOf H.1) β.key).w i *
+            (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+              ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) ≤
+            (n : ℝ) ^ d₁ * (X.tagLawAt (X.parOf H.1) β.key).w i *
+              (∏ s ∈ β.obs.erase ℓ, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+          calc
+            _ ≤ (X.tagLawAt (X.parOf H.1) β.key).w i *
+                  ((n : ℝ) ^ d₁ * (∏ s ∈ β.obs.erase ℓ, safeRatio6
+                    ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                    ((X.hidPostDel H.1 s.1 β.key).w (H.2 s)))) :=
+                  mul_le_mul_of_nonneg_left hprodRel htag0
+            _ = _ := by ring
+        calc
+          X.tagWeight H β β.obs i = (X.tagLawAt (X.parOf H.1) β.key).w i *
+              (∏ s ∈ β.obs, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := by
+                  simp [Ctx6.tagWeight, hg]
+          _ ≤ (n : ℝ) ^ d₁ * (X.tagLawAt (X.parOf H.1) β.key).w i *
+                (∏ s ∈ β.obs.erase ℓ, safeRatio6 ((X.hidPostRep H.1 s.1 β.key i).w (H.2 s))
+                  ((X.hidPostDel H.1 s.1 β.key).w (H.2 s))) := hbase
+          _ = (n : ℝ) ^ d₁ * X.tagWeight H β (β.obs.erase ℓ) i := by
+                simp [Ctx6.tagWeight, hg]
+                ring
+      · simp [Ctx6.tagWeight, hg]
+    have hdelTest : (n : ℝ) ^ (-(δ₂ * β.u)) * X.tagMass H β (β.obs.erase ℓ) ≤
+        X.tagMass H β β.obs := by
+      simpa [Ctx6.step2Thr] using hTests.2.2 ℓ hℓ
+    have hpowA : 0 < (n : ℝ) ^ (δ₂ * (β.u : ℝ)) := Real.rpow_pos_of_pos hnpos _
+    have hcancel : (n : ℝ) ^ (δ₂ * (β.u : ℝ)) *
+        (n : ℝ) ^ (-(δ₂ * (β.u : ℝ))) = 1 := by
+      calc
+        _ = (n : ℝ) ^ (δ₂ * (β.u : ℝ) + -(δ₂ * (β.u : ℝ))) := by
+              rw [← Real.rpow_add hnpos]
+        _ = 1 := by simp
+    have hmassDelLe : X.tagMass H β (β.obs.erase ℓ) ≤
+        (n : ℝ) ^ (δ₂ * (β.u : ℝ)) * X.tagMass H β β.obs := by
+      calc
+        X.tagMass H β (β.obs.erase ℓ) =
+            (n : ℝ) ^ (δ₂ * (β.u : ℝ)) *
+              ((n : ℝ) ^ (-(δ₂ * (β.u : ℝ))) * X.tagMass H β (β.obs.erase ℓ)) := by
+                rw [← mul_assoc, hcancel, one_mul]
+        _ ≤ (n : ℝ) ^ (δ₂ * (β.u : ℝ)) * X.tagMass H β β.obs :=
+              mul_le_mul_of_nonneg_left hdelTest (le_of_lt hpowA)
+    have hmassRatio : X.tagMass H β (β.obs.erase ℓ) / X.tagMass H β β.obs ≤
+        (n : ℝ) ^ (δ₂ * (β.u : ℝ)) := (div_le_iff₀ hfullMassPos).2 hmassDelLe
+    have hfrac : X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β β.obs ≤
+        (n : ℝ) ^ (δ₂ * (β.u : ℝ)) *
+          (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β (β.obs.erase ℓ)) := by
+      have hmul := mul_le_mul_of_nonneg_right hmassRatio
+        (div_nonneg (hweightNonneg (β.obs.erase ℓ) i) hdelMassPos.le)
+      have heq : X.tagMass H β (β.obs.erase ℓ) / X.tagMass H β β.obs *
+          (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β (β.obs.erase ℓ)) =
+          X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β β.obs := by
+        field_simp [ne_of_gt hdelMassPos, ne_of_gt hfullMassPos]
+        <;> ring
+      rw [← heq]
+      exact hmul
+    have hstep : (X.Tβ H β).w i ≤
+        (n : ℝ) ^ (d₁ + δ₂ * (β.u : ℝ)) * (X.TβDel H β ℓ).w i := by
+      calc
+        (X.Tβ H β).w i = X.tagWeight H β β.obs i / X.tagMass H β β.obs := hfullNorm i
+        _ ≤ ((n : ℝ) ^ d₁ * X.tagWeight H β (β.obs.erase ℓ) i) / X.tagMass H β β.obs :=
+              div_le_div_of_nonneg_right hratioWeight hfullMassPos.le
+        _ = (n : ℝ) ^ d₁ * (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β β.obs) := by
+              field_simp [ne_of_gt hfullMassPos]
+              <;> ring
+        _ ≤ (n : ℝ) ^ d₁ * ((n : ℝ) ^ (δ₂ * (β.u : ℝ)) *
+              (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β (β.obs.erase ℓ))) :=
+              mul_le_mul_of_nonneg_left hfrac (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+        _ = (n : ℝ) ^ (d₁ + δ₂ * (β.u : ℝ)) * (X.TβDel H β ℓ).w i := by
+              rw [hdelNorm i]
+              calc
+                (n : ℝ) ^ d₁ * ((n : ℝ) ^ (δ₂ * (β.u : ℝ)) *
+                    (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β (β.obs.erase ℓ))) =
+                    ((n : ℝ) ^ d₁ * (n : ℝ) ^ (δ₂ * (β.u : ℝ))) *
+                      (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β (β.obs.erase ℓ)) := by ring
+                _ = (n : ℝ) ^ (d₁ + δ₂ * (β.u : ℝ)) *
+                      (X.tagWeight H β (β.obs.erase ℓ) i / X.tagMass H β (β.obs.erase ℓ)) := by
+                        rw [← Real.rpow_add hnpos]
+    calc
+      (X.Tβ H β).w i ≤ (n : ℝ) ^ (d₁ + δ₂ * (β.u : ℝ)) * (X.TβDel H β ℓ).w i := hstep
+      _ ≤ (n : ℝ) ^ (d₂ * (β.u : ℝ)) * (X.TβDel H β ℓ).w i :=
+            mul_le_mul_of_nonneg_right hpowDel ((X.TβDel H β ℓ).nonneg i)
 
 /-- L6.1d (support, 06:220–226): positive likelihood for `Z_{(h',t')}` forces the base tag at `h ∈ C(h')` to see
 that value (`≥ 1 − ε` for the same named primary, `≥ c₁` in the crossing case); at most one required column

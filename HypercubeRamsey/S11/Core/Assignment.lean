@@ -490,7 +490,7 @@ theorem even_loads (δ x₀ K P : ℝ) (hK : 0 ≤ K) :
         ∑ W, (tupleLaw M y₀ p P t).w W *
             (if GoodPre M y₀ p P t W then
               (J W).pr (fun f => ∃ x, 1 / 2 < ∑ v, evenRowF M y₀ p t f v x) else 0) ≤ 1 / 4 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s11_even.even_loads_full δ x₀ K P hK
 
 /-- P11.1d1–d3 averaged (11:368, 375, 378, 393).  The tag law is supported on gated tags and gives gated typical
 tags with probability `≥ 3/4`; at such tags the tuple law is supported on tuples without tuple events and gives a

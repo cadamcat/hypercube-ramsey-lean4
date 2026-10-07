@@ -677,6 +677,134 @@ theorem rawFail_nonneg {n N : ℕ} {E : Fin N → Fin N → Prop}
       · exact (M.ν (t (sliceOf b.1))).nonneg (f b)
     · split_ifs <;> norm_num
 
+private theorem outerHyp_of_sigma_mass {n N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {κ δ x₀ K : ℝ} (M : Menu11 n N E X Y κ)
+    (y₀ : M.ι → Fin N) (p : FinProb M.ι) (hF : Fixed11 δ x₀ K n N E X Y κ M y₀ p)
+    (i : M.ι) (hi : p.w i ≠ 0) (z : InnerCoord n → Fin N)
+    (hsigma : ∑ x, sigmaW E M.G (gS n) (M.μ i) z x = 1) :
+    OuterHyp δ x₀ K n N E X Y M.G (piBar M y₀ p)
+      (fun x => sigmaW E M.G (gS n) (M.μ i) z x)
+      (Finset.univ.filter fun x => (M.μ i).w x ≠ 0) := by
+  classical
+  let C : Finset (Fin N) := commonSet E M.G (M.μ i) z
+  let A : ℝ := (Real.log 2 - gS n / 2) * Fintype.card (InnerCoord n)
+  have hgate : (N : ℝ) * Real.exp (-A) ≤ (C.card : ℝ) := by
+    by_contra hnot
+    have hzero : ∑ x, sigmaW E M.G (gS n) (M.μ i) z x = 0 := by
+      apply Finset.sum_eq_zero
+      intro x hx
+      have hbad : ¬ (x ∈ C ∧ (N : ℝ) * Real.exp (-A) ≤ (C.card : ℝ)) := by
+        intro h
+        exact hnot h.2
+      simp [sigmaW, C, A, hbad]
+    rw [hsigma] at hzero
+    norm_num at hzero
+  have hNpos : 0 < (N : ℝ) := by
+    have hN : 1 ≤ N := le_trans (one_le_pow₀ (by norm_num : (1 : ℕ) ≤ 2)) hF.host
+    exact_mod_cast hN
+  have hcardpos : 0 < (C.card : ℝ) :=
+    lt_of_lt_of_le (mul_pos hNpos (Real.exp_pos _)) hgate
+  have hrowsum (y : Fin N) :
+      piBar M y₀ p y = ∑ j, p.w j * piRow M y₀ j y := by
+    rfl
+  refine {
+    host := hF.host
+    disc := hF.disc
+    pi_nonneg := ?_
+    pi_sum := ?_
+    pi_supp := ?_
+    pi_cap := ?_
+    S_sub := ?_
+    degree := ?_
+    noClique := ?_
+    sigma_nonneg := ?_
+    sigma_sum := hsigma
+    sigma_supp := ?_
+    sigma_cap := ?_ }
+  · intro y
+    rw [hrowsum y]
+    apply Finset.sum_nonneg
+    intro j hj
+    exact mul_nonneg (p.nonneg j) ((hF.slice.rows j).pi_nonneg y)
+  · unfold piBar mixW
+    calc
+      (∑ y, ∑ j, p.w j * piRow M y₀ j y) =
+          ∑ j, ∑ y, p.w j * piRow M y₀ j y := by rw [Finset.sum_comm]
+      _ = ∑ j, p.w j * ∑ y, piRow M y₀ j y := by
+          apply Finset.sum_congr rfl
+          intro j hj
+          rw [← Finset.mul_sum]
+      _ = ∑ j, p.w j * 1 := by
+          apply Finset.sum_congr rfl
+          intro j hj
+          have hr : ∑ y, piRow M y₀ j y = 1 := by
+            simpa [piRow] using (hF.slice.rows j).pi_sum
+          rw [hr]
+      _ = 1 := by simp [p.sum_eq_one]
+  · intro y hy
+    have hex : ∃ j, p.w j ≠ 0 ∧ piRow M y₀ j y ≠ 0 := by
+      by_contra hnex
+      have hz : piBar M y₀ p y = 0 := by
+        rw [hrowsum y]
+        apply Finset.sum_eq_zero
+        intro j hj
+        by_cases hp : p.w j = 0
+        · simp [hp]
+        · have hr : piRow M y₀ j y = 0 := by
+            by_contra hne
+            exact hnex ⟨j, hp, hne⟩
+          simp [hr]
+      exact hy hz
+    obtain ⟨j, hjp, hjrow⟩ := hex
+    have hν : (M.ν j).w y ≠ 0 := (hF.slice.rows j).pi_supp y hjrow
+    by_contra hyY
+    exact hν (M.ν_supp j y hyY)
+  · intro y
+    simpa [piBar] using hF.balanced.1 y
+  · intro x hx
+    have hμ : (M.μ i).w x ≠ 0 := by simpa [C] using (Finset.mem_filter.mp hx).2
+    have hX : x ∈ X := by
+      by_contra hxX
+      exact hμ (M.μ_supp i x hxX)
+    exact hX
+  · intro x hx
+    have hμ : (M.μ i).w x ≠ 0 := (Finset.mem_filter.mp hx).2
+    simpa [piBar] using (hF.compat i hi).1 x hμ
+  · simpa [piBar] using (hF.compat i hi).2.2
+  · intro x
+    unfold sigmaW
+    split_ifs <;> positivity
+  · intro x hx
+    have hmem : x ∈ C := by
+      by_contra hxC
+      have hzero : sigmaW E M.G (gS n) (M.μ i) z x = 0 := by
+        simp [sigmaW, C, A, hxC, hgate]
+      exact hx hzero
+    exact Finset.mem_filter.mpr
+      ⟨Finset.mem_univ x, (Finset.mem_filter.mp hmem).2.1⟩
+  · intro x
+    by_cases hx : x ∈ C
+    · have hσ : sigmaW E M.G (gS n) (M.μ i) z x = (C.card : ℝ)⁻¹ := by
+        simp [sigmaW, C, A, hx, hgate]
+      rw [hσ]
+      have hmul : (N : ℝ) ≤ (C.card : ℝ) * Real.exp A := by
+        have hexp : Real.exp (-A) * Real.exp A = 1 := by
+          rw [← Real.exp_add]
+          simp
+        calc
+          (N : ℝ) = (N : ℝ) * (Real.exp (-A) * Real.exp A) := by rw [hexp]; ring
+          _ = ((N : ℝ) * Real.exp (-A)) * Real.exp A := by ring
+          _ ≤ (C.card : ℝ) * Real.exp A :=
+            mul_le_mul_of_nonneg_right hgate (Real.exp_pos A).le
+      have hmul' : (N : ℝ) ≤ Real.exp A * (C.card : ℝ) := by nlinarith [hmul]
+      have hdiv : (N : ℝ) / (C.card : ℝ) ≤ Real.exp A :=
+        (div_le_iff₀ hcardpos).2 hmul'
+      calc
+        (N : ℝ) * (C.card : ℝ)⁻¹ = (N : ℝ) / (C.card : ℝ) := by rw [div_eq_mul_inv]
+        _ ≤ Real.exp A := hdiv
+    · have hσ : sigmaW E M.G (gS n) (M.μ i) z x = 0 := by simp [sigmaW, C, hx]
+      simpa [hσ] using (Real.exp_nonneg A)
+
 theorem pr_pos_eq_zero_of_expect_nonpos {Ω : Type*} [Fintype Ω]
     (P : FinProb Ω) (f : Ω → ℝ) (hf : ∀ ω, 0 ≤ f ω) (hE : P.expect f ≤ 0) :
     P.pr (fun ω => 0 < f ω) = 0 := by

@@ -1,6 +1,7 @@
 import HypercubeRamsey.S16.ProducersDefs
 import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_gate1
 import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_conc
+import HypercubeRamsey.S16.ClusterDiagnostics_q_s16_scope
 
 /-! Cluster diagnostics proof nodes from the S16 pool diagnosis. -/
 
@@ -112,7 +113,96 @@ theorem scopedEmpirical_restricted {J Slot Bin : Type*} [DecidableEq J]
         ∏ j ∈ I, ((Fintype.card Bin : ℝ) / Fintype.card Slot *
           ∑ b ∈ Finset.univ.image pool, (Q j).w b) ≤
       scopedEmpirical I Q base f pool := by
-  sorry
+  classical
+  letI : Nonempty Bin := ⟨pool (Classical.choice (inferInstance : Nonempty Slot))⟩
+  let B : ℝ := Fintype.card Bin
+  let L : ℝ := Fintype.card Slot
+  let QI : I → FinLaw Bin := fun j => Q j.1
+  let F : (I → Bin) → ℝ := fun a => f (fillScope I base a)
+  let mass : J → ℝ := fun j => ∑ b ∈ Finset.univ.image pool, (Q j).w b
+  let imageWeight : (I → Bin) → ℝ := fun a =>
+    ∏ i : I, if a i ∈ Finset.univ.image pool then (Q i.1).w (a i) else 0
+  let imageSum : ℝ := ∑ a : I → Bin, F a * imageWeight a
+  have hB : 0 < B := by
+    dsimp [B]
+    exact_mod_cast (Fintype.card_pos : 0 < Fintype.card Bin)
+  have hL : 0 < L := by
+    dsimp [L]
+    exact_mod_cast (Fintype.card_pos : 0 < Fintype.card Slot)
+  have hprod_attach :
+      (∏ j ∈ I, (B / L * mass j)) = ∏ i : I, (B / L * mass i.1) := by
+    simpa using (Finset.prod_attach I (fun j => B / L * mass j)).symm
+  have hweight (a : I → Bin) :
+      (∏ i : I, (P i.1).w (a i)) * ∏ i : I, (B / L * mass i.1) =
+        (B / L) ^ Fintype.card I * imageWeight a := by
+    calc
+      _ = ∏ i : I, ((P i.1).w (a i) * (B / L * mass i.1)) := by
+        rw [← Finset.prod_mul_distrib]
+      _ = ∏ i : I,
+            ((if a i ∈ Finset.univ.image pool then (Q i.1).w (a i) else 0) /
+                mass i.1 * (B / L * mass i.1)) := by
+        apply Finset.prod_congr rfl
+        intro i _
+        rw [hP i.1 i.2 (a i)]
+      _ = ∏ i : I,
+            ((B / L) * (if a i ∈ Finset.univ.image pool then
+              (Q i.1).w (a i) else 0)) := by
+        apply Finset.prod_congr rfl
+        intro i _
+        have hm : mass i.1 ≠ 0 := ne_of_gt (by
+          simpa [mass] using hmass i.1 i.2)
+        field_simp [hm]
+      _ = (B / L) ^ Fintype.card I * imageWeight a := by
+        rw [Finset.prod_mul_distrib]
+        change (∏ _i : I, B / L) * imageWeight a =
+          (B / L) ^ Fintype.card I * imageWeight a
+        have hconst : (∏ _i : I, B / L) = (B / L) ^ Fintype.card I := by
+          simp only [Finset.prod_const, Finset.card_univ]
+        rw [hconst]
+  have hscaled :
+      (FinLaw.pi (fun j : I => P j.1)).E F *
+          (∏ j ∈ I, (B / L * mass j)) =
+        (B / L) ^ Fintype.card I * imageSum := by
+    calc
+      _ = ∑ a : I → Bin,
+            ((∏ i : I, (P i.1).w (a i)) * F a) *
+              (∏ i : I, (B / L * mass i.1)) := by
+        rw [hprod_attach]
+        change (∑ a : I → Bin, (∏ i : I, (P i.1).w (a i)) * F a) *
+            (∏ i : I, (B / L * mass i.1)) = _
+        rw [Finset.sum_mul]
+      _ = ∑ a : I → Bin, (B / L) ^ Fintype.card I * (F a * imageWeight a) := by
+        apply Finset.sum_congr rfl
+        intro a _
+        calc
+          _ = ((∏ i : I, (P i.1).w (a i)) *
+              ∏ i : I, (B / L * mass i.1)) * F a := by ring
+          _ = ((B / L) ^ Fintype.card I * imageWeight a) * F a := by
+            rw [hweight a]
+          _ = (B / L) ^ Fintype.card I * (F a * imageWeight a) := by ring
+      _ = (B / L) ^ Fintype.card I * imageSum := by
+        rw [Finset.mul_sum]
+  have himage : imageSum ≤
+      ((Fintype.card Slot : ℝ) / B) ^ Fintype.card I *
+        scopedEmpirical I Q base f pool := by
+    have hh := Lane_q_s16_scope.image_product_le_empirical QI B hB F
+      (fun a => hf (fillScope I base a)) pool
+    simpa [imageSum, imageWeight, scopedEmpirical, QI, B, F] using hh
+  have hcancel : (B / L) ^ Fintype.card I *
+      ((Fintype.card Slot : ℝ) / B) ^ Fintype.card I = 1 := by
+    rw [← mul_pow]
+    have hratio : (B / L) * ((Fintype.card Slot : ℝ) / B) = 1 := by
+      dsimp [B, L]
+      field_simp [ne_of_gt hB, ne_of_gt hL]
+    rw [hratio, one_pow]
+  calc
+    _ = (B / L) ^ Fintype.card I * imageSum := hscaled
+    _ ≤ (B / L) ^ Fintype.card I *
+        (((Fintype.card Slot : ℝ) / B) ^ Fintype.card I *
+          scopedEmpirical I Q base f pool) :=
+      mul_le_mul_of_nonneg_left himage (pow_nonneg (div_nonneg hB.le hL.le) _)
+    _ = scopedEmpirical I Q base f pool := by
+      rw [← mul_assoc, hcancel, one_mul]
 
 /-- C4a. Marginalisation of a scope-local integrand.
 TeX 16:235–245; estimated proof: 40 lines. -/
@@ -120,7 +210,24 @@ theorem pi_E_scope {J Bin : Type*} [Fintype J] [DecidableEq J] [Fintype Bin] [No
     (R : J → FinLaw Bin) (I : Finset J) (base : J → Bin) (f : (J → Bin) → ℝ)
     (hf : ∀ x y, (∀ g ∈ I, x g = y g) → f x = f y) :
     (FinLaw.pi R).E f = (FinLaw.pi (fun j : I => R j.1)).E (fun a => f (fillScope I base a)) := by
-  sorry
+  classical
+  let ι : {j : J // j ∈ I} → J := Subtype.val
+  have hi : Function.Injective ι := fun a b h => Subtype.ext h
+  have h := Lane_sol_s16_prod1.pi_injective_coordinate_E R ι hi
+    (fun a => f (fillScope I base a))
+  calc
+    (FinLaw.pi R).E f =
+        (FinLaw.pi R).E
+          (fun x => f (fillScope I base (fun j : {j : J // j ∈ I} => x j.1))) := by
+      unfold FinLaw.E
+      apply Finset.sum_congr rfl
+      intro x _
+      congr 1
+      apply hf
+      intro g hg
+      simp [fillScope, hg]
+    _ = (FinLaw.pi (fun j : {j : J // j ∈ I} => R j.1)).E
+          (fun a => f (fillScope I base a)) := h
 
 /-- C4b. The same with one coordinate of the scope pinned.
 TeX 16:228–245; estimated proof: 40 lines. -/
@@ -132,7 +239,70 @@ theorem pi_E_scope_pin {J Bin : Type*} [Fintype J] [DecidableEq J] [Fintype Bin]
     (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).E f =
       (FinLaw.pi (fun j : (I.erase g) => R j.1)).E
         (fun a => f (fillScope (I.erase g) base a)) := by
-  sorry
+  classical
+  letI : Nonempty Bin := ⟨b⟩
+  let f' : (J → Bin) → ℝ := fun x => f (Function.update x g b)
+  have hf' : ∀ x y, (∀ j ∈ I.erase g, x j = y j) → f' x = f' y := by
+    intro x y hxy
+    dsimp [f']
+    apply hf
+    intro j hj
+    by_cases hgj : j = g
+    · subst j
+      simp [Function.update]
+    · have hj' : j ∈ I.erase g := Finset.mem_erase.mpr ⟨hgj, hj⟩
+      simp [Function.update, hgj, hxy j hj']
+  have hpin : (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).E f =
+      (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).E f' := by
+    unfold FinLaw.E
+    apply Finset.sum_congr rfl
+    intro x _
+    by_cases hx : x g = b
+    · have hu : Function.update x g b = x := by
+        funext j
+        by_cases hj : j = g <;> simp [Function.update, hj, hx]
+      simp [f', hu]
+    · have hw : (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).w x = 0 := by
+        change (∏ j, (Lane_sol_s16_prod1.coordinatePin R g b j).w (x j)) = 0
+        rw [← Finset.mul_prod_erase _ _ (Finset.mem_univ g)]
+        simp [Lane_sol_s16_prod1.coordinatePin, FinLaw.dirac, hx]
+      simp [f', hw]
+  have hscope := pi_E_scope (Lane_sol_s16_prod1.coordinatePin R g b) (I.erase g)
+    base f' hf'
+  have hQ : (fun j : {j : J // j ∈ I.erase g} =>
+      Lane_sol_s16_prod1.coordinatePin R g b j.1) =
+      (fun j : {j : J // j ∈ I.erase g} => R j.1) := by
+    funext j
+    have hne : j.1 ≠ g := (Finset.mem_erase.mp j.2).1
+    simp [Lane_sol_s16_prod1.coordinatePin, hne]
+  rw [hQ] at hscope
+  have hpoint (a : {j : J // j ∈ I.erase g} → Bin) :
+      f' (fillScope (I.erase g) base a) = f (fillScope (I.erase g) base a) := by
+    dsimp [f']
+    have hgbase : fillScope (I.erase g) base a g = b := by
+      simp [fillScope, hbase]
+    have hu : Function.update (fillScope (I.erase g) base a) g b =
+        fillScope (I.erase g) base a := by
+      funext j
+      by_cases hj : j = g <;> simp [Function.update, hj, hgbase]
+    rw [hu]
+  calc
+    (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).E f =
+        (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).E f' := hpin
+    _ = (FinLaw.pi (fun j : {j : J // j ∈ I.erase g} => R j.1)).E
+          (fun a => f (fillScope (I.erase g) base a)) := by
+      calc
+        _ = (FinLaw.pi (fun j : {j : J // j ∈ I.erase g} => R j.1)).E
+              (fun a => f' (fillScope (I.erase g) base a)) := hscope
+        _ = _ := by
+          unfold FinLaw.E
+          apply Finset.sum_congr rfl
+          intro a _
+          change (FinLaw.pi (fun j : {j : J // j ∈ I.erase g} => R j.1)).w a *
+              f' (fillScope (I.erase g) base a) =
+            (FinLaw.pi (fun j : {j : J // j ∈ I.erase g} => R j.1)).w a *
+              f (fillScope (I.erase g) base a)
+          rw [hpoint a]
 
 /-- C4c. A pin outside the scope is invisible.
 TeX 16:228–245; estimated proof: 40 lines. -/
@@ -141,7 +311,11 @@ theorem pi_E_pin_outside {J Bin : Type*} [Fintype J] [DecidableEq J] [Fintype Bi
     (R : J → FinLaw Bin) (I : Finset J) (g : J) (hg : g ∉ I) (b : Bin)
     (f : (J → Bin) → ℝ) (hf : ∀ x y, (∀ g ∈ I, x g = y g) → f x = f y) :
     (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin R g b)).E f = (FinLaw.pi R).E f := by
-  sorry
+  classical
+  apply Lane_sol_s16_prod1.pi_E_local (Lane_sol_s16_prod1.coordinatePin R g b) R I f hf
+  intro j hj
+  have hne : j ≠ g := fun h => hg (h ▸ hj)
+  simp [Lane_sol_s16_prod1.coordinatePin, hne]
 
 /-- C4d. Injective reindexing commutes with a coordinate pin.
 TeX 16:239–245; estimated proof: 40 lines. -/
@@ -151,7 +325,18 @@ theorem pi_coordinatePin_comp {I J O : Type*} [Fintype I] [DecidableEq I]
     (F : (J → O) → ℝ) :
     (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P (ι j) o)).E (fun a => F (fun j' => a (ι j'))) =
       (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin (fun j' => P (ι j')) j o)).E F := by
-  sorry
+  classical
+  have h := Lane_sol_s16_prod1.pi_injective_coordinate_E
+    (Lane_sol_s16_prod1.coordinatePin P (ι j) o) ι hι F
+  have hQ : (fun j' => Lane_sol_s16_prod1.coordinatePin P (ι j) o (ι j')) =
+      Lane_sol_s16_prod1.coordinatePin (fun j' => P (ι j')) j o := by
+    funext j'
+    by_cases hj' : j' = j
+    · subst j'
+      simp [Lane_sol_s16_prod1.coordinatePin]
+    · have hne : ι j' ≠ ι j := fun h => hj' (hι h)
+      simp [Lane_sol_s16_prod1.coordinatePin, hj', hne]
+  simpa only [hQ] using h
 
 /-- C4e. `GroupBinProblem.pinnedFailure` as a pinned product integral.
 TeX 16:228–245; estimated proof: 40 lines. -/
@@ -160,7 +345,36 @@ theorem pinned_ratio_eq {I O : Type*} [Fintype I] [DecidableEq I] [Fintype O] [D
     (FinLaw.pi P).E (fun a => if a i = o then f a else 0) /
         (FinLaw.pi P).pr (fun a => a i = o) =
       if (P i).w o = 0 then 0 else (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P i o)).E f := by
-  sorry
+  have hnum : (FinLaw.pi P).E (fun a => if a i = o then f a else 0) =
+      (P i).w o * (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P i o)).E f := by
+    let dO : DecidableEq O := inferInstance
+    have hconvert : (fun a => if a i = o then f a else 0) =
+        (fun a => @ite ℝ (a i = o) (Classical.propDecidable (a i = o)) (f a) 0) := by
+      funext a
+      change @ite ℝ (a i = o) (dO (a i) o) (f a) 0 =
+        @ite ℝ (a i = o) (Classical.propDecidable (a i = o)) (f a) 0
+      have hdec : dO (a i) o = Classical.propDecidable (a i = o) :=
+        Subsingleton.elim _ _
+      rw [hdec]
+    calc
+      _ = (FinLaw.pi P).E
+            (fun a => @ite ℝ (a i = o) (Classical.propDecidable (a i = o)) (f a) 0) :=
+          congrArg (fun F => (FinLaw.pi P).E F) hconvert
+      _ = _ := Lane_sol_s16_prod1.coordinate_pin_E P i o f
+  have hden := Lane_sol_s16_prod1.pi_coordinate_pr P i o
+  calc
+    _ = ((P i).w o * (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P i o)).E f) /
+        (FinLaw.pi P).pr (fun a => a i = o) :=
+      congrArg (fun n : ℝ => n / (FinLaw.pi P).pr (fun a => a i = o)) hnum
+    _ = ((P i).w o * (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P i o)).E f) /
+        (P i).w o :=
+      congrArg (fun d : ℝ => ((P i).w o *
+        (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P i o)).E f) / d) hden
+    _ = if (P i).w o = 0 then 0 else
+        (FinLaw.pi (Lane_sol_s16_prod1.coordinatePin P i o)).E f := by
+      by_cases hzero : (P i).w o = 0
+      · simp [hzero]
+      · simp [hzero]
 
 /-- C5. A slot pin moves an expectation by at most the one-slot sensitivity.
 TeX 16:247–257; estimated proof: 80 lines. -/

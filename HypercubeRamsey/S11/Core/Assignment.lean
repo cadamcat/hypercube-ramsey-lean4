@@ -1,4 +1,5 @@
 import HypercubeRamsey.S11.Core.Experiment
+import HypercubeRamsey.S11.Core.Assignment_q_s11_tags
 import HypercubeRamsey.S11.Core.Compatibility
 import HypercubeRamsey.S07.SmallGridPurity
 import HypercubeRamsey.S03.ClockSampling
@@ -42,7 +43,75 @@ theorem t1_prob {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)
     (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι) (P : ℝ) (hP : 0 < P)
     (hraw : ∀ v : EvenRole n, (rawTags M p).expect (fun t => rawFail M y₀ p t v) ≤ (n : ℝ) ^ (-(4 * P))) :
     ∀ s, (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤ (n : ℝ) ^ (-(2 * P)) := by
-  sorry
+  classical
+  intro s
+  by_cases hV : ∃ v : EvenRole n, sliceOf v.1 = s
+  · obtain ⟨v, hvs⟩ := hV
+    by_cases hn0 : n = 0
+    · have hpow4 : (0 : ℝ) ^ (-(4 * P)) = 0 := Real.zero_rpow (by nlinarith)
+      have hpow2 : (0 : ℝ) ^ (-(2 * P)) = 0 := Real.zero_rpow (by nlinarith)
+      have hthreshold : (n : ℝ) ^ (-(2 * P)) = 0 := by simpa [hn0] using hpow2
+      have hE : (rawTags M p).expect (fun t => rawFail M y₀ p t v) ≤ 0 := by
+        simpa [hn0, hpow4] using hraw v
+      have hzero := HypercubeRamsey.Lane_q_s11_tags.pr_pos_eq_zero_of_expect_nonpos
+        (rawTags M p) (fun t => rawFail M y₀ p t v)
+        (fun t => HypercubeRamsey.Lane_q_s11_tags.rawFail_nonneg M y₀ p t v) hE
+      have hsub : ∀ t, T1 M y₀ p P t s → 0 < rawFail M y₀ p t v := by
+        intro t ht
+        unfold T1 at ht
+        rcases ht with ⟨v', hv's, hlarge⟩
+        have heq := HypercubeRamsey.Lane_q_s11_tags.rawFail_same_slice M y₀ p t v' v
+          (hv's.trans hvs.symm)
+        calc
+          0 < rawFail M y₀ p t v' := by simpa [hthreshold] using hlarge
+          _ = rawFail M y₀ p t v := heq
+      calc
+        (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤
+            (rawTags M p).pr (fun t => 0 < rawFail M y₀ p t v) :=
+          HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hsub
+        _ = 0 := hzero
+        _ ≤ (n : ℝ) ^ (-(2 * P)) := by simpa [hthreshold]
+    · have hnpos : 0 < (n : ℝ) := by exact_mod_cast Nat.pos_of_ne_zero hn0
+      let a : ℝ := (n : ℝ) ^ (-(2 * P))
+      have ha : 0 < a := by dsimp [a]; exact Real.rpow_pos_of_pos hnpos _
+      have hsub : ∀ t, T1 M y₀ p P t s → a ≤ rawFail M y₀ p t v := by
+        intro t ht
+        unfold T1 at ht
+        rcases ht with ⟨v', hv's, hlarge⟩
+        have heq := HypercubeRamsey.Lane_q_s11_tags.rawFail_same_slice M y₀ p t v' v
+          (hv's.trans hvs.symm)
+        exact le_of_lt (by simpa [a] using lt_of_lt_of_eq hlarge heq)
+      have hmark := FinProb.markov (rawTags M p) (fun t => rawFail M y₀ p t v) a
+        (fun t => HypercubeRamsey.Lane_q_s11_tags.rawFail_nonneg M y₀ p t v) ha
+      have hpow : (n : ℝ) ^ (-(4 * P)) = a * a := by
+        dsimp [a]
+        calc
+          (n : ℝ) ^ (-(4 * P)) =
+              (n : ℝ) ^ ((-(2 * P)) + (-(2 * P))) := by congr 1 <;> ring
+          _ = (n : ℝ) ^ (-(2 * P)) * (n : ℝ) ^ (-(2 * P)) :=
+            Real.rpow_add hnpos _ _
+      calc
+        (rawTags M p).pr (fun t => T1 M y₀ p P t s) ≤
+            (rawTags M p).pr (fun t => a ≤ rawFail M y₀ p t v) :=
+          HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hsub
+        _ ≤ (rawTags M p).expect (fun t => rawFail M y₀ p t v) / a := hmark
+        _ ≤ (n : ℝ) ^ (-(4 * P)) / a := div_le_div_of_nonneg_right (hraw v) ha.le
+        _ = (n : ℝ) ^ (-(2 * P)) := by
+          rw [hpow]
+          dsimp [a]
+          field_simp [ne_of_gt ha]
+  · have hfalse : ∀ t, ¬ T1 M y₀ p P t s := by
+      intro t ht
+      unfold T1 at ht
+      rcases ht with ⟨v, hvs, hlarge⟩
+      exact hV ⟨v, hvs⟩
+    calc
+      (rawTags M p).pr (fun t => T1 M y₀ p P t s) = 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_eq_zero
+        intro t ht
+        simp [hfalse t]
+      _ ≤ (n : ℝ) ^ (-(2 * P)) := Real.rpow_nonneg (by positivity) _
 
 /-- P11.1d1(ii), second event (11:350–352).  Given `i(s)` with `p_{i(s)} > 0` and `x ∈ supp μ_{i(s)}`,
 compatibility gives exceptional tag probability at most `η` for each of the `d` independent outer neighbouring
@@ -52,7 +121,186 @@ theorem t2_prob (δ x₀ K P : ℝ) :
       (M : Menu11 n N E X Y κ) (y₀ : M.ι → Fin N) (p : FinProb M.ι),
       Fixed11 δ x₀ K n N E X Y κ M y₀ p →
       ∀ s, (rawTags M p).pr (fun t => T2 M y₀ t s) ≤ (n : ℝ) ^ (-(2 * P)) := by
-  sorry
+  classical
+  let a : ℝ := 2 * P + 1
+  let b : ℝ := Real.log 2 / 2
+  have hb : 0 < b := by
+    dsimp [b]
+    positivity [Real.log_pos (by norm_num : (1 : ℝ) < 2)]
+  have hdecay : Filter.Tendsto (fun m : ℕ => (m : ℝ) ^ a * Real.exp (-b * (m : ℝ)))
+      Filter.atTop (nhds 0) := by
+    exact (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero a b hb).comp
+      tendsto_natCast_atTop_atTop
+  obtain ⟨nTail, hTail⟩ := Filter.eventually_atTop.1
+    (hdecay.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1)))
+  refine ⟨max 4 nTail, ?_⟩
+  intro n hn N E X Y κ M y₀ p hF s
+  have hn4 : 4 ≤ n := le_trans (le_max_left _ _) hn
+  have hnTail : nTail ≤ n := le_trans (le_max_right _ _) hn
+  let d : ℕ := Fintype.card (OuterCoord n)
+  let H : ℝ := (1 / 8 : ℝ) ^ d
+  have hD : (n : ℝ) / 2 ≤ (d : ℝ) := by
+    dsimp [d]
+    rw [HypercubeRamsey.Lane_q_s11_tags.outerCoord_card]
+    have hmul : 2 * hIn n ≤ n := by
+      have hh := HypercubeRamsey.Lane_q_s11_tags.hIn_le_half hn4
+      omega
+    have hmulR : 2 * (hIn n : ℝ) ≤ n := by exact_mod_cast hmul
+    rw [Nat.cast_sub (by omega)]
+    nlinarith
+  have hN : (N : ℝ) ≤ (n : ℝ) * (2 : ℝ) ^ n := by exact_mod_cast hF.hostUp
+  have hpowprod : (n : ℝ) ^ a * (n : ℝ) ^ (-(2 * P)) = n := by
+    have hnpos : 0 < (n : ℝ) := by positivity
+    have hinv : (n : ℝ) ^ (2 * P) * (n : ℝ) ^ (-(2 * P)) = 1 := by
+      rw [← Real.rpow_add hnpos (2 * P) (-(2 * P))]
+      simp
+    calc
+      (n : ℝ) ^ a * (n : ℝ) ^ (-(2 * P)) =
+          ((n : ℝ) ^ (2 * P) * (n : ℝ)) * (n : ℝ) ^ (-(2 * P)) := by
+        dsimp [a]
+        rw [Real.rpow_add hnpos (2 * P) 1, Real.rpow_one]
+      _ = ((n : ℝ) ^ (2 * P) * (n : ℝ) ^ (-(2 * P))) * (n : ℝ) := by ring
+      _ = (n : ℝ) := by rw [hinv]; ring
+  have hdecayN : (n : ℝ) * Real.exp (-b * (n : ℝ)) ≤ (n : ℝ) ^ (-(2 * P)) := by
+    have hpoly := hTail n hnTail
+    have hpowNonneg : 0 ≤ (n : ℝ) ^ (-(2 * P)) := Real.rpow_nonneg (by positivity) _
+    have hterm : (n : ℝ) * Real.exp (-b * (n : ℝ)) =
+        ((n : ℝ) ^ a * Real.exp (-b * (n : ℝ))) * (n : ℝ) ^ (-(2 * P)) := by
+      calc
+        (n : ℝ) * Real.exp (-b * (n : ℝ)) =
+              ((n : ℝ) ^ a * (n : ℝ) ^ (-(2 * P))) * Real.exp (-b * (n : ℝ)) := by
+          rw [hpowprod]
+        _ = ((n : ℝ) ^ a * Real.exp (-b * (n : ℝ))) * (n : ℝ) ^ (-(2 * P)) := by ring
+    calc
+      (n : ℝ) * Real.exp (-b * (n : ℝ)) =
+          ((n : ℝ) ^ a * Real.exp (-b * (n : ℝ))) * (n : ℝ) ^ (-(2 * P)) := hterm
+      _ ≤ 1 * (n : ℝ) ^ (-(2 * P)) := mul_le_mul_of_nonneg_right (le_of_lt hpoly) hpowNonneg
+      _ = (n : ℝ) ^ (-(2 * P)) := by ring
+  have hgeom : (2 : ℝ) ^ n * H ≤ Real.exp (-b * (n : ℝ)) := by
+    have hn2d : n ≤ 2 * d := by exact_mod_cast (by nlinarith : (n : ℝ) ≤ 2 * (d : ℝ))
+    have hpow : (2 : ℝ) ^ n * (1 / 8 : ℝ) ^ d ≤ (1 / 2 : ℝ) ^ d := by
+      calc
+        (2 : ℝ) ^ n * (1 / 8 : ℝ) ^ d ≤ (2 : ℝ) ^ (2 * d) * (1 / 8 : ℝ) ^ d := by
+          exact mul_le_mul_of_nonneg_right
+            (by exact_mod_cast Nat.pow_le_pow_right (by omega) hn2d) (by positivity)
+        _ = (1 / 2 : ℝ) ^ d := by
+          rw [pow_mul]
+          rw [← mul_pow]
+          norm_num
+    have hhalf : (1 / 2 : ℝ) ^ d ≤ Real.exp (-b * (n : ℝ)) := by
+      have hhalfExp : (1 / 2 : ℝ) ^ d = Real.exp (-((d : ℝ) * Real.log 2)) := by
+        rw [← Real.rpow_natCast]
+        rw [Real.rpow_def_of_pos (by norm_num)]
+        rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv]
+        ring
+      rw [hhalfExp]
+      apply Real.exp_le_exp.mpr
+      dsimp [b]
+      nlinarith [hD, Real.log_pos (by norm_num : (1 : ℝ) < 2)]
+    exact hpow.trans hhalf
+  let tail (x : Fin N) (t : OuterWord n → M.ι) : Prop :=
+    (d : ℝ) / 2 < highCount M y₀ t s x
+  let badX (x : Fin N) (t : OuterWord n → M.ι) : Prop :=
+    (M.μ (t s)).w x ≠ 0 ∧ tail x t
+  let neigh : Finset (OuterWord n) := Finset.univ.image (flipOuter s)
+  have hdisj : Disjoint ({s} : Finset (OuterWord n)) neigh := by
+    apply Finset.disjoint_left.mpr
+    intro z hz1 hz2
+    have hzs : z = s := Finset.mem_singleton.mp hz1
+    rcases Finset.mem_image.mp hz2 with ⟨j, hj, hjs⟩
+    exact (HypercubeRamsey.Lane_q_s11_tags.flipOuter_ne_self s j) (hjs.trans hzs)
+  have hcenterDep (i : M.ι) :
+      FinProb.DependsOn (fun t : OuterWord n → M.ι => t s = i) {s} := by
+    intro t t' hagree
+    exact congrArg (fun z => z = i) (hagree s (Finset.mem_singleton_self _))
+  have htailDep (x : Fin N) : FinProb.DependsOn (tail x) neigh := by
+    intro t t' hagree
+    have hcount : highCount M y₀ t s x = highCount M y₀ t' s x := by
+      unfold highCount
+      congr 1
+      ext j
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      rw [hagree (flipOuter s j) (Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩)]
+    exact congrArg (fun z : ℕ => (d : ℝ) / 2 < z) hcount
+  have hcenterProb (i : M.ι) :
+      (rawTags M p).pr (fun t => t s = i) = p.w i := by
+    simpa [rawTags] using
+      (HypercubeRamsey.Clock.pi_pr_coordinate (fun _ : OuterWord n => p) s i)
+  have hjoint (x : Fin N) (i : M.ι) :
+      (rawTags M p).pr (fun t => t s = i ∧ tail x t) =
+        p.w i * (rawTags M p).pr (tail x) := by
+    have h := HypercubeRamsey.Lane_q_s11_tags.pi_pr_and_of_disjoint
+      (fun _ : OuterWord n => p) (fun t => t s = i) (tail x) {s} neigh
+      (hcenterDep i) (htailDep x) hdisj
+    change (rawTags M p).pr (fun t => t s = i ∧ tail x t) =
+      (rawTags M p).pr (fun t => t s = i) * (rawTags M p).pr (tail x) at h
+    rw [hcenterProb i] at h
+    exact h
+  have hperX (x : Fin N) : (rawTags M p).pr (badX x) ≤ H := by
+    let eventI (i : M.ι) (t : OuterWord n → M.ι) : Prop :=
+      t s = i ∧ (M.μ i).w x ≠ 0 ∧ tail x t
+    have hsubset : ∀ t, badX x t → ∃ i ∈ (Finset.univ : Finset M.ι), eventI i t := by
+      intro t ht
+      refine ⟨t s, Finset.mem_univ _, ?_⟩
+      exact ⟨rfl, ht.1, ht.2⟩
+    have hmono := HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hsubset
+    have hunion := HypercubeRamsey.Clock.finProb_pr_biUnion_le_sum
+      (rawTags M p) (Finset.univ : Finset M.ι) eventI
+    have hEi (i : M.ι) : (rawTags M p).pr (eventI i) ≤ p.w i * H := by
+      by_cases hx : (M.μ i).w x ≠ 0
+      · have hEsub : ∀ t, eventI i t → t s = i ∧ tail x t := by
+          intro t ht
+          exact ⟨ht.1, ht.2.2⟩
+        have hEbound := HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hEsub
+        by_cases hp : p.w i = 0
+        · rw [hjoint x i] at hEbound
+          simpa [hp] using hEbound
+        · have htail := HypercubeRamsey.Lane_q_s11_tags.t2_neighbor_tail M y₀ p s x i
+            (hF.compat i hp) hx
+          calc
+            (rawTags M p).pr (eventI i) ≤ (rawTags M p).pr (fun t => t s = i ∧ tail x t) := hEbound
+            _ = p.w i * (rawTags M p).pr (tail x) := hjoint x i
+            _ ≤ p.w i * H := mul_le_mul_of_nonneg_left htail (p.nonneg i)
+      · have hzero : (rawTags M p).pr (eventI i) = 0 := by simp [eventI, hx, FinProb.pr]
+        rw [hzero]
+        exact mul_nonneg (p.nonneg i) (by positivity)
+    calc
+      (rawTags M p).pr (badX x) ≤
+          (rawTags M p).pr (fun t => ∃ i ∈ (Finset.univ : Finset M.ι), eventI i t) :=
+        HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hsubset
+      _ ≤ ∑ i ∈ (Finset.univ : Finset M.ι), (rawTags M p).pr (eventI i) := hunion
+      _ ≤ ∑ i ∈ (Finset.univ : Finset M.ι), p.w i * H := by
+        apply Finset.sum_le_sum
+        intro i hi
+        exact hEi i
+      _ = H := by rw [← Finset.sum_mul, p.sum_eq_one]; ring
+  have hT2 : (rawTags M p).pr (fun t => T2 M y₀ t s) ≤ (N : ℝ) * H := by
+    have hunion := HypercubeRamsey.Clock.finProb_pr_biUnion_le_sum
+      (rawTags M p) (Finset.univ : Finset (Fin N)) badX
+    have hT2sub : ∀ t, T2 M y₀ t s → ∃ x ∈ (Finset.univ : Finset (Fin N)), badX x t := by
+      intro t ht
+      rcases ht with ⟨x, hx, htail⟩
+      exact ⟨x, Finset.mem_univ _, hx, htail⟩
+    calc
+      (rawTags M p).pr (fun t => T2 M y₀ t s) ≤
+          (rawTags M p).pr (fun t => ∃ x ∈ (Finset.univ : Finset (Fin N)), badX x t) :=
+        HypercubeRamsey.Clock.finProb_pr_mono (rawTags M p) hT2sub
+      _ ≤ ∑ x ∈ (Finset.univ : Finset (Fin N)), (rawTags M p).pr (badX x) := hunion
+      _ ≤ ∑ x ∈ (Finset.univ : Finset (Fin N)), H := by
+        apply Finset.sum_le_sum
+        intro x hx
+        exact hperX x
+      _ = (N : ℝ) * H := by simp
+  calc
+    (rawTags M p).pr (fun t => T2 M y₀ t s) ≤ (N : ℝ) * H := hT2
+    _ ≤ (n : ℝ) ^ (-(2 * P)) := by
+      calc
+        (N : ℝ) * H ≤ (n : ℝ) * (2 : ℝ) ^ n * H :=
+          mul_le_mul_of_nonneg_right hN (by positivity)
+        _ = (n : ℝ) * ((2 : ℝ) ^ n * H) := by ring
+        _ ≤ (n : ℝ) * Real.exp (-b * (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left hgeom (by positivity)
+        _ ≤ (n : ℝ) ^ (-(2 * P)) := hdecayN
 
 /-- P11.1d1(ii), local-lemma input (11:353–354).  Both events at `s` read only the tags of the radius-one ball of
 `s` (the odd rows integrate to one away from it); balls meet only for words within distance two (at most

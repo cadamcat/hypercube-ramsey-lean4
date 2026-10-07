@@ -891,4 +891,249 @@ theorem finite_subdensity_ratio_bad5 {Ω Ξ : Type*} [Fintype Ω] [Fintype Ξ]
     _ ≤ ε * 1 := mul_le_mul_of_nonneg_left hDel hε
     _ = ε := by ring
 
+theorem baseLaw_weight_factor5 {γ K' χ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (X : Setup5 γ K' χ n N E G) (b : X.Base) :
+    X.baseLaw.w b = X.P.prior.parent.w b.1 *
+      (∏ w, (X.P.prior.partner b.1 w).w (b.2.1 w)) *
+      (∏ w, ∏ s : Fin (X.p.streamSegs n),
+        (X.segLaw b.1 (b.2.1 w)).w (b.2.2 w s)) := by
+  simp [Setup5.baseLaw, Setup5.coarseLaw, FinProb.bind, FinProb.pi]
+  ring
+
+theorem posterior_density_recompose5 {Ω : Type*} [Fintype Ω]
+    (P Q : FinProb Ω) (h : ∀ x, Q.w x = 0 → P.w x = 0) (x : Ω) :
+    Q.w x * ratio5 (P.w x) (Q.w x) = P.w x := by
+  by_cases hQ : Q.w x = 0
+  · simp [ratio5, hQ, h x hQ]
+  · simp [ratio5, hQ]
+    field_simp [hQ]
+
+private theorem prod_split_prefix5 {s k d : ℕ} (f : Fin s → ℝ) :
+    (∏ i : Fin s, if (i : ℕ) < k then f i else 1) =
+      (∏ i : Fin s, if (i : ℕ) < k ∧ (i : ℕ) < d then f i else 1) *
+        (∏ i : Fin s, if (i : ℕ) < k ∧ d ≤ (i : ℕ) then f i else 1) := by
+  calc
+    (∏ i : Fin s, if (i : ℕ) < k then f i else 1) =
+        ∏ i : Fin s,
+          (if (i : ℕ) < k ∧ (i : ℕ) < d then f i else 1) *
+            (if (i : ℕ) < k ∧ d ≤ (i : ℕ) then f i else 1) := by
+      apply Finset.prod_congr rfl
+      intro i hi
+      by_cases hik : (i : ℕ) < k
+      · by_cases hid : (i : ℕ) < d
+        · simp [hik, hid, Nat.not_le_of_lt hid]
+        · have hdi : d ≤ (i : ℕ) := by omega
+          simp [hik, hid, hdi]
+      · simp [hik]
+    _ = (∏ i : Fin s, if (i : ℕ) < k ∧ (i : ℕ) < d then f i else 1) *
+        (∏ i : Fin s, if (i : ℕ) < k ∧ d ≤ (i : ℕ) then f i else 1) := by
+      rw [Finset.prod_mul_distrib]
+
+private theorem prod_delete_one5 {ι : Type*} [DecidableEq ι] (S : Finset ι) (w : ι)
+    (hw : w ∈ S) (f g : ι → ℝ) (L : ℝ)
+    (hfg : ∀ x ∈ S, f x = g x * (if x = w then L else 1)) :
+    (∏ x ∈ S, f x) = (∏ x ∈ S, g x) * L := by
+  calc
+    (∏ x ∈ S, f x) = ∏ x ∈ S, g x * (if x = w then L else 1) := by
+      apply Finset.prod_congr rfl
+      intro x hx
+      exact hfg x hx
+    _ = (∏ x ∈ S, g x) * (∏ x ∈ S, if x = w then L else 1) := by
+      rw [Finset.prod_mul_distrib]
+    _ = (∏ x ∈ S, g x) * L := by
+      have hsingle : (∏ x ∈ S, if x = w then L else 1) = L := by
+        rw [Finset.prod_eq_ite w (by
+          intro x hx hxw
+          simp [hxw])]
+        simp [hw]
+      rw [hsingle]
+
+theorem colWeight_delete_prefix_factor5 {γ K' χ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (X : Setup5 γ K' χ n N E G) (b : X.Base) (ℓ : X.Key)
+    (w : BinVector5 n) (kDel : ℕ) (hw : w ∈ binList5 ℓ.coarse) (y : Fin N) :
+    X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+      X.colWeight b ℓ b.2.2
+        (fun w' s => ¬ (w' = w ∧ (s : ℕ) < kDel)) y *
+        (∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) ∧ (s : ℕ) < kDel then
+            (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+          else 1) := by
+  classical
+  let kFull := X.p.uSeg n (ℓ.level + 1)
+  let L : ℝ := ∏ s : Fin (X.p.streamSegs n),
+    if (s : ℕ) < kFull ∧ (s : ℕ) < kDel then
+      (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+    else 1
+  by_cases hb : ℓ.coarse.2
+  · let S := binList5 ℓ.coarse
+    let f : BinVector5 n → ℝ := fun w' =>
+      (X.P.prior.partner y w').w (b.2.1 w') *
+        ∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < kFull then (X.segLaw y (b.2.1 w')).w (b.2.2 w' s) else 1
+    let g : BinVector5 n → ℝ := fun w' =>
+      (X.P.prior.partner y w').w (b.2.1 w') *
+        ∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < kFull ∧ (w' = w → kDel ≤ (s : ℕ)) then
+            (X.segLaw y (b.2.1 w')).w (b.2.2 w' s) else 1
+    have hfg : ∀ w' ∈ S, f w' = g w' * (if w' = w then L else 1) := by
+      intro w' hw'
+      by_cases hww : w' = w
+      · subst w'
+        let pref : ℝ := ∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < kFull ∧ (s : ℕ) < kDel then
+            (X.segLaw y (b.2.1 w)).w (b.2.2 w s) else 1
+        let tail : ℝ := ∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < kFull ∧ kDel ≤ (s : ℕ) then
+            (X.segLaw y (b.2.1 w)).w (b.2.2 w s) else 1
+        have hsplit : (∏ s : Fin (X.p.streamSegs n),
+            if (s : ℕ) < kFull then (X.segLaw y (b.2.1 w)).w (b.2.2 w s) else 1) =
+            pref * tail := by
+          simpa [pref, tail] using
+            (prod_split_prefix5 (s := X.p.streamSegs n) (k := kFull) (d := kDel)
+              (fun s : Fin (X.p.streamSegs n) => (X.segLaw y (b.2.1 w)).w (b.2.2 w s)))
+        have hf : f w = (X.P.prior.partner y w).w (b.2.1 w) * (pref * tail) := by
+          dsimp [f]
+          rw [hsplit]
+        have hg : g w = (X.P.prior.partner y w).w (b.2.1 w) * tail := by
+          simp [g, tail, kFull]
+        have hL : L = pref := by
+          simp [L, pref, hb, kFull]
+        rw [hf, hg, hL]
+        rw [if_pos rfl]
+        ring
+      · simp [f, g, L, hww]
+    have hprod := prod_delete_one5 S w hw f g L hfg
+    have hfull : X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+        X.P.prior.parent.w y * (∏ w' ∈ S, f w') := by
+      simp [Setup5.colWeight, hb, S, f, kFull]
+    have hdeleted : X.colWeight b ℓ b.2.2
+        (fun w' s => ¬ (w' = w ∧ (s : ℕ) < kDel)) y =
+        X.P.prior.parent.w y * (∏ w' ∈ S, g w') := by
+      simp [Setup5.colWeight, hb, S, g, kFull]
+    calc
+      X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+          X.P.prior.parent.w y * (∏ w' ∈ S, f w') := hfull
+      _ = X.P.prior.parent.w y * (∏ w' ∈ S, g w') * L := by
+        rw [hprod]
+        ring
+      _ = X.colWeight b ℓ b.2.2
+          (fun w' s => ¬ (w' = w ∧ (s : ℕ) < kDel)) y * L := by
+          rw [hdeleted]
+  · have hfalse : ℓ.coarse.2 = false := by
+      cases h : ℓ.coarse.2 <;> simp_all
+    have hbin : w = ℓ.coarse.1 := by
+      simpa [binList5, hfalse] using hw
+    let D : ℝ := ∏ s : Fin (X.p.streamSegs n),
+      if (s : ℕ) < kFull ∧ kDel ≤ (s : ℕ) then
+        (X.segLaw b.1 y).w (b.2.2 w s) else 1
+    have hsplit : (∏ s : Fin (X.p.streamSegs n),
+        if (s : ℕ) < kFull then (X.segLaw b.1 y).w (b.2.2 w s) else 1) = L * D := by
+      simpa [L, D, kFull, hfalse] using
+        (prod_split_prefix5 (s := X.p.streamSegs n) (k := kFull) (d := kDel)
+          (fun s : Fin (X.p.streamSegs n) =>
+          (X.segLaw b.1 y).w (b.2.2 w s)))
+    have hfull0 : X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+        (X.P.prior.partner b.1 ℓ.coarse.1).w y *
+          (∏ s : Fin (X.p.streamSegs n),
+            if (s : ℕ) < kFull then (X.segLaw b.1 y).w (b.2.2 w s) else 1) := by
+      simp [Setup5.colWeight, hfalse, hbin, kFull]
+    have hdeleted : X.colWeight b ℓ b.2.2
+        (fun w' s => ¬ (w' = w ∧ (s : ℕ) < kDel)) y =
+        (X.P.prior.partner b.1 ℓ.coarse.1).w y * D := by
+      simp [Setup5.colWeight, hfalse, hbin, D, kFull]
+    calc
+      X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+          (X.P.prior.partner b.1 ℓ.coarse.1).w y * (L * D) := by
+        rw [hfull0, hsplit]
+      _ = X.colWeight b ℓ b.2.2
+          (fun w' s => ¬ (w' = w ∧ (s : ℕ) < kDel)) y * L := by
+        rw [hdeleted]
+        ring
+
+theorem colLik_trueBlock_recompose5 {γ K' χ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (X : Setup5 γ K' χ n N E G) (H : X.KeyHist) (K : X.Ty) (ℓ : X.Key)
+    (hℓ : ℓ ∈ X.gateKeys K)
+    (hgate : X.blockGate H.1 K (X.trueBlock H.1 K)) :
+    (∏ h : Fin (colLen5 (X.p.s n) ℓ), (X.prior H.1 ℓ).w (H.2 ℓ h)) =
+      (∏ h : Fin (colLen5 (X.p.s n) ℓ),
+        (X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)).w (H.2 ℓ h)) *
+        X.colLik H.1 K ℓ (X.trueBlock H.1 K) (H.2 ℓ) := by
+  classical
+  let P := X.prior H.1 ℓ
+  let Q := X.priorDel H.1 ℓ K.1.1 (X.p.typeSegs n K)
+  have hsupport : ∀ y, Q.w y = 0 → P.w y = 0 := by
+    intro y hQ
+    have hpoint := hgate ℓ hℓ y
+    rw [priorRep_trueBlock_eq_prior X H K ℓ (typeSegs_le_streamSegs X K)] at hpoint
+    have hle : P.w y ≤ 0 := by
+      simpa [P, Q, hQ] using hpoint
+    exact le_antisymm hle (P.nonneg y)
+  have hcoord (h : Fin (colLen5 (X.p.s n) ℓ)) :
+      Q.w (H.2 ℓ h) * ratio5
+        ((X.priorRep H.1 ℓ K.1.1 (X.trueBlock H.1 K)).w (H.2 ℓ h))
+        (Q.w (H.2 ℓ h)) = P.w (H.2 ℓ h) := by
+    have h := posterior_density_recompose5 P Q hsupport (H.2 ℓ h)
+    rw [priorRep_trueBlock_eq_prior X H K ℓ (typeSegs_le_streamSegs X K)]
+    exact h
+  unfold Setup5.colLik
+  calc
+    (∏ h : Fin (colLen5 (X.p.s n) ℓ), P.w (H.2 ℓ h)) =
+        ∏ h : Fin (colLen5 (X.p.s n) ℓ),
+          Q.w (H.2 ℓ h) * ratio5
+            ((X.priorRep H.1 ℓ K.1.1 (X.trueBlock H.1 K)).w (H.2 ℓ h))
+            (Q.w (H.2 ℓ h)) := by
+      apply Finset.prod_congr rfl
+      intro h hh
+      exact (hcoord h).symm
+    _ = (∏ h : Fin (colLen5 (X.p.s n) ℓ), Q.w (H.2 ℓ h)) *
+        (∏ h : Fin (colLen5 (X.p.s n) ℓ),
+          ratio5 ((X.priorRep H.1 ℓ K.1.1 (X.trueBlock H.1 K)).w (H.2 ℓ h))
+            (Q.w (H.2 ℓ h))) := by
+      rw [Finset.prod_mul_distrib]
+
+theorem pi_likelihood_weight_sum_le_one5 {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P Q : ∀ i, FinProb (Ω i)) :
+    ∑ x : ∀ i, Ω i,
+      (∏ i, (Q i).w (x i)) *
+        (∏ i, ratio5 ((P i).w (x i)) ((Q i).w (x i))) ≤ 1 := by
+  classical
+  have hsingle_nonneg (i : ι) :
+      0 ≤ ∑ y, (Q i).w y * ratio5 ((P i).w y) ((Q i).w y) := by
+    apply Finset.sum_nonneg
+    intro y hy
+    exact mul_nonneg ((Q i).nonneg y)
+      (ratio5_nonneg ((P i).nonneg y) ((Q i).nonneg y))
+  have hsingle_le (i : ι) :
+      (∑ y, (Q i).w y * ratio5 ((P i).w y) ((Q i).w y)) ≤ 1 := by
+    calc
+      (∑ y, (Q i).w y * ratio5 ((P i).w y) ((Q i).w y)) ≤ ∑ y, (P i).w y := by
+        apply Finset.sum_le_sum
+        intro y hy
+        by_cases hQ : (Q i).w y = 0
+        · simp [ratio5, hQ, (P i).nonneg y]
+        · have heq : (Q i).w y * ratio5 ((P i).w y) ((Q i).w y) = (P i).w y := by
+            simp [ratio5, hQ]
+            field_simp [hQ]
+          rw [heq]
+      _ = 1 := (P i).sum_eq_one
+  calc
+    _ = ∑ x : ∀ i, Ω i, ∏ i, (Q i).w (x i) *
+          ratio5 ((P i).w (x i)) ((Q i).w (x i)) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [← Finset.prod_mul_distrib]
+    _ = ∏ i, ∑ y, (Q i).w y * ratio5 ((P i).w y) ((Q i).w y) := by
+      rw [Fintype.prod_sum]
+    _ ≤ ∏ _i : ι, (1 : ℝ) := by
+      apply Finset.prod_le_prod₀
+      · intro i hi
+        exact hsingle_nonneg i
+      · intro i hi
+        exact hsingle_le i
+    _ = 1 := by simp
+
 end HypercubeRamsey.Lane_q_s05_hist1b

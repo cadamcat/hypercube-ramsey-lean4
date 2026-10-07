@@ -436,4 +436,143 @@ lemma singleton_overlap_exponent_zero {κ : CConsts} {T : Stage} {k : ℕ}
         Cprime * D.rank {v} = 0 := by
   simp [rank_singleton, nonisolates_singleton]
 
+def rootedAdjacencyChain {V : Type*} [DecidableEq V] (G : SimpleGraph V)
+    (A : Finset V) : List V → Prop
+  | [] => True
+  | v :: rest => (∃ u ∈ A, G.Adj u v) ∧ rootedAdjacencyChain G (insert v A) rest
+
+theorem exists_rootedAdjacencyChain {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (A todo : Finset V)
+    (hdisj : Disjoint A todo) (hcover : A ∪ todo = Finset.univ)
+    (hrep : ∀ v, ∃ u ∈ A, G.Reachable u v) :
+    ∃ l : List V, l.Nodup ∧ l.toFinset = todo ∧ rootedAdjacencyChain G A l := by
+  classical
+  induction todo using Finset.strongInductionOn generalizing A with
+  | _ todo ih =>
+    by_cases hne : todo.Nonempty
+    · obtain ⟨x, hx⟩ := hne
+      obtain ⟨r, hr, hreach⟩ := hrep x
+      have hxnot : x ∉ A := by
+        intro hxa
+        exact (Finset.disjoint_left.mp hdisj) hxa hx
+      obtain ⟨p⟩ := hreach
+      obtain ⟨d, hd, hdu, hdv⟩ := p.exists_boundary_dart (A : Set V) hr hxnot
+      rcases d with ⟨⟨u, v⟩, huv⟩
+      have hvTodo : v ∈ todo := by
+        have hvUnion : v ∈ A ∪ todo := by rw [hcover]; simp
+        rcases Finset.mem_union.mp hvUnion with hva | hvt
+        · exact False.elim (hdv hva)
+        · exact hvt
+      have hAerase : A ∪ todo.erase v = (A ∪ todo).erase v := by
+        ext w
+        simp only [Finset.mem_union, Finset.mem_erase]
+        constructor
+        · rintro (hwa | ⟨hwn, hwt⟩)
+          · refine ⟨?_, Or.inl hwa⟩
+            intro hwv
+            subst w
+            exact hdv hwa
+          · exact ⟨hwn, Or.inr hwt⟩
+        · rintro ⟨hwn, hwa | hwt⟩
+          · exact Or.inl hwa
+          · exact Or.inr ⟨hwn, hwt⟩
+      have hcover' : insert v A ∪ todo.erase v = Finset.univ := by
+        rw [Finset.insert_union, hAerase, Finset.insert_erase (Finset.mem_union_right A hvTodo), hcover]
+      have hdisj' : Disjoint (insert v A) (todo.erase v) := by
+        apply Finset.disjoint_left.mpr
+        intro w hwA hwTodo
+        rcases Finset.mem_insert.mp hwA with hwv | hwA
+        · subst w
+          exact Finset.notMem_erase _ _ hwTodo
+        · exact (Finset.disjoint_left.mp hdisj) hwA (Finset.mem_of_mem_erase hwTodo)
+      have hrep' : ∀ w, ∃ a ∈ insert v A, G.Reachable a w := by
+        intro w
+        obtain ⟨a, ha, hreach⟩ := hrep w
+        exact ⟨a, Finset.mem_insert_of_mem ha, hreach⟩
+      obtain ⟨l, hnodup, hto, hchain⟩ :=
+        ih (todo.erase v) (Finset.erase_ssubset hvTodo) (insert v A) hdisj' hcover' hrep'
+      have hvnotl : v ∉ l := by
+        intro hvl
+        have hvl' : v ∈ l.toFinset := List.mem_toFinset.mpr hvl
+        rw [hto] at hvl'
+        exact Finset.notMem_erase _ _ hvl'
+      refine ⟨v :: l, List.nodup_cons.mpr ⟨hvnotl, hnodup⟩, ?_, ?_⟩
+      · simp only [List.toFinset_cons]
+        rw [hto, Finset.insert_erase hvTodo]
+      · exact ⟨⟨u, hdu, huv⟩, hchain⟩
+    · have htodo : todo = ∅ := Finset.not_nonempty_iff_eq_empty.mp hne
+      subst todo
+      exact ⟨[], by simp, by simp, by simp [rootedAdjacencyChain]⟩
+
+noncomputable def componentRoot {V : Type*} (G : SimpleGraph V)
+    (c : G.ConnectedComponent) : V := Classical.choose c.nonempty_supp
+
+lemma componentRoot_mem {V : Type*} (G : SimpleGraph V) (c : G.ConnectedComponent) :
+    componentRoot G c ∈ c.supp := Classical.choose_spec c.nonempty_supp
+
+noncomputable def componentRoots {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] : Finset V :=
+  Finset.univ.image (componentRoot G)
+
+theorem componentRoots_card {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] :
+    (componentRoots G).card = Nat.card G.ConnectedComponent := by
+  classical
+  have hinj : Function.Injective (componentRoot G) := by
+    intro c d h
+    apply SimpleGraph.ConnectedComponent.eq_of_common_vertex (componentRoot_mem G c)
+    rw [h]
+    exact componentRoot_mem G d
+  rw [componentRoots, Finset.card_image_of_injective _ hinj, Nat.card_eq_fintype_card]
+  rfl
+
+theorem componentRoots_reach {V : Type*} [Fintype V] [DecidableEq V]
+    (G : SimpleGraph V) [DecidableRel G.Adj] (v : V) :
+    ∃ r ∈ componentRoots G, G.Reachable r v := by
+  classical
+  let c := G.connectedComponentMk v
+  let r := componentRoot G c
+  have hr : r ∈ c.supp := componentRoot_mem G c
+  have heq : G.connectedComponentMk r = G.connectedComponentMk v := by
+    simpa [c, r] using (SimpleGraph.ConnectedComponent.mem_supp_iff c r).mp hr
+  refine ⟨r, Finset.mem_image.mpr ⟨c, Finset.mem_univ _, rfl⟩,
+    SimpleGraph.ConnectedComponent.exact heq⟩
+
+theorem exists_overlapRootedChain {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (S : Finset (Pos T k)) :
+    ∃ roots : Finset {v : Pos T k // v ∈ S},
+      roots.card = Nat.card (D.overlapGraph S).ConnectedComponent ∧
+      ∃ l : List {v : Pos T k // v ∈ S}, l.Nodup ∧
+        l.toFinset = Finset.univ \ roots ∧
+        rootedAdjacencyChain (D.overlapGraph S) roots l := by
+  classical
+  let G := D.overlapGraph S
+  let roots := componentRoots G
+  refine ⟨roots, componentRoots_card G, ?_⟩
+  apply exists_rootedAdjacencyChain G roots (Finset.univ \ roots)
+  · exact Finset.disjoint_sdiff
+  · exact Finset.union_sdiff_of_subset (Finset.subset_univ roots)
+  · exact componentRoots_reach G
+
+theorem exists_overlapRootedChain_rank {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (S : Finset (Pos T k)) :
+    ∃ roots : Finset {v : Pos T k // v ∈ S},
+      ∃ l : List {v : Pos T k // v ∈ S},
+        roots.card = Nat.card (D.overlapGraph S).ConnectedComponent ∧
+        l.Nodup ∧ l.toFinset = Finset.univ \ roots ∧ l.length = D.rank S ∧
+        rootedAdjacencyChain (D.overlapGraph S) roots l := by
+  obtain ⟨roots, hroots, l, hnodup, hto, hchain⟩ := exists_overlapRootedChain D S
+  refine ⟨roots, l, hroots, hnodup, hto, ?_, hchain⟩
+  calc
+    l.length = l.toFinset.card := (List.toFinset_card_of_nodup hnodup).symm
+    _ = (Finset.univ \ roots).card := by rw [hto]
+    _ = (Finset.univ : Finset {v : Pos T k // v ∈ S}).card - roots.card :=
+      Finset.card_sdiff_of_subset (Finset.subset_univ roots)
+    _ = S.card - Nat.card (D.overlapGraph S).ConnectedComponent := by
+      rw [hroots]
+      simp
+    _ = D.rank S := rfl
+
 end HypercubeRamsey.Lane_q_s18_n6

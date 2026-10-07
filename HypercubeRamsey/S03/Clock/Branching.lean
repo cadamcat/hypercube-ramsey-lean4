@@ -35,6 +35,168 @@ structure BranchingSupersolution (δ δ' θ : ℝ) (T : ℕ) (Hrow Hlab : ℕ �
   row_step : ∀ c ≤ T, Real.exp (δ' + δ * ∑ t ∈ Finset.range c, (Hlab (t + 1) - 1)) ≤ Hrow c
   lab_step : ∀ c ≤ T, Real.exp (δ' + θ * δ * ∑ t ∈ Finset.range c, (Hrow (t + 1) - 1)) ≤ Hlab c
 
+private theorem branching_one_edge_excess {T : ℕ} {Ω : Type*} [Fintype Ω] [DecidableEq Ω]
+    {g : ℕ} (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : FinProb Ω)
+    (lab : Ω → Fin g) (y : Fin g) (H : ℕ → ℝ) (hHge : ∀ c, 1 ≤ H c)
+    (c : ℕ) (hc : c ≤ T) :
+    (outputEdgeClockLaw (T := T) δ hδ p lab y
+      (sub_nonneg.mpr (by
+        calc
+          δ * labMarg p lab y ≤ δ * 1 := mul_le_mul_of_nonneg_left
+            (labMarg_le_one p lab y) hδ
+          _ = δ := by ring
+          _ ≤ 1 := hδ1))).expect
+      (fun x => match x with
+        | .noArrival => 0
+        | .tick t o => if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0) ≤
+      δ * ∑ t ∈ Finset.range c, labMarg p lab y * (H (t + 1) - 1) := by
+  classical
+  let hbase : 0 ≤ 1 - δ * labMarg p lab y :=
+    sub_nonneg.mpr (by
+      calc
+        δ * labMarg p lab y ≤ δ * 1 := mul_le_mul_of_nonneg_left
+          (labMarg_le_one p lab y) hδ
+        _ = δ := by ring
+        _ ≤ 1 := hδ1)
+  let Q := outputEdgeClockLaw (T := T) δ hδ p lab y hbase
+  let e : MeshClockValue T Ω ≃ Unit ⊕ (Fin T × Ω) := {
+    toFun := fun x => match x with
+      | .noArrival => Sum.inl ()
+      | .tick t o => Sum.inr (t, o)
+    invFun := fun x => match x with
+      | .inl _ => .noArrival
+      | .inr (t, o) => .tick t o
+    left_inv := by intro x; cases x <;> rfl
+    right_inv := by intro x; cases x <;> rfl
+  }
+  have hsurv : ∀ t : Fin T, survival δ (labMarg p lab y) t.val ≤ 1 := by
+    intro t
+    apply pow_le_one₀
+    · exact hbase
+    · exact le_trans (sub_le_self 1 (mul_nonneg hδ (labMarg_nonneg p lab y))) (by norm_num)
+  have hterm : ∀ t : Fin T, 0 ≤ H (t.val + 1) - 1 := by
+    intro t
+    linarith [hHge (t.val + 1)]
+  have hsum (t : Fin T) :
+      (∑ o : Ω, Q.w (.tick t o) *
+        (if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0)) ≤
+        (if t.val < c then δ * labMarg p lab y * (H (t.val + 1) - 1) else 0) := by
+    by_cases htc : t.val < c
+    · simp only [if_pos htc]
+      calc
+        (∑ o : Ω, Q.w (.tick t o) *
+            (if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0)) =
+            (survival δ (labMarg p lab y) t.val * δ * (H (t.val + 1) - 1)) *
+              labMarg p lab y := by
+                rw [show (∑ o : Ω, Q.w (.tick t o) *
+                    (if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0)) =
+                    ∑ o : Ω, (survival δ (labMarg p lab y) t.val * δ *
+                      outputMarkMass p lab y o) * (if lab o = y then H (t.val + 1) - 1 else 0) by
+                    apply Finset.sum_congr rfl
+                    intro o ho
+                    simp [Q, outputEdgeClockLaw, markedClockLaw, markedClockWeight, htc,
+                      outputMarkMass]
+                    ]
+                calc
+                  (∑ o : Ω, (survival δ (labMarg p lab y) t.val * δ *
+                      (if lab o = y then p.w o else 0)) *
+                      (if lab o = y then H (t.val + 1) - 1 else 0)) =
+                      ∑ o : Ω, (survival δ (labMarg p lab y) t.val * δ *
+                        (H (t.val + 1) - 1)) *
+                        (if lab o = y then p.w o else 0) := by
+                          apply Finset.sum_congr rfl
+                          intro o ho
+                          by_cases h : lab o = y
+                          · simp [h]
+                            ring
+                          · simp [h]
+                  _ = (survival δ (labMarg p lab y) t.val * δ *
+                        (H (t.val + 1) - 1)) *
+                        ∑ o : Ω, if lab o = y then p.w o else 0 := by
+                          rw [← Finset.mul_sum]
+                  _ = survival δ (labMarg p lab y) t.val * δ *
+                      (H (t.val + 1) - 1) * labMarg p lab y := rfl
+        _ ≤ δ * labMarg p lab y * (H (t.val + 1) - 1) := by
+          have hcoef : 0 ≤ δ * (H (t.val + 1) - 1) * labMarg p lab y :=
+            mul_nonneg (mul_nonneg hδ (hterm t)) (labMarg_nonneg p lab y)
+          have := mul_le_mul_of_nonneg_right (hsurv t) hcoef
+          nlinarith [this]
+    · simp [htc]
+  have hsumFin :
+      (∑ t : Fin T, ∑ o : Ω, Q.w (.tick t o) *
+        (if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0)) ≤
+        δ * ∑ t ∈ Finset.range c, labMarg p lab y * (H (t + 1) - 1) := by
+    calc
+      (∑ t : Fin T, ∑ o : Ω, Q.w (.tick t o) *
+          (if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0)) ≤
+          ∑ t : Fin T, (if t.val < c then
+            δ * labMarg p lab y * (H (t.val + 1) - 1) else 0) :=
+            Finset.sum_le_sum fun t ht => hsum t
+      _ = δ * ∑ t ∈ Finset.range c, labMarg p lab y * (H (t + 1) - 1) := by
+          change (∑ t : Fin T,
+            (fun i : ℕ => if i < c then
+              δ * labMarg p lab y * (H (i + 1) - 1) else 0) t.val) = _
+          rw [Fin.sum_univ_eq_sum_range
+            (fun i : ℕ => if i < c then δ * labMarg p lab y * (H (i + 1) - 1) else 0) T]
+          have hfilter : (Finset.range T).filter (fun t => t < c) = Finset.range c := by
+            ext t
+            simp only [Finset.mem_filter, Finset.mem_range]
+            constructor
+            · rintro ⟨htT, htc⟩
+              exact htc
+            · intro htc
+              exact ⟨lt_of_lt_of_le htc hc, htc⟩
+          rw [← Finset.sum_filter, hfilter]
+          rw [← Finset.mul_sum]
+          calc
+            δ * labMarg p lab y * ∑ t ∈ Finset.range c, (H (t + 1) - 1) =
+                δ * (labMarg p lab y * ∑ t ∈ Finset.range c, (H (t + 1) - 1)) := by ring
+            _ = δ * ∑ t ∈ Finset.range c, labMarg p lab y * (H (t + 1) - 1) := by
+                rw [Finset.mul_sum]
+  unfold FinProb.expect
+  calc
+    (∑ x : MeshClockValue T Ω, Q.w x * (match x with
+      | .noArrival => 0
+      | .tick t o => if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0)) =
+        ∑ x : Unit ⊕ (Fin T × Ω), Q.w (e.symm x) * (match e.symm x with
+          | .noArrival => 0
+          | .tick t o => if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0) := by
+            exact Fintype.sum_equiv e _ _ (by intro x; rw [e.symm_apply_apply])
+    _ = ∑ t : Fin T, ∑ o : Ω, Q.w (.tick t o) *
+          (if t.val < c ∧ lab o = y then H (t.val + 1) - 1 else 0) := by
+            simp [e, Fintype.sum_sum_type, Fintype.sum_prod_type]
+    _ ≤ δ * ∑ t ∈ Finset.range c, labMarg p lab y * (H (t + 1) - 1) := hsumFin
+
+private theorem branching_rate_sum_bound {I : Type*} [Fintype I] (rate : I → ℝ)
+    (δ K : ℝ) (hδ : 0 ≤ δ) (hrate : ∑ i, rate i ≤ K)
+    (excess : ℕ → ℝ) (hexcess : ∀ t, 0 ≤ excess t)
+    (c : ℕ) :
+    ∑ i, δ * ∑ t ∈ Finset.range c, rate i * excess t ≤
+      δ * K * ∑ t ∈ Finset.range c, excess t := by
+  calc
+    (∑ i, δ * ∑ t ∈ Finset.range c, rate i * excess t) =
+        δ * ∑ i, ∑ t ∈ Finset.range c, rate i * excess t := by
+          rw [← Finset.mul_sum]
+    _ = δ * ∑ t ∈ Finset.range c, ∑ i, rate i * excess t := by
+          congr 1
+          rw [Finset.sum_comm]
+    _ ≤ δ * ∑ t ∈ Finset.range c, K * excess t := by
+          apply mul_le_mul_of_nonneg_left
+          · apply Finset.sum_le_sum
+            intro t ht
+            calc
+              (∑ i, rate i * excess t) = (∑ i, rate i) * excess t := by
+                rw [Finset.sum_mul]
+              _ ≤ K * excess t := mul_le_mul_of_nonneg_right hrate (hexcess t)
+          · exact hδ
+    _ = δ * K * ∑ t ∈ Finset.range c, excess t := by
+          calc
+            δ * ∑ t ∈ Finset.range c, K * excess t =
+                δ * (K * ∑ t ∈ Finset.range c, excess t) := by
+                  congr 1
+                  rw [← Finset.mul_sum]
+            _ = δ * K * ∑ t ∈ Finset.range c, excess t := by ring
+
 /-- The endpoints of the edges an insertion prescribes (TeX 03:948: "Include the endpoints of all inserted
 arrivals as extra full-horizon roots"). -/
 noncomputable def insertedEndpoints {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}

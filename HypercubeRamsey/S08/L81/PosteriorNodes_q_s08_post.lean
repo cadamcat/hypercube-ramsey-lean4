@@ -992,6 +992,54 @@ theorem pi_pr_coordinate {ι Ω : Type*} [Fintype ι] [DecidableEq ι] [Fintype 
       · intro x hx hxy
         simp [hxy]
 
+theorem map_prod {α β γ δ : Type*} [Fintype α] [Fintype β]
+    [Fintype γ] [Fintype δ] [DecidableEq γ] [DecidableEq δ]
+    (P : FinProb α) (Q : FinProb β) (f : α → γ) (g : β → δ) :
+    FinProb.map (P.prod Q) (fun x => (f x.1, g x.2)) =
+      (FinProb.map P f).prod (FinProb.map Q g) := by
+  classical
+  apply FinProb.ext
+  intro z
+  change (∑ x : α × β,
+      if (f x.1, g x.2) = z then P.w x.1 * Q.w x.2 else 0) =
+    (∑ a, if f a = z.1 then P.w a else 0) *
+      ∑ b, if g b = z.2 then Q.w b else 0
+  rw [Fintype.sum_prod_type]
+  have hterm (a : α) (b : β) :
+      (if (f a, g b) = z then P.w a * Q.w b else 0) =
+        (if f a = z.1 then P.w a else 0) * (if g b = z.2 then Q.w b else 0) := by
+    by_cases ha : f a = z.1
+    · by_cases hb : g b = z.2
+      · simp [ha, hb]
+      · have hpair : (f a, g b) ≠ z := by
+          intro hh
+          exact hb (congrArg Prod.snd hh)
+        rw [if_neg hpair]
+        simp [ha, hb]
+    · by_cases hb : g b = z.2
+      · have hpair : (f a, g b) ≠ z := by
+          intro hh
+          exact ha (congrArg Prod.fst hh)
+        rw [if_neg hpair]
+        simp [ha, hb]
+      · have hpair : (f a, g b) ≠ z := by
+          intro hh
+          exact ha (congrArg Prod.fst hh)
+        rw [if_neg hpair]
+        simp [ha, hb]
+  calc
+    (∑ a, ∑ b, if (f a, g b) = z then P.w a * Q.w b else 0) =
+        ∑ a, ∑ b,
+          (if f a = z.1 then P.w a else 0) * (if g b = z.2 then Q.w b else 0) := by
+      apply Fintype.sum_congr
+      intro a
+      apply Fintype.sum_congr
+      intro b
+      exact hterm a b
+    _ = (∑ a, if f a = z.1 then P.w a else 0) *
+        ∑ b, if g b = z.2 then Q.w b else 0 := by
+      rw [Fintype.sum_mul_sum]
+
 theorem rprime_pr_coordinate {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (j : Fin h) (y : Fin D.N) :
     D.R'.pr (fun ξ => ξ j = y) = ∑ i, D.M.Λ i * (D.M.ν i).w y := by

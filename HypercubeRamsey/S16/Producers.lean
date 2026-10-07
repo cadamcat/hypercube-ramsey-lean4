@@ -3118,7 +3118,94 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
   intro T k PT K16 Q H hCalibration R Perm K c0 Ds S F Cal hSource hn hPerm
     hTypical hGate hLink C v hcell hEven
   rcases hSource with hCluster | ⟨hDirect, hDirectData⟩
-  · sorry
+  · rcases hCluster with ⟨hmode, hUniform, hSourceCell⟩
+    obtain ⟨Ssol, hsolver, records, groups, hsliceLaw, hslicePass,
+      hgroupReadout, hqraw, hpretrim, hU, hpriorReadout⟩ := hSourceCell C
+    let sourcePair := (R.cellWords C).symm ⟨v, hcell⟩
+    let sourceSlice := sourcePair.1
+    let word := sourcePair.2
+    have hCellWord : R.cellWords C (sourceSlice, word) = ⟨v, hcell⟩ := by
+      dsimp [sourceSlice, word, sourcePair]
+      exact Equiv.apply_symm_apply (R.cellWords C) ⟨v, hcell⟩
+    have hCellWordVal : (R.cellWords C (sourceSlice, word)).1 = v :=
+      congrArg Subtype.val hCellWord
+    have hClusterMode : PT.tiling.mode.isCluster := by
+      rw [hmode]
+      simp [Mode.isCluster]
+    have hEvenWord : IsEvenRole word := by
+      have hpar := R.word_parity hClusterMode C sourceSlice word
+      rw [hCellWord] at hpar
+      exact hpar.mp hEven
+    let w : EvenRole PT.tiling (H.geom.cellPatch C) := ⟨word, hEvenWord⟩
+    let loc : SliceStarLocation H.geom C v w := {
+      axis := R.axis C
+      axis_injective := R.axis_injective C
+      axes_eq := R.axes_eq C
+      embed := fun z => (R.cellWords C (sourceSlice, z)).1
+      site_eq := hCellWordVal
+      flip_eq := by
+        intro z j
+        exact R.word_flip C sourceSlice z j
+      outer_eq := by
+        intro z j hj
+        have hout := R.word_outer C sourceSlice z word j hj
+        rw [hCellWordVal] at hout
+        exact hout
+    }
+    have hStarCell (j : Fin (PT.tiling.P (H.geom.cellPatch C)).h) :
+        H.geom.cellOf (flipPos v (R.axis C j)) = C := by
+      have hflip := R.word_flip C sourceSlice word j
+      rw [hCellWordVal] at hflip
+      have hmem := (R.cellWords C (sourceSlice, flipPos word j)).2
+      rw [hflip] at hmem
+      exact hmem
+    have hStarOdd (j : Fin (PT.tiling.P (H.geom.cellPatch C)).h) :
+        ¬ IsEvenRole (flipPos v (R.axis C j)) := by
+      have hInternalOdd : ¬ IsEvenRole (flipPos word j) := by
+        intro heven
+        exact ((HypercubeRamsey.S15.evenRole_flipPos word j).mp heven) hEvenWord
+      have hflip := R.word_flip C sourceSlice word j
+      rw [hCellWordVal] at hflip
+      have hParity := R.word_parity hClusterMode C sourceSlice (flipPos word j)
+      rw [hflip] at hParity
+      intro heven
+      exact hInternalOdd (hParity.mp heven)
+    let starRole (j : Fin (PT.tiling.P (H.geom.cellPatch C)).h) : OddCellRole H.geom C :=
+      ⟨flipPos v (R.axis C j), ⟨hStarCell j, hStarOdd j⟩⟩
+    let roleScope : Finset (OddCellRole H.geom C) := Finset.univ.image starRole
+    let groupScope : Finset (Cal.Group C) := roleScope.image (Cal.groupOf C)
+    have hScopesClosed : ∀ r ∈ roleScope, Cal.groupOf C r ∈ groupScope := by
+      intro r hr
+      exact Finset.mem_image.mpr ⟨r, hr, rfl⟩
+    let recordsLocal : R.Hist C → (∀ r, Ssol.Val r) :=
+      fun W => records sourceSlice (W sourceSlice)
+    have hPriorIdentity (W : R.Hist C) (ys : OddCellRole H.geom C → Fin (T.S.N k)) :
+        R.rawPrior C W ys v =
+          Ssol.σ w (recordsLocal W) (fun j => ys (starRole j)) := by
+      let fallback : Fin (T.S.N k) := ⟨0, T.S.N_pos k⟩
+      have hread := hpriorReadout W sourceSlice w ys fallback
+      rw [hCellWordVal] at hread
+      have hlabels :
+          nbrLabels w.1 (R.wordLabel C ys sourceSlice fallback) = fun j => ys (starRole j) := by
+        funext j
+        have hflip := R.word_flip C sourceSlice word j
+        rw [hCellWordVal] at hflip
+        have hOddCellWord :
+            ¬ IsEvenRole ((R.cellWords C (sourceSlice, flipPos word j)).1) := by
+          rw [hflip]
+          exact hStarOdd j
+        simp only [nbrLabels, w]
+        change R.wordLabel C ys sourceSlice fallback (flipPos word j) = ys (starRole j)
+        unfold CellRawData.wordLabel
+        rw [dif_pos hOddCellWord]
+        apply congrArg ys
+        apply Subtype.ext
+        exact hflip
+      rw [hread, hlabels]
+    -- The source slice and the `h` star roles now identify the local solver
+    -- experiment. Finish the product projection, calibrated-stage bounds,
+    -- and denominator budgets using this scope.
+    sorry
   · obtain ⟨hGroupInj, hValueUnit, hPassAll, hQUniform, hPretrimAll,
       hUDirect, hEnvExists⟩ := hDirectData C
     obtain ⟨hEnv, hRawPrior⟩ := hEnvExists

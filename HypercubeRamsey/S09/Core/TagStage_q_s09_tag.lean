@@ -1,5 +1,7 @@
 import HypercubeRamsey.S09.Core.Experiment
+import HypercubeRamsey.S09.Core.GainStage
 import HypercubeRamsey.Framework.Minimax
+import HypercubeRamsey.Tools.Concentration
 
 namespace HypercubeRamsey.Lane_q_s09_tag
 
@@ -574,6 +576,229 @@ theorem pi_expect_prod_injective_q_s09_tag {ι Ω : Type*} [Fintype ι] [Decidab
         dsimp [g]
         rw [e.symm_apply_apply]
         rfl)
+
+theorem pi_expect_comp_injective_q_s09_tag {ι Ω : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype Ω] {k : ℕ} (P : ι → FinProb Ω) (s : Fin k → ι)
+    (hs : Function.Injective s) (g : (Fin k → Ω) → ℝ) :
+    (FinProb.pi P).expect (fun ω => g (fun i => ω (s i))) =
+      (FinProb.pi (fun i : Fin k => P (s i))).expect g := by
+  classical
+  let U : Finset ι := Finset.univ.image s
+  let e : Fin k ≃ {i // i ∈ U} := finset_image_equiv_q_s09_tag s hs
+  let ePi : (∀ v : {i // i ∈ U}, Ω) ≃ (Fin k → Ω) := {
+    toFun := fun a i => a (e i)
+    invFun := fun b v => b (e.symm v)
+    left_inv := by
+      intro a
+      funext v
+      dsimp
+      rw [e.apply_symm_apply]
+    right_inv := by
+      intro b
+      funext i
+      dsimp
+      rw [e.symm_apply_apply] }
+  let PU : ∀ v : {i // i ∈ U}, FinProb Ω := fun v => P v.1
+  let F : (ι → Ω) → ℝ := fun ω => g (fun i => ω (s i))
+  let FU : (∀ v : {i // i ∈ U}, Ω) → ℝ := fun a => g (fun i => a (e i))
+  let ω₀ : ι → Ω := Classical.choice (finProb_nonempty_q_s09_tag (FinProb.pi P))
+  have hdep : FinProb.DependsOn F U := by
+    intro ω ω' hagree
+    unfold F
+    congr 1
+    funext i
+    exact hagree (s i) (Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩)
+  have hglueValue (a : ∀ v : {i // i ∈ U}, Ω) :
+      F (S07.glue U ω₀ a) = FU a := by
+    unfold F FU
+    congr 1
+    funext i
+    have hmem : s i ∈ U := Finset.mem_image.mpr ⟨i, Finset.mem_univ _, rfl⟩
+    have hieq : (⟨s i, hmem⟩ : {j // j ∈ U}) = e i := by
+      apply Subtype.ext
+      rfl
+    rw [S07.glue, dif_pos hmem]
+    exact congrArg a hieq
+  have hrestricted :
+      (FinProb.pi PU).expect FU = (FinProb.pi P).expect F := by
+    calc
+      (FinProb.pi PU).expect FU =
+          ∑ a : (∀ v : {i // i ∈ U}, Ω),
+            (∏ v : {i // i ∈ U}, (P v.1).w (a v)) * F (S07.glue U ω₀ a) := by
+        simp only [FinProb.expect, FinProb.pi, PU]
+        apply Finset.sum_congr rfl
+        intro a ha
+        rw [hglueValue]
+      _ = (FinProb.pi P).expect F := pi_expect_glue P U F ω₀ hdep
+  have hweight (a : Fin k → Ω) :
+      (FinProb.pi PU).w (ePi.symm a) = (FinProb.pi (fun i : Fin k => P (s i))).w a := by
+    change (∏ v : {i // i ∈ U}, (P v.1).w (ePi.symm a v)) =
+      ∏ i : Fin k, (P (s i)).w (a i)
+    calc
+      (∏ v : {i // i ∈ U}, (P v.1).w (ePi.symm a v)) =
+          ∏ i : Fin k, (P (s i)).w (ePi.symm a (e i)) := by
+        symm
+        exact Fintype.prod_equiv e _ _ (by intro i; rfl)
+      _ = ∏ i : Fin k, (P (s i)).w (a i) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        congr 2
+        exact congrFun (ePi.apply_symm_apply a) i
+  have hsum : (FinProb.pi PU).expect FU =
+      (FinProb.pi (fun i : Fin k => P (s i))).expect g := by
+    unfold FinProb.expect
+    rw [← Equiv.sum_comp ePi.symm (fun a =>
+      (FinProb.pi PU).w a * FU a)]
+    apply Finset.sum_congr rfl
+    intro a ha
+    rw [hweight]
+    congr 1
+    exact congrArg g (ePi.apply_symm_apply a)
+  exact hrestricted.symm.trans hsum
+
+theorem pi_coord_expect_q_s09_tag {ι Ω : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype Ω] (P : ι → FinProb Ω) (v : ι) (f : Ω → ℝ) :
+    (FinProb.pi P).expect (fun ω => f (ω v)) = (P v).expect f := by
+  classical
+  let s : Fin 1 → ι := fun _ => v
+  have hs : Function.Injective s := by
+    intro i j hij
+    exact Subsingleton.elim _ _
+  calc
+    (FinProb.pi P).expect (fun ω => f (ω v)) =
+        (FinProb.pi (fun i : Fin 1 => P (s i))).expect
+          (fun a => f (a ⟨0, by decide⟩)) := by
+      simpa [s] using pi_expect_comp_injective_q_s09_tag P s hs
+        (fun a => f (a ⟨0, by decide⟩))
+    _ = (P v).expect f := by
+      let e : (Fin 1 → Ω) ≃ Ω := Equiv.funUnique (Fin 1) Ω
+      unfold FinProb.expect
+      rw [← Equiv.sum_comp e.symm
+        (fun a => (FinProb.pi (fun i : Fin 1 => P (s i))).w a * f (a ⟨0, by decide⟩))]
+      apply Finset.sum_congr rfl
+      intro x hx
+      simp [e, FinProb.pi, s, Finset.univ_unique]
+
+theorem pi_coord_pr_q_s09_tag {ι Ω : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype Ω] (P : ι → FinProb Ω) (v : ι) (A : Ω → Prop) :
+    (FinProb.pi P).pr (fun ω => A (ω v)) = (P v).pr A := by
+  classical
+  simpa [FinProb.pr, FinProb.expect] using
+    (pi_coord_expect_q_s09_tag P v (fun x => if A x then 1 else 0))
+
+theorem flipWord_ne_q_s09_tag {m : ℕ} (z : CubeVertex m) (j : Fin m) :
+    flipWord9 z j ≠ z := by
+  intro h
+  have hval := congrFun h j
+  simp [flipWord9] at hval
+
+theorem flipWord_injective_q_s09_tag {m : ℕ} (z : CubeVertex m) :
+    Function.Injective (flipWord9 z) := by
+  intro i j hij
+  by_contra hne
+  have hval := congrFun hij i
+  have hne' : i ≠ j := hne
+  simp [flipWord9, hne'] at hval
+
+theorem tag_failure_mass_expect_eq_q_s09_tag {P : Params9} {n N : ℕ} {M : TagMix N}
+    (E : Fin N → Fin N → Prop) (G : Colour) (z : CubeVertex (P.m n)) (threshold : ℝ) :
+    let raw : FinProb (CubeVertex (P.m n) → M.ι) :=
+      FinProb.pi (fun _ : CubeVertex (P.m n) => tagMixLaw9 M)
+    let μbar : Law N := Law.mix (tagMixLaw9 M) M.μ
+    (raw.expect (fun tag => ∑ w,
+      (M.μ (tag z)).w w *
+        (if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0))) =
+      ∑ w, μbar.w w *
+        (FinProb.pi (fun _ : Fin (P.m n) => tagMixLaw9 M)).pr
+          (fun tags => ∑ j : Fin (P.m n),
+            (rowDeg E G w (M.ν (tags j)) - 1 / 2) < -threshold) := by
+  classical
+  let V := CubeVertex (P.m n)
+  let raw : FinProb (V → M.ι) := FinProb.pi (fun _ : V => tagMixLaw9 M)
+  let μbar : Law N := Law.mix (tagMixLaw9 M) M.μ
+  let nbr : Finset V := Finset.univ.image (flipWord9 z)
+  let f (w : Fin N) : (V → M.ι) → ℝ := fun tag => (M.μ (tag z)).w w
+  let g (w : Fin N) : (V → M.ι) → ℝ := fun tag =>
+    if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0
+  have hdis : Disjoint ({z} : Finset V) nbr := by
+    apply Finset.disjoint_left.mpr
+    intro v hvz hvnbr
+    rw [Finset.mem_singleton] at hvz
+    subst v
+    obtain ⟨j, hj, hflip⟩ := Finset.mem_image.mp hvnbr
+    exact (flipWord_ne_q_s09_tag z j) hflip
+  have hdepF (w : Fin N) : FinProb.DependsOn (f w) {z} := by
+    intro tag tag' hagree
+    simp [f, hagree z (by simp)]
+  have hdepG (w : Fin N) : FinProb.DependsOn (g w) nbr := by
+    intro tag tag' hagree
+    have hsurplus :
+        tagSurplus9 (P := P) E G tag z w = tagSurplus9 (P := P) E G tag' z w := by
+      unfold tagSurplus9
+      apply Finset.sum_congr rfl
+      intro j hj
+      rw [hagree (flipWord9 z j)
+        (Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩)]
+    simp [g, hsurplus]
+  have hindep (w : Fin N) :
+      raw.expect (fun tag => f w tag * g w tag) =
+        raw.expect (f w) * raw.expect (g w) := by
+    exact FinProb.pi_expect_mul_of_disjoint
+      (fun _ : V => tagMixLaw9 M) (f w) (g w) {z} nbr
+      (hdepF w) (hdepG w) hdis
+  have hF (w : Fin N) : raw.expect (f w) = μbar.w w := by
+    dsimp [raw, f, μbar]
+    calc
+      (FinProb.pi (fun _ : V => tagMixLaw9 M)).expect
+          (fun tag => (M.μ (tag z)).w w) =
+          (tagMixLaw9 M).expect (fun i => (M.μ i).w w) :=
+        pi_coord_expect_q_s09_tag (fun _ : V => tagMixLaw9 M) z (fun i => (M.μ i).w w)
+      _ = (Law.mix (tagMixLaw9 M) M.μ).w w := rfl
+  have hG (w : Fin N) : raw.expect (g w) =
+      (FinProb.pi (fun _ : Fin (P.m n) => tagMixLaw9 M)).pr
+        (fun tags => ∑ j : Fin (P.m n),
+          (rowDeg E G w (M.ν (tags j)) - 1 / 2) < -threshold) := by
+    let s : Fin (P.m n) → V := fun j => flipWord9 z j
+    have hs : Function.Injective s := flipWord_injective_q_s09_tag z
+    have hcomp := pi_expect_comp_injective_q_s09_tag
+      (fun _ : V => tagMixLaw9 M) s hs
+      (fun tags => if ∑ j : Fin (P.m n),
+        (rowDeg E G w (M.ν (tags j)) - 1 / 2) < -threshold then 1 else 0)
+    simpa [g, s, FinProb.pr, FinProb.expect, tagSurplus9] using hcomp
+  have hsum : raw.expect (fun tag => ∑ w,
+      (M.μ (tag z)).w w * (if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0)) =
+      ∑ w, raw.expect (fun tag => f w tag * g w tag) := by
+    simp only [FinProb.expect]
+    calc
+      (∑ tag, raw.w tag * ∑ w,
+          (M.μ (tag z)).w w *
+            (if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0)) =
+          ∑ tag, ∑ w, raw.w tag *
+            ((M.μ (tag z)).w w *
+              (if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0)) := by
+        apply Finset.sum_congr rfl
+        intro tag htag
+        rw [Finset.mul_sum]
+      _ = ∑ w, ∑ tag, raw.w tag *
+          ((M.μ (tag z)).w w *
+            (if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0)) :=
+        Finset.sum_comm
+      _ = ∑ w, raw.expect (fun tag => f w tag * g w tag) := by
+        apply Finset.sum_congr rfl
+        intro w hw
+        rfl
+  change raw.expect (fun tag => ∑ w,
+    (M.μ (tag z)).w w *
+      (if tagSurplus9 (P := P) E G tag z w < -threshold then 1 else 0)) = _
+  calc
+    _ = ∑ w, raw.expect (fun tag => f w tag * g w tag) := hsum
+    _ = ∑ w, μbar.w w *
+        (FinProb.pi (fun _ : Fin (P.m n) => tagMixLaw9 M)).pr
+          (fun tags => ∑ j : Fin (P.m n),
+            (rowDeg E G w (M.ν (tags j)) - 1 / 2) < -threshold) := by
+      apply Finset.sum_congr rfl
+      intro w hw
+      rw [hindep w, hF w, hG w]
 
 theorem cond_product_tuple_expect_q_s09_tag {V Ω I : Type} [Fintype V] [DecidableEq V]
     [Fintype Ω] [DecidableEq Ω] [Fintype I] [DecidableEq I]

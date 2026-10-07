@@ -668,6 +668,177 @@ theorem lik_bound (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
         Finset.card_le_card hsub
       _ ≤ ((refPool P u).card + 1) ^ (2 * setBd β γ n) :=
         bounded_powerset_card (refPool P u) (setBd β γ n)
+  have row_deleted_bound {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
+      {X Y : Finset (Fin N)} (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι)
+      (ω : Prep M tag) (a : EvenRole n) (c : Loc β γ n)
+      (z : Fin (tupLen β γ n) → Fin N) (y : Fin n → Fin N) (j : Fin n)
+      (hEv : EvLocal M tag (updW ω (c, key β γ n a.1) z) a c) :
+      oddRow M tag (updW ω (c, key β γ n a.1) z) (oddNbr a j) (y j) ≤
+        (refSets (ppos ω) (oddNbr a j) c).card *
+          (ratioThr β γ (oddNbr a j) (key β γ n a.1))⁻¹ *
+            (refRow M tag ω (oddNbr a j) c (key β γ n a.1)).w (y j) := by
+    classical
+    let ω' := updW ω (c, key β γ n a.1) z
+    let u := oddNbr a j
+    let κ := key β γ n a.1
+    let D := selSet M tag ω' u
+    have hOdd : OddOK M tag ω' u := hEv.odd_ok j
+    have hValid : Valid M tag u (paux ω') D := hOdd.2
+    have hneigh : a.1 ∈ oddAdj u := by simpa [u] using even_mem_oddAdj a j
+    have hcD : c ∈ D := by
+      dsimp [D, selSet]
+      apply Finset.mem_biUnion.mpr
+      refine ⟨a.1, hneigh, ?_⟩
+      simp [ω', hEv.sel_eq]
+    have hDsub : D ⊆ refPool (ppos ω) u := by
+      intro d hd
+      have hd' := selectedSet_pool M tag ω' u d hd
+      simpa [D, ω', updW, ppos] using hd'
+    have hDcard : D.card ≤ setBd β γ n := hValid.card_le
+    have hDmem : D ∈ refSets (ppos ω) u c := by
+      change D ∈ (refPool (ppos ω) u).powerset.filter
+        (fun D => c ∈ D ∧ D.card ≤ setBd β γ n)
+      exact Finset.mem_filter.mpr
+        ⟨Finset.mem_powerset.mpr hDsub, ⟨hcD, hDcard⟩⟩
+    have hcount : ∀ v ∈ oddAdj u, ∀ l,
+        (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n := by
+      intro v hv l
+      simpa [u, ω', updW, ppos] using hEv.counts j v hv l
+    have hRef : RefOK M tag ω u c := ⟨hcount, ⟨D, hDmem⟩⟩
+    have hκZ : κ ∈ Zset β γ u := by
+      dsimp [κ, Zset]
+      exact Finset.mem_image.mpr ⟨a.1, hneigh, rfl⟩
+    have hW {d : Loc β γ n} {κ' : Key β γ n}
+        (hne : (d, κ') ≠ (c, κ)) :
+        Function.update (aW (paux ω)) (c, κ) z (d, κ') = aW (paux ω) (d, κ') :=
+      Function.update_of_ne hne z (aW (paux ω))
+    have hbut (x : Fin N) :
+        HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ x =
+          HitsBut E G (aW (paux ω)) D (Zset β γ u) c κ x := by
+      apply propext
+      constructor <;> intro hh d hd κ' hκ' hne l
+      · have hh' := hh d hd κ' hκ' hne l
+        change Hits E G (Function.update (aW (paux ω)) (c, κ) z (d, κ') l) x at hh'
+        rw [hW hne] at hh'
+        exact hh'
+      · have hh' := hh d hd κ' hκ' hne l
+        change Hits E G (aW (paux ω) (d, κ') l) x at hh'
+        rw [← hW hne] at hh'
+        exact hh'
+    have hbutFun :
+        (fun x => HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ x) =
+          fun x => HitsBut E G (aW (paux ω)) D (Zset β γ u) c κ x := funext hbut
+    have hmask : aym (paux ω') u = aym (paux ω) u := rfl
+    let Pbut : ℝ :=
+      (maskLaw (aym (paux ω) u)).pr (HitsBut E G (aW (paux ω)) D (Zset β γ u) c κ)
+    let Rall : ℝ :=
+      (maskLaw (aym (paux ω') u)).pr (HitsAll E G (aW (paux ω')) D (Zset β γ u))
+    have hPbutEq :
+        (maskLaw (aym (paux ω') u)).pr (HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ) = Pbut := by
+      dsimp [Pbut]
+      rw [hmask]
+      exact congrArg (fun Q : Fin N → Prop => (maskLaw (aym (paux ω) u)).pr Q) hbutFun
+    have hRpos : 0 < Rall := lt_of_lt_of_le (Real.exp_pos _) hValid.mass
+    have hAllToBut (x : Fin N) :
+        HitsAll E G (aW (paux ω')) D (Zset β γ u) x →
+          HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ x := by
+      intro h d hd κ' hκ' _ l
+      exact h d hd κ' hκ' l
+    have hRle : Rall ≤
+        (maskLaw (aym (paux ω') u)).pr
+          (HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ) := by
+      exact pr_mono (maskLaw (aym (paux ω') u)) hAllToBut
+    have hPbutPos : 0 < Pbut := by
+      rw [← hPbutEq]
+      exact lt_of_lt_of_le hRpos hRle
+    have hratio :
+        ratioThr β γ u κ * Pbut ≤ Rall := by
+      have hratio' : ratioThr β γ u κ *
+          (maskLaw (aym (paux ω') u)).pr
+            (HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ) ≤ Rall := by
+        simpa [Rall] using hValid.ratio c hcD κ hκZ
+      rw [hPbutEq] at hratio'
+      exact hratio'
+    have hratioPos : 0 < ratioThr β γ u κ := by
+      unfold ratioThr
+      split_ifs <;> exact Real.exp_pos _
+    have hfrac : Pbut / Rall ≤ (ratioThr β γ u κ)⁻¹ := by
+      apply (div_le_iff₀ hRpos).2
+      calc
+        Pbut = (ratioThr β γ u κ)⁻¹ * (ratioThr β γ u κ * Pbut) := by
+          rw [← mul_assoc, inv_mul_cancel₀ hratioPos.ne']
+          ring
+        _ ≤ (ratioThr β γ u κ)⁻¹ * Rall :=
+          mul_le_mul_of_nonneg_left hratio (inv_nonneg.mpr hratioPos.le)
+    have hrowEq : oddRow M tag ω' u (y j) =
+        (if HitsAll E G (aW (paux ω')) D (Zset β γ u) (y j) then
+          (maskLaw (aym (paux ω') u)).w (y j) / Rall else 0) := by
+      by_cases hhit : HitsAll E G (aW (paux ω')) D (Zset β γ u) (y j)
+      · simp [oddRow, oddDraw, ω', u, D, hOdd, Rall, FinProb.cond, hhit]
+      · simp [oddRow, oddDraw, ω', u, D, hOdd, Rall, FinProb.cond, hhit]
+    have hcardPos : 0 < ((refSets (ppos ω) u c).card : ℝ) := by
+      exact_mod_cast (Finset.card_pos.mpr hRef.2)
+    have hdelMix :
+        (delLaw M tag ω u D c κ).w (y j) / ((refSets (ppos ω) u c).card : ℝ) ≤
+          (refRow M tag ω u c κ).w (y j) := by
+      have hunif :
+          (FinProb.uniform (refSets (ppos ω) u c) hRef.2).w D =
+            ((refSets (ppos ω) u c).card : ℝ)⁻¹ := by
+        simp [FinProb.uniform, hDmem]
+      have hmix : ((refSets (ppos ω) u c).card : ℝ)⁻¹ * (delLaw M tag ω u D c κ).w (y j) ≤
+          (refRow M tag ω u c κ).w (y j) := by
+        unfold refRow
+        rw [dif_pos hRef]
+        change _ ≤ ∑ D' ∈ Finset.univ,
+          (FinProb.uniform (refSets (ppos ω) u c) hRef.2).w D' *
+            (delLaw M tag ω u D' c κ).w (y j)
+        rw [← hunif]
+        have hsingle := Finset.single_le_sum
+          (fun D' hD' => mul_nonneg
+            ((FinProb.uniform (refSets (ppos ω) u c) hRef.2).nonneg D')
+            ((delLaw M tag ω u D' c κ).nonneg (y j))) (Finset.mem_univ D)
+        simpa using hsingle
+      simpa [div_eq_mul_inv, mul_comm] using hmix
+    by_cases hHit : HitsAll E G (aW (paux ω')) D (Zset β γ u) (y j)
+    · have hHitBut : HitsBut E G (aW (paux ω')) D (Zset β γ u) c κ (y j) :=
+        hAllToBut (y j) hHit
+      have hHitOld : HitsBut E G (aW (paux ω)) D (Zset β γ u) c κ (y j) := by
+        simpa [hbut (y j)] using hHitBut
+      have hdelEq : (delLaw M tag ω u D c κ).w (y j) =
+          (maskLaw (aym (paux ω) u)).w (y j) / Pbut := by
+        simp [delLaw, Pbut, hPbutPos, hHitOld, FinProb.cond]
+      have hquot :
+          (maskLaw (aym (paux ω') u)).w (y j) / Rall ≤
+            (ratioThr β γ u κ)⁻¹ * (delLaw M tag ω u D c κ).w (y j) := by
+        calc
+          (maskLaw (aym (paux ω') u)).w (y j) / Rall =
+              ((maskLaw (aym (paux ω') u)).w (y j) / Pbut) * (Pbut / Rall) := by
+            field_simp [ne_of_gt hPbutPos, ne_of_gt hRpos]
+            <;> ring
+          _ ≤ ((maskLaw (aym (paux ω') u)).w (y j) / Pbut) *
+              (ratioThr β γ u κ)⁻¹ :=
+            mul_le_mul_of_nonneg_left hfrac
+              (div_nonneg ((maskLaw (aym (paux ω') u)).nonneg _) hPbutPos.le)
+          _ = (ratioThr β γ u κ)⁻¹ * (delLaw M tag ω u D c κ).w (y j) := by
+            rw [hmask, hdelEq]
+            ring
+      rw [hrowEq, if_pos hHit]
+      calc
+        (maskLaw (aym (paux ω') u)).w (y j) / Rall ≤
+            (ratioThr β γ u κ)⁻¹ * (delLaw M tag ω u D c κ).w (y j) := hquot
+        _ ≤ (ratioThr β γ u κ)⁻¹ *
+            ((refSets (ppos ω) u c).card * (refRow M tag ω u c κ).w (y j)) := by
+          simpa [mul_comm] using
+            mul_le_mul_of_nonneg_left
+              ((div_le_iff₀ hcardPos).mp hdelMix)
+              (inv_nonneg.mpr hratioPos.le)
+        _ = (refSets (ppos ω) u c).card * (ratioThr β γ u κ)⁻¹ *
+            (refRow M tag ω u c κ).w (y j) := by ring
+    · rw [hrowEq, if_neg hHit]
+      exact mul_nonneg
+        (mul_nonneg (Nat.cast_nonneg _)
+          (inv_nonneg.mpr hratioPos.le))
+        ((refRow M tag ω u c κ).nonneg (y j))
   sorry
 set_option maxHeartbeats 200000
 

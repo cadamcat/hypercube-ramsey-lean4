@@ -1,5 +1,6 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.S04.GeometryNodes_q_s04_geom
+import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 
 /-!
 # L4.1f: marking, eligibility and geometric success
@@ -10,7 +11,7 @@ of geometric success (`geo_cons`, proved); the three probabilistic nodes bound i
 
 namespace HypercubeRamsey.S04
 
-open Classical OAI.HypercubeRamsey
+open Classical Filter OAI.HypercubeRamsey
 open scoped BigOperators
 
 /-- L4.1f, eligibility (04:325–328): with at least `λ/2` present IDs in every site-level ball and marked families of
@@ -160,7 +161,89 @@ theorem family_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ <
       ∀ (q : XProf M tag) (q' : YProf M tag),
         (prepLaw M tag q q').pr (fun ω => (∀ v l, (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n) ∧
           ∃ (u : OddRole n) (j : Fin (topH β γ n)), n ≤ (marked M tag (ppos ω) (paux ω) u j).card) ≤ 1 / 30 := by
-  sorry
+  classical
+  let ε : ℝ := omega4 β γ / 60
+  let δ : ℝ := 3 * omega4 β γ / 20
+  let C : ℝ := 100 / ε
+  have hωpos := omega4_pos hβ hγ
+  have hδpos : 0 < δ := by dsimp [δ]; positivity
+  have hGrowthTendsto : Tendsto (fun n : ℕ => (n : ℝ) ^ δ) atTop atTop :=
+    (tendsto_rpow_atTop hδpos).comp tendsto_natCast_atTop_atTop
+  have hGrowthEvent : ∀ᶠ n : ℕ in atTop, 2 * C ≤ (n : ℝ) ^ δ :=
+    hGrowthTendsto.eventually_ge_atTop (2 * C)
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hGrowthEvent
+  refine ⟨max 60 n₀, ?_⟩
+  intro n hn N E G X Y M tag hValid q q'
+  have hn60 : 60 ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hn₀' : n₀ ≤ n := le_trans (Nat.le_max_right _ _) hn
+  have hGrowth : 2 * (100 / (omega4 β γ / 60)) ≤ (n : ℝ) ^ (3 * omega4 β γ / 20) := by
+    simpa [C, ε, δ] using hn₀ n hn₀'
+  let p := hd β γ n
+  let F : Pos β γ n → Aux M tag → Prop := fun P a =>
+    (∀ v l, (countAt P v l : ℝ) ≤ 2 * lamH n) ∧
+      ∃ u : OddRole n, ∃ j : Fin (topH β γ n), n ≤ (marked M tag P a u j).card
+  have hauxBound (P : Pos β γ n) :
+      (auxLaw M tag q q').pr (F P) ≤ 1 / 30 := by
+    by_cases hupper : ∀ v l, (countAt P v l : ℝ) ≤ 2 * lamH n
+    · let MaskPair : FinProb (XMasks M tag × YMasks M tag) :=
+        (FinProb.pi q).prod (FinProb.pi q')
+      have hbind : (auxLaw M tag q q').pr (F P) =
+          ∑ ms, MaskPair.w ms *
+            (tupleLaw M tag ms.1).pr (fun W => F P (ms, W)) := by
+        simpa [auxLaw, Aux, MaskPair] using
+          HypercubeRamsey.Lane_q_s04_geom.bind_pr_eq MaskPair (fun ms => tupleLaw M tag ms.1)
+            (fun ms W => F P (ms, W))
+      have hcond (ms : XMasks M tag × YMasks M tag) :
+          (tupleLaw M tag ms.1).pr (fun W => F P (ms, W)) ≤ 1 / 30 := by
+        simpa [F, hupper] using
+          HypercubeRamsey.Lane_q_s04_geom.family_tuple_bound hβ hβγ hγ M tag hValid
+            P ms.1 ms.2 hupper hn60 hGrowth
+      calc
+        (auxLaw M tag q q').pr (F P) =
+            ∑ ms, MaskPair.w ms * (tupleLaw M tag ms.1).pr (fun W => F P (ms, W)) := hbind
+        _ ≤ ∑ ms, MaskPair.w ms * (1 / 30) := by
+          apply Finset.sum_le_sum
+          intro ms hms
+          exact mul_le_mul_of_nonneg_left (hcond ms) (MaskPair.nonneg ms)
+        _ = 1 / 30 := by
+          rw [← Finset.sum_mul, MaskPair.sum_eq_one]
+          ring
+    · have hempty : ∀ a : Aux M tag, ¬ F P a := by
+        intro a h
+        exact hupper h.1
+      have hzero : (auxLaw M tag q q').pr (F P) = 0 := by
+        unfold FinProb.pr
+        simp [hempty]
+      rw [hzero]
+      norm_num
+  have hprodBound :
+      (prepLaw M tag q q').pr (fun ω => F (ppos ω) (paux ω)) ≤ 1 / 30 := by
+    have hprod : (p.posLaw.prod (auxLaw M tag q q')).pr
+        (fun x => F x.1 x.2) ≤ 1 / 30 := by
+      rw [HypercubeRamsey.Lane_q_s04_geom.prod_pr_eq]
+      calc
+        (∑ P, p.posLaw.w P * (auxLaw M tag q q').pr (F P)) ≤
+            ∑ P, p.posLaw.w P * (1 / 30) := by
+          apply Finset.sum_le_sum
+          intro P hP
+          exact mul_le_mul_of_nonneg_left (hauxBound P) (p.posLaw.nonneg P)
+        _ = 1 / 30 := by
+          rw [← Finset.sum_mul, p.posLaw.sum_eq_one]
+          ring
+    have hmargin : (prepLaw M tag q q').pr (fun ω => F (ppos ω) (paux ω)) =
+        (p.posLaw.prod (auxLaw M tag q q')).pr (fun x => F x.1 x.2) := by
+      change (((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).prod p.tieLaw).pr
+        (fun ω => F ω.1.1.1 ω.1.1.2) = _
+      calc
+        _ = ((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).pr
+            (fun x => F x.1.1 x.1.2) :=
+          HypercubeRamsey.Lane_q_s04_geom.pr_prod_fst _ _ _
+        _ = (p.posLaw.prod (auxLaw M tag q q')).pr (fun x => F x.1 x.2) :=
+          HypercubeRamsey.Lane_q_s04_geom.pr_prod_fst
+            (p.posLaw.prod (auxLaw M tag q q')) p.actLaw (fun x => F x.1 x.2)
+    rw [hmargin]
+    exact hprod
+  simpa [F, p, hd] using hprodBound
 
 /-- L4.1f, heights (04:329–331; L3.8f with `Aux` = masks × tuples and `hd_admissible`, `hdRegime`): eligibility
 is defined from positions, masks and tuples before activation, so legal eligibility with bad heights has

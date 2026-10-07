@@ -102,7 +102,7 @@ private theorem pr_exists_finset_le_sum {Ω α : Type*} [Fintype Ω] [DecidableE
       simp [FinProb.pr]
 
 /-- Integrating an event against a bind law. -/
-private theorem bind_pr_eq {α β : Type*} [Fintype α] [Fintype β]
+theorem bind_pr_eq {α β : Type*} [Fintype α] [Fintype β]
     (P : FinProb α) (K : α → FinProb β) (E : α → β → Prop) :
     (FinProb.bind P K).pr (fun ab => E ab.1 ab.2) =
       ∑ a, P.w a * (K a).pr (E a) := by
@@ -121,7 +121,7 @@ private theorem bind_pr_eq {α β : Type*} [Fintype α] [Fintype β]
     _ = P.w a * (K a).pr (E a) := by rfl
 
 /-- Integrating an event against a product law. -/
-private theorem prod_pr_eq {α β : Type*} [Fintype α] [Fintype β]
+theorem prod_pr_eq {α β : Type*} [Fintype α] [Fintype β]
     (P : FinProb α) (Q : FinProb β) (E : α → β → Prop) :
     (FinProb.prod P Q).pr (fun ab => E ab.1 ab.2) =
       ∑ a, P.w a * Q.pr (E a) := by
@@ -872,7 +872,7 @@ private theorem topH_le_pow {β γ : ℝ} (hβ : 0 < β) (hβγ : β ≤ γ) (h�
     _ ≤ n ^ (n + 2) := Nat.pow_le_pow_right (by omega) (Nat.add_le_add_right htargetCeil 2)
 
 /-- Conditional on positions and masks, a large marked family has exponentially small tuple probability. -/
-private theorem family_tuple_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
+theorem family_tuple_bound {β γ : ℝ} {G : Colour} {n N : ℕ}
     {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1)
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι)

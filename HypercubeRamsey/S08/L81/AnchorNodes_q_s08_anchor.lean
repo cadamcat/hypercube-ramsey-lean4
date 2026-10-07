@@ -797,6 +797,240 @@ open Ctx
 
 variable {η₀ β p : ℝ} {h : ℕ} (D : Ctx η₀ β p h)
 
+abbrev CellMove := Sum (Sum (Fin (sC η₀ D.n)) (Fin (sC η₀ D.n))) (Fin (dC η₀ D.n))
+
+def moveCell (c : D.CellT) : CellMove D → D.CellT
+  | .inl (.inl i) =>
+      (Function.update c.1 i
+        ⟨min ((c.1 i).val + 1) (lC D.n), Nat.lt_succ_of_le (min_le_right _ _)⟩, c.2)
+  | .inl (.inr i) =>
+      (Function.update c.1 i ⟨(c.1 i).val - 1, by have hi := (c.1 i).isLt; omega⟩, c.2)
+  | .inr j => (c.1, Function.update c.2 j (Bool.not (c.2 j)))
+
+private theorem keyDist_eq_zero_iff (g e : Key η₀ D.n) : keyDist g e = 0 ↔ g = e := by
+  constructor
+  · intro h
+    have hterm (i : Fin (sC η₀ D.n)) : Nat.dist (g i).val (e i).val = 0 := by
+      have hle : Nat.dist (g i).val (e i).val ≤ keyDist g e := by
+        unfold keyDist
+        exact Finset.single_le_sum
+          (f := fun r : Fin (sC η₀ D.n) => Nat.dist (g r).val (e r).val)
+          (fun r hr => Nat.zero_le _) (Finset.mem_univ i)
+      rw [h] at hle
+      omega
+    funext i
+    apply Fin.ext
+    exact Nat.eq_of_dist_eq_zero (hterm i)
+  · rintro rfl
+    simp [keyDist]
+
+private theorem exists_key_mismatch (g e : Key η₀ D.n) (hpos : 0 < keyDist g e) :
+    ∃ i, g i ≠ e i := by
+  by_contra hne
+  push_neg at hne
+  have heq : g = e := funext hne
+  have : keyDist g e = 0 := (keyDist_eq_zero_iff D g e).2 heq
+  omega
+
+private theorem keyDist_update_eq (g e : Key η₀ D.n) (i : Fin (sC η₀ D.n))
+    (v : Fin (lC D.n + 1)) :
+    keyDist (Function.update g i v) e =
+      (∑ r ∈ Finset.univ.erase i, Nat.dist (g r).val (e r).val) + Nat.dist v.val (e i).val := by
+  unfold keyDist
+  rw [← Finset.sum_erase_add (Finset.univ : Finset (Fin (sC η₀ D.n)))
+    (fun r => Nat.dist (Function.update g i v r).val (e r).val) (Finset.mem_univ i)]
+  congr 1
+  · apply Finset.sum_congr rfl
+    intro r hr
+    have hri : r ≠ i := Finset.ne_of_mem_erase hr
+    simpa [Function.update_of_ne hri]
+  · simp
+
+private theorem keyDist_erase_decomp (g e : Key η₀ D.n) (i : Fin (sC η₀ D.n)) :
+    keyDist g e =
+      (∑ r ∈ Finset.univ.erase i, Nat.dist (g r).val (e r).val) + Nat.dist (g i).val (e i).val := by
+  unfold keyDist
+  rw [← Finset.sum_erase_add (Finset.univ : Finset (Fin (sC η₀ D.n)))
+    (fun r => Nat.dist (g r).val (e r).val) (Finset.mem_univ i)]
+
+private theorem keyDist_step_up (g e : Key η₀ D.n) (i : Fin (sC η₀ D.n))
+    (hlt : (g i).val < (e i).val) :
+    keyDist (Function.update g i
+      ⟨min ((g i).val + 1) (lC D.n), Nat.lt_succ_of_le (min_le_right _ _)⟩) e + 1 =
+        keyDist g e := by
+  have hroom : (g i).val + 1 ≤ lC D.n := by have hi := (e i).isLt; omega
+  let v : Fin (lC D.n + 1) :=
+    ⟨min ((g i).val + 1) (lC D.n), Nat.lt_succ_of_le (min_le_right _ _)⟩
+  have hv : v.val = (g i).val + 1 := by simp [v, Nat.min_eq_left hroom]
+  have hlocal : Nat.dist (g i).val (e i).val = Nat.dist (v.val) (e i).val + 1 := by
+    rw [Nat.dist_eq_sub_of_le (Nat.le_of_lt hlt),
+      Nat.dist_eq_sub_of_le (by rw [hv]; omega)]
+    omega
+  rw [hv] at hlocal
+  have hnew := keyDist_update_eq D g e i v
+  change keyDist (Function.update g i v) e + 1 = keyDist g e
+  rw [hnew, keyDist_erase_decomp D g e i, hv]
+  omega
+
+private theorem keyDist_step_down (g e : Key η₀ D.n) (i : Fin (sC η₀ D.n))
+    (hlt : (e i).val < (g i).val) :
+    keyDist (Function.update g i
+      ⟨(g i).val - 1, by have hi := (g i).isLt; omega⟩) e + 1 = keyDist g e := by
+  let v : Fin (lC D.n + 1) := ⟨(g i).val - 1, by have hi := (g i).isLt; omega⟩
+  have hv : v.val = (g i).val - 1 := rfl
+  have hlocal : Nat.dist (g i).val (e i).val = Nat.dist (v.val) (e i).val + 1 := by
+    rw [Nat.dist_eq_sub_of_le_right (Nat.le_of_lt hlt),
+      Nat.dist_eq_sub_of_le_right (by rw [hv]; omega)]
+    omega
+  rw [hv] at hlocal
+  have hnew := keyDist_update_eq D g e i v
+  change keyDist (Function.update g i v) e + 1 = keyDist g e
+  rw [hnew, keyDist_erase_decomp D g e i, hv]
+  omega
+
+private theorem hammingDist_flip_drop {ι : Type*} [Fintype ι] [DecidableEq ι]
+    (a b : ι → Bool) (j : ι) (hj : a j ≠ b j) :
+    _root_.hammingDist (Function.update a j (Bool.not (a j))) b + 1 = _root_.hammingDist a b := by
+  have hflip : Bool.not (a j) = b j := by cases ha : a j <;> cases hb : b j <;> simp_all
+  have hjmem : j ∈ Finset.univ.filter (fun i : ι => a i ≠ b i) := by simp [hj]
+  have hset :
+      Finset.univ.filter (fun i : ι => (Function.update a j (Bool.not (a j))) i ≠ b i) =
+        (Finset.univ.filter (fun i : ι => a i ≠ b i)).erase j := by
+    ext i
+    by_cases hji : i = j
+    · subst i
+      simp [Function.update_self, hflip]
+    · simp [Function.update_of_ne hji, hji]
+  unfold _root_.hammingDist
+  rw [hset]
+  exact Finset.card_erase_add_one hjmem
+
+private theorem exists_cell_step (c e : D.CellT) (hne : c ≠ e) :
+    ∃ m : CellMove D, cellDist (moveCell D c m) e + 1 = cellDist c e := by
+  have hpos : 0 < cellDist c e := by
+    by_contra hnot
+    have hzero : cellDist c e = 0 := by omega
+    have hzero' : keyDist c.1 e.1 + _root_.hammingDist c.2 e.2 = 0 := by
+      simpa [cellDist] using hzero
+    have hK : keyDist c.1 e.1 = 0 := by omega
+    have hH : _root_.hammingDist c.2 e.2 = 0 := by omega
+    have hkey : c.1 = e.1 := (keyDist_eq_zero_iff D c.1 e.1).mp hK
+    have hres : c.2 = e.2 := _root_.hammingDist_eq_zero.mp hH
+    exact hne (Prod.ext hkey hres)
+  by_cases hKpos : 0 < keyDist c.1 e.1
+  · obtain ⟨i, hi⟩ := exists_key_mismatch D c.1 e.1 hKpos
+    by_cases hup : (c.1 i).val < (e.1 i).val
+    · refine ⟨Sum.inl (Sum.inl i), ?_⟩
+      change keyDist (Function.update c.1 i
+          ⟨min ((c.1 i).val + 1) (lC D.n), Nat.lt_succ_of_le (min_le_right _ _)⟩) e.1 +
+          _root_.hammingDist c.2 e.2 + 1 =
+        keyDist c.1 e.1 + _root_.hammingDist c.2 e.2
+      have hdrop := keyDist_step_up D c.1 e.1 i hup
+      omega
+    · have hval : (c.1 i).val ≠ (e.1 i).val := by
+        intro hval
+        apply hi
+        exact Fin.ext hval
+      have hdown : (e.1 i).val < (c.1 i).val := by omega
+      refine ⟨Sum.inl (Sum.inr i), ?_⟩
+      change keyDist (Function.update c.1 i
+          ⟨(c.1 i).val - 1, by have hx := (c.1 i).isLt; omega⟩) e.1 +
+          _root_.hammingDist c.2 e.2 + 1 =
+        keyDist c.1 e.1 + _root_.hammingDist c.2 e.2
+      have hdrop := keyDist_step_down D c.1 e.1 i hdown
+      omega
+  · have hKzero : keyDist c.1 e.1 = 0 := by omega
+    have hHpos : 0 < _root_.hammingDist c.2 e.2 := by
+      have : 0 < keyDist c.1 e.1 + _root_.hammingDist c.2 e.2 := by simpa [cellDist] using hpos
+      omega
+    have hresNe : c.2 ≠ e.2 := _root_.hammingDist_pos.mp hHpos
+    have hex : ∃ j, c.2 j ≠ e.2 j := by
+      by_contra hnone
+      push_neg at hnone
+      exact hresNe (funext hnone)
+    obtain ⟨j, hj⟩ := hex
+    refine ⟨Sum.inr j, ?_⟩
+    change keyDist c.1 e.1 +
+        _root_.hammingDist (Function.update c.2 j (Bool.not (c.2 j))) e.2 + 1 =
+      keyDist c.1 e.1 + _root_.hammingDist c.2 e.2
+    have hdrop := hammingDist_flip_drop c.2 e.2 j hj
+    omega
+
+private theorem cellDist_eq_zero_iff (c e : D.CellT) : cellDist c e = 0 ↔ c = e := by
+  constructor
+  · intro h
+    have hK : keyDist c.1 e.1 = 0 := by unfold cellDist at h; omega
+    have hH : _root_.hammingDist c.2 e.2 = 0 := by unfold cellDist at h; omega
+    exact Prod.ext ((keyDist_eq_zero_iff D c.1 e.1).mp hK)
+      (_root_.hammingDist_eq_zero.mp hH)
+  · rintro rfl
+    simp [cellDist, keyDist]
+
+def runCellSequence : (k : ℕ) → D.CellT → (Fin k → Option (CellMove D)) → D.CellT
+  | 0, c, _ => c
+  | k + 1, c, f =>
+      runCellSequence k ((f 0).elim c (moveCell D c)) (fun i => f i.succ)
+
+private theorem runCellSequence_none (k : ℕ) (c : D.CellT) :
+    runCellSequence D k c (fun _ => none) = c := by
+  induction k with
+  | zero => rfl
+  | succ k ih => simp [runCellSequence, ih]
+
+private theorem exists_cell_sequence (k : ℕ) (c e : D.CellT)
+    (hde : cellDist c e ≤ k) :
+    ∃ f : Fin k → Option (CellMove D), runCellSequence D k c f = e := by
+  induction k generalizing c e with
+  | zero =>
+      have hzero : cellDist c e = 0 := by omega
+      refine ⟨Fin.elim0, ?_⟩
+      simpa [runCellSequence] using (cellDist_eq_zero_iff D c e).mp hzero
+  | succ k ih =>
+      by_cases hzero : cellDist c e = 0
+      · have heq : c = e := (cellDist_eq_zero_iff D c e).mp hzero
+        refine ⟨fun _ => none, ?_⟩
+        rw [runCellSequence_none]
+        exact heq
+      · have hne : c ≠ e := by
+          intro heq
+          subst e
+          apply hzero
+          simp [cellDist, keyDist]
+        obtain ⟨m, hstep⟩ := exists_cell_step D c e hne
+        have hsmall : cellDist (moveCell D c m) e ≤ k := by omega
+        obtain ⟨tail, htail⟩ := ih (moveCell D c m) e hsmall
+        refine ⟨Fin.cons (some m) tail, ?_⟩
+        simpa [runCellSequence, htail]
+
+theorem cellBall_card_le_four (c : D.CellT) :
+    (cellBall c 4).card ≤ (2 * sC η₀ D.n + dC η₀ D.n + 1) ^ 4 := by
+  classical
+  let Ball : Type := {e : D.CellT // e ∈ cellBall c 4}
+  let encode : Ball → Fin 4 → Option (CellMove D) := fun a =>
+    Classical.choose (exists_cell_sequence D 4 c a.1 (Finset.mem_filter.mp a.2).2)
+  have hrun (a : Ball) : runCellSequence D 4 c (encode a) = a.1 :=
+    Classical.choose_spec (exists_cell_sequence D 4 c a.1 (Finset.mem_filter.mp a.2).2)
+  have hinj : Function.Injective encode := by
+    intro a b hab
+    apply Subtype.ext
+    calc
+      a.1 = runCellSequence D 4 c (encode a) := (hrun a).symm
+      _ = runCellSequence D 4 c (encode b) := by rw [hab]
+      _ = b.1 := hrun b
+  have hcardBall : Fintype.card Ball = (cellBall c 4).card := by
+    simp [Ball, Fintype.card_subtype]
+  have hcardMove : Fintype.card (CellMove D) = 2 * sC η₀ D.n + dC η₀ D.n := by
+    simp [CellMove, Fintype.card_sum, Fintype.card_fin, two_mul]
+  have hcardOption : Fintype.card (Option (CellMove D)) =
+      2 * sC η₀ D.n + dC η₀ D.n + 1 := by simp [hcardMove]
+  have hcardSeq : Fintype.card (Fin 4 → Option (CellMove D)) =
+      (2 * sC η₀ D.n + dC η₀ D.n + 1) ^ 4 := by
+    simp [Fintype.card_fun, hcardOption]
+  calc
+    (cellBall c 4).card = Fintype.card Ball := hcardBall.symm
+    _ ≤ Fintype.card (Fin 4 → Option (CellMove D)) := Fintype.card_le_of_injective encode hinj
+    _ = (2 * sC η₀ D.n + dC η₀ D.n + 1) ^ 4 := hcardSeq
+
 theorem finPerm_of_same_fiber_card {α : Type*} [Fintype α] [DecidableEq α]
     (f g : Fin D.n → α)
     (hf : ∀ a, Fintype.card {j : Fin D.n // f j = a} =

@@ -705,7 +705,7 @@ theorem anchor_lll (hη₀ : 0 < η₀) (hp : 0 < p) (hh : 1 ≤ h) :
         _ = 4 := by norm_num
     have hcard : Dep.card ≤ (cellBall c 4).card := Finset.card_le_card hsubset
     have hball : (cellBall c 4).card ≤ Delta := by
-      sorry
+      simpa [Delta] using Lane_q_s08_anchor.cellBall_card_le_four D c
     exact hcard.trans hball
   have hprob : ∀ c, (FinProb.pi (fun c : D.CellT => D.Usel q c)).pr
       (fun W => D.CellBad q W c) ≤ x * (1 - x) ^ Delta := by

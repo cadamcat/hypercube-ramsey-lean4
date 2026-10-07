@@ -462,6 +462,65 @@ private theorem prefixMass_lower9 {P : Params9} {n N : ℕ} {M : TagMix N}
             rowDeg E G (anc9 ω c) (base.restrict A hmassPrevPos) :=
           mul_le_mul hmassPrev hcurrent (by norm_num) (le_trans (by positivity) hmassPrev)
 
+private theorem orderRegular_prefix_degrees9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (base : Law N) (ord : List I.ID)
+    (hord : orderRegular9 E G ω base ord) (hbstar : P.bStar n ≤ 1 / 200) :
+    ∀ m : ℕ, m ≤ ord.length → ∀ j c', j < m → ord[j]? = some c' →
+      (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c') (prefixLaw9 E G ω base ord j) := by
+  classical
+  intro m
+  induction m with
+  | zero =>
+      intro hm j c' hj hget
+      omega
+  | succ m ih =>
+      intro hm j c' hj hget
+      by_cases hjm : j < m
+      · exact ih (by omega) j c' hjm hget
+      · have hjEq : j = m := by omega
+        subst j
+        have hprev : ∀ l d, l < m → ord[l]? = some d →
+            (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω d) (prefixLaw9 E G ω base ord l) := by
+          intro l d hlt hget'
+          exact ih (by omega) l d hlt hget'
+        have hregular := hord m c' hget hprev
+        have hlow := (abs_le.mp hregular).1
+        have hbstarBound : 2 * P.bStar n ≤ 1 / 100 := by nlinarith
+        linarith
+
+private theorem coreHit_mass_lower_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : StarOdd9 v)
+    (hcore : orderRegular9 E G ω (siteSecond9 S b.1.1) (coreOrder9 I v b.1))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    (49 / 100 : ℝ) ^ coreCount9 I v b.1 ≤
+      ∑ y ∈ coreHitSet9 E G ω v b.1, (siteSecond9 S b.1.1).w y := by
+  classical
+  let ord := coreOrder9 I v b.1
+  have hdegrees := orderRegular_prefix_degrees9 S I E G ω (siteSecond9 S b.1.1)
+    ord hcore hbstar
+  have hlen : ord.length ≤ coreCount9 I v b.1 := by
+    simp [ord, coreOrder9, coreCount9]
+    exact Finset.card_erase_le
+  have hmassLen : (49 / 100 : ℝ) ^ ord.length ≤
+      prefixMass9 E G ω (siteSecond9 S b.1.1) ord ord.length := by
+    exact prefixMass_lower9 S I E G ω (siteSecond9 S b.1.1) ord ord.length le_rfl (hdegrees ord.length le_rfl)
+  have hpow : (49 / 100 : ℝ) ^ coreCount9 I v b.1 ≤ (49 / 100 : ℝ) ^ ord.length :=
+    pow_le_pow_of_le_one (by norm_num) (by norm_num) hlen
+  have hmassEq : prefixMass9 E G ω (siteSecond9 S b.1.1) ord ord.length =
+      ∑ y ∈ coreHitSet9 E G ω v b.1, (siteSecond9 S b.1.1).w y := by
+    unfold prefixMass9
+    change (∑ y ∈ hitSet9 E G ω
+        ((coreIDs9 I v b.1).toList.take ((coreIDs9 I v b.1).toList.length)).toFinset,
+          (siteSecond9 S b.1.1).w y) = _
+    rw [List.take_length]
+    simp [coreHitSet9]
+  calc
+    (49 / 100 : ℝ) ^ coreCount9 I v b.1 ≤ (49 / 100 : ℝ) ^ ord.length := hpow
+    _ ≤ prefixMass9 E G ω (siteSecond9 S b.1.1) ord ord.length := hmassLen
+    _ = ∑ y ∈ coreHitSet9 E G ω v b.1, (siteSecond9 S b.1.1).w y := hmassEq
+
 private theorem exists_badPrefix_of_not_orderRegular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
     (ω : Outcome9 I N) (base : Law N) (ord : List I.ID)

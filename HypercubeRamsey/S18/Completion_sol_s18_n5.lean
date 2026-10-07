@@ -71,7 +71,12 @@ theorem full_of_entering_supported (D : LateData hPT) (hD : D.Spec)
         by_contra hn
         exact (hsampler j).2.1 (Finset.mem_filter.mpr
           ⟨Finset.mem_univ _, b, hg, Or.inr (Or.inr ⟨hR1, hR2, hn⟩)⟩)
-      exact ⟨hg, hR3, (hBroad j b.1 _ _ b.2 hg hR1 hR2).2.1⟩
+      -- Obligation from the `InitialSketchSupport` guard added to `BroadDeletionFacts` (main 1e2cca1): the realized
+      -- side output has its sketch labels in the initial-prior support. Owner: lane sol-s18-n5.
+      have hSupp : InitialSketchSupport D j (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt))
+          (D.pastRows h j j.isLt b) := by
+        sorry
+      exact ⟨hg, hR3, (hBroad j b.1 _ _ b.2 hg hSupp hR1 hR2).2.1⟩
   have hearly := D.early_injective x hpos hperm htyp
   have hearly_reserve : ∀ b : {v : Pos T k // ¬ IsEvenRole v},
       D.earlyLabel h.1 b.1 ∉ PT.tiling.reserveY := by

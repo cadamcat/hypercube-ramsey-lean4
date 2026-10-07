@@ -13,6 +13,7 @@ import HypercubeRamsey.S17.Nodes_sol_s17_pool_mass
 import HypercubeRamsey.S17.Nodes_sol_s17_compat
 import HypercubeRamsey.S17.Nodes_sol_s17_moment
 import HypercubeRamsey.S17.Nodes_q_s17_res2
+import HypercubeRamsey.S17.Nodes_sol_s17_pool_retained
 
 set_option maxHeartbeats 1000000
 
@@ -81,7 +82,41 @@ theorem independentPinnedMassFailure
           (fun ys => D.gateMassFailure v σ
             (D.labelsOfPinnedSample v (T.S.N_pos k) ys)) ≤
           (1 / 2 : ℝ) * Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) := by
-  sorry
+  classical
+  let q₀ := max (Real.log (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ)) 1
+  have hq₀ : Real.log (((⌊(4 : ℝ) ^ (κ.u + 3) / κ.ξ ^ 2⌋₊).succ : ℕ) : ℝ) ≤ q₀ ∧ 1 ≤ q₀ :=
+    ⟨le_max_left _ _, le_max_right _ _⟩
+  have hIndex := Lane_sol_s17_pool.eventually_mass_index_bounds κ hκ T K hK
+  have hGamma := Lane_sol_s17_pool.eventually_retained_gamma κ hκ T K hK q₀
+  have hFalse := Lane_sol_s17_pool.homogeneous_bulk_product_tail κ hκ T hSource.2.1 false 1 (by norm_num)
+  have hTrue := Lane_sol_s17_pool.homogeneous_bulk_product_tail κ hκ T hSource.2.1 true 1 (by norm_num)
+  have hDiscPin := hSource.2.2
+  unfold DeepDisc at hDiscPin
+  filter_upwards [hIndex, hGamma, hFalse, hTrue, hDiscPin] with k hIndex hGamma hFalse hTrue hDiscPin
+  intro PT D hQuant v σ pins fixed hInput
+  have hn1 : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast (by have := hIndex.n_ge; omega : 1 ≤ T.S.n k)
+  have hDisc : TwoBudgetDisc T k ((T.S.n k : ℝ) ^ min κ.xι (κ.xs / 4))
+      (κ.αι * T.S.n k) ((T.S.n k : ℝ) ^ (-1 + κ.ι / 2)) :=
+    S12.TwoBudgetDisc.mono hDiscPin
+      (Real.rpow_le_rpow_of_exponent_le hn1 (min_le_left _ _)) le_rfl le_rfl
+  have hTail : ∀ H : S12.HomogeneousInput κ hκ T k PT.tiling.c 1,
+      (FinLaw.pi fun _ : Fin H.S.d => ListGateContext.lawAsFinLaw H.π).pr
+        (fun ys => Lane_sol_s17_pool.productMass H.S.τ (fun _ x y =>
+          hit (T.S.E k) PT.tiling.c x y / deg (T.S.E k) PT.tiling.c H.π.w x) ys < 2 / 3) ≤
+      (1 - (2 / 3 : ℝ)) ^ (-(κ.u : ℝ)) *
+        ((T.S.n k : ℝ) ^ (-(3 * (κ.R : ℝ))) + 4 ^ (κ.u + 1) * H.gamma) := by
+    cases hc : PT.tiling.c with
+    | false =>
+      intro H
+      exact hFalse H (2 / 3) (by norm_num) (by norm_num)
+    | true =>
+      intro H
+      exact hTrue H (2 / 3) (by norm_num) (by norm_num)
+  exact Lane_sol_s17_pool.fixed_independent_mass hκ D K hK hQuant v hInput.1 σ hInput.2.1.1
+    pins hInput.2.2.1 fixed hInput.2.2.2.1 hInput.2.2.2.2
+    ((T.S.n k : ℝ) ^ min κ.xι (κ.xs / 4)) (κ.αι * T.S.n k)
+    ((T.S.n k : ℝ) ^ (-1 + κ.ι / 2)) hDisc hIndex q₀ hq₀
+    (hGamma PT D hQuant v hInput.1 σ hInput.2.1.1) hTail
 
 /-- L17.1b: cleaned omitted-support failure, including bulk incidences. -/
 theorem independentPinnedSupportFailure
@@ -423,7 +458,25 @@ theorem poolCompatibilityFailure
           D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ →
           μ.pr (D.compatibilityFailure v) ≤ Real.rpow (T.S.n k : ℝ)
             (-((κ.R : ℝ) * initialResamplingRounds T k)) := by
-  sorry
+  have hnT : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hbudgets := hnT.eventually
+    (Lane_sol_s17_compat.eventually_compatibility_budgets κ hκ K hK)
+  filter_upwards [hSource.2.1, hbudgets] with k hd hb
+  rcases hb with ⟨hn, hlog, heSmall, hErr, hRoom, hNumeric⟩
+  intro PT D hQuant v heven μ hμ
+  have herror : 0 ≤ bstar T k := by unfold bstar; positivity
+  have hdisc : TwoBudgetDisc T k (Real.rpow (T.S.n k : ℝ) κ.xs)
+      (κ.α * T.S.n k) (2 * bstar T k) := by
+    simp only [Real.rpow_eq_pow]
+    apply S12.TwoBudgetDisc.mono hd le_rfl le_rfl
+    change bstar T k ≤ 2 * bstar T k
+    linarith
+  apply Lane_sol_s17_compat.fixed_pool_compatibility D K hK hQuant hκ
+    (by exact_mod_cast hn) hlog hdisc
+    (by simpa only [bstar, Real.rpow_eq_pow] using heSmall)
+    (by simpa only [bstar, Real.rpow_eq_pow] using hErr) hRoom
+    (by simpa only [initialResamplingRounds, Real.rpow_eq_pow] using hNumeric) v heven μ hμ
 
 /-- The L17.2b trial moment at fixed pools. -/
 noncomputable def poolTrialMoment
@@ -446,7 +499,56 @@ theorem uniformPoolTrialsMoment
         D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ →
         poolTrialMoment D v μ ≤ 2 * Real.rpow (T.S.n k : ℝ)
           (-((κ.R : ℝ) * initialResamplingRounds T k)) := by
-  sorry
+  classical
+  have hR : 1 ≤ κ.R := by
+    have hP := hκ.P_big.2
+    rw [hκ.Ac_eq] at hP
+    rw [hκ.R_eq]
+    have hp : 1 ≤ κ.P := by omega
+    nlinarith
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 10,
+    Lane_sol_s17_moment.rounds_eventually_le_n T] with k hn hm
+  intro PT D hQuant hEstimate v μ hμ
+  have hnReal : (10 : ℝ) ≤ T.S.n k := by exact_mod_cast hn
+  have hlog : 0 < Real.log (T.S.n k : ℝ) := Real.log_pos (by exact_mod_cast (show 1 < T.S.n k by omega))
+  have hm1 : 1 ≤ initialResamplingRounds T k := Nat.succ_le_of_lt
+    (Nat.ceil_pos.mpr (sq_pos_of_pos hlog))
+  by_cases heven : IsEvenRole v
+  · have hStar : Lane_sol_s17_moment.StarPinnedEstimate D v := by
+      intro pins hsub hcard fixed σ hvalid hmass
+      exact hEstimate v σ pins fixed ⟨heven, hvalid, hsub, hcard, hmass⟩
+    have hodd : ∀ w ∈ D.externalEarly v, ¬ IsEvenRole w := by
+      intro w hw
+      obtain ⟨_, j, _, rfl⟩ := (Finset.mem_filter.mp hw).2
+      have heq : flipPos v j = cubeFlip v j := by
+        funext a
+        by_cases ha : a = j <;> simp [flipPos, cubeFlip, ha]
+      rw [heq]
+      exact fun h => (cubeFlip_parity v j).mp h heven
+    have hL : ∀ w ∈ D.externalEarly v, 0 < D.G.nslot (D.G.cellOf w) := by
+      intro w hw
+      have hslot := Lane_sol_s17_moment.actual_slots_tenth_power D K hQuant hκ
+        (by linarith : 1 ≤ (T.S.n k : ℝ)) (D.G.cellOf w)
+      have hp : 0 < (T.S.n k : ℝ) ^ 10 := by positivity
+      exact_mod_cast (lt_of_lt_of_le hp hslot)
+    have hBins : ∀ C, (Finset.univ : Finset (Bin PT.tiling (D.G.cellPatch C))).Nonempty := by
+      intro C
+      obtain ⟨y, hy⟩ := (D.tiling_valid.tiling_valid.patch_nonempty (D.G.cellPatch C)).2
+      obtain ⟨B, hB, _⟩ := (PT.tiling.P (D.G.cellPatch C)).bins.exists_mem hy
+      exact ⟨⟨B, hB⟩, Finset.mem_univ _⟩
+    exact Lane_sol_s17_moment.perm_trial_moment_bound D K hQuant hκ v heven hStar hnReal hR
+      hodd hL hBins μ hμ (initialResamplingRounds T k) hm1 (Nat.cast_le.mpr hm)
+  · have hzero (pools : D.PoolAssignment) : D.freshEventProbability v pools = 0 := by
+      unfold ListGateContext.freshEventProbability FinLaw.pr
+      apply Finset.sum_eq_zero
+      intro s hs
+      simp [ListGateContext.event, heven]
+    have hmoment : poolTrialMoment D v μ = 0 := by
+      unfold poolTrialMoment
+      simp only [hzero, zero_pow (by omega : initialResamplingRounds T k ≠ 0)]
+      simp [FinLaw.E]
+    rw [hmoment]
+    exact mul_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
 
 /-- L17.2c: Markov assembly; odd roles have identically false list events. -/
 theorem uniformPoolMarkov

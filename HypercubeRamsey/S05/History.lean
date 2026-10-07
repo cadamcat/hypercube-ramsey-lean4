@@ -3,6 +3,7 @@ import HypercubeRamsey.S05.History_q_s05_hist2
 import HypercubeRamsey.S05.History_q_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1c_apply
+import HypercubeRamsey.S05.History_sol_s05_hist1e_bound
 import HypercubeRamsey.S05.History_sol_s05_hist1f_low
 import HypercubeRamsey.S05.History_sol_s05_hist1f_paths
 import HypercubeRamsey.S05.History_q_s05_h5l
@@ -472,7 +473,14 @@ with a constant fixed before `K₁`; high subsets are computed from pools and op
 theorem L5_1e_count : ∃ C : ℝ, 0 < C ∧ ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       X.RecordCount C := by
-  sorry
+  refine ⟨Lane_sol_s05_hist1b.recordCountConstant, Lane_sol_s05_hist1b.recordCountConstant_pos, ?_⟩
+  intro p
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 (Lane_sol_s05_hist1b.record_count_budgets_eventually p)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hp ℓ t j
+  have hb := hn₀ n hn
+  rw [← hp] at hb
+  exact Lane_sol_s05_hist1b.record_group_exp_bound X hb.1 hb.2.1 hb.2.2.1 hb.2.2.2.1 hb.2.2.2.2 ℓ t j
 
 /-! ### Stage 1: the global parent (05:648–664) -/
 

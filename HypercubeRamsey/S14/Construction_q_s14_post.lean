@@ -139,4 +139,47 @@ theorem sum_diagonal_eq_base {α : Type*} [Fintype α]
           intro b hb
           rw [Finset.mul_sum]
 
+theorem expect_bind {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinLaw α) (K : α → FinLaw β) (f : α × β → ℝ) :
+    (FinLaw.bind P K).E f = P.E (fun a => (K a).E (fun b => f (a, b))) := by
+  classical
+  unfold FinLaw.E FinLaw.bind
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a ha
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b hb
+  ring
+
+theorem finLaw_nonempty {α : Type*} [Fintype α] (P : FinLaw α) : Nonempty α := by
+  classical
+  by_contra h
+  letI : IsEmpty α := ⟨fun a => h ⟨a⟩⟩
+  have hsum := P.sum_one
+  simp at hsum
+
+theorem expect_swap {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinLaw α) (Q : FinLaw β) (f : α → β → ℝ) :
+    P.E (fun a => Q.E (fun b => f a b)) =
+      Q.E (fun b => P.E (fun a => f a b)) := by
+  classical
+  unfold FinLaw.E
+  calc
+    _ = ∑ a, ∑ b, P.w a * (Q.w b * f a b) := by
+      apply Finset.sum_congr rfl
+      intro a ha
+      rw [Finset.mul_sum]
+    _ = ∑ b, ∑ a, Q.w b * (P.w a * f a b) := by
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro b hb
+      apply Finset.sum_congr rfl
+      intro a ha
+      ring
+    _ = ∑ b, Q.w b * ∑ a, P.w a * f a b := by
+      apply Finset.sum_congr rfl
+      intro b hb
+      rw [Finset.mul_sum]
+
 end HypercubeRamsey.Lane_q_s14_post

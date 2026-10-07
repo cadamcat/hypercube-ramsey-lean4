@@ -2121,6 +2121,72 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       (r₀ : ℝ) ^ 2 * ((1000 / etaC) * Real.exp ((n : ℝ) / 50) / N) =
           ((r₀ : ℝ) ^ 2 * (1000 / etaC) * Real.exp ((n : ℝ) / 50)) / N := by ring
       _ ≤ 1 / 2 := hBudgetDiv
+  let Sample := Fin r₀ → Fin N
+  let SampleState := HighTags × Sample
+  let GoodSample (q : SampleState) : Prop :=
+    Function.Injective q.2 ∧
+      (∀ j : Fin r₀, q.2 j ∈ selected q.1.1) ∧
+      (∀ j : Fin r₀, q.2 j ∈ Y)
+  have hrowCondPos (i : HighTags) : 0 < (productRow i r₀).pr (Function.Injective ·) := by
+    exact lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 2)
+      (hrowUnique i r₀ hCollisionBudget)
+  let rowCond (i : HighTags) : FinProb Sample :=
+    (productRow i r₀).cond (Function.Injective ·) (hrowCondPos i)
+  let joint : FinProb SampleState := FinProb.bind tagPrior rowCond
+  have hrowCondGood (i : HighTags) (z : Sample) (hz : (rowCond i).w z ≠ 0) :
+      GoodSample (i, z) := by
+    have hInjective : Function.Injective z := by
+      by_contra hnot
+      have hzero : (rowCond i).w z = 0 := by
+        simp [rowCond, FinProb.cond, hnot]
+      exact hz hzero
+    have hraw : (productRow i r₀).w z ≠ 0 := by
+      intro hzero
+      have hcondZero : (rowCond i).w z = 0 := by
+        simp [rowCond, FinProb.cond, hInjective, hzero]
+      exact hz hcondZero
+    have hcoordinateNZ (j : Fin r₀) : (rho i).w (z j) ≠ 0 := by
+      intro hjzero
+      apply hraw
+      change ∏ k : Fin r₀, (rho i).w (z k) = 0
+      exact Finset.prod_eq_zero (Finset.mem_univ j) hjzero
+    refine ⟨hInjective, ?_, ?_⟩
+    · intro j
+      by_contra hnot
+      exact hcoordinateNZ j (hrhoSupport i (z j) hnot)
+    · intro j
+      by_contra hnot
+      exact hcoordinateNZ j (hrhoY i (z j) hnot)
+  have hjointGood (q : SampleState) (hq : joint.w q ≠ 0) : GoodSample q := by
+    rcases q with ⟨i, z⟩
+    have hrow : (rowCond i).w z ≠ 0 := by
+      intro hzero
+      apply hq
+      simp [joint, FinProb.bind, hzero]
+    exact hrowCondGood i z hrow
+  have hcondMarginal (i : HighTags) (j : Fin r₀) (y : Fin N) :
+      (rowCond i).expect (fun z => if z j = y then (1 : ℝ) else 0) ≤
+        2 * (rho i).w y := by
+    let Q := productRow i r₀
+    let f : Sample → ℝ := fun z => if z j = y then 1 else 0
+    have hprob : (1 / 2 : ℝ) ≤ Q.pr Function.Injective := hrowUnique i r₀ hCollisionBudget
+    have hprobPos : 0 < Q.pr Function.Injective := lt_of_lt_of_le (by norm_num) hprob
+    have hInv : (Q.pr Function.Injective)⁻¹ ≤ 2 := by
+      have h := one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 1 / 2) hprob
+      simpa using h
+    have hcond := HypercubeRamsey.S11.Core.q_s11_compat_cond_expect_le
+      Q Function.Injective hprobPos f (by intro z; dsimp [f]; split_ifs <;> positivity)
+    have hcoord : Q.expect f = (rho i).w y := by
+      calc
+        Q.expect f = (rho i).expect (fun a => if a = y then (1 : ℝ) else 0) := by
+          simpa [f] using hcoordinateExpect i r₀ j (fun a => if a = y then (1 : ℝ) else 0)
+        _ = (rho i).w y := HypercubeRamsey.S11.Core.q_s11_compat_expect_single (rho i) y
+    calc
+      (rowCond i).expect f ≤ Q.expect f / Q.pr Function.Injective := hcond
+      _ = (rho i).w y / Q.pr Function.Injective := by rw [hcoord]
+      _ = (rho i).w y * (Q.pr Function.Injective)⁻¹ := by ring
+      _ ≤ (rho i).w y * 2 := mul_le_mul_of_nonneg_left hInv ((rho i).nonneg y)
+      _ = 2 * (rho i).w y := by ring
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

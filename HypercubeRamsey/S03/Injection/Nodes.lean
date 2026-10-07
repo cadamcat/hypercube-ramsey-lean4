@@ -353,18 +353,19 @@ theorem lift_side_data {R : Type*} [Fintype R] [DecidableEq R]
   have hprQ (A : (R → Fin d) → Prop) :
       Q.pr A = (eventFilter A).sum Q.w := by
     simp [FinProb.pr, eventFilter, Finset.sum_filter]
-  have hfilterClassicalQ (A : (R → Fin d) → Prop) :
+  have hfilterClassicalQ (A : (R → Fin d) → Prop) [DecidablePred A] :
       Finset.univ.filter A = eventFilter A := by
     unfold eventFilter
     symm
     exact Finset.filter_congr_decidable Finset.univ A
       (fun x => Classical.propDecidable (A x))
-  have hsumFilterQ (A : (R → Fin d) → Prop) (f : (R → Fin d) → ℝ) :
+  have hsumFilterQ (A : (R → Fin d) → Prop) (f : (R → Fin d) → ℝ) [DecidablePred A] :
       (∑ x, if A x then f x else 0) = (eventFilter A).sum f := by
     calc
       (∑ x, if A x then f x else 0) = (Finset.univ.filter A).sum f := by
         rw [← Finset.sum_filter]
-      _ = (eventFilter A).sum f := by rw [hfilterClassicalQ]
+      _ = (eventFilter A).sum f := by
+        exact congrArg (fun s : Finset (R → Fin d) => s.sum f) (hfilterClassicalQ A)
   have hQcoordLe (x : R → Fin d) (i : R) :
       Q.w x ≤ Q.pr (fun z => z i = x i) := by
     calc
@@ -456,7 +457,7 @@ theorem lift_side_data {R : Type*} [Fintype R] [DecidableEq R]
     let f : ∀ i, Ω i → ℝ := fun i z =>
       if i ∈ S then if z = o i then (K i).w z else 0 else (K i).w z
     have hpiPr : (FinProb.pi K).pr event = outFilter.sum (fun ω => ∏ i, (K i).w (ω i)) := by
-      simp [FinProb.pr, FinProb.pi, outFilter, event, Finset.sum_filter]
+      simp [FinProb.pr, FinProb.pi, outFilter, Finset.sum_filter]
     have hpoint (ω : ∀ i, Ω i) :
         (if event ω then ∏ i, (K i).w (ω i) else 0) =
           ∏ i, f i (ω i) := by
@@ -467,18 +468,17 @@ theorem lift_side_data {R : Type*} [Fintype R] [DecidableEq R]
         by_cases his : i ∈ S
         · simp [f, his, hall i his]
         · simp [f, his]
-      · push_neg at hall
-        rcases hall with ⟨i, hi, hne⟩
-        have hnot : ¬ event ω := by
-          intro h
-          exact hne (h i hi)
+      · have hall' : ¬ ∀ i ∈ S, ω i = o i := by simpa [event] using hall
+        push_neg at hall'
+        rcases hall' with ⟨i, hi, hne⟩
+        have hnot : ¬ event ω := hall
         have hz : f i (ω i) = 0 := by simp [f, hi, hne]
         simp only [if_neg hnot]
         exact (Finset.prod_eq_zero (Finset.mem_univ i) hz).symm
     calc
       (FinProb.pi K).pr (fun ω => ∀ i ∈ S, ω i = o i) =
           outFilter.sum (fun ω => ∏ i, (K i).w (ω i)) := hpiPr
-      _ = ∑ ω, ∏ i, f i (ω i) := by
+      _ = ∑ ω : (∀ i, Ω i), ∏ i, f i (ω i) := by
         rw [(hsumFilterOut (fun ω => ∏ i, (K i).w (ω i))).symm]
         apply Finset.sum_congr rfl
         intro ω hω
@@ -594,8 +594,9 @@ theorem lift_side_data {R : Type*} [Fintype R] [DecidableEq R]
             (eventFilter (fun x => x i = y)).sum Q.w * g y =
                 (eventFilter (fun x => x i = y)).sum (fun x => Q.w x * g y) := by
               rw [Finset.sum_mul]
-            _ = ∑ x : R → Fin d, if x i = y then Q.w x * g y else 0 := by
-              simp [eventFilter, Finset.sum_filter]
+            _ = ∑ x : R → Fin d, if x i = y then Q.w x * g y else 0 :=
+              (hsumFilterQ (fun x : R → Fin d => x i = y)
+                (fun x => Q.w x * g y)).symm
         _ = ∑ x : R → Fin d, ∑ y : Fin d, if x i = y then Q.w x * g y else 0 :=
           Finset.sum_comm
         _ = ∑ x : R → Fin d, Q.w x * g (x i) := by
@@ -718,7 +719,9 @@ theorem lift_side_data {R : Type*} [Fintype R] [DecidableEq R]
                     Q.w x * (∏ i ∈ S, (p i).w (o i) / q i (y i)) else 0) =
                       (eventFilter (fun x => ∀ i ∈ S, x i = y i)).sum
                         (fun x => Q.w x * (∏ i ∈ S, (p i).w (o i) / q i (y i))) :=
-                    hsumFilterQ (fun x => ∀ i ∈ S, x i = y i) _
+                    hsumFilterQ
+                      (fun x : R → Fin d => ∀ i ∈ S, x i = y i)
+                      (fun x : R → Fin d => Q.w x * ∏ i ∈ S, (p i).w (o i) / q i (y i))
                   _ = (eventFilter (fun x => ∀ i ∈ S, x i = y i)).sum Q.w *
                         (∏ i ∈ S, (p i).w (o i) / q i (y i)) :=
                     (Finset.sum_mul _ Q.w (∏ i ∈ S, (p i).w (o i) / q i (y i))).symm
@@ -727,10 +730,10 @@ theorem lift_side_data {R : Type*} [Fintype R] [DecidableEq R]
                   _ = (∏ i ∈ S, (p i).w (o i) / q i (y i)) *
                         Q.pr (fun x => ∀ i ∈ S, x i = y i) := by rw [← hprQ]
       have hprice := hQjoint S y hsize
-      rw [hJformula]
       calc
-        (∏ i ∈ S, (p i).w (o i) / q i (y i)) * Q.pr (fun x => ∀ i ∈ S, x i = y i)
-            ≤ (∏ i ∈ S, (p i).w (o i) / q i (y i)) *
+        J.pr (fun ω => ∀ i ∈ S, ω i = o i) =
+            (∏ i ∈ S, (p i).w (o i) / q i (y i)) * Q.pr (fun x => ∀ i ∈ S, x i = y i) := hJformula
+        _ ≤ (∏ i ∈ S, (p i).w (o i) / q i (y i)) *
                 (Real.exp ((d : ℝ) ^ (-(0.04 : ℝ)) * S.card) * ∏ i ∈ S, q i (y i)) :=
           mul_le_mul_of_nonneg_left hprice hratio
         _ = Real.exp ((d : ℝ) ^ (-(0.04 : ℝ)) * S.card) * ∏ i ∈ S, (p i).w (o i) := by

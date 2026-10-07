@@ -433,6 +433,72 @@ theorem filter_step (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
     _ ≤ massPlus + massMinus := hbadmass
     _ ≤ 2 * small := by linarith [hplus, hminus]
 
+private theorem piCoord_pr {N h : ℕ} (ν : Law N) (hN : 0 < N)
+    (j : Fin h) (B : Fin N → Prop) :
+    (FinProb.pi (fun _ : Fin h => ν)).pr (fun ξ => B (ξ j)) = ν.pr B := by
+  classical
+  let S : Finset (Fin h) := {j}
+  let I := {k : Fin h // k ∈ S}
+  let j₀ : I := ⟨j, by simp [S]⟩
+  letI : Unique I := {
+    default := j₀
+    uniq := by
+      intro k
+      apply Subtype.ext
+      have hk : k.1 = j := Finset.mem_singleton.mp (by simpa [S] using k.2)
+      exact hk
+  }
+  let P : Fin h → FinProb (Fin N) := fun _ => ν
+  let F : (∀ k : Fin h, Fin N) → ℝ := fun ξ => if B (ξ j) then 1 else 0
+  let y₀ : Fin N := ⟨0, by omega⟩
+  have hdep : FinProb.DependsOn F S := by
+    intro ξ ξ' hagree
+    have hj := hagree j (by simp [S])
+    simp [F, hj]
+  have hpi := FinProb.pi_expect_depends P S F (fun _ => y₀) hdep
+  have hpi' :
+      (FinProb.pi P).expect F =
+        (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) := by
+    simpa [P, F, S, j₀, Equiv.piEquivPiSubtypeProd_symm_apply] using hpi
+  have hprExp :
+      (FinProb.pi P).pr (fun ξ => B (ξ j)) = (FinProb.pi P).expect F := by
+    unfold FinProb.pr FinProb.expect
+    apply Finset.sum_congr rfl
+    intro ξ _
+    by_cases hb : B (ξ j) <;> simp [F, hb]
+  let e : (∀ _ : I, Fin N) ≃ Fin N := Equiv.piUnique (fun _ : I => Fin N)
+  have hweight (a : ∀ _ : I, Fin N) :
+      (FinProb.pi (fun _ : I => ν)).w a = ν.w (a j₀) := by
+    change (∏ k : I, ν.w (a k)) = ν.w (a j₀)
+    calc
+      _ = ∏ k : I, ν.w (a j₀) := by
+        apply Finset.prod_congr rfl
+        intro k _
+        rw [show k = j₀ from Subsingleton.elim _ _]
+      _ = ν.w (a j₀) := by simp
+  have hsub :
+      (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) = ν.pr B := by
+    unfold FinProb.expect
+    calc
+      _ = ∑ a : (∀ _ : I, Fin N), ν.w (a j₀) * if B (a j₀) then (1 : ℝ) else 0 := by
+        apply Finset.sum_congr rfl
+        intro a _
+        rw [← hweight a]
+      _ = ∑ y : Fin N, ν.w y * if B y then (1 : ℝ) else 0 := by
+        exact Fintype.sum_equiv e _ _ (by
+          intro a
+          have hj : j₀ = (default : I) := Subsingleton.elim _ _
+          simp [e, hj])
+      _ = ν.pr B := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro y _
+        by_cases hb : B y <;> simp [hb]
+  calc
+    _ = (FinProb.pi P).expect F := hprExp
+    _ = (FinProb.pi (fun _ : I => ν)).expect (fun a => if B (a j₀) then 1 else 0) := hpi'
+    _ = ν.pr B := hsub
+
 /-- L8.1c(G3–G4) (08:90–105): filter the aggregates `μ̄_η = ∫ μ_i dη_g` (on (G1), `N max μ̄_η ≤ 4K e^{hn^β +
 n^{τ/2}}`) and `μ̄_Λ` (`N max ≤ 4K`) successively by the coordinates of the independent cross tuples.  Given a cross
 tuple's latent tag its coordinates are independent with law `ν_i`; after at most `2hs` regular hits the filtered
@@ -506,8 +572,15 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
         C = C * 1 := by ring
         _ ≤ C * t := mul_le_mul_of_nonneg_left htlarge hCpos.le
         _ = t * C := by ring
+    let gap : ℝ := (h : ℝ) * t + 2 * C * t + t - C
+    have hgap : 0 ≤ gap := by
+      dsimp [gap]
+      have hht' : (h : ℝ) ≤ t * (h : ℝ) := by simpa [mul_comm] using hht
+      linarith [hht', hCt, htlarge, hh0, hCpos]
     have hsmall₁ : (h : ℝ) * t + t + C ≤ 2 * ((h : ℝ) + C + 1) * t := by
-      nlinarith [hht, hCt, htlarge, hh0, hCpos]
+      calc
+        _ ≤ (h : ℝ) * t + t + C + gap := by dsimp [gap]; linarith
+        _ = 2 * ((h : ℝ) + C + 1) * t := by dsimp [gap]; ring
     have hsmall : (h : ℝ) * t + t + C ≤ t * t := by
       calc
         _ ≤ 2 * ((h : ℝ) + C + 1) * t := hsmall₁
@@ -605,12 +678,7 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
     have hmix :
         (∑ i, D.postW (Θ g) i * (D.M.μ i).w x) ≤
           Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
-            ∑ i, D.M.Λ i * (D.M.μ i).w x := by
-      calc
-        _ ≤ ∑ i, Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
-              (D.M.Λ i * (D.M.μ i).w x) := htermBound
-        _ = Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
-              ∑ i, D.M.Λ i * (D.M.μ i).w x := hmixFactor
+            ∑ i, D.M.Λ i * (D.M.μ i).w x := htermBound.trans_eq hmixFactor
     have hLamCap : (∑ i, D.M.Λ i * (D.M.μ i).w x) ≤ C / D.N := by
       have hl := hLambdaWidth x
       change (∑ i, D.M.Λ i * (D.M.μ i).w x) ≤ Real.exp (Real.log C) / D.N at hl
@@ -628,7 +696,9 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
             _ = (Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) * C) / D.N := by ring
             _ = (Real.exp ((h : ℝ) * (D.n : ℝ) ^ β + (D.n : ℝ) ^ (tau8 η₀ / 2)) *
                   Real.exp (Real.log C)) / D.N := by rw [hExpC]
-            _ = _ := by rw [← Real.exp_add]
+            _ = _ := by
+              congr 1
+              exact (Real.exp_add _ _).symm
   have etaWidthN (Θ : D.Hist) (h1 : D.Gate1 Θ g) :
       (μEta (Θ g)).WidthLE ((D.n : ℝ) ^ eta8 η₀) :=
     Law.WidthLE.mono (etaWidth Θ h1) hExponentCap
@@ -649,6 +719,121 @@ theorem gate34_tail (hη₀ : 0 < η₀) (hβ₀ : 0 < β) (hβτ : β < tau8 η
     rcases hStd.laws i hΛ with ⟨_, hνsupport, _, hνwidth, _⟩
     exact hFilter D.N D.E X Y D.G (μEta (Θ g)) (D.M.ν i) hStd.disc
       (etaSupport Θ h1) (etaWidthN Θ h1) hνsupport hνwidth
+  have rPrimePrMixture (D : Ctx η₀ β p h) (A : D.Tup → Prop) :
+      D.R'.pr A =
+        ∑ i, D.M.Λ i * (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
+    classical
+    have htag (i : D.M.ι) :
+        (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) =
+          (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
+      unfold FinProb.pr FinProb.pi
+      apply Finset.sum_congr rfl
+      intro ξ _
+      by_cases hA : A ξ <;> simp [hA]
+    unfold FinProb.pr
+    calc
+      _ = ∑ ξ : D.Tup, D.R'.w ξ * (if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        split_ifs <;> ring
+      _ = ∑ ξ : D.Tup,
+            (∑ i, D.M.Λ i * ∏ j, (D.M.ν i).w (ξ j)) *
+              (if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [rPrimeFormula D ξ]
+      _ = ∑ ξ : D.Tup, ∑ i, D.M.Λ i *
+            ((∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro ξ _
+        rw [Finset.sum_mul]
+        apply Finset.sum_congr rfl
+        intro i _
+        ring
+      _ = ∑ i, ∑ ξ : D.Tup, D.M.Λ i *
+            ((∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+        rw [Finset.sum_comm]
+      _ = ∑ i, D.M.Λ i *
+            (∑ ξ : D.Tup, (∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+        apply Finset.sum_congr rfl
+        intro i _
+        calc
+          _ = ∑ ξ, D.M.Λ i *
+                ((∏ j, (D.M.ν i).w (ξ j)) * if A ξ then (1 : ℝ) else 0) := by
+            apply Finset.sum_congr rfl
+            intro ξ _
+            ring
+          _ = _ := by rw [← Finset.mul_sum]
+      _ = ∑ i, D.M.Λ i *
+            (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr A := by
+        apply Finset.sum_congr rfl
+        intro i _
+        rw [htag i]
+  have rawCoordinateBadBound (bad : Fin D.N → Prop) (j : Fin h)
+      (hBad : ∀ i, 0 < D.M.Λ i → (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) :
+      D.R'.pr (fun ξ => bad (ξ j)) ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    rw [rPrimePrMixture]
+    calc
+      _ ≤ ∑ i, D.M.Λ i * (2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) := by
+        apply Finset.sum_le_sum
+        intro i _
+        by_cases hΛ : 0 < D.M.Λ i
+        · have hBadPi :
+              (FinProb.pi (fun _ : Fin h => D.M.ν i)).pr
+                (fun ξ => bad (ξ j)) ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) :=
+            (piCoord_pr (D.M.ν i) hStd.size.1 j bad).trans_le (hBad i hΛ)
+          exact mul_le_mul_of_nonneg_left hBadPi (D.M.Λ_nonneg i)
+        · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
+          simp [hΛ0]
+      _ = 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+        calc
+          _ = (∑ i, D.M.Λ i) * (2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀))) := by
+            rw [← Finset.sum_mul]
+          _ = _ := by rw [D.M.Λ_sum]; ring
+  have hLambdaCoordinate (j : Fin h) :
+      D.R'.pr (fun ξ => 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+        |colDeg D.E D.G μLambda (ξ j) - 1 / 2|) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    let bad : Fin D.N → Prop := fun y =>
+      2 * (D.n : ℝ) ^ (-eta8 η₀) < |colDeg D.E D.G μLambda y - 1 / 2|
+    have hBadTag (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+        (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+      have hsum := hLambdaFilter i hΛ
+      have hprob :
+        (D.M.ν i).pr bad =
+          ∑ y, (D.M.ν i).w y *
+            if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+              |colDeg D.E D.G μLambda y - 1 / 2| then (1 : ℝ) else 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro y _
+        split_ifs <;> ring
+      rw [hprob]
+      exact hsum
+    have hcoord := rawCoordinateBadBound bad j hBadTag
+    simpa [bad] using hcoord
+  have hEtaCoordinate (Θ : D.Hist) (h1 : D.Gate1 Θ g) (j : Fin h) :
+      D.R'.pr (fun ξ => 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+        |colDeg D.E D.G (μEta (Θ g)) (ξ j) - 1 / 2|) ≤
+        2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+    let bad : Fin D.N → Prop := fun y =>
+      2 * (D.n : ℝ) ^ (-eta8 η₀) < |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2|
+    have hBadTag (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+        (D.M.ν i).pr bad ≤ 2 * Real.exp (-((D.n : ℝ) ^ eta8 η₀)) := by
+      have hsum := hEtaFilter Θ h1 i hΛ
+      have hprob :
+        (D.M.ν i).pr bad =
+          ∑ y, (D.M.ν i).w y *
+            if 2 * (D.n : ℝ) ^ (-eta8 η₀) <
+              |colDeg D.E D.G (μEta (Θ g)) y - 1 / 2| then (1 : ℝ) else 0 := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro y _
+        split_ifs <;> ring
+      rw [hprob]
+      exact hsum
+    have hcoord := rawCoordinateBadBound bad j hBadTag
+    simpa [bad] using hcoord
   sorry
 
 private theorem powOneSub_le {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) (h : ℕ) :

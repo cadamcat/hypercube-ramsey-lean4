@@ -597,6 +597,41 @@ private theorem scaleFailure9_forces_bad {P : Params9} {hc : HeightChoice9 P} {n
   have hRk : R ≤ k := hmetric.trans hmax
   omega
 
+private theorem scaleBad9_finite_union_probability {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {c t s : ℝ} (hbase : HeightBase9 P hc n c)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : 1 / 8 ≤ s)
+    (C : Finset (Pos9 P hc n)) (S : Finset (HeightState9 P hc n)) :
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S,
+      scaleBad9 C t s ω.1 ω.2 x) ≤ (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by
+  calc
+    (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ S, scaleBad9 C t s ω.1 ω.2 x) ≤
+        ∑ x ∈ S, (heightLaw9 P hc n).pr (fun ω => scaleBad9 C t s ω.1 ω.2 x) :=
+      finProb_pr_exists_finset_le_sum (heightLaw9 P hc n) S
+        (fun x ω => scaleBad9 C t s ω.1 ω.2 x)
+    _ ≤ ∑ x ∈ S, Real.exp (-((n : ℝ) ^ c)) := by
+      apply Finset.sum_le_sum
+      intro x hx
+      simpa [scaleBad9] using hbase C t s ht₁ ht₂ hs x.1 x.2
+    _ = (S.card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by simp
+
+private theorem scaleFailure9_fixed_start_probability {P : Params9} {hc : HeightChoice9 P}
+    {n : ℕ} {c t s η : ℝ} {R : ℕ}
+    (hbase : HeightBase9 P hc n c)
+    (ht₁ : 1 / 3 ≤ t) (ht₂ : t ≤ 1) (hs : 1 / 8 ≤ s)
+    (hη : 0 ≤ η) (hηhalf : η ≤ 1 / 2) (hR : 0 < R)
+    (C : Finset (Pos9 P hc n)) (start : HeightState9 P hc n) :
+    (heightLaw9 P hc n).pr (fun ω => scaleFailure9 C t s η R ω.1 ω.2 start) ≤
+      ((scaleBall9 start R).card : ℝ) * Real.exp (-((n : ℝ) ^ c)) := by
+  calc
+    (heightLaw9 P hc n).pr (fun ω => scaleFailure9 C t s η R ω.1 ω.2 start) ≤
+        (heightLaw9 P hc n).pr (fun ω => ∃ x ∈ scaleBall9 start R,
+          scaleBad9 C t s ω.1 ω.2 x) := by
+            apply finProb_pr_mono (heightLaw9 P hc n)
+            intro ω hω
+            exact scaleFailure9_forces_bad hω hη hηhalf hR
+    _ ≤ ((scaleBall9 start R).card : ℝ) * Real.exp (-((n : ℝ) ^ c)) :=
+      scaleBad9_finite_union_probability hbase ht₁ ht₂ hs C (scaleBall9 start R)
+
 private theorem reach_level_le_for_path9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (vq : CubeVertex n) (R : ℕ)
     {v : CubeVertex n} {j : ℕ}

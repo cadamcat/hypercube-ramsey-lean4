@@ -333,6 +333,16 @@ theorem eventually_two_pow_tail (A : ℝ) (hA : 0 < A) :
       _ ≤ (1 / 8800) * (n : ℝ) ^ (-A) := hmul
   nlinarith
 
+theorem weight_le_pr {α : Type*} [Fintype α] (P : FinProb α) (A : α → Prop)
+    (x : α) (hA : A x) : P.w x ≤ P.pr A := by
+  classical
+  unfold FinProb.pr
+  have hx : x ∈ Finset.univ.filter A := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hA⟩
+  calc
+    P.w x ≤ ∑ y ∈ Finset.univ.filter A, P.w y :=
+      Finset.single_le_sum (fun y hy => P.nonneg y) hx
+    _ = ∑ y, if A y then P.w y else 0 := by rw [Finset.sum_filter]
+
 theorem prefix_ratio_le_exp {n ell N : ℕ} (hell : 2 * ell ≤ n)
     (hN : (2 : ℝ) ^ n ≤ N) :
     (2 : ℝ) ^ ell / N ≤ Real.exp (-(Real.log 2 / 2) * (n : ℝ)) := by
@@ -475,7 +485,7 @@ theorem directRowMass_dependsOn {κ : CConsts} {T : Stage} {k : ℕ}
 
 theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
-    [∀ i, Nonempty (Ω i)] (P : FinProb (∀ i, Ω i)) (laws : ∀ i, FinProb (Ω i))
+    (hΩ : ∀ i, Nonempty (Ω i)) (P : FinProb (∀ i, Ω i)) (laws : ∀ i, FinProb (Ω i))
     (S : Finset ι) (F : (∀ i, Ω i) → ℝ) (α : ℝ)
     (hF : ∀ ω, 0 ≤ F ω)
     (hdep : FinProb.DependsOn F S)
@@ -485,7 +495,7 @@ theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
   classical
   let e := Equiv.piEquivPiSubtypeProd (fun i : ι => i ∈ S) Ω
   let proj : (∀ i, Ω i) → (∀ i : {i // i ∈ S}, Ω i.1) := fun ω i => ω i.1
-  let outside : ∀ i : {i // i ∉ S}, Ω i.1 := fun i => Classical.choice (inferInstance)
+  let outside : ∀ i : {i // i ∉ S}, Ω i.1 := fun i => Classical.choice (hΩ i.1)
   let Fsub : (∀ i : {i // i ∈ S}, Ω i.1) → ℝ := fun a => F (e.symm (a, outside))
   let Psub : FinProb (∀ i : {i // i ∈ S}, Ω i.1) := FinProb.map P proj
   let Qsub : FinProb (∀ i : {i // i ∈ S}, Ω i.1) :=
@@ -509,7 +519,7 @@ theorem expect_le_of_cylinder {ι : Type*} [Fintype ι] [DecidableEq ι]
       _ = Psub.expect Fsub := (FinProb.map_expect P proj Fsub).symm
   have hrawexpect : (FinProb.pi laws).expect F = Qsub.expect Fsub := by
     exact FinProb.pi_expect_depends laws S F
-      (fun i => Classical.choice (inferInstance)) hdep
+      (fun i => Classical.choice (hΩ i)) hdep
   have hPsubWeight (a : ∀ i : {i // i ∈ S}, Ω i.1) :
       Psub.w a = P.pr (fun ω => ∀ i (hi : i ∈ S), ω i = a ⟨i, hi⟩) := by
     unfold Psub FinProb.map FinProb.pr

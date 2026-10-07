@@ -25,6 +25,7 @@ import HypercubeRamsey.S18.Current_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
+import HypercubeRamsey.S18.Nodes_q_s18_n2
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -410,7 +411,67 @@ theorem L18_1 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
 theorem L18_2b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X := by
-  sorry
+  have hcount := Lane_q_s18_n2.critical_count_field hκ T
+  have hnReal : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hlogT : Tendsto (fun k => Real.log (T.S.n k : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp hnReal
+  have hlogLarge : ∀ᶠ k in atTop, 4 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop 4
+  have hA0 : 0 ≤ κ.A0 := by
+    have hR : 0 ≤ (κ.R : ℝ) := Nat.cast_nonneg _
+    exact le_trans (by positivity) hκ.A0_big
+  have hlogMargin : ∀ᶠ k in atTop, 8 * κ.A0 + 10 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop (8 * κ.A0 + 10)
+  have hmargin : ∀ᶠ k in atTop, (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
+    filter_upwards [hlogLarge] with k hk
+    have hpow : (4 : ℝ) ^ 3 ≤ Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
+    norm_num at hpow
+    linarith
+  filter_upwards [hcount, hmargin, hlogMargin] with k hcount hmargin hlogMargin
+  intro PT hPT D hD X
+  have hlogTwo : (1 / 2 : ℝ) ≤ Real.log 2 := by
+    linarith [Real.log_two_gt_d9]
+  have hrBound : (D.geom.r : ℝ) ≤ 4 * κ.A0 * Real.log (T.S.n k : ℝ) := by
+    have hrnonneg : 0 ≤ (D.geom.r : ℝ) := Nat.cast_nonneg _
+    nlinarith [D.l16_valid.r_upper]
+  have hcoef : 8 * κ.A0 ≤ Real.log (T.S.n k : ℝ) := by linarith
+  have hlogLargeEnough : 2 ≤ Real.log (T.S.n k : ℝ) := by linarith
+  have hmarginReal :
+      2 * (D.geom.r : ℝ) + 4 ≤ Real.log (T.S.n k : ℝ) ^ 3 := by
+    have hprod : 8 * κ.A0 * Real.log (T.S.n k : ℝ) ≤
+        Real.log (T.S.n k : ℝ) ^ 2 := by
+      calc
+        8 * κ.A0 * Real.log (T.S.n k : ℝ) ≤
+            Real.log (T.S.n k : ℝ) * Real.log (T.S.n k : ℝ) :=
+          mul_le_mul_of_nonneg_right hcoef (by linarith)
+        _ = Real.log (T.S.n k : ℝ) ^ 2 := by ring
+    have hfour : (4 : ℝ) ≤ Real.log (T.S.n k : ℝ) ^ 2 := by nlinarith
+    have hsum : 8 * κ.A0 * Real.log (T.S.n k : ℝ) + 4 ≤
+        2 * Real.log (T.S.n k : ℝ) ^ 2 := by linarith
+    have hcube : 2 * Real.log (T.S.n k : ℝ) ^ 2 ≤
+        Real.log (T.S.n k : ℝ) ^ 3 := by nlinarith
+    have hr : 2 * (D.geom.r : ℝ) + 4 ≤
+        8 * κ.A0 * Real.log (T.S.n k : ℝ) + 4 := by nlinarith [hrBound]
+    exact hr.trans (hsum.trans hcube)
+  have hmarginNat : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3 := by
+    exact_mod_cast hmarginReal
+  refine {
+    critical_count := hcount PT hPT D hD X
+    distinct_cells := ?_
+    predecessor_radius := ?_
+    erased_internal := Lane_q_s18_n2.erased_internal_field D X
+    block_size := ?_
+    one_block := by
+      intro w hw
+      exact Lane_q_s18_n2.one_block_field (D := D) (X := X) hmarginNat w hw }
+  · intro a ha b hb hcell
+    exact Lane_q_s18_n2.bulkCoord_eq_of_cellEq (D := D) (X := X) hmargin
+      (Finset.mem_filter.mp ha).1 (Finset.mem_filter.mp hb).1 hcell
+  · intro b hb
+    exact Lane_q_s18_n2.predecessor_radius (D := D) (X := X) b hb
+  · intro a
+    exact Lane_q_s18_n2.block_size (D := D) (X := X) a
 
 /-- L18.2d/e/g, 18:338–453. Perform path deletion and integrate erased
 sketches before fixing independent seeds; construct a total local protocol. -/
@@ -425,7 +486,55 @@ theorem L18_2h {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
       ∀ P : TransferProtocol X, ReplyRangeBound P := by
-  sorry
+  classical
+  have hnReal : Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hlogT : Tendsto (fun k => Real.log (T.S.n k : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp hnReal
+  have hlogEventually : ∀ᶠ k in atTop, 2 ≤ Real.log (T.S.n k : ℝ) :=
+    hlogT.eventually_ge_atTop 2
+  have hratioN : Tendsto (fun n : ℕ =>
+      Real.log (n : ℝ) ^ 28 / Real.rpow (n : ℝ) (3 / 20 : ℝ)) atTop (nhds 0) := by
+    simpa [Function.comp_def] using
+      (((isLittleO_log_rpow_rpow_atTop (28 : ℝ)
+        (by norm_num : (0 : ℝ) < 3 / 20)).tendsto_div_nhds_zero).comp
+          tendsto_natCast_atTop_atTop)
+  have hsmallEventually : ∀ᶠ k in atTop,
+      Real.log (T.S.n k : ℝ) ^ 28 /
+        Real.rpow (T.S.n k : ℝ) (3 / 20 : ℝ) < 1 / 1000 :=
+    hratioN.comp T.S.n_tendsto |>.eventually
+      (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1 / 1000))
+  have hNEventually : ∀ᶠ k in atTop, 1 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hlogEventually, hsmallEventually, hNEventually] with k hL hsmall hN
+  intro PT hPT D hD X P
+  have hn : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast hN
+  have hlogCube : (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
+    have hcube : (2 : ℝ) ^ 3 ≤ Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
+    norm_num at hcube
+    linarith
+  have hnum := Lane_q_s18_n2.protocol_code_exponential_bound P hn hL hsmall
+  intro seed a fixed
+  have hcount := Lane_q_s18_n2.replyRange_card_le_codeCard P seed a fixed hlogCube
+  have hcountR :
+      ((((Finset.univ : Finset (CriticalTransferData.Raw X)).filter
+        (fun s => ∀ C, C ∉ X.blockCells a → s C = fixed C)).image
+        (fun s => P.replies seed s P.steps)).card : ℝ) ≤
+        ((⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ + 1 : ℕ) : ℝ) *
+          ((Fintype.card (Fin P.steps × P.Reply) + 1 : ℕ) : ℝ) ^
+            ⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ := by
+    exact_mod_cast hcount
+  have hcode :
+      ((⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ + 1 : ℕ) : ℝ) *
+          ((Fintype.card (Fin P.steps × P.Reply) + 1 : ℕ) : ℝ) ^
+            ⌈Real.log (T.S.n k : ℝ) ^ 20⌉₊ ≤
+        Real.exp (Real.rpow (T.S.n k : ℝ) (2 / 5 : ℝ)) := by
+    simpa using hnum
+  change (((Finset.univ : Finset X.Raw).filter
+      (fun s => ∀ C, C ∉ X.blockCells a → s C = fixed C)).image
+      (fun s => P.replies seed s P.steps)).card ≤
+        Real.exp (Real.rpow (T.S.n k : ℝ) 0.4)
+  exact hcountR.trans (by simpa only [show (2 / 5 : ℝ) = 0.4 by norm_num] using hcode)
 
 /-- L18.2a/i and 18:472–490, 630–645. Positive whole-cell survival and
 both surviving-witness second moments. -/

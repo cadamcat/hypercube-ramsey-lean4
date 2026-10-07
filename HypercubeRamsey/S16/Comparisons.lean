@@ -1,4 +1,5 @@
 import HypercubeRamsey.S16.Calibrations
+import HypercubeRamsey.S16.Comparisons_q_s16_comp1
 
 /-! Section 16 pool/history estimates and comparisons of the constructed
 sampling pipeline. Every reference experiment shares its primitive kernels
@@ -102,7 +103,7 @@ structure LoadGateHypotheses {Slot Bin Hist Check : Type*}
   contribution : (Slot → Bin) → ∀ s, Value s → D.LoadColumn → ℝ
   range : Slice → ℝ
   range_nonneg : ∀ s, 0 ≤ range s
-  contribution_range : ∀ pool s z y, 0 ≤ contribution pool s z y ∧ contribution pool s z y ≤ range s
+  contribution_range : ∀ pool, D.typical pool → ∀ s z y, 0 ≤ contribution pool s z y ∧ contribution pool s z y ≤ range s
   load_eq : ∀ pool z y, D.loadValue pool (encode z) y = ∑ s, contribution pool s (z s) y
   threshold_pos : 0 < D.loadThreshold
   mean_small : ∀ pool, D.typical pool → ∀ y,
@@ -215,7 +216,225 @@ theorem history_load_gate_concentration {Slot Bin Hist Check : Type*}
         ∃ hgate : 0 < ∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h,
           (FinLaw.cond (D.historyLaw pool) (Finset.univ.filter (D.loadGate pool)) hgate).E F ≤
             (1 - Real.exp (-(n : ℝ) ^ c0))⁻¹ * (D.historyLaw pool).E F := by
-  sorry
+  classical
+  intro pool hpool
+  letI : Fintype hD.Slice := hD.sliceFin
+  letI : DecidableEq hD.Slice := hD.sliceDec
+  letI : ∀ s, Fintype (hD.Value s) := hD.valueFin
+  let sliceLaw := hD.sliceLaw pool
+  let poolLaw := FinLaw.pi sliceLaw
+  let poolMass : (∀ s : hD.Slice, hD.Value s) → ℝ := fun z => ∏ s, (sliceLaw s).w (z s)
+  let loadFn (y : D.LoadColumn) (z : ∀ s : hD.Slice, hD.Value s) : ℝ :=
+    ∑ s, hD.contribution pool s (z s) y
+  let M : ℝ := max 1 (Fintype.card D.LoadColumn : ℝ)
+  let ε : ℝ := Real.exp (-(n : ℝ) ^ c0)
+  have hMpos : 0 < M := by dsimp [M]; positivity
+  have hMcard : (Fintype.card D.LoadColumn : ℝ) ≤ M := by
+    dsimp [M]
+    exact le_max_right _ _
+  have hp (s : hD.Slice) (z : hD.Value s) : 0 ≤ (sliceLaw s).w z :=
+    (sliceLaw s).nonneg z
+  have hone (s : hD.Slice) : ∑ z, (sliceLaw s).w z = 1 := (sliceLaw s).sum_one
+  have hfail_map :
+      (D.historyLaw pool).pr (fun h => ¬ D.loadGate pool h) =
+        poolLaw.pr (fun z => ∃ y, D.loadThreshold < loadFn y z) := by
+    rw [hD.history_eq pool, HypercubeRamsey.Lane_q_s16_comp1.finlaw_map_pr]
+    congr 1
+    funext z
+    simp [CellPoolDiagnostics.loadGate, loadFn, hD.load_eq]
+  have hmean (y : D.LoadColumn) :
+      HypercubeRamsey.Lane_q_s16_comp1.finiteExpectation poolMass (loadFn y) ≤
+        D.loadThreshold / 2 := by
+    have hm := hD.mean_small pool hpool y
+    rw [hD.history_eq pool] at hm
+    rw [HypercubeRamsey.Lane_q_s16_comp1.finlaw_map_E] at hm
+    simpa [FinLaw.E, FinLaw.pi, HypercubeRamsey.Lane_q_s16_comp1.finiteExpectation,
+      HypercubeRamsey.Lane_q_s16_comp1.dependentProductMass, poolMass, loadFn, hD.load_eq] using hm
+  have hLip (y : D.LoadColumn) :
+      ∀ s : hD.Slice, ∀ x x', (∀ t, t ≠ s → x t = x' t) →
+        |loadFn y x - loadFn y x'| ≤ hD.range s := by
+    intro s x x' hxy
+    calc
+      |loadFn y x - loadFn y x'| =
+          |∑ t, (hD.contribution pool t (x t) y - hD.contribution pool t (x' t) y)| := by
+            simp only [loadFn]
+            rw [← Finset.sum_sub_distrib]
+      _ ≤ ∑ t, |hD.contribution pool t (x t) y - hD.contribution pool t (x' t) y| :=
+        Finset.abs_sum_le_sum_abs _ _
+      _ ≤ ∑ t, if t = s then hD.range s else 0 := by
+        apply Finset.sum_le_sum
+        intro t _
+        by_cases hts : t = s
+        · subst t
+          have hx := hD.contribution_range pool hpool s (x s) y
+          have hx' := hD.contribution_range pool hpool s (x' s) y
+          have hd : |hD.contribution pool s (x s) y - hD.contribution pool s (x' s) y| ≤ hD.range s :=
+            abs_le.mpr ⟨by linarith [hx.1, hx'.2], by linarith [hx.2, hx'.1]⟩
+          simpa using hd
+        · have heq := hxy t hts
+          simp [hts, heq]
+      _ = hD.range s := by simp [Finset.sum_ite_eq']
+  have hcolumn (y : D.LoadColumn) :
+      poolLaw.pr (fun z => D.loadThreshold < loadFn y z) ≤ ε / M := by
+    rcases hD.variance_budget with hzero | ⟨hvar, hbudget⟩
+    · have hrangeZero (s : hD.Slice) : hD.range s = 0 := by
+        have hs := Finset.single_le_sum (f := fun t => hD.range t ^ 2)
+          (fun t _ => sq_nonneg (hD.range t)) (Finset.mem_univ s)
+        rw [hzero] at hs
+        have hn := hD.range_nonneg s
+        nlinarith
+      have hcontributionZero (s : hD.Slice) (z : hD.Value s) :
+          hD.contribution pool s z y = 0 := by
+        have hr := hD.contribution_range pool hpool s z y
+        rw [hrangeZero s] at hr
+        exact le_antisymm hr.2 hr.1
+      have hloadZero (z : ∀ s : hD.Slice, hD.Value s) : loadFn y z = 0 := by
+        simp [loadFn, hcontributionZero]
+      have hfalse (z : ∀ s : hD.Slice, hD.Value s) : ¬ D.loadThreshold < loadFn y z := by
+        rw [hloadZero z]
+        linarith [hD.threshold_pos]
+      have hzeroPr : poolLaw.pr (fun z => D.loadThreshold < loadFn y z) = 0 := by
+        unfold FinLaw.pr
+        simp [hfalse]
+      rw [hzeroPr]
+      exact div_nonneg (Real.exp_pos _).le hMpos.le
+    · let a : ℝ := D.loadThreshold / 2
+      have ha : 0 < a := by dsimp [a]; linarith [hD.threshold_pos]
+      have htail := HypercubeRamsey.Lane_q_s16_comp1.weighted_product_tail_dep
+        (fun s z => (sliceLaw s).w z)
+        (fun s z => (sliceLaw s).nonneg z)
+        (fun s => (sliceLaw s).sum_one) (loadFn y) hD.range (hLip y) ha hvar
+      have hsub (z : ∀ s : hD.Slice, hD.Value s) :
+          D.loadThreshold < loadFn y z →
+            a < loadFn y z - HypercubeRamsey.Lane_q_s16_comp1.finiteExpectation poolMass (loadFn y) := by
+        intro hz
+        dsimp [a]
+        linarith [hmean y]
+      have hmono := HypercubeRamsey.Lane_q_s16_comp1.finiteProbability_mono
+        poolMass (fun z => Finset.prod_nonneg fun s _ => hp s (z s)) hsub
+      have hcompare : poolLaw.pr (fun z => D.loadThreshold < loadFn y z) ≤
+          HypercubeRamsey.Lane_q_s16_comp1.finiteProbability poolMass
+            (fun z => a < loadFn y z -
+              HypercubeRamsey.Lane_q_s16_comp1.finiteExpectation poolMass (loadFn y)) := by
+        simpa [poolLaw, poolMass, FinLaw.pr, FinLaw.pi,
+          HypercubeRamsey.Lane_q_s16_comp1.finiteProbability,
+          HypercubeRamsey.Lane_q_s16_comp1.dependentProductMass] using hmono
+      have hExpBudget :
+          Real.exp (-2 * a ^ 2 / (∑ s, hD.range s ^ 2)) ≤ ε / M := by
+        calc
+          _ ≤ Real.exp (-((n : ℝ) ^ c0 + Real.log M)) := by
+            apply Real.exp_le_exp.mpr
+            have hneg := neg_le_neg hbudget
+            have hexp : -2 * a ^ 2 / (∑ s, hD.range s ^ 2) =
+                -(2 * (D.loadThreshold / 2) ^ 2 / (∑ s, hD.range s ^ 2)) := by
+              dsimp [a]
+              ring
+            rw [hexp]
+            simpa [M] using hneg
+          _ = ε / M := by
+            dsimp [ε]
+            rw [neg_add, Real.exp_add]
+            have hlog : Real.exp (-Real.log M) = M⁻¹ := by
+              rw [Real.exp_neg, Real.exp_log hMpos]
+            rw [hlog]
+            ring
+      exact hcompare.trans (htail.trans hExpBudget)
+  have hfail : (D.historyLaw pool).pr (fun h => ¬ D.loadGate pool h) ≤ ε := by
+    rw [hfail_map]
+    calc
+      _ ≤ ∑ y, poolLaw.pr (fun z => D.loadThreshold < loadFn y z) :=
+        HypercubeRamsey.Lane_q_s16_comp1.finlaw_union_le poolLaw _
+      _ ≤ ∑ _y : D.LoadColumn, ε / M :=
+        Finset.sum_le_sum fun y _ => hcolumn y
+      _ = (Fintype.card D.LoadColumn : ℝ) * (ε / M) := by simp
+      _ ≤ ε := by
+        have hratio : (Fintype.card D.LoadColumn : ℝ) / M ≤ 1 :=
+          (div_le_one hMpos).2 hMcard
+        calc
+          _ = ε * ((Fintype.card D.LoadColumn : ℝ) / M) := by ring
+          _ ≤ ε * 1 := mul_le_mul_of_nonneg_left hratio (Real.exp_pos _).le
+          _ = ε := by ring
+  have hnpos : (0 : ℝ) < n := by exact_mod_cast (lt_of_lt_of_le (by norm_num : 0 < 2) hD.n_large)
+  have hrpow : 0 < (n : ℝ) ^ c0 := Real.rpow_pos_of_pos hnpos c0
+  have hεlt : ε < 1 := by
+    dsimp [ε]
+    exact Real.exp_lt_one_iff.mpr (by linarith)
+  have hgood :
+      (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h) =
+        ∑ h, if D.loadGate pool h then (D.historyLaw pool).w h else 0 := by
+    rw [Finset.sum_filter]
+  have hgate :
+      (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h) +
+        (D.historyLaw pool).pr (fun h => ¬ D.loadGate pool h) = 1 := by
+    rw [hgood, FinLaw.pr, ← Finset.sum_add_distrib]
+    calc
+      _ = ∑ h, (D.historyLaw pool).w h := by
+        apply Finset.sum_congr rfl
+        intro h _
+        by_cases hh : D.loadGate pool h <;> simp [hh]
+      _ = 1 := (D.historyLaw pool).sum_one
+  have hgatepos : 0 < ∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h := by
+    linarith [hgate, hfail, hεlt]
+  refine ⟨hfail, ?_⟩
+  intro F hF
+  refine ⟨hgatepos, ?_⟩
+  have hnum :
+      (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h * F h) ≤
+        (D.historyLaw pool).E F := by
+    calc
+      _ ≤ ∑ h, (D.historyLaw pool).w h * F h :=
+        Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) (by
+          intro h _ _
+          exact mul_nonneg ((D.historyLaw pool).nonneg h) (hF h))
+      _ = _ := rfl
+  have hEpos : 0 ≤ (D.historyLaw pool).E F :=
+    Finset.sum_nonneg fun h _ => mul_nonneg ((D.historyLaw pool).nonneg h) (hF h)
+  have hfilterF :
+      (∑ h, if h ∈ Finset.univ.filter (D.loadGate pool) then
+        (D.historyLaw pool).w h * F h else 0) =
+        ∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h * F h := by
+    rw [← Finset.sum_filter]
+    simp
+  have hcond :
+      (FinLaw.cond (D.historyLaw pool)
+          (Finset.univ.filter (D.loadGate pool)) hgatepos).E F =
+        (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h * F h) /
+          ∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h := by
+    unfold FinLaw.E FinLaw.cond
+    calc
+      _ = ∑ h,
+          ((if h ∈ Finset.univ.filter (D.loadGate pool) then
+              (D.historyLaw pool).w h else 0) * F h) /
+            (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h) := by
+        apply Finset.sum_congr rfl
+        intro h _
+        by_cases hh : h ∈ Finset.univ.filter (D.loadGate pool) <;> simp [hh] <;> ring
+      _ = ∑ h,
+          ((if h ∈ Finset.univ.filter (D.loadGate pool) then
+              (D.historyLaw pool).w h * F h else 0) /
+            (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h)) := by
+        apply Finset.sum_congr rfl
+        intro h _
+        by_cases hh : h ∈ Finset.univ.filter (D.loadGate pool) <;> simp [hh] <;> ring
+      _ = (∑ h, if h ∈ Finset.univ.filter (D.loadGate pool) then
+            (D.historyLaw pool).w h * F h else 0) /
+            (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h) := by
+        rw [Finset.sum_div]
+      _ = _ := by rw [hfilterF]
+  have hdenLower : 1 - ε ≤
+      ∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h := by
+    linarith [hgate, hfail]
+  have hEden : 0 < 1 - ε := by linarith [hεlt]
+  calc
+    _ = (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h * F h) /
+          (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h) := hcond
+    _ ≤ (D.historyLaw pool).E F /
+          (∑ h ∈ Finset.univ.filter (D.loadGate pool), (D.historyLaw pool).w h) :=
+      div_le_div_of_nonneg_right hnum hgatepos.le
+    _ ≤ (D.historyLaw pool).E F / (1 - ε) :=
+      div_le_div_of_nonneg_left hEpos hEden hdenLower
+    _ = (1 - ε)⁻¹ * (D.historyLaw pool).E F := by ring
+
 
 /-- The analytic iid certificate plus actual permutation-pool conclusions.
 The pin remains in the global pool experiment, even when it is in another cell. -/

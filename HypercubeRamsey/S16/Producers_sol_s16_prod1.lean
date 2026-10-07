@@ -3578,7 +3578,7 @@ theorem deterministic_history_load_gate {Slot Bin Hist Check : Type*}
     rw [huniv, Finset.sum_singleton] at hweight
     rw [heq, hweight]
     simp only [FinLaw.map, if_true, FinLaw.sum_one]
-  · intro pool s z y
+  · intro pool _ s z y
     exact ⟨div_nonneg (hrange pool h0 y).1 hM.le,
       div_le_div_of_nonneg_right (hrange pool h0 y).2 hM.le⟩
   · intro pool z y
@@ -3701,13 +3701,12 @@ theorem independent_sum_variance {I : Type*} [Fintype I] [DecidableEq I]
           nlinarith only [mul_nonneg ha hb]
         _ = _ := finLaw_E_const P _
 
-/-- A necessary consequence of the frozen gate contract, including on
-noninjective and otherwise atypical pools. -/
+/-- A variance consequence of the repaired gate contract at a typical pool. -/
 theorem load_gate_global_variance_bound {Slot Bin Hist Check : Type*}
     [Fintype Slot] [DecidableEq Slot] [Fintype Bin] [DecidableEq Bin]
     [Fintype Hist] [Fintype Check] {n : ℕ} {c0 : ℝ}
     (D : CellPoolDiagnostics Slot Bin Hist Check n c0) (H : LoadGateHypotheses D)
-    (pool : Slot → Bin) (y : D.LoadColumn) :
+    (pool : Slot → Bin) (hpool : D.typical pool) (y : D.LoadColumn) :
     ((n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))) *
       (D.historyLaw pool).E (fun h => (D.loadValue pool h y -
         (D.historyLaw pool).E (fun h => D.loadValue pool h y)) ^ 2) ≤
@@ -3728,7 +3727,7 @@ theorem load_gate_global_variance_bound {Slot Bin Hist Check : Type*}
     simp_rw [H.load_eq pool]
     rw [← H.history_eq pool, hMean]
     exact independent_sum_variance (H.sliceLaw pool) (fun s z => H.contribution pool s z y)
-      H.range H.range_nonneg (fun s z => H.contribution_range pool s z y)
+      H.range H.range_nonneg (fun s z => H.contribution_range pool hpool s z y)
   let A := (n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))
   have hA : 0 ≤ A := add_nonneg (Real.rpow_nonneg (Nat.cast_nonneg _) _)
     (Real.log_nonneg (le_max_left _ _))

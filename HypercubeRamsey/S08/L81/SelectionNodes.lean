@@ -14,6 +14,7 @@ namespace HypercubeRamsey.S08
 open HypercubeRamsey.Lane_q_s08_sel
 open Classical OAI.HypercubeRamsey
 open scoped BigOperators
+set_option maxHeartbeats 1000000
 
 section Nodes
 
@@ -109,7 +110,397 @@ theorem sel_local (D : Ctx η₀ β p h) : D.SelLocal := by
 theorem pos_tail (hη₀ : 0 < η₀) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n →
       D.preLaw.pr (fun q => ¬ D.PosOK q.1.2) ≤ Real.exp (-(D.n : ℝ)) := by
-  sorry
+  obtain ⟨hσpos, hσζ, hζ1, _, _⟩ := (hd_admissible η₀ hη₀).hsz
+  have hζpos : 0 < zetaH η₀ := lt_trans hσpos hσζ
+  have hσ1 : sigmaH η₀ < 1 := lt_trans hσζ hζ1
+  let a : ℝ := 1 - zetaH η₀
+  have ha : 0 < a := by dsimp [a]; linarith
+  let cVol : ℝ := (6 : ℝ) ^ 20 * (Nat.factorial 20 : ℝ)
+  have hpowTendsto : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (10 : ℝ))
+      Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 10)).comp
+      tendsto_natCast_atTop_atTop
+  have hVolEventually : ∀ᶠ n : ℕ in Filter.atTop, cVol ≤ (n : ℝ) ^ (10 : ℝ) :=
+    hpowTendsto.eventually (Filter.eventually_ge_atTop cVol)
+  obtain ⟨nVol, hVol⟩ := Filter.eventually_atTop.1 hVolEventually
+  let cLog : ℝ := ((4 / a) ^ 2)
+  have hlogTendsto : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (a / 2))
+      Filter.atTop Filter.atTop :=
+    (_root_.tendsto_rpow_atTop (by linarith : (0 : ℝ) < a / 2)).comp
+      tendsto_natCast_atTop_atTop
+  have hLogEventually : ∀ᶠ n : ℕ in Filter.atTop, cLog ≤ (n : ℝ) ^ (a / 2) :=
+    hlogTendsto.eventually (Filter.eventually_ge_atTop cLog)
+  obtain ⟨nLog, hLog⟩ := Filter.eventually_atTop.1 hLogEventually
+  refine ⟨max 8000 (max nVol nLog), ?_⟩
+  intro D hn hGF
+  have hn8000 : 8000 ≤ D.n := by omega
+  have hnVol : nVol ≤ D.n := by omega
+  have hnLog : nLog ≤ D.n := by omega
+  have hn1 : 1 ≤ D.n := le_trans (by decide : 1 ≤ 8000) hn8000
+  have hn2 : 2 ≤ D.n := by omega
+  have hnR : (1 : ℝ) ≤ (D.n : ℝ) := by exact_mod_cast hn1
+  have hnR2 : (2 : ℝ) ≤ (D.n : ℝ) := by exact_mod_cast hn2
+  have hpowD : cVol ≤ (D.n : ℝ) ^ (10 : ℝ) := hVol D.n hnVol
+  have hlogPow : cLog ≤ (D.n : ℝ) ^ (a / 2) := hLog D.n hnLog
+  have hlogNonneg : 0 ≤ Real.log (D.n : ℝ) := Real.log_nonneg hnR
+  have hlogBound : Real.log (D.n : ℝ) ≤
+      ((D.n : ℝ) ^ (a / 4)) / (a / 4) :=
+    Real.log_natCast_le_rpow_div D.n (by linarith)
+  have hlogSq : (Real.log (D.n : ℝ)) ^ 2 ≤ (D.n : ℝ) ^ a := by
+    have hsq : (Real.log (D.n : ℝ)) ^ 2 ≤
+        (((D.n : ℝ) ^ (a / 4)) / (a / 4)) ^ 2 :=
+          (sq_le_sq₀ hlogNonneg (by positivity)).2 hlogBound
+    calc
+      (Real.log (D.n : ℝ)) ^ 2 ≤
+          (((D.n : ℝ) ^ (a / 4)) / (a / 4)) ^ 2 := hsq
+      _ = cLog * (D.n : ℝ) ^ (a / 2) := by
+        dsimp [cLog]
+        calc
+          (((D.n : ℝ) ^ (a / 4)) / (a / 4)) ^ 2 =
+              ((D.n : ℝ) ^ (a / 4)) ^ 2 / (a / 4) ^ 2 := by rw [div_pow]
+          _ = ((4 / a) ^ 2) * (D.n : ℝ) ^ (a / 2) := by
+            have hpow : ((D.n : ℝ) ^ (a / 4)) ^ 2 = (D.n : ℝ) ^ (a / 2) := by
+              calc
+                ((D.n : ℝ) ^ (a / 4)) ^ 2 =
+                    ((D.n : ℝ) ^ (a / 4)) ^ (2 : ℝ) :=
+                      (Real.rpow_natCast ((D.n : ℝ) ^ (a / 4)) 2).symm
+                _ = (D.n : ℝ) ^ ((a / 4) * 2) :=
+                      (Real.rpow_mul (x := (D.n : ℝ)) (by positivity) (a / 4) 2).symm
+                _ = (D.n : ℝ) ^ (a / 2) := by congr 1 <;> ring
+            rw [hpow]
+            have heps : (a / 4) ≠ 0 := ne_of_gt (by linarith)
+            field_simp [heps]
+      _ ≤ (D.n : ℝ) ^ (a / 2) * (D.n : ℝ) ^ (a / 2) :=
+        mul_le_mul_of_nonneg_right hlogPow (Real.rpow_nonneg (by positivity) _)
+      _ = (D.n : ℝ) ^ a := by
+        rw [← Real.rpow_add (by positivity : (0 : ℝ) < (D.n : ℝ))]
+        congr 1 <;> ring
+  have hceilLog :
+      ⌈Real.log (D.n : ℝ) ^ 2⌉₊ ≤ ⌈(D.n : ℝ) ^ a⌉₊ :=
+    Nat.ceil_le.mpr (hlogSq.trans (Nat.le_ceil ((D.n : ℝ) ^ a)))
+  have hpowOne : (1 : ℝ) ≤ (D.n : ℝ) ^ a :=
+    Real.one_le_rpow hnR (by linarith)
+  have hceilOne : 1 ≤ ⌈(D.n : ℝ) ^ a⌉₊ := by
+    exact_mod_cast (le_trans hpowOne (Nat.le_ceil ((D.n : ℝ) ^ a)))
+  have hR0 : max 1 ⌈Real.log (D.n : ℝ) ^ 2⌉₊ ≤ ⌈(D.n : ℝ) ^ a⌉₊ :=
+    max_le hceilOne hceilLog
+  have htop := topScale_le_mul_target (D.n) (sigmaH η₀) (zetaH η₀)
+    (by simpa [a] using hR0)
+  have hpowσ : (D.n : ℝ) ^ sigmaH η₀ ≤ (D.n : ℝ) :=
+    by simpa using Real.rpow_le_rpow_of_exponent_le hnR hσ1.le
+  have hpowTarget : (D.n : ℝ) ^ a ≤ (D.n : ℝ) :=
+    calc
+      (D.n : ℝ) ^ a ≤ (D.n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR (by dsimp [a]; linarith [hζpos])
+      _ = (D.n : ℝ) := Real.rpow_one _
+  have hceilσ : ⌈(D.n : ℝ) ^ sigmaH η₀⌉₊ ≤ D.n := Nat.ceil_le.mpr hpowσ
+  have hceilTarget : ⌈(D.n : ℝ) ^ a⌉₊ ≤ D.n := Nat.ceil_le.mpr hpowTarget
+  have hM : max 2 ⌈(D.n : ℝ) ^ sigmaH η₀⌉₊ ≤ D.n := max_le (by omega) hceilσ
+  have hHH : HH η₀ D.n ≤ D.n ^ 2 := by
+    dsimp [HH]
+    calc
+      topScale D.n (sigmaH η₀) (zetaH η₀) ≤
+          (max 2 ⌈(D.n : ℝ) ^ sigmaH η₀⌉₊) * ⌈(D.n : ℝ) ^ a⌉₊ := by
+            simpa [a] using htop
+      _ ≤ D.n * D.n := Nat.mul_le_mul hM hceilTarget
+      _ = D.n ^ 2 := by ring
+  have hHplus : (HH η₀ D.n + 1 : ℝ) ≤ 2 * (D.n : ℝ) ^ 2 := by
+    have hNat : HH η₀ D.n + 1 ≤ 2 * D.n ^ 2 := by
+      have hH' : HH η₀ D.n + 1 ≤ D.n ^ 2 + 1 := Nat.add_le_add_right hHH 1
+      have hsq : 1 ≤ D.n ^ 2 := Nat.one_le_pow 2 D.n hn1
+      omega
+    exact_mod_cast hNat
+  let pH := hdP η₀ D.n
+  have hdimLow : (1 / 2 : ℝ) * (D.n : ℝ) ≤ (dC η₀ D.n : ℝ) := hGF.hd_ok.2.1
+  have hdimHigh : (dC η₀ D.n : ℝ) ≤ (1 : ℝ) * D.n := hGF.hd_ok.2.2
+  have hsplit := hGF.split
+  have hmle : mC η₀ D.n ≤ D.n := by omega
+  have hnR8000 : (8000 : ℝ) ≤ (D.n : ℝ) := by exact_mod_cast hn8000
+  have hd40 : 40 ≤ dC η₀ D.n := by
+    have hr : (40 : ℝ) ≤ (dC η₀ D.n : ℝ) := by nlinarith [hdimLow, hnR8000]
+    exact_mod_cast hr
+  have hlinear : (1 / 200 : ℝ) * (dC η₀ D.n : ℝ) ≤ (rH D.n : ℝ) := by
+    simpa [hdRegime, HDRegime.ok] using hGF.hd_ok.1.1
+  have hr20 : 20 ≤ rH D.n := by
+    have hr : (20 : ℝ) ≤ (rH D.n : ℝ) := by nlinarith [hlinear, hdimLow, hnR8000]
+    exact_mod_cast hr
+  have hchoose := choose20_lower hd40
+  have hchooseLower :
+      ((D.n : ℝ) / 6) ^ 20 / (Nat.factorial 20 : ℝ) ≤
+        (Nat.choose (dC η₀ D.n) 20 : ℝ) := by
+    have hbase : (D.n : ℝ) / 6 ≤ (dC η₀ D.n : ℝ) / 3 := by nlinarith [hdimLow]
+    calc
+      ((D.n : ℝ) / 6) ^ 20 / (Nat.factorial 20 : ℝ) ≤
+          ((dC η₀ D.n : ℝ) / 3) ^ 20 / (Nat.factorial 20 : ℝ) := by
+            exact div_le_div_of_nonneg_right
+              (pow_le_pow_left₀ (by positivity) hbase 20) (by positivity)
+      _ ≤ (Nat.choose (dC η₀ D.n) 20 : ℝ) := by
+        convert hchoose using 1 <;> field_simp <;> ring
+  have hpowLower : (D.n : ℝ) ^ (10 : ℝ) ≤
+      ((D.n : ℝ) / 6) ^ 20 / (Nat.factorial 20 : ℝ) := by
+    have hmul : (D.n : ℝ) ^ (10 : ℝ) * cVol ≤ (D.n : ℝ) ^ (20 : ℝ) := by
+      calc
+        (D.n : ℝ) ^ (10 : ℝ) * cVol ≤
+            (D.n : ℝ) ^ (10 : ℝ) * (D.n : ℝ) ^ (10 : ℝ) :=
+              mul_le_mul_of_nonneg_left hpowD (Real.rpow_nonneg (by positivity) _)
+        _ = (D.n : ℝ) ^ (20 : ℝ) := by
+              rw [← Real.rpow_add (by positivity : (0 : ℝ) < (D.n : ℝ))]
+              congr 1 <;> ring
+    have heq : ((D.n : ℝ) / 6) ^ 20 / (Nat.factorial 20 : ℝ) =
+        (D.n : ℝ) ^ (20 : ℝ) / cVol := by
+      dsimp [cVol]
+      rw [div_pow]
+      field_simp
+      exact (Real.rpow_natCast (D.n : ℝ) 20).symm
+    rw [heq]
+    exact (le_div_iff₀ (by positivity : 0 < cVol)).2 (by simpa [mul_comm] using hmul)
+  have hVlower : (D.n : ℝ) ^ (10 : ℝ) ≤ (pH.V : ℝ) := by
+    have hsum : (Nat.choose (dC η₀ D.n) 20 : ℝ) ≤
+        ∑ j ∈ Finset.range (rH D.n + 1), (Nat.choose (dC η₀ D.n) j : ℝ) := by
+      calc
+        (Nat.choose (dC η₀ D.n) 20 : ℝ) =
+            ∑ j ∈ ({20} : Finset ℕ), (Nat.choose (dC η₀ D.n) j : ℝ) := by simp
+        _ ≤ ∑ j ∈ Finset.range (rH D.n + 1),
+            (Nat.choose (dC η₀ D.n) j : ℝ) :=
+          Finset.sum_le_sum_of_subset_of_nonneg
+            (Finset.singleton_subset_iff.mpr
+              (Finset.mem_range.mpr (Nat.lt_succ_of_le hr20)))
+            (by intro j hj hnot; positivity)
+    calc
+      _ ≤ (Nat.choose (dC η₀ D.n) 20 : ℝ) := hpowLower.trans hchooseLower
+      _ ≤ _ := hsum
+      _ = (pH.V : ℝ) := by simp [pH, HDParams.V, hdP]
+  have hVNat : 0 < pH.V := by
+    have hnpositive : (0 : ℝ) < (D.n : ℝ) ^ (10 : ℝ) := Real.rpow_pos_of_pos (by exact_mod_cast (by omega : 0 < D.n)) _
+    exact_mod_cast lt_of_lt_of_le hnpositive hVlower
+  have hVReal : (0 : ℝ) < (pH.V : ℝ) := by exact_mod_cast hVNat
+  have hlam : 0 < pH.lam := by simp [pH, hdP]; positivity
+  have hprob : pH.lam / (pH.V : ℝ) ≤ 1 := by
+    apply (div_le_one hVReal).2
+    simpa [pH, hdP] using hVlower
+  have hr : pH.r ≤ pH.d := by
+    have hr4 : 4 * rH D.n ≤ dC η₀ D.n := by
+      simpa [hdRegime, HDRegime.ok] using hGF.hd_ok.1.2
+    dsimp [pH, hdP]
+    omega
+  let SliceBad : (pH.Loc → Bool) → Prop := fun P =>
+    ∃ b : CubeVertex pH.d, ∃ j : Fin (pH.H + 1),
+      let count := (Finset.univ.filter fun u : CubeVertex pH.d =>
+        P (u, j) = true ∧ _root_.hammingDist u b ≤ pH.r).card
+      (count : ℝ) < pH.lam / 2 ∨ 2 * pH.lam < (count : ℝ)
+  have hSliceTail : pH.posLaw.pr SliceBad ≤
+      2 * ((Finset.univ : Finset (CubeVertex pH.d)).card : ℝ) *
+        ((pH.H + 1 : ℕ) : ℝ) * Real.exp (-pH.lam / 12) := by
+    have hcounts := _root_.HypercubeRamsey.height_position_counts pH
+      (Finset.univ : Finset (CubeVertex pH.d)) hlam hVNat hr hprob
+    simpa [SliceBad] using hcounts
+  have hMarg (g : D.KeyT) :
+      D.posLaw.pr (fun P => SliceBad (P g)) = pH.posLaw.pr SliceBad := by
+    calc
+      D.posLaw.pr (fun P => SliceBad (P g)) =
+          D.posLaw.expect (prIndicator (fun P => SliceBad (P g))) :=
+            pr_eq_expect_indicator D.posLaw (fun P => SliceBad (P g))
+      _ = pH.posLaw.expect (prIndicator SliceBad) := by
+            calc
+              D.posLaw.expect (prIndicator (fun P => SliceBad (P g))) =
+                  D.posLaw.expect (fun P => prIndicator SliceBad (P g)) := by
+                    congr 1
+              _ = pH.posLaw.expect (prIndicator SliceBad) := by
+                    simpa [Ctx.posLaw, pH] using
+                      pi_expect_coordinate pH.posLaw g (prIndicator SliceBad)
+      _ = pH.posLaw.pr SliceBad := (pr_eq_expect_indicator pH.posLaw SliceBad).symm
+  have hEvent (P : D.Pos) : ¬ D.PosOK P ↔ ∃ g, SliceBad (P g) := by
+    unfold Ctx.PosOK
+    constructor
+    · intro h
+      push_neg at h
+      rcases h with ⟨g, b, j, hfail⟩
+      refine ⟨g, b, j, ?_⟩
+      dsimp [SliceBad]
+      by_cases hlow : pH.lam / 2 ≤ (D.ballCount P g b j : ℝ)
+      · right
+        simpa [Ctx.ballCount, pH] using hfail hlow
+      · left
+        simpa [Ctx.ballCount, pH] using (lt_of_not_ge hlow)
+    · rintro ⟨g, b, j, hfail⟩ hOK
+      have hAt := hOK g b j
+      dsimp [SliceBad] at hfail
+      rcases hfail with hlow | hhigh
+      · have hlow' : (D.ballCount P g b j : ℝ) < pH.lam / 2 := by
+          simpa [Ctx.ballCount, pH] using hlow
+        exact (not_lt_of_ge hAt.1) hlow'
+      · have hhigh' : 2 * pH.lam < (D.ballCount P g b j : ℝ) := by
+          simpa [Ctx.ballCount, pH] using hhigh
+        exact (not_lt_of_ge hAt.2) hhigh'
+  have hUnion : D.posLaw.pr (fun P => ¬ D.PosOK P) ≤
+      (Fintype.card D.KeyT : ℝ) *
+        (2 * ((Finset.univ : Finset (CubeVertex pH.d)).card : ℝ) *
+          ((pH.H + 1 : ℕ) : ℝ) * Real.exp (-pH.lam / 12)) := by
+    have heq : (fun P => ¬ D.PosOK P) = (fun P => ∃ g, SliceBad (P g)) := by
+      funext P
+      exact propext (hEvent P)
+    rw [heq]
+    calc
+      _ ≤ ∑ g : D.KeyT, D.posLaw.pr (fun P => SliceBad (P g)) :=
+        pr_exists_le_sum D.posLaw (fun g P => SliceBad (P g))
+      _ ≤ ∑ _g : D.KeyT,
+          2 * ((Finset.univ : Finset (CubeVertex pH.d)).card : ℝ) *
+            ((pH.H + 1 : ℕ) : ℝ) * Real.exp (-pH.lam / 12) :=
+            Finset.sum_le_sum fun g hg => by
+              calc
+                D.posLaw.pr (fun P => SliceBad (P g)) = pH.posLaw.pr SliceBad := hMarg g
+                _ ≤ _ := hSliceTail
+      _ = _ := by simp [Finset.sum_const, nsmul_eq_mul]
+  have hPrePos : D.preLaw.pr (fun q => ¬ D.PosOK q.1.2) =
+      D.posLaw.pr (fun P => ¬ D.PosOK P) := by
+    calc
+      _ = D.preLaw.expect (fun q => prIndicator (fun q => ¬ D.PosOK q.1.2) q) :=
+        pr_eq_expect_indicator D.preLaw (fun q => ¬ D.PosOK q.1.2)
+      _ = D.posLaw.expect (prIndicator (fun P => ¬ D.PosOK P)) :=
+        preLaw_expect_pos D (prIndicator (fun P => ¬ D.PosOK P))
+      _ = _ := (pr_eq_expect_indicator D.posLaw (fun P => ¬ D.PosOK P)).symm
+  have hKeyCard : (Fintype.card D.KeyT : ℝ) ≤ (2 : ℝ) ^ D.n := by
+    have hCard : Fintype.card D.KeyT = (lC D.n + 1) ^ sC η₀ D.n := by
+      simp [Ctx.KeyT, Key]
+    have hl : lC D.n + 1 ≤ 2 ^ lC D.n := by
+      simpa using Nat.choose_succ_le_two_pow (lC D.n) 1
+    have hNat : Fintype.card D.KeyT ≤ 2 ^ D.n := by
+      rw [hCard]
+      calc
+        (lC D.n + 1) ^ sC η₀ D.n ≤ (2 ^ lC D.n) ^ sC η₀ D.n :=
+          Nat.pow_le_pow_left hl _
+        _ = 2 ^ (lC D.n * sC η₀ D.n) := by rw [Nat.pow_mul]
+        _ = 2 ^ mC η₀ D.n := by simp [mC, Nat.mul_comm]
+        _ ≤ 2 ^ D.n := Nat.pow_le_pow_right (by decide) hmle
+    exact_mod_cast hNat
+  have hSiteCard :
+      ((Finset.univ : Finset (CubeVertex pH.d)).card : ℝ) ≤ (2 : ℝ) ^ D.n := by
+    have hdimNat : dC η₀ D.n ≤ D.n := by
+      unfold dC
+      omega
+    have hcard : Fintype.card (CubeVertex pH.d) = 2 ^ pH.d := by
+      simp [CubeVertex, Fintype.card_fun]
+    have hNat : Fintype.card (CubeVertex pH.d) ≤ 2 ^ D.n := by
+      rw [hcard]
+      exact Nat.pow_le_pow_right (by decide) (by simpa [pH, hdP] using hdimNat)
+    exact_mod_cast (by simpa using hNat)
+  have hHplus : ((pH.H + 1 : ℕ) : ℝ) ≤ 2 * (D.n : ℝ) ^ 2 := by
+    have hNat : pH.H + 1 ≤ 2 * D.n ^ 2 := by
+      change HH η₀ D.n + 1 ≤ 2 * D.n ^ 2
+      have hH' : HH η₀ D.n + 1 ≤ D.n ^ 2 + 1 := Nat.add_le_add_right hHH 1
+      have hsq : 1 ≤ D.n ^ 2 := Nat.one_le_pow 2 D.n hn1
+      omega
+    exact_mod_cast hNat
+  have hExpoPref :
+      (Fintype.card D.KeyT : ℝ) *
+        (2 * ((Finset.univ : Finset (CubeVertex pH.d)).card : ℝ) *
+          ((pH.H + 1 : ℕ) : ℝ) * Real.exp (-pH.lam / 12)) ≤
+        4 * (4 : ℝ) ^ D.n * (D.n : ℝ) ^ 2 * Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12) := by
+    have hLam : pH.lam = (D.n : ℝ) ^ (10 : ℝ) := by rfl
+    have hpow4 : (2 : ℝ) ^ D.n * (2 : ℝ) ^ D.n = (4 : ℝ) ^ D.n := by
+      calc
+        (2 : ℝ) ^ D.n * (2 : ℝ) ^ D.n = ((2 : ℝ) * 2) ^ D.n := by rw [← mul_pow]
+        _ = (4 : ℝ) ^ D.n := by norm_num
+    rw [hLam]
+    calc
+      _ ≤ (2 : ℝ) ^ D.n *
+          (2 * (2 : ℝ) ^ D.n * (2 * (D.n : ℝ) ^ 2) *
+            Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12)) := by
+              gcongr <;> positivity
+      _ = _ := by
+        calc
+          (2 : ℝ) ^ D.n *
+              (2 * (2 : ℝ) ^ D.n * (2 * (D.n : ℝ) ^ 2) *
+                Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12)) =
+              4 * ((2 : ℝ) ^ D.n * (2 : ℝ) ^ D.n) * (D.n : ℝ) ^ 2 *
+                Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12) := by ring
+          _ = 4 * (4 : ℝ) ^ D.n * (D.n : ℝ) ^ 2 *
+                Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12) := by rw [hpow4]
+  have hExpOne : (2 : ℝ) ≤ Real.exp 1 := by
+    have h := Real.add_one_le_exp (1 : ℝ)
+    norm_num at h
+    exact h
+  have hExpTwo : (4 : ℝ) ≤ Real.exp 2 := by
+    calc
+      (4 : ℝ) = 2 ^ 2 := by norm_num
+      _ ≤ (Real.exp 1) ^ 2 := pow_le_pow_left₀ (by norm_num) hExpOne 2
+      _ = Real.exp 1 * Real.exp 1 := by ring
+      _ = Real.exp (1 + 1) := (Real.exp_add 1 1).symm
+      _ = Real.exp 2 := by congr 1; norm_num
+  have hExpNat : ∀ (x : ℝ) (k : ℕ), Real.exp x ^ k = Real.exp ((k : ℝ) * x) := by
+    intro x k
+    induction k with
+    | zero => simp
+    | succ k ih =>
+        calc
+          Real.exp x ^ (k + 1) = Real.exp x ^ k * Real.exp x := by rw [pow_succ]
+          _ = Real.exp ((k : ℝ) * x) * Real.exp x := by rw [ih]
+          _ = Real.exp ((k : ℝ) * x + x) := (Real.exp_add _ _).symm
+          _ = Real.exp (((k + 1 : ℕ) : ℝ) * x) := by
+            congr 1
+            norm_num [Nat.cast_succ]
+            ring
+  have hFourPow : (4 : ℝ) ^ D.n ≤ Real.exp (2 * D.n) := by
+    calc
+      (4 : ℝ) ^ D.n ≤ (Real.exp 2) ^ D.n := pow_le_pow_left₀ (by norm_num) hExpTwo _
+      _ = Real.exp (2 * (D.n : ℝ)) := by simpa [mul_comm] using hExpNat 2 D.n
+  have hNExp : (D.n : ℝ) ^ 2 ≤ Real.exp (2 * D.n) := by
+    have hNle : (D.n : ℝ) ≤ Real.exp (D.n : ℝ) := by
+      have h := Real.add_one_le_exp (D.n : ℝ)
+      linarith
+    calc
+      (D.n : ℝ) ^ 2 ≤ (Real.exp (D.n : ℝ)) ^ 2 := by gcongr
+      _ = Real.exp (2 * (D.n : ℝ)) := by
+        calc
+          (Real.exp (D.n : ℝ)) ^ 2 = Real.exp (D.n : ℝ) * Real.exp (D.n : ℝ) := by ring
+          _ = Real.exp ((D.n : ℝ) + D.n) := (Real.exp_add _ _).symm
+          _ = Real.exp (2 * (D.n : ℝ)) := by congr 1 <;> ring
+  have hPrefExp : 4 * (4 : ℝ) ^ D.n * (D.n : ℝ) ^ 2 ≤ Real.exp (4 * D.n + 2) := by
+    calc
+      4 * (4 : ℝ) ^ D.n * (D.n : ℝ) ^ 2 ≤
+          Real.exp 2 * Real.exp (2 * D.n) * Real.exp (2 * D.n) := by
+            gcongr
+      _ = (Real.exp 2 * Real.exp (2 * D.n)) * Real.exp (2 * D.n) := by ring
+      _ = Real.exp (2 + 2 * D.n) * Real.exp (2 * D.n) := by
+        rw [(Real.exp_add 2 (2 * D.n)).symm]
+      _ = Real.exp ((2 + 2 * D.n) + 2 * D.n) := (Real.exp_add _ _).symm
+      _ = Real.exp (4 * D.n + 2) := by congr 1 <;> ring
+  have hn10 : 5 * (D.n : ℝ) + 2 ≤ (D.n : ℝ) ^ (10 : ℝ) / 12 := by
+    have hnNat : 10 ≤ D.n := by omega
+    have hpowNat : (10 : ℕ) ^ 9 ≤ D.n ^ 9 := Nat.pow_le_pow_left hnNat _
+    have hpow9 : (72 : ℝ) ≤ (D.n : ℝ) ^ (9 : ℕ) := by
+      have hcast : (10 : ℝ) ^ (9 : ℕ) ≤ (D.n : ℝ) ^ (9 : ℕ) := by exact_mod_cast hpowNat
+      have hten : (72 : ℝ) ≤ (10 : ℝ) ^ (9 : ℕ) := by norm_num
+      exact hten.trans hcast
+    have hnreal : (0 : ℝ) ≤ (D.n : ℝ) := by positivity
+    have hpow10 : 72 * (D.n : ℝ) ≤ (D.n : ℝ) ^ (10 : ℝ) := by
+      have hpow10Nat : 72 * (D.n : ℝ) ≤ (D.n : ℝ) ^ (10 : ℕ) := by
+        calc
+          72 * (D.n : ℝ) ≤ (D.n : ℝ) ^ (9 : ℕ) * (D.n : ℝ) :=
+            mul_le_mul_of_nonneg_right hpow9 hnreal
+          _ = (D.n : ℝ) ^ (10 : ℕ) := by
+            rw [show (10 : ℕ) = 9 + 1 by norm_num]
+            exact (pow_succ (D.n : ℝ) 9).symm
+      calc
+        72 * (D.n : ℝ) ≤ (D.n : ℝ) ^ (10 : ℕ) := hpow10Nat
+        _ = (D.n : ℝ) ^ (10 : ℝ) := (Real.rpow_natCast (D.n : ℝ) 10).symm
+    have hmul : 12 * (5 * (D.n : ℝ) + 2) ≤ 72 * (D.n : ℝ) := by nlinarith [hnR2]
+    exact (le_div_iff₀ (by norm_num : (0 : ℝ) < 12)).2
+      (by simpa [mul_comm] using hmul.trans hpow10)
+  have hExpAbsorb : 4 * D.n + 2 - (D.n : ℝ) ^ (10 : ℝ) / 12 ≤ -(D.n : ℝ) := by
+    linarith [hn10]
+  have hFinal :
+      4 * (4 : ℝ) ^ D.n * (D.n : ℝ) ^ 2 *
+          Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12) ≤ Real.exp (-(D.n : ℝ)) := by
+    calc
+      _ ≤ Real.exp (4 * D.n + 2) *
+          Real.exp (-((D.n : ℝ) ^ (10 : ℝ)) / 12) :=
+            mul_le_mul_of_nonneg_right hPrefExp (Real.exp_nonneg _)
+      _ = Real.exp (4 * D.n + 2 - (D.n : ℝ) ^ (10 : ℝ) / 12) := by
+        rw [← Real.exp_add]
+        congr 1 <;> ring
+      _ ≤ Real.exp (-(D.n : ℝ)) := Real.exp_le_exp.mpr hExpAbsorb
+  exact hPrePos ▸ hUnion.trans (hExpoPref.trans hFinal)
 
 /-- L8.1f(viii) (08:191–195): the tags of a candidate list's distinct IDs are independent with laws `S_g`
 (internal) and `S_u` (cross), so `E_t q_L = q_{g,k}` with `k ≤ T` internal IDs (`Mden` does not depend on how the

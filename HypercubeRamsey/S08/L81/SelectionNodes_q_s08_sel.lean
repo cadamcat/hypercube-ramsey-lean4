@@ -990,7 +990,20 @@ theorem preLaw_expect_pos (D : Ctx η₀ β p h) (f : D.Pos → ℝ) :
       expect_prod_left (D.posLaw.prod auxLaw) D.actLaw (fun z => f z.1)
     _ = D.posLaw.expect f := expect_prod_left D.posLaw auxLaw f
 
-private theorem choose20_lower {d : ℕ} (hd : 40 ≤ d) :
+noncomputable def prIndicator {Ω : Type*} (A : Ω → Prop) : Ω → ℝ := by
+  classical
+  exact fun ω => if A ω then 1 else 0
+
+theorem pr_eq_expect_indicator {Ω : Type*} [Fintype Ω]
+    (P : FinProb Ω) (A : Ω → Prop) :
+    P.pr A = P.expect (prIndicator A) := by
+  classical
+  unfold FinProb.pr FinProb.expect prIndicator
+  apply Finset.sum_congr rfl
+  intro ω hω
+  by_cases h : A ω <;> simp [h]
+
+theorem choose20_lower {d : ℕ} (hd : 40 ≤ d) :
     (d : ℝ) ^ 20 / ((3 : ℝ) ^ 20 * (Nat.factorial 20 : ℝ)) ≤
       (Nat.choose d 20 : ℝ) := by
   have hdescNat : (d / 2) ^ 20 ≤ d.descFactorial 20 := by
@@ -1023,5 +1036,73 @@ private theorem choose20_lower {d : ℕ} (hd : 40 ≤ d) :
     _ ≤ (d.descFactorial 20 : ℝ) / (Nat.factorial 20 : ℝ) :=
       div_le_div_of_nonneg_right hdescReal hfact.le
     _ = (Nat.choose d 20 : ℝ) := by rw [hidenR]; field_simp
+
+private theorem scaleIndex_exists_grid (M R target : ℕ) (hM : 2 ≤ M) (hR : 1 ≤ R) :
+    ∃ i : ℕ, target ≤ M ^ i * R := by
+  have hM0 : M ≠ 0 := by omega
+  induction target with
+  | zero => exact ⟨0, by simp⟩
+  | succ target ih =>
+      obtain ⟨i, hi⟩ := ih
+      let x := M ^ i * R
+      have hx0 : x ≠ 0 := by
+        dsimp [x]
+        exact Nat.mul_ne_zero (pow_ne_zero _ hM0) (by omega)
+      have hx : 1 ≤ x := by omega
+      have hstep : x + 1 ≤ 2 * x := by omega
+      have hmult : 2 * x ≤ M * x := Nat.mul_le_mul_right x hM
+      refine ⟨i + 1, ?_⟩
+      calc
+        target + 1 ≤ x + 1 := Nat.succ_le_succ hi
+        _ ≤ 2 * x := hstep
+        _ ≤ M * x := hmult
+        _ = M ^ (i + 1) * R := by dsimp [x]; rw [pow_succ]; ring
+
+private theorem findScale_le_mul_target (M R target : ℕ)
+    (hP : ∃ i : ℕ, target ≤ M ^ i * R) (hM : 2 ≤ M) (hR : 1 ≤ R)
+    (hRT : R ≤ target) : M ^ Nat.find hP * R ≤ M * target := by
+  have hspec : target ≤ M ^ Nat.find hP * R := Nat.find_spec hP
+  by_cases hi : Nat.find hP = 0
+  · have hEq : R = target := by
+      have hle : target ≤ R := by simpa [hi] using hspec
+      exact Nat.le_antisymm hRT hle
+    rw [hi, hEq, pow_zero, one_mul]
+    calc
+      target = 1 * target := by simp
+      _ ≤ M * target := Nat.mul_le_mul_right target (by omega)
+  · have hpos : 1 ≤ Nat.find hP := by omega
+    have hpowEq : M ^ Nat.find hP = M ^ (Nat.find hP - 1 + 1) := by
+      rw [Nat.sub_add_cancel hpos]
+    have hprev : ¬ target ≤ M ^ (Nat.find hP - 1) * R :=
+      Nat.find_min hP (by omega)
+    have hlt : M ^ (Nat.find hP - 1) * R < target := Nat.lt_of_not_ge hprev
+    have hpow : M ^ Nat.find hP * R = M * (M ^ (Nat.find hP - 1) * R) := by
+      calc
+        M ^ Nat.find hP * R = M ^ ((Nat.find hP - 1) + 1) * R := by rw [hpowEq]
+        _ = (M ^ (Nat.find hP - 1) * M) * R := by rw [pow_succ]
+        _ = M * (M ^ (Nat.find hP - 1) * R) := by ring
+    rw [hpow]
+    exact Nat.mul_le_mul_left M hlt.le
+
+private theorem topScale_eq_grid_formula (n : ℕ) (σ ζ : ℝ) :
+    topScale n σ ζ =
+      (max 2 ⌈(n : ℝ) ^ σ⌉₊) ^ Nat.find
+        (scaleIndex_exists_grid (max 2 ⌈(n : ℝ) ^ σ⌉₊)
+          (max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊) ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+          (by omega) (by omega)) * max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊ := by
+  unfold topScale
+  congr 1
+
+theorem topScale_le_mul_target (n : ℕ) (σ ζ : ℝ)
+    (hR0 : max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊ ≤ ⌈(n : ℝ) ^ (1 - ζ)⌉₊) :
+    topScale n σ ζ ≤ (max 2 ⌈(n : ℝ) ^ σ⌉₊) * ⌈(n : ℝ) ^ (1 - ζ)⌉₊ := by
+  let R₀ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M := max 2 ⌈(n : ℝ) ^ σ⌉₊
+  let target := ⌈(n : ℝ) ^ (1 - ζ)⌉₊
+  have hM : 2 ≤ M := by simp [M]
+  have hR : 1 ≤ R₀ := by simp [R₀]
+  rw [topScale_eq_grid_formula]
+  exact findScale_le_mul_target M R₀ target
+    (scaleIndex_exists_grid M R₀ target hM hR) hM hR (by simpa [R₀, target] using hR0)
 
 end HypercubeRamsey.Lane_q_s08_sel

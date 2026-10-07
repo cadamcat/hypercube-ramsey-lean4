@@ -191,5 +191,18 @@ def vetoLowRows (L : X.CentreLayer5) {cL cH : ℝ} (LR : X.LowRows5 L cL cH)
       apply mul_le_mul_of_nonneg_left _ (Nat.cast_nonneg N)
       exact vetoRow_le X L b l t LR.row LR.row_nonneg H ω y (0, x) }
 
+/-- The missing adjacent-state distance bound would supply precisely the required scope inclusion. -/
+theorem adjacent_scope_inclusion (L : X.CentreLayer5) (v : EvenRole5 n) (b : OddRole5 n)
+    (hd : _root_.hammingDist (X.St.oneHot (X.St.stateOf b.1)) (X.siteOf v) ≤ 8) :
+    X.scopeBall (h := L.ht) b.1 (L.ht.hp.r + L.slack) ⊆
+      X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + L.slack + 8) := by
+  intro l hl
+  have hb := (Finset.mem_filter.mp hl).2
+  change _root_.hammingDist l.1 (X.St.oneHot (X.St.stateOf b.1)) ≤ L.ht.hp.r + L.slack at hb
+  apply Finset.mem_filter.mpr
+  refine ⟨Finset.mem_univ _, ?_⟩
+  exact (_root_.hammingDist_triangle l.1 (X.St.oneHot (X.St.stateOf b.1)) (X.siteOf v)).trans
+    (Nat.add_le_add hb hd)
+
 end
 end HypercubeRamsey.Lane_sol_s05_even

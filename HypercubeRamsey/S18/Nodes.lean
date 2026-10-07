@@ -33,6 +33,7 @@ import HypercubeRamsey.S18.Locality_sol_s18_n4
 import HypercubeRamsey.S18.Cost_sol_s18_n4
 import HypercubeRamsey.S18.Test_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_sol_s18_3f
+import HypercubeRamsey.S18.LeafForcing
 import HypercubeRamsey.S18.Current_sol_s18_n4
 import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
@@ -760,8 +761,8 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
   intro PT hPT D hD hRisk leaves
   apply hcertificate PT hPT D hD hRisk leaves
   intro seed hseed
-  -- The remaining obligation is the coordinate-fiber nonneighbor inequality.
-  sorry
+  exact Lane_sol_s18_3f.testNonneighbor_of_fiberForcing D δ leaves _
+    (LeafForcing.testFiberForcing_of_cover D δ leaves _).some
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)

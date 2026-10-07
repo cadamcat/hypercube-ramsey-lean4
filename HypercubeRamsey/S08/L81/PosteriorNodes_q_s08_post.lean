@@ -1050,6 +1050,21 @@ theorem map_pi_restrict {ι : Type*} [Fintype ι] [DecidableEq ι]
   intro a
   exact FinProb.pi_marginal P S a
 
+theorem map_pi_restrict_congr {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] [∀ i, DecidableEq (Ω i)]
+    (P Q : ∀ i, FinProb (Ω i)) (S : Finset ι)
+    (hPQ : ∀ i ∈ S, P i = Q i) :
+    FinProb.map (FinProb.pi P) (fun ω (i : {i // i ∈ S}) => ω i.1) =
+      FinProb.map (FinProb.pi Q) (fun ω (i : {i // i ∈ S}) => ω i.1) := by
+  classical
+  rw [map_pi_restrict P S, map_pi_restrict Q S]
+  apply FinProb.ext
+  intro a
+  simp only [FinProb.pi]
+  apply Finset.prod_congr rfl
+  intro i hi
+  exact congrArg (fun R : FinProb (Ω i.1) => R.w (a i)) (hPQ i.1 i.2)
+
 abbrev LocalTagSample {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (c : D.CellT) :=
       {g : D.KeyT // g ∈ keyBall c.1 3} → D.Loc → D.M.ι
@@ -1115,6 +1130,25 @@ def localTiesProj {η₀ β p : ℝ} {h : ℕ}
 def localTATProj {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (c : D.CellT) : D.TAT → LocalTATSample D c :=
   fun z => ((localTagsProj D c z.1.1, localActsProj D c z.1.2), localTiesProj D c z.2)
+
+def crossCellSet {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : Finset D.CellT :=
+  Finset.univ.image fun u : D.CrossSub c.1 => (u.1, c.2)
+
+abbrev LocalAnchorSample {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) :=
+      {e : D.CellT // e ∈ crossCellSet D c} → Fin D.N
+
+instance localAnchorSampleFintype {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : Fintype (LocalAnchorSample D c) := inferInstance
+
+noncomputable instance localAnchorSampleDecidableEq {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : DecidableEq (LocalAnchorSample D c) :=
+  Fintype.decidablePiFintype
+
+def localAnchorsProj {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (c : D.CellT) : D.Anch → LocalAnchorSample D c :=
+  fun W e => W e.1
 
 theorem rprime_pr_coordinate {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (j : Fin h) (y : Fin D.N) :
@@ -1407,6 +1441,80 @@ theorem rawTAT_local_projection_congr {η₀ β p : ℝ} {h : ℕ}
               ((D.tagLawAll Θ').prod D.actLaw) D.tieLaw
               (fun x => (localTagsProj D c x.1, localActsProj D c x.2))
               (localTiesProj D c)
+
+set_option maxHeartbeats 1000000 in
+theorem rawAnchors_cross_projection_congr {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (hS : D.SelLocal) (H H' : D.Hist)
+    (P P' : D.Pos) (c : D.CellT) (ω ω' : D.TAT)
+    (hH : ∀ g, keyDist c.1 g ≤ 4 → H g = H' g)
+    (hP : ∀ g, keyDist c.1 g ≤ 3 → P g = P' g)
+    (hT : localTATProj D c ω = localTATProj D c ω') :
+    FinProb.map (D.rawAnchors ((H, P), ω)) (localAnchorsProj D c) =
+      FinProb.map (D.rawAnchors ((H', P'), ω')) (localAnchorsProj D c) := by
+  classical
+  have hTag (g : D.KeyT) (hg : keyDist c.1 g ≤ 3) : ω.1.1 g = ω'.1.1 g := by
+    have hfun := congrArg (fun z : LocalTATSample D c => z.1.1) hT
+    have hmem : g ∈ keyBall c.1 3 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact congrFun hfun ⟨g, hmem⟩
+  have hAct (g : D.KeyT) (hg : keyDist c.1 g ≤ 1) : ω.1.2 g = ω'.1.2 g := by
+    have hfun := congrArg (fun z : LocalTATSample D c => z.1.2) hT
+    have hmem : g ∈ keyBall c.1 1 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact congrFun hfun ⟨g, hmem⟩
+  have hTie (g : D.KeyT) (hg : keyDist c.1 g ≤ 1) : ω.2 g = ω'.2 g := by
+    have hfun := congrArg (fun z : LocalTATSample D c => z.2) hT
+    have hmem : g ∈ keyBall c.1 1 := by
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ g, hg⟩
+    exact congrFun hfun ⟨g, hmem⟩
+  have hCoord (e : D.CellT) (he : e ∈ crossCellSet D c) :
+      D.Usel ((H, P), ω) e = D.Usel ((H', P'), ω') e := by
+    rcases Finset.mem_image.mp he with ⟨u, hu, hcell⟩
+    have hcu : keyDist c.1 u.1 = 1 := (Finset.mem_filter.mp u.2).2
+    subst e
+    have hsel : D.sel ((H, P), ω) (u.1, c.2) =
+        D.sel ((H', P'), ω') (u.1, c.2) := by
+      apply hS
+      · intro g hg
+        have htri := keyDist_triangle_aux c.1 u.1 g
+        have hgu : keyDist u.1 g ≤ 3 := (Finset.mem_filter.mp hg).2
+        have hcg : keyDist c.1 g ≤ 4 := by omega
+        exact hH g hcg
+      · intro g hg ℓ hℓ
+        have htri := keyDist_triangle_aux c.1 u.1 g
+        have hgu : keyDist u.1 g ≤ 2 := (Finset.mem_filter.mp hg).2
+        have hcg : keyDist c.1 g ≤ 3 := by omega
+        exact ⟨congrFun (hP g hcg) ℓ, congrFun (hTag g hcg) ℓ⟩
+      · intro ℓ hℓ
+        have hkey : keyDist c.1 u.1 ≤ 1 := by simpa [hcu]
+        exact ⟨congrFun (hAct u.1 hkey) ℓ, congrFun (hTie u.1 hkey) ℓ⟩
+    have hselTag : D.selTag ((H, P), ω) (u.1, c.2) =
+        D.selTag ((H', P'), ω') (u.1, c.2) := by
+      unfold Ctx.selTag
+      rw [hsel, hTag u.1 (by simpa [hcu])]
+    have hu0 : H u.1 = H' u.1 := hH u.1 (by simpa [hcu])
+    have hcross : ∀ v ∈ crossKeys u.1, H v = H' v := by
+      intro v hv
+      have htri := keyDist_triangle_aux c.1 u.1 v
+      have huv : keyDist u.1 v = 1 := (Finset.mem_filter.mp hv).2
+      have hcv : keyDist c.1 v ≤ 4 := by omega
+      exact hH v hcv
+    unfold Ctx.Usel
+    rw [← hselTag]
+    cases hs : D.selTag ((H, P), ω) (u.1, c.2) with
+    | none => rfl
+    | some i => exact Lane_q_s08_post.anchorU_congr_of_local D H H' u.1 i hu0 hcross
+  change FinProb.map (FinProb.pi (fun e : D.CellT => D.Usel ((H, P), ω) e))
+      (fun W (e : {e : D.CellT // e ∈ crossCellSet D c}) => W e.1) =
+    FinProb.map (FinProb.pi (fun e : D.CellT => D.Usel ((H', P'), ω') e))
+      (fun W (e : {e : D.CellT // e ∈ crossCellSet D c}) => W e.1)
+  exact Lane_q_s08_post.map_pi_restrict_congr
+    (fun e : D.CellT => D.Usel ((H, P), ω) e)
+    (fun e : D.CellT => D.Usel ((H', P'), ω') e)
+    (crossCellSet D c) hCoord
 
 theorem fcand_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT) (ξ : D.Tup)

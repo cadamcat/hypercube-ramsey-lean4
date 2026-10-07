@@ -2,6 +2,7 @@ import HypercubeRamsey.S15.Defs
 import HypercubeRamsey.S15.Needs
 import HypercubeRamsey.S05.Clock_q_s05_even
 import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S03.ScatteredMoments
 
 /-! Geometric and locality adapters for the direct assignment proof lane. -/
 
@@ -2425,6 +2426,42 @@ theorem highDirect_row_factor_bounds {κ : CConsts} {T : Stage} {k : ℕ}
     · exact directFactor_nonneg PT hPT a ys b x
     · simpa [S15.directFactor] using hfactorBound
 
+theorem highDirect_star_degrees_positive {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hmode : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m)
+    (a : S15.EvenPosition T k) (ha : S15.patchAt PT hPT a.1 = i)
+    (x : Fin (T.S.N k)) (hx : x ∈ PT.envelope i) (hn : 0 < T.S.n k)
+    (hbstar : 3 * bstar T k ≤ 1 / 4) :
+    ∀ b ∈ star a,
+      0 < deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x := by
+  intro b hb
+  by_cases hpatch : S15.patchAt PT hPT b.1 = i
+  · have hOwn := hPT.envelope_degree i x hx
+    have hOwnLower : (2 : ℝ)⁻¹ + (PT.tiling.P i).g /
+        (4 * (T.S.n k : ℝ)) ≤ deg (T.S.E k) PT.tiling.c (PT.π i).w x := by
+      have hOwn' : OwnDegOK PT.tiling i (PT.π i) x := hOwn
+      have h := hOwn'
+      simp [OwnDegOK, hmode] at h
+      exact h.1
+    have hOwnLower' : (2 : ℝ)⁻¹ + (PT.tiling.P i).g /
+        (4 * (T.S.n k : ℝ)) ≤
+          deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x := by
+      simpa [S15.lawAtOdd, hpatch] using hOwnLower
+    exact lt_of_lt_of_le (by positivity) hOwnLower'
+  · have hdegreeOther := hPT.envelope_other_degree i (S15.patchAt PT hPT b.1)
+      hpatch x hx
+    have hlow : -(3 * bstar T k) ≤
+        deg (T.S.E k) PT.tiling.c
+          (PT.π (S15.patchAt PT hPT b.1)).w x - 1 / 2 :=
+      (abs_le.mp hdegreeOther).1
+    have hdegree' : (1 / 4 : ℝ) ≤
+        deg (T.S.E k) PT.tiling.c (PT.π (S15.patchAt PT hPT b.1)).w x := by
+      nlinarith
+    have hdegree : (1 / 4 : ℝ) ≤
+        deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x := by
+      simpa [S15.lawAtOdd] using hdegree'
+    exact lt_of_lt_of_le (by norm_num) hdegree
+
 theorem highDirect_row_weight_cap_claim (κ : CConsts) (hκ : κ.Admissible)
     (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
@@ -2714,5 +2751,61 @@ theorem direct_sampler_separated_product_bound {κ : CConsts} {T : Stage} {k m :
       _ = (4 : ℝ) ^ m := by rw [pow_mul]; norm_num
   rw [hsupport F]
   exact le_trans hcompare (le_trans (mul_le_mul_of_nonneg_left hrawScaled (by norm_num)) hpower)
+
+theorem scattered_moment_sampler_bound
+    {Ω U : Type*} [Fintype Ω] [Fintype U] [DecidableEq U] [Nonempty U]
+    (P : FinLaw Ω) (succ : Finset Ω) (hsupport : ∀ ω, ω ∉ succ → P.w ω = 0)
+    (Z : U → Ω → ℝ) (hZ0 : ∀ u ω, 0 ≤ Z u ω)
+    (L : ℝ) (hL : 0 ≤ L) (hZL : ∀ u ω, ω ∈ succ → Z u ω ≤ L)
+    (near : U → Finset U) (hself : ∀ u, u ∈ near u)
+    (f : ℝ) (hf : 0 ≤ f)
+    (hnear : ∀ u, ((near u).card : ℝ) ≤ f * Fintype.card U)
+    (n : ℕ) (K D : ℝ) (hK : 1 ≤ K) (hD : 0 ≤ D)
+    (d : U → ℝ) (hd : ∀ u, 0 ≤ d u)
+    (hmean : (Fintype.card U : ℝ)⁻¹ * ∑ u, d u ≤ D)
+    (hsmall : (n : ℝ) * f * L ≤ 1)
+    (hjoint : ∀ m ≤ n, ∀ s : Fin m → U,
+      (∀ i j : Fin m, j < i → s i ∉ near (s j)) →
+        (∑ ω ∈ succ, P.w ω * ∏ i, Z (s i) ω) ≤
+          K ^ m * ∏ i, d (s i)) :
+    P.E (fun ω => ((Fintype.card U : ℝ)⁻¹ * ∑ u, Z u ω) ^ n) ≤
+      K ^ n * (D + 1) ^ n := by
+  classical
+  have hmoment := scattered_moments P.w P.nonneg succ Z hZ0 L hL hZL
+    near hself f hnear n K hK d hd hjoint
+  let avg (ω : Ω) : ℝ := (Fintype.card U : ℝ)⁻¹ * ∑ u, Z u ω
+  have hsupportEq :
+      P.E (fun ω => avg ω ^ n) =
+        ∑ ω ∈ succ, P.w ω * avg ω ^ n := by
+    unfold FinLaw.E
+    calc
+      (∑ ω, P.w ω * avg ω ^ n) =
+          ∑ ω, if ω ∈ succ then P.w ω * avg ω ^ n else 0 := by
+        apply Finset.sum_congr rfl
+        intro ω hω
+        by_cases hωs : ω ∈ succ
+        · simp [hωs]
+        · simp [hωs, hsupport ω hωs]
+      _ = ∑ ω ∈ succ, P.w ω * avg ω ^ n := by
+        rw [← Finset.sum_filter]
+        simp
+  have hmeanNonneg : 0 ≤ (Fintype.card U : ℝ)⁻¹ * ∑ u, d u := by
+    apply mul_nonneg (inv_nonneg.mpr (Nat.cast_nonneg _))
+    exact Finset.sum_nonneg fun u _ => hd u
+  have hbaseNonneg : 0 ≤ (Fintype.card U : ℝ)⁻¹ * ∑ u, d u +
+      (n : ℝ) * f * L := by positivity
+  have hbaseBound : (Fintype.card U : ℝ)⁻¹ * ∑ u, d u +
+      (n : ℝ) * f * L ≤ D + 1 := by linarith [hmean, hsmall]
+  have hmomentBound :
+      ∑ ω ∈ succ, P.w ω * avg ω ^ n ≤ K ^ n * (D + 1) ^ n := by
+    calc
+      _ ≤ K ^ n *
+          ((Fintype.card U : ℝ)⁻¹ * ∑ u, d u + (n : ℝ) * f * L) ^ n := by
+        simpa [avg] using hmoment
+      _ ≤ K ^ n * (D + 1) ^ n := by
+        apply mul_le_mul_of_nonneg_left _ (pow_nonneg (by linarith [hK]) n)
+        exact pow_le_pow_left₀ hbaseNonneg hbaseBound n
+  rw [hsupportEq]
+  exact hmomentBound
 
 end HypercubeRamsey.Lane_q_s15_direct

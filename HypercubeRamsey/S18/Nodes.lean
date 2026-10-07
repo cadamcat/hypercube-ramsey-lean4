@@ -562,8 +562,9 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     have hKB := hκ.KB_big
     nlinarith
   refine ⟨κ.KB, hK, ?_⟩
-  apply Filter.Eventually.of_forall
-  intro k PT hPT D hD hTransition
+  have hn : ∀ᶠ k in atTop, 2 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 2
+  filter_upwards [hn] with k hk
+  intro PT hPT D hD hTransition
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro p
     simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale,
@@ -573,9 +574,9 @@ theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     simpa [Lane_q_s18_n5.paletteRows_eq_counted, LateData.paletteScale, densityScale]
       using (hD.palette_counts p.1 p.2).2
   · intro v
-    sorry
+    exact Lane_q_s18_n5.geometricAdj_degree_bound hκ D hk v
   · intro S
-    sorry
+    exact Lane_q_s18_n5.nonisolates_le_twice_rank D S
   · intro x h hfull v heven
     sorry
 

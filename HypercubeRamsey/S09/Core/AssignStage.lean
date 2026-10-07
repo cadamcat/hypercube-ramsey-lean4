@@ -1552,9 +1552,6 @@ theorem p92_odd_clock (P : Params9) (hP : P.Valid) :
     exact le_of_not_gt hnotAlarm
   have hFailureProb : ∀ v, (FinProb.pi rows).pr (failure v) ≤ (n : ℝ) ^ (-Pclock) := by
     intro v
-    let base : OddSites9 n → Fin N := fun _ => ⟨0, by omega⟩
-    have hMarginal := Lane_q_s09_assign1.piPrDependsEq9 rows (scope v) (failure v) base
-      (hdepends v)
     have hPbarPos : 0 < Pbar := by dsimp [Pbar]; positivity
     have hcDegBound : Pbar * cDegree ≤ 2000 := by
       have hmin : cDegree ≤ 2000 / Pbar := min_le_right _ _
@@ -1665,7 +1662,7 @@ theorem p92_odd_clock (P : Params9) (hP : P.Valid) :
           exact Fintype.prod_equiv e.symm
             (fun i => (rows i.1).w (a i))
             (fun b => (rows b.1).w ((eFun a) b))
-            (by intro i; simp [eFun])
+            (by intro i; simp [eFun, e])
         simp [hEv, hWeight]
       have hStarValid : starValid9 S E G ω v := by
         have hnot := hNoBad v

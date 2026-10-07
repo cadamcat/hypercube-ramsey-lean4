@@ -1,5 +1,6 @@
 import HypercubeRamsey.Framework.Stage
 import HypercubeRamsey.Tools.Binomial
+import HypercubeRamsey.Tools.CubeGeometry_p_tools_cube_r
 
 /-!
 # Cube geometry and Hamming-ball bounds
@@ -438,6 +439,6 @@ theorem hypergeometric_intersection_tail (d s : ℕ) (hd : 0 < d) (hs : 0 < s) (
       B.card = s ∧ ((B ∩ A).card : ℝ) ≥
         (s : ℝ) * A.card / d + t)).card : ℝ) / Nat.choose d s ≤
       Real.exp (-2 * t ^ 2 / s) := by
-  sorry
+  exact CubeGeometryPToolsCubeR.hypergeometricIntersectionTailAux d s hd hs hsd A t ht
 
 end HypercubeRamsey

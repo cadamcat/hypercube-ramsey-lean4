@@ -2573,6 +2573,58 @@ theorem forced_martingale_concentration :
     linarith [htotal, hbadBound]
   simpa [P] using hsuccess
 
+private theorem lane_q_inj_comp_stepDrift_range {d t : ℕ}
+    (q : Fin t → Fin d → ℝ) (h : OrderedInput d t q)
+    (x : Path t d) (a j : Fin t) :
+    0 ≤ stepDrift q x a j ∧ stepDrift q x a j ≤
+      10 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+  classical
+  let y₀ : Fin t → Fin d := fun _ => ⟨0, by have := h.dimension; omega⟩
+  let R := forcingKernel q h.nonneg ∅ y₀ j
+    (takePrefix (Nat.le_of_lt j.isLt) x)
+  have hstepEq : stepDrift q x a j = forcedStepDrift q ∅ y₀ x a j := by
+    unfold stepDrift forcedStepDrift
+    apply Finset.sum_congr rfl
+    intro z hz
+    simp [forcingStepWeight, pendingLabels]
+  have hstep : R.expect (fun z => z.elim 0 (q a)) = stepDrift q x a j := by
+    rw [hstepEq]
+    exact forcingKernel_expect_step q h.nonneg ∅ y₀ x j a
+  have hrange (z : Option (Fin d)) :
+      0 ≤ z.elim 0 (q a) ∧
+        z.elim 0 (q a) ≤ 10 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+    cases z with
+    | none =>
+        constructor
+        · simp
+        · positivity
+    | some z => exact ⟨h.nonneg a z, h.atom a z⟩
+  have hlo := FinProb.expect_mono R (fun z => (hrange z).1)
+  have hhi := FinProb.expect_mono R (fun z => (hrange z).2)
+  constructor
+  · calc
+      0 = R.expect (fun _ => 0) := by simp [R, FinProb.expect_const]
+      _ ≤ R.expect (fun z => z.elim 0 (q a)) := hlo
+      _ = stepDrift q x a j := hstep
+  · calc
+      stepDrift q x a j = R.expect (fun z => z.elim 0 (q a)) := hstep.symm
+      _ ≤ R.expect (fun _ => 10 * (d : ℝ) ^ (-(0.95 : ℝ))) := hhi
+      _ = 10 * (d : ℝ) ^ (-(0.95 : ℝ)) := by simp [R, FinProb.expect_const]
+
+private theorem lane_q_inj_comp_stepDrift_prefix_congr {d t : ℕ}
+    (q : Fin t → Fin d → ℝ) (y : Fin t → Fin d)
+    (x x' : Path t d) (j a : Fin t)
+    (hprev : ∀ k : Fin t, k.val < j.val → x k = x' k) :
+    stepDrift q x a j = stepDrift q x' a j := by
+  classical
+  unfold stepDrift
+  apply Finset.sum_congr rfl
+  intro z hz
+  have hweight : ordinaryWeight q x j ∅ z = ordinaryWeight q x' j ∅ z := by
+    have hz' := forcingStepWeight_prefix_congr q ∅ y x x' j z hprev
+    simpa [forcingStepWeight, pendingLabels] using hz'
+  rw [hweight]
+
 /-- Reuses the deterministic recurrence with the forced martingale and drift change. -/
 theorem singleton_forcing_tracking_transfer (K : ℝ) (hK : 1 ≤ K) :
     ∀ᶠ d : ℕ in atTop, ∀ t (q : Fin t → Fin d → ℝ) (h : OrderedInput d t q),
@@ -2584,7 +2636,640 @@ theorem singleton_forcing_tracking_transfer (K : ℝ) (hK : 1 ≤ K) :
       1 - failureBound d ≤
         (forcingLaw q h.nonneg h.row_sum {i} y).pr (ForcedMartingaleGood q {i} y) →
       1 - failureBound d ≤ (forcingLaw q h.nonneg h.row_sum {i} y).pr (Good q) := by
-  sorry
+  have hdecay125 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(1 / 8 : ℝ)))
+      atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(1 / 8 : ℝ))) ∘ fun n : ℕ => (n : ℝ))
+      atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : (1 / 8 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hdecay825 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.825 : ℝ)))
+      atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.825 : ℝ))) ∘ fun n : ℕ => (n : ℝ))
+      atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : (0.825 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hdecay95 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.95 : ℝ)))
+      atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.95 : ℝ))) ∘ fun n : ℕ => (n : ℝ))
+      atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : (0.95 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hdecay0025 : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(0.025 : ℝ)))
+      atTop (nhds 0) := by
+    change Tendsto ((fun x : ℝ => x ^ (-(0.025 : ℝ))) ∘ fun n : ℕ => (n : ℝ))
+      atTop (nhds 0)
+    exact (tendsto_rpow_neg_atTop (by norm_num : (0.025 : ℝ) > 0)).comp
+      tendsto_natCast_atTop_atTop
+  have hKexpPos : 0 < K * Real.exp K :=
+    mul_pos (lt_of_lt_of_le (by norm_num) hK) (Real.exp_pos K)
+  have hsmallDriftEvent := hdecay825.eventually
+    (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 2020))
+  have hsmallTrackEvent := hdecay125.eventually
+    (Iio_mem_nhds (show (0 : ℝ) < 1 / (20 * (K * Real.exp K)) by positivity))
+  have hsmallAtomEvent := hdecay95.eventually
+    (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 100))
+  have hsmallTerminalEvent := hdecay0025.eventually
+    (Iio_mem_nhds (show (0 : ℝ) < 1 / (K * Real.exp K) by positivity))
+  filter_upwards [hsmallDriftEvent, hsmallTrackEvent, hsmallAtomEvent,
+    hsmallTerminalEvent] with d hsmallDrift hsmallTrack hsmallAtom hsmallTerminal
+  intro t q hq hRec i y htarget hDrift hForced
+  classical
+  have hdNat : 0 < d := lt_of_lt_of_le (by decide : 0 < 100) hq.dimension
+  have hd : 0 < (d : ℝ) := by exact_mod_cast hdNat
+  have hatomSmall : 10 * (d : ℝ) ^ (-(0.95 : ℝ)) ≤ 1 / 10 := by
+    nlinarith [hsmallAtom]
+  have hpowSplit : (d : ℝ) ^ (-(0.95 : ℝ)) =
+      (d : ℝ) ^ (-(1 / 8 : ℝ)) * (d : ℝ) ^ (-(0.825 : ℝ)) := by
+    rw [← Real.rpow_add hd]
+    norm_num
+  have hdriftSmall : 1010 * (d : ℝ) ^ (-(0.95 : ℝ)) ≤
+      (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+    rw [hpowSplit]
+    have hp := hsmallDrift
+    have hnonneg := Real.rpow_nonneg hd.le (-(1 / 8 : ℝ))
+    nlinarith
+  have htrackSmall : K * Real.exp K * (d : ℝ) ^ (-(1 / 8 : ℝ)) ≤
+      1 / 20 := by
+    have hmul := mul_lt_mul_of_pos_left hsmallTrack hKexpPos
+    have hcancel : K * Real.exp K *
+        (1 / (20 * (K * Real.exp K))) = (1 / 20 : ℝ) := by
+      field_simp
+    rw [hcancel] at hmul
+    exact hmul.le
+  have hpowTerminal : (d : ℝ) ^ (-(1 / 8 : ℝ)) =
+      (d : ℝ) ^ (-(0.1 : ℝ)) * (d : ℝ) ^ (-(0.025 : ℝ)) := by
+    rw [← Real.rpow_add hd]
+    norm_num
+  have hterminalSmall : K * Real.exp K * (d : ℝ) ^ (-(1 / 8 : ℝ)) ≤
+      (d : ℝ) ^ (-(0.1 : ℝ)) := by
+    rw [hpowTerminal]
+    have hnonneg := Real.rpow_nonneg hd.le (-(0.1 : ℝ))
+    have hmulC := mul_lt_mul_of_pos_left hsmallTerminal hKexpPos
+    have hcancel : K * Real.exp K * (1 / (K * Real.exp K)) = 1 := by field_simp
+    rw [hcancel] at hmulC
+    have hmul := mul_le_mul_of_nonneg_left hmulC.le hnonneg
+    calc
+      K * Real.exp K *
+          ((d : ℝ) ^ (-(0.1 : ℝ)) * (d : ℝ) ^ (-(0.025 : ℝ))) =
+          (d : ℝ) ^ (-(0.1 : ℝ)) *
+            (K * Real.exp K * (d : ℝ) ^ (-(0.025 : ℝ))) := by ring
+      _ ≤ (d : ℝ) ^ (-(0.1 : ℝ)) * 1 := hmul
+      _ = (d : ℝ) ^ (-(0.1 : ℝ)) := by ring
+  have hRunMono (x : Path t d) {u v : ℕ} (huv : u ≤ v)
+      (hrun : RunningThrough q x v) : RunningThrough q x u := by
+    rcases hrun with ⟨⟨hvalid, hinj⟩, htrack⟩
+    refine ⟨⟨?_, ?_⟩, ?_⟩
+    · intro k hk
+      exact hvalid k (lt_of_lt_of_le hk huv)
+    · intro k l hk hl hkl
+      exact hinj k l (lt_of_lt_of_le hk huv) (lt_of_lt_of_le hl huv) hkl
+    · intro k hk
+      exact htrack k (lt_of_lt_of_le hk huv)
+  have hpartDecomp (x : Path t d) (a : Fin t) (b : Fin (t + 1)) :
+      martingalePart q x a b.val = forcedMartingalePart q {i} y x a b.val +
+        ∑ j : Fin t, if j.val < b.val then
+          forcedStepDrift q {i} y x a j - stepDrift q x a j else 0 := by
+    unfold martingalePart forcedMartingalePart
+    calc
+      _ = ∑ j : Fin t,
+          ((if j.val < b.val then
+            (x j).elim 0 (q a) - forcedStepDrift q {i} y x a j else 0) +
+          (if j.val < b.val then
+            forcedStepDrift q {i} y x a j - stepDrift q x a j else 0)) := by
+              apply Finset.sum_congr rfl
+              intro j hj
+              by_cases hjb : j.val < b.val <;> simp [hjb] <;> ring
+      _ = _ := by rw [Finset.sum_add_distrib]
+  have hordinaryBound (x : Path t d) (a : Fin t) (b : Fin (t + 1))
+      (hrun : RunningThrough q x b.val)
+      (hforced : ForcedMartingaleGood q {i} y x) :
+      |martingalePart q x a b.val| ≤
+        (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ)) +
+          1000 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+    have hdiff := hDrift x a b hrun
+    calc
+      |martingalePart q x a b.val| =
+          |forcedMartingalePart q {i} y x a b.val +
+            ∑ j : Fin t, if j.val < b.val then
+              forcedStepDrift q {i} y x a j - stepDrift q x a j else 0| := by
+                rw [hpartDecomp]
+      _ ≤ |forcedMartingalePart q {i} y x a b.val| +
+          |∑ j : Fin t, if j.val < b.val then
+            forcedStepDrift q {i} y x a j - stepDrift q x a j else 0| := abs_add_le _ _
+      _ ≤ (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ)) +
+          1000 * (d : ℝ) ^ (-(0.95 : ℝ)) := add_le_add (hforced a b) hdiff
+  let truncateAt (x : Path t d) (n : ℕ) : Path t d :=
+    fun k => if k.val < n then x k else none
+  have htruncatedMartingaleGood (x : Path t d) (c : Fin (t + 1))
+      (hrun : RunningThrough q x c.val)
+      (hforced : ForcedMartingaleGood q {i} y x) :
+      MartingaleGood q (truncateAt x c.val) := by
+    let xt := truncateAt x c.val
+    have hbefore (k : Fin t) (hk : k.val < c.val) : xt k = x k := by
+      simp [xt, truncateAt, hk]
+    have hstepBefore (a : Fin t) (k : Fin t) (hkc : k.val < c.val) :
+        stepDrift q xt a k = stepDrift q x a k := by
+      apply lane_q_inj_comp_stepDrift_prefix_congr q y xt x k a
+      intro r hr
+      exact hbefore r (lt_trans hr hkc)
+    have hrunAt (b : Fin (t + 1)) (hbc : b.val ≤ c.val) :
+        RunningThrough q x b.val := hRunMono x hbc hrun
+    have hstepC (a : Fin t) (hc : c.val < t) :
+        stepDrift q xt a ⟨c.val, hc⟩ = stepDrift q x a ⟨c.val, hc⟩ := by
+      apply lane_q_inj_comp_stepDrift_prefix_congr q y xt x ⟨c.val, hc⟩ a
+      intro r hr
+      exact hbefore r hr
+    have hstepAfter (a : Fin t) (k : Fin t) (hck : c.val < k.val) :
+        stepDrift q xt a k = 0 := by
+      have hnot : ¬ PrefixValid xt k.val := by
+        intro hv
+        have hcFin : c.val < t := by omega
+        have hsome := hv.1 ⟨c.val, hcFin⟩ hck
+        have hnone : xt ⟨c.val, hcFin⟩ = none := by simp [xt, truncateAt]
+        rw [hnone] at hsome
+        simp at hsome
+      simp [stepDrift, ordinaryWeight, hnot]
+    have hsamePrefix (a : Fin t) (b : Fin (t + 1)) (hbc : b.val ≤ c.val) :
+        martingalePart q xt a b.val = martingalePart q x a b.val := by
+      unfold martingalePart
+      apply Finset.sum_congr rfl
+      intro k hk
+      by_cases hkb : k.val < b.val
+      · have hkc : k.val < c.val := lt_of_lt_of_le hkb hbc
+        simp only [if_pos hkb]
+        rw [hbefore k hkc, hstepBefore a k hkc]
+      · simp [hkb]
+    have hafterPrefix (a : Fin t) (b : Fin (t + 1))
+        (hcb : c.val < b.val) (hcLt : c.val < t) :
+        martingalePart q xt a b.val =
+          martingalePart q x a c.val -
+            stepDrift q x a ⟨c.val, hcLt⟩ := by
+      let j : Fin t := ⟨c.val, hcLt⟩
+      have hpoint (k : Fin t) :
+          (if k.val < b.val then
+            (xt k).elim 0 (q a) - stepDrift q xt a k else 0) =
+          (if k.val < c.val then
+            (x k).elim 0 (q a) - stepDrift q x a k else 0) +
+          (if k = j then -stepDrift q x a j else 0) := by
+        by_cases hkc : k.val < c.val
+        · have hkb : k.val < b.val := lt_trans hkc hcb
+          have hkj : k ≠ j := by
+            intro heq
+            have hv := congrArg Fin.val heq
+            simp [j] at hv
+            omega
+          simp [hkb, hkc, hkj, hbefore k hkc, hstepBefore a k hkc]
+        · by_cases hkj : k = j
+          · subst k
+            have hkb : c.val < b.val := hcb
+            simp [j, hkb, xt, truncateAt, hstepC a hcLt]
+          · have hvalne : k.val ≠ c.val := by
+              intro heq
+              apply hkj
+              apply Fin.ext
+              simpa [j] using heq
+            have hkg : c.val < k.val := by omega
+            by_cases hkb : k.val < b.val
+            · simp [hkb, hkc, hkj, xt, truncateAt, hstepAfter a k hkg]
+            · simp [hkb, hkc, hkj]
+      calc
+        martingalePart q xt a b.val =
+            ∑ k : Fin t, ((if k.val < c.val then
+              (x k).elim 0 (q a) - stepDrift q x a k else 0) +
+              (if k = j then -stepDrift q x a j else 0)) := by
+                unfold martingalePart
+                apply Finset.sum_congr rfl
+                intro k hk
+                exact hpoint k
+        _ = martingalePart q x a c.val - stepDrift q x a j := by
+              rw [Finset.sum_add_distrib]
+              simp [martingalePart, j]
+              ring
+    intro a b
+    by_cases hbc : b.val ≤ c.val
+    · rw [hsamePrefix a b hbc]
+      have hb := hordinaryBound x a b (hrunAt b hbc) hforced
+      calc
+        |martingalePart q x a b.val| ≤
+            (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ)) +
+              1000 * (d : ℝ) ^ (-(0.95 : ℝ)) := hb
+        _ ≤ (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+          nlinarith [hdriftSmall, Real.rpow_nonneg hd.le (-(0.95 : ℝ))]
+    · have hcb : c.val < b.val := by omega
+      have hcLt : c.val < t := by omega
+      rw [hafterPrefix a b hcb hcLt]
+      have hb := hordinaryBound x a c hrun hforced
+      have hc := lane_q_inj_comp_stepDrift_range q hq x a ⟨c.val, by omega⟩
+      calc
+        |martingalePart q x a c.val -
+            stepDrift q x a ⟨c.val, by omega⟩| ≤
+          |martingalePart q x a c.val| +
+            |stepDrift q x a ⟨c.val, by omega⟩| := by
+              calc
+                |martingalePart q x a c.val -
+                    stepDrift q x a ⟨c.val, by omega⟩| =
+                    |martingalePart q x a c.val +
+                      -stepDrift q x a ⟨c.val, by omega⟩| := by congr 1 <;> ring
+                _ ≤ |martingalePart q x a c.val| +
+                    |-stepDrift q x a ⟨c.val, by omega⟩| := abs_add_le _ _
+                _ = _ := by simp
+        _ ≤ (1 / 2 : ℝ) * (d : ℝ) ^ (-(1 / 8 : ℝ)) +
+            1000 * (d : ℝ) ^ (-(0.95 : ℝ)) +
+            10 * (d : ℝ) ^ (-(0.95 : ℝ)) := by
+              exact add_le_add hb
+                (abs_le.mpr ⟨by linarith [hc.1], by linarith [hc.2]⟩)
+        _ ≤ (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+          nlinarith [hdriftSmall, Real.rpow_nonneg hd.le (-(0.95 : ℝ))]
+  have htrackNonneg (x : Path t d) (n : ℕ) :
+      0 ≤ trackingError q x n := by
+    classical
+    let T : Set ℝ := {0} ∪ {r | ∃ a : Fin t, ∃ k : Fin (t + 1),
+      k.val ≤ n ∧ r = |usedMass q x a k.val - (k.val : ℝ) / d|}
+    have hfinite : T.Finite := by
+      have hrange : (Set.range (fun p : Fin t × Fin (t + 1) =>
+          |usedMass q x p.1 p.2.val - (p.2.val : ℝ) / d|)).Finite := Set.finite_range _
+      apply Set.Finite.union
+      · exact Set.finite_singleton 0
+      · apply hrange.subset
+        rintro r ⟨a, k, hk, rfl⟩
+        exact ⟨(a, k), rfl⟩
+    unfold trackingError
+    apply le_csSup hfinite.bddAbove
+    simp [T]
+  have hrecAt (x : Path t d) (c : Fin (t + 1))
+      (hrun : RunningThrough q x c.val)
+      (hforced : ForcedMartingaleGood q {i} y x) :
+      trackingError q x c.val ≤ K * (d : ℝ) ^ (-(1 / 8 : ℝ)) +
+        K / d * ∑ j : Fin t,
+          if j.val < c.val then trackingError q x j.val else 0 := by
+    let xt := truncateAt x c.val
+    have hbefore (k : Fin t) (hk : k.val < c.val) : xt k = x k := by
+      simp [xt, truncateAt, hk]
+    have htrackC : trackingError q xt c.val = trackingError q x c.val := by
+      apply trackingError_prefix_congr q xt x c.val (by omega)
+      intro k hk
+      exact hbefore k hk
+    have htrackRow (j : Fin t) (hj : j.val < c.val) :
+        trackingError q xt j.val = trackingError q x j.val := by
+      apply trackingError_prefix_congr q xt x j.val (Nat.le_of_lt j.isLt)
+      intro k hk
+      exact hbefore k (lt_trans hk hj)
+    have hrunTrunc : RunningThrough q xt c.val := by
+      refine ⟨?_, ?_⟩
+      · rcases hrun.1 with ⟨hvalid, hinj⟩
+        constructor
+        · intro k hk
+          rw [hbefore k hk]
+          exact hvalid k hk
+        · intro k l hk hl heq
+          have heq' : x k = x l := by
+            rw [hbefore k hk, hbefore l hl] at heq
+            exact heq
+          exact hinj k l hk hl heq'
+      · intro j hj
+        rw [htrackRow j hj]
+        exact hrun.2 j hj
+    have hmart := htruncatedMartingaleGood x c hrun hforced
+    have hrec := hRec xt c hrunTrunc hmart
+    rw [htrackC] at hrec
+    have hsum :
+        (∑ j : Fin t, if j.val < c.val then trackingError q xt j.val else 0) =
+        ∑ j : Fin t, if j.val < c.val then trackingError q x j.val else 0 := by
+      apply Finset.sum_congr rfl
+      intro j hj
+      by_cases hjc : j.val < c.val
+      · simp [hjc, htrackRow j hjc]
+      · simp [hjc]
+    rw [hsum] at hrec
+    exact hrec
+  have herrorBound (x : Path t d) (c : Fin (t + 1))
+      (hrun : RunningThrough q x c.val)
+      (hforced : ForcedMartingaleGood q {i} y x) :
+      trackingError q x c.val ≤ K * Real.exp K * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+    let A : ℝ := K * (d : ℝ) ^ (-(1 / 8 : ℝ))
+    let B : ℝ := K / (d : ℝ)
+    let e : Fin (t + 1) → ℝ := fun b =>
+      if b.val ≤ c.val then max 0 (trackingError q x b.val) else 0
+    have hA : 0 ≤ A := by dsimp [A]; positivity
+    have hB : 0 ≤ B := by dsimp [B]; positivity
+    have heNonneg (b : Fin (t + 1)) : 0 ≤ e b := by
+      by_cases hb : b.val ≤ c.val
+      · change 0 ≤ if b.val ≤ c.val then
+            max 0 (trackingError q x b.val) else 0
+        rw [if_pos hb]
+        exact le_max_left _ _
+      · change 0 ≤ if b.val ≤ c.val then
+            max 0 (trackingError q x b.val) else 0
+        rw [if_neg hb]
+    have hrecGronwall (b : Fin (t + 1)) :
+        e b ≤ A + B * ∑ j : Fin (t + 1),
+          if j.val < b.val then e j else 0 := by
+      by_cases hbc : b.val ≤ c.val
+      · have hrunB := hRunMono x hbc hrun
+        have hrecB := hrecAt x b hrunB hforced
+        have hbval : b.val ≤ t := by omega
+        have hsum := fin_sum_prefix_eq hbval
+          (fun j : Fin t => trackingError q x j.val)
+          (fun j : Fin (t + 1) => e j)
+          (by
+            intro j hj
+            let j' : Fin (t + 1) := ⟨j.val, by omega⟩
+            have hj' : j'.val < b.val := by simpa [j'] using hj
+            have hj'c : j'.val ≤ c.val := le_trans (Nat.le_of_lt hj') hbc
+            change trackingError q x j.val = e j'
+            dsimp [e]
+            rw [if_pos hj'c]
+            rw [show j'.val = j.val by rfl]
+            rw [max_eq_right (htrackNonneg x j.val)])
+        rw [hsum] at hrecB
+        have hsumNonneg :
+            0 ≤ ∑ j : Fin (t + 1), if j.val < b.val then e j else 0 := by
+          apply Finset.sum_nonneg
+          intro j hj
+          by_cases hjb : j.val < b.val
+          · simp [hjb, heNonneg]
+          · simp [hjb]
+        have hrhsNonneg :
+            0 ≤ A + B * ∑ j : Fin (t + 1),
+              if j.val < b.val then e j else 0 :=
+          add_nonneg hA (mul_nonneg hB hsumNonneg)
+        have heq : e b = max 0 (trackingError q x b.val) := by
+          change (if b.val ≤ c.val then max 0 (trackingError q x b.val) else 0) = _
+          rw [if_pos hbc]
+        rw [heq]
+        exact max_le_iff.mpr ⟨hrhsNonneg, hrecB⟩
+      · have heq : e b = 0 := by
+          change (if b.val ≤ c.val then max 0 (trackingError q x b.val) else 0) = 0
+          rw [if_neg hbc]
+        rw [heq]
+        have hsumNonneg :
+            0 ≤ ∑ j : Fin (t + 1), if j.val < b.val then e j else 0 := by
+          apply Finset.sum_nonneg
+          intro j hj
+          by_cases hjb : j.val < b.val
+          · simp [hjb, heNonneg j]
+          · simp [hjb]
+        exact add_nonneg hA (mul_nonneg hB hsumNonneg)
+    have hgronwall := discrete_tracking_gronwall t A B hA hB e heNonneg hrecGronwall
+    have htrackC : trackingError q x c.val ≤ e c := by
+      have heq : e c = max 0 (trackingError q x c.val) := by
+        change (if c.val ≤ c.val then max 0 (trackingError q x c.val) else 0) = _
+        rw [if_pos le_rfl]
+      rw [heq]
+      exact le_max_right _ _
+    have hcval : (c.val : ℝ) ≤ (t : ℝ) := by exact_mod_cast (show c.val ≤ t by omega)
+    have hratio : (c.val : ℝ) / (d : ℝ) ≤ 3 / 4 := by
+      apply (div_le_iff₀ hd).2
+      nlinarith [hcval, (show (t : ℝ) ≤ 3 * (d : ℝ) / 4 from hq.horizon)]
+    have htime : B * (c.val : ℝ) ≤ K := by
+      dsimp [B]
+      calc
+        K / (d : ℝ) * (c.val : ℝ) = K * ((c.val : ℝ) / (d : ℝ)) := by ring
+        _ ≤ K := by
+          have hmul := mul_le_mul_of_nonneg_left hratio (le_of_lt (lt_of_lt_of_le (by norm_num) hK))
+          nlinarith [hmul]
+    have hexp : Real.exp (B * (c.val : ℝ)) ≤ Real.exp K :=
+      Real.exp_le_exp.mpr htime
+    calc
+      trackingError q x c.val ≤ e c := htrackC
+      _ ≤ A * Real.exp (B * (c.val : ℝ)) := hgronwall c
+      _ ≤ K * Real.exp K * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+        dsimp [A]
+        calc
+          K * (d : ℝ) ^ (-(1 / 8 : ℝ)) * Real.exp (B * (c.val : ℝ)) =
+              (K * Real.exp (B * (c.val : ℝ))) * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by ring
+          _ ≤ (K * Real.exp K) * (d : ℝ) ^ (-(1 / 8 : ℝ)) :=
+            mul_le_mul_of_nonneg_right
+              (mul_le_mul_of_nonneg_left hexp (by linarith [hK]))
+              (Real.rpow_nonneg hd.le _)
+          _ = K * Real.exp K * (d : ℝ) ^ (-(1 / 8 : ℝ)) := rfl
+  have hstepFactor (x : Path t d) (hw : forcingWeight q {i} y x ≠ 0)
+      (j : Fin t) : forcingStepWeight q {i} y x j (x j) ≠ 0 := by
+    unfold forcingWeight at hw
+    exact (Finset.prod_ne_zero_iff.mp hw) j (Finset.mem_univ j)
+  have hrunAvoid (x : Path t d) (hw : forcingWeight q {i} y x ≠ 0)
+      (hforced : ForcedMartingaleGood q {i} y x) (n : ℕ) (hn : n ≤ t) :
+      RunningThrough q x n ∧
+        ∀ k : Fin t, k.val < n → k.val < i.val → x k ≠ some (y i) := by
+    induction n with
+    | zero =>
+        constructor
+        · refine ⟨⟨?_, ?_⟩, ?_⟩
+          · intro k hk
+            omega
+          · intro k l hk hl hEq
+            omega
+          · intro k hk
+            omega
+        · intro k hk
+          omega
+    | succ n ih =>
+        have hnlt : n < t := by omega
+        have hprev := ih (by omega)
+        let c : Fin (t + 1) := ⟨n, by omega⟩
+        have htrack := herrorBound x c hprev.1 hforced
+        have htrack20 : trackingError q x n ≤ 1 / 20 := by
+          exact htrack.trans htrackSmall
+        let r : Fin t := ⟨n, hnlt⟩
+        have hfactor := hstepFactor x hw r
+        have hfreeMass := free_mass_before_stop q hq x r hprev.1.1 htrack20
+        have hrow : ∃ z, x r = some z ∧ Free x n z ∧
+            (n < i.val → z ≠ y i) := by
+          by_cases hri : r = i
+          · have hfreeTarget : Free x n (y i) := by
+              intro k hk heq
+              have hki : k.val < i.val := by
+                have hv := congrArg Fin.val hri
+                dsimp [r] at hv
+                omega
+              exact hprev.2 k hk hki heq
+            have hactive : PrefixValid x n ∧
+                trackingError q x n ≤ 1 / 20 ∧ Free x n (y i) :=
+              ⟨hprev.1.1, htrack20, hfreeTarget⟩
+            have hactiveR : PrefixValid x r.val ∧
+                trackingError q x r.val ≤ 1 / 20 ∧ Free x r.val (y i) := by
+              simpa [r] using hactive
+            have hmem : r ∈ ({i} : Finset (Fin t)) := by simp [hri]
+            have hyEq : y r = y i := congrArg y hri
+            have hforceEq : forcingStepWeight q {i} y x r (x r) =
+                if x r = some (y i) then 1 else 0 := by
+              unfold forcingStepWeight
+              rw [if_pos hmem]
+              have hcond : PrefixValid x r.val ∧
+                  trackingError q x r.val ≤ 1 / 20 ∧ Free x r.val (y r) := by
+                simpa [hyEq] using hactiveR
+              rw [if_pos hcond]
+              simp [hyEq]
+            have hlabel : x r = some (y i) := by
+              by_contra hne
+              rw [hforceEq] at hfactor
+              simp [hne] at hfactor
+            refine ⟨y i, hlabel, hfreeTarget, ?_⟩
+            intro hni
+            have hv := congrArg Fin.val hri
+            dsimp [r] at hv
+            omega
+          · let B : Finset (Fin d) := pendingLabels {i} y r
+            have hBsingleton (hni : n < i.val) : B = {y i} := by
+              dsimp [B]
+              unfold pendingLabels
+              have hfilter :
+                  ({i} : Finset (Fin t)).filter (fun j => r.val < j.val) = {i} := by
+                ext j
+                simp only [Finset.mem_filter, Finset.mem_singleton]
+                constructor
+                · rintro ⟨hji, _⟩
+                  exact hji
+                · intro hji
+                  subst j
+                  exact ⟨rfl, by simpa [r] using hni⟩
+              rw [hfilter]
+              exact Finset.image_singleton y i
+            have hBempty (hni : ¬ n < i.val) : B = ∅ := by
+              dsimp [B]
+              unfold pendingLabels
+              have hfilter :
+                  ({i} : Finset (Fin t)).filter (fun j => r.val < j.val) = ∅ := by
+                ext j
+                constructor
+                · intro hj
+                  rcases Finset.mem_filter.mp hj with ⟨hji, hjlt⟩
+                  have hjiEq : j = i := Finset.mem_singleton.mp hji
+                  subst j
+                  exact (hni (by simpa [r] using hjlt)).elim
+                · intro hj
+                  have hfalse : False := by simpa using hj
+                  exact hfalse.elim
+              rw [hfilter]
+              simp
+            have hfreeTarget (hni : n < i.val) : Free x n (y i) := by
+              intro k hk heq
+              exact hprev.2 k hk (by omega) heq
+            have hmassPos : 0 < availableMass q x r B := by
+              by_cases hni : n < i.val
+              · have hmassSingleton := lane_q_inj_comp_available_mass_singleton
+                  q x r (y i) (hfreeTarget hni)
+                rw [hBsingleton hni, hmassSingleton]
+                have hbase := hfreeMass.2
+                have hatom := hq.atom r (y i)
+                nlinarith [hatomSmall]
+              · rw [hBempty hni]
+                exact lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 5) hfreeMass.2
+            have hactive : PrefixValid x n ∧
+                trackingError q x n ≤ 1 / 20 ∧ 0 < availableMass q x r B :=
+              ⟨hprev.1.1, htrack20, hmassPos⟩
+            have hactiveR : PrefixValid x r.val ∧
+                trackingError q x r.val ≤ 1 / 20 ∧ 0 < availableMass q x r B := by
+              simpa [r] using hactive
+            have hrnot : r ∉ ({i} : Finset (Fin t)) := by
+              simp
+              exact hri
+            have hforceEq : forcingStepWeight q {i} y x r (x r) =
+                ordinaryWeight q x r B (x r) := by
+              simp [forcingStepWeight, hrnot, B]
+            have hordNe : ordinaryWeight q x r B (x r) ≠ 0 := by
+              rw [← hforceEq]
+              exact hfactor
+            cases hx : x r with
+            | none =>
+                have hz : ordinaryWeight q x r B none = 0 := by
+                  unfold ordinaryWeight
+                  rw [if_pos hactiveR]
+                have hordNe' := hordNe
+                rw [hx] at hordNe'
+                exact False.elim (hordNe' hz)
+            | some z =>
+                have hallowed : Free x n z ∧ z ∉ B := by
+                  by_contra hbad
+                  have hbadR : ¬ (Free x r.val z ∧ z ∉ B) := by
+                    simpa [r] using hbad
+                  have hz : ordinaryWeight q x r B (some z) = 0 := by
+                    unfold ordinaryWeight
+                    rw [if_pos hactiveR]
+                    simp [hbadR]
+                  have hordNe' := hordNe
+                  rw [hx] at hordNe'
+                  exact hordNe' hz
+                refine ⟨z, rfl, hallowed.1, ?_⟩
+                intro hni
+                have hpend := hBsingleton hni
+                have hzneq : z ≠ y i := by
+                  intro hEq
+                  apply hallowed.2
+                  rw [hpend]
+                  simp [hEq]
+                exact hzneq
+        rcases hrow with ⟨z, hzr, hfreeRow, hrowAvoid⟩
+        have hvalidNext : PrefixValid x (n + 1) := by
+          rcases hprev.1.1 with ⟨hval, hinj⟩
+          constructor
+          · intro k hk
+            by_cases hkold : k.val < n
+            · exact hval k hkold
+            · have hkr : k = r := Fin.ext (by dsimp [r]; omega)
+              subst k
+              exact ⟨z, hzr⟩
+          · intro k l hk hl heq
+            by_cases hko : k.val < n
+            · by_cases hlo : l.val < n
+              · exact hinj k l hko hlo heq
+              · have hlr : l = r := Fin.ext (by dsimp [r]; omega)
+                subst l
+                have hek : x k = some z := heq.trans hzr
+                exact False.elim ((hfreeRow k hko) hek)
+            · have hkr : k = r := Fin.ext (by dsimp [r]; omega)
+              subst k
+              by_cases hlo : l.val < n
+              · have hel : x l = some z := heq.symm.trans hzr
+                exact False.elim ((hfreeRow l hlo) hel)
+              · have hlr : l = r := Fin.ext (by dsimp [r]; omega)
+                subst l
+                rfl
+        have htrackNext (k : Fin t) (hk : k.val < n + 1) :
+            trackingError q x k.val ≤ 1 / 20 := by
+          by_cases hko : k.val < n
+          · exact hprev.1.2 k hko
+          · have hkr : k = r := Fin.ext (by dsimp [r]; omega)
+            subst k
+            exact htrack20
+        have havoidNext : ∀ k : Fin t, k.val < n + 1 → k.val < i.val →
+            x k ≠ some (y i) := by
+          intro k hk hki
+          by_cases hko : k.val < n
+          · exact hprev.2 k hko hki
+          · have hkr : k = r := Fin.ext (by dsimp [r]; omega)
+            subst k
+            intro heq
+            have hsome : some z = some (y i) := hzr.symm.trans heq
+            injection hsome with hzEq
+            exact hrowAvoid hki hzEq
+        exact ⟨⟨hvalidNext, htrackNext⟩, havoidNext⟩
+  have hgoodSupport (x : Path t d) (hw : forcingWeight q {i} y x ≠ 0)
+      (hforced : ForcedMartingaleGood q {i} y x) : Good q x := by
+    have hall := hrunAvoid x hw hforced t le_rfl
+    let c : Fin (t + 1) := ⟨t, by omega⟩
+    have hterminal := herrorBound x c hall.1 hforced
+    have hterminal20 : trackingError q x t ≤ 1 / 20 := hterminal.trans htrackSmall
+    have hterminal01 : trackingError q x t ≤ (d : ℝ) ^ (-(0.1 : ℝ)) := by
+      have hc : c.val = t := rfl
+      simpa [hc] using hterminal.trans hterminalSmall
+    exact ⟨hall.1.1, hterminal20, hterminal01⟩
+  let P : FinProb (Path t d) := forcingLaw q hq.nonneg hq.row_sum {i} y
+  have hprob : P.pr (ForcedMartingaleGood q {i} y) =
+      P.pr (fun x => ForcedMartingaleGood q {i} y x ∧ P.w x ≠ 0) := by
+    classical
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases hw : P.w x = 0 <;> simp [hw]
+  calc
+    1 - failureBound d ≤ P.pr (ForcedMartingaleGood q {i} y) := by simpa [P] using hForced
+    _ = P.pr (fun x => ForcedMartingaleGood q {i} y x ∧ P.w x ≠ 0) := hprob
+    _ ≤ P.pr (Good q) := FinProb.pr_mono P _ _ (by
+      intro x hx
+      apply hgoodSupport x
+      · simpa [P, forcingLaw] using hx.2
+      · exact hx.1)
 
 /-- TeX 03:722–734: integrate the atom-extracted ratio and condition on G.
 The conclusion quantifies over all queries, including empty, zero and repeated targets. -/

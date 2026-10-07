@@ -823,7 +823,7 @@ theorem chosenCenterOfGoodHeights_spec
   exact Classical.choose_spec
     (active_center_of_good_heights (P := P) (hc := hc) (n := n) Pp A hg v)
 
-private theorem crowdSame_le_univ (C : Finset (Pos9 P hc n))
+theorem crowdSame_le_univ (C : Finset (Pos9 P hc n))
     (Pp A : Pos9 P hc n → Bool) (v : CubeVertex n)
     (j : Fin (hc.levels n + 1)) (R : ℕ) :
     crowdSame9 C Pp A v j R ≤ crowdSame9 Finset.univ Pp A v j R := by
@@ -833,7 +833,7 @@ private theorem crowdSame_le_univ (C : Finset (Pos9 P hc n))
   simp only [Finset.mem_filter] at hc ⊢
   exact ⟨Finset.mem_univ _, hc.2⟩
 
-private theorem crowdAdj_le_univ (C : Finset (Pos9 P hc n))
+theorem crowdAdj_le_univ (C : Finset (Pos9 P hc n))
     (Pp A : Pos9 P hc n → Bool) (v : CubeVertex n)
     (j : Fin (hc.levels n + 1)) :
     crowdAdj9 C Pp A v j ≤ crowdAdj9 Finset.univ Pp A v j := by
@@ -843,7 +843,7 @@ private theorem crowdAdj_le_univ (C : Finset (Pos9 P hc n))
   simp only [Finset.mem_filter] at hc ⊢
   exact ⟨Finset.mem_univ _, hc.2⟩
 
-private theorem bad_crowd_mono_univ
+theorem bad_crowd_mono_univ
     (C : Finset (Pos9 P hc n)) (t : ℝ) (Pp A : Pos9 P hc n → Bool)
     (v : CubeVertex n) (j : Fin (hc.levels n + 1))
     (hbad : badIn9 C t Pp A v j) (hnotHole : ¬ holeIn9 C Pp A v j) :
@@ -869,7 +869,7 @@ private theorem bad_crowd_mono_univ
         exact_mod_cast crowdSame_le_univ (P := P) (hc := hc) (n := n)
           C Pp A v j' (P.radius n + 1))))
 
-private theorem sharedConsulted_local_bounds
+theorem sharedConsulted_local_bounds
     (v v' : CubeVertex n) (R' : ℕ) (c : Pos9 P hc n)
     (h : c ∈ consulted9 (P := P) (hc := hc) (n := n) v R' ∩ consulted9 v' R') :
     _root_.hammingDist c.slice (specialWord9 (P.m n) v) ≤ 2 * R' + 1 ∧

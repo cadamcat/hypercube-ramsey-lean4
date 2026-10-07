@@ -233,6 +233,25 @@ theorem finLaw_map_E {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β]
   intro a ha
   simp
 
+theorem finset_powerset_pow_le_exp {α : Type*} [DecidableEq α]
+    (S : Finset α) (c : ℝ) (hc : 0 ≤ c) :
+    (∑ M ∈ S.powerset, c ^ M.card) ≤ Real.exp (c * S.card) := by
+  classical
+  calc
+    (∑ M ∈ S.powerset, c ^ M.card) = ∏ a ∈ S, (1 + c) := by
+      simpa [Finset.prod_const] using
+        (Finset.prod_one_add (f := fun _ : α => c) S).symm
+    _ ≤ Real.exp (c * S.card) := by
+      simpa [Finset.sum_const, nsmul_eq_mul, mul_comm] using
+        (Real.prod_one_add_le_exp_sum S (f := fun _ : α => c) (fun _ => hc))
+
+theorem finset_average_pow_expand {α : Type*} [DecidableEq α]
+    (S : Finset α) (f : α → ℝ) (n : ℕ) :
+    ((S.card : ℝ)⁻¹ * (∑ a ∈ S, f a)) ^ n =
+      ((S.card : ℝ) ^ n)⁻¹ *
+        (∑ p ∈ Fintype.piFinset (fun _ : Fin n => S), ∏ i, f (p i)) := by
+  rw [mul_pow, inv_pow, Finset.sum_pow']
+
 theorem avoided_cluster_history_E_le {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
     (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)

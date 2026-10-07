@@ -72,10 +72,133 @@ theorem selectionAt_some_mem (p : HDParams) (Sites : p.Sites) (P A : p.Loc → B
 
 theorem selection_some_shape (p : HDParams) (Sites : p.Sites) (P A : p.Loc → Bool)
     (E : p.EligMap) (τ : p.Ties) (v : CubeVertex p.d) (l : p.Loc)
-    (hshape : ∀ j l, l ∈ E v j → P l = true ∧ l.2 = j ∧ hammingDist l.1 v ≤ p.r)
-    (hselect : p.selection Sites P A E τ v = some l) : P l = true ∧ hammingDist l.1 v ≤ p.r := by
+    (hshape : ∀ j l, l ∈ E v j → P l = true ∧ l.2 = j ∧ _root_.hammingDist l.1 v ≤ p.r)
+    (hselect : p.selection Sites P A E τ v = some l) : P l = true ∧ _root_.hammingDist l.1 v ≤ p.r := by
   obtain ⟨j, hj⟩ := selectionAt_some_mem p Sites P A E τ p.Rlong v l hselect
   exact ⟨(hshape j l hj).1, (hshape j l hj).2.2⟩
+
+theorem bad_iff_of_agree (p : HDParams) (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (v : CubeVertex p.d) (j : Fin (p.H + 1)) (hE : E v j = E' v j)
+    (hshape : ∀ l ∈ E v j, l.2 = j ∧ _root_.hammingDist l.1 v ≤ p.r)
+    (hagree : ∀ l : p.Loc, l.2 = j → _root_.hammingDist l.1 v ≤ p.r + p.D → P l = P' l ∧ A l = A' l) :
+    p.Bad P A E v j ↔ p.Bad P' A' E' v j := by
+  have hactive : (∀ l ∈ E v j, A l = false) ↔ (∀ l ∈ E' v j, A' l = false) := by
+    rw [← hE]
+    constructor
+    · intro h l hl
+      have hs := hshape l hl
+      rw [← (hagree l hs.1 (by omega)).2]
+      exact h l hl
+    · intro h l hl
+      have hs := hshape l hl
+      rw [(hagree l hs.1 (by omega)).2]
+      exact h l hl
+  have hcount : (Finset.univ.filter fun u : CubeVertex p.d =>
+      P (u, j) = true ∧ A (u, j) = true ∧ _root_.hammingDist u v ≤ p.r + p.D) =
+      (Finset.univ.filter fun u : CubeVertex p.d =>
+      P' (u, j) = true ∧ A' (u, j) = true ∧ _root_.hammingDist u v ≤ p.r + p.D) := by
+    ext u
+    by_cases hu : _root_.hammingDist u v ≤ p.r + p.D
+    · have hh := hagree (u, j) rfl hu
+      simp [hu, hh.1, hh.2]
+    · simp [hu]
+  unfold HDParams.Bad
+  rw [hactive, hcount]
+
+def selectMinimum (p : HDParams) (active : Finset p.Loc) (priority : p.Loc → Fin (Fintype.card p.Loc)) :
+    Option p.Loc :=
+  if hne : (active.image priority).Nonempty then
+    some (Classical.choose (Finset.mem_image.mp (Finset.min'_mem (active.image priority) hne)))
+  else none
+
+theorem selectionAt_eq_of_data (p : HDParams) (Sites : p.Sites) (P A P' A' : p.Loc → Bool)
+    (E E' : p.EligMap) (τ τ' : p.Ties) (v : CubeVertex p.d) (R : ℕ)
+    (hheight : p.height Sites P A E R v = p.height Sites P' A' E' R v)
+    (hbad : ∀ j, p.Bad P A E v j ↔ p.Bad P' A' E' v j)
+    (hactive : ∀ j, (E v j).filter (fun l => A l = true) = (E' v j).filter (fun l => A' l = true))
+    (hpriority : ∀ j, p.priority τ (v, j) = p.priority τ' (v, j)) :
+    p.selectionAt Sites P A E τ R v = p.selectionAt Sites P' A' E' τ' R v := by
+  unfold HDParams.selectionAt
+  simp only [hheight]
+  split
+  · rename_i hj
+    let j' : Fin (p.H + 1) := ⟨p.height Sites P' A' E' R v, by omega⟩
+    rw [propext (hbad j')]
+    split
+    · rfl
+    · change selectMinimum p ((E v j').filter (fun l => A l = true)) (p.priority τ (v, j')) =
+        selectMinimum p ((E' v j').filter (fun l => A' l = true)) (p.priority τ' (v, j'))
+      rw [hactive j', hpriority j']
+  · rfl
+
+variable {γ K' χ : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
+variable (X : Setup5 γ K' χ n N E G)
+
+theorem selLong_local (L : X.CentreLayer5) (H : X.KeyHist) (v : EvenRole5 n) :
+    FinProb.DependsOn (fun ω : X.CΩ L.ht => X.selLong (L.elig H) ω v)
+      (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + L.slack + 8)) := by
+  intro ω ω' hagree
+  let p := L.ht.hp
+  let q : CubeVertex p.d := X.siteOf v
+  let P := Setup5.pos ω
+  let P' := Setup5.pos ω'
+  let A := Setup5.act ω
+  let A' := Setup5.act ω'
+  let E₀ := L.elig H ω
+  let E₁ := L.elig H ω'
+  have hcell (l : p.Loc) (hl : _root_.hammingDist l.1 q ≤ p.r + L.slack + 8) : ω l = ω' l :=
+    hagree l (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hl⟩)
+  have hE (u : CubeVertex p.d) (hu : _root_.hammingDist u q ≤ p.Rlong) (j : Fin (p.H + 1)) :
+      E₀ u j = E₁ u j := by
+    apply L.elig_local H u j ω ω'
+    intro l hl
+    have hdist := (Finset.mem_filter.mp hl).2
+    change _root_.hammingDist l.1 u ≤ p.r + 16 at hdist
+    apply hcell l
+    have htri := _root_.hammingDist_triangle l.1 u q
+    have hslack := L.slack_large
+    change p.Rlong + 32 ≤ L.slack at hslack
+    omega
+  have hbadAt (u : CubeVertex p.d) (hu : _root_.hammingDist u q ≤ p.Rlong) (j : Fin (p.H + 1)) :
+      p.Bad P A E₀ u j ↔ p.Bad P' A' E₁ u j := by
+    apply bad_iff_of_agree p P A P' A' E₀ E₁ u j (hE u hu j)
+    · intro l hl
+      exact (L.elig_shape H ω u j l hl).2
+    · intro l hj hdist
+      have hloc : _root_.hammingDist l.1 q ≤ p.r + L.slack + 8 := by
+        have htri := _root_.hammingDist_triangle l.1 u q
+        have hD : p.D = 8 := rfl
+        have hslack := L.slack_large
+        change p.Rlong + 32 ≤ L.slack at hslack
+        omega
+      have hh := hcell l hloc
+      exact ⟨congrArg (fun a : X.CVal L.ht => a.1) hh,
+        congrArg (fun a : X.CVal L.ht => a.2.1) hh⟩
+  have hbadN (u : CubeVertex p.d) (hu : u ∈ p.domBall (X.sites L.ht) q p.Rlong) (j : ℕ) :
+      p.BadN P A E₀ u j ↔ p.BadN P' A' E₁ u j := by
+    have hdist := (Finset.mem_filter.mp hu).2
+    unfold HDParams.BadN
+    constructor
+    · rintro ⟨hj, hb⟩
+      exact ⟨hj, (hbadAt u hdist ⟨j, hj⟩).mp hb⟩
+    · rintro ⟨hj, hb⟩
+      exact ⟨hj, (hbadAt u hdist ⟨j, hj⟩).mpr hb⟩
+  have hheight := height_eq_of_bad_agree p (X.sites L.ht) P A P' A' E₀ E₁ q p.Rlong hbadN
+  have hactive (j : Fin (p.H + 1)) :
+      (E₀ q j).filter (fun l => A l = true) = (E₁ q j).filter (fun l => A' l = true) := by
+    rw [← hE q (by simp) j]
+    apply Finset.filter_congr
+    intro l hl
+    have hs := L.elig_shape H ω q j l hl
+    have hdist : _root_.hammingDist l.1 q ≤ p.r := hs.2.2
+    have hh := hcell l (by omega)
+    exact Iff.of_eq (congrArg (fun a : X.CVal L.ht => a.2.1 = true) hh)
+  have hpriority (j : Fin (p.H + 1)) : p.priority (Setup5.tie ω) (q, j) = p.priority (Setup5.tie ω') (q, j) := by
+    have hh := hcell (q, j) (by simp)
+    unfold HDParams.priority Setup5.tie
+    rw [hh]
+  exact selectionAt_eq_of_data p (X.sites L.ht) P A P' A' E₀ E₁ (Setup5.tie ω) (Setup5.tie ω') q p.Rlong
+    hheight (hbadAt q (by simp)) hactive hpriority
 
 end
 end HypercubeRamsey.Lane_sol_s05_even

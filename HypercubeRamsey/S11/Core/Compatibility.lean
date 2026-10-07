@@ -658,6 +658,8 @@ theorem clique_removal (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK :
     have hExcluded := hYX G Y V (by simp) (Finset.Subset.trans hVsub hSsub)
     exact False.elim (hExcluded hCluster)
 
+set_option maxHeartbeats 2000000
+
 /-- L11.2b (11:130–159).  Suppose the violators `U` number at least `N e^{-n^δ}`; let `μ_U` be uniform on `U`.
 `E_i D_i(x) = (1 + m_x)/2` and tag mass `> η` has `D_i(x) > .8`, so `E_i D_i(x)² ≥ 1/4 + cη`.  In `L²(μ_U)` a
 positive `p`-fraction of tags has `‖v_i‖ > 1/2 + c'`; each such tag gives `ρ_i ≤ Cπ_i` on labels with projection
@@ -1150,6 +1152,232 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
                       ring
     rw [hprojectionAverage i hi] at hupper
     nlinarith [hnormLower i hi, heta]
+  have hHitProd (x y z : Fin N) :
+      hit E G x y * hit E G x z =
+        (if Hits E G x y ∧ Hits E G x z then (1 : ℝ) else 0) := by
+    unfold hit
+    by_cases hy : Hits E G x y <;> by_cases hz : Hits E G x z <;> simp [hy, hz]
+  have hcodegGram (y z : Fin N) :
+      codeg E G μ y z = ∑ x, μ.w x * hit E G x y * hit E G x z := by
+    unfold codeg
+    apply Finset.sum_congr rfl
+    intro x hx
+    rw [← hHitProd x y z]
+    ring
+  have hcodegDiag (y : Fin N) : codeg E G μ y y ≤ 1 := by
+    rw [hcodegGram]
+    calc
+      (∑ x, μ.w x * hit E G x y * hit E G x y) ≤ ∑ x, μ.w x * 1 := by
+        apply Finset.sum_le_sum
+        intro x hx
+        calc
+          μ.w x * hit E G x y * hit E G x y =
+              μ.w x * (hit E G x y * hit E G x y) := by ring
+          _ ≤ μ.w x * 1 := by
+            apply mul_le_mul_of_nonneg_left _ (μ.nonneg x)
+            unfold hit
+            split_ifs <;> norm_num
+      _ = 1 := by simp [μ.sum_eq_one]
+  have hPairExpansion (A : Finset (Fin N)) :
+      (∑ x, μ.w x * (∑ y ∈ A, hit E G x y) ^ 2) =
+        ∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z := by
+    have hsumProd (x : Fin N) :
+        (∑ y ∈ A, hit E G x y) ^ 2 =
+          ∑ y ∈ A, ∑ z ∈ A, hit E G x y * hit E G x z := by
+      calc
+        (∑ y ∈ A, hit E G x y) ^ 2 =
+            (∑ y ∈ A, hit E G x y) * (∑ z ∈ A, hit E G x z) := by ring
+        _ = ∑ y ∈ A, hit E G x y * (∑ z ∈ A, hit E G x z) := by rw [Finset.sum_mul]
+        _ = ∑ y ∈ A, ∑ z ∈ A, hit E G x y * hit E G x z := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              rw [Finset.mul_sum]
+    calc
+      (∑ x, μ.w x * (∑ y ∈ A, hit E G x y) ^ 2) =
+          ∑ x, μ.w x * (∑ y ∈ A, ∑ z ∈ A, hit E G x y * hit E G x z) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [hsumProd]
+      _ = ∑ y ∈ A, ∑ z ∈ A, ∑ x, μ.w x * hit E G x y * hit E G x z := by
+            calc
+              _ = ∑ x, ∑ y ∈ A, ∑ z ∈ A,
+                    μ.w x * hit E G x y * hit E G x z := by
+                      apply Finset.sum_congr rfl
+                      intro x hx
+                      rw [Finset.mul_sum]
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      rw [Finset.mul_sum]
+                      apply Finset.sum_congr rfl
+                      intro z hz
+                      ring
+              _ = ∑ y ∈ A, ∑ x, ∑ z ∈ A,
+                    μ.w x * hit E G x y * hit E G x z := by rw [Finset.sum_comm]
+              _ = ∑ y ∈ A, ∑ z ∈ A, ∑ x,
+                    μ.w x * hit E G x y * hit E G x z := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      rw [Finset.sum_comm]
+      _ = ∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            apply Finset.sum_congr rfl
+            intro z hz
+            rw [hcodegGram]
+  let t₀ : ℕ := 1000000000000
+  have ht₀pos : 0 < t₀ := by norm_num [t₀]
+  have ht₀recip : 1 / (t₀ : ℝ) < etaC / 1000 := by norm_num [t₀, etaC]
+  have hprojectionGap : 1 / 4 + etaC / 1000 + 1 / (t₀ : ℝ) <
+      (1 / 2 + etaC / 200) ^ 2 := by norm_num [t₀, etaC]
+  have hnoIndependent (i : ι) (hi : i ∈ NormGood) (A : Finset (Fin N))
+      (hA : A ⊆ selected i) (hcard : A.card = t₀)
+      (hpair : ∀ y ∈ A, ∀ z ∈ A, y ≠ z →
+        codeg E G μ y z < 1 / 4 + (n : ℝ) ^ (-δ)) : False := by
+    let m : ℝ := (A.card : ℝ)
+    let C : ℝ := 1 / 4 + (n : ℝ) ^ (-δ)
+    have hmEq : m = (t₀ : ℝ) := by
+      dsimp [m]
+      exact_mod_cast hcard
+    have hmCard : m = (A.card : ℝ) := rfl
+    have hmpos : 0 < m := by rw [hmEq]; exact_mod_cast ht₀pos
+    have hmomentPos : 0 < tagMoment i := by
+      have h := (Finset.mem_filter.mp hi).2
+      linarith [heta]
+    let sumHit (x : Fin N) : ℝ := ∑ y ∈ A, hit E G x y
+    have hinnerSum :
+        (∑ x, μ.w x * sumHit x * deg E G (π i) x) = ∑ y ∈ A, inner i y := by
+      calc
+        (∑ x, μ.w x * sumHit x * deg E G (π i) x) =
+            ∑ x, ∑ y ∈ A, μ.w x * hit E G x y * deg E G (π i) x := by
+              apply Finset.sum_congr rfl
+              intro x hx
+              dsimp [sumHit]
+              rw [Finset.mul_sum, Finset.sum_mul]
+        _ = ∑ y ∈ A, ∑ x, μ.w x * hit E G x y * deg E G (π i) x := by
+              rw [Finset.sum_comm]
+        _ = ∑ y ∈ A, inner i y := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              rfl
+    have hinnerLower (y : Fin N) (hy : y ∈ A) :
+        (1 / 2 + etaC / 200) * norm i < inner i y := by
+      have hproj : 1 / 2 + etaC / 200 < projection i y :=
+        (Finset.mem_filter.mp (hA hy)).2
+      dsimp [projection] at hproj
+      exact (lt_div_iff₀ (hnormPos i hi)).mp hproj
+    have hsumInnerLower : m * (1 / 2 + etaC / 200) * norm i <
+        ∑ y ∈ A, inner i y := by
+      have hsum : (∑ y ∈ A, (1 / 2 + etaC / 200) * norm i) <
+          ∑ y ∈ A, inner i y := by
+        apply Finset.sum_lt_sum
+        · intro y hy
+          exact (hinnerLower y hy).le
+        · obtain ⟨y, hy⟩ := Finset.card_pos.mp (by rw [hcard]; exact ht₀pos)
+          exact ⟨y, hy, hinnerLower y hy⟩
+      have hconst : (∑ y ∈ A, (1 / 2 + etaC / 200) * norm i) =
+          m * ((1 / 2 + etaC / 200) * norm i) := by simp [m]
+      rw [hconst] at hsum
+      nlinarith [hsum]
+    have hPairTotal :
+        (∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z) ≤ m ^ 2 * C + m := by
+      have hcodegPoint (y z : Fin N) (hy : y ∈ A) (hz : z ∈ A) :
+          codeg E G μ y z ≤ C + if y = z then (1 : ℝ) else 0 := by
+        by_cases hyz : y = z
+        · subst z
+          have hdiag := hcodegDiag y
+          have hCnonneg : 0 ≤ C := by dsimp [C]; positivity
+          have hone : 1 ≤ C + 1 := by linarith [hCnonneg]
+          simpa using hdiag.trans hone
+        · have h := hpair y hy z hz hyz
+          simp [hyz, C]
+          nlinarith [h]
+      have hinnerPair (y : Fin N) (hy : y ∈ A) :
+          (∑ z ∈ A, (C + if y = z then (1 : ℝ) else 0)) = m * C + 1 := by
+        rw [Finset.sum_add_distrib]
+        have hconst : (∑ z ∈ A, C) = m * C := by simp [m]
+        have hdelta : (∑ z ∈ A, if y = z then (1 : ℝ) else 0) = 1 := by
+          rw [Finset.sum_ite_eq A y (fun _ => (1 : ℝ))]
+          exact if_pos hy
+        rw [hconst, hdelta]
+      calc
+        (∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z) ≤
+            ∑ y ∈ A, ∑ z ∈ A, (C + if y = z then (1 : ℝ) else 0) := by
+              apply Finset.sum_le_sum
+              intro y hy
+              apply Finset.sum_le_sum
+              intro z hz
+              exact hcodegPoint y z hy hz
+        _ = m * (m * C + 1) := by
+              calc
+                (∑ y ∈ A, ∑ z ∈ A, (C + if y = z then (1 : ℝ) else 0)) =
+                    ∑ y ∈ A, (m * C + 1) := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      exact hinnerPair y hy
+                _ = (A.card : ℝ) * (m * C + 1) := by simp; ring
+                _ = m * (m * C + 1) := by rw [← hmCard]
+        _ = m ^ 2 * C + m := by ring
+    have hcs :
+        (∑ x, μ.w x * sumHit x * deg E G (π i) x) ^ 2 ≤
+          (∑ x, μ.w x * (sumHit x) ^ 2) * tagMoment i := by
+      simpa [sumHit, tagMoment] using
+        hweightedCS (fun x => ∑ y ∈ A, hit E G x y) (fun x => deg E G (π i) x)
+    have hcsLower :
+        (m * (1 / 2 + etaC / 200) * norm i) ^ 2 <
+          (∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z) * tagMoment i := by
+      calc
+        (m * (1 / 2 + etaC / 200) * norm i) ^ 2 <
+            (∑ x, μ.w x * sumHit x * deg E G (π i) x) ^ 2 := by
+              rw [hinnerSum]
+              have hleft : 0 ≤ m * (1 / 2 + etaC / 200) * norm i := by positivity
+              have hleftPos : 0 < m * (1 / 2 + etaC / 200) * norm i := by positivity
+              have hright : 0 ≤ ∑ y ∈ A, inner i y :=
+                (le_of_lt (lt_trans hleftPos hsumInnerLower))
+              exact (sq_lt_sq₀ hleft hright).2 hsumInnerLower
+        _ ≤ (∑ x, μ.w x * (sumHit x) ^ 2) * tagMoment i := hcs
+        _ = (∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z) * tagMoment i := by
+              rw [hPairExpansion]
+    have hmul :
+        (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) * tagMoment i <
+          (m ^ 2 * C + m) * tagMoment i := by
+      have hroot : norm i ^ 2 = tagMoment i := by
+        dsimp [norm]
+        exact Real.sq_sqrt (htagMomentBounds i).1
+      have hsq :
+          (m * (1 / 2 + etaC / 200) * norm i) ^ 2 =
+            (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) * tagMoment i := by
+        calc
+          (m * (1 / 2 + etaC / 200) * norm i) ^ 2 =
+              (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) * norm i ^ 2 := by ring
+          _ = (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) * tagMoment i := by rw [hroot]
+      calc
+        (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) * tagMoment i =
+            (m * (1 / 2 + etaC / 200) * norm i) ^ 2 := hsq.symm
+        _ < (∑ y ∈ A, ∑ z ∈ A, codeg E G μ y z) * tagMoment i := hcsLower
+        _ ≤ (m ^ 2 * C + m) * tagMoment i :=
+              mul_le_mul_of_nonneg_right hPairTotal (le_of_lt hmomentPos)
+    have hcoeff : m ^ 2 * (1 / 2 + etaC / 200) ^ 2 < m ^ 2 * C + m :=
+      (mul_lt_mul_iff_of_pos_right hmomentPos).mp hmul
+    have hratio : (1 / 2 + etaC / 200) ^ 2 < C + 1 / m := by
+      have hmulEq : m ^ 2 * (C + 1 / m) = m ^ 2 * C + m := by
+        field_simp [ne_of_gt hmpos]
+        <;> ring
+      have hcoeff' : m ^ 2 * (1 / 2 + etaC / 200) ^ 2 <
+          m ^ 2 * (C + 1 / m) := by rw [hmulEq]; exact hcoeff
+      have hmSq : 0 < m ^ 2 := sq_pos_of_pos hmpos
+      have hdiv : (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) / m ^ 2 < C + 1 / m := by
+        apply (div_lt_iff₀ hmSq).2
+        nlinarith [hcoeff']
+      have hcancel :
+          (m ^ 2 * (1 / 2 + etaC / 200) ^ 2) / m ^ 2 = (1 / 2 + etaC / 200) ^ 2 := by
+        field_simp [ne_of_gt hmSq]
+      rw [hcancel] at hdiv
+      exact hdiv
+    have hC : C < 1 / 4 + etaC / 1000 := by
+      dsimp [C]
+      linarith [hpowSmall]
+    have hminv : 1 / m = 1 / (t₀ : ℝ) := by rw [hmEq]
+    nlinarith [hratio, hprojectionGap, hC, hminv]
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

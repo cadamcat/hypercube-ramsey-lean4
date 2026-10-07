@@ -718,13 +718,14 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
   obtain ⟨nK, hnK⟩ := Filter.eventually_atTop.1 hKlarge
   obtain ⟨nExp, hnExp⟩ := Filter.eventually_atTop.1 hexpLarge
   obtain ⟨nRatio, hnRatio⟩ := Filter.eventually_atTop.1 hsmallRatio
-  refine ⟨max nsmall (max nb (max nK (max nExp (max nRatio 10)))), ?_⟩
+  refine ⟨max nsmall (max nb (max nK (max nExp (max nRatio 100)))), ?_⟩
   intro n hn N E X Y G ι hι π p hN hπnonneg hπsum hπsupp hπcap hmixcap hXY
   have hnsmall' : nsmall ≤ n := by omega
   have hnb' : nb ≤ n := by omega
   have hnK' : nK ≤ n := by omega
   have hnExp' : nExp ≤ n := by omega
   have hnRatio' : nRatio ≤ n := by omega
+  have hn100 : 100 ≤ n := by omega
   have hn10 : 10 ≤ n := by omega
   have hn1 : 1 ≤ n := by omega
   have hpowSmall : (n : ℝ) ^ (-δ) < etaC / 1000 := hnsmall n hnsmall'
@@ -2022,6 +2023,30 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
     have hhalf' : (2 : ℝ)⁻¹ ≤ Real.exp (3 * (n : ℝ) / 100) := by
       exact (by norm_num : (2 : ℝ)⁻¹ ≤ (1 / 2 : ℝ)).trans hhalf
     exact Nat.ceil_le_two_mul hhalf'
+  have hExp2 : 2 ≤ Real.exp 2 := by
+    have hExpOne : 2 ≤ Real.exp 1 := Real.exp_one_gt_two.le
+    have hExpOneNonneg : 0 ≤ Real.exp 1 := (Real.exp_pos 1).le
+    calc
+      (2 : ℝ) ≤ 2 * Real.exp 1 := by nlinarith [hExpOne]
+      _ ≤ Real.exp 1 * Real.exp 1 := mul_le_mul_of_nonneg_right hExpOne hExpOneNonneg
+      _ = Real.exp 2 := by rw [← Real.exp_add]; congr 1 <;> ring
+  have hExpN50 : 2 ≤ Real.exp ((n : ℝ) / 50) := by
+    have hn100R : (100 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hn100
+    have harg : (2 : ℝ) ≤ (n : ℝ) / 50 := by nlinarith [hn100R]
+    exact hExp2.trans (Real.exp_le_exp.mpr harg)
+  have hRhalf :
+      2 * (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤ (r₀ : ℝ) := by
+    calc
+      2 * (Nat.choose (sC n + t₀ - 2) (sC n - 1) : ℝ) ≤
+          2 * Real.exp ((n : ℝ) / 100) :=
+            mul_le_mul_of_nonneg_left hRamseyReal (by norm_num)
+      _ ≤ Real.exp (3 * (n : ℝ) / 100) := by
+          calc
+            2 * Real.exp ((n : ℝ) / 100) ≤
+                Real.exp ((n : ℝ) / 50) * Real.exp ((n : ℝ) / 100) :=
+                  mul_le_mul_of_nonneg_right hExpN50 (Real.exp_pos _).le
+            _ = Real.exp (3 * (n : ℝ) / 100) := by rw [← Real.exp_add]; congr 1 <;> ring
+      _ ≤ (r₀ : ℝ) := by simpa [r₀] using Nat.le_ceil (Real.exp (3 * (n : ℝ) / 100))
   have hExpHalfSq : Real.exp (1 / 2 : ℝ) ^ 2 = Real.exp 1 := by
     calc
       Real.exp (1 / 2 : ℝ) ^ 2 =
@@ -2187,6 +2212,62 @@ theorem high_degree (δ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hK : 0 
       _ = (rho i).w y * (Q.pr Function.Injective)⁻¹ := by ring
       _ ≤ (rho i).w y * 2 := mul_le_mul_of_nonneg_left hInv ((rho i).nonneg y)
       _ = 2 * (rho i).w y := by ring
+  have hjointPositiveExists : ∃ q : SampleState, 0 < joint.w q := by
+    by_contra hnone
+    have hnonpos (q : SampleState) : joint.w q ≤ 0 := by
+      by_contra h
+      exact hnone ⟨q, lt_of_not_ge h⟩
+    have hsumle : (∑ q : SampleState, joint.w q) ≤ 0 := by
+      calc
+        (∑ q : SampleState, joint.w q) ≤ ∑ q, (0 : ℝ) :=
+          Finset.sum_le_sum fun q _ => hnonpos q
+        _ = 0 := by simp
+    rw [joint.sum_eq_one] at hsumle
+    norm_num at hsumle
+  obtain ⟨q₀, hq₀pos⟩ := hjointPositiveExists
+  have hq₀good : GoodSample q₀ := hjointGood q₀ (ne_of_gt hq₀pos)
+  rcases q₀ with ⟨i₀, z₀⟩
+  obtain ⟨P₀, V₀, hP₀clique, hP₀disjoint, hV₀eq, hV₀remain⟩ :=
+    hsamplePacking i₀ r₀ z₀ hq₀good.1 hq₀good.2.1 hRamseySize
+  have hV₀remainR : (Finset.univ \ V₀).card < r₀ :=
+    lt_of_lt_of_le hV₀remain hRamseySize
+  have hV₀cardEq : (Finset.univ \ V₀).card + V₀.card = r₀ := by
+    simpa using Finset.card_sdiff_add_card_eq_card (Finset.subset_univ V₀)
+  have hV₀cardPos : 0 < V₀.card := by omega
+  have hV₀ne : V₀.Nonempty := Finset.card_pos.mp hV₀cardPos
+  have hP₀ne : P₀.Nonempty := by
+    obtain ⟨j, hj⟩ := hV₀ne
+    rw [hV₀eq] at hj
+    obtain ⟨C, hCP, _⟩ := Finset.mem_biUnion.mp hj
+    exact ⟨C, hCP⟩
+  obtain ⟨C₀, hC₀P⟩ := hP₀ne
+  have hC₀card : C₀.card = sC n := (hP₀clique C₀ hC₀P).1
+  let A₀ : Finset (Fin N) := C₀.image z₀
+  have hA₀card : A₀.card = sC n := by
+    dsimp [A₀]
+    rw [Finset.card_image_of_injective _ hq₀good.1]
+    exact hC₀card
+  have hA₀sub : A₀ ⊆ Y := by
+    intro y hy
+    obtain ⟨j, hjC, rfl⟩ := Finset.mem_image.mp hy
+    exact hq₀good.2.2 j
+  have hA₀ne : A₀.Nonempty := Finset.card_pos.mp (by rw [hA₀card]; exact hsCpos)
+  let D₀ : Law N := FinProb.uniform A₀ hA₀ne
+  have hD₀support : D₀.SupportedIn Y := by
+    intro y hy
+    have hyA : y ∉ A₀ := fun hmem => hy (hA₀sub hmem)
+    simp [D₀, FinProb.uniform, hyA]
+  have hceilS : Real.exp x ≤ (sC n : ℝ) := by
+    dsimp [x, sC]
+    exact Nat.le_ceil _
+  have hD₀atom (y : Fin N) : D₀.w y ≤ Real.exp (-x) := by
+    have hrecip : (sC n : ℝ)⁻¹ ≤ Real.exp (-x) := by
+      have h := one_div_le_one_div_of_le (Real.exp_pos x) hceilS
+      simpa [Real.exp_neg] using h
+    by_cases hy : y ∈ A₀
+    · have hcardR : (A₀.card : ℝ) = (sC n : ℝ) := by exact_mod_cast hA₀card
+      simpa [D₀, FinProb.uniform, hy, hcardR] using hrecip
+    · simpa [D₀, FinProb.uniform, hy] using (Real.exp_pos (-x)).le
   sorry
 
 /-- Discards (11:118, 161): the signed outliers, the removed cliques of the good-degree labels and the

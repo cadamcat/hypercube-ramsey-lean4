@@ -85,7 +85,123 @@ theorem tracking_label_sampler (d t : ℕ) (hd : 100 ≤ d)
         (j.val : ℝ) / d| ≤ 10 * (d : ℝ) ^ (-(1 / 8 : ℝ))) :
     ∃ Q : FinProb (Fin t → Fin d), LabelInjectionSupported Q ∧
       ∀ i y, |Q.pr (fun x => x i = y) - q i y| ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) := by
-  sorry
+  classical
+  letI : NeZero d := ⟨by omega⟩
+  have hdR : (100 : ℝ) ≤ (d : ℝ) := by exact_mod_cast hd
+  have hbase : 1 ≤ (d : ℝ) := by linarith
+  have hsqrt : (10 : ℝ) ≤ Real.sqrt (d : ℝ) := by
+    rw [Real.le_sqrt (by norm_num) (by positivity)]
+    nlinarith
+  have hhalf : (10 : ℝ) ≤ (d : ℝ) ^ (1 / (2 : ℝ)) := by
+    simpa [Real.sqrt_eq_rpow] using hsqrt
+  have hexp : (d : ℝ) ^ (1 / (2 : ℝ)) ≤ (d : ℝ) ^ (0.85 : ℝ) :=
+    Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+  have hpow : (10 : ℝ) ≤ (d : ℝ) ^ (0.85 : ℝ) := hhalf.trans hexp
+  have hneg : 10 * (d : ℝ) ^ (-(0.85 : ℝ)) ≤ 1 := by
+    have hdiv : 10 / (d : ℝ) ^ (0.85 : ℝ) ≤ 1 := by
+      rw [div_le_iff₀ (by positivity)]
+      simpa using hpow
+    simpa [Real.rpow_neg, div_eq_mul_inv] using hdiv
+  have hsplit : (d : ℝ) ^ (-(0.95 : ℝ)) =
+      (d : ℝ) ^ (-(0.1 : ℝ)) * (d : ℝ) ^ (-(0.85 : ℝ)) := by
+    rw [← Real.rpow_add (by positivity)]
+    norm_num
+  have hatom_small : 10 * (d : ℝ) ^ (-(0.95 : ℝ)) ≤
+      (d : ℝ) ^ (-(1 / 10 : ℝ)) := by
+    rw [hsplit]
+    calc
+      10 * ((d : ℝ) ^ (-(0.1 : ℝ)) * (d : ℝ) ^ (-(0.85 : ℝ)))
+          = (d : ℝ) ^ (-(0.1 : ℝ)) * (10 * (d : ℝ) ^ (-(0.85 : ℝ))) := by ring
+      _ ≤ (d : ℝ) ^ (-(0.1 : ℝ)) * 1 :=
+        mul_le_mul_of_nonneg_left hneg (Real.rpow_nonneg (by positivity) _)
+      _ = (d : ℝ) ^ (-(1 / 10 : ℝ)) := by norm_num
+  have huniform_small : (1 / (d : ℝ)) ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) := by
+    have hexp' : (d : ℝ) ^ (-(1 : ℝ)) ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) :=
+      Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
+    simpa [Real.rpow_neg_eq_inv_rpow, Real.rpow_one] using hexp'
+  let shift : Fin d → (Fin t → Fin d) := fun k i => i.castLE ht + k
+  let Q : FinProb (Fin t → Fin d) := {
+    w := fun x => ∑ k : Fin d, if shift k = x then (d : ℝ)⁻¹ else 0
+    nonneg := by
+      intro x
+      apply Finset.sum_nonneg
+      intro k hk
+      split_ifs <;> positivity
+    sum_eq_one := by
+      calc
+        ∑ x : Fin t → Fin d, (∑ k : Fin d, if shift k = x then (d : ℝ)⁻¹ else 0)
+            = ∑ k : Fin d, ∑ x : Fin t → Fin d, if shift k = x then (d : ℝ)⁻¹ else 0 := by
+                rw [Finset.sum_comm]
+        _ = ∑ k : Fin d, (d : ℝ)⁻¹ := by
+              simp [Finset.sum_ite_eq, Finset.mem_univ]
+        _ = 1 := by
+              simp [Fintype.card_fin, Nat.cast_ne_zero.mpr (by omega : d ≠ 0)]
+  }
+  refine ⟨Q, ?_, ?_⟩
+  · intro x hx
+    have hex : ∃ k : Fin d, shift k = x := by
+      by_contra h
+      push Not at h
+      have hz : Q.w x = 0 := by simp [Q, h]
+      exact hx hz
+    obtain ⟨k, hk⟩ := hex
+    rw [← hk]
+    intro a b hab
+    apply Fin.castLE_injective ht
+    exact add_right_cancel hab
+  · intro i y
+    have hprob : Q.pr (fun x => x i = y) = (1 / (d : ℝ)) := by
+      simp only [FinProb.pr, Q]
+      calc
+        (∑ x : Fin t → Fin d,
+          if x i = y then ∑ k : Fin d, if shift k = x then (d : ℝ)⁻¹ else 0 else 0)
+            = ∑ x : Fin t → Fin d, ∑ k : Fin d,
+                if x i = y then (if shift k = x then (d : ℝ)⁻¹ else 0) else 0 := by
+                  apply Finset.sum_congr rfl
+                  intro x hx
+                  by_cases hxy : x i = y <;> simp [hxy]
+        _ = ∑ k : Fin d, ∑ x : Fin t → Fin d,
+              if x i = y then (if shift k = x then (d : ℝ)⁻¹ else 0) else 0 := by
+                rw [Finset.sum_comm]
+        _ = ∑ k : Fin d, if (shift k) i = y then (d : ℝ)⁻¹ else 0 := by
+              apply Finset.sum_congr rfl
+              intro k hk
+              calc
+                (∑ x : Fin t → Fin d,
+                  if x i = y then (if shift k = x then (d : ℝ)⁻¹ else 0) else 0)
+                    = ∑ x : Fin t → Fin d,
+                      if shift k = x then (if x i = y then (d : ℝ)⁻¹ else 0) else 0 := by
+                        apply Finset.sum_congr rfl
+                        intro x hx
+                        by_cases hxy : x i = y <;> by_cases hxk : shift k = x <;>
+                          simp [hxy, hxk]
+                _ = if (shift k) i = y then (d : ℝ)⁻¹ else 0 := by
+                      simp [Finset.sum_ite_eq, Finset.mem_univ]
+        _ = (1 / (d : ℝ)) := by
+              let k₀ : Fin d := y - i.castLE ht
+              have hsol (k : Fin d) : i.castLE ht + k = y ↔ k = k₀ := by
+                constructor
+                · intro heq
+                  calc
+                    k = (i.castLE ht + k) - i.castLE ht := by abel
+                    _ = y - i.castLE ht := by rw [heq]
+                · intro heq
+                  rw [heq]
+                  simp [k₀]
+              calc
+                (∑ k : Fin d, if (shift k) i = y then (d : ℝ)⁻¹ else 0)
+                    = ∑ k : Fin d, if k = k₀ then (d : ℝ)⁻¹ else 0 := by
+                        apply Finset.sum_congr rfl
+                        intro k hk
+                        simp only [shift, hsol k]
+                _ = (d : ℝ)⁻¹ := by simp
+                _ = 1 / (d : ℝ) := by ring
+    rw [hprob]
+    have htarget : q i y ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) :=
+      (hq_atom i y).trans hatom_small
+    have hunif_nonneg : 0 ≤ (1 / (d : ℝ)) := by positivity
+    rw [abs_le]
+    constructor <;> nlinarith [hq_nonneg i y, hunif_nonneg, huniform_small, htarget]
 
 /-- L3.9c (03:695–734): price-directed perturbations of the rows give injective label laws
 whose joint probabilities have the required near-product upper bound and whose price is at

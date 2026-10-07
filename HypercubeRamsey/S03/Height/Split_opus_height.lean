@@ -1,4 +1,8 @@
 import HypercubeRamsey.S03.Height.Selection_p_height_main
+import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_paths
+import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_ovl_tail
+import HypercubeRamsey.S03.Height.Split_opus_height_g_hs_count
+import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_act
 
 set_option maxHeartbeats 400000
 
@@ -428,7 +432,646 @@ theorem scale_claim_base (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
       ∀ (C : Finset p.Loc) (Dom : Set (HDState p)) (x : HDState p),
         p.posLaw.expect (relSup p C Dom s t η x R) ≤
           Real.exp (-((p.n : ℝ) ^ a * (heightBaseRadius p.n : ℝ) ^ θ)) := by
-  sorry
+  classical
+  rcases hp.hsz with ⟨hσpos, hσζ, hζone, hθpos, hθone⟩
+  rcases hp.hb with ⟨hb₀pos, hb₀b, hbone⟩
+  have hJgap : 1 < J₀ - b₀ := by linarith [hp.hJ, hb₀b, hbone]
+  obtain ⟨nGeom, hGeomAll⟩ := height_local_geometry_eventually
+    J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨nVol, hVolAll⟩ := height_volume_ge_lambda_eventually
+    J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨nDim, hDimAll⟩ := heightBaseRadius_times_D_le_dimension_eventually
+    D c_d hp.hD hp.hd.1
+  have hCdpos : 0 < C_d := lt_of_lt_of_le hp.hd.1 hp.hd.2
+  have heCount : 0 < b₀ / 4 := by positivity
+  obtain ⟨nCount, hCountAll⟩ := hdScaleBallSiteLevels_exp_bound D C_d (b₀ / 4)
+    hp.hD hCdpos heCount
+  have hAbsorbExp : 0 < b₀ / 4 := by positivity
+  obtain ⟨nAbsorb, hAbsorbAll⟩ := exists_nat_rpow_ge
+    (e := b₀ / 4) (C := 3) hAbsorbExp
+  obtain ⟨nRad, hRadAll⟩ := heightBaseRadius_le_logsq
+  have hζpos : 0 < ζ := lt_trans hσpos hσζ
+  have honeθ : 0 < 1 - θ := sub_pos.mpr hθone
+  have hsumPos : 0 < ζ + σ + (1 - θ) := by positivity
+  have haPos : 0 < a := lt_trans hsumPos hp.ha.1
+  obtain ⟨nArith, hArithAll⟩ := height_base_exp_arithmetic a b₀ θ haPos hp.ha.2.1
+    ⟨hθpos, hθone⟩
+  let N1 := max nGeom nVol
+  let N2 := max nDim (max nCount nAbsorb)
+  let N3 := max nRad nArith
+  let Ntail := max N1 (max N2 N3)
+  let Nall := max 30 (max 2 Ntail)
+  refine ⟨Nall, ?_⟩
+  intro p hstd hn R hRone hRle s t η hs htlo hthi hη C Dom x
+  have hCore : max 2 Ntail ≤ p.n := le_trans (Nat.le_max_right 30 _) hn
+  have hn30 : 30 ≤ p.n := le_trans (Nat.le_max_left 30 _) hn
+  have hn2 : 2 ≤ p.n := le_trans (Nat.le_max_left 2 _) hCore
+  have hNtail : Ntail ≤ p.n := le_trans (Nat.le_max_right 2 _) hCore
+  have hN1 : N1 ≤ p.n := le_trans (Nat.le_max_left N1 _) hNtail
+  have hN23 : max N2 N3 ≤ p.n := le_trans (Nat.le_max_right N1 _) hNtail
+  have hN2 : N2 ≤ p.n := le_trans (Nat.le_max_left N2 N3) hN23
+  have hN3 : N3 ≤ p.n := le_trans (Nat.le_max_right N2 N3) hN23
+  have hnGeom : nGeom ≤ p.n := le_trans (Nat.le_max_left nGeom nVol) hN1
+  have hnVol : nVol ≤ p.n := le_trans (Nat.le_max_right nGeom nVol) hN1
+  have hN2tail : max nCount nAbsorb ≤ p.n := le_trans (Nat.le_max_right nDim _) hN2
+  have hnDim : nDim ≤ p.n := le_trans (Nat.le_max_left nDim _) hN2
+  have hnCountAbsorb : max nCount nAbsorb ≤ p.n := hN2tail
+  have hnCount : nCount ≤ p.n := le_trans (Nat.le_max_left nCount nAbsorb) hnCountAbsorb
+  have hnAbsorb : nAbsorb ≤ p.n := le_trans (Nat.le_max_right nCount nAbsorb) hnCountAbsorb
+  have hnRad : nRad ≤ p.n := le_trans (Nat.le_max_left nRad nArith) hN3
+  have hnArith : nArith ≤ p.n := le_trans (Nat.le_max_right nRad nArith) hN3
+  have hGeom := hGeomAll p hstd.hD hstd.hb₀ hstd.hb hnGeom
+    hstd.hdlo hstd.hdhi hstd.hreg
+  have hVol := hVolAll p hstd.hD hstd.hlam hnVol hstd.hdlo hstd.hreg
+  have hR0 : (heightBaseRadius p.n : ℝ) ≤ 2 * (Real.log (p.n : ℝ)) ^ 2 :=
+    hRadAll p.n hnRad
+  have hR0pos : 0 < heightBaseRadius p.n :=
+    Nat.lt_of_lt_of_le Nat.zero_lt_one (Nat.le_max_left 1 _)
+  have hR0dim := hDimAll p.n p.d hnDim hstd.hdlo
+  have hDdim : p.D * heightBaseRadius p.n ≤ p.d := by
+    rw [hstd.hD]
+    exact hR0dim
+  have hnpos : (0 : ℝ) < p.n := by exact_mod_cast (by omega : 0 < p.n)
+  have hn1 : (1 : ℝ) ≤ p.n := by exact_mod_cast (by omega : 1 ≤ p.n)
+  have hlamPos : 0 < p.lam := by
+    rw [hstd.hlam]
+    exact Real.rpow_pos_of_pos hnpos _
+  have hVpos : 0 < (p.V : ℝ) := lt_of_lt_of_le hlamPos hVol
+  have hDpos : 0 < p.D := by
+    rw [hstd.hD]
+    exact Nat.lt_of_lt_of_le Nat.zero_lt_one hp.hD
+  have hlamLower : (p.n : ℝ) ^ p.b₀ ≤ p.lam := by
+    rw [hstd.hlam, hstd.hb₀]
+    exact Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hJgap])
+  have hpowGap : (p.n : ℝ) ≤ (p.n : ℝ) ^ (J₀ - b₀) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hn1
+      (show (1 : ℝ) ≤ J₀ - b₀ by linarith [hJgap])
+    simpa only [Real.rpow_one] using h
+  have hpowEq : (p.n : ℝ) ^ J₀ =
+      (p.n : ℝ) ^ b₀ * (p.n : ℝ) ^ (J₀ - b₀) := by
+    calc
+      _ = (p.n : ℝ) ^ (b₀ + (J₀ - b₀)) := by congr 1 <;> ring
+      _ = _ := Real.rpow_add hnpos _ _
+  have hlamFactor : 30 * (p.n : ℝ) ^ p.b₀ ≤ p.lam := by
+    rw [hstd.hlam, hstd.hb₀, hpowEq]
+    calc
+      30 * (p.n : ℝ) ^ b₀ ≤ (p.n : ℝ) * (p.n : ℝ) ^ b₀ :=
+        mul_le_mul_of_nonneg_right (by exact_mod_cast hn30)
+          (Real.rpow_nonneg hnpos.le _)
+      _ = (p.n : ℝ) ^ b₀ * (p.n : ℝ) := by ring
+      _ ≤ (p.n : ℝ) ^ b₀ * (p.n : ℝ) ^ (J₀ - b₀) :=
+        mul_le_mul_of_nonneg_left hpowGap (Real.rpow_nonneg hnpos.le _)
+  have hqA0 : 0 < (p.n : ℝ) ^ p.b₀ / p.lam :=
+    div_pos (Real.rpow_pos_of_pos hnpos _) hlamPos
+  have hqA1 : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1 :=
+    (div_le_one hlamPos).2 hlamLower
+  have hqP0 : 0 < p.lam / (p.V : ℝ) := div_pos hlamPos hVpos
+  have hqP1 : p.lam / (p.V : ℝ) ≤ 1 := (div_le_one hVpos).2 hVol
+  have hGeomBand := hGeom.2.2
+  have hqA1' : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1 := hqA1
+  have htLower : (11 : ℝ) / 20 ≤ t := by linarith [htlo]
+  let δsite : ℝ := 4 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8)
+  let T := hdScaleBallSiteLevels (Finset.univ : p.Sites) x R
+  let T0 := hdScaleBallSiteLevels (Finset.univ : p.Sites) (x.1, 0)
+    (heightBaseRadius p.n)
+  let B0 : Finset (CubeVertex p.d) := Finset.univ.filter (fun u =>
+    (_root_.hammingDist x.1 u + max 1 p.D - 1) / max 1 p.D < heightBaseRadius p.n)
+  let L : Finset (Fin (p.H + 1)) := Finset.univ.filter
+    (fun j => Nat.dist x.2 j.val < R)
+  let L0 : Finset (Fin (p.H + 1)) := Finset.univ.filter
+    (fun j => j.val < heightBaseRadius p.n)
+  have hTsub : T ⊆ B0.product L := by
+    intro y hy
+    have hdist : hdScaleDistance p.D x (y.1, y.2.val) < R := by
+      simpa [T, hdScaleBallSiteLevels] using hy
+    have hmax : max (Nat.dist x.2 y.2.val)
+        ((_root_.hammingDist x.1 y.1 + max 1 p.D - 1) / max 1 p.D) < R := by
+      simpa [hdScaleDistance] using hdist
+    rcases max_lt_iff.mp hmax with ⟨hlev, hspace⟩
+    change y ∈ B0 ×ˢ L
+    rw [Finset.mem_product]
+    constructor
+    · simp only [B0, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact lt_of_lt_of_le hspace hRle
+    · simp only [L, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact hlev
+  have hT0eq : T0 = B0.product L0 := by
+    ext y
+    simp [T0, B0, L0, hdScaleBallSiteLevels, hdScaleDistance,
+      Nat.dist_zero_left, max_lt_iff, and_comm]
+  have hLinterval : L.card ≤ (Finset.Icc (x.2 - R) (x.2 + R)).card := by
+    apply Finset.card_le_card_of_injOn (fun j : Fin (p.H + 1) => j.val)
+    · intro j hj
+      have hdist : Nat.dist x.2 j.val < R := by simpa [L] using hj
+      change j.val ∈ Finset.Icc (x.2 - R) (x.2 + R)
+      simp only [Finset.mem_Icc]
+      rcases le_total x.2 j.val with hle | hge
+      · rw [Nat.dist_eq_sub_of_le hle] at hdist
+        constructor <;> omega
+      · rw [Nat.dist_eq_sub_of_le_right hge] at hdist
+        constructor <;> omega
+    · intro j hj j' hj' hval
+      exact Fin.ext hval
+  have hIcc : (Finset.Icc (x.2 - R) (x.2 + R)).card ≤ 2 * R + 1 := by
+    simp
+    omega
+  have hLcard : L.card ≤ 3 * heightBaseRadius p.n := by
+    have hR0one : 1 ≤ heightBaseRadius p.n := by omega
+    omega
+  have hLall : L.card ≤ p.H + 1 := by
+    calc
+      L.card ≤ Finset.univ.card := Finset.card_le_card (Finset.subset_univ L)
+      _ = p.H + 1 := by simp
+  let m := min (p.H + 1) (heightBaseRadius p.n)
+  have hmH : m ≤ p.H + 1 := Nat.min_le_left _ _
+  have hmR : m ≤ heightBaseRadius p.n := Nat.min_le_right _ _
+  have hL0card : L0.card = min (p.H + 1) (heightBaseRadius p.n) := by
+    simpa [L0] using (Fin.card_filter_val_lt (n := p.H + 1)
+      (m := heightBaseRadius p.n))
+  have hL0lower : m ≤ L0.card := by rw [hL0card]
+  have hLratio : L.card ≤ 3 * L0.card := by
+    have hmin : min (p.H + 1) (3 * heightBaseRadius p.n) ≤
+        3 * min (p.H + 1) (heightBaseRadius p.n) := by omega
+    calc
+      L.card ≤ min (p.H + 1) (3 * heightBaseRadius p.n) :=
+        Nat.le_min.mpr ⟨hLall, hLcard⟩
+      _ ≤ 3 * m := hmin
+      _ ≤ 3 * L0.card := Nat.mul_le_mul_left 3 hL0lower
+  have hTcard : T.card ≤ 3 * T0.card := by
+    calc
+      T.card ≤ (B0.product L).card := Finset.card_le_card hTsub
+      _ = B0.card * L.card := Finset.card_product B0 L
+      _ ≤ B0.card * (3 * L0.card) := Nat.mul_le_mul_left B0.card hLratio
+      _ = 3 * (B0.card * L0.card) := by ring
+      _ = 3 * T0.card := by
+        have hT0card : T0.card = B0.card * L0.card := by
+          simpa [hT0eq] using (Finset.card_product B0 L0)
+        rw [← hT0card]
+  have hT0count := hCountAll (Finset.univ : p.Sites) (x.1, 0)
+    (heightBaseRadius p.n) hnCount hstd.hD hstd.hdhi hR0 hR0pos rfl hDdim
+  have hTcardReal : (T.card : ℝ) ≤ 3 * (T0.card : ℝ) := by exact_mod_cast hTcard
+  have hTcountSmall : (T.card : ℝ) ≤
+      3 * Real.exp ((p.n : ℝ) ^ (b₀ / 4)) := by
+    exact hTcardReal.trans (mul_le_mul_of_nonneg_left hT0count (by norm_num))
+  have hU : 3 ≤ (p.n : ℝ) ^ (b₀ / 4) := hAbsorbAll p.n hnAbsorb
+  have hU2 : ((p.n : ℝ) ^ (b₀ / 4)) * ((p.n : ℝ) ^ (b₀ / 4)) =
+      (p.n : ℝ) ^ (b₀ / 2) := by
+    calc
+      _ = (p.n : ℝ) ^ ((b₀ / 4) + (b₀ / 4)) :=
+        (Real.rpow_add hnpos _ _).symm
+      _ = _ := by congr 1 <;> ring
+  have hlog3 : Real.log 3 ≤ 3 := by
+    apply (Real.log_le_iff_le_exp (by norm_num : (0 : ℝ) < 3)).2
+    have h := Real.add_one_le_exp (3 : ℝ)
+    linarith
+  have hAbsorb : 3 * Real.exp ((p.n : ℝ) ^ (b₀ / 4)) ≤
+      Real.exp ((p.n : ℝ) ^ (b₀ / 2)) := by
+    let u := (p.n : ℝ) ^ (b₀ / 4)
+    have hu : 3 ≤ u := hU
+    have hlog : Real.log 3 + u ≤ u * u := by
+      dsimp [u]
+      nlinarith [hlog3, hU]
+    calc
+      3 * Real.exp u = Real.exp (Real.log 3 + u) := by
+        rw [Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 3)]
+      _ ≤ Real.exp (u * u) := Real.exp_le_exp.mpr hlog
+      _ = Real.exp ((p.n : ℝ) ^ (b₀ / 2)) := by rw [← hU2]
+  have hTcount : (T.card : ℝ) ≤ Real.exp ((p.n : ℝ) ^ (b₀ / 2)) :=
+    hTcountSmall.trans hAbsorb
+  have hForall : ∀ (Esel : (p.Loc → Bool) → p.EligMap),
+      (p.posLaw.prod p.actLaw).pr (fun ω =>
+        relLegal p C Dom s ω.1 (Esel ω.1) x R ∧
+          relFail p C Dom t η ω.1 ω.2 (Esel ω.1) x R) ≤ (T.card : ℝ) * δsite := by
+    intro Esel
+    let siteBad (v : CubeVertex p.d) (j : Fin (p.H + 1))
+        (P A : p.Loc → Bool) : Prop :=
+      relLegal p C Dom s P (Esel P) x R ∧
+        (v, j.val) ∈ Dom ∧ hdScaleDistance p.D x (v, j.val) < 2 * R ∧
+          relBadAt p C t P A (Esel P) v j
+    have hLocal : ∀ v : CubeVertex p.d, ∀ j : Fin (p.H + 1),
+        (p.posLaw.prod p.actLaw).pr (fun ω => siteBad v j ω.1 ω.2) ≤ δsite := by
+      intro v j
+      let Reg := heightCrowdRegion v j
+      let μ : ℝ := (Reg.card : ℝ) * (p.lam / (p.V : ℝ))
+      let posCount : (p.Loc → Bool) → ℝ := fun P =>
+        (heightCrowdIDs P v j).card
+      let posBad : (p.Loc → Bool) → Prop := fun P =>
+        posCount P ≤ μ / 2 ∨ (11 / 10 : ℝ) * μ < posCount P
+      have hposTails := position_count_tails Reg hqP0 hqP1
+      have hposUpper := position_count_upper_eleven_tenths Reg hqP0 hqP1
+      have hposBad : p.posLaw.pr posBad ≤
+          Real.exp (-μ / 8) + Real.exp (-μ / 210) := by
+        have hlow : p.posLaw.pr (fun P => posCount P ≤ μ / 2) ≤ Real.exp (-μ / 8) := by
+          simpa [posCount, μ, Reg, heightCrowdIDs_card_eq_position_count] using hposTails.1
+        have hhigh : p.posLaw.pr (fun P =>
+            (11 / 10 : ℝ) * μ < posCount P) ≤ Real.exp (-μ / 210) := by
+          simpa [posCount, μ, Reg, heightCrowdIDs_card_eq_position_count, mul_assoc] using hposUpper
+        calc
+          _ ≤ p.posLaw.pr (fun P => posCount P ≤ μ / 2) +
+              p.posLaw.pr (fun P => (11 / 10 : ℝ) * μ < posCount P) := pr_or_le _ _ _
+          _ ≤ _ := add_le_add hlow hhigh
+      have hregion := heightCrowdRegion_volume_bounds v j hGeom.1 hGeom.2.1
+      have hproduct : (p.lam / (p.V : ℝ)) *
+          ((p.n : ℝ) ^ p.b₀ / p.lam) = (p.n : ℝ) ^ p.b₀ / (p.V : ℝ) := by
+        field_simp [hlamPos.ne', hVpos.ne']
+      have hregionLower : (p.n : ℝ) ^ p.b₀ ≤
+          (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) *
+            ((p.n : ℝ) ^ p.b₀ / p.lam) := by
+        calc
+          (p.n : ℝ) ^ p.b₀ = (p.V : ℝ) * ((p.n : ℝ) ^ p.b₀ / (p.V : ℝ)) := by
+            field_simp [hVpos.ne']
+          _ ≤ (Reg.card : ℝ) * ((p.n : ℝ) ^ p.b₀ / (p.V : ℝ)) :=
+            mul_le_mul_of_nonneg_right hregion.1
+              (div_nonneg (Real.rpow_nonneg hnpos.le _) hVpos.le)
+          _ = _ := by rw [← hproduct]; ring
+      have hratio : (Reg.card : ℝ) / (p.V : ℝ) ≤
+          1 + (p.D : ℝ) * ((p.d : ℝ) / p.r) ^ p.D := by
+        apply (div_le_iff₀ hVpos).2
+        nlinarith [hregion.2]
+      have hregionUpper : 4 * (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) *
+          ((p.n : ℝ) ^ p.b₀ / p.lam) ≤ (p.n : ℝ) ^ p.b := by
+        calc
+          _ = 4 * (Reg.card : ℝ) *
+              ((p.lam / (p.V : ℝ)) * ((p.n : ℝ) ^ p.b₀ / p.lam)) := by ring
+          _ = 4 * (Reg.card : ℝ) * ((p.n : ℝ) ^ p.b₀ / (p.V : ℝ)) := by
+            rw [hproduct]
+          _ = 4 * (p.n : ℝ) ^ p.b₀ * ((Reg.card : ℝ) / (p.V : ℝ)) := by ring
+          _ ≤ 4 * (p.n : ℝ) ^ p.b₀ *
+              (1 + (p.D : ℝ) * ((p.d : ℝ) / p.r) ^ p.D) :=
+            mul_le_mul_of_nonneg_left hratio (by positivity)
+          _ ≤ (p.n : ℝ) ^ p.b := hGeomBand
+      have hLamFactor' : 30 * (p.n : ℝ) ^ p.b₀ ≤
+          (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) := by
+        have hμ : p.lam ≤ (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) := by
+          calc
+            p.lam = (p.V : ℝ) * (p.lam / (p.V : ℝ)) := by field_simp [hVpos.ne']
+            _ ≤ (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) :=
+              mul_le_mul_of_nonneg_right hregion.1 (div_nonneg hlamPos.le hVpos.le)
+        exact hlamFactor.trans hμ
+      have hpos1 : Real.exp (-((Reg.card : ℝ) * (p.lam / (p.V : ℝ)) / 8)) ≤
+          Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+        apply Real.exp_le_exp.mpr
+        have hx := Real.rpow_nonneg hnpos.le p.b₀
+        have hsmall : (p.n : ℝ) ^ p.b₀ ≤ (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) := by
+          calc
+            (p.n : ℝ) ^ p.b₀ = 1 * (p.n : ℝ) ^ p.b₀ := by ring
+            _ ≤ 30 * (p.n : ℝ) ^ p.b₀ :=
+              mul_le_mul_of_nonneg_right (by norm_num : (1 : ℝ) ≤ 30) hx
+            _ ≤ _ := hLamFactor'
+        have hdiv := div_le_div_of_nonneg_right hsmall (by norm_num : (0 : ℝ) ≤ 8)
+        convert neg_le_neg hdiv using 1 <;> ring
+      have hpos2 : Real.exp (-((Reg.card : ℝ) * (p.lam / (p.V : ℝ)) / 210)) ≤
+          Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+        apply Real.exp_le_exp.mpr
+        have hx := Real.rpow_nonneg hnpos.le p.b₀
+        have h210 : 210 * (p.n : ℝ) ^ p.b₀ ≤ 240 * (p.n : ℝ) ^ p.b₀ :=
+          mul_le_mul_of_nonneg_right (by norm_num : (210 : ℝ) ≤ 240) hx
+        have h240 : 240 * (p.n : ℝ) ^ p.b₀ ≤
+            8 * ((Reg.card : ℝ) * (p.lam / (p.V : ℝ))) := by
+          calc
+            _ = 8 * (30 * (p.n : ℝ) ^ p.b₀) := by ring
+            _ ≤ _ := mul_le_mul_of_nonneg_left hLamFactor' (by norm_num)
+        have hscaled := h210.trans h240
+        have hdiv := div_le_div_of_nonneg_right hscaled (by norm_num : (0 : ℝ) ≤ 1680)
+        have hterm : (p.n : ℝ) ^ p.b₀ / 8 ≤
+            ((Reg.card : ℝ) * (p.lam / (p.V : ℝ))) / 210 := by
+          calc
+            _ = (210 * (p.n : ℝ) ^ p.b₀) / 1680 := by ring
+            _ ≤ (8 * ((Reg.card : ℝ) * (p.lam / (p.V : ℝ))) / 1680) := hdiv
+            _ = _ := by ring
+        convert neg_le_neg hterm using 1 <;> ring
+      have hqA0 : 0 < (p.n : ℝ) ^ p.b₀ / p.lam :=
+        div_pos (Real.rpow_pos_of_pos hnpos _) hlamPos
+      have hqA1 : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1 := (div_le_one hlamPos).2 hlamLower
+      have hsections : ∀ P : p.Loc → Bool, ¬ posBad P →
+          p.actLaw.pr (siteBad v j P) ≤
+            2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+        intro P hnotBad
+        by_cases hcond : relLegal p C Dom s P (Esel P) x R ∧
+            (v, j.val) ∈ Dom ∧ hdScaleDistance p.D x (v, j.val) < 2 * R
+        · have hlegal := hcond.1 v j hcond.2.1 hcond.2.2
+          let EAt := ((Esel P) v j).filter (fun ℓ => ℓ ∈ C)
+          have hsize : s * p.lam ≤ (EAt.card : ℝ) := by
+            simpa [EAt] using hlegal.2
+          have hposLow : μ / 2 < (heightCrowdIDs P v j).card := by
+            have hnot : ¬ (heightCrowdIDs P v j).card ≤ μ / 2 := by
+              intro h
+              exact hnotBad (Or.inl (by simpa [posCount] using h))
+            exact lt_of_not_ge hnot
+          have hposHigh : (heightCrowdIDs P v j).card ≤ (11 / 10 : ℝ) * μ := by
+            have hnot : ¬ (11 / 10 : ℝ) * μ < (heightCrowdIDs P v j).card := by
+              intro h
+              exact hnotBad (Or.inr (by simpa [posCount] using h))
+            exact le_of_not_gt hnot
+          have hmeanLower : (p.n : ℝ) ^ p.b₀ / 2 ≤
+              (heightCrowdIDs P v j).card * ((p.n : ℝ) ^ p.b₀ / p.lam) := by
+            have hprod := mul_le_mul_of_nonneg_right hposLow.le hqA0.le
+            dsimp [μ] at hprod
+            have hhalf : (p.n : ℝ) ^ p.b₀ / 2 ≤
+                ((Reg.card : ℝ) * (p.lam / (p.V : ℝ)) *
+                  ((p.n : ℝ) ^ p.b₀ / p.lam)) / 2 :=
+              div_le_div_of_nonneg_right hregionLower (by norm_num)
+            calc
+              _ ≤ _ := hhalf
+              _ = (μ / 2) * ((p.n : ℝ) ^ p.b₀ / p.lam) := by dsimp [μ]; ring
+              _ ≤ _ := hprod
+          have hmeanUpper : 2 * (heightCrowdIDs P v j).card *
+              ((p.n : ℝ) ^ p.b₀ / p.lam) ≤ t * (p.n : ℝ) ^ p.b := by
+            have hprod := mul_le_mul_of_nonneg_right hposHigh hqA0.le
+            have hfirst : 2 * (heightCrowdIDs P v j).card *
+                ((p.n : ℝ) ^ p.b₀ / p.lam) ≤ (11 / 20 : ℝ) * (p.n : ℝ) ^ p.b := by
+              calc
+                2 * (heightCrowdIDs P v j).card *
+                    ((p.n : ℝ) ^ p.b₀ / p.lam) =
+                      2 * ((heightCrowdIDs P v j).card *
+                        ((p.n : ℝ) ^ p.b₀ / p.lam)) := by ring
+                _ ≤ 2 * ((11 / 10 : ℝ) * μ * ((p.n : ℝ) ^ p.b₀ / p.lam)) :=
+                  mul_le_mul_of_nonneg_left hprod (by norm_num : (0 : ℝ) ≤ 2)
+                _ = (11 / 5 : ℝ) * μ * ((p.n : ℝ) ^ p.b₀ / p.lam) := by ring
+                _ ≤ (11 / 20 : ℝ) * (p.n : ℝ) ^ p.b := by
+                  have hu : 4 * μ * ((p.n : ℝ) ^ p.b₀ / p.lam) ≤
+                      (p.n : ℝ) ^ p.b := by simpa [μ, mul_assoc] using hregionUpper
+                  calc
+                    _ = (11 / 20 : ℝ) *
+                        (4 * μ * ((p.n : ℝ) ^ p.b₀ / p.lam)) := by ring
+                    _ ≤ _ := mul_le_mul_of_nonneg_left hu (by norm_num)
+            exact hfirst.trans (mul_le_mul_of_nonneg_right htLower
+              (Real.rpow_nonneg hnpos.le _))
+          have hsubset : ∀ A : p.Loc → Bool, siteBad v j P A →
+              (∀ ℓ ∈ EAt, A ℓ = false) ∨
+                t * (p.n : ℝ) ^ p.b <
+                  ∑ ℓ, if ℓ ∈ heightCrowdIDs P v j ∧ A ℓ = true then (1 : ℝ) else 0 := by
+            intro A hA
+            rcases hA.2.2.2 with hhole | hcrowd
+            · exact Or.inl (by
+                intro ℓ hℓ
+                have hℓ' := Finset.mem_filter.mp hℓ
+                exact hhole ℓ hℓ'.1 hℓ'.2)
+            · right
+              have hcard : relCrowd p C P A v j ≤
+                  (Finset.univ.filter (fun u : CubeVertex p.d =>
+                    P (u, j) = true ∧ A (u, j) = true ∧
+                      _root_.hammingDist u v ≤ p.r + p.D)).card := by
+                unfold relCrowd
+                apply Finset.card_le_card
+                intro u hu
+                simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu ⊢
+                rcases hu with ⟨hC, hP, hA', hdist⟩
+                exact ⟨hP, hA', hdist⟩
+              have hcardReal : (relCrowd p C P A v j : ℝ) ≤
+                  ((Finset.univ.filter (fun u : CubeVertex p.d =>
+                    P (u, j) = true ∧ A (u, j) = true ∧
+                      _root_.hammingDist u v ≤ p.r + p.D)).card : ℝ) := by
+                exact_mod_cast hcard
+              calc
+                t * (p.n : ℝ) ^ p.b < (relCrowd p C P A v j : ℝ) := hcrowd
+                _ ≤ _ := hcardReal
+                _ = _ := (height_crowd_active_count_eq P A v j).symm
+          have hact := activation_hole_or_crowd EAt (heightCrowdIDs P v j)
+            (t * (p.n : ℝ) ^ p.b) hmeanUpper hqA0 hqA1
+          have hbadProb : p.actLaw.pr (fun A =>
+              relBadAt p C t P A (Esel P) v j) ≤
+                Real.exp (-((EAt.card : ℝ) * ((p.n : ℝ) ^ p.b₀ / p.lam)) / 2) +
+                  Real.exp (-((heightCrowdIDs P v j).card *
+                    ((p.n : ℝ) ^ p.b₀ / p.lam)) / 3) := by
+            calc
+              _ ≤ p.actLaw.pr (fun A => (∀ ℓ ∈ EAt, A ℓ = false) ∨
+                  t * (p.n : ℝ) ^ p.b <
+                    ∑ ℓ, if ℓ ∈ heightCrowdIDs P v j ∧ A ℓ = true then (1 : ℝ) else 0) :=
+                      pr_mono _ _ _ (fun A hA => hsubset A (by
+                        exact ⟨hcond.1, hcond.2.1, hcond.2.2, hA⟩))
+              _ ≤ _ := hact
+          have hlamq : p.lam * ((p.n : ℝ) ^ p.b₀ / p.lam) = (p.n : ℝ) ^ p.b₀ := by
+            field_simp [hlamPos.ne']
+          have hHoleMean : s * (p.n : ℝ) ^ p.b₀ ≤
+              (EAt.card : ℝ) * ((p.n : ℝ) ^ p.b₀ / p.lam) := by
+            calc
+              _ = s * (p.lam * ((p.n : ℝ) ^ p.b₀ / p.lam)) := by rw [hlamq]
+              _ = (s * p.lam) * ((p.n : ℝ) ^ p.b₀ / p.lam) := by ring
+              _ ≤ _ := mul_le_mul_of_nonneg_right hsize hqA0.le
+          have hHoleExp : Real.exp (-((EAt.card : ℝ) *
+              ((p.n : ℝ) ^ p.b₀ / p.lam)) / 2) ≤
+                Real.exp (-s * (p.n : ℝ) ^ p.b₀ / 2) := by
+            apply Real.exp_le_exp.mpr
+            have hdiv := div_le_div_of_nonneg_right hHoleMean
+              (by norm_num : (0 : ℝ) ≤ 2)
+            convert neg_le_neg hdiv using 1 <;> try ring
+          have hCrowdExp : Real.exp (-((heightCrowdIDs P v j).card *
+              ((p.n : ℝ) ^ p.b₀ / p.lam)) / 3) ≤
+                Real.exp (-((p.n : ℝ) ^ p.b₀) / 6) := by
+            apply Real.exp_le_exp.mpr
+            have hdiv := div_le_div_of_nonneg_right hmeanLower
+              (by norm_num : (0 : ℝ) ≤ 3)
+            convert neg_le_neg hdiv using 1 <;> try ring
+          have hholeSmall : Real.exp (-s * (p.n : ℝ) ^ p.b₀ / 2) ≤
+              Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+            apply Real.exp_le_exp.mpr
+            have hx := Real.rpow_nonneg hnpos.le p.b₀
+            have hcoef := mul_le_mul_of_nonneg_right hs hx
+            have hdiv := div_le_div_of_nonneg_right hcoef (by norm_num : (0 : ℝ) ≤ 2)
+            have hscaled : ((1 / 4 : ℝ) * (p.n : ℝ) ^ p.b₀) / 2 ≤
+                (s * (p.n : ℝ) ^ p.b₀) / 2 := hdiv
+            have hneg := neg_le_neg hscaled
+            convert hneg using 1 <;> ring
+          have hcrowdSmall : Real.exp (-((p.n : ℝ) ^ p.b₀) / 6) ≤
+              Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+            apply Real.exp_le_exp.mpr
+            have hx := Real.rpow_nonneg hnpos.le p.b₀
+            have hdiv : ((p.n : ℝ) ^ p.b₀) / 8 ≤ ((p.n : ℝ) ^ p.b₀) / 6 := by
+              exact div_le_div_of_nonneg_left hx (by norm_num : (0 : ℝ) < 6)
+                (by norm_num : (6 : ℝ) ≤ 8)
+            have hneg := neg_le_neg hdiv
+            convert hneg using 1 <;> ring
+          have hmono : p.actLaw.pr (siteBad v j P) ≤
+              p.actLaw.pr (fun A => relBadAt p C t P A (Esel P) v j) := by
+            apply pr_mono
+            intro A hA
+            exact hA.2.2.2
+          calc
+            _ ≤ _ := hmono.trans hbadProb
+            _ ≤ 2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+              have hholeBound := hHoleExp.trans hholeSmall
+              have hcrowdBound := hCrowdExp.trans hcrowdSmall
+              calc
+                Real.exp (-((EAt.card : ℝ) *
+                    ((p.n : ℝ) ^ p.b₀ / p.lam)) / 2) +
+                  Real.exp (-((heightCrowdIDs P v j).card *
+                    ((p.n : ℝ) ^ p.b₀ / p.lam)) / 3) ≤
+                  Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) +
+                    Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) :=
+                      add_le_add hholeBound hcrowdBound
+                _ = _ := by ring
+        · have hzero : p.actLaw.pr (siteBad v j P) = 0 := by
+            have hevent : (fun A => siteBad v j P A) = fun _ => False := by
+              funext A
+              apply propext
+              constructor
+              · intro hA
+                exact hcond ⟨hA.1, hA.2.1, hA.2.2.1⟩
+              · intro hfalse
+                exact False.elim hfalse
+            change p.actLaw.pr (fun A => siteBad v j P A) = 0
+            rw [hevent]
+            simp [FinProb.pr]
+          rw [hzero]
+          positivity
+      have hsitePr := finprob_prod_pr_le_bad_or_small p.posLaw p.actLaw posBad
+        (siteBad v j) (2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8)) (by positivity) hsections
+      calc
+        _ ≤ p.posLaw.pr posBad + 2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := hsitePr
+        _ ≤ _ := by
+          have hposBad' : p.posLaw.pr posBad ≤
+              2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+            calc
+              _ ≤ Real.exp (-μ / 8) + Real.exp (-μ / 210) := hposBad
+              _ ≤ _ := by
+                have hmu : p.lam ≤ (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) := by
+                  calc
+                    p.lam = (p.V : ℝ) * (p.lam / (p.V : ℝ)) := by
+                      field_simp [hVpos.ne']
+                    _ ≤ (Reg.card : ℝ) * (p.lam / (p.V : ℝ)) :=
+                      mul_le_mul_of_nonneg_right hregion.1 (div_nonneg hlamPos.le hVpos.le)
+                have hmuLarge : 30 * (p.n : ℝ) ^ p.b₀ ≤ μ := by
+                  simpa [μ] using hLamFactor'
+                have hterm1 : Real.exp (-μ / 8) ≤
+                    Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+                  apply Real.exp_le_exp.mpr
+                  have hx := hlamLower.trans hmu
+                  have hdiv := div_le_div_of_nonneg_right hx
+                    (by norm_num : (0 : ℝ) ≤ 8)
+                  convert neg_le_neg hdiv using 1 <;> ring
+                have hterm2 : Real.exp (-μ / 210) ≤
+                    Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by
+                  apply Real.exp_le_exp.mpr
+                  have hx := Real.rpow_nonneg hnpos.le p.b₀
+                  have h210 : 210 * (p.n : ℝ) ^ p.b₀ ≤ 240 * (p.n : ℝ) ^ p.b₀ :=
+                    mul_le_mul_of_nonneg_right (by norm_num : (210 : ℝ) ≤ 240) hx
+                  have h240 : 240 * (p.n : ℝ) ^ p.b₀ ≤ 8 * μ := by
+                    calc
+                      _ = 8 * (30 * (p.n : ℝ) ^ p.b₀) := by ring
+                      _ ≤ _ := mul_le_mul_of_nonneg_left hmuLarge (by norm_num)
+                  have hscaled := h210.trans h240
+                  have hdiv := div_le_div_of_nonneg_right hscaled
+                    (by norm_num : (0 : ℝ) ≤ 1680)
+                  have hbound : (p.n : ℝ) ^ p.b₀ / 8 ≤ μ / 210 := by
+                    calc
+                      _ = (210 * (p.n : ℝ) ^ p.b₀) / 1680 := by ring
+                      _ ≤ (8 * μ) / 1680 := hdiv
+                      _ = _ := by ring
+                  convert neg_le_neg hbound using 1 <;> ring
+                linarith [hterm1, hterm2]
+          calc
+            p.posLaw.pr posBad + 2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) ≤
+                2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) +
+                  2 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) :=
+              add_le_add hposBad' le_rfl
+            _ = 4 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8) := by ring
+    have hFailSubset : ∀ ω : (p.Loc → Bool) × (p.Loc → Bool),
+        (relLegal p C Dom s ω.1 (Esel ω.1) x R ∧
+          relFail p C Dom t η ω.1 ω.2 (Esel ω.1) x R) →
+        ∃ y ∈ T, siteBad y.1 y.2 ω.1 ω.2 := by
+      intro ω hω
+      have hfail : hdScaleThresholdFailure (Finset.univ : p.Sites)
+          (relBad p C Dom t ω.1 ω.2 (Esel ω.1)) x R η := by
+        simpa [relFail] using hω.2
+      obtain ⟨v, k, hv, hbad, hdist⟩ := hdScaleThresholdFailure_has_local_bad
+        (Finset.univ : p.Sites) (relBad p C Dom t ω.1 ω.2 (Esel ω.1)) x R η
+        hDpos (by omega) (by linarith [hη]) hfail
+      have hbad' : (v, k) ∈ Dom ∧
+          ∃ hk : k < p.H + 1, relBadAt p C t ω.1 ω.2 (Esel ω.1) v ⟨k, hk⟩ := by
+        simpa [relBad] using hbad
+      rcases hbad' with ⟨hDom, hk, hbadAt⟩
+      let j : Fin (p.H + 1) := ⟨k, hk⟩
+      have hdist2 : hdScaleDistance p.D x (v, k) < 2 * R := by omega
+      have hmemT : (v, j) ∈ T := by
+        simp [T, hdScaleBallSiteLevels, j, hdist]
+      exact ⟨(v, j), hmemT, hω.1, hDom, by simpa [j] using hdist2,
+        by simpa [j] using hbadAt⟩
+    have hUnion : (p.posLaw.prod p.actLaw).pr (fun ω =>
+        relLegal p C Dom s ω.1 (Esel ω.1) x R ∧
+          relFail p C Dom t η ω.1 ω.2 (Esel ω.1) x R) ≤ (T.card : ℝ) * δsite := by
+      calc
+        _ ≤ (p.posLaw.prod p.actLaw).pr (fun ω =>
+            ∃ y ∈ T, siteBad y.1 y.2 ω.1 ω.2) :=
+          pr_mono _ _ _ (fun ω hω => hFailSubset ω hω)
+        _ ≤ ∑ y ∈ T, (p.posLaw.prod p.actLaw).pr
+            (fun ω => siteBad y.1 y.2 ω.1 ω.2) :=
+          pr_finset_exists_le (p.posLaw.prod p.actLaw) T
+            (fun y ω => siteBad y.1 y.2 ω.1 ω.2)
+        _ ≤ ∑ y ∈ T, δsite := by
+          apply Finset.sum_le_sum
+          intro y hy
+          exact hLocal y.1 y.2
+        _ = (T.card : ℝ) * δsite := by simp
+    exact hUnion
+  let val (P : p.Loc → Bool) (E : p.EligMap) : ℝ :=
+    if relLegal p C Dom s P E x R then
+      p.actLaw.pr (fun A => relFail p C Dom t η P A E x R)
+    else 0
+  have hmax : ∀ P : p.Loc → Bool,
+      ∃ E, E ∈ (Finset.univ : Finset p.EligMap) ∧
+        relSup p C Dom s t η x R P = val P E := by
+    intro P
+    unfold relSup
+    exact Finset.exists_mem_eq_sup' Finset.univ_nonempty (val P)
+  let Esel : (p.Loc → Bool) → p.EligMap := fun P => Classical.choose (hmax P)
+  have hEsel : ∀ P : p.Loc → Bool,
+      relSup p C Dom s t η x R P = val P (Esel P) :=
+    fun P => (Classical.choose_spec (hmax P)).2
+  have hscore : ∀ P : p.Loc → Bool,
+      val P (Esel P) = p.actLaw.pr (fun A =>
+        relLegal p C Dom s P (Esel P) x R ∧ relFail p C Dom t η P A (Esel P) x R) := by
+    intro P
+    by_cases hlegal : relLegal p C Dom s P (Esel P) x R
+    · simp [val, hlegal, FinProb.pr]
+    · simp [val, hlegal, FinProb.pr]
+  have hExpEq : p.posLaw.expect (relSup p C Dom s t η x R) =
+      (p.posLaw.prod p.actLaw).pr (fun ω =>
+        relLegal p C Dom s ω.1 (Esel ω.1) x R ∧
+          relFail p C Dom t η ω.1 ω.2 (Esel ω.1) x R) := by
+    calc
+      _ = p.posLaw.expect (fun P => val P (Esel P)) := by
+        unfold FinProb.expect
+        apply Finset.sum_congr rfl
+        intro P hP
+        rw [hEsel P]
+      _ = p.posLaw.expect (fun P => p.actLaw.pr (fun A =>
+          relLegal p C Dom s P (Esel P) x R ∧
+            relFail p C Dom t η P A (Esel P) x R)) := by
+        unfold FinProb.expect
+        apply Finset.sum_congr rfl
+        intro P hP
+        change p.posLaw.w P * val P (Esel P) = _
+        rw [hscore P]
+      _ = _ := by
+        simpa [FinProb.expect] using
+          (prod_pr_eq_sections p.posLaw p.actLaw (fun P A =>
+            relLegal p C Dom s P (Esel P) x R ∧
+              relFail p C Dom t η P A (Esel P) x R)).symm
+  have hProbability : p.posLaw.expect (relSup p C Dom s t η x R) ≤
+      (T.card : ℝ) * δsite := by rw [hExpEq]; exact hForall Esel
+  calc
+    p.posLaw.expect (relSup p C Dom s t η x R) ≤ (T.card : ℝ) * δsite := hProbability
+    _ ≤ Real.exp ((p.n : ℝ) ^ (b₀ / 2)) *
+        (4 * Real.exp (-((p.n : ℝ) ^ b₀) / 8)) := by
+      calc
+        _ ≤ Real.exp ((p.n : ℝ) ^ (b₀ / 2)) * δsite :=
+          mul_le_mul_of_nonneg_right hTcount (by positivity)
+        _ = Real.exp ((p.n : ℝ) ^ (b₀ / 2)) *
+            (4 * Real.exp (-((p.n : ℝ) ^ b₀) / 8)) := by
+              change Real.exp ((p.n : ℝ) ^ (b₀ / 2)) *
+                (4 * Real.exp (-((p.n : ℝ) ^ p.b₀) / 8)) = _
+              rw [show (p.n : ℝ) ^ p.b₀ = (p.n : ℝ) ^ b₀ by rw [hstd.hb₀]]
+    _ = 4 * Real.exp ((p.n : ℝ) ^ (b₀ / 2) - (p.n : ℝ) ^ b₀ / 8) := by
+      calc
+        _ = 4 * (Real.exp ((p.n : ℝ) ^ (b₀ / 2)) *
+            Real.exp (-((p.n : ℝ) ^ b₀) / 8)) := by ring
+        _ = _ := by
+          rw [← Real.exp_add]
+          congr 1
+          ring
+    _ ≤ Real.exp (-((p.n : ℝ) ^ a * (heightBaseRadius p.n : ℝ) ^ θ)) :=
+      hArithAll p.n hnArith
 
 /-- LEAF (deterministic, TeX 03:544–553). If the global height property fails, some level-zero
 start has an actual top-scale failure (paths are not spatially restricted here). -/
@@ -436,7 +1079,11 @@ theorem not_goodHeights_top_failure (p : HDParams) (hD : 0 < p.D) (hH : 0 < p.H)
     (Sites : p.Sites) (P A : p.Loc → Bool) (E : p.EligMap) (η : ℝ) (hη : 0 ≤ η)
     (hbad : ¬ p.GoodHeights Sites P A E) :
     ∃ u ∈ Sites, hdScaleFailure Sites P A E (u, 0) p.H η := by
-  sorry
+  classical
+  by_contra hno
+  have hnone : ∀ u ∈ Sites, ¬ hdScaleFailure Sites P A E (u, 0) p.H η := by
+    simpa only [not_exists, not_and] using hno
+  exact hbad (Lane_sol_hs_paths.goodHeights_of_no_failure hD hη hnone)
 
 /-- LEAF (deterministic, TeX 03:555–564). A positive long height is witnessed by a bad
 site-level near the query (displacement below `R₀`), by a scale-`i` failure from a level-zero
@@ -455,20 +1102,77 @@ theorem positive_height_witness (p : HDParams) (hD : 0 < p.D) (σ ζ : ℝ)
       hdScaleFailure (p.domBall Sites v p.Rlong) P A E (u, 0)
         (hdScaleRadius p.n σ (hdScaleIndex p.n σ ζ))
         (hdScaleSlope (hdScaleIndex p.n σ ζ) (hdScaleIndex p.n σ ζ))) := by
-  sorry
+  classical
+  have hr := height_reach_at_height Sites P A E v p.Rlong hv
+  obtain ⟨u, hu, ⟨path⟩⟩ := Lane_sol_hs_paths.reach_path
+    (p.domBall Sites v p.Rlong)
+    (fun w hw hq => Finset.mem_filter.mpr ⟨hw, hq⟩) hr
+  have hfirst := Lane_sol_hs_paths.path_first_bad path hpos
+  let L := hdScaleDistance p.D (v, 0) (u, 0)
+  by_cases hbase : L < heightBaseRadius p.n
+  · left
+    refine ⟨(u, 0), ?_, Lane_sol_hs_paths.failure_one_of_bad hD hu hfirst.1 hfirst.2⟩
+    unfold baseStarts
+    apply Finset.mem_image.mpr
+    refine ⟨(u, ⟨0, by omega⟩), ?_, rfl⟩
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, hu, ?_⟩
+    change L < 2 * heightBaseRadius p.n
+    have hR : 1 ≤ heightBaseRadius p.n := by unfold heightBaseRadius; omega
+    omega
+  · let h := hdScaleIndex p.n σ ζ
+    have hfinish := Lane_sol_hs_paths.zero_distance_le_finish (p := p) u v
+      (p.height Sites P A E p.Rlong v)
+    by_cases htop : hdScaleRadius p.n σ h ≤ L
+    · right; right
+      refine ⟨u, hu, Lane_sol_hs_paths.failure_of_path path ?_ (htop.trans hfinish)⟩
+      have hs := hdScaleThreshold_fractions_bounds (Nat.le_refl h)
+      linarith [hs.2.2.2.2.1]
+    · obtain ⟨i, hi, hlo, hhi⟩ := Lane_sol_hs_paths.scale_bracket p.n σ h L
+        (by omega) (by omega)
+      right; left
+      refine ⟨i, Finset.mem_range.mpr hi, u, Finset.mem_filter.mpr ⟨hu, hhi⟩,
+        Lane_sol_hs_paths.failure_of_path path ?_ (hlo.trans hfinish)⟩
+      have hs := hdScaleThreshold_fractions_bounds (Nat.le_of_lt hi)
+      linarith [hs.2.2.2.2.1]
 
 /-- LEAF (counting). -/
 theorem baseStarts_card_le (p : HDParams) (hD : 0 < p.D) (Dom : p.Sites)
     (v : CubeVertex p.d) (R₀ : ℕ) :
     ((baseStarts p Dom v R₀).card : ℝ) ≤
       ((p.H + 1 : ℕ) : ℝ) * ((p.d + 1 : ℕ) : ℝ) ^ (2 * p.D * R₀) := by
-  sorry
+  have hsub : baseStarts p Dom v R₀ ⊆
+      (((Finset.univ : Finset (CubeVertex p.d × Fin (p.H + 1))).filter (fun y =>
+        hdScaleDistance p.D (v, 0) (y.1, y.2.val) < 2 * R₀)).image (fun y => (y.1, y.2.val))) := by
+    intro y hy
+    simp only [baseStarts, Finset.mem_image, Finset.mem_filter, Finset.mem_univ, true_and] at hy ⊢
+    rcases hy with ⟨x, ⟨⟨_hxDom, hxdist⟩, rfl⟩⟩
+    exact ⟨x, hxdist, rfl⟩
+  have hcard := Finset.card_le_card hsub
+  have hbound := Lane_g_hs_count.scale_pairs_card_le p hD (v, 0) (2 * R₀)
+  have hle : (baseStarts p Dom v R₀).card ≤ (p.H + 1) * (p.d + 1) ^ (2 * p.D * R₀) := by
+    have hmul : p.D * (2 * R₀) = 2 * p.D * R₀ := by ring
+    rw [hmul] at hbound
+    exact hcard.trans hbound
+  exact_mod_cast hle
 
 /-- LEAF (counting). -/
 theorem midStarts_card_le (p : HDParams) (hD : 0 < p.D) (Dom : p.Sites)
     (v : CubeVertex p.d) (R : ℕ) :
     ((midStarts p Dom v R).card : ℝ) ≤ ((p.d + 1 : ℕ) : ℝ) ^ (p.D * R) := by
-  sorry
+  have hsub : midStarts p Dom v R ⊆
+      Finset.univ.filter (fun u : CubeVertex p.d => _root_.hammingDist u v ≤ p.D * R) := by
+    intro u hu
+    simp only [midStarts, Finset.mem_filter] at hu
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    have hdist := hu.2
+    have h1 := Lane_g_hs_count.hammingDist_le_of_hdScaleDistance_lt hD (v, 0) (u, 0) R hdist
+    rw [_root_.hammingDist_comm] at h1
+    exact h1
+  have hcard := Finset.card_le_card hsub
+  have hbound := Lane_g_hs_count.cube_ball_card_le_pow p.d (p.D * R) v
+  have hle : (midStarts p Dom v R).card ≤ (p.d + 1) ^ (p.D * R) := hcard.trans hbound
+  exact_mod_cast hle
 
 /-- LEAF (arithmetic, TeX 03:544–547). -/
 theorem global_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
@@ -676,7 +1380,216 @@ theorem config_activation_bound (p : HDParams) (hD : 0 < p.D) (hlam : 0 ≤ p.la
     p.actLaw.pr (fun A => ∀ y ∈ Y, relFail p C Dom tP η P A E y R') ≤
       p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
         ∏ y ∈ Y, relSup p (privateDom p C Y y R') Dom sC tC η y R' P := by
-  sorry
+  classical
+  have hCsub (y : HDState p) : privateDom p C Y y R' ⊆ C := by
+    intro ℓ hℓ
+    exact (Finset.mem_inter.mp (Finset.mem_filter.mp hℓ).1).1
+  have hYball : Y ⊆ scaleBall p x (M * R') :=
+    Finset.mem_powerset.mp (Finset.mem_filter.mp hY).1
+  have hyDist (y : HDState p) (hy : y ∈ Y) : hdScaleDistance p.D x y < M * R' := by
+    obtain ⟨z, hz, hzy⟩ := Finset.mem_image.mp (hYball hy)
+    have hz' := (Finset.mem_filter.mp hz).2
+    simpa [hzy] using hz'
+  have hparent (y : HDState p) (hy : y ∈ Y) (v : CubeVertex p.d)
+      (j : Fin (p.H + 1)) (hd : hdScaleDistance p.D y (v, j.val) < 2 * R') :
+      hdScaleDistance p.D x (v, j.val) < 2 * (M * R') := by
+    have htri := hdScaleDistance_triangle hD x y (v, j.val)
+    have hm := Nat.mul_le_mul_right R' hM
+    have hxy := hyDist y hy
+    omega
+  have hchild (y : HDState p) (v : CubeVertex p.d) (j : Fin (p.H + 1))
+      (hd : hdScaleDistance p.D y (v, j.val) < 2 * R')
+      (ℓ : p.Loc) (hj : ℓ.2 = j) (hs : _root_.hammingDist ℓ.1 v ≤ p.r + p.D) :
+      ℓ ∈ childDom p y R' := by
+    have hlev : Nat.dist y.2 ℓ.2.val < 2 * R' := by
+      rw [hj]
+      exact lt_of_le_of_lt (Nat.le_max_left _ _) hd
+    have hspace := hdScaleDistance_hamming_bound hD hd
+    have hham : _root_.hammingDist y.1 ℓ.1 ≤ p.r + 2 * p.D * R' + p.D := by
+      calc
+        _ ≤ _root_.hammingDist y.1 v + _root_.hammingDist v ℓ.1 :=
+          _root_.hammingDist_triangle _ _ _
+        _ ≤ p.D * (2 * R') + (p.r + p.D) :=
+          Nat.add_le_add hspace (by simpa [_root_.hammingDist_comm] using hs)
+        _ = _ := by ring
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hlev, hham⟩
+  have hposPair (y : HDState p) (hy : y ∈ Y) (z : HDState p) (hz : z ∈ Y)
+      (hne : y ≠ z) :
+      (((overlapDom p C y z R').filter (fun ℓ => P ℓ = true)).card : ℝ) ≤
+        ε * p.lam / Y.card := by
+    exact le_of_not_gt (fun h => hpos ⟨y, hy, z, hz, hne, h⟩)
+  have hlegChild (y : HDState p) (hy : y ∈ Y) :
+      relLegal p (privateDom p C Y y R') Dom sC P E y R' := by
+    intro v j hdom hd
+    obtain ⟨hEv, hEc⟩ := hlegal v j hdom (hparent y hy v j hd)
+    constructor
+    · intro ℓ hℓ hpriv
+      exact hEv ℓ hℓ (hCsub y hpriv)
+    · let F := (E v j).filter (fun ℓ => ℓ ∈ C)
+      have hF : ∀ ℓ ∈ F, ℓ ∈ C ∧ ℓ ∈ childDom p y R' ∧ P ℓ = true := by
+        intro ℓ hℓ
+        obtain ⟨hEℓ, hCℓ⟩ := Finset.mem_filter.mp hℓ
+        obtain ⟨hPℓ, hjℓ, hrℓ⟩ := hEv ℓ hEℓ hCℓ
+        exact ⟨hCℓ, hchild y v j hd ℓ hjℓ (by omega), hPℓ⟩
+      have hloss := Lane_sol_hs_act.private_loss C F (fun z => childDom p z R') Y y hy
+        (fun ℓ => P ℓ = true) (ε * p.lam) (mul_nonneg hε hlam) hF (hposPair y hy)
+      have hsub : F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R') ⊆
+          (E v j).filter (fun ℓ => ℓ ∈ privateDom p C Y y R') := by
+        intro ℓ hℓ
+        obtain ⟨hFℓ, hprivate⟩ := Finset.mem_filter.mp hℓ
+        obtain ⟨hCℓ, hchildℓ, hPℓ⟩ := hF ℓ hFℓ
+        exact Finset.mem_filter.mpr ⟨(Finset.mem_filter.mp hFℓ).1,
+          Finset.mem_filter.mpr ⟨Finset.mem_inter.mpr ⟨hCℓ, hchildℓ⟩, hprivate⟩⟩
+      have hcard : ((F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R')).card : ℝ) ≤
+          (((E v j).filter (fun ℓ => ℓ ∈ privateDom p C Y y R')).card : ℝ) := by
+        exact_mod_cast Finset.card_le_card hsub
+      have hgap := mul_le_mul_of_nonneg_right hs hlam
+      change sP * p.lam ≤ (F.card : ℝ) at hEc
+      nlinarith
+  have hcrowdIds (B : Finset p.Loc) (A : p.Loc → Bool) (v : CubeVertex p.d)
+      (j : Fin (p.H + 1)) :
+      relCrowd p B P A v j =
+        (B.filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧ A ℓ = true ∧
+          _root_.hammingDist ℓ.1 v ≤ p.r + p.D)).card := by
+    unfold relCrowd
+    apply Finset.card_bij (fun u _ => (u, j))
+    · intro u hu
+      obtain ⟨hB, hP, hA, hd⟩ := (Finset.mem_filter.mp hu).2
+      exact Finset.mem_filter.mpr ⟨hB, rfl, hP, hA, hd⟩
+    · intro u hu u' hu' heq
+      exact congrArg Prod.fst heq
+    · intro ℓ hℓ
+      obtain ⟨hB, hj, hP, hA, hd⟩ := Finset.mem_filter.mp hℓ
+      have heq : (ℓ.1, j) = ℓ := Prod.ext rfl hj.symm
+      refine ⟨ℓ.1, Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, heq⟩
+      change (ℓ.1, j) ∈ B ∧ P (ℓ.1, j) = true ∧ A (ℓ.1, j) = true ∧
+        _root_.hammingDist ℓ.1 v ≤ p.r + p.D
+      rw [heq]
+      exact ⟨hB, hP, hA, hd⟩
+  have htransfer (A : p.Loc → Bool) (hact : ¬ actExc p C Y R' ε P A)
+      (y : HDState p) (hy : y ∈ Y) :
+      relFail p C Dom tP η P A E y R' →
+        relFail p (privateDom p C Y y R') Dom tC η P A E y R' := by
+    apply Lane_sol_hs_act.failure_mono
+    intro v k hd hbad
+    obtain ⟨hdom, hk, hb⟩ := hbad
+    let j : Fin (p.H + 1) := ⟨k, hk⟩
+    refine ⟨hdom, hk, ?_⟩
+    rcases hb with habs | hcrowd
+    · left
+      intro ℓ hℓ hpriv
+      exact habs ℓ hℓ (hCsub y hpriv)
+    · right
+      have hd2 : hdScaleDistance p.D y (v, j.val) < 2 * R' := by
+        dsimp [j]
+        omega
+      let F := C.filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧ A ℓ = true ∧
+        _root_.hammingDist ℓ.1 v ≤ p.r + p.D)
+      have hF : ∀ ℓ ∈ F, ℓ ∈ C ∧ ℓ ∈ childDom p y R' ∧ (P ℓ = true ∧ A ℓ = true) := by
+        intro ℓ hℓ
+        obtain ⟨hCℓ, hjℓ, hPℓ, hAℓ, hrℓ⟩ := Finset.mem_filter.mp hℓ
+        exact ⟨hCℓ, hchild y v j hd2 ℓ hjℓ hrℓ, hPℓ, hAℓ⟩
+      have hov (z : HDState p) (hz : z ∈ Y) (hne : y ≠ z) :
+          (((C ∩ childDom p y R' ∩ childDom p z R').filter
+            (fun ℓ => P ℓ = true ∧ A ℓ = true)).card : ℝ) ≤
+            ε * (p.n : ℝ) ^ p.b / Y.card :=
+        le_of_not_gt (fun h => hact ⟨y, hy, z, hz, hne, h⟩)
+      have hloss := Lane_sol_hs_act.private_loss C F (fun z => childDom p z R') Y y hy
+        (fun ℓ => P ℓ = true ∧ A ℓ = true) (ε * (p.n : ℝ) ^ p.b)
+        (mul_nonneg hε (Real.rpow_nonneg (Nat.cast_nonneg _) _)) hF hov
+      have hsub : F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R') ⊆
+          (privateDom p C Y y R').filter (fun ℓ => ℓ.2 = j ∧ P ℓ = true ∧
+            A ℓ = true ∧ _root_.hammingDist ℓ.1 v ≤ p.r + p.D) := by
+        intro ℓ hℓ
+        obtain ⟨hFℓ, hprivate⟩ := Finset.mem_filter.mp hℓ
+        obtain ⟨hCℓ, hchildℓ, hPAℓ⟩ := hF ℓ hFℓ
+        exact Finset.mem_filter.mpr
+          ⟨Finset.mem_filter.mpr ⟨Finset.mem_inter.mpr ⟨hCℓ, hchildℓ⟩, hprivate⟩,
+            (Finset.mem_filter.mp hFℓ).2⟩
+      have hcard : ((F.filter (fun ℓ => ∀ z ∈ Y, z ≠ y → ℓ ∉ childDom p z R')).card : ℝ) ≤
+          (relCrowd p (privateDom p C Y y R') P A v j : ℝ) := by
+        rw [hcrowdIds]
+        exact_mod_cast Finset.card_le_card hsub
+      have hgap := mul_le_mul_of_nonneg_right ht (Real.rpow_nonneg (Nat.cast_nonneg p.n) p.b)
+      change tP * (p.n : ℝ) ^ p.b < (relCrowd p C P A v j : ℝ) at hcrowd
+      rw [hcrowdIds] at hcrowd
+      change tP * (p.n : ℝ) ^ p.b < (F.card : ℝ) at hcrowd
+      change tC * (p.n : ℝ) ^ p.b < (relCrowd p (privateDom p C Y y R') P A v j : ℝ)
+      nlinarith
+  have hdisj : ∀ y ∈ Y, ∀ z ∈ Y, y ≠ z →
+      Disjoint (privateDom p C Y y R') (privateDom p C Y z R') := by
+    intro y hy z hz hne
+    apply Finset.disjoint_left.mpr
+    intro ℓ hℓy hℓz
+    exact (Finset.mem_filter.mp hℓy).2 z hz hne.symm
+      (Finset.mem_inter.mp (Finset.mem_filter.mp hℓz).1).2
+  have hscope (y : HDState p) : FinProb.DependsOn
+      (fun A => relFail p (privateDom p C Y y R') Dom tC η P A E y R')
+      (privateDom p C Y y R') := by
+    intro A A' hAA'
+    let B := privateDom p C Y y R'
+    have hc (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+        relCrowd p B P A v j = relCrowd p B P A' v j := by
+      unfold relCrowd
+      congr 1
+      apply Finset.filter_congr
+      intro u _
+      constructor
+      · rintro ⟨hB, hP, hA, hd⟩
+        exact ⟨hB, hP, by rw [← hAA' _ hB]; exact hA, hd⟩
+      · rintro ⟨hB, hP, hA, hd⟩
+        exact ⟨hB, hP, by rw [hAA' _ hB]; exact hA, hd⟩
+    have hb (v : CubeVertex p.d) (j : Fin (p.H + 1)) :
+        relBadAt p B tC P A E v j = relBadAt p B tC P A' E v j := by
+      apply propext
+      unfold relBadAt
+      rw [hc]
+      apply or_congr _ Iff.rfl
+      constructor
+      · intro h ℓ hE hB
+        rw [← hAA' ℓ hB]
+        exact h ℓ hE hB
+      · intro h ℓ hE hB
+        rw [hAA' ℓ hB]
+        exact h ℓ hE hB
+    have hb' : relBad p B Dom tC P A E = relBad p B Dom tC P A' E := by
+      funext v k
+      simp only [relBad, hb]
+    change relFail p B Dom tC η P A E y R' = relFail p B Dom tC η P A' E y R'
+    unfold relFail
+    rw [hb']
+  have hfactor : p.actLaw.pr (fun A => ∀ y ∈ Y,
+      relFail p (privateDom p C Y y R') Dom tC η P A E y R') =
+      ∏ y ∈ Y, p.actLaw.pr (fun A =>
+        relFail p (privateDom p C Y y R') Dom tC η P A E y R') :=
+    Lane_sol_hs_act.pr_all_disjoint
+      (fun _ : p.Loc => FinProb.bernoulli ((p.n : ℝ) ^ p.b₀ / p.lam)) Y
+      (fun y => privateDom p C Y y R')
+      (fun y A => relFail p (privateDom p C Y y R') Dom tC η P A E y R') hdisj
+      (fun y _ => hscope y)
+  calc
+    p.actLaw.pr (fun A => ∀ y ∈ Y, relFail p C Dom tP η P A E y R')
+        ≤ p.actLaw.pr (fun A => actExc p C Y R' ε P A ∨
+          ∀ y ∈ Y, relFail p (privateDom p C Y y R') Dom tC η P A E y R') := by
+          apply pr_mono
+          intro A hfail
+          by_cases hact : actExc p C Y R' ε P A
+          · exact Or.inl hact
+          · exact Or.inr (fun y hy => htransfer A hact y hy (hfail y hy))
+    _ ≤ p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
+          p.actLaw.pr (fun A => ∀ y ∈ Y,
+            relFail p (privateDom p C Y y R') Dom tC η P A E y R') := pr_or_le _ _ _
+    _ = p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
+          ∏ y ∈ Y, p.actLaw.pr (fun A =>
+            relFail p (privateDom p C Y y R') Dom tC η P A E y R') := by rw [hfactor]
+    _ ≤ p.actLaw.pr (fun A => actExc p C Y R' ε P A) +
+          ∏ y ∈ Y, relSup p (privateDom p C Y y R') Dom sC tC η y R' P := by
+          apply add_le_add le_rfl
+          apply Finset.prod_le_prod₀
+          · intro y hy
+            exact pr_nonneg _ _
+          · intro y hy
+            exact le_relSup _ _ _ _ _ _ _ _ _ _ (hlegChild y hy)
 
 /-- Private suprema factor under the position law (TeX 03:508–512): proved from `xFinner`
 (`d = 1`), `relSup_dependsOn`, and disjointness of private domains. -/
@@ -733,13 +1646,117 @@ theorem overlap_bounds (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
         (p.posLaw.prod p.actLaw).pr (fun ω => actExc p C Y (hdScaleRadius p.n σ (i - 1))
             (stepEps (hdScaleIndex p.n σ ζ)) ω.1 ω.2) ≤
           stepExc p.n b σ (hdScaleRadius p.n σ (i - 1)) := by
-  sorry
+  classical
+  have hJ : 0 < J₀ := by linarith [hp.hJ]
+  have hσ : 0 < σ ∧ σ < 1 := ⟨hp.hsz.1, lt_trans hp.hsz.2.1 hp.hsz.2.2.1⟩
+  have hbJ : b ≤ J₀ := by linarith [hp.hb.2.2, hp.hJ]
+  have hb₀J : b₀ ≤ J₀ := by linarith [hp.hb.2.1, hp.hb.2.2, hp.hJ]
+  have hbσ : 0 ≤ b - 2 * σ := by
+    linarith [hp.ha.1, hp.ha.2.2, hp.hsz.1, hp.hsz.2.1, hp.hsz.2.2.2.2]
+  obtain ⟨K, hK, NV, hvol⟩ :=
+    Lane_sol_hs_ovl.volume_decay_eventually J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨NL, hlamVol⟩ :=
+    height_volume_ge_lambda_eventually J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨NT, htail⟩ :=
+    Lane_sol_hs_ovl.tail_environment_eventually J₀ b₀ b σ hJ hσ hbJ hb₀J hbσ
+  refine ⟨K, hK, max 2 (max NV (max NL NT)), ?_⟩
+  intro p hpstd hn i hi1 hih C x Y hY
+  let h := hdScaleIndex p.n σ ζ
+  let R := hdScaleRadius p.n σ (i - 1)
+  let q := stepQ p.n σ ζ K
+  let e := (p.n : ℝ) ^ (b - 2 * σ)
+  have hcfg := (Finset.mem_filter.mp hY).2
+  have hYcard : Y.card = q := hcfg.1
+  by_cases hqzero : q = 0
+  · have hYempty : Y = ∅ := Finset.card_eq_zero.mp (hYcard.trans hqzero)
+    constructor <;> simp [hYempty, posExc, actExc, FinProb.pr, stepExc, Real.exp_nonneg]
+  have hq : 0 < q := by omega
+  have hqbound : (q : ℝ) ≤ (hdScaleMultiplier p.n σ : ℝ) /
+      (16 * ((h + 1 : ℕ) : ℝ) * (2 * (K : ℝ) + 1)) := by
+    dsimp [q, stepQ, h]
+    exact Nat.floor_le (by positivity)
+  obtain ⟨he1, hmeanP, hmeanA, hτP, hτA, hpair⟩ :=
+    htail p.n (by omega) (i - 1) h K q hK hq hqbound
+  have he : 0 ≤ e := by dsimp [e]; positivity
+  have hn2 : 2 ≤ p.n := by omega
+  have hnpos : (0 : ℝ) < p.n := by exact_mod_cast (by omega : 0 < p.n)
+  have hn1 : (1 : ℝ) ≤ p.n := by exact_mod_cast (by omega : 1 ≤ p.n)
+  have hlam : 0 < p.lam := by rw [hpstd.hlam]; exact Real.rpow_pos_of_pos hnpos _
+  have hlV : p.lam ≤ (p.V : ℝ) :=
+    hlamVol p hpstd.hD hpstd.hlam (by omega) hpstd.hdlo hpstd.hreg
+  have hV : 0 < (p.V : ℝ) := hlam.trans_le hlV
+  have hP1 : p.lam / (p.V : ℝ) ≤ 1 := (div_le_one hV).2 hlV
+  have hA1 : (p.n : ℝ) ^ p.b₀ / p.lam ≤ 1 := by
+    apply (div_le_one hlam).2
+    rw [hpstd.hb₀, hpstd.hlam]
+    exact Real.rpow_le_rpow_of_exponent_le hn1 hb₀J
+  let I := (Y ×ˢ Y).filter (fun yy => yy.1 ≠ yy.2)
+  let T := fun yy : HDState p × HDState p => overlapDom p C yy.1 yy.2 R
+  have hchild : ∀ y : HDState p, childDom p y R = hdChildCenterDomain y (2 * R) := by
+    intro y
+    ext ℓ
+    simp [childDom, hdChildCenterDomain, Nat.mul_assoc, Nat.mul_left_comm, Nat.mul_comm]
+  have hvolT : ∀ yy ∈ I, ((T yy).card : ℝ) ≤ (p.V : ℝ) * Real.exp (-4 * (R : ℝ)) := by
+    intro yy hyy
+    obtain ⟨hyyY, hne⟩ := Finset.mem_filter.mp hyy
+    obtain ⟨hy, hy'⟩ := Finset.mem_product.mp hyyY
+    have hsep := hcfg.2 yy.1 hy yy.2 hy' hne
+    have hv := hvol p hpstd.hD hpstd.hdlo hpstd.hdhi hpstd.hreg (by omega)
+      (i - 1) (by omega) yy.1 yy.2 hsep
+    have hsub : T yy ⊆ childDom p yy.1 R ∩ childDom p yy.2 R := by
+      intro ℓ hℓ
+      obtain ⟨hℓ₁, hℓ₂⟩ := Finset.mem_inter.mp hℓ
+      exact Finset.mem_inter.mpr ⟨(Finset.mem_inter.mp hℓ₁).2, hℓ₂⟩
+    calc
+      _ ≤ ((childDom p yy.1 R ∩ childDom p yy.2 R).card : ℝ) :=
+        Nat.cast_le.mpr (Finset.card_le_card hsub)
+      _ ≤ _ := by simpa [hchild, R] using hv
+  have hcardNat : I.card ≤ q * q := by
+    calc
+      _ ≤ (Y ×ˢ Y).card := Finset.card_filter_le _ _
+      _ = q * q := by rw [Finset.card_product, hYcard]
+  have hcard : (I.card : ℝ) ≤ Real.exp (e * (R : ℝ)) := by
+    calc
+      _ ≤ (q : ℝ) ^ 2 := by exact_mod_cast (by simpa [pow_two] using hcardNat : I.card ≤ q ^ 2)
+      _ ≤ _ := hpair
+  constructor
+  · calc
+      _ ≤ p.posLaw.pr (fun P => ∃ yy ∈ I,
+          stepEps h * p.lam / (q : ℝ) < (((T yy).filter (fun ℓ => P ℓ = true)).card : ℝ)) := by
+        apply pr_mono
+        intro P hP
+        obtain ⟨y, hy, y', hy', hne, hcount⟩ := hP
+        refine ⟨(y, y'), Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hy, hy'⟩, hne⟩, ?_⟩
+        simpa [T, hYcard] using hcount
+      _ ≤ _ := Lane_sol_hs_ovl.position_regions_tail I T (stepEps h * p.lam / (q : ℝ)) e R
+        hV hlam.le hP1 he (by simpa [stepEps, hpstd.hlam] using hτP)
+        (by simpa [hpstd.hlam, R] using hmeanP) hcard hvolT
+  · calc
+      _ ≤ (p.posLaw.prod p.actLaw).pr (fun ω => ∃ yy ∈ I,
+          stepEps h * (p.n : ℝ) ^ p.b / (q : ℝ) <
+            (((T yy).filter (fun ℓ => ω.1 ℓ = true ∧ ω.2 ℓ = true)).card : ℝ)) := by
+        apply pr_mono
+        intro ω hω
+        obtain ⟨y, hy, y', hy', hne, hcount⟩ := hω
+        refine ⟨(y, y'), Finset.mem_filter.mpr ⟨Finset.mem_product.mpr ⟨hy, hy'⟩, hne⟩, ?_⟩
+        simpa [T, hYcard] using hcount
+      _ ≤ _ := Lane_sol_hs_ovl.active_regions_tail I T
+        (stepEps h * (p.n : ℝ) ^ p.b / (q : ℝ)) e R hV hlam hP1 hA1 he
+        (by simpa [stepEps, hpstd.hb] using hτA)
+        (by simpa [hpstd.hb₀, R] using hmeanA) hcard hvolT
 
 /-- LEAF (counting). -/
 theorem configs_card_le (p : HDParams) (hD : 0 < p.D) (x : HDState p) (R g q : ℕ) :
     ((configs p x R g q).card : ℝ) ≤
       (((p.H + 1 : ℕ) : ℝ) * ((p.d + 1 : ℕ) : ℝ) ^ (p.D * R)) ^ q := by
-  sorry
+  classical
+  have hpow := Lane_g_hs_count.powerset_filter_card_le_pow (scaleBall p x R) q (Separated p g)
+  have hball : (scaleBall p x R).card ≤ (p.H + 1) * (p.d + 1) ^ (p.D * R) :=
+    Lane_g_hs_count.scale_pairs_card_le p hD x R
+  have hle : (configs p x R g q).card ≤ ((p.H + 1) * (p.d + 1) ^ (p.D * R)) ^ q := by
+    unfold configs
+    exact hpow.trans (Nat.pow_le_pow_left hball q)
+  exact_mod_cast hle
 
 /-- LEAF (arithmetic, TeX 03:517–533): configuration count times the accumulated error is below
 the parent target. -/

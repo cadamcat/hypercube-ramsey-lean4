@@ -55,7 +55,23 @@ theorem p10_1j_tag_profiles_and_odd_injection
       DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
       AvailableAt κ (PCluster G ζ δ) n N E X Y →
       Nonempty (OddEmbeddingData n N E G) := by
-  sorry
+  refine ⟨0, 1, ?_⟩
+  intro n N E X Y G hlarge hdisc havail
+  classical
+  let V := {v : CubeVertex n // ¬ IsEvenRole v}
+  have hN : 2 ^ n ≤ N := by
+    have hreal : (2 : ℝ) ^ n ≤ (N : ℝ) := by
+      simpa using hlarge.2.1
+    exact_mod_cast hreal
+  have hcard : Fintype.card V ≤ N := by
+    calc
+      Fintype.card V ≤ Fintype.card (CubeVertex n) :=
+        Fintype.card_le_of_injective Subtype.val Subtype.val_injective
+      _ = 2 ^ n := by simp
+      _ ≤ N := hN
+  let e : V ↪ Fin N :=
+    (Fintype.equivFin V).toEmbedding.trans (Fin.castLEEmb hcard)
+  exact ⟨e, e.injective⟩
 
 /-- P10.1k (10:283–294): transfer the successful odd construction to fractional
 even rows. -/

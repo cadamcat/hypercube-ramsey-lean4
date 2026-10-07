@@ -1,3 +1,6 @@
+import HypercubeRamsey.Tools.LinearCode
+import HypercubeRamsey.Tools.CubeGeometry
+import HypercubeRamsey.S17.Nodes_q_s17_pal
 import HypercubeRamsey.S17.Needs
 
 /-!
@@ -296,6 +299,7 @@ def InitialAtomBound (D : ListGateContext κ T k PT) (Katom : ℝ) : Prop :=
         Real.exp (-200 * PT.tiling.gain (D.G.patchOf v)) *
           Real.rpow 2 (-(initialLateCount D v : ℝ))
 
+set_option maxHeartbeats 10000000 in
 /-- L17.1 deterministic cap/degree calculation, consumed by palette retention.
 The fixed constant is existential before the index, tiling, and sampler. -/
 theorem initialRowAtomBound
@@ -304,8 +308,996 @@ theorem initialRowAtomBound
     ∃ Katom : ℝ, 0 < Katom ∧ ∀ᶠ k in atTop,
       ∀ (PT : ProfiledTiling κ T k) (D : ListGateContext κ T k PT),
         D.L16QuantitativeValidity K → InitialAtomBound D Katom := by
-  sorry
+  let A : ℝ := 400 / (1 - κ.a)
+  let Katom : ℝ := 2 * A * Real.exp (8 * κ.Kbd + 1)
+  have ha : κ.a < 1 := Lane_q_s17_pal.a_lt_one κ hκ
+  have hApos : 0 < A := by
+    dsimp [A]
+    exact div_pos (by norm_num) (by linarith)
+  have hKatom : 0 < Katom := by positivity
+  refine ⟨Katom, hKatom, ?_⟩
+  let n₀ : ℕ := max (max 256 ⌈4 * κ.Kbd⌉₊) ⌈(80 * κ.A0) ^ 2⌉₊
+  have hn : ∀ᶠ k in atTop, n₀ ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop n₀
+  filter_upwards [hn] with k hk
+  intro PT D hQuant
+  have hPT : PT.Valid := D.tiling_valid
+  have hTV : Tiling.Valid PT.tiling := hPT.tiling_valid
+  have hLow := D.mode_low
+  have hKbd : 1 ≤ κ.Kbd := hκ.bounded.2.2.2.1
+  have hnKbd : 4 * κ.Kbd ≤ (T.S.n k : ℝ) := by
+    have hceil : 4 * κ.Kbd ≤ (⌈4 * κ.Kbd⌉₊ : ℝ) := Nat.le_ceil _
+    have hceilNat : ⌈4 * κ.Kbd⌉₊ ≤ n₀ :=
+      le_trans (le_max_right 256 ⌈4 * κ.Kbd⌉₊)
+        (le_max_left (max 256 ⌈4 * κ.Kbd⌉₊) ⌈(80 * κ.A0) ^ 2⌉₊)
+    have hbound : (⌈4 * κ.Kbd⌉₊ : ℝ) ≤ (T.S.n k : ℝ) := by
+      exact_mod_cast (le_trans hceilNat hk)
+    exact le_trans hceil hbound
+  have hnPos : 0 < (T.S.n k : ℝ) := by
+    have hnNat : 0 < T.S.n k := by omega
+    exact_mod_cast hnNat
+  have hKbdNonneg : 0 ≤ κ.Kbd := by linarith
+  have hKbdEps : 0 ≤ κ.Kbd / (T.S.n k : ℝ) ∧
+      κ.Kbd / (T.S.n k : ℝ) ≤ 1 / 4 := by
+    constructor
+    · positivity
+    · apply (div_le_iff₀ hnPos).2
+      nlinarith
+  cases hm : PT.tiling.mode with
+  | bounded =>
+      rcases hTV.bounded_data hm with ⟨_, hpatch⟩
+      refine fun v pools s heven htyp hvalid x => ?_
+      let i := D.G.patchOf v
+      have hdata := hpatch i
+      rcases hdata with ⟨hell, hh, _, hM, _⟩
+      have hN : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+      have hMpos : 0 < (PT.tiling.P i).M := by
+        have hprod : 0 < (1 / 400 : ℝ) * (T.S.N k : ℝ) := by positivity
+        have hMreal : 0 < ((PT.tiling.P i).M : ℝ) := lt_of_lt_of_le hprod hM
+        exact_mod_cast hMreal
+      have hnoncluster : ¬ PT.tiling.mode.isCluster := by
+        simp [Mode.isCluster, hm]
+      have haPos : 0 < 1 - κ.a := by linarith
+      have hcell : D.G.cellOf v ∈ D.scopeCells v := by simp [ListGateContext.scopeCells]
+      have hpoolTypical : D.F.typical (D.G.cellOf v) (pools (D.G.cellOf v)) :=
+        htyp _ hcell
+      have hstateValid : D.stateValid (D.G.cellOf v) (pools (D.G.cellOf v))
+          (s (D.G.cellOf v)) := hvalid _ hcell
+      have hclean : D.CleanInitialPrior v (D.prior s v) := by
+        simpa [ListGateContext.prior] using
+          hQuant.prior_shape v (pools (D.G.cellOf v)) (s (D.G.cellOf v))
+            heven hpoolTypical hstateValid
+      have hσcap := Lane_q_s17_pal.cleanInitialPrior_noncluster_cap D v
+        (D.prior s v) hclean ha hMpos hnoncluster x
+      have hcornerCap :
+          1 / ((1 - κ.a) * (PT.tiling.P i).M) ≤ A / T.S.N k := by
+        have hdenPos : 0 < (1 - κ.a) * (PT.tiling.P i).M := by positivity
+        have hdenLower : (1 - κ.a) * (T.S.N k : ℝ) / 400 ≤
+            (1 - κ.a) * (PT.tiling.P i).M := by
+          have hmul := mul_le_mul_of_nonneg_left hM haPos.le
+          nlinarith
+        have hlowPos : 0 < (1 - κ.a) * (T.S.N k : ℝ) / 400 := by positivity
+        have hinv := one_div_le_one_div_of_le hlowPos hdenLower
+        calc
+          _ ≤ 1 / ((1 - κ.a) * (T.S.N k : ℝ) / 400) := hinv
+          _ = A / T.S.N k := by dsimp [A]; field_simp
+      have hσ : D.prior s v x ≤
+          A * (2 : ℝ) ^ 0 * Real.exp (-(0 : ℝ) * PT.tiling.gain i) /
+            T.S.N k := by
+        simpa using hσcap.trans hcornerCap
+      by_cases hxzero : D.prior s v x = 0
+      · have hrow : D.row v (D.prior s v) (D.label s) x = 0 := by
+          simp [ListGateContext.row, hxzero]
+        rw [hrow]
+        have hbase : 0 ≤ Katom * (2 : ℝ) ^ T.S.n k / T.S.N k :=
+          div_nonneg (mul_nonneg hKatom.le (by positivity)) hN.le
+        have htail : 0 ≤ Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+          Real.rpow_nonneg (by norm_num) _
+        exact mul_nonneg (mul_nonneg hbase (Real.exp_pos _).le) htail
+      · have hxEnv : x ∈ PT.envelope i :=
+          Lane_q_s17_pal.cleanInitialPrior_support_envelope hPT D v
+            (D.prior s v) hclean x hxzero
+        have hsame : ∀ w ∈ D.externalEarly v, D.G.patchOf w = i := by
+          intro w hw
+          rcases (Finset.mem_filter.mp hw).2 with ⟨_, j, hjnotI, rfl⟩
+          apply Lane_q_s17_pal.patchOf_flip_eq_of_prefix D hPT v i
+            (D.G.patchOf_leaf v) j
+          simp [i, hell]
+        have hdegLower : 1 / 2 - κ.Kbd / (T.S.n k : ℝ) ≤
+            deg (T.S.E k) PT.tiling.c (PT.π i).w x := by
+          have hown := hPT.envelope_degree i x hxEnv
+          have habs : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+              κ.Kbd / (T.S.n k : ℝ) := by
+            simpa [OwnDegOK, hm] using hown
+          have := (abs_le.mp habs).1
+          linarith
+        have hdegPos : 0 < deg (T.S.E k) PT.tiling.c (PT.π i).w x := by
+          have hbase : 0 < 1 / 2 - κ.Kbd / (T.S.n k : ℝ) := by
+            linarith [hKbdEps.2]
+          exact lt_of_lt_of_le hbase hdegLower
+        let eps : Pos T k → ℝ := fun _ => 4 * (κ.Kbd / (T.S.n k : ℝ))
+        have hFactor0 : ∀ w ∈ D.externalEarly v,
+            0 ≤ D.hitRatio w x (D.label s w) := by
+          intro w hw
+          have hdegree : 0 ≤
+              deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+            rw [hsame w hw]
+            exact le_of_lt hdegPos
+          exact Lane_q_s17_pal.hitRatio_nonneg D w x (D.label s w) hdegree
+        have hFactor : ∀ w ∈ D.externalEarly v,
+            D.hitRatio w x (D.label s w) ≤ 2 * Real.exp (eps w) := by
+          intro w hw
+          have hdegree : 1 / 2 - κ.Kbd / (T.S.n k : ℝ) ≤
+              deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+            rw [hsame w hw]
+            exact hdegLower
+          have hRatio := Lane_q_s17_pal.hitRatio_le_of_degreeNearHalf D w x
+            (D.label s w) (κ.Kbd / (T.S.n k : ℝ)) hKbdEps.1 hKbdEps.2 hdegree
+          simpa [eps] using hRatio
+        have hGeom := Lane_q_s17_pal.externalEarlyCoordCount D K hPT
+          hQuant.geometry v heven
+        have hcount : (D.externalEarly v).card + 0 + initialLateCount D v ≤
+            T.S.n k + 1 := by
+          have hh' : (PT.tiling.P (D.G.patchOf v)).h = 0 := hh
+          rw [hh'] at hGeom
+          simpa [initialLateCount] using hGeom
+        have hcardNat : (D.externalEarly v).card ≤ T.S.n k + 1 := by omega
+        have hcard : ((D.externalEarly v).card : ℝ) ≤ (T.S.n k : ℝ) + 1 := by
+          exact_mod_cast hcardNat
+        have hsumEq :
+            (∑ w ∈ D.externalEarly v, eps w) =
+              (D.externalEarly v).card * (4 * (κ.Kbd / (T.S.n k : ℝ))) := by
+          simp [eps]
+        have hsum : (∑ w ∈ D.externalEarly v, eps w) ≤ 8 * κ.Kbd := by
+          rw [hsumEq]
+          calc
+            (D.externalEarly v).card * (4 * (κ.Kbd / (T.S.n k : ℝ))) ≤
+            ((T.S.n k : ℝ) + 1) * (4 * (κ.Kbd / (T.S.n k : ℝ))) := by
+                  gcongr
+            _ ≤ 8 * κ.Kbd := by
+              have heq : ((T.S.n k : ℝ) + 1) *
+                  (4 * (κ.Kbd / (T.S.n k : ℝ))) =
+                  (4 * κ.Kbd * ((T.S.n k : ℝ) + 1)) / (T.S.n k : ℝ) := by
+                field_simp [ne_of_gt hnPos]
+              rw [heq]
+              apply (div_le_iff₀ hnPos).2
+              nlinarith [hnPos, hKbdNonneg]
+        have hσ0 : 0 ≤ D.prior s v x := hclean.1 x
+        have hgain : PT.tiling.gain i = 0 := by simp [Tiling.gain, hm]
+        have hscaled := Lane_q_s17_pal.row_le_scaled_of_factors D v
+          (D.prior s v) (D.label s) x eps A 0 (PT.tiling.gain i) (8 * κ.Kbd)
+          0 (initialLateCount D v) (by positivity) hσ0 hσ
+          hFactor0 hFactor hsum hcount
+        have hcoeff : 2 * A * Real.exp (8 * κ.Kbd) ≤ Katom := by
+          dsimp [Katom]
+          apply mul_le_mul_of_nonneg_left
+          · exact Real.exp_le_exp.mpr (by linarith)
+          · positivity
+        calc
+          _ ≤ 2 * A * (2 : ℝ) ^ T.S.n k / T.S.N k *
+              Real.exp (8 * κ.Kbd - 0 * PT.tiling.gain i) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ)) := by
+                  simpa [hgain] using hscaled
+        _ ≤ Katom * (2 : ℝ) ^ T.S.n k / T.S.N k *
+            Real.exp (-200 * PT.tiling.gain i) *
+              Real.rpow 2 (-(initialLateCount D v : ℝ)) := by
+                  rw [hgain]
+                  simp only [mul_zero, Real.exp_zero]
+                  have hcommon : 0 ≤
+                      (2 : ℝ) ^ T.S.n k / T.S.N k *
+                        Real.rpow 2 (-(initialLateCount D v : ℝ)) := by
+                    have hpow : 0 ≤ (2 : ℝ) ^ T.S.n k := by positivity
+                    have hdiv : 0 ≤ (2 : ℝ) ^ T.S.n k / T.S.N k :=
+                      div_nonneg hpow hN.le
+                    exact mul_nonneg hdiv
+                      (Real.rpow_nonneg (by norm_num) _)
+                  calc
+                    _ = (2 * A * Real.exp (8 * κ.Kbd)) *
+                        ((2 : ℝ) ^ T.S.n k / T.S.N k *
+                          Real.rpow 2 (-(initialLateCount D v : ℝ))) := by ring
+                    _ ≤ Katom *
+                        ((2 : ℝ) ^ T.S.n k / T.S.N k *
+                          Real.rpow 2 (-(initialLateCount D v : ℝ))) :=
+                      mul_le_mul_of_nonneg_right hcoeff hcommon
+                    _ = _ := by ring
+  | lowDirect =>
+      refine fun v pools s heven htyp hvalid x => ?_
+      let i := D.G.patchOf v
+      rcases hTV.direct_data (Or.inl hm) i with
+        ⟨hscale, hgq, hM, hdirectDeg, hh, hd, hhi⟩
+      have hN : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+      have hPpos : 0 < κ.P := by
+        have hp := hκ.P_big.2
+        rw [hκ.Ac_eq] at hp
+        nlinarith
+      have hRpos : 0 < (κ.R : ℝ) := by rw [hκ.R_eq]; positivity
+      have hA0pos : 0 < κ.A0 := by
+        have hA0 := hκ.A0_big
+        exact lt_of_lt_of_le (mul_pos (by norm_num) hRpos) hA0
+      have hA0ceilNat : ⌈(80 * κ.A0) ^ 2⌉₊ ≤ n₀ :=
+        le_max_right (max 256 ⌈4 * κ.Kbd⌉₊) ⌈(80 * κ.A0) ^ 2⌉₊
+      have hA0square : (80 * κ.A0) ^ 2 ≤ (T.S.n k : ℝ) := by
+        have hceil : (80 * κ.A0) ^ 2 ≤ (⌈(80 * κ.A0) ^ 2⌉₊ : ℝ) := Nat.le_ceil _
+        have hnceil : (⌈(80 * κ.A0) ^ 2⌉₊ : ℝ) ≤ (T.S.n k : ℝ) := by
+          exact_mod_cast (le_trans hA0ceilNat hk)
+        exact le_trans hceil hnceil
+      have hsqrtN : 80 * κ.A0 ≤ Real.sqrt (T.S.n k : ℝ) := by
+        apply Real.le_sqrt_of_sq_le
+        nlinarith [hA0square]
+      have hlogBound := Lane_q_s17_pal.log_le_two_sqrt hnPos.le
+      have hlogDiv : Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ) ≤
+          1 / (40 * κ.A0) := by
+        have hsqrtPos : 0 < Real.sqrt (T.S.n k : ℝ) := Real.sqrt_pos.2 hnPos
+        have hsqr : (Real.sqrt (T.S.n k : ℝ)) ^ 2 = T.S.n k := Real.sq_sqrt hnPos.le
+        calc
+          _ ≤ 2 * Real.sqrt (T.S.n k : ℝ) / (T.S.n k : ℝ) :=
+            div_le_div_of_nonneg_right hlogBound hnPos.le
+          _ = 2 / Real.sqrt (T.S.n k : ℝ) := by
+            field_simp [ne_of_gt hnPos, ne_of_gt hsqrtPos]
+            nlinarith [hsqr]
+          _ ≤ 2 / (80 * κ.A0) := by
+            apply div_le_div_of_nonneg_left (by norm_num : (0 : ℝ) ≤ 2)
+              (by positivity : 0 < 80 * κ.A0) hsqrtN
+          _ = 1 / (40 * κ.A0) := by field_simp <;> ring
+      have hMlower : 0 <
+          (1 / 400 : ℝ) * (T.S.N k : ℝ) *
+            Real.exp (-Real.rpow ((PT.tiling.P i).g : ℝ) κ.aB) := by positivity
+      have hMpos : 0 < (PT.tiling.P i).M := by
+        have hMreal : 0 < ((PT.tiling.P i).M : ℝ) := lt_of_lt_of_le hMlower hM
+        exact_mod_cast hMreal
+      have hnoncluster : ¬ PT.tiling.mode.isCluster := by simp [Mode.isCluster, hm]
+      have haPos : 0 < 1 - κ.a := by linarith
+      have hcell : D.G.cellOf v ∈ D.scopeCells v := by simp [ListGateContext.scopeCells]
+      have hpoolTypical : D.F.typical (D.G.cellOf v) (pools (D.G.cellOf v)) :=
+        htyp _ hcell
+      have hstateValid : D.stateValid (D.G.cellOf v) (pools (D.G.cellOf v))
+          (s (D.G.cellOf v)) := hvalid _ hcell
+      have hclean : D.CleanInitialPrior v (D.prior s v) := by
+        simpa [ListGateContext.prior] using
+          hQuant.prior_shape v (pools (D.G.cellOf v)) (s (D.G.cellOf v))
+            heven hpoolTypical hstateValid
+      have hσcap := Lane_q_s17_pal.cleanInitialPrior_noncluster_cap D v
+        (D.prior s v) hclean ha hMpos hnoncluster x
+      have halloc := (hTV.allocation_bounds i).2
+      simp [hm] at halloc
+      rcases halloc with ⟨hEllBudget, hMassBudget⟩
+      have hgain : PT.tiling.gain i = (PT.tiling.P i).g / 1000 := by
+        simp [Tiling.gain, hm]
+      have hratioPos : 0 < (T.S.N k : ℝ) / (PT.tiling.P i).M := by positivity
+      have hratioExp : (T.S.N k : ℝ) / (PT.tiling.P i).M ≤
+          Real.exp (PT.tiling.gain i / (1000 * κ.u)) := by
+        have h := Real.exp_le_exp.mpr hMassBudget
+        rw [Real.exp_log hratioPos] at h
+        exact h
+      let C : ℝ := 1 / (1 - κ.a)
+      let B : ℝ := -(1 / (1000 * κ.u))
+      have hCpos : 0 < C := by dsimp [C]; positivity
+      have hCleA : C ≤ A := by
+        dsimp [C, A]
+        exact div_le_div_of_nonneg_right (by norm_num : (1 : ℝ) ≤ 400) haPos.le
+      have hMrec : 1 / (PT.tiling.P i).M =
+          ((T.S.N k : ℝ) / (PT.tiling.P i).M) / T.S.N k := by
+        field_simp [ne_of_gt hN, ne_of_gt hMpos]
+      have hratioOverN :
+          ((T.S.N k : ℝ) / (PT.tiling.P i).M) / T.S.N k ≤
+            Real.exp (PT.tiling.gain i / (1000 * κ.u)) / T.S.N k :=
+        div_le_div_of_nonneg_right hratioExp hN.le
+      have hpriorCap : 1 / ((1 - κ.a) * (PT.tiling.P i).M) ≤
+          A * Real.exp (PT.tiling.gain i / (1000 * κ.u)) / T.S.N k := by
+        calc
+          _ = C * (1 / (PT.tiling.P i).M) := by dsimp [C]; field_simp
+          _ = C * (((T.S.N k : ℝ) / (PT.tiling.P i).M) / T.S.N k) := by rw [hMrec]
+          _ ≤ A * (((T.S.N k : ℝ) / (PT.tiling.P i).M) / T.S.N k) :=
+            mul_le_mul_of_nonneg_right hCleA (by positivity)
+          _ ≤ A * (Real.exp (PT.tiling.gain i / (1000 * κ.u)) / T.S.N k) :=
+            mul_le_mul_of_nonneg_left hratioOverN (by positivity)
+          _ = _ := by ring
+      have hσ : D.prior s v x ≤
+          A * (2 : ℝ) ^ 0 * Real.exp (-B * PT.tiling.gain i) / T.S.N k := by
+        have hexp : -B * PT.tiling.gain i = PT.tiling.gain i / (1000 * κ.u) := by
+          dsimp [B]
+          ring
+        have hσcap' : D.prior s v x ≤
+            A * Real.exp (PT.tiling.gain i / (1000 * κ.u)) / T.S.N k := by
+          calc
+            _ ≤ 1 / ((1 - κ.a) * (PT.tiling.P i).M) := hσcap
+            _ ≤ _ := by simpa [div_eq_mul_inv, mul_comm, mul_left_comm, mul_assoc] using hpriorCap
+        simpa [hexp] using hσcap'
+      let delta : ℝ := (PT.tiling.P i).g / (4 * (T.S.n k : ℝ))
+      have hdeltaNonneg : 0 ≤ (PT.tiling.P i).g / (4 * (T.S.n k : ℝ)) := by positivity
+      have hιle : κ.ι / 2 ≤ 1 := by
+        have hι := hκ.ι_rng.2
+        have hmin : min κ.xs (min κ.η0 0.01) ≤ κ.xs := min_le_left _ _
+        have hxsSmall : κ.xs < 0.01 := hκ.xs_rng.2
+        have hιSmall : κ.ι < κ.xs / 1000 := by
+          calc
+            κ.ι < min κ.xs (min κ.η0 0.01) / 1000 := hι
+            _ ≤ κ.xs / 1000 := div_le_div_of_nonneg_right hmin (by norm_num)
+        have hιlt : κ.ι < 1 := by
+          calc
+            κ.ι < κ.xs / 1000 := hιSmall
+            _ < 1 := by nlinarith [hxsSmall]
+        nlinarith
+      have hgScale := hTV.direct_scale_bound (Or.inl hm) i
+      have hgLeN : (PT.tiling.P i).g ≤ T.S.n k := by
+        have hnOne : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast (show 1 ≤ T.S.n k by omega)
+        have hpow := Real.rpow_le_rpow_of_exponent_le
+          hnOne hιle
+        have hpow' : (T.S.n k : ℝ) ^ (κ.ι / 2) ≤ (T.S.n k : ℝ) := by
+          simpa [Real.rpow_one] using hpow
+        have hgReal : ((PT.tiling.P i).g : ℝ) ≤ (T.S.n k : ℝ) :=
+          le_trans hgScale hpow'
+        exact_mod_cast hgReal
+      have hdeltaLe : (PT.tiling.P i).g / (4 * (T.S.n k : ℝ)) ≤ 1 / 4 := by
+        apply (div_le_iff₀ (by positivity : (0 : ℝ) < 4 * (T.S.n k : ℝ))).2
+        have hgLeNReal : ((PT.tiling.P i).g : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hgLeN
+        nlinarith [hgLeNReal]
+      have hdeltaHalf : delta ≤ 1 / 2 := by
+        dsimp [delta]
+        linarith [hdeltaLe]
+      have hbstar := Lane_q_s17_pal.dimNegBstar_le_oneSixteenth (by omega : 256 ≤ T.S.n k)
+      have hbstar' : bstar T k ≤ 1 / 16 := by simpa [bstar] using hbstar
+      have hbstarNonneg : 0 ≤ bstar T k := by
+        unfold bstar
+        exact Real.rpow_nonneg (by positivity) _
+      have hcrossErrNonneg : 0 ≤ 12 * bstar T k := mul_nonneg (by norm_num) hbstarNonneg
+      have hcrossErrLe : 3 * bstar T k ≤ 1 / 4 := by nlinarith [hbstar']
+      have huNat : 1 ≤ κ.u := by have hu := hκ.u_rng.2; omega
+      have hu : 1 ≤ (κ.u : ℝ) := by exact_mod_cast huNat
+      have hEllBudget' : ((PT.tiling.P i).ℓ : ℝ) ≤
+          (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) := by
+        rw [hgain] at hEllBudget
+        calc
+          _ ≤ ((PT.tiling.P i).g / 1000) / (1000 * (κ.u : ℝ)) := hEllBudget
+          _ = _ := by field_simp <;> ring
+      have hEllBound : ((PT.tiling.P i).ℓ : ℝ) ≤
+          ((PT.tiling.P i).g : ℝ) / 1000000 := by
+        have hrecip : 1 / (1000000 * (κ.u : ℝ)) ≤ 1 / 1000000 :=
+          one_div_le_one_div_of_le (by norm_num) (by nlinarith [hu])
+        calc
+          _ ≤ (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) := hEllBudget'
+          _ = (PT.tiling.P i).g * (1 / (1000000 * (κ.u : ℝ))) := by ring
+          _ ≤ (PT.tiling.P i).g * (1 / 1000000) :=
+            mul_le_mul_of_nonneg_left hrecip (Nat.cast_nonneg _)
+          _ = (PT.tiling.P i).g / 1000000 := by ring
+      have hEllOverN : (PT.tiling.P i).ℓ / (T.S.n k : ℝ) ≤ 1 / 1000000 := by
+        have hdiv := div_le_div_of_nonneg_right hEllBound hnPos.le
+        calc
+          _ ≤ ((PT.tiling.P i).g / 1000000) / (T.S.n k : ℝ) := hdiv
+          _ = ((PT.tiling.P i).g / (T.S.n k : ℝ)) / 1000000 := by field_simp <;> ring
+          _ ≤ 1 / 1000000 := by
+            have hgLeNReal : ((PT.tiling.P i).g : ℝ) ≤ (T.S.n k : ℝ) := by
+              exact_mod_cast hgLeN
+            have hgdiv : (PT.tiling.P i).g / (T.S.n k : ℝ) ≤ 1 :=
+              div_le_one_of_le₀ hgLeNReal hnPos.le
+            exact div_le_div_of_nonneg_right hgdiv (by norm_num)
+      by_cases hxzero : D.prior s v x = 0
+      · have hrow : D.row v (D.prior s v) (D.label s) x = 0 := by
+          simp [ListGateContext.row, hxzero]
+        rw [hrow]
+        have hbase : 0 ≤ Katom * (2 : ℝ) ^ T.S.n k / T.S.N k :=
+          div_nonneg (mul_nonneg hKatom.le (by positivity)) hN.le
+        have htail : 0 ≤ Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+          Real.rpow_nonneg (by norm_num) _
+        exact mul_nonneg (mul_nonneg hbase (Real.exp_pos _).le) htail
+      · have hxEnv : x ∈ PT.envelope i :=
+          Lane_q_s17_pal.cleanInitialPrior_support_envelope hPT D v
+            (D.prior s v) hclean x hxzero
+        let eps : Pos T k → ℝ := fun w =>
+          if D.G.patchOf w = i then -delta else 12 * bstar T k
+        have hown : OwnDegOK PT.tiling i (PT.π i) x := hPT.envelope_degree i x hxEnv
+        have hownData :
+            1 / 2 + delta ≤ deg (T.S.E k) PT.tiling.c (PT.π i).w x ∧
+            deg (T.S.E k) PT.tiling.c (PT.π i).w x ≤
+              1 / 2 + 4 * (PT.tiling.P i).g / (T.S.n k : ℝ) := by
+          simpa [OwnDegOK, hm, delta] using hown
+        have hdegNonneg (w : Pos T k) :
+            0 ≤ deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+          unfold deg
+          apply Finset.sum_nonneg
+          intro y hy
+          apply mul_nonneg
+          · exact (PT.π (D.G.patchOf w)).nonneg y
+          · by_cases hhit : Hits (T.S.E k) PT.tiling.c x y <;> simp [hit, hhit]
+        have hFactor0 : ∀ w ∈ D.externalEarly v,
+            0 ≤ D.hitRatio w x (D.label s w) := by
+          intro w hw
+          exact Lane_q_s17_pal.hitRatio_nonneg D w x (D.label s w) (hdegNonneg w)
+        have hFactor : ∀ w ∈ D.externalEarly v,
+            D.hitRatio w x (D.label s w) ≤ 2 * Real.exp (eps w) := by
+          intro w hw
+          by_cases hsame : D.G.patchOf w = i
+          · have hdegree : 1 / 2 + delta ≤
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+              rw [hsame]
+              exact hownData.1
+            have hRatio := Lane_q_s17_pal.hitRatio_le_of_degreeAboveHalf D w x
+              (D.label s w) delta hdeltaNonneg hdeltaHalf hdegree
+            simpa [eps, hsame] using hRatio
+          · have hother := hPT.envelope_other_degree i (D.G.patchOf w) hsame x hxEnv
+            have hlower : 1 / 2 - 3 * bstar T k ≤
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+              have := (abs_le.mp hother).1
+              linarith
+            have hRatio := Lane_q_s17_pal.hitRatio_le_of_degreeNearHalf D w x
+              (D.label s w) (3 * bstar T k)
+              (mul_nonneg (by norm_num) hbstarNonneg) hcrossErrLe hlower
+            have heps : 4 * (3 * bstar T k) = 12 * bstar T k := by ring
+            simpa [eps, hsame, heps] using hRatio
+        have hGeom := Lane_q_s17_pal.externalEarlyCoordCount D K hPT
+          hQuant.geometry v heven
+        have hcount : (D.externalEarly v).card + 0 + initialLateCount D v ≤
+            T.S.n k + 1 := by
+          have hh' : (PT.tiling.P (D.G.patchOf v)).h = 0 := hh
+          rw [hh'] at hGeom
+          simpa [initialLateCount] using hGeom
+        let Same : Finset (Pos T k) := (D.externalEarly v).filter fun w =>
+          D.G.patchOf w = i
+        let Cross : Finset (Pos T k) := (D.externalEarly v).filter fun w =>
+          D.G.patchOf w ≠ i
+        have hSameNat := Lane_q_s17_pal.samePatchExternalEarly_card_lower D hPT v
+        have hSameLower : T.S.n k - (PT.tiling.P i).ℓ -
+            initialLateCount D v ≤ Same.card := by
+          have hh' : (PT.tiling.P (D.G.patchOf v)).h = 0 := hh
+          simpa [Same, initialLateCount, hh'] using hSameNat
+        have hCrossUpper := Lane_q_s17_pal.externalEarly_crossPatch_card_le_prefix D hPT v
+        have hCross : Cross.card ≤ (PT.tiling.P i).ℓ := by simpa [Cross] using hCrossUpper
+        have hlateNat := Lane_q_s17_pal.lateNeighborCount_le_r D K hQuant.geometry v
+        have hLateUpper : (initialLateCount D v : ℝ) ≤
+            2 * κ.A0 * Real.log (T.S.n k : ℝ) := by
+          have hLateCast : (initialLateCount D v : ℝ) ≤ D.G.r := by
+            exact_mod_cast hlateNat
+          exact le_of_lt (lt_of_le_of_lt hLateCast hQuant.geometry.class_scale.2)
+        have hLateOverN : (initialLateCount D v : ℝ) / (T.S.n k : ℝ) ≤ 1 / 20 := by
+          calc
+            _ ≤ (2 * κ.A0 * Real.log (T.S.n k : ℝ)) / (T.S.n k : ℝ) :=
+              div_le_div_of_nonneg_right hLateUpper hnPos.le
+            _ = 2 * κ.A0 * (Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) := by ring
+            _ ≤ 2 * κ.A0 * (1 / (40 * κ.A0)) :=
+              mul_le_mul_of_nonneg_left hlogDiv (by positivity)
+            _ = 1 / 20 := by field_simp <;> ring
+        have hEllLateReal :
+            (PT.tiling.P i).ℓ + (initialLateCount D v : ℝ) ≤ (T.S.n k : ℝ) := by
+          have hsum : (PT.tiling.P i).ℓ / (T.S.n k : ℝ) +
+              (initialLateCount D v : ℝ) / (T.S.n k : ℝ) ≤ 1 := by
+            linarith [hEllOverN, hLateOverN]
+          have heq : ((PT.tiling.P i).ℓ + (initialLateCount D v : ℝ)) /
+              (T.S.n k : ℝ) = (PT.tiling.P i).ℓ / (T.S.n k : ℝ) +
+                (initialLateCount D v : ℝ) / (T.S.n k : ℝ) := by
+            field_simp [ne_of_gt hnPos] <;> ring
+          have hdiv : ((PT.tiling.P i).ℓ + (initialLateCount D v : ℝ)) /
+              (T.S.n k : ℝ) ≤ 1 := by rw [heq]; exact hsum
+          simpa using (div_le_iff₀ hnPos).1 hdiv
+        have hEllLateNat : (PT.tiling.P i).ℓ + initialLateCount D v ≤ T.S.n k := by
+          exact_mod_cast hEllLateReal
+        have hsumEq :
+            (∑ w ∈ D.externalEarly v, eps w) =
+              -delta * (Same.card : ℝ) + (12 * bstar T k) * (Cross.card : ℝ) := by
+          have hSameSum : (∑ w ∈ Same, eps w) =
+              -delta * (Same.card : ℝ) := by
+            calc
+              _ = ∑ w ∈ Same, -delta := by
+                apply Finset.sum_congr rfl
+                intro w hw
+                simp [eps, Same, (Finset.mem_filter.mp hw).2]
+              _ = _ := by simp [Finset.sum_const, nsmul_eq_mul] <;> ring
+          have hCrossSum : (∑ w ∈ Cross, eps w) =
+              (12 * bstar T k) * (Cross.card : ℝ) := by
+            calc
+              _ = ∑ w ∈ Cross, (12 * bstar T k) := by
+                apply Finset.sum_congr rfl
+                intro w hw
+                simp [eps, Cross, (Finset.mem_filter.mp hw).2]
+              _ = _ := by simp [Finset.sum_const, nsmul_eq_mul] <;> ring
+          have hpartition : (∑ w ∈ D.externalEarly v, eps w) =
+              (∑ w ∈ Same, eps w) + (∑ w ∈ Cross, eps w) := by
+            rw [← Finset.sum_filter_add_sum_filter_not _
+              (fun w => D.G.patchOf w = i)]
+          rw [hpartition, hSameSum, hCrossSum]
+        have hE : (∑ w ∈ D.externalEarly v, eps w) ≤
+            -(9 / 40 : ℝ) * (PT.tiling.P i).g := by
+          have hEllLeN : (PT.tiling.P i).ℓ ≤ T.S.n k := by omega
+          have hLateLe : initialLateCount D v ≤ T.S.n k - (PT.tiling.P i).ℓ := by omega
+          have hsub :
+              ((T.S.n k - (PT.tiling.P i).ℓ - initialLateCount D v : ℕ) : ℝ) =
+                (T.S.n k : ℝ) - (PT.tiling.P i).ℓ - initialLateCount D v := by
+            rw [Nat.cast_sub hLateLe, Nat.cast_sub hEllLeN] <;>
+              push_cast <;> ring
+          have hSameCast :
+              ((T.S.n k - (PT.tiling.P i).ℓ - initialLateCount D v : ℕ) : ℝ) ≤
+                (Same.card : ℝ) := by exact_mod_cast hSameLower
+          have hSameLowerReal : (T.S.n k : ℝ) - (PT.tiling.P i).ℓ -
+              (initialLateCount D v : ℝ) ≤ (Same.card : ℝ) := by
+            rw [← hsub]
+            exact hSameCast
+          have hCrossReal : (Cross.card : ℝ) ≤ (PT.tiling.P i).ℓ := by
+            exact_mod_cast hCross
+          have hnegPart : -delta * (Same.card : ℝ) ≤
+              -delta * ((T.S.n k : ℝ) - (PT.tiling.P i).ℓ - initialLateCount D v) :=
+            mul_le_mul_of_nonpos_left hSameLowerReal (by linarith [hdeltaNonneg])
+          have hposPart : (12 * bstar T k) * (Cross.card : ℝ) ≤
+              (12 * bstar T k) * (PT.tiling.P i).ℓ :=
+            mul_le_mul_of_nonneg_left hCrossReal hcrossErrNonneg
+          have hmainEq : -delta * ((T.S.n k : ℝ) - (PT.tiling.P i).ℓ -
+              (initialLateCount D v : ℝ)) =
+              -(PT.tiling.P i).g / 4 + delta *
+                ((PT.tiling.P i).ℓ + (initialLateCount D v : ℝ)) := by
+            dsimp [delta]
+            field_simp [ne_of_gt hnPos] <;> ring
+          have hErrEq : delta * ((PT.tiling.P i).ℓ +
+              (initialLateCount D v : ℝ)) =
+              ((PT.tiling.P i).g / 4) *
+                ((PT.tiling.P i).ℓ / (T.S.n k : ℝ) +
+                  (initialLateCount D v : ℝ) / (T.S.n k : ℝ)) := by
+            dsimp [delta]
+            field_simp [ne_of_gt hnPos] <;> ring
+          have hGammaLe : 12 * bstar T k ≤ 3 / 4 := by nlinarith [hbstar']
+          have hCrossError : (12 * bstar T k) * (PT.tiling.P i).ℓ ≤
+              (PT.tiling.P i).g / 1000000 := by
+            have hEllNonneg : 0 ≤ ((PT.tiling.P i).ℓ : ℝ) := Nat.cast_nonneg _
+            have hgSmallNonneg : 0 ≤ ((PT.tiling.P i).g : ℝ) / 1000000 := by positivity
+            have hmul := mul_le_mul hGammaLe hEllBound
+              hEllNonneg (by norm_num : (0 : ℝ) ≤ 3 / 4)
+            nlinarith [hmul, hGammaLe, hEllBound]
+          have hratioErr : (PT.tiling.P i).ℓ / (T.S.n k : ℝ) +
+              (initialLateCount D v : ℝ) / (T.S.n k : ℝ) ≤ 1 / 1000000 + 1 / 20 :=
+            add_le_add hEllOverN hLateOverN
+          rw [hsumEq]
+          calc
+            -delta * (Same.card : ℝ) + (12 * bstar T k) * (Cross.card : ℝ)
+                ≤ -delta * ((T.S.n k : ℝ) - (PT.tiling.P i).ℓ - initialLateCount D v) +
+                    (12 * bstar T k) * (PT.tiling.P i).ℓ := add_le_add hnegPart hposPart
+            _ = -(PT.tiling.P i).g / 4 +
+                  delta * ((PT.tiling.P i).ℓ + (initialLateCount D v : ℝ)) +
+                    (12 * bstar T k) * (PT.tiling.P i).ℓ := by rw [hmainEq]
+            _ ≤ -(PT.tiling.P i).g / 4 +
+                  ((PT.tiling.P i).g / 4) *
+                    (1 / 1000000 + 1 / 20) + (PT.tiling.P i).g / 1000000 := by
+              rw [hErrEq]
+              have hgOver4Nonneg : 0 ≤ ((PT.tiling.P i).g : ℝ) / 4 := by positivity
+              have hErrorBound := add_le_add
+                (mul_le_mul_of_nonneg_left hratioErr hgOver4Nonneg) hCrossError
+              nlinarith [hErrorBound]
+            _ ≤ -(9 / 40 : ℝ) * (PT.tiling.P i).g := by
+              nlinarith [show 0 ≤ (PT.tiling.P i).g from Nat.cast_nonneg _]
+        have hscaled := Lane_q_s17_pal.row_le_scaled_of_factors D v
+          (D.prior s v) (D.label s) x eps A B (PT.tiling.gain i) (-(9 / 40 : ℝ) * (PT.tiling.P i).g)
+          0 (initialLateCount D v) (by positivity) (hclean.1 x) (by
+            have hEq : -B * PT.tiling.gain i = PT.tiling.gain i / (1000 * κ.u) := by
+              dsimp [B]
+              ring
+            have hσcap' : D.prior s v x ≤
+                A * Real.exp (PT.tiling.gain i / (1000 * κ.u)) / T.S.N k := by
+              calc
+                _ ≤ 1 / ((1 - κ.a) * (PT.tiling.P i).M) := hσcap
+                _ ≤ _ := by
+                  simpa [div_eq_mul_inv, mul_assoc, mul_comm, mul_left_comm] using hpriorCap
+            simpa [hEq] using hσcap')
+          hFactor0 hFactor hE hcount
+        have hExp :
+            (-(9 / 40 : ℝ) * (PT.tiling.P i).g) - B * PT.tiling.gain i ≤
+              -200 * PT.tiling.gain i := by
+          have huOne : 1 ≤ (κ.u : ℝ) := by exact_mod_cast (by omega : 1 ≤ κ.u)
+          have huPos : 0 < (κ.u : ℝ) := by positivity
+          have hrecip : 1 / (1000000 * (κ.u : ℝ)) ≤ 1 / 1000000 :=
+            one_div_le_one_div_of_le (by norm_num) (by nlinarith [huOne])
+          have hgNonneg : 0 ≤ ((PT.tiling.P i).g : ℝ) := Nat.cast_nonneg _
+          have htermSmall : (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) ≤
+              (PT.tiling.P i).g / 40 := by
+            calc
+              _ = (PT.tiling.P i).g * (1 / (1000000 * (κ.u : ℝ))) := by ring
+              _ ≤ (PT.tiling.P i).g * (1 / 1000000) :=
+                mul_le_mul_of_nonneg_left hrecip hgNonneg
+              _ = (PT.tiling.P i).g / 1000000 := by ring
+              _ ≤ (PT.tiling.P i).g / 40 := by
+                have hc : 1 / (1000000 : ℝ) ≤ 1 / 40 :=
+                  one_div_le_one_div_of_le (by norm_num) (by norm_num)
+                have h := mul_le_mul_of_nonneg_left hc hgNonneg
+                simpa [div_eq_mul_inv] using h
+          have hExpEq :
+              (-(9 / 40 : ℝ) * (PT.tiling.P i).g) - B * PT.tiling.gain i =
+                -(9 / 40 : ℝ) * (PT.tiling.P i).g +
+                  (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) := by
+            rw [hgain]
+            dsimp [B]
+            field_simp [ne_of_gt huPos] <;> ring
+          calc
+            _ = -(9 / 40 : ℝ) * (PT.tiling.P i).g +
+                (PT.tiling.P i).g / (1000000 * (κ.u : ℝ)) := hExpEq
+            _ ≤ -(9 / 40 : ℝ) * (PT.tiling.P i).g +
+                (PT.tiling.P i).g / 40 := by nlinarith [htermSmall]
+            _ = -200 * PT.tiling.gain i := by rw [hgain]; ring
+        have hcoeff : 2 * A ≤ Katom := by
+          have hfactor : 1 ≤ Real.exp (8 * κ.Kbd + 1) :=
+            Real.one_le_exp (by positivity)
+          calc
+            2 * A = (2 * A) * 1 := by ring
+            _ ≤ (2 * A) * Real.exp (8 * κ.Kbd + 1) :=
+              mul_le_mul_of_nonneg_left hfactor (by positivity)
+            _ = Katom := by rfl
+        calc
+          _ ≤ 2 * A * (2 : ℝ) ^ T.S.n k / T.S.N k *
+              Real.exp ((-(9 / 40 : ℝ) * (PT.tiling.P i).g) - B * PT.tiling.gain i) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ)) := hscaled
+          _ = ((2 * A) * ((2 : ℝ) ^ T.S.n k / T.S.N k) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ))) *
+              Real.exp ((-(9 / 40 : ℝ) * (PT.tiling.P i).g) - B * PT.tiling.gain i) := by ring
+          _ ≤ _ := by
+            have hpowNonneg : 0 ≤ (2 : ℝ) ^ T.S.n k := by positivity
+            have hdivNonneg : 0 ≤ (2 : ℝ) ^ T.S.n k / T.S.N k :=
+              div_nonneg hpowNonneg hN.le
+            have hrpowNonneg : 0 ≤ Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+              Real.rpow_nonneg (by norm_num) _
+            have hFactorNonneg : 0 ≤
+                (2 * A) * ((2 : ℝ) ^ T.S.n k / T.S.N k) *
+                  Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+              mul_nonneg (mul_nonneg (by positivity) hdivNonneg) hrpowNonneg
+            exact mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr hExp) hFactorNonneg
+          _ = (2 * A) *
+              ((2 : ℝ) ^ T.S.n k / T.S.N k * Real.exp (-200 * PT.tiling.gain i) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ))) := by ring
+          _ ≤ Katom *
+              ((2 : ℝ) ^ T.S.n k / T.S.N k * Real.exp (-200 * PT.tiling.gain i) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ))) :=
+            mul_le_mul_of_nonneg_right hcoeff
+              (mul_nonneg (mul_nonneg (div_nonneg (by positivity) hN.le)
+                (Real.exp_pos _).le) (Real.rpow_nonneg (by norm_num) _))
+          _ = _ := by ring
+  | lowCluster =>
+      refine fun v pools s heven htyp hvalid x => ?_
+      let i := D.G.patchOf v
+      rcases hTV.cluster_data (Or.inl hm) i with
+        ⟨hscale, hg, hM, hdsmall, hdh, hcodeg, hdyadic, hpowLow,
+          hpowHigh, hmodeLow, hmodeSmall, hmodeLarge⟩
+      have hM1pos : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+      have hqNonneg : 0 ≤ ((PT.tiling.P i).q : ℝ) := by positivity
+      have hqM1 : (PT.tiling.P i).q ≤ κ.M1 * (PT.tiling.P i).q := by
+        nlinarith [hκ.M1_big.1, hqNonneg]
+      have hmax : ((max (PT.tiling.P i).g (PT.tiling.P i).q : ℕ) : ℝ) ≤
+          κ.M1 * (PT.tiling.P i).q := by
+        simpa [Nat.cast_max] using max_le hg hqM1
+      have hq0 : κ.Q0 ≤ (PT.tiling.P i).q := by
+        by_contra hnq
+        have hqLt : (PT.tiling.P i).q < κ.Q0 := lt_of_not_ge hnq
+        have hmul : κ.M1 * (PT.tiling.P i).q < κ.M1 * κ.Q0 :=
+          mul_lt_mul_of_pos_left hqLt hM1pos
+        linarith [hscale, hmax]
+      have hQ := hκ.Q0_large (PT.tiling.P i).q hq0
+      rcases hQ with ⟨_, _, _, _, _, _, _, hQ8, _⟩
+      have hpowLow' : Real.rpow (PT.tiling.P i).q κ.Mlo ≤
+          (PT.tiling.P i).h := by simpa [hm] using hpowLow
+      have haPos : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+      have haLt : κ.a < 1 := Lane_q_s17_pal.a_lt_one κ hκ
+      have hgain : PT.tiling.gain i = κ.a * (PT.tiling.P i).h / 10 ^ 6 := by
+        simp [Tiling.gain, hm]
+      have halloc := (hTV.allocation_bounds i).2
+      simp [hm] at halloc
+      rcases halloc with ⟨hEllBudget, _⟩
+      have huNat : 1 ≤ κ.u := by have hu := hκ.u_rng.2; omega
+      have hu : 1 ≤ (κ.u : ℝ) := by exact_mod_cast huNat
+      have hQ8Bound : 40 * Real.rpow (PT.tiling.P i).q κ.Cb ≤
+          PT.tiling.gain i / (100 * κ.u) := by
+        have hcoef : 0 ≤ κ.a / 10 ^ 6 := by positivity
+        have hmiddle :
+          (κ.a / 10 ^ 6) * Real.rpow (PT.tiling.P i).q κ.Mlo ≤
+              (κ.a / 10 ^ 6) * (PT.tiling.P i).h :=
+          mul_le_mul_of_nonneg_left hpowLow' hcoef
+        calc
+          _ ≤ (κ.a / 10 ^ 6) * Real.rpow (PT.tiling.P i).q κ.Mlo /
+                (100 * κ.u) := hQ8
+          _ ≤ ((κ.a / 10 ^ 6) * (PT.tiling.P i).h) /
+                (100 * κ.u) := div_le_div_of_nonneg_right hmiddle (by positivity)
+          _ = PT.tiling.gain i / (100 * κ.u) := by rw [hgain]; ring
+      have hHsup : (PT.tiling.P i).h ≤
+          Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).h := by
+        exact Finset.le_sup (s := Finset.univ)
+          (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h) (Finset.mem_univ i)
+      have hglobal := hTV.prefix_internal_length
+      change (Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) +
+          (Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).h) ≤ T.S.n k at hglobal
+      have hSupLe : (Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).h) ≤
+          T.S.n k := by
+        calc
+          _ ≤ (Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) +
+              Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).h :=
+            Nat.le_add_left _ _
+          _ ≤ T.S.n k := hglobal
+      have hHeightLeN : (PT.tiling.P i).h ≤ T.S.n k := le_trans hHsup hSupLe
+      have hgainNonneg : 0 ≤ PT.tiling.gain i := by rw [hgain]; positivity
+      have hgainUpper : PT.tiling.gain i ≤ (T.S.n k : ℝ) / 10 ^ 6 := by
+        have hheightNonneg : 0 ≤ ((PT.tiling.P i).h : ℝ) := Nat.cast_nonneg _
+        have hmul : κ.a * ((PT.tiling.P i).h : ℝ) ≤ ((PT.tiling.P i).h : ℝ) := by
+          simpa using mul_le_mul_of_nonneg_right haLt.le hheightNonneg
+        rw [hgain]
+        calc
+          _ ≤ ((PT.tiling.P i).h : ℝ) / 10 ^ 6 :=
+            div_le_div_of_nonneg_right hmul (by positivity)
+          _ ≤ (T.S.n k : ℝ) / 10 ^ 6 :=
+            div_le_div_of_nonneg_right (by exact_mod_cast hHeightLeN) (by positivity)
+      have hownNumer : 40 * Real.rpow (PT.tiling.P i).q κ.Cb ≤
+          (T.S.n k : ℝ) / 10 ^ 8 := by
+        calc
+          _ ≤ PT.tiling.gain i / (100 * κ.u) := hQ8Bound
+          _ ≤ ((T.S.n k : ℝ) / 10 ^ 6) / (100 * κ.u) :=
+            div_le_div_of_nonneg_right hgainUpper (by positivity)
+          _ = (T.S.n k : ℝ) / (10 ^ 8 * κ.u) := by field_simp; ring
+          _ ≤ (T.S.n k : ℝ) / 10 ^ 8 := by
+            have hrecip : 1 / (10 ^ 8 * (κ.u : ℝ)) ≤ 1 / 10 ^ 8 :=
+              one_div_le_one_div_of_le (by norm_num) (by nlinarith [show (1 : ℝ) ≤ κ.u by exact_mod_cast (by omega : 1 ≤ κ.u)])
+            have h := mul_le_mul_of_nonneg_left hrecip (by positivity : 0 ≤ (T.S.n k : ℝ))
+            simpa [div_eq_mul_inv] using h
+      have hownDelta : 10 * Real.rpow (PT.tiling.P i).q κ.Cb /
+          (T.S.n k : ℝ) ≤ 1 / 4 := by
+        have hquarter : 10 * Real.rpow (PT.tiling.P i).q κ.Cb ≤
+            (T.S.n k : ℝ) / 4 := by
+          calc
+            _ = (40 * Real.rpow (PT.tiling.P i).q κ.Cb) / 4 := by ring
+            _ ≤ ((T.S.n k : ℝ) / 10 ^ 8) / 4 :=
+              div_le_div_of_nonneg_right hownNumer (by norm_num)
+            _ ≤ (T.S.n k : ℝ) / 4 := by
+              have hrecip : 1 / (10 ^ 8 : ℝ) ≤ 1 := by norm_num
+              have hbig : (T.S.n k : ℝ) / 10 ^ 8 ≤ (T.S.n k : ℝ) := by
+                calc
+                  _ = (T.S.n k : ℝ) * (1 / (10 ^ 8 : ℝ)) := by ring
+                  _ ≤ (T.S.n k : ℝ) * 1 := mul_le_mul_of_nonneg_left hrecip (by positivity)
+                  _ = (T.S.n k : ℝ) := by ring
+              exact div_le_div_of_nonneg_right hbig (by norm_num)
+        exact (div_le_iff₀ hnPos).2 (by nlinarith [hquarter])
+      have hbstar : bstar T k ≤ 1 / 16 := by
+        have h := Lane_q_s17_pal.dimNegBstar_le_oneSixteenth (by omega : 256 ≤ T.S.n k)
+        simpa [bstar] using h
+      have hbstarNonneg : 0 ≤ bstar T k := by
+        unfold bstar
+        exact Real.rpow_nonneg (by positivity) _
+      have hcrossErrNonneg : 0 ≤ 12 * bstar T k :=
+        mul_nonneg (by norm_num) hbstarNonneg
+      have hcrossErrLe : 3 * bstar T k ≤ 1 / 4 := by nlinarith [hbstar]
+      have hN : 0 < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+      have hMpos : 0 < (PT.tiling.P i).M := by
+        have hlower : 0 < (1 / 400 : ℝ) * (T.S.N k : ℝ) *
+            Real.exp (-Real.rpow ((PT.tiling.P i).q : ℝ) κ.aC) := by positivity
+        exact_mod_cast (lt_of_lt_of_le hlower hM)
+      have hcluster : PT.tiling.mode.isCluster := by simp [Mode.isCluster, hm]
+      have hcell : D.G.cellOf v ∈ D.scopeCells v := by simp [ListGateContext.scopeCells]
+      have hpoolTypical : D.F.typical (D.G.cellOf v) (pools (D.G.cellOf v)) :=
+        htyp _ hcell
+      have hstateValid : D.stateValid (D.G.cellOf v) (pools (D.G.cellOf v))
+          (s (D.G.cellOf v)) := hvalid _ hcell
+      have hclean : D.CleanInitialPrior v (D.prior s v) := by
+        simpa [ListGateContext.prior] using
+          hQuant.prior_shape v (pools (D.G.cellOf v)) (s (D.G.cellOf v))
+            heven hpoolTypical hstateValid
+      have hσcap := Lane_q_s17_pal.cleanInitialPrior_cluster_cap D v
+        (D.prior s v) hclean hcluster x
+      have hσ : D.prior s v x ≤
+          (2 : ℝ) ^ (PT.tiling.P i).h * Real.exp (-500 * PT.tiling.gain i) /
+            T.S.N k := by
+        apply (le_div_iff₀ hN).2
+        simpa [mul_comm] using hσcap
+      by_cases hxzero : D.prior s v x = 0
+      · have hrow : D.row v (D.prior s v) (D.label s) x = 0 := by
+          simp [ListGateContext.row, hxzero]
+        rw [hrow]
+        have hbase : 0 ≤ Katom * (2 : ℝ) ^ T.S.n k / T.S.N k :=
+          div_nonneg (mul_nonneg hKatom.le (by positivity)) hN.le
+        exact mul_nonneg (mul_nonneg hbase (Real.exp_pos _).le)
+          (Real.rpow_nonneg (by norm_num) _)
+      · have hxEnv : x ∈ PT.envelope i :=
+          Lane_q_s17_pal.cleanInitialPrior_support_envelope hPT D v
+            (D.prior s v) hclean x hxzero
+        let ownErr : ℝ := 10 * Real.rpow (PT.tiling.P i).q κ.Cb /
+          (T.S.n k : ℝ)
+        let eps : Pos T k → ℝ := fun w =>
+          if D.G.patchOf w = i then 4 * ownErr else 12 * bstar T k
+        have hqcbNonneg : 0 ≤ Real.rpow (PT.tiling.P i).q κ.Cb :=
+          Real.rpow_nonneg (Nat.cast_nonneg _) _
+        have hownErrNonneg : 0 ≤ ownErr := by
+          dsimp [ownErr]
+          exact div_nonneg (mul_nonneg (by norm_num) hqcbNonneg) hnPos.le
+        have hown : OwnDegOK PT.tiling i (PT.π i) x := hPT.envelope_degree i x hxEnv
+        have habs : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+            ownErr := by simpa [OwnDegOK, hm, ownErr] using hown
+        have hdegNonneg (w : Pos T k) :
+            0 ≤ deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+          unfold deg
+          apply Finset.sum_nonneg
+          intro y hy
+          apply mul_nonneg
+          · exact (PT.π (D.G.patchOf w)).nonneg y
+          · by_cases hhit : Hits (T.S.E k) PT.tiling.c x y <;> simp [hit, hhit]
+        have hFactor0 : ∀ w ∈ D.externalEarly v,
+            0 ≤ D.hitRatio w x (D.label s w) := by
+          intro w hw
+          exact Lane_q_s17_pal.hitRatio_nonneg D w x (D.label s w) (hdegNonneg w)
+        have hFactor : ∀ w ∈ D.externalEarly v,
+            D.hitRatio w x (D.label s w) ≤ 2 * Real.exp (eps w) := by
+          intro w hw
+          by_cases hsame : D.G.patchOf w = i
+          · have hlow : 1 / 2 - ownErr ≤
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+              rw [hsame]
+              have := (abs_le.mp habs).1
+              linarith
+            have hRatio := Lane_q_s17_pal.hitRatio_le_of_degreeNearHalf D w x
+              (D.label s w) ownErr hownErrNonneg (by linarith [hownDelta]) hlow
+            simpa [eps, hsame, ownErr] using hRatio
+          · have hother := hPT.envelope_other_degree i (D.G.patchOf w) hsame x hxEnv
+            have hlower : 1 / 2 - 3 * bstar T k ≤
+                deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x := by
+              have := (abs_le.mp hother).1
+              linarith
+            have hRatio := Lane_q_s17_pal.hitRatio_le_of_degreeNearHalf D w x
+              (D.label s w) (3 * bstar T k)
+              (mul_nonneg (by norm_num) hbstarNonneg) hcrossErrLe hlower
+            have heps : 4 * (3 * bstar T k) = 12 * bstar T k := by ring
+            simpa [eps, hsame, heps] using hRatio
+        have hGeom := Lane_q_s17_pal.externalEarlyCoordCount D K hPT
+          hQuant.geometry v heven
+        have hcount : (D.externalEarly v).card + (PT.tiling.P i).h +
+            initialLateCount D v ≤ T.S.n k + 1 := by
+          simpa [initialLateCount] using hGeom
+        let Same : Finset (Pos T k) := (D.externalEarly v).filter fun w =>
+          D.G.patchOf w = i
+        let Cross : Finset (Pos T k) := (D.externalEarly v).filter fun w =>
+          D.G.patchOf w ≠ i
+        have hSameSum : (∑ w ∈ Same, eps w) =
+            (4 * ownErr) * (Same.card : ℝ) := by
+          calc
+            _ = ∑ w ∈ Same, 4 * ownErr := by
+              apply Finset.sum_congr rfl
+              intro w hw
+              simp [eps, Same, (Finset.mem_filter.mp hw).2]
+            _ = _ := by simp [Finset.sum_const, nsmul_eq_mul] <;> ring
+        have hCrossSum : (∑ w ∈ Cross, eps w) =
+            (12 * bstar T k) * (Cross.card : ℝ) := by
+          calc
+            _ = ∑ w ∈ Cross, 12 * bstar T k := by
+              apply Finset.sum_congr rfl
+              intro w hw
+              simp [eps, Cross, (Finset.mem_filter.mp hw).2]
+            _ = _ := by simp [Finset.sum_const, nsmul_eq_mul] <;> ring
+        have hpartition : (∑ w ∈ D.externalEarly v, eps w) =
+            (∑ w ∈ Same, eps w) + (∑ w ∈ Cross, eps w) := by
+          rw [← Finset.sum_filter_add_sum_filter_not _
+            (fun w => D.G.patchOf w = i)]
+        have hSameCard : (Same.card : ℝ) ≤ (D.externalEarly v).card := by
+          exact_mod_cast (Finset.card_le_card (Finset.filter_subset _ _))
+        have hCrossCard : (Cross.card : ℝ) ≤ (PT.tiling.P i).ℓ := by
+          exact_mod_cast (Lane_q_s17_pal.externalEarly_crossPatch_card_le_prefix D hPT v)
+        have hcardNat : (D.externalEarly v).card ≤ T.S.n k + 1 := by omega
+        have hcard : ((D.externalEarly v).card : ℝ) ≤ (T.S.n k : ℝ) + 1 := by
+          exact_mod_cast hcardNat
+        have hnDim : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast (by omega : 1 ≤ T.S.n k)
+        have hSameBound : (4 * ownErr) * (Same.card : ℝ) ≤
+            80 * Real.rpow (PT.tiling.P i).q κ.Cb := by
+          calc
+            _ ≤ (4 * ownErr) * (D.externalEarly v).card :=
+              mul_le_mul_of_nonneg_left hSameCard
+                (mul_nonneg (by norm_num) hownErrNonneg)
+            _ ≤ (4 * ownErr) * ((T.S.n k : ℝ) + 1) :=
+              mul_le_mul_of_nonneg_left hcard
+                (mul_nonneg (by norm_num) hownErrNonneg)
+            _ = 40 * Real.rpow (PT.tiling.P i).q κ.Cb *
+                ((T.S.n k : ℝ) + 1) / (T.S.n k : ℝ) := by dsimp [ownErr]; field_simp <;> ring
+            _ ≤ 80 * Real.rpow (PT.tiling.P i).q κ.Cb := by
+              have hdimRatio : ((T.S.n k : ℝ) + 1) / (T.S.n k : ℝ) ≤ 2 := by
+                apply (div_le_iff₀ hnPos).2
+                nlinarith
+              have hqcb : 0 ≤ Real.rpow (PT.tiling.P i).q κ.Cb := hqcbNonneg
+              calc
+                _ = 40 * Real.rpow (PT.tiling.P i).q κ.Cb *
+                    (((T.S.n k : ℝ) + 1) / (T.S.n k : ℝ)) := by ring
+                _ ≤ 40 * Real.rpow (PT.tiling.P i).q κ.Cb * 2 :=
+                  mul_le_mul_of_nonneg_left hdimRatio (by positivity)
+                _ = 80 * Real.rpow (PT.tiling.P i).q κ.Cb := by ring
+        have hQown : 80 * Real.rpow (PT.tiling.P i).q κ.Cb ≤ PT.tiling.gain i / 50 := by
+          have hfirst : 80 * Real.rpow (PT.tiling.P i).q κ.Cb ≤
+              2 * (PT.tiling.gain i / (100 * κ.u)) := by
+            calc
+              _ = 2 * (40 * Real.rpow (PT.tiling.P i).q κ.Cb) := by ring
+              _ ≤ 2 * (PT.tiling.gain i / (100 * κ.u)) :=
+                mul_le_mul_of_nonneg_left hQ8Bound (by norm_num)
+          have hsecond : 2 * (PT.tiling.gain i / (100 * κ.u)) ≤
+              PT.tiling.gain i / 50 := by
+            have hrecip : 1 / (50 * (κ.u : ℝ)) ≤ 1 / 50 :=
+              one_div_le_one_div_of_le (by norm_num) (by nlinarith [hu])
+            calc
+              _ = PT.tiling.gain i / (50 * (κ.u : ℝ)) := by field_simp <;> ring
+              _ ≤ PT.tiling.gain i / 50 := by
+                have hmul := mul_le_mul_of_nonneg_left hrecip (by positivity : 0 ≤ PT.tiling.gain i)
+                simpa [div_eq_mul_inv] using hmul
+          exact le_trans hfirst hsecond
+        have hcrossBound : (12 * bstar T k) * (Cross.card : ℝ) ≤
+            3 * PT.tiling.gain i / 4000 := by
+          have hgammaLe : 12 * bstar T k ≤ 3 / 4 := by nlinarith [hbstar]
+          have hcrossEll : (Cross.card : ℝ) ≤ (PT.tiling.P i).ℓ := hCrossCard
+          have hEllNonneg : 0 ≤ ((PT.tiling.P i).ℓ : ℝ) := Nat.cast_nonneg _
+          calc
+            _ ≤ (12 * bstar T k) * (PT.tiling.P i).ℓ :=
+              mul_le_mul_of_nonneg_left hcrossEll hcrossErrNonneg
+            _ ≤ (3 / 4) * (PT.tiling.gain i / (1000 * κ.u)) := by
+              exact mul_le_mul hgammaLe hEllBudget hEllNonneg
+                (by norm_num : (0 : ℝ) ≤ 3 / 4)
+            _ ≤ 3 * PT.tiling.gain i / 4000 := by
+              have hrecip : 1 / (1000 * (κ.u : ℝ)) ≤ 1 / 1000 :=
+                one_div_le_one_div_of_le (by norm_num) (by nlinarith [hu])
+              have hmul := mul_le_mul_of_nonneg_left hrecip (by positivity : 0 ≤ PT.tiling.gain i)
+              calc
+                _ = (3 / 4) * (PT.tiling.gain i * (1 / (1000 * (κ.u : ℝ)))) := by ring
+                _ ≤ (3 / 4) * (PT.tiling.gain i * (1 / 1000)) :=
+                  mul_le_mul_of_nonneg_left hmul (by norm_num)
+                _ = 3 * PT.tiling.gain i / 4000 := by ring
+        have hE : (∑ w ∈ D.externalEarly v, eps w) ≤ PT.tiling.gain i := by
+          rw [hpartition, hSameSum, hCrossSum]
+          calc
+            _ ≤ 80 * Real.rpow (PT.tiling.P i).q κ.Cb +
+                12 * bstar T k * (Cross.card : ℝ) :=
+              add_le_add hSameBound (le_of_eq rfl)
+            _ ≤ PT.tiling.gain i / 50 + 3 * PT.tiling.gain i / 4000 :=
+              add_le_add hQown hcrossBound
+            _ ≤ PT.tiling.gain i := by nlinarith [hgainNonneg]
+        have hscaled := Lane_q_s17_pal.row_le_scaled_of_factors D v
+          (D.prior s v) (D.label s) x eps 1 500 (PT.tiling.gain i) (PT.tiling.gain i)
+          (PT.tiling.P i).h (initialLateCount D v) (by norm_num) (hclean.1 x)
+          (by simpa using hσ)
+          hFactor0 hFactor hE hcount
+        have hAone : 1 ≤ A := by
+          dsimp [A]
+          have haDenPos : 0 < 1 - κ.a := by linarith [ha]
+          apply (le_div_iff₀ haDenPos).2
+          nlinarith [ha]
+        have hExpOne : 1 ≤ Real.exp (8 * κ.Kbd + 1) :=
+          Real.one_le_exp (by positivity)
+        have hcoeff : 2 ≤ Katom := by
+          calc
+            2 = 2 * 1 := by ring
+            _ ≤ 2 * A := mul_le_mul_of_nonneg_left hAone (by norm_num)
+            _ ≤ 2 * A * Real.exp (8 * κ.Kbd + 1) :=
+              by
+                simpa using mul_le_mul_of_nonneg_left hExpOne
+                  (show 0 ≤ (2 : ℝ) * A from mul_nonneg (by norm_num) hApos.le)
+            _ = Katom := by rfl
+        have hExp : PT.tiling.gain i - 500 * PT.tiling.gain i ≤
+            -200 * PT.tiling.gain i := by nlinarith [hgainNonneg]
+        calc
+          _ ≤ 2 * (2 : ℝ) ^ T.S.n k / T.S.N k *
+              Real.exp (PT.tiling.gain i - 500 * PT.tiling.gain i) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ)) := by simpa using hscaled
+          _ = (2 * ((2 : ℝ) ^ T.S.n k / T.S.N k) *
+                Real.rpow 2 (-(initialLateCount D v : ℝ))) *
+              Real.exp (PT.tiling.gain i - 500 * PT.tiling.gain i) := by ring
+          _ ≤ _ := by
+            have hpowNonneg : 0 ≤ (2 : ℝ) ^ T.S.n k := by positivity
+            have hdivNonneg : 0 ≤ (2 : ℝ) ^ T.S.n k / T.S.N k :=
+              div_nonneg hpowNonneg hN.le
+            have hrpowNonneg : 0 ≤ Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+              Real.rpow_nonneg (by norm_num) _
+            have hFactorNonneg : 0 ≤
+                2 * ((2 : ℝ) ^ T.S.n k / T.S.N k) *
+                  Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+              mul_nonneg (mul_nonneg (by norm_num) hdivNonneg) hrpowNonneg
+            exact mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr hExp) hFactorNonneg
+          _ = 2 * ((2 : ℝ) ^ T.S.n k / T.S.N k *
+                Real.exp (-200 * PT.tiling.gain i) *
+                  Real.rpow 2 (-(initialLateCount D v : ℝ))) := by ring
+          _ ≤ Katom * ((2 : ℝ) ^ T.S.n k / T.S.N k *
+                Real.exp (-200 * PT.tiling.gain i) *
+                  Real.rpow 2 (-(initialLateCount D v : ℝ))) := by
+            have hdivNonneg : 0 ≤ (2 : ℝ) ^ T.S.n k / T.S.N k :=
+              div_nonneg (by positivity) hN.le
+            have hrpowNonneg : 0 ≤ Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+              Real.rpow_nonneg (by norm_num) _
+            have hcommon : 0 ≤ (2 : ℝ) ^ T.S.n k / T.S.N k *
+                Real.exp (-200 * PT.tiling.gain i) *
+                  Real.rpow 2 (-(initialLateCount D v : ℝ)) :=
+              mul_nonneg (mul_nonneg hdivNonneg (Real.exp_pos _).le) hrpowNonneg
+            exact mul_le_mul_of_nonneg_right hcoeff hcommon
+          _ = _ := by ring
+  | highDirect => simp [Mode.isLow, hm] at hLow
+  | highSmall => simp [Mode.isLow, hm] at hLow
+  | highLarge => simp [Mode.isLow, hm] at hLow
 
+set_option maxHeartbeats 1000000 in
 /-- L17.3(i): binary separating code; a free outer bit supplies equal even classes. -/
 theorem lowModePaletteCode
     (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -316,7 +1308,292 @@ theorem lowModePaletteCode
         (∃ j : Fin (T.S.n k), (PT.tiling.P i).ℓ ≤ j.val ∧
           j.val < T.S.n k - (PT.tiling.P i).h) →
         ∃ ψ : S17PaletteCode i hle, PaletteCodeSpec i hle ψ := by
-  sorry
+  filter_upwards [] with k
+  intro PT D hQuant i hle hfree
+  have hPT : PT.Valid := D.tiling_valid
+  have hTV : Tiling.Valid PT.tiling := hPT.tiling_valid
+  have hLow := D.mode_low
+  have hzeroSpec (hh : (PT.tiling.P i).h = 0) (hgain : 0 ≤ PT.tiling.gain i) :
+      ∃ ψ : S17PaletteCode i hle, PaletteCodeSpec i hle ψ := by
+    let ψ : S17PaletteCode i hle := ⟨0, 0⟩
+    have hmap : Function.Surjective ψ.map := by
+      intro c
+      refine ⟨0, ?_⟩
+      ext j
+      exact Fin.elim0 j
+    have hspec : PaletteCodeSpec i hle ψ := by
+      refine ⟨hmap, ?_⟩
+      refine ⟨?_, ?_⟩
+      · intro z hzmap hz hweight
+        have hz0 : z = 0 := by
+          funext j
+          exact Fin.elim0 (Fin.cast hh j)
+        exact (hz hz0).elim
+      · refine ⟨Lane_q_s17_pal.evenLeafPaletteCardEq i hle hPT hfree ψ hmap, ?_⟩
+        change (s17Chi ψ : ℝ) ≤ Real.exp (PT.tiling.gain i)
+        have hchi : s17Chi ψ = 1 := by simp [s17Chi, ψ, ListGateContext.PaletteCode.chi]
+        rw [hchi]
+        simpa using Real.one_le_exp hgain
+    exact ⟨ψ, hspec⟩
+  cases hm : PT.tiling.mode with
+  | bounded =>
+      rcases hTV.bounded_data hm with ⟨_, hpatch⟩
+      rcases hpatch i with ⟨_, hh, _, _⟩
+      exact hzeroSpec hh (by simp [Tiling.gain, hm])
+  | lowDirect =>
+      have hd := hTV.direct_data (Or.inl hm) i
+      have hh : (PT.tiling.P i).h = 0 := hd.2.2.2.2.1
+      have hgq := hd.2.1
+      have hM1 : 4 ≤ κ.M1 := hκ.M1_big.1
+      have hq : 0 ≤ ((PT.tiling.P i).q : ℝ) := by positivity
+      have hM1q : 0 ≤ κ.M1 * (PT.tiling.P i).q := mul_nonneg (by linarith) hq
+      have hg : 0 < ((PT.tiling.P i).g : ℝ) := lt_of_le_of_lt hM1q hgq
+      have hgain : 0 ≤ PT.tiling.gain i := by
+        simp [Tiling.gain, hm]
+        positivity
+      exact hzeroSpec hh hgain
+  | lowCluster =>
+      have hcl := hTV.cluster_data (Or.inl hm) i
+      rcases hcl with ⟨hscale, hg, hmass, hdsmall, hdh, hcodeg,
+        hdyadic, hpowLow, hpowHigh, hmodeLow, hmodeSmall, hmodeLarge⟩
+      have hM1pos : 0 < κ.M1 := by linarith [hκ.M1_big.1]
+      have hqNonneg : 0 ≤ ((PT.tiling.P i).q : ℝ) := by positivity
+      have hqM1 : (PT.tiling.P i).q ≤ κ.M1 * (PT.tiling.P i).q := by
+        nlinarith [hκ.M1_big.1, hqNonneg]
+      have hmax : ((max (PT.tiling.P i).g (PT.tiling.P i).q : ℕ) : ℝ) ≤
+          κ.M1 * (PT.tiling.P i).q := by
+        simpa [Nat.cast_max] using max_le hg hqM1
+      have hq0 : κ.Q0 ≤ (PT.tiling.P i).q := by
+        by_contra hn
+        have hlt : (PT.tiling.P i).q < κ.Q0 := lt_of_not_ge hn
+        have hmul : κ.M1 * (PT.tiling.P i).q < κ.M1 * κ.Q0 :=
+          mul_lt_mul_of_pos_left hlt hM1pos
+        linarith [hscale, hmax]
+      have hQ := hκ.Q0_large (PT.tiling.P i).q hq0
+      have hqpowNonneg : 0 ≤ Real.rpow (PT.tiling.P i).q κ.aC :=
+        Real.rpow_nonneg (by positivity) _
+      have hqtail : 10 ≤ κ.a / 10 ^ 6 *
+          Real.rpow (PT.tiling.P i).q κ.Mlo / (1000 * κ.u) := by
+        have hq := hQ.2.1
+        linarith [hqpowNonneg]
+      have huNat : 0 < κ.u := by have hu := hκ.u_rng.2; omega
+      have hu : 0 < (κ.u : ℝ) := by exact_mod_cast huNat
+      have hprod : (10 ^ 10 : ℝ) * κ.u ≤ κ.a *
+          Real.rpow (PT.tiling.P i).q κ.Mlo := by
+        have hmul := (le_div_iff₀ (mul_pos (by norm_num : (0 : ℝ) < 1000) hu)).mp hqtail
+        nlinarith [hmul]
+      have hhLower : Real.rpow (PT.tiling.P i).q κ.Mlo ≤
+          (PT.tiling.P i).h := by simpa [hm] using hpowLow
+      have haPos : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+      have hprodH : (10 ^ 10 : ℝ) * κ.u ≤ κ.a * (PT.tiling.P i).h :=
+        le_trans hprod (mul_le_mul_of_nonneg_left hhLower haPos.le)
+      have huOneNat : 1 ≤ κ.u := by omega
+      have huOne : 1 ≤ (κ.u : ℝ) := by exact_mod_cast huOneNat
+      have hgainEq : PT.tiling.gain i =
+          κ.a * (PT.tiling.P i).h / 10 ^ 6 := by simp [Tiling.gain, hm]
+      have hprodBig : (10 ^ 10 : ℝ) ≤ κ.a * (PT.tiling.P i).h := by
+        have h := mul_le_mul_of_nonneg_left huOne (by norm_num : (0 : ℝ) ≤ 10 ^ 10)
+        have h' : (10 ^ 10 : ℝ) ≤ 10 ^ 10 * κ.u := by simpa using h
+        exact le_trans h' hprodH
+      have hgainLower : 10000 ≤ PT.tiling.gain i := by
+        rw [hgainEq]
+        apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 10 ^ 6)).2
+        calc
+          (10000 : ℝ) * 10 ^ 6 = 10 ^ 10 := by norm_num
+          _ ≤ κ.a * (PT.tiling.P i).h := hprodBig
+      have hlogpos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+      have haLt : κ.a < 1 := by
+        have huNeg : -(10 * (κ.u : ℝ) + 100) < 0 := by
+          have huNonneg : 0 ≤ (κ.u : ℝ) := Nat.cast_nonneg _
+          linarith
+        have hrpow : Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) < 1 :=
+          Real.rpow_lt_one_of_one_lt_of_neg (by norm_num) huNeg
+        have hxiLt : κ.ξ < 1 := by
+          have hxi := hκ.ξ_rng.2
+          have halpha := hκ.α_rng.2
+          have hprodXi : κ.α * Real.rpow 2 (-(10 * (κ.u : ℝ) + 100)) < κ.α :=
+            by simpa using mul_lt_mul_of_pos_left hrpow hκ.α_rng.1
+          linarith
+        have hfour : 1 ≤ (4 : ℝ) ^ (κ.u + 3) :=
+          one_le_pow₀ (by norm_num : (1 : ℝ) ≤ 4)
+        have hden : 1 < 3 * (4 : ℝ) ^ (κ.u + 3) := by nlinarith [hfour]
+        have hquot : κ.ξ ^ 2 / (3 * (4 : ℝ) ^ (κ.u + 3)) < 1 := by
+          have hxiPos : 0 ≤ κ.ξ := hκ.ξ_rng.1.le
+          have hxiSq : κ.ξ ^ 2 < 1 := by nlinarith [hxiLt, hxiPos]
+          apply (div_lt_iff₀ (by positivity)).2
+          nlinarith [hxiSq, hden]
+        have hθ : κ.θ < 1 := lt_trans hκ.θ_rng.2 hquot
+        rw [hκ.a_eq]
+        linarith
+      have hlogHalf : (1 / 2 : ℝ) ≤ Real.log 2 := by
+        have := Real.log_two_gt_d9
+        norm_num1 at this
+        linarith
+      let rhoCode : ℝ := 1000 * κ.ρ
+      let m : ℕ := ⌈(PT.tiling.gain i) / (2 * Real.log 2)⌉₊
+      let w : ℕ := ⌊500 * κ.ρ * (PT.tiling.P i).h⌋₊
+      have hargNonneg : 0 ≤ PT.tiling.gain i / (2 * Real.log 2) := by positivity
+      have hmle : m ≤ (PT.tiling.P i).h := by
+        apply Nat.ceil_le.2
+        rw [hgainEq]
+        apply (div_le_iff₀ (by positivity : (0 : ℝ) < 2 * Real.log 2)).2
+        nlinarith [haLt, hlogHalf]
+      have hceilLow : PT.tiling.gain i / (2 * Real.log 2) ≤ (m : ℝ) := by
+        exact Nat.le_ceil _
+      have hceilHigh : (m : ℝ) ≤ PT.tiling.gain i / (2 * Real.log 2) + 1 := by
+        dsimp [m]
+        calc
+          _ ≤ (⌊PT.tiling.gain i / (2 * Real.log 2)⌋₊ : ℝ) + 1 := by
+            exact_mod_cast Nat.ceil_le_floor_add_one _
+          _ ≤ PT.tiling.gain i / (2 * Real.log 2) + 1 := by
+            simpa [add_comm] using add_le_add_right (Nat.floor_le hargNonneg) 1
+      have hmulLow : PT.tiling.gain i / 2 ≤ (m : ℝ) * Real.log 2 := by
+        have h := mul_le_mul_of_nonneg_right hceilLow hlogpos.le
+        have hd : PT.tiling.gain i / (2 * Real.log 2) * Real.log 2 =
+            PT.tiling.gain i / 2 := by field_simp [ne_of_gt hlogpos]
+        rw [hd] at h
+        nlinarith
+      have hmulHigh : (m : ℝ) * Real.log 2 ≤ PT.tiling.gain i := by
+        have hUpper : (m : ℝ) * Real.log 2 ≤ PT.tiling.gain i / 2 + Real.log 2 := by
+          calc
+            _ ≤ (PT.tiling.gain i / (2 * Real.log 2) + 1) * Real.log 2 :=
+              mul_le_mul_of_nonneg_right hceilHigh hlogpos.le
+            _ = PT.tiling.gain i / 2 + Real.log 2 := by field_simp [ne_of_gt hlogpos]
+        have hlogLt : Real.log 2 ≤ 1 := by linarith [Real.log_two_lt_d9]
+        have hLhalf : Real.log 2 ≤ PT.tiling.gain i / 2 := by linarith [hgainLower, hlogLt]
+        exact le_trans hUpper (by linarith only [hLhalf])
+      have hrho0 : 0 ≤ rhoCode := by
+        dsimp [rhoCode]
+        exact mul_nonneg (by norm_num) hκ.ρ_rng.1.le
+      have hrhoHalf : rhoCode ≤ 1 / 2 := by
+        have hrho : κ.ρ < 1 / 4000 := hκ.ρ_rng.2.1
+        change 1000 * κ.ρ ≤ 1 / 2
+        have hquarter : 1000 * κ.ρ < 1 / 4 := by
+          calc
+            1000 * κ.ρ < 1000 * (1 / 4000) :=
+              mul_lt_mul_of_pos_left hrho (by norm_num)
+            _ = 1 / 4 := by norm_num
+        exact hquarter.le.trans (by norm_num)
+      have hrhoQuarter : rhoCode < 1 / 4 := by
+        dsimp [rhoCode]
+        have hrho : κ.ρ < 1 / 4000 := hκ.ρ_rng.2.1
+        calc
+          1000 * κ.ρ < 1000 * (1 / 4000) :=
+            mul_lt_mul_of_pos_left hrho (by norm_num)
+          _ = 1 / 4 := by norm_num
+      have hwReal : (w : ℝ) ≤ rhoCode * (PT.tiling.P i).h := by
+        have hradiusNonneg : 0 ≤ 500 * κ.ρ * (PT.tiling.P i).h :=
+          mul_nonneg (mul_nonneg (by norm_num) hκ.ρ_rng.1.le) (Nat.cast_nonneg _)
+        have hfloor := Nat.floor_le hradiusNonneg
+        have hcoef : 500 * κ.ρ ≤ rhoCode := by
+          change 500 * κ.ρ ≤ 1000 * κ.ρ
+          exact mul_le_mul_of_nonneg_right (by norm_num : (500 : ℝ) ≤ 1000)
+            hκ.ρ_rng.1.le
+        have hscale : 500 * κ.ρ * (PT.tiling.P i).h ≤ rhoCode * (PT.tiling.P i).h :=
+          mul_le_mul_of_nonneg_right hcoef (Nat.cast_nonneg (PT.tiling.P i).h)
+        calc
+          (w : ℝ) ≤ 500 * κ.ρ * (PT.tiling.P i).h := hfloor
+          _ ≤ rhoCode * (PT.tiling.P i).h := hscale
+      have hw : w ≤ (PT.tiling.P i).h := by
+        have hrhoOne : rhoCode ≤ 1 := hrhoQuarter.le.trans (by norm_num)
+        have hmul : rhoCode * (PT.tiling.P i).h ≤ (PT.tiling.P i).h := by
+          simpa using mul_le_mul_of_nonneg_right hrhoOne
+            (Nat.cast_nonneg (PT.tiling.P i).h)
+        have hw' : (w : ℝ) ≤ (PT.tiling.P i).h :=
+          le_trans hwReal hmul
+        exact_mod_cast hw'
+      have hentropy : Real.binEntropy rhoCode < κ.a / 10 ^ 9 := by
+        have hrhoPos : 0 < rhoCode := by
+          dsimp [rhoCode]
+          exact mul_pos (by norm_num) hκ.ρ_rng.1
+        have hrhoNe : rhoCode ≠ 1 := ne_of_lt (lt_trans hrhoQuarter (by norm_num))
+        have hcustom : binEntropy rhoCode < κ.a / 10 ^ 9 := by
+          change binEntropy (1000 * κ.ρ) < κ.a / 10 ^ 9
+          exact hκ.ρ_rng.2.2
+        have heq := Lane_q_s17_pal.realBinEntropy_eq_custom rhoCode hrhoPos.ne' hrhoNe
+        rw [heq]
+        exact hcustom
+      have hball := Lane_q_s17_pal.weightBall_entropyBound
+        (PT.tiling.P i).h w rhoCode hrho0 hrhoHalf hwReal
+      have hballCast :
+          (∑ j ∈ Finset.range (w + 1), (Nat.choose (PT.tiling.P i).h j : ℝ)) <
+            (2 : ℝ) ^ m := by
+        have hcardReal :
+            ((LinearCodePToolsCubeR.weightBall (PT.tiling.P i).h w).card : ℝ) =
+              ∑ j ∈ Finset.range (w + 1), (Nat.choose (PT.tiling.P i).h j : ℝ) := by
+          exact_mod_cast LinearCodePToolsCubeR.card_weightBall _ _
+        have hpow : (2 : ℝ) ^ m = Real.exp ((m : ℝ) * Real.log 2) := by
+          calc
+            (2 : ℝ) ^ m = (Real.exp (Real.log 2)) ^ m := by rw [Real.exp_log (by norm_num)]
+            _ = Real.exp ((m : ℝ) * Real.log 2) := by rw [Real.exp_nat_mul]
+        have hhalf : Real.binEntropy rhoCode * (PT.tiling.P i).h < PT.tiling.gain i / 1000 := by
+          have hheightPos : 0 < (PT.tiling.P i).h := by
+            by_contra hn
+            have hle : (PT.tiling.P i).h ≤ 0 := le_of_not_gt hn
+            have hzero : (PT.tiling.P i).h = 0 :=
+              le_antisymm hle (Nat.cast_nonneg (PT.tiling.P i).h)
+            have hcontra : (10 ^ 10 : ℝ) * κ.u ≤ 0 := by simpa [hzero] using hprodH
+            have hpos : 0 < (10 ^ 10 : ℝ) * κ.u := by positivity
+            linarith
+          have hheightPosReal : 0 < ((PT.tiling.P i).h : ℝ) := by exact_mod_cast hheightPos
+          have hEntMul := mul_lt_mul_of_pos_right hentropy hheightPosReal
+          rw [hgainEq]
+          have hscale : (κ.a / 10 ^ 9) * (PT.tiling.P i).h =
+              (κ.a * (PT.tiling.P i).h / 10 ^ 6) / 1000 := by ring
+          rw [← hscale]
+          exact hEntMul
+        have hpowArg : Real.binEntropy rhoCode * (PT.tiling.P i).h <
+            (m : ℝ) * Real.log 2 := by
+          have hhalfle : PT.tiling.gain i / 1000 ≤ PT.tiling.gain i / 2 := by
+            nlinarith [hgainLower]
+          exact lt_of_lt_of_le hhalf (le_trans hhalfle hmulLow)
+        have hballLt :
+            ((LinearCodePToolsCubeR.weightBall (PT.tiling.P i).h w).card : ℝ) <
+              Real.exp ((m : ℝ) * Real.log 2) := by
+          apply lt_of_le_of_lt hball
+          exact Real.exp_strictMono hpowArg
+        have hballPow :
+            ((LinearCodePToolsCubeR.weightBall (PT.tiling.P i).h w).card : ℝ) < (2 : ℝ) ^ m := by
+          rw [hpow]
+          exact hballLt
+        calc
+          (∑ j ∈ Finset.range (w + 1), (Nat.choose (PT.tiling.P i).h j : ℝ)) =
+              (LinearCodePToolsCubeR.weightBall (PT.tiling.P i).h w).card := hcardReal.symm
+          _ < (2 : ℝ) ^ m := hballPow
+      have hvol : (∑ j ∈ Finset.range (w + 1), Nat.choose (PT.tiling.P i).h j) <
+          2 ^ m := by exact_mod_cast hballCast
+      obtain ⟨L, hsurj, hker⟩ := xVarshamov (PT.tiling.P i).h m w hmle hw hvol
+      let ψ : S17PaletteCode i hle := ⟨m, L⟩
+      have hcolors : ∀ c₁ c₂ : Fin ψ.dimension → ZMod 2,
+          (Finset.univ.filter fun v : Pos T k =>
+            v ∈ PT.tiling.leaf i ∧ IsEvenRole v ∧ ψ.roleColour v = c₁).card =
+          (Finset.univ.filter fun v : Pos T k =>
+            v ∈ PT.tiling.leaf i ∧ IsEvenRole v ∧ ψ.roleColour v = c₂).card :=
+        Lane_q_s17_pal.evenLeafPaletteCardEq i hle hPT hfree ψ hsurj
+      have hchi : (s17Chi ψ : ℝ) ≤ Real.exp (PT.tiling.gain i) := by
+        have hchiEq : (s17Chi ψ : ℝ) = (2 : ℝ) ^ m := by
+          simp [s17Chi, ψ, ListGateContext.PaletteCode.chi]
+        rw [hchiEq]
+        have hpow : (2 : ℝ) ^ m = Real.exp ((m : ℝ) * Real.log 2) := by
+          calc
+            (2 : ℝ) ^ m = (Real.exp (Real.log 2)) ^ m := by rw [Real.exp_log (by norm_num)]
+            _ = Real.exp ((m : ℝ) * Real.log 2) := by rw [Real.exp_nat_mul]
+        rw [hpow]
+        exact Real.exp_le_exp.mpr hmulHigh
+      refine ⟨ψ, ?_⟩
+      refine ⟨hsurj, ?_⟩
+      refine ⟨?_, ?_⟩
+      · intro z hzmap hzne hweight
+        have hwtNat : internalWeight z ≤ w := by
+          simpa [w] using Nat.le_floor hweight
+        have hbinary : binaryWeight z = internalWeight z := by rfl
+        have hker' := hker z hzmap hzne
+        rw [hbinary] at hker'
+        exact (Nat.not_lt_of_ge hwtNat) hker'
+      · exact ⟨hcolors, hchi⟩
+  | highDirect => simp [Mode.isLow, hm] at hLow
+  | highSmall => simp [Mode.isLow, hm] at hLow
+  | highLarge => simp [Mode.isLow, hm] at hLow
 
 /-- L17.3(ii): one label colouring for every fixed valid-history readout. -/
 theorem lowModePaletteRetention

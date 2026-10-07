@@ -801,6 +801,39 @@ theorem pinnedPriorMass_eq_hits {κ : CConsts} {T : Stage} {k : ℕ}
       (hPT.corner_clean (D.G.patchOf v) a ha).sub hxclean
     simp [hxX]
 
+theorem cleanSupport_subset_envelope {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (v : Pos T k) (σ : Fin (T.S.N k) → ℝ)
+    (hσ : D.CleanInitialPrior v σ) (x : Fin (T.S.N k)) (hxσ : σ x ≠ 0) :
+    x ∈ PT.envelope (D.G.patchOf v) := by
+  classical
+  rcases hσ.2.2 with ⟨a, ha, hsupport, _, _⟩
+  rw [hPT.envelope_eq]
+  exact Finset.mem_biUnion.mpr ⟨a, ha, hsupport x hxσ⟩
+
+theorem cleanSupport_external_degree_drift {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (K : ℝ) (hGeom : D.S17GeometryValidity K)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) (hσ : D.CleanInitialPrior v σ)
+    (hN : 0 < (T.S.n k : ℝ))
+    (x : Fin (T.S.N k)) (hxσ : σ x ≠ 0) (w : Pos T k)
+    (hw : w ∈ D.externalEarly v) :
+    |deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x - 1 / 2| ≤
+      max (K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) (3 * bstar T k) := by
+  let i := D.G.patchOf v
+  let j := D.G.patchOf w
+  have hxenv : x ∈ PT.envelope i := by
+    simpa [i] using cleanSupport_subset_envelope D hPT v σ hσ x hxσ
+  by_cases hji : j = i
+  · have hpatch : D.G.patchOf w = D.G.patchOf v := by simpa [j, i] using hji
+    have h := hGeom.degree_drift i x hxenv
+    have hdiv : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+        K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ) :=
+      (le_div_iff₀ hN).2 (by nlinarith [h])
+    simpa [hpatch] using le_trans hdiv (le_max_left _ _)
+  · have h := hPT.envelope_other_degree i j hji x hxenv
+    simpa [j] using le_trans h (le_max_right _ _)
+
 theorem rowMass_subtype_product {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
     (v : Pos T k) (hN : 0 < T.S.N k) (σ : Fin (T.S.N k) → ℝ)

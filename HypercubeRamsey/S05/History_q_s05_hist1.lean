@@ -26,12 +26,11 @@ theorem FinProb.no_capped_singleton_support5 {s N : ℕ} (D : ℝ) (y₀ : Fin N
     calc
       ∑ y : Fin N, P.w (h, y) = P.w (h, y₀) := by
         rw [Finset.sum_eq_single y₀]
-        · simp
-        · intro y hy hne
+        · intro y _hy hne
           have hz : P.w (h, y) = 0 := by
             by_contra hne0
             exact hne (hsupport h y hne0)
-          simp [hz]
+          exact hz
         · simp
       _ ≤ 2 * Real.exp D / ((s : ℝ) * N) := hcap h y₀
   have hsum : (∑ h : Fin s, ∑ y : Fin N, P.w (h, y)) = 1 := by

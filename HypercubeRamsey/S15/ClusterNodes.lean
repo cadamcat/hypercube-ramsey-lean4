@@ -2,6 +2,8 @@ import HypercubeRamsey.S15.DirectNodes
 import HypercubeRamsey.S15.Masks
 import HypercubeRamsey.S15.Capacity
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
+import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -313,7 +315,100 @@ theorem high_cluster_mask_expansion (κ : CConsts) (hκ : κ.Admissible) (T : St
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hcap : ClusterRowCapClaim κ T) (hgeometry : ClusterGeometryClaim κ T) :
     ClusterMaskExpansionClaim κ T := by
-  sorry
+  classical
+  filter_upwards [hcap, hgeometry] with k hcap hgeometry
+  intro PT hPT hm CS i x hx
+  obtain ⟨hroweq, hcap, hrow, hhit⟩ := hcap PT hPT hm CS
+  obtain ⟨hcore, hrank, hnonisolated, hcross⟩ := hgeometry PT hPT hm
+  let S := evenPatchPositions PT.tiling i
+  let d : ℝ := (S.card : ℝ) ^ (T.S.n k)
+  let Q := Fintype.piFinset (fun _ : Fin (T.S.n k) => S)
+  let term := fun (M : ClusterMask PT) (ω : CS.Outcome) =>
+    if ClusterMaskGeometry PT hPT i M then
+      clusterMaskPayoff PT i M *
+        (if CS.historyLoad ω ∧ ClusterMaskConsistent PT hPT hm M (CS.bins ω) then
+          clusterKeptProduct PT hPT hm i x M (CS.history ω) (CS.internal ω) else 0)
+    else 0
+  have hterm0 : ∀ M ω, 0 ≤ term M ω := by
+    intro M ω
+    dsimp [term]
+    split_ifs
+    · exact mul_nonneg (Lane_sol_s15_mask.payoff_nonneg PT i M)
+        (Lane_sol_s15_mask.keptProduct_nonneg PT hPT hm i x M _ _)
+    all_goals simp
+  have hinj (ω : CS.Outcome) : Function.Injective
+      (fun vs => Lane_sol_s15_mask.orderedMask PT hPT hm i vs (CS.bins ω)) := by
+    intro vs ws heq
+    simpa only [Lane_sol_s15_mask.orderedMask_positions] using congrArg ClusterMask.positions heq
+  have hpoint : ∀ ω, CS.law.w ω ≠ 0 →
+      (if CS.historyLoad ω then clusterColumnAverage CS i x ω ^ (T.S.n k) else 0) ≤
+        d⁻¹ * ∑ M, term M ω := by
+    intro ω hw
+    by_cases hload : CS.historyLoad ω
+    · rw [if_pos hload]
+      have htuple : (∑ vs ∈ Q, ∏ r, (PT.tiling.P i).M * CS.row ω (vs r) x) ≤
+          ∑ M, term M ω := by
+        calc
+          (∑ vs ∈ Q, ∏ r, (PT.tiling.P i).M * CS.row ω (vs r) x) ≤
+              ∑ vs ∈ Q, term (Lane_sol_s15_mask.orderedMask PT hPT hm i vs (CS.bins ω)) ω := by
+            apply Finset.sum_le_sum
+            intro vs hvs
+            have hv : ∀ r, vs r ∈ S := Fintype.mem_piFinset.mp hvs
+            let M := Lane_sol_s15_mask.orderedMask PT hPT hm i vs (CS.bins ω)
+            have hM : ClusterMaskGeometry PT hPT i M :=
+              Lane_sol_s15_mask.orderedMask_geometry PT hPT hm i vs (CS.bins ω) hv
+            have hcons : ClusterMaskConsistent PT hPT hm M (CS.bins ω) :=
+              Lane_sol_s15_mask.orderedMask_consistent PT hPT hm i vs (CS.bins ω)
+            have hp := Lane_sol_s15_mask.masked_pointwise PT hPT hm CS i x M hM ω
+              (hcap ω hw hload · x) (hrow ω hw hload · x) (hhit i x hx)
+              (hcross i x hx M hM (CS.label ω))
+            rw [show M.positions = vs from Lane_sol_s15_mask.orderedMask_positions PT hPT hm i vs (CS.bins ω)] at hp
+            change (∏ r, (PT.tiling.P i).M * CS.row ω (vs r) x) ≤ term M ω
+            dsimp only [term]
+            rw [if_pos hM, if_pos (show CS.historyLoad ω ∧
+              ClusterMaskConsistent PT hPT hm M (CS.bins ω) from ⟨hload, hcons⟩)]
+            exact hp
+          _ = ∑ M ∈ Q.image (fun vs => Lane_sol_s15_mask.orderedMask PT hPT hm i vs (CS.bins ω)),
+              term M ω := by
+            rw [Finset.sum_image]
+            intro vs hvs ws hws heq
+            exact hinj ω heq
+          _ ≤ ∑ M, term M ω := by
+            apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+            intro M hM hnM
+            exact hterm0 M ω
+      change ((S.card : ℝ)⁻¹ * ∑ a ∈ S, (PT.tiling.P i).M * CS.row ω a x) ^ (T.S.n k) ≤ _
+      rw [Lane_q_s15_c3.finset_average_pow_expand]
+      exact mul_le_mul_of_nonneg_left htuple (inv_nonneg.mpr (pow_nonneg (Nat.cast_nonneg _) _))
+    · rw [if_neg hload]
+      exact mul_nonneg (inv_nonneg.mpr (pow_nonneg (Nat.cast_nonneg _) _))
+        (Finset.sum_nonneg fun M hM => hterm0 M ω)
+  unfold clusterColumnMoment FinLaw.E
+  calc
+    (∑ ω, CS.law.w ω * (if CS.historyLoad ω then clusterColumnAverage CS i x ω ^ (T.S.n k) else 0)) ≤
+        ∑ ω, d⁻¹ * ∑ M, CS.law.w ω * term M ω := by
+      apply Finset.sum_le_sum
+      intro ω hω
+      by_cases hw : CS.law.w ω = 0
+      · simp [hw]
+      · have hh := mul_le_mul_of_nonneg_left (hpoint ω hw) (CS.law.nonneg ω)
+        simpa only [Finset.mul_sum, mul_left_comm] using hh
+    _ = d⁻¹ * ∑ M, ∑ ω, CS.law.w ω * term M ω := by
+      rw [← Finset.mul_sum, Finset.sum_comm]
+    _ = (∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then
+        clusterMaskPayoff PT i M * clusterMaskedIntegral CS i x M else 0) /
+        ((evenPatchPositions PT.tiling i).card : ℝ) ^ (T.S.n k) := by
+      rw [div_eq_mul_inv, mul_comm]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro M hM
+      by_cases hgeom : ClusterMaskGeometry PT hPT i M
+      · simp only [term, if_pos hgeom, clusterMaskedIntegral, FinLaw.E]
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro ω hω
+        ring
+      · simp [term, hgeom]
 
 /-- One fixed producer constant, shared with the final Markov estimate. -/
 def ClusterColumnMomentBound (κ : CConsts) (T : Stage) (K : ℝ) : Prop :=
@@ -334,7 +429,137 @@ theorem high_cluster_mask_summation (κ : CConsts) (hκ : κ.Admissible) (T : St
     (hsplice : ClusterSmallBinSpliceClaim κ T) (hlabel : ClusterLabelTransfer κ T)
     (hbin : ClusterBinTransfer κ T) (hhistory : ClusterHistoryRestore κ T) :
     ClusterColumnMomentClaim κ T := by
-  sorry
+  classical
+  obtain ⟨L, hL, hlabel⟩ := hlabel
+  let D := max (rowMeanConstant κ) 1
+  let K := (8 * Real.exp 1) * (16 * L * D)
+  have hD : 1 ≤ D := le_max_right _ _
+  have hD0 : 0 ≤ D := (by norm_num : (0 : ℝ) ≤ 1).trans hD
+  have hK : 0 < K := by dsimp [K]; positivity
+  refine ⟨K, hK, ?_⟩
+  filter_upwards [hexpand, hgeometry, hsplice, hlabel, hbin, hhistory,
+    Lane_sol_s15_mask.eventually_high_gain_log hκ T,
+    Lane_sol_s15_mask.eventually_crossing_costs hκ T,
+    T.S.n_tendsto.eventually (eventually_ge_atTop 1)] with
+      k hexpand hgeometry hsplice hlabel hbin hhistory hgain hcrosscost hn
+  intro PT hPT hm CS i x hx
+  by_cases hS : (evenPatchPositions PT.tiling i).Nonempty
+  · let n := T.S.n k
+    let A := Lane_sol_s15_mask.rowCap PT i
+    let B := Lane_sol_s15_mask.coreCoefficient PT i
+    let q := Lane_sol_s15_mask.crossingCoefficient PT
+    let a : ℝ := 3 ^ (2 * (PT.tiling.P i).ℓ)
+    let f := Real.exp (0.01 * PT.tiling.gain i) / 2 ^ n
+    let F := 4 * (4 * L * D) ^ n
+    let weight := fun M : ClusterMask PT =>
+      A ^ M.geometric.card * B ^ M.coreBins.card * q ^ M.crossingBins.card *
+        a ^ clusterCrossingRank PT M.positions M.geometric
+    have hA : 0 ≤ A := by dsimp [A, Lane_sol_s15_mask.rowCap]; positivity
+    have hB : 0 ≤ B := by
+      dsimp [B, Lane_sol_s15_mask.coreCoefficient]
+      split_ifs
+      · exact mul_nonneg hA (Lane_sol_s15_mask.coreRepeatCost_nonneg PT i)
+      · exact le_rfl
+    have hq : 0 ≤ q := by
+      dsimp [q, Lane_sol_s15_mask.crossingCoefficient]
+      split_ifs <;> first | (unfold clusterCrossingFraction; positivity) | exact le_rfl
+    have ha : 0 ≤ a := by dsimp [a]; positivity
+    have hf : 0 ≤ f := by dsimp [f]; positivity
+    have hF : 0 ≤ F := by dsimp [F]; positivity
+    have hs : 0 ≤ PT.tiling.gain i := Lane_sol_s15_mask.high_gain_nonneg hκ PT hm i
+    have hB1 : B ≤ 1 := by
+      by_cases hmode : PT.tiling.mode = .highSmall
+      · simp only [B, Lane_sol_s15_mask.coreCoefficient, if_pos hmode]
+        exact Lane_sol_s15_mask.cap_repeat_bound PT i hs (hsplice PT hPT hmode i)
+      · simp [B, Lane_sol_s15_mask.coreCoefficient, hmode]
+    have hqsmall : q * (n : ℝ) ^ 2 ≤ 1 := by
+      by_cases hmode : PT.tiling.mode = .highSmall
+      · simpa only [q, Lane_sol_s15_mask.crossingCoefficient, if_pos hmode] using
+          (hcrosscost PT hPT i).1
+      · simp [q, Lane_sol_s15_mask.crossingCoefficient, hmode]
+    have hgeomsmall : (n : ℝ) * f * A ≤ 1 :=
+      Lane_sol_s15_mask.geometric_cap_bound PT i hn hs (hgain PT hPT hm i)
+    obtain ⟨hcore, hrank, hnonisolated, hdelete⟩ := hgeometry PT hPT hm
+    have hcore' : ∀ v ∈ evenPatchPositions PT.tiling i,
+        (((evenPatchPositions PT.tiling i).filter (clusterCoreNear PT hPT i v)).card : ℝ) ≤
+          f * (evenPatchPositions PT.tiling i).card := by
+      intro v hv
+      simpa only [f, div_eq_mul_inv, mul_assoc, mul_comm, mul_left_comm] using hcore i v hv
+    have hrank' : ∀ G, (((evenPatchPositions PT.tiling i).card : ℝ) ^ n)⁻¹ *
+        (∑ vs : Fin n → {v : EvenPosition T k // v ∈ evenPatchPositions PT.tiling i},
+          a ^ clusterCrossingRank PT (fun r => (vs r).1) G) ≤ 2 := by
+      intro G
+      exact Lane_sol_s15_mask.rank_average_le_two PT i G a
+        ((n : ℝ) ^ 2 * clusterCrossingFraction T k) ha (by unfold clusterCrossingFraction; positivity)
+        (hcrosscost PT hPT i).2 (hrank i G)
+    have hsum := Lane_sol_s15_mask.cluster_mask_weight_sum PT hPT i hS A B q a f
+      hA hB hq ha hf hcore' hrank' hqsmall
+    have hmean0 : 0 ≤ rowMeanConstant κ := by
+      unfold rowMeanConstant
+      exact mul_nonneg (div_nonneg (by norm_num) (Lane_sol_s15_mask.a_positive hκ).le) (by norm_num)
+    have hpay : ∀ M, ClusterMaskGeometry PT hPT i M →
+        clusterMaskPayoff PT i M * clusterMaskedIntegral CS i x M ≤ F * weight M := by
+      intro M hM
+      simpa only [F, weight, A, B, q, a, mul_assoc] using
+        Lane_sol_s15_mask.transferred_payoff_bound PT hPT hm CS i x M L D hL.le hD
+          hmean0 (le_max_left _ _) (hlabel PT hPT hm CS i x hx M hM)
+          (hbin PT hPT hm CS i x hx M hM) (hhistory PT hPT hm CS i x hx M hM).2
+    have hnumer : (∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then
+        clusterMaskPayoff PT i M * clusterMaskedIntegral CS i x M else 0) ≤
+          F * ∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then weight M else 0 := by
+      rw [Finset.mul_sum]
+      apply Finset.sum_le_sum
+      intro M hM
+      by_cases hgeom : ClusterMaskGeometry PT hPT i M
+      · simp only [if_pos hgeom]
+        exact hpay M hgeom
+      · simp [hgeom]
+    have hpowB : (1 + B) ^ n ≤ (2 : ℝ) ^ n := pow_le_pow_left₀ (by linarith) (by linarith) _
+    have hpowG : (1 + (n : ℝ) * f * A) ^ n ≤ (2 : ℝ) ^ n :=
+      pow_le_pow_left₀ (by positivity) (by linarith) _
+    have hsmallSum : 2 * Real.exp 1 * (1 + B) ^ n * (1 + (n : ℝ) * f * A) ^ n ≤
+        2 * Real.exp 1 * (2 : ℝ) ^ n * (2 : ℝ) ^ n := by
+      apply mul_le_mul
+      · exact mul_le_mul_of_nonneg_left hpowB (by positivity)
+      · exact hpowG
+      · positivity
+      · positivity
+    have hconst : 1 ≤ 8 * Real.exp 1 := by
+      have hh : 1 ≤ Real.exp (1 : ℝ) := Real.one_le_exp_iff.mpr (by norm_num)
+      linarith
+    have hconstpow : 8 * Real.exp 1 ≤ (8 * Real.exp 1) ^ n := by
+      simpa only [pow_one] using pow_le_pow_right₀ hconst hn
+    calc
+      clusterColumnMoment CS i x ≤
+          (∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then
+            clusterMaskPayoff PT i M * clusterMaskedIntegral CS i x M else 0) /
+              ((evenPatchPositions PT.tiling i).card : ℝ) ^ n := hexpand PT hPT hm CS i x hx
+      _ ≤ (F * ∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then weight M else 0) /
+          ((evenPatchPositions PT.tiling i).card : ℝ) ^ n :=
+        div_le_div_of_nonneg_right hnumer (pow_nonneg (Nat.cast_nonneg _) _)
+      _ = F * ((∑ M : ClusterMask PT, if ClusterMaskGeometry PT hPT i M then weight M else 0) /
+          ((evenPatchPositions PT.tiling i).card : ℝ) ^ n) := by ring
+      _ ≤ F * (2 * Real.exp 1 * (1 + B) ^ n * (1 + (n : ℝ) * f * A) ^ n) :=
+        mul_le_mul_of_nonneg_left hsum hF
+      _ ≤ F * (2 * Real.exp 1 * (2 : ℝ) ^ n * (2 : ℝ) ^ n) :=
+        mul_le_mul_of_nonneg_left hsmallSum hF
+      _ = (8 * Real.exp 1) * (16 * L * D) ^ n := by
+        dsimp only [F]
+        have h16 : (16 : ℝ) ^ n = (4 : ℝ) ^ n * (2 : ℝ) ^ n * (2 : ℝ) ^ n := by
+          rw [← mul_pow, ← mul_pow]
+          norm_num
+        simp only [mul_pow]
+        rw [h16]
+        ring
+      _ ≤ (8 * Real.exp 1) ^ n * (16 * L * D) ^ n :=
+        mul_le_mul_of_nonneg_right hconstpow (by positivity)
+      _ = K ^ n := by rw [← mul_pow]
+  · have hempty : evenPatchPositions PT.tiling i = ∅ := Finset.not_nonempty_iff_eq_empty.mp hS
+    have hmom : clusterColumnMoment CS i x = 0 := by
+      simp [clusterColumnMoment, clusterColumnAverage, hempty, FinLaw.E,
+        show T.S.n k ≠ 0 by omega]
+    rw [hmom]
+    exact pow_nonneg hK.le _
 
 /-- P15.4: assemble the fixed-mask expansion, three actual transfers and mask summation. -/
 theorem high_cluster_column_moment (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

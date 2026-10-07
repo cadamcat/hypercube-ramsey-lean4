@@ -1,5 +1,6 @@
 import HypercubeRamsey.S16.Producers_q_s16_prod1
 import HypercubeRamsey.Tools.CubeGeometry
+import HypercubeRamsey.S16.Comparisons
 
 namespace HypercubeRamsey.S16.Lane_sol_s16_prod1
 
@@ -544,5 +545,203 @@ theorem solver_qin_cap {κ : CConsts} {T : Stage} {k : ℕ}
       _ ≤ cap / (1 / 2 : ℝ) := div_le_div_of_nonneg_left hcap (by norm_num) hmass
       _ = _ := by dsimp [cap]; ring
   · positivity
+
+/-- A quantitative permission bound, with the rate fixed by the input table. -/
+theorem permission_removed_count {Group Bin Label Incidence : Type*}
+    [Fintype Group] [DecidableEq Group] [Fintype Bin] [DecidableEq Bin]
+    [Fintype Label] [DecidableEq Label] [Fintype Incidence] [DecidableEq Incidence]
+    (P : PermissionTable Group Bin Label Incidence) (qin : Group → FinLaw Bin)
+    (hP : PermissionLossHypotheses P qin) (g : Group) :
+    ((Finset.univ \ P.permitted g).card : ℝ) ≤
+      Real.exp (-P.cperm * P.n) * Fintype.card Bin := by
+  classical
+  let bad := Finset.univ \ P.permitted g
+  let pairs := ((permissionIncidences P g).product Finset.univ).filter fun iy =>
+    Real.exp (-P.cperm * P.n) < P.badMass iy.1 iy.2
+  have witness : ∀ b ∈ bad, ∃ iy : Incidence × Label,
+      iy ∈ pairs ∧ iy.2 ∈ P.labels b := by
+    intro b hb
+    have hn := (Finset.mem_sdiff.mp hb).2
+    rw [P.permitted_iff] at hn
+    simp only [not_forall, not_le] at hn
+    obtain ⟨inc, hg, y, hy, hbad⟩ := hn
+    refine ⟨(inc, y), ?_, hy⟩
+    apply Finset.mem_filter.mpr
+    refine ⟨by simp [permissionIncidences, hg], ?_⟩
+    exact hbad
+  let f : {b // b ∈ bad} → Incidence × Label :=
+    fun b => Classical.choose (witness b.1 b.2)
+  have hf : ∀ b, f b ∈ pairs ∧ (f b).2 ∈ P.labels b.1 :=
+    fun b => Classical.choose_spec (witness b.1 b.2)
+  have hinj : Function.Injective f := by
+    intro b b' heq
+    have hy := (hf b).2
+    have hy' : (f b).2 ∈ P.labels b'.1 := by rw [heq]; exact (hf b').2
+    apply Subtype.ext
+    apply Finset.card_le_one.mp (hP.labels_disjoint (f b).2)
+    · simp [binsContainingLabel, hy]
+    · simp [binsContainingLabel, hy']
+  have hcard : bad.card ≤ pairs.card := by
+    have h := Finset.card_le_card (s := Finset.univ.image f) (t := pairs)
+      (by intro iy hiy; obtain ⟨b, _, rfl⟩ := Finset.mem_image.mp hiy; exact (hf b).1)
+    simpa [Finset.card_image_of_injective _ hinj] using h
+  have ht : 0 < Real.exp (-P.cperm * P.n) := Real.exp_pos _
+  have hmarkov : (pairs.card : ℝ) * Real.exp (-P.cperm * P.n) ≤
+      ∑ inc ∈ permissionIncidences P g, ∑ y, P.badMass inc y := by
+    calc
+      (pairs.card : ℝ) * Real.exp (-P.cperm * P.n) =
+          ∑ iy ∈ pairs, Real.exp (-P.cperm * P.n) := by simp
+      _ ≤ ∑ iy ∈ pairs, P.badMass iy.1 iy.2 := by
+        apply Finset.sum_le_sum
+        intro iy hiy
+        exact le_of_lt (Finset.mem_filter.mp hiy).2
+      _ ≤ ∑ iy ∈ (permissionIncidences P g).product Finset.univ,
+          P.badMass iy.1 iy.2 := by
+        apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _)
+        intro iy _ _
+        exact (hP.mean_bad_mass iy.1 iy.2).1
+      _ = _ := by exact Finset.sum_product _ _ _
+  have hmean : (pairs.card : ℝ) * Real.exp (-P.cperm * P.n) ≤
+      ((permissionIncidences P g).card : ℝ) *
+        (Real.exp (-3 * P.cperm * P.n) * Fintype.card Label) := by
+    exact hmarkov.trans (by
+      simpa only [Finset.sum_const, nsmul_eq_mul] using
+        (Finset.sum_le_sum (s := permissionIncidences P g)
+          (fun inc _ => hP.average_bad_mass inc)))
+  have hB : (0 : ℝ) < Fintype.card Bin := by
+    letI := hP.bins_nonempty
+    exact_mod_cast Fintype.card_pos
+  have hr := hP.incidence_label_ratio g
+  rw [← mul_div_assoc] at hr
+  have hratio := (div_le_iff₀ hB).mp hr
+  have hratio' : ((permissionIncidences P g).card : ℝ) * Fintype.card Label ≤
+      Real.exp (P.cperm * P.n) * Fintype.card Bin := by
+    nlinarith only [hratio]
+  have hsum : (pairs.card : ℝ) * Real.exp (-P.cperm * P.n) ≤
+      Real.exp (-2 * P.cperm * P.n) * Fintype.card Bin := by
+    calc
+      _ ≤ Real.exp (-3 * P.cperm * P.n) *
+          (((permissionIncidences P g).card : ℝ) * Fintype.card Label) := by
+        nlinarith only [hmean]
+      _ ≤ Real.exp (-3 * P.cperm * P.n) *
+          (Real.exp (P.cperm * P.n) * Fintype.card Bin) :=
+        mul_le_mul_of_nonneg_left hratio' (Real.exp_pos _).le
+      _ = _ := by rw [← mul_assoc, ← Real.exp_add]; congr 2; ring
+  have hbound : (pairs.card : ℝ) ≤
+      Real.exp (-P.cperm * P.n) * Fintype.card Bin := by
+    apply (mul_le_mul_iff_left₀ ht).mp
+    calc
+      _ ≤ Real.exp (-2 * P.cperm * P.n) * Fintype.card Bin := by
+        simpa [mul_comm] using hsum
+      _ = _ := by
+        have he : Real.exp (-2 * P.cperm * P.n) =
+            Real.exp (-P.cperm * P.n) * Real.exp (-P.cperm * P.n) := by
+          rw [← Real.exp_add]
+          congr 1
+          ring
+        rw [he]
+        ring
+  exact (by exact_mod_cast hcard : (bad.card : ℝ) ≤ pairs.card).trans hbound
+
+/-- The permission denominator is at least one half at the recorded threshold. -/
+theorem permission_retained_half {Group Bin Label Incidence : Type*}
+    [Fintype Group] [DecidableEq Group] [Fintype Bin] [DecidableEq Bin]
+    [Fintype Label] [DecidableEq Label] [Fintype Incidence] [DecidableEq Incidence]
+    (P : PermissionTable Group Bin Label Incidence) (qin : Group → FinLaw Bin)
+    (hP : PermissionLossHypotheses P qin) (g : Group) :
+    (1 / 2 : ℝ) ≤ ∑ b ∈ P.permitted g, (qin g).w b := by
+  classical
+  have hB : (0 : ℝ) < Fintype.card Bin := by
+    letI := hP.bins_nonempty
+    exact_mod_cast Fintype.card_pos
+  have hremoved : (∑ b ∈ Finset.univ \ P.permitted g, (qin g).w b) ≤
+      Real.exp (-P.cperm * P.n / 2) := by
+    calc
+      _ ≤ ((Finset.univ \ P.permitted g).card : ℝ) *
+          (Real.exp (P.cperm * P.n / 2) / Fintype.card Bin) := by
+        simpa using Finset.sum_le_sum (s := Finset.univ \ P.permitted g)
+          (fun b _ => hP.incoming_cap g b)
+      _ ≤ (Real.exp (-P.cperm * P.n) * Fintype.card Bin) *
+          (Real.exp (P.cperm * P.n / 2) / Fintype.card Bin) :=
+        mul_le_mul_of_nonneg_right (permission_removed_count P qin hP g) (by positivity)
+      _ = _ := by
+        field_simp
+        rw [← Real.exp_add]
+        congr 1
+        ring
+  have hexp : Real.exp (-P.cperm * P.n / 2) ≤ 1 / 2 := by
+    have hlog : Real.log (4 : ℝ) = 2 * Real.log 2 := by
+      have h := Real.log_pow (2 : ℝ) 2
+      norm_num at h
+      exact h
+    have hn := hP.threshold_large
+    rw [hlog] at hn
+    calc
+      _ ≤ Real.exp (-Real.log 2) := Real.exp_le_exp.mpr (by nlinarith)
+      _ = 1 / 2 := by rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 2)]; norm_num
+  have hsplit := Finset.sum_sdiff (s₁ := P.permitted g) (s₂ := Finset.univ)
+    (Finset.subset_univ _) (f := (qin g).w)
+  rw [(qin g).sum_one] at hsplit
+  linarith
+
+theorem four_over_atom_cap (d : ℕ) (hd : (10 ^ 100 : ℕ) ≤ d) :
+    4 / (d : ℝ) ≤ Real.rpow (d : ℝ) (-0.95) := by
+  have hbase : (10 : ℝ) ^ (100 : ℕ) ≤ (d : ℝ) := by exact_mod_cast hd
+  have hp : (0 : ℝ) < d := lt_of_lt_of_le (by positivity) hbase
+  have hpow : (4 : ℝ) ≤ Real.rpow (d : ℝ) 0.05 := by
+    calc
+      4 ≤ Real.rpow ((10 : ℝ) ^ (100 : ℕ)) 0.05 := by
+        have he : Real.rpow ((10 : ℝ) ^ (100 : ℕ)) 0.05 =
+            Real.rpow 10 (100 * 0.05) := by
+          rw [← Real.rpow_natCast]
+          exact (Real.rpow_mul (by norm_num : (0 : ℝ) ≤ 10) 100 0.05).symm
+        rw [he]
+        norm_num [Real.rpow_natCast]
+      _ ≤ _ := Real.rpow_le_rpow (by positivity) hbase (by norm_num)
+  calc
+    4 / (d : ℝ) ≤ Real.rpow (d : ℝ) 0.05 / d :=
+      div_le_div_of_nonneg_right hpow hp.le
+    _ = _ := by
+      have h := Real.rpow_sub_one hp.ne' (0.05 : ℝ)
+      rw [show (0.05 - 1 : ℝ) = -0.95 by norm_num] at h
+      simpa only [Real.rpow_eq_pow] using h.symm
+
+theorem typical_normalizer_lower (n : ℕ) (hn : 2 ≤ n) (m L B : ℝ)
+    (hL : 0 < L) (hB : 0 < B)
+    (hm : |m / (L / B) - 1| ≤ Real.rpow (n : ℝ) (-4)) :
+    L / (2 * B) ≤ m := by
+  have hn' : (2 : ℝ) ≤ n := by exact_mod_cast hn
+  have he : Real.rpow (n : ℝ) (-4) ≤ 1 / 2 := by
+    calc
+      _ ≤ Real.rpow (2 : ℝ) (-4) :=
+        Real.rpow_le_rpow_of_nonpos (by norm_num) hn' (by norm_num)
+      _ ≤ _ := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+  have hl := (abs_le.mp hm).1
+  have hratio : 1 / 2 ≤ m / (L / B) := by linarith
+  have hmul := (le_div_iff₀ (div_pos hL hB)).mp hratio
+  calc
+    L / (2 * B) = (1 / 2) * (L / B) := by ring
+    _ ≤ m := hmul
+
+theorem pool_atom_cap {Bin : Type*} [Fintype Bin]
+    (P Q : FinLaw Bin) (A : Finset Bin) (L B c : ℝ)
+    (hL : 0 < L) (hB : 0 < B) (hc : 0 ≤ c)
+    (hcap : ∀ b, P.w b ≤ c / B)
+    (hlower : L / (2 * B) ≤ ∑ b ∈ A, P.w b)
+    (hQ : ∀ b, Q.w b = (if b ∈ A then P.w b else 0) / (∑ b' ∈ A, P.w b')) :
+    ∀ b, Q.w b ≤ 2 * c / L := by
+  intro b
+  have hm : 0 < ∑ b ∈ A, P.w b := lt_of_lt_of_le (by positivity) hlower
+  rw [hQ]
+  by_cases hb : b ∈ A
+  · rw [if_pos hb]
+    calc
+      _ ≤ (c / B) / (∑ b ∈ A, P.w b) :=
+        div_le_div_of_nonneg_right (hcap b) hm.le
+      _ ≤ (c / B) / (L / (2 * B)) :=
+        div_le_div_of_nonneg_left (div_nonneg hc hB.le) (by positivity) hlower
+      _ = _ := by field_simp
+  · rw [if_neg hb, zero_div]
+    positivity
 
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

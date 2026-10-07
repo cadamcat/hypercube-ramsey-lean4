@@ -859,7 +859,7 @@ theorem keyDist_triangle {η₀ : ℝ} {n : ℕ}
         ∑ r, (Nat.dist (a r).val (b r).val + Nat.dist (b r).val (c r).val) := by
           apply Finset.sum_le_sum
           intro r hr
-          exact Nat.dist_triangle _ _ _
+          exact Nat.dist.triangle_inequality _ _ _
     _ = (∑ r, Nat.dist (a r).val (b r).val) +
           ∑ r, Nat.dist (b r).val (c r).val := Finset.sum_add_distrib
 

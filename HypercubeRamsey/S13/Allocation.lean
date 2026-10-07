@@ -3,6 +3,7 @@ import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.CubeGeometry
 import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.Framework.Embedding
+import HypercubeRamsey.S13.Allocation_q_s13_alloc
 import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!

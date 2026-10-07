@@ -568,6 +568,8 @@ theorem tag_moment (δ x₀ K P : ℝ) (hP : 10 ≤ P) :
       (pow_nonneg (mul_nonneg (by positivity) (hαbar z)) m) hrawB
     simpa [ΦB] using hB
 
+set_option maxHeartbeats 1000000
+
 /-- P11.1d1(iii) (11:356–368).  On gated tags the comparison means have caps `A_s ≤ e^{.02n}` and
 `B_s ≤ 2^h · 2^d e^{O(n^.05)} · .8^{d/2} ≤ 2^n e^{-cn}` (second gate, compatibility); Lemma 3.6 with near = outer
 distance at most two (fraction `(n+1)² 2^{-d}`), comparison means `≤ K` (balance) and a union over labels give
@@ -578,7 +580,629 @@ theorem typical_tags (δ x₀ K P : ℝ) (hK : 0 ≤ K) (hP : 10 ≤ P) :
       Fixed11 δ x₀ K n N E X Y κ M y₀ p →
       0 < (rawTags M p).pr (fun t => ∀ s, ¬ TagBad M y₀ p P t s) → TagMoment11 M y₀ p P →
       (tagLaw M y₀ p P).pr (fun t => ¬ Typical11 M y₀ p (8 * (K + 1)) t) ≤ 1 / 4 := by
-  sorry
+  classical
+  let cA : ℝ := Real.log 2 / 2 - 1 / 50
+  let cB : ℝ := Real.log 2 / 200
+  let cF : ℝ := Real.log 2
+  have hcA : 0 < cA := by
+    dsimp [cA]
+    nlinarith [Real.log_two_gt_d9]
+  have hcB : 0 < cB := by
+    dsimp [cB]
+    positivity [Real.log_pos (by norm_num : (1 : ℝ) < 2)]
+  have hcF : 0 < cF := by
+    dsimp [cF]
+    exact Real.log_pos (by norm_num : (1 : ℝ) < 2)
+  have htA : Filter.Tendsto
+      (fun k : ℕ => (k : ℝ) ^ (3 : ℝ) * Real.exp (-cA * (k : ℝ)))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero (3 : ℝ) cA hcA).comp
+      tendsto_natCast_atTop_atTop
+  have htB : Filter.Tendsto
+      (fun k : ℕ => (k : ℝ) ^ (3 : ℝ) * Real.exp (-cB * (k : ℝ)))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero (3 : ℝ) cB hcB).comp
+      tendsto_natCast_atTop_atTop
+  have htF : Filter.Tendsto
+      (fun k : ℕ => (k : ℝ) * Real.exp (-cF * (k : ℝ)))
+      Filter.atTop (nhds 0) := by
+    have ht := (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero (1 : ℝ) cF hcF).comp
+      tendsto_natCast_atTop_atTop
+    have hfun : (fun k : ℕ => (k : ℝ) * Real.exp (-cF * (k : ℝ))) =
+        (fun r : ℝ => r ^ (1 : ℝ) * Real.exp (-cF * r)) ∘ Nat.cast := by
+      funext k
+      simp [Function.comp_def, Real.rpow_one]
+    rw [hfun]
+    exact ht
+  have htDenRaw : Filter.Tendsto
+      (fun k : ℕ => (k : ℝ) ^ (-(19 / 20 : ℝ))) Filter.atTop (nhds 0) := by
+    have ht := (tendsto_rpow_neg_atTop (by norm_num : 0 < (19 : ℝ) / 20)).comp
+      tendsto_natCast_atTop_atTop
+    have hfun : (fun k : ℕ => (k : ℝ) ^ (-(19 / 20 : ℝ))) =
+        (fun r : ℝ => r ^ (-(19 / 20 : ℝ))) ∘ Nat.cast := by
+      funext k
+      rfl
+    rw [hfun]
+    exact ht
+  have htDen : Filter.Tendsto (fun k : ℕ => bS k) Filter.atTop (nhds 0) := by
+    have hfun : (fun k : ℕ => bS k) =
+        (fun k : ℕ => (k : ℝ) ^ (-(19 / 20 : ℝ))) := by
+      funext k
+      unfold bS
+      congr 1
+      ring
+    rw [hfun]
+    exact htDenRaw
+  obtain ⟨nA, hAevent⟩ := Filter.eventually_atTop.1
+    (htA.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 4)))
+  obtain ⟨nB, hBevent⟩ := Filter.eventually_atTop.1
+    (htB.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 4)))
+  obtain ⟨nF, hFevent⟩ := Filter.eventually_atTop.1
+    (htF.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 8)))
+  obtain ⟨nDen, hDenEvent⟩ := Filter.eventually_atTop.1
+    (htDen.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 200)))
+  let n₀ := max 40000 (max nA (max nB (max nF nDen)))
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y κ M y₀ p hF hgoodPos hTagMoment
+  have hnGeo : 40000 ≤ n := le_trans (le_max_left _ _) hn
+  have hnTail : max nA (max nB (max nF nDen)) ≤ n :=
+    le_trans (le_max_right _ _) hn
+  have hnA : nA ≤ n := le_trans (le_max_left _ _) hnTail
+  have hnTailB : max nB (max nF nDen) ≤ n :=
+    le_trans (le_max_right _ _) hnTail
+  have hnB : nB ≤ n := le_trans (le_max_left _ _) hnTailB
+  have hnTailF : max nF nDen ≤ n := le_trans (le_max_right _ _) hnTailB
+  have hnF : nF ≤ n := le_trans (le_max_left _ _) hnTailF
+  have hnDen : nDen ≤ n := le_trans (le_max_right _ _) hnTailF
+  have hsmallAseq : (n : ℝ) ^ (3 : ℝ) * Real.exp (-cA * (n : ℝ)) < 1 / 4 := hAevent n hnA
+  have hsmallBseq : (n : ℝ) ^ (3 : ℝ) * Real.exp (-cB * (n : ℝ)) < 1 / 4 := hBevent n hnB
+  have hsmallAseqNat : (n : ℝ) ^ (3 : ℕ) * Real.exp (-cA * (n : ℝ)) < 1 / 4 := by
+    rw [← Real.rpow_natCast]
+    exact hsmallAseq
+  have hsmallBseqNat : (n : ℝ) ^ (3 : ℕ) * Real.exp (-cB * (n : ℝ)) < 1 / 4 := by
+    rw [← Real.rpow_natCast]
+    exact hsmallBseq
+  have hsmallFseq : (n : ℝ) * Real.exp (-cF * (n : ℝ)) < 1 / 8 := hFevent n hnF
+  have hb : bS n ≤ 1 / 200 := le_of_lt (hDenEvent n hnDen)
+  have hInReal : (hIn n : ℝ) ≤ (n : ℝ) / 100 := by
+    have hnReal : (10000 : ℝ) ≤ (n : ℝ) := by
+      exact_mod_cast (show 10000 ≤ n by omega)
+    have hfloor : (hIn n : ℝ) ≤ (n : ℝ) ^ ((1 : ℝ) / 10) := by
+      unfold hIn
+      exact Nat.floor_le (by positivity)
+    have hnOne : (1 : ℝ) ≤ (n : ℝ) := by linarith
+    have hpow : (n : ℝ) ^ ((1 : ℝ) / 10) ≤ (n : ℝ) ^ ((1 : ℝ) / 2) :=
+      Real.rpow_le_rpow_of_exponent_le hnOne (by norm_num)
+    have hsqrt : (n : ℝ) ^ ((1 : ℝ) / 2) ≤ (n : ℝ) / 100 := by
+      rw [← Real.sqrt_eq_rpow]
+      apply Real.sqrt_le_iff.mpr
+      constructor
+      · positivity
+      · nlinarith [hnReal]
+    exact hfloor.trans (hpow.trans hsqrt)
+  have hIn100R : 100 * (hIn n : ℝ) ≤ (n : ℝ) := by nlinarith [hInReal]
+  have hIn100 : 100 * hIn n ≤ n := by exact_mod_cast hIn100R
+  have hInDiv : hIn n ≤ n / 100 := by omega
+  have hInnerCard : Fintype.card (InnerCoord n) = hIn n :=
+    HypercubeRamsey.Lane_q_s11_tags.innerCoord_card (by omega)
+  let d : ℕ := Fintype.card (OuterCoord n)
+  have hdEq : d = n - hIn n := by
+    dsimp [d]
+    exact HypercubeRamsey.Lane_q_s11_tags.outerCoord_card n
+  have hk : n / 100 ≤ d := by
+    rw [hdEq]
+    omega
+  have h40k : 40 * (n / 100) ≤ d := by
+    have hmod : n % 100 < 100 := Nat.mod_lt _ (by norm_num)
+    have hdecomp : n = 100 * (n / 100) + n % 100 := by
+      calc
+        n = n % 100 + 100 * (n / 100) := (Nat.mod_add_div n 100).symm
+        _ = 100 * (n / 100) + n % 100 := Nat.add_comm _ _
+    rw [hdEq]
+    omega
+  have hCardWords : Fintype.card (OuterWord n) = 2 ^ d := by
+    simpa [d] using HypercubeRamsey.Lane_q_s11_tags.outerWord_card n
+  have hCardWordsPos : 0 < (Fintype.card (OuterWord n) : ℝ) := by positivity
+  have hnR : (2 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (show 2 ≤ n by omega)
+  have hOuterHalf : n / 2 ≤ d := by
+    have hInHalf := HypercubeRamsey.Lane_q_s11_tags.hIn_le_half (by omega : 4 ≤ n)
+    rw [hdEq]
+    omega
+  have hOuterHalfR : (n : ℝ) / 2 ≤ (d : ℝ) := by
+    have hcastSub : (d : ℝ) = (n : ℝ) - (hIn n : ℝ) := by
+      rw [hdEq, Nat.cast_sub (by omega)]
+    have hInHalfR : (hIn n : ℝ) ≤ (n : ℝ) / 2 := by nlinarith [hInReal]
+    rw [hcastSub]
+    nlinarith
+  let U := OuterWord n
+  let Ptag : FinProb (OuterWord n → M.ι) := tagLaw M y₀ p P
+  let good : (OuterWord n → M.ι) → Prop := fun t => ∀ s, ¬ TagBad M y₀ p P t s
+  let succ : Finset (OuterWord n → M.ι) :=
+    Finset.univ.filter fun t => Ptag.w t ≠ 0
+  have hweight (t : OuterWord n → M.ι) :
+      Ptag.w t = (if good t then (rawTags M p).w t / (rawTags M p).pr good else 0) := by
+    by_cases hg : good t
+    · simp [Ptag, tagLaw, S07.condOr, FinProb.cond, good, hgoodPos, hg]
+    · simp [Ptag, tagLaw, S07.condOr, FinProb.cond, good, hgoodPos, hg]
+  have hgateSupport (t : OuterWord n → M.ι) (ht : Ptag.w t ≠ 0) :
+      GatedTags M y₀ p P t := by
+    have hgood : good t := by
+      by_contra hnot
+      have hz : Ptag.w t = 0 := by simp [hweight, hnot]
+      exact ht hz
+    have hraw : (rawTags M p).w t ≠ 0 := by
+      by_contra hz
+      have hzero : Ptag.w t = 0 := by rw [hweight t]; simp [hgood, hz]
+      exact ht hzero
+    have hcoords : ∀ s, p.w (t s) ≠ 0 := by
+      intro s
+      have hprod : (∏ s' : OuterWord n, p.w (t s')) ≠ 0 := by
+        change (rawTags M p).w t ≠ 0 at hraw
+        simpa [rawTags, FinProb.pi] using hraw
+      intro hzero
+      exact hprod (Finset.prod_eq_zero (Finset.mem_univ s) hzero)
+    exact ⟨hcoords, hgood⟩
+  have hsupport : ∀ t, t ∈ succ → GatedTags M y₀ p P t := by
+    intro t ht
+    exact hgateSupport t (Finset.mem_filter.mp ht).2
+  have hsumSupport (Φ : (OuterWord n → M.ι) → ℝ) :
+      (∑ t ∈ succ, Ptag.w t * Φ t) ≤ Ptag.expect Φ := by
+    unfold FinProb.expect
+    apply Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ succ)
+    intro t ht htnot
+    have hz : Ptag.w t = 0 := by
+      by_contra hne
+      exact htnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+    simp [hz]
+  let near : U → Finset U := fun u => wordBall u 2
+  let fNear : ℝ := ((d : ℝ) + 1) ^ 2 / (Fintype.card U : ℝ)
+  have hself : ∀ u : U, u ∈ near u := by
+    intro u
+    simp [near, wordBall, wordDist]
+  have hnear : ∀ u : U, ((near u).card : ℝ) ≤ fNear * Fintype.card U := by
+    intro u
+    have hball := HypercubeRamsey.Lane_q_s11_tags.wordBall_card_two_le u
+    change ((wordBall u 2).card : ℝ) ≤ _
+    calc
+      ((wordBall u 2).card : ℝ) ≤ ((d : ℝ) + 1) ^ 2 := by simpa [d] using hball
+      _ = fNear * (Fintype.card U : ℝ) := by
+        dsimp [fNear, U]
+        field_simp [ne_of_gt hCardWordsPos]
+  have hfNear : 0 ≤ fNear := by
+    dsimp [fNear]
+    positivity
+  have hlabels : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := by
+    calc
+      (Fintype.card (Fin N) : ℝ) = (N : ℝ) := by simp
+      _ ≤ ((n * 2 ^ n : ℕ) : ℝ) := by exact_mod_cast hF.hostUp
+      _ = (n : ℝ) * (2 : ℝ) ^ n := by norm_num [Nat.cast_mul, Nat.cast_pow]
+  have hnPos : 0 < n := by omega
+  let L_A : ℝ := Real.exp ((n : ℝ) / 50)
+  let L_B : ℝ := (2 : ℝ) ^ Fintype.card (InnerCoord n) * (19 / 10 : ℝ) ^ d
+  let dA : U → Fin N → ℝ := fun _ y => (N : ℝ) * piBar M y₀ p y
+  let dB : U → Fin N → ℝ := fun _ x => (N : ℝ) * alphaBar M y₀ p x
+  let ZA : U → Fin N → (OuterWord n → M.ι) → ℝ :=
+    fun u y t => compA M y₀ t u y
+  let ZB : U → Fin N → (OuterWord n → M.ι) → ℝ :=
+    fun u x t => compB M y₀ p t u x
+  have hπbar : ∀ y, 0 ≤ piBar M y₀ p y := by
+    intro y
+    unfold piBar mixW
+    exact Finset.sum_nonneg fun j hj => mul_nonneg (p.nonneg j)
+      ((hF.slice.rows j).pi_nonneg y)
+  have hαbar : ∀ x, 0 ≤ alphaBar M y₀ p x := by
+    intro x
+    unfold alphaBar mixW
+    exact Finset.sum_nonneg fun j hj => mul_nonneg (p.nonneg j)
+      ((hF.slice.alpha j).nonneg x)
+  have hA0 : ∀ u y t, 0 ≤ ZA u y t := by
+    intro u y t
+    dsimp [ZA, compA]
+    exact mul_nonneg (by positivity) (by
+      unfold piRow
+      exact (hF.slice.rows (t u)).pi_nonneg y)
+  have hB0 : ∀ u x t, 0 ≤ ZB u x t := by
+    intro u x t
+    dsimp [ZB, compB]
+    apply mul_nonneg (mul_nonneg (by positivity) ((hF.slice.alpha (t u)).nonneg x))
+    apply Finset.prod_nonneg
+    intro j hj
+    apply div_nonneg
+    · unfold deg
+      apply Finset.sum_nonneg
+      intro y hy
+      exact mul_nonneg ((hF.slice.rows (t (flipOuter u j))).pi_nonneg y)
+        (by unfold hit; split_ifs <;> norm_num)
+    · unfold deg
+      apply Finset.sum_nonneg
+      intro y hy
+      exact mul_nonneg (hπbar y) (by unfold hit; split_ifs <;> norm_num)
+  have hLA : 0 ≤ L_A := by positivity
+  have hLB : 0 ≤ L_B := by positivity
+  have hZA_L : ∀ u y t, t ∈ succ → ZA u y t ≤ L_A := by
+    intro u y t ht
+    dsimp [ZA, L_A, compA]
+    exact (hF.slice.rows (t u)).pi_cap y
+  have hZB_L : ∀ u x t, t ∈ succ → ZB u x t ≤ L_B := by
+    intro u x t ht
+    dsimp [ZB, L_B]
+    exact HypercubeRamsey.Lane_q_s11_tags.compB_cap_of_gated
+      M y₀ p hF t (hsupport t ht) u x hb
+  have hDA : ∀ y, 0 ≤ (Fintype.card U : ℝ)⁻¹ * ∑ u, dA u y := by
+    intro y
+    dsimp [dA]
+    apply mul_nonneg (inv_nonneg.mpr hCardWordsPos.le)
+    exact Finset.sum_nonneg fun u hu => mul_nonneg (by positivity) (hπbar y)
+  have hDB : ∀ x, 0 ≤ (Fintype.card U : ℝ)⁻¹ * ∑ u, dB u x := by
+    intro x
+    dsimp [dB]
+    apply mul_nonneg (inv_nonneg.mpr hCardWordsPos.le)
+    exact Finset.sum_nonneg fun u hu => mul_nonneg (by positivity) (hαbar x)
+  have hmeanA : ∀ y, (Fintype.card U : ℝ)⁻¹ * ∑ u, dA u y ≤ K := by
+    intro y
+    dsimp [dA, U]
+    have hsum : (∑ u : OuterWord n, (N : ℝ) * piBar M y₀ p y) =
+        (Fintype.card (OuterWord n) : ℝ) * ((N : ℝ) * piBar M y₀ p y) := by simp
+    rw [hsum]
+    have hcard : (Fintype.card (OuterWord n) : ℝ) ≠ 0 := ne_of_gt hCardWordsPos
+    calc
+      (Fintype.card (OuterWord n) : ℝ)⁻¹ *
+          ((Fintype.card (OuterWord n) : ℝ) * ((N : ℝ) * piBar M y₀ p y)) =
+        (N : ℝ) * piBar M y₀ p y := by field_simp
+      _ ≤ K := hF.balanced.1 y
+  have hmeanB : ∀ x, (Fintype.card U : ℝ)⁻¹ * ∑ u, dB u x ≤ K := by
+    intro x
+    dsimp [dB, U]
+    have hsum : (∑ u : OuterWord n, (N : ℝ) * alphaBar M y₀ p x) =
+        (Fintype.card (OuterWord n) : ℝ) * ((N : ℝ) * alphaBar M y₀ p x) := by simp
+    rw [hsum]
+    calc
+      (Fintype.card (OuterWord n) : ℝ)⁻¹ *
+          ((Fintype.card (OuterWord n) : ℝ) * ((N : ℝ) * alphaBar M y₀ p x)) =
+        (N : ℝ) * alphaBar M y₀ p x := by field_simp [ne_of_gt hCardWordsPos]
+      _ ≤ K := hF.balanced.2 x
+  have hsepTag {m : ℕ} (u : Fin m → OuterWord n)
+      (hs : ∀ i j : Fin m, j < i → u i ∉ near (u j)) :
+      ∀ i j, i ≠ j → 3 ≤ wordDist (u i) (u j) := by
+    intro i j hij
+    rcases lt_or_gt_of_ne hij with hijlt | hji
+    · have hnot := hs j i hijlt
+      have hdist : ¬ wordDist (u i) (u j) ≤ 2 := by
+        intro hle
+        exact hnot (by simpa [near, wordBall] using hle)
+      omega
+    · have hnot := hs i j hji
+      have hdist : ¬ wordDist (u j) (u i) ≤ 2 := by
+        intro hle
+        exact hnot (by simpa [near, wordBall] using hle)
+      have hrev : 2 < wordDist (u j) (u i) := Nat.lt_of_not_ge hdist
+      have hrev' : 2 < wordDist (u i) (u j) := by
+        rw [HypercubeRamsey.Lane_q_s11_tags.wordDist_symm]
+        exact hrev
+      omega
+  have hJointA : ∀ y (m : ℕ), m ≤ n → ∀ u : Fin m → U,
+      (∀ i j : Fin m, j < i → u i ∉ near (u j)) →
+      (∑ t ∈ succ, Ptag.w t * ∏ i, ZA (u i) y t) ≤ 2 ^ m * ∏ i, dA (u i) y := by
+    intro y m hm u hnearSep
+    have hsep := hsepTag u (by simpa using hnearSep)
+    have hmom := hTagMoment y m hm u hsep
+    let Φ : (OuterWord n → M.ι) → ℝ := fun t => ∏ i, compA M y₀ t (u i) y
+    have hΦ0 : ∀ t, 0 ≤ Φ t := by
+      intro t
+      dsimp [Φ]
+      apply Finset.prod_nonneg
+      intro i hi
+      unfold compA
+      exact mul_nonneg (by positivity) (by
+        unfold piRow
+        exact (hF.slice.rows (t (u i))).pi_nonneg y)
+    have hsum := hsumSupport Φ
+    calc
+      (∑ t ∈ succ, Ptag.w t * ∏ i, ZA (u i) y t) ≤ Ptag.expect Φ := by
+        simpa [Φ, ZA] using hsum
+      _ ≤ 2 ^ m * ∏ i, dA (u i) y := by
+        simpa [dA] using hmom.1
+  have hJointB : ∀ x (m : ℕ), m ≤ n → ∀ u : Fin m → U,
+      (∀ i j : Fin m, j < i → u i ∉ near (u j)) →
+      (∑ t ∈ succ, Ptag.w t * ∏ i, ZB (u i) x t) ≤ 2 ^ m * ∏ i, dB (u i) x := by
+    intro x m hm u hnearSep
+    have hsep := hsepTag u (by simpa using hnearSep)
+    have hmom := hTagMoment x m hm u hsep
+    let Φ : (OuterWord n → M.ι) → ℝ := fun t => ∏ i, compB M y₀ p t (u i) x
+    have hΦ0 : ∀ t, 0 ≤ Φ t := by
+      intro t
+      dsimp [Φ]
+      exact Finset.prod_nonneg fun i hi => hB0 (u i) x t
+    have hsum := hsumSupport Φ
+    calc
+      (∑ t ∈ succ, Ptag.w t * ∏ i, ZB (u i) x t) ≤ Ptag.expect Φ := by
+        simpa [Φ, ZB] using hsum
+      _ ≤ 2 ^ m * ∏ i, dB (u i) x := by
+        simpa [dB] using hmom.2
+  have hOuterLe : d ≤ n := by
+    dsimp [d]
+    rw [HypercubeRamsey.Lane_q_s11_tags.outerCoord_card]
+    exact Nat.sub_le _ _
+  have hlog2Nonneg : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num : (1 : ℝ) ≤ 2)
+  have hDlog : (n : ℝ) / 2 * Real.log 2 ≤ (d : ℝ) * Real.log 2 :=
+    mul_le_mul_of_nonneg_right hOuterHalfR hlog2Nonneg
+  have hExpA : Real.exp (-((d : ℝ) * Real.log 2)) * Real.exp ((n : ℝ) / 50) ≤
+      Real.exp (-cA * (n : ℝ)) := by
+    rw [← Real.exp_add]
+    apply Real.exp_le_exp.mpr
+    dsimp [cA]
+    nlinarith [hDlog]
+  have hCardWordsR : (Fintype.card U : ℝ) = (2 : ℝ) ^ d := by
+    rw [hCardWords]
+    norm_cast
+  have h2pow : (2 : ℝ) ^ d = Real.exp ((d : ℝ) * Real.log 2) := by
+    calc
+      (2 : ℝ) ^ d = (Real.exp (Real.log 2)) ^ d := by rw [Real.exp_log (by norm_num)]
+      _ = Real.exp ((d : ℝ) * Real.log 2) := by rw [Real.exp_nat_mul]
+  have h2powInv : ((2 : ℝ) ^ d)⁻¹ = Real.exp (-((d : ℝ) * Real.log 2)) := by
+    rw [h2pow, ← Real.exp_neg]
+  have hAprod : fNear * L_A ≤ ((d : ℝ) + 1) ^ 2 * Real.exp (-cA * (n : ℝ)) := by
+    calc
+      fNear * L_A = ((d : ℝ) + 1) ^ 2 *
+          (Real.exp (-((d : ℝ) * Real.log 2)) * Real.exp ((n : ℝ) / 50)) := by
+            dsimp [fNear, L_A, U]
+            rw [hCardWordsR, div_eq_mul_inv, h2powInv]
+            ring
+      _ ≤ ((d : ℝ) + 1) ^ 2 * Real.exp (-cA * (n : ℝ)) :=
+            mul_le_mul_of_nonneg_left hExpA (sq_nonneg ((d : ℝ) + 1))
+  have hdPlusSq : ((d : ℝ) + 1) ^ 2 ≤ 4 * (n : ℝ) ^ 2 := by
+    have hdPlus : (d : ℝ) + 1 ≤ 2 * (n : ℝ) := by
+      have hdPlusNat : d + 1 ≤ 2 * n := by omega
+      exact_mod_cast hdPlusNat
+    have hsq := (sq_le_sq₀ (by positivity : 0 ≤ (d : ℝ) + 1)
+      (by positivity : 0 ≤ 2 * (n : ℝ))).2 hdPlus
+    calc
+      ((d : ℝ) + 1) ^ 2 ≤ (2 * (n : ℝ)) ^ 2 := hsq
+      _ = 4 * (n : ℝ) ^ 2 := by ring
+  have hsmallA : (n : ℝ) * fNear * L_A ≤ 1 := by
+    calc
+      (n : ℝ) * fNear * L_A = (n : ℝ) * (fNear * L_A) := by ring
+      _ ≤ (n : ℝ) * (((d : ℝ) + 1) ^ 2 * Real.exp (-cA * (n : ℝ))) :=
+        mul_le_mul_of_nonneg_left hAprod (by positivity)
+      _ ≤ 4 * (n : ℝ) ^ 3 * Real.exp (-cA * (n : ℝ)) := by
+        calc
+          (n : ℝ) * (((d : ℝ) + 1) ^ 2 * Real.exp (-cA * (n : ℝ))) ≤
+              (n : ℝ) * (4 * (n : ℝ) ^ 2 * Real.exp (-cA * (n : ℝ))) :=
+            mul_le_mul_of_nonneg_left
+              (mul_le_mul_of_nonneg_right hdPlusSq (Real.exp_nonneg _)) (by positivity)
+          _ = 4 * (n : ℝ) ^ 3 * Real.exp (-cA * (n : ℝ)) := by ring
+      _ ≤ 1 := by
+        have hscaled : 4 * ((n : ℝ) ^ 3 * Real.exp (-cA * (n : ℝ))) ≤ 1 := by
+          calc
+            4 * ((n : ℝ) ^ 3 * Real.exp (-cA * (n : ℝ))) ≤ 4 * (1 / 4) :=
+              mul_le_mul_of_nonneg_left hsmallAseqNat.le (by norm_num)
+            _ = 1 := by norm_num
+        calc
+          4 * (n : ℝ) ^ 3 * Real.exp (-cA * (n : ℝ)) =
+              4 * ((n : ℝ) ^ 3 * Real.exp (-cA * (n : ℝ))) := by rw [mul_assoc]
+          _ ≤ 1 := hscaled
+  have hpow95 : (19 / 20 : ℝ) ^ 20 ≤ 1 / 2 := by norm_num
+  have hpow95_40 : (19 / 20 : ℝ) ^ 40 ≤ 1 / 4 := by
+    calc
+      (19 / 20 : ℝ) ^ 40 = ((19 / 20 : ℝ) ^ 20) ^ 2 := by rw [← pow_mul]
+      _ ≤ (1 / 2 : ℝ) ^ 2 := pow_le_pow_left₀ (by positivity) hpow95 2
+      _ = 1 / 4 := by norm_num
+  have hpow95Nat : ∀ k : ℕ, (19 / 20 : ℝ) ^ (40 * k) ≤ (1 / 4 : ℝ) ^ k := by
+    intro k
+    induction k with
+    | zero => simp
+    | succ k ih =>
+        rw [Nat.mul_succ]
+        have hkNonneg : 0 ≤ (1 / 4 : ℝ) ^ k :=
+          pow_nonneg (by norm_num : (0 : ℝ) ≤ 1 / 4) k
+        calc
+          (19 / 20 : ℝ) ^ (40 * k + 40) =
+              (19 / 20 : ℝ) ^ (40 * k) * (19 / 20 : ℝ) ^ 40 := by rw [pow_add]
+          _ ≤
+              (1 / 4 : ℝ) ^ k * (19 / 20 : ℝ) ^ 40 :=
+            mul_le_mul_of_nonneg_right ih
+              (pow_nonneg (by norm_num : (0 : ℝ) ≤ 19 / 20) 40)
+          _ ≤ (1 / 4 : ℝ) ^ k * (1 / 4 : ℝ) :=
+            mul_le_mul_of_nonneg_left hpow95_40 hkNonneg
+          _ = (1 / 4 : ℝ) ^ (k + 1) := by rw [pow_succ]
+  have hBgeom : (2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d ≤ (1 / 2 : ℝ) ^ (n / 100) := by
+    have hInPow : (2 : ℝ) ^ hIn n ≤ (2 : ℝ) ^ (n / 100) :=
+      pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 2) (by exact_mod_cast hInDiv)
+    have hDpow : (19 / 20 : ℝ) ^ d ≤ (19 / 20 : ℝ) ^ (40 * (n / 100)) :=
+      pow_le_pow_of_le_one (by positivity) (by norm_num) h40k
+    calc
+      (2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d ≤
+          (2 : ℝ) ^ (n / 100) * (19 / 20 : ℝ) ^ (40 * (n / 100)) :=
+        calc
+          (2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d ≤
+              (2 : ℝ) ^ (n / 100) * (19 / 20 : ℝ) ^ d :=
+            mul_le_mul_of_nonneg_right hInPow (pow_nonneg (by norm_num) d)
+          _ ≤ (2 : ℝ) ^ (n / 100) * (19 / 20 : ℝ) ^ (40 * (n / 100)) :=
+            mul_le_mul_of_nonneg_left hDpow (by positivity)
+      _ ≤ (2 : ℝ) ^ (n / 100) * (1 / 4 : ℝ) ^ (n / 100) :=
+        mul_le_mul_of_nonneg_left (hpow95Nat (n / 100)) (by positivity)
+      _ = (1 / 2 : ℝ) ^ (n / 100) := by rw [← mul_pow]; norm_num
+  have hRatioB : fNear * L_B = ((d : ℝ) + 1) ^ 2 *
+      (2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d := by
+    have hfrac : (19 / 10 : ℝ) ^ d / (2 : ℝ) ^ d = (19 / 20 : ℝ) ^ d := by
+      rw [← div_pow]
+      norm_num
+    dsimp [fNear, L_B, U]
+    rw [hCardWordsR, hInnerCard]
+    calc
+      (((d : ℝ) + 1) ^ 2 / (2 : ℝ) ^ d) *
+          ((2 : ℝ) ^ hIn n * (19 / 10 : ℝ) ^ d) =
+        ((d : ℝ) + 1) ^ 2 * (2 : ℝ) ^ hIn n *
+          ((19 / 10 : ℝ) ^ d / (2 : ℝ) ^ d) := by
+              field_simp [pow_ne_zero d (by norm_num : (2 : ℝ) ≠ 0)] <;> ring_nf
+      _ = ((d : ℝ) + 1) ^ 2 * (2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d := by rw [hfrac]
+  have hKpow : (n : ℝ) / 200 ≤ (n / 100 : ℕ) := by
+    let r : ℕ := n % 100
+    have hkpos : 1 ≤ n / 100 := by omega
+    have hdecompNat : r + 100 * (n / 100) = n := by
+      dsimp [r]
+      exact Nat.mod_add_div n 100
+    have hremNat : r < 100 := by
+      dsimp [r]
+      exact Nat.mod_lt n (by norm_num)
+    have hnNat : n ≤ 200 * (n / 100) := by omega
+    have hnR : (n : ℝ) ≤ (200 : ℝ) * ((n / 100 : ℕ) : ℝ) := by exact_mod_cast hnNat
+    exact (div_le_iff₀ (by norm_num : (0 : ℝ) < 200)).2 (by simpa [mul_comm] using hnR)
+  have hhalfRpow : (1 / 2 : ℝ) ^ (n / 100 : ℕ) ≤ Real.exp (-cB * (n : ℝ)) := by
+    calc
+      (1 / 2 : ℝ) ^ (n / 100 : ℕ) = (1 / 2 : ℝ) ^ ((n / 100 : ℕ) : ℝ) := by
+        rw [← Real.rpow_natCast]
+      _ ≤ (1 / 2 : ℝ) ^ ((n : ℝ) / 200) :=
+        Real.rpow_le_rpow_of_exponent_ge (by norm_num) (by norm_num) hKpow
+      _ = Real.exp (-cB * (n : ℝ)) := by
+        rw [Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 1 / 2)]
+        rw [show Real.log (1 / 2 : ℝ) = -Real.log 2 by
+          rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv]]
+        dsimp [cB]
+        ring
+  have hsmallB : (n : ℝ) * fNear * L_B ≤ 1 := by
+    have hnNonnegR : (0 : ℝ) ≤ (n : ℝ) := by positivity
+    have hBgeomScaled : (4 * (n : ℝ) ^ 2) * ((2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d) ≤
+        (4 * (n : ℝ) ^ 2) * (1 / 2 : ℝ) ^ (n / 100 : ℕ) :=
+      mul_le_mul_of_nonneg_left hBgeom (by positivity)
+    have hstepB : (((d : ℝ) + 1) ^ 2 * (2 : ℝ) ^ hIn n) *
+        (19 / 20 : ℝ) ^ d ≤
+        (4 * (n : ℝ) ^ 2) * ((2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d) := by
+      calc
+        (((d : ℝ) + 1) ^ 2 * (2 : ℝ) ^ hIn n) * (19 / 20 : ℝ) ^ d ≤
+            ((4 * (n : ℝ) ^ 2) * (2 : ℝ) ^ hIn n) * (19 / 20 : ℝ) ^ d := by
+              exact mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_right hdPlusSq (by positivity)) (by positivity)
+        _ = (4 * (n : ℝ) ^ 2) * ((2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d) := by
+              rw [mul_assoc]
+    calc
+      (n : ℝ) * fNear * L_B = (n : ℝ) * (fNear * L_B) := by rw [mul_assoc]
+      _ = (n : ℝ) * (((d : ℝ) + 1) ^ 2 * (2 : ℝ) ^ hIn n *
+            (19 / 20 : ℝ) ^ d) := congrArg (fun z : ℝ => (n : ℝ) * z) hRatioB
+      _ ≤ (n : ℝ) * ((4 * (n : ℝ) ^ 2) *
+            ((2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d)) :=
+              mul_le_mul_of_nonneg_left hstepB hnNonnegR
+      _ = (n : ℝ) * (4 * (n : ℝ) ^ 2) *
+            ((2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d) := by ring
+      _ = (n : ℝ) * ((4 * (n : ℝ) ^ 2) *
+            ((2 : ℝ) ^ hIn n * (19 / 20 : ℝ) ^ d)) := by ring
+      _ ≤ (n : ℝ) * ((4 * (n : ℝ) ^ 2) * (1 / 2 : ℝ) ^ (n / 100 : ℕ)) :=
+            mul_le_mul_of_nonneg_left hBgeomScaled hnNonnegR
+      _ = (n : ℝ) * (4 * (n : ℝ) ^ 2) * (1 / 2 : ℝ) ^ (n / 100 : ℕ) := by ring
+      _ ≤ 4 * (n : ℝ) ^ 3 * Real.exp (-cB * (n : ℝ)) := by
+            calc
+              (n : ℝ) * (4 * (n : ℝ) ^ 2) * (1 / 2 : ℝ) ^ (n / 100 : ℕ) =
+                  4 * (n : ℝ) ^ 3 * (1 / 2 : ℝ) ^ (n / 100 : ℕ) := by ring
+              _ ≤ 4 * (n : ℝ) ^ 3 * Real.exp (-cB * (n : ℝ)) :=
+                mul_le_mul_of_nonneg_left hhalfRpow (by positivity)
+      _ ≤ 1 := by
+        have hscaled : 4 * ((n : ℝ) ^ 3 * Real.exp (-cB * (n : ℝ))) ≤ 1 := by
+          calc
+            4 * ((n : ℝ) ^ 3 * Real.exp (-cB * (n : ℝ))) ≤ 4 * (1 / 4) :=
+              mul_le_mul_of_nonneg_left hsmallBseqNat.le (by norm_num)
+            _ = 1 := by norm_num
+        calc
+          4 * (n : ℝ) ^ 3 * Real.exp (-cB * (n : ℝ)) =
+              4 * ((n : ℝ) ^ 3 * Real.exp (-cB * (n : ℝ))) := by rw [mul_assoc]
+          _ ≤ 1 := hscaled
+  have hfailBound : (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n ≤ 1 / 8 := by
+    have hquarterHalf (k : ℕ) : (2 : ℝ) ^ k * (1 / 4 : ℝ) ^ k = (1 / 2 : ℝ) ^ k := by
+      calc
+        (2 : ℝ) ^ k * (1 / 4 : ℝ) ^ k = (2 * (1 / 4 : ℝ)) ^ k := by rw [← mul_pow]
+        _ = (1 / 2 : ℝ) ^ k := by norm_num
+    have hhalfExp : (1 / 2 : ℝ) ^ n = Real.exp (-cF * (n : ℝ)) := by
+      calc
+        (1 / 2 : ℝ) ^ n = (Real.exp (-Real.log 2)) ^ n := by
+          congr 1
+          rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+          norm_num
+        _ = Real.exp ((n : ℝ) * (-Real.log 2)) := by rw [← Real.exp_nat_mul]
+        _ = Real.exp (-cF * (n : ℝ)) := by dsimp [cF]; congr 1 <;> ring
+    calc
+      (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n =
+          (n : ℝ) * (1 / 2 : ℝ) ^ n := by
+            rw [mul_assoc, hquarterHalf]
+      _ = (n : ℝ) * Real.exp (-cF * (n : ℝ)) := by rw [hhalfExp]
+      _ ≤ 1 / 8 := le_of_lt hsmallFseq
+  let threshold : ℝ := 4 * 2 * (K + 1)
+  have hthreshold : threshold = 8 * (K + 1) := by dsimp [threshold]; ring
+  let avgA (y : Fin N) (t : OuterWord n → M.ι) : ℝ :=
+    (Fintype.card U : ℝ)⁻¹ * ∑ u : U, ZA u y t
+  let avgB (x : Fin N) (t : OuterWord n → M.ι) : ℝ :=
+    (Fintype.card U : ℝ)⁻¹ * ∑ u : U, ZB u x t
+  let badA (t : OuterWord n → M.ι) : Prop := ∃ y, threshold < avgA y t
+  let badB (t : OuterWord n → M.ι) : Prop := ∃ x, threshold < avgB x t
+  have hselfNear : ∀ u : U, u ∈ near u := hself
+  have hnearBound : ∀ u : U, ((near u).card : ℝ) ≤ fNear * Fintype.card U := hnear
+  have hlabelBound : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := hlabels
+  have hmeanA' : ∀ y, (Fintype.card U : ℝ)⁻¹ * ∑ u, dA u y ≤ K := hmeanA
+  have hmeanB' : ∀ x, (Fintype.card U : ℝ)⁻¹ * ∑ u, dB u x ≤ K := hmeanB
+  have hscA := HypercubeRamsey.scatteredMoments_union_labels Ptag succ ZA hA0 L_A hLA
+    hZA_L near hselfNear fNear hfNear hnearBound n hnPos 2 K (by norm_num) hK
+    dA (fun u y => mul_nonneg (by positivity) (hπbar y)) hmeanA' hJointA hsmallA hlabelBound
+  have hscB := HypercubeRamsey.scatteredMoments_union_labels Ptag succ ZB hB0 L_B hLB
+    hZB_L near hselfNear fNear hfNear hnearBound n hnPos 2 K (by norm_num) hK
+    dB (fun u x => mul_nonneg (by positivity) (hαbar x)) hmeanB' hJointB hsmallB hlabelBound
+  let badAEvent : (OuterWord n → M.ι) → Prop := badA
+  let badBEvent : (OuterWord n → M.ι) → Prop := badB
+  have hprA : Ptag.pr badAEvent ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    have heq : Ptag.pr badAEvent =
+        ∑ t, if t ∈ succ ∧ badAEvent t then Ptag.w t else 0 := by
+      unfold FinProb.pr badAEvent
+      apply Finset.sum_congr rfl
+      intro t ht
+      by_cases hs : t ∈ succ
+      · simp [hs]
+      · have hw : Ptag.w t = 0 := by
+          by_contra hne
+          exact hs (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+        simp [hs, hw]
+    rw [heq]
+    simpa [badA, avgA, threshold, ZA] using hscA
+  have hprB : Ptag.pr badBEvent ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+    have heq : Ptag.pr badBEvent =
+        ∑ t, if t ∈ succ ∧ badBEvent t then Ptag.w t else 0 := by
+      unfold FinProb.pr badBEvent
+      apply Finset.sum_congr rfl
+      intro t ht
+      by_cases hs : t ∈ succ
+      · simp [hs]
+      · have hw : Ptag.w t = 0 := by
+          by_contra hne
+          exact hs (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+        simp [hs, hw]
+    rw [heq]
+    simpa [badB, avgB, threshold, ZB] using hscB
+  have hbadSub : ∀ t, ¬ Typical11 M y₀ p threshold t → badAEvent t ∨ badBEvent t := by
+    intro t ht
+    by_cases hA : ∀ y, avgA y t ≤ threshold
+    · by_cases hB : ∀ x, avgB x t ≤ threshold
+      · exact False.elim (ht ⟨by simpa [Typical11, avgA, ZA, U, hCardWords, d, hthreshold] using hA,
+          by simpa [Typical11, avgB, ZB, U, hCardWords, d, hthreshold] using hB⟩)
+      · right
+        push_neg at hB
+        exact hB
+    · left
+      push_neg at hA
+      exact hA
+  have hbadPr : Ptag.pr (fun t => ¬ Typical11 M y₀ p threshold t) ≤
+      Ptag.pr badAEvent + Ptag.pr badBEvent := by
+    calc
+      Ptag.pr (fun t => ¬ Typical11 M y₀ p threshold t) ≤
+          Ptag.pr (fun t => badAEvent t ∨ badBEvent t) :=
+            HypercubeRamsey.Clock.finProb_pr_mono Ptag hbadSub
+      _ ≤ Ptag.pr badAEvent + Ptag.pr badBEvent := FinProb.pr_union Ptag badAEvent badBEvent
+  have hbadPrTarget : Ptag.pr (fun t => ¬ Typical11 M y₀ p (8 * (K + 1)) t) ≤
+      Ptag.pr badAEvent + Ptag.pr badBEvent := by
+    simpa [hthreshold] using hbadPr
+  calc
+    (tagLaw M y₀ p P).pr (fun t => ¬ Typical11 M y₀ p (8 * (K + 1)) t) =
+        Ptag.pr (fun t => ¬ Typical11 M y₀ p (8 * (K + 1)) t) := rfl
+    _ ≤ Ptag.pr badAEvent + Ptag.pr badBEvent := hbadPrTarget
+    _ ≤ 1 / 8 + 1 / 8 := add_le_add (hprA.trans hfailBound) (hprB.trans hfailBound)
+    _ = 1 / 4 := by norm_num
+
+set_option maxHeartbeats 200000
 
 /-! ## The tuple stage, odd loads and the odd injection (11:370–378) -/
 

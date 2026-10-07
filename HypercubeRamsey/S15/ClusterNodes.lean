@@ -10,6 +10,7 @@ import HypercubeRamsey.S15.ClusterNodes_sol_s15_transfer
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
 import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_c2
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -856,6 +857,9 @@ def ClusterHistoryRestore (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterRowCapClaim κ T := by
   have hWindow := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_degree_window hκ T
+  have hScales := HypercubeRamsey.Lane_sol_s15_c2.high_gain_scales κ hκ T
+  have hCross := HypercubeRamsey.Lane_sol_s15_load.high_cluster_crossing_scales_eventually κ hκ T
+  have hNpos : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
   let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
   have hn : Tendsto nR atTop atTop :=
     (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
@@ -871,13 +875,18 @@ theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       (Filter.Eventually.of_forall fun k => (hbstarEq k).symm)
   have hbstar : ∀ᶠ k in atTop, bstar T k < 1 / 18 :=
     hbstarTendsto.eventually (Iio_mem_nhds (by norm_num))
-  filter_upwards [hWindow, hbstar] with k hWindow hbstar
+  filter_upwards [hWindow, hbstar, hScales, hCross, hNpos] with k hWindow hbstar hScales hCross hNpos
   intro PT hPT hm CS
   refine ⟨?_, ?_, ?_, ?_⟩
   · intro ω a x
     exact CS.row_eq ω a x
-  · sorry
-  · sorry
+  · intro ω hω hload a x
+    exact HypercubeRamsey.Lane_sol_s15_c2.row_cap PT hPT hm CS ω hω hload
+      (by omega) hCross.1 hCross.2.1 (hCross.2.2 PT hPT) (hWindow PT hPT hm)
+      (hScales PT hPT hm) a x
+  · intro ω hω hload a x
+    exact HypercubeRamsey.Lane_sol_s15_c2.row_le_nominal PT hPT hm CS ω hω hload
+      hCross.1 hCross.2.1 (hCross.2.2 PT hPT) a x
   · intro i x hx b y
     let d := deg (T.S.E k) PT.tiling.c
       (PT.π (patchAt PT hPT b.1)).w x
@@ -915,10 +924,11 @@ theorem high_cluster_geometry (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterGeometryClaim κ T := by
   have hNormEventually :=
     HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_normalizedHit_bounds hκ T
-  filter_upwards [hNormEventually] with k hNorm
+  have hCoreEventually := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_core_near_fraction hκ T
+  filter_upwards [hNormEventually, hCoreEventually] with k hNorm hCore
   intro PT hPT hm
   refine ⟨?_, ?_, ?_, ?_⟩
-  · sorry
+  · exact hCore PT hPT hm
   · sorry
   · intro vs G
     exact HypercubeRamsey.Lane_q_s15_c2.clusterCrossingNonisolated_card_le_two_rank PT vs G

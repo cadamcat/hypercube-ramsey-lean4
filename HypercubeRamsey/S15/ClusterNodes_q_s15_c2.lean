@@ -2898,6 +2898,7 @@ private theorem binEntropy_four_scaled_le {m n : ℕ} (hm : 8 ≤ m) (hmn : m �
     _ ≤ 4 * Real.log (mr / 4) + 4 := by rw [hpm, hpInv]; linarith [hsecond]
     _ ≤ 4 * Real.log nr + 4 := by nlinarith [hlog]
 
+set_option maxHeartbeats 400000 in
 theorem clusterHighMode_core_near_fraction {κ : CConsts}
     (hκ : CConsts.Admissible κ) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
@@ -2920,6 +2921,7 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
     (tendsto_rpow_atTop (by norm_num)).comp ht
   have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
   let c : ℝ := 8 * κ.a / 10 ^ 9
+  have hρ : 0 < κ.ρ := hκ.ρ_rng.1
   have hc : 0 < c := by dsimp [c]; positivity
   have hAbsorbEventually : ∀ᶠ k in atTop,
       9 / c ≤ logN k ^ (4 : ℝ) :=
@@ -2936,7 +2938,8 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
     have hmin : min κ.xs (min κ.η0 (0.01 : ℝ)) ≤ 0.01 := le_trans hmin₁ hmin₂
     have hdiv : min κ.xs (min κ.η0 (0.01 : ℝ)) / 1000 ≤ 1 / 100000 := by
       calc
-        _ ≤ (1 / 100 : ℝ) / 1000 := by norm_num at hmin ⊢; exact div_le_div_of_nonneg_right hmin (by norm_num)
+        _ ≤ (1 / 100 : ℝ) / 1000 := by
+          convert div_le_div_of_nonneg_right hmin (by norm_num : (0 : ℝ) ≤ 1000) using 1 <;> norm_num
         _ = 1 / 100000 := by norm_num
     exact hκ.ι_rng.2.trans_le hdiv
   filter_upwards [hlogOne, hAbsorbEventually, hHeightConst, hnLarge, hCoreHeight]
@@ -2950,6 +2953,7 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
   let ell : ℝ := ellNat
   let t : ℝ := logN k
   have htOne : 1 ≤ t := by simpa [t] using ht1
+  have htPos : 0 < t := lt_of_lt_of_le zero_lt_one htOne
   have hA : t ^ (5 : ℝ) ≤ h := by
     have hh := hheight PT hPT hm i
     simpa [t, logN, nR, h] using (show (Real.log (T.S.n k : ℝ)) ^ (5 : ℝ) ≤ hNat from by
@@ -2967,7 +2971,7 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
       _ = c * (t ^ (4 : ℝ) * t) := by ring
       _ = c * t ^ (5 : ℝ) := by
         rw [show t ^ (4 : ℝ) * t = t ^ (4 + 1 : ℝ) by
-          rw [← Real.rpow_one t, ← Real.rpow_add htPos]]
+          rw [Real.rpow_add htPos, Real.rpow_one]]
         norm_num
   have hscaleAbsorb : 4 * t + 5 ≤ (8 * κ.a / 10 ^ 9) * h := by
     calc
@@ -3014,8 +3018,8 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
   have hEvenCard := evenPatchPositions_card_formula PT i hEllR
   have hGain : PT.tiling.gain i = κ.a * h / 10 ^ 6 := by
     rcases hm with hs | hl
-    · simp [Tiling.gain, hs, h]
-    · simp [Tiling.gain, hl, h]
+    · simp [Tiling.gain, hs, h, hNat]
+    · simp [Tiling.gain, hl, h, hNat]
   have hu : 1 ≤ κ.u := by have := hκ.u_rng.2; omega
   have hGainNonneg : 0 ≤ PT.tiling.gain i := by rw [hGain]; positivity
   have hEllGain : ell ≤ PT.tiling.gain i / (1000 * κ.u) := by
@@ -3023,14 +3027,18 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
     · rcases hm with hs | hl <;> simp_all
     · exact hh.1
   have hlog2nonneg : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num)
-  have hlog2le : Real.log 2 ≤ 1 := Real.log_le_sub_one_of_pos (by norm_num)
+  have hlog2le : Real.log 2 ≤ 1 := by
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    norm_num at hlog
+    exact hlog
   have huR : 1 ≤ (κ.u : ℝ) := by exact_mod_cast hu
   have hEllLog : ell * Real.log 2 ≤ κ.a * h / 10 ^ 9 := by
     calc
       ell * Real.log 2 ≤ (PT.tiling.gain i / (1000 * κ.u)) * Real.log 2 :=
         mul_le_mul_of_nonneg_right hEllGain hlog2nonneg
-      _ ≤ PT.tiling.gain i / (1000 * κ.u) :=
-        mul_le_mul_of_nonneg_left hlog2le (div_nonneg hGainNonneg (by positivity))
+      _ ≤ PT.tiling.gain i / (1000 * κ.u) := by
+        simpa only [mul_one] using mul_le_mul_of_nonneg_left hlog2le
+          (div_nonneg hGainNonneg (by positivity : (0 : ℝ) ≤ 1000 * (κ.u : ℝ)))
       _ ≤ PT.tiling.gain i / 1000 := by
         apply (div_le_div_iff₀ (by positivity [huR]) (by norm_num)).2
         nlinarith [hGainNonneg, hu]
@@ -3082,25 +3090,34 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
         Real.exp (4 * t + 4) := by
     exact hOutVolR.trans (Real.exp_le_exp.mpr hOutEntropy)
   have hHeightPos : 0 < h := by
+    dsimp [h, hNat]
     exact_mod_cast clusterHeight_pos PT hPT hm i
   have h900 : 1 ≤ 900 * κ.ρ * h := by
     have hcut : 1 / (900 * κ.ρ) ≤ h := by
       calc
         _ ≤ t ^ (5 : ℝ) := ht5
         _ ≤ h := hA
-    exact (div_le_iff₀ (by positivity : (0 : ℝ) < 900 * κ.ρ)).mp hcut
+    simpa only [mul_comm h] using
+      (div_le_iff₀ (by positivity : (0 : ℝ) < 900 * κ.ρ)).mp hcut
   have hRupper : (rIn : ℝ) < 100 * κ.ρ * h + 1 :=
-    Nat.ceil_lt_add_one (by positivity)
+    Nat.ceil_lt_add_one (by positivity : (0 : ℝ) ≤ 100 * κ.ρ * h)
   have hRratio : (rIn : ℝ) / h ≤ 1000 * κ.ρ := by
     apply (div_le_iff₀ hHeightPos).2
-    have hstrict : (rIn : ℝ) < 1000 * κ.ρ * h := by nlinarith [hRupper, h900]
+    have hstrict : (rIn : ℝ) < 1000 * κ.ρ * h := by nlinarith only [hRupper, h900]
     exact hstrict.le
-  have hρsmall : 1000 * κ.ρ < 1 / 4 := by nlinarith [hκ.ρ_rng.2.1]
-  have hRhalfReal : (rIn : ℝ) ≤ h / 2 := by nlinarith [hRratio, hρsmall]
-  have hRdouble : 2 * rIn ≤ hNat := by exact_mod_cast (by nlinarith [hRhalfReal])
+  have hρsmall : 1000 * κ.ρ < 1 / 4 := by nlinarith only [hκ.ρ_rng.2.1]
+  have hRhalfReal : (rIn : ℝ) ≤ h / 2 := by
+    have hmul := (div_le_iff₀ hHeightPos).mp hRratio
+    have hsmall := mul_le_mul_of_nonneg_right hρsmall.le hHeightPos.le
+    nlinarith only [hmul, hsmall, hHeightPos]
+  have hRdouble : 2 * rIn ≤ hNat := by
+    have hdoubleR : 2 * (rIn : ℝ) ≤ (hNat : ℝ) := by
+      change 2 * (rIn : ℝ) ≤ h
+      linarith only [hRhalfReal]
+    exact_mod_cast hdoubleR
   have hRhalf : rIn ≤ hNat / 2 := by omega
   have hInVol := HypercubeRamsey.hammingBall_volume_bound
-      (by exact_mod_cast hHeightPos) hRhalf (internalWord PT hPT i a.1)
+      (by dsimp [hNat]; exact clusterHeight_pos PT hPT hm i) hRhalf (internalWord PT hPT i a.1)
   have hInVolR :
       (HypercubeRamsey.hammingBall (internalWord PT hPT i a.1) rIn).card ≤
         Real.exp (Real.binEntropy ((rIn : ℝ) / h) * h) := by
@@ -3142,7 +3159,8 @@ theorem clusterHighMode_core_near_fraction {κ : CConsts}
       _ ≤ _ := hCountR
       _ ≤ Real.exp (4 * t + 4) * Real.exp (κ.a * h / 10 ^ 9) :=
         mul_le_mul hOutBound hInBound (by positivity) (by positivity)
-      _ = Real.exp (4 * t + 4 + κ.a * h / 10 ^ 9) := by rw [Real.exp_add]
+      _ = Real.exp (4 * t + 4 + κ.a * h / 10 ^ 9) :=
+        (Real.exp_add (4 * t + 4) (κ.a * h / 10 ^ 9)).symm
   have hGap : 4 * t + 4 + κ.a * h / 10 ^ 9 ≤
       (1 / 100 : ℝ) * PT.tiling.gain i - (ell + 1) * Real.log 2 := by
     rw [hGain]

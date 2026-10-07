@@ -3425,6 +3425,24 @@ private theorem heightPath9_radialSupport_overlap_bound9
   apply scaleSupport9_inter_overlap_bound_of_metric_separation hover hK hR
   exact heightPath9_radialFamily_separated9 f hf r s hgap
 
+private theorem annularSupport9_overlap_bound
+    {P : Params9} {hc : HeightChoice9 P} {n R Knat : ℕ} {K c₀ : ℝ}
+    (hover : HeightOverlap9 P hc n K c₀) (hK : K ≤ (Knat : ℝ)) (hR : 1 ≤ R)
+    (root child child' : HeightState9 P hc n) {r s width : ℕ}
+    (hchild : r ≤ heightMetric9 child root ∧ heightMetric9 child root ≤ r + width)
+    (hchild' : s ≤ heightMetric9 child' root ∧ heightMetric9 child' root ≤ s + width)
+    (hgap : r + width + (16 * R + 4 + 4 * Knat * R + 1) ≤ s) :
+    ((scaleSupport9 child R ∩ scaleSupport9 child' R).card : ℝ) ≤
+      ((hc.levels n + 1 : ℕ) : ℝ) * (residualBall9 P n : ℝ) *
+        Real.exp (- (c₀ * (8 * R : ℕ))) := by
+  have hradGap : 16 * R + 4 + 4 * Knat * R + 1 ≤
+      Nat.dist (heightMetric9 child root) (heightMetric9 child' root) := by
+    have hle : heightMetric9 child root ≤ heightMetric9 child' root := by omega
+    rw [Nat.dist_eq_sub_of_le hle]
+    omega
+  have hmetric := hradGap.trans (heightMetric9_radialVariation_le root child child')
+  exact scaleSupport9_inter_overlap_bound_of_metric_separation hover hK hR child child' hmetric
+
 theorem position_overlap_count_tail {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (v v' : CubeVertex n) (R' t : ℕ) :
     (heightPosLaw9 P hc n).pr (fun Pp =>

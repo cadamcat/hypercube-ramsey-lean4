@@ -1,5 +1,6 @@
 import HypercubeRamsey.S13.ResidualBounds
 import HypercubeRamsey.Tools.Concentration
+import HypercubeRamsey.Tools.CubeGeometry
 import HypercubeRamsey.Framework.Embedding
 
 /-!
@@ -462,13 +463,13 @@ theorem type_selection (κ : CConsts) (T : Stage) (k : ℕ)
           intro f hf
           exact hall f (by simp [hf]))
         simp only [List.map_cons, List.sum_cons, List.length_cons]
+        rw [Nat.cast_add, Nat.cast_one]
         calc
           _ ≤ (1 / 200 : ℝ) * T.S.N k + (xs.map fun f => (f.tiling.S : ℝ)).sum :=
-            by simpa [add_comm] using
-              add_le_add_right ha.le ((xs.map fun f => (f.tiling.S : ℝ)).sum)
+            add_le_add_left ha.le _
           _ ≤ (1 / 200 : ℝ) * T.S.N k +
               (xs.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) :=
-            by simpa [add_comm] using add_le_add_left htail ((1 / 200 : ℝ) * T.S.N k)
+            add_le_add_right htail _
           _ = ((xs.length : ℝ) + 1) * ((1 / 200 : ℝ) * T.S.N k) := by ring
     obtain ⟨f₀, xs, hLdef⟩ := List.exists_cons_of_ne_nil hLne
     have hhead : (f₀.tiling.S : ℝ) < (1 / 200 : ℝ) * T.S.N k := by
@@ -484,13 +485,13 @@ theorem type_selection (κ : CConsts) (T : Stage) (k : ℕ)
         (L.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) := by
       rw [hLdef]
       simp only [List.map_cons, List.sum_cons, List.length_cons]
+      rw [Nat.cast_add, Nat.cast_one]
       apply lt_of_lt_of_le
-      · simpa [add_comm] using
-          add_lt_add_right hhead ((xs.map fun f => (f.tiling.S : ℝ)).sum)
+      · exact add_lt_add_left hhead _
       · calc
           _ ≤ (1 / 200 : ℝ) * T.S.N k +
               (xs.length : ℝ) * ((1 / 200 : ℝ) * T.S.N k) :=
-            by simpa [add_comm] using add_le_add_left htail ((1 / 200 : ℝ) * T.S.N k)
+            add_le_add_right htail _
           _ = ((xs.length : ℝ) + 1) * ((1 / 200 : ℝ) * T.S.N k) := by ring
     have hlenR : (L.length : ℝ) ≤ 20 := by exact_mod_cast hlen
     have hmassR : (T.S.N k : ℝ) ≤
@@ -528,13 +529,417 @@ theorem kraft_prefix_code (κ : CConsts) (T : Stage) (k : ℕ)
       PrefixCodeComplete R w := by
   sorry
 
+private theorem allocation_prefixLeaf_card {n ell : ℕ} (w : CubePos n) (hell : ell < n) :
+    Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w} = 2 ^ (n - ell) := by
+  classical
+  let S : Finset (Fin n) := Finset.univ.filter fun j => j.val < ell
+  let e : Fin ell ↪ Fin n := {
+    toFun := fun j => ⟨j.val, j.isLt.trans hell⟩
+    inj' := by
+      intro a b hab
+      have hv := congrArg (fun x : Fin n => x.val) hab
+      change a.val = b.val at hv
+      exact Fin.ext hv
+  }
+  have hS_eq : S = Finset.univ.map e := by
+    ext j
+    constructor
+    · intro hj
+      have hj' := (Finset.mem_filter.mp hj).2
+      refine Finset.mem_map.mpr ⟨⟨j.val, hj'⟩, Finset.mem_univ _, ?_⟩
+      exact Fin.ext rfl
+    · intro hj
+      rcases Finset.mem_map.mp hj with ⟨j', hj', hEq⟩
+      subst j
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, j'.isLt⟩
+  have hScard : S.card = ell := by
+    rw [hS_eq]
+    simp
+  let choices : Fin n → Finset Bool := fun j =>
+    if j ∈ S then {w j} else Finset.univ
+  let Q := Fintype.piFinset choices
+  have hpred (v : CubePos n) : v ∈ prefixLeaf ell w ↔ v ∈ Q := by
+    change (∀ j : Fin n, j.val < ell → v j = w j) ↔ v ∈ Q
+    constructor
+    · intro hv
+      apply Fintype.mem_piFinset.mpr
+      intro j
+      by_cases hj : j ∈ S
+      · have hfix := hv j (Finset.mem_filter.mp hj).2
+        simp [Q, choices, hj, hfix]
+      · simp [Q, choices, hj]
+    · intro hv j hj
+      have hjS : j ∈ S := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hj⟩
+      have hmem := Fintype.mem_piFinset.mp hv j
+      simpa [Q, choices, hjS] using hmem
+  have hF : Finset.univ.filter (fun v : CubePos n => v ∈ prefixLeaf ell w) = Q := by
+    ext v
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    exact hpred v
+  have hsub := Fintype.card_congr ((Equiv.refl (CubePos n)).subtypeEquiv hpred)
+  calc
+    Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w} =
+        Fintype.card {v : CubePos n // v ∈ Q} := hsub
+    _ = Q.card := Fintype.card_coe Q
+    _ = 2 ^ (n - ell) := by
+      change (Fintype.piFinset choices).card = _
+      rw [Fintype.card_piFinset]
+      have hchoice : ∀ j : Fin n, (choices j).card = if j ∈ S then 1 else 2 := by
+        intro j
+        by_cases hj : j ∈ S <;> simp [choices, hj]
+      simp_rw [hchoice]
+      rw [Finset.prod_ite]
+      have hfilter : Finset.univ.filter (fun j : Fin n => j ∉ S) = Finset.univ \ S := by
+        ext j
+        simp
+      rw [hfilter, Finset.prod_const_one, Finset.prod_const (b := 2),
+        Finset.card_sdiff_of_subset (Finset.subset_univ S)]
+      simp [hScard]
+
+private theorem allocation_prefixLeaf_even_card {n ell : ℕ} (w : CubePos n) (hell : ell < n) :
+    Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w ∧ IsEvenRole v} =
+      2 ^ (n - ell - 1) := by
+  classical
+  let S : Finset (Fin n) := Finset.univ.filter fun j => j.val < ell
+  let e : Fin ell ↪ Fin n := {
+    toFun := fun j => ⟨j.val, j.isLt.trans hell⟩
+    inj' := by
+      intro a b hab
+      have hv := congrArg (fun x : Fin n => x.val) hab
+      change a.val = b.val at hv
+      exact Fin.ext hv
+  }
+  have hS_eq : S = Finset.univ.map e := by
+    ext j
+    constructor
+    · intro hj
+      have hj' := (Finset.mem_filter.mp hj).2
+      refine Finset.mem_map.mpr ⟨⟨j.val, hj'⟩, Finset.mem_univ _, ?_⟩
+      exact Fin.ext rfl
+    · intro hj
+      rcases Finset.mem_map.mp hj with ⟨j', hj', hEq⟩
+      subst j
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, j'.isLt⟩
+  have hScard : S.card = ell := by rw [hS_eq]; simp
+  let z : ∀ j : S, Bool := fun j => w j.1
+  have hprefix (v : CubePos n) :
+      (∀ j : S, v j.1 = z j) ↔ v ∈ prefixLeaf ell w := by
+    constructor
+    · intro hz
+      change ∀ j : Fin n, j.val < ell → v j = w j
+      intro j hj
+      have hjS : j ∈ S := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hj⟩
+      simpa [z] using hz ⟨j, hjS⟩
+    · intro hv
+      change ∀ j : Fin n, j.val < ell → v j = w j at hv
+      intro j
+      exact hv j (Finset.mem_filter.mp j.property).2
+  have hSlt : S.card < n := by simpa [hScard] using hell
+  have hParity := parity_projection_uniform S hSlt z
+  have hfilter :
+      Finset.univ.filter (fun v : CubePos n => v ∈ prefixLeaf ell w ∧ IsEvenRole v) =
+        (evenRoleSet n).filter (fun v => ∀ j : S, v j.1 = z j) := by
+    ext v
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, evenRoleSet]
+    constructor
+    · rintro ⟨hp, he⟩
+      exact ⟨he, (hprefix v).mpr hp⟩
+    · rintro ⟨he, hz⟩
+      exact ⟨(hprefix v).mp hz, he⟩
+  have hcard :
+      Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w ∧ IsEvenRole v} =
+        ((evenRoleSet n).filter (fun v => ∀ j : S, v j.1 = z j)).card := by
+    rw [Fintype.card_subtype]
+    simpa using congrArg Finset.card hfilter
+  calc
+    _ = ((evenRoleSet n).filter (fun v => ∀ j : S, v j.1 = z j)).card := hcard
+    _ = 2 ^ (n - S.card - 1) := hParity
+    _ = 2 ^ (n - ell - 1) := by rw [hScard]
+
+private theorem allocation_prefixLeaf_odd_card {n ell : ℕ} (w : CubePos n) (hell : ell < n) :
+    Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w ∧ ¬ IsEvenRole v} =
+      2 ^ (n - ell - 1) := by
+  classical
+  let P : CubePos n → Prop := fun v => v ∈ prefixLeaf ell w
+  have hsplit :
+      Fintype.card {v : CubePos n // P v ∧ IsEvenRole v} +
+        Fintype.card {v : CubePos n // P v ∧ ¬ IsEvenRole v} =
+          Fintype.card {v : CubePos n // P v} := by
+    have h := Finset.card_filter_add_card_filter_not
+      (s := Finset.univ.filter P) IsEvenRole
+    simpa [P, Fintype.card_subtype, Finset.filter_filter, and_comm] using h
+  have hleaf := allocation_prefixLeaf_card w hell
+  have heven := allocation_prefixLeaf_even_card w hell
+  have hpow : 2 ^ (n - ell) = 2 * 2 ^ (n - ell - 1) := by
+    have hsplitExp : n - ell = (n - ell - 1) + 1 := by omega
+    calc
+      2 ^ (n - ell) = 2 ^ ((n - ell - 1) + 1) := by congr 1 <;> omega
+      _ = 2 ^ (n - ell - 1) * 2 := by rw [pow_succ]
+      _ = 2 * 2 ^ (n - ell - 1) := by ring
+  have hsplit' :
+      Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w ∧ IsEvenRole v} +
+        Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w ∧ ¬ IsEvenRole v} =
+          Fintype.card {v : CubePos n // v ∈ prefixLeaf ell w} := by
+    simpa [P] using hsplit
+  rw [hleaf, heven, hpow] at hsplit'
+  omega
+
+private theorem allocation_prefixCoords_card {n ell : ℕ} (hle : ell ≤ n) :
+    (Finset.univ.filter fun j : Fin n => j.val < ell).card = ell := by
+  classical
+  let e : Fin ell ↪ Fin n := {
+    toFun := fun j => ⟨j.val, j.isLt.trans_le hle⟩
+    inj' := by
+      intro a b hab
+      have hv := congrArg (fun x : Fin n => x.val) hab
+      change a.val = b.val at hv
+      exact Fin.ext hv
+  }
+  have hset : (Finset.univ.filter fun j : Fin n => j.val < ell) = Finset.univ.map e := by
+    ext j
+    constructor
+    · intro hj
+      have hj' := (Finset.mem_filter.mp hj).2
+      refine Finset.mem_map.mpr ⟨⟨j.val, hj'⟩, Finset.mem_univ _, ?_⟩
+      exact Fin.ext rfl
+    · intro hj
+      rcases Finset.mem_map.mp hj with ⟨j', hj', hEq⟩
+      subst j
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, j'.isLt⟩
+  rw [hset]
+  simp
+
 /-- P13.3h (sections/13, lines 184–204): prefix geometry gives role counts and distinct crossing leaves. -/
 theorem allocation_geometry (κ : CConsts) (T : Stage) (k : ℕ)
     (R : RoundedFamily κ T k)
     (w : Fin R.tiling.m → CubePos ((T.orient R.orientation).S.n k))
     (hCode : PrefixCodeComplete R w)
     (hFit : PrefixDimensionFit R) : PrefixGeometry R w := by
-  sorry
+  classical
+  let n := (T.orient R.orientation).S.n k
+  have hEllLe (i : Fin R.tiling.m) :
+      (R.tiling.P i).ℓ ≤ Finset.univ.sup fun j : Fin R.tiling.m => (R.tiling.P j).ℓ :=
+    Finset.le_sup (s := Finset.univ)
+      (f := fun j : Fin R.tiling.m => (R.tiling.P j).ℓ) (Finset.mem_univ i)
+  have hHLe (i : Fin R.tiling.m) :
+      (R.tiling.P i).h ≤ Finset.univ.sup fun j : Fin R.tiling.m => (R.tiling.P j).h :=
+    Finset.le_sup (s := Finset.univ)
+      (f := fun j : Fin R.tiling.m => (R.tiling.P j).h) (Finset.mem_univ i)
+  have hDim (i : Fin R.tiling.m) : (R.tiling.P i).ℓ + (R.tiling.P i).h ≤ n := by
+    have hℓ := hEllLe i
+    have hh := hHLe i
+    have h := hFit.fit
+    omega
+  have hNpos : (0 : ℝ) < (T.S.N k : ℝ) := by exact_mod_cast T.S.N_pos k
+  have hSpos : (0 : ℝ) < (R.tiling.S : ℝ) :=
+    lt_of_lt_of_le (by positivity) R.S_lower
+  have hSupper : (R.tiling.S : ℝ) ≤ (T.S.N k : ℝ) := by exact_mod_cast R.S_upper
+  refine {
+    prefix_internal_length := hFit.fit
+    leaf_card := ?_
+    parity_leaf_card := ?_
+    odd_leaf_card := ?_
+    role_count_bounds := ?_
+    crossing_flips := ?_
+    coordinate_partition := ?_
+    coordinate_disjoint := ?_
+    internal_card := ?_
+    internal_nested := ?_ }
+  · intro i
+    exact allocation_prefixLeaf_card (w i) (hFit.free i)
+  · intro i
+    exact allocation_prefixLeaf_even_card (w i) (hFit.free i)
+  · intro i
+    exact allocation_prefixLeaf_odd_card (w i) (hFit.free i)
+  · intro i
+    constructor
+    · have hMnonneg : (0 : ℝ) ≤ (R.tiling.P i).M := by positivity
+      have hfrac : (R.tiling.P i).M / (T.S.N k : ℝ) ≤
+          (R.tiling.P i).M / (R.tiling.S : ℝ) :=
+        div_le_div_of_nonneg_left hMnonneg hSpos hSupper
+      have hdyadic : (2 : ℝ) ^ (-((R.tiling.P i).ℓ : ℤ)) =
+          ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ := by simp
+      have hpow : (2 : ℝ) ^ (n - (R.tiling.P i).ℓ - 1) =
+          (2 : ℝ) ^ (n - 1) * ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ := by
+        have hfree := hFit.free i
+        have hℓ : (R.tiling.P i).ℓ ≤ n - 1 := by omega
+        calc
+          _ = (2 : ℝ) ^ (n - 1 - (R.tiling.P i).ℓ) := by congr 1 <;> omega
+          _ = (2 : ℝ) ^ (n - 1) * ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ :=
+            pow_sub₀ (2 : ℝ) (by norm_num) hℓ
+      have hcard :
+          (Fintype.card {v : CubePos n //
+            v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) ∧ IsEvenRole v} : ℝ) =
+            (2 : ℝ) ^ (n - (R.tiling.P i).ℓ - 1) := by
+        exact_mod_cast allocation_prefixLeaf_even_card (w i) (hFit.free i)
+      have hdyLow : (R.tiling.P i).M / (R.tiling.S : ℝ) ≤
+          ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ := by
+        simpa only [hdyadic] using R.dyadic_mass_lower i
+      rw [hcard]
+      calc
+        (2 : ℝ) ^ (n - 1) * (R.tiling.P i).M / (T.S.N k : ℝ) =
+            (2 : ℝ) ^ (n - 1) * ((R.tiling.P i).M / (T.S.N k : ℝ)) := by ring
+        _ ≤ (2 : ℝ) ^ (n - 1) * ((R.tiling.P i).M / (R.tiling.S : ℝ)) :=
+          mul_le_mul_of_nonneg_left hfrac (by positivity)
+        _ ≤ (2 : ℝ) ^ (n - 1) * ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ :=
+          mul_le_mul_of_nonneg_left hdyLow (by positivity)
+        _ = (2 : ℝ) ^ (n - (R.tiling.P i).ℓ - 1) := hpow.symm
+    · have hMnonneg : (0 : ℝ) ≤ (R.tiling.P i).M := by positivity
+      have hquarter : (0 : ℝ) < (1 / 400 : ℝ) * (T.S.N k : ℝ) := by positivity
+      have hfrac : (R.tiling.P i).M / (R.tiling.S : ℝ) ≤
+          (R.tiling.P i).M / ((1 / 400 : ℝ) * (T.S.N k : ℝ)) :=
+        div_le_div_of_nonneg_left hMnonneg hquarter R.S_lower
+      have hdyadic : (2 : ℝ) ^ (-((R.tiling.P i).ℓ : ℤ)) =
+          ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ := by simp
+      have hdyHigh : ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ <
+          2 * ((R.tiling.P i).M / (R.tiling.S : ℝ)) := by
+        calc
+          _ < 2 * (R.tiling.P i).M / (R.tiling.S : ℝ) := by
+            simpa only [hdyadic] using R.dyadic_mass_upper i
+          _ = 2 * ((R.tiling.P i).M / (R.tiling.S : ℝ)) := by ring
+      have hfree := hFit.free i
+      have hpow : (2 : ℝ) ^ (n - (R.tiling.P i).ℓ - 1) =
+          (2 : ℝ) ^ (n - 1) * ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ := by
+        have hℓ : (R.tiling.P i).ℓ ≤ n - 1 := by omega
+        calc
+          _ = (2 : ℝ) ^ (n - 1 - (R.tiling.P i).ℓ) := by congr 1 <;> omega
+          _ = (2 : ℝ) ^ (n - 1) * ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ :=
+            pow_sub₀ (2 : ℝ) (by norm_num) hℓ
+      have hcard :
+          (Fintype.card {v : CubePos n //
+            v ∈ prefixLeaf (R.tiling.P i).ℓ (w i) ∧ IsEvenRole v} : ℝ) =
+            (2 : ℝ) ^ (n - (R.tiling.P i).ℓ - 1) := by
+        exact_mod_cast allocation_prefixLeaf_even_card (w i) (hFit.free i)
+      have hpowSucc : (2 : ℝ) ^ (n - 1) * 2 = (2 : ℝ) ^ n := by
+        have hfree := hFit.free i
+        have hn : n - 1 + 1 = n := by omega
+        calc
+          (2 : ℝ) ^ (n - 1) * 2 = (2 : ℝ) ^ ((n - 1) + 1) := by rw [pow_succ]
+          _ = (2 : ℝ) ^ n := by rw [hn]
+      rw [hcard]
+      exact le_of_lt <| calc
+        (2 : ℝ) ^ (n - (R.tiling.P i).ℓ - 1) =
+            (2 : ℝ) ^ (n - 1) * ((2 : ℝ) ^ (R.tiling.P i).ℓ)⁻¹ := hpow
+        _ < (2 : ℝ) ^ (n - 1) *
+            (2 * ((R.tiling.P i).M / (R.tiling.S : ℝ))) :=
+          mul_lt_mul_of_pos_left hdyHigh (by positivity)
+        _ = (2 : ℝ) ^ n * ((R.tiling.P i).M / (R.tiling.S : ℝ)) := by
+          calc
+            _ = ((2 : ℝ) ^ (n - 1) * 2) *
+                ((R.tiling.P i).M / (R.tiling.S : ℝ)) := by ring
+            _ = (2 : ℝ) ^ n * ((R.tiling.P i).M / (R.tiling.S : ℝ)) := by rw [hpowSucc]
+        _ ≤ (2 : ℝ) ^ n *
+            ((R.tiling.P i).M / ((1 / 400 : ℝ) * (T.S.N k : ℝ))) :=
+          mul_le_mul_of_nonneg_left hfrac (by positivity)
+        _ = (2 : ℝ) ^ n * (R.tiling.P i).M /
+            ((1 / 400 : ℝ) * (T.S.N k : ℝ)) := by ring
+  · intro i v hv
+    classical
+    let hLeaves (x : CubePos n) : ∃ t : Fin R.tiling.m,
+        x ∈ prefixLeaf (R.tiling.P t).ℓ (w t) := (hCode x).exists
+    let f : {j : Fin n // j.val < (R.tiling.P i).ℓ} → Fin R.tiling.m :=
+      fun j => Classical.choose (hLeaves (flipPos v j.1))
+    have hf (j : {j : Fin n // j.val < (R.tiling.P i).ℓ}) :
+        flipPos v j.1 ∈ prefixLeaf (R.tiling.P (f j)).ℓ (w (f j)) :=
+      Classical.choose_spec (hLeaves (flipPos v j.1))
+    have hflipNot (j : {j : Fin n // j.val < (R.tiling.P i).ℓ}) :
+        flipPos v j.1 ∉ prefixLeaf (R.tiling.P i).ℓ (w i) := by
+      intro hmem
+      have hvj := hv j.1 j.2
+      have hfj := hmem j.1 j.2
+      have hnot : v j.1 ≠ w i j.1 := by
+        change Function.update v j.1 (!v j.1) j.1 = w i j.1 at hfj
+        rw [Function.update_self] at hfj
+        exact Bool.not_eq_iff.mp hfj
+      exact hnot hvj
+    have hnotIndex (j : {j : Fin n // j.val < (R.tiling.P i).ℓ}) : f j ≠ i := by
+      intro heq
+      apply hflipNot j
+      simpa [heq] using hf j
+    have hinj : Function.Injective f := by
+      intro a b hab
+      by_contra hne
+      have hcoord : a.1 ≠ b.1 := by
+        intro heq
+        apply hne
+        exact Subtype.ext heq
+      let t := f a
+      have htargetA : flipPos v a.1 ∈ prefixLeaf (R.tiling.P t).ℓ (w t) := by
+        simpa [t] using hf a
+      have htargetB : flipPos v b.1 ∈ prefixLeaf (R.tiling.P t).ℓ (w t) := by
+        simpa [t, hab] using hf b
+      by_cases hshort : (R.tiling.P t).ℓ ≤ a.1.val
+      · have horig : v ∈ prefixLeaf (R.tiling.P t).ℓ (w t) := by
+          intro q hq
+          have hqa : q ≠ a.1 := by
+            intro heq
+            have := congrArg Fin.val heq
+            omega
+          have hupdate : Function.update v a.1 (!v a.1) q = v q :=
+            Function.update_of_ne hqa _ _
+          calc
+            v q = Function.update v a.1 (!v a.1) q := hupdate.symm
+            _ = w t q := htargetA q hq
+        rcases hCode v with ⟨u, hu, huniq⟩
+        have htu : t = u := huniq t horig
+        have hiu : i = u := huniq i hv
+        exact hnotIndex a (by simpa [t] using htu.trans hiu.symm)
+      · have hshort' : a.1.val < (R.tiling.P t).ℓ := by omega
+        have hTA := htargetA a.1 hshort'
+        have hnotA : v a.1 ≠ w t a.1 := by
+          change Function.update v a.1 (!v a.1) a.1 = w t a.1 at hTA
+          rw [Function.update_self] at hTA
+          exact Bool.not_eq_iff.mp hTA
+        have hupdate : Function.update v b.1 (!v b.1) a.1 = v a.1 :=
+          Function.update_of_ne hcoord _ _
+        have hTB := htargetB a.1 hshort'
+        change Function.update v b.1 (!v b.1) a.1 = w t a.1 at hTB
+        rw [hupdate] at hTB
+        have hvalB : v a.1 = w t a.1 := by
+          exact hTB
+        exact hnotA hvalB
+    exact ⟨f, fun j => ⟨hnotIndex j, hf j⟩, hinj⟩
+  · intro i
+    have hdim := hDim i
+    ext j
+    simp [Tiling.crossingCoords, Tiling.bulkCoords, Tiling.Icoord, topCoordinates]
+    omega
+  · intro i
+    refine ⟨?_, ?_, ?_⟩
+    · apply Finset.disjoint_left.mpr
+      intro j hjC hjB
+      simp [Tiling.crossingCoords, Tiling.bulkCoords] at hjC hjB
+      omega
+    · apply Finset.disjoint_left.mpr
+      intro j hjC hjI
+      simp [Tiling.crossingCoords, Tiling.Icoord, topCoordinates] at hjC hjI
+      have hdi := hDim i
+      omega
+    · apply Finset.disjoint_left.mpr
+      intro j hjB hjI
+      simp [Tiling.bulkCoords, Tiling.Icoord, topCoordinates] at hjB hjI
+      omega
+  · intro i
+    change (Finset.univ.filter fun j : Fin n => n - (R.tiling.P i).h ≤ j.val).card =
+      (R.tiling.P i).h
+    let P : Finset (Fin n) := Finset.univ.filter fun j => j.val < n - (R.tiling.P i).h
+    have hPcard : P.card = n - (R.tiling.P i).h :=
+      allocation_prefixCoords_card (Nat.sub_le n _)
+    have htop :
+        Finset.univ.filter (fun j : Fin n => n - (R.tiling.P i).h ≤ j.val) =
+          Finset.univ \ P := by
+      ext j
+      simp [P]
+    rw [htop, Finset.card_sdiff_of_subset (Finset.subset_univ P)]
+    have hhi : (R.tiling.P i).h ≤ n := by
+      have hdi := hDim i
+      omega
+    simp [P, hPcard]
+    omega
+  · intro i j hij
+    intro x hx
+    simp [Tiling.Icoord, topCoordinates] at hx ⊢
+    omega
 
 /-- P13.3i (sections/13, lines 151–155, 205–215): fixed thresholds fit prefixes and internal dimensions
 inside the assigned gain budget. -/
@@ -549,7 +954,72 @@ free parity coordinate, at all sufficiently large indices. -/
 theorem allocation_dimension_fit (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ R : RoundedFamily κ T k,
       AllocationBounds R.tiling → PrefixDimensionFit R := by
-  sorry
+  have hιhalf : κ.ι < (1 / 2 : ℝ) := by
+    have hmin₁ : min κ.η0 (0.01 : ℝ) ≤ (0.01 : ℝ) := min_le_right _ _
+    have hmin₂ : min κ.xs (min κ.η0 (0.01 : ℝ)) ≤ (0.01 : ℝ) :=
+      (min_le_right _ _).trans hmin₁
+    have hι := hκ.ι_rng.2
+    nlinarith
+  have hnlarge : ∀ᶠ k in atTop, 4 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 4
+  filter_upwards [hnlarge] with k hk
+  intro R hAlloc
+  let n := T.S.n k
+  have hnreal : (4 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hk
+  have hnbase : (1 : ℝ) ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have horient : (T.orient R.orientation).S.n k = n := by
+    cases R.orientation <;> rfl
+  have hpow : (n : ℝ) ^ κ.ι ≤ (n : ℝ) / 2 := by
+    calc
+      (n : ℝ) ^ κ.ι ≤ (n : ℝ) ^ (1 / 2 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnbase hιhalf.le
+      _ = Real.sqrt (n : ℝ) := by rw [← Real.sqrt_eq_rpow]
+      _ ≤ (n : ℝ) / 2 := by
+        rw [Real.sqrt_le_left (by positivity)]
+        have hprod := mul_nonneg (sub_nonneg.mpr hnreal) (show (0 : ℝ) ≤ n by positivity)
+        nlinarith [hprod]
+  have hhalf : ∀ i : Fin R.tiling.m,
+      (R.tiling.P i).h ≤ n / 2 ∧ (R.tiling.P i).ℓ ≤ n / 2 := by
+    intro i
+    have hmaxReal : max ((R.tiling.P i).h : ℝ) ((R.tiling.P i).ℓ : ℝ) <
+        (n : ℝ) / 2 := by
+      calc
+        _ < ((T.orient R.orientation).S.n k : ℝ) ^ κ.ι := (hAlloc i).1
+        _ = (n : ℝ) ^ κ.ι := by rw [horient]
+        _ ≤ (n : ℝ) / 2 := hpow
+    have hmaxTwiceRealLt : (2 : ℝ) *
+        max ((R.tiling.P i).h : ℝ) ((R.tiling.P i).ℓ : ℝ) < n :=
+      (lt_div_iff₀' (by norm_num : (0 : ℝ) < 2)).mp hmaxReal
+    have hmaxTwiceReal : (2 : ℝ) *
+        max ((R.tiling.P i).h : ℝ) ((R.tiling.P i).ℓ : ℝ) ≤ n := by
+      exact hmaxTwiceRealLt.le
+    have hhtwiceReal : (2 : ℝ) * (R.tiling.P i).h ≤ n := by
+      exact (mul_le_mul_of_nonneg_left (le_max_left _ _) (by norm_num)).trans hmaxTwiceReal
+    have heltwiceReal : (2 : ℝ) * (R.tiling.P i).ℓ ≤ n := by
+      exact (mul_le_mul_of_nonneg_left (le_max_right _ _) (by norm_num)).trans hmaxTwiceReal
+    have hhtwice : 2 * (R.tiling.P i).h ≤ n := by exact_mod_cast hhtwiceReal
+    have heltwice : 2 * (R.tiling.P i).ℓ ≤ n := by exact_mod_cast heltwiceReal
+    exact ⟨by omega, by omega⟩
+  have hEllSup : (Finset.univ.sup fun i : Fin R.tiling.m => (R.tiling.P i).ℓ) ≤ n / 2 := by
+    apply Finset.sup_le
+    intro i hi
+    exact (hhalf i).2
+  have hHSup : (Finset.univ.sup fun i : Fin R.tiling.m => (R.tiling.P i).h) ≤ n / 2 := by
+    apply Finset.sup_le
+    intro i hi
+    exact (hhalf i).1
+  have hfree : ∀ i, (R.tiling.P i).ℓ < (T.orient R.orientation).S.n k := by
+    intro i
+    rw [horient]
+    have hi := (hhalf i).2
+    omega
+  have hfit :
+      (Finset.univ.sup fun i : Fin R.tiling.m => (R.tiling.P i).ℓ) +
+        (Finset.univ.sup fun i : Fin R.tiling.m => (R.tiling.P i).h) ≤
+          (T.orient R.orientation).S.n k := by
+    rw [horient]
+    omega
+  exact ⟨hfree, hfit⟩
 
 private theorem tiling_valid_of_parts {κ : CConsts} {T : Stage} {k : ℕ}
     (R : RoundedFamily κ T k)

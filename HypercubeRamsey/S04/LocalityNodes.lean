@@ -1,4 +1,5 @@
 import HypercubeRamsey.S04.CoreLemmas
+import HypercubeRamsey.S04.LocalityNodes_q_s04_local
 
 /-!
 # Locality and independence in the preparatory experiment
@@ -19,20 +20,20 @@ neighbours of `v`, whose pools lie within `r + 2` of `v` and whose validity test
 neighbours and the tuples of IDs within `r + 2`. -/
 theorem elig_local {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) : EligLocal M tag := by
-  sorry
+  exact Lane_q_s04_local.elig_local_proof M tag
 
 /-- Locality of the selection (04:345–347): the long height at `v` follows paths through sites within `R_long`
 of `v`, testing site-levels whose eligibility (`EligLocal`) and crowd balls lie within `R_long + r + 2`; the tie
 used is that of `v`'s site-level. -/
 theorem sel_local {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_he : EligLocal M tag) : SelLocal M tag := by
-  sorry
+  exact Lane_q_s04_local.sel_local_proof M tag _he
 
 /-- Locality of the odd kernels: `OddOK` and `oddDraw` at `u` read the selections of the neighbours of `u`
 (`SelLocal`), the odd mask of `u` and the tuples of IDs within `r + 1` of `u`. -/
 theorem odd_local {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_hs : SelLocal M tag) : OddLocal M tag := by
-  sorry
+  exact Lane_q_s04_local.odd_local_proof M tag _hs
 
 /-- Locality of the mean even rows: `evenMean ω a x` reads the selection at `a`, legality on `a`'s consultation
 ball, the neighbouring odd kernels and sampling laws, the counts, the mask and prior of the selected reference, the
@@ -41,7 +42,7 @@ reference mixtures and the likelihood (each recomputation replaces one tuple loc
 theorem even_local {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_he : EligLocal M tag) (_hs : SelLocal M tag)
     (_ho : OddLocal M tag) : EvenLocal M tag := by
-  sorry
+  exact Lane_q_s04_local.even_local_proof M tag _he _hs _ho
 
 /-- Independence (04:189–190, 575–577): under `prepLaw` the coordinates located at different sites are independent
 (positions, activations and ties are products over IDs; masks are products over pairs and odd roles; tuples are
@@ -49,14 +50,14 @@ independent given the masks), so functions local to disjoint location sets facto
 theorem prep_factor {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag) :
     PrepFactor M tag q q' := by
-  sorry
+  exact Lane_q_s04_local.prep_factor_proof M tag q q'
 
 /-- Resampling (04:365–367, 536–539): given its mask, `W_{c,κ}` has law `prior` and is independent of all other
 coordinates, so replacing it by an independent draw from `prior` leaves the preparatory law unchanged. -/
 theorem prep_resample {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag) :
     Resample M tag q q' := by
-  sorry
+  exact Lane_q_s04_local.prep_resample_proof M tag q q'
 
 theorem disjoint_balls {n : ℕ} {v w : CubeVertex n} {R : ℕ} (h : 2 * R < _root_.hammingDist v w) :
     Disjoint (ballV v R) (ballV w R) := by

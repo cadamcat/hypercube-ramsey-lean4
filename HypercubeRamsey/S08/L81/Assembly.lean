@@ -1,4 +1,5 @@
 import HypercubeRamsey.S08.L81.EvenNodes
+import HypercubeRamsey.S08.L81.Assembly_q_s08_asm_realize
 
 /-!
 # Lemma 8.1 assembled
@@ -26,7 +27,7 @@ def C0 (K : ℝ) : ℝ := max (16 * (loadC K + 1)) ((10 : ℝ) ^ 8 * (4 * (oddM 
 /-- The tails of the six failure events sum to less than one for large `n`. -/
 theorem tails_small :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, 3 * Real.exp (-(n : ℝ)) + 4 * ((n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n) < 1 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s08_asm.tails_small
 
 section Nodes
 
@@ -56,7 +57,8 @@ theorem realization_of (D : Ctx η₀ β p h) (CL a₁ a₂ a₃ a₄ a₅ a₆ 
     ∃ (q : D.Pre) (W : D.Anch) (f : OddRole D.n → Fin D.N), D.Good q ∧ (∀ c, ¬ D.CellBad q W c) ∧
       Function.Injective f ∧ (∀ a : EvenRole D.n, ¬ D.PredFail q W a.1 (nbrLabels f a)) ∧
       ∀ x, D.evenCol q W f x ≤ 1 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s08_asm.realization_of D CL a₁ a₂ a₃ a₄ a₅ a₆
+    hpos h1 h2 h3 h4 h5 h6 h7 h8 ha₆ hsum
 
 /-- F-HallEmbed input from a good realization (08:454): the posterior even rows are probability laws on the common
 neighbourhoods of the injective odd labels, with column sums at most one. -/

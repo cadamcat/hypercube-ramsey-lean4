@@ -1,4 +1,5 @@
 import HypercubeRamsey.S06.Step3Defs
+import HypercubeRamsey.S06.Steps_q_s06_steps2
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -151,7 +152,76 @@ end Ctx6
 states, one ID each. -/
 theorem L6_1e_size (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescSize := by
-  sorry
+  refine ⟨4, 0, ?_⟩
+  intro n N E G M X hLarge
+  have hn : 4 ≤ n := hLarge.1
+  intro Id _ _ b perm hb D hD
+  change D ∈ ((Finset.univ : Finset (X.g.L.stNbr b → Id)).filter
+    (fun φ => (∀ a, φ a ∈ perm a) ∧ (Finset.univ.image φ).card ≤ X.T)).image (X.descOf b) at hD
+  rcases Finset.mem_image.mp hD with ⟨φ, hφ, rfl⟩
+  have hφ' := (Finset.mem_filter.mp hφ).2
+  rcases hφ' with ⟨hperm, hfan⟩
+  let S : Finset Id := Finset.univ.image φ
+  have hScard : S.card ≤ X.T := by simpa [S] using hfan
+  have hids : ∀ a, φ a ∈ S := fun a => Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩
+  let Tys : Finset X.Ty := neighborTypeForms6 X b
+  have hTys : Tys.card ≤ 3 * 602 := neighborTypeForms6_card X b
+  let Trans : Finset (X.g.L.stNbr b) := Finset.univ.filter
+    (fun a => X.stMode a.1 ≠ X.stMode b)
+  let Var : Finset (X.g.L.stNbr b) := Finset.univ.filter
+    (fun a => (X.stMode b = .low ∨ X.g.L.stSeverity a.1 = X.J + 1) ∧
+      (X.g.L.stSign a.1 ≠ X.g.L.stSign b ∨
+        X.g.L.stFlippable a.1 ≠ X.g.L.stFlippable b))
+  let Bad : Finset (X.g.L.stNbr b) := Trans ∪ Var
+  have hBadCard : Bad.card ≤ 1 + 21 * (X.J + 2) := by
+    simpa [Bad, Trans, Var] using descriptorBadStates6_card X b hb hn
+  have hclass : ∀ a, X.stType a.1 ∈ Tys ∨ a ∈ Bad := by
+    intro a
+    by_cases hbad : a ∈ Bad
+    · exact Or.inr hbad
+    · have htrans : ¬ X.stMode a.1 ≠ X.stMode b := by
+        intro hmode
+        exact hbad (Finset.mem_union.mpr <| Or.inl <|
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hmode⟩)
+      have hmode : X.stMode a.1 = X.stMode b := eq_of_not_ne htrans
+      have hvar : ¬ ((X.stMode b = .low ∨ X.g.L.stSeverity a.1 = X.J + 1) ∧
+          (X.g.L.stSign a.1 ≠ X.g.L.stSign b ∨
+            X.g.L.stFlippable a.1 ≠ X.g.L.stFlippable b)) := by
+        intro hv
+        exact hbad (Finset.mem_union.mpr <| Or.inr <|
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩)
+      by_cases hlow : X.stMode b = .low
+      · by_cases hsign : X.g.L.stSign a.1 = X.g.L.stSign b
+        · by_cases hflip : X.g.L.stFlippable a.1 = X.g.L.stFlippable b
+          · exact Or.inl <| neighbor_type_mem_forms6 X a.2 hsign hflip
+          · have hcontr := hvar ⟨Or.inl hlow, Or.inr hflip⟩
+            exact False.elim hcontr
+        · have hcontr := hvar ⟨Or.inl hlow, Or.inl hsign⟩
+          exact False.elim hcontr
+      · have hhigh : X.stMode b = .high := by
+          cases hm : X.stMode b with
+          | low => exact False.elim (hlow hm)
+          | high => rfl
+        have hmodeHigh : X.stMode a.1 = .high := hmode.trans hhigh
+        by_cases hboundary : X.g.L.stSeverity a.1 = X.J + 1
+        · by_cases hsign : X.g.L.stSign a.1 = X.g.L.stSign b
+          · by_cases hflip : X.g.L.stFlippable a.1 = X.g.L.stFlippable b
+            · exact Or.inl <| neighbor_type_mem_forms6 X a.2 hsign hflip
+            · have hcontr := hvar ⟨Or.inr hboundary, Or.inr hflip⟩
+              exact False.elim hcontr
+          · have hcontr := hvar ⟨Or.inr hboundary, Or.inl hsign⟩
+            exact False.elim hcontr
+        · exact Or.inl <| neighbor_type_mem_forms_high6 X a.2 hmodeHigh hboundary
+  have hdescNat : (X.descOf b φ).card ≤ 1806 * X.T + 1 + 21 * (X.J + 2) := by
+    have hsplit := descOf_card_le_split X b φ S Tys Bad hids hclass
+    have hprod : S.card * Tys.card ≤ X.T * 1806 := by
+      exact Nat.mul_le_mul hScard (by simpa using hTys)
+    calc
+      (X.descOf b φ).card ≤ S.card * Tys.card + Bad.card := hsplit
+      _ ≤ X.T * 1806 + (1 + 21 * (X.J + 2)) := Nat.add_le_add hprod hBadCard
+      _ = 1806 * X.T + 1 + 21 * (X.J + 2) := by omega
+  have hfinal : 1806 * X.T + 1 + 21 * (X.J + 2) ≤ 10 ^ 4 * (X.T + X.J + 1) := by omega
+  exact_mod_cast hdescNat.trans hfinal
 
 /-- L6.1e (counts, 06:274–281): list the at most `T` IDs, a subset for each generic type, one listed ID for each
 exceptional state. -/

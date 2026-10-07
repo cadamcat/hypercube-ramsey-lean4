@@ -134,7 +134,13 @@ theorem p92_even_rows (P : Params9) (hP : P.Valid) :
       {G : Colour} {M : TagMix N} (S : Setup9 P n N M) (I : IDMap9 P n),
       CoreInput9 P κ E X Y G M S I → StarLikBound9 S I E G →
         EvenRowLaw9 S I E G ∧ EvenRowCap9 S I E G := by
-  sorry
+  obtain ⟨n₀, hcap⟩ := Lane_q_s09_assign2.p92_even_row_cap_core P hP
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y κ G M S I hCore hSLB
+  have hcap' : EvenRowCap9 S I E G := hcap n hn S I hCore hSLB
+  rcases hCore with ⟨_, _, _, _, _, _, _, hscales⟩
+  rcases hscales with ⟨_, _, _, _, _, _, hbStar, _⟩
+  exact ⟨Lane_q_s09_assign2.evenRowLaw9_core S E G hbStar, hcap'⟩
 
 /-- P9.2-assignC, cancellation (09:342–346): integrating the target anchor turns the gated neighbour product into
 `M_v`, which cancels the posterior denominator: `∑_y M_v(y) F_x(y) μ(x)/M_v(y) ≤ μ(x) ∑_y F_x(y) ≤ μ(x)`

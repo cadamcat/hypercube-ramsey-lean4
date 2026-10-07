@@ -1421,4 +1421,120 @@ theorem supported_assignment_diagram (D : LateData hPT) (palette : PaletteIndex 
 
 end DiagramEncoding
 
+section DiagramDecoding
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+noncomputable def diagramDecode {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (row : Row) : α × α :=
+  if h : row ∈ Set.range diagram.2.1 then
+    let i := Classical.choose h
+    if diagram.2.2.1 i then
+      (labels (diagramChild hq diagram.1 i), labels (diagramParent hq diagram.1 i))
+    else (labels (diagramParent hq diagram.1 i), labels (diagramChild hq diagram.1 i))
+  else
+    (labels (diagram.2.2.2 ⟨row, h⟩).1, labels (diagram.2.2.2 ⟨row, h⟩).2)
+
+lemma diagramDecode_tree {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (i : Fin (q - 1)) :
+    diagramDecode hq diagram labels (diagram.2.1 i) =
+      if diagram.2.2.1 i then
+        (labels (diagramChild hq diagram.1 i), labels (diagramParent hq diagram.1 i))
+      else (labels (diagramParent hq diagram.1 i), labels (diagramChild hq diagram.1 i)) := by
+  have hm : diagram.2.1 i ∈ Set.range diagram.2.1 := ⟨i, rfl⟩
+  have hi : Classical.choose hm = i := diagram.2.1.injective (Classical.choose_spec hm)
+  simp only [diagramDecode, hm, ↓reduceDIte, hi]
+
+lemma diagramDecode_extra {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (row : ExtraRows diagram.2.1) :
+    diagramDecode hq diagram labels row.1 =
+      (labels (diagram.2.2.2 row).1, labels (diagram.2.2.2 row).2) := by
+  simp only [diagramDecode, row.2, ↓reduceDIte]
+
+/-- All row pairs are recovered from the diagram and its vertex labels. -/
+theorem diagramDecode_recover {Row α : Type*} {q : ℕ} {hq : 0 < q}
+    {diagram : EndpointDiagram Row q} {labels : Fin q → α} {pairs : Row → α × α}
+    (h : DiagramRealizes hq diagram labels pairs) : diagramDecode hq diagram labels = pairs := by
+  funext row
+  by_cases hm : row ∈ Set.range diagram.2.1
+  · obtain ⟨i, rfl⟩ := hm
+    exact (diagramDecode_tree hq diagram labels i).trans (h.1 i).symm
+  · exact (diagramDecode_extra hq diagram labels ⟨row, hm⟩).trans (h.2 ⟨row, hm⟩).symm
+
+lemma diagramRealizes_decode {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) :
+    DiagramRealizes hq diagram labels (diagramDecode hq diagram labels) :=
+  ⟨diagramDecode_tree hq diagram labels, diagramDecode_extra hq diagram labels⟩
+
+lemma diagramRealizes_unique {Row α : Type*} {q : ℕ} {hq : 0 < q}
+    {diagram : EndpointDiagram Row q} {labels : Fin q → α} {a b : Row → α × α}
+    (ha : DiagramRealizes hq diagram labels a) (hb : DiagramRealizes hq diagram labels b) :
+    a = b := (diagramDecode_recover ha).symm.trans (diagramDecode_recover hb)
+
+abbrev DiagramSize (p : ℕ) (violating : Bool) :=
+  {q : Fin (p + 2) // 2 ≤ q.1 ∧ (violating = true → q.1 < p)}
+
+abbrev EndpointCode (Row α : Type*) (p : ℕ) (violating : Bool) :=
+  Σ q : DiagramSize p violating,
+    EndpointDiagram Row q.1.1 × (Fin q.1.1 → α)
+
+lemma diagramSize_pos {p : ℕ} {violating : Bool} (q : DiagramSize p violating) :
+    0 < q.1.1 := by
+  have h := q.2.1
+  omega
+
+noncomputable def endpointCodeDecode {Row α β : Type*} {p : ℕ} {violating : Bool}
+    (project : α → β) (code : EndpointCode Row α p violating) : Row → β × β :=
+  diagramDecode (diagramSize_pos code.1) code.2.1 (fun i => project (code.2.2 i))
+
+abbrev SupportedAssignments (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) :=
+  {a : RowAssignment S // rowPredicate D palette S violating a}
+
+/-- The code retains its endpoint-count stratum and uses palette-valued labels. -/
+theorem supported_assignment_code (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : RowAssignment S)
+    (ha : rowPredicate D palette S violating a) :
+    ∃ code : EndpointCode S (D.palettes palette.1 palette.2) S.card violating,
+      endpointCodeDecode Subtype.val code = a ∧
+      code.1.1.1 = (endpointVertices S (extendRowAssignment D S a)).card := by
+  obtain ⟨q, hq, hcard, htwo, hupper, hviol, diagram, labels, hmem, hrealizes⟩ :=
+    supported_assignment_diagram D palette S violating a ha
+  let size : DiagramSize S.card violating := ⟨⟨q, by omega⟩, htwo, hviol⟩
+  let code : EndpointCode S (D.palettes palette.1 palette.2) S.card violating :=
+    ⟨size, diagram, fun i => ⟨labels i, hmem i⟩⟩
+  refine ⟨code, ?_, hcard⟩
+  exact diagramDecode_recover hrealizes
+
+noncomputable def supportedEncoding (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : SupportedAssignments D palette S violating) :
+    EndpointCode S (D.palettes palette.1 palette.2) S.card violating :=
+  Classical.choose (supported_assignment_code D palette S violating a.1 a.2)
+
+theorem supportedEncoding_recover (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : SupportedAssignments D palette S violating) :
+    endpointCodeDecode Subtype.val (supportedEncoding D palette S violating a) = a.1 :=
+  (Classical.choose_spec (supported_assignment_code D palette S violating a.1 a.2)).1
+
+theorem supportedEncoding_endpoint_count (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : SupportedAssignments D palette S violating) :
+    (supportedEncoding D palette S violating a).1.1.1 =
+      (endpointVertices S (extendRowAssignment D S a.1)).card :=
+  (Classical.choose_spec (supported_assignment_code D palette S violating a.1 a.2)).2
+
+/-- Decoding is a left inverse, hence the chosen encoding is injective. -/
+theorem supportedEncoding_injective (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) :
+    Function.Injective (supportedEncoding D palette S violating) := by
+  intro a b hab
+  apply Subtype.ext
+  calc
+    a.1 = endpointCodeDecode Subtype.val (supportedEncoding D palette S violating a) :=
+      (supportedEncoding_recover D palette S violating a).symm
+    _ = endpointCodeDecode Subtype.val (supportedEncoding D palette S violating b) :=
+      congrArg (endpointCodeDecode Subtype.val) hab
+    _ = b.1 := supportedEncoding_recover D palette S violating b
+
+end DiagramDecoding
+
 end HypercubeRamsey.S18.Lane_sol_s18_6b

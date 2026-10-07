@@ -190,9 +190,35 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X =>
       X.Step1CapBound → X.Step1DelBound → X.Step2Bound → X.Step3TestLow → X.Step3TestHigh → X.DescSize →
         X.RateShapes → X.V0Mass := by
-  refine ⟨2, 0, ?_⟩
+  have hTail1 : ∀ᶠ n : ℕ in Filter.atTop,
+      (10 ^ 200 : ℝ) * 603 * (n : ℝ) ^ (-(δ₁ / 4)) < 1 / 6 :=
+    eventually_const_mul_nat_rpow_neg_lt
+      (by norm_num [δ₁]) (by norm_num)
+  obtain ⟨nTail1, hTail1⟩ := Filter.eventually_atTop.1 hTail1
+  obtain ⟨_, _, hp₀, _⟩ := hadm
+  have hαfacts := height_exponents6_admissible p₀ hp₀
+  have hαpos : 0 < α₆ p₀ := hαfacts.1
+  have hαupper : α₆ p₀ ≤ 1 / 10 ^ 12 := hαfacts.2.2.1
+  have hMEventually := eventually_nat_ceil_rpow_add_two_le_double hαpos
+  obtain ⟨nM, hMEventually⟩ := Filter.eventually_atTop.1 hMEventually
+  have hexp2pos : 0 < δ₂ / 4 - 6 * α₆ p₀ := by
+    norm_num [δ₂] at *
+    nlinarith
+  have hTail2 : ∀ᶠ n : ℕ in Filter.atTop,
+      (10 ^ 210 : ℝ) * (n : ℝ) ^ (-(δ₂ / 4 - 6 * α₆ p₀)) < 1 / 6 :=
+    eventually_const_mul_nat_rpow_neg_lt hexp2pos (by norm_num)
+  obtain ⟨nTail2, hTail2⟩ := Filter.eventually_atTop.1 hTail2
+  refine ⟨max nTail1 (max nTail2 (max 2 nM)), 0, ?_⟩
   intro n N E G M X hLarge hCap hDel hStep2 hLow hHigh hDesc hRate
   obtain ⟨hn, _, _⟩ := hLarge
+  have hnTail1 : nTail1 ≤ n := le_trans (le_max_left nTail1 _) hn
+  have hnTail2 : nTail2 ≤ n :=
+    le_trans (le_trans (le_max_left nTail2 (max 2 nM))
+      (le_max_right nTail1 (max nTail2 (max 2 nM)))) hn
+  have hnM : nM ≤ n :=
+    le_trans (le_trans (le_max_right 2 nM)
+      (le_max_right nTail2 (max 2 nM)))
+      (le_trans (le_max_right nTail1 (max nTail2 (max 2 nM))) hn)
   have hStep1Raw : ∀ h, h ∈ X.step1Keys →
       X.baseLaw.pr (fun b => ¬ X.Step1OK b h) ≤ 603 * (n : ℝ) ^ (-(δ₁ / 2)) := by
     intro h hh
@@ -427,8 +453,21 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   let τ1 : ℝ := (n : ℝ) ^ (-(δ₁ / 4))
   let q1 : ℝ := (603 * (n : ℝ) ^ (-(δ₁ / 2))) / τ1
   have hnR : 0 < (n : ℝ) := by exact_mod_cast (show 0 < n by omega)
+  have hMbound : (X.m : ℝ) + 2 ≤ (n : ℝ) ^ (2 * α₆ p₀) := by
+    change (X.g.L.m : ℝ) + 2 ≤ (n : ℝ) ^ (2 * α₆ p₀)
+    rw [X.g.m_eq]
+    exact hMEventually n hnM
   have hτ1 : 0 < τ1 := by dsimp [τ1]; exact Real.rpow_pos_of_pos hnR _
   have hq1 : 0 ≤ q1 := by dsimp [q1, τ1]; positivity
+  have hq1Eq : q1 = 603 * (n : ℝ) ^ (-(δ₁ / 4)) := by
+    dsimp [q1, τ1]
+    calc
+      603 * (n : ℝ) ^ (-(δ₁ / 2)) / (n : ℝ) ^ (-(δ₁ / 4)) =
+          603 * ((n : ℝ) ^ (-(δ₁ / 2)) / (n : ℝ) ^ (-(δ₁ / 4))) := by ring
+      _ = 603 * (n : ℝ) ^ (-(δ₁ / 2) - (-(δ₁ / 4))) := by
+        rw [← Real.rpow_sub hnR]
+      _ = 603 * (n : ℝ) ^ (-(δ₁ / 4)) := by
+        rw [show -(δ₁ / 2) - (-(δ₁ / 4)) = -(δ₁ / 4) by ring]
   have hrate1Nonneg : ∀ h v, 0 ≤ X.rate1V0 v h := by
     intro h v
     dsimp [Ctx6.rate1V0, FinProb.pr]
@@ -478,6 +517,12 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   have hStep1Alarm : X.initLaw.pr (fun v => ∃ h ∈ X.step1Keys,
       τ1 ≤ X.rate1V0 v h) ≤ (10 ^ 200 : ℝ) * q1 :=
     hstep1Grouped.trans hstep1Grouped'
+  have hStep1Budget : (10 ^ 200 : ℝ) * q1 < 1 / 6 := by
+    calc
+      (10 ^ 200 : ℝ) * q1 = (10 ^ 200 : ℝ) * 603 * (n : ℝ) ^ (-(δ₁ / 4)) := by
+        rw [hq1Eq]
+        ring
+      _ < 1 / 6 := hTail1 n hnTail1
   have hrate2BaseNonneg : ∀ base β, 0 ≤ X.rate2Base base β := by
     classical
     intro base β
@@ -598,6 +643,161 @@ theorem L6_1h_parent (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         apply Finset.sum_le_sum
         intro u hu
         exact hstep2GroupedUB u.val
+  let U₂ : Finset (Fin (X.m + 2)) := Finset.univ.filter fun u => 0 < u.val
+  have hstep2Alarm' : X.initLaw.pr (fun v => ∃ β ∈ X.occTypes,
+      τ₂ β.u ≤ X.rate2V0 v β) ≤
+      ∑ u ∈ U₂, (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val := by
+    simpa [U₂] using hstep2Alarm
+  have hq₂Exp : ∀ u, q₂ u = (n : ℝ) ^ (-(δ₂ / 4) * (u : ℝ)) := by
+    intro u
+    dsimp [q₂, τ₂]
+    calc
+      (n : ℝ) ^ (-(δ₂ * (u : ℝ) / 2)) / (n : ℝ) ^ (-(δ₂ * (u : ℝ) / 4)) =
+          (n : ℝ) ^ (-(δ₂ * (u : ℝ) / 2) - (-(δ₂ * (u : ℝ) / 4))) := by
+            rw [← Real.rpow_sub hnR]
+      _ = (n : ℝ) ^ (-(δ₂ / 4) * (u : ℝ)) := by
+        rw [show -(δ₂ * (u : ℝ) / 2) - (-(δ₂ * (u : ℝ) / 4)) =
+          -(δ₂ / 4) * (u : ℝ) by ring]
+  let r₂ : ℝ := ((X.m : ℝ) + 1) ^ 2 * (n : ℝ) ^ (-(δ₂ / 4))
+  have hn1 : 1 < (n : ℝ) := by exact_mod_cast (show 1 < n by omega)
+  have hAlphaDecay : 4 * α₆ p₀ - δ₂ / 4 < 0 := by
+    norm_num [δ₂] at *
+    nlinarith
+  have hr₂Nonneg : 0 ≤ r₂ := by dsimp [r₂]; positivity
+  have hr₂Le : r₂ ≤ 1 := by
+    have hmPlus1 : (X.m : ℝ) + 1 ≤ (n : ℝ) ^ (2 * α₆ p₀) := by linarith
+    have hsquare : ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 = (n : ℝ) ^ (4 * α₆ p₀) := by
+      calc
+        ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 = ((n : ℝ) ^ (2 * α₆ p₀)) ^ (2 : ℝ) :=
+          (Real.rpow_natCast ((n : ℝ) ^ (2 * α₆ p₀)) 2).symm
+        _ = (n : ℝ) ^ ((2 * α₆ p₀) * 2) :=
+          (Real.rpow_mul hnR.le (2 * α₆ p₀) (2 : ℝ)).symm
+        _ = (n : ℝ) ^ (4 * α₆ p₀) := by
+          rw [show (2 * α₆ p₀) * 2 = 4 * α₆ p₀ by ring]
+    have hprod : ((X.m : ℝ) + 1) ^ 2 * (n : ℝ) ^ (-(δ₂ / 4)) ≤
+        (n : ℝ) ^ (4 * α₆ p₀ - δ₂ / 4) := by
+      calc
+        ((X.m : ℝ) + 1) ^ 2 * (n : ℝ) ^ (-(δ₂ / 4)) ≤
+            ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 * (n : ℝ) ^ (-(δ₂ / 4)) := by gcongr
+        _ = (n : ℝ) ^ (4 * α₆ p₀) * (n : ℝ) ^ (-(δ₂ / 4)) := by rw [hsquare]
+        _ = (n : ℝ) ^ (4 * α₆ p₀ - δ₂ / 4) := by
+          rw [← Real.rpow_add hnR]
+          rw [show 4 * α₆ p₀ + (-(δ₂ / 4)) = 4 * α₆ p₀ - δ₂ / 4 by ring]
+    have hpow : (n : ℝ) ^ (4 * α₆ p₀ - δ₂ / 4) < 1 :=
+      Real.rpow_lt_one_of_one_lt_of_neg hn1 hAlphaDecay
+    dsimp [r₂]
+    exact le_trans hprod hpow.le
+  have hfactor₂ : ∀ (u : Fin (X.m + 2)),
+      ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val = r₂ ^ u.val := by
+    intro u
+    have hmPow : ((X.m : ℝ) + 1) ^ (2 * u.val) = (((X.m : ℝ) + 1) ^ 2) ^ u.val :=
+      pow_mul _ 2 u.val
+    have hnPow : (n : ℝ) ^ (-(δ₂ / 4) * (u.val : ℝ)) =
+        ((n : ℝ) ^ (-(δ₂ / 4))) ^ u.val := by
+      calc
+        (n : ℝ) ^ (-(δ₂ / 4) * (u.val : ℝ)) =
+            ((n : ℝ) ^ (-(δ₂ / 4))) ^ (u.val : ℝ) :=
+              Real.rpow_mul hnR.le (-(δ₂ / 4)) (u.val : ℝ)
+        _ = ((n : ℝ) ^ (-(δ₂ / 4))) ^ u.val :=
+          Real.rpow_natCast ((n : ℝ) ^ (-(δ₂ / 4))) u.val
+    calc
+      ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val =
+          (((X.m : ℝ) + 1) ^ 2) ^ u.val * ((n : ℝ) ^ (-(δ₂ / 4))) ^ u.val := by
+            rw [hq₂Exp, hmPow, hnPow]
+      _ = r₂ ^ u.val := by rw [← mul_pow]
+  have hGrouped2Total :
+      (∑ u ∈ U₂, (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val) ≤
+        ((X.m : ℝ) + 2) * ((10 ^ 210 : ℝ) * r₂) := by
+    have hsum :
+        (∑ u ∈ U₂, (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val) ≤
+          ∑ u ∈ U₂, (10 ^ 210 : ℝ) * r₂ := by
+      apply Finset.sum_le_sum
+      intro u hu
+      have huPos : 0 < u.val := by
+        have hu' : u ∈ (Finset.univ.filter fun v : Fin (X.m + 2) => 0 < v.val) := by
+          simpa [U₂] using hu
+        exact (Finset.mem_filter.mp hu').2
+      have huone : 1 ≤ u.val := by omega
+      calc
+        (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val =
+            (10 ^ 210 : ℝ) * (((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val) := by ring
+        _ = (10 ^ 210 : ℝ) * r₂ ^ u.val := by rw [hfactor₂ u]
+        _ ≤ (10 ^ 210 : ℝ) * r₂ := mul_le_mul_of_nonneg_left
+          (by
+            simpa only [pow_one] using
+              (pow_le_pow_of_le_one hr₂Nonneg hr₂Le huone)) (by positivity)
+    have hUcard : U₂.card ≤ X.m + 2 := by
+      calc
+        U₂.card ≤ Fintype.card (Fin (X.m + 2)) := Finset.card_le_univ U₂
+        _ = X.m + 2 := by simp
+    calc
+      _ ≤ ∑ u ∈ U₂, (10 ^ 210 : ℝ) * r₂ := hsum
+      _ = (U₂.card : ℝ) * ((10 ^ 210 : ℝ) * r₂) := by simp
+      _ ≤ ((X.m : ℝ) + 2) * ((10 ^ 210 : ℝ) * r₂) := by
+        apply mul_le_mul_of_nonneg_right
+        · exact_mod_cast hUcard
+        · positivity
+  have hStep2AlarmBound : X.initLaw.pr (fun v => ∃ β ∈ X.occTypes,
+      τ₂ β.u ≤ X.rate2V0 v β) ≤
+      (10 ^ 210 : ℝ) * ((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2 *
+        (n : ℝ) ^ (-(δ₂ / 4)) := by
+    calc
+      _ ≤ ∑ u ∈ U₂, (10 ^ 210 : ℝ) * ((X.m : ℝ) + 1) ^ (2 * u.val) * q₂ u.val := hstep2Alarm'
+      _ ≤ ((X.m : ℝ) + 2) * ((10 ^ 210 : ℝ) * r₂) := hGrouped2Total
+      _ = (10 ^ 210 : ℝ) * ((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2 *
+          (n : ℝ) ^ (-(δ₂ / 4)) := by dsimp [r₂]; ring
+  have hpoly2 : ((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2 ≤
+      (n : ℝ) ^ (6 * α₆ p₀) := by
+    have hmPlus1 : (X.m : ℝ) + 1 ≤ (n : ℝ) ^ (2 * α₆ p₀) := by linarith
+    have hsquare : ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 = (n : ℝ) ^ (4 * α₆ p₀) := by
+      calc
+        ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 = ((n : ℝ) ^ (2 * α₆ p₀)) ^ (2 : ℝ) :=
+          (Real.rpow_natCast ((n : ℝ) ^ (2 * α₆ p₀)) 2).symm
+        _ = (n : ℝ) ^ ((2 * α₆ p₀) * 2) :=
+          (Real.rpow_mul hnR.le (2 * α₆ p₀) (2 : ℝ)).symm
+        _ = (n : ℝ) ^ (4 * α₆ p₀) := by
+          rw [show (2 * α₆ p₀) * 2 = 4 * α₆ p₀ by ring]
+    have hprod : (n : ℝ) ^ (2 * α₆ p₀) * (n : ℝ) ^ (4 * α₆ p₀) =
+        (n : ℝ) ^ (6 * α₆ p₀) := by
+      rw [← Real.rpow_add hnR]
+      rw [show 2 * α₆ p₀ + 4 * α₆ p₀ = 6 * α₆ p₀ by ring]
+    have hsquareM : ((X.m : ℝ) + 1) ^ 2 ≤ ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 :=
+      (sq_le_sq₀ (by positivity) (by positivity)).2 hmPlus1
+    calc
+      ((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2 ≤
+          (n : ℝ) ^ (2 * α₆ p₀) * ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 := by
+        calc
+          _ ≤ (n : ℝ) ^ (2 * α₆ p₀) * ((X.m : ℝ) + 1) ^ 2 :=
+            mul_le_mul_of_nonneg_right hMbound (sq_nonneg _)
+          _ ≤ (n : ℝ) ^ (2 * α₆ p₀) * ((n : ℝ) ^ (2 * α₆ p₀)) ^ 2 :=
+            mul_le_mul_of_nonneg_left hsquareM (Real.rpow_nonneg hnR.le _)
+      _ = (n : ℝ) ^ (6 * α₆ p₀) := by rw [hsquare, hprod]
+  have hStep2Budget : X.initLaw.pr (fun v => ∃ β ∈ X.occTypes,
+      τ₂ β.u ≤ X.rate2V0 v β) ≤ 1 / 6 := by
+    calc
+      _ ≤ (10 ^ 210 : ℝ) * ((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2 *
+          (n : ℝ) ^ (-(δ₂ / 4)) := hStep2AlarmBound
+      _ ≤ (10 ^ 210 : ℝ) * (n : ℝ) ^ (6 * α₆ p₀) *
+          (n : ℝ) ^ (-(δ₂ / 4)) := by
+        have hnegpow : 0 ≤ (n : ℝ) ^ (-(δ₂ / 4)) := Real.rpow_nonneg hnR.le _
+        calc
+          (10 ^ 210 : ℝ) * ((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2 *
+              (n : ℝ) ^ (-(δ₂ / 4)) =
+            ((10 ^ 210 : ℝ) * (((X.m : ℝ) + 2) * ((X.m : ℝ) + 1) ^ 2)) *
+              (n : ℝ) ^ (-(δ₂ / 4)) := by ring
+          _ ≤ ((10 ^ 210 : ℝ) * (n : ℝ) ^ (6 * α₆ p₀)) *
+              (n : ℝ) ^ (-(δ₂ / 4)) :=
+            mul_le_mul_of_nonneg_right
+              (mul_le_mul_of_nonneg_left hpoly2 (by positivity)) hnegpow
+      _ = (10 ^ 210 : ℝ) * (n : ℝ) ^ (-(δ₂ / 4 - 6 * α₆ p₀)) := by
+        calc
+          (10 ^ 210 : ℝ) * (n : ℝ) ^ (6 * α₆ p₀) * (n : ℝ) ^ (-(δ₂ / 4)) =
+              (10 ^ 210 : ℝ) * ((n : ℝ) ^ (6 * α₆ p₀) * (n : ℝ) ^ (-(δ₂ / 4))) := by ring
+          _ = (10 ^ 210 : ℝ) * (n : ℝ) ^ (6 * α₆ p₀ + (-(δ₂ / 4))) := by
+            rw [← Real.rpow_add hnR]
+          _ = (10 ^ 210 : ℝ) * (n : ℝ) ^ (-(δ₂ / 4 - 6 * α₆ p₀)) := by
+            rw [show 6 * α₆ p₀ + (-(δ₂ / 4)) = -(δ₂ / 4 - 6 * α₆ p₀) by ring]
+      _ ≤ 1 / 6 := (hTail2 n hnTail2).le
   rcases hRate3 with ⟨Sh3, _fSh3, f3, hRate3Shape, hCount3⟩
   letI : Inhabited X.State := ⟨(fun _ => false, (fun _ => 0), KeyFlag6.interior, (fun _ => 0), 0)⟩
   letI : Inhabited (X.State × Finset (Fin X.T × X.Ty)) := ⟨(default, ∅)⟩

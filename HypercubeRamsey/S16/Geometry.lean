@@ -987,6 +987,84 @@ theorem cell_data_exists {κ : CConsts} {T : Stage} {k : ℕ}
       _ ≤ 3 * Real.rpow (2 : ℝ) ((n - (PT.tiling.P i).ℓ : ℕ) : ℝ) /
             Real.rpow (n : ℝ) κ.Ac + Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
               exact add_le_add hDivBound hColorCast
+
+  have hBatchRoom (i : Fin PT.tiling.m) :
+      Real.rpow (n : ℝ) κ.Ac ≤
+        3 * (batchSize i : ℝ) * (2 : ℝ) ^ (PT.tiling.P i).h := by
+    have hn : (0 : ℝ) < (n : ℝ) := by
+      have : 0 < n := by
+        dsimp [n]
+        exact lt_of_lt_of_le (by norm_num) hScale.n_four
+      exact_mod_cast this
+    let F : ℕ := ⌊Real.rpow (n : ℝ) κ.Ac⌋₊
+    let d : ℕ := 2 ^ (PT.tiling.P i).h
+    have hd : 0 < d := by dsimp [d]; exact Nat.pow_pos (by decide)
+    have hF : 2 * d ≤ F := by
+      dsimp [F, d, n]
+      simpa using hScale.slice_room i
+    have hq : batchSize i = F / d := by rfl
+    have hqTwo : 2 ≤ batchSize i := by
+      rw [hq]
+      exact (Nat.le_div_iff_mul_le hd).2 (by nlinarith)
+    have hrem : F % d < d := Nat.mod_lt _ hd
+    have hdecomp : F = F % d + d * (F / d) := (Nat.mod_add_div F d).symm
+    have hFlt : F < 2 * (batchSize i * d) := by
+      rw [hq]
+      nlinarith [hdecomp, hrem, hqTwo]
+    have hfloor : Real.rpow (n : ℝ) κ.Ac < (F : ℝ) + 1 := by
+      dsimp [F]
+      exact Nat.lt_floor_add_one (Real.rpow (n : ℝ) κ.Ac)
+    have hFcast : (F : ℝ) < 2 * (batchSize i : ℝ) * (d : ℝ) := by
+      have hFltCast : (F : ℝ) < 2 * ((batchSize i : ℝ) * (d : ℝ)) := by
+        exact_mod_cast hFlt
+      simpa [mul_assoc] using hFltCast
+    have hqR : (0 : ℝ) < (batchSize i : ℝ) := by
+      exact_mod_cast (batchSize_pos i)
+    have hdR : (0 : ℝ) < (d : ℝ) := by exact_mod_cast hd
+    have hqR2 : (2 : ℝ) ≤ (batchSize i : ℝ) := by exact_mod_cast hqTwo
+    have hdR1 : (1 : ℝ) ≤ (d : ℝ) := by
+      exact_mod_cast (Nat.one_le_iff_ne_zero.mpr (Nat.ne_of_gt hd))
+    have hqd : (1 : ℝ) ≤ (batchSize i : ℝ) * (d : ℝ) := by nlinarith
+    have hReal : Real.rpow (n : ℝ) κ.Ac ≤
+        3 * (batchSize i : ℝ) * (d : ℝ) := by nlinarith
+    simpa [d] using hReal
+
+  have hCellRank (i : Fin PT.tiling.m) (c : Cell)
+      (hc : C.cellPatch c = i) :
+      ∃ s : CubePos n, ∃ hs : s ∈ SliceClass i c.1.2.1,
+        c.1.2.2 = Lane_q_s16_geom.batchStart
+          ((SliceClass i c.1.2.1).equivFin ⟨s, hs⟩).val (batchSize i) := by
+    obtain ⟨b, hb⟩ := hCells_nonempty c
+    have hcell : C.cellOf b = c := (Finset.mem_filter.mp hb).2
+    have hkey : keyOf b = c.1 := by
+      change cellOf b = c at hcell
+      exact congrArg Subtype.val hcell
+    have hpatch : patchOf b = i := by
+      calc
+        patchOf b = C.cellPatch (C.cellOf b) := (C.cellOf_patch b).symm
+        _ = C.cellPatch c := congrArg C.cellPatch hcell
+        _ = i := hc
+    have hvalid : SliceValid i (sliceOf b) := by
+      simpa [sliceOf, hpatch] using
+        sliceAt_valid (patchOf b) b (patchOf_leaf b)
+    have hkcolor : (keyOf b).2.1 = colors (sliceOf b) := by
+      dsimp [keyOf, keyOfAt]
+      split_ifs <;> rfl
+    have hcolor : colors (sliceOf b) = c.1.2.1 := by
+      exact hkcolor.symm.trans (congrArg (fun z : Key => z.2.1) hkey)
+    have hmem : sliceOf b ∈ SliceClass i c.1.2.1 := by
+      simp [SliceClass, hvalid, hcolor]
+    let r := (SliceClass i c.1.2.1).equivFin ⟨sliceOf b, hmem⟩
+    have hstart : c.1.2.2 = Lane_q_s16_geom.batchStart r.val (batchSize i) := by
+      calc
+        c.1.2.2 = (keyOf b).2.2 := (congrArg (fun z : Key => z.2.2) hkey).symm
+        _ = Lane_q_s16_geom.batchStart r.val (batchSize i) := by
+          dsimp [keyOf, keyOfAt]
+          rw [hpatch]
+          rw [hcolor]
+          simp [r, hmem]
+    exact ⟨sliceOf b, hmem, hstart⟩
+
   have hSlotsFit : ∀ i : Fin PT.tiling.m,
       (∑ c ∈ C.cellsInPatch i, C.nslot c) ≤ Fintype.card (Bin PT.tiling i) := by
     intro i
@@ -1019,7 +1097,277 @@ theorem cell_data_exists {κ : CConsts} {T : Stage} {k : ℕ}
 
   refine ⟨C, ?_⟩
   refine ⟨hCells_nonempty, hCellSize, ?_, hWholeSlices, ?_, hCellCount, hSlotCount, hSlotsFit⟩
-  · sorry
+  · intro i
+    classical
+    let cells := C.cellsInPatch i
+    let q := batchSize i
+    let small := cells.filter fun c =>
+      ((C.positions c).card : ℝ) < Real.rpow (n : ℝ) κ.Ac / 3
+    have hq : 0 < q := batchSize_pos i
+    let extendAt (s : CubePos n) (u : CubePos (PT.tiling.P i).h) : Pos T k :=
+      fun j => if hj : j ∈ PT.tiling.Icoord i then
+        u ⟨j.val - (n - (PT.tiling.P i).h), by
+          have hj' : n - (PT.tiling.P i).h ≤ j.val := by
+            simpa [Tiling.Icoord, topCoordinates] using hj
+          have hjlt := j.isLt
+          omega⟩
+        else s j
+    have hExtendLeaf (s : CubePos n) (u : CubePos (PT.tiling.P i).h)
+        (hs : SliceValid i s) : extendAt s u ∈ PT.tiling.leaf i := by
+      change ∀ j : Fin n, j.val < (PT.tiling.P i).ℓ →
+        extendAt s u j = PT.tiling.w i ⟨j.val, by omega⟩
+      intro j hj
+      have hnot : j ∉ PT.tiling.Icoord i := by
+        intro hmem
+        have htop : n - (PT.tiling.P i).h ≤ j.val := by
+          simpa [Tiling.Icoord, topCoordinates] using hmem
+        have hlen := hEllH i
+        omega
+      let p : Fin (PT.tiling.P i).ℓ := ⟨j.val, hj⟩
+      let pN : Fin n := ⟨p.val, by
+        have hp := p.isLt
+        have hlen := hEllH i
+        dsimp [n] at hlen
+        omega⟩
+      have hpN : pN = j := by apply Fin.ext; rfl
+      have hnotP : pN ∉ PT.tiling.Icoord i := by simpa [hpN] using hnot
+      have hbit : extendAt s u j = s pN := by
+        rw [← hpN]
+        simp [extendAt, hnotP]
+      calc
+        extendAt s u j = s pN := hbit
+        _ = PT.tiling.w i pN := by simpa [pN] using hs.1 p
+    have hExtendPatch (s : CubePos n) (u : CubePos (PT.tiling.P i).h)
+        (hs : SliceValid i s) : patchOf (extendAt s u) = i := by
+      have hleaf := hExtendLeaf s u hs
+      rcases hPT.tiling_valid.prefix_complete (extendAt s u) with ⟨j, hj, hjuniq⟩
+      exact (hjuniq (patchOf (extendAt s u)) (patchOf_leaf (extendAt s u))).trans
+        (hjuniq i hleaf).symm
+    have hExtendSlice (s : CubePos n) (u : CubePos (PT.tiling.P i).h)
+        (hs : SliceValid i s) : sliceOf (extendAt s u) = s := by
+      have hp := hExtendPatch s u hs
+      funext j
+      dsimp [sliceOf, sliceAt]
+      rw [hp]
+      by_cases hj : j ∈ PT.tiling.Icoord i
+      · simp [hj, hs.2 j hj]
+      · simp [hj, extendAt]
+    have hExtendInner (s : CubePos n) (u : CubePos (PT.tiling.P i).h)
+        (hs : SliceValid i s) : innerAt i (extendAt s u) = u := by
+      funext j
+      have hjmem :
+          (⟨n - (PT.tiling.P i).h + j.val,
+            by have hj := j.isLt; have hlen := hEllH i; omega⟩ : Fin n) ∈
+              PT.tiling.Icoord i := by
+        simp [Tiling.Icoord, topCoordinates]
+        have hj := j.isLt
+        omega
+      have hidx :
+          (⟨n - (PT.tiling.P i).h + j.val - (n - (PT.tiling.P i).h),
+            by have hj := j.isLt; omega⟩ : Fin (PT.tiling.P i).h) = j := by
+        apply Fin.ext
+        exact Nat.add_sub_cancel_left _ _
+      simpa [innerAt, extendAt, hjmem] using congrArg u hidx
+    have hKeyShape (col : Fin (D + 1)) (start : ℕ) (s : CubePos n)
+        (r : Fin (SliceClass i col).card) (hs : s ∈ SliceClass i col)
+        (hc : colors s = col)
+        (hr : (SliceClass i col).equivFin ⟨s, hs⟩ = r)
+        (hstart : Lane_q_s16_geom.batchStart r.val q = start) :
+        keyOfAt i s = ⟨i, (col, start)⟩ := by
+      dsimp [keyOfAt]
+      rw [hc]
+      simp [hs, hr, hstart, q]
+    have hBatchComplete (c : Cell) (hc : C.cellPatch c = i)
+        (hfull : c.1.2.2 + q ≤ (SliceClass i c.1.2.1).card) :
+        Real.rpow (n : ℝ) κ.Ac / 3 ≤ (C.positions c).card := by
+      obtain ⟨s₀, hs₀, hstart₀⟩ := hCellRank i c hc
+      let col := c.1.2.1
+      let start := c.1.2.2
+      have hmod : start % q = 0 := by
+        dsimp [start, q]
+        rw [hstart₀]
+        exact Lane_q_s16_geom.batchStart_mod _ _
+      have hqPos : (0 : ℝ) < (q : ℝ) := by exact_mod_cast hq
+      let f : Fin q × CubePos (PT.tiling.P i).h →
+          {b : Pos T k // b ∈ C.positions c} := fun z => by
+        let r : Fin (SliceClass i col).card :=
+          ⟨start + z.1.val, by have hz := z.1.isLt; dsimp [start, col] at *; omega⟩
+        let point := (SliceClass i col).equivFin.symm r
+        let s := point.1
+        have hmem : s ∈ SliceClass i col := point.2
+        have hvalid : SliceValid i s := (Finset.mem_filter.mp hmem).2.1
+        have hcolor : colors s = col := (Finset.mem_filter.mp hmem).2.2
+        have hrank : (SliceClass i col).equivFin ⟨s, hmem⟩ = r := by
+          exact Equiv.apply_symm_apply _ _
+        have hstart : Lane_q_s16_geom.batchStart r.val q = start := by
+          dsimp [r, start]
+          exact Lane_q_s16_geom.batchStart_add_of_mod_eq_zero hq hmod z.1.isLt
+        let b := extendAt s z.2
+        have hleaf := hExtendLeaf s z.2 hvalid
+        have hpatch : patchOf b = i := by
+          simpa [b] using hExtendPatch s z.2 hvalid
+        have hslice : sliceOf b = s := by
+          simpa [b] using hExtendSlice s z.2 hvalid
+        have hkeyB : keyOf b = ⟨i, (col, start)⟩ := by
+          calc
+            keyOf b = keyOfAt i s := by simp [keyOf, hpatch, hslice]
+            _ = ⟨i, (col, start)⟩ := hKeyShape col start s r hmem hcolor hrank hstart
+        have hkeyC : c.1 = ⟨i, (col, start)⟩ := by
+          apply Sigma.ext
+          · exact hc
+          · exact heq_of_eq (Prod.ext rfl rfl)
+        have hcell : C.cellOf b = c := by
+          apply Subtype.ext
+          exact hkeyB.trans hkeyC.symm
+        refine ⟨b, ?_⟩
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hcell⟩
+      have hf : Function.Injective f := by
+        intro z z' hzz'
+        have hb :
+            extendAt
+              ((SliceClass i col).equivFin.symm
+                ⟨start + z.1.val, by have hz := z.1.isLt; dsimp [start, col] at *; omega⟩).1 z.2 =
+            extendAt
+              ((SliceClass i col).equivFin.symm
+                ⟨start + z'.1.val, by have hz := z'.1.isLt; dsimp [start, col] at *; omega⟩).1 z'.2 :=
+          congrArg Subtype.val hzz'
+        let r : Fin (SliceClass i col).card :=
+          ⟨start + z.1.val, by have hz := z.1.isLt; dsimp [start, col] at *; omega⟩
+        let r' : Fin (SliceClass i col).card :=
+          ⟨start + z'.1.val, by have hz := z'.1.isLt; dsimp [start, col] at *; omega⟩
+        have hslice : ((SliceClass i col).equivFin.symm r).1 =
+            ((SliceClass i col).equivFin.symm r').1 := by
+          calc
+            ((SliceClass i col).equivFin.symm r).1 =
+                sliceOf (extendAt ((SliceClass i col).equivFin.symm r).1 z.2) :=
+                  (hExtendSlice ((SliceClass i col).equivFin.symm r).1 z.2
+                    ((Finset.mem_filter.mp ((SliceClass i col).equivFin.symm r).2).2.1)).symm
+            _ = sliceOf (extendAt ((SliceClass i col).equivFin.symm r').1 z'.2) :=
+                  congrArg sliceOf hb
+            _ = ((SliceClass i col).equivFin.symm r').1 :=
+                  hExtendSlice ((SliceClass i col).equivFin.symm r').1 z'.2
+                    ((Finset.mem_filter.mp ((SliceClass i col).equivFin.symm r').2).2.1)
+        have hr : r = r' := (SliceClass i col).equivFin.symm.injective (Subtype.ext hslice)
+        have hzval : z.1.val = z'.1.val := by
+          have hv := congrArg Fin.val hr
+          dsimp [r, r'] at hv
+          omega
+        have hinner : z.2 = z'.2 := by
+          have hv := congrArg (innerAt i) hb
+          rw [hExtendInner _ _ ((Finset.mem_filter.mp ((SliceClass i col).equivFin.symm r).2).2.1),
+            hExtendInner _ _ ((Finset.mem_filter.mp ((SliceClass i col).equivFin.symm r').2).2.1)] at hv
+          exact hv
+        exact Prod.ext (Fin.ext hzval) hinner
+      have hsubcard : Fintype.card {b : Pos T k // b ∈ C.positions c} =
+          (C.positions c).card := by
+        rw [Fintype.card_subtype]
+        simp
+      have hcard : q * 2 ^ (PT.tiling.P i).h ≤ (C.positions c).card := by
+        have hcard' := Fintype.card_le_of_injective f hf
+        simpa [CubePos, hsubcard] using hcard'
+      have hcardR : (q : ℝ) * (2 : ℝ) ^ (PT.tiling.P i).h ≤
+          ((C.positions c).card : ℝ) := by
+        have hcardCast : ((q * 2 ^ (PT.tiling.P i).h : ℕ) : ℝ) ≤
+            ((C.positions c).card : ℝ) := by exact_mod_cast hcard
+        simpa using hcardCast
+      have hroom : Real.rpow (n : ℝ) κ.Ac / 3 ≤
+          (q : ℝ) * (2 : ℝ) ^ (PT.tiling.P i).h := by
+        apply (div_le_iff₀ (by norm_num : (0 : ℝ) < 3)).2
+        simpa [mul_assoc, mul_comm, mul_left_comm] using hBatchRoom i
+      exact hroom.trans hcardR
+    have hFinal (c : Cell) (hc : c ∈ small) :
+        (SliceClass i c.1.2.1).card < c.1.2.2 + q := by
+      by_contra hnot
+      have hfull : c.1.2.2 + q ≤ (SliceClass i c.1.2.1).card := Nat.le_of_not_gt hnot
+      have hcin : c ∈ cells := (Finset.mem_filter.mp hc).1
+      have hpatch : C.cellPatch c = i := (Finset.mem_filter.mp hcin).2
+      have hlarge := hBatchComplete c hpatch hfull
+      exact (not_lt_of_ge hlarge) (Finset.mem_filter.mp hc).2
+    let colorOf : {c : Cell // c ∈ small} → Fin (D + 1) := fun x => x.1.1.2.1
+    have hColorInj : Function.Injective colorOf := by
+      intro x y hxy
+      let c₁ := x.1
+      let c₂ := y.1
+      have hcin₁ : c₁ ∈ cells := (Finset.mem_filter.mp x.2).1
+      have hcin₂ : c₂ ∈ cells := (Finset.mem_filter.mp y.2).1
+      have hp₁ : C.cellPatch c₁ = i := (Finset.mem_filter.mp hcin₁).2
+      have hp₂ : C.cellPatch c₂ = i := (Finset.mem_filter.mp hcin₂).2
+      obtain ⟨s₁, hsMem₁, hsStart₁⟩ := hCellRank i c₁ hp₁
+      obtain ⟨s₂, hsMem₂, hsStart₂⟩ := hCellRank i c₂ hp₂
+      have hcolors : c₁.1.2.1 = c₂.1.2.1 := by
+        change colorOf x = colorOf y at hxy
+        exact hxy
+      have hmod₁ : c₁.1.2.2 % q = 0 := by
+        rw [hsStart₁]
+        exact Lane_q_s16_geom.batchStart_mod _ _
+      have hmod₂ : c₂.1.2.2 % q = 0 := by
+        rw [hsStart₂]
+        exact Lane_q_s16_geom.batchStart_mod _ _
+      have hmul₁ : q * (c₁.1.2.2 / q) = c₁.1.2.2 := by
+        simpa [hmod₁] using Nat.mod_add_div c₁.1.2.2 q
+      have hmul₂ : q * (c₂.1.2.2 / q) = c₂.1.2.2 := by
+        simpa [hmod₂] using Nat.mod_add_div c₂.1.2.2 q
+      have hkeyOfStarts (heq : c₁.1.2.2 = c₂.1.2.2) : c₁.1 = c₂.1 := by
+        apply Sigma.ext
+        · exact hp₁.trans hp₂.symm
+        · exact heq_of_eq (Prod.ext hcolors heq)
+      by_cases hstartEq : c₁.1.2.2 = c₂.1.2.2
+      · apply Subtype.ext
+        simpa [c₁, c₂] using hkeyOfStarts hstartEq
+      · rcases lt_or_gt_of_ne hstartEq with hlt | hgt
+        · have hdivlt : c₁.1.2.2 / q < c₂.1.2.2 / q := by
+            apply lt_of_mul_lt_mul_left _ (Nat.zero_le q)
+            simpa [hmul₁, hmul₂] using hlt
+          have hgap : c₁.1.2.2 + q ≤ c₂.1.2.2 := by
+            calc
+              c₁.1.2.2 + q = q * (c₁.1.2.2 / q + 1) := by
+                rw [Nat.mul_add, Nat.mul_one, hmul₁]
+              _ ≤ q * (c₂.1.2.2 / q) := Nat.mul_le_mul_left q (Nat.succ_le_iff.mpr hdivlt)
+              _ = c₂.1.2.2 := hmul₂
+          let r₂ := (SliceClass i c₂.1.2.1).equivFin ⟨s₂, hsMem₂⟩
+          have hstart₂lt : c₂.1.2.2 < (SliceClass i c₂.1.2.1).card := by
+            rw [hsStart₂]
+            exact (Lane_q_s16_geom.batchStart_le_rank r₂.val q).trans_lt r₂.isLt
+          have hcardEq : (SliceClass i c₂.1.2.1).card =
+              (SliceClass i c₁.1.2.1).card := by rw [← hcolors]
+          have hFinal₁ := hFinal c₁ x.2
+          omega
+        · have hdivlt : c₂.1.2.2 / q < c₁.1.2.2 / q := by
+            apply lt_of_mul_lt_mul_left _ (Nat.zero_le q)
+            simpa [hmul₁, hmul₂] using hgt
+          have hgap : c₂.1.2.2 + q ≤ c₁.1.2.2 := by
+            calc
+              c₂.1.2.2 + q = q * (c₂.1.2.2 / q + 1) := by
+                rw [Nat.mul_add, Nat.mul_one, hmul₂]
+              _ ≤ q * (c₁.1.2.2 / q) := Nat.mul_le_mul_left q (Nat.succ_le_iff.mpr hdivlt)
+              _ = c₁.1.2.2 := hmul₁
+          let r₁ := (SliceClass i c₁.1.2.1).equivFin ⟨s₁, hsMem₁⟩
+          have hstart₁lt : c₁.1.2.2 < (SliceClass i c₁.1.2.1).card := by
+            rw [hsStart₁]
+            exact (Lane_q_s16_geom.batchStart_le_rank r₁.val q).trans_lt r₁.isLt
+          have hcardEq : (SliceClass i c₁.1.2.1).card =
+              (SliceClass i c₂.1.2.1).card := by rw [hcolors]
+          have hFinal₂ := hFinal c₂ y.2
+          omega
+    have hsmallNat : small.card ≤ D + 1 := by
+      have hsubcard : Fintype.card {c : Cell // c ∈ small} = small.card := by
+        rw [Fintype.card_subtype]
+        simp
+      calc
+        small.card = Fintype.card {c : Cell // c ∈ small} := hsubcard.symm
+        _ ≤ Fintype.card (Fin (D + 1)) := Fintype.card_le_of_injective colorOf hColorInj
+        _ = D + 1 := by simp
+    have hsmallReal : (small.card : ℝ) ≤ (D + 1 : ℝ) := by exact_mod_cast hsmallNat
+    have hColorBound : (D + 1 : ℝ) ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
+      calc
+        (D + 1 : ℝ) = 1 +
+            ∑ j ∈ Finset.range (R + 1), (Nat.choose n j : ℝ) := by
+              simp [D, Nat.cast_sum, add_comm]
+        _ ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := by
+              simpa [R, n] using hScale.coloring_room
+    calc
+      (small.card : ℝ) ≤ (D + 1 : ℝ) := hsmallReal
+      _ ≤ Real.exp (Real.rpow (Real.log (n : ℝ)) 5) := hColorBound
   · intro c b b' hbc hbc' hnot
     simpa [n] using hSliceSeparation c b b' hbc hbc' hnot
 

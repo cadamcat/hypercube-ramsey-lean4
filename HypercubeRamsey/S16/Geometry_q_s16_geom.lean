@@ -269,6 +269,23 @@ def batchStart (rank q : ℕ) : ℕ := rank / q * q
 theorem batchStart_le_rank (rank q : ℕ) : batchStart rank q ≤ rank :=
   Nat.div_mul_le_self _ _
 
+theorem batchStart_add_of_mod_eq_zero {s q t : ℕ} (hq : 0 < q)
+    (hs : s % q = 0) (ht : t < q) : batchStart (s + t) q = s := by
+  have hrem : s % q + t % q < q := by
+    calc
+      s % q + t % q = t := by rw [hs, Nat.mod_eq_of_lt ht]; omega
+      _ < q := ht
+  have hdiv : (s + t) / q = s / q := by
+    rw [Nat.add_div_eq_of_add_mod_lt hrem]
+    simp [Nat.div_eq_of_lt ht]
+  have hs' : q * (s / q) = s := by
+    simpa [hs] using Nat.mod_add_div s q
+  calc
+    batchStart (s + t) q = ((s + t) / q) * q := rfl
+    _ = (s / q) * q := by rw [hdiv]
+    _ = q * (s / q) := Nat.mul_comm _ _
+    _ = s := hs'
+
 theorem batchStart_mod (rank q : ℕ) : batchStart rank q % q = 0 := by
   simp [batchStart]
 

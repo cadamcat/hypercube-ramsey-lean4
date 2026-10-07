@@ -536,6 +536,39 @@ theorem exists_support_outside {α : Type*} [Fintype α]
       _ = 1 := P.sum_eq_one
   linarith
 
+theorem eventually_nat_sq_over_two_pow_lt_one :
+    ∀ᶠ n : ℕ in Filter.atTop, (n : ℝ) ^ 2 / (2 : ℝ) ^ n < 1 := by
+  have hlog : 0 < Real.log (2 : ℝ) := Real.log_pos (by norm_num)
+  have hlim : Filter.Tendsto
+      (fun n : ℕ => (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2) * (n : ℝ)))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero 2 (Real.log 2) hlog).comp
+      tendsto_natCast_atTop_atTop
+  have hsmall := hlim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1))
+  filter_upwards [hsmall] with n hn
+  have hpowInv : (2 : ℝ) ^ (-(n : ℝ)) = 1 / (2 : ℝ) ^ n :=
+    by simpa [Real.rpow_natCast, one_div] using
+      (Real.rpow_neg (by norm_num : 0 ≤ (2 : ℝ)) (n : ℝ))
+  have hexp : Real.exp (-(Real.log 2) * (n : ℝ)) = (2 : ℝ) ^ (-(n : ℝ)) := by
+    calc
+      Real.exp (-(Real.log 2) * (n : ℝ)) =
+          Real.exp (-(n : ℝ) * Real.log 2) := by congr 1 <;> ring
+      _ = (2 : ℝ) ^ (-(n : ℝ)) :=
+        by
+          rw [show -(n : ℝ) * Real.log 2 = Real.log 2 * (-(n : ℝ)) by ring]
+          exact (Real.rpow_def_of_pos (by norm_num : (0 : ℝ) < 2) (-(n : ℝ))).symm
+  have hEq : (n : ℝ) ^ 2 / (2 : ℝ) ^ n =
+      (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2) * (n : ℝ)) := by
+    calc
+      (n : ℝ) ^ 2 / (2 : ℝ) ^ n = (n : ℝ) ^ 2 * ((2 : ℝ) ^ n)⁻¹ := by
+        rw [div_eq_mul_inv]
+      _ = (n : ℝ) ^ 2 * (2 : ℝ) ^ (-(n : ℝ)) := by
+        simpa only [one_div] using congrArg (fun z : ℝ => (n : ℝ) ^ 2 * z) hpowInv.symm
+      _ = (n : ℝ) ^ 2 * Real.exp (-(Real.log 2) * (n : ℝ)) := by rw [hexp]
+      _ = (n : ℝ) ^ (2 : ℝ) * Real.exp (-(Real.log 2) * (n : ℝ)) := by
+        simp [Real.rpow_natCast]
+  simpa [hEq] using hn
+
 theorem tiling_patch_count_le {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid) : PT.tiling.m ≤ T.S.N k := by
   classical
@@ -551,6 +584,39 @@ theorem tiling_patch_count_le {κ : CConsts} {T : Stage} {k : ℕ}
     exact (Finset.disjoint_left.mp hdisj) hi hji
   have hcard := Fintype.card_le_of_injective f hf
   simpa using hcard
+
+theorem exists_support_all_below_of_sum_moment {α ι : Type*} [Fintype α] [Fintype ι]
+    (P : FinProb α) (stats : ι → α → ℝ) (n : ℕ) (t : ℝ)
+    (hn : 0 < n) (ht : 0 < t)
+    (hstats : ∀ i x, 0 ≤ stats i x)
+    (hmoment : P.expect (fun x => ∑ i, (stats i x) ^ n) < t ^ n) :
+    ∃ x, P.w x ≠ 0 ∧ ∀ i, stats i x < t := by
+  classical
+  let total (x : α) := ∑ i, (stats i x) ^ n
+  have htotal : ∀ x, 0 ≤ total x := by
+    intro x
+    unfold total
+    apply Finset.sum_nonneg
+    intro i hi
+    exact pow_nonneg (hstats i x) n
+  have hbad : P.pr (fun x => t ^ n ≤ total x) ≤ P.expect total / (t ^ n) :=
+    FinProb.markov P total (t ^ n) htotal (pow_pos ht n)
+  have hbadlt : P.pr (fun x => t ^ n ≤ total x) < 1 := by
+    have hbound : P.expect total / (t ^ n) < 1 := (div_lt_one (pow_pos ht n)).2 hmoment
+    exact lt_of_le_of_lt hbad hbound
+  obtain ⟨x, hxw, hxgood⟩ :=
+    exists_support_outside P (fun x => t ^ n ≤ total x) hbadlt
+  refine ⟨x, hxw, ?_⟩
+  intro i
+  by_contra hnot
+  have hle : t ≤ stats i x := le_of_not_gt hnot
+  have hpowl : t ^ n ≤ (stats i x) ^ n :=
+    pow_le_pow_left₀ ht.le hle n
+  have hsum : (stats i x) ^ n ≤ total x := by
+    unfold total
+    exact Finset.single_le_sum (fun j hj => pow_nonneg (hstats j x) n)
+      (Finset.mem_univ i)
+  exact hxgood (le_trans hpowl hsum)
 
 theorem row_failure_probability_le {α : Type*} [Fintype α]
     (P : FinLaw α) (cross bulk row threshold : α → ℝ) (δcross δbulk : ℝ)

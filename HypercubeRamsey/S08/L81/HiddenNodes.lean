@@ -580,6 +580,20 @@ private theorem ownMissBound (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N))
           mul_le_mul_of_nonneg_left hmiss (Nat.cast_nonneg h)
         _ = 2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) := by ring
 
+private theorem rowDeg_bounds {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (x : Fin N) (ν : Law N) : 0 ≤ rowDeg E G x ν ∧ rowDeg E G x ν ≤ 1 := by
+  constructor
+  · unfold rowDeg
+    exact Finset.sum_nonneg fun y _ => mul_nonneg (ν.nonneg y) (ind_nonneg _)
+  · unfold rowDeg
+    calc
+      (∑ y, ν.w y * if Hits E G x y then (1 : ℝ) else 0) ≤ ∑ y, ν.w y := by
+        apply Finset.sum_le_sum
+        intro y _
+        by_cases hhit : Hits E G x y <;> simp [hhit, ν.nonneg y]
+      _ = 1 := ν.sum_eq_one
+
+set_option maxHeartbeats 400000
 /-- L8.1c(G2) (08:107–123): with `L_g = ∫ (d_i^- - d_i^+) dη_g`, the own-colour defect `2ε` and survival
 `α_x^{|E(g)|} ≤ 1.1A_g` give `E[L_g | Θ_g] ≤ 2.2hεA_g`; Markov at `.1ΔA_g` fails with probability
 `O(hε/Δ) = exp(-n^p + n^{p/2} + O_h(1))`.  On (G3), the cutoff `d^+ ≥ (1-Δ)d^-` removes at most `L_g/Δ ≤ .1A_g`,
@@ -1318,7 +1332,92 @@ theorem gate2_tail (hη₀ : 0 < η₀) (hp : 0 < p) (hK : 0 < K) :
         rw [hbasePow]
         exact mul_le_mul_of_nonneg_left hExpo (le_of_lt (by unfold Ctx.AG; positivity))
       _ = 2 * D.AG g := by ring
+  have expectedLossBound (D : Ctx η₀ β p h) (X Y R : Finset (Fin D.N))
+      (hStd : Std D γ K X Y R) (hGrid : GridFacts η₀ D.n)
+      (hScale : 8 ≤ (D.n : ℝ) ^ tau8 η₀) (g : D.KeyT) :
+      D.rawHidden.expect (fun Θ =>
+        ∑ i, D.postW (Θ g) i * (D.dMinus Θ g i - D.dPlus Θ g i)) ≤
+          4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := by
+    rw [rawLossMean]
+    have hmiss0 (i : D.M.ι) (x : Fin D.N) :
+        0 ≤ 1 - rowDeg D.E D.G x (D.M.ν i) ^ h := by
+      have hr := rowDeg_bounds D.E D.G x (D.M.ν i)
+      have hpw : rowDeg D.E D.G x (D.M.ν i) ^ h ≤ 1 := pow_le_one₀ hr.1 hr.2
+      linarith
+    have hterm (i : D.M.ι) (hΛ : 0 < D.M.Λ i) (x : Fin D.N) :
+        (D.M.μ i).w x * (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g) ≤
+          (D.M.μ i).w x * (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (2 * D.AG g) := by
+      have hcoef : 0 ≤ (D.M.μ i).w x *
+          (D.M.Λ i * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) :=
+        mul_nonneg ((D.M.μ i).nonneg x)
+          (mul_nonneg (D.M.Λ_nonneg i) (hmiss0 i x))
+      by_cases hx : x ∈ R
+      · exact mul_le_mul_of_nonneg_left (crossSurvivalBound D X Y R hStd hGrid hScale g x hx) hcoef
+      · have hlaw := hStd.laws i hΛ
+        have hzero : (D.M.μ i).w x = 0 := hlaw.1 x hx
+        simp [hzero]
+    have hInner (i : D.M.ι) (hΛ : 0 < D.M.Λ i) :
+        (∑ x, (D.M.μ i).w x * (D.M.Λ i *
+          (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) *
+            (D.R'.pr (fun ξ => D.hitsAll x ξ)) ^ Fintype.card (D.CrossSub g)) ≤
+          (D.M.Λ i * (2 * D.AG g)) *
+            (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p))) := by
+      have hown := ownMissBound η₀ γ β p K h D X Y R hStd i hΛ
+      have hAGpos : 0 < D.AG g := by unfold Ctx.AG; positivity
+      have hcoef : 0 ≤ D.M.Λ i * (2 * D.AG g) :=
+        mul_nonneg (D.M.Λ_nonneg i)
+          (mul_nonneg (by norm_num) hAGpos.le)
+      calc
+        _ ≤ ∑ x, (D.M.μ i).w x * (D.M.Λ i *
+              (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) * (2 * D.AG g) := by
+          apply Finset.sum_le_sum
+          intro x _
+          exact hterm i hΛ x
+        _ = (D.M.Λ i * (2 * D.AG g)) *
+              ∑ x, (D.M.μ i).w x * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h) := by
+          calc
+            _ = ∑ x, (D.M.Λ i * (2 * D.AG g)) *
+                  ((D.M.μ i).w x * (1 - rowDeg D.E D.G x (D.M.ν i) ^ h)) := by
+              apply Finset.sum_congr rfl
+              intro x _
+              ring
+            _ = _ := by rw [Finset.mul_sum]
+        _ ≤ (D.M.Λ i * (2 * D.AG g)) *
+              (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p))) :=
+          mul_le_mul_of_nonneg_left hown hcoef
+    have hOuter :
+        (∑ i, (D.M.Λ i * (2 * D.AG g)) *
+          (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)))) ≤
+          4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := by
+      calc
+        _ = (∑ i, D.M.Λ i) *
+              ((2 * D.AG g) * (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)))) := by
+          calc
+            _ = ∑ i, D.M.Λ i *
+                  ((2 * D.AG g) * (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)))) := by
+              apply Finset.sum_congr rfl
+              intro i _
+              ring
+            _ = _ := by rw [Finset.sum_mul]
+        _ = 4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := by
+          rw [D.M.Λ_sum]
+          ring
+        _ ≤ 4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := le_rfl
+    calc
+      _ ≤ ∑ i, (D.M.Λ i * (2 * D.AG g)) *
+            (2 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p))) := by
+          apply Finset.sum_le_sum
+          intro i _
+          by_cases hΛ : 0 < D.M.Λ i
+          · exact hInner i hΛ
+          · have hΛ0 : D.M.Λ i = 0 := le_antisymm (le_of_not_gt hΛ) (D.M.Λ_nonneg i)
+            rw [hΛ0]
+            simp only [zero_mul, mul_zero, Finset.sum_const_zero, le_refl]
+      _ ≤ 4 * (h : ℝ) * Real.exp (-((D.n : ℝ) ^ p)) * D.AG g := hOuter
   sorry
+set_option maxHeartbeats 200000
 
 /-- L8.1c, union bound (08:76): three stretched-exponential tails at exponents `a, b, c` give a base-gate tail at
 exponent `min(a, b, c)/2` for large `n`. -/

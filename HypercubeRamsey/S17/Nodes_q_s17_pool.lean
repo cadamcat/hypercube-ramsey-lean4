@@ -113,15 +113,46 @@ noncomputable def reweightLaw {N : ℕ} (μ : Law N) (f : Fin N → ℝ)
 theorem reweightLaw_atom_bound {N : ℕ} (μ : Law N) (f : Fin N → ℝ)
     (hf : ∀ x, 0 ≤ f x) (Z : ℝ) (hZ : 0 < Z)
     (hZeq : ∑ x, μ.w x * f x = Z)
-    (w C : ℝ) (hμw : μ.WidthLE w)
-    (hfC : ∀ x, f x ≤ C) (x : Fin N) :
+    (w C : ℝ) (hμw : μ.WidthLE w) (hC : 0 ≤ C)
+    (hfC : ∀ x, μ.w x ≠ 0 → f x ≤ C) (x : Fin N) :
     (reweightLaw μ f hf Z hZ hZeq).w x ≤ (C / Z) * Real.exp w / N := by
-  have hprod : μ.w x * f x ≤ (Real.exp w / N) * C :=
-    mul_le_mul (hμw x) (hfC x) (hf x) (by positivity)
+  by_cases hμ0 : μ.w x = 0
+  · simp [reweightLaw, hμ0]
+    positivity
+  · have hprod : μ.w x * f x ≤ (Real.exp w / N) * C :=
+      mul_le_mul (hμw x) (hfC x hμ0) (hf x) (by positivity)
+    calc
+      (reweightLaw μ f hf Z hZ hZeq).w x = μ.w x * f x / Z := rfl
+      _ ≤ ((Real.exp w / N) * C) / Z := div_le_div_of_nonneg_right hprod hZ.le
+      _ = (C / Z) * Real.exp w / N := by ring
+
+theorem hitRatio_average_lower {N : ℕ} (μ : Law N)
+    (E : Fin N → Fin N → Prop) (c : Colour) (y : Fin N)
+    (d : Fin N → ℝ) (dmax : ℝ)
+    (hdpos : ∀ x, μ.w x ≠ 0 → 0 < d x)
+    (hdle : ∀ x, μ.w x ≠ 0 → d x ≤ dmax) :
+    (∑ x, μ.w x * (hit E c x y / d x)) ≥
+      (∑ x, μ.w x * hit E c x y) / dmax := by
+  classical
+  have hterm (x : Fin N) :
+      μ.w x * (hit E c x y / dmax) ≤ μ.w x * (hit E c x y / d x) := by
+    by_cases hμ0 : μ.w x = 0
+    · simp [hμ0]
+    · have hratio : hit E c x y / dmax ≤ hit E c x y / d x := by
+        by_cases hhit : Hits E c x y
+        · simp [hit, hhit]
+          simpa [one_div] using
+            (one_div_le_one_div_of_le (hdpos x hμ0) (hdle x hμ0))
+        · simp [hit, hhit]
+      exact mul_le_mul_of_nonneg_left hratio (μ.nonneg x)
   calc
-    (reweightLaw μ f hf Z hZ hZeq).w x = μ.w x * f x / Z := rfl
-    _ ≤ ((Real.exp w / N) * C) / Z := div_le_div_of_nonneg_right hprod hZ.le
-    _ = (C / Z) * Real.exp w / N := by ring
+    (∑ x, μ.w x * (hit E c x y / d x)) ≥
+        ∑ x, μ.w x * (hit E c x y / dmax) := Finset.sum_le_sum fun x _ => hterm x
+    _ = (∑ x, μ.w x * hit E c x y) / dmax := by
+      rw [Finset.sum_div]
+      apply Finset.sum_congr rfl
+      intro x hx
+      ring
 
 theorem pinned_product_row_expectation_simplified {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)

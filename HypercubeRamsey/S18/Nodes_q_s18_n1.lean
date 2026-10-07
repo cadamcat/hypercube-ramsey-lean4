@@ -81,6 +81,131 @@ private theorem exists_balanced_mixture {A B : Type*} [Fintype A] [Fintype B]
   rw [heq] at hb
   linarith
 
+private theorem exists_cheap_half {B : Type*} [Fintype B] [DecidableEq B]
+    [Nonempty B] (q : FinLaw B) :
+    ∃ S : Finset B, (Fintype.card B : ℝ) ≤ 2 * (S.card : ℝ) ∧
+      ∀ y ∈ S, q.w y ≤ 2 / (Fintype.card B : ℝ) := by
+  classical
+  let cutoff : ℝ := 2 / (Fintype.card B : ℝ)
+  let cheap : Finset B := Finset.univ.filter fun y => q.w y ≤ cutoff
+  let costly : Finset B := Finset.univ.filter fun y => cutoff < q.w y
+  have hcardpos : 0 < (Fintype.card B : ℝ) := by
+    exact_mod_cast Fintype.card_pos
+  have hcardEqNat : cheap.card + costly.card = Fintype.card B := by
+    dsimp [cheap, costly]
+    simpa [cutoff, not_le] using
+      (Finset.card_filter_add_card_filter_not
+        (s := (Finset.univ : Finset B))
+        (p := fun y => q.w y ≤ cutoff))
+  have hcardEq : (cheap.card : ℝ) + (costly.card : ℝ) =
+      (Fintype.card B : ℝ) := by exact_mod_cast hcardEqNat
+  have hcostlyMass : (∑ y ∈ costly, q.w y) ≤ 1 := by
+    calc
+      (∑ y ∈ costly, q.w y) =
+          ∑ y, if y ∈ costly then q.w y else 0 := by
+            simp [Finset.sum_ite_mem]
+      _ ≤ ∑ y, q.w y := by
+        apply Finset.sum_le_sum
+        intro y hy
+        by_cases h : y ∈ costly
+        · simp [h]
+        · simp [h, q.nonneg y]
+      _ = 1 := q.sum_one
+  have hcheapBound : (Fintype.card B : ℝ) ≤ 2 * (cheap.card : ℝ) := by
+    by_contra hnot
+    have hsmallCheap : 2 * cheap.card < Fintype.card B := by
+      exact_mod_cast (lt_of_not_ge hnot)
+    have hrealSmallCheap : 2 * (cheap.card : ℝ) < (Fintype.card B : ℝ) := by
+      exact_mod_cast hsmallCheap
+    have hlargeCostly : (Fintype.card B : ℝ) < 2 * (costly.card : ℝ) := by
+      nlinarith [hcardEq]
+    have hcostlyPos : 0 < costly.card := by
+      have : (0 : ℝ) < (costly.card : ℝ) := by nlinarith [hlargeCostly]
+      exact_mod_cast this
+    have hstrict : (costly.card : ℝ) * cutoff <
+        ∑ y ∈ costly, q.w y := by
+      have hsumConst : (costly.card : ℝ) * cutoff = ∑ y ∈ costly, cutoff := by
+        simp [Finset.sum_const, nsmul_eq_mul]
+      obtain ⟨y, hy⟩ := Finset.card_pos.mp hcostlyPos
+      have hylt : cutoff < q.w y := by
+        simpa [costly] using hy
+      rw [hsumConst]
+      apply Finset.sum_lt_sum
+      · intro z hz
+        have hzlt : cutoff < q.w z := by simpa [costly] using hz
+        exact le_of_lt hzlt
+      · exact ⟨y, hy, hylt⟩
+    have hscaled : (2 * (costly.card : ℝ)) / (Fintype.card B : ℝ) < 1 := by
+      calc
+        (2 * (costly.card : ℝ)) / (Fintype.card B : ℝ) =
+            (costly.card : ℝ) * cutoff := by dsimp [cutoff]; ring
+        _ < ∑ y ∈ costly, q.w y := hstrict
+        _ ≤ 1 := hcostlyMass
+    have hcostlySmall : 2 * (costly.card : ℝ) < (Fintype.card B : ℝ) := by
+      have hh := (div_lt_iff₀ hcardpos).mp hscaled
+      nlinarith [hh]
+    nlinarith [hcardEq, hrealSmallCheap, hcostlySmall]
+  refine ⟨cheap, hcheapBound, ?_⟩
+  intro y hy
+  simpa [cheap, cutoff] using hy
+
+private theorem price_expectation_le_of_support {B : Type*} [Fintype B]
+    (P : FinLaw B) (support : Finset B) (price : B → ℝ) (cap : ℝ)
+    (hsupp : ∀ y, P.w y ≠ 0 → y ∈ support)
+    (hprice : ∀ y ∈ support, price y ≤ cap) :
+    (∑ y, price y * P.w y) ≤ cap := by
+  calc
+    (∑ y, price y * P.w y) ≤ ∑ y, P.w y * cap := by
+      apply Finset.sum_le_sum
+      intro y hy
+      by_cases hzero : P.w y = 0
+      · simp [hzero]
+      · have hpos : 0 < P.w y := lt_of_le_of_ne (P.nonneg y) (Ne.symm hzero)
+        have hyprice : price y ≤ cap := hprice y (hsupp y hzero)
+        calc
+          price y * P.w y ≤ cap * P.w y := mul_le_mul_of_nonneg_right hyprice (P.nonneg y)
+          _ = P.w y * cap := by ring
+    _ = cap := by rw [← Finset.sum_mul, P.sum_one]; ring
+
+private theorem exists_balanced_history_mixture {H M Y : Type*}
+    [Fintype H] [Fintype M] [Fintype Y] [Nonempty M] [Nonempty Y]
+    (history : FinLaw H) (maskLabels : M → Finset Y)
+    (labelLaw : H → M → FinLaw Y) (cap : ℝ)
+    (hsupport : ∀ h m y, (labelLaw h m).w y ≠ 0 → y ∈ maskLabels m)
+    (hcheap : ∀ q : FinLaw Y, ∃ m, ∀ y ∈ maskLabels m, q.w y ≤ cap) :
+    ∃ mix : FinLaw M, ∀ y,
+      (∑ m, mix.w m * (∑ h, history.w h * (labelLaw h m).w y)) ≤ cap := by
+  apply exists_balanced_mixture
+  intro q
+  obtain ⟨m, hm⟩ := hcheap q
+  refine ⟨m, ?_⟩
+  have hinner (h : H) :
+      (∑ y, q.w y * (labelLaw h m).w y) ≤ cap :=
+    price_expectation_le_of_support (labelLaw h m) (maskLabels m) q.w cap
+      (hsupport h m) hm
+  calc
+    (∑ y, q.w y * (∑ h, history.w h * (labelLaw h m).w y)) =
+        ∑ h, history.w h * (∑ y, q.w y * (labelLaw h m).w y) := by
+      calc
+        _ = ∑ y, ∑ h, history.w h * (q.w y * (labelLaw h m).w y) := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          rw [Finset.mul_sum]
+          apply Finset.sum_congr rfl
+          intro h hh
+          ring
+        _ = ∑ h, ∑ y, history.w h * (q.w y * (labelLaw h m).w y) := by
+          rw [Finset.sum_comm]
+        _ = ∑ h, history.w h * (∑ y, q.w y * (labelLaw h m).w y) := by
+          apply Finset.sum_congr rfl
+          intro h hh
+          rw [Finset.mul_sum]
+    _ ≤ ∑ h, history.w h * cap := by
+      apply Finset.sum_le_sum
+      intro h hh
+      exact mul_le_mul_of_nonneg_left (hinner h) (history.nonneg h)
+    _ = cap := by rw [← Finset.sum_mul, history.sum_one]; ring
+
 private theorem labelWeight_nonneg {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
     (j : Fin D.geom.r) {b : Pos T k} (side : D.encoding.base.RowOut b)
@@ -123,6 +248,53 @@ private theorem labelWeight_total {κ : CConsts} {T : Stage} {k : ℕ}
   · simp_rw [if_neg hmass]
     have hmasktotal := uniformWeight_total side.1.1 hmask
     simpa [LateData.maskWeight] using hmasktotal
+
+private theorem labelWeight_zero_of_not_mask {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) {b : Pos T k} (side : D.encoding.base.RowOut b)
+    (tests : Finset (Fin (T.S.n k))) (y : Fin (T.S.N k))
+    (hy : y ∉ side.1.1) : D.labelWeight j side tests y = 0 := by
+  by_cases hmass : Real.exp (-(κ.α / 100) * (T.S.n k : ℝ)) ≤
+      D.retainedMass j side tests
+  · simp [LateData.labelWeight, hmass, LateData.maskWeight, hy]
+  · simp [LateData.labelWeight, hmass, LateData.maskWeight, hy]
+
+private noncomputable def lateLabelLaw {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
+    (j : Fin D.geom.r) {b : Pos T k} (side : D.encoding.base.RowOut b)
+    (tests : Finset (Fin (T.S.n k))) (hmask : side.1.1.Nonempty) :
+    FinLaw {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b} where
+  w y := D.labelWeight j side tests y.1
+  nonneg y := labelWeight_nonneg D j side tests y.1
+  sum_one := by
+    classical
+    let pool := D.encoding.base.latePoolOf b
+    have hzero (y : Fin (T.S.N k)) (hy : y ∉ pool) :
+        D.labelWeight j side tests y = 0 := by
+      apply labelWeight_zero_of_not_mask D j side tests y
+      intro hmem
+      exact hy (side.1.2.1 hmem)
+    have hsubtype :
+        (∑ y : {y : Fin (T.S.N k) // y ∈ pool}, D.labelWeight j side tests y.1) =
+          ∑ y ∈ pool, D.labelWeight j side tests y := by
+      simpa [pool] using
+        (Finset.sum_subtype_eq_sum_filter
+          (s := (Finset.univ : Finset (Fin (T.S.N k))))
+          (p := fun y => y ∈ pool) (f := fun y => D.labelWeight j side tests y))
+    have hpoolSum : (∑ y ∈ pool, D.labelWeight j side tests y) =
+        ∑ y, D.labelWeight j side tests y := by
+      have hcomp : (∑ y ∈ Finset.univ \ pool, D.labelWeight j side tests y) = 0 := by
+        apply Finset.sum_eq_zero
+        intro y hy
+        exact hzero y (Finset.mem_sdiff.mp hy).2
+      calc
+        (∑ y ∈ pool, D.labelWeight j side tests y) =
+            (∑ y ∈ pool, D.labelWeight j side tests y) + 0 := by ring
+        _ = ∑ y, D.labelWeight j side tests y := by
+          rw [← Finset.sum_sdiff pool.subset_univ, hcomp]
+          ring
+    rw [hsubtype, hpoolSum]
+    exact labelWeight_total D j side tests hmask
 
 private theorem lateError_pos {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (i : Fin PT.tiling.m) (remaining : ℕ) :

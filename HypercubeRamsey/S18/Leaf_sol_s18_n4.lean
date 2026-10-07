@@ -198,6 +198,76 @@ theorem testTouchingCharge {I A : Type*} [Fintype I] [DecidableEq A]
     _ ≤ ∑ a ∈ test, bound := Finset.sum_le_sum htoken
     _ = (test.card : ℝ) * bound := by simp
 
+/-- The actual three kinds of leaf dependency each form a charge clique. -/
+theorem leafTestTouchingCharge
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
+    (L : S18.LeafCoupling D δ)
+    (domains : Finset (Sigma fun C : D.geom.Cell => Fin (D.geom.nslot C)))
+    (images : Finset (Sigma fun i : Fin PT.tiling.m => Bin PT.tiling i))
+    (tapes : Finset D.geom.Cell) :
+    (∑ i, if ¬ Disjoint (L.domains i) domains ∨ ¬ Disjoint (L.images i) images ∨
+        ¬ Disjoint (L.tapes i) tapes then 2 * D.encoding.permLaw.pr (fun x => x ∈ L.leaf i) else 0) ≤
+      ((domains.card + images.card + tapes.card : ℕ) : ℝ) *
+        (2 * Real.rpow (T.S.n k : ℝ)
+          (20 * (((κ.Ac + 4) * D.encoding.Ts + D.geom.r : ℕ) : ℝ) -
+            (κ.P : ℝ) * D.encoding.Ts / 3)) := by
+  let q := fun i => 2 * D.encoding.permLaw.pr (fun x => x ∈ L.leaf i)
+  let B := 2 * Real.rpow (T.S.n k : ℝ)
+    (20 * (((κ.Ac + 4) * D.encoding.Ts + D.geom.r : ℕ) : ℝ) -
+      (κ.P : ℝ) * D.encoding.Ts / 3)
+  have hq0 : ∀ i, 0 ≤ q i := by
+    intro i
+    unfold q FinLaw.pr
+    apply mul_nonneg (by norm_num)
+    exact Finset.sum_nonneg (fun x _ => by split_ifs <;> simp [D.encoding.permLaw.nonneg])
+  have hB0 : 0 ≤ B := mul_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+  have hdom : (∑ i, if ¬ Disjoint (L.domains i) domains then q i else 0) ≤
+      (domains.card : ℝ) * B := by
+    apply testTouchingCharge _ _ hq0 domains B
+    intro a ha
+    apply tokenChargeOfCliques L.adjacent L.domains q hq0 B hB0
+    · intro i j a hai haj
+      apply (L.adjacent_eq i j).2
+      exact Or.inl (Finset.not_disjoint_iff.2 ⟨a, hai, haj⟩)
+    · exact L.touching_charge
+  have himage : (∑ i, if ¬ Disjoint (L.images i) images then q i else 0) ≤
+      (images.card : ℝ) * B := by
+    apply testTouchingCharge _ _ hq0 images B
+    intro a ha
+    apply tokenChargeOfCliques L.adjacent L.images q hq0 B hB0
+    · intro i j a hai haj
+      apply (L.adjacent_eq i j).2
+      exact Or.inr (Or.inl (Finset.not_disjoint_iff.2 ⟨a, hai, haj⟩))
+    · exact L.touching_charge
+  have htape : (∑ i, if ¬ Disjoint (L.tapes i) tapes then q i else 0) ≤
+      (tapes.card : ℝ) * B := by
+    apply testTouchingCharge _ _ hq0 tapes B
+    intro a ha
+    apply tokenChargeOfCliques L.adjacent L.tapes q hq0 B hB0
+    · intro i j a hai haj
+      apply (L.adjacent_eq i j).2
+      exact Or.inr (Or.inr (Finset.not_disjoint_iff.2 ⟨a, hai, haj⟩))
+    · exact L.touching_charge
+  change (∑ i, if ¬ Disjoint (L.domains i) domains ∨ ¬ Disjoint (L.images i) images ∨
+      ¬ Disjoint (L.tapes i) tapes then q i else 0) ≤ _
+  calc
+    _ ≤ (∑ i, if ¬ Disjoint (L.domains i) domains then q i else 0) +
+        (∑ i, if ¬ Disjoint (L.images i) images then q i else 0) +
+        (∑ i, if ¬ Disjoint (L.tapes i) tapes then q i else 0) := by
+      rw [← Finset.sum_add_distrib, ← Finset.sum_add_distrib]
+      apply Finset.sum_le_sum
+      intro i hi
+      by_cases hd : Disjoint (L.domains i) domains <;>
+        by_cases him : Disjoint (L.images i) images <;>
+        by_cases ht : Disjoint (L.tapes i) tapes <;> simp [hd, him, ht] <;> linarith [hq0 i]
+    _ ≤ (domains.card : ℝ) * B + (images.card : ℝ) * B + (tapes.card : ℝ) * B :=
+      add_le_add (add_le_add hdom himage) htape
+    _ = _ := by
+      change _ = ((domains.card + images.card + tapes.card : ℕ) : ℝ) * B
+      push_cast
+      ring
+
 private theorem prodOneSubLowerCharge
     {I : Type*} [DecidableEq I] (S : Finset I) (q : I → ℝ)
     (hq0 : ∀ i ∈ S, 0 ≤ q i) (hq1 : ∀ i ∈ S, q i ≤ 1) :

@@ -96,7 +96,7 @@ theorem initialProbabilityZeroOfImpossible
   | none => simp [S18.initialProbability, FinLaw.pr, hF]
   | some p => simp [S18.initialProbability, FinLaw.pr, hF]
 
- theorem invalidPrefixTerminalPinnedBound
+theorem invalidPrefixTerminalPinnedBound
     {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
     (F : S18.LateEvent D) (hkind : F.1.val = 1) (hvalid : ¬ D.prefixValid F.2)
@@ -114,5 +114,66 @@ theorem initialProbabilityZeroOfImpossible
     exact (not_lt_of_ge (Real.exp_pos _).le) (hp ▸ hbad.2)
   rw [initialProbabilityZeroOfImpossible D pin _ hfalse]
   exact Real.rpow_nonneg (Nat.cast_nonneg _) _
+
+theorem replayRounds_prefix_eq
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (marked : Finset (Pos T k))
+    (pattern pattern' : ℕ → Finset (Pos T k)) (x : D.encoding.InitInput)
+    (t : ℕ) (hpattern : ∀ s < t, pattern s = pattern' s) :
+    S18.replayRounds D marked pattern x t = S18.replayRounds D marked pattern' x t := by
+  induction t with
+  | zero => rfl
+  | succ t ih =>
+      have hprev := ih (fun s hs => hpattern s (Nat.lt_succ_of_lt hs))
+      simp only [S18.replayRounds, hprev, hpattern t (Nat.lt_succ_self t)]
+
+noncomputable def forcedReplayRisk
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (critical : Finset D.geom.Cell)
+    (pattern : ℕ → Finset (Pos T k)) (F : S18.LateEvent D) (x : D.encoding.InitInput) : ℝ :=
+  (D.encoding.kernels.refRun
+    (S18.replayRounds D (S18.replayMarked D critical) pattern x D.encoding.Ts).1).pr
+      (S18.lateFailure D F)
+
+/-- A finite occurrence list identifies the actual risk with the total forced replay. -/
+theorem lateRisk_eq_forcedReplay
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (hReplay : S18.ReplayFacts D)
+    (critical : Finset D.geom.Cell) (pattern : ℕ → Finset (Pos T k))
+    (F : S18.LateEvent D) (x : D.encoding.InitInput)
+    (hpattern : ∀ s < D.encoding.Ts,
+      pattern s = S18.actualPattern D (S18.replayMarked D critical) x s) :
+    D.pLate F x = forcedReplayRisk D critical pattern F x := by
+  have he := replayRounds_prefix_eq D (S18.replayMarked D critical) pattern
+    (S18.actualPattern D (S18.replayMarked D critical) x) x D.encoding.Ts hpattern
+  rw [hReplay.1] at he
+  unfold S18.LateData.pLate forcedReplayRisk LateEncoding.initialState ListEvent.resample
+  rw [he]
+
+/-- Enlarge a fixed-pattern integral only after replacing its state by the total replay.
+Typicality can then be retained without imposing the pattern on the replay inputs. -/
+theorem forcedReplayIntegralEnlargement
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (hReplay : S18.ReplayFacts D)
+    (P : FinLaw D.encoding.InitInput) (critical : Finset D.geom.Cell)
+    (pattern : ℕ → Finset (Pos T k)) (F : S18.LateEvent D)
+    (consistent retained : D.encoding.InitInput → Prop)
+    (hpattern : ∀ x, consistent x → ∀ s < D.encoding.Ts,
+      pattern s = S18.actualPattern D (S18.replayMarked D critical) x s)
+    (hretain : ∀ x, consistent x → retained x) :
+    P.E (fun x => if consistent x then D.pLate F x else 0) ≤
+      P.E (fun x => if retained x then forcedReplayRisk D critical pattern F x else 0) := by
+  unfold FinLaw.E
+  apply Finset.sum_le_sum
+  intro x hx
+  apply mul_le_mul_of_nonneg_left _ (P.nonneg x)
+  by_cases hc : consistent x
+  · simp only [hc, hretain x hc, ite_true]
+    exact (lateRisk_eq_forcedReplay D hReplay critical pattern F x (hpattern x hc)).le
+  · simp only [hc, ite_false]
+    split_ifs
+    · unfold forcedReplayRisk FinLaw.pr
+      exact Finset.sum_nonneg (fun full _ => by split_ifs <;> simp [FinLaw.nonneg])
+    · exact le_rfl
 
 end HypercubeRamsey.Lane_sol_s18_n4

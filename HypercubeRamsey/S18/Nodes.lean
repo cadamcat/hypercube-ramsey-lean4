@@ -18,6 +18,7 @@ import HypercubeRamsey.S18.Nodes_sol_s18_5b
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Run_sol_s18_n4
 import HypercubeRamsey.S18.Risk_sol_s18_n4
+import HypercubeRamsey.S18.PrefixObligations_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
@@ -629,7 +630,9 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
   filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2,
-    Lane_sol_s18_n4.finalListTapeBound hκ T] with k hk hfinal
+    Lane_sol_s18_n4.finalListTapeBound hκ T,
+    Lane_sol_s18_n4.validPrefixPinnedBound hκ T K27 c1 δ hK hc1
+      (hδsmall.trans_le (min_le_right _ _))] with k hk hfinal hprefix
   intro PT hPT D hD hTransition hLocal hTransfer hReplay
   intro pin f
   cases f with
@@ -656,7 +659,7 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inr F =>
           by_cases hkind : F.1.val = 1
           · by_cases hvalid : D.prefixValid F.2
-            · sorry
+            · exact hprefix D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
             · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
           · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
               (hδsmall.le.trans (min_le_left _ _)) F hkind pin

@@ -936,6 +936,44 @@ private theorem pr_pi_reindex {κ ι : Type*} [Fintype κ] [DecidableEq κ]
     _ = (FinProb.pi (fun j => P (e j))).pr
           (fun x => A (fun i => x (e.symm i))) := expect_indicator _ _
 
+private theorem pi_cond_rect_last_expect {α : Type*} [Fintype α] [DecidableEq α]
+    {m : ℕ} (P : Fin m → FinProb α) (C : Fin m → α → Prop)
+    (hcoord : ∀ j, 0 < (P j).pr (C j))
+    (hpos : 0 < (FinProb.pi P).pr (fun x => ∀ j, C j (x j)))
+    (last : Fin m) (f : α → ℝ) :
+    ((FinProb.pi P).cond (fun x => ∀ j, C j (x j)) hpos).expect
+        (fun x => f (x last)) = ((P last).cond (C last) (hcoord last)).expect f := by
+  classical
+  let Q : Fin m → FinProb α := fun j => (P j).cond (C j) (hcoord j)
+  have hcond : (FinProb.pi P).cond (fun x => ∀ j, C j (x j)) hpos = FinProb.pi Q :=
+    FinProb.pi_cond_forall P C hcoord hpos
+  let first : Fin m := ⟨0, Nat.lt_of_le_of_lt (Nat.zero_le _) last.isLt⟩
+  let e : Fin m ≃ Fin m := Equiv.swap first last
+  have he : e first = last := by simp [e]
+  have hswap : e.symm last = first := by
+    rw [← he]
+    exact e.symm_apply_apply first
+  rw [hcond]
+  calc
+    (FinProb.pi Q).expect (fun x => f (x last)) =
+        (FinProb.pi (fun j => Q (e j))).expect (fun x => f (x (e.symm last))) :=
+          expect_pi_reindex e Q (fun x => f (x last))
+    _ = (Q last).expect f := by
+          have h := expect_pi_prefix_fiber (fun j => Q (e j)) first
+            (fun j => Fin.elim0 j) f
+          have htriv (x : Fin m → α) :
+              prefixVals x first = (fun j : Fin 0 => Fin.elim0 j) := by
+            funext j
+            exact Fin.elim0 j
+          have hfun : (fun x : Fin m → α =>
+              if prefixVals x first = (fun j : Fin 0 => Fin.elim0 j) then f (x first) else 0) =
+              (fun x => f (x first)) := by
+            funext x
+            rw [if_pos (htriv x)]
+          rw [hfun] at h
+          simpa [first, e, he, hswap] using h
+    _ = ((P last).cond (C last) (hcoord last)).expect f := rfl
+
 private theorem nonempty_finProb {α : Type*} [Fintype α] (P : FinProb α) : Nonempty α := by
   classical
   by_contra h

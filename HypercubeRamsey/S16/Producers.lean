@@ -2282,6 +2282,27 @@ theorem successful_role_label_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
           simpa only [Real.rpow_eq_pow] using Real.rpow_sub_one hd.ne' (0.05 : ℝ)
         rw [show (0.05 - 1 : ℝ) = -0.95 by norm_num] at hp
         exact hp.symm
+  have hIndependent : ∀ v, L.problem.independentStarFailure v ≤
+      Real.rpow (sliceEps κ (PT.tiling.P (H.geom.cellPatch C)).h) (1 / 8 : ℝ) := by
+    intro v
+    by_cases hc : PT.tiling.mode.isCluster
+    · have h := (hsafe hc).2.1 v
+      change (K.failure C W v a) ≤ _ at h
+      simp only [CellRestrictedKernels.failure, hc, ↓reduceIte] at h
+      unfold RoleLabelProblem.independentStarFailure RoleLabelProblem.productLaw
+      unfold CellRestrictedKernels.labelLaw at h
+      unfold FinLaw.pr FinLaw.pi at *
+      simpa only [L.tests_eq, L.targets_eq, hc, true_and, if_true,
+        CellRestrictedKernels.binProblem] using h
+    · have hpr : L.problem.independentStarFailure v = 0 := by
+        unfold RoleLabelProblem.independentStarFailure FinLaw.pr
+        have hn : ∀ ys, ¬ L.problem.starBad v ys := by
+          intro ys hbad
+          exact hc ((L.tests_eq v ys).mp hbad).1
+        simp only [hn, if_false, Finset.sum_const_zero]
+      rw [hpr]
+      apply Real.rpow_nonneg
+      exact (slice_epsilon_range hκ _).1.le
   have hHyp : RoleLabelHypotheses hκ L.problem := by
     refine {
       scale_large := hDscale.1
@@ -2351,29 +2372,55 @@ theorem successful_role_label_hypotheses {κ : CConsts} (hκ : κ.Admissible) :
       exact role_block_count L.problem (hClusterColumns hr) b
     · intro hr b
       exact role_block_degree K C pool W a L (role_block_count L.problem (hClusterColumns hr)) b
-    · -- Whole-bin seed comparison at h+1 roles and local-lemma pin budgets.
-      sorry
-  have hIndependent : ∀ v, L.problem.independentStarFailure v ≤
-      Real.rpow (sliceEps κ (PT.tiling.P (H.geom.cellPatch C)).h) (1 / 8 : ℝ) := by
-    intro v
-    by_cases hc : PT.tiling.mode.isCluster
-    · have h := (hsafe hc).2.1 v
-      change (K.failure C W v a) ≤ _ at h
-      simp only [CellRestrictedKernels.failure, hc, ↓reduceIte] at h
-      unfold RoleLabelProblem.independentStarFailure RoleLabelProblem.productLaw
-      unfold CellRestrictedKernels.labelLaw at h
-      unfold FinLaw.pr FinLaw.pi at *
-      simpa only [L.tests_eq, L.targets_eq, hc, true_and, if_true,
-        CellRestrictedKernels.binProblem] using h
-    · have hpr : L.problem.independentStarFailure v = 0 := by
-        unfold RoleLabelProblem.independentStarFailure FinLaw.pr
-        have hn : ∀ ys, ¬ L.problem.starBad v ys := by
-          intro ys hbad
-          exact hc ((L.tests_eq v ys).mp hbad).1
-        simp only [hn, if_false, Finset.sum_const_zero]
-      rw [hpr]
-      apply Real.rpow_nonneg
-      exact (slice_epsilon_range hκ _).1.le
+    · intro hr q hq seed
+      have hc := hRegime.mp hr
+      have hRoom := hCalibration.room hc (H.geom.cellPatch C)
+      have hd : (10 ^ 100 : ℕ) ≤ L.problem.d := by
+        rw [L.scale_eq, if_pos hc]
+        exact hRoom.2.1
+      have hSize : ∀ v, (L.problem.participants v).card ≤ L.problem.h := by
+        intro v
+        rw [L.participants_eq, L.height_eq]
+        exact physical_participants_count K C v
+      have hQuery : (L.problem.h + 1 : ℝ) ≤ Real.rpow (L.problem.d : ℝ) 0.025 := by
+        rw [L.height_eq, L.scale_eq, if_pos hc]
+        exact hRoom.2.2.2.2.1
+      have hShort : (L.problem.h + 1 : ℝ) ≤ 2 * Real.rpow (L.problem.d : ℝ) 0.01 := by
+        rw [L.height_eq, L.scale_eq, if_pos hc]
+        have hh := hRoom.2.2.2.1
+        have hd1 : (1 : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).d := by
+          exact_mod_cast le_trans (by norm_num : (1 : ℕ) ≤ 10 ^ 100) hRoom.2.1
+        have hp : (1 : ℝ) ≤ Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) 0.01 :=
+          Real.one_le_rpow hd1 (by norm_num)
+        have hNat : ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ≤
+            2 * ((PT.tiling.P (H.geom.cellPatch C)).h : ℝ) ^ 2 := by
+          have hi : (PT.tiling.P (H.geom.cellPatch C)).h = 0 ∨
+              1 ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by omega
+          rcases hi with hi | hi
+          · simp [hi]
+          · have hi' : (1 : ℝ) ≤ (PT.tiling.P (H.geom.cellPatch C)).h := by exact_mod_cast hi
+            nlinarith
+        linarith
+      have hLower : ∀ r y, (L.problem.target r).w y ≠ 0 →
+          1 / (L.problem.d : ℝ) ≤ (L.problem.target r).w y := by
+        intro r y hy
+        rw [L.targets_eq, if_pos hc] at hy ⊢
+        have h := physical_U_atom_lower R hR hc C W (R.groupOf C r) (a (R.groupOf C r))
+          (positive_pool_bin_raw K C pool W hW hm _ _ (hpositive hc _)) y hy
+        rw [Q.profiled_valid.tiling_valid.bins_card _ _ (a (R.groupOf C r)).2] at h
+        rw [L.scale_eq, if_pos hc]
+        exact h
+      have hroom : 16 * (L.problem.d : ℝ) ^ 2 * (L.problem.h + 1 : ℝ) ^ 2 *
+          Real.rpow (sliceEps κ (PT.tiling.P (H.geom.cellPatch C)).h) (1 / 16 : ℝ) ≤
+          Real.rpow (L.problem.d : ℝ) (-20) := by
+        rw [L.scale_eq, if_pos hc, L.height_eq]
+        exact hRoom.2.2.2.2.2
+      obtain ⟨y, _⟩ := (Q.profiled_valid.tiling_valid.patch_nonempty (H.geom.cellPatch C)).2
+      letI : Nonempty (Fin (T.S.N k)) := ⟨y⟩
+      exact Lane_sol_s16_prod1.role_star_certificates L.problem _ (slice_epsilon_range hκ _).1
+        hd hr hSize
+        (role_block_degree K C pool W a L (role_block_count L.problem (hClusterColumns hr)))
+        hQuery hShort hIndependent hLower hroom q hq seed
   refine ⟨L, hHyp, hIndependent, ?_⟩
   intro v r y
   by_cases hc : PT.tiling.mode.isCluster

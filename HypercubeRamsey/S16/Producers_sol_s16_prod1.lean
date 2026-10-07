@@ -1752,4 +1752,389 @@ theorem group_star_markov_comparison {Group Bin Star Column : Type*}
         Real.rpow P.ε (1 / 8 : ℝ) := div_le_div_of_nonneg_right hMean ht.le
     _ = _ := by rw [hprod]; field_simp [ht.ne']
 
+
+/-- Count event scopes through the actual block incidence relation. -/
+theorem role_star_scope_counts {Role Label Star Block : Type}
+    [Fintype Role] [DecidableEq Role] [Fintype Label] [DecidableEq Label]
+    [Fintype Star] [Fintype Block] [DecidableEq Block]
+    (P : RoleLabelProblem Role Label Star Block) (q : Role → FinLaw Label)
+    (seed : RoleBlockSeed P q) (charge : Star → ℝ)
+    (pin : Star → Role → Label → ℝ) (touch : ℝ)
+    (hSize : ∀ s, (P.participants s).card ≤ P.h)
+    (hDegree : ∀ b, (Finset.univ.filter fun s => ∃ r ∈ P.participants s,
+      P.blockOf r = b).card ≤ P.d * P.h) :
+    (∀ S, ((role_star_data P q seed charge pin touch).touching S).card ≤
+      S.card * (P.d * P.h)) ∧
+    (∀ s, ((role_star_data P q seed charge pin touch).neighbors s).card ≤
+      P.h * (P.d * P.h)) := by
+  classical
+  let stars := fun r : Role => Finset.univ.filter fun s : Star =>
+    P.blockOf r ∈ (P.participants s).image P.blockOf
+  have hc : ∀ r, (stars r).card ≤ P.d * P.h := by
+    intro r
+    have heq : stars r = Finset.univ.filter (fun s : Star =>
+        ∃ r' ∈ P.participants s, P.blockOf r' = P.blockOf r) := by
+      apply Finset.ext
+      intro s
+      change (s ∈ Finset.univ.filter _) ↔ (s ∈ Finset.univ.filter _)
+      rw [Finset.mem_filter, Finset.mem_filter]
+      simp only [Finset.mem_univ, true_and, Finset.mem_image]
+    rw [heq]
+    exact hDegree (P.blockOf r)
+  have hUnion : ∀ S : Finset Role, (S.biUnion stars).card ≤ S.card * (P.d * P.h) := by
+    intro S
+    calc
+      _ ≤ ∑ r ∈ S, (stars r).card := Finset.card_biUnion_le
+      _ ≤ ∑ _r ∈ S, P.d * P.h := Finset.sum_le_sum fun r _ => hc r
+      _ = _ := by simp
+  constructor
+  · intro S
+    have heq : (role_star_data P q seed charge pin touch).touching S = S.biUnion stars := by
+      apply Finset.ext
+      intro s
+      constructor
+      · intro hs
+        obtain ⟨r, hr, hb⟩ := (Finset.mem_filter.mp hs).2
+        apply Finset.mem_biUnion.mpr
+        refine ⟨r, hr, ?_⟩
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hb⟩
+      · intro hs
+        obtain ⟨r, hr, hb⟩ := Finset.mem_biUnion.mp hs
+        apply Finset.mem_filter.mpr
+        exact ⟨Finset.mem_univ _, r, hr, (Finset.mem_filter.mp hb).2⟩
+    rw [heq]
+    exact hUnion S
+  · intro s
+    have hsub : (role_star_data P q seed charge pin touch).neighbors s ⊆
+        (P.participants s).biUnion stars := by
+      intro f hf
+      have hnd := (Finset.mem_filter.mp hf).2.2
+      obtain ⟨b, hb, hbf⟩ := Finset.not_disjoint_iff.mp hnd
+      obtain ⟨r, hr, hrb⟩ := Finset.mem_image.mp hb
+      apply Finset.mem_biUnion.mpr
+      refine ⟨r, hr, ?_⟩
+      apply Finset.mem_filter.mpr
+      exact ⟨Finset.mem_univ _, by rwa [hrb]⟩
+    exact (Finset.card_le_card hsub).trans
+      ((hUnion _).trans (Nat.mul_le_mul_right _ (hSize s)))
+
+/-- Seed comparison also applies after adding a singleton pin to a star. -/
+theorem role_seed_event_bound {Role Label Star Block : Type}
+    [Fintype Role] [DecidableEq Role] [Fintype Label] [DecidableEq Label] [Nonempty Label]
+    [Fintype Star] [Fintype Block] [DecidableEq Block]
+    (P : RoleLabelProblem Role Label Star Block) (q : Role → FinLaw Label)
+    (seed : RoleBlockSeed P q) (hd : (10 ^ 100 : ℕ) ≤ P.d)
+    (hq : RelativePerturbation P.target q (Real.rpow (P.d : ℝ) (-0.02)))
+    (S : Finset Role) (hQuery : (S.card : ℝ) ≤ Real.rpow (P.d : ℝ) 0.025)
+    (hShort : (S.card : ℝ) ≤ 2 * Real.rpow (P.d : ℝ) 0.01)
+    (A : (Role → Label) → Prop)
+    (hlocal : ∀ x y, (∀ r ∈ S, x r = y r) → (A x ↔ A y)) :
+    (FinLaw.pi seed.laws).pr (fun ω => A (P.readout ω)) ≤
+      4 * (FinLaw.pi P.target).pr A := by
+  classical
+  let c := (1 + Real.rpow (P.d : ℝ) (-0.02)) / (1 - Real.rpow (P.d : ℝ) (-0.02))
+  have hρ := (calibration_power_bounds P.d hd).2
+  have hc : 0 ≤ c := by
+    apply div_nonneg
+    · have hh : 0 ≤ Real.rpow (P.d : ℝ) (-0.02) := Real.rpow_nonneg (Nat.cast_nonneg _) _
+      linarith
+    · linarith
+  have hseed := role_seed_local_comparison P q seed S
+    (fun b => le_trans (by exact_mod_cast Finset.card_filter_le S _) hQuery) A hlocal
+  have hprod : (FinLaw.pi q).pr A ≤ c ^ S.card * (FinLaw.pi P.target).pr A := by
+    rw [pr_eq_indicator_E, pr_eq_indicator_E]
+    apply local_product_domination P.target q S c hc
+    · intro r _ y
+      exact (hq r y).2
+    · intro x
+      split_ifs <;> norm_num
+    · intro x y hxy
+      rw [hlocal x y hxy]
+  calc
+    _ ≤ Real.exp (Real.rpow (P.d : ℝ) (-0.04) * S.card) *
+        (c ^ S.card * (FinLaw.pi P.target).pr A) :=
+      hseed.trans (mul_le_mul_of_nonneg_left hprod (Real.exp_pos _).le)
+    _ = (Real.exp (Real.rpow (P.d : ℝ) (-0.04) * S.card) * c ^ S.card) *
+        (FinLaw.pi P.target).pr A := by ring
+    _ ≤ _ := mul_le_mul_of_nonneg_right (role_local_inflation P.d S.card hd hShort)
+      (pr_range _ _).1
+
+/-- Supported pins have enough mass to turn the joint seed comparison into
+an unconditional bound on the pinned star. -/
+theorem role_seed_failure_bounds {Role Label Star Block : Type}
+    [Fintype Role] [DecidableEq Role] [Fintype Label] [DecidableEq Label] [Nonempty Label]
+    [Fintype Star] [Fintype Block] [DecidableEq Block]
+    (P : RoleLabelProblem Role Label Star Block) (q : Role → FinLaw Label)
+    (seed : RoleBlockSeed P q) (ε : ℝ) (hε : 0 < ε)
+    (hd : (10 ^ 100 : ℕ) ≤ P.d)
+    (hq : RelativePerturbation P.target q (Real.rpow (P.d : ℝ) (-0.02)))
+    (hSize : ∀ s, (P.participants s).card ≤ P.h)
+    (hQuery : (P.h + 1 : ℝ) ≤ Real.rpow (P.d : ℝ) 0.025)
+    (hShort : (P.h + 1 : ℝ) ≤ 2 * Real.rpow (P.d : ℝ) 0.01)
+    (hMean : ∀ s, P.independentStarFailure s ≤ Real.rpow ε (1 / 8 : ℝ))
+    (hLower : ∀ r y, (P.target r).w y ≠ 0 → 1 / (P.d : ℝ) ≤ (P.target r).w y)
+    (hroom : 16 * (P.d : ℝ) ^ 2 * (P.h + 1 : ℝ) ^ 2 * Real.rpow ε (1 / 16 : ℝ) ≤
+      Real.rpow (P.d : ℝ) (-20)) :
+    (∀ s, (FinLaw.pi seed.laws).pr (fun ω => P.starBad s (P.readout ω)) ≤
+      Real.rpow ε (1 / 16 : ℝ) / 2) ∧
+    (∀ s r y, (FinLaw.pi seed.laws).pr
+      (fun ω => P.readout ω r = y ∧ P.starBad s (P.readout ω)) ≤
+      (Real.rpow ε (1 / 16 : ℝ) / 2) * (q r).w y) := by
+  classical
+  have hd2 : 2 ≤ P.d := le_trans (by norm_num) hd
+  have hdp : (0 : ℝ) < P.d := by exact_mod_cast (by omega : 0 < P.d)
+  have hρ := (calibration_power_bounds P.d hd).2
+  have hfactor : 1 / 2 ≤ (1 - Real.rpow (P.d : ℝ) (-0.02)) /
+      (1 + Real.rpow (P.d : ℝ) (-0.02)) := by
+    apply (le_div_iff₀ (by
+      have hh : 0 ≤ Real.rpow (P.d : ℝ) (-0.02) := Real.rpow_nonneg hdp.le _
+      linarith)).mpr
+    linarith
+  have hsmall := role_pinned_charge_small P.d P.h ε hd2 hε hroom
+  have hS : ∀ s, ((P.participants s).card : ℝ) ≤ (P.h + 1 : ℝ) := by
+    intro s
+    calc
+      _ ≤ (P.h : ℝ) := by exact_mod_cast hSize s
+      _ ≤ _ := by norm_num
+  have hI : ∀ s r, ((insert r (P.participants s)).card : ℝ) ≤ (P.h + 1 : ℝ) := by
+    intro s r
+    have hs := hSize s
+    exact_mod_cast (Finset.card_insert_le r (P.participants s)).trans (by omega)
+  have hjoint : ∀ s r y, (FinLaw.pi seed.laws).pr
+      (fun ω => P.readout ω r = y ∧ P.starBad s (P.readout ω)) ≤
+        4 * Real.rpow ε (1 / 8 : ℝ) := by
+    intro s r y
+    have hcomp := role_seed_event_bound P q seed hd hq (insert r (P.participants s))
+      ((hI s r).trans hQuery) ((hI s r).trans hShort)
+      (fun x => x r = y ∧ P.starBad s x) (by
+        intro x x' hxx
+        exact and_congr (by rw [hxx r (Finset.mem_insert_self _ _)])
+          (P.star_local s x x' (fun r' hr' => hxx r' (Finset.mem_insert_of_mem hr'))))
+    have hmono := pr_mono (FinLaw.pi P.target) (fun x => x r = y ∧ P.starBad s x)
+      (P.starBad s) (fun _ hh => hh.2)
+    exact hcomp.trans (mul_le_mul_of_nonneg_left (hmono.trans (hMean s)) (by norm_num))
+  constructor
+  · intro s
+    have hcomp := role_seed_event_bound P q seed hd hq (P.participants s)
+      ((hS s).trans hQuery) ((hS s).trans hShort) (P.starBad s) (P.star_local s)
+    have hm := hcomp.trans (mul_le_mul_of_nonneg_left (hMean s) (by norm_num))
+    have hdreal : (2 : ℝ) ≤ P.d := by exact_mod_cast hd2
+    have he : 0 ≤ Real.rpow ε (1 / 8 : ℝ) := Real.rpow_nonneg hε.le _
+    nlinarith
+  · intro s r y
+    by_cases hqy : (q r).w y = 0
+    · have hm := pr_mono (FinLaw.pi seed.laws)
+        (fun ω => P.readout ω r = y ∧ P.starBad s (P.readout ω))
+        (fun ω => P.readout ω r = y) (fun _ hh => hh.1)
+      rw [seed.marginal r y, hqy] at hm
+      simpa only [hqy, mul_zero] using hm
+    · have hpy : (P.target r).w y ≠ 0 := by
+        intro hh
+        have hb := (hq r y).2
+        rw [hh, mul_zero] at hb
+        exact hqy (le_antisymm hb ((q r).nonneg y))
+      have hlow : 1 / (2 * (P.d : ℝ)) ≤ (q r).w y := by
+        have hh := mul_le_mul_of_nonneg_right hfactor ((P.target r).nonneg y)
+        have hl := mul_le_mul_of_nonneg_left (hLower r y hpy) (by norm_num : (0 : ℝ) ≤ 1 / 2)
+        have hle := hl.trans (hh.trans (hq r y).1)
+        convert hle using 1 <;> ring
+      have hmass : 1 ≤ (2 * (P.d : ℝ)) * (q r).w y := by
+        have hh := mul_le_mul_of_nonneg_left hlow (by positivity : 0 ≤ 2 * (P.d : ℝ))
+        field_simp at hh
+        nlinarith
+      have he := mul_le_mul_of_nonneg_left hmass
+        (show 0 ≤ 4 * Real.rpow ε (1 / 8 : ℝ) from
+          mul_nonneg (by norm_num) (Real.rpow_nonneg hε.le _))
+      have hh := mul_le_mul_of_nonneg_right hsmall ((q r).nonneg y)
+      exact (hjoint s r y).trans (by nlinarith)
+
+
+theorem role_avoidance_rate_budget (d : ℕ) (hd : (10 ^ 100 : ℕ) ≤ d) :
+    Real.rpow (d : ℝ) (-0.04) +
+      Real.log ((1 + Real.rpow (d : ℝ) (-0.02)) / (1 - Real.rpow (d : ℝ) (-0.02))) +
+      Real.rpow (d : ℝ) (-2) ≤ Real.rpow (d : ℝ) (-0.01) := by
+  have hp : (0 : ℝ) < d := by
+    exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 10 ^ 100) hd
+  let ρ := Real.rpow (d : ℝ) (-0.02)
+  have hρ : 0 ≤ ρ ∧ ρ ≤ 1 / 3 :=
+    ⟨(Real.rpow_pos_of_pos hp _).le, (calibration_power_bounds d hd).2⟩
+  have hc : 0 < (1 + ρ) / (1 - ρ) := div_pos (by linarith) (by linarith)
+  have hlog : Real.log ((1 + ρ) / (1 - ρ)) ≤ 4 * ρ := by
+    have hh := Real.log_le_log hc (relative_factor_exp ρ hρ)
+    simpa only [Real.log_exp] using hh
+  have h1 := calibration_rpow_tenth d hd 0.03 (by norm_num)
+  have h2 := calibration_rpow_tenth d hd 0.01 (by norm_num)
+  have h3 := calibration_rpow_tenth d hd 1.99 (by norm_num)
+  have hmul (a b : ℝ) : Real.rpow (d : ℝ) a * Real.rpow (d : ℝ) b =
+      Real.rpow (d : ℝ) (a + b) := (Real.rpow_add hp a b).symm
+  have hh1 := mul_le_mul_of_nonneg_right h1 (Real.rpow_nonneg hp.le (-0.01))
+  have hh2 := mul_le_mul_of_nonneg_right h2 (Real.rpow_nonneg hp.le (-0.01))
+  have hh3 := mul_le_mul_of_nonneg_right h3 (Real.rpow_nonneg hp.le (-0.01))
+  simp only [← Real.rpow_eq_pow] at hh1 hh2 hh3
+  rw [hmul] at hh1 hh2 hh3
+  norm_num only at hh1 hh2 hh3
+  change Real.log ((1 + Real.rpow (d : ℝ) (-0.02)) /
+    (1 - Real.rpow (d : ℝ) (-0.02))) ≤ 4 * Real.rpow (d : ℝ) (-0.02) at hlog
+  norm_num only at hlog ⊢
+  have hn : 0 ≤ Real.rpow (d : ℝ) (-(1 / 100 : ℝ)) := Real.rpow_nonneg hp.le _
+  nlinarith only [hlog, hh1, hh2, hh3, hn]
+
+/-- Complete primitive avoidance certificate for independent whole-bin seeds. -/
+theorem role_star_certificates {Role Label Star Block : Type}
+    [Fintype Role] [DecidableEq Role] [Fintype Label] [DecidableEq Label] [Nonempty Label]
+    [Fintype Star] [Fintype Block] [DecidableEq Block]
+    (P : RoleLabelProblem Role Label Star Block) (ε : ℝ) (hε : 0 < ε)
+    (hd : (10 ^ 100 : ℕ) ≤ P.d) (hRegime : P.regime = .cluster)
+    (hSize : ∀ s, (P.participants s).card ≤ P.h)
+    (hDegree : ∀ b, (Finset.univ.filter fun s => ∃ r ∈ P.participants s,
+      P.blockOf r = b).card ≤ P.d * P.h)
+    (hQuery : (P.h + 1 : ℝ) ≤ Real.rpow (P.d : ℝ) 0.025)
+    (hShort : (P.h + 1 : ℝ) ≤ 2 * Real.rpow (P.d : ℝ) 0.01)
+    (hMean : ∀ s, P.independentStarFailure s ≤ Real.rpow ε (1 / 8 : ℝ))
+    (hLower : ∀ r y, (P.target r).w y ≠ 0 → 1 / (P.d : ℝ) ≤ (P.target r).w y)
+    (hroom : 16 * (P.d : ℝ) ^ 2 * (P.h + 1 : ℝ) ^ 2 * Real.rpow ε (1 / 16 : ℝ) ≤
+      Real.rpow (P.d : ℝ) (-20))
+    (q : Role → FinLaw Label)
+    (hq : RelativePerturbation P.target q (Real.rpow (P.d : ℝ) (-0.02)))
+    (seed : RoleBlockSeed P q) :
+    ∃ A : AvoidanceData P.readout P.blockOf P.safe,
+      A.base = FinLaw.pi seed.laws ∧
+      AvoidanceHypotheses A P.target q P.queries (Real.rpow (P.d : ℝ) (-0.02))
+        (Real.rpow (P.d : ℝ) (-2)) P.rate := by
+  classical
+  let x := Real.rpow ε (1 / 16 : ℝ)
+  let η := Real.rpow (P.d : ℝ) (-2)
+  let A := role_star_data P q seed (fun _ => x) (fun _ _ _ => x / 2) η
+  have hd2 : 2 ≤ P.d := le_trans (by norm_num) hd
+  have hdp : (0 : ℝ) < P.d := by exact_mod_cast (by omega : 0 < P.d)
+  have hx : 0 < x := Real.rpow_pos_of_pos hε _
+  have hη : 0 < η := Real.rpow_pos_of_pos hdp _
+  have hηsmall : η ≤ 1 / 4 := by
+    calc
+      _ ≤ Real.rpow (2 : ℝ) (-2) :=
+        Real.rpow_le_rpow_of_nonpos (by norm_num) (by exact_mod_cast hd2) (by norm_num)
+      _ ≤ _ := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+  have hb := role_star_charge_budget P.d P.h ε hd2 hε hroom
+  change (P.d : ℝ) * (P.h + 1 : ℝ) ^ 2 * x ≤ η / 16 at hb
+  have hh : (0 : ℝ) ≤ P.h := Nat.cast_nonneg _
+  have hfactor : (1 : ℝ) ≤ (P.d : ℝ) * (P.h + 1 : ℝ) ^ 2 := by
+    have hd' : (2 : ℝ) ≤ P.d := by exact_mod_cast hd2
+    nlinarith [sq_nonneg (P.h : ℝ)]
+  have hxb : x ≤ η / 16 := by
+    have hm := mul_le_mul_of_nonneg_right hfactor hx.le
+    nlinarith
+  have hxhalf : x ≤ 1 / 2 := by linarith
+  have hxone : x < 1 := by linarith
+  have hOne : (P.d : ℝ) * P.h * x ≤ η / 16 := by
+    have hh' : (P.h : ℝ) ≤ (P.h + 1 : ℝ) ^ 2 := by nlinarith [sq_nonneg (P.h : ℝ)]
+    exact (mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_left hh' hdp.le) hx.le).trans hb
+  have hNeighbor : (P.h : ℝ) * (P.d * P.h : ℕ) * x ≤ η / 16 := by
+    have hh' : (P.h : ℝ) ^ 2 ≤ (P.h + 1 : ℝ) ^ 2 := by nlinarith
+    have hm := (mul_le_mul_of_nonneg_right
+      (mul_le_mul_of_nonneg_left hh' hdp.le) hx.le).trans hb
+    push_cast
+    nlinarith only [hm]
+  obtain ⟨hTouchCard, hNeighborCard⟩ := role_star_scope_counts P q seed
+    (fun _ => x) (fun _ _ _ => x / 2) η hSize hDegree
+  have hTouchSum : ∀ S : Finset Role, (∑ e ∈ A.touching S, A.charge e) ≤
+      (S.card : ℝ) * (η / 16) := by
+    intro S
+    have hc : ((A.touching S).card : ℝ) ≤ (S.card : ℝ) * (P.d * P.h : ℕ) := by
+      exact_mod_cast hTouchCard S
+    change (∑ _e ∈ A.touching S, x) ≤ _
+    rw [Finset.sum_const, nsmul_eq_mul]
+    have hm := mul_le_mul_of_nonneg_right hc hx.le
+    have hh' := mul_le_mul_of_nonneg_left hOne (Nat.cast_nonneg (α := ℝ) S.card)
+    push_cast at hm
+    nlinarith only [hm, hh']
+  have hNeighborSum : ∀ s, (∑ e ∈ A.neighbors s, A.charge e) ≤ η / 16 := by
+    intro s
+    have hc : ((A.neighbors s).card : ℝ) ≤ (P.h : ℝ) * (P.d * P.h : ℕ) := by
+      exact_mod_cast hNeighborCard s
+    change (∑ _e ∈ A.neighbors s, x) ≤ _
+    rw [Finset.sum_const, nsmul_eq_mul]
+    exact (mul_le_mul_of_nonneg_right hc hx.le).trans hNeighbor
+  have hRecip : ∀ s, (∏ e ∈ A.neighbors s, (1 - A.charge e)⁻¹) ≤ 2 := by
+    intro s
+    have hsum := hNeighborSum s
+    have hm := avoidance_reciprocal_bound (A.neighbors s) A.charge (1 / 2)
+      (by norm_num) (fun _ _ => ⟨hx.le, hxone⟩) (by linarith)
+    norm_num only [inv_div, inv_one, div_one] at hm
+    exact hm
+  have hBadPin := role_seed_failure_bounds P q seed ε hε hd hq hSize hQuery hShort hMean hLower hroom
+  have hBad : ∀ e, A.base.pr (fun ω => ω ∈ A.bad e) ≤ x / 2 := by
+    intro e
+    simpa only [A, role_star_data, Finset.mem_filter, Finset.mem_univ, true_and] using hBadPin.1 e
+  have hPin : ∀ e r y, A.base.pr (fun ω => P.readout ω r = y ∧ ω ∈ A.bad e) ≤
+      (x / 2) * (q r).w y := by
+    intro e r y
+    simpa only [A, role_star_data, Finset.mem_filter, Finset.mem_univ, true_and] using hBadPin.2 e r y
+  refine ⟨A, rfl, ?_⟩
+  refine {
+    rho_range := ⟨Real.rpow_pos_of_pos hdp _, (calibration_power_bounds P.d hd).2⟩
+    eta_range := ⟨hη.le, by linarith⟩
+    perturbation := hq
+    base_marginals := seed.marginal
+    safe_cover := role_star_data_safe_cover P q seed _ _ _
+    charge_range := fun _ => ⟨hx.le, hxone⟩
+    nonneighbor := ?_
+    charge_dominates := ?_
+    pinned_nonneighbor := ?_
+    pinned_outside := role_pin_outside P q seed _ _ _
+    pinned_bounds_nonneg := fun _ _ _ => by dsimp [A, role_star_data]; positivity
+    pinned_touch_budget := ?_
+    singleton_cost := ?_
+    base_joint := ?_
+    query_outside := ?_
+    joint_cost := ?_
+    rate_budget := ?_ }
+  · intro e S he hS
+    exact (role_star_nonneighbor P q seed _ _ _ e S he hS).le
+  · intro e
+    have hl := avoidance_product_lower (A.neighbors e) A.charge
+      (fun _ _ => ⟨hx.le, hxone.le⟩)
+    have hsum := hNeighborSum e
+    have hp : 1 / 2 ≤ ∏ f ∈ A.neighbors e, (1 - A.charge f) := by linarith
+    have hm := mul_le_mul_of_nonneg_left hp hx.le
+    change _ ≤ x * _
+    exact (hBad e).trans (by nlinarith only [hm])
+  · intro e r y S he hS
+    exact role_star_pinned_nonneighbor P q seed _ _ _ e r y S he hS (hBad e) (hPin e r y)
+  · intro r y
+    have hm : (∑ e ∈ A.touching {r}, A.pinnedBound e r y *
+        ∏ f ∈ A.neighbors e, (1 - A.charge f)⁻¹) ≤ ∑ e ∈ A.touching {r}, A.charge e := by
+      apply Finset.sum_le_sum
+      intro e _
+      change (x / 2) * _ ≤ x
+      have hh' := mul_le_mul_of_nonneg_left (hRecip e) (by positivity : 0 ≤ x / 2)
+      nlinarith only [hh']
+    have hs := hTouchSum {r}
+    simp only [Finset.card_singleton, Nat.cast_one, one_mul] at hs
+    exact hm.trans (hs.trans (by linarith))
+  · intro r
+    apply avoidance_singleton_cost (A.touching {r}) A.charge η ⟨hη.le, by linarith⟩
+      (fun _ _ => ⟨hx.le, hxone⟩)
+    have hs := hTouchSum {r}
+    simp only [Finset.card_singleton, Nat.cast_one, one_mul] at hs
+    linarith
+  · intro S ys hS
+    apply seed.joint
+    simp only [RoleLabelProblem.queries, hRegime] at hS
+    intro b
+    have hh' : ((S.filter fun r => P.blockOf r = b).card : ℝ) ≤ P.h := by
+      exact_mod_cast hS b
+    exact hh'.trans (le_trans (by norm_num : (P.h : ℝ) ≤ P.h + 1) hQuery)
+  · intro S ys R _ hR
+    exact role_query_outside P q seed _ _ _ S ys R hR
+  · intro S _
+    have hm := avoidance_joint_cost (A.touching S) A.charge (fun _ _ => ⟨hx.le, hxhalf⟩)
+    apply hm.trans
+    apply Real.exp_le_exp.mpr
+    have hs := hTouchSum S
+    change 2 * _ ≤ η * S.card
+    nlinarith [Nat.cast_nonneg (α := ℝ) S.card]
+  · simpa only [A, role_star_data, RoleLabelProblem.rate, hRegime] using
+      role_avoidance_rate_budget P.d hd
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

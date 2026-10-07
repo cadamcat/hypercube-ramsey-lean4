@@ -63,7 +63,7 @@ theorem balanced_completion_good_order {R : Type*} [Fintype R] [DecidableEq R]
         (∀ j y, 0 ≤ qbar j y) ∧ (∀ j, ∑ y, qbar j y = 1) ∧
         (∀ i y, qbar (Sum.inl i) y = q i y) ∧
         (∀ y, ∑ j, qbar j y = (t : ℝ) / d) ∧
-        (∀ j y, qbar j y ≤ 10 / d) ∧
+        (∀ j y, qbar (Sum.inr j) y ≤ 10 / d) ∧
         ∃ e : Fin t ≃ (R ⊕ Fin (t - Fintype.card R)),
           ∀ (j : Fin t) y,
             |(∑ k : Fin t, if k.val < j.val then qbar (e k) y else 0) -

@@ -55,6 +55,8 @@ structure CleanProps {κ : CConsts} {T : Stage} {k : ℕ}
     (π : Fin 𝒯.m → Law (T.S.N k)) (C : Finset (Fin (T.S.N k))) : Prop where
   sub : C ⊆ (𝒯.P i).X
   nonempty : C.Nonempty
+  /-- The cleaning loses less than half the patch (section 13, line 232). -/
+  card_lower : (𝒯.P i).M / 2 ≤ (C.card : ℝ)
   degOwn : ∀ x ∈ C, OwnDegOK 𝒯 i (π i) x
   noClique : NoClique (T.S.E k) 𝒯.c C (π i).w κ.θ (𝒯.Q i)
   degOther : ∀ j, j ≠ i → ∀ x ∈ C,

@@ -1,5 +1,6 @@
 import HypercubeRamsey.S08.L81.AnchorNodes
 import HypercubeRamsey.Tools.ScatteredUnion
+import HypercubeRamsey.S08.L81.OddNodes_q_s08_odd
 
 /-!
 # Lemma 8.1, Step 11: odd loads by successive removal of constraints
@@ -13,6 +14,8 @@ namespace HypercubeRamsey.S08
 
 open Classical OAI.HypercubeRamsey
 open scoped BigOperators
+open HypercubeRamsey.Lane_q_s08_odd
+open HypercubeRamsey.Lane_q_s08_odd.CtxHelpers.Ctx
 
 /-- The odd-moment constant `2(33K + 1)` (08:404–411). -/
 def oddM (K : ℝ) : ℝ := 2 * (33 * K + 1)
@@ -398,6 +401,7 @@ theorem odd_anchor_step (cA : ℝ) (hcA : 0 < cA) (hη₀ : 0 < η₀) :
       rw [hRawExpect]
       exact mul_le_mul_of_nonneg_right hcost hBnonneg
 
+set_option maxHeartbeats 1000000
 /-- L8.1k(ii) (08:401–411): discard global selection success (validity stays inside `p⁰`); conditional on positions
 and hidden tuples the rows read disjoint tags, activations, ties and cross anchors (grid scopes of radius three,
 keys more than eight apart, `P0Local`), so the raw means factor; remove the at most `(2s+1)^2` hidden events
@@ -407,7 +411,434 @@ theorem odd_hidden_step (cH : ℝ) (hcH : 0 < cH) (hη₀ : 0 < η₀) (hK : 0 <
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → CondProductBound →
       D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) → D.P0Local → D.P0RawMean K → D.P0Law →
       D.OddHiddenStep (33 * K + 1) := by
-  sorry
+  classical
+  have hExpRatio : Filter.Tendsto
+      (fun n : ℕ => Real.exp ((n : ℝ) ^ cH) / ((n : ℝ) ^ cH) ^ (Nat.ceil (5 / cH) + 1))
+      Filter.atTop Filter.atTop := by
+    have ht : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ cH) Filter.atTop Filter.atTop :=
+      (tendsto_rpow_atTop hcH).comp tendsto_natCast_atTop_atTop
+    exact (Real.tendsto_exp_div_pow_atTop (Nat.ceil (5 / cH) + 1)).comp ht
+  have hExpEvent : ∀ᶠ n : ℕ in Filter.atTop,
+      6000 * (n : ℝ) ^ (5 : ℕ) ≤ Real.exp ((n : ℝ) ^ cH) := by
+    have hratio := hExpRatio.eventually (Filter.eventually_ge_atTop (6000 : ℝ))
+    have hone := Filter.eventually_ge_atTop (1 : ℕ)
+    filter_upwards [hratio, hone] with n hratio hn
+    have hnR : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+    have hceil : 5 / cH ≤ (Nat.ceil (5 / cH) : ℝ) := Nat.le_ceil _
+    have hk : 5 ≤ cH * ((Nat.ceil (5 / cH) + 1 : ℕ) : ℝ) := by
+      have hmul := mul_le_mul_of_nonneg_left hceil hcH.le
+      have hcancel : cH * (5 / cH) = 5 := by field_simp [ne_of_gt hcH]
+      rw [hcancel] at hmul
+      have hceilUp : cH * (Nat.ceil (5 / cH) : ℝ) ≤
+          cH * ((Nat.ceil (5 / cH) + 1 : ℕ) : ℝ) := by
+        have hceilNat : Nat.ceil (5 / cH) ≤ Nat.ceil (5 / cH) + 1 := by omega
+        exact mul_le_mul_of_nonneg_left (by exact_mod_cast hceilNat) hcH.le
+      linarith
+    have htPos : 0 < (n : ℝ) ^ cH := Real.rpow_pos_of_pos hnR _
+    have hpow : ((n : ℝ) ^ cH) ^ (Nat.ceil (5 / cH) + 1) =
+        (n : ℝ) ^ (cH * ((Nat.ceil (5 / cH) + 1 : ℕ) : ℝ)) := by
+      rw [← Real.rpow_natCast]
+      exact (Real.rpow_mul hnR.le cH _).symm
+    have hfive : (n : ℝ) ^ (5 : ℕ) ≤
+        ((n : ℝ) ^ cH) ^ (Nat.ceil (5 / cH) + 1) := by
+      rw [← Real.rpow_natCast (n : ℝ) 5, hpow]
+      exact Real.rpow_le_rpow_of_exponent_le (by exact_mod_cast hn) hk
+    have hden : 0 < ((n : ℝ) ^ cH) ^ (Nat.ceil (5 / cH) + 1) := pow_pos htPos _
+    have hscaled : 6000 * ((n : ℝ) ^ cH) ^ (Nat.ceil (5 / cH) + 1) ≤
+        Real.exp ((n : ℝ) ^ cH) := (le_div_iff₀ hden).mp hratio
+    exact (mul_le_mul_of_nonneg_left hfive (by norm_num : (0 : ℝ) ≤ 6000)).trans hscaled
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (hExpEvent.and (Filter.eventually_atTop.2 ⟨1, fun _ hn => hn⟩))
+  refine ⟨n₀, ?_⟩
+  intro D hn hGrid hCP hHidden hLoc hMean hP0
+  intro y l hl u hsep
+  have hLarge := hn₀ D.n hn
+  have hnNat : 1 ≤ D.n := hLarge.2
+  have hnR : 1 ≤ (D.n : ℝ) := by exact_mod_cast hnNat
+  have hnPos : 0 < (D.n : ℝ) := lt_of_lt_of_le (by norm_num) hnR
+  have hτ : tau8 η₀ ≤ 1 := by
+    rw [tau8_eq]
+    unfold eta8
+    have hmin := min_le_right (η₀ / 2) (4 / 100 : ℝ)
+    linarith
+  have hsBound : sC η₀ D.n ≤ D.n := by
+    apply Nat.ceil_le.mpr
+    calc
+      (D.n : ℝ) ^ tau8 η₀ ≤ (D.n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR hτ
+      _ = D.n := by rw [Real.rpow_one]
+  let c : Fin l → D.CellT := fun i => cellOf η₀ (u i).1
+  let targetKey : Fin l → D.KeyT := fun i => (c i).1
+  have hTargetSep : ∀ i j, i ≠ j → 8 < keyDist (targetKey i) (targetKey j) := by
+    intro i j hij
+    simpa [targetKey, c, cellOf] using hsep i j hij
+  have hTargetInj : Function.Injective targetKey := by
+    intro i j hij
+    by_contra hne
+    have hfar := hTargetSep i j hne
+    rw [hij] at hfar
+    simp [keyDist] at hfar
+  let U : Finset D.KeyT := Finset.univ.image targetKey
+  have hUmem (i : Fin l) : targetKey i ∈ U := by
+    apply Finset.mem_image.mpr
+    exact ⟨i, Finset.mem_univ _, rfl⟩
+  have hUcard : U.card = l := by
+    dsimp [U]
+    rw [Finset.card_image_of_injective _ hTargetInj]
+    simp
+  have hSel : D.SelLocal := sel_local _ _ _ _ D
+  let rowFactor (Θ : D.Hist) (P : D.Pos) (i : Fin l) : ℝ :=
+    oddRawMean D Θ P (c i) y
+  let Φ (Θ : D.Hist) : ℝ := D.posLaw.expect (fun P => ∏ i, rowFactor Θ P i)
+  have hΦNonneg (Θ : D.Hist) : 0 ≤ Φ Θ := by
+    unfold Φ
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro P hP
+    exact mul_nonneg (D.posLaw.nonneg P)
+      (Finset.prod_nonneg fun i hi =>
+        oddRawMean_nonneg D hP0 Θ P (c i) y)
+  let x : ℝ := 2 * Real.exp (-((D.n : ℝ) ^ cH))
+  let δ : ℕ := (2 * sC η₀ D.n + 1) ^ 4
+  let M : ℕ := δ + 1
+  have hbase : 2 * sC η₀ D.n + 1 ≤ 3 * D.n := by omega
+  have hδNat : δ ≤ (3 * D.n) ^ 4 := by
+    dsimp [δ]
+    exact Nat.pow_le_pow_left hbase 4
+  have hδReal : (δ : ℝ) ≤ 81 * (D.n : ℝ) ^ 4 := by
+    calc
+      (δ : ℝ) ≤ ((3 * D.n) ^ 4 : ℕ) := by exact_mod_cast hδNat
+      _ = 81 * (D.n : ℝ) ^ 4 := by push_cast; ring
+  have hn4 : (1 : ℝ) ≤ (D.n : ℝ) ^ 4 := by
+    calc
+      1 = (1 : ℝ) ^ 4 := by norm_num
+      _ ≤ (D.n : ℝ) ^ 4 := by exact pow_le_pow_left₀ (by norm_num) hnR 4
+  have hn5 : (D.n : ℝ) ^ 4 ≤ (D.n : ℝ) ^ 5 := by
+    calc
+      (D.n : ℝ) ^ 4 = 1 * (D.n : ℝ) ^ 4 := by ring
+      _ ≤ (D.n : ℝ) * (D.n : ℝ) ^ 4 := by gcongr
+      _ = (D.n : ℝ) ^ 5 := by ring
+  have hMReal : (M : ℝ) ≤ 82 * (D.n : ℝ) ^ 5 := by
+    have hMcast : (M : ℝ) = (δ : ℝ) + 1 := by simp [M]
+    rw [hMcast]
+    nlinarith [hδReal, hn4, hn5]
+  have hExpLarge : 6000 * (D.n : ℝ) ^ 5 ≤ Real.exp ((D.n : ℝ) ^ cH) := hLarge.1
+  have hscaled : 6000 * (D.n : ℝ) ^ 5 * (Real.exp ((D.n : ℝ) ^ cH))⁻¹ ≤ 1 := by
+    have hmul := mul_le_mul_of_nonneg_right hExpLarge
+      (inv_nonneg.mpr (Real.exp_pos ((D.n : ℝ) ^ cH)).le)
+    simpa [mul_assoc] using hmul
+  have hxM : x * (M : ℝ) ≤ 1 / 2 := by
+    dsimp [x]
+    rw [Real.exp_neg]
+    calc
+      2 * (Real.exp ((D.n : ℝ) ^ cH))⁻¹ * (M : ℝ) ≤
+          2 * (Real.exp ((D.n : ℝ) ^ cH))⁻¹ * (82 * (D.n : ℝ) ^ 5) := by
+        gcongr
+      _ = (164 / 6000 : ℝ) *
+          (6000 * (D.n : ℝ) ^ 5 * (Real.exp ((D.n : ℝ) ^ cH))⁻¹) := by ring
+      _ ≤ 1 / 2 := by nlinarith [hscaled]
+  have hLLL : LLLInput (fun _ : D.KeyT => D.R')
+      (fun g Θ => D.HBad Θ g) (fun g => keyBall g 2) x δ := by
+    simpa [Ctx.HiddenLLL, x, δ] using hHidden
+  have hxNonneg : 0 ≤ x := by positivity
+  have hxlt : x < 1 := hLLL.x_lt_one
+  have hbasePos : 0 < 1 - x := sub_pos.mpr hxlt
+  have hbaseLe : 1 - x ≤ 1 := by linarith
+  have hBern := one_add_mul_sub_le_pow (a := 1 - x) (by linarith) M
+  have hbasePow : (1 / 2 : ℝ) ≤ (1 - x) ^ M := by nlinarith [hxM, hBern]
+  let touching : Finset D.KeyT :=
+    Finset.univ.filter fun g => ¬ Disjoint (keyBall g 2) U
+  have hTouched : touching.card ≤ U.card * M := by
+    have hsub : touching ⊆ U.biUnion (fun k : D.KeyT =>
+        insert k (Finset.univ.filter fun g : D.KeyT =>
+          g ≠ k ∧ ¬ Disjoint (keyBall k 2) (keyBall g 2))) := by
+      intro g hg
+      obtain ⟨k, hkBall, hkU⟩ := Finset.not_disjoint_iff.mp (Finset.mem_filter.mp hg).2
+      apply Finset.mem_biUnion.mpr
+      refine ⟨k, hkU, ?_⟩
+      by_cases hEq : g = k
+      · simp [hEq]
+      · simp only [Finset.mem_insert]
+        right
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, hEq, ?_⟩
+        apply Finset.not_disjoint_iff.mpr
+        refine ⟨k, ?_, hkBall⟩
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        change keyDist k k ≤ 2
+        simp [keyDist]
+    calc
+      touching.card ≤ (U.biUnion (fun k : D.KeyT =>
+          insert k (Finset.univ.filter fun g : D.KeyT =>
+            g ≠ k ∧ ¬ Disjoint (keyBall k 2) (keyBall g 2)))).card :=
+        Finset.card_le_card hsub
+      _ ≤ ∑ k ∈ U, (insert k (Finset.univ.filter fun g : D.KeyT =>
+            g ≠ k ∧ ¬ Disjoint (keyBall k 2) (keyBall g 2))).card := Finset.card_biUnion_le
+      _ ≤ ∑ _k ∈ U, M := by
+        apply Finset.sum_le_sum
+        intro k hk
+        have hdeg := hLLL.degree k
+        have hdeg' : (Finset.univ.filter fun g : D.KeyT =>
+            g ≠ k ∧ ¬ Disjoint (keyBall k 2) (keyBall g 2)).card ≤ δ := by
+          simpa [Ctx.HiddenLLL, x, δ] using hdeg
+        calc
+          _ ≤ _ + 1 := Finset.card_insert_le k _
+          _ ≤ δ + 1 := Nat.add_le_add_right hdeg' 1
+          _ = M := by rfl
+      _ = U.card * M := by simp
+  have hTouchCount : touching.card ≤ l * M := by
+    simpa [hUcard] using hTouched
+  have hCount : touching.card ≤ M * l := by simpa [Nat.mul_comm] using hTouchCount
+  have hpowOrder : (1 - x) ^ (M * l) ≤ (1 - x) ^ touching.card :=
+    pow_le_pow_of_le_one hbasePos.le hbaseLe hCount
+  have hcost : ((1 - x) ^ touching.card)⁻¹ ≤ (2 : ℝ) ^ l := by
+    calc
+      ((1 - x) ^ touching.card)⁻¹ ≤ ((1 - x) ^ (M * l))⁻¹ :=
+        (inv_le_inv₀ (pow_pos hbasePos _) (pow_pos hbasePos _)).2 hpowOrder
+      _ = (((1 - x) ^ M) ^ l)⁻¹ := by rw [pow_mul]
+      _ ≤ ((1 / 2 : ℝ) ^ l)⁻¹ :=
+        (inv_le_inv₀ (pow_pos (pow_pos hbasePos _) _)
+          (pow_pos (by norm_num : (0 : ℝ) < (1 / 2 : ℝ)) _)).2
+            (pow_le_pow_left₀ (by norm_num) hbasePow l)
+      _ = (2 : ℝ) ^ l := by rw [div_pow]; norm_num
+  let b₀ : ℝ := 16 * K / (98 / 100)
+  have hb₀_nonneg : 0 ≤ b₀ := by positivity
+  have hb₀_pos : 0 < b₀ := by positivity
+  have hNnat : 0 < D.N := by
+    have hy := y.isLt
+    omega
+  have hNreal : 0 < (D.N : ℝ) := by exact_mod_cast hNnat
+  have hNormNonneg (q : D.Pre) (W : D.Anch) (e : D.CellT) :
+      0 ≤ oddNormP0 D q W e y := by
+    unfold oddNormP0
+    exact div_nonneg (mul_nonneg (Nat.cast_nonneg _) ((hP0 q W e).1 y)) (by norm_num)
+  have hAnchorNonneg (q : D.Pre) :
+      0 ≤ (D.rawAnchors q).expect (fun W => ∏ i, oddNormP0 D q W (c i) y) := by
+    unfold FinProb.expect
+    apply Finset.sum_nonneg
+    intro W hW
+    exact mul_nonneg ((D.rawAnchors q).nonneg W)
+      (Finset.prod_nonneg fun i hi => hNormNonneg q W (c i))
+  let targetSub (i : Fin l) : {g // g ∈ U} := ⟨targetKey i, hUmem i⟩
+  let outside₀ : ∀ g : {g // g ∈ U}, D.Tup := fun _ _ => y
+  have hLocalBound (ω : D.Hist) (P₀ : D.Pos) :
+      (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+        (fun a => ∏ i, rowFactor (glue U ω a) P₀ i) ≤ b₀ ^ l := by
+    have hAssignDep (i : Fin l) : FinProb.DependsOn
+        (fun a : ∀ g : {g // g ∈ U}, D.Tup => rowFactor (glue U ω a) P₀ i)
+        ({targetSub i} : Finset {g // g ∈ U}) := by
+      intro a a' haa
+      apply oddRawMean_hidden_dep D hLoc hSel
+        (glue U ω a) (glue U ω a') P₀ (c i) y
+      intro k hk
+      have hdist : keyDist (targetKey i) k ≤ 4 := (Finset.mem_filter.mp hk).2
+      by_cases hku : k ∈ U
+      · obtain ⟨j, hj, hkj⟩ := Finset.mem_image.mp hku
+        have hkj' : targetKey j = k := hkj
+        subst k
+        by_cases hij : i = j
+        · subst j
+          have hAgree := haa (targetSub i) (Finset.mem_singleton_self _)
+          have hGlueA : glue U ω a (targetKey i) = a (targetSub i) := by
+            simp [glue, targetSub, hUmem]
+          have hGlueA' : glue U ω a' (targetKey i) = a' (targetSub i) := by
+            simp [glue, targetSub, hUmem]
+          rw [hGlueA, hGlueA', hAgree]
+        · have hfar := hTargetSep i j hij
+          have hnear : keyDist (targetKey i) (targetKey j) ≤ 4 := by
+            simpa [targetKey] using hdist
+          omega
+      · simp [glue, hku]
+    have hDisj : ∀ i j, i ≠ j →
+        Disjoint ({targetSub i} : Finset {g // g ∈ U}) ({targetSub j} : Finset {g // g ∈ U}) := by
+      intro i j hij
+      apply Finset.disjoint_left.mpr
+      intro g hgi hgj
+      have hi : g = targetSub i := Finset.mem_singleton.mp hgi
+      have hj : g = targetSub j := Finset.mem_singleton.mp hgj
+      apply hij
+      apply hTargetInj
+      exact congrArg Subtype.val (hi.symm.trans hj)
+    have hFactor := pi_expect_finprod_of_disjoint
+      (fun _ : {g // g ∈ U} => D.R')
+      (fun i a => rowFactor (glue U ω a) P₀ i)
+      (fun i => {targetSub i}) hAssignDep hDisj Finset.univ
+    let baseHist : D.Hist := glue U ω outside₀
+    have hMeanFactor (i : Fin l) :
+        (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+          (fun a => rowFactor (glue U ω a) P₀ i) ≤ b₀ := by
+      have hSingle := pi_expect_singleton_eq
+        (fun _ : {g // g ∈ U} => D.R') (targetSub i)
+        (fun a => rowFactor (glue U ω a) P₀ i) outside₀ (hAssignDep i)
+      have hGlueFun :
+          (fun ξ => rowFactor (glue U ω (Function.update outside₀ (targetSub i) ξ)) P₀ i) =
+          fun ξ => rowFactor (Function.update baseHist (targetKey i) ξ) P₀ i := by
+        funext ξ
+        rw [glue_update U ω outside₀ (targetKey i) (hUmem i) ξ]
+      have hRawBound : (D.R').expect (fun ξ =>
+          (D.rawLaw (Function.update baseHist (targetKey i) ξ) P₀).expect
+            (fun z => D.p0 ((Function.update baseHist (targetKey i) ξ, P₀), z.1) z.2
+              (c i) y)) ≤ 16 * K / D.N := by
+        simpa [FinProb.expect] using hMean baseHist P₀ (c i) y
+      have hMeanRaw : (D.R').expect (fun ξ =>
+          rowFactor (Function.update baseHist (targetKey i) ξ) P₀ i) =
+          ((D.N : ℝ) / (98 / 100)) *
+            (D.R').expect (fun ξ =>
+              (D.rawLaw (Function.update baseHist (targetKey i) ξ) P₀).expect
+                (fun z => D.p0 ((Function.update baseHist (targetKey i) ξ, P₀), z.1) z.2
+                  (c i) y)) := by
+        rw [expect_congr D.R' (fun ξ => oddRawMean_scale D
+          (Function.update baseHist (targetKey i) ξ) P₀ (c i) y)]
+        exact FinProb.expect_smul D.R' ((D.N : ℝ) / (98 / 100)) _
+      calc
+        (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+            (fun a => rowFactor (glue U ω a) P₀ i) =
+            (D.R').expect (fun ξ => rowFactor
+              (Function.update baseHist (targetKey i) ξ) P₀ i) := by
+          rw [hSingle]
+          exact expect_congr D.R' (fun ξ => congrFun hGlueFun ξ)
+        _ = ((D.N : ℝ) / (98 / 100)) *
+              (D.R').expect (fun ξ =>
+                (D.rawLaw (Function.update baseHist (targetKey i) ξ) P₀).expect
+                  (fun z => D.p0 ((Function.update baseHist (targetKey i) ξ, P₀), z.1) z.2
+                    (c i) y)) := hMeanRaw
+        _ ≤ ((D.N : ℝ) / (98 / 100)) * (16 * K / D.N) :=
+          mul_le_mul_of_nonneg_left hRawBound (by positivity)
+        _ = b₀ := by
+          dsimp [b₀]
+          field_simp [ne_of_gt hNreal]
+    have hFactorNonneg (i : Fin l) : 0 ≤
+        (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+          (fun a => rowFactor (glue U ω a) P₀ i) := by
+      unfold FinProb.expect
+      apply Finset.sum_nonneg
+      intro a ha
+      exact mul_nonneg
+        ((FinProb.pi (fun _ : {g // g ∈ U} => D.R')).nonneg a)
+        (oddRawMean_nonneg D hP0 (glue U ω a) P₀ (c i) y)
+    calc
+      (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+          (fun a => ∏ i, rowFactor (glue U ω a) P₀ i) =
+          ∏ i, (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+            (fun a => rowFactor (glue U ω a) P₀ i) := by simpa using hFactor
+      _ ≤ ∏ i : Fin l, b₀ := by
+        apply Finset.prod_le_prod₀
+        · intro i hi
+          exact hFactorNonneg i
+        · intro i hi
+          exact hMeanFactor i
+      _ = b₀ ^ l := by simp
+  have hFreeBound (ω : D.Hist) :
+      (∑ a : (∀ g : {g // g ∈ U}, D.Tup),
+        (∏ g : {g // g ∈ U}, D.R'.w (a g)) * Φ (glue U ω a)) ≤ b₀ ^ l := by
+    have hSwap :
+        (∑ a : (∀ g : {g // g ∈ U}, D.Tup),
+          (∏ g : {g // g ∈ U}, D.R'.w (a g)) * Φ (glue U ω a)) =
+        D.posLaw.expect (fun P₀ =>
+          (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+            (fun a => ∏ i, rowFactor (glue U ω a) P₀ i)) := by
+      unfold Φ FinProb.expect
+      simp only [FinProb.expect, FinProb.pi]
+      simp_rw [Finset.mul_sum]
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro P₀ hP₀
+      apply Finset.sum_congr rfl
+      intro a ha
+      ring
+    calc
+      _ = D.posLaw.expect (fun P₀ =>
+          (FinProb.pi (fun _ : {g // g ∈ U} => D.R')).expect
+            (fun a => ∏ i, rowFactor (glue U ω a) P₀ i)) := hSwap
+      _ ≤ D.posLaw.expect (fun _ => b₀ ^ l) :=
+        FinProb.expect_mono D.posLaw (fun P₀ => hLocalBound ω P₀)
+      _ = b₀ ^ l := FinProb.expect_const D.posLaw _
+  unfold CondProductBound at hCP
+  have hCondPair := hCP (fun _ : D.KeyT => D.R') (fun g Θ => D.HBad Θ g)
+    (fun g => keyBall g 2) x δ hLLL
+  have hCond := hCondPair.2 U Φ hΦNonneg (b₀ ^ l) hFreeBound
+  have hCondHidden : D.hiddenLaw.expect Φ ≤
+      ((1 - x) ^ touching.card)⁻¹ * b₀ ^ l := by
+    simpa [Ctx.hiddenLaw, Ctx.rawHidden, x, touching] using hCond
+  have hConst : 2 * b₀ ≤ 33 * K + 1 := by
+    dsimp [b₀]
+    have hc : (1600 / 49 : ℝ) < 33 := by norm_num
+    nlinarith [hK, hc]
+  have hFinalConst : D.hiddenLaw.expect Φ ≤ (33 * K + 1) ^ l := by
+    calc
+      D.hiddenLaw.expect Φ ≤ ((1 - x) ^ touching.card)⁻¹ * b₀ ^ l := hCondHidden
+      _ ≤ (2 : ℝ) ^ l * b₀ ^ l :=
+        mul_le_mul_of_nonneg_right hcost (pow_nonneg hb₀_nonneg _)
+      _ = (2 * b₀) ^ l := by rw [mul_pow]
+      _ ≤ (33 * K + 1) ^ l := pow_le_pow_left₀ (by positivity) hConst l
+  let ψ (q : D.Pre) (W : D.Anch) : ℝ :=
+    ∏ i, oddNormP0 D q W (c i) y
+  have hRawExp (Θ : D.Hist) (P₀ : D.Pos) :
+      (D.rawLaw Θ P₀).expect
+        (fun z => ∏ i, oddNormP0 D ((Θ, P₀), z.1) z.2 (c i) y) =
+      (D.rawTAT Θ).expect (fun z =>
+        (D.rawAnchors ((Θ, P₀), z)).expect
+          (fun W => ∏ i, oddNormP0 D ((Θ, P₀), z) W (c i) y)) := by
+    change (FinProb.bind (D.rawTAT Θ) (fun z => D.rawAnchors ((Θ, P₀), z))).expect
+      (fun z => ∏ i, oddNormP0 D ((Θ, P₀), z.1) z.2 (c i) y) = _
+    calc
+      _ = ∑ z, (D.rawTAT Θ).w z *
+            (D.rawAnchors ((Θ, P₀), z)).expect
+              (fun W => ∏ i, oddNormP0 D ((Θ, P₀), z) W (c i) y) :=
+        FinProb.bind_expect (D.rawTAT Θ) (fun z => D.rawAnchors ((Θ, P₀), z))
+          (fun z W => ∏ i, oddNormP0 D ((Θ, P₀), z) W (c i) y)
+      _ = _ := by
+        unfold FinProb.expect
+        rfl
+  have hInter (Θ : D.Hist) (P₀ : D.Pos) :
+      (D.rawTAT Θ).expect (fun z =>
+        (D.rawAnchors ((Θ, P₀), z)).expect
+          (fun W => ∏ i, oddNormP0 D ((Θ, P₀), z) W (c i) y)) =
+      ∏ i, rowFactor Θ P₀ i := by
+    rw [← hRawExp Θ P₀]
+    simpa [rowFactor] using
+      oddRawLaw_expect_finprod_of_separated D hLoc hSel Θ P₀ y c hTargetSep Finset.univ
+  let baseLaw : FinProb (D.Hist × D.Pos) := FinProb.bind D.hiddenLaw (fun _ => D.posLaw)
+  have hPreAvg :
+      D.preLaw.expect (fun q => (D.rawAnchors q).expect (fun W => ψ q W)) =
+        baseLaw.expect (fun hp => ∏ i, rowFactor hp.1 hp.2 i) := by
+    have hBind := FinProb.bind_expect baseLaw (fun hp => D.rawTAT hp.1)
+      (fun hp z => (D.rawAnchors (hp, z)).expect (fun W => ψ (hp, z) W))
+    calc
+      D.preLaw.expect (fun q => (D.rawAnchors q).expect (fun W => ψ q W)) =
+          ∑ hp, baseLaw.w hp * (D.rawTAT hp.1).expect
+            (fun z => (D.rawAnchors (hp, z)).expect (fun W => ψ (hp, z) W)) := by
+        simpa [Ctx.preLaw, baseLaw] using hBind
+      _ = baseLaw.expect (fun hp => ∏ i, rowFactor hp.1 hp.2 i) := by
+        apply expect_congr baseLaw
+        intro hp
+        simpa [ψ] using hInter hp.1 hp.2
+  have hBaseAvg :
+      baseLaw.expect (fun hp => ∏ i, rowFactor hp.1 hp.2 i) = D.hiddenLaw.expect Φ := by
+    have hBind := FinProb.bind_expect D.hiddenLaw (fun _ => D.posLaw)
+      (fun Θ P₀ => ∏ i, rowFactor Θ P₀ i)
+    simpa [baseLaw, Φ, FinProb.expect] using hBind
+  have hAvg :
+      D.preLaw.expect (fun q => (D.rawAnchors q).expect (fun W => ψ q W)) =
+        D.hiddenLaw.expect Φ := hPreAvg.trans hBaseAvg
+  have hDrop :
+      D.preLaw.expect (fun q => (if D.Good q then 1 else 0) *
+          (D.rawAnchors q).expect (fun W => ψ q W)) ≤
+        D.preLaw.expect (fun q => (D.rawAnchors q).expect (fun W => ψ q W)) := by
+    apply FinProb.expect_mono
+    intro q
+    by_cases hG : D.Good q
+    · simp [hG]
+    · simp [hG]
+      exact hAnchorNonneg q
+  change D.preLaw.expect (fun q => (if D.Good q then 1 else 0) *
+      (D.rawAnchors q).expect (fun W => ψ q W)) ≤ (33 * K + 1) ^ l
+  calc
+    _ ≤ D.preLaw.expect (fun q => (D.rawAnchors q).expect (fun W => ψ q W)) := hDrop
+    _ = D.hiddenLaw.expect Φ := hAvg
+    _ ≤ (33 * K + 1) ^ l := hFinalConst
+set_option maxHeartbeats 200000
 
 /-- L8.1k, assembly of the two stages (08:396–413): the staged law draws the anchors from the anchor law at each
 pre-anchor history, so the joint moment is the pre-anchor mean of the anchor-law means. -/

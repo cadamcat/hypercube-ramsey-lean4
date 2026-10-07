@@ -29,6 +29,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
 import HypercubeRamsey.S18.Nodes_q_s18_n2
+import HypercubeRamsey.S18.Deletion_sol_s18_1b
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -391,7 +392,32 @@ theorem L18_1b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → TransitionData D → SmallErrors κ T k PT D.geom (Real.log 2 / 1000) →
         BroadDeletionFacts D K27 := by
-  sorry
+  obtain ⟨Kβ, _, hSchedule, hSmall⟩ := L18_0a hκ T
+  let ε : ℝ := min (1 / 1000) (κ.α / 300000)
+  have hε : 0 < ε := lt_min (by norm_num) (div_pos hκ.α_rng.1 (by norm_num))
+  refine ⟨1100, by norm_num, ?_⟩
+  filter_upwards [hSchedule, hSmall ε hε, T.S.n_tendsto.eventually_ge_atTop 1] with k hS hE hn
+  intro PT hPT D _ _ _
+  have hsmall := hE PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hlower := hS PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hnR : (1 : ℝ) ≤ T.S.n k := by exact_mod_cast hn
+  have hn0 : 0 < (T.S.n k : ℝ) := by linarith
+  have hm : 0 < sketchLength T k := by
+    unfold sketchLength
+    exact Nat.ceil_pos.mpr (Real.rpow_pos_of_pos hn0 _)
+  have hB : ∀ v j, bstar T k ≤ D.error v j ^ 4 := by
+    intro v j
+    have he := (hlower (D.geom.patchOf v)).1 j
+    change Real.rpow (T.S.n k : ℝ) (-0.02) ≤ D.error v j at he
+    calc
+      bstar T k ≤ (Real.rpow (T.S.n k : ℝ) (-0.02)) ^ 4 := by
+        unfold bstar
+        rw [← Real.rpow_mul_natCast hn0.le]
+        apply Real.rpow_le_rpow_of_exponent_le hnR
+        norm_num
+      _ ≤ D.error v j ^ 4 := pow_le_pow_left₀ (Real.rpow_nonneg (Nat.cast_nonneg _) _) he 4
+  exact HypercubeRamsey.Lane_sol_s18_1b.broadDeletion_of_small D hn hm hB ε hε
+    ((min_le_left _ _).trans (by norm_num)) (min_le_right _ _) hsmall
 
 /-- L18.1c, 18:225–226. Bounds an intersection, not a success-conditioned law. -/
 theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK : 0 < K27) :

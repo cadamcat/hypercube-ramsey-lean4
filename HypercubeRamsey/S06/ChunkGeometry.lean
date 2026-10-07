@@ -1,4 +1,6 @@
 import HypercubeRamsey.S06.Defs
+import HypercubeRamsey.S05.Geometry
+import HypercubeRamsey.S06.ChunkGeometry_q_s06_front
 
 /-!
 # Section 6 coarse and fine chunk geometry
@@ -153,7 +155,158 @@ structure ChunkGeometry6 (n : ℕ) (α : ℝ) where
 F-Bins `exists_consecutive_bin_partition` with `ε = n^{-.04}`). -/
 theorem L6_1b_layout (α : ℝ) (hα : 0 < α) (hα' : α ≤ 1 / 100) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∃ L : ChunkLayout6 n, L.m = ⌈(n : ℝ) ^ α⌉₊ := by
-  sorry
+  have hα'' : α < 1 / 50 := by linarith
+  obtain ⟨nL, hL5⟩ := HypercubeRamsey.L5_1b α hα hα''
+  have heventX : ∀ᶠ n : ℕ in Filter.atTop, 4 < (n : ℝ) ^ (1 / 5 : ℝ) := by
+    have htend := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 5)).comp
+      tendsto_natCast_atTop_atTop
+    exact htend.eventually (Filter.eventually_gt_atTop 4)
+  have heventY : ∀ᶠ n : ℕ in Filter.atTop, 8 < (n : ℝ) ^ (3 / 25 : ℝ) := by
+    have htend := (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 3 / 25)).comp
+      tendsto_natCast_atTop_atTop
+    exact htend.eventually (Filter.eventually_gt_atTop 8)
+  obtain ⟨nA, hnA⟩ := Filter.eventually_atTop.1
+    ((Filter.eventually_ge_atTop 2).and (heventX.and heventY))
+  refine ⟨max nL nA, ?_⟩
+  intro n hn
+  have hnL : n ≥ nL := le_trans (le_max_left _ _) hn
+  have hnA' : n ≥ nA := le_trans (le_max_right _ _) hn
+  obtain ⟨g, hg⟩ := hL5 n hnL
+  have hdata := hnA n hnA'
+  have hn2 : 2 ≤ n := hdata.1
+  have hpowX : 4 < (n : ℝ) ^ (1 / 5 : ℝ) := hdata.2.1
+  have hpowY : 8 < (n : ℝ) ^ (3 / 25 : ℝ) := hdata.2.2
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
+  have hnRpos : 0 < (n : ℝ) := by positivity
+  let ε : ℝ := (n : ℝ) ^ (-(1 / 25 : ℝ))
+  have hε : 0 < ε := by dsimp [ε]; positivity
+  have hεinv : 1 / ε = (n : ℝ) ^ (1 / 25 : ℝ) := by
+    dsimp [ε]
+    rw [Real.rpow_neg hnRpos.le]
+    field_simp
+  have hnPowLe : (n : ℝ) ^ (1 / 25 : ℝ) ≤ (n : ℝ) := by
+    have h := Real.rpow_le_rpow_of_exponent_le hnR (by norm_num : (1 / 25 : ℝ) ≤ 1)
+    simpa [Real.rpow_one] using h
+  have hfloorLe : Nat.floor (1 / ε) ≤ n := by
+    have hf : (Nat.floor (1 / ε) : ℝ) ≤ (n : ℝ) := by
+      rw [hεinv]
+      exact (Nat.floor_le (by positivity)).trans hnPowLe
+    exact_mod_cast hf
+  let m : ℕ := ⌈(n : ℝ) ^ α⌉₊
+  let ell (i : Fin coarseChunkCount) : ℕ := (g.coarseChunks i).card
+  have hell (i : Fin coarseChunkCount) : ell i = ⌊(n : ℝ) ^ (1 / 5 : ℝ)⌋₊ :=
+    g.coarse_length i
+  have hellPos (i : Fin coarseChunkCount) : 0 < ell i := by
+    rw [hell]
+    apply Nat.floor_pos.mpr
+    linarith
+  have hellLower (i : Fin coarseChunkCount) :
+      (n : ℝ) ^ (1 / 5 : ℝ) / 2 ≤ (ell i : ℝ) := by
+    have hellReal : (ell i : ℝ) = ⌊(n : ℝ) ^ (1 / 5 : ℝ)⌋₊ := by
+      exact_mod_cast hell i
+    rw [hellReal]
+    have hlt := Nat.lt_floor_add_one ((n : ℝ) ^ (1 / 5 : ℝ))
+    linarith
+  have hε2 : ε * ε = (n : ℝ) ^ (-(2 / 25 : ℝ)) := by
+    dsimp [ε]
+    rw [← Real.rpow_add hnRpos]
+    congr 1 <;> norm_num
+  have hεSquare : ε * ε * ((n : ℝ) ^ (1 / 5 : ℝ) / 2) =
+      (n : ℝ) ^ (3 / 25 : ℝ) / 2 := by
+    rw [hε2]
+    have hpow : (n : ℝ) ^ (-(2 / 25 : ℝ)) * (n : ℝ) ^ (1 / 5 : ℝ) =
+        (n : ℝ) ^ (3 / 25 : ℝ) := by
+      rw [← Real.rpow_add hnRpos (-(2 / 25 : ℝ)) (1 / 5 : ℝ)]
+      congr 1 <;> norm_num
+    calc
+      (n : ℝ) ^ (-(2 / 25 : ℝ)) * ((n : ℝ) ^ (1 / 5 : ℝ) / 2) =
+          ((n : ℝ) ^ (-(2 / 25 : ℝ)) * (n : ℝ) ^ (1 / 5 : ℝ)) / 2 := by ring
+      _ = (n : ℝ) ^ (3 / 25 : ℝ) / 2 := by rw [hpow]
+  have hEpsSqEll (i : Fin coarseChunkCount) : 4 ≤ ε * ε * (ell i : ℝ) := by
+    have hmono := mul_le_mul_of_nonneg_left (hellLower i) (sq_nonneg ε)
+    have hmono' : ε * ε * ((n : ℝ) ^ (1 / 5 : ℝ) / 2) ≤
+        ε * ε * (ell i : ℝ) := by nlinarith [hmono]
+    rw [hεSquare] at hmono'
+    nlinarith [hmono']
+  have hCentral (i : Fin coarseChunkCount) : 2 / Real.sqrt (ell i : ℝ) ≤ ε := by
+    have hsqrtPos : 0 < Real.sqrt (ell i : ℝ) :=
+      Real.sqrt_pos.2 (by exact_mod_cast hellPos i)
+    have hsqrtSq : Real.sqrt (ell i : ℝ) ^ 2 = (ell i : ℝ) :=
+      Real.sq_sqrt (by exact_mod_cast Nat.zero_le (ell i))
+    have hmul : 2 ≤ ε * Real.sqrt (ell i : ℝ) := by
+      apply le_of_sq_le_sq
+      · rw [mul_pow, hsqrtSq]
+        nlinarith [hEpsSqEll i]
+      · positivity
+    exact (div_le_iff₀ hsqrtPos).2 hmul
+  have hAtom (i : Fin coarseChunkCount) (k : Fin (ell i + 1)) :
+      halfBinomialMass (ell i) k ≤ ε := by
+    exact (centralBinomialUpper (ell i) (hellPos i) k.val
+      (Nat.le_of_lt_succ k.isLt)).trans (hCentral i)
+  have hProps (i : Fin coarseChunkCount) :=
+    HypercubeRamsey.Lane_q_s06_front.quantileLabel_properties
+      (ell i) ε hε (hAtom i)
+  have hlabelLe (i : Fin coarseChunkCount) (q : ℕ) :
+      HypercubeRamsey.Lane_q_s06_front.quantileLabel (ell i) ε q ≤ n := by
+    exact ((hProps i).2.2.1 q).trans hfloorLe
+  let label (i : Fin coarseChunkCount) (q : ℕ) :=
+    HypercubeRamsey.Lane_q_s06_front.quantileLabel (ell i) ε q
+  let encBin (i : Fin coarseChunkCount) (q : ℕ) : Fin (n + 1) :=
+    ⟨label i q, Nat.lt_succ_of_le (hlabelLe i q)⟩
+  let L : ChunkLayout6 n := {
+    m := m
+    fineLength := g.fineLength
+    coarseChunks := g.coarseChunks
+    fineChunks := g.fineChunks
+    residual := g.residual
+    bin := encBin
+    chunks_disjoint := g.chunks_disjoint
+    chunks_cover := g.chunks_cover
+    occupied_sublinear := g.occupied_sublinear
+    coarse_length := g.coarse_length
+    fine_length_odd := g.fine_length_odd
+    fine_length_lower := g.fine_length_lower
+    fine_length_upper := g.fine_length_upper
+    fine_chunk_length := g.fine_chunk_length
+    residual_nonempty := g.residual_nonempty
+    bin_monotone := by
+      intro i a b hab
+      change label i a ≤ label i b
+      exact (hProps i).1 a b hab
+    bin_step := by
+      intro i a
+      change label i (a + 1) ≤ label i a + 1
+      exact (hProps i).2.1 a
+    bin_probability := by
+      intro i j
+      simp only [encBin, Fin.ext_iff, ell]
+      simpa [label, ε] using (hProps i).2.2.2.1 j.val
+    bin_count := by
+      intro i
+      let values := (Finset.range (ell i + 1)).image (label i)
+      have himage :
+          ((Finset.range (ell i + 1)).image (encBin i)).image Fin.val = values := by
+        ext q
+        simp [values, encBin, label]
+      have hcard : ((Finset.range (ell i + 1)).image (encBin i)).card = values.card := by
+        calc
+          ((Finset.range (ell i + 1)).image (encBin i)).card =
+              (((Finset.range (ell i + 1)).image (encBin i)).image Fin.val).card := by
+                symm
+                exact Finset.card_image_of_injective _ Fin.val_injective
+          _ = values.card := congrArg Finset.card himage
+      have hcount := (hProps i).2.2.2.2
+      change (((Finset.range (ell i + 1)).image (encBin i)).card : ℝ) ≤
+        (n : ℝ) ^ (1 / 25 : ℝ) + 1
+      calc
+        (((Finset.range (ell i + 1)).image (encBin i)).card : ℝ) =
+            (values.card : ℝ) := by exact_mod_cast hcard
+        _ ≤ ε⁻¹ + 1 := hcount
+        _ = (n : ℝ) ^ (1 / 25 : ℝ) + 1 := by
+          simpa only [one_div] using congrArg (fun x : ℝ => x + 1) hεinv
+  }
+  refine ⟨L, ?_⟩
+  rfl
 
 /-- L6.1b (signs): on each parity class the majority signs are uniform (06:74; complement one fine chunk and
 flip one residual coordinate). -/

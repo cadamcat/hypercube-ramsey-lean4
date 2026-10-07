@@ -15,3 +15,5 @@ import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.S03.Mixtures
 import HypercubeRamsey.S03.ScatteredMoments
 import HypercubeRamsey.S03.GatedPosterior
+import HypercubeRamsey.S03.NearProductInjection
+import HypercubeRamsey.S03.ClockSampling

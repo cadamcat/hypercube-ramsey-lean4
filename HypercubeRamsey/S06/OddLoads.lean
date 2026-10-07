@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.OddRows
 import HypercubeRamsey.S06.OddLoads_q_s06_loads
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadB
+import HypercubeRamsey.S06.OddLoads_sol_s06_loadA
 
 /-!
 # Odd loads through the three histories, and the additional even history mean
@@ -135,6 +136,45 @@ is the candidate prior (`≤ 20Π ≤ 20K/N`); same-bin fraction `O((2n^{−.04}
 constraints touching separated bins costs `O(1)^l` (Lemma 3.4); Lemma 3.6, Markov and the label union. -/
 theorem L6_1k_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.CoarseCert → X.OddBaseLoad := by
+  have hStages : ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.StageFacts :=
+    ((stepFacts6 γ p₀ K hadm).and (stageFacts6 γ p₀ K hadm)).mono
+      (fun _ _ _ _ _ _ h => h.2 h.1)
+  obtain ⟨n₀, C₀, hStages⟩ := hStages
+  refine ⟨n₀, C₀, ?_⟩
+  intro n N E G M X hLarge hCoarse v hv hGood
+  have hStage := hStages n N E G M X hLarge
+  have hGoodMass : 0 < X.initLaw.pr X.V0Good :=
+    lt_of_lt_of_le (by norm_num) hStage.1
+  have hvRaw : X.initLaw.w v ≠ 0 :=
+    (restrictOr6_supp hGoodMass hv).2
+  have hS₀Mass : 0 < X.par.piPrime.pr (fun z => z ∈ X.par.S₀) := by
+    linarith [X.par.S₀_mass]
+  have hvS₀ : v ∈ X.par.S₀ :=
+    (restrictOr6_supp hS₀Mass (by simpa [Ctx6.initLaw] using hvRaw)).1
+  have hInteriorRaw (h : X.Key) (hh : h.2 = .interior) (y : Fin N) :
+      (X.coarseLaw v).expect (fun c =>
+        if X.Step1OK (v, c) h then (N : ℝ) * (X.hidPost (v, c) h).w y else 0) ≤ 20 * K :=
+    Lane_sol_s06_loadA.interior_step1_mean_le X v h hh y hvS₀
+  have hnPos : 0 < n := by
+    by_contra hn
+    have hnZero : n = 0 := by omega
+    have hNZero : N ≤ 0 := by simpa [hnZero] using hLarge.2.2
+    have hY := X.y₀.isLt
+    omega
+  have hBoundaryRaw (b : X.Base) (y : Fin N) :
+      ((2 : ℝ) ^ n)⁻¹ * ∑ u : CubeVertex n,
+        (if X.g.L.boundary u then Lane_sol_s06_loadA.baseLoadTerm X b u y else 0) ≤
+          (n : ℝ) ^ (-(1 / 20 : ℝ) + d₁) :=
+    Lane_sol_s06_loadA.boundary_baseLoadTerm_average_le X b y hnPos
+  have hRawProduct (U : Finset (CubeVertex n))
+      (hsep : ∀ u ∈ U, ∀ u' ∈ U, u ≠ u' → X.g.L.coarseBin u ≠ X.g.L.coarseBin u') (y : Fin N) :
+      (X.coarseLaw v).expect (fun c => ∏ u ∈ U,
+        (if X.Step1OK (v, c) (X.g.L.coarseBin u, .interior) then
+          (N : ℝ) * (X.hidPost (v, c) (X.g.L.coarseBin u, .interior)).w y else 0)) ≤
+            (20 * K) ^ U.card :=
+    Lane_sol_s06_loadA.interior_step1_product_raw_le X v hvS₀ U
+      (fun u => (X.g.L.coarseBin u, .interior)) (fun _ => rfl) hsep y
+  -- Remaining: coarse avoidance, near-bin moments, and the simultaneous label estimate.
   sorry
 
 /-- L6.1k (hidden joint, 06:683–689): Lemma 3.4 removal of the stage 3 constraints touching separated targets
@@ -1164,6 +1204,23 @@ theorem L6_1k_hidden (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
 randomness; their means are the long means; caps handle close repeats. -/
 theorem L6_1k_centres (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.OddRowBounds → X.OddCentreLoad := by
+  refine ⟨2, 0, ?_⟩
+  intro n N E G M X hLarge hRows H hH hLong
+  have hRow0 (C : X.Centre) (u : CubeVertex n) (y : Fin N) :
+      0 ≤ (N : ℝ) * X.oddRow H C u y :=
+    mul_nonneg (Nat.cast_nonneg N) (Lane_sol_s06_loadA.oddRow_nonneg X H C u y)
+  have hCap (C : X.Centre) (u : CubeVertex n) (hu : ¬ IsEvenRole u) (y : Fin N) :
+      (N : ℝ) * X.oddRow H C u y ≤
+        max (Real.exp ((X.m : ℝ) ^ (15 / 100 : ℝ))) ((n : ℝ) ^ ((5 / 100 : ℝ) * X.J)) :=
+    Lane_sol_s06_loadA.oddRow_cap X hRows H hH C u hu y
+  have hMean (y : Fin N) : (X.centreLaw H).expect (fun C => X.rowAvg H C y) = X.longAvg H y := by
+    unfold Ctx6.rowAvg Ctx6.longAvg
+    rw [FinProb.expect_smul]
+    congr 1
+    unfold Ctx6.longMean FinProb.expect
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+  -- Remaining: spatial scopes of long rows and the scattered-moment union estimate.
   sorry
 
 /-- L6.1l (base, 06:713–749): rows outside interior `j = 0` are bounded deterministically (`T_β ≤ n^{d₂u}Λ`,
@@ -1171,6 +1228,28 @@ balance, rarity); at interior `j = 0` the cancellation `E_{I_h,Z_S}[f_x] ≤ N �
 `E_Π η = Λ`; scattered moments under stage 2. -/
 theorem L6_1l_base (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.TagDom → X.Step2Dom → X.CoarseCert → X.EvenBaseMean := by
+  have hStages : ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.StageFacts :=
+    ((stepFacts6 γ p₀ K hadm).and (stageFacts6 γ p₀ K hadm)).mono
+      (fun _ _ _ _ _ _ h => h.2 h.1)
+  obtain ⟨n₀, C₀, hStages⟩ := hStages
+  refine ⟨n₀, C₀, ?_⟩
+  intro n N E G M X hLarge hTag hDom hCoarse v hv hGood
+  have hStage := hStages n N E G M X hLarge
+  have hGoodMass : 0 < X.initLaw.pr X.V0Good :=
+    lt_of_lt_of_le (by norm_num) hStage.1
+  have hvRaw : X.initLaw.w v ≠ 0 :=
+    (restrictOr6_supp hGoodMass hv).2
+  have hvPos : 0 < X.initLaw.w v :=
+    lt_of_le_of_ne (X.initLaw.nonneg v) (Ne.symm hvRaw)
+  have hInteriorRaw (x : CubeVertex n) (hh : (X.evenType x).key.2 = .interior) (a : Fin N) :
+      (X.coarseLaw v).expect (fun c => X.phiEven (v, c) x a) ≤ 20 * K / c₁ := by
+    exact Lane_sol_s06_loadA.interior_gatedTagMixture_mean_le X v (X.evenType x) hh hvPos a
+  have hPhiCap (b : X.Base) (x : CubeVertex n) (hx : IsEvenRole x)
+      (hSupp : X.KeysSupp b {(X.evenType x).key}) (a : Fin N) :
+      X.phiEven b x a ≤ (n : ℝ) ^ (d₂ * (X.evenType x).u) * K := by
+    apply Lane_sol_s06_loadA.gatedTagMixture_hiddenMean_cap X hDom b (X.evenType x) _ hSupp a
+    exact Finset.mem_image.mpr ⟨x, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hx⟩, rfl⟩
+  -- Remaining: rarity bounds outside interior severity zero, and coarse-stage product moments.
   sorry
 
 /-- L6.1l (hidden, 06:751–757): scattered moments of the `f_x` under stage 3; removing the constraints touching

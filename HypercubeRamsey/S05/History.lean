@@ -1,4 +1,5 @@
 import HypercubeRamsey.S05.Experiment
+import HypercubeRamsey.S05.History_q_s05_hist2
 
 /-!
 # L5.1c, d, f, h, l(1–2): raw test bounds and the five conditioning stages
@@ -12,7 +13,8 @@ averages under the stage laws (05:1003–1041).
 
 namespace HypercubeRamsey
 
-open Classical OAI.HypercubeRamsey
+open Classical Filter OAI.HypercubeRamsey
+open scoped Topology
 
 set_option synthInstance.maxSize 1024
 
@@ -309,11 +311,151 @@ def Stage4Laws (b : X.Base) (hi : X.HighHid) (tr : X.LowIdx → Law N) : Prop :=
 probability `o(1)` by Stage 3, so conditioning each key separately costs a density factor `1 + o(1) ≤ 2`. -/
 theorem L5_1h4 : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
-      ∀ b hi, (∀ K t, X.OptOccurs K t →
+        ∀ b hi, (∀ K t, X.OptOccurs K t →
           (X.lowLaw b).pr (fun lo => X.optFail (b, X.joinHidden hi lo) K t) ≤
             Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8)) →
         ∃ tr, X.Stage4Laws b hi tr := by
-  sorry
+  classical
+  let R : ParamReq5 := {
+    Kcap := fun _ => 0
+    Kpp := fun _ => 0
+    Kh := fun _ => 0
+    K1 := fun _ => 0
+    K2 := fun _ => 0
+    KD := fun _ => 0
+    Ks := fun _ => 0
+    KB := fun _ => 0
+    alpha := fun _ => 1 / 50
+    alpha_pos := fun _ => by norm_num
+  }
+  refine ⟨R, ?_⟩
+  intro p _hp
+  let M : ℝ := Real.rpow 2 ((2 * 3 ^ coarseChunkCount5 : ℕ) : ℝ)
+  have hM : 0 < M := by dsimp [M]; positivity
+  have hEps := Params5.tendsto_optTestEps5 p
+  have hsmallPositive : 0 < (1 / 2 : ℝ) / M := div_pos (by norm_num) hM
+  have hbound : Set.Iio ((1 / 2 : ℝ) / M) ∈ 𝓝 (0 : ℝ) := Iio_mem_nhds hsmallPositive
+  have hsmall := Filter.eventually_atTop.1 (hEps.eventually hbound)
+  obtain ⟨n₀, hn₀⟩ := hsmall
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp b hi htests
+  let Tests (k : X.LowIdx) :=
+    {K : X.Ty // X.OptOccurs K (k.2.1) ∧ X.optKeyOf K (k.2.1) = .inl k}
+  have hTestsCard (k : X.LowIdx) : (Fintype.card (Tests k) : ℝ) ≤ M := by
+    letI : Fintype (Tests k) := Subtype.fintype _
+    simpa [M, Tests] using Setup5.optPatternCount_le5 X k (inferInstance)
+  have hε0 : 0 ≤ Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) :=
+    (Real.exp_pos _).le
+  have hεsmall : Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) < 1 / 2 / M := by
+    rw [hXp]
+    exact hn₀ n hn
+  have hTestsSmall (k : X.LowIdx) :
+      (Fintype.card (Tests k) : ℝ) * Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) < 1 / 2 := by
+    calc
+      (Fintype.card (Tests k) : ℝ) * Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) ≤
+          M * Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) :=
+        mul_le_mul_of_nonneg_right (hTestsCard k) hε0
+      _ < M * ((1 / 2 : ℝ) / M) := mul_lt_mul_of_pos_left hεsmall hM
+      _ = 1 / 2 := by field_simp [ne_of_gt hM]
+  have hOptFail_ext {K : X.Ty} {t : CubeVertex (X.p.m n)} {k : X.LowIdx}
+      (hOpt : X.OptOccurs K t) (hKey : X.optKeyOf K t = .inl k)
+      (lo lo' : X.LowHid) (hlo : lo k = lo' k) :
+      X.optFail (b, X.joinHidden hi lo) K t = X.optFail (b, X.joinHidden hi lo') K t := by
+    classical
+    have hfacts := X.optOccurs_high_type_keys_near5 K t hOpt
+    have hcolsS : ∀ ℓ ∈ K.2.1,
+        (b, X.joinHidden hi lo).2 ℓ = (b, X.joinHidden hi lo').2 ℓ := by
+      intro ℓ hℓ
+      rcases hfacts.2.1 ℓ hℓ with ⟨i, rfl⟩
+      rfl
+    have hcolsIns : ∀ ℓ ∈ insert (X.optKeyOf K t) K.2.1,
+        (b, X.joinHidden hi lo).2 ℓ = (b, X.joinHidden hi lo').2 ℓ := by
+      intro ℓ hℓ
+      rcases Finset.mem_insert.mp hℓ with hℓ | hℓ
+      · subst ℓ
+        rw [hKey]
+        change lo k = lo' k
+        exact hlo
+      · exact hcolsS ℓ hℓ
+    have hmassS := X.blockMass_ext5 (b, X.joinHidden hi lo) (b, X.joinHidden hi lo') K
+      K.2.1 rfl hcolsS
+    have hmassIns := X.blockMass_ext5 (b, X.joinHidden hi lo) (b, X.joinHidden hi lo') K
+      (insert (X.optKeyOf K t) K.2.1) rfl hcolsIns
+    unfold Setup5.optFail
+    rw [hmassIns, hmassS]
+  have hLowMarg (k : X.LowIdx) (A : Fin N → Prop) :
+      (X.lowLaw b).pr (fun lo => A (lo k ⟨0, by omega⟩)) = (X.prior b (.inl k)).pr A := by
+    classical
+    let i₀ : Fin 1 := ⟨0, by omega⟩
+    let P : X.LowIdx → FinProb (Fin 1 → Fin N) :=
+      fun k' => FinProb.pi fun _ : Fin 1 => X.prior b (.inl k')
+    have htop := FinProb.pi_pr_singleton5 P k (fun col => A (col i₀)) (fun _ => X.y₀)
+    have hinner := FinProb.pi_pr_singleton5
+      (fun _ : Fin 1 => X.prior b (.inl k)) i₀ A X.y₀
+    simpa [P, Setup5.lowLaw, Setup5.lowLawOf, i₀] using htop.trans hinner
+  let i₀ : Fin 1 := ⟨0, by omega⟩
+  let loAt : X.LowIdx → Fin N → X.LowHid := fun k y =>
+    Function.update (fun _ : X.LowIdx => fun _ : Fin 1 => X.y₀) k (fun _ => y)
+  let Bad : ∀ k : X.LowIdx, Tests k → Fin N → Prop := fun k q y =>
+    X.optFail (b, X.joinHidden hi (loAt k y)) q.1 (k.2.1)
+  have hbad (k : X.LowIdx) (q : Tests k) :
+      (X.prior b (.inl k)).pr (Bad k q) ≤
+        Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) := by
+    let t₀ := k.2.1
+    have hinput := htests q.1 t₀ q.2.1
+    have hcoord (lo : X.LowHid) : lo k = (loAt k (lo k i₀)) k := by
+      simp only [loAt, Function.update_self]
+      funext j
+      have hj : j = i₀ := Subsingleton.elim _ _
+      rw [hj]
+    have hEvent (lo : X.LowHid) :
+        X.optFail (b, X.joinHidden hi lo) q.1 t₀ = Bad k q (lo k i₀) := by
+      simpa [Bad, t₀] using hOptFail_ext q.2.1 q.2.2 lo (loAt k (lo k i₀)) (hcoord lo)
+    have hprEq :
+        (X.lowLaw b).pr (fun lo => X.optFail (b, X.joinHidden hi lo) q.1 t₀) =
+          (X.lowLaw b).pr (fun lo => Bad k q (lo k i₀)) := by
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro lo hlo
+      change (if X.optFail (b, X.joinHidden hi lo) q.1 t₀ then (X.lowLaw b).w lo else 0) =
+        (if Bad k q (lo k i₀) then (X.lowLaw b).w lo else 0)
+      rw [hEvent lo]
+    calc
+      (X.prior b (.inl k)).pr (Bad k q) =
+          (X.lowLaw b).pr (fun lo => Bad k q (lo k i₀)) := (hLowMarg k (Bad k q)).symm
+      _ = (X.lowLaw b).pr (fun lo => X.optFail (b, X.joinHidden hi lo) q.1 t₀) := hprEq.symm
+      _ ≤ Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8) := hinput
+  have hTrim (k : X.LowIdx) :
+      ∃ Q : FinProb (Fin N), (∀ y, Q.w y ≤ 2 * (X.prior b (.inl k)).w y) ∧
+        ∀ y, Q.w y ≠ 0 → ∀ q : Tests k, ¬ Bad k q y := by
+    letI : Fintype (Tests k) := Subtype.fintype _
+    apply FinProb.trimByFiniteFamily5 (X.prior b (.inl k)) (Bad k)
+      (Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 8)) hε0
+    · exact hbad k
+    · exact hTestsSmall k
+  let tr : X.LowIdx → Law N := fun k => Classical.choose (hTrim k)
+  have htr : ∀ k, (∀ y, (tr k).w y ≤ 2 * (X.prior b (.inl k)).w y) ∧
+      ∀ y, (tr k).w y ≠ 0 → ∀ q : Tests k, ¬ Bad k q y := fun k => Classical.choose_spec (hTrim k)
+  refine ⟨tr, ?_, ?_⟩
+  · intro k y
+    exact (htr k).1 y
+  · intro k y hy K t hOpt hKey lo hlo
+    have ht : t = k.2.1 := by
+      have h := hKey
+      simp [Setup5.optKeyOf] at h
+      exact congrArg Prod.fst (congrArg Prod.snd h)
+    have hOpt' : X.OptOccurs K (k.2.1) := by simpa [ht] using hOpt
+    have hKey' : X.optKeyOf K (k.2.1) = .inl k := by simpa [ht] using hKey
+    let q : Tests k := ⟨K, hOpt', hKey'⟩
+    have hgood : ¬ Bad k q y := (htr k).2 y hy q
+    have hcoord : lo k = (loAt k y) k := by
+      rw [hlo]
+      simp [loAt]
+    have hEqActual := hOptFail_ext hOpt hKey lo (loAt k y) hcoord
+    have hEq : X.optFail (b, X.joinHidden hi lo) K t = Bad k q y := by
+      simpa [Bad, q, ht] using hEqActual
+    rw [hEq]
+    exact hgood
 
 /-! ### Stage 5: the low keys (05:723–744) -/
 

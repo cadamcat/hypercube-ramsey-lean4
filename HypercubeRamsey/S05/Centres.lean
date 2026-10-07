@@ -106,6 +106,10 @@ def sites (h : X.HeightChoice5) : h.hp.Sites :=
 /-- The site of an even role. -/
 def siteOf (v : EvenRole5 n) : CubeVertex X.St.d := X.St.oneHot (X.St.stateOf v.1)
 
+/-- Selection with either consultation radius, using the same eligibility and ties (05:861–879). -/
+def selAt (elig : X.CΩ h → h.hp.EligMap) (ω : X.CΩ h) (R : ℕ) (v : EvenRole5 n) : Option h.hp.Loc :=
+  h.hp.selectionAt (X.sites h) (pos ω) (act ω) (elig ω) (tie ω) R (X.siteOf v)
+
 /-- The long-rule selection at an even role (05:851–853). -/
 def selLong (elig : X.CΩ h → h.hp.EligMap) (ω : X.CΩ h) (v : EvenRole5 n) : Option h.hp.Loc :=
   h.hp.selection (X.sites h) (pos ω) (act ω) (elig ω) (tie ω) (X.siteOf v)
@@ -128,17 +132,17 @@ def evenRefOf (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h) (
     Option (X.CRef h) :=
   (X.selLong elig ω v).map fun l => (l, X.refSubset H ω v l)
 
-/-- The actual record of an odd role (05:331–343): its neighbours' selected arrays, the needed same-mode
+/-- The record of an odd role at a specified consultation radius (05:331–343,861–879): its neighbours' selected arrays, the needed same-mode
 references, and at a low role with a high neighbour, that pool and the mask hit by the actual target. -/
-def actualRecord (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h) (y : OddRole5 n) :
+def actualRecordAt (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h) (R : ℕ) (y : OddRole5 n) :
     X.RecordOn h.hp.Loc :=
   let ℓ := X.g.roleKey (X.p.J n) y.1
   let obs : Finset (h.hp.Loc × X.Ty) := (evenNbrs y).biUnion fun a =>
-    match X.selLong elig ω a with
+    match X.selAt elig ω R a with
     | some l => {(l, X.g.evenType (X.p.J n) a.1)}
     | none => ∅
   let refs : Finset (h.hp.Loc × X.Ty × Option X.Key) := (evenNbrs y).biUnion fun a =>
-    match X.selLong elig ω a with
+    match X.selAt elig ω R a with
     | some l =>
       if ℓ ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
           ℓ.isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
@@ -147,9 +151,9 @@ def actualRecord (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h
   let mask : Option (h.hp.Loc × X.Ty × Finset (Fin X.blockBound)) :=
     match ℓ with
     | .inl k =>
-      if hex : ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selLong elig ω a).isSome then
+      if hex : ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω R a).isSome then
         let a := Classical.choose hex
-        match X.selLong elig ω a with
+        match X.selAt elig ω R a with
         | some l =>
           some (l, X.g.evenType (X.p.J n) a.1,
             X.firstK (X.hitSet (arraysOf ω) (l, X.g.evenType (X.p.J n) a.1) (X.lowCol H.2 k))
@@ -158,6 +162,11 @@ def actualRecord (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h
       else none
     | .inr _ => none
   (ℓ, obs, refs, mask)
+
+/-- The actual long-rule record. -/
+def actualRecord (elig : X.CΩ h → h.hp.EligMap) (H : X.KeyHist) (ω : X.CΩ h) (y : OddRole5 n) :
+    X.RecordOn h.hp.Loc :=
+  X.actualRecordAt elig H ω h.hp.Rlong y
 
 /-- The tuple of a reference: its blocks in the array of the even role's type. -/
 def refBlocks (ω : X.CΩ h) (v : EvenRole5 n) (c : X.CRef h) :
@@ -213,8 +222,11 @@ structure CentreLayer5 where
   success_select : ∀ H ω, success H ω → ∀ v, (X.selLong (elig H) ω v).isSome
   valid_select : ∀ H ω y, valid H ω y → ∀ a ∈ evenNbrs y, (X.selLong (elig H) ω a).isSome
   /-- The fixed base lies in raw support. Key and array replacements keep this base; they do not
-  retest global Step 1 or Step 2 (05:888–894). -/
+  retest global history success (05:888–894). -/
   valid_base_support : ∀ H ω y, valid H ω y → X.baseLaw.w H.1 ≠ 0
+  /-- Step 1 is retained on the fixed base, including its prior cap (05:209–217).
+  Later replacements alter only keys and arrays, not this certificate (05:888–894). -/
+  valid_step1 : ∀ H ω y, valid H ω y → X.Step1Pass H.1
   /-- True raw block support at the observed arrays, excluding zero-normalizer fallbacks. This
   is the local support test of 05:876–879; it is recomputed at hypothetical values. -/
   valid_block_support : ∀ H ω y, valid H ω y →
@@ -242,16 +254,66 @@ structure CentreLayer5 where
     X.candGateOn H (X.actualRecord (elig H) H ω y) (arraysOf ω) (H.2 (X.g.roleKey (X.p.J n) y.1))
   valid_step3 : ∀ H ω y, valid H ω y → ¬ X.step3FailOn H (X.actualRecord (elig H) H ω y) (arraysOf ω)
 
+/-- The displayed star tests, with one common definition for both height truncations
+(05:869–894). Step 1 belongs to the fixed base; all other tests use the replaced keys and arrays. -/
+def LocalValidAt (ht : X.HeightChoice5) (elig : X.KeyHist → X.CΩ ht → ht.hp.EligMap)
+    (H : X.KeyHist) (ω : X.CΩ ht) (R : ℕ) (y : OddRole5 n) : Prop :=
+  let r := X.actualRecordAt (elig H) H ω R y
+  X.baseLaw.w H.1 ≠ 0 ∧ X.Step1Pass H.1 ∧
+  (∀ a ∈ evenNbrs y, (X.selAt (elig H) ω R a).isSome) ∧
+  (∀ a ∈ evenNbrs y, ∀ j : Fin (ht.hp.H + 1),
+    ((Finset.univ.filter fun u : CubeVertex ht.hp.d =>
+      pos ω (u, j) = true ∧ hammingDist u (X.siteOf a) ≤ ht.hp.r).card : ℝ) ≤ 2 * ht.hp.lam) ∧
+  ((evenNbrs y).image fun a => X.selAt (elig H) ω R a).card ≤ X.p.T n ∧
+  (∀ a ∈ evenNbrs y, ∀ l k, X.selAt (elig H) ω R a = some l →
+    X.g.optionalKey (X.p.J n) a.1 = some (.inl k) →
+    X.p.usedBlocks n ≤ (X.hitSet (arraysOf ω) (l, X.g.evenType (X.p.J n) a.1) (X.lowCol H.2 k)).card) ∧
+  (∀ a ∈ evenNbrs y, ∀ l, X.selAt (elig H) ω R a = some l →
+    let c := (l, X.refSubset H ω a l)
+    (X.heavyCount H ω a c : ℝ) ≤ X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) a.1) c.2 : ℝ)) ∧
+  (∀ c ∈ r.2.1, ∀ i, X.blockWeight H c.2 c.2.2.1 (arraysOf ω c i) ≠ 0) ∧
+  0 < X.step3PostOn H r (arraysOf ω) none (H.2 (X.g.roleKey (X.p.J n) y.1)) ∧
+  X.candGateOn H r (arraysOf ω) (H.2 (X.g.roleKey (X.p.J n) y.1)) ∧
+  ¬ X.step3FailOn H r (arraysOf ω)
+
+/-- Raw mass of a valid short presentation with its recorded observations. Unrecorded arrays
+are integrated under their laws at the candidate history (05:905–933,978–985). -/
+def shortPresentationMass (L : X.CentreLayer5) (H : X.KeyHist) (y : OddRole5 n)
+    (r : X.RecordOn L.ht.hp.Loc) (a : X.ArraysOn L.ht.hp.Loc) : ℝ :=
+  (X.centreLaw L.ht H).pr fun ω =>
+    X.LocalValidAt L.ht L.elig H ω (L.ht.hp.Rshort (X.p.m n)) y ∧
+    X.actualRecordAt (L.elig H) H ω (L.ht.hp.Rshort (X.p.m n)) y = r ∧
+    ∀ c ∈ r.2.1, arraysOf ω c = a c
+
+/-- Certificates for the paper's low-row layer. The short presentation is local in low keys,
+and size failure is negligible at good histories; neither follows from center locality alone.
+`Ckey` is chosen before the parameter request and dimension threshold (05:978–1001). -/
+structure LowLayer5 (L : X.CentreLayer5) (Ckey : ℕ) (cL cH : ℝ) : Prop where
+  /-- Validity is exactly the displayed star tests, also used by the short calculation (05:869–887). -/
+  valid_eq : ∀ H ω y, L.valid H ω y ↔ X.LocalValidAt L.ht L.elig H ω L.ht.hp.Rlong y
+  /-- Equality of these finite presentation masses retains locality after integrating every
+  unconsulted array. It includes eligibility, validity and lookup inputs at hypothetical keys. -/
+  presentation_local : ∀ b hi y r a, FinProb.DependsOn
+    (fun lo => X.shortPresentationMass L (b, X.joinHidden hi lo) y r a)
+    (Finset.univ.filter fun k : X.LowIdx =>
+      hammingDist k.2.1 (X.g.sign y.1) ≤ Ckey * Nat.sqrt (X.p.m n))
+  /-- The paper's exp(-Ω(n)) bound implies this weaker eventual bound, still sufficient
+  after multiplying by the low cap exp(m^.15) (05:837–849,987–1001). -/
+  size_failure : ∀ H, X.KeyGood5 H cL cH →
+    (X.centreLaw L.ht H).pr (fun ω => ¬ L.ht.hp.Legal (pos ω) (L.elig H ω) (X.sites L.ht)) ≤
+      Real.exp (-Real.sqrt n)
+
 /-- L5.1j (05:818–894): at every good key history the marking and singleton rules, the long height rule and
 uniform ties give geometry success with probability `1 - o(1)` — balls hold `λ/2..2λ` prospective centers,
 maximal families of disjoint Step 3 failures have fewer than `n` members (disjoint ID sets read independent
 arrays; the history bounds and the record counts), eligible sets keep `λ/3` centers, neighbouring even states
 use two consecutive levels and at most `2n^b ≤ T` IDs, and every actual mapping passes Step 3 by maximality. -/
 theorem L5_1j : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) →
-    ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
+    ∃ Ckey : ℕ, ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
       ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
-        X.RecordCount C → ∃ L : X.CentreLayer5, ∀ H : X.KeyHist, X.KeyGood5 H (cL p.pre1) (cH p.pre1) →
-          (X.centreLaw L.ht H).pr (fun ω => ¬ L.success H ω) ≤ 1 / 100 := by
+        X.RecordCount C → ∃ L : X.CentreLayer5, X.LowLayer5 L Ckey (cL p.pre1) (cH p.pre1) ∧
+          ∀ H : X.KeyHist, X.KeyGood5 H (cL p.pre1) (cH p.pre1) →
+            (X.centreLaw L.ht H).pr (fun ω => ¬ L.success H ω) ≤ 1 / 100 := by
   sorry
 
 /-! ### High rows: the common law of L5.1g (05:472–605) -/
@@ -381,12 +443,15 @@ ratio of finite sums in the experiment with the target replaced and the unrecord
 candidate value), the adjusted or fallback rows, the proxy means, their locality (sign distance `O(√m)`), the
 long/short comparison (`o(e^{-2m^{1/5}})` mismatch at each of `O(n)` neighbouring states, cap `e^{D_L}`), and the
 deletion bound `e^{a₄ k_c}` from the Step 3 bounds and the reserved selection multiplier. Its locality constant
-is chosen before the parameter request and dimension threshold, uniformly over all permitted layers. -/
-theorem L5_1k_rows : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) →
+is chosen before the parameter request and dimension threshold, uniformly over layers carrying
+`LowLayer5` with the earlier short-presentation locality constant. Raw support alone does not retain
+Step 1's fixed-base cap or supply the key locality and size-failure estimate. -/
+theorem L5_1k_rows : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) → ∀ Ckey : ℕ,
     ∃ Cloc : ℕ, ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G),
       X.p = p → (∀ x : CubeVertex n, ∀ ℓ ∈ X.g.typeKeys (X.p.J n) x, (X.g.key x).1 ∈ binList5 ℓ.coarse) →
-        ∀ L : X.CentreLayer5, ∃ LR : X.LowRows5 L (cL p.pre1) (cH p.pre1), LR.proxyRadius ≤ Cloc := by
+        ∀ L : X.CentreLayer5, X.LowLayer5 L Ckey (cL p.pre1) (cH p.pre1) →
+          ∃ LR : X.LowRows5 L (cL p.pre1) (cH p.pre1), LR.proxyRadius ≤ Cloc := by
   sorry
 
 /-! ### The odd rows and their column sums (05:1003–1058) -/

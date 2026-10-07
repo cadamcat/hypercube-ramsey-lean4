@@ -525,7 +525,8 @@ slot/image/tape dependency, conditional pushforward and touching charges.
 The prescribed `D.l16_valid.slot_eq` bounds leaf slot domains as well as cells. -/
 theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
-      ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → Nonempty (LeafCoupling D δ) := by
+      ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
+        Nonempty (LeafCoupling D δ) := by
   sorry
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
@@ -557,7 +558,7 @@ theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   filter_upwards [P18_3a hκ T K27 c1 δ hK hc1 hδ hδsmall, P18_3e hκ T δ hδ, hf] with k ha he hf
   intro PT hPT D hD hR hLocal hTransfer
   have risk := ha PT hPT D hD hR hLocal hTransfer (P18_3c D)
-  obtain ⟨leaves⟩ := he PT hPT D hD risk
+  obtain ⟨leaves⟩ := he PT hPT D hD hR risk
   exact hf PT hPT D hD risk leaves
 
 /-- P18.4b, 18:827–861. The entering predicate is the exact incoming-risk

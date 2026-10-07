@@ -7,6 +7,7 @@ import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n2
 import HypercubeRamsey.S18.Locality_sol_s18_n4
+import HypercubeRamsey.S18.Tower_sol_s18_n4
 
 namespace HypercubeRamsey.Lane_sol_s18_1c
 open Classical Filter
@@ -737,7 +738,7 @@ theorem numerical_cutoff (T : Stage) :
 
 /-- A finite seed table implements every conditional finite law. The table's law
 is fixed before an input is selected; evaluation has the required marginal. -/
-theorem independent_kernel_seeds {A B : Type*} [Fintype A] [Fintype B]
+theorem independent_kernel_seeds {A B : Type*} [Fintype A] [Fintype B] [DecidableEq A] [DecidableEq B]
     (K : A → FinLaw B) :
     ∃ seedLaw : FinLaw (A → B), ∀ a, FinLaw.map seedLaw (fun seed => seed a) = K a := by
   refine ⟨FinLaw.pi K, ?_⟩
@@ -2450,5 +2451,1140 @@ theorem block_currentPrior_local (D : LateData hPT) (X : CriticalTransferData D)
     D.currentPrior j w (blockConfig D X a s, rows) =
       D.currentPrior j w (blockConfig D X a s', rows) := by
   rw [blockConfig_local D X a s s' hs]
+
+set_option maxHeartbeats 400000
+
+/-- All prefix bits are outer bits, so an erased outer word fixes the patch. -/
+private theorem patchOf_eq_of_outer (D : LateData hPT) (v w : Pos T k)
+    (houter : ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf v) → w a = v a) :
+    D.geom.patchOf w = D.geom.patchOf v := by
+  have hleaf : w ∈ PT.tiling.leaf (D.geom.patchOf v) := by
+    intro a ha
+    have hnot : a ∉ PT.tiling.Icoord (D.geom.patchOf v) := by
+      intro hI
+      have hat : T.S.n k - (PT.tiling.P (D.geom.patchOf v)).h ≤ a.val :=
+        (Finset.mem_filter.mp hI).2
+      have hell : (PT.tiling.P (D.geom.patchOf v)).ℓ ≤
+          Finset.univ.sup (fun i : Fin PT.tiling.m => (PT.tiling.P i).ℓ) :=
+        Finset.le_sup (f := fun i : Fin PT.tiling.m => (PT.tiling.P i).ℓ) (Finset.mem_univ _)
+      have hh : (PT.tiling.P (D.geom.patchOf v)).h ≤
+          Finset.univ.sup (fun i : Fin PT.tiling.m => (PT.tiling.P i).h) :=
+        Finset.le_sup (f := fun i : Fin PT.tiling.m => (PT.tiling.P i).h) (Finset.mem_univ _)
+      have hlen := hPT.tiling_valid.prefix_internal_length
+      omega
+    rw [houter a hnot]
+    exact D.geom.patchOf_leaf v a ha
+  obtain ⟨i, hi, hu⟩ := hPT.tiling_valid.prefix_complete w
+  exact (hu _ (D.geom.patchOf_leaf w)).trans (hu _ hleaf).symm
+
+noncomputable def erasedTests (D : LateData hPT) (X : CriticalTransferData D) (b : Pos T k) :
+    Finset (Fin (T.S.n k)) := Finset.univ.filter fun a => flipPos b a ∈ X.erased
+
+/-- A predecessor in the erased outer word loses its whole internal batch. -/
+theorem erasedTests_internal (D : LateData hPT) (X : CriticalTransferData D)
+    (b : Pos T k) (hb : b ∈ X.predecessors D.geom.r)
+    (ho : ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → b a = X.target a) :
+    erasedTests D X b = PT.tiling.Icoord (D.geom.patchOf b) := by
+  have hp := patchOf_eq_of_outer D X.target b ho
+  ext a
+  simp only [erasedTests, Finset.mem_filter, Finset.mem_univ, true_and]
+  constructor
+  · intro he
+    by_contra ha
+    have hnot : a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) := by simpa only [hp] using ha
+    have heq := (Finset.mem_filter.mp he).2 a hnot
+    rw [← ho a hnot] at heq
+    cases hba : b a <;> simp [flipPos, hba] at heq
+  · intro ha
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_biUnion.mpr ⟨b, hb, Finset.mem_image.mpr ⟨a, Finset.mem_univ _, rfl⟩⟩, ?_⟩
+    intro t ht
+    have hta : t ≠ a := by
+      intro heq
+      subst t
+      exact ht (by simpa only [hp] using ha)
+    simpa [flipPos, hta] using ho t ht
+
+/-- Outside the erased outer word, at most one external test is erased. -/
+theorem erasedTests_external (D : LateData hPT) (X : CriticalTransferData D)
+    (b : Pos T k)
+    (ho : ¬ ∀ a, a ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → b a = X.target a)
+    (a : Fin (T.S.n k)) (ha : a ∈ erasedTests D X b) :
+    a ∉ PT.tiling.Icoord (D.geom.patchOf b) ∧ erasedTests D X b = {a} := by
+  push_neg at ho
+  obtain ⟨t, ht', hbt'⟩ := ho
+  have houter := (Finset.mem_filter.mp (Finset.mem_filter.mp ha).2).2
+  have hta : t = a := by
+    by_contra hne
+    apply hbt'
+    simpa [flipPos, hne] using houter t ht'
+  subst t
+  have hnot : a ∉ PT.tiling.Icoord (D.geom.patchOf b) := by
+    intro hI
+    have hpatch1 := internal_patch D b a hI
+    have hpatch2 := patchOf_eq_of_outer D X.target (flipPos b a) houter
+    have hp : D.geom.patchOf b = D.geom.patchOf X.target := hpatch1.symm.trans hpatch2
+    exact ht' (by simpa only [hp] using hI)
+  refine ⟨hnot, ?_⟩
+  ext a'
+  simp only [Finset.mem_singleton]
+  constructor
+  · intro ha'
+    have ho' := (Finset.mem_filter.mp (Finset.mem_filter.mp ha').2).2
+    by_contra hne
+    apply hbt'
+    simpa [flipPos, Ne.symm hne] using ho' a ht'
+  · intro heq
+    subst a'
+    exact ha
+
+/-- Every nonempty erasure is exactly one permitted deletion kernel. -/
+theorem erasedTests_deletion (D : LateData hPT) (X : CriticalTransferData D)
+    (b : Pos T k) (hb : b ∈ X.predecessors D.geom.r) :
+    erasedTests D X b = ∅ ∨ ∃ a ∈ erasedTests D X b,
+      erasedTests D X b = if a ∈ PT.tiling.Icoord (D.geom.patchOf b) then
+        PT.tiling.Icoord (D.geom.patchOf b) else {a} := by
+  by_cases he : erasedTests D X b = ∅
+  · exact Or.inl he
+  · obtain ⟨a, ha⟩ := Finset.nonempty_iff_ne_empty.mpr he
+    right
+    refine ⟨a, ha, ?_⟩
+    by_cases ho : ∀ t, t ∉ PT.tiling.Icoord (D.geom.patchOf X.target) → b t = X.target t
+    · have hI := erasedTests_internal D X b hb ho
+      have haI : a ∈ PT.tiling.Icoord (D.geom.patchOf b) := hI ▸ ha
+      simp only [if_pos haI]
+      exact hI
+    · obtain ⟨haI, hE⟩ := erasedTests_external D X b ho a ha
+      simp only [if_neg haI]
+      exact hE
+
+/-- Exact tail-coordinate cardinality makes a batch's deletion cost equal its size. -/
+private theorem internalCoords_card (hPT : PT.Valid) (i : Fin PT.tiling.m) :
+    (PT.tiling.Icoord i).card = (PT.tiling.P i).h := by
+  have hhn : (PT.tiling.P i).h ≤ T.S.n k := by
+    have hh : (PT.tiling.P i).h ≤ Finset.univ.sup (fun j : Fin PT.tiling.m => (PT.tiling.P j).h) :=
+      Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h) (Finset.mem_univ i)
+    have hlen := hPT.tiling_valid.prefix_internal_length
+    omega
+  let h := (PT.tiling.P i).h
+  let e : {a : Fin (T.S.n k) // a ∈ PT.tiling.Icoord i} ≃ Fin h :=
+    { toFun := fun a => ⟨a.1.val - (T.S.n k - h), by
+        have ha : T.S.n k - h ≤ a.1.val := (Finset.mem_filter.mp a.2).2
+        omega⟩
+      invFun := fun a => ⟨⟨T.S.n k - h + a.val, by dsimp [h] at *; omega⟩,
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, by dsimp [h] at *; omega⟩⟩
+      left_inv := by intro a; apply Subtype.ext; apply Fin.ext; have ha := (Finset.mem_filter.mp a.2).2; dsimp [h] at *; omega
+      right_inv := by intro a; apply Fin.ext; dsimp; omega }
+  simpa only [Fintype.card_coe, Fintype.card_fin] using Fintype.card_congr e
+
+/-- The same-class uniqueness rule counts erased incidences without multiplying by the number of rows. -/
+theorem erasedTests_class_count (D : LateData hPT) (X : CriticalTransferData D) (j : Fin D.geom.r) :
+    (∑ b : {b : Pos T k // b ∈ D.encoding.base.classes j}, (erasedTests D X b.1).card) ≤ X.erased.card := by
+  classical
+  let I := Σ b : {b : Pos T k // b ∈ D.encoding.base.classes j},
+    {a : Fin (T.S.n k) // a ∈ erasedTests D X b.1}
+  let code : I → {w : Pos T k // w ∈ X.erased} := fun p =>
+    ⟨flipPos p.1.1 p.2.1, (Finset.mem_filter.mp p.2.2).2⟩
+  have hinj : Function.Injective code := by
+    rintro ⟨b, a⟩ ⟨b', a'⟩ heq
+    have hf : flipPos b.1 a.1 = flipPos b'.1 a'.1 := congrArg Subtype.val heq
+    let w := flipPos b.1 a.1
+    have hc : D.geom.classOf (flipPos w a.1) = some j := by
+      simpa only [w, flipPos_involutive] using (D.encoding.base.class_of_spec b.1 j).mp b.2
+    have hc' : D.geom.classOf (flipPos w a'.1) = some j := by
+      rw [show w = flipPos b'.1 a'.1 from hf, flipPos_involutive]
+      exact (D.encoding.base.class_of_spec b'.1 j).mp b'.2
+    have haa : a.1 = a'.1 := D.l16_valid.one_per_class w j a.1 a'.1 hc hc'
+    have hbb : b = b' := Subtype.ext (by simpa only [haa, flipPos_involutive] using congrArg (fun v => flipPos v a'.1) hf)
+    subst b'
+    have hae : a = a' := Subtype.ext haa
+    subst a'
+    rfl
+  have hc := Fintype.card_le_of_injective code hinj
+  simpa only [I, Fintype.card_sigma, Fintype.card_coe] using hc
+
+/-- The erased slice contains at most max(1,h) even sites. -/
+theorem erased_card (D : LateData hPT) (X : CriticalTransferData D) (hG : TransferGeometry X) :
+    X.erased.card ≤ max 1 (PT.tiling.P (D.geom.patchOf X.target)).h := by
+  rcases hG.erased_internal with hsingle | ⟨a, ha, hbatch⟩
+  · exact (Finset.card_le_card hsingle).trans (by simp)
+  · apply (Finset.card_le_card hbatch).trans
+    exact Finset.card_image_le.trans (by rw [internalCoords_card hPT]; exact le_max_right _ _)
+
+/-- Erased side data always has the target patch and therefore the target error schedule. -/
+theorem erased_patch (D : LateData hPT) (X : CriticalTransferData D) (w : Pos T k) (hw : w ∈ X.erased) :
+    D.geom.patchOf w = D.geom.patchOf X.target :=
+  patchOf_eq_of_outer D X.target w (Finset.mem_filter.mp hw).2
+
+/-- At path values, a row's original label factor is dominated by its exact erasure kernel. -/
+theorem erased_labelWeight_compare (D : LateData hPT) (X : CriticalTransferData D)
+    (j : Fin D.geom.r) (b : Pos T k) (hb : b ∈ X.predecessors D.geom.r)
+    (side : D.encoding.base.RowOut b) (hd : D.deletionConclusion j side) (y : Fin (T.S.N k)) :
+    D.labelWeight j side Finset.univ y ≤
+      Real.exp (1000 * ((erasedTests D X b).card : ℝ) * D.error X.target j) *
+        D.labelWeight j side (Finset.univ \ erasedTests D X b) y := by
+  rcases erasedTests_deletion D X b hb with he | ⟨a, ha, he⟩
+  · simp [he]
+  · have hpatch := erased_patch D X (flipPos b a) (Finset.mem_filter.mp ha).2
+    have herr : D.error (flipPos b a) j = D.error X.target j := by
+      simp only [LateData.error, hpatch]
+    have hcard : (erasedTests D X b).card = if a ∈ PT.tiling.Icoord (D.geom.patchOf b) then
+        (PT.tiling.P (D.geom.patchOf b)).h else 1 := by
+      rw [he]
+      split_ifs with hI
+      · exact internalCoords_card hPT _
+      · simp
+    have hh := hd a y
+    rw [← he, herr, ← hcard] at hh
+    exact hh
+
+noncomputable def rowErasedTests (D : LateData hPT) (X : CriticalTransferData D) (b : Pos T k) :
+    Finset (Fin (T.S.n k)) := if b ∈ X.predecessors D.geom.r then erasedTests D X b else ∅
+
+/-- The product comparison is made on the same side values before seed fixing. -/
+theorem erased_class_label_compare (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X) (j : Fin D.geom.r)
+    (out : D.encoding.base.ClassRows j)
+    (hd : ∀ b : {b : Pos T k // b ∈ D.encoding.base.classes j},
+      b.1 ∈ X.predecessors D.geom.r → D.deletionConclusion j (out b)) :
+    (∏ b, D.labelWeight j (out b) Finset.univ (D.encoding.base.rowLabel (out b))) ≤
+      Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) * D.error X.target j) *
+        ∏ b, D.labelWeight j (out b) (Finset.univ \ rowErasedTests D X b.1)
+          (D.encoding.base.rowLabel (out b)) := by
+  let cost := fun b : {b : Pos T k // b ∈ D.encoding.base.classes j} =>
+    1000 * ((rowErasedTests D X b.1).card : ℝ) * D.error X.target j
+  have hpoint (b : {b : Pos T k // b ∈ D.encoding.base.classes j}) :
+      D.labelWeight j (out b) Finset.univ (D.encoding.base.rowLabel (out b)) ≤
+        Real.exp (cost b) * D.labelWeight j (out b) (Finset.univ \ rowErasedTests D X b.1)
+          (D.encoding.base.rowLabel (out b)) := by
+    by_cases hb : b.1 ∈ X.predecessors D.geom.r
+    · simpa only [cost, rowErasedTests, if_pos hb] using
+        erased_labelWeight_compare D X j b.1 hb (out b) (hd b hb) (D.encoding.base.rowLabel (out b))
+    · simp [cost, rowErasedTests, hb]
+  have hcount : (∑ b : {b : Pos T k // b ∈ D.encoding.base.classes j}, (rowErasedTests D X b.1).card) ≤
+      max 1 (PT.tiling.P (D.geom.patchOf X.target)).h := by
+    apply (Finset.sum_le_sum (g := fun b : {b : Pos T k // b ∈ D.encoding.base.classes j} =>
+      (erasedTests D X b.1).card) (fun b _ => by unfold rowErasedTests; split_ifs <;> simp)).trans
+    exact (erasedTests_class_count D X j).trans (erased_card D X hG)
+  have hcost : (∑ b, cost b) ≤
+      1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) * D.error X.target j := by
+    have hcast : (∑ b : {b : Pos T k // b ∈ D.encoding.base.classes j}, ((rowErasedTests D X b.1).card : ℝ)) ≤
+        (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) := by exact_mod_cast hcount
+    dsimp [cost]
+    rw [← Finset.sum_mul, ← Finset.mul_sum]
+    exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hcast (by norm_num))
+      (error_pos D _ _).le
+  calc
+    _ ≤ ∏ b, Real.exp (cost b) * D.labelWeight j (out b)
+        (Finset.univ \ rowErasedTests D X b.1) (D.encoding.base.rowLabel (out b)) :=
+      Finset.prod_le_prod₀ (fun b _ => labelWeight_nonneg D j _ _ _) (fun b _ => hpoint b)
+    _ = Real.exp (∑ b, cost b) * ∏ b, D.labelWeight j (out b)
+        (Finset.univ \ rowErasedTests D X b.1) (D.encoding.base.rowLabel (out b)) := by
+      rw [Finset.prod_mul_distrib, Real.exp_sum]
+    _ ≤ _ := mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr hcost)
+      (Finset.prod_nonneg fun b _ => labelWeight_nonneg D j _ _ _)
+
+/-- A deleted row's label kernel reads exactly the remaining sketches. -/
+theorem erasedLabelWeight_invariant (D : LateData hPT) (X : CriticalTransferData D)
+    (j : Fin D.geom.r) (b : Pos T k) (out out' : D.encoding.base.RowOut b)
+    (hmask : out.1 = out'.1)
+    (hsketch : ∀ a, a ∉ rowErasedTests D X b → out.2.1 a = out'.2.1 a)
+    (y : Fin (T.S.N k)) :
+    D.labelWeight j out (Finset.univ \ rowErasedTests D X b) y =
+      D.labelWeight j out' (Finset.univ \ rowErasedTests D X b) y := by
+  let tests := Finset.univ \ rowErasedTests D X b
+  have hp (u : Fin (T.S.N k)) : D.passes j out tests u ↔ D.passes j out' tests u := by
+    constructor <;> intro h a ha <;>
+      simpa only [LateData.sketchHit, hsketch a (Finset.mem_sdiff.mp ha).2] using h a ha
+  have hm (u : Fin (T.S.N k)) : D.maskWeight out u = D.maskWeight out' u := by
+    unfold LateData.maskWeight
+    rw [hmask]
+  have hmass : D.retainedMass j out tests = D.retainedMass j out' tests := by
+    unfold LateData.retainedMass
+    simp_rw [hp, hm]
+  change D.labelWeight j out tests y = D.labelWeight j out' tests y
+  unfold LateData.labelWeight
+  rw [hmass, hp, hm]
+
+/-- Product factors in coordinates absent from an integrand integrate to one. -/
+theorem integrate_omitted_coordinates {I : Type*} [Fintype I] [DecidableEq I]
+    {A : I → Type*} [∀ i, Fintype (A i)] (P : ∀ i, FinLaw (A i))
+    (S : Finset I) (default : ∀ i, A i) (f : (∀ i, A i) → ℝ)
+    (hf : ∀ z z', (∀ i ∈ S, z i = z' i) → f z = f z') :
+    (FinLaw.pi P).E f =
+      (FinLaw.pi (fun i : S => P i)).E
+        (fun z => f (fun i => if hi : i ∈ S then z ⟨i, hi⟩ else default i)) := by
+  let Q : ∀ i, FinProb (A i) := fun i => ⟨(P i).w, (P i).nonneg, (P i).sum_one⟩
+  let extend := fun z : (∀ i : S, A i) => fun i =>
+    if hi : i ∈ S then z ⟨i, hi⟩ else default i
+  have hm := FinProb.pi_marginal_expect Q S (fun z => f (extend z))
+  have hfun : f = fun z => f (extend (fun i : S => z i)) := by
+    funext z
+    apply hf
+    intro i hi
+    simp only [extend, dif_pos hi]
+  calc
+    (FinLaw.pi P).E f = (FinLaw.pi P).E (fun z => f (extend (fun i : S => z i))) :=
+      congrArg (FinLaw.E (FinLaw.pi P)) hfun
+    _ = _ := hm
+
+/-- A total deleted row law keeps mask and iid side-draw factors unchanged. -/
+noncomputable def deletedRowKernel (D : LateData hPT) (j : Fin D.geom.r)
+    (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) (tests : Finset (Fin (T.S.n k))) :
+    FinLaw (D.encoding.base.RowOut b.1) where
+  w out := (D.encoding.kernels.maskProfile b.1).w out.1 *
+    (rowSketchLaw D j b.1 h).w out.2.1 *
+      D.labelWeight j out tests (D.encoding.base.rowLabel out)
+  nonneg out := mul_nonneg (mul_nonneg ((D.encoding.kernels.maskProfile b.1).nonneg out.1)
+    ((rowSketchLaw D j b.1 h).nonneg out.2.1)) (labelWeight_nonneg D j out tests _)
+  sum_one := by
+    have hl (mask : D.encoding.base.AllowedMask b.1)
+        (sk : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) :
+        (∑ y : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1},
+          D.labelWeight j (mask, sk, y) tests y.1) = 1 := by
+      change (∑ y : {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1},
+        D.labelWeight j (rowSide D j b.1 b.2 mask sk) tests y.1) = 1
+      exact (lateLabelLaw D j (rowSide D j b.1 b.2 mask sk) tests
+        (allowedMask_nonempty D j b.1 b.2 mask)).sum_one
+    rw [Fintype.sum_prod_type]
+    simp_rw [Fintype.sum_prod_type]
+    dsimp only [LateProcessBase.rowLabel]
+    simp only [← Finset.mul_sum, hl, mul_one, FinLaw.sum_one]
+
+/-- The deleted kernel has the same factorization as the original reference kernel. -/
+theorem deletedRowKernel_formula (D : LateData hPT) (j : Fin D.geom.r)
+    (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) (tests : Finset (Fin (T.S.n k)))
+    (out : D.encoding.base.RowOut b.1) :
+    (deletedRowKernel D j b h tests).w out =
+      (D.encoding.kernels.maskProfile b.1).w out.1 *
+      (∏ a, ∏ t, (D.currentPrior j (flipPos b.1 a) h).w (out.2.1 a t)) *
+      D.labelWeight j out tests (D.encoding.base.rowLabel out) := by
+  rfl
+
+/-- Same path values and side draws give the pointwise row comparison. -/
+theorem deletedRowKernel_compare (D : LateData hPT) (hT : TransitionData D)
+    (X : CriticalTransferData D) (j : Fin D.geom.r)
+    (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) (out : D.encoding.base.RowOut b.1)
+    (hd : b.1 ∈ X.predecessors D.geom.r → D.deletionConclusion j out) :
+    (D.encoding.kernels.refK j b h).w out ≤
+      Real.exp (1000 * ((rowErasedTests D X b.1).card : ℝ) * D.error X.target j) *
+        (deletedRowKernel D j b h (Finset.univ \ rowErasedTests D X b.1)).w out := by
+  rw [hT.reference_formula, deletedRowKernel_formula]
+  have hside : 0 ≤ (D.encoding.kernels.maskProfile b.1).w out.1 *
+      (∏ a, ∏ t, (D.currentPrior j (flipPos b.1 a) h).w (out.2.1 a t)) := by
+    apply mul_nonneg ((D.encoding.kernels.maskProfile b.1).nonneg out.1)
+    exact Finset.prod_nonneg fun a _ => Finset.prod_nonneg fun t _ => (D.currentPrior j _ h).nonneg _
+  have hl : D.labelWeight j out Finset.univ (D.encoding.base.rowLabel out) ≤
+      Real.exp (1000 * ((rowErasedTests D X b.1).card : ℝ) * D.error X.target j) *
+        D.labelWeight j out (Finset.univ \ rowErasedTests D X b.1) (D.encoding.base.rowLabel out) := by
+    by_cases hb : b.1 ∈ X.predecessors D.geom.r
+    · simpa only [rowErasedTests, if_pos hb] using
+        erased_labelWeight_compare D X j b.1 hb out (hd hb) (D.encoding.base.rowLabel out)
+    · simp [rowErasedTests, hb]
+  calc
+    _ ≤ _ := mul_le_mul_of_nonneg_left hl hside
+    _ = _ := by ring
+
+/-- The same per-class budget applies after restricting to predecessor rows. -/
+theorem rowErasedTests_class_count (D : LateData hPT) (X : CriticalTransferData D)
+    (hG : TransferGeometry X) (j : Fin D.geom.r) :
+    (∑ b : {b : Pos T k // b ∈ D.encoding.base.classes j}, (rowErasedTests D X b.1).card) ≤
+      max 1 (PT.tiling.P (D.geom.patchOf X.target)).h := by
+  apply (Finset.sum_le_sum (g := fun b : {b : Pos T k // b ∈ D.encoding.base.classes j} =>
+    (erasedTests D X b.1).card) (fun b _ => by unfold rowErasedTests; split_ifs <;> simp)).trans
+  exact (erasedTests_class_count D X j).trans (erased_card D X hG)
+
+noncomputable def deletedTransition (D : LateData hPT) (X : CriticalTransferData D)
+    (j : Fin D.geom.r) (h : D.encoding.base.History j.castSucc) : FinLaw (D.encoding.base.ClassRows j) :=
+  FinLaw.pi fun b => deletedRowKernel D j b h (Finset.univ \ rowErasedTests D X b.1)
+
+/-- Whole-class path factors pay for at most max(1,h) deleted tests. -/
+theorem deletedTransition_compare (D : LateData hPT) (hT : TransitionData D)
+    (X : CriticalTransferData D) (hG : TransferGeometry X)
+    (j : Fin D.geom.r) (h : D.encoding.base.History j.castSucc) (out : D.encoding.base.ClassRows j)
+    (hd : ∀ b : {b : Pos T k // b ∈ D.encoding.base.classes j},
+      b.1 ∈ X.predecessors D.geom.r → D.deletionConclusion j (out b)) :
+    (D.encoding.kernels.referenceTransition j h).w out ≤
+      Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) * D.error X.target j) *
+        (deletedTransition D X j h).w out := by
+  let cost := fun b : {b : Pos T k // b ∈ D.encoding.base.classes j} =>
+    1000 * ((rowErasedTests D X b.1).card : ℝ) * D.error X.target j
+  have hcost : (∑ b, cost b) ≤
+      1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) * D.error X.target j := by
+    have hcast : (∑ b : {b : Pos T k // b ∈ D.encoding.base.classes j}, ((rowErasedTests D X b.1).card : ℝ)) ≤
+        (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) := by
+      exact_mod_cast rowErasedTests_class_count D X hG j
+    dsimp [cost]
+    rw [← Finset.sum_mul, ← Finset.mul_sum]
+    exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hcast (by norm_num))
+      (error_pos D _ _).le
+  change (∏ b, (D.encoding.kernels.refK j b h).w (out b)) ≤
+    _ * ∏ b, (deletedRowKernel D j b h (Finset.univ \ rowErasedTests D X b.1)).w (out b)
+  calc
+    _ ≤ ∏ b, Real.exp (cost b) *
+        (deletedRowKernel D j b h (Finset.univ \ rowErasedTests D X b.1)).w (out b) :=
+      Finset.prod_le_prod₀ (fun b _ => (D.encoding.kernels.refK j b h).nonneg (out b))
+        (fun b _ => deletedRowKernel_compare D hT X j b h (out b) (hd b))
+    _ = Real.exp (∑ b, cost b) * ∏ b,
+        (deletedRowKernel D j b h (Finset.univ \ rowErasedTests D X b.1)).w (out b) := by
+      rw [Finset.prod_mul_distrib, Real.exp_sum]
+    _ ≤ _ := mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr hcost)
+      (Finset.prod_nonneg fun b _ => (deletedRowKernel D j b h _).nonneg (out b))
+
+/-- An extended path has one predecessor pair, so its weight factors exactly. -/
+theorem runFrom_step_weight (D : LateData hPT)
+    (step : ∀ j : Fin D.geom.r, D.encoding.base.History j.castSucc → FinLaw (D.encoding.base.ClassRows j))
+    (s : Config D.fresh) (m : ℕ) (hm : m + 1 ≤ D.geom.r)
+    (H : D.encoding.base.History ⟨m + 1, Nat.lt_succ_of_le hm⟩) :
+    (D.encoding.base.runFrom step s (m + 1) hm).w H =
+      (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)).w
+        (D.beforeHistory H ⟨m, by omega⟩ (by simp)) *
+      (step ⟨m, hm⟩ (D.beforeHistory H ⟨m, by omega⟩ (by simp))).w
+        (D.pastRows H ⟨m, hm⟩ (by simp)) := by
+  let j : Fin D.geom.r := ⟨m, hm⟩
+  let pair : D.encoding.base.History j.castSucc × D.encoding.base.ClassRows j :=
+    (D.beforeHistory H j.castSucc (by simp [j]), D.pastRows H j (by simp [j]))
+  have heq (p : D.encoding.base.History j.castSucc × D.encoding.base.ClassRows j) :
+      D.encoding.base.extend j p.1 p.2 = H ↔ p = pair := by
+    constructor
+    · intro hp
+      apply Lane_sol_s18_n4.extend_injective D j
+      exact hp.trans (Lane_sol_s18_n4.extend_beforeHistory_pastRows D j H).symm
+    · intro hp
+      rw [hp]
+      exact Lane_sol_s18_n4.extend_beforeHistory_pastRows D j H
+  rw [LateProcessBase.runFrom]
+  change (∑ p, if D.encoding.base.extend j p.1 p.2 = H then
+    (FinLaw.bind (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)) (step j)).w p else 0) = _
+  have hpoint (p : D.encoding.base.History j.castSucc × D.encoding.base.ClassRows j) :
+      (if D.encoding.base.extend j p.1 p.2 = H then
+        (FinLaw.bind (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)) (step j)).w p else 0) =
+      (if p = pair then
+        (FinLaw.bind (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)) (step j)).w pair else 0) := by
+    by_cases hp : p = pair
+    · subst p
+      simp only [if_pos ((heq pair).mpr rfl), ite_true]
+    · have hno : D.encoding.base.extend j p.1 p.2 ≠ H := fun he => hp ((heq p).mp he)
+      simp only [if_neg hp, if_neg hno]
+  calc
+    _ = ∑ p : D.encoding.base.History j.castSucc × D.encoding.base.ClassRows j,
+        if p = pair then
+          (FinLaw.bind (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)) (step j)).w pair else 0 :=
+      Finset.sum_congr rfl (fun p _ => hpoint p)
+    _ = (FinLaw.bind (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)) (step j)).w pair := by
+      convert Fintype.sum_ite_eq' pair (fun _ : D.encoding.base.History j.castSucc × D.encoding.base.ClassRows j =>
+        (FinLaw.bind (D.encoding.base.runFrom step s m (Nat.le_of_succ_le hm)) (step j)).w pair) using 1
+      apply Finset.sum_congr rfl
+      intro p _
+      by_cases hp : p = pair <;> simp [hp]
+    _ = _ := rfl
+
+/-- Pointwise comparisons along a fixed path multiply before any seeds are fixed. -/
+theorem runFrom_compare_path (D : LateData hPT)
+    (step step' : ∀ j : Fin D.geom.r, D.encoding.base.History j.castSucc → FinLaw (D.encoding.base.ClassRows j))
+    (s : Config D.fresh) (cost : Fin D.geom.r → ℝ)
+    (m : ℕ) (hm : m ≤ D.geom.r)
+    (H : D.encoding.base.History ⟨m, Nat.lt_succ_of_le hm⟩)
+    (hcomp : ∀ j : Fin D.geom.r, ∀ hj : j.val < m,
+      (step j (D.beforeHistory H j.castSucc (Nat.le_of_lt hj))).w (D.pastRows H j hj) ≤
+        Real.exp (cost j) *
+          (step' j (D.beforeHistory H j.castSucc (Nat.le_of_lt hj))).w (D.pastRows H j hj)) :
+    (D.encoding.base.runFrom step s m hm).w H ≤
+      Real.exp (∑ j : Fin m, cost ⟨j.val, j.isLt.trans_le hm⟩) *
+        (D.encoding.base.runFrom step' s m hm).w H := by
+  induction m with
+  | zero => simp only [LateProcessBase.runFrom, Finset.univ_eq_empty, Finset.sum_empty, Real.exp_zero, one_mul, le_refl]
+  | succ m ih =>
+    let pre := D.beforeHistory H ⟨m, by omega⟩ (by simp)
+    have hpreComp : ∀ j : Fin D.geom.r, ∀ hj : j.val < m,
+        (step j (D.beforeHistory pre j.castSucc (Nat.le_of_lt hj))).w (D.pastRows pre j hj) ≤
+          Real.exp (cost j) *
+            (step' j (D.beforeHistory pre j.castSucc (Nat.le_of_lt hj))).w (D.pastRows pre j hj) := by
+      intro j hj
+      simpa only [pre, Lane_sol_s18_n4.beforeHistory_comp, Lane_sol_s18_n4.pastRows_beforeHistory] using
+        hcomp j (Nat.lt_trans hj (Nat.lt_succ_self m))
+    have hpre := ih (Nat.le_of_succ_le hm) pre hpreComp
+    have hlast := hcomp ⟨m, hm⟩ (Nat.lt_succ_self m)
+    rw [runFrom_step_weight, runFrom_step_weight]
+    calc
+      _ ≤ (Real.exp (∑ j : Fin m, cost ⟨j.val, j.isLt.trans_le (Nat.le_of_succ_le hm)⟩) *
+          (D.encoding.base.runFrom step' s m (Nat.le_of_succ_le hm)).w pre) *
+          (Real.exp (cost ⟨m, hm⟩) *
+            (step' ⟨m, hm⟩ pre).w (D.pastRows H ⟨m, hm⟩ (Nat.lt_succ_self m))) :=
+        mul_le_mul hpre hlast ((step ⟨m, hm⟩ pre).nonneg _)
+          (mul_nonneg (Real.exp_nonneg _) ((D.encoding.base.runFrom step' s m _).nonneg pre))
+      _ = _ := by
+        rw [Fin.sum_univ_castSucc, Real.exp_add]
+        simp only [Fin.val_castSucc, Fin.val_last]
+        dsimp only [pre]
+        ring
+
+abbrev SketchReply (cap m : ℕ) := Option (Fin m → Fin cap)
+
+private noncomputable def boundedListIndex {A : Type*} [Fintype A]
+    (S : Finset A) {cap : ℕ} (hcap : S.card ≤ cap) (x : {x : A // x ∈ S}) : Fin cap :=
+  Fin.castLE (by simpa only [Fintype.card_coe] using hcap) (Fintype.equivFin _ x)
+
+private noncomputable def readListIndex {A : Type*} [Fintype A]
+    (S : Finset A) (fallback : A) {cap : ℕ} (i : Fin cap) : A :=
+  if hi : i.val < Fintype.card {x : A // x ∈ S} then
+    ((Fintype.equivFin {x : A // x ∈ S}).symm ⟨i.val, hi⟩).1 else fallback
+
+private theorem read_boundedListIndex {A : Type*} [Fintype A]
+    (S : Finset A) (fallback : A) {cap : ℕ} (hcap : S.card ≤ cap) (x : {x : A // x ∈ S}) :
+    readListIndex S fallback (boundedListIndex S hcap x) = x.1 := by
+  unfold boundedListIndex readListIndex
+  simp only [Fin.val_castLE]
+  rw [dif_pos (Fintype.equivFin {x : A // x ∈ S} x).isLt]
+  change ((Fintype.equivFin {x : A // x ∈ S}).symm (Fintype.equivFin _ x)).1 = x.1
+  simp
+
+/-- A short-list sketch uses indices; every invalid response is the one abort symbol. -/
+noncomputable def encodeSketch {A : Type*} [Fintype A] (S : Finset A) (cap m : ℕ)
+    (sk : Fin m → A) : SketchReply cap m :=
+  if h : S.card ≤ cap ∧ ∀ t, sk t ∈ S then
+    some (fun t => boundedListIndex S h.1 ⟨sk t, h.2 t⟩) else none
+
+noncomputable def decodeSketch {A : Type*} [Fintype A] (S : Finset A) (fallback : A)
+    {cap m : ℕ} (reply : SketchReply cap m) : Option (Fin m → A) :=
+  reply.map fun code t => readListIndex S fallback (code t)
+
+/-- On a supported short list, the total response reproduces every sampled label. -/
+theorem decode_encodeSketch {A : Type*} [Fintype A] (S : Finset A) (fallback : A)
+    {cap m : ℕ} (sk : Fin m → A) (hcap : S.card ≤ cap) (hs : ∀ t, sk t ∈ S) :
+    decodeSketch S fallback (encodeSketch S cap m sk) = some sk := by
+  have hgood : S.card ≤ cap ∧ ∀ t, sk t ∈ S := ⟨hcap, hs⟩
+  simp only [encodeSketch, dif_pos hgood, decodeSketch, Option.map_some]
+  congr 1
+  funext t
+  exact read_boundedListIndex S fallback hcap ⟨sk t, hs t⟩
+
+/-- The one abort symbol and all index vectors fit the frozen reply-cardinality bound. -/
+theorem sketchReply_card (A : ℝ) (m : ℕ) :
+    (Fintype.card (SketchReply ⌊Real.exp A⌋₊ m) : ℝ) ≤ 1 + Real.exp (A * m) := by
+  have hc : (⌊Real.exp A⌋₊ : ℝ) ≤ Real.exp A := Nat.floor_le (Real.exp_nonneg A)
+  calc
+    _ = 1 + (⌊Real.exp A⌋₊ : ℝ) ^ m := by simp [SketchReply]; ring
+    _ ≤ 1 + (Real.exp A) ^ m := add_le_add le_rfl (pow_le_pow_left₀ (Nat.cast_nonneg _) hc m)
+    _ = _ := by rw [← Real.exp_nat_mul]; congr 2; ring
+
+/-- Seeds for later sketches are indexed by preceding labels, without preceding side data. -/
+abbrev ProcessedLabels (D : LateData hPT) (j : Fin (D.geom.r + 1)) :=
+  ∀ b : D.encoding.base.ProcessedRole j, {y : Fin (T.S.N k) // y ∈ D.encoding.base.latePoolOf b.1}
+
+noncomputable def historyLabels (D : LateData hPT) {j : Fin (D.geom.r + 1)}
+    (H : D.encoding.base.History j) : ProcessedLabels D j := fun b => (H.2 b).2.2
+
+noncomputable def labelHistory (D : LateData hPT) (j : Fin (D.geom.r + 1))
+    (s : Config D.fresh) (labels : ProcessedLabels D j) : D.encoding.base.History j :=
+  (s, fun b => (⟨D.encoding.base.latePoolOf b.1, (fun _ hx => hx), by omega⟩,
+    (fun _ _ => D.fallback), labels b))
+
+/-- Current lists ignore all preceding masks and sketches, including erased sketches. -/
+theorem currentPrior_labelHistory (D : LateData hPT) (j : Fin D.geom.r) (w : Pos T k)
+    (H : D.encoding.base.History j.castSucc) :
+    D.currentPrior j w H = D.currentPrior j w (labelHistory D j.castSucc H.1 (historyLabels D H)) := by
+  rfl
+
+/-- Independent finite tables sample local sketch laws with only label history as input. -/
+theorem sketch_seed_tables (D : LateData hPT) (j : Fin D.geom.r) (w : Pos T k) :
+    ∃ seedLaw : FinLaw ((Config D.fresh × ProcessedLabels D j.castSucc) →
+        Fin (sketchLength T k) → Fin (T.S.N k)),
+      ∀ H, FinLaw.map seedLaw (fun seed => seed (H.1, historyLabels D H)) =
+        FinLaw.pi (fun _ : Fin (sketchLength T k) => asFinLaw (D.currentPrior j w H)) := by
+  obtain ⟨seedLaw, heval⟩ := independent_kernel_seeds
+    (fun input : Config D.fresh × ProcessedLabels D j.castSucc =>
+      FinLaw.pi (fun _ : Fin (sketchLength T k) =>
+        asFinLaw (D.currentPrior j w (labelHistory D j.castSucc input.1 input.2))))
+  exact ⟨seedLaw, fun H => heval (H.1, historyLabels D H)⟩
+
+/-- A response evaluated at the total block prior consults no other raw block. -/
+theorem encodedSketch_local (D : LateData hPT) (X : CriticalTransferData D)
+    (j : Fin D.geom.r) (a : Fin (T.S.n k))
+    (S : Finset (Fin (T.S.N k))) (cap : ℕ)
+    (seed : (Config D.fresh × ProcessedLabels D j.castSucc) → Fin (sketchLength T k) → Fin (T.S.N k))
+    (labels : ProcessedLabels D j.castSucc)
+    (s s' : X.Raw) (hs : ∀ C ∈ X.blockCells a, s C = s' C) :
+    encodeSketch S cap (sketchLength T k) (seed (blockConfig D X a s, labels)) =
+      encodeSketch S cap (sketchLength T k) (seed (blockConfig D X a s', labels)) := by
+  rw [blockConfig_local D X a s s' hs]
+
+/-- Only earlier predecessor labels are modified; the current label integrates out separately. -/
+noncomputable def transferStep (D : LateData hPT) (X : CriticalTransferData D)
+    (j : Fin D.geom.r) (h : D.encoding.base.History j.castSucc) : FinLaw (D.encoding.base.ClassRows j) :=
+  if j.val < X.failure.1.val then deletedTransition D X j h
+    else D.encoding.kernels.referenceTransition j h
+
+noncomputable def deletedExperiment (D : LateData hPT) (X : CriticalTransferData D) :=
+  FinLaw.bind X.rawLaw (fun s => D.encoding.base.runFull (transferStep D X) (X.state s))
+
+/-- The original gate supplies each earlier predecessor's deletion comparison. -/
+theorem failure_path_comparison (D : LateData hPT) (hT : TransitionData D)
+    (X : CriticalTransferData D) (hG : TransferGeometry X) (s : X.Raw)
+    (H : D.encoding.base.History (Fin.last D.geom.r)) (hb : D.prefixFailure X.failure H) :
+    (D.encoding.kernels.refRun (X.state s)).w H ≤
+      Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *
+        ∑ j : Fin D.geom.r, D.error X.target j) *
+      (D.encoding.base.runFull (transferStep D X) (X.state s)).w H := by
+  let cost : Fin D.geom.r → ℝ := fun j => if j.val < X.failure.1.val then
+    1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) * D.error X.target j else 0
+  have hcomp (j : Fin D.geom.r) (hj : j.val < D.geom.r) :
+      (D.encoding.kernels.referenceTransition j (D.beforeHistory H j.castSucc (Nat.le_of_lt hj))).w
+        (D.pastRows H j hj) ≤ Real.exp (cost j) *
+      (transferStep D X j (D.beforeHistory H j.castSucc (Nat.le_of_lt hj))).w (D.pastRows H j hj) := by
+    by_cases hbefore : j.val < X.failure.1.val
+    · simp only [transferStep, cost, if_pos hbefore]
+      apply deletedTransition_compare D hT X hG
+      intro b hbPred
+      have hball : b.1 ∈ cubeBall X.failure.2.1.1 (6 * D.geom.r) := by
+        have hh := hG.predecessor_radius b.1 hbPred
+        simp only [cubeBall, Finset.mem_filter, Finset.mem_univ, true_and] at hh ⊢
+        omega
+      have hdel := (hb.2.1.2 j hbefore b hball).2
+      simpa only [Lane_sol_s18_n4.pastRows_beforeHistory] using hdel
+    · simp only [transferStep, cost, if_neg hbefore, Real.exp_zero, one_mul, le_refl]
+  have hpath := runFrom_compare_path D D.encoding.kernels.referenceTransition (transferStep D X)
+    (X.state s) cost D.geom.r le_rfl H hcomp
+  have hcost : (∑ j : Fin D.geom.r, cost j) ≤
+      1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *
+        ∑ j : Fin D.geom.r, D.error X.target j := by
+    rw [Finset.mul_sum]
+    apply Finset.sum_le_sum
+    intro j _
+    dsimp [cost]
+    split_ifs
+    · rfl
+    · have he := (error_pos D X.target j).le
+      positivity
+  have hpath' : (D.encoding.kernels.refRun (X.state s)).w H ≤
+      Real.exp (∑ j : Fin D.geom.r, cost j) *
+        (D.encoding.base.runFull (transferStep D X) (X.state s)).w H := by
+    simpa only [LateKernels.refRun, LateProcessBase.runFull, Fin.eta] using hpath
+  exact hpath'.trans (mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr hcost)
+    ((D.encoding.base.runFull (transferStep D X) (X.state s)).nonneg H))
+
+/-- Integrating the same path comparison preserves the original gated failure event.
+The event still needs weakening before erased sketch factors can be eliminated. -/
+theorem failure_deleted_comparison (D : LateData hPT) (hT : TransitionData D)
+    (X : CriticalTransferData D) (hG : TransferGeometry X) :
+    X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
+      Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *
+        ∑ j : Fin D.geom.r, D.error X.target j) *
+      (deletedExperiment D X).pr (fun z => D.prefixFailure X.failure z.2) := by
+  unfold FinLaw.pr
+  rw [Finset.mul_sum]
+  apply Finset.sum_le_sum
+  intro z _
+  by_cases hb : D.prefixFailure X.failure z.2
+  · simp only [if_pos hb, CriticalTransferData.experiment, deletedExperiment, FinLaw.bind]
+    have hh := mul_le_mul_of_nonneg_left (failure_path_comparison D hT X hG z.1 z.2 hb)
+      (X.rawLaw.nonneg z.1)
+    convert hh using 1 <;> ring
+  · simp [hb]
+
+/-- Any positive supported current atom belongs to every weakened external-hit list. -/
+theorem currentPrior_withheld_support (D : LateData hPT) (j : Fin D.geom.r)
+    (H : D.encoding.base.History j.castSucc) (w : Pos T k)
+    (hv : D.initialValid w H.1) (hm : 0 < ∑ x, Lane_sol_s18_n1_caps.rawWeight D H w x)
+    (J : Finset (Fin (T.S.n k))) (x : Fin (T.S.N k))
+    (hx : (D.currentPrior j w H).w x ≠ 0) : x ∈ D.withheldList w H.1 J := by
+  have hraw : Lane_sol_s18_n1_caps.rawWeight D H w x ≠ 0 := by
+    intro hz
+    apply hx
+    rw [LateData.currentPrior, Lane_sol_s18_n1_caps.priorAt_weight D H w hv hm, hz, zero_div]
+  have hinit : (D.initialPrior w H.1).w x ≠ 0 := by
+    intro hz
+    apply hraw
+    simp [Lane_sol_s18_n1_caps.rawWeight, hz]
+  have hweight := (S18.Lane_sol_s18_n5.initialPrior_support D w H.1 hv x hinit).2
+  apply Finset.mem_filter.mpr
+  refine ⟨initialWeight_envelope D w H.1 hv x hweight, ?_⟩
+  intro a ha
+  have hprod : (∏ a ∈ D.externalEarly w,
+      (if Hits (T.S.E k) PT.tiling.c x (D.earlyLabel H.1 (flipPos w a)) then 1 else 0) /
+        rowDeg (T.S.E k) PT.tiling.c x (PT.π (D.geom.patchOf (flipPos w a)))) ≠ 0 := by
+    intro hz
+    apply hweight
+    simp [LateData.initialWeight, hz]
+  have hf := Finset.prod_ne_zero_iff.mp hprod a (Finset.mem_sdiff.mp ha).1
+  by_contra hnot
+  exact hf (by simp [hnot])
+
+/-- Positive sequential weight implies positive transition weight at each actual prefix. -/
+theorem runFrom_transition_support (D : LateData hPT)
+    (step : ∀ j : Fin D.geom.r, D.encoding.base.History j.castSucc → FinLaw (D.encoding.base.ClassRows j))
+    (s : Config D.fresh) (m : ℕ) (hm : m ≤ D.geom.r)
+    (H : D.encoding.base.History ⟨m, Nat.lt_succ_of_le hm⟩)
+    (hH : (D.encoding.base.runFrom step s m hm).w H ≠ 0) :
+    ∀ j : Fin D.geom.r, ∀ hj : j.val < m,
+      (step j (D.beforeHistory H j.castSucc (Nat.le_of_lt hj))).w (D.pastRows H j hj) ≠ 0 := by
+  induction m with
+  | zero => intro j hj; omega
+  | succ m ih =>
+    let pre := D.beforeHistory H ⟨m, by omega⟩ (by simp)
+    rw [runFrom_step_weight] at hH
+    have hpre := (mul_ne_zero_iff.mp hH).1
+    have hlast := (mul_ne_zero_iff.mp hH).2
+    intro j hj
+    by_cases heq : j.val = m
+    · have hjEq : j = ⟨m, hm⟩ := Fin.ext heq
+      subst j
+      exact hlast
+    · have hjm : j.val < m := by omega
+      have hh := ih (Nat.le_of_succ_le hm) pre hpre j hjm
+      simpa only [pre, Lane_sol_s18_n4.beforeHistory_comp, Lane_sol_s18_n4.pastRows_beforeHistory] using hh
+
+/-- Positive reference paths support each individual current-prior sketch atom. -/
+theorem reference_sketch_support (D : LateData hPT) (hT : TransitionData D)
+    (s : Config D.fresh) (H : D.encoding.base.History (Fin.last D.geom.r))
+    (hH : (D.encoding.kernels.refRun s).w H ≠ 0)
+    (j : Fin D.geom.r) (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (a : Fin (T.S.n k)) (t : Fin (sketchLength T k)) :
+    (D.currentPrior j (flipPos b.1 a)
+      (D.beforeHistory H j.castSucc (Nat.le_of_lt j.isLt))).w
+        ((D.pastRows H j j.isLt b).2.1 a t) ≠ 0 := by
+  have hstep := runFrom_transition_support D D.encoding.kernels.referenceTransition s D.geom.r le_rfl H hH j j.isLt
+  have hrow := Finset.prod_ne_zero_iff.mp hstep b (Finset.mem_univ b)
+  rw [hT.reference_formula] at hrow
+  have hsk := (mul_ne_zero_iff.mp (mul_ne_zero_iff.mp hrow).1).2
+  exact Finset.prod_ne_zero_iff.mp (Finset.prod_ne_zero_iff.mp hsk a (Finset.mem_univ a)) t (Finset.mem_univ t)
+
+private theorem adjacent_flip_witness {n : ℕ} (v w : CubePos n)
+    (h : (OAI.HypercubeRamsey.cube n).Adj v w) : ∃ a, w = flipPos v a := by
+  let S := Finset.univ.filter fun a : Fin n => v a ≠ w a
+  have hcard : S.card = 1 := h
+  obtain ⟨a, ha⟩ := Finset.card_eq_one.mp hcard
+  refine ⟨a, ?_⟩
+  funext b
+  by_cases hb : b = a
+  · subst b
+    have hne : v a ≠ w a := by
+      have hm : a ∈ S := by rw [ha]; simp
+      exact (Finset.mem_filter.mp hm).2
+    cases hv : v a <;> cases hw : w a <;> simp_all [flipPos]
+  · have heq : v b = w b := by
+      by_contra hne
+      have hm : b ∈ S := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+      rw [ha] at hm
+      exact hb (Finset.mem_singleton.mp hm)
+    simp [flipPos, hb, heq]
+
+private theorem directEven_radius (D : LateData hPT) (X : CriticalTransferData D) (hG : TransferGeometry X)
+    (w : Pos T k) (hw : w ∈ X.directEven) : hammingDist X.failure.2.1.1 w ≤ 2 * D.geom.r + 1 := by
+  obtain ⟨b, hb, a, heq⟩ := directEven_representation D X w hw
+  have hbDist := (Finset.mem_filter.mp (hG.predecessor_radius b hb)).2
+  have hflip : hammingDist b w ≤ 1 := by rw [heq]; exact hammingDist_flip_le_one b a
+  have htri := hammingDist_triangle X.failure.2.1.1 b w
+  change hammingDist X.failure.2.1.1 b ≤ 2 * D.geom.r at hbDist
+  omega
+
+/-- The root gate suffices for current-list positivity throughout its predecessor computation. -/
+theorem root_gate_current_mass (D : LateData hPT) (X : CriticalTransferData D) (hG : TransferGeometry X)
+    (H : D.encoding.base.History (Fin.last D.geom.r))
+    (hg : D.gate X.failure.1 X.failure.2.1.1
+      (D.beforeHistory H X.failure.1.castSucc (Nat.le_of_lt X.failure.1.isLt)))
+    (he12 : ∀ v j, D.error v j ≤ 1 / 12)
+    (j : Fin D.geom.r) (hj : j.val ≤ X.failure.1.val)
+    (w : Pos T k) (hw : w ∈ X.directEven) :
+    D.initialValid w H.1 ∧
+      0 < ∑ x, Lane_sol_s18_n1_caps.rawWeight D
+        (D.beforeHistory H j.castSucc (Nat.le_of_lt j.isLt)) w x := by
+  have hv : D.initialValid w H.1 := gate_directEven_initialValid D X hG _ hg w hw
+  refine ⟨hv, ?_⟩
+  apply (Lane_sol_s18_n1_caps.posterior_cap D
+    (D.beforeHistory H j.castSucc (Nat.le_of_lt j.isLt)) w hv
+    (fun s => (error_pos D w s).le) (he12 w) ?_).1
+  intro s hs b hadj
+  have hsRoot : s.val < X.failure.1.val := hs.trans_le hj
+  have hball : b.1 ∈ cubeBall X.failure.2.1.1 (6 * D.geom.r) := by
+    simp only [cubeBall, Finset.mem_filter, Finset.mem_univ, true_and]
+    have hwDist := directEven_radius D X hG w hw
+    have hbDist : hammingDist w b.1 = 1 := hadj
+    have htri := hammingDist_triangle X.failure.2.1.1 w b.1
+    have hr := D.l16_valid.r_pos
+    change hammingDist X.failure.2.1.1 b.1 ≤ 6 * D.geom.r
+    omega
+  obtain ⟨a, ha⟩ := adjacent_flip_witness b.1 w ((OAI.HypercubeRamsey.cube (T.S.n k)).adj_comm _ _ |>.mp hadj)
+  have hhit := (hg.2 s hsRoot b hball).1 a
+  rw [← ha] at hhit
+  simpa only [Lane_sol_s18_n4.beforeHistory_comp, Lane_sol_s18_n4.pastRows_beforeHistory] using hhit
+
+private theorem smallErrors_twelfth (D : LateData hPT)
+    (hsmall : SmallErrors κ T k PT D.geom (Real.log 2 / 1000)) (v : Pos T k) (j : Fin D.geom.r) :
+    D.error v j ≤ 1 / 12 := by
+  have hbound : (max 1 (PT.tiling.P (D.geom.patchOf v)).h : ℝ) *
+      (∑ s : Fin D.geom.r, D.error v s) ≤ Real.log 2 / 1000 := hsmall (D.geom.patchOf v)
+  have hM : (1 : ℝ) ≤ (max 1 (PT.tiling.P (D.geom.patchOf v)).h : ℝ) := by
+    exact_mod_cast le_max_left 1 (PT.tiling.P (D.geom.patchOf v)).h
+  have hsum0 : 0 ≤ ∑ s : Fin D.geom.r, D.error v s := Finset.sum_nonneg fun s _ => (error_pos D v s).le
+  have hsum : (∑ s : Fin D.geom.r, D.error v s) ≤ Real.log 2 / 1000 := by nlinarith
+  have hsingle := Finset.single_le_sum (fun s _ => (error_pos D v s).le) (Finset.mem_univ j)
+  have hlog : Real.log 2 ≤ 1 := by
+    have hh := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    norm_num at hh
+    exact hh
+  linarith
+
+noncomputable def retainedFailure (D : LateData hPT) (X : CriticalTransferData D)
+    (z : X.Raw × D.encoding.base.History (Fin.last D.geom.r)) : Prop :=
+  (∀ c : SketchCall D X, callSite D X c ∉ X.erased →
+    let L := D.withheldList (callSite D X c) X.fixed (criticalExternalInputs D X (callSite D X c))
+    (L.card : ℝ) ≤ Real.exp (Real.log (T.S.n k : ℝ) ^ 8) ∧
+      ∀ t, ((D.pastRows z.2 c.1 c.1.isLt ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2 t) ∈ L) ∧
+  (let side := D.pastRows z.2 X.failure.1 X.failure.1.isLt X.failure.2.1
+   let tests := D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val
+   let U := prefixLabelLaw D X.failure.1 side tests
+     (allowedMask_nonempty D X.failure.1 X.failure.2.1.1 X.failure.2.1.2 side.1)
+   ∃ x y, X.allowed x y ∧ X.survives z.1 x y ∧ X.deviates U x y)
+
+/-- A positive original failure supplies the short-list and witness event with every gate test dropped. -/
+theorem failure_retained_event (D : LateData hPT) (hT : TransitionData D)
+    (X : CriticalTransferData D) (hG : TransferGeometry X)
+    (hsmall : SmallErrors κ T k PT D.geom (Real.log 2 / 1000))
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (hcount : ((max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r : ℕ) : ℝ) ≤
+      Real.log (T.S.n k : ℝ) ^ 4)
+    (s : X.Raw) (H : D.encoding.base.History (Fin.last D.geom.r))
+    (hs : X.rawLaw.w s ≠ 0) (hH : (D.encoding.kernels.refRun (X.state s)).w H ≠ 0)
+    (hb : D.prefixFailure X.failure H) : retainedFailure D X (s, H) := by
+  have hstart : H.1 = X.state s := runFrom_initial_support D D.encoding.kernels.referenceTransition
+    (X.state s) D.geom.r le_rfl H hH
+  have hfixed := rawLaw_noncritical_fixed D X s hs
+  refine ⟨?_, prefixFailure_surviving_witness D X hsmall s H hstart hb⟩
+  intro c hc
+  let w := callSite D X c
+  have hw : w ∈ X.directEven := Finset.mem_biUnion.mpr ⟨c.2.1.1, c.2.1.2.2,
+    Finset.mem_image.mpr ⟨c.2.2, Finset.mem_univ _, rfl⟩⟩
+  have hwne : w ∈ X.directEven \ X.erased := Finset.mem_sdiff.mpr ⟨hw, hc⟩
+  have hj : c.1.val ≤ X.failure.1.val :=
+    (predecessor_rank D X D.geom.r c.2.1.1 c.2.1.2.2 c.1
+      ((D.encoding.base.class_of_spec c.2.1.1 c.1).mp c.2.1.2.1)).1
+  obtain ⟨hv, hmass⟩ := root_gate_current_mass D X hG H hb.2.1
+    (smallErrors_twelfth D hsmall) c.1 hj w hw
+  have hvRaw : D.initialValid w (X.state s) := by simpa only [hstart] using hv
+  refine ⟨fixedWithheldList_card D X hG hmargin hcount w hwne s hfixed hvRaw, ?_⟩
+  intro t
+  have hAtom := reference_sketch_support D hT (X.state s) H hH c.1
+    ⟨c.2.1.1, c.2.1.2.1⟩ c.2.2 t
+  have hlist := currentPrior_withheld_support D c.1
+    (D.beforeHistory H c.1.castSucc (Nat.le_of_lt c.1.isLt)) w hv hmass
+    (criticalExternalInputs D X w) _ hAtom
+  change _ ∈ D.withheldList w H.1 (criticalExternalInputs D X w) at hlist
+  rw [hstart, withheldList_noncritical_fixed D X s hfixed w] at hlist
+  exact hlist
+
+/-- Path deletion dominates the weaker event that no longer reads gate tests on erased sketches. -/
+theorem failure_retained_comparison (D : LateData hPT) (hT : TransitionData D)
+    (X : CriticalTransferData D) (hG : TransferGeometry X)
+    (hsmall : SmallErrors κ T k PT D.geom (Real.log 2 / 1000))
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (hcount : ((max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r : ℕ) : ℝ) ≤
+      Real.log (T.S.n k : ℝ) ^ 4) :
+    X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
+      Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *
+        ∑ j : Fin D.geom.r, D.error X.target j) *
+      (deletedExperiment D X).pr (retainedFailure D X) := by
+  unfold FinLaw.pr
+  rw [Finset.mul_sum]
+  apply Finset.sum_le_sum
+  intro z _
+  have hrhs : 0 ≤ Real.exp (1000 * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h : ℝ) *
+      ∑ j : Fin D.geom.r, D.error X.target j) *
+      (if retainedFailure D X z then (deletedExperiment D X).w z else 0) := by
+    apply mul_nonneg (Real.exp_nonneg _)
+    split_ifs
+    · exact (deletedExperiment D X).nonneg z
+    · rfl
+  by_cases hb : D.prefixFailure X.failure z.2
+  · by_cases hz : X.experiment.w z = 0
+    · simpa only [if_pos hb, hz] using hrhs
+    · have hs : X.rawLaw.w z.1 ≠ 0 := by
+        intro hzero
+        apply hz
+        simp [CriticalTransferData.experiment, FinLaw.bind, hzero]
+      have hH : (D.encoding.kernels.refRun (X.state z.1)).w z.2 ≠ 0 := by
+        intro hzero
+        apply hz
+        simp [CriticalTransferData.experiment, FinLaw.bind, hzero]
+      have hk := failure_retained_event D hT X hG hsmall hmargin hcount z.1 z.2 hs hH hb
+      simp only [if_pos hb, if_pos hk, CriticalTransferData.experiment, deletedExperiment, FinLaw.bind]
+      have hh := mul_le_mul_of_nonneg_left (failure_path_comparison D hT X hG z.1 z.2 hb) (X.rawLaw.nonneg z.1)
+      convert hh using 1 <;> ring
+  · simpa only [if_neg hb] using hrhs
+
+private theorem law_eq_of_weights {N : ℕ} (P Q : Law N) (h : ∀ y, P.w y = Q.w y) : P = Q := by
+  cases P
+  cases Q
+  congr 1
+  exact funext h
+
+/-- The retained witness law is unchanged when all erased current sketches are replaced. -/
+theorem prefixLaw_erased_invariant (D : LateData hPT) (X : CriticalTransferData D)
+    (out out' : D.encoding.base.RowOut X.failure.2.1.1)
+    (hmask : out.1 = out'.1)
+    (hsketch : ∀ a, flipPos X.failure.2.1.1 a ∉ X.erased → out.2.1 a = out'.2.1 a) :
+    prefixLabelLaw D X.failure.1 out
+      (D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val)
+      (allowedMask_nonempty D X.failure.1 X.failure.2.1.1 X.failure.2.1.2 out.1) =
+    prefixLabelLaw D X.failure.1 out'
+      (D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val)
+      (allowedMask_nonempty D X.failure.1 X.failure.2.1.1 X.failure.2.1.2 out'.1) := by
+  apply law_eq_of_weights
+  intro y
+  exact prefixLabelWeight_erased_invariant D X out out' hmask hsketch y
+
+/-- The weakened event ignores every erased sketch in all predecessor rows. -/
+theorem retainedFailure_erased_invariant (D : LateData hPT) (X : CriticalTransferData D)
+    (s : X.Raw) (H H' : D.encoding.base.History (Fin.last D.geom.r))
+    (hmask : (D.pastRows H X.failure.1 X.failure.1.isLt X.failure.2.1).1 =
+      (D.pastRows H' X.failure.1 X.failure.1.isLt X.failure.2.1).1)
+    (hsketch : ∀ c : SketchCall D X, callSite D X c ∉ X.erased →
+      (D.pastRows H c.1 c.1.isLt ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2 =
+        (D.pastRows H' c.1 c.1.isLt ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2) :
+    retainedFailure D X (s, H) ↔ retainedFailure D X (s, H') := by
+  have hbRoot : X.failure.2.1.1 ∈ X.predecessors D.geom.r :=
+    predecessors_mono D X (Nat.zero_le _) (by simp [CriticalTransferData.predecessors])
+  have hcurrent (a : Fin (T.S.n k)) (ha : flipPos X.failure.2.1.1 a ∉ X.erased) :
+      (D.pastRows H X.failure.1 X.failure.1.isLt X.failure.2.1).2.1 a =
+        (D.pastRows H' X.failure.1 X.failure.1.isLt X.failure.2.1).2.1 a := by
+    exact hsketch ⟨X.failure.1, ⟨X.failure.2.1.1, X.failure.2.1.2, hbRoot⟩, a⟩ ha
+  have hU := prefixLaw_erased_invariant D X _ _ hmask hcurrent
+  unfold retainedFailure
+  simp only [hU]
+  apply and_congr
+  · constructor <;> intro h c hc
+    · obtain ⟨hcard, hs⟩ := h c hc
+      exact ⟨hcard, fun t => by rw [← hsketch c hc]; exact hs t⟩
+    · obtain ⟨hcard, hs⟩ := h c hc
+      exact ⟨hcard, fun t => by rw [hsketch c hc]; exact hs t⟩
+  · rfl
+
+private theorem finLaw_eq_of_weights {A : Type*} [Fintype A]
+    (P Q : FinLaw A) (h : ∀ x, P.w x = Q.w x) : P = Q := by
+  cases P
+  cases Q
+  congr 1
+  exact funext h
+
+/-- Selecting a conditional draw from an independent seed table preserves its joint law. -/
+theorem seed_table_joint {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinLaw A) (K : A → FinLaw B) (Q : FinLaw (A → B))
+    (hQ : ∀ a, FinLaw.map Q (fun seed => seed a) = K a) :
+    FinLaw.map (FinLaw.bind P (fun _ => Q)) (fun z => (z.1, z.2 z.1)) = FinLaw.bind P K := by
+  apply finLaw_eq_of_weights
+  intro ab
+  rcases ab with ⟨a₀, b₀⟩
+  change (∑ z : A × (A → B), if (z.1, z.2 z.1) = (a₀, b₀) then P.w z.1 * Q.w z.2 else 0) =
+    P.w a₀ * (K a₀).w b₀
+  rw [Fintype.sum_prod_type, Finset.sum_eq_single a₀]
+  · have hm : (∑ seed : A → B, if (a₀, seed a₀) = (a₀, b₀) then P.w a₀ * Q.w seed else 0) =
+        P.w a₀ * (FinLaw.map Q (fun seed => seed a₀)).w b₀ := by
+      simp only [Prod.mk.injEq, eq_self, true_and]
+      change _ = P.w a₀ * ∑ seed, if seed a₀ = b₀ then Q.w seed else 0
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro seed _
+      split_ifs <;> simp
+    rw [hm, hQ]
+  · intro a _ ha
+    simp only [Prod.mk.injEq]
+    simp [ha]
+  · simp
+
+noncomputable def affectedCalls (D : LateData hPT) (X : CriticalTransferData D) : Finset (SketchCall D X) :=
+  Finset.univ.filter fun c => callSite D X c ∉ X.erased ∧
+    (D.directCells (callSite D X c) ∩ X.criticalCells).Nonempty
+
+private theorem criticalCell_in_block (D : LateData hPT) (X : CriticalTransferData D)
+    (C : D.geom.Cell) (hC : C ∈ X.criticalCells) : ∃ a, C ∈ X.blockCells a := by
+  obtain ⟨a, ha, heq⟩ := Finset.mem_image.mp hC
+  refine ⟨a, Finset.mem_image.mpr ⟨a, Finset.mem_filter.mpr ⟨ha, ?_⟩, heq⟩⟩
+  left
+  simp
+
+/-- Enumerating only affected sketch calls meets the total protocol step bound. -/
+theorem affectedCalls_card (D : LateData hPT) (X : CriticalTransferData D) (hG : TransferGeometry X)
+    (hmargin : (2 * D.geom.r + 4 : ℕ) ≤ Real.log (T.S.n k : ℝ) ^ 3)
+    (hbudget : ((D.geom.r * (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r) *
+      (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+        ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) : ℕ) : ℝ) ≤
+      Real.log (T.S.n k : ℝ) ^ 20) :
+    ((affectedCalls D X).card : ℝ) ≤ (T.S.n k : ℝ) * Real.log (T.S.n k : ℝ) ^ 20 := by
+  let calls := fun a : Fin (T.S.n k) => Finset.univ.filter fun c : SketchCall D X =>
+    (D.directCells (callSite D X c) ∩ X.blockCells a).Nonempty
+  have hcover : affectedCalls D X ⊆ Finset.univ.biUnion calls := by
+    intro c hc
+    obtain ⟨C, hC⟩ := (Finset.mem_filter.mp hc).2.2
+    obtain ⟨a, ha⟩ := criticalCell_in_block D X C (Finset.mem_inter.mp hC).2
+    exact Finset.mem_biUnion.mpr ⟨a, Finset.mem_univ _, Finset.mem_filter.mpr ⟨Finset.mem_univ _,
+      ⟨C, Finset.mem_inter.mpr ⟨(Finset.mem_inter.mp hC).1, ha⟩⟩⟩⟩
+  have hnat : (affectedCalls D X).card ≤ ∑ a : Fin (T.S.n k), (calls a).card :=
+    (Finset.card_le_card hcover).trans Finset.card_biUnion_le
+  have hreal : ((affectedCalls D X).card : ℝ) ≤ ∑ a : Fin (T.S.n k), ((calls a).card : ℝ) := by
+    exact_mod_cast hnat
+  apply hreal.trans
+  calc
+    _ ≤ ∑ _a : Fin (T.S.n k), Real.log (T.S.n k : ℝ) ^ 20 := by
+      apply Finset.sum_le_sum
+      intro a _
+      have hh : ((calls a).card : ℝ) ≤ ((D.geom.r *
+          (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r) *
+          (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+          ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) : ℕ) : ℝ) := by
+        have hnat : (calls a).card ≤ D.geom.r *
+            (max 1 (PT.tiling.P (D.geom.patchOf X.target)).h * D.geom.r) *
+            (1 + ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 2) * D.geom.r) *
+            ((PT.tiling.Icoord (D.geom.patchOf X.target)).card + 1) := by
+          simpa only [calls, Nat.mul_assoc] using block_sketchCalls_card D X hG hmargin a
+        exact_mod_cast hnat
+      exact hh.trans hbudget
+    _ = _ := by simp
+
+
+private theorem processed_class_before (D : LateData hPT) (m : ℕ) (hm : m ≤ D.geom.r)
+    (b : Pos T k) (hb : b ∈ D.encoding.base.processed ⟨m, Nat.lt_succ_of_le hm⟩) :
+    ∃ j : Fin D.geom.r, j.val < m ∧ D.geom.classOf b = some j := by
+  induction m with
+  | zero =>
+    have hz : (⟨0, Nat.lt_succ_of_le hm⟩ : Fin (D.geom.r + 1)) = 0 := Fin.ext rfl
+    rw [hz, D.encoding.base.processed_zero] at hb
+    simp at hb
+  | succ m ih =>
+    have hstep := D.encoding.base.processed_step ⟨m, hm⟩
+    have hidx : (⟨m, hm⟩ : Fin D.geom.r).succ = ⟨m + 1, Nat.lt_succ_of_le hm⟩ := Fin.ext rfl
+    rw [hidx] at hstep
+    rw [← hstep] at hb
+    rcases Finset.mem_union.mp hb with hpast | hcurrent
+    · obtain ⟨j, hj, hc⟩ := ih (Nat.le_of_succ_le hm) hpast
+      exact ⟨j, Nat.lt_trans hj (Nat.lt_succ_self m), hc⟩
+    · exact ⟨⟨m, hm⟩, Nat.lt_succ_self m, (D.encoding.base.class_of_spec b ⟨m, hm⟩).mp hcurrent⟩
+
+/-- Every earlier label consulted by a predecessor's current list is itself a predecessor. -/
+theorem currentPrior_predecessor_local (D : LateData hPT) (X : CriticalTransferData D) (hD : D.Spec)
+    (c : SketchCall D X) (H H' : D.encoding.base.History c.1.castSucc)
+    (hscope : ∀ C ∈ D.directCells (callSite D X c), H.1 C = H'.1 C)
+    (hlabels : ∀ b : D.encoding.base.ProcessedRole c.1.castSucc,
+      b.1 ∈ X.predecessors D.geom.r →
+        D.encoding.base.rowLabel (H.2 b) = D.encoding.base.rowLabel (H'.2 b)) :
+    D.currentPrior c.1 (callSite D X c) H = D.currentPrior c.1 (callSite D X c) H' := by
+  apply Lane_sol_s18_n4.priorAt_local D hD _ _ H H' hscope
+  intro b hadj
+  obtain ⟨j, hj, hclass⟩ := processed_class_before D c.1.val (Nat.le_of_lt c.1.isLt) b.1 b.2
+  obtain ⟨a, ha⟩ := adjacent_flip_witness b.1 (callSite D X c)
+    ((OAI.HypercubeRamsey.cube (T.S.n k)).adj_comm _ _ |>.mp hadj)
+  apply hlabels
+  exact predecessors_closed D X c.2.1.1 b.1 c.2.1.2.2 c.1 j
+    ((D.encoding.base.class_of_spec c.2.1.1 c.1).mp c.2.1.2.1) hclass hj c.2.2 a ha
+
+
+/-- Integrate a total deleted row by mask, iid sketches, then the normalized label law. -/
+private theorem deletedRowKernel_integral (D : LateData hPT) (j : Fin D.geom.r)
+    (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (H : D.encoding.base.History j.castSucc) (tests : Finset (Fin (T.S.n k)))
+    (f : D.encoding.base.RowOut b.1 → ℝ) :
+    (deletedRowKernel D j b H tests).E f =
+      (D.encoding.kernels.maskProfile b.1).E (fun mask =>
+        (rowSketchLaw D j b.1 H).E (fun sk =>
+          (lateLabelLaw D j (rowSide D j b.1 b.2 mask sk) tests
+            (allowedMask_nonempty D j b.1 b.2 mask)).E (fun y => f (mask, sk, y)))) := by
+  unfold FinLaw.E
+  rw [Fintype.sum_prod_type]
+  simp_rw [Fintype.sum_prod_type, Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro mask _
+  apply Finset.sum_congr rfl
+  intro sk _
+  apply Finset.sum_congr rfl
+  intro y _
+  change (_ * _ * D.labelWeight j (mask, sk, y) tests y.1) * f (mask, sk, y) =
+    _ * (_ * (D.labelWeight j (rowSide D j b.1 b.2 mask sk) tests y.1 * f (mask, sk, y)))
+  rw [labelWeight_side_congr D j (side := (mask, sk, y))
+    (side' := rowSide D j b.1 b.2 mask sk) rfl rfl]
+  ring
+
+private abbrev PartialSketch (D : LateData hPT) (tests : Finset (Fin (T.S.n k))) :=
+  ∀ a : {a : Fin (T.S.n k) // a ∈ tests}, Fin (sketchLength T k) → Fin (T.S.N k)
+
+private noncomputable def partialSketchLaw (D : LateData hPT) (j : Fin D.geom.r) (b : Pos T k)
+    (H : D.encoding.base.History j.castSucc) (tests : Finset (Fin (T.S.n k))) :
+    FinLaw (PartialSketch D tests) :=
+  FinLaw.pi (fun a : {a : Fin (T.S.n k) // a ∈ tests} =>
+    FinLaw.pi (fun _ : Fin (sketchLength T k) => asFinLaw (D.currentPrior j (flipPos b a.1) H)))
+
+private noncomputable def extendPartialSketch (D : LateData hPT) (tests : Finset (Fin (T.S.n k)))
+    (sk : PartialSketch D tests) : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k) :=
+  fun a => if ha : a ∈ tests then sk ⟨a, ha⟩ else fun _ => D.fallback
+
+/-- Every erased iid coordinate can be eliminated in the deleted row integral,
+provided the integrand reads only masks, labels and remaining sketches. -/
+theorem deletedRow_integrate_erased (D : LateData hPT) (X : CriticalTransferData D)
+    (j : Fin D.geom.r) (b : {b : Pos T k // b ∈ D.encoding.base.classes j})
+    (H : D.encoding.base.History j.castSucc) (f : D.encoding.base.RowOut b.1 → ℝ)
+    (hf : ∀ out out' : D.encoding.base.RowOut b.1,
+      out.1 = out'.1 → D.encoding.base.rowLabel out = D.encoding.base.rowLabel out' →
+      (∀ a, a ∉ rowErasedTests D X b.1 → out.2.1 a = out'.2.1 a) → f out = f out') :
+    (deletedRowKernel D j b H (Finset.univ \ rowErasedTests D X b.1)).E f =
+      (D.encoding.kernels.maskProfile b.1).E (fun mask =>
+        (partialSketchLaw D j b.1 H (Finset.univ \ rowErasedTests D X b.1)).E
+          (fun sk =>
+            (lateLabelLaw D j (rowSide D j b.1 b.2 mask
+                (extendPartialSketch D (Finset.univ \ rowErasedTests D X b.1) sk))
+              (Finset.univ \ rowErasedTests D X b.1)
+              (allowedMask_nonempty D j b.1 b.2 mask)).E
+                (fun y => f (mask, extendPartialSketch D (Finset.univ \ rowErasedTests D X b.1) sk, y)))) := by
+  rw [deletedRowKernel_integral]
+  congr 1
+  funext mask
+  let tests : Finset (Fin (T.S.n k)) := Finset.univ \ rowErasedTests D X b.1
+  let P : Fin (T.S.n k) → FinLaw (Fin (sketchLength T k) → Fin (T.S.N k)) := fun a =>
+    FinLaw.pi (fun _ : Fin (sketchLength T k) => asFinLaw (D.currentPrior j (flipPos b.1 a) H))
+  let g : (Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) → ℝ := fun sk =>
+    (lateLabelLaw D j (rowSide D j b.1 b.2 mask sk) tests
+      (allowedMask_nonempty D j b.1 b.2 mask)).E (fun y => f (mask, sk, y))
+  have hg : ∀ sk sk', (∀ a ∈ tests, sk a = sk' a) → g sk = g sk' := by
+    intro sk sk' hagree
+    unfold g FinLaw.E
+    apply Finset.sum_congr rfl
+    intro y _
+    have hsk (a : Fin (T.S.n k)) (ha : a ∉ rowErasedTests D X b.1) : sk a = sk' a :=
+      hagree a (Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, ha⟩)
+    have hl := erasedLabelWeight_invariant D X j b.1
+      (rowSide D j b.1 b.2 mask sk) (rowSide D j b.1 b.2 mask sk') rfl hsk y.1
+    have hvalue := hf (mask, sk, y) (mask, sk', y) rfl rfl hsk
+    change D.labelWeight j (rowSide D j b.1 b.2 mask sk) tests y.1 * f (mask, sk, y) =
+      D.labelWeight j (rowSide D j b.1 b.2 mask sk') tests y.1 * f (mask, sk', y)
+    rw [hl, hvalue]
+  change (FinLaw.pi P).E g =
+    (FinLaw.pi (fun a : {a : Fin (T.S.n k) // a ∈ tests} => P a.1)).E
+      (fun sk => g (extendPartialSketch D tests sk))
+  exact integrate_omitted_coordinates P tests (fun _ _ => D.fallback) g hg
+
+/-- Independent coordinate seed evaluations preserve the product of the corresponding conditional laws. -/
+theorem pi_map_coordinatewise {I : Type*} [Fintype I] [DecidableEq I]
+    {A B : I → Type*} [∀ i, Fintype (A i)] [∀ i, Fintype (B i)]
+    [∀ i, DecidableEq (B i)] (P : ∀ i, FinLaw (A i)) (f : ∀ i, A i → B i) :
+    FinLaw.map (FinLaw.pi P) (fun x i => f i (x i)) =
+      FinLaw.pi (fun i => FinLaw.map (P i) (f i)) := by
+  apply finLaw_eq_of_weights
+  intro y
+  have hpoint (x : ∀ i, A i) :
+      (if ∀ i, f i (x i) = y i then ∏ i, (P i).w (x i) else 0) =
+        ∏ i, if f i (x i) = y i then (P i).w (x i) else 0 := by
+    by_cases hx : ∀ i, f i (x i) = y i
+    · simp only [if_pos hx]
+      apply Finset.prod_congr rfl
+      intro i _
+      rw [if_pos (hx i)]
+    · simp only [if_neg hx]
+      obtain ⟨i, hi⟩ := not_forall.mp hx
+      symm
+      exact Finset.prod_eq_zero (Finset.mem_univ i) (by simp [hi])
+  change (∑ x : ∀ i, A i, if (fun i => f i (x i)) = y then ∏ i, (P i).w (x i) else 0) =
+    ∏ i, ∑ a, if f i a = y i then (P i).w a else 0
+  simp_rw [funext_iff, hpoint]
+  exact (Fintype.prod_sum (fun i (a : A i) => if f i a = y i then (P i).w a else 0)).symm
 
 end HypercubeRamsey.Lane_sol_s18_1c

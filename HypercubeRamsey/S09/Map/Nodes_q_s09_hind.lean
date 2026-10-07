@@ -1124,6 +1124,59 @@ private theorem list_split_first_match9 {α : Type*} (f : α → ℕ) (r : ℕ) 
             exact hhead
           · exact hpre z hzpre
 
+private theorem heightPath9_firstValueSegment9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    {bad : HeightState9 P hc n → Prop} {l : List (HeightState9 P hc n)}
+    {start : HeightState9 P hc n} (f : HeightState9 P hc n → ℕ)
+    (hp : HeightPath9 (heightStep9 bad) l start) {r : ℕ}
+    (hmatch : ∃ x ∈ l, f x = r) :
+    ∃ pre x post, l = (pre ++ [x]) ++ post ∧ f x = r ∧
+      (∀ z ∈ pre, f z ≠ r) ∧
+      HeightPath9 (heightStep9 bad) (pre ++ [x]) x := by
+  induction hp generalizing r with
+  | singleton x =>
+      obtain ⟨z, hz, hzval⟩ := hmatch
+      have hzx : z = x := by simpa using hz
+      subst z
+      refine ⟨[], x, [], ?_, hzval, ?_, HeightPath9.singleton x⟩
+      · simp
+      · simp
+  | @cons head next rest start hstep htail ih =>
+      by_cases hhead : f head = r
+      · refine ⟨[], head, next :: rest, ?_, hhead, by simp, ?_⟩
+        · simp
+        · simpa using (HeightPath9.singleton head)
+      · have htailMatch : ∃ x ∈ next :: rest, f x = r := by
+          rcases hmatch with ⟨x, hx, hfx⟩
+          rcases List.mem_cons.mp hx with hxeq | hxtail
+          · subst x
+            exact (hhead hfx).elim
+          · exact ⟨x, hxtail, hfx⟩
+        obtain ⟨pre, x, post, hsplit, hfx, hpre, hpath⟩ := ih htailMatch
+        refine ⟨head :: pre, x, post, ?_, hfx, ?_, ?_⟩
+        · calc
+            head :: next :: rest = head :: ((pre ++ [x]) ++ post) := by rw [hsplit]
+            _ = ((head :: pre) ++ [x]) ++ post := by simp [List.append_assoc]
+        · intro z hz
+          simp only [List.mem_cons] at hz
+          rcases hz with rfl | hz
+          · exact hhead
+          · exact hpre z hz
+        · cases pre with
+          | nil =>
+              have hsplit' : next :: rest = x :: post := by simpa using hsplit
+              have hnextEq : next = x := (List.cons.inj hsplit').1
+              subst next
+              have hpath' : HeightPath9 (heightStep9 bad) [x] x := by simpa using hpath
+              simpa using HeightPath9.cons hstep hpath'
+          | cons first preTail =>
+              have hsplit' : next :: rest = first :: ((preTail ++ [x]) ++ post) := by
+                simpa [List.append_assoc] using hsplit
+              have hnextEq : next = first := (List.cons.inj hsplit').1
+              subst first
+              have hpath' : HeightPath9 (heightStep9 bad) (next :: (preTail ++ [x])) x := by
+                simpa [List.append_assoc] using hpath
+              simpa [List.append_assoc] using HeightPath9.cons hstep hpath'
+
 private inductive ListRadialUnit9 {α : Type*} (f : α → ℕ) : List α → Prop
   | nil : ListRadialUnit9 f []
   | one (x : α) : ListRadialUnit9 f [x]

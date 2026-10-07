@@ -44,6 +44,12 @@ def main():
         if not cands:
             cands = table.get(short, [])
         if len(cands) != 1:
+            # structure fields and constructors: use the given module, or the module of the enclosing declaration
+            if ':' in e and len(cands) == 0:
+                print(e); continue
+            pre = [c for k, cs in table.items() for c in cs if name.startswith(c[0] + '.')] if not cands else []
+            if len(pre) >= 1 and len({c[1] for c in pre}) == 1:
+                print(f"{pre[0][1][:-5].replace('/', '.')}:{name}"); continue
             print(f'unresolved: {e} ({len(cands)} candidates)', file=sys.stderr); bad += 1; continue
         full, path = cands[0]
         print(f"{path[:-5].replace('/', '.')}:{full}")

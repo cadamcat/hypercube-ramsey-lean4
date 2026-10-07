@@ -136,4 +136,60 @@ theorem scale_exponent_comparisons (x R Q W q κ γ d α : ℝ)
       _ ≤ d * x ^ α * R := mul_le_mul_of_nonneg_right hgap hRpos.le
   linarith
 
+theorem packing_parameters (R Q ℓ : ℕ) (W γ δ ηp η : ℝ)
+    (hR : 1 ≤ R) (hQR : (Q : ℝ) = W * (R : ℝ))
+    (hγ : 0 < γ) (hγ1 : γ ≤ 1) (hδ : 0 < δ)
+    (hWγ : 2 / γ ≤ W) (hWδ : 8 / δ ≤ W)
+    (hη : 0 ≤ η) (hη1 : η ≤ 1) (hgap : δ ≤ η - ηp)
+    (hγsmall : 2 * (2 * (ℓ : ℝ) + 1) * γ ≤ δ / 4) :
+    let q := ⌊γ * W⌋₊
+    0 < q ∧ γ / 2 * W ≤ (q : ℝ) ∧ (q : ℝ) ≤ W ∧
+      (η + 1) * ((R : ℝ) + ((2 * ℓ * R + 1 : ℕ) : ℝ) * ((q - 1 : ℕ) : ℝ)) <
+        (η - ηp) * (Q : ℝ) := by
+  let q := ⌊γ * W⌋₊
+  have hW : 0 < W := (div_pos (by norm_num) hγ).trans_le hWγ
+  have hWγ' : 2 ≤ W * γ := (div_le_iff₀ hγ).mp hWγ
+  have hfloor : (q : ℝ) ≤ γ * W := Nat.floor_le (by positivity)
+  have hfloor' : γ * W < (q : ℝ) + 1 := Nat.lt_floor_add_one _
+  have hqlo : γ / 2 * W ≤ (q : ℝ) := by nlinarith only [hWγ', hfloor']
+  have hqR : 0 < (q : ℝ) := (mul_pos (div_pos hγ (by norm_num)) hW).trans_le hqlo
+  have hq : 0 < q := by exact_mod_cast hqR
+  have hqhi : (q : ℝ) ≤ W := hfloor.trans (by nlinarith only [hγ1, hW])
+  refine ⟨hq, hqlo, hqhi, ?_⟩
+  have hRreal : (1 : ℝ) ≤ (R : ℝ) := by exact_mod_cast hR
+  have hQpos : 0 < (Q : ℝ) := by rw [hQR]; positivity
+  have hRnonneg : (0 : ℝ) ≤ (R : ℝ) := Nat.cast_nonneg R
+  have hsub : ((q - 1 : ℕ) : ℝ) ≤ (q : ℝ) := by exact_mod_cast (Nat.sub_le q 1)
+  have hfactor : ((2 * ℓ * R + 1 : ℕ) : ℝ) ≤ (2 * (ℓ : ℝ) + 1) * (R : ℝ) := by
+    push_cast
+    nlinarith only [hRreal]
+  have hRq : (R : ℝ) * (q : ℝ) ≤ γ * (Q : ℝ) := by
+    calc
+      _ ≤ (R : ℝ) * (γ * W) := mul_le_mul_of_nonneg_left hfloor hRnonneg
+      _ = γ * (Q : ℝ) := by rw [hQR]; ring
+  have hproduct : ((2 * ℓ * R + 1 : ℕ) : ℝ) * ((q - 1 : ℕ) : ℝ) ≤
+      (2 * (ℓ : ℝ) + 1) * γ * (Q : ℝ) := by
+    calc
+      _ ≤ ((2 * (ℓ : ℝ) + 1) * (R : ℝ)) * (q : ℝ) :=
+        mul_le_mul hfactor hsub (by positivity) (by positivity)
+      _ = (2 * (ℓ : ℝ) + 1) * ((R : ℝ) * (q : ℝ)) := by ring
+      _ ≤ (2 * (ℓ : ℝ) + 1) * (γ * (Q : ℝ)) := mul_le_mul_of_nonneg_left hRq (by positivity)
+      _ = _ := by ring
+  have hWδ' : 8 ≤ W * δ := (div_le_iff₀ hδ).mp hWδ
+  have hRsmall : 8 * (R : ℝ) ≤ δ * (Q : ℝ) := by
+    calc
+      _ ≤ (W * δ) * (R : ℝ) := mul_le_mul_of_nonneg_right hWδ' hRnonneg
+      _ = δ * (Q : ℝ) := by rw [hQR]; ring
+  have hγQ := mul_le_mul_of_nonneg_right hγsmall hQpos.le
+  have hgapQ := mul_le_mul_of_nonneg_right hgap hQpos.le
+  have hδQ : 0 < δ * (Q : ℝ) := mul_pos hδ hQpos
+  calc
+    _ ≤ (η + 1) * ((R : ℝ) + (2 * (ℓ : ℝ) + 1) * γ * (Q : ℝ)) := by gcongr
+    _ ≤ 2 * ((R : ℝ) + (2 * (ℓ : ℝ) + 1) * γ * (Q : ℝ)) := by
+      apply mul_le_mul_of_nonneg_right (by linarith : η + 1 ≤ 2)
+      positivity
+    _ ≤ δ * (Q : ℝ) / 2 := by nlinarith only [hRsmall, hγQ]
+    _ < δ * (Q : ℝ) := by linarith
+    _ ≤ (η - ηp) * (Q : ℝ) := hgapQ
+
 end HypercubeRamsey.Lane_sol_s09_hind

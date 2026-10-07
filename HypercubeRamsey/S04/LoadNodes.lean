@@ -1,4 +1,5 @@
 import HypercubeRamsey.S04.CoreLemmas
+import HypercubeRamsey.S04.LoadNodes_q_s04_load
 
 /-!
 # L4.1i–k: odd loads and the odd injection, predictive thresholds, even loads
@@ -24,7 +25,7 @@ theorem odd_load_prob (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : 
         (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag),
         TagBal M tag (2 * K) → ProfOK M tag q q' → OddFactor M tag q q' → OddCap M tag →
         (prepLaw M tag q q').pr (fun ω => ∃ y, 1 / 10 < oddCol M tag ω y) ≤ 1 / 10 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.odd_load_prob_proof β γ K hβ hβγ hγ hK
 
 /-- L4.1i, injection (04:512–526): on `S_pre` all odd rows are probabilities (`GeoCons`) with atoms
 `≤ exp(2n^γ)/N ≤ N^{-0.95}` (`OddCap`, `N ≥ 2^n`) and column sums `≤ 1/10 ≤ 0.4`; Lemma 3.9
@@ -36,7 +37,7 @@ theorem injection_exists (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ :
         (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι),
         GeoCons M tag → OddCap M tag →
         ∀ ω : Prep M tag, SPre M tag ω → ∃ J, InjOK M tag ω J := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.injection_exists β γ hβ hβγ hγ
 
 /-- L4.1j (04:528–551): for a fixed even role `a` and reference `c`, on `S_pre` with `sel a = c` the event `E`
 holds (`GeoCons`); the injection comparison (`InjOK`, the `n` neighbouring outputs) bounds the failure by twice its
@@ -51,9 +52,9 @@ theorem pred_fail_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
       GeoCons M tag → RefIndep M tag → Resample M tag q q' →
       (∀ ω, SPre M tag ω → InjOK M tag ω (J ω)) →
       ∑ ω, (prepLaw M tag q q').w ω *
-          (if SPre M tag ω then (J ω).pr (fun f => ∃ a, PredFail M tag ω a (nbrLabels f a)) else 0) ≤
-        1 / 10 := by
-  sorry
+        (if SPre M tag ω then (J ω).pr (fun f => ∃ a, PredFail M tag ω a (nbrLabels f a)) else 0) ≤
+      1 / 10 := by
+  exact HypercubeRamsey.Lane_q_s04_load.pred_fail_prob_proof β γ hβ hβγ hγ
 
 /-- L4.1k, comparison (04:562–574): separated even roles have disjoint neighbourhoods, so the product of their
 rows reads at most `mn ≤ n²` odd outputs; `InjOK` bounds its injection integral by twice its integral under the
@@ -61,7 +62,7 @@ product of the odd rows, which on `S_pre` are the sampling laws (`GeoCons`), and
 product factors into the mean rows. -/
 theorem even_clock {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
     (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (_hgeo : GeoCons M tag) : EvenClock M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.even_clock M tag _hgeo
 
 /-- L4.1k, even loads (04:553–591): Lemma 3.6 with weights `prepLaw(ω) 1_{S_pre}(ω) J_ω(f)`, `Z_a = N p_a(x)`,
 cap `exp((log 2 - c₂ a_*/2) n)` (`EvenRowFacts`), near sets of radius `2 locR` (`n · fraction · cap → 0` since
@@ -78,6 +79,6 @@ theorem even_load_prob (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ :
         ∑ ω, (prepLaw M tag q q').w ω *
             (if SPre M tag ω then (J ω).pr (fun f => ∃ x, 1 < evenCol M tag ω f x) else 0) ≤
           1 / 10 := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_load.even_load_prob_proof β γ K hβ hβγ hγ hK
 
 end HypercubeRamsey.S04

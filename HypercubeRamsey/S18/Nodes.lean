@@ -950,6 +950,24 @@ theorem P18_5e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
                 (D.paletteScale A.paletteIndex)⁻¹ ^ (2 * (D.nonisolates A.rows).card) *
                 ∏ v ∈ A.rows \ D.nonisolates A.rows,
                   isolatedWeight D v (assignment v).1 (assignment v).2 := by
+  have hnCast : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
+    (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp
+      T.S.n_tendsto
+  have hlog := Real.tendsto_log_atTop.comp hnCast
+  have hmargin : ∀ᶠ k in atTop, (2 : ℝ) < Real.log (T.S.n k : ℝ) ^ 3 := by
+    filter_upwards [hlog.eventually_gt_atTop 2] with k hk
+    have hlog2 : (2 : ℝ) < Real.log (T.S.n k : ℝ) := by simpa using hk
+    have hlog3 : (2 : ℝ) ^ 3 < Real.log (T.S.n k : ℝ) ^ 3 := by gcongr
+    norm_num at hlog3
+    linarith
+  refine ⟨1, by norm_num, ?_⟩
+  filter_upwards [hmargin] with k hmargin
+  intro PT hPT D hD A
+  obtain ⟨Q, _hCount⟩ :=
+    HypercubeRamsey.Lane_q_s18_n6.pairQueriesOfOuterFamilyRepresentatives
+      hκ D hD A hmargin
+  refine ⟨Q, ?_⟩
+  intro assignment hValid
   sorry
 
 /-- P18.5f/g, 18:1126–1212. Calibrated label and group-bin comparisons,
@@ -1348,7 +1366,94 @@ theorem L18_6a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cprime : ℝ)
             (∑ S ∈ (D.paletteRows palette).powersetCard p,
               Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S)) /
               ((D.paletteRows palette).powersetCard p).card ≤ 2 := by
-  sorry
+  have hlogInv : Real.log (1 / 2 : ℝ) < -1 / 2 := by
+    have h := Real.log_lt_sub_one_of_pos (by norm_num : (0 : ℝ) < 1 / 2)
+      (by norm_num : (1 / 2 : ℝ) ≠ 1)
+    norm_num at h ⊢
+    exact h
+  have hlogTwo : 1 / 2 < Real.log 2 := by
+    have h := hlogInv
+    rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv] at h
+    linarith
+  have hgap : 0 < Real.log 2 / 2 - 0.02 := by nlinarith [hlogTwo]
+  let η : ℝ := min (1 / 2) ((Real.log 2 / 2 - 0.02) / (2 * Cprime))
+  have hη : 0 < η := by
+    apply lt_min
+    · norm_num
+    · exact div_pos hgap (by positivity)
+  have hη1 : η < 1 := by
+    exact lt_of_le_of_lt (min_le_left _ _) (by norm_num)
+  have hslack : 0.02 + Cprime * η < Real.log 2 / 2 := by
+    have hη' : η ≤ (Real.log 2 / 2 - 0.02) / (2 * Cprime) := min_le_right _ _
+    have hmul : Cprime * η ≤ (Real.log 2 / 2 - 0.02) / 2 := by
+      have hmul' := mul_le_mul_of_nonneg_left hη' hCp.le
+      have hden : 2 * Cprime ≠ 0 := ne_of_gt (by positivity)
+      field_simp at hmul'
+      nlinarith
+    dsimp [η] at hη1
+    linarith
+  let a : ℝ := 0.02 + Cprime * η
+  have hRateEvent := HypercubeRamsey.Lane_q_s18_n6.eventually_overlapRate_le_half
+    hκ T η a hη1 (by dsimp [a]; exact hslack)
+  refine ⟨η, hη, hη1, hslack, ?_⟩
+  filter_upwards [hRateEvent] with k hRate
+  intro PT hPT D hD δ hPair palette p hp
+  let U : Finset (Pos T k) := D.paletteRows palette
+  let Δ : ℕ := ⌈(T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5)⌉₊
+  have hExponentBound (S : Finset (Pos T k)) :
+      0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S ≤
+        (0.02 + Cprime * η) * (T.S.n k : ℝ) * D.rank S :=
+    HypercubeRamsey.Lane_q_s18_n6.overlapMoment_exponent_bound
+      D δ K Cprime η hPair hCp.le p hp S
+  by_cases hpU : p ≤ U.card
+  · have hRateLocal :
+        Real.exp (a * (T.S.n k : ℝ)) * (p : ℝ) ^ 2 * Δ /
+          ((U.card : ℝ) - p + 1) ≤ 1 / 2 := by
+      simpa [a, U, Δ, Real.rpow_natCast, Nat.cast_add] using
+        hRate U (hPair.2.1 palette) p hp
+    have hdeg : ∀ v, (Finset.univ.filter fun w => D.geometricAdj v w).card ≤ Δ := by
+      intro v
+      have hdegReal := hPair.2.2.1 v
+      have hceil : (T.S.n k : ℝ) ^ (κ.Ac + 5) ≤ (Δ : ℝ) := by
+        calc
+          (T.S.n k : ℝ) ^ (κ.Ac + 5) =
+              (T.S.n k : ℝ) ^ ((κ.Ac + 5 : ℕ) : ℝ) := by rw [← Real.rpow_natCast]
+          _ = (T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5) := by congr 1 <;> norm_num
+          _ ≤ (Δ : ℝ) := by dsimp [Δ]; exact Nat.le_ceil _
+      exact_mod_cast hdegReal.trans hceil
+    have hMoment := HypercubeRamsey.Lane_q_s18_n6.overlapRank_exp_moment_le_two
+      D U p Δ (a * (T.S.n k : ℝ)) hpU hdeg (by simpa [a, U, Δ] using hRateLocal)
+    have hSum :
+        (∑ S ∈ U.powersetCard p,
+          Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+            Cprime * p * D.rank S)) ≤
+        (∑ S ∈ U.powersetCard p,
+          Real.exp (a * (T.S.n k : ℝ) * D.rank S)) := by
+      apply Finset.sum_le_sum
+      intro S hS
+      exact Real.exp_le_exp.mpr (by
+        have h := hExponentBound S
+        dsimp [a]
+        nlinarith [h])
+    have hdenPos : 0 < ((U.powersetCard p).card : ℝ) := by
+      rw [Finset.card_powersetCard]
+      exact_mod_cast Nat.choose_pos hpU
+    change
+      (∑ S ∈ U.powersetCard p,
+        Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+          Cprime * p * D.rank S)) / ((U.powersetCard p).card : ℝ) ≤ 2
+    calc
+      _ ≤ (∑ S ∈ U.powersetCard p,
+          Real.exp (a * (T.S.n k : ℝ) * D.rank S)) / ((U.powersetCard p).card : ℝ) :=
+        div_le_div_of_nonneg_right hSum hdenPos.le
+      _ ≤ 2 := hMoment
+  · have hEmpty : U.powersetCard p = ∅ := by
+      apply Finset.powersetCard_eq_empty.mpr
+      omega
+    have hlt : U.card < p := Nat.lt_of_not_ge hpU
+    dsimp [U] at hEmpty ⊢
+    rw [hEmpty]
+    simp [Nat.choose_eq_zero_of_lt hlt]
 
 noncomputable def HallBudget {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : LateData hPT) (η K Cs : ℝ) : ℝ :=
@@ -1372,6 +1477,24 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
           ((D.paletteRows palette).powersetCard p).card ≤ 2) →
         (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧
           HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
+  let KH : ℝ := K + Cp + Cs + 1
+  have hKH : 0 < KH := by dsimp [KH]; positivity
+  have hthreshold : ∀ᶠ k : ℕ in atTop, 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := by
+    have hlarge := T.S.n_tendsto.eventually_ge_atTop ⌈3 / η⌉₊
+    filter_upwards [hlarge] with k hk
+    have hcast : (⌈3 / η⌉₊ : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hk
+    have hceil : 3 / η ≤ (⌈3 / η⌉₊ : ℝ) := Nat.le_ceil _
+    have h3 : (3 : ℝ) ≤ η * (T.S.n k : ℝ) := by
+      have h := (div_le_iff₀ hη).mp (hceil.trans hcast)
+      nlinarith
+    exact Nat.le_floor h3
+  refine ⟨KH, hKH, ?_⟩
+  filter_upwards [hthreshold] with k ht0
+  intro PT hPT D hD δ εterm εrun C H hEndpoint hAverage
+  have hPairFacts : PairInitialFacts D δ K := hEndpoint.pair_facts
+  have hObstructionSize : 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := ht0
+  -- The remaining estimate is the connected endpoint-tree diagram sum,
+  -- with two additional mergers on the actual distinct-endpoint support.
   sorry
 
 set_option maxHeartbeats 400000

@@ -248,6 +248,273 @@ theorem rawAt_card_eq_countAt {β γ : ℝ} {n : ℕ}
     _ = B.card := Finset.card_image_of_injective B hf
     _ = countAt P v l := by rfl
 
+/-- The fixed binomial layer at radius eleven already dominates the `n^10` position intensity
+once the radius has reached eleven and `n` is sufficiently large. -/
+theorem hd_count_parameters {β γ : ℝ} (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1)
+    (n : ℕ) (hn : 22 ^ 11 ≤ n) :
+    (hd β γ n).r ≤ (hd β γ n).d ∧
+      0 < (hd β γ n).V ∧
+      lamH n / ((hd β γ n).V : ℝ) ≤ 1 := by
+  let p := hd β γ n
+  have hn22 : (22 : ℝ) ^ 11 ≤ n := by exact_mod_cast hn
+  have hn121 : (121 : ℝ) ≤ n := by
+    have hpow : (121 : ℝ) ≤ (22 : ℝ) ^ 11 := by norm_num
+    exact hpow.trans hn22
+  have hn1 : (1 : ℝ) ≤ n := by
+    have : (1 : ℝ) ≤ (22 : ℝ) ^ 11 := by norm_num
+    exact this.trans hn22
+  have hωpos := omega4_pos hβ hγ
+  have hωlt := omega4_lt hβ hβγ
+  have hρ0 : 0 ≤ rhoH β γ := by
+    dsimp [rhoH, b0H, bH]
+    linarith
+  have hρhalf : rhoH β γ < 1 / 2 := by
+    dsimp [rhoH, b0H, bH]
+    linarith
+  have hexpLower : 1 / 2 ≤ 1 - rhoH β γ := by linarith
+  have hroot : 11 ≤ (n : ℝ) ^ (1 / 2 : ℝ) := by
+    rw [← Real.sqrt_eq_rpow]
+    have hs := Real.sqrt_le_sqrt hn121
+    norm_num at hs ⊢
+    exact hs
+  have hrpowLower : (n : ℝ) ^ (1 / 2 : ℝ) ≤ (n : ℝ) ^ (1 - rhoH β γ) :=
+    Real.rpow_le_rpow_of_exponent_le hn1 hexpLower
+  have hradiusLowerReal : (11 : ℝ) ≤ (n : ℝ) ^ (1 - rhoH β γ) :=
+    hroot.trans hrpowLower
+  have hradiusLower : 11 ≤ radius β γ n := by
+    unfold radius
+    exact Nat.le_floor hradiusLowerReal
+  have hterm : 11 ∈ Finset.range (p.r + 1) := by
+    simp only [Finset.mem_range]
+    dsimp [p, hd]
+    omega
+  have hchooseV : Nat.choose n 11 ≤ p.V := by
+    dsimp [p, HDParams.V, hd]
+    apply Finset.single_le_sum
+    · intro i hi
+      exact Nat.zero_le _
+    · simpa [Finset.mem_range] using hterm
+  have hchooseLower : (n : ℝ) ^ 10 ≤ (Nat.choose n 11 : ℕ) := by
+    have hnumerator : (n : ℝ) / 2 ≤ ((n + 1 - 11 : ℕ) : ℝ) := by
+      have hcast : ((n + 1 - 11 : ℕ) : ℝ) = (n : ℝ) + 1 - 11 := by
+        rw [Nat.cast_sub (by omega), Nat.cast_add, Nat.cast_one]
+        norm_num
+      rw [hcast]
+      linarith
+    have hnumPow : (n : ℝ) ^ 10 ≤
+        ((n + 1 - 11 : ℕ) : ℝ) ^ 11 / (Nat.factorial 11 : ℝ) := by
+      have hfirst : (n : ℝ) ^ 10 ≤ (n : ℝ) ^ 11 / (22 : ℝ) ^ 11 := by
+        apply (le_div_iff₀ (by positivity : (0 : ℝ) < (22 : ℝ) ^ 11)).2
+        have hmul := mul_le_mul_of_nonneg_left hn22 (show 0 ≤ (n : ℝ) ^ 10 by positivity)
+        simpa [pow_succ, mul_assoc, mul_left_comm, mul_comm] using hmul
+      have hmiddle : (n : ℝ) ^ 11 / (22 : ℝ) ^ 11 =
+          ((n : ℝ) / 2) ^ 11 / (11 : ℝ) ^ 11 := by
+        field_simp
+        norm_num [show (22 : ℝ) = 2 * 11 by norm_num]
+      have hfactorial : (Nat.factorial 11 : ℝ) ≤ (11 : ℝ) ^ 11 := by norm_num
+      have hsecond : ((n : ℝ) / 2) ^ 11 / (11 : ℝ) ^ 11 ≤
+          ((n : ℝ) / 2) ^ 11 / (Nat.factorial 11 : ℝ) :=
+        div_le_div_of_nonneg_left (by positivity) (by positivity) hfactorial
+      have hthird : ((n : ℝ) / 2) ^ 11 / (Nat.factorial 11 : ℝ) ≤
+          ((n + 1 - 11 : ℕ) : ℝ) ^ 11 / (Nat.factorial 11 : ℝ) :=
+        div_le_div_of_nonneg_right (by gcongr) (by positivity)
+      exact hfirst.trans_eq hmiddle |>.trans (hsecond.trans hthird)
+    have hchooseCast :
+        ((n + 1 - 11 : ℕ) : ℝ) ^ 11 / (Nat.factorial 11 : ℝ) ≤ (Nat.choose n 11 : ℝ) := by
+      exact Nat.pow_le_choose 11 n
+    exact hnumPow.trans hchooseCast
+  have hVlower : (n : ℝ) ^ 10 ≤ (p.V : ℝ) := by
+    exact hchooseLower.trans (by exact_mod_cast hchooseV)
+  have hlam : lamH n = (n : ℝ) ^ 10 := by simp [lamH]
+  have hpV : 0 < (p.V : ℝ) := by
+    have hnpos : (0 : ℝ) < (n : ℝ) := lt_of_lt_of_le (by norm_num) hn1
+    exact lt_of_lt_of_le (by positivity) hVlower
+  constructor
+  · change radius β γ n ≤ n
+    have hradiusUpper : (n : ℝ) ^ (1 - rhoH β γ) ≤ n := by
+      calc
+        (n : ℝ) ^ (1 - rhoH β γ) ≤ (n : ℝ) ^ (1 : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le hn1 (by linarith [hρ0])
+        _ = n := by simp
+    have hfloor : ((radius β γ n : ℕ) : ℝ) ≤ (n : ℝ) := by
+      exact (Nat.floor_le (by positivity)).trans hradiusUpper
+    exact_mod_cast hfloor
+  · constructor
+    · have hpVNat : 0 < p.V := by exact_mod_cast hpV
+      change 0 < (hd β γ n).V
+      exact hpVNat
+    · change lamH n / (p.V : ℝ) ≤ 1
+      rw [hlam]
+      exact (div_le_one₀ hpV).2 hVlower
+
+/-- A crude explicit bound for the top height scale. -/
+private theorem topH_le_pow {β γ : ℝ} (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1)
+    (n : ℕ) (hn : 4 ≤ n) : topH β γ n ≤ n ^ (n + 2) := by
+  let R₀ : ℕ := max 1 ⌈Real.log (n : ℝ) ^ 2⌉₊
+  let M : ℕ := max 2 ⌈(n : ℝ) ^ sigmaH β γ⌉₊
+  let target : ℕ := ⌈(n : ℝ) ^ (1 - zetaH β γ)⌉₊
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast (show 1 ≤ n by omega)
+  have hωpos := omega4_pos hβ hγ
+  have hωlt := omega4_lt hβ hβγ
+  have hσ0 : 0 ≤ sigmaH β γ := by
+    dsimp [sigmaH, zetaH, b0H, bH]
+    linarith
+  have hσ1 : sigmaH β γ ≤ 1 := by
+    dsimp [sigmaH, zetaH, b0H, bH]
+    linarith
+  have hζ0 : 0 ≤ zetaH β γ := by
+    dsimp [zetaH, b0H, bH]
+    linarith
+  have hζ1 : zetaH β γ ≤ 1 := by
+    dsimp [zetaH, b0H, bH]
+    linarith
+  have hMceil : ⌈(n : ℝ) ^ sigmaH β γ⌉₊ ≤ n := by
+    apply Nat.ceil_le.mpr
+    calc
+      (n : ℝ) ^ sigmaH β γ ≤ (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR hσ1
+      _ = n := by simp
+  have hM : M ≤ n := by
+    dsimp [M]
+    exact max_le (by omega) hMceil
+  have hM2 : 2 ≤ M := by dsimp [M]; omega
+  have hlog0 : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by exact_mod_cast (show 1 ≤ n by omega))
+  have hlogLe : Real.log (n : ℝ) ≤ n := by
+    have h := Real.log_le_sub_one_of_pos (by positivity : (0 : ℝ) < n)
+    linarith
+  have hlogSq : Real.log (n : ℝ) ^ 2 ≤ (n : ℝ) ^ 2 :=
+    (sq_le_sq₀ hlog0 (by positivity)).2 hlogLe
+  have hRceil : ⌈Real.log (n : ℝ) ^ 2⌉₊ ≤ n ^ 2 := by
+    apply Nat.ceil_le.mpr
+    simpa [Nat.cast_pow] using hlogSq
+  have hR : R₀ ≤ n ^ 2 := by
+    dsimp [R₀]
+    exact max_le (Nat.one_le_pow 2 n (by omega)) hRceil
+  have hR1 : 1 ≤ R₀ := by dsimp [R₀]; omega
+  have htargetCeil : target ≤ n := by
+    dsimp [target]
+    apply Nat.ceil_le.mpr
+    calc
+      (n : ℝ) ^ (1 - zetaH β γ) ≤ (n : ℝ) ^ (1 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnR (by linarith [hζ0])
+      _ = n := by simp
+  have htargetPow : target ≤ 2 ^ target := by
+    induction target with
+    | zero => simp
+    | succ k ih =>
+      have hkpos : 1 ≤ 2 ^ k := Nat.one_le_pow k 2 (by omega)
+      calc
+        k + 1 ≤ 2 ^ k + 1 := Nat.succ_le_succ ih
+        _ ≤ 2 * 2 ^ k := by omega
+        _ = 2 ^ (k + 1) := by rw [Nat.pow_succ]; ring
+  have htargetM : target ≤ M ^ target * R₀ := by
+    calc
+      target ≤ 2 ^ target := htargetPow
+      _ ≤ M ^ target := Nat.pow_le_pow_left hM2 target
+      _ = M ^ target * 1 := by simp
+      _ ≤ M ^ target * R₀ := Nat.mul_le_mul_left _ hR1
+  have hExists : ∃ i : ℕ, target ≤ M ^ i * R₀ := ⟨target, htargetM⟩
+  have hfind : Nat.find hExists ≤ target := Nat.find_min' hExists htargetM
+  have htopEq : topH β γ n = M ^ Nat.find hExists * R₀ := by
+    dsimp [topH, topScale, R₀, M, target]
+  rw [htopEq]
+  calc
+    M ^ Nat.find hExists * R₀ ≤ n ^ Nat.find hExists * n ^ 2 :=
+      Nat.mul_le_mul (by gcongr) hR
+    _ ≤ n ^ target * n ^ 2 := by
+      exact Nat.mul_le_mul_right _ (Nat.pow_le_pow_right (by omega) hfind)
+    _ = n ^ (target + 2) := by rw [Nat.pow_add]
+    _ ≤ n ^ (n + 2) := Nat.pow_le_pow_right (by omega) (Nat.add_le_add_right htargetCeil 2)
+
+/-- The count-concentration union bound is below `1/30` beyond one explicit threshold. -/
+theorem count_tail_bound {β γ : ℝ} (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1)
+    (n : ℕ) (hn : 22 ^ 11 ≤ n) :
+    2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+        ((topH β γ n + 1 : ℕ) : ℝ) * Real.exp (-lamH n / 12) ≤ 1 / 30 := by
+  have hn4 : 4 ≤ n := by omega
+  have hH := topH_le_pow hβ hβγ hγ n hn4
+  have hHplus : topH β γ n + 1 ≤ n ^ (n + 3) := by
+    have hpowpos : 1 ≤ n ^ (n + 2) := Nat.one_le_pow (n + 2) n (by omega)
+    calc
+      topH β γ n + 1 ≤ n ^ (n + 2) + 1 := Nat.add_le_add_right hH 1
+      _ ≤ 2 * n ^ (n + 2) := by omega
+      _ ≤ n * n ^ (n + 2) := Nat.mul_le_mul_right _ (by omega)
+      _ = n ^ (n + 3) := by rw [Nat.pow_succ]; ring
+  have hsiteEq : (Finset.univ : Finset (CubeVertex n)).card = 2 ^ n := by
+    simp [CubeVertex]
+  have hsite : ((Finset.univ : Finset (CubeVertex n)).card : ℝ) ≤ (n : ℝ) ^ n := by
+    rw [hsiteEq]
+    exact_mod_cast (Nat.pow_le_pow_left (show 2 ≤ n by omega) n)
+  have hheight : ((topH β γ n + 1 : ℕ) : ℝ) ≤ (n : ℝ) ^ (n + 3) := by
+    exact_mod_cast hHplus
+  have hnexp : (n : ℝ) ≤ Real.exp (n : ℝ) := by
+    have h := Real.add_one_le_exp (n : ℝ)
+    linarith
+  have hpowExp (k : ℕ) : (n : ℝ) ^ k ≤ Real.exp ((n : ℝ) * k) := by
+    calc
+      (n : ℝ) ^ k ≤ Real.exp (n : ℝ) ^ k := pow_le_pow_left₀ (by positivity) hnexp k
+      _ = Real.exp ((n : ℝ) * k) := by rw [← Real.exp_nat_mul]; congr 1; ring
+  have h2exp : (2 : ℝ) ≤ Real.exp 1 := by
+    have h := Real.add_one_le_exp (1 : ℝ)
+    norm_num at h ⊢
+    exact h
+  have hnpoly : (1 : ℝ) + (n : ℝ) * n + (n : ℝ) * ((n : ℝ) + 3) ≤ (n : ℝ) ^ 4 := by
+    have hnR : (4 : ℝ) ≤ n := by exact_mod_cast hn4
+    have hnSq : 16 ≤ (n : ℝ) ^ 2 := by nlinarith [sq_nonneg ((n : ℝ) - 4)]
+    have hnFourth : 16 * (n : ℝ) ^ 2 ≤ (n : ℝ) ^ 4 := by
+      have h := mul_le_mul_of_nonneg_right hnSq (sq_nonneg (n : ℝ))
+      nlinarith [h]
+    nlinarith [hnFourth, hnR]
+  have hfactor : 2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+      ((topH β γ n + 1 : ℕ) : ℝ) ≤ Real.exp ((n : ℝ) ^ 4) := by
+    calc
+      2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+          ((topH β γ n + 1 : ℕ) : ℝ) ≤
+          2 * (n : ℝ) ^ n * (n : ℝ) ^ (n + 3) := by gcongr
+      _ ≤ Real.exp 1 * Real.exp ((n : ℝ) * n) *
+          Real.exp ((n : ℝ) * (n + 3)) := by
+            have hfirst : 2 * (n : ℝ) ^ n ≤ Real.exp 1 * Real.exp ((n : ℝ) * n) :=
+              mul_le_mul h2exp (hpowExp n) (by positivity) (Real.exp_nonneg _)
+            exact mul_le_mul hfirst (by simpa [Nat.cast_add] using hpowExp (n + 3))
+              (by positivity) (by positivity)
+      _ = Real.exp (1 + (n : ℝ) * n + (n : ℝ) * ((n : ℝ) + 3)) := by
+        rw [← Real.exp_add, ← Real.exp_add]
+      _ ≤ Real.exp ((n : ℝ) ^ 4) := Real.exp_le_exp.mpr hnpoly
+  have hlam : lamH n = (n : ℝ) ^ 10 := by simp [lamH]
+  have hnSix : 24 ≤ (n : ℝ) ^ 6 := by
+    have hNat : 64 ≤ n ^ 6 := by
+      calc
+        64 = 2 ^ 6 := by norm_num
+        _ ≤ n ^ 6 := Nat.pow_le_pow_left (by omega) 6
+    exact_mod_cast (le_trans (by norm_num) hNat)
+  have hlarge : (n : ℝ) ^ 4 + Real.log 30 ≤ (n : ℝ) ^ 10 / 12 := by
+    have hlog30 : Real.log 30 ≤ 29 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 30)
+      linarith
+    have hnFour : 29 ≤ (n : ℝ) ^ 4 := by
+      have hnR : (4 : ℝ) ≤ n := by exact_mod_cast hn4
+      nlinarith [sq_nonneg ((n : ℝ) - 4)]
+    have hmul := mul_le_mul_of_nonneg_left hnSix (show 0 ≤ (n : ℝ) ^ 4 by positivity)
+    have hpow : 2 * (n : ℝ) ^ 4 ≤ (n : ℝ) ^ 10 / 12 := by
+      apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 12)).2
+      calc
+        2 * (n : ℝ) ^ 4 * 12 = 24 * (n : ℝ) ^ 4 := by ring
+        _ ≤ (n : ℝ) ^ 6 * (n : ℝ) ^ 4 := by
+          simpa [mul_comm, mul_left_comm, mul_assoc] using hmul
+        _ = (n : ℝ) ^ 10 := by rw [← pow_add]
+    linarith
+  calc
+    2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+        ((topH β γ n + 1 : ℕ) : ℝ) * Real.exp (-lamH n / 12) ≤
+        Real.exp ((n : ℝ) ^ 4) * Real.exp (-((n : ℝ) ^ 10) / 12) := by
+          rw [hlam]
+          exact mul_le_mul_of_nonneg_right hfactor (Real.exp_nonneg _)
+    _ = Real.exp ((n : ℝ) ^ 4 - (n : ℝ) ^ 10 / 12) := by rw [← Real.exp_add]; congr 1 <;> ring
+    _ ≤ Real.exp (-(Real.log 30)) := Real.exp_le_exp.mpr (by linarith [hlarge])
+    _ = 1 / 30 := by
+      rw [Real.exp_neg, Real.exp_log (by norm_num : (0 : ℝ) < 30)]
+      norm_num
+
 /-- The deterministic eligibility statement derived from the forbidden-card bound. -/
 theorem geo_legal_proof {β γ : ℝ} (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}

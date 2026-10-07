@@ -76,6 +76,7 @@ theorem geo_cons {β γ : ℝ} {G : Colour} {n N : ℕ} {E : Fin N → Fin N →
   intro v hv l
   exact hlegal v (Finset.mem_filter.mp hv).1 l
 
+set_option maxHeartbeats 600000
 /-- L4.1f, counts (04:311–313; L3.8j on all `2^n` sites): some site-level ball has fewer than `λ/2` or more than
 `2λ` present IDs with probability at most `2^{n+1}(H+1) e^{-λ/12} ≤ 1/30`. -/
 theorem count_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
@@ -83,7 +84,70 @@ theorem count_prob (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι) (q : XProf M tag) (q' : YProf M tag),
       (prepLaw M tag q q').pr (fun ω => ¬ ∀ v l,
         lamH n / 2 ≤ (countAt (ppos ω) v l : ℝ) ∧ (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n) ≤ 1 / 30 := by
-  sorry
+  classical
+  refine ⟨22 ^ 11, ?_⟩
+  intro n hn N E G X Y M tag q q'
+  let p := hd β γ n
+  have hgeom := HypercubeRamsey.Lane_q_s04_geom.hd_count_parameters hβ hβγ hγ n hn
+  have hlam : 0 < p.lam := by
+    dsimp [p, hd, lamH]
+    positivity
+  have hbadSubset : ∀ P : Pos β γ n,
+      (¬ ∀ v l, lamH n / 2 ≤ (countAt P v l : ℝ) ∧
+          (countAt P v l : ℝ) ≤ 2 * lamH n) →
+        ∃ v ∈ (Finset.univ : Finset (CubeVertex n)), ∃ j : Fin (p.H + 1),
+          let count := (Finset.univ.filter (fun u : CubeVertex p.d =>
+            P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card
+          ((count : ℝ) < p.lam / 2 ∨ 2 * p.lam < (count : ℝ)) := by
+    intro P hbad
+    push_neg at hbad
+    obtain ⟨v, l, hcount⟩ := hbad
+    refine ⟨v, Finset.mem_univ _, l, ?_⟩
+    by_cases hlo : (countAt P v l : ℝ) < lamH n / 2
+    · exact Or.inl (by simpa [countAt, p, hd] using hlo)
+    · have hlow : lamH n / 2 ≤ (countAt P v l : ℝ) := le_of_not_gt hlo
+      have hhi := hcount (by simpa [countAt, p, hd] using hlow)
+      exact Or.inr (by simpa [countAt, p, hd] using hhi)
+  have hconc := height_position_counts p Finset.univ hlam hgeom.2.1 hgeom.1 hgeom.2.2
+  let A : Pos β γ n → Prop := fun P =>
+    ¬ ∀ v l, lamH n / 2 ≤ (countAt P v l : ℝ) ∧
+      (countAt P v l : ℝ) ≤ 2 * lamH n
+  let B : Pos β γ n → Prop := fun P =>
+    ∃ v ∈ (Finset.univ : Finset (CubeVertex n)), ∃ j : Fin (p.H + 1),
+      let count := (Finset.univ.filter (fun u : CubeVertex p.d =>
+        P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card
+      ((count : ℝ) < p.lam / 2 ∨ 2 * p.lam < (count : ℝ))
+  have hmono : p.posLaw.pr A ≤ p.posLaw.pr B := by
+    apply pr_mono p.posLaw
+    exact hbadSubset
+  have hconc' : p.posLaw.pr B ≤
+      2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+        ((p.H + 1 : ℕ) : ℝ) * Real.exp (-p.lam / 12) := by
+    simpa [B] using hconc
+  have hmargin : (prepLaw M tag q q').pr (fun ω => A (ppos ω)) = p.posLaw.pr A := by
+    change (((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).prod p.tieLaw).pr
+      (fun ω => A ω.1.1.1) = _
+    calc
+      _ = ((p.posLaw.prod (auxLaw M tag q q')).prod p.actLaw).pr
+          (fun ω => A ω.1.1) :=
+        HypercubeRamsey.Lane_q_s04_geom.pr_prod_fst _ _ _
+      _ = (p.posLaw.prod (auxLaw M tag q q')).pr (fun ω => A ω.1) :=
+        HypercubeRamsey.Lane_q_s04_geom.pr_prod_fst
+          (p.posLaw.prod (auxLaw M tag q q')) p.actLaw (fun x => A x.1)
+      _ = p.posLaw.pr A := HypercubeRamsey.Lane_q_s04_geom.pr_prod_fst _ _ _
+  have htail := HypercubeRamsey.Lane_q_s04_geom.count_tail_bound hβ hβγ hγ n hn
+  calc
+    (prepLaw M tag q q').pr (fun ω => ¬ ∀ v l,
+        lamH n / 2 ≤ (countAt (ppos ω) v l : ℝ) ∧
+          (countAt (ppos ω) v l : ℝ) ≤ 2 * lamH n) = p.posLaw.pr A := by
+            rw [hmargin]
+    _ ≤ p.posLaw.pr B := hmono
+    _ ≤ 2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+        ((p.H + 1 : ℕ) : ℝ) * Real.exp (-p.lam / 12) := hconc'
+    _ ≤ 1 / 30 := by
+      change 2 * ((Finset.univ : Finset (CubeVertex n)).card : ℝ) *
+        ((topH β γ n + 1 : ℕ) : ℝ) * Real.exp (-lamH n / 12) ≤ 1 / 30
+      exact htail
 
 /-- L4.1f, families (04:313–323): fix positions and masks with at most `2λ` present IDs per ball; a candidate has
 `exp(O(T log n))` choices, invalidity events of disjoint candidates depend on disjoint tuples and are independent,

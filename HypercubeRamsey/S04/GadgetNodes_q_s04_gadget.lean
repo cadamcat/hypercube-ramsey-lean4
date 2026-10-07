@@ -2510,8 +2510,6 @@ private theorem mergeSort_mem_gap {n : ℕ} (f : Fin n → ℕ) (p q : Fin n)
   let i' : Fin n := Fin.cast hlen i
   have hival : i'.val = i.val := by simp [i']
   have hiNat : i.val < n := by simpa [hlen] using i.isLt
-  have hival : i'.val = i.val := by simp [i']
-  have hiNat : i.val < n := by simpa [hlen] using i.isLt
   have hxi : mergeSortAt f i' = x := by
     dsimp [mergeSortAt, L, i']
     simpa using hi
@@ -2543,14 +2541,15 @@ private theorem mergeSort_mem_extremes {n : ℕ} (f : Fin n → ℕ) (hn : 0 < n
   obtain ⟨i, hi⟩ := List.mem_iff_get.mp hxsort
   let i' : Fin n := Fin.cast hlen i
   have hival : i'.val = i.val := by simp [i']
-  have hiNat : i.val < n := by simpa [hlen] using i.isLt
+  have hiLt : i.val < n := by rw [← hlen]; exact i.isLt
   have hxi : mergeSortAt f i' = x := by
     dsimp [mergeSortAt, L, i']
     simpa using hi
   have hmon := mergeSortAt_monotone f
   have hiLast : i' ≤ (⟨n - 1, by omega⟩ : Fin n) := by
     apply Fin.le_iff_val_le_val.mpr
-    exact Nat.le_sub_one_of_lt i'.isLt
+    rw [hival]
+    exact Nat.le_sub_one_of_lt hiLt
   constructor
   · calc
       mergeSortAt f ⟨0, hn⟩ ≤ mergeSortAt f i' :=

@@ -1,9 +1,9 @@
-import HypercubeRamsey.Framework.FinProb
+import HypercubeRamsey.S03.Injection.Comparison
 
 /-!
-Blueprint nodes L3.9a–e for calibrated near-product injections.  The sampler estimates are
-stated with explicit slack constants; the main theorem composes the price witness, calibration,
-and side-data transfer below.
+Lemma 3.9 assemblies and calibration. Concrete sequential/forcing processes and the
+Steps 2–3 estimates are in `Sampler` and `Comparison`. The final export and the price
+witness have no local placeholder; analytic nodes remain assigned proof obligations.
 -/
 
 namespace HypercubeRamsey
@@ -47,165 +47,148 @@ def LabelMarginalImage {R : Type*} [Fintype R] [DecidableEq R] (d : ℕ)
   {v | ∃ Q : FinProb (R → Fin d), LabelInjectionSupported Q ∧
     LabelNearProductBound d q Q ∧ ∀ i y, v (i, y) = LabelMarginalVector Q (i, y)}
 
-/-- L3.9a (03:627–647): complete a low-load family by dummy rows and choose an order whose
-column prefixes track their uniform targets. The completion has `ceil(2d/3)` rows, unit row
-masses, equal column sums, and dummy atoms bounded by `10/d`. -/
-theorem balanced_completion_good_order {R : Type*} [Fintype R] [DecidableEq R]
-    (d : ℕ) (hd : 100 ≤ d) (q : R → Fin d → ℝ)
-    (hq_nonneg : ∀ i y, 0 ≤ q i y)
-    (hq_sum : ∀ i, ∑ y, q i y = 1)
-    (hq_atom : ∀ i y, q i y ≤ (d : ℝ) ^ (-(0.95 : ℝ)))
-    (hq_load : ∀ y, ∑ i, q i y ≤ 1 / 2)
-    (hq_rows : (Fintype.card R : ℝ) ≤ (d : ℝ) / 2) :
-    ∃ t : ℕ, (2 / 3 : ℝ) * d ≤ t ∧ (t : ℝ) ≤ (2 / 3 : ℝ) * d + 1 ∧
-      Fintype.card R ≤ t ∧
-      ∃ qbar : (R ⊕ Fin (t - Fintype.card R)) → Fin d → ℝ,
-        (∀ j y, 0 ≤ qbar j y) ∧ (∀ j, ∑ y, qbar j y = 1) ∧
-        (∀ i y, qbar (Sum.inl i) y = q i y) ∧
-        (∀ y, ∑ j, qbar j y = (t : ℝ) / d) ∧
-        (∀ j y, qbar j y ≤ 10 / d) ∧
-        ∃ e : Fin t ≃ (R ⊕ Fin (t - Fintype.card R)),
-          ∀ (j : Fin t) y,
-            |(∑ k : Fin t, if k.val < j.val then qbar (e k) y else 0) -
-              (j.val : ℝ) / d| ≤ 10 * (d : ℝ) ^ (-(1 / 8 : ℝ)) := by
+/-- Step 1 (03:627–647), with the relaxed atom cap needed after price perturbation.
+Only dummy rows have the `10/d` cap. The actual order is part of the witness. -/
+theorem balanced_completion_good_order :
+    ∀ᶠ d : ℕ in Filter.atTop, ∀ {R : Type} [Fintype R] [DecidableEq R]
+      (q : R → Fin d → ℝ),
+      (∀ i y, 0 ≤ q i y) → (∀ i, ∑ y, q i y = 1) →
+      (∀ i y, q i y ≤ 2 * (d : ℝ) ^ (-(0.95 : ℝ))) →
+      (∀ y, ∑ i, q i y ≤ 1 / 2) →
+      ∃ t : ℕ, t = Nat.ceil ((2 / 3 : ℝ) * d) ∧ Fintype.card R ≤ t ∧
+        ∃ qbar : (R ⊕ Fin (t - Fintype.card R)) → Fin d → ℝ,
+          ∃ e : Fin t ≃ (R ⊕ Fin (t - Fintype.card R)),
+            (∀ i y, qbar (Sum.inl i) y = q i y) ∧
+            (∀ j y, qbar (Sum.inr j) y =
+              ((t : ℝ) / d - ∑ i, q i y) / (t - Fintype.card R : ℕ)) ∧
+            (∀ j y, qbar (Sum.inr j) y ≤ 10 / d) ∧
+            (∀ y, ∑ j, qbar j y = (t : ℝ) / d) ∧
+            Injection.OrderedInput d t (fun k y => qbar (e k) y) := by
   sorry
 
-/-- L3.9b (03:649–693): the sequential sampler tracks all row-label masses when the ordered
-prefixes are balanced. The conclusion records the simultaneous singleton estimate needed by
-the likelihood comparison in L3.9c. -/
-theorem tracking_label_sampler (d t : ℕ) (hd : 100 ≤ d)
-    (ht : t ≤ d)
-    (q : Fin t → Fin d → ℝ)
-    (hq_nonneg : ∀ i y, 0 ≤ q i y)
-    (hq_sum : ∀ i, ∑ y, q i y = 1)
-    (hq_atom : ∀ i y, q i y ≤ 10 * (d : ℝ) ^ (-(0.95 : ℝ)))
-    (hq_load : ∀ y, ∑ i, q i y = (t : ℝ) / d)
-    (hprefix : ∀ (j : Fin t) y,
-      |(∑ k : Fin t, if k.val < j.val then q k y else 0) -
-        (j.val : ℝ) / d| ≤ 10 * (d : ℝ) ^ (-(1 / 8 : ℝ))) :
-    ∃ Q : FinProb (Fin t → Fin d), LabelInjectionSupported Q ∧
-      ∀ i y, |Q.pr (fun x => x i = y) - q i y| ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) := by
-  classical
-  letI : NeZero d := ⟨by omega⟩
-  have hdR : (100 : ℝ) ≤ (d : ℝ) := by exact_mod_cast hd
-  have hbase : 1 ≤ (d : ℝ) := by linarith
-  have hsqrt : (10 : ℝ) ≤ Real.sqrt (d : ℝ) := by
-    rw [Real.le_sqrt (by norm_num) (by positivity)]
-    nlinarith
-  have hhalf : (10 : ℝ) ≤ (d : ℝ) ^ (1 / (2 : ℝ)) := by
-    simpa [Real.sqrt_eq_rpow] using hsqrt
-  have hexp : (d : ℝ) ^ (1 / (2 : ℝ)) ≤ (d : ℝ) ^ (0.85 : ℝ) :=
-    Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
-  have hpow : (10 : ℝ) ≤ (d : ℝ) ^ (0.85 : ℝ) := hhalf.trans hexp
-  have hneg : 10 * (d : ℝ) ^ (-(0.85 : ℝ)) ≤ 1 := by
-    have hdiv : 10 / (d : ℝ) ^ (0.85 : ℝ) ≤ 1 := by
-      rw [div_le_iff₀ (by positivity)]
-      simpa using hpow
-    simpa [Real.rpow_neg, div_eq_mul_inv] using hdiv
-  have hsplit : (d : ℝ) ^ (-(0.95 : ℝ)) =
-      (d : ℝ) ^ (-(0.1 : ℝ)) * (d : ℝ) ^ (-(0.85 : ℝ)) := by
-    rw [← Real.rpow_add (by positivity)]
-    norm_num
-  have hatom_small : 10 * (d : ℝ) ^ (-(0.95 : ℝ)) ≤
-      (d : ℝ) ^ (-(1 / 10 : ℝ)) := by
-    rw [hsplit]
-    calc
-      10 * ((d : ℝ) ^ (-(0.1 : ℝ)) * (d : ℝ) ^ (-(0.85 : ℝ)))
-          = (d : ℝ) ^ (-(0.1 : ℝ)) * (10 * (d : ℝ) ^ (-(0.85 : ℝ))) := by ring
-      _ ≤ (d : ℝ) ^ (-(0.1 : ℝ)) * 1 :=
-        mul_le_mul_of_nonneg_left hneg (Real.rpow_nonneg (by positivity) _)
-      _ = (d : ℝ) ^ (-(1 / 10 : ℝ)) := by norm_num
-  have huniform_small : (1 / (d : ℝ)) ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) := by
-    have hexp' : (d : ℝ) ^ (-(1 : ℝ)) ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) :=
-      Real.rpow_le_rpow_of_exponent_le hbase (by norm_num)
-    simpa [Real.rpow_neg_eq_inv_rpow, Real.rpow_one] using hexp'
-  let shift : Fin d → (Fin t → Fin d) := fun k i => i.castLE ht + k
-  let Q : FinProb (Fin t → Fin d) := {
-    w := fun x => ∑ k : Fin d, if shift k = x then (d : ℝ)⁻¹ else 0
-    nonneg := by
-      intro x
-      apply Finset.sum_nonneg
-      intro k hk
-      split_ifs <;> positivity
-    sum_eq_one := by
-      calc
-        ∑ x : Fin t → Fin d, (∑ k : Fin d, if shift k = x then (d : ℝ)⁻¹ else 0)
-            = ∑ k : Fin d, ∑ x : Fin t → Fin d, if shift k = x then (d : ℝ)⁻¹ else 0 := by
-                rw [Finset.sum_comm]
-        _ = ∑ k : Fin d, (d : ℝ)⁻¹ := by
-              simp [Finset.sum_ite_eq, Finset.mem_univ]
-        _ = 1 := by
-              simp [Fintype.card_fin, Nat.cast_ne_zero.mpr (by omega : d ≠ 0)]
-  }
-  refine ⟨Q, ?_, ?_⟩
-  · intro x hx
-    have hex : ∃ k : Fin d, shift k = x := by
-      by_contra h
-      push Not at h
-      have hz : Q.w x = 0 := by simp [Q, h]
-      exact hx hz
-    obtain ⟨k, hk⟩ := hex
-    rw [← hk]
-    intro a b hab
-    apply Fin.castLE_injective ht
-    exact add_right_cancel hab
-  · intro i y
-    have hprob : Q.pr (fun x => x i = y) = (1 / (d : ℝ)) := by
-      simp only [FinProb.pr, Q]
-      calc
-        (∑ x : Fin t → Fin d,
-          if x i = y then ∑ k : Fin d, if shift k = x then (d : ℝ)⁻¹ else 0 else 0)
-            = ∑ x : Fin t → Fin d, ∑ k : Fin d,
-                if x i = y then (if shift k = x then (d : ℝ)⁻¹ else 0) else 0 := by
-                  apply Finset.sum_congr rfl
-                  intro x hx
-                  by_cases hxy : x i = y <;> simp [hxy]
-        _ = ∑ k : Fin d, ∑ x : Fin t → Fin d,
-              if x i = y then (if shift k = x then (d : ℝ)⁻¹ else 0) else 0 := by
-                rw [Finset.sum_comm]
-        _ = ∑ k : Fin d, if (shift k) i = y then (d : ℝ)⁻¹ else 0 := by
-              apply Finset.sum_congr rfl
-              intro k hk
-              calc
-                (∑ x : Fin t → Fin d,
-                  if x i = y then (if shift k = x then (d : ℝ)⁻¹ else 0) else 0)
-                    = ∑ x : Fin t → Fin d,
-                      if shift k = x then (if x i = y then (d : ℝ)⁻¹ else 0) else 0 := by
-                        apply Finset.sum_congr rfl
-                        intro x hx
-                        by_cases hxy : x i = y <;> by_cases hxk : shift k = x <;>
-                          simp [hxy, hxk]
-                _ = if (shift k) i = y then (d : ℝ)⁻¹ else 0 := by
-                      simp [Finset.sum_ite_eq, Finset.mem_univ]
-        _ = (1 / (d : ℝ)) := by
-              let k₀ : Fin d := y - i.castLE ht
-              have hsol (k : Fin d) : i.castLE ht + k = y ↔ k = k₀ := by
-                constructor
-                · intro heq
-                  calc
-                    k = (i.castLE ht + k) - i.castLE ht := by abel
-                    _ = y - i.castLE ht := by rw [heq]
-                · intro heq
-                  rw [heq]
-                  simp [k₀]
-              calc
-                (∑ k : Fin d, if (shift k) i = y then (d : ℝ)⁻¹ else 0)
-                    = ∑ k : Fin d, if k = k₀ then (d : ℝ)⁻¹ else 0 := by
-                        apply Finset.sum_congr rfl
-                        intro k hk
-                        simp only [shift, hsol k]
-                _ = (d : ℝ)⁻¹ := by simp
-                _ = 1 / (d : ℝ) := by ring
-    rw [hprob]
-    have htarget : q i y ≤ (d : ℝ) ^ (-(1 / 10 : ℝ)) :=
-      (hq_atom i y).trans hatom_small
-    have hunif_nonneg : 0 ≤ (1 / (d : ℝ)) := by positivity
-    rw [abs_le]
-    constructor <;> nlinarith [hq_nonneg i y, hunif_nonneg, huniform_small, htarget]
+/-- Step 2 now refers to the concrete process and tracking event, not to an
+arbitrary law with additive singleton error. This is an assembly node. -/
+theorem tracking_label_sampler :
+    ∀ᶠ d : ℕ in Filter.atTop, ∀ t (q : Fin t → Fin d → ℝ)
+      (h : Injection.OrderedInput d t q),
+      1 - Injection.failureBound d ≤
+        (Injection.sequentialLaw q h.nonneg h.row_sum).pr (Injection.Good q) := by
+  obtain ⟨K, hK, hrec⟩ := Injection.tracking_drift_recurrence
+  filter_upwards [Injection.sequential_martingale_concentration,
+    Injection.tracking_bootstrap K hK] with d hc hb
+  intro t q h
+  exact Injection.tracking_probability_transfer q h (hc t q h)
+    (hb t q h (hrec d t q h))
 
-/-- L3.9c (03:695–734): price-directed perturbations of the rows give injective label laws
-whose joint probabilities have the required near-product upper bound and whose price is at
-least the target price. This is the sampler estimate consumed by exact calibration. -/
+/-- Steps 2–3 assembled: the law is specifically the sequential law conditioned
+on its successful tracking event. -/
+theorem ordered_conditioned_sampler_estimates :
+    ∀ᶠ d : ℕ in Filter.atTop, ∀ t (q : Fin t → Fin d → ℝ)
+      (h : Injection.OrderedInput d t q),
+      ∃ hG : 0 < (Injection.sequentialLaw q h.nonneg h.row_sum).pr (Injection.Good q),
+        LabelInjectionSupported (Injection.conditionedLaw q h hG) ∧
+        (∀ (S : Finset (Fin t)) (y : Fin t → Fin d), (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ) →
+          (Injection.conditionedLaw q h hG).pr (fun x => ∀ i ∈ S, x i = y i) ≤
+            Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, q i (y i)) ∧
+        (∀ i y, |(Injection.conditionedLaw q h hG).pr (fun x => x i = y) - q i y| ≤
+          Injection.relativeError d * q i y) := by
+  obtain ⟨K, hK, hrec⟩ := Injection.tracking_drift_recurrence
+  obtain ⟨K₁, hK₁, hlin⟩ := Injection.linear_likelihood_cancellation
+  obtain ⟨K₂, hK₂, hquad⟩ := Injection.quadratic_likelihood_remainder
+  filter_upwards [tracking_label_sampler, Injection.forcing_likelihood_identity,
+    hquad, Injection.likelihood_log_transfer K₁ K₂ hK₁ hK₂,
+    Injection.singleton_forcing_drift_stability, Injection.forced_martingale_concentration,
+    Injection.singleton_forcing_tracking_transfer K hK,
+    Injection.conditioned_comparison_transfer] with d ht hi hq hl hs hm hf hc
+  intro t q h
+  apply hc t q h (ht t q h) (hi t q h)
+  · intro S y hpos hsize x hgood htarget
+    have hquadratic := hq t q h S y hpos hsize x hgood htarget
+    exact hl t q h S y hpos hsize x hgood htarget
+      (hlin d t q h S y hpos x hgood htarget) hquadratic.1 hquadratic.2
+  · intro i y hpos
+    exact hf t q h (hrec d t q h) i y hpos
+      (hs t q h i y hpos) (hm t q h i y hpos)
+
+/-- Restrict the ordered completed law back to the real rows. Empty real row
+sets are allowed; no singleton estimate is converted into an absolute error. -/
+theorem restrict_ordered_sampler {R : Type} [Fintype R] [DecidableEq R]
+    {d t : ℕ} (q : R → Fin d → ℝ) (p : Fin t → Fin d → ℝ)
+    (e : R ↪ Fin t) (he : ∀ i y, p (e i) y = q i y)
+    (Q : FinProb (Fin t → Fin d)) (hinj : LabelInjectionSupported Q)
+    (hjoint : ∀ (S : Finset (Fin t)) (y : Fin t → Fin d), (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ) →
+      Q.pr (fun x => ∀ i ∈ S, x i = y i) ≤
+        Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, p i (y i))
+    (hmarg : ∀ i y, |Q.pr (fun x => x i = y) - p i y| ≤ Injection.relativeError d * p i y) :
+    ∃ P : FinProb (R → Fin d), LabelInjectionSupported P ∧
+      (∀ (S : Finset R) (y : R → Fin d), (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ) →
+        P.pr (fun x => ∀ i ∈ S, x i = y i) ≤
+          Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, q i (y i)) ∧
+      (∀ i y, |P.pr (fun x => x i = y) - q i y| ≤ Injection.relativeError d * q i y) := by
+  sorry
+
+/-- Centered prices and the paper's explicit normalized sign perturbation (03:739–741). -/
+noncomputable def injectionPriceMean {R : Type*} [Fintype R] {d : ℕ}
+    (q c : R → Fin d → ℝ) (i : R) : ℝ := ∑ y, q i y * c i y
+
+noncomputable def injectionPriceDelta (d : ℕ) : ℝ := (d : ℝ) ^ (-(0.05 : ℝ))
+
+noncomputable def injectionPriceSign (z : ℝ) : ℝ := if 0 < z then 1 else if z < 0 then -1 else 0
+
+noncomputable def injectionPriceTilt {R : Type*} [Fintype R] {d : ℕ}
+    (q c : R → Fin d → ℝ) (i : R) (y : Fin d) : ℝ :=
+  q i y * (1 + injectionPriceDelta d * injectionPriceSign (c i y - injectionPriceMean q c i))
+
+noncomputable def injectionPricePerturbation {R : Type*} [Fintype R] {d : ℕ}
+    (q c : R → Fin d → ℝ) (i : R) (y : Fin d) : ℝ :=
+  injectionPriceTilt q c i y / ∑ z, injectionPriceTilt q c i z
+
+/-- TeX 03:742–752: normalization, relaxed hypotheses, support and centered gain.
+Pointwise control against the original q will pay for the final joint bound. -/
+theorem price_perturbation_estimates :
+    ∀ᶠ d : ℕ in Filter.atTop, ∀ {R : Type} [Fintype R] [DecidableEq R]
+      (q : R → Fin d → ℝ),
+      (∀ i y, 0 ≤ q i y) → (∀ i, ∑ y, q i y = 1) →
+      (∀ i y, q i y ≤ (d : ℝ) ^ (-(0.95 : ℝ))) →
+      (∀ y, ∑ i, q i y ≤ 0.4) → ∀ c : R → Fin d → ℝ,
+      (∀ i y, 0 ≤ injectionPricePerturbation q c i y) ∧
+      (∀ i, ∑ y, injectionPricePerturbation q c i y = 1) ∧
+      (∀ i y, injectionPricePerturbation q c i y ≤ 2 * (d : ℝ) ^ (-(0.95 : ℝ))) ∧
+      (∀ y, ∑ i, injectionPricePerturbation q c i y ≤ 1 / 2) ∧
+      (∀ i y, injectionPricePerturbation q c i y ≤ Real.exp (3 * injectionPriceDelta d) * q i y) ∧
+      (∀ i, injectionPriceDelta d / 2 * (∑ y, q i y * |c i y - injectionPriceMean q c i|) ≤
+        ∑ y, injectionPricePerturbation q c i y * (c i y - injectionPriceMean q c i)) := by
+  sorry
+
+/-- TeX 03:753–755: relative singleton error, measured against the perturbed
+row, is dominated by its gain. Constant prices have zero centered error. -/
+theorem price_gain_dominates_relative_error :
+    ∀ᶠ d : ℕ in Filter.atTop, ∀ {R : Type} [Fintype R] [DecidableEq R]
+      (q c : R → Fin d → ℝ), (∀ i y, 0 ≤ q i y) → (∀ i, ∑ y, q i y = 1) →
+      (∀ i, ∑ y, injectionPricePerturbation q c i y = 1) →
+      (∀ i y, injectionPricePerturbation q c i y ≤ Real.exp (3 * injectionPriceDelta d) * q i y) →
+      (∀ i, injectionPriceDelta d / 2 * (∑ y, q i y * |c i y - injectionPriceMean q c i|) ≤
+        ∑ y, injectionPricePerturbation q c i y * (c i y - injectionPriceMean q c i)) →
+      ∀ Q : FinProb (R → Fin d),
+      (∀ i y, |Q.pr (fun x => x i = y) - injectionPricePerturbation q c i y| ≤
+        Injection.relativeError d * injectionPricePerturbation q c i y) →
+        injectionTargetPrice q c ≤ injectionLabelPrice Q c := by
+  sorry
+
+/-- TeX 03:756–758: absorb perturbation and comparison slack into d^(-.04).
+The empty query has bound 1; zero atoms remain zero under pointwise domination. -/
+theorem perturbed_joint_bound_transfer :
+    ∀ᶠ d : ℕ in Filter.atTop, ∀ {R : Type} [Fintype R] [DecidableEq R]
+      (q p : R → Fin d → ℝ), (∀ i y, 0 ≤ q i y) → (∀ i y, 0 ≤ p i y) →
+      (∀ i y, p i y ≤ Real.exp (3 * injectionPriceDelta d) * q i y) →
+      ∀ Q : FinProb (R → Fin d),
+      (∀ (S : Finset R) (y : R → Fin d), (S.card : ℝ) ≤ (d : ℝ) ^ (0.025 : ℝ) →
+        Q.pr (fun x => ∀ i ∈ S, x i = y i) ≤
+          Real.exp (Injection.relativeError d * S.card) * ∏ i ∈ S, p i (y i)) →
+      LabelNearProductBound d q Q := by
+  sorry
+
+/-- Price-directed witness, now an assembly of Steps 1–4. Its type is unchanged. -/
 theorem price_directed_label_sampler :
     ∃ d₀ : ℕ, 1 ≤ d₀ ∧ ∀ d ≥ d₀, ∀ {R : Type} [Fintype R] [DecidableEq R]
       (q : R → Fin d → ℝ),
@@ -216,7 +199,38 @@ theorem price_directed_label_sampler :
       ∀ c : R → Fin d → ℝ, ∃ Q : FinProb (R → Fin d),
         LabelInjectionSupported Q ∧ LabelNearProductBound d q Q ∧
         injectionTargetPrice q c ≤ injectionLabelPrice Q c := by
-  sorry
+  have hAll : ∀ᶠ d : ℕ in Filter.atTop, ∀ {R : Type} [Fintype R] [DecidableEq R]
+      (q : R → Fin d → ℝ),
+      (∀ i y, 0 ≤ q i y) → (∀ i, ∑ y, q i y = 1) →
+      (∀ i y, q i y ≤ (d : ℝ) ^ (-(0.95 : ℝ))) → (∀ y, ∑ i, q i y ≤ 0.4) →
+      ∀ c : R → Fin d → ℝ, ∃ Q : FinProb (R → Fin d),
+        LabelInjectionSupported Q ∧ LabelNearProductBound d q Q ∧
+        injectionTargetPrice q c ≤ injectionLabelPrice Q c := by
+    filter_upwards [balanced_completion_good_order, ordered_conditioned_sampler_estimates,
+      price_perturbation_estimates, price_gain_dominates_relative_error,
+      perturbed_joint_bound_transfer] with d hcomplete hsample hpert hgain hjoint
+    intro R instR instDecR q hn hs ha hl c
+    obtain ⟨hpn, hps, hpa, hpl, hpdom, hpgain⟩ := hpert q hn hs ha hl c
+    obtain ⟨t, ht, hrows, qbar, e, hreal, hdummy, hdummycap, hcol, hordered⟩ :=
+      hcomplete (injectionPricePerturbation q c) hpn hps hpa hpl
+    obtain ⟨hG, hinj, hnear, hmarg⟩ := hsample t (fun k y => qbar (e k) y) hordered
+    let emb : R ↪ Fin t := {
+      toFun := fun i => e.symm (Sum.inl i)
+      inj' := fun i j hij => Sum.inl_injective (e.symm.injective hij) }
+    have hemb : ∀ i y, qbar (e (emb i)) y = injectionPricePerturbation q c i y := by
+      intro i y
+      change qbar (e (e.symm (Sum.inl i))) y = injectionPricePerturbation q c i y
+      rw [e.apply_symm_apply]
+      exact hreal i y
+    obtain ⟨Q, hQinj, hQjoint, hQmarg⟩ := restrict_ordered_sampler
+      (injectionPricePerturbation q c) (fun k y => qbar (e k) y) emb hemb
+      (Injection.conditionedLaw _ hordered hG) hinj hnear hmarg
+    exact ⟨Q, hQinj, hjoint q (injectionPricePerturbation q c) hn hpn hpdom Q hQjoint,
+      hgain q c hn hs hps hpdom hpgain Q hQmarg⟩
+  obtain ⟨d₀, hd₀⟩ := Filter.eventually_atTop.1 hAll
+  refine ⟨max 1 d₀, Nat.le_max_left _ _, ?_⟩
+  intro d hd
+  exact hd₀ d (le_trans (Nat.le_max_right _ _) hd)
 
 /-- L3.9d (03:736–768): abstract calibration by separation. If a compact convex set of
 finite-dimensional marginal vectors has a member at least as good as the target in every linear

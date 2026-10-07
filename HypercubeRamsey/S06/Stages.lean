@@ -1,6 +1,7 @@
 import HypercubeRamsey.S06.Steps
 import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.S06.Stages_q_s06_stages
+import HypercubeRamsey.S06.Stages_sol_s06_shapes
 
 open HypercubeRamsey.Lane_q_s06_stages
 
@@ -176,22 +177,42 @@ end Ctx6
 sign translations and fine-chunk permutations of the raw experiment. -/
 theorem L6_1h_shapes12 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.RateShapes12 := by
-  refine ⟨2, 0, ?_⟩
+  have hmTail := m₆_nat_tendsto_atTop p₀ hadm.2.2.1
+  obtain ⟨nM,hnM⟩ := Filter.eventually_atTop.1 (hmTail.eventually (Filter.eventually_ge_atTop 603))
+  refine ⟨max 4 nM, 0, ?_⟩
   intro n N E G M X hLarge
-  let Sh : Type := X.Key ⊕ X.Ty
-  let f₁ : X.Key → Sh := Sum.inl
-  let f₂ : X.Ty → Sh := Sum.inr
+  have hn4 : 4 ≤ n := le_trans (le_max_left _ _) hLarge.1
+  have hm603 : 603 ≤ X.g.L.m := by
+    rw [X.g.m_eq]
+    exact hnM n (le_trans (le_max_right _ _) hLarge.1)
+  let Sh : Type := (KeyFlag6 × Fin 603) ⊕ (Lane_sol_s06_shapes.Step2Shape X.g.L.m ⊕ X.Ty)
+  letI : DecidableEq Sh := Classical.decEq _
+  let f₁ : X.Key → Sh := fun h => Sum.inl (Lane_sol_s06_shapes.step1Shape X h)
+  let f₂ : X.Ty → Sh := fun β => Sum.inr (Lane_sol_s06_shapes.taggedStep2Shape X β)
   refine ⟨Sh, inferInstance, f₁, f₂, ?_, ?_, ?_, ?_⟩
   · intro h h' heq v
-    have hh : h = h' := Sum.inl.inj heq
-    subst h'
-    rfl
+    exact Lane_sol_s06_shapes.step1Rate_shape X h h' (Sum.inl.inj heq) v
   · intro β β' heq
-    have hβ : β = β' := Sum.inr.inj heq
-    subst β'
-    exact ⟨rfl, fun _ => rfl⟩
-  · sorry
-  · sorry
+    have hr := Lane_sol_s06_shapes.taggedStep2Shape_rates X hn4 β β' (Sum.inr.inj heq)
+    exact ⟨hr.1,hr.2⟩
+  · have hc : (X.step1Keys.image f₁).card =
+        (X.step1Keys.image (Lane_sol_s06_shapes.step1Shape X)).card := by
+      have h := Finset.card_image_of_injective
+        (X.step1Keys.image (Lane_sol_s06_shapes.step1Shape X))
+        (show Function.Injective (Sum.inl : (KeyFlag6 × Fin 603) → Sh) from fun _ _ h => Sum.inl.inj h)
+      simpa only [Finset.image_image,Function.comp_def,f₁] using h
+    rw [hc]
+    exact Lane_sol_s06_shapes.step1Shape_card_bound X
+  · intro u
+    have hc : ((X.occTypes.filter fun β => β.u = u).image f₂).card ≤
+        ((X.occTypes.filter fun β => β.u = u).image (Lane_sol_s06_shapes.taggedStep2Shape X)).card := by
+      have h := Finset.card_image_le (s := (X.occTypes.filter fun β => β.u = u).image
+        (Lane_sol_s06_shapes.taggedStep2Shape X)) (f := fun c => (Sum.inr c : Sh))
+      simpa only [Finset.image_image,Function.comp_def,f₂] using h
+    have hcR : (((X.occTypes.filter fun β => β.u = u).image f₂).card : ℝ) ≤
+        (((X.occTypes.filter fun β => β.u = u).image (Lane_sol_s06_shapes.taggedStep2Shape X)).card : ℝ) := by
+      exact_mod_cast hc
+    exact hcR.trans (Lane_sol_s06_shapes.taggedStep2Shape_card_bound X hm603 u)
 
 /-- L6.1h (shapes, Step 3, 06:282–292, 06:479–481): the same symmetries act on abstract descriptors; the count of
 abstract descriptors per coarse shape and central sign. -/
@@ -199,15 +220,16 @@ theorem L6_1h_shapes3 (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes3 := by
   refine ⟨2, 0, ?_⟩
   intro n N E G M X hLarge hDesc
-  let Sh : Type := X.State × Finset (Fin X.T × X.Ty)
-  let f₃ : X.State → Finset (Fin X.T × X.Ty) → Sh := fun b D => (b, D)
+  let Sh : Type := (X.Key × Mode6 × CubeVertex X.m) × Finset (Fin X.T × X.Ty)
+  let f₃ : X.State → Finset (Fin X.T × X.Ty) → Sh :=
+    fun b D => (Lane_sol_s06_shapes.targetShape X b, D)
   refine ⟨Sh, inferInstance, f₃, ?_, ?_⟩
   · intro b D b' D' heq v
-    have hb : b = b' := congrArg Prod.fst heq
+    have hb : Lane_sol_s06_shapes.targetShape X b = Lane_sol_s06_shapes.targetShape X b' :=
+      congrArg Prod.fst heq
     have hD : D = D' := congrArg Prod.snd heq
-    subst b'
     subst D'
-    rfl
+    exact Lane_sol_s06_shapes.step3V0Rate_targetShape X b b' hb v D
   · sorry
 
 set_option maxHeartbeats 10000000

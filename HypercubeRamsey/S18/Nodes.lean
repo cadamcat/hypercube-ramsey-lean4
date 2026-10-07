@@ -1,4 +1,6 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
+import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
 import HypercubeRamsey.S18.Nodes_q_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl
 import HypercubeRamsey.S18.Nodes_sol_s18_dl_base
@@ -329,7 +331,7 @@ theorem P18_4a {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : LateData hPT) (hD : D.Spec) :
     ∃ K : LateKernels D.encoding.base,
       (D.withKernels K).Spec ∧ TransitionData (D.withKernels K) ∧ MaskBalance (D.withKernels K) := by
-  sorry
+  exact Lane_sol_s18_n1.balanced_kernels D hD
 
 /-- L18.0b, eq. (25). Finite smallness replaces impossible fixed-index
 vanishing; the cap is on probability atoms, with no factor N. -/
@@ -337,7 +339,9 @@ theorem L18_0b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D →
       SmallErrors κ T k PT D.geom (Real.log 2 / 1000) → CurrentListCapFacts D := by
-  sorry
+  filter_upwards [] with k
+  intro PT hPT D hD hT hsmall
+  exact Lane_sol_s18_n1_caps.gated_current_cap D hD hsmall
 
 /-- L18.1a, 18:171–194. Exponent .04 leaves slack below the derived .09. -/
 theorem L18_1a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
@@ -345,7 +349,17 @@ theorem L18_1a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ D : LateData hPT, D.Spec → TransitionData D → CurrentListCapFacts D →
       ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr (fun out => ¬ D.R1 j out) ≤
         Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
-  sorry
+  obtain ⟨Kβ,hKβ,hSchedule,hErrors⟩ := L18_0a hκ T
+  obtain ⟨K16,hQuant⟩ := low_mode_quantitative_inputs hκ T
+  have hlog : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  filter_upwards [hSchedule,hErrors _ hlog,hQuant,
+    Lane_sol_s18_n1_sketch.numerical_cutoffs hκ T K16] with k hSched hSmall hQ hNum
+  intro PT hPT D hD hT hC j b h hg
+  obtain ⟨Q,hgain⟩ := hQ PT hPT D.low_mode
+  have hs := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hlower := hSched PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  exact Lane_sol_s18_n1_sketch.row_estimate hκ D hT hs hC Q hNum.1 hNum.2.1 hNum.2.2
+    (fun i j => (hlower i).1 j) j b h hg
 
 /-- L18.1b, 18:195–223. Actual broad prefixes, same-side-data deletions,
 and both single and pair versions of eq. (27); K27 is uniform. -/

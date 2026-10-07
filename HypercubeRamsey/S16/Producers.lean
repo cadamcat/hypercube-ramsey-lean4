@@ -3415,6 +3415,43 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
           simp [histGate, histMap]
         _ = ∑ W ∈ Cal.gate C pool, (Cal.history C).w W :=
           Lane_q_s16_prod2.finLaw_pr_finset (Cal.history C) (Cal.gate C pool)
+    have hCalGatedSupport (pool : F.Pool C) (ht : F.typical C pool)
+        (W : Cal.Hist C) (hW : (Cal.gatedHistory C pool).w W ≠ 0) :
+        W ∈ Cal.gate C pool ∧ (Cal.history C).w W ≠ 0 := by
+      rw [Cal.gated_eq C pool ht] at hW
+      by_cases hmem : W ∈ Cal.gate C pool
+      · refine ⟨hmem, ?_⟩
+        by_contra hzero
+        apply hW
+        simp [FinLaw.cond, hmem, hzero]
+      · exact False.elim (hW (by simp [FinLaw.cond, hmem]))
+    have hRawHistSupport (W : Cal.Hist C) (hW : (Cal.history C).w W ≠ 0) :
+        (R.history C).w (hLink.histories C W) ≠ 0 := by
+      have hMap : (FinLaw.map (R.history C) (hLink.histories C).symm).w W ≠ 0 := by
+        rw [← hLink.history_eq C]
+        exact hW
+      have hWeight := Lane_q_s16_prod2.finLaw_map_equiv_weight (R.history C)
+        (hLink.histories C).symm (hLink.histories C W)
+      have hInv : (hLink.histories C).symm (hLink.histories C W) = W :=
+        (hLink.histories C).symm_apply_apply W
+      rw [hInv] at hWeight
+      rw [hWeight] at hMap
+      exact hMap
+    have hRawGateSupport (pool : F.Pool C) (W : Cal.Hist C)
+        (hW : W ∈ Cal.gate C pool) : hLink.histories C W ∈ S.gate C pool := by
+      rw [hLink.gate_eq C pool] at hW
+      rcases Finset.mem_image.mp hW with ⟨Wraw, hRawGate, hEq⟩
+      have hEq' : Wraw = hLink.histories C W := by
+        calc
+          Wraw = (hLink.histories C) ((hLink.histories C).symm Wraw) :=
+            ((hLink.histories C).apply_symm_apply Wraw).symm
+          _ = (hLink.histories C) W := congrArg (hLink.histories C) hEq
+      rw [hEq'] at hRawGate
+      exact hRawGate
+    let groupScopeRaw : Finset (R.Group C) := groupScope.image (hLink.groups C)
+    have hGroupScopeRawCard : groupScopeRaw.card = groupScope.card := by
+      dsimp [groupScopeRaw]
+      exact Finset.card_image_of_injective groupScope (hLink.groups C).injective
     let encPipe : (Cal.Hist C × Unit) ×
         ((Cal.Group C → Bin PT.tiling (H.geom.cellPatch C)) ×
         (OddCellRole H.geom C → Fin (T.S.N k))) → F.State C := fun z =>
@@ -3672,7 +3709,74 @@ theorem fresh_prior_pipeline_exists {κ : CConsts} (hκ : κ.Admissible) :
         · exact le_of_lt (Real.rpow_pos_of_pos hd _)
       bin_joint := by
         intro pool W a ht hW
-        sorry
+        have hWCal : (Cal.gatedHistory C pool).w W.1 ≠ 0 := by
+          rw [← hGatedWeight pool W.1]
+          exact hW
+        obtain ⟨hGateCal, hCalHist⟩ := hCalGatedSupport pool ht W.1 hWCal
+        let Wraw := hLink.histories C W.1
+        have hRawHist := hRawHistSupport W.1 hCalHist
+        have hRawGate := hRawGateSupport pool W.1 hGateCal
+        have hStyp : S.typical C pool := (hLink.typical_eq C pool).mp ht
+        have hBinFeas := S.bin_feasible C pool Wraw hStyp hRawGate hRawHist hClusterMode
+        let aRaw : R.Group C → Bin PT.tiling (H.geom.cellPatch C) :=
+          fun rg => a ((hLink.groups C).symm rg)
+        have hGroupMapInjOn : Set.InjOn (hLink.groups C) groupScope := by
+          intro g hg g' hg' heq
+          exact (hLink.groups C).injective heq
+        have hEvent (x : R.Group C → Bin PT.tiling (H.geom.cellPatch C)) :
+            (∀ gc ∈ groupScope, x (hLink.groups C gc) = a gc) ↔
+              ∀ rg ∈ groupScopeRaw, x rg = aRaw rg := by
+          constructor
+          · intro hall rg hrg
+            rcases Finset.mem_image.mp hrg with ⟨gc, hgc, rfl⟩
+            simpa [aRaw] using hall gc hgc
+          · intro hall gc hgc
+            simpa [aRaw] using
+              hall (hLink.groups C gc) (Finset.mem_image.mpr ⟨gc, hgc, rfl⟩)
+        have hBinProbability :
+            (Cal.binSampler C pool W.1).pr
+                (fun x => ∀ gc ∈ groupScope, x gc = a gc) =
+              (S.binLaw C pool Wraw).pr (fun x => ∀ rg ∈ groupScopeRaw, x rg = aRaw rg) := by
+          rw [hLink.bin_eq C pool W.1, Lane_q_s16_prod2.finLaw_map_pr]
+          apply Lane_q_s16_prod2.finLaw_pr_congr_of_supported
+          intro x _
+          exact hEvent x
+        have hSBound :
+            (S.binLaw C pool Wraw).pr (fun x => ∀ rg ∈ groupScopeRaw, x rg = aRaw rg) ≤
+              Real.exp (Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.05) *
+                groupScopeRaw.card) *
+              ∏ rg ∈ groupScopeRaw, (K.qtilde C pool Wraw rg).w (aRaw rg) := by
+          simpa [CellRestrictedKernels.binProblem, GroupBinProblem.feasible] using
+            (hBinFeas.2 groupScopeRaw aRaw)
+        have hProduct :
+            (∏ rg ∈ groupScopeRaw, (K.qtilde C pool Wraw rg).w (aRaw rg)) =
+              (∏ gc ∈ groupScope, (Cal.qtilde C pool W.1 gc).w (a gc) : ℝ) := by
+          calc
+            (∏ rg ∈ groupScopeRaw, (K.qtilde C pool Wraw rg).w (aRaw rg)) =
+                ∏ gc ∈ groupScope,
+                  (K.qtilde C pool Wraw (hLink.groups C gc)).w (aRaw (hLink.groups C gc)) := by
+              change (∏ rg ∈ Finset.image (hLink.groups C) groupScope,
+                  (K.qtilde C pool Wraw rg).w (aRaw rg)) = _
+              rw [Finset.prod_image hGroupMapInjOn]
+            _ = ∏ gc ∈ groupScope, (Cal.qtilde C pool W.1 gc).w (a gc) := by
+              apply Finset.prod_congr rfl
+              intro gc hgc
+              have hRestricted := hLink.restricted_eq C pool W.1 gc
+              rw [← hRestricted]
+              simp [aRaw]
+        have hCardR : (groupScopeRaw.card : ℝ) = (groupScope.card : ℝ) := by
+          exact_mod_cast hGroupScopeRawCard
+        calc
+          (Cal.binSampler C pool W.1).pr (fun x => ∀ gc ∈ groupScope, x gc = a gc) =
+              (S.binLaw C pool Wraw).pr
+                (fun x => ∀ rg ∈ groupScopeRaw, x rg = aRaw rg) := hBinProbability
+          _ ≤ Real.exp
+                (Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.05) *
+                  groupScopeRaw.card) *
+                ∏ rg ∈ groupScopeRaw, (K.qtilde C pool Wraw rg).w (aRaw rg) := hSBound
+          _ = Real.exp (Real.rpow ((PT.tiling.P (H.geom.cellPatch C)).d : ℝ) (-0.05) *
+                groupScope.card) * ∏ gc ∈ groupScope, (Cal.qtilde C pool W.1 gc).w (a gc) := by
+            rw [hCardR, hProduct]
       bins_distinct := by
         intro pool W a ht hW ha
         sorry

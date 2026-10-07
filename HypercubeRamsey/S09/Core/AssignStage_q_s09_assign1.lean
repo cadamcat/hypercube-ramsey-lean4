@@ -981,6 +981,32 @@ theorem piExpectGlue9 {V : Type*} [Fintype V] [DecidableEq V]
   have hsplit := FinProb.pi_expect_depends P U Φ ω₀ hΦ
   simpa [FinProb.expect, FinProb.pi, hglue, e, b₀] using hsplit.symm
 
+open Classical in
+/-- The probability of an event determined by `U` equals the probability in the product marginal on `U`. -/
+theorem piPrDependsEq9 {V : Type*} [Fintype V] [DecidableEq V]
+    {Ω : V → Type*} [∀ v, Fintype (Ω v)] (P : ∀ v, FinProb (Ω v))
+    (U : Finset V) (F : (∀ v, Ω v) → Prop) (ω₀ : ∀ v, Ω v)
+    (hF : FinProb.DependsOn F U) :
+    (FinProb.pi P).pr F =
+      (FinProb.pi (fun i : {i // i ∈ U} => P i.1)).pr (fun a => F (S07.glue U ω₀ a)) := by
+  let indicator : (∀ v, Ω v) → ℝ := fun ω => if F ω then 1 else 0
+  have hindicator : FinProb.DependsOn indicator U := by
+    intro ω ω' hagree
+    have hEq := hF ω ω' hagree
+    simp [indicator, hEq]
+  have hsplit := piExpectGlue9 P U indicator ω₀ hindicator
+  calc
+    (FinProb.pi P).pr F = (FinProb.pi P).expect indicator := by
+      unfold FinProb.pr FinProb.expect indicator
+      apply Finset.sum_congr rfl
+      intro ω hω
+      by_cases h : F ω <;> simp [h]
+    _ = ∑ a : (∀ i : U, Ω i.1),
+          (∏ i : U, (P i.1).w (a i)) * indicator (S07.glue U ω₀ a) := hsplit.symm
+    _ = (FinProb.pi (fun i : {i // i ∈ U} => P i.1)).pr
+          (fun a => F (S07.glue U ω₀ a)) := by
+      simp [FinProb.pr, FinProb.pi, indicator]
+
 /-- Split a dependent product into one coordinate and all remaining coordinates. -/
 def coordSplitEquiv {ι : Type*} [DecidableEq ι] {Ω : ι → Type*} (j : ι) :
     (∀ i, Ω i) ≃ Ω j × (∀ i : {i // i ≠ j}, Ω i.1) where

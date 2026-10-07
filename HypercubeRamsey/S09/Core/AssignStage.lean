@@ -1308,6 +1308,7 @@ theorem p92_odd_loads (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ) :
     _ ≤ Q.pr largeAverage := Lane_q_s09_assign1.pr_mono Q _ _ htargetToAverage
     _ ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := htailProb
 
+set_option maxHeartbeats 5000000 in
 /-- P9.2-assignB, odd injection (09:327–329): at a successful prehistory, Lemma 3.10 (`clock_sampling`, `B = 3`)
 applies to the odd rows (probability laws with atoms `≤ e^{S_d}/N ≤ n^{-A}`, column sums `≤ θ₀`), with the
 predictive failures of the even stars as predicates (each reads its `n` odd neighbours, each row is read by `n`
@@ -1319,7 +1320,403 @@ theorem p92_odd_clock (P : Params9) (hP : P.Valid) :
         (S : Setup9 P n N M) (I : IDMap9 P n),
         CoreInput9 P κ E X Y G M S I → RowCap9 S I E G →
         ∀ ω : Outcome9 I N, GoodPre9 S E G ω → ∃ J, ClockOK9 S E G ω J := by
-  sorry
+  obtain ⟨Aclock, Pclock, nClock, ε, hε, hclock⟩ :=
+    clock_sampling 3 2 (by norm_num : 1 ≤ (3 : ℝ))
+  have hExps := Lane_q_s09_assign1.scaleExpsOfValid9 P hP
+  obtain ⟨nDeep, hDeep⟩ := Lane_q_s09_assign1.deepWidthSmall9 P hP
+  obtain ⟨nLog, hLog⟩ := Lane_q_s09_assign1.natLogSmall9
+  let Abar : ℝ := |Aclock| + 1
+  let etaA : ℝ := 1 / (100 * Abar)
+  obtain ⟨nAlog, hAlog⟩ := Lane_q_s09_assign1.natLogLeConst9 etaA (by dsimp [etaA, Abar]; positivity)
+  let Pbar : ℝ := |Pclock| + 1
+  let cDegree : ℝ := min 1 (2000 / Pbar)
+  have hcDegree : 0 < cDegree := by dsimp [cDegree, Pbar]; positivity
+  obtain ⟨nDegree, hDegree⟩ := Lane_q_s09_assign1.degreeLogSmall9 P hExps hcDegree
+  obtain ⟨nEps, hEpsSmall⟩ := Filter.eventually_atTop.1
+    (hε.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1)))
+  let n₀ := max 2 (max nClock (max nDeep (max nLog (max nAlog (max nDegree nEps)))))
+  refine ⟨n₀, 1, ?_⟩
+  intro n N hLarge E X Y κ G M S I hCore hRowCap ω hPre
+  have hn₀2 : 2 ≤ n₀ := by dsimp [n₀]; omega
+  have hn0clock : nClock ≤ n₀ := by dsimp [n₀]; omega
+  have hn0deep : nDeep ≤ n₀ := by dsimp [n₀]; omega
+  have hn0log : nLog ≤ n₀ := by dsimp [n₀]; omega
+  have hn0Alog : nAlog ≤ n₀ := by dsimp [n₀]; omega
+  have hn0Degree : nDegree ≤ n₀ := by dsimp [n₀]; omega
+  have hn0Eps : nEps ≤ n₀ := by dsimp [n₀]; omega
+  have hn₂ : 2 ≤ n := le_trans hn₀2 hLarge.1
+  have hnClock : nClock ≤ n := le_trans hn0clock hLarge.1
+  have hnDeep : nDeep ≤ n := le_trans hn0deep hLarge.1
+  have hnLog : nLog ≤ n := le_trans hn0log hLarge.1
+  have hnAlog : nAlog ≤ n := le_trans hn0Alog hLarge.1
+  have hnDegree : nDegree ≤ n := le_trans hn0Degree hLarge.1
+  have hnEps : nEps ≤ n := le_trans hn0Eps hLarge.1
+  have hn : 0 < n := by omega
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast hn
+  have hnR1 : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hnR₂ : 2 ≤ (n : ℝ) := by exact_mod_cast hn₂
+  rcases hCore with ⟨hNpos, hPrep, hDeepAt, hTagPos, hMasks, hDeepTools, hScaleExps, hScales⟩
+  rcases hScales with ⟨hnScales, hmle, hradius, hShallow, hFilterBudget,
+    hDeepMargin, hbStar, hGain⟩
+  rcases hPre with ⟨hRaw, hNoBad, hOddColumn⟩
+  let rows : OddSites9 n → FinProb (Fin N) := fun b => rowLaw9 S E G ω b
+  let lab : OddSites9 n → Fin N → Fin N := fun _ y => y
+  let scope : EvenSites9 n → Finset (OddSites9 n) := fun v =>
+    Finset.univ.filter (fun b => (cube n).Adj v.1 b.1)
+  let failure : EvenSites9 n → (OddSites9 n → Fin N) → Prop := fun v f =>
+    predFail9 S E G ω v (nbrLabels9 (v := v) f)
+  have hregular : ∀ v : EvenSites9 n, starRegular9 S E G ω v := by
+    intro v
+    have hnot := hNoBad v
+    unfold StarBad9 at hnot
+    have hvalid : starValid9 S E G ω v := by
+      by_contra hv
+      exact hnot (Or.inl hv)
+    exact hvalid.1
+  have hclockColumn : ∀ y, ∑ b, labMarg (rows b) (lab b) y ≤ (1e-8 : ℝ) := by
+    intro y
+    have hEq (b : OddSites9 n) : labMarg (rows b) (lab b) y =
+        (rowLaw9 S E G ω b).w y := by
+      simp [labMarg, rows, lab]
+    calc
+      ∑ b, labMarg (rows b) (lab b) y = oddColumn9 S E G ω y := by
+        simp_rw [hEq]
+        rfl
+      _ ≤ (1e-8 : ℝ) := hOddColumn y
+  have hscopeDist (v : EvenSites9 n) (b : StarOdd9 v) : b.1 ∈ scope v := by
+    unfold scope
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, b.2⟩
+  have hdepends : ∀ v : EvenSites9 n, FinProb.DependsOn (failure v) (scope v) := by
+    intro v f f' hagree
+    have hlabels : nbrLabels9 (v := v) f = nbrLabels9 (v := v) f' := by
+      funext b
+      exact hagree b.1 (hscopeDist v b)
+    change predFail9 S E G ω v (nbrLabels9 (v := v) f) =
+      predFail9 S E G ω v (nbrLabels9 (v := v) f')
+    rw [hlabels]
+  have hballNat (v : EvenSites9 n) : (scope v).card ≤ n + 1 := by
+    let B := Finset.univ.filter (fun b : CubeVertex n => _root_.hammingDist v.1 b ≤ 1)
+    have hsubset : (scope v).image Subtype.val ⊆ B := by
+      intro b hb
+      rcases Finset.mem_image.mp hb with ⟨b', hb', rfl⟩
+      have hadj := (Finset.mem_filter.mp hb').2
+      have hdist : _root_.hammingDist v.1 b'.1 = 1 := by
+        change _root_.hammingDist v.1 b'.1 = 1 at hadj
+        exact hadj
+      have hle : _root_.hammingDist v.1 b'.1 ≤ 1 := by rw [hdist]
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hle⟩
+    have himage : ((scope v).image Subtype.val).card = (scope v).card :=
+      Finset.card_image_of_injective (scope v) Subtype.val_injective
+    have hBall : B.card ≤ n + 1 := by
+      simpa [B] using Lane_q_s09_assign1.hammingBallCardBound9 (r := 1) v.1
+    calc
+      (scope v).card = ((scope v).image Subtype.val).card := himage.symm
+      _ ≤ B.card := Finset.card_le_card hsubset
+      _ ≤ n + 1 := hBall
+  have hnCube : (n : ℝ) + 1 ≤ (n : ℝ) ^ 3 := by
+    have hnSq : 4 ≤ (n : ℝ) ^ 2 := by nlinarith
+    have hmul := mul_le_mul_of_nonneg_left hnSq hnR.le
+    nlinarith
+  have hscopeSize : ∀ v : EvenSites9 n, ((scope v).card : ℝ) ≤ (n : ℝ) ^ (3 : ℝ) := by
+    intro v
+    have hcast : ((scope v).card : ℝ) ≤ (n : ℝ) + 1 := by exact_mod_cast hballNat v
+    have hbound := hcast.trans hnCube
+    simpa using hbound
+  have hincNat (b : OddSites9 n) :
+      (Finset.univ.filter (fun v : EvenSites9 n => b ∈ scope v)).card ≤ n + 1 := by
+    let C := Finset.univ.filter (fun v : EvenSites9 n => b ∈ scope v)
+    let B := Finset.univ.filter (fun v : CubeVertex n => _root_.hammingDist b.1 v ≤ 1)
+    have hsubset : C.image Subtype.val ⊆ B := by
+      intro x hx
+      rcases Finset.mem_image.mp hx with ⟨v, hv, rfl⟩
+      have hscopeMem := (Finset.mem_filter.mp hv).2
+      have hadj := (Finset.mem_filter.mp hscopeMem).2
+      have hdist : _root_.hammingDist v.1 b.1 = 1 := by
+        change _root_.hammingDist v.1 b.1 = 1 at hadj
+        exact hadj
+      have hdist' : _root_.hammingDist b.1 v.1 = 1 := by
+        rw [_root_.hammingDist_comm]
+        exact hdist
+      have hle : _root_.hammingDist b.1 v.1 ≤ 1 := by rw [hdist']
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hle⟩
+    have himage : (C.image Subtype.val).card = C.card :=
+      Finset.card_image_of_injective C Subtype.val_injective
+    have hBall : B.card ≤ n + 1 := by
+      simpa [B] using Lane_q_s09_assign1.hammingBallCardBound9 (r := 1) b.1
+    calc
+      C.card = (C.image Subtype.val).card := himage.symm
+      _ ≤ B.card := Finset.card_le_card hsubset
+      _ ≤ n + 1 := hBall
+  have hincidence : ∀ b : OddSites9 n,
+      ((Finset.univ.filter (fun v : EvenSites9 n => b ∈ scope v)).card : ℝ) ≤ (n : ℝ) ^ (3 : ℝ) := by
+    intro b
+    have hcast : ((Finset.univ.filter (fun v : EvenSites9 n => b ∈ scope v)).card : ℝ) ≤
+        (n : ℝ) + 1 := by exact_mod_cast hincNat b
+    have hbound := hcast.trans hnCube
+    simpa using hbound
+  have hNUpper : (N : ℝ) ≤ (n : ℝ) * (2 : ℝ) ^ n := by exact_mod_cast hLarge.2.2
+  have hlog2 : Real.log (2 : ℝ) ≤ 1 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    linarith
+  have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) := Real.log_le_self hnR.le
+  have hlogN : Real.log (N : ℝ) ≤ 2 * (n : ℝ) := by
+    calc
+      Real.log (N : ℝ) ≤ Real.log ((n : ℝ) * (2 : ℝ) ^ n) :=
+        Real.log_le_log (by positivity) hNUpper
+      _ = Real.log (n : ℝ) + (n : ℝ) * Real.log 2 := by
+        rw [Real.log_mul hnR.ne' (pow_ne_zero _ (by norm_num : (2 : ℝ) ≠ 0)), Real.log_pow]
+      _ ≤ (n : ℝ) + (n : ℝ) := by
+        apply add_le_add hlogn
+        calc
+          (n : ℝ) * Real.log 2 ≤ (n : ℝ) * 1 := mul_le_mul_of_nonneg_left hlog2 hnR.le
+          _ = (n : ℝ) := by ring
+      _ = 2 * (n : ℝ) := by ring
+  have hRowCapAt : ∀ b y, (N : ℝ) * (rows b).w y ≤ Real.exp (P.Sd (n : ℝ)) := by
+    intro b y
+    exact hRowCap ω hRaw hregular b y
+  have hLogNNonneg : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by exact_mod_cast hnR1)
+  have hAcoeff : |Aclock| * etaA ≤ 1 / 100 := by
+    dsimp [etaA, Abar]
+    have hAbs : 0 ≤ |Aclock| := abs_nonneg _
+    have hDen : 0 < 100 * (|Aclock| + 1) := by positivity
+    field_simp
+    nlinarith
+  have hAlogBound : Aclock * Real.log (n : ℝ) ≤ (n : ℝ) / 100 := by
+    have hsmallLog := hAlog n hnAlog
+    calc
+      Aclock * Real.log (n : ℝ) ≤ |Aclock| * Real.log (n : ℝ) :=
+        mul_le_mul_of_nonneg_right (le_abs_self Aclock) hLogNNonneg
+      _ ≤ |Aclock| * (etaA * (n : ℝ)) :=
+        mul_le_mul_of_nonneg_left hsmallLog (abs_nonneg _)
+      _ = (|Aclock| * etaA) * (n : ℝ) := by ring
+      _ ≤ (1 / 100) * (n : ℝ) :=
+        mul_le_mul_of_nonneg_right hAcoeff hnR.le
+      _ = (n : ℝ) / 100 := by ring
+  have hPowTwoExp : (2 : ℝ) ^ n = Real.exp ((n : ℝ) * Real.log 2) := by
+    calc
+      (2 : ℝ) ^ n = Real.exp (Real.log 2) ^ n := by
+        rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+      _ = Real.exp ((n : ℝ) * Real.log 2) :=
+        (Real.exp_nat_mul (Real.log 2) n).symm
+  have hNLower : (2 : ℝ) ^ n ≤ (N : ℝ) := by simpa using hLarge.2.1
+  have hNposR : 0 < (N : ℝ) := by exact_mod_cast hNpos
+  have hRowCapRatio (b : OddSites9 n) (y : Fin N) :
+      (rows b).w y ≤ Real.exp (P.Sd (n : ℝ)) / (N : ℝ) := by
+    have hnum : (rows b).w y * (N : ℝ) ≤ Real.exp (P.Sd (n : ℝ)) := by
+      simpa [rows, mul_comm] using hRowCapAt b y
+    calc
+      (rows b).w y = (rows b).w y * (N : ℝ) / (N : ℝ) := by
+        field_simp [ne_of_gt hNposR]
+      _ ≤ Real.exp (P.Sd (n : ℝ)) / (N : ℝ) :=
+        div_le_div_of_nonneg_right hnum hNposR.le
+  have hInvN : (N : ℝ)⁻¹ ≤ ((2 : ℝ) ^ n)⁻¹ := by
+    simpa [one_div] using one_div_le_one_div_of_le (by positivity) hNLower
+  have hRatioDen : Real.exp (P.Sd (n : ℝ)) / (N : ℝ) ≤
+      Real.exp (P.Sd (n : ℝ)) / (2 : ℝ) ^ n := by
+    rw [div_eq_mul_inv, div_eq_mul_inv]
+    exact mul_le_mul_of_nonneg_left hInvN (by positivity)
+  have hlogTwoLower : (2 : ℝ)⁻¹ ≤ Real.log 2 := by
+    have h := Real.log_two_gt_d9
+    norm_num [one_div] at h ⊢ <;> linarith
+  have hAtomExp : P.Sd (n : ℝ) - (n : ℝ) * Real.log 2 ≤
+      -(Aclock * Real.log (n : ℝ)) := by
+    have hDen : (n : ℝ) / 2 ≤ (n : ℝ) * Real.log 2 :=
+      mul_le_mul_of_nonneg_left hlogTwoLower hnR.le
+    linarith [hDeep n hnDeep, hAlogBound, hDen]
+  have hPowerExp : Real.exp (-(Aclock * Real.log (n : ℝ))) =
+      (n : ℝ) ^ (-Aclock) := by
+    rw [Real.rpow_def_of_pos hnR]
+    ring
+  have hAtom : ∀ b y, labMarg (rows b) (lab b) y ≤ (n : ℝ) ^ (-Aclock) := by
+    intro b y
+    have hMarg : labMarg (rows b) (lab b) y = (rows b).w y := by
+      simp [labMarg, rows, lab]
+    calc
+      labMarg (rows b) (lab b) y = (rows b).w y := hMarg
+      _ ≤ Real.exp (P.Sd (n : ℝ)) / (N : ℝ) := hRowCapRatio b y
+      _ ≤ Real.exp (P.Sd (n : ℝ)) / (2 : ℝ) ^ n := hRatioDen
+      _ = Real.exp (P.Sd (n : ℝ) - (n : ℝ) * Real.log 2) := by
+        rw [hPowTwoExp, Real.exp_sub]
+      _ ≤ Real.exp (-(Aclock * Real.log (n : ℝ))) := Real.exp_le_exp.mpr hAtomExp
+      _ = (n : ℝ) ^ (-Aclock) := hPowerExp
+  have hfailDepends : ∀ v, FinProb.DependsOn (failure v) (scope v) := hdepends
+  have hSuccessfulAlarm (v : EvenSites9 n) :
+      alarm9 S E G ω v ≤ Real.exp (-(gainConst9 * (n : ℝ) * P.aStar n / 8)) := by
+    have hnot := hNoBad v
+    unfold StarBad9 at hnot
+    have hnotAlarm : ¬ Real.exp (-(gainConst9 * (n : ℝ) * P.aStar n / 8)) <
+        alarm9 S E G ω v := by
+      intro h
+      exact hnot (Or.inr h)
+    exact le_of_not_gt hnotAlarm
+  have hFailureProb : ∀ v, (FinProb.pi rows).pr (failure v) ≤ (n : ℝ) ^ (-Pclock) := by
+    intro v
+    let base : OddSites9 n → Fin N := fun _ => ⟨0, by omega⟩
+    have hMarginal := Lane_q_s09_assign1.piPrDependsEq9 rows (scope v) (failure v) base
+      (hdepends v)
+    have hPbarPos : 0 < Pbar := by dsimp [Pbar]; positivity
+    have hcDegBound : Pbar * cDegree ≤ 2000 := by
+      have hmin : cDegree ≤ 2000 / Pbar := min_le_right _ _
+      calc
+        Pbar * cDegree ≤ Pbar * (2000 / Pbar) :=
+          mul_le_mul_of_nonneg_left hmin hPbarPos.le
+        _ = 2000 := by field_simp [ne_of_gt hPbarPos]
+    have hLogNonneg : 0 ≤ Real.log (n : ℝ) := by
+      apply Real.log_nonneg
+      exact hnR1
+    have hLogPlusNonneg : 0 ≤ Real.log ((n : ℝ) + 1) := by
+      apply Real.log_nonneg
+      linarith
+    have hPowNonneg : 0 ≤ (n : ℝ) ^ P.u := by positivity
+    have hDegreeAt := hDegree n hnDegree
+    have hRadiusLower : 10 ≤ 2 * (P.radius n : ℝ) + 8 := by
+      have hr : (1 : ℝ) ≤ P.radius n := by exact_mod_cast hradius
+      nlinarith
+    have hTenLog : 10 * Real.log ((n : ℝ) + 1) ≤
+        (2 * (P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) :=
+      mul_le_mul_of_nonneg_right hRadiusLower hLogPlusNonneg
+    have hLogNear : Real.log (n : ℝ) ≤ Real.log ((n : ℝ) + 1) :=
+      Real.log_le_log hnR (by linarith)
+    have hLogDegree : Real.log ((n : ℝ) + 1) ≤ (cDegree / 40) * (n : ℝ) ^ P.u := by
+      calc
+        Real.log ((n : ℝ) + 1) =
+            10 * Real.log ((n : ℝ) + 1) / 10 := by field_simp
+        _ ≤ ((2 * (P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1)) / 10 :=
+          div_le_div_of_nonneg_right hTenLog (by norm_num)
+        _ ≤ (cDegree / 4 * (n : ℝ) ^ P.u) / 10 :=
+          div_le_div_of_nonneg_right hDegreeAt (by norm_num)
+        _ = (cDegree / 40) * (n : ℝ) ^ P.u := by ring
+    have hPLog : Pclock * Real.log (n : ℝ) ≤ 50 * (n : ℝ) ^ P.u := by
+      have hPclockLe : Pclock ≤ Pbar := by
+        dsimp [Pbar]
+        exact le_trans (le_abs_self Pclock) (le_add_of_nonneg_right (by norm_num))
+      calc
+        Pclock * Real.log (n : ℝ) ≤ Pbar * Real.log (n : ℝ) :=
+          mul_le_mul_of_nonneg_right hPclockLe hLogNonneg
+        _ ≤ Pbar * Real.log ((n : ℝ) + 1) :=
+          mul_le_mul_of_nonneg_left hLogNear hPbarPos.le
+        _ ≤ Pbar * ((cDegree / 40) * (n : ℝ) ^ P.u) :=
+          mul_le_mul_of_nonneg_left hLogDegree hPbarPos.le
+        _ ≤ 50 * (n : ℝ) ^ P.u := by
+          have hcoef : Pbar * (cDegree / 40) ≤ 50 := by nlinarith [hcDegBound]
+          nlinarith [mul_le_mul_of_nonneg_right hcoef hPowNonneg]
+    have hBaseGain : 4 * (n : ℝ) ^ P.u ≤
+        gainConst9 * (n : ℝ) * P.aStar n / 100 := by
+      have hnonneg : 0 ≤
+          ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) +
+            (n : ℝ) ^ (P.xS : ℝ) := by positivity
+      linarith [hGain, hnonneg]
+    have hGainLarge : 50 * (n : ℝ) ^ P.u ≤
+        gainConst9 * (n : ℝ) * P.aStar n / 8 := by
+      nlinarith [hBaseGain]
+    have hExpTail : Real.exp (-(gainConst9 * (n : ℝ) * P.aStar n / 8)) ≤
+        (n : ℝ) ^ (-Pclock) := by
+      calc
+        Real.exp (-(gainConst9 * (n : ℝ) * P.aStar n / 8)) ≤
+            Real.exp (-50 * (n : ℝ) ^ P.u) :=
+          Real.exp_le_exp.mpr (by nlinarith [hGainLarge])
+        _ ≤ Real.exp (-(Pclock * Real.log (n : ℝ))) :=
+          Real.exp_le_exp.mpr (by nlinarith [hPLog])
+        _ = (n : ℝ) ^ (-Pclock) := by rw [Real.rpow_def_of_pos hnR]; congr 1 <;> ring
+    have hAlarmEq : (FinProb.pi rows).pr (failure v) = alarm9 S E G ω v := by
+      let Scope := {b : OddSites9 n // b ∈ scope v}
+      let e : StarOdd9 v ≃ Scope := {
+        toFun := fun b => ⟨b.1, hscopeDist v b⟩
+        invFun := fun b => ⟨b.1, (Finset.mem_filter.mp b.2).2⟩
+        left_inv := by intro b; apply Subtype.ext; rfl
+        right_inv := by intro b; apply Subtype.ext; rfl }
+      let eFun : (∀ i : Scope, Fin N) ≃ (StarOdd9 v → Fin N) := {
+        toFun := fun a b => a (e b)
+        invFun := fun ys i => ys (e.symm i)
+        left_inv := by intro a; funext i; simp [e]
+        right_inv := by intro ys; funext b; simp [e] }
+      let base : OddSites9 n → Fin N := fun _ => ⟨0, by omega⟩
+      have hMarginal := Lane_q_s09_assign1.piPrDependsEq9 rows (scope v)
+        (failure v) base (hdepends v)
+      have hLift (a : ∀ i : Scope, Fin N) (b : StarOdd9 v) :
+          S07.glue (scope v) base a b.1 = (eFun a) b := by
+        have hb : b.1 ∈ scope v := hscopeDist v b
+        simp [S07.glue, eFun, e, hb]
+      have hEvent (ys : StarOdd9 v → Fin N) :
+          failure v (S07.glue (scope v) base (eFun.symm ys)) =
+            predFail9 S E G ω v ys := by
+        change predFail9 S E G ω v
+            (nbrLabels9 (v := v) (S07.glue (scope v) base (eFun.symm ys))) = _
+        congr 1
+        funext b
+        change (S07.glue (scope v) base (eFun.symm ys)) b.1 = ys b
+        exact hLift (eFun.symm ys) b
+      have hLocal :
+          (FinProb.pi (fun i : Scope => rows i.1)).pr
+              (fun a => failure v (S07.glue (scope v) base a)) =
+            (FinProb.pi (fun b : StarOdd9 v => rows b.1)).pr
+              (fun ys => predFail9 S E G ω v ys) := by
+        classical
+        unfold FinProb.pr FinProb.pi
+        apply Fintype.sum_equiv eFun
+        intro a
+        have hEv : failure v (S07.glue (scope v) base a) =
+            predFail9 S E G ω v (eFun a) := by
+          simpa [eFun] using hEvent (eFun a)
+        have hWeight :
+            (∏ i : Scope, (rows i.1).w (a i)) =
+              ∏ b : StarOdd9 v, (rows b.1).w ((eFun a) b) := by
+          exact Fintype.prod_equiv e.symm
+            (fun i => (rows i.1).w (a i))
+            (fun b => (rows b.1).w ((eFun a) b))
+            (by intro i; simp [eFun])
+        simp [hEv, hWeight]
+      have hStarValid : starValid9 S E G ω v := by
+        have hnot := hNoBad v
+        unfold StarBad9 at hnot
+        by_contra hbad
+        exact hnot (Or.inl hbad)
+      have hUpdate : updAnc9 ω (I.center v.1) (anc9 ω (I.center v.1)) = ω := by
+        funext i
+        by_cases hi : i = Sum.inl (I.center v.1)
+        · subst i
+          simp [updAnc9, anc9]
+        · simp [updAnc9, anc9, hi]
+      have hLik (ys : StarOdd9 v → Fin N) :
+          starLik9 S E G ω v (anc9 ω (I.center v.1)) ys =
+            ∏ b : StarOdd9 v, (rows b.1).w (ys b) := by
+        simp [starLik9, hUpdate, hStarValid, rows]
+      have hAlarm : alarm9 S E G ω v =
+          (FinProb.pi (fun b : StarOdd9 v => rows b.1)).pr
+            (fun ys => predFail9 S E G ω v ys) := by
+        simp [alarm9, FinProb.pr, FinProb.pi, hLik]
+      calc
+        (FinProb.pi rows).pr (failure v) =
+            (FinProb.pi (fun i : Scope => rows i.1)).pr
+              (fun a => failure v (S07.glue (scope v) base a)) := hMarginal
+        _ = (FinProb.pi (fun b : StarOdd9 v => rows b.1)).pr
+              (fun ys => predFail9 S E G ω v ys) := hLocal
+        _ = alarm9 S E G ω v := hAlarm.symm
+    calc
+      (FinProb.pi rows).pr (failure v) = alarm9 S E G ω v := hAlarmEq
+      _ ≤ Real.exp (-(gainConst9 * (n : ℝ) * P.aStar n / 8)) := hSuccessfulAlarm v
+      _ ≤ (n : ℝ) ^ (-Pclock) := hExpTail
+  have hEpsBound : 1 + ε n ≤ 2 := by linarith [hEpsSmall n hnEps]
+  obtain ⟨J, hJSupport, hJJoint⟩ := hclock n hnClock N hlogN lab rows failure scope
+    hclockColumn hAtom hfailDepends hscopeSize hincidence hFailureProb
+  refine ⟨J, ?_⟩
+  constructor
+  · intro f hf
+    rcases hJSupport f hf with ⟨hinj, hNoFailure⟩
+    refine ⟨?_, ?_⟩
+    · simpa [lab] using hinj
+    · intro v
+      simpa [failure] using hNoFailure v
+  · intro T o hT
+    have hTReal : (T.card : ℝ) ≤ (n : ℝ) ^ (3 : ℝ) := by simpa using hT
+    have hjointBound := hJJoint T o hTReal
+    calc
+      J.pr (fun f => ∀ b ∈ T, f b = o b) ≤
+          (1 + ε n) * ∏ b ∈ T, (rows b).w (o b) := by
+            simpa [lab, rows] using hjointBound
+      _ ≤ 2 * ∏ b ∈ T, (rowLaw9 S E G ω b).w (o b) :=
+        mul_le_mul_of_nonneg_right hEpsBound (Finset.prod_nonneg fun b hb =>
+          (rowLaw9 S E G ω b).nonneg (o b))
 
 /-! ## P9.2-assignC (09:331–350) -/
 

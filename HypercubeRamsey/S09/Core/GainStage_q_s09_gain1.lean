@@ -2225,11 +2225,14 @@ private theorem delLaw_outer_restrict_regular9 {P : Params9} {n N : ℕ} {M : Ta
     ∃ hO : 0 < ∑ y ∈ hitSet9 E G ω (outerIDs9 I v b), (maskedLaw9 S ω b).w y,
       ∃ hK : 0 < ∑ y ∈ coreHitSet9 E G ω v b,
         ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).w y,
-        outerFilter9 S E G ω v b =
-          (maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO ∧
-        delLaw9 S E G ω b (I.center v.1) =
-          ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
-            (coreHitSet9 E G ω v b) hK := by
+      outerFilter9 S E G ω v b =
+        (maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO ∧
+      delLaw9 S E G ω b (I.center v.1) =
+        ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
+          (coreHitSet9 E G ω v b) hK ∧
+      prefixLaw9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b)
+          ((outerIDs9 I v b).card + (coreIDs9 I v b).card) =
+        delLaw9 S E G ω b (I.center v.1) := by
   classical
   let O := outerIDs9 I v b
   let K := coreIDs9 I v b
@@ -2320,13 +2323,57 @@ private theorem delLaw_outer_restrict_regular9 {P : Params9} {n N : ℕ} {M : Ta
         rw [hABset]
         exact hF'
       simp [hyAB, hyF]
-  refine ⟨hO, hBpos, houter, ?_⟩
-  calc
-    delLaw9 S E G ω b target = base.restrict F hFpos := hdel
-    _ = base.restrict (A ∩ B) hABpos := hnorm.symm
-    _ = (base.restrict A hO).restrict B hBpos := hnest.symm
-    _ = ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
-          (coreHitSet9 E G ω v b) hBpos := by rfl
+  have hprefixSet : hitSet9 E G ω ((ord.take j).toFinset) = F := by
+    calc
+      hitSet9 E G ω ((ord.take j).toFinset) = hitSet9 E G ω (O ∪ K) := by rw [htake]
+      _ = A ∩ B := hHitUnion.symm
+      _ = F := hABset
+  have hprefix : prefixLaw9 E G ω base ord j = base.restrict F hFpos := by
+    unfold prefixLaw9
+    rw [hprefixSet]
+    unfold restrictOr9
+    rw [dif_pos hFpos]
+  refine ⟨hO, hBpos, houter, ?_, ?_⟩
+  · calc
+      delLaw9 S E G ω b target = base.restrict F hFpos := hdel
+      _ = base.restrict (A ∩ B) hABpos := hnorm.symm
+      _ = (base.restrict A hO).restrict B hBpos := hnest.symm
+      _ = ((maskedLaw9 S ω b).restrict (hitSet9 E G ω (outerIDs9 I v b)) hO).restrict
+            (coreHitSet9 E G ω v b) hBpos := by rfl
+  · calc
+      prefixLaw9 E G ω base ord j = base.restrict F hFpos := hprefix
+      _ = delLaw9 S E G ω b target := hdel.symm
+
+private theorem targetFrac_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hregular : orderRegular9 E G ω (maskedLaw9 S ω b) (fullOrder9 I v b))
+    (hbstar : P.bStar n ≤ 1 / 200) :
+    |targetFrac9 S E G ω v b - 1 / 2| ≤ 2 * P.bStar n := by
+  classical
+  let O := outerIDs9 I v b
+  let K := coreIDs9 I v b
+  let ord := fullOrder9 I v b
+  let j := O.card + K.card
+  let target := I.center v.1
+  have hlen : ord.length = O.card + K.card + 1 := by
+    simp [ord, O, K, fullOrder9, List.length_append]
+    omega
+  have hj : j < ord.length := by dsimp [j]; omega
+  have hget : ord[j]? = some target := by
+    simp [ord, j, target, O, K, fullOrder9]
+  have hdegrees := orderRegular_prefix_degrees9 S I E G ω (maskedLaw9 S ω b)
+    ord hregular hbstar
+  have hprev : ∀ l c, l < j → ord[l]? = some c →
+      (49 / 100 : ℝ) ≤ rowDeg E G (anc9 ω c)
+        (prefixLaw9 E G ω (maskedLaw9 S ω b) ord l) := by
+    intro l c hl hget'
+    exact hdegrees j (by omega) l c hl hget'
+  have hreg := hregular j target hget hprev
+  rcases delLaw_outer_restrict_regular9 S I E G ω v b hregular hbstar with
+    ⟨_, _, _, _, hprefix⟩
+  rw [hprefix] at hreg
+  simpa [targetFrac9] using hreg
 
 private theorem targetFrac_ratio_regular9 {P : Params9} {n N : ℕ} {M : TagMix N}
     (S : Setup9 P n N M) (I : IDMap9 P n) (E : Fin N → Fin N → Prop) (G : Colour)
@@ -2345,7 +2392,7 @@ private theorem targetFrac_ratio_regular9 {P : Params9} {n N : ℕ} {M : TagMix 
           targetFrac9 S E G ω v b := by
   classical
   rcases delLaw_outer_restrict_regular9 S I E G ω v b hregular hbstar with
-    ⟨hO, hK, houter, hdel⟩
+    ⟨hO, hK, houter, hdel, _hprefix⟩
   have hKOuter : 0 < ∑ y ∈ coreHitSet9 E G ω v b, (outerFilter9 S E G ω v b).w y := by
     simpa [houter] using hK
   have hdegree := law_restrict_degree_mass9 E G (outerFilter9 S E G ω v b)

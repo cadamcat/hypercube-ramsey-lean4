@@ -1,4 +1,5 @@
 import HypercubeRamsey.S09.Map.Device
+import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
 
 /-!
 Lane-local helpers for the Section 9 height induction.  In particular, these isolate the deterministic facts
@@ -608,6 +609,28 @@ private theorem badAt9_implies_badIn9_degraded {P : Params9} {hc : HeightChoice9
       have hp := Real.rpow_nonneg (Nat.cast_nonneg n) (1 - (P.σ : ℝ) + hc.eps')
       have hle := mul_le_mul_of_nonneg_right ht₂ hp
       simpa only [one_mul] using lt_of_le_of_lt hle hl
+
+private def scaleBad9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s : ℝ) (Pp A : Pos9 P hc n → Bool)
+    (x : HeightState9 P hc n) : Prop :=
+  badIn9 C t Pp A x.1 x.2 ∧
+    s * (n : ℝ) ^ (10 : ℝ) ≤ (eligCount9 C Pp x.1 x.2 : ℝ)
+
+private def scaleFailure9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
+    (Pp A : Pos9 P hc n → Bool) (start : HeightState9 P hc n) : Prop :=
+  ∃ endpoint : HeightState9 P hc n, ∃ rest : List (HeightState9 P hc n),
+    HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: rest) start ∧
+    (∀ x ∈ endpoint :: rest, _root_.hammingDist x.1 start.1 ≤ 16 * R) ∧
+    (∀ x ∈ endpoint :: rest, Nat.dist x.2.val start.2.val ≤ 8 * R) ∧
+    R ≤ max (Nat.dist endpoint.2.val start.2.val)
+      ((_root_.hammingDist endpoint.1 start.1 + 1) / 2) ∧
+    (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) + η * (R : ℝ)
+
+private noncomputable def scaleSupport9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (start : HeightState9 P hc n) (R : ℕ) : Finset (Pos9 P hc n) :=
+  (consulted9 (P := P) (hc := hc) (n := n) start.1 (8 * R)).filter
+    (fun c => Nat.dist c.level.val start.2.val ≤ 8 * R + 2)
 
 private theorem bernoulli_pi_count_ge_le {ι : Type*} [Fintype ι] [DecidableEq ι]
     (p : ℝ) (hp : 0 ≤ p) (S : Finset ι) (t : ℕ) :

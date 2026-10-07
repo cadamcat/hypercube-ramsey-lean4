@@ -6,6 +6,8 @@ import HypercubeRamsey.S18.Nodes_q_s18_n4
 import HypercubeRamsey.S18.Nodes_q_s18_n5
 import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
+import HypercubeRamsey.S18.Run_sol_s18_n4
+import HypercubeRamsey.S18.Risk_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
@@ -469,7 +471,13 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inl v =>
           exact Lane_sol_s18_n4.finalListPinnedBound D v (by omega)
             (hfinal D hD (Lane_sol_s18_n4.eventDegreeBound D hD hk) v) pin
-      | inr F => sorry
+      | inr F =>
+          by_cases hkind : F.1.val = 1
+          · by_cases hvalid : D.prefixValid F.2
+            · sorry
+            · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
+          · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
+              (hδsmall.le.trans (min_le_left _ _)) F hkind pin
 
 /-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
 theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}

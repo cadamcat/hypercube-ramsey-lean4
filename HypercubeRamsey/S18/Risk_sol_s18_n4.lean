@@ -87,4 +87,32 @@ theorem patternCoverExpectation {Ω I : Type*} [Fintype Ω] [Fintype I]
   exact (truncatedMarkov P gate closure f η hη hf).trans
     ((add_le_add hclosure (mul_le_mul_of_nonneg_left he (inv_nonneg.mpr hη.le))).trans hbudget)
 
+theorem initialProbabilityZeroOfImpossible
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (pin : Option (S18.SlotPin D))
+    (F : D.encoding.InitInput → Prop) (hF : ∀ x, ¬ F x) :
+    S18.initialProbability D pin F = 0 := by
+  cases pin with
+  | none => simp [S18.initialProbability, FinLaw.pr, hF]
+  | some p => simp [S18.initialProbability, FinLaw.pr, hF]
+
+ theorem invalidPrefixTerminalPinnedBound
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
+    (F : S18.LateEvent D) (hkind : F.1.val = 1) (hvalid : ¬ D.prefixValid F.2)
+    (pin : Option (S18.SlotPin D)) :
+    S18.initialProbability D pin (S18.terminalFailure D δ (.inr (.inr F))) ≤
+      Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 3)) := by
+  have hfailure : S18.lateFailure D F = fun _ => False := by
+    funext full
+    apply propext
+    simp [S18.lateFailure, S18.LateData.prefixFailure, hkind, hvalid]
+  have hfalse : ∀ x, ¬ S18.terminalFailure D δ (.inr (.inr F)) x := by
+    intro x hbad
+    have hp : D.pLate F x = 0 := by
+      simp [S18.LateData.pLate, hfailure, FinLaw.pr]
+    exact (not_lt_of_ge (Real.exp_pos _).le) (hp ▸ hbad.2)
+  rw [initialProbabilityZeroOfImpossible D pin _ hfalse]
+  exact Real.rpow_nonneg (Nat.cast_nonneg _) _
+
 end HypercubeRamsey.Lane_sol_s18_n4

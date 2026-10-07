@@ -153,4 +153,89 @@ theorem leafNonneighborBoundOfForcing
       · simp [hleaf]
     rw [hnum]
 
+/-- A token's incident charge is bounded whenever its incident leaves form an adjacency clique. -/
+theorem tokenChargeOfCliques {I A : Type*} [Fintype I] [DecidableEq A]
+    (adj : I → I → Prop) (tokens : I → Finset A) (charge : I → ℝ)
+    (hcharge : ∀ i, 0 ≤ charge i) (bound : ℝ) (hbound : 0 ≤ bound)
+    (hclique : ∀ i j a, a ∈ tokens i → a ∈ tokens j → adj i j)
+    (hadj : ∀ i, (∑ j, if adj i j then charge j else 0) ≤ bound) (a : A) :
+    (∑ i, if a ∈ tokens i then charge i else 0) ≤ bound := by
+  by_cases hex : ∃ i, a ∈ tokens i
+  · obtain ⟨i, hi⟩ := hex
+    calc
+      _ ≤ ∑ j, if adj i j then charge j else 0 := by
+        apply Finset.sum_le_sum
+        intro j hj
+        by_cases ha : a ∈ tokens j
+        · simp [ha, hclique i j a hi ha]
+        · simp only [ha, ite_false]
+          split_ifs <;> simp [hcharge]
+      _ ≤ bound := hadj i
+  · have hnone : ∀ i, a ∉ tokens i := by simpa using hex
+    simpa [hnone] using hbound
+
+/-- A finite test pays at most one token charge for each token it consults. -/
+theorem testTouchingCharge {I A : Type*} [Fintype I] [DecidableEq A]
+    (tokens : I → Finset A) (charge : I → ℝ) (hcharge : ∀ i, 0 ≤ charge i)
+    (test : Finset A) (bound : ℝ)
+    (htoken : ∀ a ∈ test, (∑ i, if a ∈ tokens i then charge i else 0) ≤ bound) :
+    (∑ i, if ¬ Disjoint (tokens i) test then charge i else 0) ≤ (test.card : ℝ) * bound := by
+  have hpoint : ∀ i, (if ¬ Disjoint (tokens i) test then charge i else 0) ≤
+      ∑ a ∈ test, if a ∈ tokens i then charge i else 0 := by
+    intro i
+    by_cases ht : ¬ Disjoint (tokens i) test
+    · obtain ⟨a, ha, htest⟩ := Finset.not_disjoint_iff.mp ht
+      simp only [ht, ite_true]
+      have h := Finset.single_le_sum (f := fun a => if a ∈ tokens i then charge i else 0)
+        (fun a _ => by split_ifs <;> simp [hcharge]) htest
+      simpa [ha] using h
+    · simp only [ht, ite_false]
+      exact Finset.sum_nonneg (fun a _ => by split_ifs <;> simp [hcharge])
+  calc
+    _ ≤ ∑ i, ∑ a ∈ test, if a ∈ tokens i then charge i else 0 :=
+      Finset.sum_le_sum (fun i _ => hpoint i)
+    _ = ∑ a ∈ test, ∑ i, if a ∈ tokens i then charge i else 0 := Finset.sum_comm
+    _ ≤ ∑ a ∈ test, bound := Finset.sum_le_sum htoken
+    _ = (test.card : ℝ) * bound := by simp
+
+private theorem prodOneSubLowerCharge
+    {I : Type*} [DecidableEq I] (S : Finset I) (q : I → ℝ)
+    (hq0 : ∀ i ∈ S, 0 ≤ q i) (hq1 : ∀ i ∈ S, q i ≤ 1) :
+    1 - ∑ i ∈ S, q i ≤ ∏ i ∈ S, (1 - q i) := by
+  classical
+  induction S using Finset.induction_on with
+  | empty => simp
+  | @insert i S hi ih =>
+      have hi0 := hq0 i (Finset.mem_insert_self i S)
+      have hi1 := hq1 i (Finset.mem_insert_self i S)
+      have hq0' : ∀ j ∈ S, 0 ≤ q j := fun j hj => hq0 j (Finset.mem_insert_of_mem hj)
+      have hq1' : ∀ j ∈ S, q j ≤ 1 := fun j hj => hq1 j (Finset.mem_insert_of_mem hj)
+      have hsum0 : 0 ≤ ∑ j ∈ S, q j := Finset.sum_nonneg fun j hj => hq0' j hj
+      rw [Finset.sum_insert hi, Finset.prod_insert hi]
+      calc
+        1 - (q i + ∑ j ∈ S, q j) ≤ (1 - q i) * (1 - ∑ j ∈ S, q j) := by
+          nlinarith [mul_nonneg hi0 hsum0]
+        _ ≤ (1 - q i) * ∏ j ∈ S, (1 - q j) :=
+          mul_le_mul_of_nonneg_left (ih hq0' hq1') (sub_nonneg.mpr hi1)
+
+/-- The sum bound gives the reciprocal avoidance-product cost used in P18.3f. -/
+theorem reciprocalAvoidanceProductLe {I : Type*} [DecidableEq I]
+    (S : Finset I) (q : I → ℝ) (ε : ℝ) (hε : 0 ≤ ε)
+    (hq0 : ∀ i ∈ S, 0 ≤ q i) (hq1 : ∀ i ∈ S, q i < 1)
+    (hsum : ∑ i ∈ S, q i ≤ ε / (1 + ε)) :
+    (∏ i ∈ S, (1 - q i)⁻¹) ≤ 1 + ε := by
+  have hden : 0 < 1 + ε := by linarith
+  have hprod : 0 < ∏ i ∈ S, (1 - q i) := Finset.prod_pos (fun i hi => sub_pos.mpr (hq1 i hi))
+  have hlower := prodOneSubLowerCharge S q hq0 (fun i hi => (hq1 i hi).le)
+  have hrecip : (1 + ε)⁻¹ ≤ ∏ i ∈ S, (1 - q i) := by
+    have heq : 1 - ε / (1 + ε) = (1 + ε)⁻¹ := by field_simp [ne_of_gt hden]; ring
+    rw [← heq]
+    linarith
+  rw [Finset.prod_inv_distrib]
+  have h1 : 1 ≤ (1 + ε) * ∏ i ∈ S, (1 - q i) := by
+    have h := mul_le_mul_of_nonneg_left hrecip hden.le
+    simpa only [mul_inv_cancel₀ (ne_of_gt hden)] using h
+  have h := mul_le_mul_of_nonneg_right h1 (inv_nonneg.mpr hprod.le)
+  simpa only [one_mul, mul_assoc, mul_inv_cancel₀ (ne_of_gt hprod), mul_one] using h
+
 end HypercubeRamsey.Lane_sol_s18_n4

@@ -1633,7 +1633,403 @@ theorem lowModePalettePairMoment
         (hQuant : D.L16QuantitativeValidity K)
         (i : Fin PT.tiling.m) (hX : (PT.tiling.P i).X.Nonempty),
         PalettePairMomentBound i hX Kmoment := by
-  sorry
+  classical
+  let Kmoment : ℝ := 8 * K + 20
+  have hKmoment : 0 < Kmoment := by dsimp [Kmoment]; positivity
+  refine ⟨Kmoment, hKmoment, ?_⟩
+  have hnTop : Tendsto (fun k : ℕ => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hn2 : ∀ᶠ k in atTop, 2 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 2
+  have hlog : ∀ᶠ k in atTop, 1 ≤ Real.log (T.S.n k : ℝ) := by
+    exact (Real.tendsto_log_atTop.comp hnTop).eventually_ge_atTop 1
+  have hpowTop : Tendsto
+      (fun k : ℕ => (T.S.n k : ℝ) ^ (0.19 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 0.19)).comp hnTop
+  have hpoly : Tendsto
+      (fun k : ℕ => (T.S.n k : ℝ) ^ (8 * K) *
+        Real.exp (-((T.S.n k : ℝ) ^ (0.19 : ℝ)))) atTop (nhds 0) := by
+    have hNested :=
+      (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero
+        (8 * K / (0.19 : ℝ)) 1 one_pos).comp hpowTop
+    have hNested' : Tendsto
+        (fun k : ℕ => ((T.S.n k : ℝ) ^ (0.19 : ℝ)) ^
+          (8 * K / (0.19 : ℝ)) *
+            Real.exp (-((T.S.n k : ℝ) ^ (0.19 : ℝ)))) atTop (nhds 0) := by
+      simpa only [Function.comp_def, one_mul, neg_one_mul] using hNested
+    have hEq :
+        (fun k : ℕ => ((T.S.n k : ℝ) ^ (0.19 : ℝ)) ^
+          (8 * K / (0.19 : ℝ)) *
+            Real.exp (-((T.S.n k : ℝ) ^ (0.19 : ℝ)))) =
+        (fun k : ℕ => (T.S.n k : ℝ) ^ (8 * K) *
+          Real.exp (-((T.S.n k : ℝ) ^ (0.19 : ℝ)))) := by
+      funext k
+      rw [← Real.rpow_mul (show 0 ≤ (T.S.n k : ℝ) by positivity)]
+      congr 1
+      field_simp
+      <;> ring
+    rw [← hEq]
+    exact hNested'
+  have hpolySmall : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ (8 * K) *
+        Real.exp (-((T.S.n k : ℝ) ^ (0.19 : ℝ))) ≤ 1 := by
+    have hlt : ∀ᶠ k in atTop,
+        (T.S.n k : ℝ) ^ (8 * K) *
+          Real.exp (-((T.S.n k : ℝ) ^ (0.19 : ℝ))) < 1 :=
+      hpoly.eventually (Iio_mem_nhds (by norm_num))
+    exact hlt.mono fun _ h => h.le
+  filter_upwards [hn2, hlog, hpolySmall] with k hn hlogn hpolyN
+  intro PT D hQuant i hX
+  unfold PalettePairMomentBound
+  intro d hd
+  let X := (PT.tiling.P i).X
+  let Env := PT.envelope i
+  let n : ℝ := T.S.n k
+  let M : ℝ := (X.card : ℝ)
+  have hnpos : 0 < n := by dsimp [n]; exact_mod_cast (by omega : 0 < T.S.n k)
+  have hn1 : 1 ≤ n := by dsimp [n]; exact_mod_cast (by omega : 1 ≤ T.S.n k)
+  have hlogpos : 0 ≤ Real.log n := by linarith
+  have hMpos : 0 < M := by
+    dsimp [M, X]
+    exact_mod_cast Finset.card_pos.mpr hX
+  have hPT : PT.Valid := D.tiling_valid
+  have hEnvX : Env ⊆ X := by
+    dsimp [Env, X]
+    exact hPT.envelope_subset i
+  have hdegree (x : Fin (T.S.N k)) (hx : x ∈ Env) :
+      n * |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+        K * Real.log n := by
+    simpa [n] using hQuant.geometry.degree_drift i x hx
+  have hrowTail (x : Fin (T.S.N k)) (hx : x ∈ Env) :
+      (∑ z ∈ X.filter (fun z =>
+        Real.rpow n (-1.02) <
+          |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ∧
+        |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ≤ 2 * κ.ξ),
+        Real.exp (100 * n *
+          |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|)) ≤
+        Real.exp (-Real.rpow n 0.19) * M := by
+    simpa [n, X] using (hPT.envelope_row_tail i i x hx).2
+  let joint (x z : Fin (T.S.N k)) : ℝ :=
+    4 * ∑ y, (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y *
+      hit (T.S.E k) PT.tiling.c z y
+  have hjoint_nonneg (x z : Fin (T.S.N k)) : 0 ≤ joint x z := by
+    apply mul_nonneg (by norm_num)
+    apply Finset.sum_nonneg
+    intro y hy
+    have hhitx : 0 ≤ hit (T.S.E k) PT.tiling.c x y := by
+      unfold hit
+      split_ifs <;> norm_num
+    have hhitZ : 0 ≤ hit (T.S.E k) PT.tiling.c z y := by
+      unfold hit
+      split_ifs <;> norm_num
+    exact mul_nonneg
+      (mul_nonneg ((PT.π i).nonneg y) hhitx) hhitZ
+  have hidentity (x z : Fin (T.S.N k)) :
+      joint x z = 2 * deg (T.S.E k) PT.tiling.c (PT.π i).w x +
+        2 * deg (T.S.E k) PT.tiling.c (PT.π i).w z - 1 +
+        corr (T.S.E k) PT.tiling.c (PT.π i).w x z := by
+    have hmass : (∑ y, (PT.π i).w y) = 1 := (PT.π i).sum_eq_one
+    have hpoint (y : Fin (T.S.N k)) :
+        4 * (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y *
+            hit (T.S.E k) PT.tiling.c z y =
+          2 * (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y +
+            2 * (PT.π i).w y * hit (T.S.E k) PT.tiling.c z y -
+            (PT.π i).w y +
+            (PT.π i).w y * fv (T.S.E k) PT.tiling.c x y *
+              fv (T.S.E k) PT.tiling.c z y := by
+      simp only [fv]
+      ring
+    dsimp [joint]
+    calc
+      4 * ∑ y, (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y *
+          hit (T.S.E k) PT.tiling.c z y =
+        ∑ y, 4 * (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y *
+          hit (T.S.E k) PT.tiling.c z y := by
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro y hy
+        ring
+      _ = ∑ y, (2 * (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y +
+          2 * (PT.π i).w y * hit (T.S.E k) PT.tiling.c z y -
+          (PT.π i).w y +
+          (PT.π i).w y * fv (T.S.E k) PT.tiling.c x y *
+            fv (T.S.E k) PT.tiling.c z y) := by
+        apply Finset.sum_congr rfl
+        intro y hy
+        exact hpoint y
+      _ = 2 * deg (T.S.E k) PT.tiling.c (PT.π i).w x +
+          2 * deg (T.S.E k) PT.tiling.c (PT.π i).w z - 1 +
+          corr (T.S.E k) PT.tiling.c (PT.π i).w x z := by
+        simp only [Finset.sum_add_distrib, Finset.sum_sub_distrib]
+        simp [deg, corr, hmass, Finset.mul_sum]
+        <;> ring
+  let high (x z : Fin (T.S.N k)) : Prop :=
+    Real.rpow n (-1.02) <
+      |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ∧
+    |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ≤ 2 * κ.ξ
+  let value (x z : Fin (T.S.N k)) : ℝ :=
+    if x ∈ Env ∧ z ∈ Env ∧
+        |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ≤ κ.ξ then
+      joint x z ^ (2 * d) else 0
+  let small : ℝ := Real.exp (8 * K * Real.log n + 2)
+  let pref : ℝ := Real.exp (8 * K * Real.log n)
+  have hpref : pref = n ^ (8 * K) := by
+    dsimp [pref]
+    rw [Real.rpow_def_of_pos hnpos]
+    congr 1
+    ring
+  have htailFactor : pref * Real.exp (-Real.rpow n 0.19) ≤ 1 := by
+    rw [hpref]
+    simpa [n] using hpolyN
+  have hvalueBound (x z : Fin (T.S.N k)) :
+      value x z ≤ small + if high x z then
+        Real.exp (8 * K * Real.log n + 100 * n *
+          |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0 := by
+    by_cases hgood : x ∈ Env ∧ z ∈ Env ∧
+        |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ≤ κ.ξ
+    · rcases hgood with ⟨hx, hz, hcorr⟩
+      have hdx := hdegree x hx
+      have hdz := hdegree z hz
+      have hdx' : |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| ≤
+          K * Real.log n / n := by
+        apply (le_div_iff₀ hnpos).2
+        nlinarith [hdx]
+      have hdz' : |deg (T.S.E k) PT.tiling.c (PT.π i).w z - 1 / 2| ≤
+          K * Real.log n / n := by
+        apply (le_div_iff₀ hnpos).2
+        nlinarith [hdz]
+      let corrAbs := |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|
+      let t := 2 * |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| +
+        2 * |deg (T.S.E k) PT.tiling.c (PT.π i).w z - 1 / 2| + corrAbs
+      have ht0 : 0 ≤ t := by dsimp [t, corrAbs]; positivity
+      have hqle : joint x z ≤ 1 + t := by
+        rw [hidentity]
+        dsimp [t, corrAbs]
+        have hxabs := le_abs_self
+          (deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2)
+        have hzabs := le_abs_self
+          (deg (T.S.E k) PT.tiling.c (PT.π i).w z - 1 / 2)
+        have hcabs := le_abs_self (corr (T.S.E k) PT.tiling.c (PT.π i).w x z)
+        nlinarith
+      have hqexp : joint x z ≤ Real.exp t :=
+        hqle.trans (by simpa [add_comm] using Real.add_one_le_exp t)
+      have htbound : t ≤ 4 * K * Real.log n / n + corrAbs := by
+        dsimp [t]
+        calc
+          2 * |deg (T.S.E k) PT.tiling.c (PT.π i).w x - 1 / 2| +
+              2 * |deg (T.S.E k) PT.tiling.c (PT.π i).w z - 1 / 2| + corrAbs ≤
+            2 * (K * Real.log n / n) + 2 * (K * Real.log n / n) + corrAbs := by
+              gcongr
+          _ = 4 * K * Real.log n / n + corrAbs := by ring
+      have htPow : (2 * d : ℝ) * t ≤
+          8 * K * Real.log n + 2 * n * corrAbs := by
+        have hdReal : (2 * d : ℝ) ≤ 2 * n := by
+          dsimp [n]
+          exact_mod_cast Nat.mul_le_mul_left 2 hd
+        calc
+          (2 * d : ℝ) * t ≤ 2 * n * t :=
+            mul_le_mul_of_nonneg_right hdReal ht0
+          _ ≤ 2 * n * (4 * K * Real.log n / n + corrAbs) := by
+            gcongr
+          _ = 8 * K * Real.log n + 2 * n * corrAbs := by
+            field_simp [ne_of_gt hnpos]
+            <;> ring
+      have hqpow : joint x z ^ (2 * d) ≤
+          Real.exp (8 * K * Real.log n + 2 * n * corrAbs) := by
+        calc
+          joint x z ^ (2 * d) ≤ Real.exp t ^ (2 * d) :=
+            pow_le_pow_left₀ (hjoint_nonneg x z) hqexp _
+          _ = Real.exp ((2 * d : ℝ) * t) := by
+            rw [← Real.exp_nat_mul]
+            congr 1
+            norm_num
+          _ ≤ Real.exp (8 * K * Real.log n + 2 * n * corrAbs) :=
+            Real.exp_le_exp.mpr htPow
+      by_cases hsmall : corrAbs ≤ Real.rpow n (-1.02)
+      · have hexpCompare : Real.rpow n (-1.02) ≤ Real.rpow n (-1) :=
+          Real.rpow_le_rpow_of_exponent_le hn1 (by norm_num)
+        have hInv : n * Real.rpow n (-1) = 1 := by
+          change n * n ^ (-1 : ℝ) = 1
+          rw [Real.rpow_neg_one]
+          exact mul_inv_cancel₀ hnpos.ne'
+        have hna : n * corrAbs ≤ 1 := by
+          calc
+            n * corrAbs ≤ n * Real.rpow n (-1.02) :=
+              mul_le_mul_of_nonneg_left hsmall hnpos.le
+            _ ≤ n * Real.rpow n (-1) :=
+              mul_le_mul_of_nonneg_left hexpCompare hnpos.le
+            _ = 1 := hInv
+        have hvalue : value x z = joint x z ^ (2 * d) := by
+          simp [value, hx, hz, hcorr]
+        have hhighFalse : ¬ high x z := by
+          intro hh
+          exact (not_lt_of_ge hsmall) hh.1
+        calc
+          value x z = joint x z ^ (2 * d) := hvalue
+          _ ≤ Real.exp (8 * K * Real.log n + 2 * n * corrAbs) := hqpow
+          _ ≤ small := by
+            have he : Real.exp (8 * K * Real.log n + 2 * n * corrAbs) ≤
+                Real.exp (8 * K * Real.log n + 2) :=
+              Real.exp_le_exp.mpr (by nlinarith [hna])
+            simpa [small] using he
+          _ = small + if high x z then
+              Real.exp (8 * K * Real.log n + 100 * n * corrAbs) else 0 := by
+            simp [hhighFalse]
+      · have hhigh : high x z := by
+          refine ⟨lt_of_not_ge hsmall, ?_⟩
+          exact le_trans hcorr (by linarith [hκ.ξ_rng.1])
+        have hvalue : value x z = joint x z ^ (2 * d) := by
+          simp [value, hx, hz, hcorr]
+        have habsnonneg : 0 ≤ corrAbs := by positivity
+        have hlarge : joint x z ^ (2 * d) ≤
+            Real.exp (8 * K * Real.log n + 100 * n * corrAbs) := by
+          exact hqpow.trans (Real.exp_le_exp.mpr (by nlinarith))
+        calc
+          value x z = joint x z ^ (2 * d) := hvalue
+          _ ≤ Real.exp (8 * K * Real.log n + 100 * n * corrAbs) := hlarge
+          _ ≤ small + Real.exp (8 * K * Real.log n + 100 * n * corrAbs) := by
+            dsimp [small]
+            nlinarith [Real.exp_nonneg (8 * K * Real.log n + 2)]
+          _ = small + if high x z then
+              Real.exp (8 * K * Real.log n + 100 * n *
+                |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0 := by
+            simp [hhigh, corrAbs]
+    · simp [value, hgood]
+      positivity
+  have hbigSum (x : Fin (T.S.N k)) :
+      (∑ z ∈ X, if high x z then
+          Real.exp (8 * K * Real.log n + 100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0) =
+        pref * (∑ z ∈ X.filter (high x),
+          Real.exp (100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|)) := by
+    calc
+      _ = ∑ z ∈ X, if high x z then pref *
+          Real.exp (100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0 := by
+        apply Finset.sum_congr rfl
+        intro z hz
+        by_cases hh : high x z <;> simp [hh, pref, Real.exp_add]
+      _ = ∑ z ∈ X, pref * (if high x z then
+          Real.exp (100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0) := by
+        apply Finset.sum_congr rfl
+        intro z hz
+        by_cases hh : high x z <;> simp [hh]
+      _ = pref * ∑ z ∈ X, if high x z then
+          Real.exp (100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0 := by
+        rw [← Finset.mul_sum]
+      _ = pref * (∑ z ∈ X.filter (high x),
+          Real.exp (100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|)) := by
+        rw [← Finset.sum_filter]
+  have hinner (x : Fin (T.S.N k)) :
+      (∑ z ∈ X, value x z) ≤ M * (small + 1) := by
+    by_cases hx : x ∈ Env
+    · have hrow := hrowTail x hx
+      have hrow' : (∑ z ∈ X.filter (high x),
+          Real.exp (100 * n *
+            |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|)) ≤
+          Real.exp (-Real.rpow n 0.19) * M := by
+        simpa [high, n, X] using hrow
+      have hsum : (∑ z ∈ X, value x z) ≤
+          ∑ z ∈ X, (small + if high x z then
+            Real.exp (8 * K * Real.log n + 100 * n *
+              |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0) := by
+        apply Finset.sum_le_sum
+        intro z hz
+        exact hvalueBound x z
+      calc
+        _ ≤ ∑ z ∈ X, (small + if high x z then
+            Real.exp (8 * K * Real.log n + 100 * n *
+              |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0) := hsum
+        _ = M * small +
+            ∑ z ∈ X, if high x z then
+              Real.exp (8 * K * Real.log n + 100 * n *
+                |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|) else 0 := by
+          simp [M, Finset.sum_add_distrib, Finset.sum_const, nsmul_eq_mul]
+        _ = M * small + pref *
+            (∑ z ∈ X.filter (high x),
+              Real.exp (100 * n *
+                |corr (T.S.E k) PT.tiling.c (PT.π i).w x z|)) := by
+          rw [hbigSum]
+        _ ≤ M * small + pref * (Real.exp (-Real.rpow n 0.19) * M) := by
+          apply add_le_add
+          · exact le_rfl
+          · exact mul_le_mul_of_nonneg_left hrow' (by dsimp [pref]; positivity)
+        _ = M * (small + pref * Real.exp (-Real.rpow n 0.19)) := by ring
+        _ ≤ M * (small + 1) := by
+          gcongr <;> exact htailFactor
+    · have hzero : (∑ z ∈ X, value x z) = 0 := by
+        apply Finset.sum_eq_zero
+        intro z hz
+        simp [value, hx]
+      rw [hzero]
+      positivity
+  have hdouble :
+      (∑ x ∈ X, ∑ z ∈ X, value x z) ≤ M ^ 2 * (small + 1) := by
+    calc
+      _ ≤ ∑ x ∈ X, M * (small + 1) := by
+        apply Finset.sum_le_sum
+        intro x hx
+        exact hinner x
+      _ = M ^ 2 * (small + 1) := by
+        simp [M, Finset.sum_const, nsmul_eq_mul]
+        ring
+  have hmomentNumerator :
+      (∑ x ∈ X, ∑ z ∈ X, value x z) / M ^ 2 ≤ small + 1 := by
+    apply (div_le_iff₀ (by positivity : 0 < M ^ 2)).2
+    nlinarith [hdouble]
+  have hsmallFinal : small + 1 ≤ Real.exp (Kmoment * Real.log n) := by
+    dsimp [small, Kmoment]
+    have hloglarge : 2 ≤ 10 * Real.log n := by nlinarith [hlogn]
+    have hAddExp (t : ℝ) : 1 + t ≤ Real.exp t := by
+      linarith [Real.add_one_le_exp t]
+    have hsmallLe : Real.exp (8 * K * Real.log n + 2) ≤
+        Real.exp (8 * K * Real.log n + 10 * Real.log n) :=
+      Real.exp_le_exp.mpr (by linarith [hloglarge])
+    have hunitLe : 1 ≤ Real.exp (8 * K * Real.log n + 10 * Real.log n) := by
+      have hKlog : 0 ≤ 8 * K * Real.log n := by positivity
+      calc
+        1 ≤ 1 + (8 * K * Real.log n + 10 * Real.log n) := by
+          nlinarith [hKlog, hlogn]
+        _ ≤ Real.exp (8 * K * Real.log n + 10 * Real.log n) :=
+          hAddExp (8 * K * Real.log n + 10 * Real.log n)
+    have htwo : 2 ≤ Real.exp (10 * Real.log n) := by
+      calc
+        2 ≤ 1 + 10 * Real.log n := by nlinarith [hlogn]
+        _ ≤ Real.exp (10 * Real.log n) := hAddExp (10 * Real.log n)
+    calc
+      Real.exp (8 * K * Real.log n + 2) + 1 ≤
+          Real.exp (8 * K * Real.log n + 10 * Real.log n) +
+            Real.exp (8 * K * Real.log n + 10 * Real.log n) :=
+        add_le_add hsmallLe hunitLe
+      _ = 2 * Real.exp (8 * K * Real.log n + 10 * Real.log n) := by ring
+      _ ≤ Real.exp ((8 * K + 20) * Real.log n) := by
+        calc
+          2 * Real.exp (8 * K * Real.log n + 10 * Real.log n) ≤
+              Real.exp (10 * Real.log n) *
+                Real.exp (8 * K * Real.log n + 10 * Real.log n) :=
+            mul_le_mul_of_nonneg_right htwo (Real.exp_nonneg _)
+          _ = Real.exp ((8 * K + 20) * Real.log n) := by
+            rw [← Real.exp_add]
+            congr 1
+            ring
+      _ = Real.exp (Kmoment * Real.log n) := by rfl
+  have hmomentSum :
+      (∑ x ∈ X, ∑ z ∈ X, value x z) / (X.card : ℝ) ^ 2 ≤
+        Real.exp (Kmoment * Real.log n) := by
+    have hden : M ^ 2 = (X.card : ℝ) ^ 2 := by rfl
+    rw [← hden]
+    exact hmomentNumerator.trans hsmallFinal
+  rw [Lane_q_s17_pal.uniform_pair_expect
+    (N := T.S.N k) (X := (PT.tiling.P i).X) (hX := hX)
+    (g := fun x z => if x ∈ PT.envelope i ∧ z ∈ PT.envelope i ∧
+      |corr (T.S.E k) PT.tiling.c (PT.π i).w x z| ≤ κ.ξ then
+        (4 * ∑ y, (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y *
+          hit (T.S.E k) PT.tiling.c z y) ^ (2 * d) else 0)]
+  simpa [value, joint, n, X, Env] using hmomentSum
 
 /-- L17.3 export: constants are fixed for all patches and histories after
 the common eventual index. All code/atom/retention/pair nodes are consumed. -/

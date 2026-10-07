@@ -1089,6 +1089,48 @@ theorem finProb_uniform_singleton_expect {Color : Type*} [Fintype Color]
   classical
   simp [FinProb.expect, FinProb.uniform]
 
+theorem uniform_pair_expect {N : ℕ} (X : Finset (Fin N)) (hX : X.Nonempty)
+    (g : Fin N → Fin N → ℝ) :
+    (FinLaw.pi fun _ : Fin 2 => FinLaw.uniform X hX).E
+        (fun ω => g (ω 0) (ω 1)) =
+      (∑ x ∈ X, ∑ z ∈ X, g x z) / (X.card : ℝ) ^ 2 := by
+  classical
+  let e : (Fin 2 → Fin N) ≃ (Fin N × Fin N) := {
+    toFun := fun ω => (ω 0, ω 1)
+    invFun := fun p i => if i.val = 0 then p.1 else p.2
+    left_inv := by
+      intro ω
+      funext i
+      fin_cases i <;> rfl
+    right_inv := by
+      intro p
+      cases p
+      rfl
+  }
+  change (∑ ω : Fin 2 → Fin N,
+      (∏ i, (FinLaw.uniform X hX).w (ω i)) * g (ω 0) (ω 1)) = _
+  rw [← Equiv.sum_comp e.symm
+    (fun ω : Fin 2 → Fin N =>
+      (∏ i, (FinLaw.uniform X hX).w (ω i)) * g (ω 0) (ω 1))]
+  rw [Fintype.sum_prod_type]
+  simp [FinLaw.uniform, Finset.sum_mul, e, Finset.mul_sum]
+  have hcard : (X.card : ℝ) ≠ 0 := by
+    exact_mod_cast (Finset.card_pos.mpr hX).ne'
+  have hcoef : (X.card : ℝ)⁻¹ * (X.card : ℝ)⁻¹ =
+      ((X.card : ℝ) ^ 2)⁻¹ := by
+    field_simp [hcard]
+    <;> ring
+  calc
+    _ = ∑ x ∈ X, ((X.card : ℝ) ^ 2)⁻¹ * ∑ z ∈ X, g x z := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [hcoef, ← Finset.mul_sum]
+    _ = ((X.card : ℝ) ^ 2)⁻¹ * ∑ x ∈ X, ∑ z ∈ X, g x z := by
+      rw [← Finset.mul_sum]
+    _ = (∑ x ∈ X, ∑ z ∈ X, g x z) / (X.card : ℝ) ^ 2 := by
+      rw [div_eq_mul_inv]
+      ring
+
 theorem uniform_colour_weight_lower_tail {I Color : Type*} [Fintype I]
     [DecidableEq I] [Fintype Color] [DecidableEq Color] [Nonempty Color]
     (w : I → ℝ) (W : ℝ) (c : Color)

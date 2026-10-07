@@ -1759,4 +1759,78 @@ theorem direct_raw_row_weight_expect {κ : CConsts} {T : Stage} {k : ℕ}
       rw [hproduct]
       ring
 
+theorem direct_raw_product_rows_expect {κ : CConsts} {T : Stage} {k m : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (rows : Fin m → S15.EvenPosition T k) (x : Fin (T.S.N k))
+    (hdegree : ∀ i b, b ∈ star (rows i) →
+      0 < deg (T.S.E k) PT.tiling.c (S15.lawAtOdd PT hPT b).w x)
+    (hdisj : ∀ i j, i ≠ j → Disjoint (star (rows i)) (star (rows j))) :
+    (S15.directRawLaw PT hPT).E
+      (fun ys => ∏ i, S15.directRowWeight PT hPT ys (rows i) x) =
+        ∏ i, S15.directBaseWeight PT hPT (rows i) x := by
+  classical
+  let laws : ∀ b : S15.OddPosition T k, FinLaw (Fin (T.S.N k)) :=
+    fun b => S15.lawToFinLaw (S15.lawAtOdd PT hPT b)
+  let f : ∀ b : S15.OddPosition T k, Fin (T.S.N k) → ℝ :=
+    fun b y => S15.normalizedHit (T.S.E k) PT.tiling.c
+      (S15.lawAtOdd PT hPT b) x y
+  let allStars : Finset (S15.OddPosition T k) :=
+    Finset.univ.biUnion fun i : Fin m => star (rows i)
+  have hraw : S15.directRawLaw PT hPT = FinLaw.pi laws := by
+    simp [S15.directRawLaw, laws, S15.lawToFinLaw]
+  have hpair : Set.PairwiseDisjoint
+      (↑(Finset.univ : Finset (Fin m)) : Set (Fin m))
+      (fun i : Fin m => star (rows i)) := by
+    intro i hi j hj hij
+    exact hdisj i j hij
+  have hmean (i : Fin m) (b : S15.OddPosition T k) (hb : b ∈ star (rows i)) :
+      (laws b).E (f b) = 1 := by
+    have h := expect_normalizedHit_eq_one (S15.lawAtOdd PT hPT b)
+      (T.S.E k) PT.tiling.c x (hdegree i b hb)
+    simpa [laws, f, S15.lawToFinLaw, FinLaw.E, FinProb.expect] using h
+  have hrowprod (ys : S15.OddAssignment T k) :
+      (∏ i, S15.directRowWeight PT hPT ys (rows i) x) =
+        (∏ i, S15.directBaseWeight PT hPT (rows i) x) *
+          ∏ b ∈ allStars, f b (ys b) := by
+    calc
+      ∏ i, S15.directRowWeight PT hPT ys (rows i) x =
+          ∏ i, (S15.directBaseWeight PT hPT (rows i) x *
+            ∏ b ∈ star (rows i), f b (ys b)) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        rw [directRowWeight_eq_base_star_prod]
+        rfl
+      _ = (∏ i, S15.directBaseWeight PT hPT (rows i) x) *
+          ∏ i, ∏ b ∈ star (rows i), f b (ys b) := by rw [Finset.prod_mul_distrib]
+      _ = (∏ i, S15.directBaseWeight PT hPT (rows i) x) *
+          ∏ b ∈ allStars, f b (ys b) := by
+        rw [← Finset.prod_biUnion hpair]
+  have hallMean : ∏ b ∈ allStars, (laws b).E (f b) = 1 := by
+    rw [Finset.prod_biUnion hpair]
+    calc
+      ∏ i, ∏ b ∈ star (rows i), (laws b).E (f b) =
+          ∏ i, ∏ b ∈ star (rows i), (1 : ℝ) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        apply Finset.prod_congr rfl
+        intro b hb
+        exact hmean i b hb
+      _ = 1 := by simp
+  have hproduct : (FinLaw.pi laws).E (fun ys => ∏ b ∈ allStars, f b (ys b)) = 1 := by
+    rw [finLaw_pi_E_finset_product laws allStars f, hallMean]
+  rw [hraw, FinLaw.E]
+  calc
+    (∑ ys, (FinLaw.pi laws).w ys *
+        ∏ i, S15.directRowWeight PT hPT ys (rows i) x) =
+        (∏ i, S15.directBaseWeight PT hPT (rows i) x) *
+          ∑ ys, (FinLaw.pi laws).w ys * ∏ b ∈ allStars, f b (ys b) := by
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro ys hys
+      rw [hrowprod]
+      ring
+    _ = ∏ i, S15.directBaseWeight PT hPT (rows i) x := by
+      rw [← FinLaw.E, hproduct]
+      ring
+
 end HypercubeRamsey.Lane_q_s15_direct

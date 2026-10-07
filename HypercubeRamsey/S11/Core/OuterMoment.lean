@@ -1,5 +1,6 @@
 import HypercubeRamsey.S11.Core.Definitions
 import HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer
+import HypercubeRamsey.S11.Core.OuterMoment_sol_s11_range
 import HypercubeRamsey.Tools.SignedTest
 import HypercubeRamsey.Tools.Ramsey
 
@@ -3461,6 +3462,7 @@ theorem moment_identity {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour) (�
     _ = ∑ x : Fin u → Fin N, tupWt σ x * phiU E G π (Fintype.card D) u x := by
       simp [phiU]
 
+set_option maxHeartbeats 600000 in
 /-- L11.3f (11:294–309).  Choose `L = L(P)` and then an even `u` with `.4u/L > L + P + O(1)`.  On
 `w ≤ n^{-1.03}` expand each of the `d` factors into its interactions: only lists covering `[u]` survive the
 alternating sum; lists of more than `L` interactions give the geometric tail in `2^u n^{-.03}`, lists of at most
@@ -3472,54 +3474,242 @@ theorem small_range (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx
       {X Y : Finset (Fin N)} (G : Colour) (π σ : Fin N → ℝ) (S : Finset (Fin N)),
       OuterHyp δ x₀ K n N E X Y G π σ S → SmallRange E G π σ (Fintype.card (OuterCoord n)) n δ P u := by
   classical
-  let L : ℕ := Nat.ceil (P + 10)
-  let u : ℕ := 2 * L
-  have hLpos : 0 < L := by
-    dsimp [L]
-    apply Nat.ceil_pos.2
+  let r : ℕ := Nat.ceil (5 * (P + 4)) + 2
+  let u : ℕ := 2 * Nat.ceil (100 * (r : ℝ) * (P + 4))
+  let A : ℝ := (2 : ℝ) ^ u
+  let c : ℝ := (2 : ℝ) ^ (-((u : ℝ) + 2))
+  let C : ℝ := Real.exp A + A ^ 2 * Real.exp A + A
+  let a : ℝ := 3 / (200 * (r : ℝ))
+  have hr : 2 ≤ r := by dsimp [r]; omega
+  have hr0 : 0 < (r : ℝ) := by exact_mod_cast (by omega : 0 < r)
+  have hrLarge : 5 * (P + 4) ≤ (r : ℝ) := by
+    have hh := Nat.le_ceil (5 * (P + 4))
+    dsimp [r]
+    push_cast
     linarith
-  have huPos : 0 < u := by dsimp [u]; exact Nat.mul_pos (by norm_num) hLpos
-  have huEven : Even u := by
+  have huLarge : 200 * (r : ℝ) * (P + 4) ≤ (u : ℝ) := by
+    have hh := Nat.le_ceil (100 * (r : ℝ) * (P + 4))
     dsimp [u]
-    exact ⟨L, by omega⟩
-  let P' : ℝ := P + (u : ℝ) + 2
+    push_cast
+    linarith
+  have hu0 : 0 < u := by
+    have hh : 0 < (u : ℝ) := lt_of_lt_of_le (by positivity) huLarge
+    exact_mod_cast hh
+  have huEven : Even u := ⟨Nat.ceil (100 * (r : ℝ) * (P + 4)), by dsimp [u]; omega⟩
+  have ha0 : 0 < a := by dsimp [a]; positivity
+  have hau : P + 2 ≤ a * u := by
+    dsimp [a]
+    rw [div_mul_eq_mul_div]
+    apply (le_div_iff₀ (by positivity : 0 < 200 * (r : ℝ))).mpr
+    nlinarith
+  have har : a * r = 3 / 200 := by dsimp [a]; field_simp
+  have hmeanexp : 1 - (2 / 5 : ℝ) * r ≤ -P - 2 := by linarith
+  have hA0 : 0 < A := by dsimp [A]; positivity
+  have hc0 : 0 < c := by dsimp [c]; positivity
+  have hC0 : 0 < C := by dsimp [C]; positivity
+  have hgap := OuterMoment_q_s11_outer.eventually_pow_gap (-P-2) (-P) (C/c)
+    (by linarith) (div_pos hC0 hc0)
+  have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
+    simpa [bS, neg_div, Function.comp_def] using
+      (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < (19 : ℝ) / 20)).comp
+        tendsto_natCast_atTop_atTop
+  have hbSmall : ∀ᶠ n : ℕ in atTop, bS n ≤ 1 / 8 := by
+    filter_upwards [hbT.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1/8))] with n hn
+    exact hn.le
   obtain ⟨nC, hCev⟩ := hC u
-  obtain ⟨nE, hEev⟩ := hE u P'
-  let n₀ : ℕ := max 64 (max nC nE)
-  refine ⟨u, huEven, huPos, n₀, ?_⟩
+  obtain ⟨nE, hEev⟩ := hE u (P+2)
+  obtain ⟨nB, hnB⟩ := eventually_atTop.mp hbSmall
+  obtain ⟨nG, hnG⟩ := eventually_atTop.mp hgap
+  let n₀ := max 2 (max nC (max nE (max nB nG)))
+  refine ⟨u, huEven, hu0, n₀, ?_⟩
   intro n hn N E X Y G π σ S hO
-  have hn64 : 64 ≤ n := le_trans (le_max_left _ _) hn
-  have hnCE : max nC nE ≤ n := le_trans (le_max_right _ _) hn
-  have hnC : nC ≤ n := le_trans (le_max_left _ _) hnCE
-  have hnE : nE ≤ n := le_trans (le_max_right _ _) hnCE
-  have hMean := hCev n hnC G π σ S hO
-  have hModerate := hEev n hnE G π σ S hO
-  have hModerateAll (v : ℕ) (hv : v ≤ u) := hModerate v hv
-  let t0 : ℝ := (n : ℝ) ^ (-(103 : ℝ) / 100)
-  let cap : ℝ := (n : ℝ) ^ (-(δ / 4))
+  have hn2 : 2 ≤ n := le_trans (le_max_left _ _) hn
+  have hnC : nC ≤ n := le_trans (le_trans (le_max_left _ _) (le_max_right _ _)) hn
+  have hnE : nE ≤ n := by dsimp [n₀] at hn; omega
+  have hnB' : nB ≤ n := by dsimp [n₀] at hn; omega
+  have hnG' : nG ≤ n := by dsimp [n₀] at hn; omega
+  have hn1 : 1 ≤ (n : ℝ) := by exact_mod_cast (by omega : 1 ≤ n)
   have hnpos : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
-  have hcutOrder : t0 < cap := by
-    change (n : ℝ) ^ (-(103 : ℝ) / 100) < (n : ℝ) ^ (-(δ / 4))
-    exact Real.rpow_lt_rpow_of_exponent_lt
-      (by exact_mod_cast (by omega : 1 < n)) (by linarith)
-  have hBounded := (hModerateAll u (le_rfl)).1
-  have hTail := (hModerateAll u (le_rfl)).2
-  -- The remaining expansion splits the covered interaction lists at L:
-  -- the short-list terms use `hMean`, while the long-list geometric tail and
-  -- the exponential-weight middle band use `hBounded` and `hTail`.
-  have hLowExpansion :
+  have hMean := hCev n hnC G π σ S hO
+  have hTail := (hEev n hnE G π σ S hO u le_rfl).2
+  let t : ℝ := (n : ℝ) ^ (-(103 : ℝ) / 100)
+  let cap : ℝ := (n : ℝ) ^ (-(δ/4))
+  let lam : ℝ := (n : ℝ) ^ a
+  let d : ℕ := Fintype.card (OuterCoord n)
+  have hdn : d ≤ n := by
+    simpa [d] using Fintype.card_le_of_injective
+      (fun j : OuterCoord n => j.1) Subtype.val_injective
+  have hlam : 1 ≤ lam := by
+    dsimp [lam]
+    exact Real.one_le_rpow hn1 ha0.le
+  have ht : 0 ≤ t := by dsimp [t]; positivity
+  have hlamr : lam ^ r = (n : ℝ) ^ ((3 : ℝ)/200) := by
+    dsimp [lam]
+    rw [← Real.rpow_natCast, ← Real.rpow_mul hnpos.le, har]
+  have hscale : (n : ℝ) * lam ^ r * t ≤ 1 := by
+    rw [hlamr]
+    dsimp [t]
+    have heq : (n : ℝ) * (n : ℝ) ^ ((3 : ℝ)/200) * (n : ℝ) ^ (-(103 : ℝ)/100) =
+        (n : ℝ) ^ (-(3 : ℝ)/200) := by
+      calc
+        _ = (n : ℝ)^((1 : ℝ)) * (n : ℝ)^((3 : ℝ)/200) * (n : ℝ)^(-(103 : ℝ)/100) := by rw [Real.rpow_one]
+        _ = _ := by
+          rw [← Real.rpow_add hnpos, ← Real.rpow_add hnpos]
+          congr 1
+          ring
+    rw [heq]
+    exact Real.rpow_le_one_of_one_le_of_nonpos hn1 (by norm_num)
+  have hlambda_decay : Real.exp A / lam ^ u ≤ Real.exp A * (n : ℝ) ^ (-P-2) := by
+    apply mul_le_mul_of_nonneg_left _ (Real.exp_nonneg A)
+    change (lam ^ u)⁻¹ ≤ (n : ℝ) ^ (-P-2)
+    have heq : (lam ^ u)⁻¹ = (n : ℝ) ^ (-(a * u)) := by
+      rw [Real.rpow_neg hnpos.le, Real.rpow_mul hnpos.le, Real.rpow_natCast]
+    rw [heq]
+    exact Real.rpow_le_rpow_of_exponent_le hn1 (by linarith)
+  have hwt (f : Fin u → Fin N) : 0 ≤ tupWt σ f :=
+    Finset.prod_nonneg (fun j _ => hO.sigma_nonneg (f j))
+  have hsupport (f : Fin u → Fin N) (hf : tupWt σ f ≠ 0) (j : Fin u) : f j ∈ S := by
+    exact hO.sigma_supp (f j) ((Finset.prod_ne_zero_iff.mp hf) j (Finset.mem_univ j))
+  have hdeg (f : Fin u → Fin N) (hf : tupWt σ f ≠ 0) (j : Fin u) : deg E G π (f j) ≠ 0 := by
+    have hm := hO.degree (f j) (hsupport f hf j)
+    have heq := OuterMoment_sol_s11_range.sMean_eq_two_deg_sub_one E G π hO.pi_sum (f j)
+    have hb := hnB n hnB'
+    have hl := (abs_le.mp hm).1
+    have hdpos : 0 < deg E G π (f j) := by linarith
+    exact hdpos.ne'
+  have hpoly (f : Fin u → Fin N) :
+      phiU E G π d u f = OuterMoment_sol_s11_range.polyPhi u d (fun J => inter E G π J f) := by
+    unfold phiU OuterMoment_sol_s11_range.polyPhi
+    apply Finset.sum_congr rfl
+    intro I _
+    rw [OuterMoment_sol_s11_range.kernel_expansion]
+  have hLowPoint (f : Fin u → Fin N) (hf : tupWt σ f ≠ 0) (hlow : env E G π f ≤ t) :
+      |phiU E G π d u f| ≤ Real.exp A * (n : ℝ) ^ (-P-2) +
+        A * n * Real.exp A * ∑ J : Finset (Fin u), if r ≤ J.card then |inter E G π J f| else 0 := by
+    rw [hpoly]
+    apply (OuterMoment_sol_s11_range.polyPhi_low_bound u d n r (fun J => inter E G π J f)
+      t lam ht hlam (by omega) hdn (by simp [inter, hO.pi_sum]) ?_ hscale).trans
+    · exact add_le_add hlambda_decay (le_refl _)
+    · intro J hJ
+      by_cases hc : 2 ≤ J.card
+      · exact (OuterMoment_sol_s11_range.inter_le_env E G π f J hc).trans hlow
+      · have hc1 : J.card = 1 := by
+          have := Finset.card_pos.mpr (Finset.nonempty_iff_ne_empty.mpr hJ)
+          omega
+        obtain ⟨j, rfl⟩ := Finset.card_eq_one.mp hc1
+        rw [OuterMoment_sol_s11_range.inter_singleton E G π hO.pi_sum f j (hdeg f hf j), abs_zero]
+        exact ht
+  have hMeanSum :
       (∑ f : Fin u → Fin N, tupWt σ f *
-        (if env E G π f ≤ t0 then |phiU E G π (Fintype.card (OuterCoord n)) u f| else 0)) ≤
-        (2 : ℝ) ^ (-((u : ℝ) + 3)) * (n : ℝ) ^ (-P) := by
-    sorry
-  have hMiddleExpansion :
+        ∑ J : Finset (Fin u), if r ≤ J.card then |inter E G π J f| else 0) ≤
+        A * (n : ℝ) ^ (-(2/5 : ℝ) * r) := by
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+    calc
+      _ ≤ ∑ _J : Finset (Fin u), (n : ℝ) ^ (-(2/5 : ℝ) * r) := by
+        apply Finset.sum_le_sum
+        intro J _
+        by_cases hJ : r ≤ J.card
+        · simp only [if_pos hJ]
+          exact (hMean J (by omega)).trans
+            (Real.rpow_le_rpow_of_exponent_le hn1 (by
+              have hj : (r : ℝ) ≤ J.card := by exact_mod_cast hJ
+              linarith))
+        · simp [hJ, Real.rpow_nonneg hnpos.le]
+      _ = _ := by simp [A, Fintype.card_finset]
+  have hLow :
+      (∑ f : Fin u → Fin N, tupWt σ f * (if env E G π f ≤ t then |phiU E G π d u f| else 0)) ≤
+      (Real.exp A + A ^ 2 * Real.exp A) * (n : ℝ) ^ (-P-2) := by
+    have hpt (f : Fin u → Fin N) :
+        tupWt σ f * (if env E G π f ≤ t then |phiU E G π d u f| else 0) ≤
+        tupWt σ f * (Real.exp A * (n : ℝ) ^ (-P-2) + A * n * Real.exp A *
+          ∑ J : Finset (Fin u), if r ≤ J.card then |inter E G π J f| else 0) := by
+      by_cases hf : tupWt σ f = 0
+      · simp [hf]
+      by_cases hl : env E G π f ≤ t
+      · simp only [if_pos hl]
+        exact mul_le_mul_of_nonneg_left (hLowPoint f hf hl) (hwt f)
+      · simp only [if_neg hl, mul_zero]
+        exact mul_nonneg (hwt f) (add_nonneg (by positivity)
+          (mul_nonneg (by positivity) (Finset.sum_nonneg (fun J _ => by split_ifs <;> positivity))))
+    calc
+      _ ≤ ∑ f : Fin u → Fin N, tupWt σ f * (Real.exp A * (n : ℝ) ^ (-P-2) +
+          A * n * Real.exp A * ∑ J : Finset (Fin u), if r ≤ J.card then |inter E G π J f| else 0) :=
+        Finset.sum_le_sum (fun f _ => hpt f)
+      _ = Real.exp A * (n : ℝ) ^ (-P-2) + A * n * Real.exp A *
+          (∑ f : Fin u → Fin N, tupWt σ f * ∑ J : Finset (Fin u),
+            if r ≤ J.card then |inter E G π J f| else 0) := by
+        calc
+          _ = ∑ f : Fin u → Fin N, (Real.exp A * (n : ℝ)^(-P-2) * tupWt σ f +
+              (A*n*Real.exp A) * (tupWt σ f * ∑ J : Finset (Fin u), if r ≤ J.card then |inter E G π J f| else 0)) := by
+            apply Finset.sum_congr rfl
+            intro f _
+            ring
+          _ = _ := by
+            rw [Finset.sum_add_distrib, ← Finset.mul_sum, ← Finset.mul_sum,
+              OuterMoment_sol_s11_range.tuple_weight_sum σ hO.sigma_sum, mul_one]
+      _ ≤ Real.exp A * (n : ℝ) ^ (-P-2) + A * n * Real.exp A * (A * (n : ℝ) ^ (-(2/5 : ℝ) * r)) := by
+        exact add_le_add (le_refl _) (mul_le_mul_of_nonneg_left hMeanSum (by positivity))
+      _ = Real.exp A * (n : ℝ) ^ (-P-2) + A ^ 2 * Real.exp A * (n : ℝ) ^ (1-(2/5 : ℝ)*r) := by
+        have heq : (n : ℝ) * (n : ℝ)^(-(2/5 : ℝ)*r) = (n : ℝ)^(1-(2/5 : ℝ)*r) := by
+          calc
+            _ = (n : ℝ)^(1 : ℝ) * (n : ℝ)^(-(2/5 : ℝ)*r) := by rw [Real.rpow_one]
+            _ = _ := by rw [← Real.rpow_add hnpos]; congr 1; ring
+        rw [← heq]
+        ring
+      _ ≤ _ := by
+        have hh := Real.rpow_le_rpow_of_exponent_le hn1 hmeanexp
+        nlinarith [mul_le_mul_of_nonneg_left hh (by positivity : 0 ≤ A^2*Real.exp A)]
+  have hMiddle :
       (∑ f : Fin u → Fin N, tupWt σ f *
-        (if t0 < env E G π f ∧ env E G π f ≤ cap then
-          |phiU E G π (Fintype.card (OuterCoord n)) u f| else 0)) ≤
-        (2 : ℝ) ^ (-((u : ℝ) + 3)) * (n : ℝ) ^ (-P) := by
-    sorry
-  sorry
+        (if t < env E G π f ∧ env E G π f ≤ cap then |phiU E G π d u f| else 0)) ≤
+        A * (n : ℝ) ^ (-P-2) := by
+    calc
+      _ ≤ ∑ f : Fin u → Fin N, A * (tupWt σ f *
+        (if t < env E G π f ∧ env E G π f ≤ cap then Real.exp (A*n*env E G π f) else 0)) := by
+          apply Finset.sum_le_sum
+          intro f _
+          by_cases hf : tupWt σ f = 0
+          · simp [hf]
+          split_ifs with he
+          · have hh := OuterMoment_sol_s11_range.phi_abs_le_exp E G π hO.pi_sum f (hdeg f hf) hdn
+            simpa [A, mul_assoc, mul_comm, mul_left_comm] using mul_le_mul_of_nonneg_left hh (hwt f)
+          · simp
+      _ = A * (∑ f : Fin u → Fin N, tupWt σ f *
+          (if t < env E G π f ∧ env E G π f ≤ cap then Real.exp (A*n*env E G π f) else 0)) := by rw [Finset.mul_sum]
+      _ ≤ _ := by
+        convert mul_le_mul_of_nonneg_left hTail hA0.le using 1 <;> congr 2 <;> ring
+  have hsplit (f : Fin u → Fin N) :
+      (if env E G π f ≤ cap then |phiU E G π d u f| else 0) ≤
+      (if env E G π f ≤ t then |phiU E G π d u f| else 0) +
+      (if t < env E G π f ∧ env E G π f ≤ cap then |phiU E G π d u f| else 0) := by
+    by_cases hc : env E G π f ≤ cap
+    · by_cases ht : env E G π f ≤ t
+      · simp only [if_pos hc, if_pos ht, not_lt_of_ge ht, false_and, if_false, add_zero, le_refl]
+      · simp only [if_pos hc, if_neg ht, lt_of_not_ge ht, true_and, if_true, zero_add, le_refl]
+    · simp only [if_neg hc]
+      split_ifs <;> linarith [abs_nonneg (phiU E G π d u f)]
+  unfold SmallRange
+  change (∑ f : Fin u → Fin N, tupWt σ f *
+    (if env E G π f ≤ cap then |phiU E G π d u f| else 0)) ≤ c * (n : ℝ) ^ (-P)
+  calc
+    _ ≤ (∑ f : Fin u → Fin N, tupWt σ f * (if env E G π f ≤ t then |phiU E G π d u f| else 0)) +
+        ∑ f : Fin u → Fin N, tupWt σ f *
+          (if t < env E G π f ∧ env E G π f ≤ cap then |phiU E G π d u f| else 0) := by
+      rw [← Finset.sum_add_distrib]
+      apply Finset.sum_le_sum
+      intro f _
+      simpa [mul_add] using mul_le_mul_of_nonneg_left (hsplit f) (hwt f)
+    _ ≤ (Real.exp A + A^2*Real.exp A) * (n : ℝ) ^ (-P-2) + A*(n : ℝ)^(-P-2) := add_le_add hLow hMiddle
+    _ = C * (n : ℝ) ^ (-P-2) := by dsimp [C]; ring
+    _ ≤ c * (n : ℝ) ^ (-P) := by
+      have hh := hnG n hnG'
+      have hh' : C * (n : ℝ)^(-P-2) / c < (n : ℝ)^(-P) := by
+        simpa [div_mul_eq_mul_div] using hh
+      exact le_of_lt (by simpa only [mul_comm] using (div_lt_iff₀ hc0).mp hh')
 
+open OuterMoment_sol_s11_range in
+set_option maxHeartbeats 800000 in
 /-- L11.3g (11:311–327).  For a tuple with `w > n^{-υ}` fix a maximal retained set `R` (all interactions within `R`
 at most `n^{-υ}`); each omitted coordinate lies in `B_R`, `|B_R| ≤ 2^u e^{n^.03}` (counting large extensions),
 and costs `|B_R| max σ max_x D_x^{-d} ≤ (2^n/N) exp(-.5gh + O(n^.05) + n^.03 + O_u(1)) = n^{-ω(1)}`; the retained
@@ -3530,40 +3720,239 @@ theorem large_range (δ x₀ K : ℝ) (hδ : 0 < δ) (hδ' : δ < 1 / 20000) (hx
       (π σ : Fin N → ℝ) (S : Finset (Fin N)),
       OuterHyp δ x₀ K n N E X Y G π σ S → LargeRange E G π σ (Fintype.card (OuterCoord n)) n δ P u := by
   classical
-  let P' : ℝ := P + (u : ℝ) + 4
+  let A : ℝ := (2 : ℝ)^u
+  let c : ℝ := (2 : ℝ)^(-((u : ℝ)+2))
+  have hA : 0 < A := by dsimp [A]; positivity
+  have hc : 0 < c := by dsimp [c]; positivity
   obtain ⟨nD, hDev⟩ := hD u
-  obtain ⟨nE, hEev⟩ := hE u P'
-  let n₀ : ℕ := max nD nE
+  obtain ⟨nE, hEev⟩ := hE u 0
+  have hbT : Tendsto (fun n : ℕ => bS n) atTop (nhds (0 : ℝ)) := by
+    simpa [bS, neg_div, Function.comp_def] using
+      (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ)<(19 : ℝ)/20)).comp
+        tendsto_natCast_atTop_atTop
+  have hbSmall : ∀ᶠ n : ℕ in atTop, bS n ≤ 1/8 := by
+    filter_upwards [hbT.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ)<1/8))] with n hn
+    exact hn.le
+  obtain ⟨nB, hnB⟩ := eventually_atTop.mp hbSmall
+  obtain ⟨nQ, hnQ⟩ := eventually_atTop.mp (eventually_extension_charge A 0 hA)
+  obtain ⟨nF, hnF⟩ := eventually_atTop.mp (eventually_extension_charge
+    (A^3*(Real.exp A+1)/c) P (by positivity))
+  let n₀ := 2+nD+nE+nB+nQ+nF
   refine ⟨n₀, ?_⟩
   intro n hn N E X Y G π σ S hO
-  have hnD : nD ≤ n := le_trans (le_max_left _ _) hn
-  have hnE : nE ≤ n := le_trans (le_max_right _ _) hn
+  have hn2 : 2 ≤ n := by dsimp [n₀] at hn; omega
+  have hnD : nD ≤ n := by dsimp [n₀] at hn; omega
+  have hnE : nE ≤ n := by dsimp [n₀] at hn; omega
+  have hnB' : nB ≤ n := by dsimp [n₀] at hn; omega
+  have hnQ' : nQ ≤ n := by dsimp [n₀] at hn; omega
+  have hnF' : nF ≤ n := by dsimp [n₀] at hn; omega
   have hCount := hDev n hnD G π σ S hO
-  have hModerate := hEev n hnE G π σ S hO
-  have hModerateAll (v : ℕ) (hv : v ≤ u) := hModerate v hv
-  let cap : ℝ := (n : ℝ) ^ (-(δ / 4))
+  have hMod := hEev n hnE G π σ S hO
+  let cap : ℝ := (n : ℝ)^(-(δ/4))
   let d : ℕ := Fintype.card (OuterCoord n)
-  have hChoices : Fintype.card (Finset (Fin u)) = 2 ^ u := by simp [Fintype.card_finset]
-  have hRetainedBound (R : Finset (Fin u)) :
-      (∑ f : Fin u → Fin N, tupWt σ f *
-        (if env E G π f ≤ cap then |phiU E G π d u f| else 0)) ≤
-        Real.exp ((2 : ℝ) ^ u) + 1 := by
-    have hB := (hModerateAll u (le_rfl)).1
-    -- Restrict the positive expansion to the retained coordinates and use the
-    -- bounded moderate exponential weight at length `R.card`.
-    sorry
-  have hExtensionCharge (base : Fin u → Fin N) (hbase : ∀ l, base l ∈ S)
-      (R : Finset (Fin u)) (i : Fin u) :
-      ((S.filter fun z => ∃ J' : Finset (Fin u), J' ∈ R.powerset ∧
-        cap < |inter E G π (insert i J') (Function.update base i z)|).card : ℝ) ≤
-        (2 : ℝ) ^ u * Real.exp ((n : ℝ) ^ ((3 : ℝ) / 100)) := by
-    -- Union over the at most `2^u` interaction sets and apply CountExt to each free label.
-    sorry
-  -- Choose a maximal retained set of tuple coordinates. Every omitted coordinate
-  -- incurs the extension charge above; the retained product is controlled by hRetainedBound.
-  -- Summing over the finitely many retained sets and charging at least one omitted
-  -- coordinate gives the required 2^{-u-2} n^{-P} tail.
-  sorry
+  let echarge : ℝ := -gS n*Fintype.card (InnerCoord n)/2 + 8*(n : ℝ)*bS n + (n : ℝ)^((3 : ℝ)/100)
+  let q : ℝ := A*Real.exp echarge
+  have hq0 : 0 ≤ q := by dsimp [q]; positivity
+  have hq1 : q ≤ 1 := by simpa [q, echarge] using hnQ n hnQ'
+  have hdn : d ≤ n := by
+    simpa [d] using Fintype.card_le_of_injective (fun j : OuterCoord n => j.1) Subtype.val_injective
+  have hcap0 : 0 ≤ cap := by dsimp [cap]; positivity
+  have hdeg0 (y : Fin N) : 0 ≤ deg E G π y :=
+    Finset.sum_nonneg (fun z _ => mul_nonneg (hO.pi_nonneg z) (by unfold hit; split_ifs <;> norm_num))
+  have hwt (f : Fin u → Fin N) : 0 ≤ tupWt σ f :=
+    Finset.prod_nonneg (fun j _ => hO.sigma_nonneg (f j))
+  have hsupport (f : Fin u → Fin N) (hf : tupWt σ f ≠ 0) (j : Fin u) : f j ∈ S :=
+    hO.sigma_supp (f j) ((Finset.prod_ne_zero_iff.mp hf) j (Finset.mem_univ j))
+  have hdeg (f : Fin u → Fin N) (hf : tupWt σ f ≠ 0) (j : Fin u) : 0 < deg E G π (f j) :=
+    (inverse_degree_le E G π hO.pi_sum (bS n) (by unfold bS; positivity)
+      (hnB n hnB') (f j) (hO.degree (f j) (hsupport f hf j))).1
+  have hs0 : ∃ x : Fin N, σ x ≠ 0 := by
+    by_contra h
+    push Not at h
+    have hs := hO.sigma_sum
+    simp [h] at hs
+  obtain ⟨s0, hs0⟩ := hs0
+  have hs0S : s0 ∈ S := hO.sigma_supp s0 hs0
+  let base (R : Finset (Fin u)) (z : R → Fin N) : Fin u → Fin N :=
+    fun j => if hj : j ∈ R then z ⟨j,hj⟩ else s0
+  let BR (R : Finset (Fin u)) (z : R → Fin N) (i : Fin u) : Finset (Fin N) :=
+    S.filter fun y => ∃ J ∈ R.powerset, cap < |inter E G π (insert i J) (Function.update (base R z) i y)|
+  let B (R : Finset (Fin u)) (z : R → Fin N) (i : {j : Fin u // j ∉ R}) (y : Fin N) : ℝ :=
+    if y ∈ BR R z i then ((deg E G π y)⁻¹)^d else 0
+  let H (R : Finset (Fin u)) (z : R → Fin N) : ℝ :=
+    if env E G π (retainedTuple R z) ≤ cap then
+      Real.exp ((2 : ℝ)^R.card*n*env E G π (retainedTuple R z)) else 0
+  have hB0 (R : Finset (Fin u)) (z : R → Fin N) (i : {j : Fin u // j ∉ R}) (y : Fin N) :
+      0 ≤ B R z i y := by
+    dsimp [B]
+    split_ifs
+    · exact pow_nonneg (inv_nonneg.mpr (hdeg0 y)) d
+    · exact le_refl 0
+  have hH0 (R : Finset (Fin u)) (z : R → Fin N) : 0 ≤ H R z := by dsimp [H]; split_ifs <;> positivity
+  have hAtom (y : Fin N) (hy : y ∈ S) :
+      σ y*((deg E G π y)⁻¹)^d ≤ Real.exp (-gS n*Fintype.card (InnerCoord n)/2 + 8*(n : ℝ)*bS n) :=
+    sigma_charged_atom E G π σ hO.pi_sum hO.sigma_nonneg hO.host (hnB n hnB')
+      hO.sigma_cap y (hO.degree y hy)
+  have hBSum (R : Finset (Fin u)) (z : R → Fin N) (hz : (∏ j : R, σ (z j)) ≠ 0)
+      (i : {j : Fin u // j ∉ R}) : (∑ y, σ y*B R z i y) ≤ q := by
+    have hzS (j : R) : z j ∈ S :=
+      hO.sigma_supp (z j) ((Finset.prod_ne_zero_iff.mp hz) j (Finset.mem_univ j))
+    have hbS : ∀ j, base R z j ∈ S := by
+      intro j
+      dsimp [base]
+      split_ifs with hj
+      · exact hzS ⟨j,hj⟩
+      · exact hs0S
+    have hcard : ((BR R z i).card : ℝ) ≤ A*Real.exp ((n : ℝ)^((3 : ℝ)/100)) :=
+      extension_union_card S cap (Real.exp ((n : ℝ)^((3 : ℝ)/100)))
+        (fun J f => inter E G π J f) hCount (base R z) hbS R i
+    change (∑ y, σ y*(if y ∈ BR R z i then ((deg E G π y)⁻¹)^d else 0)) ≤ q
+    simp_rw [mul_ite, mul_zero]
+    rw [← Finset.sum_filter]
+    have hfilter : (Finset.univ.filter fun y => y ∈ BR R z i) = BR R z i := by ext y; simp
+    rw [hfilter]
+    calc
+      _ ≤ ∑ _y ∈ BR R z i, Real.exp (-gS n*Fintype.card (InnerCoord n)/2 + 8*(n : ℝ)*bS n) :=
+        Finset.sum_le_sum (fun y hy => hAtom y (Finset.mem_filter.mp hy).1)
+      _ = ((BR R z i).card : ℝ)*Real.exp (-gS n*Fintype.card (InnerCoord n)/2 + 8*(n : ℝ)*bS n) := by simp
+      _ ≤ (A*Real.exp ((n : ℝ)^((3 : ℝ)/100)))*
+          Real.exp (-gS n*Fintype.card (InnerCoord n)/2 + 8*(n : ℝ)*bS n) :=
+        mul_le_mul_of_nonneg_right hcard (Real.exp_nonneg _)
+      _ = q := by
+        dsimp [q, echarge]
+        rw [Real.exp_add (-gS n*Fintype.card (InnerCoord n)/2 + 8*(n : ℝ)*bS n)
+          ((n : ℝ)^((3 : ℝ)/100))]
+        ring
+  have hRetainedIntegral (R : Finset (Fin u)) :
+      (∑ z : R → Fin N, (∏ j : R, σ (z j))*H R z) ≤ Real.exp A+1 := by
+    have hRcard : R.card ≤ u := by simpa using Finset.card_le_univ R
+    have hMR := (hMod R.card hRcard).1
+    change (∑ z : R → Fin N, (∏ j : R, σ (z j))*
+      (if env E G π (retainedTuple R z) ≤ cap then
+        Real.exp ((2 : ℝ)^R.card*n*env E G π (retainedTuple R z)) else 0)) ≤ _
+    rw [retained_sum_eq σ R (fun f : Fin R.card → Fin N => if env E G π f ≤ cap then
+      Real.exp ((2 : ℝ)^R.card*n*env E G π f) else 0)]
+    have hpower : (2 : ℝ)^R.card ≤ A := pow_le_pow_right₀ (by norm_num) hRcard
+    exact hMR.trans (add_le_add (Real.exp_le_exp.mpr hpower) (le_refl 1))
+  let F (R : Finset (Fin u)) (f : Fin u → Fin N) : ℝ :=
+    H R (fun j => f j) * ∏ i : {j : Fin u // j ∉ R}, B R (fun j => f j) i (f i)
+  have hF0 (R : Finset (Fin u)) (f : Fin u → Fin N) : 0 ≤ F R f := by
+    change 0 ≤ H R (fun j => f j) *
+      ∏ i : {j : Fin u // j ∉ R}, B R (fun j => f j) i (f i)
+    exact mul_nonneg (hH0 R (fun j => f j))
+      (Finset.prod_nonneg (fun (i : {j : Fin u // j ∉ R}) _ => hB0 R (fun j => f j) i (f i)))
+  have hRIntegral (R : Finset (Fin u)) (hR : R ≠ Finset.univ) :
+      (∑ f : Fin u → Fin N, tupWt σ f*F R f) ≤ (Real.exp A+1)*q := by
+    have hnonempty : Nonempty {j : Fin u // j ∉ R} := by
+      have hh : ¬ Finset.univ ⊆ R := fun h => hR (Finset.Subset.antisymm (Finset.subset_univ R) h)
+      obtain ⟨j, _, hj⟩ := Finset.not_subset.mp hh
+      exact ⟨⟨j,hj⟩⟩
+    have hcardpos : 0 < Fintype.card {j : Fin u // j ∉ R} := Fintype.card_pos_iff.mpr hnonempty
+    have hprod (z : R → Fin N) (hz : (∏ j : R, σ (z j)) ≠ 0) :
+        (∏ i : {j : Fin u // j ∉ R}, ∑ y, σ y*B R z i y) ≤ q := by
+      calc
+        _ ≤ ∏ _i : {j : Fin u // j ∉ R}, q := Finset.prod_le_prod₀
+          (fun i _ => Finset.sum_nonneg (fun y _ => mul_nonneg (hO.sigma_nonneg y) (hB0 R z i y)))
+          (fun i _ => hBSum R z hz i)
+        _ = q^Fintype.card {j : Fin u // j ∉ R} := by simp
+        _ ≤ q := pow_le_of_le_one hq0 hq1 (by omega)
+    change (∑ f : Fin u → Fin N, tupWt σ f * (H R (fun j => f j)*
+      ∏ i : {j : Fin u // j ∉ R}, B R (fun j => f j) i (f i))) ≤ _
+    simp_rw [← mul_assoc]
+    rw [split_weight_integral σ R (H R) (B R)]
+    calc
+      _ ≤ ∑ z : R → Fin N, ((∏ j : R, σ (z j))*H R z)*q := by
+        apply Finset.sum_le_sum
+        intro z _
+        by_cases hz : (∏ j : R, σ (z j)) = 0
+        · simp only [hz, zero_mul, le_refl]
+        · exact mul_le_mul_of_nonneg_left (hprod z hz)
+            (mul_nonneg (Finset.prod_nonneg (fun j _ => hO.sigma_nonneg (z j))) (hH0 R z))
+      _ = (∑ z : R → Fin N, (∏ j : R, σ (z j))*H R z)*q := by rw [Finset.sum_mul]
+      _ ≤ _ := mul_le_mul_of_nonneg_right (hRetainedIntegral R) hq0
+  have hPoint (f : Fin u → Fin N) :
+      tupWt σ f*(if cap < env E G π f then |phiU E G π d u f| else 0) ≤
+      A*tupWt σ f * ∑ R : Finset (Fin u), if R ≠ Finset.univ then F R f else 0 := by
+    have hsum0 : 0 ≤ ∑ R : Finset (Fin u), if R ≠ Finset.univ then F R f else 0 :=
+      Finset.sum_nonneg (fun R _ => by split_ifs; exact hF0 R f; exact le_refl 0)
+    by_cases hf : tupWt σ f = 0
+    · simp [hf]
+    by_cases hh : cap < env E G π f
+    · have hlarge : ∃ J : Finset (Fin u), 2 ≤ J.card ∧ cap < |inter E G π J f| := by
+        by_contra h
+        have he : env E G π f ≤ cap := by
+          unfold env
+          apply Finset.sup'_le
+          intro J _
+          split_ifs with hcJ
+          · exact le_of_not_gt (fun hJ => h ⟨J,hcJ,hJ⟩)
+          · exact hcap0
+        exact (not_le_of_gt hh) he
+      obtain ⟨R,hR,hgood,hext⟩ := maximal_retained (fun J => inter E G π J f) cap hlarge
+      have henv := env_retained_le E G π R f cap hcap0 hgood
+      have hBmem (i : {j : Fin u // j ∉ R}) : f i ∈ BR R (fun j => f j) i := by
+        obtain ⟨J,hJ,hv⟩ := hext i i.property
+        refine Finset.mem_filter.mpr ⟨hsupport f hf i, J, hJ, ?_⟩
+        have heq : inter E G π (insert (i : Fin u) J)
+            (Function.update (base R (fun j => f j)) i (f i)) = inter E G π (insert (i : Fin u) J) f := by
+          apply inter_congr
+          intro j hj
+          obtain rfl | hjJ := Finset.mem_insert.mp hj
+          · simp
+          · have hjR := Finset.mem_powerset.mp hJ hjJ
+            have hji : j ≠ (i : Fin u) := by intro he; exact i.property (he ▸ hjR)
+            simp [Function.update_of_ne hji, base, hjR]
+        simpa [heq] using hv
+      have hFR : F R f = Real.exp ((2 : ℝ)^R.card*n*env E G π (retainedTuple R (fun j => f j))) *
+          ∏ j ∈ Rᶜ, ((deg E G π (f j))⁻¹)^d := by
+        dsimp [F]
+        rw [show H R (fun j => f j) = Real.exp ((2 : ℝ)^R.card*n*env E G π (retainedTuple R (fun j => f j))) by
+          simp [H, henv]]
+        congr 1
+        have hprod : (∏ i : {j : Fin u // j ∉ R}, B R (fun j => f j) i (f i)) =
+            ∏ i : {j : Fin u // j ∉ R}, ((deg E G π (f i))⁻¹)^d := by
+          apply Finset.prod_congr rfl
+          intro i _
+          simp [B, hBmem i]
+        rw [hprod]
+        exact (Finset.prod_subtype (p := fun j : Fin u => j ∉ R) Rᶜ (fun j => Finset.mem_compl)
+          (fun j => ((deg E G π (f j))⁻¹)^d)).symm
+      have hp : |phiU E G π d u f| ≤ A*F R f := by
+        rw [hFR]
+        simpa [A, mul_assoc] using phi_retained_le E G π hO.pi_nonneg hO.pi_sum R f (hdeg f hf) hdn
+      have hsum : F R f ≤ ∑ R : Finset (Fin u), if R ≠ Finset.univ then F R f else 0 := by
+        have hs : (if R ≠ Finset.univ then F R f else 0) ≤
+            ∑ R : Finset (Fin u), if R ≠ Finset.univ then F R f else 0 :=
+          Finset.single_le_sum (f := fun T : Finset (Fin u) => if T ≠ Finset.univ then F T f else 0)
+            (fun T _ => by split_ifs; exact hF0 T f; exact le_refl 0) (Finset.mem_univ R)
+        simpa only [if_pos hR] using hs
+      rw [if_pos hh]
+      have hpp := hp.trans (mul_le_mul_of_nonneg_left hsum hA.le)
+      simpa [mul_assoc, mul_comm, mul_left_comm] using mul_le_mul_of_nonneg_left hpp (hwt f)
+    · rw [if_neg hh, mul_zero]
+      exact mul_nonneg (mul_nonneg hA.le (hwt f)) hsum0
+  unfold LargeRange
+  change (∑ f : Fin u → Fin N, tupWt σ f*(if cap < env E G π f then |phiU E G π d u f| else 0)) ≤ c*(n : ℝ)^(-P)
+  calc
+    _ ≤ ∑ f : Fin u → Fin N, A*tupWt σ f* ∑ R : Finset (Fin u), if R ≠ Finset.univ then F R f else 0 :=
+      Finset.sum_le_sum (fun f _ => hPoint f)
+    _ = A*∑ R : Finset (Fin u), ∑ f : Fin u → Fin N, tupWt σ f*(if R ≠ Finset.univ then F R f else 0) := by
+      simp_rw [mul_assoc, Finset.mul_sum]
+      rw [Finset.sum_comm]
+    _ ≤ A*∑ _R : Finset (Fin u), (Real.exp A+1)*q := by
+      apply mul_le_mul_of_nonneg_left _ hA.le
+      apply Finset.sum_le_sum
+      intro R _
+      by_cases hR : R ≠ Finset.univ
+      · simpa only [if_pos hR] using hRIntegral R hR
+      · simp only [if_neg hR, mul_zero, Finset.sum_const_zero]
+        positivity
+    _ = A^3*(Real.exp A+1)*Real.exp echarge := by simp [Fintype.card_finset, q, A]; ring
+    _ ≤ c*(n : ℝ)^(-P) := by
+      have hh := hnF n hnF'
+      have hh' : (A^3*(Real.exp A+1)*Real.exp echarge)/c ≤ (n : ℝ)^(-P) := by
+        simpa [echarge, div_mul_eq_mul_div] using hh
+      simpa only [mul_comm] using (div_le_iff₀ hc).mp hh'
 
 /-- Markov's inequality on the even moment (11:329): `Z < 1/2` forces `(Z - 1)^u ≥ 2^{-u}`, and
 `E(Z - 1)^u = ∫ Φ_u ≤ ∫ |Φ_u| ≤ 2 · 2^{-(u+2)} n^{-P}`. -/

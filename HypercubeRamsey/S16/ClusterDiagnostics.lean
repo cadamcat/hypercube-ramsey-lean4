@@ -350,7 +350,47 @@ theorem cluster_star_qbar_means {κ : CConsts} (hκ : κ.Admissible) :
               (fun g => K.qbar C W (groups (s, g))) g D)).E
               (Lane_sol_s16_prod1.solver_star_bin_failure S (records s (W s)) w) ≤
             2 * Real.sqrt (sliceEps κ (PT.tiling.P (G.cellPatch C)).h) := by
-  sorry
+  classical
+  obtain ⟨n₀, hdom⟩ := cluster_qbar_domination hκ
+  refine ⟨n₀, ?_⟩
+  intro T k PT K16 Q G R Perm K hmode hn C S records groups hPass hqraw hpretrim
+    W hW hPerm s w
+  obtain ⟨c, hc, hcpow, hrows⟩ := hdom Q R Perm K hmode hn C
+  have hrows := hrows S records groups hPass hqraw hpretrim W hW hPerm
+  have hSlices : ∀ t, W t ∈ R.slicePass C t ∧ (R.sliceLaw C t).w (W t) ≠ 0 := by
+    intro t
+    exact Lane_sol_s16_prod1.cond_support _ _ _ _
+      (Lane_sol_s16_prod1.pi_support _ W hW t)
+  have hGood : S.AllGood (records s (W s)) :=
+    (hPass s (W s)).mp (hSlices s).1
+  let P : HypercubeRamsey.Group PT.tiling (G.cellPatch C) →
+      FinLaw (Bin PT.tiling (G.cellPatch C)) :=
+    fun g => K.qbar C W (groups (s, g))
+  have hP : ∀ g ∈ Lane_sol_s16_prod1.solver_star_group_scope S w, ∀ D,
+      (P g).w D ≤ c * S.q g (records s (W s)) D := by
+    intro g _ D
+    exact hrows s g D
+  have hc0 : 0 ≤ c := le_trans (by norm_num) hc
+  have hcount := Lane_sol_s16_prod1.solver_star_group_scope_count S w
+  have hpow : c ^ (Lane_sol_s16_prod1.solver_star_group_scope S w).card ≤ 2 := by
+    exact (pow_le_pow_right₀ hc hcount).trans hcpow
+  have hmean := Lane_sol_s16_prod1.solver_star_trimmed_mean
+    S (records s (W s)) w (hGood w) P c hc0 hP
+  have hεnonneg : 0 ≤ sliceEps κ (PT.tiling.P (G.cellPatch C)).h := by
+    unfold sliceEps
+    exact (Real.exp_pos _).le
+  constructor
+  · exact hmean.trans (mul_le_mul_of_nonneg_right hpow hεnonneg)
+  · intro g D hg hD
+    have hvg : SliceSolver.Incident w g := by
+      obtain ⟨j, _, heq⟩ := Finset.mem_image.mp hg
+      rw [← heq]
+      refine ⟨j, S.groupOf_spec _ ?_⟩
+      rw [Lane_sol_s16_prod1.flip_parity]
+      exact not_not.mpr w.2
+    have hpin := Lane_sol_s16_prod1.solver_star_trimmed_pin_mean
+      S (records s (W s)) w P c hc hP g D hD hvg
+    exact hpin.trans (mul_le_mul_of_nonneg_right hpow (Real.sqrt_nonneg _))
 
 /-! ## Lane D: the cluster load gate, under the repair. -/
 

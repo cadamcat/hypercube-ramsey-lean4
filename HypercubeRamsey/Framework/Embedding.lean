@@ -153,18 +153,60 @@ theorem copy_of_parity_maps {n N : ℕ} (E : Fin N → Fin N → Prop) (c : Colo
     (f : CubeVertex n → Fin N)
     (hA : Set.InjOn f {v | IsEvenRole v}) (hB : Set.InjOn f {v | ¬ IsEvenRole v})
     (hedge : ∀ a b, (cube n).Adj a b → IsEvenRole a → Hits E c (f a) (f b)) :
-    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := sorry
+    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := by
+  apply cube_copy_of_parts (fun a => f a.1) (fun b => f b.1)
+  · intro a a' heq
+    exact Subtype.ext (hA a.2 a'.2 heq)
+  · intro b b' heq
+    exact Subtype.ext (hB b.2 b'.2 heq)
+  · intro a b hadj
+    exact hedge a.1 b.1 hadj a.2
 
 /-- Total-map form with even roles on the second side. -/
 theorem copy_of_parity_maps_swap {n N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
     (f : CubeVertex n → Fin N)
     (hA : Set.InjOn f {v | IsEvenRole v}) (hB : Set.InjOn f {v | ¬ IsEvenRole v})
     (hedge : ∀ a b, (cube n).Adj a b → IsEvenRole a → Hits E c (f b) (f a)) :
-    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := sorry
+    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := by
+  apply cube_copy_of_parts_swap (fun a => f a.1) (fun b => f b.1)
+  · intro a a' heq
+    exact Subtype.ext (hA a.2 a'.2 heq)
+  · intro b b' heq
+    exact Subtype.ext (hB b.2 b'.2 heq)
+  · intro a b hadj
+    exact hedge a.1 b.1 hadj a.2
 
 /-- A copy for the transposed relation gives one for the original. -/
 theorem copy_transpose {n N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
     (h : Nonempty ((cube n).Copy (crossGraph (Hits (transposeRel E) c)))) :
-    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := sorry
+    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := by
+  classical
+  let hswap : (crossGraph (Hits (transposeRel E) c)).Copy (crossGraph (Hits E c)) := {
+    toHom := {
+      toFun := Sum.swap
+      map_rel' := by
+        intro u v huv
+        cases u with
+        | inl x =>
+            cases v with
+            | inl y => simpa [crossGraph] using huv
+            | inr y =>
+                change Hits (transposeRel E) c x y at huv
+                change Hits E c y x
+                exact (hits_transpose E c x y).mp huv
+        | inr x =>
+            cases v with
+            | inl y =>
+                change Hits (transposeRel E) c y x at huv
+                change Hits E c x y
+                exact (hits_transpose E c y x).mp huv
+            | inr y => simpa [crossGraph] using huv
+    }
+    injective' := by
+      intro x y hxy
+      have h := congrArg Sum.swap hxy
+      simpa using h
+  }
+  exact ⟨hswap.comp h.some⟩
 
 end HypercubeRamsey

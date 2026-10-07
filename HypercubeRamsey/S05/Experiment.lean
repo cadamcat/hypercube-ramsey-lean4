@@ -308,11 +308,11 @@ def firstK (S : Finset (Fin X.blockBound)) (k : ℕ) : Finset (Fin X.blockBound)
 /-- Block indices of a full high pool. -/
 def poolIdx : Finset (Fin X.blockBound) := Finset.univ.filter fun i => (i : ℕ) < X.p.poolBlocks n
 
-/-- A record over IDs `Id` (05:331–343, 05:476–479): target key, the distinct observed (ID, type) arrays, the
-needed same-mode references (observed arrays with block subsets), and at a low record with a high pool, that
-pool and its mask. -/
+/-- A record over IDs `Id` (05:331–343, 05:476–479): target key, the distinct observed (ID, type) arrays,
+same-mode reference designations (ID, type, optional key), and at a low record with a high pool, that pool
+and its mask. High subsets are computed from the arrays and named optional columns, not stored in records. -/
 abbrev RecordOn (Id : Type) := X.Key × Finset (Id × X.Ty) ×
-  Finset (Id × X.Ty × Finset (Fin X.blockBound)) × Option (Id × X.Ty × Finset (Fin X.blockBound))
+  Finset (Id × X.Ty × Option X.Key) × Option (Id × X.Ty × Finset (Fin X.blockBound))
 
 /-- Arrays at every (ID, type). -/
 abbrev ArraysOn (Id : Type) := ∀ c : Id × X.Ty, X.Array c.2
@@ -327,6 +327,23 @@ def BlockHits (K : X.Ty) (z : X.Block K) (y : Fin N) : Prop := ∀ s i, Hits E G
 /-- The pool blocks all of whose entries hit the column `y`. -/
 def hitSet {Id : Type} (a : X.ArraysOn Id) (c : Id × X.Ty) (y : Fin N) : Finset (Fin X.blockBound) :=
   X.poolIdx.filter fun i => ∃ i', X.blockIdx c.2 i = some i' ∧ X.BlockHits c.2 (a c i') y
+
+/-- The tuple subset designated by a type and optional key (05:338–343). If a high pool has too few
+hits, use its first blocks. This extraction is shared by history records and actual center references. -/
+def refSubsetOn {Id : Type} (H : X.KeyHist) (a : X.ArraysOn Id) (c : Id × X.Ty)
+    (opt : Option X.Key) : Finset (Fin X.blockBound) :=
+  match c.2.2.2 with
+  | some _ => Finset.univ.filter fun i => (i : ℕ) < X.p.typeBlocks n c.2
+  | none =>
+    let hits := match opt with
+      | some (.inl k) => X.hitSet a c (X.lowCol H.2 k)
+      | _ => X.poolIdx
+    X.firstK (if X.p.usedBlocks n ≤ hits.card then hits else X.poolIdx) (X.p.usedBlocks n)
+
+/-- The concrete deletion references extracted from a canonical observation record. -/
+def refsOn {Id : Type} [DecidableEq Id] (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn Id) :
+    Finset (Id × X.Ty × Finset (Fin X.blockBound)) :=
+  r.2.2.1.image fun c => (c.1, c.2.1, X.refSubsetOn H a (c.1, c.2.1) c.2.2)
 
 /-- The candidate gate `Θ(ϑ)` (05:419–428): positive `m_{S-ℓ}` and the Step 2 lower ratio at every observed type
 containing the target, and at a low record with a high pool, that the candidate selects exactly the specified
@@ -410,7 +427,7 @@ def HighCapped {Id : Type} (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn I
 /-- Price feasibility of all deletion costs (05:574–580): for every price on the needed references, some capped,
 supported law has weighted cost at most the weighted bound `a₄ k_c`. -/
 def HighPriceFeasible {Id : Type} [DecidableEq Id] (H : X.KeyHist) (r : X.RecordOn Id) (a : X.ArraysOn Id) : Prop :=
-  ∀ price : {c // c ∈ r.2.2.1} → ℝ, (∀ c, 0 ≤ price c) → (∑ c, price c = 1) →
+  ∀ price : {c // c ∈ X.refsOn H r a} → ℝ, (∀ c, 0 ≤ price c) → (∑ c, price c = 1) →
     ∃ R : FinProb (Fin (colLen5 (X.p.s n) r.1) × Fin N),
       (∀ h y, R.w (h, y) ≤ 2 * Real.exp (X.p.DH n) / ((colLen5 (X.p.s n) r.1 : ℝ) * N)) ∧
       (∀ h y, R.w (h, y) ≠ 0 → (X.highSource H r a h).w y ≠ 0) ∧
@@ -427,7 +444,7 @@ def step3FailOn {Id : Type} [DecidableEq Id] (H : X.KeyHist) (r : X.RecordOn Id)
         (match r.1 with
           | .inl k => Real.exp (-(X.p.delta * X.p.kPrime n k.2.2.val))
           | .inr _ => Real.exp (-(X.p.delta * X.p.s n))) ∨
-      (∃ c ∈ r.2.2.1, X.step3MassOn H r a none <
+      (∃ c ∈ X.refsOn H r a, X.step3MassOn H r a none <
         Real.exp (-(X.p.delta * X.refLen c.2.1 c.2.2 * colLen5 (X.p.s n) r.1)) *
           X.step3MassOn H r a (some c)) ∨
       (r.1.isRight ∧ ¬ (X.HighCapped H r a ∧ X.HighPriceFeasible H r a)))
@@ -454,23 +471,29 @@ def LegitRef (K : X.Ty) (M : Finset (Fin X.blockBound)) : Prop :=
   | some _ => ∀ i : Fin X.blockBound, i ∈ M ↔ (i : ℕ) < X.p.typeBlocks n K
   | none => M.card = X.p.usedBlocks n ∧ M ⊆ X.poolIdx
 
-/-- A record over IDs `Id` arising from an odd role and an assignment of IDs to the states of its even
-neighbours (05:331–343): the observed arrays are the distinct (ID, type) pairs of the neighbours, the references
-are legitimate subsets of same-mode neighbours' arrays (all of them containing the target), and a mask (low
-targets only) is a successful subset of a high neighbour's pool. -/
+/-- A record arising from an odd role and a state-to-ID assignment (05:331–343): both the observation
+list and same-mode reference designations are exactly the neighbour images. Only a low interface mask
+is enumerated; high tuple subsets are extracted later from arrays and the named optional keys. -/
 def RecordFrom {Id : Type} (r : X.RecordOn Id) (y : OddRole5 n) (μ : X.St.Site → Id) : Prop :=
   X.g.roleKey (X.p.J n) y.1 = r.1 ∧
   r.2.1 = (evenNbrs y).image (fun a => (μ (X.St.stateOf a.1), X.g.evenType (X.p.J n) a.1)) ∧
-  (∀ c ∈ r.2.2.1, ∃ a₀ ∈ evenNbrs y, c.1 = μ (X.St.stateOf a₀.1) ∧
-    c.2.1 = X.g.evenType (X.p.J n) a₀.1 ∧ r.1 ∈ c.2.1.2.1 ∧
-    r.1.isLeft = c.2.1.2.2.isSome ∧ X.LegitRef c.2.1 c.2.2) ∧
+  r.2.2.1 = ((evenNbrs y).filter fun a =>
+    r.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
+      r.1.isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome).image
+    (fun a => (μ (X.St.stateOf a.1), X.g.evenType (X.p.J n) a.1,
+      X.g.optionalKey (X.p.J n) a.1)) ∧
   (match r.2.2.2 with
-    | none => True
+    | none => r.1.isLeft → ∀ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2.isSome
     | some (i, K, M) => r.1.isLeft ∧ ∃ a₁ ∈ evenNbrs y, K = X.g.evenType (X.p.J n) a₁.1 ∧
-        K.2.2 = none ∧ i = μ (X.St.stateOf a₁.1) ∧ M.card = X.p.usedBlocks n ∧ M ⊆ X.poolIdx)
+        K.2.2 = none ∧ i = μ (X.St.stateOf a₁.1) ∧ X.LegitRef K M)
 
 /-- An abstract record that can occur. -/
 def RecOccurs (r : X.AbsRecord) : Prop := ∃ y μ, X.RecordFrom r y μ
+
+/-- An occurring record within one central-sign and severity group (05:382–398). High keys do not
+contain the sign, so counting only by the target key would combine exponentially many groups. -/
+def RecOccursAt (r : X.AbsRecord) (t : CubeVertex (X.p.m n)) (j : ℕ) : Prop :=
+  ∃ y μ, X.RecordFrom r y μ ∧ X.g.sign y.1 = t ∧ X.g.severity y.1 = j
 
 end Setup5
 

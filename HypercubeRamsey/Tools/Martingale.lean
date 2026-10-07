@@ -34,6 +34,7 @@ def IsPrefixStoppingTime {α : Type*} {n : ℕ} (τ : (Fin n → α) → Fin (n 
     (∀ i : Fin m, pathPrefix hm ω i = pathPrefix hm ω' i) →
       ((τ ω).val ≤ m ↔ (τ ω').val ≤ m)
 
+set_option maxHeartbeats 1000000 in
 /-- X-Martingale: likelihood ratios of finite adaptive prefixes form a martingale under `Q`; bounded
 prefix stopping preserves expectation one. -/
 theorem xLikelihoodRatioMartingale {α : Type*} [Fintype α] [DecidableEq α] {n : ℕ}
@@ -119,6 +120,105 @@ theorem xLikelihoodRatioMartingale {α : Type*} [Fintype α] [DecidableEq α] {n
     · simp [prefixLikelihoodRatio, hq, hprefixAC hr g hq]
     · rw [prefixLikelihoodRatio, if_neg hq]
       field_simp
+  have hprefixMass {r : ℕ} (hr : r ≤ n) (R : FinProb (Fin n → α))
+      (g : Fin r → α) :
+      prefixProbability R r hr g =
+        ∑ ω, if pathPrefix hr ω = g then R.w ω else 0 := by
+    classical
+    unfold prefixProbability FinProb.pr
+    apply Finset.sum_congr rfl
+    intro ω hω
+    by_cases heq : pathPrefix hr ω = g <;> simp [heq]
+  have hprefixSum {r : ℕ} (hr : r ≤ n) (C : (Fin r → α) → Prop)
+      (R : FinProb (Fin n → α)) :
+      R.pr (fun ω => C (pathPrefix hr ω)) =
+        ∑ g, if C g then prefixProbability R r hr g else 0 := by
+    classical
+    unfold FinProb.pr
+    calc
+      (∑ ω, if C (pathPrefix hr ω) then R.w ω else 0) =
+          ∑ ω, ∑ g, if pathPrefix hr ω = g ∧ C g then R.w ω else 0 := by
+        apply Finset.sum_congr rfl
+        intro ω hω
+        symm
+        rw [Finset.sum_eq_single (pathPrefix hr ω)]
+        · simp
+        · intro g hg hne
+          have hne' : pathPrefix hr ω ≠ g := fun heq => hne heq.symm
+          simp [hne']
+        · simp
+      _ = ∑ g, ∑ ω, if pathPrefix hr ω = g ∧ C g then R.w ω else 0 := Finset.sum_comm
+      _ = ∑ g, if C g then ∑ ω, if pathPrefix hr ω = g then R.w ω else 0 else 0 := by
+        apply Finset.sum_congr rfl
+        intro g hg
+        by_cases hC : C g <;> simp [hC]
+      _ = ∑ g, if C g then R.pr (fun ω => pathPrefix hr ω = g) else 0 := by
+        apply Finset.sum_congr rfl
+        intro g hg
+        by_cases hC : C g
+        · simp [hC]
+          exact (hprefixMass hr R g).symm
+        · simp [hC]
+  have hprefixLR {r : ℕ} (hr : r ≤ n) (C : (Fin r → α) → Prop) :
+      Q.expect (fun ω => if C (pathPrefix hr ω) then
+        prefixLikelihoodRatio P Q r hr (pathPrefix hr ω) else 0) =
+        P.pr (fun ω => C (pathPrefix hr ω)) := by
+    classical
+    unfold FinProb.expect
+    calc
+      (∑ ω, Q.w ω * if C (pathPrefix hr ω) then
+          prefixLikelihoodRatio P Q r hr (pathPrefix hr ω) else 0) =
+          ∑ ω, ∑ g, if pathPrefix hr ω = g ∧ C g then
+            Q.w ω * prefixLikelihoodRatio P Q r hr g else 0 := by
+        apply Finset.sum_congr rfl
+        intro ω hω
+        symm
+        rw [Finset.sum_eq_single (pathPrefix hr ω)]
+        · simp
+        · intro g hg hne
+          have hne' : pathPrefix hr ω ≠ g := fun heq => hne heq.symm
+          simp [hne']
+        · simp
+      _ = ∑ g, ∑ ω, if pathPrefix hr ω = g ∧ C g then
+            Q.w ω * prefixLikelihoodRatio P Q r hr g else 0 := Finset.sum_comm
+      _ = ∑ g, if C g then
+            prefixProbability Q r hr g * prefixLikelihoodRatio P Q r hr g else 0 := by
+        apply Finset.sum_congr rfl
+        intro g hg
+        by_cases hC : C g
+        · simp only [hC, and_true, ite_true]
+          calc
+            (∑ ω, if pathPrefix hr ω = g then
+                Q.w ω * prefixLikelihoodRatio P Q r hr g else 0) =
+                (∑ ω, if pathPrefix hr ω = g then Q.w ω else 0) *
+                  prefixLikelihoodRatio P Q r hr g := by
+              calc
+                (∑ ω, if pathPrefix hr ω = g then
+                    Q.w ω * prefixLikelihoodRatio P Q r hr g else 0) =
+                    ∑ ω, (if pathPrefix hr ω = g then Q.w ω else 0) *
+                      prefixLikelihoodRatio P Q r hr g := by
+                  apply Finset.sum_congr rfl
+                  intro ω hω
+                  by_cases heq : pathPrefix hr ω = g <;> simp [heq]
+                _ = (∑ ω, if pathPrefix hr ω = g then Q.w ω else 0) *
+                    prefixLikelihoodRatio P Q r hr g := (Finset.sum_mul ..).symm
+            _ = prefixProbability Q r hr g * prefixLikelihoodRatio P Q r hr g :=
+              congrArg (fun z => z * prefixLikelihoodRatio P Q r hr g)
+                (hprefixMass hr Q g).symm
+        · simp [hC]
+      _ = ∑ g, if C g then prefixProbability P r hr g else 0 := by
+        apply Finset.sum_congr rfl
+        intro g hg
+        by_cases hC : C g
+        · simp [hC, hterm hr g]
+        · simp [hC]
+      _ = P.pr (fun ω => C (pathPrefix hr ω)) := (hprefixSum hr C P).symm
+  have hprefixMono {m r : ℕ} (hmr : m ≤ r) (hr : r ≤ n) (ω ω' : Fin n → α)
+      (heq : pathPrefix hr ω = pathPrefix hr ω') :
+      pathPrefix (hmr.trans hr) ω = pathPrefix (hmr.trans hr) ω' := by
+    funext i
+    have hi := congrFun heq (Fin.castLE hmr i)
+    simpa [pathPrefix] using hi
   refine ⟨?_, ?_⟩
   · calc
       (∑ a : α,
@@ -133,6 +233,123 @@ theorem xLikelihoodRatioMartingale {α : Type*} [Fintype α] [DecidableEq α] {n
             prefixLikelihoodRatio P Q m (Nat.le_of_lt hm) h :=
           (hterm (Nat.le_of_lt hm) h).symm
   · intro τ hτ
-    sorry
+    have hstopEq {r : ℕ} (hr : r ≤ n) (ω ω' : Fin n → α)
+        (heq : pathPrefix hr ω = pathPrefix hr ω')
+        (hω : (τ ω).val ≤ r) (hω' : (τ ω').val ≤ r) : τ ω = τ ω' := by
+      apply Fin.ext
+      have hleft := hτ (τ ω).val (hω.trans hr) ω ω'
+        (fun i => congrFun (hprefixMono hω hr ω ω' heq) i)
+      have hright := hτ (τ ω').val (hω'.trans hr) ω ω'
+        (fun i => congrFun (hprefixMono hω' hr ω ω' heq) i)
+      exact Nat.le_antisymm (hright.mpr le_rfl) (hleft.mp le_rfl)
+    have hstopInvariant (r : Fin (n + 1)) (hr : r.val ≤ n) (ω ω' : Fin n → α)
+        (heq : pathPrefix hr ω = pathPrefix hr ω') :
+        (τ ω = r) ↔ (τ ω' = r) := by
+      have hlevel := hτ r.val hr ω ω' (fun i => congrFun heq i)
+      constructor
+      · intro h
+        have hω : (τ ω).val ≤ r.val := by simp [h]
+        have hω' : (τ ω').val ≤ r.val := hlevel.mp hω
+        have heqτ := hstopEq hr ω ω' heq hω hω'
+        exact heqτ.symm.trans h
+      · intro h
+        have hω' : (τ ω').val ≤ r.val := by simp [h]
+        have hω : (τ ω).val ≤ r.val := hlevel.mpr hω'
+        have heqτ := hstopEq hr ω ω' heq hω hω'
+        exact heqτ.trans h
+    have hdecomp (ω : Fin n → α) :
+        prefixLikelihoodRatio P Q (τ ω).val (Nat.le_of_lt_succ (τ ω).isLt)
+          (pathPrefix (Nat.le_of_lt_succ (τ ω).isLt) ω) =
+        ∑ r : Fin (n + 1), if τ ω = r then
+          prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+            (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0 := by
+      classical
+      rw [Finset.sum_eq_single (τ ω)]
+      · simp
+      · intro r hr hne
+        have hne' : τ ω ≠ r := fun h => hne h.symm
+        simp [hne']
+      · simp
+    have hstopTerm (r : Fin (n + 1)) :
+        Q.expect (fun ω => if τ ω = r then
+          prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+            (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) =
+          P.pr (fun ω => τ ω = r) := by
+      classical
+      let C : (Fin r.val → α) → Prop := fun g =>
+        ∃ ω, pathPrefix (Nat.le_of_lt_succ r.isLt) ω = g ∧ τ ω = r
+      letI : DecidablePred C := fun g => Classical.propDecidable _
+      have hC (ω : Fin n → α) :
+          (τ ω = r) ↔ C (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) := by
+        constructor
+        · intro h
+          exact ⟨ω, rfl, h⟩
+        · rintro ⟨ω', heq, hτ'⟩
+          have hτeq := hstopInvariant r (Nat.le_of_lt_succ r.isLt) ω ω' heq.symm
+          exact hτeq.mpr hτ'
+      have hfun : (fun ω => if τ ω = r then
+          prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+            (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) =
+        (fun ω => if C (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) then
+          prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+            (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) := by
+        funext ω
+        simp [hC ω]
+      rw [hfun]
+      have hprob : (fun ω => C (pathPrefix (Nat.le_of_lt_succ r.isLt) ω)) =
+          (fun ω => τ ω = r) := by
+        funext ω
+        exact propext (hC ω).symm
+      calc
+        Q.expect (fun ω => if C (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) then
+            prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+              (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) =
+            P.pr (fun ω => C (pathPrefix (Nat.le_of_lt_succ r.isLt) ω)) :=
+          hprefixLR (Nat.le_of_lt_succ r.isLt) C
+        _ = P.pr (fun ω => τ ω = r) := congrArg P.pr hprob
+    have hdecompExpect :
+        Q.expect (fun ω => prefixLikelihoodRatio P Q (τ ω).val
+          (Nat.le_of_lt_succ (τ ω).isLt)
+          (pathPrefix (Nat.le_of_lt_succ (τ ω).isLt) ω)) =
+          ∑ r : Fin (n + 1), Q.expect (fun ω => if τ ω = r then
+            prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+              (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) := by
+      calc
+        _ = Q.expect (fun ω => ∑ r : Fin (n + 1), if τ ω = r then
+              prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+                (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) := by
+          unfold FinProb.expect
+          apply Finset.sum_congr rfl
+          intro ω hω
+          exact congrArg (fun z => Q.w ω * z) (hdecomp ω)
+        _ = ∑ r : Fin (n + 1), Q.expect (fun ω => if τ ω = r then
+              prefixLikelihoodRatio P Q r.val (Nat.le_of_lt_succ r.isLt)
+                (pathPrefix (Nat.le_of_lt_succ r.isLt) ω) else 0) := by
+          unfold FinProb.expect
+          simp_rw [Finset.mul_sum]
+          exact Finset.sum_comm
+    calc
+      _ = ∑ r : Fin (n + 1), P.pr (fun ω => τ ω = r) := by
+        rw [hdecompExpect]
+        apply Finset.sum_congr rfl
+        intro r hr
+        exact hstopTerm r
+      _ = 1 := by
+        unfold FinProb.pr
+        rw [Finset.sum_comm]
+        letI : ∀ r : Fin (n + 1), DecidablePred (fun ω : Fin n → α => τ ω = r) :=
+          fun r ω => Classical.propDecidable _
+        calc
+          (∑ ω, ∑ r : Fin (n + 1), if τ ω = r then P.w ω else 0) =
+              ∑ ω, P.w ω := by
+            apply Finset.sum_congr rfl
+            intro ω hω
+            rw [Finset.sum_eq_single (τ ω)]
+            · simp
+            · intro r hr hne
+              have hne' : τ ω ≠ r := fun h => hne h.symm
+              simp [hne']
+            · simp
+          _ = 1 := P.sum_eq_one
 
 end HypercubeRamsey

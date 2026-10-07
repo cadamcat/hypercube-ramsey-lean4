@@ -1,4 +1,5 @@
 import HypercubeRamsey.S09.Core.Experiment
+import HypercubeRamsey.S09.Core.GainStage_q_s09_gain1
 import HypercubeRamsey.Tools.Finner
 import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.Tools.SignedTest
@@ -31,7 +32,7 @@ theorem deep_forward9 {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop} {
     (hαW : α.WidthLE w) (hw : w ≤ (n : ℝ) ^ (P.xD : ℝ)) :
     ∑ x ∈ Finset.univ.filter (fun x => 2 * P.bStar n < |rowDeg E G x lam - 1 / 2|), α.w x ≤
       2 * Real.exp (w - (n : ℝ) ^ (P.xD : ℝ)) := by
-  sorry
+  exact Lane_q_s09_gain1.forward_bound hdeep G lam hlamY hlamW α hαX w hαW hw
 
 /-- Reverse degree test (09:168–169): against a first law within the deep budget, a second law of width
 `s ≤ S_d` gives mass at most `2 e^{s - S_d}` to second labels whose degree differs from `1/2` by more than
@@ -42,7 +43,7 @@ theorem deep_reverse9 {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop} {
     (hlamW : lam.WidthLE s) (hs : s ≤ P.Sd (n : ℝ)) :
     ∑ y ∈ Finset.univ.filter (fun y => 2 * P.bStar n < |colDeg E G σ y - 1 / 2|), lam.w y ≤
       2 * Real.exp (s - P.Sd (n : ℝ)) := by
-  sorry
+  exact Lane_q_s09_gain1.reverse_bound hdeep G σ hσX hσW lam hlamY s hlamW hs
 
 /-- The degree tests packaged for `CoreInput9`. -/
 theorem deep_tools9 {P : Params9} {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}

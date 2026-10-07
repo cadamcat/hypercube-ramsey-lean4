@@ -998,6 +998,86 @@ theorem likelihood_ratio_domination (κ : CConsts) (hκ : κ.Admissible)
       intro d hd
       rcases hprops d hd with ⟨hrange, hpres⟩
       exact ⟨hrange, (hpresent d).symm ▸ hpres⟩
+  have hhitTransport (W : ∀ r, H.Val r) (c : H.Center) (w : H.Tuple)
+      (S : Finset H.Center) :
+      listHit H W (S.erase c) = listHit H (H.replaceTuple W c w) (S.erase c) := by
+    ext y
+    simp only [listHit, Finset.mem_filter, Finset.mem_univ, true_and]
+    constructor
+    · intro h d hd r
+      have hdc : d ≠ c := (Finset.mem_erase.mp hd).1
+      have htuple : H.tuple (H.replaceTuple W c w) d = H.tuple W d := by
+        simp [PrimitiveHistory.tuple, PrimitiveHistory.replaceTuple, hdc]
+      simpa [htuple] using h d hd r
+    · intro h d hd r
+      have hdc : d ≠ c := (Finset.mem_erase.mp hd).1
+      have htuple : H.tuple (H.replaceTuple W c w) d = H.tuple W d := by
+        simp [PrimitiveHistory.tuple, PrimitiveHistory.replaceTuple, hdc]
+      simpa [htuple] using h d hd r
+  have hmassTransport (g : Group 𝒯 i) (W : ∀ r, H.Val r) (c : H.Center)
+      (w : H.Tuple) (S : Finset H.Center) (D : Bin 𝒯 i) :
+      hitMass H mask g W D (S.erase c) =
+        hitMass H mask g (H.replaceTuple W c w) D (S.erase c) := by
+    unfold hitMass
+    rw [hhitTransport W c w S, (hmaskTransport g W c w).2]
+  have hmaskedTransport (g : Group 𝒯 i) (W : ∀ r, H.Val r) (c : H.Center)
+      (w : H.Tuple) (S : Finset H.Center) :
+      maskedMass H mask g W (listHit H W (S.erase c)) =
+        maskedMass H mask g (H.replaceTuple W c w)
+          (listHit H (H.replaceTuple W c w) (S.erase c)) := by
+    unfold maskedMass
+    rw [hhitTransport W c w S, (hmaskTransport g W c w).1,
+      (hmaskTransport g W c w).2]
+  have hdeletedQ (g : Group 𝒯 i) (W : ∀ r, H.Val r) (c : H.Center)
+      (w : H.Tuple) (S : Finset H.Center) (D : Bin 𝒯 i) :
+    deletedQ H mask g c W S D =
+        deletedQ H mask g c (H.replaceTuple W c w) S D := by
+    unfold deletedQ
+    rw [hmaskedTransport g W c w S, hmassTransport g W c w S D,
+      (hmaskTransport g W c w).1]
+  have hdeletedU (g : Group 𝒯 i) (W : ∀ r, H.Val r) (c : H.Center)
+      (w : H.Tuple) (S : Finset H.Center) (D : Bin 𝒯 i) (y : Fin (T.S.N k)) :
+    deletedU H mask g c W S D y =
+        deletedU H mask g c (H.replaceTuple W c w) S D y := by
+    unfold deletedU
+    rw [hmassTransport g W c w S D, hhitTransport W c w S,
+      (hmaskTransport g W c w).2]
+  have hgroupMassTransport (Geom : ProjectionGeometry κ 𝒯 i)
+      (v : EvenRole 𝒯 i) (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (c : H.Center) (w : H.Tuple) (S : Finset H.Center)
+      (ys : InternalLabels 𝒯 i) :
+      groupLabelMass Geom v g
+          (deletedQ H mask g c (H.replaceTuple W c w) S)
+          (deletedU H mask g c (H.replaceTuple W c w) S) ys =
+        groupLabelMass Geom v g (deletedQ H mask g c W S)
+          (deletedU H mask g c W S) ys := by
+    unfold groupLabelMass
+    apply Finset.sum_congr rfl
+    intro D hD
+    rw [(hdeletedQ g W c w S D).symm]
+    apply congrArg (fun z => deletedQ H mask g c W S D * z)
+    apply Finset.prod_congr rfl
+    intro l hl
+    by_cases hgroup : Geom.groupOf (flipPos v.1 l) = g
+    · simp [hgroup, (hdeletedU g W c w S D (ys l)).symm]
+    · simp [hgroup]
+  have hreferenceWeightTransport (v : EvenRole 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (w : H.Tuple) (ys : InternalLabels 𝒯 i) :
+      referenceWeight Geom H mask v c (H.replaceTuple W c w) ys =
+        referenceWeight Geom H mask v c W ys := by
+    unfold referenceWeight
+    apply Finset.prod_congr rfl
+    intro g hg
+    dsimp only
+    rw [hlistTransport g W c w]
+    by_cases hne : (referenceLists Geom H g c W).Nonempty
+    · simp only [if_pos hne]
+      congr 1
+      apply Finset.sum_congr rfl
+      intro S hS
+      exact hgroupMassTransport Geom v g W c w S ys
+    · have hmask := hmaskTransport g W c w
+      simp [hne, hmask.1, hmask.2]
   sorry
 
 section Rows

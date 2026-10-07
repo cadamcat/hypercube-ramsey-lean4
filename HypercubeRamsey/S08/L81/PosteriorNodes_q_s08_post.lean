@@ -1821,6 +1821,17 @@ theorem selPost_congr_target_update {η₀ β p : ℝ} {h : ℕ}
   unfold Ctx.selPost
   simp only [hcond, hBase, hSelected]
 
+theorem p0w_congr_target_update {η₀ β p : ℝ} {h : ℕ}
+    (D : Ctx η₀ β p h) (Θ : D.Hist) (P : D.Pos) (c : D.CellT)
+    (ξ : D.Tup) (π : D.Pres c.1) (y : Fin D.N) :
+    D.p0w Θ P c π y = D.p0w (Function.update Θ c.1 ξ) P c π y := by
+  have hPost := Lane_q_s08_post.selPost_congr_target_update D Θ
+    (Function.update Θ c.1 ξ) P c π (by
+      intro v hv
+      simpa [Function.update_of_ne hv])
+  unfold Ctx.p0w
+  rw [hPost]
+
 theorem mden_congr_radius_two {η₀ β p : ℝ} {h : ℕ}
     (D : Ctx η₀ β p h) (Θ Θ' : D.Hist) (g : D.KeyT)
     {J : Type} [Fintype J] (o : D.Obs J g)
@@ -2068,6 +2079,47 @@ private theorem pr_congr_local {α : Type*} [Fintype α]
   apply Finset.sum_congr rfl
   intro x hx
   simp [hAB x]
+
+theorem expect_group_by_fiber {Ω Ψ : Type*} [Fintype Ω] [Fintype Ψ] [DecidableEq Ψ]
+    (Q : FinProb Ω) (f : Ω → Ψ) (V : Ω → Prop) (w : Ψ → ℝ) :
+    Q.expect (fun x => if V x then w (f x) else 0) =
+      ∑ y, w y * Q.pr (fun x => V x ∧ f x = y) := by
+  classical
+  unfold FinProb.expect FinProb.pr
+  have hterm (x : Ω) :
+    Q.w x * (if V x then w (f x) else 0) =
+        ∑ y, w y * (if V x ∧ f x = y then Q.w x else 0) := by
+    by_cases hV : V x
+    · simp only [hV, if_true, true_and]
+      calc
+        Q.w x * w (f x) =
+            ∑ y, (if f x = y then Q.w x * w y else 0) := by simp
+        _ = ∑ y, w y * (if f x = y then Q.w x else 0) := by
+              apply Finset.sum_congr rfl
+              intro y hy
+              by_cases hyx : f x = y <;> simp [hyx, mul_comm]
+    · simp [hV]
+  calc
+    (∑ x, Q.w x * (if V x then w (f x) else 0)) =
+        ∑ x, ∑ y, w y * (if V x ∧ f x = y then Q.w x else 0) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact hterm x
+    _ = ∑ y, w y * ∑ x, if V x ∧ f x = y then Q.w x else 0 := by
+      rw [Finset.sum_comm]
+      apply Finset.sum_congr rfl
+      intro y hy
+      rw [Finset.mul_sum]
+    _ = ∑ y, w y * Q.pr (fun x => V x ∧ f x = y) := by
+      apply Finset.sum_congr rfl
+      intro y hy
+      apply congrArg (fun r : ℝ => w y * r)
+      unfold FinProb.pr
+      apply Finset.sum_congr rfl
+      intro x hx
+      exact PToolsMisc.ite_decidable_irrel (V x ∧ f x = y)
+        (inferInstance : Decidable (V x ∧ f x = y))
+        (Classical.propDecidable (V x ∧ f x = y)) _ _
 
 set_option maxHeartbeats 3000000 in
 theorem rawLaw_pr_local_expect {η₀ β p : ℝ} {h : ℕ}

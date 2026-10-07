@@ -204,7 +204,633 @@ theorem L5_1e_cover {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) :
     (∀ x y : CubeVertex n, (cube n).Adj x y →
       g.roleKey J y ∈ g.typeKeys J x ∨ g.optionalKey J x = some (g.roleKey J y)) ∧
     (∀ x : CubeVertex n, ∀ ℓ ∈ g.typeKeys J x, (g.key x).1 ∈ binList5 ℓ.coarse) := by
-  sorry
+  classical
+  constructor
+  · intro x y hadj
+    have hadj_card : (Finset.univ.filter (fun a : Fin n => x a ≠ y a)).card = 1 := by
+      change _root_.hammingDist x y = 1 at hadj
+      simpa [_root_.hammingDist] using hadj
+    obtain ⟨a, ha_eq⟩ := Finset.card_eq_one.mp hadj_card
+    have hneq : x a ≠ y a := by
+      have ha : a ∈ Finset.univ.filter (fun i : Fin n => x i ≠ y i) := by
+        rw [ha_eq]
+        simp
+      exact (Finset.mem_filter.mp ha).2
+    have hbits : ∀ b, b ≠ a → x b = y b := by
+      intro b hba
+      by_contra hne
+      have hb : b ∈ Finset.univ.filter (fun i : Fin n => x i ≠ y i) := by
+        simp [hne]
+      rw [ha_eq] at hb
+      exact hba (Finset.mem_singleton.mp hb)
+    have hyflip : y = flipVertex5 x a := by
+      funext b
+      by_cases hba : b = a
+      · subst b
+        cases hx : x a <;> cases hy : y a <;> simp_all [flipVertex5]
+      · simp only [flipVertex5, Function.update_of_ne hba]
+        exact (hbits b hba).symm
+    have hcategory (b : Fin n) :
+        (∃ i, b ∈ g.coarseChunks i) ∨ (∃ i, b ∈ g.fineChunks i) ∨ b ∈ g.residual := by
+      have hb : b ∈ Finset.univ := Finset.mem_univ _
+      rw [← g.chunks_cover] at hb
+      simpa [Finset.mem_biUnion] using hb
+    have hfilter_eq {C : Finset (Fin n)} {u v : CubeVertex n}
+        (h : ∀ b ∈ C, u b = v b) :
+        C.filter (fun b => u b = true) = C.filter (fun b => v b = true) := by
+      ext b
+      simp only [Finset.mem_filter]
+      constructor
+      · rintro ⟨hb, hu⟩
+        exact ⟨hb, (h b hb).symm ▸ hu⟩
+      · rintro ⟨hb, hv⟩
+        exact ⟨hb, (h b hb) ▸ hv⟩
+    have hchunk_mem_coarseCoords (i : Fin coarseChunkCount5) (b : Fin n)
+        (hb : b ∈ g.coarseChunks i) : b ∈ g.coarseCoords := by
+      change b ∈ Finset.univ.biUnion g.coarseChunks
+      exact Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hb⟩
+    have hcoarseBin_eq_of_agree {u v : CubeVertex n}
+        (h : ∀ b ∈ g.coarseCoords, u b = v b) :
+        g.coarseBin u = g.coarseBin v := by
+      funext i
+      simp only [ChunkGeometry5.coarseBin]
+      have hc : g.coarseCount u i = g.coarseCount v i := by
+        unfold ChunkGeometry5.coarseCount
+        congr 1
+        apply hfilter_eq
+        intro b hb
+        exact h b (hchunk_mem_coarseCoords i b hb)
+      rw [hc]
+    have hkey_eq_of_agree {u v : CubeVertex n}
+        (h : ∀ b ∈ g.coarseCoords, u b = v b) : g.key u = g.key v := by
+      have hbin := hcoarseBin_eq_of_agree h
+      have hboundary : g.boundary u ↔ g.boundary v := by
+        unfold ChunkGeometry5.boundary
+        constructor
+        · rintro ⟨i, b, hb, hne'⟩
+          have hbcoarse : b ∈ g.coarseCoords := by
+            exact hchunk_mem_coarseCoords i b hb
+          have hflipbits : ∀ c ∈ g.coarseCoords,
+              flipVertex5 u b c = flipVertex5 v b c := by
+            intro c hc
+            by_cases hcb : c = b
+            · subst c
+              simp [flipVertex5, h b hbcoarse]
+            · simp [flipVertex5, hcb, h c hc]
+          have hflipbin := hcoarseBin_eq_of_agree hflipbits
+          refine ⟨i, b, hb, ?_⟩
+          intro heq
+          apply hne'
+          calc
+            g.coarseBin (flipVertex5 u b) = g.coarseBin (flipVertex5 v b) := hflipbin
+            _ = g.coarseBin v := heq
+            _ = g.coarseBin u := hbin.symm
+        · rintro ⟨i, b, hb, hne'⟩
+          have hbcoarse : b ∈ g.coarseCoords := by
+            exact hchunk_mem_coarseCoords i b hb
+          have hflipbits : ∀ c ∈ g.coarseCoords,
+              flipVertex5 u b c = flipVertex5 v b c := by
+            intro c hc
+            by_cases hcb : c = b
+            · subst c
+              simp [flipVertex5, h b hbcoarse]
+            · simp [flipVertex5, hcb, h c hc]
+          have hflipbin := hcoarseBin_eq_of_agree hflipbits
+          refine ⟨i, b, hb, ?_⟩
+          intro heq
+          apply hne'
+          calc
+            g.coarseBin (flipVertex5 v b) = g.coarseBin (flipVertex5 u b) := hflipbin.symm
+            _ = g.coarseBin u := heq
+            _ = g.coarseBin v := hbin
+      change (g.coarseBin u, decide (g.boundary u)) =
+        (g.coarseBin v, decide (g.boundary v))
+      have hprop : g.boundary u = g.boundary v := propext hboundary
+      have hdec : decide (g.boundary u) = decide (g.boundary v) := by rw [hprop]
+      exact Prod.ext hbin hdec
+    have hrole_eq_keyAt (z : CubeVertex n) :
+        g.roleKey J z = keyAt5 J (g.key z) (g.sign z) (g.severity z) := by
+      by_cases hz : g.severity z ≤ J <;>
+        simp [ChunkGeometry5.roleKey, keyAt5, hz]
+    have hcount_eq_of_notMem (C : Finset (Fin n)) (hnot : a ∉ C) :
+        ((C.filter fun b => x b = true).card =
+          (C.filter fun b => y b = true).card) := by
+      have hset : C.filter (fun b => x b = true) = C.filter (fun b => y b = true) :=
+        hfilter_eq (by
+          intro b hb
+          have hba : b ≠ a := by
+            intro h
+            subst b
+            exact hnot hb
+          exact hbits b hba)
+      exact congrArg Finset.card hset
+    have hcount_step (C : Finset (Fin n)) (haC : a ∈ C) :
+        (C.filter (fun b => x b = true)).card + 1 =
+            (C.filter (fun b => y b = true)).card ∨
+        (C.filter (fun b => y b = true)).card + 1 =
+            (C.filter (fun b => x b = true)).card := by
+      have hcases : (x a = false ∧ y a = true) ∨ (x a = true ∧ y a = false) := by
+        cases hx : x a <;> cases hy : y a <;> simp_all
+      rcases hcases with ⟨hx, hy⟩ | ⟨hx, hy⟩
+      · have hset : C.filter (fun b => y b = true) =
+            insert a (C.filter (fun b => x b = true)) := by
+          ext b
+          by_cases hba : b = a
+          · subst b
+            simp [haC, hx, hy]
+          · simp only [Finset.mem_filter, Finset.mem_insert]
+            simp [hba, hbits b hba]
+        have hnot : a ∉ C.filter (fun b => x b = true) := by
+          simp [Finset.mem_filter, haC, hx]
+        left
+        have hc := congrArg Finset.card hset
+        rw [Finset.card_insert_of_notMem hnot] at hc
+        omega
+      · have hset : C.filter (fun b => x b = true) =
+            insert a (C.filter (fun b => y b = true)) := by
+          ext b
+          by_cases hba : b = a
+          · subst b
+            simp [haC, hx, hy]
+          · simp only [Finset.mem_filter, Finset.mem_insert]
+            simp [hba, hbits b hba]
+        have hnot : a ∉ C.filter (fun b => y b = true) := by
+          simp [Finset.mem_filter, haC, hy]
+        right
+        have hc := congrArg Finset.card hset
+        rw [Finset.card_insert_of_notMem hnot] at hc
+        omega
+    have hstep_center (c d L : ℕ) (hL : Odd L)
+        (hstep : c + 1 = d ∨ d + 1 = c) :
+        (L < 2 * c ↔ L < 2 * d) ∨
+          ((Nat.dist (2 * c) L = 1 ∧ Nat.dist (2 * d) L = 1) ∧
+            ((¬ L < 2 * c ∧ L < 2 * d) ∨ (L < 2 * c ∧ ¬ L < 2 * d))) := by
+      obtain ⟨k, hk⟩ := hL
+      rcases hstep with hstep | hstep
+      · by_cases hc : L < 2 * c <;> by_cases hd : L < 2 * d
+        · exact Or.inl ⟨fun _ => hd, fun _ => hc⟩
+        · exfalso
+          omega
+        · right
+          have hdist : Nat.dist (2 * c) L = 1 ∧ Nat.dist (2 * d) L = 1 := by
+            constructor <;> simp [Nat.dist, hk] <;> omega
+          exact ⟨hdist, Or.inl ⟨hc, hd⟩⟩
+        · exact Or.inl ⟨fun h => (hc h).elim, fun h => (hd h).elim⟩
+      · by_cases hd : L < 2 * d <;> by_cases hc : L < 2 * c
+        · exact Or.inl ⟨fun _ => hd, fun _ => hc⟩
+        · exfalso
+          omega
+        · right
+          have hdist : Nat.dist (2 * c) L = 1 ∧ Nat.dist (2 * d) L = 1 := by
+            constructor <;> simp [Nat.dist, hk] <;> omega
+          exact ⟨hdist, Or.inr ⟨hc, hd⟩⟩
+        · exact Or.inl ⟨fun h => (hc h).elim, fun h => (hd h).elim⟩
+    have hseverity_relation (i₀ : Fin m)
+        (hcounts : ∀ i, i ≠ i₀ → g.fineCount x i = g.fineCount y i) :
+        g.severity x = g.severity y ∨
+          g.severity y = g.severity x + 1 ∨
+          g.severity x = g.severity y + 1 := by
+      let FX := Finset.univ.filter (fun i : Fin m =>
+        Nat.dist (2 * g.fineCount x i) g.fineLength ≤ 11)
+      let FY := Finset.univ.filter (fun i : Fin m =>
+        Nat.dist (2 * g.fineCount y i) g.fineLength ≤ 11)
+      have hrest : FX.erase i₀ = FY.erase i₀ := by
+        ext i
+        by_cases hii : i = i₀
+        · subst i
+          simp
+        · simp [FX, FY, hii, hcounts i hii]
+      have hrestcard : (FX.erase i₀).card = (FY.erase i₀).card := congrArg Finset.card hrest
+      have hcardX : FX.card = (FX.erase i₀).card + if i₀ ∈ FX then 1 else 0 := by
+        by_cases hmem : i₀ ∈ FX
+        · simpa [hmem] using (Finset.card_erase_add_one hmem).symm
+        · simp [hmem, Finset.erase_eq_of_notMem hmem]
+      have hcardY : FY.card = (FY.erase i₀).card + if i₀ ∈ FY then 1 else 0 := by
+        by_cases hmem : i₀ ∈ FY
+        · simpa [hmem] using (Finset.card_erase_add_one hmem).symm
+        · simp [hmem, Finset.erase_eq_of_notMem hmem]
+      have hseverityX : g.severity x = FX.card := by rfl
+      have hseverityY : g.severity y = FY.card := by rfl
+      rw [hseverityX, hseverityY, hcardX, hcardY, hrestcard]
+      by_cases hx : i₀ ∈ FX <;> by_cases hy : i₀ ∈ FY <;> simp [hx, hy] <;> omega
+    have hseverity_eq_of_center (i₀ : Fin m)
+        (hcenter : Nat.dist (2 * g.fineCount x i₀) g.fineLength = 1 ∧
+          Nat.dist (2 * g.fineCount y i₀) g.fineLength = 1)
+        (hcounts : ∀ i, i ≠ i₀ → g.fineCount x i = g.fineCount y i) :
+        g.severity x = g.severity y := by
+      unfold ChunkGeometry5.severity
+      congr 1
+      ext i
+      by_cases hii : i = i₀
+      · subst i
+        simp [hcenter]
+      · simp [hcounts i hii]
+    have hsign_ne_of_center (i₀ : Fin m)
+        (horient : ((¬ g.fineLength < 2 * g.fineCount x i₀ ∧
+          g.fineLength < 2 * g.fineCount y i₀) ∨
+          (g.fineLength < 2 * g.fineCount x i₀ ∧
+            ¬ g.fineLength < 2 * g.fineCount y i₀))) :
+        g.sign x i₀ ≠ g.sign y i₀ := by
+      intro heq
+      change decide (g.fineLength < 2 * g.fineCount x i₀) =
+        decide (g.fineLength < 2 * g.fineCount y i₀) at heq
+      rcases horient with ⟨hx, hy⟩ | ⟨hx, hy⟩ <;> simp [hx, hy] at heq
+    have hrole_mem_of_coarseRange (z : CubeVertex n)
+        (hkeyRange : g.key z ∈ g.coarseRange x)
+        (hsign : g.sign z = g.sign x) (hsev : g.severity z = g.severity x) :
+        g.roleKey J z ∈ g.typeKeys J x := by
+      rw [hrole_eq_keyAt z, hsign, hsev]
+      by_cases hlow : g.severity x ≤ J
+      · simp [ChunkGeometry5.typeKeys, hlow, keyAt5, hkeyRange]
+      · simp [ChunkGeometry5.typeKeys, hlow, keyAt5, hkeyRange]
+    have hrole_mem_of_severity (hlow : g.severity x ≤ J)
+        (hkey : g.key x = g.key y) (hsign : g.sign x = g.sign y)
+        (hsev : g.severity y = g.severity x + 1 ∨
+          g.severity x = g.severity y + 1) :
+        g.roleKey J y ∈ g.typeKeys J x := by
+      rw [hrole_eq_keyAt y, hkey.symm, hsign.symm]
+      have hjmem : g.severity y ∈
+          ({g.severity x + 1} : Finset ℕ) ∪
+            (if 0 < g.severity x then {g.severity x - 1} else ∅) := by
+        rcases hsev with h | h
+        · simp [h]
+        · have hpos : 0 < g.severity x := by omega
+          simp [h, hpos]
+      unfold ChunkGeometry5.typeKeys
+      rw [if_pos hlow]
+      apply Finset.mem_union.mpr
+      right
+      apply Finset.mem_image.mpr
+      exact ⟨g.severity y, hjmem, rfl⟩
+    have hrole_mem_high (hkeyRange : g.key y ∈ g.coarseRange x)
+        (hhighX : ¬ g.severity x ≤ J) (hhighY : ¬ g.severity y ≤ J) :
+        g.roleKey J y ∈ g.typeKeys J x := by
+      simp only [ChunkGeometry5.roleKey, dif_neg hhighY, ChunkGeometry5.typeKeys,
+        if_neg hhighX, Finset.mem_image]
+      exact ⟨g.key y, hkeyRange, rfl⟩
+    have hrole_eq_optional (hkey : g.key x = g.key y)
+        (hsign : g.sign x = g.sign y) (hxsev : g.severity x = J + 1)
+        (hysev : g.severity y = J) :
+        g.optionalKey J x = some (g.roleKey J y) := by
+      simp [ChunkGeometry5.optionalKey, ChunkGeometry5.roleKey, hkey, hsign, hxsev, hysev]
+    rcases hcategory a with hcoarse | hrest
+    · obtain ⟨ic, haic⟩ := hcoarse
+      rcases g.chunks_disjoint with ⟨_, hcf, _, _, _⟩
+      have hcounts : ∀ i, g.fineCount x i = g.fineCount y i := by
+        intro i
+        have hnot : a ∉ g.fineChunks i := by
+          intro hi
+          exact (Finset.disjoint_left.mp (hcf ic i) haic hi).elim
+        unfold ChunkGeometry5.fineCount
+        exact hcount_eq_of_notMem (g.fineChunks i) hnot
+      have hsign : g.sign y = g.sign x := by
+        funext i
+        simp [ChunkGeometry5.sign, hcounts i]
+      have hsev : g.severity y = g.severity x := by
+        simp [ChunkGeometry5.severity, hcounts]
+      have hkeyRange : g.key y ∈ g.coarseRange x := by
+        rw [hyflip]
+        simp only [ChunkGeometry5.coarseRange, Finset.mem_insert]
+        right
+        exact Finset.mem_image.mpr
+          ⟨a, hchunk_mem_coarseCoords ic a haic, rfl⟩
+      exact Or.inl (hrole_mem_of_coarseRange y hkeyRange hsign hsev)
+    · rcases hrest with hfine | haResidual
+      · obtain ⟨i₀, hai₀⟩ := hfine
+        rcases g.chunks_disjoint with ⟨_, hcf, hff, _, _⟩
+        have haNotCoarse : a ∉ g.coarseCoords := by
+          intro haC
+          change a ∈ Finset.univ.biUnion g.coarseChunks at haC
+          obtain ⟨i, hi, hai⟩ := Finset.mem_biUnion.mp haC
+          exact (Finset.disjoint_left.mp (hcf i i₀) hai hai₀).elim
+        have hagree : ∀ b ∈ g.coarseCoords, x b = y b := by
+          intro b hb
+          by_cases hba : b = a
+          · subst b
+            exact (haNotCoarse hb).elim
+          · exact hbits b hba
+        have hkey : g.key x = g.key y := hkey_eq_of_agree hagree
+        have hkeyRange : g.key y ∈ g.coarseRange x := by
+          rw [← hkey]
+          simp [ChunkGeometry5.coarseRange]
+        have hcounts : ∀ i, i ≠ i₀ → g.fineCount x i = g.fineCount y i := by
+          intro i hii
+          have hnot : a ∉ g.fineChunks i := by
+            intro hai
+            exact (Finset.disjoint_left.mp (hff i₀ i hii.symm) hai₀ hai).elim
+          unfold ChunkGeometry5.fineCount
+          exact hcount_eq_of_notMem (g.fineChunks i) hnot
+        have hstep : g.fineCount x i₀ + 1 = g.fineCount y i₀ ∨
+            g.fineCount y i₀ + 1 = g.fineCount x i₀ := by
+          simpa [ChunkGeometry5.fineCount] using hcount_step (g.fineChunks i₀) hai₀
+        have hcenterOrSame := hstep_center (g.fineCount x i₀) (g.fineCount y i₀)
+          g.fineLength g.fine_length_odd hstep
+        have hsignRel : g.sign x = g.sign y ∨
+            (Nat.dist (2 * g.fineCount x i₀) g.fineLength = 1 ∧
+              Nat.dist (2 * g.fineCount y i₀) g.fineLength = 1 ∧
+              ((¬ g.fineLength < 2 * g.fineCount x i₀ ∧
+                  g.fineLength < 2 * g.fineCount y i₀) ∨
+                (g.fineLength < 2 * g.fineCount x i₀ ∧
+                  ¬ g.fineLength < 2 * g.fineCount y i₀))) := by
+          rcases hcenterOrSame with hiff | ⟨hcenter, horient⟩
+          · left
+            have hdec : decide (g.fineLength < 2 * g.fineCount x i₀) =
+                decide (g.fineLength < 2 * g.fineCount y i₀) := by
+              by_cases hx : g.fineLength < 2 * g.fineCount x i₀
+              · have hy : g.fineLength < 2 * g.fineCount y i₀ := hiff.mp hx
+                simp [hx, hy]
+              · have hy : ¬ g.fineLength < 2 * g.fineCount y i₀ := by
+                  intro hy
+                  exact hx (hiff.mpr hy)
+                simp [hx, hy]
+            have hsignAt : g.sign x i₀ = g.sign y i₀ := by
+              change decide (g.fineLength < 2 * g.fineCount x i₀) =
+                decide (g.fineLength < 2 * g.fineCount y i₀)
+              exact hdec
+            funext i
+            by_cases hii : i = i₀
+            · subst i
+              exact hsignAt
+            · simp [ChunkGeometry5.sign, hcounts i hii]
+          · exact Or.inr ⟨hcenter.1, hcenter.2, horient⟩
+        have hsevRel := hseverity_relation i₀ hcounts
+        by_cases hlowX : g.severity x ≤ J
+        · rcases hsignRel with hsign | ⟨hcenterX, hcenterY, horient⟩
+          · rcases hsevRel with hsev | hsevUp | hsevDown
+            · exact Or.inl (hrole_mem_of_coarseRange y hkeyRange hsign.symm hsev.symm)
+            · exact Or.inl (hrole_mem_of_severity hlowX hkey hsign (Or.inl hsevUp))
+            · exact Or.inl (hrole_mem_of_severity hlowX hkey hsign (Or.inr hsevDown))
+          · have hcenter :
+                Nat.dist (2 * g.fineCount x i₀) g.fineLength = 1 ∧
+                  Nat.dist (2 * g.fineCount y i₀) g.fineLength = 1 :=
+              ⟨hcenterX, hcenterY⟩
+            have hsev : g.severity x = g.severity y :=
+              hseverity_eq_of_center i₀ hcenter hcounts
+            have hflip : i₀ ∈ g.flippable x := by
+              simp [ChunkGeometry5.flippable, hcenterX]
+            have hsignNe : g.sign x i₀ ≠ g.sign y i₀ := by
+              exact hsign_ne_of_center i₀ horient
+            have hsignUpdate : g.sign y =
+                Function.update (g.sign x) i₀ (!g.sign x i₀) := by
+              funext i
+              by_cases hii : i = i₀
+              · subst i
+                cases hx : g.sign x i₀ <;> cases hy : g.sign y i₀ <;>
+                  simp_all [hsignNe, Function.update]
+              · have hc := hcounts i hii
+                simp [ChunkGeometry5.sign, hc, Function.update_of_ne hii]
+            have hmem : g.roleKey J y ∈ g.typeKeys J x := by
+              rw [hrole_eq_keyAt y, hkey.symm, hsignUpdate, hsev.symm]
+              unfold ChunkGeometry5.typeKeys
+              rw [if_pos hlowX]
+              apply Finset.mem_union.mpr
+              left
+              apply Finset.mem_union.mpr
+              right
+              apply Finset.mem_image.mpr
+              exact ⟨i₀, hflip, rfl⟩
+            exact Or.inl hmem
+        · by_cases hlowY : g.severity y ≤ J
+          · rcases hsevRel with hsev | hsevUp | hsevDown
+            · omega
+            · omega
+            · have hxsev : g.severity x = J + 1 := by omega
+              have hysev : g.severity y = J := by omega
+              have hsign : g.sign x = g.sign y := by
+                rcases hsignRel with hsign | ⟨hcenterX, hcenterY, _⟩
+                · exact hsign
+                · have hsevEq := hseverity_eq_of_center i₀ ⟨hcenterX, hcenterY⟩ hcounts
+                  omega
+              exact Or.inr (hrole_eq_optional hkey hsign hxsev hysev)
+          · exact Or.inl (hrole_mem_high hkeyRange hlowX hlowY)
+      · rcases g.chunks_disjoint with ⟨_, _, _, hcr, hfr⟩
+        have haNotCoarse : a ∉ g.coarseCoords := by
+          intro haC
+          change a ∈ Finset.univ.biUnion g.coarseChunks at haC
+          obtain ⟨i, hi, hai⟩ := Finset.mem_biUnion.mp haC
+          exact (Finset.disjoint_left.mp (hcr i) hai haResidual).elim
+        have hagree : ∀ b ∈ g.coarseCoords, x b = y b := by
+          intro b hb
+          by_cases hba : b = a
+          · subst b
+            exact (haNotCoarse hb).elim
+          · exact hbits b hba
+        have hkey : g.key x = g.key y := hkey_eq_of_agree hagree
+        have hkeyRange : g.key y ∈ g.coarseRange x := by
+          rw [← hkey]
+          simp [ChunkGeometry5.coarseRange]
+        have hcounts : ∀ i, g.fineCount x i = g.fineCount y i := by
+          intro i
+          have hnot : a ∉ g.fineChunks i := by
+            intro hai
+            exact (Finset.disjoint_left.mp (hfr i) hai haResidual).elim
+          unfold ChunkGeometry5.fineCount
+          exact hcount_eq_of_notMem (g.fineChunks i) hnot
+        have hsign : g.sign y = g.sign x := by
+          funext i
+          simp [ChunkGeometry5.sign, hcounts i]
+        have hsev : g.severity y = g.severity x := by
+          simp [ChunkGeometry5.severity, hcounts]
+        exact Or.inl (hrole_mem_of_coarseRange y hkeyRange hsign hsev)
+  · intro x ℓ hℓ
+    have hflip_invol (v : CubeVertex n) (a : Fin n) :
+        flipVertex5 (flipVertex5 v a) a = v := by
+      funext i
+      by_cases hia : i = a
+      · subst i
+        simp [flipVertex5]
+      · simp [flipVertex5, hia]
+    have hcoarse_flip_step (v : CubeVertex n) (a : Fin n)
+        (ha : a ∈ g.coarseCoords) :
+        g.coarseBin v = g.coarseBin (flipVertex5 v a) ∨
+          binAdjacent5 (g.coarseBin v) (g.coarseBin (flipVertex5 v a)) := by
+      obtain ⟨k, hak⟩ := by
+        simpa [ChunkGeometry5.coarseCoords, Finset.mem_biUnion] using ha
+      rcases g.chunks_disjoint with ⟨hcc, hcf, hff, hcr, hfr⟩
+      have hcount_eq (i : Fin coarseChunkCount5) (hik : i ≠ k) :
+          g.coarseCount v i = g.coarseCount (flipVertex5 v a) i := by
+        have hai : a ∉ g.coarseChunks i := by
+          intro hmem
+          exact (Finset.disjoint_left.mp (hcc k i hik.symm) hak hmem).elim
+        unfold ChunkGeometry5.coarseCount
+        have hset :
+            (g.coarseChunks i).filter (fun b => v b = true) =
+              (g.coarseChunks i).filter (fun b => flipVertex5 v a b = true) := by
+          ext b
+          by_cases hb : b ∈ g.coarseChunks i
+          · have hba : b ≠ a := by
+              intro h
+              subst b
+              exact hai hb
+            simp only [Finset.mem_filter]
+            simp only [flipVertex5, Function.update_of_ne hba]
+          · simp [hb]
+        exact congrArg Finset.card hset
+      have hcount_step :
+          g.coarseCount v k + 1 = g.coarseCount (flipVertex5 v a) k ∨
+          g.coarseCount (flipVertex5 v a) k + 1 = g.coarseCount v k := by
+        unfold ChunkGeometry5.coarseCount
+        by_cases hva : v a = true
+        · have hset :
+              (g.coarseChunks k).filter (fun b => v b = true) =
+                insert a ((g.coarseChunks k).filter
+                  (fun b => flipVertex5 v a b = true)) := by
+            ext b
+            by_cases hba : b = a
+            · subst b
+              simp [hak, hva, flipVertex5]
+            · simp only [Finset.mem_filter, Finset.mem_insert]
+              simp only [flipVertex5, Function.update_of_ne hba]
+              simp [hba]
+          have hnot : a ∉ (g.coarseChunks k).filter (fun b => flipVertex5 v a b = true) := by
+            simp [Finset.mem_filter, flipVertex5, hak, hva]
+          right
+          have hc := congrArg Finset.card hset
+          rw [Finset.card_insert_of_notMem hnot] at hc
+          omega
+        · have hset :
+              (g.coarseChunks k).filter (fun b => flipVertex5 v a b = true) =
+                insert a ((g.coarseChunks k).filter (fun b => v b = true)) := by
+            ext b
+            by_cases hba : b = a
+            · subst b
+              simp [hak, hva, flipVertex5]
+            · simp only [Finset.mem_filter, Finset.mem_insert]
+              simp only [flipVertex5, Function.update_of_ne hba]
+              simp [hba]
+          have hnot : a ∉ (g.coarseChunks k).filter (fun b => v b = true) := by
+            simp [Finset.mem_filter, hva, hak]
+          left
+          have hc := congrArg Finset.card hset
+          rw [Finset.card_insert_of_notMem hnot] at hc
+          omega
+      have hval_pair :
+          (g.bin k (g.coarseCount v k)).val ≤
+              (g.bin k (g.coarseCount (flipVertex5 v a) k)).val + 1 ∧
+            (g.bin k (g.coarseCount (flipVertex5 v a) k)).val ≤
+              (g.bin k (g.coarseCount v k)).val + 1 := by
+        rcases hcount_step with hstep | hstep
+        · have hmono := g.bin_monotone k (g.coarseCount v k)
+            (g.coarseCount (flipVertex5 v a) k) (by omega)
+          have hcon := g.bin_consecutive k (g.coarseCount v k)
+          rw [hstep] at hcon
+          exact ⟨by omega, by omega⟩
+        · have hmono := g.bin_monotone k (g.coarseCount (flipVertex5 v a) k)
+            (g.coarseCount v k) (by omega)
+          have hcon := g.bin_consecutive k (g.coarseCount (flipVertex5 v a) k)
+          rw [hstep] at hcon
+          exact ⟨by omega, by omega⟩
+      have hdist : Nat.dist (g.bin k (g.coarseCount v k)).val
+          (g.bin k (g.coarseCount (flipVertex5 v a) k)).val ≤ 1 := by
+        rcases hval_pair with ⟨h1, h2⟩
+        simp only [Nat.dist]
+        omega
+      by_cases heq : g.coarseBin v = g.coarseBin (flipVertex5 v a)
+      · exact Or.inl heq
+      · right
+        have hkdiff :
+            g.bin k (g.coarseCount v k) ≠
+              g.bin k (g.coarseCount (flipVertex5 v a) k) := by
+          intro hk
+          apply heq
+          funext i
+          by_cases hik : i = k
+          · subst i
+            exact hk
+          · simp [ChunkGeometry5.coarseBin, hcount_eq i hik]
+        have hdiffSet :
+            (Finset.univ.filter (fun i : Fin coarseChunkCount5 =>
+              g.coarseBin v i ≠ g.coarseBin (flipVertex5 v a) i)) = {k} := by
+          ext i
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+          constructor
+          · intro hi
+            by_contra hik
+            have heq' : g.coarseBin v i = g.coarseBin (flipVertex5 v a) i := by
+              simp [ChunkGeometry5.coarseBin, hcount_eq i hik]
+            exact hi heq'
+          · intro hik
+            subst i
+            exact hkdiff
+        refine ⟨?_, ?_⟩
+        · rw [hdiffSet]
+          simp
+        · intro i
+          by_cases hik : i = k
+          · subst i
+            exact hdist
+          · have heq' : g.coarseBin v i = g.coarseBin (flipVertex5 v a) i := by
+              simp [ChunkGeometry5.coarseBin, hcount_eq i hik]
+            rw [heq']
+            simp
+    have hcoarseBin_compatible : ∀ v (i : CoarseKey5 n),
+        i ∈ g.coarseRange v → (g.key v).1 ∈ binList5 i := by
+      intro v i hi
+      simp only [ChunkGeometry5.coarseRange, Finset.mem_insert, Finset.mem_image] at hi
+      rcases hi with hbase | ⟨a, ha, rfl⟩
+      · subst i
+        by_cases hb : (g.key v).2 = true <;> simp [binList5, hb]
+      · by_cases hb : g.boundary (flipVertex5 v a)
+        · have hbin := hcoarse_flip_step v a ha
+          have hi2 : (g.key (flipVertex5 v a)).2 = true := by
+            simp [ChunkGeometry5.key, hb]
+          simp only [binList5, hi2, if_pos, Finset.mem_filter, Finset.mem_univ, true_and]
+          rcases hbin with heq | hadj
+          · left
+            exact (by simpa [ChunkGeometry5.key] using heq)
+          · right
+            have hsymm : binAdjacent5 (g.coarseBin (flipVertex5 v a)) (g.coarseBin v) := by
+              unfold binAdjacent5 at hadj ⊢
+              refine ⟨?_, ?_⟩
+              · simpa [ne_comm] using hadj.1
+              · intro i
+                simpa [Nat.dist_comm] using hadj.2 i
+            exact (by simpa [ChunkGeometry5.key] using hsymm)
+        · have haChunks : ∃ k, a ∈ g.coarseChunks k := by
+            simpa [ChunkGeometry5.coarseCoords, Finset.mem_biUnion] using ha
+          obtain ⟨k, hak⟩ := haChunks
+          have hbin : g.coarseBin v = g.coarseBin (flipVertex5 v a) := by
+            by_contra hne
+            apply hb
+            exact ⟨k, a, hak, by simpa [hflip_invol] using hne⟩
+          simp [binList5, ChunkGeometry5.key, hb, hbin]
+    have hcoarse_keyAt (i : CoarseKey5 n) (t : CubeVertex m) (j : ℕ) :
+        (keyAt5 J i t j).coarse = i := by
+      by_cases hj : j ≤ J <;> simp [HiddenKey5.coarse, keyAt5, hj]
+    have hsource : ℓ.coarse ∈ g.coarseRange x ∨ ℓ.coarse = g.key x := by
+      unfold ChunkGeometry5.typeKeys at hℓ
+      by_cases hlow : g.severity x ≤ J
+      · rw [if_pos hlow] at hℓ
+        simp only [Finset.mem_union, Finset.mem_image] at hℓ
+        rcases hℓ with (⟨i, hi, heq⟩ | ⟨i, hi, heq⟩) | htail
+        · left
+          have heq' := congrArg HiddenKey5.coarse heq
+          have hci : i = ℓ.coarse := by
+            rw [hcoarse_keyAt] at heq'
+            exact heq'
+          rw [← hci]
+          exact hi
+        · right
+          have heq' := congrArg HiddenKey5.coarse heq
+          rw [hcoarse_keyAt] at heq'
+          exact heq'.symm
+        · right
+          obtain ⟨j, hj, heq⟩ := htail
+          have heq' := congrArg HiddenKey5.coarse heq
+          rw [hcoarse_keyAt] at heq'
+          exact heq'.symm
+      · rw [if_neg hlow] at hℓ
+        simp only [Finset.mem_image] at hℓ
+        obtain ⟨i, hi, heq⟩ := hℓ
+        left
+        have heq' := congrArg HiddenKey5.coarse heq
+        have hci : i = ℓ.coarse := by simpa [HiddenKey5.coarse] using heq'
+        rw [← hci]
+        exact hi
+    rcases hsource with hrange | hkey
+    · exact hcoarseBin_compatible x ℓ.coarse hrange
+    · rw [hkey]
+      exact hcoarseBin_compatible x (g.key x) (by simp [ChunkGeometry5.coarseRange])
 
 /-! ### D5.5: states and the one-hot embedding (05:291–313) -/
 
@@ -253,6 +879,98 @@ attribute [instance] CubeStates5.siteFintype CubeStates5.siteDecEq
 layout, and its dimension is at most `(1 + ε) n` once `n ≥ n₀(ε)`. -/
 theorem L5_1e0 : ∀ ε : ℝ, 0 < ε → ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (m J : ℕ) (g : ChunkGeometry5 n m),
     ∃ S : CubeStates5 g J, (S.d : ℝ) ≤ (1 + ε) * n := by
-  sorry
+  intro ε hε
+  refine ⟨0, ?_⟩
+  intro n hn m J g
+  classical
+  have hflip_of_adj : ∀ {s t : CubeVertex n}, (cube n).Adj s t →
+      ∃ i : Fin n, t = flipVertex5 s i := by
+    intro s t hadj
+    have hdiff : (Finset.univ.filter (fun i : Fin n => s i ≠ t i)).card = 1 := by
+      change _root_.hammingDist s t = 1 at hadj
+      simpa [_root_.hammingDist] using hadj
+    obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hdiff
+    refine ⟨i, ?_⟩
+    funext j
+    by_cases hji : j = i
+    · subst j
+      have hneq : s i ≠ t i := by
+        have : i ∈ Finset.univ.filter (fun k : Fin n => s k ≠ t k) := by
+          rw [hi]
+          simp
+        exact (Finset.mem_filter.mp this).2
+      cases hs : s i <;> cases ht : t i <;> simp_all [flipVertex5]
+    · have heq : s j = t j := by
+        by_contra hne
+        have hj : j ∈ Finset.univ.filter (fun k : Fin n => s k ≠ t k) := by
+          simp [hne]
+        rw [hi] at hj
+        exact hji (Finset.mem_singleton.mp hj)
+      simp [flipVertex5, hji, heq]
+  let S : CubeStates5 g J := {
+    Site := CubeVertex n
+    siteFintype := inferInstance
+    siteDecEq := inferInstance
+    d := n
+    stateOf := fun x => x
+    oneHot := fun s => s
+    oneHot_injective := fun _ _ h => h
+    resCoord := fun a => a.1
+    resCoord_injective := fun _ _ h => Subtype.ext h
+    oneHot_residual := by intro x a; rfl
+    state_determines := by
+      intro x y hxy
+      subst y
+      exact ⟨rfl, rfl, rfl, Iff.rfl, rfl, rfl, rfl⟩
+    neighbors := fun s => Finset.univ.filter fun t => (cube n).Adj s t
+    mem_neighbors := by
+      intro s t
+      change t ∈ Finset.univ.filter (fun u => (cube n).Adj s u) ↔
+        ∃ x y : CubeVertex n, x = s ∧ y = t ∧ (cube n).Adj x y
+      simp
+    degree_bound := by
+      intro s
+      let Nbr := {t : CubeVertex n // (cube n).Adj s t}
+      let idx : Nbr → Fin n := fun t => Classical.choose (hflip_of_adj t.property)
+      have hidx_spec (t : Nbr) : t.1 = flipVertex5 s (idx t) := by
+        simpa [idx] using Classical.choose_spec (hflip_of_adj t.property)
+      have hidx_inj : Function.Injective idx := by
+        intro t u htu
+        apply Subtype.ext
+        calc
+          t.1 = flipVertex5 s (idx t) := hidx_spec t
+          _ = flipVertex5 s (idx u) := by rw [htu]
+          _ = u.1 := (hidx_spec u).symm
+      have hcard : Fintype.card Nbr ≤ n := by
+        simpa using Fintype.card_le_of_injective idx hidx_inj
+      have hfilter :
+          (Finset.univ.filter (fun t : CubeVertex n => (cube n).Adj s t)).card =
+            Fintype.card Nbr := by
+        simp [Nbr, Fintype.card_subtype]
+      rw [hfilter]
+      omega
+    even_distance := by
+      intro b a a' ha ha' _ _
+      have hba : (cube n).Adj b a := (Finset.mem_filter.mp ha).2
+      have hba' : (cube n).Adj b a' := (Finset.mem_filter.mp ha').2
+      have hdb : hammingDist a b = 1 := by
+        change _root_.hammingDist b a = 1 at hba
+        rw [_root_.hammingDist_comm] at hba
+        exact hba
+      have hdb' : hammingDist b a' = 1 := by
+        change _root_.hammingDist b a' = 1 at hba'
+        exact hba'
+      calc
+        hammingDist a a' ≤ hammingDist a b + hammingDist b a' :=
+          _root_.hammingDist_triangle a b a'
+        _ ≤ 1 + 1 := Nat.add_le_add (Nat.le_of_eq hdb) (Nat.le_of_eq hdb')
+        _ ≤ 8 := by omega
+    dimension_upper := by
+      change (n : ℝ) ≤ (n : ℝ) + 3 * (n : ℝ) ^ (1 / 2 : ℝ) + 301
+      nlinarith [show 0 ≤ (n : ℝ) ^ (1 / 2 : ℝ) by positivity]
+  }
+  refine ⟨S, ?_⟩
+  change (n : ℝ) ≤ (1 + ε) * n
+  nlinarith [mul_nonneg (le_of_lt hε) (Nat.cast_nonneg n)]
 
 end HypercubeRamsey

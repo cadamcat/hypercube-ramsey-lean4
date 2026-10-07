@@ -390,6 +390,71 @@ private theorem graphBall_mono_radius
         subst n
         exact Finset.Subset.rfl
 
+private theorem graphBall_card_step
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {D : ListGateContext κ T k PT} (LE : ListEvent D.F) (d : ℕ)
+    (hdegree : ∀ v, (Finset.univ.filter fun w => LE.Adjacent v w).card ≤ d)
+    (seed : Finset (Pos T k)) (r : ℕ) :
+    (LE.graphBall seed (r + 1)).card ≤
+      (d + 1) * (LE.graphBall seed r).card := by
+  classical
+  let prev := LE.graphBall seed r
+  let nbr (v : Pos T k) := Finset.univ.filter fun w => LE.Adjacent w v
+  let next := Finset.univ.filter fun w => ∃ v ∈ prev, LE.Adjacent w v
+  have hsub : next ⊆ prev.biUnion nbr := by
+    intro w hw
+    rcases Finset.mem_filter.mp hw with ⟨_, v, hv, hadj⟩
+    exact Finset.mem_biUnion.mpr ⟨v, hv,
+      Finset.mem_filter.mpr ⟨Finset.mem_univ _, hadj⟩⟩
+  have hnbr (v : Pos T k) : (nbr v).card ≤ d := by
+    have hsym : ∀ w, LE.Adjacent w v ↔ LE.Adjacent v w := by
+      intro w
+      constructor
+      · rintro ⟨hne, hdis⟩
+        refine ⟨hne.symm, ?_⟩
+        intro h
+        exact hdis h.symm
+      · rintro ⟨hne, hdis⟩
+        refine ⟨hne.symm, ?_⟩
+        intro h
+        exact hdis h.symm
+    have heq : nbr v = Finset.univ.filter (fun w => LE.Adjacent v w) := by
+      ext w
+      simp [nbr, hsym]
+    rw [heq]
+    exact hdegree v
+  have hnext : next.card ≤ d * prev.card := by
+    calc
+      next.card ≤ (prev.biUnion nbr).card := Finset.card_le_card hsub
+      _ ≤ ∑ v ∈ prev, (nbr v).card := Finset.card_biUnion_le
+      _ ≤ ∑ v ∈ prev, d := by
+        apply Finset.sum_le_sum
+        intro v hv
+        exact hnbr v
+      _ = d * prev.card := by simp [mul_comm]
+  change (prev ∪ next).card ≤ (d + 1) * prev.card
+  calc
+    (prev ∪ next).card ≤ prev.card + next.card := Finset.card_union_le _ _
+    _ ≤ prev.card + d * prev.card := Nat.add_le_add_left hnext _
+    _ = (d + 1) * prev.card := by ring
+
+private theorem graphBall_singleton_card_le_pow
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {D : ListGateContext κ T k PT} (LE : ListEvent D.F) (d : ℕ)
+    (hdegree : ∀ v, (Finset.univ.filter fun w => LE.Adjacent v w).card ≤ d)
+    (v : Pos T k) : ∀ r : ℕ,
+      (LE.graphBall {v} r).card ≤ (d + 1) ^ r := by
+  intro r
+  induction r with
+  | zero => simp [ListEvent.graphBall]
+  | succ r ih =>
+      calc
+        (LE.graphBall {v} (r + 1)).card ≤
+            (d + 1) * (LE.graphBall {v} r).card :=
+          graphBall_card_step LE d hdegree {v} r
+        _ ≤ (d + 1) * (d + 1) ^ r := Nat.mul_le_mul_left _ ih
+        _ = (d + 1) ^ (r + 1) := by rw [pow_succ]; ring
+
 private theorem graphBall_adj_extend
     {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {D : ListGateContext κ T k PT} (LE : ListEvent D.F)

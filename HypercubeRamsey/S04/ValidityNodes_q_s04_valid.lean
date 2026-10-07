@@ -2,7 +2,6 @@ import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.Tools.Concentration
 import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
-import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 
 namespace HypercubeRamsey.Lane_q_s04_valid
 

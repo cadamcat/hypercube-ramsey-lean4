@@ -1646,6 +1646,146 @@ private theorem scopeWalkMass_succ_le {n : ℕ} {R K : Type*}
               | Sum.inl _ => D ^ 2 * lam * θ ^ (n / 2)
               | Sum.inr _ => 0) := by simp
 
+private theorem scopeWalkMass_zero {R K : Type*} [Fintype R] [Fintype K] {g : ℕ}
+    (rate : R → Fin g → ℝ) (scope : K → Finset R) (v : Endpoint R g) :
+    scopeWalkMass (m := 0) rate scope v = 0 := by
+  classical
+  have hvisit (k : K) (w : Fin 1 → Endpoint R g) : ¬ scopeRowVisit scope k w := by
+    rintro ⟨i, hi, a, ha, hmem⟩
+    have hi0 : i = 0 := by
+      apply Fin.ext
+      have hlt := i.isLt
+      omega
+    exact hi hi0
+  unfold scopeWalkMass
+  apply Finset.sum_eq_zero
+  intro q hq
+  apply Finset.sum_eq_zero
+  intro w hw
+  simp [hvisit]
+
+open Classical in
+set_option maxHeartbeats 1000000 in
+private theorem scopeWalkMass_bound {R K : Type*} [Fintype R] [Fintype K]
+    [DecidableEq R] [DecidableEq K] {g : ℕ}
+    (rate : R → Fin g → ℝ) (hrate0 : ∀ a y, 0 ≤ rate a y)
+    (scope : K → Finset R) (θ D lam : ℝ)
+    (hrow : ∀ a, ∑ y, rate a y = 1) (hcol : ∀ y, ∑ a, rate a y = θ)
+    (hθpos : 0 < θ) (hθ1 : θ ≤ 1) (hD : 0 ≤ D) (hlam0 : 0 ≤ lam)
+    (hsc : ∀ k, ((scope k).card : ℝ) ≤ D)
+    (hdeg : ∀ a, ((Finset.univ.filter fun k => a ∈ scope k).card : ℝ) ≤ D)
+    (hlam : ∀ a y, rate a y ≤ lam) (m : ℕ) :
+    (∀ a, scopeWalkMass (m := m) rate scope (Sum.inl a) ≤
+      (m : ℝ) * D ^ 2 * lam * (θ ^ (m / 2) / θ)) ∧
+    (∀ y, scopeWalkMass (m := m) rate scope (Sum.inr y) ≤
+      (m : ℝ) * D ^ 2 * lam * (θ ^ ((m + 1) / 2) / θ)) := by
+  classical
+  let C : ℝ := D ^ 2 * lam
+  have hC0 : 0 ≤ C := mul_nonneg (sq_nonneg D) hlam0
+  induction m with
+  | zero =>
+      constructor
+      · intro a
+        rw [scopeWalkMass_zero]
+        simp [C]
+      · intro y
+        rw [scopeWalkMass_zero]
+        simp [C]
+  | succ m ih =>
+      constructor
+      · intro a
+        have hstep := scopeWalkMass_succ_le (n := m) rate hrate0 scope θ D lam
+          hrow hcol hθpos.le hθ1 hD hlam0 hsc hdeg hlam (Sum.inl a)
+        have hstep' : scopeWalkMass (m := m + 1) rate scope (Sum.inl a) ≤
+            (∑ y : Fin g, rate a y * scopeWalkMass (m := m) rate scope (Sum.inr y)) +
+              C * θ ^ (m / 2) := by
+          simpa [C, transitionRate, Fintype.sum_sum_type] using hstep
+        have ihLabel (y : Fin g) : scopeWalkMass (m := m) rate scope (Sum.inr y) ≤
+            (m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ) := by
+          calc
+            scopeWalkMass (m := m) rate scope (Sum.inr y) ≤
+                (m : ℝ) * D ^ 2 * lam * (θ ^ ((m + 1) / 2) / θ) := ih.2 y
+            _ = (m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ) := by dsimp [C]; ring
+        have hOld :
+            (∑ y : Fin g, rate a y * scopeWalkMass (m := m) rate scope (Sum.inr y)) ≤
+              (m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ) := by
+          calc
+            (∑ y : Fin g, rate a y * scopeWalkMass (m := m) rate scope (Sum.inr y)) ≤
+                ∑ y : Fin g, rate a y *
+                  ((m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ)) := by
+                    apply Finset.sum_le_sum
+                    intro y hy
+                    exact mul_le_mul_of_nonneg_left (ihLabel y) (hrate0 a y)
+            _ = (∑ y : Fin g, rate a y) *
+                  ((m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ)) := by
+                    rw [Finset.sum_mul]
+            _ = (m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ) := by
+                    rw [hrow a]
+                    simp
+        have hPowStep : θ ^ (m / 2) ≤ θ ^ ((m + 1) / 2) / θ := by
+          apply (le_div_iff₀ hθpos).2
+          calc
+            θ ^ (m / 2) * θ = θ ^ (m / 2 + 1) := by rw [pow_succ]
+            _ ≤ θ ^ ((m + 1) / 2) := by
+              apply pow_le_pow_of_le_one hθpos.le hθ1
+              omega
+        calc
+          scopeWalkMass (m := m + 1) rate scope (Sum.inl a) ≤
+              (∑ y : Fin g, rate a y * scopeWalkMass (m := m) rate scope (Sum.inr y)) +
+                C * θ ^ (m / 2) := hstep'
+          _ ≤ (m : ℝ) * C * (θ ^ ((m + 1) / 2) / θ) +
+                C * (θ ^ ((m + 1) / 2) / θ) := by
+                  exact add_le_add hOld (mul_le_mul_of_nonneg_left hPowStep hC0)
+          _ = ((m + 1 : ℕ) : ℝ) * C * (θ ^ ((m + 1) / 2) / θ) := by
+                push_cast
+                ring
+          _ = ((m + 1 : ℕ) : ℝ) * D ^ 2 * lam *
+                (θ ^ ((m + 1) / 2) / θ) := by dsimp [C]; ring
+      · intro y
+        have hstep := scopeWalkMass_succ_le (n := m) rate hrate0 scope θ D lam
+          hrow hcol hθpos.le hθ1 hD hlam0 hsc hdeg hlam (Sum.inr y)
+        have hstep' : scopeWalkMass (m := m + 1) rate scope (Sum.inr y) ≤
+            ∑ a : R, rate a y * scopeWalkMass (m := m) rate scope (Sum.inl a) := by
+          simpa [transitionRate, Fintype.sum_sum_type] using hstep
+        have ihRow (a : R) : scopeWalkMass (m := m) rate scope (Sum.inl a) ≤
+            (m : ℝ) * C * (θ ^ (m / 2) / θ) := by
+          calc
+            scopeWalkMass (m := m) rate scope (Sum.inl a) ≤
+                (m : ℝ) * D ^ 2 * lam * (θ ^ (m / 2) / θ) := ih.1 a
+            _ = (m : ℝ) * C * (θ ^ (m / 2) / θ) := by dsimp [C]; ring
+        have hOld :
+            (∑ a : R, rate a y * scopeWalkMass (m := m) rate scope (Sum.inl a)) ≤
+              θ * ((m : ℝ) * C * (θ ^ (m / 2) / θ)) := by
+          calc
+            (∑ a : R, rate a y * scopeWalkMass (m := m) rate scope (Sum.inl a)) ≤
+                ∑ a : R, rate a y * ((m : ℝ) * C * (θ ^ (m / 2) / θ)) := by
+                    apply Finset.sum_le_sum
+                    intro a ha
+                    exact mul_le_mul_of_nonneg_left (ihRow a) (hrate0 a y)
+            _ = (∑ a : R, rate a y) * ((m : ℝ) * C * (θ ^ (m / 2) / θ)) := by
+                    rw [Finset.sum_mul]
+            _ = θ * ((m : ℝ) * C * (θ ^ (m / 2) / θ)) := by rw [hcol y]
+        have hexp : (m + 2) / 2 = m / 2 + 1 := by omega
+        have hratio : θ ^ ((m + 2) / 2) / θ = θ ^ (m / 2) := by
+          rw [hexp, pow_succ]
+          field_simp [ne_of_gt hθpos]
+        have hcancel : θ * ((m : ℝ) * C * (θ ^ (m / 2) / θ)) =
+            (m : ℝ) * C * θ ^ (m / 2) := by
+          field_simp [ne_of_gt hθpos]
+        calc
+          scopeWalkMass (m := m + 1) rate scope (Sum.inr y) ≤
+              ∑ a : R, rate a y * scopeWalkMass (m := m) rate scope (Sum.inl a) := hstep'
+          _ ≤ (m : ℝ) * C * θ ^ (m / 2) := by rw [← hcancel]; exact hOld
+          _ ≤ ((m + 1 : ℕ) : ℝ) * C * θ ^ (m / 2) := by
+                have hcoef : (m : ℝ) ≤ (m : ℝ) + 1 := by linarith
+                calc
+                  (m : ℝ) * C * θ ^ (m / 2) = (m : ℝ) * (C * θ ^ (m / 2)) := by ring
+                  _ ≤ ((m : ℝ) + 1) * (C * θ ^ (m / 2)) :=
+                    mul_le_mul_of_nonneg_right hcoef (mul_nonneg hC0 (pow_nonneg hθpos.le _))
+                  _ = ((m + 1 : ℕ) : ℝ) * C * θ ^ (m / 2) := by push_cast; ring
+          _ = ((m + 1 : ℕ) : ℝ) * D ^ 2 * lam *
+                (θ ^ ((m + 2) / 2) / θ) := by rw [hratio]; dsimp [C]; ring
+
 theorem decPath_weight_sum {T : ℕ} {R : Type*} [Fintype R] [DecidableEq R] {g : ℕ}
     {Ω : R → Type*} [∀ a, Fintype (Ω a)] [∀ a, DecidableEq (Ω a)]
     (δ : ℝ) (hδ : 0 ≤ δ) (hδ1 : δ ≤ 1) (p : ∀ a, FinProb (Ω a)) (lab : ∀ a, Ω a → Fin g) (θ : ℝ)

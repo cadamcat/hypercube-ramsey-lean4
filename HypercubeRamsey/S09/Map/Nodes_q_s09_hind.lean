@@ -1280,6 +1280,152 @@ private theorem filter_card_eq_after_support9 {α : Type*} [DecidableEq α]
       exact ⟨hc, hp⟩
   exact congrArg Finset.card hset
 
+private theorem filter_card_eq_of_mem_iff9 {α : Type*} [DecidableEq α]
+    (C : Finset α) (p q : α → Prop) [DecidablePred p] [DecidablePred q]
+    (hpq : ∀ x ∈ C, p x ↔ q x) :
+    (C.filter p).card = (C.filter q).card := by
+  classical
+  apply congrArg Finset.card
+  ext x
+  simp only [Finset.mem_filter]
+  constructor
+  · rintro ⟨hx, hp⟩
+    exact ⟨hx, (hpq x hx).mp hp⟩
+  · rintro ⟨hx, hq⟩
+    exact ⟨hx, (hpq x hx).mpr hq⟩
+
+private theorem eligCount9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (Pp Pp' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+    eligCount9 C Pp v j = eligCount9 C Pp' v j := by
+  classical
+  unfold eligCount9
+  apply filter_card_eq_of_mem_iff9
+  intro c hc'
+  constructor
+  · rintro ⟨hp, hs, hr, hj⟩
+    refine ⟨?_, hs, hr, hj⟩
+    rw [← hP c hc']
+    exact hp
+  · rintro ⟨hp, hs, hr, hj⟩
+    refine ⟨?_, hs, hr, hj⟩
+    rw [hP c hc']
+    exact hp
+
+private theorem crowdSame9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (v : CubeVertex n) (j : Fin (hc.levels n + 1)) (ρ : ℕ) :
+    crowdSame9 C Pp A v j ρ = crowdSame9 C Pp' A' v j ρ := by
+  classical
+  unfold crowdSame9
+  apply filter_card_eq_of_mem_iff9
+  intro c hc'
+  simp only [activeAt9]
+  constructor
+  · rintro ⟨⟨hp, ha⟩, hs, hr, hj⟩
+    refine ⟨⟨?_, ?_⟩, hs, hr, hj⟩
+    · rw [← hP c hc']; exact hp
+    · rw [← hA c hc']; exact ha
+  · rintro ⟨⟨hp, ha⟩, hs, hr, hj⟩
+    refine ⟨⟨?_, ?_⟩, hs, hr, hj⟩
+    · rw [hP c hc']; exact hp
+    · rw [hA c hc']; exact ha
+
+private theorem crowdAdj9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+    crowdAdj9 C Pp A v j = crowdAdj9 C Pp' A' v j := by
+  classical
+  unfold crowdAdj9
+  apply filter_card_eq_of_mem_iff9
+  intro c hc'
+  simp only [activeAt9]
+  constructor
+  · rintro ⟨⟨hp, ha⟩, hs, hr, hj⟩
+    refine ⟨⟨?_, ?_⟩, hs, hr, hj⟩
+    · rw [← hP c hc']; exact hp
+    · rw [← hA c hc']; exact ha
+  · rintro ⟨⟨hp, ha⟩, hs, hr, hj⟩
+    refine ⟨⟨?_, ?_⟩, hs, hr, hj⟩
+    · rw [hP c hc']; exact hp
+    · rw [hA c hc']; exact ha
+
+private theorem activeAt9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (c : Pos9 P hc n) (hc' : c ∈ C) :
+    activeAt9 Pp A c ↔ activeAt9 Pp' A' c := by
+  simp [activeAt9, hP c hc', hA c hc']
+
+private theorem holeIn9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+    holeIn9 C Pp A v j ↔ holeIn9 C Pp' A' v j := by
+  unfold holeIn9
+  constructor <;> intro h c hc' hslice hres hj
+  · intro hactive'
+    exact h c hc' hslice hres hj
+      ((activeAt9_congr_on_C C Pp Pp' A A' hP hA c hc').mpr hactive')
+  · intro hactive
+    exact h c hc' hslice hres hj
+      ((activeAt9_congr_on_C C Pp Pp' A A' hP hA c hc').mp hactive)
+
+private theorem badIn9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t : ℝ) (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (v : CubeVertex n) (j : Fin (hc.levels n + 1)) :
+    badIn9 C t Pp A v j ↔ badIn9 C t Pp' A' v j := by
+  have hhole := holeIn9_congr_on_C C Pp Pp' A A' hP hA v j
+  have hsame := crowdSame9_congr_on_C C Pp Pp' A A' hP hA
+  have hadj := crowdAdj9_congr_on_C C Pp Pp' A A' hP hA
+  unfold badIn9
+  constructor
+  · intro hbad
+    rcases hbad with hh | ⟨j', hwin, hcrowd⟩
+    · exact Or.inl (hhole.mp hh)
+    · refine Or.inr ⟨j', hwin, ?_⟩
+      rcases hcrowd with hs | ha | hl
+      · exact Or.inl (by simpa [hsame v j' (P.radius n)] using hs)
+      · exact Or.inr (Or.inl (by simpa [hadj v j'] using ha))
+      · exact Or.inr (Or.inr (by simpa [hsame v j' (P.radius n + 1)] using hl))
+  · intro hbad
+    rcases hbad with hh | ⟨j', hwin, hcrowd⟩
+    · exact Or.inl (hhole.mpr hh)
+    · refine Or.inr ⟨j', hwin, ?_⟩
+      rcases hcrowd with hs | ha | hl
+      · exact Or.inl (by simpa [hsame v j' (P.radius n)] using hs)
+      · exact Or.inr (Or.inl (by simpa [hadj v j'] using ha))
+      · exact Or.inr (Or.inr (by simpa [hsame v j' (P.radius n + 1)] using hl))
+
+private theorem scaleBad9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s : ℝ) (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (x : HeightState9 P hc n) :
+    scaleBad9 C t s Pp A x ↔ scaleBad9 C t s Pp' A' x := by
+  have hbad := badIn9_congr_on_C C t Pp Pp' A A' hP hA x.1 x.2
+  have hcount := eligCount9_congr_on_C C Pp Pp' hP x.1 x.2
+  simp only [scaleBad9]
+  rw [hbad, hcount]
+
+private theorem scaleFailure9_congr_on_C {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
+    (C : Finset (Pos9 P hc n)) (t s η : ℝ) (R : ℕ)
+    (Pp Pp' A A' : Pos9 P hc n → Bool)
+    (hP : ∀ c ∈ C, Pp c = Pp' c) (hA : ∀ c ∈ C, A c = A' c)
+    (start : HeightState9 P hc n) :
+    scaleFailure9 C t s η R Pp A start ↔ scaleFailure9 C t s η R Pp' A' start := by
+  constructor
+  · rintro ⟨endpoint, rest, hpath, hsite, hlevel, hmetric, hrise⟩
+    refine ⟨endpoint, rest, ?_, hsite, hlevel, hmetric, hrise⟩
+    exact heightPath9_mono (fun x hb =>
+      (scaleBad9_congr_on_C C t s Pp Pp' A A' hP hA x).mp hb) hpath
+  · rintro ⟨endpoint, rest, hpath, hsite, hlevel, hmetric, hrise⟩
+    refine ⟨endpoint, rest, ?_, hsite, hlevel, hmetric, hrise⟩
+    exact heightPath9_mono (fun x hb =>
+      (scaleBad9_congr_on_C C t s Pp Pp' A A' hP hA x).mpr hb) hpath
+
 private theorem eligCount9_restrictLocal {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (hmn : P.m n ≤ n) (C : Finset (Pos9 P hc n)) (Pp : Pos9 P hc n → Bool)
     (start state : HeightState9 P hc n) (R : ℕ)

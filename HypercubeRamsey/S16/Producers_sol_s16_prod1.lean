@@ -4195,4 +4195,131 @@ theorem cluster_permission_cost_room {κ : CConsts} (hκ : κ.Admissible) :
       mul_le_mul hh' he (Real.exp_pos _).le (Nat.cast_nonneg n)
     _ = _ := by field_simp
 
+/-- Counting each image once is dominated by counting every slot. -/
+theorem image_product_le_slot_product {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : Index → FinLaw Bin)
+    (F : (Index → Bin) → ℝ) (hF : ∀ a, 0 ≤ F a) (pool : Slot → Bin) :
+    (∑ a : Index → Bin, F a * ∏ i,
+      if a i ∈ Finset.univ.image pool then (P i).w (a i) else 0) ≤
+    ∑ indices : Index → Slot, F (fun i => pool (indices i)) * ∏ i, (P i).w (pool (indices i)) := by
+  classical
+  let A : Finset (Index → Bin) := Finset.univ.filter fun a => ∀ i, a i ∈ Finset.univ.image pool
+  let pick : Bin → Slot := fun b => if hb : b ∈ Finset.univ.image pool then
+    Classical.choose (Finset.mem_image.mp hb) else Classical.choice inferInstance
+  have hpick : ∀ b ∈ Finset.univ.image pool, pool (pick b) = b := by
+    intro b hb
+    simp only [pick, dif_pos hb]
+    exact (Classical.choose_spec (Finset.mem_image.mp hb)).2
+  let lift : (Index → Bin) → (Index → Slot) := fun a i => pick (a i)
+  have hlift : ∀ a ∈ A, (fun i => pool (lift a i)) = a := by
+    intro a ha
+    funext i
+    exact hpick (a i) ((Finset.mem_filter.mp ha).2 i)
+  have hinj : Set.InjOn lift A := by
+    intro a ha b hb heq
+    calc
+      a = (fun i => pool (lift a i)) := (hlift a ha).symm
+      _ = (fun i => pool (lift b i)) := by rw [heq]
+      _ = b := hlift b hb
+  have hzero : ∀ a, (∏ i, if a i ∈ Finset.univ.image pool then (P i).w (a i) else 0) =
+      if a ∈ A then ∏ i, (P i).w (a i) else 0 := by
+    intro a
+    by_cases ha : a ∈ A
+    · rw [if_pos ha]
+      apply Finset.prod_congr rfl
+      intro i _
+      exact if_pos ((Finset.mem_filter.mp ha).2 i)
+    · rw [if_neg ha]
+      have hex : ∃ i, a i ∉ Finset.univ.image pool := by simpa [A, not_forall] using ha
+      obtain ⟨i, hi⟩ := hex
+      exact Finset.prod_eq_zero (Finset.mem_univ i) (if_neg hi)
+  simp_rw [hzero, mul_ite, mul_zero]
+  rw [← Finset.sum_filter]
+  have hfilter : Finset.univ.filter (fun a : Index → Bin => a ∈ A) = A := by
+    ext a
+    simp
+  rw [hfilter]
+  apply Finset.sum_le_sum_of_injOn lift hinj (Finset.subset_univ _)
+  · intro a ha
+    have hh : ∀ i, pool (lift a i) = a i := fun i => congrFun (hlift a ha) i
+    simp_rw [hh]
+    exact le_rfl
+  · intro indices _ _
+    exact mul_nonneg (hF _) (Finset.prod_nonneg fun i _ => (P i).nonneg _)
+
+/-- The weighted slot polynomial controls the image integral even for repetitions. -/
+theorem image_product_le_empirical {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : Index → FinLaw Bin) (B : ℝ) (hB : 0 < B)
+    (F : (Index → Bin) → ℝ) (hF : ∀ a, 0 ≤ F a) (pool : Slot → Bin) :
+    (∑ a : Index → Bin, F a * ∏ i,
+      if a i ∈ Finset.univ.image pool then (P i).w (a i) else 0) ≤
+    ((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+      empirical_statistic (empirical_weighted_kernel P B F) pool := by
+  classical
+  have hL : (0 : ℝ) < Fintype.card Slot := by exact_mod_cast Fintype.card_pos
+  have heq : ((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+      empirical_statistic (empirical_weighted_kernel P B F) pool =
+      ∑ indices : Index → Slot, F (fun i => pool (indices i)) * ∏ i, (P i).w (pool (indices i)) := by
+    unfold empirical_statistic empirical_weighted_kernel FinLaw.E FinLaw.pi
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro indices _
+    simp only [FinLaw.uniform, Finset.mem_univ, if_true, Finset.card_univ]
+    have hprod : (∏ _i : Index, (1 / (Fintype.card Slot : ℝ))) *
+        (∏ i : Index, B * (P i).w (pool (indices i))) =
+        (B / (Fintype.card Slot : ℝ)) ^ Fintype.card Index * ∏ i, (P i).w (pool (indices i)) := by
+      rw [← Finset.prod_mul_distrib]
+      simp_rw [show ∀ i : Index, (1 / (Fintype.card Slot : ℝ)) *
+        (B * (P i).w (pool (indices i))) = (B / (Fintype.card Slot : ℝ)) * (P i).w (pool (indices i)) by
+          intro i; ring]
+      rw [Finset.prod_mul_distrib]
+      simp [div_pow]
+    have hcancel : ((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+        (B / (Fintype.card Slot : ℝ)) ^ Fintype.card Index = 1 := by
+      rw [← mul_pow]
+      have hh : ((Fintype.card Slot : ℝ) / B) * (B / (Fintype.card Slot : ℝ)) = 1 := by
+        field_simp
+      rw [hh, one_pow]
+    rw [mul_left_comm (∏ _i : Index, 1 / (Fintype.card Slot : ℝ)), hprod]
+    calc
+      _ = (((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+          (B / (Fintype.card Slot : ℝ)) ^ Fintype.card Index) *
+          (F (fun i => pool (indices i)) * ∏ i, (P i).w (pool (indices i))) := by ring
+      _ = _ := by rw [hcancel, one_mul]
+  rw [heq]
+  exact image_product_le_slot_product P F hF pool
+
+theorem solver_star_trimmed_any_pin_mean {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯} [Nonempty (Bin 𝒯 i)]
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i) (hW : S.Hgood v W)
+    (hEps : 0 < sliceEps κ (𝒯.P i).h ∧ sliceEps κ (𝒯.P i).h ≤ 1)
+    (P : Group 𝒯 i → FinLaw (Bin 𝒯 i)) (c : ℝ) (hc : 1 ≤ c)
+    (hP : ∀ g ∈ solver_star_group_scope S v, ∀ D, (P g).w D ≤ c * S.q g W D)
+    (g : Group 𝒯 i) (D : Bin 𝒯 i) (hD : D ∈ S.pretrimBins W g) :
+    (FinLaw.pi (coordinatePin P g D)).E (solver_star_bin_failure S W v) ≤
+      c ^ (solver_star_group_scope S v).card * Real.sqrt (sliceEps κ (𝒯.P i).h) := by
+  classical
+  by_cases hg : g ∈ solver_star_group_scope S v
+  · have hvg : SliceSolver.Incident v g := by
+      obtain ⟨j, _, heq⟩ := Finset.mem_image.mp hg
+      rw [← heq]
+      refine ⟨j, S.groupOf_spec _ ?_⟩
+      rw [flip_parity]
+      exact not_not.mpr v.2
+    exact solver_star_trimmed_pin_mean S W v P c hc hP g D hD hvg
+  · have hEq : (FinLaw.pi (coordinatePin P g D)).E (solver_star_bin_failure S W v) =
+        (FinLaw.pi P).E (solver_star_bin_failure S W v) := by
+      apply pi_E_local _ _ (solver_star_group_scope S v) _ (solver_star_bin_failure_local S W v)
+      intro j hj
+      have hjg : j ≠ g := by intro h; exact hg (h ▸ hj)
+      simp only [coordinatePin, if_neg hjg]
+    rw [hEq]
+    have hroot : sliceEps κ (𝒯.P i).h ≤ Real.sqrt (sliceEps κ (𝒯.P i).h) := by
+      apply (Real.le_sqrt hEps.1.le hEps.1.le).mpr
+      nlinarith [sq_nonneg (sliceEps κ (𝒯.P i).h)]
+    exact (solver_star_trimmed_mean S W v hW P c (le_trans (by norm_num) hc) hP).trans
+      (mul_le_mul_of_nonneg_left hroot (pow_nonneg (le_trans (by norm_num) hc) _))
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

@@ -1080,24 +1080,81 @@ theorem p92_gain (P : Params9) (hP : P.Valid) (c₀ c₁ : ℝ) (hc₀ : 0 < c�
     linarith
   obtain ⟨nTail, hTail⟩ := Lane_q_s09_gain2.eventual_tail_sum3
     (u := P.u) (c₁ := c₀) (c₂ := c₁) (c₃ := c₁) hu hc₀ hc₁ hc₁
-  refine ⟨c, hc, nTail, ?_⟩
+  obtain ⟨nLog, hLog⟩ := Lane_q_s09_gain2.eventual_gain_log_error9 P hP
+  refine ⟨c, hc, max nTail nLog, ?_⟩
   intro n hn N E X Y κ G M S I hin hreg hmean hconc
+  have hnTail : nTail ≤ n := le_trans (le_max_left nTail nLog) hn
+  have hnLog : nLog ≤ n := le_trans (le_max_right nTail nLog) hn
+  have htailN := hTail n hnTail
+  have hmargin := hLog n hnLog
+  rcases hin with ⟨hN, hprep, hdeep, htags, hmasks, htools, hexps, hscales⟩
+  rcases hscales with ⟨hnDim, hm, hr, hwidth, hfilter, hfirstWidth, hbsmall, hgain⟩
   intro v
   have hregAt := hreg v
   have hmeanAt := hmean v
   have hconcAt := hconc v
+  let meanBad (ω₀ : Outcome9 I N) : Prop :=
+    ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω₀ <
+      (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n
+  let devBad (ω₀ ω : Outcome9 I N) : Prop :=
+    ∑ b : StarOdd9 v, clippedFrac9 S E G ω v b.1 ≤
+      ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω₀ - (n : ℝ) * P.aStar n / 10
   have hsplit (ω : Outcome9 I N) :
       ¬ starValid9 S E G ω v →
-        (¬ starRegular9 S E G ω v ∨
-          ¬ (-(n : ℝ) * Real.log 2 + gainConst9 * n * P.aStar n ≤ starGain9 S E G ω v)) := by
+        (¬ starRegular9 S E G ω v ∨ meanBad ω ∨ devBad ω ω) := by
     intro hbad
     by_cases hregular : starRegular9 S E G ω v
-    · right
-      intro hgain
-      exact hbad ⟨hregular, hgain⟩
+    · by_cases hmeanBad : meanBad ω
+      · exact Or.inr (Or.inl hmeanBad)
+      · have hmeanGood :
+            (n : ℝ) / 2 + (9 / 10 : ℝ) * n * P.aStar n ≤
+              ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω :=
+          le_of_not_gt hmeanBad
+        by_cases hdevBad : devBad ω ω
+        · exact Or.inr (Or.inr hdevBad)
+        · have hdevGood :
+              ∑ b : StarOdd9 v, condCoreMean9 S I E G v b.1 ω -
+                  (n : ℝ) * P.aStar n / 10 <
+                ∑ b : StarOdd9 v, clippedFrac9 S E G ω v b.1 :=
+            lt_of_not_ge hdevBad
+          have hfrac (b : StarOdd9 v) :
+              1 / 2 - 2 * P.bStar n ≤ targetFrac9 S E G ω v b.1 ∧
+                targetFrac9 S E G ω v b.1 ≤ 1 / 2 + 2 * P.bStar n := by
+            have habs := Lane_q_s09_gain2.starRegular_targetFrac_bounds9
+              ω v b.1 hbsmall hregular b.2
+            have habs' := abs_le.mp habs
+            constructor <;> linarith
+          have hclipEq (b : StarOdd9 v) :
+              clippedFrac9 S E G ω v b.1 = targetFrac9 S E G ω v b.1 := by
+            have hq := hfrac b
+            change max (1 / 2 - 2 * P.bStar n)
+              (min (1 / 2 + 2 * P.bStar n) (targetFrac9 S E G ω v b.1)) = _
+            rw [min_eq_right hq.2, max_eq_right hq.1]
+          have hclipSum :
+              (∑ b : StarOdd9 v, clippedFrac9 S E G ω v b.1) =
+                ∑ b : StarOdd9 v, targetFrac9 S E G ω v b.1 := by
+            apply Finset.sum_congr rfl
+            intro b hb
+            exact hclipEq b
+          have ha : 0 ≤ P.aStar n := by
+            dsimp [Params9.aStar]
+            positivity
+          have hclipLower :
+              (n : ℝ) / 2 + (8 / 10 : ℝ) * n * P.aStar n ≤
+                ∑ b : StarOdd9 v, clippedFrac9 S E G ω v b.1 := by
+            nlinarith
+          have hsumTarget :
+              (n : ℝ) / 2 + (8 / 10 : ℝ) * n * P.aStar n ≤
+                ∑ b : StarOdd9 v, targetFrac9 S E G ω v b.1 := by
+            rw [← hclipSum]
+            exact hclipLower
+          have hgain : -(n : ℝ) * Real.log 2 + gainConst9 * n * P.aStar n ≤
+              starGain9 S E G ω v :=
+            Lane_q_s09_gain2.star_gain_lower_of_mean9 ω v hbsmall hmargin hfrac hsumTarget
+          exact False.elim (hbad ⟨hregular, hgain⟩)
     · exact Or.inl hregular
-  -- The remaining passage averages `hconcAt` over core fibers, combines it with `hmeanAt`, and applies the
-  -- pointwise lower logarithm estimate to the actual target fractions on the regular event.
+  -- The remaining step converts the fiberwise `hconcAt` bounds into the unconditional deviation tail,
+  -- then unions that tail with the regularity and mean-history tails.
   sorry
 
 /-- The gain stage assembled (09:146–294): from the tags, the star validity event fails with raw probability at

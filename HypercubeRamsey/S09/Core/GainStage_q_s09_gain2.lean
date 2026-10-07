@@ -1099,4 +1099,216 @@ theorem eventual_gain_mean_margin9 (P : Params9) (hP : P.Valid) :
       simp only [gainMeanSpecialLoss9, hcase]
       nlinarith [hma, hmb]
 
+theorem log_gain_term_lower9 {q b : ℝ} (hb : 0 ≤ b) (hbsmall : b ≤ 1 / 200)
+    (hqlo : 1 / 2 - 2 * b ≤ q) (hqhi : q ≤ 1 / 2 + 2 * b) :
+    -Real.log 2 + 2 * (q - 1 / 2) - 32 * b ^ 2 ≤ Real.log q := by
+  have hqpos : 0 < q := by linarith
+  let x := 2 * q - 1
+  have hxlo : -4 * b ≤ x := by dsimp [x]; linarith
+  have hxhi : x ≤ 4 * b := by dsimp [x]; linarith
+  have hxsmall : -(1 / 2 : ℝ) ≤ x := by
+    have : 4 * b ≤ 4 * (1 / 200 : ℝ) := mul_le_mul_of_nonneg_left hbsmall (by norm_num)
+    norm_num at this
+    linarith
+  have hbase : 0 < 1 + x := by dsimp [x]; linarith
+  have hinv : 0 < (1 + x)⁻¹ := inv_pos.mpr hbase
+  have hlog := Real.log_le_sub_one_of_pos hinv
+  rw [Real.log_inv] at hlog
+  have hratio : x / (1 + x) ≤ Real.log (1 + x) := by
+    have hrew : 1 - (1 + x)⁻¹ = x / (1 + x) := by
+      field_simp [ne_of_gt hbase]
+      <;> ring
+    linarith [hrew]
+  have hquadratic : x - 2 * x ^ 2 ≤ x / (1 + x) := by
+    have hnum : 0 ≤ x ^ 2 * (1 + 2 * x) :=
+      mul_nonneg (sq_nonneg x) (by linarith [hxsmall])
+    have hden : 0 < 1 + x := hbase
+    rw [le_div_iff₀ hden]
+    nlinarith
+  have hxabs : |x| ≤ 4 * b := by
+    rw [abs_le]
+    constructor <;> nlinarith [hxlo, hxhi]
+  have hxSq : x ^ 2 ≤ 16 * b ^ 2 := by
+    have hsquare := mul_le_mul hxabs hxabs (abs_nonneg x) (by positivity : 0 ≤ 4 * b)
+    nlinarith [hsquare]
+  have hlogLower : x - 32 * b ^ 2 ≤ Real.log (1 + x) := by
+    calc
+      x - 32 * b ^ 2 ≤ x - 2 * x ^ 2 := by nlinarith [hxSq]
+      _ ≤ x / (1 + x) := hquadratic
+      _ ≤ Real.log (1 + x) := hratio
+  have hqfactor : q = (1 + x) / 2 := by dsimp [x]; ring
+  rw [hqfactor]
+  rw [Real.log_div hbase.ne' (by norm_num : (2 : ℝ) ≠ 0)]
+  dsimp [x]
+  linarith
+
+theorem eventual_gain_log_error9 (P : Params9) (hP : P.Valid) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, 32 * P.bStar n ^ 2 ≤ P.aStar n / 10 := by
+  have hhm : 0 < (P.hMinus : ℝ) := by exact_mod_cast hP.2.1.1
+  have hhp : (P.hPlus : ℝ) < (P.hMinus : ℝ) + (P.χ : ℝ) / 10 := by
+    have hgap := hP.2.2.2.2.2.1
+    exact_mod_cast (show P.hPlus < P.hMinus + P.χ / 10 by linarith)
+  have hχQ : P.χ < P.hMinus / 100 := by
+    have hχmin := hP.2.2.2.2.1.2
+    have hle : min P.xS (min P.hMinus (1 - P.hPlus)) / 100 ≤ P.hMinus / 100 := by
+      apply div_le_div_of_nonneg_right _ (by norm_num)
+      exact (min_le_right _ _).trans (min_le_left _ _)
+    exact lt_of_lt_of_le hχmin hle
+  have hχ : (P.χ : ℝ) < (P.hMinus : ℝ) / 100 := by exact_mod_cast hχQ
+  have hd : 0 < 2 * (P.hMinus : ℝ) - (P.hPlus : ℝ) := by
+    nlinarith
+  obtain ⟨n₀, hsmall⟩ := eventual_const_mul_rpow_neg_lt
+    (d := 2 * (P.hMinus : ℝ) - (P.hPlus : ℝ)) (A := 640) (ε := 1 / 10)
+    hd (by norm_num)
+  refine ⟨max n₀ 1, ?_⟩
+  intro n hn
+  have hn₀ : n₀ ≤ n := le_trans (le_max_left n₀ 1) hn
+  have hn1 : 1 ≤ n := le_trans (le_max_right n₀ 1) hn
+  have hnR : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hr := hsmall n hn₀
+  have hratio : 64 * (n : ℝ) ^ (-(2 * (P.hMinus : ℝ) - (P.hPlus : ℝ))) =
+      32 * P.bStar n ^ 2 / P.aStar n := by
+    rw [Params9.bStar, Params9.aStar]
+    have hexp : -(2 * (P.hMinus : ℝ) - (P.hPlus : ℝ)) =
+        (P.hPlus : ℝ) - 2 * (P.hMinus : ℝ) := by ring
+    rw [hexp]
+    have hpower := power_ratio n hn1 0 (P.hMinus : ℝ) (P.hPlus : ℝ)
+    simp only [Real.rpow_zero, one_mul, zero_add] at hpower
+    calc
+      64 * (n : ℝ) ^ ((P.hPlus : ℝ) - 2 * (P.hMinus : ℝ)) =
+          32 * (2 * (n : ℝ) ^ ((P.hPlus : ℝ) - 2 * (P.hMinus : ℝ))) := by ring
+      _ = 32 * (((n : ℝ) ^ (-(P.hMinus : ℝ))) ^ 2 /
+          ((n : ℝ) ^ (-(P.hPlus : ℝ)) / 2)) := by rw [← hpower]
+    ring
+  have haPos : 0 < P.aStar n := by
+    dsimp [Params9.aStar]
+    exact div_pos (Real.rpow_pos_of_pos hnR _) (by norm_num)
+  have hratioSmall : 32 * P.bStar n ^ 2 / P.aStar n < 1 / 10 := by
+    calc
+      32 * P.bStar n ^ 2 / P.aStar n = 64 * (n : ℝ) ^
+          (-(2 * (P.hMinus : ℝ) - (P.hPlus : ℝ))) := hratio.symm
+      _ < 1 / 10 := by nlinarith [hr]
+  have hscaled := (div_lt_iff₀ haPos).mp hratioSmall
+  nlinarith
+
+theorem starRegular_targetFrac_bounds9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    {S : Setup9 P n N M} {I : IDMap9 P n} {E : Fin N → Fin N → Prop} {G : Colour}
+    (ω : Outcome9 I N) (v : EvenSites9 n) (b : OddSites9 n)
+    (hsmall : P.bStar n ≤ 1 / 200)
+    (hregular : starRegular9 S E G ω v)
+    (hadj : (OAI.HypercubeRamsey.cube n).Adj v.1 b.1) :
+    |targetFrac9 S E G ω v b - 1 / 2| ≤ 2 * P.bStar n := by
+  classical
+  let target := I.center v.1
+  let seen := I.seen b.1
+  let core := I.core v.1
+  let outer := outerIDs9 I v b
+  let coreIDs := coreIDs9 I v b
+  let before := outer.toList ++ coreIDs.toList
+  let order := fullOrder9 I v b
+  let k := before.length
+  have hcenterCore : target ∈ core := I.center_mem_core v.1 v.2
+  have hset : seen.erase target = outer ∪ coreIDs := by
+    ext z
+    by_cases hzt : z = target
+    · subst z
+      simp [outer, coreIDs, outerIDs9, coreIDs9, seen, core, target, hcenterCore]
+    · by_cases hzcore : z ∈ core
+      · simp [outer, coreIDs, outerIDs9, coreIDs9, seen, core, target, hzt, hzcore]
+      · simp [outer, coreIDs, outerIDs9, coreIDs9, seen, core, target, hzt, hzcore]
+  have horderEq : order = before ++ [target] := by
+    simp [order, before, target, outer, coreIDs, fullOrder9]
+  have hbefore : order.take k = before := by
+    rw [horderEq]
+    simp [k]
+  have hbeforeSet : before.toFinset = outer ∪ coreIDs := by
+    simp [before]
+  have hfilters : hitSet9 E G ω before.toFinset = hitSet9 E G ω (seen.erase target) := by
+    rw [hbeforeSet, ← hset]
+  have hlaw : prefixLaw9 E G ω (maskedLaw9 S ω b) order k =
+      delLaw9 S E G ω b target := by
+    change restrictOr9 (maskedLaw9 S ω b)
+      (hitSet9 E G ω (order.take k).toFinset) =
+      restrictOr9 (maskedLaw9 S ω b)
+        (hitSet9 E G ω ((I.seen b.1).erase (I.center v.1)))
+    rw [hbefore, hbeforeSet, ← hset]
+  have horders := hregular b hadj
+  rcases horders with ⟨hmasked, _, _⟩
+  have hprev := orderRegular_degree_lower (M := M) ω (maskedLaw9 S ω b) order hmasked hsmall
+  have hget : order[k]? = some target := by
+    rw [horderEq]
+    simp [k]
+  have hdev := hmasked k target hget (by
+    intro j c hj hjget
+    exact hprev j c hjget)
+  change |rowDeg E G (anc9 ω (I.center v.1))
+      (delLaw9 S E G ω b (I.center v.1)) - 1 / 2| ≤ 2 * P.bStar n
+  rw [← hlaw]
+  exact hdev
+
+theorem star_gain_lower_of_mean9 {P : Params9} {n N : ℕ} {M : TagMix N}
+    {S : Setup9 P n N M} {I : IDMap9 P n} {E : Fin N → Fin N → Prop} {G : Colour}
+    (ω : Outcome9 I N) (v : EvenSites9 n) (hsmall : P.bStar n ≤ 1 / 200)
+    (hmargin : 32 * P.bStar n ^ 2 ≤ P.aStar n / 10)
+    (hfrac : ∀ b : StarOdd9 v,
+      1 / 2 - 2 * P.bStar n ≤ targetFrac9 S E G ω v b.1 ∧
+        targetFrac9 S E G ω v b.1 ≤ 1 / 2 + 2 * P.bStar n)
+    (hsum : (n : ℝ) / 2 + (8 / 10 : ℝ) * n * P.aStar n ≤
+      ∑ b : StarOdd9 v, targetFrac9 S E G ω v b.1) :
+    -(n : ℝ) * Real.log 2 + gainConst9 * n * P.aStar n ≤
+      starGain9 S E G ω v := by
+  have hcardNat : Fintype.card (StarOdd9 v) = n := by
+    calc
+      Fintype.card (StarOdd9 v) = Fintype.card (Fin n) :=
+        Fintype.card_congr (starCoordEquiv9 v).symm
+      _ = n := Fintype.card_fin n
+  have hcard : (Fintype.card (StarOdd9 v) : ℝ) = n := by exact_mod_cast hcardNat
+  have hbNonneg : 0 ≤ P.bStar n := by
+    dsimp [Params9.bStar]
+    exact Real.rpow_nonneg (by positivity) _
+  have hterms : ∀ b : StarOdd9 v,
+      -Real.log 2 + 2 * (targetFrac9 S E G ω v b.1 - 1 / 2) -
+          32 * P.bStar n ^ 2 ≤ Real.log (targetFrac9 S E G ω v b.1) := by
+    intro b
+    exact log_gain_term_lower9 hbNonneg hsmall (hfrac b).1 (hfrac b).2
+  have hlogs :
+      (Finset.univ.sum (fun b : StarOdd9 v =>
+        -Real.log 2 + 2 * (targetFrac9 S E G ω v b.1 - 1 / 2) -
+          32 * P.bStar n ^ 2)) ≤
+        Finset.univ.sum (fun b : StarOdd9 v => Real.log (targetFrac9 S E G ω v b.1)) := by
+    apply Finset.sum_le_sum
+    intro b hb
+    exact hterms b
+  have hlogconst :
+      (∑ b : StarOdd9 v, -Real.log 2) = -(n : ℝ) * Real.log 2 := by
+    simp [Finset.sum_const, hcard, nsmul_eq_mul]
+  have hqpart :
+      (∑ b : StarOdd9 v, 2 * (targetFrac9 S E G ω v b.1 - 1 / 2)) =
+        2 * ((∑ b : StarOdd9 v, targetFrac9 S E G ω v b.1) - (n : ℝ) / 2) := by
+    rw [← Finset.mul_sum, Finset.sum_sub_distrib]
+    simp [Finset.sum_const, hcard, nsmul_eq_mul]
+    <;> ring
+  have hquadpart :
+      (∑ b : StarOdd9 v, 32 * P.bStar n ^ 2) =
+        (n : ℝ) * 32 * P.bStar n ^ 2 := by
+    simp [Finset.sum_const, hcard, nsmul_eq_mul]
+    <;> ring
+  have hsumExpand :
+      (∑ b : StarOdd9 v,
+        (-Real.log 2 + 2 * (targetFrac9 S E G ω v b.1 - 1 / 2) -
+          32 * P.bStar n ^ 2)) =
+        -(n : ℝ) * Real.log 2 +
+          2 * ((∑ b : StarOdd9 v, targetFrac9 S E G ω v b.1) - (n : ℝ) / 2) -
+          (n : ℝ) * 32 * P.bStar n ^ 2 := by
+    rw [Finset.sum_sub_distrib, Finset.sum_add_distrib]
+    rw [hlogconst, hqpart, hquadpart]
+  rw [starGain9]
+  rw [hsumExpand] at hlogs
+  have ha : 0 ≤ P.aStar n := by
+    dsimp [Params9.aStar]
+    positivity
+  have hn : 0 ≤ (n : ℝ) := by positivity
+  unfold gainConst9
+  nlinarith
+
 end HypercubeRamsey.Lane_q_s09_gain2

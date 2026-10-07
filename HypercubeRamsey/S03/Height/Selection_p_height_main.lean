@@ -1702,7 +1702,7 @@ private def hdChildCenterDomain {p : HDParams} (start : HDState p) (R : ℕ) : F
     Nat.dist start.2 ℓ.2.val < R ∧
       _root_.hammingDist start.1 ℓ.1 ≤ p.r + p.D * R + p.D)
 
-private theorem hdScaleDistance_hamming_bound {p : HDParams} (hD : 0 < p.D)
+theorem hdScaleDistance_hamming_bound {p : HDParams} (hD : 0 < p.D)
     {s t : HDState p} {R : ℕ} (h : hdScaleDistance p.D s t < R) :
     _root_.hammingDist s.1 t.1 ≤ p.D * R := by
   have hD1 : 1 ≤ p.D := by omega
@@ -3676,7 +3676,7 @@ private inductive HDThresholdCutFirstExit {p : HDParams} (Sites : p.Sites)
         (HDThresholdWalk.down hparent hv' hj hstep tail)
         ⟨middle, (HDThresholdWalk.down hinside hv' hj hstep childTail, parentTail)⟩
 
-private theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.D) :
+theorem hdScaleDistance_self {p : HDParams} (s : HDState p) (hD : 0 < p.D) :
     hdScaleDistance p.D s s = 0 := by
   unfold hdScaleDistance
   have hD1 : 1 ≤ p.D := by omega
@@ -7386,7 +7386,7 @@ private theorem sup_id_mem_nat (s : Finset ℕ) (hne : s.Nonempty) : s.sup id �
         subst s
         simp
 
-private theorem reach_level_le {p : HDParams} (Sites : p.Sites)
+theorem reach_level_le {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (vq : CubeVertex p.d) (R : ℕ)
     {v : CubeVertex p.d} {j : ℕ}
     (h : p.Reach Sites P A E vq R v j) : j ≤ p.H := by
@@ -7395,7 +7395,7 @@ private theorem reach_level_le {p : HDParams} (Sites : p.Sites)
   | up v j hj _ _ => omega
   | down v v' j _ _ _ ih => omega
 
-private theorem height_reach_at_height {p : HDParams} (Sites : p.Sites)
+theorem height_reach_at_height {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (vq : CubeVertex p.d) (R : ℕ)
     (hvq : vq ∈ Sites) :
     p.Reach Sites P A E vq R vq (p.height Sites P A E R vq) := by
@@ -7414,7 +7414,7 @@ theorem height_le_top {p : HDParams} (Sites : p.Sites)
     (R : ℕ) : p.height Sites P A E R v ≤ p.H :=
   reach_level_le Sites P A E v R (height_reach_at_height Sites P A E v R hv)
 
-private theorem height_reach_le {p : HDParams} (Sites : p.Sites)
+theorem height_reach_le {p : HDParams} (Sites : p.Sites)
     (P A : p.Loc → Bool) (E : p.EligMap) (vq : CubeVertex p.d) (R : ℕ)
     {j : ℕ}
     (h : p.Reach Sites P A E vq R vq j) : j ≤ p.height Sites P A E R vq := by

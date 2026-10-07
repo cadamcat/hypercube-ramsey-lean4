@@ -891,4 +891,22 @@ theorem finite_subdensity_ratio_bad5 {Ω Ξ : Type*} [Fintype Ω] [Fintype Ξ]
     _ ≤ ε * 1 := mul_le_mul_of_nonneg_left hDel hε
     _ = ε := by ring
 
+theorem baseLaw_weight_factor5 {γ K' χ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (X : Setup5 γ K' χ n N E G) (b : X.Base) :
+    X.baseLaw.w b = X.P.prior.parent.w b.1 *
+      (∏ w, (X.P.prior.partner b.1 w).w (b.2.1 w)) *
+      (∏ w, ∏ s : Fin (X.p.streamSegs n),
+        (X.segLaw b.1 (b.2.1 w)).w (b.2.2 w s)) := by
+  simp [Setup5.baseLaw, Setup5.coarseLaw, FinProb.bind, FinProb.pi]
+  ring
+
+theorem posterior_density_recompose5 {Ω : Type*} [Fintype Ω]
+    (P Q : FinProb Ω) (h : ∀ x, Q.w x = 0 → P.w x = 0) (x : Ω) :
+    Q.w x * ratio5 (P.w x) (Q.w x) = P.w x := by
+  by_cases hQ : Q.w x = 0
+  · simp [ratio5, hQ, h x hQ]
+  · simp [ratio5, hQ]
+    field_simp [hQ]
+
 end HypercubeRamsey.Lane_q_s05_hist1b

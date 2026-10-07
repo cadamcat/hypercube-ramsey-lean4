@@ -2676,7 +2676,667 @@ theorem closure_incidence_bound (B C_g : ℝ) (hB : 1 ≤ B) : ∃ n₀ : ℕ, �
       ∑ t : SamplingTest R K, D.law.pr (fun ξ =>
           closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) ∧
             v ∈ activeEndpoints ξ D.scope' (D.test' t)) ≤ clockκ B n := by
-  sorry
+  classical
+  obtain ⟨nShort, hshort⟩ := short_path_bad_bound B C_g hB
+  obtain ⟨nNum, hnum⟩ := incidence_numerics B hB
+  let nMesh : ℕ := ⌈2 * max C_g 0⌉₊
+  refine ⟨max nShort (max nNum (max nMesh 3)), ?_⟩
+  intro n hn g hg R K _ _ _ Ω _ _ _ D v
+  have hnShort : nShort ≤ n := le_trans (le_max_left _ _) hn
+  have hnNum : nNum ≤ n := le_trans (le_max_left _ _) (le_trans (le_max_right _ _) hn)
+  have hnOuter : max nMesh 3 ≤ n := le_trans (le_max_right _ _) (le_trans (le_max_right _ _) hn)
+  have hnMesh : nMesh ≤ n := le_trans (le_max_left _ _) hnOuter
+  have hn3 : 3 ≤ n := le_trans (le_max_right _ _) hnOuter
+  have hn2 : 2 ≤ n := by omega
+  have hnreal : (2 : ℝ) ≤ n := by exact_mod_cast hn2
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hnreal
+  have hKpos : 0 < clockK₀ B := by unfold clockK₀; linarith [hB]
+  have hB20 : 20 ≤ clockA B := by unfold clockA clockK₀; linarith [hB]
+  have hpow20 : (10 : ℝ) ^ 6 ≤ (n : ℝ) ^ (20 : ℝ) := by
+    calc
+      (10 : ℝ) ^ 6 ≤ (2 : ℝ) ^ (20 : ℝ) := by norm_num
+      _ ≤ (n : ℝ) ^ (20 : ℝ) := Real.rpow_le_rpow (by norm_num) hnreal (by norm_num)
+  have hpowA : (n : ℝ) ^ (20 : ℝ) ≤ (n : ℝ) ^ clockA B :=
+    Real.rpow_le_rpow_of_exponent_le (le_trans (by norm_num) hnreal) hB20
+  have hgnum : (10 : ℝ) ^ 6 ≤ g := le_trans hpow20 (le_trans hpowA (D.card_labels_ge (by omega)))
+  have htheta := D.completed_theta_bounds hgnum
+  have hthetaLeOne : D.C.theta ≤ 1 := le_trans htheta.2 (by norm_num)
+  have hgPos : 0 < (g : ℝ) := by
+    have hgReal : (1 : ℝ) ≤ (g : ℝ) :=
+      (show (1 : ℝ) ≤ (10 : ℝ) ^ 6 by norm_num).trans hgnum
+    have hgNat : 1 ≤ g := by exact_mod_cast hgReal
+    exact_mod_cast (show 0 < g by omega)
+  have hgNonneg : 0 ≤ (g : ℝ) := le_of_lt hgPos
+  have hrowCardEq : (Fintype.card D.Row : ℝ) = D.C.theta * (g : ℝ) := by
+    have h := D.C.completed_card
+    change (Fintype.card (R ⊕ Fin D.C.dummyRows) : ℝ) = _
+    rw [Fintype.card_sum, Fintype.card_fin]
+    exact_mod_cast h.symm
+  have hrowCard : (Fintype.card D.Row : ℝ) ≤ (g : ℝ) := by
+    rw [hrowCardEq]
+    nlinarith [hthetaLeOne, hgNonneg]
+  have hEdgeCard : (Fintype.card (RowLabel D.Row g) : ℝ) ≤ (g : ℝ) ^ 2 := by
+    simp only [RowLabel, Fintype.card_prod, Fintype.card_fin, Nat.cast_mul]
+    nlinarith [hrowCard, hgNonneg]
+  have hCgNonneg : 0 ≤ C_g := by
+    have hgNat : 1 ≤ g := by
+      have h : (1 : ℝ) ≤ (g : ℝ) := (by norm_num : (1 : ℝ) ≤ (10 : ℝ) ^ 6).trans hgnum
+      exact_mod_cast h
+    have hlog : 0 ≤ Real.log (g : ℝ) := Real.log_nonneg (by exact_mod_cast hgNat)
+    have hnCg : 0 ≤ C_g * (n : ℝ) := le_trans hlog hg
+    nlinarith [hnpos]
+  have hnCg : 2 * C_g ≤ (n : ℝ) := by
+    have hnMeshCast : (⌈2 * max C_g 0⌉₊ : ℝ) ≤ n := by exact_mod_cast hnMesh
+    have hceil : 2 * max C_g 0 ≤ (⌈2 * max C_g 0⌉₊ : ℝ) := Nat.le_ceil _
+    have hmax : 2 * C_g ≤ 2 * max C_g 0 := by
+      exact mul_le_mul_of_nonneg_left (le_max_left C_g 0) (by norm_num)
+    exact hmax.trans (hceil.trans hnMeshCast)
+  have hdeltaBig : (g : ℝ) ^ 2 * D.mesh.δ ≤ 1 := by
+    rw [D.mesh.δ_eq]
+    have hpowExp : (g : ℝ) ^ 2 * Real.exp (-((n : ℝ) ^ 2)) =
+        Real.exp (2 * Real.log (g : ℝ) - (n : ℝ) ^ 2) := by
+      have hgalias : (g : ℝ) = Real.exp (Real.log (g : ℝ)) := (Real.exp_log hgPos).symm
+      have hgaliasSq : (g : ℝ) ^ 2 = Real.exp (Real.log (g : ℝ)) ^ 2 :=
+        congrArg (fun x : ℝ => x ^ 2) hgalias
+      calc
+        (g : ℝ) ^ 2 * Real.exp (-((n : ℝ) ^ 2)) =
+            Real.exp (Real.log (g : ℝ)) ^ 2 * Real.exp (-((n : ℝ) ^ 2)) := by rw [hgaliasSq]
+        _ = Real.exp (Real.log (g : ℝ)) * Real.exp (Real.log (g : ℝ)) *
+              Real.exp (-((n : ℝ) ^ 2)) := by rw [pow_two]
+        _ = Real.exp (Real.log (g : ℝ) + Real.log (g : ℝ)) *
+              Real.exp (-((n : ℝ) ^ 2)) := by rw [← Real.exp_add]
+        _ = Real.exp (Real.log (g : ℝ) + Real.log (g : ℝ) - (n : ℝ) ^ 2) := by
+          rw [← Real.exp_add]
+          congr 1 <;> ring
+        _ = Real.exp (2 * Real.log (g : ℝ) - (n : ℝ) ^ 2) := by congr 1 <;> ring
+    rw [hpowExp]
+    apply (Real.exp_le_one_iff).2
+    nlinarith [hg, hnCg]
+  have hmeshTime : (D.mesh.ticks : ℝ) * D.mesh.δ ≤
+      clockK₀ B * Real.log (n : ℝ) + 1 := by
+    have hcover := D.mesh.least_cover
+    rw [D.mesh.horizon_eq] at hcover
+    linarith [D.mesh.δ_le_one]
+  have hdeltaNonneg : 0 ≤ D.mesh.δ := D.mesh.δ_nonneg
+  let M : ℕ := Fintype.card (RowLabel D.Row g) + 1
+  have htime (j : ℕ) (hj : j ∈ Finset.range M) :
+      ((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ ≤ clockK₀ B * Real.log (n : ℝ) + 2 := by
+    have hjle : j ≤ Fintype.card (RowLabel D.Row g) := by
+      have := Finset.mem_range.mp hj
+      dsimp [M] at this
+      omega
+    have hjdelta : (j : ℝ) * D.mesh.δ ≤ 1 := by
+      calc
+        (j : ℝ) * D.mesh.δ ≤ (Fintype.card (RowLabel D.Row g) : ℝ) * D.mesh.δ :=
+          mul_le_mul_of_nonneg_right (by exact_mod_cast hjle) hdeltaNonneg
+        _ ≤ (g : ℝ) ^ 2 * D.mesh.δ :=
+          mul_le_mul_of_nonneg_right hEdgeCard hdeltaNonneg
+        _ ≤ 1 := hdeltaBig
+    rw [Nat.cast_add]
+    calc
+      ((D.mesh.ticks : ℝ) + (j : ℝ)) * D.mesh.δ =
+          (D.mesh.ticks : ℝ) * D.mesh.δ + (j : ℝ) * D.mesh.δ := by ring
+      _ ≤ clockK₀ B * Real.log (n : ℝ) + 1 + 1 := add_le_add hmeshTime hjdelta
+      _ = clockK₀ B * Real.log (n : ℝ) + 2 := by ring
+  have hdegree (r : D.Row) :
+      ((Finset.univ.filter fun k : K => r ∈ D.scope' k).card : ℝ) ≤ (n : ℝ) ^ B := by
+    cases r with
+    | inl a =>
+        have hsrc := D.admissible.2.2.2.2.1 a
+        have hcard :
+            (Finset.univ.filter fun k : K => Sum.inl a ∈ D.scope' k) =
+              Finset.univ.filter fun k : K => a ∈ D.I.scope k := by
+          ext k
+          simp [ClockData.scope']
+        rw [hcard]
+        exact hsrc
+    | inr i =>
+        have hempty :
+            (Finset.univ.filter fun k : K => Sum.inr i ∈ D.scope' k) = ∅ := by
+          ext k
+          simp [ClockData.scope']
+        rw [hempty]
+        simp
+        positivity
+  have rootMultiplicity (f : D.Row → ℝ) (hf : ∀ r, 0 ≤ f r) :
+      (∑ t : SamplingTest R K, ∑ r ∈ testRoots D.scope' (D.test' t), f r) ≤
+        ((n : ℝ) ^ B + 1) * ∑ r : D.Row, f r := by
+    let e : K ⊕ R ≃ SamplingTest R K := {
+      toFun := Sum.elim SamplingTest.predicate SamplingTest.singleton
+      invFun := fun t => match t with
+        | .predicate k => Sum.inl k
+        | .singleton r => Sum.inr r
+      left_inv := by intro x; cases x <;> rfl
+      right_inv := by intro t; cases t <;> rfl }
+    have hsplit := Fintype.sum_equiv e
+      (fun x : K ⊕ R => ∑ r ∈ testRoots D.scope' (D.test' (e x)), f r)
+      (fun t : SamplingTest R K => ∑ r ∈ testRoots D.scope' (D.test' t), f r)
+      (by intro x; rfl)
+    have hsumType :
+        (∑ t : SamplingTest R K, ∑ r ∈ testRoots D.scope' (D.test' t), f r) =
+          (∑ k : K, ∑ r ∈ D.scope' k, f r) + ∑ r : R, f (Sum.inl r) := by
+      calc
+        _ = ∑ x : K ⊕ R, ∑ r ∈ testRoots D.scope' (D.test' (e x)), f r := hsplit.symm
+        _ = _ := by simp [e, testRoots, ClockData.test', Fintype.sum_sum_type]
+    have hscopeIndicator (k : K) :
+        (∑ r ∈ D.scope' k, f r) = ∑ r : D.Row, if r ∈ D.scope' k then f r else 0 := by
+      calc
+        (∑ r ∈ D.scope' k, f r) =
+            ∑ r ∈ D.scope' k, if r ∈ D.scope' k then f r else 0 := by
+              apply Finset.sum_congr rfl
+              intro r hr
+              simp [hr]
+        _ = ∑ r : D.Row, if r ∈ D.scope' k then f r else 0 := by
+              apply Finset.sum_subset (Finset.subset_univ _)
+              intro r hr hnot
+              simp [hnot]
+    have hdegreeSum :
+        (∑ k : K, ∑ r ∈ D.scope' k, f r) =
+          ∑ r : D.Row, ∑ k ∈ Finset.univ.filter (fun k : K => r ∈ D.scope' k), f r := by
+      simp_rw [hscopeIndicator]
+      rw [Finset.sum_comm]
+      simp_rw [← Finset.sum_filter]
+    have hdegreeBound :
+        (∑ k : K, ∑ r ∈ D.scope' k, f r) ≤ (n : ℝ) ^ B * ∑ r : D.Row, f r := by
+      rw [hdegreeSum]
+      calc
+        _ = ∑ r : D.Row,
+            ((Finset.univ.filter (fun k : K => r ∈ D.scope' k)).card : ℝ) * f r := by
+              apply Finset.sum_congr rfl
+              intro r hr
+              simp [Finset.sum_const, nsmul_eq_mul]
+        _ ≤ ∑ r : D.Row, (n : ℝ) ^ B * f r := by
+              apply Finset.sum_le_sum
+              intro r hr
+              exact mul_le_mul_of_nonneg_right (hdegree r) (hf r)
+        _ = (n : ℝ) ^ B * ∑ r : D.Row, f r := by rw [Finset.mul_sum]
+    have hrealSum : ∑ r : R, f (Sum.inl r) ≤ ∑ r : D.Row, f r := by
+      have hsplitRows : (∑ r : D.Row, f r) =
+          (∑ r : R, f (Sum.inl r)) + ∑ i : Fin D.C.dummyRows, f (Sum.inr i) := by
+        simp [ClockData.Row, Fintype.sum_sum_type]
+      have hdummy : 0 ≤ ∑ i : Fin D.C.dummyRows, f (Sum.inr i) :=
+        Finset.sum_nonneg fun i hi => hf (Sum.inr i)
+      rw [hsplitRows]
+      linarith
+    rw [hsumType]
+    calc
+      (∑ k : K, ∑ r ∈ D.scope' k, f r) + ∑ r : R, f (Sum.inl r) ≤
+          (n : ℝ) ^ B * ∑ r : D.Row, f r + ∑ r : D.Row, f r :=
+        add_le_add hdegreeBound hrealSum
+      _ = ((n : ℝ) ^ B + 1) * ∑ r : D.Row, f r := by ring
+  have hthetaPos : 0 < D.C.theta := lt_of_lt_of_le (by norm_num) htheta.1
+  have hlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by linarith [hnreal])
+  let x : ℝ := clockK₀ B * Real.log (n : ℝ) + 2
+  have hx : 0 ≤ x := by dsimp [x]; positivity
+  have hincidence := hnum n hnNum D.C.theta htheta.1 htheta.2
+  have hJnumeric : Real.exp 2 * x ≤ (clockJ B n : ℝ) := by simpa [x] using hincidence.1
+  have hnumerics := hincidence.2
+  let pathMass (u : Endpoint D.Row g) (j : ℕ) : ℝ :=
+    ∑ π ∈ decPaths u v j, pathWeight D.edgeLaw π
+  let fullMass (j : ℕ) : ℝ := ∑ u : Endpoint D.Row g, pathMass u j
+  let rootRows (t : SamplingTest R K) : Finset D.Row := testRoots D.scope' (D.test' t)
+  let rootMass (j : ℕ) : ℝ :=
+    ∑ t : SamplingTest R K, ∑ r ∈ rootRows t, pathMass (Sum.inl r) j
+  let pathBadProb (t : SamplingTest R K) (j : ℕ)
+      (π : Fin j → ClockCandidate D.mesh.ticks D.Row g D.Out) : ℝ :=
+    D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n)
+      (insertArrivals (pathInsertion π) ξ) (D.test' t))
+  let pathException (t : SamplingTest R K) (r : D.Row) (j : ℕ)
+      (π : Fin j → ClockCandidate D.mesh.ticks D.Row g D.Out) : Prop :=
+    match t with
+    | .predicate k => pathMeetsOtherRow π (D.scope' k) r
+    | .singleton _ => False
+  let exceptionMass (j : ℕ) : ℝ :=
+    ∑ t : SamplingTest R K, ∑ r ∈ rootRows t,
+      ∑ π ∈ decPaths (Sum.inl r) v j,
+        if pathException t r j π then pathWeight D.edgeLaw π else 0
+  let eventMass (j : ℕ) : ℝ :=
+    ∑ t : SamplingTest R K, ∑ r ∈ rootRows t,
+      ∑ π ∈ decPaths (Sum.inl r) v j,
+        pathWeight D.edgeLaw π * pathBadProb t j π
+  let seriesTerm (j : ℕ) : ℝ :=
+    D.C.theta ^ (j / 2) * x ^ j / (j.factorial : ℝ)
+  let rootCoeff : ℝ := (n : ℝ) ^ B + 1
+  let meshSeries : ℝ := Real.exp (Real.sqrt D.C.theta * x) / Real.sqrt D.C.theta
+  have hshortNonneg : 0 ≤ clockShortBound B n := by
+    unfold clockShortBound
+    positivity
+  have hpathWeightNonneg (j : ℕ) (π : Fin j → ClockCandidate D.mesh.ticks D.Row g D.Out) :
+      0 ≤ pathWeight D.edgeLaw π := by
+    unfold pathWeight
+    apply Finset.prod_nonneg
+    intro i hi
+    exact (D.edgeLaw ((π i).1, (π i).2.1)).nonneg _
+  have hpathMassNonneg (u : Endpoint D.Row g) (j : ℕ) : 0 ≤ pathMass u j := by
+    unfold pathMass
+    apply Finset.sum_nonneg
+    intro π hπ
+    exact hpathWeightNonneg j π
+  have hfullSplit (j : ℕ) :
+      fullMass j = (∑ r : D.Row, pathMass (Sum.inl r) j) +
+        ∑ y : Fin g, pathMass (Sum.inr y) j := by
+    simp [fullMass, pathMass, Endpoint, Fintype.sum_sum_type]
+  have hrowMassLeFull (j : ℕ) :
+      (∑ r : D.Row, pathMass (Sum.inl r) j) ≤ fullMass j := by
+    have hy : 0 ≤ ∑ y : Fin g, pathMass (Sum.inr y) j :=
+      Finset.sum_nonneg fun y hy => hpathMassNonneg (Sum.inr y) j
+    rw [hfullSplit]
+    linarith
+  have hrootMassBound (j : ℕ) : rootMass j ≤ rootCoeff * fullMass j := by
+    calc
+      rootMass j =
+          ∑ t : SamplingTest R K, ∑ r ∈ rootRows t, pathMass (Sum.inl r) j := rfl
+      _ ≤ rootCoeff * ∑ r : D.Row, pathMass (Sum.inl r) j := by
+        simpa [rootRows, rootCoeff] using
+          (rootMultiplicity (fun r : D.Row => pathMass (Sum.inl r) j)
+            (fun r => hpathMassNonneg (Sum.inl r) j))
+      _ ≤ rootCoeff * fullMass j := by
+        apply mul_le_mul_of_nonneg_left (hrowMassLeFull j)
+        dsimp [rootCoeff]
+        positivity
+  have hrootMassSum :
+      (∑ j ∈ Finset.range M, rootMass j) ≤
+        rootCoeff * ∑ j ∈ Finset.range M, fullMass j := by
+    calc
+      _ ≤ ∑ j ∈ Finset.range M, rootCoeff * fullMass j :=
+        Finset.sum_le_sum fun j hj => hrootMassBound j
+      _ = rootCoeff * ∑ j ∈ Finset.range M, fullMass j := by rw [Finset.mul_sum]
+  have hprobLeOne (A : ClockField D.mesh.ticks D.Row g D.Out → Prop) :
+      D.law.pr A ≤ 1 := by
+    have hc := finProb_pr_compl D.law A
+    have hnc := finProb_pr_nonneg D.law (fun ξ => ¬ A ξ)
+    linarith
+  have hscopeCard (k : K) : ((D.scope' k).card : ℝ) ≤ (n : ℝ) ^ B := by
+    have hs := D.admissible.2.2.2.1 k
+    simpa [ClockData.scope'] using hs
+  have hthetaUpperOne : D.C.theta ≤ 1 := hthetaLeOne
+  have hlambda : 0 ≤ (n : ℝ) ^ (-(clockA B - 1)) := by positivity
+  have hTwoRow (j : ℕ) : exceptionMass j ≤
+      (j : ℝ) ^ 2 * (n : ℝ) ^ B *
+        ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta) *
+          (D.C.theta ^ (j / 2) * (((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ) ^ j /
+            (j.factorial : ℝ)) := by
+    let e : K ⊕ R ≃ SamplingTest R K := {
+      toFun := Sum.elim SamplingTest.predicate SamplingTest.singleton
+      invFun := fun t => match t with
+        | .predicate k => Sum.inl k
+        | .singleton r => Sum.inr r
+      left_inv := by intro x; cases x <;> rfl
+      right_inv := by intro t; cases t <;> rfl }
+    have hfilter (k : K) (r : D.Row) :
+        (∑ π ∈ decPaths (Sum.inl r) v j,
+          if pathMeetsOtherRow π (D.scope' k) r then pathWeight D.edgeLaw π else 0) =
+        ∑ π ∈ (decPaths (Sum.inl r) v j).filter
+          (fun π => pathMeetsOtherRow π (D.scope' k) r), pathWeight D.edgeLaw π := by
+      symm
+      exact Finset.sum_filter (s := decPaths (Sum.inl r) v j)
+        (fun π => pathMeetsOtherRow π (D.scope' k) r) (fun π => pathWeight D.edgeLaw π)
+    have hindicator : exceptionMass j =
+        ∑ k : K, ∑ r ∈ D.scope' k,
+          ∑ π ∈ decPaths (Sum.inl r) v j,
+            if pathMeetsOtherRow π (D.scope' k) r then pathWeight D.edgeLaw π else 0 := by
+      dsimp [exceptionMass]
+      have hEquiv := Fintype.sum_equiv e
+        (fun y : K ⊕ R =>
+          ∑ r ∈ rootRows (e y), ∑ π ∈ decPaths (Sum.inl r) v j,
+            if pathException (e y) r j π then pathWeight D.edgeLaw π else 0)
+        (fun t : SamplingTest R K =>
+          ∑ r ∈ rootRows t, ∑ π ∈ decPaths (Sum.inl r) v j,
+            if pathException t r j π then pathWeight D.edgeLaw π else 0)
+        (by intro y; rfl)
+      calc
+        _ = ∑ y : K ⊕ R,
+            ∑ r ∈ rootRows (e y), ∑ π ∈ decPaths (Sum.inl r) v j,
+              if pathException (e y) r j π then pathWeight D.edgeLaw π else 0 := hEquiv.symm
+        _ = _ := by
+          simp [e, rootRows, pathException, ClockData.test', testRoots, Fintype.sum_sum_type]
+          rfl
+    rw [hindicator]
+    simp_rw [hfilter]
+    have hbound := two_row_weight_sum (T := D.mesh.ticks)
+      D.mesh.δ D.mesh.δ_nonneg D.mesh.δ_le_one
+      D.law' D.lab' D.C.theta D.completed_rows_eq D.completed_columns_eq
+      hthetaPos hthetaUpperOne D.scope' ((n : ℝ) ^ B)
+      ((n : ℝ) ^ (-(clockA B - 1))) (by positivity) hlambda hscopeCard hdegree
+      (fun r y => D.completed_atom_le hn2 r y) v j
+    simpa [ClockData.edgeLaw] using hbound
+  have hrootEndpointSum (t : SamplingTest R K) (f : Endpoint D.Row g → ℝ) :
+      (∑ e ∈ testRootEndpoints (g := g) D.scope' (D.test' t), f e) =
+        ∑ r ∈ rootRows t, f (Sum.inl r) := by
+    simpa [rootRows, testRootEndpoints] using
+      (Finset.sum_image (s := rootRows t) (g := Sum.inl) (f := f)
+        (by
+          intro a ha b hb hab
+          exact Sum.inl.inj hab))
+  have hclosurePaths (t : SamplingTest R K) :
+      D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) ∧
+          v ∈ activeEndpoints ξ D.scope' (D.test' t)) ≤
+        ∑ r ∈ rootRows t, ∑ j ∈ Finset.range M,
+          ∑ π ∈ decPaths (Sum.inl r) v j,
+            pathWeight D.edgeLaw π * pathBadProb t j π := by
+    have h := closure_path_union D.edgeLaw
+      (testRootEndpoints (g := g) D.scope' (D.test' t)) v
+      (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t))
+    calc
+      _ ≤ ∑ e ∈ testRootEndpoints (g := g) D.scope' (D.test' t),
+          ∑ j ∈ Finset.range M, ∑ π ∈ decPaths e v j,
+            pathWeight D.edgeLaw π * pathBadProb t j π := by
+          simpa [ClockData.law, activeEndpoints_eq_closureFrom, M, pathBadProb] using h
+      _ = ∑ r ∈ rootRows t, ∑ j ∈ Finset.range M,
+          ∑ π ∈ decPaths (Sum.inl r) v j,
+            pathWeight D.edgeLaw π * pathBadProb t j π := by
+          rw [hrootEndpointSum]
+  have htotalPath :
+      (∑ t : SamplingTest R K,
+          D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) ∧
+            v ∈ activeEndpoints ξ D.scope' (D.test' t))) ≤
+        ∑ j ∈ Finset.range M, eventMass j := by
+    calc
+      _ ≤ ∑ t : SamplingTest R K,
+          ∑ r ∈ rootRows t, ∑ j ∈ Finset.range M,
+            ∑ π ∈ decPaths (Sum.inl r) v j,
+              pathWeight D.edgeLaw π * pathBadProb t j π :=
+        Finset.sum_le_sum fun t ht => hclosurePaths t
+      _ = ∑ t : SamplingTest R K,
+          ∑ j ∈ Finset.range M, ∑ r ∈ rootRows t,
+            ∑ π ∈ decPaths (Sum.inl r) v j,
+              pathWeight D.edgeLaw π * pathBadProb t j π := by
+        apply Finset.sum_congr rfl
+        intro t ht
+        rw [Finset.sum_comm]
+      _ = ∑ j ∈ Finset.range M,
+          ∑ t : SamplingTest R K, ∑ r ∈ rootRows t,
+            ∑ π ∈ decPaths (Sum.inl r) v j,
+              pathWeight D.edgeLaw π * pathBadProb t j π := by
+        rw [Finset.sum_comm]
+      _ = ∑ j ∈ Finset.range M, eventMass j := rfl
+  have hshortTerm (j : ℕ) (hj : j ≤ clockJ B n)
+      (t : SamplingTest R K) (r : D.Row) (hr : r ∈ rootRows t)
+      (π : Fin j → ClockCandidate D.mesh.ticks D.Row g D.Out)
+      (hπ : π ∈ decPaths (Sum.inl r) v j) :
+      pathWeight D.edgeLaw π * pathBadProb t j π ≤
+        clockShortBound B n * pathWeight D.edgeLaw π +
+          if pathException t r j π then pathWeight D.edgeLaw π else 0 := by
+    have hw := hpathWeightNonneg j π
+    cases t with
+    | predicate k =>
+        change r ∈ D.scope' k at hr
+        rcases Finset.mem_map.mp hr with ⟨a, ha, hrow⟩
+        have hrow' : r = Sum.inl a := hrow.symm
+        subst r
+        by_cases hother : pathMeetsOtherRow π (D.scope' k) (Sum.inl a)
+        · have hp : pathBadProb (.predicate k) j π ≤ 1 := by
+            apply hprobLeOne
+          have hmul := mul_le_mul_of_nonneg_left hp hw
+          have hshortAdd :
+              pathWeight D.edgeLaw π * pathBadProb (.predicate k) j π ≤
+                clockShortBound B n * pathWeight D.edgeLaw π + pathWeight D.edgeLaw π := by
+            nlinarith [hmul, mul_nonneg hshortNonneg hw]
+          simpa [pathException, hother] using hshortAdd
+        · by_cases hwpos : 0 < pathWeight D.edgeLaw π
+          · have hav : ∀ k' : K,
+                (SamplingTest.predicate k : SamplingTest R K) = SamplingTest.predicate k' →
+                  ¬ pathMeetsOtherRow π (D.scope' k') (Sum.inl a) := by
+              intro k' hk'
+              have hkk' : k = k' := by injection hk'
+              subst k'
+              exact hother
+            have hp : pathBadProb (.predicate k) j π ≤ clockShortBound B n := by
+              simpa [pathBadProb] using
+                hshort n hnShort g hg D (.predicate k) a ha v j hj π hπ hav hwpos
+            have hmul := mul_le_mul_of_nonneg_left hp hw
+            have hmul' : pathWeight D.edgeLaw π * pathBadProb (.predicate k) j π ≤
+                clockShortBound B n * pathWeight D.edgeLaw π := by nlinarith [hmul]
+            simpa [pathException, hother] using hmul'
+          · have hwzero : pathWeight D.edgeLaw π = 0 := by linarith
+            simp [pathException, hother, hwzero]
+    | singleton a =>
+        have hr' : r ∈ ({Sum.inl a} : Finset D.Row) := by
+          simpa [rootRows, ClockData.test', testRoots] using hr
+        have hrow : r = Sum.inl a := Finset.mem_singleton.mp hr'
+        subst r
+        have ha : a ∈ testRoots D.I.scope (.singleton a) := by simp [testRoots]
+        by_cases hwpos : 0 < pathWeight D.edgeLaw π
+        · have hav : ∀ k' : K,
+              (SamplingTest.singleton a : SamplingTest R K) = SamplingTest.predicate k' →
+                ¬ pathMeetsOtherRow π (D.scope' k') (Sum.inl a) := by
+            intro k' hk'
+            cases hk'
+          have hp : pathBadProb (.singleton a) j π ≤ clockShortBound B n := by
+            simpa [pathBadProb] using
+              hshort n hnShort g hg D (.singleton a) a ha v j hj π hπ hav hwpos
+          have hmul := mul_le_mul_of_nonneg_left hp hw
+          have hmul' : pathWeight D.edgeLaw π * pathBadProb (.singleton a) j π ≤
+              clockShortBound B n * pathWeight D.edgeLaw π := by nlinarith [hmul]
+          simpa [pathException] using hmul'
+        · have hwzero : pathWeight D.edgeLaw π = 0 := by linarith
+          simp [pathException, hwzero]
+  have hshortEvent (j : ℕ) (hj : j ≤ clockJ B n) :
+      eventMass j ≤ clockShortBound B n * rootMass j + exceptionMass j := by
+    calc
+      eventMass j ≤
+          ∑ t : SamplingTest R K, ∑ r ∈ rootRows t,
+            ∑ π ∈ decPaths (Sum.inl r) v j,
+              (clockShortBound B n * pathWeight D.edgeLaw π +
+                if pathException t r j π then pathWeight D.edgeLaw π else 0) := by
+        apply Finset.sum_le_sum
+        intro t ht
+        apply Finset.sum_le_sum
+        intro r hr
+        apply Finset.sum_le_sum
+        intro π hπ
+        exact hshortTerm j hj t r hr π hπ
+      _ = clockShortBound B n * rootMass j + exceptionMass j := by
+        simp_rw [Finset.sum_add_distrib, ← Finset.mul_sum]
+        rfl
+  have hlongEvent (j : ℕ) : eventMass j ≤ rootMass j := by
+    apply Finset.sum_le_sum
+    intro t ht
+    apply Finset.sum_le_sum
+    intro r hr
+    apply Finset.sum_le_sum
+    intro π hπ
+    have hp := hprobLeOne (fun ξ =>
+      closureBad D.lab' D.failure' D.scope' (clockLnat B n)
+        (insertArrivals (pathInsertion π) ξ) (D.test' t))
+    have hmul := mul_le_mul_of_nonneg_left hp (hpathWeightNonneg j π)
+    simpa [pathBadProb, pathMass] using hmul
+  let shortSet : Finset ℕ := (Finset.range M).filter (fun j => j ≤ clockJ B n)
+  let longSet : Finset ℕ := (Finset.range M).filter (fun j => clockJ B n < j)
+  have hrootMassNonneg (j : ℕ) : 0 ≤ rootMass j := by
+    unfold rootMass
+    apply Finset.sum_nonneg
+    intro t ht
+    apply Finset.sum_nonneg
+    intro r hr
+    exact hpathMassNonneg (Sum.inl r) j
+  have hseriesTermNonneg (j : ℕ) : 0 ≤ seriesTerm j := by
+    positivity
+  have hthetaPowLeOne (j : ℕ) : D.C.theta ^ (j / 2) ≤ 1 :=
+    pow_le_one₀ (le_of_lt hthetaPos) hthetaUpperOne
+  have hmeshTerm (j : ℕ) (hj : j ∈ Finset.range M) :
+      D.C.theta ^ (j / 2) * (((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ) ^ j /
+          (j.factorial : ℝ) ≤ seriesTerm j := by
+    have htimej : ((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ ≤ x := by
+      simpa [x] using htime j hj
+    have hpow : (((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ) ^ j ≤ x ^ j := by
+      exact pow_le_pow_left₀ (by positivity) htimej j
+    have hmul : D.C.theta ^ (j / 2) *
+          (((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ) ^ j ≤
+        D.C.theta ^ (j / 2) * x ^ j :=
+      mul_le_mul_of_nonneg_left hpow (by positivity)
+    dsimp [seriesTerm]
+    exact div_le_div_of_nonneg_right hmul (by positivity)
+  have hfullBound (j : ℕ) (hj : j ∈ Finset.range M) : fullMass j ≤ seriesTerm j := by
+    have hpaths := decPath_weight_sum (T := D.mesh.ticks)
+      D.mesh.δ D.mesh.δ_nonneg D.mesh.δ_le_one D.law' D.lab' D.C.theta
+      D.completed_rows_eq D.completed_columns_eq hthetaPos.le hthetaUpperOne v j
+    calc
+      fullMass j ≤
+          D.C.theta ^ (j / 2) * (((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ) ^ j /
+            (j.factorial : ℝ) := by
+        simpa [fullMass, pathMass, ClockData.edgeLaw] using hpaths
+      _ ≤ seriesTerm j := hmeshTerm j hj
+  have hfullSeries :
+      (∑ j ∈ Finset.range M, fullMass j) ≤ meshSeries := by
+    calc
+      _ ≤ ∑ j ∈ Finset.range M, seriesTerm j :=
+        Finset.sum_le_sum fun j hj => hfullBound j hj
+      _ ≤ meshSeries := by
+        simpa [seriesTerm, meshSeries, x] using
+          (walk_series_bound D.C.theta x hthetaPos hthetaUpperOne hx M)
+  have hseriesLong :
+      (∑ j ∈ longSet, seriesTerm j) ≤ Real.exp (-(clockJ B n : ℝ)) := by
+    have hsubset : longSet ⊆ Finset.Ico (clockJ B n + 1) M := by
+      intro j hj
+      rcases Finset.mem_filter.mp hj with ⟨hjM, hjLong⟩
+      exact Finset.mem_Ico.mpr ⟨Nat.succ_le_of_lt hjLong, Finset.mem_range.mp hjM⟩
+    calc
+      _ ≤ ∑ j ∈ longSet, (x ^ j / (j.factorial : ℝ)) := by
+        apply Finset.sum_le_sum
+        intro j hj
+        have hpow := hthetaPowLeOne j
+        have hmul := mul_le_mul_of_nonneg_right hpow (pow_nonneg hx j)
+        have hmul' : D.C.theta ^ (j / 2) * x ^ j ≤ x ^ j := by simpa using hmul
+        have hden : 0 ≤ (j.factorial : ℝ) := by positivity
+        have hterm : D.C.theta ^ (j / 2) * x ^ j / (j.factorial : ℝ) ≤
+            x ^ j / (j.factorial : ℝ) := div_le_div_of_nonneg_right hmul' hden
+        simpa [seriesTerm] using hterm
+      _ ≤ ∑ j ∈ Finset.Ico (clockJ B n + 1) M, x ^ j / (j.factorial : ℝ) :=
+        Finset.sum_le_sum_of_subset_of_nonneg hsubset (by
+          intro j hj hnot
+          exact div_nonneg (pow_nonneg hx _) (by positivity))
+      _ ≤ Real.exp (-(clockJ B n : ℝ)) :=
+        walk_series_tail x hx (clockJ B n) hJnumeric M
+  have hfullLong :
+      (∑ j ∈ longSet, fullMass j) ≤ Real.exp (-(clockJ B n : ℝ)) := by
+    calc
+      _ ≤ ∑ j ∈ longSet, seriesTerm j := by
+        apply Finset.sum_le_sum
+        intro j hj
+        exact hfullBound j (Finset.mem_filter.mp hj).1
+      _ ≤ Real.exp (-(clockJ B n : ℝ)) := hseriesLong
+  have hrootAll : (∑ j ∈ Finset.range M, rootMass j) ≤ rootCoeff * meshSeries := by
+    calc
+      _ ≤ rootCoeff * ∑ j ∈ Finset.range M, fullMass j := hrootMassSum
+      _ ≤ rootCoeff * meshSeries :=
+        mul_le_mul_of_nonneg_left hfullSeries (by positivity)
+  have hrootLong : (∑ j ∈ longSet, rootMass j) ≤
+      rootCoeff * Real.exp (-(clockJ B n : ℝ)) := by
+    calc
+      _ ≤ ∑ j ∈ longSet, rootCoeff * fullMass j :=
+        Finset.sum_le_sum fun j hj => hrootMassBound j
+      _ = rootCoeff * ∑ j ∈ longSet, fullMass j := by rw [Finset.mul_sum]
+      _ ≤ rootCoeff * Real.exp (-(clockJ B n : ℝ)) :=
+        mul_le_mul_of_nonneg_left hfullLong (by positivity)
+  have hseriesShort : (∑ j ∈ shortSet, seriesTerm j) ≤ meshSeries := by
+    calc
+      _ ≤ ∑ j ∈ Finset.range M, seriesTerm j :=
+        Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) (by
+          intro j hj hnot
+          exact hseriesTermNonneg j)
+      _ ≤ meshSeries := by
+        simpa [seriesTerm, meshSeries, x] using
+          (walk_series_bound D.C.theta x hthetaPos hthetaUpperOne hx M)
+  let twoCoeff : ℝ := (clockJ B n : ℝ) ^ 2 * (n : ℝ) ^ B *
+    ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta)
+  have htwoCoeffNonneg : 0 ≤ twoCoeff := by
+    dsimp [twoCoeff]
+    positivity
+  have htwoRowX (j : ℕ) (hj : j ∈ shortSet) :
+      exceptionMass j ≤
+        (j : ℝ) ^ 2 * (n : ℝ) ^ B *
+          ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta) * seriesTerm j := by
+    have hjrange : j ∈ Finset.range M := (Finset.mem_filter.mp hj).1
+    have hbound := hTwoRow j
+    calc
+      exceptionMass j ≤
+          (j : ℝ) ^ 2 * (n : ℝ) ^ B *
+            ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta) *
+              (D.C.theta ^ (j / 2) *
+                (((D.mesh.ticks + j : ℕ) : ℝ) * D.mesh.δ) ^ j /
+                  (j.factorial : ℝ)) := hbound
+      _ ≤ _ :=
+        mul_le_mul_of_nonneg_left (hmeshTerm j hjrange) (by positivity)
+  have hexceptionShort :
+      (∑ j ∈ shortSet, exceptionMass j) ≤ twoCoeff * meshSeries := by
+    calc
+      _ ≤ ∑ j ∈ shortSet, twoCoeff * seriesTerm j := by
+        apply Finset.sum_le_sum
+        intro j hj
+        have hjle : (j : ℝ) ≤ (clockJ B n : ℝ) := by
+          exact_mod_cast (Finset.mem_filter.mp hj).2
+        have hjsq : (j : ℝ) ^ 2 ≤ (clockJ B n : ℝ) ^ 2 := by
+          have hdiff : 0 ≤ (clockJ B n : ℝ) - j := by linarith
+          nlinarith [mul_nonneg hdiff (by positivity : 0 ≤ (clockJ B n : ℝ) + j)]
+        have hrest : 0 ≤ (n : ℝ) ^ B *
+            ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta) := by
+          positivity
+        have hcoeff :
+            (j : ℝ) ^ 2 * (n : ℝ) ^ B *
+                ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta) ≤ twoCoeff := by
+          dsimp [twoCoeff]
+          calc
+            (j : ℝ) ^ 2 * (n : ℝ) ^ B *
+                ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta) =
+              (j : ℝ) ^ 2 * ((n : ℝ) ^ B *
+                ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta)) := by ring
+            _ ≤ (clockJ B n : ℝ) ^ 2 * ((n : ℝ) ^ B *
+                ((n : ℝ) ^ B * (n : ℝ) ^ (-(clockA B - 1)) / D.C.theta)) :=
+              mul_le_mul_of_nonneg_right hjsq hrest
+            _ = _ := by ring
+        exact (htwoRowX j hj).trans
+          (mul_le_mul_of_nonneg_right hcoeff (hseriesTermNonneg j))
+      _ = twoCoeff * ∑ j ∈ shortSet, seriesTerm j := by rw [Finset.mul_sum]
+      _ ≤ twoCoeff * meshSeries :=
+        mul_le_mul_of_nonneg_left hseriesShort htwoCoeffNonneg
+  have hshortLongSplit :
+      (∑ j ∈ Finset.range M, eventMass j) ≤
+        clockShortBound B n * (∑ j ∈ Finset.range M, rootMass j) +
+          (∑ j ∈ longSet, rootMass j) +
+          ∑ j ∈ shortSet, exceptionMass j := by
+    calc
+      _ ≤ ∑ j ∈ Finset.range M,
+          (clockShortBound B n * rootMass j +
+            (if clockJ B n < j then rootMass j else 0) +
+            (if j ≤ clockJ B n then exceptionMass j else 0)) := by
+        apply Finset.sum_le_sum
+        intro j hj
+        by_cases hs : j ≤ clockJ B n
+        · have hnot : ¬ clockJ B n < j := Nat.not_lt.mpr hs
+          simpa [hs, hnot] using hshortEvent j hs
+        · have hlt : clockJ B n < j := Nat.lt_of_not_ge hs
+          have hbase : 0 ≤ clockShortBound B n * rootMass j :=
+            mul_nonneg hshortNonneg (hrootMassNonneg j)
+          simp [hs, hlt]
+          linarith [hlongEvent j, hbase]
+      _ = clockShortBound B n * (∑ j ∈ Finset.range M, rootMass j) +
+          (∑ j ∈ longSet, rootMass j) +
+          ∑ j ∈ shortSet, exceptionMass j := by
+        dsimp [longSet, shortSet]
+        rw [Finset.mul_sum, Finset.sum_filter, Finset.sum_filter]
+        rw [Finset.sum_add_distrib, Finset.sum_add_distrib]
+  have hderived :
+      (∑ t : SamplingTest R K,
+          D.law.pr (fun ξ => closureBad D.lab' D.failure' D.scope' (clockLnat B n) ξ (D.test' t) ∧
+            v ∈ activeEndpoints ξ D.scope' (D.test' t))) ≤
+        rootCoeff * meshSeries * clockShortBound B n +
+          twoCoeff * meshSeries + rootCoeff * Real.exp (-(clockJ B n : ℝ)) := by
+    calc
+      _ ≤ ∑ j ∈ Finset.range M, eventMass j := htotalPath
+      _ ≤ clockShortBound B n * (∑ j ∈ Finset.range M, rootMass j) +
+            (∑ j ∈ longSet, rootMass j) +
+            ∑ j ∈ shortSet, exceptionMass j := hshortLongSplit
+      _ ≤ clockShortBound B n * (rootCoeff * meshSeries) +
+            rootCoeff * Real.exp (-(clockJ B n : ℝ)) + twoCoeff * meshSeries := by
+          gcongr
+      _ = rootCoeff * meshSeries * clockShortBound B n +
+            twoCoeff * meshSeries + rootCoeff * Real.exp (-(clockJ B n : ℝ)) := by ring
+  have hnumericFinal :
+      rootCoeff * meshSeries * clockShortBound B n +
+        twoCoeff * meshSeries + rootCoeff * Real.exp (-(clockJ B n : ℝ)) ≤ clockκ B n := by
+    simpa [rootCoeff, meshSeries, twoCoeff, x] using hnumerics
+  exact hderived.trans hnumericFinal
 
 /-- L3.10h-inc' (03:897–902): the incidence field of the raw sampler, from `badLeaves_incidence_le` and
 `closure_incidence_bound`. -/

@@ -17,6 +17,13 @@ abbrev Colour := Bool
 def Hits {N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour) (x y : Fin N) : Prop :=
   if c then E x y else ¬ E x y
 
+/-- Transposed relation (orientation swap). -/
+def transposeRel {N : ℕ} (E : Fin N → Fin N → Prop) : Fin N → Fin N → Prop := fun x y => E y x
+
+theorem hits_transpose {N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour) (x y : Fin N) :
+    Hits (transposeRel E) c x y ↔ Hits E c y x := by
+  cases c <;> simp [Hits, transposeRel]
+
 /-- The paper's counterexample sequence (Lemma 2.1). -/
 structure BadSeq where
   n : ℕ → ℕ

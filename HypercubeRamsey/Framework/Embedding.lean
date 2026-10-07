@@ -148,4 +148,23 @@ theorem cube_copy_of_parts_swap {n N : ℕ} {G : Fin N → Fin N → Prop}
     injective' := hinj
   }⟩
 
+/-- Total-map form: one label per role, injective on each parity class (even roles on the first side). -/
+theorem copy_of_parity_maps {n N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (f : CubeVertex n → Fin N)
+    (hA : Set.InjOn f {v | IsEvenRole v}) (hB : Set.InjOn f {v | ¬ IsEvenRole v})
+    (hedge : ∀ a b, (cube n).Adj a b → IsEvenRole a → Hits E c (f a) (f b)) :
+    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := sorry
+
+/-- Total-map form with even roles on the second side. -/
+theorem copy_of_parity_maps_swap {n N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (f : CubeVertex n → Fin N)
+    (hA : Set.InjOn f {v | IsEvenRole v}) (hB : Set.InjOn f {v | ¬ IsEvenRole v})
+    (hedge : ∀ a b, (cube n).Adj a b → IsEvenRole a → Hits E c (f b) (f a)) :
+    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := sorry
+
+/-- A copy for the transposed relation gives one for the original. -/
+theorem copy_transpose {n N : ℕ} (E : Fin N → Fin N → Prop) (c : Colour)
+    (h : Nonempty ((cube n).Copy (crossGraph (Hits (transposeRel E) c)))) :
+    Nonempty ((cube n).Copy (crossGraph (Hits E c))) := sorry
+
 end HypercubeRamsey

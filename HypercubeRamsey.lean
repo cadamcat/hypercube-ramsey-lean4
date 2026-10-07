@@ -1,10 +1,15 @@
 import HypercubeRamsey.Basic
 import HypercubeRamsey.Bridge
 import HypercubeRamsey.Framework.Basic
+import HypercubeRamsey.Framework.FinProb
 import HypercubeRamsey.Framework.Law
 import HypercubeRamsey.Framework.Embedding
 import HypercubeRamsey.Framework.Hall
+import HypercubeRamsey.Framework.Stage
+import HypercubeRamsey.Framework.Patch
+import HypercubeRamsey.Framework.Disc
 import HypercubeRamsey.Assembly
+import HypercubeRamsey.S03.Stabilization
 import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.S03.Mixtures
 import HypercubeRamsey.S03.ScatteredMoments

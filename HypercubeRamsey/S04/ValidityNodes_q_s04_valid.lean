@@ -2594,6 +2594,99 @@ private theorem eventual_exposure_factor (β γ : ℝ) (hβ : 0 < β)
       ring
     _ ≤ Real.exp (-2 * (n : ℝ) ^ c) := Real.exp_le_exp.mpr hexpCompare
 
+private theorem eventual_exposure_factor_four (β γ : ℝ) (hβ : 0 < β)
+    (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      40 * (n : ℝ) ^ 5 *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2)) / 4) ≤
+        Real.exp (-4 * (n : ℝ) ^ (omega4 β γ / 5)) := by
+  let ω := omega4 β γ
+  let α := β - ω / 2
+  let c := ω / 5
+  let δ := α / 2
+  have hω : 0 < ω := omega4_pos hβ hγ
+  have hωβ : ω ≤ β / 1000 := by
+    dsimp [ω, omega4]
+    exact div_le_div_of_nonneg_right (min_le_left β (1 - γ)) (by norm_num)
+  have hα : 0 < α := by dsimp [α]; nlinarith
+  have hgap : 0 < α - c := by dsimp [α, c]; nlinarith
+  have hδ : 0 < δ := by dsimp [δ]; positivity
+  have hδeq : δ + δ = α := by dsimp [δ]; ring
+  obtain ⟨nLog, hnLog⟩ := eventually_rpow_gt (a := δ)
+    (c := 8 * (Real.log 40 + 5 / δ)) hδ
+  obtain ⟨nGap, hnGap⟩ := eventually_rpow_gt (a := α - c) (c := 32) hgap
+  refine ⟨max nLog (max nGap 1), ?_⟩
+  intro n hn
+  have hnLog' : nLog ≤ n := le_trans (le_max_left _ _) hn
+  have hnGap' : nGap ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_left nGap 1) (Nat.le_max_right nLog (max nGap 1))
+  have hnOne : 1 ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_right nGap 1) (Nat.le_max_right nLog (max nGap 1))
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hnr : 0 < (n : ℝ) := lt_of_lt_of_le (by norm_num) hnR
+  have hnδpos : 0 < (n : ℝ) ^ δ := Real.rpow_pos_of_pos hnr _
+  have hnδone : 1 ≤ (n : ℝ) ^ δ := Real.one_le_rpow hnR hδ.le
+  have hlogPow := Real.log_le_self hnδpos.le
+  rw [Real.log_rpow hnr δ] at hlogPow
+  have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) ^ δ / δ := by
+    rw [le_div_iff₀ hδ]
+    nlinarith [hlogPow]
+  have hpowC : 8 * (Real.log 40 + 5 / δ) < (n : ℝ) ^ δ := hnLog n hnLog'
+  have hlogFactor : Real.log (40 * (n : ℝ) ^ 5) ≤ (n : ℝ) ^ α / 8 := by
+    have hlogN : Real.log (40 * (n : ℝ) ^ 5) = Real.log 40 + 5 * Real.log (n : ℝ) := by
+      rw [Real.log_mul (by norm_num) (by positivity), Real.log_pow]
+      norm_num
+    have hlog5 : 5 * Real.log (n : ℝ) ≤ (5 / δ) * (n : ℝ) ^ δ := by
+      have h := mul_le_mul_of_nonneg_left hlogPow (by positivity : 0 ≤ 5 / δ)
+      have hleft : (5 / δ) * (δ * Real.log (n : ℝ)) = 5 * Real.log (n : ℝ) := by
+        field_simp [ne_of_gt hδ]
+      rw [hleft] at h
+      exact h
+    have hcoeffBound : Real.log 40 + 5 * Real.log (n : ℝ) ≤
+        (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := by
+      have hlog40 : 0 < Real.log 40 := Real.log_pos (by norm_num)
+      calc
+        Real.log 40 + 5 * Real.log (n : ℝ) ≤
+            Real.log 40 + (5 / δ) * (n : ℝ) ^ δ := by linarith [hlog5]
+        _ ≤ Real.log 40 * (n : ℝ) ^ δ + (5 / δ) * (n : ℝ) ^ δ := by
+            have h := mul_le_mul_of_nonneg_left hnδone hlog40.le
+            nlinarith
+        _ = (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := by ring
+    have hpowHalf : 8 * (Real.log 40 + 5 / δ) ≤ (n : ℝ) ^ δ := le_of_lt hpowC
+    have hpowAlpha : (n : ℝ) ^ α = (n : ℝ) ^ δ * (n : ℝ) ^ δ := by
+      rw [← Real.rpow_add hnr δ δ, hδeq]
+    rw [hlogN, hpowAlpha]
+    calc
+      Real.log 40 + 5 * Real.log (n : ℝ) ≤
+          (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := hcoeffBound
+      _ ≤ ((n : ℝ) ^ δ * (n : ℝ) ^ δ) / 8 := by nlinarith [hnδpos]
+      _ = _ := by ring
+  have hFactorPos : 0 < 40 * (n : ℝ) ^ 5 := by positivity
+  have hFactorExp : 40 * (n : ℝ) ^ 5 ≤ Real.exp ((n : ℝ) ^ α / 8) := by
+    have h := Real.exp_le_exp.mpr hlogFactor
+    rw [Real.exp_log hFactorPos] at h
+    exact h
+  have hGapPow : 32 < (n : ℝ) ^ (α - c) := hnGap n hnGap'
+  have hnCpos : 0 < (n : ℝ) ^ c := Real.rpow_pos_of_pos hnr _
+  have hpowSplit : (n : ℝ) ^ α = (n : ℝ) ^ c * (n : ℝ) ^ (α - c) := by
+    rw [← Real.rpow_add hnr c (α - c)]
+    congr 1
+    ring
+  have hexpCompare : -((n : ℝ) ^ α) / 8 ≤ -4 * (n : ℝ) ^ c := by
+    rw [hpowSplit]
+    nlinarith [mul_lt_mul_of_pos_left hGapPow hnCpos]
+  calc
+    40 * (n : ℝ) ^ 5 * Real.exp (-((n : ℝ) ^ α) / 4) ≤
+        Real.exp ((n : ℝ) ^ α / 8) * Real.exp (-((n : ℝ) ^ α) / 4) :=
+      mul_le_mul_of_nonneg_right hFactorExp (Real.exp_nonneg _)
+    _ = Real.exp (-((n : ℝ) ^ α) / 8) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    _ ≤ Real.exp (-4 * (n : ℝ) ^ c) := Real.exp_le_exp.mpr hexpCompare
+
 set_option maxHeartbeats 1000000 in
 theorem exposure_low_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}

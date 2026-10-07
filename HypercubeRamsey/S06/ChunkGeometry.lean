@@ -662,7 +662,7 @@ theorem L6_1b_boundary :
       apply Finset.card_bij (fun b hb => ⟨b, (Finset.mem_filter.mp hb).1⟩)
       · intro b hb
         rcases Finset.mem_filter.mp hb with ⟨hbS, hzb⟩
-        exact Finset.mem_filter.mpr ⟨Finset.mem_attach S ⟨b, hbS⟩, hzb⟩
+        exact Finset.mem_filter.mpr ⟨by simp, hzb⟩
       · intro b hb c hc hbc
         exact congrArg Subtype.val hbc
       · intro c hc
@@ -785,7 +785,9 @@ theorem L6_1b_boundary :
           by_cases hba : b = a
           · subst b
             simp [flipVertex6, hxa, ha]
-          · have hflip : flipVertex6 x a b = x b := by simp [flipVertex6, hba]
+          · have hflip : flipVertex6 x a b = x b := by
+              unfold flipVertex6
+              exact Function.update_of_ne hba (!x a) x
             simp [hba, hflip]
         have hnot : a ∉ (L.coarseChunks i).filter (fun b => x b = true) := by
           simp [hxa]
@@ -801,7 +803,9 @@ theorem L6_1b_boundary :
           by_cases hba : b = a
           · subst b
             simp [flipVertex6, hxa, ha]
-          · have hflip : flipVertex6 x a b = x b := by simp [flipVertex6, hba]
+          · have hflip : flipVertex6 x a b = x b := by
+              unfold flipVertex6
+              exact Function.update_of_ne hba (!x a) x
             simp [hba, hflip]
         have hnot : a ∉ (L.coarseChunks i).filter (fun b => flipVertex6 x a b = true) := by
           simp [flipVertex6, hxa]

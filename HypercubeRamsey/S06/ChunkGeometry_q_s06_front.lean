@@ -174,6 +174,28 @@ theorem binTransitionEndpoints_card_le {k ell : ℕ} (bin : ℕ → Fin k)
       _ = 2 * (binTransitionSet ell bin).card := by omega
   exact hEndpoints.trans (Nat.mul_le_mul_left 2 hTcard)
 
+/-- A radius-`r` interval around a value contains at most `2r+1` members of a finite initial segment. -/
+theorem finDistFilterCard_le {N r : ℕ} (c : Fin (N + 1)) :
+    ((Finset.univ.filter fun x : Fin (N + 1) => Nat.dist x.val c.val ≤ r).card) ≤
+      2 * r + 1 := by
+  classical
+  let S := Finset.univ.filter fun x : Fin (N + 1) => Nat.dist x.val c.val ≤ r
+  have himage : S.image Fin.val ⊆ Finset.Icc (c.val - r) (c.val + r) := by
+    intro q hq
+    rcases Finset.mem_image.mp hq with ⟨x, hx, rfl⟩
+    have hdist := (Finset.mem_filter.mp hx).2
+    simp only [Finset.mem_Icc]
+    unfold Nat.dist at hdist
+    omega
+  calc
+    S.card = (S.image Fin.val).card :=
+      (Finset.card_image_of_injective _ Fin.val_injective).symm
+    _ ≤ (Finset.Icc (c.val - r) (c.val + r)).card := Finset.card_le_card himage
+    _ = c.val + r - (c.val - r) + 1 := by
+      simp
+      omega
+    _ ≤ 2 * r + 1 := by omega
+
 private theorem prefixMass_succ (ell j : ℕ) :
     prefixMass ell (j + 1) = prefixMass ell j + halfMassNat ell j := by
   simp [prefixMass, Finset.sum_range_succ]

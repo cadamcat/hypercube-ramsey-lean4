@@ -450,7 +450,7 @@ structure PrimitiveHistory (κ : CConsts) {T : Stage} {k : ℕ}
   prior : mesh.V → Law (T.S.N k)
   prior_support : ∀ v, (prior v).SupportedIn (𝒯.P i).X
   prior_uniform : ∀ v p, 0 < mesh.wt v p → ∀ x,
-    (prior v).w x = if x ∈ mesh.corner v i then 1 / (mesh.corner v i).card else 0
+    (prior v).w x = if x ∈ mesh.corner v i then (1 : ℝ) / ((mesh.corner v i).card : ℝ) else 0
   prior_cap : ∀ v p, 0 < mesh.wt v p → ∀ x, (prior v).w x ≤ 2 / (𝒯.P i).M
 
 namespace PrimitiveHistory

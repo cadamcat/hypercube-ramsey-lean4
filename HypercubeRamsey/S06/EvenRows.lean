@@ -1,5 +1,7 @@
 import HypercubeRamsey.S06.OddLoads
 import HypercubeRamsey.S06.Prob
+import HypercubeRamsey.S03.GatedPosterior
+import HypercubeRamsey.S06.EvenRows_q_s06_even
 
 /-!
 # Odd injection and even posterior reconstruction
@@ -167,13 +169,15 @@ def EvenTest : Prop :=
     ∃ v : CubeVertex n, IsEvenRole v ∧ ¬ (0 < X.mc ω.1 ω.2.1 v ω.2.2 ∧
       Real.exp (-(2 / 100) * X.k * n) * X.Qref ω.1 ω.2.1 v ω.2.2 ≤ X.mc ω.1 ω.2.1 v ω.2.2)) ≤ 1 / 100
 
-/-- Valid even rows are probability rows on common neighbours of the odd labels, with cap `10 e^{.55n}`
-(06:826–836). -/
+/-- Valid even rows are probability rows on common neighbours of the odd labels, with cap `10 e^{.55n}`, and the
+light part of the marginal keeps mass at least `.19` (heavy mass `≤ .8 + o(1)`, 06:826–836). -/
 def EvenDensity : Prop :=
   ∀ H C (v : CubeVertex n) y, X.histLaw.w H ≠ 0 → IsEvenRole v → X.EvenValid H C v y →
     (∀ a, 0 ≤ X.evenRow H C v y a) ∧ (∑ a, X.evenRow H C v y a = 1) ∧
     (∀ a, X.evenRow H C v y a ≠ 0 → ∀ u ∈ X.oddNbrs v, Hits E G a (y u)) ∧
-    ∀ a, (N : ℝ) * X.evenRow H C v y a ≤ 10 * Real.exp ((55 / 100) * n)
+    (∀ a, (N : ℝ) * X.evenRow H C v y a ≤ 10 * Real.exp ((55 / 100) * n)) ∧
+    (19 / 100 : ℝ) ≤
+      ∑ a' ∈ Finset.univ.filter (fun a' => a' ∉ X.heavyLab H C v y), X.evenMarg H C v y a'
 
 /-- With one centre forced present and its tuple fixed, the selection probabilities of the IDs at an even role sum
 to at most `4`: `O(1/λ)` at level `0` (tie bound) against presence mass `λ`, `exp(−n^{Ω(1)})` above (06:849–853). -/
@@ -218,7 +222,92 @@ end Ctx6
 neighbours are valid, eligibility is legal everywhere and counts are at most `2λ`. -/
 theorem L6_1m_gate (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.EvenGateDet := by
-  sorry
+  refine ⟨1, 0, ?_⟩
+  intro n N E G M X hL H C v hH hOdd hv
+  have hn : 0 < n := lt_of_lt_of_le Nat.zero_lt_one hL.1
+  let a : X.State := X.g.L.stateOf v
+  have ha : a ∈ X.g.L.evenStates := by
+    unfold a ChunkLayout6.evenStates
+    exact Finset.mem_image.mpr ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩, rfl⟩
+  have hsite : X.site a ∈ X.sites := by
+    unfold Ctx6.sites
+    exact Finset.mem_image.mpr ⟨a, ha, rfl⟩
+  have hgeo := hOdd.1
+  have hheights := hgeo.2.2.2 (X.site a) hsite
+  have hheight : X.hp.height X.sites (X.pos C) (X.act C) (X.elig H C) X.Rlong (X.site a) < X.hp.H :=
+    hheights.1
+  let j := X.hp.height X.sites (X.pos C) (X.act C) (X.elig H C) X.Rlong (X.site a)
+  have hbad : ¬ X.hp.Bad (X.pos C) (X.act C) (X.elig H C) (X.site a)
+      ⟨X.hp.height X.sites (X.pos C) (X.act C) (X.elig H C) X.Rlong (X.site a), by omega⟩ := by
+    intro hb
+    exact hheights.2.1 ⟨by omega, hb⟩
+  let level : Fin (X.hp.H + 1) := ⟨j, by omega⟩
+  have hlegal := hgeo.2.2.1
+  have hlocalLegal : X.hp.Legal (X.pos C) (X.elig H C)
+      (X.hp.domBall X.sites (X.site a) X.Rlong) := by
+    intro q hq l
+    exact hlegal q (Finset.mem_filter.mp hq).1 l
+  have hcounts := hgeo.1
+  have hcount : ∀ l, ((X.prosp (X.pos C) (X.site a) l).card : ℝ) ≤ 2 * X.hp.lam :=
+    fun l => (hcounts (X.site a) hsite l).2
+  have hoddvalid : ∀ u ∈ X.oddNbrs v, X.OddValid H C X.Rlong (X.g.L.stateOf u.1) := by
+    intro u hu
+    exact hOdd.2.1 u.1 u.2
+  have hLegalAt := hlegal (X.site a) hsite level
+  let active : Finset X.Loc := (X.elig H C (X.site a) level).filter
+    (fun ℓ => X.act C ℓ = true)
+  have hactive : active.Nonempty := by
+    by_contra hne
+    have hempty : active = ∅ := Finset.not_nonempty_iff_eq_empty.mp hne
+    apply hbad
+    left
+    intro ℓ hℓ
+    cases hact : X.act C ℓ with
+    | false => rfl
+    | true =>
+      have hmem : ℓ ∈ active := Finset.mem_filter.mpr ⟨hℓ, hact⟩
+      rw [hempty] at hmem
+      exact False.elim (by simpa using hmem)
+  have hactiveAt : ({ℓ ∈ X.elig H C (X.site a)
+      ⟨X.hp.height X.sites (X.pos C) (X.act C) (X.elig H C) X.Rlong (X.site a), by omega⟩ |
+      X.act C ℓ = true}.Nonempty) := by
+    simpa [active, level, j] using hactive
+  have hselectedSome : (X.choice H C X.Rlong a).isSome := by
+    change (X.hp.selectionAt X.sites (X.pos C) (X.act C) (X.elig H C)
+      (X.ties C) X.Rlong (X.site a)).isSome
+    unfold HDParams.selectionAt
+    rw [dif_pos hheight, dif_neg hbad]
+    simp [active, level, j, hactiveAt]
+  cases hc : X.choice H C X.Rlong a with
+  | none => simp [hc] at hselectedSome
+  | some c =>
+    have hpos : X.pos C c = true := by
+      let prioritySet := active.image (fun ℓ => X.hp.priority (X.ties C) (X.site a, level) ℓ)
+      have hpriority : prioritySet.Nonempty := Finset.image_nonempty.mpr hactive
+      let choiceSpec : ∃ ℓ, ℓ ∈ active ∧
+          X.hp.priority (X.ties C) (X.site a, level) ℓ = prioritySet.min' hpriority :=
+        Finset.mem_image.mp (Finset.min'_mem prioritySet hpriority)
+      have hchoiceRed : X.choice H C X.Rlong a = some (Classical.choose choiceSpec) := by
+        change X.hp.selectionAt X.sites (X.pos C) (X.act C) (X.elig H C)
+          (X.ties C) X.Rlong (X.site a) = some (Classical.choose choiceSpec)
+        unfold HDParams.selectionAt
+        rw [dif_pos hheight, dif_neg hbad]
+        simp [prioritySet, active, level, j, choiceSpec, hpriority, hactiveAt]
+      have hchooseEq : Classical.choose choiceSpec = c := by
+        exact Option.some.inj (hchoiceRed.symm.trans hc)
+      have hchosen : Classical.choose choiceSpec ∈ active := (Classical.choose_spec choiceSpec).1
+      have hcactive : c ∈ active := by rw [← hchooseEq]; exact hchosen
+      exact (hLegalAt.1 c (Finset.mem_filter.mp hcactive).1).1
+    have hselC : X.selC H C v = c := by simp [Ctx6.selC, a, hc]
+    have hcSel : X.choice H C X.Rlong (X.g.L.stateOf v) = some (X.selC H C v) := by
+      change X.choice H C X.Rlong a = some (X.selC H C v)
+      rw [hselC]
+      exact hc
+    have hposSel : X.pos C (X.selC H C v) = true := by
+      rw [hselC]
+      exact hpos
+    refine ⟨hcSel, hposSel, ?_, hlocalLegal, hcount⟩
+    exact hoddvalid
 
 /-- L6.1m (domination, 06:787–811): at a matching neighbour `p_b ≤ e^{.2k}|𝒟_{b,c}| q_b` with
 `log|𝒟_{b,c}| < .1k`; the `o(n^{.4})` other neighbours (coarse or fine chunk flips) cost `o(kn)`. -/

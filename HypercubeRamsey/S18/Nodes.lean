@@ -1,618 +1,535 @@
 import HypercubeRamsey.S18.Defs
 
-/-!
-# Section 18 blueprint nodes
-
-Each declaration below corresponds to one Section 18 blueprint node or
-sub-node. Proofs of individual nodes are placeholders for the proof lane;
-section exports are assembled explicitly from their sub-nodes.
--/
-
-namespace HypercubeRamsey
-namespace S18
-
+/-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
+all assemblies below use their stated outputs without new placeholders. -/
+namespace HypercubeRamsey.S18
 open Classical Filter
 open scoped BigOperators
 
-/-- D18.L (18:43–87): construct the initial-list data, fixed late pools,
-current priors, and encoding after the L16.1 quantitative facts are available. -/
-theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (k : ℕ)
-    {PT : ProfiledTiling κ T k} (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
-    (hLarge : LargeIndex κ T k)
-    (h16 : ∃ G : LowGeom PT, ∃ F : FreshCell G, L16QuantitativeValidity G F) :
-    Nonempty (LateData hPT) := by
+/-- D18.L, §§16–17 and 18:43–87. Construct actual initial data, not arbitrary
+lists. The selected discrepancy budgets are forwarded from C12.K. The input
+geometry now includes the prescribed cell slot count; the output calibration
+uses a 50ρh consultation-centre margin. The general calibration and upstream
+construction gaps recorded in `Needs` remain producer obligations. -/
+theorem D18_L {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ) (T : Stage)
+    (hInit : InitDisc T κ.η0)
+    (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε)
+    (hDisc : DeepDisc T κ.xs κ.α 0.04)
+    (hDiscι : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, PT.tiling.mode.isLow → ProfileCornerMass PT → LargeIndex κ T k →
+      (∃ G : LowGeom PT, ∃ F : FreshCell G, L16QuantitativeValidity G F) →
+      Nonempty {D : LateData hPT // D.Spec} := by
   sorry
 
-/-- D18.T (18:89–166): package the actual-history gate, the three local
-requirements, deletion kernels, and the current bad/alarm events. -/
-theorem D18_T {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT) :
-    Nonempty (TransitionData D) := by
-  sorry
-
-/-- D18.G (18:662–676): define the three terminal requirements and their
-deterministic local scopes for the initial-input process. -/
-theorem D18_G {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) : Nonempty (TerminalRequirements D R) := by
-  sorry
-
-/-- D18.C (18:233–264): define the critical-cell transfer experiment with a
-total block-response protocol and fixed independent seeds. -/
-theorem D18_C {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) : Nonempty (CriticalTransferData D R) := by
-  sorry
-
-/-- L18.0a (18:75–87): summable error schedule, including uniform vanishing
-after multiplication by the maximum internal dimension. -/
+/-- L18.0a, 18:78–87. Constants precede all stages; epsilon precedes its
+own eventual quantifier. Only L16-valid geometries are quantified. -/
 theorem L18_0a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∃ Kβ : ℝ, 0 < Kβ ∧
-      ∀ᶠ k in atTop,
-        ∀ PT : ProfiledTiling κ T k, PT.Valid → PT.tiling.mode.isLow →
-          ∀ G : LowGeom PT, ScheduleAt κ T k PT G Kβ ∧
-            ∀ ε : ℝ, 0 < ε → ∀ i : Fin PT.tiling.m,
-              (max 1 (PT.tiling.P i).h : ℝ) *
-                (∑ j : Fin G.r, lateError κ T k PT i j.val) < ε := by
+      (∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid → PT.tiling.mode.isLow →
+        ∀ G : LowGeom PT, ∀ F : FreshCell G, L16QuantitativeValidity G F → ScheduleAt κ T k PT G Kβ) ∧
+      (∀ ε : ℝ, 0 < ε → ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k,
+        PT.Valid → PT.tiling.mode.isLow → ∀ G : LowGeom PT, ∀ F : FreshCell G,
+          L16QuantitativeValidity G F → SmallErrors κ T k PT G ε) := by
   sorry
 
-/-- L18.0b (18:126–134): current-list cap after the gated late hits. -/
-theorem L18_0b {κ : CConsts} (hκ : κ.Admissible) {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Kβ : ℝ) (hKβ : 0 < Kβ)
-    (hSchedule : ScheduleAt κ T k PT D.geom Kβ)
-    (hVanishing : ∀ ε : ℝ, 0 < ε → ∀ i : Fin PT.tiling.m,
-      (max 1 (PT.tiling.P i).h : ℝ) *
-        (∑ j : Fin D.geom.r, lateError κ T k PT i j.val) < ε) :
-    CurrentListCapFacts D R := by
+/-- P18.4a / D18.T, 18:89–113, 810–825. Choose profiles by separation on
+baseline *label* marginals, and construct their exact reference kernels. This
+choice occurs before terminal conditioning. -/
+theorem P18_4a {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : LateData hPT) (hD : D.Spec) :
+    ∃ K : LateKernels D.encoding.base,
+      (D.withKernels K).Spec ∧ TransitionData (D.withKernels K) ∧ MaskBalance (D.withKernels K) := by
   sorry
 
-/-- L18.1a (18:168–184): concentration of the sketch-conflict requirement. -/
-theorem L18_1a {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) :
-    ∀ j h, R.gate j h →
-      (D.encoding.kernels.referenceTransition j h).pr
-        (fun out => ¬ R.R1 j h out) ≤
-          Real.exp (-(T.S.n k : ℝ) ^ (0.09 : ℝ)) := by
+/-- L18.0b, eq. (25). Finite smallness replaces impossible fixed-index
+vanishing; the cap is on probability atoms, with no factor N. -/
+theorem L18_0b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D →
+      SmallErrors κ T k PT D.geom (Real.log 2 / 1000) → CurrentListCapFacts D := by
   sorry
 
-/-- L18.1b (18:184–211): broad prefixes and pointwise deletion-kernel
-comparison on the gate, with the external and internal batch lengths retained. -/
-theorem L18_1b {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) :
-    ∀ j h, R.gate j h → ∀ out, R.R1 j h out → R.R2 j h out →
-      ∀ b : {x : Pos T k // x ∈ D.encoding.base.classes j},
-        Real.exp (-((κ.α / 100) * (T.S.n k : ℝ))) ≤ R.prefixMass j b h out ∧
-        (D.encoding.kernels.refK j b h).w (out b) ≤
-          Real.exp (1000 * R.deletionLength j b *
-            lateError κ T k PT (D.geom.patchOf b.1) j.val) *
-              (R.deleted j b h).w (out b) := by
+/-- L18.1a, 18:171–194. Exponent .04 leaves slack below the derived .09. -/
+theorem L18_1a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → CurrentListCapFacts D →
+      ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr (fun out => ¬ D.R1 j out) ≤
+        Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
   sorry
 
-/-- L18.1c (18:211–229): exponentially small true-hit failure after R1 and R2. -/
-theorem L18_1c {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) :
-    ∀ j h, R.gate j h →
-      (D.encoding.kernels.referenceTransition j h).pr
-        (fun out => R.R1 j h out ∧ R.R2 j h out ∧ ¬ R.R3 j h out) ≤
-          Real.exp (-(T.S.n k : ℝ) ^ (0.09 : ℝ)) := by
+/-- L18.1b, 18:195–223. Actual broad prefixes, same-side-data deletions,
+and both single and pair versions of eq. (27); K27 is uniform. -/
+theorem L18_1b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∃ K27 : ℝ, 0 < K27 ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → TransitionData D → SmallErrors κ T k PT D.geom (Real.log 2 / 1000) →
+        BroadDeletionFacts D K27 := by
   sorry
 
-/-- L18.1 (18:168–229): the local transition conclusions, assembled from its
-three separately exposed sub-nodes. -/
-theorem L18_1 {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (hκ : κ.Admissible)
-    (D : LateData hPT) (R : TransitionData D) (Kβ : ℝ) (hKβ : 0 < Kβ)
-    (hSchedule : ScheduleAt κ T k PT D.geom Kβ)
-    (hVanishing : ∀ ε : ℝ, 0 < ε → ∀ i : Fin PT.tiling.m,
-      (max 1 (PT.tiling.P i).h : ℝ) *
-        (∑ j : Fin D.geom.r, lateError κ T k PT i j.val) < ε) :
-    LocalTransitionFacts D R := by
-  exact ⟨D.large_index, L18_0b hκ D R Kβ hKβ hSchedule hVanishing,
-    L18_1a D R, L18_1b D R, L18_1c D R⟩
-
-/-- D18.I (18:962–985): fixed initial pair tests, envelope conditions, and
-deterministic consultation scopes for one palette. -/
-theorem D18_I {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT) :
-    Nonempty (InitialPairData D) := by
+/-- L18.1c, 18:225–226. Bounds an intersection, not a success-conditioned law. -/
+theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK : 0 < K27) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → BroadDeletionFacts D K27 →
+      ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr
+        (fun out => D.R1 j out ∧ D.R2 j h out ∧ ¬ D.R3 j h out) ≤
+          Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
   sorry
 
-/-- L18.2a (18:277–285): critical-label domination and consultation locality. -/
-theorem L18_2a {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (hLocal : LocalTransitionFacts D R) :
-    TransferStepBound D X ⟨0, by decide⟩ := by
+theorem L18_1 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∃ K27 : ℝ, 0 < K27 ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → TransitionData D → SmallErrors κ T k PT D.geom (Real.log 2 / 1000) →
+        LocalTransitionFacts D K27 := by
+  obtain ⟨K, hK, hb⟩ := L18_1b hκ T
+  have ha := L18_1a hκ T
+  have hc := L18_1c hκ T K hK
+  have hcap := L18_0b hκ T
+  refine ⟨K, hK, ?_⟩
+  filter_upwards [hcap, ha, hb, hc] with k hcap ha hb hc
+  intro PT hPT D hD hR hsmall
+  have hC := hcap PT hPT D hD hR hsmall
+  have hB := hb PT hPT D hD hR hsmall
+  exact ⟨hC, hB, ha PT hPT D hD hR hC, hc PT hPT D hD hR hB⟩
+
+/-- L18.2b/c/f, 18:290–415. Actual predecessor/erased-word/block geometry. -/
+theorem L18_2b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X := by
   sorry
 
-/-- L18.2b (18:290–325): finite predecessor closure and coset-parity identity. -/
-theorem L18_2b {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2a : TransferStepBound D X ⟨0, by decide⟩) :
-    TransferStepBound D X ⟨1, by decide⟩ := by
+/-- L18.2d/e/g, 18:338–453. Perform path deletion and integrate erased
+sketches before fixing independent seeds; construct a total local protocol. -/
+theorem L18_2g {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK : 0 < K27) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+      ∀ X : CriticalTransferData D, TransferGeometry X → Nonempty (TransferProtocol X) := by
   sorry
 
-/-- L18.2c (18:327–336): identify the erased word and its internal-neighbour
-support from the parity identity. -/
-theorem L18_2c {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2b : TransferStepBound D X ⟨1, by decide⟩) :
-    TransferStepBound D X ⟨2, by decide⟩ := by
+/-- L18.2h, 18:455–470. Complete reply-range cardinality, not an event tail. -/
+theorem L18_2h {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
+      ∀ P : TransferProtocol X, ReplyRangeBound P := by
   sorry
 
-/-- L18.2f (18:377–415): one-block locality and the bound on omitted early
-inputs at every affected sketch site. -/
-theorem L18_2f {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2b : TransferStepBound D X ⟨1, by decide⟩)
-    (h2c : TransferStepBound D X ⟨2, by decide⟩) :
-    TransferStepBound D X ⟨5, by decide⟩ := by
+/-- L18.2a/i and 18:472–490, 630–645. Positive whole-cell survival and
+both surviving-witness second moments. -/
+theorem L18_2i {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
+        TransferGeometry X → SurvivalFacts X := by
   sorry
 
-/-- L18.2d (18:338–350): erase the direct roles meeting the designated word
-using the deletion kernels, with side-draw factors unchanged. -/
-theorem L18_2d {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2c : TransferStepBound D X ⟨2, by decide⟩)
-    (h2f : TransferStepBound D X ⟨5, by decide⟩)
-    (hLocal : LocalTransitionFacts D R) :
-    TransferStepBound D X ⟨3, by decide⟩ := by
+/-- L18.2j, 18:500–524. Cylinder identity for the actual adaptive recurrence. -/
+theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} {D : LateData hPT} {X : CriticalTransferData D}
+    (P : TransferProtocol X) : CylinderFacts P := by
   sorry
 
-/-- L18.2e (18:352–375): retain only the envelope event; the erased sketch
-factors integrate to one and the failure is contained in this event. -/
-theorem L18_2e {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2d : TransferStepBound D X ⟨3, by decide⟩)
-    (h2f : TransferStepBound D X ⟨5, by decide⟩) :
-    TransferStepBound D X ⟨4, by decide⟩ := by
+/-- L18.2k/l, 18:526–615. The independent-witness likelihood process and
+stopped moment/exception estimates are explicit. Choose cstop before stages. -/
+theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (hDisc : DeepDisc T κ.xs κ.α 0.04) :
+    ∃ cstop : ℝ, 0 < cstop ∧ cstop < κ.xs / 4 ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X → SurvivalFacts X →
+        ∀ P : TransferProtocol X, ReplyRangeBound P → CylinderFacts P → StopFacts P cstop := by
   sorry
 
-/-- L18.2g (18:420–453): a total bounded-response protocol, with replies
-depending only on the requested block and the transcript so far. -/
-theorem L18_2g {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2e : TransferStepBound D X ⟨4, by decide⟩)
-    (h2f : TransferStepBound D X ⟨5, by decide⟩) :
-    TransferStepBound D X ⟨6, by decide⟩ := by
+/-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
+final unconditioned prefix-failure estimate. -/
+theorem L18_2m {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (hDisc : DeepDisc T κ.xs κ.α 0.04) (cstop : ℝ) (hc : 0 < cstop) (hcx : cstop < κ.xs / 4) :
+    ∃ ctilt : ℝ, 0 < ctilt ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → ∀ X : CriticalTransferData D, ∀ P : TransferProtocol X,
+          StopFacts P cstop → TiltedDeviationBound P ctilt := by
   sorry
 
-/-- L18.2h (18:455–470): each block's complete reply sequence has at most
-`exp(n^.4)` possible values. -/
-theorem L18_2h {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2f : TransferStepBound D X ⟨5, by decide⟩)
-    (h2g : TransferStepBound D X ⟨6, by decide⟩) :
-    TransferStepBound D X ⟨7, by decide⟩ := by
+/-- 18:630–657. Undo survival, use its second moment and restore deletion
+costs. The exponent is chosen after the tilted bound, uniformly in X. -/
+theorem L18_2_finish {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (ctilt : ℝ) (hc : 0 < ctilt) :
+    ∃ c1 : ℝ, 0 < c1 ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → SmallErrors κ T k PT D.geom (Real.log 2 / 1000) →
+        ∀ X : CriticalTransferData D, TransferGeometry X → SurvivalFacts X →
+          ∀ P : TransferProtocol X, TiltedDeviationBound P ctilt →
+            X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
+              Real.exp (-Real.rpow (T.S.n k : ℝ) c1) := by
   sorry
 
-/-- L18.2i (18:472–490): uniform survival lower bound for single and allowed
-nonconflicting pair witnesses. -/
-theorem L18_2i {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2a : TransferStepBound D X ⟨0, by decide⟩) :
-    TransferStepBound D X ⟨8, by decide⟩ := by
+theorem L18_2 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (hDisc : DeepDisc T κ.xs κ.α 0.04) (K27 : ℝ) (hK : 0 < K27) :
+    ∃ c1 : ℝ, 0 < c1 ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+        SmallErrors κ T k PT D.geom (Real.log 2 / 1000) → TransferBound D c1 := by
+  obtain ⟨cs, hcs, hcsx, hl⟩ := L18_2l hκ T hDisc
+  obtain ⟨ct, hct, hm⟩ := L18_2m hκ T hDisc cs hcs hcsx
+  obtain ⟨c1, hc1, hfinish⟩ := L18_2_finish hκ T ct hct
+  refine ⟨c1, hc1, ?_⟩
+  filter_upwards [L18_2b hκ T, L18_2g hκ T K27 hK, L18_2h hκ T, L18_2i hκ T,
+    hl, hm, hfinish] with k hb hg hh hi hl hm hfinish
+  intro PT hPT D hD hR hLocal hsmall X
+  have geom := hb PT hPT D hD X
+  obtain ⟨P⟩ := hg PT hPT D hD hR hLocal X geom
+  have range := hh PT hPT D hD X P
+  have surv := hi PT hPT D hD X geom
+  have cyl := L18_2j P
+  have stopped := hl PT hPT D hD X geom surv P range cyl
+  have tilt := hm PT hPT D hD X P stopped
+  exact hfinish PT hPT D hD hsmall X geom surv P tilt
+
+/-- P18.3a–d, 18:678–751. Per-requirement bounds under every global slot
+pin; replay is a total function with explicit agreement. `D.l16_valid.slot_eq`
+controls the slot inputs read by each touched cell, including under the pin. -/
+theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
+    (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+        TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
   sorry
 
-/-- L18.2j (18:500–524): transcript-cylinder factorization and the adaptive
-block union bound. -/
-theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2a : TransferStepBound D X ⟨0, by decide⟩)
-    (h2g : TransferStepBound D X ⟨6, by decide⟩)
-    (h2h : TransferStepBound D X ⟨7, by decide⟩) :
-    TransferStepBound D X ⟨9, by decide⟩ := by
+/-- P18.3c, 18:715–737. Forced replay advances overlapping scopes once. -/
+theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : LateData hPT) : ReplayFacts D := by
   sorry
 
-/-- L18.2k (18:526–571): survival estimate under a transcript cylinder. -/
-theorem L18_2k {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2i : TransferStepBound D X ⟨8, by decide⟩)
-    (h2j : TransferStepBound D X ⟨9, by decide⟩) :
-    TransferStepBound D X ⟨10, by decide⟩ := by
+/-- P18.3e, 18:752–788. Leaves of the actual bad requirements, exact
+slot/image/tape dependency, conditional pushforward and touching charges.
+The prescribed `D.l16_valid.slot_eq` bounds leaf slot domains as well as cells. -/
+theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → Nonempty (LeafCoupling D δ) := by
   sorry
 
-/-- L18.2l (18:573–615): likelihood-ratio martingale and stopped second
-moment estimate, with the witness independent of the raw blocks. -/
-theorem L18_2l {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (h2j : TransferStepBound D X ⟨9, by decide⟩)
-    (h2k : TransferStepBound D X ⟨10, by decide⟩) :
-    TransferStepBound D X ⟨11, by decide⟩ := by
+/-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
+vanishing cost for every stated local nonnegative test. The slot-count
+contract in `D.l16_valid` is retained for the local pool comparison. -/
+theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
+    ∃ ε : ℕ → ℝ, (∀ k, 0 ≤ ε k) ∧ Tendsto ε atTop (nhds 0) ∧
+      ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+        ∀ D : LateData hPT, D.Spec → TerminalRiskBound D δ → LeafCoupling D δ →
+          Nonempty (TerminalCertificate D δ (ε k)) := by
   sorry
 
-/-- L18.2m (18:617–628): tilted deviation probability, after stopping at the
-barrier or an exceptional cylinder. -/
-theorem L18_2m {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (ha : TransferStepBound D X ⟨0, by decide⟩)
-    (hb : TransferStepBound D X ⟨1, by decide⟩)
-    (hc : TransferStepBound D X ⟨2, by decide⟩)
-    (hd : TransferStepBound D X ⟨3, by decide⟩)
-    (he : TransferStepBound D X ⟨4, by decide⟩)
-    (hf : TransferStepBound D X ⟨5, by decide⟩)
-    (hg : TransferStepBound D X ⟨6, by decide⟩)
-    (hh : TransferStepBound D X ⟨7, by decide⟩)
-    (hi : TransferStepBound D X ⟨8, by decide⟩)
-    (hj : TransferStepBound D X ⟨9, by decide⟩)
-    (hk : TransferStepBound D X ⟨10, by decide⟩)
-    (hl : TransferStepBound D X ⟨11, by decide⟩)
-    (h16 : L16QuantitativeValidity D.geom D.fresh)
-    (hBlock : ∀ C, C ∈ X.criticalCells → X.block C < X.blockCount) :
-    TransferBound D X := by
+theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
+    (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1) :
+    ∃ ε : ℕ → ℝ, (∀ k, 0 ≤ ε k) ∧ Tendsto ε atTop (nhds 0) ∧
+      ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+        ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+          TransferBound D c1 → Nonempty (TerminalCertificate D δ (ε k)) := by
+  obtain ⟨ε, hε, hlim, hf⟩ := P18_3f hκ T δ hδ
+  refine ⟨ε, hε, hlim, ?_⟩
+  filter_upwards [P18_3a hκ T K27 c1 δ hK hc1 hδ hδsmall, P18_3e hκ T δ hδ, hf] with k ha he hf
+  intro PT hPT D hD hR hLocal hTransfer
+  have risk := ha PT hPT D hD hR hLocal hTransfer (P18_3c D)
+  obtain ⟨leaves⟩ := he PT hPT D hD risk
+  exact hf PT hPT D hD risk leaves
+
+/-- P18.4b, 18:827–861. The entering predicate is the exact incoming-risk
+and column condition. Current bads and future alarms are defined events. -/
+theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
+    (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+        TransferBound D c1 → ∀ ε, TerminalCertificate D δ ε →
+          Nonempty (ClassSamplerData D δ) := by
   sorry
 
-/-- L18.2 (18:266–657): late-prefix transfer, assembled from the critical-cell
-geometry, erasure, protocol, survival, and stopped-martingale nodes. -/
-theorem L18_2 {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (X : CriticalTransferData D R)
-    (hLocal : LocalTransitionFacts D R) : TransferBound D X := by
-  have ha := L18_2a D R X hLocal
-  have hb := L18_2b D R X ha
-  have hc := L18_2c D R X hb
-  have hf := L18_2f D R X hb hc
-  have hd := L18_2d D R X hc hf hLocal
-  have he := L18_2e D R X hd hf
-  have hg := L18_2g D R X he hf
-  have hh := L18_2h D R X hf hg
-  have hi := L18_2i D R X ha
-  have hj := L18_2j D R X ha hg hh
-  have hk := L18_2k D R X hi hj
-  have hl := L18_2l D R X hj hk
-  exact L18_2m D R X ha hb hc hd he hf hg hh hi hj hk hl D.l16_valid X.block_lt
-
-/-- P18.3a (18:678–690): pool-typicality and initial-list failures, including
-the one-global-slot-pin bound. -/
-theorem P18_3a {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Q : TerminalRequirements D R) :
-    TerminalStepBound D R Q ⟨0, by decide⟩ := by
+/-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish
+all actual completion conclusions; no existential full=True shortcut.
+The reached-column moment comparison retains `D.l16_valid.slot_eq`. -/
+theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
+    (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1)
+    (εterm : ℕ → ℝ) (hterm : Tendsto εterm atTop (nhds 0)) :
+    ∃ εrun : ℕ → ℝ, (∀ k, 0 ≤ εrun k) ∧ Tendsto εrun atTop (nhds 0) ∧
+      ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+        ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
+          TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
+            ∀ A : ClassSamplerData D δ, FullRunProbability D C A (εrun k) := by
   sorry
 
-/-- P18.3b (18:691–714): small expected late-event risk from L18.1a and
-L18.1c, followed by the terminal threshold. -/
-theorem P18_3b {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Q : TerminalRequirements D R)
-    (hLocal : LocalTransitionFacts D R) :
-    TerminalStepBound D R Q ⟨1, by decide⟩ := by
+theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
+    (hδ : 0 < δ) (hδsmall : δ < min 0.04 c1)
+    (εterm : ℕ → ℝ) (hterm : Tendsto εterm atTop (nhds 0)) :
+    ∃ εrun : ℕ → ℝ, (∀ k, 0 ≤ εrun k) ∧ Tendsto εrun atTop (nhds 0) ∧
+      ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+        ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
+          TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
+            Nonempty (CompletionCertificate D C (εrun k)) := by
+  obtain ⟨εrun, hε, hlim, hc⟩ := P18_4c hκ T K27 c1 δ hK hc1 hδ hδsmall εterm hterm
+  refine ⟨εrun, hε, hlim, ?_⟩
+  filter_upwards [P18_4b hκ T K27 c1 δ hK hc1 hδ hδsmall, hc] with k hb hc
+  intro PT hPT D hD hR hBalance hLocal hTransfer C
+  obtain ⟨A⟩ := hb PT hPT D hD hR hLocal hTransfer (εterm k) C
+  exact ⟨⟨A, hc PT hPT D hD hR hBalance hLocal hTransfer C A⟩⟩
+
+/-- D18.I, 18:962–985. The caller fixes a palette and tested tuple. -/
+def D18_I {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : LateData hPT) (p : PaletteIndex D)
+    (S : Finset (Pos T k)) (hS : S ⊆ D.paletteRows p) (hn : S.card ≤ T.S.n k) : InitialPairData D :=
+  ⟨p, S, hS, hn⟩
+
+/-- P18.5a, 18:914–945. Full-run pair-law support, all-neighbor hits,
+palette counts and computed overlap statistics. -/
+theorem P18_5a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ : 0 < δ) :
+    ∃ K : ℝ, 0 < K ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → TransitionData D → PairInitialFacts D δ K := by
   sorry
 
-/-- P18.3c (18:715–737): define replay as a total function of pools, tapes,
-and a marked execution list; prove agreement by induction on rounds. -/
-theorem P18_3c {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Q : TerminalRequirements D R)
-    {X : CriticalTransferData D R} (hTransfer : TransferBound D X) :
-    TerminalStepBound D R Q ⟨2, by decide⟩ := by
+/-- P18.5b, 18:993–1025. A nonnegative integral comparison retaining the
+reach and side-data gates, with uniform constants before all stage indices. -/
+theorem P18_5b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
+    (hK : 0 < K27) (hδ : 0 < δ) :
+    ∃ KL Cp Cs : ℝ, 1 ≤ KL ∧ 0 < Cp ∧ 0 < Cs ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+        ∀ εterm εrun, ∀ C : TerminalCertificate D δ εterm, ∀ H : CompletionCertificate D C εrun,
+          ∀ A : InitialPairData D, ∀ assignment,
+            endpointProbability D C H A assignment ≤
+              Real.exp (Cs * D.geom.r + Cp * A.rows.card * D.rank A.rows) * KL ^ A.rows.card *
+                A.termTest C assignment := by
   sorry
 
-/-- P18.3d (18:738–751): replay estimate after terminal conditioning and the
-permutation-to-iid slot comparison. -/
-theorem P18_3d {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Q : TerminalRequirements D R)
-    (hc : TerminalStepBound D R Q ⟨2, by decide⟩) :
-    TerminalStepBound D R Q ⟨3, by decide⟩ := by
+/-- P18.5c, 18:1027–1056. Terminal → fixed-pool resampling → iid pools;
+the stronger pool gate remains through the fixed-pool comparison. The last
+comparison uses the prescribed `D.l16_valid.slot_eq` and the consulted tuple
+scope; it is not an unrestricted comparison on arbitrary numbers of slots. -/
+theorem P18_5c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ δ εterm, ∀ C : TerminalCertificate D δ εterm,
+        ∀ A : InitialPairData D, ∀ assignment,
+          A.termTest C assignment ≤ (1 + εterm) * A.permTest assignment ∧
+          A.permTest assignment ≤ 2 * A.permFreshTest assignment ∧
+          A.permFreshTest assignment ≤ 2 * A.iidFreshTest assignment := by
   sorry
 
-/-- P18.3e (18:752–771): leaf decomposition and the uniform-injection swap
-coupling, including equal fibre sizes for conditioning on a leaf. -/
-theorem P18_3e {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Q : TerminalRequirements D R)
-    (hc : TerminalStepBound D R Q ⟨2, by decide⟩)
-    (hd : TerminalStepBound D R Q ⟨3, by decide⟩) :
-    TerminalStepBound D R Q ⟨4, by decide⟩ := by
+/-- P18.5d, 18:1058–1090. Bounds the explicitly defined isolate kernel. -/
+theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → IsolateKernelFacts D KI := by
   sorry
 
-/-- P18.3f (18:773–798): apply the lopsided local lemma with the charges and
-the local comparison, producing a positive terminal event. -/
-theorem P18_3f {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (Q : TerminalRequirements D R)
-    (hLocal : LocalTransitionFacts D R)
-    (h0 : TerminalStepBound D R Q ⟨0, by decide⟩)
-    (h1 : TerminalStepBound D R Q ⟨1, by decide⟩)
-    (h2 : TerminalStepBound D R Q ⟨2, by decide⟩)
-    (h3 : TerminalStepBound D R Q ⟨3, by decide⟩)
-    (h4 : TerminalStepBound D R Q ⟨4, by decide⟩) :
-    Nonempty (TerminalCertificate D R) := by
+/-- P18.5e, 18:1092–1124. Remove state gates before bin comparisons and
+retain geometrically fixed bulk pair-hit queries. -/
+theorem P18_5e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∃ CQ : ℝ, 0 < CQ ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ A : InitialPairData D, ∃ Q : PairQueries D A,
+        ∀ assignment, (∀ v ∈ A.rows, A.validPair v (assignment v).1 (assignment v).2) →
+          A.iidFreshTest assignment ≤
+            Real.exp (0.005 * (T.S.n k : ℝ) * (D.nonisolates A.rows).card +
+              CQ * A.rows.card * D.rank A.rows) * (4 : ℝ) ^ Q.count * Q.integral assignment *
+                (D.paletteScale A.paletteIndex)⁻¹ ^ (2 * (D.nonisolates A.rows).card) *
+                ∏ v ∈ A.rows \ D.nonisolates A.rows,
+                  isolatedWeight D v (assignment v).1 (assignment v).2 := by
   sorry
 
-/-- P18.3 (18:678–799): terminal avoidance and local comparison, assembled
-from the six terminal sub-nodes. -/
-theorem P18_3 {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) {X : CriticalTransferData D R}
-    (hLocal : LocalTransitionFacts D R) (hTransfer : TransferBound D X) :
-    Nonempty (TerminalCertificate D R) := by
-  obtain ⟨Q⟩ := D18_G D R
-  have h0 := P18_3a D R Q
-  have h1 := P18_3b D R Q hLocal
-  have h2 := P18_3c D R Q hTransfer
-  have h3 := P18_3d D R Q h2
-  have h4 := P18_3e D R Q h2 h3
-  exact P18_3f D R Q hLocal h0 h1 h2 h3 h4
-
-/-- P18.4a (18:810–825): balanced mask profiles in the annealed baseline,
-chosen independently of all sampled histories. -/
-theorem P18_4a {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT) :
-    MaskBalance D := by
+/-- P18.5f/g, 18:1126–1212. Calibrated label and group-bin comparisons,
+reverse repeat summation and iid containment yield the actual query integral.
+This includes k=0, for which the right side is one. -/
+theorem P18_5f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ A : InitialPairData D, ∀ Q : PairQueries D A,
+        PairQueryBound D A Q := by
   sorry
 
-/-- P18.4b (18:827–861): at one class, use the fixed-history clock sampler
-to avoid current bad events and future alarms with factor-two comparison. -/
-theorem P18_4b {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (hBalance : MaskBalance D) (hLocal : LocalTransitionFacts D R)
-    {X : CriticalTransferData D R} (hTransfer : TransferBound D X) :
-    Nonempty (ClassSamplerData D R) := by
+/-- P18.5g, 18:1212–1220. Assemble the numerical comparisons into the
+all-tuples endpoint certificate. Constants remain uniform. -/
+theorem P18_5g {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+    (Kpair KL KI Cp Cs CQ : ℝ) (hKpair : 0 < Kpair) (hKL : 1 ≤ KL) (hKI : 1 ≤ KI)
+    (hCp : 0 < Cp) (hCs : 0 < Cs) (hCQ : 0 < CQ) :
+    ∃ K Cprime Cstage : ℝ, 0 < K ∧ 0 < Cprime ∧ 0 < Cstage ∧
+      ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+        ∀ D : LateData hPT, D.Spec → ∀ δ εterm εrun, εterm ≤ 1 →
+        ∀ C : TerminalCertificate D δ εterm, ∀ H : CompletionCertificate D C εrun,
+        PairInitialFacts D δ Kpair → IsolateKernelFacts D KI →
+        (∀ A : InitialPairData D, ∀ assignment, endpointProbability D C H A assignment ≤
+          Real.exp (Cs * D.geom.r + Cp * A.rows.card * D.rank A.rows) * KL ^ A.rows.card *
+            A.termTest C assignment) →
+        (∀ A : InitialPairData D, ∀ assignment,
+          A.termTest C assignment ≤ (1 + εterm) * A.permTest assignment ∧
+          A.permTest assignment ≤ 2 * A.permFreshTest assignment ∧
+          A.permFreshTest assignment ≤ 2 * A.iidFreshTest assignment) →
+        (∀ A : InitialPairData D, ∃ Q : PairQueries D A, PairQueryBound D A Q ∧
+          ∀ assignment, (∀ v ∈ A.rows, A.validPair v (assignment v).1 (assignment v).2) →
+            A.iidFreshTest assignment ≤
+              Real.exp (0.005 * (T.S.n k : ℝ) * (D.nonisolates A.rows).card +
+                CQ * A.rows.card * D.rank A.rows) * (4 : ℝ) ^ Q.count * Q.integral assignment *
+                  (D.paletteScale A.paletteIndex)⁻¹ ^ (2 * (D.nonisolates A.rows).card) *
+                  ∏ v ∈ A.rows \ D.nonisolates A.rows,
+                    isolatedWeight D v (assignment v).1 (assignment v).2) →
+          EndpointCertificate D C H K Cprime Cstage := by
   sorry
 
-/-- P18.4c (18:863–905): bound column loads on reached histories by backward
-integration through the class comparisons and the balanced baseline. -/
-theorem P18_4c {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : ClassSamplerData D R) (hBalance : MaskBalance D)
-    (hLocal : LocalTransitionFacts D R)
-    {X : CriticalTransferData D R} (hTransfer : TransferBound D X) :
-    ∃ full : D.encoding.base.History (Fin.last D.geom.r) → Prop,
-      FullRunProbability D R C A full := by
+theorem P18_5 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
+    (hK : 0 < K27) (hδ : 0 < δ) :
+    ∃ K Cprime Cstage : ℝ, 0 < K ∧ 0 < Cprime ∧ 0 < Cstage ∧ ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
+        D.Spec → TransitionData D → LocalTransitionFacts D K27 →
+        ∀ εterm εrun, εterm ≤ 1 → ∀ C : TerminalCertificate D δ εterm,
+          ∀ H : CompletionCertificate D C εrun, EndpointCertificate D C H K Cprime Cstage := by
+  obtain ⟨KP, hKP, ha⟩ := P18_5a hκ T δ hδ
+  obtain ⟨KL, Cp, Cs, hKL, hCp, hCs, hb⟩ := P18_5b hκ T K27 δ hK hδ
+  obtain ⟨KI, hKI, hd⟩ := P18_5d hκ T
+  obtain ⟨CQ, hCQ, he⟩ := P18_5e hκ T
+  obtain ⟨K, Cprime, Cstage, hK, hCp', hCs', hg⟩ :=
+    P18_5g hκ T KP KL KI Cp Cs CQ hKP hKL hKI hCp hCs hCQ
+  refine ⟨K, Cprime, Cstage, hK, hCp', hCs', ?_⟩
+  filter_upwards [ha, hb, P18_5c hκ T, hd, he, P18_5f hκ T, hg] with k ha hb hc hd he hf hg
+  intro PT hPT D hD hR hLocal εterm εrun hε C H
+  apply hg PT hPT D hD δ εterm εrun hε C H (ha PT hPT D hD hR) (hd PT hPT D hD)
+    (hb PT hPT D hD hR hLocal εterm εrun C H) (hc PT hPT D hD δ εterm C)
+  intro A
+  let A' := D18_I D A.paletteIndex A.rows A.rows_subset A.small
+  obtain ⟨Q, hQ⟩ := he PT hPT D hD A'
+  exact ⟨Q, hf PT hPT D hD A' Q, hQ⟩
+
+/-- L18.6a, 18:1233–1242. Average the actual overlap correction over all
+p-sets. η is chosen after Cprime and before the stages. -/
+theorem L18_6a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cprime : ℝ)
+    (hK : 0 < K) (hCp : 0 < Cprime) :
+    ∃ η : ℝ, 0 < η ∧ η < 1 ∧ 0.02 + Cprime * η < Real.log 2 / 2 ∧
+      ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+        ∀ D : LateData hPT, D.Spec → ∀ δ, PairInitialFacts D δ K →
+          ∀ palette : PaletteIndex D, ∀ p : ℕ, (p : ℝ) ≤ η * T.S.n k →
+            (∑ S ∈ (D.paletteRows palette).powersetCard p,
+              Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S)) /
+              ((D.paletteRows palette).powersetCard p).card ≤ 2 := by
   sorry
 
-/-- P18.4d (18:904–909): package the chosen class samplers and full-run bound
-as the completion certificate. -/
-theorem P18_4d {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : ClassSamplerData D R) (full : D.encoding.base.History (Fin.last D.geom.r) → Prop)
-    (hfull : FullRunProbability D R C A full) : Nonempty (CompletionCertificate D R C) := by
-  exact ⟨⟨A, full, hfull⟩⟩
+noncomputable def HallBudget {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : LateData hPT) (η K Cs : ℝ) : ℝ :=
+  Real.exp (Cs * D.geom.r) * ∑ p : PaletteIndex D,
+    (D.paletteScale p * (K / densityScale T k) ^ ⌊η * (T.S.n k : ℝ)⌋₊ +
+    (D.paletteScale p)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+      ∑ q ∈ Finset.range ⌊η * (T.S.n k : ℝ)⌋₊,
+        if 3 ≤ q then (q : ℝ) ^ 4 * (K / densityScale T k) ^ q else 0)
 
-/-- P18.4 (18:804–909): complete the conditional late assignment with high
-probability, preserving the reached-history comparison. -/
-theorem P18_4 {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (hLocal : LocalTransitionFacts D R) {X : CriticalTransferData D R}
-    (hTransfer : TransferBound D X) : Nonempty (CompletionCertificate D R C) := by
-  have hBalance := P18_4a D
-  obtain ⟨A⟩ := P18_4b D R C hBalance hLocal hTransfer
-  obtain ⟨full, hfull⟩ := P18_4c D R C A hBalance hLocal hTransfer
-  exact P18_4d D R C A full hfull
-
-/-- P18.5a (18:914–945): pair-law validity, palette size, and bounded partner
-counts on a full run. -/
-theorem P18_5a {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (A : InitialPairData D) : PairInitialFacts D A := by
+/-- L18.6b, 18:1244–1287. Tree diagrams and two extra mergers on retained
+distinct-endpoint support bound actual connected obstruction probabilities. -/
+theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : ℝ)
+    (hK : 0 < K) (hCp : 0 < Cp) (hCs : 0 < Cs) (hη : 0 < η) (hη1 : η < 1) :
+    ∃ KH : ℝ, 0 < KH ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ δ εterm εrun,
+      ∀ C : TerminalCertificate D δ εterm, ∀ H : CompletionCertificate D C εrun,
+      EndpointCertificate D C H K Cp Cs →
+      (∀ palette : PaletteIndex D, ∀ p : ℕ, (p : ℝ) ≤ η * T.S.n k →
+        (∑ S ∈ (D.paletteRows palette).powersetCard p,
+          Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cp * p * D.rank S)) /
+          ((D.paletteRows palette).powersetCard p).card ≤ 2) →
+        (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧
+          HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
   sorry
 
-/-- P18.5b (18:993–1025): backward integration of late factors, retaining the
-reach indicator and side-data predicates until each sampler comparison. -/
-theorem P18_5b {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (hPair : PairInitialFacts D A) (hLocal : LocalTransitionFacts D R)
-    {X : CriticalTransferData D R} (hTransfer : TransferBound D X) :
-    EndpointStepBound D R C A H ⟨0, by decide⟩ := by
+/-- L18.6c, 18:1289–1299. Sum all palettes/patches; C_n→∞ supplies the
+negative linear exponent. The output spends a quarter of total mass. -/
+theorem L18_6c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (η K Cs Kpair : ℝ)
+    (hη : 0 < η) (hK : 0 < K) (hCs : 0 < Cs) (hKP : 0 < Kpair) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ δ, PairInitialFacts D δ Kpair → HallBudget D η K Cs < 1 / 4 := by
   sorry
 
-/-- P18.5c (18:1027–1056): compare terminal-conditioned, resampled, and
-fresh-cell expectations in the order required by the local scopes. -/
-theorem P18_5c {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (h2b : EndpointStepBound D R C A H ⟨0, by decide⟩)
-    (hPools : ∀ x ∈ C.terminal, C.requirements.poolGood x)
-    (hInitial : ∀ x ∈ C.terminal, C.requirements.initialAvoid x)
-    (hLate : ∀ x ∈ C.terminal,
-      C.requirements.pLate x ≤ Real.exp (-(T.S.n k : ℝ) ^ (0.01 : ℝ))) :
-    EndpointStepBound D R C A H ⟨1, by decide⟩ := by
+/-- L18.6d, 18:1301–1306. Full mass≥3/4 minus actual obstruction mass<1/4
+leaves positive success and per-palette representatives. -/
+theorem L18_6d {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
+    (D : LateData hPT) {δ εterm εrun : ℝ} (C : TerminalCertificate D δ εterm)
+    (H : CompletionCertificate D C εrun) (K : ℝ) (hPair : PairInitialFacts D δ K)
+    (t₀ : ℕ) (ht : 3 ≤ t₀) (hfull : εrun ≤ 1 / 4)
+    (hbad : (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧ HallObstruction D t₀ out.2) < 1 / 4) :
+    Nonempty (HallCertificate D δ) := by
   sorry
 
-/-- P18.5d (18:1058–1090): isolated-row kernel, including its row-sum and
-entry bounds. -/
-theorem P18_5d {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (h2c : EndpointStepBound D R C A H ⟨1, by decide⟩) :
-    EndpointStepBound D R C A H ⟨2, by decide⟩ := by
-  sorry
+theorem L18_6 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs : ℝ)
+    (hK : 0 < K) (hCp : 0 < Cp) (hCs : 0 < Cs) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ D : LateData hPT, D.Spec → ∀ δ εterm εrun, εrun ≤ 1 / 4 →
+        ∀ C : TerminalCertificate D δ εterm, ∀ H : CompletionCertificate D C εrun,
+          EndpointCertificate D C H K Cp Cs → Nonempty (HallCertificate D δ) := by
+  obtain ⟨η, hη, hη1, _hslack, ha⟩ := L18_6a hκ T K Cp hK hCp
+  obtain ⟨KH, hKH, hb⟩ := L18_6b hκ T K Cp Cs η hK hCp hCs hη hη1
+  have hc := L18_6c hκ T η KH (Cs + 10) K hη hKH (by linarith) hK
+  have hn : ∀ᶠ k in atTop, (3 : ℝ) / η + 1 ≤ (T.S.n k : ℝ) := by
+    exact T.S.n_tendsto.eventually (eventually_atTop.2 ⟨⌈(3 : ℝ) / η + 1⌉₊, fun n hn =>
+      le_trans (Nat.le_ceil _) (by exact_mod_cast hn)⟩)
+  filter_upwards [ha, hb, hc, hn] with k ha hb hc hn
+  intro PT hPT D hD δ εterm εrun hfull C H E
+  have hbad := lt_of_le_of_lt (hb PT hPT D hD δ εterm εrun C H E
+    (ha PT hPT D hD δ E.pair_facts)) (hc PT hPT D hD δ E.pair_facts)
+  have ht : 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := by
+    apply Nat.le_floor
+    have hdiv : (3 : ℝ) / η ≤ (T.S.n k : ℝ) := by linarith
+    have hmul := (div_le_iff₀ hη).mp hdiv
+    norm_num at hmul ⊢
+    nlinarith
+  exact L18_6d D C H K E.pair_facts _ ht hfull hbad
 
-/-- P18.5e (18:1092–1124): reduce non-isolated rows to finitely many
-pair-hit queries with disjoint primitive consultations. -/
-theorem P18_5e {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (h2d : EndpointStepBound D R C A H ⟨2, by decide⟩) :
-    EndpointStepBound D R C A H ⟨3, by decide⟩ := by
-  sorry
+/-- 18:1306–1310. Combine palette matchings using host disjointness, then
+supply the actual odd labels and every edge from the final pair support. -/
+theorem C18_Fcube {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : LateData hPT) (δ K : ℝ) (hPair : PairInitialFacts D δ K)
+    (H : HallCertificate D δ) : CubeIn T k PT.tiling.c := by
+  have support (v : {v : Pos T k // IsEvenRole v}) :=
+    (hPair.2.2.2.2 H.input H.history H.full v.1 v.2).2 (H.pairs v.1) (H.pair_supported v.1 v.2)
+  have mem (v : {v : Pos T k // IsEvenRole v}) : H.matching v ∈ D.palette v.1 := by
+    rcases H.chosen v with hv | hv
+    · rw [hv]; exact (support v).2.1
+    · rw [hv]; exact (support v).2.2.1
+  have inj : Function.Injective H.matching := by
+    intro v w hvw
+    by_cases hp : D.rolePalette v.1 = D.rolePalette w.1
+    · exact H.palette_injective v w hp hvw
+    · have hd := D.palettes_global_disjoint (D.rolePalette v.1) (D.rolePalette w.1) hp
+      have hm : H.matching v ∈ D.palette w.1 := by rw [hvw]; exact mem w
+      exact False.elim ((Finset.disjoint_left.mp hd) (mem v) hm)
+  apply cube_copy_of_parts H.matching (D.oddAt H.history) inj H.full.2.2.2.2.2.1
+  intro v b hab
+  have hedges := (support v).2.2.2 b hab
+  rcases H.chosen v with hv | hv
+  · rw [hv]; exact hedges.1
+  · rw [hv]; exact hedges.2
 
-/-- P18.5f (18:1126–1168): compare repeated bins and reverse-integrate the
-removed variables with their multiplicative losses. -/
-theorem P18_5f {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (h2e : EndpointStepBound D R C A H ⟨3, by decide⟩) :
-    EndpointStepBound D R C A H ⟨4, by decide⟩ := by
-  sorry
-
-/-- P18.5g (18:1170–1220): restore pool restrictions, remove the load
-conditioning, and produce the symmetric endpoint kernels. -/
-theorem P18_5g {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (hPair : PairInitialFacts D A)
-    (h2b : EndpointStepBound D R C A H ⟨0, by decide⟩)
-    (h2c : EndpointStepBound D R C A H ⟨1, by decide⟩)
-    (h2d : EndpointStepBound D R C A H ⟨2, by decide⟩)
-    (h2e : EndpointStepBound D R C A H ⟨3, by decide⟩)
-    (h2f : EndpointStepBound D R C A H ⟨4, by decide⟩) :
-    Nonempty (EndpointCertificate D R C A H) := by
-  sorry
-
-/-- P18.5 (18:947–1221): joint endpoint kernels, assembled from D18.I and
-the six comparison and pooling sub-nodes. -/
-theorem P18_5 {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (H : CompletionCertificate D R C) (hLocal : LocalTransitionFacts D R)
-    {X : CriticalTransferData D R} (hTransfer : TransferBound D X) :
-    Nonempty (Σ A : InitialPairData D, EndpointCertificate D R C A H) := by
-  obtain ⟨A⟩ := D18_I D
-  have hPair := P18_5a D A
-  have h2b := P18_5b D R C A H hPair hLocal hTransfer
-  have h2c := P18_5c D R C A H h2b C.pools C.initial C.late
-  have h2d := P18_5d D R C A H h2c
-  have h2e := P18_5e D R C A H h2d
-  have h2f := P18_5f D R C A H h2e
-  exact ⟨⟨A, Classical.choice (P18_5g D R C A H hPair h2b h2c h2d h2e h2f)⟩⟩
-
-/-- L18.6a (18:1223–1248): geometric averaging for a random set of rows up to
-the cutoff `t₀`. -/
-theorem L18_6a {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (E : EndpointCertificate D R C A H)
-    (hFull : FullRunProbability D R C H.samplers H.full)
-    (hK : 0 < E.K) (hCprime : 0 < E.Cprime)
-    (hPalette : A.palette.Nonempty)
-    (hKernel : ∀ v x z, 0 ≤ E.kernel v x z)
-    (hRows : ∀ v x, ∑ z, E.kernel v x z ≤ E.K / (A.palette.card : ℝ))
-    (hEntries : ∀ v x z,
-      E.kernel v x z ≤ (A.palette.card : ℝ)⁻¹ ^ 2 * Real.exp (0.01 * (T.S.n k : ℝ)))
-    (hJoint : ∀ assignment : PairAssignment T k,
-      (D.encoding.experiment C.terminal C.positive H.samplers.act
-        (pairSampler := A.pairSampler)).pr
-        (fun out => H.full out.1.2 ∧ ∀ v ∈ A.rows, out.2 v = assignment v) ≤
-        Real.exp (2 * (D.geom.r : ℝ)) * E.K ^ A.rows.card *
-          Real.exp (0.01 * (T.S.n k : ℝ) * A.nonisolates +
-            E.Cprime * A.rows.card * A.rank) *
-          ∏ v ∈ A.rows, E.kernel v (assignment v).1 (assignment v).2) :
-    HallStepBound D R C A H E ⟨0, by decide⟩ := by
-  sorry
-
-/-- L18.6b (18:1249–1276): tree-diagram counts and the two additional mergers
-required by a connected Hall obstruction, retaining distinct endpoints. -/
-theorem L18_6b {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (E : EndpointCertificate D R C A H)
-    (h6a : HallStepBound D R C A H E ⟨0, by decide⟩) :
-    HallStepBound D R C A H E ⟨1, by decide⟩ := by
-  sorry
-
-/-- L18.6c (18:1277–1300): sum the large connected sets and small Hall
-obstructions over all patches and palettes. -/
-theorem L18_6c {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (E : EndpointCertificate D R C A H)
-    (h6a : HallStepBound D R C A H E ⟨0, by decide⟩)
-    (h6b : HallStepBound D R C A H E ⟨1, by decide⟩) :
-    HallStepBound D R C A H E ⟨2, by decide⟩ := by
-  sorry
-
-/-- L18.6d (18:1301–1311): absence of the enumerated obstructions implies a
-Hall matching in every palette. -/
-theorem L18_6d {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (E : EndpointCertificate D R C A H)
-    (h6a : HallStepBound D R C A H E ⟨0, by decide⟩)
-    (h6b : HallStepBound D R C A H E ⟨1, by decide⟩)
-    (h6c : HallStepBound D R C A H E ⟨2, by decide⟩) :
-    Nonempty (HallCertificate D) := by
-  sorry
-
-/-- L18.6 (18:1223–1311): two-endpoint Hall estimate assembled from the
-geometric, tree-counting, and obstruction-sum sub-nodes. -/
-theorem L18_6 {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (R : TransitionData D) (C : TerminalCertificate D R)
-    (A : InitialPairData D) (H : CompletionCertificate D R C)
-    (E : EndpointCertificate D R C A H) : Nonempty (HallCertificate D) := by
-  have h6a := L18_6a D R C A H E H.fullRun E.K_pos E.Cprime_pos
-    E.palette_nonempty E.kernel_nonneg E.row_sum E.entry_bound E.jointBound
-  have h6b := L18_6b D R C A H E h6a
-  have h6c := L18_6c D R C A H E h6a h6b
-  exact L18_6d D R C A H E h6a h6b h6c
-
-/-- C18.Fcube (18:1313–1322): convert the injective endpoint selection into
-the cross-cube copy using the framework embedding theorem. -/
-theorem C18_Fcube {κ : CConsts} {T : Stage} {k : ℕ}
-    {PT : ProfiledTiling κ T k} {hPT : PT.Valid} (D : LateData hPT)
-    (H : HallCertificate D) : CubeIn T k PT.tiling.c := by
-  exact cube_copy_of_parts H.assignment.evenLabel H.assignment.oddLabel
-    H.assignment.even_injective H.assignment.odd_injective H.assignment.edge
-
-/-- Assemble the low-mode experiment at one valid profile. -/
-theorem lowmode_cube_at {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (k : ℕ)
-    {PT : ProfiledTiling κ T k} (hPT : PT.Valid) (hLow : PT.tiling.mode.isLow)
-    (hLarge : LargeIndex κ T k)
-    (h16 : ∃ G : LowGeom PT, ∃ F : FreshCell G, L16QuantitativeValidity G F)
-    (Kβ : ℝ) (hKβ : 0 < Kβ) (hSchedule : ∀ G : LowGeom PT,
-      ScheduleAt κ T k PT G Kβ ∧
-        ∀ ε : ℝ, 0 < ε → ∀ i : Fin PT.tiling.m,
-          (max 1 (PT.tiling.P i).h : ℝ) *
-            (∑ j : Fin G.r, lateError κ T k PT i j.val) < ε) :
-    CubeIn T k PT.tiling.c := by
-  obtain ⟨D⟩ := D18_L hκ T k hPT hLow hLarge h16
-  obtain ⟨R⟩ := D18_T D
-  have hLocal := L18_1 hκ D R Kβ hKβ (hSchedule D.geom).1 (hSchedule D.geom).2
-  obtain ⟨X⟩ := D18_C D R
-  have hTransfer := L18_2 D R X hLocal
-  obtain ⟨C⟩ := P18_3 D R hLocal hTransfer
-  obtain ⟨H⟩ := P18_4 D R C hLocal hTransfer
-  obtain ⟨⟨A, E⟩⟩ := P18_5 D R C H hLocal hTransfer
-  obtain ⟨Hall⟩ := L18_6 D R C A H E
-  exact C18_Fcube D Hall
-
-/-- C18.Flow (18:1301–1310): every valid bounded or low profile yields a
-monochromatic cross-cube, assembled from terminal avoidance, late completion,
-endpoint kernels, the two-endpoint Hall estimate, and the embedding lemma. -/
-theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+/-- Internal low-mode assembly. The specific budgets chosen by C12.K are
+needed to bound the adaptive broad laws, in addition to the full regime. -/
+theorem C18_Flow {κ : CConsts} (hκ : κ.Admissible) (hThresholds : LateThresholds κ) (T : Stage)
     (hInit : InitDisc T κ.η0)
-    (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε) :
-    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid →
-      PT.tiling.mode.isLow → CubeIn T k PT.tiling.c := by
-  have h16 := l16_quantitative_validity hκ T hInit hDeep
-  obtain ⟨Kβ, hKβ, hSchedule⟩ := L18_0a hκ T
-  have hLarge := eventually_largeIndex κ T
-  filter_upwards [h16, hSchedule, hLarge] with k hk16 hkSchedule hkLarge
-  intro PT hPT hLow
-  rcases hk16 PT hPT hLow with ⟨G, F, h16valid⟩
-  exact lowmode_cube_at hκ T k hPT hLow hkLarge ⟨G, F, h16valid⟩ Kβ hKβ
-    (fun G => hkSchedule PT hPT hLow G)
+    (hDeep : ∀ ε : ℝ, 0 < ε → ∃ x α : ℝ, 0 < x ∧ 0 < α ∧ DeepDisc T x α ε)
+    (hDisc : DeepDisc T κ.xs κ.α 0.04)
+    (hDiscι : DeepDisc T κ.xι κ.αι (κ.ι / 2)) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, PT.Valid → PT.tiling.mode.isLow → ProfileCornerMass PT → CubeIn T k PT.tiling.c := by
+  obtain ⟨Kβ, _hKβ, hsched, hsmall⟩ := L18_0a hκ T
+  obtain ⟨K27, hK27, hlocal⟩ := L18_1 hκ T
+  obtain ⟨c1, hc1, htransfer⟩ := L18_2 hκ T hDisc K27 hK27
+  let δ := min 0.04 c1 / 2
+  have hδ : 0 < δ := by dsimp [δ]; positivity
+  have hδsmall : δ < min 0.04 c1 := by dsimp [δ]; have := lt_min (by norm_num : (0 : ℝ) < 0.04) hc1; linarith
+  obtain ⟨εterm, hεterm, htermlim, hterminal⟩ := P18_3 hκ T K27 c1 δ hK27 hc1 hδ hδsmall
+  obtain ⟨εrun, hεrun, hrunlim, hcompletion⟩ := P18_4 hκ T K27 c1 δ hK27 hc1 hδ hδsmall εterm htermlim
+  obtain ⟨K, Cp, Cs, hK, hCp, hCs, hendpoint⟩ := P18_5 hκ T K27 δ hK27 hδ
+  have hTermSmall : ∀ᶠ k in atTop, εterm k ≤ 1 := htermlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1))
+  have hRunSmall : ∀ᶠ k in atTop, εrun k ≤ 1 / 4 := hrunlim.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1 / 4))
+  have hSmall := hsmall (Real.log 2 / 1000) (div_pos (Real.log_pos (by norm_num)) (by norm_num))
+  filter_upwards [l16_quantitative_validity hκ T hInit hDeep hDisc, D18_L hκ hThresholds T hInit hDeep hDisc hDiscι,
+    hsched, hSmall, hlocal, htransfer, hterminal, hcompletion, hendpoint, eventually_largeIndex κ T,
+    L18_6 hκ T K Cp Cs hK hCp hCs, hTermSmall, hRunSmall] with
+    k h16 hdata _hsched hSmall hLocal hTransfer hTerminal hCompletion hEndpoint hLarge hHall hTermSmall hRunSmall
+  intro PT hPT hLow hCorners
+  obtain ⟨⟨D0, hD0⟩⟩ := hdata PT hPT hLow hCorners hLarge (h16 PT hPT hLow hCorners)
+  obtain ⟨kernels, hD, hR, hBalance⟩ := P18_4a D0 hD0
+  let D := D0.withKernels kernels
+  have small := hSmall PT hPT hLow D.geom D.fresh D.l16_valid
+  have localFacts := hLocal PT hPT D hD hR small
+  have transfer := hTransfer PT hPT D hD hR localFacts small
+  obtain ⟨C⟩ := hTerminal PT hPT D hD hR localFacts transfer
+  obtain ⟨H⟩ := hCompletion PT hPT D hD hR hBalance localFacts transfer C
+  have E := hEndpoint PT hPT D hD hR localFacts (εterm k) (εrun k) hTermSmall C H
+  obtain ⟨Hall⟩ := hHall PT hPT D hD δ (εterm k) (εrun k) hRunSmall C H E
+  exact C18_Fcube D δ K E.pair_facts Hall
+
+end HypercubeRamsey.S18

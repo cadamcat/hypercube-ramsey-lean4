@@ -960,7 +960,79 @@ theorem cluster_failure_dictionary {κ : CConsts} {T : Stage} {k : ℕ}
       ⟨(R.cellWords C (s, w.1)).1, (R.cellWords C (s, w.1)).2,
         (R.word_parity hc C s w.1).mpr w.2⟩ a =
       Lane_sol_s16_prod1.solver_star_bin_failure S Z w (fun g => a (groups (s, g))) := by
-  sorry
+  classical
+  have finLaw_ext (P Q : FinLaw (Fin (T.S.N k)))
+      (hw : ∀ x, P.w x = Q.w x) : P = Q := by
+    cases P
+    cases Q
+    congr 1
+    exact funext hw
+  have flip_neighbors_injective : Function.Injective (flipPos w.1) := by
+    intro j l h
+    by_contra hjl
+    have he := congrFun h j
+    simp [flipPos, hjl] at he
+  let fallback : Fin (T.S.N k) := ⟨0, T.S.N_pos k⟩
+  have hodd : ∀ j : Fin (PT.tiling.P (G.cellPatch C)).h,
+      ¬ IsEvenRole (R.cellWords C (s, flipPos w.1 j)).1 := by
+    intro j
+    rw [R.word_parity hc, Lane_sol_s16_prod1.flip_parity]
+    exact not_not.mpr w.2
+  let neighbor : Fin (PT.tiling.P (G.cellPatch C)).h → OddCellRole G C := fun j =>
+    ⟨(R.cellWords C (s, flipPos w.1 j)).1,
+      (R.cellWords C (s, flipPos w.1 j)).2, hodd j⟩
+  have hi : Function.Injective neighbor := by
+    intro j l heq
+    have hw : R.cellWords C (s, flipPos w.1 j) = R.cellWords C (s, flipPos w.1 l) :=
+      Subtype.ext (congrArg (fun r : OddCellRole G C => r.1) heq)
+    exact flip_neighbors_injective (congrArg Prod.snd ((R.cellWords C).injective hw))
+  have hlabels (ys : OddCellRole G C → Fin (T.S.N k)) :
+      nbrLabels w.1 (R.wordLabel C ys s fallback) = fun j => ys (neighbor j) := by
+    funext j
+    simp only [nbrLabels, CellRawData.wordLabel, dif_pos (hodd j), neighbor]
+  have hprior (ys : OddCellRole G C → Fin (T.S.N k)) :
+      R.rawPrior C W ys (R.cellWords C (s, w.1)).1 =
+        S.σ w Z (fun j => ys (neighbor j)) := by
+    rw [hPrior ys fallback, hlabels]
+  let P := fun r : OddCellRole G C => R.U C W (R.groupOf C r) (a (R.groupOf C r))
+  let Q := fun z : IWord PT.tiling (G.cellPatch C) =>
+    (⟨S.U (S.groupOf z) Z (a (groups (s, S.groupOf z))),
+      S.U_nonneg (S.groupOf z) Z (a (groups (s, S.groupOf z))),
+      S.U_sum (S.groupOf z) Z (a (groups (s, S.groupOf z)))⟩ :
+        FinLaw (Fin (T.S.N k)))
+  have hrows : (fun j => P (neighbor j)) = (fun j => Q (flipPos w.1 j)) := by
+    funext j
+    dsimp only [P, neighbor]
+    rw [hGroup (flipPos w.1 j) (hodd j)]
+    calc
+      _ = (⟨S.U (S.groupOf (flipPos w.1 j)) Z
+          (a (groups (s, S.groupOf (flipPos w.1 j)))),
+        S.U_nonneg (S.groupOf (flipPos w.1 j)) Z
+          (a (groups (s, S.groupOf (flipPos w.1 j)))),
+        S.U_sum (S.groupOf (flipPos w.1 j)) Z
+          (a (groups (s, S.groupOf (flipPos w.1 j))))⟩ :
+            FinLaw (Fin (T.S.N k))) := by
+          apply finLaw_ext
+          intro y
+          exact hU _ _ y
+      _ = Q (flipPos w.1 j) := rfl
+  change (if PT.tiling.mode.isCluster then
+    (FinLaw.pi P).pr
+      (fun ys => R.rawPrior C W ys (R.cellWords C (s, w.1)).1 = 0) else 0) = _
+  rw [if_pos hc]
+  simp_rw [hprior]
+  rw [Lane_sol_s16_prod1.pr_eq_indicator_E]
+  let F : InternalLabels PT.tiling (G.cellPatch C) → ℝ :=
+    fun zs => @ite ℝ (S.σ w Z zs = 0) (Classical.propDecidable _) 1 0
+  have hleft := Lane_sol_s16_prod1.pi_injective_coordinate_E P neighbor hi F
+  have hright := Lane_sol_s16_prod1.pi_injective_coordinate_E Q (flipPos w.1)
+    flip_neighbors_injective F
+  rw [hrows] at hleft
+  unfold Lane_sol_s16_prod1.solver_star_bin_failure
+  rw [Lane_sol_s16_prod1.pr_eq_indicator_E]
+  change (FinLaw.pi P).E (fun ys => F (fun j => ys (neighbor j))) =
+    (FinLaw.pi Q).E (fun ys => F (fun j => ys (flipPos w.1 j)))
+  exact hleft.trans hright.symm
 
 /-- B2. Sharp domination of the restricted rows by the raw solver rows:
 pretrim loss `h^2 sqrt eps` and permission loss `exp(-cperm n/2)`, with the
@@ -982,7 +1054,117 @@ theorem cluster_qbar_domination {κ : CConsts} (hκ : κ.Admissible) :
           (∀ W s g, R.pretrim C W (groups (s, g)) = S.pretrimBins (records s (W s)) g) →
           ∀ W, (R.history C).w W ≠ 0 → PermissionLossHypotheses (Perm.table C) (R.qin C W) →
           ∀ s g D, (K.qbar C W (groups (s, g))).w D ≤ c * S.q g (records s (W s)) D := by
-  sorry
+  classical
+  obtain ⟨n₁, hpermRoom⟩ := Lane_sol_s16_prod1.cluster_permission_cost_room hκ
+  refine ⟨n₁, ?_⟩
+  intro T k PT K16 Q G R Perm K hmode hn C
+  let n := T.S.n k
+  let h := (PT.tiling.P (G.cellPatch C)).h
+  let ε := sliceEps κ h
+  let u := Real.exp (-κ.cperm * (n : ℝ) / 2)
+  let v := (h : ℝ) ^ 2 * Real.sqrt ε
+  have hnlarge : 2 ≤ n := Q.n_large
+  have hheight : h ≤ n := by
+    simpa only [Fintype.card_fin] using
+      Fintype.card_le_of_injective (R.axis C) (R.axis_injective C)
+  have huNonneg : 0 ≤ u := le_of_lt (Real.exp_pos _)
+  have hrate : 0 < κ.cperm * (n : ℝ) / 2 := by
+    have hnpos : (0 : ℝ) < n := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) hnlarge
+    exact div_pos (mul_pos hκ.cperm_rng.1 hnpos) (by norm_num)
+  have huLt : u < 1 := by
+    exact Real.exp_lt_one_iff.mpr (by nlinarith [hrate])
+  have hvNonneg : 0 ≤ v := by
+    dsimp [v]
+    positivity
+  have hsmall2 : v ≤ 1 / 1000 := by
+    have hs := Lane_sol_s16_prod1.low_cluster_pretrim_power_small
+      hκ Q hmode (G.cellPatch C) 2 (by norm_num)
+    norm_num [Real.rpow_neg, Real.rpow_natCast] at hs
+    simpa [v, h, ε] using hs
+  have hsmall3 : (h : ℝ) ^ 3 * Real.sqrt ε ≤ 1 / 1000 := by
+    have hs := Lane_sol_s16_prod1.low_cluster_pretrim_power_small
+      hκ Q hmode (G.cellPatch C) 3 (by norm_num)
+    norm_num [Real.rpow_neg, Real.rpow_natCast] at hs
+    simpa [h, ε] using hs
+  have hvLt : v < 1 := by linarith
+  have hhu : (h : ℝ) * u ≤ 1 / 4 := by
+    exact hpermRoom n h hn hnlarge hheight
+  have hsmallSum : (h : ℝ) * (u + v) ≤ 1 / 2 := by
+    have hhv : (h : ℝ) * v = (h : ℝ) ^ 3 * Real.sqrt ε := by
+      dsimp [v]
+      ring
+    rw [mul_add, hhv]
+    linarith
+  have hnorm := Lane_sol_s16_prod1.normalization_product_room h h u v
+    huNonneg hvNonneg huLt hvLt le_rfl hsmallSum
+  let c : ℝ := ((1 - u) * (1 - v))⁻¹
+  have hc : 1 ≤ c := by simpa [c] using hnorm.1
+  have hcpow : c ^ h ≤ 2 := by simpa [c] using hnorm.2
+  have huPos : 0 < 1 - u := sub_pos.mpr huLt
+  have hvPos : 0 < 1 - v := sub_pos.mpr hvLt
+  refine ⟨c, hc, hcpow, ?_⟩
+  intro S records groups hPass hqraw hpretrim W hW hPerm s g D
+  have hSlices : ∀ t, W t ∈ R.slicePass C t ∧ (R.sliceLaw C t).w (W t) ≠ 0 := by
+    intro t
+    exact Lane_sol_s16_prod1.cond_support _ _ _ _
+      (Lane_sol_s16_prod1.pi_support _ W hW t)
+  have hGood : S.AllGood (records s (W s)) :=
+    (hPass s (W s)).mp (hSlices s).1
+  let rawMass : ℝ :=
+    ∑ D' ∈ S.pretrimBins (records s (W s)) g, S.q g (records s (W s)) D'
+  have hsolverMass := Lane_sol_s16_prod1.solver_pretrim_mass
+    S (records s (W s)) hGood g (Real.exp_pos _)
+  have hpreMass : 1 - v ≤ rawMass := by
+    simpa [rawMass, v, h, ε] using hsolverMass
+  have hrawMass :
+      (∑ D' ∈ R.pretrim C W (groups (s, g)),
+        (R.qraw C W (groups (s, g))).w D') = rawMass := by
+    rw [hpretrim]
+    apply Finset.sum_congr rfl
+    intro D' hD'
+    exact hqraw W s g D'
+  have hqinFormula : (R.qin C W (groups (s, g))).w D =
+      (if D ∈ S.pretrimBins (records s (W s)) g then
+        S.q g (records s (W s)) D else 0) / rawMass := by
+    rw [R.qin_eq C W (groups (s, g)) D hSlices, ← hrawMass, hpretrim, hqraw]
+  have hqinBound : (R.qin C W (groups (s, g))).w D ≤
+      S.q g (records s (W s)) D / (1 - v) := by
+    rw [hqinFormula]
+    by_cases hD : D ∈ S.pretrimBins (records s (W s)) g
+    · rw [if_pos hD]
+      exact div_le_div_of_nonneg_left (S.q_nonneg g (records s (W s)) D)
+        (sub_pos.mpr hvLt) hpreMass
+    · simp [hD]
+      exact div_nonneg (S.q_nonneg g (records s (W s)) D) (sub_nonneg.mpr hvLt.le)
+  have hpermSharp := Lane_sol_s16_prod1.permission_retained_sharp
+    (Perm.table C) (R.qin C W) hPerm (groups (s, g))
+  have hpermMass : 1 - u ≤
+      ∑ D' ∈ (Perm.table C).permitted (groups (s, g)),
+        (R.qin C W (groups (s, g))).w D' := by
+    simpa [u, n, Perm.rate_eq C, Perm.n_eq C] using hpermSharp
+  have hpermPos : 0 <
+      ∑ D' ∈ (Perm.table C).permitted (groups (s, g)),
+        (R.qin C W (groups (s, g))).w D' :=
+    lt_of_lt_of_le huPos hpermMass
+  rw [K.qbar_eq C W (groups (s, g)) D hW]
+  by_cases hD : D ∈ (Perm.table C).permitted (groups (s, g))
+  · rw [if_pos hD]
+    calc
+      _ ≤ (S.q g (records s (W s)) D / (1 - v)) /
+          (∑ D' ∈ (Perm.table C).permitted (groups (s, g)),
+            (R.qin C W (groups (s, g))).w D') :=
+        div_le_div_of_nonneg_right hqinBound hpermPos.le
+      _ ≤ (S.q g (records s (W s)) D / (1 - v)) / (1 - u) :=
+        div_le_div_of_nonneg_left
+          (div_nonneg (S.q_nonneg g (records s (W s)) D) hvPos.le)
+          huPos hpermMass
+      _ = c * S.q g (records s (W s)) D := by
+        dsimp [c, u, v]
+        field_simp [ne_of_gt huPos, ne_of_gt hvPos]
+        <;> ring
+  · simp [hD]
+    exact mul_nonneg (le_trans (by norm_num) hc)
+      (S.q_nonneg g (records s (W s)) D)
 
 /-- B3. Star and pinned-star integrals against the restricted (unpooled)
 rows: `solver_star_trimmed_mean` / `solver_star_trimmed_pin_mean` with B2.
@@ -1009,7 +1191,47 @@ theorem cluster_star_qbar_means {κ : CConsts} (hκ : κ.Admissible) :
               (fun g => K.qbar C W (groups (s, g))) g D)).E
               (Lane_sol_s16_prod1.solver_star_bin_failure S (records s (W s)) w) ≤
             2 * Real.sqrt (sliceEps κ (PT.tiling.P (G.cellPatch C)).h) := by
-  sorry
+  classical
+  obtain ⟨n₀, hdom⟩ := cluster_qbar_domination hκ
+  refine ⟨n₀, ?_⟩
+  intro T k PT K16 Q G R Perm K hmode hn C S records groups hPass hqraw hpretrim
+    W hW hPerm s w
+  obtain ⟨c, hc, hcpow, hrows⟩ := hdom Q R Perm K hmode hn C
+  have hrows := hrows S records groups hPass hqraw hpretrim W hW hPerm
+  have hSlices : ∀ t, W t ∈ R.slicePass C t ∧ (R.sliceLaw C t).w (W t) ≠ 0 := by
+    intro t
+    exact Lane_sol_s16_prod1.cond_support _ _ _ _
+      (Lane_sol_s16_prod1.pi_support _ W hW t)
+  have hGood : S.AllGood (records s (W s)) :=
+    (hPass s (W s)).mp (hSlices s).1
+  let P : HypercubeRamsey.Group PT.tiling (G.cellPatch C) →
+      FinLaw (Bin PT.tiling (G.cellPatch C)) :=
+    fun g => K.qbar C W (groups (s, g))
+  have hP : ∀ g ∈ Lane_sol_s16_prod1.solver_star_group_scope S w, ∀ D,
+      (P g).w D ≤ c * S.q g (records s (W s)) D := by
+    intro g _ D
+    exact hrows s g D
+  have hc0 : 0 ≤ c := le_trans (by norm_num) hc
+  have hcount := Lane_sol_s16_prod1.solver_star_group_scope_count S w
+  have hpow : c ^ (Lane_sol_s16_prod1.solver_star_group_scope S w).card ≤ 2 := by
+    exact (pow_le_pow_right₀ hc hcount).trans hcpow
+  have hmean := Lane_sol_s16_prod1.solver_star_trimmed_mean
+    S (records s (W s)) w (hGood w) P c hc0 hP
+  have hεnonneg : 0 ≤ sliceEps κ (PT.tiling.P (G.cellPatch C)).h := by
+    unfold sliceEps
+    exact (Real.exp_pos _).le
+  constructor
+  · exact hmean.trans (mul_le_mul_of_nonneg_right hpow hεnonneg)
+  · intro g D hg hD
+    have hvg : SliceSolver.Incident w g := by
+      obtain ⟨j, _, heq⟩ := Finset.mem_image.mp hg
+      rw [← heq]
+      refine ⟨j, S.groupOf_spec _ ?_⟩
+      rw [Lane_sol_s16_prod1.flip_parity]
+      exact not_not.mpr w.2
+    have hpin := Lane_sol_s16_prod1.solver_star_trimmed_pin_mean
+      S (records s (W s)) w P c hc hP g D hD hvg
+    exact hpin.trans (mul_le_mul_of_nonneg_right hpow (Real.sqrt_nonneg _))
 
 /-! ## Lane D: the cluster load gate, under the repair. -/
 

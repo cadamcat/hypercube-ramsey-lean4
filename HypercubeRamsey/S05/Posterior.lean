@@ -56,7 +56,100 @@ theorem L5_1c_prefix_delete {Z H W : Type*} [Fintype Z] [Fintype H] [Fintype W]
     (∀ h w, Real.exp (-delta * u) * (Q h).w w ≤ prefixMix5 P K h w →
       ∀ z, prefixPosterior5 P K h w z ≤
         Real.exp (a1 * u) * priorAtHistory5 P h z) := by
-  sorry
+  classical
+  have hmass_nonneg (h : H) : 0 ≤ historyMass5 P h := by
+    unfold historyMass5
+    exact Finset.sum_nonneg fun z _ => P.nonneg (z, h)
+  have hprior_nonneg (h : H) (z : Z) : 0 ≤ priorAtHistory5 P h z := by
+    unfold priorAtHistory5
+    split_ifs with hh
+    · exact le_rfl
+    · exact div_nonneg (P.nonneg (z, h)) (le_of_lt (lt_of_le_of_ne (hmass_nonneg h) (Ne.symm hh)))
+  have hmix_nonneg (h : H) (w : W) : 0 ≤ prefixMix5 P K h w := by
+    unfold prefixMix5
+    exact Finset.sum_nonneg fun z _ => mul_nonneg (hprior_nonneg h z) ((K h z).nonneg w)
+  have hmass_sum : (∑ h, historyMass5 P h) = 1 := by
+    unfold historyMass5
+    rw [Finset.sum_comm]
+    rw [← Fintype.sum_prod_type]
+    exact P.sum_eq_one
+  constructor
+  · let c : ℝ := Real.exp (-delta * u)
+    calc
+      (∑ h, ∑ w, if prefixMix5 P K h w < c * (Q h).w w
+          then historyMass5 P h * prefixMix5 P K h w else 0)
+          ≤ ∑ h, ∑ w, historyMass5 P h * (c * (Q h).w w) := by
+            apply Finset.sum_le_sum
+            intro h hh
+            apply Finset.sum_le_sum
+            intro w hw
+            by_cases hb : prefixMix5 P K h w < c * (Q h).w w
+            · simp only [if_pos hb]
+              exact mul_le_mul_of_nonneg_left (le_of_lt hb) (hmass_nonneg h)
+            · simp only [if_neg hb]
+              exact mul_nonneg (hmass_nonneg h)
+                (mul_nonneg (le_of_lt (Real.exp_pos _)) ((Q h).nonneg w))
+      _ = c := by
+        calc
+          (∑ h, ∑ w, historyMass5 P h * (c * (Q h).w w)) =
+              ∑ h, historyMass5 P h * c := by
+                apply Finset.sum_congr rfl
+                intro h hh
+                calc
+                  (∑ w, historyMass5 P h * (c * (Q h).w w)) =
+                      (historyMass5 P h * c) * (∑ w, (Q h).w w) := by
+                        calc
+                          (∑ w, historyMass5 P h * (c * (Q h).w w)) =
+                              ∑ w, (historyMass5 P h * c) * (Q h).w w := by
+                                apply Finset.sum_congr rfl
+                                intro w hw
+                                ring
+                          _ = (historyMass5 P h * c) * (∑ w, (Q h).w w) := by
+                                rw [← Finset.mul_sum]
+                  _ = historyMass5 P h * c := by rw [(Q h).sum_eq_one, mul_one]
+          _ = c := by
+            rw [← Finset.sum_mul, hmass_sum]
+            ring
+      _ = Real.exp (-delta * u) := rfl
+  · intro h w hthreshold z
+    by_cases hm : prefixMix5 P K h w = 0
+    · simp [prefixPosterior5, hm]
+      exact mul_nonneg (le_of_lt (Real.exp_pos _)) (hprior_nonneg h z)
+    · have hmix_pos : 0 < prefixMix5 P K h w := lt_of_le_of_ne (hmix_nonneg h w) (Ne.symm hm)
+      have hexp_cancel : Real.exp (delta * u) * Real.exp (-delta * u) = 1 := by
+        rw [← Real.exp_add]
+        have hcancel : delta * u + (-delta) * u = 0 := by ring
+        rw [hcancel, Real.exp_zero]
+      have hQscaled : (Q h).w w ≤ Real.exp (delta * u) * prefixMix5 P K h w := by
+        calc
+          (Q h).w w = (Real.exp (delta * u) * Real.exp (-delta * u)) * (Q h).w w := by
+            rw [hexp_cancel]
+            ring
+          _ = Real.exp (delta * u) * (Real.exp (-delta * u) * (Q h).w w) := by ring
+          _ ≤ Real.exp (delta * u) * prefixMix5 P K h w :=
+            mul_le_mul_of_nonneg_left hthreshold (le_of_lt (Real.exp_pos _))
+      have hQratio : (Q h).w w / prefixMix5 P K h w ≤ Real.exp (delta * u) :=
+        (div_le_iff₀ hmix_pos).2 hQscaled
+      have hKratio : (K h z).w w / prefixMix5 P K h w ≤
+          Real.exp (a0 * u) * Real.exp (delta * u) := by
+        calc
+          (K h z).w w / prefixMix5 P K h w ≤
+              (Real.exp (a0 * u) * (Q h).w w) / prefixMix5 P K h w :=
+                div_le_div_of_nonneg_right (hdom h z w) hmix_pos.le
+          _ = Real.exp (a0 * u) * ((Q h).w w / prefixMix5 P K h w) := by ring
+          _ ≤ Real.exp (a0 * u) * Real.exp (delta * u) :=
+            mul_le_mul_of_nonneg_left hQratio (le_of_lt (Real.exp_pos _))
+      have hexp_bound : Real.exp (a0 * u) * Real.exp (delta * u) ≤ Real.exp (a1 * u) := by
+        rw [← Real.exp_add]
+        apply Real.exp_le_exp.mpr
+        nlinarith [hgap, hu]
+      simp only [prefixPosterior5, hm]
+      calc
+        priorAtHistory5 P h z * (K h z).w w / prefixMix5 P K h w =
+            priorAtHistory5 P h z * ((K h z).w w / prefixMix5 P K h w) := by ring
+        _ ≤ priorAtHistory5 P h z * Real.exp (a1 * u) :=
+          mul_le_mul_of_nonneg_left (le_trans hKratio hexp_bound) (hprior_nonneg h z)
+        _ = Real.exp (a1 * u) * priorAtHistory5 P h z := by ring
 
 /-- The finite gated block experiment used by Step 2. -/
 structure BlockGate5 (Block Observation : Type*) [Fintype Block] [Fintype Observation] where

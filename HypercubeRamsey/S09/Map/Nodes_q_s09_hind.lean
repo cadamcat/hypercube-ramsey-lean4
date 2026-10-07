@@ -1680,6 +1680,26 @@ private theorem heightRadialChain9_edge_yields_child
       heightMetric9_ge_radial_gap root start endpoint hstart hend hgap'
   exact scaleFailure9_from_longPath9 Pp A hη hR hmargin hpath hbudget hmetric
 
+private theorem heightPath9_annularBlock_childLocalized9
+    {P : Params9} {hc : HeightChoice9 P} {n : ℕ} {C : Finset (Pos9 P hc n)}
+    {t s ηp η : ℝ} {q₀ R : ℕ} (Pp A : Pos9 P hc n → Bool)
+    (hη : 0 ≤ η) (hR : 0 < R)
+    (hmargin : ηp * ((q₀ * R : ℕ) : ℝ) - η * ((q₀ * R : ℕ) : ℝ) ≤ -(R : ℝ))
+    {root start endpoint : HeightState9 P hc n} {suffix : List (HeightState9 P hc n)}
+    (hpath : HeightPath9 (heightStep9 (scaleBad9 C t s Pp A)) (endpoint :: suffix) start)
+    (r : ℕ) (hstart : heightMetric9 start root = r)
+    (hend : heightMetric9 endpoint root = r + q₀ * R)
+    (hbudget : (start.2.val : ℝ) ≤ (endpoint.2.val : ℝ) +
+      ηp * ((q₀ * R : ℕ) : ℝ))
+    (hannular : ∀ z ∈ endpoint :: suffix,
+      r ≤ heightMetric9 z root ∧ heightMetric9 z root ≤ r + q₀ * R) :
+    ∃ childStart ∈ endpoint :: suffix,
+      scaleFailure9 C t s η R Pp A childStart ∧
+      r ≤ heightMetric9 childStart root ∧ heightMetric9 childStart root ≤ r + q₀ * R := by
+  obtain ⟨childStart, hmem, hfail⟩ := heightRadialChain9_edge_yields_child
+    Pp A hη hR hmargin hpath (by rw [hstart]; exact hend) hbudget
+  exact ⟨childStart, hmem, hfail, (hannular childStart hmem).1, (hannular childStart hmem).2⟩
+
 private theorem heightPath9_to_reach9 {P : Params9} {hc : HeightChoice9 P} {n : ℕ}
     (Pp A : Pos9 P hc n → Bool) (root : CubeVertex n) (R : ℕ)
     {l : List (HeightState9 P hc n)} {start : HeightState9 P hc n}

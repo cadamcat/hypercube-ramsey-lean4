@@ -77,6 +77,17 @@ private theorem normalize_indicator_eq_cond {κ : CConsts} {T : Stage} {k : ℕ}
   simp only [Law.cond, Law.restrict]
   by_cases hx : x ∈ A <;> simp [hx]
 
+private theorem law_cond_atom_cap {N : ℕ} (μ : Law N) (A : Finset (Fin N))
+    (hA : 0 < ∑ x ∈ A, μ.w x) (M : ℝ) (hM : 0 ≤ M)
+    (hcap : ∀ x, μ.w x ≤ M) :
+    ∀ x, (μ.cond A hA).w x ≤ M / (∑ y ∈ A, μ.w y) := by
+  intro x
+  change (if x ∈ A then μ.w x / (∑ y ∈ A, μ.w y) else 0) ≤
+    M / (∑ y ∈ A, μ.w y)
+  split_ifs with hx
+  · exact (div_le_div_iff_of_pos_right hA).2 (hcap x)
+  · exact div_nonneg hM hA.le
+
 private theorem uniformWeight_total {N : ℕ} (S : Finset (Fin N)) (hS : S.Nonempty) :
     (∑ y, if y ∈ S then (1 / (S.card : ℝ)) else 0) = 1 := by
   classical

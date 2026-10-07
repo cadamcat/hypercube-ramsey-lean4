@@ -955,6 +955,7 @@ structure LikelihoodData (Geom : ProjectionGeometry κ 𝒯 i)
 
 end PosteriorRecipe
 
+set_option maxHeartbeats 800000 in
 /-- P14.1g: the specified probability reference and actual counterfactual likelihood. -/
 theorem likelihood_ratio_domination (κ : CConsts) (hκ : κ.Admissible)
     (hconst : HeightConstantContract κ)
@@ -1078,7 +1079,287 @@ theorem likelihood_ratio_domination (κ : CConsts) (hκ : κ.Admissible)
       exact hgroupMassTransport Geom v g W c w S ys
     · have hmask := hmaskTransport g W c w
       simp [hne, hmask.1, hmask.2]
-  sorry
+  have hmasked_nonneg (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (J : Finset (Fin (T.S.N k))) :
+      0 ≤ maskedMass H mask g W J := by
+    unfold maskedMass
+    apply Finset.sum_nonneg
+    intro D hD
+    exact mul_nonneg ((mask g W).prior_nonneg D) (sq_nonneg _)
+  have hhit_nonneg (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (D : Bin 𝒯 i) (S : Finset H.Center) :
+      0 ≤ hitMass H mask g W D S := by
+    unfold hitMass
+    apply Finset.sum_nonneg
+    intro y hy
+    exact (mask g W).within_nonneg D y
+  have hdeletedQ_sum (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (c : H.Center) (S : Finset H.Center) :
+      ∑ D, deletedQ H mask g c W S D = 1 := by
+    let A := maskedMass H mask g W (listHit H W (S.erase c))
+    have hA_nonneg : 0 ≤ A := hmasked_nonneg g W _
+    have hnum : (∑ D, (mask g W).prior D *
+        hitMass H mask g W D (S.erase c) ^ 2) = A := by
+      simp [A, maskedMass, hitMass]
+    by_cases hA : 0 < A
+    · calc
+        (∑ D, deletedQ H mask g c W S D) = A / A := by
+          calc
+            _ = (∑ D, (mask g W).prior D *
+                hitMass H mask g W D (S.erase c) ^ 2) /
+                  maskedMass H mask g W (listHit H W (S.erase c)) := by
+                    simp [deletedQ, A, hA, ← Finset.sum_div]
+            _ = A / A := by rw [hnum]
+        _ = 1 := div_self (ne_of_gt hA)
+    · have hAzero : A = 0 := le_antisymm (le_of_not_gt hA) hA_nonneg
+      simp [deletedQ, A, hAzero, (mask g W).prior_sum]
+  have hdeletedU_sum (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (c : H.Center) (S : Finset H.Center) (D : Bin 𝒯 i) :
+      ∑ y, deletedU H mask g c W S D y = 1 := by
+    let J := listHit H W (S.erase c)
+    let m := hitMass H mask g W D (S.erase c)
+    have hm_nonneg : 0 ≤ m := hhit_nonneg g W D (S.erase c)
+    by_cases hm : 0 < m
+    · calc
+        (∑ y, deletedU H mask g c W S D y) =
+            (∑ y ∈ J, (mask g W).within D y) / m := by
+          simp [deletedU, J, m, hm, Finset.sum_ite_mem, Finset.univ_inter,
+            Finset.sum_div]
+        _ = m / m := by
+          rw [show (∑ y ∈ J, (mask g W).within D y) = m by
+            simp [m, J, hitMass]]
+        _ = 1 := div_self (ne_of_gt hm)
+    · have hmzero : m = 0 := le_antisymm (le_of_not_gt hm) hm_nonneg
+      simp [deletedU, J, m, hm, hmzero, (mask g W).within_sum]
+  have hdeletedQ_nonneg (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (c : H.Center) (S : Finset H.Center) (D : Bin 𝒯 i) :
+      0 ≤ deletedQ H mask g c W S D := by
+    by_cases hA : 0 < maskedMass H mask g W (listHit H W (S.erase c))
+    · simpa [deletedQ, hA] using
+        (div_nonneg (mul_nonneg ((mask g W).prior_nonneg D) (sq_nonneg _)) hA.le)
+    · simpa [deletedQ, hA] using (mask g W).prior_nonneg D
+  have hdeletedU_nonneg (g : Group 𝒯 i) (W : ∀ r, H.Val r)
+      (c : H.Center) (S : Finset H.Center) (D : Bin 𝒯 i)
+      (y : Fin (T.S.N k)) : 0 ≤ deletedU H mask g c W S D y := by
+    by_cases hm : 0 < hitMass H mask g W D (S.erase c)
+    · by_cases hy : y ∈ listHit H W (S.erase c)
+      · simpa [deletedU, hm, hy] using
+          (div_nonneg ((mask g W).within_nonneg D y) hm.le)
+      · simp [deletedU, hm, hy]
+    · simp [deletedU, hm]
+      exact (mask g W).within_nonneg D y
+  let RefChoice := Finset H.Center × Bin 𝒯 i
+  let choiceWeight : Group 𝒯 i → H.Center → (∀ r, H.Val r) →
+      RefChoice → ℝ := fun g c W sd =>
+    if (referenceLists Geom H g c W).Nonempty then
+      if sd.1 ∈ referenceLists Geom H g c W then
+        (1 / (referenceLists Geom H g c W).card) *
+          deletedQ H mask g c W sd.1 sd.2
+      else 0
+    else if sd.1 = ∅ then (mask g W).prior sd.2 else 0
+  let choiceKernel : Group 𝒯 i → H.Center → (∀ r, H.Val r) →
+      RefChoice → Fin (T.S.N k) → ℝ := fun g c W sd y =>
+    if (referenceLists Geom H g c W).Nonempty then
+      deletedU H mask g c W sd.1 sd.2 y
+    else (mask g W).within sd.2 y
+  have hchoiceWeight_nonneg (g : Group 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (sd : RefChoice) :
+      0 ≤ choiceWeight g c W sd := by
+    by_cases hL : (referenceLists Geom H g c W).Nonempty
+    · by_cases hS : sd.1 ∈ referenceLists Geom H g c W
+      · have hfrac : 0 ≤ (1 : ℝ) /
+            ((referenceLists Geom H g c W).card : ℝ) :=
+          div_nonneg (by norm_num) (Nat.cast_nonneg _)
+        simpa [choiceWeight, hL, hS] using
+          (mul_nonneg hfrac (hdeletedQ_nonneg g W c sd.1 sd.2))
+      · simp [choiceWeight, hL, hS]
+    · by_cases hS : sd.1 = ∅
+      · simp [choiceWeight, hL, hS]
+        exact (mask g W).prior_nonneg sd.2
+      · simp [choiceWeight, hL, hS]
+  have hchoiceWeight_sum (g : Group 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) : ∑ sd : RefChoice, choiceWeight g c W sd = 1 := by
+    classical
+    rw [Fintype.sum_prod_type]
+    by_cases hL : (referenceLists Geom H g c W).Nonempty
+    · let Ls := referenceLists Geom H g c W
+      have hcard : 0 < (Ls.card : ℝ) := by
+        exact_mod_cast Finset.card_pos.mpr hL
+      calc
+        _ = ∑ S ∈ Ls, ∑ D, (1 / (Ls.card : ℝ)) *
+              deletedQ H mask g c W S D := by
+          simp [choiceWeight, Ls, hL, Finset.sum_ite_mem]
+        _ = ∑ S ∈ Ls, (1 / (Ls.card : ℝ)) := by
+          apply Finset.sum_congr rfl
+          intro S hS
+          rw [← Finset.mul_sum]
+          rw [hdeletedQ_sum]
+          ring
+        _ = 1 := by
+          rw [Finset.sum_const, nsmul_eq_mul]
+          field_simp [ne_of_gt hcard]
+    · calc
+        _ = ∑ D, (mask g W).prior D := by
+          simp [choiceWeight, hL, Finset.sum_ite_eq']
+        _ = 1 := (mask g W).prior_sum
+  have hchoiceKernel_nonneg (g : Group 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (sd : RefChoice) (y : Fin (T.S.N k)) :
+      0 ≤ choiceKernel g c W sd y := by
+    by_cases hL : (referenceLists Geom H g c W).Nonempty
+    · simp [choiceKernel, hL]
+      exact hdeletedU_nonneg g W c sd.1 sd.2 y
+    · simp [choiceKernel, hL]
+      exact (mask g W).within_nonneg sd.2 y
+  have hchoiceKernel_sum (g : Group 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (sd : RefChoice) :
+      ∑ y, choiceKernel g c W sd y = 1 := by
+    by_cases hL : (referenceLists Geom H g c W).Nonempty
+    · simp [choiceKernel, hL, hdeletedU_sum]
+    · simp [choiceKernel, hL, (mask g W).within_sum]
+  let choiceLaw : H.Center → (∀ r, H.Val r) → Group 𝒯 i → FinLaw RefChoice :=
+    fun c W g => ⟨choiceWeight g c W, hchoiceWeight_nonneg g c W,
+      hchoiceWeight_sum g c W⟩
+  let owner : EvenRole 𝒯 i → Fin (𝒯.P i).h → Group 𝒯 i :=
+    fun v l => Geom.groupOf (flipPos v.1 l)
+  let makeReference : ∀ (v : EvenRole 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r), FinLaw (InternalLabels 𝒯 i) := fun v c W =>
+    FinLaw.map
+      (FinLaw.bind (FinLaw.pi fun g => choiceLaw c W g)
+        (fun a => FinLaw.pi fun l =>
+          ⟨fun y => choiceKernel (owner v l) c W (a (owner v l)) y,
+            hchoiceKernel_nonneg (owner v l) c W (a (owner v l)),
+            hchoiceKernel_sum (owner v l) c W (a (owner v l))⟩))
+      Prod.snd
+  have hmakeReference_weight (v : EvenRole 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i) :
+      (makeReference v c W).w ys =
+      ∑ a : Group 𝒯 i → RefChoice,
+          (∏ g, choiceWeight g c W (a g)) *
+            ∏ l, choiceKernel (owner v l) c W (a (owner v l)) (ys l) := by
+    simp only [makeReference, choiceLaw, FinLaw.map, FinLaw.bind, FinLaw.pi]
+    rw [Fintype.sum_prod_type]
+    simp [eq_comm]
+  have hgroupFactor (v : EvenRole 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i) (g : Group 𝒯 i) :
+      (∑ sd : RefChoice, choiceWeight g c W sd *
+        ∏ l, if owner v l = g then choiceKernel g c W sd (ys l) else 1) =
+        (if (referenceLists Geom H g c W).Nonempty then
+          (∑ S ∈ referenceLists Geom H g c W,
+            groupLabelMass Geom v g
+              (deletedQ H mask g c W S) (deletedU H mask g c W S) ys) /
+              (referenceLists Geom H g c W).card
+        else groupLabelMass Geom v g (mask g W).prior (mask g W).within ys) := by
+    classical
+    let Ls := referenceLists Geom H g c W
+    by_cases hL : Ls.Nonempty
+    · have hcard : 0 < (Ls.card : ℝ) := by
+        exact_mod_cast Finset.card_pos.mpr hL
+      have hinner (S : Finset H.Center) :
+          (∑ D, (1 / (Ls.card : ℝ)) *
+            (deletedQ H mask g c W S D *
+              ∏ l, if owner v l = g then deletedU H mask g c W S D (ys l) else 1)) =
+            (1 / (Ls.card : ℝ)) *
+              groupLabelMass Geom v g
+                (deletedQ H mask g c W S) (deletedU H mask g c W S) ys := by
+        calc
+          _ = (1 / (Ls.card : ℝ)) * ∑ D,
+              deletedQ H mask g c W S D *
+                ∏ l, if owner v l = g then deletedU H mask g c W S D (ys l) else 1 := by
+                rw [← Finset.mul_sum]
+          _ = (1 / (Ls.card : ℝ)) *
+              groupLabelMass Geom v g
+                (deletedQ H mask g c W S) (deletedU H mask g c W S) ys := by
+                simpa [groupLabelMass, owner]
+      calc
+        _ = ∑ S ∈ Ls, ∑ D,
+            (1 / (Ls.card : ℝ)) *
+              (deletedQ H mask g c W S D *
+                ∏ l, if owner v l = g then deletedU H mask g c W S D (ys l) else 1) := by
+          rw [Fintype.sum_prod_type]
+          have hL' : (referenceLists Geom H g c W).Nonempty := by
+            simpa [Ls] using hL
+          simp [choiceWeight, choiceKernel, hL',
+            Finset.sum_ite_mem_eq, Finset.sum_ite_irrel, Ls]
+          apply Finset.sum_congr rfl
+          intro S hS
+          apply Finset.sum_congr rfl
+          intro D hD
+          ring
+        _ = ∑ S ∈ Ls, (1 / (Ls.card : ℝ)) *
+            groupLabelMass Geom v g
+              (deletedQ H mask g c W S) (deletedU H mask g c W S) ys := by
+          apply Finset.sum_congr rfl
+          intro S hS
+          exact hinner S
+        _ = (1 / (Ls.card : ℝ)) * ∑ S ∈ Ls,
+            groupLabelMass Geom v g
+              (deletedQ H mask g c W S) (deletedU H mask g c W S) ys := by
+          rw [← Finset.mul_sum]
+        _ = (∑ S ∈ Ls,
+            groupLabelMass Geom v g
+              (deletedQ H mask g c W S) (deletedU H mask g c W S) ys) /
+              (Ls.card : ℝ) := by
+          field_simp [ne_of_gt hcard]
+        _ = (if (referenceLists Geom H g c W).Nonempty then
+              (∑ S ∈ referenceLists Geom H g c W,
+                groupLabelMass Geom v g
+                  (deletedQ H mask g c W S) (deletedU H mask g c W S) ys) /
+                  (referenceLists Geom H g c W).card
+            else groupLabelMass Geom v g (mask g W).prior (mask g W).within ys) := by
+          simp [Ls, hL]
+    · calc
+        _ = ∑ D, (mask g W).prior D *
+            ∏ l, if owner v l = g then (mask g W).within D (ys l) else 1 := by
+          rw [Fintype.sum_prod_type]
+          have hLs : Ls = ∅ := Finset.not_nonempty_iff_eq_empty.mp hL
+          simp [choiceWeight, choiceKernel, Ls, hLs, Finset.sum_ite_eq']
+        _ = groupLabelMass Geom v g (mask g W).prior (mask g W).within ys := by
+          simp [groupLabelMass, owner]
+        _ = (if (referenceLists Geom H g c W).Nonempty then
+              (∑ S ∈ referenceLists Geom H g c W,
+                groupLabelMass Geom v g
+                  (deletedQ H mask g c W S) (deletedU H mask g c W S) ys) /
+                  (referenceLists Geom H g c W).card
+            else groupLabelMass Geom v g (mask g W).prior (mask g W).within ys) := by
+          simp [Ls, hL]
+  have hreference_eq (v : EvenRole 𝒯 i) (c : H.Center)
+      (W : ∀ r, H.Val r) (ys : InternalLabels 𝒯 i) :
+      (makeReference v c W).w ys = referenceWeight Geom H mask v c W ys := by
+    rw [hmakeReference_weight]
+    rw [HypercubeRamsey.Lane_q_s14_post.sum_pi_grouped
+      (owner v) (fun g sd => choiceWeight g c W sd)
+      (fun g sd y => choiceKernel g c W sd y) ys]
+    calc
+      _ = ∏ g, (if (referenceLists Geom H g c W).Nonempty then
+            (∑ S ∈ referenceLists Geom H g c W,
+              groupLabelMass Geom v g
+                (deletedQ H mask g c W S) (deletedU H mask g c W S) ys) /
+                (referenceLists Geom H g c W).card
+          else groupLabelMass Geom v g (mask g W).prior (mask g W).within ys) := by
+        apply Finset.prod_congr rfl
+        intro g hg
+        exact hgroupFactor v c W ys g
+      _ = referenceWeight Geom H mask v c W ys := rfl
+  refine ⟨{
+    reference := makeReference
+    reference_eq := hreference_eq
+    independent := ?_
+    domination := ?_
+  }⟩
+  · intro v c W w
+    have hw : (makeReference v c (H.replaceTuple W c w)).w =
+        (makeReference v c W).w := by
+      funext ys
+      rw [hreference_eq, hreference_eq]
+      exact hreferenceWeightTransport v c W w ys
+    cases hleft : makeReference v c (H.replaceTuple W c w) with
+    | mk wl hwl hsl =>
+      cases hright : makeReference v c W with
+      | mk wr hwr hsr =>
+        simp only [FinLaw.mk.injEq]
+        simpa [hleft, hright] using hw
+  · intro v c W w ys
+    sorry
 
 section Rows
 

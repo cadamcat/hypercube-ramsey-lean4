@@ -3117,4 +3117,29 @@ theorem directPostCrossingLaw_supported {κ : CConsts} {T : Stage} {k : ℕ}
     simp [S15.directPostCrossingWeight, hcross, hbase]
   exact hx hweight
 
+theorem highDirect_law_uniform {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hmode : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m) :
+    PT.π i = Law.unifCore (PT.tiling.P i).Y
+      (hPT.tiling_valid.patch_nonempty i).2 := by
+  have hnotCluster : ¬ PT.tiling.mode.isCluster := by
+    simp [hmode, Mode.isCluster]
+  exact hPT.law_uniform_direct.resolve_left hnotCluster i
+
+theorem highDirect_envelope_noClique {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hmode : PT.tiling.mode = .highDirect) (i : Fin PT.tiling.m) :
+    NoClique (T.S.E k) PT.tiling.c (PT.envelope i) (PT.π i).w κ.θ (PT.tiling.Q i) := by
+  classical
+  have hnotCluster : ¬ PT.tiling.mode.isCluster := by
+    simp [hmode, Mode.isCluster]
+  have hcardone := hPT.direct_single_corner hnotCluster
+  obtain ⟨v, hv⟩ := Finset.card_eq_one.mp hcardone
+  have hvActive : v ∈ PT.activeVertices := by rw [hv]; simp
+  have henv : PT.envelope i = PT.mesh.corner v i := by
+    rw [hPT.envelope_eq i, hv]
+    simp
+  rw [henv]
+  exact (hPT.corner_clean i v hvActive).noClique
+
 end HypercubeRamsey.Lane_q_s15_direct

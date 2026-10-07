@@ -58,6 +58,23 @@ theorem normalized_restriction_bounds {α : Type*} [Fintype α]
     · simp [ha]
       positivity
 
+/-- An atom of a positive-mass restricted law is bounded by the original atom divided by the retained mass. -/
+theorem restrictOr6_weight_le {α : Type*} [Fintype α]
+    (P : FinProb α) (A : α → Prop) (fallback x : α) (hm : 0 < P.pr A) :
+    (restrictOr6 P A fallback).w x ≤ P.w x / P.pr A := by
+  classical
+  have hnorm : ∑ y, max 0 (if A y then P.w y else 0) = P.pr A := by
+    unfold FinProb.pr
+    apply Finset.sum_congr rfl
+    intro y hy
+    by_cases hA : A y
+    · simp [hA, max_eq_right (P.nonneg y)]
+    · simp [hA]
+  by_cases hA : A x
+  · simp [restrictOr6, normalize6, hm, hnorm, hA, max_eq_right (P.nonneg x)]
+  · simp [restrictOr6, normalize6, hm, hnorm, hA]
+    exact div_nonneg (P.nonneg x) hm.le
+
 /-- Exponential moment of the number of coordinates in a set under a uniform product law. -/
 theorem uniform_pi_hit_moment_le {k N : ℕ} (U : FinProb (Fin N))
     (hU : ∀ x, U.w x = (N : ℝ)⁻¹) (S : Finset (Fin N)) (theta : ℝ)
@@ -233,6 +250,37 @@ theorem bind_pi_atom_bound {ι : Type*} [Fintype ι] {k N : ℕ}
         exact hL i (x j)
     _ = (C / N) ^ k := by rw [div_pow]; simp
 
+/-- An atomwise bound on a tagged law passes to its label marginal. -/
+theorem map_snd_weight_bound {ι Ω : Type*} [Fintype ι] [Fintype Ω] [DecidableEq Ω]
+    (P : FinProb (ι × Ω)) (T : FinProb ι) (U : FinProb Ω) (D : ℝ)
+    (_hD : 0 ≤ D) (h : ∀ i x, P.w (i, x) ≤ D * T.w i * U.w x) :
+    ∀ x, (FinProb.map P Prod.snd).w x ≤ D * U.w x := by
+  classical
+  intro x
+  change (∑ ix, if ix.2 = x then P.w ix else 0) ≤ D * U.w x
+  rw [Fintype.sum_prod_type]
+  calc
+    (∑ i, ∑ y, if y = x then P.w (i, y) else 0) ≤
+        ∑ i, ∑ y, if y = x then D * T.w i * U.w y else 0 := by
+      apply Finset.sum_le_sum
+      intro i hi
+      apply Finset.sum_le_sum
+      intro y hy
+      by_cases hyx : y = x
+      · simp only [hyx, if_pos]
+        exact h i x
+      · simp [hyx]
+    _ = D * U.w x := by
+      calc
+        (∑ i, ∑ y, if y = x then D * T.w i * U.w y else 0) =
+            ∑ i, D * T.w i * U.w x := by simp
+        _ = (∑ i, T.w i) * (D * U.w x) := by
+          rw [Finset.sum_mul]
+          apply Finset.sum_congr rfl
+          intro i hi
+          ring
+        _ = D * U.w x := by rw [T.sum_eq_one]; ring
+
 /-- A sublinear width exponent is absorbed into a small linear exponential. -/
 theorem eventually_width_exp_bound {γ : ℝ} (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,
@@ -244,8 +292,8 @@ theorem eventually_width_exp_bound {γ : ℝ} (hγ : γ < 1) :
     filter_upwards [eventually_gt_atTop 0] with n hn
     have hnR : (0 : ℝ) < n := by exact_mod_cast hn
     calc
-      (n : ℝ) ^ γ / n = (n : ℝ) ^ (γ - 1) := (Real.rpow_sub_one hnR.ne' γ).symm
-      _ = (n : ℝ) ^ (-(1 - γ)) := by congr 1 <;> ring
+      (n : ℝ) ^ (-(1 - γ)) = (n : ℝ) ^ (γ - 1) := by congr 1 <;> ring
+      _ = (n : ℝ) ^ γ / n := Real.rpow_sub_one hnR.ne' γ
   have hconst : Tendsto (fun n : ℕ => Real.log 400 / (n : ℝ)) atTop (nhds 0) :=
     tendsto_const_div_atTop_nhds_zero_nat (Real.log 400)
   have hpEvent : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ γ / n < 1 / 100 :=
@@ -270,5 +318,44 @@ theorem eventually_width_exp_bound {γ : ℝ} (hγ : γ < 1) :
     400 * Real.exp ((n : ℝ) ^ γ) = Real.exp (Real.log 400 + (n : ℝ) ^ γ) := by
       rw [Real.exp_add, Real.exp_log (by norm_num)]
     _ ≤ Real.exp ((4 / 100 : ℝ) * n) := Real.exp_le_exp.mpr hexp
+
+/-- The same width estimate with an arbitrary positive linear exponent. -/
+theorem eventually_width_exp_bound_small {γ : ℝ} (hγ : γ < 1) (ε : ℝ) (hε : 0 < ε) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      400 * Real.exp ((n : ℝ) ^ γ) ≤ Real.exp (ε * n) := by
+  have hpow : Tendsto (fun n : ℕ => (n : ℝ) ^ γ / (n : ℝ)) atTop (nhds 0) := by
+    have hneg : Tendsto (fun n : ℕ => (n : ℝ) ^ (-(1 - γ))) atTop (nhds 0) :=
+      (tendsto_rpow_neg_atTop (sub_pos.mpr hγ)).comp tendsto_natCast_atTop_atTop
+    refine Tendsto.congr' ?_ hneg
+    filter_upwards [eventually_gt_atTop 0] with n hn
+    have hnR : (0 : ℝ) < n := by exact_mod_cast hn
+    calc
+      (n : ℝ) ^ (-(1 - γ)) = (n : ℝ) ^ (γ - 1) := by congr 1 <;> ring
+      _ = (n : ℝ) ^ γ / n := Real.rpow_sub_one hnR.ne' γ
+  have hconst : Tendsto (fun n : ℕ => Real.log 400 / (n : ℝ)) atTop (nhds 0) :=
+    tendsto_const_div_atTop_nhds_zero_nat (Real.log 400)
+  have hhalf : 0 < ε / 2 := by positivity
+  have hpEvent : ∀ᶠ n : ℕ in atTop, (n : ℝ) ^ γ / n < ε / 2 :=
+    hpow.eventually (Iio_mem_nhds hhalf)
+  have hcEvent : ∀ᶠ n : ℕ in atTop, Real.log 400 / (n : ℝ) < ε / 2 :=
+    hconst.eventually (Iio_mem_nhds hhalf)
+  obtain ⟨np, hp⟩ := Filter.eventually_atTop.mp hpEvent
+  obtain ⟨nc, hc⟩ := Filter.eventually_atTop.mp hcEvent
+  refine ⟨max (max np nc) 1, ?_⟩
+  intro n hn
+  have hnp : np ≤ n := le_trans (le_trans (le_max_left np nc) (le_max_left (max np nc) 1)) hn
+  have hnc : nc ≤ n := le_trans (le_trans (le_max_right np nc) (le_max_left (max np nc) 1)) hn
+  have hn1Nat : 1 ≤ n := le_trans (le_max_right (max np nc) 1) hn
+  have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast hn1Nat
+  have hnpos : (0 : ℝ) < n := lt_of_lt_of_le (by norm_num) hn1
+  have hp' : (n : ℝ) ^ γ / n < ε / 2 := hp n hnp
+  have hc' : Real.log 400 / n < ε / 2 := hc n hnc
+  have hp'' : (n : ℝ) ^ γ < (ε / 2) * n := (div_lt_iff₀ hnpos).mp hp'
+  have hc'' : Real.log 400 < (ε / 2) * n := (div_lt_iff₀ hnpos).mp hc'
+  have hexp : Real.log 400 + (n : ℝ) ^ γ ≤ ε * n := by linarith
+  calc
+    400 * Real.exp ((n : ℝ) ^ γ) = Real.exp (Real.log 400 + (n : ℝ) ^ γ) := by
+      rw [Real.exp_add, Real.exp_log (by norm_num)]
+    _ ≤ Real.exp (ε * n) := Real.exp_le_exp.mpr hexp
 
 end HypercubeRamsey.S06.Lane_q_s06_ev_b

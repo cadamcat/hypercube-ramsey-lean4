@@ -2,12 +2,14 @@ import HypercubeRamsey.S06.OddLoads
 import HypercubeRamsey.S06.Prob
 import HypercubeRamsey.S03.GatedPosterior
 import HypercubeRamsey.S06.EvenRows_q_s06_even
+import HypercubeRamsey.S06.EvenRows_q_s06_ev_c
 import HypercubeRamsey.S06.EvenRows_q_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_sol_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_select_sol_s06_ev_b
 import HypercubeRamsey.S06.EvenRows_q_s06_ev_d
 import HypercubeRamsey.S06.EvenRows_sol_s06_ev_d
 import HypercubeRamsey.S06.EvenRows_q_s06_ev_a
+
 
 /-!
 # Odd injection and even posterior reconstruction
@@ -2195,6 +2197,7 @@ theorem localEvenMean_nonneg (X : Ctx6 γ p₀ K n N E G M)
 
 end Lane_sol_fix_s06mean
 
+set_option maxHeartbeats 1000000 in
 /-- L6.1m (comparison mean, 06:836–853): auxiliary product odd sampling uses probability fillers;
 cancellation of the posterior denominator against the data subdensity
 (`∫ m_c (F_z dP_c / m_c) dy = dP_c ∫ F_z dy`), rows summing to one bound `∫ F_z dy` by the gate, the selection
@@ -2202,15 +2205,628 @@ bound summed over IDs, and the tuple marginal costs `2/c₁` times the tag mixtu
 theorem L6_1m_mean (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X =>
       X.HistSupport → X.Step2Supp → X.EvenDensity → X.SelectBound → X.EvenMean := by
+  classical
   refine ⟨2, 0, ?_⟩
-  intro n N E G M X _hLarge hHist hSupp hDensity hSelect H hH v a hv
+  intro n N E G M X hLarge hHist hStep2 hDensity hSelect H hH v a hv
+  let β : X.Ty := X.evenTy v
+  have hβ : β = X.evenType v := by
+    dsimp [β, Ctx6.evenTy, Ctx6.stType, Ctx6.evenType]
+    rw [ChunkLayout6.stType, X.facts.key_eq v, X.facts.sign_eq v,
+      X.facts.flippable_eq v, X.facts.severity_eq v]
+  have hocc : β ∈ X.occTypes := by
+    rw [hβ]
+    unfold Ctx6.occTypes
+    exact Finset.mem_image.mpr
+      ⟨v, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hv⟩, rfl⟩
+  obtain ⟨hBase, _hHid, _hV₀, _hStep1, hTests, _hRate⟩ := hHist H hH
+  have hKeys : X.KeysSupp H.1 (X.typeKeys β) := by
+    change X.KeysSupp H.1 Finset.univ at hBase
+    obtain ⟨hInit, hCand, hTag⟩ := hBase
+    refine ⟨hInit, ?_, ?_⟩
+    · intro u hu
+      apply hCand u
+      rcases Finset.mem_image.mp hu with ⟨key, hkey, rfl⟩
+      exact Finset.mem_image.mpr ⟨key, Finset.mem_univ key, rfl⟩
+    · intro s hs
+      exact hTag s (Finset.mem_univ s)
+  have hTestsβ : X.Step2Tests H β := hTests β hocc
+  have hTupleMass : ∀ i, 0 < (X.Tβ H β).w i →
+      c₁ / 2 ≤ ∑ x ∈ X.reqNbhd H (reqNames6 β), (M.μ i).w x := by
+    intro i hi
+    exact (hStep2 H β hocc hKeys hTestsβ i hi).1
+  have hTuple :=
+    Lane_q_s06_ev_c.tuple_empirical_bound6 X H β a hTupleMass
   have hPosterior :
-      (X.centreLaw H).expect (fun C => Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
+      (X.centreLaw H).expect (fun C =>
+        Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
         (19 / 100 : ℝ) * Cm6 *
-          ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a) := by
-    -- Remaining: disintegrate at each selected tuple, cancel m_c, sum the forced-centre
-    -- selection bounds, and bound the tuple marginal using HistSupport and Step2Supp.
-    sorry
+          ((N : ℝ) * ∑ i, (X.Tβ H β).w i * (M.μ i).w a) := by
+    let star := X.oddNbrs v
+    let StarY := {u : OddRole6 n // u ∈ star} → Fin N
+    let starExt : StarY → (OddRole6 n → Fin N) := fun y =>
+      (Equiv.piEquivPiSubtypeProd (fun u : OddRole6 n => u ∈ star)
+        (fun _ : OddRole6 n => Fin N)).symm (y, fun _ => X.y₀)
+    let freq : X.Tuple → ℝ := fun z =>
+      ((Finset.univ.filter fun r : Fin X.k => z.2 r = a).card : ℝ) / (X.k : ℝ)
+    let mcAt : X.Centre → X.Loc → (OddRole6 n → Fin N) → ℝ := fun C c y =>
+      ∑ z, (X.tupleLaw H β).w z * X.Fz H C v c z y
+    let margAt : X.Centre → X.Loc → (OddRole6 n → Fin N) → ℝ := fun C c y =>
+      ∑ z, (X.tupleLaw H β).w z * X.Fz H C v c z y / mcAt C c y * freq z
+    let rowLaw : X.Centre → OddRole6 n → FinProb (Fin N) := fun C u =>
+      X.oddLaw H C u.1
+    let rowsLaw : X.Centre → FinProb (OddRole6 n → Fin N) := fun C =>
+      FinProb.pi (rowLaw C)
+    let q : X.Centre → X.Loc → (OddRole6 n → Fin N) → ℝ := fun C c y =>
+      if X.EvenGate H C v c then margAt C c y else 0
+    have hFz_nonneg (C : X.Centre) (c : X.Loc) (z : X.Tuple)
+        (y : OddRole6 n → Fin N) : 0 ≤ X.Fz H C v c z y := by
+      unfold Ctx6.Fz
+      apply mul_nonneg
+      · split_ifs <;> norm_num
+      · apply Finset.prod_nonneg
+        intro u hu
+        exact Lane_q_s06_ev_c.oddRow_nonneg6 X H
+          (X.withTuple C (c, β) z) u.1 (y u)
+    have hmc_nonneg (C : X.Centre) (c : X.Loc) (y : OddRole6 n → Fin N) :
+        0 ≤ mcAt C c y := by
+      dsimp [mcAt]
+      apply Finset.sum_nonneg
+      intro z hz
+      exact mul_nonneg ((X.tupleLaw H β).nonneg z) (hFz_nonneg C c z y)
+    have hfreq_nonneg (z : X.Tuple) : 0 ≤ freq z := by
+      dsimp [freq]
+      exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+    have hmarg_nonneg (C : X.Centre) (c : X.Loc) (y : OddRole6 n → Fin N) :
+        0 ≤ margAt C c y := by
+      dsimp [margAt]
+      apply Finset.sum_nonneg
+      intro z hz
+      apply mul_nonneg
+      · exact div_nonneg
+          (mul_nonneg ((X.tupleLaw H β).nonneg z) (hFz_nonneg C c z y))
+          (hmc_nonneg C c y)
+      · exact hfreq_nonneg z
+    have hq_nonneg (C : X.Centre) (c : X.Loc) (y : OddRole6 n → Fin N) :
+        0 ≤ q C c y := by
+      by_cases hg : X.EvenGate H C v c
+      · simp [q, hg, hmarg_nonneg C c y]
+      · simp [q, hg]
+    have hevenMarg_eq (C : X.Centre) (y : OddRole6 n → Fin N) :
+        X.evenMarg H C v y a = margAt C (X.selC H C v) y := by
+      simp [Ctx6.evenMarg, Ctx6.mc, mcAt, margAt, freq, β]
+    have hq_dep (C : X.Centre) (c : X.Loc) :
+        FinProb.DependsOn (q C c) star := by
+      intro y y' hy
+      have hFz (z : X.Tuple) : X.Fz H C v c z y = X.Fz H C v c z y' := by
+        unfold Ctx6.Fz
+        congr 1
+        apply Finset.prod_congr rfl
+        intro u hu
+        rw [hy u hu]
+      have hmc : mcAt C c y = mcAt C c y' := by
+        dsimp [mcAt]
+        apply Finset.sum_congr rfl
+        intro z hz
+        rw [hFz z]
+      have hmarg : margAt C c y = margAt C c y' := by
+        dsimp [margAt]
+        apply Finset.sum_congr rfl
+        intro z hz
+        rw [hFz z, hmc]
+      simp [q, hmarg]
+    have hproj (C : X.Centre) (c : X.Loc) :
+        (rowsLaw C).expect (q C c) =
+          (FinProb.pi (fun u : {u : OddRole6 n // u ∈ star} => rowLaw C u.1)).expect
+            (fun y => q C c ((Equiv.piEquivPiSubtypeProd (fun u : OddRole6 n => u ∈ star)
+              (fun _ : OddRole6 n => Fin N)).symm (y, fun _ => X.y₀))) := by
+      exact FinProb.pi_expect_depends (rowLaw C) star (q C c) (fun _ => X.y₀) (hq_dep C c)
+    have hscore_expand (C : X.Centre) (c : X.Loc) :
+        (rowsLaw C).expect (q C c) =
+          ∑ y : StarY,
+            (∏ u : {u : OddRole6 n // u ∈ star}, (rowLaw C u.1).w (y u)) *
+              q C c (starExt y) := by
+      rw [hproj]
+      simp only [FinProb.expect, FinProb.pi]
+      rfl
+    have hwithTuple_idem (C : X.Centre) (c : X.Loc)
+        (z₀ z : X.Tuple) :
+        X.withTuple (X.withTuple C (c, β) z₀) (c, β) z = X.withTuple C (c, β) z := by
+      have hdata : Function.update (Function.update (X.tup C) (c, β) z₀) (c, β) z =
+          Function.update (X.tup C) (c, β) z := by
+        funext e
+        by_cases he : e = (c, β)
+        · subst e
+          simp
+        · simp [he]
+      change (((X.pos C, Function.update (Function.update (X.tup C) (c, β) z₀) (c, β) z),
+          X.act C), X.ties C) =
+        (((X.pos C, Function.update (X.tup C) (c, β) z), X.act C), X.ties C)
+      rw [hdata]
+    have hFz_inv (C : X.Centre) (c : X.Loc) (z₀ z : X.Tuple)
+        (y : OddRole6 n → Fin N) :
+        X.Fz H (X.withTuple C (c, β) z₀) v c z y = X.Fz H C v c z y := by
+      unfold Ctx6.Fz
+      rw [hwithTuple_idem C c z₀ z]
+    have hmc_inv (C : X.Centre) (c : X.Loc) (z₀ : X.Tuple)
+        (y : OddRole6 n → Fin N) :
+        mcAt (X.withTuple C (c, β) z₀) c y = mcAt C c y := by
+      dsimp [mcAt]
+      apply Finset.sum_congr rfl
+      intro z hz
+      rw [hFz_inv C c z₀ z y]
+    have hmarg_inv (C : X.Centre) (c : X.Loc) (z₀ : X.Tuple)
+        (y : OddRole6 n → Fin N) :
+        margAt (X.withTuple C (c, β) z₀) c y = margAt C c y := by
+      dsimp [margAt]
+      apply Finset.sum_congr rfl
+      intro z hz
+      rw [hFz_inv C c z₀ z y, hmc_inv C c z₀ y]
+    have hExt (y : StarY) (u : OddRole6 n) (hu : u ∈ star) :
+        starExt y u = y ⟨u, hu⟩ := by
+      simp [starExt, Equiv.piEquivPiSubtypeProd_symm_apply, hu]
+    have hFz_rowprod (C : X.Centre) (c : X.Loc) (z : X.Tuple)
+        (y : OddRole6 n → Fin N) (hg : X.EvenGate H (X.withTuple C (c, β) z) v c) :
+        X.Fz H C v c z y =
+          ∏ u : {u : OddRole6 n // u ∈ star},
+            (rowLaw (X.withTuple C (c, β) z) u.1).w (y u.1) := by
+      have hprod :
+          (∏ u ∈ star, X.oddRow H (X.withTuple C (c, β) z) u.1 (y u)) =
+            ∏ u : {u : OddRole6 n // u ∈ star},
+              (rowLaw (X.withTuple C (c, β) z) u.1).w (y u.1) := by
+        calc
+          (∏ u ∈ star, X.oddRow H (X.withTuple C (c, β) z) u.1 (y u)) =
+              ∏ u : {u : OddRole6 n // u ∈ star},
+                X.oddRow H (X.withTuple C (c, β) z) u.1 (y u.1) := by
+                  simpa using (Finset.prod_attach star
+                    (fun u => X.oddRow H (X.withTuple C (c, β) z) u.1 (y u))).symm
+          _ = ∏ u : {u : OddRole6 n // u ∈ star},
+                (rowLaw (X.withTuple C (c, β) z) u.1).w (y u.1) := by
+                  apply Finset.prod_congr rfl
+                  intro u hu
+                  exact (X.oddLaw_eq_row H (X.withTuple C (c, β) z) u.1
+                    (hg.2.2.1 u.1 u.2) (y u.1)).symm
+      unfold Ctx6.Fz
+      rw [if_pos hg, one_mul]
+      simpa [star] using hprod
+    have hFz_sum (C : X.Centre) (c : X.Loc) (z : X.Tuple) :
+        (∑ y : StarY, X.Fz H C v c z (starExt y)) =
+          if X.EvenGate H (X.withTuple C (c, β) z) v c then 1 else 0 := by
+      by_cases hg : X.EvenGate H (X.withTuple C (c, β) z) v c
+      · rw [if_pos hg]
+        have hterm (y : StarY) :
+            X.Fz H C v c z (starExt y) =
+              ∏ u : {u : OddRole6 n // u ∈ star},
+                (rowLaw (X.withTuple C (c, β) z) u.1).w (starExt y u.1) :=
+          hFz_rowprod C c z (starExt y) hg
+        have hsumFz :
+            (∑ y : StarY, X.Fz H C v c z (starExt y)) =
+              ∑ y : StarY,
+                ∏ u : {u : OddRole6 n // u ∈ star},
+                  (rowLaw (X.withTuple C (c, β) z) u.1).w (starExt y u.1) := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          exact hterm y
+        have hsumExt :
+            (∑ y : StarY,
+                ∏ u : {u : OddRole6 n // u ∈ star},
+                  (rowLaw (X.withTuple C (c, β) z) u.1).w (starExt y u.1)) =
+              ∑ y : StarY,
+                ∏ u : {u : OddRole6 n // u ∈ star},
+                  (rowLaw (X.withTuple C (c, β) z) u.1).w (y u) := by
+          apply Finset.sum_congr rfl
+          intro y hy
+          apply Finset.prod_congr rfl
+          intro u hu
+          rw [hExt y u.1 u.2]
+        rw [hsumFz, hsumExt]
+        have hs := (FinProb.pi
+          (fun u : {u : OddRole6 n // u ∈ star} =>
+            rowLaw (X.withTuple C (c, β) z) u.1)).sum_eq_one
+        simpa [FinProb.pi] using hs
+      · unfold Ctx6.Fz
+        rw [if_neg hg]
+        simp
+    have hscore_slot (C : X.Centre) (c : X.Loc) (z₀ : X.Tuple) :
+        (rowsLaw (X.withTuple C (c, β) z₀)).expect
+            (q (X.withTuple C (c, β) z₀) c) =
+          ∑ y : StarY,
+            X.Fz H C v c z₀ (starExt y) * margAt C c (starExt y) := by
+      rw [hscore_expand]
+      apply Finset.sum_congr rfl
+      intro y hy
+      let C₀ := X.withTuple C (c, β) z₀
+      by_cases hg : X.EvenGate H C₀ v c
+      · have hMarg := hmarg_inv C c z₀ (starExt y)
+        have hrowExt :
+            (∏ u : {u : OddRole6 n // u ∈ star},
+              (rowLaw C₀ u.1).w (y u)) =
+              ∏ u : {u : OddRole6 n // u ∈ star},
+                (rowLaw C₀ u.1).w (starExt y u.1) := by
+          apply Finset.prod_congr rfl
+          intro u hu
+          rw [hExt y u.1 u.2]
+        have hF : X.Fz H C v c z₀ (starExt y) =
+            ∏ u : {u : OddRole6 n // u ∈ star},
+              (rowLaw C₀ u.1).w (y u) := by
+          have hFzRow : X.Fz H C v c z₀ (starExt y) =
+              ∏ u : {u : OddRole6 n // u ∈ star},
+                (rowLaw C₀ u.1).w (starExt y u.1) := by
+                  simpa [C₀] using hFz_rowprod C c z₀ (starExt y) hg
+          exact hFzRow.trans hrowExt.symm
+        have hq : q C₀ c (starExt y) = margAt C c (starExt y) := by
+          simp [q, C₀, hg, hMarg]
+        rw [hq, ← hF]
+      · have hF : X.Fz H C v c z₀ (starExt y) = 0 := by
+          have hgate : ¬ X.EvenGate H (X.withTuple C (c, β) z₀) v c := by
+            simpa [C₀] using hg
+          unfold Ctx6.Fz
+          simp [β, hgate]
+        have hq : q C₀ c (starExt y) = 0 := by
+          simp [q, C₀, hg]
+        rw [hq, hF]
+        simp
+    have hslot_cancel (C : X.Centre) (c : X.Loc) :
+        (∑ z₀, (X.tupleLaw H β).w z₀ *
+            (rowsLaw (X.withTuple C (c, β) z₀)).expect
+              (q (X.withTuple C (c, β) z₀) c)) =
+          ∑ z, (X.tupleLaw H β).w z * freq z *
+            (if X.EvenGate H (X.withTuple C (c, β) z) v c then 1 else 0) := by
+      calc
+        (∑ z₀, (X.tupleLaw H β).w z₀ *
+            (rowsLaw (X.withTuple C (c, β) z₀)).expect
+              (q (X.withTuple C (c, β) z₀) c)) =
+          ∑ z₀, (X.tupleLaw H β).w z₀ *
+            ∑ y : StarY, X.Fz H C v c z₀ (starExt y) * margAt C c (starExt y) := by
+              apply Finset.sum_congr rfl
+              intro z₀ hz₀
+              rw [hscore_slot C c z₀]
+        _ = ∑ y : StarY, ∑ z₀, (X.tupleLaw H β).w z₀ *
+              X.Fz H C v c z₀ (starExt y) * margAt C c (starExt y) := by
+                calc
+                  (∑ z₀, (X.tupleLaw H β).w z₀ *
+                      ∑ y : StarY, X.Fz H C v c z₀ (starExt y) * margAt C c (starExt y)) =
+                    ∑ z₀, ∑ y : StarY, (X.tupleLaw H β).w z₀ *
+                      X.Fz H C v c z₀ (starExt y) * margAt C c (starExt y) := by
+                        apply Finset.sum_congr rfl
+                        intro z₀ hz₀
+                        rw [Finset.mul_sum]
+                        apply Finset.sum_congr rfl
+                        intro y hy
+                        ring
+                  _ = ∑ y : StarY, ∑ z₀, (X.tupleLaw H β).w z₀ *
+                        X.Fz H C v c z₀ (starExt y) * margAt C c (starExt y) := by
+                          rw [Finset.sum_comm]
+        _ = ∑ y : StarY, ∑ z, (X.tupleLaw H β).w z *
+              X.Fz H C v c z (starExt y) * freq z := by
+                apply Finset.sum_congr rfl
+                intro y hy
+                simpa [margAt, mcAt, freq] using
+                  Lane_q_s06_ev_c.posterior_cancel6 (X.tupleLaw H β)
+                    (fun z y => X.Fz H C v c z (starExt y)) freq
+                    (fun z y => hFz_nonneg C c z (starExt y))
+                    (fun z => hfreq_nonneg z) y
+        _ = ∑ z, (X.tupleLaw H β).w z * freq z *
+              ∑ y : StarY, X.Fz H C v c z (starExt y) := by
+                rw [Finset.sum_comm]
+                apply Finset.sum_congr rfl
+                intro z hz
+                rw [Finset.mul_sum]
+                apply Finset.sum_congr rfl
+                intro y hy
+                ring
+        _ = ∑ z, (X.tupleLaw H β).w z * freq z *
+              (if X.EvenGate H (X.withTuple C (c, β) z) v c then 1 else 0) := by
+                apply Finset.sum_congr rfl
+                intro z hz
+                rw [hFz_sum C c z]
+    let score : X.Centre → X.Loc → ℝ := fun C c => (rowsLaw C).expect (q C c)
+    let slot : X.Loc → X.Loc × X.Ty := fun c => (c, β)
+    let Rest (c : X.Loc) := {e : X.Loc × X.Ty // e ∉ ({slot c} : Finset (X.Loc × X.Ty))}
+    let fillData (c : X.Loc) (z : X.Tuple) (d : Rest c → X.Tuple) : X.Data X.Loc :=
+      fun e => if h : e = slot c then z else d ⟨e, by simp [h]⟩
+    let fallbackTuple : X.Tuple := (X.i₀, fun _ => X.y₀)
+    let baseCenter (P : X.hp.Loc → Bool) (A : X.Loc → Bool) (T : X.hp.Ties)
+        (c : X.Loc) (d : Rest c → X.Tuple) : X.Centre :=
+      (((P, fillData c fallbackTuple d), A), T)
+    have hfill_update (c : X.Loc) (d : Rest c → X.Tuple) (z : X.Tuple) :
+        fillData c z d = Function.update (fillData c fallbackTuple d) (slot c) z := by
+      funext e
+      by_cases h : e = slot c
+      · subst e
+        simp [fillData]
+      · simp [fillData, h]
+    have hcenter_update (P : X.hp.Loc → Bool) (A : X.Loc → Bool) (T : X.hp.Ties)
+        (c : X.Loc) (d : Rest c → X.Tuple) (z : X.Tuple) :
+        (((P, fillData c z d), A), T) =
+          X.withTuple (baseCenter P A T c d) (slot c) z := by
+      change (((P, fillData c z d), A), T) =
+        (((P, Function.update (fillData c fallbackTuple d) (slot c) z), A), T)
+      rw [hfill_update]
+    have hdataSplit (P : X.hp.Loc → Bool) (A : X.Loc → Bool) (T : X.hp.Ties)
+        (c : X.Loc) :
+        (X.dataLaw X.Loc H).expect (fun D => score (((P, D), A), T) c) =
+          ∑ z, (X.tupleLaw H β).w z *
+            (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).expect
+              (fun d => score (((P, fillData c z d), A), T) c) := by
+      change (FinProb.pi (fun e : X.Loc × X.Ty => X.tupleLaw H e.2)).expect
+          (fun D => score (((P, D), A), T) c) = _
+      exact Lane_q_s06_ev_c.pi_expect_split_coord6
+        (fun e : X.Loc × X.Ty => X.tupleLaw H e.2) (slot c)
+        (fun D => score (((P, D), A), T) c)
+    have hslot_rest (P : X.hp.Loc → Bool) (A : X.Loc → Bool) (T : X.hp.Ties)
+        (c : X.Loc) (d : Rest c → X.Tuple) :
+        ∑ z, (X.tupleLaw H β).w z * score (((P, fillData c z d), A), T) c =
+          ∑ z, (X.tupleLaw H β).w z * freq z *
+            (if X.EvenGate H (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0) := by
+      calc
+        (∑ z, (X.tupleLaw H β).w z * score (((P, fillData c z d), A), T) c) =
+            ∑ z, (X.tupleLaw H β).w z *
+              score (X.withTuple (baseCenter P A T c d) (slot c) z) c := by
+                apply Finset.sum_congr rfl
+                intro z hz
+                rw [hcenter_update]
+        _ = ∑ z, (X.tupleLaw H β).w z * freq z *
+              (if X.EvenGate H (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0) :=
+                hslot_cancel (baseCenter P A T c d) c
+    have hdataRest (P : X.hp.Loc → Bool) (A : X.Loc → Bool) (T : X.hp.Ties)
+        (c : X.Loc) :
+        (X.dataLaw X.Loc H).expect (fun D => score (((P, D), A), T) c) =
+          (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).expect
+            (fun d => ∑ z, (X.tupleLaw H β).w z * freq z *
+              (if X.EvenGate H (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0)) := by
+      rw [hdataSplit P A T c]
+      calc
+        (∑ z, (X.tupleLaw H β).w z *
+            (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).expect
+              (fun d => score (((P, fillData c z d), A), T) c)) =
+          (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).expect
+            (fun d => ∑ z, (X.tupleLaw H β).w z *
+              score (((P, fillData c z d), A), T) c) := by
+              exact Lane_q_s06_ev_c.expect_sum_swap6 (X.tupleLaw H β)
+                (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2))
+                (fun z d => score (((P, fillData c z d), A), T) c)
+        _ = (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).expect
+              (fun d => ∑ z, (X.tupleLaw H β).w z * freq z *
+                (if X.EvenGate H
+                  (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0)) := by
+                exact congrArg
+                  (fun g : (Rest c → X.Tuple) → ℝ =>
+                    (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).expect g)
+                  (funext fun d : Rest c → X.Tuple => hslot_rest P A T c d)
+    have hforceData (P : X.hp.Loc → Bool) (A : X.Loc → Bool) (T : X.hp.Ties)
+        (c : X.Loc) (z : X.Tuple) :
+        (X.dataLaw X.Loc H).expect (fun D =>
+          if X.EvenGate H (X.withTuple (((P, D), A), T) (slot c) z) v c then 1 else 0) =
+          (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).expect
+            (fun d => if X.EvenGate H (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0) := by
+      change (FinProb.pi (fun e : X.Loc × X.Ty => X.tupleLaw H e.2)).expect _ = _
+      rw [Lane_q_s06_ev_c.pi_expect_split_coord6
+        (fun e : X.Loc × X.Ty => X.tupleLaw H e.2) (slot c)
+        (fun D => if X.EvenGate H (X.withTuple (((P, D), A), T) (slot c) z) v c then 1 else 0)]
+      have hfun (z₀ : X.Tuple) :
+          (fun d : Rest c → X.Tuple => if X.EvenGate H
+            (X.withTuple (((P, fillData c z₀ d), A), T) (slot c) z) v c then (1 : ℝ) else 0) =
+          (fun d : Rest c → X.Tuple => if X.EvenGate H
+            (X.withTuple (baseCenter P A T c d) (slot c) z) v c then (1 : ℝ) else 0) := by
+        funext d
+        rw [hcenter_update P A T c d z₀]
+        rw [hwithTuple_idem (baseCenter P A T c d) c z₀ z]
+      calc
+        (∑ z₀, (X.tupleLaw H β).w z₀ *
+            (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).expect
+              (fun d => if X.EvenGate H
+                (X.withTuple (((P, fillData c z₀ d), A), T) (slot c) z) v c then 1 else 0)) =
+          ∑ z₀, (X.tupleLaw H β).w z₀ *
+            (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).expect
+              (fun d => if X.EvenGate H
+                (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0) := by
+              apply Finset.sum_congr rfl
+              intro z₀ hz₀
+              exact congrArg
+                (fun x : ℝ => (X.tupleLaw H β).w z₀ * x)
+                (congrArg
+                  (fun f : (Rest c → X.Tuple) → ℝ =>
+                    (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).expect f)
+                  (hfun z₀))
+        _ = (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).expect
+              (fun d => if X.EvenGate H
+                (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0) := by
+                unfold FinProb.expect
+                calc
+                  (∑ z₀, (X.tupleLaw H β).w z₀ *
+                      ∑ ω, (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).w ω *
+                        (if X.EvenGate H
+                          (X.withTuple (baseCenter P A T c ω) (slot c) z) v c then 1 else 0)) =
+                    (∑ z₀, (X.tupleLaw H β).w z₀) *
+                      ∑ ω, (FinProb.pi (fun d : Rest c => X.tupleLaw H d.1.2)).w ω *
+                        (if X.EvenGate H
+                          (X.withTuple (baseCenter P A T c ω) (slot c) z) v c then 1 else 0) := by
+                        rw [Finset.sum_mul]
+                  _ = _ := by rw [(X.tupleLaw H β).sum_eq_one]; ring
+    have hscoreCenterEq (c : X.Loc) :
+        (X.centreLaw H).expect (fun C => score C c) =
+          ∑ z, (X.tupleLaw H β).w z * freq z *
+            (X.centreLaw H).expect (fun C =>
+              if X.EvenGate H (X.withTuple C (slot c) z) v c then 1 else 0) := by
+      have hexpScore := Lane_q_s06_ev_c.centre_expect_data_last6 X H
+        (fun P D A T => score (((P, D), A), T) c)
+      have hexpGate (z : X.Tuple) := Lane_q_s06_ev_c.centre_expect_data_last6 X H
+        (fun P D A T =>
+          if X.EvenGate H (X.withTuple (((P, D), A), T) (slot c) z) v c then 1 else 0)
+      have hcentre_repr (C : X.Centre) :
+          (((X.pos C, X.tup C), X.act C), X.ties C) = C := by
+        cases C
+        rfl
+      have hscoreEta :
+          (X.centreLaw H).expect (fun C => score C c) =
+            (X.centreLaw H).expect
+              (fun C => score (((X.pos C, X.tup C), X.act C), X.ties C) c) := by
+        exact congrArg (fun f : X.Centre → ℝ => (X.centreLaw H).expect f)
+          (funext fun C => congrArg (fun C' => score C' c) (hcentre_repr C).symm)
+      have hgateEta (z : X.Tuple) :
+          (X.centreLaw H).expect (fun C =>
+            if X.EvenGate H (X.withTuple C (slot c) z) v c then 1 else 0) =
+          (X.centreLaw H).expect (fun C =>
+            if X.EvenGate H
+              (X.withTuple (((X.pos C, X.tup C), X.act C), X.ties C) (slot c) z) v c
+              then 1 else 0) := by
+        exact congrArg (fun f : X.Centre → ℝ => (X.centreLaw H).expect f)
+          (funext fun C => by
+            have hwith : X.withTuple C (slot c) z =
+                X.withTuple (((X.pos C, X.tup C), X.act C), X.ties C) (slot c) z :=
+              congrArg (fun C' => X.withTuple C' (slot c) z) (hcentre_repr C).symm
+            rw [hwith])
+      rw [hscoreEta, hexpScore]
+      simp_rw [hgateEta]
+      simp_rw [hexpGate]
+      simp_rw [hdataRest, hforceData]
+      change
+        (∑ P, X.hp.posLaw.w P *
+          ∑ A, X.hp.actLaw.w A *
+            ∑ T, X.hp.tieLaw.w T *
+              ∑ d : Rest c → X.Tuple, (FinProb.pi
+                (fun e : Rest c => X.tupleLaw H e.1.2)).w d *
+                ∑ z, (X.tupleLaw H β).w z * freq z *
+                  (if X.EvenGate H
+                    (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0)) =
+          ∑ z, (X.tupleLaw H β).w z * freq z *
+            ∑ P, X.hp.posLaw.w P *
+              ∑ A, X.hp.actLaw.w A *
+                ∑ T, X.hp.tieLaw.w T *
+                  ∑ d : Rest c → X.Tuple, (FinProb.pi
+                    (fun e : Rest c => X.tupleLaw H e.1.2)).w d *
+                    (if X.EvenGate H
+                      (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0)
+      exact Lane_q_s06_ev_c.sum_pull_last5
+          (X.hp.posLaw.w) (X.hp.actLaw.w) (X.hp.tieLaw.w)
+          (fun d : Rest c → X.Tuple =>
+            (FinProb.pi (fun e : Rest c => X.tupleLaw H e.1.2)).w d)
+          (fun z => (X.tupleLaw H β).w z * freq z)
+          (fun P A T d z =>
+            if X.EvenGate H (X.withTuple (baseCenter P A T c d) (slot c) z) v c then 1 else 0)
+    have hcore :
+        ∑ c : X.Loc, (X.centreLaw H).expect (fun C => (rowsLaw C).expect (q C c)) ≤
+          4 * (X.tupleLaw H β).expect freq := by
+      calc
+        (∑ c : X.Loc, (X.centreLaw H).expect (fun C => (rowsLaw C).expect (q C c))) =
+            ∑ c : X.Loc, ∑ z, (X.tupleLaw H β).w z * freq z *
+              (X.centreLaw H).expect (fun C =>
+                if X.EvenGate H (X.withTuple C (slot c) z) v c then 1 else 0) := by
+                  apply Finset.sum_congr rfl
+                  intro c hc
+                  exact hscoreCenterEq c
+        _ = ∑ z, (X.tupleLaw H β).w z * freq z *
+              ∑ c : X.Loc, (X.centreLaw H).expect (fun C =>
+                if X.EvenGate H (X.withTuple C (slot c) z) v c then 1 else 0) := by
+                rw [Finset.sum_comm]
+                apply Finset.sum_congr rfl
+                intro z hz
+                rw [← Finset.mul_sum]
+        _ ≤ ∑ z, (X.tupleLaw H β).w z * freq z * 4 := by
+              apply Finset.sum_le_sum
+              intro z hz
+              exact mul_le_mul_of_nonneg_left (hSelect H hH v z hv)
+                (mul_nonneg ((X.tupleLaw H β).nonneg z) (hfreq_nonneg z))
+        _ = 4 * (X.tupleLaw H β).expect freq := by
+              unfold FinProb.expect
+              calc
+                (∑ z, (X.tupleLaw H β).w z * freq z * 4) =
+                    (∑ z, (X.tupleLaw H β).w z * freq z) * 4 := by
+                      rw [Finset.sum_mul]
+                _ = 4 * ∑ z, (X.tupleLaw H β).w z * freq z := by ring
+    have hposterior_point (C : X.Centre) :
+        Lane_sol_fix_s06mean.posteriorMean X H C v a ≤
+          (N : ℝ) * ∑ c : X.Loc, (rowsLaw C).expect (q C c) := by
+      change (rowsLaw C).expect
+          (fun y => if X.EvenValid H C v y then
+            (N : ℝ) * X.evenMarg H C v y a else 0) ≤ _
+      have hpoint (y : OddRole6 n → Fin N) :
+          (if X.EvenValid H C v y then
+            (N : ℝ) * X.evenMarg H C v y a else 0) ≤
+            (N : ℝ) * ∑ c : X.Loc, q C c y := by
+        by_cases hvalid : X.EvenValid H C v y
+        · have hgate : X.EvenGate H C v (X.selC H C v) := hvalid.1
+          have hqsel : q C (X.selC H C v) y =
+              margAt C (X.selC H C v) y := by
+            simp [q, hgate]
+          have hsum : q C (X.selC H C v) y ≤ ∑ c : X.Loc, q C c y :=
+            Finset.single_le_sum (fun c hc => hq_nonneg C c y)
+              (Finset.mem_univ (X.selC H C v))
+          rw [if_pos hvalid, hevenMarg_eq C y, ← hqsel]
+          exact mul_le_mul_of_nonneg_left hsum (Nat.cast_nonneg N)
+        · have hsum : 0 ≤ ∑ c : X.Loc, q C c y :=
+            Finset.sum_nonneg (fun c hc => hq_nonneg C c y)
+          simp only [if_neg hvalid]
+          exact mul_nonneg (Nat.cast_nonneg N) hsum
+      calc
+        (rowsLaw C).expect
+            (fun y => if X.EvenValid H C v y then
+              (N : ℝ) * X.evenMarg H C v y a else 0) ≤
+            (rowsLaw C).expect (fun y => (N : ℝ) * ∑ c : X.Loc, q C c y) :=
+              FinProb.expect_mono (rowsLaw C) hpoint
+        _ = (N : ℝ) * ∑ c : X.Loc, (rowsLaw C).expect (q C c) := by
+              rw [FinProb.expect_smul]
+              congr 1
+              unfold FinProb.expect
+              calc
+                (∑ y, (rowsLaw C).w y * ∑ c : X.Loc, q C c y) =
+                    ∑ y, ∑ c : X.Loc, (rowsLaw C).w y * q C c y := by
+                      apply Finset.sum_congr rfl
+                      intro y hy
+                      rw [Finset.mul_sum]
+                _ = ∑ c : X.Loc, ∑ y, (rowsLaw C).w y * q C c y := by
+                      rw [Finset.sum_comm]
+                _ = _ := rfl
+    have hcenterPosterior :
+        (X.centreLaw H).expect (fun C =>
+          Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
+          (N : ℝ) * 4 * (X.tupleLaw H β).expect freq := by
+      calc
+        (X.centreLaw H).expect (fun C =>
+            Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
+          (X.centreLaw H).expect (fun C =>
+            (N : ℝ) * ∑ c : X.Loc, (rowsLaw C).expect (q C c)) :=
+              FinProb.expect_mono (X.centreLaw H) hposterior_point
+        _ = (N : ℝ) * ∑ c : X.Loc,
+              (X.centreLaw H).expect (fun C => (rowsLaw C).expect (q C c)) := by
+              rw [FinProb.expect_smul]
+              congr 1
+              unfold FinProb.expect
+              calc
+                (∑ C, (X.centreLaw H).w C *
+                    ∑ c : X.Loc, (rowsLaw C).expect (q C c)) =
+                    ∑ C, ∑ c : X.Loc,
+                      (X.centreLaw H).w C * (rowsLaw C).expect (q C c) := by
+                        apply Finset.sum_congr rfl
+                        intro C hC
+                        rw [Finset.mul_sum]
+                _ = ∑ c : X.Loc, ∑ C,
+                      (X.centreLaw H).w C * (rowsLaw C).expect (q C c) := by
+                        rw [Finset.sum_comm]
+                _ = _ := rfl
+        _ ≤ (N : ℝ) * (4 * (X.tupleLaw H β).expect freq) :=
+              mul_le_mul_of_nonneg_left hcore (Nat.cast_nonneg N)
+        _ = (N : ℝ) * 4 * (X.tupleLaw H β).expect freq := by ring
+    have hTupleFreq : (X.tupleLaw H β).expect freq ≤
+        (2 / c₁) * ∑ i, (X.Tβ H β).w i * (M.μ i).w a := by
+      simpa [freq] using hTuple
+    have hmix : 0 ≤ ∑ i, (X.Tβ H β).w i * (M.μ i).w a :=
+      Finset.sum_nonneg fun i hi =>
+        mul_nonneg ((X.Tβ H β).nonneg i) ((M.μ i).nonneg a)
+    have hconst : 4 * (2 / c₁) ≤ (19 / 100 : ℝ) * Cm6 := by
+      norm_num [Cm6, c₁, c₀]
+    calc
+      (X.centreLaw H).expect (fun C =>
+          Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
+        (N : ℝ) * 4 * (X.tupleLaw H β).expect freq := hcenterPosterior
+      _ ≤ (N : ℝ) * 4 * ((2 / c₁) *
+            ∑ i, (X.Tβ H β).w i * (M.μ i).w a) :=
+          mul_le_mul_of_nonneg_left hTupleFreq (by positivity)
+      _ = (4 * (2 / c₁)) *
+            ((N : ℝ) * ∑ i, (X.Tβ H β).w i * (M.μ i).w a) := by ring
+      _ ≤ (19 / 100 : ℝ) * Cm6 *
+            ((N : ℝ) * ∑ i, (X.Tβ H β).w i * (M.μ i).w a) :=
+          mul_le_mul_of_nonneg_right hconst (mul_nonneg (by positivity) hmix)
   have hTruncation :
       (X.centreLaw H).expect (fun C => X.localEvenMean H C v a) ≤
         (100 / 19 : ℝ) *
@@ -2222,12 +2838,20 @@ theorem L6_1m_mean (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     simpa only [mul_assoc, mul_left_comm] using mul_le_mul_of_nonneg_left
       (Lane_sol_fix_s06mean.localEvenMean_le_posteriorMean X hDensity H hH C v hv a)
       ((X.centreLaw H).nonneg C)
-  calc
-    _ ≤ _ := hTruncation
-    _ ≤ (100 / 19 : ℝ) * ((19 / 100 : ℝ) * Cm6 *
-        ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a)) :=
-      mul_le_mul_of_nonneg_left hPosterior (by norm_num)
-    _ = _ := by ring
+  have hscaled :
+      (100 / 19 : ℝ) *
+          (X.centreLaw H).expect
+            (fun C => Lane_sol_fix_s06mean.posteriorMean X H C v a) ≤
+        (100 / 19 : ℝ) * ((19 / 100 : ℝ) * Cm6 *
+          ((N : ℝ) * ∑ i, (X.Tβ H β).w i * (M.μ i).w a)) :=
+    mul_le_mul_of_nonneg_left hPosterior (by norm_num)
+  have hscaled_eq :
+      (100 / 19 : ℝ) * ((19 / 100 : ℝ) * Cm6 *
+        ((N : ℝ) * ∑ i, (X.Tβ H β).w i * (M.μ i).w a)) =
+      Cm6 * ((N : ℝ) * ∑ i, (X.Tβ H (X.evenTy v)).w i * (M.μ i).w a) := by
+    simp [β]
+    ring
+  exact hTruncation.trans (hscaled.trans_eq hscaled_eq)
 
 namespace Lane_sol_s06_ev_d
 

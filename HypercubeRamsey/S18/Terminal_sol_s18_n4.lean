@@ -5,16 +5,15 @@ namespace HypercubeRamsey.Lane_sol_s18_n4
 open Classical Filter
 open scoped BigOperators
 
-theorem terminalPositiveEventually
-    {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) :
+theorem terminalScaleEventually
+    (κ : CConsts) (T : Stage) :
     ∀ᶠ k in atTop, ∀ {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
-      (D : S18.LateData hPT), S18.TerminalRiskBound D δ →
-      ∀ L : S18.LeafCoupling D δ,
-        0 < ∑ x ∈ S18.terminalSet D δ, D.encoding.permLaw.w x := by
+      (D : S18.LateData hPT),
+      8 ≤ T.S.n k ∧ 1 ≤ (D.encoding.Ts : ℝ) ∧ (D.geom.r : ℝ) ≤ D.encoding.Ts := by
   let R : ℝ := max 1 (2 * κ.A0 / Real.log 2)
   filter_upwards [T.S.n_tendsto.eventually_ge_atTop
     (max 8 ⌈Real.exp R⌉₊)] with k hn
-  intro PT hPT D hRisk L
+  intro PT hPT D
   have hn8 : 8 ≤ T.S.n k := le_trans (le_max_left _ _) hn
   have hnpos : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
   have hn1 : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast (by omega : 1 ≤ T.S.n k)
@@ -39,6 +38,20 @@ theorem terminalPositiveEventually
       nlinarith [hupper, hmul]
     have hsecond := mul_le_mul_of_nonneg_right hlog (by linarith : 0 ≤ Real.log (T.S.n k))
     nlinarith
+  exact ⟨hn8, hTs1, hr⟩
+
+theorem terminalPositiveEventually
+    {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) :
+    ∀ᶠ k in atTop, ∀ {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
+      (D : S18.LateData hPT), S18.TerminalRiskBound D δ →
+      ∀ L : S18.LeafCoupling D δ,
+        0 < ∑ x ∈ S18.terminalSet D δ, D.encoding.permLaw.w x := by
+  filter_upwards [terminalScaleEventually κ T] with k hscale
+  intro PT hPT D hRisk L
+  obtain ⟨hn8, hTs1, hr⟩ := hscale D
+  have hnpos : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+  have hn1 : 1 ≤ (T.S.n k : ℝ) := by exact_mod_cast (by omega : 1 ≤ T.S.n k)
+  have hn8r : 8 ≤ (T.S.n k : ℝ) := by exact_mod_cast hn8
   have hP : (100 * (κ.Ac + 10) : ℕ) ≤ κ.P := hκ.P_big.2
   have hPr : 100 * ((κ.Ac : ℝ) + 10) ≤ (κ.P : ℝ) := by exact_mod_cast hP
   have hexp : 20 * (((κ.Ac + 4) * D.encoding.Ts + D.geom.r : ℕ) : ℝ) -

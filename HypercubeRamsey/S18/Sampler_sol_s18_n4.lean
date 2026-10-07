@@ -201,4 +201,180 @@ theorem classSamplerOfEnteringLaws
     simpa only [Finset.mem_singleton, forall_eq, Finset.prod_singleton] using
       hJ.2 {b} o (by simpa using hsingleCard)
 
+/-- Integrating masks and sketches retains the same deterministic label atom cap. -/
+theorem referenceLabelMarginalCap
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (H : S18.TransitionData D)
+    (j : Fin D.geom.r) (b : {v : Pos T k // v ∈ D.encoding.base.classes j})
+    (h : D.encoding.base.History j.castSucc) (y : Fin (T.S.N k)) :
+    (D.encoding.kernels.refK j b h).pr (fun out => D.encoding.base.rowLabel out = y) ≤
+      2 / ((D.encoding.base.latePool j).card : ℝ) * Real.exp ((κ.α / 100) * (T.S.n k : ℝ)) := by
+  let cap : ℝ := 2 / ((D.encoding.base.latePool j).card : ℝ) *
+    Real.exp ((κ.α / 100) * (T.S.n k : ℝ))
+  let w := fun σ : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k) =>
+    ∏ a, ∏ t, (D.currentPrior j (flipPos b.1 a) h).w (σ a t)
+  have hw0 : ∀ σ, 0 ≤ w σ := by
+    intro σ
+    exact Finset.prod_nonneg (fun a _ => Finset.prod_nonneg (fun t _ =>
+      (D.currentPrior j (flipPos b.1 a) h).nonneg _))
+  have hcap0 : 0 ≤ cap := by dsimp [cap]; positivity
+  have hw1 : ∑ σ, w σ = 1 := by
+    unfold w
+    have hs : ∀ a : Fin (T.S.n k),
+        (∑ σ : Fin (sketchLength T k) → Fin (T.S.N k),
+          ∏ t, (D.currentPrior j (flipPos b.1 a) h).w (σ t)) = 1 := by
+      intro a
+      rw [← Fintype.prod_sum (fun (_ : Fin (sketchLength T k)) (x : Fin (T.S.N k)) =>
+        (D.currentPrior j (flipPos b.1 a) h).w x)]
+      simp [FinProb.sum_eq_one]
+    rw [← Fintype.prod_sum (fun (a : Fin (T.S.n k))
+      (σ : Fin (sketchLength T k) → Fin (T.S.N k)) =>
+        ∏ t, (D.currentPrior j (flipPos b.1 a) h).w (σ t))]
+    simp [hs]
+  have hlabel : (∑ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1},
+      if l.1 = y then (1 : ℝ) else 0) ≤ 1 := by
+    by_cases hy : y ∈ D.encoding.base.latePoolOf b.1
+    · have heq : ∀ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1},
+          l.1 = y ↔ l = ⟨y, hy⟩ := by
+        intro l
+        constructor
+        · intro heq; exact Subtype.ext heq
+        · intro heq; exact congrArg Subtype.val heq
+      simp_rw [heq]
+      simp
+    · have hne : ∀ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1}, l.1 ≠ y := by
+        intro l heq
+        exact hy (heq ▸ l.2)
+      simp [hne]
+  have hout (mask : D.encoding.base.AllowedMask b.1)
+      (σ : Fin (T.S.n k) → Fin (sketchLength T k) → Fin (T.S.N k)) :
+      (∑ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1},
+        if l.1 = y then (D.encoding.kernels.refK j b h).w (mask, σ, l) else 0) ≤
+      (D.encoding.kernels.maskProfile b.1).w mask * w σ * cap := by
+    have hm0 : 0 ≤ (D.encoding.kernels.maskProfile b.1).w mask * w σ :=
+      mul_nonneg ((D.encoding.kernels.maskProfile b.1).nonneg _) (hw0 σ)
+    calc
+      _ ≤ ∑ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1},
+          ((D.encoding.kernels.maskProfile b.1).w mask * w σ * cap) *
+            (if l.1 = y then 1 else 0) := by
+        apply Finset.sum_le_sum
+        intro l hl
+        by_cases hly : l.1 = y
+        · simp only [hly, ite_true, mul_one]
+          rw [H.reference_formula]
+          exact mul_le_mul_of_nonneg_left
+            (labelWeightCap D j b (mask, σ, l) Finset.univ _) hm0
+        · simp [hly]
+      _ = ((D.encoding.kernels.maskProfile b.1).w mask * w σ * cap) *
+          ∑ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1},
+            if l.1 = y then 1 else 0 := (Finset.mul_sum _ _ _).symm
+      _ ≤ _ := by
+        simpa using mul_le_mul_of_nonneg_left hlabel (mul_nonneg hm0 hcap0)
+  change _ ≤ cap
+  unfold FinLaw.pr
+  rw [Fintype.sum_prod_type]
+  simp only [Fintype.sum_prod_type, LateProcessBase.rowLabel]
+  calc
+    _ = ∑ mask, ∑ σ, ∑ l : {z : Fin (T.S.N k) // z ∈ D.encoding.base.latePoolOf b.1},
+        if l.1 = y then (D.encoding.kernels.refK j b h).w (mask, σ, l) else 0 := by
+      apply Finset.sum_congr rfl
+      intro mask hm
+      apply Finset.sum_congr rfl
+      intro σ hσ
+      apply Finset.sum_congr rfl
+      intro l hl
+      by_cases hly : l.1 = y <;> simp [hly]
+    _ ≤ ∑ mask, ∑ σ, (D.encoding.kernels.maskProfile b.1).w mask * w σ * cap :=
+      Finset.sum_le_sum (fun mask _ => Finset.sum_le_sum (fun σ _ => hout mask σ))
+    _ = cap := by
+      simp_rw [← Finset.sum_mul, ← Finset.mul_sum, hw1, mul_one]
+      rw [(D.encoding.kernels.maskProfile b.1).sum_one, one_mul]
+
+noncomputable def classFailure
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
+    (j : Fin D.geom.r) (h : D.encoding.base.History j.castSucc) :
+    ({v : Pos T k // v ∈ D.encoding.base.classes j} ⊕ S18.LateEvent D) →
+      D.encoding.base.ClassRows j → Prop
+  | .inl b, out => D.gate j b.1 h ∧
+      (¬ D.R1 j (out b) ∨ ¬ D.R2 j h (out b) ∨
+        (D.R1 j (out b) ∧ D.R2 j h (out b) ∧ ¬ D.R3 j h (out b)))
+  | .inr f, out => j.val < f.2.1.val ∧
+      D.threshold δ (j.val + 1) < D.futureRisk f (D.encoding.base.extend j h out)
+
+ theorem avoidsClassFailure
+    {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
+    {hPT : PT.Valid} (D : S18.LateData hPT) (δ : ℝ)
+    (j : Fin D.geom.r) (h : D.encoding.base.History j.castSucc)
+    (out : D.encoding.base.ClassRows j) :
+    (∀ f, ¬ classFailure D δ j h f out) ↔ out ∉ D.bad j h ∧ out ∉ D.alarm δ j h := by
+  simp only [S18.LateData.bad, S18.LateData.alarm, Finset.mem_filter, Finset.mem_univ, true_and,
+    not_exists, Sum.forall, classFailure]
+
+/-- Instantiating the supplied clock contract for the actual bad and alarm predicates.
+The remaining inputs are quantitative bounds and deterministic spatial scopes. -/
+theorem enteringClockReduction
+    {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ n₀ : ℕ, ∃ ρ : ℕ → ℝ, Filter.Tendsto ρ Filter.atTop (nhds 0) ∧
+      ∀ nclock : ℕ, n₀ ≤ nclock → 1 ≤ nclock → 1 + ρ nclock ≤ 2 →
+      ∀ {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
+        (D : S18.LateData hPT) (δ : ℝ) (j : Fin D.geom.r)
+        (h : D.encoding.base.History j.castSucc), D.enter δ j h →
+        Real.log (T.S.N k : ℝ) ≤ 2 * (nclock : ℝ) →
+        Real.exp (Real.log (T.S.n k) ^ 3) ≤ (nclock : ℝ) ^ (5 : ℝ) →
+        (∀ b y, (D.encoding.kernels.refK j b h).pr
+          (fun out => D.encoding.base.rowLabel out = y) ≤ (nclock : ℝ) ^ (-(κ.Astar : ℝ))) →
+        ∀ sc : ({v : Pos T k // v ∈ D.encoding.base.classes j} ⊕ S18.LateEvent D) →
+          Finset {v : Pos T k // v ∈ D.encoding.base.classes j},
+        (∀ f, FinProb.DependsOn (classFailure D δ j h f) (sc f)) →
+        (∀ f, ((sc f).card : ℝ) ≤ (nclock : ℝ) ^ (5 : ℝ)) →
+        (∀ b, ((Finset.univ.filter fun f => b ∈ sc f).card : ℝ) ≤ (nclock : ℝ) ^ (5 : ℝ)) →
+        (∀ f, (D.encoding.kernels.referenceTransition j h).pr (classFailure D δ j h f) ≤
+          (nclock : ℝ) ^ (-(κ.Pstar : ℝ))) →
+        ∃ J : FinProb (D.encoding.base.ClassRows j),
+          (∀ out, J.w out ≠ 0 → Function.Injective (fun b => D.encoding.base.rowLabel (out b)) ∧
+            out ∉ D.bad j h ∧ out ∉ D.alarm δ j h) ∧
+          ∀ (S : Finset {v : Pos T k // v ∈ D.encoding.base.classes j})
+            (out : D.encoding.base.ClassRows j),
+            (S.card : ℝ) ≤ Real.exp (Real.log (T.S.n k) ^ 3) →
+            J.pr (fun ω => ∀ b ∈ S, ω b = out b) ≤
+              2 * ∏ b ∈ S, (D.encoding.kernels.refK j b h).w (out b) := by
+  rcases hκ.clock with ⟨_, _, A', P', n₀, ρ, hApos, hPpos, hA, hP, hn₀, hρ, hclock⟩
+  refine ⟨n₀, ρ, hρ, ?_⟩
+  intro nclock hlarge hn hcost T k PT hPT D δ j h he hlabels htests hatom sc hdep hscope hinc hbad
+  let p := fun b => asProb (D.encoding.kernels.refK j b h)
+  have hnreal : 1 ≤ (nclock : ℝ) := by exact_mod_cast hn
+  have hmarg : ∀ b y, labMarg (p b) D.encoding.base.rowLabel y =
+      (D.encoding.kernels.refK j b h).pr (fun out => D.encoding.base.rowLabel out = y) := by
+    intro b y
+    unfold labMarg FinLaw.pr
+    apply Finset.sum_congr rfl
+    intro out hout
+    by_cases heq : D.encoding.base.rowLabel out = y <;> simp [heq, p, asProb]
+  have ha' : ∀ b y, labMarg (p b) D.encoding.base.rowLabel y ≤ (nclock : ℝ) ^ (-A') := by
+    intro b y
+    rw [hmarg]
+    exact (hatom b y).trans (Real.rpow_le_rpow_of_exponent_le hnreal (by linarith))
+  have hb' : ∀ f, (FinProb.pi p).pr (classFailure D δ j h f) ≤ (nclock : ℝ) ^ (-P') := by
+    intro f
+    have hpr : (FinProb.pi p).pr (classFailure D δ j h f) =
+        (D.encoding.kernels.referenceTransition j h).pr (classFailure D δ j h f) := rfl
+    rw [hpr]
+    exact (hbad f).trans (Real.rpow_le_rpow_of_exponent_le hnreal (by linarith))
+  have hload : ∀ y, ∑ b, labMarg (p b) D.encoding.base.rowLabel y ≤ κ.θ0 := by
+    intro y
+    simp_rw [hmarg]
+    exact he.2.2 y
+  obtain ⟨J, hJ, hcyl⟩ := hclock nclock hlarge (T.S.N k) hlabels
+    (fun b => D.encoding.base.rowLabel) p (classFailure D δ j h) sc hload ha' hdep hscope hinc hb'
+  refine ⟨J, ?_, ?_⟩
+  · intro out hout
+    have hj := hJ out hout
+    exact ⟨hj.1, (avoidsClassFailure D δ j h out).1 hj.2⟩
+  · intro S out hS
+    have hsmall := hS.trans htests
+    exact (hcyl S out hsmall).trans
+      (mul_le_mul_of_nonneg_right hcost (Finset.prod_nonneg (fun b _ =>
+        (D.encoding.kernels.refK j b h).nonneg _)))
+
 end HypercubeRamsey.Lane_sol_s18_n4

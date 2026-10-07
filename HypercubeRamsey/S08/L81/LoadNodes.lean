@@ -1,4 +1,4 @@
-import HypercubeRamsey.S08.L81.PosteriorNodes
+import HypercubeRamsey.S08.L81.LoadNodes_q_s08_load
 
 /-!
 # Lemma 8.1, Step 9: selected-anchor load bounds
@@ -33,7 +33,7 @@ the gates `S_g(i)U_{g,i}(x) ≤ η_g(i)μ_i(x)1[x hits Θ_{E(g)}]/((1-Δ)·.8A_g
 theorem select_mean (hη₀ : 0 < η₀) (hp : 0 < p)
     (hadm : HDAdmissible 10 (b0H η₀) (bH η₀) (sigmaH η₀) (zetaH η₀) (thetaH η₀) (aH η₀) (1 / 2) 1 2) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → GridFacts η₀ D.n → D.SelectMean := by
-  sorry
+  exact Lane_q_s08_load.select_mean η₀ β p h hη₀ hp hadm
 
 /-- L8.1i(ii) (08:336–343): under the raw hidden law `E η_g = Λ` (averaging `Θ_g`), the cross tuples are independent
 of `Θ_g` and a retained `x` survives them with probability `α_x^{|E(g)|} ≤ 1.1A_g` (survival, `|E(g)| ≤ 2s`), and
@@ -41,7 +41,7 @@ of `Θ_g` and a retained `x` survives them with probability `α_x^{|E(g)|} ≤ 1
 theorem bcomp_mean (hη₀ : 0 < η₀) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ D : Ctx η₀ β p h, n₀ ≤ D.n → ∀ X Y R : Finset (Fin D.N), Std D γ K X Y R →
       GridFacts η₀ D.n → D.BcompMean K := by
-  sorry
+  exact Lane_q_s08_load.bcomp_mean η₀ γ β p K h hη₀ hK
 
 /-- L8.1i(iii) (08:345–350): Lemma 3.6 (with labels, `scatteredMoments_union_labels`) for the comparison means under
 the hidden law.  Rows are near when their keys are within distance eight (fraction `f_grid`); `B_g` reads `Θ` on
@@ -53,7 +53,7 @@ theorem comp_tail (cH : ℝ) (hcH : 0 < cH) (hη₀ : 0 < η₀) (hβτ : β < t
       GridFacts η₀ D.n → CondProductBound → D.HiddenLLL (2 * Real.exp (-(D.n : ℝ) ^ cH)) →
       D.BcompMean K →
       D.hiddenLaw.pr (fun Θ => ¬ D.CompOK (compC K) Θ) ≤ (D.n : ℝ) * 2 ^ D.n * (1 / 4 : ℝ) ^ D.n := by
-  sorry
+  exact Lane_q_s08_load.bcomp_tail η₀ γ β p K h cH hcH hη₀ hβτ hK
 
 /-- L8.1i(iv) (08:352–363): at a hidden history avoiding the hidden events with comparison loads at most
 `compC K`, Lemma 3.6 for the selected laws under positions, tags, activations and ties.  Selections at residual
@@ -80,7 +80,7 @@ theorem load_tail (D : Ctx η₀ β p h) (C₁ C₂ a b : ℝ) (hb : 0 ≤ b)
       (FinProb.bind D.posLaw fun _ => D.rawTAT Θ).pr
         (fun z => D.SelOK ((Θ, z.1), z.2) ∧ ¬ D.LoadOK C₂ ((Θ, z.1), z.2)) ≤ b) :
     D.preLaw.pr (fun q => D.SelOK q ∧ ¬ D.LoadOK C₂ q) ≤ a + b := by
-  sorry
+  exact Lane_q_s08_load.load_tail D C₁ C₂ a b hb hpos hcomp hcenter
 
 end Nodes
 

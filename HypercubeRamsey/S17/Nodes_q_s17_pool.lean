@@ -834,6 +834,21 @@ theorem cleanSupport_external_degree_drift {κ : CConsts} {T : Stage} {k : ℕ}
   · have h := hPT.envelope_other_degree i j hji x hxenv
     simpa [j] using le_trans h (le_max_right _ _)
 
+theorem cleanSupport_external_degree_bounds {κ : CConsts} {T : Stage} {k : ℕ}
+    {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
+    (hPT : PT.Valid) (K : ℝ) (hGeom : D.S17GeometryValidity K)
+    (v : Pos T k) (σ : Fin (T.S.N k) → ℝ) (hσ : D.CleanInitialPrior v σ)
+    (hN : 0 < (T.S.n k : ℝ)) (hδ :
+      max (K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) (3 * bstar T k) < 1 / 2)
+    (x : Fin (T.S.N k)) (hxσ : σ x ≠ 0) (w : Pos T k)
+    (hw : w ∈ D.externalEarly v) :
+    0 < deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ∧
+    deg (T.S.E k) PT.tiling.c (PT.π (D.G.patchOf w)).w x ≤
+      1 / 2 + max (K * Real.log (T.S.n k : ℝ) / (T.S.n k : ℝ)) (3 * bstar T k) := by
+  have h := cleanSupport_external_degree_drift D hPT K hGeom v σ hσ hN x hxσ w hw
+  have hbound := abs_le.mp h
+  constructor <;> linarith
+
 theorem not_compatiblePool_iff {κ : CConsts} {T : Stage} {k : ℕ}
     {PT : ProfiledTiling κ T k} (D : ListGateContext κ T k PT)
     (v : Pos T k) (pools : D.PoolAssignment) :

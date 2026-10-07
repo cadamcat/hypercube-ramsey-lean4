@@ -2356,6 +2356,128 @@ theorem pow_two_partition_mul (m n : ℕ) (hmn : m < n) :
   congr 1
   omega
 
+private theorem countP_ofFn_sum {α : Type*} {n : ℕ} (f : Fin n → α) (p : α → Bool) :
+    (List.ofFn f).countP p = ∑ i : Fin n, if p (f i) then 1 else 0 := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.ofFn_succ']
+    simp only [List.concat_eq_append, List.countP_append, List.countP_singleton]
+    rw [ih, Fin.sum_univ_castSucc]
+
+private theorem countP_ofFn_card {n : ℕ} (f : Fin n → ℕ) (c : ℕ) :
+    (List.ofFn f).countP (fun x => decide (x ≤ c)) =
+      (Finset.univ.filter fun i : Fin n => f i ≤ c).card := by
+  calc
+    (List.ofFn f).countP (fun x => decide (x ≤ c)) =
+        ∑ i : Fin n, if f i ≤ c then 1 else 0 := by
+          simpa using countP_ofFn_sum f (fun x => decide (x ≤ c))
+    _ = (Finset.univ.filter fun i : Fin n => f i ≤ c).card := by
+      rw [Finset.card_filter]
+
+private theorem mergeSortAt_mono {n : ℕ} (f g : Fin n → ℕ)
+    (hfg : ∀ i, f i ≤ g i) (k : Fin n) :
+    ((List.ofFn f).mergeSort (fun a b => decide (a ≤ b))).get
+        ⟨k.val, by simp⟩ ≤
+      ((List.ofFn g).mergeSort (fun a b => decide (a ≤ b))).get
+        ⟨k.val, by simp⟩ := by
+  classical
+  let Lf := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  let Lg := (List.ofFn g).mergeSort (fun a b => decide (a ≤ b))
+  have hlenf : Lf.length = n := by simp [Lf]
+  have hLeng : Lg.length = n := by simp [Lg]
+  let qf : Fin n → ℕ := fun i => Lf.get (Fin.cast hlenf.symm i)
+  let qg : Fin n → ℕ := fun i => Lg.get (Fin.cast hLeng.symm i)
+  have hqf : ∀ i : Fin n, qf i = Lf.get ⟨i.val, by simpa [Lf] using i.isLt⟩ := by
+    intro i
+    rfl
+  have hqg : ∀ i : Fin n, qg i = Lg.get ⟨i.val, by simpa [Lg] using i.isLt⟩ := by
+    intro i
+    rfl
+  have hmonf : Monotone qf := by
+    have hs : Lf.SortedLE := by simpa [Lf] using
+      (List.sortedLE_mergeSort (l := List.ofFn f))
+    intro i j hij
+    apply hs.monotone_get
+    simpa [qf, Fin.val_cast] using hij
+  have hmonG : Monotone qg := by
+    have hs : Lg.SortedLE := by simpa [Lg] using
+      (List.sortedLE_mergeSort (l := List.ofFn g))
+    intro i j hij
+    apply hs.monotone_get
+    simpa [qg, Fin.val_cast] using hij
+  have hOfFnF : List.ofFn qf = Lf := by
+    change List.ofFn (fun i : Fin n => Lf.get (Fin.cast hlenf.symm i)) = Lf
+    rw [← List.ofFn_congr hlenf (List.get Lf)]
+    exact List.ofFn_get Lf
+  have hOfFnG : List.ofFn qg = Lg := by
+    change List.ofFn (fun i : Fin n => Lg.get (Fin.cast hLeng.symm i)) = Lg
+    rw [← List.ofFn_congr hLeng (List.get Lg)]
+    exact List.ofFn_get Lg
+  by_contra hnot
+  have hgt : qg k < qf k := Nat.lt_of_not_ge (by simpa [qf, qg, Lf, Lg] using hnot)
+  let c := qg k
+  let FF : Finset (Fin n) := Finset.univ.filter fun i => qf i ≤ c
+  let FG : Finset (Fin n) := Finset.univ.filter fun i => qg i ≤ c
+  have hFGprefix : Finset.Iic k ⊆ FG := by
+    intro i hi
+    have hik : i ≤ k := Finset.mem_Iic.mp hi
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by
+      dsimp [c]
+      exact (hmonG hik).trans (Nat.le_refl _)
+    ⟩
+  have hFGcard : k.val + 1 ≤ FG.card := by
+    calc
+      k.val + 1 = (Finset.Iic k).card := by simp
+      _ ≤ FG.card := Finset.card_le_card hFGprefix
+  have hFGperm : FG.card = (List.ofFn g).countP (fun x => decide (x ≤ c)) := by
+    calc
+      FG.card = (List.ofFn qg).countP (fun x => decide (x ≤ c)) := by
+        symm
+        exact countP_ofFn_card qg c
+      _ = Lg.countP (fun x => decide (x ≤ c)) := by rw [hOfFnG]
+      _ = (List.ofFn g).countP (fun x => decide (x ≤ c)) := by
+        exact (List.mergeSort_perm (List.ofFn g) (fun a b => decide (a ≤ b))).countP_eq _
+  have hFFperm : FF.card = (List.ofFn f).countP (fun x => decide (x ≤ c)) := by
+    calc
+      FF.card = (List.ofFn qf).countP (fun x => decide (x ≤ c)) := by
+        symm
+        exact countP_ofFn_card qf c
+      _ = Lf.countP (fun x => decide (x ≤ c)) := by rw [hOfFnF]
+      _ = (List.ofFn f).countP (fun x => decide (x ≤ c)) := by
+        exact (List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))).countP_eq _
+  have hFFsubset : FF ⊆ (Finset.Iio k) := by
+    intro i hi
+    have hqi : qf i ≤ c := (Finset.mem_filter.mp hi).2
+    apply Finset.mem_Iio.mpr
+    by_contra hk
+    have hki : k ≤ i := le_of_not_gt hk
+    have hmono := hmonf hki
+    dsimp [c] at hqi
+    omega
+  have hFFcard : FF.card ≤ k.val := by
+    calc
+      FF.card ≤ (Finset.Iio k).card := Finset.card_le_card hFFsubset
+      _ = k.val := by simp
+  have hinputSub : (Finset.univ.filter fun i : Fin n => g i ≤ c) ⊆
+      (Finset.univ.filter fun i : Fin n => f i ≤ c) := by
+    intro i hi
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (hfg i).trans (Finset.mem_filter.mp hi).2⟩
+  have hinputCard := Finset.card_le_card hinputSub
+  have hinputCount : (List.ofFn g).countP (fun x => decide (x ≤ c)) ≤
+      (List.ofFn f).countP (fun x => decide (x ≤ c)) := by
+    calc
+      (List.ofFn g).countP (fun x => decide (x ≤ c)) =
+          (Finset.univ.filter fun i : Fin n => g i ≤ c).card := countP_ofFn_card g c
+      _ ≤ (Finset.univ.filter fun i : Fin n => f i ≤ c).card := hinputCard
+      _ = (List.ofFn f).countP (fun x => decide (x ≤ c)) := (countP_ofFn_card f c).symm
+  have hFGleFF : FG.card ≤ FF.card := by
+    calc
+      FG.card = (List.ofFn g).countP (fun x => decide (x ≤ c)) := hFGperm
+      _ ≤ (List.ofFn f).countP (fun x => decide (x ≤ c)) := hinputCount
+      _ = FF.card := hFFperm.symm
+  omega
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by

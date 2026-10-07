@@ -6,6 +6,8 @@ import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l_lll
 import HypercubeRamsey.S05.History_sol_s05_h5l_local
+import HypercubeRamsey.S05.History_sol_s05_h5l_geom
+import HypercubeRamsey.S05.History_sol_s05_h5l_bounds
 import HypercubeRamsey.S05.Parent_sol_s05_h1
 
 /-!
@@ -893,6 +895,33 @@ private theorem high_step3_pretrim_alarm (b : X.Base) (hi : X.HighHid)
     ring
   rw [he] at hh
   exact hh
+
+private theorem high_step3_pretrim_alarm_tight (b : X.Base) (hi : X.HighHid)
+    (tr : X.LowIdx → Law N) (cH : ℝ) (ν₃ : FinProb X.HighHid)
+    (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0) (htr : X.Stage4Laws b hi tr)
+    (r : X.AbsRecord) (hr : X.RecOccurs r) (hkey : ∃ i, r.1 = .inr i)
+    (hbudget : (coarseChunkCount5 * 4 + 2 : ℕ) * ((X.p.J n : ℝ) + 4) * Real.log 2 ≤
+      cH * (X.p.s n : ℝ) / 12) :
+    (X.lowLawOf tr).pr (fun lo =>
+      Real.exp (-(cH * X.p.s n) / 6) < X.step3Rate (b, X.joinHidden hi lo) r) ≤
+      Real.exp (-(cH * X.p.s n) / 4) := by
+  have hgeom := Lane_sol_s05_h5l.high_recordLowScope_card X r hr hkey
+  have hgeom' : ((Lane_sol_s05_h5l.recordLowScope X r).card : ℝ) ≤
+      (coarseChunkCount5 * 4 + 2 : ℕ) * ((X.p.J n : ℝ) + 4) := by exact_mod_cast hgeom
+  have hscopebudget := (mul_le_mul_of_nonneg_right hgeom' (Real.log_pos (by norm_num : (1 : ℝ) < 2)).le).trans hbudget
+  exact (high_step3_pretrim_alarm X b hi tr cH ν₃ hstage hhi htr r hr hkey).trans
+    (Lane_sol_s05_h5l.pow_two_exp_loss _ cH (X.p.s n : ℝ) hscopebudget)
+
+private theorem step2_pretrim_stage3_bound (b : X.Base) (hi : X.HighHid)
+    (tr : X.LowIdx → Law N) (cH : ℝ) (ν₃ : FinProb X.HighHid)
+    (hstage : X.Stage3Law b ν₃ cH) (hhi : ν₃.w hi ≠ 0) (htr : X.Stage4Laws b hi tr)
+    (K : X.Ty) (hK : X.TypeOccurs K) (hNonhigh : ¬ X.HighOnly K) :
+    (X.lowLawOf tr).pr (fun lo => X.step2Fail (b, X.joinHidden hi lo) K) ≤
+      (2 : ℝ) ^ (Lane_sol_s05_h5l.lowTypeScope X K).card *
+        (((K.2.1.card : ℝ) + 1) * Real.exp (-(X.p.delta * (X.p.q0 * X.p.typeSegs n K)) / 8)) := by
+  have hd := Lane_sol_s05_h5l.step2_pretrim_bound X b hi tr htr.1 K
+  have hraw := hstage.2.1 hi hhi K hK hNonhigh
+  exact hd.trans (mul_le_mul_of_nonneg_left hraw (by positivity))
 
 private theorem low_step3_group_alarm (b : X.Base) (hi : X.HighHid)
     (tr : X.LowIdx → Law N) (cL cH C : ℝ) (hraw : X.Step3Raw cL cH)

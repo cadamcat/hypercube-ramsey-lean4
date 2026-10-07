@@ -1364,7 +1364,8 @@ degree. -/
 theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.DescCount → X.RateShapes → X.CoarseCert := by
   obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
-    (eventually_coarse_degree_charge_budget.and (Filter.eventually_ge_atTop 2))
+    (eventually_coarse_degree_charge_budget.and
+      (eventually_coarse_step1_charge_budget.and (Filter.eventually_ge_atTop 2)))
   refine ⟨n₀, 0, ?_⟩
   intro n N E G M X hLarge hDesc hRate
   intro v hV0
@@ -1372,16 +1373,87 @@ theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
   let scope : X.Bin → Finset X.Bin := coarseBinScope X
   let adj : X.Bin → X.Bin → Prop := fun i j => i ≠ j ∧ ¬ Disjoint (scope i) (scope j)
   have hbudget := hn₀ n hLarge.1
+  have hn2 : 2 ≤ n := hbudget.2.2
   have hn1 : 1 < (n : ℝ) := by exact_mod_cast (by omega : 1 < n)
   have hcharge0 : 0 ≤ charge := by dsimp [charge]; positivity
   have hcharge1 : charge < 1 := by
     apply Real.rpow_lt_one_of_one_lt_of_neg hn1
     norm_num [δ₁]
-  have hwork :
-      (∀ i, FinProb.DependsOn
-        (fun z => (coarseBinEquiv X).symm z ∈ X.bad2Set v i) (scope i)) ∧
-      (∀ i, (X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i) ≤ charge / 2) := by
-    sorry
+  have hdep : ∀ i, FinProb.DependsOn
+      (fun z => (coarseBinEquiv X).symm z ∈ X.bad2Set v i) (scope i) := by
+    intro i z z' hz
+    apply propext
+    have hb := baseAgree_of_binSamples X (scope i) v z z' hz
+    have hStep1 : ∀ x : CubeVertex n, (X.g.L.key x).1 = i → ∀ h ∈ X.C (X.g.L.key x),
+        X.Step1OK (v, (coarseBinEquiv X).symm z) h ↔
+          X.Step1OK (v, (coarseBinEquiv X).symm z') h := by
+      intro x hx h hh
+      have hbin := key_neighbor_bin_close X (X.g.L.key x) h hh
+      rw [hx] at hbin
+      exact step1OK_iff_of_baseAgree X (scope i) _ _ hb h
+        (posterior_bins_subset_three X i h hbin)
+    have hRate2 : ∀ x : CubeVertex n, (X.g.L.key x).1 = i →
+        X.rate2Base (v, (coarseBinEquiv X).symm z) (X.evenType x) =
+          X.rate2Base (v, (coarseBinEquiv X).symm z') (X.evenType x) := by
+      intro x hx
+      have hbin : (X.g.L.key x).1 ∈ closedBinNeighbors X i := by
+        rw [hx]
+        exact self_mem_closedBinNeighbors X i
+      exact step2_raw_rate_eq_of_baseAgree X (scope i) _ _ hb (X.evenType x)
+        (makeType_coarse_scope_subset_three X i (X.g.L.key x) hbin
+          (X.g.L.sign x) (X.g.L.flippable x) (X.g.L.severity x))
+    have hRate3 : ∀ a : X.State, (X.g.L.stKey a).1 = i →
+        ∀ D ∈ X.absDescs a,
+          X.rate3Base (v, (coarseBinEquiv X).symm z) a D =
+            X.rate3Base (v, (coarseBinEquiv X).symm z') a D := by
+      intro a ha D hD
+      have hs := rate3CoarseScope_subset_three X a D hD
+      rw [ha] at hs
+      exact s3_base_rate_eq_of_baseAgree X (scope i) _ _ hb a D hs
+    have hBad : X.Bad2 v i ((coarseBinEquiv X).symm z) ↔
+        X.Bad2 v i ((coarseBinEquiv X).symm z') := by
+      unfold Ctx6.Bad2
+      constructor
+      · intro h
+        rcases h with ⟨x, hx, h, hh, hf⟩ | ⟨x, he, hx, hr⟩ | ⟨a, ha, hi, D, hD, hr⟩
+        · exact Or.inl ⟨x, hx, h, hh, (not_congr (hStep1 x hx h hh)).mp hf⟩
+        · right; left
+          rw [hRate2 x hx] at hr
+          exact ⟨x, he, hx, hr⟩
+        · right; right
+          rw [hRate3 a hi D hD] at hr
+          exact ⟨a, ha, hi, D, hD, hr⟩
+      · intro h
+        rcases h with ⟨x, hx, h, hh, hf⟩ | ⟨x, he, hx, hr⟩ | ⟨a, ha, hi, D, hD, hr⟩
+        · exact Or.inl ⟨x, hx, h, hh, (not_congr (hStep1 x hx h hh)).mpr hf⟩
+        · right; left
+          rw [← hRate2 x hx] at hr
+          exact ⟨x, he, hx, hr⟩
+        · right; right
+          rw [← hRate3 a hi D hD] at hr
+          exact ⟨a, ha, hi, D, hD, hr⟩
+    simpa only [Ctx6.bad2Set, Finset.mem_filter, Finset.mem_univ, true_and] using hBad
+  have hgroup : ∀ i, (X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i) ≤ charge / 2 := by
+    intro i
+    have hStep1 : (X.coarseLaw v).pr (fun c => ∃ x : CubeVertex n, (X.g.L.key x).1 = i ∧
+        ∃ h ∈ X.C (X.g.L.key x), ¬ X.Step1OK (v, c) h) ≤ charge / 4 := by
+      apply (coarse_step1_group_probability X v i ((n : ℝ) ^ (-(δ₁ / 4)))
+        (by positivity) (fun h hh => hV0.1 h hh)).trans
+      exact hbudget.2.1
+    have hFuture : (X.coarseLaw v).pr (fun c =>
+        (∃ x : CubeVertex n, IsEvenRole x ∧ (X.g.L.key x).1 = i ∧
+          (n : ℝ) ^ (-(δ₂ * (X.evenType x).u / 8)) < X.rate2Base (v, c) (X.evenType x)) ∨
+        ∃ a ∈ X.g.L.oddStates, (X.g.L.stKey a).1 = i ∧
+          ∃ D ∈ X.absDescs a, Real.exp (-(9 / 2000) * X.k) < X.rate3Base (v, c) a D) ≤ charge / 4 := by
+      sorry
+    have heq : (X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i) = (X.coarseLaw v).pr (X.Bad2 v i) := by
+      apply pr_congr
+      intro c
+      simp only [Ctx6.bad2Set, Finset.mem_filter, Finset.mem_univ, true_and]
+    rw [heq]
+    exact (FinProb.pr_union _ _ _).trans (by
+      have hh := add_le_add hStep1 hFuture
+      linarith)
   refine ⟨{
     adj := adj
     adj_symm := by intro i j hij; exact ⟨Ne.symm hij.1, fun h => hij.2 (Disjoint.symm h)⟩
@@ -1396,7 +1468,7 @@ theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         have hne : i ≠ j := by intro hij; exact hiS (hij ▸ hj)
         by_contra hnot
         exact hdisjoint j hj ⟨hne, hnot⟩
-      have hfactor := coarseLaw_local_mass_factor X v scope (X.bad2Set v) hwork.1 i S hremote
+      have hfactor := coarseLaw_local_mass_factor X v scope (X.bad2Set v) hdep i S hremote
       letI : DecidablePred (adj i) := fun j => Classical.propDecidable (adj i j)
       have hdegree : ((Finset.univ.filter (adj i)).card : ℝ) * charge ≤ 1 / 2 := by
         have hcard : ((Finset.univ.filter (adj i)).card : ℝ) ≤ (602 ^ 6 : ℝ) := by
@@ -1404,7 +1476,7 @@ theorem L6_1h_coarse (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
         exact (mul_le_mul_of_nonneg_right hcard hcharge0).trans hbudget.1
       have hprob := probability_le_charge_product (Finset.univ.filter (adj i))
         ((X.coarseLaw v).pr (fun c => c ∈ X.bad2Set v i)) charge hcharge0 hcharge1.le
-        (hwork.2 i) hdegree
+        (hgroup i) hdegree
       have hmass : 0 ≤ LocalLemma.mass (X.coarseLaw v).w
           (LocalLemma.avoid (X.bad2Set v) S) := by
         rw [finprob_pr_finset_mass]

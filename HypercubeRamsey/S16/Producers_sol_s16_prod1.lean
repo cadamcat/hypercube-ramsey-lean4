@@ -3591,4 +3591,239 @@ theorem deterministic_history_load_gate {Slot Bin Hist Check : Type*}
     · refine Or.inr ⟨lt_of_le_of_ne (div_nonneg (sq_nonneg R) hM.le) (Ne.symm hz), ?_⟩
       exact (le_div_iff₀ (lt_of_le_of_ne (div_nonneg (sq_nonneg R) hM.le) (Ne.symm hz))).mpr hbudget
 
+private theorem finLaw_E_const {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (r : ℝ) :
+    P.E (fun _ => r) = r := by
+  unfold FinLaw.E
+  rw [← Finset.sum_mul, P.sum_one, one_mul]
+
+private theorem finLaw_E_sum {Ω I : Type*} [Fintype Ω] [Fintype I]
+    (P : FinLaw Ω) (f : I → Ω → ℝ) :
+    P.E (fun z => ∑ i, f i z) = ∑ i, P.E (f i) := by
+  unfold FinLaw.E
+  simp_rw [Finset.mul_sum]
+  exact Finset.sum_comm
+
+private theorem finLaw_E_sub {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (f g : Ω → ℝ) : P.E (fun z => f z - g z) = P.E f - P.E g := by
+  unfold FinLaw.E
+  simp_rw [mul_sub]
+  rw [Finset.sum_sub_distrib]
+
+private theorem finLaw_E_map {Ω Hist : Type*} [Fintype Ω] [Fintype Hist]
+    [DecidableEq Hist] (P : FinLaw Ω) (encode : Ω → Hist) (f : Hist → ℝ) :
+    (FinLaw.map P encode).E f = P.E (fun z => f (encode z)) := by
+  classical
+  unfold FinLaw.E
+  change (∑ h, (∑ z, if encode z = h then P.w z else 0) * f h) = _
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro z _
+  simp
+
+/-- Independence bounds the load variance at every pool when the slice
+ranges are required at every pool. This does not use typicality. -/
+theorem independent_sum_variance {I : Type*} [Fintype I] [DecidableEq I]
+    {Value : I → Type*} [∀ i, Fintype (Value i)]
+    (law : ∀ i, FinLaw (Value i)) (f : ∀ i, Value i → ℝ) (R : I → ℝ)
+    (hR : ∀ i, 0 ≤ R i) (hf : ∀ i z, 0 ≤ f i z ∧ f i z ≤ R i) :
+    let P := FinLaw.pi law
+    let F := fun z => ∑ i, f i (z i)
+    P.E (fun z => (F z - P.E F) ^ 2) ≤ ∑ i, R i ^ 2 := by
+  classical
+  dsimp only
+  let P := FinLaw.pi law
+  let m := fun i => P.E (fun z => f i (z i))
+  let g := fun i (z : ∀ i, Value i) => f i (z i) - m i
+  have hm : ∀ i, 0 ≤ m i ∧ m i ≤ R i := by
+    intro i
+    constructor
+    · exact Finset.sum_nonneg fun z _ => mul_nonneg (P.nonneg z) (hf i (z i)).1
+    · calc
+        m i ≤ P.E (fun _ => R i) :=
+          Finset.sum_le_sum fun z _ => mul_le_mul_of_nonneg_left (hf i (z i)).2 (P.nonneg z)
+        _ = R i := finLaw_E_const P _
+  have hg : ∀ i, P.E (g i) = 0 := by
+    intro i
+    change P.E (fun z => f i (z i) - m i) = 0
+    rw [finLaw_E_sub, finLaw_E_const]
+    exact sub_self _
+  let Q : ∀ i, FinProb (Value i) := fun i => ⟨(law i).w, (law i).nonneg, (law i).sum_one⟩
+  have hcross : ∀ i j, i ≠ j → P.E (fun z => g i z * g j z) = 0 := by
+    intro i j hij
+    have h := FinProb.pi_expect_mul_of_disjoint Q (g i) (g j) {i} {j}
+      (by intro z z' heq; simp only [g, heq i (by simp)])
+      (by intro z z' heq; simp only [g, heq j (by simp)])
+      (by simp [hij])
+    change P.E (fun z => g i z * g j z) = P.E (g i) * P.E (g j) at h
+    rw [h, hg, hg, zero_mul]
+  have hcenter : ∀ z,
+      (∑ i, f i (z i)) - P.E (fun z => ∑ i, f i (z i)) = ∑ i, g i z := by
+    intro z
+    rw [finLaw_E_sum, ← Finset.sum_sub_distrib]
+  have hexpand : ∀ z, (∑ i, g i z) ^ 2 = ∑ i, ∑ j, g i z * g j z := by
+    intro z
+    rw [pow_two, Finset.sum_mul_sum]
+  calc
+    P.E (fun z => ((∑ i, f i (z i)) - P.E (fun z => ∑ i, f i (z i))) ^ 2) =
+        P.E (fun z => ∑ i, ∑ j, g i z * g j z) := by
+      simp_rw [hcenter, hexpand]
+    _ = ∑ i, ∑ j, P.E (fun z => g i z * g j z) := by
+      rw [finLaw_E_sum]
+      simp_rw [finLaw_E_sum]
+    _ = ∑ i, P.E (fun z => (g i z) ^ 2) := by
+      apply Finset.sum_congr rfl
+      intro i _
+      rw [Finset.sum_eq_single i]
+      · simp only [pow_two]
+      · intro j _ hji
+        exact hcross i j hji.symm
+      · simp
+    _ ≤ ∑ i, R i ^ 2 := by
+      apply Finset.sum_le_sum
+      intro i _
+      calc
+        _ ≤ P.E (fun _ => R i ^ 2) := by
+          apply Finset.sum_le_sum
+          intro z _
+          apply mul_le_mul_of_nonneg_left _ (P.nonneg z)
+          have ha : 0 ≤ R i - (f i (z i) - m i) := by linarith [(hf i (z i)).2, (hm i).1]
+          have hb : 0 ≤ R i + (f i (z i) - m i) := by linarith [(hf i (z i)).1, (hm i).2]
+          dsimp only [g]
+          nlinarith only [mul_nonneg ha hb]
+        _ = _ := finLaw_E_const P _
+
+/-- A necessary consequence of the frozen gate contract, including on
+noninjective and otherwise atypical pools. -/
+theorem load_gate_global_variance_bound {Slot Bin Hist Check : Type*}
+    [Fintype Slot] [DecidableEq Slot] [Fintype Bin] [DecidableEq Bin]
+    [Fintype Hist] [Fintype Check] {n : ℕ} {c0 : ℝ}
+    (D : CellPoolDiagnostics Slot Bin Hist Check n c0) (H : LoadGateHypotheses D)
+    (pool : Slot → Bin) (y : D.LoadColumn) :
+    ((n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))) *
+      (D.historyLaw pool).E (fun h => (D.loadValue pool h y -
+        (D.historyLaw pool).E (fun h => D.loadValue pool h y)) ^ 2) ≤
+      2 * (D.loadThreshold / 2) ^ 2 := by
+  classical
+  letI : Fintype H.Slice := H.sliceFin
+  letI : DecidableEq H.Slice := H.sliceDec
+  letI : ∀ s, Fintype (H.Value s) := H.valueFin
+  let P := FinLaw.pi (H.sliceLaw pool)
+  let F := fun z : ∀ s, H.Value s => ∑ s, H.contribution pool s (z s) y
+  have hMean : (D.historyLaw pool).E (fun h => D.loadValue pool h y) = P.E F := by
+    rw [H.history_eq pool, finLaw_E_map]
+    simp_rw [H.load_eq pool]
+    rfl
+  have hVar : (D.historyLaw pool).E (fun h => (D.loadValue pool h y -
+      (D.historyLaw pool).E (fun h => D.loadValue pool h y)) ^ 2) ≤ ∑ s, H.range s ^ 2 := by
+    rw [H.history_eq pool, finLaw_E_map]
+    simp_rw [H.load_eq pool]
+    rw [← H.history_eq pool, hMean]
+    exact independent_sum_variance (H.sliceLaw pool) (fun s z => H.contribution pool s z y)
+      H.range H.range_nonneg (fun s z => H.contribution_range pool s z y)
+  let A := (n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))
+  have hA : 0 ≤ A := add_nonneg (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+    (Real.log_nonneg (le_max_left _ _))
+  have hbudget : A * (∑ s, H.range s ^ 2) ≤ 2 * (D.loadThreshold / 2) ^ 2 := by
+    rcases H.variance_budget with hz | ⟨hp, hb⟩
+    · rw [hz, mul_zero]
+      positivity
+    · exact (le_div_iff₀ hp).mp hb
+  exact (mul_le_mul_of_nonneg_left hVar hA).trans hbudget
+
+/-- The physical star-kernel amplitude and epsilon have polynomial room
+uniformly over every low-cluster slice. -/
+theorem cluster_slice_amplitude_room {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ n₀ : ℕ, ∀ (n h : ℕ), n₀ ≤ n → 2 ≤ n →
+      (h : ℝ) ≤ Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ) →
+      (16 * Real.exp (2 * (sliceK κ h : ℝ) * sliceT κ h)) ^ h ≤ (n : ℝ) ∧
+      Real.rpow (n : ℝ) (-1) ≤ sliceEps κ h := by
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  let C := max (Real.log 16 + 2) (0.001 * κ.a)
+  have hC : 0 < C := lt_of_lt_of_le (by positivity : (0 : ℝ) < 0.001 * κ.a) (le_max_right _ _)
+  let n₀ := ⌈Real.exp (1 + C ^ 2)⌉₊
+  refine ⟨n₀, ?_⟩
+  intro n h hn hn2 hh
+  have hnp : (0 : ℝ) < n := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) hn2
+  have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast le_trans (by norm_num : (1 : ℕ) ≤ 2) hn2
+  have hx : 1 + C ^ 2 ≤ Real.log (n : ℝ) := by
+    have he : Real.exp (1 + C ^ 2) ≤ (n : ℝ) :=
+      (Nat.le_ceil _).trans (by exact_mod_cast hn)
+    simpa only [Real.log_exp] using Real.log_le_log (Real.exp_pos _) he
+  have hx1 : 1 ≤ Real.log (n : ℝ) := by nlinarith only [hx, sq_nonneg C]
+  have hx0 : 0 ≤ Real.log (n : ℝ) := hx1.trans' (by norm_num)
+  have hroot : C ≤ Real.sqrt (Real.log (n : ℝ)) := by
+    apply (Real.le_sqrt hC.le hx0).mpr
+    nlinarith only [hx]
+  have hroom : C * Real.sqrt (Real.log (n : ℝ)) ≤ Real.log (n : ℝ) := by
+    calc
+      _ ≤ Real.sqrt (Real.log (n : ℝ)) * Real.sqrt (Real.log (n : ℝ)) :=
+        mul_le_mul_of_nonneg_right hroot (Real.sqrt_nonneg _)
+      _ = _ := Real.mul_self_sqrt hx0
+  by_cases hz : h = 0
+  · subst h
+    constructor
+    · simpa using hn1
+    · have he : sliceEps κ 0 = 1 := by simp [sliceEps]
+      rw [he]
+      exact Real.rpow_le_one_of_one_le_of_nonpos hn1 (by norm_num)
+  · have hh1 : 1 ≤ h := Nat.one_le_iff_ne_zero.mpr hz
+    have hh1r : (1 : ℝ) ≤ h := by exact_mod_cast hh1
+    have hkt : (sliceK κ h : ℝ) * sliceT κ h ≤ (h : ℝ) ^ (4 : ℕ) :=
+      slice_product_bound hκ h hh1
+    have hkt0 : 0 ≤ (sliceK κ h : ℝ) * sliceT κ h := by positivity
+    have hhkt : (h : ℝ) * ((sliceK κ h : ℝ) * sliceT κ h) ≤ (h : ℝ) ^ (5 : ℕ) := by
+      have hp := mul_le_mul_of_nonneg_left hkt (Nat.cast_nonneg h)
+      nlinarith only [hp]
+    have h5 : (h : ℝ) ^ (5 : ℕ) ≤ Real.sqrt (Real.log (n : ℝ)) := by
+      calc
+        _ ≤ (Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)) ^ (5 : ℕ) :=
+          pow_le_pow_left₀ (Nat.cast_nonneg h) hh _
+        _ = Real.rpow (Real.log (n : ℝ)) (1 / 2 : ℝ) := by
+          simp only [Real.rpow_eq_pow]
+          rw [← Real.rpow_natCast, ← Real.rpow_mul hx0]
+          norm_num
+        _ = _ := (Real.sqrt_eq_rpow _).symm
+    have hh5 : (h : ℝ) ≤ (h : ℝ) ^ (5 : ℕ) :=
+      le_self_pow₀ hh1r (by norm_num)
+    have hlog0 : 0 ≤ Real.log 16 := Real.log_nonneg (by norm_num)
+    have hamp : (h : ℝ) * (Real.log 16 +
+        2 * (sliceK κ h : ℝ) * sliceT κ h) ≤ Real.log (n : ℝ) := by
+      calc
+        _ ≤ (Real.log 16 + 2) * (h : ℝ) ^ (5 : ℕ) := by
+          nlinarith only [mul_le_mul_of_nonneg_right hh5 hlog0, hhkt]
+        _ ≤ (Real.log 16 + 2) * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left h5 (by positivity)
+        _ ≤ C * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_right (le_max_left _ _) (Real.sqrt_nonneg _)
+        _ ≤ _ := hroom
+    have ht1 : (1 : ℝ) ≤ sliceT κ h := by
+      apply le_trans _ (Nat.le_ceil _)
+      exact Real.one_le_rpow hh1r hκ.ω_rng.1.le
+    have heps : 0.001 * κ.a * (sliceK κ h : ℝ) * h ≤ Real.log (n : ℝ) := by
+      have hkT : (sliceK κ h : ℝ) ≤ (sliceK κ h : ℝ) * sliceT κ h :=
+        le_mul_of_one_le_right (Nat.cast_nonneg _) ht1
+      calc
+        _ ≤ (0.001 * κ.a) * (h : ℝ) ^ (5 : ℕ) := by
+          have hh := mul_le_mul_of_nonneg_left hkT (Nat.cast_nonneg h)
+          have hh' := mul_le_mul_of_nonneg_left (hh.trans hhkt)
+            (by positivity : (0 : ℝ) ≤ 0.001 * κ.a)
+          nlinarith only [hh']
+        _ ≤ (0.001 * κ.a) * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left h5 (by positivity)
+        _ ≤ C * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_right (le_max_right _ _) (Real.sqrt_nonneg _)
+        _ ≤ _ := hroom
+    constructor
+    · calc
+        _ = Real.exp ((h : ℝ) * (Real.log 16 +
+            2 * (sliceK κ h : ℝ) * sliceT κ h)) := by
+          rw [Real.exp_nat_mul, Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 16)]
+        _ ≤ Real.exp (Real.log (n : ℝ)) := Real.exp_le_exp.mpr hamp
+        _ = _ := Real.exp_log hnp
+    · change Real.rpow (n : ℝ) (-1) ≤ Real.exp (-0.001 * κ.a * (sliceK κ h : ℝ) * h)
+      rw [Real.rpow_eq_pow, Real.rpow_def_of_pos hnp]
+      apply Real.exp_le_exp.mpr
+      nlinarith only [heps]
+
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

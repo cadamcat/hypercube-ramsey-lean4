@@ -7,10 +7,64 @@ namespace HypercubeRamsey.Lane_q_s09_assign2
 open HypercubeRamsey Classical OAI.HypercubeRamsey
 open scoped BigOperators
 
+private theorem scaleExps9_of_valid9 (P : Params9) (hP : P.Valid) : ScaleExps9 P := by
+  rcases hP with ⟨⟨hxS, hxSxD, hxD⟩, ⟨hMinus, hMinusPlus, hPlus⟩,
+    hxDPlus, ⟨hSigma, hSigmaXS⟩, ⟨hChi, hChiBound⟩, hGap, hBranch⟩
+  have hxSR : (0 : ℝ) < (P.xS : ℝ) := by exact_mod_cast hxS
+  have hSigmaR : (0 : ℝ) < (P.σ : ℝ) := by exact_mod_cast hSigma
+  have hSigmaXS' : (P.σ : ℝ) < (P.xS : ℝ) / 10 := by exact_mod_cast hSigmaXS
+  have hChiX : P.χ < P.xS / 100 := by
+    have hmin : min P.xS (min P.hMinus (1 - P.hPlus)) ≤ P.xS := min_le_left _ _
+    nlinarith
+  have hChiXR : (P.χ : ℝ) < (P.xS : ℝ) / 100 := by exact_mod_cast hChiX
+  have huPos : 0 < P.u := by
+    simp [Params9.u]
+    positivity
+  have hSigmaU : (P.σ : ℝ) < P.u := by
+    simp only [Params9.u]
+    linarith
+  have hChiU : (P.χ : ℝ) < P.u / 50 := by
+    calc
+      (P.χ : ℝ) < (P.xS : ℝ) / 100 := hChiXR
+      _ = P.u / 50 := by simp [Params9.u]; ring
+  refine ⟨?_, ?_, huPos, hSigmaU, hChiU⟩
+  · cases hc : P.case with
+    | sub yS yD yM =>
+        have hsub : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧
+            1 - P.σ < yD ∧ yD < 1 ∧ P.χ < P.σ / 10 := by
+          simpa [hc] using hBranch
+        rcases hsub with ⟨hyS, hySYM, hyM, hyMYD, hyD, hyChi⟩
+        have hgapR : 0 < (yD : ℝ) - (1 - (P.σ : ℝ)) := by exact_mod_cast (show 0 < yD - (1 - P.σ) by linarith)
+        simpa [Params9.eps, hc] using
+          (div_pos (lt_min hSigmaR hgapR) (by norm_num : (0 : ℝ) < 2))
+    | lin αS αD hB yB =>
+        have hlin : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+            P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+          simpa [hc] using hBranch
+        simpa [Params9.eps, hc] using
+          (div_pos hSigmaR (by norm_num : (0 : ℝ) < 2))
+  · cases hc : P.case with
+    | sub yS yD yM =>
+        have hsub : 0 < yS ∧ yS < yM ∧ yM < 1 - P.σ ∧
+            1 - P.σ < yD ∧ yD < 1 ∧ P.χ < P.σ / 10 := by
+          simpa [hc] using hBranch
+        rcases hsub with ⟨hyS, hySYM, hyM, hyMYD, hyD, hyChi⟩
+        have hmin : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) ≤ (P.σ : ℝ) :=
+          min_le_left _ _
+        have hbound : min (P.σ : ℝ) ((yD : ℝ) - (1 - (P.σ : ℝ))) / 2 < (P.σ : ℝ) := by
+          nlinarith [hSigmaR, hmin]
+        simpa [Params9.eps, hc] using hbound
+    | lin αS αD hB yB =>
+        have hlin : 0 < 100 * αS ∧ 100 * αS < αD ∧ αD < 1 / 100 ∧
+            P.σ < P.χ / 10 ∧ P.hPlus < hB ∧ hB < 1 ∧ 0 < yB ∧ yB < 1 := by
+          simpa [hc] using hBranch
+        have hbound : (P.σ : ℝ) / 2 < (P.σ : ℝ) := by linarith
+        simpa [Params9.eps, hc] using hbound
+
 private theorem hplus_log_le_pow9 (P : Params9) (hP : P.Valid) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,
       (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 ≤ 4 * (n : ℝ) ^ P.u := by
-  rcases scales_eventually9 P hP with ⟨hexps, hscales⟩
+  have hexps : ScaleExps9 P := scaleExps9_of_valid9 P hP
   have hu : 0 < P.u := hexps.2.2.1
   let hp : ℝ := P.hPlus
   let C : ℝ := 1 / (4 * (hp + 1))

@@ -909,4 +909,133 @@ theorem posterior_density_recompose5 {Ω : Type*} [Fintype Ω]
   · simp [ratio5, hQ]
     field_simp [hQ]
 
+private theorem prod_delete_one5 {ι : Type*} [DecidableEq ι] (S : Finset ι) (w : ι)
+    (hw : w ∈ S) (f g : ι → ℝ) (L : ℝ)
+    (hfg : ∀ x ∈ S, f x = g x * (if x = w then L else 1)) :
+    (∏ x ∈ S, f x) = (∏ x ∈ S, g x) * L := by
+  calc
+    (∏ x ∈ S, f x) = ∏ x ∈ S, g x * (if x = w then L else 1) := by
+      apply Finset.prod_congr rfl
+      intro x hx
+      exact hfg x hx
+    _ = (∏ x ∈ S, g x) * (∏ x ∈ S, if x = w then L else 1) := by
+      rw [Finset.prod_mul_distrib]
+    _ = (∏ x ∈ S, g x) * L := by
+      have hsingle : (∏ x ∈ S, if x = w then L else 1) = L := by
+        rw [Finset.prod_eq_ite w (by
+          intro x hx hxw
+          simp [hxw])]
+        simp [hw]
+      rw [hsingle]
+
+theorem colWeight_delete_prefix_factor5 {γ K' χ : ℝ} {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (X : Setup5 γ K' χ n N E G) (b : X.Base) (ℓ : X.Key)
+    (w : BinVector5 n) (hw : w ∈ binList5 ℓ.coarse) (y : Fin N) :
+    X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+      X.colWeight b ℓ b.2.2
+        (fun w' s => ¬ (w' = w ∧ (s : ℕ) < X.p.uSeg n (ℓ.level + 1))) y *
+        (∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) then
+            (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+          else 1) := by
+  classical
+  by_cases hb : ℓ.coarse.2
+  · let S := binList5 ℓ.coarse
+    let k := X.p.uSeg n (ℓ.level + 1)
+    let L := ∏ s : Fin (X.p.streamSegs n),
+      if (s : ℕ) < k then (X.segLaw y (b.2.1 w)).w (b.2.2 w s) else 1
+    let f : BinVector5 n → ℝ := fun w' =>
+      (X.P.prior.partner y w').w (b.2.1 w') *
+        ∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < k then (X.segLaw y (b.2.1 w')).w (b.2.2 w' s) else 1
+    let g : BinVector5 n → ℝ := fun w' =>
+      (X.P.prior.partner y w').w (b.2.1 w') *
+        ∏ s : Fin (X.p.streamSegs n),
+          if (s : ℕ) < k ∧ (w' = w → k ≤ (s : ℕ)) then
+            (X.segLaw y (b.2.1 w')).w (b.2.2 w' s) else 1
+    have hfg : ∀ w' ∈ S, f w' = g w' * (if w' = w then L else 1) := by
+      intro w' hw'
+      by_cases hww : w' = w
+      · subst w'
+        have hdel : (∏ s : Fin (X.p.streamSegs n),
+            if (s : ℕ) < k ∧ (True → k ≤ (s : ℕ)) then
+              (X.segLaw y (b.2.1 w)).w (b.2.2 w s) else 1) = 1 := by
+          apply Finset.prod_eq_one
+          intro s hs
+          have hnot : ¬ ((s : ℕ) < k ∧ k ≤ (s : ℕ)) := by omega
+          simp [hnot]
+        simp only [f, g, L, k]
+        rw [hdel]
+        simp
+      · simp [f, g, L, k, hww]
+    have hprod := prod_delete_one5 S w hw f g L hfg
+    have hfull : X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+        X.P.prior.parent.w y * (∏ w' ∈ S, f w') := by
+      simp [Setup5.colWeight, hb, S, f, k]
+    have hdeleted : X.colWeight b ℓ b.2.2
+        (fun w' s => ¬ (w' = w ∧ (s : ℕ) < X.p.uSeg n (ℓ.level + 1))) y =
+        X.P.prior.parent.w y * (∏ w' ∈ S, g w') := by
+      simp [Setup5.colWeight, hb, S, g, k]
+    have htarget : (∏ s : Fin (X.p.streamSegs n),
+        if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) then
+          (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+        else 1) = L := by
+      simp [hb, L, k]
+    calc
+      X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+          X.P.prior.parent.w y * (∏ w' ∈ S, f w') := hfull
+      _ = X.P.prior.parent.w y * (∏ w' ∈ S, g w') * L := by
+        rw [hprod]
+        ring
+      _ = X.colWeight b ℓ b.2.2
+          (fun w' s => ¬ (w' = w ∧ (s : ℕ) < X.p.uSeg n (ℓ.level + 1))) y *
+          (∏ s : Fin (X.p.streamSegs n),
+            if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) then
+              (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+            else 1) := by
+          rw [hdeleted, htarget]
+  · have hfalse : ℓ.coarse.2 = false := by
+      cases h : ℓ.coarse.2 <;> simp_all
+    have hbin : w = ℓ.coarse.1 := by
+      simpa [binList5, hfalse] using hw
+    let k := X.p.uSeg n (ℓ.level + 1)
+    let L := ∏ s : Fin (X.p.streamSegs n),
+      if (s : ℕ) < k then (X.segLaw b.1 y).w (b.2.2 w s) else 1
+    have hdel : (∏ s : Fin (X.p.streamSegs n),
+        if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) ∧
+            X.p.uSeg n (ℓ.level + 1) ≤ (s : ℕ) then
+          (X.segLaw b.1 y).w (b.2.2 w s) else 1) = 1 := by
+      apply Finset.prod_eq_one
+      intro s hs
+      have hnot : ¬ ((s : ℕ) < X.p.uSeg n (ℓ.level + 1) ∧
+          X.p.uSeg n (ℓ.level + 1) ≤ (s : ℕ)) := by omega
+      simp [hnot]
+    rw [hbin] at hdel
+    have hfull : X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+        (X.P.prior.partner b.1 ℓ.coarse.1).w y * L := by
+      simp [Setup5.colWeight, hfalse, hbin, L, k]
+    have hdeleted : X.colWeight b ℓ b.2.2
+        (fun w' s => ¬ (w' = w ∧ (s : ℕ) < X.p.uSeg n (ℓ.level + 1))) y =
+        (X.P.prior.partner b.1 ℓ.coarse.1).w y := by
+      simp only [Setup5.colWeight]
+      simp [hfalse, hbin]
+      rw [hdel]
+      ring
+    have htarget : (∏ s : Fin (X.p.streamSegs n),
+        if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) then
+          (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+        else 1) = L := by
+      simp [hfalse, L, k]
+    calc
+      X.colWeight b ℓ b.2.2 (fun _ _ => True) y =
+          (X.P.prior.partner b.1 ℓ.coarse.1).w y * L := hfull
+      _ = X.colWeight b ℓ b.2.2
+          (fun w' s => ¬ (w' = w ∧ (s : ℕ) < X.p.uSeg n (ℓ.level + 1))) y *
+          (∏ s : Fin (X.p.streamSegs n),
+            if (s : ℕ) < X.p.uSeg n (ℓ.level + 1) then
+              (if ℓ.coarse.2 then X.segLaw y (b.2.1 w) else X.segLaw b.1 y).w (b.2.2 w s)
+            else 1) := by
+          rw [hdeleted, htarget]
+
 end HypercubeRamsey.Lane_q_s05_hist1b

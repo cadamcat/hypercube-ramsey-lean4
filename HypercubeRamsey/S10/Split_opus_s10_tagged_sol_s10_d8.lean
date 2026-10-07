@@ -565,6 +565,18 @@ section Products
 variable {ι α : Type*} [Fintype ι] [DecidableEq ι] [DecidableEq α]
     {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
 
+/-- Reindex an expectation without requiring the two finite enumerations to
+reduce to the same instance. -/
+theorem expect_equiv {β γ : Type*} [Fintype β] [Fintype γ]
+    (P : FinProb β) (Q : FinProb γ) (e : β ≃ γ)
+    (hw : ∀ b, Q.w (e b) = P.w b) (f : β → ℝ) :
+    Q.expect (fun c => f (e.symm c)) = P.expect f := by
+  unfold FinProb.expect
+  rw [← Equiv.sum_comp e (fun c => Q.w c * f (e.symm c))]
+  apply Fintype.sum_congr
+  intro b
+  rw [hw b, Equiv.symm_apply_apply]
+
 theorem dependsOn_prod (s : Finset α) (f : α → (∀ i, Ω i) → ℝ) (D : α → Finset ι)
     (hf : ∀ a ∈ s, FinProb.DependsOn (f a) (D a)) :
     FinProb.DependsOn (fun ω => ∏ a ∈ s, f a ω) (s.biUnion D) := by

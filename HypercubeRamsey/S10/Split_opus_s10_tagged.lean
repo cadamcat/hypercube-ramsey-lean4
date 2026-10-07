@@ -1,5 +1,5 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
-import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d8
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d8_locality
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -761,6 +761,7 @@ theorem d7c_even_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 <
       evenMean M t σ x a ≤ Real.exp ((mS n δ : ℝ) / 10) := by
   sorry
 
+set_option maxHeartbeats 400000 in
 /-- **d8a** (10:119–126, 10:271–275; ~500 lines; new formal argument: the input
 domain of a group calculation, the product structure of `historyLaw`, and
 factorization over disjoint domains). At separated odd roles the gated product of
@@ -772,7 +773,133 @@ theorem d8a_odd_separated (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy
         ∑ h, (historyLaw M σ t).w h *
             (if valid M t h then ∏ i, (N : ℝ) * oddRow M t h (s i) y else 0) ≤
           ∏ i, oddMean M t σ y (s i) := by
-  sorry
+  exact (open HypercubeRamsey.Lane_sol_s10_d8 in by
+    classical
+    all_goals
+      have hgroup :
+        ∀ (q : Site n δ) (h h' : History n N δ)
+        (hP : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.pos c = h'.pos c)
+        (hW : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.tup c = h'.tup c)
+        (hS : ∀ s ∈ siteDomain q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.mask s = h'.mask s)
+        (hA : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.act c = h'.act c)
+        (hτ : ∀ c ∈ idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9), h.tie c = h'.tie c),
+        (groupValid M t h q = groupValid M t h' q) ∧
+        (clusterLaw M t h q = clusterLaw M t h' q) ∧
+        (∀ b, groupOf δ b = q → ∀ c, labLaw M t h b c = labLaw M t h' b c) ∧
+        (lists h q = lists h' q) ∧
+        (∀ s ∈ siteDomain q 1 3, selected M t h s = selected M t h' s) ∧
+        (∀ c ∈ candidates h q, h.tup c = h'.tup c) := by
+        s10_d8_group_history_eq n δ M t
+      intro y m hm s hsep
+      letI : ∀ i, Fintype (PrimitiveField n (mS n δ) (kT n δ) N δ i) :=
+        primitiveFieldFintype n (mS n δ) (kT n δ) N δ
+      let e := historyEquiv n (mS n δ) (kT n δ) N δ
+      let Ppos : ID n δ → FinProb Bool := fun _ => FinProb.bernoulli ((hp n δ).lam / ((hp n δ).V : ℝ))
+      let Ptup : ID n δ → FinProb (Fin (kT n δ) → Fin N) :=
+        fun c => p10_1kBlockTupleArrayLaw (M.μ (t c.1))
+      let Pmask : Site n δ → FinProb (Finset (Fin N)) := σ t
+      let Pact : ID n δ → FinProb Bool := fun _ =>
+        FinProb.bernoulli (((hp n δ).n : ℝ) ^ (hp n δ).b₀ / (hp n δ).lam)
+      let Ptie : ID n δ → FinProb (hp n δ).TiePerm := fun _ => FinProb.uniformAll ⟨1⟩
+      let Pfield : ∀ i : PrimitiveIndex n (mS n δ) δ, FinProb (PrimitiveField n (mS n δ) (kT n δ) N δ i) :=
+        fun i => match i with
+          | .inl (.inl (.inl (.inl c))) => Ppos c
+          | .inl (.inl (.inl (.inr c))) => Ptup c
+          | .inl (.inl (.inr q)) => Pmask q
+          | .inl (.inr c) => Pact c
+          | .inr c => Ptie c
+      have hweights : ∀ h : History n N δ, (FinProb.pi Pfield).w (e h) = (historyLaw M σ t).w h := by
+        intro h
+        change (∏ i, (Pfield i).w (e h i)) = (historyLaw M σ t).w h
+        simp only [Fintype.prod_sum_type]
+        rfl
+      have hpack (f : History n N δ → ℝ) :
+          (FinProb.pi Pfield).expect (fun ω => f (e.symm ω)) = (historyLaw M σ t).expect f :=
+        expect_equiv (historyLaw M σ t) (FinProb.pi Pfield) e hweights f
+      have hR : (hp n δ).Rlong + (hp n δ).r + 9 ≤ Rloc n δ := by
+        exact (show (hp n δ).Rlong + (hp n δ).r + 9 ≤ (hp n δ).Rlong + (hp n δ).r + 12 by omega).trans
+          (common_radius_bound n (mS n δ) δ)
+      have hLocal : ∀ b, FinProb.DependsOn
+          (fun ω => oddRow M t (e.symm ω) b y)
+          (primitiveDomain n (mS n δ) δ (groupOf δ b) 4 (Rloc n δ)) := by
+        intro b ω ω' hω
+        let h := e.symm ω
+        let h' := e.symm ω'
+        let q := groupOf δ b
+        have hAgree : ∀ i ∈ primitiveDomain n (mS n δ) δ q 4 (Rloc n δ), e h i = e h' i := by
+          intro i hi
+          simpa only [h, h', Equiv.apply_symm_apply] using hω i hi
+        have H := (historyEquiv_agree n (mS n δ) (kT n δ) N δ).mp hAgree
+        have hId : idDomain δ q 3 ((hp n δ).Rlong + (hp n δ).r + 9) ⊆ idDomain δ q 4 (Rloc n δ) := by
+          intro c hc
+          exact mem_idDomain.mpr (siteDomain_mono (by omega) hR (mem_idDomain.mp hc))
+        have hSite : siteDomain q 3 ((hp n δ).Rlong + (hp n δ).r + 9) ⊆ siteDomain q 4 (Rloc n δ) :=
+          siteDomain_mono (by omega) hR
+        obtain ⟨hv, hc, hl, _⟩ := hgroup q h h'
+          (fun c hc => H.1 c (hId hc))
+          (fun c hc => H.2.1 c (hId hc))
+          (fun q hq => H.2.2.1 q (hSite hq))
+          (fun c hc => H.2.2.2.1 c (hId hc))
+          (fun c hc => H.2.2.2.2 c (hId hc))
+        change oddRow M t h b y = oddRow M t h' b y
+        change (if groupValid M t h q then
+          (clusterLaw M t h q).expect (fun c => (labLaw M t h b c).w y) else 0) =
+          (if groupValid M t h' q then
+          (clusterLaw M t h' q).expect (fun c => (labLaw M t h' b c).w y) else 0)
+        simp only [hv, hc, hl b rfl]
+      let F := fun (i : Fin m) ω => (N : ℝ) * oddRow M t (e.symm ω) (s i) y
+      let D := fun i : Fin m => primitiveDomain n (mS n δ) δ (groupOf δ (s i)) 4 (Rloc n δ)
+      have hF : ∀ i, FinProb.DependsOn (F i) (D i) := by
+        intro i ω ω' hω
+        dsimp [F]
+        exact congrArg (fun z : ℝ => (N : ℝ) * z) (hLocal (s i) ω ω' hω)
+      have hDis : ∀ i ∈ (Finset.univ : Finset (Fin m)), ∀ j ∈ Finset.univ,
+          i ≠ j → Disjoint (D i) (D j) := by
+        intro i _ j _ hij
+        apply primitiveDomain_disjoint
+        rintro ⟨hz, hr⟩
+        rcases lt_or_gt_of_ne hij with hlt | hgt
+        · apply hsep j i hlt
+          exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨hz, hr.trans (by omega)⟩⟩
+        · apply hsep i j hgt
+          exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, ⟨by
+            calc
+              hammingDist (groupOf δ (s j)).1 (groupOf δ (s i)).1 =
+                hammingDist (groupOf δ (s i)).1 (groupOf δ (s j)).1 := hammingDist_comm _ _
+              _ ≤ 8 := hz,
+            by
+              calc
+                hammingDist (groupOf δ (s j)).2 (groupOf δ (s i)).2 =
+                  hammingDist (groupOf δ (s i)).2 (groupOf δ (s j)).2 := hammingDist_comm _ _
+                _ ≤ 2 * Rloc n δ + 16 := hr.trans (by omega)⟩⟩
+      have hFactor : (historyLaw M σ t).expect (fun h => ∏ i, (N : ℝ) * oddRow M t h (s i) y) =
+          ∏ i, oddMean M t σ y (s i) := by
+        calc
+          (historyLaw M σ t).expect (fun h => ∏ i, (N : ℝ) * oddRow M t h (s i) y) =
+              (FinProb.pi Pfield).expect (fun ω => ∏ i, F i ω) :=
+            (hpack (fun h => ∏ i, (N : ℝ) * oddRow M t h (s i) y)).symm
+          _ = ∏ i, (FinProb.pi Pfield).expect (F i) :=
+            pi_expect_prod Pfield Finset.univ F D hF hDis
+          _ = ∏ i, oddMean M t σ y (s i) := by
+            apply Finset.prod_congr rfl
+            intro i _
+            calc
+              (FinProb.pi Pfield).expect (F i) =
+                  (historyLaw M σ t).expect (fun h => (N : ℝ) * oddRow M t h (s i) y) :=
+                hpack (fun h => (N : ℝ) * oddRow M t h (s i) y)
+              _ = oddMean M t σ y (s i) := FinProb.expect_smul _ _ _
+      have hNon : ∀ h b, 0 ≤ oddRow M t h b y := by
+        intro h b
+        unfold oddRow
+        split_ifs
+        · unfold FinProb.expect
+          exact Finset.sum_nonneg fun c _ => mul_nonneg (FinProb.nonneg _ c) (FinProb.nonneg _ y)
+        · exact le_rfl
+      change (historyLaw M σ t).expect (fun h => if valid M t h then ∏ i, (N : ℝ) * oddRow M t h (s i) y else 0) ≤ _
+      exact (expect_gate_prod_le (historyLaw M σ t) Finset.univ
+        (fun i h => (N : ℝ) * oddRow M t h (s i) y) (valid M t)
+        (fun i _ h => mul_nonneg (Nat.cast_nonneg N) (hNon h (s i)))).trans_eq hFactor
+  )
 
 /-- **d8b** (10:288–292; ~500 lines; new formal argument, shares the domain
 bookkeeping of d8a): at separated even roles, integrating prehistory, group

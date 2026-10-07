@@ -1,4 +1,4 @@
-import HypercubeRamsey.S08.L81.PosteriorNodes
+import HypercubeRamsey.S08.L81.LoadNodes_q_s08_load
 
 /-!
 # Lemma 8.1, Step 9: selected-anchor load bounds
@@ -80,7 +80,7 @@ theorem load_tail (D : Ctx η₀ β p h) (C₁ C₂ a b : ℝ) (hb : 0 ≤ b)
       (FinProb.bind D.posLaw fun _ => D.rawTAT Θ).pr
         (fun z => D.SelOK ((Θ, z.1), z.2) ∧ ¬ D.LoadOK C₂ ((Θ, z.1), z.2)) ≤ b) :
     D.preLaw.pr (fun q => D.SelOK q ∧ ¬ D.LoadOK C₂ q) ≤ a + b := by
-  sorry
+  exact Lane_q_s08_load.load_tail D C₁ C₂ a b hb hpos hcomp hcenter
 
 end Nodes
 

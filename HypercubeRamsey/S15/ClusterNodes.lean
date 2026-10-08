@@ -14,6 +14,7 @@ import HypercubeRamsey.S15.ClusterNodes_sol_s15_c2
 import HypercubeRamsey.S15.ClusterGeometry_sol_s15_c2
 import HypercubeRamsey.S15.ClusterBinStage_sol_s15_c2
 import HypercubeRamsey.S15.ClusterLabelStage_sol_s15_c2
+import HypercubeRamsey.S15.HighCluster_opus_s15
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -742,7 +743,9 @@ theorem high_cluster_bin_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
   classical
   obtain ⟨c, hc, hCapacity⟩ := hCapacity
   have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
-  filter_upwards [hMass, hConditioning, hHistoryLoad, hCapacity, hn] with k hMass hConditioning hHistoryLoad hCapacity hn
+  filter_upwards [hMass, hConditioning, hHistoryLoad, hCapacity, hn,
+    Lane_opus_s15.bin_local_output κ hκ T c hc] with
+    k hMass hConditioning hHistoryLoad hCapacity hn hLocal
   intro PT hPT hm
   obtain ⟨H⟩ := hConditioning PT hPT hm
   have houtputs : ∀ W, H.law.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
@@ -759,7 +762,7 @@ theorem high_cluster_bin_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       exact HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_tail PT hPT hm W a (by omega)
         (hMass PT hPT hm W hraw havoid a)
     have hcert := hCapacity PT hPT hm W hload
-    sorry
+    exact hLocal PT hPT hm W hstar hcert
   let output (W : ClusterHistory PT hPT hm)
       (h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W) :=
     Classical.choice (houtputs W h.1 h.2)
@@ -792,7 +795,7 @@ theorem high_cluster_label_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage
     (hBins : ClusterBinStageClaim κ T) : ClusterSampleClaim κ T := by
   classical
   have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
-  filter_upwards [hBins, hn] with k hBins hn
+  filter_upwards [hBins, hn, Lane_opus_s15.label_local_output κ hκ T] with k hBins hn hLocal
   intro PT hPT hm
   obtain ⟨BS⟩ := hBins PT hPT hm
   apply HypercubeRamsey.Lane_sol_s15_c2.sample_of_label_outputs PT hPT hm BS (by omega)
@@ -806,9 +809,11 @@ theorem high_cluster_label_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage
     intro a
     rw [← HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_eq PT hPT hm W B a hreference]
     exact hgood.1 a
-  have hcolumn := hgood.2.1
-  have hdistinct := hgood.2.2
-  sorry
+  have hraw : 0 < (clusterHistoryLaw PT hPT hm).w W := by
+    apply HypercubeRamsey.Lane_sol_s15_c2.avoided_history_raw_positive PT hPT hm BS.history_positive W
+    rw [← BS.historyLaw_eq]
+    exact hW
+  exact hLocal PT hPT hm W hraw (BS.history_avoids_alarms W hW) hload B hreference hgood hmass
 
 /-- P15.3 (`prop:high-cluster-sampling`, 15:119–156): assemble the history, bin, and label stages. -/
 theorem high_cluster_sampling (κ : CConsts) (hκ : κ.Admissible) (T : Stage)

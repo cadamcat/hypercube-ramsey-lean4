@@ -20,10 +20,13 @@ theorem physical_bin_injective {κ : CConsts} {T : Stage} {k : ℕ}
     by_contra hne
     have hDne : D.1 ≠ ∅ := by
       intro he
-      exact (PT.tiling.P i).bins.bot_notMem (he ▸ D.2)
+      have h2 := D.2
+      rw [he] at h2
+      exact (PT.tiling.P i).bins.bot_notMem (by rw [Finset.bot_eq_empty]; exact h2)
     obtain ⟨y, hy⟩ := Finset.nonempty_iff_ne_empty.mpr hDne
     have hdis := Lane_q_s15_c2.clusterBin_sets_disjoint_of_patches hPT hne D E
-    exact Finset.disjoint_left.mp hdis hy (hDE ▸ hy)
+    have hDE' : D.1 = E.1 := hDE
+    exact Finset.disjoint_left.mp hdis hy (hDE' ▸ hy)
   subst j
   have hbin : D = E := Subtype.ext hDE
   subst E

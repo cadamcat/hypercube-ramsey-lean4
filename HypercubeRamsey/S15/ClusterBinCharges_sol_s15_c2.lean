@@ -69,7 +69,10 @@ theorem certificate_touching_sum_eq {κ : CConsts} {T : Stage} {k : ℕ}
     · simp only [if_neg hy, Finset.sum_const_zero]
   simp_rw [hsumy]
   rw [← Finset.sum_filter, ← Finset.mul_sum]
-  rfl
+  unfold clusterPinnedCapacityCharge
+  congr 1
+  all_goals try rfl
+  all_goals (apply Finset.sum_congr _ (fun _ _ => rfl); ext y; simp)
 
 theorem certificate_touching_sum_le {κ : CConsts} {T : Stage} {k : ℕ}
     (PT : ProfiledTiling κ T k) (hPT : PT.Valid)

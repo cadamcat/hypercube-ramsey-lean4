@@ -62,4 +62,25 @@ theorem pastRows_of_extends (j : Fin D.geom.r) (t : Fin (D.geom.r + 1))
 
 end Trajectory
 
+theorem idxOf_lt_of_key_lt {α : Type*} [BEq α] [LawfulBEq α]
+    (l : List α) (key : α → ℕ) (hsorted : l.Pairwise (fun a b => key a ≤ key b))
+    {a b : α} (ha : a ∈ l) (hb : b ∈ l) (hab : key a < key b) :
+    l.idxOf a < l.idxOf b := by
+  have ha' := List.idxOf_lt_length_of_mem ha
+  have hb' := List.idxOf_lt_length_of_mem hb
+  apply Nat.lt_of_not_ge
+  intro hle
+  by_cases heq : l.idxOf b = l.idxOf a
+  · have hba : b = a := by
+      calc
+        b = l[l.idxOf b] := (List.getElem_idxOf hb').symm
+        _ = l[l.idxOf a] := by simp only [heq]
+        _ = a := List.getElem_idxOf ha'
+    have hf : key a < key a := by simpa only [hba] using hab
+    exact Nat.lt_irrefl _ hf
+  · have hlt : l.idxOf b < l.idxOf a := by omega
+    have hba : key b ≤ key a := by
+      simpa only [List.getElem_idxOf] using hsorted.rel_getElem_of_lt hb' ha' hlt
+    exact Nat.not_le_of_gt hab hba
+
 end HypercubeRamsey.S18.Lane_sol_s18_2g_o2

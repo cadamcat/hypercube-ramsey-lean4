@@ -803,6 +803,254 @@ theorem output_eq_on_retained (hD : D.Spec) (hG : TransferGeometry X)
       D.pastRows (simHistory D X s σ) j j.isLt b =
         rowSim D X s j b (H j.castSucc) (σ j b) :=
     congrFun (hpast j (Fin.last D.geom.r) j.isLt) b
+  let sk (c : SketchCall D X) : Sketch (T := T) (k := k) :=
+    (rows c.1 ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2
+  have hprocessed (j : Fin D.geom.r) (L : Pos T k → Fin (T.S.N k))
+      (hL : ∀ b : D.encoding.base.ProcessedRole j.castSucc,
+        b.1 ∈ X.predecessors D.geom.r → L b.1 = (historyLabels D (H j.castSucc) b).1) :
+      toProcessed D X j L = restrictLabels D X j (historyLabels D (H j.castSucc)) := by
+    funext b
+    by_cases hb : b.1 ∈ X.predecessors D.geom.r
+    · have hv := hL b hb
+      have hpool : L b.1 ∈ D.encoding.base.latePoolOf b.1 := by
+        rw [hv]
+        exact (historyLabels D (H j.castSucc) b).2
+      have hgood : b.1 ∈ X.predecessors D.geom.r ∧ L b.1 ∈ D.encoding.base.latePoolOf b.1 := ⟨hb, hpool⟩
+      simp only [toProcessed, dif_pos hgood, restrictLabels, if_pos hb]
+      exact Subtype.ext hv
+    · have hbad : ¬ (b.1 ∈ X.predecessors D.geom.r ∧ L b.1 ∈ D.encoding.base.latePoolOf b.1) :=
+        fun h => hb h.1
+      simp only [toProcessed, dif_neg hbad, restrictLabels, if_neg hb]
+  have hsketch (O : SketchCall D X → Sketch (T := T) (k := k))
+      (j : Fin D.geom.r) (L : Pos T k → Fin (T.S.N k))
+      (hL : toProcessed D X j L = restrictLabels D X j (historyLabels D (H j.castSucc)))
+      (hO : ∀ c : SketchCall D X, c ∈ affectedCalls D X → c.1.val = j.val → O c = sk c)
+      (b : {x : Pos T k // x ∈ D.encoding.base.classes j})
+      (hb : b.1 ∈ X.predecessors D.geom.r) (a : Fin (T.S.n k))
+      (hne : flipPos b.1 a ∉ X.erased) :
+      protoSketch D X σ O L j b a = (rows j b).2.1 a := by
+    have hpe : b.1 ∈ X.predecessors D.geom.r ∧ flipPos b.1 a ∉ X.erased := ⟨hb, hne⟩
+    by_cases hc : (D.directCells (flipPos b.1 a) ∩ X.criticalCells).Nonempty
+    · have hcall : (⟨j, ⟨b.1, b.2, hb⟩, a⟩ : SketchCall D X) ∈ affectedCalls D X :=
+        Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne, hc⟩
+      simpa only [protoSketch, dif_pos hpe, if_pos hc] using hO _ hcall rfl
+    · simp only [protoSketch, dif_pos hpe, if_neg hc]
+      change (σ j b).2.1 a (X.fixed, toProcessed D X j L) =
+        (σ j b).2.1 a (sketchIndex D X s j b.1 a (H j.castSucc))
+      rw [hL]
+      simp only [sketchIndex, if_pos hpe, if_neg hc]
+  have hlabels : ∀ (i : Fin (D.geom.r + 1)), i.val ≤ X.failure.1.val →
+      ∀ (O : SketchCall D X → Sketch (T := T) (k := k)),
+      (∀ c : SketchCall D X, c ∈ affectedCalls D X → c.1.val < i.val → O c = sk c) →
+      ∀ b : D.encoding.base.ProcessedRole i, b.1 ∈ X.predecessors D.geom.r →
+        protoLabels D X σ O i.val b.1 = (historyLabels D (H i) b).1 := by
+    intro i
+    induction i using Fin.induction with
+    | zero =>
+      intro hi O hO b hb
+      have hf : False := by simpa [D.encoding.base.processed_zero] using b.2
+      exact hf.elim
+    | succ j ih =>
+      intro hi O hO b hb
+      have hj : j.val < X.failure.1.val := Nat.lt_of_succ_le hi
+      have hprev : j.castSucc.val ≤ X.failure.1.val := (Nat.le_succ j.val).trans hi
+      have hOprev : ∀ c : SketchCall D X, c ∈ affectedCalls D X → c.1.val < j.castSucc.val →
+          O c = sk c := fun c hc hlt => hO c hc (hlt.trans (Nat.lt_succ_self j.val))
+      by_cases hbold : b.1 ∈ D.encoding.base.processed j.castSucc
+      · have hbc : b.1 ∉ D.encoding.base.classes j := fun hc =>
+          Finset.disjoint_left.mp (D.encoding.base.class_fresh j) hc hbold
+        have hp : protoLabels D X σ O j.succ.val b.1 = protoLabels D X σ O j.val b.1 := by
+          have hbad : ¬ (b.1 ∈ D.encoding.base.classes j ∧ b.1 ∈ X.predecessors D.geom.r) :=
+            fun h => hbc h.1
+          simp only [Fin.val_succ, protoLabels, dif_pos j.isLt, dif_neg hbad]
+        have hr : (H j.succ).2 b = (H j.castSucc).2 ⟨b.1, hbold⟩ := by
+          rw [hstep j]
+          simp only [LateProcessBase.extend, dif_pos hbold]
+        change protoLabels D X σ O j.succ.val b.1 = ((H j.succ).2 b).2.2.1
+        rw [hp, hr]
+        exact ih hprev O hOprev ⟨b.1, hbold⟩ hb
+      · have hbc : b.1 ∈ D.encoding.base.classes j := by
+          have hmem : b.1 ∈ D.encoding.base.processed j.castSucc ∪ D.encoding.base.classes j := by
+            rw [D.encoding.base.processed_step j]
+            exact b.2
+          exact (Finset.mem_union.mp hmem).resolve_left hbold
+        have hL := hprocessed j (protoLabels D X σ O j.val) (fun b' hb' => ih hprev O hOprev b' hb')
+        have hv : visible D X j b.1
+            (protoSketch D X σ O (protoLabels D X σ O j.val) j ⟨b.1, hbc⟩) =
+            visible D X j b.1 (rows j ⟨b.1, hbc⟩).2.1 := by
+          funext a
+          by_cases ha : a ∈ stepErased D X j b.1
+          · simp only [visible, if_pos ha]
+          · simp only [visible, if_neg ha]
+            have hne : flipPos b.1 a ∉ X.erased := by
+              simpa only [stepErased, if_pos hj, rowErasedTests, if_pos hb,
+                erasedTests, Finset.mem_filter, Finset.mem_univ, true_and] using ha
+            apply hsketch O j _ hL _ ⟨b.1, hbc⟩ hb a hne
+            intro c hc heq
+            exact hO c hc (heq ▸ Nat.lt_succ_self j.val)
+        have hr : (H j.succ).2 b = rows j ⟨b.1, hbc⟩ := by
+          rw [hstep j]
+          simp only [LateProcessBase.extend, dif_neg hbold]
+        change protoLabels D X σ O j.succ.val b.1 = ((H j.succ).2 b).2.2.1
+        rw [hr]
+        have hgood : b.1 ∈ D.encoding.base.classes j ∧ b.1 ∈ X.predecessors D.geom.r := ⟨hbc, hb⟩
+        simp only [Fin.val_succ, protoLabels, dif_pos j.isLt, dif_pos hgood]
+        change ((σ j ⟨b.1, hbc⟩).2.2 ((σ j ⟨b.1, hbc⟩).1,
+          visible D X j b.1 (protoSketch D X σ O (protoLabels D X σ O j.val) j ⟨b.1, hbc⟩))).1 =
+          (rows j ⟨b.1, hbc⟩).2.2.1
+        rw [hv]
+        rfl
+  have hpred_le : ∀ (n : ℕ) (b : Pos T k), b ∈ X.predecessors n →
+      ∀ j : Fin D.geom.r, D.geom.classOf b = some j → j.val ≤ X.failure.1.val := by
+    intro n
+    induction n with
+    | zero =>
+      intro b hb j hj
+      have heq : b = X.failure.2.1.1 := by
+        simpa only [CriticalTransferData.predecessors, Finset.mem_singleton] using hb
+      subst b
+      have hroot := (D.encoding.base.class_of_spec X.failure.2.1.1 X.failure.1).mp X.failure.2.1.2
+      have hjroot : j = X.failure.1 := Option.some.inj (hj.symm.trans hroot)
+      subst j
+      exact le_rfl
+    | succ n ih =>
+      intro b hb j hj
+      rcases Finset.mem_union.mp hb with hb | hb
+      · exact ih b hb j hj
+      · obtain ⟨b0, hb0, j0, j1, hj0, hj1, hlt, a, a', hflip⟩ := (Finset.mem_filter.mp hb).2
+        have hjj : j1 = j := Option.some.inj (hj1.symm.trans hj)
+        subst j1
+        exact (Nat.le_of_lt hlt).trans (ih b0 hb0 j0 hj0)
+  have hperm : (plan D X).Perm (affectedCalls D X).toList := List.mergeSort_perm _ _
+  have hmem (c : SketchCall D X) : c ∈ plan D X ↔ c ∈ affectedCalls D X := by
+    rw [hperm.mem_iff, Finset.mem_toList]
+  have hnodup : (plan D X).Nodup := hperm.nodup_iff.mpr (Finset.nodup_toList _)
+  have hsorted : (plan D X).Pairwise (fun c c' => c.1.val ≤ c'.1.val) := by
+    have hbool := List.pairwise_mergeSort
+      (le := fun c c' : SketchCall D X => decide (c.1.val ≤ c'.1.val))
+      (fun a b c hab hbc => decide_eq_true (Nat.le_trans (of_decide_eq_true hab) (of_decide_eq_true hbc)))
+      (fun a b => by rcases Nat.le_total a.1.val b.1.val with h | h <;> simp [h])
+      (affectedCalls D X).toList
+    exact hbool.imp (fun h => of_decide_eq_true h)
+  have hkeep (c : SketchCall D X) (hc : c ∈ affectedCalls D X) :
+      (fixedList D X c).card ≤ cap (T := T) (k := k) ∧ ∀ t, sk c t ∈ fixedList D X c := by
+    have hne := (Finset.mem_filter.mp hc).2.1
+    have hk := hret.1 c hne
+    change ((fixedList D X c).card : ℝ) ≤ Real.exp (Real.log (T.S.n k : ℝ) ^ 8) ∧
+      (∀ t, (D.pastRows (simHistory D X s σ) c.1 c.1.isLt ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2 t ∈
+        fixedList D X c) at hk
+    refine ⟨Nat.le_floor hk.1, ?_⟩
+    intro t
+    have ht := hk.2 t
+    rw [hpastFull] at ht
+    exact ht
+  have hprefix : ∀ m n : ℕ, m ≤ n → ∃ u,
+      replies D X σ s n = replies D X σ s m ++ u := by
+    intro m n hmn
+    obtain ⟨d, rfl⟩ := Nat.exists_eq_add_of_le hmn
+    clear hmn
+    induction d with
+    | zero => exact ⟨[], by simp only [Nat.add_zero, List.append_nil]⟩
+    | succ d ih =>
+      obtain ⟨u, hu⟩ := ih
+      refine ⟨u ++ [answer D X σ (replies D X σ s (m + d)) s], ?_⟩
+      rw [Nat.add_succ, replies, hu, List.append_assoc]
+  have hget (m n : ℕ) (hmn : m ≤ n) (t : ℕ) (ht : t < m) :
+      (replies D X σ s m)[t]? = (replies D X σ s n)[t]? := by
+    obtain ⟨u, hu⟩ := hprefix m n hmn
+    rw [hu, List.getElem?_append_left (by rw [replies_length']; exact ht)]
+  have hdecode (m n : ℕ) (hmn : m ≤ n) (c : SketchCall D X)
+      (hc : (plan D X).idxOf c < m) :
+      decodeAt D X (replies D X σ s m) c = decodeAt D X (replies D X σ s n) c := by
+    unfold decodeAt
+    rw [hget m n hmn _ hc]
+  have hanswer_at (t : ℕ) : (replies D X σ s (t + 1))[t]? =
+      some (answer D X σ (replies D X σ s t) s) := by
+    rw [replies, List.getElem?_append_right (by rw [replies_length'])]
+    simp only [replies_length', Nat.sub_self, List.getElem?_cons_zero]
+  have horacle : ∀ (t : ℕ) (ht : t < (plan D X).length),
+      decodeAt D X (replies D X σ s (plan D X).length) ((plan D X)[t]) = sk ((plan D X)[t]) := by
+    intro t
+    induction t using Nat.strong_induction_on with
+    | h t ih =>
+      intro ht
+      let c : SketchCall D X := (plan D X)[t]
+      have hcplan : c ∈ plan D X := List.getElem_mem ht
+      have hc : c ∈ affectedCalls D X := (hmem c).mp hcplan
+      have hci : (plan D X).idxOf c = t := hnodup.idxOf_getElem t ht
+      have hcle : c.1.val ≤ X.failure.1.val := hpred_le D.geom.r c.2.1.1 c.2.1.2.2 c.1
+        ((D.encoding.base.class_of_spec c.2.1.1 c.1).mp c.2.1.2.1)
+      have hO : ∀ d : SketchCall D X, d ∈ affectedCalls D X → d.1.val < c.1.val →
+          decodeAt D X (replies D X σ s t) d = sk d := by
+        intro d hd hlt
+        have hdplan : d ∈ plan D X := (hmem d).mpr hd
+        have hindex : (plan D X).idxOf d < t := by
+          have hi := Lane_sol_s18_2g_o2.idxOf_lt_of_key_lt (plan D X)
+            (fun d : SketchCall D X => d.1.val) hsorted hdplan hcplan hlt
+          simpa only [hci] using hi
+        have hdlen := List.idxOf_lt_length_of_mem hdplan
+        rw [hdecode t (plan D X).length (Nat.le_of_lt ht) d hindex]
+        simpa only [List.getElem_idxOf] using ih _ hindex hdlen
+      have hL := hprocessed c.1
+        (protoLabels D X σ (decodeAt D X (replies D X σ s t)) c.1.val)
+        (hlabels c.1.castSucc hcle (decodeAt D X (replies D X σ s t)) hO)
+      have hne := (Finset.mem_filter.mp hc).2.1
+      have hcrit : (D.directCells (flipPos c.2.1.1 c.2.2) ∩ X.criticalCells).Nonempty :=
+        (Finset.mem_filter.mp hc).2.2
+      have hpe : c.2.1.1 ∈ X.predecessors D.geom.r ∧ flipPos c.2.1.1 c.2.2 ∉ X.erased :=
+        ⟨c.2.1.2.2, hne⟩
+      have hidx : sk c = (σ c.1 ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2
+          (blockConfig D X (blockOf D X c) s,
+            toProcessed D X c.1 (protoLabels D X σ (decodeAt D X (replies D X σ s t)) c.1.val)) := by
+        dsimp only [sk, rows, simRow, rowSim]
+        simp only [sketchIndex, if_pos hpe, if_pos hcrit, hL]
+        rfl
+      have ha : answer D X σ (replies D X σ s t) s =
+          encodeSketch (fixedList D X c) cap (sketchLength T k) (sk c) := by
+        have hlen : (replies D X σ s t).length = t := replies_length' σ s t
+        have hlt : (replies D X σ s t).length < (plan D X).length := by simpa only [hlen] using ht
+        have hct : (plan D X)[(replies D X σ s t).length]'hlt = c := by
+          have hfin : (⟨(replies D X σ s t).length, hlt⟩ : Fin (plan D X).length) = ⟨t, ht⟩ :=
+            Fin.ext hlen
+          exact congrArg (fun i : Fin (plan D X).length => (plan D X)[i.val]'i.isLt) hfin
+        let f (d : SketchCall D X) : Reply (T := T) (k := k) :=
+          encodeSketch (fixedList D X d) cap (sketchLength T k)
+            ((σ d.1 ⟨d.2.1.1, d.2.1.2.1⟩).2.1 d.2.2
+              (blockConfig D X (blockOf D X d) s,
+                toProcessed D X d.1 (protoLabels D X σ (decodeAt D X (replies D X σ s t)) d.1.val)))
+        calc
+          answer D X σ (replies D X σ s t) s = f ((plan D X)[(replies D X σ s t).length]'hlt) := by
+            rw [answer, dif_pos hlt]
+          _ = f c := congrArg f hct
+          _ = encodeSketch (fixedList D X c) cap (sketchLength T k) (sk c) := by
+            change encodeSketch (fixedList D X c) cap (sketchLength T k)
+              ((σ c.1 ⟨c.2.1.1, c.2.1.2.1⟩).2.1 c.2.2
+                (blockConfig D X (blockOf D X c) s,
+                  toProcessed D X c.1 (protoLabels D X σ (decodeAt D X (replies D X σ s t)) c.1.val))) =
+              encodeSketch (fixedList D X c) cap (sketchLength T k) (sk c)
+            rw [hidx]
+      have hfull : (replies D X σ s (plan D X).length)[t]? =
+          some (answer D X σ (replies D X σ s t) s) := by
+        rw [← hget (t + 1) (plan D X).length (Nat.succ_le_of_lt ht) t (Nat.lt_succ_self t)]
+        exact hanswer_at t
+      have hk := hkeep c hc
+      change decodeAt D X (replies D X σ s (plan D X).length) c = sk c
+      unfold decodeAt
+      rw [hci, hfull, ha]
+      change (decodeSketch (fixedList D X c) D.fallback
+        (encodeSketch (fixedList D X c) cap (sketchLength T k) (sk c))).getD (fun _ => D.fallback) = sk c
+      rw [decode_encodeSketch (fixedList D X c) D.fallback (sk c) hk.1 hk.2]
+      rfl
+  have horacleCalls (c : SketchCall D X) (hc : c ∈ affectedCalls D X) :
+      decodeAt D X (replies D X σ s (plan D X).length) c = sk c := by
+    have hcp : c ∈ plan D X := (hmem c).mpr hc
+    have hclen := List.idxOf_lt_length_of_mem hcp
+    simpa only [List.getElem_idxOf] using horacle _ hclen
+  have hprocessedFull (j : Fin D.geom.r) (hj : j.val ≤ X.failure.1.val) :
+      toProcessed D X j
+        (protoLabels D X σ (decodeAt D X (replies D X σ s (plan D X).length)) j.val) =
+        restrictLabels D X j (historyLabels D (H j.castSucc)) :=
+    hprocessed j _ (hlabels j.castSucc hj _ (fun c hc _ => horacleCalls c hc))
   sorry
 
 theorem sameBlock_trans' {a b c : Fin (T.S.n k)} (hab : X.sameBlock a b) (hbc : X.sameBlock b c) :

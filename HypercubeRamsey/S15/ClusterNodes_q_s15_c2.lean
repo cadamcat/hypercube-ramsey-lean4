@@ -1,4 +1,5 @@
 import HypercubeRamsey.S15.Masks
+import HypercubeRamsey.Tools.CubeGeometry
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
@@ -2210,6 +2211,1003 @@ theorem clusterHighMode_degree_window {κ : CConsts} (hκ : CConsts.Admissible �
       _ = 10 * (Real.rpow q κ.Cb / n) := by ring
       _ ≤ 10 * (1 / 60) := by gcongr
       _ = 1 / 6 := by norm_num
+
+theorem clusterHighMode_normalizedHit_bounds {κ : CConsts}
+    (hκ : CConsts.Admissible κ) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      (PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) →
+      ∀ i x, x ∈ PT.envelope i → ∀ (b : OddPosition T k) y,
+        0 ≤ normalizedHit (T.S.E k) PT.tiling.c
+          (PT.π (patchAt PT hPT b.1)) x y ∧
+        normalizedHit (T.S.E k) PT.tiling.c
+          (PT.π (patchAt PT hPT b.1)) x y ≤ 3 := by
+  let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
+  have hn : Tendsto nR atTop atTop :=
+    (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
+  have hpow : Tendsto (fun k => nR k ^ (0.96 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num)).comp hn
+  have hbstarEq : ∀ k, bstar T k = (nR k ^ (0.96 : ℝ))⁻¹ := by
+    intro k
+    dsimp [bstar, nR]
+    rw [show (-1 + (0.04 : ℝ)) = -(0.96 : ℝ) by norm_num,
+      Real.rpow_neg (by positivity : (0 : ℝ) ≤ (T.S.n k : ℝ))]
+  have hbstarTendsto : Tendsto (fun k => bstar T k) atTop (nhds 0) :=
+    (tendsto_inv_atTop_zero.comp hpow).congr'
+      (Filter.Eventually.of_forall fun k => (hbstarEq k).symm)
+  have hbstar : ∀ᶠ k in atTop, bstar T k < 1 / 18 :=
+    hbstarTendsto.eventually (Iio_mem_nhds (by norm_num))
+  have hWindow := clusterHighMode_degree_window hκ T
+  filter_upwards [hWindow, hbstar] with k hWindow hbstar
+  intro PT hPT hm i x hx b y
+  let d := deg (T.S.E k) PT.tiling.c (PT.π (patchAt PT hPT b.1)).w x
+  have herror : |d - 1 / 2| ≤ 1 / 6 := by
+    by_cases hji : patchAt PT hPT b.1 = i
+    · have hwindow := hWindow PT hPT hm i
+      have h := hPT.envelope_degree i x hx
+      have hown : |d - 1 / 2| ≤
+          10 * Real.rpow ((PT.tiling.P i).q : ℝ) κ.Cb / (T.S.n k : ℝ) := by
+        rcases hm with hs | hl
+        · simpa [OwnDegOK, hs, hji, d] using h
+        · simpa [OwnDegOK, hl, hji, d] using h
+      exact hown.trans hwindow
+    · have h := hPT.envelope_other_degree i (patchAt PT hPT b.1) hji x hx
+      calc
+        _ ≤ 3 * bstar T k := by simpa [d] using h
+        _ ≤ 1 / 6 := by nlinarith [hbstar]
+  have hdegree : 1 / 3 ≤ d := by
+    have habs := abs_le.mp herror
+    linarith
+  have hden : 0 < d := lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1 / 3) hdegree
+  have hhit0 : 0 ≤ hit (T.S.E k) PT.tiling.c x y := by
+    unfold hit
+    split_ifs <;> norm_num
+  have hhit1 : hit (T.S.E k) PT.tiling.c x y ≤ 1 := by
+    unfold hit
+    split_ifs <;> norm_num
+  unfold normalizedHit
+  change 0 ≤ (if 0 < d then hit (T.S.E k) PT.tiling.c x y / d else 0) ∧
+    (if 0 < d then hit (T.S.E k) PT.tiling.c x y / d else 0) ≤ 3
+  rw [if_pos hden]
+  constructor
+  · exact div_nonneg hhit0 hden.le
+  · apply (div_le_iff₀ hden).2
+    have hthree : 1 ≤ 3 * d := by nlinarith
+    nlinarith
+
+private def crossingRoot {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) (r : Fin (T.S.n k)) : Prop :=
+  ∀ t, Relation.ReflTransGen (clusterCrossingEdge PT vs G) t r → r ≤ t
+
+private theorem clusterCrossingEdge_symm {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) {r t : Fin (T.S.n k)}
+    (h : clusterCrossingEdge PT vs G r t) : clusterCrossingEdge PT vs G t r := by
+  rcases h with ⟨hr, ht, hne, hnear⟩
+  refine ⟨ht, hr, Ne.symm hne, ?_⟩
+  simpa [clusterCrossingNear, _root_.hammingDist_comm] using hnear
+
+private theorem clusterCrossingRoot_neighbor_notRoot {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) {r t : Fin (T.S.n k)}
+    (hr : crossingRoot PT vs G r)
+    (hEdge : clusterCrossingEdge PT vs G r t) : ¬ crossingRoot PT vs G t := by
+  intro ht
+  have hreachRT : Relation.ReflTransGen (clusterCrossingEdge PT vs G) r t :=
+    Relation.ReflTransGen.tail Relation.ReflTransGen.refl hEdge
+  have hleTR : t ≤ r := ht r hreachRT
+  have hEdgeTR := clusterCrossingEdge_symm PT vs G hEdge
+  have hreachTR : Relation.ReflTransGen (clusterCrossingEdge PT vs G) t r :=
+    Relation.ReflTransGen.tail Relation.ReflTransGen.refl hEdgeTR
+  have hleRT : r ≤ t := hr t hreachTR
+  have hne : r ≠ t := hEdge.2.2.1
+  exact hne (Fin.le_antisymm hleRT hleTR)
+
+theorem clusterCrossingNonisolated_card_le_two_rank {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (vs : Fin (T.S.n k) → EvenPosition T k)
+    (G : Finset (Fin (T.S.n k))) :
+    (clusterCrossingNonisolated PT vs G).card ≤ 2 * clusterCrossingRank PT vs G := by
+  classical
+  let N := T.S.n k
+  let rootPred : Fin N → Prop := fun r =>
+    ∀ t, Relation.ReflTransGen (clusterCrossingEdge PT vs G) t r → r ≤ t
+  let roots : Finset (Fin N) := Finset.univ.filter rootPred
+  let nonroots : Finset (Fin N) := Finset.univ.filter (fun r => ¬ rootPred r)
+  let nonisolated : Finset (Fin N) := clusterCrossingNonisolated PT vs G
+  let dom := {r : Fin N // r ∈ nonisolated}
+  let cod := Bool × {r : Fin N // ¬ crossingRoot PT vs G r}
+  have hroot_count : roots.card + nonroots.card = N := by
+    have hunion : roots ∪ nonroots = Finset.univ := by
+      ext r
+      simp only [roots, nonroots, Finset.mem_union, Finset.mem_filter, Finset.mem_univ,
+        true_and]
+      exact iff_true_intro (Classical.em (rootPred r))
+    have hdisj : Disjoint roots nonroots := by
+      apply Finset.disjoint_left.mpr
+      intro r hr hn
+      exact (Finset.mem_filter.mp hn).2 (Finset.mem_filter.mp hr).2
+    have h := Finset.card_union_of_disjoint hdisj
+    rw [hunion] at h
+    simpa [N] using h.symm
+  have hnonroot_card : nonroots.card = N - roots.card := by omega
+  let neighbor : ∀ (r : Fin N), r ∈ nonisolated → Fin N := by
+    intro r hr
+    have hmem : r ∈ clusterCrossingNonisolated PT vs G := by
+      simpa [nonisolated] using hr
+    exact Classical.choose (Finset.mem_filter.mp hmem).2
+  have neighbor_edge : ∀ (r : Fin N) (hr : r ∈ nonisolated),
+      clusterCrossingEdge PT vs G r (neighbor r hr) := by
+    intro r hr
+    have hmem : r ∈ clusterCrossingNonisolated PT vs G := by
+      simpa [nonisolated] using hr
+    exact Classical.choose_spec (Finset.mem_filter.mp hmem).2
+  let f : dom → cod := fun r =>
+    if hr : crossingRoot PT vs G r.1 then
+      let t := neighbor r.1 r.2
+      ⟨true, ⟨t, clusterCrossingRoot_neighbor_notRoot PT vs G hr (neighbor_edge r.1 r.2)⟩⟩
+    else ⟨false, ⟨r.1, hr⟩⟩
+  have hf_inj : Function.Injective f := by
+    intro r s hfs
+    by_cases hr : crossingRoot PT vs G r.1 <;>
+      by_cases hs : crossingRoot PT vs G s.1
+    · have hval : (f r).2.1 = (f s).2.1 :=
+        congrArg (fun z : cod => z.2.1) hfs
+      have hts : neighbor r.1 r.2 = neighbor s.1 s.2 := by
+        simpa [f, hr, hs] using hval
+      have hneighR := neighbor_edge r.1 r.2
+      have hneighS := neighbor_edge s.1 s.2
+      have hneighS' : clusterCrossingEdge PT vs G s.1 (neighbor r.1 r.2) := by
+        simpa [hts] using hneighS
+      have hpath : Relation.ReflTransGen (clusterCrossingEdge PT vs G) s.1 r.1 := by
+        have hpathS : Relation.ReflTransGen (clusterCrossingEdge PT vs G) s.1
+            (neighbor r.1 r.2) :=
+          Relation.ReflTransGen.tail
+            (Relation.ReflTransGen.refl :
+              Relation.ReflTransGen (clusterCrossingEdge PT vs G) s.1 s.1) hneighS'
+        have hEdgeTR : clusterCrossingEdge PT vs G (neighbor r.1 r.2) r.1 :=
+          clusterCrossingEdge_symm PT vs G hneighR
+        exact Relation.ReflTransGen.tail hpathS hEdgeTR
+      have hle₁ := hr s.1 hpath
+      have hpath' : Relation.ReflTransGen (clusterCrossingEdge PT vs G) r.1 s.1 := by
+        have hpathR : Relation.ReflTransGen (clusterCrossingEdge PT vs G) r.1
+            (neighbor r.1 r.2) :=
+          Relation.ReflTransGen.tail
+            (Relation.ReflTransGen.refl :
+              Relation.ReflTransGen (clusterCrossingEdge PT vs G) r.1 r.1) hneighR
+        have hEdgeTS : clusterCrossingEdge PT vs G (neighbor r.1 r.2) s.1 := by
+          have := clusterCrossingEdge_symm PT vs G hneighS
+          simpa [hts] using this
+        exact Relation.ReflTransGen.tail hpathR hEdgeTS
+      have hle₂ := hs r.1 hpath'
+      have heq : r.1 = s.1 := Fin.ext (by omega)
+      exact Subtype.ext heq
+    · have hbool := congrArg Prod.fst hfs
+      simp [f, hr, hs] at hbool
+    · have hbool := congrArg Prod.fst hfs
+      simp [f, hr, hs] at hbool
+    · have hval : (f r).2.1 = (f s).2.1 :=
+        congrArg (fun z : cod => z.2.1) hfs
+      have heq : r.1 = s.1 := by simpa [f, hr, hs] using hval
+      exact Subtype.ext heq
+  have hcard : Fintype.card dom ≤ Fintype.card cod := Fintype.card_le_of_injective f hf_inj
+  have hdom : Fintype.card dom = nonisolated.card := by
+    simp [dom]
+  have hroots : Fintype.card {r : Fin N // crossingRoot PT vs G r} = roots.card := by
+    exact Fintype.card_of_subtype roots (by intro r; simp [roots, rootPred, crossingRoot])
+  have hcod : Fintype.card cod = 2 * nonroots.card := by
+    dsimp [cod]
+    rw [Fintype.card_prod, Fintype.card_bool, Fintype.card_subtype_compl,
+      Fintype.card_fin, hroots, ← hnonroot_card]
+  have hcard' : nonisolated.card ≤ 2 * nonroots.card := by
+    rw [← hdom, ← hcod]
+    exact hcard
+  calc
+    nonisolated.card ≤ 2 * nonroots.card := hcard'
+    _ = 2 * clusterCrossingRank PT vs G := by
+      have hrankDef : clusterCrossingRank PT vs G = N - roots.card := by
+        simp only [clusterCrossingRank, N]
+        rfl
+      have hrank : clusterCrossingRank PT vs G = nonroots.card :=
+        hrankDef.trans hnonroot_card.symm
+      rw [hrank]
+
+theorem patchAt_flip_prefix {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (a : Position T k)
+    (j : Fin (T.S.n k))
+    (hj : (PT.tiling.P (patchAt PT hPT a)).ℓ ≤ j.val) :
+    patchAt PT hPT (flipPos a j) = patchAt PT hPT a := by
+  classical
+  let i := patchAt PT hPT a
+  have hmem : a ∈ PT.tiling.leaf i := by
+    simpa [i, patchAt] using
+      (Classical.choose_spec (hPT.tiling_valid.prefix_complete a)).1
+  have hmem' : flipPos a j ∈ PT.tiling.leaf i := by
+    change ∀ t : Fin (T.S.n k), t.val < (PT.tiling.P i).ℓ →
+      flipPos a j t = PT.tiling.w i t
+    intro t ht
+    have hne : t ≠ j := by
+      intro heq
+      have hval := congrArg Fin.val heq
+      have hj' : (PT.tiling.P i).ℓ ≤ j.val := by simpa [i] using hj
+      omega
+    simpa [flipPos, hne] using hmem t ht
+  have huniq :=
+    (Classical.choose_spec (hPT.tiling_valid.prefix_complete (flipPos a j))).2 i hmem'
+  change Classical.choose (hPT.tiling_valid.prefix_complete (flipPos a j)) = i
+  exact huniq.symm
+
+private theorem clusterCrossingNeighbor_has_prefix_coord {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (a : EvenPosition T k) (ha : a ∈ evenPatchPositions PT.tiling i)
+    (b : OddPosition T k) (hb : b ∈ clusterCrossingNeighbours PT hPT a) :
+    ∃ j : Fin (T.S.n k), j.val < (PT.tiling.P i).ℓ ∧ b.1 = flipPos a.1 j := by
+  classical
+  have hb' : Adjacent a b ∧ patchAt PT hPT b.1 ≠ patchAt PT hPT a.1 := by
+    simpa [clusterCrossingNeighbours] using (Finset.mem_filter.mp hb).2
+  have hdiff : (Finset.univ.filter fun t : Fin (T.S.n k) => a.1 t ≠ b.1 t).card = 1 := hb'.1
+  obtain ⟨j, hj⟩ := Finset.card_eq_one.mp hdiff
+  have hjmem : j ∈ Finset.univ.filter fun t : Fin (T.S.n k) => a.1 t ≠ b.1 t := by
+    rw [hj]
+    simp
+  have hdiffj : a.1 j ≠ b.1 j := (Finset.mem_filter.mp hjmem).2
+  have hsame : ∀ t, t ≠ j → a.1 t = b.1 t := by
+    intro t ht
+    have hnot : t ∉ Finset.univ.filter fun t : Fin (T.S.n k) => a.1 t ≠ b.1 t := by
+      rw [hj]
+      simp [ht]
+    by_contra hne
+    exact hnot (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+  have hflip : b.1 = flipPos a.1 j := by
+    funext t
+    by_cases ht : t = j
+    · subst t
+      cases ha : a.1 j <;> cases hbv : b.1 j <;> simp_all [flipPos]
+    · simp [flipPos, ht, hsame t ht]
+  have hi : patchAt PT hPT a.1 = i := by
+    have hleaf : a.1 ∈ PT.tiling.leaf i := (Finset.mem_filter.mp ha).2
+    have huniq := (Classical.choose_spec
+      (hPT.tiling_valid.prefix_complete a.1)).2 i hleaf
+    simpa [patchAt] using huniq.symm
+  have hjlt : j.val < (PT.tiling.P i).ℓ := by
+    by_contra hjn
+    have hjge : (PT.tiling.P i).ℓ ≤ j.val := Nat.le_of_not_gt hjn
+    have hsamePatch := patchAt_flip_prefix PT hPT a.1 j (by simpa [hi] using hjge)
+    have hEq : patchAt PT hPT b.1 = patchAt PT hPT a.1 := by
+      rw [hflip]
+      exact hsamePatch
+    exact hb'.2 hEq
+  exact ⟨j, hjlt, hflip⟩
+
+theorem clusterCrossingNeighbours_card_le_prefix {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (a : EvenPosition T k) (ha : a ∈ evenPatchPositions PT.tiling i) :
+    (clusterCrossingNeighbours PT hPT a).card ≤ (PT.tiling.P i).ℓ := by
+  classical
+  let S := clusterCrossingNeighbours PT hPT a
+  have hEll : (PT.tiling.P i).ℓ ≤ T.S.n k := by
+    have hlen := hPT.tiling_valid.prefix_internal_length
+    have hsup : (PT.tiling.P i).ℓ ≤
+        Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ :=
+      Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ)
+        (Finset.mem_univ i)
+    omega
+  let choice : {b : OddPosition T k // b ∈ S} → Fin (T.S.n k) := fun b =>
+    Classical.choose (clusterCrossingNeighbor_has_prefix_coord PT hPT i a ha b.1
+      (by simpa [S] using b.2))
+  have choice_spec : ∀ b : {b : OddPosition T k // b ∈ S},
+      (choice b).val < (PT.tiling.P i).ℓ ∧ b.1.1 = flipPos a.1 (choice b) := by
+    intro b
+    exact Classical.choose_spec (clusterCrossingNeighbor_has_prefix_coord PT hPT i a ha
+      b.1 (by simpa [S] using b.2))
+  let coord : {b : OddPosition T k // b ∈ S} → Fin (PT.tiling.P i).ℓ := fun b =>
+    ⟨(choice b).val, choice_spec b |>.1⟩
+  have hcoord_spec : ∀ b : {b : OddPosition T k // b ∈ S},
+      b.1.1 = flipPos a.1 ⟨(coord b).val,
+        lt_of_lt_of_le (coord b).isLt hEll⟩ := by
+    intro b
+    have hj : choice b = ⟨(coord b).val, lt_of_lt_of_le (coord b).isLt hEll⟩ := by
+      apply Fin.ext
+      rfl
+    calc
+      b.1.1 = flipPos a.1 (choice b) := (choice_spec b).2
+      _ = flipPos a.1 ⟨(coord b).val, lt_of_lt_of_le (coord b).isLt hEll⟩ := by rw [hj]
+  have hcoord_inj : Function.Injective coord := by
+    intro b c hbc
+    apply Subtype.ext
+    apply Subtype.ext
+    calc
+      b.1.1 = flipPos a.1
+          ⟨(coord b).val, lt_of_lt_of_le (coord b).isLt hEll⟩ := hcoord_spec b
+      _ = flipPos a.1
+          ⟨(coord c).val, lt_of_lt_of_le (coord c).isLt hEll⟩ := by rw [hbc]
+      _ = c.1.1 := (hcoord_spec c).symm
+  calc
+    S.card = Fintype.card {b : OddPosition T k // b ∈ S} := by simp
+    _ ≤ Fintype.card (Fin (PT.tiling.P i).ℓ) := Fintype.card_le_of_injective coord hcoord_inj
+    _ = (PT.tiling.P i).ℓ := Fintype.card_fin _
+
+theorem clusterCrossingFactorDeletion_le {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (M : ClusterMask PT) (hGeom : ClusterMaskGeometry PT hPT i M)
+    (f : OddPosition T k → ℝ)
+    (hfactor : ∀ r ∈ clusterKeptRows M, ∀ b ∈
+      clusterCrossingNeighbours PT hPT (M.positions r), 0 ≤ f b ∧ f b ≤ 3) :
+    (∏ r ∈ clusterKeptRows M,
+      ∏ b ∈ clusterCrossingNeighbours PT hPT (M.positions r), f b) ≤
+      3 ^ (2 * clusterCrossingRank PT M.positions M.geometric * (PT.tiling.P i).ℓ) *
+        ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by
+  classical
+  let A := clusterKeptRows M
+  let NI := clusterCrossingNonisolated PT M.positions M.geometric
+  let S := A.filter (fun r => r ∉ NI)
+  let R := A.filter (fun r => r ∈ NI)
+  let F : Fin (T.S.n k) → Finset (OddPosition T k) :=
+    fun r => clusterCrossingNeighbours PT hPT (M.positions r)
+  let rowProd : Fin (T.S.n k) → ℝ := fun r => ∏ b ∈ F r, f b
+  have hsplit : (∏ r ∈ A, rowProd r) = (∏ r ∈ S, rowProd r) * (∏ r ∈ R, rowProd r) := by
+    simpa [A, S, R] using
+      (Finset.prod_filter_mul_prod_filter_not A (fun r => r ∉ NI) rowProd).symm
+  have hallowed : (∏ r ∈ S, rowProd r) = ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by
+    symm
+    apply Finset.prod_finset_product
+    intro q
+    simp [clusterAllowedCrossings, A, S, NI, F, rowProd, clusterKeptRows]
+    constructor
+    · rintro ⟨hrow, hni, hb⟩
+      exact ⟨⟨hrow, hni⟩, hb⟩
+    · rintro ⟨⟨hrow, hni⟩, hb⟩
+      exact ⟨hrow, hni, hb⟩
+  have hRsubset : R ⊆ NI := by
+    intro r hr
+    exact (Finset.mem_filter.mp hr).2
+  have hRcard : R.card ≤ 2 * clusterCrossingRank PT M.positions M.geometric := by
+    calc
+      R.card ≤ NI.card := Finset.card_le_card hRsubset
+      _ ≤ 2 * clusterCrossingRank PT M.positions M.geometric :=
+        clusterCrossingNonisolated_card_le_two_rank PT M.positions M.geometric
+  have hrow_nonneg : ∀ r ∈ R, 0 ≤ rowProd r := by
+    intro r hr
+    apply Finset.prod_nonneg
+    intro b hb
+    exact (hfactor r (Finset.mem_filter.mp hr).1 b hb).1
+  have hrow_le : ∀ r ∈ R, rowProd r ≤ (3 : ℝ) ^ (PT.tiling.P i).ℓ := by
+    intro r hr
+    have hcard := clusterCrossingNeighbours_card_le_prefix PT hPT i (M.positions r)
+      (hGeom.1 r)
+    calc
+      rowProd r ≤ ∏ b ∈ F r, (3 : ℝ) := by
+        apply Finset.prod_le_prod₀
+        · intro b hb
+          exact (hfactor r (Finset.mem_filter.mp hr).1 b hb).1
+        · intro b hb
+          exact (hfactor r (Finset.mem_filter.mp hr).1 b hb).2
+      _ = (3 : ℝ) ^ (F r).card := by simp [rowProd, F]
+      _ ≤ (3 : ℝ) ^ (PT.tiling.P i).ℓ := by
+        exact pow_le_pow_right₀ (by norm_num) hcard
+  have hRprod : (∏ r ∈ R, rowProd r) ≤
+      (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+        (PT.tiling.P i).ℓ) := by
+    calc
+      (∏ r ∈ R, rowProd r) ≤ ∏ r ∈ R, (3 : ℝ) ^ (PT.tiling.P i).ℓ := by
+        apply Finset.prod_le_prod₀ hrow_nonneg
+        exact hrow_le
+      _ = ((3 : ℝ) ^ (PT.tiling.P i).ℓ) ^ R.card := by simp
+      _ = (3 : ℝ) ^ ((PT.tiling.P i).ℓ * R.card) := by rw [← pow_mul]
+      _ ≤ (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+          (PT.tiling.P i).ℓ) := by
+        apply pow_le_pow_right₀ (by norm_num)
+        calc
+          (PT.tiling.P i).ℓ * R.card = R.card * (PT.tiling.P i).ℓ := Nat.mul_comm _ _
+          _ ≤ (2 * clusterCrossingRank PT M.positions M.geometric) *
+              (PT.tiling.P i).ℓ := Nat.mul_le_mul_right _ hRcard
+  have hSnonneg : 0 ≤ ∏ r ∈ S, rowProd r := by
+    apply Finset.prod_nonneg
+    intro r hr
+    apply Finset.prod_nonneg
+    intro b hb
+    have hrA : r ∈ A := (Finset.mem_filter.mp hr).1
+    exact (hfactor r hrA b hb).1
+  have hAllowedNonneg : 0 ≤ ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by
+    rw [← hallowed]
+    exact hSnonneg
+  calc
+    (∏ r ∈ A, rowProd r) = (∏ r ∈ S, rowProd r) * (∏ r ∈ R, rowProd r) := hsplit
+    _ ≤ (∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2) *
+        (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+          (PT.tiling.P i).ℓ) := by
+      rw [hallowed]
+      exact mul_le_mul_of_nonneg_left hRprod hAllowedNonneg
+    _ = (3 : ℝ) ^ (2 * clusterCrossingRank PT M.positions M.geometric *
+        (PT.tiling.P i).ℓ) *
+        ∏ q ∈ clusterAllowedCrossings PT hPT M, f q.2 := by ring
+
+theorem clusterCoreNear_card_le_product_balls {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (i : Fin PT.tiling.m)
+    (a : EvenPosition T k) (ha : a ∈ evenPatchPositions PT.tiling i)
+    (r : ℕ) (hr : 100 * κ.ρ * (PT.tiling.P i).h ≤ (r : ℝ)) :
+    ((evenPatchPositions PT.tiling i).filter
+      (fun b => clusterCoreNear PT hPT i a b)).card ≤
+      (HypercubeRamsey.hammingBall (outsideWord PT hPT i a.1) 4).card *
+        (HypercubeRamsey.hammingBall (internalWord PT hPT i a.1) r).card := by
+  classical
+  let C := (evenPatchPositions PT.tiling i).filter
+    (fun b => clusterCoreNear PT hPT i a b)
+  let Bo := HypercubeRamsey.hammingBall (outsideWord PT hPT i a.1) 4
+  let Bi := HypercubeRamsey.hammingBall (internalWord PT hPT i a.1) r
+  let dom := {b : EvenPosition T k // b ∈ C}
+  let cod := {o : CubeVertex (T.S.n k - (PT.tiling.P i).h) // o ∈ Bo} ×
+    {z : CubeVertex (PT.tiling.P i).h // z ∈ Bi}
+  let f : dom → cod := fun b => by
+    have hnear : clusterCoreNear PT hPT i a b.1 := (Finset.mem_filter.mp b.2).2
+    have hdistOut : hammingDist (outsideWord PT hPT i a.1)
+        (outsideWord PT hPT i b.1.1) ≤ 4 := by exact_mod_cast hnear.1
+    have hout : outsideWord PT hPT i b.1.1 ∈ Bo := by
+      change outsideWord PT hPT i b.1.1 ∈ Finset.univ.filter
+        (fun z => hammingDist (outsideWord PT hPT i a.1) z ≤ 4)
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdistOut⟩
+    have hdistIn : hammingDist (internalWord PT hPT i a.1)
+        (internalWord PT hPT i b.1.1) ≤ r := by
+      exact_mod_cast hnear.2.trans hr
+    have hint : internalWord PT hPT i b.1.1 ∈ Bi := by
+      change internalWord PT hPT i b.1.1 ∈ Finset.univ.filter
+        (fun z => hammingDist (internalWord PT hPT i a.1) z ≤ r)
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hdistIn⟩
+    exact ⟨⟨outsideWord PT hPT i b.1.1, hout⟩,
+      ⟨internalWord PT hPT i b.1.1, hint⟩⟩
+  have hf_inj : Function.Injective f := by
+    intro b c hbc
+    apply Subtype.ext
+    apply Subtype.ext
+    have hout : outsideWord PT hPT i b.1.1 = outsideWord PT hPT i c.1.1 :=
+      congrArg (fun z : cod => z.1.1) hbc
+    have hint : internalWord PT hPT i b.1.1 = internalWord PT hPT i c.1.1 :=
+      congrArg (fun z : cod => z.2.1) hbc
+    exact position_eq_of_internal_outside PT hPT i hint hout
+  have hcard : Fintype.card dom ≤ Fintype.card cod := Fintype.card_le_of_injective f hf_inj
+  have hdom : Fintype.card dom = C.card := by
+    exact Fintype.card_of_subtype C (by intro b; simp [C])
+  calc
+    C.card = Fintype.card dom := hdom.symm
+    _ ≤ Fintype.card cod := hcard
+    _ = Bo.card * Bi.card := by simp [cod]
+
+theorem evenPatchPositions_card_formula {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (i : Fin PT.tiling.m)
+    (hell : (PT.tiling.P i).ℓ < T.S.n k) :
+    (evenPatchPositions PT.tiling i).card =
+      2 ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) := by
+  classical
+  let n := T.S.n k
+  let ell := (PT.tiling.P i).ℓ
+  let f : Fin ell → Fin n := fun j => ⟨j.val, lt_trans j.isLt (by simpa [n, ell] using hell)⟩
+  let S : Finset (Fin n) := Finset.univ.image f
+  have hf_inj : Function.Injective f := by
+    intro j j' hj
+    apply Fin.ext
+    simpa [f] using congrArg Fin.val hj
+  have hScard : S.card = ell := by
+    rw [Finset.card_image_iff.mpr]
+    · simp [ell]
+    · intro j hj j' hj' heq
+      exact hf_inj heq
+  have hS : S.card < n := by
+    rw [hScard]
+    simpa [n, ell] using hell
+  let z : ∀ j : S, Bool := fun j => PT.tiling.w i j.1
+  have hprefix : ∀ v : CubeVertex n,
+      (∀ j : S, v j.1 = z j) ↔ v ∈ PT.tiling.leaf i := by
+    intro v
+    constructor
+    · intro hv
+      change ∀ t : Fin n, t.val < ell → v t = PT.tiling.w i t
+      intro t ht
+      have htS : t ∈ S := by
+        apply Finset.mem_image.mpr
+        refine ⟨⟨t.val, by simpa [n, ell] using ht⟩, Finset.mem_univ _, ?_⟩
+        apply Fin.ext
+        rfl
+      exact hv ⟨t, htS⟩
+    · intro hv
+      change ∀ t : Fin n, t.val < ell → v t = PT.tiling.w i t at hv
+      intro j
+      have hjlt : j.1.val < ell := by
+        rcases Finset.mem_image.mp j.2 with ⟨j₀, _, heq⟩
+        have hval : j₀.val = j.1.val := by
+          simpa [f] using congrArg Fin.val heq
+        simpa [hval] using j₀.isLt
+      have h := hv j.1 hjlt
+      simpa [z] using h
+  let P := (HypercubeRamsey.evenRoleSet n).filter (fun v => v ∈ PT.tiling.leaf i)
+  have hP : P = (HypercubeRamsey.evenRoleSet n).filter
+      (fun v => ∀ j : S, v j.1 = z j) := by
+    ext v
+    simp only [P, Finset.mem_filter]
+    constructor
+    · rintro ⟨heven, hleaf⟩
+      exact ⟨heven, (hprefix v).mpr hleaf⟩
+    · rintro ⟨heven, hfixed⟩
+      exact ⟨heven, (hprefix v).mp hfixed⟩
+  let E := evenPatchPositions PT.tiling i
+  let embed : EvenPosition T k ↪ CubeVertex n :=
+    ⟨fun a => a.1, fun a b h => Subtype.ext h⟩
+  have hmap : E.map embed = P := by
+    ext v
+    simp only [P, Finset.mem_map, Finset.mem_filter]
+    constructor
+    · rintro ⟨a, ha, rfl⟩
+      have ha' : a ∈ evenPatchPositions PT.tiling i := by simpa [E] using ha
+      have hleaf : a.1 ∈ PT.tiling.leaf i := (Finset.mem_filter.mp ha').2
+      refine ⟨?_, hleaf⟩
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, a.2⟩
+    · rintro ⟨heven, hleaf⟩
+      have hpar : HypercubeRamsey.IsEvenRole v := by
+        simpa [HypercubeRamsey.evenRoleSet] using heven
+      let a : EvenPosition T k := ⟨v, hpar⟩
+      have ha : a ∈ E := by
+        simp only [E, evenPatchPositions, Finset.mem_filter, Finset.mem_univ]
+        exact ⟨trivial, by simpa [a] using hleaf⟩
+      exact ⟨a, ha, rfl⟩
+  have hcardEq : E.card = P.card := by
+    calc
+      E.card = (E.map embed).card := by simp
+      _ = P.card := by rw [hmap]
+  have hUniform := HypercubeRamsey.parity_projection_uniform S hS z
+  calc
+    (evenPatchPositions PT.tiling i).card = P.card := hcardEq
+    _ = ((HypercubeRamsey.evenRoleSet n).filter
+        (fun v => ∀ j : S, v j.1 = z j)).card := by rw [hP]
+    _ = 2 ^ (n - S.card - 1) := hUniform
+    _ = 2 ^ (T.S.n k - (PT.tiling.P i).ℓ - 1) := by simp [n, ell, hScard]
+
+theorem clusterHighMode_height_ge_log_fifth {κ : CConsts}
+    (hκ : CConsts.Admissible κ) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      (PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) → ∀ i,
+        (Real.log (T.S.n k : ℝ)) ^ (5 : ℕ) ≤ (PT.tiling.P i).h := by
+  let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
+  let logN : ℕ → ℝ := fun k => Real.log (nR k)
+  have hn : Tendsto nR atTop atTop :=
+    (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
+  have ht : Tendsto logN atTop atTop := Real.tendsto_log_atTop.comp hn
+  have hlogOne : ∀ᶠ k in atTop, 1 ≤ logN k :=
+    ht.eventually (eventually_ge_atTop (1 : ℝ))
+  have hcq : 0 < κ.cq ∧ κ.cq < 1 := by
+    constructor
+    · exact hκ.cq_rng.1
+    · have hMlo : 1 ≤ (κ.Mlo : ℝ) := by
+        have hCb : 100 < κ.Cb := by
+          have hratio : 0 < κ.aC / κ.aB := div_pos hκ.aC_rng.1 hκ.aB_rng.1
+          have hEq : (100 : ℝ) * κ.aC / κ.aB = 100 * (κ.aC / κ.aB) := by ring
+          have h := hκ.Cb_big
+          rw [hEq] at h
+          linarith
+        linarith [hκ.Mlo_big]
+      have hden : 1 < 20 * (κ.Mlo : ℝ) := by nlinarith
+      have hfrac : 1 / (20 * (κ.Mlo : ℝ)) < 1 := by
+        simpa using one_div_lt_one_div_of_lt (by norm_num) hden
+      exact lt_trans hκ.cq_rng.2 hfrac
+  have hMhiPos : 0 < (κ.Mhi : ℝ) := by
+    have h := hκ.Mhi_big.2
+    nlinarith [hκ.cq_rng.1]
+  have hMhiGtFive : 5 < (κ.Mhi : ℝ) := by
+    have h := hκ.Mhi_big.2
+    nlinarith [hcq.2, hMhiPos]
+  filter_upwards [hlogOne] with k ht1
+  intro PT hPT hm i
+  let t : ℝ := logN k
+  have htPos : 0 < t := by dsimp [t]; exact lt_of_lt_of_le zero_lt_one ht1
+  rcases hm with hsmall | hlarge
+  · have hdata := hPT.tiling_valid.cluster_data (Or.inr (Or.inl hsmall)) i
+    rcases hdata with ⟨_, _, _, _, _, _, _, hheightLower, _, _, hsmallIff, _⟩
+    let q : ℝ := (PT.tiling.P i).q
+    have hqLower : Real.rpow t κ.cq < q := by
+      have h := hsmallIff.mp hsmall
+      simpa [t, q, logN, nR] using h.1
+    have hheightLower' : Real.rpow q (κ.Mhi : ℝ) ≤ (PT.tiling.P i).h := by
+      simpa [q, hsmall] using hheightLower
+    have hraise : Real.rpow (Real.rpow t κ.cq) (κ.Mhi : ℝ) ≤
+        Real.rpow q (κ.Mhi : ℝ) :=
+      Real.rpow_le_rpow (Real.rpow_nonneg htPos.le _) hqLower.le hMhiPos.le
+    have hcomp : Real.rpow (Real.rpow t κ.cq) (κ.Mhi : ℝ) =
+        Real.rpow t (κ.cq * (κ.Mhi : ℝ)) :=
+      (Real.rpow_mul htPos.le κ.cq (κ.Mhi : ℝ)).symm
+    have hpow : t ^ (5 : ℕ) ≤ Real.rpow t (κ.cq * (κ.Mhi : ℝ)) := by
+      calc
+        t ^ (5 : ℕ) = Real.rpow t (5 : ℝ) := (Real.rpow_natCast t 5).symm
+        _ ≤ Real.rpow t (κ.cq * (κ.Mhi : ℝ)) :=
+          Real.rpow_le_rpow_of_exponent_le ht1 (le_of_lt hκ.Mhi_big.2)
+    calc
+      t ^ (5 : ℕ) ≤ Real.rpow t (κ.cq * (κ.Mhi : ℝ)) := hpow
+      _ = Real.rpow (Real.rpow t κ.cq) (κ.Mhi : ℝ) := hcomp.symm
+      _ ≤ Real.rpow q (κ.Mhi : ℝ) := hraise
+      _ ≤ (PT.tiling.P i).h := hheightLower'
+
+  · have hdata := hPT.tiling_valid.cluster_data (Or.inr (Or.inr hlarge)) i
+    rcases hdata with ⟨_, _, _, _, _, _, _, hheightLower, _, _, _, hlargeIff⟩
+    let q : ℝ := (PT.tiling.P i).q
+    have hqLower : t ^ (2 : ℕ) < q := by
+      have h := hlargeIff.mp hlarge
+      simpa [t, q, logN, nR] using h
+    have hheightLower' : Real.rpow q (κ.Mhi : ℝ) ≤ (PT.tiling.P i).h := by
+      simpa [q, hlarge] using hheightLower
+    have hraise : Real.rpow (t ^ (2 : ℕ)) (κ.Mhi : ℝ) ≤
+        Real.rpow q (κ.Mhi : ℝ) :=
+      Real.rpow_le_rpow (by positivity) hqLower.le hMhiPos.le
+    have hcomp : Real.rpow (t ^ (2 : ℕ)) (κ.Mhi : ℝ) =
+        Real.rpow t (2 * (κ.Mhi : ℝ)) := by
+      rw [(Real.rpow_natCast t 2).symm]
+      exact (Real.rpow_mul htPos.le 2 (κ.Mhi : ℝ)).symm
+    have hpow : t ^ (5 : ℕ) ≤ Real.rpow t (2 * (κ.Mhi : ℝ)) := by
+      calc
+        t ^ (5 : ℕ) = Real.rpow t (5 : ℝ) := (Real.rpow_natCast t 5).symm
+        _ ≤ Real.rpow t (2 * (κ.Mhi : ℝ)) :=
+          Real.rpow_le_rpow_of_exponent_le ht1 (by nlinarith [hMhiGtFive])
+    calc
+      t ^ (5 : ℕ) ≤ Real.rpow t (2 * (κ.Mhi : ℝ)) := hpow
+      _ = Real.rpow (t ^ (2 : ℕ)) (κ.Mhi : ℝ) := hcomp.symm
+      _ ≤ Real.rpow q (κ.Mhi : ℝ) := hraise
+      _ ≤ (PT.tiling.P i).h := hheightLower'
+
+private theorem realBinEntropy_eq_custom {p : ℝ} (hp0 : 0 < p) (hp1 : p < 1) :
+    Real.binEntropy p = HypercubeRamsey.binEntropy p := by
+  unfold Real.binEntropy HypercubeRamsey.binEntropy
+  simp [ne_of_gt hp0, ne_of_lt hp1, Real.log_inv]
+  ring
+
+private theorem binEntropy_four_scaled_le {m n : ℕ} (hm : 8 ≤ m) (hmn : m ≤ n) :
+    Real.binEntropy (4 / (m : ℝ)) * (m : ℝ) ≤ 4 * Real.log (n : ℝ) + 4 := by
+  let mr : ℝ := m
+  let nr : ℝ := n
+  let p : ℝ := 4 / mr
+  have hmpos : 0 < mr := by dsimp [mr]; exact_mod_cast (by omega : 0 < m)
+  have hmnR : mr ≤ nr := by dsimp [mr, nr]; exact_mod_cast hmn
+  have hnpos : 0 < nr := lt_of_lt_of_le hmpos hmnR
+  have hp0 : 0 < p := by dsimp [p]; positivity
+  have hp1 : p < 1 := by
+    dsimp [p]
+    rw [div_lt_one hmpos]
+    dsimp [mr]
+    exact_mod_cast (by omega : 4 < m)
+  have hq0 : 0 < 1 - p := sub_pos.mpr hp1
+  have hpm : p * mr = 4 := by dsimp [p]; field_simp [ne_of_gt hmpos]
+  have hpInv : p⁻¹ = mr / 4 := by dsimp [p]; field_simp [ne_of_gt hmpos]
+  have hlogQ : (1 - p) * Real.log ((1 - p)⁻¹) ≤ p := by
+    have hlog := Real.log_le_sub_one_of_pos (inv_pos.mpr hq0)
+    have hmul := mul_le_mul_of_nonneg_left hlog hq0.le
+    have heq : (1 - p) * ((1 - p)⁻¹ - 1) = p := by
+      field_simp [ne_of_gt hq0]
+      ring
+    calc
+      (1 - p) * Real.log ((1 - p)⁻¹) ≤
+          (1 - p) * ((1 - p)⁻¹ - 1) := hmul
+      _ = p := heq
+  have hsecond : mr * ((1 - p) * Real.log ((1 - p)⁻¹)) ≤ 4 := by
+    calc
+      mr * ((1 - p) * Real.log ((1 - p)⁻¹)) ≤ mr * p :=
+        mul_le_mul_of_nonneg_left hlogQ hmpos.le
+      _ = 4 := by nlinarith [hpm]
+  have hlog : Real.log (mr / 4) ≤ Real.log nr := by
+    apply Real.log_le_log (by positivity)
+    dsimp [mr, nr]
+    nlinarith
+  calc
+    Real.binEntropy (4 / (m : ℝ)) * (m : ℝ) =
+        (p * Real.log p⁻¹ + (1 - p) * Real.log (1 - p)⁻¹) * mr := by
+          simp [p, mr, Real.binEntropy]
+    _ = (p * mr) * Real.log p⁻¹ + mr * ((1 - p) * Real.log (1 - p)⁻¹) := by ring
+    _ ≤ 4 * Real.log (mr / 4) + 4 := by rw [hpm, hpInv]; linarith [hsecond]
+    _ ≤ 4 * Real.log nr + 4 := by nlinarith [hlog]
+
+set_option maxHeartbeats 400000 in
+theorem clusterHighMode_core_near_fraction {κ : CConsts}
+    (hκ : CConsts.Admissible κ) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      (PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge) →
+      ∀ i (a : EvenPosition T k), a ∈ evenPatchPositions PT.tiling i →
+        (((evenPatchPositions PT.tiling i).filter
+          (fun b => clusterCoreNear PT hPT i a b)).card : ℝ) ≤
+          ((evenPatchPositions PT.tiling i).card : ℝ) *
+            Real.exp (0.01 * PT.tiling.gain i) / (2 : ℝ) ^ (T.S.n k) := by
+  let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
+  let logN : ℕ → ℝ := fun k => Real.log (nR k)
+  have hn : Tendsto nR atTop atTop :=
+    (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
+  have ht : Tendsto logN atTop atTop := Real.tendsto_log_atTop.comp hn
+  have hlogOne : ∀ᶠ k in atTop, 1 ≤ logN k :=
+    ht.eventually (eventually_ge_atTop (1 : ℝ))
+  have ht4 : Tendsto (fun k => logN k ^ (4 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num)).comp ht
+  have ht5 : Tendsto (fun k => logN k ^ (5 : ℝ)) atTop atTop :=
+    (tendsto_rpow_atTop (by norm_num)).comp ht
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  let c : ℝ := 8 * κ.a / 10 ^ 9
+  have hρ : 0 < κ.ρ := hκ.ρ_rng.1
+  have hc : 0 < c := by dsimp [c]; positivity
+  have hAbsorbEventually : ∀ᶠ k in atTop,
+      9 / c ≤ logN k ^ (4 : ℝ) :=
+    ht4.eventually (eventually_ge_atTop (9 / c))
+  have hCoreHeight := clusterHighMode_height_ge_log_fifth hκ T
+  have hHeightConst : ∀ᶠ k in atTop,
+      1 / (900 * κ.ρ) ≤ logN k ^ (5 : ℝ) :=
+    ht5.eventually (eventually_ge_atTop (1 / (900 * κ.ρ)))
+  have hnLarge : ∀ᶠ k in atTop, 64 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually (eventually_ge_atTop 64)
+  have hIota : κ.ι < 1 / 100000 := by
+    have hmin₁ := min_le_right κ.xs (min κ.η0 (0.01 : ℝ))
+    have hmin₂ := min_le_right κ.η0 (0.01 : ℝ)
+    have hmin : min κ.xs (min κ.η0 (0.01 : ℝ)) ≤ 0.01 := le_trans hmin₁ hmin₂
+    have hdiv : min κ.xs (min κ.η0 (0.01 : ℝ)) / 1000 ≤ 1 / 100000 := by
+      calc
+        _ ≤ (1 / 100 : ℝ) / 1000 := by
+          convert div_le_div_of_nonneg_right hmin (by norm_num : (0 : ℝ) ≤ 1000) using 1 <;> norm_num
+        _ = 1 / 100000 := by norm_num
+    exact hκ.ι_rng.2.trans_le hdiv
+  filter_upwards [hlogOne, hAbsorbEventually, hHeightConst, hnLarge, hCoreHeight]
+      with k ht1 ht4 ht5 hn64 hheight
+  intro PT hPT hm i a ha
+  let nNat := T.S.n k
+  let n : ℝ := nNat
+  let hNat := (PT.tiling.P i).h
+  let h : ℝ := hNat
+  let ellNat := (PT.tiling.P i).ℓ
+  let ell : ℝ := ellNat
+  let t : ℝ := logN k
+  have htOne : 1 ≤ t := by simpa [t] using ht1
+  have htPos : 0 < t := lt_of_lt_of_le zero_lt_one htOne
+  have hA : t ^ (5 : ℝ) ≤ h := by
+    have hh := hheight PT hPT hm i
+    simpa [t, logN, nR, h] using (show (Real.log (T.S.n k : ℝ)) ^ (5 : ℝ) ≤ hNat from by
+      simpa [Real.rpow_natCast] using hh)
+  have hAbsorb : 4 * t + 5 ≤ c * t ^ (5 : ℝ) := by
+    have hc4 : 9 ≤ c * t ^ (4 : ℝ) := by
+      calc
+        9 = (9 / c) * c := by field_simp [hc.ne']
+        _ ≤ t ^ (4 : ℝ) * c := mul_le_mul_of_nonneg_right ht4 hc.le
+        _ = c * t ^ (4 : ℝ) := by ring
+    calc
+      _ ≤ 9 * t := by nlinarith [htOne]
+      _ ≤ (c * t ^ (4 : ℝ)) * t :=
+        mul_le_mul_of_nonneg_right hc4 (le_trans (by norm_num) htOne)
+      _ = c * (t ^ (4 : ℝ) * t) := by ring
+      _ = c * t ^ (5 : ℝ) := by
+        rw [show t ^ (4 : ℝ) * t = t ^ (4 + 1 : ℝ) by
+          rw [Real.rpow_add htPos, Real.rpow_one]]
+        norm_num
+  have hscaleAbsorb : 4 * t + 5 ≤ (8 * κ.a / 10 ^ 9) * h := by
+    calc
+      _ ≤ c * t ^ (5 : ℝ) := hAbsorb
+      _ ≤ c * h := mul_le_mul_of_nonneg_left hA hc.le
+      _ = (8 * κ.a / 10 ^ 9) * h := by rfl
+  have halloc := hPT.tiling_valid.allocation_bounds i
+  have hmaxR : (max hNat ellNat : ℝ) < n ^ κ.ι := by
+    simpa [n, nNat, nR] using halloc.1
+  have hNatMax : (hNat : ℝ) ≤ (max hNat ellNat : ℝ) := by
+    exact_mod_cast (Nat.le_max_left hNat ellNat)
+  have hnOne : 1 ≤ n := by
+    dsimp [n, nNat]
+    exact_mod_cast (by omega : 1 ≤ T.S.n k)
+  have hIotaHalf : κ.ι ≤ 1 / 2 := le_trans hIota.le (by norm_num)
+  have hpower : n ^ κ.ι ≤ Real.sqrt n := by
+    calc
+      n ^ κ.ι ≤ n ^ (1 / 2 : ℝ) :=
+        Real.rpow_le_rpow_of_exponent_le hnOne hIotaHalf
+      _ = Real.sqrt n := by rw [Real.sqrt_eq_rpow]
+  have hroot : Real.sqrt n ≤ n / 2 := by
+    have hsq : Real.sqrt n ^ 2 = n := Real.sq_sqrt (by linarith)
+    have hn4 : 4 ≤ n := by
+      dsimp [n, nNat]
+      exact_mod_cast (by omega : 4 ≤ T.S.n k)
+    nlinarith [hsq]
+  have hhHalf : h < n / 2 := lt_of_le_of_lt hNatMax (lt_of_lt_of_le hmaxR hpower) |>.trans_le hroot
+  have hdoubleReal : 2 * h < n := by linarith
+  have hdoubleNat : 2 * hNat < nNat := by
+    dsimp [h, n, hNat, nNat] at hdoubleReal
+    exact_mod_cast hdoubleReal
+  have hmNat : 8 ≤ nNat - hNat := by omega
+  have hmcast : (nNat - hNat : ℝ) = n - h := by
+    simp [n, nNat, h, hNat, Nat.cast_sub (by omega : hNat ≤ nNat)]
+  have hmEll : ellNat < nNat := by
+    have hlen := hPT.tiling_valid.prefix_internal_length
+    have hsupℓ : ellNat ≤ Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ :=
+      Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).ℓ) (Finset.mem_univ i)
+    have hsuph : hNat ≤ Finset.univ.sup fun j : Fin PT.tiling.m => (PT.tiling.P j).h :=
+      Finset.le_sup (f := fun j : Fin PT.tiling.m => (PT.tiling.P j).h) (Finset.mem_univ i)
+    have hheightPos := clusterHeight_pos PT hPT hm i
+    omega
+  have hEllR : (PT.tiling.P i).ℓ < T.S.n k := by exact_mod_cast hmEll
+  have hEvenCard := evenPatchPositions_card_formula PT i hEllR
+  have hGain : PT.tiling.gain i = κ.a * h / 10 ^ 6 := by
+    rcases hm with hs | hl
+    · simp [Tiling.gain, hs, h, hNat]
+    · simp [Tiling.gain, hl, h, hNat]
+  have hu : 1 ≤ κ.u := by have := hκ.u_rng.2; omega
+  have hGainNonneg : 0 ≤ PT.tiling.gain i := by rw [hGain]; positivity
+  have hEllGain : ell ≤ PT.tiling.gain i / (1000 * κ.u) := by
+    rcases halloc.2 with hb | hh
+    · rcases hm with hs | hl <;> simp_all
+    · exact hh.1
+  have hlog2nonneg : 0 ≤ Real.log 2 := Real.log_nonneg (by norm_num)
+  have hlog2le : Real.log 2 ≤ 1 := by
+    have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    norm_num at hlog
+    exact hlog
+  have huR : 1 ≤ (κ.u : ℝ) := by exact_mod_cast hu
+  have hEllLog : ell * Real.log 2 ≤ κ.a * h / 10 ^ 9 := by
+    calc
+      ell * Real.log 2 ≤ (PT.tiling.gain i / (1000 * κ.u)) * Real.log 2 :=
+        mul_le_mul_of_nonneg_right hEllGain hlog2nonneg
+      _ ≤ PT.tiling.gain i / (1000 * κ.u) := by
+        simpa only [mul_one] using mul_le_mul_of_nonneg_left hlog2le
+          (div_nonneg hGainNonneg (by positivity : (0 : ℝ) ≤ 1000 * (κ.u : ℝ)))
+      _ ≤ PT.tiling.gain i / 1000 := by
+        apply (div_le_div_iff₀ (by positivity [huR]) (by norm_num)).2
+        nlinarith [hGainNonneg, hu]
+      _ = κ.a * h / 10 ^ 9 := by rw [hGain]; ring
+  have hGap : 4 * t + 4 + κ.a * h / 10 ^ 9 ≤
+      (1 / 100 : ℝ) * PT.tiling.gain i - (ell + 1) * Real.log 2 := by
+    rw [hGain]
+    nlinarith [hscaleAbsorb, hEllLog, hlog2le]
+  have hEcard : ((evenPatchPositions PT.tiling i).card : ℝ) =
+      (2 : ℝ) ^ (nNat - ellNat - 1) := by exact_mod_cast hEvenCard
+  have hnatExp : ((nNat - ellNat - 1 : ℕ) : ℝ) =
+      (nNat : ℝ) - ellNat - 1 := by
+    have hsub : nNat - ellNat - 1 = nNat - (ellNat + 1) := by omega
+    rw [hsub, Nat.cast_sub (Nat.succ_le_of_lt hmEll)]
+    push_cast
+    ring
+  have hpow2 (m : ℕ) : (2 : ℝ) ^ m = Real.exp ((m : ℝ) * Real.log 2) := by
+    calc
+      (2 : ℝ) ^ m = (Real.exp (Real.log 2)) ^ m := by rw [Real.exp_log (by norm_num)]
+      _ = Real.exp ((m : ℝ) * Real.log 2) := by
+        rw [mul_comm (m : ℝ) (Real.log 2), ← Real.exp_nat_mul]
+        congr 1
+        ring
+  have hRhsExp :
+      (2 : ℝ) ^ (nNat - ellNat - 1) * Real.exp ((1 / 100 : ℝ) * PT.tiling.gain i) /
+          (2 : ℝ) ^ nNat =
+        Real.exp ((1 / 100 : ℝ) * PT.tiling.gain i - (ell + 1) * Real.log 2) := by
+    rw [hpow2, hpow2, ← Real.exp_add, ← Real.exp_sub]
+    congr 1
+    rw [hnatExp]
+    simp [n, nNat, ell, ellNat]
+    ring
+  have hCount := clusterCoreNear_card_le_product_balls PT hPT i a ha
+      (Nat.ceil (100 * κ.ρ * h)) (by exact Nat.le_ceil _)
+  let mout := nNat - hNat
+  let rIn := Nat.ceil (100 * κ.ρ * h)
+  have hmOut : 8 ≤ mout := by simpa [mout] using hmNat
+  have hOutVol := HypercubeRamsey.hammingBall_volume_bound
+      (by omega : 0 < mout) (by omega : 4 ≤ mout / 2)
+      (outsideWord PT hPT i a.1)
+  have hOutVolR :
+      (HypercubeRamsey.hammingBall (outsideWord PT hPT i a.1) 4).card ≤
+        Real.exp (Real.binEntropy (4 / (mout : ℝ)) * (mout : ℝ)) := by exact_mod_cast hOutVol
+  have hOutEntropy : Real.binEntropy (4 / (mout : ℝ)) * (mout : ℝ) ≤ 4 * t + 4 := by
+    have h := binEntropy_four_scaled_le hmOut (Nat.sub_le nNat hNat)
+    simpa [mout, n, nNat, h, t, logN, nR, hmcast] using h
+  have hOutBound :
+      (HypercubeRamsey.hammingBall (outsideWord PT hPT i a.1) 4).card ≤
+        Real.exp (4 * t + 4) := by
+    exact hOutVolR.trans (Real.exp_le_exp.mpr hOutEntropy)
+  have hHeightPos : 0 < h := by
+    dsimp [h, hNat]
+    exact_mod_cast clusterHeight_pos PT hPT hm i
+  have h900 : 1 ≤ 900 * κ.ρ * h := by
+    have hcut : 1 / (900 * κ.ρ) ≤ h := by
+      calc
+        _ ≤ t ^ (5 : ℝ) := ht5
+        _ ≤ h := hA
+    simpa only [mul_comm h] using
+      (div_le_iff₀ (by positivity : (0 : ℝ) < 900 * κ.ρ)).mp hcut
+  have hRupper : (rIn : ℝ) < 100 * κ.ρ * h + 1 :=
+    Nat.ceil_lt_add_one (by positivity : (0 : ℝ) ≤ 100 * κ.ρ * h)
+  have hRratio : (rIn : ℝ) / h ≤ 1000 * κ.ρ := by
+    apply (div_le_iff₀ hHeightPos).2
+    have hstrict : (rIn : ℝ) < 1000 * κ.ρ * h := by nlinarith only [hRupper, h900]
+    exact hstrict.le
+  have hρsmall : 1000 * κ.ρ < 1 / 4 := by nlinarith only [hκ.ρ_rng.2.1]
+  have hRhalfReal : (rIn : ℝ) ≤ h / 2 := by
+    have hmul := (div_le_iff₀ hHeightPos).mp hRratio
+    have hsmall := mul_le_mul_of_nonneg_right hρsmall.le hHeightPos.le
+    nlinarith only [hmul, hsmall, hHeightPos]
+  have hRdouble : 2 * rIn ≤ hNat := by
+    have hdoubleR : 2 * (rIn : ℝ) ≤ (hNat : ℝ) := by
+      change 2 * (rIn : ℝ) ≤ h
+      linarith only [hRhalfReal]
+    exact_mod_cast hdoubleR
+  have hRhalf : rIn ≤ hNat / 2 := by omega
+  have hInVol := HypercubeRamsey.hammingBall_volume_bound
+      (by dsimp [hNat]; exact clusterHeight_pos PT hPT hm i) hRhalf (internalWord PT hPT i a.1)
+  have hInVolR :
+      (HypercubeRamsey.hammingBall (internalWord PT hPT i a.1) rIn).card ≤
+        Real.exp (Real.binEntropy ((rIn : ℝ) / h) * h) := by
+    have := hInVol
+    exact_mod_cast this
+  have hEntropyArg0 : 0 ≤ (rIn : ℝ) / h := by positivity
+  have hEntropyArg1 : (rIn : ℝ) / h ≤ 1000 * κ.ρ := hRratio
+  have hEntropy1000Pos : 0 < 1000 * κ.ρ := by positivity
+  have hEntropy1000LtOne : 1000 * κ.ρ < 1 := by linarith [hρsmall]
+  have hEntropyMono : Real.binEntropy ((rIn : ℝ) / h) ≤ Real.binEntropy (1000 * κ.ρ) :=
+    Real.binEntropy_strictMonoOn.monotoneOn
+      (by exact ⟨hEntropyArg0, le_trans hEntropyArg1 (by linarith [hρsmall])⟩)
+      (by exact ⟨le_of_lt hEntropy1000Pos, by linarith [hρsmall]⟩)
+      hEntropyArg1
+  have hEntropyBudget : Real.binEntropy (1000 * κ.ρ) < κ.a / 10 ^ 9 := by
+    rw [realBinEntropy_eq_custom hEntropy1000Pos hEntropy1000LtOne]
+    exact hκ.ρ_rng.2.2
+  have hInEntropy : Real.binEntropy ((rIn : ℝ) / h) * h ≤ κ.a * h / 10 ^ 9 := by
+    calc
+      _ ≤ Real.binEntropy (1000 * κ.ρ) * h :=
+        mul_le_mul_of_nonneg_right hEntropyMono hHeightPos.le
+      _ ≤ (κ.a / 10 ^ 9) * h := by gcongr
+      _ = κ.a * h / 10 ^ 9 := by ring
+  have hInBound :
+      (HypercubeRamsey.hammingBall (internalWord PT hPT i a.1) rIn).card ≤
+        Real.exp (κ.a * h / 10 ^ 9) := by
+    exact hInVolR.trans (Real.exp_le_exp.mpr hInEntropy)
+  have hCountR :
+      (((evenPatchPositions PT.tiling i).filter
+        (fun b => clusterCoreNear PT hPT i a b)).card : ℝ) ≤
+      (HypercubeRamsey.hammingBall (outsideWord PT hPT i a.1) 4).card *
+        (HypercubeRamsey.hammingBall (internalWord PT hPT i a.1) rIn).card := by
+    exact_mod_cast hCount
+  have hCountExp :
+      (((evenPatchPositions PT.tiling i).filter
+        (fun b => clusterCoreNear PT hPT i a b)).card : ℝ) ≤
+      Real.exp (4 * t + 4 + κ.a * h / 10 ^ 9) := by
+    calc
+      _ ≤ _ := hCountR
+      _ ≤ Real.exp (4 * t + 4) * Real.exp (κ.a * h / 10 ^ 9) :=
+        mul_le_mul hOutBound hInBound (by positivity) (by positivity)
+      _ = Real.exp (4 * t + 4 + κ.a * h / 10 ^ 9) :=
+        (Real.exp_add (4 * t + 4) (κ.a * h / 10 ^ 9)).symm
+  have hGap : 4 * t + 4 + κ.a * h / 10 ^ 9 ≤
+      (1 / 100 : ℝ) * PT.tiling.gain i - (ell + 1) * Real.log 2 := by
+    rw [hGain]
+    nlinarith [hscaleAbsorb, hEllLog, hlog2le]
+  calc
+    (((evenPatchPositions PT.tiling i).filter
+      (fun b => clusterCoreNear PT hPT i a b)).card : ℝ) ≤
+        Real.exp (4 * t + 4 + κ.a * h / 10 ^ 9) := hCountExp
+    _ ≤ Real.exp ((1 / 100 : ℝ) * PT.tiling.gain i - (ell + 1) * Real.log 2) :=
+      Real.exp_le_exp.mpr hGap
+    _ = ((evenPatchPositions PT.tiling i).card : ℝ) *
+        Real.exp (0.01 * PT.tiling.gain i) / (2 : ℝ) ^ nNat := by
+      rw [← hRhsExp, hEcard]
+      norm_num [n, nNat]
+
+theorem clusterGroupRoleCount_le_twiceHeight {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (g : ClusterGroupIndex PT) :
+    (Finset.univ.filter fun b : OddPosition T k => clusterGroupIndexAt PT hPT hm b = g).card ≤
+      2 * (PT.tiling.P g.1.1).h := by
+  let A := Finset.univ.filter fun b : OddPosition T k => clusterGroupIndexAt PT hPT hm b = g
+  have hsub : A.image (clusterSliceWord hPT) ⊆ clusterGroupWordChoices hPT hm g := by
+    intro z hz
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hz
+    have h := clusterSliceWord_mem_groupChoices (hPT := hPT) (hm := hm) b
+    rw [(Finset.mem_filter.mp hb).2] at h
+    exact h
+  calc
+    A.card = (A.image (clusterSliceWord hPT)).card :=
+      (Finset.card_image_of_injective _ (clusterSliceWord_injective hPT)).symm
+    _ ≤ (clusterGroupWordChoices hPT hm g).card := Finset.card_le_card hsub
+    _ ≤ _ := clusterGroupWordChoices_card_le g
+
+theorem clusterSameSlice_internal_neighbor {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (hn : 0 < T.S.n k)
+    (a : EvenPosition T k) (b : OddPosition T k) (hab : Adjacent a b)
+    (hs : clusterSliceAt PT hPT b.1 = clusterSliceAt PT hPT a.1) :
+    ∃ l : Fin (PT.tiling.P (patchAt PT hPT a.1)).h,
+      b.1 = flipPos a.1 ⟨T.S.n k - (PT.tiling.P (patchAt PT hPT a.1)).h + l.val,
+        by have hh := clusterHeight_le PT hPT (patchAt PT hPT a.1); have hl := l.isLt; omega⟩ := by
+  let M : ClusterMask PT := ⟨fun _ => a, ∅, ∅, ∅⟩
+  let r : Fin (T.S.n k) := ⟨0, hn⟩
+  have hmem := clusterAdjacent_sameSlice_mem_internalStarRoles (M := M) (r := r) hab hs
+  obtain ⟨l, hl, heq⟩ := Finset.mem_image.mp hmem
+  refine ⟨l, ?_⟩
+  exact (congrArg Subtype.val heq).symm
 
 theorem two_exp_le_exp_two_pow {n : ℕ} (hn : 1 ≤ n) :
     2 * Real.exp (n : ℝ) ≤ (Real.exp 2) ^ n := by

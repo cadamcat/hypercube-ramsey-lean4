@@ -1263,6 +1263,7 @@ theorem success_of_events : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ 
         SupportOK X (canonHt X) H ω → CentreSuccess X (canonHt X) H ω := by
   sorry
 
+set_option maxHeartbeats 1000000
 /-- SUB-LEMMA J10 (union bound over J3–J9): the two probability estimates of L5.1j. -/
 theorem markElig_estimates : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) →
     ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
@@ -1272,7 +1273,164 @@ theorem markElig_estimates : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < 
               ¬ (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X))) ≤
             Real.exp (-Real.sqrt n) ∧
           (X.centreLaw (canonHt X) H).pr (fun ω => ¬ CentreSuccess X (canonHt X) H ω) ≤ 1 / 100 := by
-  sorry
+  intro C cL cH hc
+  obtain ⟨Rsing, hRsing⟩ := singles_tail cL cH hc
+  obtain ⟨Rfam, hRfam⟩ := families_tail C cL cH hc
+  obtain ⟨Rsup, hRsup⟩ := support_tail cL cH hc
+  let R := (Rsing.join Rfam).join Rsup
+  refine ⟨R, ?_⟩
+  intro p hR
+  obtain ⟨hRsf, hRsup'⟩ := ParamReq5.holds_of_join hR
+  obtain ⟨hRsing', hRfam'⟩ := ParamReq5.holds_of_join hRsf
+  obtain ⟨nBalls, hBallsN⟩ := balls_tail p
+  obtain ⟨nSing, hSingN⟩ := hRsing p hRsing'
+  obtain ⟨nFam, hFamN⟩ := hRfam p hRfam'
+  obtain ⟨nSup, hSupN⟩ := hRsup p hRsup'
+  obtain ⟨nLeg, hLegN⟩ := legal_of_events p
+  obtain ⟨nHeight, hHeightN⟩ := heights_tail p
+  obtain ⟨nSuccess, hSuccessN⟩ := success_of_events p
+  have hexpLim := by
+    simpa only [Function.comp_apply] using
+      Real.tendsto_exp_neg_atTop_nhds_zero.comp
+        (Real.tendsto_sqrt_atTop.comp tendsto_natCast_atTop_atTop)
+  obtain ⟨nExp, hExpN⟩ := Filter.eventually_atTop.mp
+    (hexpLim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 400)))
+  let n01 := max nBalls nSing
+  let n02 := max n01 nFam
+  let n03 := max n02 nSup
+  let n04 := max n03 nLeg
+  let n05 := max n04 nHeight
+  let n06 := max n05 nSuccess
+  let n0 := max n06 nExp
+  refine ⟨n0, ?_⟩
+  intro n hn N E G X hXp hRC H hH
+  have hn06 : n06 ≤ n := (le_max_left _ _).trans hn
+  have hnExp : nExp ≤ n := (le_max_right _ _).trans hn
+  have hnSuccess : nSuccess ≤ n := (le_max_right _ _).trans hn06
+  have hn05 : n05 ≤ n := (le_max_left _ _).trans hn06
+  have hn04 : n04 ≤ n := (le_max_left _ _).trans hn05
+  have hnHeight : nHeight ≤ n := (le_max_right _ _).trans hn05
+  have hn03 : n03 ≤ n := (le_max_left _ _).trans hn04
+  have hnLeg : nLeg ≤ n := (le_max_right _ _).trans hn04
+  have hn02 : n02 ≤ n := (le_max_left _ _).trans hn03
+  have hnSup : nSup ≤ n := (le_max_right _ _).trans hn03
+  have hn01 : n01 ≤ n := (le_max_left _ _).trans hn02
+  have hnFam : nFam ≤ n := (le_max_right _ _).trans hn02
+  have hnBalls : nBalls ≤ n := (le_max_left _ _).trans hn01
+  have hnSing : nSing ≤ n := (le_max_right _ _).trans hn01
+  let μ := X.centreLaw (canonHt X) H
+  let badBalls : X.CΩ (canonHt X) → Prop := fun ω => ¬ BallsOK X (canonHt X) ω
+  let badSingles : X.CΩ (canonHt X) → Prop := fun ω =>
+    BallsOK X (canonHt X) ω ∧ ¬ SinglesOK X (canonHt X) H ω
+  let badFamilies : X.CΩ (canonHt X) → Prop := fun ω =>
+    BallsOK X (canonHt X) ω ∧ ¬ FamiliesOK X (canonHt X) H ω
+  let badLegal : X.CΩ (canonHt X) → Prop := fun ω =>
+    ¬ (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X))
+  let badHeights : X.CΩ (canonHt X) → Prop := fun ω =>
+    (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) ∧
+      ¬ (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω) (act ω)
+        (markElig X (canonHt X) H ω)
+  let badSupport : X.CΩ (canonHt X) → Prop := fun ω => ¬ SupportOK X (canonHt X) H ω
+  let badSuccess : X.CΩ (canonHt X) → Prop := fun ω => ¬ CentreSuccess X (canonHt X) H ω
+  have hBallsPr : μ.pr badBalls ≤ Real.exp (-Real.sqrt n) / 3 := by
+    simpa [μ, badBalls] using hBallsN n hnBalls N E G X hXp H
+  have hSinglesPr : μ.pr badSingles ≤ Real.exp (-Real.sqrt n) / 3 := by
+    simpa [μ, badSingles] using hSingN n hnSing N E G X hXp H hH
+  have hFamiliesPr : μ.pr badFamilies ≤ Real.exp (-Real.sqrt n) / 3 := by
+    simpa [μ, badFamilies] using hFamN n hnFam N E G X hXp hRC H hH
+  have hSupportPr : μ.pr badSupport ≤ 1 / 300 := by
+    simpa [μ, badSupport] using hSupN n hnSup N E G X hXp H hH
+  have hHeightsPr : μ.pr badHeights ≤ 1 / 300 := by
+    simpa [μ, badHeights] using hHeightN n hnHeight N E G X hXp H
+  have hLegDet : ∀ ω, BallsOK X (canonHt X) ω → SinglesOK X (canonHt X) H ω →
+      FamiliesOK X (canonHt X) H ω →
+        (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) := by
+    intro ω hB hS hF
+    exact hLegN n hnLeg N E G X hXp H ω hB hS hF
+  have hLegalCover : ∀ ω, badLegal ω →
+      badBalls ω ∨ badSingles ω ∨ badFamilies ω := by
+    intro ω hnotLegal
+    by_cases hB : BallsOK X (canonHt X) ω
+    · by_cases hS : SinglesOK X (canonHt X) H ω
+      · by_cases hF : FamiliesOK X (canonHt X) H ω
+        · exact (hnotLegal (hLegDet ω hB hS hF)).elim
+        · exact Or.inr (Or.inr ⟨hB, hF⟩)
+      · exact Or.inr (Or.inl ⟨hB, hS⟩)
+    · exact Or.inl hB
+  have hLegalUnion :
+      μ.pr (fun ω => badBalls ω ∨ badSingles ω ∨ badFamilies ω) ≤
+        μ.pr badBalls + μ.pr badSingles + μ.pr badFamilies := by
+    calc
+      _ ≤ μ.pr badBalls + μ.pr (fun ω => badSingles ω ∨ badFamilies ω) :=
+        FinProb.pr_union μ badBalls (fun ω => badSingles ω ∨ badFamilies ω)
+      _ ≤ μ.pr badBalls + (μ.pr badSingles + μ.pr badFamilies) := by
+        have hu := FinProb.pr_union μ badSingles badFamilies
+        nlinarith [hu]
+      _ = μ.pr badBalls + μ.pr badSingles + μ.pr badFamilies := by ring
+  have hLegalPr : μ.pr badLegal ≤ Real.exp (-Real.sqrt n) := by
+    calc
+      μ.pr badLegal ≤ μ.pr (fun ω => badBalls ω ∨ badSingles ω ∨ badFamilies ω) :=
+        FinProb.pr_mono μ _ _ hLegalCover
+      _ ≤ μ.pr badBalls + μ.pr badSingles + μ.pr badFamilies := hLegalUnion
+      _ ≤ Real.exp (-Real.sqrt n) / 3 + Real.exp (-Real.sqrt n) / 3 +
+          Real.exp (-Real.sqrt n) / 3 := by linarith [hBallsPr, hSinglesPr, hFamiliesPr]
+      _ = Real.exp (-Real.sqrt n) := by ring
+  have hSuccessDet : ∀ ω,
+      (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) →
+      BallsOK X (canonHt X) ω →
+      (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω) (act ω)
+        (markElig X (canonHt X) H ω) →
+      SupportOK X (canonHt X) H ω → CentreSuccess X (canonHt X) H ω := by
+    intro ω hL hB hHt hSup'
+    exact hSuccessN n hnSuccess N E G X hXp H ω hH.base_support hH.step1 hL hB hHt hSup'
+  have hSuccessCover : ∀ ω, badSuccess ω →
+      badLegal ω ∨ badBalls ω ∨ badHeights ω ∨ badSupport ω := by
+    intro ω hnotSuccess
+    by_cases hL : (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω)
+        (X.sites (canonHt X))
+    · by_cases hB : BallsOK X (canonHt X) ω
+      · by_cases hHt : (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω)
+          (act ω) (markElig X (canonHt X) H ω)
+        · by_cases hSup' : SupportOK X (canonHt X) H ω
+          · exact (hnotSuccess (hSuccessDet ω hL hB hHt hSup')).elim
+          · exact Or.inr (Or.inr (Or.inr hSup'))
+        · exact Or.inr (Or.inr (Or.inl ⟨hL, hHt⟩))
+      · exact Or.inr (Or.inl hB)
+    · exact Or.inl (by simpa [badLegal] using hL)
+  have hSuccessUnion :
+      μ.pr (fun ω => badLegal ω ∨ badBalls ω ∨ badHeights ω ∨ badSupport ω) ≤
+        μ.pr badLegal + μ.pr badBalls + μ.pr badHeights + μ.pr badSupport := by
+    calc
+      _ ≤ μ.pr badLegal +
+          μ.pr (fun ω => badBalls ω ∨ badHeights ω ∨ badSupport ω) :=
+        FinProb.pr_union μ badLegal
+          (fun ω => badBalls ω ∨ badHeights ω ∨ badSupport ω)
+      _ ≤ μ.pr badLegal + (μ.pr badBalls +
+          μ.pr (fun ω => badHeights ω ∨ badSupport ω)) := by
+        have hu := FinProb.pr_union μ badBalls
+          (fun ω => badHeights ω ∨ badSupport ω)
+        nlinarith [hu]
+      _ ≤ μ.pr badLegal + (μ.pr badBalls + (μ.pr badHeights + μ.pr badSupport)) :=
+        by
+          have hu := FinProb.pr_union μ badHeights badSupport
+          nlinarith [hu]
+      _ = μ.pr badLegal + μ.pr badBalls + μ.pr badHeights + μ.pr badSupport := by ring
+  have hSuccessPr : μ.pr badSuccess ≤ 1 / 100 := by
+    calc
+      μ.pr badSuccess ≤ μ.pr (fun ω => badLegal ω ∨ badBalls ω ∨ badHeights ω ∨ badSupport ω) :=
+        FinProb.pr_mono μ _ _ hSuccessCover
+      _ ≤ μ.pr badLegal + μ.pr badBalls +
+          μ.pr badHeights + μ.pr badSupport := hSuccessUnion
+      _ ≤ Real.exp (-Real.sqrt n) + Real.exp (-Real.sqrt n) / 3 +
+          (1 / 300 : ℝ) + 1 / 300 := by
+        linarith [hLegalPr, hBallsPr, hHeightsPr, hSupportPr]
+      _ ≤ 1 / 100 := by
+        have hexp : Real.exp (-Real.sqrt (n : ℝ)) < 1 / 400 := hExpN n hnExp
+        norm_num at hexp ⊢
+        nlinarith
+  exact ⟨hLegalPr, hSuccessPr⟩
+
+set_option maxHeartbeats 400000
 
 /-- SUB-LEMMA J11 (05:880–887): local validity at the long radius reads center data within
 `r + centreSlack`: neighbouring sites lie within `4√n + 302` of the odd image

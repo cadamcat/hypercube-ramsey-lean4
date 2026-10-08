@@ -353,5 +353,55 @@ theorem InRef_signShift (X : Setup5 γ K' χ n N E G) (t : CubeVertex (X.p.m n))
       exact congrArg (obsSignMap X t) hEq
 
 
+theorem obsLikOn_high_signShift (X : Setup5 γ K' χ n N E G) (H : X.KeyHist)
+    (t : CubeVertex (X.p.m n)) (r : X.AbsRecord) (j : CoarseKey5 n)
+    (hkey : r.1 = .inr j) (a : X.ArraysOn (Fin (X.p.T n)))
+    (θ : Fin (colLen5 (X.p.s n) r.1) → Fin N)
+    (ex : Option (Fin (X.p.T n) × X.Ty × Finset (Fin X.blockBound))) :
+    X.obsLikOn (signShiftHistory5 X t H) (shiftHighRecord X t r)
+      (arraysSignPerm X t a) θ (ex.map (refSignMap X t)) = X.obsLikOn H r a θ ex := by
+  classical
+  rcases r with ⟨ℓ, data⟩
+  change ℓ = .inr j at hkey
+  subst ℓ
+  have hfilter :
+      (data.1.image (obsSignMap X t)).filter
+          (fun c => (.inr j : X.Key) ∈ c.2.2.1) =
+        (data.1.filter (fun c => (.inr j : X.Key) ∈ c.2.2.1)).image (obsSignMap X t) := by
+    ext c
+    simp only [Finset.mem_filter, Finset.mem_image]
+    constructor
+    · rintro ⟨⟨d, hd, rfl⟩, hj⟩
+      exact ⟨d, ⟨hd, (mem_signShift_keys_high X t j d.2.2.1).mp hj⟩, rfl⟩
+    · rintro ⟨d, ⟨hd, hj⟩, rfl⟩
+      exact ⟨⟨d, hd, rfl⟩, (mem_signShift_keys_high X t j d.2.2.1).mpr hj⟩
+  unfold Setup5.obsLikOn
+  change (∏ c ∈ (data.1.image (obsSignMap X t)).filter
+      (fun c => (.inr j : X.Key) ∈ c.2.2.1), ∏ i : Fin (X.p.typeBlocks n c.2),
+      if X.InRef (ex.map (refSignMap X t)) c i then 1 else
+        ratio5 ((X.blockLaw (X.withCol (signShiftHistory5 X t H) (.inr j) θ) c.2).w
+          (arraysSignPerm X t a c i))
+          ((X.blockLawDel (signShiftHistory5 X t H) c.2 (.inr j)).w
+            (arraysSignPerm X t a c i))) = _
+  rw [hfilter, Finset.prod_image]
+  · apply Finset.prod_congr rfl
+    intro c _
+    apply Finset.prod_congr rfl
+    intro i _
+    have href : X.InRef (ex.map (refSignMap X t)) (obsSignMap X t c) i =
+        X.InRef ex c i := propext (InRef_signShift X t ex c i)
+    rw [href]
+    change (if X.InRef ex c i then 1 else
+      ratio5 ((X.blockLaw (X.withCol (signShiftHistory5 X t H) (.inr j) θ)
+        (signShiftType5 X t c.2)).w
+        (arraysSignPerm X t a (c.1, signShiftType5 X t c.2) i))
+        ((X.blockLawDel (signShiftHistory5 X t H) (signShiftType5 X t c.2)
+          (signShiftKey5 X t (.inr j))).w
+          (arraysSignPerm X t a (c.1, signShiftType5 X t c.2) i))) = _
+    rw [← withCol_high_signShift X H t j θ, blockLaw_signShift,
+      blockLawDel_signShift, arraysSignPerm_apply]
+  · intro c _ d _ h
+    exact obsSignMap_injective X t h
+
 end
 end HypercubeRamsey.Lane_sol_s05_h23

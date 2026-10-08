@@ -11,6 +11,11 @@ import HypercubeRamsey.S15.ClusterNodes_sol_s15_transfer
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
 import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_c2
+import HypercubeRamsey.S15.ClusterGeometry_sol_s15_c2
+import HypercubeRamsey.S15.ClusterBinStage_sol_s15_c2
+import HypercubeRamsey.S15.ClusterLabelStage_sol_s15_c2
+import HypercubeRamsey.S15.HighCluster_opus_s15
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -768,13 +773,80 @@ theorem high_cluster_bin_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hConditioning : ClusterHistoryConditioningClaim κ T)
     (hHistoryLoad : ClusterHistoryLoadClaim κ T) (hCapacity : ClusterCapacityClaim κ T) :
     ClusterBinStageClaim κ T := by
-  sorry
+  classical
+  obtain ⟨c, hc, hCapacity⟩ := hCapacity
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hMass, hConditioning, hHistoryLoad, hCapacity, hn,
+    Lane_opus_s15.bin_local_output κ hκ T c hc] with
+    k hMass hConditioning hHistoryLoad hCapacity hn hLocal
+  intro PT hPT hm
+  obtain ⟨H⟩ := hConditioning PT hPT hm
+  have houtputs : ∀ W, H.law.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+      Nonempty (HypercubeRamsey.Lane_sol_s15_c2.BinLawOutput PT hPT hm W) := by
+    intro W hW hload
+    have hraw : 0 < (clusterHistoryLaw PT hPT hm).w W := by
+      apply HypercubeRamsey.Lane_sol_s15_c2.avoided_history_raw_positive PT hPT hm H.positive W
+      rwa [← H.law_eq]
+    have havoid := H.avoids W hW
+    have hstar : ∀ a, (clusterIndependentBinKernel PT hPT hm W).pr
+        (fun B => (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) < clusterBinStarFailure PT hPT hm W B a) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) := by
+      intro a
+      exact HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_tail PT hPT hm W a (by omega)
+        (hMass PT hPT hm W hraw havoid a)
+    have hcert := hCapacity PT hPT hm W hload
+    exact hLocal PT hPT hm W hstar hcert
+  let output (W : ClusterHistory PT hPT hm)
+      (h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W) :=
+    Classical.choice (houtputs W h.1 h.2)
+  let binLaw (W : ClusterHistory PT hPT hm) :=
+    if h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W then (output W h).law
+    else clusterIndependentBinKernel PT hPT hm W
+  refine ⟨{
+    history_positive := H.positive
+    historyLaw := H.law
+    historyLaw_eq := H.law_eq
+    binLaw := binLaw
+    history_local_upper_comparison := H.local_comparison
+    history_avoids_alarms := H.avoids
+    history_load_probability := hHistoryLoad PT hPT hm H
+    bin_requirements := ?_
+    local_upper_comparison := ?_ }⟩
+  · intro W hW hload B hB
+    have hg : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W := ⟨hW, hload⟩
+    have hgood := (output W hg).good B
+    apply hgood
+    simpa only [binLaw, dif_pos hg] using hB
+  · intro W hW hload F hF S hdep hcard
+    have hg : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W := ⟨hW, hload⟩
+    simpa only [binLaw, dif_pos hg] using
+      (output W hg).comparison F hF S hdep hcard
 
 /-- P15.3(ii): conditionally sample the labels and enforce all even-row mass gates. -/
 theorem high_cluster_label_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hMass : ClusterMassClaim κ T)
     (hBins : ClusterBinStageClaim κ T) : ClusterSampleClaim κ T := by
-  sorry
+  classical
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hBins, hn, Lane_opus_s15.label_local_output κ hκ T] with k hBins hn hLocal
+  intro PT hPT hm
+  obtain ⟨BS⟩ := hBins PT hPT hm
+  apply HypercubeRamsey.Lane_sol_s15_c2.sample_of_label_outputs PT hPT hm BS (by omega)
+  intro W hW hload B hB
+  have hgood := BS.bin_requirements W hW hload B hB
+  have hreference := HypercubeRamsey.Lane_sol_s15_c2.binStage_reference_positive
+    PT hPT hm BS (by omega) W hW hload B hB
+  have hmass : ∀ a, (clusterIndependentLabelKernel PT hPT hm W B).pr
+      (fun I => clusterRowMass PT hPT hm W I a < 1 / 2) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) := by
+    intro a
+    rw [← HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_eq PT hPT hm W B a hreference]
+    exact hgood.1 a
+  have hraw : 0 < (clusterHistoryLaw PT hPT hm).w W := by
+    apply HypercubeRamsey.Lane_sol_s15_c2.avoided_history_raw_positive PT hPT hm BS.history_positive W
+    rw [← BS.historyLaw_eq]
+    exact hW
+  exact hLocal PT hPT hm W hraw (BS.history_avoids_alarms W hW) hload B hreference hgood hmass
 
 /-- P15.3 (`prop:high-cluster-sampling`, 15:119–156): assemble the history, bin, and label stages. -/
 theorem high_cluster_sampling (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -889,6 +961,9 @@ def ClusterHistoryRestore (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterRowCapClaim κ T := by
   have hWindow := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_degree_window hκ T
+  have hScales := HypercubeRamsey.Lane_sol_s15_c2.high_gain_scales κ hκ T
+  have hCross := HypercubeRamsey.Lane_sol_s15_load.high_cluster_crossing_scales_eventually κ hκ T
+  have hNpos : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
   let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
   have hn : Tendsto nR atTop atTop :=
     (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
@@ -904,13 +979,18 @@ theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       (Filter.Eventually.of_forall fun k => (hbstarEq k).symm)
   have hbstar : ∀ᶠ k in atTop, bstar T k < 1 / 18 :=
     hbstarTendsto.eventually (Iio_mem_nhds (by norm_num))
-  filter_upwards [hWindow, hbstar] with k hWindow hbstar
+  filter_upwards [hWindow, hbstar, hScales, hCross, hNpos] with k hWindow hbstar hScales hCross hNpos
   intro PT hPT hm CS
   refine ⟨?_, ?_, ?_, ?_⟩
   · intro ω a x
     exact CS.row_eq ω a x
-  · sorry
-  · sorry
+  · intro ω hω hload a x
+    exact HypercubeRamsey.Lane_sol_s15_c2.row_cap PT hPT hm CS ω hω hload
+      (by omega) hCross.1 hCross.2.1 (hCross.2.2 PT hPT) (hWindow PT hPT hm)
+      (hScales PT hPT hm) a x
+  · intro ω hω hload a x
+    exact HypercubeRamsey.Lane_sol_s15_c2.row_le_nominal PT hPT hm CS ω hω hload
+      hCross.1 hCross.2.1 (hCross.2.2 PT hPT) a x
   · intro i x hx b y
     let d := deg (T.S.E k) PT.tiling.c
       (PT.π (patchAt PT hPT b.1)).w x
@@ -946,7 +1026,24 @@ theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
 /-- P15.4b: core removal counts, forest/rank sparsity and crossing-factor deletion. -/
 theorem high_cluster_geometry (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterGeometryClaim κ T := by
-  sorry
+  have hNormEventually :=
+    HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_normalizedHit_bounds hκ T
+  have hCoreEventually := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_core_near_fraction hκ T
+  have hCrossEventually := HypercubeRamsey.Lane_sol_s15_c2.crossing_fraction_parameters κ hκ T
+  filter_upwards [hNormEventually, hCoreEventually, hCrossEventually] with k hNorm hCore hCross
+  intro PT hPT hm
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · exact hCore PT hPT hm
+  · intro i G j hj
+    exact HypercubeRamsey.Lane_sol_s15_c2.crossing_rank_tail_bound hκ hCross.1 hCross.2 PT hPT i G j
+  · intro vs G
+    exact HypercubeRamsey.Lane_q_s15_c2.clusterCrossingNonisolated_card_le_two_rank PT vs G
+  · intro i x hx M hGeom ys
+    apply HypercubeRamsey.Lane_q_s15_c2.clusterCrossingFactorDeletion_le PT hPT i M hGeom
+      (fun b => normalizedHit (T.S.E k) PT.tiling.c
+        (PT.π (patchAt PT hPT b.1)) x (ys b))
+    intro r hr b hb
+    exact hNorm PT hPT hm i x hx b (ys b)
 
 set_option maxHeartbeats 1000000 in
 /-- P15.4c: the small-bin core repeat cost. -/

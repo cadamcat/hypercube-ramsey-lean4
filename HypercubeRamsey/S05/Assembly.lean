@@ -233,14 +233,14 @@ theorem L5_1_rows : ∀ γ K' χ : ℝ, 0 < γ → γ < 1 → 0 < K' → 0 < χ 
           (Finset.mem_filter.mp hk).2.trans (Nat.mul_le_mul_right _ hCloc)⟩))
       one_target := fun lo r y hr => by
         rw [LR.selExp_mean (v, c) hi r lo y hr]
-        have hmean := L5_1k_mean_bound (LR.selExp (v, c) hi r)
+        have hmean := L5_1k_mean_bound (LR.selExp (v, c) hi r lo)
           (Real.exp (-(X.p.delta * X.p.kPrime n (X.g.severity r.1)))) (Real.exp_pos _)
           (Real.exp_le_one_iff.mpr (by
             have := X.p.hdelta.1
             have : (0 : ℝ) ≤ X.p.kPrime n (X.g.severity r.1) := Nat.cast_nonneg _
             nlinarith))
-          (LR.selExp_records (v, c) hi r) y
-        rw [LR.selExp_prior (v, c) hi r hr] at hmean
+          (LR.selExp_records (v, c) hi r lo) y
+        rw [LR.selExp_prior (v, c) hi r lo hr] at hmean
         have hN0 : (0 : ℝ) ≤ N := Nat.cast_nonneg _
         calc (N : ℝ) * _ ≤ (N : ℝ) * (2 * (X.prior (v, c) (X.g.roleKey (X.p.J n) r.1)).w y) :=
               mul_le_mul_of_nonneg_left hmean hN0

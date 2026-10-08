@@ -2,6 +2,7 @@ import HypercubeRamsey.S18.Defs
 import HypercubeRamsey.S18.Nodes_q_s18_n3
 import HypercubeRamsey.S18.Nodes_sol_fix_surv
 import HypercubeRamsey.S18.Nodes_sol_s18_2lm
+import HypercubeRamsey.S18.Nodes_sol_s18_2lm_finish
 import HypercubeRamsey.S18.Nodes_sol_fix_outsupp
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
@@ -47,6 +48,7 @@ import HypercubeRamsey.S18.Nodes_q_s18_n2
 import HypercubeRamsey.S18.Nodes_q_s18_n3
 import HypercubeRamsey.S18.Deletion_sol_s18_1b
 import HypercubeRamsey.S18.Nodes_sol_s18_1c
+import HypercubeRamsey.S18.Protocol_opus_s18_2g
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -544,7 +546,16 @@ theorem L18_2g {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK 
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
       ∀ X : CriticalTransferData D, TransferGeometry X → Nonempty (TransferProtocol X) := by
-  sorry
+  obtain ⟨Kβ, hKβ, hSchedule, hSmall⟩ := L18_0a hκ T
+  have hε : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  filter_upwards [hSmall (Real.log 2 / 1000) hε, Lane_sol_s18_1c.protocol_scalar_cutoffs hκ T,
+    Lane_sol_s18_1c.eventually_prefixLabelLaw_broad hκ T] with k hS hC hB
+  intro PT hPT D hD hT _hL X hG
+  have hsmall := hS PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  obtain ⟨hmargin, hcount, hbudget⟩ := hC PT hPT D (D.geom.patchOf X.target)
+  exact ⟨Lane_opus_s18_2g.protocol hD hT hG hsmall hmargin hcount hbudget
+    (fun σ t => hB PT hPT D X.failure.1 X.failure.2.1 (Lane_opus_s18_2g.protoSide D X σ t)
+      (D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val))⟩
 
 /-- L18.2h, 18:455–470. Complete reply-range cardinality, not an event tail. -/
 theorem L18_2h {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
@@ -630,7 +641,7 @@ theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
   refine ⟨κ.xs / 8, ?_, ?_, ?_⟩
   · exact div_pos hκ.xs_rng.1 (by norm_num)
   · nlinarith [hκ.xs_rng.1]
-  · sorry
+  · exact Lane_sol_s18_2lm.eventual_stop_facts hκ T hDisc
 
 /-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
 final unconditioned prefix-failure estimate. -/
@@ -1558,9 +1569,8 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
             K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker ≤
               (D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
                 (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card := by
-          -- The finite assignment-to-diagram injection and weighted count remain.
-          -- Distinct endpoints and palette support are retained in kernelSum.
-          sorry
+          exact Lane_sol_s18_6b.kernelSum_bounds D palette S K hK hthree ker
+            hnonneg hsymm hrow hentry hrate
         have hfactor : 0 ≤ Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S :=
           mul_nonneg (Real.exp_pos _).le (Lane_sol_s18_6b.correction_nonneg D Cp S)
         constructor

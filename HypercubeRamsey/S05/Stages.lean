@@ -1,4 +1,5 @@
 import HypercubeRamsey.S05.Defs
+import HypercubeRamsey.S05.Geometry_opus_s05
 
 /-!
 # L5.1g and L5.1i: the common high-row law and the prior-heavy bound
@@ -6,6 +7,8 @@ import HypercubeRamsey.S05.Defs
 L5.1g is the separation step of the high rows (05:574–592); L5.1i bounds the number of prior-heavy entries of a
 dominated tuple (05:785–806).  Both are used by the row construction of `Centres.lean`.
 -/
+
+set_option linter.deprecated false
 
 namespace HypercubeRamsey
 
@@ -77,8 +80,84 @@ theorem L5_1g_common_high_law {Data Ref : Type*} [Fintype Data] [Fintype Ref]
       have hc : c = default := hSub.elim _ _
       rw [hc]
       simpa [price] using hcost
-    · -- Multiple references require the finite separation argument.
-      sorry
+    · -- Multiple references: the separation step (Sion's minimax theorem, 05:574–581).
+      haveI : Nonempty Ref := hRef
+      let cap : ℝ := 2 * Real.exp M.capExponent / ((s : ℝ) * N)
+      let src : Fin s × Fin N → ℝ := fun i => (M.source d i.1).w i.2
+      let K : Set (Fin s × Fin N → ℝ) := stdSimplex ℝ (Fin s × Fin N) ∩
+        {w | ∀ i, w i ≤ cap ∧ (src i = 0 → w i = 0)}
+      let a : Ref → Fin s × Fin N → ℝ := fun c i => (M.deleted d c i.1).w i.2 / (s : ℝ)
+      let f : Ref → (Fin s × Fin N → ℝ) → ℝ := fun c w =>
+        Lane_opus_s05_geo.excessSum (a c) w - M.costBound * M.length c
+      have hcostEq : ∀ (R : FinProb (Fin s × Fin N)) (c : Ref),
+          ∑ h, ∑ y, R.w (h, y) * highDeletionCost5 R (M.deleted d) c h y =
+            Lane_opus_s05_geo.excessSum (a c) R.w := by
+        intro R c
+        unfold Lane_opus_s05_geo.excessSum
+        rw [Fintype.sum_prod_type]
+        refine Finset.sum_congr rfl fun h _ => Finset.sum_congr rfl fun y _ => ?_
+        exact Lane_opus_s05_geo.excessCost_eq (R.nonneg (h, y))
+      have hmemK : ∀ R : FinProb (Fin s × Fin N),
+          (∀ h y, R.w (h, y) ≤ cap) → (∀ h y, R.w (h, y) ≠ 0 → (M.source d h).w y ≠ 0) →
+            R.w ∈ K := by
+        intro R hcap hsupp
+        refine ⟨⟨R.nonneg, R.sum_eq_one⟩, fun i => ⟨hcap i.1 i.2, fun hi => ?_⟩⟩
+        by_contra hne
+        exact hsupp i.1 i.2 hne hi
+      have hKsub : K ⊆ {w | ∀ i, 0 ≤ w i} := fun w hw => hw.1.1
+      have hK : IsCompact K := by
+        apply IsCompact.inter_right
+        · exact IsCompact.of_isClosed_subset isCompact_Icc (isClosed_stdSimplex ℝ _)
+            (stdSimplex_subset_Icc ℝ)
+        · have hset : {w : Fin s × Fin N → ℝ | ∀ i, w i ≤ cap ∧ (src i = 0 → w i = 0)} =
+              ⋂ i, ({w : Fin s × Fin N → ℝ | w i ≤ cap} ∩
+                {w : Fin s × Fin N → ℝ | src i = 0 → w i = 0}) := by
+            ext w
+            simp [Set.mem_iInter]
+          rw [hset]
+          refine isClosed_iInter fun i =>
+            (isClosed_le (continuous_apply i) continuous_const).inter ?_
+          by_cases hi : src i = 0
+          · simpa [hi] using isClosed_eq (continuous_apply i) continuous_const
+          · simp [hi]
+      have hcv : Convex ℝ K := by
+        refine (convex_stdSimplex ℝ _).inter ?_
+        intro x hx y hy p q hp hq hpq i
+        refine ⟨?_, fun hi => ?_⟩
+        · simp only [Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+          have hxi := (hx i).1
+          have hyi := (hy i).1
+          calc p * x i + q * y i ≤ p * cap + q * cap := by
+                exact add_le_add (mul_le_mul_of_nonneg_left hxi hp)
+                  (mul_le_mul_of_nonneg_left hyi hq)
+            _ = cap := by rw [← add_mul, hpq, one_mul]
+        · simp [(hx i).2 hi, (hy i).2 hi]
+      obtain ⟨R0, hcap0, hsupp0⟩ := M.capped_feasible d hd
+      have hne : K.Nonempty := ⟨R0.w, hmemK R0 hcap0 hsupp0⟩
+      have hcont : ∀ c, ContinuousOn (f c) K := fun c =>
+        ((Lane_opus_s05_geo.excessSum_continuous (a c)).sub continuous_const).continuousOn
+      have hconv : ∀ c, ConvexOn ℝ K (f c) := fun c =>
+        ((Lane_opus_s05_geo.excessSum_convexOn (a c)).subset hKsub hcv).sub
+          (concaveOn_const _ hcv)
+      have hprice : ∀ p : Ref → ℝ, (∀ c, 0 ≤ p c) → ∑ c, p c = 1 →
+          ∃ x ∈ K, ∑ c, p c * f c x ≤ 0 := by
+        intro p hp0 hp1
+        obtain ⟨R, hcap, hsupp, hcost⟩ := M.price_feasible d hd p hp0 hp1
+        refine ⟨R.w, hmemK R hcap hsupp, ?_⟩
+        simp only [hcostEq] at hcost
+        simp only [f, mul_sub, Finset.sum_sub_distrib]
+        linarith
+      obtain ⟨w, hwK, hw⟩ :=
+        Lane_opus_s05_geo.common_point_of_price hne hcv hK f hcont hconv hprice
+      let R : FinProb (Fin s × Fin N) := ⟨w, hwK.1.1, hwK.1.2⟩
+      refine ⟨R, fun h y => (hwK.2 (h, y)).1,
+        fun h y hRy hsrc => hRy ((hwK.2 (h, y)).2 hsrc), ?_⟩
+      intro c
+      rw [hcostEq R c]
+      have hc := hw c
+      simp only [f] at hc
+      change Lane_opus_s05_geo.excessSum (a c) w ≤ M.costBound * M.length c
+      linarith
   · haveI : IsEmpty Ref := ⟨fun c => hRef ⟨c⟩⟩
     obtain ⟨R, hcap, hsupp⟩ := M.capped_feasible d hd
     refine ⟨R, hcap, hsupp, ?_⟩

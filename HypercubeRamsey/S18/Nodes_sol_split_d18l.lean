@@ -6,6 +6,7 @@ import HypercubeRamsey.S18.PaletteRows
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_row
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_row_quant
 import HypercubeRamsey.S18.Nodes_sol_d18l_up_pool
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_query
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_raw
@@ -391,16 +392,18 @@ theorem D18_L_palette_row (hκ : κ.Admissible) (hThresholds : LateThresholds κ
         ProfileCornerMass PT → LargeIndex κ T k → PaletteRowInput (rawData hκ X) Krow := by
   have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
   -- A fixed upstream scale, before the index and all construction choices.
-  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10)
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10 + 100 * κ.Kcell * (κ.Kp : ℝ))
   have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
   obtain ⟨Krow, hKrow, hRows⟩ := lowModePalettePairRow κ hκ T hSource K17 hK17
   refine ⟨Krow, hKrow, ?_⟩
-  filter_upwards [hRows] with k hRows
+  filter_upwards [hRows,
+    Lane_sol_d18l_row.eventually_physical_quantitative_validity hκ T K17
+      (Lane_sol_d18l_row.fixed_adapter_scale hκ)] with k hRows hAdapter
   intro PT hPT X hMass hLarge
   let physical := Classical.choice X.l16.physical
   let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low physical
-  have hQuant : ctx.L16QuantitativeValidity K17 := by
-    sorry
+  have hQuant : ctx.L16QuantitativeValidity K17 :=
+    Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
   apply Lane_sol_d18l_row.palette_row_transport (rawData hκ X) physical
     X.palette.hle X.palette.code X.palette.colours
   · intro v
@@ -694,8 +697,10 @@ theorem D18_L_upstream_bad (hκ : κ.Admissible) (hThresholds : LateThresholds �
   filter_upwards [Lane_sol_d18l_up.eventually_typical_tail T (κ.P : ℝ)
     (Nat.cast_nonneg κ.P), uniformPoolListEstimate κ hκ T hSource K17 hK17,
     T.S.n_tendsto.eventually_ge_atTop 1,
-    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R)]
-    with k hsmall hPools hn hlocal
+    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R),
+    Lane_sol_d18l_row.eventually_physical_remaining_inputs hκ T K17
+      (Lane_sol_d18l_row.fixed_adapter_scale hκ)]
+    with k hsmall hPools hn hlocal hAdapter
   intro PT hPT X hMass hLarge
   dsimp only
   let D := rawData hκ X
@@ -707,11 +712,10 @@ theorem D18_L_upstream_bad (hκ : κ.Admissible) (hThresholds : LateThresholds �
   | inr v =>
     by_cases heven : IsEvenRole v
     · let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
-      -- Physical geometry/sampler adapter; the corner, prior-shape,
-      -- fixed-pool singleton and pool-typicality fields are proved in the
-      -- lane helper. The remaining source/history/comparison fields are open.
-      have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty := by
-        sorry
+      -- The shared adapter supplies geometry, sampler and pool-comparison
+      -- fields for this physical context at the fixed upstream scale.
+      have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty :=
+        Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
       have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining
         hPT X.low physical X.l16.pools_nonempty K17 hlocal hRest
       have hEstimate := hPools PT context hQuant v D.encoding.poolLaw (Or.inl rfl)
@@ -752,8 +756,10 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
   filter_upwards [Lane_sol_d18l_up.eventually_typical_tail T (κ.P : ℝ)
     (Nat.cast_nonneg κ.P), uniformPoolListEstimate κ hκ T hSource K17 hK17,
     T.S.n_tendsto.eventually_ge_atTop 1,
-    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R)]
-    with k hsmall hPools hn hlocal
+    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R),
+    Lane_sol_d18l_row.eventually_physical_remaining_inputs hκ T K17
+      (Lane_sol_d18l_row.fixed_adapter_scale hκ)]
+    with k hsmall hPools hn hlocal hAdapter
   intro PT hPT X hMass hLarge
   dsimp only
   intro C slot bin f
@@ -795,8 +801,8 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
       by_cases heven : IsEvenRole v
       · let physical := Classical.choice X.l16.physical
         let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
-        have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty := by
-          sorry
+        have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty :=
+          Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
         have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining
           hPT X.low physical X.l16.pools_nonempty K17 hlocal hRest
         let poolPin : context.PoolPin := ⟨C, slot, bin⟩

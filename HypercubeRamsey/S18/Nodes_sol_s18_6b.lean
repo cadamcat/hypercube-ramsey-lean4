@@ -1235,4 +1235,770 @@ lemma descFactorial_le_factorial (p d : ℕ) (h : d ≤ p) : p.descFactorial d �
 
 end DiagramCounts
 
+section DiagramEncoding
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+noncomputable def diagramNodeEquiv {q : ℕ}
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) : NodePos shape.1 ≃ Fin (q - 1) :=
+  Fintype.equivFinOfCardEq ((nodePos_card shape.1).trans
+    (BinaryTree.mem_treesOfNumNodesEq.mp shape.2))
+
+noncomputable def diagramVertexEquiv {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) : Option (NodePos shape.1) ≃ Fin q :=
+  Fintype.equivFinOfCardEq (by
+    rw [Fintype.card_option, nodePos_card,
+      BinaryTree.mem_treesOfNumNodesEq.mp shape.2]
+    omega)
+
+noncomputable def diagramParent {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) (i : Fin (q - 1)) : Fin q :=
+  diagramVertexEquiv hq shape (parent shape.1 ((diagramNodeEquiv shape).symm i))
+
+noncomputable def diagramChild {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) (i : Fin (q - 1)) : Fin q :=
+  diagramVertexEquiv hq shape (some ((diagramNodeEquiv shape).symm i))
+
+/-- The tree rows record an orientation; every remaining row records its two
+vertex coordinates. The labels include the root coordinate. -/
+noncomputable def DiagramRealizes {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (pairs : Row → α × α) : Prop :=
+  (∀ i, pairs (diagram.2.1 i) =
+    if diagram.2.2.1 i then
+      (labels (diagramChild hq diagram.1 i), labels (diagramParent hq diagram.1 i))
+    else (labels (diagramParent hq diagram.1 i), labels (diagramChild hq diagram.1 i))) ∧
+  (∀ row : ExtraRows diagram.2.1, pairs row.1 =
+    (labels (diagram.2.2.2 row).1, labels (diagram.2.2.2 row).2))
+
+/-- A connected endpoint graph has a diagram using each spanning-tree row once. -/
+theorem exists_endpointDiagram {Row α : Type*} [Fintype α]
+    (G : SimpleGraph α) (hc : G.Connected) (pairs : Row → α × α)
+    (hw : ∀ x y, G.Adj x y → ∃ row,
+      s(x, y) = s((pairs row).1, (pairs row).2)) :
+    ∃ hq : 0 < Fintype.card α, ∃ diagram : EndpointDiagram Row (Fintype.card α),
+      ∃ labels : Fin (Fintype.card α) ≃ α,
+        DiagramRealizes hq diagram labels pairs := by
+  obtain ⟨root⟩ := hc.nonempty
+  have hq : 0 < Fintype.card α := Fintype.card_pos_iff.mpr ⟨root⟩
+  obtain ⟨tree, hv, hn, hcover⟩ := exists_plane_spanning_tree G hc root
+  let vl : Option (NodePos (treeShape tree)) ≃ α :=
+    Equiv.ofBijective (vertexLabels root tree)
+      ⟨vertexLabels_injective root tree hn, vertexLabels_surjective root tree hcover⟩
+  have hsize : (treeShape tree).numNodes = Fintype.card α - 1 := by
+    have h := Fintype.card_congr vl
+    rw [Fintype.card_option, nodePos_card] at h
+    omega
+  let shape : BinaryTree.treesOfNumNodesEq (Fintype.card α - 1) :=
+    ⟨treeShape tree, BinaryTree.mem_treesOfNumNodesEq.mpr hsize⟩
+  obtain ⟨eNode, heNode⟩ := exists_tree_row_embedding G pairs hw root tree hv hn
+  let e : Fin (Fintype.card α - 1) ↪ Row :=
+    (diagramNodeEquiv shape).symm.toEmbedding.trans eNode
+  let labels : Fin (Fintype.card α) ≃ α := (diagramVertexEquiv hq shape).symm.trans vl
+  have hparent (i : Fin (Fintype.card α - 1)) :
+      labels (diagramParent hq shape i) =
+        vertexLabels root tree (parent (treeShape tree) ((diagramNodeEquiv shape).symm i)) := by
+    simp [labels, diagramParent, vl, shape]
+  have hchild (i : Fin (Fintype.card α - 1)) :
+      labels (diagramChild hq shape i) = nodeLabel tree ((diagramNodeEquiv shape).symm i) := by
+    simp [labels, diagramChild, vl, shape, vertexLabels]
+  have horient : ∀ i : Fin (Fintype.card α - 1), ∃ flip : Bool,
+      pairs (e i) = if flip then
+        (labels (diagramChild hq shape i), labels (diagramParent hq shape i))
+      else (labels (diagramParent hq shape i), labels (diagramChild hq shape i)) := by
+    intro i
+    have h := heNode ((diagramNodeEquiv shape).symm i)
+    change s(vertexLabels root tree (parent (treeShape tree) ((diagramNodeEquiv shape).symm i)),
+      nodeLabel tree ((diagramNodeEquiv shape).symm i)) =
+      s((pairs (e i)).1, (pairs (e i)).2) at h
+    rw [← hparent i, ← hchild i] at h
+    rcases Sym2.eq_iff.mp h with ⟨h₁, h₂⟩ | ⟨h₁, h₂⟩
+    · exact ⟨false, by simp only [Bool.false_eq_true, ↓reduceIte]; exact Prod.ext h₁.symm h₂.symm⟩
+    · exact ⟨true, by simp only [↓reduceIte]; exact Prod.ext h₂.symm h₁.symm⟩
+  choose flip hflip using horient
+  let chords : ExtraRows e → Fin (Fintype.card α) × Fin (Fintype.card α) :=
+    fun row => (labels.symm (pairs row.1).1, labels.symm (pairs row.1).2)
+  refine ⟨hq, (shape, ⟨e, flip, chords⟩), labels, hflip, ?_⟩
+  intro row
+  simp only [chords, Equiv.apply_symm_apply, Prod.mk.eta]
+
+
+
+lemma diagramRealizes_map {Row α β : Type*} {q : ℕ} {hq : 0 < q}
+    {diagram : EndpointDiagram Row q} {labels : Fin q → α} {pairs : Row → α × α}
+    (f : α → β) (h : DiagramRealizes hq diagram labels pairs) :
+    DiagramRealizes hq diagram (fun i => f (labels i))
+      (fun row => (f (pairs row).1, f (pairs row).2)) := by
+  constructor
+  · intro i
+    change (f (pairs (diagram.2.1 i)).1, f (pairs (diagram.2.1 i)).2) = _
+    rw [h.1 i]
+    split_ifs <;> rfl
+  · intro row
+    change (f (pairs row.1).1, f (pairs row.1).2) = _
+    rw [h.2 row]
+
+
+lemma extendRowAssignment_apply (D : LateData hPT) (S : Finset (Pos T k))
+    (a : RowAssignment S) (v : S) : extendRowAssignment D S a v = a v := by
+  simp only [extendRowAssignment, v.2, ↓reduceDIte]
+
+lemma supported_host_mem (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (a : RowAssignment S) (violating : Bool)
+    (ha : rowPredicate D palette S violating a)
+    (x : HostVertices S (extendRowAssignment D S a)) :
+    x.1 ∈ D.palettes palette.1 palette.2 := by
+  obtain ⟨v, hv, hx⟩ := Finset.mem_biUnion.mp x.2
+  let row : S := ⟨v, hv⟩
+  have hrow := extendRowAssignment_apply D S a row
+  change extendRowAssignment D S a v = a row at hrow
+  rw [hrow] at hx
+  simp only [Finset.mem_insert, Finset.mem_singleton] at hx
+  rcases hx with hx | hx
+  · rw [hx]
+    exact (ha.1 row).2.1
+  · rw [hx]
+    exact (ha.1 row).2.2
+
+/-- Every supported assignment has a finite diagram, injective palette-valued
+labels, and the endpoint-count bounds used to stratify the weighted sum. -/
+theorem supported_assignment_diagram (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : RowAssignment S)
+    (ha : rowPredicate D palette S violating a) :
+    ∃ q : ℕ, ∃ hq : 0 < q,
+      q = (endpointVertices S (extendRowAssignment D S a)).card ∧
+      2 ≤ q ∧ q ≤ S.card + 1 ∧ (violating = true → q < S.card) ∧
+      ∃ diagram : EndpointDiagram S q, ∃ labels : Fin q ↪ Fin (T.S.N k),
+        (∀ i, labels i ∈ D.palettes palette.1 palette.2) ∧
+        DiagramRealizes hq diagram labels a := by
+  let b := extendRowAssignment D S a
+  let V := HostVertices S b
+  let pairs : S → V × V := fun row => (hostFirst S b row, hostSecond S b row)
+  have hc : (hostGraph S b).Connected := hostGraph_connected S b ha.2.1
+  have hw : ∀ x y : V, (hostGraph S b).Adj x y → ∃ row : S,
+      s(x, y) = s((pairs row).1, (pairs row).2) := by
+    rintro x y ⟨hne, row, hx⟩
+    refine ⟨row, ?_⟩
+    rcases hx with ⟨h₁, h₂⟩ | ⟨h₁, h₂⟩
+    · have h₁' : x = (pairs row).1 := Subtype.ext h₁
+      have h₂' : y = (pairs row).2 := Subtype.ext h₂
+      rw [h₁', h₂']
+    · have h₁' : x = (pairs row).2 := Subtype.ext h₁
+      have h₂' : y = (pairs row).1 := Subtype.ext h₂
+      rw [h₁', h₂']
+      exact Sym2.eq_swap
+  obtain ⟨hq, diagram, labelsV, hrealizes⟩ := exists_endpointDiagram (hostGraph S b) hc pairs hw
+  let labels : Fin (Fintype.card V) ↪ Fin (T.S.N k) :=
+    labelsV.toEmbedding.trans ⟨Subtype.val, Subtype.val_injective⟩
+  have hcard : Fintype.card V = (endpointVertices S b).card := Fintype.card_coe _
+  have htwo : 2 ≤ Fintype.card V := by
+    obtain ⟨row⟩ := ha.2.1.nonempty
+    have hne : hostFirst S b row ≠ hostSecond S b row := by
+      intro heq
+      have h := congrArg Subtype.val heq
+      change (b row).1 = (b row).2 at h
+      have hb := extendRowAssignment_apply D S a row
+      change b row = a row at hb
+      rw [hb] at h
+      exact (ha.1 row).1 h
+    haveI : Nontrivial V := ⟨⟨hostFirst S b row, hostSecond S b row, hne⟩⟩
+    exact Fintype.one_lt_card_iff_nontrivial.mpr inferInstance
+  have hupper : Fintype.card V ≤ S.card + 1 := by
+    rw [hcard]
+    exact connected_vertices_le S b ha.2.1
+  have hviolating : violating = true → Fintype.card V < S.card := by
+    rw [hcard]
+    exact ha.2.2
+  refine ⟨Fintype.card V, hq, hcard, htwo, hupper, hviolating,
+    diagram, labels, ?_, ?_⟩
+  · intro i
+    exact supported_host_mem D palette S a violating ha (labelsV i)
+  · have hmap := diagramRealizes_map (fun x : V => x.1) hrealizes
+    have hpairs : (fun row : S => ((pairs row).1.1, (pairs row).2.1)) = a := by
+      funext row
+      exact extendRowAssignment_apply D S a row
+    rw [hpairs] at hmap
+    exact hmap
+
+end DiagramEncoding
+
+section DiagramDecoding
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+noncomputable def diagramDecode {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (row : Row) : α × α :=
+  if h : row ∈ Set.range diagram.2.1 then
+    let i := Classical.choose h
+    if diagram.2.2.1 i then
+      (labels (diagramChild hq diagram.1 i), labels (diagramParent hq diagram.1 i))
+    else (labels (diagramParent hq diagram.1 i), labels (diagramChild hq diagram.1 i))
+  else
+    (labels (diagram.2.2.2 ⟨row, h⟩).1, labels (diagram.2.2.2 ⟨row, h⟩).2)
+
+lemma diagramDecode_tree {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (i : Fin (q - 1)) :
+    diagramDecode hq diagram labels (diagram.2.1 i) =
+      if diagram.2.2.1 i then
+        (labels (diagramChild hq diagram.1 i), labels (diagramParent hq diagram.1 i))
+      else (labels (diagramParent hq diagram.1 i), labels (diagramChild hq diagram.1 i)) := by
+  have hm : diagram.2.1 i ∈ Set.range diagram.2.1 := ⟨i, rfl⟩
+  have hi : Classical.choose hm = i := diagram.2.1.injective (Classical.choose_spec hm)
+  simp only [diagramDecode, hm, ↓reduceDIte, hi]
+
+lemma diagramDecode_extra {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (row : ExtraRows diagram.2.1) :
+    diagramDecode hq diagram labels row.1 =
+      (labels (diagram.2.2.2 row).1, labels (diagram.2.2.2 row).2) := by
+  simp only [diagramDecode, row.2, ↓reduceDIte]
+
+/-- All row pairs are recovered from the diagram and its vertex labels. -/
+theorem diagramDecode_recover {Row α : Type*} {q : ℕ} {hq : 0 < q}
+    {diagram : EndpointDiagram Row q} {labels : Fin q → α} {pairs : Row → α × α}
+    (h : DiagramRealizes hq diagram labels pairs) : diagramDecode hq diagram labels = pairs := by
+  funext row
+  by_cases hm : row ∈ Set.range diagram.2.1
+  · obtain ⟨i, rfl⟩ := hm
+    exact (diagramDecode_tree hq diagram labels i).trans (h.1 i).symm
+  · exact (diagramDecode_extra hq diagram labels ⟨row, hm⟩).trans (h.2 ⟨row, hm⟩).symm
+
+lemma diagramRealizes_decode {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) :
+    DiagramRealizes hq diagram labels (diagramDecode hq diagram labels) :=
+  ⟨diagramDecode_tree hq diagram labels, diagramDecode_extra hq diagram labels⟩
+
+lemma diagramRealizes_unique {Row α : Type*} {q : ℕ} {hq : 0 < q}
+    {diagram : EndpointDiagram Row q} {labels : Fin q → α} {a b : Row → α × α}
+    (ha : DiagramRealizes hq diagram labels a) (hb : DiagramRealizes hq diagram labels b) :
+    a = b := (diagramDecode_recover ha).symm.trans (diagramDecode_recover hb)
+
+abbrev DiagramSize (p : ℕ) (violating : Bool) :=
+  {q : Fin (p + 2) // 2 ≤ q.1 ∧ (violating = true → q.1 < p)}
+
+abbrev EndpointCode (Row α : Type*) (p : ℕ) (violating : Bool) :=
+  Σ q : DiagramSize p violating,
+    EndpointDiagram Row q.1.1 × (Fin q.1.1 → α)
+
+lemma diagramSize_pos {p : ℕ} {violating : Bool} (q : DiagramSize p violating) :
+    0 < q.1.1 := by
+  have h := q.2.1
+  omega
+
+noncomputable def endpointCodeDecode {Row α β : Type*} {p : ℕ} {violating : Bool}
+    (project : α → β) (code : EndpointCode Row α p violating) : Row → β × β :=
+  diagramDecode (diagramSize_pos code.1) code.2.1 (fun i => project (code.2.2 i))
+
+abbrev SupportedAssignments (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) :=
+  {a : RowAssignment S // rowPredicate D palette S violating a}
+
+/-- The code retains its endpoint-count stratum and uses palette-valued labels. -/
+theorem supported_assignment_code (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : RowAssignment S)
+    (ha : rowPredicate D palette S violating a) :
+    ∃ code : EndpointCode S (D.palettes palette.1 palette.2) S.card violating,
+      endpointCodeDecode Subtype.val code = a ∧
+      code.1.1.1 = (endpointVertices S (extendRowAssignment D S a)).card := by
+  obtain ⟨q, hq, hcard, htwo, hupper, hviol, diagram, labels, hmem, hrealizes⟩ :=
+    supported_assignment_diagram D palette S violating a ha
+  let size : DiagramSize S.card violating := ⟨⟨q, by omega⟩, htwo, hviol⟩
+  let code : EndpointCode S (D.palettes palette.1 palette.2) S.card violating :=
+    ⟨size, diagram, fun i => ⟨labels i, hmem i⟩⟩
+  refine ⟨code, ?_, hcard⟩
+  exact diagramDecode_recover hrealizes
+
+noncomputable def supportedEncoding (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : SupportedAssignments D palette S violating) :
+    EndpointCode S (D.palettes palette.1 palette.2) S.card violating :=
+  Classical.choose (supported_assignment_code D palette S violating a.1 a.2)
+
+theorem supportedEncoding_recover (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : SupportedAssignments D palette S violating) :
+    endpointCodeDecode Subtype.val (supportedEncoding D palette S violating a) = a.1 :=
+  (Classical.choose_spec (supported_assignment_code D palette S violating a.1 a.2)).1
+
+theorem supportedEncoding_endpoint_count (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) (a : SupportedAssignments D palette S violating) :
+    (supportedEncoding D palette S violating a).1.1.1 =
+      (endpointVertices S (extendRowAssignment D S a.1)).card :=
+  (Classical.choose_spec (supported_assignment_code D palette S violating a.1 a.2)).2
+
+/-- Decoding is a left inverse, hence the chosen encoding is injective. -/
+theorem supportedEncoding_injective (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool) :
+    Function.Injective (supportedEncoding D palette S violating) := by
+  intro a b hab
+  apply Subtype.ext
+  calc
+    a.1 = endpointCodeDecode Subtype.val (supportedEncoding D palette S violating a) :=
+      (supportedEncoding_recover D palette S violating a).symm
+    _ = endpointCodeDecode Subtype.val (supportedEncoding D palette S violating b) :=
+      congrArg (endpointCodeDecode Subtype.val) hab
+    _ = b.1 := supportedEncoding_recover D palette S violating b
+
+end DiagramDecoding
+
+section DiagramWeights
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+noncomputable def rowWeight {Row α : Type*} [Fintype Row]
+    (kernel : Row → α → α → ℝ) (pairs : Row → α × α) : ℝ :=
+  ∏ row, kernel row (pairs row).1 (pairs row).2
+
+lemma rowWeight_nonneg {Row α : Type*} [Fintype Row]
+    (kernel : Row → α → α → ℝ) (pairs : Row → α × α)
+    (hk : ∀ row x y, 0 ≤ kernel row x y) : 0 ≤ rowWeight kernel pairs :=
+  Finset.prod_nonneg fun row _ => hk row _ _
+
+lemma prod_rows_split {Row : Type*} [Fintype Row] {q : ℕ}
+    (e : Fin (q - 1) ↪ Row) (f : Row → ℝ) :
+    (∏ row, f row) = (∏ i, f (e i)) * ∏ row : ExtraRows e, f row.1 := by
+  have h := Fintype.prod_subtype_mul_prod_subtype (fun row => row ∈ Set.range e) f
+  have he := (Equiv.ofInjective e e.injective).prod_comp
+    (fun row : Set.range e => f row.1)
+  change (∏ i, f (e i)) = (∏ row : {r // r ∈ Set.range e}, f row.1) at he
+  calc
+    _ = (∏ row : {r // r ∈ Set.range e}, f row.1) *
+        ∏ row : ExtraRows e, f row.1 := by
+      convert h.symm using 1 <;> congr 1 <;>
+        apply Finset.prod_congr (by ext; simp) <;> intro _ _ <;> rfl
+    _ = _ := by rw [← he]
+
+noncomputable def diagramTreeWeight {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α)
+    (kernel : Row → α → α → ℝ) : ℝ :=
+  ∏ i, kernel (diagram.2.1 i) (labels (diagramParent hq diagram.1 i))
+    (labels (diagramChild hq diagram.1 i))
+
+lemma diagramWeight_le_tree {Row α : Type*} [Fintype Row] {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α)
+    (kernel : Row → α → α → ℝ) (t : ℝ)
+    (hk : ∀ row x y, 0 ≤ kernel row x y)
+    (hsym : ∀ row x y, kernel row x y = kernel row y x)
+    (hentry : ∀ row x y, kernel row x y ≤ t) :
+    rowWeight kernel (diagramDecode hq diagram labels) ≤
+      diagramTreeWeight hq diagram labels kernel * t ^ (Fintype.card Row - (q - 1)) := by
+  unfold rowWeight
+  rw [prod_rows_split diagram.2.1]
+  have htree :
+      (∏ i, kernel (diagram.2.1 i) (diagramDecode hq diagram labels (diagram.2.1 i)).1
+        (diagramDecode hq diagram labels (diagram.2.1 i)).2) =
+        diagramTreeWeight hq diagram labels kernel := by
+    apply Finset.prod_congr rfl
+    intro i _
+    rw [diagramDecode_tree]
+    split_ifs
+    · exact hsym _ _ _
+    · rfl
+  rw [htree]
+  apply mul_le_mul_of_nonneg_left
+  · calc
+      _ ≤ ∏ _row : ExtraRows diagram.2.1, t :=
+        Finset.prod_le_prod₀ (fun row _ => hk _ _ _) (fun row _ => hentry _ _ _)
+      _ = t ^ (Fintype.card Row - (q - 1)) := by simp only [Finset.prod_const,
+          Finset.card_univ, extraRows_card]
+  · exact Finset.prod_nonneg fun i _ => hk _ _ _
+
+noncomputable def diagramLabelEquiv {α : Type*} {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1)) :
+    (Fin q → α) ≃ α × (NodePos shape.1 → α) :=
+  (Equiv.arrowCongr (diagramVertexEquiv hq shape).symm (Equiv.refl α)).trans
+    (Equiv.piOptionEquivProd (β := fun _ => α))
+
+lemma diagramLabelEquiv_symm_apply {α : Type*} {q : ℕ} (hq : 0 < q)
+    (shape : BinaryTree.treesOfNumNodesEq (q - 1))
+    (z : α × (NodePos shape.1 → α)) (i : Fin q) :
+    (diagramLabelEquiv hq shape).symm z i =
+      vertexValue z.1 z.2 ((diagramVertexEquiv hq shape).symm i) := by
+  cases h : (diagramVertexEquiv hq shape).symm i <;>
+    simp [diagramLabelEquiv, Equiv.arrowCongr, Equiv.piOptionEquivProd, vertexValue, h]
+
+lemma diagramTreeWeight_labels {Row α : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (kernel : Row → α → α → ℝ)
+    (z : α × (NodePos diagram.1.1 → α)) :
+    diagramTreeWeight hq diagram ((diagramLabelEquiv hq diagram.1).symm z) kernel =
+      kernelWeight diagram.1.1
+        (fun i => kernel (diagram.2.1 (diagramNodeEquiv diagram.1 i))) z.1 z.2 := by
+  unfold diagramTreeWeight kernelWeight
+  apply Fintype.prod_equiv (diagramNodeEquiv diagram.1).symm
+  intro i
+  simp only [diagramParent, diagramChild, diagramLabelEquiv_symm_apply,
+    Equiv.symm_apply_apply, Equiv.apply_symm_apply, vertexValue, Option.elim_some]
+
+lemma diagramTreeWeight_sum_le {Row α : Type*} [Fintype α] {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (kernel : Row → α → α → ℝ) (s : ℝ) (hs : 0 ≤ s)
+    (hk : ∀ row x y, 0 ≤ kernel row x y) (hrow : ∀ row x, ∑ y, kernel row x y ≤ s) :
+    (∑ labels : Fin q → α, diagramTreeWeight hq diagram labels kernel) ≤
+      (Fintype.card α : ℝ) * s ^ (q - 1) := by
+  rw [← (diagramLabelEquiv hq diagram.1).symm.sum_comp
+    (fun labels => diagramTreeWeight hq diagram labels kernel)]
+  simp_rw [diagramTreeWeight_labels]
+  rw [Fintype.sum_prod_type]
+  calc
+    _ ≤ ∑ _root : α, s ^ diagram.1.1.numNodes := by
+      apply Finset.sum_le_sum
+      intro root _
+      exact kernelWeight_sum_le diagram.1.1 _ root s hs
+        (fun i x y => hk _ _ _) (fun i x => hrow _ _)
+    _ = _ := by simp [BinaryTree.mem_treesOfNumNodesEq.mp diagram.1.2]
+
+theorem diagramWeight_sum_le {Row α : Type*} [Fintype Row] [Fintype α] {q : ℕ}
+    (hq : 0 < q) (diagram : EndpointDiagram Row q) (kernel : Row → α → α → ℝ)
+    (s t : ℝ) (hs : 0 ≤ s) (ht : 0 ≤ t)
+    (hk : ∀ row x y, 0 ≤ kernel row x y)
+    (hsym : ∀ row x y, kernel row x y = kernel row y x)
+    (hrow : ∀ row x, ∑ y, kernel row x y ≤ s)
+    (hentry : ∀ row x y, kernel row x y ≤ t) :
+    (∑ labels : Fin q → α, rowWeight kernel (diagramDecode hq diagram labels)) ≤
+      (Fintype.card α : ℝ) * s ^ (q - 1) * t ^ (Fintype.card Row - (q - 1)) := by
+  calc
+    _ ≤ (∑ labels : Fin q → α, diagramTreeWeight hq diagram labels kernel) *
+        t ^ (Fintype.card Row - (q - 1)) := by
+      rw [Finset.sum_mul]
+      exact Finset.sum_le_sum fun labels _ =>
+        diagramWeight_le_tree hq diagram labels kernel t hk hsym hentry
+    _ ≤ _ := mul_le_mul_of_nonneg_right
+      (diagramTreeWeight_sum_le hq diagram kernel s hs hk hrow) (pow_nonneg ht _)
+
+theorem kernelSum_le_codeSum (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (violating : Bool)
+    (kernel : Pos T k → Fin (T.S.N k) → Fin (T.S.N k) → ℝ)
+    (hk : ∀ v ∈ S, ∀ x y, 0 ≤ kernel v x y) :
+    kernelSum D palette S violating kernel ≤
+      ∑ code : EndpointCode S (D.palettes palette.1 palette.2) S.card violating,
+        rowWeight (fun row : S => kernel row) (endpointCodeDecode Subtype.val code) := by
+  calc
+    _ = ∑ a : SupportedAssignments D palette S violating,
+        rowWeight (fun row : S => kernel row) a.1 := by
+      unfold kernelSum rowWeight
+      rw [← Finset.sum_filter]
+      exact Finset.sum_subtype _ (by simp) _
+    _ ≤ _ := by
+      apply Finset.sum_le_sum_of_injOn (supportedEncoding D palette S violating)
+        (supportedEncoding_injective D palette S violating).injOn (by simp)
+      · intro a _
+        rw [supportedEncoding_recover]
+      · intro code _ _
+        exact rowWeight_nonneg _ _ (fun row x y => hk row row.2 x y)
+
+end DiagramWeights
+
+lemma add_two_le_two_pow {p : ℕ} (hp : 3 ≤ p) : p + 2 ≤ 2 ^ p := by
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_add_of_le hp
+  induction m with
+  | zero => norm_num
+  | succ m ih =>
+      rw [show 3 + (m + 1) = (3 + m) + 1 by omega, pow_succ]
+      omega
+
+lemma stratum_rate_identity (p a d : ℕ) (had : a + d = p)
+    (M A u : ℝ) (hM : 0 < M) (hA : 0 < A) :
+    (8 : ℝ) ^ p * (4 * (p : ℝ) ^ 2) ^ d *
+        (2 * M * (A / M) ^ a * (M⁻¹ ^ 2 * u) ^ d) =
+      2 * M * (8 * A / M) ^ p * (4 * (p : ℝ) ^ 2 * u / (A * M)) ^ d := by
+  have hr : (A / M) * (4 * (p : ℝ) ^ 2 * u / (A * M)) =
+      4 * (p : ℝ) ^ 2 * (M⁻¹ ^ 2 * u) := by
+    field_simp
+  have hs : (A / M) ^ a * (A / M) ^ d = (A / M) ^ p := by
+    rw [← pow_add, had]
+  calc
+    _ = 2 * M * (8 : ℝ) ^ p *
+        ((A / M) ^ a * (4 * (p : ℝ) ^ 2 * (M⁻¹ ^ 2 * u)) ^ d) := by
+      rw [mul_pow]
+      ring
+    _ = 2 * M * (8 : ℝ) ^ p *
+        (((A / M) ^ a * (A / M) ^ d) *
+          (4 * (p : ℝ) ^ 2 * u / (A * M)) ^ d) := by
+      rw [← hr, mul_pow]
+      ring
+    _ = _ := by
+      rw [hs, show 8 * A / M = 8 * (A / M) by ring, mul_pow]
+      ring
+
+lemma diagram_stratum_bound {p q : ℕ} (hp : 3 ≤ p) (hq : 2 ≤ q) (hqp : q ≤ p + 1)
+    (M A u : ℝ) (hM : 0 < M) (hA : 0 < A) (hu : 0 ≤ u) :
+    (8 : ℝ) ^ (q - 1) * (p.factorial : ℝ) * ((q * q : ℕ) : ℝ) ^ (p - (q - 1)) *
+        (2 * M * (A / M) ^ (q - 1) * (M⁻¹ ^ 2 * u) ^ (p - (q - 1))) ≤
+      2 * M * (p.factorial : ℝ) * (8 * A / M) ^ p *
+        (4 * (p : ℝ) ^ 2 * u / (A * M)) ^ (p - (q - 1)) := by
+  have ha : q - 1 ≤ p := by omega
+  have had : (q - 1) + (p - (q - 1)) = p := by omega
+  have h8 : (8 : ℝ) ^ (q - 1) ≤ 8 ^ p := pow_le_pow_right₀ (by norm_num) ha
+  have hqR : (q : ℝ) ≤ (p : ℝ) + 1 := by exact_mod_cast hqp
+  have hpR : (1 : ℝ) ≤ p := by exact_mod_cast (show 1 ≤ p by omega)
+  have hsq : ((q * q : ℕ) : ℝ) ≤ 4 * (p : ℝ) ^ 2 := by
+    simp only [Nat.cast_mul]
+    have hq0 : (0 : ℝ) ≤ q := Nat.cast_nonneg _
+    nlinarith
+  have hb :
+      (8 : ℝ) ^ (q - 1) * ((q * q : ℕ) : ℝ) ^ (p - (q - 1)) *
+          (2 * M * (A / M) ^ (q - 1) * (M⁻¹ ^ 2 * u) ^ (p - (q - 1))) ≤
+        (8 : ℝ) ^ p * (4 * (p : ℝ) ^ 2) ^ (p - (q - 1)) *
+          (2 * M * (A / M) ^ (q - 1) * (M⁻¹ ^ 2 * u) ^ (p - (q - 1))) := by
+    gcongr
+  calc
+    _ = (p.factorial : ℝ) * ((8 : ℝ) ^ (q - 1) * ((q * q : ℕ) : ℝ) ^ (p - (q - 1)) *
+        (2 * M * (A / M) ^ (q - 1) * (M⁻¹ ^ 2 * u) ^ (p - (q - 1)))) := by ring
+    _ ≤ (p.factorial : ℝ) * ((8 : ℝ) ^ p * (4 * (p : ℝ) ^ 2) ^ (p - (q - 1)) *
+        (2 * M * (A / M) ^ (q - 1) * (M⁻¹ ^ 2 * u) ^ (p - (q - 1)))) :=
+      mul_le_mul_of_nonneg_left hb (Nat.cast_nonneg _)
+    _ = _ := by rw [stratum_rate_identity p (q - 1) (p - (q - 1)) had M A u hM hA]; ring
+
+lemma absorb_diagram_constant {p : ℕ} (hp : 1 ≤ p) (K M : ℝ) (hK : 0 < K) (hM : 0 < M) :
+    (256 : ℝ) * K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p ≤
+      (4096 * (K + 1) ^ 2 / M) ^ p := by
+  have hc : (256 : ℝ) ≤ 256 ^ p := by
+    simpa using pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 256) hp
+  calc
+    _ ≤ (256 : ℝ) ^ p * (K + 1) ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p := by
+      gcongr <;> linarith
+    _ = _ := by
+      rw [← mul_pow, ← mul_pow, ← mul_pow]
+      congr 1
+      ring
+
+lemma twoM_rate_square (p : ℕ) (M A u : ℝ) (hM : 0 < M) (hA : 0 < A) :
+    2 * M * (4 * (p : ℝ) ^ 2 * u / (A * M)) ^ 2 =
+      (32 / A ^ 2) * M⁻¹ * (p : ℝ) ^ 4 * u ^ 2 := by
+  field_simp
+  ring
+
+
+lemma ordinary_kernel_constant {p : ℕ} (hp : 3 ≤ p) (K M : ℝ) (hK : 0 < K) (hM : 0 < M) :
+    K ^ p * ((2 : ℝ) ^ p * (2 * M * (p.factorial : ℝ) * (8 * (K + 1) / M) ^ p)) ≤
+      M * (p.factorial : ℝ) * (4096 * (K + 1) ^ 2 / M) ^ p := by
+  have h := absorb_diagram_constant (show 1 ≤ p by omega) K M hK hM
+  calc
+    _ = M * (p.factorial : ℝ) * (2 * (K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p)) := by ring
+    _ ≤ M * (p.factorial : ℝ) * (256 * (K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p)) := by
+      gcongr <;> norm_num
+    _ = M * (p.factorial : ℝ) * (256 * K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p) := by ring
+    _ ≤ _ := mul_le_mul_of_nonneg_left h (by positivity)
+
+lemma violating_kernel_constant {p : ℕ} (hp : 3 ≤ p) (K M u : ℝ) (hK : 0 < K) (hM : 0 < M) :
+    K ^ p * ((2 : ℝ) ^ p * (2 * M * (p.factorial : ℝ) * (8 * (K + 1) / M) ^ p) *
+        (4 * (p : ℝ) ^ 2 * u / ((K + 1) * M)) ^ 2) ≤
+      M⁻¹ * u ^ 2 * (p : ℝ) ^ 4 * (p.factorial : ℝ) *
+        (4096 * (K + 1) ^ 2 / M) ^ p := by
+  have h := absorb_diagram_constant (show 1 ≤ p by omega) K M hK hM
+  have hb : 32 / (K + 1) ^ 2 ≤ (256 : ℝ) := by
+    apply (div_le_iff₀ (by positivity)).mpr
+    nlinarith [sq_nonneg K]
+  calc
+    _ = (2 * M * (4 * (p : ℝ) ^ 2 * u / ((K + 1) * M)) ^ 2) *
+        (p.factorial : ℝ) * K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p := by ring
+    _ = M⁻¹ * u ^ 2 * (p : ℝ) ^ 4 * (p.factorial : ℝ) *
+        ((32 / (K + 1) ^ 2) * K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p) := by
+      rw [twoM_rate_square p M (K + 1) u hM (by positivity)]
+      ring
+    _ ≤ M⁻¹ * u ^ 2 * (p : ℝ) ^ 4 * (p.factorial : ℝ) *
+        (256 * K ^ p * (2 : ℝ) ^ p * (8 * (K + 1) / M) ^ p) := by gcongr
+    _ ≤ _ := mul_le_mul_of_nonneg_left h (by positivity)
+
+section CodeWeights
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+lemma diagramDecode_map {Row α β : Type*} {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (project : α → β) :
+    diagramDecode hq diagram (fun i => project (labels i)) =
+      fun row => (project (diagramDecode hq diagram labels row).1,
+        project (diagramDecode hq diagram labels row).2) :=
+  diagramDecode_recover (diagramRealizes_map project (diagramRealizes_decode hq diagram labels))
+
+lemma diagramWeight_project {Row α β : Type*} [Fintype Row] {q : ℕ} (hq : 0 < q)
+    (diagram : EndpointDiagram Row q) (labels : Fin q → α) (project : α → β)
+    (kernel : Row → β → β → ℝ) :
+    rowWeight kernel (diagramDecode hq diagram (fun i => project (labels i))) =
+      rowWeight (fun row x y => kernel row (project x) (project y))
+        (diagramDecode hq diagram labels) := by
+  rw [diagramDecode_map]
+  rfl
+
+theorem endpointCodeWeight_sum_le {Row α β : Type*} [Fintype Row] [Fintype α]
+    (p : ℕ) (violating : Bool) (hp : Fintype.card Row = p)
+    (project : α → β) (kernel : Row → β → β → ℝ) (s t : ℝ) (hs : 0 ≤ s) (ht : 0 ≤ t)
+    (hk : ∀ row x y, 0 ≤ kernel row (project x) (project y))
+    (hsym : ∀ row x y, kernel row (project x) (project y) = kernel row (project y) (project x))
+    (hrow : ∀ row x, ∑ y, kernel row (project x) (project y) ≤ s)
+    (hentry : ∀ row x y, kernel row (project x) (project y) ≤ t) :
+    (∑ code : EndpointCode Row α p violating, rowWeight kernel (endpointCodeDecode project code)) ≤
+      ∑ q : DiagramSize p violating, (Fintype.card (EndpointDiagram Row q.1.1) : ℝ) *
+        ((Fintype.card α : ℝ) * s ^ (q.1.1 - 1) * t ^ (p - (q.1.1 - 1))) := by
+  rw [Fintype.sum_sigma]
+  apply Finset.sum_le_sum
+  intro q _
+  rw [Fintype.sum_prod_type]
+  calc
+    _ ≤ ∑ _diagram : EndpointDiagram Row q.1.1,
+        (Fintype.card α : ℝ) * s ^ (q.1.1 - 1) * t ^ (p - (q.1.1 - 1)) := by
+      apply Finset.sum_le_sum
+      intro diagram _
+      change (∑ labels : Fin q.1.1 → α,
+        rowWeight kernel (diagramDecode (diagramSize_pos q) diagram (fun i => project (labels i)))) ≤ _
+      simp_rw [diagramWeight_project]
+      simpa only [hp] using diagramWeight_sum_le (diagramSize_pos q) diagram
+        (fun row x y => kernel row (project x) (project y)) s t hs ht hk hsym hrow hentry
+    _ = _ := by simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+
+theorem endpointCode_sum_le {Row α β : Type*} [Fintype Row] [Fintype α]
+    (p : ℕ) (violating : Bool) (hpCard : Fintype.card Row = p) (hp : 3 ≤ p)
+    (project : α → β) (kernel : Row → β → β → ℝ) (K M u : ℝ)
+    (hK : 0 < K) (hM : 0 < M) (hu : 0 ≤ u)
+    (hroot : (Fintype.card α : ℝ) ≤ 2 * M)
+    (hk : ∀ row x y, 0 ≤ kernel row (project x) (project y))
+    (hsym : ∀ row x y, kernel row (project x) (project y) = kernel row (project y) (project x))
+    (hrow : ∀ row x, ∑ y, kernel row (project x) (project y) ≤ (K + 1) / M)
+    (hentry : ∀ row x y, kernel row (project x) (project y) ≤ M⁻¹ ^ 2 * u)
+    (hrate : 4 * (p : ℝ) ^ 2 * u / ((K + 1) * M) ≤ 1) :
+    (∑ code : EndpointCode Row α p violating, rowWeight kernel (endpointCodeDecode project code)) ≤
+      (2 : ℝ) ^ p * (2 * M * (p.factorial : ℝ) * (8 * (K + 1) / M) ^ p) *
+        (if violating then (4 * (p : ℝ) ^ 2 * u / ((K + 1) * M)) ^ 2 else 1) := by
+  let R : ℝ := 4 * (p : ℝ) ^ 2 * u / ((K + 1) * M)
+  let C : ℝ := 2 * M * (p.factorial : ℝ) * (8 * (K + 1) / M) ^ p
+  let factor : ℝ := if violating then R ^ 2 else 1
+  have hR0 : 0 ≤ R := by dsimp [R]; positivity
+  have hC0 : 0 ≤ C := by dsimp [C]; positivity
+  have hf0 : 0 ≤ factor := by dsimp [factor]; split_ifs <;> positivity
+  have hterm (q : DiagramSize p violating) :
+      (Fintype.card (EndpointDiagram Row q.1.1) : ℝ) *
+        ((Fintype.card α : ℝ) * ((K + 1) / M) ^ (q.1.1 - 1) *
+          (M⁻¹ ^ 2 * u) ^ (p - (q.1.1 - 1))) ≤ C * factor := by
+    have hqp : q.1.1 ≤ p + 1 := by have h := q.1.2; omega
+    have ha : q.1.1 - 1 ≤ Fintype.card Row := by rw [hpCard]; omega
+    have hc : (Fintype.card (EndpointDiagram Row q.1.1) : ℝ) ≤
+        (8 : ℝ) ^ (q.1.1 - 1) * (p.factorial : ℝ) *
+          ((q.1.1 * q.1.1 : ℕ) : ℝ) ^ (p - (q.1.1 - 1)) := by
+      exact_mod_cast (by simpa only [hpCard] using endpointDiagram_card_le (Row := Row) q.1.1 ha)
+    have hpow : R ^ (p - (q.1.1 - 1)) ≤ factor := by
+      by_cases hv : violating = true
+      · simp only [factor, hv, ↓reduceIte]
+        have hqv := q.2.2 hv
+        have hd : 2 ≤ p - (q.1.1 - 1) := by omega
+        calc
+          _ = R ^ 2 * R ^ (p - (q.1.1 - 1) - 2) := by
+            rw [← pow_add]
+            congr 1
+            omega
+          _ ≤ R ^ 2 * 1 := mul_le_mul_of_nonneg_left
+            (pow_le_one₀ hR0 hrate) (sq_nonneg R)
+          _ = _ := mul_one _
+      · simp only [factor, hv, ↓reduceIte]
+        exact pow_le_one₀ hR0 hrate
+    calc
+      _ ≤ (8 : ℝ) ^ (q.1.1 - 1) * (p.factorial : ℝ) *
+          ((q.1.1 * q.1.1 : ℕ) : ℝ) ^ (p - (q.1.1 - 1)) *
+          (2 * M * ((K + 1) / M) ^ (q.1.1 - 1) *
+            (M⁻¹ ^ 2 * u) ^ (p - (q.1.1 - 1))) := by gcongr
+      _ ≤ C * R ^ (p - (q.1.1 - 1)) :=
+        diagram_stratum_bound hp q.2.1 hqp M (K + 1) u hM (by positivity) hu
+      _ ≤ C * factor := mul_le_mul_of_nonneg_left hpow hC0
+  have hsize : Fintype.card (DiagramSize p violating) ≤ 2 ^ p := by
+    calc
+      _ ≤ p + 2 := by simpa only [Fintype.card_fin] using
+        Fintype.card_subtype_le (fun q : Fin (p + 2) => 2 ≤ q.1 ∧ (violating = true → q.1 < p))
+      _ ≤ _ := add_two_le_two_pow hp
+  have hsizeR : (Fintype.card (DiagramSize p violating) : ℝ) ≤ (2 : ℝ) ^ p := by
+    exact_mod_cast hsize
+  calc
+    _ ≤ ∑ q : DiagramSize p violating, (Fintype.card (EndpointDiagram Row q.1.1) : ℝ) *
+        ((Fintype.card α : ℝ) * ((K + 1) / M) ^ (q.1.1 - 1) *
+          (M⁻¹ ^ 2 * u) ^ (p - (q.1.1 - 1))) :=
+      endpointCodeWeight_sum_le p violating hpCard project kernel _ _
+        (by positivity) (by positivity) hk hsym hrow hentry
+    _ ≤ ∑ _q : DiagramSize p violating, C * factor := Finset.sum_le_sum fun q _ => hterm q
+    _ = (Fintype.card (DiagramSize p violating) : ℝ) * (C * factor) := by
+      simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+    _ ≤ (2 : ℝ) ^ p * (C * factor) :=
+      mul_le_mul_of_nonneg_right hsizeR (mul_nonneg hC0 hf0)
+    _ = _ := by simp only [C, factor, R, mul_assoc]
+
+end CodeWeights
+
+section SupportedKernelBounds
+attribute [local instance] Classical.decEq Classical.propDecidable
+set_option backward.isDefEq.respectTransparency.types false
+
+set_option maxHeartbeats 400000 in
+theorem kernelSum_bounds (D : LateData hPT) (palette : PaletteIndex D)
+    (S : Finset (Pos T k)) (K : ℝ) (hK : 0 < K) (hp : 3 ≤ S.card)
+    (kernel : Pos T k → Fin (T.S.N k) → Fin (T.S.N k) → ℝ)
+    (hk : ∀ v ∈ S, ∀ x y, 0 ≤ kernel v x y)
+    (hsym : ∀ v ∈ S, ∀ x y, kernel v x y = kernel v y x)
+    (hrow : ∀ v ∈ S, ∀ x, ∑ y, kernel v x y ≤ K / D.paletteScale palette)
+    (hentry : ∀ v ∈ S, ∀ x y, kernel v x y ≤ (D.paletteScale palette)⁻¹ ^ 2 *
+      Real.exp (0.01 * (T.S.n k : ℝ)))
+    (hrate : 4 * (S.card : ℝ) ^ 2 * Real.exp (0.01 * (T.S.n k : ℝ)) /
+      ((K + 1) * D.paletteScale palette) ≤ 1) :
+    K ^ S.card * kernelSum D palette S false kernel ≤
+        D.paletteScale palette * (S.card.factorial : ℝ) *
+          (4096 * (K + 1) ^ 2 / D.paletteScale palette) ^ S.card ∧
+      K ^ S.card * kernelSum D palette S true kernel ≤
+        (D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+          (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) *
+          (4096 * (K + 1) ^ 2 / D.paletteScale palette) ^ S.card := by
+  let M := D.paletteScale palette
+  let u := Real.exp (0.01 * (T.S.n k : ℝ))
+  let α := ↥(D.palettes palette.1 palette.2)
+  letI : DecidableEq S := Classical.decEq _
+  letI : DecidableEq α := Classical.decEq _
+  let ker : S → Fin (T.S.N k) → Fin (T.S.N k) → ℝ := fun row => kernel row
+  have hM : 0 < M := paletteScale_pos D palette
+  have hu : 0 ≤ u := (Real.exp_pos _).le
+  have hroot : (Fintype.card α : ℝ) ≤ 2 * M := by
+    simpa only [α, Fintype.card_coe, M, LateData.paletteScale, mul_div_assoc] using
+      D.palette_size palette.1 palette.2
+  have hrow' (row : S) (x : α) : (∑ y : α, ker row x.1 y.1) ≤ (K + 1) / M := by
+    calc
+      _ = ∑ y ∈ D.palettes palette.1 palette.2, kernel row x.1 y :=
+        Finset.sum_coe_sort _ _
+      _ ≤ ∑ y : Fin (T.S.N k), kernel row x.1 y :=
+        Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+          (fun y _ _ => hk row row.2 x.1 y)
+      _ ≤ K / M := hrow row row.2 x.1
+      _ ≤ (K + 1) / M := div_le_div_of_nonneg_right (by linarith) hM.le
+  have hCode (violating : Bool) :
+      (∑ code : EndpointCode S α S.card violating,
+        rowWeight ker (endpointCodeDecode Subtype.val code)) ≤
+      (2 : ℝ) ^ S.card * (2 * M * (S.card.factorial : ℝ) * (8 * (K + 1) / M) ^ S.card) *
+        (if violating then (4 * (S.card : ℝ) ^ 2 * u / ((K + 1) * M)) ^ 2 else 1) :=
+    endpointCode_sum_le (Row := S) (α := α) (β := Fin (T.S.N k)) S.card violating (Fintype.card_coe S) hp Subtype.val ker K M u
+      hK hM hu hroot (fun row x y => hk row row.2 x.1 y.1)
+      (fun row x y => hsym row row.2 x.1 y.1) hrow'
+      (fun row x y => hentry row row.2 x.1 y.1) hrate
+  have hfalse : kernelSum D palette S false kernel ≤
+      (2 : ℝ) ^ S.card * (2 * M * (S.card.factorial : ℝ) * (8 * (K + 1) / M) ^ S.card) := by
+    refine (kernelSum_le_codeSum D palette S false kernel hk).trans ?_
+    calc
+      _ = ∑ code : EndpointCode S α S.card false,
+          rowWeight ker (endpointCodeDecode Subtype.val code) := by
+        apply Finset.sum_congr (by ext; simp)
+        intro code _
+        rfl
+      _ ≤ _ := by simpa only [Bool.false_eq_true, ↓reduceIte, mul_one] using hCode false
+  have htrue : kernelSum D palette S true kernel ≤
+      (2 : ℝ) ^ S.card * (2 * M * (S.card.factorial : ℝ) * (8 * (K + 1) / M) ^ S.card) *
+        (4 * (S.card : ℝ) ^ 2 * u / ((K + 1) * M)) ^ 2 := by
+    refine (kernelSum_le_codeSum D palette S true kernel hk).trans ?_
+    calc
+      _ = ∑ code : EndpointCode S α S.card true,
+          rowWeight ker (endpointCodeDecode Subtype.val code) := by
+        apply Finset.sum_congr (by ext; simp)
+        intro code _
+        rfl
+      _ ≤ _ := by simpa only [↓reduceIte] using hCode true
+  have hu2 : u ^ 2 = Real.exp (0.02 * (T.S.n k : ℝ)) := by
+    dsimp [u]
+    rw [pow_two, ← Real.exp_add]
+    congr 1
+    ring
+  constructor
+  · exact (mul_le_mul_of_nonneg_left hfalse (pow_nonneg hK.le _)).trans
+      (ordinary_kernel_constant hp K M hK hM)
+  · have h := (mul_le_mul_of_nonneg_left htrue (pow_nonneg hK.le _)).trans
+      (violating_kernel_constant hp K M u hK hM)
+    simpa only [M, hu2] using h
+
+end SupportedKernelBounds
+
 end HypercubeRamsey.S18.Lane_sol_s18_6b

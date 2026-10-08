@@ -454,6 +454,215 @@ theorem final_tail_eventually :
       linarith
     _ = Real.exp (-Real.sqrt n) / 3 := by ring
 
+/-- Eventually `m > 1` and a used high tuple has at least `400` blocks (`k_*/u_* → ∞`). -/
+theorem scales_eventually (p : Params5 γ K' χ) :
+    ∀ᶠ n : ℕ in atTop, 1 < p.m n ∧ 400 ≤ p.usedBlocks n := by
+  have hm := Lane_sol_s05_h1.tendsto_m p
+  have hl := Real.tendsto_log_atTop.comp hm
+  have hq0 : (1 : ℝ) ≤ p.q0 := by exact_mod_cast p.hq0.1
+  have heta := p.heta.1
+  let A : ℝ := 160000 * p.eta + 800 * p.q0 + 1
+  filter_upwards [hm.eventually_gt_atTop 1, hl.eventually_ge_atTop (200 * A)] with n hm1 hlA
+  dsimp only [Function.comp_apply] at hlA
+  have hmNat : 1 < p.m n := by exact_mod_cast hm1
+  refine ⟨hmNat, ?_⟩
+  have hxpos : (0 : ℝ) < p.m n := by linarith
+  have hLg0 : 0 ≤ Real.log (p.m n : ℝ) := Real.log_nonneg hm1.le
+  have hu : (1 : ℝ) ≤ p.uStarSeg n := by
+    exact_mod_cast Lane_sol_s05_h5l.uStarSeg_positive p n hmNat
+  have hd : 0 < (p.q0 : ℝ) * p.uStarSeg n := by positivity
+  have huUp : (p.uStarSeg n : ℝ) < p.eta * Real.log (p.m n : ℝ) / p.q0 + 1 := by
+    unfold Params5.uStarSeg
+    exact Nat.ceil_lt_add_one (div_nonneg (mul_nonneg heta.le hLg0) (by linarith))
+  have hquUp : (p.q0 : ℝ) * p.uStarSeg n ≤ p.eta * Real.log (p.m n : ℝ) + p.q0 := by
+    have h := mul_le_mul_of_nonneg_left huUp.le (by linarith : (0 : ℝ) ≤ p.q0)
+    have he : (p.q0 : ℝ) * (p.eta * Real.log (p.m n : ℝ) / p.q0 + 1) =
+        p.eta * Real.log (p.m n : ℝ) + p.q0 := by
+      field_simp
+    linarith
+  set y : ℝ := Real.log (p.m n : ℝ) / 200 with hy
+  have hyA : A ≤ y := by rw [hy]; linarith
+  have hA1 : 1 ≤ A := by dsimp [A]; nlinarith
+  have hy1 : 1 ≤ y := hA1.trans hyA
+  have hrpow : (p.m n : ℝ) ^ (1 / 200 : ℝ) = Real.exp y := by
+    rw [Real.rpow_def_of_pos hxpos, hy]
+    ring_nf
+  have hexp := Real.quadratic_le_exp_of_nonneg (by linarith : (0 : ℝ) ≤ y)
+  have hmain : 400 * ((p.q0 : ℝ) * p.uStarSeg n) ≤ (p.m n : ℝ) ^ (1 / 200 : ℝ) := by
+    rw [hrpow]
+    have hLg : Real.log (p.m n : ℝ) = 200 * y := by rw [hy]; ring
+    have hyy : y * A ≤ y * y := mul_le_mul_of_nonneg_left hyA (by linarith)
+    have hAexp : y * A = 160000 * p.eta * y + 800 * p.q0 * y + y := by dsimp [A]; ring
+    have hq0y : (p.q0 : ℝ) ≤ p.q0 * y := by nlinarith
+    rw [hLg] at hquUp
+    nlinarith
+  have hused : (p.m n : ℝ) ^ (1 / 200 : ℝ) / ((p.q0 : ℝ) * p.uStarSeg n) ≤ p.usedBlocks n :=
+    Nat.le_ceil _
+  have h400 : (400 : ℝ) ≤ p.usedBlocks n := by
+    refine le_trans ?_ hused
+    rw [le_div_iff₀ hd]
+    exact hmain
+  exact_mod_cast h400
+
+/-- Eventually every array has few blocks compared with the per-block tail `e^{-C u}`. -/
+theorem typeBlocks_tail_eventually (p : Params5 γ K' χ) (C : ℝ)
+    (hC : p.Kh * (p.q0 : ℝ) + (p.q0 : ℝ) / p.eta + (p.q0 : ℝ) / p.K1 + 10 ≤ C) :
+    ∀ᶠ n : ℕ in atTop, ∀ K : EvenType5 n (p.m n) (p.J n),
+      (p.typeBlocks n K : ℝ) * Real.exp (-C * (p.typeSegs n K : ℝ)) ≤ Real.exp (-100) := by
+  have hm := Lane_sol_s05_h1.tendsto_m p
+  have hl := Real.tendsto_log_atTop.comp hm
+  have hq0 : (1 : ℝ) ≤ p.q0 := by exact_mod_cast p.hq0.1
+  have hK1 := p.hK1
+  have hK2 := p.hK2
+  have heta := p.heta.1
+  have hKh := p.hKh
+  have hK21 : 0 < p.K2 / p.K1 := div_pos hK2 hK1
+  have hqK1 : 0 ≤ (p.q0 : ℝ) / p.K1 := div_nonneg (by linarith) hK1.le
+  have hqeta : 0 ≤ (p.q0 : ℝ) / p.eta := div_nonneg (by linarith) heta.le
+  have hKhq : 0 ≤ p.Kh * (p.q0 : ℝ) := mul_nonneg hKh.le (by linarith)
+  let D : ℝ := 2 * (p.K2 / p.K1 + 1)
+  have hD : 0 < D := by dsimp [D]; linarith
+  let L0 : ℝ := max 210 ((100 + Real.log D) / 3)
+  filter_upwards [hm.eventually_gt_atTop 1, hl.eventually_ge_atTop L0] with n hm1 hlL
+  dsimp only [Function.comp_apply] at hlL
+  intro K
+  have hmNat : 1 < p.m n := by exact_mod_cast hm1
+  have hxpos : (0 : ℝ) < p.m n := by linarith
+  set Lg : ℝ := Real.log (p.m n : ℝ) with hLgdef
+  have hLg210 : 210 ≤ Lg := le_trans (le_max_left _ _) hlL
+  have hLgD : (100 + Real.log D) / 3 ≤ Lg := le_trans (le_max_right _ _) hlL
+  have hrpow (r : ℝ) : (p.m n : ℝ) ^ r = Real.exp (Lg * r) := Real.rpow_def_of_pos hxpos r
+  have hCq : (p.q0 : ℝ) / p.K1 ≤ C := by linarith
+  have hCpos : 0 < C := by linarith
+  rcases hK : K.2.2 with _ | j
+  · -- high type: the full pool
+    have hsegs : p.typeSegs n K = p.uStarSeg n := by simp [Params5.typeSegs, hK]
+    have hblocks : p.typeBlocks n K = p.poolBlocks n := by simp [Params5.typeBlocks, hK]
+    rw [hsegs, hblocks]
+    set u : ℝ := (p.uStarSeg n : ℝ) with hudef
+    have hu1 : 1 ≤ u := by
+      rw [hudef]; exact_mod_cast Lane_sol_s05_h5l.uStarSeg_positive p n hmNat
+    have huLow : p.eta * Lg / p.q0 ≤ u := by
+      rw [hudef]; unfold Params5.uStarSeg; exact Nat.le_ceil _
+    have hqu : 1 ≤ (p.q0 : ℝ) * u := by nlinarith
+    have hX : (1 : ℝ) ≤ (p.m n : ℝ) ^ (1 / 200 : ℝ) :=
+      Real.one_le_rpow hm1.le (by norm_num)
+    have hUsedUp : (p.usedBlocks n : ℝ) ≤ 2 * Real.exp (Lg / 200) := by
+      have hlt : (p.usedBlocks n : ℝ) < (p.m n : ℝ) ^ (1 / 200 : ℝ) / ((p.q0 : ℝ) * u) + 1 := by
+        rw [hudef]; unfold Params5.usedBlocks
+        exact Nat.ceil_lt_add_one (div_nonneg (by linarith) (by positivity))
+      have hdiv : (p.m n : ℝ) ^ (1 / 200 : ℝ) / ((p.q0 : ℝ) * u) ≤ (p.m n : ℝ) ^ (1 / 200 : ℝ) :=
+        div_le_self (by linarith) hqu
+      have he : (p.m n : ℝ) ^ (1 / 200 : ℝ) = Real.exp (Lg / 200) := by rw [hrpow]; ring_nf
+      linarith
+    have hPoolUp : (p.poolBlocks n : ℝ) ≤
+        Real.exp (p.Kh * ((p.q0 : ℝ) * u)) * p.usedBlocks n + 1 := by
+      rw [hudef]; unfold Params5.poolBlocks
+      exact (Nat.ceil_lt_add_one (by positivity)).le
+    have hLgu : Lg ≤ (p.q0 : ℝ) / p.eta * u := by
+      rw [div_mul_eq_mul_div, le_div_iff₀ heta]
+      rw [div_le_iff₀ (by linarith)] at huLow
+      linarith
+    have hCu : p.Kh * ((p.q0 : ℝ) * u) + Lg + 10 * u ≤ C * u := by
+      have h := mul_le_mul_of_nonneg_right hC (by linarith : (0 : ℝ) ≤ u)
+      have hq1 : 0 ≤ (p.q0 : ℝ) / p.K1 * u := mul_nonneg hqK1 (by linarith)
+      nlinarith
+    have hE1 : Real.exp (p.Kh * ((p.q0 : ℝ) * u)) * (2 * Real.exp (Lg / 200)) *
+        Real.exp (-C * u) ≤ 2 * Real.exp (-Lg / 2) := by
+      have heq : Real.exp (p.Kh * ((p.q0 : ℝ) * u)) * (2 * Real.exp (Lg / 200)) *
+          Real.exp (-C * u) = 2 * Real.exp (p.Kh * ((p.q0 : ℝ) * u) + Lg / 200 + -C * u) := by
+        rw [Real.exp_add, Real.exp_add]; ring
+      rw [heq]
+      have : p.Kh * ((p.q0 : ℝ) * u) + Lg / 200 + -C * u ≤ -Lg / 2 := by nlinarith
+      have := Real.exp_le_exp.mpr this
+      linarith
+    have hE2 : Real.exp (-C * u) ≤ Real.exp (-Lg / 2) := by
+      apply Real.exp_le_exp.mpr
+      have : 0 ≤ p.Kh * ((p.q0 : ℝ) * u) := mul_nonneg hKh.le (by linarith)
+      nlinarith
+    have hE3 : 3 * Real.exp (-Lg / 2) ≤ Real.exp (-100) := by
+      have h5 : (6 : ℝ) ≤ Real.exp 5 := by linarith [Real.add_one_le_exp (5 : ℝ)]
+      have hle : Real.exp (-Lg / 2) ≤ Real.exp (-105) := Real.exp_le_exp.mpr (by linarith)
+      have hsplit : Real.exp (-100) = Real.exp 5 * Real.exp (-105) := by
+        rw [← Real.exp_add]; norm_num
+      rw [hsplit]
+      have hpos : 0 < Real.exp (-105) := Real.exp_pos _
+      nlinarith
+    have hEC : 0 ≤ Real.exp (-C * u) := (Real.exp_pos _).le
+    have hUsed0 : (0 : ℝ) ≤ p.usedBlocks n := Nat.cast_nonneg _
+    calc
+      (p.poolBlocks n : ℝ) * Real.exp (-C * u) ≤
+          (Real.exp (p.Kh * ((p.q0 : ℝ) * u)) * p.usedBlocks n + 1) * Real.exp (-C * u) :=
+        mul_le_mul_of_nonneg_right hPoolUp hEC
+      _ ≤ (Real.exp (p.Kh * ((p.q0 : ℝ) * u)) * (2 * Real.exp (Lg / 200)) + 1) *
+            Real.exp (-C * u) := by
+        apply mul_le_mul_of_nonneg_right _ hEC
+        have := mul_le_mul_of_nonneg_left hUsedUp (Real.exp_pos (p.Kh * ((p.q0 : ℝ) * u))).le
+        linarith
+      _ = Real.exp (p.Kh * ((p.q0 : ℝ) * u)) * (2 * Real.exp (Lg / 200)) * Real.exp (-C * u) +
+            Real.exp (-C * u) := by ring
+      _ ≤ 2 * Real.exp (-Lg / 2) + Real.exp (-Lg / 2) := add_le_add hE1 hE2
+      _ ≤ Real.exp (-100) := by linarith
+  · -- low type: the low tuple
+    have hsegs : p.typeSegs n K = p.uSeg n j := by simp [Params5.typeSegs, hK]
+    have hblocks : p.typeBlocks n K = p.lowBlocks n j := by simp [Params5.typeBlocks, hK]
+    rw [hsegs, hblocks]
+    set u : ℝ := (p.uSeg n j : ℝ) with hudef
+    have hj4 : (4 : ℝ) ≤ ((j : ℕ) : ℝ) + 4 := by
+      have : (0 : ℝ) ≤ ((j : ℕ) : ℝ) := Nat.cast_nonneg _
+      linarith
+    have huLow : p.K1 * (((j : ℕ) : ℝ) + 4) * Lg / p.q0 ≤ u := by
+      rw [hudef]; unfold Params5.uSeg; exact Nat.le_ceil _
+    have hqu : p.K1 * (((j : ℕ) : ℝ) + 4) * Lg ≤ p.q0 * u := by
+      rw [div_le_iff₀ (by linarith)] at huLow; linarith
+    have hjL : 4 * Lg ≤ (((j : ℕ) : ℝ) + 4) * Lg := by nlinarith
+    have hqu4 : 4 * p.K1 ≤ p.q0 * u := by nlinarith
+    have hquPos : 0 < (p.q0 : ℝ) * u := by nlinarith
+    set X50 : ℝ := (p.m n : ℝ) ^ (1 / 50 : ℝ) with hX50
+    have hX50one : (1 : ℝ) ≤ X50 := Real.one_le_rpow hm1.le (by norm_num)
+    have hX50exp : X50 = Real.exp (Lg / 50) := by rw [hX50, hrpow]; ring_nf
+    have hlowUp : (p.lowBlocks n j : ℝ) ≤
+        p.K2 * ((((j : ℕ) : ℝ) + 4) * Lg + X50) / ((p.q0 : ℝ) * u) + 1 := by
+      rw [hudef, hX50]; unfold Params5.lowBlocks
+      exact (Nat.ceil_lt_add_one (div_nonneg (mul_nonneg hK2.le (by positivity))
+        (by positivity))).le
+    have hfrac : p.K2 * ((((j : ℕ) : ℝ) + 4) * Lg + X50) / ((p.q0 : ℝ) * u) ≤
+        p.K2 / p.K1 * (1 + X50) := by
+      rw [div_le_iff₀ hquPos]
+      have h1 : p.K2 * ((((j : ℕ) : ℝ) + 4) * Lg) ≤ p.K2 / p.K1 * ((p.q0 : ℝ) * u) := by
+        rw [div_mul_eq_mul_div, le_div_iff₀ hK1]
+        nlinarith
+      have h2 : p.K2 * X50 ≤ p.K2 / p.K1 * X50 * ((p.q0 : ℝ) * u) := by
+        rw [div_mul_eq_mul_div, div_mul_eq_mul_div, le_div_iff₀ hK1]
+        have : p.K2 * X50 * p.K1 * 4 ≤ p.K2 * X50 * ((p.q0 : ℝ) * u) := by
+          have hpos : 0 ≤ p.K2 * X50 := mul_nonneg hK2.le (by linarith)
+          nlinarith
+        nlinarith [mul_pos hK2 hK1]
+      nlinarith
+    have hBlocksUp : (p.lowBlocks n j : ℝ) ≤ D * Real.exp (Lg / 50) := by
+      rw [← hX50exp]
+      dsimp [D]
+      nlinarith
+    have hCu : 4 * Lg ≤ C * u := by
+      have h1 : (p.q0 : ℝ) / p.K1 * u ≤ C * u := mul_le_mul_of_nonneg_right hCq (by nlinarith)
+      have h2 : 4 * Lg ≤ (p.q0 : ℝ) / p.K1 * u := by
+        rw [div_mul_eq_mul_div, le_div_iff₀ hK1]
+        nlinarith
+      linarith
+    have hEC : 0 ≤ Real.exp (-C * u) := (Real.exp_pos _).le
+    calc
+      (p.lowBlocks n j : ℝ) * Real.exp (-C * u) ≤ D * Real.exp (Lg / 50) * Real.exp (-C * u) :=
+        mul_le_mul_of_nonneg_right hBlocksUp hEC
+      _ = D * Real.exp (Lg / 50 + -C * u) := by rw [Real.exp_add]; ring
+      _ ≤ D * Real.exp (-(100 + Real.log D)) := by
+        apply mul_le_mul_of_nonneg_left _ hD.le
+        apply Real.exp_le_exp.mpr
+        linarith
+      _ = Real.exp (-100) := by
+        rw [show -(100 + Real.log D) = -100 + -Real.log D by ring, Real.exp_add,
+          Real.exp_neg (Real.log D), Real.exp_log hD]
+        field_simp
+
 end
 
 end HypercubeRamsey.Setup5.Lane_opus_s05_j4

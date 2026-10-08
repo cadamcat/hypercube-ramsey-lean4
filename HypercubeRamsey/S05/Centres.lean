@@ -2465,6 +2465,7 @@ theorem lowTable_exists : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < 
           Nonempty (LowTable5 X L Cloc) := by
   sorry
 
+set_option maxHeartbeats 2000000 in
 /-- SUB-LEMMA K2 (05:987–1001): at a good history the long-row mean exceeds the short-row mean
 by at most `1`: rows agree when neighbouring choices agree (`rowAt_congr`), the height lemma
 bounds mismatch by `o(e^{-2m^{1/5}})` at each of `O(n)` neighbours on correct sizes
@@ -2476,9 +2477,537 @@ theorem lowTable_long_vs_short : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x �
         ∀ (Cloc : ℕ) (T : LowTable5 X L Cloc) (H : X.KeyHist), X.KeyGood5 H (cL p.pre1) (cH p.pre1) →
           ∀ y x, X.g.low (X.p.J n) y.1 →
             (X.centreLaw L.ht H).expect (fun ω => (N : ℝ) * T.rowAt L.ht.hp.Rlong H ω y (0, x)) ≤
-              (X.centreLaw L.ht H).expect
+            (X.centreLaw L.ht H).expect
                 (fun ω => (N : ℝ) * T.rowAt (L.ht.hp.Rshort (X.p.m n)) H ω y (0, x)) + 1 := by
-  sorry
+  classical
+  intro cL cH hc Ckey
+  let R : ParamReq5 := {
+    Kcap := fun _ => 0
+    Kpp := fun _ => 0
+    Kh := fun _ => 0
+    K1 := fun _ => 0
+    K2 := fun _ => 0
+    KD := fun _ => 0
+    Ks := fun _ => 0
+    KB := fun _ => 0
+    alpha := fun _ => 1 / 50
+    alpha_pos := fun _ => by norm_num }
+  refine ⟨R, ?_⟩
+  intro p hpR
+  have hmTop : Filter.Tendsto (fun n : ℕ => (p.m n : ℝ)) Filter.atTop Filter.atTop :=
+    Lane_sol_s05_h1.tendsto_m p
+  have hTheta : (0.9 : ℝ) < 1 - p.alpha / 100000 := by
+    have := p.halpha.2
+    norm_num at this ⊢ <;> linarith
+  have hAlpha : 0 < p.alpha ∧ p.alpha < 2 * (1 - p.alpha / 100000) := by
+    constructor
+    · exact p.halpha.1
+    · have := p.halpha.2
+      norm_num at this ⊢ <;> linarith
+  obtain ⟨nHeight, hHeight⟩ := height_selection_short
+    10 (p.alpha / 10000) (p.alpha / 2000) (p.alpha / 1000000) (p.alpha / 100000)
+    (1 - p.alpha / 100000) (p.alpha / 20000) (1 / 2) 2 p.alpha 8
+    (Lane_sol_s05_centres.height_admissible p)
+    (Lane_sol_s05_centres.heightRegime p) hTheta hAlpha
+  obtain ⟨nReg, hReg⟩ := Filter.eventually_atTop.mp
+    (Lane_sol_s05_centres.height_regime_eventually p)
+  have hscale : Filter.Eventually (fun n : ℕ =>
+      Real.exp (p.DL n) * Real.exp (-Real.sqrt n) ≤ 1 / 2 ∧
+      (n : ℝ) * Real.exp (p.DL n) *
+        Real.exp (-3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5)) ≤ 1 / 2) Filter.atTop := by
+    have hlogSmall : Filter.Eventually (fun n : ℕ =>
+        Real.log (n : ℝ) ≤ (n : ℝ) ^ (p.alpha / 10)) Filter.atTop := by
+      have hlittle := ((isLittleO_log_rpow_atTop
+          (div_pos p.halpha.1 (by norm_num : (0 : ℝ) < 10))).comp_tendsto
+        tendsto_natCast_atTop_atTop).bound (by norm_num : (0 : ℝ) < 1)
+      filter_upwards [hlittle, Filter.eventually_ge_atTop (1 : ℕ)] with n hn hn1
+      have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+      have hlog0 : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg hnR
+      simpa only [Function.comp_apply, Real.norm_eq_abs, one_mul,
+        abs_of_nonneg hlog0,
+        abs_of_nonneg (Real.rpow_nonneg (Nat.cast_nonneg n) _)] using hn
+    have hlogM : Filter.Eventually (fun n : ℕ =>
+        Real.log (n : ℝ) ≤ (p.m n : ℝ) ^ ((1 : ℝ) / 5)) Filter.atTop := by
+      filter_upwards [hlogSmall, Filter.eventually_ge_atTop (1 : ℕ)] with n hlog hn1
+      have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+      have hnpos : (0 : ℝ) < n := by positivity
+      have hmLower : (n : ℝ) ^ p.alpha ≤ (p.m n : ℝ) := by
+        dsimp [Params5.m]
+        exact_mod_cast (Nat.le_ceil ((n : ℝ) ^ p.alpha))
+      have hpowEq : (n : ℝ) ^ (p.alpha / 5) =
+          ((n : ℝ) ^ p.alpha) ^ ((1 : ℝ) / 5) := by
+        rw [← Real.rpow_mul (Nat.cast_nonneg n)]
+        congr 1 <;> ring
+      have hpow : (n : ℝ) ^ (p.alpha / 10) ≤
+          (n : ℝ) ^ (p.alpha / 5) :=
+        Real.rpow_le_rpow_of_exponent_le hnR (by linarith)
+      calc
+        Real.log (n : ℝ) ≤ (n : ℝ) ^ (p.alpha / 10) := hlog
+        _ ≤ (n : ℝ) ^ (p.alpha / 5) := hpow
+        _ = ((n : ℝ) ^ p.alpha) ^ ((1 : ℝ) / 5) := hpowEq
+        _ ≤ (p.m n : ℝ) ^ ((1 : ℝ) / 5) :=
+          Real.rpow_le_rpow (by positivity) hmLower (by norm_num)
+    have hDLsmall : Filter.Eventually (fun n : ℕ =>
+        p.DL n ≤ (p.m n : ℝ) ^ ((1 : ℝ) / 5) / 2) Filter.atTop := by
+      have hpowTop : Filter.Tendsto (fun n : ℕ => (p.m n : ℝ) ^ ((1 : ℝ) / 20))
+          Filter.atTop Filter.atTop :=
+        (tendsto_rpow_atTop (by norm_num : (0 : ℝ) < 1 / 20)).comp hmTop
+      filter_upwards [hpowTop.eventually_ge_atTop 2,
+          Filter.eventually_ge_atTop (1 : ℕ)] with n hpow hn1
+      have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+      have hmLower : (n : ℝ) ^ p.alpha ≤ (p.m n : ℝ) := by
+        dsimp [Params5.m]
+        exact_mod_cast (Nat.le_ceil ((n : ℝ) ^ p.alpha))
+      have hmge : (1 : ℝ) ≤ (p.m n : ℝ) :=
+        (Real.one_le_rpow hnR p.halpha.1.le).trans hmLower
+      have hmpos : (0 : ℝ) < (p.m n : ℝ) := lt_of_lt_of_le (by norm_num) hmge
+      have hmul : (p.m n : ℝ) ^ ((1 : ℝ) / 20) *
+          (p.m n : ℝ) ^ (15 / 100 : ℝ) =
+            (p.m n : ℝ) ^ ((1 : ℝ) / 5) := by
+        rw [← Real.rpow_add hmpos] <;> congr 1 <;> norm_num
+      have hineq := mul_le_mul_of_nonneg_right hpow
+        (Real.rpow_nonneg (Nat.cast_nonneg (p.m n)) (15 / 100 : ℝ))
+      rw [hmul] at hineq
+      have hDL : p.DL n = (p.m n : ℝ) ^ (15 / 100 : ℝ) := rfl
+      rw [hDL]
+      nlinarith
+    have hDLsqrt : Filter.Eventually (fun n : ℕ =>
+        p.DL n ≤ Real.sqrt n / 2) Filter.atTop := by
+      have hMargin := Lane_sol_s05_centres.nat_power_margin
+        (2 * (2 : ℝ) ^ (15 / 100 : ℝ)) (p.alpha * (15 / 100 : ℝ))
+        (1 / 2 : ℝ) (by nlinarith [p.halpha.2])
+      filter_upwards [hMargin, Filter.eventually_ge_atTop (1 : ℕ)] with n hmargin hn1
+      have hnR : (1 : ℝ) ≤ n := by exact_mod_cast hn1
+      have hnpos : (0 : ℝ) < n := by positivity
+      have hmUpper : (p.m n : ℝ) ≤ 2 * (n : ℝ) ^ p.alpha := by
+        dsimp [Params5.m]
+        have hceil := Nat.ceil_lt_add_one (Real.rpow_nonneg (Nat.cast_nonneg n) p.alpha)
+        change (⌈(n : ℝ) ^ p.alpha⌉₊ : ℝ) < _ at hceil
+        have hpow : (1 : ℝ) ≤ (n : ℝ) ^ p.alpha :=
+          Real.one_le_rpow hnR p.halpha.1.le
+        linarith
+      have hmnonneg : 0 ≤ (p.m n : ℝ) := Nat.cast_nonneg _
+      have hpowUpper := Real.rpow_le_rpow hmnonneg hmUpper
+        (by norm_num : 0 ≤ (15 / 100 : ℝ))
+      have hpowEq : (2 * (n : ℝ) ^ p.alpha) ^ (15 / 100 : ℝ) =
+          2 ^ (15 / 100 : ℝ) * (n : ℝ) ^ (p.alpha * (15 / 100 : ℝ)) := by
+        rw [Real.mul_rpow (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg n) _),
+          ← Real.rpow_mul (Nat.cast_nonneg n)]
+      have hDL : p.DL n = (p.m n : ℝ) ^ (15 / 100 : ℝ) := rfl
+      have hcap : 2 * p.DL n ≤ (n : ℝ) ^ (1 / 2 : ℝ) := by
+        rw [hDL]
+        calc
+          _ ≤ 2 * (2 * (n : ℝ) ^ p.alpha) ^ (15 / 100 : ℝ) :=
+            mul_le_mul_of_nonneg_left hpowUpper (by norm_num)
+          _ = 2 * 2 ^ (15 / 100 : ℝ) *
+              (n : ℝ) ^ (p.alpha * (15 / 100 : ℝ)) := by rw [hpowEq]; ring
+          _ ≤ (n : ℝ) ^ (1 / 2 : ℝ) := hmargin
+      have hcapSqrt : 2 * p.DL n ≤ Real.sqrt n := by
+        simpa only [Real.sqrt_eq_rpow] using hcap
+      nlinarith
+    have hexpNegOne : Real.exp (-1 : ℝ) ≤ 1 / 2 := by
+      have hExpOne : (2 : ℝ) ≤ Real.exp 1 := by
+        linarith [Real.add_one_le_exp (1 : ℝ)]
+      rw [Real.exp_neg]
+      simpa [one_div] using one_div_le_one_div_of_le (by norm_num) hExpOne
+    filter_upwards [hlogM, hDLsmall, hDLsqrt,
+        Filter.eventually_ge_atTop (4 : ℕ)] with n hlog hDLm hDLs hn4
+    have hnpos : (0 : ℝ) < n := by exact_mod_cast (show 0 < n by omega)
+    have hMge : (1 : ℝ) ≤ (p.m n : ℝ) ^ ((1 : ℝ) / 5) := by
+      have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast (show 1 ≤ n by omega)
+      have hmLower : (n : ℝ) ^ p.alpha ≤ (p.m n : ℝ) := by
+        dsimp [Params5.m]
+        exact_mod_cast (Nat.le_ceil ((n : ℝ) ^ p.alpha))
+      have hmge : (1 : ℝ) ≤ (p.m n : ℝ) :=
+        (Real.one_le_rpow hn1 p.halpha.1.le).trans hmLower
+      exact Real.one_le_rpow hmge (by norm_num)
+    have hroot : (2 : ℝ) ≤ Real.sqrt n := by
+      calc
+        (2 : ℝ) = Real.sqrt 4 := by norm_num
+        _ ≤ Real.sqrt n := Real.sqrt_le_sqrt (by exact_mod_cast (show 4 ≤ n by omega))
+    have hfirst : p.DL n - Real.sqrt n ≤ -1 := by nlinarith
+    have hfirstEq : Real.exp (p.DL n) * Real.exp (-Real.sqrt n) =
+        Real.exp (p.DL n - Real.sqrt n) := by
+      rw [← Real.exp_add]
+      congr 1 <;> ring
+    have hsecondExp : Real.log (n : ℝ) + p.DL n -
+        3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5) ≤ -1 := by nlinarith
+    have hsecondEq : (n : ℝ) * Real.exp (p.DL n) *
+        Real.exp (-3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5)) =
+          Real.exp (Real.log (n : ℝ) + p.DL n -
+            3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5)) := by
+      calc
+        _ = Real.exp (Real.log (n : ℝ)) * Real.exp (p.DL n) *
+            Real.exp (-3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5)) := by
+          rw [Real.exp_log hnpos]
+        _ = Real.exp (Real.log (n : ℝ) + p.DL n -
+            3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5)) := by
+          rw [← Real.exp_add, ← Real.exp_add]
+          congr 1 <;> ring
+    refine ⟨?_, ?_⟩
+    · calc
+        _ = Real.exp (p.DL n - Real.sqrt n) := hfirstEq
+        _ ≤ Real.exp (-1) := Real.exp_le_exp.mpr hfirst
+        _ ≤ 1 / 2 := hexpNegOne
+    · calc
+        _ = Real.exp (Real.log (n : ℝ) + p.DL n -
+            3 * (p.m n : ℝ) ^ ((1 : ℝ) / 5)) := hsecondEq
+        _ ≤ Real.exp (-1) := Real.exp_le_exp.mpr hsecondExp
+        _ ≤ 1 / 2 := hexpNegOne
+  obtain ⟨nScale, hscaleAt⟩ := Filter.eventually_atTop.mp hscale
+  let n₀ := max nScale (max nHeight nReg)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp L hL Cloc T H hH y x hy
+  subst p
+  dsimp [n₀] at hn
+  have hnScale : nScale ≤ n := le_trans (Nat.le_max_left _ _) hn
+  have hnInner : max nHeight nReg ≤ n :=
+    le_trans (Nat.le_max_right nScale (max nHeight nReg)) hn
+  have hnHeight : nHeight ≤ n := le_trans (Nat.le_max_left nHeight nReg) hnInner
+  have hnReg : nReg ≤ n := le_trans (Nat.le_max_right nHeight nReg) hnInner
+  have hscaleN := hscaleAt n hnScale
+  obtain ⟨hdimLo, hdimHi, hreg⟩ := hReg n hnReg (X.p.m n) (X.p.J n) X.g X.St
+  let LocalArrays := ∀ K : X.Ty, X.Array K
+  let CurriedArrays := L.ht.hp.Loc → LocalArrays
+  let aux := L.ht.hp.Ties × CurriedArrays
+  let locPosLaw : L.ht.hp.Loc → FinProb Bool := fun _ =>
+    FinProb.bernoulli (L.ht.hp.lam / (L.ht.hp.V : ℝ))
+  let locActLaw : L.ht.hp.Loc → FinProb Bool := fun _ =>
+    FinProb.bernoulli ((n : ℝ) ^ L.ht.b₀ / L.ht.hp.lam)
+  let locTieLaw : L.ht.hp.Loc → FinProb L.ht.hp.TiePerm := fun _ =>
+    FinProb.uniformAll (Ω := L.ht.hp.TiePerm) ⟨1⟩
+  let locArrayLaw : L.ht.hp.Loc → FinProb LocalArrays := fun _ =>
+    FinProb.pi fun K : X.Ty =>
+      FinProb.pi fun _ : Fin (X.p.typeBlocks n K) => X.blockLaw H K
+  let arrayLaw : FinProb CurriedArrays := FinProb.pi locArrayLaw
+  let auxLaw : FinProb aux := FinProb.prod L.ht.hp.tieLaw arrayLaw
+  let splitTo : X.CΩ L.ht →
+      ((L.ht.hp.Loc → Bool) × aux) × (L.ht.hp.Loc → Bool) := fun ω =>
+    ((X.pos ω, ((fun l => (ω l).2.2.1), fun l K => (ω l).2.2.2 K)), X.act ω)
+  let splitFrom : (((L.ht.hp.Loc → Bool) × aux) × (L.ht.hp.Loc → Bool)) →
+      X.CΩ L.ht := fun z l => (z.1.1 l, (z.2 l, (z.1.2.1 l, z.1.2.2 l)))
+  have splitLeft : ∀ ω, splitFrom (splitTo ω) = ω := by
+    intro ω
+    funext l
+    cases hωl : ω l with
+    | mk P t => cases t with
+      | mk A t => cases t with
+        | mk τ D =>
+          calc
+            splitFrom (splitTo ω) l = ω l := by
+              simp [splitFrom, splitTo, Setup5.pos, Setup5.act] <;> exact hωl
+            _ = (P, A, τ, D) := hωl
+  have splitRight : ∀ z, splitTo (splitFrom z) = z := by
+    intro z
+    cases z with
+    | mk q A => cases q with
+      | mk P t => cases t with
+        | mk τ D => rfl
+  let split : X.CΩ L.ht ≃
+      ((L.ht.hp.Loc → Bool) × aux) × (L.ht.hp.Loc → Bool) := {
+    toFun := splitTo
+    invFun := splitFrom
+    left_inv := splitLeft
+    right_inv := splitRight }
+  let productLaw : FinProb (((L.ht.hp.Loc → Bool) × aux) × (L.ht.hp.Loc → Bool)) :=
+    FinProb.prod (FinProb.prod L.ht.hp.posLaw auxLaw) L.ht.hp.actLaw
+  have hsplitWeights : (FinProb.map (X.centreLaw L.ht H) split).w = productLaw.w := by
+    funext z
+    have hmw : (FinProb.map (X.centreLaw L.ht H) split).w z =
+        (X.centreLaw L.ht H).w (split.symm z) := by
+      unfold FinProb.map
+      have hiff (ω : X.CΩ L.ht) : split ω = z ↔ ω = split.symm z := by
+        constructor
+        · intro h
+          apply split.injective
+          simpa using h
+        · intro h
+          simpa [h]
+      simp [hiff]
+    rw [hmw]
+    cases z with
+    | mk q A => cases q with
+      | mk P t => cases t with
+        | mk τ D =>
+          change (∏ l : L.ht.hp.Loc,
+              (locPosLaw l).w (P l) *
+                ((locActLaw l).w (A l) *
+                  ((locTieLaw l).w (τ l) * (locArrayLaw l).w (D l)))) =
+            ((∏ l : L.ht.hp.Loc, (locPosLaw l).w (P l)) *
+              ((∏ l : L.ht.hp.Loc, (locTieLaw l).w (τ l)) *
+                (∏ l : L.ht.hp.Loc, (locArrayLaw l).w (D l)))) *
+              (∏ l : L.ht.hp.Loc, (locActLaw l).w (A l))
+          simp only [Finset.prod_mul_distrib] <;> ring_nf
+  have hsplitLaw : FinProb.map (X.centreLaw L.ht H) split = productLaw := by
+    cases hmap : FinProb.map (X.centreLaw L.ht H) split with
+    | mk pw pn ps =>
+      cases hprod : productLaw with
+      | mk qw qn qs =>
+        have hw : pw = qw := by
+          have h := hsplitWeights
+          rw [hmap, hprod] at h
+          exact h
+        subst qw
+        rfl
+  rcases L.ht.fixed with ⟨hb₀, hb, hσ, hζ, hθ, ha⟩
+  have hHpH : L.ht.hp.H =
+      topScale n (X.p.alpha / 1000000) (X.p.alpha / 100000) := by
+    dsimp [Setup5.HeightChoice5.hp]
+    rw [hσ, hζ]
+  have hHpB₀ : L.ht.hp.b₀ = X.p.alpha / 10000 := by
+    simpa [Setup5.HeightChoice5.hp] using hb₀
+  have hHpB : L.ht.hp.b = X.p.alpha / 2000 := by
+    simpa [Setup5.HeightChoice5.hp] using hb
+  let Esel : (L.ht.hp.Loc → Bool) → aux → L.ht.hp.EligMap := fun P au =>
+    L.elig H (split.symm ((P, au), fun _ => false))
+  let siteQuery : EvenRole5 n → CubeVertex L.ht.hp.d :=
+    fun a => (show CubeVertex L.ht.hp.d from X.siteOf a)
+  have siteQuery_eq (a : EvenRole5 n) : siteQuery a = X.siteOf a := by
+    simp [siteQuery, Setup5.HeightChoice5.hp, Setup5.siteOf]
+  let mismatchT : (((L.ht.hp.Loc → Bool) × aux) × (L.ht.hp.Loc → Bool)) →
+      EvenRole5 n → Prop := fun z a =>
+        L.ht.hp.height (X.sites L.ht) z.1.1 z.2 (Esel z.1.1 z.1.2)
+            L.ht.hp.Rlong (siteQuery a) ≠
+          L.ht.hp.height (X.sites L.ht) z.1.1 z.2 (Esel z.1.1 z.1.2)
+            (L.ht.hp.Rshort (X.p.m n)) (siteQuery a)
+  let legalT : (((L.ht.hp.Loc → Bool) × aux) × (L.ht.hp.Loc → Bool)) → Prop :=
+    fun z => L.ht.hp.Legal z.1.1 (Esel z.1.1 z.1.2) (X.sites L.ht)
+  let mismatch : X.CΩ L.ht → EvenRole5 n → Prop := fun ω a =>
+    L.ht.hp.height (X.sites L.ht) (X.pos ω) (X.act ω) (L.elig H ω)
+        L.ht.hp.Rlong (siteQuery a) ≠
+      L.ht.hp.height (X.sites L.ht) (X.pos ω) (X.act ω) (L.elig H ω)
+        (L.ht.hp.Rshort (X.p.m n)) (siteQuery a)
+  have selectionAtEq {q : HDParams} (S : q.Sites) (P A : q.Loc → Bool)
+      (F : q.EligMap) (τ : q.Ties) (R R' : ℕ) (v : CubeVertex q.d)
+      (hh : q.height S P A F R v = q.height S P A F R' v) :
+      q.selectionAt S P A F τ R v = q.selectionAt S P A F τ R' v := by
+    simp [HDParams.selectionAt, hh]
+  have hEsel (ω : X.CΩ L.ht) :
+      Esel (X.pos ω) ((fun l => (ω l).2.2.1), fun l K => (ω l).2.2.2 K) =
+        L.elig H ω := by
+    let ω' := splitFrom
+      (((X.pos ω, ((fun l => (ω l).2.2.1), fun l K => (ω l).2.2.2 K)), fun _ => false))
+    have hpre : ∀ l, (ω' l).1 = (ω l).1 ∧
+        (ω' l).2.2.2 = (ω l).2.2.2 := by
+      intro l
+      constructor
+      · change (ω l).1 = (ω l).1
+        rfl
+      · funext K
+        change (ω l).2.2.2 K = (ω l).2.2.2 K
+        rfl
+    simpa [Esel, ω', split, splitFrom] using (L.elig_preActivation H ω' ω hpre)
+  have hSize := hL.size_failure H hH
+  let globalLegal : X.CΩ L.ht → Prop := fun ω =>
+    L.ht.hp.Legal (X.pos ω) (L.elig H ω) (X.sites L.ht)
+  let bad : X.CΩ L.ht → Prop := fun ω =>
+    ¬ globalLegal ω ∨ ∃ a ∈ evenNbrs y, mismatch ω a
+  have hMismatchBound : ∀ a : EvenRole5 n,
+      (X.centreLaw L.ht H).pr (fun ω => globalLegal ω ∧ mismatch ω a) ≤
+        Real.exp (-3 * (X.p.m n : ℝ) ^ ((1 : ℝ) / 5)) := by
+    intro a
+    have hsite : siteQuery a ∈ X.sites L.ht := by
+      change siteQuery a ∈ Finset.univ.image
+        (fun v : EvenRole5 n => X.St.oneHot (X.St.stateOf v.1))
+      have heq : X.St.oneHot (X.St.stateOf a.1) = siteQuery a := by
+        dsimp [siteQuery, Setup5.HeightChoice5.hp, Setup5.siteOf] <;> rfl
+      exact Finset.mem_image.mpr ⟨a, Finset.mem_univ _, heq⟩
+    have hHeightBound := hHeight L.ht.hp (by rfl) hHpH (by rfl)
+      hHpB₀ hHpB
+      hnHeight hdimLo hdimHi hreg (X.sites L.ht) (siteQuery a) hsite none auxLaw Esel
+    have hheightMap : productLaw.pr (fun z =>
+        L.ht.hp.Legal z.1.1 (Esel z.1.1 z.1.2) (L.ht.hp.domBall
+          (X.sites L.ht) (siteQuery a) L.ht.hp.Rlong) ∧ mismatchT z a) ≤
+          Real.exp (-3 * (X.p.m n : ℝ) ^ ((1 : ℝ) / 5)) := by
+      simpa [productLaw, mismatchT, HDParams.posLawForced, HDParams.posLaw,
+        Params5.m, Setup5.HeightChoice5.hp] using hHeightBound
+    have hsubset : ∀ z,
+        (legalT z ∧ mismatchT z a) →
+          (L.ht.hp.Legal z.1.1 (Esel z.1.1 z.1.2) (L.ht.hp.domBall
+            (X.sites L.ht) (siteQuery a) L.ht.hp.Rlong) ∧ mismatchT z a) := by
+      intro z hz
+      refine ⟨?_, hz.2⟩
+      intro v hv j
+      exact hz.1 v (Finset.mem_filter.mp hv).1 j
+    have hprod := FinProb.pr_mono productLaw
+      (A := fun z => legalT z ∧ mismatchT z a)
+      (B := fun z => L.ht.hp.Legal z.1.1 (Esel z.1.1 z.1.2)
+        (L.ht.hp.domBall (X.sites L.ht) (siteQuery a) L.ht.hp.Rlong) ∧ mismatchT z a)
+      hsubset
+    have hpred : (fun ω => legalT (split ω) ∧ mismatchT (split ω) a) =
+        (fun ω => globalLegal ω ∧ mismatch ω a) := by
+      funext ω
+      simp only [legalT, globalLegal, mismatch, mismatchT, split, splitTo,
+        Equiv.coe_fn_mk]
+      rw [hEsel ω]
+    have hIndMap :
+        (FinProb.map (X.centreLaw L.ht H) split).expect
+            (fun z => if legalT z ∧ mismatchT z a then 1 else 0) =
+          (FinProb.map (X.centreLaw L.ht H) split).pr
+            (fun z => legalT z ∧ mismatchT z a) := by
+      classical
+      unfold FinProb.expect FinProb.pr
+      apply Finset.sum_congr rfl
+      intro z hz
+      by_cases hA : legalT z ∧ mismatchT z a <;> simp [hA]
+    have hIndCentre :
+        (X.centreLaw L.ht H).expect
+            (fun ω => if legalT (split ω) ∧ mismatchT (split ω) a then 1 else 0) =
+          (X.centreLaw L.ht H).pr
+            (fun ω => legalT (split ω) ∧ mismatchT (split ω) a) := by
+      classical
+      unfold FinProb.expect FinProb.pr
+      apply Finset.sum_congr rfl
+      intro ω hω
+      by_cases hA : legalT (split ω) ∧ mismatchT (split ω) a <;> simp [hA]
+    have hmapPrHere :
+        (FinProb.map (X.centreLaw L.ht H) split).pr
+          (fun z => legalT z ∧ mismatchT z a) =
+          (X.centreLaw L.ht H).pr
+            (fun ω => legalT (split ω) ∧ mismatchT (split ω) a) := by
+      classical
+      calc
+        _ = (FinProb.map (X.centreLaw L.ht H) split).expect
+            (fun z => if legalT z ∧ mismatchT z a then 1 else 0) := hIndMap.symm
+        _ = (X.centreLaw L.ht H).expect
+            (fun ω => if legalT (split ω) ∧ mismatchT (split ω) a then 1 else 0) :=
+          FinProb.map_expect (X.centreLaw L.ht H) split
+            (fun z => if legalT z ∧ mismatchT z a then 1 else 0)
+        _ = (X.centreLaw L.ht H).pr
+            (fun ω => legalT (split ω) ∧ mismatchT (split ω) a) := hIndCentre
+    have htransport : productLaw.pr (fun z => legalT z ∧ mismatchT z a) =
+        (X.centreLaw L.ht H).pr (fun ω => globalLegal ω ∧ mismatch ω a) := by
+      calc
+        _ = (FinProb.map (X.centreLaw L.ht H) split).pr
+            (fun z => legalT z ∧ mismatchT z a) := by rw [hsplitLaw]
+        _ = _ := hmapPrHere
+        _ = _ := by rw [hpred]
+    calc
+      _ = productLaw.pr (fun z => legalT z ∧ mismatchT z a) := htransport.symm
+      _ ≤ _ := hprod.trans hheightMap
+  let M : ℝ := (X.p.m n : ℝ) ^ ((1 : ℝ) / 5)
+  let cap : ℝ := Real.exp (X.p.DL n)
+  let P : FinProb (X.CΩ L.ht) := X.centreLaw L.ht H
+  let longMean : X.CΩ L.ht → ℝ := fun ω => (N : ℝ) *
+    T.rowAt L.ht.hp.Rlong H ω y (0, x)
+  let shortMean : X.CΩ L.ht → ℝ := fun ω => (N : ℝ) *
+    T.rowAt (L.ht.hp.Rshort (X.p.m n)) H ω y (0, x)
+  have hsum : ∑ a ∈ evenNbrs y, P.pr (fun ω => globalLegal ω ∧ mismatch ω a) ≤
+      (n : ℝ) * Real.exp (-3 * M) := by
+    calc
+      _ ≤ ∑ a ∈ evenNbrs y, Real.exp (-3 * M) := by
+        apply Finset.sum_le_sum
+        intro a ha
+        simpa [P, M] using hMismatchBound a
+      _ = ((evenNbrs y).card : ℝ) * Real.exp (-3 * M) := by simp
+      _ ≤ (n : ℝ) * Real.exp (-3 * M) := by
+        exact mul_le_mul_of_nonneg_right
+          (by exact_mod_cast Lane_sol_s05_hist1b.evenNbrs_card_le y)
+          (Real.exp_nonneg _)
+  have hcover : ∀ ω, bad ω →
+      (¬ globalLegal ω ∨ ∃ a ∈ evenNbrs y, globalLegal ω ∧ mismatch ω a) := by
+    intro ω hb
+    rcases hb with hnot | ⟨a, ha, hmis⟩
+    · exact Or.inl hnot
+    · by_cases hlegal : globalLegal ω
+      · exact Or.inr ⟨a, ha, hlegal, hmis⟩
+      · exact Or.inl hlegal
+  have hsize : P.pr (fun ω => ¬ globalLegal ω) ≤ Real.exp (-Real.sqrt n) := by
+    simpa [P, globalLegal] using hSize
+  have hunion := Lane_sol_s05_h5l.pr_finset_union_le P (evenNbrs y)
+    (fun a ω => globalLegal ω ∧ mismatch ω a)
+  have hbadBound : P.pr bad ≤ Real.exp (-Real.sqrt n) +
+      (n : ℝ) * Real.exp (-3 * M) := by
+    calc
+      _ ≤ P.pr (fun ω => ¬ globalLegal ω ∨
+          ∃ a ∈ evenNbrs y, globalLegal ω ∧ mismatch ω a) :=
+        FinProb.pr_mono P (A := bad)
+          (B := fun ω => ¬ globalLegal ω ∨
+            ∃ a ∈ evenNbrs y, globalLegal ω ∧ mismatch ω a) hcover
+      _ ≤ P.pr (fun ω => ¬ globalLegal ω) +
+          P.pr (fun ω => ∃ a ∈ evenNbrs y, globalLegal ω ∧ mismatch ω a) :=
+        FinProb.pr_union P _ _
+      _ ≤ Real.exp (-Real.sqrt n) + (n : ℝ) * Real.exp (-3 * M) := by
+        exact add_le_add hsize (by simpa [P, M] using hunion.trans hsum)
+  have hcapBad : cap * P.pr bad ≤ 1 := by
+    calc
+      _ ≤ cap * (Real.exp (-Real.sqrt n) +
+          (n : ℝ) * Real.exp (-3 * M)) :=
+        mul_le_mul_of_nonneg_left hbadBound (Real.exp_nonneg _)
+      _ = cap * Real.exp (-Real.sqrt n) +
+          cap * (n : ℝ) * Real.exp (-3 * M) := by ring
+      _ ≤ 1 / 2 + 1 / 2 := by
+        refine add_le_add ?_ ?_
+        · simpa [cap] using hscaleN.1
+        · simpa [cap, M, mul_assoc, mul_left_comm, mul_comm] using hscaleN.2
+      _ = 1 := by norm_num
+  have hselEq (ω : X.CΩ L.ht) (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
+      (hnot : ¬ mismatch ω a) :
+      X.selAt (L.elig H) ω L.ht.hp.Rlong a =
+        X.selAt (L.elig H) ω (L.ht.hp.Rshort (X.p.m n)) a := by
+    have hh := not_ne_iff.mp hnot
+    unfold Setup5.selAt
+    simpa only [siteQuery_eq a] using
+      selectionAtEq (X.sites L.ht) (X.pos ω) (X.act ω) (L.elig H ω)
+        (Setup5.tie ω) L.ht.hp.Rlong (L.ht.hp.Rshort (X.p.m n)) (siteQuery a) hh
+  letI : DecidablePred bad := fun ω => Classical.propDecidable (bad ω)
+  have hpoint : ∀ ω, longMean ω ≤ shortMean ω +
+      (if bad ω then cap else 0) := by
+    intro ω
+    by_cases hv : L.valid H ω y
+    · by_cases hb : bad ω
+      · have hrowcap := T.rowAt_cap L.ht.hp.Rlong H ω y (0, x)
+        have hshortnonneg : 0 ≤ shortMean ω := by
+          dsimp [shortMean]
+          exact mul_nonneg (Nat.cast_nonneg _) (T.rowAt_nonneg _ H ω y (0, x))
+        have hbadCap : (if bad ω then cap else 0) = cap := if_pos hb
+        rw [hbadCap]
+        dsimp [longMean, cap]
+        nlinarith [hrowcap, hshortnonneg]
+      · have hsel : ∀ a ∈ evenNbrs y,
+            X.selAt (L.elig H) ω L.ht.hp.Rlong a =
+              X.selAt (L.elig H) ω (L.ht.hp.Rshort (X.p.m n)) a := by
+          intro a ha
+          exact hselEq ω a ha (by
+            intro hmis
+            exact hb (Or.inr ⟨a, ha, hmis⟩))
+        have hrow := T.rowAt_congr L.ht.hp.Rlong
+          (L.ht.hp.Rshort (X.p.m n)) H ω y hsel
+        simp [longMean, shortMean, cap, hb, hrow]
+    · have hzero := T.long_invalid H ω y (0, x) hv
+      have hshortnonneg : 0 ≤ shortMean ω := by
+        dsimp [shortMean]
+        exact mul_nonneg (Nat.cast_nonneg _) (T.rowAt_nonneg _ H ω y (0, x))
+      have hind : 0 ≤ (if bad ω then cap else 0) := by
+        split_ifs <;> positivity
+      change longMean ω ≤ shortMean ω + (if bad ω then cap else 0)
+      simp only [longMean, hzero, mul_zero]
+      exact add_nonneg hshortnonneg hind
+  have hbonus : P.expect (fun ω => if bad ω then cap else 0) = cap * P.pr bad := by
+    classical
+    have hindicator : P.expect (fun ω => if bad ω then 1 else 0) = P.pr bad := by
+      simp [FinProb.expect, FinProb.pr]
+    calc
+      P.expect (fun ω => if bad ω then cap else 0) =
+          cap * P.expect (fun ω => if bad ω then 1 else 0) := by
+        simp only [FinProb.expect]
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intro ω hω
+        by_cases hb : bad ω <;> simp [hb] <;> ring
+      _ = cap * P.pr bad := congrArg (fun q : ℝ => cap * q) hindicator
+  have hmean := FinProb.expect_mono P hpoint
+  calc
+    (X.centreLaw L.ht H).expect longMean ≤
+        (X.centreLaw L.ht H).expect shortMean + 1 := by
+      calc
+        P.expect longMean ≤ P.expect (fun ω => shortMean ω +
+            (if bad ω then cap else 0)) := hmean
+        _ = P.expect shortMean + P.expect (fun ω => if bad ω then cap else 0) :=
+          FinProb.expect_add P shortMean (fun ω => if bad ω then cap else 0)
+        _ = P.expect shortMean + cap * P.pr bad := by rw [hbonus]
+        _ ≤ P.expect shortMean + 1 := by nlinarith [hcapBad]
+    _ = _ := rfl
 
 theorem expect_nonneg' {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (f : Ω → ℝ) (hf : ∀ ω, 0 ≤ f ω) :
     0 ≤ P.expect f :=

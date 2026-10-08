@@ -1,4 +1,5 @@
 import HypercubeRamsey.Framework.FinProb
+import HypercubeRamsey.Tools.Finner_sol_finner
 
 /-!
 # Finite Finner inequality
@@ -23,6 +24,6 @@ theorem xFinner {ι B : Type*} [Fintype ι] [DecidableEq ι] [Fintype B] [Decida
     (FinProb.pi Q).expect (fun ω => ∏ b, f b ω) ≤
       ∏ b, Real.rpow
         ((FinProb.pi Q).expect (fun ω => (f b ω) ^ d)) ((d : ℝ)⁻¹) := by
-  sorry
+  exact Lane_sol_finner.finner Q S d hd hdegree f hnonneg hscope
 
 end HypercubeRamsey

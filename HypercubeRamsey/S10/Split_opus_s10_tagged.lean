@@ -1282,12 +1282,12 @@ theorem d3_tilt_caps (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) 
         rw [← Real.rpow_add hnreal]
         rw [show 300 * δ + 200 * δ = 500 * δ by ring]
 
-  have flip_of_dist : ∀ {d : ℕ} (s z : Fin d → Bool), hammingDist s z = 1 →
+  have flip_of_dist : ∀ {d : ℕ} (s z : Fin d → Bool), _root_.hammingDist s z = 1 →
       ∃ i : Fin d, z = p10_1kFlipCoordinate s i := by
     intro d s z hdist
     classical
     have hcard : (Finset.univ.filter (fun i : Fin d => s i ≠ z i)).card = 1 := by
-      simpa [hammingDist] using hdist
+      simpa [_root_.hammingDist] using hdist
     obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hcard
     refine ⟨i, ?_⟩
     funext j
@@ -1336,11 +1336,11 @@ theorem d3_tilt_caps (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) 
       obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hz
       have hcL : c ∈ L := (Finset.mem_filter.mp hc).1
       have hcNot : c.1 ≠ q.1 := (Finset.mem_filter.mp hc).2
-      have hdist : hammingDist c.1 q.1 = 1 := by
+      have hdist : _root_.hammingDist c.1 q.1 = 1 := by
         rcases hAdj c hcL with hsame | hfar
         · exact False.elim (hcNot hsame)
         · exact hfar
-      have hdist' : hammingDist q.1 c.1 = 1 := by
+      have hdist' : _root_.hammingDist q.1 c.1 = 1 := by
         rw [_root_.hammingDist_comm]
         exact hdist
       obtain ⟨i, hflip⟩ := flip_of_dist q.1 c.1 hdist'
@@ -1355,7 +1355,7 @@ theorem d3_tilt_caps (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) 
               apply Finset.sum_congr rfl
               intro z hz
               obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hz
-              have hdist : hammingDist c.1 q.1 = 1 := by
+              have hdist : _root_.hammingDist c.1 q.1 = 1 := by
                 rcases hAdj c (Finset.mem_filter.mp hc).1 with hsame | hfar
                 · exact False.elim ((Finset.mem_filter.mp hc).2 hsame)
                 · exact hfar
@@ -1409,7 +1409,7 @@ theorem d3_tilt_caps (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) 
     have hback : p10_1kFlipCoordinate z i = q.1 := by
       funext j
       by_cases hji : j = i <;> simp [z, p10_1kFlipCoordinate, hji]
-    have hdist : hammingDist z q.1 = 1 := by
+    have hdist : _root_.hammingDist z q.1 = 1 := by
       rw [← hback]
       exact p10_1kFlipCoordinate_hammingDist (mS n δ) z i
     have hcard := hOne z hdist

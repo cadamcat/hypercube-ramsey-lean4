@@ -977,7 +977,29 @@ theorem evenRow_outputs_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.
 /-- SUB-LEMMA D3: even roles at residual distance more than two have disjoint stars. -/
 theorem star_disjoint_of_far (v w : EvenRole5 n) (hfar : 2 < X.g.residualDist v.1 w.1) :
     Disjoint (star v) (star w) := by
-  sorry
+  classical
+  apply Finset.disjoint_left.mpr
+  intro b hbv hbw
+  have hadjv : (cube n).Adj v.1 b.1 := (Finset.mem_filter.mp hbv).2
+  have hadjw : (cube n).Adj w.1 b.1 := (Finset.mem_filter.mp hbw).2
+  have hvb := Lane_sol_s05_even.adjacent_residualDist X v.1 b.1 hadjv
+  have hwb := Lane_sol_s05_even.adjacent_residualDist X w.1 b.1 hadjw
+  have htri : X.g.residualDist v.1 w.1 ≤
+      X.g.residualDist v.1 b.1 + X.g.residualDist b.1 w.1 := by
+    simpa only [← Lane_sol_s05_even.residualDist_eq X] using
+      (_root_.hammingDist_triangle
+        (Lane_sol_s05_even.residualVertex X v.1)
+        (Lane_sol_s05_even.residualVertex X b.1)
+        (Lane_sol_s05_even.residualVertex X w.1))
+  have hbw : X.g.residualDist b.1 w.1 = X.g.residualDist w.1 b.1 := by
+    simp [Lane_sol_s05_even.residualDist_eq, _root_.hammingDist_comm]
+  rw [hbw] at htri
+  have hbound : X.g.residualDist v.1 w.1 ≤ 2 := by
+    calc
+      X.g.residualDist v.1 w.1 ≤ X.g.residualDist v.1 b.1 + X.g.residualDist w.1 b.1 := htri
+      _ ≤ 1 + 1 := Nat.add_le_add hvb hwb
+      _ = 2 := by norm_num
+  omega
 
 /-- The product-row mean of `Z_v(x)` at fixed centers (05:1229–1236). -/
 def evenW (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N) (ω : X.CΩ L.ht) : ℝ :=

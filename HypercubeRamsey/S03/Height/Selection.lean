@@ -3,6 +3,7 @@ import HypercubeRamsey.S03.Height.Selection_p_height_small
 import HypercubeRamsey.S03.Height.Selection_p_height_main
 import HypercubeRamsey.S03.Height.Split_opus_height
 import HypercubeRamsey.S03.Height.Selection_sol_height_short
+import HypercubeRamsey.S03.Height.Selection_sol_height_short_arith
 import OAI.Combinatorics.Ramsey.Hypercube
 
 /-!
@@ -71,7 +72,35 @@ theorem height_selection_short (J₀ b₀ b σ ζ θ a c_d C_d α : ℝ) (D : �
             p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) p.Rlong v ≠
               p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) (p.Rshort m) v) ≤
           Real.exp (-3 * (m : ℝ) ^ ((1 : ℝ) / 5)) := by
-  sorry
+  obtain ⟨nR, hR⟩ := Lane_sol_height_short.short_radius_bounds_eventually σ ζ α hα
+  obtain ⟨nA, hA⟩ := Lane_sol_height_short.short_error_eventually
+    J₀ b₀ b σ ζ θ a c_d C_d α D hp hθ hα
+  obtain ⟨nC, hC⟩ := Lane_opus_height.scale_claim_all J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  obtain ⟨nE, hE⟩ := Lane_opus_height.std_eventually J₀ b₀ b σ ζ θ a c_d C_d D hp reg
+  refine ⟨max (max nR nA) (max nC nE), ?_⟩
+  intro p hD hH hlam hb₀ hb hn hdlo hdhi hreg Sites v hv forced Aux _ πAux Esel
+  have hstd : Lane_opus_height.Std J₀ b₀ b σ ζ c_d C_d D reg p :=
+    ⟨hD, hH, hlam, hb₀, hb, hdlo, hdhi, hreg⟩
+  have hnAll := hn
+  simp only [max_le_iff] at hnAll
+  obtain ⟨⟨hnR, hnA⟩, ⟨hnC, hnE⟩⟩ := hnAll
+  obtain ⟨hD0, _hH0, hlam30, hnb4⟩ := hE p hstd hnE
+  let m := ⌈(p.n : ℝ) ^ α⌉₊
+  obtain ⟨hshortQ, hbase⟩ := hR p.n hnR
+  have hshort : p.Rshort m ≤ p.Rlong := by
+    unfold HDParams.Rshort HDParams.Rlong
+    rw [hH]
+    calc
+      p.D * Nat.sqrt m ≤ p.D * (2 * topScale p.n σ ζ) :=
+        Nat.mul_le_mul_left _ hshortQ
+      _ = 2 * p.D * topScale p.n σ ζ := by ring
+  have hHR : p.H = Lane_p_height_main.hdScaleRadius p.n σ
+      (Lane_p_height_main.hdScaleIndex p.n σ ζ) :=
+    hH.trans (Lane_p_height_main.topScale_eq_hdScaleRadius _ _ _)
+  have hprob := Lane_sol_height_short.short_probability_bound p hD0 σ ζ a θ hHR
+    hlam30 hnb4 (hC p hstd hnC) Sites v hv forced πAux Esel m hshort hbase
+  rw [hD] at hprob
+  exact hprob.trans (hA p.n p.d hnA hdhi)
 
 /-- L3.8i (part 4): a fixed eligible ID is selected at level zero with probability at most `3/λ`. -/
 theorem height_selection_tie (p : HDParams) (hlam : 0 < p.lam) (P : p.Loc → Bool) (E : p.EligMap)

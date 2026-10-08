@@ -12,6 +12,7 @@ import HypercubeRamsey.S05.Centres_sol_s05_centres_low
 import HypercubeRamsey.S05.Centres_sol_s05_centres_counts
 import HypercubeRamsey.S05.Centres_sol_s05_j5_stars
 import HypercubeRamsey.S05.Centres_opus_j12
+import HypercubeRamsey.S05.Centres_opus_j11
 
 /-!
 # D5.6–D5.8, L5.1j, L5.1g/k rows, L5.1l(3): centers, height choices and the odd rows
@@ -3837,854 +3838,357 @@ theorem markElig_estimates : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < 
 
 set_option maxHeartbeats 400000
 
-set_option maxHeartbeats 950000
+/-! ### J11 helpers (05:861–887)
+
+Local validity at an odd role reads the selections at its even neighbours, the arrays at the selected
+IDs and the prospective positions near the neighbouring sites. The transfer lemmas below are stated for
+an abstract height choice, eligibility, radius and scope, so that their kernel terms do not unfold the
+concrete experiment; J11 only instantiates them. -/
+
+private theorem j11_hd_self {d : ℕ} (v : CubeVertex d) : hammingDist v v = 0 :=
+  _root_.hammingDist_self v
+
+private theorem j11_hd_root {d : ℕ} (u v : CubeVertex d) :
+    hammingDist u v = _root_.hammingDist u v := rfl
+
+private theorem j11_hitSet_congr (X : Setup5 γ K' χ n N E G) {Id : Type} (A A' : X.ArraysOn Id)
+    (c : Id × X.Ty) (hc : A c = A' c) : X.hitSet A c = X.hitSet A' c := by
+  funext x
+  unfold Setup5.hitSet
+  rw [hc]
+
+private theorem j11_recordOf_obs_mem (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (H : X.KeyHist) (A : X.ArraysOn ht.hp.Loc) (σ : EvenRole5 n → Option ht.hp.Loc)
+    (y : OddRole5 n) (c : ht.hp.Loc × X.Ty) (hc : c ∈ (recordOf X ht H A σ y).2.1) :
+    ∃ a ∈ evenNbrs y, ∃ l, σ a = some l ∧ c = (l, X.g.evenType (X.p.J n) a.1) := by
+  obtain ⟨a, ha, hc⟩ := Finset.mem_biUnion.mp hc
+  cases hs : σ a with
+  | none => simp [hs] at hc
+  | some l => exact ⟨a, ha, l, hs, by simpa [hs] using hc⟩
+
+private theorem j11_recordOf_ref_obs (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (H : X.KeyHist) (A : X.ArraysOn ht.hp.Loc) (σ : EvenRole5 n → Option ht.hp.Loc)
+    (y : OddRole5 n) (c : ht.hp.Loc × X.Ty × Option X.Key)
+    (hc : c ∈ (recordOf X ht H A σ y).2.2.1) : (c.1, c.2.1) ∈ (recordOf X ht H A σ y).2.1 := by
+  obtain ⟨a, ha, hc⟩ := Finset.mem_biUnion.mp hc
+  apply Finset.mem_biUnion.mpr
+  refine ⟨a, ha, ?_⟩
+  cases hs : σ a with
+  | none => simp [hs] at hc
+  | some l =>
+    simp only [hs] at hc ⊢
+    split_ifs at hc
+    · rw [Finset.mem_singleton.mp hc]
+      exact Finset.mem_singleton_self _
+    · simp at hc
+
+private theorem j11_recordOf_mask_obs (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (H : X.KeyHist) (A : X.ArraysOn ht.hp.Loc) (σ : EvenRole5 n → Option ht.hp.Loc)
+    (y : OddRole5 n) (c : ht.hp.Loc × X.Ty) (M : Finset (Fin X.blockBound))
+    (hc : (recordOf X ht H A σ y).2.2.2 = some (c.1, c.2, M)) :
+    c ∈ (recordOf X ht H A σ y).2.1 := by
+  dsimp only [recordOf] at hc ⊢
+  split at hc
+  · split_ifs at hc with hh
+    · have ha := (Classical.choose_spec hh).1
+      cases hs : σ (Classical.choose hh) with
+      | none => simp [hs] at hc
+      | some l =>
+        simp only [hs, Option.some.injEq, Prod.mk.injEq] at hc
+        apply Finset.mem_biUnion.mpr
+        refine ⟨Classical.choose hh, ha, ?_⟩
+        rw [hs, Finset.mem_singleton]
+        exact Prod.ext hc.1.symm hc.2.1.symm
+  · simp at hc
+
+private theorem j11_recordOf_congr (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (H : X.KeyHist) (A A' : X.ArraysOn ht.hp.Loc)
+    (σ σ' : EvenRole5 n → Option ht.hp.Loc) (y : OddRole5 n)
+    (hσ : ∀ a ∈ evenNbrs y, σ a = σ' a)
+    (hA : ∀ a ∈ evenNbrs y, ∀ l, σ a = some l →
+      A (l, X.g.evenType (X.p.J n) a.1) = A' (l, X.g.evenType (X.p.J n) a.1)) :
+    recordOf X ht H A σ y = recordOf X ht H A' σ' y := by
+  have h1 : (recordOf X ht H A σ y).2.1 = (recordOf X ht H A' σ' y).2.1 := by
+    apply Finset.biUnion_congr rfl
+    intro a ha
+    rw [hσ a ha]
+  have h2 : (recordOf X ht H A σ y).2.2.1 = (recordOf X ht H A' σ' y).2.2.1 := by
+    apply Finset.biUnion_congr rfl
+    intro a ha
+    rw [hσ a ha]
+  have h3 : (recordOf X ht H A σ y).2.2.2 = (recordOf X ht H A' σ' y).2.2.2 := by
+    dsimp only [recordOf]
+    split
+    · have hex : (∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ a).isSome) ↔
+          ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ' a).isSome := by
+        constructor <;> rintro ⟨a, ha, htype, hs⟩
+        · exact ⟨a, ha, htype, (hσ a ha) ▸ hs⟩
+        · exact ⟨a, ha, htype, (hσ a ha).symm ▸ hs⟩
+      by_cases hh : ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (σ a).isSome
+      · have hh' := hex.mp hh
+        rw [dif_pos hh, dif_pos hh']
+        have ha := (Classical.choose_spec hh).1
+        have heq : Classical.choose hh = Classical.choose hh' := by
+          congr 1
+          exact funext fun a => propext (by
+            by_cases ha : a ∈ evenNbrs y
+            · simp only [ha, true_and, hσ a ha]
+            · simp [ha])
+        rw [← heq, ← hσ _ ha]
+        cases hs : σ (Classical.choose hh) with
+        | none => rfl
+        | some l =>
+          dsimp only
+          rw [j11_hitSet_congr X A A' _ (hA _ ha l hs)]
+      · rw [dif_neg hh, dif_neg (mt hex.mpr hh)]
+    · rfl
+  exact Prod.ext rfl (Prod.ext h1 (Prod.ext h2 h3))
+
+/-- Step 3 failure reads the record's observed arrays only. -/
+private theorem j11_step3Fail_congr (X : Setup5 γ K' χ n N E G) {Id : Type} [DecidableEq Id]
+    (H : X.KeyHist) (r : X.RecordOn Id) (A B : X.ArraysOn Id)
+    (hmask : ∀ c M, r.2.2.2 = some (c.1, c.2, M) → c ∈ r.2.1)
+    (href : ∀ c ∈ r.2.2.1, (c.1, c.2.1) ∈ r.2.1)
+    (hobs : ∀ c ∈ r.2.1, A c = B c) : X.step3FailOn H r A ↔ X.step3FailOn H r B := by
+  have hrefs := Lane_sol_s05_centres.refsOn_arrays_congr X H r A B href hobs
+  have hgate : X.candGateOn H r A (H.2 r.1) ↔ X.candGateOn H r B (H.2 r.1) :=
+    Lane_sol_s05_hist1b.candGateOn_arrays_congr X H r A B hmask hobs _
+  have hmass (e : Option (Id × X.Ty × Finset (Fin X.blockBound))) :
+      X.step3MassOn H r A e = X.step3MassOn H r B e :=
+    Lane_sol_s05_hist1b.step3MassOn_arrays_congr X H r A B hmask hobs e
+  have hcap := Lane_sol_s05_centres.highCapped_arrays_congr X H r A B hmask hobs
+  have hprice := Lane_sol_s05_centres.highPrice_arrays_congr X H r A B hmask href hobs
+  simp only [Setup5.step3FailOn, hgate, hmass, hrefs, hcap, hprice]
+
+/-- The three Step 3 stars of local validity transfer along an equal record with equal observed
+arrays. -/
+private theorem j11_star_congr (X : Setup5 γ K' χ n N E G) {Id : Type} [DecidableEq Id]
+    (H : X.KeyHist) (r r' : X.RecordOn Id) (A B : X.ArraysOn Id) (hr : r = r')
+    (hmask : ∀ c M, r.2.2.2 = some (c.1, c.2, M) → c ∈ r.2.1)
+    (href : ∀ c ∈ r.2.2.1, (c.1, c.2.1) ∈ r.2.1)
+    (hobs : ∀ c ∈ r.2.1, A c = B c) :
+    (0 < X.step3PostOn H r A none (H.2 r.1) → 0 < X.step3PostOn H r' B none (H.2 r'.1)) ∧
+    (X.candGateOn H r A (H.2 r.1) → X.candGateOn H r' B (H.2 r'.1)) ∧
+    (¬ X.step3FailOn H r A → ¬ X.step3FailOn H r' B) := by
+  subst hr
+  refine ⟨fun h => ?_, fun h => ?_, fun h => ?_⟩
+  · rw [← Lane_sol_s05_centres.step3Post_arrays_congr X H r A B hmask hobs none]
+    exact h
+  · exact (Lane_sol_s05_hist1b.candGateOn_arrays_congr X H r A B hmask hobs _).mp h
+  · rwa [← j11_step3Fail_congr X H r A B hmask href hobs]
+
+private theorem j11_heavyCount_congr (X : Setup5 γ K' χ n N E G) {ht : X.HeightChoice5}
+    (H : X.KeyHist) (ω ω' : X.CΩ ht) (v : EvenRole5 n) (c : X.CRef ht)
+    (h : arr ω c.1 (X.g.evenType (X.p.J n) v.1) = arr ω' c.1 (X.g.evenType (X.p.J n) v.1)) :
+    X.heavyCount H ω v c = X.heavyCount H ω' v c := by
+  unfold Setup5.heavyCount
+  rw [h]
+
+private theorem j11_refSubset_congr (X : Setup5 γ K' χ n N E G) {ht : X.HeightChoice5}
+    (H : X.KeyHist) (ω ω' : X.CΩ ht) (v : EvenRole5 n) (l : ht.hp.Loc)
+    (h : arr ω l (X.g.evenType (X.p.J n) v.1) = arr ω' l (X.g.evenType (X.p.J n) v.1)) :
+    X.refSubset H ω v l = X.refSubset H ω' v l := by
+  unfold Setup5.refSubset Setup5.refSubsetOn
+  rw [j11_hitSet_congr X (arraysOf ω) (arraysOf ω') (l, X.g.evenType (X.p.J n) v.1) h]
+
+/-- The record of an odd role transfers when the neighbouring selections and the selected arrays
+agree. -/
+private theorem j11_record_eq (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (elig : X.CΩ ht → ht.hp.EligMap) (H : X.KeyHist) (ω ω' : X.CΩ ht) (R : ℕ) (y : OddRole5 n)
+    (hsel : ∀ a ∈ evenNbrs y, X.selAt elig ω R a = X.selAt elig ω' R a)
+    (harr : ∀ a ∈ evenNbrs y, ∀ l, X.selAt elig ω R a = some l → ∀ K,
+      arr ω l K = arr ω' l K) :
+    X.actualRecordAt elig H ω R y = X.actualRecordAt elig H ω' R y := by
+  rw [actualRecordAt_eq X ht elig H ω R y, actualRecordAt_eq X ht elig H ω' R y]
+  exact j11_recordOf_congr X ht H _ _ _ _ y hsel (fun a ha l hl => harr a ha l hl _)
+
+/-- Transfer of local validity for an abstract height choice and eligibility. -/
+private theorem j11_valid_transfer (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (elig : X.KeyHist → X.CΩ ht → ht.hp.EligMap) (H : X.KeyHist) (ω ω' : X.CΩ ht) (R : ℕ)
+    (y : OddRole5 n)
+    (hsel : ∀ a ∈ evenNbrs y, X.selAt (elig H) ω R a = X.selAt (elig H) ω' R a)
+    (harr : ∀ a ∈ evenNbrs y, ∀ l, X.selAt (elig H) ω R a = some l → ∀ K,
+      arr ω l K = arr ω' l K)
+    (hpos : ∀ a ∈ evenNbrs y, ∀ (j : Fin (ht.hp.H + 1)) (u : CubeVertex ht.hp.d),
+      hammingDist u (X.siteOf a) ≤ ht.hp.r → pos ω (u, j) = pos ω' (u, j))
+    (hv : X.LocalValidAt ht elig H ω R y) : X.LocalValidAt ht elig H ω' R y := by
+  have hrec := j11_record_eq X ht (elig H) H ω ω' R y hsel harr
+  have hobs (c : ht.hp.Loc × X.Ty) (hc : c ∈ (X.actualRecordAt (elig H) H ω R y).2.1) :
+      arraysOf ω c = arraysOf ω' c := by
+    rw [actualRecordAt_eq] at hc
+    obtain ⟨a, ha, l, hl, rfl⟩ := j11_recordOf_obs_mem X ht H _ _ y c hc
+    exact harr a ha l hl _
+  have hmask (c : ht.hp.Loc × X.Ty) (M : Finset (Fin X.blockBound))
+      (hc : (X.actualRecordAt (elig H) H ω R y).2.2.2 = some (c.1, c.2, M)) :
+      c ∈ (X.actualRecordAt (elig H) H ω R y).2.1 := by
+    rw [actualRecordAt_eq] at hc ⊢
+    exact j11_recordOf_mask_obs X ht H _ _ y c M hc
+  have href (c : ht.hp.Loc × X.Ty × Option X.Key)
+      (hc : c ∈ (X.actualRecordAt (elig H) H ω R y).2.2.1) :
+      (c.1, c.2.1) ∈ (X.actualRecordAt (elig H) H ω R y).2.1 := by
+    rw [actualRecordAt_eq] at hc ⊢
+    exact j11_recordOf_ref_obs X ht H _ _ y c hc
+  have hstar := j11_star_congr X H _ _ (arraysOf ω) (arraysOf ω') hrec hmask href hobs
+  obtain ⟨hbase, hstep1, hs, hcounts, hT, hhits, hheavy, hblock, hpath, hgate, hfail⟩ := hv
+  refine ⟨hbase, hstep1, ?_, ?_, ?_, ?_, ?_, ?_, hstar.1 hpath, hstar.2.1 hgate, hstar.2.2 hfail⟩
+  · intro a ha
+    rw [← hsel a ha]
+    exact hs a ha
+  · intro a ha j
+    have hfil : (Finset.univ.filter fun u : CubeVertex ht.hp.d =>
+          pos ω' (u, j) = true ∧ hammingDist u (X.siteOf a) ≤ ht.hp.r) =
+        (Finset.univ.filter fun u : CubeVertex ht.hp.d =>
+          pos ω (u, j) = true ∧ hammingDist u (X.siteOf a) ≤ ht.hp.r) :=
+      Lane_opus_s05_j11.filter_congr' fun u _ =>
+        ⟨fun h => ⟨(hpos a ha j u h.2).trans h.1, h.2⟩,
+          fun h => ⟨(hpos a ha j u h.2).symm.trans h.1, h.2⟩⟩
+    rw [hfil]
+    exact hcounts a ha j
+  · have himg : (evenNbrs y).image (fun a => X.selAt (elig H) ω' R a) =
+        (evenNbrs y).image (fun a => X.selAt (elig H) ω R a) := by
+      apply Finset.image_congr
+      intro a ha
+      exact (hsel a ha).symm
+    rw [himg]
+    exact hT
+  · intro a ha l k hl hk
+    have hl0 : X.selAt (elig H) ω R a = some l := (hsel a ha).trans hl
+    have hh := hhits a ha l k hl0 hk
+    rwa [j11_hitSet_congr X (arraysOf ω) (arraysOf ω') (l, X.g.evenType (X.p.J n) a.1)
+      (harr a ha l hl0 _)] at hh
+  · intro a ha l hl
+    have hl0 : X.selAt (elig H) ω R a = some l := (hsel a ha).trans hl
+    have he := harr a ha l hl0 (X.g.evenType (X.p.J n) a.1)
+    have hh := hheavy a ha l hl0
+    show (X.heavyCount H ω' a (l, X.refSubset H ω' a l) : ℝ) ≤
+      X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) a.1) (X.refSubset H ω' a l) : ℝ)
+    rw [← j11_refSubset_congr X H ω ω' a l he,
+      ← j11_heavyCount_congr X H ω ω' a (l, X.refSubset H ω a l) he]
+    exact hh
+  · intro c hc i
+    rw [← hrec] at hc
+    rw [← hobs c hc]
+    exact hblock c hc i
+
+/-- Local position count: a vertex within `r` of a neighbouring site lies in the scope. -/
+private theorem j11_scope (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5) (y : OddRole5 n)
+    (R slack : ℕ)
+    (hgap : ∀ a ∈ evenNbrs y,
+      hammingDist (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) + R + 16 ≤ slack)
+    (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (u : CubeVertex ht.hp.d)
+    (hu : hammingDist u (X.siteOf a) ≤ R) (l : ht.hp.Loc) (hl : hammingDist l.1 u ≤ ht.hp.r + 16) :
+    l ∈ X.scopeBall (h := ht) y.1 (ht.hp.r + slack) := by
+  refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩
+  have h1 := HypercubeRamsey.hammingDist_triangle l.1 u (X.St.oneHot (X.St.stateOf y.1))
+  have h2 := HypercubeRamsey.hammingDist_triangle u (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1))
+  have h3 : @HypercubeRamsey.hammingDist ht.hp.d (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) +
+      R + 16 ≤ slack := hgap a ha
+  omega
+
+/-- Generic J11: local validity reads the scope when the scope contains the `(r+16)`-balls around
+the `R`-balls of the neighbouring sites and eligibility is local and shaped. -/
+private theorem j11_local_generic (X : Setup5 γ K' χ n N E G) (ht : X.HeightChoice5)
+    (elig : X.KeyHist → X.CΩ ht → ht.hp.EligMap) (H : X.KeyHist) (y : OddRole5 n) (R : ℕ)
+    (S : Finset ht.hp.Loc) (hD : ht.hp.D ≤ 16)
+    (hscope : ∀ a ∈ evenNbrs y, ∀ u : CubeVertex ht.hp.d, hammingDist u (X.siteOf a) ≤ R →
+      ∀ l : ht.hp.Loc, hammingDist l.1 u ≤ ht.hp.r + 16 → l ∈ S)
+    (hloc : ∀ s j, FinProb.DependsOn (fun ω : X.CΩ ht => elig H ω s j)
+      (Finset.univ.filter fun l : ht.hp.Loc => hammingDist l.1 s ≤ ht.hp.r + 16))
+    (hshape : ∀ ω s j l, l ∈ elig H ω s j → hammingDist l.1 s ≤ ht.hp.r) :
+    FinProb.DependsOn (fun ω => X.LocalValidAt ht elig H ω R y) S := by
+  intro ω ω' hagree
+  have hE (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (u : CubeVertex ht.hp.d)
+      (hu : hammingDist u (X.siteOf a) ≤ R) (j : Fin (ht.hp.H + 1)) :
+      elig H ω u j = elig H ω' u j :=
+    hloc u j ω ω' fun l hl => hagree l (hscope a ha u hu l (Finset.mem_filter.mp hl).2)
+  have hactE (ξ : X.CΩ ht) (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (u : CubeVertex ht.hp.d)
+      (hu : hammingDist u (X.siteOf a) ≤ R) (j : Fin (ht.hp.H + 1)) (l : ht.hp.Loc)
+      (hl : l ∈ elig H ξ u j) : l ∈ S := by
+    have := hshape ξ u j l hl
+    exact hscope a ha u hu l (by omega)
+  have hbad (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (u : CubeVertex ht.hp.d)
+      (hu : _root_.hammingDist u (X.siteOf a) ≤ R) (j : Fin (ht.hp.H + 1)) :
+      ht.hp.Bad (pos ω) (act ω) (elig H ω) u j ↔ ht.hp.Bad (pos ω') (act ω') (elig H ω') u j := by
+    have hu' : hammingDist u (X.siteOf a) ≤ R := hu
+    apply Lane_opus_s05_j11.bad_congr ht.hp _ _ _ _ _ _ u j (hE a ha u hu' j)
+    · intro l hl
+      exact congrArg (fun z => z.2.1) (hagree l (hactE ω a ha u hu' j l hl))
+    · intro w hw
+      have hw' : hammingDist w u ≤ ht.hp.r + 16 := by
+        rw [j11_hd_root]
+        omega
+      have e := hagree (w, j) (hscope a ha u hu' (w, j) hw')
+      exact ⟨congrArg Prod.fst e, congrArg (fun z => z.2.1) e⟩
+  have h0 (a : EvenRole5 n) : hammingDist (X.siteOf a : CubeVertex ht.hp.d) (X.siteOf a) ≤ R := by
+    rw [j11_hd_self]
+    exact Nat.zero_le _
+  have hsel (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+      X.selAt (elig H) ω R a = X.selAt (elig H) ω' R a := by
+    refine Lane_opus_s05_j11.selectionAt_congr ht.hp (X.sites ht) (pos ω) (act ω) (pos ω')
+      (act ω') (elig H ω) (elig H ω') (tie ω) (tie ω') R (X.siteOf a) (hbad a ha)
+      (fun j => hE a ha _ (h0 a) j) ?_ ?_
+    · intro j l hl
+      exact congrArg (fun z => z.2.1) (hagree l (hactE ω a ha _ (h0 a) j l hl))
+    · intro j
+      have hl : hammingDist (X.siteOf a, j).1 (X.siteOf a : CubeVertex ht.hp.d) ≤ ht.hp.r + 16 := by
+        show hammingDist (X.siteOf a : CubeVertex ht.hp.d) (X.siteOf a) ≤ ht.hp.r + 16
+        rw [j11_hd_self]
+        exact Nat.zero_le _
+      exact congrArg (fun z => z.2.2.1) (hagree (X.siteOf a, j) (hscope a ha _ (h0 a) _ hl))
+  have hselS (ξ : X.CΩ ht) (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : ht.hp.Loc)
+      (hl : X.selAt (elig H) ξ R a = some l) : l ∈ S := by
+    obtain ⟨j, hj⟩ := Lane_opus_s05_j11.selectionAt_mem ht.hp (X.sites ht) (pos ξ) (act ξ)
+      (elig H ξ) (tie ξ) R (X.siteOf a) l hl
+    exact hactE ξ a ha _ (h0 a) j l hj
+  have hpos (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (j : Fin (ht.hp.H + 1))
+      (u : CubeVertex ht.hp.d) (hu : hammingDist u (X.siteOf a) ≤ ht.hp.r) :
+      pos ω (u, j) = pos ω' (u, j) := by
+    have hl : hammingDist (u, j).1 (X.siteOf a : CubeVertex ht.hp.d) ≤ ht.hp.r + 16 := by
+      show hammingDist u (X.siteOf a : CubeVertex ht.hp.d) ≤ ht.hp.r + 16
+      omega
+    exact congrArg Prod.fst (hagree (u, j) (hscope a ha _ (h0 a) (u, j) hl))
+  have harr (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : ht.hp.Loc)
+      (hl : X.selAt (elig H) ω R a = some l) (K : X.Ty) : arr ω l K = arr ω' l K :=
+    congrArg (fun z => z.2.2.2 K) (hagree l (hselS ω a ha l hl))
+  show X.LocalValidAt ht elig H ω R y = X.LocalValidAt ht elig H ω' R y
+  exact propext ⟨j11_valid_transfer X ht elig H ω ω' R y hsel harr hpos,
+    j11_valid_transfer X ht elig H ω' ω R y (fun a ha => (hsel a ha).symm)
+      (fun a ha l hl K => (harr a ha l ((hsel a ha).trans hl) K).symm)
+      (fun a ha j u hu => (hpos a ha j u hu).symm)⟩
+
+/-- The neighbouring sites and the long radius fit the canonical slack (05:309–312). -/
+private theorem j11_gap (X : Setup5 γ K' χ n N E G) (y : OddRole5 n) (a : EvenRole5 n)
+    (ha : a ∈ evenNbrs y) :
+    hammingDist (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) + (canonHt X).hp.Rlong + 16 ≤
+      Lane_sol_s05_centres.centreSlack X.p n := by
+  have hadj : (cube n).Adj a.1 y.1 := (Finset.mem_filter.mp ha).2
+  have hdist : (hammingDist (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) : ℝ) ≤
+      4 * (n : ℝ) ^ (1 / 2 : ℝ) + 302 :=
+    Lane_sol_s05_centres.adjacent_embedding_upper X.St a.1 y.1 hadj
+  have hslack := Lane_sol_s05_centres.centreSlack_scope X.p n
+  have hR : (canonHt X).hp.Rlong = 16 * topScale n (X.p.alpha / 1000000) (X.p.alpha / 100000) := by
+    show 2 * 8 * topScale n (X.p.alpha / 1000000) (X.p.alpha / 100000) = _
+    ring
+  rw [hR]
+  have hgapR : ((hammingDist (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) +
+      16 * topScale n (X.p.alpha / 1000000) (X.p.alpha / 100000) + 16 : ℕ) : ℝ) ≤
+      (Lane_sol_s05_centres.centreSlack X.p n : ℝ) := by
+    push_cast
+    linarith
+  exact_mod_cast hgapR
+
 /-- SUB-LEMMA J11 (05:880–887): local validity at the long radius reads center data within
 `r + centreSlack`: neighbouring sites lie within `4√n + 302` of the odd image
 (`Lane_sol_s05_centres.adjacent_embedding_upper`), selections read `Rlong + r + 16` around them
 (`markElig_local`), and `centreSlack_scope` absorbs both. -/
 theorem localValid_local (X : Setup5 γ K' χ n N E G) (H : X.KeyHist) (y : OddRole5 n) :
     FinProb.DependsOn (fun ω => X.LocalValidAt (canonHt X) (markElig X (canonHt X)) H ω (canonHt X).hp.Rlong y)
-      (X.scopeBall (h := canonHt X) y.1 ((canonHt X).hp.r + Lane_sol_s05_centres.centreSlack X.p n)) := by
-  classical
-  intro ω ω' hagree
-  let ht := canonHt X
-  let elig := markElig X ht H
-  let R := ht.hp.Rlong
-  let oddSite := X.St.oneHot (X.St.stateOf y.1)
-  have hMetric (u v : CubeVertex ht.hp.d) :
-      HypercubeRamsey.hammingDist u v = _root_.hammingDist u v := by
-    unfold HypercubeRamsey.hammingDist _root_.hammingDist
-    rfl
-  have hR : (R : ℝ) =
-      16 * (topScale n (X.p.alpha / 1000000) (X.p.alpha / 100000) : ℝ) := by
-    simp [R, ht, canonHt, HeightChoice5.hp, HDParams.Rlong]
-  have hgap (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
-      HypercubeRamsey.hammingDist (X.siteOf a) oddSite + R + 16 ≤
-        Lane_sol_s05_centres.centreSlack X.p n := by
-    have hadj : (cube n).Adj a.1 y.1 := (Finset.mem_filter.mp ha).2
-    have hdist := Lane_sol_s05_centres.adjacent_embedding_upper X.St a.1 y.1 hadj
-    have hslack := Lane_sol_s05_centres.centreSlack_scope X.p n
-    have hdist' : (HypercubeRamsey.hammingDist (X.siteOf a) oddSite : ℝ) ≤
-        4 * (n : ℝ) ^ (1 / 2 : ℝ) + 302 := by
-      simpa [Setup5.siteOf, oddSite] using hdist
-    have hgapR : ((HypercubeRamsey.hammingDist (X.siteOf a) oddSite + R + 16 : ℕ) : ℝ) ≤
-        (Lane_sol_s05_centres.centreSlack X.p n : ℝ) := by
-      push_cast
-      rw [hR]
-      linarith [hdist', hslack]
-    exact_mod_cast hgapR
-  have hscopeLoc (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (hu : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R)
-      (l : ht.hp.Loc) (hl : HypercubeRamsey.hammingDist l.1 u ≤ ht.hp.r + 16) :
-      l ∈ X.scopeBall (h := ht) y.1 (ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n) := by
-    apply Finset.mem_filter.mpr
-    refine ⟨Finset.mem_univ _, ?_⟩
-    have h := hgap a ha
-    have htri2 := HypercubeRamsey.hammingDist_triangle u (X.siteOf a) oddSite
-    calc
-      HypercubeRamsey.hammingDist l.1 oddSite ≤ HypercubeRamsey.hammingDist l.1 u + HypercubeRamsey.hammingDist u oddSite :=
-        HypercubeRamsey.hammingDist_triangle l.1 u oddSite
-      _ ≤ HypercubeRamsey.hammingDist l.1 u +
-          (HypercubeRamsey.hammingDist u (X.siteOf a) +
-            HypercubeRamsey.hammingDist (X.siteOf a) oddSite) := by
-        exact Nat.add_le_add_left htri2 _
-      _ ≤ (ht.hp.r + 16) + (R + HypercubeRamsey.hammingDist (X.siteOf a) oddSite) :=
-        Nat.add_le_add hl (Nat.add_le_add hu (le_rfl))
-      _ ≤ ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n := by
-        omega
-  have hposAt (l : ht.hp.Loc) (hl : l ∈ X.scopeBall (h := ht) y.1
-      (ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n)) : pos ω l = pos ω' l := by
-    exact congrArg Prod.fst (hagree l hl)
-  have hactAt (l : ht.hp.Loc) (hl : l ∈ X.scopeBall (h := ht) y.1
-      (ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n)) : act ω l = act ω' l := by
-    exact congrArg (fun z => z.2.1) (hagree l hl)
-  have htieAt (l : ht.hp.Loc) (hl : l ∈ X.scopeBall (h := ht) y.1
-      (ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n)) : tie ω l = tie ω' l := by
-    exact congrArg (fun z => z.2.2.1) (hagree l hl)
-  have harrAt (l : ht.hp.Loc) (hl : l ∈ X.scopeBall (h := ht) y.1
-      (ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n)) (K : X.Ty) :
-      arr ω l K = arr ω' l K := by
-    exact congrArg (fun z => z.2.2.2 K) (hagree l hl)
-  have hEligEq (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (hu : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R)
-      (j : Fin (ht.hp.H + 1)) : elig ω u j = elig ω' u j := by
-    apply (markElig_local X ht H u j) ω ω'
-    intro l hl
-    exact hagree l (hscopeLoc a ha u hu l ((Finset.mem_filter.mp hl).2))
-  have hD : ht.hp.D ≤ 16 := by simp [ht, canonHt, HeightChoice5.hp]
-  have hActNear (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (hu : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R)
-      (l : ht.hp.Loc) (hl : HypercubeRamsey.hammingDist l.1 u ≤ ht.hp.r + 16) :
-      act ω l = act ω' l := hactAt l (hscopeLoc a ha u hu l hl)
-  have hBadEq (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (hu : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R)
-      (j : Fin (ht.hp.H + 1)) :
-      ht.hp.Bad (pos ω) (act ω) (elig ω) u j ↔
-        ht.hp.Bad (pos ω') (act ω') (elig ω') u j := by
-    have hE := hEligEq a ha u hu j
-    have hno : (∀ l ∈ elig ω u j, act ω l = false) ↔
-        (∀ l ∈ elig ω' u j, act ω' l = false) := by
-      constructor
-      · intro h l hl
-        have hlω : l ∈ elig ω u j := by rw [hE]; exact hl
-        have hshape := markElig_shape X ht H ω u j l hlω
-        exact (hActNear a ha u hu l (by omega)).symm.trans (h l hlω)
-      · intro h l hl
-        have hlω' : l ∈ elig ω' u j := by rw [← hE]; exact hl
-        have hshape := markElig_shape X ht H ω' u j l hlω'
-        exact (hActNear a ha u hu l (by omega)).trans (h l hlω')
-    have hcountSet :
-        (Finset.univ.filter fun w : CubeVertex ht.hp.d =>
-          pos ω (w, j) = true ∧ act ω (w, j) = true ∧
-            _root_.hammingDist w u ≤ ht.hp.r + ht.hp.D) =
-        (Finset.univ.filter fun w : CubeVertex ht.hp.d =>
-          pos ω' (w, j) = true ∧ act ω' (w, j) = true ∧
-            _root_.hammingDist w u ≤ ht.hp.r + ht.hp.D) := by
-      ext w
-      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-      constructor
-      · rintro ⟨hp, ha', hd⟩
-        have hl : HypercubeRamsey.hammingDist w u ≤ ht.hp.r + 16 := by
-          rw [hMetric]
-          omega
-        have hloc := hscopeLoc a ha u hu (w, j) hl
-        exact ⟨(hposAt (w, j) hloc).symm.trans hp,
-          (hactAt (w, j) hloc).symm.trans ha', hd⟩
-      · rintro ⟨hp, ha', hd⟩
-        have hl : HypercubeRamsey.hammingDist w u ≤ ht.hp.r + 16 := by
-          rw [hMetric]
-          omega
-        have hloc := hscopeLoc a ha u hu (w, j) hl
-        exact ⟨(hposAt (w, j) hloc).trans hp, (hactAt (w, j) hloc).trans ha', hd⟩
-    unfold HDParams.Bad
-    simp only [hno, hcountSet]
-  have hBadNEq (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (hu : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R)
-      (k : ℕ) :
-      ht.hp.BadN (pos ω) (act ω) (elig ω) u k ↔
-        ht.hp.BadN (pos ω') (act ω') (elig ω') u k := by
-    unfold HDParams.BadN
-    constructor
-    · rintro ⟨hj, hbad⟩
-      exact ⟨hj, (hBadEq a ha u hu ⟨k, hj⟩).mp hbad⟩
-    · rintro ⟨hj, hbad⟩
-      exact ⟨hj, (hBadEq a ha u hu ⟨k, hj⟩).mpr hbad⟩
-  have hReachWithin (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (k : ℕ)
-      (hr : ht.hp.Reach (X.sites ht) (pos ω) (act ω) (elig ω) (X.siteOf a) R u k) :
-      HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R := by
-    induction hr with
-    | start v hv hd => exact hd
-    | up v k hk hr hbad ih => exact ih
-    | down v v' k hr hv' hdR hdD ih => exact hdR
-  have hReachWithin' (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (u : CubeVertex ht.hp.d) (k : ℕ)
-      (hr : ht.hp.Reach (X.sites ht) (pos ω') (act ω') (elig ω') (X.siteOf a) R u k) :
-      HypercubeRamsey.hammingDist u (X.siteOf a) ≤ R := by
-    induction hr with
-    | start v hv hd => exact hd
-    | up v k hk hr hbad ih => exact ih
-    | down v v' k hr hv' hdR hdD ih => exact hdR
-  have hReachEq (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (u : CubeVertex ht.hp.d) (k : ℕ) :
-      ht.hp.Reach (X.sites ht) (pos ω) (act ω) (elig ω) (X.siteOf a) R u k ↔
-        ht.hp.Reach (X.sites ht) (pos ω') (act ω') (elig ω') (X.siteOf a) R u k := by
-    constructor
-    · intro hr
-      induction hr with
-      | start v hv hd => exact HDParams.Reach.start v hv hd
-      | up v k hk hr hbad ih =>
-          have hu := hReachWithin a ha v k hr
-          exact HDParams.Reach.up v k hk ih ((hBadNEq a ha v hu k).mp hbad)
-      | down v v' k hr hv' hdR hdD ih =>
-          exact HDParams.Reach.down v v' k ih hv' hdR hdD
-    · intro hr
-      induction hr with
-      | start v hv hd => exact HDParams.Reach.start v hv hd
-      | up v k hk hr hbad ih =>
-          have hu := hReachWithin' a ha v k hr
-          exact HDParams.Reach.up v k hk ih ((hBadNEq a ha v hu k).mpr hbad)
-      | down v v' k hr hv' hdR hdD ih =>
-          exact HDParams.Reach.down v v' k ih hv' hdR hdD
-  have hHeightEq (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
-      ht.hp.height (X.sites ht) (pos ω) (act ω) (elig ω) R (X.siteOf a) =
-        ht.hp.height (X.sites ht) (pos ω') (act ω') (elig ω') R (X.siteOf a) := by
-    unfold HDParams.height
-    have hset : (Finset.range (ht.hp.H + 1)).filter (fun k =>
-        ht.hp.Reach (X.sites ht) (pos ω) (act ω) (elig ω) (X.siteOf a) R (X.siteOf a) k) =
-      (Finset.range (ht.hp.H + 1)).filter (fun k =>
-        ht.hp.Reach (X.sites ht) (pos ω') (act ω') (elig ω') (X.siteOf a) R (X.siteOf a) k) := by
-      ext k
-      simp only [Finset.mem_filter, Finset.mem_range]
-      constructor
-      · rintro ⟨hk, hr⟩
-        exact ⟨hk, (hReachEq a ha (X.siteOf a) k).mp hr⟩
-      · rintro ⟨hk, hr⟩
-        exact ⟨hk, (hReachEq a ha (X.siteOf a) k).mpr hr⟩
-    rw [hset]
-  have hSelEq (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
-      X.selAt elig ω R a = X.selAt elig ω' R a := by
-    let v : CubeVertex ht.hp.d := X.siteOf a
-    have hvR : HypercubeRamsey.hammingDist v v ≤ R := by
-      simp [HypercubeRamsey.hammingDist]
-    have hheight := hHeightEq a ha
-    have hheightV :
-        ht.hp.height (X.sites ht) (pos ω) (act ω) (elig ω) R v =
-          ht.hp.height (X.sites ht) (pos ω') (act ω') (elig ω') R v := by
-      simpa [v] using hheight
-    have hbad (j : Fin (ht.hp.H + 1)) :
-        ht.hp.Bad (pos ω) (act ω) (elig ω) v j ↔
-          ht.hp.Bad (pos ω') (act ω') (elig ω') v j :=
-      hBadEq a ha v (by simpa [v] using hvR) j
-    have hE (j : Fin (ht.hp.H + 1)) : elig ω v j = elig ω' v j :=
-      hEligEq a ha v (by simpa [v] using hvR) j
-    have hActEligible (j : Fin (ht.hp.H + 1)) (l : ht.hp.Loc)
-        (hl : l ∈ elig ω v j) : act ω l = act ω' l := by
-      have hs := markElig_shape X ht H ω v j l hl
-      exact hActNear a ha v (by simpa [v] using hvR) l (by omega)
-    have hactive (j : Fin (ht.hp.H + 1)) :
-        (elig ω v j).filter (fun l => act ω l = true) =
-          (elig ω' v j).filter (fun l => act ω' l = true) := by
-      ext l
-      simp only [Finset.mem_filter]
-      constructor
-      · rintro ⟨hl, ha'⟩
-        refine ⟨?_, ?_⟩
-        · rw [← hE j]
-          exact hl
-        · exact (hActEligible j l hl).symm.trans ha'
-      · rintro ⟨hl, ha'⟩
-        have hlω : l ∈ elig ω v j := by rw [hE j]; exact hl
-        exact ⟨hlω, (hActEligible j l hlω).trans ha'⟩
-    have htie (j : Fin (ht.hp.H + 1)) : tie ω (v, j) = tie ω' (v, j) := by
-      have hloc := hscopeLoc a ha v hvR (v, j) (by simp [HypercubeRamsey.hammingDist])
-      exact htieAt (v, j) hloc
-    let chooseActive (bad : Prop) (active : Finset ht.hp.Loc)
-        (priority : ht.hp.Loc → Fin (Fintype.card ht.hp.Loc)) : Option ht.hp.Loc := by
-      classical
-      exact if hbad : bad then
-        none
-      else
-        let priorities := active.image priority
-        if hne : priorities.Nonempty then
-          let q := priorities.min' hne
-          have hq : q ∈ priorities := Finset.min'_mem priorities hne
-          let hmem : ∃ l, l ∈ active ∧ priority l = q := Finset.mem_image.mp hq
-          some (Classical.choose hmem)
-        else
-          none
-    let selectionLevel (P A : ht.hp.Loc → Bool) (E : ht.hp.EligMap)
-        (τ : ht.hp.Ties) (j : Fin (ht.hp.H + 1)) : Option ht.hp.Loc :=
-      chooseActive (ht.hp.Bad P A E v j) ((E v j).filter (fun l => A l = true))
-        (ht.hp.priority τ (v, j))
-    let selectionCore (P A : ht.hp.Loc → Bool) (E : ht.hp.EligMap)
-        (τ : ht.hp.Ties) (q : ℕ) : Option ht.hp.Loc := by
-      exact if hj : q < ht.hp.H then
-        selectionLevel P A E τ ⟨q, by omega⟩
-      else
-        none
-    have hlevelEq (j : Fin (ht.hp.H + 1)) :
-        selectionLevel (pos ω) (act ω) (elig ω) (tie ω) j =
-          selectionLevel (pos ω') (act ω') (elig ω') (tie ω') j := by
-      have hbadEq' : ht.hp.Bad (pos ω) (act ω) (elig ω) v j =
-          ht.hp.Bad (pos ω') (act ω') (elig ω') v j := propext (hbad j)
-      have hactiveEq : (elig ω v j).filter (fun l => act ω l = true) =
-          (elig ω' v j).filter (fun l => act ω' l = true) := hactive j
-      have hpriorityEq : ht.hp.priority (tie ω) (v, j) = ht.hp.priority (tie ω') (v, j) := by
-        funext l
-        simp [HDParams.priority, htie j]
-      change chooseActive (ht.hp.Bad (pos ω) (act ω) (elig ω) v j)
-          ((elig ω v j).filter (fun l => act ω l = true)) (ht.hp.priority (tie ω) (v, j)) =
-        chooseActive (ht.hp.Bad (pos ω') (act ω') (elig ω') v j)
-          ((elig ω' v j).filter (fun l => act ω' l = true)) (ht.hp.priority (tie ω') (v, j))
-      rw [hbadEq', hactiveEq, hpriorityEq]
-    have hcore (P A : ht.hp.Loc → Bool) (E : ht.hp.EligMap) (τ : ht.hp.Ties) :
-        ht.hp.selectionAt (X.sites ht) P A E τ R v =
-          selectionCore P A E τ (ht.hp.height (X.sites ht) P A E R v) := by
-      simp [HDParams.selectionAt, selectionCore, selectionLevel, chooseActive]
-    have hcoreEq :
-        selectionCore (pos ω) (act ω) (elig ω) (tie ω)
-            (ht.hp.height (X.sites ht) (pos ω) (act ω) (elig ω) R v) =
-          selectionCore (pos ω') (act ω') (elig ω') (tie ω')
-            (ht.hp.height (X.sites ht) (pos ω') (act ω') (elig ω') R v) := by
-      rw [hheightV]
-      by_cases hj : ht.hp.height (X.sites ht) (pos ω') (act ω') (elig ω') R v < ht.hp.H
-      · simp [selectionCore, hj, hlevelEq]
-      · simp [selectionCore, hj]
-    change ht.hp.selectionAt (X.sites ht) (pos ω) (act ω) (elig ω) (tie ω) R v =
-      ht.hp.selectionAt (X.sites ht) (pos ω') (act ω') (elig ω') (tie ω') R v
-    rw [hcore (pos ω) (act ω) (elig ω) (tie ω),
-      hcore (pos ω') (act ω') (elig ω') (tie ω')]
-    exact hcoreEq
-
-  have hselMem (ξ : X.CΩ ht) (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (l : ht.hp.Loc) (hsel : X.selAt elig ξ R a = some l) :
-      ∃ j : Fin (ht.hp.H + 1), l ∈ elig ξ (X.siteOf a) j := by
-    classical
-    change ht.hp.selectionAt (X.sites ht) (pos ξ) (act ξ) (elig ξ) (tie ξ) R (X.siteOf a) =
-      some l at hsel
-    simp only [HDParams.selectionAt] at hsel
-    split_ifs at hsel with hj hbad hne
-    · let j' : Fin (ht.hp.H + 1) := ⟨
-        ht.hp.height (X.sites ht) (pos ξ) (act ξ) (elig ξ) R (X.siteOf a), by omega⟩
-      have hactive := (Finset.min'_mem _ hne)
-      have hmem : ∃ l', l' ∈ (elig ξ (X.siteOf a) j').filter (fun l' => act ξ l' = true) ∧
-          ht.hp.priority (tie ξ) (X.siteOf a, j') l' =
-            (Finset.image (ht.hp.priority (tie ξ) (X.siteOf a, j'))
-              ((elig ξ (X.siteOf a) j').filter (fun l' => act ξ l' = true))).min' hne :=
-        Finset.mem_image.mp hactive
-      have hchosen : Classical.choose hmem = l := by
-        exact Option.some.inj hsel
-      refine ⟨j', ?_⟩
-      rw [← hchosen]
-      exact (Finset.mem_filter.mp (Classical.choose_spec hmem).1).1
-
-  have hselScope (ξ : X.CΩ ht) (a : EvenRole5 n) (ha : a ∈ evenNbrs y)
-      (l : ht.hp.Loc) (hsel : X.selAt elig ξ R a = some l) :
-      l ∈ X.scopeBall (h := ht) y.1 (ht.hp.r + Lane_sol_s05_centres.centreSlack X.p n) := by
-    obtain ⟨j, hj⟩ := hselMem ξ a ha l hsel
-    have hshape := markElig_shape X ht H ξ (X.siteOf a) j l hj
-    exact hscopeLoc a ha (X.siteOf a) (by simp [HypercubeRamsey.hammingDist]) l (by omega)
-
-  have harrSel (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : ht.hp.Loc)
-      (hsel : X.selAt elig ω R a = some l) (K : X.Ty) :
-      arraysOf ω (l, K) = arraysOf ω' (l, K) := by
-    change arr ω l K = arr ω' l K
-    exact harrAt l (hselScope ω a ha l hsel) K
-
-  have hobsEq :
-      (evenNbrs y).biUnion (fun a => match X.selAt elig ω R a with
-        | some l => {(l, X.g.evenType (X.p.J n) a.1)}
-        | none => ∅) =
-      (evenNbrs y).biUnion (fun a => match X.selAt elig ω' R a with
-        | some l => {(l, X.g.evenType (X.p.J n) a.1)}
-        | none => ∅) := by
-    ext c
-    simp only [Finset.mem_biUnion]
-    constructor
-    · rintro ⟨a, ha, hc⟩
-      refine ⟨a, ha, ?_⟩
-      rw [← hSelEq a ha]
-      exact hc
-    · rintro ⟨a, ha, hc⟩
-      refine ⟨a, ha, ?_⟩
-      rw [hSelEq a ha]
-      exact hc
-
-  have hrefsEq :
-      (evenNbrs y).biUnion (fun a => match X.selAt elig ω R a with
-        | some l =>
-          if X.g.roleKey (X.p.J n) y.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
-              (X.g.roleKey (X.p.J n) y.1).isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
-            {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
-        | none => ∅) =
-      (evenNbrs y).biUnion (fun a => match X.selAt elig ω' R a with
-        | some l =>
-          if X.g.roleKey (X.p.J n) y.1 ∈ (X.g.evenType (X.p.J n) a.1).2.1 ∧
-              (X.g.roleKey (X.p.J n) y.1).isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome then
-            {(l, X.g.evenType (X.p.J n) a.1, X.g.optionalKey (X.p.J n) a.1)} else ∅
-        | none => ∅) := by
-    ext c
-    simp only [Finset.mem_biUnion]
-    constructor
-    · rintro ⟨a, ha, hc⟩
-      refine ⟨a, ha, ?_⟩
-      rw [← hSelEq a ha]
-      exact hc
-    · rintro ⟨a, ha, hc⟩
-      refine ⟨a, ha, ?_⟩
-      rw [hSelEq a ha]
-      exact hc
-
-  have hrecord :
-      X.actualRecordAt elig H ω R y = X.actualRecordAt elig H ω' R y := by
-    rw [actualRecordAt_eq X ht elig H ω R y, actualRecordAt_eq X ht elig H ω' R y]
-    dsimp only [recordOf]
-    rw [hobsEq, hrefsEq]
-    cases hkey : X.g.roleKey (X.p.J n) y.1 with
-    | inr i => simp [hkey]
-    | inl k =>
-      have hpredEq :
-          (fun a : EvenRole5 n => a ∈ evenNbrs y ∧
-            (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω R a).isSome) =
-          (fun a : EvenRole5 n => a ∈ evenNbrs y ∧
-            (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω' R a).isSome) := by
-        funext a
-        by_cases ha : a ∈ evenNbrs y
-        · apply propext
-          simp [ha, hSelEq a ha]
-        · simp [ha]
-      have hmaskEq :
-          (∃ a, a ∈ evenNbrs y ∧ (X.g.evenType (X.p.J n) a.1).2.2 = none ∧
-            (X.selAt elig ω R a).isSome) =
-          (∃ a, a ∈ evenNbrs y ∧ (X.g.evenType (X.p.J n) a.1).2.2 = none ∧
-            (X.selAt elig ω' R a).isSome) := by
-        exact congrArg (fun P : EvenRole5 n → Prop => ∃ a, P a) hpredEq
-      have hchooseAux {α : Type} (P Q : α → Prop) (hPQ : P = Q)
-          (hex : ∃ a, P a) :
-          Classical.choose (congrArg (fun f : α → Prop => ∃ a, f a) hPQ ▸ hex) =
-            Classical.choose hex := by
-        cases hPQ
-        rfl
-      have hchooseEq (hω : (∃ a, a ∈ evenNbrs y ∧
-          (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω R a).isSome))
-          (hω' : (∃ a, a ∈ evenNbrs y ∧
-            (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω' R a).isSome)) :
-          Classical.choose hω = Classical.choose hω' := by
-        have hchooseTransport : Classical.choose (hmaskEq ▸ hω) = Classical.choose hω :=
-          hchooseAux _ _ hpredEq hω
-        have htransport : (Eq.mp hmaskEq hω) = hω' := Subsingleton.elim _ _
-        have hchooseProof : Classical.choose (Eq.mp hmaskEq hω) = Classical.choose hω' :=
-          congrArg (fun e : (∃ a, a ∈ evenNbrs y ∧
-            (X.g.evenType (X.p.J n) a.1).2.2 = none ∧
-              (X.selAt elig ω' R a).isSome) => Classical.choose e) htransport
-        exact hchooseTransport.symm.trans hchooseProof
-      simp only [hkey]
-      by_cases hω : ∃ a, a ∈ evenNbrs y ∧
-          (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω R a).isSome
-      · by_cases hω' : ∃ a, a ∈ evenNbrs y ∧
-            (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω' R a).isSome
-        · simp only [dif_pos hω, dif_pos hω']
-          let a := Classical.choose hω
-          let a' := Classical.choose hω'
-          have hchoice : a = a' := hchooseEq hω hω'
-          have hspec := Classical.choose_spec hω
-          have ha : a ∈ evenNbrs y := hspec.1
-          have hs : (X.selAt elig ω R a).isSome := hspec.2.2
-          obtain ⟨l, hsel⟩ := Option.isSome_iff_exists.mp hs
-          have hsel' : X.selAt elig ω' R a' = some l := by
-            rw [← hchoice]
-            rw [← hSelEq a ha]
-            exact hsel
-          have hselω' : X.selAt elig ω R a' = some l := by
-            rw [← hchoice]
-            exact hsel
-          have hchooseRight : Classical.choose hω' = a := by
-            change a' = a
-            exact hchoice.symm
-          have hhit : X.hitSet (arraysOf ω) (l, X.g.evenType (X.p.J n) a.1)
-              (X.lowCol H.2 k) =
-              X.hitSet (arraysOf ω') (l, X.g.evenType (X.p.J n) a.1)
-                (X.lowCol H.2 k) := by
-            unfold Setup5.hitSet
-            rw [harrSel a ha l hsel (X.g.evenType (X.p.J n) a.1)]
-          simp [a, a', hchoice, hsel, hselω', hsel']
-          rw [hchooseRight, hhit]
-        · simp only [dif_pos hω, dif_neg hω']
-          exact (hω' (hmaskEq.mp hω)).elim
-      · by_cases hω' : ∃ a, a ∈ evenNbrs y ∧
-            (X.g.evenType (X.p.J n) a.1).2.2 = none ∧ (X.selAt elig ω' R a).isSome
-        · simp only [dif_neg hω, dif_pos hω']
-          exact (hω (hmaskEq.mpr hω')).elim
-        · simp only [dif_neg hω, dif_neg hω']
-
-  let r := X.actualRecordAt elig H ω R y
-  let A := arraysOf ω
-  let A' := arraysOf ω'
-  have hobsArrays (c : ht.hp.Loc × X.Ty) (hc : c ∈ r.2.1) : A c = A' c := by
-    dsimp only [r] at hc
-    rw [actualRecordAt_eq X ht elig H ω R y] at hc
-    dsimp only [recordOf] at hc
-    rcases Finset.mem_biUnion.mp hc with ⟨a, ha, hc⟩
-    cases hs : X.selAt elig ω R a with
-    | none => simp [hs] at hc
-    | some l =>
-      have heq : c = (l, X.g.evenType (X.p.J n) a.1) := by simpa [hs] using hc
-      subst c
-      exact harrSel a ha l hs (X.g.evenType (X.p.J n) a.1)
-
-  have href (c : ht.hp.Loc × X.Ty × Option X.Key) (hc : c ∈ r.2.2.1) :
-      (c.1, c.2.1) ∈ r.2.1 := by
-    dsimp only [r] at hc ⊢
-    rw [actualRecordAt_eq X ht elig H ω R y] at hc ⊢
-    dsimp only [recordOf] at hc ⊢
-    rcases Finset.mem_biUnion.mp hc with ⟨a, ha, hc⟩
-    cases hs : X.selAt elig ω R a with
-    | none => simp [hs] at hc
-    | some l =>
-      by_cases hcond : X.g.roleKey (X.p.J n) y.1 ∈
-          (X.g.evenType (X.p.J n) a.1).2.1 ∧
-            (X.g.roleKey (X.p.J n) y.1).isLeft = (X.g.evenType (X.p.J n) a.1).2.2.isSome
-      · have heq : c = (l, X.g.evenType (X.p.J n) a.1,
-            X.g.optionalKey (X.p.J n) a.1) := by simpa [hs, hcond] using hc
-        subst c
-        apply Finset.mem_biUnion.mpr
-        refine ⟨a, ha, ?_⟩
-        simp [hs]
-      · simp [hs, hcond] at hc
-
-  have hmask (c : ht.hp.Loc × X.Ty) (M : Finset (Fin X.blockBound))
-      (hc : r.2.2.2 = some (c.1, c.2, M)) : c ∈ r.2.1 := by
-    dsimp only [r] at hc ⊢
-    rw [actualRecordAt_eq X ht elig H ω R y] at hc ⊢
-    dsimp only [recordOf] at hc ⊢
-    cases hkey : X.g.roleKey (X.p.J n) y.1 with
-    | inr i => simp [hkey] at hc
-    | inl k =>
-      by_cases hex :
-          ∃ a ∈ evenNbrs y, (X.g.evenType (X.p.J n) a.1).2.2 = none ∧
-            (X.selAt elig ω R a).isSome
-      · let a := Classical.choose hex
-        have hspec := Classical.choose_spec hex
-        have ha : a ∈ evenNbrs y := hspec.1
-        have htype : (X.g.evenType (X.p.J n) a.1).2.2 = none := hspec.2.1
-        have hs : (X.selAt elig ω R a).isSome := hspec.2.2
-        obtain ⟨l, hsel⟩ := Option.isSome_iff_exists.mp hs
-        have hc' := hc
-        simp only [hkey, dif_pos hex, a, hsel] at hc'
-        have heq : (l, X.g.evenType (X.p.J n) a.1,
-            X.firstK (X.hitSet A (l, X.g.evenType (X.p.J n) a.1)
-              (X.lowCol H.2 k)) (X.p.usedBlocks n)) = (c.1, c.2, M) :=
-          Option.some.inj hc'
-        have hp : (l, X.g.evenType (X.p.J n) a.1) = (c.1, c.2) :=
-          congrArg (fun z : ht.hp.Loc × X.Ty × Finset (Fin X.blockBound) =>
-            (z.1, z.2.1)) heq
-        have hcEq : c = (l, X.g.evenType (X.p.J n) a.1) := by
-          apply Prod.ext
-          · exact (congrArg Prod.fst hp).symm
-          · exact (congrArg Prod.snd hp).symm
-        rw [hcEq]
-        apply Finset.mem_biUnion.mpr
-        refine ⟨a, ha, ?_⟩
-        simp [hex, hsel]
-      · simp [hkey, hex] at hc
-
-  have hStep3Arrays {Id : Type} [DecidableEq Id] (r : X.RecordOn Id)
-      (A B : X.ArraysOn Id)
-      (hmask : ∀ c M, r.2.2.2 = some (c.1, c.2, M) → c ∈ r.2.1)
-      (href : ∀ c ∈ r.2.2.1, (c.1, c.2.1) ∈ r.2.1)
-      (hobs : ∀ c ∈ r.2.1, A c = B c) : X.step3FailOn H r A = X.step3FailOn H r B := by
-    have hrefs := Lane_sol_s05_centres.refsOn_arrays_congr X H r A B href hobs
-    have hgate (θ : Fin (colLen5 (X.p.s n) r.1) → Fin N) :
-        X.candGateOn H r A θ = X.candGateOn H r B θ :=
-      propext (Lane_sol_s05_hist1b.candGateOn_arrays_congr X H r A B hmask hobs θ)
-    have hmass (e : Option (Id × X.Ty × Finset (Fin X.blockBound))) :
-        X.step3MassOn H r A e = X.step3MassOn H r B e :=
-      Lane_sol_s05_hist1b.step3MassOn_arrays_congr X H r A B hmask hobs e
-    have hcap : X.HighCapped H r A = X.HighCapped H r B :=
-      propext (Lane_sol_s05_centres.highCapped_arrays_congr X H r A B hmask hobs)
-    have hprice : X.HighPriceFeasible H r A = X.HighPriceFeasible H r B :=
-      propext (Lane_sol_s05_centres.highPrice_arrays_congr X H r A B hmask href hobs)
-    simp only [Setup5.step3FailOn, hgate (H.2 r.1), hmass, hrefs, hcap, hprice]
-
-  have hfailEq : X.step3FailOn H r A = X.step3FailOn H r A' :=
-    hStep3Arrays r A A' hmask href hobsArrays
-
-  have hpostEq : ∀ e θ, X.step3PostOn H r A e θ = X.step3PostOn H r A' e θ := by
-    intro e θ
-    exact Lane_sol_s05_centres.step3Post_arrays_congr X H r A A' hmask hobsArrays e θ
-
-  have hgateEq (θ : Fin (colLen5 (X.p.s n) r.1) → Fin N) :
-      X.candGateOn H r A θ ↔ X.candGateOn H r A' θ :=
-    Lane_sol_s05_hist1b.candGateOn_arrays_congr X H r A A' hmask hobsArrays θ
-
-  have hkeyRecord : r.1 = X.g.roleKey (X.p.J n) y.1 := rfl
-  have hkeyRecord' : (X.actualRecordAt elig H ω' R y).1 =
-      X.g.roleKey (X.p.J n) y.1 := rfl
-  have hpostRecordEq :
-      X.step3PostOn H r A' none (H.2 r.1) =
-        X.step3PostOn H (X.actualRecordAt elig H ω' R y) A' none
-          (H.2 (X.actualRecordAt elig H ω' R y).1) :=
-    congrArg (fun q : X.RecordOn ht.hp.Loc =>
-      X.step3PostOn H q A' none (H.2 q.1)) hrecord
-  have hgateRecordEq :
-      X.candGateOn H r A' (H.2 r.1) =
-        X.candGateOn H (X.actualRecordAt elig H ω' R y) A'
-          (H.2 (X.actualRecordAt elig H ω' R y).1) :=
-    congrArg (fun q : X.RecordOn ht.hp.Loc =>
-      X.candGateOn H q A' (H.2 q.1)) hrecord
-  have hfailRecordEq : X.step3FailOn H r A' =
-      X.step3FailOn H (X.actualRecordAt elig H ω' R y) A' :=
-    congrArg (fun q : X.RecordOn ht.hp.Loc => X.step3FailOn H q A') hrecord
-
-  have hposCountSet (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (j : Fin (ht.hp.H + 1)) :
-      (Finset.univ.filter fun u : CubeVertex ht.hp.d =>
-        pos ω (u, j) = true ∧ HypercubeRamsey.hammingDist u (X.siteOf a) ≤ ht.hp.r) =
-      (Finset.univ.filter fun u : CubeVertex ht.hp.d =>
-        pos ω' (u, j) = true ∧ HypercubeRamsey.hammingDist u (X.siteOf a) ≤ ht.hp.r) := by
-    ext u
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-    constructor
-    · rintro ⟨hp, hd⟩
-      have huR : HypercubeRamsey.hammingDist (X.siteOf a) (X.siteOf a) ≤ R := by
-        simp [HypercubeRamsey.hammingDist]
-      have huloc : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ ht.hp.r + 16 := by
-        omega
-      have hl := hscopeLoc a ha (X.siteOf a) huR (u, j) huloc
-      exact ⟨(hposAt (u, j) hl).symm.trans hp, hd⟩
-    · rintro ⟨hp, hd⟩
-      have huR : HypercubeRamsey.hammingDist (X.siteOf a) (X.siteOf a) ≤ R := by
-        simp [HypercubeRamsey.hammingDist]
-      have huloc : HypercubeRamsey.hammingDist u (X.siteOf a) ≤ ht.hp.r + 16 := by
-        omega
-      have hl := hscopeLoc a ha (X.siteOf a) huR (u, j) huloc
-      exact ⟨(hposAt (u, j) hl).trans hp, hd⟩
-
-  have himageEq :
-      (evenNbrs y).image (fun a => X.selAt elig ω R a) =
-        (evenNbrs y).image (fun a => X.selAt elig ω' R a) := by
-    apply Finset.image_congr
-    intro a ha
-    exact hSelEq a ha
-
-  have hhitSel (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : ht.hp.Loc)
-      (hsel : X.selAt elig ω R a = some l) (x : Fin N) :
-      X.hitSet A (l, X.g.evenType (X.p.J n) a.1) x =
-        X.hitSet A' (l, X.g.evenType (X.p.J n) a.1) x := by
-    change X.hitSet (arraysOf ω) (l, X.g.evenType (X.p.J n) a.1) x =
-      X.hitSet (arraysOf ω') (l, X.g.evenType (X.p.J n) a.1) x
-    unfold Setup5.hitSet
-    rw [harrSel a ha l hsel (X.g.evenType (X.p.J n) a.1)]
-
-  have hsubSel (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : ht.hp.Loc)
-      (hsel : X.selAt elig ω R a = some l) :
-      X.refSubset H ω a l = X.refSubset H ω' a l := by
-    unfold Setup5.refSubset
-    simp only [Setup5.refSubsetOn]
-    cases htype : (X.g.evenType (X.p.J n) a.1).2.2 with
-    | some v => rfl
-    | none =>
-      cases hopt : X.g.optionalKey (X.p.J n) a.1 with
-        | none => rfl
-        | some key =>
-          cases key with
-        | inr i => rfl
-        | inl k =>
-          have hhit : X.hitSet (arraysOf ω) (l, X.g.evenType (X.p.J n) a.1)
-              (X.lowCol H.2 k) =
-              X.hitSet (arraysOf ω') (l, X.g.evenType (X.p.J n) a.1)
-                (X.lowCol H.2 k) := by
-            unfold Setup5.hitSet
-            rw [harrSel a ha l hsel (X.g.evenType (X.p.J n) a.1)]
-          simp only [hhit]
-
-  have hheavySel (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : ht.hp.Loc)
-      (hsel : X.selAt elig ω R a = some l) :
-      X.heavyCount H ω a (l, X.refSubset H ω a l) =
-        X.heavyCount H ω' a (l, X.refSubset H ω' a l) := by
-    have hsub := hsubSel a ha l hsel
-    have harr (i : Fin (X.p.typeBlocks n (X.g.evenType (X.p.J n) a.1)))
-        (e : Fin (X.p.typeSegs n (X.g.evenType (X.p.J n) a.1)) × Fin X.p.q0) :
-        arr ω l (X.g.evenType (X.p.J n) a.1) i e.1 e.2 =
-          arr ω' l (X.g.evenType (X.p.J n) a.1) i e.1 e.2 := by
-      have hh := congrArg (fun z : X.Array (X.g.evenType (X.p.J n) a.1) => z i e.1 e.2)
-        (harrSel a ha l hsel (X.g.evenType (X.p.J n) a.1))
-      simpa [Setup5.arraysOf, Setup5.arr] using hh
-    unfold Setup5.heavyCount
-    rw [hsub]
-    apply Finset.sum_congr rfl
-    intro i hi
-    by_cases hb : ∃ j ∈ X.refSubset H ω' a l, X.blockIdx _ j = some i
-    · simp only [if_pos hb]
-      have hset :
-          (Finset.univ.filter fun e : Fin (X.p.typeSegs n (X.g.evenType (X.p.J n) a.1)) ×
-            Fin X.p.q0 => X.PriorHeavy H (X.g.evenType (X.p.J n) a.1)
-              (arr ω l (X.g.evenType (X.p.J n) a.1) i e.1 e.2)) =
-        (Finset.univ.filter fun e : Fin (X.p.typeSegs n (X.g.evenType (X.p.J n) a.1)) ×
-            Fin X.p.q0 => X.PriorHeavy H (X.g.evenType (X.p.J n) a.1)
-              (arr ω' l (X.g.evenType (X.p.J n) a.1) i e.1 e.2)) := by
-        ext e
-        simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-        rw [harr i e]
-      rw [hset]
-    · simp [hb]
-
-  change X.LocalValidAt ht (markElig X ht) H ω R y =
-    X.LocalValidAt ht (markElig X ht) H ω' R y
-  apply propext
-  constructor
-  · intro hv
-    rcases hv with ⟨hbase, hstep1, hsel, hcounts, hT, hhits, hheavy,
-      hblock, hpath, hgate, hfail⟩
-    have hsel' : ∀ a ∈ evenNbrs y, (X.selAt elig ω' R a).isSome := by
-      intro a ha
-      have hs := hsel a ha
-      change (X.selAt elig ω R a).isSome at hs
-      change (X.selAt elig ω' R a).isSome
-      rw [← hSelEq a ha]
-      exact hs
-    have hcounts' : ∀ a ∈ evenNbrs y, ∀ j : Fin (ht.hp.H + 1),
-        ((Finset.univ.filter fun u : CubeVertex ht.hp.d =>
-          pos ω' (u, j) = true ∧ HypercubeRamsey.hammingDist u (X.siteOf a) ≤ ht.hp.r).card : ℝ) ≤
-          2 * ht.hp.lam := by
-      intro a ha j
-      rw [← hposCountSet a ha j]
-      exact hcounts a ha j
-    have hT' : ((evenNbrs y).image fun a => X.selAt elig ω' R a).card ≤ X.p.T n := by
-      have h := hT
-      change ((evenNbrs y).image fun a => X.selAt elig ω R a).card ≤ X.p.T n at h
-      rw [← himageEq]
-      exact h
-    have hhits' : ∀ a ∈ evenNbrs y, ∀ l k,
-        X.selAt elig ω' R a = some l →
-          X.g.optionalKey (X.p.J n) a.1 = some (.inl k) →
-            X.p.usedBlocks n ≤
-              (X.hitSet A' (l, X.g.evenType (X.p.J n) a.1) (X.lowCol H.2 k)).card := by
-      intro a ha l k hsel' hkey
-      have hselω : X.selAt elig ω R a = some l := by
-        rw [hSelEq a ha]
-        exact hsel'
-      have hh := hhits a ha l k hselω hkey
-      rw [hhitSel a ha l hselω (X.lowCol H.2 k)] at hh
-      exact hh
-    have hheavy' : ∀ a ∈ evenNbrs y, ∀ l,
-        X.selAt elig ω' R a = some l →
-          let c := (l, X.refSubset H ω' a l)
-          (X.heavyCount H ω' a c : ℝ) ≤
-            X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) a.1) c.2 : ℝ) := by
-      intro a ha l hsel'
-      have hselω : X.selAt elig ω R a = some l := by
-        rw [hSelEq a ha]
-        exact hsel'
-      have hsub := hsubSel a ha l hselω
-      have hh := hheavy a ha l hselω
-      change (X.heavyCount H ω a (l, X.refSubset H ω a l) : ℝ) ≤
-        X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) a.1)
-          (X.refSubset H ω a l) : ℝ) at hh
-      rw [hheavySel a ha l hselω, hsub] at hh
-      exact hh
-    have hblock' : ∀ c ∈ (X.actualRecordAt elig H ω' R y).2.1, ∀ i,
-        X.blockWeight H c.2 c.2.2.1 (arraysOf ω' c i) ≠ 0 := by
-      intro c hc i
-      have hcω : c ∈ r.2.1 := by
-        change c ∈ (X.actualRecordAt elig H ω R y).2.1
-        rw [hrecord]
-        exact hc
-      have harray := congrArg (fun z : X.Array c.2 => z i) (hobsArrays c hcω)
-      have hb := hblock c hcω i
-      change X.blockWeight H c.2 c.2.2.1 (A' c i) ≠ 0
-      rw [← harray]
-      exact hb
-    have hpath' :
-        0 < X.step3PostOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω') none
-          (H.2 (X.g.roleKey (X.p.J n) y.1)) := by
-      have hpath0 :
-          0 < X.step3PostOn H r A none (H.2 r.1) := by
-        change 0 < X.step3PostOn H (X.actualRecordAt elig H ω R y) (arraysOf ω)
-          none (H.2 r.1)
-        exact hpath
-      have hp := hpostEq none (H.2 r.1)
-      rw [hp] at hpath0
-      rw [hpostRecordEq] at hpath0
-      change 0 < X.step3PostOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω') none
-        (H.2 (X.g.roleKey (X.p.J n) y.1))
-      exact hpath0
-    have hgate' : X.candGateOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω')
-        (H.2 (X.g.roleKey (X.p.J n) y.1)) := by
-      have hg : X.candGateOn H r A (H.2 (X.g.roleKey (X.p.J n) y.1)) := by
-        change X.candGateOn H (X.actualRecordAt elig H ω R y) (arraysOf ω) (H.2 r.1)
-        exact hgate
-      have hg' := (hgateEq (H.2 r.1)).mp hg
-      rw [hgateRecordEq] at hg'
-      change X.candGateOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω')
-        (H.2 (X.g.roleKey (X.p.J n) y.1))
-      exact hg'
-    have hfail' : ¬ X.step3FailOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω') := by
-      have hf : ¬ X.step3FailOn H r A := by
-        change ¬ X.step3FailOn H (X.actualRecordAt elig H ω R y) (arraysOf ω)
-        exact hfail
-      rw [hfailEq] at hf
-      rw [hfailRecordEq] at hf
-      exact hf
-    refine ⟨hbase, hstep1, hsel', hcounts', hT', hhits', hheavy', ?_, hpath', ?_, ?_⟩
-    · exact hblock'
-    · exact hgate'
-    · exact hfail'
-  · intro hv
-    rcases hv with ⟨hbase, hstep1, hsel, hcounts, hT, hhits, hheavy,
-      hblock, hpath, hgate, hfail⟩
-    have hsel' : ∀ a ∈ evenNbrs y, (X.selAt elig ω R a).isSome := by
-      intro a ha
-      have hs := hsel a ha
-      change (X.selAt elig ω' R a).isSome at hs
-      change (X.selAt elig ω R a).isSome
-      rw [hSelEq a ha]
-      exact hs
-    have hcounts' : ∀ a ∈ evenNbrs y, ∀ j : Fin (ht.hp.H + 1),
-        ((Finset.univ.filter fun u : CubeVertex ht.hp.d =>
-          pos ω (u, j) = true ∧ HypercubeRamsey.hammingDist u (X.siteOf a) ≤ ht.hp.r).card : ℝ) ≤
-          2 * ht.hp.lam := by
-      intro a ha j
-      rw [hposCountSet a ha j]
-      exact hcounts a ha j
-    have hT' : ((evenNbrs y).image fun a => X.selAt elig ω R a).card ≤ X.p.T n := by
-      have h := hT
-      change ((evenNbrs y).image fun a => X.selAt elig ω' R a).card ≤ X.p.T n at h
-      rw [himageEq]
-      exact h
-    have hhits' : ∀ a ∈ evenNbrs y, ∀ l k,
-        X.selAt elig ω R a = some l →
-          X.g.optionalKey (X.p.J n) a.1 = some (.inl k) →
-            X.p.usedBlocks n ≤
-              (X.hitSet A (l, X.g.evenType (X.p.J n) a.1) (X.lowCol H.2 k)).card := by
-      intro a ha l k hselω hkey
-      have hselω' : X.selAt elig ω' R a = some l := by
-        rw [← hSelEq a ha]
-        exact hselω
-      have hh := hhits a ha l k hselω' hkey
-      rw [← hhitSel a ha l hselω (X.lowCol H.2 k)] at hh
-      exact hh
-    have hheavy' : ∀ a ∈ evenNbrs y, ∀ l,
-        X.selAt elig ω R a = some l →
-          let c := (l, X.refSubset H ω a l)
-          (X.heavyCount H ω a c : ℝ) ≤
-            X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) a.1) c.2 : ℝ) := by
-      intro a ha l hselω
-      have hselω' : X.selAt elig ω' R a = some l := by
-        rw [← hSelEq a ha]
-        exact hselω
-      have hsub := hsubSel a ha l hselω
-      have hh := hheavy a ha l hselω'
-      change (X.heavyCount H ω' a (l, X.refSubset H ω' a l) : ℝ) ≤
-        X.p.nu0 * (X.refLen (X.g.evenType (X.p.J n) a.1)
-          (X.refSubset H ω' a l) : ℝ) at hh
-      rw [← hheavySel a ha l hselω, ← hsub] at hh
-      exact hh
-    have hblock' : ∀ c ∈ (X.actualRecordAt elig H ω R y).2.1, ∀ i,
-        X.blockWeight H c.2 c.2.2.1 (arraysOf ω c i) ≠ 0 := by
-      intro c hc i
-      have hcω' : c ∈ (X.actualRecordAt elig H ω' R y).2.1 := by
-        rw [← hrecord]
-        exact hc
-      have harray := congrArg (fun z : X.Array c.2 => z i) (hobsArrays c hc)
-      have hb := hblock c hcω' i
-      change X.blockWeight H c.2 c.2.2.1 (A c i) ≠ 0
-      rw [harray]
-      exact hb
-    have hpath' :
-        0 < X.step3PostOn H (X.actualRecordAt elig H ω R y) (arraysOf ω) none
-          (H.2 (X.g.roleKey (X.p.J n) y.1)) := by
-      have hpath0 : 0 < X.step3PostOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω') none
-          (H.2 (X.actualRecordAt elig H ω' R y).1) := by
-        change 0 < X.step3PostOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω') none
-          (H.2 (X.actualRecordAt elig H ω' R y).1)
-        exact hpath
-      rw [← hpostRecordEq] at hpath0
-      have hp := hpostEq none (H.2 r.1)
-      rw [← hp] at hpath0
-      change 0 < X.step3PostOn H (X.actualRecordAt elig H ω R y) (arraysOf ω) none
-        (H.2 (X.g.roleKey (X.p.J n) y.1))
-      exact hpath0
-    have hgate' : X.candGateOn H (X.actualRecordAt elig H ω R y) (arraysOf ω)
-        (H.2 (X.g.roleKey (X.p.J n) y.1)) := by
-      have hg : X.candGateOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω')
-          (H.2 (X.actualRecordAt elig H ω' R y).1) := by
-        change X.candGateOn H (X.actualRecordAt elig H ω' R y) (arraysOf ω')
-          (H.2 (X.actualRecordAt elig H ω' R y).1)
-        exact hgate
-      rw [← hgateRecordEq] at hg
-      have hg' := (hgateEq (H.2 r.1)).mpr hg
-      change X.candGateOn H (X.actualRecordAt elig H ω R y) (arraysOf ω)
-        (H.2 (X.g.roleKey (X.p.J n) y.1))
-      exact hg'
-    have hfail' : ¬ X.step3FailOn H (X.actualRecordAt elig H ω R y) (arraysOf ω) := by
-      have hf := hfail
-      rw [← hfailRecordEq] at hf
-      rw [← hfailEq] at hf
-      simpa only [r, A] using hf
-    refine ⟨hbase, hstep1, hsel', hcounts', hT', hhits', hheavy', ?_, hpath', ?_, ?_⟩
-    · exact hblock'
-    · exact hgate'
-    · exact hfail'
+      (X.scopeBall (h := canonHt X) y.1 ((canonHt X).hp.r + Lane_sol_s05_centres.centreSlack X.p n)) :=
+  j11_local_generic X (canonHt X) (markElig X (canonHt X)) H y (canonHt X).hp.Rlong _
+    (by show 8 ≤ 16; norm_num)
+    (j11_scope X (canonHt X) y (canonHt X).hp.Rlong _ (j11_gap X y))
+    (markElig_local X (canonHt X) H)
+    (fun ω s j l hl => (markElig_shape X (canonHt X) H ω s j l hl).2.2)
 
 set_option maxHeartbeats 400000
 

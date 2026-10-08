@@ -1,5 +1,7 @@
 import HypercubeRamsey.S03.Height.Scale
 import HypercubeRamsey.S03.Height.Selection_p_height_small
+import HypercubeRamsey.S03.Height.Selection_p_height_main
+import HypercubeRamsey.S03.Height.Split_opus_height
 import OAI.Combinatorics.Ramsey.Hypercube
 
 /-!
@@ -29,7 +31,7 @@ theorem height_selection_global (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
           p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) Sites ∧
             ¬ p.GoodHeights Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2)) ≤
           Real.exp (-(p.n : ℝ) ^ (1 + c)) := by
-  sorry
+  exact Lane_opus_height.height_selection_global_proof J₀ b₀ b σ ζ θ a c_d C_d D hp reg
 
 /--
 L3.8g (part 2): positive long height at a fixed query, also with one forced-present prospective center.
@@ -47,7 +49,7 @@ theorem height_selection_positive (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : �
           p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) (p.domBall Sites v p.Rlong) ∧
             0 < p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) p.Rlong v) ≤
           Real.exp (-(p.n : ℝ) ^ c) := by
-  sorry
+  exact Lane_opus_height.height_selection_positive_proof J₀ b₀ b σ ζ θ a c_d C_d D hp reg
 
 /--
 L3.8h (part 3): the long and short path maxima agree except with the stated stretched-exponential error.
@@ -88,7 +90,7 @@ theorem height_position_counts (p : HDParams) (Sites : p.Sites)
     (hprob : p.lam / (p.V : ℝ) ≤ 1) :
     p.posLaw.pr (fun P => ∃ v ∈ Sites, ∃ j : Fin (p.H + 1),
       let count := (Finset.univ.filter (fun u : CubeVertex p.d =>
-        P (u, j) = true ∧ hammingDist u v ≤ p.r)).card
+        P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card
       ((count : ℝ) < p.lam / 2 ∨ 2 * p.lam < (count : ℝ))) ≤
         2 * (Sites.card : ℝ) * ((p.H + 1 : ℕ) : ℝ) * Real.exp (-p.lam / 12) := by
   exact height_position_counts_p_height_small p Sites hlam hV hr hprob

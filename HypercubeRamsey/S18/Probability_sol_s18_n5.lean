@@ -86,6 +86,7 @@ theorem fullRunProbability_mono (D : LateData hPT) {δ ε ε₁ ε₂ : ℝ}
 /-- A constant-base reached column moment gives an explicit uniform run
 error. The class-to-pool ratio uses only one_per_class and positive pools. -/
 theorem fullRunProbability_of_column_moments (D : LateData hPT) (hD : D.Spec)
+    (hT : TransitionData D)
     {δ ε K27 K : ℝ} (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
     (hBroad : BroadDeletionFacts D K27) (hθ : 0 < κ.θ0) (hK : 0 ≤ K)
     (hn : 1 ≤ T.S.n k) (hscale : 576 * K / κ.θ0 ≤ densityScale T k)
@@ -99,7 +100,7 @@ theorem fullRunProbability_of_column_moments (D : LateData hPT) (hD : D.Spec)
     FullRunProbability D C A (runError T k) := by
   let M : Fin D.geom.r → ℝ := fun j => (2 : ℝ) ^ D.geom.r *
     (K * (D.encoding.base.classes j).card / (D.encoding.base.latePool j).card) ^ T.S.n k
-  have hfull := fullRunProbability_of_reached_moments D hD C A hBroad hθ (T.S.n k) M
+  have hfull := fullRunProbability_of_reached_moments D hD hT C A hBroad hθ (T.S.n k) M
     (reached_incoming D C A) hmoments
   apply fullRunProbability_mono D C A hfull
   have hnR : (1 : ℝ) ≤ T.S.n k := by exact_mod_cast hn

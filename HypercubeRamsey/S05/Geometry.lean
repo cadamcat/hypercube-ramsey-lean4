@@ -2530,10 +2530,10 @@ theorem L5_1e0 : ∀ ε : ℝ, 0 < ε → ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (m
                   have hbaseSource : dataOf (fineSource i true) = dataOf v :=
                     hsource.1.trans hv.symm
                   rcases hbaseParts hbaseSource with ⟨_, _, hmerged, _⟩
-              have hmode :
-                  (Nat.dist (2 * g.fineCount (fineSource i true) i) g.fineLength = 11) ↔
-                    (Nat.dist (2 * g.fineCount v i) g.fineLength = 11) :=
-                ⟨fun _ => hedge, fun _ => hsource.2⟩
+                  have hmode :
+                      (Nat.dist (2 * g.fineCount (fineSource i true) i) g.fineLength = 11) ↔
+                        (Nat.dist (2 * g.fineCount v i) g.fineLength = 11) :=
+                    ⟨fun _ => hedge, fun _ => hsource.2⟩
                   have hraw := hrawCountSameMode i (hmerged i) hmode
                   have hmatch : ∃ b ∈ g.fineChunks i, fineSource i true b = v a :=
                     hfindBit (g.fineChunks i) (fineSource i true) v (by
@@ -2618,12 +2618,12 @@ theorem L5_1e0 : ∀ ε : ℝ, 0 < ε → ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (m
               _ = g.residual.card + 2 * coarseChunkCount5 + 4 * m := hLabelCard
               _ ≤ 2 * n := hboundNat
           · have hempty : N = ∅ := by
-              ext t
-              simp only [N, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_empty,
-                iff_false]
-              rintro ⟨x, y, hx, hy, hadj⟩
+              apply Finset.eq_empty_of_forall_notMem
+              intro t ht
+              rcases (Finset.mem_filter.mp ht).2 with ⟨x, y, hx, hy, hadj⟩
               exact hs ⟨x, hx⟩
-            simp [hempty]
+            rw [hempty, Finset.card_empty]
+            exact Nat.zero_le _
     even_distance := by
       intro b a a' ha ha' hEven hEven'
       classical

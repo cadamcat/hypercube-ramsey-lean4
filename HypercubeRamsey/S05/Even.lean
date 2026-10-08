@@ -300,7 +300,276 @@ theorem evenGate_local {L : X.CentreLayer5} (HR : X.HighRows5 L) (H : X.KeyHist)
     (c : X.CRef L.ht) (O : OddRole5 n → X.OddOut) :
     FinProb.DependsOn (fun ω : X.CΩ L.ht => evenGate X HR H v c ω O)
       (X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack)) := by
-  sorry
+  classical
+  intro ω ω' hagree
+  have hcenter (l : L.ht.hp.Loc)
+      (hd : _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + 2 * L.slack) : ω l = ω' l := by
+    apply hagree l
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    change _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + 2 * L.slack
+    exact hd
+  have hslack : L.ht.hp.Rlong + 32 ≤ L.slack := L.slack_large
+  have hlongScope (l : L.ht.hp.Loc)
+      (hl : l ∈ X.scopeBall (h := L.ht) v.1 (L.ht.hp.r + L.slack + 8)) :
+      _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + 2 * L.slack := by
+    have hd := (Finset.mem_filter.mp hl).2
+    change _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + L.slack + 8 at hd
+    omega
+  have hstarScope (b : OddRole5 n) (hb : b ∈ star v) (l : L.ht.hp.Loc)
+      (hl : l ∈ X.scopeBall (h := L.ht) b.1 (L.ht.hp.r + L.slack)) :
+      _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + 2 * L.slack := by
+    have hadj : (cube n).Adj v.1 b.1 := (Finset.mem_filter.mp hb).2
+    have hvb : v ∈ evenNbrs b := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hadj⟩
+    have hnear := L.slack_nbr b v hvb
+    change _root_.hammingDist (X.siteOf v) (X.St.oneHot (X.St.stateOf b.1)) +
+      L.ht.hp.Rlong + 16 ≤ L.slack at hnear
+    have hsym : _root_.hammingDist (X.St.oneHot (X.St.stateOf b.1)) (X.siteOf v) =
+        _root_.hammingDist (X.siteOf v) (X.St.oneHot (X.St.stateOf b.1)) :=
+      _root_.hammingDist_comm _ _
+    have hsite : _root_.hammingDist (X.St.oneHot (X.St.stateOf b.1)) (X.siteOf v) ≤ L.slack := by
+      omega
+    have hd := (Finset.mem_filter.mp hl).2
+    change _root_.hammingDist l.1 (X.St.oneHot (X.St.stateOf b.1)) ≤ L.ht.hp.r + L.slack at hd
+    have htri := _root_.hammingDist_triangle l.1 (X.St.oneHot (X.St.stateOf b.1)) (X.siteOf v)
+    calc
+      _root_.hammingDist l.1 (X.siteOf v) ≤
+          _root_.hammingDist l.1 (X.St.oneHot (X.St.stateOf b.1)) +
+            _root_.hammingDist (X.St.oneHot (X.St.stateOf b.1)) (X.siteOf v) := htri
+      _ ≤ L.ht.hp.r + 2 * L.slack := by omega
+  have hvalid (b : OddRole5 n) (hb : b ∈ star v) :
+      L.valid H ω b = L.valid H ω' b := by
+    apply L.valid_local H b ω ω'
+    intro l hl
+    exact hcenter l (hstarScope b hb l hl)
+  have hstarsValid : (∀ b ∈ star v, L.valid H ω b) ↔ ∀ b ∈ star v, L.valid H ω' b := by
+    constructor
+    · intro hv b hb
+      exact (hvalid b hb).mp (hv b hb)
+    · intro hv b hb
+      exact (hvalid b hb).mpr (hv b hb)
+  have hselLong : X.selLong (L.elig H) ω v = X.selLong (L.elig H) ω' v := by
+    apply Lane_sol_s05_even.selLong_local X L H v ω ω'
+    exact fun l hl => hcenter l (hlongScope l hl)
+  have hsubset (l : L.ht.hp.Loc) (hl : _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r) :
+      X.refSubset H ω v l = X.refSubset H ω' v l := by
+    have hloc := hcenter l (by omega)
+    have harray : X.arraysOf ω (l, X.g.evenType (X.p.J n) v.1) =
+        X.arraysOf ω' (l, X.g.evenType (X.p.J n) v.1) := by
+      change X.arr ω l (X.g.evenType (X.p.J n) v.1) =
+        X.arr ω' l (X.g.evenType (X.p.J n) v.1)
+      exact congrArg (fun z : X.CVal L.ht => z.2.2.2 (X.g.evenType (X.p.J n) v.1)) hloc
+    simp [Setup5.refSubset, Setup5.refSubsetOn, Setup5.hitSet, harray]
+  have href : X.evenRefOf (L.elig H) H ω v = X.evenRefOf (L.elig H) H ω' v := by
+    unfold Setup5.evenRefOf
+    rw [hselLong]
+    cases hs : X.selLong (L.elig H) ω' v with
+    | none => rfl
+    | some l =>
+      have hshape := Lane_sol_s05_even.selection_some_shape L.ht.hp (X.sites L.ht)
+        (Setup5.pos ω') (Setup5.act ω') (L.elig H ω') (Setup5.tie ω') (X.siteOf v) l
+        (by intro j l' hl; exact L.elig_shape H ω' (X.siteOf v) j l' hl) hs
+      simp only [hs, Option.map_some]
+      exact congrArg some (congrArg (fun M => (l, M)) (hsubset l hshape.2))
+  have hselectedRadius (hc : X.evenRefOf (L.elig H) H ω v = some c) :
+      _root_.hammingDist c.1.1 (X.siteOf v) ≤ L.ht.hp.r := by
+    unfold Setup5.evenRefOf at hc
+    obtain ⟨l, hsel, hpair⟩ := Option.map_eq_some_iff.mp hc
+    have hfst : l = c.1 := congrArg Prod.fst hpair
+    have hshape := Lane_sol_s05_even.selection_some_shape L.ht.hp (X.sites L.ht)
+      (Setup5.pos ω) (Setup5.act ω) (L.elig H ω) (Setup5.tie ω) (X.siteOf v) l
+      (by intro j l' hl; exact L.elig_shape H ω (X.siteOf v) j l' hl) hsel
+    rw [← hfst]
+    exact hshape.2
+  have hheavy (hc : X.evenRefOf (L.elig H) H ω v = some c) :
+      X.heavyCount H ω v c = X.heavyCount H ω' v c := by
+    have hr := hselectedRadius hc
+    have hloc := hcenter c.1 (by omega)
+    have harray (i : Fin (X.p.typeBlocks n (X.g.evenType (X.p.J n) v.1)))
+        (e : Fin (X.p.typeSegs n (X.g.evenType (X.p.J n) v.1)) × Fin X.p.q0) :
+        X.arr ω c.1 (X.g.evenType (X.p.J n) v.1) i e.1 e.2 =
+          X.arr ω' c.1 (X.g.evenType (X.p.J n) v.1) i e.1 e.2 := by
+      exact congrArg (fun z : X.CVal L.ht => z.2.2.2 (X.g.evenType (X.p.J n) v.1) i e.1 e.2) hloc
+    unfold Setup5.heavyCount
+    apply Finset.sum_congr rfl
+    intro i hi
+    by_cases hidx : ∃ j ∈ c.2, X.blockIdx (X.g.evenType (X.p.J n) v.1) j = some i
+    · simp only [if_pos hidx]
+      apply congrArg Finset.card
+      ext e
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      unfold Setup5.PriorHeavy
+      rw [harray i e]
+    · simp [hidx]
+  have hElig (u : CubeVertex L.ht.hp.d)
+      (hu : u ∈ L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong)
+      (j : Fin (L.ht.hp.H + 1)) : L.elig H ω u j = L.elig H ω' u j := by
+    apply L.elig_local H u j ω ω'
+    intro l hl
+    have hdu := (Finset.mem_filter.mp hu).2
+    change _root_.hammingDist u (X.siteOf v) ≤ L.ht.hp.Rlong at hdu
+    have hdl := (Finset.mem_filter.mp hl).2
+    change _root_.hammingDist l.1 u ≤ L.ht.hp.r + 16 at hdl
+    have htri := _root_.hammingDist_triangle l.1 u (X.siteOf v)
+    have htotal : _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + L.ht.hp.Rlong + 16 := by omega
+    have hbound : L.ht.hp.r + L.ht.hp.Rlong + 16 ≤ L.ht.hp.r + 2 * L.slack := by omega
+    exact hcenter l (htotal.trans hbound)
+  have hposOld (u : CubeVertex L.ht.hp.d)
+      (hu : u ∈ L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong)
+      (j : Fin (L.ht.hp.H + 1)) (l : L.ht.hp.Loc) (hl : l ∈ L.elig H ω u j) :
+      Setup5.pos ω l = Setup5.pos ω' l := by
+    have hs := L.elig_shape H ω u j l hl
+    have hdu := (Finset.mem_filter.mp hu).2
+    change _root_.hammingDist u (X.siteOf v) ≤ L.ht.hp.Rlong at hdu
+    have hdl : _root_.hammingDist l.1 u ≤ L.ht.hp.r := by
+      change _root_.hammingDist l.1 u ≤ L.ht.hp.r
+      exact hs.2.2
+    have htri := _root_.hammingDist_triangle l.1 u (X.siteOf v)
+    have hdist : _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + 2 * L.slack := by omega
+    exact congrArg (fun z : X.CVal L.ht => z.1) (hcenter l hdist)
+  have hposNew (u : CubeVertex L.ht.hp.d)
+      (hu : u ∈ L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong)
+      (j : Fin (L.ht.hp.H + 1)) (l : L.ht.hp.Loc) (hl : l ∈ L.elig H ω' u j) :
+      Setup5.pos ω l = Setup5.pos ω' l := by
+    have hs := L.elig_shape H ω' u j l hl
+    have hdu := (Finset.mem_filter.mp hu).2
+    change _root_.hammingDist u (X.siteOf v) ≤ L.ht.hp.Rlong at hdu
+    have hdl : _root_.hammingDist l.1 u ≤ L.ht.hp.r := by
+      change _root_.hammingDist l.1 u ≤ L.ht.hp.r
+      exact hs.2.2
+    have htri := _root_.hammingDist_triangle l.1 u (X.siteOf v)
+    have hdist : _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r + 2 * L.slack := by omega
+    exact congrArg (fun z : X.CVal L.ht => z.1) (hcenter l hdist)
+  have hLegalAt (u : CubeVertex L.ht.hp.d)
+      (hu : u ∈ L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong)
+      (j : Fin (L.ht.hp.H + 1)) :
+      L.ht.hp.LegalAt (Setup5.pos ω) (L.elig H ω) u j ↔
+        L.ht.hp.LegalAt (Setup5.pos ω') (L.elig H ω') u j := by
+    unfold HDParams.LegalAt
+    constructor
+    · rintro ⟨hcoords, hcard⟩
+      refine ⟨?_, ?_⟩
+      · intro l hl
+        have he := hElig u hu j
+        have hlold : l ∈ L.elig H ω u j := by rw [he]; exact hl
+        have hcoord := hcoords l hlold
+        refine ⟨?_, hcoord.2.1, hcoord.2.2⟩
+        rw [← hposOld u hu j l hlold]
+        exact hcoord.1
+      · rw [← hElig u hu j]
+        exact hcard
+    · rintro ⟨hcoords, hcard⟩
+      refine ⟨?_, ?_⟩
+      · intro l hl
+        have he := hElig u hu j
+        have hlnew : l ∈ L.elig H ω' u j := by rw [← he]; exact hl
+        have hcoord := hcoords l hlnew
+        refine ⟨?_, hcoord.2.1, hcoord.2.2⟩
+        rw [hposNew u hu j l hlnew]
+        exact hcoord.1
+      · rw [hElig u hu j]
+        exact hcard
+  have hlegal : L.ht.hp.Legal (Setup5.pos ω) (L.elig H ω)
+      (L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong) ↔
+      L.ht.hp.Legal (Setup5.pos ω') (L.elig H ω')
+      (L.ht.hp.domBall (X.sites L.ht) (X.siteOf v) L.ht.hp.Rlong) := by
+    unfold HDParams.Legal
+    constructor
+    · intro h u hu j
+      exact (hLegalAt u hu j).mp (h u hu j)
+    · intro h u hu j
+      exact (hLegalAt u hu j).mpr (h u hu j)
+  have hbudget (hvAll : ∀ b ∈ star v, L.valid H ω b) :
+      (∑ b, X.budgetCost HR H ω v b (O b)) =
+        ∑ b, X.budgetCost HR H ω' v b (O b) := by
+    apply Finset.sum_congr rfl
+    intro b _
+    by_cases hb : b ∈ star v
+    · have hadj : (cube n).Adj v.1 b.1 := (Finset.mem_filter.mp hb).2
+      by_cases hvlow : X.g.low (X.p.J n) v.1
+      · simp [Setup5.budgetCost, hadj, hvlow]
+      · by_cases hblow : X.g.low (X.p.J n) b.1
+        · simp [Setup5.budgetCost, hadj, hvlow, hblow]
+        · have hvalidOld : L.valid H ω b := hvAll b hb
+          have hvalidNew : L.valid H ω' b := (hvalid b hb).mp hvalidOld
+          have hscopeB (l : L.ht.hp.Loc)
+              (hl : l ∈ X.scopeBall (h := L.ht) b.1 (L.ht.hp.r + L.slack)) : ω l = ω' l :=
+            hcenter l (hstarScope b hb l hl)
+          have hrec := Lane_opus_s05.highRecord_local X L H b ω ω' hscopeB hvalidOld hvalidNew hblow
+          have hrow (o : X.OddOut) : HR.row H ω b o = HR.row H ω' b o := by
+            have hh := HR.row_local H b ω ω' hscopeB
+            exact congrFun hh o
+          have hmasknone : (X.actualRecord (L.elig H) H ω' b).2.2.2 = none := by
+            change ¬ X.g.severity b.1 ≤ X.p.J n at hblow
+            simp only [Setup5.actualRecord, Setup5.actualRecordAt, ChunkGeometry5.roleKey, dif_neg hblow]
+          have hmask : ∀ d M, (X.actualRecord (L.elig H) H ω' b).2.2.2 =
+              some (d.1, d.2, M) → d ∈ (X.actualRecord (L.elig H) H ω' b).2.1 := by
+            intro d M hm
+            rw [hmasknone] at hm
+            cases hm
+          have hab : ∀ d ∈ (X.actualRecord (L.elig H) H ω' b).2.1,
+              X.arraysOf ω d = X.arraysOf ω' d := by
+            intro d hd
+            apply hrec.2 d
+            rw [hrec.1]
+            exact hd
+          unfold Setup5.budgetCost
+          have hbudgetCond : (cube n).Adj v.1 b.1 ∧
+              ¬ X.g.low (X.p.J n) v.1 ∧ ¬ X.g.low (X.p.J n) b.1 :=
+            ⟨hadj, hvlow, hblow⟩
+          cases hc : X.evenRefOf (L.elig H) H ω v with
+          | none =>
+            have hc' : X.evenRefOf (L.elig H) H ω' v = none := by rw [← href]; exact hc
+            simp only [if_pos hbudgetCond, hc, hc']
+          | some c =>
+            have hc' : X.evenRefOf (L.elig H) H ω' v = some c := by rw [← href]; exact hc
+            have hhighCost (o : X.OddOut) :
+                X.highCost H (X.actualRecord (L.elig H) H ω b) (X.arraysOf ω)
+                    (c.1, X.g.evenType (X.p.J n) v.1, c.2) (HR.row H ω b) o =
+                  X.highCost H (X.actualRecord (L.elig H) H ω' b) (X.arraysOf ω')
+                    (c.1, X.g.evenType (X.p.J n) v.1, c.2) (HR.row H ω' b) o := by
+              unfold Setup5.highCost
+              rw [hrec.1]
+              cases hi : X.idxOf (X.actualRecord (L.elig H) H ω' b).1 o with
+              | none => rfl
+              | some i =>
+                simp only [hi]
+                have hdeleted := Lane_sol_s05_centres.highDeleted_arrays_congr X H
+                  (X.actualRecord (L.elig H) H ω' b) (X.arraysOf ω) (X.arraysOf ω')
+                  hmask hab (c.1, X.g.evenType (X.p.J n) v.1, c.2) i
+                rw [hrow o, hdeleted]
+            simp only [if_pos hbudgetCond, hc, hc']
+            exact hhighCost (O b)
+    · have hadj : ¬ (cube n).Adj v.1 b.1 := by
+        intro h
+        exact hb (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩)
+      simp [Setup5.budgetCost, hadj]
+  have hgate : evenGate X HR H v c ω O ↔ evenGate X HR H v c ω' O := by
+    unfold evenGate
+    constructor
+    · rintro ⟨hc, hv, hleg, hheavy', hbud⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · rw [← href]
+        exact hc
+      · exact hstarsValid.mp hv
+      · exact hlegal.mp hleg
+      · rw [← hheavy hc]
+        exact hheavy'
+      · rw [← hbudget hv]
+        exact hbud
+    · rintro ⟨hc, hv, hleg, hheavy', hbud⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · rw [href]
+        exact hc
+      · exact hstarsValid.mpr hv
+      · exact hlegal.mpr hleg
+      · have hcOld : X.evenRefOf (L.elig H) H ω v = some c := by rw [href]; exact hc
+        rw [hheavy hcOld]
+        exact hheavy'
+      · have hvOld : ∀ b ∈ star v, L.valid H ω b := fun b hb => (hvalid b hb).mpr (hv b hb)
+        rw [hbudget hvOld]
+        exact hbud
+  exact propext hgate
 
 /-- SUB-LEMMA S3 (05:1103–1164, the product reference): a reference `Q` independent of the reference values,
 local to `r + 2·slack`, dominating the star sublikelihood on the gate with cost `e^{a₆ k n}`. Construction:
@@ -991,7 +1260,355 @@ theorem evenW_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) 
     (ω ω' : X.CΩ L.ht)
     (hω : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 (L.ht.hp.r + 2 * L.slack), ω l = ω' l) :
     evenW X ES H v x ω = evenW X ES H v x ω' := by
-  sorry
+  classical
+  let R : ℕ := L.ht.hp.r + 2 * L.slack
+  have hscopeResidual (rad : ℕ) (hrad : rad ≤ R) (l : L.ht.hp.Loc)
+      (hl : l ∈ X.scopeBall (h := L.ht) v.1 rad) :
+      l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R := by
+    have hs := Lane_sol_s05_even.scopeBall_subset_residual X (h := L.ht) v.1 rad hl
+    have hd := (Finset.mem_filter.mp hs).2
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    exact hd.trans (by simpa [R] using hrad)
+  have hoddScope (b : OddRole5 n) (hb : b ∈ star v) (l : L.ht.hp.Loc)
+      (hl : l ∈ X.scopeBall (h := L.ht) b.1 (L.ht.hp.r + L.slack)) :
+      l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R := by
+    have hadj : (cube n).Adj v.1 b.1 := (Finset.mem_filter.mp hb).2
+    have hs := Lane_sol_s05_even.odd_scope_subset_residual X (h := L.ht) v b hadj
+      (L.ht.hp.r + L.slack) hl
+    have hd := (Finset.mem_filter.mp hs).2
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    have hslack : 1 ≤ L.slack := by have hh := L.slack_large; omega
+    exact hd.trans (by dsimp [R]; omega)
+  have hlongRadius : L.ht.hp.r + L.slack + 8 ≤ R := by
+    have hh := L.slack_large
+    dsimp [R]
+    omega
+  have hsmallRadius : L.ht.hp.r ≤ R := by dsimp [R]; omega
+  have hrefOf_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l) :
+      X.evenRefOf (L.elig H) H a v = X.evenRefOf (L.elig H) H a' v := by
+    have hsel : X.selLong (L.elig H) a v = X.selLong (L.elig H) a' v := by
+      apply Lane_sol_s05_even.selLong_local X L H v a a'
+      intro l hl
+      exact hag l (hscopeResidual (L.ht.hp.r + L.slack + 8) hlongRadius l hl)
+    have hsubset (l : L.ht.hp.Loc)
+        (hl : _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r) :
+        X.refSubset H a v l = X.refSubset H a' v l := by
+      have hloc := hag l (hscopeResidual (L.ht.hp.r) hsmallRadius l (by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        change _root_.hammingDist l.1 (X.siteOf v) ≤ L.ht.hp.r
+        exact hl))
+      have harray : X.arraysOf a (l, X.g.evenType (X.p.J n) v.1) =
+          X.arraysOf a' (l, X.g.evenType (X.p.J n) v.1) := by
+        change X.arr a l (X.g.evenType (X.p.J n) v.1) =
+          X.arr a' l (X.g.evenType (X.p.J n) v.1)
+        exact congrArg (fun z : X.CVal L.ht => z.2.2.2 (X.g.evenType (X.p.J n) v.1)) hloc
+      simp [Setup5.refSubset, Setup5.refSubsetOn, Setup5.hitSet, harray]
+    unfold Setup5.evenRefOf
+    rw [hsel]
+    cases hs : X.selLong (L.elig H) a' v with
+    | none => rfl
+    | some l =>
+      have hshape := Lane_sol_s05_even.selection_some_shape L.ht.hp (X.sites L.ht)
+        (Setup5.pos a') (Setup5.act a') (L.elig H a') (Setup5.tie a') (X.siteOf v) l
+        (by intro j l' hl; exact L.elig_shape H a' (X.siteOf v) j l' hl) hs
+      simp only [hs, Option.map_some]
+      exact congrArg some (congrArg (fun M => (l, M)) (hsubset l hshape.2))
+  have hselectedRadius (a : X.CΩ L.ht) (c : X.CRef L.ht)
+      (hc : X.evenRefOf (L.elig H) H a v = some c) :
+      _root_.hammingDist c.1.1 (X.siteOf v) ≤ L.ht.hp.r := by
+    unfold Setup5.evenRefOf at hc
+    obtain ⟨l, hsel, hpair⟩ := Option.map_eq_some_iff.mp hc
+    have hfst : l = c.1 := congrArg Prod.fst hpair
+    have hshape := Lane_sol_s05_even.selection_some_shape L.ht.hp (X.sites L.ht)
+      (Setup5.pos a) (Setup5.act a) (L.elig H a) (Setup5.tie a) (X.siteOf v) l
+      (by intro j l' hl; exact L.elig_shape H a (X.siteOf v) j l' hl) hsel
+    rw [← hfst]
+    exact hshape.2
+  have hgate_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (O : OddRole5 n → X.OddOut) :
+      ES.gate H v c a O ↔ ES.gate H v c a' O := by
+    have heq : ES.gate H v c a O = ES.gate H v c a' O := by
+      apply ES.gate_local H v c O a a'
+      intro l hl
+      exact hag l (hscopeResidual R (by rfl) l hl)
+    rw [heq]
+  have hrefQ_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (b : OddRole5 n) :
+      ES.refQ H v c a b = ES.refQ H v c a' b := by
+    apply ES.refQ_local H v c b a a'
+    intro l hl
+    exact hag l (hscopeResidual R (by rfl) l hl)
+  have hoddRow_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (b : OddRole5 n) (hb : b ∈ star v) (o : X.OddOut) :
+      X.oddRow LR HR H a b o = X.oddRow LR HR H a' b o := by
+    have hscopeB (l : L.ht.hp.Loc)
+        (hl : l ∈ X.scopeBall (h := L.ht) b.1 (L.ht.hp.r + L.slack)) :=
+      hag l (hoddScope b hb l hl)
+    have hLR : LR.row H a b o = LR.row H a' b o := by
+      have hh := LR.row_local H b a a' hscopeB
+      exact congrFun hh o
+    have hHR : HR.row H a b o = HR.row H a' b o := by
+      have hh := HR.row_local H b a a' hscopeB
+      exact congrFun hh o
+    change LR.row H a b o + HR.row H a b o = LR.row H a' b o + HR.row H a' b o
+    rw [hLR, hHR]
+  have hoddFP_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (b : OddRole5 n) (hb : b ∈ star v) :
+      X.oddRowFP LR HR H a b = X.oddRowFP LR HR H a' b := by
+    have hvalidEq : L.valid H a b = L.valid H a' b := by
+      apply L.valid_local H b a a'
+      intro l hl
+      exact hag l (hoddScope b hb l hl)
+    have hvalid : L.valid H a b ↔ L.valid H a' b :=
+      ⟨fun hv => hvalidEq.mp hv, fun hv => hvalidEq.symm.mp hv⟩
+    by_cases hv : L.valid H a b
+    · have hv' := hvalid.mp hv
+      apply FinProb.ext
+      intro o
+      simp only [Setup5.oddRowFP, dif_pos hv, dif_pos hv']
+      exact hoddRow_congr a a' hag b hb o
+    · have hv' : ¬ L.valid H a' b := fun hh => hv (hvalid.mpr hh)
+      simp [Setup5.oddRowFP, hv, hv']
+  have hreplace_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H a v = some c)
+      (z : X.RefVal v c.2) :
+      ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R,
+        replaceRef (X := X) (h := L.ht) a v c z l =
+          replaceRef (X := X) (h := L.ht) a' v c z l := by
+    intro l hl
+    have hbase := hag l hl
+    have hrad := hselectedRadius a c hc
+    have hloc : c.1 ∈ X.scopeBall (h := L.ht) v.1 (L.ht.hp.r) := by
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      change _root_.hammingDist c.1.1 (X.siteOf v) ≤ L.ht.hp.r
+      exact hrad
+    have hAt := hag c.1 (hscopeResidual (L.ht.hp.r) hsmallRadius c.1 hloc)
+    by_cases he : l = c.1
+    · subst l
+      simp [Setup5.replaceRef, hAt]
+    · simp [Setup5.replaceRef, he, hbase]
+  have hweight_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H a v = some c)
+      (O : OddRole5 n → X.OddOut) (z : X.RefVal v c.2) :
+      X.evenWeight ES H a v c O z = X.evenWeight ES H a' v c O z := by
+    have hrep := hreplace_congr a a' hag c hc z
+    have hgate := hgate_congr
+      (replaceRef (X := X) (h := L.ht) a v c z)
+      (replaceRef (X := X) (h := L.ht) a' v c z) hrep c O
+    have hgateEq := propext hgate
+    have hprod : (∏ b ∈ star v, X.oddRow LR HR H
+        (replaceRef (X := X) (h := L.ht) a v c z) b (O b)) =
+        ∏ b ∈ star v, X.oddRow LR HR H
+          (replaceRef (X := X) (h := L.ht) a' v c z) b (O b) := by
+      apply Finset.prod_congr rfl
+      intro b hb
+      exact hoddRow_congr _ _ hrep b hb (O b)
+    unfold evenWeight
+    rw [hgateEq, hprod]
+  have hmass_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H a v = some c)
+      (O : OddRole5 n → X.OddOut) :
+      X.evenMass ES H a v c O = X.evenMass ES H a' v c O := by
+    unfold evenMass
+    apply Finset.sum_congr rfl
+    intro z hz
+    exact hweight_congr a a' hag c hc O z
+  have hmarg_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H a v = some c)
+      (O : OddRole5 n → X.OddOut) (y : Fin N) :
+      X.evenMarg ES H a v c O y = X.evenMarg ES H a' v c O y := by
+    unfold evenMarg
+    apply Finset.sum_congr rfl
+    intro z hz
+    rw [hweight_congr a a' hag c hc O z, hmass_congr a a' hag c hc O]
+  have hkeep_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H a v = some c)
+      (O : OddRole5 n → X.OddOut) (y : Fin N) :
+      X.EvenKeep ES H a v c O y ↔ X.EvenKeep ES H a' v c O y := by
+    unfold EvenKeep
+    rw [hmarg_congr a a' hag c hc O y]
+  have htest_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (c : X.CRef L.ht) (hc : X.evenRefOf (L.elig H) H a v = some c)
+      (O : OddRole5 n → X.OddOut) :
+      X.EvenTest ES H a v c O ↔ X.EvenTest ES H a' v c O := by
+    have hqprod : (∏ b ∈ star v, (ES.refQ H v c a b).w (O b)) =
+        ∏ b ∈ star v, (ES.refQ H v c a' b).w (O b) := by
+      apply Finset.prod_congr rfl
+      intro b hb
+      exact congrArg (fun Q => Q.w (O b)) (hrefQ_congr a a' hag c b)
+    unfold EvenTest
+    rw [hmass_congr a a' hag c hc O, hqprod]
+  have hevenRow_congr (a a' : X.CΩ L.ht)
+      (hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, a l = a' l)
+      (O : OddRole5 n → X.OddOut) (y : Fin N) :
+      X.evenRow ES H a O v y = X.evenRow ES H a' O v y := by
+    have href := hrefOf_congr a a' hag
+    cases hc : X.evenRefOf (L.elig H) H a' v with
+    | none =>
+      have hc' : X.evenRefOf (L.elig H) H a v = none := by rw [href]; exact hc
+      simp [Setup5.evenRow, hc, hc']
+    | some c =>
+      have hc' : X.evenRefOf (L.elig H) H a v = some c := by rw [href]; exact hc
+      have hcond : (ES.gate H v c a O ∧ X.EvenTest ES H a v c O) ↔
+          (ES.gate H v c a' O ∧ X.EvenTest ES H a' v c O) := by
+        constructor
+        · rintro ⟨hg, ht⟩
+          exact ⟨(hgate_congr a a' hag c O).mp hg,
+            (htest_congr a a' hag c hc' O).mp ht⟩
+        · rintro ⟨hg, ht⟩
+          exact ⟨(hgate_congr a a' hag c O).mpr hg,
+            (htest_congr a a' hag c hc' O).mpr ht⟩
+      have hnum (z : Fin N) :
+          (if X.EvenKeep ES H a v c O z then X.evenMarg ES H a v c O z else 0) =
+            if X.EvenKeep ES H a' v c O z then X.evenMarg ES H a' v c O z else 0 := by
+        by_cases hk : X.EvenKeep ES H a v c O z
+        · have hk' := (hkeep_congr a a' hag c hc' O z).mp hk
+          simp only [if_pos hk, if_pos hk']
+          exact hmarg_congr a a' hag c hc' O z
+        · have hk' : ¬ X.EvenKeep ES H a' v c O z :=
+            fun hh => hk ((hkeep_congr a a' hag c hc' O z).mpr hh)
+          simp only [if_neg hk, if_neg hk']
+      have hden : (∑ z, if X.EvenKeep ES H a v c O z then
+          X.evenMarg ES H a v c O z else 0) =
+          ∑ z, if X.EvenKeep ES H a' v c O z then
+            X.evenMarg ES H a' v c O z else 0 := by
+        apply Finset.sum_congr rfl
+        intro z hz
+        exact hnum z
+      simp only [Setup5.evenRow, hc, hc']
+      by_cases hg : ES.gate H v c a O ∧ X.EvenTest ES H a v c O
+      · have hg' := hcond.mp hg
+        simp only [if_pos hg, if_pos hg']
+        rw [hnum y, hden]
+      · have hg' : ¬ (ES.gate H v c a' O ∧ X.EvenTest ES H a' v c O) :=
+          fun hh => hg (hcond.mpr hh)
+        simp only [if_neg hg, if_neg hg']
+  have hweight_outputs (a : X.CΩ L.ht) (c : X.CRef L.ht)
+      (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b)
+      (z : X.RefVal v c.2) :
+      X.evenWeight ES H a v c O z = X.evenWeight ES H a v c O' z := by
+    have hgate := propext (ES.gate_outputs H v c
+      (replaceRef (X := X) (h := L.ht) a v c z) O O' hO)
+    have hprod : (∏ b ∈ star v, X.oddRow LR HR H
+        (replaceRef (X := X) (h := L.ht) a v c z) b (O b)) =
+        ∏ b ∈ star v, X.oddRow LR HR H
+          (replaceRef (X := X) (h := L.ht) a v c z) b (O' b) := by
+      apply Finset.prod_congr rfl
+      intro b hb
+      rw [hO b hb]
+    unfold evenWeight
+    rw [hgate, hprod]
+  have hmass_outputs (a : X.CΩ L.ht) (c : X.CRef L.ht)
+      (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) :
+      X.evenMass ES H a v c O = X.evenMass ES H a v c O' := by
+    unfold evenMass
+    apply Finset.sum_congr rfl
+    intro z hz
+    exact hweight_outputs a c O O' hO z
+  have hmarg_outputs (a : X.CΩ L.ht) (c : X.CRef L.ht)
+      (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) (y : Fin N) :
+      X.evenMarg ES H a v c O y = X.evenMarg ES H a v c O' y := by
+    unfold evenMarg
+    apply Finset.sum_congr rfl
+    intro z hz
+    rw [hweight_outputs a c O O' hO z, hmass_outputs a c O O' hO]
+  have hkeep_outputs (a : X.CΩ L.ht) (c : X.CRef L.ht)
+      (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) (y : Fin N) :
+      X.EvenKeep ES H a v c O y ↔ X.EvenKeep ES H a v c O' y := by
+    unfold EvenKeep
+    rw [hmarg_outputs a c O O' hO y]
+  have htest_outputs (a : X.CΩ L.ht) (c : X.CRef L.ht)
+      (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) :
+      X.EvenTest ES H a v c O ↔ X.EvenTest ES H a v c O' := by
+    have hqprod : (∏ b ∈ star v, (ES.refQ H v c a b).w (O b)) =
+        ∏ b ∈ star v, (ES.refQ H v c a b).w (O' b) := by
+      apply Finset.prod_congr rfl
+      intro b hb
+      rw [hO b hb]
+    unfold EvenTest
+    rw [hmass_outputs a c O O' hO, hqprod]
+  have hevenRow_outputs (a : X.CΩ L.ht) (O O' : OddRole5 n → X.OddOut)
+      (hO : ∀ b ∈ star v, O b = O' b) (y : Fin N) :
+      X.evenRow ES H a O v y = X.evenRow ES H a O' v y := by
+    cases hc : X.evenRefOf (L.elig H) H a v with
+    | none => simp [Setup5.evenRow, hc]
+    | some c =>
+      have hcond : (ES.gate H v c a O ∧ X.EvenTest ES H a v c O) ↔
+          (ES.gate H v c a O' ∧ X.EvenTest ES H a v c O') := by
+        exact ⟨fun h => ⟨(ES.gate_outputs H v c a O O' hO).mp h.1,
+          (htest_outputs a c O O' hO).mp h.2⟩,
+          fun h => ⟨(ES.gate_outputs H v c a O O' hO).mpr h.1,
+            (htest_outputs a c O O' hO).mpr h.2⟩⟩
+      have hnum (z : Fin N) :
+          (if X.EvenKeep ES H a v c O z then X.evenMarg ES H a v c O z else 0) =
+            if X.EvenKeep ES H a v c O' z then X.evenMarg ES H a v c O' z else 0 := by
+        by_cases hk : X.EvenKeep ES H a v c O z
+        · have hk' := (hkeep_outputs a c O O' hO z).mp hk
+          simp only [if_pos hk, if_pos hk']
+          exact hmarg_outputs a c O O' hO z
+        · have hk' : ¬ X.EvenKeep ES H a v c O' z :=
+            fun hh => hk ((hkeep_outputs a c O O' hO z).mpr hh)
+          simp only [if_neg hk, if_neg hk']
+      have hden : (∑ z, if X.EvenKeep ES H a v c O z then
+          X.evenMarg ES H a v c O z else 0) =
+          ∑ z, if X.EvenKeep ES H a v c O' z then
+            X.evenMarg ES H a v c O' z else 0 := by
+        apply Finset.sum_congr rfl
+        intro z hz
+        exact hnum z
+      simp only [Setup5.evenRow, hc]
+      by_cases hg : ES.gate H v c a O ∧ X.EvenTest ES H a v c O
+      · have hg' := hcond.mp hg
+        simp only [if_pos hg, if_pos hg']
+        rw [hnum y, hden]
+      · have hg' : ¬ (ES.gate H v c a O' ∧ X.EvenTest ES H a v c O') :=
+          fun hh => hg (hcond.mpr hh)
+        simp only [if_neg hg, if_neg hg']
+  have hag : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 R, ω l = ω' l := hω
+  have hrowCenter (O : OddRole5 n → X.OddOut) :
+      X.evenRow ES H ω O v x = X.evenRow ES H ω' O v x :=
+    hevenRow_congr ω ω' hag O x
+  have hstarLaw (b : OddRole5 n) (hb : b ∈ star v) :
+      X.oddRowFP LR HR H ω b = X.oddRowFP LR HR H ω' b :=
+    hoddFP_congr ω ω' hag b hb
+  have hdep (a : X.CΩ L.ht) :
+      FinProb.DependsOn (fun O => evenZ X ES H v x (a, O)) (star v) := by
+    intro O O' hO
+    unfold evenZ
+    change (N : ℝ) * X.evenRow ES H a O v x =
+      (N : ℝ) * X.evenRow ES H a O' v x
+    rw [hevenRow_outputs a O O' hO x]
+  unfold evenW
+  rw [FinProb.pi_expect_depends (fun b => X.oddRowFP LR HR H ω b) (star v)
+        (fun O => evenZ X ES H v x (ω, O)) (fun _ => (0, X.y₀)) (hdep ω),
+      FinProb.pi_expect_depends (fun b => X.oddRowFP LR HR H ω' b) (star v)
+        (fun O => evenZ X ES H v x (ω', O)) (fun _ => (0, X.y₀)) (hdep ω')]
+  have hlaw : (fun b : {b : OddRole5 n // b ∈ star v} => X.oddRowFP LR HR H ω b.1) =
+      fun b : {b : OddRole5 n // b ∈ star v} => X.oddRowFP LR HR H ω' b.1 := by
+    funext b
+    exact hstarLaw b.1 b.2
+  rw [hlaw]
+  congr 1
+  funext O
+  unfold evenZ
+  exact congrArg (fun z : ℝ => (N : ℝ) * z)
+    (hrowCenter ((Equiv.piEquivPiSubtypeProd (fun b : OddRole5 n => b ∈ star v)
+      (fun _ => X.OddOut)).symm (O, fun _ => (0, X.y₀))))
 
 /-- SUB-LEMMA D6 (05:1209–1247, comparison mean): under raw centers at a good key history the product-row
 mean of `Z_v(x)` is at most `d_v`: cancel the posterior denominator against the gated subdensity (sum over

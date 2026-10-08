@@ -1032,7 +1032,486 @@ theorem support_tail : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH 
       ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
         ∀ H : X.KeyHist, X.KeyGood5 H (cL p.pre1) (cH p.pre1) →
           (X.centreLaw (canonHt X) H).pr (fun ω => ¬ SupportOK X (canonHt X) H ω) ≤ 1 / 300 := by
-  sorry
+  classical
+  intro cL cH hc
+  refine ⟨Lane_sol_s05_centres.loadRequest, ?_⟩
+  intro p hreq
+  refine ⟨0, ?_⟩
+  intro n hn N E G Y hY H hgood
+  let ht := canonHt Y
+  let hp := ht.hp
+  let Arr := ∀ K : Y.Ty, Y.Array K
+  let arrLaw : FinProb Arr :=
+    FinProb.pi fun K => FinProb.pi fun _ : Fin (Y.p.typeBlocks n K) => Y.blockLaw H K
+  let locLaw : FinProb (Y.CVal ht) :=
+    (FinProb.bernoulli (hp.lam / (hp.V : ℝ))).prod
+      ((FinProb.bernoulli ((n : ℝ) ^ hp.b₀ / hp.lam)).prod
+        ((FinProb.uniformAll (Ω := hp.TiePerm) ⟨1⟩).prod arrLaw))
+  have hcover := (L5_1e_cover Y.g (Y.p.J n)).2
+  have hBounds : ∀ K, Y.TypeOccurs K → Y.Step2Bounds H K := by
+    intro K hK
+    exact Setup5.L5_1d_bounds n N E G Y hcover H hgood.base_support hgood.step1 K hK
+      (hgood.step2.1 K hK)
+  have hmassLower (K : Y.Ty) (hK : Y.TypeOccurs K) :
+      Real.exp (-(Y.p.delta * (Y.p.q0 * Y.p.typeSegs n K)) *
+        ∑ ℓ ∈ K.2.1, (colLen5 (Y.p.s n) ℓ : ℝ)) ≤ Y.blockMass H K K.2.1 := by
+    have hgate := Lane_q_s05_hist1b.blockGate_trueBlock_of_step1Pass Y H K hK hgood.step1
+    have hnot := hgood.step2.1 K hK
+    by_contra hlt
+    exact hnot ⟨hgate, Or.inl (lt_of_not_ge hlt)⟩
+  have hmassPos (K : Y.Ty) (hK : Y.TypeOccurs K) : 0 < Y.blockMass H K K.2.1 :=
+    (Real.exp_pos _).trans_le (hmassLower K hK)
+  have hblockLawDiv (K : Y.Ty) (hK : Y.TypeOccurs K) (z : Y.Block K) :
+      (Y.blockLaw H K).w z = Y.blockWeight H K K.2.1 z / Y.blockMass H K K.2.1 := by
+    simpa [Setup5.blockLaw, Setup5.blockLawOn, Setup5.blockMass] using
+      (Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg
+        (f := fun z => Y.blockWeight H K K.2.1 z) (Y.fallbackBlock K) z
+        (fun z => Lane_q_s05_hist1b.blockWeight_nonneg Y H K K.2.1 z)
+        (by simpa [Setup5.blockMass] using hmassPos K hK))
+  have hrawExists (K : Y.Ty) (hK : Y.TypeOccurs K) :
+      ∃ z, Y.blockWeight H K K.2.1 z ≠ 0 := by
+    have hpos : 0 < (Y.blockLaw H K).pr (fun _ => True) := by
+      simp [FinProb.pr, (Y.blockLaw H K).sum_eq_one]
+    obtain ⟨z, hz, _⟩ := FinProb.exists_support_of_pos5 (Y.blockLaw H K) (fun _ => True) hpos
+    refine ⟨z, ?_⟩
+    rw [hblockLawDiv K hK z] at hz
+    exact (div_ne_zero_iff.mp hz).1
+  have hdelMassPos (K : Y.Ty) (hK : Y.TypeOccurs K) (ℓ : Y.Key) (hℓ : ℓ ∈ K.2.1) :
+      0 < Y.blockMass H K (K.2.1.erase ℓ) := by
+    obtain ⟨z, hz⟩ := hrawExists K hK
+    have hprodRaw := hz
+    unfold Setup5.blockWeight at hprodRaw
+    have hbaseGate : Y.blockBase H.1 K z *
+        (if Y.blockGate H.1 K z then 1 else 0) ≠ 0 := (mul_ne_zero_iff.mp hprodRaw).1
+    have hkeyProd : (∏ k ∈ K.2.1, Y.colLik H.1 K k z (H.2 k)) ≠ 0 :=
+      (mul_ne_zero_iff.mp hprodRaw).2
+    have hdelProd : (∏ k ∈ K.2.1.erase ℓ, Y.colLik H.1 K k z (H.2 k)) ≠ 0 := by
+      apply Finset.prod_ne_zero_iff.mpr
+      intro k hk
+      exact (Finset.prod_ne_zero_iff.mp hkeyProd) k (Finset.mem_of_mem_erase hk)
+    have hdelRaw : Y.blockWeight H K (K.2.1.erase ℓ) z ≠ 0 := by
+      simpa [Setup5.blockWeight] using mul_ne_zero hbaseGate hdelProd
+    have hdelNonneg := Lane_q_s05_hist1b.blockWeight_nonneg Y H K (K.2.1.erase ℓ) z
+    have hdelPos : 0 < Y.blockWeight H K (K.2.1.erase ℓ) z :=
+      lt_of_le_of_ne hdelNonneg (Ne.symm hdelRaw)
+    have hsum : Y.blockWeight H K (K.2.1.erase ℓ) z ≤
+        Y.blockMass H K (K.2.1.erase ℓ) := by
+      unfold Setup5.blockMass
+      exact Finset.single_le_sum
+        (fun z' _ => Lane_q_s05_hist1b.blockWeight_nonneg Y H K (K.2.1.erase ℓ) z')
+        (Finset.mem_univ z)
+    exact lt_of_lt_of_le hdelPos hsum
+  have harrayBlock (ω : Y.CΩ ht) (hω : (Y.centreLaw ht H).w ω ≠ 0)
+      (l : hp.Loc) (K : Y.Ty) (i : Fin (Y.p.typeBlocks n K)) :
+      (Y.blockLaw H K).w ((ω l).2.2.2 K i) ≠ 0 := by
+    have hpi : (∏ l : hp.Loc, locLaw.w (ω l)) ≠ 0 := by
+      change (FinProb.pi (fun _ : hp.Loc => locLaw)).w ω ≠ 0
+      change (∏ l : hp.Loc, locLaw.w (ω l)) ≠ 0 at hω
+      exact hω
+    have hloc := (Finset.prod_ne_zero_iff.mp hpi) l (Finset.mem_univ _)
+    have hloc' :
+        (FinProb.bernoulli (hp.lam / (hp.V : ℝ))).w ((ω l).1) *
+          ((FinProb.bernoulli ((n : ℝ) ^ hp.b₀ / hp.lam)).w ((ω l).2.1) *
+            ((FinProb.uniformAll (Ω := hp.TiePerm) ⟨1⟩).w ((ω l).2.2.1) *
+              arrLaw.w ((ω l).2.2.2))) ≠ 0 := by
+      simpa only [locLaw, FinProb.prod] using hloc
+    have hact := (mul_ne_zero_iff.mp hloc').2
+    have htie := (mul_ne_zero_iff.mp hact).2
+    have harr := (mul_ne_zero_iff.mp htie).2
+    have hKprod :
+        (∏ K : Y.Ty,
+          (FinProb.pi (fun j : Fin (Y.p.typeBlocks n K) => Y.blockLaw H K)).w
+            ((ω l).2.2.2 K)) ≠ 0 := by
+      change arrLaw.w ((ω l).2.2.2) ≠ 0 at harr
+      exact harr
+    have hIprod := (Finset.prod_ne_zero_iff.mp hKprod) K (Finset.mem_univ _)
+    have hIprod' :
+        (∏ j : Fin (Y.p.typeBlocks n K), (Y.blockLaw H K).w ((ω l).2.2.2 K j)) ≠ 0 := by
+      change (FinProb.pi (fun j : Fin (Y.p.typeBlocks n K) => Y.blockLaw H K)).w
+          ((ω l).2.2.2 K) ≠ 0 at hIprod
+      exact hIprod
+    exact (Finset.prod_ne_zero_iff.mp hIprod') i (Finset.mem_univ _)
+  have htypeOfRecord (ω : Y.CΩ ht) (y : OddRole5 n)
+      (c : hp.Loc × Y.Ty) (hc : c ∈
+        (Y.actualRecordAt (markElig Y ht H) H ω hp.Rlong y).2.1) : Y.TypeOccurs c.2 := by
+    change c ∈ (evenNbrs y).biUnion (fun a =>
+      match Y.selAt (markElig Y ht H) ω hp.Rlong a with
+      | some l => {(l, Y.g.evenType (Y.p.J n) a.1)}
+      | none => ∅) at hc
+    obtain ⟨a, ha, hc⟩ := Finset.mem_biUnion.mp hc
+    cases hs : Y.selAt (markElig Y ht H) ω hp.Rlong a with
+    | none => simp [hs] at hc
+    | some l =>
+        have heq : c = (l, Y.g.evenType (Y.p.J n) a.1) := by simpa [hs] using hc
+        cases heq
+        exact ⟨a.1, a.2, rfl⟩
+  have hselectedMem (ω : Y.CΩ ht) (s : CubeVertex hp.d) (l : hp.Loc)
+      (hsel : hp.selection (Y.sites ht) (pos ω) (act ω) (markElig Y ht H ω)
+        (tie ω) s = some l) : l ∈ markElig Y ht H ω s l.2 := by
+    classical
+    let j := hp.height (Y.sites ht) (pos ω) (act ω) (markElig Y ht H ω) hp.Rlong s
+    change (if hj : j < hp.H then
+        let j' : Fin (hp.H + 1) := ⟨j, by omega⟩
+        if hbad : hp.Bad (pos ω) (act ω) (markElig Y ht H ω) s j' then none
+        else
+          let active := ((markElig Y ht H ω) s j').filter (fun q => act ω q = true)
+          let priorities := active.image (hp.priority (tie ω) (s, j'))
+          if hne : priorities.Nonempty then
+            let q := priorities.min' hne
+            have hq : q ∈ priorities := Finset.min'_mem priorities hne
+            have hmem : ∃ z, z ∈ active ∧ hp.priority (tie ω) (s, j') z = q :=
+              Finset.mem_image.mp hq
+            some (Classical.choose hmem)
+          else none
+      else none) = some l at hsel
+    by_cases hj : j < hp.H
+    · rw [dif_pos hj] at hsel
+      let j' : Fin (hp.H + 1) := ⟨j, by omega⟩
+      change (if hbad : hp.Bad (pos ω) (act ω) (markElig Y ht H ω) s j' then none
+        else
+          let active := ((markElig Y ht H ω) s j').filter (fun q => act ω q = true)
+          let priorities := active.image (hp.priority (tie ω) (s, j'))
+          if hne : priorities.Nonempty then
+            let q := priorities.min' hne
+            have hq : q ∈ priorities := Finset.min'_mem priorities hne
+            have hmem : ∃ z, z ∈ active ∧ hp.priority (tie ω) (s, j') z = q :=
+              Finset.mem_image.mp hq
+            some (Classical.choose hmem)
+          else none) = some l at hsel
+      by_cases hbad : hp.Bad (pos ω) (act ω) (markElig Y ht H ω) s j'
+      · rw [dif_pos hbad] at hsel
+        cases hsel
+      · rw [dif_neg hbad] at hsel
+        let active := ((markElig Y ht H ω) s j').filter (fun q => act ω q = true)
+        let priorities := active.image (hp.priority (tie ω) (s, j'))
+        change (if hne : priorities.Nonempty then
+            let q := priorities.min' hne
+            have hq : q ∈ priorities := Finset.min'_mem priorities hne
+            have hmem : ∃ z, z ∈ active ∧ hp.priority (tie ω) (s, j') z = q :=
+              Finset.mem_image.mp hq
+            some (Classical.choose hmem)
+          else none) = some l at hsel
+        by_cases hne : priorities.Nonempty
+        · rw [dif_pos hne] at hsel
+          have hchosen := Option.some.inj hsel
+          let q := priorities.min' hne
+          have hq : q ∈ priorities := Finset.min'_mem priorities hne
+          have hmem : ∃ z, z ∈ active ∧ hp.priority (tie ω) (s, j') z = q :=
+            Finset.mem_image.mp hq
+          have hmem' := Classical.choose_spec hmem
+          rw [hchosen] at hmem'
+          have helig : l ∈ markElig Y ht H ω s j' := (Finset.mem_filter.mp hmem'.1).1
+          have hlevel : l.2 = j' := (markElig_shape Y ht H ω s j' l helig).2.1
+          rw [hlevel]
+          exact helig
+        · rw [dif_neg hne] at hsel
+          cases hsel
+    · rw [dif_neg hj] at hsel
+      cases hsel
+  have hgoodAtSupport (ω : Y.CΩ ht) (hω : (Y.centreLaw ht H).w ω ≠ 0) :
+      SupportOK Y ht H ω := by
+    intro y hsel
+    let r := Y.actualRecordAt (markElig Y ht H) H ω hp.Rlong y
+    have hType (c : hp.Loc × Y.Ty) (hc : c ∈ r.2.1) : Y.TypeOccurs c.2 :=
+      htypeOfRecord ω y c (by simpa [r] using hc)
+    have hRaw (c : hp.Loc × Y.Ty) (hc : c ∈ r.2.1) (i : Fin (Y.p.typeBlocks n c.2)) :
+        Y.blockWeight H c.2 c.2.2.1 (arraysOf ω c i) ≠ 0 := by
+      have hK := hType c hc
+      have hb := harrayBlock ω hω c.1 c.2 i
+      have hb' : (Y.blockLaw H c.2).w (arraysOf ω c i) ≠ 0 := by
+        simpa [Setup5.arraysOf, Setup5.arr] using hb
+      have hLaw := hblockLawDiv c.2 hK (arraysOf ω c i)
+      rw [hLaw] at hb'
+      exact (div_ne_zero_iff.mp hb').1
+    have hCandidate :
+        Y.candGateOn H r (arraysOf ω) (H.2 (Y.g.roleKey (Y.p.J n) y.1)) := by
+      unfold Setup5.candGateOn
+      refine ⟨?_, ?_⟩
+      · intro c hc hℓ
+        have hK := hType c hc
+        have hratioFull : Real.exp
+            (-(Y.p.delta * (Y.p.q0 * Y.p.typeSegs n c.2)) * colLen5 (Y.p.s n) r.1) *
+            Y.blockMass H c.2 (c.2.2.1.erase r.1) ≤
+          Y.blockMass H c.2 c.2.2.1 := by
+          have hnot := hgood.step2.1 c.2 hK
+          have hGate := Lane_q_s05_hist1b.blockGate_trueBlock_of_step1Pass
+            Y H c.2 hK hgood.step1
+          have hnotRatio : ¬ Y.blockMass H c.2 c.2.2.1 <
+              Real.exp (-(Y.p.delta * (Y.p.q0 * Y.p.typeSegs n c.2)) * colLen5 (Y.p.s n) r.1) *
+                Y.blockMass H c.2 (c.2.2.1.erase r.1) := by
+            intro hlt
+            exact hnot ⟨hGate, Or.inr ⟨r.1, hℓ, hlt⟩⟩
+          exact le_of_not_gt hnotRatio
+        have hwithCol : Y.withCol H r.1 (H.2 r.1) = H := by
+          cases r.1 <;> simp [Setup5.withCol]
+        have hratio : Real.exp
+              (-(Y.p.delta * (Y.p.q0 * Y.p.typeSegs n c.2)) * colLen5 (Y.p.s n) r.1) *
+              Y.blockMass H c.2 (c.2.2.1.erase r.1) ≤
+            Y.blockMass (Y.withCol H r.1 (H.2 r.1)) c.2 c.2.2.1 := by
+          rw [hwithCol]
+          exact hratioFull
+        refine ⟨hdelMassPos c.2 hK r.1 hℓ, ?_⟩
+        exact hratio
+      · intro c M hmask h
+        -- The mask in an actual record is selected from a high pool; its entries
+        -- either list the true key or pass the singleton optional-hit test.
+        have hmaskSpec :
+            ∃ k, Y.g.roleKey (Y.p.J n) y.1 = .inl k ∧
+              ∃ a : EvenRole5 n, a ∈ evenNbrs y ∧
+                (Y.g.evenType (Y.p.J n) a.1).2.2 = none ∧
+                Y.selAt (markElig Y ht H) ω hp.Rlong a = some c.1 ∧
+                c.2 = Y.g.evenType (Y.p.J n) a.1 ∧
+                M = Y.firstK (Y.hitSet (arraysOf ω) (c.1, c.2)
+                  (Y.lowCol H.2 k)) (Y.p.usedBlocks n) := by
+          cases hrole : Y.g.roleKey (Y.p.J n) y.1 with
+          | inr kH =>
+              simp [r, Setup5.actualRecordAt, hrole] at hmask
+          | inl k =>
+              have hm := hmask
+              simp only [r, Setup5.actualRecordAt, hrole] at hm
+              by_cases hex : ∃ a : EvenRole5 n, a ∈ evenNbrs y ∧
+                  (Y.g.evenType (Y.p.J n) a.1).2.2 = none ∧
+                    (Y.selAt (markElig Y ht H) ω hp.Rlong a).isSome
+              · rw [dif_pos hex] at hm
+                let a := Classical.choose hex
+                have ha := Classical.choose_spec hex
+                cases hs : Y.selAt (markElig Y ht H) ω hp.Rlong a with
+                | none => rw [hs] at hm; cases hm
+                | some l =>
+                    rw [hs] at hm
+                    have htuple :
+                        (l, Y.g.evenType (Y.p.J n) a.1,
+                          Y.firstK (Y.hitSet (arraysOf ω)
+                            (l, Y.g.evenType (Y.p.J n) a.1) (Y.lowCol H.2 k))
+                            (Y.p.usedBlocks n)) = (c.1, c.2, M) :=
+                      Option.some.inj hm
+                    rcases Prod.mk.inj htuple with ⟨hl, hrest⟩
+                    rcases Prod.mk.inj hrest with ⟨hK, hM⟩
+                    have hselOut : Y.selAt (markElig Y ht H) ω hp.Rlong a = some c.1 := by
+                      rw [hs, hl]
+                    have hMout : M = Y.firstK (Y.hitSet (arraysOf ω) (c.1, c.2)
+                        (Y.lowCol H.2 k)) (Y.p.usedBlocks n) := by
+                      simpa [hl, hK] using hM.symm
+                    exact ⟨k, rfl, a, ha.1, ha.2.1, hselOut, hK.symm, hMout⟩
+              · rw [dif_neg hex] at hm
+                cases hm
+        rcases hmaskSpec with ⟨k, hrole, a, ha, hmode, hselA, hK, hM⟩
+        have hroleKey : r.1 = (.inl k : Y.Key) := by
+          simpa [r, Setup5.actualRecordAt] using hrole
+        have htargetEq : H.2 r.1 h = Y.lowCol H.2 k := by
+          let Fibre : Y.Key → Type := fun ℓ => Fin (colLen5 (Y.p.s n) ℓ)
+          let h' : Fibre (.inl k) :=
+            Eq.recOn hroleKey h
+          have hpair : (⟨r.1, h⟩ : Σ ℓ : Y.Key, Fibre ℓ) = ⟨.inl k, h'⟩ := by
+            apply Sigma.ext hroleKey
+            exact (eqRec_heq (φ := Fibre) hroleKey h).symm
+          have heq : H.2 r.1 h = H.2 (.inl k) h' :=
+            congrArg (fun z : Σ ℓ : Y.Key, Fibre ℓ => H.2 z.1 z.2) hpair
+          have hlen : colLen5 (Y.p.s n) (.inl k : Y.Key) = 1 := rfl
+          have h0 : h' = (⟨0, by norm_num⟩ : Fin 1) := by
+            apply Fin.ext
+            have hlt : (h'.val : ℕ) < 1 := by
+              simpa only [colLen5] using h'.isLt
+            omega
+          rw [heq, h0]
+          apply congrArg (H.2 (.inl k))
+          apply Fin.ext
+          rfl
+        have hselected :
+            c.1 ∈ markElig Y ht H ω (Y.siteOf a) c.1.2 := by
+          have hselHP : hp.selection (Y.sites ht) (pos ω) (act ω)
+              (markElig Y ht H ω) (tie ω) (Y.siteOf a) = some c.1 := by
+            simpa [Setup5.selAt, Setup5.siteOf, HDParams.selection] using hselA
+          exact hselectedMem ω (Y.siteOf a) c.1 hselHP
+        have hsingleton : singletonOK Y ht H (arraysOf ω) a c.1 := by
+          have hmem : c.1 ∈ eligOf Y ht H (pos ω) (arraysOf ω)
+              (Y.siteOf a) c.1.2 := hselected
+          simp only [eligOf, Finset.mem_filter] at hmem
+          exact hmem.2.1 a rfl
+        have hhit : Y.p.usedBlocks n ≤
+            (Y.hitSet (arraysOf ω) (c.1, c.2) (H.2 r.1 h)).card := by
+          have hadj : (cube n).Adj a.1 y.1 := (Finset.mem_filter.mp ha).2
+          rcases (L5_1e_cover Y.g (Y.p.J n)).1 a.1 y.1 hadj with hlisted | hopt
+          · have hobs : c ∈ r.2.1 := by
+              change c ∈ (evenNbrs y).biUnion (fun b =>
+                match Y.selAt (markElig Y ht H) ω hp.Rlong b with
+                | some q => {(q, Y.g.evenType (Y.p.J n) b.1)}
+                | none => ∅)
+              apply Finset.mem_biUnion.mpr
+              refine ⟨a, ha, ?_⟩
+              rw [hselA]
+              change c ∈ {(c.1, Y.g.evenType (Y.p.J n) a.1)}
+              exact Finset.mem_singleton.mpr (Prod.ext rfl hK)
+            have hTypeK : Y.TypeOccurs c.2 := hType c hobs
+            have hlistedK : r.1 ∈ c.2.2.1 := by
+              have hlisted' := hlisted
+              rw [hrole] at hlisted'
+              rw [hroleKey, hK]
+              exact hlisted'
+            have hpoolSub : Y.poolIdx ⊆
+                Y.hitSet (arraysOf ω) (c.1, c.2) (H.2 r.1 h) := by
+              intro i hi
+              have hiPool : (i : ℕ) < Y.p.poolBlocks n := by
+                simpa [Setup5.poolIdx] using (Finset.mem_filter.mp hi).2
+              have htypeBlocks : Y.p.typeBlocks n c.2 = Y.p.poolBlocks n := by
+                rw [hK]
+                simp [Params5.typeBlocks, hmode]
+              have hiType : (i : ℕ) < Y.p.typeBlocks n c.2 := by
+                simpa [htypeBlocks] using hiPool
+              let i' : Fin (Y.p.typeBlocks n c.2) := ⟨i, hiType⟩
+              have hidx : Y.blockIdx c.2 i = some i' := by
+                simp [Setup5.blockIdx, i', hiType]
+              have hblock := harrayBlock ω hω c.1 c.2 i'
+              have hhitBlock := (hBounds c.2 hTypeK).2.2
+                (arraysOf ω (c.1, c.2) i') hblock r.1 hlistedK h
+              unfold Setup5.hitSet
+              simp only [Finset.mem_filter]
+              exact ⟨hi, ⟨i', hidx, hhitBlock⟩⟩
+            have hcard := Finset.card_le_card hpoolSub
+            have hpoolIdxCard : Y.poolIdx.card = Y.p.poolBlocks n := by
+              have hb : Y.p.poolBlocks n ≤ Y.blockBound := le_max_left _ _
+              unfold Setup5.poolIdx
+              rw [Fin.card_filter_val_lt, Nat.min_eq_right hb]
+            calc
+              Y.p.usedBlocks n ≤ Y.p.poolBlocks n :=
+                Lane_sol_s05_centres.usedBlocks_le_pool Y
+              _ = Y.poolIdx.card := hpoolIdxCard.symm
+              _ ≤ (Y.hitSet (arraysOf ω) (c.1, c.2) (H.2 r.1 h)).card := hcard
+          · have hopt' : Y.g.optionalKey (Y.p.J n) a.1 = some (.inl k) := by
+              simpa [hrole] using hopt
+            have hhitLow := hsingleton.2 k hopt'
+            have hcardEq := congrArg (fun z =>
+              (Y.hitSet (arraysOf ω) (c.1, c.2) z).card) htargetEq
+            rw [hcardEq]
+            simpa [hK] using hhitLow
+        refine ⟨hhit, ?_⟩
+        rw [hM]
+        exact congrArg (fun z => Y.firstK (Y.hitSet (arraysOf ω) (c.1, c.2) z)
+          (Y.p.usedBlocks n)) htargetEq
+    have hPost : 0 < Y.step3PostOn H r (arraysOf ω) none (H.2 r.1) := by
+      let θ₀ := H.2 r.1
+      have hpriorEach (j : Fin (colLen5 (Y.p.s n) r.1)) :
+          0 < (Y.prior H.1 r.1).w (θ₀ j) :=
+        lt_of_le_of_ne ((Y.prior H.1 r.1).nonneg (θ₀ j))
+          (Ne.symm (hgood.key_support r.1 j))
+      have hpriorPos : 0 < ∏ j, (Y.prior H.1 r.1).w (θ₀ j) :=
+        Finset.prod_pos fun j _ => hpriorEach j
+      have hwithColTrue : Y.withCol H r.1 θ₀ = H := by
+        apply Prod.ext
+        · rfl
+        · funext ℓ
+          simp [Setup5.withCol, θ₀]
+      have hobsPos : 0 < Y.obsLikOn H r (arraysOf ω) θ₀ none := by
+        unfold Setup5.obsLikOn
+        apply Finset.prod_pos
+        intro c hc
+        apply Finset.prod_pos
+        intro i _
+        have hcMem : c ∈ r.2.1 := (Finset.mem_filter.mp hc).1
+        have hℓ : r.1 ∈ c.2.2.1 := (Finset.mem_filter.mp hc).2
+        have hTypeK : Y.TypeOccurs c.2 := hType c hcMem
+        have hdelMass := hdelMassPos c.2 hTypeK r.1 hℓ
+        have hrawFull := hRaw c hcMem i
+        have hrawExpand := hrawFull
+        unfold Setup5.blockWeight at hrawExpand
+        have hcommon : Y.blockBase H.1 c.2 (arraysOf ω c i) *
+            (if Y.blockGate H.1 c.2 (arraysOf ω c i) then 1 else 0) ≠ 0 :=
+          (mul_ne_zero_iff.mp hrawExpand).1
+        have hkeyProd : (∏ k ∈ c.2.2.1,
+            Y.colLik H.1 c.2 k (arraysOf ω c i) (H.2 k)) ≠ 0 :=
+          (mul_ne_zero_iff.mp hrawExpand).2
+        have hdelProd : (∏ k ∈ c.2.2.1.erase r.1,
+            Y.colLik H.1 c.2 k (arraysOf ω c i) (H.2 k)) ≠ 0 := by
+          apply Finset.prod_ne_zero_iff.mpr
+          intro k hk
+          exact (Finset.prod_ne_zero_iff.mp hkeyProd) k
+            (Finset.mem_of_mem_erase hk)
+        have hdelRaw : Y.blockWeight H c.2 (c.2.2.1.erase r.1)
+            (arraysOf ω c i) ≠ 0 := by
+          simpa [Setup5.blockWeight] using mul_ne_zero hcommon hdelProd
+        have hdelDiv : (Y.blockLawDel H c.2 r.1).w (arraysOf ω c i) =
+            Y.blockWeight H c.2 (c.2.2.1.erase r.1) (arraysOf ω c i) /
+              Y.blockMass H c.2 (c.2.2.1.erase r.1) := by
+          simpa [Setup5.blockLawDel, Setup5.blockLawOn, Setup5.blockMass] using
+            (Lane_q_s05_hist1b.normalize5_weight_eq_div_of_nonneg
+              (f := fun z => Y.blockWeight H c.2 (c.2.2.1.erase r.1) z)
+              (Y.fallbackBlock c.2) (arraysOf ω c i)
+              (fun z => Lane_q_s05_hist1b.blockWeight_nonneg Y H c.2
+                (c.2.2.1.erase r.1) z) hdelMass)
+        have hdenLaw : (Y.blockLawDel H c.2 r.1).w (arraysOf ω c i) ≠ 0 := by
+          rw [hdelDiv]
+          exact div_ne_zero hdelRaw (ne_of_gt hdelMass)
+        have hnumLawBase : (Y.blockLaw H c.2).w (arraysOf ω c i) ≠ 0 := by
+          rw [hblockLawDiv c.2 hTypeK]
+          exact div_ne_zero hrawFull (ne_of_gt (hmassPos c.2 hTypeK))
+        have hnumLaw : (Y.blockLaw (Y.withCol H r.1 θ₀) c.2).w
+            (arraysOf ω c i) ≠ 0 := by
+          rw [hwithColTrue]
+          exact hnumLawBase
+        have hnumPos : 0 < (Y.blockLaw (Y.withCol H r.1 θ₀) c.2).w
+            (arraysOf ω c i) :=
+          lt_of_le_of_ne ((Y.blockLaw (Y.withCol H r.1 θ₀) c.2).nonneg
+            (arraysOf ω c i))
+            (Ne.symm hnumLaw)
+        have hdenPos : 0 < (Y.blockLawDel H c.2 r.1).w (arraysOf ω c i) :=
+          lt_of_le_of_ne ((Y.blockLawDel H c.2 r.1).nonneg (arraysOf ω c i))
+            (Ne.symm hdenLaw)
+        have hratioPos : 0 < ratio5
+            ((Y.blockLaw (Y.withCol H r.1 θ₀) c.2).w (arraysOf ω c i))
+            ((Y.blockLawDel H c.2 r.1).w (arraysOf ω c i)) := by
+          by_cases hz : (Y.blockLawDel H c.2 r.1).w (arraysOf ω c i) = 0
+          · exact (ne_of_gt hdenPos) hz |>.elim
+          · simp [ratio5, hz]
+            exact div_pos hnumPos hdenPos
+        have hnotRef : ¬ Y.InRef (none : Option
+            (hp.Loc × Y.Ty × Finset (Fin Y.blockBound))) c i := by
+          simp [Setup5.InRef]
+        rw [if_neg hnotRef]
+        exact hratioPos
+      have hgate : Y.candGateOn H r (arraysOf ω) θ₀ := by
+        change Y.candGateOn H r (arraysOf ω)
+          (H.2 (Y.g.roleKey (Y.p.J n) y.1))
+        exact hCandidate
+      have hnumPos : 0 <
+          (∏ j, (Y.prior H.1 r.1).w (θ₀ j)) *
+            (if Y.candGateOn H r (arraysOf ω) θ₀ then 1 else 0) *
+            Y.obsLikOn H r (arraysOf ω) θ₀ none := by
+        rw [if_pos hgate]
+        exact mul_pos (mul_pos hpriorPos one_pos) hobsPos
+      have hmassPos : 0 < Y.step3MassOn H r (arraysOf ω) none := by
+        unfold Setup5.step3MassOn
+        let f : (Fin (colLen5 (Y.p.s n) r.1) → Fin N) → ℝ := fun θ =>
+          (∏ j, (Y.prior H.1 r.1).w (θ j)) *
+            (if Y.candGateOn H r (arraysOf ω) θ then 1 else 0) *
+            Y.obsLikOn H r (arraysOf ω) θ none
+        have hterm : 0 < f θ₀ := by simpa [f] using hnumPos
+        apply lt_of_lt_of_le hterm
+        exact Finset.single_le_sum
+          (f := f)
+          (fun θ _ => by
+            apply mul_nonneg
+            · apply mul_nonneg
+              · exact Finset.prod_nonneg fun j _ =>
+                  (Y.prior H.1 r.1).nonneg _
+              · split_ifs <;> norm_num
+            · exact Lane_sol_s05_hist1b.obsLikOn_nonneg Y H r (arraysOf ω) θ none)
+          (Finset.mem_univ θ₀)
+      unfold Setup5.step3PostOn
+      exact div_pos hnumPos hmassPos
+    exact ⟨hRaw, hPost, hCandidate⟩
+  have hprobZero : (Y.centreLaw ht H).pr (fun ω => ¬ SupportOK Y ht H ω) = 0 := by
+    unfold FinProb.pr
+    apply Finset.sum_eq_zero
+    intro ω _
+    by_cases hω : (Y.centreLaw ht H).w ω = 0
+    · simp [hω]
+    · have hgoodω := hgoodAtSupport ω hω
+      have hnotEvent : ¬ (¬ SupportOK Y ht H ω) := by
+        intro hbad
+        exact hbad hgoodω
+      simp [hnotEvent]
+  rw [hprobZero]
+  norm_num
 
 /-- SUB-LEMMA J9 (05:851–860, deterministic): good heights give a choice everywhere on two
 consecutive levels around each odd state, the crowd bound gives at most `2n^b ≤ T` IDs, the

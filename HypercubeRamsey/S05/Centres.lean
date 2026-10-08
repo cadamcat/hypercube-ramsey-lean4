@@ -1,4 +1,5 @@
 import HypercubeRamsey.S05.History
+import HypercubeRamsey.S05.Centres_q_s05_j34
 import HypercubeRamsey.S05.Selection
 import HypercubeRamsey.S03.Height.Selection
 import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
@@ -1231,6 +1232,40 @@ theorem singles_tail : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH 
         ∀ H : X.KeyHist, X.KeyGood5 H (cL p.pre1) (cH p.pre1) →
           (X.centreLaw (canonHt X) H).pr (fun ω => BallsOK X (canonHt X) ω ∧
             ¬ SinglesOK X (canonHt X) H ω) ≤ Real.exp (-Real.sqrt n) / 3 := by
+  classical
+  intro cL cH hc
+  let R : ParamReq5 := {
+    Kcap := fun _ => 0
+    Kpp := fun _ => 0
+    Kh := fun x => x.1 1 + x.2.2.2.1 + 1
+    K1 := fun _ => 0
+    K2 := fun _ => 0
+    KD := fun _ => 0
+    Ks := fun _ => 0
+    KB := fun x =>
+      let pre15 : Pre15 := x.1.1.1.1
+      let pre0 : Pre05 := pre15.1
+      let ν : ℝ := pre0.2.2.2.2.1
+      let q₀ : ℝ := pre0.2.2.2.2.2.2.2
+      let Kpp : ℝ := pre15.2.2.1
+      let Kh : ℝ := pre15.2.2.2.1
+      let eta : ℝ := pre15.2.2.2.2
+      let K₁ : ℝ := x.1.1.1.2
+      let C : ℝ := Kh * q₀ + q₀ / eta + q₀ / K₁ + 10
+      (q₀ + (Real.log 2 + ν * |Real.log (q₀ * K')| + C) / Kpp) / ν
+    alpha := fun _ => 1 / 50
+    alpha_pos := fun _ => by norm_num
+  }
+  refine ⟨R, ?_⟩
+  intro p hR
+  rcases hR with ⟨_, _, hKh, _, _, _, _, hKB, _⟩
+  let C : ℝ := p.Kh * p.q0 + p.q0 / p.eta + p.q0 / p.K1 + 10
+  have hKhGap : p.a 1 + p.delta + 1 ≤ p.Kh := by
+    simpa [R, Params5.pre0] using hKh
+  have hKBReq :
+      (p.q0 + (Real.log 2 + p.nu0 * |Real.log ((p.q0 : ℝ) * K')| + C) / p.Kpp) / p.nu0 ≤ p.KB := by
+    simpa [R, C, Params5.pre5, Params5.pre4, Params5.pre3, Params5.pre2,
+      Params5.pre1, Params5.pre0] using hKB
   sorry
 
 /-- SUB-LEMMA J5 (05:838–846): `n` disjoint failures at one star read disjoint independent arrays;

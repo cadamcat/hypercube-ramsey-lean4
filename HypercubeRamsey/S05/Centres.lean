@@ -6,6 +6,7 @@ import HypercubeRamsey.S05.Centres_sol_s05_centres_records
 import HypercubeRamsey.S05.Centres_sol_s05_centres_height
 import HypercubeRamsey.S05.Centres_sol_s05_centres_low
 import HypercubeRamsey.S05.Centres_sol_s05_centres_counts
+import HypercubeRamsey.S05.Centres_sol_s05_k1
 
 /-!
 # D5.6–D5.8, L5.1j, L5.1g/k rows, L5.1l(3): centers, height choices and the odd rows

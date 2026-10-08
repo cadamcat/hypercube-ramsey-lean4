@@ -1,4 +1,5 @@
 import HypercubeRamsey.S18.Nodes_sol_s18_3e
+import HypercubeRamsey.S18.LeafForcing_q_s18_cylf
 
 namespace HypercubeRamsey.S18.LeafForcing
 open Classical
@@ -28,7 +29,7 @@ theorem cylinder_forcing (D : S18.LateData hPT) (R : Finset D.geom.Cell)
             D.geom.cellPatch C' = D.geom.cellPatch C →
               (x.1 C s).1 ≠ (target C' s').1) →
           y.1 C s = x.1 C s := by
-  sorry
+  exact Lane_q_s18_cylf.cylinder_forcing_proof D R target ht event hlocal A hA hpos
 
 private theorem sigma_bin_eq {i j : Fin PT.tiling.m}
     (b : Bin PT.tiling i) (c : Bin PT.tiling j)

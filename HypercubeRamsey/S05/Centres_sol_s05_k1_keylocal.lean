@@ -9,6 +9,12 @@ open scoped BigOperators
 noncomputable section
 set_option maxHeartbeats 800000
 
+/-- `Finset.mem_of_mem_filter` for any decidability instance of the filter predicate; the
+instance is read off the hypothesis instead of being synthesized. -/
+theorem mem_of_mem_filter_any {α : Type*} {p : α → Prop} {inst : DecidablePred p} {s : Finset α}
+    {x : α} (h : x ∈ @Finset.filter α p inst s) : x ∈ s :=
+  @Finset.mem_of_mem_filter α p inst s x h
+
 section Tables
 variable {Target Data Ω : Type*} [Fintype Target] [Fintype Data] [Fintype Ω]
 variable (T U : PresentationTable (Target := Target) (Data := Data) (Ω := Ω))
@@ -144,10 +150,10 @@ theorem observation_history_congr (H H' : X.KeyHist) (r : X.RecordOn Id) (a : X.
       simpa only [he c hc', hf c hc'] using hh.1 c hc' ht
   have hl (θ) : X.obsLikOn H r a θ none = X.obsLikOn H' r a θ none := by
     unfold Setup5.obsLikOn
-    rw [Finset.prod_filter]
     apply Finset.prod_congr rfl
     intro c hc'
-    rw [hw θ c hc', hd c hc']
+    have hc'' := mem_of_mem_filter_any hc'
+    rw [hw θ c hc'', hd c hc'']
   have hm : X.step3MassOn H r a none = X.step3MassOn H' r a none := by
     unfold Setup5.step3MassOn
     rw [hb]
@@ -189,7 +195,6 @@ theorem keyAt_low_sign {m J : ℕ} (i : CoarseKey5 n) (t : CubeVertex m) (j : �
   split_ifs at hk with hj
   · have he := Sum.inl.inj hk
     exact (congrArg (fun k : CoarseKey5 n × CubeVertex m × Fin (J + 1) => k.2.1) he).symm
-  · cases hk
 
 theorem type_low_key_distance (x : CubeVertex n) (k : X.LowIdx)
     (hk : Sum.inl k ∈ X.g.typeKeys (X.p.J n) x) :

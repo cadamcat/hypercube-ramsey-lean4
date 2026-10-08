@@ -1,5 +1,6 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
 import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d7
+import HypercubeRamsey.S10.Split_opus_s10_d7a
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56
 import HypercubeRamsey.S10.Split_opus_s10_d6
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d8_locality
@@ -4522,7 +4523,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
       2 ^ n ≤ N → N ≤ n * 2 ^ n → ∀ (t : Slice n δ → M.I) a,
       refFail M t σ a ≤ Real.exp (-(1 / 200 : ℝ) * aG n δ * kT n δ * n) := by
-  classical
   obtain ⟨n6, h6⟩ := d6_likelihood_comparison η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
   have hδbound : δ < (1 : ℝ) / 2000 := by
     have hmin : min (min η₀ ζ) 1 ≤ 1 := min_le_right _ _
@@ -4664,7 +4664,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (L : Finset (ID n δ)) (u : GData q) :
       deletionRef M t h a q.1 L c (liftGroup q u) ≤
         (groupDeletionLaw h q c L).w u := by
-    classical
     let Fminus : Finset (Fin N) := Finset.univ.filter fun y =>
       ∀ c' ∈ L, c' ≠ c → ∀ i, Hits E G (h.tup c' i) y
     let ρ := maskedPrior M (t q.1.1) (h.mask q.1)
@@ -4721,8 +4720,11 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
         apply Finset.sum_congr rfl
         intro j hj
         rw [hJweight j, hlabelsWeight j]
+      have hdef : groupDeletionLaw h q c L = FinProb.map (FinProb.bind J labels) Prod.snd :=
+        dif_pos hA
       have hQw : (groupDeletionLaw h q c L).w u = ∑ j, J.w j * (labels j).w u := by
-        simpa [groupDeletionLaw, Fminus, ρ, D, A, hA] using hmap
+        rw [hdef]
+        convert hmap
       rw [heq, hQw]
     · have hAzero : A = 0 := le_antisymm (le_of_not_gt hA) hAnonneg
       have hzero : deletionRef M t h a q.1 L c (liftGroup q u) = 0 := by
@@ -4738,7 +4740,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (u : GData q) :
       groupRef M t h a q.1 c (liftGroup q u) ≤
         (groupReferenceLaw h c q).w u := by
-    classical
     let Ls := (lists h q.1).filter (fun L => c ∈ L)
     by_cases hLs : Ls.Nonempty
     · have hsum :
@@ -4770,7 +4771,7 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
             (FinProb.map
               (FinProb.bind (FinProb.uniform Ls hLs)
                 (fun L => groupDeletionLaw h q c L)) Prod.snd).w u
-          exact hbind.symm
+          convert hbind.symm
     · have hLsEmpty : Ls = ∅ := Finset.not_nonempty_iff_eq_empty.mp hLs
       have hRefZero : groupRef M t h a q.1 c (liftGroup q u) = 0 := by
         simp [groupRef, Ls, hLsEmpty]
@@ -4779,7 +4780,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
   have hdeletionRefNonneg (h : History n N δ) (q : Site n δ)
       (L : Finset (ID n δ)) (c : ID n δ) (ω : OddRole n → Fin N) :
       0 ≤ deletionRef M t h a q L c ω := by
-    classical
     unfold deletionRef
     apply Finset.sum_nonneg
     intro j hj
@@ -4868,7 +4868,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
         (if predMass M t h a c (liftStar w) = 0 ∨
             predMass M t h a c (liftStar w) < ε * refQ M t h a c (liftStar w)
           then predMass M t h a c (liftStar w) else 0) ≤ ε := by
-    classical
     let π : FinProb (Fin k → Fin N) := tuplePrior M t c
     let F : (Fin k → Fin N) → StarData → ℝ := fun w z =>
       subLik M t h a c w (liftStar z)
@@ -4925,7 +4924,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (hmass : 0 < predMass M t h a c ω)
       (hpass : ε * refQ M t h a c ω ≤ predMass M t h a c ω) :
       0 < lightMass M t h a c ω := by
-    classical
     let π : FinProb (Fin k → Fin N) := tuplePrior M t c
     let P : FinProb (Fin k → Fin N) := {
       w := fun w => posterior M t h a c ω w
@@ -5185,11 +5183,14 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
     have hratioB : 0 ≤ (B.card : ℝ) / (N : ℝ) :=
       div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
     have hexpAll : Sexp - Bexp * (k : ℝ) < 0 := by
-      have hwidth := hsc.2.1
-      dsimp [a0, aG] at ⊢
-      dsimp [Sexp, Bexp]
-      nlinarith [mul_lt_mul_of_pos_right hwidth (Nat.cast_pos.mpr hkpos), haPos,
-        (show 0 < (n : ℝ) by exact_mod_cast (show 0 < n by omega))]
+      have hwidth : 200 * (n : ℝ) ^ δ < a0 * n := hsc.2.1
+      have hkR : (0 : ℝ) < k := Nat.cast_pos.mpr hkpos
+      have hnR : (0 : ℝ) < n := by exact_mod_cast (show 0 < n by omega)
+      have hX : 0 < a0 * n * k := mul_pos (mul_pos haPos hnR) hkR
+      have hY := mul_lt_mul_of_pos_right hwidth hkR
+      show (Real.log 2 - (5 / 100 : ℝ) * a0) * (k : ℝ) * n + (k : ℝ) * (n : ℝ) ^ δ -
+          (Real.log 2 - (2 / 100 : ℝ) * a0) * n * (k : ℝ) < 0
+      nlinarith [hY, hX]
     have hAllUpper : ∑ w ∈ S, P.w w < 1 := by
       calc
         ∑ w ∈ S, P.w w ≤ ((B.card : ℝ) / (N : ℝ)) ^ k * Real.exp Sexp := by
@@ -5369,8 +5370,16 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (ω : OddRole n → Fin N) :
       deletionRef M t (History.setTuple h c w₀) a q L c ω =
         deletionRef M t h a q L c ω := by
+    have hF : (Finset.univ.filter fun y => ∀ c' ∈ L, c' ≠ c → ∀ i,
+          Hits E G ((History.setTuple h c w₀).tup c' i) y) =
+        Finset.univ.filter fun y => ∀ c' ∈ L, c' ≠ c → ∀ i, Hits E G (h.tup c' i) y := by
+      apply Finset.filter_congr
+      intro y _
+      refine forall_congr' fun c' => forall_congr' fun _ => forall_congr' fun hne => ?_
+      rw [show (History.setTuple h c w₀).tup c' = h.tup c' from Function.update_of_ne hne _ _]
     unfold deletionRef
-    simp [History.setTuple, History.tup, Function.update_apply]
+    rw [hF]
+    rfl
   have hrefQTupleInvariant (h : History n N δ) (c : ID n δ)
       (w₀ : Fin k → Fin N) (ω : OddRole n → Fin N) :
       refQ M t (History.setTuple h c w₀) a c ω = refQ M t h a c ω := by
@@ -5389,184 +5398,53 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (w₀ : Fin k → Fin N) (z : StarData) :
       lowStar (History.setTuple h c w₀) c z = lowStar h c z := by
     simp [lowStar, hpredMassTupleInvariant, hrefQTupleInvariant]
-  let groupRoleSet : Site n δ → Finset (OddRole n) := fun q =>
-    (starOf a).filter (fun b => groupOf δ b = q)
-  let starLabelLaw (h : History n N δ) (C : Site n δ → ClIdx M) : FinProb StarData :=
-    FinProb.pi (fun b : {b : OddRole n // b ∈ starOf a} =>
-      labLaw M t h b.1 (C (groupOf δ b.1)))
-  let groupFactor (h : History n N δ) (z : StarData) (q : Site n δ)
-      (j : ClIdx M) : ℝ :=
-    ∏ b ∈ groupRoleSet q, (labLaw M t h b j).w (liftStar z b)
-  let clusterFactor (h : History n N δ) (z : StarData)
-      (q : Site n δ) (j : ClIdx M) : ℝ :=
-    if q ∈ incGroups a then groupFactor h z q j else 1
-  letI : DecidableEq (Site n δ) := instDecidableEqProd
-  have hgroupRole_product (h : History n N δ) (z : StarData)
-      (C : Site n δ → ClIdx M) :
-      ∏ b : {b : OddRole n // b ∈ starOf a},
-          (labLaw M t h b.1 (C (groupOf δ b.1))).w (liftStar z b.1) =
-        ∏ q ∈ incGroups a, groupFactor h z q (C q) := by
-    let f : OddRole n → ℝ := fun b =>
-      (labLaw M t h b (C (groupOf δ b))).w (liftStar z b)
-    have hset : (starOf a).filter (fun b => groupOf δ b ∈ incGroups a) = starOf a := by
-      ext b
-      simp only [Finset.mem_filter]
-      constructor
-      · exact And.left
-      · intro hb
-        exact ⟨hb, hgroupOf_mem b hb⟩
-    have hattach :
-        (∏ b : {b : OddRole n // b ∈ starOf a}, f b.1) =
-          ∏ b ∈ starOf a, f b := by
-      rw [Finset.univ_eq_attach]
-      simpa [f] using Finset.prod_attach (starOf a) f
-    calc
-      ∏ b : {b : OddRole n // b ∈ starOf a},
-          (labLaw M t h b.1 (C (groupOf δ b.1))).w (liftStar z b.1) =
-        ∏ b ∈ starOf a, f b := by simpa [f] using hattach
-      _ = ∏ b ∈ (starOf a).filter (fun b => groupOf δ b ∈ incGroups a), f b := by
-        rw [hset]
-      _ = ∏ q ∈ incGroups a,
-          ∏ b ∈ (starOf a).filter (fun b => groupOf δ b = q), f b :=
-        (Finset.prod_fiberwise_eq_prod_filter (starOf a) (incGroups a)
-          (groupOf δ) f).symm
-      _ = ∏ q ∈ incGroups a, groupFactor h z q (C q) := by
-        apply Finset.prod_congr rfl
-        intro q hq
-        unfold groupFactor groupRoleSet
-        apply Finset.prod_congr rfl
-        intro b hb
-        have hbq : groupOf δ b = q := (Finset.mem_filter.mp hb).2
-        simp [f, hbq]
   have hstarLikCluster (h : History n N δ) (z : StarData) :
       starLik M t h a (liftStar z) =
-        (FinProb.pi (fun q : Site n δ => clusterLaw M t h q)).expect
-          (fun C => ∏ b : {b : OddRole n // b ∈ starOf a},
-            (labLaw M t h b.1 (C (groupOf δ b.1))).w (liftStar z b.1)) := by
-    let f : Site n δ → ClIdx M → ℝ := fun q j => clusterFactor h z q j
-    have hIncFilter :
-        (Finset.univ : Finset (Site n δ)).filter (fun q => q ∈ incGroups a) =
-          incGroups a := by
-      ext q
-      simp
-    have hfactor (C : Site n δ → ClIdx M) :
-      (∏ b : {b : OddRole n // b ∈ starOf a},
-          (labLaw M t h b.1 (C (groupOf δ b.1))).w (liftStar z b.1)) =
-            ∏ q : Site n δ, f q (C q) := by
-      rw [hgroupRole_product]
-      calc
-        ∏ q ∈ incGroups a, groupFactor h z q (C q) =
-            ∏ q : Site n δ,
-              if q ∈ incGroups a then groupFactor h z q (C q) else 1 := by
-          rw [← hIncFilter, Finset.prod_filter]
-        _ = ∏ q : Site n δ, f q (C q) := by simp [f, clusterFactor]
-    have hexpect := Lane_q_s10_d7.pi_expect_prod_q_s10_d7
-      (fun q : Site n δ => clusterLaw M t h q) f
-    unfold starLik
-    calc
-      (∏ q ∈ incGroups a,
-          (clusterLaw M t h q).expect (fun j => groupFactor h z q j)) =
-        ∏ q : Site n δ, (clusterLaw M t h q).expect (f q) := by
-          calc
-            ∏ q ∈ incGroups a,
-                (clusterLaw M t h q).expect (fun j => groupFactor h z q j) =
-              ∏ q : Site n δ, if q ∈ incGroups a then
-                (clusterLaw M t h q).expect (fun j => groupFactor h z q j) else 1 := by
-                  rw [← hIncFilter, Finset.prod_filter]
-            _ = ∏ q : Site n δ, (clusterLaw M t h q).expect (f q) := by
-              apply Finset.prod_congr rfl
-              intro q hq
-              by_cases hqi : q ∈ incGroups a
-              · simp [f, clusterFactor, hqi]
-              · simp [f, clusterFactor, hqi, FinProb.expect_const]
-      _ = (FinProb.pi (fun q : Site n δ => clusterLaw M t h q)).expect
-          (fun C => ∏ q : Site n δ, f q (C q)) := hexpect.symm
-      _ = (FinProb.pi (fun q : Site n δ => clusterLaw M t h q)).expect
-          (fun C => ∏ b : {b : OddRole n // b ∈ starOf a},
-            (labLaw M t h b.1 (C (groupOf δ b.1))).w (liftStar z b.1)) := by
-          apply Finset.sum_congr rfl
-          intro C hC
-          rw [hfactor C]
-  have hprEq {α : Type*} [Fintype α] (P : FinProb α) (A : α → Prop) :
-      P.pr A = P.expect (fun x => if A x then (1 : ℝ) else 0) := by
-    simp [FinProb.pr, FinProb.expect]
-  have hstarLabelPr (h : History n N δ) (C : Site n δ → ClIdx M)
-      (A : StarData → Prop) :
-      (starLabelLaw h C).pr (fun z => A z) =
-        (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b)))).pr
-          (fun ω => A (restrictStar ω)) := by
-    classical
-    let Pfull := fun b : OddRole n => labLaw M t h b (C (groupOf δ b))
-    let Pstar := fun b : {b : OddRole n // b ∈ starOf a} => Pfull b.1
-    let e := Equiv.piEquivPiSubtypeProd (fun b : OddRole n => b ∈ starOf a)
-      (fun _ : OddRole n => Fin N)
-    let outside : ∀ b : {b : OddRole n // b ∉ starOf a}, Fin N := fun _ => defaultLabel
-    let F : (OddRole n → Fin N) → ℝ := fun ω =>
-      if A (restrictStar ω) then 1 else 0
-    have hdep : FinProb.DependsOn F (starOf a) := by
-      intro ω ω' hag
-      have hrestrict : restrictStar ω = restrictStar ω' := by
-        funext b
-        exact hag b.1 b.2
-      simp [F, hrestrict]
-    have hExt (z : StarData) : restrictStar (e.symm (z, outside)) = z := by
-      funext b
-      simp [restrictStar, e, outside, Equiv.piEquivPiSubtypeProd]
-    have hexpect := FinProb.pi_expect_depends Pfull (starOf a) F
-      (fun _ : OddRole n => defaultLabel) hdep
-    have hfullToStar :
-        (FinProb.pi Pfull).pr (fun ω => A (restrictStar ω)) =
-          (FinProb.pi Pstar).pr A := by
-      calc
-        (FinProb.pi Pfull).pr (fun ω => A (restrictStar ω)) =
-            (FinProb.pi Pfull).expect F := hprEq _ _
-        _ = (FinProb.pi Pstar).expect
-            (fun z => F (e.symm (z, outside))) := by
-          exact hexpect
-        _ = (FinProb.pi Pstar).expect (fun z => if A z then (1 : ℝ) else 0) := by
-          unfold HypercubeRamsey.FinProb.expect
-          apply Finset.sum_congr rfl
-          intro z hz
-          simp [F, hExt]
-        _ = (FinProb.pi Pstar).pr A := (hprEq _ _).symm
-    simpa [starLabelLaw, Pfull, Pstar] using hfullToStar.symm
+        (FinProb.pi (clusterLaw M t h)).expect
+          (fun C => ∏ b ∈ starOf a, (labLaw M t h b (C (groupOf δ b))).w (liftStar z b)) :=
+    (Lane_opus_s10_d7a.pi_expect_prod_fiber (clusterLaw M t h) (starOf a) (groupOf δ)
+      (incGroups a) hgroupOf_mem
+      (fun b c => (labLaw M t h b c).w (liftStar z b))).symm
   have hstarMarginal (h : History n N δ) (A : StarData → Prop) :
       ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-        (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b))).pr
-          (fun ω => A (restrictStar ω))) =
+        (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b)))).pr
+          (fun ω => A (restrictStar ω)) =
         ∑ z : StarData, starLik M t h a (liftStar z) * (if A z then 1 else 0) := by
-    classical
-    have hstarSum (z : StarData) :
-        ∑ C : Site n δ → ClIdx M,
-            (FinProb.pi (clusterLaw M t h)).w C * (starLabelLaw h C).w z =
-          starLik M t h a (liftStar z) := by
-      have hh := hstarLikCluster h z
-      simpa [starLabelLaw, HypercubeRamsey.FinProb.expect,
-        HypercubeRamsey.FinProb.pi] using hh
+    have hpr (C : Site n δ → ClIdx M) :
+        (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b)))).pr
+          (fun ω => A (restrictStar ω)) =
+        ∑ z : StarData, (if A z then (1 : ℝ) else 0) *
+          ∏ b ∈ starOf a, (labLaw M t h b (C (groupOf δ b))).w (liftStar z b) := by
+      have h1 := Lane_opus_s10_d7a.pi_pr_restrict
+        (fun b : OddRole n => labLaw M t h b (C (groupOf δ b))) (starOf a)
+        (fun _ => defaultLabel) A
+      refine h1.trans ?_
+      rw [Lane_opus_s10_d7a.pr_eq_expect_ite]
+      unfold FinProb.expect
+      refine Finset.sum_congr rfl fun z _ => ?_
+      rw [mul_comm]
+      congr 1
+      show (∏ b : {b : OddRole n // b ∈ starOf a},
+          (labLaw M t h b.1 (C (groupOf δ b.1))).w (z b)) = _
+      rw [← Finset.prod_coe_sort (starOf a)]
+      refine Finset.prod_congr rfl fun b _ => ?_
+      simp only [liftStar, dif_pos b.2]
     calc
-      ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-            (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b))).pr
-              (fun ω => A (restrictStar ω))) =
-            ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-          (starLabelLaw h C).pr A := by
-            apply Finset.sum_congr rfl
-            intro C hC
-            rw [← hstarLabelPr h C A]
       _ = ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-          ∑ z : StarData, if A z then (starLabelLaw h C).w z else 0 := by
-            apply Finset.sum_congr rfl
-            intro C hC
-            simp [HypercubeRamsey.FinProb.pr]
-      _ = ∑ z : StarData, ∑ C : Site n δ → ClIdx M,
-          (FinProb.pi (clusterLaw M t h)).w C *
-            (if A z then (starLabelLaw h C).w z else 0) := by
-            rw [Finset.sum_comm]
+            ∑ z : StarData, (if A z then (1 : ℝ) else 0) *
+              ∏ b ∈ starOf a, (labLaw M t h b (C (groupOf δ b))).w (liftStar z b) :=
+        Finset.sum_congr rfl fun C _ => by rw [hpr C]
+      _ = ∑ z : StarData, (if A z then (1 : ℝ) else 0) *
+            (FinProb.pi (clusterLaw M t h)).expect (fun C =>
+              ∏ b ∈ starOf a, (labLaw M t h b (C (groupOf δ b))).w (liftStar z b)) := by
+        unfold FinProb.expect
+        simp only [Finset.mul_sum]
+        rw [Finset.sum_comm]
+        refine Finset.sum_congr rfl fun z _ => Finset.sum_congr rfl fun C _ => ?_
+        ring
       _ = ∑ z : StarData, starLik M t h a (liftStar z) * (if A z then 1 else 0) := by
-            apply Finset.sum_congr rfl
-            intro z hz
-            by_cases hA : A z
-            · simp [hA, ← Finset.mul_sum, hstarSum z]
-            · simp [hA]
+        refine Finset.sum_congr rfl fun z _ => ?_
+        rw [hstarLikCluster h z, mul_comm]
   have hIsGroup_of_inc (q : Site n δ) (hq : q ∈ incGroups a) : IsGroup δ q := by
     change (p10_1kOddGroupRoles (mS_le n δ) q).Nonempty
     obtain ⟨b, hadj, hbq⟩ := (p10_1k_mem_incidentOddGroups (mS_le n δ) a q).mp hq
@@ -5622,7 +5500,7 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
         unfold predMass HypercubeRamsey.FinProb.expect
         apply Finset.sum_nonneg
         intro w hw
-        exact mul_nonneg (tuplePrior M t c).nonneg w (hsubLik_nonneg h c w ω)
+        exact mul_nonneg ((tuplePrior M t c).nonneg w) (hsubLik_nonneg h c w ω)
       have hmass : 0 < predMass M t h a c ω := lt_of_le_of_ne hmassNN (Ne.symm hz)
       by_cases hpass : ε * refQ M t h a c ω ≤ predMass M t h a c ω
       · have hlight := hlightPos h c ω hmass hpass
@@ -5633,8 +5511,8 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       · exact Or.inr (lt_of_not_ge hpass)
   let perCandidate (h : History n N δ) (c : ID n δ) : ℝ :=
     ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-      (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b))).pr
-        (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω)))
+      (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b)))).pr
+        (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω))
   have hsetTupleSelf (h : History n N δ) (c : ID n δ) :
       History.setTuple h c (History.tup h c) = h := by
     simp [History.setTuple, History.pos, History.tup, History.mask, History.act,
@@ -5643,7 +5521,6 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       perCandidate h c =
         ∑ z : StarData, subLik M t h a c (History.tup h c) (liftStar z) *
           (if lowStar h c z then 1 else 0) := by
-    classical
     by_cases hg : gate M t h a c
     · have hstar := hstarMarginal h (lowStar h c)
       have hsub (z : StarData) :
@@ -5653,18 +5530,18 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       calc
         perCandidate h c =
             ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-              (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b))).pr
-                (fun ω => lowStar h c (restrictStar ω))) := by
+              (FinProb.pi (fun b : OddRole n => labLaw M t h b (C (groupOf δ b)))).pr
+                (fun ω => lowStar h c (restrictStar ω)) := by
           simp [perCandidate, hg]
         _ = ∑ z : StarData, starLik M t h a (liftStar z) *
-              (if lowStar h c z then 1 else 0) := hstar
+              (if lowStar h c z then 1 else 0) := by convert hstar
         _ = ∑ z : StarData, subLik M t h a c (History.tup h c) (liftStar z) *
               (if lowStar h c z then 1 else 0) := by
           apply Finset.sum_congr rfl
           intro z hz
           rw [hsub z]
     · unfold perCandidate
-      simp [hg, subLik, hsetTupleSelf h c]
+      simp [hg, subLik, hsetTupleSelf h c, FinProb.pr]
   let PositionLaw : FinProb (ID n δ → Bool) :=
     p10_1kGlobalPositionLaw n (mS n δ) δ
   let TupleKernel : ID n δ → FinProb (Fin k → Fin N) := fun c => tuplePrior M t c
@@ -5690,7 +5567,7 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       TupleLaw.expect g =
         (RestLaw c).expect (fun r =>
           (tuplePrior M t c).expect (fun w => g (restoreTuple c r w))) := by
-    simpa [TupleLaw, RestLaw, TupleKernel, restoreTuple] using
+    simpa [TupleLaw, RestLaw, TupleKernel, restoreTuple, FinProb.expect] using
       Lane_q_s10_d7.pi_expect_split_at_q_s10_d7 TupleKernel c g
   have hHistoryExpect (F : History n N δ → ℝ) :
       (historyLaw M σ t).expect F =
@@ -5699,7 +5576,8 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
             TieLaw.expect (fun tie => F ((((pos, W), mask), act), tie)))))) := by
     unfold historyLaw
     rw [hTupleLaw]
-    simp only [Lane_q_s10_d7.finprob_prod_expect_q_s10_d7]
+    simp only [Lane_opus_s10_d7a.prod_expect_eq]
+    rfl
   have hMoveTuple (c : ID n δ)
       (g : (Fin k → Fin N) → (Site n δ → Finset (Fin N)) →
         (ID n δ → Bool) → (ID n δ → (hp n δ).TiePerm) → ℝ) :
@@ -5759,7 +5637,9 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       (tie : ID n δ → (hp n δ).TiePerm) (w : Fin k → Fin N) :
       composeHistory c pos r mask act tie w =
         History.setTuple (composeHistory c pos r mask act tie defaultTuple) c w := by
-    simp [composeHistory, History.setTuple, History.tup, hrestoreUpdate]
+    show ((((pos, restoreTuple c r w), mask), act), tie) =
+      ((((pos, Function.update (restoreTuple c r defaultTuple) c w), mask), act), tie)
+    rw [hrestoreUpdate c r w]
   have hperCandidateBase (c : ID n δ) (pos : ID n δ → Bool) (r : RestTuple c)
       (mask : Site n δ → Finset (Fin N)) (act : ID n δ → Bool)
       (tie : ID n δ → (hp n δ).TiePerm) (w : Fin k → Fin N) :
@@ -5779,44 +5659,39 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
     rw [htup, hcurEq]
     have htupSet : History.tup (History.setTuple hbase c w) c = w := by
       simp [History.tup, History.setTuple]
-    rw [htupSet]
-    apply Finset.sum_congr rfl
-    intro z hz
-    rw [hsubLikTupleInvariant hbase c w w (liftStar z),
-      hlowTupleInvariant hbase c w z]
+    refine Finset.sum_congr rfl fun z _ => ?_
+    have e1 := hsubLikTupleInvariant hbase c w w (liftStar z)
+    have e2 := hlowTupleInvariant hbase c w z
+    by_cases h1 : lowStar hbase c z
+    · have h2 : lowStar (History.setTuple hbase c w) c z := e2.mpr h1
+      rw [if_pos h2, if_pos h1, e1]
+    · have h2 : ¬ lowStar (History.setTuple hbase c w) c z := fun h => h1 (e2.mp h)
+      rw [if_neg h2, if_neg h1, e1]
   have htupleCandidateBound (c : ID n δ) (pos : ID n δ → Bool)
       (r : RestTuple c) (mask : Site n δ → Finset (Fin N))
       (act : ID n δ → Bool) (tie : ID n δ → (hp n δ).TiePerm) :
       (tuplePrior M t c).expect (fun w =>
         perCandidate (composeHistory c pos r mask act tie w) c) ≤ ε := by
-    let hbase := composeHistory c pos r mask act tie defaultTuple
+    obtain ⟨hb, hhb⟩ : ∃ hb, hb = composeHistory c pos r mask act tie defaultTuple :=
+      ⟨_, rfl⟩
     have hsumEq : (tuplePrior M t c).expect (fun w =>
         perCandidate (composeHistory c pos r mask act tie w) c) =
         ∑ z : StarData,
-          (if lowStar hbase c z then 1 else 0) *
-            predMass M t hbase a c (liftStar z) := by
-      unfold HypercubeRamsey.FinProb.expect
-      simp_rw [hperCandidateBase]
+          (if lowStar hb c z then predMass M t hb a c (liftStar z) else 0) := by
+      unfold FinProb.expect
+      simp_rw [hperCandidateBase, ← hhb, Finset.mul_sum]
       rw [Finset.sum_comm]
-      apply Finset.sum_congr rfl
-      intro z hz
-      by_cases hlow : lowStar hbase c z
-      · simp [hbase, hlow, predMass, HypercubeRamsey.FinProb.expect]
-      · simp [hbase, hlow, predMass, HypercubeRamsey.FinProb.expect]
-    calc
-      (tuplePrior M t c).expect (fun w =>
-          perCandidate (composeHistory c pos r mask act tie w) c) =
-        ∑ z : StarData,
-          (if lowStar hbase c z then 1 else 0) *
-            predMass M t hbase a c (liftStar z) := hsumEq
-      _ = ∑ z : StarData,
-          (if lowStar hbase c z then
-            predMass M t hbase a c (liftStar z) else 0) := by
-          apply Finset.sum_congr rfl
-          intro z hz
-          by_cases hlow : lowStar hbase c z <;> simp [hlow, mul_comm]
-      _ ≤ ε := by simpa [lowStar] using hlowBound hbase c
-  have expectBound {β : Type*} [Fintype β] (P : FinProb β) (f : β → ℝ)
+      refine Finset.sum_congr rfl fun z _ => ?_
+      by_cases hl : lowStar hb c z
+      · simp only [if_pos hl, mul_one]
+        unfold predMass FinProb.expect
+        rfl
+      · simp only [if_neg hl, mul_zero, Finset.sum_const_zero]
+    rw [hsumEq]
+    first
+      | exact hlowBound hb c
+      | simpa [lowStar] using hlowBound hb c
+  have expectBound {β : Type} [Fintype β] (P : FinProb β) (f : β → ℝ)
       (hf : ∀ x, f x ≤ ε) : P.expect f ≤ ε := by
     calc
       P.expect f ≤ P.expect (fun _ => ε) :=
@@ -5847,48 +5722,8 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
   have hprobUnion (P : FinProb (OddRole n → Fin N)) (h : History n N δ)
       (hv : valid M t h) :
       P.pr (fun ω => ¬ predictive M t a h ω) ≤
-        ∑ c : ID n δ, P.pr (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω)) := by
-    classical
-    have hcount (ω : OddRole n → Fin N) :
-        (if ¬ predictive M t a h ω then (1 : ℝ) else 0) ≤
-          ∑ c : ID n δ, if gate M t h a c ∧ lowStar h c (restrictStar ω) then 1 else 0 := by
-      by_cases hbad : ¬ predictive M t a h ω
-      · obtain ⟨c, hc⟩ := hfailCandidates h hv ω hbad
-        have hsingle :
-            (if gate M t h a c ∧ lowStar h c (restrictStar ω) then (1 : ℝ) else 0) ≤
-              ∑ c : ID n δ,
-                if gate M t h a c ∧ lowStar h c (restrictStar ω) then 1 else 0 :=
-          Finset.single_le_sum
-            (fun c' hc' => by split_ifs <;> norm_num)
-            (Finset.mem_univ c)
-        simp [hbad, hc] at hsingle ⊢
-        exact hsingle
-      · simp [hbad]
-        apply Finset.sum_nonneg
-        intro c hc
-        split_ifs <;> norm_num
-    unfold HypercubeRamsey.FinProb.pr
-    calc
-      (∑ ω, if ¬ predictive M t a h ω then P.w ω else 0) ≤
-          ∑ ω, P.w ω *
-            ∑ c : ID n δ,
-              if gate M t h a c ∧ lowStar h c (restrictStar ω) then 1 else 0 := by
-        apply Finset.sum_le_sum
-        intro ω hω
-        by_cases hbad : ¬ predictive M t a h ω
-        · simp [hbad]
-          exact mul_le_mul_of_nonneg_left (hcount ω) (P.nonneg ω)
-        · simp [hbad]
-          apply mul_nonneg (P.nonneg ω)
-          apply Finset.sum_nonneg
-          intro c hc
-          split_ifs <;> norm_num
-      _ = ∑ c : ID n δ, P.pr (fun ω =>
-            gate M t h a c ∧ lowStar h c (restrictStar ω)) := by
-        rw [Finset.mul_sum, Finset.sum_comm]
-        apply Finset.sum_congr rfl
-        intro c hc
-        simp [HypercubeRamsey.FinProb.pr, mul_comm]
+        ∑ c : ID n δ, P.pr (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω)) :=
+    Lane_opus_s10_d7a.pr_le_sum_pr P _ _ (fun ω hbad => hfailCandidates h hv ω hbad)
   have hperNonneg (h : History n N δ) (c : ID n δ) : 0 ≤ perCandidate h c := by
     unfold perCandidate
     apply Finset.sum_nonneg
@@ -5898,43 +5733,22 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
   have hperHistory (h : History n N δ) :
       (if valid M t h then
           ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-            (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b))).pr
-              (fun ω => ¬ predictive M t a h ω))
+            (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b)))).pr
+              (fun ω => ¬ predictive M t a h ω)
         else 0) ≤ ∑ c : ID n δ, perCandidate h c := by
     by_cases hv : valid M t h
-    · simp [hv]
-      have hP (C : Site n δ → ClIdx M) :=
-        hprobUnion (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b)))) h hv
+    · rw [if_pos hv]
       calc
-        ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-            (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b))).pr
-              (fun ω => ¬ predictive M t a h ω)) ≤
-          ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-            ∑ c : ID n δ,
-              (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b))).pr
-                (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω))) := by
-          apply Finset.sum_le_sum
-          intro C hC
-          exact mul_le_mul_of_nonneg_left (hP C)
+        _ ≤ ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
+            ∑ c : ID n δ, (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b)))).pr
+                (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω)) :=
+          Finset.sum_le_sum fun C _ => mul_le_mul_of_nonneg_left (hprobUnion _ h hv)
             ((FinProb.pi (clusterLaw M t h)).nonneg C)
-        _ = ∑ c : ID n δ,
-            ∑ C : Site n δ → ClIdx M, (FinProb.pi (clusterLaw M t h)).w C *
-              (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b))).pr
-                (fun ω => gate M t h a c ∧ lowStar h c (restrictStar ω)) := by
-          rw [Finset.sum_comm]
-          apply Finset.sum_congr rfl
-          intro c hc
-          apply Finset.sum_congr rfl
-          intro C hC
-          ring
         _ = ∑ c : ID n δ, perCandidate h c := by
-          apply Finset.sum_congr rfl
-          intro c hc
-          rfl
-    · simp [hv]
-      apply Finset.sum_nonneg
-      intro c hc
-      exact hperNonneg h c
+          simp only [Finset.mul_sum]
+          exact Finset.sum_comm
+    · rw [if_neg hv]
+      exact Finset.sum_nonneg fun c _ => hperNonneg h c
   have hrefFailCandidates :
       refFail M t σ a ≤ ∑ c : ID n δ,
         (historyLaw M σ t).expect (fun h => perCandidate h c) := by
@@ -5943,8 +5757,8 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
       ∑ h, (historyLaw M σ t).w h *
           (if valid M t h then ∑ C : Site n δ → ClIdx M,
             (FinProb.pi (clusterLaw M t h)).w C *
-              (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b))).pr
-                (fun ω => ¬ predictive M t a h ω))
+              (FinProb.pi (fun b => labLaw M t h b (C (groupOf δ b)))).pr
+                (fun ω => ¬ predictive M t a h ω)
           else 0) ≤
         ∑ h, (historyLaw M σ t).w h * ∑ c : ID n δ, perCandidate h c := by
           apply Finset.sum_le_sum
@@ -5953,7 +5767,8 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
             ((historyLaw M σ t).nonneg h)
       _ = ∑ c : ID n δ,
           ∑ h, (historyLaw M σ t).w h * perCandidate h c := by
-          rw [Finset.mul_sum, Finset.sum_comm]
+          simp only [Finset.mul_sum]
+          exact Finset.sum_comm
       _ = ∑ c : ID n δ,
           (historyLaw M σ t).expect (fun h => perCandidate h c) := by
           apply Finset.sum_congr rfl
@@ -5962,7 +5777,7 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
   have htotalFail : refFail M t σ a ≤ (Fintype.card (ID n δ) : ℝ) * ε := by
     calc
       refFail M t σ a ≤ ∑ c : ID n δ,
-          (historyLaw M σ t).expect (fun h => perCandidate h c) := hRefFailCandidates
+          (historyLaw M σ t).expect (fun h => perCandidate h c) := hrefFailCandidates
       _ ≤ ∑ _c : ID n δ, ε := by
           apply Finset.sum_le_sum
           intro c hc
@@ -5974,15 +5789,12 @@ theorem d7a_predictive_failure (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ 
     have h := Real.log_two_lt_d9
     linarith
   have hpow2exp : (2 : ℝ) ^ (2 * n) ≤ Real.exp (2 * (n : ℝ)) := by
-    have hpow : (2 : ℝ) ^ (2 * n) =
-        Real.exp ((2 * (n : ℝ)) * Real.log 2) := by
-      calc
-        (2 : ℝ) ^ (2 * n) = Real.exp (Real.log ((2 : ℝ) ^ (2 * n))) := by
-          rw [Real.exp_log (by positivity)]
-        _ = Real.exp ((2 * (n : ℝ)) * Real.log 2) := by rw [Real.log_pow]; ring_nf
+    have hcast : ((2 * n : ℕ) : ℝ) = 2 * (n : ℝ) := by norm_num
+    have hpow : (2 : ℝ) ^ (2 * n) = Real.exp ((2 * (n : ℝ)) * Real.log 2) := by
+      rw [← Real.exp_log (by positivity : (0 : ℝ) < 2 ^ (2 * n)), Real.log_pow, hcast]
     rw [hpow]
     exact Real.exp_le_exp.mpr
-      (mul_le_mul_of_nonneg_left hlog2le (by positivity))
+      (mul_le_of_le_one_right (by positivity) hlog2le)
   have hakBig : 10000 < a0 * (k : ℝ) := by
     simpa [a0, k, aG] using hsc.2.2.2.2
   have hfinal : (Fintype.card (ID n δ) : ℝ) * ε ≤

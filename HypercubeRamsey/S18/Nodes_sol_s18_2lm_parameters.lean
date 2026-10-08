@@ -50,7 +50,7 @@ theorem log_power_margin (T : Stage) (q : ℕ) (C b d : ℝ) (hb : 0 < b) (hd : 
   rw [he] at h
   exact h
 
-theorem valid_eventually (hκ : κ.Admissible) (T : Stage) : ∀ᶠ k in atTop, Valid κ T k := by
+theorem valid_eventually {κ : CConsts} (hκ : κ.Admissible) (T : Stage) : ∀ᶠ k in atTop, Valid κ T k := by
   let M := 8 * κ.A0 + 1
   let C := 1 + |κ.a|
   have hA : 0 ≤ κ.A0 := (show (0 : ℝ) ≤ 10 ^ 6 * (κ.R : ℝ) by positivity).trans hκ.A0_big

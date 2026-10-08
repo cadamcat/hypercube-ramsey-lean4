@@ -1,7 +1,7 @@
 import HypercubeRamsey.S03.Injection.Sampler
 import HypercubeRamsey.S03.Injection.Comparison_q_inj_comp
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000
 
 /-!
 # Lemma 3.9, the forcing comparison (TeX 03:695–734)

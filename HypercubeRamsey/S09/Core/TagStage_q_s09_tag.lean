@@ -8,7 +8,7 @@ namespace HypercubeRamsey.Lane_q_s09_tag
 
 open Classical Filter OAI.HypercubeRamsey
 open scoped BigOperators
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000
 
 private theorem finProb_ext_q_s09_tag {Ω : Type*} [Fintype Ω]
     {P Q : FinProb Ω} (h : ∀ ω, P.w ω = Q.w ω) : P = Q := by
@@ -1478,7 +1478,7 @@ theorem tagWidth_over_rpow_tendsto (P : Params9) (a : ℝ) (ha : 0 < a)
     ring
   exact hsum.congr' heq.symm
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem tag_first_width_budget (P : Params9) (hP : P.Valid) (hA : P.CoreAdmissible) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀,
       (n : ℝ) ^ (P.xS : ℝ) + (P.hPlus : ℝ) * Real.log (n : ℝ) + 1 + Real.log (n : ℝ) ≤

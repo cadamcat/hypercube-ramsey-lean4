@@ -1114,7 +1114,7 @@ private theorem clipped_endpoint_counts (S ℓ : ℕ) (hS : 100 ≤ S)
   · simpa [low, w, lo] using hlowLarge
   · simpa [high, w, lo, hi] using hhighLarge
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem tag_exists_bound (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
     (hγ : γ < 1) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, KeyFiber β γ n →
@@ -2356,6 +2356,888 @@ theorem pow_two_partition_mul (m n : ℕ) (hmn : m < n) :
   congr 1
   omega
 
+private theorem countP_ofFn_sum {α : Type*} {n : ℕ} (f : Fin n → α) (p : α → Bool) :
+    (List.ofFn f).countP p = ∑ i : Fin n, if p (f i) then 1 else 0 := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.ofFn_succ']
+    simp only [List.concat_eq_append, List.countP_append, List.countP_singleton]
+    rw [ih, Fin.sum_univ_castSucc]
+
+private theorem countP_ofFn_card {n : ℕ} (f : Fin n → ℕ) (c : ℕ) :
+    (List.ofFn f).countP (fun x => decide (x ≤ c)) =
+      (Finset.univ.filter fun i : Fin n => f i ≤ c).card := by
+  calc
+    (List.ofFn f).countP (fun x => decide (x ≤ c)) =
+        ∑ i : Fin n, if f i ≤ c then 1 else 0 := by
+          simpa using countP_ofFn_sum f (fun x => decide (x ≤ c))
+    _ = (Finset.univ.filter fun i : Fin n => f i ≤ c).card := by
+      rw [Finset.card_filter]
+
+private theorem mergeSortAt_mono {n : ℕ} (f g : Fin n → ℕ)
+    (hfg : ∀ i, f i ≤ g i) (k : Fin n) :
+    ((List.ofFn f).mergeSort (fun a b => decide (a ≤ b))).get
+        ⟨k.val, by simp⟩ ≤
+      ((List.ofFn g).mergeSort (fun a b => decide (a ≤ b))).get
+        ⟨k.val, by simp⟩ := by
+  classical
+  let Lf := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  let Lg := (List.ofFn g).mergeSort (fun a b => decide (a ≤ b))
+  have hlenf : Lf.length = n := by simp [Lf]
+  have hLeng : Lg.length = n := by simp [Lg]
+  let qf : Fin n → ℕ := fun i => Lf.get (Fin.cast hlenf.symm i)
+  let qg : Fin n → ℕ := fun i => Lg.get (Fin.cast hLeng.symm i)
+  have hqf : ∀ i : Fin n, qf i = Lf.get ⟨i.val, by simpa [Lf] using i.isLt⟩ := by
+    intro i
+    rfl
+  have hqg : ∀ i : Fin n, qg i = Lg.get ⟨i.val, by simpa [Lg] using i.isLt⟩ := by
+    intro i
+    rfl
+  have hmonf : Monotone qf := by
+    have hs : Lf.SortedLE := by simpa [Lf] using
+      (List.sortedLE_mergeSort (l := List.ofFn f))
+    intro i j hij
+    apply hs.monotone_get
+    simpa [qf, Fin.val_cast] using hij
+  have hmonG : Monotone qg := by
+    have hs : Lg.SortedLE := by simpa [Lg] using
+      (List.sortedLE_mergeSort (l := List.ofFn g))
+    intro i j hij
+    apply hs.monotone_get
+    simpa [qg, Fin.val_cast] using hij
+  have hOfFnF : List.ofFn qf = Lf := by
+    change List.ofFn (fun i : Fin n => Lf.get (Fin.cast hlenf.symm i)) = Lf
+    rw [← List.ofFn_congr hlenf (List.get Lf)]
+    exact List.ofFn_get Lf
+  have hOfFnG : List.ofFn qg = Lg := by
+    change List.ofFn (fun i : Fin n => Lg.get (Fin.cast hLeng.symm i)) = Lg
+    rw [← List.ofFn_congr hLeng (List.get Lg)]
+    exact List.ofFn_get Lg
+  by_contra hnot
+  have hgt : qg k < qf k := Nat.lt_of_not_ge (by simpa [qf, qg, Lf, Lg] using hnot)
+  let c := qg k
+  let FF : Finset (Fin n) := Finset.univ.filter fun i => qf i ≤ c
+  let FG : Finset (Fin n) := Finset.univ.filter fun i => qg i ≤ c
+  have hFGprefix : Finset.Iic k ⊆ FG := by
+    intro i hi
+    have hik : i ≤ k := Finset.mem_Iic.mp hi
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by
+      dsimp [c]
+      exact (hmonG hik).trans (Nat.le_refl _)
+    ⟩
+  have hFGcard : k.val + 1 ≤ FG.card := by
+    calc
+      k.val + 1 = (Finset.Iic k).card := by simp
+      _ ≤ FG.card := Finset.card_le_card hFGprefix
+  have hFGperm : FG.card = (List.ofFn g).countP (fun x => decide (x ≤ c)) := by
+    calc
+      FG.card = (List.ofFn qg).countP (fun x => decide (x ≤ c)) := by
+        symm
+        exact countP_ofFn_card qg c
+      _ = Lg.countP (fun x => decide (x ≤ c)) := by rw [hOfFnG]
+      _ = (List.ofFn g).countP (fun x => decide (x ≤ c)) := by
+        exact (List.mergeSort_perm (List.ofFn g) (fun a b => decide (a ≤ b))).countP_eq _
+  have hFFperm : FF.card = (List.ofFn f).countP (fun x => decide (x ≤ c)) := by
+    calc
+      FF.card = (List.ofFn qf).countP (fun x => decide (x ≤ c)) := by
+        symm
+        exact countP_ofFn_card qf c
+      _ = Lf.countP (fun x => decide (x ≤ c)) := by rw [hOfFnF]
+      _ = (List.ofFn f).countP (fun x => decide (x ≤ c)) := by
+        exact (List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))).countP_eq _
+  have hFFsubset : FF ⊆ (Finset.Iio k) := by
+    intro i hi
+    have hqi : qf i ≤ c := (Finset.mem_filter.mp hi).2
+    apply Finset.mem_Iio.mpr
+    by_contra hk
+    have hki : k ≤ i := le_of_not_gt hk
+    have hmono := hmonf hki
+    dsimp [c] at hqi
+    omega
+  have hFFcard : FF.card ≤ k.val := by
+    calc
+      FF.card ≤ (Finset.Iio k).card := Finset.card_le_card hFFsubset
+      _ = k.val := by simp
+  have hinputSub : (Finset.univ.filter fun i : Fin n => g i ≤ c) ⊆
+      (Finset.univ.filter fun i : Fin n => f i ≤ c) := by
+    intro i hi
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (hfg i).trans (Finset.mem_filter.mp hi).2⟩
+  have hinputCard := Finset.card_le_card hinputSub
+  have hinputCount : (List.ofFn g).countP (fun x => decide (x ≤ c)) ≤
+      (List.ofFn f).countP (fun x => decide (x ≤ c)) := by
+    calc
+      (List.ofFn g).countP (fun x => decide (x ≤ c)) =
+          (Finset.univ.filter fun i : Fin n => g i ≤ c).card := countP_ofFn_card g c
+      _ ≤ (Finset.univ.filter fun i : Fin n => f i ≤ c).card := hinputCard
+      _ = (List.ofFn f).countP (fun x => decide (x ≤ c)) := (countP_ofFn_card f c).symm
+  have hFGleFF : FG.card ≤ FF.card := by
+    calc
+      FG.card = (List.ofFn g).countP (fun x => decide (x ≤ c)) := hFGperm
+      _ ≤ (List.ofFn f).countP (fun x => decide (x ≤ c)) := hinputCount
+      _ = FF.card := hFFperm.symm
+  omega
+
+private def mergeSortAt {n : ℕ} (f : Fin n → ℕ) (i : Fin n) : ℕ :=
+  ((List.ofFn f).mergeSort (fun a b => decide (a ≤ b))).get ⟨i.val, by simp⟩
+
+private theorem mergeSortAt_monotone {n : ℕ} (f : Fin n → ℕ) :
+    Monotone (mergeSortAt f) := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  let q : Fin n → ℕ := fun i => L.get (Fin.cast hlen.symm i)
+  have hq : ∀ i : Fin n, q i = mergeSortAt f i := by intro i; rfl
+  have hs : L.SortedLE := by
+    simpa [L] using (List.sortedLE_mergeSort (l := List.ofFn f))
+  have hqmon : Monotone q := by
+    intro i j hij
+    apply hs.monotone_get
+    simpa [q, Fin.val_cast] using hij
+  intro i j hij
+  rw [← hq i, ← hq j]
+  exact hqmon hij
+
+private theorem mergeSort_mem_gap {n : ℕ} (f : Fin n → ℕ) (p q : Fin n)
+    (hpq : q.val = p.val + 1) (x : ℕ) (hx : x ∈ List.ofFn f) :
+    x ≤ mergeSortAt f p ∨ mergeSortAt f q ≤ x := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  have hperm := List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))
+  have hxsort : x ∈ L := hperm.mem_iff.mpr hx
+  obtain ⟨i, hi⟩ := List.mem_iff_get.mp hxsort
+  let i' : Fin n := Fin.cast hlen i
+  have hival : i'.val = i.val := by simp [i']
+  have hiNat : i.val < n := by simpa [hlen] using i.isLt
+  have hxi : mergeSortAt f i' = x := by
+    dsimp [mergeSortAt, L, i']
+    simpa using hi
+  have hmon := mergeSortAt_monotone f
+  by_cases hip : i' ≤ p
+  · left
+    calc
+      x = mergeSortAt f i' := hxi.symm
+      _ ≤ mergeSortAt f p := hmon hip
+  · right
+    have hnotVal : ¬ i'.val ≤ p.val := by
+      intro hv
+      exact hip (Fin.le_iff_val_le_val.mpr hv)
+    have hqi : q.val ≤ i'.val := by omega
+    have hqi' : q ≤ i' := Fin.le_iff_val_le_val.mpr hqi
+    calc
+      mergeSortAt f q ≤ mergeSortAt f i' := hmon hqi'
+      _ = x := hxi
+
+private theorem mergeSort_mem_extremes {n : ℕ} (f : Fin n → ℕ) (hn : 0 < n)
+    (x : ℕ) (hx : x ∈ List.ofFn f) :
+    mergeSortAt f ⟨0, hn⟩ ≤ x ∧
+      x ≤ mergeSortAt f ⟨n - 1, by omega⟩ := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  have hperm := List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))
+  have hxsort : x ∈ L := hperm.mem_iff.mpr hx
+  obtain ⟨i, hi⟩ := List.mem_iff_get.mp hxsort
+  let i' : Fin n := Fin.cast hlen i
+  have hival : i'.val = i.val := by simp [i']
+  have hiLt : i.val < n := by rw [← hlen]; exact i.isLt
+  have hxi : mergeSortAt f i' = x := by
+    dsimp [mergeSortAt, L, i']
+    simpa using hi
+  have hmon := mergeSortAt_monotone f
+  have hiLast : i' ≤ (⟨n - 1, by omega⟩ : Fin n) := by
+    apply Fin.le_iff_val_le_val.mpr
+    rw [hival]
+    exact Nat.le_sub_one_of_lt hiLt
+  constructor
+  · calc
+      mergeSortAt f ⟨0, hn⟩ ≤ mergeSortAt f i' :=
+        hmon (Fin.le_iff_val_le_val.mpr (by simp))
+      _ = x := hxi
+  · calc
+      x = mergeSortAt f i' := hxi.symm
+      _ ≤ mergeSortAt f ⟨n - 1, by omega⟩ :=
+        hmon hiLast
+
+private theorem sum_ofFn_eq {n : ℕ} (f : Fin n → ℕ) :
+    (List.ofFn f).sum = ∑ i : Fin n, f i := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.ofFn_succ']
+    simp only [List.concat_eq_append, List.sum_append, List.sum_singleton]
+    rw [ih, Fin.sum_univ_castSucc]
+
+private theorem list_sum_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
+    l₁.sum = l₂.sum := by
+  letI : LeftCommutative (fun a b : ℕ => a + b) := ⟨by intro a b c; omega⟩
+  exact h.foldr_eq (f := fun a b => a + b) (b := 0)
+
+private theorem mergeSort_sum_eq (l : List ℕ) :
+    (l.mergeSort (fun a b => decide (a ≤ b))).sum = l.sum := by
+  letI : LeftCommutative (fun a b : ℕ => a + b) := ⟨by intro a b c; omega⟩
+  have h := (List.mergeSort_perm l (fun a b => decide (a ≤ b))).foldr_eq
+    (f := fun a b => a + b) (b := 0)
+  exact h
+
+private theorem mergeSortAt_add_one {n : ℕ} (f : Fin n → ℕ) (k : Fin n) :
+    mergeSortAt (fun i => f i + 1) k = mergeSortAt f k + 1 := by
+  let l := List.ofFn f
+  have hraw : l.map Nat.succ = List.ofFn (fun i : Fin n => f i + 1) := by
+    simp [l, Nat.succ_eq_add_one]
+    funext i
+    simp [Nat.succ_eq_add_one]
+  have hmap : (l.mergeSort (fun a b => decide (a ≤ b))).map Nat.succ =
+      ((l.map Nat.succ).mergeSort (fun a b => decide (a ≤ b))) := by
+    apply List.map_mergeSort
+    intro a ha b hb
+    simp
+  have hsorted :
+      (l.mergeSort (fun a b => decide (a ≤ b))).map Nat.succ =
+        (List.ofFn (fun i : Fin n => f i + 1)).mergeSort
+          (fun a b => decide (a ≤ b)) := by
+    rw [← hraw]
+    exact hmap
+  have hget := congrArg (fun L : List ℕ => L.getD k.val 0) hsorted
+  simpa [mergeSortAt, l, List.getD_map, List.getD_eq_get, Nat.succ_eq_add_one] using hget.symm
+
+private theorem rankValue_succ_eq_mergeSortAt {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (t : Fin (HypercubeRamsey.S04.chunkNum β γ n)) :
+    HypercubeRamsey.S04.rankValue β γ n g v (t.val + 1) =
+      mergeSortAt (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+        HypercubeRamsey.S04.clipped β γ n g j v) t := by
+  have hchunk : HypercubeRamsey.S04.chunkNum β γ n + 1 =
+      HypercubeRamsey.S04.gadgetPower β γ n := by
+    unfold HypercubeRamsey.S04.chunkNum
+    have hpos := HypercubeRamsey.S04.gadgetPower_pos β γ n
+    omega
+  have hpos : t.val + 1 ≠ 0 := by omega
+  have hlt : t.val + 1 < HypercubeRamsey.S04.gadgetPower β γ n := by
+    have ht := t.isLt
+    omega
+  have hne : t.val + 1 ≠ HypercubeRamsey.S04.gadgetPower β γ n := by omega
+  simp [HypercubeRamsey.S04.rankValue, hpos, hne,
+    HypercubeRamsey.S04.sortedCounts, mergeSortAt]
+
+private theorem rankValue_eq_of_at_eq_except {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v w : CubeVertex n)
+    (r : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (hprofile : ∀ j, j ≠ r →
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) j =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w) j)
+    (t : ℕ) (ht : t ≠ r.val + 1) :
+    HypercubeRamsey.S04.rankValue β γ n g v t =
+      HypercubeRamsey.S04.rankValue β γ n g w t := by
+  classical
+  by_cases ht0 : t = 0
+  · simp [HypercubeRamsey.S04.rankValue, ht0]
+  · by_cases htS : t = HypercubeRamsey.S04.gadgetPower β γ n
+    · simp [HypercubeRamsey.S04.rankValue, ht0, htS]
+    · have hchunk : HypercubeRamsey.S04.chunkNum β γ n + 1 =
+          HypercubeRamsey.S04.gadgetPower β γ n := by
+        unfold HypercubeRamsey.S04.chunkNum
+        have hpos := HypercubeRamsey.S04.gadgetPower_pos β γ n
+        omega
+      by_cases hlt : t < HypercubeRamsey.S04.gadgetPower β γ n
+      · let j : Fin (HypercubeRamsey.S04.chunkNum β γ n) :=
+          ⟨t - 1, by omega⟩
+        have hjval : j.val + 1 = t := by dsimp [j]; omega
+        have hjne : j ≠ r := by
+          intro hEq
+          have hval := congrArg Fin.val hEq
+          omega
+        have hv := rankValue_succ_eq_mergeSortAt g v j
+        have hw := rankValue_succ_eq_mergeSortAt g w j
+        rw [hjval] at hv hw
+        rw [hv, hw, hprofile j hjne]
+      · have hgt : HypercubeRamsey.S04.gadgetPower β γ n < t := by omega
+        have hlenV : (HypercubeRamsey.S04.sortedCounts β γ n g v).length =
+            HypercubeRamsey.S04.chunkNum β γ n := by
+          simp [HypercubeRamsey.S04.sortedCounts]
+        have hlenW : (HypercubeRamsey.S04.sortedCounts β γ n g w).length =
+            HypercubeRamsey.S04.chunkNum β γ n := by
+          simp [HypercubeRamsey.S04.sortedCounts]
+        have hidxV : (HypercubeRamsey.S04.sortedCounts β γ n g v).length ≤ t - 1 := by
+          rw [hlenV]
+          omega
+        have hidxW : (HypercubeRamsey.S04.sortedCounts β γ n g w).length ≤ t - 1 := by
+          rw [hlenW]
+          omega
+        simp only [HypercubeRamsey.S04.rankValue, if_neg ht0, if_neg htS]
+        rw [List.getD_eq_default _ _ hidxV, List.getD_eq_default _ _ hidxW]
+
+private theorem mergeSort_one_change {n : ℕ} (f g : Fin n → ℕ)
+    (hfg : ∀ i, f i ≤ g i) (hgf : ∀ i, g i ≤ f i + 1)
+    (hsum : (∑ i : Fin n, f i) + 1 = ∑ i : Fin n, g i) :
+    ∃ r : Fin n, mergeSortAt g r = mergeSortAt f r + 1 ∧
+      ∀ t : Fin n, t ≠ r → mergeSortAt g t = mergeSortAt f t := by
+  classical
+  let Lf := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  let Lg := (List.ofFn g).mergeSort (fun a b => decide (a ≤ b))
+  have hlenf : Lf.length = n := by simp [Lf]
+  have hLeng : Lg.length = n := by simp [Lg]
+  let qf : Fin n → ℕ := fun i => Lf.get (Fin.cast hlenf.symm i)
+  let qg : Fin n → ℕ := fun i => Lg.get (Fin.cast hLeng.symm i)
+  have hqf : ∀ i : Fin n, qf i = mergeSortAt f i := by intro i; rfl
+  have hqg : ∀ i : Fin n, qg i = mergeSortAt g i := by intro i; rfl
+  have hOfFnF : List.ofFn qf = Lf := by
+    change List.ofFn (fun i : Fin n => Lf.get (Fin.cast hlenf.symm i)) = Lf
+    rw [← List.ofFn_congr hlenf (List.get Lf)]
+    exact List.ofFn_get Lf
+  have hOfFnG : List.ofFn qg = Lg := by
+    change List.ofFn (fun i : Fin n => Lg.get (Fin.cast hLeng.symm i)) = Lg
+    rw [← List.ofFn_congr hLeng (List.get Lg)]
+    exact List.ofFn_get Lg
+  have hlow : ∀ i, qf i ≤ qg i := by
+    intro i
+    simpa [qf, qg, Lf, Lg, mergeSortAt] using mergeSortAt_mono f g hfg i
+  have hhigh : ∀ i, qg i ≤ qf i + 1 := by
+    intro i
+    have h := mergeSortAt_mono g (fun j => f j + 1) hgf i
+    have h' : mergeSortAt g i ≤ mergeSortAt (fun j => f j + 1) i := by
+      simpa [mergeSortAt] using h
+    rw [mergeSortAt_add_one] at h'
+    rw [hqg i, hqf i]
+    exact h'
+  have hsumf : (∑ i : Fin n, qf i) = ∑ i, f i := by
+    calc
+      (∑ i : Fin n, qf i) = (List.ofFn qf).sum := (sum_ofFn_eq qf).symm
+      _ = Lf.sum := by rw [hOfFnF]
+      _ = (List.ofFn f).sum := mergeSort_sum_eq (List.ofFn f)
+      _ = ∑ i, f i := sum_ofFn_eq f
+  have hsumg : (∑ i : Fin n, qg i) = ∑ i, g i := by
+    calc
+      (∑ i : Fin n, qg i) = (List.ofFn qg).sum := (sum_ofFn_eq qg).symm
+      _ = Lg.sum := by rw [hOfFnG]
+      _ = (List.ofFn g).sum := mergeSort_sum_eq (List.ofFn g)
+      _ = ∑ i, g i := sum_ofFn_eq g
+  have hqsum : (∑ i : Fin n, qf i) + 1 = ∑ i : Fin n, qg i := by
+    rw [hsumf, hsumg]
+    exact hsum
+  have hpoint : ∀ i, qg i = qf i + if qf i < qg i then 1 else 0 := by
+    intro i
+    have hl := hlow i
+    have hh := hhigh i
+    by_cases h : qf i < qg i
+    · have h' : qg i = qf i + 1 := by omega
+      simp [h, h']
+    · have h' : qg i = qf i := by omega
+      simp [h, h']
+  have hsumPoint : (∑ i : Fin n, qg i) =
+      (∑ i : Fin n, qf i) + ∑ i : Fin n, if qf i < qg i then 1 else 0 := by
+    calc
+      (∑ i : Fin n, qg i) =
+          ∑ i : Fin n, (qf i + if qf i < qg i then 1 else 0) :=
+            Finset.sum_congr rfl (fun i _ => hpoint i)
+      _ = (∑ i : Fin n, qf i) + ∑ i : Fin n, if qf i < qg i then 1 else 0 :=
+            Finset.sum_add_distrib
+  have hdiffsum : (∑ i : Fin n, if qf i < qg i then 1 else 0) = 1 := by
+    omega
+  let D : Finset (Fin n) := Finset.univ.filter fun i => qf i < qg i
+  have hDcard : D.card = 1 := by
+    simpa [D] using hdiffsum
+  obtain ⟨r, hr⟩ := Finset.card_eq_one.mp hDcard
+  have hrD : r ∈ D := by rw [hr]; simp
+  have hrrank : qg r = qf r + 1 := by
+    have hlt := (Finset.mem_filter.mp hrD).2
+    have hl := hlow r
+    have hh := hhigh r
+    omega
+  refine ⟨r, ?_, ?_⟩
+  · simpa [hqf r, hqg r] using hrrank
+  · intro t htr
+    have htD : t ∉ D := by rw [hr]; simp [htr]
+    have hnotlt : ¬ qf t < qg t := by simpa [D] using htD
+    have hl := hlow t
+    have hh := hhigh t
+    have hEq : qg t = qf t := by omega
+    simpa [hqf t, hqg t] using hEq
+
+private theorem mergeSort_sum_sq {n : ℕ} (f : Fin n → ℕ) :
+    (∑ i : Fin n, (mergeSortAt f i) ^ 2) = ∑ i : Fin n, (f i) ^ 2 := by
+  classical
+  let L := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  have hlen : L.length = n := by simp [L]
+  let q : Fin n → ℕ := fun i => L.get (Fin.cast hlen.symm i)
+  have hOfFn : List.ofFn q = L := by
+    change List.ofFn (fun i : Fin n => L.get (Fin.cast hlen.symm i)) = L
+    rw [← List.ofFn_congr hlen (List.get L)]
+    exact List.ofFn_get L
+  have hq : ∀ i : Fin n, q i = mergeSortAt f i := by intro i; rfl
+  calc
+    (∑ i : Fin n, (mergeSortAt f i) ^ 2) = ∑ i : Fin n, (q i) ^ 2 :=
+      Finset.sum_congr rfl (fun i _ => by rw [hq])
+    _ = (List.ofFn (fun i : Fin n => (q i) ^ 2)).sum := (sum_ofFn_eq _).symm
+    _ = ((List.ofFn q).map fun x : ℕ => x ^ 2).sum := by
+      exact congrArg List.sum (List.ofFn_comp' q (fun x : ℕ => x ^ 2))
+    _ = ((L.map fun x : ℕ => x ^ 2)).sum := by rw [hOfFn]
+    _ = (((List.ofFn f).map fun x : ℕ => x ^ 2)).sum := by
+      apply list_sum_eq_of_perm
+      exact (List.mergeSort_perm (List.ofFn f) (fun a b => decide (a ≤ b))).map
+        (fun x : ℕ => x ^ 2)
+    _ = ∑ i : Fin n, (f i) ^ 2 := by simp [List.map_ofFn, sum_ofFn_eq]
+
+private theorem mergeSort_one_change_at {n : ℕ} (f g : Fin n → ℕ) (j : Fin n)
+    (hfg : ∀ i, f i ≤ g i) (hgf : ∀ i, g i ≤ f i + 1)
+    (hsum : (∑ i : Fin n, f i) + 1 = ∑ i : Fin n, g i)
+    (hcoord : g j = f j + 1) (hother : ∀ i, i ≠ j → g i = f i) :
+    ∃ r : Fin n, mergeSortAt f r = f j ∧
+      mergeSortAt g r = g j ∧
+      ∀ t : Fin n, t ≠ r → mergeSortAt g t = mergeSortAt f t := by
+  classical
+  obtain ⟨r, hrank, hrest⟩ := mergeSort_one_change f g hfg hgf hsum
+  have hinputSq : (∑ i : Fin n, (f i) ^ 2) + (2 * f j + 1) =
+      ∑ i : Fin n, (g i) ^ 2 := by
+    have hpoint : ∀ i : Fin n, (g i) ^ 2 = (f i) ^ 2 +
+        if i = j then 2 * f j + 1 else 0 := by
+      intro i
+      by_cases hij : i = j
+      · subst i
+        rw [hcoord]
+        simp
+        ring
+      · rw [hother i hij]
+        simp [hij]
+    calc
+      _ = (∑ i : Fin n, (f i) ^ 2) +
+          ∑ i : Fin n, (if i = j then 2 * f j + 1 else 0) := by simp
+      _ = ∑ i : Fin n, ((f i) ^ 2 + if i = j then 2 * f j + 1 else 0) :=
+        Finset.sum_add_distrib.symm
+      _ = ∑ i : Fin n, (g i) ^ 2 :=
+        Finset.sum_congr rfl (fun i _ => (hpoint i).symm)
+  have hsortedSq :
+      (∑ i : Fin n, (mergeSortAt g i) ^ 2) =
+        (∑ i : Fin n, (mergeSortAt f i) ^ 2) + (2 * mergeSortAt f r + 1) := by
+    have hpoint : ∀ i : Fin n, (mergeSortAt g i) ^ 2 =
+        (mergeSortAt f i) ^ 2 + if i = r then 2 * mergeSortAt f r + 1 else 0 := by
+      intro i
+      by_cases hir : i = r
+      · subst i
+        rw [hrank]
+        simp
+        ring
+      · rw [hrest i hir]
+        simp [hir]
+    calc
+      _ = ∑ i : Fin n,
+          ((mergeSortAt f i) ^ 2 + if i = r then 2 * mergeSortAt f r + 1 else 0) :=
+        Finset.sum_congr rfl (fun i _ => hpoint i)
+      _ = (∑ i : Fin n, (mergeSortAt f i) ^ 2) +
+          ∑ i : Fin n, (if i = r then 2 * mergeSortAt f r + 1 else 0) :=
+        Finset.sum_add_distrib
+      _ = (∑ i : Fin n, (mergeSortAt f i) ^ 2) + (2 * mergeSortAt f r + 1) := by simp
+  have hcompare : (∑ i : Fin n, (f i) ^ 2) + (2 * f j + 1) =
+      (∑ i : Fin n, (f i) ^ 2) + (2 * mergeSortAt f r + 1) := by
+    calc
+      _ = (∑ i : Fin n, (g i) ^ 2) := hinputSq
+      _ = (∑ i : Fin n, (mergeSortAt g i) ^ 2) := (mergeSort_sum_sq g).symm
+      _ = (∑ i : Fin n, (mergeSortAt f i) ^ 2) + (2 * mergeSortAt f r + 1) := hsortedSq
+      _ = (∑ i : Fin n, (f i) ^ 2) + (2 * mergeSortAt f r + 1) := by
+        rw [mergeSort_sum_sq f]
+  have hvalue : mergeSortAt f r = f j := by omega
+  exact ⟨r, hvalue, by rw [hrank, hvalue, hcoord], hrest⟩
+
+private theorem mergeSortList_eq_of_at_eq {n : ℕ} (f g : Fin n → ℕ)
+    (h : ∀ i, mergeSortAt f i = mergeSortAt g i) :
+    (List.ofFn f).mergeSort (fun a b => decide (a ≤ b)) =
+      (List.ofFn g).mergeSort (fun a b => decide (a ≤ b)) := by
+  classical
+  let Lf := (List.ofFn f).mergeSort (fun a b => decide (a ≤ b))
+  let Lg := (List.ofFn g).mergeSort (fun a b => decide (a ≤ b))
+  have hlenf : Lf.length = n := by simp [Lf]
+  have hLeng : Lg.length = n := by simp [Lg]
+  let qf : Fin n → ℕ := fun i => Lf.get (Fin.cast hlenf.symm i)
+  let qg : Fin n → ℕ := fun i => Lg.get (Fin.cast hLeng.symm i)
+  have hqf : ∀ i : Fin n, qf i = mergeSortAt f i := by intro i; rfl
+  have hqg : ∀ i : Fin n, qg i = mergeSortAt g i := by intro i; rfl
+  have hOfFnF : List.ofFn qf = Lf := by
+    change List.ofFn (fun i : Fin n => Lf.get (Fin.cast hlenf.symm i)) = Lf
+    rw [← List.ofFn_congr hlenf (List.get Lf)]
+    exact List.ofFn_get Lf
+  have hOfFnG : List.ofFn qg = Lg := by
+    change List.ofFn (fun i : Fin n => Lg.get (Fin.cast hLeng.symm i)) = Lg
+    rw [← List.ofFn_congr hLeng (List.get Lg)]
+    exact List.ofFn_get Lg
+  have hq : qf = qg := by
+    funext i
+    rw [hqf i, hqg i]
+    exact h i
+  calc
+    Lf = List.ofFn qf := hOfFnF.symm
+    _ = List.ofFn qg := congrArg List.ofFn hq
+    _ = Lg := hOfFnG
+
+private theorem searchLeaf_eq_of_rank_profile {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v w : CubeVertex n)
+    (hprofile : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) j =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w) j) :
+    HypercubeRamsey.S04.searchLeaf β γ n g v =
+      HypercubeRamsey.S04.searchLeaf β γ n g w := by
+  classical
+  have hsorted := mergeSortList_eq_of_at_eq
+    (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+      HypercubeRamsey.S04.clipped β γ n g j v)
+    (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+      HypercubeRamsey.S04.clipped β γ n g j w) hprofile
+  have hrv : ∀ t, HypercubeRamsey.S04.rankValue β γ n g v t =
+      HypercubeRamsey.S04.rankValue β γ n g w t := by
+    intro t
+    simp [HypercubeRamsey.S04.rankValue,
+      HypercubeRamsey.S04.sortedCounts, hsorted]
+  have hstep : ∀ ab,
+      HypercubeRamsey.S04.searchStep β γ n g v ab =
+        HypercubeRamsey.S04.searchStep β γ n g w ab := by
+    intro ab
+    simp [HypercubeRamsey.S04.searchStep, hrv]
+  have hfold (L : List ℕ) (ab : ℕ × ℕ) :
+      List.foldl (fun st _ => HypercubeRamsey.S04.searchStep β γ n g v st) ab L =
+        List.foldl (fun st _ => HypercubeRamsey.S04.searchStep β γ n g w st) ab L := by
+    induction L generalizing ab with
+    | nil => rfl
+    | cons t L ih => simp [List.foldl_cons, hstep, ih]
+  unfold HypercubeRamsey.S04.searchLeaf
+  exact hfold _ _
+
+private def binarySearchMid (ab : ℕ × ℕ) : ℕ := (ab.1 + ab.2) / 2
+
+private def binarySearchStepR (S : ℕ) (R : ℕ → ℕ) (ab : ℕ × ℕ) : ℕ × ℕ :=
+  if binarySearchMid ab * S ≤ R (binarySearchMid ab) then
+    (ab.1, binarySearchMid ab) else (binarySearchMid ab, ab.2)
+
+private def binarySearchRun (S : ℕ) (R : ℕ → ℕ) : ℕ → ℕ × ℕ → ℕ × ℕ
+  | 0, ab => ab
+  | k + 1, ab => binarySearchStepR S R (binarySearchRun S R k ab)
+
+private def binarySearchPath (S : ℕ) (R : ℕ → ℕ) : ℕ → ℕ × ℕ → List ℕ
+  | 0, _ => []
+  | k + 1, ab => binarySearchPath S R k ab ++
+      [binarySearchMid (binarySearchRun S R k ab)]
+
+private theorem foldl_range_binarySearchRun (S : ℕ) (R : ℕ → ℕ) (e : ℕ)
+    (ab : ℕ × ℕ) :
+    (List.range e).foldl (fun st _ => binarySearchStepR S R st) ab =
+      binarySearchRun S R e ab := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih =>
+    rw [List.range_succ, List.foldl_append]
+    simp [List.foldl_cons, List.foldl_nil, ih, binarySearchRun]
+
+private theorem binarySearchRun_eq_of_eq_on_path (S : ℕ) (R R' : ℕ → ℕ)
+    (e : ℕ) (ab : ℕ × ℕ)
+    (h : ∀ t ∈ binarySearchPath S R e ab, R t = R' t) :
+    binarySearchRun S R e ab = binarySearchRun S R' e ab := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih =>
+    have hprefix : ∀ t ∈ binarySearchPath S R e ab, R t = R' t := by
+      intro t ht
+      apply h t
+      change t ∈ binarySearchPath S R e ab ++ _
+      exact List.mem_append_left _ ht
+    have hrun := ih ab hprefix
+    have hmid : binarySearchMid (binarySearchRun S R e ab) =
+        binarySearchMid (binarySearchRun S R' e ab) := by rw [hrun]
+    have hlastmem : binarySearchMid (binarySearchRun S R e ab) ∈
+        binarySearchPath S R (e + 1) ab := by simp [binarySearchPath]
+    have hvalue := h _ hlastmem
+    simp only [binarySearchRun]
+    rw [hrun]
+    simp only [binarySearchStepR]
+    rw [← hmid]
+    simp [hvalue]
+
+private theorem binarySearchRun_eq_of_same_path_decisions (S : ℕ) (R R' : ℕ → ℕ)
+    (e : ℕ) (ab : ℕ × ℕ)
+    (h : ∀ t ∈ binarySearchPath S R e ab,
+      (t * S ≤ R t) ↔ (t * S ≤ R' t)) :
+    binarySearchRun S R e ab = binarySearchRun S R' e ab := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih =>
+    have hprefix : ∀ t ∈ binarySearchPath S R e ab,
+        (t * S ≤ R t) ↔ (t * S ≤ R' t) := by
+      intro t ht
+      apply h t
+      change t ∈ binarySearchPath S R e ab ++ _
+      exact List.mem_append_left _ ht
+    have hrun := ih ab hprefix
+    have hmid : binarySearchMid (binarySearchRun S R e ab) =
+        binarySearchMid (binarySearchRun S R' e ab) := by rw [hrun]
+    have hlastmem : binarySearchMid (binarySearchRun S R e ab) ∈
+        binarySearchPath S R (e + 1) ab := by simp [binarySearchPath]
+    have hdecision := h _ hlastmem
+    rw [hmid] at hdecision
+    simp only [binarySearchRun]
+    rw [hrun]
+    simp only [binarySearchStepR]
+    let P := binarySearchMid (binarySearchRun S R' e ab) * S ≤
+      R (binarySearchMid (binarySearchRun S R' e ab))
+    let Q := binarySearchMid (binarySearchRun S R' e ab) * S ≤
+      R' (binarySearchMid (binarySearchRun S R' e ab))
+    have hdec : P ↔ Q := by simpa [P, Q] using hdecision
+    by_cases hp : P
+    · have hq := hdec.mp hp
+      simp [P, Q, hp, hq]
+    · have hq : ¬ Q := by intro hq; exact hp (hdec.mpr hq)
+      simp [P, Q, hp, hq]
+
+private theorem gadgetSearchLeaf_eq_run {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    HypercubeRamsey.S04.searchLeaf β γ n g v =
+      binarySearchRun (HypercubeRamsey.S04.gadgetPower β γ n)
+        (HypercubeRamsey.S04.rankValue β γ n g v)
+        (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+        (0, HypercubeRamsey.S04.gadgetPower β γ n) := by
+  unfold HypercubeRamsey.S04.searchLeaf
+  change (List.range (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))).foldl
+      (fun st _ => binarySearchStepR (HypercubeRamsey.S04.gadgetPower β γ n)
+        (HypercubeRamsey.S04.rankValue β γ n g v) st)
+      (0, HypercubeRamsey.S04.gadgetPower β γ n) = _
+  exact foldl_range_binarySearchRun _ _ _ _
+
+private theorem binarySearchRun_endpoint_invariant (S e : ℕ) (R : ℕ → ℕ)
+    (hS : S = 2 ^ e) (hzero : R 0 = 0) (hfinal : R S = S * S) :
+    ∀ k ≤ e,
+      (binarySearchRun S R k (0, S)).1 ≤ (binarySearchRun S R k (0, S)).2 ∧
+      (binarySearchRun S R k (0, S)).2 =
+        (binarySearchRun S R k (0, S)).1 + 2 ^ (e - k) ∧
+      (binarySearchRun S R k (0, S)).2 ≤ S ∧
+      R (binarySearchRun S R k (0, S)).1 ≤
+        (binarySearchRun S R k (0, S)).1 * S ∧
+      (binarySearchRun S R k (0, S)).2 * S ≤
+        R (binarySearchRun S R k (0, S)).2 := by
+  intro k
+  induction k with
+  | zero =>
+    intro hk
+    simp only [binarySearchRun]
+    refine ⟨by omega, ?_, by omega, ?_, ?_⟩
+    · simpa using hS
+    · simpa using hzero
+    · exact le_of_eq hfinal.symm
+  | succ k ih =>
+    intro hk
+    have hprev := ih (by omega)
+    let ab := binarySearchRun S R k (0, S)
+    have hab : ab.1 ≤ ab.2 := by simpa [ab] using hprev.1
+    have hwidthPrev : ab.2 = ab.1 + 2 ^ (e - k) := by
+      simpa [ab] using hprev.2.1
+    have habUpper : ab.2 ≤ S := by simpa [ab] using hprev.2.2.1
+    have hlo : R ab.1 ≤ ab.1 * S := by simpa [ab] using hprev.2.2.2.1
+    have hhi : ab.2 * S ≤ R ab.2 := by simpa [ab] using hprev.2.2.2.2
+    have hlen : e - k = (e - (k + 1)) + 1 := by omega
+    let half := 2 ^ (e - (k + 1))
+    have hpow : 2 ^ (e - k) = 2 * half := by
+      rw [hlen, pow_succ]
+      dsimp [half]
+      omega
+    have hwidth : ab.2 = ab.1 + 2 * half := by
+      rw [hwidthPrev, hpow]
+    have hhalf : 0 < half := by positivity
+    let m := binarySearchMid ab
+    have hmid : m = ab.1 + half := by
+      dsimp [m, binarySearchMid]
+      omega
+    by_cases hc : m * S ≤ R m
+    · have hrun : binarySearchRun S R (k + 1) (0, S) = (ab.1, m) := by
+        simp only [binarySearchRun]
+        change binarySearchStepR S R ab = (ab.1, m)
+        unfold binarySearchStepR
+        simp [m, hc]
+      rw [hrun]
+      simp only [Prod.fst, Prod.snd]
+      refine ⟨?_, ?_, ?_, hlo, hc⟩
+      · omega
+      · simpa [half] using hmid
+      · have hmle : m ≤ ab.2 := by rw [hmid, hwidth]; omega
+        exact hmle.trans habUpper
+    · have hc' : R m ≤ m * S := Nat.le_of_lt (lt_of_not_ge hc)
+      have hrun : binarySearchRun S R (k + 1) (0, S) = (m, ab.2) := by
+        simp only [binarySearchRun]
+        change binarySearchStepR S R ab = (m, ab.2)
+        unfold binarySearchStepR
+        simp [m, hc]
+      rw [hrun]
+      simp only [Prod.fst, Prod.snd]
+      refine ⟨?_, ?_, habUpper, hc', hhi⟩
+      · omega
+      · rw [hwidth, hmid]
+        simp [half]
+        omega
+
+private theorem gadgetSearchLeaf_spec {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) :
+    let S := HypercubeRamsey.S04.gadgetPower β γ n
+    let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
+    ab.2 = ab.1 + 1 ∧
+      ab.2 ≤ S ∧
+      HypercubeRamsey.S04.rankValue β γ n g v ab.1 ≤ ab.1 * S ∧
+      ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let e := max 1 (⌈Real.log ((n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)) /
+    Real.log 2⌉₊)
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
+  have hS : S = 2 ^ e := by
+    rfl
+  have he : Nat.log2 S = e := by rw [hS, Nat.log2_two_pow]
+  have hzero : R 0 = 0 := by simp [R, HypercubeRamsey.S04.rankValue]
+  have hSpos : 0 < S := by
+    exact HypercubeRamsey.S04.gadgetPower_pos β γ n
+  have hfinal : R S = S * S := by
+    simp [R, S, HypercubeRamsey.S04.rankValue, hSpos.ne', pow_two]
+  have hfold : ab = binarySearchRun S R e (0, S) := by
+    dsimp [ab, HypercubeRamsey.S04.searchLeaf]
+    rw [he]
+    change (List.range e).foldl (fun st _ => binarySearchStepR S R st) (0, S) = _
+    exact foldl_range_binarySearchRun S R e (0, S)
+  have hspec := binarySearchRun_endpoint_invariant S e R hS hzero hfinal e (Nat.le_refl _)
+  rcases hspec with ⟨hle, hwidth, habUpper, hlo, hhi⟩
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simpa [ab, hfold, S] using hwidth
+  · simpa [ab, hfold, S] using habUpper
+  · simpa [ab, R, hfold, S] using hlo
+  · simpa [ab, R, hfold, S] using hhi
+
+private theorem clipped_gap_of_search {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v ≤
+          (HypercubeRamsey.S04.searchLeaf β γ n g v).1 *
+            HypercubeRamsey.S04.gadgetPower β γ n ∨
+        (HypercubeRamsey.S04.searchLeaf β γ n g v).2 *
+            HypercubeRamsey.S04.gadgetPower β γ n ≤
+          HypercubeRamsey.S04.clipped β γ n g j v := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let ab := HypercubeRamsey.S04.searchLeaf β γ n g v
+  let f : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
+    fun j => HypercubeRamsey.S04.clipped β γ n g j v
+  have hspec : ab.2 = ab.1 + 1 ∧ ab.2 ≤ S ∧
+      HypercubeRamsey.S04.rankValue β γ n g v ab.1 ≤ ab.1 * S ∧
+      ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := by
+    simpa [ab, S] using gadgetSearchLeaf_spec g v
+  have hchunk : HypercubeRamsey.S04.chunkNum β γ n + 1 = S := by
+    unfold HypercubeRamsey.S04.chunkNum
+    have hpos := HypercubeRamsey.S04.gadgetPower_pos β γ n
+    omega
+  have hn : 0 < HypercubeRamsey.S04.chunkNum β γ n := by omega
+  intro j
+  change f j ≤ ab.1 * S ∨ ab.2 * S ≤ f j
+  have hxmem : f j ∈ List.ofFn f := List.mem_ofFn.mpr ⟨j, rfl⟩
+  by_cases hzero : ab.1 = 0
+  · have hfirstRank : HypercubeRamsey.S04.rankValue β γ n g v 1 =
+        mergeSortAt f ⟨0, hn⟩ := by
+      simpa [f] using rankValue_succ_eq_mergeSortAt g v ⟨0, hn⟩
+    have hfirst : S ≤ mergeSortAt f ⟨0, hn⟩ := by
+      have hb : ab.2 = 1 := by omega
+      simpa [hzero, hb, hfirstRank] using hspec.2.2.2
+    have hmin := mergeSort_mem_extremes f hn (f j) hxmem
+    right
+    have hb : ab.2 = 1 := by omega
+    rw [hb]
+    simpa using hfirst.trans hmin.1
+  · by_cases htop : ab.2 = S
+    · have haPos : 0 < ab.1 := Nat.pos_of_ne_zero hzero
+      let p : Fin (HypercubeRamsey.S04.chunkNum β γ n) := ⟨ab.1 - 1, by omega⟩
+      have hpVal : p.val + 1 = ab.1 := by dsimp [p]; omega
+      have hlastRank : HypercubeRamsey.S04.rankValue β γ n g v ab.1 =
+          mergeSortAt f p := by
+        have h := rankValue_succ_eq_mergeSortAt g v p
+        rw [hpVal] at h
+        simpa [f] using h
+      have hlastFin : p = ⟨HypercubeRamsey.S04.chunkNum β γ n - 1, by omega⟩ := by
+        apply Fin.ext
+        dsimp [p]
+        omega
+      have hmax := mergeSort_mem_extremes f hn (f j) hxmem
+      have hmax' : f j ≤ mergeSortAt f p := by
+        simpa [hlastFin] using hmax.2
+      left
+      calc
+        f j ≤ mergeSortAt f p := hmax'
+        _ = HypercubeRamsey.S04.rankValue β γ n g v ab.1 := hlastRank.symm
+        _ ≤ ab.1 * S := hspec.2.2.1
+    · have ha : ab.1 < HypercubeRamsey.S04.chunkNum β γ n := by
+        have hstrict : ab.2 < S := lt_of_le_of_ne hspec.2.1 htop
+        omega
+      let p : Fin (HypercubeRamsey.S04.chunkNum β γ n) := ⟨ab.1 - 1, by omega⟩
+      let q : Fin (HypercubeRamsey.S04.chunkNum β γ n) := ⟨ab.1, ha⟩
+      have hpVal : p.val + 1 = ab.1 := by dsimp [p]; omega
+      have hqVal : q.val + 1 = ab.2 := by dsimp [q]; omega
+      have hpRank : HypercubeRamsey.S04.rankValue β γ n g v ab.1 =
+          mergeSortAt f p := by
+        have h := rankValue_succ_eq_mergeSortAt g v p
+        rw [hpVal] at h
+        simpa [f] using h
+      have hqRank : HypercubeRamsey.S04.rankValue β γ n g v ab.2 =
+          mergeSortAt f q := by
+        have h := rankValue_succ_eq_mergeSortAt g v q
+        rw [hqVal] at h
+        simpa [f] using h
+      have hpq : q.val = p.val + 1 := by dsimp [p, q]; omega
+      rcases mergeSort_mem_gap f p q hpq (f j) hxmem with hlow | hhigh
+      · left
+        calc
+          f j ≤ mergeSortAt f p := hlow
+          _ = HypercubeRamsey.S04.rankValue β γ n g v ab.1 := hpRank.symm
+          _ ≤ ab.1 * S := hspec.2.2.1
+      · right
+        calc
+          ab.2 * S ≤ HypercubeRamsey.S04.rankValue β γ n g v ab.2 := hspec.2.2.2
+          _ = mergeSortAt f q := hqRank
+          _ ≤ f j := hhigh
+
+private theorem side_stable_of_gap (S a x y : ℕ) (hS : 4 ≤ S)
+    (hgap : x ≤ a * S ∨ (a + 1) * S ≤ x)
+    (hdelta : y ≤ x + 1 ∧ x ≤ y + 1) :
+    (a * S + S / 2 < x) ↔ (a * S + S / 2 < y) := by
+  have hlowMid : a * S + 1 ≤ a * S + S / 2 := by omega
+  have hhighMid : a * S + S / 2 + 1 ≤ a * S + S := by omega
+  have hscale : (a + 1) * S = a * S + S := by
+    rw [Nat.add_mul]
+    simp
+  rcases hgap with hlow | hhigh
+  · have hxnot : ¬ a * S + S / 2 < x := by omega
+    have hynot : ¬ a * S + S / 2 < y := by omega
+    constructor <;> intro h <;> omega
+  · have hbase : a * S + S ≤ x := by rw [← hscale]; exact hhigh
+    have hx : a * S + S / 2 < x := by omega
+    have hy : a * S + S / 2 < y := by omega
+    exact ⟨fun _ => hy, fun _ => hx⟩
+
+private theorem unit_below_multiple_same_side (S t a : ℕ) (hS : 4 ≤ S) :
+    (a * S + S / 2 < t * S - 1) ↔ (a * S + S / 2 < t * S) := by
+  by_cases hta : t ≤ a
+  · have hmul := Nat.mul_le_mul_right S hta
+    have hnot₁ : ¬ a * S + S / 2 < t * S := by omega
+    have hnot₂ : ¬ a * S + S / 2 < t * S - 1 := by omega
+    constructor <;> intro h <;> omega
+  · have hat : a + 1 ≤ t := by omega
+    have hmul := Nat.mul_le_mul_right S hat
+    have hscale : (a + 1) * S = a * S + S := by
+      rw [Nat.add_mul]
+      simp
+    have hgap : a * S + S / 2 < t * S - 1 := by omega
+    exact ⟨fun _ => by omega, fun _ => hgap⟩
+
+private theorem side_equiv_of_unit_multiple (S t a x y : ℕ) (hS : 4 ≤ S)
+    (hnear : (x + 1 = t * S ∧ y = t * S) ∨
+      (y + 1 = t * S ∧ x = t * S)) :
+    (a * S + S / 2 < x) ↔ (a * S + S / 2 < y) := by
+  have h := unit_below_multiple_same_side S t a hS
+  rcases hnear with ⟨hx, hy⟩ | ⟨hy, hx⟩
+  · have hx' : x = t * S - 1 := by omega
+    simpa [hx', hy] using h
+  · have hy' : y = t * S - 1 := by omega
+    simpa [hy', hx] using h.symm
+
 private theorem mergeSortNat_eq_of_perm {l₁ l₂ : List ℕ} (h : l₁.Perm l₂) :
     l₁.mergeSort (fun a b => decide (a ≤ b)) =
       l₂.mergeSort (fun a b => decide (a ≤ b)) := by
@@ -2394,6 +3276,1220 @@ private theorem gadgetOut_eq_of_leaf_and_side {β γ : ℝ} {n : ℕ}
   ext j
   simp only [Finset.mem_filter, Finset.mem_univ, true_and]
   exact hside' j
+
+private theorem gadgetOut_flip_eq_of_leaf {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hleaf : HypercubeRamsey.S04.searchLeaf β γ n g (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.searchLeaf β γ n g v)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.gadgetOut β γ n g v := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  have hgap := clipped_gap_of_search g v hS
+  have hwidth : (HypercubeRamsey.S04.searchLeaf β γ n g v).2 =
+      (HypercubeRamsey.S04.searchLeaf β γ n g v).1 + 1 := by
+    simpa using (gadgetSearchLeaf_spec g v).1
+  apply Eq.symm
+  apply gadgetOut_eq_of_leaf_and_side g v (HypercubeRamsey.cubeFlip v i) hleaf.symm
+  intro j
+  have hdelta :
+      (HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≤
+          HypercubeRamsey.S04.clipped β γ n g j v + 1) ∧
+        (HypercubeRamsey.S04.clipped β γ n g j v ≤
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1) := by
+    by_cases hj : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j
+    · exact clipped_flip_delta g j v i hj
+    · have heq := chunkCount_flip_eq g j v i hj
+      simp [HypercubeRamsey.S04.clipped, heq]
+  have hstable := side_stable_of_gap S
+    (HypercubeRamsey.S04.searchLeaf β γ n g v).1
+    (HypercubeRamsey.S04.clipped β γ n g j v)
+    (HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i))
+    hS (by simpa [hwidth] using hgap j) hdelta
+  rw [hleaf]
+  simpa [S] using hstable
+
+private theorem gadgetOut_eq_of_same_rank_side_profile {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (base w₁ w₂ : CubeVertex n)
+    (j₁ j₂ r : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    (hprofile : ∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w₁) t =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k w₂) t)
+    (hother₁ : ∀ k, k ≠ j₁ →
+      HypercubeRamsey.S04.clipped β γ n g k w₁ =
+        HypercubeRamsey.S04.clipped β γ n g k base)
+    (hother₂ : ∀ k, k ≠ j₂ →
+      HypercubeRamsey.S04.clipped β γ n g k w₂ =
+        HypercubeRamsey.S04.clipped β γ n g k base)
+    (hnear₁ :
+      (HypercubeRamsey.S04.clipped β γ n g j₁ base + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ w₁ = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₁ w₁ + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ base = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n))
+    (hnear₂ :
+      (HypercubeRamsey.S04.clipped β γ n g j₂ base + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ w₂ = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₂ w₂ + 1 = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ base = (r.val + 1) *
+          HypercubeRamsey.S04.gadgetPower β γ n)) :
+    HypercubeRamsey.S04.gadgetOut β γ n g w₁ =
+      HypercubeRamsey.S04.gadgetOut β γ n g w₂ := by
+  classical
+  have hleaf := searchLeaf_eq_of_rank_profile g w₁ w₂ hprofile
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let a := (HypercubeRamsey.S04.searchLeaf β γ n g w₁).1
+  have hstable₁ : ∀ k : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k base) ↔
+        (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k w₁) := by
+    intro k
+    by_cases hk : k = j₁
+    · subst k
+      exact side_equiv_of_unit_multiple S (r.val + 1) a
+        (HypercubeRamsey.S04.clipped β γ n g j₁ base)
+        (HypercubeRamsey.S04.clipped β γ n g j₁ w₁) hS hnear₁
+    · simp [hother₁ k hk]
+  have hstable₂ : ∀ k : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k base) ↔
+        (a * S + S / 2 < HypercubeRamsey.S04.clipped β γ n g k w₂) := by
+    intro k
+    by_cases hk : k = j₂
+    · subst k
+      exact side_equiv_of_unit_multiple S (r.val + 1) a
+        (HypercubeRamsey.S04.clipped β γ n g j₂ base)
+        (HypercubeRamsey.S04.clipped β γ n g j₂ w₂) hS hnear₂
+    · simp [hother₂ k hk]
+  apply gadgetOut_eq_of_leaf_and_side g w₁ w₂ hleaf
+  intro k
+  rw [← hleaf]
+  exact (hstable₁ k).symm.trans (hstable₂ k)
+
+private theorem chunkCoords_pairwise_disjoint {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j k : Fin (HypercubeRamsey.S04.chunkNum β γ n)) (hjk : j ≠ k) :
+    Disjoint (HypercubeRamsey.S04.chunkCoords β γ n g j)
+      (HypercubeRamsey.S04.chunkCoords β γ n g k) := by
+  classical
+  let s := HypercubeRamsey.S04.chunkNum β γ n
+  let ℓ := HypercubeRamsey.S04.chunkLen β γ n
+  have hs : 0 < s := by
+    simpa [s] using Nat.zero_lt_of_lt j.isLt
+  have hstart :
+      HypercubeRamsey.S04.chunkStart β γ n g j + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n g k ∨
+        HypercubeRamsey.S04.chunkStart β γ n g k + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n g j := by
+    by_cases hjk' : j.val < k.val
+    · have hidx : g.val * s + j.val + 1 ≤ g.val * s + k.val := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      left
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n g j + ℓ =
+            (g.val * s + j.val + 1) * ℓ := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ, Nat.add_mul,
+                Nat.mul_add, Nat.add_assoc]
+        _ ≤ (g.val * s + k.val) * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n g k := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ]
+    · have hkj' : k.val < j.val := by
+        have hne : j.val ≠ k.val := by intro h; exact hjk (Fin.ext h)
+        omega
+      have hidx : g.val * s + k.val + 1 ≤ g.val * s + j.val := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      right
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n g k + ℓ =
+            (g.val * s + k.val + 1) * ℓ := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ, Nat.add_mul,
+                Nat.mul_add, Nat.add_assoc]
+        _ ≤ (g.val * s + j.val) * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n g j := by
+              simp [HypercubeRamsey.S04.chunkStart, s, ℓ]
+  apply Finset.disjoint_left.mpr
+  intro i hi hj'
+  rcases Finset.mem_filter.mp hi with ⟨_, ⟨hlo₁, hhi₁⟩⟩
+  rcases Finset.mem_filter.mp hj' with ⟨_, ⟨hlo₂, hhi₂⟩⟩
+  rcases hstart with h | h
+  · have hle₁ : i.val < HypercubeRamsey.S04.chunkStart β γ n g j + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₁
+    have hle₂ : HypercubeRamsey.S04.chunkStart β γ n g k ≤ i.val := by
+      exact hlo₂
+    omega
+  · have hle₁ : i.val < HypercubeRamsey.S04.chunkStart β γ n g k + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₂
+    have hle₂ : HypercubeRamsey.S04.chunkStart β γ n g j ≤ i.val := by
+      exact hlo₁
+    omega
+
+private theorem chunkCoords_pairwise_disjoint_all {β γ : ℝ} {n : ℕ}
+    (g h : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j k : Fin (HypercubeRamsey.S04.chunkNum β γ n))
+    (hpair : (g, j) ≠ (h, k)) :
+    Disjoint (HypercubeRamsey.S04.chunkCoords β γ n g j)
+      (HypercubeRamsey.S04.chunkCoords β γ n h k) := by
+  classical
+  let s := HypercubeRamsey.S04.chunkNum β γ n
+  let ℓ := HypercubeRamsey.S04.chunkLen β γ n
+  let q₁ := g.val * s + j.val
+  let q₂ := h.val * s + k.val
+  have hs : 0 < s := by
+    simpa [s] using Nat.zero_lt_of_lt j.isLt
+  have hqne : q₁ ≠ q₂ := by
+    intro heq
+    rcases lt_trichotomy g.val h.val with hgh | hgh | hgh
+    · have hu : q₁ < (g.val + 1) * s := by
+        dsimp [q₁]
+        rw [Nat.add_mul, Nat.one_mul]
+        omega
+      have hstep : g.val + 1 ≤ h.val := Nat.succ_le_of_lt hgh
+      have hm : (g.val + 1) * s ≤ h.val * s := Nat.mul_le_mul_right s hstep
+      have hq₂lower : h.val * s ≤ q₂ := by
+        dsimp [q₂]
+        exact Nat.le_add_right _ _
+      exact (ne_of_lt (lt_of_lt_of_le hu (hm.trans hq₂lower))) heq
+    · have hjk : j.val ≠ k.val := by
+        intro hjk
+        apply hpair
+        exact Prod.ext (Fin.ext hgh) (Fin.ext hjk)
+      have heq' : g.val * s + j.val = g.val * s + k.val := by
+        simpa [q₁, q₂, hgh] using heq
+      exact hjk (Nat.add_left_cancel heq')
+    · have hu : q₂ < (h.val + 1) * s := by
+        dsimp [q₂]
+        rw [Nat.add_mul, Nat.one_mul]
+        omega
+      have hstep : h.val + 1 ≤ g.val := Nat.succ_le_of_lt hgh
+      have hm : (h.val + 1) * s ≤ g.val * s := Nat.mul_le_mul_right s hstep
+      have hq₁lower : g.val * s ≤ q₁ := by
+        dsimp [q₁]
+        exact Nat.le_add_right _ _
+      exact (ne_of_lt (lt_of_lt_of_le hu (hm.trans hq₁lower))) heq.symm
+  have hstart :
+      HypercubeRamsey.S04.chunkStart β γ n g j + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n h k ∨
+        HypercubeRamsey.S04.chunkStart β γ n h k + ℓ ≤
+          HypercubeRamsey.S04.chunkStart β γ n g j := by
+    rcases lt_or_gt_of_ne hqne with hq | hq
+    · have hidx : q₁ + 1 ≤ q₂ := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      left
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n g j + ℓ = q₁ * ℓ + ℓ := by
+          simp [HypercubeRamsey.S04.chunkStart, q₁, s, ℓ]
+        _ = (q₁ + 1) * ℓ := by
+          calc
+            q₁ * ℓ + ℓ = q₁ * ℓ + 1 * ℓ := by rw [Nat.one_mul]
+            _ = (q₁ + 1) * ℓ := (Nat.add_mul q₁ 1 ℓ).symm
+        _ ≤ q₂ * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n h k := by
+          simp [HypercubeRamsey.S04.chunkStart, q₂, s, ℓ]
+    · have hidx : q₂ + 1 ≤ q₁ := by omega
+      have hmul := Nat.mul_le_mul_right ℓ hidx
+      right
+      calc
+        HypercubeRamsey.S04.chunkStart β γ n h k + ℓ = q₂ * ℓ + ℓ := by
+          simp [HypercubeRamsey.S04.chunkStart, q₂, s, ℓ]
+        _ = (q₂ + 1) * ℓ := by
+          calc
+            q₂ * ℓ + ℓ = q₂ * ℓ + 1 * ℓ := by rw [Nat.one_mul]
+            _ = (q₂ + 1) * ℓ := (Nat.add_mul q₂ 1 ℓ).symm
+        _ ≤ q₁ * ℓ := hmul
+        _ = HypercubeRamsey.S04.chunkStart β γ n g j := by
+          simp [HypercubeRamsey.S04.chunkStart, q₁, s, ℓ]
+  apply Finset.disjoint_left.mpr
+  intro i hi hk
+  rcases Finset.mem_filter.mp hi with ⟨_, ⟨hlo₁, hhi₁⟩⟩
+  rcases Finset.mem_filter.mp hk with ⟨_, ⟨hlo₂, hhi₂⟩⟩
+  rcases hstart with h12 | h21
+  · have hupper : i.val < HypercubeRamsey.S04.chunkStart β γ n g j + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₁
+    omega
+  · have hupper : i.val < HypercubeRamsey.S04.chunkStart β γ n h k + ℓ := by
+      simpa [HypercubeRamsey.S04.chunkLen, ℓ] using hhi₂
+    omega
+
+private theorem clipped_tuple_flip_profile {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    (∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g j v) ∨
+    ∃ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (∀ k, k ≠ j →
+        HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g k v) ∧
+      (HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g j v + 1 ∨
+        HypercubeRamsey.S04.clipped β γ n g j v =
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1) := by
+  classical
+  let D : Finset (Fin (HypercubeRamsey.S04.chunkNum β γ n)) :=
+    Finset.univ.filter fun j =>
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≠
+        HypercubeRamsey.S04.clipped β γ n g j v
+  have hcard : D.card ≤ 1 := by
+    apply Finset.card_le_one.mpr
+    intro j hj k hk
+    by_contra hjk
+    have hij : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j := by
+      by_contra hnot
+      have hcount := chunkCount_flip_eq g j v i hnot
+      have hclip : HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i) = HypercubeRamsey.S04.clipped β γ n g j v := by
+        simp [HypercubeRamsey.S04.clipped, hcount]
+      exact (Finset.mem_filter.mp hj).2 hclip
+    have hik : i ∈ HypercubeRamsey.S04.chunkCoords β γ n g k := by
+      by_contra hnot
+      have hcount := chunkCount_flip_eq g k v i hnot
+      have hclip : HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i) = HypercubeRamsey.S04.clipped β γ n g k v := by
+        simp [HypercubeRamsey.S04.clipped, hcount]
+      exact (Finset.mem_filter.mp hk).2 hclip
+    exact (Finset.disjoint_left.mp (chunkCoords_pairwise_disjoint g j k hjk) hij) hik
+  by_cases hempty : D = ∅
+  · left
+    intro j
+    by_contra hne
+    have hj : j ∈ D := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+    rw [hempty] at hj
+    simp at hj
+  · have hDne : D.card ≠ 0 := by
+      intro h
+      exact hempty (Finset.card_eq_zero.mp h)
+    have hDcard : D.card = 1 := by omega
+    obtain ⟨j, hjD⟩ := Finset.card_eq_one.mp hDcard
+    right
+    refine ⟨j, ?_, ?_⟩
+    · intro k hkj
+      by_contra hne
+      have hk : k ∈ D := Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+      rw [hjD] at hk
+      simp [hkj] at hk
+    · have hjmem : j ∈ D := by rw [hjD]; simp
+      have hjdiff := (Finset.mem_filter.mp hjmem).2
+      have hdelta := clipped_flip_delta g j v i (by
+        by_contra hnot
+        have hcount := chunkCount_flip_eq g j v i hnot
+        have hclip : HypercubeRamsey.S04.clipped β γ n g j
+            (HypercubeRamsey.cubeFlip v i) = HypercubeRamsey.S04.clipped β γ n g j v := by
+          simp [HypercubeRamsey.S04.clipped, hcount]
+        exact hjdiff hclip)
+      by_cases hle : HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i) ≤ HypercubeRamsey.S04.clipped β γ n g j v
+      · right
+        omega
+      · left
+        omega
+
+private theorem clipped_flip_sorted_change {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    (∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g t v =
+        HypercubeRamsey.S04.clipped β γ n g t (HypercubeRamsey.cubeFlip v i)) ∨
+    ∃ j r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      (∀ k, k ≠ j →
+        HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g k v) ∧
+      (∀ t, t ≠ r → mergeSortAt
+        (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) t =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) t) ∧
+      ((mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) r =
+          mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 ∧
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g j v + 1 ∧
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+          HypercubeRamsey.S04.clipped β γ n g j v) ∨
+       (mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+          mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+            (HypercubeRamsey.cubeFlip v i)) r + 1 ∧
+        HypercubeRamsey.S04.clipped β γ n g j v =
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1 ∧
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+            (HypercubeRamsey.cubeFlip v i)) r =
+          HypercubeRamsey.S04.clipped β γ n g j
+            (HypercubeRamsey.cubeFlip v i))) := by
+  classical
+  let f : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
+    fun j => HypercubeRamsey.S04.clipped β γ n g j v
+  let h : Fin (HypercubeRamsey.S04.chunkNum β γ n) → ℕ :=
+    fun j => HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  rcases clipped_tuple_flip_profile g v i with heq | ⟨j, hother, hdir⟩
+  · left
+    intro t
+    exact (heq t).symm
+  · by_cases hup : h j = f j + 1
+    · have hfg : ∀ k, f k ≤ h k := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hgf : ∀ k, h k ≤ f k + 1 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hpoint : ∀ k, h k = f k + if k = j then 1 else 0 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; simp [hup]
+        · simp [f, h, hkj, hother k hkj]
+      have hsum : (∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), f k) + 1 =
+          ∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), h k := by
+        have hs : (∑ k, h k) = (∑ k, f k) + 1 := by
+          calc
+            (∑ k, h k) = ∑ k, (f k + if k = j then 1 else 0) :=
+              Finset.sum_congr rfl (fun k _ => hpoint k)
+            _ = (∑ k, f k) + ∑ k, (if k = j then 1 else 0) := Finset.sum_add_distrib
+            _ = (∑ k, f k) + 1 := by simp
+        omega
+      obtain ⟨r, hold, hnew, hrest⟩ :=
+        mergeSort_one_change_at f h j hfg hgf hsum hup
+          (by intro k hkj; exact hother k hkj)
+      have hrank : mergeSortAt h r = mergeSortAt f r + 1 := by
+        rw [hnew, hold, hup]
+      right
+      refine ⟨j, r, hother, ?_, ?_⟩
+      · intro t htr
+        exact hrest t htr
+      · exact Or.inl ⟨hrank, hup, hold⟩
+    · have hdown : f j = h j + 1 := by
+        rcases hdir with hinc | hdec
+        · exact False.elim (hup hinc)
+        · exact hdec
+      have hfg : ∀ k, h k ≤ f k := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hgf : ∀ k, f k ≤ h k + 1 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; omega
+        · simp [f, h, hother k hkj]
+      have hpoint : ∀ k, f k = h k + if k = j then 1 else 0 := by
+        intro k
+        by_cases hkj : k = j
+        · subst k; simp [hdown]
+        · simp [f, h, hkj, hother k hkj]
+      have hsum : (∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), h k) + 1 =
+          ∑ k : Fin (HypercubeRamsey.S04.chunkNum β γ n), f k := by
+        have hs : (∑ k, f k) = (∑ k, h k) + 1 := by
+          calc
+            (∑ k, f k) = ∑ k, (h k + if k = j then 1 else 0) :=
+              Finset.sum_congr rfl (fun k _ => hpoint k)
+            _ = (∑ k, h k) + ∑ k, (if k = j then 1 else 0) := Finset.sum_add_distrib
+            _ = (∑ k, h k) + 1 := by simp
+        omega
+      obtain ⟨r, hlow, hhigh, hrest⟩ :=
+        mergeSort_one_change_at h f j hfg hgf hsum hdown
+          (by intro k hkj; exact (hother k hkj).symm)
+      have hrank : mergeSortAt f r = mergeSortAt h r + 1 := by
+        rw [hhigh, hlow, hdown]
+      right
+      refine ⟨j, r, hother, ?_, ?_⟩
+      · intro t htr
+        exact (hrest t htr).symm
+      · exact Or.inr ⟨hrank, hdown, hlow⟩
+
+private abbrev ClippedFlipRankData {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (j r : Fin (HypercubeRamsey.S04.chunkNum β γ n)) : Prop :=
+  (∀ k, k ≠ j →
+    HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.clipped β γ n g k v) ∧
+  (∀ t, t ≠ r → mergeSortAt
+    (fun k => HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i)) t =
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) t) ∧
+  ((mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+      (HypercubeRamsey.cubeFlip v i)) r =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 ∧
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g j v + 1 ∧
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+        HypercubeRamsey.S04.clipped β γ n g j v) ∨
+    (mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r =
+        mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) r + 1 ∧
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) + 1 ∧
+      mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+          (HypercubeRamsey.cubeFlip v i)) r =
+        HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i)))
+
+private theorem clipped_flip_has_rank_data {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :
+    ∃ d : Fin (HypercubeRamsey.S04.chunkNum β γ n) ×
+        Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      ClippedFlipRankData g v i d.1 d.2 := by
+  rcases clipped_flip_sorted_change g v i with heq | ⟨j, r, hother, hrest, hdir⟩
+  · exact False.elim (hsame heq)
+  · exact ⟨(j, r), hother, hrest, hdir⟩
+
+private noncomputable def clippedFlipRankData {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :=
+  Classical.choose (clipped_flip_has_rank_data g v i hsame)
+
+private theorem clippedFlipRankData_spec {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :
+    ClippedFlipRankData g v i (clippedFlipRankData g v i hsame).1
+      (clippedFlipRankData g v i hsame).2 :=
+  Classical.choose_spec (clipped_flip_has_rank_data g v i hsame)
+
+private noncomputable def clippedFlipRankDataTotal {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    Fin (HypercubeRamsey.S04.chunkNum β γ n) ×
+      Fin (HypercubeRamsey.S04.chunkNum β γ n) := by
+  classical
+  by_cases hsame : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  · have hpos : 0 < HypercubeRamsey.S04.chunkNum β γ n := by
+      unfold HypercubeRamsey.S04.chunkNum
+      have hpow : 2 ≤ HypercubeRamsey.S04.gadgetPower β γ n := by
+        unfold HypercubeRamsey.S04.gadgetPower
+        calc
+          2 = 2 ^ (1 : ℕ) := by norm_num
+          _ ≤ 2 ^ max 1
+              (⌈Real.log ((n : ℝ) ^ (2 * HypercubeRamsey.omega4 β γ)) /
+                Real.log 2⌉₊) :=
+              Nat.pow_le_pow_right (by decide : 0 < (2 : ℕ)) (le_max_left _ _)
+      omega
+    exact (⟨0, hpos⟩, ⟨0, hpos⟩)
+  · exact clippedFlipRankData g v i hsame
+
+private theorem clippedFlipRankDataTotal_spec {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hsame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)) :
+    ClippedFlipRankData g v i (clippedFlipRankDataTotal g v i).1
+      (clippedFlipRankDataTotal g v i).2 := by
+  classical
+  unfold clippedFlipRankDataTotal
+  rw [dif_neg hsame]
+  exact clippedFlipRankData_spec g v i hsame
+
+private noncomputable def gadgetFlipCodeOfData {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (d : Fin (HypercubeRamsey.S04.chunkNum β γ n) ×
+      Fin (HypercubeRamsey.S04.chunkNum β γ n)) (path : List ℕ) :
+    Option (Fin (HypercubeRamsey.S04.chunkNum β γ n) × Bool) := by
+  classical
+  let r := d.2
+  let t := r.val + 1
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  by_cases hp : t ∈ path
+  · by_cases hc :
+      ((t * S ≤ R t) ≠
+        (t * S ≤ HypercubeRamsey.S04.rankValue β γ n g
+          (HypercubeRamsey.cubeFlip v i) t))
+    · exact some (r,
+        decide (HypercubeRamsey.S04.clipped β γ n g d.1
+          (HypercubeRamsey.cubeFlip v i) =
+            HypercubeRamsey.S04.clipped β γ n g d.1 v + 1))
+    · exact none
+  · exact none
+
+private noncomputable def gadgetFlipCode {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n) :
+    Option (Fin (HypercubeRamsey.S04.chunkNum β γ n) × Bool) := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  let path := binarySearchPath S R (Nat.log2 S) (0, S)
+  exact if ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) then
+    none
+  else
+    gadgetFlipCodeOfData g v i (clippedFlipRankDataTotal g v i) path
+
+private theorem gadgetFlipCode_none_eq_base {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    (hcode : gadgetFlipCode g v i = none) :
+    HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.gadgetOut β γ n g v := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  let R' := HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i)
+  let e := Nat.log2 S
+  let path := binarySearchPath S R e (0, S)
+  by_cases hsame : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j v =
+        HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  · have hprofile : ∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+        mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j v) t =
+          mergeSortAt (fun j => HypercubeRamsey.S04.clipped β γ n g j
+            (HypercubeRamsey.cubeFlip v i)) t := by
+      intro t
+      have hfun : (fun j : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+          HypercubeRamsey.S04.clipped β γ n g j v) =
+        (fun j => HypercubeRamsey.S04.clipped β γ n g j
+          (HypercubeRamsey.cubeFlip v i)) := funext hsame
+      rw [hfun]
+    have hleaf := searchLeaf_eq_of_rank_profile g v (HypercubeRamsey.cubeFlip v i) hprofile
+    exact gadgetOut_flip_eq_of_leaf g v i hleaf.symm hS
+  · let d := clippedFlipRankDataTotal g v i
+    let r := d.2
+    let t := r.val + 1
+    have hdata := clippedFlipRankDataTotal_spec g v i hsame
+    have hrest := hdata.2.1
+    let b := decide (HypercubeRamsey.S04.clipped β γ n g d.1
+      (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g d.1 v + 1)
+    have hdecPath : ∀ u ∈ path, (u * S ≤ R u) ↔ (u * S ≤ R' u) := by
+      intro u hu
+      by_cases hut : u = t
+      · subst u
+        by_cases hc : (t * S ≤ R t) ≠ (t * S ≤ R' t)
+        · have hsome : gadgetFlipCode g v i = some (r, b) := by
+            unfold gadgetFlipCode
+            rw [if_neg hsame]
+            simpa [gadgetFlipCodeOfData, d, r, t, S, R, R', e, path, b, hu, hc]
+          simp [hsome] at hcode
+        · have heq : (t * S ≤ R t) = (t * S ≤ R' t) := by
+            by_contra hne
+            exact hc hne
+          exact Iff.of_eq heq
+      · have hrv := rankValue_eq_of_at_eq_except g v
+          (HypercubeRamsey.cubeFlip v i) r (fun t htr => (hrest t htr).symm) u (by omega)
+        have hrv' : R u = R' u := by simpa [R, R'] using hrv
+        change (u * S ≤ R u) ↔ (u * S ≤ R' u)
+        constructor
+        · intro hu
+          calc
+            u * S ≤ R u := hu
+            _ = R' u := hrv'
+        · intro hu
+          calc
+            u * S ≤ R' u := hu
+            _ = R u := hrv'.symm
+    have hleaf : HypercubeRamsey.S04.searchLeaf β γ n g v =
+        HypercubeRamsey.S04.searchLeaf β γ n g (HypercubeRamsey.cubeFlip v i) := by
+      calc
+        HypercubeRamsey.S04.searchLeaf β γ n g v = binarySearchRun S R e (0, S) := by
+          simpa [S, R, e] using gadgetSearchLeaf_eq_run g v
+        _ = binarySearchRun S R' e (0, S) := binarySearchRun_eq_of_same_path_decisions
+          S R R' e (0, S) hdecPath
+        _ = HypercubeRamsey.S04.searchLeaf β γ n g (HypercubeRamsey.cubeFlip v i) := by
+          simpa [S, R', e] using (gadgetSearchLeaf_eq_run g (HypercubeRamsey.cubeFlip v i)).symm
+    exact gadgetOut_flip_eq_of_leaf g v i hleaf.symm hS
+
+private theorem gadgetFlipCode_some_spec {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    {r : Fin (HypercubeRamsey.S04.chunkNum β γ n)} {b : Bool}
+    (hcode : gadgetFlipCode g v i = some (r, b)) :
+    ∃ j, ClippedFlipRankData g v i j r ∧
+      r.val + 1 ∈ binarySearchPath (HypercubeRamsey.S04.gadgetPower β γ n)
+        (HypercubeRamsey.S04.rankValue β γ n g v)
+        (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+        (0, HypercubeRamsey.S04.gadgetPower β γ n) ∧
+      b = decide (HypercubeRamsey.S04.clipped β γ n g j
+        (HypercubeRamsey.cubeFlip v i) =
+          HypercubeRamsey.S04.clipped β γ n g j v + 1) ∧
+      ((r.val + 1) * HypercubeRamsey.S04.gadgetPower β γ n ≤
+          HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1)) ≠
+        ((r.val + 1) * HypercubeRamsey.S04.gadgetPower β γ n ≤
+          HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i)
+            (r.val + 1)) := by
+  classical
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let R := HypercubeRamsey.S04.rankValue β γ n g v
+  let R' := HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i)
+  let path := binarySearchPath S R (Nat.log2 S) (0, S)
+  let same : Prop := ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+    HypercubeRamsey.S04.clipped β γ n g j v =
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i)
+  by_cases hsame : same
+  · have hsame' : ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+        HypercubeRamsey.S04.clipped β γ n g j v =
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) := by
+      simpa [same] using hsame
+    have hnone : gadgetFlipCode g v i = none := by
+      unfold gadgetFlipCode
+      rw [if_pos hsame']
+    rw [hnone] at hcode
+    cases hcode
+  · let d := clippedFlipRankDataTotal g v i
+    let r₀ := d.2
+    let t := r₀.val + 1
+    let b₀ := decide (HypercubeRamsey.S04.clipped β γ n g d.1
+      (HypercubeRamsey.cubeFlip v i) =
+        HypercubeRamsey.S04.clipped β γ n g d.1 v + 1)
+    have hnotSame : ¬ ∀ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+        HypercubeRamsey.S04.clipped β γ n g j v =
+          HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) := by
+      simpa [same] using hsame
+    have hdataCode : gadgetFlipCodeOfData g v i d path = some (r, b) := by
+      unfold gadgetFlipCode at hcode
+      rw [if_neg hnotSame] at hcode
+      simpa [S, R, path] using hcode
+    have hdata := clippedFlipRankDataTotal_spec g v i hnotSame
+    by_cases hp : t ∈ path
+    · by_cases hc : (t * S ≤ R t) ≠ (t * S ≤ R' t)
+      · have hpair : (r₀, b₀) = (r, b) := by
+          have hEq := hdataCode
+          simpa [gadgetFlipCodeOfData, d, r₀, t, b₀, S, R, R', path, hp, hc]
+            using hEq
+        have hr : r₀ = r := congrArg Prod.fst hpair
+        have hb : b₀ = b := congrArg Prod.snd hpair
+        refine ⟨d.1, ?_, ?_, ?_, ?_⟩
+        · simpa [d, r₀, hr] using hdata
+        · simpa [r₀, hr, t, path, S, R] using hp
+        · simpa [b₀, d] using hb.symm
+        · simpa [r₀, hr, t, S, R, R'] using hc
+      · have heq : (t * S ≤ R t) = (t * S ≤ R' t) := by
+          by_contra hne
+          exact hc hne
+        simp [gadgetFlipCodeOfData, d, r₀, t, b₀, S, R, R', path, hp, heq] at hdataCode
+    · simp [gadgetFlipCodeOfData, d, r₀, t, b₀, S, R, R', path, hp] at hdataCode
+
+private theorem threshold_of_unit_increment (a x : ℕ)
+    (hcross : (a ≤ x) ≠ (a ≤ x + 1)) : x + 1 = a := by
+  have hnot : ¬ a ≤ x := by
+    intro hx
+    have hy : a ≤ x + 1 := by omega
+    have heq : (a ≤ x) = (a ≤ x + 1) :=
+      propext ⟨fun _ => hy, fun _ => hx⟩
+    exact hcross heq
+  have hy : a ≤ x + 1 := by
+    by_contra hny
+    have heq : (a ≤ x) = (a ≤ x + 1) :=
+      propext ⟨fun hx => by omega, fun hy => by exact False.elim (hny hy)⟩
+    exact hcross heq
+  omega
+
+private theorem threshold_of_unit_decrement (a x : ℕ)
+    (hcross : (a ≤ x + 1) ≠ (a ≤ x)) : x + 1 = a := by
+  have hy : a ≤ x + 1 := by
+    by_contra hny
+    have heq : (a ≤ x + 1) = (a ≤ x) :=
+      propext ⟨fun hx => by exact False.elim (hny hx), fun hx => by omega⟩
+    exact hcross heq
+  have hnot : ¬ a ≤ x := by
+    intro hx
+    have heq : (a ≤ x + 1) = (a ≤ x) :=
+      propext ⟨fun _ => hx, fun _ => by omega⟩
+    exact hcross heq
+  omega
+
+private theorem gadgetOut_eq_of_same_flip_code {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n)
+    (i₁ i₂ : Fin n) (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    {r : Fin (HypercubeRamsey.S04.chunkNum β γ n)} {b : Bool}
+    (hcode₁ : gadgetFlipCode g v i₁ = some (r, b))
+    (hcode₂ : gadgetFlipCode g v i₂ = some (r, b)) :
+    HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i₁) =
+      HypercubeRamsey.S04.gadgetOut β γ n g (HypercubeRamsey.cubeFlip v i₂) := by
+  classical
+  rcases gadgetFlipCode_some_spec g v i₁ hcode₁ with
+    ⟨j₁, hdata₁, hpath₁, hb₁, hcross₁⟩
+  rcases gadgetFlipCode_some_spec g v i₂ hcode₂ with
+    ⟨j₂, hdata₂, hpath₂, hb₂, hcross₂⟩
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let f₀ := fun k : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+    HypercubeRamsey.S04.clipped β γ n g k v
+  let f₁ := fun k : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+    HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i₁)
+  let f₂ := fun k : Fin (HypercubeRamsey.S04.chunkNum β γ n) =>
+    HypercubeRamsey.S04.clipped β γ n g k (HypercubeRamsey.cubeFlip v i₂)
+  have hprofile : ∀ t : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      mergeSortAt f₁ t = mergeSortAt f₂ t := by
+    intro t
+    by_cases htr : t = r
+    · subst t
+      cases b
+      · have hdec₁ := of_decide_eq_false (by simpa using hb₁.symm)
+        have hdec₂ := of_decide_eq_false (by simpa using hb₂.symm)
+        rcases hdata₁.2.2 with ⟨_, hchunk₁, _⟩ | ⟨hbase₁, hchunk₁, _⟩
+        · omega
+        · rcases hdata₂.2.2 with ⟨_, hchunk₂, _⟩ | ⟨hbase₂, hchunk₂, _⟩
+          · omega
+          · have hf₁ : mergeSortAt f₁ r + 1 = mergeSortAt f₀ r := hbase₁.symm
+            have hf₂ : mergeSortAt f₂ r + 1 = mergeSortAt f₀ r := hbase₂.symm
+            omega
+      · have hinc₁ := of_decide_eq_true (by simpa using hb₁.symm)
+        have hinc₂ := of_decide_eq_true (by simpa using hb₂.symm)
+        rcases hdata₁.2.2 with ⟨hnew₁, hchunk₁, _⟩ | ⟨_, hchunk₁, _⟩
+        · rcases hdata₂.2.2 with ⟨hnew₂, _, _⟩ | ⟨_, hchunk₂, _⟩
+          · simpa [f₁, f₂] using hnew₁.trans hnew₂.symm
+          · omega
+        · omega
+    · calc
+        mergeSortAt f₁ t = mergeSortAt f₀ t := hdata₁.2.1 t htr
+        _ = mergeSortAt f₂ t := (hdata₂.2.1 t htr).symm
+  have hnear₁ :
+      (HypercubeRamsey.S04.clipped β γ n g j₁ v + 1 = (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ (HypercubeRamsey.cubeFlip v i₁) =
+          (r.val + 1) * S) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₁ (HypercubeRamsey.cubeFlip v i₁) + 1 =
+          (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₁ v = (r.val + 1) * S) := by
+    cases b
+    · have hdec := of_decide_eq_false (by simpa using hb₁.symm)
+      rcases hdata₁.2.2 with hinc | hdecData
+      · omega
+      · rcases hdecData with ⟨hbaseRank, hchunk, hpin⟩
+        have hnewRank : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₁) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁ (HypercubeRamsey.cubeFlip v i₁) := by
+          rw [rankValue_succ_eq_mergeSortAt, hpin]
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁
+              (HypercubeRamsey.cubeFlip v i₁) + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                (HypercubeRamsey.cubeFlip v i₁)) r + 1 := hbaseRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₁
+                (HypercubeRamsey.cubeFlip v i₁) + 1 := by rw [hpin]
+        have hthreshold := threshold_of_unit_decrement ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₁
+            (HypercubeRamsey.cubeFlip v i₁)) (by
+              simpa [S, holdRank, hnewRank] using hcross₁)
+        exact Or.inr ⟨by simpa [S] using hthreshold, by omega⟩
+    · have hinc := of_decide_eq_true (by simpa using hb₁.symm)
+      rcases hdata₁.2.2 with hincData | hdec
+      · rcases hincData with ⟨hnewRank, hchunk, hpin⟩
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁ v := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = HypercubeRamsey.S04.clipped β γ n g j₁ v := hpin
+        have hnewRank' : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₁) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₁ v + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i₁)
+                (r.val + 1) = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                  (HypercubeRamsey.cubeFlip v i₁)) r :=
+              rankValue_succ_eq_mergeSortAt g (HypercubeRamsey.cubeFlip v i₁) r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 :=
+              hnewRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₁ v + 1 := by
+              rw [← rankValue_succ_eq_mergeSortAt g v r, holdRank]
+        have hthreshold := threshold_of_unit_increment ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₁ v) (by
+            simpa [S, holdRank, hnewRank'] using hcross₁)
+        exact Or.inl ⟨by simpa [S] using hthreshold, by omega⟩
+      · omega
+  have hnear₂ :
+      (HypercubeRamsey.S04.clipped β γ n g j₂ v + 1 = (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ (HypercubeRamsey.cubeFlip v i₂) =
+          (r.val + 1) * S) ∨
+      (HypercubeRamsey.S04.clipped β γ n g j₂ (HypercubeRamsey.cubeFlip v i₂) + 1 =
+          (r.val + 1) * S ∧
+        HypercubeRamsey.S04.clipped β γ n g j₂ v = (r.val + 1) * S) := by
+    cases b
+    · have hdec := of_decide_eq_false (by simpa using hb₂.symm)
+      rcases hdata₂.2.2 with hinc | hdecData
+      · omega
+      · rcases hdecData with ⟨hbaseRank, hchunk, hpin⟩
+        have hnewRank : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₂) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂ (HypercubeRamsey.cubeFlip v i₂) := by
+          rw [rankValue_succ_eq_mergeSortAt, hpin]
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂
+              (HypercubeRamsey.cubeFlip v i₂) + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                (HypercubeRamsey.cubeFlip v i₂)) r + 1 := hbaseRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₂
+                (HypercubeRamsey.cubeFlip v i₂) + 1 := by rw [hpin]
+        have hthreshold := threshold_of_unit_decrement ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₂
+            (HypercubeRamsey.cubeFlip v i₂)) (by
+              simpa [S, holdRank, hnewRank] using hcross₂)
+        exact Or.inr ⟨by simpa [S] using hthreshold, by omega⟩
+    · have hinc := of_decide_eq_true (by simpa using hb₂.symm)
+      rcases hdata₂.2.2 with hincData | hdec
+      · rcases hincData with ⟨hnewRank, hchunk, hpin⟩
+        have holdRank : HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂ v := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g v (r.val + 1) =
+                mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r :=
+              rankValue_succ_eq_mergeSortAt g v r
+            _ = HypercubeRamsey.S04.clipped β γ n g j₂ v := hpin
+        have hnewRank' : HypercubeRamsey.S04.rankValue β γ n g
+            (HypercubeRamsey.cubeFlip v i₂) (r.val + 1) =
+            HypercubeRamsey.S04.clipped β γ n g j₂ v + 1 := by
+          calc
+            HypercubeRamsey.S04.rankValue β γ n g (HypercubeRamsey.cubeFlip v i₂)
+                (r.val + 1) = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k
+                  (HypercubeRamsey.cubeFlip v i₂)) r :=
+              rankValue_succ_eq_mergeSortAt g (HypercubeRamsey.cubeFlip v i₂) r
+            _ = mergeSortAt (fun k => HypercubeRamsey.S04.clipped β γ n g k v) r + 1 :=
+              hnewRank
+            _ = HypercubeRamsey.S04.clipped β γ n g j₂ v + 1 := by
+              rw [← rankValue_succ_eq_mergeSortAt g v r, holdRank]
+        have hthreshold := threshold_of_unit_increment ((r.val + 1) * S)
+          (HypercubeRamsey.S04.clipped β γ n g j₂ v) (by
+            simpa [S, holdRank, hnewRank'] using hcross₂)
+        exact Or.inl ⟨by simpa [S] using hthreshold, by omega⟩
+      · omega
+  exact gadgetOut_eq_of_same_rank_side_profile g v
+    (HypercubeRamsey.cubeFlip v i₁) (HypercubeRamsey.cubeFlip v i₂)
+    j₁ j₂ r hS hprofile hdata₁.1 hdata₂.1 hnear₁ hnear₂
+
+private def keyFlipHasCode (β γ : ℝ) {n : ℕ} (v : CubeVertex n) (i : Fin n) : Prop :=
+  ∃ g : Fin (HypercubeRamsey.S04.gadgetNum β γ n),
+    ∃ r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      ∃ b : Bool, gadgetFlipCode g v i = some (r, b)
+
+private noncomputable def keyFlipWitness {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) (h : keyFlipHasCode β γ v i) :
+    Fin (HypercubeRamsey.S04.gadgetNum β γ n) ×
+      Fin (HypercubeRamsey.S04.chunkNum β γ n) × Bool :=
+  (Classical.choose h, Classical.choose (Classical.choose_spec h),
+    Classical.choose (Classical.choose_spec (Classical.choose_spec h)))
+
+private theorem keyFlipWitness_spec {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) (h : keyFlipHasCode β γ v i) :
+    gadgetFlipCode (keyFlipWitness v i h).1 v i =
+      some ((keyFlipWitness v i h).2.1, (keyFlipWitness v i h).2.2) := by
+  classical
+  dsimp [keyFlipWitness]
+  exact Classical.choose_spec
+    (Classical.choose_spec (Classical.choose_spec h))
+
+private noncomputable def keyFlipCode (β γ : ℝ) {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) :
+    Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool) := by
+  classical
+  by_cases h : keyFlipHasCode β γ v i
+  · let w := keyFlipWitness v i h
+    exact some (w.1, w.2.1.val + 1, w.2.2)
+  · exact none
+
+private theorem keyFlipCode_cases (β γ : ℝ) {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) :
+    (keyFlipCode β γ v i = none ∧
+      ∀ g : Fin (HypercubeRamsey.S04.gadgetNum β γ n), gadgetFlipCode g v i = none) ∨
+    ∃ g r b, keyFlipCode β γ v i = some (g, r.val + 1, b) ∧
+      gadgetFlipCode g v i = some (r, b) := by
+  classical
+  by_cases h : keyFlipHasCode β γ v i
+  · let w := keyFlipWitness v i h
+    have hw := keyFlipWitness_spec v i h
+    right
+    refine ⟨w.1, w.2.1, w.2.2, ?_, ?_⟩
+    · simp [keyFlipCode, h, w]
+    · simpa [w] using hw
+  · left
+    have hnone : keyFlipCode β γ v i = none := by
+      simp [keyFlipCode, h]
+    refine ⟨hnone, ?_⟩
+    intro g
+    by_contra hne
+    cases hg : gadgetFlipCode g v i with
+    | none => exact hne hg
+    | some c => exact h ⟨g, c.1, c.2, hg⟩
+
+private theorem keyFlipCode_some_spec (β γ : ℝ) {n : ℕ}
+    (v : CubeVertex n) (i : Fin n)
+    {g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)} {t : ℕ} {b : Bool}
+    (hcode : keyFlipCode β γ v i = some (g, t, b)) :
+    ∃ r : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      t = r.val + 1 ∧ gadgetFlipCode g v i = some (r, b) := by
+  classical
+  rcases keyFlipCode_cases β γ v i with ⟨hnone, _⟩ | ⟨g₀, r₀, b₀, hout, hg₀⟩
+  · rw [hnone] at hcode
+    cases hcode
+  · have hp : (g₀, r₀.val + 1, b₀) = (g, t, b) :=
+      Option.some.inj (hout.symm.trans hcode)
+    have hg : g₀ = g := congrArg Prod.fst hp
+    have hrest : (r₀.val + 1, b₀) = (t, b) := congrArg Prod.snd hp
+    have ht : t = r₀.val + 1 := (congrArg Prod.fst hrest).symm
+    have hb : b₀ = b := congrArg Prod.snd hrest
+    refine ⟨r₀, ht, ?_⟩
+    simpa [hg, hb] using hg₀
+
+private theorem gadgetFlipCode_some_changed_chunk {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    {r : Fin (HypercubeRamsey.S04.chunkNum β γ n)} {b : Bool}
+    (hcode : gadgetFlipCode g v i = some (r, b)) :
+    ∃ j : Fin (HypercubeRamsey.S04.chunkNum β γ n),
+      HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≠
+        HypercubeRamsey.S04.clipped β γ n g j v := by
+  rcases gadgetFlipCode_some_spec g v i hcode with ⟨j, hdata, _, _, _⟩
+  refine ⟨j, ?_⟩
+  rcases hdata.2.2 with ⟨_, hchange, _⟩ | ⟨_, hchange, _⟩ <;> omega
+
+private theorem chunkCoords_mem_of_clipped_changed {β γ : ℝ} {n : ℕ}
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (j : Fin (HypercubeRamsey.S04.chunkNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hchange : HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) ≠
+      HypercubeRamsey.S04.clipped β γ n g j v) :
+    i ∈ HypercubeRamsey.S04.chunkCoords β γ n g j := by
+  by_contra hi
+  have hcount := chunkCount_flip_eq g j v i hi
+  have hclip : HypercubeRamsey.S04.clipped β γ n g j (HypercubeRamsey.cubeFlip v i) =
+      HypercubeRamsey.S04.clipped β γ n g j v := by
+    simp [HypercubeRamsey.S04.clipped, hcount]
+  exact hchange hclip
+
+private theorem gadgetFlipCode_some_unique {β γ : ℝ} {n : ℕ}
+    (g h : Fin (HypercubeRamsey.S04.gadgetNum β γ n)) (v : CubeVertex n) (i : Fin n)
+    (hgh : ∃ r b, gadgetFlipCode g v i = some (r, b))
+    (hhh : ∃ r b, gadgetFlipCode h v i = some (r, b)) : g = h := by
+  rcases hgh with ⟨r, b, hcodeg⟩
+  rcases hhh with ⟨r', b', hcodeh⟩
+  rcases gadgetFlipCode_some_changed_chunk g v i hcodeg with ⟨j, hj⟩
+  rcases gadgetFlipCode_some_changed_chunk h v i hcodeh with ⟨k, hk⟩
+  have hjmem := chunkCoords_mem_of_clipped_changed g j v i hj
+  have hkmem := chunkCoords_mem_of_clipped_changed h k v i hk
+  by_contra hne
+  have hpair : (g, j) ≠ (h, k) := by
+    intro heq
+    exact hne (congrArg Prod.fst heq)
+  exact (Finset.disjoint_left.mp
+    (chunkCoords_pairwise_disjoint_all g h j k hpair)) hjmem hkmem
+
+private theorem keyFlipOutput_eq_of_code_eq {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i₁ i₂ : Fin n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n)
+    (hcode : keyFlipCode β γ v i₁ = keyFlipCode β γ v i₂) :
+    HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i₁) =
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i₂) := by
+  classical
+  rcases keyFlipCode_cases β γ v i₁ with ⟨hnone₁, hcodes₁⟩ |
+    ⟨g₁, r₁, b₁, hout₁, hgcode₁⟩
+  · have hnone₂ : keyFlipCode β γ v i₂ = none := by
+      rw [hnone₁] at hcode
+      exact hcode.symm
+    rcases keyFlipCode_cases β γ v i₂ with ⟨_, hcodes₂⟩ |
+      ⟨g₂, r₂, b₂, hout₂, _⟩
+    · funext h
+      change HypercubeRamsey.S04.gadgetOut β γ n h
+          (HypercubeRamsey.cubeFlip v i₁) =
+        HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₂)
+      calc
+        HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₁) =
+            HypercubeRamsey.S04.gadgetOut β γ n h v :=
+          gadgetFlipCode_none_eq_base h v i₁ hS (hcodes₁ h)
+        _ = HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₂) :=
+          (gadgetFlipCode_none_eq_base h v i₂ hS (hcodes₂ h)).symm
+    · rw [hnone₂] at hout₂
+      cases hout₂
+  · rcases keyFlipCode_cases β γ v i₂ with ⟨hnone₂, _⟩ |
+      ⟨g₂, r₂, b₂, hout₂, hgcode₂⟩
+    · rw [hout₁, hnone₂] at hcode
+      cases hcode
+    · have htuple : (g₁, r₁.val + 1, b₁) = (g₂, r₂.val + 1, b₂) :=
+        Option.some.inj (by rw [hout₁, hout₂] at hcode; exact hcode)
+      have hg : g₁ = g₂ := congrArg Prod.fst htuple
+      have htail : (r₁.val + 1, b₁) = (r₂.val + 1, b₂) := congrArg Prod.snd htuple
+      have hrank : r₁.val + 1 = r₂.val + 1 := congrArg Prod.fst htail
+      have hrval : r₁.val = r₂.val := by omega
+      have hr : r₁ = r₂ := Fin.ext hrval
+      have hb : b₁ = b₂ := congrArg Prod.snd htail
+      have hgcode₂' : gadgetFlipCode g₁ v i₂ = some (r₁, b₁) := by
+        simpa [hg, hr, hb] using hgcode₂
+      funext h
+      change HypercubeRamsey.S04.gadgetOut β γ n h
+          (HypercubeRamsey.cubeFlip v i₁) =
+        HypercubeRamsey.S04.gadgetOut β γ n h (HypercubeRamsey.cubeFlip v i₂)
+      by_cases hh : h = g₁
+      · subst h
+        exact gadgetOut_eq_of_same_flip_code g₁ v i₁ i₂ hS hgcode₁ hgcode₂'
+      · have hnone₁h : gadgetFlipCode h v i₁ = none := by
+          by_contra hne
+          cases hsome : gadgetFlipCode h v i₁ with
+          | none => exact hne hsome
+          | some c =>
+            have hu := gadgetFlipCode_some_unique g₁ h v i₁
+              ⟨r₁, b₁, hgcode₁⟩ ⟨c.1, c.2, hsome⟩
+            exact hh hu.symm
+        have hnone₂h : gadgetFlipCode h v i₂ = none := by
+          by_contra hne
+          cases hsome : gadgetFlipCode h v i₂ with
+          | none => exact hne hsome
+          | some c =>
+            have hu := gadgetFlipCode_some_unique g₁ h v i₂
+              ⟨r₁, b₁, hgcode₂'⟩ ⟨c.1, c.2, hsome⟩
+            exact hh hu.symm
+        calc
+          HypercubeRamsey.S04.gadgetOut β γ n h
+              (HypercubeRamsey.cubeFlip v i₁) = HypercubeRamsey.S04.gadgetOut β γ n h v :=
+            gadgetFlipCode_none_eq_base h v i₁ hS hnone₁h
+          _ = HypercubeRamsey.S04.gadgetOut β γ n h
+              (HypercubeRamsey.cubeFlip v i₂) :=
+            (gadgetFlipCode_none_eq_base h v i₂ hS hnone₂h).symm
+
+private theorem binarySearchPath_length (S : ℕ) (R : ℕ → ℕ) (e : ℕ)
+    (ab : ℕ × ℕ) : (binarySearchPath S R e ab).length = e := by
+  induction e generalizing ab with
+  | zero => rfl
+  | succ e ih => simp [binarySearchPath, ih]
+
+private noncomputable def keyFlipPathNode {β γ : ℝ} {n : ℕ} (v : CubeVertex n)
+    (g : Fin (HypercubeRamsey.S04.gadgetNum β γ n))
+    (k : Fin (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))) : ℕ :=
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let path := binarySearchPath S (HypercubeRamsey.S04.rankValue β γ n g v)
+    (Nat.log2 S) (0, S)
+  path.get ⟨k.val, by
+    change k.val < (binarySearchPath S (HypercubeRamsey.S04.rankValue β γ n g v)
+      (Nat.log2 S) (0, S)).length
+    rw [binarySearchPath_length]
+    exact k.isLt⟩
+
+private abbrev keyFlipRankDomain {β γ : ℝ} {n : ℕ} (v : CubeVertex n) :=
+  Σ g : Fin (HypercubeRamsey.S04.gadgetNum β γ n),
+    Fin (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+
+private noncomputable def keyFlipCodeTypes {β γ : ℝ} {n : ℕ} (v : CubeVertex n) :
+    Finset (Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool)) := by
+  classical
+  exact {none} ∪
+    ((Finset.univ : Finset
+      (keyFlipRankDomain (β := β) (γ := γ) v × Bool))).image
+      (fun p => some (p.1.1,
+        keyFlipPathNode (β := β) (γ := γ) v p.1.1 p.1.2, p.2))
+
+private theorem keyFlipCodeTypes_card_le {β γ : ℝ} {n : ℕ} (v : CubeVertex n) :
+    (keyFlipCodeTypes (β := β) (γ := γ) v).card ≤
+      1 + HypercubeRamsey.S04.gadgetNum β γ n *
+      (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+  classical
+  let G := HypercubeRamsey.S04.gadgetNum β γ n
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let e := Nat.log2 S
+  have hdomain : Fintype.card (keyFlipRankDomain (β := β) (γ := γ) v) = G * e := by
+    unfold keyFlipRankDomain
+    rw [Fintype.card_sigma]
+    simp [G, e, S]
+  let D : Finset (keyFlipRankDomain (β := β) (γ := γ) v × Bool) := Finset.univ
+  calc
+    (keyFlipCodeTypes (β := β) (γ := γ) v).card ≤
+        ({none} : Finset (Option (Fin G × ℕ × Bool))).card +
+          (D.image (fun p => some (p.1.1,
+            keyFlipPathNode v p.1.1 p.1.2, p.2))).card := by
+            unfold keyFlipCodeTypes
+            exact Finset.card_union_le _ _
+    _ ≤ 1 + D.card := by
+      simp only [Finset.card_singleton]
+      exact Nat.add_le_add_left Finset.card_image_le 1
+    _ = 1 + Fintype.card (keyFlipRankDomain (β := β) (γ := γ) v × Bool) := by
+      simp only [D, Finset.card_univ]
+    _ = 1 + Fintype.card (keyFlipRankDomain (β := β) (γ := γ) v) * 2 := by
+      simp only [Fintype.card_prod, Fintype.card_bool]
+    _ = 1 + (G * e) * 2 := by rw [hdomain]
+    _ = 1 + HypercubeRamsey.S04.gadgetNum β γ n *
+          (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+      simp [G, S, e, Nat.mul_assoc]
+
+private theorem keyFlipCode_mem_types {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (i : Fin n) :
+    keyFlipCode β γ v i ∈ keyFlipCodeTypes (β := β) (γ := γ) v := by
+  classical
+  rcases keyFlipCode_cases β γ v i with ⟨hnone, _⟩ |
+    ⟨g, r, b, hout, hlocal⟩
+  · rw [hnone]
+    simp [keyFlipCodeTypes]
+  · rcases gadgetFlipCode_some_spec g v i hlocal with
+      ⟨j, hdata, hpath, hb, hcross⟩
+    let path := binarySearchPath (HypercubeRamsey.S04.gadgetPower β γ n)
+      (HypercubeRamsey.S04.rankValue β γ n g v)
+      (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n))
+      (0, HypercubeRamsey.S04.gadgetPower β γ n)
+    have hlen : path.length = Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) := by
+      exact binarySearchPath_length _ _ _ _
+    obtain ⟨k, hk, hget⟩ := List.getElem_of_mem hpath
+    let k' : Fin (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n)) :=
+      ⟨k, by rw [← hlen]; exact hk⟩
+    have hnode : keyFlipPathNode v g k' = r.val + 1 := by
+      unfold keyFlipPathNode
+      dsimp [k']
+      exact hget
+    rw [hout]
+    simp only [keyFlipCodeTypes, Finset.mem_union, Finset.mem_singleton]
+    right
+    apply Finset.mem_image.mpr
+    refine ⟨(⟨g, k'⟩, b), Finset.mem_univ _, ?_⟩
+    simpa [hnode]
+
+private noncomputable def keyOutputOfFlipCode {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (c : Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool)) :
+    HypercubeRamsey.S04.Key β γ n := by
+  classical
+  exact if h : ∃ i : Fin n, keyFlipCode β γ v i = c then
+    HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v (Classical.choose h))
+  else HypercubeRamsey.S04.key β γ n v
+
+private theorem keyOutputOfFlipCode_eq {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (c : Option (Fin (HypercubeRamsey.S04.gadgetNum β γ n) × ℕ × Bool))
+    (i : Fin n) (hc : keyFlipCode β γ v i = c)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    keyOutputOfFlipCode v c =
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i) := by
+  classical
+  let h : ∃ j : Fin n, keyFlipCode β γ v j = c := ⟨i, hc⟩
+  have hchosen := Classical.choose_spec h
+  unfold keyOutputOfFlipCode
+  rw [dif_pos h]
+  exact keyFlipOutput_eq_of_code_eq v (Classical.choose h) i hS
+    (hchosen.trans hc.symm)
+
+private theorem keyFlip_image_card_le_path {β γ : ℝ} {n : ℕ}
+    (v : CubeVertex n) (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    ((Finset.univ : Finset (Fin n)).image fun i =>
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i)).card ≤
+      1 + HypercubeRamsey.S04.gadgetNum β γ n *
+        (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+  classical
+  let G := HypercubeRamsey.S04.gadgetNum β γ n
+  let S := HypercubeRamsey.S04.gadgetPower β γ n
+  let codeSet := keyFlipCodeTypes (β := β) (γ := γ) v
+  let outputSet := codeSet.image (keyOutputOfFlipCode v)
+  let flipImage := (Finset.univ : Finset (Fin n)).image fun i =>
+    HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip v i)
+  have hsubset : flipImage ⊆ outputSet := by
+    intro κ hκ
+    rcases Finset.mem_image.mp hκ with ⟨i, hi, rfl⟩
+    apply Finset.mem_image.mpr
+    refine ⟨keyFlipCode β γ v i, ?_, ?_⟩
+    · exact keyFlipCode_mem_types v i
+    · exact keyOutputOfFlipCode_eq v _ i rfl hS
+  calc
+    flipImage.card ≤ outputSet.card := Finset.card_le_card hsubset
+    _ ≤ codeSet.card := Finset.card_image_le
+    _ ≤ 1 + G * (Nat.log2 S * 2) := by
+      simpa [codeSet, G, S] using keyFlipCodeTypes_card_le v
+    _ = 1 + HypercubeRamsey.S04.gadgetNum β γ n *
+          (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+      simp [G, S]
 
 private theorem exists_cubeFlip_of_adj {n : ℕ} (u v : CubeVertex n)
     (h : (cube n).Adj u v) : ∃ i : Fin n, HypercubeRamsey.cubeFlip u i = v := by
@@ -2443,5 +4539,21 @@ private theorem keyFlip_image_card_le_n {β γ : ℝ} {n : ℕ} (u : OddRole n) 
     (HypercubeRamsey.S04.Zset β γ u).card ≤ F.card := Finset.card_le_card hsub
     _ ≤ (Finset.univ : Finset (Fin n)).card := Finset.card_image_le
     _ = n := by simp [F]
+
+theorem keyNbr_card_le_path {β γ : ℝ} {n : ℕ} (u : OddRole n)
+    (hS : 4 ≤ HypercubeRamsey.S04.gadgetPower β γ n) :
+    (HypercubeRamsey.S04.Zset β γ u).card ≤
+      1 + HypercubeRamsey.S04.gadgetNum β γ n *
+        (Nat.log2 (HypercubeRamsey.S04.gadgetPower β γ n) * 2) := by
+  classical
+  let F : Finset (HypercubeRamsey.S04.Key β γ n) :=
+    Finset.univ.image fun i : Fin n =>
+      HypercubeRamsey.S04.key β γ n (HypercubeRamsey.cubeFlip u.1 i)
+  have hsub : HypercubeRamsey.S04.Zset β γ u ⊆ F := by
+    intro κ hκ
+    rcases Finset.mem_image.mp hκ with ⟨v, hv, rfl⟩
+    rcases exists_cubeFlip_of_adj u.1 v ((Finset.mem_filter.mp hv).2) with ⟨i, hi⟩
+    exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, by rw [hi]⟩
+  exact (Finset.card_le_card hsub).trans (keyFlip_image_card_le_path u.1 hS)
 
 end HypercubeRamsey.Lane_q_s04_gadget

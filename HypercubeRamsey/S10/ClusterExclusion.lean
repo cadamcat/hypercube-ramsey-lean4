@@ -1,4 +1,6 @@
 import HypercubeRamsey.S10.LocalNodes
+import HypercubeRamsey.S10.Transfer_sol_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_row
 import HypercubeRamsey.Framework.PartC
 import HypercubeRamsey.Assembly
 
@@ -32,6 +34,14 @@ structure HallRows (n N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) where
     ∀ b : {v : CubeVertex n // ¬ IsEvenRole v},
       (cube n).Adj a.1 b.1 → Hits E G x (odd b)
   column_load : ∀ x, ∑ a, row a x ≤ 1
+
+/-- TeX 10:283–294: intersect the retained entering event, the predictive
+tests, and the column moment tests, and extract fractional Hall rows. -/
+private theorem hallRows_of_experiment {n N : ℕ}
+    {E : Fin N → Fin N → Prop} {G : Colour}
+    (D : Lane_sol_s10_1k.RowExperiment n N E G) : Nonempty (HallRows n N E G) := by
+  obtain ⟨ω, _hω, hinj, hnonneg, hsum, hcommon, hcolumn⟩ := D.realization
+  exact ⟨⟨D.odd ω, hinj, D.row ω, hnonneg, hsum, hcommon, hcolumn⟩⟩
 
 /-- P10.1j (10:263–281): the profile, cluster and odd-injection construction. -/
 theorem p10_1j_tag_profiles_and_odd_injection
@@ -81,7 +91,21 @@ theorem p10_1k_transfer_to_even_rows
       DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
       AvailableAt κ (PCluster G ζ δ) n N E X Y →
       OddEmbeddingData n N E G → Nonempty (HallRows n N E G) := by
-  sorry
+  -- Remaining construction: simultaneous validity, typical tags, successful
+  -- cluster columns, and the predictive and separated even-row estimates
+  -- of TeX 10:101–292. OddEmbeddingData alone does not contain those data.
+  have hconstruction :
+      ∃ n₀ C₀, ∀ n N (E : Fin N → Fin N → Prop) (X Y : Finset (Fin N)) (G : Colour),
+        LargeAt n₀ C₀ n N →
+        DiscOne E X Y ((n : ℝ) ^ η₀) ((n : ℝ) ^ η₀) ((n : ℝ) ^ (-η₀)) →
+        AvailableAt κ (PCluster G ζ δ) n N E X Y →
+        Nonempty (Lane_sol_s10_1k.RowExperiment n N E G) :=
+    Lane_opus_s10_row.rowExperiment_eventually η₀ ζ δ κ hη₀ hζ hδ hδsmall hκ
+  obtain ⟨n₀, C₀, hconstruct⟩ := hconstruction
+  refine ⟨n₀, C₀, ?_⟩
+  intro n N E X Y G hlarge hdisc havail _odd
+  obtain ⟨D⟩ := hconstruct n N E X Y G hlarge hdisc havail
+  exact hallRows_of_experiment D
 
 /-- `LargeAt` is antitone in its thresholds. -/
 private theorem largeAt_of_le {n₀ n₁ n N : ℕ} {C₀ C₁ : ℝ}

@@ -17,7 +17,7 @@ namespace HypercubeRamsey
 open OAI.HypercubeRamsey Classical
 open scoped BigOperators
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 /-- P9.2-tags(ii) (09:128–134): the raw probability of a tag event is exponentially small.  For a fixed `z`,
 draw `w ∼ μ_{i_z}`: the broad test (`BroadAt`, the tag-average second law has width `log(8/κ) = O(1)`) gives
 degree `1/2 ± o(a_*)` into the tag-average second law outside first-law mass `e^{-Ω(n^u)}`, and deep
@@ -682,7 +682,7 @@ theorem p92_tag_bad_prob (P : Params9) (hP : P.Valid) (κ : ℝ) (hκ : 0 < κ) 
             exact hratioTail
       simpa [raw, tagLaw] using hbadProb
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 /-- P9.2-tags(ii) (09:135–137): the tag events satisfy the local-lemma input with charge `e^{-c' n^u/2}`:
 `B_z` reads the tags on `{z} ∪ {z^j}` (`tagScope9`), two events meet only within special distance two (at
 most `(m+1)²` others), and `e^{-c' n^u} ≤ x (1 - x)^{(m+1)²}` with `x = e^{-c' n^u/2}` for large `n`. -/

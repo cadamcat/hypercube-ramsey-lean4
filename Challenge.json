@@ -1,0 +1,18 @@
+{
+  "challenge_module": "Challenge",
+  "solution_module": "HypercubeRamsey.Main",
+  "theorem_names": [
+    "Erdos181.erdos_181"
+  ],
+  "definition_names": [
+    "SimpleGraph.hypercube",
+    "SimpleGraph.graphRamsey",
+    "SimpleGraph.diagonalGraphRamsey"
+  ],
+  "permitted_axioms": [
+    "propext",
+    "Quot.sound",
+    "Classical.choice"
+  ],
+  "enable_nanoda": false
+}

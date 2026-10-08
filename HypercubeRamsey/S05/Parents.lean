@@ -414,90 +414,324 @@ theorem L5_1a (γ K' χ : ℝ) {n N : ℕ} {ι Bin : Type*} [Fintype ι] [Fintyp
   refine ⟨P, ?_⟩
   have hlabelNonempty : (Finset.univ : Finset (Fin N)).Nonempty := by
     exact ⟨⟨0, by omega⟩, Finset.mem_univ _⟩
-  let U0 : Law N := FinProb.uniform Finset.univ hlabelNonempty
-  let U : FinProb (Word5 N p.q0) := FinProb.pi (fun _ : Fin p.q0 => U0)
-  have hgoodTag_exists (x y : Fin N) (hxy : goodPair x y) :
-      ∃ i, 0 < Λ.w i ∧ GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y := by
-    have hmass : 0 < GoodPairMass5 E G Λ μ x y := by
-      change χ ^ 2 / 2 ≤ GoodPairMass5 E G Λ μ x y at hxy
-      exact lt_of_lt_of_le (by positivity : 0 < χ ^ 2 / 2) hxy
-    have hterm : ∃ i, 0 <
-        (if GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y then Λ.w i else 0) := by
-      by_contra hnone
-      have hle : ∀ i, (if GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y
-          then Λ.w i else 0) ≤ 0 := by
-        intro i
-        exact le_of_not_gt (fun hi => hnone ⟨i, hi⟩)
-      have hs :
-          (∑ i, if GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y
-            then Λ.w i else 0) ≤ 0 := by
-        calc
-          _ ≤ ∑ i, 0 := Finset.sum_le_sum (fun i hi => hle i)
-          _ = 0 := by simp
-      unfold GoodPairMass5 at hmass
-      linarith
-    obtain ⟨i, hi⟩ := hterm
-    by_cases hgood : GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y
-    · simp [hgood] at hi
-      exact ⟨i, hi, hgood.1, hgood.2⟩
-    · simp [hgood] at hi
-  have hselected_exists (x y : Fin N) (hxy : goodPair x y) :
-      ∃ z : Fin N, Hits E G z x ∧ Hits E G z y := by
-    obtain ⟨i, hi, hxi, hyi⟩ := hgoodTag_exists x y hxy
-    have hm := commonMass_lower i x y hi hxi hyi
-    have hset : (commonSet i x y).Nonempty := by
-      by_contra hne
-      have hempty : commonSet i x y = ∅ := Finset.not_nonempty_iff_eq_empty.mp hne
-      rw [hempty] at hm
-      norm_num at hm
-    obtain ⟨z, hz⟩ := hset
-    exact ⟨z, (Finset.mem_filter.mp hz).2.1, (Finset.mem_filter.mp hz).2.2⟩
-  let pickedLabel (x y : Fin N) (hxy : goodPair x y) : Fin N :=
-    Classical.choose (hselected_exists x y hxy)
-  have hpickedLabel (x y : Fin N) (hxy : goodPair x y) :
-      Hits E G (pickedLabel x y hxy) x ∧ Hits E G (pickedLabel x y hxy) y :=
-    Classical.choose_spec (hselected_exists x y hxy)
+  let U0 : Law N := Law.mix Λ μ
+  let refProduct (i : ι) : FinProb (Word5 N p.q0) :=
+    FinProb.pi (fun _ : Fin p.q0 => μ i)
+  let U : FinProb (Word5 N p.q0) :=
+    FinProb.map (FinProb.bind Λ refProduct) Prod.snd
+  let tagGood (x y : Fin N) (i : ι) : Prop :=
+    GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y
+  have htagMass (x y : Fin N) :
+      FinProb.pr Λ (tagGood x y) = GoodPairMass5 E G Λ μ x y := by
+    classical
+    simp only [FinProb.pr, GoodPairMass5]
+    apply Finset.sum_congr rfl
+    intro i hi
+    by_cases h : GoodColumn5 E G (μ i) x ∧ GoodColumn5 E G (μ i) y
+    · simp [tagGood, h]
+    · simp [tagGood, h]
+  have htagMassPos (x y : Fin N) (hxy : goodPair x y) :
+    0 < FinProb.pr Λ (tagGood x y) := by
+    rw [htagMass]
+    exact lt_of_lt_of_le (by positivity) hxy
+  let tagLaw (x y : Fin N) (hxy : goodPair x y) : FinProb ι :=
+    FinProb.cond Λ (tagGood x y) (htagMassPos x y hxy)
+  let commonLaw (x y : Fin N) (i : ι) : Law N :=
+    if h : 0 < Λ.w i ∧ tagGood x y i then
+      Law.restrict (μ i) (commonSet i x y) (by
+        have hc := commonMass_lower i x y h.1 h.2.1 h.2.2
+        linarith)
+    else μ i
+  have hUweight (z : Word5 N p.q0) :
+      U.w z = ∑ i, Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) := by
+    simp [U, refProduct, FinProb.map, FinProb.bind, FinProb.pi, Fintype.sum_prod_type]
   let streamSeg (x y : Fin N) : FinProb (Word5 N p.q0) :=
     if hxy : goodPair x y then
-      FinProb.uniform {fun _ : Fin p.q0 => pickedLabel x y hxy} (by simp)
+      FinProb.map
+        (FinProb.bind (tagLaw x y hxy)
+          (fun i => FinProb.pi (fun _ : Fin p.q0 => commonLaw x y i))) Prod.snd
     else U
+  have hstreamSegWeight (x y : Fin N) (hxy : goodPair x y) (z : Word5 N p.q0) :
+      (streamSeg x y).w z =
+        ∑ i, (tagLaw x y hxy).w i * ∏ j : Fin p.q0, (commonLaw x y i).w (z j) := by
+    simp [streamSeg, hxy, FinProb.map, FinProb.bind, FinProb.pi, Fintype.sum_prod_type]
+  have htagLawWeight (x y : Fin N) (hxy : goodPair x y) (i : ι) :
+      (tagLaw x y hxy).w i =
+        (if tagGood x y i then Λ.w i else 0) / GoodPairMass5 E G Λ μ x y := by
+    by_cases h : tagGood x y i
+    · simp [tagLaw, FinProb.cond, htagMass, h]
+    · simp [tagLaw, FinProb.cond, htagMass, h]
   let S : StreamSegments5 n N p.q0 E G γ K' (p.a 0) := {
     paired := goodPair
     segment := streamSeg
     reference := U
     segment_density := by
       intro x y z hpair
-      sorry
+      let mass : ℝ := GoodPairMass5 E G Λ μ x y
+      let L : FinProb ι := tagLaw x y hpair
+      have hmassPos : 0 < mass := by
+        dsimp [mass]
+        have hχ : 0 < χ ^ 2 / 2 := by positivity
+        exact lt_of_lt_of_le hχ hpair
+      have hLweight (i : ι) : L.w i =
+          (if tagGood x y i then Λ.w i else 0) / mass := by
+        dsimp [L, mass]
+        exact htagLawWeight x y hpair i
+      have hcommonPoint (i : ι) (hi : 0 < Λ.w i) (hgood : tagGood x y i)
+          (j : Fin p.q0) :
+          (commonLaw x y i).w (z j) ≤ (10 / 9 : ℝ) * (μ i).w (z j) := by
+        have hmassCommon := commonMass_lower i x y hi hgood.1 hgood.2
+        have hmassCommonPos : 0 < ∑ u ∈ commonSet i x y, (μ i).w u :=
+          lt_of_lt_of_le (by norm_num) hmassCommon
+        dsimp [commonLaw]
+        have hcase : 0 < Λ.w i ∧ tagGood x y i := ⟨hi, hgood⟩
+        rw [dif_pos hcase, Law.restrict]
+        change (if z j ∈ commonSet i x y then
+          (μ i).w (z j) / (∑ u ∈ commonSet i x y, (μ i).w u) else 0) ≤ _
+        by_cases hz : z j ∈ commonSet i x y
+        · rw [if_pos hz]
+          calc
+            (μ i).w (z j) / (∑ u ∈ commonSet i x y, (μ i).w u) ≤
+                (μ i).w (z j) / (9 / 10 : ℝ) :=
+              div_le_div_of_nonneg_left ((μ i).nonneg (z j)) (by norm_num) hmassCommon
+            _ = (10 / 9 : ℝ) * (μ i).w (z j) := by ring
+        · rw [if_neg hz]
+          exact mul_nonneg (by norm_num) ((μ i).nonneg (z j))
+      have hprodBound (i : ι) (hi : 0 < Λ.w i) (hgood : tagGood x y i) :
+          (∏ j : Fin p.q0, (commonLaw x y i).w (z j)) ≤
+            (10 / 9 : ℝ) ^ p.q0 * ∏ j : Fin p.q0, (μ i).w (z j) := by
+        calc
+          _ ≤ ∏ j : Fin p.q0, ((10 / 9 : ℝ) * (μ i).w (z j)) :=
+            Finset.prod_le_prod₀ (fun j hj => (commonLaw x y i).nonneg (z j))
+              (fun j hj => hcommonPoint i hi hgood j)
+          _ = (10 / 9 : ℝ) ^ p.q0 * ∏ j : Fin p.q0, (μ i).w (z j) := by
+            rw [Finset.prod_mul_distrib]
+            have hconst :
+                (∏ _j : Fin p.q0, (10 / 9 : ℝ)) = (10 / 9 : ℝ) ^ p.q0 := by
+              rw [Finset.prod_const, Finset.card_univ, Fintype.card_fin]
+            rw [hconst]
+      have hterm (i : ι) :
+          L.w i * ∏ j : Fin p.q0, (commonLaw x y i).w (z j) ≤
+            ((10 / 9 : ℝ) ^ p.q0 / mass) *
+              (Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j)) := by
+        by_cases hgood : tagGood x y i
+        · by_cases hi : 0 < Λ.w i
+          · rw [hLweight]
+            simp only [if_pos hgood]
+            calc
+              (Λ.w i / mass) * ∏ j : Fin p.q0, (commonLaw x y i).w (z j) ≤
+                  (Λ.w i / mass) *
+                    ((10 / 9 : ℝ) ^ p.q0 * ∏ j : Fin p.q0, (μ i).w (z j)) :=
+                mul_le_mul_of_nonneg_left (hprodBound i hi hgood)
+                  (div_nonneg (Λ.nonneg i) hmassPos.le)
+              _ = ((10 / 9 : ℝ) ^ p.q0 / mass) *
+                    (Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j)) := by ring
+          · have hz : Λ.w i = 0 := le_antisymm (le_of_not_gt hi) (Λ.nonneg i)
+            have hzero : L.w i = 0 := by rw [hLweight, if_pos hgood, hz]; simp
+            rw [hzero]
+            have hcoefNonneg : 0 ≤ ((10 / 9 : ℝ) ^ p.q0 / mass) :=
+              div_nonneg (pow_nonneg (by norm_num : 0 ≤ (10 / 9 : ℝ)) _) hmassPos.le
+            have htermNonneg : 0 ≤ Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) :=
+              mul_nonneg (Λ.nonneg i) (Finset.prod_nonneg fun j hj => (μ i).nonneg (z j))
+            calc
+              0 * ∏ j : Fin p.q0, (commonLaw x y i).w (z j) = 0 := by ring
+              _ ≤ ((10 / 9 : ℝ) ^ p.q0 / mass) *
+                    (Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j)) :=
+                mul_nonneg hcoefNonneg htermNonneg
+        · have hzero : L.w i = 0 := by rw [hLweight, if_neg hgood]; simp
+          rw [hzero]
+          have hcoefNonneg : 0 ≤ ((10 / 9 : ℝ) ^ p.q0 / mass) :=
+            div_nonneg (pow_nonneg (by norm_num : 0 ≤ (10 / 9 : ℝ)) _) hmassPos.le
+          have htermNonneg : 0 ≤ Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) :=
+            mul_nonneg (Λ.nonneg i) (Finset.prod_nonneg fun j hj => (μ i).nonneg (z j))
+          calc
+            0 * ∏ j : Fin p.q0, (commonLaw x y i).w (z j) = 0 := by ring
+            _ ≤ ((10 / 9 : ℝ) ^ p.q0 / mass) *
+                  (Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j)) :=
+              mul_nonneg hcoefNonneg htermNonneg
+      have hsumBound :
+          (∑ i, L.w i * ∏ j : Fin p.q0, (commonLaw x y i).w (z j)) ≤
+            ((10 / 9 : ℝ) ^ p.q0 / mass) * U.w z := by
+        rw [hUweight]
+        calc
+          _ ≤ ∑ i, ((10 / 9 : ℝ) ^ p.q0 / mass) *
+                (Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j)) :=
+            Finset.sum_le_sum fun i _ => hterm i
+          _ = ((10 / 9 : ℝ) ^ p.q0 / mass) *
+                ∑ i, Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) := by rw [Finset.mul_sum]
+      have hcoef : (10 / 9 : ℝ) ^ p.q0 / mass ≤
+          Real.exp ((p.a 0) * (p.q0 : ℝ)) := by
+        have hqnonneg : 0 ≤ (10 / 9 : ℝ) ^ p.q0 := by positivity
+        have hthresholdPos : 0 < χ ^ 2 / 2 := by positivity
+        calc
+          _ ≤ (10 / 9 : ℝ) ^ p.q0 / (χ ^ 2 / 2) :=
+            div_le_div_of_nonneg_left hqnonneg hthresholdPos hpair
+          _ = (2 / χ ^ 2) * (10 / 9 : ℝ) ^ p.q0 := by
+            field_simp [ne_of_gt (sq_pos_of_pos p.hχ)]
+            <;> ring
+          _ ≤ Real.exp ((p.a 0) * (p.q0 : ℝ)) := p.hq0.2
+      rw [hstreamSegWeight x y hpair z]
+      calc
+        _ ≤ ((10 / 9 : ℝ) ^ p.q0 / mass) * U.w z := hsumBound
+        _ ≤ Real.exp ((p.a 0) * (p.q0 : ℝ)) * U.w z :=
+          mul_le_mul_of_nonneg_right hcoef (U.nonneg z)
     segment_hits := by
       intro x y z hpair hz j
-      have hzword : z = (fun _ : Fin p.q0 => pickedLabel x y hpair) := by
-        by_contra hne
-        simp [streamSeg, hpair, FinProb.uniform, hne] at hz
-      subst z
-      exact hpickedLabel x y hpair
+      have hsumne :
+          (∑ i, (tagLaw x y hpair).w i *
+            ∏ k : Fin p.q0, (commonLaw x y i).w (z k)) ≠ 0 := by
+        rw [← hstreamSegWeight x y hpair z]
+        exact hz
+      have hsumpos : 0 <
+          ∑ i, (tagLaw x y hpair).w i *
+            ∏ k : Fin p.q0, (commonLaw x y i).w (z k) := by
+        apply lt_of_le_of_ne
+        · exact Finset.sum_nonneg fun i hi =>
+            mul_nonneg ((tagLaw x y hpair).nonneg i)
+              (Finset.prod_nonneg fun k hk => (commonLaw x y i).nonneg (z k))
+        · exact Ne.symm hsumne
+      obtain ⟨i, hi, htermPos⟩ :=
+        (Finset.sum_pos_iff_of_nonneg (fun i hi =>
+          mul_nonneg ((tagLaw x y hpair).nonneg i)
+            (Finset.prod_nonneg fun k hk => (commonLaw x y i).nonneg (z k)))).mp hsumpos
+      have hprodPos : 0 < ∏ k : Fin p.q0, (commonLaw x y i).w (z k) := by
+        exact lt_of_le_of_ne
+          (Finset.prod_nonneg fun k hk => (commonLaw x y i).nonneg (z k))
+          (by
+            intro heq
+            rw [← heq, mul_zero] at htermPos
+            exact (lt_irrefl 0) htermPos)
+      have htagPos : 0 < (tagLaw x y hpair).w i := by
+        exact lt_of_le_of_ne ((tagLaw x y hpair).nonneg i)
+          (by
+            intro heq
+            rw [← heq, zero_mul] at htermPos
+            exact (lt_irrefl 0) htermPos)
+      have htagW := htagLawWeight x y hpair i
+      have htag : tagGood x y i := by
+        by_contra hnot
+        rw [htagW, if_neg hnot] at htagPos
+        norm_num at htagPos
+      have htagLambda : 0 < Λ.w i := by
+        rw [htagW, if_pos htag] at htagPos
+        have hmass : 0 < GoodPairMass5 E G Λ μ x y :=
+          lt_of_lt_of_le (by positivity) hpair
+        by_contra hnot
+        have hzero : Λ.w i = 0 := le_antisymm (le_of_not_gt hnot) (Λ.nonneg i)
+        rw [hzero] at htagPos
+        norm_num at htagPos
+      have hfactorNe (k : Fin p.q0) : (commonLaw x y i).w (z k) ≠ 0 := by
+        intro hz0
+        have hzero : ∏ u : Fin p.q0, (commonLaw x y i).w (z u) = 0 :=
+          Finset.prod_eq_zero (Finset.mem_univ k) hz0
+        exact (ne_of_gt hprodPos) hzero
+      have hmem (k : Fin p.q0) : z k ∈ commonSet i x y := by
+        by_contra hnot
+        apply hfactorNe k
+        simp [commonLaw, htagLambda, htag, Law.restrict, hnot]
+      exact (Finset.mem_filter.mp (hmem j)).2
     reference_coordinate_cap := by
       intro j x
-      sorry
+      have hNreal : 0 < (N : ℝ) := by exact_mod_cast hN
+      have hpiMarginal (i : ι) :
+          (refProduct i).expect (fun z => if z j = x then 1 else 0) = (μ i).w x := by
+        letI : Unique {k : Fin p.q0 // k ∈ ({j} : Finset (Fin p.q0))} :=
+          ⟨⟨j, by simp⟩, fun k => Subtype.ext (Finset.mem_singleton.mp k.property)⟩
+        have hpi := FinProb.pi_marginal_expect
+          (P := fun _ : Fin p.q0 => μ i) ({j} : Finset (Fin p.q0))
+          (fun z => if z ⟨j, by simp⟩ = x then 1 else 0)
+        have hidx : (⟨j, by simp⟩ : {k : Fin p.q0 // k ∈ ({j} : Finset (Fin p.q0))}) = default :=
+          Unique.eq_default _
+        have hsum :
+            (∑ z : (∀ k : {k // k ∈ ({j} : Finset (Fin p.q0))}, Fin N),
+              if z default = x then (μ i).w (z default) else 0) = (μ i).w x := by
+          let z₀ : (∀ k : {k // k ∈ ({j} : Finset (Fin p.q0))}, Fin N) := fun _ => x
+          rw [Finset.sum_eq_single z₀]
+          · simp [z₀]
+          · intro z hz hzne
+            have hzx : z default ≠ x := by
+              intro hzval
+              apply hzne
+              funext k
+              rw [Unique.eq_default k]
+              exact hzval
+            simp [hzx]
+          · simp
+        calc
+          _ = (FinProb.pi (fun k : {k // k ∈ ({j} : Finset (Fin p.q0))} => μ i)).expect
+                (fun z => if z ⟨j, by simp⟩ = x then 1 else 0) := by
+              simpa [refProduct] using hpi
+          _ = ∑ z : (∀ k : {k // k ∈ ({j} : Finset (Fin p.q0))}, Fin N),
+                if z default = x then (μ i).w (z default) else 0 := by
+              simp only [FinProb.expect, FinProb.pi]
+              apply Finset.sum_congr rfl
+              intro z hz
+              have hprod :
+                  (∏ k : {k // k ∈ ({j} : Finset (Fin p.q0))}, (μ i).w (z k)) =
+                    (μ i).w (z default) := Fintype.prod_unique _
+              rw [hprod, hidx]
+              by_cases hzx : z default = x <;> simp [hzx]
+          _ = (μ i).w x := hsum
+      have hpr : wordMarginal5 U j x = U.expect (fun z => if z j = x then 1 else 0) := by
+        unfold wordMarginal5 FinProb.expect
+        apply Finset.sum_congr rfl
+        intro z hz
+        by_cases hzx : z j = x <;> simp [hzx]
+      have hmargin : wordMarginal5 U j x = U0.w x := by
+        rw [hpr]
+        calc
+          _ = ∑ i, Λ.w i * (refProduct i).expect
+                (fun z => if z j = x then 1 else 0) := by
+            change (FinProb.map (FinProb.bind Λ refProduct) Prod.snd).expect _ = _
+            rw [FinProb.map_expect]
+            change (FinProb.bind Λ refProduct).expect
+              (fun a => if a.2 j = x then 1 else 0) = _
+            have hbind := FinProb.bind_expect Λ refProduct
+              (fun (_ : ι) (z : Word5 N p.q0) => if z j = x then (1 : ℝ) else 0)
+            simpa using hbind
+          _ = ∑ i, Λ.w i * (μ i).w x := by
+            apply Finset.sum_congr rfl
+            intro i hi
+            rw [hpiMarginal]
+          _ = U0.w x := by simp [U0, Law.mix]
+      rw [hmargin]
+      have hbalance' : (N : ℝ) * U0.w x ≤ K' := by
+        simpa [U0, Law.mix] using hbalance x
+      apply (le_div_iff₀ hNreal).2
+      nlinarith [hbalance']
     reference_density := by
       intro z
-      have hbase : 0 ≤ (n : ℝ) ^ γ := by positivity
-      have hExpArg : 0 ≤ (p.q0 : ℝ) * (n : ℝ) ^ γ :=
-        mul_nonneg (Nat.cast_nonneg _) hbase
-      have hExp : 1 ≤ Real.exp ((p.q0 : ℝ) * (n : ℝ) ^ γ) := by
+      let A : ℝ := Real.exp ((n : ℝ) ^ γ) / (N : ℝ)
+      have hUweight : U.w z = ∑ i, Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) := by
+        simp [U, refProduct, FinProb.map, FinProb.bind, FinProb.pi, Fintype.sum_prod_type]
+      have hterm (i : ι) :
+          Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) ≤ Λ.w i * A ^ p.q0 := by
+        by_cases hi : 0 < Λ.w i
+        · have hprod :
+              (∏ j : Fin p.q0, (μ i).w (z j)) ≤ ∏ _j : Fin p.q0, A := by
+            apply Finset.prod_le_prod₀
+            · intro j hj
+              exact (μ i).nonneg (z j)
+            · intro j hj
+              simpa [A] using hwidth i hi (z j)
+          calc
+            Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j) ≤
+                Λ.w i * ∏ _j : Fin p.q0, A :=
+              mul_le_mul_of_nonneg_left hprod (Λ.nonneg i)
+            _ = Λ.w i * A ^ p.q0 := by simp [Finset.prod_const]
+        · have hzero : Λ.w i = 0 := le_antisymm (le_of_not_gt hi) (Λ.nonneg i)
+          simp [hzero]
+      have hsum :
+          (∑ i, Λ.w i * ∏ j : Fin p.q0, (μ i).w (z j)) ≤ A ^ p.q0 := by
         calc
-          1 = Real.exp 0 := by simp
-          _ ≤ Real.exp ((p.q0 : ℝ) * (n : ℝ) ^ γ) := Real.exp_le_exp.mpr hExpArg
-      have hUweight : U.w z = ((N : ℝ)⁻¹) ^ p.q0 := by
-        simp [U, U0, FinProb.pi, FinProb.uniform, Finset.mem_univ, Fintype.card_fin]
+          _ ≤ ∑ i, Λ.w i * A ^ p.q0 := Finset.sum_le_sum fun i _ => hterm i
+          _ = A ^ p.q0 := by simp [← Finset.sum_mul, Λ.sum_eq_one]
+      have hAq : A ^ p.q0 =
+          Real.exp ((p.q0 : ℝ) * (n : ℝ) ^ γ) / (N : ℝ) ^ p.q0 := by
+        dsimp [A]
+        rw [div_pow, ← Real.exp_nat_mul]
       rw [hUweight]
-      have hNp : 0 < (N : ℝ) ^ p.q0 := by positivity
-      have hpow : ((N : ℝ)⁻¹) ^ p.q0 = ((N : ℝ) ^ p.q0)⁻¹ := by simp
-      rw [hpow]
-      calc
-        ((N : ℝ) ^ p.q0)⁻¹ = 1 / (N : ℝ) ^ p.q0 := by simp
-        _ ≤ Real.exp ((p.q0 : ℝ) * (n : ℝ) ^ γ) / (N : ℝ) ^ p.q0 :=
-          (div_le_div_iff₀ hNp hNp).2
-            (mul_le_mul_of_nonneg_right hExp (le_of_lt hNp))
+      exact hsum.trans_eq hAq
   }
   refine ⟨S, ?_⟩
   refine ⟨?_, ⟨?_, ?_⟩⟩

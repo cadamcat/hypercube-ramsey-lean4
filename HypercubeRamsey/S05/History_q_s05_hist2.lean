@@ -128,7 +128,7 @@ theorem binNeighborVals5_card_le {n : ℕ} (w : BinVector5 n) (i : Fin coarseChu
     (Finset.univ.image (binNeighborVal5 (w i))).card ≤ Finset.univ.card := Finset.card_image_le
     _ = 3 := by simp
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem nearBinVectors5_card_le {n : ℕ} (w : BinVector5 n) :
     (nearBinVectors5 w).card ≤ 3 ^ coarseChunkCount5 := by
   unfold nearBinVectors5

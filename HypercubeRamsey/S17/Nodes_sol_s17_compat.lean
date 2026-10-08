@@ -13,7 +13,7 @@ open scoped BigOperators
 open Lane_sol_s17_pool S16.Lane_q_s16_comp2
 
 /-- Pushforwards preserve event probabilities through their readout. -/
-theorem map_pr {α β : Type*} [Fintype α] [Fintype β]
+theorem map_pr {α β : Type*} [Fintype α] [Fintype β] [DecidableEq β]
     (P : FinLaw α) (f : α → β) (A : β → Prop) :
     (FinLaw.map P f).pr A = P.pr (fun x => A (f x)) := by
   have h := map_expect P f (fun y => if A y then (1 : ℝ) else 0)
@@ -721,6 +721,7 @@ theorem clean_prior_short_cap (D : ListGateContext κ T k PT)
 
 /-- Composing finite pushforwards composes their deterministic readouts. -/
 theorem map_comp {α β γ : Type*} [Fintype α] [Fintype β] [Fintype γ]
+    [DecidableEq β] [DecidableEq γ]
     (P : FinLaw α) (f : α → β) (g : β → γ) :
     FinLaw.map (FinLaw.map P f) g = FinLaw.map P (fun x => g (f x)) := by
   apply finLaw_ext
@@ -1033,5 +1034,545 @@ theorem polynomial_exponential_round_tail (C c d R : ℝ)
   apply Real.exp_le_exp.mpr
   dsimp [m, y] at he
   nlinarith
+
+
+/-- Separate one distinguished coordinate from an independent finite product. -/
+theorem pi_option_pr {I α : Type*} [Fintype I] [DecidableEq I] [DecidableEq (Option I)]
+    [Fintype α]
+    (P : FinLaw α) (Q : I → FinLaw α) (A : α → (I → α) → Prop) :
+    (FinLaw.pi (Ω := fun _ : Option I => α) (fun z : Option I => match z with
+      | none => P | some i => Q i)).pr (fun z => A (z none) (fun i => z (some i))) =
+        P.E (fun x => (FinLaw.pi Q).pr (A x)) := by
+  let e := Equiv.piOptionEquivProd (β := fun _ : Option I => α)
+  unfold FinLaw.pr FinLaw.E
+  have he := Fintype.sum_equiv e
+    (fun z => if A (z none) (fun i => z (some i)) then
+      (FinLaw.pi (Ω := fun _ : Option I => α) (fun z : Option I => match z with | none => P | some i => Q i)).w z else 0)
+    (fun p => if A p.1 p.2 then
+      (FinLaw.pi (Ω := fun _ : Option I => α) (fun z : Option I => match z with | none => P | some i => Q i)).w (e.symm p) else 0)
+    (fun z => by rw [e.symm_apply_apply]; rfl)
+  rw [he, Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro x hx
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro ys hys
+  simp [FinLaw.pi, Fintype.prod_option, e, mul_ite]
+
+/-- A product containing one fixed coordinate is an independent experiment on its complement. -/
+theorem pi_fixed_hit_pr {I : Type*} [Fintype I] [DecidableEq I]
+    {T : Stage} {k : ℕ} (c : Colour) (μ : Law (T.S.N k))
+    (ν : I → Law (T.S.N k)) (j : I) (y : Fin (T.S.N k)) (z : ℝ) :
+    (FinLaw.pi (fun i => if i = j then FinLaw.dirac y
+      else ListGateContext.lawAsFinLaw (ν i))).pr (fun ys =>
+        (∑ x, μ.w x * ∏ i, hit (T.S.E k) c x (ys i)) < z) =
+      (FinLaw.pi (fun i : {i : I // i ≠ j} => ListGateContext.lawAsFinLaw (ν i.1))).pr
+        (fun ys => (∑ x, μ.w x * hit (T.S.E k) c x y *
+          ∏ i, hit (T.S.E k) c x (ys i)) < z) := by
+  let e := Equiv.optionSubtypeNe j
+  let A := fun ys : Option {i : I // i ≠ j} → Fin (T.S.N k) =>
+    (∑ x, μ.w x * hit (T.S.E k) c x (ys none) *
+      ∏ i : {i : I // i ≠ j}, hit (T.S.E k) c x (ys (some i))) < z
+  have hp := pi_reindex_pr e
+    (fun i => if i = j then FinLaw.dirac y else ListGateContext.lawAsFinLaw (ν i)) A
+  have hleft : (fun ys : I → Fin (T.S.N k) => A (fun i => ys (e i))) =
+      (fun ys => (∑ x, μ.w x * ∏ i, hit (T.S.E k) c x (ys i)) < z) := by
+    funext ys
+    dsimp [A, e]
+    simp_rw [Fintype.prod_eq_mul_prod_subtype_ne (fun i => hit (T.S.E k) c _ (ys i)) j,
+      mul_assoc]
+  rw [hleft] at hp
+  rw [hp]
+  have hP : (fun i : Option {i : I // i ≠ j} =>
+      if e i = j then FinLaw.dirac y else ListGateContext.lawAsFinLaw (ν (e i))) =
+    (fun i : Option {i : I // i ≠ j} => match i with
+      | none => FinLaw.dirac y
+      | some i => ListGateContext.lawAsFinLaw (ν i.1)) := by
+    funext i
+    cases i with
+    | none => simp [e]
+    | some i => simp [e, i.2]
+  rw [hP]
+  change (FinLaw.pi (Ω := fun _ : Option {i : I // i ≠ j} => Fin (T.S.N k))
+    (fun i : Option {i : I // i ≠ j} => match i with
+      | none => FinLaw.dirac y
+      | some i => ListGateContext.lawAsFinLaw (ν i.1))).pr (fun ys =>
+    (∑ x, μ.w x * hit (T.S.E k) c x (ys none) *
+      ∏ i, hit (T.S.E k) c x (ys (some i))) < z) = _
+  have hopt := pi_option_pr (I := {i : I // i ≠ j}) (α := Fin (T.S.N k)) (FinLaw.dirac y)
+    (fun i : {i : I // i ≠ j} => ListGateContext.lawAsFinLaw (ν i.1))
+    (fun y ys => (∑ x, μ.w x * hit (T.S.E k) c x y *
+      ∏ i, hit (T.S.E k) c x (ys i)) < z)
+  simp [FinLaw.E, FinLaw.dirac] at hopt
+  convert hopt using 1 <;> congr!
+  funext motive i hn hs
+  cases i <;> rfl
+
+/-- Expose a forced member first; all other independent labels have small width. -/
+theorem single_forced_hit_tail {I : Type*} [Fintype I] [DecidableEq I]
+    {T : Stage} {k : ℕ} {wS wL err W : ℝ}
+    (hDisc : TwoBudgetDisc T k wS wL err) (c : Colour)
+    (μ : Law (T.S.N k)) (ν : I → Law (T.S.N k)) (j : I) (y : Fin (T.S.N k))
+    (hμ : μ.SupportedIn (T.X k)) (he : 0 ≤ err) (heSmall : err ≤ 1 / 4)
+    (hs : 2 * (Fintype.card I : ℝ) * err ≤ 1 / 10)
+    (hCap : μ.CapLE (Real.exp wS * (1 / 2 - err) ^ Fintype.card I))
+    (hν : ∀ i, (ν i).SupportedIn (T.Y k)) (hW : ∀ i, (ν i).WidthLE W) :
+    (FinLaw.pi (fun i => if i = j then FinLaw.dirac y
+      else ListGateContext.lawAsFinLaw (ν i))).pr (fun ys =>
+        (∑ x, μ.w x * ∏ i, hit (T.S.E k) c x (ys i)) <
+          (9 / 10 : ℝ) * Real.rpow 2 (-(Fintype.card I : ℝ))) ≤
+      (if (∑ x, μ.w x * hit (T.S.E k) c x y) < 1 / 2 - err then 1 else 0) +
+        (Fintype.card I : ℝ) * (2 * Real.exp (W - wL)) := by
+  rw [pi_fixed_hit_pr]
+  let J := {i : I // i ≠ j}
+  let e := (Fintype.equivFin J).symm
+  have hcard : Fintype.card J + 1 = Fintype.card I := by
+    simpa [J] using Fintype.card_congr (Equiv.optionSubtypeNe j)
+  have hprod (ys : J → Fin (T.S.N k)) (x : Fin (T.S.N k)) :
+      (∏ i : Fin (Fintype.card J), hit (T.S.E k) c x (ys (e i))) =
+        ∏ i : J, hit (T.S.E k) c x (ys i) :=
+    Fintype.prod_equiv e _ _ (fun _ => rfl)
+  have hp := pi_reindex_pr e (fun i : J => ListGateContext.lawAsFinLaw (ν i.1))
+    (fun ys => (∑ x, μ.w x * hit (T.S.E k) c x y *
+      ∏ i, hit (T.S.E k) c x (ys i)) <
+        (9 / 10 : ℝ) * Real.rpow 2 (-(Fintype.card I : ℝ)))
+  simp only [hprod] at hp
+  rw [hp]
+  have ht := forced_first_hit_tail hDisc c μ y (fun i => ν (e i).1) hμ he
+    (by linarith) (by simpa only [hcard] using hCap)
+    (fun i => hν _) (fun i => hW _)
+  apply le_trans _ (ht.trans ?_)
+  · apply Lane_q_s17_pool.pr_mono
+    intro ys hy
+    exact hy.trans_le (by rw [hcard]; exact short_hit_mass_threshold _ err he heSmall hs)
+  · have hc : (Fintype.card J : ℝ) ≤ Fintype.card I := by exact_mod_cast (by omega : Fintype.card J ≤ Fintype.card I)
+    have hh := mul_le_mul_of_nonneg_right hc (by positivity : 0 ≤ 2 * Real.exp (W - wL))
+    exact add_le_add (le_refl _) hh
+
+/-- Every selected slot except the prescribed one retains its raw label marginal. -/
+theorem cellLaws_selected_unforced (D : ListGateContext κ T k PT)
+    (p : D.PoolPin) (w : Pos T k) (j : Fin (D.G.nslot (D.G.cellOf w)))
+    (l : Fin (PT.tiling.P (D.G.patchOf w)).d)
+    (hu : ∀ h : D.G.cellOf w = p.cell,
+      cast (congrArg (fun C => Fin (D.G.nslot C)) h) j ≠ p.slot) :
+    FinLaw.map (cellLaws D (some p) (D.G.cellOf w)) (selectedLabel D w j l) =
+      ListGateContext.lawAsFinLaw (binIndexLaw D.tiling_valid (D.G.patchOf w) l) := by
+  rcases p with ⟨C, slot, B⟩
+  by_cases hc : D.G.cellOf w = C
+  · subst C
+    simp only [cellLaws, Function.update_self]
+    let f : Bin PT.tiling (D.G.cellPatch (D.G.cellOf w)) → Fin (T.S.N k) := fun B =>
+      binIndexRead D.tiling_valid (D.G.patchOf w)
+        (cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch w)) B) l
+    change FinLaw.map (pinnedCell D ⟨_, slot, B⟩) (fun P => f (P j)) = _
+    rw [← map_comp (pinnedCell D ⟨_, slot, B⟩) (fun P => P j) f,
+      pinnedCell_unforced_marginal D ⟨_, slot, B⟩ j (by simpa using hu rfl)]
+    exact uniformBin_index_marginal D (D.G.cellOf_patch w) l
+  · simp only [cellLaws, Function.update_of_ne hc]
+    exact uniformCell_selected_marginal D w j l
+
+/-- The label at a prescribed external slot is deterministic. -/
+theorem cellLaws_selected_forced (D : ListGateContext κ T k PT)
+    (w : Pos T k) (j : Fin (D.G.nslot (D.G.cellOf w)))
+    (B : Bin PT.tiling (D.G.cellPatch (D.G.cellOf w)))
+    (l : Fin (PT.tiling.P (D.G.patchOf w)).d) :
+    FinLaw.map (cellLaws D (some ⟨D.G.cellOf w, j, B⟩) (D.G.cellOf w))
+      (selectedLabel D w j l) = FinLaw.dirac
+        (binIndexRead D.tiling_valid (D.G.patchOf w)
+          (cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch w)) B) l) := by
+  simp only [cellLaws, Function.update_self]
+  let f : Bin PT.tiling (D.G.cellPatch (D.G.cellOf w)) → Fin (T.S.N k) := fun B =>
+    binIndexRead D.tiling_valid (D.G.patchOf w)
+      (cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch w)) B) l
+  change FinLaw.map (pinnedCell D ⟨_, j, B⟩) (fun P => f (P j)) = _
+  rw [← map_comp (pinnedCell D ⟨_, j, B⟩) (fun P => P j) f,
+    pinnedCell_forced_marginal]
+  apply finLaw_ext
+  intro y
+  simp only [FinLaw.map, FinLaw.dirac]
+  rw [Finset.sum_eq_single B] <;> simp_all [f, eq_comm]
+
+
+/-- Permission controls the first degree of a forced external witness; the remaining labels are iid. -/
+theorem forced_witness_average (D : ListGateContext κ T k PT)
+    (K : ℝ) (hK : 0 ≤ K) (hQuant : D.L16QuantitativeValidity K)
+    (v : Pos T k) (heven : IsEvenRole v) (a : CompatibilityWitness D v)
+    (j : a.1.1) (B : Bin PT.tiling (D.G.cellPatch (D.G.cellOf j.1)))
+    (hB : hQuant.sampler.permittedBin j.1
+      (cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch j.1)) B))
+    {wS wL W : ℝ}
+    (hDisc : TwoBudgetDisc T k wS wL (2 * bstar T k))
+    (he : 0 ≤ 2 * bstar T k) (heSmall : 2 * bstar T k ≤ 1 / 4)
+    (hs : 2 * (a.1.1.card : ℝ) * (2 * bstar T k) ≤ 1 / 10)
+    (hCap : ∀ σ, ∀ hσ : D.CleanInitialPrior v σ,
+      (cleanPriorLaw D v σ hσ).CapLE
+        (Real.exp wS * (1 / 2 - 2 * bstar T k) ^ a.1.1.card))
+    (hW : ∀ w : a.1.1, (binIndexLaw D.tiling_valid (D.G.patchOf w.1) (a.2.2 w)).WidthLE W) :
+    (FinLaw.pi (cellLaws D (some ⟨D.G.cellOf j.1, a.2.1 j, B⟩))).E
+      (witnessAverage D v a) ≤ K * Real.exp (-κ.cperm * T.S.n k) +
+        (a.1.1.card : ℝ) * (2 * Real.exp (W - wL)) := by
+  let p : D.PoolPin := ⟨D.G.cellOf j.1, a.2.1 j, B⟩
+  let B' : Bin PT.tiling (D.G.patchOf j.1) :=
+    cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch j.1)) B
+  let y := binIndexRead D.tiling_valid (D.G.patchOf j.1) B' (a.2.2 j)
+  let ν : a.1.1 → Law (T.S.N k) := fun w =>
+    binIndexLaw D.tiling_valid (D.G.patchOf w.1) (a.2.2 w)
+  let ρ := (a.1.1.card : ℝ) * (2 * Real.exp (W - wL))
+  let F := fun own : CellPool D.G (D.G.cellOf v) =>
+    if D.F.typical (D.G.cellOf v) own then
+      (D.F.fresh (D.G.cellOf v) own).pr (fun s =>
+        |(∑ x, D.F.prior (D.G.cellOf v) s v x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| >
+          2 * bstar T k) else 0
+  have hm : ∀ w : a.1.1,
+      FinLaw.map (cellLaws D (some p) (D.G.cellOf w.1))
+        (selectedLabel D w.1 (a.2.1 w) (a.2.2 w)) =
+      if w = j then FinLaw.dirac y else ListGateContext.lawAsFinLaw (ν w) := by
+    intro w
+    by_cases hw : w = j
+    · subst w
+      simp only [ite_true]
+      exact cellLaws_selected_forced D j.1 (a.2.1 j) B (a.2.2 j)
+    · rw [if_neg hw]
+      apply cellLaws_selected_unforced
+      intro hc
+      have hh : w = j := Subtype.ext
+        ((hQuant.geometry.star_distinct v heven).2 _ (a.1.2.1 w.2)
+          _ (a.1.2.1 j.2) hc)
+      exact False.elim (hw hh)
+  have hown : cellLaws D (some p) (D.G.cellOf v) = uniformCell D (D.G.cellOf v) := by
+    apply Function.update_of_ne
+    exact ((hQuant.geometry.star_distinct v heven).1 _ (a.1.2.1 j.2)).symm
+  rw [witnessAverage_pi D K hQuant v heven a (cellLaws D (some p)), hown]
+  simp_rw [hm]
+  have hpoint (own : CellPool D.G (D.G.cellOf v)) :
+    (if D.F.typical (D.G.cellOf v) own then
+      (FinLaw.pi (fun w : a.1.1 => if w = j then FinLaw.dirac y
+        else ListGateContext.lawAsFinLaw (ν w))).E
+          (selectedBadProbability D v a.1.1 own) else 0) ≤ F own + ρ := by
+    by_cases ht : D.F.typical (D.G.cellOf v) own
+    · simp only [ht, ite_true]
+      unfold selectedBadProbability
+      rw [expect_pr_swap]
+      have hbound : (D.F.fresh (D.G.cellOf v) own).E (fun s =>
+        (FinLaw.pi (fun w : a.1.1 => if w = j then FinLaw.dirac y
+          else ListGateContext.lawAsFinLaw (ν w))).pr (fun ys =>
+          (∑ x, D.F.prior (D.G.cellOf v) s v x * ∏ w : a.1.1,
+            hit (T.S.E k) PT.tiling.c x (ys w)) <
+              (9 / 10 : ℝ) * Real.rpow 2 (-(a.1.1.card : ℝ)))) ≤
+        (D.F.fresh (D.G.cellOf v) own).pr (fun s =>
+          |(∑ x, D.F.prior (D.G.cellOf v) s v x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| >
+            2 * bstar T k) + ρ := by
+        let H := fun s : D.F.State (D.G.cellOf v) =>
+          if |(∑ x, D.F.prior (D.G.cellOf v) s v x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| >
+            2 * bstar T k then (1 : ℝ) else 0
+        have hsum : (D.F.fresh (D.G.cellOf v) own).E (fun s => H s + ρ) =
+            (D.F.fresh (D.G.cellOf v) own).pr (fun s =>
+              |(∑ x, D.F.prior (D.G.cellOf v) s v x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| >
+                2 * bstar T k) + ρ := by
+          simp [FinLaw.E, FinLaw.pr, H, mul_add, mul_ite, Finset.sum_add_distrib,
+            ← Finset.sum_mul, FinLaw.sum_one]
+        rw [← hsum]
+        unfold FinLaw.E
+        apply Finset.sum_le_sum
+        intro s hs'
+        by_cases hz : (D.F.fresh (D.G.cellOf v) own).w s = 0
+        · simp [hz]
+        · have hp : 0 < (D.F.fresh (D.G.cellOf v) own).w s :=
+            lt_of_le_of_ne ((D.F.fresh _ _).nonneg s) (Ne.symm hz)
+          have hv := D.fresh_spec.fresh_valid _ _ s ht hp
+          have hc := hQuant.prior_shape v own s heven ht hv
+          have hh := single_forced_hit_tail hDisc PT.tiling.c (cleanPriorLaw D v _ hc)
+            ν j y (cleanPriorLaw_supported D v _ hc) he heSmall
+            (by simpa using hs) (by simpa using hCap _ hc)
+            (fun w => binIndexLaw_supported D.tiling_valid _ _) hW
+          have hfirst :
+            (if (∑ x, D.F.prior (D.G.cellOf v) s v x * hit (T.S.E k) PT.tiling.c x y) <
+              1 / 2 - 2 * bstar T k then (1 : ℝ) else 0) ≤
+            (if |(∑ x, D.F.prior (D.G.cellOf v) s v x * hit (T.S.E k) PT.tiling.c x y) - 1 / 2| >
+              2 * bstar T k then 1 else 0) := by
+            split_ifs with h1 h2 h2 <;> try norm_num
+            have ha := neg_le_abs ((∑ x, D.F.prior (D.G.cellOf v) s v x *
+              hit (T.S.E k) PT.tiling.c x y) - 1 / 2)
+            exact False.elim (h2 (by linarith))
+          have hh' := hh.trans (by
+            convert add_le_add hfirst (le_refl ρ) using 1 <;> congr!
+            exact Fintype.card_coe _)
+          have ht' := mul_le_mul_of_nonneg_left hh' ((D.F.fresh (D.G.cellOf v) own).nonneg s)
+          simpa only [cleanPriorLaw, Fintype.card_coe, H] using ht'
+      simpa only [F, ht, ite_true] using hbound
+    · simp only [ht, ite_false, F]
+      dsimp [ρ]
+      positivity
+  have hh := expect_le (uniformCell D (D.G.cellOf v)) _ (fun own => F own + ρ) hpoint
+  have hadd : (uniformCell D (D.G.cellOf v)).E (fun own => F own + ρ) =
+      (uniformCell D (D.G.cellOf v)).E F + ρ := by
+    simp only [FinLaw.E, mul_add, Finset.sum_add_distrib, ← Finset.sum_mul,
+      FinLaw.sum_one, one_mul]
+  rw [hadd] at hh
+  have hperm := forced_permission_average_cell D K hK hQuant v heven j.1
+    (a.1.2.1 j.2) B' hB y (binIndexRead_mem D.tiling_valid _ B' (a.2.2 j))
+  exact hh.trans (by simpa only [F, ρ] using add_le_add hperm (le_refl ρ))
+
+/-- A forbidden pinned bin cannot witness compatibility failure. -/
+theorem forced_witness_forbidden (D : ListGateContext κ T k PT)
+    (K : ℝ) (hQuant : D.L16QuantitativeValidity K) (v : Pos T k)
+    (a : CompatibilityWitness D v) (j : a.1.1)
+    (B : Bin PT.tiling (D.G.cellPatch (D.G.cellOf j.1)))
+    (hB : ¬ hQuant.sampler.permittedBin j.1
+      (cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch j.1)) B))
+    (hpin : 0 < ∑ pools ∈ D.poolPinSet ⟨D.G.cellOf j.1, a.2.1 j, B⟩,
+      (iidPoolLaw D.G hQuant.pool_support_nonempty).w pools) :
+    (FinLaw.cond (iidPoolLaw D.G hQuant.pool_support_nonempty)
+      (D.poolPinSet ⟨D.G.cellOf j.1, a.2.1 j, B⟩) hpin).pr
+        (witnessFailure D K hQuant v a) = 0 := by
+  unfold FinLaw.pr
+  apply Finset.sum_eq_zero
+  intro pools hp
+  by_cases hq : pools (D.G.cellOf j.1) (a.2.1 j) = B
+  · have hn : ¬ witnessFailure D K hQuant v a pools := by
+      intro hb
+      apply hB
+      simpa only [witnessBin, hq] using hb.2.1 j
+    simp [hn]
+  · simp [FinLaw.cond, ListGateContext.poolPinSet, hq]
+
+
+/-- All raw and one-pin iid witnesses have the same exponential Markov bound. -/
+theorem fixed_iid_witness_tail (D : ListGateContext κ T k PT)
+    (K : ℝ) (hK : 0 ≤ K) (hQuant : D.L16QuantitativeValidity K) (hκ : κ.Admissible)
+    (hlog : 1 ≤ Real.log (T.S.n k : ℝ)) (hn : 2 ≤ T.S.n k)
+    (hDisc : TwoBudgetDisc T k (Real.rpow (T.S.n k : ℝ) κ.xs)
+      (κ.α * T.S.n k) (2 * bstar T k))
+    (heSmall : 2 * bstar T k ≤ 1 / 4)
+    (hErr : 2 * (ListGateContext.pinBudget κ : ℝ) * (2 * bstar T k) ≤ 1 / 10)
+    (hRoom : Real.log 2 + (ListGateContext.pinBudget κ : ℝ) * Real.log 4 +
+      (K + 1) * Real.log (T.S.n k : ℝ) ≤ Real.rpow (T.S.n k : ℝ) κ.xs)
+    (v : Pos T k) (heven : IsEvenRole v) (ν : FinLaw D.PoolAssignment)
+    (hν : ν = iidPoolLaw D.G hQuant.pool_support_nonempty ∨
+      ∃ (p : D.PoolPin) (hp : 0 < ∑ pools ∈ D.poolPinSet p,
+        (iidPoolLaw D.G hQuant.pool_support_nonempty).w pools),
+        ν = FinLaw.cond (iidPoolLaw D.G hQuant.pool_support_nonempty) (D.poolPinSet p) hp)
+    (a : CompatibilityWitness D v) :
+    ν.pr (witnessFailure D K hQuant v a) ≤
+      (K * Real.exp (-κ.cperm * T.S.n k) +
+        (ListGateContext.pinBudget κ : ℝ) *
+          (2 * Real.exp ((K + 1) * Real.log (T.S.n k : ℝ) - κ.α * T.S.n k))) /
+        Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) := by
+  let ε := K * Real.exp (-κ.cperm * T.S.n k) +
+    (ListGateContext.pinBudget κ : ℝ) *
+      (2 * Real.exp ((K + 1) * Real.log (T.S.n k : ℝ) - κ.α * T.S.n k))
+  have hε : 0 ≤ ε := by dsimp [ε]; positivity
+  have he : 0 ≤ 2 * bstar T k := by unfold bstar; positivity
+  have hcard : (a.1.1.card : ℝ) ≤ ListGateContext.pinBudget κ := by exact_mod_cast a.1.2.2
+  have hs : 2 * (a.1.1.card : ℝ) * (2 * bstar T k) ≤ 1 / 10 :=
+    (mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hcard (by norm_num)) he).trans hErr
+  have hCap := fun σ (hσ : D.CleanInitialPrior v σ) =>
+    clean_prior_short_cap D K hK hQuant hκ hlog (2 * bstar T k) he heSmall hRoom
+      v σ hσ a.1.1.card a.1.2.2
+  have hW := fun w : a.1.1 => low_bin_index_width D K hK hQuant hκ hlog
+    (by omega) (D.G.patchOf w.1) (a.2.2 w)
+  have hmean (P : ∀ C, FinLaw (CellPool D.G C))
+      (hU : ∀ w : a.1.1,
+        FinLaw.map (P (D.G.cellOf w.1)) (selectedLabel D w.1 (a.2.1 w) (a.2.2 w)) =
+          ListGateContext.lawAsFinLaw (binIndexLaw D.tiling_valid (D.G.patchOf w.1) (a.2.2 w))) :
+      (FinLaw.pi P).E (witnessAverage D v a) ≤ ε := by
+    have hh := unforced_witness_average D K hQuant v heven a P hDisc he heSmall hs hCap hW hU
+    have hc := mul_le_mul_of_nonneg_right hcard
+      (by positivity : 0 ≤ 2 * Real.exp ((K + 1) * Real.log (T.S.n k : ℝ) - κ.α * T.S.n k))
+    dsimp [ε]
+    exact hh.trans (by linarith [mul_nonneg hK (Real.exp_pos (-κ.cperm * T.S.n k)).le])
+  have hfinish (Q : FinLaw D.PoolAssignment) (hQ : Q.E (witnessAverage D v a) ≤ ε) :
+      Q.pr (witnessFailure D K hQuant v a) ≤
+        ε / Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ))) :=
+    (witness_failure_markov D K hQuant v a Q (by omega)).trans
+      (div_le_div_of_nonneg_right hQ (Real.rpow_nonneg (Nat.cast_nonneg _) _))
+  rcases hν with rfl | ⟨p, hp, rfl⟩
+  · apply hfinish
+    rw [iidPoolLaw_eq_pi]
+    exact hmean (uniformCell D) (fun w => uniformCell_selected_marginal D _ _ _)
+  · rcases p with ⟨C, slot, B⟩
+    by_cases hc : ∃ j : a.1.1, D.G.cellOf j.1 = C
+    · obtain ⟨j, hc⟩ := hc
+      subst C
+      by_cases hslot : slot = a.2.1 j
+      · subst slot
+        by_cases hB : hQuant.sampler.permittedBin j.1
+          (cast (congrArg (Bin PT.tiling) (D.G.cellOf_patch j.1)) B)
+        · apply hfinish
+          rw [pinned_iidPoolLaw_eq_pi]
+          have hh := forced_witness_average D K hK hQuant v heven a j B hB hDisc
+            he heSmall hs hCap hW
+          have hh' := mul_le_mul_of_nonneg_right hcard
+            (by positivity : 0 ≤ 2 * Real.exp ((K + 1) * Real.log (T.S.n k : ℝ) - κ.α * T.S.n k))
+          exact hh.trans (by dsimp [ε]; linarith)
+        · rw [forced_witness_forbidden D K hQuant v a j B hB]
+          exact div_nonneg hε (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+      · apply hfinish
+        rw [pinned_iidPoolLaw_eq_pi]
+        apply hmean
+        intro w
+        apply cellLaws_selected_unforced
+        intro hw
+        have hwj : w = j := Subtype.ext
+          ((hQuant.geometry.star_distinct v heven).2 _ (a.1.2.1 w.2)
+            _ (a.1.2.1 j.2) hw)
+        subst w
+        simpa using (Ne.symm hslot)
+    · apply hfinish
+      rw [pinned_iidPoolLaw_eq_pi]
+      apply hmean
+      intro w
+      apply cellLaws_selected_unforced
+      intro hw
+      exact False.elim (hc ⟨w, hw⟩)
+
+/-- A constant and a logarithmic term fit inside any positive power budget. -/
+theorem eventually_logarithmic_room (r c C a : ℝ) (hr : 0 < r) (hc : 0 < c) (ha : 0 ≤ a) :
+    ∀ᶠ n : ℝ in atTop, C + a * Real.log n ≤ c * Real.rpow n r := by
+  simp only [Real.rpow_eq_pow]
+  have hlog := (isLittleO_log_rpow_atTop hr).bound (div_pos hc (by positivity : 0 < 2 * (a + 1)))
+  have hpow := (tendsto_rpow_atTop hr).eventually_ge_atTop (2 * |C| / c)
+  filter_upwards [hlog, hpow, eventually_ge_atTop (0 : ℝ)] with n hn hp hnonneg
+  have hn' : |Real.log n| ≤ c / (2 * (a + 1)) * n ^ r := by
+    simpa only [Real.norm_eq_abs, abs_of_nonneg (Real.rpow_nonneg hnonneg r), Real.rpow_eq_pow] using hn
+  have hcC : 2 * C ≤ c * n ^ r := by
+    have hh := (div_le_iff₀ hc).mp hp
+    nlinarith [le_abs_self C]
+  have hl : a * Real.log n ≤ (c / 2) * n ^ r := by
+    have hbound := mul_le_mul_of_nonneg_left hn' ha
+    have hfac : a * (c / (2 * (a + 1))) ≤ c / 2 := by
+      rw [← mul_div_assoc]
+      apply (div_le_iff₀ (by positivity : 0 < 2 * (a + 1))).mpr
+      nlinarith
+    have hh := mul_le_mul_of_nonneg_right hfac (Real.rpow_nonneg hnonneg r)
+    nlinarith [le_abs_self (Real.log n)]
+  linarith
+
+/-- All analytic budgets and the polynomial witness union fit before one common index. -/
+theorem eventually_compatibility_budgets (κ : CConsts) (hκ : κ.Admissible)
+    (K : ℝ) (hK : 0 < K) :
+    ∀ᶠ n : ℝ in atTop,
+      2 ≤ n ∧ 1 ≤ Real.log n ∧
+      2 * Real.rpow n (-1 + (0.04 : ℝ)) ≤ 1 / 4 ∧
+      2 * (ListGateContext.pinBudget κ : ℝ) * (2 * Real.rpow n (-1 + (0.04 : ℝ))) ≤ 1 / 10 ∧
+      Real.log 2 + (ListGateContext.pinBudget κ : ℝ) * Real.log 4 +
+        (K + 1) * Real.log n ≤ Real.rpow n κ.xs ∧
+      (1 + Real.rpow n (-3 : ℝ)) *
+        ((ListGateContext.pinBudget κ : ℝ) + 1) *
+        Real.rpow n (((κ.Ac : ℝ) + 3) * ListGateContext.pinBudget κ) *
+        ((K * Real.exp (-κ.cperm * n) + (ListGateContext.pinBudget κ : ℝ) *
+          (2 * Real.exp ((K + 1) * Real.log n - κ.α * n))) /
+          Real.rpow n (-(2 * (κ.R : ℝ)))) ≤
+        Real.rpow n (-((κ.R : ℝ) * (⌈(Real.log n) ^ 2⌉₊ : ℝ))) := by
+  simp only [Real.rpow_eq_pow]
+  let B := (ListGateContext.pinBudget κ : ℝ)
+  let C := 2 * (B + 1) * (K + 2 * B)
+  let d := ((κ.Ac : ℝ) + 3) * B + 2 * (κ.R : ℝ)
+  have hB : 0 ≤ B := by dsimp [B]; positivity
+  have hC : 0 < C := by dsimp [C]; positivity
+  have hd : 0 ≤ d := by dsimp [d]; positivity
+  have hgap : 0 < κ.α - κ.cperm := by linarith [hκ.cperm_rng.2, hκ.α_rng.1]
+  have hroom := eventually_logarithmic_room κ.xs 1
+    (Real.log 2 + B * Real.log 4) (K + 1) hκ.xs_rng.1 (by norm_num) (by linarith)
+  have hwidth := eventually_logarithmic_room 1 (κ.α - κ.cperm) 0 (K + 1)
+    (by norm_num) hgap (by linarith)
+  have he : Tendsto (fun n : ℝ => 2 * n ^ (-1 + (0.04 : ℝ))) atTop (nhds 0) := by
+    convert (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 1 - 0.04)).const_mul 2 using 1 <;> norm_num
+  have hbe : Tendsto (fun n : ℝ => (4 * B) * n ^ (-1 + (0.04 : ℝ))) atTop (nhds 0) := by
+    convert (tendsto_rpow_neg_atTop (by norm_num : (0 : ℝ) < 1 - 0.04)).const_mul (4 * B) using 1 <;> norm_num
+  have htail := polynomial_exponential_round_tail C κ.cperm d (κ.R : ℝ)
+    hC hκ.cperm_rng.1 hd (Nat.cast_nonneg _)
+  simp only [Real.rpow_eq_pow] at hroom hwidth htail
+  filter_upwards [eventually_ge_atTop (2 : ℝ), Real.tendsto_log_atTop.eventually_ge_atTop 1,
+    he.eventually (gt_mem_nhds (by norm_num : (0 : ℝ) < 1 / 4)),
+    hbe.eventually (gt_mem_nhds (by norm_num : (0 : ℝ) < 1 / 10)),
+    hroom, hwidth, htail] with n hn hlog he hbe hroom hwidth htail
+  have hn0 : 0 < n := by linarith
+  have hn1 : 1 ≤ n := by linarith
+  refine ⟨hn, hlog, ?_, ?_, ?_, ?_⟩
+  · convert he.le using 1 <;> norm_num
+  · convert hbe.le using 1 <;> norm_num <;> ring
+  · simpa only [one_mul, B] using hroom
+  · have hpow : n ^ (-3 : ℝ) ≤ 1 := Real.rpow_le_one_of_one_le_of_nonpos hn1 (by norm_num)
+    have hexp : Real.exp ((K + 1) * Real.log n - κ.α * n) ≤ Real.exp (-κ.cperm * n) := by
+      apply Real.exp_le_exp.mpr
+      simp only [zero_add, Real.rpow_one] at hwidth
+      nlinarith
+    have hnum : K * Real.exp (-κ.cperm * n) + B *
+        (2 * Real.exp ((K + 1) * Real.log n - κ.α * n)) ≤
+        (K + 2 * B) * Real.exp (-κ.cperm * n) := by
+      have hh := mul_le_mul_of_nonneg_left hexp (by positivity : 0 ≤ 2 * B)
+      nlinarith
+    have hdiv : 1 / n ^ (-(2 * (κ.R : ℝ))) = n ^ (2 * (κ.R : ℝ)) := by
+      rw [Real.rpow_neg hn0.le]
+      simp
+    have heq : 2 * (B + 1) * n ^ (((κ.Ac : ℝ) + 3) * B) *
+        (((K + 2 * B) * Real.exp (-κ.cperm * n)) /
+          n ^ (-(2 * (κ.R : ℝ)))) = C * n ^ d * Real.exp (-κ.cperm * n) := by
+      rw [div_eq_mul_one_div, hdiv]
+      dsimp [C, d]
+      rw [Real.rpow_add hn0]
+      ring
+    apply le_trans _ htail
+    change (1 + n ^ (-3 : ℝ)) * (B + 1) * n ^ (((κ.Ac : ℝ) + 3) * B) *
+      ((K * Real.exp (-κ.cperm * n) + B * (2 * Real.exp ((K + 1) * Real.log n - κ.α * n))) /
+        n ^ (-(2 * (κ.R : ℝ)))) ≤ _
+    rw [← heq]
+    have hfac : 0 ≤ (1 + n ^ (-3 : ℝ)) * (B + 1) *
+        n ^ (((κ.Ac : ℝ) + 3) * B) := by positivity
+    calc
+      _ ≤ (1 + n ^ (-3 : ℝ)) * (B + 1) * n ^ (((κ.Ac : ℝ) + 3) * B) *
+          (((K + 2 * B) * Real.exp (-κ.cperm * n)) /
+            n ^ (-(2 * (κ.R : ℝ)))) :=
+        mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right hnum (by positivity)) hfac
+      _ ≤ _ := by
+        gcongr
+        linarith
+
+
+/-- The concrete witness cover, pin estimates and numerical budget imply compatibility. -/
+theorem fixed_pool_compatibility (D : ListGateContext κ T k PT)
+    (K : ℝ) (hK : 0 < K) (hQuant : D.L16QuantitativeValidity K) (hκ : κ.Admissible)
+    (hn : 2 ≤ T.S.n k) (hlog : 1 ≤ Real.log (T.S.n k : ℝ))
+    (hDisc : TwoBudgetDisc T k (Real.rpow (T.S.n k : ℝ) κ.xs)
+      (κ.α * T.S.n k) (2 * bstar T k))
+    (heSmall : 2 * bstar T k ≤ 1 / 4)
+    (hErr : 2 * (ListGateContext.pinBudget κ : ℝ) * (2 * bstar T k) ≤ 1 / 10)
+    (hRoom : Real.log 2 + (ListGateContext.pinBudget κ : ℝ) * Real.log 4 +
+      (K + 1) * Real.log (T.S.n k : ℝ) ≤ Real.rpow (T.S.n k : ℝ) κ.xs)
+    (hNumeric : (1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ)) *
+      ((ListGateContext.pinBudget κ : ℝ) + 1) *
+      Real.rpow (T.S.n k : ℝ) (((κ.Ac : ℝ) + 3) * ListGateContext.pinBudget κ) *
+      ((K * Real.exp (-κ.cperm * T.S.n k) + (ListGateContext.pinBudget κ : ℝ) *
+        (2 * Real.exp ((K + 1) * Real.log (T.S.n k : ℝ) - κ.α * T.S.n k))) /
+        Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ)))) ≤
+      Real.rpow (T.S.n k : ℝ) (-((κ.R : ℝ) * initialResamplingRounds T k)))
+    (v : Pos T k) (heven : IsEvenRole v) (μ : FinLaw D.PoolAssignment)
+    (hμ : D.IsPermOrPinnedPoolLaw hQuant.pool_support_nonempty μ) :
+    μ.pr (D.compatibilityFailure v) ≤ Real.rpow (T.S.n k : ℝ)
+      (-((κ.R : ℝ) * initialResamplingRounds T k)) := by
+  let B := ListGateContext.pinBudget κ
+  let ε := (K * Real.exp (-κ.cperm * T.S.n k) + (B : ℝ) *
+    (2 * Real.exp ((K + 1) * Real.log (T.S.n k : ℝ) - κ.α * T.S.n k))) /
+      Real.rpow (T.S.n k : ℝ) (-(2 * (κ.R : ℝ)))
+  have hε : 0 ≤ ε := by dsimp [ε]; positivity
+  have hcount : (Fintype.card (CompatibilityWitness D v) : ℝ) ≤
+      ((B : ℝ) + 1) * Real.rpow (T.S.n k : ℝ) (((κ.Ac : ℝ) + 3) * B) := by
+    have hh := compatibility_witness_count D K hQuant hκ v hlog (by omega)
+    have hp : T.S.n k * ((T.S.n k) ^ (κ.Ac + 1) * T.S.n k) = (T.S.n k) ^ (κ.Ac + 3) := by
+      simp only [pow_add, pow_one]
+      ring
+    rw [hp] at hh
+    simp only [Real.rpow_eq_pow]
+    rw [show ((κ.Ac : ℝ) + 3) * B = (((κ.Ac + 3) * B : ℕ) : ℝ) by push_cast; ring,
+      Real.rpow_natCast, pow_mul]
+    exact_mod_cast hh
+  apply compatibility_from_witness_tails D K hQuant v hn μ hμ ε _ hε
+  · intro ν hν a
+    exact fixed_iid_witness_tail D K hK.le hQuant hκ hlog hn hDisc heSmall hErr hRoom v heven ν hν a
+  · have hf : 0 ≤ 1 + Real.rpow (T.S.n k : ℝ) (-3 : ℝ) :=
+      add_nonneg (by norm_num) (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+    have hh := mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hcount hf) hε
+    exact hh.trans (by simpa only [B, ε, mul_assoc] using hNumeric)
 
 end HypercubeRamsey.Lane_sol_s17_compat

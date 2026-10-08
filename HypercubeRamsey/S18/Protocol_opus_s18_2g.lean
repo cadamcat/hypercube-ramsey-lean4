@@ -1051,7 +1051,28 @@ theorem output_eq_on_retained (hD : D.Spec) (hG : TransferGeometry X)
         (protoLabels D X σ (decodeAt D X (replies D X σ s (plan D X).length)) j.val) =
         restrictLabels D X j (historyLabels D (H j.castSucc)) :=
     hprocessed j _ (hlabels j.castSucc hj _ (fun c hc _ => horacleCalls c hc))
-  sorry
+  have hroot : ∀ n : ℕ, X.failure.2.1.1 ∈ X.predecessors n := by
+    intro n
+    induction n with
+    | zero => simp [CriticalTransferData.predecessors]
+    | succ n ih => exact Finset.mem_union.mpr (Or.inl ih)
+  let transcript := replies D X σ s (plan D X).length
+  let side := D.pastRows (simHistory D X s σ) X.failure.1 X.failure.1.isLt X.failure.2.1
+  have hmask : (protoSide D X σ transcript).1 = side.1 := by
+    change (σ X.failure.1 X.failure.2.1).1 =
+      (D.pastRows (simHistory D X s σ) X.failure.1 X.failure.1.isLt X.failure.2.1).1
+    rw [hpastFull]
+    rfl
+  have hsk : ∀ a, flipPos X.failure.2.1.1 a ∉ X.erased →
+      (protoSide D X σ transcript).2.1 a = side.2.1 a := by
+    intro a hne
+    dsimp only [protoSide, transcript, side]
+    rw [hpastFull]
+    exact hsketch (decodeAt D X (replies D X σ s (plan D X).length)) X.failure.1 _
+      (hprocessedFull X.failure.1 le_rfl) (fun c hc _ => horacleCalls c hc)
+      X.failure.2.1 (hroot D.geom.r) a hne
+  simpa only [output, transcript, side] using
+    prefixLaw_erased_invariant D X (protoSide D X σ transcript) side hmask hsk
 
 theorem sameBlock_trans' {a b c : Fin (T.S.n k)} (hab : X.sameBlock a b) (hbc : X.sameBlock b c) :
     X.sameBlock a c := by

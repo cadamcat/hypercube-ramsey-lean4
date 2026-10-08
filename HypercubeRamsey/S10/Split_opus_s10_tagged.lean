@@ -1544,6 +1544,81 @@ theorem d5_odd_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < �
     rw [htag] at hs
     refine ⟨hs.1, ?_⟩
     simp only [hs.2, Option.getD_some]
+  have hcodedActual {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (h : History n N δ) (q : Site n δ) (hv : groupValid M t h q)
+      (default : (hp n δ).Loc) :
+      Lane_sol_s10_d56.codedList ((realizedList M t h q).filter fun c => c.1 = q.1)
+        (flipSlice q.1) (fun i => (selected M t h (flipSlice q.1 i, q.2)).getD default) =
+      realizedList M t h q := by
+    classical
+    ext c
+    constructor
+    · intro hc
+      rcases Finset.mem_union.mp hc with hc | hc
+      · exact (Finset.mem_filter.mp hc).1
+      · obtain ⟨i, hi, heq⟩ := Finset.mem_image.mp hc
+        have hs := hexternalQuery M t h q hv default i
+        apply Finset.mem_biUnion.mpr
+        refine ⟨(flipSlice q.1 i, q.2), hs.1, ?_⟩
+        rw [hs.2]
+        simp only [Option.elim_some, Finset.mem_singleton]
+        exact heq.symm
+    · intro hc
+      by_cases ho : c.1 = q.1
+      · exact Finset.mem_union.mpr (Or.inl (Finset.mem_filter.mpr ⟨hc, ho⟩))
+      · have hL := hv.2.2.2.1
+        have hdist := ((Finset.mem_filter.mp hL).2.2.1 c hc).resolve_left ho
+        obtain ⟨i, hi⟩ := Lane_sol_s10_d56.flipCoordinate_of_hammingDist_one q.1 c.1
+          (by simpa only [_root_.hammingDist_comm] using hdist)
+        have htag : c.1 = flipSlice q.1 i := hi.trans (hflip n q.1 i).symm
+        have hs := hexternalId M t h q c hc ho
+        have hcenter : (selected M t h (flipSlice q.1 i, q.2)).getD default = c.2 := by
+          rw [← htag, hs.2]
+          rfl
+        apply Finset.mem_union.mpr
+        apply Or.inr
+        exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, Prod.ext htag.symm hcenter⟩
+  have hconditionalCap {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (P : ID n δ → Bool) (T : ID n δ → Fin (kT n δ) → Fin N)
+      (S : Site n δ → Finset (Fin N)) (q : Site n δ) (default : (hp n δ).Loc)
+      (center : Fin (mS n δ) → (hp n δ).Loc) :
+      ((p10_1kGlobalActivationLaw n (mS n δ) δ).prod (p10_1kGlobalTieLaw n (mS n δ) δ)).pr
+        (fun AT => let h : History n N δ := ((((P, T), S), AT.1), AT.2)
+          groupValid M t h q ∧ ∀ i,
+            (selected M t h (flipSlice q.1 i, q.2)).getD default = center i) ≤
+      ∏ i, Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2
+        (center i) (fun loc => P (flipSlice q.1 i, loc)) := by
+    classical
+    let base : History n N δ := ((((P, T), S), fun _ => false), fun _ => 1)
+    let Elig : Slice n δ → (hp n δ).EligMap := elig M t base
+    have hinj : Function.Injective (flipSlice q.1) := by
+      have heq : flipSlice q.1 = p10_1kFlipCoordinate q.1 := funext (hflip n q.1)
+      rw [heq]
+      exact Lane_sol_s10_d56.flipCoordinate_injective q.1
+    let F := fun AT : (ID n δ → Bool) × (ID n δ → (hp n δ).TiePerm) =>
+      ∀ i, (∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((Elig (flipSlice q.1 i) q.2 j).card : ℝ)) ∧
+        (hp n δ).Legal (fun loc => P (flipSlice q.1 i, loc)) (Elig (flipSlice q.1 i))
+          ((hp n δ).domBall (sliceSites δ (flipSlice q.1 i)) q.2 (hp n δ).Rlong) ∧
+        (hp n δ).selection (sliceSites δ (flipSlice q.1 i)) (fun loc => P (flipSlice q.1 i, loc))
+          (fun loc => AT.1 (flipSlice q.1 i, loc)) (Elig (flipSlice q.1 i))
+          (fun loc => AT.2 (flipSlice q.1 i, loc)) q.2 = some (center i)
+    have hb := Lane_sol_s10_d56.global_selection_probability_le n (mS n δ) δ
+      (flipSlice q.1) hinj (sliceSites δ) (fun _ => q.2) P Elig center
+    apply (p10_1k_FinProb_pr_mono _ _ F ?_).trans hb
+    intro AT hh i
+    let h : History n N δ := ((((P, T), S), AT.1), AT.2)
+    have hv : groupValid M t h q := hh.1
+    have hfields : elig M t h = Elig := by rfl
+    have hquery := hexternalQuery M t h q hv default i
+    have hlegal := hv.2.1 (flipSlice q.1 i, q.2) hquery.1
+    refine ⟨?_, ?_, ?_⟩
+    · simpa only [hfields] using hlegal.1
+    · simpa only [hfields, h, History.pos] using hlegal.2
+    · have hs : selected M t h (flipSlice q.1 i, q.2) = some (center i) :=
+        hquery.2.trans (congrArg some (hh.2 i))
+      simpa only [selected, hfields, h, History.pos, History.act, History.tie] using hs
   sorry
 
 /-- **d6** = P10.1h, the comparison (10.2) (10:191–222; ~500 lines; new

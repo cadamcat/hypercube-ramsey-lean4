@@ -1,3 +1,4 @@
+import HypercubeRamsey.S05.History_sol_s05_h3_apply
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
 import HypercubeRamsey.S05.History_sol_s05_h23_apply
@@ -690,7 +691,44 @@ theorem L5_1h3 : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 <
           (∀ K t, X.OptOccurs K t → (X.hiddenLaw (v, c)).pr (fun U => X.optFail ((v, c), U) K t) ≤
             Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4)) →
           ∃ ν : FinProb X.HighHid, X.Stage3Law (v, c) ν (cH p.pre1) := by
-  sorry
+  classical
+  intro C cL cH hpos
+  refine ⟨Lane_sol_s05_h23.stage3Request cH, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 (Lane_sol_s05_h23.highGroupBounds_eventually p)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp hCount hRaw v c hb hStep1 hStep2 hOpt
+  obtain ⟨hm, hD, hTm, hTJ, hJ, hhalf, hdeg⟩ := hn₀ n hn
+  have hK1 : 16 / p.delta ≤ p.K1 := hp.2.2.2.1
+  have hKs : 2 * ((Lane_sol_s05_hist1b.signatureConstant : ℝ) + 204) / cH p.pre1 ≤ p.Ks :=
+    hp.2.2.2.2.2.2.1
+  have hK1X : 16 / X.p.delta ≤ X.p.K1 := by simpa only [hXp] using hK1
+  have hKsX : 2 * ((Lane_sol_s05_hist1b.signatureConstant : ℝ) + 204) / cH p.pre1 ≤ X.p.Ks := by
+    simpa only [hXp] using hKs
+  have hbounds : Lane_sol_s05_h23.Stage3RawBounds X (v, c) (cH p.pre1) := by
+    refine ⟨hStep2, hOpt, ?_⟩
+    intro r hr q hkey
+    rcases r with ⟨ℓ, data⟩
+    change ℓ = .inr q at hkey
+    subst ℓ
+    unfold Lane_sol_s05_h23.highRecordMean
+    apply Lane_sol_s05_h23.high_step3_mean_bound X (v, c) (.inr q, data) q
+      (Real.exp (-(cH p.pre1 * X.p.s n)))
+    intro hi lo
+    have h := hRaw ((v, c), (Lane_q_s05_h23.hiddenSplitEquiv5 X).symm (lo, hi))
+      hb hStep1 (.inr q, data) hr
+    change (∑ θ : Fin (X.p.s n) → Fin N,
+      (∏ h, (X.prior (v, c) (.inr q)).w (θ h)) *
+        X.step3Rate (X.withCol ((v, c), (Lane_q_s05_h23.hiddenSplitEquiv5 X).symm (lo, hi))
+          (.inr q) θ) (.inr q, data)) ≤ Real.exp (-(cH p.pre1 * X.p.s n)) at h
+    exact h
+  obtain ⟨ν, hHigh, hLow, hOptional, hRecords, hSupport⟩ :=
+    Lane_sol_s05_h23.stage3Law_exists X (v, c) (cH p.pre1) (hpos p.pre1).2 hbounds
+      (by simpa only [hXp] using hm) (by simpa only [hXp] using hD)
+      (by simpa only [hXp] using hTm) (by simpa only [hXp] using hTJ)
+      (by simpa only [hXp] using hJ) hK1X hKsX
+      (by simpa only [hXp] using hhalf) (by simpa only [hXp] using hdeg)
+  exact ⟨ν, hHigh, hLow, hOptional, hRecords, hb, hStep1, hSupport⟩
 
 /-! ### Stage 4: separate optional pretrims (05:704–721) -/
 

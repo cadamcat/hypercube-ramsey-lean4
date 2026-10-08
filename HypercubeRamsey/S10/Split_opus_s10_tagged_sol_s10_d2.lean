@@ -33,11 +33,11 @@ private def diffEquiv {d : ℕ} (v : CubeVertex d) : CubeVertex d ≃ Finset (Fi
     · simp [diffSet, vertexOfDiff, hi]
 
 private theorem diffSet_card {d : ℕ} (v u : CubeVertex d) :
-    (diffSet v u).card = hammingDist u v := by
-  simp [diffSet, hammingDist, ne_comm]
+    (diffSet v u).card = _root_.hammingDist u v := by
+  simp [diffSet, _root_.hammingDist, ne_comm]
 
 private def ballToSubsets {d r : ℕ} (v : CubeVertex d) :
-    {u : CubeVertex d // hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
+    {u : CubeVertex d // _root_.hammingDist u v ≤ r} ≃ {s : Finset (Fin d) // s.card ≤ r} where
   toFun u := ⟨diffSet v u.1, by rw [diffSet_card]; exact u.2⟩
   invFun s := ⟨vertexOfDiff v s.1, by
     rw [← diffSet_card]
@@ -102,26 +102,26 @@ private theorem card_small_subsets (d r : ℕ) :
   rw [← Fin.sum_univ_eq_sum_range]
 
 private theorem hammingBall_card (d r : ℕ) (v : CubeVertex d) :
-    (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card =
+    (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card =
       ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
   classical
-  have hcard : Fintype.card {u : CubeVertex d // hammingDist u v ≤ r} =
-      (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card := by
-    simpa using (Fintype.card_subtype (fun u : CubeVertex d => hammingDist u v ≤ r))
+  have hcard : Fintype.card {u : CubeVertex d // _root_.hammingDist u v ≤ r} =
+      (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card := by
+    simpa using (Fintype.card_subtype (fun u : CubeVertex d => _root_.hammingDist u v ≤ r))
   exact hcard.symm.trans ((Fintype.card_congr (ballToSubsets v)).trans (card_small_subsets d r))
 
 def positionCount (p : HDParams) (P : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) : ℝ :=
   (((Finset.univ.filter (fun u : CubeVertex p.d =>
-    P (u, j) = true ∧ hammingDist u v ≤ p.r)).card : ℕ) : ℝ)
+    P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card : ℕ) : ℝ)
 
 def positionBad (p : HDParams) (P : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) : Prop :=
   positionCount p P v j < (998 / 1000 : ℝ) * p.lam ∨ (1002 / 1000 : ℝ) * p.lam < positionCount p P v j
 
 private def levelBallEquiv (d H r : ℕ) (j : Fin (H + 1)) (v : CubeVertex d) :
-    {u : CubeVertex d // hammingDist u v ≤ r} ≃
-      {ℓ : CubeVertex d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} where
+    {u : CubeVertex d // _root_.hammingDist u v ≤ r} ≃
+      {ℓ : CubeVertex d × Fin (H + 1) // ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r} where
   toFun u := ⟨(u.1, j), by simp [u.2]⟩
   invFun ℓ := ⟨ℓ.1.1, ℓ.2.2⟩
   left_inv := by intro u; apply Subtype.ext; rfl
@@ -133,18 +133,18 @@ private def levelBallEquiv (d H r : ℕ) (j : Fin (H + 1)) (v : CubeVertex d) :
 
 private theorem levelBall_card (d H r : ℕ) (j : Fin (H + 1)) (v : CubeVertex d) :
     (Finset.univ.filter (fun ℓ : CubeVertex d × Fin (H + 1) =>
-      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
+      ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r)).card =
       ∑ i ∈ Finset.range (r + 1), Nat.choose d i := by
   classical
   calc
     (Finset.univ.filter (fun ℓ : CubeVertex d × Fin (H + 1) =>
-      ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r)).card =
-        Fintype.card {ℓ : CubeVertex d × Fin (H + 1) // ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ r} := by
+      ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r)).card =
+        Fintype.card {ℓ : CubeVertex d × Fin (H + 1) // ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ r} := by
           symm
           exact Fintype.card_subtype _
-    _ = Fintype.card {u : CubeVertex d // hammingDist u v ≤ r} :=
+    _ = Fintype.card {u : CubeVertex d // _root_.hammingDist u v ≤ r} :=
           Fintype.card_congr (levelBallEquiv d H r j v).symm
-    _ = (Finset.univ.filter (fun u : CubeVertex d => hammingDist u v ≤ r)).card :=
+    _ = (Finset.univ.filter (fun u : CubeVertex d => _root_.hammingDist u v ≤ r)).card :=
           Fintype.card_subtype _
     _ = _ := hammingBall_card d r v
 
@@ -254,19 +254,19 @@ private theorem position_exp_mgf_le (p : HDParams) (hlam : 0 < p.lam)
     (hV : 0 < p.V) (hprob : p.lam / (p.V : ℝ) ≤ 1)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) (s : ℝ) :
     p.posLaw.expect (fun P => Real.exp (s * ∑ ℓ : p.Loc,
-      if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then if P ℓ then 1 else 0 else 0)) ≤
+      if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then if P ℓ then 1 else 0 else 0)) ≤
         Real.exp (p.lam * (Real.exp s - 1)) := by
   classical
   let q : ℝ := p.lam / (p.V : ℝ)
   let X : p.Loc → Bool → ℝ := fun ℓ b =>
-    if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then if b then 1 else 0 else 0
+    if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then if b then 1 else 0 else 0
   have hq0 : 0 ≤ q := by dsimp [q]; exact div_nonneg hlam.le (Nat.cast_nonneg _)
   have hq1 : q ≤ 1 := by simpa [q] using hprob
   have hcoord (ℓ : p.Loc) :
       (FinProb.bernoulli q).expect (fun b => Real.exp (s * X ℓ b)) =
-        if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+        if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
           1 + q * (Real.exp s - 1) else 1 := by
-    by_cases h : ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r
+    by_cases h : ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r
     · simp [FinProb.expect, FinProb.bernoulli, X, h, hq0, hq1] <;> ring
     · simp [FinProb.expect, FinProb.bernoulli, X, h, hq0, hq1]
   have hprod :
@@ -283,64 +283,64 @@ private theorem position_exp_mgf_le (p : HDParams) (hlam : 0 < p.lam)
             (fun ℓ b => Real.exp (s * X ℓ b)))
   have hprodFactors :
       p.posLaw.expect (fun P => Real.exp (s * ∑ ℓ : p.Loc, X ℓ (P ℓ))) =
-        ∏ ℓ : p.Loc, if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+        ∏ ℓ : p.Loc, if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
           1 + q * (Real.exp s - 1) else 1 := by
     simpa only [hcoord] using hprod
   have hfactor (ℓ : p.Loc) :
-      0 ≤ (if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+      0 ≤ (if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
         1 + q * (Real.exp s - 1) else 1) := by
-    by_cases h : ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r
+    by_cases h : ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r
     · rw [if_pos h]
       have heq : 1 + q * (Real.exp s - 1) = 1 - q + q * Real.exp s := by ring
       rw [heq]
       positivity
     · simp [h]
   have hprodLe :
-      (∏ ℓ : p.Loc, if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+      (∏ ℓ : p.Loc, if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
         1 + q * (Real.exp s - 1) else 1) ≤
-        ∏ ℓ : p.Loc, Real.exp (if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+        ∏ ℓ : p.Loc, Real.exp (if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
           q * (Real.exp s - 1) else 0) := by
     apply Finset.prod_le_prod₀
     · intro ℓ hℓ
       exact hfactor ℓ
     · intro ℓ hℓ
-      by_cases h : ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r
+      by_cases h : ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r
       · simp only [if_pos h]
         have := Real.add_one_le_exp (q * (Real.exp s - 1))
         nlinarith
       · simp [h]
   have hcard :
       (Finset.univ.filter (fun ℓ : p.Loc =>
-        ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r)).card = p.V := by
+        ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r)).card = p.V := by
     simpa [HDParams.Loc, HDParams.V] using levelBall_card p.d p.H p.r j v
   have hindicator :
       (∑ ℓ : p.Loc,
-        if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) = p.V := by
+        if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) = p.V := by
     have hcast :
         (∑ ℓ : p.Loc,
-          if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) =
+          if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) =
           ((Finset.univ.filter (fun ℓ : p.Loc =>
-            ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r)).card : ℝ) := by
+            ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r)).card : ℝ) := by
       simpa using (Finset.natCast_card_filter
-        (fun ℓ : p.Loc => ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r)
+        (fun ℓ : p.Loc => ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r)
         (Finset.univ : Finset p.Loc))
     rw [hcast]
     exact_mod_cast hcard
   have hsum :
       (∑ ℓ : p.Loc,
-        if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+        if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
           q * (Real.exp s - 1) else 0) = p.lam * (Real.exp s - 1) := by
     calc
       _ = (∑ ℓ : p.Loc,
-          if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) *
+          if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) *
             (q * (Real.exp s - 1)) := by
           calc
             _ = ∑ ℓ : p.Loc,
-                (if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) *
+                (if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then (1 : ℝ) else 0) *
                   (q * (Real.exp s - 1)) := by
                     apply Finset.sum_congr rfl
                     intro ℓ hℓ
-                    by_cases h : ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r <;> simp [h]
+                    by_cases h : ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r <;> simp [h]
             _ = _ := by rw [Finset.sum_mul]
       _ = p.lam * (Real.exp s - 1) := by
           rw [hindicator]
@@ -349,12 +349,12 @@ private theorem position_exp_mgf_le (p : HDParams) (hlam : 0 < p.lam)
           field_simp [hVne]
   calc
     p.posLaw.expect (fun P => Real.exp (s * ∑ ℓ : p.Loc, X ℓ (P ℓ))) ≤
-        ∏ ℓ : p.Loc, if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then
+        ∏ ℓ : p.Loc, if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then
           1 + q * (Real.exp s - 1) else 1 := le_of_eq hprodFactors
     _ ≤ ∏ ℓ : p.Loc, Real.exp
-          (if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then q * (Real.exp s - 1) else 0) := hprodLe
+          (if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then q * (Real.exp s - 1) else 0) := hprodLe
     _ = Real.exp (∑ ℓ : p.Loc,
-          if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then q * (Real.exp s - 1) else 0) := by
+          if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then q * (Real.exp s - 1) else 0) := by
           symm
           rw [Real.exp_sum]
     _ = Real.exp (p.lam * (Real.exp s - 1)) := by rw [hsum]
@@ -367,35 +367,35 @@ theorem position_bad_tail (p : HDParams) (hlam : 0 < p.lam)
       2 * Real.exp (-p.lam / 2000000) := by
   classical
   let X : p.Loc → Bool → ℝ := fun ℓ b =>
-    if ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r then if b then 1 else 0 else 0
+    if ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r then if b then 1 else 0 else 0
   have hcount (P : p.Loc → Bool) :
       positionCount p P v j = ∑ ℓ : p.Loc, X ℓ (P ℓ) := by
     have hnatNat :
         (Finset.univ.filter (fun u : CubeVertex p.d =>
-          P (u, j) = true ∧ hammingDist u v ≤ p.r)).card =
+          P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card =
           ∑ u : CubeVertex p.d,
-            if hammingDist u v ≤ p.r then if P (u, j) = true then 1 else 0 else 0 := by
+            if _root_.hammingDist u v ≤ p.r then if P (u, j) = true then 1 else 0 else 0 := by
       rw [Finset.card_eq_sum_ite
         (s := Finset.univ.filter (fun u : CubeVertex p.d =>
-          P (u, j) = true ∧ hammingDist u v ≤ p.r))
+          P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r))
         (t := Finset.univ) (Finset.subset_univ _)]
       simp only [Finset.mem_filter, Finset.mem_univ, true_and]
       refine Finset.sum_congr rfl ?_
       intro u hu
-      by_cases hd : hammingDist u v ≤ p.r <;> by_cases hp : P (u, j) = true <;>
+      by_cases hd : _root_.hammingDist u v ≤ p.r <;> by_cases hp : P (u, j) = true <;>
         simp [hd, hp]
     have hnat :
         ((Finset.univ.filter (fun u : CubeVertex p.d =>
-          P (u, j) = true ∧ hammingDist u v ≤ p.r)).card : ℝ) =
+          P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r)).card : ℝ) =
           ∑ u : CubeVertex p.d,
-            if hammingDist u v ≤ p.r then if P (u, j) = true then (1 : ℝ) else 0 else 0 := by
+            if _root_.hammingDist u v ≤ p.r then if P (u, j) = true then (1 : ℝ) else 0 else 0 := by
       exact_mod_cast hnatNat
     rw [positionCount, hnat, Fintype.sum_prod_type]
     simp only [X]
     refine Finset.sum_congr rfl ?_
     intro u hu
     rw [Finset.sum_eq_single j]
-    · by_cases hd : hammingDist u v ≤ p.r <;> simp [hd]
+    · by_cases hd : _root_.hammingDist u v ≤ p.r <;> simp [hd]
     · intro k hk hkj
       simp [hkj]
     · simp

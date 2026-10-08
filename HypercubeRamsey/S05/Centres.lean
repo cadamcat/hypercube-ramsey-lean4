@@ -919,6 +919,7 @@ theorem support_tail : ∀ (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH 
           (X.centreLaw (canonHt X) H).pr (fun ω => ¬ SupportOK X (canonHt X) H ω) ≤ 1 / 300 := by
   sorry
 
+set_option maxHeartbeats 8000000 in
 /-- SUB-LEMMA J9 (05:851–860, deterministic): good heights give a choice everywhere on two
 consecutive levels around each odd state, the crowd bound gives at most `2n^b ≤ T` IDs, the
 singleton tests give hits and heavy fractions, and maximality (`markElig_sound`) gives Step 3. -/
@@ -929,7 +930,487 @@ theorem success_of_events : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ 
         BallsOK X (canonHt X) ω →
         (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω) (act ω) (markElig X (canonHt X) H ω) →
         SupportOK X (canonHt X) H ω → CentreSuccess X (canonHt X) H ω := by
-  sorry
+  classical
+  intro p
+  have hpow0 : ∀ᶠ n : ℕ in Filter.atTop, 2 ≤ (n : ℝ) ^ (p.alpha / 2000) :=
+    ((tendsto_rpow_atTop (by have := p.halpha.1; positivity : (0 : ℝ) < p.alpha / 2000)).comp
+      tendsto_natCast_atTop_atTop).eventually_ge_atTop 2
+  have hpow : ∀ᶠ n : ℕ in Filter.atTop, 1 ≤ n ∧ 2 ≤ (n : ℝ) ^ (p.alpha / 2000) := by
+    filter_upwards [hpow0, Filter.eventually_ge_atTop (1 : ℕ)] with n h1 h2
+    exact ⟨h2, h1⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1 hpow
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp H ω hbase hstep1 hlegal hballs hgood hsupp
+  let ht := canonHt X
+  let Sites := X.sites ht
+  let elig := markElig X ht H ω
+  let eligFn := markElig X ht H
+  let P := pos ω
+  let A := act ω
+  let τ := tie ω
+  let hp := ht.hp
+  have hn1 : 1 ≤ n := (hn₀ n hn).1
+  have hnpos : 0 < n := by omega
+  have hnR : (1 : ℝ) ≤ n := by exact_mod_cast (show 1 ≤ n by omega)
+  have hsmallT : 2 * (n : ℝ) ^ hp.b ≤ (X.p.T n : ℝ) := by
+    have hnFacts := hn₀ n hn
+    have hbasePow : 2 ≤ (n : ℝ) ^ (p.alpha / 2000) := hnFacts.2
+    have hdouble : 2 * (n : ℝ) ^ (p.alpha / 2000) ≤
+        (n : ℝ) ^ (p.alpha / 1000) := by
+      have hexp : p.alpha / 1000 = p.alpha / 2000 + p.alpha / 2000 := by ring
+      rw [hexp, Real.rpow_add (by exact_mod_cast hnpos)]
+      exact mul_le_mul_of_nonneg_right hbasePow
+        (Real.rpow_nonneg (by positivity : (0 : ℝ) ≤ (n : ℝ)) _)
+    have hceil : (p.m n : ℝ) ^ (1 / 1000 : ℝ) ≤ (p.T n : ℝ) := Nat.le_ceil _
+    have hm : (n : ℝ) ^ p.alpha ≤ (p.m n : ℝ) := by
+      exact_mod_cast (Nat.le_ceil ((n : ℝ) ^ p.alpha))
+    have hmono := Real.rpow_le_rpow (by positivity) hm (by norm_num : (0 : ℝ) ≤ 1 / 1000)
+    have heq : ((n : ℝ) ^ p.alpha) ^ (1 / 1000 : ℝ) =
+        (n : ℝ) ^ (p.alpha / 1000) := by
+      rw [← Real.rpow_mul (by positivity : (0 : ℝ) ≤ (n : ℝ))]
+      congr 1
+      ring
+    have hb : hp.b = p.alpha / 2000 := by
+      change X.p.alpha / 2000 = p.alpha / 2000
+      rw [hXp]
+    have hceilX : (p.m n : ℝ) ^ (1 / 1000 : ℝ) ≤ (X.p.T n : ℝ) := by
+      simpa [hXp] using hceil
+    rw [hb]
+    calc
+      2 * (n : ℝ) ^ (p.alpha / 2000) ≤ (n : ℝ) ^ (p.alpha / 1000) := hdouble
+      _ = ((n : ℝ) ^ p.alpha) ^ (1 / 1000 : ℝ) := heq.symm
+      _ ≤ (p.m n : ℝ) ^ (1 / 1000 : ℝ) := hmono
+      _ ≤ (X.p.T n : ℝ) := hceilX
+  have hsitesGood : hp.GoodHeights Sites P A elig →
+      ∀ s ∈ Sites, hp.selection Sites P A elig τ s |>.isSome := by
+    intro hg s hs
+    have hprops := hg s hs
+    have hheight : hp.height Sites P A elig hp.Rlong s < hp.H := hprops.1
+    have hbad : ¬ hp.Bad P A elig s ⟨hp.height Sites P A elig hp.Rlong s,
+        Nat.lt_succ_of_le hheight.le⟩ := by
+      intro hb
+      exact hprops.2.1 ⟨Nat.lt_succ_of_le hheight.le, hb⟩
+    have hactive : ∃ l ∈ elig s ⟨hp.height Sites P A elig hp.Rlong s,
+        Nat.lt_succ_of_le hheight.le⟩, A l = true := by
+      by_contra hnone
+      apply hbad
+      left
+      intro l hl
+      by_cases ha : A l = true
+      · exact (hnone ⟨l, hl, ha⟩).elim
+      · cases hv : A l <;> simp_all
+    have hactive' : (elig s ⟨hp.height Sites P A elig hp.Rlong s,
+        Nat.lt_succ_of_le hheight.le⟩).filter
+        (fun l => A l = true) |>.Nonempty := by
+      rcases hactive with ⟨l, hl, ha⟩
+      exact ⟨l, Finset.mem_filter.mpr ⟨hl, ha⟩⟩
+    have hprior : (((elig s ⟨hp.height Sites P A elig hp.Rlong s,
+        Nat.lt_succ_of_le hheight.le⟩).filter
+        (fun l => A l = true)).image (hp.priority τ (s,
+          ⟨hp.height Sites P A elig hp.Rlong s, Nat.lt_succ_of_le hheight.le⟩))).Nonempty := by
+      exact hactive'.image _
+    simpa [HDParams.selection, HDParams.selectionAt, hheight, hbad, hprior]
+  have hselected_spec (s : CubeVertex hp.d) (j : ℕ) (hj : j < hp.H)
+      (hheight : hp.height Sites P A elig hp.Rlong s = j)
+      (hbad : ¬ hp.Bad P A elig s ⟨j, Nat.lt_succ_of_le hj.le⟩) (l : hp.Loc)
+      (hsel : hp.selection Sites P A elig τ s = some l) :
+      l ∈ elig s ⟨j, Nat.lt_succ_of_le hj.le⟩ ∧ A l = true := by
+    classical
+    simp [HDParams.selection, HDParams.selectionAt, hheight, hj, hbad] at hsel
+    let j' : Fin (hp.H + 1) := ⟨j, Nat.lt_succ_of_le hj.le⟩
+    let active : Finset hp.Loc := (elig s j').filter (fun x => A x = true)
+    let priorities := active.image (hp.priority τ (s, j'))
+    have hneP : priorities.Nonempty := by
+      rcases hsel.1 with ⟨x, hx⟩
+      exact ⟨hp.priority τ (s, j') x, Finset.mem_image.mpr ⟨x, by simpa [active, j'] using hx, rfl⟩⟩
+    let q := priorities.min' hneP
+    have hmem : ∃ x, x ∈ active ∧ hp.priority τ (s, j') x = q :=
+      Finset.mem_image.mp (Finset.min'_mem priorities hneP)
+    have hchosen : Classical.choose hmem = l := by
+      simpa [active, priorities, q, j'] using hsel.2
+    rcases Classical.choose_spec hmem with ⟨hactive, _⟩
+    rw [hchosen] at hactive
+    have hactive' : l ∈ (elig s j').filter (fun x => A x = true) := by
+      simpa [active] using hactive
+    exact Finset.mem_filter.mp hactive'
+  have hshape_of_selection (s : CubeVertex hp.d) (j : ℕ) (hj : j < hp.H)
+      (hheight : hp.height Sites P A elig hp.Rlong s = j)
+      (hbad : ¬ hp.Bad P A elig s ⟨j, Nat.lt_succ_of_le hj.le⟩) (l : hp.Loc)
+      (hsel : hp.selection Sites P A elig τ s = some l) :
+      P l = true ∧ l.2 = ⟨j, Nat.lt_succ_of_le hj.le⟩ ∧ hammingDist l.1 s ≤ hp.r := by
+    have hmem := (hselected_spec s j hj hheight hbad l hsel).1
+    rcases Lane_opus_s05.markElig_shape X ht H ω s
+        ⟨j, Nat.lt_succ_of_le hj.le⟩ l hmem with ⟨hP, hlev, hdist⟩
+    exact ⟨by simpa [P] using hP, hlev, hdist⟩
+  have hselect_at (s : CubeVertex hp.d) (hs : s ∈ Sites) :
+      ∃ l, hp.selection Sites P A elig τ s = some l := by
+    have hs' := hsitesGood hgood s hs
+    cases hsel : hp.selection Sites P A elig τ s with
+    | none => simp [hsel] at hs'
+    | some l => exact ⟨l, rfl⟩
+  have hlegal' : hp.Legal P elig Sites := by simpa [hp, P, elig, Sites, ht] using hlegal
+  have hglobal : ∀ v : EvenRole5 n, (X.selLong (markElig X ht H) ω v).isSome := by
+    intro v
+    have hv : X.siteOf v ∈ Sites := by
+      apply Finset.mem_image.mpr
+      exact ⟨v, Finset.mem_univ _, rfl⟩
+    have hs := hsitesGood hgood (X.siteOf v) hv
+    change (hp.selection Sites P A elig τ (X.siteOf v)).isSome = true
+    exact hs
+  have hstar : ∀ (y : OddRole5 n), LocalValidAt X ht (markElig X ht) H ω hp.Rlong y := by
+    intro y
+    let b := X.St.stateOf y.1
+    let S := X.St.neighbors b
+    let heightAt : X.St.Site → ℕ := fun t => hp.height Sites P A elig hp.Rlong (X.St.oneHot t)
+    have adj_flip {x z : CubeVertex n} (hAdj : (cube n).Adj x z) :
+        ∃ i : Fin n, x = flipVertex5 z i := by
+      classical
+      have hc : (Finset.univ.filter fun i : Fin n => x i ≠ z i).card = 1 := hAdj
+      obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hc
+      refine ⟨i, ?_⟩
+      funext k
+      by_cases hki : k = i
+      · subst k
+        have hmem : i ∈ Finset.univ.filter (fun j : Fin n => x j ≠ z j) := by
+          rw [hi]
+          simp
+        have hne : x i ≠ z i := (Finset.mem_filter.mp hmem).2
+        cases hx : x i <;> cases hz : z i <;> simp_all [flipVertex5]
+      · have heq : x k = z k := by
+          by_contra hne
+          have hmem : k ∈ Finset.univ.filter (fun j : Fin n => x j ≠ z j) :=
+            Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩
+          rw [hi] at hmem
+          exact hki (Finset.mem_singleton.mp hmem)
+        simp [flipVertex5, hki, heq]
+    have neigh_even (t : X.St.Site) (htS : t ∈ S) :
+        ∃ x : CubeVertex n, X.St.stateOf x = t ∧ IsEvenRole x := by
+      obtain ⟨x, z, hx, hz, hAdj⟩ := (X.St.mem_neighbors b t).mp htS
+      have hxOdd : ¬ IsEvenRole x := by
+        have hpar := (X.St.state_determines x y.1 hx).2.2.2.1
+        intro he
+        exact y.2 (hpar.mp he)
+      have hflip : IsEvenRole z := by
+        have hpar : IsEvenRole x ↔ ¬ IsEvenRole z := by
+          obtain ⟨i, hi⟩ := adj_flip hAdj
+          rw [hi]
+          simpa [flipVertex5, cubeFlip] using (cubeFlip_parity z i)
+        by_contra hzEven
+        exact hxOdd (hpar.mpr hzEven)
+      exact ⟨z, hz, hflip⟩
+    have site_mem (t : X.St.Site) (htS : t ∈ S) : X.St.oneHot t ∈ Sites := by
+      obtain ⟨x, hx, hEven⟩ := neigh_even t htS
+      apply Finset.mem_image.mpr
+      exact ⟨⟨x, hEven⟩, Finset.mem_univ _, by simp [Setup5.siteOf, hx]⟩
+    have hSnon : S.Nonempty := by
+      let i : Fin n := ⟨0, by omega⟩
+      refine ⟨X.St.stateOf (cubeFlip y.1 i), ?_⟩
+      apply (X.St.mem_neighbors b _).2
+      exact ⟨y.1, cubeFlip y.1 i, rfl, rfl, cubeFlip_adj y.1 i⟩
+    have hheight_lt (t : X.St.Site) (htS : t ∈ S) : heightAt t < hp.H :=
+      (hgood (X.St.oneHot t) (site_mem t htS)).1
+    have hnotbad (t : X.St.Site) (htS : t ∈ S) :
+        ¬ hp.Bad P A elig (X.St.oneHot t)
+          ⟨heightAt t, Nat.lt_succ_of_le (hheight_lt t htS).le⟩ := by
+      intro hb'
+      exact (hgood (X.St.oneHot t) (site_mem t htS)).2.1
+        ⟨Nat.lt_succ_of_le (hheight_lt t htS).le, hb'⟩
+    have hselect_some (t : X.St.Site) (htS : t ∈ S) :
+        ∃ l, hp.selection Sites P A elig τ (X.St.oneHot t) = some l :=
+      hselect_at (X.St.oneHot t) (site_mem t htS)
+    let μ : X.St.Site → hp.Loc := fun t =>
+      if htS : t ∈ S then Classical.choose (hselect_some t htS) else default
+    have hμsel (t : X.St.Site) (htS : t ∈ S) :
+        hp.selection Sites P A elig τ (X.St.oneHot t) = some (μ t) := by
+      dsimp only [μ]
+      rw [dif_pos htS]
+      exact Classical.choose_spec (hselect_some t htS)
+    have hμshape (t : X.St.Site) (htS : t ∈ S) :
+        P (μ t) = true ∧ (μ t).2 = ⟨heightAt t,
+          Nat.lt_succ_of_le (hheight_lt t htS).le⟩ ∧
+          hammingDist (μ t).1 (X.St.oneHot t) ≤ hp.r := by
+      exact hshape_of_selection (X.St.oneHot t) (heightAt t) (hheight_lt t htS) rfl
+        (hnotbad t htS) (μ t) (hμsel t htS)
+    have hμactive (t : X.St.Site) (htS : t ∈ S) : A (μ t) = true := by
+      exact (hselected_spec (X.St.oneHot t) (heightAt t) (hheight_lt t htS) rfl
+        (hnotbad t htS) (μ t) (hμsel t htS)).2
+    have hdist (t t' : X.St.Site) (htS : t ∈ S) (htS' : t' ∈ S) :
+        _root_.hammingDist (X.St.oneHot t) (X.St.oneHot t') ≤ 8 := by
+      simpa [HypercubeRamsey.hammingDist] using
+        X.St.even_distance b t t' htS htS' (neigh_even t htS) (neigh_even t' htS')
+    let heights := S.image heightAt
+    have hheights_nonempty : heights.Nonempty := by
+      rcases hSnon with ⟨t, htS⟩
+      exact ⟨heightAt t, Finset.mem_image.mpr ⟨t, htS, rfl⟩⟩
+    let j := heights.min' hheights_nonempty
+    have hj_mem : j ∈ heights := Finset.min'_mem heights hheights_nonempty
+    obtain ⟨t₀, ht₀S, ht₀j⟩ := Finset.mem_image.mp hj_mem
+    have hj_le (t : X.St.Site) (htS : t ∈ S) : j ≤ heightAt t :=
+      Finset.min'_le heights (heightAt t) (Finset.mem_image.mpr ⟨t, htS, rfl⟩)
+    have hlevel (t : X.St.Site) (htS : t ∈ S) : heightAt t = j ∨ heightAt t = j + 1 := by
+      have hclose := (hgood (X.St.oneHot t₀) (site_mem t₀ ht₀S)).2.2
+        (X.St.oneHot t) (site_mem t htS) (hdist t₀ t ht₀S htS)
+      change |(heightAt t₀ : ℤ) - (heightAt t : ℤ)| ≤ 1 at hclose
+      rw [ht₀j] at hclose
+      have hbounds := abs_le.mp hclose
+      have hupper : (heightAt t : ℤ) ≤ (j : ℤ) + 1 := by omega
+      have hupperNat : heightAt t ≤ j + 1 := by exact_mod_cast hupper
+      by_cases hEq : heightAt t = j
+      · exact Or.inl hEq
+      · right
+        have hlt : j < heightAt t := lt_of_le_of_ne (hj_le t htS) (Ne.symm hEq)
+        exact le_antisymm hupperNat (Nat.succ_le_of_lt hlt)
+    have hj_lt : j < hp.H := by
+      have := hheight_lt t₀ ht₀S
+      omega
+    let jfin : Fin (hp.H + 1) := ⟨j, Nat.lt_succ_of_le hj_lt.le⟩
+    let M := S.image μ
+    let M₀ := M.filter fun l => l.2.val = j
+    let M₁ := M.filter fun l => l.2.val = j + 1
+    have hM_levels (l : hp.Loc) (hl : l ∈ M) : l.2.val = j ∨ l.2.val = j + 1 := by
+      obtain ⟨t, htS, rfl⟩ := Finset.mem_image.mp hl
+      have hr := hlevel t htS
+      have hμval := congrArg Fin.val (hμshape t htS).2.1
+      simp only [Fin.val_mk] at hμval
+      rcases hr with hr | hr <;> simp [hr, hμval]
+    have hM_eq : M = M₀ ∪ M₁ := by
+      ext l
+      constructor
+      · intro hl
+        rcases hM_levels l hl with h | h
+        · exact Finset.mem_union.mpr (Or.inl (Finset.mem_filter.mpr ⟨hl, h⟩))
+        · exact Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mpr ⟨hl, h⟩))
+      · intro hl
+        rcases Finset.mem_union.mp hl with hl | hl
+        · exact (Finset.mem_filter.mp hl).1
+        · exact (Finset.mem_filter.mp hl).1
+    have hgroup_bound (k : ℕ) (t₀ : X.St.Site) (ht₀S : t₀ ∈ S)
+        (hcenter : heightAt t₀ = k) (hk : k < hp.H)
+        (Mk : Finset hp.Loc) (hMk : Mk ⊆ M)
+        (hMk_level : ∀ l ∈ Mk, l.2.val = k) : (Mk.card : ℝ) ≤ (n : ℝ) ^ hp.b := by
+      let kfin : Fin (hp.H + 1) := ⟨k, Nat.lt_succ_of_le hk.le⟩
+      let Ck : Finset (CubeVertex hp.d) := Finset.univ.filter fun u =>
+        P (u, kfin) = true ∧ A (u, kfin) = true ∧
+          _root_.hammingDist u (X.St.oneHot t₀) ≤ hp.r + hp.D
+      have hnot : ¬ hp.Bad P A elig (X.St.oneHot t₀) kfin := by
+        have hn := hnotbad t₀ ht₀S
+        have heq : (⟨heightAt t₀, Nat.lt_succ_of_le (hheight_lt t₀ ht₀S).le⟩ :
+            Fin (hp.H + 1)) = kfin := by
+          exact Fin.ext (by simp [hcenter, kfin])
+        simpa [heq] using hn
+      have hnotCrowd : ¬ (n : ℝ) ^ hp.b < (Ck.card : ℝ) := by
+        have hnC : ¬ (hp.n : ℝ) ^ hp.b < (Ck.card : ℝ) := by
+          have hnBad : ¬ ((∀ l ∈ elig (X.St.oneHot t₀) kfin, A l = false) ∨
+              (hp.n : ℝ) ^ hp.b <
+                ((Finset.univ.filter (fun u : CubeVertex hp.d =>
+                  P (u, kfin) = true ∧ A (u, kfin) = true ∧
+                    _root_.hammingDist u (X.St.oneHot t₀) ≤ hp.r + hp.D)).card : ℝ)) := by
+            simpa only [HDParams.Bad] using hnot
+          exact (not_or.mp hnBad).2
+        simpa [hp, ht, canonHt, HeightChoice5.hp, Ck, P, A, kfin] using hnC
+      have hCk : (Ck.card : ℝ) ≤ (n : ℝ) ^ hp.b := not_lt.mp hnotCrowd
+      let locs := Mk.image Prod.fst
+      have hloc_subset : locs ⊆ Ck := by
+        intro u hu
+        obtain ⟨z, hz, hzu⟩ := Finset.mem_image.mp hu
+        obtain ⟨t, htS, htz⟩ := Finset.mem_image.mp (hMk hz)
+        have hshape := hμshape t htS
+        have hactive := hμactive t htS
+        have hlev : (μ t).2.val = k := by
+          rw [htz]
+          exact hMk_level z hz
+        have hfin : (μ t).2 = kfin := Fin.ext hlev
+        have hpair : z = (u, kfin) := by
+          apply Prod.ext
+          · exact hzu
+          · have hlevZ : z.2.val = k := by
+              rw [htz] at hlev
+              exact hlev
+            exact Fin.ext hlevZ
+        have hμpair : μ t = (u, kfin) := htz.trans hpair
+        have hdist' : _root_.hammingDist u (X.St.oneHot t₀) ≤ hp.r + hp.D := by
+          have htDist := hdist t t₀ htS ht₀S
+          have htri := _root_.hammingDist_triangle u (X.St.oneHot t) (X.St.oneHot t₀)
+          have hrShape : _root_.hammingDist (μ t).1 (X.St.oneHot t) ≤ hp.r := by
+            simpa [HypercubeRamsey.hammingDist, _root_.hammingDist] using hshape.2.2
+          have hloc : (μ t).1 = u := by
+            have h := congrArg Prod.fst hμpair
+            simpa using h
+          have hr : _root_.hammingDist u (X.St.oneHot t) ≤ hp.r := by
+            rw [← hloc]
+            exact hrShape
+          have hD : hp.D = 8 := by simp [hp, ht, canonHt, HeightChoice5.hp]
+          have htDist' : _root_.hammingDist (X.St.oneHot t) (X.St.oneHot t₀) ≤ hp.D := by
+            omega
+          calc
+            _ ≤ _ := htri
+            _ ≤ hp.r + hp.D := Nat.add_le_add hr htDist'
+        have hP : P (u, kfin) = true := by
+          simpa [hμpair] using hshape.1
+        have hA : A (u, kfin) = true := by
+          simpa [hμpair] using hactive
+        exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hP, hA, hdist'⟩
+      have hinj : Set.InjOn Prod.fst (↑Mk : Set hp.Loc) := by
+        intro l hl l' hl' hfst
+        change l ∈ Mk at hl
+        change l' ∈ Mk at hl'
+        obtain ⟨u, i⟩ := l
+        obtain ⟨u', i'⟩ := l'
+        simp only [Prod.fst] at hfst
+        subst u'
+        have hi : i.val = k := hMk_level (u, i) hl
+        have hi' : i'.val = k := hMk_level (u, i') hl'
+        have : i = i' := Fin.ext (by omega)
+        subst i'
+        rfl
+      have hcard_image : locs.card = Mk.card := Finset.card_image_iff.mpr hinj
+      have hcard : Mk.card ≤ Ck.card := by
+        rw [← hcard_image]
+        exact Finset.card_le_card hloc_subset
+      have hcardR : (Mk.card : ℝ) ≤ (Ck.card : ℝ) := by exact_mod_cast hcard
+      exact hcardR.trans hCk
+    have hM₀_bound : (M₀.card : ℝ) ≤ (n : ℝ) ^ hp.b := by
+      exact hgroup_bound j t₀ ht₀S ht₀j hj_lt M₀ (by
+        intro l hl
+        exact (Finset.mem_filter.mp hl).1) (by
+        intro l hl
+        exact (Finset.mem_filter.mp hl).2)
+    have hM₁_bound : (M₁.card : ℝ) ≤ (n : ℝ) ^ hp.b := by
+      by_cases hne : M₁.Nonempty
+      · obtain ⟨l, hl⟩ := hne
+        obtain ⟨t, htS, htl⟩ := Finset.mem_image.mp
+          ((Finset.mem_filter.mp hl).1)
+        have hlevel_t : heightAt t = j + 1 := by
+          have hval := congrArg Fin.val (hμshape t htS).2.1
+          have hmk := (Finset.mem_filter.mp hl).2
+          rw [← htl] at hmk
+          simp only [Fin.val_mk] at hval
+          omega
+        exact hgroup_bound (j + 1) t htS hlevel_t (by
+          have := hheight_lt t htS
+          omega) M₁ (by
+          intro l' hl'
+          exact (Finset.mem_filter.mp hl').1) (by
+          intro l' hl'
+          exact (Finset.mem_filter.mp hl').2)
+      · have hempty : M₁ = ∅ := Finset.not_nonempty_iff_eq_empty.mp hne
+        simp [hempty]
+        positivity
+    have hMcard : (M.card : ℝ) ≤ 2 * (n : ℝ) ^ hp.b := by
+      have hcard : M.card ≤ M₀.card + M₁.card := by
+        rw [hM_eq]
+        exact Finset.card_union_le M₀ M₁
+      calc
+        (M.card : ℝ) ≤ (M₀.card : ℝ) + (M₁.card : ℝ) := by exact_mod_cast hcard
+        _ ≤ 2 * (n : ℝ) ^ hp.b := by linarith [hM₀_bound, hM₁_bound]
+    have hT : M.card ≤ X.p.T n := by
+      exact_mod_cast hMcard.trans hsmallT
+    have hsiteState (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+        X.St.stateOf a.1 ∈ S := by
+      apply (X.St.mem_neighbors b _).2
+      exact ⟨y.1, a.1, rfl, rfl, (cube n).adj_symm (Finset.mem_filter.mp ha).2⟩
+    have hsel_at (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+        X.selAt eligFn ω hp.Rlong a = some (μ (X.St.stateOf a.1)) := by
+      change hp.selectionAt Sites P A elig τ hp.Rlong (X.siteOf a) =
+        some (μ (X.St.stateOf a.1))
+      simpa [HDParams.selection, Setup5.siteOf] using hμsel (X.St.stateOf a.1) (hsiteState a ha)
+    have hμelig (t : X.St.Site) (htS : t ∈ S) : μ t ∈ elig (X.St.oneHot t) (μ t).2 := by
+      have hmem := (hselected_spec (X.St.oneHot t) (heightAt t) (hheight_lt t htS) rfl
+        (hnotbad t htS) (μ t) (hμsel t htS)).1
+      rw [(hμshape t htS).2.1]
+      exact hmem
+    have hμsingleton (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+        Lane_opus_s05.singletonOK X ht H (arraysOf ω) a (μ (X.St.stateOf a.1)) := by
+      have htS := hsiteState a ha
+      have hm := hμelig (X.St.stateOf a.1) htS
+      change μ (X.St.stateOf a.1) ∈ Lane_opus_s05.eligOf X ht H (pos ω) (arraysOf ω)
+        (X.St.oneHot (X.St.stateOf a.1)) (μ (X.St.stateOf a.1)).2 at hm
+      simp only [Lane_opus_s05.eligOf, Finset.mem_filter] at hm
+      rcases hm with ⟨_, hprop⟩
+      exact hprop.1 a (by rfl)
+    have hlevels : ∀ t ∈ S, (μ t).2.val = j ∨ (μ t).2.val = j + 1 := by
+      intro t htS
+      have hval := congrArg Fin.val (hμshape t htS).2.1
+      simp only [Fin.val_mk] at hval
+      simpa [hval] using hlevel t htS
+    have hT' : ((evenNbrs y).image fun a => X.selAt eligFn ω hp.Rlong a).card ≤ X.p.T n := by
+      let ids := (evenNbrs y).image fun a => μ (X.St.stateOf a.1)
+      let opts := ids.image (fun l => some l)
+      have hselImg : (evenNbrs y).image (fun a => X.selAt eligFn ω hp.Rlong a) = opts := by
+        calc
+          _ = (evenNbrs y).image (fun a => some (μ (X.St.stateOf a.1))) := by
+            apply Finset.image_congr
+            intro a ha
+            exact hsel_at a ha
+          _ = opts := by
+            dsimp [opts, ids]
+            rw [Finset.image_image]
+            rfl
+      have hinj : Set.InjOn (fun l : hp.Loc => some l) (↑ids : Set hp.Loc) := by
+        intro l hl l' hl' heq
+        exact Option.some.inj heq
+      have hopts : opts.card = ids.card := Finset.card_image_iff.mpr hinj
+      have hids : ids ⊆ M := by
+        intro l hl
+        obtain ⟨a, ha, heq⟩ := Finset.mem_image.mp hl
+        have hm : μ (X.St.stateOf a.1) ∈ S.image μ :=
+          Finset.mem_image.mpr ⟨X.St.stateOf a.1, hsiteState a ha, rfl⟩
+        simpa [M, ← heq] using hm
+      calc
+        _ = opts.card := by rw [hselImg]
+        _ = ids.card := hopts
+        _ ≤ M.card := Finset.card_le_card hids
+        _ ≤ X.p.T n := hT
+    have hlongsome (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+        (X.selLong (markElig X ht H) ω a).isSome := by
+      have hs := hselect_at (X.St.oneHot (X.St.stateOf a.1))
+        (site_mem (X.St.stateOf a.1) (hsiteState a ha))
+      change (hp.selection Sites P A elig τ (X.siteOf a)).isSome = true
+      rcases hs with ⟨l, hl⟩
+      have hl' : hp.selection Sites P A elig τ (X.siteOf a) = some l := by
+        simpa [Setup5.siteOf] using hl
+      simp [hl']
+    have hstep3 : ¬ X.step3FailOn H (X.actualRecordAt eligFn H ω hp.Rlong y) (arraysOf ω) := by
+      apply Lane_opus_s05.markElig_sound X ht H ω hp.Rlong y μ j hj_lt.le
+      · intro t htS
+        exact hμelig t htS
+      · exact hlevels
+      · exact hT
+      · intro a ha
+        exact hsel_at a ha
+    unfold LocalValidAt
+    dsimp only
+    refine ⟨hbase, hstep1, ?_, ?_, hT', ?_, ?_, ?_, ?_, ?_, hstep3⟩
+    · intro a ha
+      exact hlongsome a ha
+    · intro a ha j'
+      have hcount := hballs (X.St.oneHot (X.St.stateOf a.1))
+        (site_mem (X.St.stateOf a.1) (hsiteState a ha)) j'
+      exact hcount.2
+    · intro a ha l k hsel hkey
+      have heq : l = μ (X.St.stateOf a.1) :=
+        Option.some.inj (hsel.symm.trans (hsel_at a ha))
+      rw [heq]
+      exact (hμsingleton a ha).2 k hkey
+    · intro a ha l hsel
+      have heq : l = μ (X.St.stateOf a.1) :=
+        Option.some.inj (hsel.symm.trans (hsel_at a ha))
+      rw [heq]
+      have hc : X.heavyCount H ω a
+          (μ (X.St.stateOf a.1), X.refSubset H ω a (μ (X.St.stateOf a.1))) =
+          Lane_opus_s05.heavyCountOn X ht H (arraysOf ω) a
+            (μ (X.St.stateOf a.1), X.refSubset H ω a (μ (X.St.stateOf a.1))) := by
+        rfl
+      rw [hc]
+      exact (hμsingleton a ha).1
+    · have hs := hsupp y (by intro a ha; exact hlongsome a ha)
+      exact hs.1
+    · have hs := hsupp y (by intro a ha; exact hlongsome a ha)
+      exact hs.2.1
+    · have hs := hsupp y (by intro a ha; exact hlongsome a ha)
+      exact hs.2.2
+  unfold Lane_opus_s05.CentreSuccess
+  exact ⟨hlegal', hglobal, hstar⟩
 
 /-- SUB-LEMMA J10 (union bound over J3–J9): the two probability estimates of L5.1j. -/
 theorem markElig_estimates : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) →

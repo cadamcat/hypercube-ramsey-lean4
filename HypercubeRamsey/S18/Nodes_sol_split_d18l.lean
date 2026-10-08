@@ -558,9 +558,8 @@ theorem D18_L_upstream_bad (hκ : κ.Admissible) (hThresholds : LateThresholds �
   | inr v =>
     by_cases heven : IsEvenRole v
     · let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
-      -- Physical geometry/sampler adapter; the corner, prior-shape,
-      -- fixed-pool singleton and pool-typicality fields are proved in the
-      -- lane helper. The remaining source/history/comparison fields are open.
+      -- The shared adapter supplies geometry, sampler and pool-comparison
+      -- fields for this physical context at the fixed upstream scale.
       have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty :=
         Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
       have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining

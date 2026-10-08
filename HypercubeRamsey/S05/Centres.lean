@@ -908,7 +908,122 @@ theorem heights_tail : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ n₀,
         (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) ∧
           ¬ (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω) (act ω)
             (markElig X (canonHt X) H ω)) ≤ 1 / 300 := by
-  sorry
+  classical
+  intro p
+  obtain ⟨c, hc, nHeight, hHeight⟩ :=
+    height_selection_global 10 (p.alpha / 10000) (p.alpha / 2000)
+      (p.alpha / 1000000) (p.alpha / 100000) (1 - p.alpha / 100000)
+      (p.alpha / 20000) (1 / 2) 2 8
+      (Lane_sol_s05_centres.height_admissible p)
+      (Lane_sol_s05_centres.heightRegime p)
+  obtain ⟨nGeom, hGeom⟩ :=
+    Filter.eventually_atTop.1 (Lane_sol_s05_centres.height_regime_eventually p)
+  have hpow : Filter.Tendsto (fun m : ℕ => (m : ℝ) ^ (1 + c)) Filter.atTop Filter.atTop :=
+    (tendsto_rpow_atTop (by linarith)).comp tendsto_natCast_atTop_atTop
+  have hexp : Filter.Tendsto (fun m : ℕ => Real.exp (-((m : ℝ) ^ (1 + c)))) Filter.atTop (nhds 0) :=
+    Real.tendsto_exp_neg_atTop_nhds_zero.comp hpow
+  obtain ⟨nExp, hExp⟩ := Filter.eventually_atTop.1
+    (hexp.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 300)))
+  let n₀ := max nHeight (max nGeom nExp)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G Y hY H
+  let ht := canonHt Y
+  let hp := ht.hp
+  have hgeom := hGeom n (by omega) (Y.p.m n) (Y.p.J n) Y.g Y.St
+  have hdimlo : (1 / 2 : ℝ) * hp.n ≤ hp.d := by
+    change (1 / 2 : ℝ) * n ≤ Y.St.d
+    exact hgeom.1
+  have hdimhi : (hp.d : ℝ) ≤ 2 * hp.n := by
+    change (Y.St.d : ℝ) ≤ 2 * n
+    exact hgeom.2.1
+  have hreg : (Lane_sol_s05_centres.heightRegime p).ok hp.n hp.d hp.r := by
+    simpa [hp, ht, canonHt, HeightChoice5.hp, hY] using hgeom.2.2
+  have hscale : hp.H = topScale hp.n (p.alpha / 1000000) (p.alpha / 100000) := by
+    simp [hp, ht, canonHt, HeightChoice5.hp, hY]
+  have hlam : hp.lam = (hp.n : ℝ) ^ (10 : ℝ) := by
+    simp [hp, HeightChoice5.hp]
+  have hb₀ : hp.b₀ = p.alpha / 10000 := by
+    simp [hp, ht, canonHt, HeightChoice5.hp, hY]
+  have hb : hp.b = p.alpha / 2000 := by
+    simp [hp, ht, canonHt, HeightChoice5.hp, hY]
+  have hnHeight : nHeight ≤ n := by omega
+  have hbad := hHeight hp (by simp [hp, HeightChoice5.hp]) hscale hlam hb₀ hb
+    (by simpa [hp, ht, canonHt, HeightChoice5.hp] using hnHeight) hdimlo hdimhi hreg
+  let Arr := ∀ K : Y.Ty, Y.Array K
+  let Aux := ∀ l : hp.Loc, hp.TiePerm × Arr
+  let arrayLaw : FinProb Arr :=
+    FinProb.pi fun K => FinProb.pi fun _ : Fin (Y.p.typeBlocks n K) => Y.blockLaw H K
+  let auxLaw : FinProb Aux :=
+    FinProb.pi fun _ =>
+      (FinProb.uniformAll (Ω := hp.TiePerm) ⟨1⟩).prod arrayLaw
+  let posLaw : FinProb (hp.Loc → Bool) :=
+    FinProb.pi fun _ => FinProb.bernoulli (hp.lam / (hp.V : ℝ))
+  let actLaw : FinProb (hp.Loc → Bool) :=
+    FinProb.pi fun _ => FinProb.bernoulli ((n : ℝ) ^ hp.b₀ / hp.lam)
+  let law : FinProb (((hp.Loc → Bool) × Aux) × (hp.Loc → Bool)) :=
+    (posLaw.prod auxLaw).prod actLaw
+  let AOf : Aux → Y.ArraysOn hp.Loc := fun a q => (a q.1).2 q.2
+  let Esel : (hp.Loc → Bool) → Aux → hp.EligMap :=
+    fun P a => eligOf Y ht H P (AOf a)
+  let e : Y.CΩ ht ≃ (((hp.Loc → Bool) × Aux) × (hp.Loc → Bool)) :=
+    { toFun := fun ω =>
+        ((pos ω, fun l => ((ω l).2.2.1, (ω l).2.2.2)), act ω)
+      invFun := fun q l =>
+        (q.1.1 l, q.2 l, (q.1.2 l).1, (q.1.2 l).2)
+      left_inv := by
+        intro ω
+        funext l
+        cases h : ω l with
+        | mk a b => cases b with
+          | mk b c => cases c with
+            | mk c d => simp [pos, act, h]
+      right_inv := by
+        rintro ⟨⟨P, a⟩, A⟩
+        apply Prod.ext
+        · apply Prod.ext
+          · rfl
+          · funext l
+            rfl
+        · rfl }
+  have prod_move (f g h : hp.Loc → ℝ) :
+      (∏ l, f l * (g l * h l)) = (∏ l, f l) * (∏ l, h l) * (∏ l, g l) := by
+    rw [Finset.prod_mul_distrib, Finset.prod_mul_distrib]
+    ac_rfl
+  have hw (ω : Y.CΩ ht) : law.w (e ω) = (Y.centreLaw ht H).w ω := by
+    change law.w ((pos ω, fun l => ((ω l).2.2.1, (ω l).2.2.2)), act ω) =
+      (Y.centreLaw ht H).w ω
+    simp only [law, posLaw, auxLaw, actLaw, arrayLaw, Setup5.centreLaw, FinProb.prod,
+      FinProb.pi, pos, act]
+    exact (prod_move
+      (fun l => (FinProb.bernoulli (hp.lam / (hp.V : ℝ))).w (pos ω l))
+      (fun l => (FinProb.bernoulli ((n : ℝ) ^ hp.b₀ / hp.lam)).w (act ω l))
+      (fun l => (FinProb.uniformAll (Ω := hp.TiePerm) ⟨1⟩).w ((ω l).2.2.1) *
+        arrayLaw.w (fun K => (ω l).2.2.2 K))).symm
+  let bad : (((hp.Loc → Bool) × Aux) × (hp.Loc → Bool)) → Prop := fun q =>
+    hp.Legal q.1.1 (Esel q.1.1 q.1.2) (Y.sites ht) ∧
+      ¬ hp.GoodHeights (Y.sites ht) q.1.1 q.2 (Esel q.1.1 q.1.2)
+  let target : Y.CΩ ht → Prop := fun ω =>
+    hp.Legal (pos ω) (markElig Y ht H ω) (Y.sites ht) ∧
+      ¬ hp.GoodHeights (Y.sites ht) (pos ω) (act ω) (markElig Y ht H ω)
+  have hAuxArr (ω : Y.CΩ ht) :
+      (fun q : hp.Loc × Y.Ty => (ω q.1).2.2.2 q.2) = arraysOf ω := by
+    funext q
+    rfl
+  have hEvent (ω : Y.CΩ ht) : bad (e ω) = target ω := by
+    change bad ((pos ω, fun l => ((ω l).2.2.1, (ω l).2.2.2)), act ω) = target ω
+    simp only [bad, target, Esel, AOf, markElig, pos, act]
+    rw [hAuxArr ω]
+  have hPred : (fun ω => bad (e ω)) = target := by
+    funext ω
+    exact hEvent ω
+  have hpr : law.pr bad = (Y.centreLaw ht H).pr target := by
+    rw [Lane_sol_s05_h1.pr_equiv (Y.centreLaw ht H) law e hw bad]
+    rw [hPred]
+  have htail : (Y.centreLaw ht H).pr target ≤ Real.exp (-((n : ℝ) ^ (1 + c))) := by
+    exact hpr.symm ▸ hbad (Y.sites ht) auxLaw Esel
+  have hnExp : nExp ≤ n := by omega
+  have hexpSmall : Real.exp (-((n : ℝ) ^ (1 + c))) < 1 / 300 := hExp n hnExp
+  exact htail.trans hexpSmall.le
 
 /-- SUB-LEMMA J8 (05:874–879): raw block support, true path support and the true-target gate
 at actual long records hold with probability `1 - o(1)` at good histories. -/

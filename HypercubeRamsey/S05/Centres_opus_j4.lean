@@ -138,7 +138,7 @@ theorem typeSegs_pos (hm : 1 < X.p.m n) (K : X.Ty) : 0 < X.p.q0 * X.p.typeSegs n
   exact Nat.mul_pos hq0 hseg
 
 /-- The prior-heavy part of the singleton test fails with probability at most `e^{-100}`. -/
-theorem heavy_fail_le (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
+theorem heavy_fail_le [Fintype X.Ty] [DecidableEq X.Ty] (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
     (K : X.Ty) (hType : X.TypeOccurs K) {Id : Type} (l : Id) (o : Option X.Key) (C : ℝ)
     (hC : 0 ≤ C)
     (hTail : (X.p.typeBlocks n K : ℝ) * Real.exp (-C * (X.p.typeSegs n K : ℝ)) ≤ Real.exp (-100))
@@ -252,7 +252,7 @@ theorem heavy_fail_le (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
 /-- The optional-hit part of the singleton test fails with probability at most `e^{-100}`: at a high role
 with `j = J + 1`, each pool block hits the optional column with probability at least
 `e^{-(a₁+δ) q₀ u_*}`, and the pool has `e^{K_h q₀ u_*} k_*/u_*` independent blocks. -/
-theorem opt_fail_le (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
+theorem opt_fail_le [Fintype X.Ty] [DecidableEq X.Ty] (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
     (x : CubeVertex n) (hx : IsEvenRole x) {Id : Type} (l : Id)
     (hKh : X.p.a 1 + X.p.delta + 1 ≤ X.p.Kh) (hm : 1 < X.p.m n)
     (hused : 400 ≤ X.p.usedBlocks n) :
@@ -371,7 +371,7 @@ theorem opt_fail_le (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
     _ ≤ Real.exp (-100) := Real.exp_le_exp.mpr (by linarith)
 
 /-- A singleton test at an even role fails with probability at most `2 e^{-100}`. -/
-theorem single_fail_le (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
+theorem single_fail_le [Fintype X.Ty] [DecidableEq X.Ty] (H : X.KeyHist) {cL cH : ℝ} (hgood : X.KeyGood5 H cL cH)
     (x : CubeVertex n) (hx : IsEvenRole x) {Id : Type} (l : Id) (C : ℝ) (hC : 0 ≤ C)
     (hTail : (X.p.typeBlocks n (X.g.evenType (X.p.J n) x) : ℝ) *
       Real.exp (-C * (X.p.typeSegs n (X.g.evenType (X.p.J n) x) : ℝ)) ≤ Real.exp (-100))

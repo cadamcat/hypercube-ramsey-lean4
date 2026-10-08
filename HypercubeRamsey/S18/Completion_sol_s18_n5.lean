@@ -1,4 +1,5 @@
 import HypercubeRamsey.S18.Comparisons_sol_s18_n5
+import HypercubeRamsey.S18.Supp_sol_s18_supp
 
 namespace HypercubeRamsey.S18.Lane_sol_s18_n5
 open Classical Filter
@@ -25,6 +26,7 @@ theorem terminal_input_support (D : LateData hPT) {δ ε : ℝ}
 all the completion conclusions. Bad avoidance is used only after the gate
 has been established by induction on the processing index. -/
 theorem full_of_entering_supported (D : LateData hPT) (hD : D.Spec)
+    (hT : TransitionData D)
     {δ ε : ℝ} (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
     {K27 : ℝ} (hBroad : BroadDeletionFacts D K27)
     (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
@@ -71,12 +73,11 @@ theorem full_of_entering_supported (D : LateData hPT) (hD : D.Spec)
         by_contra hn
         exact (hsampler j).2.1 (Finset.mem_filter.mpr
           ⟨Finset.mem_univ _, b, hg, Or.inr (Or.inr ⟨hR1, hR2, hn⟩)⟩)
-      -- Obligation from the `InitialSketchSupport` guard added to `BroadDeletionFacts` (main 1e2cca1): the realized
-      -- side output has its sketch labels in the initial-prior support. Owner: lane sol-s18-n5.
-      have hSupp : InitialSketchSupport D j (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt))
-          (D.pastRows h j j.isLt b) := by
-        sorry
-      exact ⟨hg, hR3, (hBroad j b.1 _ _ b.2 hg hSupp hR1 hR2).2.1⟩
+      have hcurrent := Lane_sol_s18_supp.actual_current_sketch_support D hT A j
+        (D.beforeHistory h j.castSucc (Nat.le_of_lt j.isLt))
+        (D.pastRows h j j.isLt) (henter j) (hsupport j) b
+      exact ⟨hg, hR3, Lane_sol_s18_supp.deletion_of_current_support D hBroad j b _ _
+        hg hcurrent hR1 hR2⟩
   have hearly := D.early_injective x hpos hperm htyp
   have hearly_reserve : ∀ b : {v : Pos T k // ¬ IsEvenRole v},
       D.earlyLabel h.1 b.1 ∉ PT.tiling.reserveY := by
@@ -350,6 +351,7 @@ theorem reached_futureRisk (D : LateData hPT) {δ ε : ℝ}
     exact lt_of_not_ge hn
 
 theorem actual_supported_full (D : LateData hPT) (hD : D.Spec)
+    (hT : TransitionData D)
     {δ ε K27 : ℝ} (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
     (hBroad : BroadDeletionFacts D K27) (x : D.encoding.InitInput)
     (h : D.encoding.base.History (Fin.last D.geom.r))
@@ -361,7 +363,7 @@ theorem actual_supported_full (D : LateData hPT) (hD : D.Spec)
   obtain ⟨hx, hh⟩ := mul_ne_zero_iff.mp hw
   obtain ⟨hinit, hsteps⟩ := runFrom_support D A.act (D.encoding.initialState x)
     D.geom.r le_rfl h hh
-  exact full_of_entering_supported D hD C A hBroad x h hx hinit henter
+  exact full_of_entering_supported D hD hT C A hBroad x h hx hinit henter
     (fun j => hsteps j j.isLt)
 
 noncomputable def reached (D : LateData hPT) (δ : ℝ) (j : Fin D.geom.r)
@@ -391,6 +393,7 @@ theorem first_nonenter (D : LateData hPT) (δ : ℝ)
 /-- The only probabilistic obligation left after completion induction is
 the probability of a first failed entering check at a reached history. -/
 theorem fullRunProbability_of_first_stop (D : LateData hPT) (hD : D.Spec)
+    (hT : TransitionData D)
     {δ ε K27 εrun : ℝ} (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
     (hBroad : BroadDeletionFacts D K27)
     (hstop : (FinLaw.bind (D.encoding.terminalLaw (terminalSet D δ) C.positive)
@@ -416,7 +419,7 @@ theorem fullRunProbability_of_first_stop (D : LateData hPT) (hD : D.Spec)
             D.enter δ j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt)) := by
           by_contra hn
           exact hs (first_nonenter D δ z.2 hn)
-        have hf := actual_supported_full D hD C A hBroad z.1 z.2 hz he
+        have hf := actual_supported_full D hD hT C A hBroad z.1 z.2 hz he
         simp [hf, hs]
   have hsum := Finset.sum_le_sum (fun z (_ : z ∈ Finset.univ) => hcover z)
   rw [Finset.sum_add_distrib, P.sum_one] at hsum
@@ -479,6 +482,7 @@ theorem reached_column_tail_on {Ω : Type*} [Fintype Ω] (D : LateData hPT)
 /-- Incoming-risk/support induction and the reached moments suffice for the
 whole run. The probability estimate here reads the actual class-run law. -/
 theorem fullRunProbability_of_reached_moments (D : LateData hPT) (hD : D.Spec)
+    (hT : TransitionData D)
     {δ ε K27 : ℝ} (C : TerminalCertificate D δ ε) (A : ClassSamplerData D δ)
     (hBroad : BroadDeletionFacts D K27) (hθ : 0 < κ.θ0) (m : ℕ) (M : Fin D.geom.r → ℝ)
     (hincoming : ∀ x h,
@@ -521,7 +525,7 @@ theorem fullRunProbability_of_reached_moments (D : LateData hPT) (hD : D.Spec)
         simp [hf, hcol]
       · simp only [hf, if_false]
         split_ifs; exact P.nonneg z; exact le_rfl
-  apply fullRunProbability_of_first_stop D hD C A hBroad
+  apply fullRunProbability_of_first_stop D hD hT C A hBroad
   calc
     _ ≤ ∑ j, P.pr (Fail j) := pr_exists_le_sum P Fail
     _ ≤ ∑ j, P.pr (fun z => ∃ y, Column j y z) := Finset.sum_le_sum fun j _ => hreduce j

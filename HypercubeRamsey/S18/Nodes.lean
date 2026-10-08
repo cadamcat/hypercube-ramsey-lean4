@@ -1,4 +1,8 @@
 import HypercubeRamsey.S18.Defs
+import HypercubeRamsey.S18.Nodes_q_s18_n3
+import HypercubeRamsey.S18.Nodes_sol_fix_surv
+import HypercubeRamsey.S18.Nodes_sol_s18_2lm
+import HypercubeRamsey.S18.Nodes_sol_fix_outsupp
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
 import HypercubeRamsey.S18.Nodes_q_s18_dl
@@ -11,24 +15,38 @@ import HypercubeRamsey.S18.Nodes_q_s18_n1
 import HypercubeRamsey.S18.Nodes_sol_s18_n5
 import HypercubeRamsey.S18.PoolBudget_sol_s18_n5
 import HypercubeRamsey.S18.Isolates_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5d
 import HypercubeRamsey.S18.Completion_sol_s18_n5
 import HypercubeRamsey.S18.Locality_sol_s18_n5
 import HypercubeRamsey.S18.Backward_sol_s18_n5
+import HypercubeRamsey.S18.Nodes_sol_s18_5b
+import HypercubeRamsey.S18.Probability_sol_s18_n5
+import HypercubeRamsey.S18.ColumnMoment_sol_s18_n5
 import HypercubeRamsey.S18.Nodes_sol_s18_n4
 import HypercubeRamsey.S18.Run_sol_s18_n4
 import HypercubeRamsey.S18.Risk_sol_s18_n4
+import HypercubeRamsey.S18.PrefixObligations_sol_s18_n4
 import HypercubeRamsey.S18.Terminal_sol_s18_n4
 import HypercubeRamsey.S18.Sampler_sol_s18_n4
 import HypercubeRamsey.S18.Leaf_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_3e
 import HypercubeRamsey.S18.Swap_sol_s18_n4
 import HypercubeRamsey.S18.Locality_sol_s18_n4
 import HypercubeRamsey.S18.Cost_sol_s18_n4
 import HypercubeRamsey.S18.Test_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_3f
+import HypercubeRamsey.S18.LeafForcing
 import HypercubeRamsey.S18.Current_sol_s18_n4
+import HypercubeRamsey.S18.Nodes_sol_s18_4b
 import HypercubeRamsey.S18.Nodes_q_s18_n7
 import HypercubeRamsey.S18.Nodes_q_s18_n6
+import HypercubeRamsey.S18.Nodes_sol_s18_6b
 import HypercubeRamsey.S18.Nodes_q_s18_n6_g
+import HypercubeRamsey.S18.Nodes_sol_s18_5e
 import HypercubeRamsey.S18.Nodes_q_s18_n2
+import HypercubeRamsey.S18.Nodes_q_s18_n3
+import HypercubeRamsey.S18.Deletion_sol_s18_1b
+import HypercubeRamsey.S18.Nodes_sol_s18_1c
 
 /-! Repaired Section 18 skeleton. Leaf estimates remain proof-lane work;
 all assemblies below use their stated outputs without new placeholders. -/
@@ -391,7 +409,32 @@ theorem L18_1b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → TransitionData D → SmallErrors κ T k PT D.geom (Real.log 2 / 1000) →
         BroadDeletionFacts D K27 := by
-  sorry
+  obtain ⟨Kβ, _, hSchedule, hSmall⟩ := L18_0a hκ T
+  let ε : ℝ := min (1 / 1000) (κ.α / 300000)
+  have hε : 0 < ε := lt_min (by norm_num) (div_pos hκ.α_rng.1 (by norm_num))
+  refine ⟨1100, by norm_num, ?_⟩
+  filter_upwards [hSchedule, hSmall ε hε, T.S.n_tendsto.eventually_ge_atTop 1] with k hS hE hn
+  intro PT hPT D _ _ _
+  have hsmall := hE PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hlower := hS PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hnR : (1 : ℝ) ≤ T.S.n k := by exact_mod_cast hn
+  have hn0 : 0 < (T.S.n k : ℝ) := by linarith
+  have hm : 0 < sketchLength T k := by
+    unfold sketchLength
+    exact Nat.ceil_pos.mpr (Real.rpow_pos_of_pos hn0 _)
+  have hB : ∀ v j, bstar T k ≤ D.error v j ^ 4 := by
+    intro v j
+    have he := (hlower (D.geom.patchOf v)).1 j
+    change Real.rpow (T.S.n k : ℝ) (-0.02) ≤ D.error v j at he
+    calc
+      bstar T k ≤ (Real.rpow (T.S.n k : ℝ) (-0.02)) ^ 4 := by
+        unfold bstar
+        rw [Real.rpow_eq_pow, ← Real.rpow_mul_natCast hn0.le (-0.02) 4]
+        apply Real.rpow_le_rpow_of_exponent_le hnR
+        norm_num
+      _ ≤ D.error v j ^ 4 := pow_le_pow_left₀ (Real.rpow_nonneg (Nat.cast_nonneg _) _) he 4
+  exact HypercubeRamsey.Lane_sol_s18_1b.broadDeletion_of_small D hn hm hB ε hε
+    ((min_le_left _ _).trans (by norm_num)) (min_le_right _ _) hsmall
 
 /-- L18.1c, 18:225–226. Bounds an intersection, not a success-conditioned law. -/
 theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK : 0 < K27) :
@@ -400,7 +443,18 @@ theorem L18_1c {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 : ℝ) (hK 
       ∀ j b h, D.gate j b.1 h → (D.encoding.kernels.refK j b h).pr
         (fun out => D.R1 j out ∧ D.R2 j h out ∧ ¬ D.R3 j h out) ≤
           Real.exp (-Real.rpow (T.S.n k : ℝ) 0.04) := by
-  sorry
+  obtain ⟨Kβ, hKβ, hSchedule, hSmall⟩ := L18_0a hκ T
+  have hε : 0 < Real.log 2 / 1000 := div_pos (Real.log_pos (by norm_num)) (by norm_num)
+  have hn : ∀ᶠ k in atTop, 0 < (T.S.n k : ℝ) := by
+    filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hk
+    exact_mod_cast (show 0 < T.S.n k by omega)
+  filter_upwards [hSchedule, hSmall (Real.log 2 / 1000) hε,
+    Lane_sol_s18_1c.numerical_cutoff T, hn] with k hSchedule hSmall hCutoff hn
+  intro PT hPT D hD hT hB j b h hg
+  have hS := hSchedule PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hE := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  exact (Lane_sol_s18_1c.trueHit_tail D hT K27 hB hE hn
+    (fun i => (hS i).1) j b h hg).trans hCutoff
 
 theorem L18_1 {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∃ K27 : ℝ, 0 < K27 ∧ ∀ᶠ k in atTop,
@@ -553,13 +607,17 @@ theorem L18_2i {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → ∀ X : CriticalTransferData D,
         TransferGeometry X → SurvivalFacts X := by
-  sorry
+  classical
+  filter_upwards [Lane_q_s18_n3.critical_cell_hit_bound_eventually hκ T,
+    Lane_sol_fix_surv.survival_moments_eventually hκ T] with k hcell hmoments
+  intro PT hPT D hD X hgeom
+  exact ⟨hcell PT hPT D hD X hgeom, hmoments PT hPT D hD X hgeom⟩
 
 /-- L18.2j, 18:500–524. Cylinder identity for the actual adaptive recurrence. -/
 theorem L18_2j {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} {D : LateData hPT} {X : CriticalTransferData D}
     (P : TransferProtocol X) : CylinderFacts P := by
-  sorry
+  exact Lane_q_s18_n3.protocol_cylinder_facts P
 
 /-- L18.2k/l, 18:526–615. The independent-witness likelihood process and
 stopped moment/exception estimates are explicit. Choose cstop before stages. -/
@@ -569,7 +627,10 @@ theorem L18_2l {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, TransferGeometry X → SurvivalFacts X →
         ∀ P : TransferProtocol X, ReplyRangeBound P → CylinderFacts P → StopFacts P cstop := by
-  sorry
+  refine ⟨κ.xs / 8, ?_, ?_, ?_⟩
+  · exact div_pos hκ.xs_rng.1 (by norm_num)
+  · nlinarith [hκ.xs_rng.1]
+  · sorry
 
 /-- L18.2m, 18:617–628. An integrated tilted deviation estimate, not the
 final unconditioned prefix-failure estimate. -/
@@ -579,7 +640,13 @@ theorem L18_2m {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, ∀ P : TransferProtocol X,
           StopFacts P cstop → TiltedDeviationBound P ctilt := by
-  sorry
+  refine ⟨cstop / 2, div_pos hc (by norm_num), ?_⟩
+  filter_upwards [hDisc, Lane_sol_fix_outsupp.parameters_eventually hκ T cstop hcx,
+    Lane_sol_s18_2lm.barrier_slack_eventually T cstop hc] with k hd hp hb
+  intro PT hPT D hD X P hstop
+  apply Lane_sol_s18_2lm.tilted_bound_of_raw P cstop hstop hb
+  intro seed pair
+  exact (Lane_sol_fix_outsupp.raw_output_bound hκ hd hp.1 hp.2.1 P seed pair).trans hp.2.2
 
 /-- 18:630–657. Undo survival, use its second moment and restore deletion
 costs. The exponent is chosen after the tilted bound, uniformly in X. -/
@@ -592,7 +659,7 @@ theorem L18_2_finish {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
           ∀ P : TransferProtocol X, TiltedDeviationBound P ctilt →
             X.experiment.pr (fun z => D.prefixFailure X.failure z.2) ≤
               Real.exp (-Real.rpow (T.S.n k : ℝ) c1) := by
-  sorry
+  exact Lane_q_s18_n3.finish_from_survival_tilt hκ T ctilt hc
 
 theorem L18_2 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (hDisc : DeepDisc T κ.xs κ.α 0.04) (K27 : ℝ) (hK : 0 < K27) :
@@ -626,7 +693,9 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ReplayFacts D → TerminalRiskBound D δ := by
   filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2,
-    Lane_sol_s18_n4.finalListTapeBound hκ T] with k hk hfinal
+    Lane_sol_s18_n4.finalListTapeBound hκ T,
+    Lane_sol_s18_n4.validPrefixPinnedBound hκ T K27 c1 δ hK hc1
+      (hδsmall.trans_le (min_le_right _ _))] with k hk hfinal hprefix
   intro PT hPT D hD hTransition hLocal hTransfer hReplay
   intro pin f
   cases f with
@@ -653,7 +722,7 @@ theorem P18_3a {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       | inr F =>
           by_cases hkind : F.1.val = 1
           · by_cases hvalid : D.prefixValid F.2
-            · sorry
+            · exact hprefix D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
             · exact Lane_sol_s18_n4.invalidPrefixTerminalPinnedBound D δ F hkind hvalid pin
           · exact Lane_sol_s18_n4.nonPrefixTerminalPinnedBound D K27 δ hLocal (by omega)
               (hδsmall.le.trans (min_le_left _ _)) F hkind pin
@@ -670,7 +739,19 @@ theorem P18_3e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → TerminalRiskBound D δ →
         Nonempty (LeafCoupling D δ) := by
-  sorry
+  have hnR := (tendsto_natCast_atTop_atTop :
+    Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  filter_upwards [Lane_sol_s18_n4.terminalScaleEventually κ T,
+    hnR.eventually_ge_atTop κ.Kcell] with k hscale hK
+  intro PT hPT D hD hR hRisk
+  obtain ⟨hn8, hTs, hr⟩ := hscale D
+  have hn : 0 < (T.S.n k : ℝ) := by exact_mod_cast (by omega : 0 < T.S.n k)
+  suffices hinputs : Nonempty (Lane_sol_s18_3e.CanonicalLeafInputs D δ) by
+    obtain ⟨X⟩ := hinputs
+    exact ⟨Lane_sol_s18_3e.leafCouplingOfInputs D δ hRisk X
+      (Lane_sol_s18_3e.late_probability_local D hD hR) hn⟩
+  exact Lane_sol_s18_3e.canonicalLeafInputs_of_bounds hκ D hD hR δ
+    (by omega) (by exact_mod_cast hTs) (by exact_mod_cast hr) hK
 
 /-- P18.3f, 18:773–798. Positive *canonical* terminal event and a uniform
 vanishing cost for every stated local nonnegative test. The slot-count
@@ -682,16 +763,13 @@ theorem P18_3f {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (δ : ℝ) (hδ 
           Nonempty (TerminalCertificate D δ (ε k)) := by
   refine ⟨fun k => (T.S.n k : ℝ)⁻¹, fun k => inv_nonneg.mpr (Nat.cast_nonneg _),
     (tendsto_inv_atTop_nhds_zero_nat (𝕜 := ℝ)).comp T.S.n_tendsto, ?_⟩
-  filter_upwards [Lane_sol_s18_n4.terminalPositiveEventually hκ T δ,
-    Lane_sol_s18_n4.terminalTestCostEventually hκ T δ] with k hpositive hcost
+  filter_upwards [Lane_sol_s18_3f.terminalCertificateEventually_of_nonneighbor hκ T δ]
+    with k hcertificate
   intro PT hPT D hD hRisk leaves
-  have hpos := hpositive D hRisk leaves
-  obtain ⟨hprob, hcharge, hproduct⟩ := hcost D hRisk leaves
-  refine ⟨Lane_q_s18_n4.terminalCertificateOfBounds D δ (T.S.n k : ℝ)⁻¹ hpos ?_⟩
-  intro seed hseed Ψ hΨ hlocal
-  -- Construct the consulted-image partition and its local forcing kernels;
-  -- hproduct supplies the vanishing cost once their deterministic scopes are bounded.
-  sorry
+  apply hcertificate PT hPT D hD hRisk leaves
+  intro seed hseed
+  exact Lane_sol_s18_3f.testNonneighbor_of_fiberForcing D δ leaves _
+    (LeafForcing.testFiberForcing_of_cover D δ leaves _).some
 
 theorem P18_3 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
@@ -717,14 +795,9 @@ theorem P18_4b {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ D : LateData hPT, D.Spec → TransitionData D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ∀ ε, TerminalCertificate D δ ε →
           Nonempty (ClassSamplerData D δ) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 1] with k hn
+  filter_upwards [Lane_sol_s18_4b.classSamplerEventually hκ T δ hδ] with k hsampler
   intro PT hPT D hD hTransition hLocal hTransfer ε C
-  apply Lane_sol_s18_n4.classSamplerOfEnteringLaws D δ hn
-  intro j h henter
-  have hcurrent := Lane_sol_s18_n4.classCurrentBadUniformBound D δ (by omega) j h henter
-  have halarm := Lane_sol_s18_n4.classFutureAlarmBound D δ j h henter
-  -- Instantiate the clock with the deterministic spatial scopes and incidences.
-  sorry
+  exact hsampler D hD hTransition
 
 /-- P18.4c/d, 18:863–909. Bound stops at reached histories and establish
 all actual completion conclusions; no existential full=True shortcut.
@@ -738,25 +811,27 @@ theorem P18_4c {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
         ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
           TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
             ∀ A : ClassSamplerData D δ, FullRunProbability D C A (εrun k) := by
-  let εrun : ℕ → ℝ := fun k => 1 / ((T.S.n k + 1 : ℕ) : ℝ)
-  have hlim : Tendsto εrun atTop (nhds 0) := by
-    have hn : Tendsto (fun k => ((T.S.n k + 1 : ℕ) : ℝ)) atTop atTop :=
-      tendsto_natCast_atTop_atTop.comp ((tendsto_add_atTop_nat 1).comp T.S.n_tendsto)
-    simpa only [Function.comp_def, εrun, one_div] using tendsto_inv_atTop_zero.comp hn
-  refine ⟨εrun, (fun k => by dsimp [εrun]; positivity), hlim, ?_⟩
-  have hstop : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+  refine ⟨Lane_sol_s18_n5.runError T, Lane_sol_s18_n5.runError_nonneg T,
+    Lane_sol_s18_n5.runError_tendsto T, ?_⟩
+  have hθ : 0 < κ.θ0 := by rw [hκ.clock.2.1]; norm_num
+  have hmoments : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → TransitionData D → MaskBalance D → LocalTransitionFacts D K27 →
         TransferBound D c1 → ∀ C : TerminalCertificate D δ (εterm k),
-          ∀ A : ClassSamplerData D δ,
+          ∀ A : ClassSamplerData D δ, ∀ j : Fin D.geom.r, ∀ y : Fin (T.S.N k),
             (FinLaw.bind (D.encoding.terminalLaw (terminalSet D δ) C.positive)
-              (fun x => D.encoding.base.runFull A.act (D.encoding.initialState x))).pr
-                (fun z => ∃ j : Fin D.geom.r, Lane_sol_s18_n5.reached D δ j z.2 ∧
-                  ¬ D.enter δ j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt))) ≤ εrun k := by
-    sorry
-  filter_upwards [hstop] with k hk
+              (fun x => D.encoding.base.runFull A.act (D.encoding.initialState x))).E
+                (fun z => if Lane_sol_s18_n5.reached D δ j z.2 then
+                  D.columnSum j (D.beforeHistory z.2 j.castSucc (Nat.le_of_lt j.isLt)) y ^ T.S.n k else 0) ≤
+                    (2 : ℝ) ^ D.geom.r *
+                      (12 * (D.encoding.base.classes j).card / (D.encoding.base.latePool j).card) ^ T.S.n k := by
+    filter_upwards [Lane_sol_s18_n5.actual_column_moment_eventually hκ T εterm hterm] with k hk
+    intro PT hPT D hD hT hBalance _hLocal _hTransfer C A j y
+    exact hk D hD hT hBalance δ C A j y
+  filter_upwards [hmoments, T.S.n_tendsto.eventually_ge_atTop 1,
+    T.S.ratio_tendsto.eventually_ge_atTop (576 * 12 / κ.θ0)] with k hk hn hscale
   intro PT hPT D hD hT hBalance hLocal hTransfer C A
-  exact Lane_sol_s18_n5.fullRunProbability_of_first_stop D hD C A hLocal.2.1
-    (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
+  exact Lane_sol_s18_n5.fullRunProbability_of_column_moments D hD hT C A hLocal.2.1
+    hθ (by norm_num) hn hscale (hk PT hPT D hD hT hBalance hLocal hTransfer C A)
 
 theorem P18_4 {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c1 δ : ℝ) (hK : 0 < K27) (hc1 : 0 < c1)
@@ -850,7 +925,41 @@ theorem P18_5b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K27 δ : ℝ)
             endpointProbability D C H A assignment ≤
               Real.exp (Cs * D.geom.r + Cp * A.rows.card * D.rank A.rows) * KL ^ A.rows.card *
                 A.termTest C assignment := by
-  sorry
+  have hKL : 1 ≤ 32 * Real.exp (24 + K27) := by
+    have he : 1 ≤ Real.exp (24 + K27) := by
+      calc
+        (1 : ℝ) = Real.exp 0 := by simp
+        _ ≤ Real.exp (24 + K27) := Real.exp_le_exp.mpr (by linarith)
+    nlinarith
+  refine ⟨32 * Real.exp (24 + K27), 8, 1, hKL, by norm_num, by norm_num, ?_⟩
+  obtain ⟨Kpair, hKpair, hPairs⟩ := P18_5a hκ T δ hδ
+  obtain ⟨Kβ, hKβ, hSchedule, hsmall⟩ := L18_0a hκ T
+  have hscale : ∀ᶠ k in atTop, 8 * κ.KB < densityScale T k :=
+    T.S.ratio_tendsto.eventually_gt_atTop (8 * κ.KB)
+  filter_upwards [hPairs, hsmall (1 / 1000) (by norm_num), hscale,
+    Lane_sol_s18_5b.eventually_query_size T] with k hPair hSmall hScale hQuery
+  intro PT hPT D hD hTransition hLocal εterm εrun C H A assignment
+  have hs := hSmall PT hPT D.low_mode D.geom D.fresh D.l16_valid
+  have hs₁ : SmallErrors κ T k PT D.geom 1 :=
+    fun i => (hs i).trans (by norm_num)
+  have herr (v : Pos T k) (j : Fin D.geom.r) : D.error v j ≤ 1 / 1000 :=
+    Lane_sol_s18_n5.smallErrors_error_le D (1 / 1000) hs v j
+  have hPairFacts := hPair PT hPT D hD hTransition
+  have hm (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+      (hf : D.full δ x h) (v : Pos T k) (hv : v ∈ A.rows) :
+      0 < ∑ y, Lane_sol_s18_n5.finalWeight D h v y := by
+    have heven : IsEvenRole v := (Finset.mem_filter.mp (A.rows_subset hv)).2.1
+    exact Lane_sol_s18_n5.full_finalWeight_pos D δ x h hf v heven
+      (fun j hj => Lane_sol_s18_n5.currentCap_lt_one hκ D hLocal.1 hScale δ x h hf v j hj)
+      (fun j => lt_of_le_of_lt (herr v j) (by norm_num))
+  have hZ (x : D.encoding.InitInput) (h : D.encoding.base.History (Fin.last D.geom.r))
+      (hf : D.full δ x h) (v : Pos T k) (hv : v ∈ A.rows) :
+      (1 / 2 : ℝ) ≤ ∑ p : Fin (T.S.N k) × Fin (T.S.N k),
+        if D.nonconflict v p.1 p.2 then (D.finalPrior h v).w p.1 * (D.finalPrior h v).w p.2 else 0 :=
+    (hPairFacts.2.2.2.2 x h hf v (Finset.mem_filter.mp (A.rows_subset hv)).2.1).1
+  have hcard : (A.rows.card : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast A.small
+  simpa only [one_mul] using Lane_sol_s18_5b.endpoint_comparison D hTransition hK.le hLocal.2.1 hs₁ C H A assignment
+    (hcard.trans hQuery) (fun v hv j => (herr v j).trans (by norm_num)) hm hZ
 
 /-- P18.5c, 18:1027–1056. Terminal → fixed-pool resampling → iid pools;
 the stronger pool gate remains through the fixed-pool comparison. The last
@@ -877,13 +986,7 @@ theorem P18_5d {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (Krow : ℝ) (hKrow : 0 < Krow) :
     ∃ KI : ℝ, 1 ≤ KI ∧ ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
       ∀ D : LateData hPT, D.Spec → PaletteRowInput D Krow → IsolateKernelFacts D KI := by
-  refine ⟨1, by norm_num, ?_⟩
-  apply Filter.Eventually.of_forall
-  intro k PT hPT D hD hRows v hv x z
-  exact ⟨Lane_q_s18_n5.isolatedWeight_nonneg D v x z,
-    Lane_q_s18_n5.isolatedWeight_symm D v x z, by
-      sorry, by
-      sorry⟩
+  exact Lane_sol_s18_5d.isolate_facts hκ T Krow hKrow
 
 /-- P18.5e, 18:1092–1124. Remove state gates before bin comparisons and
 retain geometrically fixed bulk pair-hit queries. -/
@@ -897,7 +1000,7 @@ theorem P18_5e {κ : CConsts} (hκ : κ.Admissible) (T : Stage) :
                 (D.paletteScale A.paletteIndex)⁻¹ ^ (2 * (D.nonisolates A.rows).card) *
                 ∏ v ∈ A.rows \ D.nonisolates A.rows,
                   isolatedWeight D v (assignment v).1 (assignment v).2 := by
-  sorry
+  exact HypercubeRamsey.Lane_sol_s18_5e.pair_query_reduction hκ T
 
 /-- P18.5f/g, 18:1126–1212. Calibrated label and group-bin comparisons,
 reverse repeat summation and iid containment yield the actual query integral.
@@ -1295,7 +1398,94 @@ theorem L18_6a {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cprime : ℝ)
             (∑ S ∈ (D.paletteRows palette).powersetCard p,
               Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S)) /
               ((D.paletteRows palette).powersetCard p).card ≤ 2 := by
-  sorry
+  have hlogInv : Real.log (1 / 2 : ℝ) < -1 / 2 := by
+    have h := Real.log_lt_sub_one_of_pos (by norm_num : (0 : ℝ) < 1 / 2)
+      (by norm_num : (1 / 2 : ℝ) ≠ 1)
+    norm_num at h ⊢
+    exact h
+  have hlogTwo : 1 / 2 < Real.log 2 := by
+    have h := hlogInv
+    rw [show (1 / 2 : ℝ) = (2 : ℝ)⁻¹ by norm_num, Real.log_inv] at h
+    linarith
+  have hgap : 0 < Real.log 2 / 2 - 0.02 := by nlinarith [hlogTwo]
+  let η : ℝ := min (1 / 2) ((Real.log 2 / 2 - 0.02) / (2 * Cprime))
+  have hη : 0 < η := by
+    apply lt_min
+    · norm_num
+    · exact div_pos hgap (by positivity)
+  have hη1 : η < 1 := by
+    exact lt_of_le_of_lt (min_le_left _ _) (by norm_num)
+  have hslack : 0.02 + Cprime * η < Real.log 2 / 2 := by
+    have hη' : η ≤ (Real.log 2 / 2 - 0.02) / (2 * Cprime) := min_le_right _ _
+    have hmul : Cprime * η ≤ (Real.log 2 / 2 - 0.02) / 2 := by
+      have hmul' := mul_le_mul_of_nonneg_left hη' hCp.le
+      have hden : 2 * Cprime ≠ 0 := ne_of_gt (by positivity)
+      field_simp at hmul'
+      nlinarith
+    dsimp [η] at hη1
+    linarith
+  let a : ℝ := 0.02 + Cprime * η
+  have hRateEvent := HypercubeRamsey.Lane_q_s18_n6.eventually_overlapRate_le_half
+    hκ T η a hη1 (by dsimp [a]; exact hslack)
+  refine ⟨η, hη, hη1, hslack, ?_⟩
+  filter_upwards [hRateEvent] with k hRate
+  intro PT hPT D hD δ hPair palette p hp
+  let U : Finset (Pos T k) := D.paletteRows palette
+  let Δ : ℕ := ⌈(T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5)⌉₊
+  have hExponentBound (S : Finset (Pos T k)) :
+      0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card + Cprime * p * D.rank S ≤
+        (0.02 + Cprime * η) * (T.S.n k : ℝ) * D.rank S :=
+    HypercubeRamsey.Lane_q_s18_n6.overlapMoment_exponent_bound
+      D δ K Cprime η hPair hCp.le p hp S
+  by_cases hpU : p ≤ U.card
+  · have hRateLocal :
+        Real.exp (a * (T.S.n k : ℝ)) * (p : ℝ) ^ 2 * Δ /
+          ((U.card : ℝ) - p + 1) ≤ 1 / 2 := by
+      simpa [a, U, Δ, Real.rpow_natCast, Nat.cast_add] using
+        hRate U (hPair.2.1 palette) p hp
+    have hdeg : ∀ v, (Finset.univ.filter fun w => D.geometricAdj v w).card ≤ Δ := by
+      intro v
+      have hdegReal := hPair.2.2.1 v
+      have hceil : (T.S.n k : ℝ) ^ (κ.Ac + 5) ≤ (Δ : ℝ) := by
+        calc
+          (T.S.n k : ℝ) ^ (κ.Ac + 5) =
+              (T.S.n k : ℝ) ^ ((κ.Ac + 5 : ℕ) : ℝ) := by rw [← Real.rpow_natCast]
+          _ = (T.S.n k : ℝ) ^ ((κ.Ac : ℝ) + 5) := by congr 1 <;> norm_num
+          _ ≤ (Δ : ℝ) := by dsimp [Δ]; exact Nat.le_ceil _
+      exact_mod_cast hdegReal.trans hceil
+    have hMoment := HypercubeRamsey.Lane_q_s18_n6.overlapRank_exp_moment_le_two
+      D U p Δ (a * (T.S.n k : ℝ)) hpU hdeg (by simpa [a, U, Δ] using hRateLocal)
+    have hSum :
+        (∑ S ∈ U.powersetCard p,
+          Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+            Cprime * p * D.rank S)) ≤
+        (∑ S ∈ U.powersetCard p,
+          Real.exp (a * (T.S.n k : ℝ) * D.rank S)) := by
+      apply Finset.sum_le_sum
+      intro S hS
+      exact Real.exp_le_exp.mpr (by
+        have h := hExponentBound S
+        dsimp [a]
+        nlinarith [h])
+    have hdenPos : 0 < ((U.powersetCard p).card : ℝ) := by
+      rw [Finset.card_powersetCard]
+      exact_mod_cast Nat.choose_pos hpU
+    change
+      (∑ S ∈ U.powersetCard p,
+        Real.exp (0.01 * (T.S.n k : ℝ) * (D.nonisolates S).card +
+          Cprime * p * D.rank S)) / ((U.powersetCard p).card : ℝ) ≤ 2
+    calc
+      _ ≤ (∑ S ∈ U.powersetCard p,
+          Real.exp (a * (T.S.n k : ℝ) * D.rank S)) / ((U.powersetCard p).card : ℝ) :=
+        div_le_div_of_nonneg_right hSum hdenPos.le
+      _ ≤ 2 := hMoment
+  · have hEmpty : U.powersetCard p = ∅ := by
+      apply Finset.powersetCard_eq_empty.mpr
+      omega
+    have hlt : U.card < p := Nat.lt_of_not_ge hpU
+    dsimp [U] at hEmpty ⊢
+    rw [hEmpty]
+    simp [Nat.choose_eq_zero_of_lt hlt]
 
 noncomputable def HallBudget {κ : CConsts} {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k}
     {hPT : PT.Valid} (D : LateData hPT) (η K Cs : ℝ) : ℝ :=
@@ -1319,7 +1509,77 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
           ((D.paletteRows palette).powersetCard p).card ≤ 2) →
         (pairExperiment D C H).pr (fun out => D.full δ out.1.1 out.1.2 ∧
           HallObstruction D ⌊η * (T.S.n k : ℝ)⌋₊ out.2) ≤ HallBudget D η KH (Cs + 10) := by
-  sorry
+  let B : ℝ := 4096 * (K + 1) ^ 2
+  let KH : ℝ := B * K
+  have hB : 0 ≤ B := by dsimp [B]; positivity
+  have hKH : 0 < KH := by dsimp [KH, B]; positivity
+  have hthreshold : ∀ᶠ k : ℕ in atTop, 3 ≤ ⌊η * (T.S.n k : ℝ)⌋₊ := by
+    have hlarge := T.S.n_tendsto.eventually_ge_atTop ⌈3 / η⌉₊
+    filter_upwards [hlarge] with k hk
+    have hcast : (⌈3 / η⌉₊ : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast hk
+    have hceil : 3 / η ≤ (⌈3 / η⌉₊ : ℝ) := Nat.le_ceil _
+    have h3 : (3 : ℝ) ≤ η * (T.S.n k : ℝ) := by
+      have h := (div_le_iff₀ hη).mp (hceil.trans hcast)
+      nlinarith
+    exact Nat.le_floor h3
+  have hChord := Lane_sol_s18_6b.eventually_chordRate_le_one hκ T K hK
+  refine ⟨KH, hKH, ?_⟩
+  filter_upwards [hthreshold, hChord] with k ht0 hChord
+  intro PT hPT D hD δ εterm εrun C H hEndpoint hAverage
+  have hPairFacts : PairInitialFacts D δ K := hEndpoint.pair_facts
+  simpa only [HallBudget, KH] using
+    (Lane_sol_s18_6b.obstruction_le_of_tuple_diagrams D C H K Cp Cs η B
+      hK hη hB hPairFacts hAverage ht0 (by
+        intro palette S hsub hthree hsmall
+        have hfloor : (⌊η * (T.S.n k : ℝ)⌋₊ : ℝ) ≤ (T.S.n k : ℝ) := by
+          have h := Nat.floor_le (mul_nonneg hη.le (Nat.cast_nonneg (T.S.n k)))
+          have hmul : η * (T.S.n k : ℝ) ≤ (T.S.n k : ℝ) := by
+            simpa only [one_mul] using mul_le_mul_of_nonneg_right hη1.le
+              (show (0 : ℝ) ≤ (T.S.n k : ℝ) from Nat.cast_nonneg _)
+          exact h.trans hmul
+        have hSn : S.card ≤ T.S.n k := by
+          have hcast : (S.card : ℝ) ≤ (⌊η * (T.S.n k : ℝ)⌋₊ : ℝ) := by
+            exact_mod_cast hsmall
+          exact_mod_cast hcast.trans hfloor
+        let A : InitialPairData D := ⟨palette, S, hsub, hSn⟩
+        obtain ⟨ker, hnonneg, hsymm, hrow, hentry, hjoint⟩ := hEndpoint.joint A
+        have hrate := hChord PT hPT D δ hPairFacts palette S.card hSn
+        let F : ℝ := Real.exp (Cs * D.geom.r) * K ^ S.card *
+          Lane_sol_s18_6b.correction D Cp S
+        have hjoint' : ∀ assignment, endpointProbability D C H A assignment ≤
+            F * ∏ v ∈ A.rows, ker v (assignment v).1 (assignment v).2 := by
+          intro assignment
+          exact hjoint assignment
+        have hfalse := Lane_sol_s18_6b.connectedPr_le_kernelSum D C H hPairFacts A false ker F hjoint'
+        have htrue := Lane_sol_s18_6b.connectedPr_le_kernelSum D C H hPairFacts A true ker F hjoint'
+        have hcount :
+            K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S false ker ≤
+              D.paletteScale palette * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card ∧
+            K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker ≤
+              (D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+                (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card := by
+          exact Lane_sol_s18_6b.kernelSum_bounds D palette S K hK hthree ker
+            hnonneg hsymm hrow hentry hrate
+        have hfactor : 0 ≤ Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S :=
+          mul_nonneg (Real.exp_pos _).le (Lane_sol_s18_6b.correction_nonneg D Cp S)
+        constructor
+        · calc
+            _ ≤ F * Lane_sol_s18_6b.kernelSum D palette S false ker := hfalse
+            _ = (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S false ker) := by dsimp [F]; ring
+            _ ≤ (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (D.paletteScale palette * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card) :=
+              mul_le_mul_of_nonneg_left hcount.1 hfactor
+            _ = _ := by ring
+        · calc
+            _ ≤ F * Lane_sol_s18_6b.kernelSum D palette S true ker := htrue
+            _ = (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                (K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker) := by dsimp [F]; ring
+            _ ≤ (Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S) *
+                ((D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
+                  (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card) :=
+              mul_le_mul_of_nonneg_left hcount.2 hfactor
+            _ = _ := by ring))
 
 set_option maxHeartbeats 400000
 

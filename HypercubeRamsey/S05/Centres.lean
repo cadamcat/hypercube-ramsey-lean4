@@ -1,6 +1,7 @@
 import HypercubeRamsey.S05.History
 import HypercubeRamsey.S05.Selection
 import HypercubeRamsey.S03.Height.Selection
+import HypercubeRamsey.S05.Centres_sol_s05_g1
 import HypercubeRamsey.S05.Centres_sol_s05_centres_scales
 import HypercubeRamsey.S05.Centres_sol_s05_centres_records
 import HypercubeRamsey.S05.Centres_sol_s05_centres_height
@@ -394,7 +395,68 @@ theorem highRecord_local (X : Setup5 γ K' χ n N E G) (L : X.CentreLayer5) (H :
     (hv : L.valid H ω y) (hv' : L.valid H ω' y) (hy : ¬ X.g.low (X.p.J n) y.1) :
     X.actualRecord (L.elig H) H ω y = X.actualRecord (L.elig H) H ω' y ∧
       ∀ c ∈ (X.actualRecord (L.elig H) H ω y).2.1, arraysOf ω c = arraysOf ω' c := by
-  sorry
+  classical
+  have hloc (a : EvenRole5 n) (ha : a ∈ evenNbrs y) (l : L.ht.hp.Loc)
+      (hl : _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.Rlong + L.ht.hp.r + 16) :
+      ω l = ω' l := by
+    apply hω l
+    apply Finset.mem_filter.mpr
+    refine ⟨Finset.mem_univ _, ?_⟩
+    change _root_.hammingDist l.1 (X.St.oneHot (X.St.stateOf y.1)) ≤ L.ht.hp.r + L.slack
+    have hsl : _root_.hammingDist (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) +
+        L.ht.hp.Rlong + 16 ≤ L.slack := L.slack_nbr y a ha
+    have ht : _root_.hammingDist l.1 (X.St.oneHot (X.St.stateOf y.1)) ≤
+        _root_.hammingDist l.1 (X.siteOf a) +
+          _root_.hammingDist (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1)) :=
+      _root_.hammingDist_triangle l.1 (X.siteOf a) (X.St.oneHot (X.St.stateOf y.1))
+    omega
+  have hsel (a : EvenRole5 n) (ha : a ∈ evenNbrs y) :
+      X.selAt (L.elig H) ω L.ht.hp.Rlong a = X.selAt (L.elig H) ω' L.ht.hp.Rlong a := by
+    apply Lane_sol_s05_g1.selectionAt_congr_local
+    · intro s hs j
+      apply L.elig_local H s j ω ω'
+      intro l hl
+      have hd : _root_.hammingDist l.1 s ≤ L.ht.hp.r + 16 := (Finset.mem_filter.mp hl).2
+      apply hloc a ha l
+      have ht := _root_.hammingDist_triangle l.1 s (X.siteOf a)
+      omega
+    · intro s hs j l hl
+      exact (L.elig_shape H ω s j l hl).2.2
+    · intro l hl
+      change _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.Rlong + L.ht.hp.r + 8 at hl
+      exact congrArg (fun z : X.CVal L.ht => z.1) (hloc a ha l (by omega))
+    · intro l hl
+      change _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.Rlong + L.ht.hp.r + 8 at hl
+      exact congrArg (fun z : X.CVal L.ht => z.2.1) (hloc a ha l (by omega))
+    · intro j
+      exact congrArg (fun z : X.CVal L.ht => z.2.2.1)
+        (hloc a ha (X.siteOf a, j) (by rw [_root_.hammingDist_self]; omega))
+  constructor
+  · dsimp only [actualRecord, actualRecordAt]
+    refine Prod.ext rfl (Prod.ext ?_ (Prod.ext ?_ ?_))
+    · apply Finset.biUnion_congr rfl
+      intro a ha
+      rw [hsel a ha]
+    · apply Finset.biUnion_congr rfl
+      intro a ha
+      rw [hsel a ha]
+    · change ¬ X.g.severity y.1 ≤ X.p.J n at hy
+      simp only [ChunkGeometry5.roleKey, dif_neg hy]
+  · intro c hc
+    change c ∈ (evenNbrs y).biUnion _ at hc
+    obtain ⟨a, ha, hc⟩ := Finset.mem_biUnion.mp hc
+    cases hs : X.selAt (L.elig H) ω L.ht.hp.Rlong a with
+    | none => simp only [hs, Finset.notMem_empty] at hc
+    | some l =>
+      have he : c = (l, X.g.evenType (X.p.J n) a.1) := by
+        simpa only [hs, Finset.mem_singleton] using hc
+      subst c
+      obtain ⟨j, hj⟩ := Lane_sol_s05_g1.selectionAt_mem L.ht.hp (X.sites L.ht)
+        (pos ω) (act ω) (L.elig H ω) (tie ω) L.ht.hp.Rlong (X.siteOf a) l hs
+      have hd : _root_.hammingDist l.1 (X.siteOf a) ≤ L.ht.hp.r :=
+        (L.elig_shape H ω (X.siteOf a) j l hj).2.2
+      exact congrArg (fun z : X.CVal L.ht => z.2.2.2 (X.g.evenType (X.p.J n) a.1))
+        (hloc a ha l (by omega))
 
 end Lane_opus_s05
 

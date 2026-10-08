@@ -3,6 +3,7 @@ import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_paths
 import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_ovl_tail
 import HypercubeRamsey.S03.Height.Split_opus_height_g_hs_count
 import HypercubeRamsey.S03.Height.Split_opus_height_sol_hs_act
+import HypercubeRamsey.S03.Height.Split_opus_height_g_hs_arith1
 
 set_option maxHeartbeats 400000
 
@@ -1406,7 +1407,7 @@ theorem global_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
     ∃ c > (0 : ℝ), ∃ n₀ : ℕ, ∀ n d : ℕ, n₀ ≤ n → (d : ℝ) ≤ C_d * n →
       (2 : ℝ) ^ d * Real.exp (-((n : ℝ) ^ a * (topScale n σ ζ : ℝ) ^ θ)) ≤
         Real.exp (-(n : ℝ) ^ (1 + c)) := by
-  sorry
+  exact Lane_g_hs_arith1.global_arith_proof J₀ b₀ b σ ζ θ a c_d C_d D hp
 
 /-- LEAF (arithmetic, TeX 03:555–569). -/
 theorem positive_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
@@ -1419,7 +1420,7 @@ theorem positive_arith (J₀ b₀ b σ ζ θ a c_d C_d : ℝ) (D : ℕ)
             Real.exp (-((n : ℝ) ^ a * (hdScaleRadius n σ i : ℝ) ^ θ)) +
         (2 : ℝ) ^ d * Real.exp (-((n : ℝ) ^ a * (topScale n σ ζ : ℝ) ^ θ))) ≤
       Real.exp (-(n : ℝ) ^ c) := by
-  sorry
+  exact Lane_g_hs_arith1.positive_arith_proof J₀ b₀ b σ ζ θ a c_d C_d D hp
 
 /-! ## 3b. The induction step (TeX 03:422–533), split and assembled -/
 

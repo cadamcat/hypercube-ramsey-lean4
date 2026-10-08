@@ -15,11 +15,12 @@ open scoped BigOperators
 open S16 S16.Lane_sol_fix2_s16
 
 /-- Fixed cluster-query threshold from 18:1118–1123. The second conjunct is the fresh prior-mean coefficient
-(`D18_L_prior_mean`, via the S16 mean comparison): `KB` is chosen after `Kcell` and `Kp`. -/
+(`D18_L_prior_mean`, via the S16 mean comparison): `KB` is chosen after `Kcell` and `Kp`. The third covers the actual
+low-cluster height lower bound `Q0^Mlo`. -/
 def LateThresholds (κ : CConsts) : Prop :=
   Real.exp (100 * κ.Kbd) + 100 * rowMeanConstant κ + κ.A0 ≤ κ.KB ∧
   (100 * κ.Kcell * (κ.Kp : ℝ)) * max (rowMeanConstant κ) 2 ≤ κ.KB ∧
-  ∀ h : ℕ, Real.rpow (κ.M1 * κ.Q0) κ.Mlo ≤ (h : ℝ) → 2 < 20 * κ.ρ * h
+  ∀ h : ℕ, Real.rpow κ.Q0 κ.Mlo ≤ (h : ℝ) → 2 < 20 * κ.ρ * h
 
 /-- Fixed Q0 inequalities used by both calibration stages (16:338–342,
 400–427). The arguments are scalar scales, before any stage or profile. -/
@@ -147,10 +148,7 @@ theorem producer_constants_widening (κ₀ : CConsts) (hκ₀ : κ₀.Admissible
       (le_max_right _ _).trans (le_max_right _ _), ?_⟩
     intro h hh
     have hscale := hlate Q0 hQlate
-    have hbase : Q0 ≤ κ₀.M1 * Q0 := by
-      nlinarith only [hQone, hκ₀.M1_big.1]
-    have hp := Real.rpow_le_rpow (by linarith : 0 ≤ Q0) hbase (by linarith : 0 ≤ (κ₀.Mlo : ℝ))
-    have hdim : 1 / κ₀.ρ ≤ (h : ℝ) := hscale.trans (hp.trans hh)
+    have hdim : 1 / κ₀.ρ ≤ (h : ℝ) := hscale.trans hh
     have hρh : 1 ≤ (h : ℝ) * κ₀.ρ := (div_le_iff₀ hκ₀.ρ_rng.1).mp hdim
     change 2 < 20 * κ₀.ρ * h
     nlinarith only [hρh]

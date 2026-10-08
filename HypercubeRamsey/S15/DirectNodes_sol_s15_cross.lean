@@ -946,3 +946,822 @@ theorem sigmaLaw_supported (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
   exact hx hxT
 
 end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey
+open Classical
+open scoped BigOperators
+set_option maxHeartbeats 600000
+
+noncomputable def toProb {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) : FinProb Ω :=
+  ⟨P.w, P.nonneg, P.sum_one⟩
+
+theorem pi_expect_one {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)] (P : ∀ i, FinProb (Ω i))
+    (b : ι) (f : Ω b → ℝ) :
+    (FinProb.pi P).expect (fun ω => f (ω b)) = (P b).expect f := by
+  rw [← pi_expect_resample P b]
+  simp only [Function.update_self]
+  exact FinProb.expect_const _ _
+
+/-- A label of the two-stage reference experiment has the stated mixture marginal. -/
+theorem refLaw_label_expect {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r)
+    (z : IWord 𝒯 i) (f : Fin (T.S.N k) → ℝ) :
+    (toProb (S.refLaw W)).expect (fun ω => f (ω.2 z)) =
+      ∑ y, S.oddMarginal (S.groupOf z) W y * f y := by
+  let Q : Group 𝒯 i → FinProb (Bin 𝒯 i) :=
+    fun g => ⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩
+  let U : (Group 𝒯 i → Bin 𝒯 i) → IWord 𝒯 i → Law (T.S.N k) :=
+    fun D z => ⟨S.U (S.groupOf z) W (D (S.groupOf z)), S.U_nonneg _ W _, S.U_sum _ W _⟩
+  change (FinProb.bind (FinProb.pi Q) (fun D => FinProb.pi (U D))).expect
+    (fun ω => f (ω.2 z)) = _
+  rw [FinProb.bind_expect (FinProb.pi Q) (fun D => FinProb.pi (U D)) (fun _ Y => f (Y z))]
+  change (FinProb.pi Q).expect (fun D => (FinProb.pi (U D)).expect (fun Y => f (Y z))) = _
+  simp_rw [pi_expect_one]
+  change (FinProb.pi Q).expect (fun D =>
+    ∑ y, S.U (S.groupOf z) W (D (S.groupOf z)) y * f y) = _
+  rw [pi_expect_one Q (S.groupOf z) (fun D => ∑ y, S.U (S.groupOf z) W D y * f y)]
+  unfold FinProb.expect SliceSolver.oddMarginal
+  simp_rw [Finset.sum_mul, Finset.mul_sum, mul_assoc]
+  exact Finset.sum_comm
+
+/-- Every normalized hit has mean at most one, including zero-degree sites. -/
+theorem normalizedHit_expect_le_one {N : ℕ} (E : Fin N → Fin N → Prop)
+    (c : Colour) (ν : Law N) (x : Fin N) :
+    ν.expect (fun y => S15.normalizedHit E c ν x y) ≤ 1 := by
+  by_cases hd : 0 < deg E c ν.w x
+  · rw [Lane_q_s15_direct.expect_normalizedHit_eq_one ν E c x hd]
+  · simp [FinProb.expect, S15.normalizedHit, hd]
+
+namespace CrossingExperiment
+variable {T : Stage} {k : ℕ} {ι : Type*} [Fintype ι] [DecidableEq ι]
+  {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+
+/-- Removing a small entering submeasure costs at most its original mean mass.
+No degree lower bound is needed on the removed sites. -/
+theorem removed_expect_le (Q : CrossingExperiment T k ι Ω)
+    (f : (∀ i, Ω i) → Fin (T.S.N k) → ℝ)
+    (hf : ∀ ω x, 0 ≤ f ω x)
+    (hupdate : ∀ b ∈ Q.C, ∀ ω y x, f (Function.update ω b y) x = f ω x)
+    (S : Finset ι) (hS : S ⊆ Q.C) :
+    (FinProb.pi Q.P).expect (fun ω => ∑ x, f ω x *
+      ∏ i ∈ S, S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x (Q.label i (ω i))) ≤
+        (FinProb.pi Q.P).expect (fun ω => ∑ x, f ω x) := by
+  induction S using Finset.induction_on with
+  | empty => simp
+  | @insert b S hb ih =>
+    have hbC := hS (Finset.mem_insert_self b S)
+    have hsub : S ⊆ Q.C := fun i hi => hS (Finset.mem_insert_of_mem hi)
+    apply le_trans _ (ih hsub)
+    rw [← pi_expect_resample Q.P b]
+    apply FinProb.expect_mono
+    intro ω
+    have hpoint (y : Ω b) :
+        (∑ x, f (Function.update ω b y) x * ∏ i ∈ insert b S,
+          S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x (Q.label i (Function.update ω b y i))) =
+        ∑ x, (f ω x * ∏ i ∈ S,
+          S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x (Q.label i (ω i))) *
+            S15.normalizedHit (T.S.E k) Q.c (Q.ν b) x (Q.label b y) := by
+      apply Finset.sum_congr rfl
+      intro x hx
+      rw [hupdate b hbC ω y x, Finset.prod_insert hb, Function.update_self]
+      have hp : (∏ i ∈ S, S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x
+          (Q.label i (Function.update ω b y i))) =
+          ∏ i ∈ S, S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x (Q.label i (ω i)) := by
+        apply Finset.prod_congr rfl
+        intro i hi
+        rw [Function.update_of_ne (show i ≠ b from fun h => hb (h ▸ hi))]
+      rw [hp]
+      ring
+    simp_rw [hpoint]
+    unfold FinProb.expect
+    simp_rw [Finset.mul_sum]
+    rw [Finset.sum_comm]
+    apply Finset.sum_le_sum
+    intro x hx
+    let a := f ω x * ∏ i ∈ S,
+      S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x (Q.label i (ω i))
+    have hmean : (Q.P b).expect (fun y =>
+        S15.normalizedHit (T.S.E k) Q.c (Q.ν b) x (Q.label b y)) ≤ 1 := by
+      rw [← FinProb.map_expect, ← Q.marginal b]
+      exact normalizedHit_expect_le_one _ _ _ _
+    have ha : 0 ≤ a := mul_nonneg (hf ω x)
+      (Finset.prod_nonneg fun i _ => normalizedHit_nonneg _ _ _ _ _)
+    calc
+      (∑ y, (Q.P b).w y * (a * S15.normalizedHit (T.S.E k) Q.c (Q.ν b) x (Q.label b y))) =
+          a * (Q.P b).expect (fun y => S15.normalizedHit (T.S.E k) Q.c (Q.ν b) x (Q.label b y)) := by
+        unfold FinProb.expect
+        rw [Finset.mul_sum]
+        apply Finset.sum_congr rfl
+        intros
+        ring
+      _ ≤ a * 1 := mul_le_mul_of_nonneg_left hmean ha
+      _ = a := mul_one _
+end CrossingExperiment
+
+/-- The union of crossing degree outliers has exponentially small mass under any narrow first law. -/
+theorem crossing_gate_loss {T : Stage} {k : ℕ} {ι : Type*} [Fintype ι]
+    (C : Finset ι) (c : Colour) (ν : ι → Law (T.S.N k)) (μ : Law (T.S.N k))
+    {wS wL w : ℝ} (hD : TwoBudgetDisc T k wS wL (bstar T k))
+    (hν : ∀ i ∈ C, (ν i).SupportedIn (T.Y k))
+    (hwν : ∀ i ∈ C, (ν i).WidthLE wS)
+    (hμ : μ.SupportedIn (T.X k)) (hwμ : μ.WidthLE w)
+    (hb : 0 ≤ bstar T k) :
+    μ.pr (fun x => ¬ ∀ i ∈ C, |deg (T.S.E k) c (ν i).w x - 1 / 2| ≤ 2 * bstar T k) ≤
+      C.card * (2 * Real.exp (w - wL)) := by
+  classical
+  have hout (i : ι) (hi : i ∈ C) :
+      μ.pr (fun x => 2 * bstar T k < |deg (T.S.E k) c (ν i).w x - 1 / 2|) ≤
+        2 * Real.exp (w - wL) := by
+    apply (CrossingExperiment.pr_mono μ (A := fun x => 2 * bstar T k < |deg (T.S.E k) c (ν i).w x - 1 / 2|)
+      (B := fun x => bstar T k < |deg (T.S.E k) c (ν i).w x - 1 / 2|)
+      (fun x hx => lt_of_le_of_lt (by linarith) hx)).trans
+    simpa [FinProb.pr, ← Finset.sum_filter] using
+      S15.Needs.exceptional_first hD c (Or.inl ⟨le_rfl, le_rfl⟩)
+        (ν i) μ (hν i hi) (hwν i hi) hμ hwμ
+  have hbound : ∀ S : Finset ι, S ⊆ C →
+      μ.pr (fun x => ∃ i ∈ S, 2 * bstar T k < |deg (T.S.E k) c (ν i).w x - 1 / 2|) ≤
+        S.card * (2 * Real.exp (w - wL)) := by
+    intro S
+    induction S using Finset.induction_on with
+    | empty => simp [FinProb.pr]
+    | @insert i S hi ih =>
+      intro hs
+      have hb := FinProb.pr_union μ
+        (fun x => 2 * bstar T k < |deg (T.S.E k) c (ν i).w x - 1 / 2|)
+        (fun x => ∃ j ∈ S, 2 * bstar T k < |deg (T.S.E k) c (ν j).w x - 1 / 2|)
+      have he : μ.pr (fun x => ∃ j ∈ insert i S,
+          2 * bstar T k < |deg (T.S.E k) c (ν j).w x - 1 / 2|) =
+          μ.pr (fun x => (2 * bstar T k < |deg (T.S.E k) c (ν i).w x - 1 / 2|) ∨
+            ∃ j ∈ S, 2 * bstar T k < |deg (T.S.E k) c (ν j).w x - 1 / 2|) := by
+        congr 1
+        funext x
+        simp
+      rw [he]
+      have hh := hb.trans (add_le_add (hout i (hs (Finset.mem_insert_self _ _)))
+        (ih (fun j hj => hs (Finset.mem_insert_of_mem hj))))
+      simpa [Finset.card_insert_of_notMem hi, Nat.cast_add, Nat.cast_one, add_mul, one_mul,
+        add_comm] using hh
+  convert hbound C (Finset.Subset.refl C) using 1
+  congr 1
+  funext x
+  simp
+end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey
+open Classical
+open scoped BigOperators
+set_option maxHeartbeats 600000
+variable {κ : CConsts} {T : Stage} {k : ℕ}
+
+@[simp] theorem sliceAt_fst (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (v : S15.Position T k) : (S15.clusterSliceAt PT hPT v).1 = S15.patchAt PT hPT v := rfl
+
+noncomputable def marginalLaw (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (b : S15.OddPosition T k) : Law (T.S.N k) :=
+  FinProb.map (toProb ((S15.clusterSolver PT hPT hm (S15.patchAt PT hPT b.1)).refLaw
+    (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1))))
+      (fun ω => ω.2 (S15.solverWordAt PT hPT hm b.1))
+
+theorem marginalLaw_w (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (b : S15.OddPosition T k) (y : Fin (T.S.N k)) :
+    (marginalLaw PT hPT hm W b).w y = S15.clusterMarginal PT hPT hm W b y := by
+  have hh := refLaw_label_expect
+    (S15.clusterSolver PT hPT hm (S15.patchAt PT hPT b.1))
+    (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1))
+    (S15.solverWordAt PT hPT hm b.1) (fun z => if z = y then 1 else 0)
+  simpa [FinProb.expect, S15.clusterMarginal, marginalLaw, FinProb.map, mul_ite, sliceAt_fst] using hh
+
+theorem marginalLaw_supported (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (b : S15.OddPosition T k) :
+    (marginalLaw PT hPT hm W b).SupportedIn (T.Y k) := by
+  intro y hy
+  rw [marginalLaw_w]
+  let i := S15.patchAt PT hPT b.1
+  let S := S15.clusterSolver PT hPT hm i
+  let g := S.groupOf (S15.solverWordAt PT hPT hm b.1)
+  change ∑ D : Bin PT.tiling i, S.q g (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1)) D *
+    S.U g (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1)) D y = 0
+  apply Finset.sum_eq_zero
+  intro D hD
+  have hnot : y ∉ D.1 := by
+    intro hd
+    have hpatch : y ∈ (PT.tiling.P i).Y :=
+      (PT.tiling.P i).bins.le D.2 hd
+    exact hy ((Finset.mem_sdiff.mp ((hPT.tiling_valid.patch_supports i).2.2.2
+        ((hPT.tiling_valid.patch_supports i).2.2.1 hpatch))).1)
+  have hu : S.U g (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1)) D y = 0 := by
+    by_contra hne
+    exact hnot (S.U_support _ _ _ _ hne)
+  rw [hu, mul_zero]
+
+/-- The reference label cap has width bounded by a fixed multiple of the allocated height. -/
+theorem sampler_scale_product (hκ : κ.Admissible) {h : ℕ} (hh : 0 < h) :
+    (sliceK κ h : ℝ) * sliceT κ h ≤ 4 * h := by
+  have h1 : (1 : ℝ) ≤ h := by exact_mod_cast hh
+  have h0 : (0 : ℝ) < h := by exact_mod_cast hh
+  have hcq : κ.cq < 1 := by
+    have hm : (100 : ℝ) < κ.Mlo := by
+      have hc := hκ.Cb_big
+      have hd : 0 < 100 * κ.aC / κ.aB := by positivity [hκ.aC_rng.1, hκ.aB_rng.1]
+      linarith [hκ.Mlo_big]
+    have hq := hκ.cq_rng.2
+    have he : 1 / (20 * (κ.Mlo : ℝ)) < 1 := (div_lt_one (by positivity)).2 (by linarith)
+    exact hq.trans he
+  have hMhi : (1 : ℝ) < κ.Mhi := by nlinarith [hκ.Mhi_big.2, hκ.cq_rng.1]
+  have haC : κ.aC < 1 := by
+    have hh := hκ.aC_rng.2
+    have hl := min_le_right κ.η0 (1 : ℝ)
+    linarith
+  have hω : 4 * κ.ω ≤ 1 := by nlinarith [hκ.ω_rng.1, hκ.ω_rng.2]
+  have hK : (sliceK κ h : ℝ) ≤ 2 * (h : ℝ) ^ (3 * κ.ω) := by
+    exact Nat.ceil_le_two_mul ((show (2 : ℝ)⁻¹ ≤ 1 by norm_num).trans
+      (Real.one_le_rpow h1 (by positivity [hκ.ω_rng.1])))
+  have hT : (sliceT κ h : ℝ) ≤ 2 * (h : ℝ) ^ κ.ω := by
+    exact Nat.ceil_le_two_mul ((show (2 : ℝ)⁻¹ ≤ 1 by norm_num).trans
+      (Real.one_le_rpow h1 hκ.ω_rng.1.le))
+  calc
+    (sliceK κ h : ℝ) * sliceT κ h ≤
+        (2 * (h : ℝ) ^ (3 * κ.ω)) * (2 * (h : ℝ) ^ κ.ω) :=
+      mul_le_mul hK hT (by positivity) (by positivity)
+    _ = 4 * (h : ℝ) ^ (4 * κ.ω) := by
+      rw [show 4 * κ.ω = 3 * κ.ω + κ.ω by ring, Real.rpow_add h0]
+      ring
+    _ ≤ 4 * h := by
+      have hp := Real.rpow_le_rpow_of_exponent_le h1 hω
+      simpa using mul_le_mul_of_nonneg_left hp (by norm_num : (0 : ℝ) ≤ 4)
+
+end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey
+open Classical
+open scoped BigOperators
+set_option maxHeartbeats 600000
+namespace CrossingExperiment
+variable {T : Stage} {k : ℕ} {ι : Type*} [Fintype ι] [DecidableEq ι]
+  {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+
+noncomputable def gates (Q : CrossingExperiment T k ι Ω) : Finset (Fin (T.S.N k)) :=
+  Finset.univ.filter fun x => ∀ i ∈ Q.C,
+    |deg (T.S.E k) Q.c (Q.ν i).w x - 1 / 2| ≤ 2 * bstar T k
+
+noncomputable def retained (Q : CrossingExperiment T k ι Ω) (ω : ∀ i, Ω i) : ℝ :=
+  ∑ x ∈ Q.gates, (Q.μ ω).w x
+
+noncomputable def trimmed (Q : CrossingExperiment T k ι Ω) :
+    CrossingExperiment T k ι Ω where
+  P := Q.P
+  label := Q.label
+  ν := Q.ν
+  marginal := Q.marginal
+  c := Q.c
+  C := Q.C
+  μ := fun ω => if h : 0 < Q.retained ω then Law.restrict (Q.μ ω) Q.gates h else Q.μ ω
+  A := Q.A
+  μ_update := by
+    intro b hb ω y
+    simp only [retained, Q.μ_update b hb ω y]
+    rfl
+  A_update := Q.A_update
+
+noncomputable def removed (Q : CrossingExperiment T k ι Ω) (ω : ∀ i, Ω i) : ℝ :=
+  ∑ x, (if Q.A ω ∧ x ∉ Q.gates then (Q.μ ω).w x else 0) *
+    ∏ i ∈ Q.C, S15.normalizedHit (T.S.E k) Q.c (Q.ν i) x (Q.label i (ω i))
+
+theorem retained_complement (Q : CrossingExperiment T k ι Ω) (ω : ∀ i, Ω i) :
+    Q.retained ω + (Q.μ ω).pr (fun x => x ∉ Q.gates) = 1 := by
+  have he : Q.retained ω + (Q.μ ω).pr (fun x => x ∉ Q.gates) = ∑ x, (Q.μ ω).w x := by
+    unfold retained FinProb.pr
+    have hs : (∑ x ∈ Q.gates, (Q.μ ω).w x) = ∑ x, if x ∈ Q.gates then (Q.μ ω).w x else 0 := by
+      simp
+    rw [hs]
+    rw [← Finset.sum_add_distrib]
+    apply Finset.sum_congr rfl
+    intro x hx
+    by_cases h : x ∈ Q.gates <;> simp [h]
+  rw [he, (Q.μ ω).sum_eq_one]
+
+theorem unfiltered_window {r ℓ : ℕ} {b q M V : ℝ}
+    (hb : 0 ≤ b) (hbsmall : b ≤ 1 / 100) (hℓ : 1 ≤ ℓ) (hr : r ≤ ℓ)
+    (hqlo : 1 - b ≤ q) (hqhi : q ≤ 1)
+    (hMlo : Real.exp (-10 * r * b) ≤ M) (hMhi : M ≤ Real.exp (10 * r * b))
+    (hVlo : 0 ≤ V) (hVhi : V ≤ b) :
+    |q * M + V - 1| ≤ Real.exp (20 * ℓ * b) - 1 := by
+  have hq0 : 0 ≤ q := by linarith
+  have hM0 : 0 ≤ M := (Real.exp_pos _).le.trans hMlo
+  have hrR : (r : ℝ) ≤ ℓ := by exact_mod_cast hr
+  have hℓR : (1 : ℝ) ≤ ℓ := by exact_mod_cast hℓ
+  have hE : 1 ≤ Real.exp (10 * (r : ℝ) * b) := Real.one_le_exp (by positivity)
+  have hgap : Real.exp (10 * (r : ℝ) * b) + b ≤ Real.exp (20 * (ℓ : ℝ) * b) := by
+    have h := Real.add_one_le_exp (10 * (ℓ : ℝ) * b)
+    have hmul := mul_le_mul_of_nonneg_left h (Real.exp_pos (10 * (ℓ : ℝ) * b)).le
+    rw [← Real.exp_add] at hmul
+    have he1 : Real.exp (10 * (r : ℝ) * b) ≤ Real.exp (10 * (ℓ : ℝ) * b) :=
+      Real.exp_le_exp.mpr (by nlinarith)
+    have he2 : 1 ≤ Real.exp (10 * (ℓ : ℝ) * b) := Real.one_le_exp (by positivity)
+    have hsame : 10 * (ℓ : ℝ) * b + 10 * (ℓ : ℝ) * b = 20 * (ℓ : ℝ) * b := by ring
+    rw [hsame] at hmul
+    have hprod : b ≤ Real.exp (10 * (ℓ : ℝ) * b) * (10 * (ℓ : ℝ) * b) := by
+      have hlb : b ≤ 10 * (ℓ : ℝ) * b := by nlinarith
+      exact hlb.trans (le_mul_of_one_le_left (by positivity) he2)
+    nlinarith
+  have hlo : 1 - (10 * (r : ℝ) + 1) * b ≤ q * M + V := by
+    have he := Real.add_one_le_exp (-10 * (r : ℝ) * b)
+    have hm := mul_le_mul_of_nonneg_left hMlo hq0
+    have hq := mul_le_mul_of_nonneg_right hqlo (Real.exp_pos (-10 * (r : ℝ) * b)).le
+    have he' := mul_le_mul_of_nonneg_left he (show 0 ≤ 1 - b by linarith)
+    nlinarith [show 0 ≤ (r : ℝ) * b ^ 2 by positivity]
+  have hhi : q * M + V ≤ Real.exp (20 * (ℓ : ℝ) * b) := by
+    have hh := mul_le_mul_of_nonneg_right hqhi hM0
+    nlinarith
+  have htarget := Real.add_one_le_exp (20 * (ℓ : ℝ) * b)
+  exact abs_le.mpr ⟨by nlinarith, by linarith⟩
+
+/-- Trimming degree outliers and restoring them by Markov proves the unfiltered tail. -/
+theorem unfiltered_tail (Q : CrossingExperiment T k ι Ω) {w0 wS wL w : ℝ} {ℓ : ℕ}
+    (hD : TwoBudgetDisc T k wS wL (bstar T k))
+    (hN : 0 < T.S.N k) (hb : 0 < bstar T k) (hsmall : bstar T k ≤ 1 / 100)
+    (hℓ : 1 ≤ ℓ) (hr : Q.C.card ≤ ℓ)
+    (hbudget : w0 + Real.log 2 + (Q.C.card : ℝ) * (Real.log 4 + 10 * bstar T k) ≤ wS)
+    (hμ : ∀ ω, Q.A ω → (Q.μ ω).SupportedIn (T.X k))
+    (hwμ : ∀ ω, Q.A ω → (Q.μ ω).WidthLE w0)
+    (hν : ∀ i ∈ Q.C, (Q.ν i).SupportedIn (T.Y k))
+    (hwν : ∀ i ∈ Q.C, (Q.ν i).WidthLE w)
+    (hνbudget : w ≤ wS)
+    (hloss : (Q.C.card : ℝ) * (2 * Real.exp (w0 - wL)) ≤ bstar T k) :
+    (FinProb.pi Q.P).pr (fun ω => Q.A ω ∧
+      Real.exp (20 * ℓ * bstar T k) - 1 < |Q.mass Q.C ω - 1|) ≤
+        Q.C.card * (2 * Real.exp (w - wL)) +
+          (Q.C.card * (2 * Real.exp (w0 - wL))) / bstar T k := by
+  let ε := (Q.C.card : ℝ) * (2 * Real.exp (w0 - wL))
+  have hgate (ω) (ha : Q.A ω) : (Q.μ ω).pr (fun x => x ∉ Q.gates) ≤ ε := by
+    simpa [gates, ε] using crossing_gate_loss Q.C Q.c Q.ν (Q.μ ω) hD hν
+      (fun i hi => Law.WidthLE.mono (hwν i hi) hνbudget) (hμ ω ha) (hwμ ω ha) hb.le
+  have hret (ω) (ha : Q.A ω) : 1 - bstar T k ≤ Q.retained ω ∧ Q.retained ω ≤ 1 := by
+    have he := Q.retained_complement ω
+    have hn : 0 ≤ (Q.μ ω).pr (fun x => x ∉ Q.gates) :=
+      Finset.sum_nonneg fun x _ => by split_ifs <;> simp [FinProb.nonneg]
+    have hh := (hgate ω ha).trans hloss
+    constructor <;> linarith
+  have hpos (ω) (ha : Q.A ω) : 0 < Q.retained ω := by
+    have hh := (hret ω ha).1
+    linarith
+  have htw (ω) (ha : Q.A ω) : (Q.trimmed.μ ω).WidthLE (w0 + Real.log 2) := by
+    intro x
+    simp only [trimmed, dif_pos (hpos ω ha)]
+    change (if x ∈ Q.gates then (Q.μ ω).w x / Q.retained ω else 0) ≤ _
+    split_ifs with hx
+    · have hN' : (0 : ℝ) < T.S.N k := by exact_mod_cast hN
+      have hrhalf : 1 / 2 ≤ Q.retained ω := by have hh := (hret ω ha).1; linarith
+      calc
+        (Q.μ ω).w x / Q.retained ω ≤ (Real.exp w0 / T.S.N k) / (1 / 2) :=
+          div_le_div₀ (by positivity) (hwμ ω ha x) (by norm_num) hrhalf
+        _ = Real.exp (w0 + Real.log 2) / T.S.N k := by
+          rw [Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+          ring
+    · positivity
+  have hts (ω) (ha : Q.A ω) : (Q.trimmed.μ ω).SupportedIn (T.X k) := by
+    intro x hx
+    simp only [trimmed, dif_pos (hpos ω ha)]
+    simp [Law.restrict, hμ ω ha x hx]
+  have htd (ω) (ha : Q.A ω) (i : ι) (hi : i ∈ Q.C) (x : Fin (T.S.N k))
+      (hx : (Q.trimmed.μ ω).w x ≠ 0) :
+      |deg (T.S.E k) Q.c (Q.ν i).w x - 1 / 2| ≤ 3 * bstar T k := by
+    have hxgate : x ∈ Q.gates := by
+      by_contra hh
+      apply hx
+      simp [trimmed, dif_pos (hpos ω ha), Law.restrict, hh]
+    have hg := (Finset.mem_filter.mp hxgate).2 i hi
+    linarith
+  have htail := Q.trimmed.product_tail hD hN hb.le hsmall hbudget hts htw hν hwν htd
+  have hnon (ω) : 0 ≤ Q.removed ω := by
+    apply Finset.sum_nonneg
+    intro x hx
+    apply mul_nonneg
+    · split_ifs <;> simp [FinProb.nonneg]
+    · exact Finset.prod_nonneg fun i hi => normalizedHit_nonneg _ _ _ _ _
+  have hexp : (FinProb.pi Q.P).expect Q.removed ≤ ε := by
+    have hu : ∀ i ∈ Q.C, ∀ ω y x,
+        (if Q.A (Function.update ω i y) ∧ x ∉ Q.gates then (Q.μ (Function.update ω i y)).w x else 0) =
+        (if Q.A ω ∧ x ∉ Q.gates then (Q.μ ω).w x else 0) := by
+      intro i hi ω y x
+      simp [Q.A_update i hi ω y, Q.μ_update i hi ω y]
+    apply (Q.removed_expect_le _ (by intros; split_ifs <;> simp [FinProb.nonneg])
+      hu Q.C (Finset.Subset.refl _)).trans
+    apply le_trans (FinProb.expect_mono _ ?_) (le_of_eq (FinProb.expect_const _ ε))
+    intro ω
+    by_cases ha : Q.A ω
+    · have he : (∑ x, if Q.A ω ∧ x ∉ Q.gates then (Q.μ ω).w x else 0) =
+          (Q.μ ω).pr (fun x => x ∉ Q.gates) := by
+        unfold FinProb.pr
+        apply Finset.sum_congr rfl
+        intro x hx
+        by_cases hg : x ∈ Q.gates <;> simp [ha, hg]
+      rw [he]
+      exact hgate ω ha
+    · simp [ha, ε]; positivity
+  have hmark := (FinProb.markov (FinProb.pi Q.P) Q.removed (bstar T k) hnon hb).trans
+    (div_le_div_of_nonneg_right hexp hb.le)
+  have hmono : (FinProb.pi Q.P).pr (fun ω => Q.A ω ∧
+      Real.exp (20 * ℓ * bstar T k) - 1 < |Q.mass Q.C ω - 1|) ≤
+      (FinProb.pi Q.P).pr (fun ω => (Q.A ω ∧ ¬ Q.trimmed.Good Q.C ω) ∨
+        bstar T k ≤ Q.removed ω) := by
+    apply pr_mono
+    rintro ω ⟨ha, hbad⟩
+    by_cases hg : Q.trimmed.Good Q.C ω
+    · right
+      by_contra hv
+      have hdecomp : Q.mass Q.C ω = Q.retained ω * Q.trimmed.mass Q.C ω + Q.removed ω := by
+        unfold mass weight removed
+        rw [Finset.mul_sum, ← Finset.sum_add_distrib]
+        apply Finset.sum_congr rfl
+        intro x hx
+        simp only [trimmed, dif_pos (hpos ω ha)]
+        by_cases hxg : x ∈ Q.gates
+        · simp only [Law.restrict, hxg, if_pos, ha, true_and, not_true_eq_false,
+            if_false, zero_mul, add_zero]
+          change _ = Q.retained ω * ((Q.μ ω).w x / Q.retained ω * _)
+          field_simp [(hpos ω ha).ne']
+        · simp [Law.restrict, ha, hxg]
+      have hh := unfiltered_window hb.le hsmall hℓ hr (hret ω ha).1 (hret ω ha).2
+        hg.1 hg.2 (hnon ω) (le_of_lt (lt_of_not_ge hv))
+      rw [← hdecomp] at hh
+      exact not_lt_of_ge hh hbad
+    · exact Or.inl ⟨ha, hg⟩
+  exact hmono.trans ((FinProb.pr_union _ _ _).trans (add_le_add htail hmark))
+end CrossingExperiment
+end HypercubeRamsey.Lane_sol_s15_cross
+
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey Filter
+open Classical
+open scoped BigOperators
+set_option maxHeartbeats 600000
+variable {κ : CConsts} {T : Stage} {k : ℕ}
+
+theorem patch_eq_of_slice_eq (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (b : S15.OddPosition T k) (s : S15.ClusterSlice PT)
+    (hs : S15.clusterSliceAt PT hPT b.1 = s) : S15.patchAt PT hPT b.1 = s.1 :=
+  congrArg Sigma.fst hs
+
+noncomputable def crossingWord (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : S15.EvenPosition T k) (s : S15.ClusterSlice PT) : IWord PT.tiling s.1 :=
+  if h : ∃ b ∈ S15.clusterCrossingNeighbours PT hPT a, S15.clusterSliceAt PT hPT b.1 = s then
+    cast (congrArg (IWord PT.tiling)
+      (patch_eq_of_slice_eq PT hPT (Classical.choose h) s (Classical.choose_spec h).2))
+      (S15.solverWordAt PT hPT hm (Classical.choose h).1)
+  else fun _ => false
+
+theorem crossingWord_at (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (a : S15.EvenPosition T k) (b : S15.OddPosition T k)
+    (hb : b ∈ S15.clusterCrossingNeighbours PT hPT a) :
+    crossingWord PT hPT hm a (S15.clusterSliceAt PT hPT b.1) = S15.solverWordAt PT hPT hm b.1 := by
+  have hex : ∃ c ∈ S15.clusterCrossingNeighbours PT hPT a,
+      S15.clusterSliceAt PT hPT c.1 = S15.clusterSliceAt PT hPT b.1 := ⟨b, hb, rfl⟩
+  have hc : Classical.choose hex = b :=
+    crossing_slice_injective PT hPT a (Classical.choose_spec hex).1 hb (Classical.choose_spec hex).2
+  unfold crossingWord
+  rw [dif_pos hex]
+  have hw : HEq (S15.solverWordAt PT hPT hm (Classical.choose hex).1)
+      (S15.solverWordAt PT hPT hm b.1) := by
+    generalize Classical.choose hex = c at hc ⊢
+    cases hc
+    rfl
+  exact eq_of_heq ((cast_heq _ _).trans hw)
+
+noncomputable def clusterExperiment (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (a : S15.EvenPosition T k) :
+    CrossingExperiment T k (S15.ClusterSlice PT) (fun s => S15.ClusterSliceOutcome PT s.1) where
+  P := fun s => toProb ((S15.clusterSolver PT hPT hm s.1).refLaw (S15.historyOnSlice W s))
+  label := fun s ω => ω.2 (crossingWord PT hPT hm a s)
+  ν := fun s => FinProb.map
+    (toProb ((S15.clusterSolver PT hPT hm s.1).refLaw (S15.historyOnSlice W s)))
+      (fun ω => ω.2 (crossingWord PT hPT hm a s))
+  marginal := fun _ => rfl
+  c := PT.tiling.c
+  C := (S15.clusterCrossingNeighbours PT hPT a).image (fun b => S15.clusterSliceAt PT hPT b.1)
+  μ := fun I => if h : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 then
+    sigmaLaw PT hPT hm W I a h else Law.dirac ⟨0, T.S.N_pos k⟩
+  A := fun I => (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1
+  μ_update := by
+    intro s hs I y
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hs
+    have hne := crossing_slice_ne_own PT hPT a b hb
+    have he : S15.clusterSigma PT hPT hm W (Function.update I (S15.clusterSliceAt PT hPT b.1) y) a =
+        S15.clusterSigma PT hPT hm W I a := by
+      funext x
+      change (S15.clusterSolver PT hPT hm (S15.patchAt PT hPT a.1)).σ _ _
+        (nbrLabels _ (Function.update I (S15.clusterSliceAt PT hPT b.1) y
+          (S15.clusterSliceAt PT hPT a.1)).2) x = _
+      rw [Function.update_of_ne (Ne.symm hne)]
+      rfl
+    simp only [he]
+    split_ifs with hp
+    · apply law_ext
+      exact he
+    · rfl
+  A_update := by
+    intro s hs I y
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hs
+    have hne := crossing_slice_ne_own PT hPT a b hb
+    simp [S15.clusterSigma, Function.update_of_ne (Ne.symm hne)]
+
+theorem clusterExperiment_nu (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (a : S15.EvenPosition T k) (b : S15.OddPosition T k)
+    (hb : b ∈ S15.clusterCrossingNeighbours PT hPT a) :
+    (clusterExperiment PT hPT hm W a).ν (S15.clusterSliceAt PT hPT b.1) =
+      marginalLaw PT hPT hm W b := by
+  simp only [clusterExperiment, marginalLaw, crossingWord_at PT hPT hm a b hb]
+  rfl
+
+theorem clusterExperiment_mass (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (a : S15.EvenPosition T k)
+    (I : S15.ClusterInternalData PT) (ha : (clusterExperiment PT hPT hm W a).A I) :
+    (clusterExperiment PT hPT hm W a).mass (clusterExperiment PT hPT hm W a).C I =
+      S15.clusterCrossingMass PT hPT hm W I a := by
+  let Q := clusterExperiment PT hPT hm W a
+  change (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 at ha
+  unfold CrossingExperiment.mass CrossingExperiment.weight S15.clusterCrossingMass
+  apply Finset.sum_congr rfl
+  intro x hx
+  change (if h : (∑ y, S15.clusterSigma PT hPT hm W I a y) = 1 then
+    sigmaLaw PT hPT hm W I a h else Law.dirac ⟨0, T.S.N_pos k⟩).w x * _ = _
+  rw [dif_pos ha]
+  change S15.clusterSigma PT hPT hm W I a x * _ = _
+  congr 1
+  change (∏ s ∈ (S15.clusterCrossingNeighbours PT hPT a).image
+      (fun b => S15.clusterSliceAt PT hPT b.1),
+    S15.normalizedHit (T.S.E k) Q.c (Q.ν s) x (Q.label s (I s))) = _
+  rw [Finset.prod_image]
+  · apply Finset.prod_congr rfl
+    intro b hb
+    rw [clusterExperiment_nu PT hPT hm W a b hb]
+    simp only [Q, clusterExperiment, crossingWord_at PT hPT hm a b hb]
+    have hweights : (marginalLaw PT hPT hm W b).w = S15.clusterMarginal PT hPT hm W b :=
+      funext (marginalLaw_w PT hPT hm W b)
+    simp only [S15.normalizedHit, S15.clusterFactor, S15.clusterDegree, hweights]
+    rfl
+  · exact crossing_slice_injective PT hPT a
+
+/-- Allocations and solver caps give uniform marginal widths without conditioning on alarms. -/
+theorem cluster_log_width (hκ : κ.Admissible) (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (hn : 1 ≤ (T.S.n k : ℝ)) (i : Fin PT.tiling.m) :
+    Real.log ((T.S.N k : ℝ) / (PT.tiling.P i).M) ≤ κ.a * (T.S.n k : ℝ) ^ κ.ι := by
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; positivity [hκ.θ_rng.1]
+  have hu : (1 : ℝ) ≤ κ.u := by exact_mod_cast (show 1 ≤ κ.u by have := hκ.u_rng.2; omega)
+  obtain hb | ⟨_, hlog⟩ := (hPT.tiling_valid.allocation_bounds i).2
+  · rcases hm with hm | hm <;> rw [hm] at hb <;> cases hb
+  have hh : ((PT.tiling.P i).h : ℝ) ≤ (T.S.n k : ℝ) ^ κ.ι := by
+    apply le_trans _ (hPT.tiling_valid.allocation_bounds i).1.le
+    exact_mod_cast le_max_left (PT.tiling.P i).h (PT.tiling.P i).ℓ
+  have hg : PT.tiling.gain i = κ.a * (PT.tiling.P i).h / 10 ^ 6 := by
+    rcases hm with hm | hm <;> simp [Tiling.gain, hm]
+  rw [hg] at hlog
+  apply hlog.trans
+  apply (div_le_iff₀ (by positivity : (0 : ℝ) < 1000 * (κ.u : ℝ))).2
+  nlinarith [mul_le_mul_of_nonneg_left hh ha.le,
+    show (0 : ℝ) ≤ κ.a * (T.S.n k : ℝ) ^ κ.ι by positivity]
+
+theorem marginalLaw_width (hκ : κ.Admissible) (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (b : S15.OddPosition T k)
+    (hn : 1 ≤ (T.S.n k : ℝ)) :
+    (marginalLaw PT hPT hm W b).WidthLE ((15 + κ.a) * (T.S.n k : ℝ) ^ κ.ι) := by
+  let i := S15.patchAt PT hPT b.1
+  let S := S15.clusterSolver PT hPT hm i
+  let t := 2 * (PT.tiling.kScale i : ℝ) * PT.tiling.tScale i
+  have hM : 0 < (PT.tiling.P i).M := by
+    rw [← (PT.tiling.P i).cardX]
+    exact Finset.card_pos.mpr (hPT.tiling_valid.patch_nonempty i).1
+  have hMR : (0 : ℝ) < (PT.tiling.P i).M := by exact_mod_cast hM
+  have hcap (y) : ((PT.tiling.P i).M : ℝ) * (marginalLaw PT hPT hm W b).w y ≤ 8 * Real.exp t := by
+    rw [marginalLaw_w]
+    have hh := S.marginal_cap (S.groupOf (S15.solverWordAt PT hPT hm b.1))
+      (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1)) y
+    change ((PT.tiling.P i).M : ℝ) * S.oddMarginal
+      (S.groupOf (S15.solverWordAt PT hPT hm b.1))
+      (S15.historyOnSlice W (S15.clusterSliceAt PT hPT b.1)) y ≤ 8 * Real.exp t
+    unfold SliceSolver.oddMarginal
+    simpa only [mul_comm] using (le_div_iff₀ hMR).mp hh
+  have hw := law_width_of_cap (T.S.N_pos k) hM (marginalLaw PT hPT hm W b)
+    (by positivity : 0 < 8 * Real.exp t) hcap (cluster_log_width hκ PT hPT hm hn i)
+  apply Law.WidthLE.mono hw
+  rw [Real.log_mul (by norm_num : (8 : ℝ) ≠ 0) (Real.exp_ne_zero t), Real.log_exp]
+  have hlog := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 8)
+  norm_num at hlog
+  have h1 := Real.one_le_rpow hn hκ.ι_rng.1.le
+  have ht := sampler_scale_product hκ (S15.clusterHeight_pos PT hPT hm i)
+  have hh : ((PT.tiling.P i).h : ℝ) ≤ (T.S.n k : ℝ) ^ κ.ι := by
+    apply le_trans _ (hPT.tiling_valid.allocation_bounds i).1.le
+    exact_mod_cast le_max_left (PT.tiling.P i).h (PT.tiling.P i).ℓ
+  change (sliceK κ (PT.tiling.P i).h : ℝ) * sliceT κ (PT.tiling.P i).h ≤ _ at ht
+  dsimp [t, Tiling.kScale, Tiling.tScale]
+  nlinarith
+
+theorem sigmaLaw_width (hκ : κ.Admissible) (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : S15.ClusterHistory PT hPT hm) (I : S15.ClusterInternalData PT)
+    (a : S15.EvenPosition T k) (ha : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1) :
+    (sigmaLaw PT hPT hm W I a ha).WidthLE ((T.S.n k : ℝ) ^ κ.ι) := by
+  let i := S15.patchAt PT hPT a.1
+  have hg0 : 0 ≤ PT.tiling.gain i := by
+    have ha0 : 0 < κ.a := by rw [hκ.a_eq]; positivity [hκ.θ_rng.1]
+    rcases hm with hm | hm <;> simp [Tiling.gain, hm] <;> positivity
+  have hh : ((PT.tiling.P i).h : ℝ) ≤ (T.S.n k : ℝ) ^ κ.ι := by
+    apply le_trans _ (hPT.tiling_valid.allocation_bounds i).1.le
+    exact_mod_cast le_max_left (PT.tiling.P i).h (PT.tiling.P i).ℓ
+  have hlog : Real.log 2 ≤ 1 := by
+    have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    norm_num at h
+    exact h
+  intro x
+  have hcap := (S15.clusterSolver PT hPT hm i).σ_cap (S15.clusterCenterRole PT hPT hm a)
+    (S15.historyOnSlice W (S15.clusterSliceAt PT hPT a.1))
+    (nbrLabels (S15.clusterCenterRole PT hPT hm a).1 (I (S15.clusterSliceAt PT hPT a.1)).2) x
+  have hpow : (2 : ℝ) ^ (PT.tiling.P i).h ≤ Real.exp ((T.S.n k : ℝ) ^ κ.ι) := by
+    calc
+      (2 : ℝ) ^ (PT.tiling.P i).h = (Real.exp (Real.log 2)) ^ (PT.tiling.P i).h := by
+        rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+      _ = Real.exp ((PT.tiling.P i).h * Real.log 2) := (Real.exp_nat_mul _ _).symm
+      _ ≤ Real.exp ((T.S.n k : ℝ) ^ κ.ι) := by
+        apply Real.exp_le_exp.mpr
+        nlinarith
+  have he : Real.exp (-500 * PT.tiling.gain i) ≤ 1 := Real.exp_le_one_iff.mpr (by linarith)
+  have hNR : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  apply (le_div_iff₀ hNR).2
+  change S15.clusterSigma PT hPT hm W I a x * (T.S.N k : ℝ) ≤ _
+  have hmul := mul_le_mul_of_nonneg_left he (by positivity : (0 : ℝ) ≤ 2 ^ (PT.tiling.P i).h)
+  change (T.S.N k : ℝ) * S15.clusterSigma PT hPT hm W I a x ≤
+    2 ^ (PT.tiling.P i).h * Real.exp (-500 * PT.tiling.gain i) at hcap
+  nlinarith
+end HypercubeRamsey.Lane_sol_s15_cross
+namespace HypercubeRamsey.Lane_sol_s15_cross
+open HypercubeRamsey Filter
+open Classical
+open scoped BigOperators
+set_option maxHeartbeats 600000
+
+theorem cluster_crossing_bound (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
+    (hDeep : DeepDisc T κ.xs κ.α 0.04) : S15.ClusterCrossingClaim κ T := by
+  have hιxs : κ.ι < κ.xs := by
+    linarith [hκ.ι_rng.2, min_le_left κ.xs (min κ.η0 (0.01 : ℝ)), hκ.xs_rng.1]
+  have hι1 : κ.ι < 1 := by linarith [hκ.xs_rng.2]
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; positivity [hκ.θ_rng.1]
+  have hnlim := (tendsto_natCast_atTop_atTop : Tendsto (fun n : ℕ => (n : ℝ)) atTop atTop).comp T.S.n_tendsto
+  have hs' := hnlim.eventually (Lane_sol_consts_adm.eventually_power_bound κ.ι κ.xs
+    (30 + κ.a) 1 hιxs (by norm_num))
+  have hl' := hnlim.eventually (Lane_sol_consts_adm.eventually_power_bound κ.ι 1
+    (30 + κ.a) (κ.α / 2) hι1 (by positivity [hκ.α_rng.1]))
+  filter_upwards [hDeep, crossing_parameters κ hκ T, hs', hl'] with k hD hp hs hl
+  intro PT hPT hm W hW hAlarms a
+  rcases hp with ⟨hn, hbsmall, _, _, htail⟩
+  let n := (T.S.n k : ℝ)
+  let Q := clusterExperiment PT hPT hm W a
+  let i := S15.patchAt PT hPT a.1
+  have hn1 : 1 ≤ n := hn
+  have hn0 : 0 < n := by linarith
+  have hp0 : 0 ≤ n ^ κ.ι := Real.rpow_nonneg hn0.le _
+  have hpow : 1 ≤ n ^ κ.ι := Real.one_le_rpow hn hκ.ι_rng.1.le
+  have hb : 0 < bstar T k := by unfold bstar; positivity
+  have hcard : Q.C.card = (S15.clusterCrossingNeighbours PT hPT a).card :=
+    Finset.card_image_of_injOn (crossing_slice_injective PT hPT a)
+  have hr : Q.C.card ≤ (PT.tiling.P i).ℓ := by
+    rw [hcard]
+    exact Lane_q_s15_direct.highDirect_crossingNeighbours_card_le_prefix PT hPT a i rfl
+  have hrN : (Q.C.card : ℝ) ≤ n := by
+    rw [hcard]
+    have hsub : S15.clusterCrossingNeighbours PT hPT a ⊆ Lane_q_s15_direct.star a := by
+      intro b hb
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp hb).2.1⟩
+    dsimp [n]
+    exact_mod_cast (Finset.card_le_card hsub).trans (Lane_q_s15_direct.star_card_le a)
+  have hrcap : (Q.C.card : ℝ) ≤ n ^ κ.ι := by
+    have hr' : (Q.C.card : ℝ) ≤ (PT.tiling.P i).ℓ := by exact_mod_cast hr
+    have hh : ((PT.tiling.P i).ℓ : ℝ) ≤ (max (PT.tiling.P i).h (PT.tiling.P i).ℓ : ℝ) :=
+      by exact_mod_cast le_max_right (PT.tiling.P i).h (PT.tiling.P i).ℓ
+    exact hr'.trans (hh.trans (hPT.tiling_valid.allocation_bounds i).1.le)
+  by_cases hi : (PT.tiling.P i).ℓ = 0
+  · have hc0 : Q.C = ∅ := Finset.card_eq_zero.mp (by omega)
+    have hm0 (I) (hI : Q.A I) : S15.clusterCrossingMass PT hPT hm W I a = 1 := by
+      rw [← clusterExperiment_mass PT hPT hm W a I hI]
+      change Q.mass Q.C I = 1
+      simp [hc0, CrossingExperiment.mass, CrossingExperiment.weight, (Q.μ I).sum_eq_one]
+    have he : (S15.clusterInternalKernel PT hPT hm W).pr (fun I =>
+        (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 ∧
+          |S15.clusterCrossingMass PT hPT hm W I a - 1| >
+            Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1) = 0 := by
+      unfold FinLaw.pr
+      apply Finset.sum_eq_zero
+      intro I hI
+      split_ifs with h
+      · have he := hm0 I h.1
+        have hf := h.2
+        simp [he, hi] at hf
+      · rfl
+    rw [he]
+    positivity
+  have hℓ : 1 ≤ (PT.tiling.P i).ℓ := by omega
+  have hμ (I) (hI : Q.A I) : (Q.μ I).SupportedIn (T.X k) := by
+    change (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 at hI
+    change (if h : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 then
+      sigmaLaw PT hPT hm W I a h else Law.dirac ⟨0, T.S.N_pos k⟩).SupportedIn _
+    rw [dif_pos hI]
+    exact sigmaLaw_supported PT hPT hm W hW I a hI
+  have hwμ (I) (hI : Q.A I) : (Q.μ I).WidthLE (n ^ κ.ι) := by
+    change (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 at hI
+    change (if h : (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 then
+      sigmaLaw PT hPT hm W I a h else Law.dirac ⟨0, T.S.N_pos k⟩).WidthLE _
+    rw [dif_pos hI]
+    exact sigmaLaw_width hκ PT hPT hm W I a hI
+  have hν (s) (hs : s ∈ Q.C) : (Q.ν s).SupportedIn (T.Y k) := by
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hs
+    rw [clusterExperiment_nu PT hPT hm W a b hb]
+    exact marginalLaw_supported PT hPT hm W b
+  have hwν (s) (hs : s ∈ Q.C) : (Q.ν s).WidthLE ((15 + κ.a) * n ^ κ.ι) := by
+    obtain ⟨b, hb, rfl⟩ := Finset.mem_image.mp hs
+    rw [clusterExperiment_nu PT hPT hm W a b hb]
+    exact marginalLaw_width hκ PT hPT hm W b hn
+  have hs' : (30 + κ.a) * n ^ κ.ι ≤ n ^ κ.xs := by simpa [n] using hs
+  have hl' : (30 + κ.a) * n ^ κ.ι ≤ κ.α * n / 2 := by
+    simpa [n, Real.rpow_one, div_mul_eq_mul_div] using hl
+  have hbudget : n ^ κ.ι + Real.log 2 +
+      (Q.C.card : ℝ) * (Real.log 4 + 10 * bstar T k) ≤ n ^ κ.xs := by
+    have hlog2 := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+    have hlog4 := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 4)
+    have hf : Real.log 4 + 10 * bstar T k ≤ 4 := by norm_num at hlog4; linarith
+    have hm := mul_le_mul_of_nonneg_left hf (show (0 : ℝ) ≤ Q.C.card by positivity)
+    nlinarith
+  have hvbudget : (15 + κ.a) * n ^ κ.ι ≤ n ^ κ.xs := by nlinarith
+  have he0 : Real.exp (n ^ κ.ι - κ.α * n) ≤ Real.exp (-κ.α * n / 2) := by
+    apply Real.exp_le_exp.mpr
+    nlinarith
+  have heν : Real.exp ((15 + κ.a) * n ^ κ.ι - κ.α * n) ≤ Real.exp (-κ.α * n / 2) := by
+    apply Real.exp_le_exp.mpr
+    nlinarith
+  have hinv : 1 / bstar T k ≤ n := by
+    apply (div_le_iff₀ hb).2
+    have hnb : n * bstar T k = n ^ (0.04 : ℝ) := by
+      calc
+        n * bstar T k = n ^ (1 : ℝ) * n ^ (-1 + 0.04 : ℝ) := by simp [bstar, n]
+        _ = n ^ ((1 : ℝ) + (-1 + 0.04)) := (Real.rpow_add hn0 _ _).symm
+        _ = _ := by norm_num
+    rw [hnb]
+    exact Real.one_le_rpow hn (by norm_num)
+  have htailone : 8 * n ^ (2 : ℕ) * Real.exp (-κ.α * n / 2) ≤ 1 := by
+    apply htail.trans
+    exact Real.rpow_le_one_of_one_le_of_nonpos hn (neg_nonpos.mpr (Nat.cast_nonneg κ.R))
+  have hloss : (Q.C.card : ℝ) * (2 * Real.exp (n ^ κ.ι - κ.α * n)) ≤ bstar T k := by
+    have he := mul_le_mul hrN (mul_le_mul_of_nonneg_left he0 (by norm_num : (0 : ℝ) ≤ 2))
+      (by positivity) (by positivity)
+    have hh : (Q.C.card : ℝ) * (2 * Real.exp (n ^ κ.ι - κ.α * n)) / bstar T k ≤ 1 := by
+      calc
+        _ = ((Q.C.card : ℝ) * (2 * Real.exp (n ^ κ.ι - κ.α * n))) * (1 / bstar T k) := by ring
+        _ ≤ (n * (2 * Real.exp (-κ.α * n / 2))) * n :=
+          mul_le_mul he hinv (by positivity) (by positivity)
+        _ ≤ 8 * n ^ (2 : ℕ) * Real.exp (-κ.α * n / 2) := by nlinarith [Real.exp_pos (-κ.α * n / 2)]
+        _ ≤ 1 := htailone
+    exact (div_le_one hb).mp hh
+  have hD' : TwoBudgetDisc T k (n ^ κ.xs) (κ.α * n) (bstar T k) := by
+    simpa [n, bstar] using hD
+  have hres := Q.unfiltered_tail hD' (T.S.N_pos k) hb hbsmall hℓ hr hbudget hμ hwμ
+    hν hwν hvbudget hloss
+  have hpr : (S15.clusterInternalKernel PT hPT hm W).pr (fun I =>
+      (∑ x, S15.clusterSigma PT hPT hm W I a x) = 1 ∧
+        |S15.clusterCrossingMass PT hPT hm W I a - 1| >
+          Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1) ≤
+      (FinProb.pi Q.P).pr (fun I => Q.A I ∧
+        Real.exp (20 * (PT.tiling.P i).ℓ * bstar T k) - 1 < |Q.mass Q.C I - 1|) := by
+    change (FinProb.pi Q.P).pr _ ≤ _
+    apply CrossingExperiment.pr_mono
+    rintro I ⟨hI, hbad⟩
+    exact ⟨hI, by rwa [clusterExperiment_mass PT hPT hm W a I hI]⟩
+  apply hpr.trans (hres.trans _)
+  have he1 := mul_le_mul hrN (mul_le_mul_of_nonneg_left heν (by norm_num : (0 : ℝ) ≤ 2))
+    (by positivity) (by positivity)
+  have he2 := mul_le_mul hrN (mul_le_mul_of_nonneg_left he0 (by norm_num : (0 : ℝ) ≤ 2))
+    (by positivity) (by positivity)
+  calc
+    (Q.C.card : ℝ) * (2 * Real.exp ((15 + κ.a) * n ^ κ.ι - κ.α * n)) +
+      ((Q.C.card : ℝ) * (2 * Real.exp (n ^ κ.ι - κ.α * n))) / bstar T k ≤
+        n * (2 * Real.exp (-κ.α * n / 2)) + (n * (2 * Real.exp (-κ.α * n / 2))) * n := by
+      rw [div_eq_mul_one_div]
+      exact add_le_add he1 (mul_le_mul he2 hinv (by positivity) (by positivity))
+    _ ≤ 8 * n ^ (2 : ℕ) * Real.exp (-κ.α * n / 2) := by
+      have hpoly : 2 * n + 2 * n ^ (2 : ℕ) ≤ 8 * n ^ (2 : ℕ) := by nlinarith
+      have hmul := mul_le_mul_of_nonneg_right hpoly (Real.exp_pos (-κ.α * n / 2)).le
+      nlinarith only [hmul]
+    _ ≤ n ^ (-(κ.R : ℝ)) := htail
+end HypercubeRamsey.Lane_sol_s15_cross

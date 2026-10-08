@@ -170,4 +170,179 @@ theorem solver_role_matches_unique (D : ListGateContext κ T k PT) (v : Pos T k)
   funext j
   exact (he hle j).trans (he' hle j).symm
 
+/-- Proposed additional raw-data field. It fixes the internal order and
+the translation by the parity of the outer word, before sampler transport. -/
+def RawWordOrder {G : LowGeom PT} (R : S16.Lane_sol_fix2_s16.CellRawData G) : Prop :=
+  PT.tiling.mode.isCluster → ∀ C s z
+    (hle : (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k)
+    (j : Fin (PT.tiling.P (G.cellPatch C)).h),
+    z j = if ¬ IsEvenRole (fun l : Fin (T.S.n k) =>
+      if l ∈ PT.tiling.Icoord (G.cellPatch C) then false else
+        (R.cellWords C (s, z)).1 l) ∧ j.val = 0
+      then !((R.cellWords C (s, z)).1
+        (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j))
+      else (R.cellWords C (s, z)).1
+        (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j)
+
+private theorem role_matches_transport (D : ListGateContext κ T k PT)
+    (v : Pos T k) (i : Fin PT.tiling.m) (e : EvenRole PT.tiling i)
+    (hi : i = D.G.patchOf v)
+    (h : ∀ (hle : (PT.tiling.P i).h ≤ T.S.n k) (j : Fin (PT.tiling.P i).h),
+      e.1 j = if ¬ IsEvenRole (fun l : Fin (T.S.n k) =>
+        if l ∈ PT.tiling.Icoord i then false else v l) ∧ j.val = 0
+        then !(v (S16.Lane_q_s16_prod1.cellAxis i hle j))
+        else v (S16.Lane_q_s16_prod1.cellAxis i hle j)) :
+    D.SolverRoleMatches v (cast (by rw [hi]) e) := by
+  subst i
+  exact h
+
+/-- The proposed field supplies exactly the ordered-role conjunct absent
+from the current raw source interface. -/
+theorem raw_word_order_solver_role {G : LowGeom PT}
+    (R : S16.Lane_sol_fix2_s16.CellRawData G) (hOrder : RawWordOrder R)
+    (hCluster : PT.tiling.mode.isCluster) (D : ListGateContext κ T k PT)
+    (hG : D.G = G) (v : Pos T k) (C : G.Cell) (s : R.Slice C)
+    (e : EvenRole PT.tiling (G.cellPatch C)) (hcell : G.cellOf v = C)
+    (hsite : (R.cellWords C (s, e.1)).1 = v) :
+    D.SolverRoleMatches v (cast (by rw [hG, ← G.cellOf_patch v, hcell]) e) := by
+  subst hG
+  apply role_matches_transport D v (D.G.cellPatch C) e
+    (by rw [← D.G.cellOf_patch v, hcell])
+  intro hle j
+  simpa only [hsite] using hOrder hCluster C s e.1 hle j
+
+/-- The single proposed field also determines the stored axis order;
+no second ordering assumption is needed for internal neighbor labels. -/
+theorem raw_word_order_axis {G : LowGeom PT}
+    (R : S16.Lane_sol_fix2_s16.CellRawData G) (hOrder : RawWordOrder R)
+    (hCluster : PT.tiling.mode.isCluster) (C : G.Cell) (s : R.Slice C)
+    (z : IWord PT.tiling (G.cellPatch C))
+    (hle : (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k)
+    (j : Fin (PT.tiling.P (G.cellPatch C)).h) :
+    R.axis C j = S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j := by
+  by_contra hne
+  have houter : (fun l : Fin (T.S.n k) =>
+      if l ∈ PT.tiling.Icoord (G.cellPatch C) then false else
+        (R.cellWords C (s, flipPos z j)).1 l) =
+      (fun l : Fin (T.S.n k) =>
+      if l ∈ PT.tiling.Icoord (G.cellPatch C) then false else
+        (R.cellWords C (s, z)).1 l) := by
+    funext l
+    by_cases hl : l ∈ PT.tiling.Icoord (G.cellPatch C)
+    · simp [hl]
+    · simp only [ite_eq_right hl]
+      exact (R.word_outer C s z (flipPos z j) l hl).symm
+  have hbit : (R.cellWords C (s, flipPos z j)).1
+      (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j) =
+      (R.cellWords C (s, z)).1
+        (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j) := by
+    rw [R.word_flip]
+    exact Function.update_of_ne (Ne.symm hne) _ _
+  have hflip := hOrder hCluster C s (flipPos z j) hle j
+  rw [houter, hbit] at hflip
+  have hold := hOrder hCluster C s z hle j
+  rw [← hold] at hflip
+  simp only [flipPos, Function.update_self] at hflip
+  cases hz : z j <;> simp [hz] at hflip
+
+theorem raw_word_order_flip {G : LowGeom PT}
+    (R : S16.Lane_sol_fix2_s16.CellRawData G) (hOrder : RawWordOrder R)
+    (hCluster : PT.tiling.mode.isCluster) (C : G.Cell) (s : R.Slice C)
+    (z : IWord PT.tiling (G.cellPatch C))
+    (hle : (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k)
+    (j : Fin (PT.tiling.P (G.cellPatch C)).h) :
+    (R.cellWords C (s, flipPos z j)).1 =
+      flipPos (R.cellWords C (s, z)).1
+        (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j) := by
+  rw [R.word_flip, raw_word_order_axis R hOrder hCluster C s z hle j]
+
+/-- The existing canonical constructor satisfies the proposed word order.
+Keeping this identity in its output avoids reconstructing it from a free
+slice embedding later. -/
+theorem cluster_cell_words_order {G : LowGeom PT} (C : G.Cell)
+    (whole : ∀ v, G.cellOf v = C → ∀ v',
+      S16.CellData.sameSlice (G.cellPatch C) v v' → G.cellOf v' = C)
+    (hle : (PT.tiling.P (G.cellPatch C)).h ≤ T.S.n k)
+    (hpos : 0 < (PT.tiling.P (G.cellPatch C)).h)
+    (s : S16.Lane_q_s16_prod1.ClusterCellSlice G C)
+    (z : IWord PT.tiling (G.cellPatch C))
+    (j : Fin (PT.tiling.P (G.cellPatch C)).h) :
+    z j = if ¬ IsEvenRole (fun l : Fin (T.S.n k) =>
+      if l ∈ PT.tiling.Icoord (G.cellPatch C) then false else
+        (S16.Lane_q_s16_prod1.clusterCellWords C whole hle hpos (s, z)).1 l)
+      ∧ j.val = 0
+      then !((S16.Lane_q_s16_prod1.clusterCellWords C whole hle hpos (s, z)).1
+        (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j))
+      else (S16.Lane_q_s16_prod1.clusterCellWords C whole hle hpos (s, z)).1
+        (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j) := by
+  let v := (S16.Lane_q_s16_prod1.clusterCellWords C whole hle hpos (s, z)).1
+  have houter : (fun l : Fin (T.S.n k) =>
+      if l ∈ PT.tiling.Icoord (G.cellPatch C) then false else v l) = s.1 := by
+    funext l
+    by_cases hl : l ∈ PT.tiling.Icoord (G.cellPatch C)
+    · simp only [ite_eq_left hl]
+      exact (s.2.2 l hl).symm
+    · simp [v, S16.Lane_q_s16_prod1.clusterCellWords,
+        S16.Lane_q_s16_prod1.clusterCombine, hl]
+  have hjmem : S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j ∈
+      PT.tiling.Icoord (G.cellPatch C) := by
+    rw [← S16.Lane_q_s16_prod1.cellAxis_image (G.cellPatch C) hle]
+    exact Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩
+  have hbit : v (S16.Lane_q_s16_prod1.cellAxis (G.cellPatch C) hle j) =
+      S16.Lane_q_s16_prod1.clusterShiftWord s z hpos j := by
+    simp [v, S16.Lane_q_s16_prod1.clusterCellWords,
+      S16.Lane_q_s16_prod1.clusterCombine, hjmem,
+      S16.Lane_q_s16_prod1.cellAxisInv_cellAxis]
+  change z j = if ¬ IsEvenRole _ ∧ j.val = 0 then !(v _) else v _
+  rw [houter, hbit]
+  by_cases hs : IsEvenRole s.1
+  · simp [hs, S16.Lane_q_s16_prod1.clusterShiftWord]
+  · by_cases hj : j.val = 0
+    · have hj' : j = ⟨0, hpos⟩ := Fin.ext hj
+      simp [hs, S16.Lane_q_s16_prod1.clusterShiftWord, flipPos, hj']
+    · have hj' : j ≠ ⟨0, hpos⟩ := fun h => hj (congrArg Fin.val h)
+      simp [hs, hj, S16.Lane_q_s16_prod1.clusterShiftWord, flipPos, hj']
+
+/-- Even parity and flip preservation permit a different origin already
+on a two-coordinate slice. The canonical translated word at the zero site
+is zero, whereas this valid local star places the all-one word there. -/
+theorem two_coordinate_origin_example :
+    let translate : CubePos 2 → CubePos 2 := fun z => fun j => !(z j)
+    let zero : CubePos 2 := fun _ => false
+    let one : CubePos 2 := fun _ => true
+    (∀ z, IsEvenRole (translate z) ↔ IsEvenRole z) ∧
+    (∀ z j, translate (flipPos z j) = flipPos (translate z) j) ∧
+    translate one = zero ∧ IsEvenRole one ∧ one ≠ zero := by
+  classical
+  dsimp only
+  refine ⟨?_, ?_, rfl, ?_, ?_⟩
+  · intro z
+    have huniv : (Finset.univ : Finset (Fin 2)) = {0, 1} := by decide
+    cases h0 : z 0 <;> cases h1 : z 1 <;>
+      norm_num [IsEvenRole, huniv, Finset.filter_insert, Finset.filter_singleton, h0, h1]
+  · intro z j
+    funext a
+    by_cases ha : a = j
+    · subst a
+      simp [flipPos]
+    · simp [flipPos, ha]
+  · norm_num [IsEvenRole]
+  · intro h
+    have h0 := congrFun h 0
+    exact Bool.noConfusion h0
+
+/-- Rebase to any other solver word while witnessing failure of S17's
+ordered-role requirement. No conclusion about the pair-row estimate is used. -/
+theorem noncanonical_slice_location (D : ListGateContext κ T k PT)
+    (v : Pos T k) (hle : (PT.tiling.P (D.G.patchOf v)).h ≤ T.S.n k)
+    (e e' : EvenRole PT.tiling (D.G.patchOf v)) (hne : e' ≠ e)
+    (he : D.SolverRoleMatches v e)
+    (loc : S16.SliceStarLocation D.G (D.G.cellOf v) v
+      (cast (by rw [D.G.cellOf_patch]) e)) :
+    Nonempty (S16.SliceStarLocation D.G (D.G.cellOf v) v
+      (cast (by rw [D.G.cellOf_patch]) e')) ∧ ¬ D.SolverRoleMatches v e' := by
+  refine ⟨slice_star_location_rebase loc _, ?_⟩
+  intro he'
+  exact hne (solver_role_matches_unique D v hle e' e he' he)
+
 end HypercubeRamsey.S18.Lane_sol_d18l_row

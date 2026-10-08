@@ -6,6 +6,7 @@ import HypercubeRamsey.S06.Steps_cap_sol_s06_steps1
 import HypercubeRamsey.S06.Steps_q_s06_steps2
 import HypercubeRamsey.S06.Steps_sol_s06_g
 import HypercubeRamsey.S06.Steps_joint_sol_s06_g
+import HypercubeRamsey.S06.Steps_opus_g
 
 /-!
 # Steps 1–3: the predictive tests and their consequences
@@ -3775,7 +3776,21 @@ private theorem jointGatedDom_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}
 its kernels; the deleted density integrates to at most one. -/
 theorem L6_1g_tests (γ p₀ K : ℝ) (hadm : Admissible6 γ p₀ K) :
     ForLarge6 γ p₀ K fun _ _ _ _ _ X => X.Step2Supp → X.Step3TestHigh := by
-  sorry
+  obtain ⟨n₀, C₀, hTD⟩ := (L6_1c_tag γ p₀ K hadm).and (L6_1d_dom γ p₀ K hadm)
+  refine ⟨n₀, C₀, ?_⟩
+  intro n N E G M X hLarge hStep2Supp
+  obtain ⟨hTag, hDomOf⟩ := hTD n N E G M X hLarge
+  have hDom : X.Step2Dom := hDomOf hTag
+  intro Id instFin instDec b _ hmode D hTypes
+  have hJ (v : Fin N) (hroot : X.tgtName b ≠ .initial → 0 < X.initLaw.w v) :=
+    Lane_sol_s06_g.joint_mass_tests X v b D hmode
+      (jointGatedDom_sol_s06_g X v b D hTag hDom hStep2Supp hroot hTypes)
+  constructor
+  · exact Lane_opus_g.raw_high_bound X b hmode D (fun m => m none < X.s3Thr)
+      (fun v hroot => (hJ v hroot).1)
+  · intro c _
+    exact Lane_opus_g.raw_high_bound X b hmode D (fun m => m none < X.s3Thr * m (some c))
+      (fun v hroot => (hJ v hroot).2 (some c))
 
 set_option maxHeartbeats 400000 in
 private theorem highPostSupport_sol_s06_g {γ p₀ K : ℝ} {n N : ℕ}

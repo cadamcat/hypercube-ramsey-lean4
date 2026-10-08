@@ -2,7 +2,7 @@ import HypercubeRamsey.S03.Injection.Sampler
 import HypercubeRamsey.Framework.FinProbLemmas
 import HypercubeRamsey.Tools.Concentration
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000
 
 /-!
 Private finite-kernel helpers for the q-inj-comp lane.

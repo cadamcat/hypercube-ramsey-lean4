@@ -1,10 +1,21 @@
 import HypercubeRamsey.S15.DirectNodes
 import HypercubeRamsey.S15.Masks
 import HypercubeRamsey.S15.Capacity
+import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_alarm
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
 import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c2
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_transfer
+import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
+import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_c2
+import HypercubeRamsey.S15.ClusterGeometry_sol_s15_c2
+import HypercubeRamsey.S15.ClusterBinStage_sol_s15_c2
+import HypercubeRamsey.S15.ClusterLabelStage_sol_s15_c2
+import HypercubeRamsey.S15.HighCluster_opus_s15
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -74,25 +85,574 @@ def ClusterMassClaim (κ : CConsts) (T : Stage) : Prop :=
 /-- L15.2a: the raw alarm-one probability and deterministic crossing-removal bound. -/
 theorem high_cluster_degree_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterAlarmTestClaim κ T := by
-  sorry
+  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.raw_degree_alarm_probability κ hκ T hDeep,
+    HypercubeRamsey.Lane_sol_s15_alarm.cluster_crossing_removed_eventually κ hκ T hDeep]
+    with k hraw hcross
+  intro PT hPT hm a
+  constructor
+  · exact hraw PT hPT hm a
+  · intro W
+    simpa only [clusterCrossingRemovedMass] using hcross PT hPT hm W a
 
 /-- L15.2b: the raw mean large-interaction estimate. -/
 theorem high_cluster_interaction_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterInteractionMeanClaim κ T := by
-  sorry
+  exact HypercubeRamsey.Lane_sol_s15_alarm.raw_interaction_alarm_mean κ hκ T hDeep
 
 /-- L15.2c: product-local-lemma conditioning of the primitive histories. -/
 theorem high_cluster_condition_histories (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hAlarm : ClusterAlarmTestClaim κ T)
     (hInteraction : ClusterInteractionMeanClaim κ T) : ClusterHistoryConditioningClaim κ T := by
-  sorry
+  have hAlarm3Probability : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ a : EvenPosition T k,
+        (clusterHistoryLaw PT hPT hm).pr (fun W => clusterAlarm3 PT hPT hm W a) ≤
+          Real.exp (-Real.rpow ((PT.tiling.P (patchAt PT hPT a.1)).h : ℝ)
+            (1 + κ.c14)) := by
+    apply Filter.Eventually.of_forall
+    intro k PT hPT hm a
+    exact HypercubeRamsey.Lane_q_s15_c1.clusterAlarm3_pr_le_slice_bad PT hPT hm a
+  have hAlarm2Probability : ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ a : EvenPosition T k,
+        (clusterHistoryLaw PT hPT hm).pr
+          (fun W => clusterAlarm2 PT hPT hm W a) ≤
+            Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)) := by
+    filter_upwards [hInteraction] with k hk
+    intro PT hPT hm a
+    exact HypercubeRamsey.Lane_q_s15_c1.clusterAlarm2_pr_le_exp hPT hm a
+      (hk PT hPT hm a)
+  have hAlarm1Probability : ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ a : EvenPosition T k,
+        (clusterHistoryLaw PT hPT hm).pr
+          (fun W => clusterAlarm1 PT hPT hm W a) ≤
+            Real.exp (-Real.rpow (T.S.n k : ℝ) 0.2) := by
+    filter_upwards [hAlarm] with k hk
+    intro PT hPT hm a
+    exact (hk PT hPT hm a).1
+  have hRowAlarmProbability : ∀ᶠ k in atTop,
+      ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ a : EvenPosition T k,
+        (clusterHistoryLaw PT hPT hm).pr
+          (fun W => HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm PT hPT hm W a) ≤
+            Real.exp (-Real.rpow (T.S.n k : ℝ) 0.2) +
+              Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)) +
+                Real.exp (-Real.rpow ((PT.tiling.P (patchAt PT hPT a.1)).h : ℝ)
+                  (1 + κ.c14)) := by
+    filter_upwards [hAlarm1Probability, hAlarm2Probability, hAlarm3Probability]
+      with k hk1 hk2 hk3
+    intro PT hPT hm a
+    calc
+      (clusterHistoryLaw PT hPT hm).pr
+          (fun W => HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm PT hPT hm W a) ≤
+          (clusterHistoryLaw PT hPT hm).pr (fun W => clusterAlarm1 PT hPT hm W a) +
+            (clusterHistoryLaw PT hPT hm).pr (fun W => clusterAlarm2 PT hPT hm W a) +
+              (clusterHistoryLaw PT hPT hm).pr (fun W => clusterAlarm3 PT hPT hm W a) := by
+        exact HypercubeRamsey.Lane_q_s15_c1.finLaw_pr_or3_le_add
+          (clusterHistoryLaw PT hPT hm)
+          (fun W => clusterAlarm1 PT hPT hm W a)
+          (fun W => clusterAlarm2 PT hPT hm W a)
+          (fun W => clusterAlarm3 PT hPT hm W a)
+      _ ≤ Real.exp (-Real.rpow (T.S.n k : ℝ) 0.2) +
+            Real.exp (-200 * PT.tiling.gain (patchAt PT hPT a.1)) +
+              Real.exp (-Real.rpow ((PT.tiling.P (patchAt PT hPT a.1)).h : ℝ)
+                (1 + κ.c14)) := by
+        exact add_le_add (add_le_add (hk1 PT hPT hm a) (hk2 PT hPT hm a))
+          (hk3 PT hPT hm a)
+  have hnEventually : ∀ᶠ k in atTop, 2 ≤ T.S.n k :=
+    T.S.n_tendsto.eventually_ge_atTop 2
+  have hnReal : Filter.Tendsto (fun k => (T.S.n k : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp T.S.n_tendsto
+  have hlogT : Filter.Tendsto (fun k => Real.log (T.S.n k : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp hnReal
+  have hThresholdEventually : ∀ᶠ k in atTop,
+      10 ^ 7 / κ.a ≤ Real.log (T.S.n k : ℝ) := by
+    have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+    exact hlogT.eventually_ge_atTop (10 ^ 7 / κ.a)
+  have hRadiusEventually :=
+    HypercubeRamsey.Lane_q_s15_c1.clusterPatch_radius_eventually κ hκ T
+  filter_upwards [hRowAlarmProbability, hnEventually, hThresholdEventually, hRadiusEventually]
+    with k hkProb hkN hkThreshold hkRadius
+  intro PT hPT hm
+  let L := Real.log (T.S.n k : ℝ)
+  let x : EvenPosition T k → ℝ := fun a =>
+    HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmCharge PT hPT hm a
+  let p : EvenPosition T k → ℝ := fun a => x a / 2
+  have hrawHalf : ∀ a, (clusterHistoryLaw PT hPT hm).pr
+      (HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm PT hPT hm · a) ≤ p a := by
+    intro a
+    have hFacts := HypercubeRamsey.Lane_q_s15_c1.clusterHighRow_charge_facts
+      PT hPT hm hκ a hkN L rfl hkThreshold
+      (hkRadius PT hPT hm (patchAt PT hPT a.1))
+    have hraw := hkProb PT hPT hm a
+    have hhalf := HypercubeRamsey.Lane_q_s15_c1.clusterBadProbability_pr_le_half_charge
+      (HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm PT hPT hm · a)
+      (clusterHistoryLaw PT hPT hm) (T.S.n k : ℝ)
+      (PT.tiling.gain (patchAt PT hPT a.1))
+      ((PT.tiling.P (patchAt PT hPT a.1)).h : ℝ) κ.c14
+      (le_trans (by norm_num) hFacts.1) hFacts.2.1 hFacts.2.2.1 hFacts.2.2.2.1 hraw
+    simpa [p, x, HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmCharge] using hhalf
+  have hx0 : ∀ a, 0 ≤ x a := by
+    intro a
+    unfold x HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmCharge
+    exact (Real.exp_pos _).le
+  have hx1 : ∀ a, x a < 1 := by
+    intro a
+    have hFacts := HypercubeRamsey.Lane_q_s15_c1.clusterHighRow_charge_facts
+      PT hPT hm hκ a hkN L rfl hkThreshold
+      (hkRadius PT hPT hm (patchAt PT hPT a.1))
+    unfold x HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmCharge
+    rw [← Real.exp_zero]
+    apply Real.exp_lt_exp.mpr
+    nlinarith [hFacts.1]
+  have hpx : ∀ a, p a ≤ x a * ∏ a' ∈ Finset.univ.filter
+      (HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmAdjacent PT hPT hm a),
+        (1 - x a') := by
+    classical
+    intro a
+    let Nbrs := Finset.univ.filter
+      (HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmAdjacent PT hPT hm a)
+    let Overlap := Finset.univ.filter fun a' : EvenPosition T k =>
+      ∃ r : HypercubeRamsey.S15.ClusterRecordIndex PT hPT hm,
+        r ∈ HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm a ∧
+        r ∈ HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm a'
+    have hsub : Nbrs ⊆ Overlap := by
+      intro a' ha'
+      rcases Finset.mem_filter.mp ha' with ⟨_, hadj⟩
+      have hshared : ∃ r, r ∈
+          HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm a ∧ r ∈
+          HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm a' := by
+        by_contra hnone
+        apply hadj.2
+        apply Finset.disjoint_left.mpr
+        intro r hr hr'
+        exact hnone ⟨r, hr, hr'⟩
+      exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, hshared⟩
+    have hchargeEq : ∀ a' ∈ Nbrs, x a' = x a := by
+      intro a' ha'
+      rcases (Finset.mem_filter.mp ha').2 with ⟨hne, hnoverlap⟩
+      have hshared : ∃ r, r ∈
+          HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm a ∧ r ∈
+          HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm a' := by
+        by_contra hnone
+        exact hnoverlap (Finset.disjoint_left.mpr (by
+          intro r hr hr'
+          exact hnone ⟨r, hr, hr'⟩))
+      rcases hshared with ⟨r, hr, hr'⟩
+      have hrows := HypercubeRamsey.Lane_q_s15_c1.clusterRowConsultationScopes_intersection_geometry
+        PT hPT hm a a' r hr hr'
+      rcases hrows with ⟨i, hi, hi', _, _⟩
+      have hpatch : patchAt PT hPT a.1 = patchAt PT hPT a'.1 := hi.trans hi'.symm
+      unfold x HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmCharge
+      rw [hpatch]
+    have hsumX : (∑ a' ∈ Nbrs, x a') ≤ 1 / 2 := by
+      calc
+        _ = ∑ a' ∈ Nbrs, x a := by
+          apply Finset.sum_congr rfl
+          intro a' ha'
+          rw [hchargeEq a' ha']
+        _ = (Nbrs.card : ℝ) * x a := by simp [Finset.sum_const, nsmul_eq_mul]
+        _ ≤ (Overlap.card : ℝ) * x a := by
+          exact mul_le_mul_of_nonneg_right (by exact_mod_cast Finset.card_le_card hsub)
+            (hx0 a)
+        _ ≤ 1 / 2 := by
+          have hFacts := HypercubeRamsey.Lane_q_s15_c1.clusterHighRow_charge_facts
+            PT hPT hm hκ a hkN L rfl hkThreshold
+            (hkRadius PT hPT hm (patchAt PT hPT a.1))
+          have hOverlapBound := hFacts.2.2.2.2
+          change (Overlap.card : ℝ) * x a ≤ 1 / 2 at hOverlapBound
+          exact hOverlapBound
+    have hProdLower := HypercubeRamsey.Lane_q_s15_c1.clusterProd_one_sub_lower Nbrs x
+      (fun a' ha' => hx0 a') (fun a' ha' => (hx1 a').le)
+    have hProdHalf : (1 / 2 : ℝ) ≤ ∏ a' ∈ Nbrs, (1 - x a') := by
+      calc
+        (1 / 2 : ℝ) ≤ 1 - ∑ a' ∈ Nbrs, x a' := by linarith [hsumX]
+        _ ≤ ∏ a' ∈ Nbrs, (1 - x a') := hProdLower
+    change x a / 2 ≤ x a * ∏ a' ∈ Nbrs, (1 - x a')
+    calc
+      x a / 2 = x a * (1 / 2) := by ring
+      _ ≤ x a * ∏ a' ∈ Nbrs, (1 - x a') :=
+        mul_le_mul_of_nonneg_left hProdHalf (hx0 a)
+  let E := HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmEventSet PT hPT hm
+  let w := HypercubeRamsey.Lane_q_s15_c1.clusterHistoryProductWeight PT hPT hm
+  let adj := HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmAdjacent PT hPT hm
+  letI : DecidableRel adj := Classical.decRel _
+  have hsymm : ∀ a a', adj a a' → adj a' a := by
+    intro a a' hadj
+    refine ⟨hadj.1.symm, ?_⟩
+    intro hdis
+    apply hadj.2
+    exact Finset.disjoint_left.mpr (by
+      intro r hr hr'
+      exact (Finset.disjoint_left.mp hdis) hr' hr)
+  have hirr : ∀ a, ¬ adj a a := by
+    intro a hadj
+    exact hadj.1 rfl
+  have hLocalLemma := LocalLemma.conditional_avoidance w
+    (HypercubeRamsey.Lane_q_s15_c1.clusterHistoryProductWeight_nonneg PT hPT hm)
+    (HypercubeRamsey.Lane_q_s15_c1.clusterHistoryProductWeight_sum_one PT hPT hm)
+    E adj hsymm hirr p x
+    (HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm_LLL_independent_bound_of_raw
+      PT hPT hm p hrawHalf)
+    hx0 hx1 hpx
+  have hAvoid : ∀ W, W ∈ LocalLemma.avoid E Finset.univ ↔
+      clusterAlarmsAvoided PT hPT hm W := by
+    intro W
+    have hE : ∀ a, W ∈ E a ↔
+        HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm PT hPT hm W a := by
+      intro a
+      simp [E, HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmEventSet]
+    have hAvoidEvent : W ∈ LocalLemma.avoid E Finset.univ ↔
+        ∀ a, ¬ HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm PT hPT hm W a := by
+      unfold LocalLemma.avoid
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+      constructor
+      · intro h a hb
+        exact h a True.intro ((hE a).mpr hb)
+      · intro h a ha hb
+        exact h a ((hE a).mp hb)
+    have hPred : (∀ a, ¬ HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm
+          PT hPT hm W a) ↔ clusterAlarmsAvoided PT hPT hm W := by
+      simp [clusterAlarmsAvoided, HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarm]
+    exact hAvoidEvent.trans hPred
+  have hPositive : 0 < (clusterHistoryLaw PT hPT hm).pr
+      (clusterAlarmsAvoided PT hPT hm) := by
+    calc
+      0 < LocalLemma.mass w (LocalLemma.avoid E Finset.univ) := hLocalLemma.1
+      _ = (clusterHistoryLaw PT hPT hm).pr
+          (fun W => W ∈ LocalLemma.avoid E Finset.univ) :=
+        HypercubeRamsey.Lane_q_s15_c1.clusterHistoryProductWeight_mass_eq_pr
+          PT hPT hm (LocalLemma.avoid E Finset.univ)
+      _ = (clusterHistoryLaw PT hPT hm).pr (clusterAlarmsAvoided PT hPT hm) := by
+        congr 1
+        funext W
+        exact propext (hAvoid W)
+  let law := clusterAvoidedHistoryLaw PT hPT hm hPositive
+  refine ⟨hPositive, law, rfl, ?_, ?_⟩
+  · intro W hW
+    by_contra havoid
+    have hzero : law.w W = 0 := by
+      simp [law, clusterAvoidedHistoryLaw, FinLaw.cond, havoid]
+    exact hW hzero
+  · intro F hF U hdepends hUcard
+    classical
+    let Touched := Finset.univ.filter fun a : EvenPosition T k =>
+      ∃ r : HypercubeRamsey.S15.ClusterRecordIndex PT hPT hm,
+        r ∈ clusterConsultationScope PT hPT hm U ∧
+        r ∈ clusterConsultationScope PT hPT hm
+          (HypercubeRamsey.Lane_q_s15_c1.clusterRowConsultations PT hPT hm a)
+    let Far := Finset.univ \ Touched
+    have hST : Disjoint Far Touched := by
+      apply Finset.disjoint_left.mpr
+      intro a haFar haTouch
+      exact (Finset.mem_sdiff.mp haFar).2 haTouch
+    have hUnion : Far ∪ Touched = Finset.univ := by
+      ext a
+      simp [Far]
+    have hScopeDisj : Disjoint (clusterConsultationScope PT hPT hm U)
+        (Far.biUnion (HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmVariables PT hPT hm)) := by
+      apply Finset.disjoint_left.mpr
+      intro r hrU hrFar
+      rcases Finset.mem_biUnion.mp hrFar with ⟨a, haFar, hrA⟩
+      have hnotTouch : a ∉ Touched := (Finset.mem_sdiff.mp haFar).2
+      have htouch : a ∈ Touched := by
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        exact ⟨r, hrU, hrA⟩
+      exact (hnotTouch htouch).elim
+    have hRadiusU : ∀ c ∈ U,
+        8 ≤ 10 * κ.ρ * (PT.tiling.P c.1.1).h := by
+      intro c hc
+      exact hkRadius PT hPT hm c.1.1
+    have hTouchedSum : (∑ a ∈ Touched, x a) ≤ Real.exp (-L) / 2 := by
+      have h := HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmTouching_charge_sum_bound
+        PT hPT hm hκ U hkN L rfl hkThreshold hRadiusU hUcard
+      simpa [Touched, x, HypercubeRamsey.Lane_q_s15_c1.clusterRowAlarmCharge] using h
+    have hnPositive : (0 : ℝ) < (T.S.n k : ℝ) := by
+      exact_mod_cast (show 0 < T.S.n k by omega)
+    have hnExp : (T.S.n k : ℝ) = Real.exp L := by
+      dsimp [L]
+      exact (Real.exp_log hnPositive).symm
+    have hExpNeg : Real.exp (-L) = 1 / (T.S.n k : ℝ) := by
+      rw [Real.exp_neg, hnExp]
+      ring
+    have hProdLower : 1 - ∑ a ∈ Touched, x a ≤
+        ∏ a ∈ Touched, (1 - x a) :=
+      HypercubeRamsey.Lane_q_s15_c1.clusterProd_one_sub_lower Touched x
+        (fun a ha => hx0 a) (fun a ha => (hx1 a).le)
+    let q := ∏ a ∈ Touched, (1 - x a)
+    have hqPos : 0 < q := by
+      apply Finset.prod_pos
+      intro a ha
+      exact sub_pos.mpr (hx1 a)
+    have hqLower : (1 + 1 / (T.S.n k : ℝ))⁻¹ ≤ q := by
+      have hsimple : (1 + 1 / (T.S.n k : ℝ))⁻¹ ≤
+          1 - 1 / (2 * (T.S.n k : ℝ)) := by
+        have hn1 : (1 : ℝ) ≤ (T.S.n k : ℝ) := by exact_mod_cast (by omega : 1 ≤ T.S.n k)
+        have hC : 0 < 1 + 1 / (T.S.n k : ℝ) := by positivity
+        field_simp [ne_of_gt hnPositive, ne_of_gt hC]
+        nlinarith [hn1]
+      calc
+        _ ≤ 1 - Real.exp (-L) / 2 := by
+          rw [hExpNeg]
+          calc
+            _ ≤ 1 - 1 / (2 * (T.S.n k : ℝ)) := hsimple
+            _ = 1 - 1 / (T.S.n k : ℝ) / 2 := by ring
+        _ ≤ 1 - ∑ a ∈ Touched, x a := sub_le_sub_left hTouchedSum 1
+        _ ≤ q := hProdLower
+    have hqInv : q⁻¹ ≤ 1 + 1 / (T.S.n k : ℝ) := by
+      have hC : 0 < 1 + 1 / (T.S.n k : ℝ) := by positivity
+      have hmul : 1 ≤ q * (1 + 1 / (T.S.n k : ℝ)) := by
+        calc
+          1 = (1 + 1 / (T.S.n k : ℝ))⁻¹ *
+              (1 + 1 / (T.S.n k : ℝ)) :=
+                (inv_mul_cancel₀ (ne_of_gt hC)).symm
+          _ ≤ q * (1 + 1 / (T.S.n k : ℝ)) :=
+            mul_le_mul_of_nonneg_right hqLower hC.le
+      rw [inv_eq_one_div]
+      apply (div_le_iff₀ hqPos).2
+      simpa [mul_comm] using hmul
+    have hAvoidPos : ∀ S : Finset (EvenPosition T k),
+        0 < LocalLemma.mass w (LocalLemma.avoid E S) := by
+      intro S
+      induction S using Finset.induction_on with
+      | empty =>
+          have hsum : ∑ W, w W = 1 := by
+            simpa [w] using
+              HypercubeRamsey.Lane_q_s15_c1.clusterHistoryProductWeight_sum_one PT hPT hm
+          have hmass : LocalLemma.mass w (LocalLemma.avoid E ∅) = ∑ W, w W := by
+            simp [LocalLemma.mass, LocalLemma.avoid]
+          rw [hmass, hsum]
+          norm_num
+      | @insert a S ha ih =>
+          have havoidInsert : LocalLemma.avoid E (insert a S) =
+              LocalLemma.avoid E S \ E a := by
+            ext W
+            simp only [LocalLemma.avoid, Finset.mem_filter, Finset.mem_univ,
+              true_and, Finset.mem_sdiff]
+            change (∀ j ∈ insert a S, W ∉ E j) ↔
+              ((∀ j ∈ S, W ∉ E j) ∧ W ∉ E a)
+            constructor
+            · intro h
+              exact ⟨fun j hj => h j (Finset.mem_insert_of_mem hj),
+                h a (Finset.mem_insert_self a S)⟩
+            · rintro ⟨hS, ha⟩ j hj
+              rcases Finset.mem_insert.mp hj with rfl | hj
+              · exact ha
+              · exact hS j hj
+          have hsplit : LocalLemma.mass w (LocalLemma.avoid E (insert a S)) +
+              LocalLemma.mass w (E a ∩ LocalLemma.avoid E S) =
+                LocalLemma.mass w (LocalLemma.avoid E S) := by
+            rw [havoidInsert]
+            have hs := Finset.sum_inter_add_sum_sdiff
+              (LocalLemma.avoid E S) (E a) w
+            unfold LocalLemma.mass
+            rw [Finset.inter_comm (E a) (LocalLemma.avoid E S)]
+            exact (add_comm _ _).trans hs
+          have hbound := hLocalLemma.2.1 a S ha
+          have hlower : (1 - x a) * LocalLemma.mass w (LocalLemma.avoid E S) ≤
+              LocalLemma.mass w (LocalLemma.avoid E (insert a S)) := by
+            rw [← hsplit]
+            have hbound' : LocalLemma.mass w (E a ∩ LocalLemma.avoid E S) ≤
+                x a * (LocalLemma.mass w (LocalLemma.avoid E (insert a S)) +
+                  LocalLemma.mass w (E a ∩ LocalLemma.avoid E S)) := by
+              rw [← hsplit] at hbound
+              exact hbound
+            nlinarith [hbound']
+          exact lt_of_lt_of_le (mul_pos (sub_pos.mpr (hx1 a)) ih) hlower
+    have hnumFactor := HypercubeRamsey.Lane_q_s15_c1.clusterHistory_sum_mul_avoid_disjoint_scope
+      PT hPT hm F U Far hdepends hScopeDisj
+    have hratioFar :
+        (∑ W ∈ LocalLemma.avoid E Far, w W * F W) /
+          LocalLemma.mass w (LocalLemma.avoid E Far) =
+            (clusterHistoryLaw PT hPT hm).E F := by
+      have hpos := hAvoidPos Far
+      rw [show (∑ W ∈ LocalLemma.avoid E Far, w W * F W) =
+          (clusterHistoryLaw PT hPT hm).E F *
+            LocalLemma.mass w (LocalLemma.avoid E Far) by
+          simpa [w] using hnumFactor]
+      exact mul_div_cancel_right₀ _ (ne_of_gt hpos)
+    have hcomp := hLocalLemma.2.2.1 Far Touched hST F hF
+    rw [hUnion] at hcomp
+    let A := Finset.univ.filter (fun W : ClusterHistory PT hPT hm =>
+      clusterAlarmsAvoided PT hPT hm W)
+    have hAset : A = LocalLemma.avoid E Finset.univ := by
+      ext W
+      simpa only [A, Finset.mem_filter, Finset.mem_univ, true_and] using
+        (hAvoid W).symm
+    have hApos : 0 < ∑ z ∈ A, (clusterHistoryLaw PT hPT hm).w z := by
+      have hmass : LocalLemma.mass w (LocalLemma.avoid E Finset.univ) =
+          ∑ z ∈ A, (clusterHistoryLaw PT hPT hm).w z := by
+        unfold LocalLemma.mass
+        calc
+          _ = ∑ z ∈ LocalLemma.avoid E Finset.univ,
+              (clusterHistoryLaw PT hPT hm).w z := by
+            apply Finset.sum_congr rfl
+            intro z hz
+            have hw := HypercubeRamsey.Lane_q_s15_c1.clusterHistoryLaw_weight_eq_product
+              PT hPT hm z
+            simpa [w] using hw.symm
+          _ = _ := by rw [← hAset]
+      calc
+        0 < LocalLemma.mass w (LocalLemma.avoid E Finset.univ) := hLocalLemma.1
+        _ = _ := hmass
+    have cond_E (P : FinLaw (ClusterHistory PT hPT hm))
+        (B : Finset (ClusterHistory PT hPT hm))
+        (hB : 0 < ∑ z ∈ B, P.w z)
+        (G : ClusterHistory PT hPT hm → ℝ) :
+        (FinLaw.cond P B hB).E G =
+          (∑ z ∈ B, P.w z * G z) / (∑ z ∈ B, P.w z) := by
+      classical
+      unfold FinLaw.E FinLaw.cond
+      calc
+        _ = (∑ z, (if z ∈ B then P.w z else 0) * G z) /
+            (∑ z ∈ B, P.w z) := by
+          rw [Finset.sum_div]
+          apply Finset.sum_congr rfl
+          intro z hz
+          ring_nf
+        _ = (∑ z ∈ B, P.w z * G z) / (∑ z ∈ B, P.w z) := by
+          apply congrArg (fun t : ℝ => t / (∑ z ∈ B, P.w z))
+          simp only [ite_mul, zero_mul, Finset.sum_ite_mem_eq]
+    have hLawRatio : law.E F =
+        (∑ W ∈ LocalLemma.avoid E Finset.univ, w W * F W) /
+          LocalLemma.mass w (LocalLemma.avoid E Finset.univ) := by
+      change (FinLaw.cond (clusterHistoryLaw PT hPT hm) A hApos).E F = _
+      rw [cond_E]
+      rw [hAset]
+      congr 1
+    calc
+      law.E F =
+          (∑ W ∈ LocalLemma.avoid E Finset.univ, w W * F W) /
+            LocalLemma.mass w (LocalLemma.avoid E Finset.univ) := hLawRatio
+      _ ≤ q⁻¹ * ((∑ W ∈ LocalLemma.avoid E Far, w W * F W) /
+          LocalLemma.mass w (LocalLemma.avoid E Far)) := by
+        simpa [w, q] using hcomp
+      _ = q⁻¹ * (clusterHistoryLaw PT hPT hm).E F := by rw [hratioFar]
+      _ ≤ (1 + 1 / (T.S.n k : ℝ)) * (clusterHistoryLaw PT hPT hm).E F :=
+        mul_le_mul_of_nonneg_right hqInv (by
+          unfold FinLaw.E
+          apply Finset.sum_nonneg
+          intro W _
+          exact mul_nonneg ((clusterHistoryLaw PT hPT hm).nonneg W) (hF W))
 
+open Lane_sol_s15_load in
 /-- L15.2d: the conditional row mass estimate from the crossing filter and three alarm bounds. -/
 theorem high_cluster_conditional_mass_estimate (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hCross : ClusterCrossingClaim κ T)
     (hAlarm : ClusterAlarmTestClaim κ T) (hInteraction : ClusterInteractionMeanClaim κ T)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterMassClaim κ T := by
-  sorry
+  have hCenter := clusterCenter_mass_bound_eventually κ hκ T hDeep
+  have hRemoved := high_cluster_removed_budget_eventually κ hκ T
+  have hZeroSmall := high_cluster_zero_small_eventually κ hκ T
+  have hInteractionSmall := high_cluster_interaction_budget_small_eventually κ hκ T
+  have hTotal := high_cluster_mass_budget_eventually κ hκ T
+  filter_upwards [hAlarm, hCenter, hRemoved, hZeroSmall, hInteractionSmall, hTotal] with
+    k hkAlarm hkCenter hkRemoved hkZero hkInteraction hkTotal
+  intro PT hPT hm W hW hAvoid a
+  let ell := (clusterCrossingNeighbours PT hPT a).card
+  let C : ℝ := 5 ^ (ell + 1)
+  let B0 : ℝ := (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ))
+  let γ : ℝ := (T.S.n k : ℝ) ^ (-(4 * κ.R : ℝ))
+  let L : ℝ := C ^ κ.u * (2 : ℝ) ^ κ.u
+  let P := (clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw
+    (historyOnSlice W (clusterSliceAt PT hPT a.1))
+  let G := Lane_q_s15_c1.clusterInteractionIntegrandAtCenter PT hPT hm W a
+  let Zero := fun Y => Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y = 0
+  let F := fun Y =>
+    (FinLaw.pi (fun j => lawToFinLaw (clusterCrossLaw PT hPT hm W a j))).E (fun ys =>
+      (FinLaw.pi (fun j => lawToFinLaw (clusterBulkLaw PT hPT hm W a j))).pr
+        (fun zs => clusterRowAtCenterExternal PT hPT hm W a Y ys zs < 1 / 2))
+  have hRemoval : ∀ I : ClusterInternalData PT,
+      (∑ x, if clusterJ PT hPT hm W a x then 0 else clusterSigma PT hPT hm W I a x) ≤ 1 / 10 := by
+    intro I
+    apply (clusterSigma_removed_mass_le PT hPT hm W hW hAvoid I a _
+      ((hkAlarm PT hPT hm a).2 W)).trans
+    exact hkRemoved PT hPT hm (patchAt PT hPT a.1)
+  have hInteractionBudget : clusterInteractionCost PT hPT hm W a ≤
+      Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := le_of_not_gt (hAvoid a).2.1
+  have hZero : P.pr Zero ≤ γ := by
+    have h := clusterSigma_zero_probability PT hPT hm W hAvoid a
+    have hproj := Lane_q_s15_c1.pi_pr_coordinate
+      (fun s : ClusterSlice PT => (clusterSolver PT hPT hm s.1).refLaw (historyOnSlice W s))
+      (clusterSliceAt PT hPT a.1) Zero
+    have heq : P.pr Zero = (clusterInternalKernel PT hPT hm W).pr
+        (fun I => clusterSigma PT hPT hm W I a = 0) := by
+      exact hproj.symm
+    rw [heq]
+    exact h.trans (hkZero PT hPT hm (patchAt PT hPT a.1))
+  have hG : ∀ Y, 0 ≤ G Y := clusterInteractionIntegrandAtCenter_nonneg PT hPT hm W a
+  have hL : 0 ≤ L := by positivity
+  have hγ : 0 ≤ γ := by positivity
+  have hB0 : 0 ≤ B0 := by positivity
+  have hpoint (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1) :
+      F Y ≤ (if Zero Y then 1 else 0) + (γ + (4 : ℝ) ^ κ.u * (B0 + L * G Y)) := by
+    by_cases hz : Zero Y
+    · rw [if_pos hz]
+      have hF : F Y ≤ 1 := by
+        calc
+          _ ≤ (FinLaw.pi (fun j => lawToFinLaw (clusterCrossLaw PT hPT hm W a j))).E (fun _ => 1) := by
+            unfold F FinLaw.E
+            apply Finset.sum_le_sum
+            intro ys _
+            apply mul_le_mul_of_nonneg_left (finLaw_pr_le_one _ _) ((FinLaw.pi _).nonneg ys)
+          _ = 1 := by simp only [FinLaw.E, mul_one, FinLaw.sum_one]
+      have hterm : 0 ≤ (4 : ℝ) ^ κ.u * (B0 + L * G Y) := by
+        have h := hG Y
+        positivity
+      linarith
+    · rw [if_neg hz, zero_add]
+      exact hkCenter PT hPT hm W hW a hRemoval Y hz
+  have hAvg : P.E F ≤ P.pr Zero + γ + (4 : ℝ) ^ κ.u * (B0 + L * P.E G) := by
+    calc
+      _ ≤ P.E (fun Y => (if Zero Y then 1 else 0) +
+          (γ + (4 : ℝ) ^ κ.u * (B0 + L * G Y))) := by
+        unfold FinLaw.E
+        apply Finset.sum_le_sum
+        intro Y _
+        exact mul_le_mul_of_nonneg_left (hpoint Y) (P.nonneg Y)
+      _ = _ := by
+        have hInd : P.E (fun Y => if Zero Y then (1 : ℝ) else 0) = P.pr Zero := by
+          unfold FinLaw.E FinLaw.pr
+          apply Finset.sum_congr rfl
+          intro Y _
+          by_cases hz : Zero Y <;> simp [hz]
+        rw [finLaw_E_add, hInd,
+          finLaw_E_affine, finLaw_E_affine]
+        ring
+  have hCost : P.E G = clusterInteractionCost PT hPT hm W a :=
+    (Lane_q_s15_c1.clusterInteractionCost_eq_centerExpectation PT hPT hm W a).symm
+  have hell : ell ≤ (PT.tiling.P (patchAt PT hPT a.1)).ℓ :=
+    Lane_q_s15_direct.highDirect_crossingNeighbours_card_le_prefix PT hPT a _ rfl
+  have hLarge : (4 : ℝ) ^ κ.u * L *
+      Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) ≤ B0 := by
+    have hCpow : C ^ κ.u ≤
+        ((5 : ℝ) ^ ((PT.tiling.P (patchAt PT hPT a.1)).ℓ + 1)) ^ κ.u := by
+      apply pow_le_pow_left₀ (by positivity : (0 : ℝ) ≤ C)
+      exact pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 5) (Nat.add_le_add_right hell 1)
+    calc
+      _ = (4 : ℝ) ^ κ.u * C ^ κ.u * (2 : ℝ) ^ κ.u *
+          Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := by dsimp [L]; ring
+      _ ≤ (4 : ℝ) ^ κ.u * ((5 : ℝ) ^ ((PT.tiling.P (patchAt PT hPT a.1)).ℓ + 1)) ^ κ.u *
+          (2 : ℝ) ^ κ.u * Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := by
+        gcongr
+      _ ≤ _ := hkInteraction PT hPT hm (patchAt PT hPT a.1)
+  calc
+    _ = P.E F := clusterRow_failure_probability_eq PT hPT hm W a
+    _ ≤ P.pr Zero + γ + (4 : ℝ) ^ κ.u * (B0 + L * P.E G) := hAvg
+    _ ≤ γ + γ + (4 : ℝ) ^ κ.u * (B0 + L *
+        Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1))) := by
+      rw [hCost]
+      gcongr
+    _ = 2 * γ + (4 : ℝ) ^ κ.u * B0 + (4 : ℝ) ^ κ.u * L *
+        Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := by ring
+    _ ≤ 2 * γ + (4 : ℝ) ^ κ.u * B0 + B0 := by linarith
+    _ = 2 * γ + ((4 : ℝ) ^ κ.u + 1) * B0 := by ring
+    _ ≤ _ := hkTotal
 
 /-- L15.2 (`lem:high-cluster-mass`, 15:91–112): conditional row-mass failure is at most `n^-R`. -/
 theorem high_cluster_mass (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -115,7 +675,41 @@ def ClusterHistoryLoadClaim (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_history_load (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterHistoryLoadClaim κ T := by
-  sorry
+  have hsmall := Lane_sol_s15_load.history_load_small_eventually κ hκ T
+  have hHost := T.S.eventually_large 1 7
+  have hRatio := T.S.ratio_tendsto.eventually_ge_atTop (800 * 384 / κ.θstar)
+  have hNsmall : ∀ᶠ k in atTop,
+      (T.S.n k : ℝ) ^ 2 / (2 : ℝ) ^ (T.S.n k) < 1 :=
+    T.S.n_tendsto.eventually Lane_q_s15_direct.eventually_nat_sq_over_two_pow_lt_one
+  filter_upwards [hsmall, hHost, hRatio, hNsmall] with k hsmall hHost hRatio hNsmall
+  intro PT hPT hm H
+  have htheta : 0 < κ.θstar := hκ.bucket.2.2.2.2
+  have hNpos : (0 : ℝ) < T.S.N k := by exact_mod_cast T.S.N_pos k
+  have hpow : (0 : ℝ) < 2 ^ (T.S.n k) := by positivity
+  have hratio : 800 * 384 * (2 : ℝ) ^ (T.S.n k) / T.S.N k ≤ κ.θstar := by
+    have h := (div_le_div_iff₀ htheta hpow).mp hRatio
+    exact (div_le_iff₀ hNpos).2 (by nlinarith [h])
+  have hNupper : (T.S.N k : ℝ) ≤ (T.S.n k : ℝ) * (2 : ℝ) ^ (T.S.n k) := by
+    exact_mod_cast hHost.2.2
+  have hn2 : (T.S.n k : ℝ) ^ 2 ≤ (2 : ℝ) ^ (T.S.n k) := by
+    simpa using ((div_lt_iff₀ hpow).mp hNsmall).le
+  have hNbound : (T.S.N k : ℝ) ^ 2 ≤ (8 : ℝ) ^ (T.S.n k) := by
+    calc
+      _ ≤ ((T.S.n k : ℝ) * (2 : ℝ) ^ (T.S.n k)) ^ 2 := by gcongr
+      _ = (T.S.n k : ℝ) ^ 2 * (4 : ℝ) ^ (T.S.n k) := by
+        rw [mul_pow]
+        congr 1
+        rw [pow_two, ← mul_pow]
+        norm_num
+      _ ≤ (2 : ℝ) ^ (T.S.n k) * (4 : ℝ) ^ (T.S.n k) := by gcongr
+      _ = (8 : ℝ) ^ (T.S.n k) := by rw [← mul_pow]; norm_num
+  have htail : (1 / 2 : ℝ) ^ (T.S.n k) ≤ 1 / 100 := by
+    have h := pow_le_pow_of_le_one (by norm_num : (0 : ℝ) ≤ 1 / 2)
+      (by norm_num : (1 / 2 : ℝ) ≤ 1) hHost.1
+    norm_num at h
+    linarith
+  exact Lane_sol_s15_load.historyLoad_probability hκ PT hPT hm H.law
+    H.local_comparison hsmall.1 (hsmall.2 PT hPT hm) hratio hNbound htail
 
 /-- P15.3b: actual certificate charges, with a constant supplied by the estimate. -/
 def ClusterCapacityClaim (κ : CConsts) (T : Stage) : Prop :=
@@ -134,7 +728,32 @@ def ClusterCapacityClaim (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_capacity_certificates (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterCapacityClaim κ T := by
-  sorry
+  have hcp : 0 < κ.cp := hκ.bucket.2.1
+  refine ⟨κ.cp / 12, by positivity, ?_⟩
+  obtain ⟨dmin, hdmin⟩ := eventually_atTop.1
+    (HypercubeRamsey.Lane_sol_s15_alarm.capacity_charge_decay_eventually κ.cp hcp)
+  let d0 : ℕ := ⌈max dmin 1⌉₊
+  have hd0 : dmin ≤ (d0 : ℝ) := (le_max_left _ _).trans (Nat.le_ceil _)
+  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.cluster_bin_size_eventually_ge κ hκ T d0,
+    HypercubeRamsey.Lane_sol_s15_alarm.cluster_selected_atom_cap_eventually κ hκ T]
+      with k hkbin hkatom
+  intro PT hPT hm W hload
+  constructor
+  · intro i D g hpin
+    have hcard := hPT.tiling_valid.bins_card i D.1 D.2
+    have hd : dmin ≤ (D.1.card : ℝ) := by
+      rw [hcard]
+      exact hd0.trans (by exact_mod_cast hkbin PT hPT hm i)
+    have hdecay := hdmin (D.1.card : ℝ) hd
+    have hD := (PT.tiling.P i).bins.nonempty_of_mem_parts D.2
+    exact (HypercubeRamsey.Lane_sol_s15_alarm.pinned_capacity_charge_le
+      PT hPT hm W hκ D.1 hD hdecay.1 g).trans hdecay.2
+  · intro B hB havoid y
+    apply HypercubeRamsey.Lane_sol_s15_alarm.capacity_avoided_column_le
+      PT hPT hm W hκ hload B ?_ havoid y
+    intro g y'
+    exact hkatom PT hPT hm W g (B g)
+      (HypercubeRamsey.Lane_sol_s15_alarm.selected_bin_probability_pos PT hPT hm W B hB g) y'
 
 /-- The output contract of the conditioned bin stage in P15.3(i). -/
 def ClusterBinStageClaim (κ : CConsts) (T : Stage) : Prop :=
@@ -154,13 +773,80 @@ theorem high_cluster_bin_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hConditioning : ClusterHistoryConditioningClaim κ T)
     (hHistoryLoad : ClusterHistoryLoadClaim κ T) (hCapacity : ClusterCapacityClaim κ T) :
     ClusterBinStageClaim κ T := by
-  sorry
+  classical
+  obtain ⟨c, hc, hCapacity⟩ := hCapacity
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hMass, hConditioning, hHistoryLoad, hCapacity, hn,
+    Lane_opus_s15.bin_local_output κ hκ T c hc] with
+    k hMass hConditioning hHistoryLoad hCapacity hn hLocal
+  intro PT hPT hm
+  obtain ⟨H⟩ := hConditioning PT hPT hm
+  have houtputs : ∀ W, H.law.w W ≠ 0 → clusterHistoryLoad PT hPT hm W →
+      Nonempty (HypercubeRamsey.Lane_sol_s15_c2.BinLawOutput PT hPT hm W) := by
+    intro W hW hload
+    have hraw : 0 < (clusterHistoryLaw PT hPT hm).w W := by
+      apply HypercubeRamsey.Lane_sol_s15_c2.avoided_history_raw_positive PT hPT hm H.positive W
+      rwa [← H.law_eq]
+    have havoid := H.avoids W hW
+    have hstar : ∀ a, (clusterIndependentBinKernel PT hPT hm W).pr
+        (fun B => (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) < clusterBinStarFailure PT hPT hm W B a) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) := by
+      intro a
+      exact HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_tail PT hPT hm W a (by omega)
+        (hMass PT hPT hm W hraw havoid a)
+    have hcert := hCapacity PT hPT hm W hload
+    exact hLocal PT hPT hm W hstar hcert
+  let output (W : ClusterHistory PT hPT hm)
+      (h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W) :=
+    Classical.choice (houtputs W h.1 h.2)
+  let binLaw (W : ClusterHistory PT hPT hm) :=
+    if h : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W then (output W h).law
+    else clusterIndependentBinKernel PT hPT hm W
+  refine ⟨{
+    history_positive := H.positive
+    historyLaw := H.law
+    historyLaw_eq := H.law_eq
+    binLaw := binLaw
+    history_local_upper_comparison := H.local_comparison
+    history_avoids_alarms := H.avoids
+    history_load_probability := hHistoryLoad PT hPT hm H
+    bin_requirements := ?_
+    local_upper_comparison := ?_ }⟩
+  · intro W hW hload B hB
+    have hg : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W := ⟨hW, hload⟩
+    have hgood := (output W hg).good B
+    apply hgood
+    simpa only [binLaw, dif_pos hg] using hB
+  · intro W hW hload F hF S hdep hcard
+    have hg : H.law.w W ≠ 0 ∧ clusterHistoryLoad PT hPT hm W := ⟨hW, hload⟩
+    simpa only [binLaw, dif_pos hg] using
+      (output W hg).comparison F hF S hdep hcard
 
 /-- P15.3(ii): conditionally sample the labels and enforce all even-row mass gates. -/
 theorem high_cluster_label_stage (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hMass : ClusterMassClaim κ T)
     (hBins : ClusterBinStageClaim κ T) : ClusterSampleClaim κ T := by
-  sorry
+  classical
+  have hn : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
+  filter_upwards [hBins, hn, Lane_opus_s15.label_local_output κ hκ T] with k hBins hn hLocal
+  intro PT hPT hm
+  obtain ⟨BS⟩ := hBins PT hPT hm
+  apply HypercubeRamsey.Lane_sol_s15_c2.sample_of_label_outputs PT hPT hm BS (by omega)
+  intro W hW hload B hB
+  have hgood := BS.bin_requirements W hW hload B hB
+  have hreference := HypercubeRamsey.Lane_sol_s15_c2.binStage_reference_positive
+    PT hPT hm BS (by omega) W hW hload B hB
+  have hmass : ∀ a, (clusterIndependentLabelKernel PT hPT hm W B).pr
+      (fun I => clusterRowMass PT hPT hm W I a < 1 / 2) ≤
+        (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2) := by
+    intro a
+    rw [← HypercubeRamsey.Lane_sol_s15_c2.bin_star_failure_eq PT hPT hm W B a hreference]
+    exact hgood.1 a
+  have hraw : 0 < (clusterHistoryLaw PT hPT hm).w W := by
+    apply HypercubeRamsey.Lane_sol_s15_c2.avoided_history_raw_positive PT hPT hm BS.history_positive W
+    rw [← BS.historyLaw_eq]
+    exact hW
+  exact hLocal PT hPT hm W hraw (BS.history_avoids_alarms W hW) hload B hreference hgood hmass
 
 /-- P15.3 (`prop:high-cluster-sampling`, 15:119–156): assemble the history, bin, and label stages. -/
 theorem high_cluster_sampling (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -275,6 +961,9 @@ def ClusterHistoryRestore (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterRowCapClaim κ T := by
   have hWindow := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_degree_window hκ T
+  have hScales := HypercubeRamsey.Lane_sol_s15_c2.high_gain_scales κ hκ T
+  have hCross := HypercubeRamsey.Lane_sol_s15_load.high_cluster_crossing_scales_eventually κ hκ T
+  have hNpos : ∀ᶠ k in atTop, 1 ≤ T.S.n k := T.S.n_tendsto.eventually_ge_atTop 1
   let nR : ℕ → ℝ := fun k => (T.S.n k : ℝ)
   have hn : Tendsto nR atTop atTop :=
     (tendsto_natCast_atTop_atTop).comp T.S.n_tendsto
@@ -290,13 +979,18 @@ theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
       (Filter.Eventually.of_forall fun k => (hbstarEq k).symm)
   have hbstar : ∀ᶠ k in atTop, bstar T k < 1 / 18 :=
     hbstarTendsto.eventually (Iio_mem_nhds (by norm_num))
-  filter_upwards [hWindow, hbstar] with k hWindow hbstar
+  filter_upwards [hWindow, hbstar, hScales, hCross, hNpos] with k hWindow hbstar hScales hCross hNpos
   intro PT hPT hm CS
   refine ⟨?_, ?_, ?_, ?_⟩
   · intro ω a x
     exact CS.row_eq ω a x
-  · sorry
-  · sorry
+  · intro ω hω hload a x
+    exact HypercubeRamsey.Lane_sol_s15_c2.row_cap PT hPT hm CS ω hω hload
+      (by omega) hCross.1 hCross.2.1 (hCross.2.2 PT hPT) (hWindow PT hPT hm)
+      (hScales PT hPT hm) a x
+  · intro ω hω hload a x
+    exact HypercubeRamsey.Lane_sol_s15_c2.row_le_nominal PT hPT hm CS ω hω hload
+      hCross.1 hCross.2.1 (hCross.2.2 PT hPT) a x
   · intro i x hx b y
     let d := deg (T.S.E k) PT.tiling.c
       (PT.π (patchAt PT hPT b.1)).w x
@@ -332,7 +1026,24 @@ theorem high_cluster_row_caps (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
 /-- P15.4b: core removal counts, forest/rank sparsity and crossing-factor deletion. -/
 theorem high_cluster_geometry (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterGeometryClaim κ T := by
-  sorry
+  have hNormEventually :=
+    HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_normalizedHit_bounds hκ T
+  have hCoreEventually := HypercubeRamsey.Lane_q_s15_c2.clusterHighMode_core_near_fraction hκ T
+  have hCrossEventually := HypercubeRamsey.Lane_sol_s15_c2.crossing_fraction_parameters κ hκ T
+  filter_upwards [hNormEventually, hCoreEventually, hCrossEventually] with k hNorm hCore hCross
+  intro PT hPT hm
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · exact hCore PT hPT hm
+  · intro i G j hj
+    exact HypercubeRamsey.Lane_sol_s15_c2.crossing_rank_tail_bound hκ hCross.1 hCross.2 PT hPT i G j
+  · intro vs G
+    exact HypercubeRamsey.Lane_q_s15_c2.clusterCrossingNonisolated_card_le_two_rank PT vs G
+  · intro i x hx M hGeom ys
+    apply HypercubeRamsey.Lane_q_s15_c2.clusterCrossingFactorDeletion_le PT hPT i M hGeom
+      (fun b => normalizedHit (T.S.E k) PT.tiling.c
+        (PT.π (patchAt PT hPT b.1)) x (ys b))
+    intro r hr b hb
+    exact hNorm PT hPT hm i x hx b (ys b)
 
 set_option maxHeartbeats 1000000 in
 /-- P15.4c: the small-bin core repeat cost. -/
@@ -792,12 +1503,60 @@ theorem high_cluster_label_transfer (κ : CConsts) (hκ : κ.Admissible) (T : St
 /-- P15.4e: bin comparison and reverse integration, with all removed variables charged. -/
 theorem high_cluster_bin_transfer (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterBinTransfer κ T := by
-  sorry
+  have hsmall : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      PT.tiling.mode = .highSmall →
+      ∀ i x, x ∈ PT.envelope i → ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      ∀ W : ClusterHistory PT hPT hm,
+      (clusterIndependentBinKernel PT hPT hm W).E
+        (fun B => if ClusterMaskConsistent PT hPT hm M B then
+          (clusterIndependentLabelKernel PT hPT hm W B).E
+            (clusterKeptProduct PT hPT hm i x M W) else 0) ≤
+        clusterCoreRepeatCost PT i ^ M.coreBins.card *
+          clusterCrossingFraction T k ^ M.crossingBins.card *
+            clusterReferenceMean PT hPT hm i x M W := by
+    filter_upwards [high_cluster_small_bin_splice κ hκ T hDeep,
+      Lane_sol_s15_transfer.eventual_core_radius κ hκ T,
+      Lane_sol_s15_transfer.eventual_crossing_width κ hκ T,
+      Lane_sol_s15_transfer.eventual_high_gain_le_dimension κ hκ T,
+      T.S.n_tendsto.eventually (eventually_ge_atTop 1)] with k hs hr hw hg hn
+    intro PT hPT hm hsmall i x hx M hM W
+    exact Lane_sol_s15_transfer.raw_bin_repeat_bound_small PT hPT hm hsmall i x M hM
+      (by nlinarith [hr PT hPT hm i]) hn (hw PT hPT)
+      (Lane_sol_s15_transfer.crossing_bin_cap_of_splice PT hn (hg PT hPT hm) (hs PT hPT hsmall)) W
+  filter_upwards [hsmall, T.S.n_tendsto.eventually (eventually_ge_atTop 5)] with k hk hn
+  intro PT hPT hm CS i x hx M hM
+  exact Lane_sol_s15_transfer.bin_transfer_of_scope_and_reverse PT hPT hm CS i x M
+    (by omega) (Lane_sol_s15_transfer.maskBinQueries PT hPT hm M)
+    (Lane_sol_s15_transfer.masked_label_integral_bin_depends PT hPT hm i x M)
+    (Lane_sol_s15_transfer.mask_bin_queries_budget PT hPT hm M hn)
+    (fun W => by
+      rcases hm with hsm | hlg
+      · exact hk PT hPT (Or.inl hsm) hsm i x hx M hM W
+      · exact Lane_sol_s15_transfer.raw_bin_repeat_bound_large PT hPT (Or.inr hlg) hlg i x M W)
 
 /-- P15.4f: restore the raw local scopes and factor the kept reference experiment. -/
 theorem high_cluster_history_restore (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterHistoryRestore κ T := by
-  sorry
+  have hfactor : ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+      ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+      ∀ i x, x ∈ PT.envelope i → ∀ M : ClusterMask PT, ClusterMaskGeometry PT hPT i M →
+      (clusterHistoryLaw PT hPT hm).E (clusterReferenceMean PT hPT hm i x M) =
+        ∏ r ∈ clusterKeptRows M, (clusterRawReferenceLaw PT hPT hm).E
+          (fun z => (PT.tiling.P i).M * clusterSigma PT hPT hm z.1 z.2 (M.positions r) x) := by
+    filter_upwards [Lane_sol_s15_transfer.eventual_core_radius κ hκ T,
+      Lane_sol_s15_transfer.eventual_crossing_width κ hκ T,
+      Lane_sol_s15_transfer.eventual_nominal_degrees_pos κ hκ T] with k hr hw hd
+    intro PT hPT hm i x hx M hM
+    exact Lane_sol_s15_transfer.raw_reference_factorization PT hPT hm i x M hM
+      (hr PT hPT hm i) (hw PT hPT) (hd PT hPT hm i x hx)
+  filter_upwards [hfactor, T.S.n_tendsto.eventually (eventually_ge_atTop 2)] with k hk hn
+  intro PT hPT hm CS i x hx M hM
+  exact Lane_sol_s15_transfer.history_restore_of_scope_and_factorization PT hPT hm CS i x M
+    (by omega) (Lane_sol_s15_transfer.referenceConsultations PT hPT hm M)
+    (Lane_sol_s15_transfer.reference_mean_history_depends PT hPT hm i x M)
+    (Lane_sol_s15_transfer.reference_consultations_budget PT hPT hm M hn)
+    hM.1 (hk PT hPT hm i x hx M hM)
 
 /-- Fixed-mask expansion: caps and deletion costs are outside each nonnegative tested product. -/
 def ClusterMaskExpansionClaim (κ : CConsts) (T : Stage) : Prop :=

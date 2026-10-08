@@ -104,7 +104,7 @@ structure LoadGateHypotheses {Slot Bin Hist Check : Type*}
   contribution : (Slot → Bin) → ∀ s, Value s → D.LoadColumn → ℝ
   range : Slice → ℝ
   range_nonneg : ∀ s, 0 ≤ range s
-  contribution_range : ∀ pool s z y, 0 ≤ contribution pool s z y ∧ contribution pool s z y ≤ range s
+  contribution_range : ∀ pool, D.typical pool → ∀ s z y, 0 ≤ contribution pool s z y ∧ contribution pool s z y ≤ range s
   load_eq : ∀ pool z y, D.loadValue pool (encode z) y = ∑ s, contribution pool s (z s) y
   threshold_pos : 0 < D.loadThreshold
   mean_small : ∀ pool, D.typical pool → ∀ y,
@@ -754,8 +754,8 @@ theorem history_load_gate_concentration {Slot Bin Hist Check : Type*}
         intro t _
         by_cases hts : t = s
         · subst t
-          have hx := hD.contribution_range pool s (x s) y
-          have hx' := hD.contribution_range pool s (x' s) y
+          have hx := hD.contribution_range pool hpool s (x s) y
+          have hx' := hD.contribution_range pool hpool s (x' s) y
           have hd : |hD.contribution pool s (x s) y - hD.contribution pool s (x' s) y| ≤ hD.range s :=
             abs_le.mpr ⟨by linarith [hx.1, hx'.2], by linarith [hx.2, hx'.1]⟩
           simpa using hd
@@ -773,7 +773,7 @@ theorem history_load_gate_concentration {Slot Bin Hist Check : Type*}
         nlinarith
       have hcontributionZero (s : hD.Slice) (z : hD.Value s) :
           hD.contribution pool s z y = 0 := by
-        have hr := hD.contribution_range pool s z y
+        have hr := hD.contribution_range pool hpool s z y
         rw [hrangeZero s] at hr
         exact le_antisymm hr.2 hr.1
       have hloadZero (z : ∀ s : hD.Slice, hD.Value s) : loadFn y z = 0 := by
@@ -922,6 +922,7 @@ theorem history_load_gate_concentration {Slot Bin Hist Check : Type*}
     _ ≤ (D.historyLaw pool).E F / (1 - ε) :=
       div_le_div_of_nonneg_left hEpos hEden hdenLower
     _ = (1 - ε)⁻¹ * (D.historyLaw pool).E F := by ring
+
 
 /-- The analytic iid certificate plus actual permutation-pool conclusions.
 The pin remains in the global pool experiment, even when it is in another cell. -/

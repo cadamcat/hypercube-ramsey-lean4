@@ -792,11 +792,11 @@ theorem calibration_exp_cap (d : ℕ) (t : ℝ) (hd : 1 ≤ d) (ht : 0 ≤ t)
     _ ≤ Real.rpow (d : ℝ) 0.1 := h3
     _ ≤ d := by simpa using Real.rpow_le_rpow_of_exponent_le hd' (by norm_num : (0.1 : ℝ) ≤ 1)
 
-theorem low_cluster_pretrim_small {κ : CConsts} (hκ : κ.Admissible)
+theorem low_cluster_pretrim_power_small {κ : CConsts} (hκ : κ.Admissible)
     {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
     (Q : LowModeQuantFacts hκ (PT := PT) K16) (hm : PT.tiling.mode = .lowCluster)
-    (i : Fin PT.tiling.m) :
-    ((PT.tiling.P i).h : ℝ) ^ 2 * Real.sqrt (sliceEps κ (PT.tiling.P i).h) ≤ 1 / 2 := by
+    (i : Fin PT.tiling.m) (m : ℕ) (hm6 : m ≤ 6) :
+    ((PT.tiling.P i).h : ℝ) ^ m * Real.sqrt (sliceEps κ (PT.tiling.P i).h) ≤ Real.rpow 10 (-3) := by
   obtain ⟨hscale, hg, _, _, _, _, _, hLower, hUpper, _, _, _⟩ :=
     Q.profiled_valid.tiling_valid.cluster_data (Or.inl hm) i
   simp only [hm, if_true] at hLower hUpper
@@ -835,12 +835,20 @@ theorem low_cluster_pretrim_small {κ : CConsts} (hκ : κ.Admissible)
   have hs := (hall (PT.tiling.P i).h hLower hUpper').2.2.2.2.2.1
   have hh1 : (1 : ℝ) ≤ (PT.tiling.P i).h :=
     (Real.one_le_rpow hq1 hMlo.le).trans hLower
-  have hpow := pow_le_pow_right₀ hh1 (by norm_num : (2 : ℕ) ≤ 6)
+  have hpow := pow_le_pow_right₀ hh1 hm6
   calc
     _ ≤ ((PT.tiling.P i).h : ℝ) ^ 6 * Real.sqrt (sliceEps κ (PT.tiling.P i).h) :=
       mul_le_mul_of_nonneg_right hpow (Real.sqrt_nonneg _)
     _ ≤ Real.rpow 10 (-3) := hs
-    _ ≤ _ := by norm_num [Real.rpow_neg, Real.rpow_natCast]
+
+
+theorem low_cluster_pretrim_small {κ : CConsts} (hκ : κ.Admissible)
+    {T : Stage} {k : ℕ} {PT : ProfiledTiling κ T k} {K16 : ℝ}
+    (Q : LowModeQuantFacts hκ (PT := PT) K16) (hm : PT.tiling.mode = .lowCluster)
+    (i : Fin PT.tiling.m) :
+    ((PT.tiling.P i).h : ℝ) ^ 2 * Real.sqrt (sliceEps κ (PT.tiling.P i).h) ≤ 1 / 2 := by
+  have hs := low_cluster_pretrim_power_small hκ Q hm i 2 (by norm_num)
+  exact hs.trans (by norm_num [Real.rpow_neg, Real.rpow_natCast])
 
 theorem exceptional_count {T : Stage} {k : ℕ} {wS wL err : ℝ}
     (hDisc : TwoBudgetDisc T k wS wL err) (c : Colour)
@@ -3570,7 +3578,7 @@ theorem deterministic_history_load_gate {Slot Bin Hist Check : Type*}
     rw [huniv, Finset.sum_singleton] at hweight
     rw [heq, hweight]
     simp only [FinLaw.map, if_true, FinLaw.sum_one]
-  · intro pool s z y
+  · intro pool _ s z y
     exact ⟨div_nonneg (hrange pool h0 y).1 hM.le,
       div_le_div_of_nonneg_right (hrange pool h0 y).2 hM.le⟩
   · intro pool z y
@@ -3590,5 +3598,727 @@ theorem deterministic_history_load_gate {Slot Bin Hist Check : Type*}
     · exact Or.inl hz
     · refine Or.inr ⟨lt_of_le_of_ne (div_nonneg (sq_nonneg R) hM.le) (Ne.symm hz), ?_⟩
       exact (le_div_iff₀ (lt_of_le_of_ne (div_nonneg (sq_nonneg R) hM.le) (Ne.symm hz))).mpr hbudget
+
+private theorem finLaw_E_const {Ω : Type*} [Fintype Ω] (P : FinLaw Ω) (r : ℝ) :
+    P.E (fun _ => r) = r := by
+  unfold FinLaw.E
+  rw [← Finset.sum_mul, P.sum_one, one_mul]
+
+private theorem finLaw_E_sum {Ω I : Type*} [Fintype Ω] [Fintype I]
+    (P : FinLaw Ω) (f : I → Ω → ℝ) :
+    P.E (fun z => ∑ i, f i z) = ∑ i, P.E (f i) := by
+  unfold FinLaw.E
+  simp_rw [Finset.mul_sum]
+  exact Finset.sum_comm
+
+private theorem finLaw_E_sub {Ω : Type*} [Fintype Ω] (P : FinLaw Ω)
+    (f g : Ω → ℝ) : P.E (fun z => f z - g z) = P.E f - P.E g := by
+  unfold FinLaw.E
+  simp_rw [mul_sub]
+  rw [Finset.sum_sub_distrib]
+
+private theorem finLaw_E_map {Ω Hist : Type*} [Fintype Ω] [Fintype Hist]
+    [DecidableEq Hist] (P : FinLaw Ω) (encode : Ω → Hist) (f : Hist → ℝ) :
+    (FinLaw.map P encode).E f = P.E (fun z => f (encode z)) := by
+  classical
+  unfold FinLaw.E
+  change (∑ h, (∑ z, if encode z = h then P.w z else 0) * f h) = _
+  simp_rw [Finset.sum_mul]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro z _
+  simp
+
+/-- Independence bounds the load variance at every pool when the slice
+ranges are required at every pool. This does not use typicality. -/
+theorem independent_sum_variance {I : Type*} [Fintype I] [DecidableEq I]
+    {Value : I → Type*} [∀ i, Fintype (Value i)]
+    (law : ∀ i, FinLaw (Value i)) (f : ∀ i, Value i → ℝ) (R : I → ℝ)
+    (hR : ∀ i, 0 ≤ R i) (hf : ∀ i z, 0 ≤ f i z ∧ f i z ≤ R i) :
+    let P := FinLaw.pi law
+    let F := fun z => ∑ i, f i (z i)
+    P.E (fun z => (F z - P.E F) ^ 2) ≤ ∑ i, R i ^ 2 := by
+  classical
+  dsimp only
+  let P := FinLaw.pi law
+  let m := fun i => P.E (fun z => f i (z i))
+  let g := fun i (z : ∀ i, Value i) => f i (z i) - m i
+  have hm : ∀ i, 0 ≤ m i ∧ m i ≤ R i := by
+    intro i
+    constructor
+    · exact Finset.sum_nonneg fun z _ => mul_nonneg (P.nonneg z) (hf i (z i)).1
+    · calc
+        m i ≤ P.E (fun _ => R i) :=
+          Finset.sum_le_sum fun z _ => mul_le_mul_of_nonneg_left (hf i (z i)).2 (P.nonneg z)
+        _ = R i := finLaw_E_const P _
+  have hg : ∀ i, P.E (g i) = 0 := by
+    intro i
+    change P.E (fun z => f i (z i) - m i) = 0
+    rw [finLaw_E_sub, finLaw_E_const]
+    exact sub_self _
+  let Q : ∀ i, FinProb (Value i) := fun i => ⟨(law i).w, (law i).nonneg, (law i).sum_one⟩
+  have hcross : ∀ i j, i ≠ j → P.E (fun z => g i z * g j z) = 0 := by
+    intro i j hij
+    have h := FinProb.pi_expect_mul_of_disjoint Q (g i) (g j) {i} {j}
+      (by intro z z' heq; simp only [g, heq i (by simp)])
+      (by intro z z' heq; simp only [g, heq j (by simp)])
+      (by simp [hij])
+    change P.E (fun z => g i z * g j z) = P.E (g i) * P.E (g j) at h
+    rw [h, hg, hg, zero_mul]
+  have hcenter : ∀ z,
+      (∑ i, f i (z i)) - P.E (fun z => ∑ i, f i (z i)) = ∑ i, g i z := by
+    intro z
+    rw [finLaw_E_sum, ← Finset.sum_sub_distrib]
+  have hexpand : ∀ z, (∑ i, g i z) ^ 2 = ∑ i, ∑ j, g i z * g j z := by
+    intro z
+    rw [pow_two, Finset.sum_mul_sum]
+  calc
+    P.E (fun z => ((∑ i, f i (z i)) - P.E (fun z => ∑ i, f i (z i))) ^ 2) =
+        P.E (fun z => ∑ i, ∑ j, g i z * g j z) := by
+      simp_rw [hcenter, hexpand]
+    _ = ∑ i, ∑ j, P.E (fun z => g i z * g j z) := by
+      rw [finLaw_E_sum]
+      simp_rw [finLaw_E_sum]
+    _ = ∑ i, P.E (fun z => (g i z) ^ 2) := by
+      apply Finset.sum_congr rfl
+      intro i _
+      rw [Finset.sum_eq_single i]
+      · simp only [pow_two]
+      · intro j _ hji
+        exact hcross i j hji.symm
+      · simp
+    _ ≤ ∑ i, R i ^ 2 := by
+      apply Finset.sum_le_sum
+      intro i _
+      calc
+        _ ≤ P.E (fun _ => R i ^ 2) := by
+          apply Finset.sum_le_sum
+          intro z _
+          apply mul_le_mul_of_nonneg_left _ (P.nonneg z)
+          have ha : 0 ≤ R i - (f i (z i) - m i) := by linarith [(hf i (z i)).2, (hm i).1]
+          have hb : 0 ≤ R i + (f i (z i) - m i) := by linarith [(hf i (z i)).1, (hm i).2]
+          dsimp only [g]
+          nlinarith only [mul_nonneg ha hb]
+        _ = _ := finLaw_E_const P _
+
+/-- A variance consequence of the repaired gate contract at a typical pool. -/
+theorem load_gate_global_variance_bound {Slot Bin Hist Check : Type*}
+    [Fintype Slot] [DecidableEq Slot] [Fintype Bin] [DecidableEq Bin]
+    [Fintype Hist] [Fintype Check] {n : ℕ} {c0 : ℝ}
+    (D : CellPoolDiagnostics Slot Bin Hist Check n c0) (H : LoadGateHypotheses D)
+    (pool : Slot → Bin) (hpool : D.typical pool) (y : D.LoadColumn) :
+    ((n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))) *
+      (D.historyLaw pool).E (fun h => (D.loadValue pool h y -
+        (D.historyLaw pool).E (fun h => D.loadValue pool h y)) ^ 2) ≤
+      2 * (D.loadThreshold / 2) ^ 2 := by
+  classical
+  letI : Fintype H.Slice := H.sliceFin
+  letI : DecidableEq H.Slice := H.sliceDec
+  letI : ∀ s, Fintype (H.Value s) := H.valueFin
+  let P := FinLaw.pi (H.sliceLaw pool)
+  let F := fun z : ∀ s, H.Value s => ∑ s, H.contribution pool s (z s) y
+  have hMean : (D.historyLaw pool).E (fun h => D.loadValue pool h y) = P.E F := by
+    rw [H.history_eq pool, finLaw_E_map]
+    simp_rw [H.load_eq pool]
+    rfl
+  have hVar : (D.historyLaw pool).E (fun h => (D.loadValue pool h y -
+      (D.historyLaw pool).E (fun h => D.loadValue pool h y)) ^ 2) ≤ ∑ s, H.range s ^ 2 := by
+    rw [H.history_eq pool, finLaw_E_map]
+    simp_rw [H.load_eq pool]
+    rw [← H.history_eq pool, hMean]
+    exact independent_sum_variance (H.sliceLaw pool) (fun s z => H.contribution pool s z y)
+      H.range H.range_nonneg (fun s z => H.contribution_range pool hpool s z y)
+  let A := (n : ℝ) ^ c0 + Real.log (max 1 (Fintype.card D.LoadColumn : ℝ))
+  have hA : 0 ≤ A := add_nonneg (Real.rpow_nonneg (Nat.cast_nonneg _) _)
+    (Real.log_nonneg (le_max_left _ _))
+  have hbudget : A * (∑ s, H.range s ^ 2) ≤ 2 * (D.loadThreshold / 2) ^ 2 := by
+    rcases H.variance_budget with hz | ⟨hp, hb⟩
+    · rw [hz, mul_zero]
+      positivity
+    · exact (le_div_iff₀ hp).mp hb
+  exact (mul_le_mul_of_nonneg_left hVar hA).trans hbudget
+
+/-- The physical star-kernel amplitude and epsilon have polynomial room
+uniformly over every low-cluster slice. -/
+theorem cluster_slice_amplitude_room {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ n₀ : ℕ, ∀ (n h : ℕ), n₀ ≤ n → 2 ≤ n →
+      (h : ℝ) ≤ Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ) →
+      (16 * Real.exp (2 * (sliceK κ h : ℝ) * sliceT κ h)) ^ h ≤ (n : ℝ) ∧
+      Real.rpow (n : ℝ) (-1) ≤ sliceEps κ h := by
+  have ha : 0 < κ.a := by rw [hκ.a_eq]; exact div_pos hκ.θ_rng.1 (by norm_num)
+  let C := max (Real.log 16 + 2) (0.001 * κ.a)
+  have hC : 0 < C := lt_of_lt_of_le (by positivity : (0 : ℝ) < 0.001 * κ.a) (le_max_right _ _)
+  let n₀ := ⌈Real.exp (1 + C ^ 2)⌉₊
+  refine ⟨n₀, ?_⟩
+  intro n h hn hn2 hh
+  have hnp : (0 : ℝ) < n := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) hn2
+  have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast le_trans (by norm_num : (1 : ℕ) ≤ 2) hn2
+  have hx : 1 + C ^ 2 ≤ Real.log (n : ℝ) := by
+    have he : Real.exp (1 + C ^ 2) ≤ (n : ℝ) :=
+      (Nat.le_ceil _).trans (by exact_mod_cast hn)
+    simpa only [Real.log_exp] using Real.log_le_log (Real.exp_pos _) he
+  have hx1 : 1 ≤ Real.log (n : ℝ) := by nlinarith only [hx, sq_nonneg C]
+  have hx0 : 0 ≤ Real.log (n : ℝ) := hx1.trans' (by norm_num)
+  have hroot : C ≤ Real.sqrt (Real.log (n : ℝ)) := by
+    apply (Real.le_sqrt hC.le hx0).mpr
+    nlinarith only [hx]
+  have hroom : C * Real.sqrt (Real.log (n : ℝ)) ≤ Real.log (n : ℝ) := by
+    calc
+      _ ≤ Real.sqrt (Real.log (n : ℝ)) * Real.sqrt (Real.log (n : ℝ)) :=
+        mul_le_mul_of_nonneg_right hroot (Real.sqrt_nonneg _)
+      _ = _ := Real.mul_self_sqrt hx0
+  by_cases hz : h = 0
+  · subst h
+    constructor
+    · simpa using hn1
+    · have he : sliceEps κ 0 = 1 := by simp [sliceEps]
+      rw [he]
+      exact Real.rpow_le_one_of_one_le_of_nonpos hn1 (by norm_num)
+  · have hh1 : 1 ≤ h := Nat.one_le_iff_ne_zero.mpr hz
+    have hh1r : (1 : ℝ) ≤ h := by exact_mod_cast hh1
+    have hkt : (sliceK κ h : ℝ) * sliceT κ h ≤ (h : ℝ) ^ (4 : ℕ) :=
+      slice_product_bound hκ h hh1
+    have hkt0 : 0 ≤ (sliceK κ h : ℝ) * sliceT κ h := by positivity
+    have hhkt : (h : ℝ) * ((sliceK κ h : ℝ) * sliceT κ h) ≤ (h : ℝ) ^ (5 : ℕ) := by
+      have hp := mul_le_mul_of_nonneg_left hkt (Nat.cast_nonneg h)
+      nlinarith only [hp]
+    have h5 : (h : ℝ) ^ (5 : ℕ) ≤ Real.sqrt (Real.log (n : ℝ)) := by
+      calc
+        _ ≤ (Real.rpow (Real.log (n : ℝ)) (1 / 10 : ℝ)) ^ (5 : ℕ) :=
+          pow_le_pow_left₀ (Nat.cast_nonneg h) hh _
+        _ = Real.rpow (Real.log (n : ℝ)) (1 / 2 : ℝ) := by
+          simp only [Real.rpow_eq_pow]
+          rw [← Real.rpow_natCast, ← Real.rpow_mul hx0]
+          norm_num
+        _ = _ := (Real.sqrt_eq_rpow _).symm
+    have hh5 : (h : ℝ) ≤ (h : ℝ) ^ (5 : ℕ) :=
+      le_self_pow₀ hh1r (by norm_num)
+    have hlog0 : 0 ≤ Real.log 16 := Real.log_nonneg (by norm_num)
+    have hamp : (h : ℝ) * (Real.log 16 +
+        2 * (sliceK κ h : ℝ) * sliceT κ h) ≤ Real.log (n : ℝ) := by
+      calc
+        _ ≤ (Real.log 16 + 2) * (h : ℝ) ^ (5 : ℕ) := by
+          nlinarith only [mul_le_mul_of_nonneg_right hh5 hlog0, hhkt]
+        _ ≤ (Real.log 16 + 2) * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left h5 (by positivity)
+        _ ≤ C * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_right (le_max_left _ _) (Real.sqrt_nonneg _)
+        _ ≤ _ := hroom
+    have ht1 : (1 : ℝ) ≤ sliceT κ h := by
+      apply le_trans _ (Nat.le_ceil _)
+      exact Real.one_le_rpow hh1r hκ.ω_rng.1.le
+    have heps : 0.001 * κ.a * (sliceK κ h : ℝ) * h ≤ Real.log (n : ℝ) := by
+      have hkT : (sliceK κ h : ℝ) ≤ (sliceK κ h : ℝ) * sliceT κ h :=
+        le_mul_of_one_le_right (Nat.cast_nonneg _) ht1
+      calc
+        _ ≤ (0.001 * κ.a) * (h : ℝ) ^ (5 : ℕ) := by
+          have hh := mul_le_mul_of_nonneg_left hkT (Nat.cast_nonneg h)
+          have hh' := mul_le_mul_of_nonneg_left (hh.trans hhkt)
+            (by positivity : (0 : ℝ) ≤ 0.001 * κ.a)
+          nlinarith only [hh']
+        _ ≤ (0.001 * κ.a) * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_left h5 (by positivity)
+        _ ≤ C * Real.sqrt (Real.log (n : ℝ)) :=
+          mul_le_mul_of_nonneg_right (le_max_right _ _) (Real.sqrt_nonneg _)
+        _ ≤ _ := hroom
+    constructor
+    · calc
+        _ = Real.exp ((h : ℝ) * (Real.log 16 +
+            2 * (sliceK κ h : ℝ) * sliceT κ h)) := by
+          rw [Real.exp_nat_mul, Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 16)]
+        _ ≤ Real.exp (Real.log (n : ℝ)) := Real.exp_le_exp.mpr hamp
+        _ = _ := Real.exp_log hnp
+    · change Real.rpow (n : ℝ) (-1) ≤ Real.exp (-0.001 * κ.a * (sliceK κ h : ℝ) * h)
+      rw [Real.rpow_eq_pow, Real.rpow_def_of_pos hnp]
+      apply Real.exp_le_exp.mpr
+      nlinarith only [heps]
+
+/-- Dimension-only room for all supported slice-history normalizer rows.
+The atom bound is n/B and L is at least n^199. -/
+theorem cluster_normalizer_budget_room : ∃ n₀ : ℕ, ∀ (n : ℕ) (L B Checks : ℝ),
+    n₀ ≤ n → 2 ≤ n → 0 < B → (n : ℝ) ^ (199 : ℕ) ≤ L →
+    L ^ 2 / B ≤ Real.exp (-Real.rpow (n : ℝ) (1 / 2 : ℝ)) / 4 →
+    Checks ≤ (n : ℝ) ^ (200 : ℕ) * Real.exp ((n : ℝ) ^ (1.01 : ℝ)) →
+    ((n : ℝ) * L ^ 2 / B + ((n : ℝ) + 1) / L ≤ Real.rpow (n : ℝ) (-4) / 2) ∧
+    (Real.rpow (n : ℝ) (1 / 2 : ℝ) + Real.log (8 * max 1 Checks) ≤
+      L * Real.rpow (n : ℝ) (-4) ^ 2 / (8 * (n : ℝ) ^ (2 : ℕ))) := by
+  obtain ⟨n₀, hroom⟩ := logarithmic_room (1 / 2) 1 0 5 (by norm_num) (by norm_num) (by norm_num)
+  refine ⟨n₀, ?_⟩
+  intro n L B Checks hn hn2 hB hL hcollision hchecks
+  let x : ℝ := n
+  have hx2 : (2 : ℝ) ≤ x := by dsimp [x]; exact_mod_cast hn2
+  have hx : 0 < x := by linarith
+  have hx1 : 1 ≤ x := by linarith
+  have hLp : 0 < L := lt_of_lt_of_le (pow_pos hx _) hL
+  have hρ : Real.rpow x (-4) = 1 / x ^ (4 : ℕ) := by
+    rw [Real.rpow_eq_pow, Real.rpow_neg, show (4 : ℝ) = ((4 : ℕ) : ℝ) by norm_num,
+      Real.rpow_natCast, one_div] <;> exact hx.le
+  have hsmall : Real.exp (-Real.rpow x (1 / 2 : ℝ)) ≤ 1 / x ^ (5 : ℕ) := by
+    have hr := hroom n hn
+    simp only [one_mul, zero_add] at hr
+    have he := Real.exp_le_exp.mpr (neg_le_neg hr)
+    have he5 : Real.exp (5 * Real.log x) = x ^ (5 : ℕ) := by
+      simpa only [Nat.cast_ofNat, Real.exp_log hx] using Real.exp_nat_mul (Real.log x) 5
+    change Real.exp (-Real.rpow x (1 / 2 : ℝ)) ≤ Real.exp (-(5 * Real.log x)) at he
+    rw [Real.exp_neg (5 * Real.log x), he5] at he
+    simpa only [one_div] using he
+  have h194 : (8 : ℝ) ≤ x ^ (194 : ℕ) := by
+    calc
+      8 = (2 : ℝ) ^ (3 : ℕ) := by norm_num
+      _ ≤ x ^ (3 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (194 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have h187 : (2048 : ℝ) ≤ x ^ (187 : ℕ) := by
+    calc
+      2048 = (2 : ℝ) ^ (11 : ℕ) := by norm_num
+      _ ≤ x ^ (11 : ℕ) := pow_le_pow_left₀ (by norm_num) hx2 _
+      _ ≤ x ^ (187 : ℕ) := pow_le_pow_right₀ hx1 (by norm_num)
+  have hpinL : 8 * x ^ (5 : ℕ) ≤ L := by
+    calc
+      _ ≤ x ^ (194 : ℕ) * x ^ (5 : ℕ) := mul_le_mul_of_nonneg_right h194 (pow_nonneg hx.le _)
+      _ = x ^ (199 : ℕ) := by rw [← pow_add]
+      _ ≤ L := hL
+  have hvarL : 2048 * x ^ (12 : ℕ) ≤ L := by
+    calc
+      _ ≤ x ^ (187 : ℕ) * x ^ (12 : ℕ) := mul_le_mul_of_nonneg_right h187 (pow_nonneg hx.le _)
+      _ = x ^ (199 : ℕ) := by rw [← pow_add]
+      _ ≤ L := hL
+  refine ⟨?_, ?_⟩
+  · have hpin : (x + 1) / L ≤ Real.rpow x (-4) / 4 := by
+      calc
+        _ ≤ (2 * x) / L := div_le_div_of_nonneg_right (by linarith) hLp.le
+        _ ≤ (2 * x) / (8 * x ^ (5 : ℕ)) :=
+          div_le_div_of_nonneg_left (by positivity) (by positivity) hpinL
+        _ = _ := by rw [hρ]; field_simp <;> ring
+    have hcoll : x * L ^ 2 / B ≤ Real.rpow x (-4) / 4 := by
+      calc
+        _ = x * (L ^ 2 / B) := by ring
+        _ ≤ x * (Real.exp (-Real.rpow x (1 / 2 : ℝ)) / 4) :=
+          mul_le_mul_of_nonneg_left hcollision hx.le
+        _ ≤ x * ((1 / x ^ (5 : ℕ)) / 4) :=
+          mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right hsmall (by norm_num)) hx.le
+        _ = _ := by rw [hρ]; field_simp <;> ring
+    dsimp only [x] at *
+    linarith only [hpin, hcoll]
+  · have hlogx : Real.log x ≤ x := (Real.log_le_sub_one_of_pos hx).trans (by linarith)
+    have hx200 : 1 ≤ x ^ (200 : ℕ) := one_le_pow₀ hx1
+    have hpow101 : Real.rpow x (1.01 : ℝ) ≤ x ^ (2 : ℕ) := by
+      simpa only [Real.rpow_eq_pow, Real.rpow_two] using
+        Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1.01 : ℝ) ≤ 2)
+    have hmax : max 1 Checks ≤ x ^ (200 : ℕ) * Real.exp (Real.rpow x (1.01 : ℝ)) := by
+      refine max_le ?_ hchecks
+      exact one_le_mul_of_one_le_of_one_le hx200
+        (Real.one_le_exp_iff.mpr (Real.rpow_nonneg hx.le _))
+    have hlog : Real.log (8 * max 1 Checks) ≤ 8 + 200 * x + x ^ (2 : ℕ) := by
+      calc
+        _ ≤ Real.log (8 * (x ^ (200 : ℕ) * Real.exp (Real.rpow x (1.01 : ℝ)))) :=
+          Real.log_le_log (by positivity) (mul_le_mul_of_nonneg_left hmax (by norm_num))
+        _ = Real.log 8 + 200 * Real.log x + Real.rpow x (1.01 : ℝ) := by
+          rw [Real.log_mul (by norm_num : (8 : ℝ) ≠ 0) (by positivity),
+            Real.log_mul (by positivity : x ^ (200 : ℕ) ≠ 0) (Real.exp_pos _).ne',
+            Real.log_pow, Real.log_exp]
+          ring
+        _ ≤ _ := by nlinarith only [Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 8), hlogx, hpow101]
+    have hroot : Real.rpow x (1 / 2 : ℝ) ≤ x := by
+      simpa only [Real.rpow_eq_pow, Real.rpow_one] using
+        Real.rpow_le_rpow_of_exponent_le hx1 (by norm_num : (1 / 2 : ℝ) ≤ 1)
+    have hpoly : 256 * x ^ (2 : ℕ) ≤ L * Real.rpow x (-4) ^ 2 / (8 * x ^ (2 : ℕ)) := by
+      calc
+        _ = (2048 * x ^ (12 : ℕ)) * Real.rpow x (-4) ^ 2 / (8 * x ^ (2 : ℕ)) := by
+          rw [hρ]; field_simp <;> ring
+        _ ≤ _ := div_le_div_of_nonneg_right
+          (mul_le_mul_of_nonneg_right hvarL (sq_nonneg _)) (by positivity)
+    apply le_trans _ hpoly
+    nlinarith only [hlog, hroot, hx2, mul_nonneg (by linarith : 0 ≤ x - 2) (by linarith : 0 ≤ x)]
+
+private theorem finLaw_bind_pr {A B : Type*} [Fintype A] [Fintype B]
+    (P : FinLaw A) (K : A → FinLaw B) (E : A × B → Prop) :
+    (FinLaw.bind P K).pr E = P.E (fun a => (K a).pr (fun b => E (a, b))) := by
+  classical
+  unfold FinLaw.pr FinLaw.E
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro a _
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro b _
+  change (if E (a, b) then P.w a * (K a).w b else 0) =
+    P.w a * (if E (a, b) then (K a).w b else 0)
+  split_ifs <;> simp
+
+noncomputable def solver_star_bin_failure {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (a : Group 𝒯 i → Bin 𝒯 i) : ℝ :=
+  (FinLaw.pi fun z : IWord 𝒯 i =>
+    (⟨S.U (S.groupOf z) W (a (S.groupOf z)),
+      S.U_nonneg (S.groupOf z) W (a (S.groupOf z)),
+      S.U_sum (S.groupOf z) W (a (S.groupOf z))⟩ : FinLaw (Fin (T.S.N k)))).pr
+    (fun lab => S.σ v W (nbrLabels v.1 lab) = 0)
+
+theorem solver_star_bin_failure_range {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (a : Group 𝒯 i → Bin 𝒯 i) :
+    0 ≤ solver_star_bin_failure S W v a ∧ solver_star_bin_failure S W v a ≤ 1 :=
+  pr_range _ _
+
+theorem solver_star_failure_integral {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i) :
+    (FinLaw.pi fun g => (⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩ : FinLaw (Bin 𝒯 i))).E
+      (solver_star_bin_failure S W v) =
+    (S.refLaw W).pr (fun ω => S.σ v W (nbrLabels v.1 ω.2) = 0) := by
+  symm
+  unfold SliceSolver.refLaw internalRefLaw
+  rw [finLaw_bind_pr]
+  rfl
+
+theorem solver_star_failure_mean {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (hW : S.Hgood v W) :
+    (FinLaw.pi fun g => (⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩ : FinLaw (Bin 𝒯 i))).E
+      (solver_star_bin_failure S W v) ≤ sliceEps κ (𝒯.P i).h := by
+  rw [solver_star_failure_integral]
+  exact S.Hgood_zero v W hW
+
+theorem solver_star_positive_pin_integral {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (g : Group 𝒯 i) (D : Bin 𝒯 i) :
+    (S.refLaw W).pr (fun ω => ω.1 g = D ∧ S.σ v W (nbrLabels v.1 ω.2) = 0) =
+      S.q g W D * (FinLaw.pi (coordinatePin
+        (fun g => (⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩ : FinLaw (Bin 𝒯 i))) g D)).E
+        (solver_star_bin_failure S W v) := by
+  classical
+  let P : Group 𝒯 i → FinLaw (Bin 𝒯 i) := fun g => ⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩
+  let K := fun a : Group 𝒯 i → Bin 𝒯 i => FinLaw.pi fun z : IWord 𝒯 i =>
+    (⟨S.U (S.groupOf z) W (a (S.groupOf z)),
+      S.U_nonneg (S.groupOf z) W (a (S.groupOf z)),
+      S.U_sum (S.groupOf z) W (a (S.groupOf z))⟩ : FinLaw (Fin (T.S.N k)))
+  have hInner : ∀ a, (K a).pr (fun lab => a g = D ∧ S.σ v W (nbrLabels v.1 lab) = 0) =
+      if a g = D then solver_star_bin_failure S W v a else 0 := by
+    intro a
+    by_cases ha : a g = D
+    · simp only [ha, true_and, ↓reduceIte]
+      rfl
+    · simp [FinLaw.pr, ha]
+  change (FinLaw.bind (FinLaw.pi P) K).pr
+    (fun ω => ω.1 g = D ∧ S.σ v W (nbrLabels v.1 ω.2) = 0) = _
+  rw [finLaw_bind_pr]
+  simp_rw [hInner]
+  exact coordinate_pin_E P g D (solver_star_bin_failure S W v)
+
+theorem solver_pretrim_star_pin_mean {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (g : Group 𝒯 i) (D : Bin 𝒯 i) (hD : D ∈ S.pretrimBins W g) (hvg : SliceSolver.Incident v g) :
+    (FinLaw.pi (coordinatePin
+      (fun g => (⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩ : FinLaw (Bin 𝒯 i))) g D)).E
+      (solver_star_bin_failure S W v) ≤ Real.sqrt (sliceEps κ (𝒯.P i).h) := by
+  have hp := (Finset.mem_filter.mp hD).2
+  have hb := hp.2 v hvg
+  rw [solver_star_positive_pin_integral] at hb
+  by_contra hn
+  have hb' : S.q g W D * (FinLaw.pi (coordinatePin
+      (fun g => (⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩ : FinLaw (Bin 𝒯 i))) g D)).E
+      (solver_star_bin_failure S W v) ≤ S.q g W D * Real.sqrt (sliceEps κ (𝒯.P i).h) :=
+    by simpa only [mul_comm] using hb
+  exact (not_lt_of_ge hb') (mul_lt_mul_of_pos_left (lt_of_not_ge hn) hp.1)
+
+noncomputable def solver_star_group_scope {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (v : EvenRole 𝒯 i) : Finset (Group 𝒯 i) :=
+  Finset.univ.image fun j => S.groupOf (flipPos v.1 j)
+
+theorem solver_star_group_scope_count {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (v : EvenRole 𝒯 i) :
+    (solver_star_group_scope S v).card ≤ (𝒯.P i).h := by
+  simpa only [solver_star_group_scope, Finset.card_univ, Fintype.card_fin] using
+    Finset.card_image_le (s := (Finset.univ : Finset (Fin (𝒯.P i).h)))
+      (f := fun j => S.groupOf (flipPos v.1 j))
+
+theorem solver_star_bin_failure_local {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (a b : Group 𝒯 i → Bin 𝒯 i)
+    (hab : ∀ g ∈ solver_star_group_scope S v, a g = b g) :
+    solver_star_bin_failure S W v a = solver_star_bin_failure S W v b := by
+  classical
+  letI : Nonempty (Fin (T.S.N k)) := ⟨⟨0, T.S.N_pos k⟩⟩
+  unfold solver_star_bin_failure
+  rw [pr_eq_indicator_E, pr_eq_indicator_E]
+  apply pi_E_local _ _ (Finset.univ.image (flipPos v.1)) _
+  · intro x y hxy
+    have heq : nbrLabels v.1 x = nbrLabels v.1 y := by
+      funext j
+      apply hxy
+      exact Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩
+    rw [heq]
+  · intro z hz
+    obtain ⟨j, hj, rfl⟩ := Finset.mem_image.mp hz
+    congr 1
+    exact congrArg (S.U (S.groupOf (flipPos v.1 j)) W)
+      (hab _ (Finset.mem_image.mpr ⟨j, Finset.mem_univ _, rfl⟩))
+
+private theorem solver_bins_nonempty {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) : Nonempty (Bin 𝒯 i) := by
+  classical
+  by_contra h
+  letI : IsEmpty (Bin 𝒯 i) := not_nonempty_iff.mp h
+  have hh := S.q_sum (S.groupOf (fun _ => false)) W
+  simp at hh
+
+theorem solver_star_trimmed_mean {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (hW : S.Hgood v W) (P : Group 𝒯 i → FinLaw (Bin 𝒯 i)) (c : ℝ) (hc : 0 ≤ c)
+    (hP : ∀ g ∈ solver_star_group_scope S v, ∀ D, (P g).w D ≤ c * S.q g W D) :
+    (FinLaw.pi P).E (solver_star_bin_failure S W v) ≤
+      c ^ (solver_star_group_scope S v).card * sliceEps κ (𝒯.P i).h := by
+  classical
+  letI : Nonempty (Bin 𝒯 i) := solver_bins_nonempty S W
+  calc
+    _ ≤ c ^ (solver_star_group_scope S v).card *
+        (FinLaw.pi fun g => (⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩ : FinLaw (Bin 𝒯 i))).E
+          (solver_star_bin_failure S W v) :=
+      local_product_domination _ P (solver_star_group_scope S v) c hc hP
+        (solver_star_bin_failure S W v) (fun a => (solver_star_bin_failure_range S W v a).1)
+        (solver_star_bin_failure_local S W v)
+    _ ≤ _ := mul_le_mul_of_nonneg_left (solver_star_failure_mean S W v hW) (pow_nonneg hc _)
+
+theorem solver_star_trimmed_pin_mean {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯}
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i)
+    (P : Group 𝒯 i → FinLaw (Bin 𝒯 i)) (c : ℝ) (hc : 1 ≤ c)
+    (hP : ∀ g ∈ solver_star_group_scope S v, ∀ D, (P g).w D ≤ c * S.q g W D)
+    (g : Group 𝒯 i) (D : Bin 𝒯 i) (hD : D ∈ S.pretrimBins W g)
+    (hvg : SliceSolver.Incident v g) :
+    (FinLaw.pi (coordinatePin P g D)).E (solver_star_bin_failure S W v) ≤
+      c ^ (solver_star_group_scope S v).card * Real.sqrt (sliceEps κ (𝒯.P i).h) := by
+  classical
+  letI : Nonempty (Bin 𝒯 i) := solver_bins_nonempty S W
+  let Q : Group 𝒯 i → FinLaw (Bin 𝒯 i) := fun g => ⟨S.q g W, S.q_nonneg g W, S.q_sum g W⟩
+  have hc0 : 0 ≤ c := le_trans (by norm_num) hc
+  have hPin : ∀ j ∈ solver_star_group_scope S v, ∀ b,
+      ((coordinatePin P g D) j).w b ≤ c * ((coordinatePin Q g D) j).w b := by
+    intro j hj b
+    by_cases hjg : j = g
+    · subst j
+      simp only [coordinatePin, if_true]
+      exact le_mul_of_one_le_left ((FinLaw.dirac D).nonneg b) hc
+    · simpa only [coordinatePin, if_neg hjg, Q] using hP j hj b
+  calc
+    _ ≤ c ^ (solver_star_group_scope S v).card *
+        (FinLaw.pi (coordinatePin Q g D)).E (solver_star_bin_failure S W v) :=
+      local_product_domination _ _ (solver_star_group_scope S v) c hc0 hPin
+        (solver_star_bin_failure S W v) (fun a => (solver_star_bin_failure_range S W v a).1)
+        (solver_star_bin_failure_local S W v)
+    _ ≤ _ := mul_le_mul_of_nonneg_left (solver_pretrim_star_pin_mean S W v g D hD hvg)
+      (pow_nonneg hc0 _)
+
+theorem permission_retained_sharp {Group Bin Label Incidence : Type*}
+    [Fintype Group] [DecidableEq Group] [Fintype Bin] [DecidableEq Bin]
+    [Fintype Label] [DecidableEq Label] [Fintype Incidence] [DecidableEq Incidence]
+    (P : PermissionTable Group Bin Label Incidence) (qin : Group → FinLaw Bin)
+    (hP : PermissionLossHypotheses P qin) (g : Group) :
+    1 - Real.exp (-P.cperm * P.n / 2) ≤ ∑ b ∈ P.permitted g, (qin g).w b := by
+  classical
+  have hB : (0 : ℝ) < Fintype.card Bin := by
+    letI := hP.bins_nonempty
+    exact_mod_cast Fintype.card_pos
+  have hremoved : (∑ b ∈ Finset.univ \ P.permitted g, (qin g).w b) ≤
+      Real.exp (-P.cperm * P.n / 2) := by
+    calc
+      _ ≤ ((Finset.univ \ P.permitted g).card : ℝ) *
+          (Real.exp (P.cperm * P.n / 2) / Fintype.card Bin) := by
+        simpa using Finset.sum_le_sum (s := Finset.univ \ P.permitted g)
+          (fun b _ => hP.incoming_cap g b)
+      _ ≤ (Real.exp (-P.cperm * P.n) * Fintype.card Bin) *
+          (Real.exp (P.cperm * P.n / 2) / Fintype.card Bin) :=
+        mul_le_mul_of_nonneg_right (permission_removed_count P qin hP g) (by positivity)
+      _ = _ := by
+        field_simp
+        rw [← Real.exp_add]
+        congr 1
+        ring
+  have hsplit := Finset.sum_sdiff (s₁ := P.permitted g) (s₂ := Finset.univ)
+    (Finset.subset_univ _) (f := (qin g).w)
+  rw [(qin g).sum_one] at hsplit
+  linarith
+
+/-- Two small normalization losses over at most h groups cost at most two. -/
+theorem normalization_product_room (h m : ℕ) (u v : ℝ)
+    (hu : 0 ≤ u) (hv : 0 ≤ v) (hu1 : u < 1) (hv1 : v < 1)
+    (hm : m ≤ h) (hsmall : (h : ℝ) * (u + v) ≤ 1 / 2) :
+    1 ≤ ((1 - u) * (1 - v))⁻¹ ∧
+      (((1 - u) * (1 - v))⁻¹) ^ m ≤ 2 := by
+  have hbpos : 0 < (1 - u) * (1 - v) := mul_pos (by linarith) (by linarith)
+  have hbone : (1 - u) * (1 - v) ≤ 1 := by nlinarith [mul_nonneg hu (by linarith : 0 ≤ 1 - v)]
+  have hbase : 1 - (u + v) ≤ (1 - u) * (1 - v) := by nlinarith [mul_nonneg hu hv]
+  have hBern := one_add_mul_sub_le_pow (by linarith : (-1 : ℝ) ≤ (1 - u) * (1 - v)) m
+  have hm' : (m : ℝ) ≤ h := by exact_mod_cast hm
+  have hlin : (m : ℝ) * (u + v) ≤ 1 / 2 :=
+    (mul_le_mul_of_nonneg_right hm' (add_nonneg hu hv)).trans hsmall
+  have hpow : (1 / 2 : ℝ) ≤ ((1 - u) * (1 - v)) ^ m := by
+    have hb := mul_le_mul_of_nonneg_left hbase (Nat.cast_nonneg m)
+    nlinarith only [hBern, hb, hlin]
+  constructor
+  · exact (one_le_inv₀ hbpos).mpr hbone
+  · rw [inv_pow]
+    calc
+      _ ≤ (1 / 2 : ℝ)⁻¹ := inv_anti₀ (by norm_num) hpow
+      _ = 2 := by norm_num
+
+theorem cluster_permission_cost_room {κ : CConsts} (hκ : κ.Admissible) :
+    ∃ n₀ : ℕ, ∀ n h : ℕ, n₀ ≤ n → 2 ≤ n → h ≤ n →
+      (h : ℝ) * Real.exp (-κ.cperm * n / 2) ≤ 1 / 4 := by
+  obtain ⟨n₀, hroom⟩ := logarithmic_room 1 (κ.cperm / 2)
+    (Real.log 4) 1 (by norm_num) (div_pos hκ.cperm_rng.1 (by norm_num)) (by norm_num)
+  refine ⟨n₀, ?_⟩
+  intro n h hn hn2 hh
+  have hnp : (0 : ℝ) < n := by exact_mod_cast lt_of_lt_of_le (by norm_num : (0 : ℕ) < 2) hn2
+  have hx := hroom n hn
+  simp only [Real.rpow_one, one_mul] at hx
+  have he : Real.exp (-κ.cperm * n / 2) ≤ 1 / (4 * (n : ℝ)) := by
+    calc
+      _ ≤ Real.exp (-(Real.log 4 + Real.log (n : ℝ))) := Real.exp_le_exp.mpr (by linarith)
+      _ = _ := by
+        rw [Real.exp_neg, Real.exp_add, Real.exp_log (by norm_num : (0 : ℝ) < 4), Real.exp_log hnp]
+        simp only [one_div]
+  have hh' : (h : ℝ) ≤ n := by exact_mod_cast hh
+  calc
+    _ ≤ (n : ℝ) * (1 / (4 * (n : ℝ))) :=
+      mul_le_mul hh' he (Real.exp_pos _).le (Nat.cast_nonneg n)
+    _ = _ := by field_simp
+
+/-- Counting each image once is dominated by counting every slot. -/
+theorem image_product_le_slot_product {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : Index → FinLaw Bin)
+    (F : (Index → Bin) → ℝ) (hF : ∀ a, 0 ≤ F a) (pool : Slot → Bin) :
+    (∑ a : Index → Bin, F a * ∏ i,
+      if a i ∈ Finset.univ.image pool then (P i).w (a i) else 0) ≤
+    ∑ indices : Index → Slot, F (fun i => pool (indices i)) * ∏ i, (P i).w (pool (indices i)) := by
+  classical
+  let A : Finset (Index → Bin) := Finset.univ.filter fun a => ∀ i, a i ∈ Finset.univ.image pool
+  let pick : Bin → Slot := fun b => if hb : b ∈ Finset.univ.image pool then
+    Classical.choose (Finset.mem_image.mp hb) else Classical.choice inferInstance
+  have hpick : ∀ b ∈ Finset.univ.image pool, pool (pick b) = b := by
+    intro b hb
+    simp only [pick, dif_pos hb]
+    exact (Classical.choose_spec (Finset.mem_image.mp hb)).2
+  let lift : (Index → Bin) → (Index → Slot) := fun a i => pick (a i)
+  have hlift : ∀ a ∈ A, (fun i => pool (lift a i)) = a := by
+    intro a ha
+    funext i
+    exact hpick (a i) ((Finset.mem_filter.mp ha).2 i)
+  have hinj : Set.InjOn lift A := by
+    intro a ha b hb heq
+    calc
+      a = (fun i => pool (lift a i)) := (hlift a ha).symm
+      _ = (fun i => pool (lift b i)) := by rw [heq]
+      _ = b := hlift b hb
+  have hzero : ∀ a, (∏ i, if a i ∈ Finset.univ.image pool then (P i).w (a i) else 0) =
+      if a ∈ A then ∏ i, (P i).w (a i) else 0 := by
+    intro a
+    by_cases ha : a ∈ A
+    · rw [if_pos ha]
+      apply Finset.prod_congr rfl
+      intro i _
+      exact if_pos ((Finset.mem_filter.mp ha).2 i)
+    · rw [if_neg ha]
+      have hex : ∃ i, a i ∉ Finset.univ.image pool := by simpa [A, not_forall] using ha
+      obtain ⟨i, hi⟩ := hex
+      exact Finset.prod_eq_zero (Finset.mem_univ i) (if_neg hi)
+  simp_rw [hzero, mul_ite, mul_zero]
+  rw [← Finset.sum_filter]
+  have hfilter : Finset.univ.filter (fun a : Index → Bin => a ∈ A) = A := by
+    ext a
+    simp
+  rw [hfilter]
+  apply Finset.sum_le_sum_of_injOn lift hinj (Finset.subset_univ _)
+  · intro a ha
+    have hh : ∀ i, pool (lift a i) = a i := fun i => congrFun (hlift a ha) i
+    simp_rw [hh]
+    exact le_rfl
+  · intro indices _ _
+    exact mul_nonneg (hF _) (Finset.prod_nonneg fun i _ => (P i).nonneg _)
+
+/-- The weighted slot polynomial controls the image integral even for repetitions. -/
+theorem image_product_le_empirical {Index Slot Bin : Type*}
+    [Fintype Index] [DecidableEq Index] [Fintype Slot] [DecidableEq Slot] [Nonempty Slot]
+    [Fintype Bin] [DecidableEq Bin] (P : Index → FinLaw Bin) (B : ℝ) (hB : 0 < B)
+    (F : (Index → Bin) → ℝ) (hF : ∀ a, 0 ≤ F a) (pool : Slot → Bin) :
+    (∑ a : Index → Bin, F a * ∏ i,
+      if a i ∈ Finset.univ.image pool then (P i).w (a i) else 0) ≤
+    ((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+      empirical_statistic (empirical_weighted_kernel P B F) pool := by
+  classical
+  have hL : (0 : ℝ) < Fintype.card Slot := by exact_mod_cast Fintype.card_pos
+  have heq : ((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+      empirical_statistic (empirical_weighted_kernel P B F) pool =
+      ∑ indices : Index → Slot, F (fun i => pool (indices i)) * ∏ i, (P i).w (pool (indices i)) := by
+    unfold empirical_statistic empirical_weighted_kernel FinLaw.E FinLaw.pi
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro indices _
+    simp only [FinLaw.uniform, Finset.mem_univ, if_true, Finset.card_univ]
+    have hprod : (∏ _i : Index, (1 / (Fintype.card Slot : ℝ))) *
+        (∏ i : Index, B * (P i).w (pool (indices i))) =
+        (B / (Fintype.card Slot : ℝ)) ^ Fintype.card Index * ∏ i, (P i).w (pool (indices i)) := by
+      rw [← Finset.prod_mul_distrib]
+      simp_rw [show ∀ i : Index, (1 / (Fintype.card Slot : ℝ)) *
+        (B * (P i).w (pool (indices i))) = (B / (Fintype.card Slot : ℝ)) * (P i).w (pool (indices i)) by
+          intro i; ring]
+      rw [Finset.prod_mul_distrib]
+      simp [div_pow]
+    have hcancel : ((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+        (B / (Fintype.card Slot : ℝ)) ^ Fintype.card Index = 1 := by
+      rw [← mul_pow]
+      have hh : ((Fintype.card Slot : ℝ) / B) * (B / (Fintype.card Slot : ℝ)) = 1 := by
+        field_simp
+      rw [hh, one_pow]
+    rw [mul_left_comm (∏ _i : Index, 1 / (Fintype.card Slot : ℝ)), hprod]
+    calc
+      _ = (((Fintype.card Slot : ℝ) / B) ^ Fintype.card Index *
+          (B / (Fintype.card Slot : ℝ)) ^ Fintype.card Index) *
+          (F (fun i => pool (indices i)) * ∏ i, (P i).w (pool (indices i))) := by ring
+      _ = _ := by rw [hcancel, one_mul]
+  rw [heq]
+  exact image_product_le_slot_product P F hF pool
+
+theorem solver_star_trimmed_any_pin_mean {κ : CConsts} {T : Stage} {k : ℕ}
+    {𝒯 : Tiling κ T k} {i : Fin 𝒯.m} {mesh : Mesh 𝒯} [Nonempty (Bin 𝒯 i)]
+    (S : SliceSolver κ 𝒯 i mesh) (W : ∀ r, S.Val r) (v : EvenRole 𝒯 i) (hW : S.Hgood v W)
+    (hEps : 0 < sliceEps κ (𝒯.P i).h ∧ sliceEps κ (𝒯.P i).h ≤ 1)
+    (P : Group 𝒯 i → FinLaw (Bin 𝒯 i)) (c : ℝ) (hc : 1 ≤ c)
+    (hP : ∀ g ∈ solver_star_group_scope S v, ∀ D, (P g).w D ≤ c * S.q g W D)
+    (g : Group 𝒯 i) (D : Bin 𝒯 i) (hD : D ∈ S.pretrimBins W g) :
+    (FinLaw.pi (coordinatePin P g D)).E (solver_star_bin_failure S W v) ≤
+      c ^ (solver_star_group_scope S v).card * Real.sqrt (sliceEps κ (𝒯.P i).h) := by
+  classical
+  by_cases hg : g ∈ solver_star_group_scope S v
+  · have hvg : SliceSolver.Incident v g := by
+      obtain ⟨j, _, heq⟩ := Finset.mem_image.mp hg
+      rw [← heq]
+      refine ⟨j, S.groupOf_spec _ ?_⟩
+      rw [flip_parity]
+      exact not_not.mpr v.2
+    exact solver_star_trimmed_pin_mean S W v P c hc hP g D hD hvg
+  · have hEq : (FinLaw.pi (coordinatePin P g D)).E (solver_star_bin_failure S W v) =
+        (FinLaw.pi P).E (solver_star_bin_failure S W v) := by
+      apply pi_E_local _ _ (solver_star_group_scope S v) _ (solver_star_bin_failure_local S W v)
+      intro j hj
+      have hjg : j ≠ g := by intro h; exact hg (h ▸ hj)
+      simp only [coordinatePin, if_neg hjg]
+    rw [hEq]
+    have hroot : sliceEps κ (𝒯.P i).h ≤ Real.sqrt (sliceEps κ (𝒯.P i).h) := by
+      apply (Real.le_sqrt hEps.1.le hEps.1.le).mpr
+      nlinarith [sq_nonneg (sliceEps κ (𝒯.P i).h)]
+    exact (solver_star_trimmed_mean S W v hW P c (le_trans (by norm_num) hc) hP).trans
+      (mul_le_mul_of_nonneg_left hroot (pow_nonneg (le_trans (by norm_num) hc) _))
 
 end HypercubeRamsey.S16.Lane_sol_s16_prod1

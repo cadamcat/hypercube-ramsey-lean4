@@ -1,10 +1,14 @@
+import HypercubeRamsey.S05.History_sol_s05_h3_apply
 import HypercubeRamsey.S05.Experiment
 import HypercubeRamsey.S05.History_q_s05_hist2
+import HypercubeRamsey.S05.History_sol_s05_h23_apply
 import HypercubeRamsey.S05.History_q_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1b
 import HypercubeRamsey.S05.History_sol_s05_hist1c_apply
+import HypercubeRamsey.S05.History_sol_s05_hist1e_bound
 import HypercubeRamsey.S05.History_sol_s05_hist1f_low
 import HypercubeRamsey.S05.History_sol_s05_hist1f_paths
+import HypercubeRamsey.S05.History_sol_s05_1f_apply
 import HypercubeRamsey.S05.History_q_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l
 import HypercubeRamsey.S05.History_sol_s05_h5l_lll
@@ -452,7 +456,57 @@ theorem L5_1f : ∃ cL cH : Pre15 → ℝ, (∀ x, 0 < cL x ∧ 0 < cH x) ∧
     ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
       ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
         X.Step3Raw (cL p.pre1) (cH p.pre1) := by
-  sorry
+  refine ⟨Lane_sol_s05_1f.lowRate, Lane_sol_s05_1f.highRate,
+    Lane_sol_s05_1f.rates_pos, Lane_sol_s05_1f.highRequest, ?_⟩
+  intro p hR
+  obtain ⟨nL, hL⟩ := Lane_sol_s05_hist1b.step3_low_eventual_bound p
+  obtain ⟨nH, hH⟩ := Lane_sol_s05_1f.high_raw_eventual_bound p hR
+  refine ⟨max nL nH, ?_⟩
+  intro n hn N E G X hXp
+  intro H hbase hstep1 r hr
+  by_cases hl : r.1.isLeft
+  · have hh := hL n (le_trans (le_max_left _ _) hn) N E G X hXp H r hr hl
+    have hscale : X.step3Scale
+        (match r.1 with
+          | .inl _ => Lane_sol_s05_1f.lowRate p.pre1
+          | .inr _ => Lane_sol_s05_1f.highRate p.pre1) r.1 =
+        Real.exp (-((p.delta / 2) * X.p.kPrime n r.1.level)) := by
+      cases hkey : r.1 with
+      | inl k => simp only [step3Scale, hkey, HiddenKey5.level, Lane_sol_s05_1f.lowRate,
+          Lane_sol_s05_1f.pathDelta_params]
+      | inr k => simp [hkey] at hl
+    rw [hscale]
+    exact hh
+  · have hh : r.1.isRight := by
+      cases hkey : r.1 with
+      | inl k => simp [hkey] at hl
+      | inr k => simp [hkey]
+    have hocc : X.KeyOccurs r.1 := by
+      obtain ⟨y, μ, hrec⟩ := hr
+      exact Or.inl ⟨y.1, y.2, hrec.1⟩
+    have hlevel : r.1.level = X.p.J n := by
+      cases hkey : r.1 with
+      | inl k => simp [hkey] at hh
+      | inr k => rfl
+    have hprior (y : Fin N) : (N : ℝ) * (X.prior H.1 r.1).w y ≤
+        Real.exp (p.Kcap * ((p.q0 : ℝ) * p.uSeg n (p.J n + 1))) := by
+      have hncap := hstep1.2 r.1 hocc
+      have hle : (N : ℝ) * (X.prior H.1 r.1).w y ≤
+          Real.exp (X.p.Kcap * (X.p.q0 * X.p.uSeg n (r.1.level + 1))) :=
+        le_of_not_gt (fun h => hncap ⟨y, h⟩)
+      simpa only [hlevel, hXp] using hle
+    have hraw := hH n (le_trans (le_max_right _ _) hn) N E G X hXp H r hr hh hprior
+    have hscale : X.step3Scale
+        (match r.1 with
+          | .inl _ => Lane_sol_s05_1f.lowRate p.pre1
+          | .inr _ => Lane_sol_s05_1f.highRate p.pre1) r.1 =
+        Real.exp (-(Lane_sol_s05_1f.highRate p.pre1 * X.p.s n)) := by
+      cases hkey : r.1 with
+      | inl k => simp [hkey] at hh
+      | inr k => rfl
+    rw [hscale]
+    simpa only [hXp] using hraw
+
 
 /-! ### Record counts (05:331–398) -/
 
@@ -472,7 +526,14 @@ with a constant fixed before `K₁`; high subsets are computed from pools and op
 theorem L5_1e_count : ∃ C : ℝ, 0 < C ∧ ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       X.RecordCount C := by
-  sorry
+  refine ⟨Lane_sol_s05_hist1b.recordCountConstant, Lane_sol_s05_hist1b.recordCountConstant_pos, ?_⟩
+  intro p
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 (Lane_sol_s05_hist1b.record_count_budgets_eventually p)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hp ℓ t j
+  have hb := hn₀ n hn
+  rw [← hp] at hb
+  exact Lane_sol_s05_hist1b.record_group_exp_bound X hb.1 hb.2.1 hb.2.2.1 hb.2.2.2.1 hb.2.2.2.2 ℓ t j
 
 /-! ### Stage 1: the global parent (05:648–664) -/
 
@@ -525,7 +586,16 @@ Stage 1); bounded-degree grouping by bin and the conditional avoidance lemma wit
 theorem L5_1h2 : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
     ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
       ∀ v, X.Stage1Good v → ∃ ν : FinProb X.Coarse, X.Stage2Law v ν := by
-  sorry
+  refine ⟨Lane_sol_s05_h23.stage2Request, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 (Lane_sol_s05_h23.stage2Bounds_eventually p)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp v hv
+  obtain ⟨hm, hbhalf, hbdeg, hbfactor⟩ := hn₀ n hn
+  have hK1 : 8 / p.delta ≤ p.K1 := hp.2.2.2.1
+  rw [← hXp] at hm hbhalf hbdeg hbfactor hK1
+  exact Lane_sol_s05_h23.stage2Law_exists X v
+    ⟨hv.1, hv.2.1, hv.2.2.1, hv.2.2.2⟩ hm hK1 hbhalf hbdeg hbfactor
 
 /-! ### History odd loads, first part (05:1007–1025) -/
 
@@ -621,7 +691,44 @@ theorem L5_1h3 : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 <
           (∀ K t, X.OptOccurs K t → (X.hiddenLaw (v, c)).pr (fun U => X.optFail ((v, c), U) K t) ≤
             Real.exp (-(X.p.delta * (X.p.q0 * X.p.uStarSeg n)) / 4)) →
           ∃ ν : FinProb X.HighHid, X.Stage3Law (v, c) ν (cH p.pre1) := by
-  sorry
+  classical
+  intro C cL cH hpos
+  refine ⟨Lane_sol_s05_h23.stage3Request cH, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.1 (Lane_sol_s05_h23.highGroupBounds_eventually p)
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp hCount hRaw v c hb hStep1 hStep2 hOpt
+  obtain ⟨hm, hD, hTm, hTJ, hJ, hhalf, hdeg⟩ := hn₀ n hn
+  have hK1 : 16 / p.delta ≤ p.K1 := hp.2.2.2.1
+  have hKs : 2 * ((Lane_sol_s05_hist1b.signatureConstant : ℝ) + 204) / cH p.pre1 ≤ p.Ks :=
+    hp.2.2.2.2.2.2.1
+  have hK1X : 16 / X.p.delta ≤ X.p.K1 := by simpa only [hXp] using hK1
+  have hKsX : 2 * ((Lane_sol_s05_hist1b.signatureConstant : ℝ) + 204) / cH p.pre1 ≤ X.p.Ks := by
+    simpa only [hXp] using hKs
+  have hbounds : Lane_sol_s05_h23.Stage3RawBounds X (v, c) (cH p.pre1) := by
+    refine ⟨hStep2, hOpt, ?_⟩
+    intro r hr q hkey
+    rcases r with ⟨ℓ, data⟩
+    change ℓ = .inr q at hkey
+    subst ℓ
+    unfold Lane_sol_s05_h23.highRecordMean
+    apply Lane_sol_s05_h23.high_step3_mean_bound X (v, c) (.inr q, data) q
+      (Real.exp (-(cH p.pre1 * X.p.s n)))
+    intro hi lo
+    have h := hRaw ((v, c), (Lane_q_s05_h23.hiddenSplitEquiv5 X).symm (lo, hi))
+      hb hStep1 (.inr q, data) hr
+    change (∑ θ : Fin (X.p.s n) → Fin N,
+      (∏ h, (X.prior (v, c) (.inr q)).w (θ h)) *
+        X.step3Rate (X.withCol ((v, c), (Lane_q_s05_h23.hiddenSplitEquiv5 X).symm (lo, hi))
+          (.inr q) θ) (.inr q, data)) ≤ Real.exp (-(cH p.pre1 * X.p.s n)) at h
+    exact h
+  obtain ⟨ν, hHigh, hLow, hOptional, hRecords, hSupport⟩ :=
+    Lane_sol_s05_h23.stage3Law_exists X (v, c) (cH p.pre1) (hpos p.pre1).2 hbounds
+      (by simpa only [hXp] using hm) (by simpa only [hXp] using hD)
+      (by simpa only [hXp] using hTm) (by simpa only [hXp] using hTJ)
+      (by simpa only [hXp] using hJ) hK1X hKsX
+      (by simpa only [hXp] using hhalf) (by simpa only [hXp] using hdeg)
+  exact ⟨ν, hHigh, hLow, hOptional, hRecords, hb, hStep1, hSupport⟩
 
 /-! ### Stage 4: separate optional pretrims (05:704–721) -/
 
@@ -1499,7 +1606,7 @@ structure ProxyMeanData5 (Cloc : ℕ) (b : X.Base) (hi : X.HighHid)
         Z (Function.update lo (X.lowIdxOf (X.g.roleKey (X.p.J n) r.1)) (fun _ => y')) r y ≤
       2 * (N : ℝ) * (X.prior b (X.g.roleKey (X.p.J n) r.1)).w y
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000
 /-- L5.1l(2) (05:1027–1041): under the Stage 5 law, the odd-role averages of a proxy-mean functional are bounded
 at every label with probability `1 - o(1)`: near rows (sign distance `O(√m)`) are a `2^{-m+o(m)}` fraction, the
 comparison costs `2^n`, separated targets are resampled independently from the trimmed laws with the

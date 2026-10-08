@@ -3,8 +3,8 @@ import HypercubeRamsey.S17.Nodes
 /-!
 # Section 17 exports
 
-The public lemma names are `independentPinnedList`, `uniformPoolListEstimate`,
-`lowModePalettes`, and `finiteResamplingComparison`, each assembled in
+The public lemma names are `independentPinnedList`, `uniformPoolListEstimate`
+and `finiteResamplingComparison`, each assembled in
 `Nodes.lean` from the named blueprint subnodes.  This module exports the
 locality guarantee for the concrete `S_v` event.
 -/

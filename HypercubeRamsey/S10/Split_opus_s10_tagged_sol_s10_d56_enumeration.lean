@@ -1,0 +1,107 @@
+import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56
+
+namespace HypercubeRamsey.Lane_sol_s10_d56
+
+open Classical
+open scoped BigOperators
+
+/-- Integrate independent data and selection fields in their sampling order. -/
+theorem prod_expect {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α → β → ℝ) :
+    (P.prod Q).expect (fun ω => f ω.1 ω.2) = P.expect (fun a => Q.expect (f a)) := by
+  change (FinProb.bind P (fun _ => Q)).expect (fun ω => f ω.1 ω.2) = _
+  exact FinProb.bind_expect P (fun _ => Q) f
+
+/-- Enumerating a realized list replaces its selection event by a tuple-independent weight. -/
+theorem conditional_choice_expect_le {α β γ : Type*}
+    [Fintype α] [Fintype β] [DecidableEq γ]
+    (P : FinProb α) (Q : FinProb β) (F : Finset γ)
+    (choice : α → β → γ) (gate : α → β → Prop) (row : α → γ → ℝ)
+    (weight : γ → ℝ)
+    (hrow : ∀ a, ∀ c ∈ F, 0 ≤ row a c)
+    (hsupport : ∀ a b, gate a b → choice a b ∈ F)
+    (hweight : ∀ a, ∀ c ∈ F, Q.pr (fun b => gate a b ∧ choice a b = c) ≤ weight c) :
+    (P.prod Q).expect (fun ω => if gate ω.1 ω.2 then row ω.1 (choice ω.1 ω.2) else 0) ≤
+      ∑ c ∈ F, weight c * P.expect (fun a => row a c) := by
+  classical
+  have hpoint (a : α) (b : β) :
+      (if gate a b then row a (choice a b) else 0) =
+        ∑ c ∈ F, if gate a b ∧ choice a b = c then row a c else 0 := by
+    by_cases hg : gate a b
+    · rw [ite_eq_left hg]
+      symm
+      rw [Finset.sum_eq_single (choice a b)]
+      · simp [hg]
+      · intro c hc hne
+        simp [Ne.symm hne]
+      · intro hn
+        exact False.elim (hn (hsupport a b hg))
+    · simp [hg]
+  have hcond (a : α) :
+      Q.expect (fun b => if gate a b then row a (choice a b) else 0) ≤
+        ∑ c ∈ F, weight c * row a c := by
+    calc
+      _ = ∑ c ∈ F, Q.pr (fun b => gate a b ∧ choice a b = c) * row a c := by
+        simp_rw [hpoint]
+        unfold FinProb.expect FinProb.pr
+        simp_rw [Finset.mul_sum]
+        rw [Finset.sum_comm]
+        apply Finset.sum_congr rfl
+        intro c hc
+        rw [Finset.sum_mul]
+        apply Finset.sum_congr rfl
+        intro b hb
+        by_cases h : gate a b ∧ choice a b = c <;> simp [h]
+      _ ≤ _ := Finset.sum_le_sum fun c hc =>
+        mul_le_mul_of_nonneg_right (hweight a c hc) (hrow a c hc)
+  rw [prod_expect P Q (fun a b => if gate a b then row a (choice a b) else 0)]
+  apply (FinProb.expect_mono P hcond).trans_eq
+  unfold FinProb.expect
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro c hc
+  apply Finset.sum_congr rfl
+  intro a ha
+  ring
+
+
+/-- Independent data averages can be taken in either order. -/
+theorem expect_swap {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α → β → ℝ) :
+    P.expect (fun a => Q.expect (f a)) = Q.expect (fun b => P.expect (fun a => f a b)) := by
+  unfold FinProb.expect
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro b hb
+  apply Finset.sum_congr rfl
+  intro a ha
+  ring
+
+
+/-- Product averaging for a function supplied on the whole pair. -/
+theorem expect_prod_pair {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α × β → ℝ) :
+    (P.prod Q).expect f = P.expect (fun a => Q.expect (fun b => f (a, b))) :=
+  prod_expect P Q (fun a b => f (a, b))
+
+
+/-- Sum over all external vectors factors into one name sum per direction. -/
+theorem sum_choice_family {A : Type*} [DecidableEq A] {ι Ω : Type*}
+    [Fintype ι] [DecidableEq ι] [Fintype Ω] (F : Finset A)
+    (w : ι → Ω → ℝ) (B : ℝ) :
+    (∑ c ∈ F.product (Finset.univ : Finset (ι → Ω)), (∏ i, w i (c.2 i)) * B) =
+      (F.card : ℝ) * B * ∏ i, ∑ x, w i x := by
+  classical
+  simp only [Finset.product_eq_sprod]
+  rw [Finset.sum_product F Finset.univ (fun c : A × (ι → Ω) => (∏ i, w i (c.2 i)) * B)]
+  change (∑ _a ∈ F, ∑ v : ι → Ω, (∏ i, w i (v i)) * B) = _
+  have hs : (∑ v : ι → Ω, (∏ i, w i (v i)) * B) = (∏ i, ∑ x, w i x) * B := by
+    rw [← Finset.sum_mul, ← Fintype.prod_sum]
+  rw [hs]
+  simp only [Finset.sum_const, nsmul_eq_mul]
+  ring
+
+end HypercubeRamsey.Lane_sol_s10_d56

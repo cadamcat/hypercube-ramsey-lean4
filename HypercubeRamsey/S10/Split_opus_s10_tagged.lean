@@ -23,6 +23,13 @@ import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d2_global_probability
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d2_regroup
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d2_disjoint_numeric
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d2_config
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_independence
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_weights
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_enumeration
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_lists
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_selection
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_counting
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_asymptotics
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -3907,7 +3914,710 @@ theorem d5_odd_mean_cap (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < �
       (G : Colour) (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M),
       2 ^ n ≤ N → GoodStrategy M σ → ∀ (t : Slice n δ → M.I) y b,
       oddMean M t σ y b ≤ Real.exp ((mS n δ : ℝ) / 10) := by
-  sorry
+  classical
+  have hδone : δ < (1 : ℝ) / 2000 := lt_of_lt_of_le hδsmall
+    (div_le_div_of_nonneg_right (min_le_right _ _) (by norm_num))
+  obtain ⟨c, hc, nSel, hSel⟩ :=
+    Lane_sol_s10_d56.s10_external_weight_sum_eventually δ hδ hδone
+  have hfixedRow {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (i : M.I) (S : Finset (Fin N))
+      {r k : ℕ} (μs : Fin r → Law N) (own : Fin r → Prop)
+      (W : Fin r → Fin k → Fin N) (y : Fin N) :
+      hypListRow M i S μs own W y =
+        Lane_sol_s10_d56.fixedRow E G (maskedPrior M i S) (maskedCluster M i S)
+          μs (aG n δ) own W y := by
+    let ρ := maskedPrior M i S
+    let D := maskedCluster M i S
+    let F := fixedListHitSet E G W
+    let kept : Fin (M.K i) → Prop := fun j =>
+      Real.exp (-(3 / 2 : ℝ) * k * r) ≤ lawMassOn (D j) F ∧
+      ∀ b, (if own b then Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * k)
+        else Real.exp (-(6 / 5 : ℝ) * k)) * lawMassOn (D j) (fixedListHitSetWithout E G W b) ≤
+          lawMassOn (D j) F
+    let wt : Fin (M.K i) → ℝ := fun j => if kept j then ρ.w j * (lawMassOn (D j) F) ^ 2 else 0
+    have hwt (j : Fin (M.K i)) : wt j =
+        Lane_sol_s10_d56.listWeight E G ρ D (aG n δ) own W j := by
+      dsimp only [wt, kept, F]
+      unfold Lane_sol_s10_d56.listWeight Lane_sol_s10_d56.listKept
+      split_ifs <;> rfl
+    have htotal : (∑ j, wt j) = ∑ j, Lane_sol_s10_d56.listWeight E G ρ D (aG n δ) own W j :=
+      Finset.sum_congr rfl (fun j _ => hwt j)
+    change (if fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0 then 0
+      else ∑ j, wt j / (∑ j', wt j') * (restrictOrSelf (D j) F).w y) = _
+    unfold Lane_sol_s10_d56.fixedRow
+    rw [← htotal]
+    by_cases hf : fixedListFailure E G ρ D μs (aG n δ) W ∨ ∑ j, wt j = 0
+    · dsimp only [ρ, D] at hf ⊢
+      simp only [ite_eq_left hf]
+    · dsimp only [ρ, D] at hf ⊢
+      simp only [ite_eq_right hf]
+      apply Finset.sum_congr rfl
+      intro j hj
+      rw [hwt]
+      rfl
+  have hfixedNonneg {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (i : M.I) (S : Finset (Fin N))
+      {r k : ℕ} (μs : Fin r → Law N) (own : Fin r → Prop)
+      (W : Fin r → Fin k → Fin N) (y : Fin N) : 0 ≤ hypListRow M i S μs own W y := by
+    rw [hfixedRow]
+    exact Lane_sol_s10_d56.fixedRow_nonneg E G _ _ μs (aG n δ) own W y
+  have hbalancedFixed {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I) (q : Site n δ) (s : ℕ)
+      (hs : s ≤ TT n δ) (y : Fin N) :
+      let μs : Fin (s + mS n δ) → Law N :=
+        Fin.addCases (fun _ => M.μ (t q.1)) (fun e => M.μ (t (flipSlice q.1 e)))
+      let own : Fin (s + mS n δ) → Prop := fun b => b.val < s
+      ∑ S, (σ t q).w S * (p10_1kTupleArrayLaw (k := kT n δ) μs).expect
+        (fun W => Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) S)
+          (maskedCluster M (t q.1) S) μs (aG n δ) own W y) ≤
+      Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y := by
+    simpa only [hypMean, hfixedRow] using hgood.balanced t q s hs y
+  have hactualRow {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (h : History n N δ) (b : OddRole n) (y : Fin N)
+      (hv : groupValid M t h (groupOf δ b)) :
+      let q := groupOf δ b
+      let L := realizedList M t h q
+      let μs : Fin L.card → Law N := fun j => M.μ (t (L.equivFin.symm j).1.1)
+      let own : Fin L.card → Prop := fun j => (L.equivFin.symm j).1.1 = q.1
+      let W : Fin L.card → Fin (kT n δ) → Fin N := fun j => h.tup (L.equivFin.symm j).1
+      oddRow M t h b y = hypListRow M (t q.1) (h.mask q) μs own W y := by
+    dsimp only
+    let q := groupOf δ b
+    let L := realizedList M t h q
+    let μs : Fin L.card → Law N := fun j => M.μ (t (L.equivFin.symm j).1.1)
+    let own : Fin L.card → Prop := fun j => (L.equivFin.symm j).1.1 = q.1
+    let W : Fin L.card → Fin (kT n δ) → Fin N := fun j => h.tup (L.equivFin.symm j).1
+    let ρ := maskedPrior M (t q.1) (h.mask q)
+    let D := maskedCluster M (t q.1) (h.mask q)
+    have hF : fixedListHitSet E G W = hitSet M t h q := by
+      simpa only [W, L, hitSet] using Lane_sol_s10_d56.fixedListHitSet_enum E G L h.tup
+    have hFm (j : Fin L.card) : fixedListHitSetWithout E G W j =
+        hitSetWithout M t h q (L.equivFin.symm j).1 := by
+      simpa only [W, L, hitSetWithout] using
+        Lane_sol_s10_d56.fixedListHitSetWithout_enum E G L h.tup j
+    have hKept (j : Fin (M.K (t q.1))) :
+        Lane_sol_s10_d56.listKept E G D (aG n δ) own W j ↔ j ∈ tiltKept M t h q := by
+      unfold Lane_sol_s10_d56.listKept tiltKept
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and, hF]
+      apply and_congr Iff.rfl
+      constructor
+      · intro hr c hcL
+        let j' : Fin L.card := L.equivFin ⟨c, hcL⟩
+        have hh := hr j'
+        rw [hFm] at hh
+        by_cases ho : c.1 = q.1
+        · simpa [j', own, ho] using hh
+        · simpa [j', own, ho] using hh
+      · intro hr j'
+        have hh := hr (L.equivFin.symm j').1 (L.equivFin.symm j').2
+        rw [hFm]
+        by_cases ho : (L.equivFin.symm j').1.1 = q.1
+        · simpa [own, ho] using hh
+        · simpa [own, ho] using hh
+    have hwt (j : Fin (M.K (t q.1))) :
+        Lane_sol_s10_d56.listWeight E G ρ D (aG n δ) own W j = tiltWeight M t h q j := by
+      unfold Lane_sol_s10_d56.listWeight tiltWeight
+      simp only [hKept, hF]
+      rfl
+    have hpos : 0 < ∑ j, tiltWeight M t h q j := hv.2.2.2.2.2
+    have hpass : ¬ fixedListFailure E G ρ D μs (aG n δ) W := hv.2.2.2.2.1
+    rw [hfixedRow]
+    unfold oddRow
+    rw [ite_eq_left hv]
+    unfold clusterLaw
+    rw [dif_pos (And.intro hv hpos)]
+    rw [FinProb.map_expect]
+    change (∑ j, tiltWeight M t h q j / (∑ j', tiltWeight M t h q j') *
+      (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y) =
+        Lane_sol_s10_d56.fixedRow E G ρ D μs (aG n δ) own W y
+    unfold Lane_sol_s10_d56.fixedRow
+    simp only [hwt]
+    rw [ite_eq_right (not_or_intro hpass (ne_of_gt hpos))]
+    apply Finset.sum_congr rfl
+    intro j hj
+    rw [hF]
+    by_cases hkeep : j ∈ tiltKept M t h q
+    · have habs := (Finset.mem_filter.mp hkeep).2.1
+      unfold labLaw
+      rw [ite_eq_left (And.intro hv habs)]
+      rfl
+    · have hz : tiltWeight M t h q j = 0 := by simp [tiltWeight, hkeep]
+      simp only [hz, zero_div, zero_mul]
+  have hflip (n : ℕ) (z : Slice n δ) (e : Fin (mS n δ)) :
+      flipSlice z e = p10_1kFlipCoordinate z e := by
+    funext j
+    by_cases hj : j = e
+    · subst j
+      simp [flipSlice, p10_1kFlipCoordinate]
+    · simp [flipSlice, p10_1kFlipCoordinate, hj]
+  have hlistOrder (n : ℕ) (q : Site n δ) (L : Finset (ID n δ))
+      (hroles : ∀ c ∈ L, c.1 = q.1 ∨ _root_.hammingDist c.1 q.1 = 1)
+      (hexternal : ∀ z' : Slice n δ, _root_.hammingDist z' q.1 = 1 →
+        (L.filter fun c => c.1 = z').card = 1) :
+      let s := (L.filter fun c => c.1 = q.1).card
+      ∃ e : Fin (s + mS n δ) ≃ {c // c ∈ L},
+        ∀ b, (e b).1.1 = Fin.addCases (fun _ : Fin s => q.1) (flipSlice q.1) b := by
+    apply Lane_sol_s10_d56.namedList_order_equiv q.1 (flipSlice q.1)
+    · have heq : flipSlice q.1 = p10_1kFlipCoordinate q.1 := funext (hflip n q.1)
+      rw [heq]
+      exact Lane_sol_s10_d56.flipCoordinate_injective q.1
+    · intro i
+      rw [hflip]
+      exact Lane_sol_s10_d56.flipCoordinate_ne_self q.1 i
+    · intro c hcL
+      rcases hroles c hcL with hc | hc
+      · exact Or.inl hc
+      · obtain ⟨i, hi⟩ := Lane_sol_s10_d56.flipCoordinate_of_hammingDist_one q.1 c.1
+          (by simpa only [_root_.hammingDist_comm] using hc)
+        exact Or.inr ⟨i, hi.trans (hflip n q.1 i).symm⟩
+    · intro i
+      apply hexternal (flipSlice q.1 i)
+      rw [hflip, _root_.hammingDist_comm]
+      exact p10_1kFlipCoordinate_hammingDist (mS n δ) q.1 i
+  have hnamedMean {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I)
+      (q : Site n δ) (L : Finset (ID n δ))
+      (hsize : (L.filter fun c => c.1 = q.1).card ≤ TT n δ)
+      (hroles : ∀ c ∈ L, c.1 = q.1 ∨ _root_.hammingDist c.1 q.1 = 1)
+      (hexternal : ∀ z' : Slice n δ, _root_.hammingDist z' q.1 = 1 →
+        (L.filter fun c => c.1 = z').card = 1) (y : Fin N) :
+      let μs : Fin L.card → Law N := fun j => M.μ (t (L.equivFin.symm j).1.1)
+      let own : Fin L.card → Prop := fun j => (L.equivFin.symm j).1.1 = q.1
+      ((p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))).prod
+        (FinProb.pi (fun q => σ t q))).expect (fun data =>
+          Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) (data.2 q))
+            (maskedCluster M (t q.1) (data.2 q)) μs (aG n δ) own
+            (fun j => data.1 (L.equivFin.symm j).1) y) ≤
+      Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y := by
+    dsimp only
+    let μs : Fin L.card → Law N := fun j => M.μ (t (L.equivFin.symm j).1.1)
+    let own : Fin L.card → Prop := fun j => (L.equivFin.symm j).1.1 = q.1
+    let s := (L.filter fun c => c.1 = q.1).card
+    let μh : Fin (s + mS n δ) → Law N :=
+      Fin.addCases (fun _ => M.μ (t q.1)) (fun i => M.μ (t (flipSlice q.1 i)))
+    let oh : Fin (s + mS n δ) → Prop := fun j => j.val < s
+    obtain ⟨eL, hprofile⟩ := hlistOrder n q L hroles hexternal
+    change ∀ b : Fin (s + mS n δ), (eL b).1.1 =
+      Fin.addCases (fun _ : Fin s => q.1) (flipSlice q.1) b at hprofile
+    let e : Fin (s + mS n δ) ≃ Fin L.card := eL.trans L.equivFin
+    have hnames (j : Fin (s + mS n δ)) : (L.equivFin.symm (e j)).1 = (eL j).1 := by
+      simp [e]
+    have hμ : (fun j => μs (e j)) = μh := by
+      funext j
+      dsimp only [μs]
+      rw [hnames, hprofile]
+      refine Fin.addCases (fun i => ?_) (fun i => ?_) j
+      · simp [μh]
+      · simp [μh]
+    have ho : (fun j => own (e j)) = oh := by
+      funext j
+      apply propext
+      dsimp only [own, oh]
+      rw [hnames, hprofile]
+      refine Fin.addCases (fun i => ?_) (fun i => ?_) j
+      · simp [i.isLt]
+      · have hne : flipSlice q.1 i ≠ q.1 := by
+          rw [hflip]
+          exact Lane_sol_s10_d56.flipCoordinate_ne_self q.1 i
+        simp only [Fin.addCases_right]
+        change (flipSlice q.1 i = q.1) ↔ s + i.val < s
+        constructor
+        · intro hi
+          exact False.elim (hne hi)
+        · intro hi
+          omega
+    let tuples := p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))
+    let R : (ID n δ → Fin (kT n δ) → Fin N) → Finset (Fin N) → ℝ := fun T S =>
+      Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) S) (maskedCluster M (t q.1) S)
+        μs (aG n δ) own (fun j => T (L.equivFin.symm j).1) y
+    have hmarg (S : Finset (Fin N)) : tuples.expect (fun T => R T S) =
+        (p10_1kTupleArrayLaw (k := kT n δ) μs).expect (fun W =>
+          Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) S)
+            (maskedCluster M (t q.1) S) μs (aG n δ) own W y) := by
+      have hi : Function.Injective (fun j : Fin L.card => (L.equivFin.symm j).1) :=
+        Subtype.val_injective.comp L.equivFin.symm.injective
+      exact Lane_sol_s10_d56.pi_injective_expect
+        (fun c : ID n δ => p10_1kBlockTupleArrayLaw (k := kT n δ) (M.μ (t c.1)))
+        (fun j : Fin L.card => (L.equivFin.symm j).1) hi
+        (fun W => Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) S)
+          (maskedCluster M (t q.1) S) μs (aG n δ) own W y)
+    have hmean (S : Finset (Fin N)) : tuples.expect (fun T => R T S) =
+        (p10_1kTupleArrayLaw (k := kT n δ) μh).expect (fun W =>
+          Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) S)
+            (maskedCluster M (t q.1) S) μh (aG n δ) oh W y) := by
+      rw [hmarg]
+      have hr := Lane_sol_s10_d56.fixedRow_mean_equiv (k := kT n δ) E G (maskedPrior M (t q.1) S)
+        (maskedCluster M (t q.1) S) μs (aG n δ) own e y
+      rw [hμ, ho] at hr
+      have hμp (j : Fin (s + mS n δ)) : μs (e j) = μh j := congrFun hμ j
+      simp_rw [hμp] at hr
+      exact hr.symm
+    change (tuples.prod (FinProb.pi (fun q => σ t q))).expect
+      (fun data => R data.1 (data.2 q)) ≤ _
+    rw [Lane_sol_s10_d56.prod_expect tuples (FinProb.pi (fun q => σ t q))
+      (fun T masks => R T (masks q))]
+    simp_rw [Lane_sol_s10_d56.pi_expect_eval (fun q => σ t q) q]
+    rw [Lane_sol_s10_d56.expect_swap tuples (σ t q) R]
+    simp_rw [hmean]
+    exact hbalancedFixed M σ hgood t q s hsize y
+  have henvWord (n : ℕ) (q s : Site n δ) (hs : s ∈ p10_1kProjectedNeighborEnvelope q)
+      (hne : s.1 ≠ q.1) : s.2 = q.2 := by
+    unfold p10_1kProjectedNeighborEnvelope at hs
+    rcases Finset.mem_union.mp hs with hs | hs
+    · obtain ⟨z, hz, heq⟩ := Finset.mem_image.mp hs
+      exact (congrArg Prod.snd heq).symm
+    · obtain ⟨w, hw, heq⟩ := Finset.mem_image.mp hs
+      exact False.elim (hne (congrArg Prod.fst heq).symm)
+  have hexternalId {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (h : History n N δ) (q : Site n δ) (c : ID n δ)
+      (hc : c ∈ realizedList M t h q) (hne : c.1 ≠ q.1) :
+      (c.1, q.2) ∈ incidentSites δ q ∧ selected M t h (c.1, q.2) = some c.2 := by
+    obtain ⟨s, hs, hc⟩ := Finset.mem_biUnion.mp hc
+    cases hsel : selected M t h s with
+    | none => simp [hsel] at hc
+    | some loc =>
+      have hcid : c = (s.1, loc) := by simpa [hsel] using hc
+      have hns : s.1 ≠ q.1 := by
+        intro heq
+        exact hne ((congrArg Prod.fst hcid).trans heq)
+      have hword := henvWord n q s (Finset.mem_filter.mp hs).1 hns
+      have hsite : s = (c.1, q.2) := Prod.ext (congrArg Prod.fst hcid).symm hword
+      have hloc : loc = c.2 := (congrArg Prod.snd hcid).symm
+      refine ⟨hsite ▸ hs, ?_⟩
+      simpa only [hsite, hloc] using hsel
+  have hexternalQuery {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (h : History n N δ) (q : Site n δ) (hv : groupValid M t h q)
+      (default : (hp n δ).Loc) (i : Fin (mS n δ)) :
+      (flipSlice q.1 i, q.2) ∈ incidentSites δ q ∧
+        selected M t h (flipSlice q.1 i, q.2) =
+          some ((selected M t h (flipSlice q.1 i, q.2)).getD default) := by
+    have hdist : _root_.hammingDist (flipSlice q.1 i) q.1 = 1 := by
+      rw [hflip, _root_.hammingDist_comm]
+      exact p10_1kFlipCoordinate_hammingDist (mS n δ) q.1 i
+    have hL := hv.2.2.2.1
+    have hcard := (Finset.mem_filter.mp hL).2.2.2 (flipSlice q.1 i) hdist
+    obtain ⟨c, hc⟩ := Finset.card_eq_one.mp hcard
+    have hm : c ∈ (realizedList M t h q).filter (fun c => c.1 = flipSlice q.1 i) := by rw [hc]; simp
+    have htag := (Finset.mem_filter.mp hm).2
+    have hne : c.1 ≠ q.1 := by
+      rw [htag, hflip]
+      exact Lane_sol_s10_d56.flipCoordinate_ne_self q.1 i
+    have hs := hexternalId M t h q c (Finset.mem_filter.mp hm).1 hne
+    rw [htag] at hs
+    refine ⟨hs.1, ?_⟩
+    simp only [hs.2, Option.getD_some]
+  have hcodedActual {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (h : History n N δ) (q : Site n δ) (hv : groupValid M t h q)
+      (default : (hp n δ).Loc) :
+      Lane_sol_s10_d56.codedList ((realizedList M t h q).filter fun c => c.1 = q.1)
+        (flipSlice q.1) (fun i => (selected M t h (flipSlice q.1 i, q.2)).getD default) =
+      realizedList M t h q := by
+    classical
+    ext c
+    constructor
+    · intro hc
+      rcases Finset.mem_union.mp hc with hc | hc
+      · exact (Finset.mem_filter.mp hc).1
+      · obtain ⟨i, hi, heq⟩ := Finset.mem_image.mp hc
+        have hs := hexternalQuery M t h q hv default i
+        apply Finset.mem_biUnion.mpr
+        refine ⟨(flipSlice q.1 i, q.2), hs.1, ?_⟩
+        rw [hs.2]
+        simp only [Option.elim_some, Finset.mem_singleton]
+        exact heq.symm
+    · intro hc
+      by_cases ho : c.1 = q.1
+      · exact Finset.mem_union.mpr (Or.inl (Finset.mem_filter.mpr ⟨hc, ho⟩))
+      · have hL := hv.2.2.2.1
+        have hdist := ((Finset.mem_filter.mp hL).2.2.1 c hc).resolve_left ho
+        obtain ⟨i, hi⟩ := Lane_sol_s10_d56.flipCoordinate_of_hammingDist_one q.1 c.1
+          (by simpa only [_root_.hammingDist_comm] using hdist)
+        have htag : c.1 = flipSlice q.1 i := hi.trans (hflip n q.1 i).symm
+        have hs := hexternalId M t h q c hc ho
+        have hcenter : (selected M t h (flipSlice q.1 i, q.2)).getD default = c.2 := by
+          rw [← htag, hs.2]
+          rfl
+        apply Finset.mem_union.mpr
+        apply Or.inr
+        exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, Prod.ext htag.symm hcenter⟩
+  have hconditionalCap {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (t : Slice n δ → M.I)
+      (P : ID n δ → Bool) (T : ID n δ → Fin (kT n δ) → Fin N)
+      (S : Site n δ → Finset (Fin N)) (q : Site n δ) (default : (hp n δ).Loc)
+      (center : Fin (mS n δ) → (hp n δ).Loc) :
+      ((p10_1kGlobalActivationLaw n (mS n δ) δ).prod (p10_1kGlobalTieLaw n (mS n δ) δ)).pr
+        (fun AT => let h : History n N δ := ((((P, T), S), AT.1), AT.2)
+          groupValid M t h q ∧ ∀ i,
+            (selected M t h (flipSlice q.1 i, q.2)).getD default = center i) ≤
+      ∏ i, Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2
+        (center i) (fun loc => P (flipSlice q.1 i, loc)) := by
+    classical
+    let base : History n N δ := ((((P, T), S), fun _ => false), fun _ => 1)
+    let Elig : Slice n δ → (hp n δ).EligMap := elig M t base
+    have hinj : Function.Injective (flipSlice q.1) := by
+      have heq : flipSlice q.1 = p10_1kFlipCoordinate q.1 := funext (hflip n q.1)
+      rw [heq]
+      exact Lane_sol_s10_d56.flipCoordinate_injective q.1
+    let F := fun AT : (ID n δ → Bool) × (ID n δ → (hp n δ).TiePerm) =>
+      ∀ i, (∀ j, (99 / 100 : ℝ) * (hp n δ).lam ≤ ((Elig (flipSlice q.1 i) q.2 j).card : ℝ)) ∧
+        (hp n δ).Legal (fun loc => P (flipSlice q.1 i, loc)) (Elig (flipSlice q.1 i))
+          ((hp n δ).domBall (sliceSites δ (flipSlice q.1 i)) q.2 (hp n δ).Rlong) ∧
+        (hp n δ).selection (sliceSites δ (flipSlice q.1 i)) (fun loc => P (flipSlice q.1 i, loc))
+          (fun loc => AT.1 (flipSlice q.1 i, loc)) (Elig (flipSlice q.1 i))
+          (fun loc => AT.2 (flipSlice q.1 i, loc)) q.2 = some (center i)
+    have hb := Lane_sol_s10_d56.global_selection_probability_le n (mS n δ) δ
+      (flipSlice q.1) hinj (sliceSites δ) (fun _ => q.2) P Elig center
+    apply (p10_1k_FinProb_pr_mono _ _ F ?_).trans hb
+    intro AT hh i
+    let h : History n N δ := ((((P, T), S), AT.1), AT.2)
+    have hv : groupValid M t h q := hh.1
+    have hfields : elig M t h = Elig := by rfl
+    have hquery := hexternalQuery M t h q hv default i
+    have hlegal := hv.2.1 (flipSlice q.1 i, q.2) hquery.1
+    refine ⟨?_, ?_, ?_⟩
+    · simpa only [hfields] using hlegal.1
+    · simpa only [hfields, h, History.pos] using hlegal.2
+    · have hs : selected M t h (flipSlice q.1 i, q.2) = some (center i) :=
+        hquery.2.trans (congrArg some (hh.2 i))
+      simpa only [selected, hfields, h, History.pos, History.act, History.tie] using hs
+  have hencodedMean {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I) (q : Site n δ)
+      (O : Finset (ID n δ)) (hO : ∀ c ∈ O, c.1 = q.1) (hsize : O.card ≤ TT n δ)
+      (center : Fin (mS n δ) → (hp n δ).Loc) (y : Fin N) :
+      let L := Lane_sol_s10_d56.codedList O (flipSlice q.1) center
+      let μs : Fin L.card → Law N := fun j => M.μ (t (L.equivFin.symm j).1.1)
+      let own : Fin L.card → Prop := fun j => (L.equivFin.symm j).1.1 = q.1
+      ((p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))).prod
+        (FinProb.pi (fun q => σ t q))).expect (fun data =>
+          Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) (data.2 q))
+            (maskedCluster M (t q.1) (data.2 q)) μs (aG n δ) own
+            (fun j => data.1 (L.equivFin.symm j).1) y) ≤
+      Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y := by
+    dsimp only
+    let L := Lane_sol_s10_d56.codedList O (flipSlice q.1) center
+    have hne : ∀ i, flipSlice q.1 i ≠ q.1 := by
+      intro i
+      rw [hflip]
+      exact Lane_sol_s10_d56.flipCoordinate_ne_self q.1 i
+    have hinj : Function.Injective (flipSlice q.1) := by
+      have heq : flipSlice q.1 = p10_1kFlipCoordinate q.1 := funext (hflip n q.1)
+      rw [heq]
+      exact Lane_sol_s10_d56.flipCoordinate_injective q.1
+    refine hnamedMean M σ hgood t q L ?_ ?_ ?_ y
+    · rw [Lane_sol_s10_d56.codedList_own_filter O q.1 (flipSlice q.1) center hO hne]
+      exact hsize
+    · intro c hcL
+      rcases Lane_sol_s10_d56.codedList_tags O q.1 (flipSlice q.1) center hO c hcL with hc | ⟨i, hi⟩
+      · exact Or.inl hc
+      · apply Or.inr
+        rw [hi, hflip, _root_.hammingDist_comm]
+        exact p10_1kFlipCoordinate_hammingDist (mS n δ) q.1 i
+    · intro z hz
+      obtain ⟨i, hi⟩ := Lane_sol_s10_d56.flipCoordinate_of_hammingDist_one q.1 z
+        (by simpa only [_root_.hammingDist_comm] using hz)
+      have htag : z = flipSlice q.1 i := hi.trans (hflip n q.1 i).symm
+      rw [htag, Lane_sol_s10_d56.codedList_external_filter O q.1 (flipSlice q.1) center hO hne hinj i]
+      simp
+  have hgivenPositions {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I) (P : ID n δ → Bool)
+      (b : OddRole n) (y : Fin N) :
+      let q := groupOf δ b
+      let C := Lane_sol_s10_d56.positionCandidates (hp n δ) (incidentSites δ q) P
+      let Oset := C.powerset.filter fun O => O.card ≤ TT n δ ∧ ∀ c ∈ O, c.1 = q.1
+      let dataLaw := (p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))).prod
+        (FinProb.pi (fun q => σ t q))
+      let actTie := (p10_1kGlobalActivationLaw n (mS n δ) δ).prod (p10_1kGlobalTieLaw n (mS n δ) δ)
+      (dataLaw.prod actTie).expect (fun ω =>
+        oddRow M t ((((P, ω.1.1), ω.1.2), ω.2.1), ω.2.2) b y) ≤
+      (Oset.card : ℝ) * (Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y) *
+        ∏ i, ∑ loc, Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2 loc
+          (fun loc' => P (flipSlice q.1 i, loc')) := by
+    classical
+    dsimp only
+    let q := groupOf δ b
+    let C := Lane_sol_s10_d56.positionCandidates (hp n δ) (incidentSites δ q) P
+    let Oset := C.powerset.filter fun O => O.card ≤ TT n δ ∧ ∀ c ∈ O, c.1 = q.1
+    let dataLaw := (p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))).prod
+      (FinProb.pi (fun q => σ t q))
+    let actTie := (p10_1kGlobalActivationLaw n (mS n δ) δ).prod (p10_1kGlobalTieLaw n (mS n δ) δ)
+    let default : (hp n δ).Loc := (fun _ => false, ⟨0, by omega⟩)
+    let mk : ((ID n δ → Fin (kT n δ) → Fin N) × (Site n δ → Finset (Fin N))) →
+        ((ID n δ → Bool) × (ID n δ → (hp n δ).TiePerm)) → History n N δ :=
+      fun data AT => ((((P, data.1), data.2), AT.1), AT.2)
+    let choice := fun data AT =>
+      ((realizedList M t (mk data AT) q).filter (fun c => c.1 = q.1),
+        fun i : Fin (mS n δ) => (selected M t (mk data AT) (flipSlice q.1 i, q.2)).getD default)
+    let gate := fun data AT => groupValid M t (mk data AT) q
+    let F := Oset.product (Finset.univ : Finset (Fin (mS n δ) → (hp n δ).Loc))
+    let R := fun (data : (ID n δ → Fin (kT n δ) → Fin N) × (Site n δ → Finset (Fin N)))
+      (γ : Finset (ID n δ) × (Fin (mS n δ) → (hp n δ).Loc)) =>
+      let L := Lane_sol_s10_d56.codedList γ.1 (flipSlice q.1) γ.2
+      Lane_sol_s10_d56.fixedRow E G (maskedPrior M (t q.1) (data.2 q)) (maskedCluster M (t q.1) (data.2 q))
+        (fun j : Fin L.card => M.μ (t (L.equivFin.symm j).1.1)) (aG n δ)
+        (fun j : Fin L.card => (L.equivFin.symm j).1.1 = q.1)
+        (fun j : Fin L.card => data.1 (L.equivFin.symm j).1) y
+    let w := fun (i : Fin (mS n δ)) (loc : (hp n δ).Loc) =>
+      Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2 loc
+        (fun loc' => P (flipSlice q.1 i, loc'))
+    let weight := fun γ : Finset (ID n δ) × (Fin (mS n δ) → (hp n δ).Loc) => ∏ i, w i (γ.2 i)
+    let B := Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+    have hsupport data AT (hv : gate data AT) : choice data AT ∈ F := by
+      have hL := hv.2.2.2.1
+      have hC : candidates (mk data AT) q = C := by rfl
+      have hsubset : realizedList M t (mk data AT) q ⊆ C := by
+        rw [← hC]
+        exact Finset.mem_powerset.mp (Finset.mem_filter.mp hL).1
+      apply Finset.mem_product.mpr
+      refine ⟨Finset.mem_filter.mpr ⟨Finset.mem_powerset.mpr ?_, ?_⟩, Finset.mem_univ _⟩
+      · intro c hc
+        exact hsubset (Finset.mem_filter.mp hc).1
+      · exact ⟨(Finset.mem_filter.mp hL).2.1, fun c hc => (Finset.mem_filter.mp hc).2⟩
+    have hrow data γ (hγ : γ ∈ F) : 0 ≤ R data γ := by
+      dsimp only [R]
+      exact Lane_sol_s10_d56.fixedRow_nonneg E G _ _ _ _ _ _ _
+    have hprob data γ (hγ : γ ∈ F) :
+        actTie.pr (fun AT => gate data AT ∧ choice data AT = γ) ≤ weight γ := by
+      have hb := hconditionalCap M t P data.1 data.2 q default γ.2
+      apply (p10_1k_FinProb_pr_mono actTie _ _ ?_).trans hb
+      intro AT hh
+      exact ⟨hh.1, fun i => congrFun (congrArg Prod.snd hh.2) i⟩
+    have hmean γ (hγ : γ ∈ F) : dataLaw.expect (fun data => R data γ) ≤ B := by
+      have hO := (Finset.mem_filter.mp (Finset.mem_product.mp hγ).1).2
+      exact hencodedMean M σ hgood t q γ.1 hO.2 hO.1 γ.2 y
+    have hweight γ : 0 ≤ weight γ := Finset.prod_nonneg fun i hi =>
+      Lane_sol_s10_d56.selectionCap_nonneg _ _ _ _ _
+    have hidentity data AT : oddRow M t (mk data AT) b y =
+        if gate data AT then R data (choice data AT) else 0 := by
+      by_cases hv : gate data AT
+      · rw [ite_eq_left hv]
+        dsimp only [R, choice]
+        rw [hcodedActual M t (mk data AT) q hv default]
+        have ha := hactualRow M t (mk data AT) b y hv
+        dsimp only at ha
+        rw [hfixedRow] at ha
+        simpa only [mk, History.tup, History.mask, q] using ha
+      · dsimp only [gate, q] at hv ⊢
+        unfold oddRow
+        simp only [ite_eq_right hv]
+    change (dataLaw.prod actTie).expect (fun ω => oddRow M t (mk ω.1 ω.2) b y) ≤ _
+    calc
+      _ = (dataLaw.prod actTie).expect (fun ω => if gate ω.1 ω.2 then R ω.1 (choice ω.1 ω.2) else 0) := by
+        apply congrArg (dataLaw.prod actTie).expect
+        funext ω
+        exact hidentity ω.1 ω.2
+      _ ≤ ∑ γ ∈ F, weight γ * dataLaw.expect (fun data => R data γ) :=
+        Lane_sol_s10_d56.conditional_choice_expect_le dataLaw actTie F choice gate R weight hrow hsupport hprob
+      _ ≤ ∑ γ ∈ F, weight γ * B := Finset.sum_le_sum fun γ hγ =>
+        mul_le_mul_of_nonneg_left (hmean γ hγ) (hweight γ)
+      _ = _ := Lane_sol_s10_d56.sum_choice_family Oset w B
+  have huniformPositions {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I) (P : ID n δ → Bool)
+      (b : OddRole n) (y : Fin N) :
+      let q := groupOf δ b
+      let K : ℝ := ((mS n δ + (n - mS n δ + 1) ^ 3 : ℕ) * ((hp n δ).H + 1 : ℕ) * (2 * (hp n δ).lam) + 1) ^ TT n δ
+      let B := Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+      let dataLaw := (p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))).prod
+        (FinProb.pi (fun q => σ t q))
+      let actTie := (p10_1kGlobalActivationLaw n (mS n δ) δ).prod (p10_1kGlobalTieLaw n (mS n δ) δ)
+      (dataLaw.prod actTie).expect (fun ω => oddRow M t ((((P, ω.1.1), ω.1.2), ω.2.1), ω.2.2) b y) ≤
+        K * B * ∏ i, ∑ loc, Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2 loc
+          (fun loc' => P (flipSlice q.1 i, loc')) := by
+    classical
+    dsimp only
+    let q := groupOf δ b
+    let C := Lane_sol_s10_d56.positionCandidates (hp n δ) (incidentSites δ q) P
+    let Oset := C.powerset.filter fun O => O.card ≤ TT n δ ∧ ∀ c ∈ O, c.1 = q.1
+    let K0 : ℝ := (mS n δ + (n - mS n δ + 1) ^ 3 : ℕ) * ((hp n δ).H + 1 : ℕ) * (2 * (hp n δ).lam) + 1
+    let B := Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+    let W := ∏ i, ∑ loc, Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2 loc
+      (fun loc' => P (flipSlice q.1 i, loc'))
+    have hlam : 0 ≤ (hp n δ).lam := by change 0 ≤ (n : ℝ) ^ 10; positivity
+    have hB : 0 ≤ B := mul_nonneg (Real.exp_pos _).le
+      (Finset.sum_nonneg fun j _ => mul_nonneg (M.lam_nonneg _ j) ((M.D _ j).nonneg y))
+    have hW : 0 ≤ W := Finset.prod_nonneg fun i _ => Finset.sum_nonneg fun loc _ =>
+      Lane_sol_s10_d56.selectionCap_nonneg _ _ _ _ _
+    have hK0 : 0 ≤ K0 := by dsimp [K0]; positivity
+    by_cases hgate : ∀ site ∈ incidentSites δ q, ∀ j,
+      (p10_1kHeightPositionCount (hp n δ) (fun loc => P (site.1, loc)) site.2 j : ℝ) ≤ 2 * (hp n δ).lam
+    · have hcard := Lane_sol_s10_d56.positionCandidates_card_le (hp n δ) (incidentSites δ q) P hgate
+      have hinc : (incidentSites δ q).card ≤ mS n δ + (n - mS n δ + 1) ^ 3 :=
+        (Finset.card_filter_le _ _).trans (p10_1kProjectedNeighborEnvelope_card_le q)
+      have hincr : ((incidentSites δ q).card : ℝ) ≤ (mS n δ + (n - mS n δ + 1) ^ 3 : ℕ) := by exact_mod_cast hinc
+      have hcount : (C.card : ℝ) + 1 ≤ K0 := by
+        have hb := hcard.trans (mul_le_mul_of_nonneg_right
+          (mul_le_mul_of_nonneg_right hincr (Nat.cast_nonneg _)) (by positivity))
+        dsimp only [K0]
+        linarith
+      have hOsub : Oset ⊆ C.powerset.filter (fun O => O.card ≤ TT n δ) := by
+        intro O hO
+        exact Finset.mem_filter.mpr ⟨(Finset.mem_filter.mp hO).1, (Finset.mem_filter.mp hO).2.1⟩
+      have hOn := (Finset.card_le_card hOsub).trans (Lane_sol_s10_d56.candidateSubsets_card_le C (TT n δ))
+      have hOr : (Oset.card : ℝ) ≤ ((C.card : ℝ) + 1) ^ TT n δ := by exact_mod_cast hOn
+      have hO : (Oset.card : ℝ) ≤ K0 ^ TT n δ :=
+        hOr.trans (pow_le_pow_left₀ (by positivity) hcount _)
+      exact (hgivenPositions M σ hgood t P b y).trans
+        (mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hO hB) hW)
+    · have hz (ω : ((ID n δ → Fin (kT n δ) → Fin N) × (Site n δ → Finset (Fin N))) ×
+          ((ID n δ → Bool) × (ID n δ → (hp n δ).TiePerm))) :
+          oddRow M t ((((P, ω.1.1), ω.1.2), ω.2.1), ω.2.2) b y = 0 := by
+        unfold oddRow
+        apply ite_eq_right
+        intro hv
+        apply hgate
+        intro site hs j
+        have hh := (hv.1 site hs j).2
+        have hc : (p10_1kHeightPositionCount (hp n δ) (fun loc => P (site.1, loc)) site.2 j : ℝ)
+            ≤ (1002 / 1000 : ℝ) * (hp n δ).lam := hh
+        exact hc.trans (by nlinarith)
+      simp only [hz, FinProb.expect, mul_zero, Finset.sum_const_zero]
+      exact mul_nonneg (mul_nonneg (pow_nonneg hK0 _) hB) hW
+  have hmFloor (n : ℕ) (hn : 1 ≤ n) : mS n δ = ⌊(n : ℝ) ^ (200 * δ)⌋₊ := by
+    have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast hn
+    have hpow : (n : ℝ) ^ (200 * δ) ≤ n := by
+      simpa using Real.rpow_le_rpow_of_exponent_le hn1 (by nlinarith [hδone] : 200 * δ ≤ 1)
+    have hf : (⌊(n : ℝ) ^ (200 * δ)⌋₊ : ℝ) ≤ n :=
+      (Nat.floor_le (Real.rpow_nonneg (by positivity) _)).trans hpow
+    have hfn : ⌊(n : ℝ) ^ (200 * δ)⌋₊ ≤ n := by exact_mod_cast hf
+    exact min_eq_left hfn
+  have hglobalMean {n N : ℕ} {E : Fin N → Fin N → Prop} {X Y : Finset (Fin N)}
+      {G : Colour} (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy M)
+      (hgood : GoodStrategy M σ) (t : Slice n δ → M.I) (b : OddRole n) (y : Fin N)
+      (hn1 : 1 ≤ n) (hnSel : nSel ≤ n)
+      (hall : ∀ i : Fin (mS n δ), (groupOf δ b).2 ∈ sliceSites δ (flipSlice (groupOf δ b).1 i)) :
+      let q := groupOf δ b
+      let K : ℝ := ((mS n δ + (n - mS n δ + 1) ^ 3 : ℕ) * ((hp n δ).H + 1 : ℕ) * (2 * (hp n δ).lam) + 1) ^ TT n δ
+      let B := Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+      let W := 1 / (99 / 100 : ℝ) + ((hp n δ).H : ℝ) * (hp n δ).lam * Real.exp (-(n : ℝ) ^ c)
+      (historyLaw M σ t).expect (fun h => oddRow M t h b y) ≤ K * B * W ^ mS n δ := by
+    dsimp only
+    let q := groupOf δ b
+    let K : ℝ := ((mS n δ + (n - mS n δ + 1) ^ 3 : ℕ) * ((hp n δ).H + 1 : ℕ) * (2 * (hp n δ).lam) + 1) ^ TT n δ
+    let B := Real.exp ((mS n δ : ℝ) / 100) * ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+    let W := 1 / (99 / 100 : ℝ) + ((hp n δ).H : ℝ) * (hp n δ).lam * Real.exp (-(n : ℝ) ^ c)
+    let positions := p10_1kGlobalPositionLaw n (mS n δ) δ
+    let dataLaw := (p10_1kGlobalTupleArrayLaw (k := kT n δ) n (mS n δ) δ (fun z => M.μ (t z))).prod
+      (FinProb.pi (fun q => σ t q))
+    let actTie := (p10_1kGlobalActivationLaw n (mS n δ) δ).prod (p10_1kGlobalTieLaw n (mS n δ) δ)
+    let f := fun (i : Fin (mS n δ)) (P : (hp n δ).Loc → Bool) =>
+      ∑ loc, Lane_sol_s10_d56.selectionCap (hp n δ) (sliceSites δ (flipSlice q.1 i)) q.2 loc P
+    have hB : 0 ≤ B := mul_nonneg (Real.exp_pos _).le
+      (Finset.sum_nonneg fun j _ => mul_nonneg (M.lam_nonneg _ j) ((M.D _ j).nonneg y))
+    have hlam : 0 ≤ (hp n δ).lam := by change 0 ≤ (n : ℝ) ^ 10; positivity
+    have hK : 0 ≤ K := by dsimp [K]; positivity
+    have hinj : Function.Injective (flipSlice q.1) := by
+      have heq : flipSlice q.1 = p10_1kFlipCoordinate q.1 := funext (hflip n q.1)
+      rw [heq]
+      exact Lane_sol_s10_d56.flipCoordinate_injective q.1
+    have hseln : ∀ (Sites : (hp n δ).Sites) (v : CubeVertex (hp n δ).d), v ∈ Sites →
+        (∑ loc, (hp n δ).posLaw.expect (Lane_sol_s10_d56.selectionCap (hp n δ) Sites v loc)) ≤ W := by
+      have hh := hSel n hnSel
+      have heq : hp n δ = p10_1kHeightParams n ⌊(n : ℝ) ^ (200 * δ)⌋₊ δ := by
+        dsimp only [hp]
+        rw [hmFloor n hn1]
+      have htransport : ∀ p : HDParams, p = p10_1kHeightParams n ⌊(n : ℝ) ^ (200 * δ)⌋₊ δ →
+          ∀ (Sites : p.Sites) (v : CubeVertex p.d), v ∈ Sites →
+          (∑ loc, p.posLaw.expect (Lane_sol_s10_d56.selectionCap p Sites v loc)) ≤
+          1 / (99 / 100 : ℝ) + (p.H : ℝ) * p.lam * Real.exp (-(n : ℝ) ^ c) := by
+        intro p hpEq
+        subst p
+        exact hh
+      exact htransport (hp n δ) heq
+    have hchron : (historyLaw M σ t).expect (fun h => oddRow M t h b y) =
+        positions.expect (fun P => (dataLaw.prod actTie).expect (fun ω =>
+          oddRow M t ((((P, ω.1.1), ω.1.2), ω.2.1), ω.2.2) b y)) := by
+      simp only [historyLaw, positions, dataLaw, actTie, Lane_sol_s10_d56.expect_prod_pair]
+    calc
+      _ = positions.expect (fun P => (dataLaw.prod actTie).expect (fun ω =>
+          oddRow M t ((((P, ω.1.1), ω.1.2), ω.2.1), ω.2.2) b y)) := hchron
+      _ ≤ positions.expect (fun P => (K * B) * ∏ i, f i (fun loc => P (flipSlice q.1 i, loc))) :=
+        FinProb.expect_mono positions (fun P => huniformPositions M σ hgood t P b y)
+      _ = (K * B) * positions.expect (fun P => ∏ i, f i (fun loc => P (flipSlice q.1 i, loc))) :=
+        FinProb.expect_smul positions (K * B) _
+      _ = (K * B) * ∏ i, (hp n δ).posLaw.expect (f i) := by
+        rw [Lane_sol_s10_d56.global_position_expect_queries n (mS n δ) δ (flipSlice q.1) hinj f]
+      _ ≤ (K * B) * W ^ mS n δ := by
+        apply mul_le_mul_of_nonneg_left _ (mul_nonneg hK hB)
+        calc
+          (∏ i, (hp n δ).posLaw.expect (f i)) ≤ ∏ _i : Fin (mS n δ), W := by
+            apply Finset.prod_le_prod₀
+            · intro i hi
+              unfold FinProb.expect
+              apply Finset.sum_nonneg
+              intro P hP
+              apply mul_nonneg ((hp n δ).posLaw.nonneg P)
+              exact Finset.sum_nonneg fun loc _ => Lane_sol_s10_d56.selectionCap_nonneg _ _ _ _ _
+            · intro i hi
+              rw [Lane_sol_s10_d56.expect_name_sum]
+              exact hseln _ _ (hall i)
+          _ = _ := by simp
+  have hownCost := Lane_sol_s10_d56.own_cost_eventually δ hδ hδone
+  have hwidthCost := Lane_sol_s10_d56.width_cost_eventually δ hδ
+  have hexternalCost := Lane_sol_s10_d56.external_cost_eventually δ c hδ hδone hc
+  have hnlarge : ∀ᶠ n : ℕ in atTop, 2 ≤ n ∧ nSel ≤ n :=
+    Filter.eventually_atTop.mpr ⟨max 2 nSel, fun n hn => ⟨le_trans (le_max_left _ _) hn, le_trans (le_max_right _ _) hn⟩⟩
+  apply Filter.eventually_atTop.mp
+  filter_upwards [hownCost, hwidthCost, hexternalCost, hnlarge] with n hownCost hwidthCost hexternalCost hnlarge
+  intro N E X Y G M σ hN hgood t y b
+  have hn1 : 1 ≤ n := by omega
+  have hN0 : 0 < N := lt_of_lt_of_le (pow_pos (by norm_num : 0 < (2 : ℕ)) n) hN
+  have hNR : (0 : ℝ) < N := Nat.cast_pos.mpr hN0
+  let q := groupOf δ b
+  let K : ℝ := ((mS n δ + (n - mS n δ + 1) ^ 3 : ℕ) * ((hp n δ).H + 1 : ℕ) * (2 * (hp n δ).lam) + 1) ^ TT n δ
+  let W := 1 / (99 / 100 : ℝ) + ((hp n δ).H : ℝ) * (hp n δ).lam * Real.exp (-(n : ℝ) ^ c)
+  let ν := ∑ j, M.lam (t q.1) j * (M.D (t q.1) j).w y
+  have hlam : 0 ≤ (hp n δ).lam := by change 0 ≤ (n : ℝ) ^ 10; positivity
+  have hK0 : 0 ≤ K := by dsimp [K]; positivity
+  have hW0 : 0 ≤ W := by dsimp [W]; positivity
+  have hν0 : 0 ≤ ν := Finset.sum_nonneg fun j _ => mul_nonneg (M.lam_nonneg _ j) ((M.D _ j).nonneg y)
+  have hK : K ≤ Real.exp ((mS n δ : ℝ) / 25) := by
+    change Lane_sol_s10_d56.candidateBase n (mS n δ) δ ^ p10_1kHeightCount n δ ≤ _
+    simpa only [hmFloor n hn1] using hownCost
+  have hwidth : (n : ℝ) ^ δ ≤ (mS n δ : ℝ) / 100 := by
+    simpa only [hmFloor n hn1] using hwidthCost
+  have hW : W ≤ Real.exp (1 / 25 : ℝ) := hexternalCost (mS n δ)
+  have hWpow : W ^ mS n δ ≤ Real.exp (1 / 25 : ℝ) ^ mS n δ := pow_le_pow_left₀ hW0 hW _
+  have hwidthExp : Real.exp ((n : ℝ) ^ δ) ≤ Real.exp ((mS n δ : ℝ) / 100) := Real.exp_le_exp.mpr hwidth
+  have hν : (N : ℝ) * ν ≤ Real.exp ((n : ℝ) ^ δ) := by
+    calc
+      _ ≤ (N : ℝ) * (Real.exp ((n : ℝ) ^ δ) / N) :=
+        mul_le_mul_of_nonneg_left (M.ν_width (t q.1) y) hNR.le
+      _ = _ := by field_simp
+  by_cases hall : ∀ i : Fin (mS n δ), q.2 ∈ sliceSites δ (flipSlice q.1 i)
+  · have hmean := hglobalMean M σ hgood t b y hn1 hnlarge.2 hall
+    unfold oddMean
+    calc
+      _ ≤ (N : ℝ) * (K * (Real.exp ((mS n δ : ℝ) / 100) * ν) * W ^ mS n δ) :=
+        mul_le_mul_of_nonneg_left hmean hNR.le
+      _ = K * W ^ mS n δ * Real.exp ((mS n δ : ℝ) / 100) * ((N : ℝ) * ν) := by ring
+      _ ≤ K * W ^ mS n δ * Real.exp ((mS n δ : ℝ) / 100) * Real.exp ((n : ℝ) ^ δ) :=
+        mul_le_mul_of_nonneg_left hν (by positivity)
+      _ ≤ Real.exp ((mS n δ : ℝ) / 25) * Real.exp (1 / 25 : ℝ) ^ mS n δ *
+          Real.exp ((mS n δ : ℝ) / 100) * Real.exp ((mS n δ : ℝ) / 100) := by
+        gcongr
+      _ = Real.exp ((mS n δ : ℝ) / 10) := by
+        rw [← Real.exp_nat_mul]
+        simp only [← Real.exp_add]
+        congr 1
+        ring
+  · have hz (h : History n N δ) : oddRow M t h b y = 0 := by
+      unfold oddRow
+      apply ite_eq_right
+      intro hv
+      apply hall
+      intro i
+      let default : (hp n δ).Loc := (fun _ => false, ⟨0, by omega⟩)
+      exact (Finset.mem_filter.mp (hexternalQuery M t h q hv default i).1).2
+    simp only [oddMean, FinProb.expect, hz, mul_zero, Finset.sum_const_zero]
+    exact Real.exp_nonneg _
 
 set_option maxHeartbeats 4000000 in
 /-- **d6** = P10.1h, the comparison (10.2) (10:191–222; ~500 lines; new

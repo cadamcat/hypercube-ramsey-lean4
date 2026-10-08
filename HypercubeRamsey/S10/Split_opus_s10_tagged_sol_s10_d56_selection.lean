@@ -115,4 +115,31 @@ theorem global_selection_probability_le (n m : ℕ) (δ : ℝ) {r : ℕ}
     exact selection_probability_le_cap p (Sites (e i)) (v (e i)) (center i)
       (fun loc => P (e i, loc)) (E (e i))
 
+
+/-- Independent position fields factor over distinct queried slices. -/
+theorem global_position_expect_queries (n m : ℕ) (δ : ℝ) {r : ℕ}
+    (e : Fin r → P10_1kSpecialSliceWord m) (he : Function.Injective e)
+    (f : Fin r → ((p10_1kHeightParams n m δ).Loc → Bool) → ℝ) :
+    (p10_1kGlobalPositionLaw n m δ).expect
+      (fun P => ∏ i, f i (fun loc => P (e i, loc))) =
+      ∏ i, (p10_1kHeightParams n m δ).posLaw.expect (f i) := by
+  let p := p10_1kHeightParams n m δ
+  let Z := P10_1kSpecialSliceWord m
+  have hcur := pi_curry_expect (fun (_ : Z) (_ : p.Loc) => FinProb.bernoulli (p.lam / (p.V : ℝ)))
+    (fun P => ∏ i, f i (P (e i)))
+  change (p10_1kGlobalPositionLaw n m δ).expect (fun P => ∏ i, f i (fun loc => P (e i, loc))) = _ at hcur
+  rw [hcur]
+  change (FinProb.pi (fun _ : Z => p.posLaw)).expect (fun P => ∏ i, f i (P (e i))) =
+    ∏ i, p.posLaw.expect (f i)
+  rw [pi_injective_expect (fun _ : Z => p.posLaw) e he (fun P => ∏ i, f i (P i))]
+  exact pi_expect_product (fun _ => p.posLaw) f
+
+/-- Finite name sums can be averaged before summing. -/
+theorem expect_name_sum {Ω I : Type*} [Fintype Ω] [Fintype I]
+    (P : FinProb Ω) (f : I → Ω → ℝ) :
+    P.expect (fun ω => ∑ i, f i ω) = ∑ i, P.expect (f i) := by
+  unfold FinProb.expect
+  simp_rw [Finset.mul_sum]
+  exact Finset.sum_comm
+
 end HypercubeRamsey.Lane_sol_s10_d56

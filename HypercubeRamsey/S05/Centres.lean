@@ -1275,7 +1275,224 @@ theorem legal_of_events : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ n�
       ∀ (H : X.KeyHist) (ω : X.CΩ (canonHt X)), BallsOK X (canonHt X) ω → SinglesOK X (canonHt X) H ω →
         FamiliesOK X (canonHt X) H ω →
           (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) := by
-  sorry
+  intro p
+  refine ⟨2, ?_⟩
+  intro n hn N E G X hXp H ω hBalls hSingles hFamilies
+  have hn2 : 2 ≤ n := hn
+  let ht := canonHt X
+  have hmPos : 0 < X.p.m n := by
+    unfold Params5.m
+    apply Nat.ceil_pos.mpr
+    exact Real.rpow_pos_of_pos (by exact_mod_cast (show 0 < n by omega)) _
+  have hmOne : 1 ≤ (X.p.m n : ℝ) := by
+    exact_mod_cast (Nat.succ_le_iff.mpr hmPos)
+  have hmLe : X.p.m n ≤ n := by
+    unfold Params5.m
+    rw [Nat.ceil_le]
+    have hnR : (1 : ℝ) < (n : ℝ) := by
+      exact_mod_cast (show 1 < n by omega)
+    have hpow' : (n : ℝ) ^ X.p.alpha ≤ (n : ℝ) ^ (1 : ℝ) :=
+      (Real.rpow_le_rpow_left_iff hnR).2 (by linarith [X.p.halpha.2])
+    have hpow : (n : ℝ) ^ X.p.alpha ≤ n := by
+      simpa only [Real.rpow_one] using hpow'
+    exact hpow
+  have hTle : (X.p.T n : ℝ) ≤ 2 * n := by
+    have hT := Lane_sol_s05_h5l.T_upper X.p n hmOne
+    have hpow : (X.p.m n : ℝ) ^ (1 / 1000 : ℝ) ≤ (X.p.m n : ℝ) :=
+      Real.rpow_le_self_of_one_le hmOne (by norm_num)
+    have hmLeR : (X.p.m n : ℝ) ≤ n := by exact_mod_cast hmLe
+    calc
+      (X.p.T n : ℝ) ≤ 2 * (X.p.m n : ℝ) ^ (1 / 1000 : ℝ) := hT
+      _ ≤ 2 * (X.p.m n : ℝ) := by nlinarith
+      _ ≤ 2 * n := by nlinarith
+  have hn7 : 128 ≤ n ^ 7 := by
+    calc
+      128 = 2 ^ 7 := by norm_num
+      _ ≤ n ^ 7 := by gcongr
+  have hn7R : 96 ≤ (n : ℝ) ^ 7 := by
+    have hcast : (128 : ℝ) ≤ (n : ℝ) ^ 7 := by exact_mod_cast hn7
+    linarith
+  have hpoly : 96 * (n : ℝ) ^ 3 ≤ (n : ℝ) ^ 10 := by
+    have hmul := mul_le_mul_of_nonneg_left hn7R (by positivity : 0 ≤ (n : ℝ) ^ 3)
+    have hmul' : 96 * (n : ℝ) ^ 3 ≤ (n : ℝ) ^ 3 * (n : ℝ) ^ 7 := by
+      simpa [mul_comm] using hmul
+    rw [← pow_add] at hmul'
+    norm_num at hmul'
+    exact hmul'
+  change ht.hp.Legal (pos ω) (markElig X ht H ω) (X.sites ht)
+  intro s hs j
+  change (∀ l ∈ markElig X ht H ω s j,
+      pos ω l = true ∧ l.2 = j ∧ hammingDist l.1 s ≤ ht.hp.r) ∧
+    ht.hp.lam / 3 ≤ ((markElig X ht H ω s j).card : ℝ)
+  constructor
+  · intro l hl
+    exact markElig_shape X ht H ω s j l hl
+  · rcases Finset.mem_image.mp hs with ⟨a, ha, hsite⟩
+    let Pset : Finset ht.hp.Loc := prosp X ht (pos ω) s j
+    let Vset : Finset (CubeVertex ht.hp.d) := Finset.univ.filter fun u =>
+      pos ω (u, j) = true ∧ hammingDist u s ≤ ht.hp.r
+    let badSet : Finset ht.hp.Loc := Pset.filter fun l =>
+      ¬ ∀ v : EvenRole5 n, X.siteOf v = s → singletonOK X ht H (arraysOf ω) v l
+    let Mset : Finset ht.hp.Loc := marks X ht H (pos ω) (arraysOf ω) s j
+    have hPsetEq : Pset = Vset.image (fun u => (u, j)) := by
+      ext l
+      constructor
+      · intro hl
+        simp only [Pset, prosp, Finset.mem_filter, Finset.mem_univ, true_and] at hl
+        rcases hl with ⟨hpos, hrest⟩
+        rcases hrest with ⟨hlev, hdist⟩
+        have heq : l = (l.1, j) := Prod.ext rfl (Fin.ext hlev)
+        have hpos' : pos ω (l.1, j) = true := by
+          rw [heq] at hpos
+          exact hpos
+        refine Finset.mem_image.mpr ⟨l.1, ?_, heq.symm⟩
+        simp only [Vset, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hpos', hdist⟩
+      · intro hl
+        rcases Finset.mem_image.mp hl with ⟨u, hu, rfl⟩
+        simp only [Vset, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+        simp only [Pset, prosp, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hu.1, hu.2⟩
+    have hPsetCard : Pset.card = Vset.card := by
+      calc
+        Pset.card = (Vset.image (fun u => (u, j))).card := congrArg Finset.card hPsetEq
+        _ = Vset.card := Finset.card_image_of_injective Vset
+          (fun u v huv => congrArg Prod.fst huv)
+    have hPcard : ht.hp.lam / 2 ≤ (Pset.card : ℝ) := by
+      rw [hPsetCard]
+      simpa [Vset, BallsOK] using (hBalls s hs j).1
+    have hBadCard : (badSet.card : ℝ) ≤ ht.hp.lam / 12 := by
+      simpa [badSet, Pset, prosp, SinglesOK] using (hSingles s hs (j : ℕ))
+    let Bset : Finset X.St.Site := Finset.univ.filter fun b =>
+      ∃ t ∈ X.St.neighbors b, X.St.oneHot t = s
+    have hBsub : Bset ⊆ X.St.neighbors (X.St.stateOf a.1) := by
+      intro b hb
+      rcases (Finset.mem_filter.mp hb).2 with ⟨t, ht, hts⟩
+      have hsite' : s = X.St.oneHot (X.St.stateOf a.1) := by
+        simpa [ht, canonHt, HeightChoice5.hp, siteOf] using hsite.symm
+      have hstate : t = X.St.stateOf a.1 := by
+        apply X.St.oneHot_injective
+        exact hts.trans hsite'
+      apply (X.St.mem_neighbors (X.St.stateOf a.1) b).2
+      rcases (X.St.mem_neighbors b t).1 ht with ⟨x, y, hx, hy, hxy⟩
+      refine ⟨y, x, ?_, hx, hxy.symm⟩
+      calc
+        X.St.stateOf y = t := hy
+        _ = X.St.stateOf a.1 := hstate
+    have hBcard : Bset.card ≤ 2 * n := by
+      calc
+        Bset.card ≤ (X.St.neighbors (X.St.stateOf a.1)).card := Finset.card_le_card hBsub
+        _ ≤ 2 * n := X.St.degree_bound _
+    let levelSet : Finset ℕ := (Finset.range (ht.hp.H + 1)).filter fun k =>
+      k = (j : ℕ) ∨ k + 1 = (j : ℕ)
+    have hLevelSubset : levelSet ⊆ insert (j : ℕ) ({(j : ℕ) - 1} : Finset ℕ) := by
+      intro k hk
+      simp only [levelSet, Finset.mem_filter] at hk
+      rcases hk.2 with hEq | hEq
+      · simp [hEq]
+      · have hpred : k = (j : ℕ) - 1 := by omega
+        simp [hpred]
+    have hLevelCard : levelSet.card ≤ 2 := by
+      calc
+        levelSet.card ≤ (insert (j : ℕ) ({(j : ℕ) - 1} : Finset ℕ)).card :=
+          Finset.card_le_card hLevelSubset
+        _ ≤ ({(j : ℕ) - 1} : Finset ℕ).card + 1 := Finset.card_insert_le _ _
+        _ ≤ 1 + 1 := by simp
+        _ = 2 := by norm_num
+    have hfamily (b : X.St.Site) (k : ℕ) :
+        ((Lane_sol_s05_centres.markingFamily (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id).card ≤
+          n * X.p.T n := by
+      let F := failSets X ht H (pos ω) (arraysOf ω) b k
+      have hsmall : (Lane_sol_s05_centres.markingFamily F).card ≤ n :=
+        Nat.le_of_lt (hFamilies b k)
+      have hsize : ∀ S ∈ F, S.card ≤ X.p.T n := by
+        intro S hS
+        rcases Finset.mem_image.mp hS with ⟨μ, hμ, rfl⟩
+        exact (Finset.mem_filter.mp hμ).2.2.1
+      exact Lane_sol_s05_centres.marking_card_bound F n (X.p.T n) hsmall hsize
+    let Uset : Finset ht.hp.Loc := Bset.biUnion fun b => levelSet.biUnion fun k =>
+      (Lane_sol_s05_centres.markingFamily
+        (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id
+    have hMsubset : Mset ⊆ Uset := by
+      intro l hl
+      simp only [Mset, marks, Finset.mem_filter] at hl
+      rcases Finset.mem_biUnion.mp hl.1 with ⟨b, hb, hlb⟩
+      rcases Finset.mem_biUnion.mp hlb with ⟨k, hk, hlk⟩
+      unfold Uset
+      refine Finset.mem_biUnion.mpr ⟨b, ?_, Finset.mem_biUnion.mpr ⟨k, ?_, hlk⟩⟩
+      · simpa [Bset] using hb
+      · simpa [levelSet] using hk
+    have hUcard : Uset.card ≤ Bset.card * (levelSet.card * (n * X.p.T n)) := by
+      unfold Uset
+      calc
+        _ ≤ ∑ b ∈ Bset, (levelSet.biUnion fun k =>
+            (Lane_sol_s05_centres.markingFamily
+              (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id).card := Finset.card_biUnion_le
+        _ ≤ ∑ b ∈ Bset, ∑ k ∈ levelSet, n * X.p.T n := by
+          apply Finset.sum_le_sum
+          intro b hb
+          calc
+            _ ≤ ∑ k ∈ levelSet,
+              ((Lane_sol_s05_centres.markingFamily
+                (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id).card :=
+                Finset.card_biUnion_le
+            _ ≤ ∑ k ∈ levelSet, n * X.p.T n :=
+              Finset.sum_le_sum fun k hk => hfamily b k
+        _ = Bset.card * (levelSet.card * (n * X.p.T n)) := by simp [mul_assoc]
+    have hMcard : Mset.card ≤ 4 * n ^ 2 * X.p.T n := by
+      calc
+        Mset.card ≤ Uset.card := Finset.card_le_card hMsubset
+        _ ≤ Bset.card * (levelSet.card * (n * X.p.T n)) := hUcard
+        _ ≤ (2 * n) * (2 * (n * X.p.T n)) :=
+          Nat.mul_le_mul hBcard (Nat.mul_le_mul_right _ hLevelCard)
+        _ = 4 * n ^ 2 * X.p.T n := by ring
+    have hMcardR : (Mset.card : ℝ) ≤ ht.hp.lam / 12 := by
+      have hcardR : (Mset.card : ℝ) ≤ 4 * (n : ℝ) ^ 2 * (X.p.T n : ℝ) := by
+        exact_mod_cast hMcard
+      have hsmall : (Mset.card : ℝ) ≤ (n : ℝ) ^ 10 / 12 := by
+        calc
+          (Mset.card : ℝ) ≤ 4 * (n : ℝ) ^ 2 * (X.p.T n : ℝ) := hcardR
+          _ ≤ 8 * (n : ℝ) ^ 3 := by nlinarith [hTle]
+          _ ≤ (n : ℝ) ^ 10 / 12 := by nlinarith [hpoly]
+      simpa [ht, canonHt, HeightChoice5.hp] using hsmall
+    have hEsub : markElig X ht H ω s j ⊆ Pset := by
+      intro l hl
+      have hl' := hl
+      dsimp only [markElig, eligOf] at hl'
+      exact (Finset.mem_filter.mp hl').1
+    have hLostSub : Pset \ markElig X ht H ω s j ⊆ badSet ∪ Mset := by
+      intro l hl
+      rcases Finset.mem_sdiff.mp hl with ⟨hlP, hlnE⟩
+      by_cases hgood : ∀ v : EvenRole5 n, X.siteOf v = s → singletonOK X ht H (arraysOf ω) v l
+      · apply Finset.mem_union.mpr
+        right
+        have hM : l ∈ Mset := by
+          by_contra hlnM
+          have hlnE' := hlnE
+          dsimp only [markElig, eligOf] at hlnE'
+          simp only [Finset.mem_filter] at hlnE'
+          have hnotM : l ∉ marks X ht H (pos ω) (arraysOf ω) s j := by
+            simpa [Mset] using hlnM
+          exact hlnE' ⟨hlP, ⟨hgood, hnotM⟩⟩
+        exact hM
+      · apply Finset.mem_union.mpr
+        left
+        exact Finset.mem_filter.mpr ⟨hlP, hgood⟩
+    have hLostCard :
+        (Pset \ markElig X ht H ω s j).card ≤ badSet.card + Mset.card := by
+      calc
+        (Pset \ markElig X ht H ω s j).card ≤ (badSet ∪ Mset).card :=
+          Finset.card_le_card hLostSub
+        _ ≤ badSet.card + Mset.card := Finset.card_union_le _ _
+    have hCardEq : ((Pset \ markElig X ht H ω s j).card : ℝ) +
+        ((markElig X ht H ω s j).card : ℝ) = (Pset.card : ℝ) := by
+      exact_mod_cast Finset.card_sdiff_add_card_eq_card hEsub
+    have hLostCardR : ((Pset \ markElig X ht H ω s j).card : ℝ) ≤
+        (badSet.card : ℝ) + (Mset.card : ℝ) := by exact_mod_cast hLostCard
+    have hTotal : (Pset.card : ℝ) ≤ (markElig X ht H ω s j).card +
+        (badSet.card : ℝ) + (Mset.card : ℝ) := by linarith
+    change ht.hp.lam / 3 ≤ ((markElig X ht H ω s j).card : ℝ)
+    linarith [hPcard, hBadCard, hMcardR, hTotal]
 
 /-- SUB-LEMMA J7 (05:851–855, D3.8/L3.8 applied): on legal eligibility, the long height rule
 gives good heights with probability `1 - o(1)`. -/
@@ -2382,6 +2599,7 @@ theorem success_of_events : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ 
   unfold Lane_opus_s05.CentreSuccess
   exact ⟨hlegal', hglobal, hstar⟩
 
+set_option maxHeartbeats 1000000
 /-- SUB-LEMMA J10 (union bound over J3–J9): the two probability estimates of L5.1j. -/
 theorem markElig_estimates : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < cL x ∧ 0 < cH x) →
     ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
@@ -2391,7 +2609,164 @@ theorem markElig_estimates : ∀ (C : ℝ) (cL cH : Pre15 → ℝ), (∀ x, 0 < 
               ¬ (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X))) ≤
             Real.exp (-Real.sqrt n) ∧
           (X.centreLaw (canonHt X) H).pr (fun ω => ¬ CentreSuccess X (canonHt X) H ω) ≤ 1 / 100 := by
-  sorry
+  intro C cL cH hc
+  obtain ⟨Rsing, hRsing⟩ := singles_tail cL cH hc
+  obtain ⟨Rfam, hRfam⟩ := families_tail C cL cH hc
+  obtain ⟨Rsup, hRsup⟩ := support_tail cL cH hc
+  let R := (Rsing.join Rfam).join Rsup
+  refine ⟨R, ?_⟩
+  intro p hR
+  obtain ⟨hRsf, hRsup'⟩ := ParamReq5.holds_of_join hR
+  obtain ⟨hRsing', hRfam'⟩ := ParamReq5.holds_of_join hRsf
+  obtain ⟨nBalls, hBallsN⟩ := balls_tail p
+  obtain ⟨nSing, hSingN⟩ := hRsing p hRsing'
+  obtain ⟨nFam, hFamN⟩ := hRfam p hRfam'
+  obtain ⟨nSup, hSupN⟩ := hRsup p hRsup'
+  obtain ⟨nLeg, hLegN⟩ := legal_of_events p
+  obtain ⟨nHeight, hHeightN⟩ := heights_tail p
+  obtain ⟨nSuccess, hSuccessN⟩ := success_of_events p
+  have hexpLim := by
+    simpa only [Function.comp_apply] using
+      Real.tendsto_exp_neg_atTop_nhds_zero.comp
+        (Real.tendsto_sqrt_atTop.comp tendsto_natCast_atTop_atTop)
+  obtain ⟨nExp, hExpN⟩ := Filter.eventually_atTop.mp
+    (hexpLim.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 400)))
+  let n01 := max nBalls nSing
+  let n02 := max n01 nFam
+  let n03 := max n02 nSup
+  let n04 := max n03 nLeg
+  let n05 := max n04 nHeight
+  let n06 := max n05 nSuccess
+  let n0 := max n06 nExp
+  refine ⟨n0, ?_⟩
+  intro n hn N E G X hXp hRC H hH
+  have hn06 : n06 ≤ n := (le_max_left _ _).trans hn
+  have hnExp : nExp ≤ n := (le_max_right _ _).trans hn
+  have hnSuccess : nSuccess ≤ n := (le_max_right _ _).trans hn06
+  have hn05 : n05 ≤ n := (le_max_left _ _).trans hn06
+  have hn04 : n04 ≤ n := (le_max_left _ _).trans hn05
+  have hnHeight : nHeight ≤ n := (le_max_right _ _).trans hn05
+  have hn03 : n03 ≤ n := (le_max_left _ _).trans hn04
+  have hnLeg : nLeg ≤ n := (le_max_right _ _).trans hn04
+  have hn02 : n02 ≤ n := (le_max_left _ _).trans hn03
+  have hnSup : nSup ≤ n := (le_max_right _ _).trans hn03
+  have hn01 : n01 ≤ n := (le_max_left _ _).trans hn02
+  have hnFam : nFam ≤ n := (le_max_right _ _).trans hn02
+  have hnBalls : nBalls ≤ n := (le_max_left _ _).trans hn01
+  have hnSing : nSing ≤ n := (le_max_right _ _).trans hn01
+  let μ := X.centreLaw (canonHt X) H
+  let badBalls : X.CΩ (canonHt X) → Prop := fun ω => ¬ BallsOK X (canonHt X) ω
+  let badSingles : X.CΩ (canonHt X) → Prop := fun ω =>
+    BallsOK X (canonHt X) ω ∧ ¬ SinglesOK X (canonHt X) H ω
+  let badFamilies : X.CΩ (canonHt X) → Prop := fun ω =>
+    BallsOK X (canonHt X) ω ∧ ¬ FamiliesOK X (canonHt X) H ω
+  let badLegal : X.CΩ (canonHt X) → Prop := fun ω =>
+    ¬ (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X))
+  let badHeights : X.CΩ (canonHt X) → Prop := fun ω =>
+    (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) ∧
+      ¬ (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω) (act ω)
+        (markElig X (canonHt X) H ω)
+  let badSupport : X.CΩ (canonHt X) → Prop := fun ω => ¬ SupportOK X (canonHt X) H ω
+  let badSuccess : X.CΩ (canonHt X) → Prop := fun ω => ¬ CentreSuccess X (canonHt X) H ω
+  have hBallsPr : μ.pr badBalls ≤ Real.exp (-Real.sqrt n) / 3 := by
+    simpa [μ, badBalls] using hBallsN n hnBalls N E G X hXp H
+  have hSinglesPr : μ.pr badSingles ≤ Real.exp (-Real.sqrt n) / 3 := by
+    simpa [μ, badSingles] using hSingN n hnSing N E G X hXp H hH
+  have hFamiliesPr : μ.pr badFamilies ≤ Real.exp (-Real.sqrt n) / 3 := by
+    simpa [μ, badFamilies] using hFamN n hnFam N E G X hXp hRC H hH
+  have hSupportPr : μ.pr badSupport ≤ 1 / 300 := by
+    simpa [μ, badSupport] using hSupN n hnSup N E G X hXp H hH
+  have hHeightsPr : μ.pr badHeights ≤ 1 / 300 := by
+    simpa [μ, badHeights] using hHeightN n hnHeight N E G X hXp H
+  have hLegDet : ∀ ω, BallsOK X (canonHt X) ω → SinglesOK X (canonHt X) H ω →
+      FamiliesOK X (canonHt X) H ω →
+        (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) := by
+    intro ω hB hS hF
+    exact hLegN n hnLeg N E G X hXp H ω hB hS hF
+  have hLegalCover : ∀ ω, badLegal ω →
+      badBalls ω ∨ badSingles ω ∨ badFamilies ω := by
+    intro ω hnotLegal
+    by_cases hB : BallsOK X (canonHt X) ω
+    · by_cases hS : SinglesOK X (canonHt X) H ω
+      · by_cases hF : FamiliesOK X (canonHt X) H ω
+        · exact (hnotLegal (hLegDet ω hB hS hF)).elim
+        · exact Or.inr (Or.inr ⟨hB, hF⟩)
+      · exact Or.inr (Or.inl ⟨hB, hS⟩)
+    · exact Or.inl hB
+  have hLegalUnion :
+      μ.pr (fun ω => badBalls ω ∨ badSingles ω ∨ badFamilies ω) ≤
+        μ.pr badBalls + μ.pr badSingles + μ.pr badFamilies := by
+    calc
+      _ ≤ μ.pr badBalls + μ.pr (fun ω => badSingles ω ∨ badFamilies ω) :=
+        FinProb.pr_union μ badBalls (fun ω => badSingles ω ∨ badFamilies ω)
+      _ ≤ μ.pr badBalls + (μ.pr badSingles + μ.pr badFamilies) := by
+        have hu := FinProb.pr_union μ badSingles badFamilies
+        nlinarith [hu]
+      _ = μ.pr badBalls + μ.pr badSingles + μ.pr badFamilies := by ring
+  have hLegalPr : μ.pr badLegal ≤ Real.exp (-Real.sqrt n) := by
+    calc
+      μ.pr badLegal ≤ μ.pr (fun ω => badBalls ω ∨ badSingles ω ∨ badFamilies ω) :=
+        FinProb.pr_mono μ _ _ hLegalCover
+      _ ≤ μ.pr badBalls + μ.pr badSingles + μ.pr badFamilies := hLegalUnion
+      _ ≤ Real.exp (-Real.sqrt n) / 3 + Real.exp (-Real.sqrt n) / 3 +
+          Real.exp (-Real.sqrt n) / 3 := by linarith [hBallsPr, hSinglesPr, hFamiliesPr]
+      _ = Real.exp (-Real.sqrt n) := by ring
+  have hSuccessDet : ∀ ω,
+      (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) →
+      BallsOK X (canonHt X) ω →
+      (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω) (act ω)
+        (markElig X (canonHt X) H ω) →
+      SupportOK X (canonHt X) H ω → CentreSuccess X (canonHt X) H ω := by
+    intro ω hL hB hHt hSup'
+    exact hSuccessN n hnSuccess N E G X hXp H ω hH.base_support hH.step1 hL hB hHt hSup'
+  have hSuccessCover : ∀ ω, badSuccess ω →
+      badLegal ω ∨ badBalls ω ∨ badHeights ω ∨ badSupport ω := by
+    intro ω hnotSuccess
+    by_cases hL : (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω)
+        (X.sites (canonHt X))
+    · by_cases hB : BallsOK X (canonHt X) ω
+      · by_cases hHt : (canonHt X).hp.GoodHeights (X.sites (canonHt X)) (pos ω)
+          (act ω) (markElig X (canonHt X) H ω)
+        · by_cases hSup' : SupportOK X (canonHt X) H ω
+          · exact (hnotSuccess (hSuccessDet ω hL hB hHt hSup')).elim
+          · exact Or.inr (Or.inr (Or.inr hSup'))
+        · exact Or.inr (Or.inr (Or.inl ⟨hL, hHt⟩))
+      · exact Or.inr (Or.inl hB)
+    · exact Or.inl (by simpa [badLegal] using hL)
+  have hSuccessUnion :
+      μ.pr (fun ω => badLegal ω ∨ badBalls ω ∨ badHeights ω ∨ badSupport ω) ≤
+        μ.pr badLegal + μ.pr badBalls + μ.pr badHeights + μ.pr badSupport := by
+    calc
+      _ ≤ μ.pr badLegal +
+          μ.pr (fun ω => badBalls ω ∨ badHeights ω ∨ badSupport ω) :=
+        FinProb.pr_union μ badLegal
+          (fun ω => badBalls ω ∨ badHeights ω ∨ badSupport ω)
+      _ ≤ μ.pr badLegal + (μ.pr badBalls +
+          μ.pr (fun ω => badHeights ω ∨ badSupport ω)) := by
+        have hu := FinProb.pr_union μ badBalls
+          (fun ω => badHeights ω ∨ badSupport ω)
+        nlinarith [hu]
+      _ ≤ μ.pr badLegal + (μ.pr badBalls + (μ.pr badHeights + μ.pr badSupport)) :=
+        by
+          have hu := FinProb.pr_union μ badHeights badSupport
+          nlinarith [hu]
+      _ = μ.pr badLegal + μ.pr badBalls + μ.pr badHeights + μ.pr badSupport := by ring
+  have hSuccessPr : μ.pr badSuccess ≤ 1 / 100 := by
+    calc
+      μ.pr badSuccess ≤ μ.pr (fun ω => badLegal ω ∨ badBalls ω ∨ badHeights ω ∨ badSupport ω) :=
+        FinProb.pr_mono μ _ _ hSuccessCover
+      _ ≤ μ.pr badLegal + μ.pr badBalls +
+          μ.pr badHeights + μ.pr badSupport := hSuccessUnion
+      _ ≤ Real.exp (-Real.sqrt n) + Real.exp (-Real.sqrt n) / 3 +
+          (1 / 300 : ℝ) + 1 / 300 := by
+        linarith [hLegalPr, hBallsPr, hHeightsPr, hSupportPr]
+      _ ≤ 1 / 100 := by
+        have hexp : Real.exp (-Real.sqrt (n : ℝ)) < 1 / 400 := hExpN n hnExp
+        norm_num at hexp ⊢
+        nlinarith
+  exact ⟨hLegalPr, hSuccessPr⟩
+
+set_option maxHeartbeats 400000
 
 /-- SUB-LEMMA J11 (05:880–887): local validity at the long radius reads center data within
 `r + centreSlack`: neighbouring sites lie within `4√n + 302` of the odd image

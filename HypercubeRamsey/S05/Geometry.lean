@@ -2452,6 +2452,7 @@ theorem L5_1e0 : ∀ ε : ℝ, 0 < ε → ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (m
       have hcard := Finset.card_le_card_of_injOn f hmem hinj
       have hleft : _root_.hammingDist (g.sign x) (g.sign y) = A.card := by
         simp [A, _root_.hammingDist]
+      change _root_.hammingDist (g.sign x) (g.sign y) ≤ _root_.hammingDist _ _
       rw [hleft, hamming_code_eq]
       exact hcard
     resCoord := fun a => coordEquiv (.inl (.inl a))

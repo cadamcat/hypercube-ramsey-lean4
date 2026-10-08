@@ -1555,9 +1555,8 @@ theorem L18_6b {κ : CConsts} (hκ : κ.Admissible) (T : Stage) (K Cp Cs η : �
             K ^ S.card * Lane_sol_s18_6b.kernelSum D palette S true ker ≤
               (D.paletteScale palette)⁻¹ * Real.exp (0.02 * (T.S.n k : ℝ)) *
                 (S.card : ℝ) ^ 4 * (S.card.factorial : ℝ) * (B / D.paletteScale palette) ^ S.card := by
-          -- The finite assignment-to-diagram injection and weighted count remain.
-          -- Distinct endpoints and palette support are retained in kernelSum.
-          sorry
+          exact Lane_sol_s18_6b.kernelSum_bounds D palette S K hK hthree ker
+            hnonneg hsymm hrow hentry hrate
         have hfactor : 0 ≤ Real.exp (Cs * D.geom.r) * Lane_sol_s18_6b.correction D Cp S :=
           mul_nonneg (Real.exp_pos _).le (Lane_sol_s18_6b.correction_nonneg D Cp S)
         constructor

@@ -2,6 +2,7 @@ import HypercubeRamsey.S15.ClusterBinSampler_sol_s15_c2
 import HypercubeRamsey.S15.ClusterBinCharges_sol_s15_c2
 import HypercubeRamsey.S15.ClusterBinScales_sol_s15_c2
 import HypercubeRamsey.S15.ClusterLabelStage_sol_s15_c2
+import HypercubeRamsey.S15.HighCluster_opus_s15_sol_s15_prelaw
 
 /-! Sub-lemmas for the conditioned bin and label stages of P15.3 (section 15, lines 119–156).
 
@@ -721,7 +722,60 @@ theorem label_prelaw_small (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
     ∀ B : ClusterBinAssignment PT, 0 < (clusterIndependentBinKernel PT hPT hm W).w B →
       clusterBinGood PT hPT hm W B →
       Nonempty (LabelProductPreLaw PT hPT hm W B) := by
-  sorry
+  classical
+  filter_upwards [Lane_sol_s15_prelaw.small_bin_samplers κ hκ T] with k hsamplers
+  intro PT hPT hm hs W hW havoid hload B hB hgood
+  obtain ⟨Q, hQ⟩ := hsamplers PT hPT hm hs W B hB hgood
+  let f := Lane_sol_s15_prelaw.binAt PT hPT hm B
+  let φ := fun ω => Lane_sol_s15_prelaw.internalOfOdds PT hPT hm B
+    (Lane_sol_s15_prelaw.blockRead f ω)
+  have hlabel (ω) (b : OddPosition T k) :
+      clusterLabelFromInternal (hPT := hPT) hm (φ ω) b =
+        Lane_sol_s15_prelaw.blockRead f ω b :=
+    Lane_sol_s15_prelaw.internalOfOdds_label PT hPT hm B _ b
+  have hsupport (ω) (hω : (FinLaw.pi Q).w ω ≠ 0) (b : OddPosition T k) :
+      Lane_sol_s15_prelaw.blockRead f ω b ∈ Lane_sol_s15_prelaw.physicalSet (f b) := by
+    exact (hQ (f b)).2.2.1 (ω (f b))
+      (Finset.prod_ne_zero_iff.mp hω (f b) (Finset.mem_univ _)) ⟨b, rfl⟩
+  refine ⟨{
+    V := Lane_sol_s15_prelaw.PhysicalBin PT
+    Ω := fun v => {b : OddPosition T k // f b = v} → Fin (T.S.N k)
+    Q := Q
+    φ := φ
+    var := f
+    pins := fun ω => Lane_sol_s15_prelaw.internalOfOdds_pins PT hPT hm B _
+    local_label := ?_
+    var_load := fun v => (hQ v).2.2.2.2
+    singleton := ?_
+    preComparison := ?_
+    supported := ?_
+    injective := ?_ }⟩
+  · intro b ω ω' heq
+    rw [hlabel, hlabel]
+    exact congrFun heq ⟨b, rfl⟩
+  · intro b y
+    rw [Lane_sol_s15_prelaw.pr_map]
+    simp_rw [hlabel]
+    change (FinLaw.pi Q).pr (fun ω => ω (f b) ⟨b, rfl⟩ = y) = _
+    rw [Lane_sol_s15_prelaw.pr_pi_coord Q (f b) (fun z => z ⟨b, rfl⟩ = y)]
+    exact (hQ (f b)).2.1 ⟨b, rfl⟩ y
+  · intro F hF S hdep _ hquery
+    exact Lane_sol_s15_prelaw.product_preComparison PT hPT hm hs W B Q
+      (fun v => (hQ v).2.1) (fun v => (hQ v).2.2.2.1) F hF S hdep hquery
+  · intro ω hω b
+    rw [hlabel]
+    exact Finpartition.le _ (B (clusterGroupIndexAt PT hPT hm b)).2 (hsupport ω hω b)
+  · intro ω hω b c heq
+    rw [hlabel, hlabel] at heq
+    have hbin : f c = f b := by
+      by_contra hne
+      exact Finset.disjoint_left.mp (Lane_sol_s15_prelaw.physical_disjoint PT hPT (f c) (f b) hne)
+        (hsupport ω hω c) (heq ▸ hsupport ω hω b)
+    have hωb : (Q (f b)).w (ω (f b)) ≠ 0 :=
+      Finset.prod_ne_zero_iff.mp hω (f b) (Finset.mem_univ _)
+    have heq' : ω (f b) ⟨b, rfl⟩ = ω (f b) ⟨c, hbin⟩ := by
+      exact heq.trans (Lane_sol_s15_prelaw.blockRead_eq f ω c (f b) hbin)
+    exact congrArg Subtype.val ((hQ (f b)).1 (ω (f b)) hωb heq')
 
 /-- Sub-lemma (high-small-bin mass conditioning, 15:155): the local lemma on the variables of a
 product pre-law against the star mass failures.  Under the pre-law each failure costs

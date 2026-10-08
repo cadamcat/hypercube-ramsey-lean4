@@ -1059,6 +1059,7 @@ noncomputable def protocol (hD : D.Spec) (hT : TransitionData D) (hG : TransferG
   replies_step := fun _ _ _ => rfl
   calls_bound := fun σ s a => calls_bound' hG hmargin hbudget σ s a
   output := output D X
+  output_supported := fun σ s => output_supported (D := D) (X := X) σ _
   broad := fun σ s => hbroad σ _
   reduction := reduction' hD hT hG hsmall hmargin hcount
 

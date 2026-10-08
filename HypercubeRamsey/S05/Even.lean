@@ -1476,7 +1476,196 @@ theorem even_near_small : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p
         (∀ v : EvenRole5 n, ((Lane_sol_s05_even.evenNear X v (evenSep X L)).card : ℝ) ≤
           f * Fintype.card (EvenRole5 n)) ∧
         (n : ℝ) * f * (4 / (1 - X.p.nu0 - X.p.nu1) * Real.exp (X.p.tau1 * n)) ≤ 1 := by
-  sorry
+  classical
+  let R : ParamReq5 := {
+    Kcap := fun _ => 0
+    Kpp := fun _ => 0
+    Kh := fun _ => 0
+    K1 := fun _ => 0
+    K2 := fun _ => 0
+    KD := fun _ => 0
+    Ks := fun _ => 0
+    KB := fun _ => 0
+    alpha := fun _ => 1
+    alpha_pos := fun _ => by norm_num
+  }
+  refine ⟨R, ?_⟩
+  intro p hp
+  let q₀ : ℝ := 2 * p.rho
+  have hq₀pos : 0 < q₀ := by dsimp [q₀]; linarith [p.hrho.1]
+  have hq₀half : q₀ < 1 / 2 := by dsimp [q₀]; linarith [p.hrho.2]
+  have hbin : binaryEntropy5 q₀ = Real.binEntropy q₀ := by
+    unfold binaryEntropy5 Real.binEntropy
+    rw [Real.log_inv q₀, Real.log_inv (1 - q₀)]
+    ring
+  let gap : ℝ := Real.log 2 - p.tau1 - Real.binEntropy q₀
+  have hgap : 0 < gap := by
+    dsimp [gap]
+    rw [← hbin]
+    linarith [p.hEntropy]
+  obtain ⟨δ, hδ, hcont⟩ :=
+    (Metric.continuousAt_iff.mp (Real.binEntropy_continuous.continuousAt (x := q₀)))
+      (gap / 2) (by positivity)
+  let d : ℝ := min (δ / 2) ((1 / 2 - q₀) / 2)
+  let t : ℝ := q₀ + d
+  have hdpos : 0 < d := lt_min (by positivity) (by positivity)
+  have ht0 : 0 ≤ t := by dsimp [t]; linarith [hq₀pos, hdpos]
+  have htHalf : t < 1 / 2 := by
+    have hdle : d ≤ (1 / 2 - q₀) / 2 := min_le_right _ _
+    dsimp [t]
+    linarith [hq₀half, hdle]
+  have hclose : dist t q₀ < δ := by
+    have hdt : t - q₀ = d := by dsimp [t]; ring
+    rw [Real.dist_eq, hdt, abs_of_pos hdpos]
+    have hsmall : d ≤ δ / 2 := min_le_left _ _
+    linarith [hδ]
+  have hHclose := hcont hclose
+  have hHbound : Real.binEntropy t ≤ Real.binEntropy q₀ + gap / 2 := by
+    have hAbs : |Real.binEntropy t - Real.binEntropy q₀| < gap / 2 := by
+      simpa [Real.dist_eq] using hHclose
+    have := le_abs_self (Real.binEntropy t - Real.binEntropy q₀)
+    linarith
+  have hentropy : Real.binEntropy t < Real.log 2 - p.tau1 := by
+    dsimp [gap] at hHbound ⊢
+    linarith
+  let c : ℝ := Real.log 2 - Real.binEntropy t - p.tau1
+  have hc : 0 < c := by dsimp [c]; linarith [hentropy]
+  let b : ℝ := 1 - 9 * p.alpha / 4000000
+  have hb1 : b < 1 := by dsimp [b]; linarith [p.halpha.1]
+  have hmarginB := Lane_sol_s05_centres.nat_power_margin (10 / d) b 1 hb1
+  have hmarginHalf := Lane_sol_s05_centres.nat_power_margin (10 / d) (1 / 2) 1 (by norm_num)
+  let den : ℝ := 1 - p.nu0 - p.nu1
+  have hden : 0 < den := by
+    dsimp [den]
+    have := p.hnu1.2
+    linarith
+  have htailBase : Filter.Tendsto (fun n : ℕ => (n : ℝ) ^ (1 : ℝ) * Real.exp (-c * n))
+      Filter.atTop (nhds 0) :=
+    (tendsto_rpow_mul_exp_neg_mul_atTop_nhds_zero 1 c hc).comp
+      tendsto_natCast_atTop_atTop
+  have htail : Filter.Tendsto (fun n : ℕ => (8 / den) * ((n : ℝ) * Real.exp (-c * n)))
+      Filter.atTop (nhds 0) := by
+    simpa only [Real.rpow_one, mul_zero] using htailBase.const_mul (8 / den)
+  have htailSmall := htail.eventually
+    (isOpen_Iio.mem_nhds (by norm_num : (0 : ℝ) ∈ Set.Iio 1))
+  have hlarge := hmarginB.and (hmarginHalf.and (htailSmall.and (Filter.eventually_ge_atTop (1 : ℕ))))
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp hlarge
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp L
+  rcases hn₀ n hn with ⟨hmarginB, hrest⟩
+  rcases hrest with ⟨hmarginHalf, hrest⟩
+  rcases hrest with ⟨hsmall, hn1⟩
+  have hnpos : 0 < n := by omega
+  have hnreal : (0 : ℝ) < n := by exact_mod_cast hnpos
+  have hmarginB' : (10 / d) * (n : ℝ) ^ b ≤ (n : ℝ) := by
+    simpa [Real.rpow_one] using hmarginB
+  have hmarginHalf' : (10 / d) * (n : ℝ) ^ (1 / 2 : ℝ) ≤ (n : ℝ) := by
+    simpa [Real.rpow_one] using hmarginHalf
+  have hBpow : (n : ℝ) ^ b ≤ d / 10 * (n : ℝ) := by
+    calc
+      (n : ℝ) ^ b = (d / 10) * ((10 / d) * (n : ℝ) ^ b) := by
+        field_simp [ne_of_gt hdpos]
+      _ ≤ (d / 10) * (n : ℝ) :=
+        mul_le_mul_of_nonneg_left hmarginB' (by positivity)
+  have hHalfPow : (n : ℝ) ^ (1 / 2 : ℝ) ≤ d / 10 * (n : ℝ) := by
+    calc
+      (n : ℝ) ^ (1 / 2 : ℝ) = (d / 10) * ((10 / d) * (n : ℝ) ^ (1 / 2 : ℝ)) := by
+        field_simp [ne_of_gt hdpos]
+      _ ≤ (d / 10) * (n : ℝ) :=
+        mul_le_mul_of_nonneg_left hmarginHalf' (by positivity)
+  have hfloor : (L.ht.hp.r : ℝ) ≤ p.rho * n := by
+    change (⌊X.p.rho * n⌋₊ : ℝ) ≤ _
+    rw [hXp]
+    exact Nat.floor_le (mul_nonneg p.hrho.1.le (Nat.cast_nonneg _))
+  have hζσ : L.ht.ζ - L.ht.σ = 9 * p.alpha / 1000000 := by
+    rw [L.ht.fixed.2.2.2.1, L.ht.fixed.2.2.1, hXp]
+    ring
+  have hslack : (L.slack : ℝ) ≤ (n : ℝ) ^ b := by
+    have hh := L.slack_small
+    rw [hζσ] at hh
+    have hb : 1 - (9 * p.alpha / 1000000) / 4 = b := by
+      dsimp [b]
+      ring
+    rw [hb] at hh
+    exact hh
+  have hoccupied : ((Finset.univ \ X.g.residual).card : ℝ) ≤ (n : ℝ) ^ (1 / 2 : ℝ) :=
+    Lane_sol_s05_even.residual_complement_card X
+  have hrad : ((evenSep X L + (Finset.univ \ X.g.residual).card : ℕ) : ℝ) ≤ t * n := by
+    rw [evenSep]
+    push_cast
+    dsimp [t, q₀]
+    nlinarith [hfloor, hslack, hoccupied, hBpow, hHalfPow]
+  have htn : t * (n : ℝ) < (1 / 2 : ℝ) * n := mul_lt_mul_of_pos_right htHalf hnreal
+  have hradTwice : (2 : ℝ) * ((evenSep X L + (Finset.univ \ X.g.residual).card : ℕ) : ℝ) < n := by
+    nlinarith [hrad, htn]
+  have hradNatTwice : 2 * (evenSep X L + (Finset.univ \ X.g.residual).card) < n := by
+    exact_mod_cast hradTwice
+  have hradNat : evenSep X L + (Finset.univ \ X.g.residual).card ≤ n / 2 := by omega
+  have hradFrac :
+      ((evenSep X L + (Finset.univ \ X.g.residual).card : ℕ) : ℝ) / n ≤ t :=
+    (div_le_iff₀ hnreal).2 hrad
+  have hnearEntropy (v : EvenRole5 n) :
+      ((Lane_sol_s05_even.evenNear X v (evenSep X L)).card : ℝ) ≤ Real.exp (Real.binEntropy t * n) :=
+    Lane_sol_s05_even.evenNear_entropy_bound X v (evenSep X L) t hnpos ht0 htHalf.le hradFrac hradNat
+  have hevenCard : Fintype.card (EvenRole5 n) = 2 ^ (n - 1) := by
+    have he : EvenRole5 n ≃ {x : CubeVertex n // x ∈ evenRoleSet n} := {
+      toFun := fun x => ⟨x.1, by simpa [evenRoleSet] using x.2⟩
+      invFun := fun x => ⟨x.1, by simpa [evenRoleSet] using x.2⟩
+      left_inv := by intro x; rfl
+      right_inv := by intro x; rfl
+    }
+    have hcard : Fintype.card (EvenRole5 n) = (evenRoleSet n).card :=
+      (Fintype.card_congr he).trans (Fintype.card_coe _)
+    exact hcard.trans (parity_class_card hnpos).1
+  have hdouble : 2 * (Fintype.card (EvenRole5 n) : ℝ) = (2 : ℝ) ^ n := by
+    rw [hevenCard]
+    push_cast
+    rw [← pow_succ']
+    congr 1
+    omega
+  have hpow : (2 : ℝ) ^ n = Real.exp (Real.log 2 * n) := by
+    calc
+      _ = (Real.exp (Real.log 2)) ^ n := by rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+      _ = Real.exp (Real.log 2 * n) := by rw [← Real.exp_nat_mul]; congr 1; ring
+  let f : ℝ := 2 * Real.exp (-(Real.log 2 - Real.binEntropy t) * n)
+  have hscale : Real.exp (Real.binEntropy t * n) =
+      f * (Fintype.card (EvenRole5 n) : ℝ) := by
+    dsimp [f]
+    calc
+      Real.exp (Real.binEntropy t * n) =
+          (2 * Real.exp (-(Real.log 2 - Real.binEntropy t) * n)) *
+            (Fintype.card (EvenRole5 n) : ℝ) := by
+        rw [show (2 * Real.exp (-(Real.log 2 - Real.binEntropy t) * n)) *
+            (Fintype.card (EvenRole5 n) : ℝ) =
+              Real.exp (-(Real.log 2 - Real.binEntropy t) * n) *
+                (2 * (Fintype.card (EvenRole5 n) : ℝ)) by ring,
+          hdouble, hpow, ← Real.exp_add]
+        congr 1
+        ring
+      _ = _ := rfl
+  have hnearCard (v : EvenRole5 n) :
+      ((Lane_sol_s05_even.evenNear X v (evenSep X L)).card : ℝ) ≤
+        f * Fintype.card (EvenRole5 n) := (hnearEntropy v).trans_eq hscale
+  have hformula :
+      (n : ℝ) * f * (4 / den * Real.exp (p.tau1 * n)) =
+        (8 / den) * ((n : ℝ) * Real.exp (-c * n)) := by
+    dsimp [f]
+    calc
+      _ = (8 / den) * ((n : ℝ) *
+          (Real.exp (-(Real.log 2 - Real.binEntropy t) * n) * Real.exp (p.tau1 * n))) := by ring
+      _ = (8 / den) * ((n : ℝ) *
+          Real.exp (-(Real.log 2 - Real.binEntropy t) * n + p.tau1 * n)) := by
+        rw [← Real.exp_add]
+      _ = _ := by
+        rw [show -(Real.log 2 - Real.binEntropy t) * n + p.tau1 * n = -c * n by
+          dsimp [c]
+          ring]
+  have hsmallFinal :
+      (n : ℝ) * f * (4 / den * Real.exp (p.tau1 * n)) ≤ 1 := by
+    rw [hformula]
+    exact hsmall.le
+  refine ⟨f, by positivity, hnearCard, ?_⟩
+  simpa [den, hXp] using hsmallFinal
 
 /-- SUB-LEMMA E (05:806–816, 1246–1248, deterministic cube rarity): the average over actual even roles of
 `d_v = C B_{K(v)} exp(C k_* 1_{j(v) > J})` is bounded, for `α` small after `C` (`log B_K = O(j + 1)` at low
@@ -1492,12 +1681,95 @@ theorem even_mean_average (Cd : Pre65 → ℝ) : ∃ R : ParamReq5, ∀ p : Para
 theorem evenRow_outputs_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (v : EvenRole5 n)
     (x : Fin N) (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) :
     X.evenRow ES H ω O v x = X.evenRow ES H ω O' v x := by
-  sorry
+  classical
+  have hweight (c : X.CRef L.ht) (z : X.RefVal v c.2) :
+      X.evenWeight ES H ω v c O z = X.evenWeight ES H ω v c O' z := by
+    unfold evenWeight
+    have hg := ES.gate_outputs H v c
+      (replaceRef (X := X) (h := L.ht) ω v c z) O O' hO
+    rw [propext hg]
+    congr 1
+    apply Finset.prod_congr rfl
+    intro b hb
+    rw [hO b hb]
+  have hmass (c : X.CRef L.ht) :
+      X.evenMass ES H ω v c O = X.evenMass ES H ω v c O' := by
+    unfold evenMass
+    apply Finset.sum_congr rfl
+    intro z hz
+    exact hweight c z
+  have hq (c : X.CRef L.ht) :
+      (∏ b ∈ star v, (ES.refQ H v c ω b).w (O b)) =
+        ∏ b ∈ star v, (ES.refQ H v c ω b).w (O' b) := by
+    apply Finset.prod_congr rfl
+    intro b hb
+    rw [hO b hb]
+  have htest (c : X.CRef L.ht) :
+      X.EvenTest ES H ω v c O ↔ X.EvenTest ES H ω v c O' := by
+    unfold EvenTest
+    rw [hmass c, hq c]
+  have hmarg (c : X.CRef L.ht) (y : Fin N) :
+      X.evenMarg ES H ω v c O y = X.evenMarg ES H ω v c O' y := by
+    unfold evenMarg
+    simp_rw [hweight c, hmass c]
+  have hkeep (c : X.CRef L.ht) (y : Fin N) :
+      X.EvenKeep ES H ω v c O y ↔ X.EvenKeep ES H ω v c O' y := by
+    unfold EvenKeep
+    rw [hmarg c y]
+  have hentry (c : X.CRef L.ht) (y : Fin N) :
+      (if X.EvenKeep ES H ω v c O y then X.evenMarg ES H ω v c O y else 0) =
+        (if X.EvenKeep ES H ω v c O' y then X.evenMarg ES H ω v c O' y else 0) := by
+    rw [propext (hkeep c y), hmarg c y]
+  have hden (c : X.CRef L.ht) :
+      (∑ y, if X.EvenKeep ES H ω v c O y then X.evenMarg ES H ω v c O y else 0) =
+        ∑ y, if X.EvenKeep ES H ω v c O' y then X.evenMarg ES H ω v c O' y else 0 := by
+    apply Finset.sum_congr rfl
+    intro y hy
+    exact hentry c y
+  unfold evenRow
+  cases hc : X.evenRefOf (L.elig H) H ω v with
+  | none => rfl
+  | some c =>
+      simp only [hc]
+      have hcond :
+          (ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O) ↔
+            (ES.gate H v c ω O' ∧ X.EvenTest ES H ω v c O') :=
+        and_congr (ES.gate_outputs H v c ω O O' hO) (htest c)
+      by_cases hg : ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O
+      · have hg' := hcond.mp hg
+        simp only [if_pos hg, if_pos hg']
+        rw [hentry c x, hden c]
+      · have hg' : ¬ (ES.gate H v c ω O' ∧ X.EvenTest ES H ω v c O') := by
+          intro hg'
+          exact hg (hcond.mpr hg')
+        simp only [if_neg hg, if_neg hg']
 
 /-- SUB-LEMMA D3: even roles at residual distance more than two have disjoint stars. -/
 theorem star_disjoint_of_far (v w : EvenRole5 n) (hfar : 2 < X.g.residualDist v.1 w.1) :
     Disjoint (star v) (star w) := by
-  sorry
+  classical
+  apply Finset.disjoint_left.mpr
+  intro b hbv hbw
+  have hadjv : (cube n).Adj v.1 b.1 := (Finset.mem_filter.mp hbv).2
+  have hadjw : (cube n).Adj w.1 b.1 := (Finset.mem_filter.mp hbw).2
+  have hvb := Lane_sol_s05_even.adjacent_residualDist X v.1 b.1 hadjv
+  have hwb := Lane_sol_s05_even.adjacent_residualDist X w.1 b.1 hadjw
+  have htri : X.g.residualDist v.1 w.1 ≤
+      X.g.residualDist v.1 b.1 + X.g.residualDist b.1 w.1 := by
+    simpa only [← Lane_sol_s05_even.residualDist_eq X] using
+      (_root_.hammingDist_triangle
+        (Lane_sol_s05_even.residualVertex X v.1)
+        (Lane_sol_s05_even.residualVertex X b.1)
+        (Lane_sol_s05_even.residualVertex X w.1))
+  have hbw : X.g.residualDist b.1 w.1 = X.g.residualDist w.1 b.1 := by
+    simp [Lane_sol_s05_even.residualDist_eq, _root_.hammingDist_comm]
+  rw [hbw] at htri
+  have hbound : X.g.residualDist v.1 w.1 ≤ 2 := by
+    calc
+      X.g.residualDist v.1 w.1 ≤ X.g.residualDist v.1 b.1 + X.g.residualDist w.1 b.1 := htri
+      _ ≤ 1 + 1 := Nat.add_le_add hvb hwb
+      _ = 2 := by norm_num
+  omega
 
 /-- The product-row mean of `Z_v(x)` at fixed centers (05:1229–1236). -/
 def evenW (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N) (ω : X.CΩ L.ht) : ℝ :=

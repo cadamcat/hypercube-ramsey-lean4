@@ -972,7 +972,68 @@ theorem even_mean_average (Cd : Pre65 → ℝ) : ∃ R : ParamReq5, ∀ p : Para
 theorem evenRow_outputs_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (v : EvenRole5 n)
     (x : Fin N) (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) :
     X.evenRow ES H ω O v x = X.evenRow ES H ω O' v x := by
-  sorry
+  classical
+  have hweight (c : X.CRef L.ht) (z : X.RefVal v c.2) :
+      X.evenWeight ES H ω v c O z = X.evenWeight ES H ω v c O' z := by
+    unfold evenWeight
+    have hg := ES.gate_outputs H v c
+      (replaceRef (X := X) (h := L.ht) ω v c z) O O' hO
+    rw [propext hg]
+    congr 1
+    apply Finset.prod_congr rfl
+    intro b hb
+    rw [hO b hb]
+  have hmass (c : X.CRef L.ht) :
+      X.evenMass ES H ω v c O = X.evenMass ES H ω v c O' := by
+    unfold evenMass
+    apply Finset.sum_congr rfl
+    intro z hz
+    exact hweight c z
+  have hq (c : X.CRef L.ht) :
+      (∏ b ∈ star v, (ES.refQ H v c ω b).w (O b)) =
+        ∏ b ∈ star v, (ES.refQ H v c ω b).w (O' b) := by
+    apply Finset.prod_congr rfl
+    intro b hb
+    rw [hO b hb]
+  have htest (c : X.CRef L.ht) :
+      X.EvenTest ES H ω v c O ↔ X.EvenTest ES H ω v c O' := by
+    unfold EvenTest
+    rw [hmass c, hq c]
+  have hmarg (c : X.CRef L.ht) (y : Fin N) :
+      X.evenMarg ES H ω v c O y = X.evenMarg ES H ω v c O' y := by
+    unfold evenMarg
+    simp_rw [hweight c, hmass c]
+  have hkeep (c : X.CRef L.ht) (y : Fin N) :
+      X.EvenKeep ES H ω v c O y ↔ X.EvenKeep ES H ω v c O' y := by
+    unfold EvenKeep
+    rw [hmarg c y]
+  have hentry (c : X.CRef L.ht) (y : Fin N) :
+      (if X.EvenKeep ES H ω v c O y then X.evenMarg ES H ω v c O y else 0) =
+        (if X.EvenKeep ES H ω v c O' y then X.evenMarg ES H ω v c O' y else 0) := by
+    rw [propext (hkeep c y), hmarg c y]
+  have hden (c : X.CRef L.ht) :
+      (∑ y, if X.EvenKeep ES H ω v c O y then X.evenMarg ES H ω v c O y else 0) =
+        ∑ y, if X.EvenKeep ES H ω v c O' y then X.evenMarg ES H ω v c O' y else 0 := by
+    apply Finset.sum_congr rfl
+    intro y hy
+    exact hentry c y
+  unfold evenRow
+  cases hc : X.evenRefOf (L.elig H) H ω v with
+  | none => rfl
+  | some c =>
+      simp only [hc]
+      have hcond :
+          (ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O) ↔
+            (ES.gate H v c ω O' ∧ X.EvenTest ES H ω v c O') :=
+        and_congr (ES.gate_outputs H v c ω O O' hO) (htest c)
+      by_cases hg : ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O
+      · have hg' := hcond.mp hg
+        simp only [if_pos hg, if_pos hg']
+        rw [hentry c x, hden c]
+      · have hg' : ¬ (ES.gate H v c ω O' ∧ X.EvenTest ES H ω v c O') := by
+          intro hg'
+          exact hg (hcond.mpr hg')
+        simp only [if_neg hg, if_neg hg']
 
 /-- SUB-LEMMA D3: even roles at residual distance more than two have disjoint stars. -/
 theorem star_disjoint_of_far (v w : EvenRole5 n) (hfar : 2 < X.g.residualDist v.1 w.1) :

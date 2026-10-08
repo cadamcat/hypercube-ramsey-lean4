@@ -6,6 +6,12 @@ import HypercubeRamsey.S18.PaletteRows
 import HypercubeRamsey.S17.Nodes
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_fresh
 import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_row
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_row_quant
+import HypercubeRamsey.S18.Nodes_sol_d18l_up_pool
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_query
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_raw
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_bounds
+import HypercubeRamsey.S18.Nodes_sol_split_d18l_sol_d18l_cal_finish
 
 /-! Component and input-estimate nodes for D18.L. The two given Spec fields
 (corner mass and thresholds) are passed directly by the final assembly.
@@ -386,16 +392,18 @@ theorem D18_L_palette_row (hκ : κ.Admissible) (hThresholds : LateThresholds κ
         ProfileCornerMass PT → LargeIndex κ T k → PaletteRowInput (rawData hκ X) Krow := by
   have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
   -- A fixed upstream scale, before the index and all construction choices.
-  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10)
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10 + 100 * κ.Kcell * (κ.Kp : ℝ))
   have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
   obtain ⟨Krow, hKrow, hRows⟩ := lowModePalettePairRow κ hκ T hSource K17 hK17
   refine ⟨Krow, hKrow, ?_⟩
-  filter_upwards [hRows] with k hRows
+  filter_upwards [hRows,
+    Lane_sol_d18l_row.eventually_physical_quantitative_validity hκ T K17
+      (Lane_sol_d18l_row.fixed_adapter_scale hκ)] with k hRows hAdapter
   intro PT hPT X hMass hLarge
   let physical := Classical.choice X.l16.physical
   let ctx := Lane_sol_s18_dl.physical_list_context hPT X.low physical
-  have hQuant : ctx.L16QuantitativeValidity K17 := by
-    sorry
+  have hQuant : ctx.L16QuantitativeValidity K17 :=
+    Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
   apply Lane_sol_d18l_row.palette_row_transport (rawData hκ X) physical
     X.palette.hle X.palette.code X.palette.colours
   · intro v
@@ -499,13 +507,112 @@ theorem D18_L_cell_query_calibration (hκ : κ.Admissible) (hThresholds : LateTh
     (T : Stage) (hSources : Sources κ T) :
     ∀ᶠ k in atTop, ∀ (PT : ProfiledTiling κ T k) (hPT : PT.Valid) (X : Inputs hPT),
       ProfileCornerMass PT → LargeIndex κ T k → CellQueryCalibration (rawData hκ X) := by
-  sorry
+  classical
+  filter_upwards [T.S.n_tendsto.eventually_ge_atTop (max 100 ⌈Real.exp 100⌉₊)] with k hn
+  intro PT hPT X hMass hLarge
+  let D := rawData hκ X
+  change CellQueryCalibration D
+  intro C q hq odd hodd hCell hEarly hSep f hf
+  by_cases hzero : q = 0
+  · subst q
+    exact Lane_sol_d18l_cal.zero_queries D C odd f
+  let physical := Classical.choice X.l16.physical
+  let roles : Fin q → S16.OddCellRole D.geom C :=
+    fun a => ⟨odd a, hCell a, (hEarly a).1⟩
+  have hroles : Function.Injective roles := by
+    intro a b hab
+    exact hodd (congrArg Subtype.val hab)
+  have hn100 : 100 ≤ T.S.n k := (Nat.le_max_left _ _).trans hn
+  have hn10 : 10 ≤ T.S.n k := by omega
+  have hnExp : Real.exp 100 ≤ (T.S.n k : ℝ) :=
+    (Nat.le_ceil _).trans (by exact_mod_cast (Nat.le_max_right 100 ⌈Real.exp 100⌉₊).trans hn)
+  have hLowCluster (hc : PT.tiling.mode.isCluster) : PT.tiling.mode = .lowCluster := by
+    have hl := X.low
+    cases hm : PT.tiling.mode <;> simp_all [Mode.isLow, Mode.isCluster]
+  have hSepC : ∀ a b, a ≠ b →
+      50 * κ.ρ * (PT.tiling.P (D.geom.cellPatch C)).h <
+        (hammingDist (roles a).1 (roles b).1 : ℝ) := by
+    intro a b hab
+    have hpatch : D.geom.patchOf (odd a) = D.geom.cellPatch C := by
+      rw [← D.geom.cellOf_patch (odd a), hCell a]
+    simpa only [hpatch] using hSep a b hab
+  have hGroups : Function.Injective (fun a => physical.raw.groupOf C (roles a)) := by
+    by_cases hCluster : PT.tiling.mode.isCluster
+    · exact
+      Lane_sol_d18l_cal.query_groups_injective hκ hThresholds hPT
+        physical.raw physical.source_valid hCluster X.low C roles hSepC
+    · have hRawGroups : Function.Injective (physical.raw.groupOf C) := by
+        rcases physical.source_valid with ⟨hm, _, hSource⟩ | ⟨_, hSource⟩
+        · exact (hCluster (by simp [hm, Mode.isCluster])).elim
+        · exact (hSource C).1
+      exact hRawGroups.comp hroles
+  have hMargin : PT.tiling.mode.isCluster →
+      2 < 20 * κ.ρ * (PT.tiling.P (D.geom.cellPatch C)).h := fun hc =>
+    Lane_sol_d18l_cal.patch_threshold hκ hThresholds hPT (hLowCluster hc) _
+  have hHeight : PT.tiling.mode.isCluster → 1 ≤ (PT.tiling.P (D.geom.cellPatch C)).h := by
+    intro hc
+    have hm := hMargin hc
+    by_contra hh
+    have hz : (PT.tiling.P (D.geom.cellPatch C)).h = 0 := by omega
+    simp [hz] at hm
+    norm_num at hm
+  obtain ⟨y, hy⟩ := (hPT.tiling_valid.patch_nonempty (D.geom.cellPatch C)).2
+  obtain ⟨B, hB, hyB⟩ := (PT.tiling.P (D.geom.cellPatch C)).bins.exists_mem hy
+  have hBins : (Finset.univ : Finset (Bin PT.tiling (D.geom.cellPatch C))).Nonempty :=
+    ⟨⟨B, hB⟩, Finset.mem_univ _⟩
+  have hM : 0 < (PT.tiling.P (D.geom.cellPatch C)).M := by
+    rw [← (PT.tiling.P (D.geom.cellPatch C)).cardY]
+    exact Finset.card_pos.mpr ⟨y, hy⟩
+  have hCount := Lane_sol_d18l_cal.source_bin_count hκ physical.quantitative (D.geom.cellPatch C)
+  have hd : 0 < (PT.tiling.P (D.geom.cellPatch C)).d := by
+    by_contra hh
+    have hz : (PT.tiling.P (D.geom.cellPatch C)).d = 0 := by omega
+    rw [hz] at hCount
+    have hmR : (0 : ℝ) < (PT.tiling.P (D.geom.cellPatch C)).M := by exact_mod_cast hM
+    simp at hCount
+    linarith
+  have hSlot : (T.S.n k : ℝ) ^ (200 : ℕ) ≤
+      (D.geom.nslot C : ℝ) * (PT.tiling.P (D.geom.cellPatch C)).d := by
+    have hK := Lane_sol_d18l_cal.Kcell_ge_one hκ
+    have hs := X.l16.slot_lower C
+    rw [hκ.Ac_eq] at hs
+    exact (show (T.S.n k : ℝ) ^ (200 : ℕ) ≤ κ.Kcell * (T.S.n k : ℝ) ^ (200 : ℕ) by
+      simpa only [one_mul] using mul_le_mul_of_nonneg_right hK (by positivity)).trans hs
+  have hDirect (hc : ¬ PT.tiling.mode.isCluster) :
+      (q : ℝ) ≤ Real.rpow (D.geom.nslot C : ℝ) 0.025 ∧
+        Real.rpow (D.geom.nslot C : ℝ) (-0.04) ≤ 0.001 := by
+    have hd := Lane_sol_d18l_cal.source_direct_bin_size hκ physical.quantitative hc (D.geom.cellPatch C)
+    have hs : (T.S.n k : ℝ) ^ (200 : ℕ) ≤ (D.geom.nslot C : ℝ) := by
+      simpa only [hd, Nat.cast_one, mul_one] using hSlot
+    exact Lane_sol_d18l_cal.direct_slot_query_room (T.S.n k) q (D.geom.nslot C : ℝ) hn10 hq hs
+  have hRate : Lane_sol_d18l_cal.cell_query_rate D.geom C ≤ 0.001 := by
+    by_cases hc : PT.tiling.mode.isCluster
+    · simpa only [Lane_sol_d18l_cal.cell_query_rate, if_pos hc] using
+        (Lane_sol_d18l_cal.patch_rate_and_error hκ hPT (hLowCluster hc) (D.geom.cellPatch C)).1
+    · simpa only [Lane_sol_d18l_cal.cell_query_rate, if_neg hc] using (hDirect hc).2
+  have hRoom := Lane_sol_d18l_cal.bin_square_room (T.S.n k)
+    (PT.tiling.P (D.geom.cellPatch C)).d hnExp (physical.quantitative.bin_count_bound _)
+  have hq0 : 0 < q := by omega
+  have hBound := Lane_sol_d18l_cal.physical_cell_query_bound physical C hBins hq0 hq roles hroles hGroups
+    hHeight (fun hc => (hDirect hc).1) hMargin hSepC hn100 hRoom hd hSlot hRate f hf
+  rw [Lane_sol_d18l_cal.cell_pool_law_iid D C hBins]
+  have hRhs : (∏ a, ((∑ y, (PT.πraw (D.geom.cellPatch C)).w y * f a y) +
+      Real.rpow (T.S.n k : ℝ) (-197))) =
+      ∏ a, ((∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +
+        Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3))) := by
+    apply Finset.prod_congr rfl
+    intro a _
+    have hp : D.geom.patchOf (odd a) = D.geom.cellPatch C := by
+      rw [← D.geom.cellOf_patch (odd a), hCell a]
+    rw [hp, hκ.Ac_eq]
+    norm_num
+  exact hBound.trans_eq (congrArg (fun x => Real.exp (0.002 * q) * x) hRhs)
 
 /-- Product-pool/product-fresh algebra, without positivity or typicality
 assumptions on unconsulted cells. TeX 18:277–285,1134–1210. -/
 theorem D18_L_query_factorization (hκ : κ.Admissible) {hPT : PT.Valid} (X : Inputs hPT) :
     QueryFactorization (rawData hκ X) := by
-  sorry
+  exact Lane_sol_d18l_cal.fresh_factorization (rawData hκ X)
 
 /-- Assemble the general separated-test estimate from one-cell calibration
 and exact factorization; reindex each queried fibre by its finite cardinality.
@@ -521,7 +628,58 @@ theorem D18_L_separated_calibration {hPT : PT.Valid} (D : LateData hPT)
         D.freshQueryIntegral q odd f ≤ Real.exp (0.002 * q) *
           ∏ a, ((∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +
             Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3))) := by
-  sorry
+  classical
+  intro q hq odd hodd hEarly hSep f hf
+  let c := fun a => D.geom.cellOf (odd a)
+  let S := Finset.univ.filter fun C => ∃ a, c a = C
+  let b := fun a => (∑ y, (PT.πraw (D.geom.patchOf (odd a))).w y * f a y) +
+    Real.rpow (T.S.n k : ℝ) (-((κ.Ac : ℝ) - 3))
+  let L := fun C => (D.cellPoolLaw C).E (fun P => if D.fresh.typical C P then
+    (D.fresh.fresh C P).E (fun s => ∏ a : {a : Fin q // c a = C},
+      f a.1 (D.fresh.label C s (odd a.1))) else 0)
+  have hL : ∀ C, 0 ≤ L C := by
+    intro C
+    dsimp only [L, FinLaw.E]
+    apply Finset.sum_nonneg
+    intro P _
+    apply mul_nonneg ((D.cellPoolLaw C).nonneg P)
+    split_ifs
+    · apply Finset.sum_nonneg
+      intro s _
+      apply mul_nonneg ((D.fresh.fresh C P).nonneg s)
+      exact Finset.prod_nonneg (fun a _ => (hf a.1 _).1)
+    · exact le_rfl
+  have hB (C : D.geom.Cell) :
+      L C ≤ Real.exp (0.002 * Fintype.card {a : Fin q // c a = C}) *
+        ∏ a : {a : Fin q // c a = C}, b a.1 := by
+    let A := {a : Fin q // c a = C}
+    let e := (Fintype.equivFin A).symm
+    have hsize : Fintype.card A ≤ q := by
+      calc
+        Fintype.card A ≤ Fintype.card (Fin q) :=
+          Fintype.card_le_of_injective Subtype.val Subtype.val_injective
+        _ = q := Fintype.card_fin q
+    have he : Function.Injective (fun a => odd (e a).1) :=
+      hodd.comp (Subtype.val_injective.comp e.injective)
+    have h := hCells C (Fintype.card A) (hsize.trans hq)
+      (fun a => odd (e a).1) he (fun a => (e a).2)
+      (fun a => hEarly (e a).1)
+      (fun a a' hne => hSep (e a).1 (e a').1
+        (fun hv => hne (e.injective (Subtype.ext hv)))
+        ((e a).2.trans (e a').2.symm))
+      (fun a => f (e a).1) (fun a y => hf (e a).1 y)
+    have hprod (s : D.fresh.State C) :
+        (∏ a : Fin (Fintype.card A), f (e a).1
+          (D.fresh.label C s (odd (e a).1))) =
+          ∏ a : A, f a.1 (D.fresh.label C s (odd a.1)) := by
+      exact e.prod_comp (fun a : A => f a.1 (D.fresh.label C s (odd a.1)))
+    simp_rw [hprod] at h
+    have hrhs : (∏ a : Fin (Fintype.card A), b (e a).1) =
+        ∏ a : A, b a.1 := e.prod_comp (fun a : A => b a.1)
+    exact h.trans_eq (congrArg (fun x => Real.exp (0.002 * Fintype.card A) * x) hrhs)
+  rw [hFactor q odd f]
+  simpa only [S, c, L, b, Fintype.card_fin] using
+    Lane_sol_d18l_cal.fibre_bounds c S (fun a => by simp [S]) L b 0.002 hL hB
 
 /-- Unpinned upstream pool/list tail for the actual finite process.
 TeX 17:123–131; 18:678–690. The exponent uses the prescribed Ts. -/
@@ -532,7 +690,53 @@ theorem D18_L_upstream_bad (hκ : κ.Admissible) (hThresholds : LateThresholds �
       let D := rawData hκ X
       ∀ f, D.encoding.permLaw.pr (D.upstreamBad f) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) := by
-  sorry
+  classical
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10 + 100 * κ.Kcell * (κ.Kp : ℝ))
+  have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
+  filter_upwards [Lane_sol_d18l_up.eventually_typical_tail T (κ.P : ℝ)
+    (Nat.cast_nonneg κ.P), uniformPoolListEstimate κ hκ T hSource K17 hK17,
+    T.S.n_tendsto.eventually_ge_atTop 1,
+    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R),
+    Lane_sol_d18l_row.eventually_physical_remaining_inputs hκ T K17
+      (Lane_sol_d18l_row.fixed_adapter_scale hκ)]
+    with k hsmall hPools hn hlocal hAdapter
+  intro PT hPT X hMass hLarge
+  dsimp only
+  let D := rawData hκ X
+  let physical := Classical.choice X.l16.physical
+  intro f
+  cases f with
+  | inl C =>
+    exact Lane_sol_d18l_up.physical_initial_typical_tail D.encoding physical C hsmall
+  | inr v =>
+    by_cases heven : IsEvenRole v
+    · let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+      -- The shared adapter supplies geometry, sampler and pool-comparison
+      -- fields for this physical context at the fixed upstream scale.
+      have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty :=
+        Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
+      have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining
+        hPT X.low physical X.l16.pools_nonempty K17 hlocal hRest
+      have hEstimate := hPools PT context hQuant v D.encoding.poolLaw (Or.inl rfl)
+      exact Lane_sol_d18l_up.physical_initial_list_tail hκ hPT X.low physical
+        D.encoding rfl (by exact_mod_cast hn) v hEstimate
+    · have hz := Lane_sol_d18l_up.physical_odd_list_probability hPT X.low physical
+        D.encoding rfl v heven
+      have hnonneg : 0 ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) :=
+        Real.rpow_nonneg (Nat.cast_nonneg _) _
+      have hfalse : ∀ x, ¬ D.upstreamBad (.inr v) x := by
+        intro x
+        change ¬ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) <
+          (FinLaw.pi fun C => X.fresh.fresh C (x.1 C)).pr (D.encoding.events.S v)
+        rw [hz x.1]
+        exact not_lt_of_ge hnonneg
+      have hpr : D.encoding.permLaw.pr (D.upstreamBad (.inr v)) = 0 := by
+        simp [FinLaw.pr, hfalse]
+      change D.encoding.permLaw.pr (D.upstreamBad (.inr v)) ≤ _
+      rw [hpr]
+      exact Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k))
+        (-((κ.P : ℝ) * D.encoding.Ts / 2))
 
 /-- The same tail with any one global slot-to-bin pin; zero-probability
 pins retain Lean's zero quotient. TeX 17:123–131; 18:678–690. -/
@@ -546,7 +750,16 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
           D.encoding.permLaw.pr (fun x => x.1 C slot = bin) ≤
         Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) := by
   classical
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 0] with k hk
+  let K17 : ℝ := max 1 (κ.Kbd + 4 * κ.KB + 10 + 100 * κ.Kcell * (κ.Kp : ℝ))
+  have hK17 : 0 < K17 := lt_of_lt_of_le (by norm_num) (le_max_left _ _)
+  have hSource : S17SourceFacts κ T := ⟨hSources.1, hSources.2.2⟩
+  filter_upwards [Lane_sol_d18l_up.eventually_typical_tail T (κ.P : ℝ)
+    (Nat.cast_nonneg κ.P), uniformPoolListEstimate κ hκ T hSource K17 hK17,
+    T.S.n_tendsto.eventually_ge_atTop 1,
+    Lane_sol_d18l_up.eventually_local_typical_tail T (κ.R : ℝ) (Nat.cast_nonneg κ.R),
+    Lane_sol_d18l_row.eventually_physical_remaining_inputs hκ T K17
+      (Lane_sol_d18l_row.fixed_adapter_scale hκ)]
+    with k hsmall hPools hn hlocal hAdapter
   intro PT hPT X hMass hLarge
   dsimp only
   intro C slot bin f
@@ -580,7 +793,57 @@ theorem D18_L_upstream_bad_pinned (hκ : κ.Admissible) (hThresholds : LateThres
     have hpow : 0 ≤ Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)) :=
       Real.rpow_nonneg (by positivity) _
     simpa [hden, hnum] using hpow
-  · sorry
+  · cases f with
+    | inl C' =>
+      exact Lane_sol_d18l_up.physical_initial_typical_tail_pinned D.encoding
+        (Classical.choice X.l16.physical) C' ⟨C, slot⟩ bin hsmall
+    | inr v =>
+      by_cases heven : IsEvenRole v
+      · let physical := Classical.choice X.l16.physical
+        let context := Lane_sol_s18_dl.physical_list_context hPT X.low physical
+        have hRest : Lane_sol_d18l_up.RemainingInputs context K17 X.l16.pools_nonempty :=
+          Classical.choice (hAdapter PT hPT X.geom X.fresh X.l16 X.low physical)
+        have hQuant := Lane_sol_d18l_up.physical_quantitative_of_remaining
+          hPT X.low physical X.l16.pools_nonempty K17 hlocal hRest
+        let poolPin : context.PoolPin := ⟨C, slot, bin⟩
+        have hnonneg : 0 ≤ D.encoding.permLaw.pr pin := by
+          unfold FinLaw.pr
+          apply Finset.sum_nonneg
+          intro x _
+          split_ifs <;> simp [D.encoding.permLaw.nonneg]
+        have hp : 0 < ∑ P ∈ context.poolPinSet poolPin,
+            (permPoolLaw context.G hQuant.pool_support_nonempty).w P := by
+          have hpos : 0 < D.encoding.permLaw.pr pin :=
+            lt_of_le_of_ne hnonneg (Ne.symm hden)
+          change 0 < ∑ P ∈ Finset.univ.filter (fun P => P C slot = bin),
+            D.encoding.poolLaw.w P
+          rw [Finset.sum_filter]
+          rw [Lane_sol_d18l_up.initial_pr_pool D.encoding
+            (fun P => P C slot = bin)] at hpos
+          exact hpos
+        have hEstimate := hPools PT context hQuant v
+          (context.pinnedPoolLaw hQuant.pool_support_nonempty poolPin hp)
+          (Or.inr ⟨poolPin, hp, rfl⟩)
+        exact Lane_sol_d18l_up.physical_initial_list_tail_pinned hκ hPT X.low physical
+          D.encoding rfl (by exact_mod_cast hn) v ⟨C, slot⟩ bin hp hEstimate
+      · have hz := Lane_sol_d18l_up.physical_odd_list_probability hPT X.low
+          (Classical.choice X.l16.physical) D.encoding rfl v heven
+        have hnonneg : 0 ≤ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) :=
+          Real.rpow_nonneg (Nat.cast_nonneg _) _
+        have hfalse : ∀ x, ¬ D.upstreamBad (.inr v) x := by
+          intro x
+          change ¬ Real.rpow (T.S.n k : ℝ) (-(κ.P : ℝ)) <
+            (FinLaw.pi fun C => X.fresh.fresh C (x.1 C)).pr (D.encoding.events.S v)
+          rw [hz x.1]
+          exact not_lt_of_ge hnonneg
+        have hnum : D.encoding.permLaw.pr (fun x => pin x ∧ bad x) = 0 := by
+          unfold FinLaw.pr
+          apply Finset.sum_eq_zero
+          intro x _
+          have hb : ¬ bad x := hfalse x
+          simp only [hb, and_false, if_false]
+        rw [hnum, zero_div]
+        exact Real.rpow_nonneg (Nat.cast_nonneg (T.S.n k)) _
 
 /-- Transfer diagnostic typical positivity to the actual iid marginal
 cell-pool law. TeX 16:260–296; 18:277–285. -/

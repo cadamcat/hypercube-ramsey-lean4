@@ -3,6 +3,18 @@ import HypercubeRamsey.S03.ConditionalAvoidance
 import HypercubeRamsey.Framework.FinProbLemmas
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import HypercubeRamsey.S03.Clock.Steps_p_clock_r4
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s6
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s6_asymptotics
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_analysis
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_cross
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_survival
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_integral
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_kernel
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_absence
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_bound
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_probability
+import HypercubeRamsey.S03.Clock.Steps_sol_clock_s7_errors
 
 /-!
 # Lemma 3.10, Steps 2–8
@@ -659,7 +671,199 @@ theorem step6_background_tracking (B A C_g K₀ : ℝ) (hB : 1 ≤ B) (hK₀ : 0
               removedRows removedLabels y t - θ * (backgroundTrajectory mesh.δ θ t.val).2| ≤
             (n : ℝ) ^ (-3 * B))) ≥
         1 - Real.exp (-((n : ℝ) ^ (A / 3))) := by
-  sorry
+  classical
+  let σ := (A / 3 + 3 * (B + K₀)) / 2
+  let β := A - 2 * σ
+  have hB0 : 0 ≤ B := by linarith
+  have hσ : 3 * (B + K₀) < σ := by dsimp [σ]; linarith
+  have hσ0 : 0 < σ := by linarith
+  have hβA : A / 3 < β := by dsimp [β, σ]; linarith
+  have hβ2 : 2 < β := by dsimp [β, σ]; linarith
+  have hErr := Lane_sol_clock_s6.eventual_error_budget B A K₀ σ hB0 hK₀.le
+    (by linarith) (by linarith) hσ
+  have hFail := Lane_sol_clock_s6.eventual_failure_budget K₀ C_g σ (A / 3) β hK₀.le hσ0 hβA hβ2
+  have hSmall := Lane_sol_clock_s6.deltaN_tendsto.eventually
+    (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 6))
+  have hAll := hErr.and (hFail.and (hSmall.and (eventually_ge_atTop (2 : ℕ))))
+  obtain ⟨n₀, hn₀⟩ := eventually_atTop.mp hAll
+  refine ⟨n₀, ?_⟩
+  intro n hn mesh hδ hδ1 R instR instDR g Ω instΩ instDΩ p lab θ hlog hcolumns hθ hatom
+    removedRows removedLabels hremoved ins hins
+  rcases hn₀ n hn with ⟨hErrn, hFailn, hδsmallN, hn2⟩
+  have hnpos : 0 < (n : ℝ) := by exact_mod_cast (lt_of_lt_of_le (by decide : 0 < 2) hn2)
+  have hnlog : 0 ≤ Real.log (n : ℝ) := Real.log_nonneg (by exact_mod_cast (by omega : 1 ≤ n))
+  have hδN : mesh.δ = Lane_sol_clock_s6.deltaN n := mesh.δ_eq
+  have hδpos : 0 < mesh.δ := by rw [mesh.δ_eq]; exact Real.exp_pos _
+  have hδNpos : 0 < Lane_sol_clock_s6.deltaN n := by rw [← hδN]; exact hδpos
+  have hδsmall : mesh.δ ≤ 1 / 6 := by rw [hδN]; exact hδsmallN.le
+  let P := clockFieldLaw (samplingEdgeClockLaw (T := mesh.ticks) mesh.δ hδ hδ1 p lab)
+  let Track : ClockField mesh.ticks R g Ω → Prop := fun ξ => ∀ t : Fin (mesh.ticks + 1),
+    (∀ a, |availableRowRate (fun a y => labMarg (p a) (lab a) y) (insertArrivals ins ξ)
+        removedRows removedLabels a t - (backgroundTrajectory mesh.δ θ t.val).1| ≤ (n : ℝ) ^ (-3 * B)) ∧
+    (∀ y, |availableLabelRate (fun a y => labMarg (p a) (lab a) y) (insertArrivals ins ξ)
+        removedRows removedLabels y t - θ * (backgroundTrajectory mesh.δ θ t.val).2| ≤ (n : ℝ) ^ (-3 * B))
+  change 1 - Real.exp (-((n : ℝ) ^ (A / 3))) ≤ P.pr Track
+  by_cases hg0 : g = 0
+  · subst g
+    haveI : IsEmpty R := ⟨fun a => Fin.elim0 (lab a (Classical.choice (finProb_nonempty (p a))))⟩
+    have hTrack : Track = (fun _ => True) := by funext ξ; simp [Track]
+    rw [hTrack]
+    have hP : P.pr (fun _ => True) = 1 := by
+      unfold FinProb.pr
+      simp only [ite_true]
+      exact P.sum_eq_one
+    rw [hP]
+    linarith only [Real.exp_nonneg (-((n : ℝ) ^ (A / 3)))]
+  · have hgpos : 0 < (g : ℝ) := by exact_mod_cast Nat.pos_of_ne_zero hg0
+    let y₀ : Fin g := ⟨0, Nat.pos_of_ne_zero hg0⟩
+    let r : R → Fin g → ℝ := fun a y => labMarg (p a) (lab a) y
+    have hr : ∀ a y, 0 ≤ r a y := fun a y => labMarg_nonneg (p a) (lab a) y
+    have hrow : ∀ a, ∑ y, r a y = 1 := fun a => labMarg_sum_one (p a) (lab a)
+    have hcol : ∀ y, ∑ a, r a y = θ := hcolumns
+    have hθ0 : 0 ≤ θ := by rw [← hcol y₀]; exact Finset.sum_nonneg fun a _ => hr a y₀
+    have hθ1 : θ ≤ 1 := by linarith only [hθ]
+    let atom := (n : ℝ) ^ (-A)
+    let ε := (n : ℝ) ^ (-σ)
+    let H := (mesh.ticks : ℝ) * mesh.δ
+    let Hcap := Lane_sol_clock_s6.horizonN K₀ n
+    let Lcap := Lane_sol_clock_s6.insertionCapN K₀ n
+    let c := (Lane_sol_clock_s6.prescribedCount ins : ℝ)
+    have hAtom : 0 < atom := Real.rpow_pos_of_pos hnpos _
+    have hε : 0 < ε := Real.rpow_pos_of_pos hnpos _
+    have hH0 : 0 ≤ H := mul_nonneg (Nat.cast_nonneg _) hδ
+    have hHcap0 : 0 ≤ Hcap := by dsimp [Hcap, Lane_sol_clock_s6.horizonN, Lane_sol_clock_s6.deltaN]; positivity
+    have hLcap0 : 0 ≤ Lcap := by dsimp [Lcap, Lane_sol_clock_s6.insertionCapN]; positivity
+    have hH : H ≤ Hcap := by
+      have h := mesh.least_cover.le
+      rw [mesh.horizon_eq, hδN] at h
+      simpa only [H, Hcap, Lane_sol_clock_s6.horizonN, hδN] using h
+    have hc0 : 0 ≤ c := Nat.cast_nonneg _
+    have hc : c ≤ Lcap := by simpa only [c, Lcap, Lane_sol_clock_s6.prescribedCount,
+      Lane_sol_clock_s6.insertionCapN, insertionSize] using hins
+    have hbase (e : RowLabel R g) : 0 ≤ 1 - mesh.δ * r e.1 e.2 := by
+      have h := mul_le_mul_of_nonneg_left (labMarg_le_one (p e.1) (lab e.1) e.2) hδ
+      dsimp [r]
+      nlinarith only [h, hδ1]
+    let μ := fun (e : RowLabel R g) => outputMarkMass (p e.1) (lab e.1) e.2
+    have hμ : ∀ e o, 0 ≤ μ e o := by
+      intro e o
+      dsimp [μ, outputMarkMass]
+      split_ifs <;> simp [(p e.1).nonneg o]
+    have hμsum : ∀ e, ∑ o, μ e o = r e.1 e.2 := fun e => outputMarkMass_sum (p e.1) (lab e.1) e.2
+    have hw0 : ∀ u e, 0 ≤ Lane_sol_clock_s6.endpointWeight r u e := by
+      intro u e
+      rcases u with a | y
+      · exact hr a e.2
+      · exact hr e.1 y
+    have hwAtom : ∀ u e, Lane_sol_clock_s6.endpointWeight r u e ≤ atom := by
+      intro u e
+      rcases u with a | y
+      · exact hatom a e.2
+      · exact hatom e.1 y
+    have hload : ∀ u, (∑ e : RowLabel R g, r e.1 e.2 * Lane_sol_clock_s6.endpointWeight r u e) ≤ 1 := by
+      intro u
+      rcases u with a | y
+      · exact Lane_sol_clock_s6.row_weighted_load r θ hrow hcol hθ1 a
+      · exact Lane_sol_clock_s6.label_weighted_load r θ hrow hcol hθ1 y
+    let Good : ClockField mesh.ticks R g Ω → Prop := fun ξ => ∀ t : Fin (mesh.ticks + 1),
+      ∀ u : Endpoint R g, |Lane_sol_clock_s6.massNoise mesh.δ (fun e => r e.1 e.2) ins
+        removedRows removedLabels (Lane_sol_clock_s6.endpointWeight r u) t ξ| ≤ ε
+    let failure := ((mesh.ticks + 1 : ℕ) : ℝ) * (Fintype.card (Endpoint R g) : ℝ) *
+      (2 * Real.exp (-ε ^ 2 / (2 * (H * atom + atom * ε / 3))))
+    have hNoise := Lane_sol_clock_s6.ordinary_noise_good mesh.δ (fun e => r e.1 e.2) μ hδ
+      hbase (fun e => hr e.1 e.2) hμ hμsum ins removedRows removedLabels
+      (Lane_sol_clock_s6.endpointWeight r) atom hAtom hw0 hwAtom hload ε hε
+    change 1 - failure ≤ P.pr Good at hNoise
+    have hRawError :
+        2 * ((((removedRows.card + removedLabels.card : ℕ) : ℝ) * atom + ε + c * atom +
+          H * (c * atom ^ 2 + 2 * mesh.δ))) * Real.exp (3 * mesh.δ * (mesh.ticks : ℝ)) ≤
+          (n : ℝ) ^ (-3 * B) := by
+      have hb : (((removedRows.card + removedLabels.card : ℕ) : ℝ) * atom + ε + c * atom +
+          H * (c * atom ^ 2 + 2 * mesh.δ)) ≤
+          2 * (n : ℝ) ^ B * atom + ε + Lcap * atom +
+            Hcap * (Lcap * atom ^ 2 + 2 * Lane_sol_clock_s6.deltaN n) := by
+        rw [hδN]
+        gcongr
+      have he : Real.exp (3 * mesh.δ * (mesh.ticks : ℝ)) ≤ Real.exp (3 * Hcap) := by
+        apply Real.exp_le_exp.mpr
+        dsimp [H] at hH
+        nlinarith only [hH]
+      calc
+        _ ≤ 2 * (2 * (n : ℝ) ^ B * atom + ε + Lcap * atom +
+              Hcap * (Lcap * atom ^ 2 + 2 * Lane_sol_clock_s6.deltaN n)) * Real.exp (3 * Hcap) :=
+          mul_le_mul (mul_le_mul_of_nonneg_left hb (by norm_num)) he (Real.exp_nonneg _)
+            (by positivity)
+        _ ≤ _ := hErrn
+    have hMatching (ζ : ClockField mesh.ticks R g Ω) (t : Fin (mesh.ticks + 1)) :
+        matchingThrough ζ removedRows removedLabels t =
+          Lane_sol_clock_s6.keyMatching ζ removedRows removedLabels (t.val * (Fintype.card R * g)) := by
+      simp only [matchingThrough, Lane_sol_clock_s6.keyMatching, Lane_sol_clock_s6.keyEvents,
+        Lane_sol_clock_s6.eventPriority_horizon]
+    have hsubset : ∀ ξ, Good ξ → Track ξ := by
+      intro ξ hgood
+      have htrack := Lane_sol_clock_s6.euler_tracking_bound r hr atom hAtom.le hatom
+        mesh.δ θ hδ hδsmall hθ0 hθ1 hrow hcol
+        (fun k => (backgroundTrajectory mesh.δ θ k).1)
+        (fun k => (backgroundTrajectory mesh.δ θ k).2) rfl rfl
+        (by intro k; rfl) (by intro k; rfl) ins ξ removedRows removedLabels ε hε.le hgood
+      have hField : Lane_sol_clock_s6.prescribedField ins ξ = insertArrivals ins ξ := rfl
+      rw [hField] at htrack
+      intro t
+      constructor
+      · intro a
+        have h := (htrack t (.inl a)).trans hRawError
+        simpa only [Track, r, availableRowRate, hMatching, Lane_sol_clock_s6.endpointMass,
+          Lane_sol_clock_s6.rowMass] using h
+      · intro y
+        have h := (htrack t (.inr y)).trans hRawError
+        simpa only [Track, r, availableLabelRate, hMatching, Lane_sol_clock_s6.endpointMass,
+          Lane_sol_clock_s6.labelMass] using h
+    have hgExp : (g : ℝ) ≤ Real.exp (C_g * (n : ℝ)) := by
+      calc
+        _ = Real.exp (Real.log (g : ℝ)) := (Real.exp_log hgpos).symm
+        _ ≤ _ := Real.exp_le_exp.mpr hlog
+    have hRows := Lane_sol_clock_s6.completed_row_card p lab θ hcolumns
+    have hCard : (Fintype.card (Endpoint R g) : ℝ) ≤ 2 * Real.exp (C_g * (n : ℝ)) := by
+      simp only [Endpoint, Fintype.card_sum, Fintype.card_fin, Nat.cast_add]
+      have h := mul_le_mul_of_nonneg_right hθ1 hgpos.le
+      simp only [one_mul] at h
+      rw [hRows]
+      linarith only [h, hgExp]
+    have hTicks : ((mesh.ticks + 1 : ℕ) : ℝ) ≤ (Hcap + 2) * Real.exp ((n : ℝ) ^ 2) := by
+      have h : ((mesh.ticks + 1 : ℕ) : ℝ) ≤ (Hcap + 2) / mesh.δ := by
+        apply (le_div_iff₀ hδpos).mpr
+        simp only [Nat.cast_add, Nat.cast_one]
+        dsimp [H] at hH
+        nlinarith only [hH, hδ1]
+      simpa only [hδN, Lane_sol_clock_s6.deltaN, Real.exp_neg, div_eq_mul_inv, inv_inv] using h
+    have hFactor : ((mesh.ticks + 1 : ℕ) : ℝ) * (Fintype.card (Endpoint R g) : ℝ) * 2 ≤
+        4 * (Hcap + 2) * Real.exp ((n : ℝ) ^ 2 + C_g * (n : ℝ)) := by
+      calc
+        _ ≤ ((Hcap + 2) * Real.exp ((n : ℝ) ^ 2)) * (2 * Real.exp (C_g * (n : ℝ))) * 2 := by
+          gcongr
+        _ = _ := by rw [Real.exp_add]; ring
+    have hDen : 0 < 2 * (H * atom + atom * ε / 3) := by positivity
+    have hDenLe : 2 * (H * atom + atom * ε / 3) ≤ 2 * (Hcap * atom + atom * ε / 3) := by
+      have h := mul_le_mul_of_nonneg_right hH hAtom.le
+      linarith only [h]
+    have hquot := div_le_div_of_nonneg_left (sq_nonneg ε) hDen hDenLe
+    have hcapEq : ε ^ 2 / (2 * (Hcap * atom + atom * ε / 3)) =
+        (n : ℝ) ^ β / (2 * (Hcap + (n : ℝ) ^ (-σ) / 3)) :=
+      Lane_sol_clock_s6.freedman_exponent_identity A σ Hcap n hnpos
+    have hTail : Real.exp (-ε ^ 2 / (2 * (H * atom + atom * ε / 3))) ≤
+        Real.exp (-((n : ℝ) ^ β / (2 * (Hcap + (n : ℝ) ^ (-σ) / 3)))) := by
+      apply Real.exp_le_exp.mpr
+      simpa only [neg_div, hcapEq] using neg_le_neg hquot
+    have hFailure : failure ≤ Real.exp (-((n : ℝ) ^ (A / 3))) := by
+      calc
+        failure = (((mesh.ticks + 1 : ℕ) : ℝ) * (Fintype.card (Endpoint R g) : ℝ) * 2) *
+            Real.exp (-ε ^ 2 / (2 * (H * atom + atom * ε / 3))) := by dsimp [failure]; ring
+        _ ≤ (4 * (Hcap + 2) * Real.exp ((n : ℝ) ^ 2 + C_g * (n : ℝ))) *
+            Real.exp (-((n : ℝ) ^ β / (2 * (Hcap + (n : ℝ) ^ (-σ) / 3)))) :=
+          mul_le_mul hFactor hTail (Real.exp_nonneg _) (by positivity)
+        _ ≤ _ := hFailn
+    exact (by linarith only [hFailure] : 1 - Real.exp (-((n : ℝ) ^ (A / 3))) ≤ 1 - failure).trans
+      (hNoise.trans (finProb_pr_mono P hsubset))
 
 /-- A target assignment is realized when the greedy matching gives every queried row its prescribed output. -/
 def matchesTargets {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
@@ -676,6 +880,7 @@ def matchesTargetsOrdinarily {T : ℕ} {R : Type*} {g : ℕ} {Ω : R → Type*}
     (ξ : ClockField T R g Ω) (S : Finset R) (o : ∀ a, Ω a) : Prop :=
   ∀ a ∈ S, ∃ y, (greedyMatching (insertArrivals ins ξ)).assignment a = some (y, o a) ∧ ins (a, y) = none
 
+set_option maxHeartbeats 800000 in
 /-- L3.10g (03:1042–1078): at most `n^B` prescribed distinct-label targets, realized by ordinary arrivals
 under a fixed short insertion, retain their product upper bound under the finite-mesh matching law. The empty
 insertion gives the raw joint target bound used at 03:1109–1110 and 03:1127–1128. -/
@@ -695,9 +900,50 @@ theorem step7_target_product_bound (B A C_g K₀ : ℝ) (hB : 1 ≤ B) (hK₀ : 
         (fun ξ => matchesTargetsOrdinarily ins ξ S o) ≤
         (1 + (n : ℝ)⁻¹) * ∏ a ∈ S, (p a).w (o a) := by
   classical
-  refine ⟨2, ?_⟩
+  obtain ⟨n₆, htrack⟩ := step6_background_tracking B A C_g K₀ hB hK₀ hA
+  let cH : ℝ := 2 * K₀ + 1
+  let cJ : ℝ := 2 * (K₀ + 1) ^ 2
+  have hA' : 10 * B < A := by linarith
+  obtain ⟨nErr, hcaps⟩ := Lane_sol_clock_s7.eventual_target_error_caps B A cH cJ hB hA'
+  let n₀ := max n₆ (max nErr (max (Nat.ceil A) 2))
+  refine ⟨n₀, ?_⟩
   intro n hn mesh hδ hδ1 R _ _ g Ω _ _ p lab θ hlogg hcolumns hθ hsmall ins hins S o hInj hS
+  have hn6 : n₆ ≤ n := (le_max_left _ _).trans hn
+  have hnRest : max nErr (max (Nat.ceil A) 2) ≤ n := (le_max_right _ _).trans hn
+  have hnErr : nErr ≤ n := (le_max_left _ _).trans hnRest
+  have hnLast : max (Nat.ceil A) 2 ≤ n := (le_max_right _ _).trans hnRest
+  have hnA : Nat.ceil A ≤ n := (le_max_left _ _).trans hnLast
+  have hn2 : 2 ≤ n := (le_max_right _ _).trans hnLast
   let law := clockFieldLaw (samplingEdgeClockLaw (T := mesh.ticks) mesh.δ hδ hδ1 p lab)
+  by_cases hSempty : S = ∅
+  · subst S
+    have hprob : law.pr (fun _ : ClockField mesh.ticks R g Ω => True) = 1 := by
+      simpa [FinProb.pr] using law.sum_eq_one
+    have hInv : 0 ≤ (n : ℝ)⁻¹ := inv_nonneg.mpr (by positivity)
+    have hgoal : law.pr (fun _ : ClockField mesh.ticks R g Ω => True) ≤
+        1 + (n : ℝ)⁻¹ := by
+      rw [hprob]
+      linarith
+    simpa [matchesTargetsOrdinarily] using hgoal
+  by_cases hzero : ∃ a ∈ S, (p a).w (o a) = 0
+  · obtain ⟨a, ha, hpa⟩ := hzero
+    have hprod : (∏ b ∈ S, (p b).w (o b)) = 0 := Finset.prod_eq_zero ha hpa
+    have hprob : law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) = 0 := by
+      unfold FinProb.pr
+      apply Finset.sum_eq_zero
+      intro ξ _
+      by_cases hmatch : matchesTargetsOrdinarily ins ξ S o
+      · rw [if_pos hmatch]
+        obtain ⟨y, hassign, hinsay⟩ := hmatch a ha
+        obtain ⟨t, ht⟩ := greedyMatching_assignment_source (insertArrivals ins ξ) a y (o a) hassign
+        have ht' : ξ (a, y) = .tick t (o a) := by
+          simpa [insertArrivals, hinsay] using ht
+        exact Lane_sol_clock_s7.clock_weight_zero_of_zero_mark
+          mesh.δ hδ hδ1 p lab ξ a y t (o a) ht' hpa
+      · simp [hmatch]
+    change law.pr _ ≤ _
+    rw [hprob, hprod]
+    simp
   by_cases hg0 : g = 0
   · subst g
     have hSempty : S = ∅ := by
@@ -717,7 +963,234 @@ theorem step7_target_product_bound (B A C_g K₀ : ℝ) (hB : 1 ≤ B) (hK₀ : 
       simp only [Finset.prod_empty]
       nlinarith
     simpa [matchesTargetsOrdinarily] using hgoal
-  · sorry
+  · have hg : 0 < g := Nat.pos_of_ne_zero hg0
+    let N : ℝ := n
+    let δ := mesh.δ
+    let T := mesh.ticks
+    let H : ℝ := (T : ℝ) * δ
+    let J : ℝ := insertionSize ins
+    let eps : ℝ := N ^ (-3 * B)
+    let rateCap : ℝ := N ^ (-A)
+    let r : R → Fin g → ℝ := fun a y => labMarg (p a) (lab a) y
+    let L := S.image fun a => lab a (o a)
+    let D := Lane_sol_clock_s7.backgroundEdges S L
+    let q : ℕ → ℝ := fun t => (backgroundTrajectory δ θ t).1
+    let z : ℕ → ℝ := fun t => (backgroundTrajectory δ θ t).2
+    have hN2 : 2 ≤ N := by
+      change (2 : ℝ) ≤ (n : ℝ)
+      exact_mod_cast hn2
+    have hN0 : 0 < N := by linarith
+    have hA0 : 0 ≤ A := by linarith
+    have hNA : A ≤ N := (Nat.le_ceil A).trans (by
+      change (Nat.ceil A : ℝ) ≤ (n : ℝ)
+      exact_mod_cast hnA)
+    have hlog : 0 < Real.log N := Real.log_pos (by linarith)
+    have hδ0 : 0 ≤ δ := hδ
+    have hδhalf : δ ≤ 1 / 2 := by
+      calc
+        δ = Real.exp (-(N ^ 2)) := mesh.δ_eq
+        _ ≤ Real.exp (-1) := Real.exp_le_exp.mpr (by nlinarith)
+        _ ≤ 1 / 2 := Real.exp_neg_one_lt_half.le
+    have hδcap : δ ≤ rateCap := by
+      have hlogle : Real.log N ≤ N := (Real.log_le_sub_one_of_pos hN0).trans (by linarith)
+      have hprod := mul_le_mul_of_nonneg_left hlogle hA0
+      have hAN := mul_le_mul_of_nonneg_right hNA hN0.le
+      dsimp [δ, rateCap]
+      rw [mesh.δ_eq, Real.rpow_def_of_pos hN0]
+      apply Real.exp_le_exp.mpr
+      nlinarith
+    have hH0 : 0 ≤ H := mul_nonneg (by positivity) hδ0
+    have hJ0 : 0 ≤ J := by dsimp [J]; positivity
+    have hpowHalf : 1 ≤ N ^ (1 / 2 : ℝ) := Real.one_le_rpow (by linarith) (by norm_num)
+    have hlogHalf : Real.log N ≤ 2 * N ^ (1 / 2 : ℝ) := by
+      simpa [mul_comm] using Real.log_le_rpow_div hN0.le (by norm_num : (0 : ℝ) < 1 / 2)
+    have hHcap : H ≤ cH * N ^ (1 / 2 : ℝ) := by
+      have hcover : H < K₀ * Real.log N + δ := by simpa [H, T, δ, N, mesh.horizon_eq] using mesh.least_cover
+      have hlogmul := mul_le_mul_of_nonneg_left hlogHalf hK₀.le
+      dsimp [cH]
+      nlinarith
+    have hJcap : J ≤ cJ * N ^ (1 / 2 : ℝ) := by
+      have hmul := mul_le_mul_of_nonneg_left hlogHalf (sq_nonneg (K₀ + 1))
+      dsimp [J, cJ, N]
+      nlinarith
+    have hTpos : 0 < T := by
+      by_contra hT
+      have hT0 : T = 0 := by omega
+      have hcov := mesh.covers_horizon
+      rw [mesh.horizon_eq] at hcov
+      change K₀ * Real.log N ≤ (T : ℝ) * δ at hcov
+      rw [hT0] at hcov
+      norm_num at hcov
+      have hp : 0 < K₀ * Real.log N := mul_pos hK₀ hlog
+      simpa using (not_le_of_gt hp) hcov
+    haveI : Nonempty (Fin T) := ⟨⟨0, hTpos⟩⟩
+    have hθ0 : 0 ≤ θ := by
+      rw [← hcolumns (⟨0, hg⟩ : Fin g)]
+      exact Finset.sum_nonneg (by intro a _; exact labMarg_nonneg _ _ _)
+    have hθ1 : θ ≤ 1 := by linarith
+    have hr0 : ∀ a y, 0 ≤ r a y := fun a y => labMarg_nonneg _ _ _
+    have hr1 : ∀ a y, r a y ≤ 1 := fun a y => labMarg_le_one _ _ _
+    have heps0 : 0 ≤ eps := Real.rpow_nonneg hN0.le _
+    have hrateCap0 : 0 ≤ rateCap := Real.rpow_nonneg hN0.le _
+    have hq0 : q 0 = 1 := by simp [q, backgroundTrajectory]
+    have hz0 : z 0 = 1 := by simp [z, backgroundTrajectory]
+    have hq : ∀ t, q (t + 1) = q t * (1 - δ * θ * z t) := by
+      intro t
+      simp only [q, z, backgroundTrajectory, backgroundStep]
+      ring
+    have hz : ∀ t, z (t + 1) = z t * (1 - δ * q t) := by
+      intro t
+      simp only [q, z, backgroundTrajectory, backgroundStep]
+      ring
+    have hbox := Lane_sol_clock_s7.euler_background_bounds q z δ θ hq0 hz0 hδ0 hδ1 hθ0 hθ1 hq hz
+    have hshift (t : ℕ) : q t + θ * z t ≤ q (t + 1) + θ * z (t + 1) + 2 * δ := by
+      have ht := hbox t
+      have hθq : θ * q t ≤ 1 := mul_le_one₀ hθ1 ht.1 ht.2.1
+      have hθq0 : 0 ≤ θ * q t := mul_nonneg hθ0 ht.1
+      have hθqz : θ * q t * z t ≤ 1 := mul_le_one₀ hθq ht.2.2.1 ht.2.2.2
+      have hmul := mul_le_mul_of_nonneg_left hθqz hδ0
+      rw [hq t, hz t]
+      nlinarith
+    have hcount : Lane_sol_clock_s7.prescribedCount ins = insertionSize ins := by
+      unfold Lane_sol_clock_s7.prescribedCount insertionSize
+      congr 1
+      apply Finset.filter_congr
+      intro e _
+      cases he : ins e <;> simp [he]
+    have hpres : Lane_sol_clock_s7.prescribedRateMass r ins ≤ J * rateCap := by
+      have h := Lane_sol_clock_s7.prescribedRateMass_le r ins rateCap hsmall
+      simpa only [hcount, J] using h
+    have hcardL : L.card = S.card := Finset.card_image_iff.mpr (by
+      intro a ha b hb hab
+      exact hInj ha hb hab)
+    have hremoved : ((S.card + L.card : ℕ) : ℝ) ≤ 2 * N ^ B := by
+      rw [hcardL, Nat.cast_add]
+      nlinarith
+    let GoodOrig : ClockField T R g Ω → Prop := fun ξ => ∀ t : Fin (T + 1),
+      (∀ a, |Lane_sol_clock_s7.rowAvailableMass r ins ξ S L a t.val - q t.val| ≤ eps) ∧
+      (∀ y, |Lane_sol_clock_s7.columnAvailableMass r ins ξ S L y t.val - θ * z t.val| ≤ eps)
+    let Good := fun bg : (∀ e : {e // e ∈ D}, MeshClockValue T (Ω e.1.1)) =>
+      GoodOrig (Lane_sol_clock_s7.fillBackground D bg)
+    let Pbg := FinProb.pi (fun e : {e // e ∈ D} =>
+      Lane_sol_clock_s7.edgeLaw (T := T) δ hδ hδ1 p lab e.1)
+    have hbgEq (ξ : ClockField T R g Ω) (t : Fin (T + 1)) :
+        Lane_sol_clock_s7.backgroundAt ins ξ S L t.val = matchingThrough (insertArrivals ins ξ) S L t := by
+      simp [Lane_sol_clock_s7.backgroundAt_eq, matchingThrough, insertArrivals, Lane_sol_clock_s7.overlay,
+        and_assoc, and_left_comm, and_comm, Bool.and_assoc, Bool.and_left_comm, Bool.and_comm]
+      rfl
+    have hGoodFull : law.pr GoodOrig ≥ 1 - Real.exp (-(N ^ (A / 3))) := by
+      have h := htrack n hn6 mesh hδ hδ1 p lab θ hlogg hcolumns hθ hsmall S L hremoved ins hins
+      simpa only [GoodOrig, Lane_sol_clock_s7.rowAvailableMass, Lane_sol_clock_s7.columnAvailableMass,
+        hbgEq, availableRowRate, availableLabelRate, q, z, eps, N, law, T, δ, r] using h
+    have hdep : FinProb.DependsOn GoodOrig D := by
+      intro ξ ξ' hagree
+      have hb (t : ℕ) := Lane_sol_clock_s7.backgroundAt_eq_of_agree ins ξ ξ' S L t hagree
+      dsimp [GoodOrig]
+      simp only [Lane_sol_clock_s7.rowAvailableMass, Lane_sol_clock_s7.columnAvailableMass]
+      simp_rw [hb]
+    have hmarg : law.pr GoodOrig = Pbg.pr Good :=
+      Lane_sol_clock_s7.clock_background_probability δ hδ hδ1 p lab D GoodOrig hdep
+    have hbad : Pbg.pr (fun bg => ¬ Good bg) ≤ Real.exp (-(N ^ (A / 3))) := by
+      have htotal := finProb_pr_compl Pbg Good
+      rw [← hmarg] at htotal
+      linarith
+    let E : ℝ := (S.card : ℝ) * H * (2 * eps + 2 * J * rateCap + 6 * δ)
+    let C : ℝ := Real.exp E
+    let f : Fin T → ℝ := fun t => q t.val * z t.val
+    have hf : ∀ t, 0 ≤ f t := by
+      intro t
+      exact mul_nonneg (hbox t.val).1 (hbox t.val).2.2.1
+    have hInt : δ * ∑ t, f t ≤ 1 := by
+      change δ * (∑ t : Fin T, (fun s : ℕ => q s * z s) t.val) ≤ 1
+      rw [Fin.sum_univ_eq_sum_range (fun s : ℕ => q s * z s) T,
+        Lane_sol_clock_s7.euler_target_integral q z δ T hz0 hz]
+      exact sub_le_self _ (hbox T).2.2.1
+    have hgood : ∀ times bg, Good bg → Lane_sol_clock_s7.targetSurvivalKernel δ p lab ins S o times bg ≤
+        C * ∏ a : S, f (times a) := by
+      intro times bg hG
+      let ξ := Lane_sol_clock_s7.fillBackground D bg
+      let timesR := Lane_sol_clock_s7.extendTargetTimes S times
+      have htr : ∀ a ∈ S, ∀ t : Fin T, q t.val + θ * z t.val ≤
+          Lane_sol_clock_s7.rowAvailableMass r ins ξ S L a (t.val + 1) +
+            Lane_sol_clock_s7.columnAvailableMass r ins ξ S L (lab a (o a)) (t.val + 1) + (2 * eps + 2 * δ) := by
+        intro a ha t
+        have hrow := (abs_le.mp ((hG t.succ).1 a)).1
+        have hcol := (abs_le.mp ((hG t.succ).2 (lab a (o a)))).1
+        have hs := hshift t.val
+        change -eps ≤ Lane_sol_clock_s7.rowAvailableMass r ins ξ S L a (t.val + 1) - q (t.val + 1) at hrow
+        change -eps ≤ Lane_sol_clock_s7.columnAvailableMass r ins ξ S L (lab a (o a)) (t.val + 1) - θ * z (t.val + 1) at hcol
+        linarith
+      have hbound := Lane_sol_clock_s7.target_cross_survival_product_bound ins ξ S o lab timesR r
+        q z δ θ (2 * eps + 2 * δ) hInj hr0 hr1 (by positivity) hq0 hz0 hδ0 hδhalf hθ0 hθ1 hq hz htr
+      have hProd0 : 0 ≤ ∏ a : S, q (timesR a.1).val * z (timesR a.1).val := by
+        apply Finset.prod_nonneg
+        intro a _
+        exact mul_nonneg (hbox _).1 (hbox _).2.2.1
+      have hE : (S.card : ℝ) * δ * (T : ℝ) *
+          (2 * eps + 2 * δ + 2 * Lane_sol_clock_s7.prescribedRateMass r ins + 4 * δ) ≤ E := by
+        have hmul := mul_le_mul_of_nonneg_left
+          (show 2 * eps + 2 * δ + 2 * Lane_sol_clock_s7.prescribedRateMass r ins + 4 * δ ≤
+            2 * eps + 2 * J * rateCap + 6 * δ by linarith)
+          (mul_nonneg (show 0 ≤ (S.card : ℝ) by positivity) hH0)
+        simpa [E, H, mul_assoc, mul_comm, mul_left_comm] using hmul
+      calc
+        _ ≤ Real.exp ((S.card : ℝ) * δ * (T : ℝ) *
+            (2 * eps + 2 * δ + 2 * Lane_sol_clock_s7.prescribedRateMass r ins + 4 * δ)) *
+              ∏ a : S, q (timesR a.1).val * z (timesR a.1).val := hbound
+        _ ≤ C * ∏ a : S, q (timesR a.1).val * z (timesR a.1).val :=
+          mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr hE) hProd0
+        _ = _ := by simp [f, timesR, Lane_sol_clock_s7.extendTargetTimes_on]
+    have hraw := Lane_sol_clock_s7.ordinary_target_probability_from_survival δ hδ hδ1 p lab ins S o hInj
+      Good C (Real.exp (-(N ^ (A / 3)))) f (Real.exp_nonneg _) hf hbad hgood hInt
+    have hraw' : law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) ≤
+        (∏ a ∈ S, (p a).w (o a)) * (C + H ^ S.card * Real.exp (-(N ^ (A / 3)))) := by
+      have hLaw : clockFieldLaw (Lane_sol_clock_s7.edgeLaw (T := T) δ hδ hδ1 p lab) = law := rfl
+      rw [hLaw] at hraw
+      change law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) ≤ _ at hraw
+      simpa only [H, T, mul_comm] using hraw
+    have hcapsn := hcaps n hnErr
+    change 2 * cH * N ^ (3 / 2 - 2 * B) + 2 * cH * cJ * N ^ (B + 2 - A) +
+      6 * cH * N ^ (B + 3 / 2 - A) ≤ 1 / 4 ∧
+      cH * N ^ (B + 1 / 2 - A / 3) ≤ 1 / 2 ∧ 4 ≤ N ^ (A / 3 - 1) at hcapsn
+    have hE0 : 0 ≤ E := by dsimp [E]; positivity
+    have hscaled := Lane_sol_clock_s7.scaled_clock_error_bound N B A cH cJ δ H J S.card
+      hN0 (by dsimp [cH]; positivity) (by dsimp [cJ]; positivity) hδ0 hδcap hH0 hHcap hJ0 hJcap hS
+    have hEcap : E ≤ 1 / (4 * N) := by
+      apply (le_div_iff₀ (by positivity : 0 < 4 * N)).mpr
+      change N * E ≤ _ at hscaled
+      nlinarith [hcapsn.1]
+    have hKH : H * (S.card : ℝ) ≤ cH * N ^ (B + 1 / 2) := by
+      calc
+        _ ≤ (cH * N ^ (1 / 2 : ℝ)) * N ^ B :=
+          mul_le_mul hHcap hS (by positivity) (by positivity)
+        _ = _ := by rw [Real.rpow_add hN0]; ring
+    have hRatio : cH * N ^ (B + 1 / 2) ≤ N ^ (A / 3) / 2 := by
+      have hmul := mul_le_mul_of_nonneg_right hcapsn.2.1 (Real.rpow_nonneg hN0.le (A / 3))
+      have heq : N ^ (B + 1 / 2 - A / 3) * N ^ (A / 3) = N ^ (B + 1 / 2) := by
+        rw [← Real.rpow_add hN0]
+        congr 1
+        ring
+      calc
+        cH * N ^ (B + 1 / 2) = cH * (N ^ (B + 1 / 2 - A / 3) * N ^ (A / 3)) := by rw [heq]
+        _ = (cH * N ^ (B + 1 / 2 - A / 3)) * N ^ (A / 3) := by ring
+        _ ≤ (1 / 2) * N ^ (A / 3) := hmul
+        _ = _ := by ring
+    have hGrowth : 4 * N ≤ N ^ (A / 3) := by
+      have hmul := mul_le_mul_of_nonneg_right hcapsn.2.2 hN0.le
+      have heq : N ^ (A / 3 - 1) * N = N ^ (A / 3) := by
+        calc
+          _ = N ^ (A / 3 - 1) * N ^ (1 : ℝ) := by simp
+          _ = N ^ (A / 3 - 1 + 1) := (Real.rpow_add hN0 _ _).symm
+          _ = _ := by congr 1; ring
+      rw [heq] at hmul
+      exact hmul
+    have hFinal : C + H ^ S.card * Real.exp (-(N ^ (A / 3))) ≤ 1 + N⁻¹ :=
+      Lane_sol_clock_s7.target_error_absorption S.card hN2 hE0 hEcap hH0 (hKH.trans hRatio) hGrowth
+    have hpProd : 0 ≤ ∏ a ∈ S, (p a).w (o a) := Finset.prod_nonneg (by intro a _; exact (p a).nonneg _)
+    have hout : law.pr (fun ξ => matchesTargetsOrdinarily ins ξ S o) ≤
+        (∏ a ∈ S, (p a).w (o a)) * (1 + N⁻¹) :=
+      hraw'.trans (mul_le_mul_of_nonneg_left hFinal hpProd)
+    simpa only [mul_comm] using hout
 
 set_option maxHeartbeats 800000 in
 /-- L3.10g, unmatched singleton (03:1079–1082): under a fixed short insertion a row stays unmatched with

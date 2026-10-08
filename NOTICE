@@ -1,7 +1,16 @@
-This project includes definitions from Google DeepMind's Formal Conjectures, commit
-9d259649abe0b02d7a25f7589b872db679b35e21, licensed under Apache-2.0.
+hypercube-ramsey-lean4
+Copyright 2026 Yao Xu
 
-This project depends on OpenAI's openai/math library, commit
-adc7f1241b42e322a6451854ab7e4b4c146bf78a, licensed under Apache-2.0.
+This project includes a theorem statement and definitions copied from
+Google DeepMind's Formal Conjectures
+(https://github.com/google-deepmind/formal-conjectures), commit
+9d259649abe0b02d7a25f7589b872db679b35e21, Copyright 2026 The Formal
+Conjectures Authors, licensed under the Apache License, Version 2.0. They are
+in Challenge.lean and HypercubeRamsey/FormalConjectures.lean; THIRD_PARTY.md
+records the upstream files and the changes.
 
-See THIRD_PARTY.md for source paths, imported modules, and dependency information.
+This project depends on OpenAI's openai/math library
+(https://github.com/openai/math), commit
+adc7f1241b42e322a6451854ab7e4b4c146bf78a, in the lean/ directory, licensed
+under the Apache License, Version 2.0. Lake fetches it; no OpenAI source is
+copied into this repository. The upstream repository has no NOTICE file.

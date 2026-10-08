@@ -4,11 +4,7 @@
   "theorem_names": [
     "Erdos181.erdos_181"
   ],
-  "definition_names": [
-    "SimpleGraph.hypercube",
-    "SimpleGraph.graphRamsey",
-    "SimpleGraph.diagonalGraphRamsey"
-  ],
+  "definition_names": [],
   "permitted_axioms": [
     "propext",
     "Quot.sound",

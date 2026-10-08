@@ -1,10 +1,13 @@
 cff-version: 1.2.0
-message: "If you use this formalization, please cite it using the metadata in this file."
+message: "If you use this formalization, please cite it using the metadata from this file."
 type: software
-title: "The hypercube Ramsey number has linear order in Lean 4"
+title: "The hypercube Ramsey number has linear order, in Lean 4"
 abstract: >-
-  A Lean 4 formalization of the theorem that the diagonal Ramsey number of the
-  n-dimensional hypercube is at most C times 2^n for an absolute constant C > 0.
+  A Lean 4 formalization of OpenAI's theorem that an absolute constant C > 0
+  bounds the diagonal Ramsey number of the n-dimensional hypercube by
+  C * 2^n for every n, stated as Erdos181.erdos_181 in Google DeepMind's
+  Formal Conjectures. The final theorem uses only the axioms propext,
+  Classical.choice and Quot.sound.
 authors:
   - family-names: Xu
     given-names: Yao
@@ -12,17 +15,40 @@ authors:
 repository-code: "https://github.com/cadamcat/hypercube-ramsey-lean4"
 url: "https://github.com/cadamcat/hypercube-ramsey-lean4"
 license: Apache-2.0
-version: "TODO(release: version tag)"
-date-released: "TODO(release: publication date)"
+version: v1.0.0
+# date-released: RELEASE_DATE (YYYY-MM-DD; set when v1.0.0 is published)
 keywords:
   - Lean 4
   - formalization
   - Ramsey theory
   - hypercube
+  - Erdős problem 181
   - combinatorics
 references:
   - type: article
     authors:
       - name: OpenAI
     title: "The hypercube Ramsey number has linear order"
+    year: 2026
     url: "https://github.com/openai/math/blob/adc7f1241b42e322a6451854ab7e4b4c146bf78a/preprints/The-hypercube-Ramsey-number-has-linear-order-September-23-2026/paper.pdf"
+  - type: software
+    authors:
+      - name: OpenAI
+    title: "openai/math"
+    repository-code: "https://github.com/openai/math"
+    commit: adc7f1241b42e322a6451854ab7e4b4c146bf78a
+    license: Apache-2.0
+  - type: software
+    authors:
+      - name: The Formal Conjectures Authors
+    title: "Formal Conjectures"
+    repository-code: "https://github.com/google-deepmind/formal-conjectures"
+    commit: 9d259649abe0b02d7a25f7589b872db679b35e21
+    license: Apache-2.0
+  - type: software
+    authors:
+      - name: The mathlib Community
+    title: mathlib4
+    repository-code: "https://github.com/leanprover-community/mathlib4"
+    commit: d13f23b723b8a846827a245b89c10fc7d3f11612
+    license: Apache-2.0

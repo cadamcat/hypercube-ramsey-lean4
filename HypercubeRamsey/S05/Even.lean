@@ -5,6 +5,7 @@ import HypercubeRamsey.S05.Even_trunc_sol_s05_even
 import HypercubeRamsey.S05.Even_test_clock_sol_s05_even
 import HypercubeRamsey.S05.Even_test_scales_sol_s05_even
 import HypercubeRamsey.S05.Stages_p_s05_h
+import HypercubeRamsey.S05.Even_opus_s05
 
 /-!
 # L5.1n–o: even rows by deletion of primitive block values, comparison means, loads
@@ -746,6 +747,337 @@ theorem L5_1n_rows : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → 
 def EvenLoadsOK (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (O : OddRole5 n → X.OddOut) : Prop :=
   ∀ x, ∑ v : EvenRole5 n, X.evenRow ES H ω O v x ≤ 1
 
+namespace Lane_opus_s05_even
+
+/-! ### L5.1o sub-lemmas (lane opus-s05-even)
+
+`L5_1o` is `scatteredMoments_union_labels` (L3.6c) with `Z_v(x) = N p_v(x)`, `K = 2`, near sets of residual
+radius `evenSep`, the cap of `L5_1n_rows`, and the inputs below. -/
+
+/-- The residual separation radius of even rows: twice `r + slack + 9`, a residual radius containing the gate
+scope `r + slack + 8` and every odd neighbour's consultation scope `r + slack` (05:1255–1275). -/
+def evenSep (L : X.CentreLayer5) : ℕ := 2 * (L.ht.hp.r + L.slack + 9)
+
+/-- `Z_v(x) = N p_v(x)` on the joint space of centers and odd outputs (05:1252). -/
+def evenZ (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N)
+    (ωO : X.CΩ L.ht × (OddRole5 n → X.OddOut)) : ℝ :=
+  (N : ℝ) * X.evenRow ES H ωO.1 ωO.2 v x
+
+/-- The retained success event: geometry success, odd loads and every actual test (05:1166–1176, 1270). -/
+def evenSucc (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) : Finset (X.CΩ L.ht × (OddRole5 n → X.OddOut)) :=
+  Finset.univ.filter fun ωO => L.success H ωO.1 ∧ X.OddLoadsOK LR HR H ωO.1 ∧
+    ∀ v c, X.evenRefOf (L.elig H) H ωO.1 v = some c → X.EvenTest ES H ωO.1 v c ωO.2
+
+/-- The comparison-mean bound `d_v = C B_{K(v)} exp(C k_* 1_{j(v) > J})` (05:1244–1247). -/
+def evenD (Cd : ℝ) (v : EvenRole5 n) : ℝ :=
+  Cd * X.blockConst (X.g.evenType (X.p.J n) v.1) ^ X.p.KB *
+    (if X.g.low (X.p.J n) v.1 then 1 else Real.exp (Cd * (X.kStarLen : ℝ)))
+
+theorem evenD_nonneg {Cd : ℝ} (hCd : 0 ≤ Cd) (v : EvenRole5 n) : 0 ≤ evenD X Cd v := by
+  unfold evenD blockConst
+  apply mul_nonneg (mul_nonneg hCd (Real.rpow_nonneg (Real.exp_pos _).le _))
+  split_ifs
+  · exact zero_le_one
+  · exact (Real.exp_pos _).le
+
+theorem evenWeight_nonneg (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (v : EvenRole5 n)
+    (c : X.CRef L.ht) (O : OddRole5 n → X.OddOut) (z : X.RefVal v c.2) :
+    0 ≤ X.evenWeight ES H ω v c O z := by
+  unfold evenWeight
+  refine mul_nonneg (mul_nonneg ((X.refLaw H v c.2).nonneg z) ?_) ?_
+  · split_ifs
+    · exact zero_le_one
+    · exact le_refl 0
+  · exact Finset.prod_nonneg fun b _ => X.oddRow_nonneg LR HR H _ b (O b)
+
+theorem evenMarg_nonneg (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (v : EvenRole5 n)
+    (c : X.CRef L.ht) (O : OddRole5 n → X.OddOut) (x : Fin N) :
+    0 ≤ X.evenMarg ES H ω v c O x := by
+  unfold evenMarg evenMass
+  refine Finset.sum_nonneg fun z _ => mul_nonneg ?_ ?_
+  · exact div_nonneg (evenWeight_nonneg X ES H ω v c O z)
+      (Finset.sum_nonneg fun z' _ => evenWeight_nonneg X ES H ω v c O z')
+  · exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+
+/-- SUB-LEMMA A (proved): even rows are nonnegative everywhere. -/
+theorem evenRow_nonneg (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht)
+    (O : OddRole5 n → X.OddOut) (v : EvenRole5 n) (x : Fin N) : 0 ≤ X.evenRow ES H ω O v x := by
+  have hk (x' : Fin N) (c : X.CRef L.ht) :
+      0 ≤ (if X.EvenKeep ES H ω v c O x' then X.evenMarg ES H ω v c O x' else 0) := by
+    split_ifs
+    · exact evenMarg_nonneg X ES H ω v c O x'
+    · exact le_refl 0
+  unfold evenRow
+  cases X.evenRefOf (L.elig H) H ω v with
+  | none => exact le_refl 0
+  | some c =>
+    dsimp only
+    by_cases hg : ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O
+    · rw [if_pos hg]
+      exact div_nonneg (hk x c) (Finset.sum_nonneg fun x' _ => hk x' c)
+    · simp only [if_neg hg]
+      exact le_refl _
+
+/-- A nonzero even row comes from the selected reference with its gate and test. -/
+theorem evenRow_ne_zero {ES : X.EvenSetup5 LR HR} {H : X.KeyHist} {ω : X.CΩ L.ht}
+    {O : OddRole5 n → X.OddOut} {v : EvenRole5 n} {x : Fin N} (h : X.evenRow ES H ω O v x ≠ 0) :
+    ∃ c, X.evenRefOf (L.elig H) H ω v = some c ∧ ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O := by
+  revert h
+  unfold evenRow
+  cases hc : X.evenRefOf (L.elig H) H ω v with
+  | none => intro h; exact (h rfl).elim
+  | some c =>
+    intro h
+    by_cases hg : ES.gate H v c ω O ∧ X.EvenTest ES H ω v c O
+    · exact ⟨c, rfl, hg.1, hg.2⟩
+    · exact absurd (if_neg hg) h
+
+/-- SUB-LEMMA C (05:1255–1258, repeat cost): residual near sets of radius `evenSep` have fraction `f` of the
+even roles with `n f · 4e^{τ₁ n}/(1 - υ₀ - υ₁) ≤ 1`. The radius is `2ρn + o(n)` (`r = ⌊ρ n⌋`, sublinear slack,
+`O(√n)` occupied coordinates), so `evenNear_entropy_bound` gives `f ≤ 2 e^{-n(log 2 - H(2ρ + o(1)))}`, and
+`H(2ρ) < log 2 - τ₁` is `Params5.hEntropy`. -/
+theorem even_near_small : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
+    ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
+      ∀ L : X.CentreLayer5, ∃ f : ℝ, 0 ≤ f ∧
+        (∀ v : EvenRole5 n, ((Lane_sol_s05_even.evenNear X v (evenSep X L)).card : ℝ) ≤
+          f * Fintype.card (EvenRole5 n)) ∧
+        (n : ℝ) * f * (4 / (1 - X.p.nu0 - X.p.nu1) * Real.exp (X.p.tau1 * n)) ≤ 1 := by
+  sorry
+
+/-- SUB-LEMMA E (05:806–816, 1246–1248, deterministic cube rarity): the average over actual even roles of
+`d_v = C B_{K(v)} exp(C k_* 1_{j(v) > J})` is bounded, for `α` small after `C` (`log B_K = O(j + 1)` at low
+severity plus `O(s)` at `j = J`, `O(s)` at high severity, against `Pr(j ≥ h) ≤ n^{-.13h}` of
+`ChunkEstimates5.severity_tail`). -/
+theorem even_mean_average (Cd : Pre65 → ℝ) : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
+    ∃ D₀ : ℝ, 0 ≤ D₀ ∧ ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
+      (X : Setup5 γ K' χ n N E G), X.p = p → ChunkEstimates5 X.g →
+        (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * ∑ v, evenD X (Cd p.pre6) v ≤ D₀ := by
+  sorry
+
+/-- SUB-LEMMA D2 (05:1150–1158, `gate_outputs`): an even row reads only the outputs of its star. -/
+theorem evenRow_outputs_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (v : EvenRole5 n)
+    (x : Fin N) (O O' : OddRole5 n → X.OddOut) (hO : ∀ b ∈ star v, O b = O' b) :
+    X.evenRow ES H ω O v x = X.evenRow ES H ω O' v x := by
+  sorry
+
+/-- SUB-LEMMA D3: even roles at residual distance more than two have disjoint stars. -/
+theorem star_disjoint_of_far (v w : EvenRole5 n) (hfar : 2 < X.g.residualDist v.1 w.1) :
+    Disjoint (star v) (star w) := by
+  sorry
+
+/-- The product-row mean of `Z_v(x)` at fixed centers (05:1229–1236). -/
+def evenW (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N) (ω : X.CΩ L.ht) : ℝ :=
+  (FinProb.pi fun b => X.oddRowFP LR HR H ω b).expect fun O => evenZ X ES H v x (ω, O)
+
+/-- SUB-LEMMA D5 (05:1271–1275): the product-row mean reads the centers in the residual scope
+`r + slack + 9` (gate and reference scopes `r + slack + 8`; star validity and rows `r + slack` around
+neighbours one residual coordinate away; replacing the reference values stays inside the scope). -/
+theorem evenW_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (v : EvenRole5 n) (x : Fin N)
+    (ω ω' : X.CΩ L.ht)
+    (hω : ∀ l ∈ Lane_sol_s05_even.residualScope X (h := L.ht) v.1 (L.ht.hp.r + L.slack + 9), ω l = ω' l) :
+    evenW X ES H v x ω = evenW X ES H v x ω' := by
+  sorry
+
+/-- SUB-LEMMA D6 (05:1209–1247, comparison mean): under raw centers at a good key history the product-row
+mean of `Z_v(x)` is at most `d_v`: cancel the posterior denominator against the gated subdensity (sum over
+outputs at most the selection indicator), force the center present (level zero `3/λ`, positive levels the
+forced-center height bound), presence sums `λ` per level, raw tuple marginal `P̄_K ≤ B_K/N` at prior-light
+labels, truncation factor `2/(1 - υ₀ - υ₁)`, and high subsets `exp(O(k_*))`. -/
+theorem evenW_mean : ∃ R : ParamReq5, ∃ Cd : Pre65 → ℝ, (∀ q, 0 ≤ Cd q) ∧
+    ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
+    ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
+      (2 : ℝ) ^ n ≤ N → N ≤ n * 2 ^ n →
+      ∀ (L : X.CentreLayer5) (cL cH : ℝ) (LR : X.LowRows5 L cL cH) (HR : X.HighRows5 L)
+        (ES : X.EvenSetup5 LR HR) (H : X.KeyHist), X.KeyGood5 H cL cH →
+        (∀ K, X.TypeOccurs K → X.Step2Bounds H K) → ∀ (v : EvenRole5 n) (x : Fin N),
+          (X.centreLaw L.ht H).expect (evenW X ES H v x) ≤ evenD X (Cd p.pre6) v := by
+  sorry
+
+/-- SUB-LEMMA D (05:1209–1247, 1259–1275, separated joint moments): for at most `n` residual-separated even
+rows, the retained success event integrates `∏ Z_{s_i}(x)` to at most `2^m ∏ d_{s_i}`. Split as D1
+(`clock_expect_le`, the `(1+ε)` comparison on the `≤ n²` star outputs), D2 (`evenRow` reads only the star
+outputs, `gate_outputs`), D3 (separated stars are disjoint, so the product-row mean factors), D5 (the
+product-row mean of `Z_v` reads the centers in the residual scope `r + slack + 9`: `gate_local`,
+`refQ_local`, `valid_local`, `row_local`, long-rule selection locality), D4 (disjoint residual scopes
+factor under the product center law, `pi_expect_prod_disjoint`), and D6, the comparison mean
+`E[product-row mean of Z_v(x)] ≤ d_v` (posterior cancellation, forced-center selection bounds, `P̄_K ≤ B_K/N`
+at prior-light labels, high subsets). -/
+theorem even_joint_moments : ∃ R : ParamReq5, ∃ Cd : Pre65 → ℝ, (∀ q, 0 ≤ Cd q) ∧
+    ∀ p : Params5 γ K' χ, R.Holds p → ∃ n₀ : ℕ, ∀ n ≥ n₀,
+    ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour) (X : Setup5 γ K' χ n N E G), X.p = p →
+      (2 : ℝ) ^ n ≤ N → N ≤ n * 2 ^ n →
+      ∀ (L : X.CentreLayer5) (cL cH : ℝ) (LR : X.LowRows5 L cL cH) (HR : X.HighRows5 L)
+        (ES : X.EvenSetup5 LR HR) (H : X.KeyHist), X.KeyGood5 H cL cH →
+        (∀ K, X.TypeOccurs K → X.Step2Bounds H K) →
+        ∀ (J : X.CΩ L.ht → FinProb (OddRole5 n → X.OddOut)) (ε : ℝ), 0 ≤ ε → ε ≤ 1 →
+          X.ClockFamily5 (LR := LR) (HR := HR) H J ε →
+          ∀ (x : Fin N) (m : ℕ), m ≤ n → ∀ s : Fin m → EvenRole5 n,
+            (∀ i j : Fin m, j < i → s i ∉ Lane_sol_s05_even.evenNear X (s j) (evenSep X L)) →
+            ∑ ωO ∈ evenSucc X ES H, (X.jointLaw H J).w ωO * ∏ i, evenZ X ES H (s i) x ωO ≤
+              (2 : ℝ) ^ m * ∏ i, evenD X (Cd p.pre6) (s i) := by
+  classical
+  obtain ⟨R6, Cd, hCd, h6⟩ := evenW_mean (γ := γ) (K' := K') (χ := χ)
+  refine ⟨R6, Cd, hCd, ?_⟩
+  intro p hp
+  obtain ⟨n₀, hn₀⟩ := h6 p hp
+  refine ⟨n₀, ?_⟩
+  intro n hn N E G X hXp hN2 hNhi L cL cH LR HR ES H hgood hstep J ε hε0 hε1 hclock x m hm s hsep
+  have hmean := hn₀ n hn N E G X hXp hN2 hNhi L cL cH LR HR ES H hgood hstep
+  rcases Nat.eq_zero_or_pos m with hm0 | hmpos
+  · subst hm0
+    simp only [Fin.prod_univ_zero, mul_one, pow_zero]
+    calc
+      (∑ ωO ∈ evenSucc X ES H, (X.jointLaw H J).w ωO) ≤ ∑ ωO, (X.jointLaw H J).w ωO :=
+        Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _)
+          fun ωO _ _ => (X.jointLaw H J).nonneg ωO
+      _ = 1 := (X.jointLaw H J).sum_eq_one
+  have hfar : ∀ i j : Fin m, j < i → evenSep X L < X.g.residualDist (s j).1 (s i).1 := by
+    intro i j hji
+    have hn' := hsep i j hji
+    simp only [Lane_sol_s05_even.evenNear, Finset.mem_filter, Finset.mem_univ, true_and, not_le] at hn'
+    exact hn'
+  have hpair : ∀ {α : Type} (D : Fin m → Finset α), (∀ i j : Fin m, j < i → Disjoint (D j) (D i)) →
+      ((Finset.univ : Finset (Fin m)) : Set (Fin m)).Pairwise (fun i j => Disjoint (D i) (D j)) := by
+    intro α D hD i _ j _ hij
+    rcases lt_or_gt_of_ne hij with h | h
+    · exact hD j i h
+    · exact (hD i j h).symm
+  have hstar (v : EvenRole5 n) : (star v).card ≤ n := by
+    refine le_trans (Finset.card_le_card ?_) (oddAdjSet5_card_le v)
+    intro b hb
+    simp only [Setup5.star, oddAdjSet5, Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
+    exact hb
+  have hrowFP (ω : X.CΩ L.ht) (b : OddRole5 n) (o : X.OddOut) :
+      X.oddRow LR HR H ω b o ≤ (X.oddRowFP LR HR H ω b).w o := by
+    unfold oddRowFP
+    split_ifs with hv
+    · exact le_refl _
+    · have h0 : X.oddRow LR HR H ω b o = 0 := by
+        simp [oddRow, LR.row_invalid H ω b o hv, HR.row_invalid H ω b o hv]
+      rw [h0]
+      exact (FinProb.dirac5 _).nonneg o
+  let S : Finset (OddRole5 n) := Finset.univ.biUnion fun i => star (s i)
+  have hScard : S.card ≤ n ^ 2 := by
+    calc
+      S.card ≤ ∑ i : Fin m, (star (s i)).card := Finset.card_biUnion_le
+      _ ≤ ∑ _i : Fin m, n := Finset.sum_le_sum fun i _ => hstar (s i)
+      _ = m * n := by simp
+      _ ≤ n * n := Nat.mul_le_mul_right n hm
+      _ = n ^ 2 := (sq n).symm
+  have hW0 : ∀ (v : EvenRole5 n) (ω : X.CΩ L.ht), 0 ≤ evenW X ES H v x ω := by
+    intro v ω
+    unfold evenW FinProb.expect
+    exact Finset.sum_nonneg fun O _ => mul_nonneg ((FinProb.pi _).nonneg O)
+      (mul_nonneg (Nat.cast_nonneg _) (evenRow_nonneg X ES H ω O v x))
+  have hpoint : ∀ ω : X.CΩ L.ht, L.success H ω → X.OddLoadsOK LR HR H ω →
+      (J ω).expect (fun O => ∏ i, evenZ X ES H (s i) x (ω, O)) ≤
+        (1 + ε) * ∏ i, evenW X ES H (s i) x ω := by
+    intro ω hs hodd
+    have hcyl : ∀ o : OddRole5 n → X.OddOut, (J ω).pr (fun O => ∀ b ∈ S, O b = o b) ≤
+        (1 + ε) * ∏ b ∈ S, (X.oddRowFP LR HR H ω b).w (o b) := by
+      intro o
+      refine le_trans (hclock.joint ω hs hodd S o hScard) ?_
+      apply mul_le_mul_of_nonneg_left _ (by linarith)
+      exact Finset.prod_le_prod₀ (fun b _ => X.oddRow_nonneg LR HR H ω b (o b))
+        (fun b _ => hrowFP ω b (o b))
+    have hdepS : FinProb.DependsOn
+        (fun O : OddRole5 n → X.OddOut => ∏ i, evenZ X ES H (s i) x (ω, O)) S := by
+      intro O O' hO
+      apply Finset.prod_congr rfl
+      intro i _
+      simp only [evenZ]
+      rw [evenRow_outputs_local X ES H ω (s i) x O O'
+        (fun b hb => hO b (Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hb⟩))]
+    have h1 := clock_expect_le (J ω) (fun b => X.oddRowFP LR HR H ω b) S ε hε0 hcyl
+      (fun O => ∏ i, evenZ X ES H (s i) x (ω, O))
+      (fun O => Finset.prod_nonneg fun i _ =>
+        mul_nonneg (Nat.cast_nonneg _) (evenRow_nonneg X ES H ω O (s i) x)) hdepS
+    have h2 : (FinProb.pi fun b => X.oddRowFP LR HR H ω b).expect
+        (fun O => ∏ i ∈ Finset.univ, evenZ X ES H (s i) x (ω, O)) =
+          ∏ i ∈ Finset.univ, evenW X ES H (s i) x ω :=
+      Lane_sol_s05_h5l.pi_expect_prod_disjoint (fun b => X.oddRowFP LR HR H ω b) Finset.univ
+        (fun i => star (s i)) (fun i O => evenZ X ES H (s i) x (ω, O))
+        (fun i _ => by
+          intro O O' hO
+          simp only [evenZ]
+          rw [evenRow_outputs_local X ES H ω (s i) x O O' hO])
+        (hpair (fun i => star (s i)) fun i j hji => star_disjoint_of_far X (s j) (s i) (by
+          have := hfar i j hji
+          unfold evenSep at this
+          omega))
+    exact h1.trans (le_of_eq (congrArg (fun t => (1 + ε) * t) h2))
+  have hcentre : (X.centreLaw L.ht H).expect (fun ω => ∏ i ∈ Finset.univ, evenW X ES H (s i) x ω) =
+      ∏ i ∈ Finset.univ, (X.centreLaw L.ht H).expect (evenW X ES H (s i) x) :=
+    Lane_sol_s05_h5l.pi_expect_prod_disjoint _ Finset.univ
+      (fun i => Lane_sol_s05_even.residualScope X (h := L.ht) (s i).1 (L.ht.hp.r + L.slack + 9))
+      (fun i ω => evenW X ES H (s i) x ω)
+      (fun i _ => by
+        intro ω ω' hω
+        exact evenW_local X ES H (s i) x ω ω' hω)
+      (hpair _ fun i j hji => Lane_sol_s05_even.residualScopes_disjoint X (s j).1 (s i).1 _ _ (by
+        have := hfar i j hji
+        unfold evenSep at this
+        omega))
+  have hA : ∀ ω : X.CΩ L.ht, (∑ O : OddRole5 n → X.OddOut,
+      (if L.success H ω ∧ X.OddLoadsOK LR HR H ω then
+        (X.centreLaw L.ht H).w ω * ((J ω).w O * ∏ i, evenZ X ES H (s i) x (ω, O)) else 0)) ≤
+        (X.centreLaw L.ht H).w ω * ((1 + ε) * ∏ i, evenW X ES H (s i) x ω) := by
+    intro ω
+    by_cases hA : L.success H ω ∧ X.OddLoadsOK LR HR H ω
+    · simp only [if_pos hA]
+      rw [← Finset.mul_sum]
+      exact mul_le_mul_of_nonneg_left (hpoint ω hA.1 hA.2) ((X.centreLaw L.ht H).nonneg ω)
+    · simp only [if_neg hA, Finset.sum_const_zero]
+      exact mul_nonneg ((X.centreLaw L.ht H).nonneg ω)
+        (mul_nonneg (by linarith) (Finset.prod_nonneg fun i _ => hW0 _ _))
+  calc
+    _ ≤ ∑ ωO : X.CΩ L.ht × (OddRole5 n → X.OddOut),
+        (if L.success H ωO.1 ∧ X.OddLoadsOK LR HR H ωO.1 then
+          (X.centreLaw L.ht H).w ωO.1 *
+            ((J ωO.1).w ωO.2 * ∏ i, evenZ X ES H (s i) x (ωO.1, ωO.2)) else 0) := by
+      unfold evenSucc
+      rw [Finset.sum_filter]
+      apply Finset.sum_le_sum
+      intro ωO _
+      split_ifs with hc1 hc2 hc2
+      · exact le_of_eq (by rw [show (X.jointLaw H J).w ωO =
+          (X.centreLaw L.ht H).w ωO.1 * (J ωO.1).w ωO.2 from rfl, mul_assoc])
+      · exact absurd ⟨hc1.1, hc1.2.1⟩ hc2
+      · exact mul_nonneg ((X.centreLaw L.ht H).nonneg _) (mul_nonneg ((J _).nonneg _)
+          (Finset.prod_nonneg fun i _ =>
+            mul_nonneg (Nat.cast_nonneg _) (evenRow_nonneg X ES H _ _ (s i) x)))
+      · exact le_refl 0
+    _ = ∑ ω : X.CΩ L.ht, ∑ O : OddRole5 n → X.OddOut,
+        (if L.success H ω ∧ X.OddLoadsOK LR HR H ω then
+          (X.centreLaw L.ht H).w ω * ((J ω).w O * ∏ i, evenZ X ES H (s i) x (ω, O)) else 0) :=
+      Fintype.sum_prod_type _
+    _ ≤ ∑ ω : X.CΩ L.ht, (X.centreLaw L.ht H).w ω * ((1 + ε) * ∏ i, evenW X ES H (s i) x ω) :=
+      Finset.sum_le_sum fun ω _ => hA ω
+    _ = (1 + ε) * (X.centreLaw L.ht H).expect
+        (fun ω => ∏ i ∈ Finset.univ, evenW X ES H (s i) x ω) := by
+      unfold FinProb.expect
+      rw [Finset.mul_sum]
+      apply Finset.sum_congr rfl
+      intro ω _
+      ring
+    _ = (1 + ε) * ∏ i, (X.centreLaw L.ht H).expect (evenW X ES H (s i) x) := by
+      rw [hcentre]
+    _ ≤ (1 + ε) * ∏ i, evenD X (Cd p.pre6) (s i) := by
+      apply mul_le_mul_of_nonneg_left _ (by linarith)
+      exact Finset.prod_le_prod₀
+        (fun i _ => by
+          unfold FinProb.expect
+          exact Finset.sum_nonneg fun ω _ => mul_nonneg ((X.centreLaw L.ht H).nonneg ω) (hW0 (s i) ω))
+        (fun i _ => hmean (s i) x)
+    _ ≤ (2 : ℝ) ^ m * ∏ i, evenD X (Cd p.pre6) (s i) := by
+      apply mul_le_mul_of_nonneg_right _ (Finset.prod_nonneg fun i _ => evenD_nonneg X (hCd _) _)
+      calc
+        1 + ε ≤ 2 := by linarith
+        _ = (2 : ℝ) ^ 1 := (pow_one 2).symm
+        _ ≤ (2 : ℝ) ^ m := pow_le_pow_right₀ (by norm_num) hmpos
+
+end Lane_opus_s05_even
+
 /-- L5.1o (05:1209–1282): the normalized comparison mean of the even row at a prior-light label is at most
 `d_v = O(B_{K(v)} exp(O(k_* 1_{j(v) > J})))` — cancellation of the posterior denominator, the forced-center height
 bounds (`3/λ` at level zero, `e^{-n^c}` above), presence sums `λ` per level, unselected marginal `P̄_K ≤ B_K/N`
@@ -763,7 +1095,122 @@ theorem L5_1o : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
           (X.jointLaw H J).pr (fun ωO => L.success H ωO.1 ∧ X.OddLoadsOK LR HR H ωO.1 ∧
             (∀ v c, X.evenRefOf (L.elig H) H ωO.1 v = some c → X.EvenTest ES H ωO.1 v c ωO.2) ∧
             ¬ X.EvenLoadsOK ES H ωO.1 ωO.2) ≤ 1 / 100 := by
-  sorry
+  classical
+  obtain ⟨Rrow, hrow⟩ := L5_1n_rows (γ := γ) (K' := K') (χ := χ)
+  obtain ⟨RD, Cd, hCd, hD⟩ := Lane_opus_s05_even.even_joint_moments (γ := γ) (K' := K') (χ := χ)
+  obtain ⟨RE, hE⟩ := Lane_opus_s05_even.even_mean_average (γ := γ) (K' := K') (χ := χ) Cd
+  obtain ⟨RC, hC⟩ := Lane_opus_s05_even.even_near_small (γ := γ) (K' := K') (χ := χ)
+  refine ⟨(Rrow.join RD).join (RE.join RC), ?_⟩
+  intro p hp
+  obtain ⟨hp12, hp34⟩ := ParamReq5.holds_of_join hp
+  obtain ⟨hp1, hp2⟩ := ParamReq5.holds_of_join hp12
+  obtain ⟨hp3, hp4⟩ := ParamReq5.holds_of_join hp34
+  obtain ⟨D₀, hD₀, nE, hnE⟩ := hE p hp3
+  refine ⟨8 * (D₀ + 1) + 1, by positivity, ?_⟩
+  obtain ⟨nR, hnR⟩ := hrow p hp1
+  obtain ⟨nD, hnD⟩ := hD p hp2
+  obtain ⟨nC, hnC⟩ := hC p hp4
+  obtain ⟨nT, hnT⟩ := Filter.eventually_atTop.mp
+    (Lane_q_s05_h5l.halfPowerTail_tendsto.eventually (Iio_mem_nhds (by norm_num : (0 : ℝ) < 1 / 100)))
+  refine ⟨max (max nR nD) (max (max nE nC) (max nT 1)), ?_⟩
+  intro n hn N E G X hXp hGeom hNlo hNhi L cL cH LR HR ES H hgood hstep J ε hε0 hε1 hclock
+  have hnR' : nR ≤ n := le_trans (le_trans (le_max_left _ _) (le_max_left _ _)) hn
+  have hnD' : nD ≤ n := le_trans (le_trans (le_max_right _ _) (le_max_left _ _)) hn
+  have hnE' : nE ≤ n :=
+    le_trans (le_trans (le_max_left _ _) (le_trans (le_max_left _ _) (le_max_right _ _))) hn
+  have hnC' : nC ≤ n :=
+    le_trans (le_trans (le_max_right _ _) (le_trans (le_max_left _ _) (le_max_right _ _))) hn
+  have hnT' : nT ≤ n :=
+    le_trans (le_trans (le_max_left _ _) (le_trans (le_max_right _ _) (le_max_right _ _))) hn
+  have hn1 : 1 ≤ n :=
+    le_trans (le_trans (le_max_right _ _) (le_trans (le_max_right _ _) (le_max_right _ _))) hn
+  have hpow : (0 : ℝ) < 2 ^ n := by positivity
+  have hN2 : (2 : ℝ) ^ n ≤ N := by nlinarith [mul_nonneg hD₀ hpow.le]
+  rcases isEmpty_or_nonempty (EvenRole5 n) with hU | hU
+  · apply le_trans (le_of_eq _) (by norm_num : (0 : ℝ) ≤ 1 / 100)
+    unfold FinProb.pr
+    apply Finset.sum_eq_zero
+    intro ωO _
+    rw [if_neg]
+    rintro ⟨_, _, _, hbad⟩
+    apply hbad
+    intro x
+    haveI := hU
+    simp
+  haveI := hU
+  obtain ⟨f, hf0, hnear, hsmall⟩ := hnC n hnC' N E G X hXp L
+  have hmean := hnE n hnE' N E G X hXp hGeom
+  have hjoint := hnD n hnD' N E G X hXp hN2 hNhi L cL cH LR HR ES H hgood hstep J ε hε0 hε1 hclock
+  have hden : 0 < 1 - X.p.nu0 - X.p.nu1 := by linarith [X.p.hnu1.2]
+  let cap : ℝ := 4 / (1 - X.p.nu0 - X.p.nu1) * Real.exp (X.p.tau1 * n)
+  have hcap0 : 0 ≤ cap := by positivity
+  have hZL : ∀ (v : EvenRole5 n) (y : Fin N) (ωO : X.CΩ L.ht × (OddRole5 n → X.OddOut)),
+      ωO ∈ Lane_opus_s05_even.evenSucc X ES H → Lane_opus_s05_even.evenZ X ES H v y ωO ≤ cap := by
+    intro v y ωO _
+    by_cases h0 : X.evenRow ES H ωO.1 ωO.2 v y = 0
+    · simp only [Lane_opus_s05_even.evenZ, h0, mul_zero]
+      exact hcap0
+    · obtain ⟨c, hc, hg, ht⟩ := Lane_opus_s05_even.evenRow_ne_zero X h0
+      exact (hnR n hnR' N E G X hXp L cL cH LR HR ES H hstep ωO.1 ωO.2 v c hc hg ht).2.2.2 y
+  have hlabels : (Fintype.card (Fin N) : ℝ) ≤ (n : ℝ) * 2 ^ n := by
+    rw [Fintype.card_fin]
+    exact_mod_cast hNhi
+  have hscat := scatteredMoments_union_labels (X.jointLaw H J) (Lane_opus_s05_even.evenSucc X ES H)
+    (fun v y ωO => Lane_opus_s05_even.evenZ X ES H v y ωO)
+    (fun v y ωO => mul_nonneg (Nat.cast_nonneg N) (Lane_opus_s05_even.evenRow_nonneg X ES H ωO.1 ωO.2 v y))
+    cap hcap0 hZL (fun v => Lane_sol_s05_even.evenNear X v (Lane_opus_s05_even.evenSep X L))
+    (fun v => Lane_sol_s05_even.evenNear_self X v _) f hf0 hnear n (by omega) 2 D₀ (by norm_num) hD₀
+    (fun v _ => Lane_opus_s05_even.evenD X (Cd p.pre6) v)
+    (fun v _ => Lane_opus_s05_even.evenD_nonneg X (hCd p.pre6) v) (fun _ => hmean) hjoint hsmall hlabels
+  have hcardU : (0 : ℝ) < Fintype.card (EvenRole5 n) := Nat.cast_pos.mpr Fintype.card_pos
+  have hcardU2 : (Fintype.card (EvenRole5 n) : ℝ) ≤ 2 ^ n := by
+    exact_mod_cast Lane_sol_s05_even.evenRole_card_le n
+  have hratio : 8 * (D₀ + 1) + 1 ≤ (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * N := by
+    rw [inv_mul_eq_div, le_div_iff₀ hcardU]
+    calc
+      (8 * (D₀ + 1) + 1) * (Fintype.card (EvenRole5 n) : ℝ) ≤ (8 * (D₀ + 1) + 1) * 2 ^ n :=
+        mul_le_mul_of_nonneg_left hcardU2 (by positivity)
+      _ ≤ N := hNlo
+  have himp : ∀ ωO : X.CΩ L.ht × (OddRole5 n → X.OddOut),
+      (L.success H ωO.1 ∧ X.OddLoadsOK LR HR H ωO.1 ∧
+        (∀ v c, X.evenRefOf (L.elig H) H ωO.1 v = some c → X.EvenTest ES H ωO.1 v c ωO.2) ∧
+          ¬ X.EvenLoadsOK ES H ωO.1 ωO.2) →
+      ωO ∈ Lane_opus_s05_even.evenSucc X ES H ∧ ∃ y, 4 * 2 * (D₀ + 1) <
+        (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * ∑ v, Lane_opus_s05_even.evenZ X ES H v y ωO := by
+    rintro ωO ⟨hs, hodd, htest, hbad⟩
+    refine ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _, hs, hodd, htest⟩, ?_⟩
+    unfold EvenLoadsOK at hbad
+    push_neg at hbad
+    obtain ⟨y, hy⟩ := hbad
+    refine ⟨y, ?_⟩
+    have hsum : (∑ v, Lane_opus_s05_even.evenZ X ES H v y ωO) =
+        (N : ℝ) * ∑ v, X.evenRow ES H ωO.1 ωO.2 v y := by
+      simp only [Lane_opus_s05_even.evenZ, Finset.mul_sum]
+    rw [hsum, ← mul_assoc]
+    have hpos : 0 < (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * N := by
+      have : (0 : ℝ) < N := lt_of_lt_of_le hpow hN2
+      positivity
+    calc
+      4 * 2 * (D₀ + 1) < 8 * (D₀ + 1) + 1 := by linarith
+      _ ≤ (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * N := hratio
+      _ = (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * N * 1 := (mul_one _).symm
+      _ < _ := mul_lt_mul_of_pos_left hy hpos
+  have hTn : (n : ℝ) * (1 / 2 : ℝ) ^ n < 1 / 100 := hnT n hnT'
+  calc
+    _ ≤ (n : ℝ) * 2 ^ n * (1 / 4 : ℝ) ^ n := by
+      refine le_trans ?_ hscat
+      unfold FinProb.pr
+      apply Finset.sum_le_sum
+      intro ωO _
+      split_ifs with h1 h2 h2
+      · exact le_refl _
+      · exact absurd (himp ωO h1) h2
+      · exact (X.jointLaw H J).nonneg ωO
+      · exact le_refl _
+    _ = (n : ℝ) * (1 / 2 : ℝ) ^ n := by
+      rw [mul_assoc, ← mul_pow]
+      norm_num
+    _ ≤ 1 / 100 := hTn.le
 
 end Setup5
 

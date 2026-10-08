@@ -1635,9 +1635,9 @@ theorem d4_mask_strategy (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < 
     simpa [P, v, bound, FinProb.expect] using hbound (s, y)
 
   let near := fun q : Site n δ =>
-    Finset.univ.filter fun z : Slice n δ => hammingDist z q.1 ≤ 1
+    Finset.univ.filter fun z : Slice n δ => _root_.hammingDist z q.1 ≤ 1
   have hflipDist (z : Slice n δ) (e : Fin (mS n δ)) :
-      hammingDist z (flipSlice z e) ≤ 1 := by
+      _root_.hammingDist z (flipSlice z e) ≤ 1 := by
     classical
     have hsub :
         (Finset.univ.filter fun i : Fin (mS n δ) => z i ≠ flipSlice z e i) ⊆ {e} := by
@@ -1661,7 +1661,7 @@ theorem d4_mask_strategy (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < 
     simp [near]
   have hflipNear (q : Site n δ) (e : Fin (mS n δ)) :
       flipSlice q.1 e ∈ near q := by
-    simp [near, hammingDist_comm, hflipDist]
+    simp [near, _root_.hammingDist_comm, hflipDist]
   have hmeanLocalized (p : Slice n δ → M.I) (q : Site n δ)
       (S : Finset (Fin N)) (s : ℕ) (y : Fin N) :
       hypMean M (localize p q) q S s y = hypMean M p q S s y := by

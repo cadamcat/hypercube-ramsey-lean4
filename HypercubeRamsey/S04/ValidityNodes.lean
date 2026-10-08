@@ -52,7 +52,7 @@ theorem own_ratio (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour} {X Y : Finset (Fin N)}
       (M : Menu4 β γ G n N E X Y) (tag : Key β γ n → M.ι),
       KeyNbrCard β γ n → EntryLow M → EntryOwn M → OwnRatio M tag := by
-  sorry
+  exact HypercubeRamsey.Lane_q_s04_valid.own_ratio_core β γ hβ hβγ hγ
 
 /-- L4.1e3 (04:235–236, 296–298): invalidity is the low failure or an own-key ratio failure at one of the
 `≤ T` IDs; `(1 + T) exp(-2n^{ω/5}) ≤ exp(-n^{ω/5})` for large `n`. -/

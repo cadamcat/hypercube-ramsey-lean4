@@ -6,6 +6,306 @@ namespace HypercubeRamsey.S11.Core.OuterMoment_q_s11_outer
 
 open Filter
 
+theorem signed_fv_weight_difference {N : ℕ} {E : Fin N → Fin N → Prop}
+    {X Y : Finset (Fin N)} {wX wY err : ℝ} (G : Colour)
+    (hdisc : DiscOne E X Y wX wY err)
+    (μ ν π : Law N) (hμX : μ.SupportedIn X) (hνY : ν.SupportedIn Y)
+    (hπY : π.SupportedIn Y) (hN : 0 < (N : ℝ))
+    (hμWidth : μ.WidthLE (wX - Real.log 11))
+    (hνWidth : ν.WidthLE wY) (hπWidth : π.WidthLE wY)
+    (g : Fin N → ℝ) (hg : ∀ x, |g x| ≤ 5) (herr : 0 ≤ err) :
+    |∑ x, μ.w x * g x *
+      ((∑ y, ν.w y * fv E G x y) - (∑ y, π.w y * fv E G x y))| ≤ 24 * err := by
+  classical
+  let cp : ℝ := ∑ x, μ.w x * (6 + g x)
+  let cm : ℝ := ∑ x, μ.w x * (6 - g x)
+  have hμg : |∑ x, μ.w x * g x| ≤ 5 := by
+    calc
+      |∑ x, μ.w x * g x| ≤ ∑ x, |μ.w x * g x| := Finset.abs_sum_le_sum_abs _ _
+      _ = ∑ x, μ.w x * |g x| := by
+        apply Finset.sum_congr rfl
+        intro x hx
+        rw [abs_mul, abs_of_nonneg (μ.nonneg x)]
+      _ ≤ ∑ x, μ.w x * 5 := by
+        apply Finset.sum_le_sum
+        intro x hx
+        exact mul_le_mul_of_nonneg_left (hg x) (μ.nonneg x)
+      _ = 5 := by rw [← Finset.sum_mul, μ.sum_eq_one]; ring
+  have hcpEq : cp = 6 + ∑ x, μ.w x * g x := by
+    dsimp [cp]
+    calc
+      (∑ x, μ.w x * (6 + g x)) =
+          ∑ x, (6 * μ.w x + μ.w x * g x) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            ring
+      _ = 6 * ∑ x, μ.w x + ∑ x, μ.w x * g x := by
+            rw [Finset.sum_add_distrib, ← Finset.mul_sum]
+      _ = 6 + ∑ x, μ.w x * g x := by rw [μ.sum_eq_one]; ring
+  have hcmEq : cm = 6 - ∑ x, μ.w x * g x := by
+    dsimp [cm]
+    calc
+      (∑ x, μ.w x * (6 - g x)) =
+          ∑ x, (6 * μ.w x - μ.w x * g x) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            ring
+      _ = 6 * ∑ x, μ.w x - ∑ x, μ.w x * g x := by
+            rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+      _ = 6 - ∑ x, μ.w x * g x := by rw [μ.sum_eq_one]; ring
+  have hcpLower : 1 ≤ cp := by rw [hcpEq]; have := (abs_le.mp hμg).1; linarith
+  have hcpUpper : cp ≤ 11 := by rw [hcpEq]; have := (abs_le.mp hμg).2; linarith
+  have hcmLower : 1 ≤ cm := by rw [hcmEq]; have := (abs_le.mp hμg).2; linarith
+  have hcmUpper : cm ≤ 11 := by rw [hcmEq]; have := (abs_le.mp hμg).1; linarith
+  have hcpPos : 0 < cp := lt_of_lt_of_le (by norm_num) hcpLower
+  have hcmPos : 0 < cm := lt_of_lt_of_le (by norm_num) hcmLower
+  have hcpCm : cp + cm = 12 := by rw [hcpEq, hcmEq]; ring
+  let μplus : Law N := {
+    w := fun x => μ.w x * (6 + g x) / cp
+    nonneg := fun x => div_nonneg (mul_nonneg (μ.nonneg x) (by
+      have := (abs_le.mp (hg x)).1
+      linarith)) hcpPos.le
+    sum_eq_one := by
+      calc
+        (∑ x, μ.w x * (6 + g x) / cp) = cp / cp := by
+          rw [Finset.sum_div]
+        _ = 1 := div_self hcpPos.ne'
+  }
+  let μminus : Law N := {
+    w := fun x => μ.w x * (6 - g x) / cm
+    nonneg := fun x => div_nonneg (mul_nonneg (μ.nonneg x) (by
+      have := (abs_le.mp (hg x)).2
+      linarith)) hcmPos.le
+    sum_eq_one := by
+      calc
+        (∑ x, μ.w x * (6 - g x) / cm) = cm / cm := by
+          rw [Finset.sum_div]
+        _ = 1 := div_self hcmPos.ne'
+  }
+  have hplusSupport : μplus.SupportedIn X := by
+    intro x hx
+    change μ.w x * (6 + g x) / cp = 0
+    rw [hμX x hx]
+    simp
+  have hminusSupport : μminus.SupportedIn X := by
+    intro x hx
+    change μ.w x * (6 - g x) / cm = 0
+    rw [hμX x hx]
+    simp
+  have hplusWidth : μplus.WidthLE wX := by
+    intro x
+    change μ.w x * (6 + g x) / cp ≤ Real.exp wX / N
+    have hratio : (6 + g x) / cp ≤ 11 := by
+      apply (div_le_iff₀ hcpPos).2
+      have h := (abs_le.mp (hg x)).2
+      nlinarith
+    calc
+      μ.w x * (6 + g x) / cp = μ.w x * ((6 + g x) / cp) := by ring
+      _ ≤ μ.w x * 11 := mul_le_mul_of_nonneg_left hratio (μ.nonneg x)
+      _ ≤ (Real.exp (wX - Real.log 11) / N) * 11 :=
+        mul_le_mul_of_nonneg_right (hμWidth x) (by norm_num)
+      _ = Real.exp wX / N := by
+        rw [Real.exp_sub, Real.exp_log (by norm_num : (0 : ℝ) < 11)]
+        field_simp [ne_of_gt hN]
+        <;> ring
+  have hminusWidth : μminus.WidthLE wX := by
+    intro x
+    change μ.w x * (6 - g x) / cm ≤ Real.exp wX / N
+    have hratio : (6 - g x) / cm ≤ 11 := by
+      apply (div_le_iff₀ hcmPos).2
+      have h := (abs_le.mp (hg x)).1
+      nlinarith
+    calc
+      μ.w x * (6 - g x) / cm = μ.w x * ((6 - g x) / cm) := by ring
+      _ ≤ μ.w x * 11 := mul_le_mul_of_nonneg_left hratio (μ.nonneg x)
+      _ ≤ (Real.exp (wX - Real.log 11) / N) * 11 :=
+        mul_le_mul_of_nonneg_right (hμWidth x) (by norm_num)
+      _ = Real.exp wX / N := by
+        rw [Real.exp_sub, Real.exp_log (by norm_num : (0 : ℝ) < 11)]
+        field_simp [ne_of_gt hN]
+        <;> ring
+  have hdenRow (μ' ν' : Law N) :
+      dens E G μ' ν' = ∑ x, μ'.w x * ∑ y, ν'.w y * hit E G x y := by
+    simp only [dens]
+    simp only [hit]
+    apply Finset.sum_congr rfl
+    intro x hx
+    rw [Finset.mul_sum]
+    apply Finset.sum_congr rfl
+    intro y hy
+    ring
+  have hfvRow (ν' : Law N) (x : Fin N) :
+      (∑ y, ν'.w y * fv E G x y) =
+        2 * (∑ y, ν'.w y * hit E G x y) - 1 := by
+    unfold fv
+    calc
+      (∑ y, ν'.w y * (2 * hit E G x y - 1)) =
+          ∑ y, (2 * (ν'.w y * hit E G x y) - ν'.w y) := by
+            apply Finset.sum_congr rfl
+            intro y hy
+            ring
+      _ = 2 * (∑ y, ν'.w y * hit E G x y) - ∑ y, ν'.w y := by
+            rw [Finset.sum_sub_distrib, ← Finset.mul_sum]
+      _ = 2 * (∑ y, ν'.w y * hit E G x y) - 1 := by rw [ν'.sum_eq_one]
+  have hfvDensity (μ' ν' π' : Law N) :
+      (∑ x, μ'.w x *
+        ((∑ y, ν'.w y * fv E G x y) - (∑ y, π'.w y * fv E G x y))) =
+        2 * (dens E G μ' ν' - dens E G μ' π') := by
+    calc
+      _ = ∑ x, μ'.w x *
+          (2 * ((∑ y, ν'.w y * hit E G x y) - (∑ y, π'.w y * hit E G x y))) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [hfvRow ν' x, hfvRow π' x]
+            ring
+      _ = 2 * ((∑ x, μ'.w x * ∑ y, ν'.w y * hit E G x y) -
+          (∑ x, μ'.w x * ∑ y, π'.w y * hit E G x y)) := by
+            calc
+              (∑ x, μ'.w x *
+                  (2 * ((∑ y, ν'.w y * hit E G x y) - (∑ y, π'.w y * hit E G x y)))) =
+                  ∑ x, 2 * (μ'.w x *
+                    ((∑ y, ν'.w y * hit E G x y) - (∑ y, π'.w y * hit E G x y))) := by
+                      apply Finset.sum_congr rfl
+                      intro x hx
+                      ring
+              _ = 2 * ∑ x, μ'.w x *
+                    ((∑ y, ν'.w y * hit E G x y) - (∑ y, π'.w y * hit E G x y)) := by
+                      rw [Finset.mul_sum]
+              _ = 2 * ((∑ x, μ'.w x * ∑ y, ν'.w y * hit E G x y) -
+                    (∑ x, μ'.w x * ∑ y, π'.w y * hit E G x y)) := by
+                      congr 1
+                      calc
+                        (∑ x, μ'.w x *
+                            ((∑ y, ν'.w y * hit E G x y) - (∑ y, π'.w y * hit E G x y))) =
+                            ∑ x, (μ'.w x * (∑ y, ν'.w y * hit E G x y) -
+                              μ'.w x * (∑ y, π'.w y * hit E G x y)) := by
+                                apply Finset.sum_congr rfl
+                                intro x hx
+                                ring
+                        _ =
+                            (∑ x, μ'.w x * ∑ y, ν'.w y * hit E G x y) -
+                              (∑ x, μ'.w x * ∑ y, π'.w y * hit E G x y) := by
+                                rw [Finset.sum_sub_distrib]
+      _ = 2 * (dens E G μ' ν' - dens E G μ' π') := by
+            rw [← hdenRow, ← hdenRow]
+  have hdiscPlusNu := hdisc μplus ν hplusSupport hνY hplusWidth hνWidth G
+  have hdiscPlusPi := hdisc μplus π hplusSupport hπY hplusWidth hπWidth G
+  have hdiscMinusNu := hdisc μminus ν hminusSupport hνY hminusWidth hνWidth G
+  have hdiscMinusPi := hdisc μminus π hminusSupport hπY hminusWidth hπWidth G
+  have hplusDelta :
+      |∑ x, μplus.w x *
+        ((∑ y, ν.w y * fv E G x y) - (∑ y, π.w y * fv E G x y))| ≤ 4 * err := by
+    rw [hfvDensity]
+    have hdiff : |dens E G μplus ν - dens E G μplus π| ≤ 2 * err := by
+      calc
+        |dens E G μplus ν - dens E G μplus π| ≤
+            |dens E G μplus ν - 1 / 2| + |dens E G μplus π - 1 / 2| := by
+              calc
+                _ = |(dens E G μplus ν - 1 / 2) -
+                      (dens E G μplus π - 1 / 2)| := by congr 1 <;> ring
+                _ ≤ _ := abs_sub _ _
+        _ ≤ err + err := add_le_add hdiscPlusNu hdiscPlusPi
+        _ = 2 * err := by ring
+    rw [abs_mul, abs_of_pos (by norm_num : (0 : ℝ) < 2)]
+    nlinarith
+  have hminusDelta :
+      |∑ x, μminus.w x *
+        ((∑ y, ν.w y * fv E G x y) - (∑ y, π.w y * fv E G x y))| ≤ 4 * err := by
+    rw [hfvDensity]
+    have hdiff : |dens E G μminus ν - dens E G μminus π| ≤ 2 * err := by
+      calc
+        |dens E G μminus ν - dens E G μminus π| ≤
+            |dens E G μminus ν - 1 / 2| + |dens E G μminus π - 1 / 2| := by
+              calc
+                _ = |(dens E G μminus ν - 1 / 2) -
+                      (dens E G μminus π - 1 / 2)| := by congr 1 <;> ring
+                _ ≤ _ := abs_sub _ _
+        _ ≤ err + err := add_le_add hdiscMinusNu hdiscMinusPi
+        _ = 2 * err := by ring
+    rw [abs_mul, abs_of_pos (by norm_num : (0 : ℝ) < 2)]
+    nlinarith
+  let F : Fin N → ℝ := fun x =>
+    (∑ y, ν.w y * fv E G x y) - (∑ y, π.w y * fv E G x y)
+  have hweightPlus (x : Fin N) : cp * μplus.w x = μ.w x * (6 + g x) := by
+    change cp * (μ.w x * (6 + g x) / cp) = _
+    field_simp [ne_of_gt hcpPos]
+  have hweightMinus (x : Fin N) : cm * μminus.w x = μ.w x * (6 - g x) := by
+    change cm * (μ.w x * (6 - g x) / cm) = _
+    field_simp [ne_of_gt hcmPos]
+  have hpoint (x : Fin N) :
+      μ.w x * (6 + g x) - μ.w x * (6 - g x) =
+        cp * μplus.w x - cm * μminus.w x := by
+    rw [hweightPlus, hweightMinus]
+  have hsumPlus : (∑ x, cp * μplus.w x * F x) =
+      cp * (∑ x, μplus.w x * F x) := by
+    calc
+      (∑ x, cp * μplus.w x * F x) =
+          ∑ x, cp * (μplus.w x * F x) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            ring
+      _ = cp * (∑ x, μplus.w x * F x) := by rw [Finset.mul_sum]
+  have hsumMinus : (∑ x, cm * μminus.w x * F x) =
+      cm * (∑ x, μminus.w x * F x) := by
+    calc
+      (∑ x, cm * μminus.w x * F x) =
+          ∑ x, cm * (μminus.w x * F x) := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            ring
+      _ = cm * (∑ x, μminus.w x * F x) := by rw [Finset.mul_sum]
+  have hidentity : 2 * (∑ x, μ.w x * g x * F x) =
+      cp * (∑ x, μplus.w x * F x) - cm * (∑ x, μminus.w x * F x) := by
+    calc
+      2 * (∑ x, μ.w x * g x * F x) =
+          ∑ x, 2 * (μ.w x * g x * F x) := by rw [Finset.mul_sum]
+      _ = ∑ x, (μ.w x * (6 + g x) - μ.w x * (6 - g x)) * F x := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            ring
+      _ = ∑ x, (cp * μplus.w x - cm * μminus.w x) * F x := by
+            apply Finset.sum_congr rfl
+            intro x hx
+            rw [hpoint x]
+      _ = cp * (∑ x, μplus.w x * F x) - cm * (∑ x, μminus.w x * F x) := by
+            calc
+              (∑ x, (cp * μplus.w x - cm * μminus.w x) * F x) =
+                  (∑ x, cp * μplus.w x * F x) -
+                    (∑ x, cm * μminus.w x * F x) := by
+                      calc
+                        _ = ∑ x, (cp * μplus.w x * F x - cm * μminus.w x * F x) := by
+                              apply Finset.sum_congr rfl
+                              intro x hx
+                              ring
+                        _ = _ := by rw [Finset.sum_sub_distrib]
+              _ = cp * (∑ x, μplus.w x * F x) - cm * (∑ x, μminus.w x * F x) := by
+                    rw [hsumPlus, hsumMinus]
+  exact calc
+    |∑ x, μ.w x * g x * F x| =
+        |(cp * (∑ x, μplus.w x * F x) - cm * (∑ x, μminus.w x * F x)) / 2| := by
+          congr 1
+          linarith [hidentity]
+    _ = |cp * (∑ x, μplus.w x * F x) - cm * (∑ x, μminus.w x * F x)| / 2 := by
+          rw [abs_div, abs_of_pos (by norm_num : (0 : ℝ) < 2)]
+    _ ≤ (cp * (4 * err) + cm * (4 * err)) / 2 :=
+          by
+            have hnum :
+                |cp * (∑ x, μplus.w x * F x) - cm * (∑ x, μminus.w x * F x)| ≤
+                  cp * (4 * err) + cm * (4 * err) := by
+              calc
+                _ ≤ |cp * (∑ x, μplus.w x * F x)| +
+                    |cm * (∑ x, μminus.w x * F x)| := abs_sub _ _
+                _ = cp * |∑ x, μplus.w x * F x| +
+                    cm * |∑ x, μminus.w x * F x| := by
+                      rw [abs_mul, abs_mul, abs_of_nonneg hcpPos.le, abs_of_nonneg hcmPos.le]
+                _ ≤ cp * (4 * err) + cm * (4 * err) := by
+                      exact add_le_add (mul_le_mul_of_nonneg_left hplusDelta hcpPos.le)
+                        (mul_le_mul_of_nonneg_left hminusDelta hcmPos.le)
+            exact div_le_div_of_nonneg_right hnum (by norm_num)
+    _ = 24 * err := by
+          rw [← add_mul, hcpCm]
+          ring
+
 theorem eventually_pow_gap (a b c : ℝ) (hab : a < b) (hc : 0 < c) :
     ∀ᶠ n : ℕ in atTop, c * (n : ℝ) ^ a < (n : ℝ) ^ b := by
   have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ (b - a)) atTop atTop :=

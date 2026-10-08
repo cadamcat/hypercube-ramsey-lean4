@@ -672,9 +672,83 @@ theorem label_clock_large (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
               L.E F ≤ 2 * (clusterIndependentLabelKernel PT hPT hm W B).E F := by
   sorry
 
-/-- Sub-lemma (high-small-bin mode, 15:155): independent calibrated per-bin injections
-(L3.9 / `S03.Injection`, maximum atom `≤ d^{-.95}`, query error `exp(d^{-.04} h)`), then the
-bin-variable local lemma against the mass failures (charges `n^{-5P}`), comparison `1 + o(1) ≤ 2`. -/
+/-- A product representation of a high-small-bin pre-label law: independent variables `V`
+(for instance one calibrated injection per physical bin used by `B`, and one independent label
+per word not read by an odd role), each odd role's label read from one variable `var b`. -/
+structure LabelProductPreLaw {κ : CConsts} {T : Stage} {k : ℕ}
+    (PT : ProfiledTiling κ T k) (hPT : PT.Valid)
+    (hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge)
+    (W : ClusterHistory PT hPT hm) (B : ClusterBinAssignment PT) where
+  V : Type
+  [vFin : Fintype V]
+  [vDec : DecidableEq V]
+  Ω : V → Type
+  [ωFin : ∀ v, Fintype (Ω v)]
+  Q : ∀ v, FinLaw (Ω v)
+  φ : (∀ v, Ω v) → ClusterInternalData PT
+  var : OddPosition T k → V
+  pins : ∀ ω, clusterBinsOfInternal (φ ω) = B
+  local_label : ∀ b ω ω', ω (var b) = ω' (var b) →
+    clusterLabelFromInternal (hPT := hPT) hm (φ ω) b =
+      clusterLabelFromInternal (hPT := hPT) hm (φ ω') b
+  var_load : ∀ v, ((Finset.univ.filter fun b => var b = v).card : ℝ) ≤ (T.S.n k : ℝ) ^ 2
+  singleton : ∀ b y, (FinLaw.map (FinLaw.pi Q) φ).pr
+      (fun I => clusterLabelFromInternal (hPT := hPT) hm I b = y) =
+    (clusterSolver PT hPT hm (patchAt PT hPT b.1)).U (clusterGroupIndexAt PT hPT hm b).2
+      (historyOnSlice W (clusterSliceAt PT hPT b.1)) (B (clusterGroupIndexAt PT hPT hm b)) y
+  preComparison : ∀ F : ClusterInternalData PT → ℝ, (∀ I, 0 ≤ F I) →
+    ∀ S : Finset (OddPosition T k), ClusterLabelDependsOn hPT hm F S →
+      (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 → ClusterLabelQueryOK PT hPT hm B S →
+        (FinLaw.map (FinLaw.pi Q) φ).E F ≤
+          clusterLabelError PT hPT hm B S * (clusterIndependentLabelKernel PT hPT hm W B).E F
+  supported : ∀ ω, (FinLaw.pi Q).w ω ≠ 0 → ∀ b,
+    clusterLabelFromInternal (hPT := hPT) hm (φ ω) b ∈ (PT.tiling.P (patchAt PT hPT b.1)).Y
+  injective : ∀ ω, (FinLaw.pi Q).w ω ≠ 0 →
+    Function.Injective (clusterLabelFromInternal (hPT := hPT) hm (φ ω))
+
+attribute [instance] LabelProductPreLaw.vFin LabelProductPreLaw.vDec LabelProductPreLaw.ωFin
+
+/-- Sub-lemma (high-small-bin pre-law, 15:155, L3.9): independently per physical bin used by `B`,
+`near_product_injection` for the individual laws `U` of the roles assigned to it (maximum atom
+`≤ d^{-.95}` by (15.13), column sums `≤ θ0 ≤ 0.4`), independent labels on the other words.
+Exact singletons; joint upper error `exp(d^{-.04})` per multi-observed role (`clusterLabelError`). -/
+theorem label_prelaw_small (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+    ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+    PT.tiling.mode = .highSmall →
+    ∀ W : ClusterHistory PT hPT hm, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      clusterAlarmsAvoided PT hPT hm W → clusterHistoryLoad PT hPT hm W →
+    ∀ B : ClusterBinAssignment PT, 0 < (clusterIndependentBinKernel PT hPT hm W).w B →
+      clusterBinGood PT hPT hm W B →
+      Nonempty (LabelProductPreLaw PT hPT hm W B) := by
+  sorry
+
+/-- Sub-lemma (high-small-bin mass conditioning, 15:155): the local lemma on the variables of a
+product pre-law against the star mass failures.  Under the pre-law each failure costs
+`≤ 2 n^{-R/2}` (`preComparison` on the star, `ClusterLabelQueryOK` from the bin-stage distinctness
+`hgood.2.2`, and `hmass`); each variable meets `≤ n^3` stars (`var_load`); queries of `≤ n^2`
+roles meet `≤ n^2` variables, so the comparison factor is `1 + o(1) ≤ 2`. -/
+theorem label_condition_small (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
+    ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
+    ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
+    PT.tiling.mode = .highSmall →
+    ∀ W : ClusterHistory PT hPT hm, 0 < (clusterHistoryLaw PT hPT hm).w W →
+      clusterAlarmsAvoided PT hPT hm W → clusterHistoryLoad PT hPT hm W →
+    ∀ B : ClusterBinAssignment PT, 0 < (clusterIndependentBinKernel PT hPT hm W).w B →
+      clusterBinGood PT hPT hm W B →
+      (∀ a, (clusterIndependentLabelKernel PT hPT hm W B).pr
+        (fun I => clusterRowMass PT hPT hm W I a < 1 / 2) ≤ (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2)) →
+    ∀ X : LabelProductPreLaw PT hPT hm W B,
+      ∃ L : FinLaw (ClusterInternalData PT),
+        (∀ I, L.w I ≠ 0 → ∃ ω, (FinLaw.pi X.Q).w ω ≠ 0 ∧ X.φ ω = I) ∧
+        (∀ I, L.w I ≠ 0 → ∀ a, (1 / 2 : ℝ) ≤ clusterRowMass PT hPT hm W I a) ∧
+        ∀ F : ClusterInternalData PT → ℝ, (∀ I, 0 ≤ F I) →
+          ∀ S : Finset (OddPosition T k), ClusterLabelDependsOn hPT hm F S →
+            (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
+              L.E F ≤ 2 * (FinLaw.map (FinLaw.pi X.Q) X.φ).E F := by
+  sorry
+
+/-- High-small-bin mode: the product pre-law followed by mass conditioning. -/
 theorem label_output_small (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
     ∀ᶠ k in atTop, ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid,
     ∀ hm : PT.tiling.mode = .highSmall ∨ PT.tiling.mode = .highLarge,
@@ -686,7 +760,29 @@ theorem label_output_small (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
       (∀ a, (clusterIndependentLabelKernel PT hPT hm W B).pr
         (fun I => clusterRowMass PT hPT hm W I a < 1 / 2) ≤ (T.S.n k : ℝ) ^ (-(κ.R : ℝ) / 2)) →
       Nonempty (LabelLawOutput PT hPT hm W B) := by
-  sorry
+  filter_upwards [label_prelaw_small κ hκ T, label_condition_small κ hκ T] with k hPre hCond
+  intro PT hPT hm hs W hraw havoid hload B hB hgood hmass
+  obtain ⟨X⟩ := hPre PT hPT hm hs W hraw havoid hload B hB hgood
+  obtain ⟨L, hsupp, hmassL, hcomp⟩ := hCond PT hPT hm hs W hraw havoid hload B hB hgood hmass X
+  refine ⟨{
+    preLaw := FinLaw.map (FinLaw.pi X.Q) X.φ
+    law := L
+    pins := ?_
+    singleton := X.singleton
+    preComparison := X.preComparison
+    comparison := hcomp
+    supported := ?_
+    injective := ?_
+    mass := hmassL }⟩
+  · intro I hI
+    obtain ⟨ω, _, rfl⟩ := hsupp I hI
+    exact X.pins ω
+  · intro I hI b
+    obtain ⟨ω, hω, rfl⟩ := hsupp I hI
+    exact X.supported ω hω b
+  · intro I hI
+    obtain ⟨ω, hω, rfl⟩ := hsupp I hI
+    exact X.injective ω hω
 
 /-- In high-large-bin mode the pre-label law is the independent label kernel itself. -/
 theorem label_output_large (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :

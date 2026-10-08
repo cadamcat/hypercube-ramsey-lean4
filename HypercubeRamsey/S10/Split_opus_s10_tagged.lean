@@ -1,4 +1,5 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
+import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d10
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -797,6 +798,7 @@ theorem d8c_tag_locality (M : MenuData n N E X Y G ζ δ κ) (σ : MaskStrategy 
       (tagNbhd δ (evenSite δ a).1)) := by
   sorry
 
+set_option maxHeartbeats 400000 in
 /-- **d8d** (10:39, 10:267, 10:271; ~300 lines; lemma-level counting): the near
 fractions. Residual: special ball of radius 8 times a residual ball of radius
 `2R_loc + 16` times projection fibres, at most `e^{n^{1-2δ}} 2^{-n}`; tags: at most
@@ -806,7 +808,481 @@ theorem d8d_near_fractions (δ : ℝ) (hδ : 0 < δ) (hδsmall : δ < 1 / 2000) 
       oddFracOf n δ ≤ Real.exp ((n : ℝ) ^ (1 - 2 * δ)) / 2 ^ n ∧
       evenFracOf n δ ≤ Real.exp ((n : ℝ) ^ (1 - 2 * δ)) / 2 ^ n ∧
       tagFracOf n δ ≤ ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
-  sorry
+  classical
+  let β : ℝ := 1 - 7 * δ
+  let γ : ℝ := 1 - 2 * δ
+  have hβ : 0 < β := by dsimp [β]; nlinarith [hδsmall]
+  have hγ : 0 < γ := by dsimp [γ]; nlinarith [hδsmall]
+  have hsmall : δ < 1 / 2000 := hδsmall
+  have htop0 := Lane_q_s10_d10.topScale_power_bound δ (8 * δ) hδ (by nlinarith [hsmall])
+  have htop : ∀ᶠ n : ℕ in atTop,
+      (HypercubeRamsey.topScale n δ (8 * δ) : ℝ) ≤ 4 * (n : ℝ) ^ β := by
+    filter_upwards [htop0] with n hn
+    have hexp : 1 - 8 * δ + δ = β := by dsimp [β]; ring
+    rw [hexp] at hn
+    exact hn
+  have hlog0 := Lane_q_s10_d10.natLog_add_one_le_rpow_eventually δ hδ
+  let Cgap : ℝ := 3472 / δ
+  have hCgap : 0 < Cgap := by positivity
+  have hgap : ∀ᶠ n : ℕ in atTop, Cgap ≤ (n : ℝ) ^ (4 * δ) := by
+    have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ (4 * δ)) atTop atTop :=
+      (_root_.tendsto_rpow_atTop (by positivity : 0 < 4 * δ)).comp
+        tendsto_natCast_atTop_atTop
+    exact htend.eventually_ge_atTop Cgap
+  have hγlarge : ∀ᶠ n : ℕ in atTop, 4 ≤ (n : ℝ) ^ γ := by
+    have htend : Tendsto (fun n : ℕ => (n : ℝ) ^ γ) atTop atTop :=
+      (_root_.tendsto_rpow_atTop hγ).comp tendsto_natCast_atTop_atTop
+    exact htend.eventually_ge_atTop 4
+  have hsmallN : ∀ᶠ n : ℕ in atTop, 2 ≤ n :=
+    eventually_atTop.mpr ⟨2, fun _ hn => hn⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.1
+    (Filter.Eventually.and htop (Filter.Eventually.and hlog0
+      (Filter.Eventually.and hgap (Filter.Eventually.and hγlarge hsmallN))))
+  refine ⟨n₀, ?_⟩
+  intro n hn
+  rcases hn₀ n hn with ⟨htopN, hlogN, hgapN, hγN, hn2⟩
+  have hnreal : 1 ≤ (n : ℝ) := by exact_mod_cast (show 1 ≤ n by omega)
+  have hnpos : 0 < (n : ℝ) := by positivity
+  have hpowβ : 1 ≤ (n : ℝ) ^ β := Real.one_le_rpow hnreal hβ.le
+  have hpowδβ : (n : ℝ) ^ (2 * δ) ≤ (n : ℝ) ^ β :=
+    Real.rpow_le_rpow_of_exponent_le hnreal (by dsimp [β]; nlinarith [hsmall])
+  have hmpos : 1 ≤ mS n δ := by
+    dsimp [mS]
+    apply le_min
+    · dsimp [p10_1kSpecialCount]
+      apply Nat.le_floor
+      exact_mod_cast Real.one_le_rpow hnreal (by positivity : 0 ≤ 200 * δ)
+    · omega
+  have hmle := mS_le n δ
+  let d : ℕ := n - mS n δ
+  have hrfloor : ((hp n δ).r : ℝ) ≤ (n : ℝ) ^ (1 - 10 * δ) := by
+    dsimp [hp, p10_1kHeightParams]
+    exact_mod_cast (Nat.floor_le (by positivity : 0 ≤ (n : ℝ) ^ (1 - 10 * δ)))
+  have hrpow : (n : ℝ) ^ (1 - 10 * δ) ≤ (n : ℝ) ^ β :=
+    Real.rpow_le_rpow_of_exponent_le hnreal (by dsimp [β]; nlinarith [hδ])
+  have hheight : ((hp n δ).H : ℝ) ≤ 4 * (n : ℝ) ^ β := by
+    simpa [hp, p10_1kHeightParams] using htopN
+  have hRloc : (Rloc n δ : ℝ) ≤ 204 * (n : ℝ) ^ β := by
+    dsimp [Rloc]
+    push_cast
+    have hlogle : (Nat.log 2 n : ℝ) + 1 ≤ (n : ℝ) ^ (2 * δ) := hlogN
+    have hlogβ : (Nat.log 2 n : ℝ) + 1 ≤ (n : ℝ) ^ β := hlogle.trans hpowδβ
+    nlinarith [hrfloor.trans hrpow, hheight, hlogβ]
+  let nearRadius : ℕ := 2 * Rloc n δ + 24 + 2 * (Nat.log 2 n + 1)
+  have hnearRadius : (nearRadius : ℝ) ≤ 434 * (n : ℝ) ^ β := by
+    dsimp [nearRadius]
+    push_cast
+    have hlogle : (Nat.log 2 n : ℝ) + 1 ≤ (n : ℝ) ^ (2 * δ) := hlogN
+    have hlogβ : (Nat.log 2 n : ℝ) + 1 ≤ (n : ℝ) ^ β := hlogle.trans hpowδβ
+    nlinarith [hRloc, hlogβ, hpowβ]
+  have hlogNplusPos : 0 ≤ Real.log ((n : ℝ) + 1) :=
+    Real.log_nonneg (by linarith [hnreal])
+  have hlogNplus : Real.log ((n : ℝ) + 1) ≤ (2 / δ) * (n : ℝ) ^ δ := by
+    have hNpow : 1 ≤ (n : ℝ) ^ δ := Real.one_le_rpow hnreal hδ.le
+    have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) ^ δ / δ :=
+      Real.log_natCast_le_rpow_div n hδ
+    have hlogtwo : Real.log 2 ≤ 1 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+      norm_num at h
+      exact h
+    have hmul : (n : ℝ) + 1 ≤ 2 * (n : ℝ) := by nlinarith
+    have hlogmul : Real.log (2 * (n : ℝ)) = Real.log 2 + Real.log (n : ℝ) :=
+      Real.log_mul (by norm_num) (ne_of_gt hnpos)
+    have hδle : δ ≤ 1 := by linarith [hsmall]
+    calc
+      Real.log ((n : ℝ) + 1) ≤ Real.log (2 * (n : ℝ)) :=
+        Real.log_le_log (by positivity) hmul
+      _ = Real.log 2 + Real.log (n : ℝ) := hlogmul
+      _ ≤ 1 + (n : ℝ) ^ δ / δ := add_le_add hlogtwo hlogn
+      _ ≤ (2 / δ) * (n : ℝ) ^ δ := by
+        have hcoef : 1 ≤ 1 / δ := (le_div_iff₀ hδ).2 (by linarith)
+        have hmul : 1 ≤ (1 / δ) * (n : ℝ) ^ δ := by
+          calc
+            1 = 1 * 1 := by ring
+            _ ≤ (1 / δ) * (n : ℝ) ^ δ :=
+              mul_le_mul hcoef hNpow (by norm_num) (by positivity)
+        rw [show (2 / δ) * (n : ℝ) ^ δ =
+            (n : ℝ) ^ δ / δ + (1 / δ) * (n : ℝ) ^ δ by field_simp; ring]
+        nlinarith [hmul]
+  have hdecay : 2 * (nearRadius : ℝ) * Real.log ((n : ℝ) + 1) ≤
+      ((n : ℝ) ^ γ) / 2 := by
+    have hprod : 2 * (nearRadius : ℝ) * Real.log ((n : ℝ) + 1) ≤
+        (1736 / δ) * (n : ℝ) ^ (1 - 6 * δ) := by
+      calc
+        2 * (nearRadius : ℝ) * Real.log ((n : ℝ) + 1) ≤
+            2 * (434 * (n : ℝ) ^ β) * ((2 / δ) * (n : ℝ) ^ δ) := by
+          calc
+            2 * (nearRadius : ℝ) * Real.log ((n : ℝ) + 1) ≤
+                2 * (434 * (n : ℝ) ^ β) * Real.log ((n : ℝ) + 1) :=
+              mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_left hnearRadius (by norm_num)) hlogNplusPos
+            _ ≤ 2 * (434 * (n : ℝ) ^ β) * ((2 / δ) * (n : ℝ) ^ δ) :=
+              mul_le_mul_of_nonneg_left hlogNplus (by positivity)
+        _ = (1736 / δ) * (n : ℝ) ^ (1 - 6 * δ) := by
+          calc
+            2 * (434 * (n : ℝ) ^ β) * ((2 / δ) * (n : ℝ) ^ δ) =
+                (1736 / δ) * ((n : ℝ) ^ β * (n : ℝ) ^ δ) := by ring
+            _ = (1736 / δ) * (n : ℝ) ^ (β + δ) := by rw [← Real.rpow_add hnpos]
+            _ = (1736 / δ) * (n : ℝ) ^ (1 - 6 * δ) := by congr 2 <;> dsimp [β] <;> ring
+    have hcoeff : 1736 / δ ≤ (1 / 2 : ℝ) * (n : ℝ) ^ (4 * δ) := by
+      dsimp [Cgap] at hgapN
+      have hgapMul : 3472 ≤ (n : ℝ) ^ (4 * δ) * δ :=
+        (div_le_iff₀ hδ).1 hgapN
+      apply (div_le_iff₀ hδ).2
+      nlinarith [hgapMul]
+    calc
+      2 * (nearRadius : ℝ) * Real.log ((n : ℝ) + 1) ≤
+          (1736 / δ) * (n : ℝ) ^ (1 - 6 * δ) := hprod
+      _ ≤ (1 / 2 : ℝ) * (n : ℝ) ^ (4 * δ) * (n : ℝ) ^ (1 - 6 * δ) :=
+        mul_le_mul_of_nonneg_right hcoeff (by positivity)
+      _ = (n : ℝ) ^ γ / 2 := by
+        calc
+          (1 / 2 : ℝ) * (n : ℝ) ^ (4 * δ) * (n : ℝ) ^ (1 - 6 * δ) =
+          (1 / 2 : ℝ) * ((n : ℝ) ^ (4 * δ) * (n : ℝ) ^ (1 - 6 * δ)) := by ring
+          _ = (1 / 2 : ℝ) * (n : ℝ) ^ (4 * δ + (1 - 6 * δ)) := by
+            rw [← Real.rpow_add hnpos]
+          _ = (n : ℝ) ^ γ / 2 := by
+            have hexp : 4 * δ + (1 - 6 * δ) = γ := by dsimp [γ]; ring
+            rw [hexp]
+            ring
+  have hroleCards (q : ℕ) (hq : 0 < q) :
+      Fintype.card (OddRole q) = 2 ^ (q - 1) ∧
+        Fintype.card (EvenRole q) = 2 ^ (q - 1) := by
+    have hp := HypercubeRamsey.parity_class_card hq
+    have heqEven : Fintype.card (EvenRole q) =
+        (HypercubeRamsey.evenRoleSet q).card := by
+      simpa [EvenRole, HypercubeRamsey.evenRoleSet] using
+        (Fintype.card_coe (HypercubeRamsey.evenRoleSet q))
+    have heqOdd : Fintype.card (OddRole q) =
+        (Finset.univ \ HypercubeRamsey.evenRoleSet q).card := by
+      simpa [OddRole, HypercubeRamsey.evenRoleSet] using
+        (Fintype.card_coe (Finset.univ \ HypercubeRamsey.evenRoleSet q))
+    exact ⟨heqOdd.trans hp.2, heqEven.trans hp.1⟩
+  have hroles := hroleCards n (by omega)
+  have hoddCard : (Fintype.card (OddRole n) : ℝ) = (2 : ℝ) ^ (n - 1) := by
+    exact_mod_cast hroles.1
+  have hevenCard : (Fintype.card (EvenRole n) : ℝ) = (2 : ℝ) ^ (n - 1) := by
+    exact_mod_cast hroles.2
+  have hpowN : (2 : ℝ) ^ n = 2 * (2 : ℝ) ^ (n - 1) := by
+    calc
+      (2 : ℝ) ^ n = (2 : ℝ) ^ (n - 1 + 1) := by congr 1; omega
+      _ = (2 : ℝ) ^ (n - 1) * 2 := by rw [pow_succ]
+      _ = 2 * (2 : ℝ) ^ (n - 1) := by ring
+  have hballExp (v : CubeVertex n) :
+      2 * ((Finset.univ.filter fun u : CubeVertex n =>
+        HypercubeRamsey.hammingDist v u ≤ nearRadius).card : ℝ) ≤
+          Real.exp ((n : ℝ) ^ γ) := by
+    let B : Finset (CubeVertex n) := Finset.univ.filter fun u =>
+      HypercubeRamsey.hammingDist v u ≤ nearRadius
+    have hBcard := Lane_q_s10_d10.hammingBall_card_le_pow (R := nearRadius) v
+    have hBreal : (B.card : ℝ) ≤ ((n + 1 : ℕ) : ℝ) ^ nearRadius := by
+      exact_mod_cast hBcard
+    have hlogpow : Real.log (((n + 1 : ℕ) : ℝ) ^ nearRadius) =
+        (nearRadius : ℝ) * Real.log ((n : ℝ) + 1) := by
+      rw [Real.log_pow]
+      norm_cast
+    have hpowExp : ((n + 1 : ℕ) : ℝ) ^ nearRadius ≤
+        Real.exp (((n : ℝ) ^ γ) / 4) := by
+      apply (Real.log_le_iff_le_exp (by positivity)).mp
+      rw [hlogpow]
+      nlinarith [hdecay]
+    have hquarter : 1 ≤ ((n : ℝ) ^ γ) / 4 := by linarith [hγN]
+    have htwo : 2 ≤ Real.exp (((n : ℝ) ^ γ) / 4) := by
+      have h := Real.add_one_le_exp (((n : ℝ) ^ γ) / 4)
+      linarith
+    have hmul : 2 * ((n + 1 : ℕ) : ℝ) ^ nearRadius ≤
+        Real.exp (((n : ℝ) ^ γ) / 4) * Real.exp (((n : ℝ) ^ γ) / 4) :=
+      mul_le_mul htwo hpowExp (by positivity) (by positivity)
+    have hexpAdd : Real.exp (((n : ℝ) ^ γ) / 4) *
+        Real.exp (((n : ℝ) ^ γ) / 4) = Real.exp (((n : ℝ) ^ γ) / 2) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    have hle : Real.exp (((n : ℝ) ^ γ) / 2) ≤ Real.exp ((n : ℝ) ^ γ) := by
+      apply Real.exp_le_exp.mpr
+      have hpowNonneg : 0 ≤ (n : ℝ) ^ γ := by positivity
+      nlinarith [hpowNonneg]
+    calc
+      2 * (B.card : ℝ) ≤ 2 * ((n + 1 : ℕ) : ℝ) ^ nearRadius :=
+        mul_le_mul_of_nonneg_left hBreal (by norm_num)
+      _ ≤ Real.exp (((n : ℝ) ^ γ) / 4) * Real.exp (((n : ℝ) ^ γ) / 4) := hmul
+      _ = Real.exp (((n : ℝ) ^ γ) / 2) := hexpAdd
+      _ ≤ Real.exp ((n : ℝ) ^ γ) := hle
+  have projectedNearBound (u v : CubeVertex n)
+      (hspecial : HypercubeRamsey.hammingDist
+        (p10_1kSpecialSlice (mS_le n δ) u) (p10_1kSpecialSlice (mS_le n δ) v) ≤ 8)
+      (hprojected : HypercubeRamsey.hammingDist
+        (p10_1k_projectedWord d (p10_1kResidualWord (mS_le n δ) u))
+        (p10_1k_projectedWord d (p10_1kResidualWord (mS_le n δ) v)) ≤
+          2 * Rloc n δ + 16) :
+      HypercubeRamsey.hammingDist u v ≤ nearRadius := by
+    have hchunks : Fintype.card (Fin d.bitIndices.length) ≤ Nat.log 2 n + 1 := by
+      have hlen := Lane_q_s10_d10.bitIndices_length_le_log d
+      have hmono : Nat.log 2 d ≤ Nat.log 2 n := Nat.log_mono_right (Nat.sub_le n (mS n δ))
+      calc
+        Fintype.card (Fin d.bitIndices.length) = d.bitIndices.length := by simp
+        _ ≤ Nat.log 2 d + 1 := hlen
+        _ ≤ Nat.log 2 n + 1 := Nat.add_le_add_right hmono 1
+    have hcomm {e : ℕ} (x y : CubeVertex e) :
+        HypercubeRamsey.hammingDist x y = HypercubeRamsey.hammingDist y x := by
+      unfold HypercubeRamsey.hammingDist
+      congr 1
+      ext i
+      simp [ne_comm]
+    let ru := p10_1kResidualWord (mS_le n δ) u
+    let rv := p10_1kResidualWord (mS_le n δ) v
+    let pu := p10_1k_projectedWord d ru
+    let pv := p10_1k_projectedWord d rv
+    have hpu : HypercubeRamsey.hammingDist ru pu = Fintype.card (Fin d.bitIndices.length) := by
+      exact p10_1k_projectedWord_hammingDist d ru
+    have hpv : HypercubeRamsey.hammingDist rv pv = Fintype.card (Fin d.bitIndices.length) := by
+      exact p10_1k_projectedWord_hammingDist d rv
+    have hpv' : HypercubeRamsey.hammingDist pv rv = Fintype.card (Fin d.bitIndices.length) := by
+      rw [hcomm, hpv]
+    have hres : HypercubeRamsey.hammingDist ru rv ≤
+        (2 * Rloc n δ + 16) + 2 * Fintype.card (Fin d.bitIndices.length) := by
+      have htri₁ := HypercubeRamsey.hammingDist_triangle ru pu rv
+      have htri₂ := HypercubeRamsey.hammingDist_triangle pu pv rv
+      have hpr : HypercubeRamsey.hammingDist pu rv ≤
+          (2 * Rloc n δ + 16) + Fintype.card (Fin d.bitIndices.length) := by
+        calc
+          HypercubeRamsey.hammingDist pu rv ≤
+              HypercubeRamsey.hammingDist pu pv + HypercubeRamsey.hammingDist pv rv := htri₂
+          _ ≤ (2 * Rloc n δ + 16) + Fintype.card (Fin d.bitIndices.length) := by
+            rw [hpv'] at *
+            exact Nat.add_le_add hprojected le_rfl
+      calc
+        HypercubeRamsey.hammingDist ru rv ≤
+            HypercubeRamsey.hammingDist ru pu + HypercubeRamsey.hammingDist pu rv := htri₁
+        _ ≤ Fintype.card (Fin d.bitIndices.length) +
+              ((2 * Rloc n δ + 16) + Fintype.card (Fin d.bitIndices.length)) :=
+          Nat.add_le_add hpu.le hpr
+        _ = (2 * Rloc n δ + 16) + 2 * Fintype.card (Fin d.bitIndices.length) := by omega
+    calc
+      HypercubeRamsey.hammingDist u v =
+          HypercubeRamsey.hammingDist (p10_1kSpecialSlice (mS_le n δ) u)
+            (p10_1kSpecialSlice (mS_le n δ) v) +
+          HypercubeRamsey.hammingDist ru rv :=
+        p10_1kSliceHammingDist (mS_le n δ) u v
+      _ ≤ 8 + ((2 * Rloc n δ + 16) +
+            2 * Fintype.card (Fin d.bitIndices.length)) := Nat.add_le_add hspecial hres
+      _ ≤ nearRadius := by dsimp [nearRadius]; omega
+  have nearRoleCount {Role : Type} [Fintype Role] [DecidableEq Role]
+      (near : Finset Role) (center : Slice n δ)
+      (f : Role → Slice n δ × CubeVertex d)
+      (hinj : Function.Injective f)
+      (hnear : ∀ x ∈ near, HypercubeRamsey.hammingDist center (f x).1 ≤ 8) :
+      near.card ≤ (Finset.univ.filter fun z : Slice n δ =>
+        HypercubeRamsey.hammingDist center z ≤ 8).card * 2 ^ d := by
+    let Z : Finset (Slice n δ) := Finset.univ.filter fun z =>
+      HypercubeRamsey.hammingDist center z ≤ 8
+    let Q : Finset (Slice n δ × CubeVertex d) := Z ×ˢ Finset.univ
+    have himage : near.card = (near.image f).card :=
+      (Finset.card_image_of_injective near hinj).symm
+    have hsub : near.image f ⊆ Q := by
+      intro x hx
+      rcases Finset.mem_image.mp hx with ⟨r, hr, rfl⟩
+      apply Finset.mem_product.mpr
+      exact ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _, hnear r hr⟩,
+        Finset.mem_univ _⟩
+    calc
+      near.card = (near.image f).card := himage
+      _ ≤ Q.card := Finset.card_le_card hsub
+      _ = Z.card * 2 ^ d := by simp [Q, Z, CubeVertex]
+  have nearSliceCard (center : Slice n δ) :
+      (Finset.univ.filter fun z : Slice n δ =>
+        HypercubeRamsey.hammingDist center z ≤ 8).card ≤ (mS n δ + 1) ^ 8 := by
+    exact Lane_q_s10_d10.hammingBall_card_le_pow center
+  have tagRoleFraction {Role : Type} [Fintype Role]
+      (near : Finset Role) (count : near.card ≤ (mS n δ + 1) ^ 8 * 2 ^ d)
+      (hrole : (Fintype.card Role : ℝ) = (2 : ℝ) ^ (n - 1)) :
+      (near.card : ℝ) / Fintype.card Role ≤
+        ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
+    have hcount : (near.card : ℝ) ≤ ((mS n δ : ℝ) + 1) ^ 8 * (2 : ℝ) ^ d := by
+      exact_mod_cast count
+    have hx : 2 ≤ (mS n δ : ℝ) + 1 := by exact_mod_cast (show 2 ≤ mS n δ + 1 by omega)
+    have hpoly : 2 * ((mS n δ : ℝ) + 1) ^ 8 ≤ ((mS n δ : ℝ) + 1) ^ 9 := by
+      rw [pow_succ]
+      have hmul := mul_le_mul_of_nonneg_right hx (by positivity : 0 ≤ ((mS n δ : ℝ) + 1) ^ 8)
+      nlinarith
+    have hpowDen : (2 : ℝ) ^ (n - 1) = (2 : ℝ) ^ d * (2 : ℝ) ^ (mS n δ - 1) := by
+      have hnat : n - 1 = d + (mS n δ - 1) := by dsimp [d]; omega
+      rw [hnat, pow_add]
+    have hpowm : (2 : ℝ) ^ (mS n δ) = 2 * (2 : ℝ) ^ (mS n δ - 1) := by
+      calc
+        (2 : ℝ) ^ (mS n δ) = (2 : ℝ) ^ (mS n δ - 1 + 1) := by congr 1; omega
+        _ = (2 : ℝ) ^ (mS n δ - 1) * 2 := by rw [pow_succ]
+        _ = 2 * (2 : ℝ) ^ (mS n δ - 1) := by ring
+    have hrolePos : 0 < (Fintype.card Role : ℝ) := by rw [hrole]; positivity
+    have hpowMPos : 0 < (2 : ℝ) ^ (mS n δ) := by positivity
+    calc
+      (near.card : ℝ) / Fintype.card Role ≤
+          (((mS n δ : ℝ) + 1) ^ 8 * (2 : ℝ) ^ d) / Fintype.card Role :=
+        div_le_div_of_nonneg_right hcount hrolePos.le
+      _ = (((mS n δ : ℝ) + 1) ^ 8 * (2 : ℝ) ^ d) / (2 : ℝ) ^ (n - 1) := by
+        rw [hrole]
+      _ = (2 * ((mS n δ : ℝ) + 1) ^ 8) / (2 : ℝ) ^ (mS n δ) := by
+        rw [hpowDen, hpowm]
+        field_simp
+        <;> ring
+      _ ≤ ((mS n δ : ℝ) + 1) ^ 9 / (2 : ℝ) ^ (mS n δ) :=
+        div_le_div_of_nonneg_right hpoly hpowMPos.le
+  have nbhdOverlapDist {s t : Slice n δ}
+      (h : ¬ Disjoint (tagNbhd δ s) (tagNbhd δ t)) :
+      HypercubeRamsey.hammingDist s t ≤ 8 := by
+    have hmeet : ∃ z, z ∈ tagNbhd δ s ∧ z ∈ tagNbhd δ t := by
+      by_contra hnone
+      apply h
+      rw [Finset.disjoint_left]
+      intro z hz hzt
+      exact hnone ⟨z, hz, hzt⟩
+    rcases hmeet with ⟨z, hzs, hzt⟩
+    have hs : HypercubeRamsey.hammingDist s z ≤ 4 :=
+      (Finset.mem_filter.mp hzs).2
+    have ht : HypercubeRamsey.hammingDist t z ≤ 4 :=
+      (Finset.mem_filter.mp hzt).2
+    have hcomm : HypercubeRamsey.hammingDist z t = HypercubeRamsey.hammingDist t z := by
+      unfold HypercubeRamsey.hammingDist
+      congr 1
+      ext i
+      simp [ne_comm]
+    calc
+      HypercubeRamsey.hammingDist s t ≤
+          HypercubeRamsey.hammingDist s z + HypercubeRamsey.hammingDist z t :=
+        HypercubeRamsey.hammingDist_triangle s z t
+      _ ≤ 8 := by rw [hcomm]; omega
+  let oddTagMap : OddRole n → Slice n δ × CubeVertex d := fun b =>
+    ((groupOf δ b).1, p10_1kResidualWord (mS_le n δ) b.1)
+  have hoddTagMapInj : Function.Injective oddTagMap := by
+    intro x y hxy
+    apply Subtype.ext
+    apply (p10_1kSliceWordEquiv (mS_le n δ)).injective
+    apply Prod.ext
+    · simpa [oddTagMap, groupOf, p10_1kProjectedVertex, p10_1kSpecialSlice] using
+        congrArg Prod.fst hxy
+    · simpa [oddTagMap, p10_1kResidualWord] using congrArg Prod.snd hxy
+  have hoddTagBound (b : OddRole n) :
+      ((oddTagNear δ b).card : ℝ) / Fintype.card (OddRole n) ≤
+        ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
+    have hcount := nearRoleCount (oddTagNear δ b) ((groupOf δ b).1) oddTagMap
+      hoddTagMapInj (by
+        intro b' hb'
+        exact nbhdOverlapDist ((Finset.mem_filter.mp hb').2))
+    have hcount' : (oddTagNear δ b).card ≤ (mS n δ + 1) ^ 8 * 2 ^ d :=
+      hcount.trans (Nat.mul_le_mul_right (2 ^ d) (nearSliceCard ((groupOf δ b).1)))
+    exact tagRoleFraction (oddTagNear δ b) hcount' hoddCard
+  let evenTagMap : EvenRole n → Slice n δ × CubeVertex d := fun a =>
+    ((evenSite δ a).1, p10_1kResidualWord (mS_le n δ) a.1)
+  have hevenTagMapInj : Function.Injective evenTagMap := by
+    intro x y hxy
+    apply Subtype.ext
+    apply (p10_1kSliceWordEquiv (mS_le n δ)).injective
+    apply Prod.ext
+    · simpa [evenTagMap, evenSite, p10_1kProjectedVertex, p10_1kSpecialSlice] using
+        congrArg Prod.fst hxy
+    · simpa [evenTagMap, p10_1kResidualWord] using congrArg Prod.snd hxy
+  have hevenTagBound (a : EvenRole n) :
+      ((evenTagNear δ a).card : ℝ) / Fintype.card (EvenRole n) ≤
+        ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
+    have hcount := nearRoleCount (evenTagNear δ a) ((evenSite δ a).1) evenTagMap
+      hevenTagMapInj (by
+        intro a' ha'
+        exact nbhdOverlapDist ((Finset.mem_filter.mp ha').2))
+    have hcount' : (evenTagNear δ a).card ≤ (mS n δ + 1) ^ 8 * 2 ^ d :=
+      hcount.trans (Nat.mul_le_mul_right (2 ^ d) (nearSliceCard ((evenSite δ a).1)))
+    exact tagRoleFraction (evenTagNear δ a) hcount' hevenCard
+  have hoddNearBound (b : OddRole n) :
+      ((oddNear δ b).card : ℝ) / Fintype.card (OddRole n) ≤
+        Real.exp ((n : ℝ) ^ γ) / 2 ^ n := by
+    let B : Finset (CubeVertex n) := Finset.univ.filter fun u =>
+      HypercubeRamsey.hammingDist b.1 u ≤ nearRadius
+    let I := (oddNear δ b).image (fun b' => b'.1)
+    have hinj : Function.Injective (fun b' : OddRole n => b'.1) := fun _ _ h => Subtype.ext h
+    have himage : I.card = (oddNear δ b).card :=
+      Finset.card_image_of_injective _ hinj
+    have hsub : I ⊆ B := by
+      intro u hu
+      rcases Finset.mem_image.mp hu with ⟨b', hb', rfl⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      have hnear := (Finset.mem_filter.mp hb').2
+      apply projectedNearBound b.1 b'.1
+      · simpa [groupOf, p10_1kProjectedVertex] using hnear.1
+      · simpa [groupOf, p10_1kProjectedVertex] using hnear.2
+    have hcard : (oddNear δ b).card ≤ B.card := by
+      rw [← himage]
+      exact Finset.card_le_card hsub
+    have hcardR : ((oddNear δ b).card : ℝ) ≤ (B.card : ℝ) := by exact_mod_cast hcard
+    have hden : 0 < (Fintype.card (OddRole n) : ℝ) := by rw [hoddCard]; positivity
+    calc
+      ((oddNear δ b).card : ℝ) / Fintype.card (OddRole n) ≤
+          (B.card : ℝ) / Fintype.card (OddRole n) :=
+        div_le_div_of_nonneg_right hcardR (by positivity)
+      _ = (2 * (B.card : ℝ)) / 2 ^ n := by
+        rw [hoddCard, hpowN]
+        field_simp
+        <;> ring
+      _ ≤ Real.exp ((n : ℝ) ^ γ) / 2 ^ n :=
+        div_le_div_of_nonneg_right (hballExp b.1) (by positivity)
+  have hevenNearBound (a : EvenRole n) :
+      ((evenNear δ a).card : ℝ) / Fintype.card (EvenRole n) ≤
+        Real.exp ((n : ℝ) ^ γ) / 2 ^ n := by
+    let B : Finset (CubeVertex n) := Finset.univ.filter fun u =>
+      HypercubeRamsey.hammingDist a.1 u ≤ nearRadius
+    let I := (evenNear δ a).image (fun a' => a'.1)
+    have hinj : Function.Injective (fun a' : EvenRole n => a'.1) := fun _ _ h => Subtype.ext h
+    have himage : I.card = (evenNear δ a).card :=
+      Finset.card_image_of_injective _ hinj
+    have hsub : I ⊆ B := by
+      intro u hu
+      rcases Finset.mem_image.mp hu with ⟨a', ha', rfl⟩
+      apply Finset.mem_filter.mpr
+      refine ⟨Finset.mem_univ _, ?_⟩
+      have hnear := (Finset.mem_filter.mp ha').2
+      apply projectedNearBound a.1 a'.1
+      · simpa [evenSite, p10_1kProjectedVertex] using hnear.1
+      · simpa [evenSite, p10_1kProjectedVertex] using hnear.2
+    have hcard : (evenNear δ a).card ≤ B.card := by
+      rw [← himage]
+      exact Finset.card_le_card hsub
+    have hcardR : ((evenNear δ a).card : ℝ) ≤ (B.card : ℝ) := by exact_mod_cast hcard
+    calc
+      ((evenNear δ a).card : ℝ) / Fintype.card (EvenRole n) ≤
+          (B.card : ℝ) / Fintype.card (EvenRole n) :=
+        div_le_div_of_nonneg_right hcardR (by positivity)
+      _ = (2 * (B.card : ℝ)) / 2 ^ n := by
+        rw [hevenCard, hpowN]
+        field_simp
+        <;> ring
+      _ ≤ Real.exp ((n : ℝ) ^ γ) / 2 ^ n :=
+        div_le_div_of_nonneg_right (hballExp a.1) (by positivity)
+  have hoddFrac : oddFracOf n δ ≤ Real.exp ((n : ℝ) ^ γ) / 2 ^ n := by
+    unfold oddFracOf
+    apply Real.iSup_le
+    intro b
+    exact hoddNearBound b
+    positivity
+  have hevenFrac : evenFracOf n δ ≤ Real.exp ((n : ℝ) ^ γ) / 2 ^ n := by
+    unfold evenFracOf
+    apply Real.iSup_le
+    intro a
+    exact hevenNearBound a
+    positivity
+  have htagFrac : tagFracOf n δ ≤ ((mS n δ : ℝ) + 1) ^ 9 / 2 ^ (mS n δ) := by
+    unfold tagFracOf
+    apply max_le
+    · apply Real.iSup_le
+      intro b
+      exact hoddTagBound b
+      positivity
+    · apply Real.iSup_le
+      intro a
+      exact hevenTagBound a
+      positivity
+  refine ⟨?_, ?_, ?_⟩
+  · simpa [γ] using hoddFrac
+  · simpa [γ] using hevenFrac
+  · exact htagFrac
 
 /-- **d9** (10:265; ~300 lines; lemma-level: `balanced_mixture`-type separation on
 the expected slice terms, which are sub-probability vectors supported on the tag's

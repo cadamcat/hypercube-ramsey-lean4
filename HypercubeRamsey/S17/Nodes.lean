@@ -2192,19 +2192,6 @@ theorem lowModePaletteCode
   | highSmall => simp [Mode.isLow, hm] at hLow
   | highLarge => simp [Mode.isLow, hm] at hLow
 
-/-- L17.3(ii): one label colouring for every fixed valid-history readout. -/
-theorem lowModePaletteRetention
-    (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hSource : S17SourceFacts κ T) (K : ℝ) (hK : 0 < K)
-    (Katom : ℝ) (hAtomPos : 0 < Katom) :
-    ∀ᶠ k in atTop, ∀ (PT : ProfiledTiling κ T k)
-      (D : ListGateContext κ T k PT) (hQuant : D.L16QuantitativeValidity K),
-      InitialAtomBound D Katom →
-      ∀ (i : Fin PT.tiling.m) (hle : (PT.tiling.P i).h ≤ T.S.n k)
-        (ψ : S17PaletteCode i hle), PaletteCodeSpec i hle ψ →
-        ∃ colours : S17PaletteAssignment ψ, PaletteRetentionSpec D i hle ψ colours := by
-  sorry
-
 set_option maxHeartbeats 10000000 in
 /-- L17.3(iii): pair-tail bound. The paper's unspecified fixed constant
 is existential before the index; it is not the low-mode cutoff `κ.KB`. -/
@@ -3427,36 +3414,6 @@ theorem lowModePalettePairMoment
         (4 * ∑ y, (PT.π i).w y * hit (T.S.E k) PT.tiling.c x y *
           hit (T.S.E k) PT.tiling.c z y) ^ (2 * d) else 0)]
   simpa [value, joint, n, X, Env] using hmomentSum
-
-/-- L17.3 export: constants are fixed for all patches and histories after
-the common eventual index. All code/atom/retention/pair nodes are consumed. -/
-theorem lowModePalettes
-    (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
-    (hSource : S17SourceFacts κ T) (K : ℝ) (hK : 0 < K) :
-    ∃ Kpair Kmoment : ℝ, 0 < Kpair ∧ 0 < Kmoment ∧ ∀ᶠ k in atTop,
-      ∀ (PT : ProfiledTiling κ T k) (D : ListGateContext κ T k PT)
-        (hQuant : D.L16QuantitativeValidity K)
-        (i : Fin PT.tiling.m) (hle : (PT.tiling.P i).h ≤ T.S.n k),
-        (∃ j : Fin (T.S.n k), (PT.tiling.P i).ℓ ≤ j.val ∧
-          j.val < T.S.n k - (PT.tiling.P i).h) →
-        ∃ ψ : S17PaletteCode i hle, PaletteCodeSpec i hle ψ ∧
-          ∃ colours : S17PaletteAssignment ψ,
-            PaletteRetentionSpec D i hle ψ colours ∧
-            PalettePairRowBound D i hle ψ colours Kpair ∧
-              PalettePairMomentBound i (D.patchXNonempty i) Kmoment := by
-  obtain ⟨Katom, hAtomPos, hAtom⟩ := initialRowAtomBound κ hκ T hSource K hK
-  obtain ⟨Kpair, hPairPos, hPair⟩ := lowModePalettePairRow κ hκ T hSource K hK
-  obtain ⟨Kmoment, hMomentPos, hMoment⟩ := lowModePalettePairMoment κ hκ T hSource K hK
-  refine ⟨Kpair, Kmoment, hPairPos, hMomentPos, ?_⟩
-  filter_upwards [hAtom, lowModePaletteCode κ hκ T hSource K hK,
-    lowModePaletteRetention κ hκ T hSource K hK Katom hAtomPos,
-    hPair, hMoment] with k ha hc hr hp hm
-  intro PT D hQuant i hle hfree
-  obtain ⟨ψ, hCode⟩ := hc PT D hQuant i hle hfree
-  obtain ⟨colours, hRetention⟩ := hr PT D hQuant (ha PT D hQuant) i hle ψ hCode
-  exact ⟨ψ, hCode, colours, hRetention,
-    hp PT D hQuant i hle ψ hCode colours hRetention,
-    hm PT D hQuant i (D.patchXNonempty i)⟩
 
 /-- Sites executing in a specified round. -/
 noncomputable def activeAtRound

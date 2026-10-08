@@ -16,7 +16,7 @@ repository-code: "https://github.com/cadamcat/hypercube-ramsey-lean4"
 url: "https://github.com/cadamcat/hypercube-ramsey-lean4"
 license: Apache-2.0
 version: v1.0.0
-# date-released: RELEASE_DATE (YYYY-MM-DD; set when v1.0.0 is published)
+date-released: 2026-10-08
 keywords:
   - Lean 4
   - formalization

@@ -1,5 +1,8 @@
 import HypercubeRamsey.S10.ClusterExclusion_p_s10_1k
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_independence
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_weights
+import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d56_enumeration
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)

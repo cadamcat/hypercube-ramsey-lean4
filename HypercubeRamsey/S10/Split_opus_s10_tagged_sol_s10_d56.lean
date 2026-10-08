@@ -654,4 +654,203 @@ theorem selectionCap_pos_le (p : HDParams) (Sites : p.Sites)
   have hh := (selection_level_of_legal p Sites v hv P ω.1 E ω.2 ℓ h.2.1 h.2.2).1
   exact ⟨h.2.1, hh ▸ hlevel, h.2.2⟩
 
+
+/-! Forced-present averaging for the position field. -/
+
+private theorem position_force_weight (p : HDParams) (ℓ : p.Loc)
+    (hq0 : 0 ≤ p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1)
+    (P : p.Loc → Bool) :
+    (if P ℓ = true then p.posLaw.w P else 0) =
+      (p.lam / (p.V : ℝ)) * (p.posLawForced (some ℓ)).w P := by
+  classical
+  let q := p.lam / (p.V : ℝ)
+  let f : p.Loc → ℝ := fun x => (FinProb.bernoulli q).w (P x)
+  let g : p.Loc → ℝ := fun x =>
+    (if some ℓ = some x then FinProb.bernoulli 1 else FinProb.bernoulli q).w (P x)
+  have herase : (∏ x ∈ Finset.univ.erase ℓ, g x) =
+      ∏ x ∈ Finset.univ.erase ℓ, f x := by
+    apply Finset.prod_congr rfl
+    intro x hx
+    have hne : x ≠ ℓ := (Finset.mem_erase.mp hx).1
+    simp [f, g, Ne.symm hne]
+  have hplain : p.posLaw.w P = f ℓ * ∏ x ∈ Finset.univ.erase ℓ, f x := by
+    exact (Finset.mul_prod_erase Finset.univ f (Finset.mem_univ ℓ)).symm
+  have hforced : (p.posLawForced (some ℓ)).w P =
+      g ℓ * ∏ x ∈ Finset.univ.erase ℓ, f x := by
+    change (∏ x, g x) = _
+    rw [← Finset.mul_prod_erase Finset.univ g (Finset.mem_univ ℓ), herase]
+  rw [hplain, hforced]
+  cases hP : P ℓ <;> simp [f, g, FinProb.bernoulli, hP,
+    max_eq_right hq0, min_eq_left hq1, q]
+
+/-- Requiring one named center to be present costs λ/V; all other positions keep their law. -/
+theorem position_expect_force_present (p : HDParams) (ℓ : p.Loc)
+    (hq0 : 0 ≤ p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1)
+    (f : (p.Loc → Bool) → ℝ) :
+    p.posLaw.expect (fun P => if P ℓ = true then f P else 0) =
+      (p.lam / (p.V : ℝ)) * (p.posLawForced (some ℓ)).expect f := by
+  classical
+  unfold FinProb.expect
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro P hP
+  have hw := position_force_weight p ℓ hq0 hq1 P
+  calc
+    p.posLaw.w P * (if P ℓ = true then f P else 0) =
+        (if P ℓ = true then p.posLaw.w P else 0) * f P := by
+          split_ifs <;> simp
+    _ = (p.lam / (p.V : ℝ)) * (p.posLawForced (some ℓ)).w P * f P := by rw [hw]
+    _ = _ := by ring
+
+
+private theorem pr_nonneg {α : Type*} [Fintype α] (P : FinProb α) (F : α → Prop) :
+    0 ≤ P.pr F := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_nonneg
+  intro a ha
+  split_ifs <;> simp [P.nonneg]
+
+/-- Every position-only selection cap is nonnegative. -/
+theorem selectionCap_nonneg (p : HDParams) (Sites : p.Sites)
+    (v : CubeVertex p.d) (ℓ : p.Loc) (P : p.Loc → Bool) :
+    0 ≤ selectionCap p Sites v ℓ P := by
+  exact (pr_nonneg (p.actLaw.prod p.tieLaw) _).trans
+    (selection_probability_le_cap p Sites v ℓ P (fun _ _ => ∅))
+
+/-- An absent center, or a location outside the queried ball, has zero cap. -/
+theorem selectionCap_eq_zero_of_not_position (p : HDParams) (Sites : p.Sites)
+    (v : CubeVertex p.d) (hv : v ∈ Sites) (ℓ : p.Loc) (P : p.Loc → Bool)
+    (hnot : ¬ (P ℓ = true ∧ _root_.hammingDist ℓ.1 v ≤ p.r)) :
+    selectionCap p Sites v ℓ P = 0 := by
+  classical
+  apply le_antisymm _ (selectionCap_nonneg p Sites v ℓ P)
+  unfold selectionCap
+  apply ciSup_le
+  intro E
+  have hvdom : v ∈ p.domBall Sites v p.Rlong := by simp [HDParams.domBall, hv]
+  have hfalse (ω : (p.Loc → Bool) × p.Ties) :
+      ¬ ((∀ j, (99 / 100 : ℝ) * p.lam ≤ ((E v j).card : ℝ)) ∧
+        p.Legal P E (p.domBall Sites v p.Rlong) ∧
+        p.selection Sites P ω.1 E ω.2 v = some ℓ) := by
+    intro h
+    have hm := (selection_level_of_legal p Sites v hv P ω.1 E ω.2 ℓ h.2.1 h.2.2).2
+    have hspec := ((h.2.1 v hvdom ℓ.2).1 ℓ hm)
+    exact hnot ⟨hspec.1, hspec.2.2⟩
+  simp only [FinProb.pr, ite_eq_right (hfalse _), Finset.sum_const_zero, le_refl]
+
+/-- Without forcing, each cap pays the probability that its named center is present. -/
+theorem selectionCap_mean_eq_forced (p : HDParams) (Sites : p.Sites)
+    (v : CubeVertex p.d) (hv : v ∈ Sites) (ℓ : p.Loc)
+    (hq0 : 0 ≤ p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1) :
+    p.posLaw.expect (selectionCap p Sites v ℓ) =
+      (p.lam / (p.V : ℝ)) *
+        (p.posLawForced (some ℓ)).expect (selectionCap p Sites v ℓ) := by
+  classical
+  have heq (P : p.Loc → Bool) : selectionCap p Sites v ℓ P =
+      if P ℓ = true then selectionCap p Sites v ℓ P else 0 := by
+    split_ifs with hP
+    · rfl
+    · exact selectionCap_eq_zero_of_not_position p Sites v hv ℓ P (fun h => hP h.1)
+  calc
+    _ = p.posLaw.expect (fun P => if P ℓ = true then selectionCap p Sites v ℓ P else 0) :=
+      congrArg p.posLaw.expect (funext heq)
+    _ = _ := position_expect_force_present p ℓ hq0 hq1 _
+
+/-- A level-zero center's expected weight is at most 1/(.99V). -/
+theorem selectionCap_zero_mean_le (p : HDParams) (hlam : 0 < p.lam)
+    (Sites : p.Sites) (v : CubeVertex p.d) (hv : v ∈ Sites)
+    (ℓ : p.Loc) (hlevel : ℓ.2.val = 0)
+    (hq1 : p.lam / (p.V : ℝ) ≤ 1) :
+    p.posLaw.expect (selectionCap p Sites v ℓ) ≤
+      (p.lam / (p.V : ℝ)) * (1 / ((99 / 100 : ℝ) * p.lam)) := by
+  have hq0 : 0 ≤ p.lam / (p.V : ℝ) := div_nonneg hlam.le (Nat.cast_nonneg _)
+  rw [selectionCap_mean_eq_forced p Sites v hv ℓ hq0 hq1]
+  apply mul_le_mul_of_nonneg_left _ hq0
+  calc
+    _ ≤ (p.posLawForced (some ℓ)).expect (fun _ => 1 / ((99 / 100 : ℝ) * p.lam)) :=
+      expect_mono _ (fun P => selectionCap_zero_le p hlam Sites v hv ℓ hlevel P)
+    _ = _ := by simp [FinProb.expect, ← Finset.sum_mul, FinProb.sum_eq_one]
+
+/-- Higher-level named centers pay λ/V times the forced-center positive-height bound. -/
+theorem selectionCap_positive_mean_le (p : HDParams) (Sites : p.Sites)
+    (v : CubeVertex p.d) (hv : v ∈ Sites) (ℓ : p.Loc) (hlevel : 0 < ℓ.2.val)
+    (hq0 : 0 ≤ p.lam / (p.V : ℝ)) (hq1 : p.lam / (p.V : ℝ) ≤ 1) (ε : ℝ)
+    (hbound : ∀ Esel : (p.Loc → Bool) → p.EligMap,
+      ((p.posLawForced (some ℓ)).prod p.actLaw).pr (fun ω =>
+        p.Legal ω.1 (Esel ω.1) (p.domBall Sites v p.Rlong) ∧
+        0 < p.height Sites ω.1 ω.2 (Esel ω.1) p.Rlong v) ≤ ε) :
+    p.posLaw.expect (selectionCap p Sites v ℓ) ≤ (p.lam / (p.V : ℝ)) * ε := by
+  rw [selectionCap_mean_eq_forced p Sites v hv ℓ hq0 hq1]
+  apply mul_le_mul_of_nonneg_left _ hq0
+  exact (expect_mono _ (fun P => selectionCap_pos_le p Sites v hv ℓ hlevel P)).trans
+    (positiveSelectionCap_mean_le p Sites v ℓ (p.posLawForced (some ℓ)) ε hbound)
+
+
+/-! Independent fields can be regrouped into one experiment per slice. -/
+
+/-- Expectation of a product of functions of independent coordinates factors. -/
+theorem pi_expect_product {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {Ω : ι → Type*} [∀ i, Fintype (Ω i)]
+    (P : ∀ i, FinProb (Ω i)) (f : ∀ i, Ω i → ℝ) :
+    (FinProb.pi P).expect (fun ω => ∏ i, f i (ω i)) = ∏ i, (P i).expect (f i) := by
+  classical
+  unfold FinProb.expect FinProb.pi
+  simp_rw [← Finset.prod_mul_distrib]
+  exact (Fintype.prod_sum (fun i a => (P i).w a * f i a)).symm
+
+/-- A product field indexed by slice-center pairs equals a product of per-slice fields. -/
+theorem pi_curry_expect {ι κ Ω : Type*}
+    [Fintype ι] [DecidableEq ι] [Fintype κ] [DecidableEq κ] [Fintype Ω]
+    (P : ι → κ → FinProb Ω) (f : (ι → κ → Ω) → ℝ) :
+    (FinProb.pi (fun x : ι × κ => P x.1 x.2)).expect
+      (fun ω => f (fun i j => ω (i, j))) =
+      (FinProb.pi (fun i => FinProb.pi (P i))).expect f := by
+  classical
+  let e : (ι → κ → Ω) ≃ (ι × κ → Ω) :=
+    { toFun := fun ω x => ω x.1 x.2
+      invFun := fun ω i j => ω (i, j)
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold FinProb.expect FinProb.pi
+  rw [← Equiv.sum_comp e]
+  apply Finset.sum_congr rfl
+  intro ω hω
+  change (∏ x : ι × κ, (P x.1 x.2).w (ω x.1 x.2)) * f ω =
+    (∏ i, ∏ j, (P i j).w (ω i j)) * f ω
+  rw [Fintype.prod_prod_type]
+
+/-- Independent activation and tie fields can be paired separately at every slice. -/
+theorem pi_pair_expect {ι Ω Ψ : Type*}
+    [Fintype ι] [DecidableEq ι] [Fintype Ω] [Fintype Ψ]
+    (P : ι → FinProb Ω) (Q : ι → FinProb Ψ)
+    (f : (ι → Ω) × (ι → Ψ) → ℝ) :
+    ((FinProb.pi P).prod (FinProb.pi Q)).expect f =
+      (FinProb.pi (fun i => (P i).prod (Q i))).expect
+        (fun ω => f ((fun i => (ω i).1), (fun i => (ω i).2))) := by
+  classical
+  let e : (ι → Ω × Ψ) ≃ ((ι → Ω) × (ι → Ψ)) :=
+    { toFun := fun ω => (fun i => (ω i).1, fun i => (ω i).2)
+      invFun := fun ω i => (ω.1 i, ω.2 i)
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  unfold FinProb.expect FinProb.pi FinProb.prod
+  rw [← Equiv.sum_comp e]
+  apply Finset.sum_congr rfl
+  intro ω hω
+  change (∏ i, (P i).w (ω i).1) * (∏ i, (Q i).w (ω i).2) *
+      f ((fun i => (ω i).1), (fun i => (ω i).2)) =
+    (∏ i, (P i).w (ω i).1 * (Q i).w (ω i).2) *
+      f ((fun i => (ω i).1), (fun i => (ω i).2))
+  rw [Finset.prod_mul_distrib]
+
+
+/-- An independent one-point auxiliary field does not change event probability. -/
+theorem pr_prod_unit_middle {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (F : α → β → Prop) :
+    ((P.prod (FinProb.uniformAll (Ω := Unit) ⟨()⟩)).prod Q).pr
+      (fun ω => F ω.1.1 ω.2) = (P.prod Q).pr (fun ω => F ω.1 ω.2) := by
+  classical
+  simp [FinProb.pr, FinProb.prod, FinProb.uniformAll, Fintype.sum_prod_type]
+
 end HypercubeRamsey.Lane_sol_s10_d56

@@ -879,10 +879,1909 @@ structure CubeStates5 {n m : ℕ} (g : ChunkGeometry5 n m) (J : ℕ) where
 
 attribute [instance] CubeStates5.siteFintype CubeStates5.siteDecEq
 
+set_option maxHeartbeats 1000000 in
 /-- L5.1e0 (05:291–313), with the constants in the order `∀ ε, ∃ n₀`: the state quotient exists at every
 layout, and its dimension is at most `(1 + ε) n` once `n ≥ n₀(ε)`. -/
 theorem L5_1e0 : ∀ ε : ℝ, 0 < ε → ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (m J : ℕ) (g : ChunkGeometry5 n m),
     ∃ S : CubeStates5 g J, (S.d : ℝ) ≤ (1 + ε) * n := by
-  sorry
+  intro ε hε
+  obtain ⟨n₀, hn₀⟩ := exists_nat_gt (max ((8 / ε) ^ 2) (602 / ε))
+  refine ⟨max n₀ 100000, ?_⟩
+  intro n hn m J g
+  have hnlarge : (max n₀ 100000 : ℝ) ≤ n := by exact_mod_cast hn
+  have hdimNeed : 3 * Real.sqrt (n : ℝ) + 301 ≤ ε * n := by
+    have hn0 : max ((8 / ε) ^ 2) (602 / ε) < (n₀ : ℝ) := hn₀
+    have hsqrt : 8 / ε ≤ Real.sqrt (n : ℝ) := by
+      apply Real.le_sqrt_of_sq_le
+      have hthreshold := le_trans (le_max_left ((8 / ε) ^ 2) (602 / ε)) (le_of_lt hn0)
+      have hnCast : (n₀ : ℝ) ≤ n := by
+        exact_mod_cast le_trans (le_max_left n₀ 100000) hn
+      nlinarith [hthreshold]
+    have hlarge : 602 / ε ≤ n := by
+      have : (602 / ε) < (n₀ : ℝ) := lt_of_le_of_lt
+        (le_max_right ((8 / ε) ^ 2) (602 / ε)) hn0
+      have hn0le : (n₀ : ℝ) ≤ n := le_trans (le_max_left (n₀ : ℝ) 100000) hnlarge
+      linarith
+    have h1 : 3 * Real.sqrt (n : ℝ) ≤ (3 / 8) * ε * n := by
+      have hscaled : (3 : ℝ) ≤ (3 / 8) * ε * Real.sqrt (n : ℝ) := by
+        have h := (div_le_iff₀ hε).mp hsqrt
+        nlinarith
+      have hmul := mul_le_mul_of_nonneg_right hscaled (Real.sqrt_nonneg (n : ℝ))
+      have hsq : (Real.sqrt (n : ℝ)) ^ 2 = n := Real.sq_sqrt (by positivity)
+      nlinarith [hsq]
+    have h2 : (301 : ℝ) ≤ (1 / 2) * ε * n := by
+      have hepsn := (div_le_iff₀ hε).mp hlarge
+      have hepsn' : (602 : ℝ) ≤ ε * n := by nlinarith [hepsn]
+      nlinarith
+    nlinarith
+  classical
+  let SiteData : Type :=
+    (((g.residual → Bool) × (∀ i : Fin coarseChunkCount5,
+        Fin ((g.coarseChunks i).card + 1))) ×
+      ((∀ i : Fin m, Fin ((g.fineChunks i).card + 2)) × Fin (m + 1)))
+  letI : Fintype SiteData := inferInstance
+  let CoarseCoord : Type := Σ i : Fin coarseChunkCount5, Fin ((g.coarseChunks i).card + 1)
+  let FineCoord : Type := Σ i : Fin m, Fin ((g.fineChunks i).card + 2)
+  let Coord : Type := ((g.residual ⊕ CoarseCoord) ⊕ (FineCoord ⊕ Fin (m + 1)))
+  letI : Fintype CoarseCoord := inferInstance
+  letI : Fintype FineCoord := inferInstance
+  letI : Fintype Coord := inferInstance
+  let d : ℕ := Fintype.card Coord
+  let coordEquiv : Coord ≃ Fin d := Fintype.equivFin Coord
+  let dataOf : CubeVertex n → SiteData := fun x =>
+    ((fun a => x a.1,
+      fun i => ⟨g.coarseCount x i, by
+        have h := Finset.card_filter_le (g.coarseChunks i) (fun a => x a = true)
+        simpa [ChunkGeometry5.coarseCount] using h⟩),
+      (fun i => ⟨mergedFineCount5 g.fineLength (g.fineCount x i), by
+        have hcount : g.fineCount x i ≤ (g.fineChunks i).card := by
+          exact Finset.card_filter_le _ _
+        unfold mergedFineCount5
+        by_cases hd : Nat.dist (2 * g.fineCount x i) g.fineLength = 11
+        · split_ifs <;> omega
+        · simp [hd]
+          omega⟩,
+        ⟨g.severity x, by
+          have h := Finset.card_le_univ (s := Finset.univ.filter
+            (fun i : Fin m => Nat.dist (2 * g.fineCount x i) g.fineLength ≤ 11))
+          simpa [ChunkGeometry5.severity] using h⟩))
+  let coordBit : SiteData → Coord → Bool := fun s c =>
+    match c with
+    | .inl (.inl a) => s.1.1 a
+    | .inl (.inr c) => decide (s.1.2 c.1 = c.2)
+    | .inr (.inl f) => decide (s.2.1 f.1 = f.2)
+    | .inr (.inr j) => decide (s.2.2 = j)
+  have cat_injective : ∀ {k : ℕ} (a b : Fin k),
+      (∀ q : Fin k, decide (a = q) = decide (b = q)) → a = b := by
+    intro k a b h
+    by_contra hab
+    have hh := h a
+    simp [hab] at hh
+    exact hab hh.symm
+  let diffCoord : SiteData → SiteData → Finset Coord := fun s t =>
+    Finset.univ.filter fun c => coordBit s c ≠ coordBit t c
+  have hamming_code_eq (s t : SiteData) :
+      _root_.hammingDist (fun k : Fin d => coordBit s (coordEquiv.symm k))
+          (fun k : Fin d => coordBit t (coordEquiv.symm k)) = (diffCoord s t).card := by
+    classical
+    let e := coordEquiv
+    let fromFinEq :
+        {j : Fin d // (fun k : Fin d => coordBit s (e.symm k)) j =
+          (fun k : Fin d => coordBit t (e.symm k)) j} ≃
+        {c : Coord // coordBit s c = coordBit t c} := {
+      toFun := fun j => ⟨e.symm j.1, by simpa using j.2⟩
+      invFun := fun c => ⟨e c.1, by simpa using c.2⟩
+      left_inv := by intro j; apply Subtype.ext; simp
+      right_inv := by intro c; apply Subtype.ext; simp }
+    have hEqCard := Fintype.card_congr fromFinEq
+    have hroot :
+        _root_.hammingDist (fun k : Fin d => coordBit s (e.symm k))
+            (fun k : Fin d => coordBit t (e.symm k)) =
+            (Finset.univ.filter fun k : Fin d =>
+            coordBit s (e.symm k) ≠ coordBit t (e.symm k)).card := by
+      unfold _root_.hammingDist
+      rfl
+    have hFinSum :
+        _root_.hammingDist (fun k : Fin d => coordBit s (e.symm k))
+            (fun k : Fin d => coordBit t (e.symm k)) +
+          Fintype.card {j : Fin d //
+            (fun k : Fin d => coordBit s (e.symm k)) j =
+              (fun k : Fin d => coordBit t (e.symm k)) j} = Fintype.card (Fin d) := by
+      have hsum := Finset.card_filter_add_card_filter_not (s := Finset.univ)
+        (fun j : Fin d => (fun k => coordBit s (e.symm k)) j =
+          (fun k => coordBit t (e.symm k)) j)
+      let p : Fin d → Prop := fun j =>
+        (fun k => coordBit s (e.symm k)) j = (fun k => coordBit t (e.symm k)) j
+      have hsub : Fintype.card {j : Fin d // p j} = (Finset.univ.filter p).card :=
+        Fintype.card_of_subtype (Finset.univ.filter p) (by intro j; simp)
+      have hsumNe :
+          (Finset.univ.filter (fun j : Fin d => ¬ p j)).card +
+            (Finset.univ.filter p).card = (Finset.univ : Finset (Fin d)).card := by
+        have hsum := Finset.card_filter_add_card_filter_not
+          (s := (Finset.univ : Finset (Fin d))) p
+        calc
+          _ = (Finset.univ.filter p).card +
+                (Finset.univ.filter (fun j : Fin d => ¬ p j)).card := Nat.add_comm _ _
+          _ = (Finset.univ : Finset (Fin d)).card := hsum
+      rw [hroot, hsub]
+      change (Finset.univ.filter (fun j : Fin d => ¬ p j)).card +
+        (Finset.univ.filter p).card = Fintype.card (Fin d)
+      calc
+        _ = (Finset.univ : Finset (Fin d)).card := hsumNe
+        _ = Fintype.card (Fin d) := by simp
+    have hCoordSum : (diffCoord s t).card +
+        Fintype.card {c : Coord // coordBit s c = coordBit t c} = Fintype.card Coord := by
+      have hsum := Finset.card_filter_add_card_filter_not (s := Finset.univ)
+        (fun c : Coord => coordBit s c = coordBit t c)
+      let p : Coord → Prop := fun c => coordBit s c = coordBit t c
+      have hsub : Fintype.card {c : Coord // p c} = (Finset.univ.filter p).card :=
+        Fintype.card_of_subtype (Finset.univ.filter p) (by intro c; simp)
+      have hsumNe :
+          (Finset.univ.filter (fun c : Coord => ¬ p c)).card +
+            (Finset.univ.filter p).card = (Finset.univ : Finset Coord).card := by
+        have hsum := Finset.card_filter_add_card_filter_not
+          (s := (Finset.univ : Finset Coord)) p
+        calc
+          _ = (Finset.univ.filter p).card +
+                (Finset.univ.filter (fun c : Coord => ¬ p c)).card := Nat.add_comm _ _
+          _ = (Finset.univ : Finset Coord).card := hsum
+      rw [hsub]
+      change (Finset.univ.filter (fun c : Coord => ¬ p c)).card +
+        (Finset.univ.filter p).card = Fintype.card Coord
+      calc
+        _ = (Finset.univ : Finset Coord).card := hsumNe
+        _ = Fintype.card Coord := by simp
+    have hTotal : Fintype.card (Fin d) = Fintype.card Coord := by
+      change Fintype.card (Fin (Fintype.card Coord)) = Fintype.card Coord
+      exact Fintype.card_fin _
+    have hFinSum' := hFinSum
+    rw [hEqCard, hTotal] at hFinSum'
+    exact Nat.add_right_cancel (hFinSum'.trans hCoordSum.symm)
+  have merged_side (q : ℕ) :
+      (g.fineLength < 2 * q) =
+        (g.fineLength < 2 * mergedFineCount5 g.fineLength q) := by
+    unfold mergedFineCount5
+    by_cases hd : Nat.dist (2 * q) g.fineLength = 11
+    · by_cases hlow : 2 * q < g.fineLength
+      · have hdist : g.fineLength - 2 * q = 11 := by
+          simpa [Nat.dist_eq_sub_of_le (Nat.le_of_lt hlow)] using hd
+        simp [hd, hlow] <;> omega
+      · have hle : g.fineLength ≤ 2 * q := Nat.le_of_not_gt hlow
+        have hdist : 2 * q - g.fineLength = 11 := by
+          simpa [Nat.dist_eq_sub_of_le_right hle] using hd
+        simp [hd, hlow] <;> omega
+    · simp [hd]
+  have signCode (z : CubeVertex n) (i : Fin m) :
+      g.sign z i = decide (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount z i)) := by
+    change decide (g.fineLength < 2 * g.fineCount z i) = _
+    have hProp := merged_side (g.fineCount z i)
+    have hiff : (g.fineLength < 2 * g.fineCount z i) ↔
+        g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount z i) := Iff.of_eq hProp
+    by_cases hleft : g.fineLength < 2 * g.fineCount z i
+    · have hright := hiff.mp hleft
+      simp [hleft, hright]
+    · have hright : ¬g.fineLength <
+          2 * mergedFineCount5 g.fineLength (g.fineCount z i) :=
+        fun hh => hleft (hiff.mpr hh)
+      simp [hleft, hright]
+  have hfilterOutside (A : Finset (Fin n)) (u : CubeVertex n) (a : Fin n)
+      (ha : a ∉ A) :
+      A.filter (fun b => flipVertex5 u a b = true) = A.filter (fun b => u b = true) := by
+    ext b
+    by_cases hba : b = a
+    · subst b
+      simp [ha]
+    · have hf : flipVertex5 u a b = u b := by
+        change Function.update u a (!u a) b = u b
+        exact Function.update_of_ne hba _ _
+      simp [hf]
+  have hfineCountOutside (u : CubeVertex n) (a : Fin n) (i : Fin m)
+      (ha : a ∉ g.fineChunks i) :
+      g.fineCount (flipVertex5 u a) i = g.fineCount u i := by
+    unfold ChunkGeometry5.fineCount
+    rw [hfilterOutside (g.fineChunks i) u a ha]
+  have hseveritySame {u v : CubeVertex n}
+      (hcount : ∀ i : Fin m, g.fineCount u i = g.fineCount v i) :
+      g.severity u = g.severity v := by
+    unfold ChunkGeometry5.severity
+    congr 1
+    ext i
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+    rw [hcount i]
+  have hcategory (a : Fin n) :
+      a ∈ g.residual ∨ (∃ i, a ∈ g.coarseChunks i) ∨ (∃ i, a ∈ g.fineChunks i) := by
+    have ha : a ∈ (Finset.univ : Finset (Fin n)) := Finset.mem_univ _
+    rw [← g.chunks_cover] at ha
+    rcases Finset.mem_union.mp ha with hchunk | hres
+    · rcases Finset.mem_union.mp hchunk with hcoarse | hfine
+      · rcases Finset.mem_biUnion.mp hcoarse with ⟨i, _, hai⟩
+        exact Or.inr (Or.inl ⟨i, hai⟩)
+      · rcases Finset.mem_biUnion.mp hfine with ⟨i, _, hai⟩
+        exact Or.inr (Or.inr ⟨i, hai⟩)
+    · exact Or.inl hres
+  have hcardFour (a b c d : Coord) :
+      (insert a (insert b (insert c ({d} : Finset Coord)))).card ≤ 4 := by
+    have h1 := Finset.card_insert_le a (insert b (insert c ({d} : Finset Coord)))
+    have h2 := Finset.card_insert_le b (insert c ({d} : Finset Coord))
+    have h3 := Finset.card_insert_le c ({d} : Finset Coord)
+    have h4 : ({d} : Finset Coord).card = 1 := by simp
+    omega
+  have hflipCodeBound (u : CubeVertex n) (a : Fin n) :
+      _root_.hammingDist (fun k : Fin d => coordBit (dataOf u) (coordEquiv.symm k))
+          (fun k : Fin d => coordBit (dataOf (flipVertex5 u a)) (coordEquiv.symm k)) ≤ 4 := by
+    rw [hamming_code_eq]
+    rcases hcategory a with haRes | haCoarse | haFine
+    · let c₀ : Coord := .inl (.inl ⟨a, haRes⟩)
+      let Cand : Finset Coord := {c₀}
+      have hsubset : diffCoord (dataOf u) (dataOf (flipVertex5 u a)) ⊆ Cand := by
+        intro c hc
+        simp only [diffCoord, Finset.mem_filter, Finset.mem_univ, true_and] at hc
+        cases c with
+        | inl left =>
+          cases left with
+          | inl r =>
+            by_cases hr : r.1 = a
+            · have hrEq : (⟨a, haRes⟩ : g.residual) = r := Subtype.ext hr.symm
+              have hcEq : Sum.inl (Sum.inl r) = c₀ := by
+                dsimp [c₀]
+                exact congrArg (fun r : g.residual => (Sum.inl (Sum.inl r) : Coord)) hrEq.symm
+              exact Finset.mem_singleton.mpr hcEq
+            · have hsame : flipVertex5 u a r.1 = u r.1 := by
+                change Function.update u a (!u a) r.1 = u r.1
+                exact Function.update_of_ne hr _ _
+              have heq : coordBit (dataOf u) (.inl (.inl r)) =
+                  coordBit (dataOf (flipVertex5 u a)) (.inl (.inl r)) := by
+                simp [coordBit, dataOf, hsame]
+              exact (hc heq).elim
+          | inr c' =>
+            have hnot : a ∉ g.coarseChunks c'.1 := by
+              intro hai
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 c'.1))
+                hai haRes
+            have hcnt := hfilterOutside (g.coarseChunks c'.1) u a hnot
+            have hcnt' : g.coarseCount (flipVertex5 u a) c'.1 = g.coarseCount u c'.1 := by
+              unfold ChunkGeometry5.coarseCount
+              exact congrArg Finset.card hcnt
+            have heq : coordBit (dataOf u) (.inl (.inr c')) =
+                coordBit (dataOf (flipVertex5 u a)) (.inl (.inr c')) := by
+              simp [coordBit, dataOf, hcnt']
+            exact (hc heq).elim
+        | inr right =>
+          cases right with
+          | inl f =>
+            have hnot : a ∉ g.fineChunks f.1 := by
+              intro hai
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 f.1))
+                hai haRes
+            have hcnt := hfineCountOutside u a f.1 hnot
+            have hmergedEq :
+                mergedFineCount5 g.fineLength (g.fineCount (flipVertex5 u a) f.1) =
+                  mergedFineCount5 g.fineLength (g.fineCount u f.1) := by rw [hcnt]
+            have heq : coordBit (dataOf u) (.inr (.inl f)) =
+                coordBit (dataOf (flipVertex5 u a)) (.inr (.inl f)) := by
+              simp [coordBit, dataOf, hmergedEq]
+            exact (hc heq).elim
+          | inr j =>
+            have hcnt : ∀ i : Fin m, g.fineCount (flipVertex5 u a) i = g.fineCount u i := by
+              intro i
+              have hnot : a ∉ g.fineChunks i := by
+                intro hai
+                exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai haRes
+              exact hfineCountOutside u a i hnot
+            have hsev := hseveritySame (fun i => (hcnt i).symm)
+            have heq : coordBit (dataOf u) (.inr (.inr j)) =
+                coordBit (dataOf (flipVertex5 u a)) (.inr (.inr j)) := by
+              simp [coordBit, dataOf, hsev]
+            exact (hc heq).elim
+      calc
+        _ ≤ Cand.card := Finset.card_le_card hsubset
+        _ ≤ 4 := by simp [Cand]
+    · obtain ⟨i, hai⟩ := haCoarse
+      let c₀ : Coord := .inl (.inr ⟨i, (dataOf u).1.2 i⟩)
+      let c₁ : Coord := .inl (.inr ⟨i, (dataOf (flipVertex5 u a)).1.2 i⟩)
+      let Cand : Finset Coord := insert c₀ {c₁}
+      have hsubset : diffCoord (dataOf u) (dataOf (flipVertex5 u a)) ⊆ Cand := by
+        intro c hc
+        simp only [diffCoord, Finset.mem_filter, Finset.mem_univ, true_and] at hc
+        cases c with
+        | inl left =>
+          cases left with
+          | inl r =>
+            have hnot : a ∉ g.residual := by
+              intro har
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 i)) hai har
+            have hsame : flipVertex5 u a r.1 = u r.1 := by
+              have hne : r.1 ≠ a := fun he => hnot (he ▸ r.2)
+              change Function.update u a (!u a) r.1 = u r.1
+              exact Function.update_of_ne hne _ _
+            have heq : coordBit (dataOf u) (.inl (.inl r)) =
+                coordBit (dataOf (flipVertex5 u a)) (.inl (.inl r)) := by
+              simp [coordBit, dataOf, hsame]
+            exact (hc heq).elim
+          | inr c' =>
+            rcases c' with ⟨j, q⟩
+            by_cases hji : j = i
+            · subst j
+              change decide ((dataOf u).1.2 i = q) ≠
+                decide ((dataOf (flipVertex5 u a)).1.2 i = q) at hc
+              by_cases hq : (dataOf u).1.2 i = q
+              · exact Finset.mem_insert.mpr (Or.inl (by simp [Cand, c₀, hq]))
+              · have hq' : (dataOf (flipVertex5 u a)).1.2 i = q := by
+                  by_contra hq'
+                  exact hc (by simp [hq, hq'])
+                exact Finset.mem_insert.mpr (Or.inr (by simp [Cand, c₁, hq']))
+            · have hnot : a ∉ g.coarseChunks j := by
+                intro haj
+                exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) hai haj
+              have hcnt := hfilterOutside (g.coarseChunks j) u a hnot
+              have hcnt' : g.coarseCount (flipVertex5 u a) j = g.coarseCount u j := by
+                unfold ChunkGeometry5.coarseCount
+                exact congrArg Finset.card hcnt
+              have heq : coordBit (dataOf u) (.inl (.inr ⟨j, q⟩)) =
+                  coordBit (dataOf (flipVertex5 u a)) (.inl (.inr ⟨j, q⟩)) := by
+                simp [coordBit, dataOf, hcnt']
+              exact (hc heq).elim
+        | inr right =>
+          cases right with
+          | inl f =>
+            have hnot : a ∉ g.fineChunks f.1 := by
+              intro haf
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i f.1)) hai haf
+            have hcnt := hfineCountOutside u a f.1 hnot
+            have hmergedEq :
+                mergedFineCount5 g.fineLength (g.fineCount (flipVertex5 u a) f.1) =
+                  mergedFineCount5 g.fineLength (g.fineCount u f.1) := by rw [hcnt]
+            have heq : coordBit (dataOf u) (.inr (.inl f)) =
+                coordBit (dataOf (flipVertex5 u a)) (.inr (.inl f)) := by
+              simp [coordBit, dataOf, hmergedEq]
+            exact (hc heq).elim
+          | inr j =>
+            have hcnt : ∀ k : Fin m, g.fineCount (flipVertex5 u a) k = g.fineCount u k := by
+              intro k
+              have hnot : a ∉ g.fineChunks k := by
+                intro haf
+                exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i k)) hai haf
+              exact hfineCountOutside u a k hnot
+            have hsev := hseveritySame (fun k => (hcnt k).symm)
+            have heq : coordBit (dataOf u) (.inr (.inr j)) =
+                coordBit (dataOf (flipVertex5 u a)) (.inr (.inr j)) := by
+              simp [coordBit, dataOf, hsev]
+            exact (hc heq).elim
+      calc
+        _ ≤ Cand.card := Finset.card_le_card hsubset
+        _ ≤ 4 := by
+          have hcard := Finset.card_insert_le c₀ ({c₁} : Finset Coord)
+          simp [Cand] at hcard ⊢
+          omega
+    · obtain ⟨i, hai⟩ := haFine
+      let f₀ : Coord := .inr (.inl ⟨i, (dataOf u).2.1 i⟩)
+      let f₁ : Coord := .inr (.inl ⟨i, (dataOf (flipVertex5 u a)).2.1 i⟩)
+      let j₀ : Coord := .inr (.inr (dataOf u).2.2)
+      let j₁ : Coord := .inr (.inr (dataOf (flipVertex5 u a)).2.2)
+      let Cand : Finset Coord := insert f₀ (insert f₁ (insert j₀ {j₁}))
+      have hsubset : diffCoord (dataOf u) (dataOf (flipVertex5 u a)) ⊆ Cand := by
+        intro c hc
+        simp only [diffCoord, Finset.mem_filter, Finset.mem_univ, true_and] at hc
+        cases c with
+        | inl left =>
+          cases left with
+          | inl r =>
+            have hnot : a ∉ g.residual := by
+              intro har
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai har
+            have hsame : flipVertex5 u a r.1 = u r.1 := by
+              have hne : r.1 ≠ a := fun he => hnot (he ▸ r.2)
+              change Function.update u a (!u a) r.1 = u r.1
+              exact Function.update_of_ne hne _ _
+            have heq : coordBit (dataOf u) (.inl (.inl r)) =
+                coordBit (dataOf (flipVertex5 u a)) (.inl (.inl r)) := by
+              simp [coordBit, dataOf, hsame]
+            exact (hc heq).elim
+          | inr c' =>
+            have hnot : a ∉ g.coarseChunks c'.1 := by
+              intro hac
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 c'.1 i)) hac hai
+            have hcnt := hfilterOutside (g.coarseChunks c'.1) u a hnot
+            have hcnt' : g.coarseCount (flipVertex5 u a) c'.1 = g.coarseCount u c'.1 := by
+              unfold ChunkGeometry5.coarseCount
+              exact congrArg Finset.card hcnt
+            have heq : coordBit (dataOf u) (.inl (.inr c')) =
+                coordBit (dataOf (flipVertex5 u a)) (.inl (.inr c')) := by
+              simp [coordBit, dataOf, hcnt']
+            exact (hc heq).elim
+        | inr right =>
+          cases right with
+          | inl f =>
+            rcases f with ⟨j, q⟩
+            by_cases hji : j = i
+            · subst j
+              change decide ((dataOf u).2.1 i = q) ≠
+                decide ((dataOf (flipVertex5 u a)).2.1 i = q) at hc
+              by_cases hq : (dataOf u).2.1 i = q
+              · exact Finset.mem_insert.mpr (Or.inl (by simp [Cand, f₀, hq]))
+              · have hq' : (dataOf (flipVertex5 u a)).2.1 i = q := by
+                  by_contra hq'
+                  exact hc (by simp [hq, hq'])
+                exact Finset.mem_insert.mpr (Or.inr (Finset.mem_insert.mpr
+                  (Or.inl (by simp [Cand, f₁, hq']))))
+            · have hnot : a ∉ g.fineChunks j := by
+                intro haf
+                exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.1 i j (Ne.symm hji))) hai haf
+              have hcnt := hfineCountOutside u a j hnot
+              have hmergedEq :
+                  mergedFineCount5 g.fineLength (g.fineCount (flipVertex5 u a) j) =
+                    mergedFineCount5 g.fineLength (g.fineCount u j) := by rw [hcnt]
+              have heq : coordBit (dataOf u) (.inr (.inl ⟨j, q⟩)) =
+                  coordBit (dataOf (flipVertex5 u a)) (.inr (.inl ⟨j, q⟩)) := by
+                simp [coordBit, dataOf, hmergedEq]
+              exact (hc heq).elim
+          | inr j =>
+            by_cases hj : j = (dataOf u).2.2
+            · simp [Cand, j₀, hj]
+            · have hj' : j = (dataOf (flipVertex5 u a)).2.2 := by
+                by_contra hn
+                apply hc
+                simp [coordBit, dataOf, Ne.symm hj, Ne.symm hn]
+              simp [Cand, j₁, hj']
+      calc
+        _ ≤ Cand.card := Finset.card_le_card hsubset
+        _ ≤ 4 := by simpa [Cand] using hcardFour f₀ f₁ j₀ j₁
+  have hflipSet (A : Finset (Fin n)) (u : CubeVertex n) (a : Fin n)
+      (ha : a ∈ A) :
+      A.filter (fun b => flipVertex5 u a b = true) =
+        if u a then (A.filter fun b => u b = true).erase a
+        else insert a (A.filter fun b => u b = true) := by
+    ext b
+    by_cases hba : b = a
+    · subst b
+      cases hbit : u a <;> simp [flipVertex5, hbit, ha]
+    · cases hbit : u a <;> simp [flipVertex5, hbit, hba]
+  have hcountFlipBlock (A : Finset (Fin n)) (u : CubeVertex n) (a : Fin n)
+      (ha : a ∈ A) :
+      (A.filter (fun b => flipVertex5 u a b = true)).card =
+        if u a then (A.filter fun b => u b = true).card - 1
+        else (A.filter fun b => u b = true).card + 1 := by
+    rw [hflipSet A u a ha]
+    by_cases hbit : u a = true
+    · have hmem : a ∈ A.filter fun b => u b = true := Finset.mem_filter.mpr ⟨ha, hbit⟩
+      simp only [if_pos hbit, Finset.card_erase_of_mem hmem]
+    · have hfalse : u a = false := by
+        cases hu : u a with
+        | false => rfl
+        | true => exact False.elim (hbit hu)
+      have hnot : a ∉ A.filter fun b => u b = true := by simp [hfalse]
+      rw [if_neg hbit, Finset.card_insert_of_notMem hnot]
+      simp [hfalse]
+  have hcountFlipSame (A : Finset (Fin n)) (u v : CubeVertex n) (a b : Fin n)
+      (ha : a ∈ A) (hb : b ∈ A)
+      (hcount : (A.filter fun c => u c = true).card = (A.filter fun c => v c = true).card)
+      (hbit : u a = v b) :
+      (A.filter (fun c => flipVertex5 u a c = true)).card =
+        (A.filter (fun c => flipVertex5 v b c = true)).card := by
+    rw [hcountFlipBlock A u a ha, hcountFlipBlock A v b hb, hbit, hcount]
+  have hdataDetermine {u v : CubeVertex n}
+      (hres : ∀ a ∈ g.residual, u a = v a)
+      (hcoarse : ∀ i, g.coarseCount u i = g.coarseCount v i)
+      (hmerged : ∀ i, mergedFineCount5 g.fineLength (g.fineCount u i) =
+        mergedFineCount5 g.fineLength (g.fineCount v i))
+      (hsev : g.severity u = g.severity v) : dataOf u = dataOf v := by
+    apply Prod.ext
+    · apply Prod.ext
+      · funext a
+        exact hres a.1 a.2
+      · funext i
+        exact Fin.ext (hcoarse i)
+    · apply Prod.ext
+      · funext i
+        exact Fin.ext (hmerged i)
+      · exact Fin.ext hsev
+  have hbaseParts {u v : CubeVertex n} (hbase : dataOf u = dataOf v) :
+      (∀ a ∈ g.residual, u a = v a) ∧
+      (∀ i, g.coarseCount u i = g.coarseCount v i) ∧
+      (∀ i, mergedFineCount5 g.fineLength (g.fineCount u i) =
+        mergedFineCount5 g.fineLength (g.fineCount v i)) ∧
+      g.severity u = g.severity v := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · intro a ha
+      exact congrArg (fun s : SiteData => s.1.1 ⟨a, ha⟩) hbase
+    · intro i
+      exact congrArg Fin.val (congrArg (fun s : SiteData => s.1.2 i) hbase)
+    · intro i
+      exact congrArg Fin.val (congrArg (fun s : SiteData => s.2.1 i) hbase)
+    · exact congrArg Fin.val (congrArg (fun s : SiteData => s.2.2) hbase)
+  have hresFlipDataEq {u v : CubeVertex n} (hbase : dataOf u = dataOf v)
+      (a : g.residual) : dataOf (flipVertex5 u a.1) = dataOf (flipVertex5 v a.1) := by
+    rcases hbaseParts hbase with ⟨hres, hcoarse, hmerged, hsev⟩
+    apply hdataDetermine
+    · intro b hb
+      by_cases hba : b = a.1
+      · subst b
+        have hbit : u a.1 = v a.1 := hres a.1 a.2
+        change Function.update u a.1 (!u a.1) a.1 =
+          Function.update v a.1 (!v a.1) a.1
+        rw [Function.update_self, Function.update_self]
+        exact congrArg Bool.not hbit
+      · have hbit := hres b hb
+        have hu : flipVertex5 u a.1 b = u b := by
+          change Function.update u a.1 (!u a.1) b = u b
+          exact Function.update_of_ne hba _ _
+        have hv : flipVertex5 v a.1 b = v b := by
+          change Function.update v a.1 (!v a.1) b = v b
+          exact Function.update_of_ne hba _ _
+        simpa [hu, hv] using hbit
+    · intro i
+      have hnot : a.1 ∉ g.coarseChunks i := by
+        intro hai
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 i)) hai a.2
+      have hu : g.coarseCount (flipVertex5 u a.1) i = g.coarseCount u i := by
+        unfold ChunkGeometry5.coarseCount
+        exact congrArg Finset.card (hfilterOutside (g.coarseChunks i) u a.1 hnot)
+      have hv : g.coarseCount (flipVertex5 v a.1) i = g.coarseCount v i := by
+        unfold ChunkGeometry5.coarseCount
+        exact congrArg Finset.card (hfilterOutside (g.coarseChunks i) v a.1 hnot)
+      rw [hu, hv]
+      exact hcoarse i
+    · intro i
+      have hnot : a.1 ∉ g.fineChunks i := by
+        intro hai
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai a.2
+      rw [hfineCountOutside u a.1 i hnot, hfineCountOutside v a.1 i hnot]
+      exact hmerged i
+    · have hu : g.severity (flipVertex5 u a.1) = g.severity u :=
+        hseveritySame (fun i => hfineCountOutside u a.1 i (by
+          intro hai
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai a.2))
+      have hv : g.severity (flipVertex5 v a.1) = g.severity v :=
+        hseveritySame (fun i => hfineCountOutside v a.1 i (by
+          intro hai
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai a.2))
+      exact hu.trans (hsev.trans hv.symm)
+  have hseverityFlipBalance (u : CubeVertex n) (i : Fin m) (a : Fin n)
+      (ha : a ∈ g.fineChunks i) :
+      g.severity (flipVertex5 u a) +
+          (if Nat.dist (2 * g.fineCount u i) g.fineLength ≤ 11 then 1 else 0) =
+        g.severity u +
+          (if Nat.dist (2 * g.fineCount (flipVertex5 u a) i) g.fineLength ≤ 11 then 1 else 0) := by
+    let weight (z : CubeVertex n) (j : Fin m) : ℕ :=
+      if Nat.dist (2 * g.fineCount z j) g.fineLength ≤ 11 then 1 else 0
+    have hseverityWeight (z : CubeVertex n) : g.severity z = ∑ j, weight z j := by
+      simp [weight, ChunkGeometry5.severity]
+    have hweightOther (j : Fin m) (hji : j ≠ i) :
+        weight (flipVertex5 u a) j = weight u j := by
+      have hnot : a ∉ g.fineChunks j := by
+        intro haj
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.1 j i hji)) haj ha
+      simp [weight, hfineCountOutside u a j hnot]
+    have hsumAfter :
+        (∑ j, weight (flipVertex5 u a) j) = weight (flipVertex5 u a) i +
+          ∑ j ∈ (Finset.univ.erase i), weight (flipVertex5 u a) j := by
+      calc
+        _ = (∑ j ∈ (Finset.univ.erase i), weight (flipVertex5 u a) j) +
+              weight (flipVertex5 u a) i :=
+            (Finset.sum_erase_add Finset.univ (fun j => weight (flipVertex5 u a) j)
+              (Finset.mem_univ i)).symm
+        _ = _ := by ac_rfl
+    have hsumBefore :
+        (∑ j, weight u j) = weight u i + ∑ j ∈ (Finset.univ.erase i), weight u j := by
+      calc
+        _ = (∑ j ∈ (Finset.univ.erase i), weight u j) + weight u i :=
+            (Finset.sum_erase_add Finset.univ (fun j => weight u j) (Finset.mem_univ i)).symm
+        _ = _ := by ac_rfl
+    have hotherSum :
+        (∑ j ∈ (Finset.univ.erase i), weight (flipVertex5 u a) j) =
+          ∑ j ∈ (Finset.univ.erase i), weight u j := by
+      apply Finset.sum_congr rfl
+      intro j hj
+      exact hweightOther j (Finset.mem_erase.mp hj).1
+    rw [hseverityWeight (flipVertex5 u a), hseverityWeight u, hsumAfter, hsumBefore, hotherSum]
+    ring
+  have hcoarseFlipDataEq {u v : CubeVertex n} (hbase : dataOf u = dataOf v)
+      (i : Fin coarseChunkCount5) (a b : Fin n)
+      (ha : a ∈ g.coarseChunks i) (hb : b ∈ g.coarseChunks i) (hbit : u a = v b) :
+      dataOf (flipVertex5 u a) = dataOf (flipVertex5 v b) := by
+    rcases hbaseParts hbase with ⟨hres, hcoarse, hmerged, hsev⟩
+    apply hdataDetermine
+    · intro r hr
+      have hnotA : a ∉ g.residual := fun har =>
+        (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 i)) ha har
+      have hnotB : b ∉ g.residual := fun har =>
+        (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 i)) hb har
+      have hsameA : flipVertex5 u a r = u r := by
+        change Function.update u a (!u a) r = u r
+        have hne : r ≠ a := by
+          intro he
+          subst r
+          exact hnotA hr
+        exact Function.update_of_ne hne _ _
+      have hsameB : flipVertex5 v b r = v r := by
+        change Function.update v b (!v b) r = v r
+        have hne : r ≠ b := by
+          intro he
+          subst r
+          exact hnotB hr
+        exact Function.update_of_ne hne _ _
+      simpa [hsameA, hsameB] using hres r hr
+    · intro j
+      by_cases hji : j = i
+      · subst j
+        unfold ChunkGeometry5.coarseCount
+        exact hcountFlipSame (g.coarseChunks i) u v a b ha hb (hcoarse i) hbit
+      · have hnotA : a ∉ g.coarseChunks j := by
+          intro haj
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) ha haj
+        have hnotB : b ∉ g.coarseChunks j := by
+          intro hbj
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) hb hbj
+        have hca := hfilterOutside (g.coarseChunks j) u a hnotA
+        have hcb := hfilterOutside (g.coarseChunks j) v b hnotB
+        have hca' : g.coarseCount (flipVertex5 u a) j = g.coarseCount u j := by
+          unfold ChunkGeometry5.coarseCount
+          exact congrArg Finset.card hca
+        have hcb' : g.coarseCount (flipVertex5 v b) j = g.coarseCount v j := by
+          unfold ChunkGeometry5.coarseCount
+          exact congrArg Finset.card hcb
+        rw [hca', hcb']
+        exact hcoarse j
+    · intro j
+      have hnotA : a ∉ g.fineChunks j := by
+        intro haj
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i j)) ha haj
+      have hnotB : b ∉ g.fineChunks j := by
+        intro hbj
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i j)) hb hbj
+      rw [hfineCountOutside u a j hnotA, hfineCountOutside v b j hnotB]
+      exact hmerged j
+    · have hsevU : g.severity (flipVertex5 u a) = g.severity u :=
+        hseveritySame (fun j => hfineCountOutside u a j (by
+          intro haj
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i j)) ha haj))
+      have hsevV : g.severity (flipVertex5 v b) = g.severity v :=
+        hseveritySame (fun j => hfineCountOutside v b j (by
+          intro hbj
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i j)) hb hbj))
+      exact hsevU.trans (hsev.trans hsevV.symm)
+  have hfineFlipDataEq {u v : CubeVertex n} (hbase : dataOf u = dataOf v)
+      (i : Fin m) (a b : Fin n) (ha : a ∈ g.fineChunks i) (hb : b ∈ g.fineChunks i)
+      (hcount : g.fineCount u i = g.fineCount v i) (hbit : u a = v b) :
+      dataOf (flipVertex5 u a) = dataOf (flipVertex5 v b) := by
+    rcases hbaseParts hbase with ⟨hres, hcoarse, hmerged, hsev⟩
+    have hcountAfter : g.fineCount (flipVertex5 u a) i = g.fineCount (flipVertex5 v b) i := by
+      unfold ChunkGeometry5.fineCount
+      exact hcountFlipSame (g.fineChunks i) u v a b ha hb hcount hbit
+    apply hdataDetermine
+    · intro r hr
+      have hnotA : a ∉ g.residual := fun har =>
+        (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) ha har
+      have hnotB : b ∉ g.residual := fun har =>
+        (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hb har
+      have hsameA : flipVertex5 u a r = u r := by
+        change Function.update u a (!u a) r = u r
+        have hne : r ≠ a := by
+          intro he
+          subst r
+          exact hnotA hr
+        exact Function.update_of_ne hne _ _
+      have hsameB : flipVertex5 v b r = v r := by
+        change Function.update v b (!v b) r = v r
+        have hne : r ≠ b := by
+          intro he
+          subst r
+          exact hnotB hr
+        exact Function.update_of_ne hne _ _
+      simpa [hsameA, hsameB] using hres r hr
+    · intro j
+      have hnotA : a ∉ g.coarseChunks j := by
+        intro haj
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 j i)) haj ha
+      have hnotB : b ∉ g.coarseChunks j := by
+        intro hbj
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 j i)) hbj hb
+      have hca := hfilterOutside (g.coarseChunks j) u a hnotA
+      have hcb := hfilterOutside (g.coarseChunks j) v b hnotB
+      have hca' : g.coarseCount (flipVertex5 u a) j = g.coarseCount u j := by
+        unfold ChunkGeometry5.coarseCount
+        exact congrArg Finset.card hca
+      have hcb' : g.coarseCount (flipVertex5 v b) j = g.coarseCount v j := by
+        unfold ChunkGeometry5.coarseCount
+        exact congrArg Finset.card hcb
+      rw [hca', hcb']
+      exact hcoarse j
+    · intro j
+      by_cases hji : j = i
+      · subst j
+        rw [hcountAfter]
+      · have hnotA : a ∉ g.fineChunks j := by
+          intro haj
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.1 i j (Ne.symm hji))) ha haj
+        have hnotB : b ∉ g.fineChunks j := by
+          intro hbj
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.1 i j (Ne.symm hji))) hb hbj
+        rw [hfineCountOutside u a j hnotA, hfineCountOutside v b j hnotB]
+        exact hmerged j
+    · have hOld :
+          (Nat.dist (2 * g.fineCount u i) g.fineLength ≤ 11) ↔
+            Nat.dist (2 * g.fineCount v i) g.fineLength ≤ 11 := by rw [hcount]
+      have hNew :
+          (Nat.dist (2 * g.fineCount (flipVertex5 u a) i) g.fineLength ≤ 11) ↔
+            Nat.dist (2 * g.fineCount (flipVertex5 v b) i) g.fineLength ≤ 11 := by
+        rw [hcountAfter]
+      have hOldIte :
+          (if Nat.dist (2 * g.fineCount u i) g.fineLength ≤ 11 then 1 else 0) =
+            (if Nat.dist (2 * g.fineCount v i) g.fineLength ≤ 11 then 1 else 0) := by
+        by_cases h : Nat.dist (2 * g.fineCount u i) g.fineLength ≤ 11
+        · have h' := hOld.mp h
+          simp [h, h']
+        · have h' : ¬ Nat.dist (2 * g.fineCount v i) g.fineLength ≤ 11 :=
+            fun hh => h (hOld.mpr hh)
+          simp [h, h']
+      have hNewIte :
+          (if Nat.dist (2 * g.fineCount (flipVertex5 u a) i) g.fineLength ≤ 11 then 1 else 0) =
+            (if Nat.dist (2 * g.fineCount (flipVertex5 v b) i) g.fineLength ≤ 11 then 1 else 0) := by
+        by_cases h : Nat.dist (2 * g.fineCount (flipVertex5 u a) i) g.fineLength ≤ 11
+        · have h' := hNew.mp h
+          simp [h, h']
+        · have h' : ¬ Nat.dist (2 * g.fineCount (flipVertex5 v b) i) g.fineLength ≤ 11 :=
+            fun hh => h (hNew.mpr hh)
+          simp [h, h']
+      have hbalU := hseverityFlipBalance u i a ha
+      have hbalV := hseverityFlipBalance v i b hb
+      omega
+  have hnNat : 100000 ≤ n := by
+    exact le_trans (le_max_right n₀ 100000) hn
+  have hnR : (100000 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hnNat
+  have hsqrtN : 144 ≤ Real.sqrt (n : ℝ) := by
+    apply Real.le_sqrt_of_sq_le
+    nlinarith
+  have hsqrtSqrtN : 12 ≤ Real.sqrt (Real.sqrt (n : ℝ)) := by
+    apply Real.le_sqrt_of_sq_le
+    nlinarith [hsqrtN]
+  have hquarter : Real.sqrt (Real.sqrt (n : ℝ)) = (n : ℝ) ^ (1 / 4 : ℝ) := by
+    rw [Real.sqrt_eq_rpow, Real.sqrt_eq_rpow]
+    rw [← Real.rpow_mul (by positivity : 0 ≤ (n : ℝ))]
+    norm_num
+  have hFineLengthBig : 11 < g.fineLength := by
+    have hpowQuarter : 11 < (n : ℝ) ^ (1 / 4 : ℝ) := by
+      calc
+        (11 : ℝ) < 12 := by norm_num
+        _ ≤ Real.sqrt (Real.sqrt (n : ℝ)) := hsqrtSqrtN
+        _ = (n : ℝ) ^ (1 / 4 : ℝ) := hquarter
+    have hpowLarge : 11 < (n : ℝ) ^ (3 / 10 : ℝ) := by
+      exact lt_of_lt_of_le hpowQuarter
+        (Real.rpow_le_rpow_of_exponent_le (by linarith) (by norm_num))
+    have hreal : (11 : ℝ) < (g.fineLength : ℝ) :=
+      lt_of_lt_of_le hpowLarge g.fine_length_lower
+    exact_mod_cast hreal
+  have hfindBit (A : Finset (Fin n)) (u v : CubeVertex n)
+      (hcount : (A.filter fun c => u c = true).card =
+        (A.filter fun c => v c = true).card)
+      (a : Fin n) (ha : a ∈ A) : ∃ b ∈ A, u b = v a := by
+    cases hbit : v a with
+    | true =>
+        have hposV : 0 < (A.filter fun c => v c = true).card :=
+          Finset.card_pos.mpr ⟨a, Finset.mem_filter.mpr ⟨ha, hbit⟩⟩
+        rw [← hcount] at hposV
+        obtain ⟨b, hb⟩ := Finset.card_pos.mp hposV
+        exact ⟨b, (Finset.mem_filter.mp hb).1, (Finset.mem_filter.mp hb).2⟩
+    | false =>
+        have hltV : (A.filter fun c => v c = true).card < A.card := by
+          apply Finset.card_lt_card
+          refine ⟨Finset.filter_subset _ _, ?_⟩
+          intro hsubset
+          have hmem : a ∈ A.filter fun c => v c = true := hsubset ha
+          have : v a = true := (Finset.mem_filter.mp hmem).2
+          rw [hbit] at this
+          cases this
+        have hltU : (A.filter fun c => u c = true).card < A.card := by
+          rw [hcount]
+          exact hltV
+        have hparts := Finset.card_filter_add_card_filter_not (s := A)
+          (fun c => u c = true)
+        have hfalseCard : 0 < (A.filter fun c => u c = false).card := by
+          have hnotCard : (A.filter fun c => ¬ u c = true).card =
+              (A.filter fun c => u c = false).card := by
+            congr 1
+            ext c
+            simp
+          rw [← hnotCard]
+          omega
+        obtain ⟨b, hb⟩ := Finset.card_pos.mp hfalseCard
+        exact ⟨b, (Finset.mem_filter.mp hb).1, (Finset.mem_filter.mp hb).2⟩
+  have hrawCountSameMode {u v : CubeVertex n} (i : Fin m)
+      (hmerged : mergedFineCount5 g.fineLength (g.fineCount u i) =
+        mergedFineCount5 g.fineLength (g.fineCount v i))
+      (hedge : (Nat.dist (2 * g.fineCount u i) g.fineLength = 11) ↔
+        (Nat.dist (2 * g.fineCount v i) g.fineLength = 11)) :
+      g.fineCount u i = g.fineCount v i := by
+    by_cases hdu : Nat.dist (2 * g.fineCount u i) g.fineLength = 11
+    · have hdv := hedge.mp hdu
+      have hsideU : (g.fineLength < 2 * g.fineCount u i) ↔
+          (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount u i)) :=
+        Iff.of_eq (merged_side (g.fineCount u i))
+      have hsideV : (g.fineLength < 2 * g.fineCount v i) ↔
+          (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount v i)) :=
+        Iff.of_eq (merged_side (g.fineCount v i))
+      have hside : (g.fineLength < 2 * g.fineCount u i) ↔
+          (g.fineLength < 2 * g.fineCount v i) := by
+        have hmid : (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount u i)) ↔
+            (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount v i)) := by
+          rw [hmerged]
+        exact hsideU.trans (hmid.trans hsideV.symm)
+      obtain ⟨k, hk⟩ := g.fine_length_odd
+      by_cases hlowU : 2 * g.fineCount u i < g.fineLength
+      · have hlowV : 2 * g.fineCount v i < g.fineLength := by
+          by_contra hnotV
+          have hpropV : g.fineLength < 2 * g.fineCount v i := by omega
+          have hpropU : g.fineLength < 2 * g.fineCount u i := hside.mpr hpropV
+          omega
+        have hqposU : 0 < g.fineCount u i := by
+          by_contra hq
+          have hq0 : g.fineCount u i = 0 := Nat.eq_zero_of_not_pos hq
+          rw [hq0] at hdu
+          simp [Nat.dist] at hdu
+          omega
+        have hqposV : 0 < g.fineCount v i := by
+          by_contra hq
+          have hq0 : g.fineCount v i = 0 := Nat.eq_zero_of_not_pos hq
+          rw [hq0] at hdv
+          simp [Nat.dist] at hdv
+          omega
+        simp [mergedFineCount5, hdu, hdv, hlowU, hlowV] at hmerged
+        omega
+      · have hlowV : ¬ 2 * g.fineCount v i < g.fineLength := by
+          have hpropU : g.fineLength < 2 * g.fineCount u i := by omega
+          have hpropV : g.fineLength < 2 * g.fineCount v i := hside.mp hpropU
+          omega
+        simp [mergedFineCount5, hdu, hdv, hlowU, hlowV] at hmerged
+        omega
+    · have hdv : Nat.dist (2 * g.fineCount v i) g.fineLength ≠ 11 := by
+        intro hv
+        exact hdu (hedge.mpr hv)
+      simpa [mergedFineCount5, hdu, hdv] using hmerged
+  let S : CubeStates5 g J := {
+    Site := SiteData
+    siteFintype := inferInstance
+    siteDecEq := inferInstance
+    d := d
+    stateOf := dataOf
+    oneHot := fun s k => coordBit s (coordEquiv.symm k)
+    oneHot_injective := by
+      intro s t hst
+      have hcode : ∀ c : Coord, coordBit s c = coordBit t c := by
+        intro c
+        have h := congrFun hst (coordEquiv c)
+        simpa [coordBit] using h
+      apply Prod.ext
+      · apply Prod.ext
+        · funext a
+          exact hcode (.inl (.inl a))
+        · funext i
+          exact cat_injective (s.1.2 i) (t.1.2 i) (fun q => hcode (.inl (.inr ⟨i, q⟩)))
+      · apply Prod.ext
+        · funext i
+          exact cat_injective (s.2.1 i) (t.2.1 i) (fun q => hcode (.inr (.inl ⟨i, q⟩)))
+        · exact cat_injective s.2.2 t.2.2 (fun q => hcode (.inr (.inr q)))
+    sign_distance := by
+      intro x y
+      classical
+      let A : Finset (Fin m) := Finset.univ.filter fun i => g.sign x i ≠ g.sign y i
+      let f : Fin m → Coord := fun i => .inr (.inl ⟨i, (dataOf x).2.1 i⟩)
+      have hmem (i : Fin m) (hi : i ∈ A) : f i ∈ diffCoord (dataOf x) (dataOf y) := by
+        have hsign : g.sign x i ≠ g.sign y i := (Finset.mem_filter.mp hi).2
+        have hval : (dataOf x).2.1 i ≠ (dataOf y).2.1 i := by
+          intro heq
+          apply hsign
+          have hx : g.sign x i = decide
+              (g.fineLength < 2 * ((dataOf x).2.1 i).val) := by
+            change decide (g.fineLength < 2 * g.fineCount x i) =
+              decide (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount x i))
+            have hProp := merged_side (g.fineCount x i)
+            have hiff : (g.fineLength < 2 * g.fineCount x i) ↔
+                g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount x i) := Iff.of_eq hProp
+            by_cases hleft : g.fineLength < 2 * g.fineCount x i
+            · have hright := hiff.mp hleft
+              simp [hleft, hright]
+            · have hright : ¬g.fineLength <
+                  2 * mergedFineCount5 g.fineLength (g.fineCount x i) :=
+                fun hh => hleft (hiff.mpr hh)
+              simp [hleft, hright]
+          have hy : g.sign y i = decide
+              (g.fineLength < 2 * ((dataOf y).2.1 i).val) := by
+            change decide (g.fineLength < 2 * g.fineCount y i) =
+              decide (g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount y i))
+            have hProp := merged_side (g.fineCount y i)
+            have hiff : (g.fineLength < 2 * g.fineCount y i) ↔
+                g.fineLength < 2 * mergedFineCount5 g.fineLength (g.fineCount y i) := Iff.of_eq hProp
+            by_cases hleft : g.fineLength < 2 * g.fineCount y i
+            · have hright := hiff.mp hleft
+              simp [hleft, hright]
+            · have hright : ¬g.fineLength <
+                  2 * mergedFineCount5 g.fineLength (g.fineCount y i) :=
+                fun hh => hleft (hiff.mpr hh)
+              simp [hleft, hright]
+          rw [hx, hy, heq]
+        unfold diffCoord
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+        have hval' : (dataOf y).2.1 i ≠ (dataOf x).2.1 i := Ne.symm hval
+        simp [f, coordBit, hval, hval']
+      have hinj : Set.InjOn f A := by
+        intro i hi j hj hEq
+        have houter := Sum.inr.inj hEq
+        have hSigma := Sum.inl.inj houter
+        exact congrArg Sigma.fst hSigma
+      have hcard := Finset.card_le_card_of_injOn f hmem hinj
+      have hleft : _root_.hammingDist (g.sign x) (g.sign y) = A.card := by
+        simp [A, _root_.hammingDist]
+      rw [hleft, hamming_code_eq]
+      exact hcard
+    resCoord := fun a => coordEquiv (.inl (.inl a))
+    resCoord_injective := by
+      intro a b hab
+      have h := coordEquiv.injective hab
+      exact Sum.inl.inj (Sum.inl.inj h)
+    oneHot_residual := by
+      intro x a
+      simp [coordBit, dataOf]
+    state_determines := by
+      intro x y hxy
+      have hres (a : g.residual) : x a.1 = y a.1 := by
+        have h := congrArg (fun s : SiteData => s.1.1 a) hxy
+        simpa [dataOf] using h
+      have hcoarseCount (i : Fin coarseChunkCount5) :
+          g.coarseCount x i = g.coarseCount y i := by
+        have h := congrArg (fun s : SiteData => s.1.2 i) hxy
+        exact congrArg Fin.val h
+      have hmerged (i : Fin m) :
+          mergedFineCount5 g.fineLength (g.fineCount x i) =
+            mergedFineCount5 g.fineLength (g.fineCount y i) := by
+        have h := congrArg (fun s : SiteData => s.2.1 i) hxy
+        exact congrArg Fin.val h
+      have hseverity : g.severity x = g.severity y := by
+        have h := congrArg (fun s : SiteData => s.2.2) hxy
+        exact congrArg Fin.val h
+      have hcoarseBin : g.coarseBin x = g.coarseBin y := by
+        funext i
+        simp [ChunkGeometry5.coarseBin, hcoarseCount i]
+      have hcountFlip (u : CubeVertex n) (i : Fin coarseChunkCount5)
+          (a : Fin n) (ha : a ∈ g.coarseChunks i) :
+          g.coarseCount (flipVertex5 u a) i =
+            if u a then g.coarseCount u i - 1 else g.coarseCount u i + 1 := by
+        classical
+        let T := (g.coarseChunks i).filter fun b => u b = true
+        by_cases hbit : u a = true
+        · have hset :
+              (g.coarseChunks i).filter (fun b => flipVertex5 u a b = true) = T.erase a := by
+            ext b
+            by_cases hba : b = a
+            · subst b
+              simp [T, ha, flipVertex5, hbit]
+            · have hf : flipVertex5 u a b = u b := by
+                simpa only [flipVertex5, Function.update_of_ne hba]
+              constructor
+              · intro hh
+                have hm := Finset.mem_filter.mp hh
+                exact Finset.mem_erase.mpr ⟨hba, Finset.mem_filter.mpr ⟨hm.1, hf.symm.trans hm.2⟩⟩
+              · intro hh
+                have hm := Finset.mem_filter.mp (Finset.mem_erase.mp hh).2
+                exact Finset.mem_filter.mpr ⟨hm.1, hf.trans hm.2⟩
+          have hmem : a ∈ T := by simp [T, ha, hbit]
+          unfold ChunkGeometry5.coarseCount
+          rw [hset, Finset.card_erase_of_mem hmem]
+          simp [T, hbit, ChunkGeometry5.coarseCount]
+        · have hset :
+              (g.coarseChunks i).filter (fun b => flipVertex5 u a b = true) = insert a T := by
+            ext b
+            by_cases hba : b = a
+            · subst b
+              simp [T, ha, flipVertex5, hbit]
+            · have hf : flipVertex5 u a b = u b := by
+                simpa only [flipVertex5, Function.update_of_ne hba]
+              constructor
+              · intro hh
+                have hm := Finset.mem_filter.mp hh
+                exact Finset.mem_insert.mpr (Or.inr (Finset.mem_filter.mpr ⟨hm.1, hf.symm.trans hm.2⟩))
+              · intro hh
+                rcases Finset.mem_insert.mp hh with heq | hm
+                · exact (hba heq).elim
+                · have hm' := Finset.mem_filter.mp hm
+                  exact Finset.mem_filter.mpr ⟨hm'.1, hf.trans hm'.2⟩
+          have hnot : a ∉ T := by simp [T, ha, hbit]
+          unfold ChunkGeometry5.coarseCount
+          rw [hset, Finset.card_insert_of_notMem hnot]
+          simp [T, hbit, ChunkGeometry5.coarseCount]
+      have hcountFlipOther (u : CubeVertex n) (a : Fin n)
+          (j : Fin coarseChunkCount5) (hnot : a ∉ g.coarseChunks j) :
+          g.coarseCount (flipVertex5 u a) j = g.coarseCount u j := by
+        unfold ChunkGeometry5.coarseCount
+        have hset :
+            (g.coarseChunks j).filter (fun b => flipVertex5 u a b = true) =
+              (g.coarseChunks j).filter (fun b => u b = true) := by
+          ext b
+          by_cases hba : b = a
+          · subst b
+            simp [hnot]
+          · have hf : flipVertex5 u a b = u b := by
+              change Function.update u a (!u a) b = u b
+              exact Function.update_of_ne hba _ _
+            simp only [Finset.mem_filter]
+            rw [hf]
+        rw [hset]
+      have hcoarseBinFlipEq (u v : CubeVertex n)
+          (hcounts : ∀ j, g.coarseCount u j = g.coarseCount v j)
+          (i : Fin coarseChunkCount5) (a b : Fin n)
+          (ha : a ∈ g.coarseChunks i) (hb : b ∈ g.coarseChunks i)
+          (hbit : u a = v b) :
+          g.coarseBin (flipVertex5 u a) = g.coarseBin (flipVertex5 v b) := by
+        funext j
+        change g.bin j (g.coarseCount (flipVertex5 u a) j) =
+          g.bin j (g.coarseCount (flipVertex5 v b) j)
+        by_cases hji : j = i
+        · subst j
+          rw [hcountFlip u i a ha, hcountFlip v i b hb, hbit, hcounts i]
+        · have hnotA : a ∉ g.coarseChunks j := by
+            intro haj
+            exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) ha haj
+          have hnotB : b ∉ g.coarseChunks j := by
+            intro hbj
+            exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) hb hbj
+          rw [hcountFlipOther u a j hnotA, hcountFlipOther v b j hnotB, hcounts j]
+      have hmatchingBit (u v : CubeVertex n)
+          (hcounts : ∀ j, g.coarseCount u j = g.coarseCount v j)
+          (i : Fin coarseChunkCount5) (a : Fin n) (ha : a ∈ g.coarseChunks i) :
+          ∃ b ∈ g.coarseChunks i, v b = u a := by
+        by_cases hbit : u a = true
+        · have hcountPos : 0 < g.coarseCount u i := by
+            unfold ChunkGeometry5.coarseCount
+            exact Finset.card_pos.mpr ⟨a, Finset.mem_filter.mpr ⟨ha, hbit⟩⟩
+          have hcountPosV : 0 < g.coarseCount v i := by simpa [hcounts i] using hcountPos
+          have hfilterPos : 0 <
+              ((g.coarseChunks i).filter fun b => v b = true).card := by
+            simpa [ChunkGeometry5.coarseCount] using hcountPosV
+          obtain ⟨b, hb⟩ := Finset.card_pos.mp hfilterPos
+          have hvb := (Finset.mem_filter.mp hb).2
+          exact ⟨b, (Finset.mem_filter.mp hb).1, hvb.trans hbit.symm⟩
+        · have hstrict :
+              ((g.coarseChunks i).filter fun b => u b = true) ⊂ g.coarseChunks i := by
+            apply Finset.ssubset_iff_subset_ne.mpr
+            constructor
+            · exact Finset.filter_subset _ _
+            · intro heq
+              have ha' : a ∈ (g.coarseChunks i).filter fun b => u b = true := by
+                rw [heq]
+                exact ha
+              exact hbit (Finset.mem_filter.mp ha').2
+          have hcountLtU : g.coarseCount u i < (g.coarseChunks i).card := by
+            unfold ChunkGeometry5.coarseCount
+            exact Finset.card_lt_card hstrict
+          have hcountLtV : g.coarseCount v i < (g.coarseChunks i).card := by
+            simpa [hcounts i] using hcountLtU
+          have hzeros : ((g.coarseChunks i).filter fun b => v b = false).Nonempty := by
+            by_contra hne
+            have hall : ∀ b ∈ g.coarseChunks i, v b = true := by
+              intro b hb
+              cases hv : v b with
+              | false =>
+                  have hbzero : b ∈ (g.coarseChunks i).filter fun c => v c = false :=
+                    Finset.mem_filter.mpr ⟨hb, hv⟩
+                  exact (hne ⟨b, hbzero⟩).elim
+              | true => rfl
+            have hfilter :
+                (g.coarseChunks i).filter (fun b => v b = true) = g.coarseChunks i := by
+              ext b
+              simp only [Finset.mem_filter]
+              constructor
+              · rintro ⟨hb, _⟩
+                exact hb
+              · intro hb
+                exact ⟨hb, hall b hb⟩
+            have hfull : g.coarseCount v i = (g.coarseChunks i).card := by
+              unfold ChunkGeometry5.coarseCount
+              rw [hfilter]
+            rw [hfull] at hcountLtV
+            exact (Nat.lt_irrefl _) hcountLtV
+          obtain ⟨b, hb⟩ := hzeros
+          have hbitFalse : u a = false := by
+            cases hua : u a with
+            | false => rfl
+            | true => exact (hbit hua).elim
+          have hvb := (Finset.mem_filter.mp hb).2
+          exact ⟨b, (Finset.mem_filter.mp hb).1, hvb.trans hbitFalse.symm⟩
+      have hboundaryTransport {u v : CubeVertex n}
+          (hcounts : ∀ i, g.coarseCount u i = g.coarseCount v i)
+          (hbin : g.coarseBin u = g.coarseBin v) (hu : g.boundary u) : g.boundary v := by
+        rcases hu with ⟨i, a, ha, hflipNe⟩
+        obtain ⟨b, hb, hbit⟩ := hmatchingBit u v hcounts i a ha
+        have hflipEq := hcoarseBinFlipEq u v hcounts i a b ha hb hbit.symm
+        have hflipNe' : g.coarseBin (flipVertex5 v b) ≠ g.coarseBin v := by
+          intro heq
+          apply hflipNe
+          calc
+            g.coarseBin (flipVertex5 u a) = g.coarseBin (flipVertex5 v b) := hflipEq
+            _ = g.coarseBin v := heq
+            _ = g.coarseBin u := hbin.symm
+        exact ⟨i, b, hb, hflipNe'⟩
+      have hboundary : g.boundary x ↔ g.boundary y := by
+        constructor
+        · exact hboundaryTransport hcoarseCount hcoarseBin
+        · exact hboundaryTransport (fun i => (hcoarseCount i).symm) hcoarseBin.symm
+      have hkey : g.key x = g.key y := by
+        change (g.coarseBin x, decide (g.boundary x)) =
+          (g.coarseBin y, decide (g.boundary y))
+        exact Prod.ext hcoarseBin
+          (congrArg (fun P : Prop => decide P) (propext hboundary))
+      have hkeyFlip (a b : Fin n) (i : Fin coarseChunkCount5)
+          (ha : a ∈ g.coarseChunks i) (hb : b ∈ g.coarseChunks i)
+          (hbit : x a = y b) :
+          g.key (flipVertex5 x a) = g.key (flipVertex5 y b) := by
+        have hcounts : ∀ j, g.coarseCount (flipVertex5 x a) j =
+            g.coarseCount (flipVertex5 y b) j := by
+          intro j
+          by_cases hji : j = i
+          · subst j
+            rw [hcountFlip x i a ha, hcountFlip y i b hb, hbit, hcoarseCount i]
+          · have hnotA : a ∉ g.coarseChunks j := by
+              intro haj
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) ha haj
+            have hnotB : b ∉ g.coarseChunks j := by
+              intro hbj
+              exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j (Ne.symm hji))) hb hbj
+            rw [hcountFlipOther x a j hnotA, hcountFlipOther y b j hnotB, hcoarseCount j]
+        have hbin := hcoarseBinFlipEq x y hcoarseCount i a b ha hb hbit
+        have hbound : g.boundary (flipVertex5 x a) ↔ g.boundary (flipVertex5 y b) :=
+          ⟨hboundaryTransport hcounts hbin,
+            hboundaryTransport (fun j => (hcounts j).symm) hbin.symm⟩
+        change (g.coarseBin (flipVertex5 x a), decide (g.boundary (flipVertex5 x a))) =
+          (g.coarseBin (flipVertex5 y b), decide (g.boundary (flipVertex5 y b)))
+        exact Prod.ext hbin
+          (congrArg (fun P : Prop => decide P) (propext hbound))
+      have hcoarseRange : g.coarseRange x = g.coarseRange y := by
+        classical
+        ext k
+        simp only [ChunkGeometry5.coarseRange, Finset.mem_insert, Finset.mem_image]
+        constructor
+        · rintro (hk | ⟨a, ha, hk⟩)
+          · exact Or.inl (hkey.symm ▸ hk)
+          · obtain ⟨i, _, hai⟩ := Finset.mem_biUnion.mp ha
+            obtain ⟨b, hb, hbit⟩ := hmatchingBit x y hcoarseCount i a hai
+            apply Or.inr
+            refine ⟨b, Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, hb⟩, ?_⟩
+            exact (hkeyFlip a b i hai hb hbit.symm).symm.trans hk
+        · rintro (hk | ⟨b, hb, hk⟩)
+          · exact Or.inl (hkey ▸ hk)
+          · obtain ⟨i, _, hbi⟩ := Finset.mem_biUnion.mp hb
+            obtain ⟨a, ha, hbit⟩ :=
+              hmatchingBit y x (fun j => (hcoarseCount j).symm) i b hbi
+            apply Or.inr
+            refine ⟨a, Finset.mem_biUnion.mpr ⟨i, Finset.mem_univ _, ha⟩, ?_⟩
+            exact (hkeyFlip a b i ha hbi hbit).trans hk
+      have hnNat : 100000 ≤ n := by
+        exact le_trans (le_max_right n₀ 100000) hn
+      have hnR : (100000 : ℝ) ≤ (n : ℝ) := by exact_mod_cast hnNat
+      have hnRpos : 0 < (n : ℝ) := by linarith
+      have hsqrtN : 144 ≤ Real.sqrt (n : ℝ) := by
+        apply Real.le_sqrt_of_sq_le
+        nlinarith
+      have hsqrtSqrtN : 12 ≤ Real.sqrt (Real.sqrt (n : ℝ)) := by
+        apply Real.le_sqrt_of_sq_le
+        nlinarith [hsqrtN]
+      have hquarter : Real.sqrt (Real.sqrt (n : ℝ)) = (n : ℝ) ^ (1 / 4 : ℝ) := by
+        rw [Real.sqrt_eq_rpow, Real.sqrt_eq_rpow]
+        rw [← Real.rpow_mul hnRpos.le]
+        norm_num
+      have hpowQuarter : 11 < (n : ℝ) ^ (1 / 4 : ℝ) := by
+        calc
+          (11 : ℝ) < 12 := by norm_num
+          _ ≤ Real.sqrt (Real.sqrt (n : ℝ)) := hsqrtSqrtN
+          _ = (n : ℝ) ^ (1 / 4 : ℝ) := hquarter
+      have hpowLarge : 11 < (n : ℝ) ^ (3 / 10 : ℝ) := by
+        exact lt_of_lt_of_le hpowQuarter
+          (Real.rpow_le_rpow_of_exponent_le (by linarith) (by norm_num))
+      have hFineLengthBig : 11 < g.fineLength := by
+        have hreal : (11 : ℝ) < (g.fineLength : ℝ) :=
+          lt_of_lt_of_le hpowLarge g.fine_length_lower
+        exact_mod_cast hreal
+      have hmergedDistOne (q : ℕ) :
+          (Nat.dist (2 * q) g.fineLength = 1) ↔
+            Nat.dist (2 * mergedFineCount5 g.fineLength q) g.fineLength = 1 := by
+        unfold mergedFineCount5
+        by_cases hd : Nat.dist (2 * q) g.fineLength = 11
+        · by_cases hlow : 2 * q < g.fineLength
+          · have hdist : g.fineLength - 2 * q = 11 := by
+              simpa [Nat.dist_eq_sub_of_le (Nat.le_of_lt hlow)] using hd
+            have hnewle : 2 * (q - 1) ≤ g.fineLength :=
+              (Nat.mul_le_mul_left 2 (Nat.sub_le q 1)).trans (Nat.le_of_lt hlow)
+            have hnewNe : Nat.dist (2 * (q - 1)) g.fineLength ≠ 1 := by
+              intro hnew
+              have hqpos : 0 < q := by
+                by_contra hq
+                have hq0 : q = 0 := Nat.eq_zero_of_not_pos hq
+                subst q
+                simp [Nat.dist] at hdist
+                omega
+              have hnewEq : g.fineLength - 2 * (q - 1) = 1 := by
+                simpa [Nat.dist_eq_sub_of_le hnewle] using hnew
+              omega
+            simp [hd, hlow, hnewNe]
+          · have hle : g.fineLength ≤ 2 * q := Nat.le_of_not_gt hlow
+            have hdist : 2 * q - g.fineLength = 11 := by
+              simpa [Nat.dist_eq_sub_of_le_right hle] using hd
+            have hnewle : g.fineLength ≤ 2 * (q + 1) := by omega
+            have hnewNe : Nat.dist (2 * (q + 1)) g.fineLength ≠ 1 := by
+              intro hnew
+              have hnewEq : 2 * (q + 1) - g.fineLength = 1 := by
+                simpa [Nat.dist_eq_sub_of_le_right hnewle] using hnew
+              omega
+            simp [hd, hlow, hnewNe]
+        · simp [hd]
+      have hflippable : g.flippable x = g.flippable y := by
+        ext i
+        simp only [ChunkGeometry5.flippable, Finset.mem_filter, Finset.mem_univ, true_and]
+        constructor
+        · intro hx
+          have hx' := (hmergedDistOne (g.fineCount x i)).mp hx
+          have hy' : Nat.dist (2 * mergedFineCount5 g.fineLength (g.fineCount y i))
+              g.fineLength = 1 := by
+            rw [← hmerged i]
+            exact hx'
+          exact (hmergedDistOne (g.fineCount y i)).mpr hy'
+        · intro hy
+          have hy' := (hmergedDistOne (g.fineCount y i)).mp hy
+          have hx' : Nat.dist (2 * mergedFineCount5 g.fineLength (g.fineCount x i))
+              g.fineLength = 1 := by
+            rw [hmerged i]
+            exact hy'
+          exact (hmergedDistOne (g.fineCount x i)).mpr hx'
+      let edgeSet (z : CubeVertex n) : Finset (Fin m) :=
+        Finset.univ.filter fun i => Nat.dist (2 * g.fineCount z i) g.fineLength = 11
+      let innerSet (z : CubeVertex n) : Finset (Fin m) :=
+        Finset.univ.filter fun i =>
+          Nat.dist (2 * mergedFineCount5 g.fineLength (g.fineCount z i)) g.fineLength ≤ 9
+      let edgeCount (z : CubeVertex n) : ℕ := (edgeSet z).card
+      have hdistNeTen (q : ℕ) : Nat.dist (2 * q) g.fineLength ≠ 10 := by
+        obtain ⟨k, hk⟩ := g.fine_length_odd
+        by_cases hlow : 2 * q < g.fineLength
+        · have hdist : g.fineLength - 2 * q ≠ 10 := by
+            intro h
+            omega
+          simpa [Nat.dist_eq_sub_of_le (Nat.le_of_lt hlow)] using hdist
+        · have hle : g.fineLength ≤ 2 * q := Nat.le_of_not_gt hlow
+          have hdist : 2 * q - g.fineLength ≠ 10 := by
+            intro h
+            omega
+          simpa [Nat.dist_eq_sub_of_le_right hle] using hdist
+      have hdistSplit (q : ℕ) :
+          Nat.dist (2 * q) g.fineLength ≤ 11 ↔
+            Nat.dist (2 * q) g.fineLength ≤ 9 ∨ Nat.dist (2 * q) g.fineLength = 11 := by
+        constructor
+        · intro h
+          by_cases h11 : Nat.dist (2 * q) g.fineLength = 11
+          · exact Or.inr h11
+          · left
+            have h10 := hdistNeTen q
+            omega
+        · rintro (h | h)
+          · exact h.trans (by norm_num)
+          · rw [h]
+      have hmergedOuter (q : ℕ) (hed : Nat.dist (2 * q) g.fineLength = 11) :
+          9 < Nat.dist (2 * mergedFineCount5 g.fineLength q) g.fineLength := by
+        by_cases hlow : 2 * q < g.fineLength
+        · have hdist : g.fineLength - 2 * q = 11 := by
+            simpa [Nat.dist_eq_sub_of_le (Nat.le_of_lt hlow)] using hed
+          have hqpos : 0 < q := by
+            by_contra hq
+            have hq0 : q = 0 := Nat.eq_zero_of_not_pos hq
+            subst q
+            have hL : g.fineLength = 11 := by
+              simpa [Nat.dist_eq_sub_of_le (Nat.zero_le _)] using hed
+            omega
+          have hnewle : 2 * (q - 1) ≤ g.fineLength :=
+            (Nat.mul_le_mul_left 2 (Nat.sub_le q 1)).trans (Nat.le_of_lt hlow)
+          have hnewEq : g.fineLength - 2 * (q - 1) = 13 := by omega
+          have hnew : Nat.dist (2 * (q - 1)) g.fineLength = 13 := by
+            rw [Nat.dist_eq_sub_of_le hnewle]
+            exact hnewEq
+          have hmergedEq : mergedFineCount5 g.fineLength q = q - 1 := by
+            simp [mergedFineCount5, hed, hlow]
+          rw [hmergedEq, hnew]
+          norm_num
+        · have hle : g.fineLength ≤ 2 * q := Nat.le_of_not_gt hlow
+          have hdist : 2 * q - g.fineLength = 11 := by
+            simpa [Nat.dist_eq_sub_of_le_right hle] using hed
+          have hnewle : g.fineLength ≤ 2 * (q + 1) := by omega
+          have hnewEq : 2 * (q + 1) - g.fineLength = 13 := by omega
+          have hnew : Nat.dist (2 * (q + 1)) g.fineLength = 13 := by
+            rw [Nat.dist_eq_sub_of_le_right hnewle]
+            exact hnewEq
+          have hmergedEq : mergedFineCount5 g.fineLength q = q + 1 := by
+            simp [mergedFineCount5, hed, hlow]
+          rw [hmergedEq, hnew]
+          norm_num
+      have hpredSplit (z : CubeVertex n) (i : Fin m) :
+          Nat.dist (2 * g.fineCount z i) g.fineLength ≤ 11 ↔
+            i ∈ innerSet z ∨ i ∈ edgeSet z := by
+        by_cases hed : Nat.dist (2 * g.fineCount z i) g.fineLength = 11
+        · simp [innerSet, edgeSet, hed, hmergedOuter _ hed]
+        · have hmergedEq :
+              mergedFineCount5 g.fineLength (g.fineCount z i) = g.fineCount z i := by
+            simp [mergedFineCount5, hed]
+          simp only [innerSet, edgeSet, Finset.mem_filter, Finset.mem_univ, true_and]
+          rw [hmergedEq]
+          exact hdistSplit (g.fineCount z i)
+      have hseverityFormula (z : CubeVertex n) :
+          g.severity z = (innerSet z).card + (edgeSet z).card := by
+        have hfilter :
+            (Finset.univ.filter fun i : Fin m =>
+              Nat.dist (2 * g.fineCount z i) g.fineLength ≤ 11) = innerSet z ∪ edgeSet z := by
+          ext i
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_union]
+          exact hpredSplit z i
+        have hdisj : Disjoint (innerSet z) (edgeSet z) := by
+          apply Finset.disjoint_left.mpr
+          intro i hi he
+          have hi' := (Finset.mem_filter.mp hi).2
+          have he' := (Finset.mem_filter.mp he).2
+          have houter := hmergedOuter (g.fineCount z i) he'
+          exact (not_lt_of_ge hi') houter
+        unfold ChunkGeometry5.severity
+        rw [hfilter, Finset.card_union_of_disjoint hdisj]
+      have hinnerEq : (innerSet x).card = (innerSet y).card := by
+        apply congrArg Finset.card
+        ext i
+        simp only [innerSet, Finset.mem_filter, Finset.mem_univ, true_and]
+        rw [hmerged i]
+      have hedgeEq : edgeCount x = edgeCount y := by
+        have hx := hseverityFormula x
+        have hy := hseverityFormula y
+        dsimp [edgeCount] at *
+        omega
+      have hrawMergedMod (q : ℕ) :
+          Nat.ModEq 2 q
+            (mergedFineCount5 g.fineLength q +
+              if Nat.dist (2 * q) g.fineLength = 11 then 1 else 0) := by
+        by_cases hed : Nat.dist (2 * q) g.fineLength = 11
+        · by_cases hlow : 2 * q < g.fineLength
+          · have hqpos : 0 < q := by
+              by_contra hq
+              have hq0 : q = 0 := Nat.eq_zero_of_not_pos hq
+              subst q
+              have hL : g.fineLength = 11 := by
+                simpa [Nat.dist_eq_sub_of_le (Nat.zero_le _)] using hed
+              omega
+            have hqle : 1 ≤ q := Nat.one_le_iff_ne_zero.mpr (Nat.ne_of_gt hqpos)
+            simp [Nat.ModEq, mergedFineCount5, hed, hlow, Nat.sub_add_cancel hqle]
+          · simp [Nat.ModEq, mergedFineCount5, hed, hlow]
+            omega
+        · simp [Nat.ModEq, mergedFineCount5, hed]
+      have hindicator (z : CubeVertex n) :
+          (∑ i : Fin m, if Nat.dist (2 * g.fineCount z i) g.fineLength = 11 then 1 else 0) =
+            edgeCount z := by
+        simp [edgeCount, edgeSet]
+      have hFineParity (z : CubeVertex n) :
+          (∑ i : Fin m, g.fineCount z i) % 2 =
+            ((∑ i : Fin m, mergedFineCount5 g.fineLength (g.fineCount z i)) +
+              edgeCount z) % 2 := by
+        let f : Fin m → ℕ := fun i => g.fineCount z i
+        let q : Fin m → ℕ := fun i =>
+          mergedFineCount5 g.fineLength (g.fineCount z i) +
+            (if Nat.dist (2 * g.fineCount z i) g.fineLength = 11 then 1 else 0)
+        have hmodSum : Nat.ModEq 2 (∑ i ∈ (Finset.univ : Finset (Fin m)), f i)
+            (∑ i ∈ (Finset.univ : Finset (Fin m)), q i) := by
+          exact Nat.ModEq.sum (s := Finset.univ)
+            (fun i hi => hrawMergedMod (g.fineCount z i))
+        have hqsum : (∑ i : Fin m, q i) =
+            (∑ i : Fin m, mergedFineCount5 g.fineLength (g.fineCount z i)) + edgeCount z := by
+          dsimp [q]
+          rw [Finset.sum_add_distrib, hindicator z]
+        have hmod : Nat.ModEq 2 (∑ i : Fin m, g.fineCount z i)
+            ((∑ i : Fin m, mergedFineCount5 g.fineLength (g.fineCount z i)) + edgeCount z) := by
+          rw [hqsum] at hmodSum
+          simpa [f] using hmodSum
+        exact hmod
+      let C : Finset (Fin n) := Finset.univ.biUnion g.coarseChunks
+      let F : Finset (Fin n) := Finset.univ.biUnion g.fineChunks
+      have hCOnes (z : CubeVertex n) :
+          (C.filter fun a => z a = true).card = ∑ i, g.coarseCount z i := by
+        have hdisj : ((Finset.univ : Finset (Fin coarseChunkCount5)) : Set _).PairwiseDisjoint
+            (fun i => (g.coarseChunks i).filter fun a => z a = true) := by
+          intro i hi j hj hij
+          apply Finset.disjoint_left.mpr
+          intro a ha hb
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.1 i j hij))
+            (Finset.mem_filter.mp ha).1 (Finset.mem_filter.mp hb).1
+        have hunion : C.filter (fun a => z a = true) =
+            Finset.univ.biUnion (fun i => (g.coarseChunks i).filter fun a => z a = true) := by
+          ext a
+          simp [C, Finset.mem_biUnion, Finset.mem_filter]
+        rw [hunion]
+        simpa [ChunkGeometry5.coarseCount] using Finset.card_biUnion hdisj
+      have hFOnes (z : CubeVertex n) :
+          (F.filter fun a => z a = true).card = ∑ i, g.fineCount z i := by
+        have hdisj : ((Finset.univ : Finset (Fin m)) : Set _).PairwiseDisjoint
+            (fun i => (g.fineChunks i).filter fun a => z a = true) := by
+          intro i hi j hj hij
+          apply Finset.disjoint_left.mpr
+          intro a ha hb
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.1 i j hij))
+            (Finset.mem_filter.mp ha).1 (Finset.mem_filter.mp hb).1
+        have hunion : F.filter (fun a => z a = true) =
+            Finset.univ.biUnion (fun i => (g.fineChunks i).filter fun a => z a = true) := by
+          ext a
+          simp [F, Finset.mem_biUnion, Finset.mem_filter]
+        rw [hunion]
+        simpa [ChunkGeometry5.fineCount] using Finset.card_biUnion hdisj
+      have hcoverClass (a : Fin n) : a ∈ C ∨ a ∈ F ∨ a ∈ g.residual := by
+        have ha : a ∈ (Finset.univ : Finset (Fin n)) := Finset.mem_univ _
+        rw [← g.chunks_cover] at ha
+        simpa [C, F, Finset.mem_biUnion] using ha
+      have htrueUnion (z : CubeVertex n) :
+          (Finset.univ.filter fun a : Fin n => z a = true) =
+            ((C.filter fun a => z a = true) ∪ (F.filter fun a => z a = true)) ∪
+              (g.residual.filter fun a => z a = true) := by
+        ext a
+        simp only [Finset.mem_filter, Finset.mem_union, Finset.mem_univ, true_and]
+        constructor
+        · intro hbit
+          rcases hcoverClass a with ha | ha | ha
+          · exact Or.inl (Or.inl ⟨ha, hbit⟩)
+          · exact Or.inl (Or.inr ⟨ha, hbit⟩)
+          · exact Or.inr ⟨ha, hbit⟩
+        · rintro ((⟨ha, hbit⟩ | ⟨ha, hbit⟩) | ⟨ha, hbit⟩)
+          · exact hbit
+          · exact hbit
+          · exact hbit
+      have hCF : Disjoint C F := by
+        apply Finset.disjoint_left.mpr
+        intro a haC haF
+        rcases Finset.mem_biUnion.mp haC with ⟨i, _, hai⟩
+        rcases Finset.mem_biUnion.mp haF with ⟨j, _, haj⟩
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i j)) hai haj
+      have hCR : Disjoint (C ∪ F) g.residual := by
+        apply Finset.disjoint_left.mpr
+        intro a ha hres'
+        rcases Finset.mem_union.mp ha with haC | haF
+        · rcases Finset.mem_biUnion.mp haC with ⟨i, _, hai⟩
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 i)) hai hres'
+        · rcases Finset.mem_biUnion.mp haF with ⟨i, _, hai⟩
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai hres'
+      have hCFtrue (z : CubeVertex n) :
+          Disjoint (C.filter fun a => z a = true) (F.filter fun a => z a = true) := by
+        apply Finset.disjoint_left.mpr
+        intro a ha hb
+        exact (Finset.disjoint_left.mp hCF) (Finset.mem_filter.mp ha).1
+          (Finset.mem_filter.mp hb).1
+      have hCRtrue (z : CubeVertex n) :
+          Disjoint ((C.filter fun a => z a = true) ∪ (F.filter fun a => z a = true))
+            (g.residual.filter fun a => z a = true) := by
+        apply Finset.disjoint_left.mpr
+        intro a ha hb
+        rcases Finset.mem_union.mp ha with haC | haF
+        · exact (Finset.disjoint_left.mp hCR)
+            (Finset.mem_union.mpr (Or.inl (Finset.mem_filter.mp haC).1))
+            (Finset.mem_filter.mp hb).1
+        · exact (Finset.disjoint_left.mp hCR)
+            (Finset.mem_union.mpr (Or.inr (Finset.mem_filter.mp haF).1))
+            (Finset.mem_filter.mp hb).1
+      have honesDecomp (z : CubeVertex n) :
+          (Finset.univ.filter fun a : Fin n => z a = true).card =
+            (∑ i, g.coarseCount z i) + (∑ i, g.fineCount z i) +
+              (g.residual.filter fun a => z a = true).card := by
+        rw [htrueUnion z, Finset.card_union_of_disjoint (hCRtrue z),
+          Finset.card_union_of_disjoint (hCFtrue z), hCOnes z, hFOnes z]
+      have hresOnes : (g.residual.filter fun a => x a = true).card =
+          (g.residual.filter fun a => y a = true).card := by
+        congr 1
+        ext a
+        by_cases ha : a ∈ g.residual
+        · simp [ha, hres ⟨a, ha⟩]
+        · simp [ha]
+      have hcoarseSum : (∑ i, g.coarseCount x i) = ∑ i, g.coarseCount y i :=
+        Finset.sum_congr rfl (fun i hi => hcoarseCount i)
+      have hmergedSum :
+          (∑ i, mergedFineCount5 g.fineLength (g.fineCount x i)) =
+            ∑ i, mergedFineCount5 g.fineLength (g.fineCount y i) :=
+        Finset.sum_congr rfl (fun i hi => hmerged i)
+      have hmodTriple (a b c : ℕ) :
+          (a + b + c) % 2 = ((a % 2 + b % 2) % 2 + c % 2) % 2 := by omega
+      have htotalMod :
+          ((Finset.univ.filter fun a : Fin n => x a = true).card) % 2 =
+            ((Finset.univ.filter fun a : Fin n => y a = true).card) % 2 := by
+        rw [honesDecomp x, honesDecomp y]
+        rw [hmodTriple, hmodTriple, hresOnes, hcoarseSum,
+          hFineParity x, hFineParity y, hmergedSum, hedgeEq] <;> omega
+      have hsign : g.sign x = g.sign y := by
+        funext i
+        rw [signCode x i, signCode y i, hmerged i]
+      refine ⟨?_, hsign, hseverity, ?_, ?_, ?_, ?_⟩
+      · change (g.coarseBin x, decide (g.boundary x)) =
+          (g.coarseBin y, decide (g.boundary y))
+        exact hkey
+      · change Even (Finset.univ.filter (fun i => x i = true)).card ↔
+          Even (Finset.univ.filter (fun i => y i = true)).card
+        rw [Nat.even_iff, Nat.even_iff, htotalMod]
+      · simp [ChunkGeometry5.evenType, ChunkGeometry5.typeKeys, hkey, hcoarseRange,
+          hflippable, hsign, hseverity]
+      · simp [ChunkGeometry5.optionalKey, hkey, hsign, hseverity]
+      · simp [ChunkGeometry5.roleKey, hkey, hsign, hseverity]
+    data_determine_state := by
+      intro x y hres hcoarse hmerged hsev
+      apply Prod.ext
+      · apply Prod.ext
+        · funext a
+          exact hres a.1 a.2
+        · funext i
+          exact Fin.ext (hcoarse i)
+      · apply Prod.ext
+        · funext i
+          exact Fin.ext (hmerged i)
+        · exact Fin.ext hsev
+    neighbors := fun s => Finset.univ.filter (fun t : SiteData =>
+      ∃ x y, dataOf x = s ∧ dataOf y = t ∧ (cube n).Adj x y)
+    mem_neighbors := by
+      intro s t
+      simp [Finset.mem_filter, dataOf]
+    degree_bound := by
+        all_goals
+          intro s
+          classical
+          let N : Finset SiteData := Finset.univ.filter (fun t : SiteData =>
+            ∃ x y, dataOf x = s ∧ dataOf y = t ∧ (cube n).Adj x y)
+          change N.card ≤ 2 * n
+          by_cases hs : ∃ u, dataOf u = s
+          · obtain ⟨u, hus⟩ := hs
+            have hnPos : 0 < n := by omega
+            let defaultCoord : Fin n := ⟨0, hnPos⟩
+            let pickCoord (A : Finset (Fin n)) (z : CubeVertex n) (b : Bool) : Fin n :=
+              if h : ∃ a, a ∈ A ∧ z a = b then Classical.choose h else defaultCoord
+            have hpickCoord (A : Finset (Fin n)) (z : CubeVertex n) (b : Bool)
+                (h : ∃ a, a ∈ A ∧ z a = b) :
+                pickCoord A z b ∈ A ∧ z (pickCoord A z b) = b := by
+              dsimp [pickCoord]
+              rw [dif_pos h]
+              exact Classical.choose_spec h
+            let fineSource (i : Fin m) (e : Bool) : CubeVertex n :=
+              if e then
+                if h : ∃ z, dataOf z = s ∧
+                    Nat.dist (2 * g.fineCount z i) g.fineLength = 11 then Classical.choose h
+                else u
+              else
+                if h : ∃ z, dataOf z = s ∧
+                    Nat.dist (2 * g.fineCount z i) g.fineLength ≠ 11 then Classical.choose h
+                else u
+            have hfineSourcePos (i : Fin m)
+                (h : ∃ z, dataOf z = s ∧ Nat.dist (2 * g.fineCount z i) g.fineLength = 11) :
+                dataOf (fineSource i true) = s ∧
+                  Nat.dist (2 * g.fineCount (fineSource i true) i) g.fineLength = 11 := by
+              dsimp [fineSource]
+              rw [dif_pos h]
+              exact Classical.choose_spec h
+            have hfineSourceNeg (i : Fin m)
+                (h : ∃ z, dataOf z = s ∧ Nat.dist (2 * g.fineCount z i) g.fineLength ≠ 11) :
+                dataOf (fineSource i false) = s ∧
+                  Nat.dist (2 * g.fineCount (fineSource i false) i) g.fineLength ≠ 11 := by
+              dsimp [fineSource]
+              rw [dif_pos h]
+              exact Classical.choose_spec h
+            let CoarseLabel : Type := Fin coarseChunkCount5 × Bool
+            let FineLabel : Type := Fin m × (Bool × Bool)
+            let Labels : Type := g.residual ⊕ (CoarseLabel ⊕ FineLabel)
+            let output : Labels → SiteData := fun label =>
+              match label with
+              | .inl a => dataOf (flipVertex5 u a.1)
+              | .inr (.inl (i, b)) =>
+                  dataOf (flipVertex5 u (pickCoord (g.coarseChunks i) u b))
+              | .inr (.inr (i, (e, b))) =>
+                  dataOf (flipVertex5 (fineSource i e)
+                    (pickCoord (g.fineChunks i) (fineSource i e) b))
+            have hsubset : N ⊆ Finset.univ.image output := by
+              intro t ht
+              rcases (Finset.mem_filter.mp ht).2 with ⟨v, w, hv, hw, hadj⟩
+              have hbase : dataOf u = dataOf v := hus.trans hv.symm
+              have adjFlip (p q : CubeVertex n) (hpq : (cube n).Adj p q) :
+                  ∃ a : Fin n, q = flipVertex5 p a := by
+                have hcard : (Finset.univ.filter fun i : Fin n => p i ≠ q i).card = 1 := by
+                  change _root_.hammingDist p q = 1 at hpq
+                  simpa [_root_.hammingDist] using hpq
+                obtain ⟨c, hc⟩ := Finset.card_eq_one.mp hcard
+                have hdiff (i : Fin n)
+                    (hi : i ∈ Finset.univ.filter (fun j : Fin n => p j ≠ q j)) : p i ≠ q i :=
+                  (Finset.mem_filter.mp hi).2
+                have hcMem : c ∈ Finset.univ.filter (fun i : Fin n => p i ≠ q i) := by
+                  rw [hc]
+                  simp
+                have hbit : p c ≠ q c := hdiff c hcMem
+                have hsame (i : Fin n) (hic : i ≠ c) : p i = q i := by
+                  by_contra hne
+                  have hi : i ∈ Finset.univ.filter (fun j : Fin n => p j ≠ q j) := by simp [hne]
+                  rw [hc] at hi
+                  exact hic (Finset.mem_singleton.mp hi)
+                refine ⟨c, ?_⟩
+                funext i
+                by_cases hic : i = c
+                · subst i
+                  cases hp : p c <;> cases hq : q c
+                  · exact (hbit (by rw [hp, hq])).elim
+                  · simp [flipVertex5, hp, hq]
+                  · simp [flipVertex5, hp, hq]
+                  · exact (hbit (by rw [hp, hq])).elim
+                · have hs := hsame i hic
+                  simpa only [flipVertex5, Function.update_of_ne hic] using hs.symm
+              obtain ⟨a, hwa⟩ := adjFlip v w hadj
+              have hwt : dataOf (flipVertex5 v a) = t := by
+                rw [← hwa]
+                exact hw
+              rcases hcategory a with hres | hcoarse | hfine
+              · let r : g.residual := ⟨a, hres⟩
+                refine Finset.mem_image.mpr ⟨Sum.inl r, Finset.mem_univ _, ?_⟩
+                change dataOf (flipVertex5 u a) = t
+                exact (hresFlipDataEq hbase r).trans hwt
+              · rcases hcoarse with ⟨i, ha⟩
+                rcases hbaseParts hbase with ⟨_, hcounts, _, _⟩
+                have hmatch : ∃ b ∈ g.coarseChunks i, u b = v a :=
+                  hfindBit (g.coarseChunks i) u v (by
+                    simpa [ChunkGeometry5.coarseCount] using hcounts i) a ha
+                have hpick := hpickCoord (g.coarseChunks i) u (v a) hmatch
+                refine Finset.mem_image.mpr
+                  ⟨Sum.inr (Sum.inl (i, v a)), Finset.mem_univ _, ?_⟩
+                change dataOf (flipVertex5 u (pickCoord (g.coarseChunks i) u (v a))) = t
+                exact (hcoarseFlipDataEq hbase i (pickCoord (g.coarseChunks i) u (v a)) a
+                  hpick.1 ha hpick.2).trans hwt
+              · rcases hfine with ⟨i, ha⟩
+                by_cases hedge : Nat.dist (2 * g.fineCount v i) g.fineLength = 11
+                · have hsource := hfineSourcePos i ⟨v, hv, hedge⟩
+                  have hbaseSource : dataOf (fineSource i true) = dataOf v :=
+                    hsource.1.trans hv.symm
+                  rcases hbaseParts hbaseSource with ⟨_, _, hmerged, _⟩
+              have hmode :
+                  (Nat.dist (2 * g.fineCount (fineSource i true) i) g.fineLength = 11) ↔
+                    (Nat.dist (2 * g.fineCount v i) g.fineLength = 11) :=
+                ⟨fun _ => hedge, fun _ => hsource.2⟩
+                  have hraw := hrawCountSameMode i (hmerged i) hmode
+                  have hmatch : ∃ b ∈ g.fineChunks i, fineSource i true b = v a :=
+                    hfindBit (g.fineChunks i) (fineSource i true) v (by
+                      simpa [ChunkGeometry5.fineCount] using hraw) a ha
+                  have hpick := hpickCoord (g.fineChunks i) (fineSource i true) (v a) hmatch
+                  refine Finset.mem_image.mpr
+                    ⟨Sum.inr (Sum.inr (i, (true, v a))), Finset.mem_univ _, ?_⟩
+                  change dataOf (flipVertex5 (fineSource i true)
+                    (pickCoord (g.fineChunks i) (fineSource i true) (v a))) = t
+                  exact (hfineFlipDataEq hbaseSource i
+                    (pickCoord (g.fineChunks i) (fineSource i true) (v a)) a
+                    hpick.1 ha hraw hpick.2).trans hwt
+                · have hsource := hfineSourceNeg i ⟨v, hv, hedge⟩
+                  have hbaseSource : dataOf (fineSource i false) = dataOf v :=
+                    hsource.1.trans hv.symm
+                  rcases hbaseParts hbaseSource with ⟨_, _, hmerged, _⟩
+                  have hmode :
+                      (Nat.dist (2 * g.fineCount (fineSource i false) i) g.fineLength = 11) ↔
+                        (Nat.dist (2 * g.fineCount v i) g.fineLength = 11) :=
+                    ⟨fun hh => False.elim (hsource.2 hh), fun hh => False.elim (hedge hh)⟩
+                  have hraw := hrawCountSameMode i (hmerged i) hmode
+                  have hmatch : ∃ b ∈ g.fineChunks i, fineSource i false b = v a :=
+                    hfindBit (g.fineChunks i) (fineSource i false) v (by
+                      simpa [ChunkGeometry5.fineCount] using hraw) a ha
+                  have hpick := hpickCoord (g.fineChunks i) (fineSource i false) (v a) hmatch
+                  refine Finset.mem_image.mpr
+                    ⟨Sum.inr (Sum.inr (i, (false, v a))), Finset.mem_univ _, ?_⟩
+                  change dataOf (flipVertex5 (fineSource i false)
+                    (pickCoord (g.fineChunks i) (fineSource i false) (v a))) = t
+                  exact (hfineFlipDataEq hbaseSource i
+                    (pickCoord (g.fineChunks i) (fineSource i false) (v a)) a
+                    hpick.1 ha hraw hpick.2).trans hwt
+            have hLabelCard : Fintype.card Labels =
+                g.residual.card + 2 * coarseChunkCount5 + 4 * m := by
+              simp [Labels, CoarseLabel, FineLabel, Fintype.card_bool]
+              ring
+            let fineUnion : Finset (Fin n) := Finset.univ.biUnion g.fineChunks
+            let occupied : Finset (Fin n) :=
+              (Finset.univ.biUnion g.coarseChunks) ∪ fineUnion
+            have hfinePair : ((Finset.univ : Finset (Fin m)) : Set (Fin m)).PairwiseDisjoint
+                g.fineChunks := by
+              intro i _ j _ hij
+              exact g.chunks_disjoint.2.2.1 i j hij
+            have hFineCard : fineUnion.card = ∑ i : Fin m, (g.fineChunks i).card := by
+              simpa [fineUnion] using Finset.card_biUnion hfinePair
+            have hFinePos : 1 ≤ g.fineLength := by omega
+            have hFineSum : (∑ i : Fin m, (g.fineChunks i).card) = m * g.fineLength := by
+              simp [g.fine_chunk_length]
+            have hmFine : m ≤ fineUnion.card := by
+              rw [hFineCard, hFineSum]
+              nlinarith
+            have hfineSub : fineUnion ⊆ occupied := by
+              intro a ha
+              exact Finset.mem_union_right _ ha
+            have hmOcc : m ≤ occupied.card := hmFine.trans (Finset.card_le_card hfineSub)
+            have hoccReal : (occupied.card : ℝ) ≤ Real.sqrt (n : ℝ) := by
+              simpa [occupied, fineUnion, Real.sqrt_eq_rpow] using g.occupied_sublinear
+            have hmReal : (m : ℝ) ≤ Real.sqrt (n : ℝ) := by
+              have hmOccReal : (m : ℝ) ≤ (occupied.card : ℝ) := by exact_mod_cast hmOcc
+              exact hmOccReal.trans hoccReal
+            have hrootSq : (Real.sqrt (n : ℝ)) ^ 2 = n :=
+              Real.sq_sqrt (by positivity)
+            have hroot100 : (100 : ℝ) ≤ Real.sqrt (n : ℝ) := by
+              exact (by norm_num : (100 : ℝ) ≤ 144).trans hsqrtN
+            have hrootSmall : Real.sqrt (n : ℝ) ≤ (n : ℝ) / 100 := by
+              apply (le_div_iff₀ (by norm_num : (0 : ℝ) < 100)).2
+              nlinarith [hrootSq, hroot100]
+            have hbudget : (600 : ℝ) + 4 * (m : ℝ) ≤ (n : ℝ) := by
+              nlinarith [hmReal, hrootSmall, hnR]
+            have hresNat : g.residual.card ≤ n := by
+              simpa using (Finset.card_le_univ g.residual)
+            have hbudgetNat : 600 + 4 * m ≤ n := by exact_mod_cast hbudget
+            have hboundNat : g.residual.card + 2 * coarseChunkCount5 + 4 * m ≤ 2 * n := by
+              have htemp : g.residual.card + 600 + 4 * m ≤ 2 * n := by omega
+              simpa [coarseChunkCount5] using htemp
+            calc
+              N.card ≤ (Finset.univ.image output).card := Finset.card_le_card hsubset
+              _ ≤ Fintype.card Labels := by
+                calc
+                  _ ≤ (Finset.univ : Finset Labels).card := Finset.card_image_le
+                  _ = Fintype.card Labels := by simp
+              _ = g.residual.card + 2 * coarseChunkCount5 + 4 * m := hLabelCard
+              _ ≤ 2 * n := hboundNat
+          · have hempty : N = ∅ := by
+              ext t
+              simp only [N, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_empty,
+                iff_false]
+              rintro ⟨x, y, hx, hy, hadj⟩
+              exact hs ⟨x, hx⟩
+            simp [hempty]
+    even_distance := by
+      intro b a a' ha ha' hEven hEven'
+      classical
+      change a ∈ Finset.univ.filter (fun t : SiteData =>
+        ∃ x y, dataOf x = b ∧ dataOf y = t ∧ (cube n).Adj x y) at ha
+      change a' ∈ Finset.univ.filter (fun t : SiteData =>
+        ∃ x y, dataOf x = b ∧ dataOf y = t ∧ (cube n).Adj x y) at ha'
+      obtain ⟨u, x, hub, hxa, hux⟩ := (Finset.mem_filter.mp ha).2
+      obtain ⟨v, y, hvb, hya, hvy⟩ := (Finset.mem_filter.mp ha').2
+      have adjFlip (p q : CubeVertex n) (hpq : (cube n).Adj p q) :
+          ∃ c : Fin n, q = flipVertex5 p c := by
+        have hcard : (Finset.univ.filter fun i : Fin n => p i ≠ q i).card = 1 := by
+          change _root_.hammingDist p q = 1 at hpq
+          simpa [_root_.hammingDist] using hpq
+        obtain ⟨c, hc⟩ := Finset.card_eq_one.mp hcard
+        have hdiff (i : Fin n) (hi : i ∈ Finset.univ.filter (fun j : Fin n => p j ≠ q j)) :
+            p i ≠ q i := (Finset.mem_filter.mp hi).2
+        have hcMem : c ∈ Finset.univ.filter (fun i : Fin n => p i ≠ q i) := by
+          rw [hc]
+          simp
+        have hbit : p c ≠ q c := hdiff c hcMem
+        have hsame (i : Fin n) (hic : i ≠ c) : p i = q i := by
+          by_contra hne
+          have hi : i ∈ Finset.univ.filter (fun j : Fin n => p j ≠ q j) := by
+            simp [hne]
+          rw [hc] at hi
+          exact hic (Finset.mem_singleton.mp hi)
+        refine ⟨c, ?_⟩
+        funext i
+        by_cases hic : i = c
+        · subst i
+          cases hp : p c <;> cases hq : q c
+          · exact (hbit (by rw [hp, hq])).elim
+          · simp [flipVertex5, hp, hq]
+          · simp [flipVertex5, hp, hq]
+          · exact (hbit (by rw [hp, hq])).elim
+        · have hs := hsame i hic
+          simpa only [flipVertex5, Function.update_of_ne hic] using hs.symm
+      obtain ⟨ca, hxaFlip⟩ := adjFlip u x hux
+      obtain ⟨ca', hyaFlip⟩ := adjFlip v y hvy
+      let code : SiteData → CubeVertex d := fun s k => coordBit s (coordEquiv.symm k)
+      have hstepUX : _root_.hammingDist (code (dataOf u)) (code (dataOf x)) ≤ 4 := by
+        rw [hxaFlip]
+        exact hflipCodeBound u ca
+      have hstepXU : _root_.hammingDist (code (dataOf x)) (code (dataOf u)) ≤ 4 := by
+        rw [hxaFlip]
+        calc
+          _ = _ := _root_.hammingDist_comm _ _
+          _ ≤ 4 := hflipCodeBound u ca
+      have hstepVY : _root_.hammingDist (code (dataOf v)) (code (dataOf y)) ≤ 4 := by
+        rw [hyaFlip]
+        exact hflipCodeBound v ca'
+      have hcodeUV : code (dataOf u) = code (dataOf v) := by
+        funext k
+        change coordBit (dataOf u) (coordEquiv.symm k) =
+          coordBit (dataOf v) (coordEquiv.symm k)
+        rw [hub, hvb]
+      have hstepUV : _root_.hammingDist (code (dataOf u)) (code (dataOf v)) = 0 := by
+        rw [hcodeUV]
+        simp [_root_.hammingDist]
+      have htriXY : _root_.hammingDist (code (dataOf x)) (code (dataOf y)) ≤
+          _root_.hammingDist (code (dataOf x)) (code (dataOf u)) +
+            _root_.hammingDist (code (dataOf u)) (code (dataOf y)) :=
+        _root_.hammingDist_triangle (code (dataOf x)) (code (dataOf u)) (code (dataOf y))
+      have htriUY : _root_.hammingDist (code (dataOf u)) (code (dataOf y)) ≤
+          _root_.hammingDist (code (dataOf u)) (code (dataOf v)) +
+            _root_.hammingDist (code (dataOf v)) (code (dataOf y)) :=
+        _root_.hammingDist_triangle (code (dataOf u)) (code (dataOf v)) (code (dataOf y))
+      change _root_.hammingDist (code a) (code a') ≤ 8
+      calc
+        _ = _ := by rw [← hxa, ← hya]
+        _ ≤ _ := htriXY
+        _ ≤ _ := Nat.add_le_add_left htriUY _
+        _ ≤ 8 := by omega
+    dimension_upper := by
+      let C : Finset (Fin n) := Finset.univ.biUnion g.coarseChunks
+      let F : Finset (Fin n) := Finset.univ.biUnion g.fineChunks
+      have hcc : ((Finset.univ : Finset (Fin coarseChunkCount5)) : Set _).PairwiseDisjoint
+          g.coarseChunks := by
+        intro i hi j hj hij
+        exact g.chunks_disjoint.1 i j hij
+      have hff : ((Finset.univ : Finset (Fin m)) : Set _).PairwiseDisjoint
+          g.fineChunks := by
+        intro i hi j hj hij
+        exact g.chunks_disjoint.2.2.1 i j hij
+      have hC : C.card = ∑ i, (g.coarseChunks i).card := by
+        simpa [C] using Finset.card_biUnion hcc
+      have hF : F.card = ∑ i, (g.fineChunks i).card := by
+        simpa [F] using Finset.card_biUnion hff
+      have hCF : Disjoint C F := by
+        apply Finset.disjoint_left.mpr
+        intro a haC haF
+        rcases Finset.mem_biUnion.mp haC with ⟨i, _, hai⟩
+        rcases Finset.mem_biUnion.mp haF with ⟨j, _, haj⟩
+        exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.1 i j)) hai haj
+      have hCR : Disjoint (C ∪ F) g.residual := by
+        apply Finset.disjoint_left.mpr
+        intro a ha hres
+        rcases Finset.mem_union.mp ha with haC | haF
+        · rcases Finset.mem_biUnion.mp haC with ⟨i, _, hai⟩
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.1 i)) hai hres
+        · rcases Finset.mem_biUnion.mp haF with ⟨i, _, hai⟩
+          exact (Finset.disjoint_left.mp (g.chunks_disjoint.2.2.2.2 i)) hai hres
+      have hcover : C.card + F.card + g.residual.card = n := by
+        have h := congrArg Finset.card g.chunks_cover
+        rw [Finset.card_union_of_disjoint hCR, Finset.card_union_of_disjoint hCF] at h
+        simpa [C, F] using h
+      have hlen : 1 ≤ g.fineLength := by
+        obtain ⟨k, hk⟩ := g.fine_length_odd
+        omega
+      have hFsize : F.card = m * g.fineLength := by
+        calc
+          F.card = ∑ i, (g.fineChunks i).card := hF
+          _ = ∑ _i : Fin m, g.fineLength := by simp [g.fine_chunk_length]
+          _ = m * g.fineLength := by simp
+      have hmNat : m ≤ (C ∪ F).card := by
+        have hmono : F.card ≤ (C ∪ F).card := Finset.card_mono Finset.subset_union_right
+        calc
+          m ≤ m * g.fineLength := by simpa using Nat.mul_le_mul_left m hlen
+          _ = F.card := hFsize.symm
+          _ ≤ (C ∪ F).card := hmono
+      have hmReal : (m : ℝ) ≤ Real.sqrt (n : ℝ) := by
+        have hmCast : (m : ℝ) ≤ ((C ∪ F).card : ℝ) := by exact_mod_cast hmNat
+        have hocc : ((C ∪ F).card : ℝ) ≤ Real.sqrt (n : ℝ) := by
+          simpa [C, F, Real.sqrt_eq_rpow] using g.occupied_sublinear
+        exact hmCast.trans hocc
+      have hCoarseDim : Fintype.card CoarseCoord =
+          (∑ i : Fin coarseChunkCount5, (g.coarseChunks i).card) + coarseChunkCount5 := by
+        simp [CoarseCoord, Fintype.card_sigma, Fintype.card_fin, Finset.sum_add_distrib]
+      have hFineDim : Fintype.card FineCoord =
+          (∑ i : Fin m, (g.fineChunks i).card) + 2 * m := by
+        simp [FineCoord, Fintype.card_sigma, Fintype.card_fin, Finset.sum_add_distrib]
+        ring
+      have hdFormula : d = g.residual.card +
+          (∑ i, (g.coarseChunks i).card) +
+          (∑ i, (g.fineChunks i).card) + 3 * m + 301 := by
+        dsimp [d, Coord]
+        simp only [Fintype.card_sum, Fintype.card_coe, hCoarseDim, hFineDim, Fintype.card_fin]
+        norm_num [coarseChunkCount5]
+        ring
+      have hdNat : d ≤ n + 3 * m + 301 := by
+        rw [hdFormula, ← hC, ← hF]
+        omega
+      have hdReal : (d : ℝ) ≤ n + 3 * (m : ℝ) + 301 := by exact_mod_cast hdNat
+      change (d : ℝ) ≤ n + 3 * (n : ℝ) ^ (1 / 2 : ℝ) + 301
+      have hsqrt : Real.sqrt (n : ℝ) = (n : ℝ) ^ (1 / 2 : ℝ) := by rw [Real.sqrt_eq_rpow]
+      rw [← hsqrt]
+      have hscale : 3 * (m : ℝ) ≤ 3 * Real.sqrt (n : ℝ) :=
+        mul_le_mul_of_nonneg_left hmReal (by norm_num)
+      linarith [hdReal, hscale]
+  }
+  refine ⟨S, ?_⟩
+  have hdim : (S.d : ℝ) ≤ n + 3 * Real.sqrt (n : ℝ) + 301 := by
+    simpa [Real.sqrt_eq_rpow] using S.dimension_upper
+  change (S.d : ℝ) ≤ (1 + ε) * n
+  calc
+    (S.d : ℝ) ≤ n + 3 * Real.sqrt (n : ℝ) + 301 := hdim
+    _ ≤ n + ε * n := by nlinarith [hdimNeed]
+    _ = (1 + ε) * n := by ring
 
 end HypercubeRamsey

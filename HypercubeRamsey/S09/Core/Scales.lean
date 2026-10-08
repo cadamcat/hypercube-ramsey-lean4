@@ -179,7 +179,7 @@ def ScalesAt9 (P : Params9) (n : ℕ) : Prop :=
   ((P.radius n : ℝ) + 8) * Real.log ((n : ℝ) + 1) + (n : ℝ) ^ (P.xS : ℝ) + 4 * (n : ℝ) ^ P.u ≤
     gainConst9 * (n : ℝ) * P.aStar n / 100
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 /-- Arithmetic consequences of `Params9.Valid` for the internal scales: the exponent facts, and the
 per-dimension facts for all large `n`.  (In the sublinear case `y_s < y_m < 1 - σ < y_d` and `1 - σ + ε < y_d`;
 in the linear case `S_s + log(100/49)(T + m) ≈ (α_s + .0713 α_d) n + o(n) < α_d n`.) -/

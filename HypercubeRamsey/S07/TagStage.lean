@@ -121,7 +121,7 @@ theorem cross_fail_mean (D₀ d : ℝ) (hd : 0 < d) (hd' : d < 1 / 8) :
       dsimp [q]
       ring
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000
 /-- L7.1e(i)–(ii) (07:163–175): the tag events satisfy the local-lemma input with charge `n^{-D₀/4}`: `B_g`
 reads the tags on `{g} ∪ E(g)`, two events meet only within grid distance two, and Markov's inequality gives
 `Pr(B_g) ≤ 4s²K n^{-D₀/2} ≤ n^{-D₀/4} (1 - n^{-D₀/4})^{(2s+1)²}` for large `n`. -/

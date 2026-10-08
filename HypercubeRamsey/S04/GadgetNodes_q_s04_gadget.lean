@@ -1114,7 +1114,7 @@ private theorem clipped_endpoint_counts (S ℓ : ℕ) (hS : 100 ≤ S)
   · simpa [low, w, lo] using hlowLarge
   · simpa [high, w, lo, hi] using hhighLarge
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem tag_exists_bound (β γ K : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ)
     (hγ : γ < 1) (hK : 0 < K) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, KeyFiber β γ n →

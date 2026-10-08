@@ -549,7 +549,7 @@ private theorem interpQ9_end {a b : ℚ} {M : ℕ} (hM : 0 < M) :
   field_simp
   ring
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem p92_select_sublinear_impl (T : Stage) (hT : StabilizedOn T FamB)
     (hH : HdagLtOne T) :
     ∃ P : Params9, P.Valid ∧ P.IsSublinear ∧ P.SubSelection T := by
@@ -1007,7 +1007,7 @@ private theorem noPowerWidth9 {T : Stage} {e : ℚ}
   push_neg at hnotx
   exact ⟨x, hnotx⟩
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem p92_select_linear_impl (T : Stage) (hT : StabilizedOn T FamB)
     (hNoH : ¬ HdagLtOne T) (hHL : HLdagLtOne T) (hNotZero : ¬ HLdagZero T) :
     ∃ P : Params9, P.Valid ∧ P.IsLinear ∧ P.LinearSelection T := by

@@ -69,7 +69,7 @@ noncomputable def coarsePairEquiv5 (X : Setup5 γ K' χ n N E G) :
         funext x
         rfl
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem coarseLaw_eq_map_pi5 (X : Setup5 γ K' χ n N E G) (v : Fin N) :
     X.coarseLaw v = FinProb.map (FinProb.pi (CoarsePairLaw5 X v)) (coarsePairEquiv5 X) := by
   classical

@@ -81,7 +81,7 @@ theorem row_fail_marginal_q_s11_slice {N : ℕ} (E : Fin N → Fin N → Prop)
     _ = testFail E G I k g μ ν y₀ := by
       simp [FinProb.expect, FinProb.pi, f, testFail, starW, P, tupLaw, tupW]
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem sigma_fail_q_s11_slice :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
       (μ ν : Law N) (y₀ : Fin N),

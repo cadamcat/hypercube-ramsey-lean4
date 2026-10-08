@@ -93,7 +93,7 @@ private theorem pi_expect_split_local
   simp_rw [hleft, hright]
   rfl
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 private theorem pi_expect_glue_integral
     {V : Type} [Fintype V] [DecidableEq V]
     {α : V → Type} [∀ v, Fintype (α v)] [∀ v, DecidableEq (α v)]
@@ -188,7 +188,7 @@ private theorem pi_expect_glue_integral
       intro a ha
       ring
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem cond_product_bound_impl : CondProductBound := by
   classical
   intro V _ _ α _ _ P I _ _ Bad sc x Δ hL
@@ -1104,7 +1104,7 @@ theorem eventually_cross_width_budget (d : ℝ) (hd : 0 < d) (hd' : d < 1 / 8) :
       _ < (n : ℝ) ^ ((1 : ℝ) / 4) := h₂
   exact le_of_lt hresult
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem tagBad_depends
     {d : ℝ} {n s ℓ q N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
     {X Y : Finset (Fin N)} {p κ : ℝ}
@@ -1166,7 +1166,7 @@ theorem tagBad_depends
     ((n : ℝ) ^ (-(D₀ / 2)) < crossFailKey Γ M σ' g)
   rw [hfail]
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem eventually_tag_moment_small (D₀ d : ℝ) (hD₀ : 0 < D₀) (hd : 0 < d)
     (hd' : d < D₀ / 1000) :
     ∀ᶠ n : ℕ in Filter.atTop,
@@ -1310,7 +1310,7 @@ private theorem dens_eq_sum_rowDeg {N : ℕ} (E : Fin N → Fin N → Prop) (c :
   intro y hy
   ring
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem low_degree_mass_bound
     {N : ℕ} (D₀ d : ℝ) (n : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
     (X Y : Finset (Fin N)) (K : ℝ) (α τ : Law N)
@@ -1626,7 +1626,7 @@ theorem crossFail_imp_exists_step
       exact hprev j hj hnot
     · simpa [Bad, ν, anchors] using hk₀bad
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 theorem crossStepBad_pr_le
     {d : ℝ} {n N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
     {X Y : Finset (Fin N)} {p κ : ℝ}

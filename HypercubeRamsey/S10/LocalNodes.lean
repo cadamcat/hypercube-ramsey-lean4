@@ -12,7 +12,7 @@ namespace HypercubeRamsey.S10
 open scoped BigOperators
 open Classical Filter
 
-set_option maxHeartbeats 0 in
+set_option maxHeartbeats 100000000 in
 /-- P10.1b (10:43–54): the scale inequalities needed for the tuple-array, fan and
 height bounds. The four exponents are those used in the paper's choice of `m`, `k`
 and `T`; all inequalities hold eventually under the stated parameter range. -/

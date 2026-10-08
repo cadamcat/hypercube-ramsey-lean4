@@ -1606,7 +1606,7 @@ structure ProxyMeanData5 (Cloc : ℕ) (b : X.Base) (hi : X.HighHid)
         Z (Function.update lo (X.lowIdxOf (X.g.roleKey (X.p.J n) r.1)) (fun _ => y')) r y ≤
       2 * (N : ℝ) * (X.prior b (X.g.roleKey (X.p.J n) r.1)).w y
 
-set_option maxHeartbeats 0
+set_option maxHeartbeats 100000000
 /-- L5.1l(2) (05:1027–1041): under the Stage 5 law, the odd-role averages of a proxy-mean functional are bounded
 at every label with probability `1 - o(1)`: near rows (sign distance `O(√m)`) are a `2^{-m+o(m)}` fraction, the
 comparison costs `2^n`, separated targets are resampled independently from the trimmed laws with the

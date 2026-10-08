@@ -63,12 +63,9 @@ theorem opposite_dominates {L : X.CentreLayer5} {cL cH : ℝ} (LR : X.LowRows5 L
     have hcard : (Fintype.card X.OddOut : ℝ) = ((X.p.s n : ℝ) + 1) * N := by
       simp [Setup5.OddOut, Fintype.card_prod, Fintype.card_fin]
     simp only [Lane_sol_s05_even.uniformOdd, FinProb.uniformAll, hcard, oppCost]
-    have hs1 : (X.p.s n : ℝ) + 1 ≠ 0 := by positivity
-    have hN' : (N : ℝ) ≠ 0 := hN.ne'
-    rw [Real.exp_add, Real.exp_add, Real.exp_add, Real.exp_log (by positivity),
-      Real.exp_log (by positivity)]
+    rw [Real.exp_add, Real.exp_add, Real.exp_add, Real.exp_log (by norm_num),
+      Real.exp_log (by linarith)]
     field_simp
-    ring
   rw [hrhs]
   unfold Setup5.oddRow
   by_cases hbl : X.g.low (X.p.J n) b.1
@@ -133,7 +130,7 @@ theorem prod_dominates (C : ℝ) (hC : X.RecordCount C) {L : X.CentreLayer5} {cL
         ∏ b ∈ Finset.univ.filter (fun b : OddRole5 n => (cube n).Adj v.1 b.1),
           (Lane_sol_s05_even.localReferenceQ X L H ω v b c).w (O b) := by
   rw [Real.exp_sum, ← Finset.prod_mul_distrib]
-  apply Finset.prod_le_prod
+  apply Finset.prod_le_prod₀
   · intro b _
     exact X.oddRow_nonneg LR HR H ω b (O b)
   · intro b hb
@@ -518,8 +515,9 @@ theorem cost_sum_le (C : ℝ) (hC0 : 0 ≤ C) {L : X.CentreLayer5} (HR : X.HighR
             (X.actualRecord (L.elig H) H ω b) (arraysOf ω) (c.1, X.g.evenType (X.p.J n) v.1, c.2)
             (HR.row H ω b) (O b) + (S.card : ℝ) * ((X.p.a 6 - X.p.a 5) / 2 * k) +
           ∑ b ∈ S, (if ¬ (X.g.low (X.p.J n) v.1 ↔ X.g.low (X.p.J n) b.1) then oppCost X else 0) := by
-        rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, nsmul_eq_mul,
-          Finset.sum_filter]
+        rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_const, nsmul_eq_mul]
+        congr 2
+        exact (Finset.sum_filter _ _).symm
       _ ≤ X.p.a 5 * k * n + (n : ℝ) * ((X.p.a 6 - X.p.a 5) / 2 * k) +
           (X.p.a 6 - X.p.a 5) / 2 * k * n := by
         rw [hkeq] at hoppSum ⊢

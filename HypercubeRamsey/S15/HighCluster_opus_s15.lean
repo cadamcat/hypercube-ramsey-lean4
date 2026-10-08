@@ -2,6 +2,7 @@ import HypercubeRamsey.S15.ClusterBinSampler_sol_s15_c2
 import HypercubeRamsey.S15.ClusterBinCharges_sol_s15_c2
 import HypercubeRamsey.S15.ClusterBinScales_sol_s15_c2
 import HypercubeRamsey.S15.ClusterLabelStage_sol_s15_c2
+import HypercubeRamsey.S15.HighCluster_opus_s15_q_s15_clock
 
 /-! Sub-lemmas for the conditioned bin and label stages of P15.3 (section 15, lines 119–156).
 
@@ -670,7 +671,7 @@ theorem label_clock_large (κ : CConsts) (hκ : κ.Admissible) (T : Stage) :
           ∀ S : Finset (OddPosition T k), ClusterLabelDependsOn hPT hm F S →
             (S.card : ℝ) ≤ (T.S.n k : ℝ) ^ 2 →
               L.E F ≤ 2 * (clusterIndependentLabelKernel PT hPT hm W B).E F := by
-  sorry
+  exact HypercubeRamsey.S15.Lane_q_s15_clock.label_clock_large κ hκ T
 
 /-- A product representation of a high-small-bin pre-label law: independent variables `V`
 (for instance one calibrated injection per physical bin used by `B`, and one independent label

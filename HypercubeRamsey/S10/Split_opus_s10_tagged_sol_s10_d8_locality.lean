@@ -191,4 +191,153 @@ macro "s10_d8_group_history_eq " n:term:max δ:term:max M:term:max t:term:max : 
         exact hW c (hsubid q hq₀ c (candidate_domain hc))
   )
 
+set_option hygiene false in
+macro "s10_d8_even_history_eq " n:term:max δ:term:max M:term:max t:term:max hgroup:term:max : tactic =>
+  `(tactic| all_goals
+      intro a h h' hP hW hS hA hτ
+      let qₐ := _root_.HypercubeRamsey.Lane_opus_s10_tagged.evenSite ($δ) a
+      have hR := common_radius_bound ($n) (_root_.HypercubeRamsey.Lane_opus_s10_tagged.mS ($n) ($δ)) ($δ)
+      change (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).Rlong + (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).r + 12 ≤ _root_.HypercubeRamsey.Lane_opus_s10_tagged.Rloc ($n) ($δ) at hR
+      have hInc : ∀ q ∈ _root_.HypercubeRamsey.Lane_opus_s10_tagged.incGroups a, q ∈ siteDomain qₐ 1 3 := by
+        intro q hq
+        exact mem_siteDomain.mpr (envelope_dist (p10_1k_incidentOddGroups_subset_envelope (_root_.HypercubeRamsey.Lane_opus_s10_tagged.mS_le ($n) ($δ)) a hq))
+      have hDom : ∀ q ∈ siteDomain qₐ 1 3,
+          siteDomain q 3 ((_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).Rlong + (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).r + 9) ⊆ siteDomain qₐ 4 (_root_.HypercubeRamsey.Lane_opus_s10_tagged.Rloc ($n) ($δ)) := by
+        intro q hq u hu
+        exact siteDomain_mono (by omega) (by omega) (siteDomain_comp hq hu)
+      have hIDom : ∀ q ∈ siteDomain qₐ 1 3,
+          idDomain ($δ) q 3 ((_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).Rlong + (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).r + 9) ⊆ idDomain ($δ) qₐ 4 (_root_.HypercubeRamsey.Lane_opus_s10_tagged.Rloc ($n) ($δ)) := by
+        intro q hq c hc
+        exact mem_idDomain.mpr (hDom q hq (mem_idDomain.mp hc))
+      have hG (q) (hq : q ∈ siteDomain qₐ 1 3) := ($hgroup) q h h'
+        (fun c hc => hP c (hIDom q hq hc)) (fun c hc => hW c (hIDom q hq hc))
+        (fun u hu => hS u (hDom q hq hu)) (fun c hc => hA c (hIDom q hq hc))
+        (fun c hc => hτ c (hIDom q hq hc))
+      have hself : qₐ ∈ siteDomain qₐ 1 3 := mem_siteDomain.mpr ⟨by simp, by simp⟩
+      have hCenter : _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf ($M) ($t) h a = _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf ($M) ($t) h' a := by
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf
+        rw [(hG qₐ hself).2.2.2.2.1 qₐ hself]
+      have hcount : ∀ j,
+          p10_1kHeightPositionCount (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)) (fun ℓ => h.pos (qₐ.1, ℓ)) qₐ.2 j =
+            p10_1kHeightPositionCount (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)) (fun ℓ => h'.pos (qₐ.1, ℓ)) qₐ.2 j := by
+        intro j
+        have he : p10_1kHeightEligibleIds (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)) (fun ℓ => h.pos (qₐ.1, ℓ)) qₐ.2 j =
+            p10_1kHeightEligibleIds (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)) (fun ℓ => h'.pos (qₐ.1, ℓ)) qₐ.2 j := by
+          apply eligible_congr
+          intro u hu
+          apply hP (qₐ.1, (u, j))
+          apply mem_idDomain.mpr
+          apply mem_siteDomain.mpr
+          refine ⟨by simp [qₐ], ?_⟩
+          have hur : hammingDist qₐ.2 u ≤ (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).r := by
+            calc
+              hammingDist qₐ.2 u = hammingDist u qₐ.2 := hammingDist_comm _ _
+              _ ≤ (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).r := hu
+          exact hur.trans (by omega)
+        exact (p10_1kHeightEligibleIds_card _ _ _ _).symm.trans
+          ((congrArg Finset.card he).trans (p10_1kHeightEligibleIds_card _ _ _ _))
+      have hBounds (j) := congrArg (fun z : ℕ =>
+        (998 / 1000 : ℝ) * (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).lam ≤ (z : ℝ) ∧
+        (z : ℝ) ≤ (1002 / 1000 : ℝ) * (_root_.HypercubeRamsey.Lane_opus_s10_tagged.hp ($n) ($δ)).lam) (hcount j)
+      have hgate : ∀ c, _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate ($M) ($t) h a c = _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate ($M) ($t) h' a c := by
+        intro c
+        apply propext
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate
+        apply and_congr
+        · exact (congrArg (fun z => z = some c) hCenter).to_iff
+        apply and_congr
+        · exact forall_congr' fun j => (hBounds j).to_iff
+        · exact forall_congr' fun q => imp_congr_right fun hq => (hG q (hInc q hq)).1.to_iff
+      have hsub : ∀ c w ω ω', (∀ b ∈ _root_.HypercubeRamsey.Lane_opus_s10_tagged.starOf a, ω b = ω' b) →
+          _root_.HypercubeRamsey.Lane_opus_s10_tagged.subLik ($M) ($t) h a c w ω = _root_.HypercubeRamsey.Lane_opus_s10_tagged.subLik ($M) ($t) h' a c w ω' := by
+        intro c w ω ω' hω
+        let u := h.setTuple c w
+        let u' := h'.setTuple c w
+        have hU := ($hgroup)
+        have hGU (q) (hq : q ∈ siteDomain qₐ 1 3) := hU q u u'
+          (fun d hd => hP d (hIDom q hq hd))
+          (fun d hd => update_agree_on (idDomain ($δ) qₐ 4 (_root_.HypercubeRamsey.Lane_opus_s10_tagged.Rloc ($n) ($δ))) hW c w d (hIDom q hq hd))
+          (fun v hv => hS v (hDom q hq hv)) (fun d hd => hA d (hIDom q hq hd))
+          (fun d hd => hτ d (hIDom q hq hd))
+        have huCenter : _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf ($M) ($t) u a = _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf ($M) ($t) u' a := by
+          unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf
+          rw [(hGU qₐ hself).2.2.2.2.1 qₐ hself]
+        have huGate : _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate ($M) ($t) u a c = _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate ($M) ($t) u' a c := by
+          apply propext
+          unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate
+          simp only [huCenter]
+          apply and_congr Iff.rfl
+          apply and_congr
+          · exact forall_congr' fun j => (hBounds j).to_iff
+          · exact forall_congr' fun q => imp_congr_right fun hq => (hGU q (hInc q hq)).1.to_iff
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.subLik
+        change (if _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate ($M) ($t) u a c then _root_.HypercubeRamsey.Lane_opus_s10_tagged.starLik ($M) ($t) u a ω else 0) =
+          (if _root_.HypercubeRamsey.Lane_opus_s10_tagged.gate ($M) ($t) u' a c then _root_.HypercubeRamsey.Lane_opus_s10_tagged.starLik ($M) ($t) u' a ω' else 0)
+        rw [huGate]
+        congr 1
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.starLik
+        apply Finset.prod_congr rfl
+        intro q hq
+        rw [(hGU q (hInc q hq)).2.1]
+        apply congrArg (FinProb.expect _)
+        funext j
+        apply Finset.prod_congr rfl
+        intro b hb
+        obtain ⟨hb, hbq⟩ := Finset.mem_filter.mp hb
+        rw [(hGU q (hInc q hq)).2.2.1 b hbq j, hω b hb]
+      have href : ∀ c ω ω', (∀ b ∈ _root_.HypercubeRamsey.Lane_opus_s10_tagged.starOf a, ω b = ω' b) →
+          _root_.HypercubeRamsey.Lane_opus_s10_tagged.refQ ($M) ($t) h a c ω = _root_.HypercubeRamsey.Lane_opus_s10_tagged.refQ ($M) ($t) h' a c ω' := by
+        intro c ω ω' hω
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.refQ
+        apply Finset.prod_congr rfl
+        intro q hq
+        have H := hG q (hInc q hq)
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.groupRef
+        rw [H.2.2.2.1]
+        congr 1
+        apply Finset.sum_congr rfl
+        intro L hL
+        have hLs : L ⊆ _root_.HypercubeRamsey.Lane_opus_s10_tagged.candidates h q := by
+          rw [← H.2.2.2.1] at hL
+          exact Finset.mem_powerset.mp (Finset.mem_filter.mp (Finset.mem_filter.mp hL).1).1
+        have hFm : (Finset.univ.filter fun y => ∀ d ∈ L, d ≠ c → ∀ i, Hits E G (h.tup d i) y) =
+            (Finset.univ.filter fun y => ∀ d ∈ L, d ≠ c → ∀ i, Hits E G (h'.tup d i) y) := by
+          apply Finset.ext
+          intro y
+          simp only [Finset.mem_filter, Finset.mem_univ, true_and]
+          exact forall_congr' fun d => imp_congr_right fun hd => by rw [H.2.2.2.2.2 d (hLs hd)]
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.deletionRef
+        rw [hFm, hS q (siteDomain_mono (by omega) (by omega) (hInc q hq))]
+        apply Finset.sum_congr rfl
+        intro j _
+        congr 1
+        apply Finset.prod_congr rfl
+        intro b hb
+        rw [hω b (Finset.mem_filter.mp hb).1]
+      constructor
+      · intro ω ω' hω x
+        have hMass : ∀ c, _root_.HypercubeRamsey.Lane_opus_s10_tagged.predMass ($M) ($t) h a c ω = _root_.HypercubeRamsey.Lane_opus_s10_tagged.predMass ($M) ($t) h' a c ω' := by
+          intro c
+          unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.predMass
+          exact congrArg (FinProb.expect _) (funext fun w => hsub c w ω ω' hω)
+        have hMarg : ∀ c x, _root_.HypercubeRamsey.Lane_opus_s10_tagged.avgMarginal ($M) ($t) h a c ω x = _root_.HypercubeRamsey.Lane_opus_s10_tagged.avgMarginal ($M) ($t) h' a c ω' x := by
+          intro c x
+          unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.avgMarginal _root_.HypercubeRamsey.Lane_opus_s10_tagged.posterior
+          simp only [hMass c, hsub c _ ω ω' hω]
+        have hHeavy : ∀ c, _root_.HypercubeRamsey.Lane_opus_s10_tagged.heavy ($M) ($t) h a c ω = _root_.HypercubeRamsey.Lane_opus_s10_tagged.heavy ($M) ($t) h' a c ω' := by
+          intro c
+          simp only [_root_.HypercubeRamsey.Lane_opus_s10_tagged.heavy, hMarg]
+        have hLight : ∀ c, _root_.HypercubeRamsey.Lane_opus_s10_tagged.lightMass ($M) ($t) h a c ω = _root_.HypercubeRamsey.Lane_opus_s10_tagged.lightMass ($M) ($t) h' a c ω' := by
+          intro c
+          simp only [_root_.HypercubeRamsey.Lane_opus_s10_tagged.lightMass, hHeavy, hMarg]
+        have hOK : ∀ c, _root_.HypercubeRamsey.Lane_opus_s10_tagged.predOK ($M) ($t) h a c ω = _root_.HypercubeRamsey.Lane_opus_s10_tagged.predOK ($M) ($t) h' a c ω' := by
+          intro c
+          simp only [_root_.HypercubeRamsey.Lane_opus_s10_tagged.predOK, hgate, hMass, href c ω ω' hω, hLight]
+        unfold _root_.HypercubeRamsey.Lane_opus_s10_tagged.evenRow
+        rw [hCenter]
+        cases _root_.HypercubeRamsey.Lane_opus_s10_tagged.centerOf ($M) ($t) h' a <;> simp only [hOK, hHeavy, hMarg, hLight]
+      · intro q hq
+        exact ⟨(hG q (hInc q hq)).2.1, (hG q (hInc q hq)).2.2.1⟩
+  )
+
 end HypercubeRamsey.Lane_sol_s10_d8

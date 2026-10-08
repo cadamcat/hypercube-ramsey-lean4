@@ -633,6 +633,28 @@ theorem pi_expect_congr_on (P Q : ∀ i, FinProb (Ω i)) (D : Finset ι)
     funext fun i => hPQ i.1 i.2
   rw [heq]
 
+/-- Finite expectation preserves pointwise nonnegativity. -/
+theorem expect_nonneg {β : Type*} [Fintype β] (P : FinProb β)
+    (f : β → ℝ) (hf : ∀ b, 0 ≤ f b) : 0 ≤ P.expect f :=
+  Finset.sum_nonneg fun b _ => mul_nonneg (P.nonneg b) (hf b)
+
+/-- A probability law supplies a point even when its underlying type has no
+registered nonempty instance. -/
+theorem law_nonempty {β : Type*} [Fintype β] (P : FinProb β) : Nonempty β := by
+  classical
+  by_contra h
+  haveI : IsEmpty β := ⟨fun b => h ⟨b⟩⟩
+  have hs : (∑ b, P.w b) = 0 := by simp
+  rw [P.sum_eq_one] at hs
+  norm_num at hs
+
+/-- Local comparison of product expectations, with a point supplied by the law. -/
+theorem pi_expect_congr_local (P Q : ∀ i, FinProb (Ω i)) (D : Finset ι)
+    (f : (∀ i, Ω i) → ℝ) (hf : FinProb.DependsOn f D)
+    (hPQ : ∀ i ∈ D, P i = Q i) :
+    (FinProb.pi P).expect f = (FinProb.pi Q).expect f :=
+  pi_expect_congr_on P Q D f (Classical.choice (law_nonempty (FinProb.pi P))) hf hPQ
+
 /-- Candidate replacement preserves agreement on a fixed primitive domain. -/
 theorem update_agree_on {β : Type*} (D : Finset ι) {u v : ι → β}
     (huv : ∀ i ∈ D, u i = v i) (c : ι) (w : β) :

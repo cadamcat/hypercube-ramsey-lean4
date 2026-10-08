@@ -6,6 +6,7 @@ import HypercubeRamsey.S05.Centres_sol_s05_centres_records
 import HypercubeRamsey.S05.Centres_sol_s05_centres_height
 import HypercubeRamsey.S05.Centres_sol_s05_centres_low
 import HypercubeRamsey.S05.Centres_sol_s05_centres_counts
+import HypercubeRamsey.S05.Centres_sol_s05_j12
 
 /-!
 # D5.6–D5.8, L5.1j, L5.1g/k rows, L5.1l(3): centers, height choices and the odd rows
@@ -970,7 +971,123 @@ theorem presentation_local : ∃ Ckey : ℕ, ∀ p : Params5 γ K' χ, ∃ n₀ 
         (fun lo => shortPresMassOf X (canonHt X) (markElig X (canonHt X)) (b, X.joinHidden hi lo) y r a)
         (Finset.univ.filter fun k : X.LowIdx =>
           hammingDist k.2.1 (X.g.sign y.1) ≤ Ckey * Nat.sqrt (X.p.m n)) := by
-  sorry
+  set_option backward.isDefEq.respectTransparency false in
+    trace "J12: start"
+    refine ⟨16, fun p => ⟨1, ?_⟩⟩
+    trace "J12: existential constants"
+    intro n hn N E G X hXp b hi y r a
+    trace "J12: context instantiated"
+    have hm : 1 ≤ X.p.m n := by
+      unfold Params5.m
+      apply Nat.one_le_ceil_iff.mpr
+      exact Real.rpow_pos_of_pos (by exact_mod_cast (show 0 < n by omega)) _
+    trace "J12: positive m; start model bridge"
+    have bridge (ht : X.HeightChoice5) (H : X.KeyHist) (y : OddRole5 n)
+        (r : X.RecordOn ht.hp.Loc) (a : X.ArraysOn ht.hp.Loc) :
+        shortPresMassOf X ht (markElig X ht) H y r a =
+          Lane_sol_s05_j12.Model.presentationMass X ht.hp H y r a := by
+      j12_reduce_height
+        dsimp (config := {unfoldPartialApp := true}) only [CΩ, CVal,
+          Lane_sol_s05_j12.Model.CΩ, Lane_sol_s05_j12.Model.CVal,
+          HeightChoice5.hp, Lane_sol_s05_j12.Model.hp, HDParams.Loc, HDParams.TiePerm,
+          RecordOn, ArraysOn] at *
+        have ha (ω : X.CΩ ht) : arraysOf ω =
+            Lane_sol_s05_j12.Model.arraysOf (X := X) (h := ht.hp) ω := by
+          funext c
+          rfl
+        trace "J12: arrays bridge proved"
+        have hp (ω : X.CΩ ht) : pos ω =
+            Lane_sol_s05_j12.Model.pos (X := X) (h := ht.hp) ω := by
+          funext l
+          rfl
+        have hrecord (H : X.KeyHist) (A : X.ArraysOn ht.hp.Loc)
+            (σ : EvenRole5 n → Option ht.hp.Loc) (y : OddRole5 n) :
+            recordOf X ht H A σ y = Lane_sol_s05_j12.Model.recordOf X ht.hp H A σ y := by
+          dsimp (config := {unfoldPartialApp := true}) only [recordOf,
+            Lane_sol_s05_j12.Model.recordOf, HeightChoice5.hp, Lane_sol_s05_j12.Model.hp]
+          congr 3
+          · funext v
+            cases hv : σ v <;> simp only [hv] <;> rfl
+          · apply Finset.biUnion_congr rfl
+            intro v hv
+            cases hσ : σ v <;> simp only [hσ]
+            · rfl
+            · split_ifs <;> rfl
+          · cases hk : X.g.roleKey (X.p.J n) y.1
+            · dsimp only
+              split_ifs
+              · cases hs : σ (Classical.choose ‹_›) <;> rfl
+              · rfl
+            · rfl
+        trace "J12: abstract record bridge proved"
+        have he0 (H : X.KeyHist) (P : ht.hp.Loc → Bool) (A : X.ArraysOn ht.hp.Loc) :
+            eligOf X ht H P A = Lane_sol_s05_j12.Model.eligOf X ht.hp H P A := by
+          funext s j
+          change CubeVertex X.St.d at s
+          change Fin (topScale n ht.σ ht.ζ + 1) at j
+          dsimp only [HeightChoice5.hp, HDParams.Loc, ArraysOn] at P A
+          dsimp (config := {unfoldPartialApp := true}) only [eligOf,
+            Lane_sol_s05_j12.Model.eligOf, prosp, Lane_sol_s05_j12.Model.prosp,
+            marks, Lane_sol_s05_j12.Model.marks, failSets, Lane_sol_s05_j12.Model.failSets,
+            singletonOK, Lane_sol_s05_j12.Model.singletonOK,
+            heavyCountOn, Lane_sol_s05_j12.Model.heavyCountOn,
+            PriorHeavy, Lane_sol_s05_j12.Model.PriorHeavy, avgMarg, Lane_sol_s05_j12.Model.avgMarg,
+            siteOf, Lane_sol_s05_j12.Model.siteOf, HeightChoice5.hp, Lane_sol_s05_j12.Model.hp,
+            HypercubeRamsey.hammingDist, _root_.hammingDist]
+          erw [← hrecord]
+          rfl
+        have he : markElig X ht = Lane_sol_s05_j12.Model.markElig X ht.hp := by
+          funext H ω
+          unfold markElig Lane_sol_s05_j12.Model.markElig
+          rw [← ha, ← hp]
+          exact he0 H (pos ω) (arraysOf ω)
+        trace "J12: eligibility bridge proved"
+        have hs (H : X.KeyHist) (ω : X.CΩ ht) (R : ℕ) (v : EvenRole5 n) :
+            X.selAt (markElig X ht H) ω R v =
+              Lane_sol_s05_j12.Model.selAt X (Lane_sol_s05_j12.Model.markElig X ht.hp H) ω R v := by
+          rw [he]
+          dsimp (config := {unfoldPartialApp := true}) only [selAt, Lane_sol_s05_j12.Model.selAt, sites, Lane_sol_s05_j12.Model.sites,
+            siteOf, Lane_sol_s05_j12.Model.siteOf, pos, Lane_sol_s05_j12.Model.pos,
+            act, Lane_sol_s05_j12.Model.act, tie, Lane_sol_s05_j12.Model.tie,
+            HeightChoice5.hp, Lane_sol_s05_j12.Model.hp]
+          try rfl
+        trace "J12: selection bridge proved"
+        have hr (H : X.KeyHist) (ω : X.CΩ ht) (R : ℕ) (y : OddRole5 n) :
+            X.actualRecordAt (markElig X ht H) H ω R y =
+              Lane_sol_s05_j12.Model.actualRecordAt X (Lane_sol_s05_j12.Model.markElig X ht.hp H) H ω R y := by
+          rw [actualRecordAt_eq, Lane_sol_s05_j12.Model.actualRecordAt_eq, ← hrecord]
+          have hσ : (fun v => X.selAt (markElig X ht H) ω R v) =
+              (fun v => Lane_sol_s05_j12.Model.selAt X
+                (Lane_sol_s05_j12.Model.markElig X ht.hp H) ω R v) := funext (hs H ω R)
+          rw [hσ, ha]
+        trace "J12: record bridge proved"
+        have hlaw : X.centreLaw ht H = Lane_sol_s05_j12.Model.centreLaw X ht.hp H := by
+          dsimp (config := {unfoldPartialApp := true}) only [centreLaw,
+            Lane_sol_s05_j12.Model.centreLaw, HeightChoice5.hp, Lane_sol_s05_j12.Model.hp,
+            instFintypeCVal, instFintypeCΩ]
+          try rfl
+        trace "J12: law bridge proved"
+        unfold shortPresMassOf Lane_sol_s05_j12.Model.presentationMass
+        erw [← hlaw]
+        apply congrArg ((X.centreLaw ht H).pr)
+        funext ω
+        dsimp (config := {unfoldPartialApp := true}) only [CΩ, CVal,
+          HeightChoice5.hp, HDParams.Loc, HDParams.TiePerm] at ω
+        dsimp (config := {unfoldPartialApp := true}) only [LocalValidAt, Lane_sol_s05_j12.Model.LocalValidAt]
+        simp only [← hr, hs]
+        dsimp (config := {unfoldPartialApp := true}) only [refSubset, Lane_sol_s05_j12.Model.refSubset,
+          heavyCount, Lane_sol_s05_j12.Model.heavyCount, avgMarg, Lane_sol_s05_j12.Model.avgMarg,
+          PriorHeavy, Lane_sol_s05_j12.Model.PriorHeavy,
+          arraysOf, Lane_sol_s05_j12.Model.arraysOf, arr, Lane_sol_s05_j12.Model.arr,
+          pos, Lane_sol_s05_j12.Model.pos, HeightChoice5.hp, Lane_sol_s05_j12.Model.hp,
+          HypercubeRamsey.hammingDist, _root_.hammingDist]
+        try rfl
+    trace "J12: generic bridge proved"
+    have hlocal := Lane_sol_s05_j12.Model.mass_local X (canonHt X).hp rfl hm b hi y r a
+    intro lo lo' hlo
+    have hh := hlocal lo lo' hlo
+    exact (bridge (canonHt X) (b, X.joinHidden hi lo) y r a).trans
+      (hh.trans (bridge (canonHt X) (b, X.joinHidden hi lo') y r a).symm)
 
 /-- The centre layer built from the marking eligibility. -/
 def markLayer (X : Setup5 γ K' χ n N E G)

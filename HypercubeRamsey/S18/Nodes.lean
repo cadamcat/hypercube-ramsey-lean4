@@ -1,6 +1,8 @@
 import HypercubeRamsey.S18.Defs
 import HypercubeRamsey.S18.Nodes_q_s18_n3
 import HypercubeRamsey.S18.Nodes_sol_fix_surv
+import HypercubeRamsey.S18.Nodes_sol_s18_2lm
+import HypercubeRamsey.S18.Nodes_sol_fix_outsupp
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_caps
 import HypercubeRamsey.S18.Nodes_sol_s18_n1_sketch
 import HypercubeRamsey.S18.Nodes_q_s18_dl
@@ -638,8 +640,13 @@ theorem L18_2m {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
       ∀ PT : ProfiledTiling κ T k, ∀ hPT : PT.Valid, ∀ D : LateData hPT,
         D.Spec → ∀ X : CriticalTransferData D, ∀ P : TransferProtocol X,
           StopFacts P cstop → TiltedDeviationBound P ctilt := by
-  refine ⟨cstop, hc, ?_⟩
-  sorry
+  refine ⟨cstop / 2, div_pos hc (by norm_num), ?_⟩
+  filter_upwards [hDisc, Lane_sol_fix_outsupp.parameters_eventually hκ T cstop hcx,
+    Lane_sol_s18_2lm.barrier_slack_eventually T cstop hc] with k hd hp hb
+  intro PT hPT D hD X P hstop
+  apply Lane_sol_s18_2lm.tilted_bound_of_raw P cstop hstop hb
+  intro seed pair
+  exact (Lane_sol_fix_outsupp.raw_output_bound hκ hd hp.1 hp.2.1 P seed pair).trans hp.2.2
 
 /-- 18:630–657. Undo survival, use its second moment and restore deletion
 costs. The exponent is chosen after the tilted bound, uniformly in X. -/

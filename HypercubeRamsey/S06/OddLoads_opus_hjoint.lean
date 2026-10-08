@@ -1,4 +1,7 @@
 import HypercubeRamsey.S06.OddLoads_sol_s06_loadB
+import HypercubeRamsey.S06.OddLoads_opus_hjoint_sol_s06_hjoint
+import HypercubeRamsey.S06.OddLoads_opus_hjoint_tuples_sol_s06_hjoint
+import HypercubeRamsey.S06.OddLoads_opus_hjoint_hid_sol_s06_hjoint
 
 /-!
 # The target-only route for the odd hidden joint step (lane opus-diag-hjoint)
@@ -316,7 +319,11 @@ theorem proxyRow_dependsOn_tuples (X : Ctx6 γ p₀ K n N E G M) (H : X.Hist) (P
     (a : X.Loc → Bool) (τ : X.hp.Ties) (u : CubeVertex n) (hu : ¬ IsEvenRole u) (y : Fin N) :
     FinProb.DependsOn (fun d : X.Data X.Loc => X.proxyRow H (((P, d), a), τ) u y)
       (proxyTupleScope X u) := by
-  sorry
+  intro d d' hdd
+  apply Lane_sol_s06_hjoint.proxyRow_congr_data X H (((P, d), a), τ)
+    (((P, d'), a), τ) u rfl rfl rfl ?_ y
+  intro e he
+  exact hdd e (Finset.mem_filter.mpr ⟨Finset.mem_univ _, he⟩)
 
 /-- At fixed centre data, the short proxy row reads hidden keys only in the sign scope: marks through
 `S3Fail_congr_hid`, validity and the Step 3 tests at `b`, and the adjustment table through `presProb` (whose tuple law
@@ -324,7 +331,7 @@ is handled by `dataLaw_expect_congr_hid` and `proxyRow_dependsOn_tuples`'s geome
 theorem proxyRow_congr_hid (X : Ctx6 γ p₀ K n N E G M) (b₀ : X.Base) (C : X.Centre) (u : CubeVertex n)
     (hu : ¬ IsEvenRole u) (y : Fin N) (Z Z' : X.Hid) (hZ : ∀ ℓ ∈ proxySignScope X u, Z ℓ = Z' ℓ) :
     X.proxyRow (b₀, Z) C u y = X.proxyRow (b₀, Z') C u y := by
-  sorry
+  exact Lane_sol_s06_hjoint.proxyRow_hid_local X b₀ C u y Z Z' hZ
 
 /-- Proxy locality (06:641–643): the centre-averaged short proxy row of an odd role reads hidden keys only at signs
 within `Rshort + 6` of its sign.  The short choice at a neighbour `a` of `b = q_st(u)` consults eligibility at sites

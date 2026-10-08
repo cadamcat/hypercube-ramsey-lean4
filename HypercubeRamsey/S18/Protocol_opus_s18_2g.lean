@@ -1,5 +1,6 @@
 import HypercubeRamsey.S18.Nodes_sol_s18_1c
 import HypercubeRamsey.S18.Run_sol_s18_n4
+import HypercubeRamsey.S18.Protocol_opus_s18_2g_sol
 
 /-!
 # Lane opus-s18-2g: the class-ordered transfer protocol of L18.2g (TeX 18:420–453)
@@ -784,6 +785,24 @@ theorem output_eq_on_retained (hD : D.Spec) (hG : TransferGeometry X)
         (D.prefixTests (D.prefixOrder X.failure) X.failure.2.2.2.1.val)
         (allowedMask_nonempty' D X.failure.1 X.failure.2.1.1 X.failure.2.1.2
           (D.pastRows (simHistory D X s σ) X.failure.1 X.failure.1.isLt X.failure.2.1).1) := by
+  let H : ∀ i : Fin (D.geom.r + 1), D.encoding.base.History i :=
+    fun i => simFrom D X s σ i.val (Nat.lt_succ_iff.mp i.isLt)
+  let rows : ∀ j : Fin D.geom.r, D.encoding.base.ClassRows j :=
+    fun j => simRow D X s j (σ j) (H j.castSucc)
+  have hstep : ∀ j : Fin D.geom.r,
+      H j.succ = D.encoding.base.extend j (H j.castSucc) (rows j) := by
+    intro j
+    rfl
+  have hbefore (i t : Fin (D.geom.r + 1)) (hit : i.val ≤ t.val) :
+      D.beforeHistory (H t) i hit = H i :=
+    Lane_sol_s18_2g_o2.beforeHistory_of_extends D H rows hstep i t hit
+  have hpast (j : Fin D.geom.r) (t : Fin (D.geom.r + 1)) (hjt : j.val < t.val) :
+      D.pastRows (H t) j hjt = rows j :=
+    Lane_sol_s18_2g_o2.pastRows_of_extends D H rows hstep j t hjt
+  have hpastFull (j : Fin D.geom.r) (b : {x : Pos T k // x ∈ D.encoding.base.classes j}) :
+      D.pastRows (simHistory D X s σ) j j.isLt b =
+        rowSim D X s j b (H j.castSucc) (σ j b) :=
+    congrFun (hpast j (Fin.last D.geom.r) j.isLt) b
   sorry
 
 theorem sameBlock_trans' {a b c : Fin (T.S.n k)} (hab : X.sameBlock a b) (hbc : X.sameBlock b c) :

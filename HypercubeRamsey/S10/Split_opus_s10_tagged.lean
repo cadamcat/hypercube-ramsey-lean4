@@ -3,6 +3,7 @@ import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d8_locality
 import HypercubeRamsey.S10.Split_opus_s10_tagged_sol_s10_d7c
 import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d4
 import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d10
+import HypercubeRamsey.S10.Split_opus_s10_tagged_q_s10_d3
 
 /-!
 # Section 10: the global experiment and the split of the construction (TeX 10:23–262)
@@ -1208,6 +1209,7 @@ theorem d2_valid_whp (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) 
       (historyLaw M σ t).pr (fun h => ¬ valid M t h) ≤ 1 / 100 := by
   sorry
 
+set_option maxHeartbeats 4000000 in
 /-- **d3** = P10.1e (10:128–149; ~300 lines; lemma-level from the helper's
 squared-tilt kernels). Pointwise caps: `N p_b^W ≤ 8 e^{2k(T+m)+n^δ}`, every label
 law has atoms at most `e^{-n^ζ/2}`, and so has each group column contribution
@@ -1222,7 +1224,1148 @@ theorem d3_tilt_caps (η₀ ζ δ κ : ℝ) (hη₀ : 0 < η₀) (hζ : 0 < ζ) 
       (∀ h b c y, (labLaw M t h b c).w y ≤ Real.exp (-(n : ℝ) ^ ζ / 2)) ∧
       (∀ h q c y, ∑ b ∈ Finset.univ.filter (fun b => groupOf δ b = q),
         (labLaw M t h b c).w y ≤ Real.exp (-(n : ℝ) ^ ζ / 2)) := by
-  sorry
+  classical
+  have hδζ : δ < ζ / 2000 := by
+    have hmin : min (min η₀ ζ) 1 ≤ ζ :=
+      (min_le_left _ _).trans (min_le_right _ _)
+    exact lt_of_lt_of_le hδsmall (div_le_div_of_nonneg_right hmin (by norm_num))
+  have hNpow : 500 * δ < ζ := by nlinarith [hδζ]
+  have hCountPow := Lane_q_s10_d3.eventually_power_gap
+    (a := 0) (b := 200 * δ) (c := 2) (by linarith) (by norm_num)
+  have hConstPow := Lane_q_s10_d3.eventually_power_gap
+    (a := 0) (b := ζ) (c := 8) (by linarith) (by norm_num)
+  have hTiltPow := Lane_q_s10_d3.eventually_power_gap
+    (a := 500 * δ) (b := ζ) (c := 72) hNpow (by norm_num)
+  have hLogPow := Lane_q_s10_d3.eventually_log_fiber_gap hζ
+  have hBudgetPow := Lane_q_s10_d3.eventually_retainedBudgetUpper_lt_half hδ
+  have hBasic : ∀ᶠ n : ℕ in Filter.atTop, 2 ≤ n :=
+    Filter.eventually_atTop.mpr ⟨2, fun _ hn => hn⟩
+  have hEvents : ∀ᶠ n : ℕ in Filter.atTop,
+      2 ≤ n ∧ 8 ≤ (n : ℝ) ^ ζ ∧ 72 * (n : ℝ) ^ (500 * δ) ≤ (n : ℝ) ^ ζ ∧
+        2 * ((Nat.log 2 n : ℝ) + 1) ^ 2 ≤ (n : ℝ) ^ ζ / 8 ∧
+          Lane_q_s10_d3.retainedBudgetUpper n δ < 1 / 2 ∧
+            2 ≤ (n : ℝ) ^ (200 * δ) := by
+    filter_upwards [hBasic, hConstPow, hTiltPow, hLogPow, hBudgetPow, hCountPow]
+      with n hn2 hconst htilt hlog hbudget hcount
+    exact ⟨hn2, by simpa using hconst, htilt, hlog, hbudget, by simpa using hcount⟩
+  obtain ⟨n₀, hn₀⟩ := Filter.eventually_atTop.mp hEvents
+  refine ⟨n₀, ?_⟩
+  intro n hn N E X Y G M t hN
+  rcases hn₀ n hn with ⟨hn2, hconst, htilt, hlog, hbudgetSmall, hcountPow⟩
+  have hNpos : 0 < N := lt_of_lt_of_le (by positivity : 0 < 2 ^ n) hN
+  have hnreal : 0 < (n : ℝ) := by exact_mod_cast (by omega : 0 < n)
+  have hnζ : 0 < (n : ℝ) ^ ζ := Real.rpow_pos_of_pos hnreal ζ
+  have hlogTwo : Real.log 2 ≤ (n : ℝ) ^ ζ / 8 := by
+    have hlog2 : Real.log 2 ≤ 1 := by
+      have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+      linarith
+    nlinarith [hconst, hlog2]
+  have hTiltBound : 9 * (n : ℝ) ^ (500 * δ) ≤ (n : ℝ) ^ ζ / 8 := by
+    nlinarith [htilt]
+  have hscale := p10_1kFixedListScale_rounding_bounds n δ hn2 hδ
+  have hkUpper : (kT n δ : ℝ) ≤ 2 * (n : ℝ) ^ (300 * δ) := hscale.2.1
+  have hblockUpper : (p10_1kFixedListBlockCount n δ : ℝ) ≤
+      3 * (n : ℝ) ^ (200 * δ) := hscale.2.2
+  have hspecial : mS n δ ≤ p10_1kSpecialCount n δ := min_le_left _ _
+  have hlistScaleNat : TT n δ + mS n δ ≤ p10_1kFixedListBlockCount n δ := by
+    dsimp [p10_1kFixedListBlockCount, TT]
+    omega
+  have hlistScale : (TT n δ + mS n δ : ℝ) ≤ 3 * (n : ℝ) ^ (200 * δ) := by
+    calc
+      (TT n δ + mS n δ : ℝ) ≤ (p10_1kFixedListBlockCount n δ : ℝ) := by
+        exact_mod_cast hlistScaleNat
+      _ ≤ 3 * (n : ℝ) ^ (200 * δ) := hblockUpper
+  have hkr : (kT n δ : ℝ) * (TT n δ + mS n δ : ℝ) ≤
+      6 * (n : ℝ) ^ (500 * δ) := by
+    calc
+      (kT n δ : ℝ) * (TT n δ + mS n δ : ℝ) ≤
+          (2 * (n : ℝ) ^ (300 * δ)) * (3 * (n : ℝ) ^ (200 * δ)) :=
+        mul_le_mul hkUpper hlistScale (by positivity) (by positivity)
+      _ = 6 * ((n : ℝ) ^ (300 * δ) * (n : ℝ) ^ (200 * δ)) := by ring
+      _ = 6 * (n : ℝ) ^ (500 * δ) := by
+        rw [← Real.rpow_add hnreal]
+        rw [show 300 * δ + 200 * δ = 500 * δ by ring]
+
+  have flip_of_dist : ∀ {d : ℕ} (s z : Fin d → Bool), _root_.hammingDist s z = 1 →
+      ∃ i : Fin d, z = p10_1kFlipCoordinate s i := by
+    intro d s z hdist
+    classical
+    have hcard : (Finset.univ.filter (fun i : Fin d => s i ≠ z i)).card = 1 := by
+      simpa [_root_.hammingDist] using hdist
+    obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hcard
+    refine ⟨i, ?_⟩
+    funext j
+    have hj : s j ≠ z j ↔ j = i := by
+      have hmem : j ∈ Finset.univ.filter (fun k : Fin d => s k ≠ z k) ↔ j = i := by
+        rw [hi]
+        simp
+      simpa using hmem
+    by_cases hji : j = i
+    · subst j
+      have hne : s i ≠ z i := hj.2 rfl
+      cases hs : s i <;> cases hz : z i <;> simp_all [p10_1kFlipCoordinate]
+    · have heq : s j = z j := by
+        by_contra hne
+        exact hji (hj.1 hne)
+      simp [p10_1kFlipCoordinate, hji, heq]
+
+  have hListCard : ∀ h q, groupValid M t h q →
+      (realizedList M t h q).card ≤ TT n δ + mS n δ := by
+    intro h q hgv
+    rcases hgv with ⟨_, _, _, hL, _, _⟩
+    let L := realizedList M t h q
+    rcases (Finset.mem_filter.mp hL).2 with ⟨hOwn, hAdj, hOne⟩
+    let own := L.filter (fun c => c.1 = q.1)
+    let exts := L.filter (fun c => c.1 ≠ q.1)
+    have hpart : L = own ∪ exts := by
+      ext c
+      by_cases hc : c ∈ L <;> by_cases hq : c.1 = q.1 <;>
+        simp [own, exts, hc, hq]
+    have hdisj : Disjoint own exts := by
+      apply Finset.disjoint_left.mpr
+      intro c hcOwn hcExt
+      exact (Finset.mem_filter.mp hcExt).2 (Finset.mem_filter.mp hcOwn).2
+    have hcardPart : L.card = own.card + exts.card := by
+      rw [hpart, Finset.card_union_of_disjoint hdisj]
+    let B := exts.image (fun c : ID n δ => c.1)
+    let Adj := (Finset.univ : Finset (Fin (mS n δ))).image
+      (fun i => p10_1kFlipCoordinate q.1 i)
+    have hcover : ∀ c ∈ exts, c.1 ∈ B := by
+      intro c hc
+      exact Finset.mem_image.mpr ⟨c, hc, rfl⟩
+    have hsumFib : exts.card = ∑ z ∈ B, (exts.filter (fun c => c.1 = z)).card := by
+      simpa [B] using Finset.card_eq_sum_card_fiberwise hcover
+    have hBsub : B ⊆ Adj := by
+      intro z hz
+      obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hz
+      have hcL : c ∈ L := (Finset.mem_filter.mp hc).1
+      have hcNot : c.1 ≠ q.1 := (Finset.mem_filter.mp hc).2
+      have hdist : _root_.hammingDist c.1 q.1 = 1 := by
+        rcases hAdj c hcL with hsame | hfar
+        · exact False.elim (hcNot hsame)
+        · exact hfar
+      have hdist' : _root_.hammingDist q.1 c.1 = 1 := by
+        rw [_root_.hammingDist_comm]
+        exact hdist
+      obtain ⟨i, hflip⟩ := flip_of_dist q.1 c.1 hdist'
+      exact Finset.mem_image.mpr ⟨i, Finset.mem_univ _, hflip.symm⟩
+    have hcardExt : exts.card ≤ mS n δ := by
+      calc
+        exts.card = B.card := by
+          rw [hsumFib]
+          calc
+            (∑ z ∈ B, (exts.filter (fun c => c.1 = z)).card) =
+                ∑ z ∈ B, 1 := by
+              apply Finset.sum_congr rfl
+              intro z hz
+              obtain ⟨c, hc, rfl⟩ := Finset.mem_image.mp hz
+              have hdist : _root_.hammingDist c.1 q.1 = 1 := by
+                rcases hAdj c (Finset.mem_filter.mp hc).1 with hsame | hfar
+                · exact False.elim ((Finset.mem_filter.mp hc).2 hsame)
+                · exact hfar
+              have hnot : c.1 ≠ q.1 := by
+                intro heq
+                rw [heq] at hdist
+                simp at hdist
+              have hone := hOne c.1 hdist
+              have hfilt : exts.filter (fun c' => c'.1 = c.1) =
+                  L.filter (fun c' => c'.1 = c.1) := by
+                ext c'
+                simp only [Finset.mem_filter]
+                constructor
+                · rintro ⟨hcExt', hcEq⟩
+                  exact ⟨(Finset.mem_filter.mp hcExt').1, hcEq⟩
+                · rintro ⟨hcL', hcEq⟩
+                  have hcNot' : c'.1 ≠ q.1 := by
+                    rw [hcEq]
+                    exact hnot
+                  exact ⟨Finset.mem_filter.mpr ⟨hcL', hcNot'⟩, hcEq⟩
+              rw [hfilt]
+              exact hone
+            _ = B.card := by simp
+        _ ≤ Adj.card := Finset.card_le_card hBsub
+        _ ≤ mS n δ := by
+          calc
+            Adj.card ≤ (Finset.univ : Finset (Fin (mS n δ))).card := Finset.card_image_le
+            _ = mS n δ := by simp
+    calc
+      L.card = own.card + exts.card := hcardPart
+      _ ≤ TT n δ + mS n δ := Nat.add_le_add hOwn hcardExt
+
+  have hListPositive : ∀ h q, groupValid M t h q → 1 ≤ (realizedList M t h q).card := by
+    intro h q hgv
+    rcases hgv with ⟨_, _, _, hL, _, _⟩
+    let L := realizedList M t h q
+    rcases (Finset.mem_filter.mp hL).2 with ⟨_, _, hOne⟩
+    have hspecial : 1 ≤ p10_1kSpecialCount n δ := by
+      have hfloor : (n : ℝ) ^ (200 * δ) <
+          (p10_1kSpecialCount n δ : ℝ) + 1 := by
+        dsimp [p10_1kSpecialCount]
+        exact Nat.lt_floor_add_one _
+      have hcast : (1 : ℝ) ≤ (p10_1kSpecialCount n δ : ℝ) := by
+        nlinarith [hcountPow, hfloor]
+      exact_mod_cast hcast
+    have hmpos : 0 < mS n δ := by
+      dsimp [mS]
+      omega
+    let i : Fin (mS n δ) := ⟨0, hmpos⟩
+    let z := p10_1kFlipCoordinate q.1 i
+    have hback : p10_1kFlipCoordinate z i = q.1 := by
+      funext j
+      by_cases hji : j = i <;> simp [z, p10_1kFlipCoordinate, hji]
+    have hdist : _root_.hammingDist z q.1 = 1 := by
+      rw [← hback]
+      exact p10_1kFlipCoordinate_hammingDist (mS n δ) z i
+    have hcard := hOne z hdist
+    have hnon : (L.filter (fun c => c.1 = z)).Nonempty := by
+      exact Finset.card_pos.mp (by rw [hcard]; norm_num)
+    obtain ⟨c, hc⟩ := hnon
+    have hLnon : L.Nonempty := ⟨c, (Finset.mem_filter.mp hc).1⟩
+    have hpos : 0 < L.card := Finset.card_pos.mpr hLnon
+    simpa [L] using (Nat.succ_le_iff.mpr hpos)
+
+  have hMaskAgg : ∀ (h : History n N δ) (q : Site n δ) (y : Fin N),
+      ∑ j, (maskedPrior M (t q.1) (h.mask q)).w j *
+        (maskedCluster M (t q.1) (h.mask q) j).w y ≤
+          4 * Real.exp ((n : ℝ) ^ δ) / N := by
+    intro h q y
+    let i := t q.1
+    let S := h.mask q
+    by_cases hPerm : Permitted M i S
+    · let ρ₀ := prior M i
+      let D₀ := M.D i
+      let R := keptClusters M i S
+      let ν := Law.mix ρ₀ D₀
+      have hR : (1 / 2 : ℝ) ≤ FinProb.pr ρ₀ (fun j => j ∈ R) := by
+        simpa [Permitted, ρ₀, R, prior] using hPerm
+      have hRpos : 0 < FinProb.pr ρ₀ (fun j => j ∈ R) :=
+        lt_of_lt_of_le (by norm_num) hR
+      let ρc := FinProb.cond ρ₀ (fun j => j ∈ R) hRpos
+      have hmask : ∀ j ∈ R, (1 / 2 : ℝ) ≤ lawMassOn (D₀ j) S := by
+        intro j hj
+        simpa [R, keptClusters] using (Finset.mem_filter.mp hj).2
+      have hagg : ∀ z, ∑ j, ρ₀.w j * (D₀ j).w z ≤ 1 * ν.w z := by
+        intro z
+        have heq : (∑ j, ρ₀.w j * (D₀ j).w z) = ν.w z := by
+          simp [ν, ρ₀, prior, Law.mix]
+        rw [heq]
+        change ν.w z ≤ 1 * ν.w z
+        simp
+      have hpriorEq (j : Fin (M.K i)) :
+          (maskedPrior M i S).w j = ρc.w j := by
+        simp [maskedPrior, hPerm, ρc, ρ₀, R, prior]
+      let y₀ : Fin N := ⟨0, by omega⟩
+      have hlawEq (j : Fin (M.K i)) (hj : j ∈ R) :
+          (maskedCluster M i S j).w y =
+            (p10_1kMaskClusterLaw D₀ S y₀ j).w y := by
+        have hhalf := hmask j hj
+        have hmass : 0 < lawMassOn (D₀ j) S :=
+          lt_of_lt_of_le (by norm_num) hhalf
+        simp [maskedCluster, hPerm, S, R, ρ₀, D₀, prior, hj,
+          p10_1kMaskClusterLaw, restrictOrSelf, hmass, y₀]
+      have hsumEq :
+          (∑ j, (maskedPrior M i S).w j * (maskedCluster M i S j).w y) =
+            ∑ j, ρc.w j * (p10_1kMaskClusterLaw D₀ S y₀ j).w y := by
+        apply Finset.sum_congr rfl
+        intro j hj
+        by_cases hjR : j ∈ R
+        · rw [hpriorEq j, hlawEq j hjR]
+        · have hc : ρc.w j = 0 := by simp [ρc, FinProb.cond, hjR]
+          rw [hpriorEq j]
+          simp [hc]
+      have hhelper := p10_1k_maskedClusterAggregate_le
+        ρ₀ D₀ ν S R y₀ 1 hR hmask hagg y
+      have hνwidth : ν.w y ≤ Real.exp ((n : ℝ) ^ δ) / N := by
+        simpa [ν, ρ₀, prior, Law.mix] using M.ν_width i y
+      have hhelper' :
+          (∑ j, ρc.w j * (p10_1kMaskClusterLaw D₀ S y₀ j).w y) ≤
+            4 * ν.w y := by simpa using hhelper
+      calc
+        (∑ j, (maskedPrior M i S).w j * (maskedCluster M i S j).w y) =
+            ∑ j, ρc.w j * (p10_1kMaskClusterLaw D₀ S y₀ j).w y := hsumEq
+        _ ≤ 4 * ν.w y := hhelper'
+        _ ≤ 4 * Real.exp ((n : ℝ) ^ δ) / N := by
+          calc
+            4 * ν.w y ≤ 4 * (Real.exp ((n : ℝ) ^ δ) / N) :=
+              mul_le_mul_of_nonneg_left hνwidth (by norm_num)
+            _ = 4 * Real.exp ((n : ℝ) ^ δ) / N := by ring
+    · have hbase : (∑ j, (maskedPrior M i S).w j *
+          (maskedCluster M i S j).w y) = ∑ j, M.lam i j * (M.D i j).w y := by
+        simp [maskedPrior, maskedCluster, hPerm, prior, i, S]
+      have hwidth := M.ν_width i y
+      have hnonneg : 0 ≤ Real.exp ((n : ℝ) ^ δ) / N :=
+        div_nonneg (Real.exp_nonneg _) (by positivity)
+      calc
+        (∑ j, (maskedPrior M i S).w j * (maskedCluster M i S j).w y) =
+            ∑ j, M.lam i j * (M.D i j).w y := hbase
+        _ ≤ Real.exp ((n : ℝ) ^ δ) / N := hwidth
+        _ ≤ 4 * Real.exp ((n : ℝ) ^ δ) / N := by
+          calc
+            Real.exp ((n : ℝ) ^ δ) / N ≤ 4 * (Real.exp ((n : ℝ) ^ δ) / N) :=
+              by nlinarith [hnonneg]
+            _ = 4 * Real.exp ((n : ℝ) ^ δ) / N := by ring
+
+  have hMaskAtom : ∀ (h : History n N δ) (q : Site n δ) (i : M.I)
+      (j : Fin (M.K i)) (y : Fin N),
+      (maskedCluster M i (h.mask q) j).w y ≤ 2 * Real.exp (-(n : ℝ) ^ ζ) := by
+    intro h q i j y
+    let S := h.mask q
+    by_cases hPerm : Permitted M i S
+    · by_cases hj : j ∈ keptClusters M i S
+      · have hhalf : (1 / 2 : ℝ) ≤ lawMassOn (M.D i j) S := by
+          simpa [keptClusters] using (Finset.mem_filter.mp hj).2
+        have hmass : 0 < lawMassOn (M.D i j) S :=
+          lt_of_lt_of_le (by norm_num) hhalf
+        have hrestr := p10_1k_restrict_atom_le_two (M.D i j) S hhalf y
+        have hcluster : maskedCluster M i S j = Law.restrict (M.D i j) S hmass := by
+          simp [maskedCluster, hPerm, hj, restrictOrSelf, hmass]
+        rw [hcluster]
+        calc
+          (Law.restrict (M.D i j) S hmass).w y ≤ 2 * (M.D i j).w y := hrestr
+          _ ≤ 2 * Real.exp (-(n : ℝ) ^ ζ) :=
+            mul_le_mul_of_nonneg_left (M.D_atom i j y) (by norm_num)
+      · have hcluster : maskedCluster M i S j = M.D i j := by
+          simp [maskedCluster, hPerm, hj, S]
+        rw [hcluster]
+        calc
+          (M.D i j).w y ≤ Real.exp (-(n : ℝ) ^ ζ) := M.D_atom i j y
+          _ ≤ 2 * Real.exp (-(n : ℝ) ^ ζ) := by
+            nlinarith [Real.exp_nonneg (-(n : ℝ) ^ ζ)]
+    · have hcluster : maskedCluster M i S j = M.D i j := by
+        simp [maskedCluster, hPerm, S]
+      rw [hcluster]
+      calc
+        (M.D i j).w y ≤ Real.exp (-(n : ℝ) ^ ζ) := M.D_atom i j y
+        _ ≤ 2 * Real.exp (-(n : ℝ) ^ ζ) := by
+          nlinarith [Real.exp_nonneg (-(n : ℝ) ^ ζ)]
+
+  have hLabStrong : ∀ (h : History n N δ) (b : OddRole n)
+      (c : ClIdx M) (y : Fin N),
+      (labLaw M t h b c).w y ≤
+        2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) := by
+    intro h b c y
+    let q := groupOf δ b
+    let F := hitSet M t h q
+    let D := maskedCluster M c.1 (h.mask q) c.2
+    by_cases hgate : groupValid M t h q ∧
+        Real.exp (-(3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card) ≤
+          lawMassOn D F
+    · have hcard := hListCard h q hgate.1
+      have hL : (3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card ≤
+          (n : ℝ) ^ ζ / 8 := by
+        calc
+          (3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card ≤
+              (3 / 2 : ℝ) * (kT n δ : ℝ) * (TT n δ + mS n δ : ℝ) := by
+            have hkpos : 0 ≤ (kT n δ : ℝ) := Nat.cast_nonneg _
+            have hcardR : ((realizedList M t h q).card : ℝ) ≤
+                (TT n δ + mS n δ : ℝ) := by exact_mod_cast hcard
+            exact mul_le_mul_of_nonneg_left
+              hcardR (mul_nonneg (by norm_num) hkpos)
+          _ ≤ 9 * (n : ℝ) ^ (500 * δ) := by nlinarith [hkr]
+          _ ≤ (n : ℝ) ^ ζ / 8 := hTiltBound
+      let Lcap : ℝ := (3 / 2 : ℝ) * (kT n δ : ℝ) *
+        (realizedList M t h q).card
+      have hMassGate : Real.exp (-Lcap) ≤ lawMassOn D F := by
+        simpa [Lcap, mul_assoc, mul_left_comm, mul_comm] using hgate.2
+      have hrestricted := p10_1k_restrict_atom_le_of_mass_lower D F
+        Lcap hMassGate y
+      have hAtom := hMaskAtom h q c.1 c.2 y
+      have hEq :
+          (labLaw M t h b c).w y ≤
+            2 * Real.exp ((3 / 2 : ℝ) * kT n δ *
+              (realizedList M t h q).card - (n : ℝ) ^ ζ) := by
+        have hMassPos : 0 < lawMassOn D F :=
+          lt_of_lt_of_le (Real.exp_pos _) hMassGate
+        have hLabEq : labLaw M t h b c = restrictOrSelf D F := by
+          unfold labLaw
+          have hcond : groupValid M t h (groupOf δ b) ∧
+              Real.exp (-(3 / 2 : ℝ) * kT n δ *
+                (realizedList M t h (groupOf δ b)).card) ≤
+                lawMassOn (maskedCluster M c.1 (h.mask (groupOf δ b)) c.2)
+                  (hitSet M t h (groupOf δ b)) := by
+            simpa [q, F, D] using hgate
+          rw [if_pos hcond]
+        have hLabAtom : (labLaw M t h b c).w y =
+            (Law.restrict D F hMassPos).w y := by
+          have hweight := congrArg (fun L : Law N => L.w y) hLabEq
+          simpa [restrictOrSelf, hMassPos] using hweight
+        have hLaw : (labLaw M t h b c).w y ≤
+            Real.exp ((3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card) * D.w y := by
+          rw [hLabAtom]
+          exact hrestricted
+        calc
+          (labLaw M t h b c).w y ≤
+              Real.exp ((3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card) * D.w y := hLaw
+          _ ≤ Real.exp ((3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card) *
+              (2 * Real.exp (-(n : ℝ) ^ ζ)) :=
+            mul_le_mul_of_nonneg_left hAtom (Real.exp_nonneg _)
+          _ = 2 * Real.exp ((3 / 2 : ℝ) * kT n δ *
+              (realizedList M t h q).card - (n : ℝ) ^ ζ) := by
+            calc
+              _ = 2 * (Real.exp ((3 / 2 : ℝ) * kT n δ *
+                  (realizedList M t h q).card) * Real.exp (-(n : ℝ) ^ ζ)) := by ring
+              _ = 2 * Real.exp ((3 / 2 : ℝ) * kT n δ *
+                  (realizedList M t h q).card - (n : ℝ) ^ ζ) := by
+                rw [← Real.exp_add]
+                have harg :
+                    ((3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card) +
+                        (-(n : ℝ) ^ ζ) =
+                      (3 / 2 : ℝ) * kT n δ * (realizedList M t h q).card -
+                        (n : ℝ) ^ ζ := by ring
+                rw [harg]
+      calc
+        (labLaw M t h b c).w y ≤
+            2 * Real.exp ((3 / 2 : ℝ) * kT n δ *
+              (realizedList M t h q).card - (n : ℝ) ^ ζ) := hEq
+        _ ≤ 2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) := by
+          apply mul_le_mul_of_nonneg_left _ (by norm_num)
+          exact Real.exp_le_exp.mpr (by linarith)
+    · have hfalse : (labLaw M t h b c).w y = D.w y := by
+        unfold labLaw
+        have hcond : ¬ (groupValid M t h (groupOf δ b) ∧
+            Real.exp (-(3 / 2 : ℝ) * kT n δ *
+              (realizedList M t h (groupOf δ b)).card) ≤
+              lawMassOn (maskedCluster M c.1 (h.mask (groupOf δ b)) c.2)
+                (hitSet M t h (groupOf δ b))) := by
+          simpa [q, F, D] using hgate
+        rw [if_neg hcond]
+      rw [hfalse]
+      have hAtom := hMaskAtom h q c.1 c.2 y
+      calc
+        D.w y ≤ 2 * Real.exp (-(n : ℝ) ^ ζ) := hAtom
+        _ ≤ 2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) := by
+          apply mul_le_mul_of_nonneg_left _ (by norm_num)
+          exact Real.exp_le_exp.mpr (by linarith)
+
+  have hLabCap : ∀ h b c y,
+      (labLaw M t h b c).w y ≤ Real.exp (-(n : ℝ) ^ ζ / 2) := by
+    intro h b c y
+    have hStrong := hLabStrong h b c y
+    have hsmall : 2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) ≤
+        Real.exp (-(n : ℝ) ^ ζ / 2) := by
+      have heq : 2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) =
+          Real.exp (Real.log 2 + ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by
+        calc
+          2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) =
+              Real.exp (Real.log 2) * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) := by
+            rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+          _ = Real.exp (Real.log 2 + ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by
+            rw [← Real.exp_add]
+      rw [heq]
+      exact Real.exp_le_exp.mpr (by nlinarith [hlogTwo])
+    exact hStrong.trans hsmall
+
+  have hRowCap : ∀ h b y, (N : ℝ) * oddRow M t h b y ≤
+      8 * Real.exp (2 * kT n δ * (TT n δ + mS n δ) + (n : ℝ) ^ δ) := by
+    intro h b y
+    let q := groupOf δ b
+    by_cases hvalid : groupValid M t h q
+    · have hgv : groupValid M t h q := hvalid
+      rcases hvalid with ⟨_, _, _, hLmem, hpass, hret⟩
+      let L := realizedList M t h q
+      let ρ := maskedPrior M (t q.1) (h.mask q)
+      let D := maskedCluster M (t q.1) (h.mask q)
+      let F := hitSet M t h q
+      let r := L.card
+      let μL : Fin r → Law N := fun j => M.μ (t (L.equivFin.symm j).1.1)
+      let W : Fin r → Fin (kT n δ) → Fin N := fun j => h.tup (L.equivFin.symm j).1
+      have hF : fixedListHitSet E G W = F := by
+        ext z
+        simp only [fixedListHitSet, F, hitSet, Finset.mem_filter,
+          Finset.mem_univ, true_and]
+        constructor
+        · intro hfix c hc i
+          let j : Fin r := L.equivFin ⟨c, hc⟩
+          have h := hfix j i
+          simpa [W, j, L] using h
+        · intro hhit j i
+          exact hhit (L.equivFin.symm j).1 (L.equivFin.symm j).2 i
+      have hFminus (c : ID n δ) (hc : c ∈ L) :
+          fixedListHitSetWithout E G W (L.equivFin ⟨c, hc⟩) =
+            hitSetWithout M t h q c := by
+        ext z
+        simp only [fixedListHitSetWithout, hitSetWithout, Finset.mem_filter,
+          Finset.mem_univ, true_and]
+        constructor
+        · intro hfix c' hc' hne i
+          let j : Fin r := L.equivFin ⟨c', hc'⟩
+          have hjne : j ≠ L.equivFin ⟨c, hc⟩ := by
+            intro heq
+            have heq' : L.equivFin ⟨c', hc'⟩ = L.equivFin ⟨c, hc⟩ := by
+              simpa [j] using heq
+            exact hne (congrArg Subtype.val (L.equivFin.injective heq'))
+          have h := hfix j hjne i
+          simpa [W, j, L] using h
+        · intro hhit j hjne i
+          let c' : ID n δ := (L.equivFin.symm j).1
+          have hc' : c' ∈ L := (L.equivFin.symm j).2
+          have hne : c' ≠ c := by
+            intro heq
+            apply hjne
+            have hsub : L.equivFin.symm j = ⟨c, hc⟩ := Subtype.ext heq
+            calc
+              j = L.equivFin (L.equivFin.symm j) := by simp
+              _ = L.equivFin ⟨c, hc⟩ := congrArg L.equivFin hsub
+          have h := hhit c' hc' hne i
+          simpa [W, c', L] using h
+      have hsuccess : ¬ fixedListFailure E G ρ D μL (aG n δ) W := by
+        simpa [listFails, ρ, D, μL, W, L, q] using hpass
+      have hAfullLowerFix :=
+        (p10_1k_successfulFixedList_test_bounds E G ρ D μL (aG n δ) W hsuccess).1
+      have hAfullLower :
+          Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ)) ≤ squaredClusterMass ρ D F := by
+        simpa [hF, r, mul_assoc, mul_left_comm, mul_comm] using hAfullLowerFix
+      have hrpos : 1 ≤ r := by simpa [r, L] using hListPositive h q hgv
+      have hrNat : r ≤ p10_1kFixedListBlockCount n δ := by
+        calc
+          r ≤ TT n δ + mS n δ := by simpa [r, L] using hListCard h q hgv
+          _ ≤ p10_1kFixedListBlockCount n δ := hlistScaleNat
+      have hrupper : (r : ℝ) ≤ 3 * (n : ℝ) ^ (200 * δ) := by
+        calc
+          (r : ℝ) ≤ (p10_1kFixedListBlockCount n δ : ℝ) := by exact_mod_cast hrNat
+          _ ≤ 3 * (n : ℝ) ^ (200 * δ) := hblockUpper
+      have hkLower : (n : ℝ) ^ (300 * δ) ≤ (kT n δ : ℝ) := by
+        simpa [kT, p10_1kTupleListLength] using
+          (Nat.le_ceil ((n : ℝ) ^ (300 * δ)))
+      have hkrLower : (n : ℝ) ^ (300 * δ) ≤ (kT n δ : ℝ) * (r : ℝ) := by
+        calc
+          (n : ℝ) ^ (300 * δ) ≤ (kT n δ : ℝ) := hkLower
+          _ ≤ (kT n δ : ℝ) * (r : ℝ) := by
+            have hrreal : 1 ≤ (r : ℝ) := by exact_mod_cast hrpos
+            calc
+              (kT n δ : ℝ) = (kT n δ : ℝ) * 1 := by ring
+              _ ≤ (kT n δ : ℝ) * (r : ℝ) :=
+                mul_le_mul_of_nonneg_left hrreal (by positivity)
+      have hgainK : (n : ℝ) ^ (299 * δ) ≤ aG n δ * (kT n δ : ℝ) := by
+        have hpEq : (n : ℝ) ^ (-δ) * (n : ℝ) ^ (300 * δ) =
+            (n : ℝ) ^ (299 * δ) := by
+          rw [← Real.rpow_add hnreal]
+          rw [show -δ + 300 * δ = 299 * δ by ring]
+        calc
+          (n : ℝ) ^ (299 * δ) =
+              (n : ℝ) ^ (-δ) * (n : ℝ) ^ (300 * δ) := hpEq.symm
+          _ ≤ (n : ℝ) ^ (-δ) * (kT n δ : ℝ) :=
+            mul_le_mul_of_nonneg_left hkLower (Real.rpow_nonneg (le_of_lt hnreal) _)
+          _ = aG n δ * (kT n δ : ℝ) := by rfl
+      have hbudget :
+          Real.exp (-((kT n δ : ℝ) * (r : ℝ))) + (r : ℝ) *
+            (Real.exp (-((6 / 25 : ℝ) * aG n δ * (kT n δ : ℝ))) +
+              Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ)))) ≤ 1 / 2 := by
+        have hfirst : Real.exp (-((kT n δ : ℝ) * (r : ℝ))) ≤
+            Real.exp (-(n : ℝ) ^ (300 * δ)) := by
+          exact Real.exp_le_exp.mpr (by linarith [hkrLower])
+        have hownExp : Real.exp (-((6 / 25 : ℝ) * aG n δ *
+            (kT n δ : ℝ))) ≤ Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) := by
+          apply Real.exp_le_exp.mpr
+          nlinarith [hgainK]
+        have hownTerm : (r : ℝ) * Real.exp (-((6 / 25 : ℝ) * aG n δ *
+            (kT n δ : ℝ))) ≤ 3 * (n : ℝ) ^ (200 * δ) *
+              Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) := by
+          calc
+            (r : ℝ) * Real.exp (-((6 / 25 : ℝ) * aG n δ * (kT n δ : ℝ))) ≤
+                (r : ℝ) * Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) :=
+              mul_le_mul_of_nonneg_left hownExp (by positivity)
+            _ ≤ 3 * (n : ℝ) ^ (200 * δ) *
+                Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) :=
+              mul_le_mul_of_nonneg_right hrupper (Real.exp_nonneg _)
+        have hexternalExp : Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ))) ≤
+            Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ))) := by
+          apply Real.exp_le_exp.mpr
+          nlinarith [hkLower]
+        have hexternalTerm : (r : ℝ) * Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ))) ≤
+            3 * (n : ℝ) ^ (200 * δ) *
+              Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ))) := by
+          calc
+            (r : ℝ) * Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ))) ≤
+                (r : ℝ) * Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ))) :=
+              mul_le_mul_of_nonneg_left hexternalExp (by positivity)
+            _ ≤ 3 * (n : ℝ) ^ (200 * δ) *
+                Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ))) :=
+              mul_le_mul_of_nonneg_right hrupper (Real.exp_nonneg _)
+        have hbudgetParts : (r : ℝ) *
+            (Real.exp (-((6 / 25 : ℝ) * aG n δ * (kT n δ : ℝ))) +
+              Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ)))) ≤
+              3 * (n : ℝ) ^ (200 * δ) *
+                Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) +
+              3 * (n : ℝ) ^ (200 * δ) *
+                Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ))) := by
+          rw [mul_add]
+          exact add_le_add hownTerm hexternalTerm
+        have hbudgetStep :
+            Real.exp (-((kT n δ : ℝ) * (r : ℝ))) +
+                (r : ℝ) *
+                  (Real.exp (-((6 / 25 : ℝ) * aG n δ * (kT n δ : ℝ))) +
+                    Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ)))) ≤
+              Real.exp (-(n : ℝ) ^ (300 * δ)) +
+                (3 * (n : ℝ) ^ (200 * δ) *
+                  Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) +
+                  3 * (n : ℝ) ^ (200 * δ) *
+                    Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ)))) := by
+          linarith [hfirst, hbudgetParts]
+        calc
+          Real.exp (-((kT n δ : ℝ) * (r : ℝ))) + (r : ℝ) *
+              (Real.exp (-((6 / 25 : ℝ) * aG n δ * (kT n δ : ℝ))) +
+                Real.exp (-((2 / 5 : ℝ) * (kT n δ : ℝ)))) ≤
+              Real.exp (-(n : ℝ) ^ (300 * δ)) +
+                (3 * (n : ℝ) ^ (200 * δ) *
+                  Real.exp (-((6 / 25 : ℝ) * (n : ℝ) ^ (299 * δ))) +
+                    3 * (n : ℝ) ^ (200 * δ) *
+                  Real.exp (-((2 / 5 : ℝ) * (n : ℝ) ^ (300 * δ)))) := hbudgetStep
+          _ = Lane_q_s10_d3.retainedBudgetUpper n δ := by
+            simp only [Lane_q_s10_d3.retainedBudgetUpper]
+            ring
+          _ ≤ 1 / 2 := le_of_lt hbudgetSmall
+      let A := squaredClusterMass ρ D F
+      let hA : 0 < A := lt_of_lt_of_le (Real.exp_pos _) hAfullLower
+      obtain ⟨hAfix, hRfix⟩ := p10_1k_successfulFixedList_retainedTilt_half_mass
+        E G ρ D μL (aG n δ) W hsuccess hbudget
+      let massBad : Fin (M.K (t q.1)) → Prop := fun j =>
+        lawMassOn (D j) F < Real.exp (-(3 / 2 : ℝ) *
+          ((kT n δ : ℝ) * (r : ℝ)))
+      let ratioBad : Fin r → Fin (M.K (t q.1)) → Prop := fun b' j =>
+        (FixedListOwnBlock E G ρ D (μL b') (aG n δ) ∧
+          lawMassOn (D j) F /
+            lawMassOn (D j) (fixedListHitSetWithout E G W b') <
+              Real.exp ((-Real.log 2 + (2 / 25 : ℝ) * aG n δ) * (kT n δ : ℝ))) ∨
+        (¬ FixedListOwnBlock E G ρ D (μL b') (aG n δ) ∧
+          lawMassOn (D j) F /
+            lawMassOn (D j) (fixedListHitSetWithout E G W b') <
+              Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ)))
+
+      let Rgood := p10_1kTiltGoodClusterSet massBad ratioBad
+      have hAfixF : 0 < squaredClusterMass ρ D F := by
+        simpa [hF] using hAfix
+      have hAfixEq : hAfixF = hA := Subsingleton.elim _ _
+      have hRfixF : (1 / 2 : ℝ) ≤ FinProb.pr
+          (p10_1kSquaredTiltPrior ρ D F hAfixF)
+          (fun j => j ∈ p10_1kTiltGoodClusterSet massBad ratioBad) := by
+        simpa [hF, massBad, ratioBad, p10_1kTiltGoodClusterSet] using hRfix
+      have hRfixA := hRfixF
+      rw [hAfixEq] at hRfixA
+      have hRgood : (1 / 2 : ℝ) ≤ FinProb.pr
+          (p10_1kSquaredTiltPrior ρ D F hA)
+          (fun j => j ∈ Rgood) := by
+        simpa [Rgood] using hRfixA
+
+      have hPriorPos (j : Fin (M.K (t q.1))) (hj : 0 < ρ.w j) :
+          0 < M.lam (t q.1) j := by
+        let i := t q.1
+        let S := h.mask q
+        by_cases hPerm : Permitted M i S
+        · let R := keptClusters M i S
+          have hhalf : (1 / 2 : ℝ) ≤ FinProb.pr (prior M i) (fun j => j ∈ R) := by
+            simpa [Permitted, R, prior, i, S] using hPerm
+          have hden : 0 < FinProb.pr (prior M i) (fun j => j ∈ R) :=
+            lt_of_lt_of_le (by norm_num) hhalf
+          by_cases hkeep : j ∈ R
+          ·
+            have hweight : ρ.w j = (prior M i).w j /
+                FinProb.pr (prior M i) (fun j => j ∈ R) := by
+              dsimp [ρ, maskedPrior]
+              rw [dif_pos hPerm]
+              change (FinProb.cond (prior M i) (fun k => k ∈ R) hden).w j = _
+              simp [FinProb.cond, hkeep]
+            rw [hweight] at hj
+            have hpriorPos : 0 < (prior M i).w j :=
+              (div_pos_iff_of_pos_right hden).mp hj
+            simpa [prior] using hpriorPos
+          · have hz : ρ.w j = 0 := by
+              dsimp [ρ, maskedPrior]
+              rw [dif_pos hPerm]
+              change (FinProb.cond (prior M i) (fun k => k ∈ R) hden).w j = 0
+              simp [FinProb.cond, hkeep]
+            rw [hz] at hj
+            norm_num at hj
+        · have hpriorPos : 0 < (prior M i).w j := by
+            have hρeq : ρ.w j = (prior M i).w j := by
+              dsimp [ρ, maskedPrior]
+              rw [dif_neg hPerm]
+            rw [hρeq] at hj
+            exact hj
+          simpa [prior] using hpriorPos
+
+      have hClusterPos (j : Fin (M.K (t q.1))) (z : Fin N)
+          (hj : 0 < (D j).w z) : 0 < (M.D (t q.1) j).w z := by
+        let i := t q.1
+        let S := h.mask q
+        by_cases hPerm : Permitted M i S
+        · let R := keptClusters M i S
+          by_cases hkeep : j ∈ R
+          · have hhalf : (1 / 2 : ℝ) ≤ lawMassOn (M.D i j) S := by
+              simpa [R, keptClusters] using (Finset.mem_filter.mp hkeep).2
+            have hmass : 0 < lawMassOn (M.D i j) S :=
+              lt_of_lt_of_le (by norm_num) hhalf
+            have hclusterEq : D j = Law.restrict (M.D i j) S hmass := by
+              simp [D, maskedCluster, hPerm, R, hkeep, S, i,
+                restrictOrSelf, hmass]
+            have hrestrPos : 0 < (Law.restrict (M.D i j) S hmass).w z := by
+              rw [← hclusterEq]
+              exact hj
+            by_cases hz : z ∈ S
+            · have hweight : (Law.restrict (M.D i j) S hmass).w z =
+                  (M.D i j).w z / lawMassOn (M.D i j) S := by
+                have hmassEq : lawMassOn (M.D i j) S =
+                    ∑ y ∈ S, (M.D i j).w y := rfl
+                calc
+                  (Law.restrict (M.D i j) S hmass).w z =
+                      (M.D i j).w z / (∑ y ∈ S, (M.D i j).w y) := by
+                    simp only [Law.restrict, if_pos hz]
+                  _ = (M.D i j).w z / lawMassOn (M.D i j) S := by
+                    rw [hmassEq]
+              rw [hweight] at hrestrPos
+              exact (div_pos_iff_of_pos_right hmass).mp hrestrPos
+            · simp [Law.restrict, hz] at hrestrPos
+          · simpa [D, maskedCluster, hPerm, R, hkeep, S, i] using hj
+        · simpa [D, maskedCluster, hPerm, S, i] using hj
+
+      have hOwnSlice (b' : Fin r)
+          (hslice : (L.equivFin.symm b').1.1 = q.1) :
+          FixedListOwnBlock E G ρ D (μL b') (aG n δ) := by
+        intro j hρj z z' hz hz'
+        have hlamPos := hPriorPos j hρj
+        have hDz := hClusterPos j z hz
+        have hDz' := hClusterPos j z' hz'
+        have hcode := M.codegree (t q.1) j hlamPos z z' hDz hDz'
+        simpa [μL, aG, hslice] using hcode
+
+      have hRsubset : Rgood ⊆ tiltKept M t h q := by
+        intro j hj
+        classical
+        have hgoodMem : ¬ massBad j ∧ ∀ b', ¬ ratioBad b' j := by
+          change j ∈ p10_1kTiltGoodClusterSet massBad ratioBad at hj
+          simpa [p10_1kTiltGoodClusterSet] using hj
+        rcases hgoodMem with ⟨hMassGood, hRatioGood⟩
+        have hAbs : Real.exp (-(3 / 2 : ℝ) * kT n δ * L.card) ≤
+            lawMassOn (D j) F := by
+          apply le_of_not_gt
+          intro hlt
+          have hlt' : massBad j := by
+            dsimp [massBad, r, L]
+            convert hlt using 1 <;> congr 1 <;> ring
+          exact hMassGood hlt'
+        apply Finset.mem_filter.mpr
+        refine ⟨Finset.mem_univ _, ?_⟩
+        refine ⟨?_, ?_⟩
+        · simpa [L] using hAbs
+        · intro c hc
+          let b' : Fin r := L.equivFin ⟨c, hc⟩
+          have hnotRatio0 := hRatioGood b'
+          have hnotRatio :
+              ¬ ((FixedListOwnBlock E G ρ D (μL b') (aG n δ) ∧
+                    lawMassOn (D j) F / lawMassOn (D j)
+                      (hitSetWithout M t h q c) <
+                        Real.exp ((-Real.log 2 + (2 / 25 : ℝ) * aG n δ) *
+                          (kT n δ : ℝ))) ∨
+                  (¬ FixedListOwnBlock E G ρ D (μL b') (aG n δ) ∧
+                    lawMassOn (D j) F / lawMassOn (D j)
+                      (hitSetWithout M t h q c) <
+                        Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ)))) := by
+            intro hbad
+            apply hRatioGood b'
+            dsimp [ratioBad]
+            rcases hbad with hown | hext
+            · have hratio : lawMassOn (D j) F /
+                  lawMassOn (D j) (fixedListHitSetWithout E G W b') <
+                    Real.exp ((-Real.log 2 + (2 / 25 : ℝ) * aG n δ) *
+                      (kT n δ : ℝ)) := by
+                rw [hFminus c hc]
+                exact hown.2
+              exact Or.inl ⟨hown.1, hratio⟩
+            · have hratio : lawMassOn (D j) F /
+                  lawMassOn (D j) (fixedListHitSetWithout E G W b') <
+                    Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ)) := by
+                rw [hFminus c hc]
+                exact hext.2
+              exact Or.inr ⟨hext.1, hratio⟩
+          have hdenNonneg : 0 ≤ lawMassOn (D j) (hitSetWithout M t h q c) := by
+            unfold lawMassOn
+            apply Finset.sum_nonneg
+            intro z hz
+            exact (D j).nonneg z
+          have hratioMul {a : ℝ} (ha : 0 < a)
+              (hratio : a ≤ lawMassOn (D j) F /
+                lawMassOn (D j) (hitSetWithout M t h q c)) :
+              a * lawMassOn (D j) (hitSetWithout M t h q c) ≤
+                lawMassOn (D j) F := by
+            have hdenPos : 0 < lawMassOn (D j) (hitSetWithout M t h q c) := by
+              by_contra hnot
+              have hzero : lawMassOn (D j) (hitSetWithout M t h q c) = 0 :=
+                le_antisymm (le_of_not_gt hnot) hdenNonneg
+              rw [hzero, div_zero] at hratio
+              exact (not_le_of_gt ha) hratio
+            exact (le_div_iff₀ hdenPos).mp hratio
+          have hprod :
+              (if c.1 = q.1 then
+                Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) * (kT n δ : ℝ))
+               else Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ))) *
+                lawMassOn (D j) (hitSetWithout M t h q c) ≤ lawMassOn (D j) F := by
+            by_cases hcOwn : c.1 = q.1
+            · have hown : FixedListOwnBlock E G ρ D (μL b') (aG n δ) :=
+                hOwnSlice b' (by simpa [b'] using hcOwn)
+              have hnot : ¬ lawMassOn (D j) F /
+                    lawMassOn (D j) (hitSetWithout M t h q c) <
+                      Real.exp ((-Real.log 2 + (2 / 25 : ℝ) * aG n δ) *
+                        (kT n δ : ℝ)) := by
+                intro hlt
+                exact hnotRatio (Or.inl ⟨hown, hlt⟩)
+              have hratio :
+                  Real.exp ((-Real.log 2 + (2 / 25 : ℝ) * aG n δ) *
+                    (kT n δ : ℝ)) ≤ lawMassOn (D j) F /
+                      lawMassOn (D j) (hitSetWithout M t h q c) :=
+                le_of_not_gt hnot
+              have hratio' :
+                  Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) *
+                    (kT n δ : ℝ)) ≤ lawMassOn (D j) F /
+                      lawMassOn (D j) (hitSetWithout M t h q c) := by
+                simpa only [show (2 / 25 : ℝ) = 8 / 100 by norm_num] using hratio
+              simpa [hcOwn] using hratioMul (Real.exp_pos _) hratio'
+            · by_cases hOwn : FixedListOwnBlock E G ρ D (μL b') (aG n δ)
+              · have hlog2 : Real.log 2 ≤ 1 := by
+                  have h := Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)
+                  linarith
+                have hthreshold :
+                    Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ)) ≤
+                      Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) *
+                        (kT n δ : ℝ)) := by
+                  apply Real.exp_le_exp.mpr
+                  have hgain : 0 ≤ aG n δ := Real.rpow_nonneg (le_of_lt hnreal) _
+                  nlinarith [hlog2, hgain]
+                have hnot : ¬ lawMassOn (D j) F /
+                    lawMassOn (D j) (hitSetWithout M t h q c) <
+                      Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) *
+                        (kT n δ : ℝ)) := by
+                  intro hlt
+                  have hlt' : lawMassOn (D j) F /
+                      lawMassOn (D j) (hitSetWithout M t h q c) <
+                        Real.exp ((-Real.log 2 + (2 / 25 : ℝ) * aG n δ) *
+                          (kT n δ : ℝ)) := by
+                    simpa only [show (2 / 25 : ℝ) = 8 / 100 by norm_num] using hlt
+                  exact hnotRatio (Or.inl ⟨hOwn, hlt'⟩)
+                have hratio :
+                    Real.exp ((-Real.log 2 + (8 / 100 : ℝ) * aG n δ) *
+                      (kT n δ : ℝ)) ≤ lawMassOn (D j) F /
+                        lawMassOn (D j) (hitSetWithout M t h q c) :=
+                  le_of_not_gt hnot
+                have hratio' := hratioMul (Real.exp_pos _) hratio
+                simpa [hcOwn] using le_trans
+                  (mul_le_mul_of_nonneg_right hthreshold hdenNonneg) hratio'
+              · have hnot : ¬ lawMassOn (D j) F /
+                    lawMassOn (D j) (hitSetWithout M t h q c) <
+                      Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ)) := by
+                  intro hlt
+                  exact hnotRatio (Or.inr ⟨hOwn, hlt⟩)
+                have hratio :
+                    Real.exp (-(6 / 5 : ℝ) * (kT n δ : ℝ)) ≤ lawMassOn (D j) F /
+                      lawMassOn (D j) (hitSetWithout M t h q c) :=
+                  le_of_not_gt hnot
+                simpa [hcOwn] using hratioMul (Real.exp_pos _) hratio
+          exact hprod
+      have hRprob : (1 / 2 : ℝ) ≤ FinProb.pr
+          (p10_1kSquaredTiltPrior ρ D F hA)
+          (fun j => j ∈ tiltKept M t h q) := by
+        have hmono : FinProb.pr (p10_1kSquaredTiltPrior ρ D F hA)
+            (fun j => j ∈ Rgood) ≤ FinProb.pr
+              (p10_1kSquaredTiltPrior ρ D F hA)
+              (fun j => j ∈ tiltKept M t h q) := by
+          unfold FinProb.pr
+          apply Finset.sum_le_sum
+          intro j hj
+          by_cases hjg : j ∈ Rgood
+          · have hjk := hRsubset hjg
+            simp [hjg, hjk]
+          · by_cases hjk : j ∈ tiltKept M t h q
+            · simpa [hjg, hjk] using
+                (p10_1kSquaredTiltPrior ρ D F hA).nonneg j
+            · simp [hjg, hjk]
+        exact hRgood.trans hmono
+      let Aret := ∑ j, tiltWeight M t h q j
+      have hprEq : FinProb.pr (p10_1kSquaredTiltPrior ρ D F hA)
+          (fun j => j ∈ tiltKept M t h q) = Aret / A := by
+        unfold FinProb.pr
+        calc
+          _ = ∑ j, tiltWeight M t h q j / A := by
+            apply Finset.sum_congr rfl
+            intro j hj
+            by_cases hjk : j ∈ tiltKept M t h q
+            · rw [if_pos hjk]
+              have hweight : (p10_1kSquaredTiltPrior ρ D F hA).w j =
+                  ρ.w j * (lawMassOn (D j) F) ^ 2 / A := by
+                rfl
+              rw [hweight]
+              simp [tiltWeight, ρ, D, F, hjk]
+            · simp [tiltWeight, hjk]
+          _ = Aret / A := by
+            rw [← Finset.sum_div]
+      have hAretPos : 0 < Aret := by simpa [Aret] using hret
+      have hAretLower : A / 2 ≤ Aret := by
+        rw [hprEq] at hRprob
+        have hprod : (1 / 2 : ℝ) * A ≤ (Aret / A) * A :=
+          mul_le_mul_of_nonneg_right hRprob hA.le
+        have hcancel : (Aret / A) * A = Aret := by
+          field_simp [ne_of_gt hA]
+        nlinarith [hprod, hcancel]
+      have hAretExp : Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ)) / 2 ≤ Aret := by
+        calc
+          Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ)) / 2 ≤ A / 2 :=
+            div_le_div_of_nonneg_right hAfullLower (by norm_num)
+          _ = A / 2 := rfl
+          _ ≤ Aret := hAretLower
+      have hrecip : 1 / Aret ≤
+          2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) := by
+        apply (div_le_iff₀ hAretPos).2
+        have hcancel :
+            Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+              Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ)) = 1 := by
+          rw [← Real.exp_add]
+          congr 1
+          ring_nf
+          simp
+        calc
+          1 = (2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ))) *
+                (Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ)) / 2) := by
+            calc
+              1 = (2 / 2) *
+                  (Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+                    Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ))) := by
+                rw [hcancel]
+                norm_num
+              _ = (2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ))) *
+                    (Real.exp (-2 * (kT n δ : ℝ) * (r : ℝ)) / 2) := by ring
+          _ ≤ (2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ))) * Aret :=
+            mul_le_mul_of_nonneg_left hAretExp (by positivity)
+      have hagg : 0 ≤ ∑ j, ρ.w j * (D j).w y := by
+        apply Finset.sum_nonneg
+        intro j hj
+        exact mul_nonneg (ρ.nonneg j) ((D j).nonneg y)
+      have hterm (j : Fin (M.K (t q.1))) :
+          (tiltWeight M t h q j / Aret) *
+              (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y ≤
+            ρ.w j * (D j).w y / Aret := by
+        by_cases hj : j ∈ tiltKept M t h q
+        · have hkeep := (Finset.mem_filter.mp hj).2
+          have hMassGate : Real.exp (-(3 / 2 : ℝ) * kT n δ *
+              (realizedList M t h q).card) ≤ lawMassOn (D j) F := by
+            simpa [q, F, D] using hkeep.1
+          have hmassPos : 0 < lawMassOn (D j) F :=
+            lt_of_lt_of_le (Real.exp_pos _) hMassGate
+          have hmassPosRestrict : 0 < ∑ z ∈ F, (D j).w z := by
+            simpa [lawMassOn] using hmassPos
+          have hMassLe : lawMassOn (D j) F ≤ 1 :=
+            p10_1k_lawMassOn_le_one (D j) F
+          have hLabEq :
+              (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y =
+                (Law.restrict (D j) F hmassPosRestrict).w y := by
+            have hcond : groupValid M t h (groupOf δ b) ∧
+                Real.exp (-(3 / 2 : ℝ) * kT n δ *
+                  (realizedList M t h (groupOf δ b)).card) ≤
+                  lawMassOn (maskedCluster M (t q.1) (h.mask q) j)
+                    (hitSet M t h (groupOf δ b)) := by
+              exact ⟨hgv, by simpa [q, F, D] using hMassGate⟩
+            have hLawEq : labLaw M t h b (⟨t q.1, j⟩ : ClIdx M) =
+                restrictOrSelf (D j) F := by
+              unfold labLaw
+              rw [if_pos hcond]
+            have hweight := congrArg (fun L : Law N => L.w y) hLawEq
+            simpa [restrictOrSelf, hmassPos] using hweight
+          have hlabelLE : (Law.restrict (D j) F hmassPosRestrict).w y ≤
+              (D j).w y / lawMassOn (D j) F := by
+            by_cases hy : y ∈ F
+            · simp [Law.restrict, lawMassOn, hy]
+            · simp [Law.restrict, hy]
+              exact div_nonneg ((D j).nonneg y) hmassPos.le
+          have hNum : ρ.w j * (lawMassOn (D j) F) ^ 2 *
+              (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y ≤
+                ρ.w j * (D j).w y := by
+            calc
+              ρ.w j * (lawMassOn (D j) F) ^ 2 *
+                  (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y =
+                  ρ.w j * (lawMassOn (D j) F) ^ 2 *
+                    (Law.restrict (D j) F hmassPosRestrict).w y := by rw [hLabEq]
+              _ ≤
+                  ρ.w j * (lawMassOn (D j) F) ^ 2 *
+                    ((D j).w y / lawMassOn (D j) F) :=
+                mul_le_mul_of_nonneg_left hlabelLE
+                  (mul_nonneg (ρ.nonneg j) (sq_nonneg _))
+              _ = (ρ.w j * lawMassOn (D j) F) * (D j).w y := by
+                field_simp [ne_of_gt hmassPos] <;> ring
+              _ ≤ ρ.w j * (D j).w y := by
+                apply mul_le_mul_of_nonneg_right _ ((D j).nonneg y)
+                nlinarith [ρ.nonneg j, hMassLe]
+          simp only [tiltWeight, if_pos hj]
+          have hdiv := div_le_div_of_nonneg_right hNum hAretPos.le
+          convert hdiv using 1 <;> ring
+        · simp only [tiltWeight, if_neg hj]
+          calc
+            (0 / Aret) * (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y = 0 := by simp
+            _ ≤ ρ.w j * (D j).w y / Aret :=
+              div_nonneg (mul_nonneg (ρ.nonneg j) ((D j).nonneg y)) hAretPos.le
+      have hrowEq : oddRow M t h b y =
+          (clusterLaw M t h q).expect
+            (fun c => (labLaw M t h b c).w y) := by
+        simp [oddRow, q, hgv]
+      have hclusterEq : (clusterLaw M t h q).expect
+          (fun c => (labLaw M t h b c).w y) =
+            ∑ j, tiltWeight M t h q j / Aret *
+              (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y := by
+        rw [clusterLaw, dif_pos ⟨hgv, hret⟩,
+          Lane_q_s10_d3.expect_map]
+        rfl
+      have hrowAgg : oddRow M t h b y ≤
+          (∑ j, ρ.w j * (D j).w y) / Aret := by
+        rw [hrowEq, hclusterEq]
+        calc
+          (∑ j, tiltWeight M t h q j / Aret *
+              (labLaw M t h b (⟨t q.1, j⟩ : ClIdx M)).w y) ≤
+              ∑ j, ρ.w j * (D j).w y / Aret := by
+            apply Finset.sum_le_sum
+            intro j hj
+            exact hterm j
+          _ = (∑ j, ρ.w j * (D j).w y) / Aret := by rw [Finset.sum_div]
+      have hrowSmall : oddRow M t h b y ≤
+          2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+            (∑ j, ρ.w j * (D j).w y) := by
+        calc
+          oddRow M t h b y ≤ (∑ j, ρ.w j * (D j).w y) / Aret := hrowAgg
+          _ = (∑ j, ρ.w j * (D j).w y) * (1 / Aret) := by ring
+          _ ≤ (∑ j, ρ.w j * (D j).w y) *
+              (2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ))) :=
+            mul_le_mul_of_nonneg_left hrecip hagg
+          _ = 2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+              (∑ j, ρ.w j * (D j).w y) := by ring
+      have hNagg : (N : ℝ) * (∑ j, ρ.w j * (D j).w y) ≤
+          4 * Real.exp ((n : ℝ) ^ δ) := by
+        have hNreal : 0 < (N : ℝ) := by exact_mod_cast hNpos
+        have hNratio : (N : ℝ) / N = 1 := div_self (ne_of_gt hNreal)
+        calc
+          (N : ℝ) * (∑ j, ρ.w j * (D j).w y) ≤
+              (N : ℝ) * (4 * Real.exp ((n : ℝ) ^ δ) / N) :=
+            mul_le_mul_of_nonneg_left (hMaskAgg h q y) (Nat.cast_nonneg _)
+          _ = 4 * Real.exp ((n : ℝ) ^ δ) := by
+            calc
+              (N : ℝ) * (4 * Real.exp ((n : ℝ) ^ δ) / N) =
+                  4 * Real.exp ((n : ℝ) ^ δ) * ((N : ℝ) / N) := by ring
+              _ = 4 * Real.exp ((n : ℝ) ^ δ) := by rw [hNratio]; ring
+      have hrExp : Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) ≤
+          Real.exp (2 * (kT n δ : ℝ) * (TT n δ + mS n δ : ℝ)) := by
+        have hcardR : (r : ℝ) ≤ (TT n δ + mS n δ : ℝ) := by
+          exact_mod_cast (by simpa [r, L] using hListCard h q hgv)
+        apply Real.exp_le_exp.mpr
+        exact mul_le_mul_of_nonneg_left hcardR
+          (mul_nonneg (by norm_num) (Nat.cast_nonneg _))
+      calc
+        (N : ℝ) * oddRow M t h b y ≤
+            (N : ℝ) * (2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+              (∑ j, ρ.w j * (D j).w y)) :=
+          mul_le_mul_of_nonneg_left hrowSmall (Nat.cast_nonneg _)
+        _ = 2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+              ((N : ℝ) * (∑ j, ρ.w j * (D j).w y)) := by ring
+        _ ≤ 2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+              (4 * Real.exp ((n : ℝ) ^ δ)) :=
+          mul_le_mul_of_nonneg_left hNagg (by positivity)
+        _ ≤ 8 * Real.exp (2 * (kT n δ : ℝ) *
+              (TT n δ + mS n δ : ℝ) + (n : ℝ) ^ δ) := by
+          calc
+            2 * Real.exp (2 * (kT n δ : ℝ) * (r : ℝ)) *
+                (4 * Real.exp ((n : ℝ) ^ δ)) ≤
+                2 * Real.exp (2 * (kT n δ : ℝ) *
+                  (TT n δ + mS n δ : ℝ)) * (4 * Real.exp ((n : ℝ) ^ δ)) :=
+              mul_le_mul_of_nonneg_right
+                (mul_le_mul_of_nonneg_left hrExp (by norm_num))
+                (by positivity)
+            _ = 8 * Real.exp (2 * (kT n δ : ℝ) *
+                (TT n δ + mS n δ : ℝ) + (n : ℝ) ^ δ) := by
+              calc
+                _ = 8 * (Real.exp (2 * (kT n δ : ℝ) *
+                    (TT n δ + mS n δ : ℝ)) * Real.exp ((n : ℝ) ^ δ)) := by ring
+                _ = 8 * Real.exp (2 * (kT n δ : ℝ) *
+                    (TT n δ + mS n δ : ℝ) + (n : ℝ) ^ δ) := by
+                  rw [← Real.exp_add]
+    · have hzero : oddRow M t h b y = 0 := by
+        unfold oddRow
+        have hcond : ¬ groupValid M t h (groupOf δ b) := by simpa [q] using hvalid
+        rw [if_neg hcond]
+      rw [hzero]
+      simp
+      positivity
+
+  have hGroupCap : ∀ h q c y,
+      ∑ b ∈ Finset.univ.filter (fun b => groupOf δ b = q),
+        (labLaw M t h b c).w y ≤ Real.exp (-(n : ℝ) ^ ζ / 2) := by
+    intro h q c y
+    let B : Finset (OddRole n) := Finset.univ.filter (fun b => groupOf δ b = q)
+    let Bp := p10_1kOddGroupRoles (mS_le n δ) q
+    let d := n - mS n δ
+    let S := ∑ i : Fin d.bitIndices.length, d.bitIndices.get i
+    have hBpeq : Bp = B := by
+      ext b
+      simp [Bp, B, p10_1kOddGroupRoles, groupOf, p10_1kProjectedVertex] <;> rfl
+    have hcardEq' : Fintype.card Bp = B.card := by
+      calc
+        Fintype.card Bp = Bp.card := by simpa using (Fintype.card_coe Bp)
+        _ = B.card := congrArg Finset.card hBpeq
+    have hgroupNat : B.card ≤ 2 ^ S := by
+      rw [← hcardEq']
+      exact p10_1k_oddGroup_card_le n (mS n δ) (mS_le n δ) q
+    have hlogMono : Nat.log 2 d ≤ Nat.log 2 n := by
+      exact Nat.log_mono_right (Nat.sub_le n (mS n δ))
+    have hSbound : S ≤ (Nat.log 2 n + 1) ^ 2 := by
+      calc
+        S ≤ (Nat.log 2 d + 1) ^ 2 :=
+          Lane_q_s10_d3.bitIndicesExponent_le (d := d)
+        _ ≤ (Nat.log 2 n + 1) ^ 2 := by gcongr
+    have hSboundR : (S : ℝ) ≤ ((Nat.log 2 n : ℝ) + 1) ^ 2 := by
+      exact_mod_cast hSbound
+    have hSexp : 2 * (S : ℝ) ≤ (n : ℝ) ^ ζ / 8 := by
+      nlinarith [hlog, hSboundR]
+    have hcardExp : (B.card : ℝ) ≤ Real.exp ((n : ℝ) ^ ζ / 8) := by
+      calc
+        (B.card : ℝ) ≤ (2 : ℝ) ^ S := by exact_mod_cast hgroupNat
+        _ ≤ Real.exp (2 * (S : ℝ)) := Lane_q_s10_d3.twoPow_le_exp_two S
+        _ ≤ Real.exp ((n : ℝ) ^ ζ / 8) := Real.exp_le_exp.mpr hSexp
+    have hsumBound :
+        (∑ b ∈ B, (labLaw M t h b c).w y) ≤
+          (B.card : ℝ) * (2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by
+      calc
+        (∑ b ∈ B, (labLaw M t h b c).w y) ≤
+            ∑ b ∈ B, 2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) := by
+          apply Finset.sum_le_sum
+          intro b hb
+          exact hLabStrong h b c y
+        _ = (B.card : ℝ) *
+            (2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by simp
+    have hprod : Real.exp ((n : ℝ) ^ ζ / 8) *
+        (2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) ≤
+          Real.exp (-(n : ℝ) ^ ζ / 2) := by
+      have htwo : 2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) =
+          Real.exp (Real.log 2 + ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by
+        calc
+          2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) =
+              Real.exp (Real.log 2) * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ) := by
+            rw [Real.exp_log (by norm_num : (0 : ℝ) < 2)]
+          _ = Real.exp (Real.log 2 + ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by
+            rw [← Real.exp_add]
+      calc
+        Real.exp ((n : ℝ) ^ ζ / 8) *
+            (2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) =
+            Real.exp (Real.log 2 + (n : ℝ) ^ ζ / 8 +
+              ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := by
+          rw [htwo, ← Real.exp_add]
+          congr 1
+          ring
+        _ ≤ Real.exp (-(n : ℝ) ^ ζ / 2) := by
+          apply Real.exp_le_exp.mpr
+          nlinarith [hlogTwo]
+    calc
+      (∑ b ∈ Finset.univ.filter (fun b => groupOf δ b = q),
+          (labLaw M t h b c).w y) = ∑ b ∈ B, (labLaw M t h b c).w y := rfl
+      _ ≤ (B.card : ℝ) *
+          (2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) := hsumBound
+      _ ≤ Real.exp ((n : ℝ) ^ ζ / 8) *
+          (2 * Real.exp ((n : ℝ) ^ ζ / 8 - (n : ℝ) ^ ζ)) :=
+        mul_le_mul_of_nonneg_right hcardExp (by positivity)
+      _ ≤ Real.exp (-(n : ℝ) ^ ζ / 2) := hprod
+
+  exact ⟨hRowCap, hLabCap, hGroupCap⟩
 
 /-- **d4** = P10.1f (10:150–153; ~300 lines; lemma-level). A good mask strategy
 exists: cheap-label masks from the prices `c_s(y)` (`p10_1f_mask_price_separation`,

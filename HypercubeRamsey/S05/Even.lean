@@ -6,6 +6,7 @@ import HypercubeRamsey.S05.Even_test_clock_sol_s05_even
 import HypercubeRamsey.S05.Even_test_scales_sol_s05_even
 import HypercubeRamsey.S05.Stages_p_s05_h
 import HypercubeRamsey.S05.Even_opus_s05
+import HypercubeRamsey.S05.Even_opus_e
 
 /-!
 # L5.1n–o: even rows by deletion of primitive block values, comparison means, loads
@@ -965,8 +966,8 @@ severity plus `O(s)` at `j = J`, `O(s)` at high severity, against `Pr(j ≥ h) �
 theorem even_mean_average (Cd : Pre65 → ℝ) : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p →
     ∃ D₀ : ℝ, 0 ≤ D₀ ∧ ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ (N : ℕ) (E : Fin N → Fin N → Prop) (G : Colour)
       (X : Setup5 γ K' χ n N E G), X.p = p → ChunkEstimates5 X.g →
-        (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * ∑ v, evenD X (Cd p.pre6) v ≤ D₀ := by
-  sorry
+        (Fintype.card (EvenRole5 n) : ℝ)⁻¹ * ∑ v, evenD X (Cd p.pre6) v ≤ D₀ :=
+  Lane_opus_s05_e.mean_average_explicit Cd
 
 /-- SUB-LEMMA D2 (05:1150–1158, `gate_outputs`): an even row reads only the outputs of its star. -/
 theorem evenRow_outputs_local (ES : X.EvenSetup5 LR HR) (H : X.KeyHist) (ω : X.CΩ L.ht) (v : EvenRole5 n)

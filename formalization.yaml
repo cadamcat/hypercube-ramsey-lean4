@@ -11,8 +11,8 @@ project:
     DeepMind's Formal Conjectures. The formal proof follows OpenAI's paper. It
     takes the cube, its Ramsey number, finite Ramsey bounds and the paper's
     counterexample-sequence lemma (Lemma 2.1) from OpenAI's Lean library
-    openai/math, and formalizes the rest of the paper, Sections 2 to 18, which
-    shows that no counterexample sequence exists. The final theorem depends
+    openai/math, and formalizes the rest of the paper, Sections 3 to 18, which
+    show that no counterexample sequence exists. The final theorem depends
     only on the axioms propext, Classical.choice and Quot.sound.
   authors:
     - "Yao Xu"

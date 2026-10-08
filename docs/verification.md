@@ -90,6 +90,8 @@ lake env lean Audit/TargetProbes.lean
 lake env lean Audit/IndependentRestatement.lean
 ```
 
+On 2026-10-08 both commands exited with status 0 on the `v1.0.0` sources; `FidelityProbe.fc_iff_indep` depends only on `propext`, `Classical.choice` and `Quot.sound`. They are not part of the [independent check](#independent-check-of-v100) above.
+
 To check the copies against Formal Conjectures itself:
 
 ```sh

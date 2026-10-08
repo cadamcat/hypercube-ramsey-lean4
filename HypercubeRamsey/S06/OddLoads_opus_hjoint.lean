@@ -16,8 +16,8 @@ as `StateCode6.sign_dist`.
 
 The generic part (resampling a block of coordinates of a product law, the conditional avoidance comparison with
 a fiber bound, and the fiber product over distinct targets) is proved here.  The proxy locality
-`proxyMean_signScope_local` is assembled from two `sorry` nodes, `proxyRow_congr_hid` and
-`proxyRow_dependsOn_tuples`.
+`proxyMean_signScope_local` is assembled from two lemmas, `proxyRow_congr_hid` and
+`proxyRow_dependsOn_tuples`, both proved.
 -/
 
 namespace HypercubeRamsey.S06.Lane_opus_hjoint

@@ -19,7 +19,7 @@ Design (see `runs/lanes/opus-s18-2g/NOTES.md`):
   (`protoLabels`), and outputs the tested prefix law at the failure row (no abort branch is needed:
   every `prefixLabelLaw` is broad).
 
-Open obligations are the `sorry` lemmas below; each docstring gives TeX lines and size.
+The lemmas below were the open obligations of this split and are all proved; each docstring gives TeX lines and size.
 -/
 
 namespace HypercubeRamsey.S18.Lane_opus_s18_2g

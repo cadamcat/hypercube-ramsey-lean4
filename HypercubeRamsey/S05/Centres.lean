@@ -754,7 +754,7 @@ attribute [instance] LowRows5.dataFintype
 
 `L5_1j` is assembled from the marking eligibility `markElig` (05:818–833), its locality, maximality
 and probability estimates; `L5_1k_rows` from a selection table `LowTable5` (05:896–985) and the
-long/short comparison (05:987–1001). Each `sorry` below is one open sub-lemma. -/
+long/short comparison (05:987–1001). Each lemma below was one sub-lemma of this split; all are proved. -/
 
 namespace Lane_opus_s05
 

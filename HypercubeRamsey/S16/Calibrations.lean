@@ -6,7 +6,7 @@ import HypercubeRamsey.S16.Calibrations_q_s16_calib
 # Section 16 calibrated bins and role labels
 
 Both calibrations use the finite-dimensional separation lemma from the
-Section 3 injection work. The sorry-bearing sampler contracts stop before
+Section 3 injection work. The sampler contracts stop before
 exact marginal calibration; the exported theorems assemble exact marginals
 from price witnesses and compact convex marginal images.
 -/

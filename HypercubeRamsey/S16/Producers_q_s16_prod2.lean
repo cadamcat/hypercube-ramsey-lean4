@@ -617,6 +617,146 @@ theorem finLaw_pi_project {I : Type*} [Fintype I] [DecidableEq I]
     ∏ i : {j : I // j ∈ S}, (law i.1).w (a i)
   exact hmass
 
+/-- Conditioning the first coordinate of a product leaves its independent
+second coordinate unchanged. -/
+theorem finLaw_cond_bind_left {α β : Type*} [Fintype α] [DecidableEq α]
+    [Fintype β] [DecidableEq β] (P : FinLaw α) (Q : FinLaw β) (s : Finset α)
+    (h : 0 < ∑ a ∈ s, P.w a) :
+    FinLaw.cond (FinLaw.bind P (fun _ => Q))
+        (Finset.univ.filter fun z : α × β => z.1 ∈ s)
+        (by
+          have hp : (FinLaw.bind P (fun _ => Q)).pr
+              (fun z => z.1 ∈ s) = ∑ a ∈ s, P.w a := by
+            classical
+            rw [finLaw_bind_pr]
+            unfold FinLaw.pr
+            calc
+              (∑ a, P.w a * Q.pr (fun _ => a ∈ s)) =
+                  ∑ a, if a ∈ s then P.w a else 0 := by
+                apply Finset.sum_congr rfl
+                intro a ha
+                rw [finLaw_pr_const]
+                by_cases hmem : a ∈ s <;> simp [hmem]
+              _ = ∑ a ∈ s, P.w a := by
+                rw [← Finset.sum_filter]
+                simp
+          have hset : (FinLaw.bind P (fun _ => Q)).pr
+              (fun z => z ∈ Finset.univ.filter (fun z : α × β => z.1 ∈ s)) =
+                ∑ a ∈ s, P.w a := by
+            simpa using hp
+          rw [← Lane_q_s16_prod2.finLaw_pr_finset]
+          rw [hset]
+          exact h) =
+      FinLaw.bind (FinLaw.cond P s h) (fun _ => Q) := by
+  classical
+  have hmass :
+      (FinLaw.bind P (fun _ => Q)).pr
+          (fun z => z.1 ∈ s) = ∑ a ∈ s, P.w a := by
+    rw [finLaw_bind_pr]
+    unfold FinLaw.pr
+    calc
+      (∑ a, P.w a * Q.pr (fun _ => a ∈ s)) =
+          ∑ a, if a ∈ s then P.w a else 0 := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        rw [finLaw_pr_const]
+        by_cases hmem : a ∈ s <;> simp [hmem]
+      _ = ∑ a ∈ s, P.w a := by
+        rw [← Finset.sum_filter]
+        simp
+  have hdenom :
+      (∑ z ∈ Finset.univ.filter (fun z : α × β => z.1 ∈ s),
+        (FinLaw.bind P (fun _ => Q)).w z) = ∑ a ∈ s, P.w a := by
+    calc
+      (∑ z ∈ Finset.univ.filter (fun z : α × β => z.1 ∈ s),
+          (FinLaw.bind P (fun _ => Q)).w z) =
+          (FinLaw.bind P (fun _ => Q)).pr
+            (fun z => z ∈ Finset.univ.filter (fun z : α × β => z.1 ∈ s)) :=
+        (finLaw_pr_finset _ _).symm
+      _ = ∑ a ∈ s, P.w a := by
+        simpa [Finset.mem_filter] using hmass
+  apply finLaw_ext
+  intro z
+  rcases z with ⟨a, b⟩
+  have hwt : (FinLaw.bind P (fun _ => Q)).w (a, b) = P.w a * Q.w b := by
+    simp [FinLaw.bind]
+  simp only [FinLaw.cond]
+  rw [hdenom]
+  by_cases ha : a ∈ s <;> simp [FinLaw.bind, hwt, ha] <;> ring
+
+/-- Pushforward by an equivalence commutes with conditioning, with the event
+transported to its image. -/
+theorem finLaw_map_cond_equiv {α β : Type*} [Fintype α] [DecidableEq α]
+    [Fintype β] [DecidableEq β] (P : FinLaw α) (e : α ≃ β) (s : Finset α)
+    (h : 0 < ∑ a ∈ s, P.w a) :
+    FinLaw.map (FinLaw.cond P s h) e =
+      FinLaw.cond (FinLaw.map P e) (s.image e)
+        (by
+          have hmass : ∑ b ∈ s.image e, (FinLaw.map P e).w b = ∑ a ∈ s, P.w a := by
+            calc
+              ∑ b ∈ s.image e, (FinLaw.map P e).w b =
+                  (FinLaw.map P e).pr (fun b => b ∈ s.image e) :=
+                (finLaw_pr_finset _ _).symm
+              _ = P.pr (fun a => e a ∈ s.image e) := finLaw_map_pr P e _
+              _ = P.pr (fun a => a ∈ s) := by
+                apply finLaw_pr_congr_of_supported
+                intro a _
+                simp [Finset.mem_image, e.injective]
+              _ = ∑ a ∈ s, P.w a := finLaw_pr_finset P s
+          rw [hmass]
+          exact h) := by
+  classical
+  have hmass : ∑ b ∈ s.image e, (FinLaw.map P e).w b = ∑ a ∈ s, P.w a := by
+    calc
+      ∑ b ∈ s.image e, (FinLaw.map P e).w b =
+          (FinLaw.map P e).pr (fun b => b ∈ s.image e) :=
+        (finLaw_pr_finset _ _).symm
+      _ = P.pr (fun a => e a ∈ s.image e) := finLaw_map_pr P e _
+      _ = P.pr (fun a => a ∈ s) := by
+        apply finLaw_pr_congr_of_supported
+        intro a _
+        simp [Finset.mem_image, e.injective]
+      _ = ∑ a ∈ s, P.w a := finLaw_pr_finset P s
+  apply finLaw_ext
+  intro b
+  have hmem : b ∈ s.image e ↔ e.symm b ∈ s := by
+    constructor
+    · intro hb
+      rcases Finset.mem_image.mp hb with ⟨a, ha, hab⟩
+      have : a = e.symm b := by
+        apply e.injective
+        simpa [hab]
+      simpa [this] using ha
+    · intro hb
+      exact Finset.mem_image.mpr ⟨e.symm b, hb, by simp⟩
+  have hEq (a : α) : e a = b ↔ a = e.symm b := by
+    constructor
+    · intro hab
+      apply e.injective
+      simpa [hab]
+    · intro ha
+      simpa [ha]
+  have hsum (f : α → ℝ) :
+      (∑ a, if e a = b then f a else 0) = f (e.symm b) := by
+    calc
+      (∑ a, if e a = b then f a else 0) =
+          ∑ a, if a = e.symm b then f a else 0 := by
+        apply Finset.sum_congr rfl
+        intro a ha
+        simp [hEq a]
+      _ = f (e.symm b) := by simp
+  by_cases hb : e.symm b ∈ s <;>
+    simp [FinLaw.map, FinLaw.cond, hmem, hmass, hEq, hb]
+
+/-- An equivalence pushforward preserves the mass of the corresponding atom. -/
+theorem finLaw_map_equiv_weight {α β : Type*} [Fintype α] [Fintype β]
+    [DecidableEq β] (P : FinLaw α) (e : α ≃ β) (a : α) :
+    (FinLaw.map P e).w (e a) = P.w a := by
+  classical
+  change (∑ b, if e b = e a then P.w b else 0) = P.w a
+  have heq (b : α) : e b = e a ↔ b = a := e.injective.eq_iff
+  simp [heq]
+
 /-- An eventual index property becomes a dimension cutoff along any sequence
 whose finitely many early dimensions are bounded. -/
 theorem badSeq_dimension_cutoff (S : BadSeq) {P : ℕ → Prop}

@@ -1,5 +1,6 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.S04.GadgetNodes_q_s04_gadget
+import HypercubeRamsey.S04.GadgetNodes_sol_s04_gadget
 
 /-!
 # L4.1c, L4.1d: the key gadget and the patch tags
@@ -18,7 +19,27 @@ the move determine the new multiset; the moving chunk stays on the same side of 
 `|Z_u| ≤ 1 + G_n (2 log₂ S + 1) ≤ n^{γ - 0.9ω}` for large `n`. -/
 theorem key_nbr_card (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, KeyNbrCard β γ n := by
-  sorry
+  obtain ⟨nNumeric, hnNumeric⟩ :=
+    HypercubeRamsey.Lane_sol_s04_gadget.key_neighbor_numeric_bound hβ hβγ hγ
+  obtain ⟨nGrowth, hnGrowth⟩ :=
+    HypercubeRamsey.Lane_q_s04_gadget.keyFiber_growth_thresholds hβ hβγ hγ
+  refine ⟨max 1 (max nNumeric nGrowth), ?_⟩
+  intro n hn u
+  have hnNumeric' : nNumeric ≤ n :=
+    (le_max_left nNumeric nGrowth).trans ((le_max_right 1 _).trans hn)
+  have hnGrowth' : nGrowth ≤ n :=
+    (le_max_right nNumeric nGrowth).trans ((le_max_right 1 _).trans hn)
+  have hn1 : 1 ≤ n := (le_max_left 1 _).trans hn
+  have hSreal : (4 : ℝ) ≤ (gadgetPower β γ n : ℝ) :=
+    (by norm_num : (4 : ℝ) ≤ 128).trans
+      ((hnGrowth n hnGrowth').1.trans
+        (HypercubeRamsey.Lane_q_s04_gadget.gadgetPower_ge_scale n
+          (omega4_pos hβ hγ) hn1))
+  have hS : 4 ≤ gadgetPower β γ n := by exact_mod_cast hSreal
+  have hcard : ((Zset β γ u).card : ℝ) ≤
+      ((1 + gadgetNum β γ n * (Nat.log2 (gadgetPower β γ n) * 2) : ℕ) : ℝ) := by
+    exact_mod_cast HypercubeRamsey.Lane_q_s04_gadget.keyNbr_card_le_path u hS
+  exact hcard.trans (hnNumeric n hnNumeric')
 
 /-- L4.1c(3) (04:134–136, 393–394): the key depends only on the `m = G_n s' ℓ ≤ 128 n^{γ+13ω}` special
 coordinates, so at most `n^{γ+14ω}` coordinate flips of a vertex change its key (for large `n`). -/

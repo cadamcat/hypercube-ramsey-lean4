@@ -1,5 +1,6 @@
 import HypercubeRamsey.S18.PrefixBudget_sol_s18_n4
 import HypercubeRamsey.S18.PrefixClosure_sol_s18_n4
+import HypercubeRamsey.S18.PoolComparison_sol_s18_3a_perm
 
 namespace HypercubeRamsey.Lane_sol_s18_n4
 open Classical Filter
@@ -19,13 +20,26 @@ private theorem validPrefixClosureTail {κ : CConsts} (hκ : κ.Admissible) (T :
   filter_upwards [restrictedLateClosureTapeBound hκ T] with k hrestricted
   intro PT hPT D hD F hvalid pin
   have htape := hrestricted D hD F hvalid (pin.map (fun p => p.1))
-  -- Missing: equality of the full and restricted backward execution closures.
-  -- Its proof must keep the class/round radius together along each predecessor path.
-  sorry
+  let X : S18.CriticalTransferData D :=
+    ⟨F.2, hvalid, pin.map (fun p => p.1), fun C => D.fresh.fallback C⟩
+  have hbound := initialPinnedPoolTapeBound D (D.lateRegion F)
+    (fun pools tapes => D.encoding.Ts <
+      (backwardClosure (D := Lane_q_s18_n4.lateListContext D)
+        D.encoding.events D.encoding.order (lateRestrictedEvents D F)
+        pools tapes (replayTargets D X.criticalCells)).card)
+    (Real.rpow (T.S.n k : ℝ) (-((κ.P : ℝ) * D.encoding.Ts / 2)))
+    (Real.rpow_nonneg (Nat.cast_nonneg _) _) htape pin
+  convert hbound using 1
+  congr 1
+  funext x
+  apply propext
+  change (poolGateFor D (D.lateRegion F) x.1 ∧
+    D.encoding.Ts < (replayBackwardClosure D X.criticalCells x).card) ↔ _
+  rw [replayBackwardClosure_eq_restricted D F hvalid (pin.map (fun p => p.1)) X.fixed x]
 
 /-- Compare the actual consulted permutation slots, with a globally pinned
 cell omitted from the critical set, to the iid pool/tape fresh experiment. -/
-private theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
+theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible) (T : Stage)
     (K27 c : ℝ) (hK : 0 < K27) (hc : 0 < c) :
     ∀ᶠ k in atTop, ∀ {PT : ProfiledTiling κ T k} {hPT : PT.Valid}
       (D : S18.LateData hPT), D.Spec → S18.TransitionData D →
@@ -39,17 +53,33 @@ private theorem validPrefixPermutationReplay {κ : CConsts} (hκ : κ.Admissible
           if ∀ C ∈ X.criticalCells, D.fresh.typical C (x.1 C) then
             forcedReplayRisk D X.criticalCells (occurrencePattern D W) F x else 0) ≤
               2 * Real.exp (-Real.rpow (T.S.n k : ℝ) c) := by
-  filter_upwards [T.S.n_tendsto.eventually_ge_atTop 2] with k hn
+  filter_upwards [Lane_sol_s18_3a_perm.pinnedReplay_pool_comparison_eventually hκ T] with k hpool
   intro PT hPT D hD hTransition hLocal hTransfer hReplay F hkind hvalid pin
   dsimp only
   intro W hW
-  have hfresh := criticalFreshReplayBound D hReplay c hTransfer F hkind hvalid
-    (pin.map (fun p => p.1)) (occurrencePattern D W)
-  have hentry := prescribedPoolTapeLaw D
-  have htypical := criticalTypicalIntegral_le D hD
-  -- Missing: the deterministic consulted pool scope and its pin-uniform
-  -- permutation-to-iid comparison, followed by critical/outside tape disintegration.
-  sorry
+  let X : S18.CriticalTransferData D :=
+    ⟨F.2, hvalid, pin.map (fun p => p.1), fun C => D.fresh.fallback C⟩
+  let f := fun x : D.encoding.InitInput =>
+    if ∀ C ∈ X.criticalCells, D.fresh.typical C (x.1 C) then
+      forcedReplayRisk D X.criticalCells (occurrencePattern D W) F x else 0
+  have hcomparison : (initialPinnedLaw D pin).E f ≤
+      2 * (Lane_sol_s18_3a_perm.iidPinnedLaw D pin).E f := by
+    apply Lane_sol_s18_3a_perm.replayComparison_of_poolComparison D pin f
+    have hlocal := Lane_sol_s18_3a_perm.replayPoolTest_local D hD hTransition F hkind hvalid
+      (pin.map (fun p => p.1)) (occurrencePattern D W)
+    apply hpool D hD F pin
+    · intro pools
+      apply Finset.sum_nonneg
+      intro tapes _
+      apply mul_nonneg ((tapeLaw D.fresh D.encoding.Ts).nonneg tapes)
+      dsimp only [f]
+      split_ifs
+      · exact Lane_q_s17_res1.finLaw_pr_nonneg _ _
+      · exact le_rfl
+    · exact hlocal
+  exact hcomparison.trans (mul_le_mul_of_nonneg_left
+    (Lane_sol_s18_3a_perm.iidPinnedReplayBound D hD hReplay c hTransfer F hkind hvalid pin
+      (occurrencePattern D W)) (by norm_num))
 
 /-- The valid-prefix branch reduces to the two exact analytic estimates
 above. Pattern summation and the final exponent budget are proved helpers. -/

@@ -1,6 +1,7 @@
 import HypercubeRamsey.S04.CoreLemmas
 import HypercubeRamsey.Framework.LawLemmas
 import HypercubeRamsey.Tools.Concentration
+import HypercubeRamsey.S03.Clock.Leaves_p_clock_r2
 
 namespace HypercubeRamsey.Lane_q_s04_valid
 
@@ -466,6 +467,358 @@ private theorem expect_pi_cons {α : Type*} [Fintype α] {k : ℕ}
   rw [hsumCons]
   simp [FinProb.pi, Finset.mul_sum, Fin.prod_univ_succ, mul_assoc, mul_comm, mul_left_comm]
 
+private theorem expect_if_eq {α : Type*} [Fintype α] [DecidableEq α]
+    (P : FinProb α) (a₀ : α) (c : ℝ) :
+    P.expect (fun a => if a = a₀ then c else 0) = P.w a₀ * c := by
+  classical
+  unfold FinProb.expect
+  rw [Finset.sum_eq_single a₀]
+  · simp
+  · intro a ha hne
+    simp [hne]
+  · simp
+
+private theorem expect_pi_prefix_fiber {α : Type*} [Fintype α] [DecidableEq α] {k : ℕ}
+    (Q : Fin k → FinProb α) (i : Fin k) (p : Fin i.val → α) (f : α → ℝ) :
+    (FinProb.pi Q).expect (fun x => if prefixVals x i = p then f (x i) else 0) =
+      (∏ j : Fin i.val, (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j)) * (Q i).expect f := by
+  induction k with
+  | zero => exact Fin.elim0 i
+  | succ k ih =>
+      cases i using Fin.cases with
+      | zero =>
+          have hpref (x : Fin (k + 1) → α) : prefixVals x 0 = p := by
+            funext j
+            exact Fin.elim0 j
+          have hcons := expect_pi_cons Q
+            (fun x => if prefixVals x 0 = p then f (x 0) else 0)
+          have htail (a : α) :
+              (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                  (fun x => if prefixVals (Fin.cons a x) 0 = p then f a else 0) = f a := by
+            have hf : (fun x : Fin k → α =>
+                if prefixVals (Fin.cons a x) 0 = p then f a else 0) = (fun _ => f a) := by
+              funext x
+              rw [if_pos (hpref (Fin.cons a x))]
+            rw [hf, FinProb.expect_const]
+          calc
+            _ = (Q 0).expect (fun a =>
+                  (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                    (fun x => if prefixVals (Fin.cons a x) 0 = p then f a else 0)) := hcons
+            _ = (Q 0).expect f := by
+                  congr 1
+                  funext a
+                  exact htail a
+            _ = _ := by
+              change (Q 0).expect f = 1 * (Q 0).expect f
+              ring
+      | succ i =>
+          let p₀ := p ⟨0, Nat.zero_lt_succ _⟩
+          let pt : Fin i.val → α := fun j => p j.succ
+          have hp : p = (Fin.cons (α := fun _ : Fin i.val.succ => α) p₀ pt) := by
+            funext j
+            cases j using Fin.cases with
+            | zero => simp [p₀]
+            | succ j => rfl
+          have hcons := expect_pi_cons Q
+            (fun x => if prefixVals x i.succ = p then f (x i.succ) else 0)
+          have hfun (a : α) (x : Fin k → α) :
+              (if prefixVals (Fin.cons (α := fun _ : Fin (k + 1) => α) a x) i.succ = p then
+                f ((Fin.cons (α := fun _ : Fin (k + 1) => α) a x) i.succ) else 0) =
+              (if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0) := by
+            rw [prefixVals_cons_succ, hp]
+            have hconsEq : (Fin.cons (α := fun _ : Fin i.val.succ => α) a (prefixVals x i)) =
+                (Fin.cons (α := fun _ : Fin i.val.succ => α) p₀ pt) ↔
+                a = p₀ ∧ prefixVals x i = pt := by
+              constructor
+              · intro h
+                constructor
+                · have h0 := congrFun h ⟨0, Nat.zero_lt_succ _⟩
+                  simpa using h0
+                · apply funext
+                  intro j
+                  have hj := congrFun h j.succ
+                  simpa using hj
+              · rintro ⟨ha, htail⟩
+                subst a
+                funext j
+                cases j using Fin.cases with
+                | zero => rfl
+                | succ j => simp [htail]
+            by_cases hc : a = p₀ ∧ prefixVals x i = pt
+            · have hceq := hconsEq.mpr hc
+              simp [hceq, hc]
+            · have hne : Fin.cons (α := fun _ : Fin i.val.succ => α) a
+                    (prefixVals x i) ≠ Fin.cons p₀ pt := by
+                  intro h
+                  exact hc (hconsEq.mp h)
+              have hcur :
+                  (Fin.cons (α := fun _ : Fin (k + 1) => α) a x) i.succ = x i := by simp
+              simp [hc, hne, hcur]
+          have hcons' : (FinProb.pi Q).expect
+              (fun x => if prefixVals x i.succ = p then f (x i.succ) else 0) =
+              (Q 0).expect (fun a => (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                (fun x => if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0)) := by
+            rw [hcons]
+            congr 1
+            funext a
+            congr 1
+            funext x
+            exact hfun a x
+          have htail := ih (fun j : Fin k => Q j.succ) i pt
+          have hsplit : (Q 0).expect (fun a =>
+              (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                (fun x => if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0)) =
+              (Q 0).w p₀ *
+                (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                  (fun x => if prefixVals x i = pt then f (x i) else 0) := by
+            have hinner (a : α) :
+                (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                    (fun x => if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0) =
+                  if a = p₀ then
+                    (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                      (fun x => if prefixVals x i = pt then f (x i) else 0) else 0 := by
+              by_cases ha : a = p₀
+              · subst a
+                simp
+              · have hz : (fun x : Fin k → α =>
+                    if a = p₀ ∧ prefixVals x i = pt then f (x i) else 0) = fun _ => 0 := by
+                  funext x
+                  simp [ha]
+                rw [hz, FinProb.expect_const]
+                simp [ha]
+            calc
+              _ = (Q 0).expect (fun a => if a = p₀ then
+                    (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                      (fun x => if prefixVals x i = pt then f (x i) else 0) else 0) := by
+                    congr 1
+                    funext a
+                    exact hinner a
+              _ = (Q 0).w p₀ *
+                    (FinProb.pi (fun j : Fin k => Q j.succ)).expect
+                      (fun x => if prefixVals x i = pt then f (x i) else 0) := by
+                    exact expect_if_eq (Q 0) p₀ _
+          have hprod :
+              (∏ j : Fin i.val.succ,
+                (Q ⟨j.val, lt_trans j.isLt i.succ.isLt⟩).w (p j)) =
+              (Q 0).w p₀ * ∏ j : Fin i.val,
+                (Q (⟨j.val, lt_trans j.isLt i.isLt⟩ : Fin k).succ).w (pt j) := by
+            rw [Fin.prod_univ_succ]
+            apply congrArg₂ (fun x y : ℝ => x * y)
+            · simp [p₀]
+            · apply Finset.prod_congr rfl
+              intro j hj
+              have hidx :
+                  (⟨j.succ.val, lt_trans j.succ.isLt i.succ.isLt⟩ : Fin (k + 1)) =
+                    (⟨j.val, lt_trans j.isLt i.isLt⟩ : Fin k).succ := by
+                apply Fin.ext
+                rfl
+              rw [hidx]
+          calc
+            _ = ((Q 0).w p₀ *
+                  (∏ j : Fin i.val, (Q (⟨j.val, lt_trans j.isLt i.isLt⟩ : Fin k).succ).w
+                    (pt j))) * (Q i.succ).expect f := by
+                  rw [hcons', hsplit, htail]
+                  ring
+            _ = (∏ j : Fin i.val.succ,
+                  (Q ⟨j.val, lt_trans j.isLt i.succ.isLt⟩).w (p j)) *
+                  (Q i.succ).expect f := by rw [← hprod]
+
+private theorem expect_eq_on_support {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (f g : Ω → ℝ) (h : ∀ ω, P.w ω = 0 ∨ f ω = g ω) : P.expect f = P.expect g := by
+  classical
+  unfold FinProb.expect
+  apply Finset.sum_congr rfl
+  intro ω hω
+  rcases h ω with hz | hfg
+  · simp [hz]
+  · simp [hfg]
+
+private theorem expect_not_pr {Ω : Type*} [Fintype Ω] (P : FinProb Ω) (A : Ω → Prop) :
+    P.expect (fun x => if A x then (0 : ℝ) else 1) = 1 - P.pr A := by
+  classical
+  unfold FinProb.expect FinProb.pr
+  calc
+    (∑ x, P.w x * (if A x then (0 : ℝ) else 1)) =
+        ∑ x, (P.w x - (if A x then P.w x else 0)) := by
+          apply Finset.sum_congr rfl
+          intro x hx
+          by_cases hA : A x <;> simp [hA]
+    _ = (∑ x, P.w x) - ∑ x, if A x then P.w x else 0 := by
+          rw [Finset.sum_sub_distrib]
+    _ = 1 - (∑ x, if A x then P.w x else 0) := by rw [P.sum_eq_one]
+
+private theorem cond_true_eq_self {α : Type*} [Fintype α] [DecidableEq α] (P : FinProb α) :
+    P.cond (fun _ => True) (by simp [FinProb.pr, P.sum_eq_one]) = P := by
+  classical
+  have hp : P.pr (fun _ => True) = 1 := by simp [FinProb.pr, P.sum_eq_one]
+  apply finProb_ext
+  intro a
+  simp [FinProb.cond, hp]
+
+private theorem pr_eq_weight_singleton {α : Type*} [Fintype α] [DecidableEq α]
+    (P : FinProb α) (a : α) : P.pr (fun x => x = a) = P.w a := by
+  classical
+  unfold FinProb.pr
+  rw [Finset.sum_eq_single a]
+  · simp
+  · intro x hx hne
+    simp [hne]
+  · simp
+
+private theorem pr_congr_local_early {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (A B : Ω → Prop) (h : ∀ ω, A ω ↔ B ω) : P.pr A = P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  simp [h ω]
+
+private theorem pi_cond_prefix_expect_next {α : Type*} [Fintype α] [DecidableEq α]
+    {k : ℕ} (P : Fin k → FinProb α) (i : Fin k) (p : Fin i.val → α)
+    (hpos : 0 < (FinProb.pi P).pr (fun x => prefixVals x i = p)) (f : α → ℝ) :
+    ((FinProb.pi P).cond (fun x => prefixVals x i = p) hpos).expect (fun x => f (x i)) =
+      (P i).expect f := by
+  classical
+  let C : Fin k → α → Prop := fun j a =>
+    ∀ hj : j.val < i.val, a = p ⟨j.val, hj⟩
+  have hEvent : (fun x : Fin k → α => prefixVals x i = p) =
+      (fun x => ∀ j, C j (x j)) := by
+    funext x
+    apply propext
+    constructor
+    · intro hp j hj
+      let q : Fin i.val := ⟨j.val, hj⟩
+      have hindex : (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = j := by
+        apply Fin.ext
+        rfl
+      have h := congrFun hp q
+      have hx : prefixVals x i q = x j := by
+        change x (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = x j
+        rw [hindex]
+      rw [hx] at h
+      simpa [q] using h
+    · intro hall
+      funext q
+      let j : Fin k := ⟨q.val, lt_trans q.isLt i.isLt⟩
+      have hmem : j.val < i.val := by simpa [j] using q.isLt
+      have hvalue : x j = p ⟨j.val, hmem⟩ := hall j hmem
+      have hpeq : (⟨j.val, hmem⟩ : Fin i.val) = q := by
+        apply Fin.ext
+        rfl
+      rw [hpeq] at hvalue
+      have hindex : (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = j := by
+        apply Fin.ext
+        rfl
+      have hx : prefixVals x i q = x j := by
+        change x (⟨q.val, lt_trans q.isLt i.isLt⟩ : Fin k) = x j
+        rw [hindex]
+      rw [hx]
+      exact hvalue
+  have hfactor : (FinProb.pi P).pr (fun x => prefixVals x i = p) =
+      ∏ j, (P j).pr (C j) := by
+    rw [hEvent]
+    exact FinProb.pi_pr_forall P C
+  have hfactorPos : 0 < ∏ j : Fin k, (P j).pr (C j) := by
+    rw [← hfactor]
+    exact hpos
+  have hcoord (j : Fin k) : 0 < (P j).pr (C j) := by
+    by_cases hj : j.val < i.val
+    · by_contra hnot
+      have hnon : 0 ≤ (P j).pr (C j) := FinProb.pr_nonneg (P j) (C j)
+      have hzero : (P j).pr (C j) = 0 := le_antisymm (le_of_not_gt hnot) hnon
+      have hprodZero : (∏ j' : Fin k, (P j').pr (C j')) = 0 :=
+        Finset.prod_eq_zero (Finset.mem_univ j) hzero
+      rw [hprodZero] at hfactorPos
+      exact (lt_irrefl 0) hfactorPos
+    · have hC : C j = (fun _ => True) := by
+        funext a
+        apply propext
+        constructor
+        · intro _
+          trivial
+        · intro _ hmem
+          exact (hj hmem).elim
+      rw [hC]
+      simp [FinProb.pr, (P j).sum_eq_one]
+  let Q : Fin k → FinProb α := fun j => (P j).cond (C j) (hcoord j)
+  have hrectPos : 0 < (FinProb.pi P).pr (fun x => ∀ j, C j (x j)) := by
+    simpa [hEvent] using hpos
+  have hcond : (FinProb.pi P).cond (fun x => prefixVals x i = p) hpos = FinProb.pi Q := by
+    simpa [hEvent] using FinProb.pi_cond_forall P C hcoord hrectPos
+  have hsupport : ∀ x : Fin k → α,
+      (FinProb.pi Q).w x = 0 ∨
+        (if prefixVals x i = p then f (x i) else 0) = f (x i) := by
+    intro x
+    by_cases hp : prefixVals x i = p
+    · exact Or.inr (by simp [hp])
+    · left
+      have hex : ∃ j : Fin k, ¬ C j (x j) := by
+        have hnot : ¬ (∀ j, C j (x j)) := by
+          intro hall
+          exact hp ((Iff.of_eq (congrFun hEvent x)).2 hall)
+        exact not_forall.mp hnot
+      obtain ⟨j, hj⟩ := hex
+      have hz : (Q j).w (x j) = 0 := by simp [Q, FinProb.cond, hj]
+      unfold FinProb.pi
+      exact Finset.prod_eq_zero (Finset.mem_univ j) hz
+  have hweight (j : Fin i.val) :
+      (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j) = 1 := by
+    let q : Fin k := ⟨j.val, lt_trans j.isLt i.isLt⟩
+    have hmem : q.val < i.val := by exact j.isLt
+    have hprob : (P q).pr (fun a => a = p j) = (P q).w (p j) :=
+      pr_eq_weight_singleton (P q) (p j)
+    have hCq : C q = (fun a => a = p j) := by
+      funext a
+      apply propext
+      constructor
+      · intro h
+        exact h hmem
+      · intro ha hq
+        have heq : (⟨q.val, hq⟩ : Fin i.val) = j := by
+          apply Fin.ext
+          rfl
+        simpa [heq] using ha
+    have hpr : (P q).pr (C q) = (P q).w (p j) := by
+      calc
+        (P q).pr (C q) = (P q).pr (fun a => a = p j) := by
+          apply pr_congr_local_early
+          intro a
+          exact Iff.of_eq (congrFun hCq a)
+        _ = (P q).w (p j) := hprob
+    have hposWeight : 0 < (P q).w (p j) := by
+      rw [← hpr]
+      exact hcoord q
+    have hCpoint : C q (p j) := by
+      intro hq
+      have heq : (⟨q.val, hq⟩ : Fin i.val) = j := by
+        apply Fin.ext
+        rfl
+      exact (congrArg p heq).symm
+    have hQeq : Q ⟨j.val, lt_trans j.isLt i.isLt⟩ =
+        (P q).cond (C q) (hcoord q) := by
+      rfl
+    rw [hQeq]
+    simp only [FinProb.cond]
+    rw [if_pos hCpoint, hpr]
+    exact div_self (ne_of_gt hposWeight)
+  have hprefixProd :
+      (∏ j : Fin i.val, (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j)) = 1 := by
+    apply Finset.prod_eq_one
+    intro j hj
+    exact hweight j
+  have hcurrent : Q i = P i := by
+    apply finProb_ext
+    intro a
+    simp [Q, C, FinProb.cond, FinProb.pr, (P i).sum_eq_one]
+  calc
+    ((FinProb.pi P).cond (fun x => prefixVals x i = p) hpos).expect (fun x => f (x i)) =
+        (FinProb.pi Q).expect (fun x => f (x i)) := by rw [hcond]
+    _ = (FinProb.pi Q).expect (fun x => if prefixVals x i = p then f (x i) else 0) :=
+      (expect_eq_on_support (FinProb.pi Q) _ _ hsupport).symm
+    _ = (∏ j : Fin i.val, (Q ⟨j.val, lt_trans j.isLt i.isLt⟩).w (p j)) * (Q i).expect f :=
+      expect_pi_prefix_fiber Q i p f
+    _ = (P i).expect f := by rw [hprefixProd, hcurrent]; ring
+
 private theorem pr_pi_cons {α : Type*} [Fintype α] {k : ℕ}
     (P : Fin (k + 1) → FinProb α) (A : (Fin (k + 1) → α) → Prop) :
     (FinProb.pi P).pr A =
@@ -597,6 +950,44 @@ private theorem pr_pi_reindex {κ ι : Type*} [Fintype κ] [DecidableEq κ]
     _ = (FinProb.pi (fun j => P (e j))).pr
           (fun x => A (fun i => x (e.symm i))) := expect_indicator _ _
 
+private theorem pi_cond_rect_last_expect {α : Type*} [Fintype α] [DecidableEq α]
+    {m : ℕ} (P : Fin m → FinProb α) (C : Fin m → α → Prop)
+    (hcoord : ∀ j, 0 < (P j).pr (C j))
+    (hpos : 0 < (FinProb.pi P).pr (fun x => ∀ j, C j (x j)))
+    (last : Fin m) (f : α → ℝ) :
+    ((FinProb.pi P).cond (fun x => ∀ j, C j (x j)) hpos).expect
+        (fun x => f (x last)) = ((P last).cond (C last) (hcoord last)).expect f := by
+  classical
+  let Q : Fin m → FinProb α := fun j => (P j).cond (C j) (hcoord j)
+  have hcond : (FinProb.pi P).cond (fun x => ∀ j, C j (x j)) hpos = FinProb.pi Q :=
+    FinProb.pi_cond_forall P C hcoord hpos
+  let first : Fin m := ⟨0, Nat.lt_of_le_of_lt (Nat.zero_le _) last.isLt⟩
+  let e : Fin m ≃ Fin m := Equiv.swap first last
+  have he : e first = last := by simp [e]
+  have hswap : e.symm last = first := by
+    rw [← he]
+    exact e.symm_apply_apply first
+  rw [hcond]
+  calc
+    (FinProb.pi Q).expect (fun x => f (x last)) =
+        (FinProb.pi (fun j => Q (e j))).expect (fun x => f (x (e.symm last))) :=
+          expect_pi_reindex e Q (fun x => f (x last))
+    _ = (Q last).expect f := by
+          have h := expect_pi_prefix_fiber (fun j => Q (e j)) first
+            (fun j => Fin.elim0 j) f
+          have htriv (x : Fin m → α) :
+              prefixVals x first = (fun j : Fin 0 => Fin.elim0 j) := by
+            funext j
+            exact Fin.elim0 j
+          have hfun : (fun x : Fin m → α =>
+              if prefixVals x first = (fun j : Fin 0 => Fin.elim0 j) then f (x first) else 0) =
+              (fun x => f (x first)) := by
+            funext x
+            rw [if_pos (htriv x)]
+          rw [hfun] at h
+          simpa [first, e, he, hswap] using h
+    _ = ((P last).cond (C last) (hcoord last)).expect f := rfl
+
 private theorem nonempty_finProb {α : Type*} [Fintype α] (P : FinProb α) : Nonempty α := by
   classical
   by_contra h
@@ -687,6 +1078,10 @@ private theorem pr_Hit_eq_rowDeg {N : ℕ} (E : Fin N → Fin N → Prop) (G : C
   simp [FinProb.pr, rowDeg, mul_comm]
 
 private def finToList {α : Type*} {k : ℕ} (x : Fin k → α) : List α := List.ofFn x
+
+private theorem finToList_cons {α : Type*} {k : ℕ} (a : α) (x : Fin k → α) :
+    finToList (Fin.cons a x) = a :: finToList x := by
+  simp [finToList]
 
 private def tupleLabels {k N m : ℕ} (W : Fin m → Fin k → Fin N) : List (Fin N) :=
   (List.ofFn fun i : Fin m => finToList (W i)).flatten
@@ -1143,6 +1538,213 @@ private theorem pr_HitsList_append {N : ℕ} (E : Fin N → Fin N → Prop) (G :
                         (HitsList E G ys) := by rw [← hBaseEvent]
                 _ = P.pr (HitsList E G (x :: xs)) *
                       (residualAfter E G P (x :: xs)).pr (HitsList E G ys) := by rw [← hres]
+
+private theorem pr_HitsList_finToList_eq_prod {N k : ℕ} (E : Fin N → Fin N → Prop)
+    (G : Colour) (P : Law N) (x : Fin k → Fin N) (L : ℝ)
+    (hgood : GoodPath E G L P (finToList x)) :
+    P.pr (HitsList E G (finToList x)) =
+      ∏ j : Fin k,
+        (residualAfter E G P (finToList (prefixVals x j))).pr
+          (fun y => Hits E G (x j) y) := by
+  induction k generalizing P with
+  | zero =>
+      simp [finToList, HitsList, FinProb.pr, P.sum_eq_one]
+  | succ k ih =>
+      let a := x 0
+      let tail : Fin k → Fin N := fun j => x j.succ
+      have hx : x = Fin.cons a tail := by
+        funext j
+        cases j using Fin.cases <;> rfl
+      have hlist : finToList x = a :: finToList tail := by
+        rw [hx, finToList_cons]
+      have hgood' : GoodPath E G L P ([a] ++ finToList tail) := by
+        simpa [hlist] using hgood
+      have hparts : Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+          GoodPath E G L (safeCond P (fun y => Hits E G a y)) (finToList tail) := by
+        simpa [GoodPath, hlist] using hgood
+      have hprob := pr_HitsList_append E G P [a] (finToList tail) L hgood'
+      have hone : HitsList E G [a] = (fun y => Hits E G a y) := by
+        funext y
+        simp [HitsList]
+      have hprob' : P.pr (HitsList E G (finToList x)) =
+          P.pr (fun y => Hits E G a y) *
+            (safeCond P (fun y => Hits E G a y)).pr
+              (HitsList E G (finToList tail)) := by
+        calc
+          P.pr (HitsList E G (finToList x)) =
+              P.pr (HitsList E G (a :: finToList tail)) := by rw [hlist]
+          _ = P.pr (HitsList E G ([a] ++ finToList tail)) := by rfl
+          _ = P.pr (HitsList E G [a]) *
+              (residualAfter E G P [a]).pr (HitsList E G (finToList tail)) := hprob
+          _ = _ := by simp [hone, residualAfter, safeCond]
+      have htail := ih (P := safeCond P (fun y => Hits E G a y)) tail hparts.2
+      have hq0 :
+          (residualAfter E G P (finToList (prefixVals x (0 : Fin (k + 1))))).pr
+            (fun y => Hits E G (x 0) y) = P.pr (fun y => Hits E G a y) := by
+        have hprefix : prefixVals x (0 : Fin (k + 1)) =
+            (fun j : Fin 0 => Fin.elim0 j) := by
+          funext j
+          exact Fin.elim0 j
+        have hnil : finToList (prefixVals x (0 : Fin (k + 1))) = [] := by
+          rw [hprefix]
+          simp [finToList]
+        rw [hnil]
+        simp only [residualAfter, List.foldl_nil]
+        rw [hx]
+        simp [a]
+      have hqtail (j : Fin k) :
+          (residualAfter E G P (finToList (prefixVals x j.succ))).pr
+              (fun y => Hits E G (x j.succ) y) =
+            (residualAfter E G (safeCond P (fun y => Hits E G a y))
+              (finToList (prefixVals tail j))).pr (fun y => Hits E G (tail j) y) := by
+        have hlistTail : finToList (prefixVals x j.succ) = a :: finToList (prefixVals tail j) := by
+          rw [hx, prefixVals_cons_succ, finToList_cons]
+        rw [hlistTail]
+        have hres := residualAfter_append E G P [a] (finToList (prefixVals tail j))
+        have hres' : residualAfter E G P (a :: finToList (prefixVals tail j)) =
+            residualAfter E G (safeCond P (fun y => Hits E G a y))
+              (finToList (prefixVals tail j)) := by
+          simpa [residualAfter] using hres
+        rw [hres']
+      calc
+        P.pr (HitsList E G (finToList x)) =
+            P.pr (fun y => Hits E G a y) *
+              (safeCond P (fun y => Hits E G a y)).pr
+                (HitsList E G (finToList tail)) := hprob'
+        _ = P.pr (fun y => Hits E G a y) *
+              (∏ j : Fin k,
+                (residualAfter E G P (finToList (prefixVals x j.succ))).pr
+                  (fun y => Hits E G (x j.succ) y)) := by
+              rw [htail]
+              congr 1
+              apply Finset.prod_congr rfl
+              intro j hj
+              exact (hqtail j).symm
+        _ = ∏ j : Fin (k + 1),
+              (residualAfter E G P (finToList (prefixVals x j))).pr
+                (fun y => Hits E G (x j) y) := by
+              rw [Fin.prod_univ_succ]
+              rw [← hq0]
+
+private theorem GoodPath_finToList_prefix_and_step {N k : ℕ}
+    (E : Fin N → Fin N → Prop) (G : Colour) (L : ℝ) (P : Law N)
+    (x : Fin k → Fin N) (hgood : GoodPath E G L P (finToList x)) (j : Fin k) :
+    GoodPath E G L P (finToList (prefixVals x j)) ∧
+      Real.exp (-L) ≤
+        (residualAfter E G P (finToList (prefixVals x j))).pr
+          (fun y => Hits E G (x j) y) := by
+  induction k generalizing P with
+  | zero => exact Fin.elim0 j
+  | succ k ih =>
+      let a := x 0
+      let tail : Fin k → Fin N := fun r => x r.succ
+      have hx : x = Fin.cons a tail := by
+        funext r
+        cases r using Fin.cases <;> rfl
+      have hlist : finToList x = a :: finToList tail := by
+        rw [hx, finToList_cons]
+      have hparts : Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+          GoodPath E G L (safeCond P (fun y => Hits E G a y)) (finToList tail) := by
+        simpa [GoodPath, hlist] using hgood
+      cases j using Fin.cases with
+      | zero =>
+          have hnil : finToList (prefixVals x (0 : Fin (k + 1))) = [] := by
+            have hp : prefixVals x (0 : Fin (k + 1)) = (fun q : Fin 0 => Fin.elim0 q) := by
+              funext q
+              exact Fin.elim0 q
+            rw [hp]
+            simp [finToList]
+          constructor
+          · rw [hnil]
+            simp [GoodPath]
+          · rw [hnil]
+            simpa [residualAfter] using hparts.1
+      | succ j =>
+          have htail := ih (P := safeCond P (fun y => Hits E G a y)) tail hparts.2 j
+          have hlistTail : finToList (prefixVals x j.succ) =
+              a :: finToList (prefixVals tail j) := by
+            rw [hx, prefixVals_cons_succ, finToList_cons]
+          have hres : residualAfter E G P (a :: finToList (prefixVals tail j)) =
+              residualAfter E G (safeCond P (fun y => Hits E G a y))
+                (finToList (prefixVals tail j)) := by
+            simpa [residualAfter] using
+              (residualAfter_append E G P [a] (finToList (prefixVals tail j)))
+          constructor
+          · rw [hlistTail]
+            change Real.exp (-L) ≤ P.pr (fun y => Hits E G a y) ∧
+              GoodPath E G L (safeCond P (fun y => Hits E G a y))
+                (finToList (prefixVals tail j))
+            exact ⟨hparts.1, htail.1⟩
+          · rw [hlistTail, hres]
+            simpa [tail] using htail.2
+
+private noncomputable def seqFill {ι α : Type*} [Fintype ι] [DecidableEq ι]
+    {m : ℕ} (s : Finset ι) (e : Fin m ≃ {i // i ∈ s}) (ω₀ : ι → α)
+    (V : Fin m → α) : ι → α := fun i =>
+  if hi : i ∈ s then V (e.symm ⟨i, hi⟩) else ω₀ i
+
+private theorem pr_congr_local {Ω : Type*} [Fintype Ω] (P : FinProb Ω)
+    (A B : Ω → Prop) (h : ∀ ω, A ω ↔ B ω) : P.pr A = P.pr B := by
+  classical
+  unfold FinProb.pr
+  apply Finset.sum_congr rfl
+  intro ω hω
+  simp [h ω]
+
+private theorem pi_pr_seqFill {ι α : Type*} [Fintype ι] [DecidableEq ι]
+    [Fintype α] (P : ι → FinProb α) {m : ℕ} (s : Finset ι)
+    (e : Fin m ≃ {i // i ∈ s}) (ω₀ : ι → α) (A : (ι → α) → Prop)
+    (hA : ∀ ω ω', (∀ i ∈ s, ω i = ω' i) → A ω = A ω') :
+    (FinProb.pi P).pr A =
+      (FinProb.pi (fun j : Fin m => P (e j).1)).pr (fun V => A (seqFill s e ω₀ V)) := by
+  classical
+  let Psub : {i // i ∈ s} → FinProb α := fun i => P i.1
+  let E := Equiv.piEquivPiSubtypeProd (fun i : ι => i ∈ s) (fun _ => α)
+  let b₀ : ∀ i : {j // j ∉ s}, α := fun i => ω₀ i.1
+  let Asub : (∀ i : {j // j ∈ s}, α) → Prop := fun a => A (E.symm (a, b₀))
+  letI : DecidablePred (fun i : ι => i ∈ s) := fun i => Finset.decidableMem i s
+  let ωc : ι → α := Classical.choice (nonempty_finProb (FinProb.pi P))
+  let bc : ∀ i : {j // j ∉ s}, α := fun i => ωc i.1
+  have hMargChoice : (FinProb.pi P).pr A =
+      (FinProb.pi Psub).pr (fun a => A (E.symm (a, bc))) := by
+    change (FinProb.pi P).pr A =
+      (FinProb.pi (fun i : {j // j ∈ s} => P i.1)).pr
+        (fun a => A ((Equiv.piEquivPiSubtypeProd (fun i => i ∈ s)
+          (fun _ => α)).symm
+            (a, fun i : {j // j ∉ s} =>
+              (Classical.choice (nonempty_finProb (FinProb.pi P))) i.1)))
+    exact pr_pi_depends_subset P s A hA
+  have hAgree (a : ∀ i : {j // j ∈ s}, α) :
+      ∀ i ∈ s, E.symm (a, bc) i = E.symm (a, b₀) i := by
+    intro i hi
+    simp [E, hi]
+  have hPred (a : ∀ i : {j // j ∈ s}, α) :
+      A (E.symm (a, bc)) ↔ A (E.symm (a, b₀)) := by
+    exact Iff.of_eq (hA _ _ (hAgree a))
+  have hMarg : (FinProb.pi P).pr A =
+      (FinProb.pi Psub).pr (fun a => A (E.symm (a, b₀))) := by
+    calc
+      (FinProb.pi P).pr A =
+          (FinProb.pi Psub).pr (fun a => A (E.symm (a, bc))) := hMargChoice
+      _ = (FinProb.pi Psub).pr (fun a => A (E.symm (a, b₀))) := by
+          apply pr_congr_local
+          intro a
+          exact hPred a
+  have hLift (V : Fin m → α) :
+      E.symm ((fun i : {j // j ∈ s} => V (e.symm i)), b₀) = seqFill s e ω₀ V := by
+    funext i
+    by_cases hi : i ∈ s
+    · simp [E, seqFill, b₀, hi]
+    · simp [E, seqFill, b₀, hi]
+  have hReindex := pr_pi_reindex e Psub Asub
+  calc
+    (FinProb.pi P).pr A = (FinProb.pi Psub).pr Asub := by simpa [Asub] using hMarg
+    _ = (FinProb.pi (fun j : Fin m => P (e j).1)).pr
+          (fun V => A (seqFill s e ω₀ V)) := by
+        rw [hReindex]
+        apply pr_congr_local
+        intro V
+        rw [← hLift V]
 
 private theorem HitsList_tupleLabels_iff {N k m : ℕ} (E : Fin N → Fin N → Prop)
     (G : Colour) (W : Fin m → Fin k → Fin N) (y : Fin N) :
@@ -2096,6 +2698,99 @@ private theorem eventual_exposure_factor (β γ : ℝ) (hβ : 0 < β)
       ring
     _ ≤ Real.exp (-2 * (n : ℝ) ^ c) := Real.exp_le_exp.mpr hexpCompare
 
+private theorem eventual_exposure_factor_four (β γ : ℝ) (hβ : 0 < β)
+    (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀,
+      40 * (n : ℝ) ^ 5 *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2)) / 4) ≤
+        Real.exp (-4 * (n : ℝ) ^ (omega4 β γ / 5)) := by
+  let ω := omega4 β γ
+  let α := β - ω / 2
+  let c := ω / 5
+  let δ := α / 2
+  have hω : 0 < ω := omega4_pos hβ hγ
+  have hωβ : ω ≤ β / 1000 := by
+    dsimp [ω, omega4]
+    exact div_le_div_of_nonneg_right (min_le_left β (1 - γ)) (by norm_num)
+  have hα : 0 < α := by dsimp [α]; nlinarith
+  have hgap : 0 < α - c := by dsimp [α, c]; nlinarith
+  have hδ : 0 < δ := by dsimp [δ]; positivity
+  have hδeq : δ + δ = α := by dsimp [δ]; ring
+  obtain ⟨nLog, hnLog⟩ := eventually_rpow_gt (a := δ)
+    (c := 8 * (Real.log 40 + 5 / δ)) hδ
+  obtain ⟨nGap, hnGap⟩ := eventually_rpow_gt (a := α - c) (c := 32) hgap
+  refine ⟨max nLog (max nGap 1), ?_⟩
+  intro n hn
+  have hnLog' : nLog ≤ n := le_trans (le_max_left _ _) hn
+  have hnGap' : nGap ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_left nGap 1) (Nat.le_max_right nLog (max nGap 1))
+  have hnOne : 1 ≤ n := by
+    apply le_trans _ hn
+    exact le_trans (Nat.le_max_right nGap 1) (Nat.le_max_right nLog (max nGap 1))
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hnr : 0 < (n : ℝ) := lt_of_lt_of_le (by norm_num) hnR
+  have hnδpos : 0 < (n : ℝ) ^ δ := Real.rpow_pos_of_pos hnr _
+  have hnδone : 1 ≤ (n : ℝ) ^ δ := Real.one_le_rpow hnR hδ.le
+  have hlogPow := Real.log_le_self hnδpos.le
+  rw [Real.log_rpow hnr δ] at hlogPow
+  have hlogn : Real.log (n : ℝ) ≤ (n : ℝ) ^ δ / δ := by
+    rw [le_div_iff₀ hδ]
+    nlinarith [hlogPow]
+  have hpowC : 8 * (Real.log 40 + 5 / δ) < (n : ℝ) ^ δ := hnLog n hnLog'
+  have hlogFactor : Real.log (40 * (n : ℝ) ^ 5) ≤ (n : ℝ) ^ α / 8 := by
+    have hlogN : Real.log (40 * (n : ℝ) ^ 5) = Real.log 40 + 5 * Real.log (n : ℝ) := by
+      rw [Real.log_mul (by norm_num) (by positivity), Real.log_pow]
+      norm_num
+    have hlog5 : 5 * Real.log (n : ℝ) ≤ (5 / δ) * (n : ℝ) ^ δ := by
+      have h := mul_le_mul_of_nonneg_left hlogPow (by positivity : 0 ≤ 5 / δ)
+      have hleft : (5 / δ) * (δ * Real.log (n : ℝ)) = 5 * Real.log (n : ℝ) := by
+        field_simp [ne_of_gt hδ]
+      rw [hleft] at h
+      exact h
+    have hcoeffBound : Real.log 40 + 5 * Real.log (n : ℝ) ≤
+        (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := by
+      have hlog40 : 0 < Real.log 40 := Real.log_pos (by norm_num)
+      calc
+        Real.log 40 + 5 * Real.log (n : ℝ) ≤
+            Real.log 40 + (5 / δ) * (n : ℝ) ^ δ := by linarith [hlog5]
+        _ ≤ Real.log 40 * (n : ℝ) ^ δ + (5 / δ) * (n : ℝ) ^ δ := by
+            have h := mul_le_mul_of_nonneg_left hnδone hlog40.le
+            nlinarith
+        _ = (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := by ring
+    have hpowHalf : 8 * (Real.log 40 + 5 / δ) ≤ (n : ℝ) ^ δ := le_of_lt hpowC
+    have hpowAlpha : (n : ℝ) ^ α = (n : ℝ) ^ δ * (n : ℝ) ^ δ := by
+      rw [← Real.rpow_add hnr δ δ, hδeq]
+    rw [hlogN, hpowAlpha]
+    calc
+      Real.log 40 + 5 * Real.log (n : ℝ) ≤
+          (Real.log 40 + 5 / δ) * (n : ℝ) ^ δ := hcoeffBound
+      _ ≤ ((n : ℝ) ^ δ * (n : ℝ) ^ δ) / 8 := by nlinarith [hnδpos]
+      _ = _ := by ring
+  have hFactorPos : 0 < 40 * (n : ℝ) ^ 5 := by positivity
+  have hFactorExp : 40 * (n : ℝ) ^ 5 ≤ Real.exp ((n : ℝ) ^ α / 8) := by
+    have h := Real.exp_le_exp.mpr hlogFactor
+    rw [Real.exp_log hFactorPos] at h
+    exact h
+  have hGapPow : 32 < (n : ℝ) ^ (α - c) := hnGap n hnGap'
+  have hnCpos : 0 < (n : ℝ) ^ c := Real.rpow_pos_of_pos hnr _
+  have hpowSplit : (n : ℝ) ^ α = (n : ℝ) ^ c * (n : ℝ) ^ (α - c) := by
+    rw [← Real.rpow_add hnr c (α - c)]
+    congr 1
+    ring
+  have hexpCompare : -((n : ℝ) ^ α) / 8 ≤ -4 * (n : ℝ) ^ c := by
+    rw [hpowSplit]
+    nlinarith [mul_lt_mul_of_pos_left hGapPow hnCpos]
+  calc
+    40 * (n : ℝ) ^ 5 * Real.exp (-((n : ℝ) ^ α) / 4) ≤
+        Real.exp ((n : ℝ) ^ α / 8) * Real.exp (-((n : ℝ) ^ α) / 4) :=
+      mul_le_mul_of_nonneg_right hFactorExp (Real.exp_nonneg _)
+    _ = Real.exp (-((n : ℝ) ^ α) / 8) := by
+      rw [← Real.exp_add]
+      congr 1
+      ring
+    _ ≤ Real.exp (-4 * (n : ℝ) ^ c) := Real.exp_le_exp.mpr hexpCompare
+
 set_option maxHeartbeats 1000000 in
 theorem exposure_low_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
     ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
@@ -2707,5 +3402,887 @@ theorem entry_own_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : �
     have hbudget : δ' + P.pr High ≤ δ := by linarith [hδ'δ, hhighProbSmall]
     nlinarith [hbudget]
   simpa [P, Low, q, δ, δ', ω, a, hδTarget] using hLowBound
+
+set_option maxHeartbeats 1000000 in
+theorem own_ratio_core (β γ : ℝ) (hβ : 0 < β) (hβγ : β ≤ γ) (hγ : γ < 1) :
+    ∃ n₀ : ℕ, ∀ n ≥ n₀, ∀ {N : ℕ} {E : Fin N → Fin N → Prop} {G : Colour}
+      {X Y : Finset (Fin N)} (M : Menu4 β γ G n N E X Y)
+      (tag : Key β γ n → M.ι),
+      KeyNbrCard β γ n → EntryLow M → EntryOwn M → OwnRatio M tag := by
+  obtain ⟨nWidth, hWidthAll⟩ := eventual_residual_width_budget β γ hβ hβγ hγ
+  obtain ⟨nOwnWidth, hOwnWidthAll⟩ := eventual_own_residual_width_budget β γ hβ hβγ hγ
+  obtain ⟨nFactors, hFactors⟩ := eventual_width_budget_factors β γ hβ hβγ hγ
+  obtain ⟨nAbsorb, hAbsorb⟩ := eventual_exposure_factor_four β γ hβ hγ
+  let ω := omega4 β γ
+  let h := h4 β γ
+  let cExp := ω / 5
+  let gapθ := cExp - 3 * h
+  let gapA := ω / 3 - 4 * h - cExp
+  have hω : 0 < ω := omega4_pos hβ hγ
+  have hωβ : ω ≤ β / 1000 := by
+    dsimp [ω, omega4]
+    exact div_le_div_of_nonneg_right (min_le_left β (1 - γ)) (by norm_num)
+  have hh : 0 < h := by dsimp [h, h4]; positivity
+  have hgapθ : 0 < gapθ := by dsimp [gapθ, cExp, h, h4]; nlinarith [hω]
+  have hgapA : 0 < gapA := by dsimp [gapA, cExp, h, h4]; nlinarith [hω]
+  obtain ⟨nTheta, hTheta⟩ := eventually_rpow_gt (a := gapθ) (c := 800) hgapθ
+  obtain ⟨nAzuma, hAzuma⟩ := eventually_rpow_gt (a := gapA) (c := 3200) hgapA
+  obtain ⟨nAstar, hAstar⟩ := eventually_rpow_gt (a := h) (c := 2) hh
+  let nA := max nWidth nOwnWidth
+  let nB := max nFactors nAbsorb
+  let nC := max nTheta (max nAzuma nAstar)
+  let nRest := max nA (max nB nC)
+  refine ⟨max 1 nRest, ?_⟩
+  intro n hn N E G X Y M tag hKey hEntryLow hEntryOwn
+  have hnOne : 1 ≤ n := le_trans (Nat.le_max_left 1 nRest) hn
+  have hnRest : nRest ≤ n := le_trans (Nat.le_max_right 1 nRest) hn
+  have hnA : nA ≤ n := le_trans (Nat.le_max_left nA (max nB nC)) hnRest
+  have hnBC : max nB nC ≤ n := le_trans (Nat.le_max_right nA (max nB nC)) hnRest
+  have hnB : nB ≤ n := le_trans (Nat.le_max_left nB nC) hnBC
+  have hnC : nC ≤ n := le_trans (Nat.le_max_right nB nC) hnBC
+  have hnWidth : nWidth ≤ n := le_trans (Nat.le_max_left nWidth nOwnWidth) hnA
+  have hnOwnWidth : nOwnWidth ≤ n := le_trans (Nat.le_max_right nWidth nOwnWidth) hnA
+  have hnFactors : nFactors ≤ n := le_trans (Nat.le_max_left nFactors nAbsorb) hnB
+  have hnAbsorb : nAbsorb ≤ n := le_trans (Nat.le_max_right nFactors nAbsorb) hnB
+  have hnTheta : nTheta ≤ n := le_trans (Nat.le_max_left nTheta (max nAzuma nAstar)) hnC
+  have hnAzuma : nAzuma ≤ n := le_trans
+    (Nat.le_max_left nAzuma nAstar) (le_trans (Nat.le_max_right nTheta (max nAzuma nAstar)) hnC)
+  have hnAstar : nAstar ≤ n := le_trans
+    (Nat.le_max_right nAzuma nAstar) (le_trans (Nat.le_max_right nTheta (max nAzuma nAstar)) hnC)
+  have hnR : 1 ≤ (n : ℝ) := by exact_mod_cast hnOne
+  have hnr : 0 < (n : ℝ) := lt_of_lt_of_le (by norm_num) hnR
+  have hnThetaPow : 800 < (n : ℝ) ^ gapθ := hTheta n hnTheta
+  have hnAzumaPow : 3200 < (n : ℝ) ^ gapA := hAzuma n hnAzuma
+  have hnAstarPow : 2 < (n : ℝ) ^ h := hAstar n hnAstar
+  intro xm ym u D cLoc hDpos hDcard hc hOwnKey
+  classical
+  let Z : Finset (Key β γ n) := Zset β γ u
+  let s : Finset (Loc β γ n × Key β γ n) := D ×ˢ Z
+  let A := {ck : Loc β γ n × Key β γ n // ck ∈ s}
+  let m : ℕ := Fintype.card A
+  have hcount : m = D.card * Z.card := by
+    dsimp [m, A, s]
+    rw [Fintype.card_coe, Finset.card_product]
+  let target : A := ⟨(cLoc, key β γ n u.1), Finset.mem_product.mpr ⟨hc, hOwnKey⟩⟩
+  obtain ⟨e, last, hlast, he⟩ := exists_fin_equiv_last target
+  let Ppair : Loc β γ n × Key β γ n → FinProb (Fin (tupLen β γ n) → Fin N) :=
+    fun ck => FinProb.pi (fun _ : Fin (tupLen β γ n) => maskLaw (xm ck))
+  let Ptuple : Fin m → FinProb (Fin (tupLen β γ n) → Fin N) :=
+    fun i => Ppair (e i).1
+  let Pseq : FinProb (Fin m → Fin (tupLen β γ n) → Fin N) := FinProb.pi Ptuple
+  let ω₀ : Loc β γ n × Key β γ n → Fin (tupLen β γ n) → Fin N :=
+    Classical.choice (nonempty_finProb (FinProb.pi Ppair))
+  let P₀ : Law N := maskLaw (ym u)
+  let ownIdx : M.ι := tag (key β γ n u.1)
+  let ownKey := key β γ n u.1
+  let ownPatch : M.ι := tag ((e last).1).2
+  have hOwnPatchEq : ownPatch = ownIdx := by
+    have hpairEq : (e last).1 = (cLoc, ownKey) := congrArg Subtype.val he
+    dsimp [ownPatch, ownIdx, ownKey]
+    exact congrArg (fun q : Loc β γ n × Key β γ n => tag q.2) hpairEq
+  let ownThreshold : ℝ := M.pd ownPatch - (M.pd ownPatch - 1 / 2) / 4
+  let aStarN : ℝ := aStar β γ n
+  let cap : ℝ := capL β γ n
+  let theta : ℝ := 20 * (n : ℝ) ^ (-(omega4 β γ) / 5) / aStarN
+  let tAz : ℝ := (tupLen β γ n : ℝ) * aStarN / (40 * cap)
+  let baseLabels (q : Fin last.val → Fin (tupLen β γ n) → Fin N) := tupleLabels q
+  let history : ∀ t : Fin (tupLen β γ n + 1),
+      (Fin m → Fin (tupLen β γ n) → Fin N) →
+        (Fin last.val → Fin (tupLen β γ n) → Fin N) × (Fin t.val → Fin N) :=
+    fun t V => (prefixVals V last,
+      fun j => V last ⟨j.val, Nat.lt_of_lt_of_le j.isLt (Nat.le_of_lt_succ t.isLt)⟩)
+  let H : Fin (tupLen β γ n + 1) → Type := fun t =>
+    (Fin last.val → Fin (tupLen β γ n) → Fin N) × (Fin t.val → Fin N)
+  let project : ∀ i : Fin (tupLen β γ n), H i.succ → H i.castSucc :=
+    fun _ h => (h.1, fun j => h.2 j.castSucc)
+  let goodPrefix {i : Fin (tupLen β γ n)} (h : H i.castSucc) : Prop :=
+    GoodPath E G cap P₀ (baseLabels h.1 ++ finToList h.2)
+  let etaPrefix {i : Fin (tupLen β γ n)} (h : H i.castSucc) : Law N :=
+    residualAfter E G P₀ (baseLabels h.1 ++ finToList h.2)
+  let fiberDelta (i : Fin (tupLen β γ n)) (h : H i.castSucc) (x : Fin N) : ℝ :=
+    if goodPrefix h then
+      if rowDeg E G x (etaPrefix h) < ownThreshold then 0 else 1
+    else 1
+  let Delta : Fin (tupLen β γ n) →
+      (Fin m → Fin (tupLen β γ n) → Fin N) → ℝ :=
+    fun i V => fiberDelta i (history i.castSucc V) (V last i)
+
+  have hWidth : ∀ (i : Fin m)
+      (q : Fin i.val → Fin (tupLen β γ n) → Fin N) (xs : List (Fin N)),
+      xs.length ≤ tupLen β γ n →
+      GoodPath E G cap P₀ (tupleLabels q ++ xs) →
+      Law.WidthLE (residualAfter E G P₀ (tupleLabels q ++ xs))
+        (2 * (n : ℝ) ^ γ) := by
+    intro i q xs hxs hgood
+    have hi : i.val + 1 ≤ m := Nat.succ_le_of_lt i.isLt
+    have hlenNat : (tupleLabels q ++ xs).length ≤ tupLen β γ n * m := by
+      rw [List.length_append, tupleLabels_length]
+      calc
+        i.val * tupLen β γ n + xs.length ≤ i.val * tupLen β γ n + tupLen β γ n :=
+          Nat.add_le_add_left hxs _
+        _ = (i.val + 1) * tupLen β γ n := by rw [Nat.add_mul, one_mul]
+        _ ≤ m * tupLen β γ n := Nat.mul_le_mul_right _ hi
+        _ = tupLen β γ n * m := Nat.mul_comm _ _
+    have hlen : (tupleLabels q ++ xs).length ≤
+        tupLen β γ n * D.card * Z.card := by
+      calc
+        (tupleLabels q ++ xs).length ≤ tupLen β γ n * m := hlenNat
+        _ = tupLen β γ n * D.card * Z.card := by rw [hcount]; simp [Nat.mul_assoc]
+    exact hWidthAll n hnWidth M u tag D (ym u) hDcard hKey
+      (tupleLabels q ++ xs) hlen hgood
+
+  let ownFail : Tuples β γ n N → Prop := fun W =>
+    P₀.pr (HitsAll E G W D Z) <
+      ratioThr β γ u ownKey * P₀.pr (HitsBut E G W D Z cLoc ownKey)
+  have hOwnDepends : ∀ W W', (∀ ck ∈ s, W ck = W' ck) → ownFail W = ownFail W' := by
+    intro W W' hagree
+    have hAll : ∀ y, HitsAll E G W D Z y = HitsAll E G W' D Z y := by
+      intro y
+      apply propext
+      constructor
+      · intro hh c hc κ hκ j
+        have hW := hagree (c, κ) (Finset.mem_product.mpr ⟨hc, hκ⟩)
+        rw [← hW]
+        exact hh c hc κ hκ j
+      · intro hh c hc κ hκ j
+        have hW := hagree (c, κ) (Finset.mem_product.mpr ⟨hc, hκ⟩)
+        rw [hW]
+        exact hh c hc κ hκ j
+    have hBut : ∀ y, HitsBut E G W D Z cLoc ownKey y =
+        HitsBut E G W' D Z cLoc ownKey y := by
+      intro y
+      apply propext
+      constructor
+      · intro hh c hc κ hκ hne j
+        have hW := hagree (c, κ) (Finset.mem_product.mpr ⟨hc, hκ⟩)
+        rw [← hW]
+        exact hh c hc κ hκ hne j
+      · intro hh c hc κ hκ hne j
+        have hW := hagree (c, κ) (Finset.mem_product.mpr ⟨hc, hκ⟩)
+        rw [hW]
+        exact hh c hc κ hκ hne j
+    have hAllIff : ∀ y, HitsAll E G W D Z y ↔ HitsAll E G W' D Z y :=
+      fun y => Iff.of_eq (hAll y)
+    have hButIff : ∀ y, HitsBut E G W D Z cLoc ownKey y ↔
+        HitsBut E G W' D Z cLoc ownKey y := fun y => Iff.of_eq (hBut y)
+    have hPAll := pr_congr_local_early P₀ _ _ hAllIff
+    have hPBut := pr_congr_local_early P₀ _ _ hButIff
+    simp [ownFail, hPAll, hPBut]
+  let ownSeq : (Fin m → Fin (tupLen β γ n) → Fin N) → Prop :=
+    fun V => ownFail (seqFill s e ω₀ V)
+  have hOwnTransfer : (tupleLaw M tag xm).pr ownFail = Pseq.pr ownSeq := by
+    simpa [Ppair, Ptuple, Pseq, tupleLaw, ownSeq] using
+      (pi_pr_seqFill Ppair s e ω₀ ownFail hOwnDepends)
+
+  let firstBad : (Fin m → Fin (tupLen β γ n) → Fin N) → Prop :=
+    OuterFirstBad E G cap P₀
+  have hFirstBad := tupleArray_firstBad_bound M tag xm ym u m s e hEntryLow hWidth
+  have hfirstBound : Pseq.pr firstBad ≤
+      (m : ℝ) * (tupLen β γ n : ℝ) *
+        Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) := by
+    simpa [Pseq, P₀, firstBad] using hFirstBad
+
+  have hfiltration : ∀ i V, history i.castSucc V = project i (history i.succ V) := by
+    intro i V
+    apply Prod.ext
+    · rfl
+    · funext j
+      rfl
+  have hadapted : ∀ (r : ℕ) (hr : r ≤ tupLen β γ n) (i : Fin (tupLen β γ n)),
+      i.val < r → ∀ V V', history ⟨r, Nat.lt_succ_of_le hr⟩ V =
+        history ⟨r, Nat.lt_succ_of_le hr⟩ V' → Delta i V = Delta i V' := by
+    intro r hr i hir V V' hhist
+    have hOut : prefixVals V last = prefixVals V' last := congrArg Prod.fst hhist
+    have hPrefix : (history ⟨r, Nat.lt_succ_of_le hr⟩ V).2 =
+        (history ⟨r, Nat.lt_succ_of_le hr⟩ V').2 := congrArg Prod.snd hhist
+    have hHist : history i.castSucc V = history i.castSucc V' := by
+      apply Prod.ext
+      · exact hOut
+      · funext j
+        have hjr : j.val < r := lt_of_lt_of_le j.isLt (Nat.le_of_lt hir)
+        have h := congrFun hPrefix ⟨j.val, hjr⟩
+        simpa [history] using h
+    have hCurrent : V last i = V' last i := by
+      have h := congrFun hPrefix ⟨i.val, hir⟩
+      simpa [history] using h
+    dsimp [Delta]
+    rw [hHist, hCurrent]
+  have hboundDelta : ∀ i V, 0 ≤ Delta i V ∧ Delta i V ≤ 1 := by
+    intro i V
+    by_cases hg : goodPrefix (history i.castSucc V)
+    · by_cases hd : rowDeg E G (V last i) (etaPrefix (history i.castSucc V)) < ownThreshold
+      · norm_num [Delta, fiberDelta, hg, hd]
+      · norm_num [Delta, fiberDelta, hg, hd]
+    · norm_num [Delta, fiberDelta, hg]
+
+  have hmean : ∀ i (hist : H i.castSucc),
+      Pseq.pr (fun V => history i.castSucc V = hist) = 0 ∨
+        (1 - theta) * Pseq.pr (fun V => history i.castSucc V = hist) ≤
+          (∑ V, if history i.castSucc V = hist then Pseq.w V * Delta i V else 0) := by
+    intro i hist
+    let fiber : (Fin m → Fin (tupLen β γ n) → Fin N) → Prop :=
+      fun V => history i.castSucc V = hist
+    let C : Fin m → (Fin (tupLen β γ n) → Fin N) → Prop := fun j W =>
+      if hj : j.val < last.val then W = hist.1 ⟨j.val, hj⟩
+      else prefixVals W i = hist.2
+    have hLast (j : Fin m) (hj : ¬ j.val < last.val) : j = last := by
+      apply Fin.ext
+      have hle : j.val ≤ last.val := by omega
+      omega
+    have hEvent (V : Fin m → Fin (tupLen β γ n) → Fin N) :
+        fiber V ↔ ∀ j, C j (V j) := by
+      constructor
+      · intro hh j
+        by_cases hj : j.val < last.val
+        · have houtRaw := congrFun (congrArg Prod.fst hh) ⟨j.val, hj⟩
+          have hout₀ : prefixVals V last ⟨j.val, hj⟩ = hist.1 ⟨j.val, hj⟩ := by
+            simpa [history] using houtRaw
+          have hprefix : prefixVals V last ⟨j.val, hj⟩ = V j := by simp [prefixVals]
+          have hout' : V j = hist.1 ⟨j.val, hj⟩ := by
+            calc
+              V j = prefixVals V last ⟨j.val, hj⟩ := hprefix.symm
+              _ = hist.1 ⟨j.val, hj⟩ := hout₀
+          have hCval : C j (V j) := by
+            dsimp [C]
+            rw [dif_pos hj]
+            exact hout'
+          exact hCval
+        · have hEq := hLast j hj
+          subst j
+          have hpref := congrArg Prod.snd hh
+          have hfunc : (fun q : Fin i.val =>
+              V last ⟨q.val, Nat.lt_of_lt_of_le q.isLt
+                (Nat.le_of_lt_succ i.castSucc.isLt)⟩) = prefixVals (V last) i := by
+            funext q
+            apply congrArg (V last)
+            apply Fin.ext
+            rfl
+          have hpref' : prefixVals (V last) i = hist.2 := hfunc.symm.trans hpref
+          have hCval : C last (V last) := by
+            dsimp [C]
+            rw [dif_neg (Nat.not_lt_of_ge (le_refl _))]
+            exact hpref'
+          exact hCval
+      · intro hall
+        apply Prod.ext
+        · funext q
+          let j : Fin m := ⟨q.val, lt_trans q.isLt last.isLt⟩
+          have hj : j.val < last.val := q.isLt
+          have h := hall j
+          have hout : V j = hist.1 ⟨j.val, hj⟩ := by
+            dsimp [C] at h
+            rw [dif_pos hj] at h
+            exact h
+          have hindex' : (⟨j.val, hj⟩ : Fin last.val) = q := by
+            apply Fin.ext
+            rfl
+          have hx : prefixVals V last q = V j := by
+            change V (⟨q.val, lt_trans q.isLt last.isLt⟩ : Fin m) = V j
+            exact congrArg V (by apply Fin.ext; rfl)
+          have hout' : V j = hist.1 q := by
+            rw [hindex'] at hout
+            exact hout
+          change prefixVals V last q = hist.1 q
+          rw [hx]
+          exact hout'
+        · have h := hall last
+          change (if h : last.val < last.val then V last = hist.1 ⟨last.val, h⟩
+            else prefixVals (V last) i = hist.2) at h
+          split_ifs at h with hlt
+          · exact False.elim (Nat.lt_irrefl _ hlt)
+          have hfunc : (fun q : Fin i.val =>
+              V last ⟨q.val, Nat.lt_of_lt_of_le q.isLt
+                (Nat.le_of_lt_succ i.castSucc.isLt)⟩) = prefixVals (V last) i := by
+            funext q
+            apply congrArg (V last)
+            apply Fin.ext
+            rfl
+          calc
+            (fun q : Fin i.val =>
+                V last ⟨q.val, Nat.lt_of_lt_of_le q.isLt
+                  (Nat.le_of_lt_succ i.castSucc.isLt)⟩) = prefixVals (V last) i := hfunc
+            _ = hist.2 := h
+    have hprobEq : Pseq.pr fiber =
+        Pseq.pr (fun V => ∀ j, C j (V j)) := by
+      apply pr_congr_local_early
+      intro V
+      exact hEvent V
+    have hfactor : Pseq.pr (fun V => ∀ j, C j (V j)) =
+        ∏ j : Fin m, (Ptuple j).pr (C j) := by
+      exact FinProb.pi_pr_forall Ptuple C
+    by_cases hz : Pseq.pr fiber = 0
+    · exact Or.inl hz
+    · have hFiberPos : 0 < Pseq.pr fiber := by
+        have hnon := FinProb.pr_nonneg Pseq fiber
+        exact lt_of_le_of_ne hnon (Ne.symm hz)
+      have hrectPos : 0 < Pseq.pr (fun V => ∀ j, C j (V j)) := by
+        rw [← hprobEq]
+        exact hFiberPos
+      have hfactorPos : 0 < ∏ j : Fin m, (Ptuple j).pr (C j) := by
+        rw [← hfactor]
+        exact hrectPos
+      have hcoord (j : Fin m) : 0 < (Ptuple j).pr (C j) := by
+        by_contra hnot
+        have hnon := FinProb.pr_nonneg (Ptuple j) (C j)
+        have hzero : (Ptuple j).pr (C j) = 0 := le_antisymm (le_of_not_gt hnot) hnon
+        have hprodZero : (∏ j' : Fin m, (Ptuple j').pr (C j')) = 0 :=
+          Finset.prod_eq_zero (Finset.mem_univ j) hzero
+        rw [hprodZero] at hfactorPos
+        exact (lt_irrefl 0) hfactorPos
+      let Qouter : Fin m → FinProb (Fin (tupLen β γ n) → Fin N) :=
+        fun j => (Ptuple j).cond (C j) (hcoord j)
+      have hrectCond :
+          (Pseq.cond (fun V => ∀ j, C j (V j)) hrectPos) = FinProb.pi Qouter :=
+        FinProb.pi_cond_forall Ptuple C hcoord hrectPos
+      have hFiberCond : Pseq.cond fiber hFiberPos =
+          Pseq.cond (fun V => ∀ j, C j (V j)) hrectPos := by
+        apply finProb_ext
+        intro V
+        simp only [FinProb.cond]
+        by_cases hV : fiber V
+        · have hR : ∀ j, C j (V j) := (hEvent V).1 hV
+          rw [if_pos hV, if_pos hR]
+          rw [hprobEq]
+        · have hR : ¬ (∀ j, C j (V j)) := by
+            intro hR
+            exact hV ((hEvent V).2 hR)
+          rw [if_neg hV, if_neg hR]
+          simp only [zero_div]
+      have hFiberSupport : ∀ V,
+          (FinProb.pi Qouter).w V = 0 ∨
+            Delta i V = fiberDelta i hist (V last i) := by
+        intro V
+        by_cases hV : fiber V
+        · right
+          dsimp [Delta]
+          rw [hV]
+        · left
+          have hnotRect : ¬ (∀ j, C j (V j)) := by
+            intro hR
+            exact hV ((hEvent V).2 hR)
+          obtain ⟨j, hj⟩ := not_forall.mp hnotRect
+          have hzj : (Qouter j).w (V j) = 0 := by
+            simp [Qouter, FinProb.cond, hj]
+          unfold FinProb.pi
+          exact Finset.prod_eq_zero (Finset.mem_univ j) hzj
+      have hOuterMean :
+          (Pseq.cond fiber hFiberPos).expect (Delta i) =
+            ((Ptuple last).cond (C last) (hcoord last)).expect
+              (fun W => fiberDelta i hist (W i)) := by
+        calc
+          (Pseq.cond fiber hFiberPos).expect (Delta i) =
+              (Pseq.cond (fun V => ∀ j, C j (V j)) hrectPos).expect (Delta i) := by
+                rw [hFiberCond]
+          _ = (FinProb.pi Qouter).expect (Delta i) := by rw [hrectCond]
+          _ = (FinProb.pi Qouter).expect (fun V => fiberDelta i hist (V last i)) :=
+                expect_eq_on_support (FinProb.pi Qouter) (Delta i)
+                  (fun V => fiberDelta i hist (V last i)) hFiberSupport
+          _ = (Pseq.cond (fun V => ∀ j, C j (V j)) hrectPos).expect
+                (fun V => fiberDelta i hist (V last i)) := by rw [← hrectCond]
+          _ = ((Ptuple last).cond (C last) (hcoord last)).expect
+                (fun W => fiberDelta i hist (W i)) :=
+                pi_cond_rect_last_expect Ptuple C hcoord hrectPos last
+                  (fun W => fiberDelta i hist (W i))
+      have hCtarget : C last = (fun W => prefixVals W i = hist.2) := by
+        funext W
+        simp [C]
+      let Sown : Mask (M.μ ownPatch) := xm (e last).1
+      let Pentry : Fin (tupLen β γ n) → FinProb (Fin N) :=
+        fun _ => maskLaw Sown
+      have hPentryEq : Ptuple last = FinProb.pi Pentry := by
+        rfl
+      have hOwnPrefixPos : 0 < (FinProb.pi Pentry).pr (fun W => prefixVals W i = hist.2) := by
+        rw [← hPentryEq, ← hCtarget]
+        exact hcoord last
+      have hInnerMean := pi_cond_prefix_expect_next Pentry i hist.2 hOwnPrefixPos
+        (fun x => fiberDelta i hist x)
+      have hlen : (baseLabels hist.1 ++ finToList hist.2).length ≤
+          tupLen β γ n * D.card * Z.card := by
+        rw [List.length_append, tupleLabels_length]
+        have hprefixLen : (finToList hist.2).length = i.val := by simp [finToList]
+        rw [hprefixLen]
+        calc
+          last.val * tupLen β γ n + i.val ≤
+              last.val * tupLen β γ n + tupLen β γ n :=
+            Nat.add_le_add_left (Nat.le_of_lt i.isLt) _
+          _ = (last.val + 1) * tupLen β γ n := by rw [Nat.add_mul, one_mul]
+          _ = m * tupLen β γ n := by rw [hlast]
+          _ = tupLen β γ n * D.card * Z.card := by
+            rw [hcount]
+            ac_rfl
+      have hTargetCond : (Ptuple last).cond (C last) (hcoord last) =
+          (FinProb.pi Pentry).cond (fun W => prefixVals W i = hist.2) hOwnPrefixPos := by
+        apply finProb_ext
+        intro W
+        have hCiff : C last W ↔ prefixVals W i = hist.2 :=
+          Iff.of_eq (congrFun hCtarget W)
+        have hprEq : (Ptuple last).pr (C last) =
+            (FinProb.pi Pentry).pr (fun W => prefixVals W i = hist.2) := by
+          rw [hPentryEq, hCtarget]
+        simp only [FinProb.cond]
+        by_cases hpre : prefixVals W i = hist.2
+        · have hC : C last W := hCiff.mpr hpre
+          rw [if_pos hC, if_pos hpre, hPentryEq, hprEq]
+        · have hC : ¬ C last W := fun h => hpre (hCiff.mp h)
+          simp [hC, hpre]
+      have hTargetMean :
+          ((Ptuple last).cond (C last) (hcoord last)).expect
+              (fun W => fiberDelta i hist (W i)) =
+            (maskLaw Sown).expect (fiberDelta i hist) := by
+        rw [hTargetCond]
+        simpa [Pentry] using hInnerMean
+      have hFiberLower :
+          ((Ptuple last).cond (C last) (hcoord last)).expect
+            (fun W => fiberDelta i hist (W i)) ≥ 1 - theta := by
+        by_cases hgood : goodPrefix hist
+        · have hgoodList : GoodPath E G (capL β γ n) (maskLaw (ym u))
+              (tupleLabels hist.1 ++ finToList hist.2) := by
+            change GoodPath E G cap P₀ (baseLabels hist.1 ++ finToList hist.2)
+            exact hgood
+          have hηWidth := hOwnWidthAll n hnOwnWidth M u tag D (ym u)
+            (baseLabels hist.1 ++ finToList hist.2) hDcard hKey hlen hgoodList
+          have hηWidthOwn : Law.WidthLE (etaPrefix hist)
+              (M.sY ownPatch + (n : ℝ) ^ (γ - omega4 β γ / 2) / 4) := by
+            simpa [hOwnPatchEq, etaPrefix] using hηWidth
+          let dip : Fin N → Prop := fun x =>
+            rowDeg E G x (etaPrefix hist) < ownThreshold
+          have hEntryDip := hEntryOwn ownPatch Sown (etaPrefix hist) (by
+            intro y hy
+            have hy' : (M.ν ownIdx).w y = 0 := by simpa [hOwnPatchEq] using hy
+            have hP₀y : P₀.w y = 0 := mask_zero_of_zero (ym u) y hy'
+            let suppP₀ : Finset (Fin N) := Finset.univ.filter fun z => P₀.w z ≠ 0
+            have hP₀Supp : P₀.SupportedIn suppP₀ := by
+              intro z hz
+              by_contra hne
+              exact hz (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hne⟩)
+            have hEtaSupp := residualAfter_supportedIn E G P₀
+              (baseLabels hist.1 ++ finToList hist.2) hP₀Supp
+            have hyOut : y ∉ suppP₀ := by simp [suppP₀, hP₀y]
+            exact hEtaSupp y hyOut) hηWidthOwn
+          have hai : (n : ℝ) ^ (-h4 β γ) ≤ M.pd ownPatch - 1 / 2 := by
+            have hp := (M.prep ownPatch).2.2.2.2.2.2.1
+            linarith [hp]
+          have haiPos : 0 < M.pd ownPatch - 1 / 2 :=
+            lt_of_lt_of_le (Real.rpow_pos_of_pos hnr _) hai
+          have hentrySmall :
+              (maskLaw Sown).pr dip ≤ theta := by
+            have hentry := hEntryDip
+            have hnum : 0 ≤ 20 * (n : ℝ) ^ (-(omega4 β γ) / 5) := by positivity
+            have hden : 0 < aStarN := Real.rpow_pos_of_pos hnr _
+            have hdiv :
+                20 * (n : ℝ) ^ (-(omega4 β γ) / 5) / (M.pd ownPatch - 1 / 2) ≤
+                  20 * (n : ℝ) ^ (-(omega4 β γ) / 5) / aStarN := by
+              apply (div_le_div_iff₀ haiPos hden).2
+              exact mul_le_mul_of_nonneg_left hai hnum
+            exact hentry.trans (by simpa [theta, aStarN] using hdiv)
+          have hNot := expect_not_pr (maskLaw Sown) dip
+          have hfun : (fun x => fiberDelta i hist x) =
+              (fun x => if dip x then 0 else 1) := by
+            funext x
+            simp [fiberDelta, goodPrefix, hgood, dip]
+          calc
+            ((Ptuple last).cond (C last) (hcoord last)).expect
+                (fun W => fiberDelta i hist (W i)) =
+                (maskLaw Sown).expect (fun x => fiberDelta i hist x) := hTargetMean
+            _ = 1 - (maskLaw Sown).pr dip := by rw [hfun, hNot]
+            _ ≥ 1 - theta := by linarith [hentrySmall]
+        · have hfun : (fun x => fiberDelta i hist x) = fun _ => (1 : ℝ) := by
+            funext x
+            simp [fiberDelta, goodPrefix, hgood]
+          calc
+            ((Ptuple last).cond (C last) (hcoord last)).expect
+                (fun W => fiberDelta i hist (W i)) =
+                (maskLaw Sown).expect (fun x => fiberDelta i hist x) := hTargetMean
+            _ = 1 := by rw [hfun, FinProb.expect_const]
+            _ ≥ 1 - theta := by
+              have hθ : 0 ≤ theta := by
+                dsimp [theta, aStarN]
+                exact div_nonneg (mul_nonneg (by norm_num)
+                  (Real.rpow_nonneg (Nat.cast_nonneg n) _)) (Real.rpow_nonneg (Nat.cast_nonneg n) _)
+              linarith
+      have hcondMean : (Pseq.cond fiber hFiberPos).expect (Delta i) ≥ 1 - theta := by
+        rw [hOuterMean]
+        exact hFiberLower
+      right
+      rw [FinProb.expect_cond_eq_sum] at hcondMean
+      exact (le_div_iff₀ hFiberPos).mp hcondMean
+
+  have hhk : 0 < tupLen β γ n := by
+    have hrpow : 1 ≤ (n : ℝ) ^ (omega4 β γ / 3) :=
+      Real.one_le_rpow hnR (by positivity)
+    have hceil : (n : ℝ) ^ (omega4 β γ / 3) ≤ (tupLen β γ n : ℝ) := by
+      dsimp [tupLen]
+      exact Nat.le_ceil _
+    have hkReal : 1 ≤ (tupLen β γ n : ℝ) := hrpow.trans hceil
+    have hkposReal : 0 < (tupLen β γ n : ℝ) := by linarith
+    exact_mod_cast hkposReal
+  have htPos : 0 < tAz := by
+    have hkposReal : 0 < (tupLen β γ n : ℝ) := by exact_mod_cast hhk
+    have haPos : 0 < aStarN := Real.rpow_pos_of_pos hnr _
+    have hcapPos : 0 < cap := Real.rpow_pos_of_pos hnr _
+    dsimp [tAz]
+    exact div_pos (mul_pos hkposReal haPos) (mul_pos (by norm_num) hcapPos)
+  have hAzumaRaw := stopped_own_azuma_bound H Pseq history project hfiltration
+    Delta hadapted theta tAz hboundDelta hmean hhk htPos
+  have hAzumaBound :
+      Pseq.pr (fun V => ∑ i, Delta i V <
+        (tupLen β γ n : ℝ) * (1 - theta) - tAz) ≤
+        Real.exp (-2 * tAz ^ 2 / (tupLen β γ n : ℝ)) := hAzumaRaw
+
+  let azBad : (Fin m → Fin (tupLen β γ n) → Fin N) → Prop := fun V =>
+    ∑ i, Delta i V < (tupLen β γ n : ℝ) * (1 - theta) - tAz
+  have hcover : ∀ V, ownSeq V → firstBad V ∨ azBad V := by
+    intro V hOwnSeqV
+    by_cases hFirst : firstBad V
+    · exact Or.inl hFirst
+    · right
+      by_contra hAzGood
+      have hSumLower :
+          (tupLen β γ n : ℝ) * (1 - theta) - tAz ≤ ∑ i, Delta i V := by
+        exact le_of_not_gt hAzGood
+      have hFullGood : GoodPath E G cap P₀ (tupleLabels V) := by
+        by_contra hbad
+        have hfb := (not_GoodPath_iff_FirstBad E G cap P₀ (tupleLabels V)).mp hbad
+        exact hFirst ((FirstBad_tupleLabels_iff E G cap P₀ V).mp hfb)
+      let base := tupleLabels (prefixVals V last)
+      let targetLabels := finToList (V last)
+      have hsplit : tupleLabels V = base ++ targetLabels :=
+        tupleLabels_split_last V last hlast
+      have hGoodAppend : GoodPath E G cap P₀ (base ++ targetLabels) := by
+        simpa [base, targetLabels, hsplit] using hFullGood
+      have hParts := (GoodPath_append E G cap P₀ base targetLabels).1 hGoodAppend
+      let eta0 := residualAfter E G P₀ base
+      let q : Fin (tupLen β γ n) → ℝ := fun j =>
+        rowDeg E G (V last j)
+          (residualAfter E G P₀
+            (base ++ finToList (prefixVals (V last) j)))
+      let dips : Finset (Fin (tupLen β γ n)) :=
+        Finset.univ.filter fun j => q j < M.pd ownPatch - (M.pd ownPatch - 1 / 2) / 4
+      have hstepData (j : Fin (tupLen β γ n)) :
+          GoodPath E G cap eta0 (finToList (prefixVals (V last) j)) ∧
+            Real.exp (-cap) ≤ q j := by
+        have h := GoodPath_finToList_prefix_and_step E G cap eta0 (V last) hParts.2 j
+        have hres : residualAfter E G P₀
+            (base ++ finToList (prefixVals (V last) j)) =
+              residualAfter E G eta0 (finToList (prefixVals (V last) j)) := by
+          dsimp [eta0]
+          rw [residualAfter_append]
+        have hrow : q j =
+            (residualAfter E G eta0 (finToList (prefixVals (V last) j))).pr
+              (fun y => Hits E G (V last j) y) := by
+          change rowDeg E G (V last j)
+            (residualAfter E G P₀ (base ++ finToList (prefixVals (V last) j))) = _
+          rw [hres]
+          exact (pr_Hit_eq_rowDeg E G _ _).symm
+        exact ⟨h.1, by rw [hrow]; exact h.2⟩
+      have hprefixGood (j : Fin (tupLen β γ n)) :
+          GoodPath E G cap P₀ (base ++ finToList (prefixVals (V last) j)) := by
+        exact (GoodPath_append E G cap P₀ base
+          (finToList (prefixVals (V last) j))).2 ⟨hParts.1, (hstepData j).1⟩
+      have hEtaPrefix (j : Fin (tupLen β γ n)) :
+          etaPrefix (history j.castSucc V) =
+            residualAfter E G P₀ (base ++ finToList (prefixVals (V last) j)) := by
+        rfl
+      have hDelta (j : Fin (tupLen β γ n)) :
+          Delta j V = if j ∈ dips then (0 : ℝ) else 1 := by
+        have hprefixIndex : (history j.castSucc V).2 = prefixVals (V last) j := by
+          funext q
+          apply congrArg (V last)
+          apply Fin.ext
+          rfl
+        have hgoodj : goodPrefix (history j.castSucc V) := by
+          change GoodPath E G cap P₀
+            (tupleLabels (prefixVals V last) ++ finToList (history j.castSucc V).2)
+          rw [hprefixIndex]
+          exact hprefixGood j
+        have hdip :
+            (rowDeg E G (V last j) (etaPrefix (history j.castSucc V)) < ownThreshold) ↔
+              j ∈ dips := by
+          simp [dips, q, etaPrefix, hEtaPrefix, ownThreshold]
+        dsimp [Delta, fiberDelta]
+        rw [if_pos hgoodj]
+        by_cases hq : rowDeg E G (V last j) (etaPrefix (history j.castSucc V)) < ownThreshold
+        · have hj : j ∈ dips := hdip.mp hq
+          simp [hq, hj]
+        · have hj : j ∉ dips := fun hj => hq (hdip.mpr hj)
+          simp [hq, hj]
+      have hIndicator :
+          ∑ j : Fin (tupLen β γ n), (if j ∈ dips then (1 : ℝ) else 0) = (dips.card : ℝ) := by
+        have hNat := Finset.card_filter (fun j : Fin (tupLen β γ n) => j ∈ dips) Finset.univ
+        have hReal : ((Finset.univ.filter fun j : Fin (tupLen β γ n) => j ∈ dips).card : ℝ) =
+            ∑ j, (if j ∈ dips then (1 : ℝ) else 0) := by exact_mod_cast hNat
+        simpa [dips] using hReal.symm
+      have hSumEq : ∑ j : Fin (tupLen β γ n), Delta j V =
+          (tupLen β γ n : ℝ) - (dips.card : ℝ) := by
+        calc
+          _ = ∑ j : Fin (tupLen β γ n), (1 - (if j ∈ dips then (1 : ℝ) else 0)) := by
+                apply Finset.sum_congr rfl
+                intro j hj
+                rw [hDelta j]
+                by_cases hmem : j ∈ dips <;> simp [hmem]
+          _ = (tupLen β γ n : ℝ) - (dips.card : ℝ) := by
+                rw [Finset.sum_sub_distrib]
+                simp [Finset.sum_const, hIndicator]
+      have hthetaSmall : theta ≤ aStarN / (40 * cap) := by
+        have hleft : (n : ℝ) ^ (-cExp) * cap = (n : ℝ) ^ (-cExp + h) := by
+          dsimp [cap, capL, h]
+          rw [← Real.rpow_add hnr]
+        have hright : aStarN * aStarN = (n : ℝ) ^ (-2 * h) := by
+          dsimp [aStarN, aStar, h]
+          rw [← Real.rpow_add hnr]
+          congr 1
+          ring
+        have hfactor : (n : ℝ) ^ (-cExp + h) * (n : ℝ) ^ gapθ =
+            (n : ℝ) ^ (-2 * h) := by
+          rw [← Real.rpow_add hnr]
+          congr 1
+          dsimp [gapθ]
+          ring
+        have hmul := mul_le_mul_of_nonneg_left (le_of_lt hnThetaPow)
+          (Real.rpow_nonneg hnr.le (-cExp + h))
+        rw [hfactor] at hmul
+        have hbound : 800 * (n : ℝ) ^ (-cExp) * cap ≤ aStarN * aStarN := by
+          rw [mul_assoc, hleft, hright]
+          nlinarith [hmul]
+        dsimp [theta]
+        have haPos : 0 < aStarN := Real.rpow_pos_of_pos hnr _
+        have hcapPos : 0 < cap := Real.rpow_pos_of_pos hnr _
+        apply (div_le_div_iff₀ haPos (mul_pos (by norm_num) hcapPos)).2
+        have hExpEq : -cExp = -(omega4 β γ) / 5 := by dsimp [cExp, ω]; ring
+        rw [hExpEq] at hbound
+        nlinarith [hbound]
+      have hDipsBound : (dips.card : ℝ) ≤ aStarN * (tupLen β γ n : ℝ) / (20 * cap) := by
+        have hThetaK := mul_le_mul_of_nonneg_left hthetaSmall
+          (Nat.cast_nonneg (tupLen β γ n) : (0 : ℝ) ≤ (tupLen β γ n : ℝ))
+        calc
+          (dips.card : ℝ) ≤ (tupLen β γ n : ℝ) * theta + tAz := by
+            rw [hSumEq] at hSumLower
+            nlinarith [hSumLower]
+          _ ≤ (tupLen β γ n : ℝ) * (aStarN / (40 * cap)) + tAz :=
+            add_le_add hThetaK le_rfl
+          _ = aStarN * (tupLen β γ n : ℝ) / (20 * cap) := by
+            dsimp [tAz]
+            ring
+      have hAStarPos : 0 < aStarN := Real.rpow_pos_of_pos hnr _
+      have hAStarHalf : aStarN ≤ 1 / 2 := by
+        dsimp [aStarN, aStar]
+        rw [Real.rpow_neg hnr.le]
+        have hx : 0 < (n : ℝ) ^ h := Real.rpow_pos_of_pos hnr _
+        have hinv := one_div_le_one_div_of_le (by norm_num : (0 : ℝ) < 2)
+          (le_of_lt hnAstarPow)
+        simpa [one_div] using hinv
+      have hai : (n : ℝ) ^ (-h4 β γ) ≤ M.pd ownPatch - 1 / 2 := by
+        have hp := (M.prep ownPatch).2.2.2.2.2.2.1
+        linarith [hp]
+      have hqGood : ∀ j ∉ dips, 1 / 2 + 3 / 4 * aStarN ≤ q j := by
+        intro j hj
+        have hjNotDip : ¬ q j < M.pd ownPatch - (M.pd ownPatch - 1 / 2) / 4 := by
+          intro hlow
+          exact hj (Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa [q] using hlow⟩)
+        change aStarN ≤ M.pd ownPatch - 1 / 2 at hai
+        have hthreshold : 1 / 2 + 3 / 4 * aStarN ≤
+            M.pd ownPatch - (M.pd ownPatch - 1 / 2) / 4 := by
+          nlinarith [hai]
+        exact hthreshold.trans (le_of_not_gt hjNotDip)
+      have hqBad : ∀ j ∈ dips, Real.exp (-cap) ≤ q j := by
+        intro j hj
+        have hstep := hstepData j
+        simpa [q] using hstep.2
+      have hproduct := own_product_bound_of_dips (k := tupLen β γ n) aStarN cap q dips
+        hAStarPos hAStarHalf (Real.rpow_pos_of_pos hnr _)
+        hqGood hqBad hDipsBound
+      let eta0 := residualAfter E G P₀ base
+      have hmassOwn := pr_HitsList_finToList_eq_prod E G eta0 (V last) cap hParts.2
+      have hmassAppend := pr_HitsList_append E G P₀ base targetLabels cap hGoodAppend
+      have hbasePos : 0 < P₀.pr (HitsList E G base) :=
+        lt_of_lt_of_le (Real.exp_pos _) (pr_HitsList_lower E G P₀ base cap hParts.1)
+      have hFill : (fun i : Fin m => (seqFill s e ω₀ V) (e i).1) = V := by
+        funext i
+        simp [seqFill, (e i).2]
+      have hAllMass : P₀.pr (HitsAll E G (seqFill s e ω₀ V) D Z) =
+          P₀.pr (HitsList E G (tupleLabels V)) := by
+        apply pr_congr_local_early P₀
+        intro y
+        simpa only [hFill] using
+          (HitsList_tupleLaw_iff u D m e (seqFill s e ω₀ V) y).symm
+      have hButMass : P₀.pr (HitsBut E G (seqFill s e ω₀ V) D Z cLoc ownKey) =
+          P₀.pr (HitsList E G base) := by
+        apply pr_congr_local_early P₀
+        intro y
+        simpa only [hFill, base] using (HitsBut_tuplePrefix_iff u D m e last hlast target he
+          (seqFill s e ω₀ V) y)
+      have hMassEq : P₀.pr (HitsAll E G (seqFill s e ω₀ V) D Z) =
+          P₀.pr (HitsList E G base) *
+            (residualAfter E G P₀ base).pr (HitsList E G targetLabels) := by
+        rw [hAllMass, hsplit]
+        exact hmassAppend
+      have hFail := hOwnSeqV
+      change P₀.pr (HitsAll E G (seqFill s e ω₀ V) D Z) <
+        ratioThr β γ u ownKey *
+          P₀.pr (HitsBut E G (seqFill s e ω₀ V) D Z cLoc ownKey) at hFail
+      rw [hMassEq, hButMass] at hFail
+      have hOwnCondFail : (residualAfter E G P₀ base).pr (HitsList E G targetLabels) <
+          ratioThr β γ u ownKey := by
+        have hFail' : P₀.pr (HitsList E G base) *
+            (residualAfter E G P₀ base).pr (HitsList E G targetLabels) <
+              P₀.pr (HitsList E G base) * ratioThr β γ u ownKey := by
+          simpa only [mul_comm] using hFail
+        exact (mul_lt_mul_iff_right₀ hbasePos).mp hFail'
+      have hRatioThr : ratioThr β γ u ownKey =
+          Real.exp ((tupLen β γ n : ℝ) * (-Real.log 2 + c1 * aStarN)) := by
+        simp [ratioThr, ownKey, aStarN]
+      have hProdLower :
+          Real.exp ((tupLen β γ n : ℝ) * (-Real.log 2 + c1 * aStarN)) ≤
+            (residualAfter E G P₀ base).pr (HitsList E G targetLabels) := by
+        rw [hmassOwn]
+        have hprodEq : (∏ j : Fin (tupLen β γ n), q j) =
+            ∏ j : Fin (tupLen β γ n),
+              (residualAfter E G eta0 (finToList (prefixVals (V last) j))).pr
+                (fun y => Hits E G (V last j) y) := by
+          apply Finset.prod_congr rfl
+          intro j hj
+          dsimp [q, eta0]
+          rw [residualAfter_append]
+          exact (pr_Hit_eq_rowDeg E G _ _).symm
+        rw [← hprodEq]
+        exact hproduct
+      exact False.elim ((not_lt_of_ge hProdLower) (by simpa [hRatioThr] using hOwnCondFail))
+
+  have hDreal : (D.card : ℝ) ≤ (setBd β γ n : ℝ) := by exact_mod_cast hDcard
+  have hωlt : omega4 β γ < 1 := by
+    change ω < 1
+    nlinarith
+  have hDlinear : (D.card : ℝ) ≤ 4 * (n : ℝ) := by
+    have hDb := le_trans hDreal (hFactors n hnFactors).1
+    have hpow : (n : ℝ) ^ (omega4 β γ / 30) ≤ (n : ℝ) := by
+      have hpow' := Real.rpow_le_rpow_of_exponent_le hnR
+        (show omega4 β γ / 30 ≤ (1 : ℝ) by linarith)
+      simpa using hpow'
+    exact hDb.trans (mul_le_mul_of_nonneg_left hpow (by norm_num))
+  have hZlinear : (Z.card : ℝ) ≤ (n : ℝ) := by
+    have hz := hKey u
+    have hpow : (n : ℝ) ^ (γ - 9 / 10 * omega4 β γ) ≤ (n : ℝ) := by
+      have hpow' := Real.rpow_le_rpow_of_exponent_le hnR
+        (show γ - 9 / 10 * omega4 β γ ≤ (1 : ℝ) by
+          have hωpos := omega4_pos hβ hγ
+          nlinarith)
+      simpa using hpow'
+    exact hz.trans hpow
+  have hKlinear : (tupLen β γ n : ℝ) ≤ 2 * (n : ℝ) := by
+    have hk := (hFactors n hnFactors).2.1
+    have hpow : (n : ℝ) ^ (omega4 β γ / 3) ≤ (n : ℝ) := by
+      have hpow' := Real.rpow_le_rpow_of_exponent_le hnR
+        (show omega4 β γ / 3 ≤ (1 : ℝ) by linarith)
+      simpa using hpow'
+    exact hk.trans (mul_le_mul_of_nonneg_left hpow (by norm_num))
+  have hcountReal : (m : ℝ) = (D.card : ℝ) * (Z.card : ℝ) := by
+    rw [hcount, Nat.cast_mul]
+  have hmBound : (m : ℝ) ≤ 4 * (n : ℝ) ^ 2 := by
+    rw [hcountReal]
+    calc
+      (D.card : ℝ) * (Z.card : ℝ) ≤ (4 * (n : ℝ)) * (n : ℝ) :=
+        mul_le_mul hDlinear hZlinear (by positivity) (by positivity)
+      _ = 4 * (n : ℝ) ^ 2 := by ring
+  have hfactorBound : (m : ℝ) * (tupLen β γ n : ℝ) ≤ 40 * (n : ℝ) ^ 5 := by
+    calc
+      (m : ℝ) * (tupLen β γ n : ℝ) ≤ (4 * (n : ℝ) ^ 2) * (2 * (n : ℝ)) :=
+        mul_le_mul hmBound hKlinear (by positivity) (by positivity)
+      _ = 8 * (n : ℝ) ^ 3 := by ring
+      _ ≤ 40 * (n : ℝ) ^ 5 := by
+        have hnSq : 1 ≤ (n : ℝ) ^ 2 := by nlinarith
+        have hmul := mul_le_mul_of_nonneg_left hnSq
+          (by positivity : 0 ≤ 8 * (n : ℝ) ^ 3)
+        nlinarith [hmul, pow_nonneg hnr.le 5]
+  have hFirstSmall : Pseq.pr firstBad ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+    calc
+      Pseq.pr firstBad ≤ (m : ℝ) * (tupLen β γ n : ℝ) *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) := hfirstBound
+      _ ≤ 40 * (n : ℝ) ^ 5 *
+          Real.exp (-((n : ℝ) ^ (β - omega4 β γ / 2) / 4)) :=
+        mul_le_mul_of_nonneg_right hfactorBound (Real.exp_nonneg _)
+      _ ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+        simpa [cExp, ω, neg_div] using hAbsorb n hnAbsorb
+  have hkposR : 0 < (tupLen β γ n : ℝ) := by exact_mod_cast hhk
+  have hcapPos : 0 < cap := Real.rpow_pos_of_pos hnr _
+  have hAzCost : 2 * tAz ^ 2 / (tupLen β γ n : ℝ) =
+      (tupLen β γ n : ℝ) * aStarN ^ 2 / (800 * cap ^ 2) := by
+    dsimp [tAz]
+    field_simp [ne_of_gt hkposR, ne_of_gt hcapPos]
+    <;> ring
+  have haSq : aStarN ^ 2 = (n : ℝ) ^ (-2 * h) := by
+    rw [pow_two]
+    dsimp [aStarN, aStar, h]
+    rw [← Real.rpow_add hnr]
+    congr 1
+    ring
+  have hcapSq : cap ^ 2 = (n : ℝ) ^ (2 * h) := by
+    rw [pow_two]
+    dsimp [cap, capL, h]
+    rw [← Real.rpow_add hnr]
+    congr 1
+    ring
+  have hCostPow : (n : ℝ) ^ (ω / 3) * aStarN ^ 2 / cap ^ 2 =
+      (n : ℝ) ^ (ω / 3 - 4 * h) := by
+    rw [haSq, hcapSq, ← Real.rpow_add hnr, ← Real.rpow_sub hnr]
+    congr 1
+    ring
+  have hPowGap : (n : ℝ) ^ cExp * (n : ℝ) ^ gapA =
+      (n : ℝ) ^ (ω / 3 - 4 * h) := by
+    rw [← Real.rpow_add hnr]
+    congr 1
+    dsimp [gapA]
+    ring
+  have hCostLarge : 3200 * (n : ℝ) ^ cExp ≤ (n : ℝ) ^ (ω / 3 - 4 * h) := by
+    have hmul := mul_le_mul_of_nonneg_left (le_of_lt hnAzumaPow)
+      (Real.rpow_nonneg hnr.le cExp)
+    rw [hPowGap] at hmul
+    nlinarith [hmul]
+  have hkLower : (n : ℝ) ^ (ω / 3) ≤ (tupLen β γ n : ℝ) := by
+    dsimp [tupLen, ω]
+    exact Nat.le_ceil _
+  have hAzCostLower : 4 * (n : ℝ) ^ cExp ≤ 2 * tAz ^ 2 / (tupLen β γ n : ℝ) := by
+    rw [hAzCost]
+    calc
+      4 * (n : ℝ) ^ cExp ≤ (n : ℝ) ^ (ω / 3 - 4 * h) / 800 := by
+        linarith [hCostLarge]
+      _ = (n : ℝ) ^ (ω / 3) * aStarN ^ 2 / (800 * cap ^ 2) := by
+        rw [← hCostPow]
+        ring
+      _ ≤ (tupLen β γ n : ℝ) * aStarN ^ 2 / (800 * cap ^ 2) :=
+        div_le_div_of_nonneg_right
+          (mul_le_mul_of_nonneg_right hkLower (sq_nonneg _)) (by positivity)
+  have hAzSmall : Pseq.pr azBad ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+    calc
+      Pseq.pr azBad ≤ Real.exp (-2 * tAz ^ 2 / (tupLen β γ n : ℝ)) := hAzumaBound
+      _ ≤ Real.exp (-4 * (n : ℝ) ^ cExp) := by
+        apply Real.exp_le_exp.mpr
+        calc
+          -2 * tAz ^ 2 / (tupLen β γ n : ℝ) =
+              -(2 * tAz ^ 2 / (tupLen β γ n : ℝ)) := by ring
+          _ ≤ -4 * (n : ℝ) ^ cExp := by
+            simpa only [neg_mul] using neg_le_neg hAzCostLower
+  have hUnion : Pseq.pr ownSeq ≤ Pseq.pr firstBad + Pseq.pr azBad := by
+    calc
+      Pseq.pr ownSeq ≤ Pseq.pr (fun V => firstBad V ∨ azBad V) :=
+        pr_mono Pseq _ _ hcover
+      _ ≤ Pseq.pr firstBad + Pseq.pr azBad := FinProb.pr_union Pseq firstBad azBad
+  have hxOne : 1 ≤ (n : ℝ) ^ cExp := Real.one_le_rpow hnR (by dsimp [cExp]; positivity)
+  have htwoExp : 2 ≤ Real.exp (2 * (n : ℝ) ^ cExp) := by
+    have h := Real.add_one_le_exp (2 * (n : ℝ) ^ cExp)
+    linarith
+  change (tupleLaw M tag xm).pr ownFail ≤ _
+  rw [hOwnTransfer]
+  calc
+    Pseq.pr ownSeq ≤ Pseq.pr firstBad + Pseq.pr azBad := hUnion
+    _ ≤ Real.exp (-4 * (n : ℝ) ^ cExp) + Real.exp (-4 * (n : ℝ) ^ cExp) :=
+      add_le_add hFirstSmall hAzSmall
+    _ = 2 * Real.exp (-4 * (n : ℝ) ^ cExp) := by ring
+    _ ≤ Real.exp (2 * (n : ℝ) ^ cExp) * Real.exp (-4 * (n : ℝ) ^ cExp) :=
+      mul_le_mul_of_nonneg_right htwoExp (Real.exp_nonneg _)
+    _ = Real.exp (-2 * (n : ℝ) ^ (omega4 β γ / 5)) := by
+      rw [← Real.exp_add]
+      congr 1
+      dsimp [cExp, ω]
+      ring
 
 end HypercubeRamsey.Lane_q_s04_valid

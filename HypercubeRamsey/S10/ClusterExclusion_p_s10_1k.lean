@@ -348,7 +348,7 @@ theorem p10_1kHeightParams_position_counts_eventually (η₀ ζ δ : ℝ)
             ⌊(n : ℝ) ^ (200 * δ)⌋₊ δ).H + 1),
             let count := (Finset.univ.filter (fun u : CubeVertex
               (p10_1kHeightParams n ⌊(n : ℝ) ^ (200 * δ)⌋₊ δ).d =>
-              P (u, j) = true ∧ hammingDist u v ≤
+              P (u, j) = true ∧ _root_.hammingDist u v ≤
                 (p10_1kHeightParams n ⌊(n : ℝ) ^ (200 * δ)⌋₊ δ).r)).card
             ((count : ℝ) < (p10_1kHeightParams n
               ⌊(n : ℝ) ^ (200 * δ)⌋₊ δ).lam / 2 ∨
@@ -388,7 +388,7 @@ projected site. -/
 def p10_1kHeightPositionCount (p : HDParams) (P : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) : ℕ :=
   (Finset.univ.filter fun u : CubeVertex p.d =>
-    P (u, j) = true ∧ hammingDist u v ≤ p.r).card
+    P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r).card
 
 /-- A height-position sample fails if some queried site and level has too few
 or too many prospective centers in its radius-`r` ball. -/
@@ -419,7 +419,7 @@ noncomputable def p10_1kHeightEligibleIds (p : HDParams) (P : p.Loc → Bool)
     (v : CubeVertex p.d) (j : Fin (p.H + 1)) : Finset p.Loc := by
   classical
   exact (Finset.univ.filter fun u : CubeVertex p.d =>
-    P (u, j) = true ∧ hammingDist u v ≤ p.r).image (fun u => (u, j))
+    P (u, j) = true ∧ _root_.hammingDist u v ≤ p.r).image (fun u => (u, j))
 
 /-- The eligible-ID set has exactly the position count at its site and level. -/
 theorem p10_1kHeightEligibleIds_card (p : HDParams) (P : p.Loc → Bool)
@@ -3625,12 +3625,12 @@ def p10_1kFlipCoordinate {d : ℕ} (s : Fin d → Bool) (j : Fin d) : Fin d → 
 
 /-- Flipping a single Boolean coordinate has Hamming distance one. -/
 theorem p10_1kFlipCoordinate_hammingDist (d : ℕ) (s : Fin d → Bool) (j : Fin d) :
-    hammingDist s (p10_1kFlipCoordinate s j) = 1 := by
+    _root_.hammingDist s (p10_1kFlipCoordinate s j) = 1 := by
   have hset : Finset.univ.filter (fun k : Fin d =>
       s k ≠ p10_1kFlipCoordinate s j k) = {j} := by
     ext k
     simp [p10_1kFlipCoordinate]
-  simp [hammingDist, hset]
+  simp [_root_.hammingDist, hset]
 
 /-- A residual coordinate flip changes exactly its corresponding chunk bit. -/
 theorem p10_1k_chunkedWord_flipCoordinate (d : ℕ) (s : Fin d → Bool)
@@ -4262,31 +4262,31 @@ theorem p10_1k_pair_common_neighbor_exists {N : ℕ}
 private theorem p10_1k_chunkProjection_flip_dist_le_three
     {G : Type} [Fintype G] [DecidableEq G] [AddCommGroup G]
     (h₂ : ∀ g : G, g + g = 0) (s : G → Bool) (g : G) :
-    hammingDist (chunkProject s) (chunkProject (flipChunkBit s g)) ≤ 3 := by
+    _root_.hammingDist (chunkProject s) (chunkProject (flipChunkBit s g)) ≤ 3 := by
   have hprojS := (p10_1a_hamming_projection (G := G) h₂).1 s
   have hprojT := (p10_1a_hamming_projection (G := G) h₂).1 (flipChunkBit s g)
-  have hs : hammingDist s (chunkProject s) = 1 := by
-    simpa [hammingDist, chunkHammingDistance] using hprojS.2
-  have ht : hammingDist (flipChunkBit s g) (chunkProject (flipChunkBit s g)) = 1 := by
-    simpa [hammingDist, chunkHammingDistance] using hprojT.2
-  have hedge : hammingDist s (flipChunkBit s g) = 1 := by
+  have hs : _root_.hammingDist s (chunkProject s) = 1 := by
+    simpa [_root_.hammingDist, chunkHammingDistance] using hprojS.2
+  have ht : _root_.hammingDist (flipChunkBit s g) (chunkProject (flipChunkBit s g)) = 1 := by
+    simpa [_root_.hammingDist, chunkHammingDistance] using hprojT.2
+  have hedge : _root_.hammingDist s (flipChunkBit s g) = 1 := by
     have hset : Finset.univ.filter (fun i : G => s i ≠ flipChunkBit s g i) = {g} := by
       ext i
       simp [flipChunkBit]
     calc
-      hammingDist s (flipChunkBit s g) =
+      _root_.hammingDist s (flipChunkBit s g) =
           chunkHammingDistance s (flipChunkBit s g) := by
-        simp [hammingDist, chunkHammingDistance]
+        simp [_root_.hammingDist, chunkHammingDistance]
       _ = 1 := by simp [chunkHammingDistance, hset]
-  have h₁ := hammingDist_triangle (chunkProject s) s (chunkProject (flipChunkBit s g))
-  have h₂' := hammingDist_triangle s (flipChunkBit s g) (chunkProject (flipChunkBit s g))
-  have hsymm : hammingDist (chunkProject s) s = 1 := by
+  have h₁ := _root_.hammingDist_triangle (chunkProject s) s (chunkProject (flipChunkBit s g))
+  have h₂' := _root_.hammingDist_triangle s (flipChunkBit s g) (chunkProject (flipChunkBit s g))
+  have hsymm : _root_.hammingDist (chunkProject s) s = 1 := by
     simpa [hammingDist_comm] using hs
   calc
-    hammingDist (chunkProject s) (chunkProject (flipChunkBit s g)) ≤
-        hammingDist (chunkProject s) s + hammingDist s (chunkProject (flipChunkBit s g)) := h₁
-    _ ≤ 1 + (hammingDist s (flipChunkBit s g) +
-        hammingDist (flipChunkBit s g) (chunkProject (flipChunkBit s g))) :=
+    _root_.hammingDist (chunkProject s) (chunkProject (flipChunkBit s g)) ≤
+        _root_.hammingDist (chunkProject s) s + _root_.hammingDist s (chunkProject (flipChunkBit s g)) := h₁
+    _ ≤ 1 + (_root_.hammingDist s (flipChunkBit s g) +
+        _root_.hammingDist (flipChunkBit s g) (chunkProject (flipChunkBit s g))) :=
       add_le_add (le_of_eq hsymm) h₂'
     _ = 3 := by rw [hedge, ht]
 
@@ -4509,12 +4509,12 @@ private noncomputable def p10_1k_chunkSigmaDiffEquiv (d : ℕ)
 /-- The residual Hamming metric equals the sum of its chunk metrics. -/
 theorem p10_1k_hammingDist_eq_productHammingDistance (d : ℕ)
     (s t : Fin d → Bool) :
-    hammingDist s t =
+    _root_.hammingDist s t =
       productHammingDistance (p10_1k_chunkedWord d s) (p10_1k_chunkedWord d t) := by
   classical
   calc
-    hammingDist s t = Fintype.card {i : Fin d // s i ≠ t i} := by
-      simp [hammingDist, Fintype.card_subtype]
+    _root_.hammingDist s t = Fintype.card {i : Fin d // s i ≠ t i} := by
+      simp [_root_.hammingDist, Fintype.card_subtype]
     _ = Fintype.card {p : P10_1kChunkCoordinate d //
           p10_1k_chunkWordEquiv d s p ≠ p10_1k_chunkWordEquiv d t p} :=
       Fintype.card_congr (p10_1k_diffCoordinateEquiv d s t)
@@ -4531,7 +4531,7 @@ theorem p10_1k_hammingDist_eq_productHammingDistance (d : ℕ)
 
 /-- Projection moves a residual word by one bit in every binary chunk. -/
 theorem p10_1k_projectedWord_hammingDist (d : ℕ) (s : Fin d → Bool) :
-    hammingDist s (p10_1k_projectedWord d s) =
+    _root_.hammingDist s (p10_1k_projectedWord d s) =
       Fintype.card (Fin d.bitIndices.length) := by
   have h₂ : ∀ i : Fin d.bitIndices.length, ∀ g : P10_1kChunkGroup d i, g + g = 0 :=
     fun i g => p10_1k_chunkGroup_two_add d i g
@@ -4543,7 +4543,7 @@ theorem p10_1k_projectedWord_hammingDist (d : ℕ) (s : Fin d → Bool) :
 per binary chunk. -/
 theorem p10_1k_projectedWord_fiber_diameter (d : ℕ) (s t : Fin d → Bool)
     (hproj : p10_1k_projectedWord d s = p10_1k_projectedWord d t) :
-    hammingDist s t ≤ 2 * Fintype.card (Fin d.bitIndices.length) := by
+    _root_.hammingDist s t ≤ 2 * Fintype.card (Fin d.bitIndices.length) := by
   have h₂ : ∀ i : Fin d.bitIndices.length, ∀ g : P10_1kChunkGroup d i, g + g = 0 :=
     fun i g => p10_1k_chunkGroup_two_add d i g
   have hchunk := congrArg (p10_1k_chunkedWord d) hproj
@@ -4560,7 +4560,7 @@ theorem p10_1k_projectedWord_fiber_diameter (d : ℕ) (s t : Fin d → Bool)
 /-- A residual cube edge moves at most three coordinates after projection. -/
 theorem p10_1k_projectedWord_flip_hammingDist_le_three (d : ℕ)
     (s : Fin d → Bool) (j : Fin d) :
-    hammingDist (p10_1k_projectedWord d s)
+    _root_.hammingDist (p10_1k_projectedWord d s)
         (p10_1k_projectedWord d (p10_1kFlipCoordinate s j)) ≤ 3 := by
   let p := p10_1k_chunkCoordinateEquiv d j
   let W := p10_1k_chunkedWord d s
@@ -4591,7 +4591,7 @@ theorem p10_1k_projectedWord_flip_hammingDist_le_three (d : ℕ)
     p10_1k_chunkedWord_projected]
   rw [p10_1k_chunkedWord_projected]
   rw [hproduct]
-  simpa [chunkHammingDistance, hammingDist] using hlocal
+  simpa [chunkHammingDistance, _root_.hammingDist] using hlocal
 
 /-- The changed chunk of a residual coordinate flip is its local projected
 neighbor. -/
@@ -4731,20 +4731,20 @@ private noncomputable def p10_1k_hammingDiffEquiv {A B : Type*} [Fintype A]
 /-- Hamming distance is invariant under a coordinate equivalence. -/
 private theorem p10_1k_hammingDist_domain_equiv {A B : Type*} [Fintype A] [Fintype B]
     (e : A ≃ B) (f g : B → Bool) :
-    hammingDist (fun a => f (e a)) (fun a => g (e a)) = hammingDist f g := by
+    _root_.hammingDist (fun a => f (e a)) (fun a => g (e a)) = _root_.hammingDist f g := by
   calc
-    hammingDist (fun a => f (e a)) (fun a => g (e a)) =
+    _root_.hammingDist (fun a => f (e a)) (fun a => g (e a)) =
         Fintype.card {a : A // f (e a) ≠ g (e a)} := by
-      simp [hammingDist, Fintype.card_subtype]
+      simp [_root_.hammingDist, Fintype.card_subtype]
     _ = Fintype.card {b : B // f b ≠ g b} :=
       Fintype.card_congr (p10_1k_hammingDiffEquiv e f g)
-    _ = hammingDist f g := by simp [hammingDist, Fintype.card_subtype]
+    _ = _root_.hammingDist f g := by simp [_root_.hammingDist, Fintype.card_subtype]
 
 /-- Hamming distance on a sum type splits into the two component distances. -/
 private theorem p10_1k_hammingDist_sum {A B : Type*} [Fintype A] [Fintype B]
     (f f' : A → Bool) (g g' : B → Bool) :
-    hammingDist (Sum.elim f g) (Sum.elim f' g') =
-      hammingDist f f' + hammingDist g g' := by
+    _root_.hammingDist (Sum.elim f g) (Sum.elim f' g') =
+      _root_.hammingDist f f' + _root_.hammingDist g g' := by
   classical
   let e : {x : A ⊕ B // Sum.elim f g x ≠ Sum.elim f' g' x} ≃
       ({x : A // f x ≠ f' x} ⊕ {y : B // g y ≠ g' y}) := {
@@ -4765,21 +4765,21 @@ private theorem p10_1k_hammingDist_sum {A B : Type*} [Fintype A] [Fintype B]
       rintro (⟨a, ha⟩ | ⟨b, hb⟩) <;> rfl
   }
   calc
-    hammingDist (Sum.elim f g) (Sum.elim f' g') =
+    _root_.hammingDist (Sum.elim f g) (Sum.elim f' g') =
         Fintype.card {x : A ⊕ B // Sum.elim f g x ≠ Sum.elim f' g' x} := by
-      simp [hammingDist, Fintype.card_subtype]
+      simp [_root_.hammingDist, Fintype.card_subtype]
     _ = Fintype.card ({x : A // f x ≠ f' x} ⊕ {y : B // g y ≠ g' y}) :=
       Fintype.card_congr e
     _ = Fintype.card {x : A // f x ≠ f' x} + Fintype.card {y : B // g y ≠ g' y} :=
       Fintype.card_sum
-    _ = hammingDist f f' + hammingDist g g' := by
-      simp [hammingDist, Fintype.card_subtype]
+    _ = _root_.hammingDist f f' + _root_.hammingDist g g' := by
+      simp [_root_.hammingDist, Fintype.card_subtype]
 
 /-- Splitting coordinates adds the Hamming distances in the special and residual words. -/
 theorem p10_1kSliceHammingDist {n m : ℕ} (hm : m ≤ n) (v w : Fin n → Bool) :
-    hammingDist v w =
-      hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) +
-        hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) := by
+    _root_.hammingDist v w =
+      _root_.hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) +
+        _root_.hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) := by
   let e := p10_1kCoordinateSplit hm
   let p := p10_1kSliceWordEquiv hm v
   let q := p10_1kSliceWordEquiv hm w
@@ -4798,28 +4798,28 @@ theorem p10_1kSliceHammingDist {n m : ℕ} (hm : m ≤ n) (v w : Fin n → Bool)
     funext x
     cases x <;> rfl
   calc
-    hammingDist v w = hammingDist (fun x => f (e x)) (fun x => g (e x)) := by
+    _root_.hammingDist v w = _root_.hammingDist (fun x => f (e x)) (fun x => g (e x)) := by
       rw [hv, hw]
-    _ = hammingDist f g := p10_1k_hammingDist_domain_equiv e f g
-    _ = hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) +
-        hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) := by
+    _ = _root_.hammingDist f g := p10_1k_hammingDist_domain_equiv e f g
+    _ = _root_.hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) +
+        _root_.hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) := by
       rw [hf, hg, p10_1k_hammingDist_sum]
       simp [p10_1kSpecialSlice, p10_1kResidualWord, p10_1kSliceWordEquiv, f, g, e]
 
 /-- An edge changes either one special coordinate or one residual coordinate. -/
 theorem p10_1k_adjacentCoordinates_split {n m : ℕ} (hm : m ≤ n)
     {v w : Fin n → Bool} (hadj : (cube n).Adj v w) :
-    (hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 1 ∧
+    (_root_.hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 1 ∧
       p10_1kResidualWord hm v = p10_1kResidualWord hm w) ∨
     (p10_1kSpecialSlice hm v = p10_1kSpecialSlice hm w ∧
-      hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) = 1) := by
-  change hammingDist v w = 1 at hadj
+      _root_.hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) = 1) := by
+  change _root_.hammingDist v w = 1 at hadj
   rw [p10_1kSliceHammingDist hm v w] at hadj
   have hcases :
-      (hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 1 ∧
-        hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) = 0) ∨
-      (hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 0 ∧
-        hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) = 1) := by
+      (_root_.hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 1 ∧
+        _root_.hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) = 0) ∨
+      (_root_.hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 0 ∧
+        _root_.hammingDist (p10_1kResidualWord hm v) (p10_1kResidualWord hm w) = 1) := by
     omega
   rcases hcases with ⟨hspecial, hresidual⟩ | ⟨hspecial, hresidual⟩
   · exact Or.inl ⟨hspecial, (hammingDist_eq_zero.mp hresidual)⟩
@@ -4829,7 +4829,7 @@ theorem p10_1k_adjacentCoordinates_split {n m : ℕ} (hm : m ≤ n)
 theorem p10_1kResidualFlipVertex_adjacent {n m : ℕ} (hm : m ≤ n)
     (v : Fin n → Bool) (j : Fin (n - m)) :
     (cube n).Adj v (p10_1kResidualFlipVertex hm v j) := by
-  change hammingDist v (p10_1kResidualFlipVertex hm v j) = 1
+  change _root_.hammingDist v (p10_1kResidualFlipVertex hm v j) = 1
   rw [p10_1kSliceHammingDist hm v (p10_1kResidualFlipVertex hm v j),
     p10_1kResidualFlipVertex_specialSlice,
     p10_1kResidualFlipVertex_residualWord,
@@ -4848,11 +4848,11 @@ private theorem p10_1k_even_iff_not_even_succ (r : ℕ) :
 
 /-- Adjacent cube vertices lie in opposite parity classes. -/
 private theorem p10_1k_evenRole_flip_of_hammingDist_one {n : ℕ}
-    {u v : Fin n → Bool} (h : hammingDist u v = 1) :
+    {u v : Fin n → Bool} (h : _root_.hammingDist u v = 1) :
     IsEvenRole u ↔ ¬ IsEvenRole v := by
   classical
   have hone : (Finset.univ.filter fun i : Fin n => u i ≠ v i).card = 1 := by
-    simpa [hammingDist] using h
+    simpa [_root_.hammingDist] using h
   obtain ⟨i, hi⟩ := Finset.card_eq_one.mp hone
   have hi_mem : i ∈ Finset.univ.filter (fun j : Fin n => u j ≠ v j) := by
     rw [hi]
@@ -4901,7 +4901,7 @@ private theorem p10_1k_evenRole_flip_of_hammingDist_one {n : ℕ}
 theorem p10_1kSpecialFlipVertex_adjacent {n m : ℕ} (hm : m ≤ n)
     (v : Fin n → Bool) (i : Fin m) :
     (cube n).Adj v (p10_1kSpecialFlipVertex hm v i) := by
-  change hammingDist v (p10_1kSpecialFlipVertex hm v i) = 1
+  change _root_.hammingDist v (p10_1kSpecialFlipVertex hm v i) = 1
   rw [p10_1kSliceHammingDist hm v (p10_1kSpecialFlipVertex hm v i),
     p10_1kSpecialFlipVertex_specialSlice,
     p10_1kSpecialFlipVertex_residualWord,
@@ -4910,11 +4910,11 @@ theorem p10_1kSpecialFlipVertex_adjacent {n m : ℕ} (hm : m ≤ n)
 
 /-- A word at Hamming distance one is obtained by flipping one coordinate. -/
 private theorem p10_1k_flipCoordinate_of_hammingDist_one {d : ℕ}
-    (s t : Fin d → Bool) (h : hammingDist s t = 1) :
+    (s t : Fin d → Bool) (h : _root_.hammingDist s t = 1) :
     ∃ j : Fin d, t = p10_1kFlipCoordinate s j := by
   classical
   have hcard : (Finset.univ.filter (fun i : Fin d => s i ≠ t i)).card = 1 := by
-    simpa [hammingDist] using h
+    simpa [_root_.hammingDist] using h
   obtain ⟨j, hfilter⟩ := Finset.card_eq_one.mp hcard
   refine ⟨j, ?_⟩
   funext k
@@ -4963,11 +4963,11 @@ theorem p10_1kProjectedVertex_specialFlipVertex {n m : ℕ} (hm : m ≤ n)
 fixed and moves the projected residual site by at most three bits. -/
 theorem p10_1k_projectedVertex_edge {n m : ℕ} (hm : m ≤ n)
     {v w : Fin n → Bool} (hadj : (cube n).Adj v w) :
-    (hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 1 ∧
+    (_root_.hammingDist (p10_1kSpecialSlice hm v) (p10_1kSpecialSlice hm w) = 1 ∧
       p10_1k_projectedWord (n - m) (p10_1kResidualWord hm v) =
         p10_1k_projectedWord (n - m) (p10_1kResidualWord hm w)) ∨
     (p10_1kSpecialSlice hm v = p10_1kSpecialSlice hm w ∧
-      hammingDist (p10_1k_projectedWord (n - m) (p10_1kResidualWord hm v))
+      _root_.hammingDist (p10_1k_projectedWord (n - m) (p10_1kResidualWord hm v))
         (p10_1k_projectedWord (n - m) (p10_1kResidualWord hm w)) ≤ 3) := by
   rcases p10_1k_adjacentCoordinates_split hm hadj with hspecial | hresidual
   · exact Or.inl ⟨hspecial.1, congrArg (p10_1k_projectedWord (n - m)) hspecial.2⟩
@@ -5003,7 +5003,7 @@ def p10_1kFlipOddRole {n : ℕ} (a : P10_1kEvenRole n) (j : Fin n) :
     P10_1kOddRole n := by
   refine ⟨p10_1kFlipCoordinate a.1 j, ?_⟩
   have hadj : (cube n).Adj a.1 (p10_1kFlipCoordinate a.1 j) := by
-    change hammingDist a.1 (p10_1kFlipCoordinate a.1 j) = 1
+    change _root_.hammingDist a.1 (p10_1kFlipCoordinate a.1 j) = 1
     exact p10_1kFlipCoordinate_hammingDist n a.1 j
   exact (p10_1k_evenRole_flip_of_hammingDist_one hadj).mp a.2
 
@@ -5011,7 +5011,7 @@ def p10_1kFlipOddRole {n : ℕ} (a : P10_1kEvenRole n) (j : Fin n) :
 theorem p10_1kFlipOddRole_adjacent {n : ℕ} (a : P10_1kEvenRole n)
     (j : Fin n) :
     (cube n).Adj a.1 (p10_1kFlipOddRole a j).1 := by
-  change hammingDist a.1 (p10_1kFlipCoordinate a.1 j) = 1
+  change _root_.hammingDist a.1 (p10_1kFlipCoordinate a.1 j) = 1
   exact p10_1kFlipCoordinate_hammingDist n a.1 j
 
 /-- Every coordinate gives a distinct odd neighbor of a fixed even role. -/
@@ -5030,7 +5030,7 @@ theorem p10_1kFlipOddRole_injective {n : ℕ} (a : P10_1kEvenRole n) :
 theorem p10_1kFlipOddRole_surjective {n : ℕ} (a : P10_1kEvenRole n)
     (b : P10_1kOddRole n) (hadj : (cube n).Adj a.1 b.1) :
     ∃ j : Fin n, p10_1kFlipOddRole a j = b := by
-  have hdist : hammingDist a.1 b.1 = 1 := by exact hadj
+  have hdist : _root_.hammingDist a.1 b.1 = 1 := by exact hadj
   obtain ⟨j, hflip⟩ := p10_1k_flipCoordinate_of_hammingDist_one a.1 b.1 hdist
   refine ⟨j, ?_⟩
   apply Subtype.ext
@@ -5569,16 +5569,16 @@ theorem p10_1k_residualIncidentOddGroup_card_bound {n m : ℕ} (hm : m ≤ n)
 /-- A radius-three Hamming ball in a `d`-cube has at most `(d+1)^3`
 vertices, by encoding each vertex with its at most three changed coordinates. -/
 theorem p10_1k_hammingBall_three_card_le_cube {d : ℕ} (q : Fin d → Bool) :
-    (Finset.univ.filter fun v : Fin d → Bool => hammingDist q v ≤ 3).card ≤
+    (Finset.univ.filter fun v : Fin d → Bool => _root_.hammingDist q v ≤ 3).card ≤
       (d + 1) ^ 3 := by
   classical
   let B : Finset (Fin d → Bool) :=
-    Finset.univ.filter fun v => hammingDist q v ≤ 3
+    Finset.univ.filter fun v => _root_.hammingDist q v ≤ 3
   let diff (v : Fin d → Bool) : Finset (Fin d) :=
     Finset.univ.filter fun i => q i ≠ v i
   have hdiffCard (v : {v : Fin d → Bool // v ∈ B}) : (diff v.1).card ≤ 3 := by
-    have hball : hammingDist q v.1 ≤ 3 := (Finset.mem_filter.mp v.2).2
-    simpa [diff, hammingDist] using hball
+    have hball : _root_.hammingDist q v.1 ≤ 3 := (Finset.mem_filter.mp v.2).2
+    simpa [diff, _root_.hammingDist] using hball
   let code (v : {v : Fin d → Bool // v ∈ B}) : Fin 3 → Option (Fin d) :=
     fun j => if hj : j.val < (diff v.1).card then
       some ((diff v.1).equivFin.symm ⟨j.val, hj⟩).1 else none
@@ -5648,9 +5648,9 @@ noncomputable def p10_1kProjectedNeighborEnvelope {n m : ℕ}
     (q : P10_1kProjectedSite n m) : Finset (P10_1kProjectedSite n m) := by
   classical
   exact
-    (Finset.univ.filter fun z : Fin m → Bool => hammingDist q.1 z = 1).image
+    (Finset.univ.filter fun z : Fin m → Bool => _root_.hammingDist q.1 z = 1).image
       (fun z => (z, q.2)) ∪
-      (Finset.univ.filter fun t : Fin (n - m) → Bool => hammingDist q.2 t ≤ 3).image
+      (Finset.univ.filter fun t : Fin (n - m) → Bool => _root_.hammingDist q.2 t ≤ 3).image
       (fun t => (q.1, t))
 
 /-- The projected-neighbor envelope has polynomial size: at most `m` special
@@ -5660,14 +5660,14 @@ theorem p10_1kProjectedNeighborEnvelope_card_le {n m : ℕ}
     (p10_1kProjectedNeighborEnvelope q).card ≤ m + (n - m + 1) ^ 3 := by
   classical
   let special : Finset (P10_1kProjectedSite n m) :=
-    (Finset.univ.filter fun z : Fin m → Bool => hammingDist q.1 z = 1).image
+    (Finset.univ.filter fun z : Fin m → Bool => _root_.hammingDist q.1 z = 1).image
       (fun z => (z, q.2))
   let residual : Finset (P10_1kProjectedSite n m) :=
-    (Finset.univ.filter fun t : Fin (n - m) → Bool => hammingDist q.2 t ≤ 3).image
+    (Finset.univ.filter fun t : Fin (n - m) → Bool => _root_.hammingDist q.2 t ≤ 3).image
       (fun t => (q.1, t))
   have hspecial : special.card ≤ m := by
     have hsubset : (Finset.univ.filter fun z : Fin m → Bool =>
-        hammingDist q.1 z = 1) ⊆
+        _root_.hammingDist q.1 z = 1) ⊆
         (Finset.univ : Finset (Fin m)).image (p10_1kFlipCoordinate q.1) := by
       intro z hz
       have hdist := (Finset.mem_filter.mp hz).2
@@ -5675,7 +5675,7 @@ theorem p10_1kProjectedNeighborEnvelope_card_le {n m : ℕ}
       exact Finset.mem_image.mpr ⟨j, Finset.mem_univ _, hflip.symm⟩
     calc
       special.card ≤
-          (Finset.univ.filter fun z : Fin m → Bool => hammingDist q.1 z = 1).card :=
+          (Finset.univ.filter fun z : Fin m → Bool => _root_.hammingDist q.1 z = 1).card :=
         Finset.card_image_le
       _ ≤ ((Finset.univ : Finset (Fin m)).image
           (p10_1kFlipCoordinate q.1)).card := Finset.card_le_card hsubset
@@ -5685,7 +5685,7 @@ theorem p10_1kProjectedNeighborEnvelope_card_le {n m : ℕ}
     calc
       residual.card ≤
           (Finset.univ.filter fun t : Fin (n - m) → Bool =>
-            hammingDist q.2 t ≤ 3).card := Finset.card_image_le
+            _root_.hammingDist q.2 t ≤ 3).card := Finset.card_image_le
       _ ≤ (n - m + 1) ^ 3 := p10_1k_hammingBall_three_card_le_cube q.2
   have hunion : p10_1kProjectedNeighborEnvelope q = special ∪ residual := by
     simp [special, residual, p10_1kProjectedNeighborEnvelope]
@@ -5922,7 +5922,7 @@ three of its center site. -/
 theorem p10_1k_envelope_same_slice_residual_dist_le_three {n m : ℕ}
     (q s : P10_1kProjectedSite n m)
     (hmem : s ∈ p10_1kProjectedNeighborEnvelope q)
-    (hslice : s.1 = q.1) : hammingDist q.2 s.2 ≤ 3 := by
+    (hslice : s.1 = q.1) : _root_.hammingDist q.2 s.2 ≤ 3 := by
   classical
   rcases Finset.mem_union.mp hmem with hspecial | hresidual
   · obtain ⟨z, hz, hpair⟩ := Finset.mem_image.mp hspecial
@@ -5939,7 +5939,7 @@ theorem p10_1k_envelope_same_slice_residual_dist_le_three {n m : ℕ}
 theorem p10_1k_envelope_same_slice_residual_dist_le_three_symm {n m : ℕ}
     (q s : P10_1kProjectedSite n m)
     (hmem : s ∈ p10_1kProjectedNeighborEnvelope q)
-    (hslice : s.1 = q.1) : hammingDist s.2 q.2 ≤ 3 := by
+    (hslice : s.1 = q.1) : _root_.hammingDist s.2 q.2 ≤ 3 := by
   simpa [hammingDist_comm] using
     p10_1k_envelope_same_slice_residual_dist_le_three q s hmem hslice
 
@@ -6279,7 +6279,7 @@ theorem p10_1k_selection_legal_spec_of_some {p : HDParams}
     ∃ j : Fin (p.H + 1),
       p.height Sites P A E p.Rlong v = j.val ∧ j.val < p.H ∧
         ¬ p.Bad P A E v j ∧ ℓ ∈ E v j ∧ A ℓ = true ∧
-        P ℓ = true ∧ ℓ.2 = j ∧ hammingDist ℓ.1 v ≤ p.r := by
+        P ℓ = true ∧ ℓ.2 = j ∧ _root_.hammingDist ℓ.1 v ≤ p.r := by
   obtain ⟨j, hheight, hj, hbad, hE, hA⟩ :=
     p10_1k_selection_spec_of_some Sites P A E τ v ℓ hsel
   have hLegalAt := hlegal v hv j
@@ -6310,7 +6310,7 @@ private theorem p10_1k_ownTupleId_selection_spec {n m : ℕ} (δ : ℝ)
       j.val < (p10_1kHeightParams n m δ).H ∧
       ¬ (p10_1kHeightParams n m δ).Bad P A E v j ∧
       loc ∈ E v j ∧ A loc = true ∧ P loc = true ∧
-      loc.2 = j ∧ hammingDist loc.1 v ≤ (p10_1kHeightParams n m δ).r := by
+      loc.2 = j ∧ _root_.hammingDist loc.1 v ≤ (p10_1kHeightParams n m δ).r := by
   obtain ⟨site, loc, henv, hslice, hselected, hidEq⟩ :=
     p10_1k_ownTupleId_source δ q selected id hid
   have hsiteEq : (q.1, site.2) = site := Prod.ext hslice.symm rfl
@@ -6381,7 +6381,7 @@ theorem p10_1kOddGroupOwnTupleIds_level_image_card_le_three
       hj₀, hbad₀, hE₀, hA₀, hP₀, hlevel₀, hdist₀⟩ :=
       p10_1k_ownTupleId_selection_spec δ q selected Sites P A E τ
         hlegal hmatch hinSites id₀ hid₀
-    have hsiteQ₀ : hammingDist q.2 v₀ ≤ 3 :=
+    have hsiteQ₀ : _root_.hammingDist q.2 v₀ ≤ 3 :=
       p10_1k_envelope_same_slice_residual_dist_le_three q (q.1, v₀) henv₀ rfl
     have hbaseHeight : p.height Sites P A E p.Rlong v₀ = level id₀ := by
       calc
@@ -6396,21 +6396,21 @@ theorem p10_1kOddGroupOwnTupleIds_level_image_card_le_three
         hE, hA, hP, hlevel, hdist⟩ :=
         p10_1k_ownTupleId_selection_spec δ q selected Sites P A E τ
           hlegal hmatch hinSites id hid
-      have hsiteQ : hammingDist q.2 v ≤ 3 :=
+      have hsiteQ : _root_.hammingDist q.2 v ≤ 3 :=
         p10_1k_envelope_same_slice_residual_dist_le_three q (q.1, v) henv rfl
       let qres : CubeVertex (n - m) := q.2
-      have hsiteQ₀' : hammingDist v₀ qres ≤ 3 := by
-        change hammingDist v₀ q.2 ≤ 3
+      have hsiteQ₀' : _root_.hammingDist v₀ qres ≤ 3 := by
+        change _root_.hammingDist v₀ q.2 ≤ 3
         exact p10_1k_envelope_same_slice_residual_dist_le_three_symm
           q (q.1, v₀) henv₀ rfl
-      have hsiteQ' : hammingDist qres v ≤ 3 := by
-        change hammingDist q.2 v ≤ 3
+      have hsiteQ' : _root_.hammingDist qres v ≤ 3 := by
+        change _root_.hammingDist q.2 v ≤ 3
         exact hsiteQ
-      have hsiteV : hammingDist v₀ v ≤ p.D := by
-        have hsiteV₆ : hammingDist v₀ v ≤ 6 := by
+      have hsiteV : _root_.hammingDist v₀ v ≤ p.D := by
+        have hsiteV₆ : _root_.hammingDist v₀ v ≤ 6 := by
           calc
-            hammingDist v₀ v ≤ hammingDist v₀ qres + hammingDist qres v :=
-              hammingDist_triangle v₀ qres v
+            _root_.hammingDist v₀ v ≤ _root_.hammingDist v₀ qres + _root_.hammingDist qres v :=
+              _root_.hammingDist_triangle v₀ qres v
             _ ≤ 3 + 3 := add_le_add hsiteQ₀' hsiteQ'
             _ = 6 := by norm_num
         simpa [p, p10_1kHeightParams] using hsiteV₆
@@ -6444,7 +6444,7 @@ theorem p10_1kOddGroupOwnTupleIds_level_image_card_le_three
     simp [Own, hempty]
 
 private theorem p10_1k_cube_hammingDist_comm {d : ℕ}
-    (u v : CubeVertex d) : hammingDist u v = hammingDist v u := by
+    (u v : CubeVertex d) : _root_.hammingDist u v = _root_.hammingDist v u := by
   exact _root_.hammingDist_comm u v
 
 /-- At a fixed selected height, the own-slice IDs inject into the nonbad
@@ -6502,14 +6502,14 @@ theorem p10_1kOddGroupOwnTupleIds_height_fiber_mass_bound
     refine ⟨by omega, ?_⟩
     simpa [j] using hbad
   let qres : CubeVertex p.d := q.2
-  have hq₀ : hammingDist v₀ qres ≤ 3 := by
-    change hammingDist v₀ q.2 ≤ 3
+  have hq₀ : _root_.hammingDist v₀ qres ≤ 3 := by
+    change _root_.hammingDist v₀ q.2 ≤ 3
     exact p10_1k_envelope_same_slice_residual_dist_le_three_symm
       q (q.1, v₀) henv₀ rfl
   let crowd : Finset (CubeVertex p.d) :=
     Finset.univ.filter fun u =>
       P (u, j) = true ∧ A (u, j) = true ∧
-        hammingDist u v₀ ≤ p.r + p.D
+        _root_.hammingDist u v₀ ≤ p.r + p.D
   have hnotCrowded : ¬ (p.n : ℝ) ^ p.b < (crowd.card : ℝ) := by
     intro hlarge
     apply hnotBad₀
@@ -6530,30 +6530,30 @@ theorem p10_1kOddGroupOwnTupleIds_height_fiber_mass_bound
       rw [hideq]
     have hlocVal : loc.2.val = b := hlevelId.symm.trans hparts.2
     have hlocEq : loc.2 = j := Fin.ext hlocVal
-    have hq : hammingDist qres v ≤ 3 := by
-      change hammingDist q.2 v ≤ 3
+    have hq : _root_.hammingDist qres v ≤ 3 := by
+      change _root_.hammingDist q.2 v ≤ 3
       exact p10_1k_envelope_same_slice_residual_dist_le_three
         q (q.1, v) henv rfl
-    have hbaseDist : hammingDist v v₀ ≤ p.D := by
+    have hbaseDist : _root_.hammingDist v v₀ ≤ p.D := by
       -- The reverse envelope bound for `v₀` and the forward bound for `v`
       -- place both sites within three residual steps of `q`.
-      have hqv₀ : hammingDist qres v₀ ≤ 3 := by
+      have hqv₀ : _root_.hammingDist qres v₀ ≤ 3 := by
         rw [p10_1k_cube_hammingDist_comm]
         exact hq₀
-      have hvq : hammingDist v qres ≤ 3 := by
+      have hvq : _root_.hammingDist v qres ≤ 3 := by
         rw [p10_1k_cube_hammingDist_comm]
         exact hq
-      have hdistV : hammingDist v v₀ ≤ 6 := by
+      have hdistV : _root_.hammingDist v v₀ ≤ 6 := by
         calc
-          hammingDist v v₀ ≤ hammingDist v qres + hammingDist qres v₀ :=
-            hammingDist_triangle v qres v₀
+          _root_.hammingDist v v₀ ≤ _root_.hammingDist v qres + _root_.hammingDist qres v₀ :=
+            _root_.hammingDist_triangle v qres v₀
           _ ≤ 3 + 3 := add_le_add hvq hqv₀
           _ = 6 := by norm_num
       simpa [p, p10_1kHeightParams] using hdistV
-    have hcenter : hammingDist loc.1 v₀ ≤ p.r + p.D := by
+    have hcenter : _root_.hammingDist loc.1 v₀ ≤ p.r + p.D := by
       calc
-        hammingDist loc.1 v₀ ≤ hammingDist loc.1 v + hammingDist v v₀ :=
-          hammingDist_triangle loc.1 v v₀
+        _root_.hammingDist loc.1 v₀ ≤ _root_.hammingDist loc.1 v + _root_.hammingDist v v₀ :=
+          _root_.hammingDist_triangle loc.1 v v₀
         _ ≤ p.r + p.D := add_le_add hdist hbaseDist
     have hPj : P (loc.1, j) = true := by
       rw [← hlocEq]
@@ -6561,7 +6561,7 @@ theorem p10_1kOddGroupOwnTupleIds_height_fiber_mass_bound
     have hAj : A (loc.1, j) = true := by
       rw [← hlocEq]
       exact hA
-    have hcenterMap : hammingDist id.2.1 v₀ ≤ p.r + p.D := by
+    have hcenterMap : _root_.hammingDist id.2.1 v₀ ≤ p.r + p.D := by
       rw [hideq]
       exact hcenter
     have hPmap : P (id.2.1, j) = true := by
@@ -7006,7 +7006,7 @@ theorem p10_1k_incidentOddGroups_card_le {n m : ℕ} (hm : m ≤ n)
   have hsubset : p10_1kIncidentOddGroups hm a ⊆ S := by
     intro q hq
     obtain ⟨b, hadj, hbq⟩ := (p10_1k_mem_incidentOddGroups hm a q).mp hq
-    have hdist : hammingDist a.1 b.1 = 1 := by exact hadj
+    have hdist : _root_.hammingDist a.1 b.1 = 1 := by exact hadj
     obtain ⟨j, hflip⟩ := p10_1k_flipCoordinate_of_hammingDist_one a.1 b.1 hdist
     refine Finset.mem_image.mpr ⟨j, Finset.mem_univ _, ?_⟩
     calc

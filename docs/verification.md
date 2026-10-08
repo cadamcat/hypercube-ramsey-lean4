@@ -46,6 +46,23 @@ The script builds `HypercubeRamsey.Main` and runs `lake env leanchecker --fresh 
 
 `definition_names` is empty. Comparator treats the names listed there as definition holes, for which it checks only the name, type, universe levels and safety, not the definition itself. The Formal Conjectures definitions are fixed parts of the statement, so listing them would weaken the comparison. Running Comparator requires `lean4export` built for the project's Lean version and the `landrun` sandbox; the Comparator repository describes the setup.
 
+## Independent check of v1.0.0
+
+On 8 October 2026 (UTC), release `v1.0.0` (commit `ad206e1bf8240c28b538dfe72f10364cbc1591da`) was cloned from GitHub onto a new Google Cloud virtual machine (`c4d-standard-32`, 32 cores, Ubuntu 24.04.5 LTS) and checked with the steps above, in order:
+
+| Step | Result |
+|---|---|
+| `lake update` | exit 1 with the expected `iut: Lake resolved an unexpected checkout` error; all 43 packages checked out at the revisions locked in `lake-manifest.json` |
+| `scripts/apply-oai-patches.sh` | exit 0, 23 patches applied |
+| `lake exe cache get`, then `lake build` | exit 0 after 1483 s (9673 jobs), no errors and no `sorry` |
+| `scripts/verify.sh` | exit 0; `Erdos181.erdos_181` depends on axioms `[propext, Classical.choice, Quot.sound]` |
+| `lake env leanchecker --fresh HypercubeRamsey.Main` | exit 0 after 1334 s |
+| Comparator with [Challenge.json](../Challenge.json) | exit 0: "Lean default kernel accepts the solution" |
+
+Comparator was [`leanprover/comparator`](https://github.com/leanprover/comparator) at `ca04cfc`, with `lean4export` at `076e8e5` (the `v4.34.0` source) built with the project toolchain `v4.34.1`. It ran with comparator's development stand-in for the `landrun` sandbox, so it checked the statement match and kernel acceptance without isolating the build from the code it checks.
+
+Software Heritage archived the repository with `v1.0.0` at this commit in snapshot `swh:1:snp:18d9fc2a98ef0dee8fc48803afe0e6d0e79eb3eb`.
+
 ## Statement fidelity
 
 The statement is the paper's Theorem 1.1, clause by clause:

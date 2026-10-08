@@ -11,6 +11,8 @@
                                        Erdos181.erdos_181 and the definitions it uses, printed with pp.all,
                                        agree between Challenge.lean and HypercubeRamsey.Main; and the
                                        proof's axioms are within propext, Classical.choice, Quot.sound
+  check_target.py statement            as `types`, without the axiom check (scripts/verify.sh checks the
+                                       axioms separately and reports an open proof with its own exit status)
 Exit 0 only when every check passes.
 """
 import re, subprocess, sys, tempfile, os
@@ -97,16 +99,16 @@ def axioms_of_main():
     return r.returncode, ({x.strip() for x in m.group(1).split(',')} if m else None)
 
 
-def types():
+def build_main():
     b0 = subprocess.run(['lake', 'build', 'HypercubeRamsey.Main'], cwd=ROOT, capture_output=True, text=True)
     print(f'lake build HypercubeRamsey.Main exit {b0.returncode}')
     if b0.returncode != 0:
         print((b0.stdout + b0.stderr)[-3000:])
-        return False
-    rc0, ax = axioms_of_main()
-    ax_ok = rc0 == 0 and ax is not None and ax <= ALLOWED
-    print(f'axioms of Erdos181.erdos_181: {sorted(ax) if ax is not None else "unparsed"}; allowed: {ax_ok}')
-    ch = (ROOT / 'Challenge.lean').read_text()
+    return b0.returncode == 0
+
+
+def compare_printed(ch):
+    """Print the statement and definitions with pp.all from the challenge text `ch` and from HypercubeRamsey.Main."""
     ch_imports = [l for l in ch.splitlines() if l.startswith('import ')]
     ch_body = [l for l in ch.splitlines() if not l.startswith('import ')]
     rc1, a = printed(ch_imports + ch_body)
@@ -114,11 +116,31 @@ def types():
     a = a.replace("declaration uses 'sorry'", '').replace('declaration uses `sorry`', '')
     a = '\n'.join(l for l in a.splitlines() if not l.startswith('warning'))
     b = '\n'.join(l for l in b.splitlines() if not l.startswith('warning'))
-    ok = ax_ok and rc1 == 0 and rc2 == 0 and a.strip() == b.strip() and 'erdos_181' in a
+    same = rc1 == 0 and rc2 == 0 and a.strip() == b.strip() and 'erdos_181' in a
     print(f'challenge exit {rc1}, main exit {rc2}, pp.all outputs identical: {a.strip() == b.strip()}')
+    return same, a, b
+
+
+def types():
+    if not build_main():
+        return False
+    rc0, ax = axioms_of_main()
+    ax_ok = rc0 == 0 and ax is not None and ax <= ALLOWED
+    print(f'axioms of Erdos181.erdos_181: {sorted(ax) if ax is not None else "unparsed"}; allowed: {ax_ok}')
+    same, a, b = compare_printed((ROOT / 'Challenge.lean').read_text())
+    ok = ax_ok and same
     if not ok:
         print('--- challenge\n' + a[-3000:] + '\n--- main\n' + b[-3000:])
     return ok
+
+
+def statement():
+    if not build_main():
+        return False
+    same, a, b = compare_printed((ROOT / 'Challenge.lean').read_text())
+    if not same:
+        print('--- challenge\n' + a[-3000:] + '\n--- main\n' + b[-3000:])
+    return same
 
 
 if __name__ == '__main__':
@@ -126,4 +148,6 @@ if __name__ == '__main__':
         sys.exit(0 if defs(sys.argv[2] if len(sys.argv) > 2 else None) else 1)
     if len(sys.argv) == 2 and sys.argv[1] == 'types':
         sys.exit(0 if types() else 1)
+    if len(sys.argv) == 2 and sys.argv[1] == 'statement':
+        sys.exit(0 if statement() else 1)
     sys.exit(__doc__)

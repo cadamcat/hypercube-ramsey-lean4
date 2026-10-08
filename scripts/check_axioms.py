@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Check the axiom report emitted while verifying the public theorem."""
+"""Check the axiom report of Erdos181.erdos_181 in a captured `#print axioms` log.
+
+Exit 0 when the theorem depends only on propext, Classical.choice and Quot.sound; 2 when it also
+depends on sorryAx (an open proof) and on nothing else outside that set; 1 otherwise, including a
+missing, repeated or unparsable report.
+"""
 
 from pathlib import Path
 import re
@@ -7,7 +12,11 @@ import sys
 
 
 ALLOWED = {"propext", "Classical.choice", "Quot.sound"}
+OPEN = "sorryAx"
 TARGET = "Erdos181.erdos_181"
+# Lean may wrap a long axiom list over several lines.
+REPORT = re.compile(r"'(?P<name>[^'\n]+)' depends on axioms:\s*\[(?P<axioms>[^\]]*)\]")
+NO_AXIOMS = re.compile(r"'(?P<name>[^'\n]+)' does not depend on any axioms")
 
 
 def main() -> int:
@@ -15,28 +24,27 @@ def main() -> int:
         print(f"usage: {sys.argv[0]} AXIOM_LOG", file=sys.stderr)
         return 1
 
-    log = Path(sys.argv[1]).read_text(encoding="utf-8")
-    reports = [line for line in log.splitlines() if "depends on axioms:" in line]
+    log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+    reports = [(m.group("name"), m.group("axioms")) for m in REPORT.finditer(log)]
+    reports += [(m.group("name"), "") for m in NO_AXIOMS.finditer(log)]
     if len(reports) != 1:
-        print(f"expected one axiom report, found {len(reports)}", file=sys.stderr)
+        print(f"FAIL: expected one axiom report, found {len(reports)}", file=sys.stderr)
         return 1
 
-    report = reports[0]
-    if TARGET not in report:
-        print(f"axiom report is not for {TARGET}: {report}", file=sys.stderr)
+    name, listed = reports[0]
+    if name != TARGET:
+        print(f"FAIL: the axiom report is for {name}, not {TARGET}", file=sys.stderr)
         return 1
 
-    match = re.search(r"depends on axioms:\s*\[([^\]]*)\]", report)
-    if match is None:
-        print(f"could not parse axiom report: {report}", file=sys.stderr)
-        return 1
-
-    axioms = {item.strip() for item in match.group(1).split(",") if item.strip()}
+    axioms = {item.strip() for item in listed.split(",") if item.strip()}
     print(f"Axioms for {TARGET}: {', '.join(sorted(axioms)) or '(none)'}")
-    unexpected = axioms - ALLOWED
+    unexpected = axioms - ALLOWED - {OPEN}
     if unexpected:
-        print(f"FAIL: unexpected axioms: {', '.join(sorted(unexpected))}", file=sys.stderr)
+        print(f"FAIL: axioms outside the permitted set: {', '.join(sorted(unexpected))}", file=sys.stderr)
         return 1
+    if OPEN in axioms:
+        print(f"OPEN: {TARGET} depends on sorryAx; the proof is incomplete.")
+        return 2
 
     print("PASS: all axioms are in the permitted set.")
     return 0

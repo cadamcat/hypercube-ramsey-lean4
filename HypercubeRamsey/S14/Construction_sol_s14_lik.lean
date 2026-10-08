@@ -1,9 +1,12 @@
 import HypercubeRamsey.PartC.SliceSolver
 import HypercubeRamsey.Framework.FinProbLemmas
+import HypercubeRamsey.S03.Height.Device
+import HypercubeRamsey.S14.Construction_q_s14_post
 
 namespace HypercubeRamsey.Lane_sol_s14_lik
 
 open scoped BigOperators
+open Classical
 
 /-- The squared tilt pays for two label densities; remaining labels use
     the tested deletion ratio. -/
@@ -254,6 +257,291 @@ def precompose {α : Type*} (e : α ≃ α) : Equiv.Perm α ≃ Equiv.Perm α wh
   invFun σ := e.symm.trans σ
   left_inv σ := by ext x; simp
   right_inv σ := by ext x; simp
+
+/-- A greedy disjoint-family scan commutes with renaming its ground set. -/
+theorem greedy_scan_map {C : Type*} [Fintype C] [DecidableEq C] (e : C ≃ C)
+    (items : List (Finset C)) (bad bad' : Finset C → Prop)
+    (hbad : ∀ S, bad' (S.map e.toEmbedding) ↔ bad S) :
+    (items.map (fun S => S.map e.toEmbedding)).foldl
+      (fun A S => if bad' S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A) (∅ : Finset (Finset C)) =
+    (items.foldl
+      (fun A S => if bad S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A) (∅ : Finset (Finset C))).map
+        (Equiv.finsetCongr e).toEmbedding := by
+  classical
+  let m := (Equiv.finsetCongr e).toEmbedding
+  let f := fun (A : Finset (Finset C)) S =>
+    if bad S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A
+  let f' := fun (A : Finset (Finset C)) S =>
+    if bad' S ∧ ∀ S' ∈ A, Disjoint S S' then insert S A else A
+  have hcond (A : Finset (Finset C)) (S : Finset C) :
+      (bad' (S.map e.toEmbedding) ∧
+        ∀ S' ∈ A.map m, Disjoint (S.map e.toEmbedding) S') ↔
+      (bad S ∧ ∀ S' ∈ A, Disjoint S S') := by
+    rw [hbad]
+    constructor
+    · rintro ⟨hb, hd⟩
+      refine ⟨hb, ?_⟩
+      intro S' hS'
+      exact (Finset.disjoint_map e.toEmbedding).mp
+        (hd _ (Finset.mem_map.mpr ⟨S', hS', rfl⟩))
+    · rintro ⟨hb, hd⟩
+      refine ⟨hb, ?_⟩
+      intro S' hS'
+      obtain ⟨S₀, hS₀, rfl⟩ := Finset.mem_map.mp hS'
+      exact (Finset.disjoint_map e.toEmbedding).mpr (hd S₀ hS₀)
+  have hstep (A : Finset (Finset C)) (S : Finset C) :
+      f' (A.map m) (S.map e.toEmbedding) = (f A S).map m := by
+    dsimp [f, f']
+    simp only [hcond A S]
+    split_ifs <;> simp [m, Equiv.finsetCongr]
+  have hscan (A : Finset (Finset C)) :
+      (items.map (fun S => S.map e.toEmbedding)).foldl f' (A.map m) =
+        (items.foldl f A).map m := by
+    induction items generalizing A with
+    | nil => rfl
+    | cons S items ih =>
+      simp only [List.map_cons, List.foldl_cons]
+      rw [hstep]
+      exact ih _
+  simpa only [Finset.map_empty] using hscan ∅
+
+/-- Rename a height-device experiment by a cube isometry. -/
+theorem bad_transport (p : HDParams) (e : CubePos p.d ≃ CubePos p.d)
+    (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (hd : ∀ x y, hammingDist (e x) (e y) = hammingDist x y)
+    (hp : ∀ c, P' (e c.1, c.2) = P c)
+    (ha : ∀ c, A' (e c.1, c.2) = A c)
+    (he : ∀ v j, E' (e v) j = (E v j).map (Equiv.prodCongr e (Equiv.refl _)).toEmbedding)
+    (v : CubePos p.d) (j : Fin (p.H + 1)) :
+    p.Bad P' A' E' (e v) j ↔ p.Bad P A E v j := by
+  classical
+  have hnone : (∀ c ∈ E' (e v) j, A' c = false) ↔ (∀ c ∈ E v j, A c = false) := by
+    rw [he]
+    constructor
+    · intro hn c hc
+      have h := hn _ (Finset.mem_map.mpr ⟨c, hc, rfl⟩)
+      change A' (e c.1, c.2) = false at h
+      rwa [ha] at h
+    · intro hn c hc
+      obtain ⟨c0, hc0, heq⟩ := Finset.mem_map.mp hc
+      rw [← heq]
+      change A' (e c0.1, c0.2) = false
+      rw [ha]
+      exact hn c0 hc0
+  have hcrowd : (Finset.univ.filter fun u : CubePos p.d =>
+      P' (u, j) = true ∧ A' (u, j) = true ∧ hammingDist u (e v) ≤ p.r + p.D) =
+      (Finset.univ.filter fun u : CubePos p.d =>
+        P (u, j) = true ∧ A (u, j) = true ∧ hammingDist u v ≤ p.r + p.D).map e.toEmbedding := by
+    ext u
+    obtain ⟨u, rfl⟩ := e.surjective u
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_map_equiv, Equiv.symm_apply_apply, hd]
+    rw [hp (u, j), ha (u, j)]
+  unfold HDParams.Bad
+  rw [hnone, hcrowd, Finset.card_map]
+
+theorem reach_transport (p : HDParams) (e : CubePos p.d ≃ CubePos p.d)
+    (Sites Sites' : p.Sites) (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (hd : ∀ x y, hammingDist (e x) (e y) = hammingDist x y)
+    (hs : ∀ v, e v ∈ Sites' ↔ v ∈ Sites)
+    (hb : ∀ v j, p.BadN P' A' E' (e v) j ↔ p.BadN P A E v j)
+    (q u : CubePos p.d) (R j : ℕ) :
+    p.Reach Sites' P' A' E' (e q) R (e u) j ↔ p.Reach Sites P A E q R u j := by
+  constructor
+  · intro h
+    have aux : ∀ u' j, p.Reach Sites' P' A' E' (e q) R u' j →
+        p.Reach Sites P A E q R (e.symm u') j := by
+      intro u' j h
+      induction h with
+      | start v hv hr =>
+        apply HDParams.Reach.start
+        · exact (hs _).mp (by simpa using hv)
+        · simpa only [← hd (e.symm v) q, Equiv.apply_symm_apply] using hr
+      | up v j hj hr hb' ih =>
+        exact HDParams.Reach.up _ _ hj ih ((hb (e.symm v) j).mp (by simpa using hb'))
+      | down v v' j hr hv' hd' hn ih =>
+        apply HDParams.Reach.down _ _ _ ih
+        · exact (hs _).mp (by simpa using hv')
+        · simpa only [← hd (e.symm v') q, Equiv.apply_symm_apply] using hd'
+        · simpa only [← hd (e.symm v) (e.symm v'), Equiv.apply_symm_apply] using hn
+    simpa only [Equiv.symm_apply_apply] using aux _ _ h
+  · intro h
+    induction h with
+    | start u hu hr => exact HDParams.Reach.start _ ((hs u).mpr hu) (by simpa [hd] using hr)
+    | up u j hj hr hb' ih => exact HDParams.Reach.up _ _ hj ih ((hb u j).mpr hb')
+    | down u u' j hr hu' hd' hn ih =>
+      exact HDParams.Reach.down _ _ _ ih ((hs u').mpr hu') (by simpa [hd] using hd')
+        (by simpa [hd] using hn)
+
+theorem height_transport (p : HDParams) (e : CubePos p.d ≃ CubePos p.d)
+    (Sites Sites' : p.Sites) (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (hd : ∀ x y, hammingDist (e x) (e y) = hammingDist x y)
+    (hs : ∀ v, e v ∈ Sites' ↔ v ∈ Sites)
+    (hb : ∀ v j, p.BadN P' A' E' (e v) j ↔ p.BadN P A E v j)
+    (q : CubePos p.d) (R : ℕ) :
+    p.height Sites' P' A' E' R (e q) = p.height Sites P A E R q := by
+  unfold HDParams.height
+  congr 1
+  ext j
+  simp only [Finset.mem_filter]
+  exact and_congr_right fun _ => reach_transport p e Sites Sites' P A P' A' E E' hd hs hb q q R j
+
+/-- Distinct priorities remove the choice of a witness from selection. -/
+theorem selection_transport (p : HDParams) (e : CubePos p.d ≃ CubePos p.d)
+    (Sites Sites' : p.Sites) (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (τ τ' : p.Ties) (R : ℕ)
+    (hh : ∀ v, p.height Sites' P' A' E' R (e v) = p.height Sites P A E R v)
+    (hb : ∀ v j, p.Bad P' A' E' (e v) j ↔ p.Bad P A E v j)
+    (ha : ∀ c, A' (e c.1, c.2) = A c)
+    (he : ∀ v j, E' (e v) j = (E v j).map (Equiv.prodCongr e (Equiv.refl _)).toEmbedding)
+    (ht : ∀ v j c, p.priority τ' (e v, j) (e c.1, c.2) = p.priority τ (v, j) c)
+    (v : CubePos p.d) :
+    p.selectionAt Sites' P' A' E' τ' R (e v) =
+      (p.selectionAt Sites P A E τ R v).map (Equiv.prodCongr e (Equiv.refl _)) := by
+  classical
+  let ec := Equiv.prodCongr e (Equiv.refl (Fin (p.H + 1)))
+  have hactive (j : Fin (p.H + 1)) :
+      (E' (e v) j).filter (fun c => A' c = true) =
+      ((E v j).filter fun c => A c = true).map ec.toEmbedding := by
+    rw [he]
+    change ((E v j).map ec.toEmbedding).filter (fun c => A' c = true) = _
+    ext c
+    obtain ⟨c, rfl⟩ := ec.surjective c
+    simp only [Finset.mem_filter, Finset.mem_map_equiv, Equiv.symm_apply_apply]
+    change (c ∈ E v j ∧ A' (e c.1, c.2) = true) ↔ (c ∈ E v j ∧ A c = true)
+    rw [ha]
+  have hprior (j : Fin (p.H + 1)) :
+      ((E' (e v) j).filter fun c => A' c = true).image (p.priority τ' (e v, j)) =
+      ((E v j).filter fun c => A c = true).image (p.priority τ (v, j)) := by
+    rw [hactive]
+    rw [Finset.map_eq_image, Finset.image_image]
+    simp only [Function.comp_def]
+    congr 1
+    funext c
+    exact ht v j c
+  unfold HDParams.selectionAt
+  simp only [hh, hb, hprior]
+  split_ifs with hj hbad hne <;> simp only [Option.map_none, Option.map_some]
+  all_goals try rfl
+  apply congrArg some
+  apply ((τ' (e v, ⟨p.height Sites P A E R v, by omega⟩)).injective.comp
+    (Fintype.equivFin p.Loc).injective)
+  change p.priority τ' (e v, ⟨p.height Sites P A E R v, by omega⟩) _ =
+    p.priority τ' (e v, ⟨p.height Sites P A E R v, by omega⟩) _
+  simp only [Equiv.prodCongr_apply, Prod.map, Equiv.refl_apply]
+  rw [ht]
+  let j : Fin (p.H + 1) := ⟨p.height Sites P A E R v, by omega⟩
+  let active := (E v j).filter fun c => A c = true
+  let active' := (E' (e v) j).filter fun c => A' c = true
+  let priorities := active.image (p.priority τ (v, j))
+  have hne' : priorities.Nonempty := hne
+  let q0 := priorities.min' hne'
+  have hm₁ : ∃ c, c ∈ active' ∧ p.priority τ' (e v, j) c = q0 := by
+    apply Finset.mem_image.mp
+    rw [show active'.image (p.priority τ' (e v, j)) = priorities from hprior j]
+    exact Finset.min'_mem priorities hne'
+  have hm₂ : ∃ c, c ∈ active ∧ p.priority τ (v, j) c = q0 :=
+    Finset.mem_image.mp (Finset.min'_mem priorities hne')
+  change p.priority τ' (e v, j) (Classical.choose hm₁) =
+    p.priority τ (v, j) (Classical.choose hm₂)
+  exact (Classical.choose_spec hm₁).2.trans (Classical.choose_spec hm₂).2.symm
+
+theorem pr_fibers {Ω Y : Type*} [Fintype Ω] [Fintype Y]
+    (P : FinLaw Ω) (f : Ω → Y) (A : Y → Prop) :
+    P.pr (fun ω => A (f ω)) = ∑ y, if A y then P.pr (fun ω => f ω = y) else 0 := by
+  classical
+  have h := Lane_q_s14_post.expect_comp_eq_sum_pr P f (fun y => if A y then 1 else 0)
+  simpa only [FinLaw.E, FinLaw.pr, mul_ite, mul_one, mul_zero] using h
+
+theorem pr_bind {Ω Y : Type*} [Fintype Ω] [Fintype Y]
+    (P : FinLaw Ω) (Q : Ω → FinLaw Y) (A : Ω × Y → Prop) :
+    (FinLaw.bind P Q).pr A = ∑ ω, P.w ω * (Q ω).pr (fun y => A (ω, y)) := by
+  classical
+  unfold FinLaw.pr
+  rw [Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro ω _
+  rw [Finset.mul_sum]
+  apply Finset.sum_congr rfl
+  intro y _
+  simp only [FinLaw.bind]
+  split_ifs <;> simp
+
+/-- The experiment's unused label coordinates disappear from every star event. -/
+theorem internal_query_pr {G B Z J : Type*} [Fintype G] [DecidableEq G]
+    [Fintype B] [Fintype Z] [DecidableEq Z] [Fintype J] [DecidableEq J] {N : ℕ}
+    (q : G → B → ℝ) (hq0 : ∀ g b, 0 ≤ q g b) (hq1 : ∀ g, ∑ b, q g b = 1)
+    (U : G → B → Fin N → ℝ) (hU0 : ∀ g b y, 0 ≤ U g b y)
+    (hU1 : ∀ g b, ∑ y, U g b y = 1) (grp : Z → G)
+    (query : J → Z) (hinj : Function.Injective query)
+    (A : (G → B) → (J → Fin N) → Prop) :
+    (internalRefLaw q hq0 hq1 U hU0 hU1 grp).pr
+      (fun ω => A ω.1 (fun j => ω.2 (query j))) =
+      ∑ bins : G → B, (∏ g, q g (bins g)) *
+        ∑ ys : J → Fin N, if A bins ys then
+          ∏ j, U (grp (query j)) (bins (grp (query j))) (ys j) else 0 := by
+  classical
+  rw [internalRefLaw, pr_bind]
+  apply Finset.sum_congr rfl
+  intro bins _
+  congr 1
+  simp only [Prod.fst, Prod.snd]
+  rw [pr_fibers (Y := J → Fin N) _ (fun labels : Z → Fin N => fun j => labels (query j)) (A bins)]
+  apply Finset.sum_congr rfl
+  intro ys _
+  split_ifs
+  · have hp := pi_query_probability (fun z =>
+        (⟨U (grp z) (bins (grp z)), hU0 _ _, hU1 _ _⟩ : FinLaw (Fin N))) query hinj ys
+    exact hp
+  · rfl
+
+/-- Badness only reads eligibility and center bits in the crowd ball. -/
+theorem bad_congr_at (p : HDParams) (P A P' A' : p.Loc → Bool) (E E' : p.EligMap)
+    (v : CubePos p.d) (j : Fin (p.H + 1)) (he : E v j = E' v j)
+    (ha : ∀ c ∈ E v j, A c = A' c)
+    (hc : ∀ z, hammingDist z v ≤ p.r + p.D →
+      P (z, j) = P' (z, j) ∧ A (z, j) = A' (z, j)) :
+    p.Bad P A E v j ↔ p.Bad P' A' E' v j := by
+  classical
+  have hnone : (∀ c ∈ E v j, A c = false) ↔ (∀ c ∈ E' v j, A' c = false) := by
+    rw [← he]
+    constructor <;> intro h c hc'
+    · rw [← ha c hc']
+      exact h c hc'
+    · rw [ha c hc']
+      exact h c hc'
+  have hcrowd : (Finset.univ.filter fun z : CubePos p.d =>
+      P (z, j) = true ∧ A (z, j) = true ∧ hammingDist z v ≤ p.r + p.D) =
+      (Finset.univ.filter fun z : CubePos p.d =>
+        P' (z, j) = true ∧ A' (z, j) = true ∧ hammingDist z v ≤ p.r + p.D) := by
+    apply Finset.filter_congr
+    intro z _
+    by_cases hz : hammingDist z v ≤ p.r + p.D
+    · rw [(hc z hz).1, (hc z hz).2]
+    · simp only [hz, and_false]
+  unfold HDParams.Bad
+  rw [hnone, hcrowd]
+
+/-- A union indexed by every site commutes with independent renamings. -/
+theorem biUnion_transport {A C : Type*} [Fintype A] [DecidableEq C]
+    (ea : A ≃ A) (ec : C ≃ C) (S S' : A → Finset C)
+    (hS : ∀ a, S' (ea a) = (S a).map ec.toEmbedding) :
+    (Finset.univ.biUnion S') = (Finset.univ.biUnion S).map ec.toEmbedding := by
+  classical
+  ext c
+  obtain ⟨c, rfl⟩ := ec.surjective c
+  conv_lhs => simp only [Finset.mem_biUnion, Finset.mem_univ, true_and]
+  conv_rhs => simp only [Finset.mem_map_equiv, Equiv.symm_apply_apply,
+    Finset.mem_biUnion, Finset.mem_univ, true_and]
+  constructor
+  · rintro ⟨a, hc⟩
+    obtain ⟨a, rfl⟩ := ea.surjective a
+    refine ⟨a, ?_⟩
+    rw [hS] at hc
+    simpa only [Finset.mem_map_equiv, Equiv.symm_apply_apply] using hc
+  · rintro ⟨a, hc⟩
+    refine ⟨ea a, ?_⟩
+    rw [hS]
+    exact Finset.mem_map.mpr ⟨c, hc, rfl⟩
 
 end HypercubeRamsey.Lane_sol_s14_lik
 

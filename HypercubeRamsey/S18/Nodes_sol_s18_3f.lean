@@ -372,52 +372,6 @@ theorem oppositePins_not_nonneighbors :
       P.pr (fun b => b = false) * P.pr (fun b => b ≠ true) := by
   norm_num [FinLaw.pr, FinLaw.uniform, Fintype.sum_bool]
 
-/-- Image tokens may be erased when their edges were already carried by domains
-or tapes. All fields of the frozen coupling contract remain satisfied. -/
-noncomputable def eraseRedundantImages (D : S18.LateData hPT) (δ : ℝ)
-    (L : S18.LeafCoupling D δ)
-    (hredundant : ∀ i j, ¬ Disjoint (L.images i) (L.images j) →
-      ¬ Disjoint (L.domains i) (L.domains j) ∨ ¬ Disjoint (L.tapes i) (L.tapes j)) :
-    S18.LeafCoupling D δ :=
-  { L with
-    images := fun _ => ∅
-    adjacent_eq := by
-      intro i j
-      rw [L.adjacent_eq]
-      simp only [Finset.disjoint_empty_left, not_true_eq_false, false_or]
-      constructor
-      · intro h
-        rcases h with hd | him | ht
-        · exact Or.inl hd
-        · exact hredundant i j him
-        · exact Or.inr ht
-      · intro h
-        rcases h with hd | ht
-        · exact Or.inl hd
-        · exact Or.inr (Or.inr ht)
-    scope_bound := by
-      intro i
-      have h := L.scope_bound i
-      have hi : 0 ≤ ((L.images i).card : ℝ) := Nat.cast_nonneg _
-      simp only [Finset.card_empty, Nat.cast_zero, add_zero]
-      push_cast at h ⊢
-      linarith }
-
-/-- Erasing redundant tokens rules out automatic image coverage for any occurring
-leaf that reads a domain slot. This is a contract-level obstruction, not a
-refutation of the terminal comparison theorem. -/
-theorem erasedImages_not_imageCovered (D : S18.LateData hPT) (δ : ℝ)
-    (L : S18.LeafCoupling D δ)
-    (hredundant : ∀ i j, ¬ Disjoint (L.images i) (L.images j) →
-      ¬ Disjoint (L.domains i) (L.domains j) ∨ ¬ Disjoint (L.tapes i) (L.tapes j))
-    (i : L.Leaf) (x : D.encoding.InitInput) (hx : x ∈ L.leaf i)
-    (hdom : (L.domains i).Nonempty) :
-    ¬ ImageCovered D δ (eraseRedundantImages D δ L hredundant) := by
-  intro h
-  obtain ⟨s, hs⟩ := hdom
-  have hm := h i x hx s hs
-  simpa [eraseRedundantImages] using hm
-
 /-- Exact event inequality needed for coordinate fibers. This requires less
 than an explicit forcing kernel. -/
 def TestNonneighborBound (D : S18.LateData hPT) (δ : ℝ)

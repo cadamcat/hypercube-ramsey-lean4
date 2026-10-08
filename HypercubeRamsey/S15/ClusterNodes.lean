@@ -2,6 +2,7 @@ import HypercubeRamsey.S15.DirectNodes
 import HypercubeRamsey.S15.Masks
 import HypercubeRamsey.S15.Capacity
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
+import HypercubeRamsey.S15.ClusterNodes_sol_s15_alarm
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c3
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_mask
 import HypercubeRamsey.S15.MaskTransfer_sol_s15_mask
@@ -9,6 +10,7 @@ import HypercubeRamsey.S15.ClusterNodes_q_s15_c2
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_transfer
 import HypercubeRamsey.S15.ClusterNodes_q_s15_c1
 import HypercubeRamsey.S15.ClusterNodes_sol_s15_load
+import HypercubeRamsey.S15.ClusterNominal_sol_s15_transfer
 
 /-! History alarms, cluster mass, and the conditional bin and label stages of Section 15. -/
 
@@ -78,12 +80,19 @@ def ClusterMassClaim (κ : CConsts) (T : Stage) : Prop :=
 /-- L15.2a: the raw alarm-one probability and deterministic crossing-removal bound. -/
 theorem high_cluster_degree_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterAlarmTestClaim κ T := by
-  sorry
+  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.raw_degree_alarm_probability κ hκ T hDeep,
+    HypercubeRamsey.Lane_sol_s15_alarm.cluster_crossing_removed_eventually κ hκ T hDeep]
+    with k hraw hcross
+  intro PT hPT hm a
+  constructor
+  · exact hraw PT hPT hm a
+  · intro W
+    simpa only [clusterCrossingRemovedMass] using hcross PT hPT hm W a
 
 /-- L15.2b: the raw mean large-interaction estimate. -/
 theorem high_cluster_interaction_alarm (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) : ClusterInteractionMeanClaim κ T := by
-  sorry
+  exact HypercubeRamsey.Lane_sol_s15_alarm.raw_interaction_alarm_mean κ hκ T hDeep
 
 /-- L15.2c: product-local-lemma conditioning of the primitive histories. -/
 theorem high_cluster_condition_histories (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -526,29 +535,119 @@ theorem high_cluster_condition_histories (κ : CConsts) (hκ : κ.Admissible) (T
           intro W _
           exact mul_nonneg ((clusterHistoryLaw PT hPT hm).nonneg W) (hF W))
 
+open Lane_sol_s15_load in
 /-- L15.2d: the conditional row mass estimate from the crossing filter and three alarm bounds. -/
 theorem high_cluster_conditional_mass_estimate (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04) (hCross : ClusterCrossingClaim κ T)
     (hAlarm : ClusterAlarmTestClaim κ T) (hInteraction : ClusterInteractionMeanClaim κ T)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterMassClaim κ T := by
-  filter_upwards [hAlarm] with k hkAlarm
+  have hCenter := clusterCenter_mass_bound_eventually κ hκ T hDeep
+  have hRemoved := high_cluster_removed_budget_eventually κ hκ T
+  have hZeroSmall := high_cluster_zero_small_eventually κ hκ T
+  have hInteractionSmall := high_cluster_interaction_budget_small_eventually κ hκ T
+  have hTotal := high_cluster_mass_budget_eventually κ hκ T
+  filter_upwards [hAlarm, hCenter, hRemoved, hZeroSmall, hInteractionSmall, hTotal] with
+    k hkAlarm hkCenter hkRemoved hkZero hkInteraction hkTotal
   intro PT hPT hm W hW hAvoid a
-  have hZero := Lane_sol_s15_load.clusterSigma_zero_probability PT hPT hm W hAvoid a
+  let ell := (clusterCrossingNeighbours PT hPT a).card
+  let C : ℝ := 5 ^ (ell + 1)
+  let B0 : ℝ := (T.S.n k : ℝ) ^ (-(3 * κ.R : ℝ))
+  let γ : ℝ := (T.S.n k : ℝ) ^ (-(4 * κ.R : ℝ))
+  let L : ℝ := C ^ κ.u * (2 : ℝ) ^ κ.u
+  let P := (clusterSolver PT hPT hm (clusterSliceAt PT hPT a.1).1).refLaw
+    (historyOnSlice W (clusterSliceAt PT hPT a.1))
+  let G := Lane_q_s15_c1.clusterInteractionIntegrandAtCenter PT hPT hm W a
+  let Zero := fun Y => Lane_q_s15_c1.clusterSigmaAtCenter PT hPT hm W a Y = 0
+  let F := fun Y =>
+    (FinLaw.pi (fun j => lawToFinLaw (clusterCrossLaw PT hPT hm W a j))).E (fun ys =>
+      (FinLaw.pi (fun j => lawToFinLaw (clusterBulkLaw PT hPT hm W a j))).pr
+        (fun zs => clusterRowAtCenterExternal PT hPT hm W a Y ys zs < 1 / 2))
   have hRemoval : ∀ I : ClusterInternalData PT,
-      (∑ x, if clusterJ PT hPT hm W a x then 0 else clusterSigma PT hPT hm W I a x) ≤
-      ((PT.tiling.P (patchAt PT hPT a.1)).M *
-        ((2 : ℝ) ^ (PT.tiling.P (patchAt PT hPT a.1)).h *
-          Real.exp (-500 * PT.tiling.gain (patchAt PT hPT a.1)) / T.S.N k)) *
-      (Real.exp (-Real.rpow (T.S.n k : ℝ) 0.2) + Real.exp (-(κ.α / 2) * T.S.n k)) := by
+      (∑ x, if clusterJ PT hPT hm W a x then 0 else clusterSigma PT hPT hm W I a x) ≤ 1 / 10 := by
     intro I
-    exact Lane_sol_s15_load.clusterSigma_removed_mass_le PT hPT hm W hW hAvoid I a _
-      ((hkAlarm PT hPT hm a).2 W)
+    apply (clusterSigma_removed_mass_le PT hPT hm W hW hAvoid I a _
+      ((hkAlarm PT hPT hm a).2 W)).trans
+    exact hkRemoved PT hPT hm (patchAt PT hPT a.1)
   have hInteractionBudget : clusterInteractionCost PT hPT hm W a ≤
       Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := le_of_not_gt (hAvoid a).2.1
-  -- Remaining: project the external neighbour labels to independent slice marginals,
-  -- apply the crossing chain to the normalized J-restricted row, then average the
-  -- heterogeneous bulk moment and its alarm-two envelope over the center experiment.
-  sorry
+  have hZero : P.pr Zero ≤ γ := by
+    have h := clusterSigma_zero_probability PT hPT hm W hAvoid a
+    have hproj := Lane_q_s15_c1.pi_pr_coordinate
+      (fun s : ClusterSlice PT => (clusterSolver PT hPT hm s.1).refLaw (historyOnSlice W s))
+      (clusterSliceAt PT hPT a.1) Zero
+    have heq : P.pr Zero = (clusterInternalKernel PT hPT hm W).pr
+        (fun I => clusterSigma PT hPT hm W I a = 0) := by
+      exact hproj.symm
+    rw [heq]
+    exact h.trans (hkZero PT hPT hm (patchAt PT hPT a.1))
+  have hG : ∀ Y, 0 ≤ G Y := clusterInteractionIntegrandAtCenter_nonneg PT hPT hm W a
+  have hL : 0 ≤ L := by positivity
+  have hγ : 0 ≤ γ := by positivity
+  have hB0 : 0 ≤ B0 := by positivity
+  have hpoint (Y : ClusterSliceOutcome PT (clusterSliceAt PT hPT a.1).1) :
+      F Y ≤ (if Zero Y then 1 else 0) + (γ + (4 : ℝ) ^ κ.u * (B0 + L * G Y)) := by
+    by_cases hz : Zero Y
+    · rw [if_pos hz]
+      have hF : F Y ≤ 1 := by
+        calc
+          _ ≤ (FinLaw.pi (fun j => lawToFinLaw (clusterCrossLaw PT hPT hm W a j))).E (fun _ => 1) := by
+            unfold F FinLaw.E
+            apply Finset.sum_le_sum
+            intro ys _
+            apply mul_le_mul_of_nonneg_left (finLaw_pr_le_one _ _) ((FinLaw.pi _).nonneg ys)
+          _ = 1 := by simp only [FinLaw.E, mul_one, FinLaw.sum_one]
+      have hterm : 0 ≤ (4 : ℝ) ^ κ.u * (B0 + L * G Y) := by
+        have h := hG Y
+        positivity
+      linarith
+    · rw [if_neg hz, zero_add]
+      exact hkCenter PT hPT hm W hW a hRemoval Y hz
+  have hAvg : P.E F ≤ P.pr Zero + γ + (4 : ℝ) ^ κ.u * (B0 + L * P.E G) := by
+    calc
+      _ ≤ P.E (fun Y => (if Zero Y then 1 else 0) +
+          (γ + (4 : ℝ) ^ κ.u * (B0 + L * G Y))) := by
+        unfold FinLaw.E
+        apply Finset.sum_le_sum
+        intro Y _
+        exact mul_le_mul_of_nonneg_left (hpoint Y) (P.nonneg Y)
+      _ = _ := by
+        have hInd : P.E (fun Y => if Zero Y then (1 : ℝ) else 0) = P.pr Zero := by
+          unfold FinLaw.E FinLaw.pr
+          apply Finset.sum_congr rfl
+          intro Y _
+          by_cases hz : Zero Y <;> simp [hz]
+        rw [finLaw_E_add, hInd,
+          finLaw_E_affine, finLaw_E_affine]
+        ring
+  have hCost : P.E G = clusterInteractionCost PT hPT hm W a :=
+    (Lane_q_s15_c1.clusterInteractionCost_eq_centerExpectation PT hPT hm W a).symm
+  have hell : ell ≤ (PT.tiling.P (patchAt PT hPT a.1)).ℓ :=
+    Lane_q_s15_direct.highDirect_crossingNeighbours_card_le_prefix PT hPT a _ rfl
+  have hLarge : (4 : ℝ) ^ κ.u * L *
+      Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) ≤ B0 := by
+    have hCpow : C ^ κ.u ≤
+        ((5 : ℝ) ^ ((PT.tiling.P (patchAt PT hPT a.1)).ℓ + 1)) ^ κ.u := by
+      apply pow_le_pow_left₀ (by positivity : (0 : ℝ) ≤ C)
+      exact pow_le_pow_right₀ (by norm_num : (1 : ℝ) ≤ 5) (Nat.add_le_add_right hell 1)
+    calc
+      _ = (4 : ℝ) ^ κ.u * C ^ κ.u * (2 : ℝ) ^ κ.u *
+          Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := by dsimp [L]; ring
+      _ ≤ (4 : ℝ) ^ κ.u * ((5 : ℝ) ^ ((PT.tiling.P (patchAt PT hPT a.1)).ℓ + 1)) ^ κ.u *
+          (2 : ℝ) ^ κ.u * Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := by
+        gcongr
+      _ ≤ _ := hkInteraction PT hPT hm (patchAt PT hPT a.1)
+  calc
+    _ = P.E F := clusterRow_failure_probability_eq PT hPT hm W a
+    _ ≤ P.pr Zero + γ + (4 : ℝ) ^ κ.u * (B0 + L * P.E G) := hAvg
+    _ ≤ γ + γ + (4 : ℝ) ^ κ.u * (B0 + L *
+        Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1))) := by
+      rw [hCost]
+      gcongr
+    _ = 2 * γ + (4 : ℝ) ^ κ.u * B0 + (4 : ℝ) ^ κ.u * L *
+        Real.exp (-100 * PT.tiling.gain (patchAt PT hPT a.1)) := by ring
+    _ ≤ 2 * γ + (4 : ℝ) ^ κ.u * B0 + B0 := by linarith
+    _ = 2 * γ + ((4 : ℝ) ^ κ.u + 1) * B0 := by ring
+    _ ≤ _ := hkTotal
 
 /-- L15.2 (`lem:high-cluster-mass`, 15:91–112): conditional row-mass failure is at most `n^-R`. -/
 theorem high_cluster_mass (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
@@ -624,7 +723,32 @@ def ClusterCapacityClaim (κ : CConsts) (T : Stage) : Prop :=
 theorem high_cluster_capacity_certificates (κ : CConsts) (hκ : κ.Admissible) (T : Stage)
     (hDeep : DeepDisc T κ.xs κ.α 0.04)
     (hConditioning : ClusterHistoryConditioningClaim κ T) : ClusterCapacityClaim κ T := by
-  sorry
+  have hcp : 0 < κ.cp := hκ.bucket.2.1
+  refine ⟨κ.cp / 12, by positivity, ?_⟩
+  obtain ⟨dmin, hdmin⟩ := eventually_atTop.1
+    (HypercubeRamsey.Lane_sol_s15_alarm.capacity_charge_decay_eventually κ.cp hcp)
+  let d0 : ℕ := ⌈max dmin 1⌉₊
+  have hd0 : dmin ≤ (d0 : ℝ) := (le_max_left _ _).trans (Nat.le_ceil _)
+  filter_upwards [HypercubeRamsey.Lane_sol_s15_alarm.cluster_bin_size_eventually_ge κ hκ T d0,
+    HypercubeRamsey.Lane_sol_s15_alarm.cluster_selected_atom_cap_eventually κ hκ T]
+      with k hkbin hkatom
+  intro PT hPT hm W hload
+  constructor
+  · intro i D g hpin
+    have hcard := hPT.tiling_valid.bins_card i D.1 D.2
+    have hd : dmin ≤ (D.1.card : ℝ) := by
+      rw [hcard]
+      exact hd0.trans (by exact_mod_cast hkbin PT hPT hm i)
+    have hdecay := hdmin (D.1.card : ℝ) hd
+    have hD := (PT.tiling.P i).bins.nonempty_of_mem_parts D.2
+    exact (HypercubeRamsey.Lane_sol_s15_alarm.pinned_capacity_charge_le
+      PT hPT hm W hκ D.1 hD hdecay.1 g).trans hdecay.2
+  · intro B hB havoid y
+    apply HypercubeRamsey.Lane_sol_s15_alarm.capacity_avoided_column_le
+      PT hPT hm W hκ hload B ?_ havoid y
+    intro g y'
+    exact hkatom PT hPT hm W g (B g)
+      (HypercubeRamsey.Lane_sol_s15_alarm.selected_bin_probability_pos PT hPT hm W B hB g) y'
 
 /-- The output contract of the conditioned bin stage in P15.3(i). -/
 def ClusterBinStageClaim (κ : CConsts) (T : Stage) : Prop :=
@@ -1294,7 +1418,15 @@ theorem high_cluster_bin_transfer (κ : CConsts) (hκ : κ.Admissible) (T : Stag
         clusterCoreRepeatCost PT i ^ M.coreBins.card *
           clusterCrossingFraction T k ^ M.crossingBins.card *
             clusterReferenceMean PT hPT hm i x M W := by
-    sorry
+    filter_upwards [high_cluster_small_bin_splice κ hκ T hDeep,
+      Lane_sol_s15_transfer.eventual_core_radius κ hκ T,
+      Lane_sol_s15_transfer.eventual_crossing_width κ hκ T,
+      Lane_sol_s15_transfer.eventual_high_gain_le_dimension κ hκ T,
+      T.S.n_tendsto.eventually (eventually_ge_atTop 1)] with k hs hr hw hg hn
+    intro PT hPT hm hsmall i x hx M hM W
+    exact Lane_sol_s15_transfer.raw_bin_repeat_bound_small PT hPT hm hsmall i x M hM
+      (by nlinarith [hr PT hPT hm i]) hn (hw PT hPT)
+      (Lane_sol_s15_transfer.crossing_bin_cap_of_splice PT hn (hg PT hPT hm) (hs PT hPT hsmall)) W
   filter_upwards [hsmall, T.S.n_tendsto.eventually (eventually_ge_atTop 5)] with k hk hn
   intro PT hPT hm CS i x hx M hM
   exact Lane_sol_s15_transfer.bin_transfer_of_scope_and_reverse PT hPT hm CS i x M
@@ -1315,7 +1447,12 @@ theorem high_cluster_history_restore (κ : CConsts) (hκ : κ.Admissible) (T : S
       (clusterHistoryLaw PT hPT hm).E (clusterReferenceMean PT hPT hm i x M) =
         ∏ r ∈ clusterKeptRows M, (clusterRawReferenceLaw PT hPT hm).E
           (fun z => (PT.tiling.P i).M * clusterSigma PT hPT hm z.1 z.2 (M.positions r) x) := by
-    sorry
+    filter_upwards [Lane_sol_s15_transfer.eventual_core_radius κ hκ T,
+      Lane_sol_s15_transfer.eventual_crossing_width κ hκ T,
+      Lane_sol_s15_transfer.eventual_nominal_degrees_pos κ hκ T] with k hr hw hd
+    intro PT hPT hm i x hx M hM
+    exact Lane_sol_s15_transfer.raw_reference_factorization PT hPT hm i x M hM
+      (hr PT hPT hm i) (hw PT hPT) (hd PT hPT hm i x hx)
   filter_upwards [hfactor, T.S.n_tendsto.eventually (eventually_ge_atTop 2)] with k hk hn
   intro PT hPT hm CS i x hx M hM
   exact Lane_sol_s15_transfer.history_restore_of_scope_and_factorization PT hPT hm CS i x M

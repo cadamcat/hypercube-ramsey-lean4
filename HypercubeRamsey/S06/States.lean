@@ -121,6 +121,11 @@ structure StateCode6 (L : ChunkLayout6 n) where
   enc_injective : ∀ x y, enc (L.stateOf x) = enc (L.stateOf y) → L.stateOf x = L.stateOf y
   nbr_dist : ∀ b, ∀ a ∈ L.stNbr b, ∀ a' ∈ L.stNbr b, hammingDist (enc a) (enc a') ≤ D₀₆
   residual_dist : ∀ x y, L.residualDist x y ≤ hammingDist (enc (L.stateOf x)) (enc (L.stateOf y))
+  /-- Repair (lane opus-diag-hjoint): the fine count fields are one-hot (06:231–235), so every sign change costs
+  an encoded coordinate; this is the fact behind "the short tube contains only that many sign changes"
+  (06:641–643). -/
+  sign_dist : ∀ x y, hammingDist (L.stSign (L.stateOf x)) (L.stSign (L.stateOf y)) ≤
+    hammingDist (enc (L.stateOf x)) (enc (L.stateOf y))
   d_lower : cd₆ * n ≤ d
   d_upper : (d : ℝ) ≤ Cd₆ * n
 
@@ -1517,6 +1522,44 @@ theorem L6_1e_facts (α : ℝ) :
           exact Or.inl (by rw [hKeyβ, hkey])
         exact reqForName (β := β) (primaryName6 (L.key u)) hName }
 
+/-- One-hot fine count fields: each sign change of a role state changes the one-hot field of that fine chunk
+(06:231–235). -/
+theorem signDist_le_encode6 (L : ChunkLayout6 n) (x y : CubeVertex n) :
+    hammingDist (L.stSign (L.stateOf x)) (L.stSign (L.stateOf y)) ≤
+      hammingDist (Lane_q_s06_front.encodeTuple6 L (L.stateOf x))
+        (Lane_q_s06_front.encodeTuple6 L (L.stateOf y)) := by
+  classical
+  rw [Lane_q_s06_front.hammingDist_encode_eq]
+  have hcx : ∀ i : Fin L.m, ((L.stateOf x).2.2.2.1 i).val < L.fineLength + 1 := by
+    intro i
+    have h1 := Lane_q_s06_front.mergedCount_le_fineLength6 L x i
+    change min (L.mergedCount x i) n < L.fineLength + 1
+    omega
+  let φ : Fin L.m → Lane_q_s06_front.CodeCoord6 L := fun i =>
+    Lane_q_s06_front.fineCoord6 L i ⟨((L.stateOf x).2.2.2.1 i).val, hcx i⟩
+  have hφinj : ∀ i j, φ i = φ j → i = j := by
+    intro i j h
+    simp only [φ, Lane_q_s06_front.fineCoord6, Sum.inr.injEq, Sum.inl.injEq, Prod.mk.injEq] at h
+    exact h.1
+  unfold hammingDist
+  apply Finset.card_le_card_of_injOn φ
+  · intro i hi
+    have hi' : L.stSign (L.stateOf x) i ≠ L.stSign (L.stateOf y) i := by
+      simpa using hi
+    have hcount : ((L.stateOf x).2.2.2.1 i).val ≠ ((L.stateOf y).2.2.2.1 i).val := by
+      intro heq
+      apply hi'
+      simp only [ChunkLayout6.stSign, heq]
+    have hmem : φ i ∈ Lane_q_s06_front.diffCoords6 L (L.stateOf x) (L.stateOf y) := by
+      unfold Lane_q_s06_front.diffCoords6
+      rw [Finset.mem_filter]
+      refine ⟨Finset.mem_univ _, ?_⟩
+      simp only [φ, Lane_q_s06_front.fineCoord6, Lane_q_s06_front.codeBit6]
+      simp [hcount]
+    exact hmem
+  · intro i _ j _ h
+    exact hφinj i j h
+
 /-- L6.1e (code): one-hot fields give an injective code of role states in `Q_d`, `n/2 ≤ d ≤ 2n`, with even
 neighbours of one odd state within distance `10` and residual distance preserved (06:233–258). -/
 theorem L6_1e_code (α : ℝ) (hα : 0 < α) (hα' : α ≤ 1 / 100) :
@@ -1556,6 +1599,7 @@ theorem L6_1e_code (α : ℝ) (hα : 0 < α) (hα' : α ≤ 1 / 100) :
     enc_injective := C.enc_injective
     nbr_dist := C.nbr_dist
     residual_dist := C.residual_dist
+    sign_dist := signDist_le_encode6 g.L
     d_lower := C.d_lower
     d_upper := C.d_upper }⟩
 

@@ -6,6 +6,7 @@ import HypercubeRamsey.S05.Even_test_clock_sol_s05_even
 import HypercubeRamsey.S05.Even_test_scales_sol_s05_even
 import HypercubeRamsey.S05.Stages_p_s05_h
 import HypercubeRamsey.S05.Even_opus_s05
+import HypercubeRamsey.S05.Even_opus_s3
 
 /-!
 # L5.1n–o: even rows by deletion of primitive block values, comparison means, loads
@@ -592,7 +593,61 @@ theorem even_refQ : ∃ R : ParamReq5, ∀ p : Params5 γ K' χ, R.Holds p → �
             ∏ b ∈ star v, X.oddRow LR HR H ω b (O b) ≤
               Real.exp (X.p.a 6 * (X.refLen (X.g.evenType (X.p.J n) v.1) c.2 : ℝ) * n) *
                 ∏ b ∈ star v, (refQ H v c ω b).w (O b) := by
-  sorry
+  classical
+  obtain ⟨C, hCpos, hCcount⟩ := L5_1e_count (γ := γ) (K' := K') (χ := χ)
+  refine ⟨Lane_opus_s05_s3.s3Request C, ?_⟩
+  intro p hp
+  obtain ⟨nC, hnC⟩ := hCcount p
+  obtain ⟨nE, hnE⟩ := Filter.eventually_atTop.mp (Lane_opus_s05_s3.eventual_costs p C hCpos.le)
+  refine ⟨max nC nE, ?_⟩
+  intro n hn N E G X hXp L cL cH LR HR
+  have hRC : X.RecordCount C := hnC n (le_trans (le_max_left _ _) hn) N E G X hXp
+  obtain ⟨hn7, hm2, hA, hB, hD⟩ := hnE n (le_trans (le_max_right _ _) hn)
+  have hK2 : 2 * (C + 1) / (X.p.a 6 - X.p.a 4) ≤ X.p.K2 := by
+    rw [hXp]
+    exact Lane_opus_s05_s3.s3Request_K2 C hp
+  rw [← hXp] at hm2 hA hB hD
+  refine ⟨fun H v c ω b => Lane_sol_s05_even.localReferenceQ X L H ω v b c, ?_, ?_, ?_⟩
+  · intro H v c ω z b
+    exact Lane_sol_s05_even.localReferenceQ_delete_replace X L H ω v b c z
+  · intro H v c b ω ω' hagree
+    apply Lane_sol_s05_even.localReferenceQ_local X L H v b c ω ω'
+    intro l hl
+    apply hagree l
+    have hsl := L.slack_large
+    have hd := (Finset.mem_filter.mp hl).2
+    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, by omega⟩
+  · intro H v c ω O hg
+    obtain ⟨hc, hval, _, _, hbud⟩ := hg
+    have hprod := Lane_opus_s05_s3.prod_dominates X C hRC LR HR H ω v c hc hn7 hm2 O hval
+    refine hprod.trans ?_
+    apply mul_le_mul_of_nonneg_right _
+      (Finset.prod_nonneg fun b _ => (Lane_sol_s05_even.localReferenceQ X L H ω v b c).nonneg _)
+    apply Real.exp_le_exp.mpr
+    refine Lane_opus_s05_s3.cost_sum_le X C hCpos.le HR H ω v c hc O hm2 hK2 hA hB hD ?_
+    intro hv
+    have hbnonneg (b : OddRole5 n) : 0 ≤ X.budgetCost HR H ω v b (O b) := by
+      unfold budgetCost
+      split
+      · split
+        · exact Lane_sol_s05_even.highCost_nonneg X _ _ _ _ _ _
+        · rfl
+      · rfl
+    calc ∑ b ∈ (Finset.univ.filter fun b : OddRole5 n => (cube n).Adj v.1 b.1).filter
+            (fun b => ¬ X.g.low (X.p.J n) b.1),
+          X.highCost H (X.actualRecord (L.elig H) H ω b) (arraysOf ω)
+            (c.1, X.g.evenType (X.p.J n) v.1, c.2) (HR.row H ω b) (O b) =
+        ∑ b ∈ (Finset.univ.filter fun b : OddRole5 n => (cube n).Adj v.1 b.1).filter
+            (fun b => ¬ X.g.low (X.p.J n) b.1), X.budgetCost HR H ω v b (O b) := by
+          apply Finset.sum_congr rfl
+          intro b hb
+          have hb' := Finset.mem_filter.mp hb
+          have hadj := (Finset.mem_filter.mp hb'.1).2
+          simp only [budgetCost, if_pos (show (cube n).Adj v.1 b.1 ∧ ¬ X.g.low (X.p.J n) v.1 ∧
+            ¬ X.g.low (X.p.J n) b.1 from ⟨hadj, hv, hb'.2⟩), hc]
+      _ ≤ ∑ b, X.budgetCost HR H ω v b (O b) :=
+          Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _) fun b _ _ => hbnonneg b
+      _ ≤ X.p.a 5 * ((X.p.q0 * X.p.uStarSeg n * X.p.usedBlocks n : ℕ) : ℝ) * n := hbud
 
 end Lane_opus_s05_even
 

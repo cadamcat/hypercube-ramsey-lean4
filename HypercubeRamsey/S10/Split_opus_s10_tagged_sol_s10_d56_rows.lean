@@ -153,4 +153,65 @@ theorem ite_classical {α : Sort*} (P : Prop) (d : Decidable P) (t e : α) :
   have hd : d = Classical.propDecidable P := Subsingleton.elim _ _
   rw [hd]
 
+
+/-- Universal conditions on a canonical list enumeration are conditions on its named members. -/
+theorem namedList_forall {I : Type*} [DecidableEq I] (L : Finset I) (P : I → Prop) :
+    (∀ b : Fin L.card, P (L.equivFin.symm b).1) ↔ ∀ c ∈ L, P c := by
+  constructor
+  · intro h c hc
+    simpa using h (L.equivFin ⟨c, hc⟩)
+  · intro h b
+    exact h (L.equivFin.symm b).1 (L.equivFin.symm b).2
+
+/-- Canonical block indices enumerate exactly the named common hits. -/
+theorem fixedListHitSet_enum {I : Type*} [DecidableEq I] {N k : ℕ}
+    (E : Fin N → Fin N → Prop) (G : Colour) (L : Finset I) (W : I → Fin k → Fin N) :
+    fixedListHitSet E G (fun b : Fin L.card => W (L.equivFin.symm b).1) =
+      Finset.univ.filter (fun y => ∀ c ∈ L, ∀ i, Hits E G (W c i) y) := by
+  classical
+  ext y
+  simp only [fixedListHitSet, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact namedList_forall L (fun c => ∀ i, Hits E G (W c i) y)
+
+/-- The canonical deletion set removes exactly the corresponding named ID. -/
+theorem fixedListHitSetWithout_enum {I : Type*} [DecidableEq I] {N k : ℕ}
+    (E : Fin N → Fin N → Prop) (G : Colour) (L : Finset I) (W : I → Fin k → Fin N)
+    (b : Fin L.card) :
+    fixedListHitSetWithout E G (fun b : Fin L.card => W (L.equivFin.symm b).1) b =
+      Finset.univ.filter (fun y => ∀ c ∈ L, c ≠ (L.equivFin.symm b).1 →
+        ∀ i, Hits E G (W c i) y) := by
+  classical
+  ext y
+  simp only [fixedListHitSetWithout, Finset.mem_filter, Finset.mem_univ, true_and]
+  have hne (j : Fin L.card) : j ≠ b ↔ (L.equivFin.symm j).1 ≠ (L.equivFin.symm b).1 := by
+    constructor
+    · intro hj heq
+      exact hj (L.equivFin.symm.injective (Subtype.ext heq))
+    · intro hj heq
+      exact hj (congrArg (fun j => (L.equivFin.symm j).1) heq)
+  simp only [hne]
+  exact namedList_forall L (fun c => c ≠ (L.equivFin.symm b).1 → ∀ i, Hits E G (W c i) y)
+
+/-- Equivalent finite block presentations have the same fixed-list row. -/
+theorem fixedRow_equiv {N r s k q : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ρ : FinProb (Fin q)) (D : Fin q → Law N) (μs : Fin s → Law N) (a : ℝ)
+    (own : Fin s → Prop) (e : Fin r ≃ Fin s) (W : Fin s → Fin k → Fin N) (y : Fin N) :
+    fixedRow E G ρ D (fun b => μs (e b)) a (fun b => own (e b)) (fun b => W (e b)) y =
+      fixedRow E G ρ D μs a own W y := by
+  have hrs : r = s := by simpa using Fintype.card_congr e
+  subst s
+  exact fixedRow_perm E G ρ D μs a own e W y
+
+/-- Product averaging also permits equivalent presentations with different written block counts. -/
+theorem fixedRow_mean_equiv {N r s k q : ℕ} (E : Fin N → Fin N → Prop) (G : Colour)
+    (ρ : FinProb (Fin q)) (D : Fin q → Law N) (μs : Fin s → Law N) (a : ℝ)
+    (own : Fin s → Prop) (e : Fin r ≃ Fin s) (y : Fin N) :
+    (FinProb.pi (fun b => FinProb.pi (fun _ : Fin k => μs (e b)))).expect
+      (fun W => fixedRow E G ρ D (fun b => μs (e b)) a (fun b => own (e b)) W y) =
+    (FinProb.pi (fun b => FinProb.pi (fun _ : Fin k => μs b))).expect
+      (fun W => fixedRow E G ρ D μs a own W y) := by
+  have hrs : r = s := by simpa using Fintype.card_congr e
+  subst s
+  exact fixedRow_mean_perm E G ρ D μs a own e y
+
 end HypercubeRamsey.Lane_sol_s10_d56

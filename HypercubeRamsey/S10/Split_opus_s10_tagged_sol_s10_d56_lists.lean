@@ -115,4 +115,57 @@ theorem flipCoordinate_of_hammingDist_one {m : ℕ} (s t : Fin m → Bool)
       exact hkj (hk.mp hne)
     simp [p10_1kFlipCoordinate, hkj, heq]
 
+
+/-- Encode an own list and one center from each external slice as a named list. -/
+def codedList {Z I : Type*} [DecidableEq Z] [DecidableEq I] {m : ℕ}
+    (O : Finset (Z × I)) (tags : Fin m → Z) (center : Fin m → I) : Finset (Z × I) :=
+  O ∪ Finset.univ.image (fun i => (tags i, center i))
+
+/-- Own names are exactly the own part of the encoded list. -/
+theorem codedList_own_filter {Z I : Type*} [DecidableEq Z] [DecidableEq I] {m : ℕ}
+    (O : Finset (Z × I)) (z : Z) (tags : Fin m → Z) (center : Fin m → I)
+    (hO : ∀ c ∈ O, c.1 = z) (hne : ∀ i, tags i ≠ z) :
+    (codedList O tags center).filter (fun c => c.1 = z) = O := by
+  classical
+  ext c
+  simp only [codedList, Finset.mem_filter, Finset.mem_union, Finset.mem_image, Finset.mem_univ, true_and]
+  constructor
+  · rintro ⟨hc | ⟨i, hi⟩, hz⟩
+    · exact hc
+    · have htag : tags i = z := (congrArg Prod.fst hi).trans hz
+      exact False.elim (hne i htag)
+  · intro hc
+    exact ⟨Or.inl hc, hO c hc⟩
+
+/-- Each external direction contributes exactly its one prescribed center. -/
+theorem codedList_external_filter {Z I : Type*} [DecidableEq Z] [DecidableEq I] {m : ℕ}
+    (O : Finset (Z × I)) (z : Z) (tags : Fin m → Z) (center : Fin m → I)
+    (hO : ∀ c ∈ O, c.1 = z) (hne : ∀ i, tags i ≠ z) (hinj : Function.Injective tags) (i : Fin m) :
+    (codedList O tags center).filter (fun c => c.1 = tags i) = {(tags i, center i)} := by
+  classical
+  ext c
+  simp only [codedList, Finset.mem_filter, Finset.mem_union, Finset.mem_image,
+    Finset.mem_univ, true_and, Finset.mem_singleton]
+  constructor
+  · rintro ⟨hc | ⟨j, hj⟩, ht⟩
+    · exact False.elim (hne i (ht.symm.trans (hO c hc)))
+    · have hji : j = i := hinj ((congrArg Prod.fst hj).trans ht)
+      subst j
+      exact hj.symm
+  · intro hc
+    subst c
+    exact ⟨Or.inr ⟨i, rfl⟩, rfl⟩
+
+/-- Encoded lists read only the own tag and the specified external tags. -/
+theorem codedList_tags {Z I : Type*} [DecidableEq Z] [DecidableEq I] {m : ℕ}
+    (O : Finset (Z × I)) (z : Z) (tags : Fin m → Z) (center : Fin m → I)
+    (hO : ∀ c ∈ O, c.1 = z) :
+    ∀ c ∈ codedList O tags center, c.1 = z ∨ ∃ i, c.1 = tags i := by
+  classical
+  intro c hc
+  rcases Finset.mem_union.mp hc with hc | hc
+  · exact Or.inl (hO c hc)
+  · obtain ⟨i, hi, heq⟩ := Finset.mem_image.mp hc
+    exact Or.inr ⟨i, (congrArg Prod.fst heq).symm⟩
+
 end HypercubeRamsey.Lane_sol_s10_d56

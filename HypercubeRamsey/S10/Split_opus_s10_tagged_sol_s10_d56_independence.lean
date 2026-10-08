@@ -86,4 +86,24 @@ theorem pi_injective_pr_all {ι κ Ω : Type*}
     (fun k a => if F k a then (1 : ℝ) else 0)]
   simp_rw [← hpr]
 
+
+/-- Projecting one coordinate of a product field gives its original marginal law. -/
+theorem pi_expect_eval {ι Ω : Type*} [Fintype ι] [DecidableEq ι] [Fintype Ω]
+    (P : ι → FinProb Ω) (i : ι) (f : Ω → ℝ) :
+    (FinProb.pi P).expect (fun ω => f (ω i)) = (P i).expect f := by
+  classical
+  have he : Function.Injective (fun _ : Unit => i) := fun _ _ _ => Subsingleton.elim _ _
+  rw [pi_injective_expect P (fun _ : Unit => i) he (fun ω => f (ω ()))]
+  let e : Ω ≃ (Unit → Ω) :=
+    { toFun := fun x _ => x
+      invFun := fun ω => ω ()
+      left_inv := fun _ => rfl
+      right_inv := by intro ω; funext u; cases u; rfl }
+  unfold FinProb.expect
+  rw [← Equiv.sum_comp e]
+  apply Finset.sum_congr rfl
+  intro x hx
+  change (∏ _ : Unit, (P i).w x) * f x = (P i).w x * f x
+  simp
+
 end HypercubeRamsey.Lane_sol_s10_d56

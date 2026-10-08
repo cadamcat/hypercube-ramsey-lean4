@@ -66,4 +66,18 @@ theorem conditional_choice_expect_le {α β γ : Type*}
   intro a ha
   ring
 
+
+/-- Independent data averages can be taken in either order. -/
+theorem expect_swap {α β : Type*} [Fintype α] [Fintype β]
+    (P : FinProb α) (Q : FinProb β) (f : α → β → ℝ) :
+    P.expect (fun a => Q.expect (f a)) = Q.expect (fun b => P.expect (fun a => f a b)) := by
+  unfold FinProb.expect
+  simp_rw [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  apply Finset.sum_congr rfl
+  intro b hb
+  apply Finset.sum_congr rfl
+  intro a ha
+  ring
+
 end HypercubeRamsey.Lane_sol_s10_d56

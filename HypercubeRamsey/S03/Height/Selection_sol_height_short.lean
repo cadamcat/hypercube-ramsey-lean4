@@ -5,6 +5,7 @@ set_option maxHeartbeats 400000
 namespace HypercubeRamsey.Lane_sol_height_short
 
 open OAI.HypercubeRamsey Lane_p_height_main Lane_opus_height Lane_sol_hs_paths
+open scoped BigOperators
 
 namespace Path
 
@@ -159,5 +160,103 @@ theorem short_height_witness (p : HDParams) (hD : 0 < p.D) (σ ζ : ℝ)
         ((hbound _ (Path.finish_mem path)).trans_lt hhi)
     · have hs := hdScaleThreshold_fractions_bounds (Nat.le_of_lt hi)
       linarith [hs.2.2.2.2.1]
+
+/-- The union bound over scales large enough to leave the short tube. -/
+noncomputable def shortErrorBound (n d D m : ℕ) (σ ζ a θ : ℝ) : ℝ :=
+  (∑ i ∈ (Finset.range (hdScaleIndex n σ ζ)).filter
+      (fun i => Nat.sqrt m < 2 * hdScaleRadius n σ (i + 1)),
+    ((d + 1 : ℕ) : ℝ) ^ (D * hdScaleRadius n σ (i + 1)) *
+      Real.exp (-((n : ℝ) ^ a * (hdScaleRadius n σ i : ℝ) ^ θ))) +
+    (2 : ℝ) ^ d * Real.exp (-((n : ℝ) ^ a * (topScale n σ ζ : ℝ) ^ θ))
+
+/-- Scale claims bound the mismatch event uniformly in the forced center,
+auxiliary law, and position-dependent eligibility selector. -/
+theorem short_probability_bound (p : HDParams) (hD : 0 < p.D) (σ ζ a θ : ℝ)
+    (hH : p.H = hdScaleRadius p.n σ (hdScaleIndex p.n σ ζ))
+    (hlam : 30 ≤ p.lam) (hnb : 4 ≤ (p.n : ℝ) ^ p.b)
+    (hclaims : ∀ i, i ≤ hdScaleIndex p.n σ ζ → ScaleClaim p σ ζ a θ i)
+    (Sites : p.Sites) (v : CubeVertex p.d) (hv : v ∈ Sites) (forced : Option p.Loc)
+    {Aux : Type*} [Fintype Aux] (πAux : FinProb Aux)
+    (Esel : (p.Loc → Bool) → Aux → p.EligMap) (m : ℕ)
+    (hshort : p.Rshort m ≤ p.Rlong)
+    (hbase : 2 * heightBaseRadius p.n ≤ Nat.sqrt m) :
+    (((p.posLawForced forced).prod πAux).prod p.actLaw).pr (fun ω =>
+      p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) (p.domBall Sites v p.Rlong) ∧
+        p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) p.Rlong v ≠
+          p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) (p.Rshort m) v) ≤
+      shortErrorBound p.n p.d p.D m σ ζ a θ := by
+  classical
+  let h := hdScaleIndex p.n σ ζ
+  let I := (Finset.range h).filter
+    (fun i => Nat.sqrt m < 2 * hdScaleRadius p.n σ (i + 1))
+  let Dom := p.domBall Sites v p.Rlong
+  let μ := ((p.posLawForced forced).prod πAux).prod p.actLaw
+  let Fail : CubeVertex p.d → ℕ → ((p.Loc → Bool) × Aux) × (p.Loc → Bool) → Prop :=
+    fun u i ω => p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) Dom ∧
+      hdScaleFailure Dom ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) (u, 0)
+        (hdScaleRadius p.n σ i) (hdScaleSlope h i)
+  let EvB : ((p.Loc → Bool) × Aux) × (p.Loc → Bool) → Prop :=
+    fun ω => ∃ i ∈ I, ∃ u ∈ midStarts p Dom v (hdScaleRadius p.n σ (i + 1)), Fail u i ω
+  let EvC : ((p.Loc → Bool) × Aux) × (p.Loc → Bool) → Prop :=
+    fun ω => ∃ u ∈ Dom, Fail u h ω
+  let e : ℕ → ℝ := fun i =>
+    Real.exp (-((p.n : ℝ) ^ a * (hdScaleRadius p.n σ i : ℝ) ^ θ))
+  have hkey : ∀ u i, i ≤ h → μ.pr (Fail u i) ≤ e i := by
+    intro u i hi
+    have hbounds := hdScaleThreshold_fractions_bounds hi
+    exact (actual_pr_le_expect p hlam hnb forced Dom πAux Esel (u, 0)
+      (hdScaleRadius p.n σ i) (hdScaleEligibilityFraction h i)
+      (hdScaleCrowdFraction h i) (hdScaleSlope h i) hbounds.2.1
+      hbounds.2.2.2.1).trans
+        (hclaims i hi (forcedFree p forced) (siteDom p Dom) (u, 0))
+  have hsub : ∀ ω : ((p.Loc → Bool) × Aux) × (p.Loc → Bool),
+      (p.Legal ω.1.1 (Esel ω.1.1 ω.1.2) Dom ∧
+        p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) p.Rlong v ≠
+          p.height Sites ω.1.1 ω.2 (Esel ω.1.1 ω.1.2) (p.Rshort m) v) →
+      EvB ω ∨ EvC ω := by
+    rintro ω ⟨hlegal, hne⟩
+    rcases short_height_witness p hD σ ζ hH Sites ω.1.1 ω.2
+      (Esel ω.1.1 ω.1.2) v hv m hshort hbase hne with
+      ⟨i, hi, u, hu, hf⟩ | ⟨u, hu, hf⟩
+    · exact Or.inl ⟨i, hi, u, hu, hlegal, hf⟩
+    · exact Or.inr ⟨u, hu, hlegal, hf⟩
+  have hB : μ.pr EvB ≤ ∑ i ∈ I,
+      ((p.d + 1 : ℕ) : ℝ) ^ (p.D * hdScaleRadius p.n σ (i + 1)) * e i := by
+    calc
+      μ.pr EvB ≤ ∑ i ∈ I, μ.pr (fun ω =>
+          ∃ u ∈ midStarts p Dom v (hdScaleRadius p.n σ (i + 1)), Fail u i ω) :=
+        pr_finset_exists_le _ _ _
+      _ ≤ ∑ i ∈ I,
+          ((p.d + 1 : ℕ) : ℝ) ^ (p.D * hdScaleRadius p.n σ (i + 1)) * e i := by
+        apply Finset.sum_le_sum
+        intro i hi
+        have hih : i ≤ h := le_of_lt (Finset.mem_range.mp (Finset.mem_filter.mp hi).1)
+        calc
+          _ ≤ ∑ u ∈ midStarts p Dom v (hdScaleRadius p.n σ (i + 1)), μ.pr (Fail u i) :=
+            pr_finset_exists_le _ _ _
+          _ ≤ ∑ _u ∈ midStarts p Dom v (hdScaleRadius p.n σ (i + 1)), e i :=
+            Finset.sum_le_sum (fun u _ => hkey u i hih)
+          _ = ((midStarts p Dom v (hdScaleRadius p.n σ (i + 1))).card : ℝ) * e i := by
+            rw [Finset.sum_const, nsmul_eq_mul]
+          _ ≤ _ := mul_le_mul_of_nonneg_right
+            (midStarts_card_le p hD Dom v _) (Real.exp_pos _).le
+  have hC : μ.pr EvC ≤ (2 : ℝ) ^ p.d * e h := by
+    have hcard : (Dom.card : ℝ) ≤ (2 : ℝ) ^ p.d := by
+      have hc := Finset.card_le_univ Dom
+      rw [card_cubeVertex] at hc
+      exact_mod_cast hc
+    calc
+      μ.pr EvC ≤ ∑ u ∈ Dom, μ.pr (Fail u h) := pr_finset_exists_le _ _ _
+      _ ≤ ∑ _u ∈ Dom, e h := Finset.sum_le_sum (fun u _ => hkey u h le_rfl)
+      _ = (Dom.card : ℝ) * e h := by rw [Finset.sum_const, nsmul_eq_mul]
+      _ ≤ _ := mul_le_mul_of_nonneg_right hcard (Real.exp_pos _).le
+  calc
+    _ ≤ μ.pr (fun ω => EvB ω ∨ EvC ω) := pr_mono _ _ _ hsub
+    _ ≤ μ.pr EvB + μ.pr EvC := pr_or_le _ _ _
+    _ ≤ (∑ i ∈ I,
+        ((p.d + 1 : ℕ) : ℝ) ^ (p.D * hdScaleRadius p.n σ (i + 1)) * e i) +
+        (2 : ℝ) ^ p.d * e h := add_le_add hB hC
+    _ = shortErrorBound p.n p.d p.D m σ ζ a θ := by
+      simp only [shortErrorBound, I, h, e, topScale_eq_hdScaleRadius]
 
 end HypercubeRamsey.Lane_sol_height_short

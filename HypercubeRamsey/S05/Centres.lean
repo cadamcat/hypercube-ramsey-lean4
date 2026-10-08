@@ -1013,7 +1013,224 @@ theorem legal_of_events : ∀ p : Params5 γ K' χ, ∃ n₀ : ℕ, ∀ n ≥ n�
       ∀ (H : X.KeyHist) (ω : X.CΩ (canonHt X)), BallsOK X (canonHt X) ω → SinglesOK X (canonHt X) H ω →
         FamiliesOK X (canonHt X) H ω →
           (canonHt X).hp.Legal (pos ω) (markElig X (canonHt X) H ω) (X.sites (canonHt X)) := by
-  sorry
+  intro p
+  refine ⟨2, ?_⟩
+  intro n hn N E G X hXp H ω hBalls hSingles hFamilies
+  have hn2 : 2 ≤ n := hn
+  let ht := canonHt X
+  have hmPos : 0 < X.p.m n := by
+    unfold Params5.m
+    apply Nat.ceil_pos.mpr
+    exact Real.rpow_pos_of_pos (by exact_mod_cast (show 0 < n by omega)) _
+  have hmOne : 1 ≤ (X.p.m n : ℝ) := by
+    exact_mod_cast (Nat.succ_le_iff.mpr hmPos)
+  have hmLe : X.p.m n ≤ n := by
+    unfold Params5.m
+    rw [Nat.ceil_le]
+    have hnR : (1 : ℝ) < (n : ℝ) := by
+      exact_mod_cast (show 1 < n by omega)
+    have hpow' : (n : ℝ) ^ X.p.alpha ≤ (n : ℝ) ^ (1 : ℝ) :=
+      (Real.rpow_le_rpow_left_iff hnR).2 (by linarith [X.p.halpha.2])
+    have hpow : (n : ℝ) ^ X.p.alpha ≤ n := by
+      simpa only [Real.rpow_one] using hpow'
+    exact hpow
+  have hTle : (X.p.T n : ℝ) ≤ 2 * n := by
+    have hT := Lane_sol_s05_h5l.T_upper X.p n hmOne
+    have hpow : (X.p.m n : ℝ) ^ (1 / 1000 : ℝ) ≤ (X.p.m n : ℝ) :=
+      Real.rpow_le_self_of_one_le hmOne (by norm_num)
+    have hmLeR : (X.p.m n : ℝ) ≤ n := by exact_mod_cast hmLe
+    calc
+      (X.p.T n : ℝ) ≤ 2 * (X.p.m n : ℝ) ^ (1 / 1000 : ℝ) := hT
+      _ ≤ 2 * (X.p.m n : ℝ) := by nlinarith
+      _ ≤ 2 * n := by nlinarith
+  have hn7 : 128 ≤ n ^ 7 := by
+    calc
+      128 = 2 ^ 7 := by norm_num
+      _ ≤ n ^ 7 := by gcongr
+  have hn7R : 96 ≤ (n : ℝ) ^ 7 := by
+    have hcast : (128 : ℝ) ≤ (n : ℝ) ^ 7 := by exact_mod_cast hn7
+    linarith
+  have hpoly : 96 * (n : ℝ) ^ 3 ≤ (n : ℝ) ^ 10 := by
+    have hmul := mul_le_mul_of_nonneg_left hn7R (by positivity : 0 ≤ (n : ℝ) ^ 3)
+    have hmul' : 96 * (n : ℝ) ^ 3 ≤ (n : ℝ) ^ 3 * (n : ℝ) ^ 7 := by
+      simpa [mul_comm] using hmul
+    rw [← pow_add] at hmul'
+    norm_num at hmul'
+    exact hmul'
+  change ht.hp.Legal (pos ω) (markElig X ht H ω) (X.sites ht)
+  intro s hs j
+  change (∀ l ∈ markElig X ht H ω s j,
+      pos ω l = true ∧ l.2 = j ∧ hammingDist l.1 s ≤ ht.hp.r) ∧
+    ht.hp.lam / 3 ≤ ((markElig X ht H ω s j).card : ℝ)
+  constructor
+  · intro l hl
+    exact markElig_shape X ht H ω s j l hl
+  · rcases Finset.mem_image.mp hs with ⟨a, ha, hsite⟩
+    let Pset : Finset ht.hp.Loc := prosp X ht (pos ω) s j
+    let Vset : Finset (CubeVertex ht.hp.d) := Finset.univ.filter fun u =>
+      pos ω (u, j) = true ∧ hammingDist u s ≤ ht.hp.r
+    let badSet : Finset ht.hp.Loc := Pset.filter fun l =>
+      ¬ ∀ v : EvenRole5 n, X.siteOf v = s → singletonOK X ht H (arraysOf ω) v l
+    let Mset : Finset ht.hp.Loc := marks X ht H (pos ω) (arraysOf ω) s j
+    have hPsetEq : Pset = Vset.image (fun u => (u, j)) := by
+      ext l
+      constructor
+      · intro hl
+        simp only [Pset, prosp, Finset.mem_filter, Finset.mem_univ, true_and] at hl
+        rcases hl with ⟨hpos, hrest⟩
+        rcases hrest with ⟨hlev, hdist⟩
+        have heq : l = (l.1, j) := Prod.ext rfl (Fin.ext hlev)
+        have hpos' : pos ω (l.1, j) = true := by
+          rw [heq] at hpos
+          exact hpos
+        refine Finset.mem_image.mpr ⟨l.1, ?_, heq.symm⟩
+        simp only [Vset, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hpos', hdist⟩
+      · intro hl
+        rcases Finset.mem_image.mp hl with ⟨u, hu, rfl⟩
+        simp only [Vset, Finset.mem_filter, Finset.mem_univ, true_and] at hu
+        simp only [Pset, prosp, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hu.1, hu.2⟩
+    have hPsetCard : Pset.card = Vset.card := by
+      calc
+        Pset.card = (Vset.image (fun u => (u, j))).card := congrArg Finset.card hPsetEq
+        _ = Vset.card := Finset.card_image_of_injective Vset
+          (fun u v huv => congrArg Prod.fst huv)
+    have hPcard : ht.hp.lam / 2 ≤ (Pset.card : ℝ) := by
+      rw [hPsetCard]
+      simpa [Vset, BallsOK] using (hBalls s hs j).1
+    have hBadCard : (badSet.card : ℝ) ≤ ht.hp.lam / 12 := by
+      simpa [badSet, Pset, prosp, SinglesOK] using (hSingles s hs (j : ℕ))
+    let Bset : Finset X.St.Site := Finset.univ.filter fun b =>
+      ∃ t ∈ X.St.neighbors b, X.St.oneHot t = s
+    have hBsub : Bset ⊆ X.St.neighbors (X.St.stateOf a.1) := by
+      intro b hb
+      rcases (Finset.mem_filter.mp hb).2 with ⟨t, ht, hts⟩
+      have hsite' : s = X.St.oneHot (X.St.stateOf a.1) := by
+        simpa [ht, canonHt, HeightChoice5.hp, siteOf] using hsite.symm
+      have hstate : t = X.St.stateOf a.1 := by
+        apply X.St.oneHot_injective
+        exact hts.trans hsite'
+      apply (X.St.mem_neighbors (X.St.stateOf a.1) b).2
+      rcases (X.St.mem_neighbors b t).1 ht with ⟨x, y, hx, hy, hxy⟩
+      refine ⟨y, x, ?_, hx, hxy.symm⟩
+      calc
+        X.St.stateOf y = t := hy
+        _ = X.St.stateOf a.1 := hstate
+    have hBcard : Bset.card ≤ 2 * n := by
+      calc
+        Bset.card ≤ (X.St.neighbors (X.St.stateOf a.1)).card := Finset.card_le_card hBsub
+        _ ≤ 2 * n := X.St.degree_bound _
+    let levelSet : Finset ℕ := (Finset.range (ht.hp.H + 1)).filter fun k =>
+      k = (j : ℕ) ∨ k + 1 = (j : ℕ)
+    have hLevelSubset : levelSet ⊆ insert (j : ℕ) ({(j : ℕ) - 1} : Finset ℕ) := by
+      intro k hk
+      simp only [levelSet, Finset.mem_filter] at hk
+      rcases hk.2 with hEq | hEq
+      · simp [hEq]
+      · have hpred : k = (j : ℕ) - 1 := by omega
+        simp [hpred]
+    have hLevelCard : levelSet.card ≤ 2 := by
+      calc
+        levelSet.card ≤ (insert (j : ℕ) ({(j : ℕ) - 1} : Finset ℕ)).card :=
+          Finset.card_le_card hLevelSubset
+        _ ≤ ({(j : ℕ) - 1} : Finset ℕ).card + 1 := Finset.card_insert_le _ _
+        _ ≤ 1 + 1 := by simp
+        _ = 2 := by norm_num
+    have hfamily (b : X.St.Site) (k : ℕ) :
+        ((Lane_sol_s05_centres.markingFamily (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id).card ≤
+          n * X.p.T n := by
+      let F := failSets X ht H (pos ω) (arraysOf ω) b k
+      have hsmall : (Lane_sol_s05_centres.markingFamily F).card ≤ n :=
+        Nat.le_of_lt (hFamilies b k)
+      have hsize : ∀ S ∈ F, S.card ≤ X.p.T n := by
+        intro S hS
+        rcases Finset.mem_image.mp hS with ⟨μ, hμ, rfl⟩
+        exact (Finset.mem_filter.mp hμ).2.2.1
+      exact Lane_sol_s05_centres.marking_card_bound F n (X.p.T n) hsmall hsize
+    let Uset : Finset ht.hp.Loc := Bset.biUnion fun b => levelSet.biUnion fun k =>
+      (Lane_sol_s05_centres.markingFamily
+        (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id
+    have hMsubset : Mset ⊆ Uset := by
+      intro l hl
+      simp only [Mset, marks, Finset.mem_filter] at hl
+      rcases Finset.mem_biUnion.mp hl.1 with ⟨b, hb, hlb⟩
+      rcases Finset.mem_biUnion.mp hlb with ⟨k, hk, hlk⟩
+      unfold Uset
+      refine Finset.mem_biUnion.mpr ⟨b, ?_, Finset.mem_biUnion.mpr ⟨k, ?_, hlk⟩⟩
+      · simpa [Bset] using hb
+      · simpa [levelSet] using hk
+    have hUcard : Uset.card ≤ Bset.card * (levelSet.card * (n * X.p.T n)) := by
+      unfold Uset
+      calc
+        _ ≤ ∑ b ∈ Bset, (levelSet.biUnion fun k =>
+            (Lane_sol_s05_centres.markingFamily
+              (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id).card := Finset.card_biUnion_le
+        _ ≤ ∑ b ∈ Bset, ∑ k ∈ levelSet, n * X.p.T n := by
+          apply Finset.sum_le_sum
+          intro b hb
+          calc
+            _ ≤ ∑ k ∈ levelSet,
+              ((Lane_sol_s05_centres.markingFamily
+                (failSets X ht H (pos ω) (arraysOf ω) b k)).biUnion id).card :=
+                Finset.card_biUnion_le
+            _ ≤ ∑ k ∈ levelSet, n * X.p.T n :=
+              Finset.sum_le_sum fun k hk => hfamily b k
+        _ = Bset.card * (levelSet.card * (n * X.p.T n)) := by simp [mul_assoc]
+    have hMcard : Mset.card ≤ 4 * n ^ 2 * X.p.T n := by
+      calc
+        Mset.card ≤ Uset.card := Finset.card_le_card hMsubset
+        _ ≤ Bset.card * (levelSet.card * (n * X.p.T n)) := hUcard
+        _ ≤ (2 * n) * (2 * (n * X.p.T n)) :=
+          Nat.mul_le_mul hBcard (Nat.mul_le_mul_right _ hLevelCard)
+        _ = 4 * n ^ 2 * X.p.T n := by ring
+    have hMcardR : (Mset.card : ℝ) ≤ ht.hp.lam / 12 := by
+      have hcardR : (Mset.card : ℝ) ≤ 4 * (n : ℝ) ^ 2 * (X.p.T n : ℝ) := by
+        exact_mod_cast hMcard
+      have hsmall : (Mset.card : ℝ) ≤ (n : ℝ) ^ 10 / 12 := by
+        calc
+          (Mset.card : ℝ) ≤ 4 * (n : ℝ) ^ 2 * (X.p.T n : ℝ) := hcardR
+          _ ≤ 8 * (n : ℝ) ^ 3 := by nlinarith [hTle]
+          _ ≤ (n : ℝ) ^ 10 / 12 := by nlinarith [hpoly]
+      simpa [ht, canonHt, HeightChoice5.hp] using hsmall
+    have hEsub : markElig X ht H ω s j ⊆ Pset := by
+      intro l hl
+      have hl' := hl
+      dsimp only [markElig, eligOf] at hl'
+      exact (Finset.mem_filter.mp hl').1
+    have hLostSub : Pset \ markElig X ht H ω s j ⊆ badSet ∪ Mset := by
+      intro l hl
+      rcases Finset.mem_sdiff.mp hl with ⟨hlP, hlnE⟩
+      by_cases hgood : ∀ v : EvenRole5 n, X.siteOf v = s → singletonOK X ht H (arraysOf ω) v l
+      · apply Finset.mem_union.mpr
+        right
+        have hM : l ∈ Mset := by
+          by_contra hlnM
+          have hlnE' := hlnE
+          dsimp only [markElig, eligOf] at hlnE'
+          simp only [Finset.mem_filter] at hlnE'
+          have hnotM : l ∉ marks X ht H (pos ω) (arraysOf ω) s j := by
+            simpa [Mset] using hlnM
+          exact hlnE' ⟨hlP, ⟨hgood, hnotM⟩⟩
+        exact hM
+      · apply Finset.mem_union.mpr
+        left
+        exact Finset.mem_filter.mpr ⟨hlP, hgood⟩
+    have hLostCard :
+        (Pset \ markElig X ht H ω s j).card ≤ badSet.card + Mset.card := by
+      calc
+        (Pset \ markElig X ht H ω s j).card ≤ (badSet ∪ Mset).card :=
+          Finset.card_le_card hLostSub
+        _ ≤ badSet.card + Mset.card := Finset.card_union_le _ _
+    have hCardEq : ((Pset \ markElig X ht H ω s j).card : ℝ) +
+        ((markElig X ht H ω s j).card : ℝ) = (Pset.card : ℝ) := by
+      exact_mod_cast Finset.card_sdiff_add_card_eq_card hEsub
+    have hLostCardR : ((Pset \ markElig X ht H ω s j).card : ℝ) ≤
+        (badSet.card : ℝ) + (Mset.card : ℝ) := by exact_mod_cast hLostCard
+    have hTotal : (Pset.card : ℝ) ≤ (markElig X ht H ω s j).card +
+        (badSet.card : ℝ) + (Mset.card : ℝ) := by linarith
+    change ht.hp.lam / 3 ≤ ((markElig X ht H ω s j).card : ℝ)
+    linarith [hPcard, hBadCard, hMcardR, hTotal]
 
 /-- SUB-LEMMA J7 (05:851–855, D3.8/L3.8 applied): on legal eligibility, the long height rule
 gives good heights with probability `1 - o(1)`. -/
